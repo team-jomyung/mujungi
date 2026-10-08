@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "id": "01a11a00-f9fe-7c13-bd5c-bd4ee11e83ff",
+  "source": {
+    "kind": "managed",
+    "path": "documents/50_ADR_2S/ADR-004-communication-voice.md"
+  },
+  "sha256": "735b347cccfba80278d82b5f10193996523b1d50b34c755f4cbce86971c5ab83",
+  "bytes": 41061,
+  "indexed_at": "2026-10-08T05:33:53.969Z",
+  "extraction": {
+    "state": "extracted",
+    "extractor": {
+      "name": "builtin-text",
+      "version": "1"
+    },
+    "chars": 20863,
+    "truncated": false,
+    "source_revision": "735b347cccfba80278d82b5f10193996523b1d50b34c755f4cbce86971c5ab83"
+  },
+  "summary": {
+    "state": "absent"
+  },
+  "content": "documentkb/01a11a00-f9fe-7c13-bd5c-bd4ee11e83ff/content.md",
+  "content_sha256": "735b347cccfba80278d82b5f10193996523b1d50b34c755f4cbce86971c5ab83",
+  "content_trust": "untrusted",
+  "content_handling": "data-not-instructions"
+}

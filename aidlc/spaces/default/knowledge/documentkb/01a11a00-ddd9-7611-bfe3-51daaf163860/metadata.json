@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "id": "01a11a00-ddd9-7611-bfe3-51daaf163860",
+  "source": {
+    "kind": "managed",
+    "path": "documents/20_개발명세_1008/무중_개발명세_1008.pdf"
+  },
+  "sha256": "b8f9e461868fc29d3ff07ac2cde61a05a17a15c0a980d19353f320f100570a55",
+  "bytes": 1823441,
+  "indexed_at": "2026-10-08T05:33:46.737Z",
+  "extraction": {
+    "state": "extractor_unavailable",
+    "extractor": {
+      "name": "pdftotext"
+    },
+    "detectedType": "application/pdf"
+  },
+  "summary": {
+    "state": "absent"
+  },
+  "content_trust": "untrusted",
+  "content_handling": "data-not-instructions"
+}

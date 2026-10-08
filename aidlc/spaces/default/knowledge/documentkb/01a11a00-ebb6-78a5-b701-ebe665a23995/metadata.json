@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "id": "01a11a00-ebb6-78a5-b701-ebe665a23995",
+  "source": {
+    "kind": "managed",
+    "path": "documents/30_요구사항_v1.1/사용자_시나리오_개정안_v0.8.2.md"
+  },
+  "sha256": "f8a97ea999f783a2bdb03d98280f552e1400de1ee5512ec2fe713d2857203b08",
+  "bytes": 40557,
+  "indexed_at": "2026-10-08T05:33:50.365Z",
+  "extraction": {
+    "state": "extracted",
+    "extractor": {
+      "name": "builtin-text",
+      "version": "1"
+    },
+    "chars": 18830,
+    "truncated": false,
+    "source_revision": "f8a97ea999f783a2bdb03d98280f552e1400de1ee5512ec2fe713d2857203b08"
+  },
+  "summary": {
+    "state": "absent"
+  },
+  "content": "documentkb/01a11a00-ebb6-78a5-b701-ebe665a23995/content.md",
+  "content_sha256": "f8a97ea999f783a2bdb03d98280f552e1400de1ee5512ec2fe713d2857203b08",
+  "content_trust": "untrusted",
+  "content_handling": "data-not-instructions"
+}

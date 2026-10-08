@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "id": "01a11a00-ebcb-7a4c-9cd9-56e5db640192",
+  "source": {
+    "kind": "managed",
+    "path": "documents/30_요구사항_v1.1/요구사항_명세서_v1.1.md"
+  },
+  "sha256": "39525113db9dec2f91bd43636545585f4e4dfd263d0f3d3c484a3af36dcbcea0",
+  "bytes": 196169,
+  "indexed_at": "2026-10-08T05:33:50.365Z",
+  "extraction": {
+    "state": "extracted",
+    "extractor": {
+      "name": "builtin-text",
+      "version": "1"
+    },
+    "chars": 96736,
+    "truncated": false,
+    "source_revision": "39525113db9dec2f91bd43636545585f4e4dfd263d0f3d3c484a3af36dcbcea0"
+  },
+  "summary": {
+    "state": "absent"
+  },
+  "content": "documentkb/01a11a00-ebcb-7a4c-9cd9-56e5db640192/content.md",
+  "content_sha256": "39525113db9dec2f91bd43636545585f4e4dfd263d0f3d3c484a3af36dcbcea0",
+  "content_trust": "untrusted",
+  "content_handling": "data-not-instructions"
+}

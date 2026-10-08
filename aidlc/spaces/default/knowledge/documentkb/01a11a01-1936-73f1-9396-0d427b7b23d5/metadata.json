@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "id": "01a11a01-1936-73f1-9396-0d427b7b23d5",
+  "source": {
+    "kind": "managed",
+    "path": "documents/80_점검표_1008/개발전환_점검표_1008.pdf"
+  },
+  "sha256": "b122570c84714d9d5073857685271c5cc6d5910a4d01924442118423d28ba5dd",
+  "bytes": 816318,
+  "indexed_at": "2026-10-08T05:34:01.988Z",
+  "extraction": {
+    "state": "extractor_unavailable",
+    "extractor": {
+      "name": "pdftotext"
+    },
+    "detectedType": "application/pdf"
+  },
+  "summary": {
+    "state": "absent"
+  },
+  "content_trust": "untrusted",
+  "content_handling": "data-not-instructions"
+}

@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "id": "01a11a01-0b75-752a-a68e-fe8229a0f62c",
+  "source": {
+    "kind": "managed",
+    "path": "documents/60_ERD_v0.1/ERD_데이터사전_v0.1.md"
+  },
+  "sha256": "b52d2c01be1e9cba06e92cc01c639c48c50589ab6be8b7086bb98936065f9a3d",
+  "bytes": 25093,
+  "indexed_at": "2026-10-08T05:33:58.486Z",
+  "extraction": {
+    "state": "extracted",
+    "extractor": {
+      "name": "builtin-text",
+      "version": "1"
+    },
+    "chars": 20117,
+    "truncated": false,
+    "source_revision": "b52d2c01be1e9cba06e92cc01c639c48c50589ab6be8b7086bb98936065f9a3d"
+  },
+  "summary": {
+    "state": "absent"
+  },
+  "content": "documentkb/01a11a01-0b75-752a-a68e-fe8229a0f62c/content.md",
+  "content_sha256": "b52d2c01be1e9cba06e92cc01c639c48c50589ab6be8b7086bb98936065f9a3d",
+  "content_trust": "untrusted",
+  "content_handling": "data-not-instructions"
+}

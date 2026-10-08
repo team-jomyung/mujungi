@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "id": "01a11a01-12e2-710c-877d-551692c155a5",
+  "source": {
+    "kind": "managed",
+    "path": "documents/70_WBS_v0.5/WBS_v0.5_2차검토본.md"
+  },
+  "sha256": "81cf9e4b008103acdfd37e60bf5d1f870240bad2250898afd9d3940cc2ea1e3a",
+  "bytes": 57928,
+  "indexed_at": "2026-10-08T05:34:00.384Z",
+  "extraction": {
+    "state": "extracted",
+    "extractor": {
+      "name": "builtin-text",
+      "version": "1"
+    },
+    "chars": 32142,
+    "truncated": false,
+    "source_revision": "81cf9e4b008103acdfd37e60bf5d1f870240bad2250898afd9d3940cc2ea1e3a"
+  },
+  "summary": {
+    "state": "absent"
+  },
+  "content": "documentkb/01a11a01-12e2-710c-877d-551692c155a5/content.md",
+  "content_sha256": "81cf9e4b008103acdfd37e60bf5d1f870240bad2250898afd9d3940cc2ea1e3a",
+  "content_trust": "untrusted",
+  "content_handling": "data-not-instructions"
+}

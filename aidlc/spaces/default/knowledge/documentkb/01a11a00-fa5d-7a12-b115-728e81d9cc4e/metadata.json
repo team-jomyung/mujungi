@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "id": "01a11a00-fa5d-7a12-b115-728e81d9cc4e",
+  "source": {
+    "kind": "managed",
+    "path": "documents/50_ADR_2S/architecture/first-bolt.md"
+  },
+  "sha256": "849c1cb8444585fa679bdab4ddf6039f7746e14404f2e6b46b58f6d5bfb530db",
+  "bytes": 49234,
+  "indexed_at": "2026-10-08T05:33:53.969Z",
+  "extraction": {
+    "state": "extracted",
+    "extractor": {
+      "name": "builtin-text",
+      "version": "1"
+    },
+    "chars": 25751,
+    "truncated": false,
+    "source_revision": "849c1cb8444585fa679bdab4ddf6039f7746e14404f2e6b46b58f6d5bfb530db"
+  },
+  "summary": {
+    "state": "absent"
+  },
+  "content": "documentkb/01a11a00-fa5d-7a12-b115-728e81d9cc4e/content.md",
+  "content_sha256": "849c1cb8444585fa679bdab4ddf6039f7746e14404f2e6b46b58f6d5bfb530db",
+  "content_trust": "untrusted",
+  "content_handling": "data-not-instructions"
+}

@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "id": "01a11a00-ddb8-71c4-ac8e-c11687dd14ab",
+  "source": {
+    "kind": "managed",
+    "path": "documents/20_개발명세_1008/개발명세_1008_화면별명세.md"
+  },
+  "sha256": "9b932ea3882981228415e7214a5510ead8fee7b47d211ac6171053c982415560",
+  "bytes": 33005,
+  "indexed_at": "2026-10-08T05:33:46.737Z",
+  "extraction": {
+    "state": "extracted",
+    "extractor": {
+      "name": "builtin-text",
+      "version": "1"
+    },
+    "chars": 22399,
+    "truncated": false,
+    "source_revision": "9b932ea3882981228415e7214a5510ead8fee7b47d211ac6171053c982415560"
+  },
+  "summary": {
+    "state": "absent"
+  },
+  "content": "documentkb/01a11a00-ddb8-71c4-ac8e-c11687dd14ab/content.md",
+  "content_sha256": "9b932ea3882981228415e7214a5510ead8fee7b47d211ac6171053c982415560",
+  "content_trust": "untrusted",
+  "content_handling": "data-not-instructions"
+}

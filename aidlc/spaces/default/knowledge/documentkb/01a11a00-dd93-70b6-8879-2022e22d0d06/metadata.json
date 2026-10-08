@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "id": "01a11a00-dd93-70b6-8879-2022e22d0d06",
+  "source": {
+    "kind": "managed",
+    "path": "documents/20_개발명세_1008/개발명세_1008_API_이벤트_상태기계.md"
+  },
+  "sha256": "acc5730624905cba1ae15bd980da6be9887889e3b594cc5c555f0187fc7a85fb",
+  "bytes": 8696,
+  "indexed_at": "2026-10-08T05:33:46.737Z",
+  "extraction": {
+    "state": "extracted",
+    "extractor": {
+      "name": "builtin-text",
+      "version": "1"
+    },
+    "chars": 6270,
+    "truncated": false,
+    "source_revision": "acc5730624905cba1ae15bd980da6be9887889e3b594cc5c555f0187fc7a85fb"
+  },
+  "summary": {
+    "state": "absent"
+  },
+  "content": "documentkb/01a11a00-dd93-70b6-8879-2022e22d0d06/content.md",
+  "content_sha256": "acc5730624905cba1ae15bd980da6be9887889e3b594cc5c555f0187fc7a85fb",
+  "content_trust": "untrusted",
+  "content_handling": "data-not-instructions"
+}

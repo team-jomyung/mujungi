@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "id": "01a11a00-dda8-793a-9bee-1d333caf02de",
+  "source": {
+    "kind": "managed",
+    "path": "documents/20_개발명세_1008/개발명세_1008_테스트시나리오.md"
+  },
+  "sha256": "348e18f40b5aff87d0f8f3be9794da4626ba75bad0eaf85a56a9d1e9e572df0d",
+  "bytes": 21031,
+  "indexed_at": "2026-10-08T05:33:46.737Z",
+  "extraction": {
+    "state": "extracted",
+    "extractor": {
+      "name": "builtin-text",
+      "version": "1"
+    },
+    "chars": 12650,
+    "truncated": false,
+    "source_revision": "348e18f40b5aff87d0f8f3be9794da4626ba75bad0eaf85a56a9d1e9e572df0d"
+  },
+  "summary": {
+    "state": "absent"
+  },
+  "content": "documentkb/01a11a00-dda8-793a-9bee-1d333caf02de/content.md",
+  "content_sha256": "348e18f40b5aff87d0f8f3be9794da4626ba75bad0eaf85a56a9d1e9e572df0d",
+  "content_trust": "untrusted",
+  "content_handling": "data-not-instructions"
+}

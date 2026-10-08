@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "id": "01a11a00-f9ee-7d09-9b4d-59c36b5a7278",
+  "source": {
+    "kind": "managed",
+    "path": "documents/50_ADR_2S/ADR-002-technology-defaults.md"
+  },
+  "sha256": "2493a6ac5290c5d43eb8a128c20178c002302a62653c861ee7c1a7b2c7da1c02",
+  "bytes": 31673,
+  "indexed_at": "2026-10-08T05:33:53.969Z",
+  "extraction": {
+    "state": "extracted",
+    "extractor": {
+      "name": "builtin-text",
+      "version": "1"
+    },
+    "chars": 16918,
+    "truncated": false,
+    "source_revision": "2493a6ac5290c5d43eb8a128c20178c002302a62653c861ee7c1a7b2c7da1c02"
+  },
+  "summary": {
+    "state": "absent"
+  },
+  "content": "documentkb/01a11a00-f9ee-7d09-9b4d-59c36b5a7278/content.md",
+  "content_sha256": "2493a6ac5290c5d43eb8a128c20178c002302a62653c861ee7c1a7b2c7da1c02",
+  "content_trust": "untrusted",
+  "content_handling": "data-not-instructions"
+}

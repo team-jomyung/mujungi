@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "id": "01a11a00-fa2f-790c-a8b3-5165c2a9f227",
+  "source": {
+    "kind": "managed",
+    "path": "documents/50_ADR_2S/ADR-010-durable-delivery.md"
+  },
+  "sha256": "22461a5a398c963130e157e989244d309edee6e1c2f2f1afcec43d2282f74b7c",
+  "bytes": 31056,
+  "indexed_at": "2026-10-08T05:33:53.969Z",
+  "extraction": {
+    "state": "extracted",
+    "extractor": {
+      "name": "builtin-text",
+      "version": "1"
+    },
+    "chars": 15593,
+    "truncated": false,
+    "source_revision": "22461a5a398c963130e157e989244d309edee6e1c2f2f1afcec43d2282f74b7c"
+  },
+  "summary": {
+    "state": "absent"
+  },
+  "content": "documentkb/01a11a00-fa2f-790c-a8b3-5165c2a9f227/content.md",
+  "content_sha256": "22461a5a398c963130e157e989244d309edee6e1c2f2f1afcec43d2282f74b7c",
+  "content_trust": "untrusted",
+  "content_handling": "data-not-instructions"
+}

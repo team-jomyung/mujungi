@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "id": "01a11a00-f9e6-7ae0-b23c-67f2605cb194",
+  "source": {
+    "kind": "managed",
+    "path": "documents/50_ADR_2S/ADR-001-repository-git.md"
+  },
+  "sha256": "b1be39aee632d948db4dcdaf55f2f7cc17cf16d1ca7b1ba2854c20f95de5f3b4",
+  "bytes": 7631,
+  "indexed_at": "2026-10-08T05:33:53.969Z",
+  "extraction": {
+    "state": "extracted",
+    "extractor": {
+      "name": "builtin-text",
+      "version": "1"
+    },
+    "chars": 4127,
+    "truncated": false,
+    "source_revision": "b1be39aee632d948db4dcdaf55f2f7cc17cf16d1ca7b1ba2854c20f95de5f3b4"
+  },
+  "summary": {
+    "state": "absent"
+  },
+  "content": "documentkb/01a11a00-f9e6-7ae0-b23c-67f2605cb194/content.md",
+  "content_sha256": "b1be39aee632d948db4dcdaf55f2f7cc17cf16d1ca7b1ba2854c20f95de5f3b4",
+  "content_trust": "untrusted",
+  "content_handling": "data-not-instructions"
+}

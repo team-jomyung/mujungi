@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "id": "01a11a01-0b8b-7a24-83ef-d52afdb91d9b",
+  "source": {
+    "kind": "managed",
+    "path": "documents/60_ERD_v0.1/mujoong_ERD_1007.png"
+  },
+  "sha256": "3cd648b9f966ec5e12cdb95435f9578ee870c1dd32996bcdac1fed44bda47086",
+  "bytes": 2638850,
+  "indexed_at": "2026-10-08T05:33:58.486Z",
+  "extraction": {
+    "state": "unsupported_type",
+    "detectedType": "application/octet-stream"
+  },
+  "summary": {
+    "state": "absent"
+  },
+  "content_trust": "untrusted",
+  "content_handling": "data-not-instructions"
+}

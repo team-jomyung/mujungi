@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "id": "01a11a01-0b92-7e20-8f08-bd20cb3203e2",
+  "source": {
+    "kind": "managed",
+    "path": "documents/60_ERD_v0.1/mujoong_ERD_PostgreSQL_1007.sql"
+  },
+  "sha256": "0190549002f3dbbdc3f9b6c54ac1a43ff6dd9b610af1dd0587f79624ac6b3cc7",
+  "bytes": 21402,
+  "indexed_at": "2026-10-08T05:33:58.486Z",
+  "extraction": {
+    "state": "extracted",
+    "extractor": {
+      "name": "builtin-text",
+      "version": "1"
+    },
+    "chars": 21400,
+    "truncated": false,
+    "source_revision": "0190549002f3dbbdc3f9b6c54ac1a43ff6dd9b610af1dd0587f79624ac6b3cc7"
+  },
+  "summary": {
+    "state": "absent"
+  },
+  "content": "documentkb/01a11a01-0b92-7e20-8f08-bd20cb3203e2/content.md",
+  "content_sha256": "0190549002f3dbbdc3f9b6c54ac1a43ff6dd9b610af1dd0587f79624ac6b3cc7",
+  "content_trust": "untrusted",
+  "content_handling": "data-not-instructions"
+}

@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "id": "01a11a00-d687-70c2-bcbc-c77d7ce69bf5",
+  "source": {
+    "kind": "managed",
+    "path": "documents/10_화면설계_v1.5j/무중_화면설계_v1.5j.pdf"
+  },
+  "sha256": "fe86fc158fa9cc5e29365fd781894744adce31d182d4d1feb9fec2d3bce7076f",
+  "bytes": 3053029,
+  "indexed_at": "2026-10-08T05:33:44.918Z",
+  "extraction": {
+    "state": "extractor_unavailable",
+    "extractor": {
+      "name": "pdftotext"
+    },
+    "detectedType": "application/pdf"
+  },
+  "summary": {
+    "state": "absent"
+  },
+  "content_trust": "untrusted",
+  "content_handling": "data-not-instructions"
+}

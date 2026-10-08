@@ -1,0 +1,93 @@
+# 무중 개발 명세 1008 — API · 실시간 이벤트 · 내부 이벤트 · 상태 기계
+
+경로 이름은 제안이다. 2-Spring v0.4의 '세부 경로명은 API 계약에서 확정'을 따른다. 상태 이름은 화면 설계 기준이며 ADR-005와 다른 점은 개발전환_점검표 2절 3 · 4번에 있다.
+
+## API 묶음
+| 묶음 | 경로 | 소유 | 비고 |
+|---|---|---|---|
+| 인증 | POST /api/auth/google · POST /api/auth/refresh · POST /api/auth/logout · DELETE /api/me | Core | OAuth code → 세션 쿠키(Spring Session, core_spring_session). 만료 401 → 01 |
+| 동의 · 약관 | GET /api/policies/current · GET/PUT /api/consents | Core | 첫 02에서 4항목 GIVEN으로 한 번 저장. 변경 · 철회 API 없음. policy_version 비교로 재동의 판단 |
+| 아이 | GET/POST/PATCH /api/child (계정당 하나 · 아이 삭제 API 없음) | Core | 아이를 지우려면 계정 삭제(DELETE /api/me) |
+| 기기 | GET /api/device · GET /api/device/status · POST /api/device/register | Core(등록) + Realtime(상태) | 상태는 Realtime heartbeat → Core Inbox로 반영(DeviceStatusChanged). 해제 API 없음(10/8) |
+| 기기 웹 | POST /api/device/bootstrap · GET /api/device/bootstrap/status · WS /ws/device?token= | Realtime(/device, /ws) | 모델 키 · 세션 키는 기기에 안 줌. 기기 토큰만 |
+| 종료 표현 | GET/PUT /api/child/stop-expressions | Core | 세션 시작 때 세션 패키지에 복사(realtime_session_stop_expression) |
+| 활동 | POST /api/activities/free · POST /api/activities/practice · GET /api/sessions/current · GET /api/sessions/{id} · POST /api/sessions/{id}/end | Core → Outbox → Realtime | 시작은 idempotencyKey(realtime_activity_session.start_idempotency_key). 409 SESSION_EXISTS · 423 DEVICE_OFFLINE · 403 CONSENT_MISSING |
+| 실시간(보호자) | GET /api/sessions/{id}/stream (SSE) | Realtime | transcript.delta · transcript.done · state · gap · warning.silence · practice.stage · ended |
+| 기록 | GET /api/records?month · GET /api/records?date · GET /api/sessions/{id}/result · GET /api/sessions/{id}/result/status · POST /api/sessions/{id}/result/retry | Core | 결과는 core_result(version) · 상태는 core_session_result_state |
+| 목표 | GET /api/goal-selections · POST /api/goal-selections · PATCH /api/goal-selections/{id} · DELETE /api/goal-selections/{id} | Core | 즐겨찾기 · 순서 컬럼 추가 필요 |
+| 리포트 | GET /api/reports/preview · POST /api/reports · GET /api/reports/{id} · GET /api/reports/{id}/pdf | Core | AI 없음: 저장된 전사를 날짜순으로 묶어 PDF. 생성은 core_result_job(job_type=REPORT)로 비동기 |
+| 삭제 | DELETE /api/me → 내부적으로 core_data_deletion_request 접수 · GET /api/deletion-requests/{id} | Core | 기록만 따로 지우는 화면은 없음(준하 10/8) |
+| 푸시 | PUT /api/push-token {token, platform} | Core | [없음] 토큰 테이블 필요. 페이로드 {type, sessionId, deviceStatus} |
+
+## 실시간 이벤트 (보호자 앱 ← 서버)
+| 이벤트 | 페이로드 | 화면 반응 |
+|---|---|---|
+| transcript.delta | {turnId, speaker:'child'\|'ai', text, seq} | 12 말풍선에 조각 추가(흐린 글) |
+| transcript.done | {turnId, speaker, text, startedAt, endedAt} | 말풍선 확정 · 시각 표시 |
+| state | {status, since} | 상태 줄: WAITING_CHILD · ACTIVE · CLOSING · ENDED(confirmed) |
+| gap | {from, to, reason:'DISCONNECT'\|'RECONNECT'} | 점선 '잠깐 끊김' 구간 |
+| warning.silence | {silentSince, endsAt} | 노란 카드 '2분 더 말이 없으면 끝나요' |
+| practice.goal | {goalIndex, goalCount, goalName} | 12 머리의 연습 표시 n/N · 목표 이름 (연습 방식 D-05 결정 뒤 단계 값 추가) |
+| ended | {endReason, endedAt, confirmed:boolean} | → 17 (confirmed=false면 미확인 표시) |
+
+## 내부 이벤트 (Core ↔ Realtime, Outbox/Inbox)
+| 이벤트 | 방향 | 내용 |
+|---|---|---|
+| SessionPackageCreated | Core → Realtime | sessionId · 목표 · 상황 · 승인 콘텐츠 버전 · 종료 표현 · 원음 보관 여부(동의) |
+| SessionStateChanged | Realtime → Core | PREPARING · DEVICE_ACK · WAITING_CHILD · ACTIVE · CLOSING · ENDED(reason, confirmed) |
+| TranscriptAppended | Realtime → Core | turn · speaker · text · 시각 (Core가 동의 확인 뒤 저장, 철회 뒤 도착분 거절) |
+| PracticeStageChanged · CueDelivered · EvaluationMade | Realtime → Core | 연습 기록(방식 결정 뒤 필드 확정) |
+| AudioSegmentUploaded | Realtime → Core(내부 업로드 API) | 원음 보관 동의 때만 |
+| ResultRequested | Core 내부 | 세션 끝 → Result Worker → core_result · 알림 |
+| DeviceStatusChanged | Realtime → Core | CONNECTED · DISCONNECTED · UNRESPONSIVE · lastSeenAt |
+| DeletionRequested · DeletionCompleted | Core ↔ Realtime | 아이 · 계정 삭제 때 Realtime 영역(전사 · 원음) 처리 뒤 완료 보고 |
+
+## 상태 기계 · 활동 세션 (realtime_activity_session.status)
+| 상태 | 뜻 · 조건 | 화면 |
+|---|---|---|
+| REQUESTED | 보호자 시작 요청(08 · 18) · Core 검사 통과 | 08 · 18 단추 흐림 |
+| PREPARING | 세션 패키지 수신 · GPT-Live 세션 열림 | 12 '상황 준비 중' / '참여 기다리는 중' |
+| DEVICE_ACK | 기기가 패키지 받고 재생 준비 | 12 '기기 응답 확인됨' |
+| WAITING_CHILD | 첫 인사 재생 뒤 아이 대답 대기(최대 N초) | 12 참여 기다리는 중 → 무응답이면 DECLINED(P3) |
+| ACTIVE | 아이 첫 발화 | 12 대화 중 · 말풍선 |
+| CLOSING | 보호자 끝내기 · 아이 종료 표현 · 공백 6분 · 철회 | 17 마무리 중 · 출력 차단 · 마무리 인사 1회 |
+| ENDED | 기기 멈춤 · 전송 · 공급자 세션 정리 확인(confirmed) | 17 (사유 줄) · ResultRequested |
+| ENDED_UNCONFIRMED | CLOSING 30초 안에 기기 멈춤 확인 없음 → 서버가 자동 처리 | 17 '기기 응답 없이 끝냄' · 다음 시작 전 04 기기 칸이 다시 확인 |
+| ABORTED | 연결 끊김 40초 복구 실패 · Core 장애 | P2 → 17 (끊기기 전 기록) |
+| DECLINED | WAITING_CHILD에서 무응답 | P3 → 04 · 기록 저장 안 함 |
+| FAILED | PREPARING 실패(상황 생성 · 모델 연결) | 08 · 18로 돌아와 이유 표시 |
+
+end_reason: GUARDIAN_STOP · CHILD_STOP · SILENCE · DISCONNECT · CONSENT_WITHDRAWN · UNCONFIRMED · DECLINED · FAILED
+
+## 상태 기계 · 기기 (Device · 제안 테이블)
+| 상태 | 뜻 · 조건 | 화면 |
+|---|---|---|
+| UNREGISTERED | bootstrap으로 코드 발급, 아직 집에 안 묶임 | D0 코드 표시 · 보호자 05 '기기 등록 · 없음' |
+| REGISTERED_OFFLINE | 등록됐으나 WS 없음 | 05 '기기 연결 · 끊김' 또는 꺼짐 |
+| CONNECTED | WS 열림 · heartbeat 5초 · 지연 1초 이하 | 04 · 05 초록 · 탭 열림 |
+| UNSTABLE | heartbeat 지연 1초 넘거나 5분 안 끊김 2회 이상 | 04 · 05 노랑 · 탭 잠김(안정될 때까지) |
+| DISCONNECTED | heartbeat 40초 끊김 | 04 · 05 빨강 · 탭 잠김 · 세션 중이면 P2 경로 |
+| UNRESPONSIVE | 연결은 있는데 명령 응답 없음(세션 패키지 · 종료 명령 30초) | 05 회색 '응답 없음' · 12 '그래도 끝내기' |
+| RELEASED | 기기 데이터 삭제로 새 코드가 나온 경우(해제 기능 없음) | 05 등록 전 · D0 재등록 |
+
+상태는 Realtime이 판정하고 DeviceStatusChanged로 Core에 알림. last_seen_at 보관
+
+## 상태 기계 · 동의 (core_consent, 4항목 전부 필수)
+| 상태 | 뜻 · 조건 | 화면 |
+|---|---|---|
+| NOT_GIVEN | 첫 02 전 | 02만 열림(다른 화면 진입 불가) |
+| GIVEN(policy_version) | 4항목 저장 | 정상 |
+| OUTDATED | 약관 개정으로 policy_version이 현재와 다름 | 다음 실행에 02 재동의 · 거부하면 계정 삭제 안내 |
+| DELETED | 계정 삭제 | 모든 기록 · 기기 등록 삭제 요청 · 01 |
+
+항목별 변경 · 철회 화면 없음(준하 10/8). 요구사항 FR-A03 선택 항목 · FR-A08 철회와 어긋나므로 팀 확인 필요
+
+## 상태 기계 · 결과 · 리포트 작업 (core_result_job · core_report)
+| 상태 | 뜻 · 조건 | 화면 |
+|---|---|---|
+| REQUESTED | 세션 ENDED 또는 리포트 요청 | 17 '정리 중' / 29 '만드는 중' |
+| RUNNING | Worker 실행(attempt 1~3) | 같음 |
+| READY | core_result · core_report 저장 | 17 단추 켜짐 / 29 내용 표시 |
+| FAILED | 3회 실패 | 17 · 27 '다시 시도' / 29 실패 카드 |
+
+재시도는 core_result_job_attempt에만 쌓이고 이전 결과는 보존

@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "id": "01a11a00-d699-73a2-b626-29648a803d17",
+  "source": {
+    "kind": "managed",
+    "path": "documents/10_화면설계_v1.5j/화면설계_v1.5j_화면과_분기.md"
+  },
+  "sha256": "6d9ec53f780776366564e208a9ec53ff805f923dd9872c8f0d788f09ceadf7af",
+  "bytes": 23081,
+  "indexed_at": "2026-10-08T05:33:44.918Z",
+  "extraction": {
+    "state": "extracted",
+    "extractor": {
+      "name": "builtin-text",
+      "version": "1"
+    },
+    "chars": 12387,
+    "truncated": false,
+    "source_revision": "6d9ec53f780776366564e208a9ec53ff805f923dd9872c8f0d788f09ceadf7af"
+  },
+  "summary": {
+    "state": "absent"
+  },
+  "content": "documentkb/01a11a00-d699-73a2-b626-29648a803d17/content.md",
+  "content_sha256": "6d9ec53f780776366564e208a9ec53ff805f923dd9872c8f0d788f09ceadf7af",
+  "content_trust": "untrusted",
+  "content_handling": "data-not-instructions"
+}

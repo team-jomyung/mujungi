@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "id": "01a11a00-fa27-7bb9-b598-3ea5e765193d",
+  "source": {
+    "kind": "managed",
+    "path": "documents/50_ADR_2S/ADR-009-execution-boundary.md"
+  },
+  "sha256": "2de0a9887822507a363d03290931723b0879d45745bf42f489a66659f613eb4a",
+  "bytes": 32571,
+  "indexed_at": "2026-10-08T05:33:53.969Z",
+  "extraction": {
+    "state": "extracted",
+    "extractor": {
+      "name": "builtin-text",
+      "version": "1"
+    },
+    "chars": 16968,
+    "truncated": false,
+    "source_revision": "2de0a9887822507a363d03290931723b0879d45745bf42f489a66659f613eb4a"
+  },
+  "summary": {
+    "state": "absent"
+  },
+  "content": "documentkb/01a11a00-fa27-7bb9-b598-3ea5e765193d/content.md",
+  "content_sha256": "2de0a9887822507a363d03290931723b0879d45745bf42f489a66659f613eb4a",
+  "content_trust": "untrusted",
+  "content_handling": "data-not-instructions"
+}

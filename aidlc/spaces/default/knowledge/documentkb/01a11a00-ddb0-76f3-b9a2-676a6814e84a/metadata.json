@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "id": "01a11a00-ddb0-76f3-b9a2-676a6814e84a",
+  "source": {
+    "kind": "managed",
+    "path": "documents/20_개발명세_1008/개발명세_1008_화면_테이블.md"
+  },
+  "sha256": "e258893eeb4a09f7b26e11d29a82349c86c8c21106d2c9e79a5e9d228b737bf3",
+  "bytes": 6591,
+  "indexed_at": "2026-10-08T05:33:46.737Z",
+  "extraction": {
+    "state": "extracted",
+    "extractor": {
+      "name": "builtin-text",
+      "version": "1"
+    },
+    "chars": 6500,
+    "truncated": false,
+    "source_revision": "e258893eeb4a09f7b26e11d29a82349c86c8c21106d2c9e79a5e9d228b737bf3"
+  },
+  "summary": {
+    "state": "absent"
+  },
+  "content": "documentkb/01a11a00-ddb0-76f3-b9a2-676a6814e84a/content.md",
+  "content_sha256": "e258893eeb4a09f7b26e11d29a82349c86c8c21106d2c9e79a5e9d228b737bf3",
+  "content_trust": "untrusted",
+  "content_handling": "data-not-instructions"
+}

@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "id": "01a11a00-fa0e-7cb2-b39b-eeaa470d0db1",
+  "source": {
+    "kind": "managed",
+    "path": "documents/50_ADR_2S/ADR-006-demo-deployment.md"
+  },
+  "sha256": "45c3d88449778a09c995f4ab4868ca287261426abe54255f87dbf566995f7108",
+  "bytes": 48614,
+  "indexed_at": "2026-10-08T05:33:53.969Z",
+  "extraction": {
+    "state": "extracted",
+    "extractor": {
+      "name": "builtin-text",
+      "version": "1"
+    },
+    "chars": 28135,
+    "truncated": false,
+    "source_revision": "45c3d88449778a09c995f4ab4868ca287261426abe54255f87dbf566995f7108"
+  },
+  "summary": {
+    "state": "absent"
+  },
+  "content": "documentkb/01a11a00-fa0e-7cb2-b39b-eeaa470d0db1/content.md",
+  "content_sha256": "45c3d88449778a09c995f4ab4868ca287261426abe54255f87dbf566995f7108",
+  "content_trust": "untrusted",
+  "content_handling": "data-not-instructions"
+}

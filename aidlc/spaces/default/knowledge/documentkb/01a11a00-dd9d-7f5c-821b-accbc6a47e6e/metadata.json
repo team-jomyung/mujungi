@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "id": "01a11a00-dd9d-7f5c-821b-accbc6a47e6e",
+  "source": {
+    "kind": "managed",
+    "path": "documents/20_개발명세_1008/개발명세_1008_결정기록_역할_빈칸.md"
+  },
+  "sha256": "3576a8adc86dd1c85f5f358d087741aa5211d1385ea5fdb8c140c24ebb10c190",
+  "bytes": 11134,
+  "indexed_at": "2026-10-08T05:33:46.737Z",
+  "extraction": {
+    "state": "extracted",
+    "extractor": {
+      "name": "builtin-text",
+      "version": "1"
+    },
+    "chars": 6975,
+    "truncated": false,
+    "source_revision": "3576a8adc86dd1c85f5f358d087741aa5211d1385ea5fdb8c140c24ebb10c190"
+  },
+  "summary": {
+    "state": "absent"
+  },
+  "content": "documentkb/01a11a00-dd9d-7f5c-821b-accbc6a47e6e/content.md",
+  "content_sha256": "3576a8adc86dd1c85f5f358d087741aa5211d1385ea5fdb8c140c24ebb10c190",
+  "content_trust": "untrusted",
+  "content_handling": "data-not-instructions"
+}

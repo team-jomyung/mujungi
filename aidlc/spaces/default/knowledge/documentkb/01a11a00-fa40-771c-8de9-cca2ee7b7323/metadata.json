@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "id": "01a11a00-fa40-771c-8de9-cca2ee7b7323",
+  "source": {
+    "kind": "managed",
+    "path": "documents/50_ADR_2S/README.md"
+  },
+  "sha256": "dbffa201ae7b3af428061ae0e0132c7dc035b8c02734391409fe3bfb4ac42400",
+  "bytes": 18133,
+  "indexed_at": "2026-10-08T05:33:53.969Z",
+  "extraction": {
+    "state": "extracted",
+    "extractor": {
+      "name": "builtin-text",
+      "version": "1"
+    },
+    "chars": 10839,
+    "truncated": false,
+    "source_revision": "dbffa201ae7b3af428061ae0e0132c7dc035b8c02734391409fe3bfb4ac42400"
+  },
+  "summary": {
+    "state": "absent"
+  },
+  "content": "documentkb/01a11a00-fa40-771c-8de9-cca2ee7b7323/content.md",
+  "content_sha256": "dbffa201ae7b3af428061ae0e0132c7dc035b8c02734391409fe3bfb4ac42400",
+  "content_trust": "untrusted",
+  "content_handling": "data-not-instructions"
+}

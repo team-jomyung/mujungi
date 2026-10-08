@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "id": "01a11a00-f339-70e1-b135-3ecddea6909e",
+  "source": {
+    "kind": "managed",
+    "path": "documents/40_기능명세_GPT-Live/무중_기능명세서_상세기능_v2.md"
+  },
+  "sha256": "6d480354bdb85411067850823519439070ca02f8d890e378c273a8079f8479a8",
+  "bytes": 85679,
+  "indexed_at": "2026-10-08T05:33:52.240Z",
+  "extraction": {
+    "state": "extracted",
+    "extractor": {
+      "name": "builtin-text",
+      "version": "1"
+    },
+    "chars": 42023,
+    "truncated": false,
+    "source_revision": "6d480354bdb85411067850823519439070ca02f8d890e378c273a8079f8479a8"
+  },
+  "summary": {
+    "state": "absent"
+  },
+  "content": "documentkb/01a11a00-f339-70e1-b135-3ecddea6909e/content.md",
+  "content_sha256": "6d480354bdb85411067850823519439070ca02f8d890e378c273a8079f8479a8",
+  "content_trust": "untrusted",
+  "content_handling": "data-not-instructions"
+}

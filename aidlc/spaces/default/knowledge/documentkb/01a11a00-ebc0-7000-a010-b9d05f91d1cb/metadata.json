@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "id": "01a11a00-ebc0-7000-a010-b9d05f91d1cb",
+  "source": {
+    "kind": "managed",
+    "path": "documents/30_요구사항_v1.1/요구사항 명세서 v1.1.xlsx"
+  },
+  "sha256": "b0c2ea5fbd1fc9720cc27d4b1f3a0bbd75085bdaa9731327c34d8975213fd798",
+  "bytes": 247792,
+  "indexed_at": "2026-10-08T05:33:50.365Z",
+  "extraction": {
+    "state": "unsupported_type",
+    "detectedType": "application/octet-stream"
+  },
+  "summary": {
+    "state": "absent"
+  },
+  "content_trust": "untrusted",
+  "content_handling": "data-not-instructions"
+}
