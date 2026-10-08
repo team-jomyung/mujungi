@@ -1,0 +1,46 @@
+# 무중 개발 명세 1008 — 화면 ↔ 테이블 (ERD 10/7 · 40테이블)
+
+테이블마다 컬럼과 그 테이블을 읽거나 쓰는 화면.
+
+| 테이블 | 컬럼 | 쓰는 화면 |
+|---|---|---|
+| core_result_job_attempt | id, result_job_id, attempt_no, trigger_type, status, error_code, error_message, started_at, ended_at |  |
+| core_recommendation_evidence | id, recommendation_id, structured_experience_id, source_transcript_id, evidence_type, created_at | S-27 |
+| core_structured_experience | id, child_id, activity_context_id, session_id, version, content_json, model_version, prompt_version, status, created_at, invalidated_at, invalidation_reason |  |
+| realtime_result_input_snapshot | id, session_id, snapshot_version, status, cutoff_at, consent_version, consent_checked_at, data_usage_allowed, snapshot_hash, captured_at, invalidated_at, invalidation_reason, input_json |  |
+| realtime_session_stop_expression | id, session_id, expression_text, is_default, sort_order, created_at |  |
+| core_scenario | id, child_id, goal_selection_id, target_behavior_key, scenario_type, relation_type, opportunity_condition, scenario_text, partner_role_text, model_version, prompt_version, validation_status, created_at, status, invalidated_at, invalidation_reason |  |
+| realtime_practice_attempt | id, session_id, scenario_exposure_id, goal_selection_id, attempt_type, sequence_no, status, created_at, ended_at | S-18 |
+| realtime_audio_recording | id, session_id, speaker, storage_path, started_at, ended_at, created_at, deleted_at |  |
+| core_spring_session | primary_id, session_id, creation_time, last_access_time, max_inactive_interval, expiry_time, principal_name | S-01 |
+| core_practice_goal_selection | id, guardian_id, child_id, recommendation_id, selection_type, status, selected_at, created_at, invalidated_at, invalidation_reason | S-18, S-27 |
+| realtime_practice_response | id, attempt_id, transcript_id, response_type, status, response_latency_ms, created_at |  |
+| core_child | id, guardian_id, display_name, age, interests_json, status, created_at, updated_at, deleted_at | P-07, R-PDF, S-03, S-04, S-30 |
+| realtime_activity_session | id, guardian_id, child_id, activity_context_id, activity_type, status, current_practice_stage, start_idempotency_key, voice_client_id, gpt_live_session_id, consent_version, consent_checked_at, data_collection_allowed, transcript_storage_allowed, child_context_json, intro_content_version_id, closing_content_version_id, end_reason, end_detail, termination_requested_at, output_stopped_at, transport_closed_at, provider_closed_at, started_at, ended_at, row_version, created_at, updated_at, practice_goal_selection_id | D-19, P-01, P-02, P-03, R-PDF, S-04, S-08, S-12, S-17, S-26, S-28 |
+| core_result_job | id, session_id, snapshot_id, job_type, status, idempotency_key, requested_by, attempt_count, last_error, created_at, updated_at | S-17 |
+| core_approved_content_version | id, content_id, version, content_text, audio_path, status, created_at |  |
+| core_outbox_event | event_id, event_type, aggregate_type, aggregate_id, payload_json, status, retry_count, available_at, published_at, last_error, created_at |  |
+| core_stop_expression | id, child_id, expression_suffix, normalized_suffix, sort_order, created_at, updated_at | S-05, S-SET1 |
+| realtime_scenario_exposure | id, session_id, child_id, scenario_id, sequence_no, exposure_type, scenario_snapshot_json, exposed_at |  |
+| core_result | id, session_id, result_job_id, source_snapshot_id, version, result_type, status, content_json, model_version, prompt_version, created_at, invalidated_at, invalidation_reason | S-27, S-28 |
+| core_goal_recommendation | id, child_id, structured_experience_id, source_session_id, behavior_key, reason_text, status, created_at, invalidated_at, invalidation_reason | S-18, S-27 |
+| realtime_outbox_event | event_id, event_type, aggregate_type, aggregate_id, payload_json, status, retry_count, available_at, published_at, last_error, created_at |  |
+| core_report | id, guardian_id, child_id, status, content_json, generated_at, invalidated_at, invalidation_reason, deleted_at, created_at | R-PDF, S-30 |
+| realtime_conversation_turn | id, session_id, turn_no, turn_type, status, started_at, ended_at, created_at |  |
+| realtime_session_event | id, session_id, event_type, op_id, transcript_id, payload_json, created_at | S-12 |
+| core_spring_session_attributes | attribute_name, session_primary_id, attribute_bytes |  |
+| realtime_transcript | id, session_id, turn_id, sequence_no, speaker, text, assembly_status, review_needed, started_at, ended_at, created_at, deleted_at | R-PDF, S-12, S-27, S-30 |
+| core_social_account | id, guardian_id, provider, provider_user_id, provider_email, created_at, updated_at | S-01 |
+| core_consent | id, actor_guardian_id, child_id, consent_type, consent_status, consent_version, policy_version, effective_from, effective_to, created_at | S-02 |
+| core_analytics_event | event_id, event_name, event_time, session_id, activity_type, target_skill_key, trigger_source, app_version, model_version, properties_json, created_at, guardian_id, child_id, scenario_id |  |
+| realtime_cue_delivery | id, attempt_id, source_type, delivered_text, cue_level, sequence_order, model_version, prompt_version, given_at |  |
+| core_guardian | id, status, created_at, updated_at |  |
+| core_session_result_state | session_id, current_result_id, updated_at | S-17 |
+| realtime_inbox_event | event_id, source_service, event_type, payload_json, status, retry_count, received_at, processed_at, last_error |  |
+| realtime_evaluation | id, response_id, label, review_needed, reason, raw_json, model_version, prompt_version, created_at, invalidated_at, invalidation_reason, status |  |
+| core_data_deletion_request | id, guardian_id, child_id, session_id, target_type, target_id, requested_types_json, status, idempotency_key, blocked_at, requested_at, completed_at, last_error |  |
+| core_inbox_event | event_id, source_service, event_type, payload_json, status, retry_count, received_at, processed_at, last_error |  |
+| core_approved_content | id, content_code, content_type, created_at | S-02-1 |
+| core_report_activity | id, report_id, session_id, result_id, included_at | R-PDF, S-30 |
+| core_support_item | id, behavior_key, condition_text, content_text, status, created_at, updated_at | S-27 |
+| core_activity_context | id, guardian_id, child_id, session_id, purpose, known_content, situation_type, source_type, question, status, created_at, updated_at, deleted_at | S-08 |
