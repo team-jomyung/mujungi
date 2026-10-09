@@ -1161,3 +1161,92 @@
 **Stage**: functional-design
 
 ---
+
+## Subagent Completed
+**Timestamp**: 2026-10-09T17:00:55Z
+**Event**: SUBAGENT_COMPLETED
+**Agent Type**: 
+**Agent ID**: ad87a941afcbd0b1a
+**Message**: 했어요
+
+---
+
+## Session End
+**Timestamp**: 2026-10-09T17:05:48Z
+**Event**: SESSION_ENDED
+**Reason**: other
+
+---
+
+## Session Resume
+**Timestamp**: 2026-10-09T17:09:02Z
+**Event**: SESSION_RESUMED
+**Source**: resume
+**Session**: 39fd3430-12f4-5241-8ae6-2725dd7b4530
+
+---
+
+## Human Turn
+**Timestamp**: 2026-10-09T17:09:30Z
+**Event**: HUMAN_TURN
+**Session**: 39fd3430-12f4-5241-8ae6-2725dd7b4530
+
+---
+
+## Workflow Unparked
+**Timestamp**: 2026-10-09T17:09:50Z
+**Event**: WORKFLOW_UNPARKED
+
+---
+
+## Autonomy Mode Set
+**Timestamp**: 2026-10-09T17:09:54Z
+**Event**: AUTONOMY_MODE_SET
+**Mode**: autonomous
+
+---
+
+## Unit Started
+**Timestamp**: 2026-10-09T17:11:21Z
+**Event**: UNIT_STARTED
+**Stage**: functional-design
+**Unit**: u1-walking-skeleton
+**Run floor**: WORKFLOW_STARTED:2026-10-08T08:47:46Z#1
+
+---
+
+## Artifact Created
+**Timestamp**: 2026-10-09T17:15:12Z
+**Event**: ARTIFACT_CREATED
+**Tool**: Write
+**File**: <project-dir>/aidlc/spaces/default/intents/261008-mujoong-service/construction/u1-walking-skeleton/functional-design/functional-design-questions.md
+**Context**: construction > u1-walking-skeleton > functional-design > functional-design-questions.md
+
+---
+
+## Artifact Created
+**Timestamp**: 2026-10-09T17:16:45Z
+**Event**: ARTIFACT_CREATED
+**Tool**: Write
+**File**: <project-dir>/aidlc/spaces/default/intents/261008-mujoong-service/construction/u1-walking-skeleton/functional-design/entities.md
+**Context**: construction > u1-walking-skeleton > functional-design > entities.md
+
+---
+
+## Artifact Created
+**Timestamp**: 2026-10-09T17:21:49Z
+**Event**: ARTIFACT_CREATED
+**Tool**: Write
+**File**: <project-dir>/aidlc/spaces/default/intents/261008-mujoong-service/construction/u1-walking-skeleton/functional-design/rules.md
+**Context**: construction > u1-walking-skeleton > functional-design > rules.md
+
+---
+
+## Artifact Created
+**Timestamp**: 2026-10-09T17:23:59Z
+**Event**: ARTIFACT_CREATED
+**Tool**: Write
+**File**: <project-dir>/aidlc/spaces/default/intents/261008-mujoong-service/construction/u1-walking-skeleton/functional-design/functional-spec.md
+**Context**: construction > u1-walking-skeleton > functional-design > functional-spec.md
+
+---
