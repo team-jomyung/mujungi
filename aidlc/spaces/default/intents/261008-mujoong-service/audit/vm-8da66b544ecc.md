@@ -548,3 +548,61 @@
 **Session**: 39fd3430-12f4-5241-8ae6-2725dd7b4530
 
 ---
+
+## Subagent Completed
+**Timestamp**: 2026-10-09T16:05:32Z
+**Event**: SUBAGENT_COMPLETED
+**Agent Type**: 
+**Agent ID**: acab96c58b10b190e
+**Message**: Approve
+
+---
+
+## Session Resume
+**Timestamp**: 2026-10-09T16:12:21Z
+**Event**: SESSION_RESUMED
+**Source**: resume
+**Session**: 39fd3430-12f4-5241-8ae6-2725dd7b4530
+
+---
+
+## Human Turn
+**Timestamp**: 2026-10-09T16:12:21Z
+**Event**: HUMAN_TURN
+**Session**: 39fd3430-12f4-5241-8ae6-2725dd7b4530
+
+---
+
+## Gate Approved
+**Timestamp**: 2026-10-09T16:13:11Z
+**Event**: GATE_APPROVED
+**Stage**: units-generation
+**User Input**: Approve
+
+---
+
+## Stage Completion
+**Timestamp**: 2026-10-09T16:13:11Z
+**Event**: STAGE_COMPLETED
+**Stage**: units-generation
+**Validation Basis**: {"graphContract":"sha256:baf39a0a351356930786ca985bbb7c5893e8db3e93715525a8e909b629765ee7","inputs":[{"artifact":"components","contentHash":"sha256:214168daad6cf5862117ef176d927012b5bf9df768c13662623d43722b292ea0","instanceCount":1,"presentCount":1,"producer":"domain-design","required":true,"structureHash":"sha256:d810a9180d10f47276d95fba6268562a3bdc5d250059efb6e6365666374b2f8c"},{"artifact":"decisions","contentHash":"sha256:e01aa697b1f82323b6fe180d77fd2d1b0076db2b059894fe6e7d3a77d3b4581e","instanceCount":1,"presentCount":1,"producer":"domain-design","required":false,"structureHash":"sha256:0cc2c5011d780dfa2401a11f5a5fee6595fc11428614796e570ed86a4af442c2"},{"artifact":"requirements","contentHash":"sha256:09219434ca9866922693d920ac5755beba530845da9dbd5db1864e8bc5fa2c1e","instanceCount":1,"presentCount":1,"producer":"requirements-analysis","required":true,"structureHash":"sha256:a00cf24560b5e92c69d71f510f2a41289486228b3f72a2aec3229a583be48738"},{"artifact":"stories","contentHash":"sha256:48bac11b45492ba22909c2d398a735e7ff5bb7a57066987f6ccb5daf48250c43","instanceCount":1,"presentCount":1,"producer":"user-stories","required":false,"structureHash":"sha256:7c1c8cc1aa2c5c67010aa083fdcb7c174a316892896186573fb338bb0decc1e7"}],"outputs":[{"artifact":"traceability","contentHash":"sha256:1b05d1b6b5a701806fca6343495dadd81066f5c7f11d0afc1d456d7eccab0758","instanceCount":1,"presentCount":1,"producer":"units-generation","required":true,"structureHash":"sha256:c77d5328915881eb115f700488cb2fbc6a5aaab20d2c7394d7b990021a50a888"},{"artifact":"unit-of-work-dependency","contentHash":"sha256:7d8c878582328f1e004b4f72a0215916828cd298ee0c277644aa5b5d5c4545c1","instanceCount":1,"presentCount":1,"producer":"units-generation","required":true,"structureHash":"sha256:63c36a8292291827c00b6e66e8678d230ce6a2e89da27aac2d522fec6cd0d0a7"},{"artifact":"unit-of-work-story-map","contentHash":"sha256:d854e751f955b615eb3c603b25e8134dda1b3503c42d98be1e034868eabf244f","instanceCount":1,"presentCount":1,"producer":"units-generation","required":true,"structureHash":"sha256:fbedba8ac08fcbc6ba00c3e4cd651f1708de2d137b520cc6ed2c41714658fcac"},{"artifact":"unit-of-work","contentHash":"sha256:bb5ae6d00c4fb42d1984173d4ea39b6481104c6d4a0f9db0d51dca379fc2ff56","instanceCount":1,"presentCount":1,"producer":"units-generation","required":true,"structureHash":"sha256:d94253e206ed23484f0028fc0cbe5b9c8f30952495290cfa064554683468a848"}],"projectType":"greenfield","schema":3}
+**Details**: Stage Units Generation approved by gate
+**Tokens In**: 74
+**Tokens Out**: 64447
+**Cache Read**: 22980545
+**Cache Write**: 104538
+**Cost USD**: 14.15
+**By Model**: opus-5=14.15
+**By Agent**: main=14.15
+**Tokens By Model**: opus-5=74/64.4k/23M/104.5k
+**Tokens By Agent**: main=74/64.4k/23M/104.5k
+
+---
+
+## Stage Start
+**Timestamp**: 2026-10-09T16:13:11Z
+**Event**: STAGE_STARTED
+**Stage**: contract-design
+**Agent**: aidlc-architect-agent
+
+---
