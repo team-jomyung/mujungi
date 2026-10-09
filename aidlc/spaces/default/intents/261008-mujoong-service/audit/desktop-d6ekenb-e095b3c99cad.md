@@ -1198,3 +1198,52 @@
 **Reason**: other
 
 ---
+
+## Session Resume
+**Timestamp**: 2026-10-09T14:45:43Z
+**Event**: SESSION_RESUMED
+**Source**: resume
+**Session**: bbd4f352-e924-4776-ac66-eb5b199b4c2e
+
+---
+
+## Human Turn
+**Timestamp**: 2026-10-09T14:45:45Z
+**Event**: HUMAN_TURN
+**Session**: bbd4f352-e924-4776-ac66-eb5b199b4c2e
+
+---
+
+## Gate Approved
+**Timestamp**: 2026-10-09T14:45:56Z
+**Event**: GATE_APPROVED
+**Stage**: refined-mockups
+**User Input**: Approve
+
+---
+
+## Stage Completion
+**Timestamp**: 2026-10-09T14:45:56Z
+**Event**: STAGE_COMPLETED
+**Stage**: refined-mockups
+**Validation Basis**: {"graphContract":"sha256:a24fe5e76e30a54250dff6f40ed7dd073597cbf8edbc2b452e33e3c0f0dcfd03","inputs":[{"artifact":"requirements","contentHash":"sha256:09219434ca9866922693d920ac5755beba530845da9dbd5db1864e8bc5fa2c1e","instanceCount":1,"presentCount":1,"producer":"requirements-analysis","required":true,"structureHash":"sha256:a00cf24560b5e92c69d71f510f2a41289486228b3f72a2aec3229a583be48738"},{"artifact":"stories","contentHash":"sha256:48bac11b45492ba22909c2d398a735e7ff5bb7a57066987f6ccb5daf48250c43","instanceCount":1,"presentCount":1,"producer":"user-stories","required":false,"structureHash":"sha256:7c1c8cc1aa2c5c67010aa083fdcb7c174a316892896186573fb338bb0decc1e7"},{"artifact":"user-flow","contentHash":"sha256:83c5b4e7c8cf0a4a0a307ffa606a145b2d2abab7823cf148049f46a54bc058c1","instanceCount":1,"presentCount":0,"producer":"rough-mockups","required":true,"structureHash":"sha256:153a5d75a6c05e5ba6bb15fd4dd9b8d0b03a42ccc6a7fa4428b865e29e1caeb2"},{"artifact":"wireframes","contentHash":"sha256:183d53203981c5c974e03416ad7781b064e78d507f3672942cef3b18885f2015","instanceCount":1,"presentCount":0,"producer":"rough-mockups","required":true,"structureHash":"sha256:db29830d288ca9c07bfdd5f68cbb66b1501b247fd214b8f3ba14b20d0c0b6fde"}],"outputs":[{"artifact":"accessibility-checklist","contentHash":"sha256:b930b8714c5c74f9b106227b1eef37269ddc47e5c7896fc82e7f558c79ab4165","instanceCount":1,"presentCount":1,"producer":"refined-mockups","required":true,"structureHash":"sha256:c676d02ed429eb0b03875e8dfd879f0d3a326a088dbcb1eb7880f546033e829f"},{"artifact":"design-system-mapping","contentHash":"sha256:5e1dbe53bcfcdf68a26683baee1af33dfe18e214e65edb8ea8bc6d6537ac75c7","instanceCount":1,"presentCount":1,"producer":"refined-mockups","required":true,"structureHash":"sha256:7447f583361c72d4e167b1d082e9ba73956b74cc832ff06c94742d7799234cec"},{"artifact":"interaction-spec","contentHash":"sha256:c400ab29373f7a38f35dad74e8c70b34a2eaa396007d3d5e515dfa3f256c31a8","instanceCount":1,"presentCount":1,"producer":"refined-mockups","required":true,"structureHash":"sha256:4d079fca658531c43ed37fe059d592e07b8a395179857421de5f74efb8257f49"},{"artifact":"mockups","contentHash":"sha256:0a5170e30823b1cfe29652aae284039651a38fc2853a0a9efba7b780c5126d6c","instanceCount":1,"presentCount":1,"producer":"refined-mockups","required":true,"structureHash":"sha256:997622e7a1689fb2a7a946c2693592a8842cead4ef05ed6a43b2daea573e0d2e"},{"artifact":"refined-mockups-questions","contentHash":"sha256:3ec4b1357e30cd3645f408a79306df6c6edf34e1ca6b4a5f9987a9cfba7bfa15","instanceCount":1,"presentCount":1,"producer":"refined-mockups","required":true,"structureHash":"sha256:63c3aa8b56b3b859b2180f01c8fafde86155db17b4bfee6a438c724fc7219b62"}],"projectType":"greenfield","schema":3}
+**Details**: Stage Refined Mockups approved by gate
+**Tokens In**: 296
+**Tokens Out**: 51640
+**Cache Read**: 9644059
+**Cache Write**: 911943
+**Cost USD**: 17.48
+**By Model**: fable-5=11.92; <synthetic>=null; sonnet-5=5.56
+**By Agent**: main=17.48
+**Tokens By Model**: fable-5=288/46.7k/7.3M/115.7k; sonnet-5=8/4.9k/2.4M/796.3k
+**Tokens By Agent**: main=296/51.6k/9.6M/911.9k
+
+---
+
+## Stage Start
+**Timestamp**: 2026-10-09T14:45:56Z
+**Event**: STAGE_STARTED
+**Stage**: domain-design
+**Agent**: aidlc-architect-agent
+
+---
