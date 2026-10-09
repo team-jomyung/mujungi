@@ -1154,3 +1154,10 @@
 **Session**: 39fd3430-12f4-5241-8ae6-2725dd7b4530
 
 ---
+
+## Workflow Parked
+**Timestamp**: 2026-10-09T17:00:41Z
+**Event**: WORKFLOW_PARKED
+**Stage**: functional-design
+
+---
