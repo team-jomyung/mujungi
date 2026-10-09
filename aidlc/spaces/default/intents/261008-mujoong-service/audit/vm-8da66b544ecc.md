@@ -5222,3 +5222,12 @@
 **Run floor**: WORKFLOW_STARTED:2026-10-08T08:47:46Z#1
 
 ---
+
+## Error Logged
+**Timestamp**: 2026-10-09T22:50:19Z
+**Event**: ERROR_LOGGED
+**Tool**: aidlc-state
+**Command**: aidlc-state park --project-dir <project-dir>
+**Error**: Refusing to park: Construction Autonomy Mode is autonomous. An unattended autonomous run has no human to resume it and must keep moving - do not park it.
+
+---
