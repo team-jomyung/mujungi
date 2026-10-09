@@ -32,5 +32,8 @@ AI-DLC 워크플로를 현재 단계(2.6 Domain Design, Running)부터 **3.4 Inf
 - 사람에게 질문하고 멈추지 않는다(판단 → 가정 기록 → 진행).
 
 ## 4. 기록
-- 게이트를 하나 넘길 때마다 `git add aidlc docs && git commit -m "docs: <단계> 승인" && git push origin main`. main 푸시가 거부되면 `aidlc-cloud` 브랜치로 푸시하고 보고에 적는다.
+- 세션에 허용된 브랜치가 따로 있으면(예: `claude/…`) 그 브랜치에 커밋·푸시하고 main으로 가는 draft PR을 하나 열어 둔다. 게이트를 하나 넘길 때마다 `git add aidlc docs && git commit -m "docs: <단계> 승인" && git push`. 허용 브랜치 제한이 없으면 main에 바로 푸시한다.
 - 3.4 승인 뒤 `docs/cloud_run_report.md`에 적는다: 단계별 산출물 경로, 준하 제안(가정) 전체 목록, 열린 질문, 3.5 전에 사람이 정할 것, 사용량(`aidlc engine runtime summary --json`). 커밋·푸시로 끝낸다.
+
+## 5. 설치가 막힐 때
+- 클라우드 컨테이너는 root로 돌아가고 공식 설치 스크립트는 root 설치를 거부한다. `scripts/cloud-setup.sh`가 root일 때는 다른 길(릴리스 바이너리 직접 배치 → 비root 사용자로 설치 → bun 으로 엔진 소스 실행)을 차례로 시도한다. 스크립트를 다시 돌리면 된다. 설치 스크립트 본문을 고치지 않는다.
