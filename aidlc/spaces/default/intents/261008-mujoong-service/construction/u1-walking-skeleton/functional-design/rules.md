@@ -1,18 +1,18 @@
 # U1 u1-walking-skeleton — 업무 규칙 (Functional Design 3.1)
 
 > Functional Design(3.1) 산출물 · U1 워킹 스켈레톤 · 깊이 Standard · 2026-10-09 (클라우드 세션, 팀장 대리 판단)
-> 입력: `unit-of-work.md`(U1 정의), `unit-of-work-story-map.md`(US1.1 · US1.4 · US2.1 · US2.2 · US3.1 · US3.3 · US6.1 · US6.2), `requirements.md`(FR2.1 ~ FR2.3 · FR7.1 · NFR1 · NFR3 · NFR6 · NFR9), `components.md`(DeviceRegistry · CoreMessaging · RealtimeMessaging · DeviceWeb · J1 ~ J14), `contract-summary.md`(C2 · C7 · C8 · C9 · C11 · 시간 계약 · J20 ~ J31), 질문 파일 `functional-design-questions.md`(Q1 ~ Q12). 엔터티는 `entities.md`, 순서 있는 동작과 상태 기계는 `functional-spec.md`.
-> 규칙 번호는 `BR{묶음}.{순번}`이다. 숫자 시간값은 `contract-summary.md` 7절 시간 계약 한 곳에만 있고 여기서는 설정 키 이름(`mujoong.timing.*`)으로 부른다. **스켈레톤 슬라이스**로 표시한 규칙은 U1이 최소만 구현하고 소유 유닛이 완성한다(J42).
+> 입력: `unit-of-work.md`(U1 정의), `unit-of-work-story-map.md`(US1.1 · US1.4 · US2.1 · US2.2 · US3.1 · US3.3 · US6.1 · US6.2), `requirements.md`(FR2.1 ~ FR2.3 · FR7.1 · NFR1 · NFR3 · NFR6 · NFR9), `components.md`(DeviceRegistry · CoreMessaging · RealtimeMessaging · DeviceWeb · J1 ~ J14), `contract-summary.md`(C2 · C7 · C8 · C9 · C11 · 시간 계약 · J20 ~ J31), `mockups.md` · `interaction-spec.md`(화면 문구 · 상태), 질문 파일 `functional-design-questions.md`(Q1 ~ Q19, J42 ~ J60). 엔터티는 `entities.md`, 순서 있는 동작과 상태 기계는 `functional-spec.md`.
+> 규칙 번호는 `BR{묶음}.{순번}`이다. 숫자 시간값은 `contract-summary.md` 7절 시간 계약에 키가 있으면 그 한 곳에만 두고 여기서는 설정 키 이름(`mujoong.timing.*`)으로 부른다. 7절에 키가 없는 값(내부 HTTP 제한 · 폴러 · 재시도 간격 등)은 BR8.11대로 `mujoong.*` 키를 NFR Design(3.3)이 확정한다. **스켈레톤 슬라이스**로 표시한 규칙은 U1이 최소만 구현하고 소유 유닛이 완성한다(J42).
 
 ## 1. 규칙 묶음
 
 | 묶음 | 주제 | 규칙 |
 |---|---|---|
 | BR1 | 기기 부트스트랩 · 등록 코드 | BR1.1 ~ BR1.7 |
-| BR2 | 보호자 등록(05a) · 재등록 | BR2.1 ~ BR2.9 |
+| BR2 | 보호자 등록(05a) · 재등록 | BR2.1 ~ BR2.10 |
 | BR3 | 기기 토큰 · 인증 · 연결 대체 | BR3.1 ~ BR3.9 |
 | BR4 | 연결 상태 사본 · 시작 가능 판정 | BR4.1 ~ BR4.8 |
-| BR5 | 영속 메시징(Outbox/Inbox) | BR5.1 ~ BR5.13 |
+| BR5 | 영속 메시징(Outbox/Inbox) | BR5.1 ~ BR5.14 |
 | BR6 | 세션 슬라이스(시작 · 끝내기 · 안전 시한) | BR6.1 ~ BR6.17 |
 | BR7 | 음성 · 게이트 슬라이스 | BR7.1 ~ BR7.6 |
 | BR8 | 실행 골격 · 공통 | BR8.1 ~ BR8.11 |
@@ -28,7 +28,7 @@ rules:
     category: "constraint"
     applies_to: "Device.registration_code, D0 화면"
     trigger: "코드를 발급할 때, 05a에서 코드를 받을 때"
-    logic: "코드는 SecureRandom으로 31글자 중 8개를 뽑는다. 입력은 앞뒤 공백 · 가운데 공백 · 하이픈을 지우고 대문자로 바꾼 뒤 비교한다. 화면 표시는 앞 4 + 뒤 4(예 7F3K 92QD)다."
+    logic: "코드는 SecureRandom으로 31글자 중 8개를 뽑는다. 입력은 앞뒤 공백 · 가운데 공백 · 하이픈 · 가운뎃점을 지우고 대문자로 바꾼 뒤 비교한다. 화면 표시는 앞 4 + 뒤 4(예 7F3K · 92QD, C.D-00.30.3)다."
     violation: "발급 알파벳 밖의 글자를 가진 입력은 어떤 행과도 맞지 않아 BR2.1대로 CODE_NOT_FOUND가 된다."
     source: "FR2.1 · AC6.1.1 · AC6.1.5 · OQ13 · J22"
   - id: BR1.2
@@ -48,11 +48,11 @@ rules:
     violation: "같은 쿠키에 코드가 바뀌면 보호자가 입력한 코드와 기기 화면이 어긋난다 — 허용하지 않는다."
     source: "AC6.1.5 · J45"
   - id: BR1.4
-    statement: "코드는 발급 뒤 24시간(bootstrap.code-ttl)만 유효하고, 만료된 UNREGISTERED 행은 EXPIRED로 바꿔 코드를 비운다."
+    statement: "코드는 발급 뒤 24시간(bootstrap.code-ttl)만 유효하고, 만료된 UNREGISTERED 행은 EXPIRED로 바꿔 등록에 쓰이지 않게 한다."
     category: "constraint"
     applies_to: "Device.code_expires_at, Device.registration_status"
     trigger: "상태 조회 · 등록 요청이 만료된 행을 만날 때, 10분 정리 작업"
-    logic: "now > code_expires_at 이고 UNREGISTERED이면 EXPIRED로 바꾼다(코드 유일 색인에서 빠진다). EXPIRED이면서 7일이 지난 행은 정리 작업이 삭제한다. 기기 웹은 EXPIRED · 401을 받으면 조용히 새 코드를 요청한다."
+    logic: "now > code_expires_at 이고 UNREGISTERED이면 EXPIRED로 바꾼다(조회 때 또는 정리 작업). registration_code는 NOT NULL이라 값이 남지만 UNREGISTERED 부분 유일 색인에서 빠지므로 같은 코드를 새 발급에서 다시 뽑아도 된다. EXPIRED이면서 7일이 지난 행은 정리 작업이 삭제한다. 기기 웹은 EXPIRED · 401을 받으면 조용히 새 코드를 요청한다."
     violation: "만료 코드로 등록을 시도하면 CODE_NOT_FOUND(화면은 '없는 코드예요'와 같다)."
     source: "AC6.1.5 · OQ13 · J45"
   - id: BR1.5
@@ -68,7 +68,7 @@ rules:
     category: "constraint"
     applies_to: "POST /api/device/bootstrap"
     trigger: "bootstrap 요청"
-    logic: "IP는 Nginx가 넘기는 X-Forwarded-For 첫 값(신뢰 프록시에서 온 요청만)이다. 창을 넘으면 429 RATE_LIMITED. 같은 쿠키의 반복 요청(BR1.3)은 횟수에 세지 않는다. 카운터는 앱 메모리이며 앱이 하나라 충분하다."
+    logic: "IP는 Nginx가 `proxy_set_header X-Forwarded-For $remote_addr`로 덮어써 넘기는 값이다(클라이언트가 보낸 X-Forwarded-For는 이어 붙이지 않고 버린다, BR8.9). 앱은 Docker 내부망의 Nginx에서 온 요청에서만 이 헤더를 읽고, 없거나 주소 형식이 아니면 연결 원격 주소를 쓴다. IPv6는 앞 64비트로 묶어 센다. 창을 넘으면 429 RATE_LIMITED. 같은 쿠키의 반복 요청(BR1.3)은 횟수에 세지 않는다. 카운터는 앱 메모리이며 앱이 하나라 충분하고, 키 수에 상한을 두어 위조 키로 메모리가 차지 않게 한다."
     violation: "429. 아이 기기 화면에는 기술 문구를 보이지 않고 5초 뒤 다시 시도한다(BR9.4)."
     source: "NFR9 · J29"
   - id: BR1.7
@@ -76,25 +76,25 @@ rules:
     category: "policy"
     applies_to: "GET /api/device/bootstrap/status"
     trigger: "기기 웹의 2초 폴링(bootstrap.status-poll)"
-    logic: "쿠키 비밀로 행을 찾아 PENDING(UNREGISTERED) · REGISTERED · EXPIRED를 돌려준다. 쿠키가 없거나 모르는 값이면 401 BOOTSTRAP_NOT_FOUND."
+    logic: "쿠키 비밀로 행을 찾아 PENDING(UNREGISTERED) · REGISTERED · EXPIRED를 돌려준다. RELEASED 행(claim 전에 교체 등록으로 풀린 쿠키)도 EXPIRED로 돌려줘 기기 웹이 조용히 새 코드를 받게 한다. 쿠키가 없거나 모르는 값이면 401 BOOTSTRAP_NOT_FOUND. 쿠키는 HttpOnly라 기기 웹 JS는 있는지 볼 수 없으므로 항상 이 호출로 서버가 판정한다."
     violation: "401을 받은 기기 웹은 새 코드를 요청한다."
     source: "AC6.1.2 · J22"
 
   # ═════════════ BR2 · 보호자 등록(05a) · 재등록 ═════════════
   - id: BR2.1
-    statement: "등록 요청의 코드는 정규화 뒤 영숫자 8글자여야 하고, 그 코드로 등록 가능한 행이 없으면 CODE_NOT_FOUND다."
+    statement: "등록 요청의 코드는 정규화 뒤 영숫자 8글자여야 하고, 등록 가능한 행이 없으면 CODE_NOT_FOUND, 이미 등록된 코드면 CODE_ALREADY_REGISTERED다."
     category: "validation"
     applies_to: "POST /api/device/register"
     trigger: "05a 「등록」"
-    logic: "정규화(BR1.1) 뒤 길이가 8이 아니거나 영숫자가 아니면 400 VALIDATION_FAILED(화면은 8칸이 차야 단추가 켜져 이 경우가 생기지 않는다). 형식이 맞으면 UNREGISTERED이고 만료되지 않은 행을 코드로 찾는다. 없는 코드 · 만료된 코드 · 발급 알파벳 밖 글자(0 · 1 · I · L · O)를 포함한 코드는 모두 404 CODE_NOT_FOUND다."
-    violation: "404이면 05a에 빨간 카드 '없는 코드예요'가 보이고 다시 입력할 수 있다."
+    logic: "정규화(BR1.1) 뒤 길이가 8이 아니거나 영숫자가 아니면 400 VALIDATION_FAILED(화면은 8칸이 차야 단추가 켜져 이 경우가 생기지 않는다). 형식이 맞으면 ① UNREGISTERED이고 code_expires_at이 지나지 않은 행을 코드로 찾는다(부분 유일 색인이라 최대 1행) — 있으면 BR2.5(또는 활성 기기가 없으면 BR2.3)로 진행한다. ② 없으면 같은 코드의 REGISTERED 또는 RELEASED 행이 있는지 본다 — 있으면 409 CODE_ALREADY_REGISTERED. ③ 그 밖(없는 코드 · 만료된 코드 · EXPIRED · 발급 알파벳 밖 글자(0 · 1 · I · L · O)를 포함한 코드)은 404 CODE_NOT_FOUND다."
+    violation: "404이면 05a에 빨간 카드 '없는 코드예요', 409이면 빨간 카드 '이미 등록된 코드예요'(mockups 9-10)가 보이고 둘 다 다시 입력할 수 있다."
     source: "AC2.2.3 · FR2.1"
   - id: BR2.2
     statement: "등록하는 주체는 로그인한 보호자이고, 계정 삭제가 접수된 보호자는 등록할 수 없다."
     category: "authorization"
     applies_to: "POST /api/device/register"
     trigger: "등록 요청"
-    logic: "세션의 guardianId로만 동작한다. 요청 본문에 보호자 ID를 받지 않는다. guardian.status가 DELETION_REQUESTED이면 403 ACCOUNT_DELETION_IN_PROGRESS."
+    logic: "세션의 guardianId로만 동작한다. 요청 본문에 보호자 ID를 받지 않는다. guardian.status가 DELETION_REQUESTED이면 403 ACCOUNT_DELETION_IN_PROGRESS. 이 확인은 빠른 거절용으로 트랜잭션 밖에서 먼저 하고, 등록 트랜잭션 처음에 보호자 행을 `SELECT ... FOR SHARE`로 다시 읽어 ACTIVE일 때만 진행한다(삭제 접수는 같은 행을 갱신하므로 접수와 등록 커밋이 겹쳐도 삭제된 계정에 REGISTERED 기기가 남지 않는다). 락 순서는 보호자 행 → 코드 행 → 옛 기기 행이다(BR2.5)."
     violation: "401(세션 없음) · 403."
     source: "NFR9 · AC1.1.8"
   - id: BR2.3
@@ -102,7 +102,7 @@ rules:
     category: "constraint"
     applies_to: "Device.registration_status"
     trigger: "등록 요청"
-    logic: "한 트랜잭션에서 조건부 갱신 ‘UPDATE core_device SET guardian_id = :g, registration_status = REGISTERED, registered_at = now WHERE id = :id AND registration_status = UNREGISTERED AND code_expires_at > now’ 의 갱신 행 수가 1일 때만 성공이다. 0이면 행을 다시 읽어 REGISTERED · RELEASED이면 409 CODE_ALREADY_REGISTERED, 사라졌거나 EXPIRED이면 404를 돌려준다."
+    logic: "한 트랜잭션에서 조건부 갱신 ‘UPDATE core_device SET guardian_id = :g, registration_status = REGISTERED, registered_at = now WHERE id = :id AND registration_status = UNREGISTERED AND code_expires_at > now’ 의 갱신 행 수가 1일 때만 성공이다. 0이면 행을 다시 읽어 BR2.1의 ② ③ 분기(REGISTERED · RELEASED이면 409 CODE_ALREADY_REGISTERED, 그 밖은 404)로 답한다. 교체 경로에서 0행이면 BR2.5대로 옛 기기 해제까지 모두 되돌린다."
     violation: "진 쪽은 '이미 등록된 코드' 빨간 카드를 보고 다시 입력할 수 있다. Device 행은 하나다."
     source: "AC2.2.2 · AC2.2.3 · AC2.2.6"
   - id: BR2.4
@@ -110,7 +110,7 @@ rules:
     category: "constraint"
     applies_to: "Device.guardian_id"
     trigger: "등록 요청에서 같은 보호자의 REGISTERED 기기가 있을 때"
-    logic: "옛 기기의 마지막 보고 상태가 OFFLINE · DISCONNECTED · UNRESPONSIVE이거나, 보고가 있었는데 30초(core.device-status-stale) 넘게 새 보고가 없으면(UNKNOWN) 교체를 허용한다. CONNECTED · UNSTABLE이면 409 DEVICE_ALREADY_ACTIVE로 거절한다. 허용하면 BR2.5를 따른다. 부분 유일 색인(보호자당 REGISTERED 하나)이 마지막 방어선이다."
+    logic: "교체 허용 여부는 BR4.3의 판정을 그대로 쓴다. 옛 기기 판정이 STABLE(CONNECTED이고 30초 안에 보고가 있음) 또는 UNSTABLE이면 409 DEVICE_ALREADY_ACTIVE로 거절한다. 그 밖의 모든 경우 — 한 번도 보고되지 않은 기기(사본 없음, BR4.3 ②의 UNRESPONSIVE) · OFFLINE · DISCONNECTED · UNRESPONSIVE · 30초 넘게 보고 없음(UNKNOWN) — 는 교체를 허용하고 BR2.5를 따른다. 보호자당 REGISTERED 하나의 부분 유일 색인이 마지막 방어선이며 그 위반(23505)과 옛 기기 조건부 해제의 0행은 409 DEVICE_ALREADY_ACTIVE로 번역한다."
     violation: "409 DEVICE_ALREADY_ACTIVE. 연결된 기기를 실수로 풀지 않는다."
     source: "AC2.2.7 · AC6.1.3 · B3 · J13 · J46"
   - id: BR2.5
@@ -118,8 +118,8 @@ rules:
     category: "policy"
     applies_to: "Device, CoreOutboxEvent"
     trigger: "BR2.4가 교체를 허용했을 때"
-    logic: "같은 트랜잭션에서 (1) 새 행 REGISTERED, (2) 옛 행 RELEASED(release_reason REREGISTERED, released_at, device_token_hash 비움), (3) CoreOutboxEvent DeviceReleased(deviceId=옛 기기, guardianId, reason=REREGISTERED)를 저장한다. 하나라도 실패하면 모두 되돌린다."
-    violation: "부분 적용은 없다 — 옛 토큰이 살아 있는 채로 새 기기가 REGISTERED가 되는 일이 없다."
+    logic: "한 트랜잭션에서 순서대로 한다. (0) 보호자 행을 FOR SHARE로 읽어 ACTIVE인지 확인(BR2.2). (1) 코드의 UNREGISTERED 행을 FOR UPDATE로 잠그고 만료 전인지 본다. (2) 보호자의 옛 REGISTERED 행이 있으면 FOR UPDATE로 잠그고 BR2.4를 이 시점의 연결 상태 사본으로 다시 판정한다(연결돼 있으면 409 DEVICE_ALREADY_ACTIVE). (3) 옛 행을 조건부로 해제한다 — ‘UPDATE core_device SET registration_status = RELEASED, release_reason = REREGISTERED, released_at = now, device_token_hash = NULL WHERE id = :옛 AND registration_status = REGISTERED’, 갱신 행 수가 1이어야 하고 같은 트랜잭션에서 CoreOutboxEvent DeviceReleased(deviceId = 옛 기기, guardianId, reason = REREGISTERED)를 저장한다. (4) 마지막으로 새 행을 BR2.3의 조건부 UPDATE로 REGISTERED로 바꾼다. 보호자당 REGISTERED 하나의 부분 유일 색인은 문장마다 즉시 검사되고 지연시킬 수 없으므로 (3)이 반드시 (4)보다 먼저다. (4)가 0행이거나 어느 단계든 예외면 트랜잭션 전체를 되돌려 옛 기기는 풀리지 않는다."
+    violation: "부분 적용은 없다 — 옛 토큰이 살아 있는 채로 새 기기가 REGISTERED가 되거나, 새 기기 등록이 실패했는데 옛 기기만 풀리는 일이 없다."
     source: "AC6.1.3 · J13 · J46"
   - id: BR2.6
     statement: "등록 실패가 보호자당 10분에 10번을 넘으면 그 보호자의 등록 요청을 잠시 거절한다."
@@ -142,7 +142,7 @@ rules:
     category: "policy"
     applies_to: "ParentWeb 05a (U1 최소 화면)"
     trigger: "05a 표시와 조작"
-    logic: "칸마다 터치 영역 44px 이상. 8칸 미만이면 「등록」 꺼짐. 요청 중 「등록」 꺼짐 + 등록 중 상태. 404 · 409 · 429 · 오류는 빨간 카드로 알리고 입력을 지우지 않는다. 기기 해제 · 페어링 단추를 두지 않는다. 문구는 문구표(C.S-05A.8.x)이고 문구 미정 곳은 B26을 따른다."
+    logic: "칸마다 터치 영역 44px 이상. 8칸은 OTP식이다: 자동 대문자, 입력하면 다음 칸으로, 지우면 이전 칸으로, 8자 붙여넣기를 지원한다(BR1.1 정규화와 같다). 8칸 미만이면 「등록」 꺼짐. 요청 중 「등록」 꺼짐 + '등록하고 있어요'(mockups 9-9). 없는 코드(404) · 이미 등록된 코드(409, mockups 9-10) · 429는 빨간 카드로 알리고 입력을 지우지 않는다. 네트워크 오류 · 5xx는 토스트 + 「다시 시도」다. 기기 해제 · 페어링 단추를 두지 않는다. 문구표(C.S-05A.8.x)에 없는 문구는 mockups.md 9절의 제안 문구를 임시로 쓴다."
     violation: "—"
     source: "AC2.2.1 · AC2.2.3 · AC2.2.4 · AC2.2.5 · AC2.2.8"
   - id: BR2.9
@@ -153,6 +153,14 @@ rules:
     logic: "04 대화 기기 구역은 등록이 없을 때만 「기기 등록」을 보인다(AC1.4.4). 재등록 진입 단추는 화면 설계에 없다(OQ12, Should) — 서버 규칙(BR2.4 · BR2.5)만 준비한다."
     violation: "—"
     source: "AC2.2.7 · AC1.4.4 · B3 · OQ12"
+  - id: BR2.10
+    statement: "Device 계정 삭제 참가자는 기기를 해제하고 해제 사실을 알린 뒤 그 계정의 기기 행을 모두 지운다."
+    category: "constraint"
+    applies_to: "Device, CoreOutboxEvent (DeletionParticipant 계약 8절)"
+    trigger: "계정 삭제 지휘(U2)가 deleteByGuardian(guardianId, deletionRequestId)을 부를 때"
+    logic: "멱등이다. 한 트랜잭션에서 (1) REGISTERED 행이 있으면 RELEASED(release_reason ACCOUNT_DELETED, released_at, device_token_hash 비움)로 바꾸고 DeviceReleased(reason ACCOUNT_DELETED) Outbox를 쓴다. (2) guardian_id가 같은 core_device 행을 상태와 상관없이 모두 삭제한다(재등록으로 RELEASED가 된 옛 행 포함). 등록 전 EXPIRED · UNREGISTERED 행은 guardian_id가 없어 대상이 아니며 7일 정리 작업(BR1.4)이 지운다. DeviceReleased 처리에 필요한 deviceId는 Outbox payload가 가지므로 행이 없어도 Realtime은 연결을 닫는다. 두 번 불러도 같은 결과이고 반환은 {deleted: {device: n}}이다. 호출 순서: core_device를 가리키는 core_activity(U4 참가자)가 먼저 지워져야 하고 보호자 행 삭제(U2)는 맨 뒤다. core_device.guardian_id와 core_activity.device_id의 외래 키는 ON DELETE 없이(RESTRICT) 이 순서를 강제한다."
+    violation: "순서를 어기면 외래 키 위반으로 삭제 지휘가 실패하고 다시 시도된다(멱등)."
+    source: "AC1.6.6 · AC2.2.5 · 공통 완료 조건 · J19 · J58"
 
   # ═════════════ BR3 · 기기 토큰 · 인증 · 연결 대체 ═════════════
   - id: BR3.1
@@ -161,14 +169,14 @@ rules:
     applies_to: "POST /api/device/bootstrap/claim"
     trigger: "기기 웹이 REGISTERED를 본 뒤"
     logic: "쿠키의 bootstrap 비밀이 REGISTERED 행과 맞고 first_connected_at이 비어 있어야 한다. 새 토큰(SecureRandom 256비트, base64url)을 만들어 SHA-256 해시를 저장하고(앞 토큰 해시는 덮어써 무효), Set-Cookie MUJOONG_DEVICE(HttpOnly · Secure · SameSite=Strict · Path=/ · Max-Age 400일)를 내려 보내며 bootstrap 쿠키는 지운다. 응답 본문은 {deviceId}뿐이다."
-    violation: "PENDING이면 409 NOT_REGISTERED_YET, 만료 · 모르는 비밀이면 401, first_connected_at이 있으면 BR3.2."
+    violation: "PENDING이면 409 NOT_REGISTERED_YET, 쿠키가 없거나 모르는 비밀이면 401 BOOTSTRAP_NOT_FOUND(계약에 더함), 행이 EXPIRED · RELEASED이거나 first_connected_at이 있으면 410 BOOTSTRAP_CLOSED(BR3.2)."
     source: "AC6.1.4 · AC2.2.5 · J29"
   - id: BR3.2
     statement: "첫 WSS 인증이 성공하면 claim은 닫힌다."
     category: "constraint"
     applies_to: "Device.first_connected_at"
     trigger: "verify-token 첫 성공, 그 뒤의 claim 요청"
-    logic: "first_connected_at이 채워진 행에 claim이 오면 410 BOOTSTRAP_CLOSED. 기기 웹은 /device/me로 현재 토큰이 유효한지 확인한다."
+    logic: "first_connected_at이 채워진 행, 그리고 EXPIRED · RELEASED 행에 claim이 오면 410 BOOTSTRAP_CLOSED. 기기 웹은 /device/me로 현재 토큰이 유효한지 확인한다(200이면 T19, 401이면 새 bootstrap)."
     violation: "410."
     source: "J29"
   - id: BR3.3
@@ -184,7 +192,7 @@ rules:
     category: "authorization"
     applies_to: "POST /internal/devices/verify-token"
     trigger: "Realtime이 WSS 접속에서 쿠키 토큰을 받았을 때"
-    logic: "해시가 REGISTERED 행과 맞으면 200 {deviceId, guardianId, childId, registrationStatus: REGISTERED}를 돌려주고 first_connected_at이 비어 있으면 채운다. 맞는 행이 없거나 RELEASED이면 401 INVALID_DEVICE_TOKEN. 결과는 연결 하나에만 묶고 연결마다 다시 확인한다(캐시하지 않는다). 응답 제한 시간은 1초(7절)다."
+    logic: "해시가 REGISTERED 행과 맞으면 200 {deviceId, guardianId, childId, registrationStatus: REGISTERED}를 돌려주고 first_connected_at이 비어 있으면 채운다. 맞는 행이 없거나 RELEASED이면 401 INVALID_DEVICE_TOKEN. 결과는 연결 하나에만 묶고 연결마다 다시 확인한다(캐시하지 않는다). 응답 제한 시간은 1초(J26)이고 설정 키 이름은 NFR Design(3.3)이 확정한다."
     violation: "Realtime은 업그레이드 뒤 4401로 닫는다(BR3.6)."
     source: "AC2.2.5 · AC6.2.8 · J29"
   - id: BR3.5
@@ -208,7 +216,7 @@ rules:
     category: "policy"
     applies_to: "DeviceConnection.connection_id"
     trigger: "인증된 새 연결"
-    logic: "현재 connection_id가 있으면 그 연결에 4001 REPLACED를 보내 닫고 새 connection_id로 바꾼다. 4001을 받은 기기 웹은 꺼짐 상태로 두고 자동 재접속하지 않는다(두 창이 서로 밀어내는 반복 방지)."
+    logic: "현재 connection_id가 있으면 그 연결에 4001 REPLACED를 보내 닫고 새 connection_id로 바꾼다. 4001을 받은 기기 웹은 꺼짐 상태로 두고 자동 재접속하지 않는다(두 창이 서로 밀어내는 반복 방지). DeviceConnection과 DeviceStatusChanged의 모든 기록(CONNECTED · DISCONNECTED · OFFLINE)은 ‘WHERE device_id = :d AND connection_id = :cid’ 조건부로 하고 행 수가 0이면 기록 없이 버린다 — 4001로 대체돼 닫힌 옛 연결과, 인증 전에 닫힌 연결(1013 · 4400 · 4401 · 4408)의 close 처리가 새 연결의 상태를 덮지 않는다. 진행 중 세션에 새 연결을 다시 붙이는 이어가기(HELLO resume)는 U3가 완성한다. U1에서는 새 연결이 진행 중 세션에 자동으로 붙지 않으며 그 세션의 40초 시계는 BR6.12 ④를 따른다."
     violation: "—"
     source: "AC6.2.10 · OQ13 · J22"
   - id: BR3.8
@@ -234,7 +242,7 @@ rules:
     category: "constraint"
     applies_to: "Device.reported_connection_state 외 사본 열"
     trigger: "PUT /internal/devices/{id}/connection, DeviceStatusChanged 이벤트 처리"
-    logic: "보고의 시각(보고는 reportedAt, 이벤트는 envelope occurredAt)이 Device.reported_at보다 클 때만 state · rttMs · recentDisconnects · since · lastSeenAt를 덮어쓰고 reported_at을 올린다. 아니면 무시하고 204(또는 이벤트 PROCESSED)로 답한다. 보고는 유실돼도 된다(다음 보고가 덮는다)."
+    logic: "보고의 시각(보고는 reportedAt, 이벤트는 Inbox 행의 occurred_at)이 Device.reported_at보다 클 때만 덮어쓴다. 읽고 비교하고 쓰지 않고 한 문장의 조건부 UPDATE로 한다: ‘UPDATE core_device SET reported_connection_state = :state, rtt_ms = :rtt, recent_disconnect_count = :n, connection_since = :since, last_seen_at = :seen, reported_at = :t WHERE id = :id AND registration_status = REGISTERED AND (reported_at IS NULL OR reported_at < :t)’. 갱신 행 수가 0이면 버린다(204, 이벤트는 PROCESSED). 두 쓰기 경로(HTTP 보고와 이벤트 처리기)가 겹쳐도 reported_at이 줄지 않는다. 보고는 유실돼도 된다(다음 보고가 덮는다). 보고 필드 → 열: state → reported_connection_state, rttMs → rtt_ms, recentDisconnects → recent_disconnect_count, since → connection_since, lastSeenAt → last_seen_at."
     violation: "—"
     source: "AC2.1.10 · B6 · J47"
   - id: BR4.2
@@ -259,6 +267,7 @@ rules:
       ⑤ UNSTABLE → UNSTABLE · DEVICE_UNSTABLE
       ⑥ DISCONNECTED → DISCONNECTED · DEVICE_DISCONNECTED
       ⑦ UNRESPONSIVE 또는 OFFLINE(아이가 「끄기」로 끔) → UNRESPONSIVE · DEVICE_UNRESPONSIVE
+
     violation: "—"
     source: "AC2.1.1 · AC2.1.3 ~ AC2.1.6 · AC2.1.10 · B6 · B7 · 기기 상태 대응표(OQ11) · J47"
   - id: BR4.4
@@ -274,9 +283,9 @@ rules:
     category: "policy"
     applies_to: "ParentWeb 하단 탭(자유대화 · 연습)"
     trigger: "탭 표시와 누름"
-    logic: "canStart가 true일 때만 탭이 열려 있고 자유대화는 08로 간다(연습은 U5). 잠기면 탭은 보조기기에도 '잠김'으로 읽히고 누르면 사유 한 줄 토스트(문구 미정, B26)를 보인 뒤 05로 간다."
+    logic: "canStart가 true일 때만 탭이 열려 있고 자유대화는 08로 간다(연습은 U5). 잠기면 탭은 보조기기에도 '잠김'으로 읽히고 누르면 사유 한 줄 토스트(mockups 9-6)를 보인 뒤 05로 간다. 05는 U2가 화면을 만들기 전까지 /parent/device 스텁이 04로 되돌린다(J57)."
     violation: "—"
-    source: "AC1.4.2 ~ AC1.4.4 · AC1.4.9 · AC1.4.11 · AC1.4.14 · AC1.4.15"
+    source: "AC1.4.2 ~ AC1.4.4 · AC1.4.9 · AC1.4.11 · AC1.4.15"
   - id: BR4.6
     statement: "04 대화 기기 구역과 05 값은 등록 줄 · 네트워크 줄 · 판정으로 구성되고 색 + 상태명 + 사유를 함께 보인다."
     category: "policy"
@@ -284,24 +293,24 @@ rules:
     trigger: "04 · 05 표시"
     logic: |
       DeviceView = { registration{status NONE|REGISTERED, codePrefix, registeredAt}, network{state, rttMs, recentDisconnects, since, lastSeenAt, lastReportedAt}, verdict{canStart, reasonCode} } (contract-summary.md 3절).
-      표시: 안정 = 초록 '안정' + 마지막 확인 hh:mm + 「기기 상태 보기 ›」, 불안정 = 노랑 + '안정될 때까지 시작할 수 없어요', 끊김 = 빨강 + '전원 · 와이파이를 확인해 주세요', 응답 없음 = 회색 + '기기를 다시 켜 보세요' + 마지막 hh:mm, 등록 없음 = '연결된 기기 없음' + '아이 기기에 뜬 코드로 등록해요.' + 「기기 등록」(→ 05a), 확인 불가 = '기기 상태 확인 불가' + 마지막 확인 시각. 색만으로 구분하지 않는다.
+      표시: 안정 = 초록 '안정' + 마지막 확인 hh:mm + 「기기 상태 보기 ›」, 불안정 = 노랑 + '안정될 때까지 시작할 수 없어요' + 「기기 상태 보기 ›」, 끊김 = 빨강 + '전원 · 와이파이를 확인해 주세요' + 「기기 상태 보기 ›」, 응답 없음 = 회색 + '기기를 다시 켜 보세요' + 마지막 hh:mm + 「기기 상태 보기 ›」, 확인 불가 = '기기 상태 확인 불가' + 마지막 확인 시각 + 「기기 상태 보기 ›」, 등록 없음 = '연결된 기기 없음' + '아이 기기에 뜬 코드로 등록해요.' + 「기기 등록」(→ 05a, 「기기 상태 보기」는 두지 않는다). 「기기 상태 보기 ›」는 등록된 기기라면 어느 상태든 05로 간다. 색만으로 구분하지 않는다.
       응답에 판정값 · 전사 · 비밀(해시 포함)을 넣지 않는다.
     violation: "—"
-    source: "AC1.4.2 ~ AC1.4.5 · AC1.4.14 · AC1.4.15 · AC2.1.1 ~ AC2.1.6 · AC2.1.14 · NFR9"
+    source: "AC1.4.2 ~ AC1.4.5 · AC1.4.15 · AC2.1.1 ~ AC2.1.6 · AC2.1.14 · NFR9"
   - id: BR4.7
-    statement: "진행 중 세션은 연결 상태 사본의 불안정 · 응답 없음만으로 중단되지 않는다. 세션을 움직이는 연결 사건은 끊김(DISCONNECT 40초)과 기기 「끄기」뿐이다."
+    statement: "진행 중 세션은 연결 상태 사본의 불안정 · 응답 없음만으로 중단되지 않는다. 세션을 움직이는 연결 사건은 마지막 기기 메시지 뒤 40초(DISCONNECT)뿐이고, 기기 「끄기」(close 1000)는 연결 상태만 OFFLINE으로 구분해 같은 40초 경로를 탄다."
     category: "constraint"
     applies_to: "SessionLifecycle, 연결 상태 사본"
     trigger: "연결 상태가 바뀔 때"
     logic: "Core 사본의 상태 변화는 세션 전이를 일으키지 않는다. 세션 전이는 Realtime이 BR6.12의 시한으로만 한다."
     violation: "—"
-    source: "AC2.1.11 · B7 · B16"
+    source: "AC2.1.11 · B7 · B16 · J53"
   - id: BR4.8
     statement: "Realtime은 연결 상태가 바뀔 때 DeviceStatusChanged 이벤트를 쓰고, 영속 연결 행 전부를 OFFLINE까지 10초마다 Core에 보고한다."
     category: "policy"
     applies_to: "DeviceGateway 스켈레톤 슬라이스, RealtimeOutboxEvent"
     trigger: "상태 변경, 10초 주기(device.status-report-interval)"
-    logic: "바뀔 때: 상태 변경과 같은 트랜잭션에서 RealtimeOutboxEvent DeviceStatusChanged. 주기: PUT /internal/devices/{id}/connection(제한 1초, 유실 허용). U1 슬라이스가 쓰는 상태는 OFFLINE · CONNECTED · DISCONNECTED(마지막 기기 메시지 뒤 40초)뿐이고 UNSTABLE · UNRESPONSIVE 판정과 5분 창 계산은 U3가 완성한다."
+    logic: "바뀔 때: 상태 변경과 같은 트랜잭션에서 RealtimeOutboxEvent DeviceStatusChanged. 주기: PUT /internal/devices/{id}/connection(제한 1초, 유실 허용). U1 슬라이스가 쓰는 상태는 OFFLINE · CONNECTED · DISCONNECTED와 UNRESPONSIVE다. ① CONNECTED: 인증된 연결이 HELLO를 보내 HELLO_OK를 받을 때(인증만 된 5초 동안은 아니다). ② 연결이 닫힐 때: 닫기 프레임을 받은 정상 닫기(기기 「끄기」 1000 DEVICE_OFF, 브라우저의 페이지 이탈 1001)는 즉시 OFFLINE, 닫기 프레임 없이 끊긴 연결(1006 등)은 마지막 기기 메시지 뒤 40초(device.disconnect)에 DISCONNECTED가 된다. 서버가 보내는 1001(재시작 · 배포)은 해당하지 않는다. ③ UNRESPONSIVE: 명령 시한이 지났을 때(BR6.12 ② 시작 20초 · ③ 종료 30초) 쓰고, 그 연결의 다음 HEARTBEAT 또는 새 연결 인증(HELLO_OK)이면 CONNECTED로 푼다(B7, J55). 40초 끊김 판정은 연결별 메모리 시계가 아니라 영속 last_seen_at을 기준으로 주기 점검한다(점검 주기는 설정 키). UNSTABLE 판정 · 5분 창 · 지연 1초 · 불안정 → 안정 복귀 조건(히스테리시스)은 U3가 완성한다."
     violation: "보고가 30초 넘게 끊기면 Core는 BR4.3 ③으로 '확인 불가'를 보인다."
     source: "AC2.1.10 · B6 · B10 · J47"
 
@@ -327,7 +336,7 @@ rules:
     category: "policy"
     applies_to: "Outbox 상태"
     trigger: "발송 응답"
-    logic: "200 → PUBLISHED(published_at, BR5.11로 payload 비움). 409 EVENT_CONFLICT · 400 · 401(재시도해도 같은 결과) → 즉시 FAILED + 경고 로그. 시간 초과 · 연결 실패 · 5xx → retry_count + 1, available_at = now + {1,2,4,8,16,30,30,…}초. retry_count가 20을 넘으면 FAILED + 경고 로그."
+    logic: "200 → PUBLISHED(published_at, BR5.11로 payload 비움). 409 EVENT_CONFLICT · 400 INVALID_ENVELOPE(재시도해도 같은 결과) → 즉시 FAILED + 경고 로그. 401을 포함한 시간 초과 · 연결 실패 · 나머지 4xx · 5xx → retry_count + 1, available_at = now + {1,2,4,8,16,30,30,…}초(401은 배포 중 두 앱의 비밀이 잠시 어긋난 일시 상태일 수 있다). retry_count가 20인 행이 또 실패하면 FAILED + 경고 로그(retry_count는 20으로 남는다)."
     violation: "FAILED는 사람이 로그로 확인한다(자동 재발송 없음)."
     source: "ADR-010 · J26 · J49"
   - id: BR5.4
@@ -351,15 +360,15 @@ rules:
     category: "constraint"
     applies_to: "Inbox"
     trigger: "새 eventId 수신"
-    logic: "새 행을 status RECEIVED로 커밋하고 나서 200을 돌려준다. 처리기는 응답 뒤 비동기로 호출한다(BR5.7). ACK 뒤 처리기가 실패해도 보낸 쪽은 다시 보내지 않는다 — 수신 쪽이 BR5.8로 책임진다."
+    logic: "새 행을 status RECEIVED, next_attempt_at = received_at으로 커밋하고 나서 200을 돌려준다. 처리기는 응답 뒤 비동기로 호출한다(BR5.7). ACK 뒤 처리기가 실패해도 보낸 쪽은 다시 보내지 않는다 — 수신 쪽이 BR5.8로 책임진다."
     violation: "—"
     source: "ADR-010 · C11"
   - id: BR5.7
-    statement: "Inbox 행은 eventType별 등록된 처리기를 별도 트랜잭션에서 한 번 호출해 반영하고, 처리기는 멱등이다."
+    statement: "Inbox 행은 eventType별 등록된 처리기를 호출해 반영한다. 처리기의 업무 변경과 PROCESSED 표시는 같은 로컬 트랜잭션이고, 처리기는 멱등이다."
     category: "policy"
     applies_to: "Inbox 처리기 호출"
     trigger: "새 Inbox 행, 재호출 폴러"
-    logic: "성공하면 PROCESSED(processed_at, BR5.11). 처리기를 직접 알지 않고 등록 표로 찾는다. 같은 이벤트를 두 번 불러도 결과가 같아야 한다(예: 사본 버전 비교)."
+    logic: "호출 전에 선점 UPDATE(‘SET next_attempt_at = now + 30초 WHERE event_id = :id AND status = RECEIVED AND next_attempt_at <= now’)의 행 수가 1일 때만 호출한다 — 첫 비동기 호출과 재호출 폴러가 같은 행을 중복 호출하지 않는다(30초 값은 설정 키). 처리기를 직접 알지 않고 등록 표로 찾는다. 처리기 트랜잭션이 커밋되면 같은 트랜잭션에서 PROCESSED(processed_at, BR5.11로 payload 비움)가 된다(ADR-010 2.4). 같은 이벤트를 두 번 불러도 결과가 같아야 한다(두 번째 방어, 예: 사본 버전 비교)."
     violation: "처리기가 예외를 던지면 BR5.8."
     source: "ADR-010 · C11 · J49"
   - id: BR5.8
@@ -383,7 +392,7 @@ rules:
     category: "constraint"
     applies_to: "처리기(ActivityCoordinator 사본, DeviceRegistry 사본)"
     trigger: "SessionStateChanged · DeviceStatusChanged 처리"
-    logic: "SessionStateChanged: payload.statusVersion이 Activity.status_version보다 클 때만 사본을 덮어쓰고 같거나 작으면 버린다(PROCESSED). DeviceStatusChanged: BR4.1. 두 이벤트가 뒤바뀌어 와도 최종 값이 같다."
+    logic: "SessionStateChanged: payload.statusVersion이 Activity.status_version보다 클 때만 사본을 덮어쓰고 같거나 작으면 버린다(PROCESSED). DeviceStatusChanged: BR4.1. 두 이벤트가 뒤바뀌어 와도 최종 값이 같다. 사본 갱신은 읽고 비교하고 쓰지 않고 한 문장의 조건부 UPDATE로 한다: Activity는 ‘UPDATE core_activity SET ... WHERE session_id = :id AND status_version < :v AND NOT (status = FAILED AND local_failed)’, Device는 BR4.1. 갱신 행 수가 0이면 버린다(PROCESSED). 동시에 도는 처리기가 서로의 값을 되돌리지 못한다."
     violation: "—"
     source: "ADR-010 · 계약 6절"
   - id: BR5.11
@@ -399,7 +408,7 @@ rules:
     category: "policy"
     applies_to: "CoreMessaging, RealtimeMessaging"
     trigger: "앱 시작"
-    logic: "PENDING 중 available_at이 지난 Outbox 행과 RECEIVED 중 next_attempt_at이 지난 Inbox 행을 폴러가 평소대로 집는다(별도 복구 절차 없음). 상대 앱의 표는 건드리지 않는다. 세션 복구는 BR6.13."
+    logic: "시작할 때: PENDING 중 available_at이 지난 Outbox 행은 폴러가 평소대로 집는다. Inbox는 RECEIVED 행을 next_attempt_at이 지났든 말든 모두 한 번 처리기에 넘긴다(시작 시점에는 진행 중인 호출이 없다 — 200 직후 처리기 호출 전에 죽은 행도 여기서 구한다). 그 뒤 평소에는 RECEIVED 중 next_attempt_at이 지난 행만 폴러가 집는다. 상대 앱의 표는 건드리지 않는다. 세션 복구는 BR6.13."
     violation: "—"
     source: "ADR-010 · J53"
   - id: BR5.13
@@ -410,27 +419,36 @@ rules:
     logic: "last_error에도 상태 코드 · 예외 종류만 적는다. 페이로드를 로그 · 오류 메시지에 넣지 않는다."
     violation: "—"
     source: "NFR9 · 공통 완료 조건"
+  - id: BR5.14
+    statement: "계정 삭제 참가자는 전달이 끝난 Outbox/Inbox 행만 지우고, 아직 전달 · 처리 중인 제어 이벤트는 지우지 않으며, 대화 원문이 든 이벤트의 페이로드는 즉시 비운다."
+    category: "constraint"
+    applies_to: "네 Outbox/Inbox 테이블 (DeletionParticipant 계약 8절)"
+    trigger: "계정 삭제 지휘(U2)가 deleteByGuardian을 부를 때"
+    logic: "멱등이다. (a) Outbox는 PUBLISHED · FAILED, Inbox는 PROCESSED · IGNORED · DEAD 행 중 guardian_id가 같은 행을 삭제한다. (b) PENDING · RECEIVED 행은 건드리지 않는다 — DeviceReleased · DeletionRequested · DeletionCompleted가 전달 · 처리되기 전에 사라지면 해제 신호와 삭제 완료가 영영 오지 않는다. (c) 예외로 eventType이 SessionRecordCaptured(대화 원문 포함)인 행은 상태와 무관하게 payload_json을 {} 로 비우고 purged_at을 채우며, Outbox의 PENDING이면 FAILED(last_error ACCOUNT_DELETED)로, Inbox의 RECEIVED이면 IGNORED로 닫는다. (d) 호출 시점과 순서는 U2 삭제 지휘가 정하며, U1은 어느 시점에 불려도 결과가 같다. 지휘가 DeletionCompleted 처리 뒤 마지막 단계에 다시 부르면 (a)로 남은 행도 지워진다."
+    violation: "—"
+    source: "AC1.6.6 · ADR-010 · 공통 완료 조건 · J19 · J50 · J58"
 
   # ═════════════ BR6 · 세션 슬라이스 (ActivityCoordinator · SessionLifecycle 최소) ═════════════
   - id: BR6.1
-    statement: "자유대화 시작 요청은 동의 → 진행 중 세션 → 기기 안정 순으로 검사하고 첫 사유 하나만 거절한다."
+    statement: "자유대화 시작 요청은 같은 idempotencyKey를 먼저 확인한 뒤, 새 키일 때만 동의 → 진행 중 세션 → 기기 안정 순으로 검사하고 첫 사유 하나만 거절한다."
     category: "validation"
     applies_to: "POST /api/activities/free (스켈레톤 슬라이스, U4가 완성)"
     trigger: "08 「자유대화 시작」"
     logic: |
       ⓪ 로그인 필수(401), guardian.status가 DELETION_REQUESTED이면 403 ACCOUNT_DELETION_IN_PROGRESS.
+      ⓪′ (guardianId, idempotencyKey)를 먼저 조회한다. 이미 있으면 ① ~ ③을 건너뛰고 BR6.2대로 처리한다. 새 키일 때만 아래를 적용한다.
       ① 현재 정책 버전의 4항목 동의가 GIVEN이 아니면 403 CONSENT_MISSING.
       ② 보호자에게 종료 아닌 세션(REQUESTED · PREPARING · DEVICE_ACK · WAITING_CHILD · ACTIVE · CLOSING)이 있으면 409 SESSION_IN_PROGRESS. 종료 상태(ENDED · ENDED_UNCONFIRMED · ABORTED · DECLINED · FAILED)는 막지 않는다.
       ③ 기기 판정(BR4.3)이 안정이 아니면(불안정 · 끊김 · 응답 없음 · 확인 불가 · 없음) 423 DEVICE_NOT_STABLE.
-      화면은 08(또는 18)에 머물고 해당 사유 문구 하나만 보인다.
+      화면은 08(또는 18)에 머물고 mockups 9-12의 해당 사유 문구 하나만 보인다.
     violation: "위 상태 코드와 오류 봉투 {code, message, traceId}. message에 전사 · 개인정보를 넣지 않는다."
     source: "AC3.1.6 · FR2.3 · mockups 9-12 · J24 · J48"
   - id: BR6.2
     statement: "시작은 idempotencyKey로 멱등이다. 같은 키 재요청은 같은 세션을 돌려주고 새 세션을 만들지 않는다."
     category: "constraint"
     applies_to: "Activity.start_idempotency_key"
-    trigger: "시작 요청"
-    logic: "(guardianId, idempotencyKey)가 이미 있으면: 요청 본문 해시(request_hash)가 같으면 첫 응답({sessionId, status})을 그대로 돌려주고, 다르면 409 IDEMPOTENCY_CONFLICT. 키가 없으면 새 세션. 키는 클라이언트가 만든 UUID다."
+    trigger: "시작 요청(BR6.1 ⓪ 직후, 동의 검사 이전)"
+    logic: "(guardianId, idempotencyKey)가 이미 있으면: 요청 본문 해시(request_hash)가 같으면 첫 응답({sessionId, status})을 그대로 돌려주고, 다르면 409 IDEMPOTENCY_CONFLICT. 단 그 키의 행이 BR6.7의 로컬 FAILED이면 첫 결과 그대로 503 REALTIME_UNAVAILABLE을 다시 돌려주고(새 시작은 새 키로만), 첫 시도가 BR6.1의 ① ~ ③에서 거절돼 행이 없으면 재요청은 처음부터 다시 검사한다. 키가 없으면 새 세션. 키는 클라이언트가 만든 UUID다. 같은 키가 동시에 겹쳐 INSERT가 (guardian_id, key) 유일 위반이면 승자 행을 다시 읽어 같은 응답을 돌려준다."
     violation: "409 IDEMPOTENCY_CONFLICT."
     source: "AC3.1.8 · 계약 2절"
   - id: BR6.3
@@ -438,7 +456,7 @@ rules:
     category: "constraint"
     applies_to: "Activity, ActivitySession"
     trigger: "서로 다른 키로 시작 요청 두 건이 겹칠 때"
-    logic: "Core core_activity의 부분 유일 색인(보호자당 종료 아닌 상태 하나)이 먼저, Realtime realtime_activity_session의 같은 부분 유일 색인이 2차 방어다. 색인 위반은 409 SESSION_IN_PROGRESS로 번역하고 두 번째 요청의 화면(12)은 첫 세션이다."
+    logic: "Core core_activity의 부분 유일 색인(보호자당 종료 아닌 상태 하나)이 먼저, Realtime realtime_activity_session의 같은 부분 유일 색인이 2차 방어다. 유일 위반이 나면 먼저 (guardianId, idempotencyKey)로 다시 읽어 같은 키 행이 있으면 BR6.2대로 재생하고, 없을 때만 409 SESSION_IN_PROGRESS로 번역한다. 두 번째 요청을 보낸 08은 BR6.1대로 사유 문구 하나만 보인다(같은 탭이 이미 첫 응답으로 12에 갔다면 이동하지 않는다). 첫 세션의 12는 첫 요청을 보낸 화면이 열고 있고, 다른 화면에서 진행 중 세션의 12로 들어가는 길(04 지금 활동 · 진행 중 탭, GET /api/sessions/current)은 U4가 완성한다."
     violation: "409 SESSION_IN_PROGRESS."
     source: "AC3.1.8 · FR2.3"
   - id: BR6.4
@@ -454,7 +472,7 @@ rules:
     category: "policy"
     applies_to: "POST /internal/sessions (C8)"
     trigger: "시작 검사 통과"
-    logic: "sessionId는 Core가 발급한다(J11). 패키지: guardianId · childId · deviceId · activityType(FREE_TALK) · consentSnapshot(정책 버전 + 4항목) · childContext(displayName · age · interests만) · stopExpressions(기본 표현 한 건) · approvedContent(CLOSING · WAITING_FILLER의 contentVersionId · text · audioUrl — 세션에 고정). 08 입력 네 칸 원문은 패키지에 넣지 않는다(NFR3). 제한 시간 3초."
+    logic: "sessionId는 Core가 발급한다(J11). 패키지: sessionId · idempotencyKey · guardianId · childId · deviceId · activityType(FREE_TALK) · consentSnapshot(정책 버전 + 4항목) · childContext(displayName · age · interests만) · stopExpressions(기본 표현 한 건) · approvedContent(CLOSING · WAITING_FILLER의 contentVersionId · text · audioUrl — 세션에 고정). 08 입력 네 칸 원문은 패키지에 넣지 않는다(NFR3). 제한 시간 3초."
     violation: "지연 · 실패는 BR6.7."
     source: "AC3.1.7 · NFR3 · A5 · J11 · J26"
   - id: BR6.6
@@ -462,30 +480,36 @@ rules:
     category: "policy"
     applies_to: "SessionLifecycle (POST /internal/sessions 수신)"
     trigger: "Core의 시작 명령"
-    logic: "① sessionId가 이미 있으면(같은 idempotencyKey) 현재 상태를 202로 돌려준다. ② 기기 연결이 CONNECTED가 아니면 423 DEVICE_NOT_CONNECTED. ③ 보호자 · 기기에 종료 아닌 세션이 있으면 409 SESSION_IN_PROGRESS(2차 방어). ④ 같은 트랜잭션에 ActivitySession(PREPARING, status_version 1, 패키지 고정) + SessionStopExpression + RealtimeOutboxEvent SessionStateChanged(PREPARING)를 쓴다. ⑤ 커밋 뒤 모델 세션 열기와 START_SESSION 전송을 시작한다(BR7.2). Core가 취소(BR6.7)한 sessionId의 늦은 시작은 거절한다(10분 묘비)."
-    violation: "202가 아니면 Core는 그 사유로 시작을 거절한다."
+    logic: "① sessionId가 이미 있으면(같은 idempotencyKey) 현재 상태를 202로 돌려준다. ② 기기 연결이 CONNECTED가 아니면(DeviceConnection 행의 상태와, 살아 있는 소켓 레지스트리에 그 connection_id가 모두 있어야 한다) 423 DEVICE_NOT_CONNECTED. ③ 보호자 · 기기에 종료 아닌 세션이 있으면 409 SESSION_IN_PROGRESS(2차 방어). ④ 같은 트랜잭션에 ActivitySession(PREPARING, status_version 1, 패키지 고정) + SessionStopExpression + RealtimeOutboxEvent SessionStateChanged(PREPARING)를 쓴다. ⑤ 커밋 뒤 모델 세션 열기와 START_SESSION 전송을 시작한다(BR7.2). Core가 취소(BR6.7)한 sessionId의 늦은 시작은 409 SESSION_NOT_ACTIVE로 거절한다(10분 묘비)."
+    violation: "202가 아닌 확정 응답(409 · 423)이면 Core는 같은 처리 안에서 방금 만든 사본을 로컬 FAILED(failure_code 비움)로 닫고 번역해 돌려준다: 423 DEVICE_NOT_CONNECTED → 423 DEVICE_NOT_STABLE, 409 SESSION_IN_PROGRESS → 409 SESSION_IN_PROGRESS(Core가 모르는 진행 세션이 있다는 신호이므로 운영 경고 로그를 남긴다). 내부 코드는 보호자 응답에 내보내지 않는다. Realtime에 세션이 없으므로 취소는 필요 없다."
     source: "AC3.1.8 · FR2.3 · C8"
   - id: BR6.7
     statement: "Realtime을 부를 수 없으면 Core는 그 세션을 FAILED로 닫고 보호자에게 503을 돌려주며 Realtime에 정리를 부탁한다."
     category: "policy"
     applies_to: "ActivityCoordinator 스켈레톤 슬라이스"
     trigger: "Realtime 시작 호출 시간 초과 · 연결 실패 · 503"
-    logic: "Core 사본을 FAILED(end_reason FAILED, failure_code 비움, status_version은 0 그대로)로 바꿔 계정 잠김을 막고 503 REALTIME_UNAVAILABLE를 돌려준다. 이어 best-effort로 Realtime에 끝내기를 보내고(무시돼도 됨) Realtime은 그 sessionId의 묘비를 둔다. Core가 로컬 FAILED로 닫은 세션의 늦은 Realtime 이벤트는 반영하지 않는다."
+    logic: "연결 거부 · 503 등 확정 실패는 바로, 시간 초과는 같은 sessionId로 1회 재시도(BR6.6 ①이 멱등)한 뒤에도 실패하면 Core 사본을 FAILED(end_reason FAILED, failure_code 비움, status_version은 0 그대로, local_failed true)로 바꿔 계정 잠김을 막고 503 REALTIME_UNAVAILABLE을 돌려준다. 이어 Realtime에 취소 `POST /internal/sessions/{sessionId}/end {requestId = sessionId, reason: CORE_ABANDONED}`(제한 2초, 멱등)를 보낸다. Realtime은 (가) 모르는 sessionId면 10분 묘비(Realtime 메모리, 재시작하면 사라지고 그때 늦게 만들어진 세션은 BR6.14의 재취소로 닫힌다)를 두고 202, (나) PREPARING · DEVICE_ACK · ACTIVE이면 FAILED(end_reason FAILED, failure_code 비움)로 닫고 공급자 세션을 닫으며 START_SESSION이 나갔고 연결이 살아 있으면 기기에 CLOSE_TRANSPORT(FAILED)를 보내고 SessionStateChanged를 쓴다, (다) CLOSING이면 그대로 두고 202, (라) 이미 종료 상태면 202 무동작이다. Core가 로컬 FAILED로 닫은 세션의 늦은 Realtime 이벤트는 사본에 반영하지 않는다(BR6.14)."
     violation: "—"
     source: "AC3.1.9 · J24 · J26"
   - id: BR6.8
-    statement: "세션 상태 전이는 허용된 것만 하고 종료 상태는 되돌아가지 않는다. U1 슬라이스의 전이는 PREPARING → DEVICE_ACK → ACTIVE → CLOSING → ENDED와 실패 · 중단 경로다."
+    statement: "세션 상태 전이는 허용된 것만, 조건부 UPDATE로 승자 하나만 성립시키고 종료 상태는 되돌아가지 않는다. U1 슬라이스의 전이는 PREPARING → DEVICE_ACK → ACTIVE → CLOSING → ENDED와 실패 · 중단 경로다."
     category: "constraint"
     applies_to: "ActivitySession.status"
     trigger: "전이 시도"
     logic: |
       허용 전이(Realtime, 전이마다 status_version + 1과 SessionStateChanged를 같은 트랜잭션에):
-      PREPARING → DEVICE_ACK (START_SESSION에 ACK, 이어 DEVICE_READY mic·player OK)
-      DEVICE_ACK → ACTIVE (공급자 session.started 확인 + 입력 음성 시작)
-      PREPARING · DEVICE_ACK → FAILED (DEVICE_NO_ACK 20초, 공급자 연결 실패 PROVIDER_UNAVAILABLE, 재시작 SERVER_RESTART)
-      ACTIVE → CLOSING (끝내기 요청 GUARDIAN_STOP)
+      PREPARING → DEVICE_ACK (START_SESSION에 ACK, 이어 DEVICE_READY mic · player OK — prefetch는 OK · PARTIAL 모두 수락, 빠진 음원은 재생 때 audioUrl로 받는다)
+      DEVICE_ACK → ACTIVE (공급자 session.started 확인; 이어 입력 음성 중계를 시작한다. session.started가 DEVICE_ACK보다 먼저 오면 기억해 두었다가 DEVICE_ACK 직후 이어서 전이)
+      PREPARING → FAILED (DEVICE_READY의 mic 또는 player가 UNAVAILABLE이면 20초를 기다리지 않고 즉시, failure_code DEVICE_NO_ACK)
+      PREPARING · DEVICE_ACK → FAILED (BR6.12 ②의 20초 시한: DEVICE_NO_ACK 또는 PROVIDER_UNAVAILABLE, 공급자 연결 실패 PROVIDER_UNAVAILABLE)
+      PREPARING · DEVICE_ACK · ACTIVE → FAILED (Core 취소 CORE_ABANDONED, BR6.7)
+      PREPARING · DEVICE_ACK · ACTIVE · CLOSING → FAILED (Realtime 재시작 SERVER_RESTART, BR6.13)
+      ACTIVE → CLOSING (끝내기 요청 GUARDIAN_STOP, BR6.9)
       CLOSING → ENDED (VOICE_SESSION_CLOSED 확인, confirmed true) · ENDED_UNCONFIRMED (30초 확인 없음, confirmed false)
       ACTIVE → ABORTED (DISCONNECT 40초)
+      end_reason: ENDED = GUARDIAN_STOP, ENDED_UNCONFIRMED = UNCONFIRMED, ABORTED = DISCONNECT, FAILED = FAILED.
+      모든 전이는 ‘UPDATE realtime_activity_session SET status = :to, status_version = status_version + 1, row_version = row_version + 1 WHERE id = :id AND status = :from’ 의 행 수가 1일 때만 성립하고, 그때만 SessionStateChanged와 STOP_OUTPUT · PLAY_APPROVED_CONTENT · CLOSE_TRANSPORT 같은 부수 효과를 낸다(승자 하나). 행 수 0이면 다른 전이가 이긴 것이므로 무시하고 SessionEvent에 기록한다(끝내기 요청이면 BR6.9대로 현재 상태에 맞게 답한다).
+      FAILED로 전이할 때 기기 WSS 연결이 살아 있고 START_SESSION이 이미 나갔으면 CLOSE_TRANSPORT(reason FAILED)를 보내고 SESSION_STATE{STANDBY}로 되돌린다. VOICE_SESSION_CLOSED는 기다리지 않고 오면 SessionEvent에 기록만 한다. ABORTED(DISCONNECT)와 재시작은 보낼 연결이 없으므로 제외한다.
       U1에 없는 전이(WAITING_CHILD · DECLINED · CHILD_STOP · SILENCE · CONSENT_WITHDRAWN)는 U4가 더한다. REQUESTED는 Core 사본에만 있다.
     violation: "허용되지 않은 전이는 무시하고 SessionEvent에 기록한다(오류 응답 아님)."
     source: "세션 상태 11개(K5) · AC3.3.4 · AC3.3.5 · B11"
@@ -494,7 +518,7 @@ rules:
     category: "authorization"
     applies_to: "POST /api/sessions/{id}/end (P1)"
     trigger: "P1 「네, 끝낼게요」"
-    logic: "P1(제목 '정말 끝낼까요?')에서 「아니오」면 12 그대로. 요청은 세션 id + requestId(UUID). 남의 세션이면 404. 종료 가능 상태(U1은 ACTIVE)가 아니면 409 SESSION_NOT_ACTIVE(화면은 17로 가서 실제 사유를 본다). 이미 CLOSING 이후면 현재 상태를 돌려주고 두 번 처리하지 않는다(requestId 멱등 — 종료 요청 1건 · 기기 종료 명령 1회 · 전이 1회). Core는 Realtime에 end(제한 2초)를 부르고 202 {CLOSING}을 돌려준다. Realtime에 닿지 않으면 503 REALTIME_UNAVAILABLE이고 앱은 '전송하지 못함'을 보이며 종료 요청됨으로 표시하지 않는다. 401이어도 같다(세션은 ACTIVE 유지)."
+    logic: "P1(제목 '정말 끝낼까요?')에서 「아니오」면 12 그대로. 요청은 세션 id + requestId(UUID). 남의 세션이면 404. Core는 사본이 종료 상태(ENDED · ENDED_UNCONFIRMED · ABORTED · FAILED)일 때만 Realtime을 부르지 않고 409 SESSION_NOT_ACTIVE로 답하고, 그 밖의 상태(사본이 늦어 PREPARING · DEVICE_ACK여도)는 Realtime에 end(제한 2초)를 보내 Realtime 응답을 최종으로 삼는다. Realtime end(reason GUARDIAN_STOP)의 응답: ACTIVE → 202 {CLOSING}(첫 수락, requestId 기록). CLOSING → 같은 requestId든 다르든 202 {CLOSING}, 재처리 없음(멱등: 종료 요청 1건 · 기기 종료 명령 1회 · 전이 1회). ENDED · ENDED_UNCONFIRMED · ABORTED · FAILED → 409 SESSION_NOT_ACTIVE. PREPARING · DEVICE_ACK → 409 SESSION_NOT_ACTIVE(WAITING_CHILD 추가는 U4). 12는 409를 받으면 세션 상태를 한 번 다시 읽어 종료 상태일 때만 17로 가고(실제 사유를 본다), PREPARING · DEVICE_ACK면 12에 머물고 토스트만 보인다. 끝내기 단추는 ACTIVE가 되기 전에는 꺼 둔다. '끝내기 요청을 보내지 못했어요. 인터넷을 확인해 주세요.'(mockups 9-18)는 Realtime에 닿지 않는 503 · 401뿐 아니라 보호자 폰의 네트워크 오류 · 시간 초과에도 보이며 종료 요청됨으로 표시하지 않는다(세션은 ACTIVE 유지). Realtime end는 reason이 CORE_ABANDONED일 때 BR6.7의 (가) ~ (라)를 따른다."
     violation: "404 · 409 · 503."
     source: "AC3.3.1 ~ AC3.3.3 · AC3.3.6 · AC3.3.8 · AC3.3.9"
   - id: BR6.10
@@ -504,8 +528,8 @@ rules:
     trigger: "CLOSING 진입"
     logic: |
       ① 서버 쪽 출력 버퍼를 취소하고 STOP_OUTPUT(reason GUARDIAN_STOP)을 보낸다. 이후 게이트는 일반 출력을 통과시키지 않는다(늦은 출력 폐기).
-      ② 세션에 고정된 CLOSING 승인 문구를 PLAY_APPROVED_CONTENT로 한 번만 보낸다(기기 재생 로그 count = 1, 콘텐츠 길이 3초 이내).
-      ③ PLAYBACK_MARK COMPLETED(또는 STOPPED)를 받으면 CLOSE_TRANSPORT를 보낸다.
+      ② 세션에 고정된 CLOSING 승인 문구를 PLAY_APPROVED_CONTENT(새 playbackId)로 한 번만 보낸다(기기 재생 로그 count = 1, 콘텐츠 길이 3초 이내).
+      ③ ②에서 보낸 playbackId와 같은 PLAYBACK_MARK가 COMPLETED · STOPPED · FAILED(승인 음성을 못 받은 경우 포함) 중 하나로 오면 CLOSE_TRANSPORT를 보낸다. 다른 playbackId의 마크(① STOP_OUTPUT으로 멈춘 이전 출력 등)는 근거로 쓰지 않는다. FAILED이면 마무리 인사 없이 종료로 가며 종료 확인은 ④로만 정한다.
       ④ 기기의 VOICE_SESSION_CLOSED(outputStoppedAt · micClosedAt)를 받으면 공급자 세션을 닫고 ENDED(confirmed true)로 간다. 기기가 확인한 시각 · 서버가 닫은 시각을 termination 필드에 남긴다.
       종료 확정 뒤 이전 응답이 이어 재생되지 않는다. 종료와 기록 삭제는 별개다.
     violation: "확인이 30초 안에 없으면 BR6.12 ③."
@@ -524,19 +548,19 @@ rules:
     applies_to: "ActivityCoordinator(①), SessionLifecycle(②~④)"
     trigger: "시계(t0)가 지날 때"
     logic: |
-      ① session.preparing-timeout (10초): Core가 REQUESTED를 만든 때부터 PREPARING 이벤트를 못 받으면 Core 사본을 FAILED로 닫는다(BR6.7과 같다).
-      ② session.device-ack-timeout (20초): START_SESSION 송신부터 ACK와 DEVICE_READY가 모두 없으면 FAILED(failure_code DEVICE_NO_ACK), 기기 판정 UNRESPONSIVE.
-      ③ session.closing-confirm (30초): CLOSING 진입부터 VOICE_SESSION_CLOSED가 없으면 ENDED_UNCONFIRMED. 이 시한이 끊김보다 우선한다(CLOSING 중 끊김은 DISCONNECT 전이가 없다).
-      ④ device.disconnect (40초): ACTIVE에서 마지막 기기 메시지(HEARTBEAT 포함) 뒤 40초면 ABORTED(DISCONNECT), 기기에는 보낼 수 없으므로 서버가 출력 · 공급자를 정리한다.
+      ① session.preparing-timeout (10초): Core가 REQUESTED를 만든 때부터 PREPARING 이벤트를 못 받으면 Core 사본을 FAILED로 닫는다(BR6.7과 같다, ‘WHERE status = REQUESTED AND status_version = 0’ 일 때만 쓴다).
+      ② session.device-ack-timeout (20초): START_SESSION 송신부터 ACK · DEVICE_READY · 공급자 session.started가 모두 확인돼 ACTIVE가 되지 않으면 FAILED. ACK나 DEVICE_READY가 빠졌으면 failure_code DEVICE_NO_ACK이고 기기 연결 판정을 UNRESPONSIVE로 쓴다(BR4.8 ③), 둘은 왔는데 session.started가 없으면 PROVIDER_UNAVAILABLE이다.
+      ③ session.closing-confirm (30초): CLOSING 진입부터 VOICE_SESSION_CLOSED가 없으면 ENDED_UNCONFIRMED이고 기기 연결 판정을 UNRESPONSIVE로 쓴다(②와 같은 설정 · 해제). 이 시한이 끊김보다 우선한다(CLOSING 중 끊김은 DISCONNECT 전이가 없다).
+      ④ device.disconnect (40초): ACTIVE에서 그 세션의 START_SESSION을 받은 연결(ACK와 DEVICE_READY를 보낸 connection_id)의 마지막 기기 메시지(HEARTBEAT 포함) 뒤 40초면 ABORTED(DISCONNECT). 그 연결이 닫히거나 4001로 대체된 뒤 새 연결이 인증돼도 새 연결의 메시지는 이 세션의 시계를 되돌리지 않는다(이어가기는 U3). 서버가 출력 · 공급자를 정리한다.
       참여 대기 · 공백 4 · 6분 · 점선 10초 · 기술적 일시 정지 · 경계값 19 / 21초 시험은 U4가 같은 키 · 같은 코드를 확장한다.
     violation: "—"
-    source: "AC3.1.9 · AC3.3.5 · AC6.2.11 · B5 · B7 · B10 · B11 · J51"
+    source: "AC3.1.9 · AC3.3.5 · AC6.2.11 · AC2.1.6 · B5 · B7 · B10 · B11 · J51 · J55"
   - id: BR6.13
     statement: "Realtime이 재시작하면 종료 아닌 세션을 FAILED(SERVER_RESTART)로 바꾸고 음성 활동을 이어 붙이지 않는다."
     category: "policy"
     applies_to: "SessionLifecycle"
     trigger: "Realtime 시작"
-    logic: "시작할 때 종료 아닌 realtime_activity_session을 모두 FAILED(failure_code SERVER_RESTART)로 바꾸고 SessionStateChanged를 Outbox에 쓴다. 이어 붙이는 복구는 없다. Core가 재시작하면 REQUESTED로 남은 세션을 BR6.12 ①로 정리한다."
+    logic: "시작할 때 종료 아닌 realtime_activity_session을 모두 FAILED(failure_code SERVER_RESTART)로 바꾸고(BR6.8의 재시작 전이) SessionStateChanged를 Outbox에 쓴다. 이어 붙이는 복구는 없다. 또 시작할 때 CONNECTED · UNSTABLE인 realtime_device_connection 행은 connection_id를 비우고 DISCONNECTED로 바꾸며 DeviceStatusChanged를 같은 트랜잭션에 쓴다(죽은 소켓이 안정으로 보이지 않게). Core가 재시작하면 REQUESTED로 남은 세션을 BR6.12 ①로 정리한다."
     violation: "—"
     source: "ADR-010 · J53"
   - id: BR6.14
@@ -544,7 +568,7 @@ rules:
     category: "constraint"
     applies_to: "Activity (Core 처리기)"
     trigger: "SessionStateChanged 처리"
-    logic: "BR5.10대로 payload.statusVersion > Activity.status_version 일 때만 status · end_reason · failure_code · confirmed · started_at · ended_at · observed_at을 덮어쓴다. 사본이 Core 로컬 FAILED(BR6.7)이면 반영하지 않는다."
+    logic: "BR5.10대로 payload.statusVersion > Activity.status_version 일 때만 status · end_reason · failure_code · confirmed를 덮어쓴다. 열 대응: started_at = status가 처음 ACTIVE로 바뀐 이벤트의 at, ended_at = 종료 상태(ENDED · ENDED_UNCONFIRMED · ABORTED · FAILED) 이벤트의 at, observed_at = 처리한 이벤트의 at. 정확한 시각이 따로 필요해지면 startedAt · endedAt을 payload에 더하는 일은 U4가 한다(더하기만 안전). 사본이 Core 로컬 FAILED(BR6.7)이면 반영하지 않는다. 단 이벤트의 status가 종료 상태가 아니면 처리기가 같은 취소(CORE_ABANDONED)를 Realtime에 다시 보내고, 호출이 실패하면 예외를 던져 BR5.8 재호출에 맡긴다."
     violation: "—"
     source: "계약 6절 · J5 · J10"
   - id: BR6.15
@@ -552,9 +576,9 @@ rules:
     category: "policy"
     applies_to: "GET /api/sessions/{id}?sinceSeq=n (U1 최소)"
     trigger: "2초 폴링(parent.poll-interval)"
-    logic: "소유가 아니면 404. Core가 GET /internal/sessions/{id}/view?sinceSeq(제한 1초)를 부른다. 응답: status · statusVersion · items(seq > sinceSeq인 말풍선: 아이 전사 · approved_for_display가 true인 AI 말) · nextSeq. 실패하면 마지막 사본으로 답하고 stale = true(12가 '기기 상태 확인 불가'). 판정값 · 08 입력 원문 · 게이트가 폐기한 구간은 응답에 없다."
+    logic: "소유가 아니면 404. Core가 GET /internal/sessions/{id}/view?sinceSeq(제한 1초)를 부른다. 응답 모양은 계약 3절 LiveView 중 U1이 채우는 값이다: SessionSummary(sessionId · activityType · status · endReason · failureCode · confirmed · requestedAt · startedAt · endedAt) + statusVersion · serverTime · observedAt · stale · items(seq > sinceSeq인 말풍선: 아이 전사 · approved_for_display가 true이고 확정(FINAL)된 AI 말) · nextSeq. technicalPause · silenceWarning · practice는 null, gaps는 빈 배열로 두고 U3 · U4 · U5가 채운다. nextSeq는 응답 items의 최대 seq이고 items가 비면 요청의 sinceSeq를 그대로 돌려준다. 단 확정 전(PARTIAL) 행이 있으면 그중 가장 작은 seq − 1을 넘지 않는다(확정 전 조각은 같은 seq로 다시 온다, J23). 조회에 실패하면 Core 사본으로 답하고 stale = true이며 items는 비우고 nextSeq는 요청의 sinceSeq로 둔다(12가 '기기 상태를 확인할 수 없어요 · 마지막 확인 hh:mm', mockups 9-16). 시작 직후 라벨은 mockups 9-13. 판정값 · 08 입력 원문 · 게이트가 폐기한 구간은 응답에 없다. 12는 받은 status로 functional-spec 4절의 이동 표를 따른다."
     violation: "—"
-    source: "AC3.1.7 · FR3.2 · A2 · J5 · J23"
+    source: "FR3.2 · AC3.2.1 · AC3.2.17(U4 소관) · A2 · J5 · J23"
   - id: BR6.16
     statement: "보호자가 로그아웃하거나 로그인이 만료돼도 진행 중 세션은 영향받지 않는다."
     category: "policy"
@@ -568,7 +592,7 @@ rules:
     category: "constraint"
     applies_to: "Activity, ActivitySession"
     trigger: "모든 세션 읽기 · 쓰기"
-    logic: "Core 사본 컬럼 중 status · status_version · end_reason · failure_code · confirmed · started_at · ended_at은 SessionStateChanged로만 바뀐다(예외: BR6.7 로컬 FAILED). Core 컴포넌트가 realtime 스키마를 읽거나 쓰지 않고 그 반대도 없다."
+    logic: "Core 사본 컬럼 중 status · status_version · end_reason · failure_code · confirmed · started_at · ended_at은 SessionStateChanged로만 바뀐다(예외: BR6.6 · BR6.7의 로컬 FAILED). Core 컴포넌트가 realtime 스키마를 읽거나 쓰지 않고 그 반대도 없다."
     violation: "—"
     source: "ADR-019 · J5"
 
@@ -578,7 +602,7 @@ rules:
     category: "constraint"
     applies_to: "DeviceGateway, VoiceRelay"
     trigger: "바이너리 0x01 프레임 수신"
-    logic: "PCM16 · 24kHz · 모노 20ms 프레임을 순번 순으로 공급자 session.input_audio.append에 전달한다. DEVICE_READY 전 · 세션 없음 · 종료 뒤 프레임은 버린다. 원음은 디스크 · DB · Outbox · 로그에 쓰지 않는다. 동의된 세션의 원음 파일 저장은 U3(RAW_AUDIO)."
+    logic: "PCM16 · 24kHz · 모노 20ms 프레임을 순번 순으로 공급자 session.input_audio.append에 전달한다. 기기는 DEVICE_READY 뒤부터 프레임을 보낼 수 있다(계약 4.2절). 서버는 세션이 ACTIVE(공급자 session.started 확인)가 되기 전에 온 프레임, 세션 없음 · 종료 · FAILED 전이 뒤 프레임을 버리고 버퍼링하지 않는다. FAILED 전이도 CLOSE_TRANSPORT와 함께 입력 수락을 끝낸다. 원음은 디스크 · DB · Outbox · 로그에 쓰지 않는다. 동의된 세션의 원음 파일 저장은 U3(RAW_AUDIO)."
     violation: "—"
     source: "FR7.8 · NFR9 · ADR-004 · J27"
   - id: BR7.2
@@ -586,7 +610,7 @@ rules:
     category: "policy"
     applies_to: "VoiceRelay"
     trigger: "세션 PREPARING"
-    logic: "서버 환경 변수 키로 wss://api.openai.com/v1/live/sessions(모델 gpt-live-1)에 연결해 session.start를 보내고 session.started를 받으면 DEVICE_ACK 이후 ACTIVE 전이 조건(BR6.8)을 채운다. 키는 기기 · 프런트 번들 · 응답 · 로그에 나가지 않는다. 연결 실패 · 시간 초과는 FAILED(PROVIDER_UNAVAILABLE)."
+    logic: "서버 환경 변수 키로 wss://api.openai.com/v1/live/sessions(모델 gpt-live-1)에 연결해 session.start를 보내고 session.started를 받으면 ACTIVE 전이 조건(BR6.8)을 채운다. 키는 기기 · 프런트 번들 · 응답 · 로그에 나가지 않는다. 연결 실패 또는 BR6.12 ②의 시한 초과는 FAILED(PROVIDER_UNAVAILABLE)."
     violation: "BR6.8의 FAILED 경로."
     source: "ADR-004 · GL-01 · 스켈레톤 J16"
   - id: BR7.3
@@ -610,9 +634,9 @@ rules:
     category: "policy"
     applies_to: "Transcript.approved_for_display"
     trigger: "구간 통과"
-    logic: "아이 전사는 확정 즉시 approved_for_display true. AI 말은 해당 구간이 통과된 시점에 true. 폐기 구간은 false로 남고 보호자 응답(BR6.15)에서 빠진다. 전사 조립은 sequence_no를 세션 안에서 1부터 올리고 확정 전 조각은 같은 번호로 갱신한다."
+    logic: "아이 전사는 확정 즉시 approved_for_display true. AI 말은 해당 구간이 통과된 시점에 true. 폐기 구간은 false로 남고 보호자 응답(BR6.15)에서 빠진다. AI 행의 FINAL 전환과 approved_for_display 판정(통과 true / 폐기 false)은 같은 트랜잭션에서 커밋한다 — 승인이 늦어 앞선 seq가 뒤늦게 나타나는 일을 막는다. 전사 조립은 sequence_no를 세션 안에서 1부터 올리고 확정 전 조각은 같은 번호로 갱신한다."
     violation: "—"
-    source: "AC3.1.7 · FR7.1 · J12"
+    source: "AC3.2.15(U4 소관) · FR7.1 · J12"
   - id: BR7.6
     statement: "아이 기기는 서버가 승인해 보낸 소리 외에는 재생하지 않는다."
     category: "constraint"
@@ -640,21 +664,21 @@ rules:
     violation: "—"
     source: "J43 · 계약 10절"
   - id: BR8.3
-    statement: "실행 프로필은 dev · demo · prod이고, 시험 로그인과 시드는 dev · demo에서만 켜진다."
+    statement: "실행 프로필은 dev · demo · prod이고, 시험 로그인과 시드는 dev에서만 켜진다."
     category: "constraint"
     applies_to: "설정 프로필"
     trigger: "앱 시작"
-    logic: "mujoong.dev-login.enabled(기본 false)와 DevSeedRunner는 dev · demo 프로필에서만 빈으로 등록된다. prod에서는 빈이 없어 /api/dev/login이 404다."
+    logic: "DevLoginController와 DevSeedRunner 빈은 프로필 dev AND mujoong.dev-login.enabled=true(기본 false)일 때만 등록된다. prod 프로필이 활성인데 dev가 함께 활성이거나 mujoong.dev-login.enabled=true이면 앱은 기동을 거부한다. demo · prod에서는 빈이 없어 /api/dev/login이 404다. demo는 U2의 구글 로그인을 쓴다(공개 서버의 시험 로그인은 누구에게나 시드 보호자 세션을 주므로 열지 않는다)."
     violation: "—"
     source: "AC1.1.7 · NFR9 · J44"
   - id: BR8.4
     statement: "시험 로그인은 시드 보호자의 세션 쿠키를 열 뿐이며 구글 외 로그인 · 회원가입 · 아이디 · 비밀번호 경로를 만들지 않는다."
     category: "authorization"
     applies_to: "POST /api/dev/login"
-    trigger: "dev · demo 프로필에서 호출"
-    logic: "본문 없이 호출하면 시드 보호자(고정 UUID)에 대한 MUJOONG_SESSION 쿠키(운영과 같은 Spring Session JDBC)를 연다. 01 화면에는 이 경로로 가는 단추가 없다."
-    violation: "prod에서는 404."
-    source: "AC1.1.7 · J44"
+    trigger: "dev 프로필에서 호출"
+    logic: "본문 없이 호출하면 시드 보호자(고정 UUID)에 대한 MUJOONG_SESSION 쿠키(운영과 같은 Spring Session JDBC)를 연다. 01 화면에는 이 경로로 가는 단추가 없다. 같이 켜지는 DevSeedRunner(dev 한정)는 시드 보호자 · 아이 한 명 · 현재 정책 버전 동의 4항목 GIVEN · 기본 종료 표현 한 건 · 승인 문구 CLOSING과 WAITING_FILLER(임시 WAV 두 개, 정식 녹음 전까지, J60)를 넣는다."
+    violation: "dev 밖에서는 404."
+    source: "AC1.1.7 · J44 · J60"
   - id: BR8.5
     statement: "모든 보호자 API는 세션의 보호자 ID로만 자원을 찾고, 남의 자원은 존재 여부를 드러내지 않는 404로 답한다."
     category: "authorization"
@@ -668,7 +692,7 @@ rules:
     category: "policy"
     applies_to: "공통 오류 처리"
     trigger: "오류 응답"
-    logic: "코드 목록: UNAUTHENTICATED 401 · NOT_FOUND 404 · VALIDATION_FAILED 400 · CONSENT_MISSING 403 · ACCOUNT_DELETION_IN_PROGRESS 403 · SESSION_IN_PROGRESS 409 · IDEMPOTENCY_CONFLICT 409 · SESSION_NOT_ACTIVE 409 · DEVICE_NOT_STABLE 423 · REALTIME_UNAVAILABLE 503, 기기 등록: CODE_NOT_FOUND 404 · CODE_ALREADY_REGISTERED 409 · DEVICE_ALREADY_ACTIVE 409 · TOO_MANY_ATTEMPTS 429 · RATE_LIMITED 429 · BOOTSTRAP_NOT_FOUND 401 · NOT_REGISTERED_YET 409 · BOOTSTRAP_CLOSED 410 · DEVICE_NOT_REGISTERED 401 · ALREADY_REGISTERED 409. message에는 전사 원문 · 개인정보를 넣지 않는다. traceId는 요청마다 만들어 로그와 연결한다."
+    logic: "코드 목록: UNAUTHENTICATED 401 · NOT_FOUND 404 · VALIDATION_FAILED 400 · CONSENT_MISSING 403 · ACCOUNT_DELETION_IN_PROGRESS 403 · CSRF_TOKEN_INVALID 403 · SESSION_IN_PROGRESS 409 · IDEMPOTENCY_CONFLICT 409 · SESSION_NOT_ACTIVE 409 · DEVICE_NOT_STABLE 423 · REALTIME_UNAVAILABLE 503, 기기 등록: CODE_NOT_FOUND 404 · CODE_ALREADY_REGISTERED 409 · DEVICE_ALREADY_ACTIVE 409 · TOO_MANY_ATTEMPTS 429 · RATE_LIMITED 429 · CODE_ISSUE_FAILED 503 · BOOTSTRAP_NOT_FOUND 401 · NOT_REGISTERED_YET 409 · BOOTSTRAP_CLOSED 410 · DEVICE_NOT_REGISTERED 401 · ALREADY_REGISTERED 409, 앱 사이(내부): INVALID_ENVELOPE 400 · EVENT_CONFLICT 409 · INVALID_DEVICE_TOKEN 401 · DEVICE_NOT_CONNECTED 423. 내부 코드(DEVICE_NOT_CONNECTED 등)는 보호자 응답에 내보내지 않고 번역한다(DEVICE_NOT_CONNECTED → DEVICE_NOT_STABLE). message에는 전사 원문 · 개인정보를 넣지 않는다. traceId는 요청마다 만들어 로그와 연결한다."
     violation: "—"
     source: "J24 · 계약 2절 · NFR9"
   - id: BR8.7
@@ -682,17 +706,17 @@ rules:
   - id: BR8.8
     statement: "상태를 바꾸는 보호자 요청은 CSRF 토큰 헤더를 요구한다."
     category: "authorization"
-    applies_to: "POST · PUT · PATCH · DELETE (로그인 전 요청 제외)"
+    applies_to: "POST · PUT · PATCH · DELETE 보호자 REST (아래 면제 목록 제외)"
     trigger: "보호자 REST 호출"
-    logic: "X-CSRF-TOKEN 헤더가 세션의 토큰과 맞아야 한다. 취득 경로 · 재취득 시점은 NFR Design(3.3)이 정한다. SameSite=Lax만으로는 충분하지 않다."
-    violation: "403."
+    logic: "X-CSRF-TOKEN 헤더가 세션의 토큰과 맞아야 한다. 취득 경로 · 재취득 시점은 NFR Design(3.3)이 정한다. SameSite=Lax만으로는 충분하지 않다. 면제는 경로 접두어가 아니라 정확한 경로 목록으로만 한다: POST /api/dev/login(dev 한정), 구글 로그인 교환(U2), POST /api/device/bootstrap · POST /api/device/bootstrap/claim(기기 쿠키 인증, SameSite=Strict), /internal/**(X-Internal-Token). POST /api/device/register를 포함한 그 밖의 보호자 세션 변경 요청은 모두 CSRF 헤더가 필수이고, /api/device/** 전체를 면제하지 않는다."
+    violation: "403 CSRF_TOKEN_INVALID."
     source: "J21 · ADR-008"
   - id: BR8.9
     statement: "바깥에서 닿는 길은 Nginx 하나이고 /internal/** 은 막으며 WSS 업그레이드를 통과시킨다."
     category: "constraint"
     applies_to: "Nginx"
     trigger: "모든 외부 요청"
-    logic: "HTTPS 종료, /ws/device WebSocket 업그레이드 통과(Realtime), /api/** Core, /device · /parent Next.js, /internal/** 403(바깥), 승인 음성 정적 경로는 토큰 없이 읽기만 가능한 개인정보 없는 파일."
+    logic: "HTTPS 종료, /ws/device WebSocket 업그레이드 통과(Realtime), /api/** Core, /device · /parent Next.js, /internal/** 403(바깥), 승인 음성 정적 경로는 토큰 없이 읽기만 가능한 개인정보 없는 파일. Nginx는 X-Forwarded-For를 `$remote_addr`로 덮어써 넘긴다(덧붙이지 않는다, BR1.6). 앞에 로드밸런서가 생기면 신뢰 프록시 설정을 3.4에서 바꾼다."
     violation: "—"
     source: "ADR-006 · J26"
   - id: BR8.10
@@ -708,7 +732,7 @@ rules:
     category: "constraint"
     applies_to: "시간 계약 전체"
     trigger: "시한을 쓰는 모든 코드"
-    logic: "값은 contract-summary.md 7절 한 곳이 원천이다. 설정 파일 이름과 키 이름은 7절 키를 따른다. 값이 바뀌면 7절을 먼저 고친다."
+    logic: "contract-summary.md 7절에 키가 있는 값은 그 키를 따르고 값이 바뀌면 7절을 먼저 고친다. 7절에 키가 없는 값(내부 HTTP 제한 J26, Outbox 폴러 · 재시도 간격 · Inbox 재호출 J49, 처리기 선점 30초, 출력 구간 조용 시간 J52, 실패 페이로드 보관 기간 J50, 묘비 10분, 코드 재추첨 횟수 J45, D0 재시도 5초, 「등록되었어요」 3초, 연결 점검 주기)은 `mujoong.*` 설정 키로 읽는다. 키 이름과 값은 NFR Design(3.3)이 확정해 3.5의 contracts/timing.md에 더하기만 한다. 코드에 숫자를 박지 않고 시험은 같은 키를 줄여 주입한다."
     violation: "—"
     source: "NFR6 · 계약 7절 · J51"
 
@@ -719,11 +743,12 @@ rules:
     applies_to: "DeviceWeb 시작"
     trigger: "/device 열기"
     logic: |
-      ① GET /api/device/me → 200이면 T19(꺼짐). 401이면 ②.
-      ② bootstrap 쿠키가 있으면 GET /api/device/bootstrap/status: REGISTERED면 claim(BR3.1) 뒤 「등록되었어요」→ T19, PENDING이면 ③, EXPIRED · 401이면 ④.
+      ① GET /api/device/me → 200이면 T19(꺼짐, J56). 401이면 ②.
+      ② GET /api/device/bootstrap/status를 부른다(bootstrap 쿠키는 HttpOnly라 기기 웹 JS가 유무를 볼 수 없으므로 서버가 판정한다): REGISTERED면 claim(BR3.1) 뒤 「등록되었어요」→ T19, PENDING이면 ③, EXPIRED · 401 BOOTSTRAP_NOT_FOUND면 ④.
       ③ POST /api/device/bootstrap(BR1.3)이 같은 코드를 돌려주고 D0 코드 표시 · 2초 폴링.
-      ④ 쿠키가 없거나 EXPIRED면 POST /api/device/bootstrap으로 새 코드를 받아 D0.
-      WSS가 4401로 닫히면 ①부터 다시.
+      ④ POST /api/device/bootstrap으로 새 코드를 받아 D0.
+      claim 결과: 200 → 「등록되었어요」 3초 → T19, 401 → ④, 410 → /device/me로 확인(200이면 T19, 401이면 ④), 409 NOT_REGISTERED_YET → 2초 뒤 status를 다시 조회.
+      WSS가 4401로 닫히면 ①부터 다시. 기기 웹은 bootstrap과 claim을 한 번에 하나만 보내고 응답이 올 때까지 같은 요청을 다시 보내지 않는다(단일 비행). claim은 서버에서 Device 행 잠금 아래 처리한다. 쿠키 유무를 클라이언트가 판단하지 않고 localStorage 등 클라이언트 표시값도 두지 않는다(BR1.5 · AC6.1.4).
     violation: "—"
     source: "AC6.1.1 · AC6.1.2 · AC6.1.5 · AC6.2.8 · OQ13"
   - id: BR9.2
@@ -731,7 +756,7 @@ rules:
     category: "policy"
     applies_to: "D0 화면"
     trigger: "코드 표시, 등록 완료"
-    logic: "안내 '보호자 앱에서 이 코드를 넣어 주세요' + 4글자 · 4글자 코드('7F3K 92QD' 꼴, C.D-00.30.2~3). 상태: 코드 표시 / 등록 대기 / 등록되었어요(3초). 코드는 새로고침해도 유지(BR1.3). 만료되면 조용히 새 코드로 바뀐다(BR1.4). 클릭 요소가 없다."
+    logic: "안내 '보호자 앱에서 이 코드를 넣어 주세요' + 4글자 · 4글자 코드('7F3K · 92QD' 꼴, C.D-00.30.2~3). 상태: 코드 표시 / 등록 대기 / 등록되었어요(3초). 코드는 새로고침해도 유지(BR1.3). 만료되면 조용히 새 코드로 바뀐다(BR1.4). 등록 직후 기기는 T19 꺼짐으로 착지하고 「켜기」를 누른 뒤에야 대기가 된다(J56). 클릭 요소가 없다."
     violation: "—"
     source: "AC6.1.1 · AC6.1.2 · AC6.1.5"
   - id: BR9.3
@@ -739,17 +764,17 @@ rules:
     category: "policy"
     applies_to: "DeviceWeb, DeviceRegistry"
     trigger: "쿠키 없음 · 모르는 토큰"
-    logic: "쿠키가 지워진 기기 웹은 BR9.1 ④로 새 코드를 받는다. 보호자가 그 코드를 등록하면 BR2.4 · BR2.5로 옛 기기가 RELEASED가 되고 옛 토큰의 WSS 접속은 거부된다. 그 전까지 04 · 05는 '응답 없음 · 마지막 hh:mm'이다. 보호자 쪽 재등록 진입 경로는 OQ12(Should)."
+    logic: "쿠키가 지워진 기기 웹은 BR9.1 ④로 새 코드를 받는다. 보호자가 그 코드를 등록하면 BR2.4 · BR2.5로 옛 기기가 RELEASED가 되고 옛 토큰의 WSS 접속은 거부된다. 그 전까지 04 · 05는 '응답 없음 · 마지막 hh:mm'이다(옛 기기가 정상 닫기로 끝난 경우. 닫기 프레임 없이 끊겼으면 40초 뒤 '끊김'이다, BR4.8). 보호자 쪽 재등록 진입 경로는 OQ12(Should)."
     violation: "—"
     source: "AC6.1.3 · AC6.2.8 · B3"
   - id: BR9.4
-    statement: "아이 기기 화면에는 기술 문구를 보이지 않는다. 네트워크 실패는 화면을 유지하고 5초 뒤 다시 시도한다."
+    statement: "아이 기기 화면에는 기술 문구를 보이지 않는다. D0에서 아직 코드를 받지 못한 동안만 '연결을 확인하는 중'을 보이고, 그 밖의 네트워크 실패는 화면을 유지하고 5초 뒤 다시 시도한다."
     category: "policy"
     applies_to: "D0 · T19"
     trigger: "요청 실패 · 429 · 503"
-    logic: "실패하면 마지막 화면을 그대로 두고 5초 뒤 같은 요청을 다시 한다. 마이크 허용 거부만 문구를 보인다(BR9.5)."
+    logic: "D0에서 코드를 아직 받지 못한 상태(첫 로드 · 코드 요청 bootstrap 실패: 429 · 503 · 네트워크)는 '연결을 확인하는 중'(개발명세 D-00 오류 · interaction-spec 4절)을 보이고 5초 뒤 같은 요청을 다시 한다. 이미 코드가 보이는 중의 status 폴링 실패와 T19의 HTTP 실패는 마지막 화면을 그대로 두고 5초 뒤 다시 한다. 마이크 허용 거부(BR9.5)와 이 문구만 아이 기기 화면의 글이다. T19 '다시 연결하고 있어요'(mockups 9-31)는 U3 몫이다."
     violation: "—"
-    source: "AC6.1.1 · 아동 서비스 원칙(NFR1)"
+    source: "AC6.1.1 · 개발명세 D-00 · interaction-spec 4절 · NFR1"
   - id: BR9.5
     statement: "T19의 클릭 요소는 「켜기」와 「끄기」뿐이다. 「켜기」는 마이크 · 소리 허용을 받은 뒤 연결하고, 허용 거부면 연결하지 않는다."
     category: "policy"
@@ -759,7 +784,7 @@ rules:
     violation: "—"
     source: "AC6.2.1 ~ AC6.2.3 · AC6.2.9 · AC6.2.11 · AC6.2.13(U3) · B16"
   - id: BR9.6
-    statement: "T19의 표시 상태는 서버의 SESSION_STATE와 기기의 실제 재생에서 정하고, ?debug=1이면 상태 로그를 보인다. U1 최소 표시는 꺼짐 · 대기 · 듣는 중 · 말하는 중 · 마무리다."
+    statement: "T19의 표시 상태는 서버의 SESSION_STATE와 기기의 실제 재생에서 정하고, ?debug=1이면 상태 로그를 보인다. U1 최소 표시는 꺼짐 · 대기 · 듣는 중 · 말하는 중 · 마무리 · 마이크 허용 안 됨(BR9.5)이다."
     category: "policy"
     applies_to: "T19"
     trigger: "SESSION_STATE 수신, 재생 시작 · 끝"
@@ -771,7 +796,7 @@ rules:
     category: "policy"
     applies_to: "DeviceWeb"
     trigger: "WSS 4401, /device/me 401"
-    logic: "4401을 받으면 /device/me로 확인하고 401이면 D0(BR9.1 ②~④). 4001(대체됨)은 D0이 아니라 꺼짐이다(BR3.7)."
+    logic: "4401을 받으면 /device/me로 확인하고 401이면 D0(BR9.1 ②~④). 4001(대체됨)은 D0이 아니라 꺼짐이다(BR3.7). 그 밖의 닫기 코드(1001 · 1011 · 1013 · 4400 · 4408)는 켜짐 상태일 때 BR9.4대로 마지막 화면을 유지하고 5초 간격으로 다시 접속한다(「끄기」 뒤에는 하지 않는다). 1 · 2 · 4초 백오프(device.reconnect-backoff) · HELLO resume · '다시 연결하고 있어요' 표시는 U3가 완성한다."
     violation: "—"
     source: "AC6.2.8 · J22"
 ```
@@ -781,11 +806,11 @@ rules:
 | 묶음 | 규칙 수 | 한 줄 |
 |---|---|---|
 | BR1 부트스트랩 · 코드 | 7 | 8글자 31알파벳 코드를 24시간 발급하고 같은 쿠키엔 같은 코드, 비밀은 해시로 |
-| BR2 보호자 등록 | 9 | 조건부 UPDATE 한 건만 성공, 활성 기기가 연결돼 있지 않으면 교체(옛 기기 RELEASED + DeviceReleased 같은 트랜잭션) |
+| BR2 보호자 등록 | 10 | 코드 조회 404 · 409 구분, 조건부 UPDATE 한 건만 성공, 연결돼 있지 않으면 교체(옛 기기 먼저 RELEASED + DeviceReleased 같은 트랜잭션), 계정 삭제 참가자 |
 | BR3 토큰 · 인증 | 9 | claim은 첫 연결 전 회전 가능, WSS는 Origin + 쿠키, 새 연결이 옛 연결 대체, 내부 호출은 공유 비밀 |
 | BR4 연결 상태 사본 | 8 | 최신 보고만 반영, 판정은 읽을 때 계산, 30초 stale = 확인 불가, 시작 가능 = 안정만 |
-| BR5 영속 메시징 | 13 | 같은 트랜잭션 저장, 직렬 발송과 백오프, 커밋 뒤 ACK, 해시로 중복 · 충돌, 끝나면 페이로드 비움 |
-| BR6 세션 슬라이스 | 17 | 시작 거절 순서 · 멱등 · 하나만, 전이표, 끝내기 + 마무리 인사 1회, 네 안전 시한, 재시작 FAILED |
+| BR5 영속 메시징 | 14 | 같은 트랜잭션 저장, 직렬 발송과 백오프, 커밋 뒤 ACK, 해시로 중복 · 충돌, 처리기 선점, 끝나면 페이로드 비움, 계정 삭제 참가자 |
+| BR6 세션 슬라이스 | 17 | 멱등 먼저 + 시작 거절 순서 · 하나만, 전이표(조건부 승자 하나), 끝내기 + 마무리 인사 1회, Core 포기 세션 정리, 네 안전 시한, 재시작 FAILED |
 | BR7 음성 · 게이트 | 6 | 준비 뒤에만 입력, 서버 키로 공급자 연결, 800ms 출력 구간, 폐기 → 대체 문구, 승인된 소리만 재생 |
 | BR8 실행 골격 · 공통 | 11 | 스키마 · 역할 분리, Flyway V1, 프로필별 시험 로그인, 404 숨김, 오류 봉투, 로그 위생, CSRF, Nginx |
 | BR9 기기 웹 | 7 | me → status → bootstrap 순서, D0 3초, 쿠키 삭제 → D0, 기술 문구 없음, 켜기 · 끄기만 |

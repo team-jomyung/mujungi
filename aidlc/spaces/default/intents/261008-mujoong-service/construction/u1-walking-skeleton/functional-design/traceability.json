@@ -130,7 +130,7 @@
     {
       "id": "AC1.1.9",
       "status": "OK",
-      "target": "BR6.16, BR8.6"
+      "target": "BR6.16, BR8.6 (세션 영향 없음 · 오류 봉투. 「안내 토스트 → 01」은 Deferred → u2-guardian-account)"
     },
     {
       "id": "AC1.1.10",
@@ -160,7 +160,7 @@
     {
       "id": "AC1.4.5",
       "status": "Deferred",
-      "target": "u2-guardian-account (03 수정 · 05 화면 · 26 · 설정 시트 · 05 이동 · 폰 인터넷 줄 · 종료 표현 구역)"
+      "target": "u2-guardian-account (03 수정 · 05 화면 · 26 · 설정 시트 · 05 이동 · 폰 인터넷 줄 · 종료 표현 구역) — U1은 링크(/parent/device 스텁)까지"
     },
     {
       "id": "AC1.4.6",
@@ -180,7 +180,7 @@
     {
       "id": "AC1.4.9",
       "status": "OK",
-      "target": "BR4.5"
+      "target": "BR4.5 (자유대화 → 08까지. 「연습」 → 18은 Deferred → u5-practice)"
     },
     {
       "id": "AC1.4.10",
@@ -190,7 +190,7 @@
     {
       "id": "AC1.4.11",
       "status": "OK",
-      "target": "BR4.5"
+      "target": "BR4.5 (05 화면은 U2, U1은 라우트 스텁 J57)"
     },
     {
       "id": "AC1.4.12",
@@ -204,8 +204,8 @@
     },
     {
       "id": "AC1.4.14",
-      "status": "OK",
-      "target": "BR4.6"
+      "status": "Deferred",
+      "target": "u4-activity-session (04 지금 활동 칸의 '지금은 시작할 수 없어요' + 사유 한 줄 — U1은 대화 기기 구역만 맡고(BR4.6) 지금 활동 칸은 U4 소관)"
     },
     {
       "id": "AC1.4.15",
@@ -215,32 +215,32 @@
     {
       "id": "AC2.1.1",
       "status": "OK",
-      "target": "BR4.3, BR4.6"
+      "target": "BR4.3, BR4.6 (U1은 DeviceView 값과 reasonCode까지. 05 화면 문구 · 판정 카드 표시는 Deferred → u2-guardian-account)"
     },
     {
       "id": "AC2.1.2",
       "status": "OK",
-      "target": "BR2.7, BR4.6"
+      "target": "BR2.7, BR4.6 (05 등록 줄 표시는 U2)"
     },
     {
       "id": "AC2.1.3",
       "status": "OK",
-      "target": "BR4.3"
+      "target": "BR4.3 (U1은 DeviceView 값과 reasonCode까지. 05 화면 문구 · 판정 카드 표시는 Deferred → u2-guardian-account)"
     },
     {
       "id": "AC2.1.4",
       "status": "OK",
-      "target": "BR4.3"
+      "target": "BR4.3 (U1은 DeviceView 값과 reasonCode까지. 05 화면 문구 · 판정 카드 표시는 Deferred → u2-guardian-account)"
     },
     {
       "id": "AC2.1.5",
       "status": "OK",
-      "target": "BR4.3"
+      "target": "BR4.3 (U1은 DeviceView 값과 reasonCode까지. 05 화면 문구 · 판정 카드 표시는 Deferred → u2-guardian-account)"
     },
     {
       "id": "AC2.1.6",
       "status": "OK",
-      "target": "BR4.3"
+      "target": "BR4.3, BR4.8, BR6.12 (명령 시한 초과 → UNRESPONSIVE 기록 · 해제는 U1, J55. U1은 DeviceView 값과 reasonCode까지. 05 화면 문구 · 판정 카드 표시는 Deferred → u2-guardian-account)"
     },
     {
       "id": "AC2.1.7",
@@ -260,7 +260,7 @@
     {
       "id": "AC2.1.10",
       "status": "OK",
-      "target": "BR4.1, BR4.4, BR4.8"
+      "target": "BR4.1, BR4.4, BR4.8 (U1: last_seen_at 보관 · 최신 보고 반영 · 명령 시한 UNRESPONSIVE 설정 · 해제, J55. 5분 창 · 지연 1초 · 히스테리시스 · 플래핑 시험은 Deferred → u3-voice-conversation)"
     },
     {
       "id": "AC2.1.11",
@@ -290,7 +290,7 @@
     {
       "id": "AC2.2.2",
       "status": "OK",
-      "target": "BR2.3, BR2.7"
+      "target": "BR2.3, BR2.7 (기기 쪽 대기는 「켜기」 뒤, J56. 05 화면은 U2, U1은 라우트 스텁 J57)"
     },
     {
       "id": "AC2.2.3",
@@ -300,12 +300,12 @@
     {
       "id": "AC2.2.4",
       "status": "OK",
-      "target": "BR2.8"
+      "target": "BR2.8 (05 화면은 U2, U1은 라우트 스텁 J57)"
     },
     {
       "id": "AC2.2.5",
       "status": "OK",
-      "target": "BR2.8, BR3.3, BR3.4, BR3.6"
+      "target": "BR2.8, BR2.10, BR3.3, BR3.4, BR3.6 (계정 삭제 때 토큰 무효화 · 기기 행 삭제는 BR2.10, J58. 삭제 지휘 · AC1.6.6은 U2)"
     },
     {
       "id": "AC2.2.6",
@@ -315,7 +315,7 @@
     {
       "id": "AC2.2.7",
       "status": "OK",
-      "target": "BR2.4, BR2.9"
+      "target": "BR2.4, BR2.9 (예외: 연결되지 않은 옛 기기는 J13 · J46 · AC6.1.3에 따라 교체 허용하며 보고가 한 번도 없던 기기도 포함한다. 거절 시험은 옛 기기를 CONNECTED와 30초 안의 보고로 시드)"
     },
     {
       "id": "AC2.2.8",
@@ -355,17 +355,17 @@
     {
       "id": "AC3.1.7",
       "status": "OK",
-      "target": "BR6.5, BR6.15"
+      "target": "BR6.5"
     },
     {
       "id": "AC3.1.8",
       "status": "OK",
-      "target": "BR6.2, BR6.3, BR6.6"
+      "target": "BR6.2, BR6.3, BR6.6 (12는 첫 세션 = 첫 요청의 12. 다른 화면에서의 12 진입은 u4-activity-session)"
     },
     {
       "id": "AC3.1.9",
       "status": "OK",
-      "target": "BR6.7, BR6.12"
+      "target": "BR6.7, BR6.12, BR6.15"
     },
     {
       "id": "AC3.3.1",
@@ -385,12 +385,12 @@
     {
       "id": "AC3.3.4",
       "status": "OK",
-      "target": "BR6.8, BR6.10"
+      "target": "BR6.8, BR6.10 (기기 멈춤 확인 → ENDED까지. 정리 중 표시는 Deferred → u4-activity-session · u6-results-report)"
     },
     {
       "id": "AC3.3.5",
       "status": "OK",
-      "target": "BR6.12"
+      "target": "BR6.12, BR6.15"
     },
     {
       "id": "AC3.3.6",
@@ -420,7 +420,7 @@
     {
       "id": "AC6.1.2",
       "status": "OK",
-      "target": "BR1.7, BR9.1, BR9.2"
+      "target": "BR1.7, BR9.1, BR9.2 (T19 꺼짐 착지, J56)"
     },
     {
       "id": "AC6.1.3",
@@ -485,7 +485,7 @@
     {
       "id": "AC6.2.10",
       "status": "OK",
-      "target": "BR3.7"
+      "target": "BR3.7, BR6.12 (둘째 문장: 동시 연결 대체 + 세션 시계. 첫째 문장 재연결 resume은 Deferred → u3-voice-conversation, HELLO resume)"
     },
     {
       "id": "AC6.2.11",
@@ -517,7 +517,7 @@
     {
       "id": "BR2.2",
       "status": "N/A",
-      "target": "기술 규칙: 등록 주체는 세션 보호자, 삭제 접수 계정 거절(NFR9)"
+      "target": "기술 규칙: 등록 주체는 세션 보호자, 삭제 접수 계정 거절(NFR9) — AC1.1.8의 남의 자원 차단 일반 규칙은 BR8.5, 등록 API 몫은 여기"
     },
     {
       "id": "BR2.6",
@@ -597,12 +597,17 @@
     {
       "id": "BR5.12",
       "status": "N/A",
-      "target": "기술 규칙: 시작 때 미완료 행 재개(ADR-010)"
+      "target": "기술 규칙: 시작 때 미완료 행 재개(ADR-010 · J53)"
     },
     {
       "id": "BR5.13",
       "status": "N/A",
       "target": "기술 규칙: 메시징 로그 위생(NFR9)"
+    },
+    {
+      "id": "BR5.14",
+      "status": "N/A",
+      "target": "기술 규칙: 계정 삭제 참가자 — 전달이 끝난 Outbox/Inbox 행만 삭제, 제어 이벤트 보존, 대화 원문 페이로드 즉시 비움(ADR-010 · 공통 완료 조건 · J19 · J50 · J58). AC1.6.6(삭제 완료 검증)은 US1.6 · U2 소관이라 이 유닛의 AC에 걸리지 않는다"
     },
     {
       "id": "BR6.13",
@@ -642,7 +647,7 @@
     {
       "id": "BR7.5",
       "status": "N/A",
-      "target": "스켈레톤 음성 경로: 승인된 AI 말만 보호자에게 노출(FR7.1 · J12) — U3가 완성"
+      "target": "스켈레톤 음성 경로: 승인된 AI 말만 보호자에게 노출(FR7.1 · J12) — 말풍선 AC(AC3.2.15)는 US3.2 · U4 소관, 음성 경로는 U3가 완성"
     },
     {
       "id": "BR8.1",
@@ -682,7 +687,7 @@
     {
       "id": "BR9.4",
       "status": "N/A",
-      "target": "기술 규칙: 아이 기기 화면에는 기술 문구 없음(NFR1)"
+      "target": "기술 규칙: 아이 기기 화면에는 기술 문구 없음, D0 '연결을 확인하는 중'과 5초 재시도(NFR1 · 개발명세 D-00 · interaction-spec 4절) — AC6.1.1의 코드 표시는 BR1.1 · BR9.2가 맡는다"
     }
   ]
 }

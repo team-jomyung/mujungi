@@ -1,7 +1,7 @@
 # U1 u1-walking-skeleton — 엔터티 모델 (Functional Design 3.1)
 
 > Functional Design(3.1) 산출물 · U1 워킹 스켈레톤 · 깊이 Standard · 2026-10-09 (클라우드 세션, 팀장 대리 판단)
-> 입력: `unit-of-work.md`(U1 정의), `unit-of-work-story-map.md`(U1이 닿는 스토리 8개), `requirements.md`(FR2.1 · FR2.2 · FR2.3 · NFR6 · NFR9), `components.md`(엔터티 소유 표 · J1~J14 · 기기 상태 대응표), `contract-summary.md`(C2 · C7 · C9 · C11 · 시간 계약 · 포트), ERD v0.1 DDL(`mujoong_ERD_PostgreSQL_1007.sql`). 질문과 대리 답은 `functional-design-questions.md`(Q1 ~ Q12), 준하 제안(가정) J42 ~ J53은 `functional-spec.md` 끝 표.
+> 입력: `unit-of-work.md`(U1 정의), `unit-of-work-story-map.md`(U1이 닿는 스토리 8개), `requirements.md`(FR2.1 · FR2.2 · FR2.3 · NFR6 · NFR9), `components.md`(엔터티 소유 표 · J1~J14 · 기기 상태 대응표), `contract-summary.md`(C2 · C7 · C9 · C11 · 시간 계약 · 포트), ERD v0.1 DDL(`mujoong_ERD_PostgreSQL_1007.sql`). 질문과 대리 답은 `functional-design-questions.md`(Q1 ~ Q19), 준하 제안(가정) J42 ~ J60은 `functional-spec.md` 끝 표.
 > 이 문서는 데이터 모양만 적는다. 규칙은 `rules.md`(BRx.y), 순서 있는 동작과 상태 기계는 `functional-spec.md`.
 
 ## 1. 소유와 범위
@@ -15,12 +15,12 @@ U1은 완성하는 컴포넌트의 엔터티는 **전부** 설계하고(`u1_role
 | CoreInboxEvent | core_inbox_event | core | CoreMessaging | owned | U1 |
 | RealtimeOutboxEvent | realtime_outbox_event | realtime | RealtimeMessaging | owned | U1 |
 | RealtimeInboxEvent | realtime_inbox_event | realtime | RealtimeMessaging | owned | U1 |
-| Guardian | core_guardian | core | GuardianIdentity | minimal(시드) | U2 |
-| LoginSession | core_spring_session(+_attributes) | core | GuardianIdentity | minimal(시험 로그인) | U2 |
-| Consent | core_consent | core | ConsentPolicy | minimal(시드) | U2 |
-| Child | core_child | core | ChildProfile | minimal(시드) | U2 |
+| Guardian | core_guardian | core | GuardianIdentity | minimal(dev 시드) | U2 |
+| LoginSession | core_spring_session(+_attributes) | core | GuardianIdentity | minimal(dev 시험 로그인) | U2 |
+| Consent | core_consent | core | ConsentPolicy | minimal(dev 시드) | U2 |
+| Child | core_child | core | ChildProfile | minimal(dev 시드) | U2 |
 | StopExpression | core_stop_expression | core | ChildProfile | 표만 만듦(스켈레톤은 기본 표현만) | U2 |
-| ApprovedContent · ApprovedContentVersion | core_approved_content · core_approved_content_version | core | ApprovedContentCatalog | minimal(시드 문구) | U2 |
+| ApprovedContent · ApprovedContentVersion | core_approved_content · core_approved_content_version | core | ApprovedContentCatalog | minimal(dev 시드 문구 · 임시 음성) | U2 |
 | Activity | core_activity | core | ActivityCoordinator | minimal(자유대화 한 건) | U4 |
 | ActivitySession | realtime_activity_session | realtime | SessionLifecycle | minimal | U4 |
 | SessionEvent | realtime_session_event | realtime | SessionLifecycle | minimal | U4 |
@@ -38,11 +38,11 @@ entities:
     schema: core
     owner_component: DeviceRegistry
     u1_role: owned
-    description: 아이 기기 한 대의 등록 수명(코드 발급 → 등록 → 해제)과 Realtime이 보고한 연결 상태 사본. 계정당 활성 기기는 하나다.
+    description: 아이 기기 한 대의 등록 수명(코드 발급 → 등록 → 해제 → 계정 삭제 때 행 삭제)과 Realtime이 보고한 연결 상태 사본. 계정당 활성 기기는 하나다.
     attributes:
       - { name: id, type: uuid, required: true, unique: true }
-      - { name: guardian_id, type: uuid, required: false, references: Guardian.id, constraints: "REGISTERED이면 필수, UNREGISTERED · EXPIRED이면 비어 있다" }
-      - { name: registration_code, type: "string(8)", required: true, constraints: "알파벳 [2-9A-HJKMNP-Z] 8글자 대문자. UNREGISTERED 행끼리 유일(부분 유일 색인). 등록 뒤에도 05의 '코드 앞 4자리' 표시를 위해 남긴다" }
+      - { name: guardian_id, type: uuid, required: false, references: Guardian.id, constraints: "REGISTERED이면 필수, UNREGISTERED · EXPIRED이면 비어 있다. RELEASED는 해제 전 값을 그대로 둔다(계정 삭제 참가자가 이 열로 찾는다, BR2.10). 외래 키는 ON DELETE 없음(RESTRICT)이다" }
+      - { name: registration_code, type: "string(8)", required: true, constraints: "알파벳 [2-9A-HJKMNP-Z] 8글자 대문자. UNREGISTERED 행끼리 유일(부분 유일 색인). 등록 뒤에도 05의 '코드 앞 4자리' 표시를 위해 남긴다. EXPIRED 행도 NOT NULL 값이 그대로 남고 UNREGISTERED 부분 유일 색인에서만 빠진다(BR1.4)" }
       - { name: code_issued_at, type: timestamp, required: true }
       - { name: code_expires_at, type: timestamp, required: true, constraints: "code_issued_at + 24시간(bootstrap.code-ttl)" }
       - { name: bootstrap_secret_hash, type: "string(64)", required: true, unique: true, constraints: "bootstrap 비밀의 SHA-256 소문자 16진수. 비밀 원문은 저장하지 않는다" }
@@ -53,24 +53,26 @@ entities:
       - { name: registered_at, type: timestamp, required: false }
       - { name: released_at, type: timestamp, required: false }
       - { name: release_reason, type: "string(30)", required: false, allowed_values: [REREGISTERED, ACCOUNT_DELETED] }
-      - { name: reported_connection_state, type: "string(20)", required: false, allowed_values: [OFFLINE, CONNECTED, UNSTABLE, DISCONNECTED, UNRESPONSIVE], constraints: "Realtime이 보고한 값의 사본. 한 번도 보고가 없으면 비어 있다" }
-      - { name: reported_at, type: timestamp, required: false, constraints: "사본에 반영한 가장 늦은 보고 시각(보고의 reportedAt 또는 이벤트의 occurredAt). 단조 증가" }
-      - { name: last_seen_at, type: timestamp, required: false }
-      - { name: connection_since, type: timestamp, required: false }
-      - { name: rtt_ms, type: int, required: false, constraints: ">= 0" }
-      - { name: recent_disconnect_count, type: int, required: true, default: 0, constraints: ">= 0, 최근 5분 창 끊김 횟수(Realtime 값)" }
+      - { name: reported_connection_state, type: "string(20)", required: false, allowed_values: [OFFLINE, CONNECTED, UNSTABLE, DISCONNECTED, UNRESPONSIVE], constraints: "Realtime이 보고한 값의 사본(보고의 state). 한 번도 보고가 없으면 비어 있고, 이 기기는 BR4.3 ②로 UNRESPONSIVE처럼 보여 주되 교체 등록은 막지 않는다(BR2.4 · J46)" }
+      - { name: reported_at, type: timestamp, required: false, constraints: "사본에 반영한 가장 늦은 보고 시각(보고의 reportedAt 또는 이벤트를 받은 Inbox 행의 occurred_at). 읽고 비교하고 쓰지 않고 'WHERE reported_at IS NULL OR reported_at < :t' 조건부 UPDATE 한 문장으로만 올리므로 줄어들지 않는다(BR4.1)" }
+      - { name: last_seen_at, type: timestamp, required: false, constraints: "보고의 lastSeenAt(DeviceConnection.last_seen_at의 사본)" }
+      - { name: connection_since, type: timestamp, required: false, constraints: "보고의 since" }
+      - { name: rtt_ms, type: int, required: false, constraints: ">= 0, 보고의 rttMs(DeviceConnection.last_rtt_ms의 사본)" }
+      - { name: recent_disconnect_count, type: int, required: true, default: 0, constraints: ">= 0, 최근 5분 창 끊김 횟수(Realtime 값). 보고의 recentDisconnects(DeviceConnection.recent_disconnects의 사본)" }
       - { name: created_at, type: timestamp, required: true }
       - { name: updated_at, type: timestamp, required: true }
       - { name: row_version, type: bigint, required: true, default: 0, constraints: "낙관적 잠금" }
     constraints:
-      - "부분 유일: guardian_id (WHERE registration_status = 'REGISTERED') — 계정당 활성 기기 하나(AC2.2.7)"
-      - "부분 유일: registration_code (WHERE registration_status = 'UNREGISTERED') — 발급 중인 코드끼리 겹치지 않는다"
+      - "부분 유일: guardian_id (WHERE registration_status = 'REGISTERED') — 계정당 활성 기기 하나(AC2.2.7). PostgreSQL의 유일 색인은 문장마다 즉시 검사되고 부분 색인은 DEFERRABLE로 만들 수 없으므로, 교체 등록은 옛 행을 먼저 RELEASED로 바꾼 뒤 새 행을 REGISTERED로 바꾼다(BR2.5). 위반(23505)은 409 DEVICE_ALREADY_ACTIVE로 번역한다(BR2.4)"
+      - "부분 유일: registration_code (WHERE registration_status = 'UNREGISTERED') — 발급 중인 코드끼리 겹치지 않는다. EXPIRED 행은 registration_code NOT NULL 값이 남은 채 이 색인에서만 빠지므로 같은 코드를 새 발급에서 다시 뽑아도 된다(BR1.4)"
       - "검사: registration_status = 'REGISTERED' 이면 guardian_id · registered_at이 반드시 있다. device_token_hash는 claim 뒤에만 채워진다"
       - "검사: registration_status = 'RELEASED' 이면 released_at · release_reason이 있고 device_token_hash는 비어 있다"
       - "검사: registration_status IN ('UNREGISTERED','EXPIRED') 이면 guardian_id는 비어 있다"
       - "상태 전이는 UNREGISTERED → REGISTERED · EXPIRED, REGISTERED → RELEASED만 허용(되돌림 · 건너뜀 없음, EXPIRED · RELEASED는 끝)"
+      - "외래 키: guardian_id → core_guardian.id는 ON DELETE 없음(RESTRICT)이고 core_activity.device_id → core_device.id도 같다. 계정 삭제는 core_activity(U4 참가자) → core_device(Device 참가자, BR2.10) → core_guardian(U2) 순서여야 하며 RESTRICT가 이 순서를 강제한다"
+      - "삭제: EXPIRED이면서 7일이 지난 행은 정리 작업이 지운다(BR1.4). 계정 삭제 참가자는 guardian_id가 같은 행(REGISTERED는 RELEASED로 바꾼 뒤, 재등록으로 RELEASED가 된 옛 행 포함)을 지운다(BR2.10)"
     relationships:
-      - { to: Guardian, cardinality: "many-to-one(활성은 최대 1)", direction: "Device → Guardian", note: "같은 core 스키마라 DB 외래 키 가능" }
+      - { to: Guardian, cardinality: "many-to-one(활성은 최대 1)", direction: "Device → Guardian", note: "같은 core 스키마라 DB 외래 키를 두며 ON DELETE 없음(RESTRICT)" }
       - { to: DeviceConnection, cardinality: "one-to-one(논리)", direction: "Device ← DeviceConnection", note: "스키마가 달라 논리 참조(device_id)" }
 
   - name: CoreOutboxEvent
@@ -83,13 +85,14 @@ entities:
       - { name: event_id, type: uuid, required: true, unique: true }
       - { name: event_type, type: "string(100)", required: true, allowed_values: [DeviceReleased, DeletionRequested] }
       - { name: schema_version, type: int, required: true, default: 1, constraints: ">= 1 (ERD v0.2 추가)" }
-      - { name: aggregate_type, type: "string(100)", required: false, allowed_values: [ActivitySession, Device, DataDeletionRequest] }
-      - { name: aggregate_id, type: uuid, required: false }
+      - { name: occurred_at, type: timestamp, required: true, constraints: "envelope의 occurredAt. 업무 변경 트랜잭션의 시각이며 받는 쪽이 순서를 가릴 때의 기준이다(BR4.1 · BR5.10, ERD v0.2 추가)" }
+      - { name: aggregate_type, type: "string(100)", required: true, allowed_values: [ActivitySession, Device, DataDeletionRequest], constraints: "envelope 필수 필드(BR5.4). 모든 Core 이벤트에 집합체가 있다" }
+      - { name: aggregate_id, type: uuid, required: true, constraints: "envelope 필수 필드(BR5.4)" }
       - { name: guardian_id, type: uuid, required: false, constraints: "계정 삭제 참가자가 찾는 열(ERD v0.2 추가). 보호자와 무관한 이벤트는 비어 있다" }
-      - { name: payload_json, type: json, required: true, constraints: "전달 전까지만 내용을 가진다. PUBLISHED가 되는 즉시 {} 로 비운다(BR5.11). 전사 원문 · 원음 · 비밀을 담지 않는다" }
+      - { name: payload_json, type: json, required: true, constraints: "전달 전까지만 내용을 가진다. PUBLISHED가 되는 즉시 {} 로 비운다(BR5.11). FAILED 행은 created_at 7일 뒤에 비운다. 전사 원문 · 원음 · 비밀을 담지 않는다" }
       - { name: payload_hash, type: "string(64)", required: true, constraints: "정규화 payload의 SHA-256. 비운 뒤에도 남는다(충돌 판정용, ERD v0.2 추가)" }
       - { name: status, type: "string(30)", required: true, allowed_values: [PENDING, PUBLISHED, FAILED], default: PENDING }
-      - { name: retry_count, type: int, required: true, default: 0, constraints: ">= 0, <= 20" }
+      - { name: retry_count, type: int, required: true, default: 0, constraints: ">= 0, <= 20. retry_count가 20인 행이 또 실패하면 FAILED가 되고 값은 20으로 남는다(BR5.3)" }
       - { name: available_at, type: timestamp, required: true, constraints: "이 시각 이후에 발송 대상" }
       - { name: published_at, type: timestamp, required: false }
       - { name: last_error, type: text, required: false, constraints: "상태 코드 · 예외 종류만. 페이로드 내용을 넣지 않는다" }
@@ -97,7 +100,7 @@ entities:
       - { name: created_at, type: timestamp, required: true }
     constraints:
       - "색인: (status, available_at, created_at) — 발송 폴러가 쓴다"
-      - "색인: (guardian_id) — 계정 삭제"
+      - "색인: (guardian_id) — 계정 삭제 참가자(BR5.14)가 쓴다. 참가자는 PUBLISHED · FAILED 행만 지우고 PENDING 행(DeviceReleased · DeletionRequested)은 남긴다"
       - "PUBLISHED이면 purged_at이 채워지거나 payload가 이미 비어 있다"
     relationships: []
 
@@ -112,13 +115,14 @@ entities:
       - { name: source_service, type: "string(50)", required: true, allowed_values: [REALTIME] }
       - { name: event_type, type: "string(100)", required: true }
       - { name: schema_version, type: int, required: true, default: 1 }
-      - { name: aggregate_id, type: uuid, required: false }
+      - { name: occurred_at, type: timestamp, required: true, constraints: "수신 envelope의 occurredAt 값. DeviceStatusChanged처럼 시각으로 최신을 가리는 처리기(BR4.1)가 재호출 · 재시작 복구 때도 DB 행만으로 비교할 수 있게 저장한다(ERD v0.2 추가)" }
+      - { name: aggregate_id, type: uuid, required: true, constraints: "envelope 필수 필드(BR5.4). aggregateType은 저장하지 않는다 — 처리기는 event_type으로 고른다(ERD v0.2 추가)" }
       - { name: guardian_id, type: uuid, required: false, constraints: "ERD v0.2 추가" }
-      - { name: payload_json, type: json, required: true, constraints: "처리 끝(PROCESSED · IGNORED)이면 {} 로 비운다(BR5.11)" }
+      - { name: payload_json, type: json, required: true, constraints: "처리 끝(PROCESSED · IGNORED)이면 {} 로 비운다(BR5.11). DEAD 행은 received_at 7일 뒤에 비운다" }
       - { name: payload_hash, type: "string(64)", required: true }
       - { name: status, type: "string(30)", required: true, allowed_values: [RECEIVED, PROCESSED, IGNORED, DEAD], default: RECEIVED }
-      - { name: retry_count, type: int, required: true, default: 0, constraints: ">= 0, <= 5 (처리기 재호출 횟수)" }
-      - { name: next_attempt_at, type: timestamp, required: false, constraints: "RECEIVED이고 처리기가 실패했을 때 다음 호출 시각(ERD v0.2 추가)" }
+      - { name: retry_count, type: int, required: true, default: 0, constraints: ">= 0, <= 5 (처리기 재호출 횟수). 6번째 실패는 DEAD가 되고 값은 5로 남는다(BR5.8)" }
+      - { name: next_attempt_at, type: timestamp, required: false, constraints: "RECEIVED 행에서는 NULL이 아니다. INSERT 때 received_at으로 채워 방금 받은 행도 폴러에 잡히게 하고(BR5.6), 처리기를 부르기 전 선점 UPDATE가 now + 30초로 올리며(BR5.7), 처리기가 실패하면 다음 호출 시각으로 갱신한다(BR5.8). ERD v0.2 추가" }
       - { name: received_at, type: timestamp, required: true }
       - { name: processed_at, type: timestamp, required: false }
       - { name: last_error, type: text, required: false }
@@ -126,6 +130,9 @@ entities:
     constraints:
       - "event_id가 기본 키라 같은 eventId는 한 행뿐이다(중복 차단의 근거)"
       - "색인: (status, next_attempt_at) — 처리기 재호출 폴러"
+      - "검사: status = 'RECEIVED' 이면 next_attempt_at이 NULL이 아니다"
+      - "RECEIVED로 오래 남은 행: 200 직후 처리기를 부르기 전에 앱이 죽었거나 선점(now + 30초)이 지나도록 처리기가 끝나지 않은 행이다. 폴러가 next_attempt_at이 지난 행을 다시 집고, 앱 시작 때는 RECEIVED 행 전부를 한 번 처리기에 넘긴다(BR5.12). 처리기는 멱등이므로 겹쳐도 결과가 같다. 계속 실패하면 DEAD가 되고 DEAD의 payload는 7일 뒤 비운다(BR5.8 · BR5.11)"
+      - "색인: (guardian_id) — 계정 삭제 참가자(BR5.14)가 쓴다. 참가자는 PROCESSED · IGNORED · DEAD 행만 지우고 RECEIVED 행은 남긴다. 단 대화 원문을 담은 SessionRecordCaptured의 RECEIVED 행은 payload_json을 {} 로 비우고 purged_at을 채운 뒤 IGNORED로 닫는다(BR5.14)"
     relationships: []
 
   - name: RealtimeOutboxEvent
@@ -137,17 +144,18 @@ entities:
     attributes:
       - { name: event_id, type: uuid, required: true, unique: true }
       - { name: event_type, type: "string(100)", required: true, allowed_values: [SessionStateChanged, SessionRecordCaptured, DeviceStatusChanged, DeletionCompleted] }
-      - { name: schema_version, type: int, required: true, default: 1 }
-      - { name: aggregate_type, type: "string(100)", required: false, allowed_values: [ActivitySession, Device, DataDeletionRequest] }
-      - { name: aggregate_id, type: uuid, required: false }
+      - { name: schema_version, type: int, required: true, default: 1, constraints: ">= 1" }
+      - { name: occurred_at, type: timestamp, required: true, constraints: "envelope의 occurredAt. 상태가 바뀐 업무 트랜잭션의 시각이며 받는 쪽(Core)이 DeviceStatusChanged의 최신을 가릴 때의 기준이다(BR4.1 · BR5.10, ERD v0.2 추가)" }
+      - { name: aggregate_type, type: "string(100)", required: true, allowed_values: [ActivitySession, Device, DataDeletionRequest], constraints: "envelope 필수 필드(BR5.4)" }
+      - { name: aggregate_id, type: uuid, required: true, constraints: "envelope 필수 필드(BR5.4)" }
       - { name: guardian_id, type: uuid, required: false }
-      - { name: payload_json, type: json, required: true }
+      - { name: payload_json, type: json, required: true, constraints: "CoreOutboxEvent와 같다(PUBLISHED가 되는 즉시 {} 로 비우고 FAILED 행은 7일 뒤 비운다, BR5.11). SessionRecordCaptured는 대화 원문을 담으므로 계정 삭제 참가자가 상태와 무관하게 즉시 비운다(BR5.14)" }
       - { name: payload_hash, type: "string(64)", required: true }
       - { name: status, type: "string(30)", required: true, allowed_values: [PENDING, PUBLISHED, FAILED], default: PENDING }
-      - { name: retry_count, type: int, required: true, default: 0 }
+      - { name: retry_count, type: int, required: true, default: 0, constraints: ">= 0, <= 20" }
       - { name: available_at, type: timestamp, required: true }
       - { name: published_at, type: timestamp, required: false }
-      - { name: last_error, type: text, required: false }
+      - { name: last_error, type: text, required: false, constraints: "상태 코드 · 예외 종류만. 계정 삭제 참가자가 PENDING SessionRecordCaptured 행을 닫을 때는 ACCOUNT_DELETED(BR5.14)" }
       - { name: purged_at, type: timestamp, required: false }
       - { name: created_at, type: timestamp, required: true }
     constraints:
@@ -165,19 +173,20 @@ entities:
       - { name: source_service, type: "string(50)", required: true, allowed_values: [CORE] }
       - { name: event_type, type: "string(100)", required: true }
       - { name: schema_version, type: int, required: true, default: 1 }
-      - { name: aggregate_id, type: uuid, required: false }
+      - { name: occurred_at, type: timestamp, required: true, constraints: "수신 envelope의 occurredAt 값(CoreInboxEvent와 같다, ERD v0.2 추가)" }
+      - { name: aggregate_id, type: uuid, required: true, constraints: "envelope 필수 필드(BR5.4). aggregateType은 저장하지 않는다(ERD v0.2 추가)" }
       - { name: guardian_id, type: uuid, required: false }
-      - { name: payload_json, type: json, required: true }
+      - { name: payload_json, type: json, required: true, constraints: "CoreInboxEvent와 같다(처리 끝이면 {} 로 비우고 DEAD는 7일 뒤 비운다, BR5.11)" }
       - { name: payload_hash, type: "string(64)", required: true }
       - { name: status, type: "string(30)", required: true, allowed_values: [RECEIVED, PROCESSED, IGNORED, DEAD], default: RECEIVED }
-      - { name: retry_count, type: int, required: true, default: 0 }
-      - { name: next_attempt_at, type: timestamp, required: false }
+      - { name: retry_count, type: int, required: true, default: 0, constraints: ">= 0, <= 5" }
+      - { name: next_attempt_at, type: timestamp, required: false, constraints: "CoreInboxEvent와 같다. RECEIVED 행에서는 NULL이 아니며 INSERT 때 received_at, 처리기 선점 때 now + 30초, 처리기 실패 때 다음 호출 시각이다(BR5.6 · BR5.7 · BR5.8)" }
       - { name: received_at, type: timestamp, required: true }
       - { name: processed_at, type: timestamp, required: false }
       - { name: last_error, type: text, required: false }
       - { name: purged_at, type: timestamp, required: false }
     constraints:
-      - "CoreInboxEvent와 같은 색인 · 검사"
+      - "CoreInboxEvent와 같은 색인 · 검사(RECEIVED로 오래 남은 행의 재처리 포함)"
     relationships: []
 
   # ───────────── 스켈레톤이 지나가는 최소 엔터티 (소유 유닛이 완성) ─────────────
@@ -187,7 +196,7 @@ entities:
     owner_component: GuardianIdentity
     u1_role: minimal
     u1_columns_used: [id, status]
-    description: 보호자 계정. U1은 시드 한 명만 쓴다(구글 로그인 · 계정 삭제 접수는 U2).
+    description: 보호자 계정. U1은 dev 프로필의 DevSeedRunner가 넣는 시드 한 명만 쓴다(구글 로그인 · 계정 삭제 접수는 U2, J44). 이 행을 가리키는 core_device의 외래 키는 ON DELETE 없음(RESTRICT)이라 보호자 행 삭제는 기기 · 활동 행 삭제 뒤 맨 마지막이다(BR2.10).
     attributes:
       - { name: id, type: uuid, required: true, unique: true }
       - { name: status, type: "string(30)", required: true, allowed_values: [ACTIVE, DELETION_REQUESTED], default: ACTIVE }
@@ -202,7 +211,7 @@ entities:
     owner_component: GuardianIdentity
     u1_role: minimal
     u1_columns_used: [primary_id, session_id, principal_name, expiry_time]
-    description: Spring Session JDBC 표준 테이블. 시험 로그인과 이후 구글 로그인이 같은 세션 계층을 쓴다(J44).
+    description: Spring Session JDBC 표준 테이블. 시험 로그인(dev 프로필 한정)과 이후 구글 로그인(U2, demo · prod)이 같은 세션 계층을 쓴다(J44).
     attributes:
       - { name: primary_id, type: "string(36)", required: true, unique: true }
       - { name: principal_name, type: "string(100)", required: false, constraints: "guardianId 문자열" }
@@ -216,7 +225,7 @@ entities:
     owner_component: ConsentPolicy
     u1_role: minimal
     u1_columns_used: [actor_guardian_id, child_id, consent_type, consent_status, policy_version, effective_from, effective_to]
-    description: 4항목 동의 기록. U1은 시드로 4항목을 GIVEN으로 넣고 시작 게이트(ConsentGate)가 읽는다.
+    description: 4항목 동의 기록. U1은 dev 시드로 4항목을 GIVEN으로 넣고 시작 게이트(ConsentGate)가 읽는다. 읽은 정책 버전 문자열과 4항목 값은 세션 패키지의 consentSnapshot으로 Realtime에 건네진다(ActivitySession.consent_snapshot_json).
     attributes:
       - { name: id, type: uuid, required: true, unique: true }
       - { name: actor_guardian_id, type: uuid, required: true, references: Guardian.id }
@@ -275,7 +284,7 @@ entities:
     owner_component: ApprovedContentCatalog
     u1_role: minimal
     u1_columns_used: [id, content_code, content_type]
-    description: 승인 문구 종류. U1 시드는 CLOSING(마무리 인사)과 WAITING_FILLER(게이트 폐기 때 대체 문구) 두 건.
+    description: 승인 문구 종류. U1 시드는 CLOSING(마무리 인사)과 WAITING_FILLER(게이트 폐기 때 대체 문구) 두 건이다(J52). 정식 음성은 실제 녹음(B26) 전이므로 dev 시드는 임시 문구 + 임시 WAV 두 개를 둔다(J60).
     attributes:
       - { name: id, type: uuid, required: true, unique: true }
       - { name: content_code, type: "string(100)", required: true, unique: true }
@@ -296,7 +305,7 @@ entities:
       - { name: content_id, type: uuid, required: true, references: ApprovedContent.id }
       - { name: version, type: int, required: true }
       - { name: content_text, type: text, required: true }
-      - { name: audio_path, type: "string(500)", required: false, constraints: "Nginx 정적 경로 아래 상대 경로. 개인정보 없는 파일" }
+      - { name: audio_path, type: "string(500)", required: false, constraints: "Nginx 정적 경로 아래 상대 경로. 개인정보 없는 파일. U1 dev 시드는 개발용 임시 WAV 두 개(CLOSING은 3초 이내)를 가리킨다(J60)" }
       - { name: status, type: "string(30)", required: true, allowed_values: [DRAFT, APPROVED, RETIRED] }
       - { name: created_at, type: timestamp, required: true }
     constraints:
@@ -308,33 +317,36 @@ entities:
     schema: core
     owner_component: ActivityCoordinator
     u1_role: minimal
-    u1_columns_used: [session_id, guardian_id, child_id, device_id, activity_type, status, status_version, end_reason, failure_code, confirmed, start_idempotency_key, request_hash, requested_at, started_at, ended_at]
-    description: Core가 가진 세션 사본. 시작 검사 · 04 · 12 · 17의 읽기 원천이며 Realtime의 SessionStateChanged 이벤트로만 진행한다(J5). 보호자당 종료 아닌 세션은 하나다.
+    u1_columns_used: [session_id, guardian_id, child_id, device_id, activity_type, status, status_version, end_reason, failure_code, confirmed, local_failed, start_idempotency_key, request_hash, requested_at, started_at, ended_at, observed_at]
+    description: Core가 가진 세션 사본. 시작 검사 · 04 · 12 · 17의 읽기 원천이며 Realtime의 SessionStateChanged 이벤트로만 진행한다(J5). 예외는 Core가 Realtime의 이벤트 없이 직접 FAILED로 닫는 로컬 FAILED(local_failed)뿐이다(BR6.6 · BR6.7 · BR6.12 ①, BR6.17). 보호자당 종료 아닌 세션은 하나다.
     attributes:
       - { name: session_id, type: uuid, required: true, unique: true, constraints: "Core가 시작 요청 때 발급(J11)" }
       - { name: guardian_id, type: uuid, required: true, references: Guardian.id }
       - { name: child_id, type: uuid, required: true, references: Child.id }
-      - { name: device_id, type: uuid, required: true, references: Device.id }
+      - { name: device_id, type: uuid, required: true, references: Device.id, constraints: "외래 키는 ON DELETE 없음(RESTRICT)이라 core_activity 행이 core_device 행보다 먼저 지워져야 한다(BR2.10)" }
       - { name: activity_type, type: "string(30)", required: true, allowed_values: [FREE_TALK, PRACTICE], constraints: "U1은 FREE_TALK만" }
       - { name: status, type: "string(30)", required: true, allowed_values: [REQUESTED, PREPARING, DEVICE_ACK, WAITING_CHILD, ACTIVE, CLOSING, ENDED, ENDED_UNCONFIRMED, ABORTED, DECLINED, FAILED], default: REQUESTED }
-      - { name: status_version, type: int, required: true, default: 0, constraints: "Realtime이 매기는 세션별 단조 증가 값. 0 = Core만 아는 REQUESTED" }
-      - { name: end_reason, type: "string(50)", required: false, allowed_values: [GUARDIAN_STOP, CHILD_STOP, SILENCE, DISCONNECT, CONSENT_WITHDRAWN, UNCONFIRMED, DECLINED, FAILED] }
-      - { name: failure_code, type: "string(50)", required: false, allowed_values: [DEVICE_NO_ACK, SCENARIO_GEN_FAILED, PROVIDER_UNAVAILABLE, SERVER_RESTART] }
+      - { name: status_version, type: int, required: true, default: 0, constraints: "Realtime이 매기는 세션별 단조 증가 값. 0 = Core만 아는 REQUESTED(로컬 FAILED도 0 그대로)" }
+      - { name: end_reason, type: "string(50)", required: false, allowed_values: [GUARDIAN_STOP, CHILD_STOP, SILENCE, DISCONNECT, CONSENT_WITHDRAWN, UNCONFIRMED, DECLINED, FAILED], constraints: "payload 값 그대로. U1 대응은 ENDED = GUARDIAN_STOP, ENDED_UNCONFIRMED = UNCONFIRMED, ABORTED = DISCONNECT, FAILED = FAILED(로컬 FAILED 포함, BR6.8 · BR6.14)" }
+      - { name: failure_code, type: "string(50)", required: false, allowed_values: [DEVICE_NO_ACK, SCENARIO_GEN_FAILED, PROVIDER_UNAVAILABLE, SERVER_RESTART], constraints: "payload 값 그대로. 로컬 FAILED이면 비어 있다(BR6.6 · BR6.7)" }
       - { name: confirmed, type: boolean, required: true, default: false, constraints: "기기 멈춤을 확인했는가" }
+      - { name: local_failed, type: boolean, required: true, default: false, constraints: "Core가 Realtime 이벤트 없이 직접 FAILED로 닫은 행이면 true(시작 호출 시간 초과 · 연결 실패 · 503 BR6.7, Realtime의 확정 거절 409 · 423 BR6.6, PREPARING 10초 시한 BR6.12 ①). true인 행은 이후 SessionStateChanged로 바뀌지 않는다(BR5.10 · BR6.14). ERD v0.2 신설 열" }
       - { name: start_idempotency_key, type: "string(100)", required: true }
       - { name: request_hash, type: "string(64)", required: true, constraints: "시작 요청 본문의 SHA-256. 같은 키에 다른 본문이면 IDEMPOTENCY_CONFLICT 판정에 쓴다" }
       - { name: requested_at, type: timestamp, required: true }
-      - { name: started_at, type: timestamp, required: false }
-      - { name: ended_at, type: timestamp, required: false }
-      - { name: observed_at, type: timestamp, required: false, constraints: "마지막으로 Realtime 이벤트를 반영한 시각" }
+      - { name: started_at, type: timestamp, required: false, constraints: "status가 처음 ACTIVE로 바뀐 SessionStateChanged 이벤트의 at(BR6.14)" }
+      - { name: ended_at, type: timestamp, required: false, constraints: "종료 상태(ENDED · ENDED_UNCONFIRMED · ABORTED · FAILED) 이벤트의 at(BR6.14). 로컬 FAILED는 Core가 닫은 시각" }
+      - { name: observed_at, type: timestamp, required: false, constraints: "마지막으로 반영한 SessionStateChanged 이벤트의 at(BR6.14). 12 응답의 observedAt이 된다(BR6.15)" }
       - { name: created_at, type: timestamp, required: true }
       - { name: updated_at, type: timestamp, required: true }
     constraints:
       - "유일: (guardian_id, start_idempotency_key) — 같은 키 재요청은 같은 세션"
       - "부분 유일: guardian_id (WHERE status IN ('REQUESTED','PREPARING','DEVICE_ACK','WAITING_CHILD','ACTIVE','CLOSING')) — 진행 중 세션 하나(AC3.1.8)"
-      - "status_version은 줄어들지 않는다(받은 값이 같거나 작으면 버림)"
+      - "status_version은 줄어들지 않는다. 사본 갱신은 읽고 비교하고 쓰지 않고 한 문장의 조건부 UPDATE로 한다: WHERE session_id = :id AND status_version < :v AND NOT (status = 'FAILED' AND local_failed). 행 수가 0이면 버린다(BR5.10)"
+      - "검사: local_failed = true 이면 status = 'FAILED' · status_version = 0 · failure_code는 비어 있다. 로컬 FAILED로 닫는 쪽도 조건부로 쓴다(WHERE status = 'REQUESTED' AND status_version = 0, BR6.12 ①)"
+      - "외래 키: device_id → core_device.id는 ON DELETE 없음(RESTRICT). 계정 삭제 순서는 core_activity → core_device → core_guardian이다(BR2.10)"
     relationships:
-      - { to: Device, cardinality: many-to-one, direction: "Activity → Device" }
+      - { to: Device, cardinality: many-to-one, direction: "Activity → Device", note: "DB 외래 키(ON DELETE 없음, RESTRICT)" }
       - { to: ActivitySession, cardinality: "one-to-one(논리)", direction: "Activity ← ActivitySession", note: "스키마가 달라 논리 참조(session_id)" }
 
   - name: ActivitySession
@@ -342,8 +354,8 @@ entities:
     schema: realtime
     owner_component: SessionLifecycle
     u1_role: minimal
-    u1_columns_used: [id, guardian_id, child_id, device_id, activity_type, status, status_version, start_idempotency_key, gpt_live_session_id, consent_version, data_collection_allowed, transcript_storage_allowed, child_context_json, closing_content_version_id, end_reason, termination_requested_at, output_stopped_at, transport_closed_at, provider_closed_at, started_at, ended_at, row_version]
-    description: Realtime이 가진 진행 중 세션의 주인 행. J12에 따라 practice_goal_selection_id · current_practice_stage는 이 표에서 뺀다(realtime_session_goal로 옮김). status_version을 더한다(ERD v0.2).
+    u1_columns_used: [id, guardian_id, child_id, device_id, activity_type, status, status_version, start_idempotency_key, gpt_live_session_id, consent_version, consent_checked_at, consent_snapshot_json, policy_version, data_collection_allowed, transcript_storage_allowed, child_context_json, closing_content_version_id, end_reason, end_detail, termination_requested_at, output_stopped_at, transport_closed_at, provider_closed_at, started_at, ended_at, row_version]
+    description: Realtime이 가진 진행 중 세션의 주인 행. J12에 따라 practice_goal_selection_id · current_practice_stage는 이 표에서 뺀다(realtime_session_goal로 옮김). status_version과 동의 스냅샷 열(consent_snapshot_json · policy_version)을 더한다(ERD v0.2). 모든 전이는 'UPDATE ... SET status = :to, status_version = status_version + 1, row_version = row_version + 1 WHERE id = :id AND status = :from' 한 문장이고 행 수가 1일 때만 성립한다(BR6.8).
     attributes:
       - { name: id, type: uuid, required: true, unique: true, constraints: "Core의 session_id와 같은 값" }
       - { name: guardian_id, type: uuid, required: true }
@@ -354,12 +366,17 @@ entities:
       - { name: status_version, type: int, required: true, constraints: "PREPARING = 1부터 전이마다 +1(ERD v0.2 추가)" }
       - { name: start_idempotency_key, type: "string(100)", required: true, unique: true }
       - { name: gpt_live_session_id, type: "string(255)", required: false, constraints: "공급자 세션 ID(세션 의존 명령 용). 외부로 노출하지 않는다" }
-      - { name: consent_version, type: int, required: true }
-      - { name: data_collection_allowed, type: boolean, required: true }
-      - { name: transcript_storage_allowed, type: boolean, required: true }
+      - { name: consent_version, type: int, required: true, constraints: "ERD v0.1 열을 유지한다. 세션 시작 때의 동의 버전 스냅샷" }
+      - { name: consent_checked_at, type: timestamp, required: true, constraints: "ERD v0.1 열을 유지한다(NOT NULL). 동의 스냅샷을 확인한 시각. 세션 패키지에 별도 필드가 없어 U1은 Realtime이 시작 명령을 받은 시각으로 채운다(Core가 BR6.1 ①을 확인한 직후의 같은 요청이다)" }
+      - { name: consent_snapshot_json, type: json, required: true, constraints: "패키지의 consentSnapshot 그대로 {policyVersion, voiceAndText, guardianView, reportSharing, rawAudio}. 다섯 값이 모두 있어야 한다(필수). 정책 버전 문자열 · 보호자 열람 동의 · 원음 동의(U3가 원음 저장 여부를 정할 값)를 담는 자리다(ERD v0.2 추가)" }
+      - { name: policy_version, type: "string(50)", required: true, constraints: "consent_snapshot_json.policyVersion과 같은 값을 꺼내 둔 열(조회 · 감사용, ERD v0.2 추가)" }
+      - { name: data_collection_allowed, type: boolean, required: true, constraints: "consent_snapshot_json에서 파생: data_collection_allowed = voiceAndText" }
+      - { name: transcript_storage_allowed, type: boolean, required: true, constraints: "consent_snapshot_json에서 파생: transcript_storage_allowed = voiceAndText" }
       - { name: child_context_json, type: json, required: false, constraints: "displayName · age · interests만(NFR3). 08 입력 원문은 넣지 않는다" }
+      - { name: intro_content_version_id, type: uuid, required: false, constraints: "ERD v0.1 열을 유지한다. 시작 때 고정한 인트로 승인 문구 버전(core 논리 참조). U1 패키지는 CLOSING · WAITING_FILLER만 고정하므로 비어 있고 인트로는 U4가 채운다" }
       - { name: closing_content_version_id, type: uuid, required: false, constraints: "시작 때 고정한 마무리 인사 버전(core 논리 참조)" }
-      - { name: end_reason, type: "string(50)", required: false }
+      - { name: end_reason, type: "string(50)", required: false, constraints: "ENDED = GUARDIAN_STOP, ENDED_UNCONFIRMED = UNCONFIRMED, ABORTED = DISCONNECT, FAILED = FAILED(BR6.8). Core 취소 요청의 내부 reason CORE_ABANDONED는 요청 사유일 뿐 이 열에 쓰지 않는다 — 그 정리로 닫힌 세션도 FAILED(failure_code 비움)다(BR6.7 · J54)" }
+      - { name: end_detail, type: text, required: false, constraints: "ERD v0.1 열을 유지한다. 종료 상세. U1은 FAILED일 때 failure_code(DEVICE_NO_ACK · PROVIDER_UNAVAILABLE · SERVER_RESTART, BR6.8 · BR6.12)를 적어 SessionStateChanged의 failureCode로 내보내고 그 밖의 종료와 CORE_ABANDONED 정리는 비운다. 전사 원문 · 개인정보를 넣지 않는다" }
       - { name: termination_requested_at, type: timestamp, required: false }
       - { name: output_stopped_at, type: timestamp, required: false }
       - { name: transport_closed_at, type: timestamp, required: false }
@@ -373,6 +390,8 @@ entities:
       - "부분 유일: guardian_id (WHERE status IN ('PREPARING','DEVICE_ACK','WAITING_CHILD','ACTIVE','CLOSING')) — Realtime 2차 방어(SESSION_IN_PROGRESS)"
       - "부분 유일: device_id (WHERE 같은 조건) — 기기당 진행 세션 하나"
       - "종료 상태(ENDED · ENDED_UNCONFIRMED · ABORTED · DECLINED · FAILED)는 되돌아가지 않는다"
+      - "consent_snapshot_json과 파생 열: data_collection_allowed · transcript_storage_allowed는 voiceAndText와 같고, policy_version은 policyVersion과 같다. 세션 시작 뒤 바뀌지 않는다(스냅샷)"
+      - "상태 전이는 WHERE id = :id AND status = :from 조건부 UPDATE 한 문장이며 행 수가 1일 때만 성립해 전이마다 승자가 하나다(BR6.8). status_version과 row_version이 함께 오른다"
     relationships:
       - { to: SessionEvent, cardinality: one-to-many, direction: "ActivitySession → SessionEvent" }
       - { to: Transcript, cardinality: one-to-many, direction: "ActivitySession → Transcript" }
@@ -389,7 +408,7 @@ entities:
       - { name: id, type: uuid, required: true, unique: true }
       - { name: session_id, type: uuid, required: true, references: ActivitySession.id }
       - { name: event_type, type: "string(100)", required: true }
-      - { name: op_id, type: "string(100)", required: false }
+      - { name: op_id, type: "string(100)", required: false, constraints: "명령 · 요청의 식별자. 끝내기 요청이 수락될 때 그 requestId를 여기에 기록한다(BR6.9)" }
       - { name: payload_json, type: json, required: false }
       - { name: created_at, type: timestamp, required: true }
     constraints: []
@@ -442,39 +461,43 @@ entities:
     owner_component: DeviceGateway
     u1_role: minimal
     u1_columns_used: [device_id, guardian_id, child_id, connection_state, connection_id, connection_since, last_seen_at]
-    description: 기기 한 대의 연결 상태 원장. 연결 5단계 판정은 U3가 완성하고 U1은 OFFLINE · CONNECTED · DISCONNECTED(40초)만 쓴다.
+    description: 기기 한 대의 연결 상태 원장. 연결 판정의 완성(UNSTABLE · 5분 창 · 지연 1초 · 히스테리시스 · 정식 명령 ACK에 따른 UNRESPONSIVE 확장)은 U3가 맡고, U1은 OFFLINE · CONNECTED · DISCONNECTED(마지막 기기 메시지 뒤 40초)와 UNRESPONSIVE를 쓴다. UNRESPONSIVE는 명령 시한(시작 20초 · 종료 30초)을 넘겼을 때 U1이 기록하고 그 연결의 다음 HEARTBEAT 또는 새 연결 인증(HELLO_OK)이면 CONNECTED로 푼다(BR4.8 · BR6.12, J55).
     attributes:
       - { name: device_id, type: uuid, required: true, unique: true, constraints: "core_device.id의 논리 참조" }
       - { name: guardian_id, type: uuid, required: true, constraints: "verify-token 응답 값" }
       - { name: child_id, type: uuid, required: false }
-      - { name: connection_state, type: "string(20)", required: true, allowed_values: [OFFLINE, CONNECTED, UNSTABLE, DISCONNECTED, UNRESPONSIVE], default: OFFLINE }
-      - { name: connection_id, type: uuid, required: false, constraints: "현재 WSS 연결 식별자. OFFLINE이면 비어 있다" }
+      - { name: connection_state, type: "string(20)", required: true, allowed_values: [OFFLINE, CONNECTED, UNSTABLE, DISCONNECTED, UNRESPONSIVE], default: OFFLINE, constraints: "U1이 쓰는 값은 OFFLINE · CONNECTED · DISCONNECTED · UNRESPONSIVE. UNSTABLE 판정은 U3. 상태가 바뀔 때마다 같은 트랜잭션에서 DeviceStatusChanged를 Outbox에 쓴다(BR4.8)" }
+      - { name: connection_id, type: uuid, required: false, constraints: "현재 WSS 연결 식별자. OFFLINE이면 비어 있고, Realtime 재시작 때 CONNECTED · UNSTABLE 행을 DISCONNECTED로 바꾸면서 함께 비운다(BR6.13). 이 행의 모든 기록(CONNECTED · DISCONNECTED · OFFLINE · UNRESPONSIVE와 DeviceStatusChanged)은 WHERE device_id = :d AND connection_id = :cid 조건부로 하고 행 수가 0이면 기록 없이 버린다. 새 연결이 인증될 때의 connection_id 교체는 옛 연결을 4001로 닫는 것과 같은 시점의 조건부 UPDATE로 한다 — 대체돼 닫힌 옛 연결이나 인증 전에 닫힌 연결(1013 · 4400 · 4401 · 4408)의 close 처리가 새 연결의 상태를 덮지 못한다(BR3.7)" }
       - { name: connection_since, type: timestamp, required: false }
-      - { name: last_seen_at, type: timestamp, required: false }
+      - { name: last_seen_at, type: timestamp, required: false, constraints: "마지막 기기 메시지(HEARTBEAT 포함)의 시각. 40초 끊김 점검은 연결별 메모리 시계가 아니라 이 영속 값을 기준으로 주기적으로 한다(BR4.8)" }
       - { name: last_rtt_ms, type: int, required: false }
       - { name: recent_disconnects, type: int, required: true, default: 0 }
       - { name: updated_at, type: timestamp, required: true }
-    constraints: []
-    relationships: []
+    constraints:
+      - "한 기기에 한 행(device_id 유일)이고 첫 접속에서 만들어진다. 한 번도 접속하지 않은 기기는 행이 없다 — Core는 이를 사본 없음으로 본다(BR4.3 ②)"
+    relationships:
+      - { to: Device, cardinality: "one-to-one(논리)", direction: "DeviceConnection → Device", note: "스키마가 달라 논리 참조(device_id). Core 사본의 열 대응은 Device.reported_* 참고" }
 ```
 
 ## 3. 요약
 
-- **U1이 소유하는 엔터티는 다섯**이다: Device(등록 수명 + 연결 상태 사본), Core · Realtime의 Outbox와 Inbox 네 개. 나머지 열세 개는 스켈레톤 경로가 지나가도록 같은 마이그레이션(V1)이 표를 만들지만 동작은 소유 유닛이 완성한다.
-- **Device**는 등록 축(UNREGISTERED · REGISTERED · RELEASED · EXPIRED)만 가진다. 연결 축(OFFLINE ~ UNRESPONSIVE)은 Realtime이 주인이고 Core 행에는 보고받은 사본만 적는다. 05 · 04의 5단계 표시와 시작 판정은 두 축을 읽을 때 합친다(`rules.md` BR4.x).
-- **Outbox/Inbox**는 한 쌍의 규칙을 두 앱이 각자 자기 스키마에서 지킨다. ERD v0.1 열에 `schema_version` · `guardian_id` · `payload_hash` · `purged_at`(Inbox는 `next_attempt_at`도)을 더해 중복 판정 · 충돌 판정 · 민감 페이로드 비우기 · 계정 삭제를 가능하게 한다.
-- **부분 유일 색인 셋**이 동시성 규칙의 DB 근거다: 계정당 활성 기기 하나(core_device), 보호자당 진행 세션 하나(core_activity와 realtime_activity_session 둘 다), 발급 중 코드 유일(core_device).
+- **U1이 소유하는 엔터티는 다섯**이다: Device(등록 수명 + 연결 상태 사본), Core · Realtime의 Outbox와 Inbox 네 개. 나머지 열세 개는 스켈레톤 경로가 지나가도록 같은 마이그레이션(V1)이 표를 만들지만 동작은 소유 유닛이 완성한다. 엔터티는 모두 열여덟 개다.
+- **Device**는 등록 축(UNREGISTERED · REGISTERED · RELEASED · EXPIRED)만 가진다. 연결 축(OFFLINE ~ UNRESPONSIVE)은 Realtime이 주인이고 Core 행에는 보고받은 사본만 적는다. 05 · 04의 5단계 표시와 시작 판정은 두 축을 읽을 때 합친다(`rules.md` BR4.x). EXPIRED 행도 `registration_code` NOT NULL 값이 남고 UNREGISTERED 부분 유일 색인에서만 빠진다(BR1.4). 연결 원장 `realtime_device_connection`에서 U1은 OFFLINE · CONNECTED · DISCONNECTED와, 명령 시한을 넘겼을 때의 UNRESPONSIVE(J55)를 쓰고 UNSTABLE 판정은 U3가 완성한다.
+- **Outbox/Inbox**는 한 쌍의 규칙을 두 앱이 각자 자기 스키마에서 지킨다. ERD v0.1 열에 Outbox는 `schema_version` · `occurred_at` · `guardian_id` · `payload_hash` · `purged_at` 다섯 열(11열 → 16열)을, Inbox는 `schema_version` · `occurred_at` · `aggregate_id` · `guardian_id` · `payload_hash` · `next_attempt_at` · `purged_at` 일곱 열(9열 → 16열)을 더해 중복 판정 · 충돌 판정 · 최신 판정 · 민감 페이로드 비우기 · 계정 삭제를 가능하게 한다. `occurred_at`은 envelope 시각을 DB 행에 남겨 재호출 · 재시작 복구에서도 BR4.1 비교를 하게 한다. Inbox `next_attempt_at`은 INSERT 때 `received_at`으로 채워 방금 받은 RECEIVED 행도 폴러에 잡히게 하고 처리기 선점 때 now + 30초로 올린다(BR5.6 · BR5.7). Outbox의 `aggregate_type` · `aggregate_id`는 envelope 필수 필드(BR5.4)라 NOT NULL이다.
+- **부분 유일 색인은 종류가 셋(색인은 다섯 개)**이고 동시성 규칙의 DB 근거다. 계정당 활성 기기 하나(core_device의 guardian_id), 발급 중 코드 유일(core_device의 registration_code), 진행 중 세션 하나(core_activity의 guardian_id, realtime_activity_session의 guardian_id와 device_id). 부분 유일 색인은 문장마다 즉시 검사되고 지연시킬 수 없으므로 교체 등록은 옛 기기 행을 먼저 RELEASED로 바꾼 뒤 새 행을 REGISTERED로 바꾼다(BR2.5).
+- **동시에 쓰는 사본**은 읽고 비교하고 쓰지 않고 조건부 UPDATE 한 문장으로 갱신한다: core_device의 연결 사본(`reported_at`, BR4.1), core_activity(`status_version`과 `local_failed`, BR5.10), realtime_activity_session의 상태 전이(BR6.8), realtime_device_connection(`connection_id`, BR3.7).
+- **계정 삭제 순서**(J58): core_activity(U4 참가자) → core_device(Device 참가자, BR2.10) → core_guardian(U2) 순서이고 `core_device.guardian_id`와 `core_activity.device_id` 외래 키는 ON DELETE 없음(RESTRICT)이라 순서를 어기면 삭제가 실패해 다시 시도된다. 메시징 참가자(BR5.14)는 전달이 끝난 Outbox/Inbox 행만 지우고 아직 전달 · 처리 중인 제어 이벤트(PENDING · RECEIVED)는 남긴다.
 
 ## 4. ERD v0.2로 바꿀 것 (U1 몫)
 
-`docs/cloud_run_report.md`의 'ERD v0.2로 바꿀 것'에 합쳐 넣는다.
+`docs/cloud_run_report.md`의 'ERD v0.2로 바꿀 것'에 합쳐 넣는다. 열 수는 위 yaml의 실제 열 수이고 ERD v0.1이 있는 표는 `mujoong_ERD_PostgreSQL_1007.sql`의 열 수와 견준 값이다.
 
 | # | 대상 | 변경 | 까닭 |
 |---|---|---|---|
-| E1 | core_device (신설) | 위 Device 열 전부 | J4 · J13, 개발 명세 Device 상태 7개를 등록 축으로 |
-| E2 | realtime_device_connection (신설) | 위 DeviceConnection 열 | 연결 원장 분리(J4) |
-| E3 | core_activity (신설) | 위 Activity 열 · 부분 유일 색인 | 세션 사본(J5) |
-| E4 | core_outbox_event · core_inbox_event · realtime_outbox_event · realtime_inbox_event | `schema_version` · `guardian_id` · `payload_hash` · `purged_at` 추가, Inbox는 `next_attempt_at` 추가, Inbox status에 `IGNORED` · `DEAD` | 중복 · 충돌 판정, 민감 페이로드 비우기, 계정 삭제(J49 · J50) |
-| E5 | realtime_activity_session | `status_version` 추가, `voice_client_id`를 `device_id`로 이름 변경(논리 참조 core_device.id), `practice_goal_selection_id` · `current_practice_stage` 삭제(J12) | 사본 순서 판정, 기기 식별 |
+| E1 | core_device (신설) | 위 Device 열 전부(22열). 부분 유일 색인 둘(guardian_id는 REGISTERED, registration_code는 UNREGISTERED). `guardian_id` → core_guardian.id 외래 키는 ON DELETE 없음(RESTRICT). EXPIRED 행도 `registration_code` NOT NULL 값을 남긴다 | J4 · J13, 개발 명세 Device 상태 7개를 등록 축으로. 교체 등록 순서(BR2.5) · 계정 삭제 순서(BR2.10) |
+| E2 | realtime_device_connection (신설) | 위 DeviceConnection 열(10열). `connection_state`에 UNRESPONSIVE 포함 | 연결 원장 분리(J4). U1이 명령 시한의 UNRESPONSIVE를 쓴다(J55) |
+| E3 | core_activity (신설) | 위 Activity 열 전부(19열, `local_failed` 불리언 포함 — 기본 false, Core가 이벤트 없이 닫은 로컬 FAILED 표시) · 부분 유일 색인. `device_id` → core_device.id 외래 키는 ON DELETE 없음(RESTRICT) | 세션 사본(J5). 로컬 FAILED를 이벤트가 덮어쓰지 못하게 함(BR5.10 · BR6.14) |
+| E4 | core_outbox_event · realtime_outbox_event (각 11열 → 16열), core_inbox_event · realtime_inbox_event (각 9열 → 16열) | Outbox 두 표: `schema_version` · `occurred_at` · `guardian_id` · `payload_hash` · `purged_at` 5열 추가, `aggregate_type` · `aggregate_id`를 NULL 허용에서 NOT NULL로 변경. Inbox 두 표: `schema_version` · `occurred_at` · `aggregate_id` · `guardian_id` · `payload_hash` · `next_attempt_at` · `purged_at` 7열 추가(`next_attempt_at`은 INSERT 때 `received_at`으로 채움), status에 `IGNORED` · `DEAD` | 중복 · 충돌 판정, 최신 판정(BR4.1), 처리기 선점 · 재호출(BR5.7), 민감 페이로드 비우기, 계정 삭제(J49 · J50 · J58) |
+| E5 | realtime_activity_session (29열 → 29열) | 추가 3열: `status_version` · `consent_snapshot_json`(패키지의 consentSnapshot) · `policy_version`. 유지(ERD v0.1 열, 위 yaml에 다시 적음): `consent_checked_at` · `intro_content_version_id` · `end_detail`. `voice_client_id`를 `device_id`로 이름 변경(논리 참조 core_device.id), 삭제 3열: `practice_goal_selection_id` · `current_practice_stage`(J12) · `activity_context_id`(U1이 쓰지 않는다 — 08 입력은 Realtime에 건네지 않는다, NFR3. 필요하면 U4가 열을 더한다) | 사본 순서 판정, 기기 식별, 동의 스냅샷(정책 버전 · 보호자 열람 · 원음 동의)을 담을 자리 |
 | E6 | core_stop_expression | `expression_suffix`(10자) → `expression_text`(20자), `normalized_suffix` → `normalized_text` | J12 · SET-01 2 ~ 20자 |
-| E7 | core_approved_content_version | `audio_path`는 Nginx 정적 경로 아래 상대 경로로 의미를 고정 | 승인 음성 전달(J30) |
+| E7 | core_approved_content_version | `audio_path`는 Nginx 정적 경로 아래 상대 경로로 의미를 고정. U1 dev 시드는 임시 WAV 두 개(J60) | 승인 음성 전달(J30) |
