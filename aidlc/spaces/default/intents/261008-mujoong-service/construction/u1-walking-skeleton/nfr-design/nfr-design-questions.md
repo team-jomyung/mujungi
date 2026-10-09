@@ -1,7 +1,7 @@
 # NFR Design — U1 u1-walking-skeleton — 질문 파일
 
 > 무중(Mujoong) · 깊이 Standard · 2026-10-09 (클라우드 세션)
-> 입력: `nfr-requirements/*.md`(NFRx.y 65개, 마스터는 각 문서의 `## 1`), `functional-design/{rules,entities,functional-spec}.md`, `inception/contract-design/contract-summary.md`(5 · 6 · 7절), `inception/domain-design/components.md`, ADR_2S(ADR-002 · 004 · 005 · 008 · 010 · 019).
+> 입력: `nfr-requirements/*.md`(NFRx.y 67개, 마스터는 각 문서의 `## 1`), `functional-design/{rules,entities,functional-spec}.md`, `inception/contract-design/contract-summary.md`(5 · 6 · 7절), `inception/domain-design/components.md`, ADR_2S(ADR-002 · 004 · 005 · 008 · 010 · 019).
 > 규모: 질문 12개(Q1 ~ Q12) · 준하 제안(가정) 12건(J73 ~ J84). 3.2가 J72까지 썼으므로 이어서 번호를 매긴다.
 >
 > **누가 답했나.** 사람 지시(2026-10-09 "반복 순서는 unit-major 그대로 둬. U1의 3.1→3.4까지 진행하고 3.5 앞에서 멈춰. 이어갈 방식을 물으면 자동 진행으로")와 `docs/cloud_handoff.md` 2절에 따라 팀장(준하)의 대리가 채웠다. 모든 답은 '대리 판단(가정)'이다. 이 단계는 설계 단계이므로 클래스 이름 · 완전한 코드는 쓰지 않고 패턴 · 구조 · 경계만 정한다.
@@ -38,7 +38,7 @@ X. Other (please specify)
 
 ### Q3. 보안 설계의 구체 선택
 
-A. CSRF: 서버 세션 기반 토큰을 `GET /api/session/csrf`로 받아 변경 요청에 `X-CSRF-TOKEN` 헤더로 보낸다(403 CSRF_TOKEN_INVALID를 받으면 한 번 다시 받아 재시도). 필터 순서: 로깅/traceId → 속도 제한 → 인증(세션 또는 기기 쿠키 또는 내부 토큰) → CSRF → 인가(소유권). Nginx: TLS 종료, HTTP → HTTPS 301, 보안 헤더, `/internal/**` 403, `client_max_body_size 64k`, WSS 업그레이드에 `proxy_read_timeout 75s`(heartbeat 5초 × 15), `X-Forwarded-For`를 `$remote_addr`로 덮어쓰기, `/api/device/bootstrap`에 `limit_req`(앱 속도 제한의 앞 방어선). 비밀은 서버의 환경 파일(권한 600)에서 Compose `env_file`로 주입하고 앱 관리 포트(8081)는 호스트에 게시하지 않는다. 기기 토큰은 256비트 무작위 + SHA-256 저장 + `MessageDigest.isEqual`
+A. CSRF: 서버 세션 기반 토큰을 `GET /api/session/csrf`로 받아 변경 요청에 `X-CSRF-TOKEN` 헤더로 보낸다(403 CSRF_TOKEN_INVALID를 받으면 한 번 다시 받아 재시도). 필터 순서: 로깅/traceId → 속도 제한 → 인증(세션 또는 기기 쿠키 또는 내부 토큰) → CSRF → 인가(소유권). Nginx: TLS 종료, HTTP → HTTPS 301, 보안 헤더, `/internal/**` 403, `client_max_body_size 64k`, WSS 업그레이드에 `proxy_read_timeout 75s`(heartbeat 5초 × 15), `X-Forwarded-For`를 `$remote_addr`로 덮어쓰기, `/api/device/bootstrap`에 `limit_req`(앱 속도 제한의 앞 방어선). 비밀은 서버의 환경 파일(권한 600)에서 Compose `env_file`로 주입하고 앱 관리 포트(번호는 3.4가 정한다 — 계약의 Realtime 앱 포트 8081과 겹치지 않게)는 호스트에 게시하지 않는다. 기기 토큰은 256비트 무작위 + SHA-256 저장 + `MessageDigest.isEqual`
 B. 쿠키 이중 제출(double submit) CSRF를 쓴다
 C. 보안 설정을 앱 코드에만 두고 Nginx는 프록시만 한다
 X. Other (please specify)
@@ -65,7 +65,7 @@ X. Other (please specify)
 
 ### Q6. 관측 설계: 로그 · 지표 이름 · 점검
 
-A. 로그 필드는 `ts · level · traceId · component · event · ownerHash` + 사건별 허용 필드 표(전사 · 원음 · 토큰은 필드 자체가 없다)이고, 로그 인코더 설정과 ArchUnit/로그 샘플 시험이 위반을 막는다. 지표 이름은 `mujoong_` 접두사(예: `mujoong_session_ended_total{reason}`, `mujoong_timeout_fired_total{type}`, `mujoong_relay_added_seconds`, `mujoong_event_delivery_seconds`, `mujoong_devices_connected`, `mujoong_outbox_oldest_pending_seconds`)이고 관리 포트(8081)의 `/actuator/prometheus`로만 읽는다. 외부 가용성 프로브는 호스트 cron 스크립트가 `/api/health`를 1분마다 부르고 결과를 로그 파일에 남긴다. 대시보드는 두지 않고 점검표(수동)로 읽는다
+A. 로그 필드는 `ts · level · traceId · component · event · ownerHash` + 사건별 허용 필드 표(전사 · 원음 · 토큰은 필드 자체가 없다)이고, 로그 인코더 설정과 ArchUnit/로그 샘플 시험이 위반을 막는다. 지표 이름은 `mujoong_` 접두사(예: `mujoong_session_ended_total{reason}`, `mujoong_timeout_fired_total{type}`, `mujoong_relay_added_seconds`, `mujoong_event_delivery_seconds`, `mujoong_devices_connected`, `mujoong_outbox_oldest_pending_seconds`)이고 관리 포트(번호는 3.4가 정한다 — 계약의 Realtime 앱 포트 8081과 겹치지 않게)의 `/actuator/prometheus`로만 읽는다. 외부 가용성 프로브는 호스트 cron 스크립트가 `/api/health`를 1분마다 부르고 결과를 로그 파일에 남긴다. 대시보드는 두지 않고 점검표(수동)로 읽는다
 B. Prometheus + Grafana를 Compose에 함께 둔다
 C. 로그만 남긴다
 X. Other (please specify)

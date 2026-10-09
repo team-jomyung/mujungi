@@ -1,0 +1,410 @@
+{
+  "stage": "nfr-design",
+  "unit": "u1-walking-skeleton",
+  "upstream_ids": [
+    "NFR1.1",
+    "NFR1.2",
+    "NFR1.3",
+    "NFR2.1",
+    "NFR3.1",
+    "NFR3.2",
+    "NFR4.1",
+    "NFR4.2",
+    "NFR4.3",
+    "NFR4.4",
+    "NFR4.5",
+    "NFR4.6",
+    "NFR4.7",
+    "NFR4.8",
+    "NFR4.9",
+    "NFR4.10",
+    "NFR4.11",
+    "NFR4.12",
+    "NFR4.13",
+    "NFR4.14",
+    "NFR4.15",
+    "NFR4.16",
+    "NFR5.1",
+    "NFR5.2",
+    "NFR5.3",
+    "NFR5.4",
+    "NFR5.5",
+    "NFR5.6",
+    "NFR5.7",
+    "NFR5.8",
+    "NFR6.1",
+    "NFR6.2",
+    "NFR6.3",
+    "NFR6.4",
+    "NFR6.5",
+    "NFR7.1",
+    "NFR7.2",
+    "NFR7.3",
+    "NFR7.4",
+    "NFR7.5",
+    "NFR7.6",
+    "NFR7.7",
+    "NFR7.8",
+    "NFR9.1",
+    "NFR9.2",
+    "NFR9.3",
+    "NFR9.4",
+    "NFR9.5",
+    "NFR9.6",
+    "NFR9.7",
+    "NFR9.8",
+    "NFR9.9",
+    "NFR9.10",
+    "NFR9.11",
+    "NFR9.12",
+    "NFR9.13",
+    "NFR9.14",
+    "NFR9.15",
+    "NFR10.1",
+    "NFR10.2",
+    "NFR10.3",
+    "NFR10.4",
+    "NFR11.1",
+    "NFR12.1",
+    "NFR12.2",
+    "NFR12.3",
+    "NFR12.4"
+  ],
+  "coverage": [
+    {
+      "id": "NFR1.1",
+      "status": "OK",
+      "target": "SD-17, SD-25, LC-1, LC-4"
+    },
+    {
+      "id": "NFR1.2",
+      "status": "OK",
+      "target": "SD-18, LC-4"
+    },
+    {
+      "id": "NFR1.3",
+      "status": "OK",
+      "target": "SD-19, LC-2"
+    },
+    {
+      "id": "NFR2.1",
+      "status": "OK",
+      "target": "SD-19, LC-2"
+    },
+    {
+      "id": "NFR3.1",
+      "status": "OK",
+      "target": "SD-20, LC-3, LC-4"
+    },
+    {
+      "id": "NFR3.2",
+      "status": "OK",
+      "target": "SD-20, LC-4"
+    },
+    {
+      "id": "NFR4.1",
+      "status": "OK",
+      "target": "RD-1, RD-4, RD-23, LC-4"
+    },
+    {
+      "id": "NFR4.2",
+      "status": "OK",
+      "target": "RD-5, RD-14, RD-23, LC-4"
+    },
+    {
+      "id": "NFR4.3",
+      "status": "OK",
+      "target": "RD-1, RD-6, RD-15, LC-3"
+    },
+    {
+      "id": "NFR4.4",
+      "status": "OK",
+      "target": "RD-1, RD-3, LC-4"
+    },
+    {
+      "id": "NFR4.5",
+      "status": "OK",
+      "target": "RD-7, RD-8, RD-9, RD-22, LC-3"
+    },
+    {
+      "id": "NFR4.6",
+      "status": "OK",
+      "target": "RD-3, RD-7, RD-9, RD-22, LC-3, LC-4"
+    },
+    {
+      "id": "NFR4.7",
+      "status": "OK",
+      "target": "RD-8, RD-9, RD-10, RD-11, RD-12, RD-13, LC-3, LC-4"
+    },
+    {
+      "id": "NFR4.8",
+      "status": "OK",
+      "target": "RD-18, OD-14, LC-1, LC-9"
+    },
+    {
+      "id": "NFR4.9",
+      "status": "OK",
+      "target": "RD-12, RD-13, RD-16, RD-17, LC-9, LC-12, LC-14"
+    },
+    {
+      "id": "NFR4.10",
+      "status": "OK",
+      "target": "RD-12, RD-13, RD-19, LC-6, LC-9, LC-14"
+    },
+    {
+      "id": "NFR4.11",
+      "status": "OK",
+      "target": "RD-20, LC-5, LC-8"
+    },
+    {
+      "id": "NFR4.12",
+      "status": "OK",
+      "target": "RD-8, RD-14, RD-15, RD-23, LC-3, LC-4, LC-12"
+    },
+    {
+      "id": "NFR4.13",
+      "status": "OK",
+      "target": "RD-12, RD-16, RD-23, LC-1, LC-5, LC-6, LC-12, LC-14"
+    },
+    {
+      "id": "NFR4.14",
+      "status": "OK",
+      "target": "OD-2, OD-5, OD-9, OD-15, OD-17, LC-4, LC-11"
+    },
+    {
+      "id": "NFR4.15",
+      "status": "OK",
+      "target": "OD-5, OD-6, OD-11, OD-14, LC-1, LC-9"
+    },
+    {
+      "id": "NFR4.16",
+      "status": "OK",
+      "target": "RD-14, RD-21, LC-2, LC-12"
+    },
+    {
+      "id": "NFR5.1",
+      "status": "OK",
+      "target": "PD-1, PD-2, PD-3, PD-4, PD-6, PD-20, LC-4"
+    },
+    {
+      "id": "NFR5.2",
+      "status": "OK",
+      "target": "PD-1, PD-2, PD-3, PD-4, PD-6, PD-20, LC-4"
+    },
+    {
+      "id": "NFR5.3",
+      "status": "OK",
+      "target": "PD-5, PD-6, PD-8, PD-9, LC-4"
+    },
+    {
+      "id": "NFR5.4",
+      "status": "OK",
+      "target": "OD-2, OD-8, OD-17, LC-4"
+    },
+    {
+      "id": "NFR5.5",
+      "status": "OK",
+      "target": "PD-7, PD-8, PD-9, PD-12, PD-18, LC-3"
+    },
+    {
+      "id": "NFR5.6",
+      "status": "OK",
+      "target": "PD-13, PD-14, PD-17, LC-1, LC-2"
+    },
+    {
+      "id": "NFR5.7",
+      "status": "OK",
+      "target": "OD-7, LC-3, LC-11"
+    },
+    {
+      "id": "NFR5.8",
+      "status": "OK",
+      "target": "PD-6, PD-19, LC-4"
+    },
+    {
+      "id": "NFR6.1",
+      "status": "OK",
+      "target": "RD-1, RD-2, RD-24, LC-2, LC-11"
+    },
+    {
+      "id": "NFR6.2",
+      "status": "OK",
+      "target": "RD-1, RD-2, RD-23, LC-3, LC-4"
+    },
+    {
+      "id": "NFR6.3",
+      "status": "OK",
+      "target": "RD-1, RD-3, RD-22, LC-3, LC-4"
+    },
+    {
+      "id": "NFR6.4",
+      "status": "OK",
+      "target": "RD-2, RD-22, RD-23, LC-4, LC-11"
+    },
+    {
+      "id": "NFR6.5",
+      "status": "OK",
+      "target": "OD-2, OD-5, OD-10, LC-4, LC-11"
+    },
+    {
+      "id": "NFR7.1",
+      "status": "OK",
+      "target": "SCD-5, SCD-6, SCD-8, LC-4"
+    },
+    {
+      "id": "NFR7.2",
+      "status": "OK",
+      "target": "SCD-7, SCD-8, LC-4"
+    },
+    {
+      "id": "NFR7.3",
+      "status": "OK",
+      "target": "SCD-1, SCD-2, SCD-5, LC-4"
+    },
+    {
+      "id": "NFR7.4",
+      "status": "OK",
+      "target": "SCD-1, SCD-2, SCD-3, SCD-4, LC-4"
+    },
+    {
+      "id": "NFR7.5",
+      "status": "OK",
+      "target": "PD-8, PD-10, PD-18, LC-3"
+    },
+    {
+      "id": "NFR7.6",
+      "status": "OK",
+      "target": "PD-4, PD-5, PD-7, PD-8, PD-11, LC-3, LC-5"
+    },
+    {
+      "id": "NFR7.7",
+      "status": "OK",
+      "target": "SCD-9, SCD-10, LC-3, LC-5"
+    },
+    {
+      "id": "NFR7.8",
+      "status": "OK",
+      "target": "OD-2, OD-5, OD-6, OD-12, OD-15, LC-4, LC-9"
+    },
+    {
+      "id": "NFR9.1",
+      "status": "OK",
+      "target": "SD-1, LC-1, LC-7, LC-13"
+    },
+    {
+      "id": "NFR9.2",
+      "status": "OK",
+      "target": "SD-4, SD-5, LC-3"
+    },
+    {
+      "id": "NFR9.3",
+      "status": "OK",
+      "target": "SD-4, SD-6, LC-2, LC-11"
+    },
+    {
+      "id": "NFR9.4",
+      "status": "OK",
+      "target": "SD-4, SD-7, LC-3, LC-4, LC-13"
+    },
+    {
+      "id": "NFR9.5",
+      "status": "OK",
+      "target": "SD-9, LC-3"
+    },
+    {
+      "id": "NFR9.6",
+      "status": "OK",
+      "target": "SD-3, SD-4, SD-8, LC-1, LC-4, LC-13"
+    },
+    {
+      "id": "NFR9.7",
+      "status": "OK",
+      "target": "SD-13, LC-3, LC-5, LC-6, LC-13"
+    },
+    {
+      "id": "NFR9.8",
+      "status": "OK",
+      "target": "SD-11, SD-15, LC-1"
+    },
+    {
+      "id": "NFR9.9",
+      "status": "OK",
+      "target": "SD-3, SD-7, SD-10, LC-1, LC-3, LC-4"
+    },
+    {
+      "id": "NFR9.10",
+      "status": "OK",
+      "target": "SD-12, SD-16, LC-11"
+    },
+    {
+      "id": "NFR9.11",
+      "status": "OK",
+      "target": "SD-14, SD-25, LC-3"
+    },
+    {
+      "id": "NFR9.12",
+      "status": "OK",
+      "target": "SD-2, SD-11, LC-1"
+    },
+    {
+      "id": "NFR9.13",
+      "status": "OK",
+      "target": "SD-16, LC-11"
+    },
+    {
+      "id": "NFR9.14",
+      "status": "OK",
+      "target": "OD-1, OD-2, OD-4, OD-5, OD-13, LC-11"
+    },
+    {
+      "id": "NFR9.15",
+      "status": "OK",
+      "target": "OD-1, OD-2, OD-3, OD-4, OD-16, LC-11"
+    },
+    {
+      "id": "NFR10.1",
+      "status": "OK",
+      "target": "PD-13, PD-14, PD-16, LC-2"
+    },
+    {
+      "id": "NFR10.2",
+      "status": "OK",
+      "target": "PD-12, PD-14, PD-16, LC-2"
+    },
+    {
+      "id": "NFR10.3",
+      "status": "OK",
+      "target": "PD-12, PD-14, PD-16, LC-2"
+    },
+    {
+      "id": "NFR10.4",
+      "status": "OK",
+      "target": "PD-13, PD-16, LC-1, LC-2"
+    },
+    {
+      "id": "NFR11.1",
+      "status": "OK",
+      "target": "PD-15, LC-2"
+    },
+    {
+      "id": "NFR12.1",
+      "status": "OK",
+      "target": "SD-21, RD-11, LC-3"
+    },
+    {
+      "id": "NFR12.2",
+      "status": "OK",
+      "target": "SD-22, LC-4"
+    },
+    {
+      "id": "NFR12.3",
+      "status": "OK",
+      "target": "SD-23, LC-3, LC-5"
+    },
+    {
+      "id": "NFR12.4",
+      "status": "OK",
+      "target": "SD-24, LC-5, LC-8"
+    }
+  ]
+}
