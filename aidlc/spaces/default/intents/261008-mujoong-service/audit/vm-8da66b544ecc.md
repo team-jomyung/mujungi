@@ -541,3 +541,10 @@
 **Error**: Cannot approve "units-generation" because no new human reply has been received for this approval question. Wait for the human to type their choice, then retry the approval. This needs a fresh human turn: wait for the person to reply, then record it again.
 
 ---
+
+## Human Turn
+**Timestamp**: 2026-10-09T16:03:55Z
+**Event**: HUMAN_TURN
+**Session**: 39fd3430-12f4-5241-8ae6-2725dd7b4530
+
+---
