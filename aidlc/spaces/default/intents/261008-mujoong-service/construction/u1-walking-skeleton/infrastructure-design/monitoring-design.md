@@ -3,7 +3,7 @@
 > 단계: Construction · Infrastructure Design(3.4) · U1 u1-walking-skeleton · 깊이 Standard · 문서 monitoring-design.md (설계 ID 접두사 MO) · 담당 역할: aidlc-operations-agent
 > 입력: `observability-design.md`(지표 · 사건 · SLO 이름의 정본), `observability-requirements.md`(3.1 SLO · 3.2 경보선), `reliability-design.md`(2.11 가용성 집계 · 배포 중단, 2.12 백업, `## 3` 설정 키), `performance-design.md`(11/2 측정 L1 ~ L7), `scalability-design.md`(2.6 용량 · 측정 정의), `security-design.md`(2.2 Nginx 접근 로그, 2.16 로그 위생), `logical-components.md`(LC-9 · H-12 · H-14 · H-15), `infrastructure-design-questions.md`(Q4 · Q9 · Q11), `components.md`, `functional-spec.md`, `contract-summary.md`(4.2 · 5 · 6 · 7절)
 > 날짜: 2026-10-09
-> 대리 판단: 질문 파일의 답 Q1 ~ Q12는 팀장(준하)의 대리 판단(가정) J85 ~ J96이다. 이 문서는 J88(로그 한도) · J93(모니터링 · 점검) · J95(운영 시간 정책)를 중심으로 쓴다. 지표 · 사건 · SLO 이름과 수치는 observability-design.md와 observability-requirements.md를 바꾸지 않고 '어디서 어떻게 읽는지'만 정한다. 이 문서가 새로 둔 값은 '제안(3.5 확정)'으로 표시했다.
+> 대리 판단: 질문 파일의 답 Q1 ~ Q12는 팀장(준하)의 대리 판단(가정) J85 ~ J96이다. 이 문서는 J88(로그 한도) · J93(모니터링 · 점검) · J95(운영 시간 정책)를 중심으로 쓴다. 지표 · 사건 · SLO 이름과 수치는 observability-design.md와 observability-requirements.md를 바꾸지 않고 '어디서 어떻게 읽는지'만 정한다. 이 문서가 새로 둔 값은 '제안(3.5 확정)'으로 표시했다. 3.4 재점검(2026-10-09)의 결정 R4-1 ~ R4-19 중 이 문서에 닿는 것은 5절 '다르게 푼 곳'에 '3.4 재점검 결정 R4-n'으로 기록했다.
 > 정본 나눔: 서비스별 메모리 한도 · 헬스체크 주기 · 볼륨 경로의 정본은 infrastructure-specification.md이고, 관측 파일 · 점검 기준 · 프로브의 정본은 이 문서다. 이 문서의 `/opt/mujoong/...` 같은 호스트 경로 표기는 infrastructure-specification.md의 볼륨 · 데이터 배치 표에 맞춘 제안이다.
 
 ## 1. 관측 구성 한눈에
@@ -138,7 +138,7 @@ flowchart LR
 | `mujoong_db_pool_wait_exceeded_total` | 관리 포트 · METRIC_SNAPSHOT `poolWaitMaxMs` · `poolWaitExceeded` | `poolWaitMaxMs` 100 초과가 연속 5개 스냅샷 A-11 | DB 연결 풀 대기 100ms SLO |
 | `mujoong_queue_depth{queue}` · `mujoong_input_frames_dropped_total` · `mujoong_recorder_rejected_total` | 관리 포트 · QUEUE_PRESSURE 줄 | `recorder_rejected`가 0이 아니면 DB 장기 장애 신호로 조사 | 대기열 넘침. 음성 경로에서 버린 프레임 · 거절한 기록 |
 | METRIC_SNAPSHOT `sysCpuAvgPct` · `sysMemMaxPct` | `check-since-last` | CPU 평균 50% · 메모리 최댓값 60% A-14 | 컨테이너가 보는 값이라 추세용. 11/2 판정은 `host-sample` 값이 정본 |
-| 호스트 CPU · 메모리 (`cpuPct` · `memPct`) | host-collect(`/proc`) | 기록용. 11/2 판정은 CPU 평균 60% 이하 · 메모리 최댓값 70% 이하 | 호스트 전체 판정선(NFR7.2). 컨테이너 한도 합계는 70% 이내 |
+| 호스트 CPU · 메모리 (`cpuPct` · `memPct`) | host-collect(`/proc`) | 기록용. 11/2 판정은 CPU 평균 60% 이하 · 메모리 최댓값 70% 이하 | 호스트 전체 판정선(NFR7.2). 컨테이너 한도 합계(5.075GiB)는 호스트 `MemTotal` 실측값의 70% 이내 |
 
 **보안 · 로그 위생**
 
@@ -153,7 +153,7 @@ flowchart LR
 
 | Metric | Source | Threshold | Why it matters |
 |---|---|---|---|
-| 디스크 사용률 `diskRoot` · `diskData` | host-collect(`df`) | 80% 이상 A-15 | 로그 · 이미지 · DB가 같은 호스트. 가득 차면 DB 쓰기 중단 |
+| 디스크 사용률 `diskRoot` · `diskData` · `diskBackup` | host-collect(`df`: 루트 볼륨, 데이터 볼륨 `/var/lib/mujoong`, 백업 전용 볼륨 `/var/lib/mujoong-backup`) | 80% 이상 A-15 | 로그 · 이미지 · DB · 백업이 같은 호스트(백업은 별도 볼륨이지만 같은 AZ). 가득 차면 DB 쓰기나 백업이 중단 |
 | 인증서 남은 일수 `certDays`(파일) · `certServedDays`(서빙 중) | host-collect(파일 만료일, 443 접속의 서빙 인증서) | 20일 미만 A-16 | 갱신 실패 신호. 두 값이 다르면 갱신됐으나 nginx가 재적재하지 않은 것 |
 | 마지막 성공 백업 나이 `backupAgeH` | host-collect(`backup.log`) | 26시간 초과 A-17 | RPO 24시간. 서버가 꺼져 있던 날은 03:00 백업이 돌지 않는다 |
 | 시계 `clockSync` · `clockOffsetMs` | host-collect(`chronyc tracking`) | 동기 상태 Normal 아님 또는 오프셋 절댓값 1초 초과 A-22 (제안) | 앱 시한 · 인증서 판단의 전제(H-15) |
@@ -190,7 +190,7 @@ flowchart LR
 | A-12 시작 성공률 | 하루 98% 미만(표본 10건 이상) 또는 연속 2건 실패 | P2 | `sli-report --host` → 점검표 8번 |
 | A-13 지연 경보선 | 시작 → ACTIVE 8초 · 중계 증가분 0.4초 · 말 끝 → 첫 음성 2.0초 · 서버 몫 0.4초 · REST 240ms · 12 조회 400ms · 이벤트 전달 1.6초 초과(표본 규칙 적용). REST · 12 조회 두 줄은 히스토그램 버킷 경계가 맞아야 정확하다(5절 사람이 정할 것 14) | P3 (11/2 측정 뒤 P2) | `sli-report` · `turn-metrics` → 점검표 9번 |
 | A-14 자원 · 풀 사용률 | CPU 평균 50% · 메모리 최댓값 60% · 풀 사용 8/10 이상이 5분 지속 | P3 | `check-since-last` → 점검표 10번 |
-| A-15 디스크 | `diskRoot` 또는 `diskData` 80% 이상 | P2 | `host-collect.log` → 점검표 11번 |
+| A-15 디스크 | `diskRoot` · `diskData` · `diskBackup` 중 하나가 80% 이상 | P2 | `host-collect.log` → 점검표 11번 |
 | A-16 인증서 | `certDays` 또는 `certServedDays` 20일 미만. 만료일이 시연일 이전이면 P1 | P2 (P1) | `host-collect.log` → 점검표 11번 |
 | A-17 백업 나이 | `backupAgeH` 26 초과 | P2 | `host-collect.log` → 점검표 11번. 정지 중이었다면 시작 점검 7번 |
 | A-18 배포 실패 | `deploy.log`의 DEPLOY_END `result=FAIL` 또는 짝이 없는 DEPLOY_START. 스모크 단계 실패는 P1, 그 이전 단계(백업 · 이미지 · 마이그레이션)는 P2 | P1 또는 P2 | GitHub Actions 실행 결과와 `deploy.log`. 실패 시 GitHub 기본 알림은 각자 계정 설정에 따라 보장하지 않음. 롤백은 수동 |
@@ -288,8 +288,8 @@ observability-design.md 2.15는 migrate · certbot · backup을 5m × 2로 제�
 | 시점 | 배포 단계 D5 직전(마이그레이션 성공 뒤, realtime · core-api 재생성 직전). 롤백도 같다. web · nginx는 재생성하는 경우에만 |
 | 방법 | 재생성 대상 컨테이너마다 타임스탬프 포함 로그를 압축해 `/var/log/mujoong/archive/<UTC 시각>-<서비스>-<배포 id>.log.gz`로 저장(제안) |
 | 읽는 쪽 | `check-since-last` · `sli-report` · `turn-metrics` · `trace-find`는 현재 컨테이너 로그와 보존 폴더를 시각순으로 이어서 읽는다 |
-| 보관 | 7일 또는 최근 40개 중 먼저 닿는 쪽(제안). 루트 볼륨 사용량은 한 번에 압축 후 수십 MB 수준으로 추정 |
-| 금지 | 수동으로 `docker compose down` · `docker rm`을 쓰지 않는다. 재시작이 필요하면 `docker compose restart <서비스>`(컨테이너 유지)를 쓴다(RUNBOOK) |
+| 보관 | 7일 또는 최근 40개 중 먼저 닿는 쪽(제안). 초과분 삭제는 배포 D9가 수행한다(cicd-pipeline.md 2.3.3). 루트 볼륨 사용량은 한 번에 압축 후 수십 MB 수준으로 추정 |
+| 금지 | 수동으로 `docker compose down` · `docker rm`을 쓰지 않는다. 재시작이 필요하면 `docker compose restart <서비스>`(컨테이너 유지)를 쓴다(RUNBOOK). 예외는 11/2 측정 창 전용 `docker compose -p mujoong down` 하나다: 측정 스택 `mujoong-lt`가 demo와 같은 고정 서브넷을 쓰므로 `stop`으로는 망이 남아 'Pool overlaps' 오류가 난다(인프라 명세 1.3). 이때 컨테이너 로그는 정지 전에 위 방법으로 archive에 보존하고(상시 컨테이너 전부, 측정 창 단계 1이 보존 절차를 수동 실행), 데이터는 호스트 경로 바인드라 지워지지 않으며(`-v` 금지), 측정이 끝나면 `docker compose -p mujoong-lt down`으로 `mujoong-lt` 망을 지운 뒤 `mujoong-compose` 단위로 demo 스택을 다시 올려 망이 고정 서브넷으로 다시 만들어지는지 확인한다. 이 예외는 측정 창 밖에서 쓰지 않는다 |
 | 대안(채택 안 함) | journald 로깅 드라이버(재생성에도 남지만 결정 보강의 json-file과 다름), 연속 복사 서비스(상시 프로세스 추가). 5절 사람이 정할 것 9 |
 
 #### 2.4.4 접근
@@ -301,7 +301,7 @@ observability-design.md 2.15는 migrate · certbot · backup을 5m × 2로 제�
 | EC2 기본 지표 | AWS 콘솔 접근 권한자 | 모니터링 탭 | 콘솔 기록 |
 | GitHub Actions 실행 결과 | 저장소 접근자 | Actions 화면 | GitHub |
 
-호스트 로그 파일 권한은 root 소유 640(제안)이다. 22번 포트는 열지 않는다(J86). 로그를 저장소 · 채팅에 붙일 때는 값이 아닌 사건 코드 · traceId만 옮긴다.
+호스트 로그 파일 권한은 `backup.log`만 uid 999(backup 컨테이너의 비루트 사용자) 소유 640(그룹 root 읽기)이고 나머지 호스트 로그는 root 소유 640(제안)이다. 22번 포트는 열지 않는다(J86). 로그를 저장소 · 채팅에 붙일 때는 값이 아닌 사건 코드 · traceId만 옮긴다.
 
 #### 2.4.5 traceId 따라가기
 
@@ -359,7 +359,7 @@ observability-design.md 2.15는 migrate · certbot · backup을 5m × 2로 제�
 | 8 | 시작 성공률 | `sli-report --host`(SESSION_TRANSITION 하루 집계) | 표본 10건 이상이면 98% 미만, 또는 연속 2건 실패 | A-12 |
 | 9 | 지연 p95 | `sli-report` · `turn-metrics` 현재 값 | SLO 수치의 80%(11/2 측정 전에는 참고) | A-13 |
 | 10 | 자원 | METRIC_SNAPSHOT `sysCpuAvgPct` · `sysMemMaxPct` · `poolActive` | CPU 평균 50% · 메모리 최댓값 60% · 풀 사용 8/10 이상이 5분 지속 | A-14 |
-| 11 | 백업 · 디스크 · 인증서 | `host-collect.log` | 백업 26시간 이하, 디스크 80% 미만, 인증서 20일 이상 | A-15 · A-16 · A-17 |
+| 11 | 백업 · 디스크 · 인증서 | `host-collect.log` | 백업 26시간 이하, 디스크(루트 · 데이터 · 백업 볼륨) 80% 미만, 인증서 20일 이상 | A-15 · A-16 · A-17 |
 | 12 | 점검 기록 | 점검 시각을 `last-check`에 쓰고 한 줄 메모(결과 · 조치) | — | — |
 
 #### 2.5.2 시작 점검 (Start 직후, 제안)
@@ -373,7 +373,7 @@ observability-design.md 2.15는 migrate · certbot · backup을 5m × 2로 제�
 | S3 | 컨테이너 | `host-collect.log` 첫 줄들 | 7개 running · healthy, readiness 200 둘 | A-4 · A-5 |
 | S4 | 마이그레이션 · 이력 버전 | 두 앱 readiness(이력 버전 확인 포함) | UP | RUNBOOK 마이그레이션 실패 |
 | S5 | 인증서 | `certDays` · `certServedDays` | 20일 이상(A-16 기준). 30일 미만이면 갱신 시도 로그를 확인하고 정지 중에는 갱신 확인이 돌지 않았으므로 필요하면 수동 갱신 1회. 시연 하루 전에는 만료일이 시연일 이후인지 직접 확인(ADR-006 3.3) | A-16 |
-| S6 | 디스크 · 로그 보관 | `diskRoot` · `diskData`, 가장 오래된 로그 줄의 시각 | 80% 미만. 시연 전 하루 로그량을 확인해 2.4.2 추정과 비교 | A-15 |
+| S6 | 디스크 · 로그 보관 | `diskRoot` · `diskData` · `diskBackup`, 가장 오래된 로그 줄의 시각 | 80% 미만. 시연 전 하루 로그량을 확인해 2.4.2 추정과 비교 | A-15 |
 | S7 | 백업 나이 | `backupAgeH`, `backup.log` | 26시간 이하. 정지 중에는 03:00 백업이 없었으므로 기동 직후 보충 백업이 24시간 초과 때 자동으로 돈다(인프라 명세 4.4). 성공 줄이 없으면 수동 1회 | A-17 |
 | S8 | 최신 SHA 반영 | `deploy.log` 마지막 `result=OK`의 sha와 main 최신 | 같음. 다르면 수동 배포 | A-25 |
 | S9 | 프로브 | 프로브 결과 파일의 최근 분 | 3종 OK. 프로브 실행 위치가 켜져 있는지 포함 | A-1 · A-3 |
@@ -413,7 +413,7 @@ observability-design.md 2.15는 migrate · certbot · backup을 5m × 2로 제�
 | 세 호출 모두 `ERR`이고 `net=FAIL` | 프로브 쪽 네트워크 | 그 분은 미관측으로 분모에서 뺀다 |
 | 세 호출 모두 `ERR`이고 `net=OK`이며 서버를 일부러 껐음 | 의도적 정지 | `power.log` 구간이면 제외 |
 
-점검 페이지 주의: nginx가 502 · 503에 보여 주는 정적 점검 페이지는 원래 상태 코드를 그대로 유지해야 한다. 200으로 바꾸면 device와 health 호출이 성공으로 오판된다(infrastructure-specification.md와 맞출 것 2). 프로브는 상태 코드와 health 본문의 `status`만 보고 페이지 내용은 보지 않는다.
+점검 페이지 주의: nginx가 만든 502 · 504에 보여 주는 정적 점검 페이지와 JSON은 `error_page 502 504`로 상태 코드를 유지한 채 본문만 바꾼다(`=503` 같은 상태 치환 없음, 인프라 명세 3.3). 200으로 바뀌면 device와 health 호출이 성공으로 오판된다. 앱이 직접 낸 503(SERVICE_NOT_READY)은 `proxy_intercept_errors off`라 그대로 통과한다. 그래서 업스트림 접속 불가는 502, 앱은 떠 있으나 준비 전은 503으로 구분되고 위 실패 패턴표가 이를 쓴다(R4-17). 프로브는 상태 코드와 health 본문의 `status`만 보고 페이지 내용은 보지 않는다.
 
 한계: wss의 101은 realtime 프로세스와 nginx 경로가 살아 있다는 뜻이다. 업그레이드 뒤 서버는 4401(또는 준비 전이면 1013)로 닫으므로 101만으로 realtime의 readiness는 알 수 없다. DB가 막히면 Core health가 먼저 실패하므로 가용성 판정에는 영향이 작다. 닫기 코드를 읽는 선택 필드는 5절 사람이 정할 것 8이다. 프로브의 쿠키 없는 업그레이드는 분당 1건의 INFO 줄과 보안 사건 카운터 +1을 만든다(J75(m)).
 
@@ -443,7 +443,7 @@ observability-design.md 2.15는 migrate · certbot · backup을 5m × 2로 제�
 | 기동이 끝나지 않음 | `power.log` | `POWER_STOP`만 있고 `POWER_READY` 없음 | 제외하지 않음(실패로 센다) |
 | 프로브 쪽 장애 | 프로브 결과 파일 | 줄 없음 또는 `net=FAIL` | 미관측으로 분모에서 뺌, 관측률에 반영 |
 
-`power.log`는 한 줄 `키=값`(`ts` · `event` · `boot`)이며 호스트의 systemd 단위 `mujoong-power-mark`(인프라 명세 N-9)가 기동 완료 때 `POWER_READY`, 정지 시작 때 `POWER_STOP`을 쓴다. 11/2 측정 창은 호스트를 켜 둔 채 demo 스택만 멈추므로(인프라 명세 1.3) 이 단위가 호스트 정지뿐 아니라 `mujoong-compose` 단위의 정지 · 기동 완료에도 묶여야 같은 방식으로 제외된다(5절 다른 문서와 맞출 것 5). 프로브 파일은 프로브 위치에 있고 제외 구간 파일 둘은 호스트에 있으므로, 점검자가 점검 때 세션으로 두 파일을 읽어 프로브 위치의 `probe-daily`에 입력한다(양이 작아 한 번에 가능, 5절 사람이 정할 것 3).
+`power.log`는 한 줄 `키=값`(`ts` · `event` · `boot`)이며 호스트의 systemd 단위 `mujoong-power-mark`(인프라 명세 N-9)가 기동 완료 때 `POWER_READY`, 정지 시작 때 `POWER_STOP`을 쓴다. 11/2 측정 창은 호스트를 켜 둔 채 demo 스택만 내리므로(`docker compose -p mujoong down`, 인프라 명세 1.3) 이 단위는 호스트 정지 · 기동뿐 아니라 `mujoong-compose.service`의 시작 완료 · 정지 시작에도 묶인다(PartOf/After, 인프라 명세 1.4에 반영됨). 그래서 측정 창의 스택 정지 · 재기동도 `power.log`가 `POWER_STOP` · `POWER_READY`로 자동 기록해 같은 방식으로 제외되고 수동 표시는 없다(5절 다른 문서와 맞출 것 5). 프로브 파일은 프로브 위치에 있고 제외 구간 파일 둘은 호스트에 있으므로, 점검자가 점검 때 세션으로 두 파일을 읽어 프로브 위치의 `probe-daily`에 입력한다(양이 작아 한 번에 가능, 5절 사람이 정할 것 3).
 
 #### 2.6.4 프로브 실행 위치 선택지 (사람이 정함)
 
@@ -470,7 +470,7 @@ observability-design.md 2.15는 migrate · certbot · backup을 5m × 2로 제�
 | 겹침 방지 | `flock` 비차단 + 전체 20초 제한(인프라 명세 1.4) | 한 번이 길어져도 다음 분과 겹치지 않음 |
 | 호출 제한 | 관리 포트 호출 · 인증서 서빙 확인 각 3초(제안), 실행 전체는 인프라 명세 1.4의 `timeout 20` | 한 항목 실패가 나머지를 막지 않는다. 최악이 20초 안에 들도록 호출마다 제한을 둔다 |
 | 출력 | `/var/log/mujoong/host-collect.log`(분당 1줄), `/var/log/mujoong/metrics-snapshot.log`(앱당 분당 1줄) | 2.7.4 |
-| 정지 중 | 서버가 꺼져 있으면 돌지 않는다. 측정 창처럼 호스트는 켜진 채 스택만 멈춘 구간에는 `ctr` · readiness 경고가 뜬다 | 기록 공백과 경고는 정지 구간(`power.log`)과 대조하고, 구간 안의 경고는 알림으로 세지 않는다 |
+| 정지 중 | 서버가 꺼져 있으면 돌지 않는다. 측정 창처럼 호스트는 켜진 채 demo 스택만 내린 구간(`down`)에는 `ctr` · readiness 경고가 뜬다 | 기록 공백과 경고는 정지 구간(`power.log`)과 대조하고, 구간 안의 경고는 알림으로 세지 않는다 |
 | 오토힐 | 하지 않음 | 관찰만 하고 컨테이너를 건드리지 않는다(결정 보강). 재시작은 사람이 한다 |
 
 #### 2.7.2 host-collect 한 줄 필드
@@ -482,7 +482,7 @@ observability-design.md 2.15는 migrate · certbot · backup을 5m × 2로 제�
 | ctrBad | 문제 컨테이너 이름 목록 또는 `none` | running 아님 · unhealthy | none이 아님 |
 | readyCore · readyRealtime | HTTP 상태 코드 또는 `ERR` | 각 앱 컨테이너 안에서 `/actuator/health/readiness` | 200이 아님 |
 | restarts | `<서비스>:<RestartCount>` 목록 | `docker inspect` | 직전 줄보다 증가(컨테이너가 다시 만들어지면 0부터이므로 컨테이너 id가 같을 때만 비교) |
-| diskRoot · diskData | 사용률 % | 루트 볼륨 · 데이터 볼륨 `df` | 80 이상 |
+| diskRoot · diskData · diskBackup | 사용률 % | 루트 볼륨 · 데이터 볼륨(`/var/lib/mujoong`) · 백업 전용 볼륨(`/var/lib/mujoong-backup`) `df` | 80 이상 |
 | certDays | 정수 | 현재 인증서 파일의 만료일까지 | 20 미만 |
 | certServedDays | 정수 | 443 접속으로 실제 서빙되는 인증서의 만료일까지(제안) | 20 미만 또는 `certDays`와 다름 |
 | backupAgeH | 정수(시간) | `backup.log`의 마지막 성공 줄 | 26 초과 |
@@ -507,14 +507,14 @@ host-collect가 각 앱의 관리 포트 `/actuator/prometheus`를 컨테이너 
 | `/var/log/mujoong/metrics-snapshot.log` | host-collect | 한 줄 `키=값`, 앱당 | 7일(제안) | `check-since-last` |
 | `/var/log/mujoong/deploy.log` | 배포 스크립트 | 한 줄 `키=값`(cicd-pipeline.md 2.10) | 30일(제안) | `probe-daily` · 사람 |
 | `/var/log/mujoong/power.log` | 호스트 systemd 단위 | 한 줄 `키=값` | 30일(제안) | `probe-daily` · 사람 |
-| `/var/log/mujoong/backup.log` | backup 컨테이너 | 시각 · 결과 · 파일 · 크기 · 소요 시간 한 줄 | 30일(제안) | host-collect(`backupAgeH`) |
-| `/var/log/mujoong/archive/*.log.gz` | 배포 스크립트 | JSON 줄(압축) | 7일 또는 40개 | 점검 도우미 |
-| `/var/log/mujoong/deploy-<배포 id>.log` | 배포 스크립트 | 단계별 상세(값 없음) | 30일(제안) | 사람 |
-| `/var/log/mujoong/migrate-<배포 id>.log` | 배포 스크립트 | 마이그레이션 표준 출력 | 30일(제안) | 사람(마이그레이션 실패 절차) |
+| `/var/log/mujoong/backup.log` | backup 컨테이너(uid 999 소유) | 시각 · 결과 · 파일 · 크기 · 소요 시간 한 줄 | 30일(제안) | host-collect(`backupAgeH`) |
+| `/var/log/mujoong/archive/*.log.gz` | 배포 스크립트 | JSON 줄(압축) | 7일 또는 40개 초과분 삭제(배포 D9에서 수행) | 점검 도우미 |
+| `/var/log/mujoong/deploy-<배포 id>.log` | 배포 스크립트 | 단계별 상세(값 없음) | 30일(logrotate 와일드카드로 삭제, 제안) | 사람 |
+| `/var/log/mujoong/migrate-<배포 id>.log` | 배포 스크립트 | 마이그레이션 표준 출력 | 30일(logrotate 와일드카드로 삭제, 제안) | 사람(마이그레이션 실패 절차) |
 | `/var/lib/mujoong/last-check` | `check-since-last` | 마지막 점검 시각 + 메모 | 계속 | `check-since-last` |
 | 프로브 결과 파일 | 프로브 | 한 줄 `키=값` | 14일(제안), 프로브 위치 | `probe-daily` |
 
-observability-design.md는 로그 파일 보관을 일괄 7일로 적었다. 이 문서는 용량이 큰 두 수집 파일만 7일로 두고, 사건 단위로 작은 `deploy.log` · `power.log` · `backup.log`는 30일로 늘렸다(가용성 판정에 쓰이는 제외 구간이 11/2 보고 창보다 먼저 지워지지 않게 하려는 제안, 5절 다르게 푼 곳 3).
+observability-design.md는 로그 파일 보관을 일괄 7일로 적었다. 이 문서는 용량이 큰 두 수집 파일만 7일로 두고, 사건 단위로 작은 `deploy.log` · `power.log` · `backup.log`는 30일로 늘렸다(가용성 판정에 쓰이는 제외 구간이 11/2 보고 창보다 먼저 지워지지 않게 하려는 제안, 5절 다르게 푼 곳 3). 소유 · 권한은 2.4.4(`backup.log`만 uid 999 소유 640, 나머지 root 640)이고, `deploy-<배포 id>.log` · `migrate-<배포 id>.log`는 logrotate 와일드카드가, `archive/*.log.gz`는 배포 D9가 지운다(인프라 명세 1.4 · cicd-pipeline.md 2.3.3, R4-11).
 
 ### 2.8 점검 도우미
 
@@ -529,9 +529,9 @@ observability-design.md는 로그 파일 보관을 일괄 7일로 적었다. 이
 | `log-hygiene-check` | 호스트 | 로그 · 환경 파일(값 비출력) | 위반 건수 | 2.4.6 |
 | `trace-find` | 호스트 | traceId · 시간 범위 | 시각순 줄 | 2.4.5 |
 | `host-sample` | 호스트, 11/2 시험 중에만 | `/proc` · `docker stats` | 5초 표본 기록 파일 | NFR7.2 판정 |
-| `power-mark` | 호스트 systemd 단위 | 기동 · 종료 이벤트 | `power.log` | 2.6.3 |
+| `power-mark` | 호스트 systemd 단위 | 호스트 기동 완료 · 정지 시작과 `mujoong-compose.service`의 시작 완료 · 정지 시작 | `power.log` | 2.6.3 |
 
-도우미 소스는 저장소 `infra/`에 두고(제안) 배포 번들과 함께 호스트의 `/opt/mujoong/current/bin/`(= `/opt/mujoong/bin`)에서 쓴다(인프라 명세 4.2, cicd-pipeline.md 2.3). 도구 이름 · 위치는 3.5가 확정한다.
+도우미 소스는 저장소 `infra/`에 두고(제안) 배포 번들과 함께 호스트의 `/opt/mujoong/current/bin/`에 놓이고, 고정 경로의 얇은 진입점 `/opt/mujoong/bin/`(심볼릭 링크가 아닌 디렉터리, 인프라 명세 4.2)이 이를 호출해 쓴다(cicd-pipeline.md 2.3 · 2.6.1, R4-8). 도구 이름 · 위치는 3.5가 확정한다.
 
 ### 2.9 사건 대응과 에스컬레이션
 
@@ -578,16 +578,16 @@ RUNBOOK 절 이름은 제안이며 `RUNBOOK.md` 본문은 3.5 이후다(J96).
 | 가용성 판정 | 3종 중 하나라도 실패하면 실패한 분. 관측률 90% 미만이면 판정 보류 | — | `probe-daily` | RD-18 |
 | 알림 A-1 연속 실패 | 3분 연속 (제안) | 분 | 점검 도우미 | 이 문서 |
 | 알림 A-5 readiness 연속 실패 | 2줄(2분) (제안) | 줄 | `check-since-last` | 이 문서 |
-| 호스트 경고 기준 | 디스크 80% · 인증서 20일 · 백업 나이 26시간 | — | host-collect | OD-14 |
+| 호스트 경고 기준 | 디스크(루트 · 데이터 · 백업 볼륨) 80% · 인증서 20일 · 백업 나이 26시간 | — | host-collect | OD-14 |
 | 시계 경고 기준 | 오프셋 절댓값 1초 초과 또는 동기 상태 비정상 (제안) | — | host-collect | 이 문서 · H-15 |
 | 수동 점검 4기준 | WARN 5분 창 10건 초과 · PENDING 나이 60초 초과 · FAILED 1건 이상 · 풀 대기 100ms 초과 5분 연속 | — | 점검표 | OD-15 |
 | 경보선 비율 | SLO 수치의 80%. 가용성은 하루 실패 7분(소진 속도의 절반) | — | 점검표 | 요구 3.2 |
 | 자원 경보선 | CPU 평균 50% · 메모리 최댓값 60% · 풀 사용 8/10 이상 5분 | — | 점검표 | 요구 3.2 |
 | 로그 json-file 한도 | realtime 20m × 5, core-api · nginx 10m × 5, 나머지 10m × 3 | — | Compose logging | J88 · 결정 보강 |
 | 컨테이너 로그 총 상한 | 약 350MB (neo4j 꺼짐) | MB | 호스트 | 2.4.2 |
-| 배포 직전 로그 보존 | 7일 또는 40개 (제안) | — | `/var/log/mujoong/archive/` | 이 문서 |
+| 배포 직전 로그 보존 | 7일 또는 40개 초과분 삭제 (제안) | — | `/var/log/mujoong/archive/`, 삭제는 배포 D9 | 이 문서 · R4-11 |
 | 호스트 수집 파일 보관 | 7일 | 일 | logrotate | OD-16 |
-| 사건 파일 보관 | 30일 (`deploy.log` · `power.log` · `backup.log`, 제안) | 일 | logrotate | 이 문서 |
+| 사건 파일 보관 | 30일 (`deploy.log` · `power.log` · `backup.log` · `deploy-<배포 id>.log` · `migrate-<배포 id>.log`, 제안) | 일 | logrotate | 이 문서 · R4-11 |
 | 프로브 결과 파일 보관 | 14일 (제안) | 일 | 프로브 위치 | 이 문서 |
 | 오류 예산 단계 | 50% · 75% · 100% (제안) | % | 2.3절 | slo-sli 가이드 |
 | 상시 컨테이너 수 | 7 (nginx · web · core-api · realtime · postgres · certbot · backup) | 개 | host-collect | 구성 |
@@ -602,7 +602,7 @@ RUNBOOK 절 이름은 제안이며 `RUNBOOK.md` 본문은 3.5 이후다(J96).
 | MO-1 | 포트 스캔과 `docker compose config`로 호스트 게시 포트가 80 · 443뿐인지, 관리 포트 9090이 게시되지 않는지 확인한다. nginx 경유 외부 요청에서 `/actuator/...`가 403이고 `/api/health`만 200이다 | Build and Test |
 | MO-1 | 컨테이너 안에서 관리 포트를 불러 2.1절 지표 이름 · 라벨이 모두 있고 라벨 값이 열거 집합 안인지 확인한다(observability-design.md OD-5와 같은 시험의 플랫폼 확인) | Build and Test |
 | MO-2 | 프로브 스크립트를 가짜 서버에 돌려 세 호출의 성공 · 실패 · 시간 초과가 OK · FAIL · UNOBSERVED로 남는지, realtime만 정지해도 wss가 FAIL인지 확인한다. HTTP 전용 모드 판정도 확인한다 | Build and Test |
-| MO-2 | 프로브가 만드는 쿠키 없는 업그레이드가 INFO 줄로만 남고 점검표 3번의 WARN 5분 창에 들지 않는지 확인한다. 업스트림(web · core-api · realtime)을 각각 정지했을 때 점검 페이지가 502 · 503 상태로 나가 해당 호출이 실패로 기록되는지 확인한다 | Build and Test |
+| MO-2 | 프로브가 만드는 쿠키 없는 업그레이드가 INFO 줄로만 남고 점검표 3번의 WARN 5분 창에 들지 않는지 확인한다. 업스트림(web · core-api · realtime)을 각각 정지했을 때 점검 페이지가 502 상태를 유지한 채 나가 해당 호출이 실패로 기록되는지, 앱이 직접 낸 503은 그대로 통과해 준비 전 실패로 구분되는지 확인한다 | Build and Test |
 | MO-3 | host-collect가 2.7.2의 모든 키를 한 줄에 남기는지, 컨테이너 하나를 정지 · 앱 readiness를 실패시키면 `ctrBad` · `readyCore` · `warn`이 바뀌는지, 한 항목이 실패해도 나머지가 기록되는지 확인한다. 20초 안에 끝나는지 | Build and Test |
 | MO-3 | 인증서 갱신 뒤 nginx 재적재를 일부러 건너뛰면 `certDays`와 `certServedDays`가 달라져 경고가 켜지는지 확인한다 | Build and Test |
 | MO-4 | `check-since-last`가 합성 로그(네 기준을 일부러 넘긴 값, 재시작을 끼운 값, 보존 폴더에 나뉜 값)에서 기준을 모두 잡고 재시작 사이의 최댓값을 구하는지 확인한다 | 3.5 구현 |
@@ -649,7 +649,7 @@ RUNBOOK 절 이름은 제안이며 `RUNBOOK.md` 본문은 3.5 이후다(J96).
 | 13 | 11/2 측정에서 해당 행의 SLO 수치 조정(특히 말 끝 → 첫 음성 2.5초, 서버 몫 0.5초 · 화면 도달 1.5초) | 사람 · 11/2 측정 |
 | 14 | REST 240ms · 12 조회 400ms 경보선은 `http.server.requests` 히스토그램 버킷(100 · 300 · 500 · 1000ms)과 METRIC_SNAPSHOT의 `restLe300Ms` · `viewLe500Ms` 카운터로는 정확히 판정할 수 없다. 버킷에 250ms · 400ms를 더하고 스냅샷 키를 늘리거나, 경보선을 SLO 경계(300 · 500ms)의 이웃 버킷으로 읽을지 정한다. observability-design.md의 이름 · 키를 바꾸는 일이라 이 문서는 바꾸지 않고 올린다 | 사람 · 3.5 |
 | 15 | 인증서 방식(Let's Encrypt HTTP-01 가정). 방식이 바뀌면 `certDays` · `certServedDays` 기준(20일)과 갱신 주기 가정(만료 30일 전부터 하루 2회 확인)을 다시 본다 | 사람 · 클라우드 담당 |
-| 16 | Neo4j를 켜는 유닛과 시점. 켜면 상시 컨테이너 기대 수가 7에서 8이 되고(`ctr`), 컨테이너 한도 합계가 6.875GiB로 70% 판정선을 넘어 인스턴스 상향과 메모리 경보선 재측정이 함께 필요하다. json-file 한도에 neo4j(10m × 3)와 헬스 · 오류율 지표 1개씩이 더해진다 | 해당 유닛 3.4 |
+| 16 | Neo4j를 켜는 유닛과 시점. 켜면 상시 컨테이너 기대 수가 7에서 8이 되고(`ctr`), 컨테이너 한도 합계가 6.575GiB(5.075 + 1.5)로 70% 판정선(호스트 `MemTotal` 실측의 70%, 약 5.3GiB)을 넘어 인스턴스 상향과 메모리 경보선 재측정이 함께 필요하다. json-file 한도에 neo4j(10m × 3)와 헬스 · 오류율 지표 1개씩이 더해진다 | 해당 유닛 3.4 |
 | 17 | 예산 한도와 알림. 비용 알림(AWS Budgets 등)도 경보 연동과 같이 계정 · 수신자 정보가 필요해 이번 범위 밖이다. 무제한 크레딧 모드 과금은 A-21로 콘솔에서 사람이 본다 | 사람 |
 | 18 | Construction Verification Command 선택은 cicd-pipeline.md 5절 사람이 정할 것 1에 있다. 이 문서의 점검 도우미(`turn-metrics` · `sli-report`)는 그 명령의 판정 근거가 될 수 있다 | 사람 · 3.5 시작 |
 
@@ -665,16 +665,23 @@ RUNBOOK 절 이름은 제안이며 `RUNBOOK.md` 본문은 3.5 이후다(J96).
 | 6 | host-collect에 `certServedDays` · `clockSync` · `clockOffsetMs`를 더했다 | 재적재 누락과 시계 이상을 잡기 위해 |
 | 7 | security-design.md SD-3와 5.4의 I-9가 정적 승인 음성 경로를 `/audio/approved/`(제안)로 적었으나 결정 보강이 `/media/approved/`로 정했다. 이 문서의 스모크 · 접근 로그 설명은 후자를 따른다 | 결정 보강이 우선 |
 | 8 | 질문 파일의 Q8은 배포를 병합 때 자동 실행으로 하지만 정지 중 서버에는 배포할 수 없어 시작 점검 8번(최신 SHA 확인)을 더했다 | J95 |
+| 9 | 3.4 재점검 결정 R4-4: host-collect와 A-15가 백업 전용 볼륨 `diskBackup`(`/var/lib/mujoong-backup`)도 점검한다. 백업이 별도 볼륨이어도 같은 AZ라 A-17 · A-20은 AZ 상실의 복구 수단이 아니다(5절 사람이 정할 것 12) | 인프라 명세가 백업 전용 EBS를 추가했다 |
+| 10 | 3.4 재점검 결정 R4-7: 11/2 측정 창의 demo 스택 정지는 `docker compose stop`이 아니라 측정 창 전용 예외 `docker compose -p mujoong down`이다. 2.4.3의 '수동 down 금지' 규칙에 이 예외를 적었다(직전 로그 보존). `power.log`는 `mujoong-compose.service`의 시작 완료 · 정지 시작에도 묶여 측정 창의 정지 · 재기동을 자동 기록한다(2.6.3) | 고정 서브넷 충돌(Pool overlaps)을 피하고 수동 표시를 없앤다 |
+| 11 | 3.4 재점검 결정 R4-8: 점검 도우미는 번들의 `/opt/mujoong/current/bin/`에 놓이고 고정 경로의 얇은 진입점 `/opt/mujoong/bin/`(링크 아님)이 부른다(2.8) | 인프라 명세 4.2와 일치시킨다 |
+| 12 | 3.4 재점검 결정 R4-11: 호스트 로그 소유 · 보관을 정했다. `backup.log`만 uid 999 소유 640(그룹 root 읽기), 나머지는 root 640(2.4.4). `deploy-*.log` · `migrate-*.log`는 logrotate가 30일, `archive/*.log.gz`는 배포 D9가 7일 또는 40개 초과분을 지운다(2.7.4) | 정리 주체가 없으면 루트 볼륨이 조용히 찬다 |
+| 13 | 3.4 재점검 결정 R4-17: Nginx가 만든 502 · 504는 상태 코드를 유지한 채 본문만 바꾸고(`=503` 치환 금지) 앱이 직접 낸 503은 그대로 통과한다. 프로브 실패 패턴표(502 접속 불가 / 503 준비 전)와 같다(2.6.1) | 두 상태의 구분이 프로브 판정의 전제다(NFR4.13) |
+| 14 | 3.4 재점검 결정 R4-19: 컨테이너 메모리 한도 합계는 5.075GiB(Neo4j를 켜면 6.575GiB)이고 70% 판정은 호스트 `MemTotal` 실측값의 70%(약 5.3GiB, 7.6GiB 가정은 확인 필요)와 비교한다. 인용 수치를 고쳤다(5절 사람이 정할 것 16) | 인프라 명세 4.1과 일치시킨다 |
 
 **다른 문서와 맞출 것**
 
 | 번호 | 대상 | 내용 |
 |---|---|---|
-| 1 | infrastructure-specification.md | 컨테이너 이름(nginx · web · core-api · realtime · postgres · neo4j · migrate · certbot · backup), 네트워크 edge · backend, 포트, 로그 한도 표, 호스트 경로(`/var/log/mujoong` · `/var/lib/mujoong`, 이 문서가 더한 `deploy-<배포 id>.log`도 포함), 앱 이미지의 HTTP 클라이언트, Compose 헬스체크가 이 문서의 readiness 호출과 같은 것을 쓰는지 |
-| 2 | infrastructure-specification.md | Nginx 접근 로그 형식(2.4.1)과 폴링 2xx 제외, `/api/health` 정확 일치 허용, `/actuator/` 403이 같은지(인프라 명세 3.3이 같은 값). 502 · 504에 보여 주는 정적 점검 페이지가 원래 상태 코드를 유지하는지(200으로 바꾸면 프로브가 성공으로 오판) |
-| 3 | infrastructure-specification.md | 호스트 cron 단위, logrotate 설정(수집 파일 7일 · 사건 파일 30일, 인프라 명세 1.4와 같음), 호스트 시계(chrony) 확인 항목(같음), 점검 도우미가 쓰는 호스트 도구. 인프라 명세 1.4의 설치 도구에 `flock`(util-linux 기본)과 `chronyc`(chrony 포함)가 이미 들어 있는지 |
+| 1 | infrastructure-specification.md | 컨테이너 이름(nginx · web · core-api · realtime · postgres · neo4j · migrate · certbot · backup), 네트워크 edge · backend, 포트, 로그 한도 표, 호스트 경로(`/var/log/mujoong` · `/var/lib/mujoong` · 백업 전용 볼륨 `/var/lib/mujoong-backup`, 이 문서가 더한 `deploy-<배포 id>.log`도 포함), 앱 이미지의 HTTP 클라이언트, Compose 헬스체크가 이 문서의 readiness 호출과 같은 것을 쓰는지 |
+| 2 | infrastructure-specification.md | Nginx 접근 로그 형식(2.4.1)과 폴링 2xx 제외, `/api/health` 정확 일치 허용, `/actuator/` 403이 같은지(인프라 명세 3.3이 같은 값). 502 · 504에 보여 주는 점검 페이지의 상태 코드 유지는 반영됨(인프라 명세 3.3: `error_page 502 504`, 상태 치환 `=503` 금지. 200으로 바꾸면 프로브가 성공으로 오판) |
+| 3 | infrastructure-specification.md | 호스트 cron 단위, logrotate 설정(수집 파일 7일 · 사건 파일 30일, `deploy-*.log` · `migrate-*.log` 30일 삭제, `archive/*.log.gz` 7일 또는 40개 초과분은 배포 D9가 삭제, 인프라 명세 1.4와 같음), 호스트 로그 소유(`backup.log`만 uid 999), 호스트 시계(chrony) 확인 항목(같음), 점검 도우미가 쓰는 호스트 도구. 인프라 명세 1.4의 설치 도구에 `flock`(util-linux 기본)과 `chronyc`(chrony 포함)가 이미 들어 있는지 |
 | 4 | cicd-pipeline.md | `deploy.log` 형식(2.10), 배포 직전 로그 보존 단계(D5 ①), 1초 샘플러, `AUTO_DEPLOY` 동결, 정지 중 배포 처리 |
-| 5 | infrastructure-specification.md | `mujoong-power-mark`가 호스트 정지뿐 아니라 `mujoong-compose` 단위의 정지 · 기동 완료에도 묶여(예: 종속 관계) 측정 창의 스택 정지도 `POWER_STOP` · `POWER_READY`로 표시되는지. 아니면 측정 창 절차(인프라 명세 1.3 단계 1)에서 수동으로 표시 |
+| 5 | infrastructure-specification.md | 반영됨(R4-7): 인프라 명세 1.4에서 `mujoong-power-mark`가 호스트 정지 · 기동뿐 아니라 `mujoong-compose.service`의 시작 완료 · 정지 시작에도 묶여(PartOf/After) 측정 창의 `down`과 재기동도 `POWER_STOP` · `POWER_READY`로 자동 기록된다. 수동 표시는 없다 |
+| 6 | cicd-pipeline.md | 배포 단계 로그 정리 행(2.3.3), D9의 archive 정리, 측정 창 단계 0의 `AUTO_DEPLOY=false` 동결(2.11 · 2.12) |
 
 ## 6. 자체 점검
 
@@ -683,4 +690,5 @@ RUNBOOK 절 이름은 제안이며 `RUNBOOK.md` 본문은 3.5 이후다(J96).
 | (a) 필수 표 존재 | Metrics & KPIs(2.1) · Alerts(2.2) · SLIs / SLOs(2.3) · Logs & Tracing(2.4, 대시보드 명세 2.4.7 포함) · 점검표(2.5) · 프로브 설계(2.6) · 호스트 cron 점검 항목(2.7) · `## 5. 열린 질문과 가정`이 모두 있다 |
 | (b) 인용 BR · NFR 존재 | 인용한 NFRx.y는 nfr-requirements에 있는 번호만 썼고 BRx.y는 인용하지 않았다(검사 스크립트로 확인함) |
 | (c) 표 열 수 | 모든 표의 머리 · 구분선 · 행의 열 수를 스크립트로 확인했다. 셀 안에 파이프 문자를 쓰지 않았다 |
-| (d) 수치 충돌 | SLO 16행은 observability-requirements.md 3.1과, 경보선은 3.2와, 점검 기준은 observability-design.md 2.13 · 3절과, 설정 키 값(`stop_grace_period` 40초, 정상 종료 유예 30초, WSS 75초)은 reliability-design.md `## 3`과, 컨테이너 7개 · 로그 한도 표 · 로그 보관 기간 · 관리 포트 9090 루프백 · host-collect 20초 제한은 infrastructure-specification.md(1.4 · 2.1 · 2.4)와 같다. 다르게 푼 곳은 5절 표에 모두 적었다(json-file 한도 통일, 보관 기간 분리, 제외 구간 추가) |
+| (d) 수치 충돌 | SLO 16행은 observability-requirements.md 3.1과, 경보선은 3.2와, 점검 기준은 observability-design.md 2.13 · 3절과, 설정 키 값(`stop_grace_period` 40초, 정상 종료 유예 30초, WSS 75초)은 reliability-design.md `## 3`과, 컨테이너 7개 · 로그 한도 표 · 로그 보관 기간 · 호스트 로그 소유 · 백업 전용 볼륨 경로 · 관리 포트 9090 루프백 · host-collect 20초 제한은 infrastructure-specification.md(1.4 · 2.1 · 2.4 · 4.2)와 같다. 다르게 푼 곳은 5절 표에 모두 적었다(json-file 한도 통일, 보관 기간 분리, 제외 구간 추가) |
+| (e) 3.4 재점검 반영 | 결정 R4-4 · R4-7 · R4-8 · R4-11 · R4-17 · R4-19 중 이 문서에 닿는 것을 5절 '다르게 푼 곳' 9 ~ 14에 '3.4 재점검 결정 R4-n'으로 적고 2.1 · 2.2(A-15) · 2.4.3 · 2.4.4 · 2.5 · 2.6.1 · 2.6.3 · 2.7 · 2.8 · 5절에 같은 이름 · 경로 · 수치로 넣었다. `diskBackup` · `/var/lib/mujoong-backup` · 호스트 로그 소유 · `docker compose -p mujoong down` 예외 · `error_page 502 504` · 5.075GiB는 인프라 명세와 문자열 대조로 확인했고 맞출 것 5(`power.log`)는 '반영됨'으로 닫았다 |

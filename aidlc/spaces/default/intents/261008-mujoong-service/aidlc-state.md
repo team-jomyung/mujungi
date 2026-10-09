@@ -48,9 +48,9 @@
 
 
 
-- **Active Unit**: u1-walking-skeleton
 
-- **Unit State**: in-progress
+
+
 
 ## Phase Progress
 <!-- Status values: Pending, Active, Verified, Skipped -->
@@ -113,7 +113,7 @@ Per unit: [TBD]
 - **Current Stage**: functional-design
 - **Next Stage**: nfr-requirements
 - **Status**: Running
-- **Last Updated**: 2026-10-09T20:42:06Z
+- **Last Updated**: 2026-10-09T22:49:31Z
 
 - **Construction Autonomy Mode**: autonomous
 

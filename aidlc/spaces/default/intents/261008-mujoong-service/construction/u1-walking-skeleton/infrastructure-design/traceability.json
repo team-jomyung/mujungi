@@ -1,0 +1,410 @@
+{
+  "stage": "infrastructure-design",
+  "unit": "u1-walking-skeleton",
+  "upstream_ids": [
+    "NFR1.1",
+    "NFR1.2",
+    "NFR1.3",
+    "NFR2.1",
+    "NFR3.1",
+    "NFR3.2",
+    "NFR4.1",
+    "NFR4.2",
+    "NFR4.3",
+    "NFR4.4",
+    "NFR4.5",
+    "NFR4.6",
+    "NFR4.7",
+    "NFR4.8",
+    "NFR4.9",
+    "NFR4.10",
+    "NFR4.11",
+    "NFR4.12",
+    "NFR4.13",
+    "NFR4.14",
+    "NFR4.15",
+    "NFR4.16",
+    "NFR5.1",
+    "NFR5.2",
+    "NFR5.3",
+    "NFR5.4",
+    "NFR5.5",
+    "NFR5.6",
+    "NFR5.7",
+    "NFR5.8",
+    "NFR6.1",
+    "NFR6.2",
+    "NFR6.3",
+    "NFR6.4",
+    "NFR6.5",
+    "NFR7.1",
+    "NFR7.2",
+    "NFR7.3",
+    "NFR7.4",
+    "NFR7.5",
+    "NFR7.6",
+    "NFR7.7",
+    "NFR7.8",
+    "NFR9.1",
+    "NFR9.2",
+    "NFR9.3",
+    "NFR9.4",
+    "NFR9.5",
+    "NFR9.6",
+    "NFR9.7",
+    "NFR9.8",
+    "NFR9.9",
+    "NFR9.10",
+    "NFR9.11",
+    "NFR9.12",
+    "NFR9.13",
+    "NFR9.14",
+    "NFR9.15",
+    "NFR10.1",
+    "NFR10.2",
+    "NFR10.3",
+    "NFR10.4",
+    "NFR11.1",
+    "NFR12.1",
+    "NFR12.2",
+    "NFR12.3",
+    "NFR12.4"
+  ],
+  "coverage": [
+    {
+      "id": "NFR1.1",
+      "status": "OK",
+      "target": "Nginx `/media/approved/` 읽기 전용 정적 서빙, 승인 음성 볼륨 `/srv/mujoong/approved-audio`(앱 컨테이너에 마운트하지 않음) (`## 3. 공유 인프라와 접근 경계` (3.2))"
+    },
+    {
+      "id": "NFR1.2",
+      "status": "N/A",
+      "target": "별도 인프라 자원 없음 — 애플리케이션 코드 · 설정으로 충족(구현 위치는 nfr-design/security-design.md의 해당 설계 요소, 인프라 쪽 전제는 5.절 NFR 매핑 표 밖)"
+    },
+    {
+      "id": "NFR1.3",
+      "status": "N/A",
+      "target": "별도 인프라 자원 없음 — 애플리케이션 코드 · 설정으로 충족(구현 위치는 nfr-design/security-design.md의 해당 설계 요소, 인프라 쪽 전제는 5.절 NFR 매핑 표 밖)"
+    },
+    {
+      "id": "NFR2.1",
+      "status": "N/A",
+      "target": "별도 인프라 자원 없음 — 애플리케이션 코드 · 설정으로 충족(구현 위치는 nfr-design/security-design.md의 해당 설계 요소, 인프라 쪽 전제는 5.절 NFR 매핑 표 밖)"
+    },
+    {
+      "id": "NFR3.1",
+      "status": "N/A",
+      "target": "별도 인프라 자원 없음 — 애플리케이션 코드 · 설정으로 충족(구현 위치는 nfr-design/security-design.md의 해당 설계 요소, 인프라 쪽 전제는 5.절 NFR 매핑 표 밖)"
+    },
+    {
+      "id": "NFR3.2",
+      "status": "N/A",
+      "target": "별도 인프라 자원 없음 — 애플리케이션 코드 · 설정으로 충족(구현 위치는 nfr-design/security-design.md의 해당 설계 요소, 인프라 쪽 전제는 5.절 NFR 매핑 표 밖)"
+    },
+    {
+      "id": "NFR4.1",
+      "status": "OK",
+      "target": "Nginx WSS 읽기 · 쓰기 제한 75초(> 앱 끊김 판정 40초), `/ws/device` 버퍼링 끔 (`## 3. 공유 인프라와 접근 경계` (3.3))"
+    },
+    {
+      "id": "NFR4.2",
+      "status": "OK",
+      "target": "보안 그룹 아웃바운드로 공급자 호스트 443 허용, realtime만 공급자에 연결 (`## 3. 공유 인프라와 접근 경계` (3.4))"
+    },
+    {
+      "id": "NFR4.3",
+      "status": "N/A",
+      "target": "별도 인프라 자원 없음 — 애플리케이션 코드 · 설정으로 충족(구현 위치는 nfr-design/reliability-design.md의 해당 설계 요소, 인프라 쪽 전제는 5.절 NFR 매핑 표 밖)"
+    },
+    {
+      "id": "NFR4.4",
+      "status": "N/A",
+      "target": "별도 인프라 자원 없음 — 애플리케이션 코드 · 설정으로 충족(구현 위치는 nfr-design/reliability-design.md의 해당 설계 요소, 인프라 쪽 전제는 5.절 NFR 매핑 표 밖)"
+    },
+    {
+      "id": "NFR4.5",
+      "status": "N/A",
+      "target": "별도 인프라 자원 없음 — 애플리케이션 코드 · 설정으로 충족(구현 위치는 nfr-design/reliability-design.md의 해당 설계 요소, 인프라 쪽 전제는 5.절 NFR 매핑 표 밖)"
+    },
+    {
+      "id": "NFR4.6",
+      "status": "N/A",
+      "target": "별도 인프라 자원 없음 — 애플리케이션 코드 · 설정으로 충족(구현 위치는 nfr-design/reliability-design.md의 해당 설계 요소, 인프라 쪽 전제는 5.절 NFR 매핑 표 밖)"
+    },
+    {
+      "id": "NFR4.7",
+      "status": "OK",
+      "target": "`restart: unless-stopped`, `depends_on` 기동 순서, `stop_grace_period` 40초, 데이터 볼륨 영속, `mujoong-compose` 단위 (`## 2. 인프라 서비스` (2.2))"
+    },
+    {
+      "id": "NFR4.8",
+      "status": "OK",
+      "target": "외부 프로브 3종 경로 · 판정, `/api/health` 외부 허용 한 경로, Elastic IP · 도메인, `deploy.log`와 `power.log` (`## 2. 인프라 서비스` (2.6))"
+    },
+    {
+      "id": "NFR4.9",
+      "status": "OK",
+      "target": "재시작 정책, Compose 헬스체크, 부팅 자동 기동 단위, hang 수동 재시작 절차 (`## 2. 인프라 서비스` (2.3))"
+    },
+    {
+      "id": "NFR4.10",
+      "status": "OK",
+      "target": "종료 유예 40초, 두 앱 병렬 재생성(core-api가 realtime을 기다리지 않음), migrate 선행 실행, Nginx 적재, 중단 60초 예산 (`## 2. 인프라 서비스` (2.2) · `## 1. 배포 구성` (1.1), 상세는 cicd-pipeline.md 2.6)"
+    },
+    {
+      "id": "NFR4.11",
+      "status": "OK",
+      "target": "`backup` 컨테이너 · 백업 전용 볼륨 `mujoong-demo-backup` · 7일 보관 · `mujoong_backup` 역할 · 트리거 4종 · 복원 리허설 (`## 4. 데이터 · 용량 · 비용 · 운영 순서` (4.4))"
+    },
+    {
+      "id": "NFR4.12",
+      "status": "OK",
+      "target": "망 둘 분리(`backend` internal), 컨테이너 메모리 한도, 역할별 연결 한도, 앱별 DB 역할 (`## 2. 인프라 서비스` (2.1))"
+    },
+    {
+      "id": "NFR4.13",
+      "status": "OK",
+      "target": "readiness(관리 포트 9090 루프백), Compose 헬스체크, 준비 전 앱 직접 503 · Nginx 502 정책과 오류 페이지 (`## 3. 공유 인프라와 접근 경계` (3.3))"
+    },
+    {
+      "id": "NFR4.14",
+      "status": "OK",
+      "target": "종료 상태 지표(상태별 카운터)는 관리 포트 9090(컨테이너 루프백, 호스트 비게시)에서 읽고 SESSION_TRANSITION 로그는 json-file이 수집해 한도 안에서 보관한다(배포 직전 로그 보존 포함) (`## 2. 인프라 서비스` (2.1 · 2.4))"
+    },
+    {
+      "id": "NFR4.15",
+      "status": "OK",
+      "target": "관리 포트 9090 비게시, Nginx `/actuator/` 403, host-collect 점검 (`## 3. 공유 인프라와 접근 경계` (3.2))"
+    },
+    {
+      "id": "NFR4.16",
+      "status": "N/A",
+      "target": "별도 인프라 자원 없음 — 애플리케이션 코드 · 설정으로 충족(구현 위치는 nfr-design/reliability-design.md의 해당 설계 요소, 인프라 쪽 전제는 5.절 NFR 매핑 표 밖)"
+    },
+    {
+      "id": "NFR5.1",
+      "status": "OK",
+      "target": "`t3.large`(CPU 크레딧 `unlimited`), WSS 버퍼링 끔, 측정 창 (`## 1. 배포 구성` (1.1))"
+    },
+    {
+      "id": "NFR5.2",
+      "status": "OK",
+      "target": "같음(말 끝 → 첫 음성 측정을 EC2에서 하는 측정 창) (`## 1. 배포 구성` (1.3))"
+    },
+    {
+      "id": "NFR5.3",
+      "status": "N/A",
+      "target": "별도 인프라 자원 없음 — 애플리케이션 코드 · 설정으로 충족(구현 위치는 nfr-design/performance-design.md의 해당 설계 요소, 인프라 쪽 전제는 5.절 NFR 매핑 표 밖)"
+    },
+    {
+      "id": "NFR5.4",
+      "status": "N/A",
+      "target": "별도 인프라 자원 없음 — 애플리케이션 코드 · 설정으로 충족(구현 위치는 nfr-design/observability-design.md의 해당 설계 요소, 인프라 쪽 전제는 5.절 NFR 매핑 표 밖)"
+    },
+    {
+      "id": "NFR5.5",
+      "status": "OK",
+      "target": "PostgreSQL 설정(`shared_buffers` · `random_page_cost`), Nginx upstream keepalive (`## 2. 인프라 서비스` (2.5))"
+    },
+    {
+      "id": "NFR5.6",
+      "status": "OK",
+      "target": "Nginx gzip, `_next/static` 불변 캐시, HTTP/2 (`## 3. 공유 인프라와 접근 경계` (3.3))"
+    },
+    {
+      "id": "NFR5.7",
+      "status": "OK",
+      "target": "Nginx `X-Trace-Id`를 `$request_id`로 덮어쓰기, 접근 로그의 `requestId` (`## 3. 공유 인프라와 접근 경계` (3.3))"
+    },
+    {
+      "id": "NFR5.8",
+      "status": "N/A",
+      "target": "별도 인프라 자원 없음 — 애플리케이션 코드 · 설정으로 충족(구현 위치는 nfr-design/performance-design.md의 해당 설계 요소, 인프라 쪽 전제는 5.절 NFR 매핑 표 밖)"
+    },
+    {
+      "id": "NFR6.1",
+      "status": "OK",
+      "target": "시간 설정 키 값을 Compose `environment:`로 서비스별 주입(코드에 숫자 없음, 3.7 '비밀 아님' 행) (`## 3. 공유 인프라와 접근 경계` (3.7))"
+    },
+    {
+      "id": "NFR6.2",
+      "status": "N/A",
+      "target": "별도 인프라 자원 없음 — 애플리케이션 코드 · 설정으로 충족(구현 위치는 nfr-design/reliability-design.md의 해당 설계 요소, 인프라 쪽 전제는 5.절 NFR 매핑 표 밖)"
+    },
+    {
+      "id": "NFR6.3",
+      "status": "N/A",
+      "target": "별도 인프라 자원 없음 — 애플리케이션 코드 · 설정으로 충족(구현 위치는 nfr-design/reliability-design.md의 해당 설계 요소, 인프라 쪽 전제는 5.절 NFR 매핑 표 밖)"
+    },
+    {
+      "id": "NFR6.4",
+      "status": "OK",
+      "target": "chrony 시각 동기화, 동기화 뒤 스택 기동, 시계 점검 (`## 1. 배포 구성` (1.4))"
+    },
+    {
+      "id": "NFR6.5",
+      "status": "N/A",
+      "target": "별도 인프라 자원 없음 — 애플리케이션 코드 · 설정으로 충족(구현 위치는 nfr-design/observability-design.md의 해당 설계 요소, 인프라 쪽 전제는 5.절 NFR 매핑 표 밖)"
+    },
+    {
+      "id": "NFR7.1",
+      "status": "OK",
+      "target": "`t3.large` CPU 크레딧 모드, 동시 세션 비교를 재는 측정 창 (`## 1. 배포 구성` (1.3))"
+    },
+    {
+      "id": "NFR7.2",
+      "status": "OK",
+      "target": "인스턴스 크기, 컨테이너 한도 합계 5.075 GiB ≤ 호스트 `MemTotal` 실측의 70%(약 5.3 GiB), `host-sample` (`## 4. 데이터 · 용량 · 비용 · 운영 순서` (4.1))"
+    },
+    {
+      "id": "NFR7.3",
+      "status": "N/A",
+      "target": "별도 인프라 자원 없음 — 애플리케이션 코드 · 설정으로 충족(구현 위치는 nfr-design/scalability-design.md의 해당 설계 요소, 인프라 쪽 전제는 5.절 NFR 매핑 표 밖)"
+    },
+    {
+      "id": "NFR7.4",
+      "status": "OK",
+      "target": "서비스당 컨테이너 1개, `--scale` 거부, 단일 인스턴스 (`## 2. 인프라 서비스` (2.2))"
+    },
+    {
+      "id": "NFR7.5",
+      "status": "N/A",
+      "target": "별도 인프라 자원 없음 — 애플리케이션 코드 · 설정으로 충족(구현 위치는 nfr-design/scalability-design.md의 해당 설계 요소, 인프라 쪽 전제는 5.절 NFR 매핑 표 밖)"
+    },
+    {
+      "id": "NFR7.6",
+      "status": "OK",
+      "target": "PostgreSQL `max_connections` 100, 앱 풀 합계 20, 역할 연결 한도 (`## 2. 인프라 서비스` (2.5))"
+    },
+    {
+      "id": "NFR7.7",
+      "status": "OK",
+      "target": "데이터 볼륨 50 GB, 표당 5만 행 점검 기준(4.2의 한 줄) (`## 4. 데이터 · 용량 · 비용 · 운영 순서` (4.2))"
+    },
+    {
+      "id": "NFR7.8",
+      "status": "OK",
+      "target": "host-collect 지표 스냅샷, 관리 포트 지표 (`## 2. 인프라 서비스` (2.1))"
+    },
+    {
+      "id": "NFR9.1",
+      "status": "OK",
+      "target": "보안 그룹 80 · 443, Elastic IP, 도메인, certbot, TLS 1.2 이상, 301, HSTS (`## 3. 공유 인프라와 접근 경계` (3.3))"
+    },
+    {
+      "id": "NFR9.2",
+      "status": "N/A",
+      "target": "별도 인프라 자원 없음 — 애플리케이션 코드 · 설정으로 충족(구현 위치는 nfr-design/security-design.md의 해당 설계 요소, 인프라 쪽 전제는 5.절 NFR 매핑 표 밖)"
+    },
+    {
+      "id": "NFR9.3",
+      "status": "N/A",
+      "target": "별도 인프라 자원 없음 — 애플리케이션 코드 · 설정으로 충족(구현 위치는 nfr-design/security-design.md의 해당 설계 요소, 인프라 쪽 전제는 5.절 NFR 매핑 표 밖)"
+    },
+    {
+      "id": "NFR9.4",
+      "status": "N/A",
+      "target": "별도 인프라 자원 없음 — 애플리케이션 코드 · 설정으로 충족(구현 위치는 nfr-design/security-design.md의 해당 설계 요소, 인프라 쪽 전제는 5.절 NFR 매핑 표 밖)"
+    },
+    {
+      "id": "NFR9.5",
+      "status": "N/A",
+      "target": "별도 인프라 자원 없음 — 애플리케이션 코드 · 설정으로 충족(구현 위치는 nfr-design/security-design.md의 해당 설계 요소, 인프라 쪽 전제는 5.절 NFR 매핑 표 밖)"
+    },
+    {
+      "id": "NFR9.6",
+      "status": "OK",
+      "target": "`edge` · `backend` 분리, Nginx `/internal/` 403, 관리 포트 비게시 (`## 3. 공유 인프라와 접근 경계` (3.2))"
+    },
+    {
+      "id": "NFR9.7",
+      "status": "OK",
+      "target": "PostgreSQL 역할 4개 · 초기화 스크립트 · `pg_hba` · `backend` internal 망 (`## 2. 인프라 서비스` (2.1))"
+    },
+    {
+      "id": "NFR9.8",
+      "status": "OK",
+      "target": "Nginx 접근 로그 형식(쿼리 · 쿠키 제외), PostgreSQL 로그 설정, json-file 한도 (`## 3. 공유 인프라와 접근 경계` (3.3))"
+    },
+    {
+      "id": "NFR9.9",
+      "status": "OK",
+      "target": "Nginx `limit_req` · 본문 64k · 수신 시간 · XFF 덮어쓰기, Nginx 고정 IP (`## 3. 공유 인프라와 접근 경계` (3.3))"
+    },
+    {
+      "id": "NFR9.10",
+      "status": "OK",
+      "target": "Parameter Store, 서비스별 env 파일 600, IAM 최소 권한, OIDC, IMDSv2 홉 1 (`## 3. 공유 인프라와 접근 경계` (3.7))"
+    },
+    {
+      "id": "NFR9.11",
+      "status": "OK",
+      "target": "환경별 Spring 프로필(demo 단독), dev · ci · demo 분리, 측정 창 (`## 1. 배포 구성` (1.3))"
+    },
+    {
+      "id": "NFR9.12",
+      "status": "OK",
+      "target": "Nginx 보안 헤더와 CSP 분담 (`## 3. 공유 인프라와 접근 경계` (3.3))"
+    },
+    {
+      "id": "NFR9.13",
+      "status": "OK",
+      "target": "취약점 점검 자체는 CI이고, 인프라 몫은 그 점검을 받는 컨테이너 정책: 베이스 이미지 태그 고정 · 비루트(postgres `user: \"999:999\"` · backup 포함) · 읽기 전용 루트 · 권한 최소화 (`## 2. 인프라 서비스` (2.2))"
+    },
+    {
+      "id": "NFR9.14",
+      "status": "N/A",
+      "target": "별도 인프라 자원 없음 — 애플리케이션 코드 · 설정으로 충족(구현 위치는 nfr-design/security-design.md의 해당 설계 요소, 인프라 쪽 전제는 5.절 NFR 매핑 표 밖)"
+    },
+    {
+      "id": "NFR9.15",
+      "status": "N/A",
+      "target": "별도 인프라 자원 없음 — 애플리케이션 코드 · 설정으로 충족(구현 위치는 nfr-design/observability-design.md의 해당 설계 요소, 인프라 쪽 전제는 5.절 NFR 매핑 표 밖)"
+    },
+    {
+      "id": "NFR10.1",
+      "status": "N/A",
+      "target": "별도 인프라 자원 없음 — 애플리케이션 코드 · 설정으로 충족(구현 위치는 nfr-design/performance-design.md의 해당 설계 요소, 인프라 쪽 전제는 5.절 NFR 매핑 표 밖)"
+    },
+    {
+      "id": "NFR10.2",
+      "status": "N/A",
+      "target": "별도 인프라 자원 없음 — 애플리케이션 코드 · 설정으로 충족(구현 위치는 nfr-design/performance-design.md의 해당 설계 요소, 인프라 쪽 전제는 5.절 NFR 매핑 표 밖)"
+    },
+    {
+      "id": "NFR10.3",
+      "status": "N/A",
+      "target": "별도 인프라 자원 없음 — 애플리케이션 코드 · 설정으로 충족(구현 위치는 nfr-design/performance-design.md의 해당 설계 요소, 인프라 쪽 전제는 5.절 NFR 매핑 표 밖)"
+    },
+    {
+      "id": "NFR10.4",
+      "status": "OK",
+      "target": "HTTPS(Secure Context)와 `Permissions-Policy: microphone=(self)` (`## 3. 공유 인프라와 접근 경계` (3.3))"
+    },
+    {
+      "id": "NFR11.1",
+      "status": "N/A",
+      "target": "별도 인프라 자원 없음 — 애플리케이션 코드 · 설정으로 충족(구현 위치는 nfr-design/performance-design.md의 해당 설계 요소, 인프라 쪽 전제는 5.절 NFR 매핑 표 밖)"
+    },
+    {
+      "id": "NFR12.1",
+      "status": "N/A",
+      "target": "별도 인프라 자원 없음 — 애플리케이션 코드 · 설정으로 충족(구현 위치는 nfr-design/security-design.md의 해당 설계 요소, 인프라 쪽 전제는 5.절 NFR 매핑 표 밖)"
+    },
+    {
+      "id": "NFR12.2",
+      "status": "OK",
+      "target": "스왑 없음, 코어 덤프 0, JVM 힙 덤프 끔, OOM 즉시 종료 (`## 1. 배포 구성` (1.4))"
+    },
+    {
+      "id": "NFR12.3",
+      "status": "OK",
+      "target": "백업 7일 보관(페이로드는 식별자 · 열거값뿐이라 대화 원문이 백업에 남지 않음) (`## 4. 데이터 · 용량 · 비용 · 운영 순서` (4.4))"
+    },
+    {
+      "id": "NFR12.4",
+      "status": "OK",
+      "target": "데이터 등급 표지(`mujoong_db.data_class`)와 백업 거부 조건, 오프호스트 복사 없음, 합성 데이터 한정(사람 결정은 5.4 O-3) (`## 4. 데이터 · 용량 · 비용 · 운영 순서` (4.4))"
+    }
+  ]
+}
