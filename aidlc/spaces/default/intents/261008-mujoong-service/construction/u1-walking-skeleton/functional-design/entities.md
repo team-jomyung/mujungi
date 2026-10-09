@@ -54,7 +54,7 @@ entities:
       - { name: released_at, type: timestamp, required: false }
       - { name: release_reason, type: "string(30)", required: false, allowed_values: [REREGISTERED, ACCOUNT_DELETED] }
       - { name: reported_connection_state, type: "string(20)", required: false, allowed_values: [OFFLINE, CONNECTED, UNSTABLE, DISCONNECTED, UNRESPONSIVE], constraints: "Realtime이 보고한 값의 사본(보고의 state, 보고에서 필수 — 없으면 400 INVALID_ENVELOPE, BR4.1 · J59(i)). 한 번도 보고가 없으면 비어 있고, 이 기기는 BR4.3 ②로 UNRESPONSIVE처럼 보여 주되 교체 등록은 막지 않는다(BR2.4 · J46)" }
-      - { name: reported_at, type: timestamp, required: false, constraints: "사본에 반영한 가장 늦은 보고 시각. PUT 보고는 reportedAt(Realtime이 그 보고가 담은 연결 행을 읽은 시각이며 전송 시각이 아니다, BR4.8)이고 보고에서 필수다(없으면 400 INVALID_ENVELOPE, J59(i)). 이벤트 경로는 DeviceStatusChanged를 받은 Inbox 행의 occurred_at(상태 UPDATE를 실행한 clock_timestamp이며 트랜잭션 시작 시각이 아니다)이다. 둘은 같은 Realtime 시계라 서로 비교한다. 읽고 비교하고 쓰지 않고 'WHERE registration_status = REGISTERED AND (reported_at IS NULL OR reported_at < :t)' 조건부 UPDATE 한 문장으로만 올리므로 줄어들지 않는다(BR4.1 · BR4.2)" }
+      - { name: reported_at, type: timestamp, required: false, constraints: "사본에 반영한 가장 늦은 보고 시각. PUT 보고는 reportedAt(Realtime이 그 보고가 담은 연결 행을 읽은 시각이며 전송 시각이 아니다, BR4.8)이고 보고에서 필수다(없으면 400 INVALID_ENVELOPE, J59(i)). 이벤트 경로는 DeviceStatusChanged를 받은 Inbox 행의 occurred_at(상태 UPDATE 직전에 Realtime 앱 Clock으로 읽은 시각이며 트랜잭션 시작 시각 now()가 아니다)이다. 둘은 같은 Realtime 시계라 서로 비교한다. 읽고 비교하고 쓰지 않고 'WHERE registration_status = REGISTERED AND (reported_at IS NULL OR reported_at < :t)' 조건부 UPDATE 한 문장으로만 올리므로 줄어들지 않는다(BR4.1 · BR4.2)" }
       - { name: last_seen_at, type: timestamp, required: false, constraints: "보고의 lastSeenAt(DeviceConnection.last_seen_at의 사본). 보고에 없으면 COALESCE로 기존 값을 유지한다(BR4.1)" }
       - { name: connection_since, type: timestamp, required: false, constraints: "보고의 since" }
       - { name: rtt_ms, type: int, required: false, constraints: ">= 0, 보고의 rttMs(DeviceConnection.last_rtt_ms의 사본). 보고에 없으면 COALESCE로 기존 값을 유지한다(BR4.1)" }
@@ -146,7 +146,7 @@ entities:
       - { name: event_id, type: uuid, required: true, unique: true }
       - { name: event_type, type: "string(100)", required: true, allowed_values: [SessionStateChanged, SessionRecordCaptured, DeviceStatusChanged, DeletionCompleted] }
       - { name: schema_version, type: int, required: true, default: 1, constraints: ">= 1" }
-      - { name: occurred_at, type: timestamp, required: true, constraints: "envelope의 occurredAt이며 받는 쪽(Core)이 DeviceStatusChanged의 최신을 가릴 때의 기준이다(BR4.1 · BR5.10). DeviceStatusChanged는 상태 UPDATE를 실행한 시각(clock_timestamp이며 트랜잭션 시작 시각이 아니다)이고 PUT 보고의 reportedAt(연결 행을 읽은 시각)과 같은 Realtime 시계를 쓴다(BR4.8). 그 밖의 이벤트는 상태가 바뀐 업무 트랜잭션의 시각이다(ERD v0.2 추가)" }
+      - { name: occurred_at, type: timestamp, required: true, constraints: "envelope의 occurredAt이며 받는 쪽(Core)이 DeviceStatusChanged의 최신을 가릴 때의 기준이다(BR4.1 · BR5.10). DeviceStatusChanged는 상태 UPDATE 직전에 Realtime 앱 Clock으로 읽은 시각(트랜잭션 시작 시각 now()가 아니다)이고 PUT 보고의 reportedAt(연결 행을 읽은 시각)과 같은 Realtime 시계를 쓴다(BR4.8). 그 밖의 이벤트는 상태가 바뀐 업무 트랜잭션의 시각이다(ERD v0.2 추가)" }
       - { name: aggregate_type, type: "string(100)", required: true, allowed_values: [ActivitySession, Device, DataDeletionRequest], constraints: "envelope 필수 필드(BR5.4)" }
       - { name: aggregate_id, type: uuid, required: true, constraints: "envelope 필수 필드(BR5.4)" }
       - { name: guardian_id, type: uuid, required: false }

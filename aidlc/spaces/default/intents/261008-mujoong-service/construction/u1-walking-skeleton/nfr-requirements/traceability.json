@@ -1,0 +1,80 @@
+{
+  "stage": "nfr-requirements",
+  "unit": "u1-walking-skeleton",
+  "upstream_ids": [
+    "NFR1",
+    "NFR2",
+    "NFR3",
+    "NFR4",
+    "NFR5",
+    "NFR6",
+    "NFR7",
+    "NFR8",
+    "NFR9",
+    "NFR10",
+    "NFR11",
+    "NFR12"
+  ],
+  "coverage": [
+    {
+      "id": "NFR1",
+      "status": "OK",
+      "target": "NFR1.1, NFR1.2, NFR1.3 (U1 게이트 슬라이스(계약 9절 범주 7개마다 시드) · U1 화면 문구까지 — 전체 금지 표현 사전 · 27 · PDF 시험은 후속 유닛(u3 이후)이 같은 시험 틀에 더한다)"
+    },
+    {
+      "id": "NFR2",
+      "status": "OK",
+      "target": "NFR2.1 (U1 화면 · 기기 · 오류 문구 범위 — 알림 · 리포트 문구는 후속 유닛)"
+    },
+    {
+      "id": "NFR3",
+      "status": "OK",
+      "target": "NFR3.1, NFR3.2 (공급자 요청 필드 화이트리스트 시험 — 판정 역할 합성 누출 시험은 후속 유닛이 확장)"
+    },
+    {
+      "id": "NFR4",
+      "status": "OK",
+      "target": "NFR4.1, NFR4.2, NFR4.3, NFR4.4, NFR4.5, NFR4.6, NFR4.7, NFR4.8, NFR4.9, NFR4.10, NFR4.11, NFR4.12, NFR4.13, NFR4.14, NFR4.15, NFR4.16 (U1 슬라이스의 중단 시나리오(기기 연결 · 음성 모델 시작 구간 · 서버 상태 미수신 · 종료 확인 미수신 · 중복 · 이벤트 역전 · 앱만 오프라인의 U1 몫 NFR4.16) + 가용성 · 복구 · 백업 · 헬스 · 관측 — ACTIVE 뒤 공급자 끊김 감지는 소유 u3 · u4, 12 재조회 이어붙임은 u4)"
+    },
+    {
+      "id": "NFR5",
+      "status": "OK",
+      "target": "NFR5.1, NFR5.2, NFR5.3, NFR5.4, NFR5.5, NFR5.6, NFR5.7, NFR5.8 (U1은 중계 구간 · 서버 몫 · REST · 첫 화면 목표와 측정 로그를 책임진다 — 끼어들기 0.5초(NFR5.8)의 완성은 u3, 말풍선 화면 도달(폴링 포함)과 12 한정 폴링 단축은 사람 결정)"
+    },
+    {
+      "id": "NFR6",
+      "status": "OK",
+      "target": "NFR6.1, NFR6.2, NFR6.3, NFR6.4, NFR6.5 (U1의 네 안전 시한 · 기기 보고 stale · 설정 키 단일 원천 · 주입 시험 — 참여 대기 · 공백 4분 · 6분 · 불안정 판정은 u3 · u4)"
+    },
+    {
+      "id": "NFR7",
+      "status": "OK",
+      "target": "NFR7.1, NFR7.2, NFR7.3, NFR7.4, NFR7.5, NFR7.6, NFR7.7, NFR7.8 (EC2 1대 동시 세션 2개 · 용량 가정 · 단일 인스턴스 제약 · 지표)"
+    },
+    {
+      "id": "NFR8",
+      "status": "N/A",
+      "target": "U1에는 리포트 생성이 없다 — 결과 · 리포트(60초 READY · 3회 재시도)는 U6(u6-results-report)의 NFR 단계가 다룬다"
+    },
+    {
+      "id": "NFR9",
+      "status": "OK",
+      "target": "NFR9.1, NFR9.2, NFR9.3, NFR9.4, NFR9.5, NFR9.6, NFR9.7, NFR9.8, NFR9.9, NFR9.10, NFR9.11, NFR9.12, NFR9.13, NFR9.14, NFR9.15 (HTTPS · 세션 · CSRF · 기기 인증 · 소유권 · 내부 호출 · DB 역할 · 로그 위생 · 남용 방지 · 비밀 · dev 로그인 차단 · 헤더 · 취약점 점검 · 보안 사건 로그)"
+    },
+    {
+      "id": "NFR10",
+      "status": "OK",
+      "target": "NFR10.1, NFR10.2, NFR10.3, NFR10.4 (U1 화면의 지원 브라우저 · 마이크 요청 방식 — 01~30 전체 iOS 렌더 확인은 각 유닛)"
+    },
+    {
+      "id": "NFR11",
+      "status": "OK",
+      "target": "NFR11.1 (/parent가 기기 접점을 직접 참조하지 않는 경계(U1이 만든 DeviceView 경계))"
+    },
+    {
+      "id": "NFR12",
+      "status": "OK",
+      "target": "NFR12.1, NFR12.2, NFR12.3, NFR12.4 (U1 소유 데이터의 삭제 참가자 · guardian_id 채움 · 원음 비저장 · 페이로드 비움 · 백업 충돌의 열린 질문)"
+    }
+  ]
+}
