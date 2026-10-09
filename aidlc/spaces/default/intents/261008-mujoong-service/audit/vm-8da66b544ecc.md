@@ -5231,3 +5231,25 @@
 **Error**: Refusing to park: Construction Autonomy Mode is autonomous. An unattended autonomous run has no human to resume it and must keep moving - do not park it.
 
 ---
+
+## Session End
+**Timestamp**: 2026-10-09T22:54:13Z
+**Event**: SESSION_ENDED
+**Reason**: other
+
+---
+
+## Session Resume
+**Timestamp**: 2026-10-09T23:10:09Z
+**Event**: SESSION_RESUMED
+**Source**: resume
+**Session**: 39fd3430-12f4-5241-8ae6-2725dd7b4530
+
+---
+
+## Human Turn
+**Timestamp**: 2026-10-09T23:10:10Z
+**Event**: HUMAN_TURN
+**Session**: 39fd3430-12f4-5241-8ae6-2725dd7b4530
+
+---
