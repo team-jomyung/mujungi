@@ -87,3 +87,6 @@ aidlc/diagnostics/
 
 # Claude Code 에이전트 워크트리(기계 로컬)
 .claude/worktrees/
+
+# Git Bash 크래시 덤프
+*.stackdump

@@ -17,6 +17,14 @@ Claude Code를 이 폴더에서 열고:
 ```
 스코프는 `classic`, 모드는 `Edit File`. 문서끼리 다르면 화면 설계가 맞다(개발전환_점검표 2절).
 
+## 클라우드 세션(claude.ai/code)에서 이어가기
+클라우드 세션은 플랜 한도보다 클라우드 세션 크레딧을 먼저 쓴다. 작업 기록은 전부 git에 있으므로 어느 기계에서든 이어진다.
+1. claude.ai/code 에서 이 GitHub 레포(baikjunha/mujoong-aidlc)로 세션을 연다.
+2. 세션 안에서 `bash scripts/cloud-setup.sh` 를 실행한다(AI-DLC 설치 → `aidlc config --harness claude` → `aidlc doctor`).
+3. Claude Code를 재시작하고 `/aidlc` 를 입력하면 저장된 단계에서 이어진다. 게이트마다 "Approve" 또는 고칠 내용을 적는다.
+4. 끝나면 `git add aidlc/ && git commit && git push` 로 기록을 올린다. 로컬에서 이어 받을 때는 먼저 `git pull`.
+한 시점에 한 곳(로컬 또는 클라우드)에서만 돌려야 기록이 갈라지지 않는다.
+
 ## Windows + Git Bash 주의
 Claude Code 훅은 bash로 실행되는데 설치된 명령은 `aidlc.cmd`라 bash가 못 찾는다(`aidlc: command not found`로 훅이 전부 실패하고 `/aidlc`가 제대로 돌지 않는다). `%LOCALAPPDATA%\aidlc\bin\` 안에 확장자 없는 `aidlc` 셸 스크립트를 하나 두면 된다.
 

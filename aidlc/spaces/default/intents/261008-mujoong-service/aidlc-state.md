@@ -71,7 +71,7 @@
 - [ ] practices-discovery — SKIP
 - [x] requirements-analysis — EXECUTE
 - [x] user-stories — EXECUTE
-- [-] refined-mockups — EXECUTE
+- [?] refined-mockups — EXECUTE
 - [ ] domain-design — EXECUTE
 - [ ] units-generation — EXECUTE
 - [ ] contract-design — EXECUTE
@@ -101,7 +101,7 @@ Per unit: [TBD]
 - **Current Stage**: refined-mockups
 - **Next Stage**: domain-design
 - **Status**: Running
-- **Last Updated**: 2026-10-09T10:07:42Z
+- **Last Updated**: 2026-10-09T14:39:25Z
 
 ## Session Resume Point
 - **Last Completed Stage**: user-stories
