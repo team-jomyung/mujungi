@@ -70,7 +70,7 @@
 - [ ] reverse-engineering — SKIP
 - [ ] practices-discovery — SKIP
 - [x] requirements-analysis — EXECUTE
-- [-] user-stories — EXECUTE
+- [?] user-stories — EXECUTE
 - [ ] refined-mockups — EXECUTE
 - [ ] domain-design — EXECUTE
 - [ ] units-generation — EXECUTE
@@ -101,7 +101,7 @@ Per unit: [TBD]
 - **Current Stage**: user-stories
 - **Next Stage**: refined-mockups
 - **Status**: Running
-- **Last Updated**: 2026-10-08T14:44:45Z
+- **Last Updated**: 2026-10-09T10:05:17Z
 
 ## Session Resume Point
 - **Last Completed Stage**: requirements-analysis
