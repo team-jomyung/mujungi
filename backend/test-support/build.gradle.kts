@@ -32,9 +32,8 @@ dependencies {
     // JUnit 확장 · Spring 시험 보조는 쓰는 앱의 시험 클래스패스에 이미 있다
     compileOnly(libs.junit.jupiter.api)
     compileOnly(libs.spring.boot.test)
-    // 가짜 공급자 포트는 Realtime 앱 안 이벤트 형식(voice.ProviderPort)을 구현한다(J129, Step 30).
-    // compileOnly라 Core 시험 실행 클래스패스에는 Realtime 클래스가 들어가지 않는다.
-    compileOnly(project(":realtime-activity"))
+    // 앱 모듈에 의존하지 않는다. 특정 앱의 인터페이스를 구현하는 대역(예: realtime voice.ProviderPort를 구현하는
+    // FakeProviderPort)은 그 앱의 src/test에 둔다. core 시험이 realtime 공사 상태에 묶이지 않게 한다(J129 보완 · J 후보).
 
     testImplementation(libs.bundles.unit.test)
 }

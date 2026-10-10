@@ -1,0 +1,229 @@
+/*
+ * 아이 기기 웹 /device (U1 3.5 Step 38 · design-system-mapping 5절 · 접근성 O3 · K1 · K2 · interaction-spec 6절)
+ * 가로 한 화면: 캐릭터 가운데 큼직, 라벨 아래, 「켜기」/「끄기」는 72px 이상이고 「끄기」는 캐릭터와 떨어진 구석.
+ * 색은 보조이고 표정 · 라벨이 1차다. prefers-reduced-motion이면 전환 없음.
+ */
+.mj-device {
+  position: relative;
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: center;
+  background-color: var(--color-surface-base);
+  color: var(--color-text-primary);
+}
+
+/* ───── D0 ───── */
+.mj-d0 {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: calc(var(--space-unit) * 6);
+  padding: calc(var(--space-unit) * 8);
+  text-align: center;
+}
+
+.mj-d0__brand {
+  margin: 0;
+  font-size: var(--font-size-device-label);
+  font-weight: 700;
+  color: var(--color-brand-primary);
+}
+
+.mj-d0__guide,
+.mj-d0__checking,
+.mj-d0__registered {
+  margin: 0;
+  font-size: var(--font-size-device-label);
+}
+
+.mj-d0__code {
+  margin: 0;
+  font-size: clamp(48px, 9vw, 112px);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ───── T19 ───── */
+.mj-t19 {
+  position: relative;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: calc(var(--space-unit) * 8);
+}
+
+.mj-t19__stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: calc(var(--space-unit) * 6);
+  text-align: center;
+}
+
+.mj-t19__label {
+  margin: 0;
+  min-height: 1.4em;
+  font-size: var(--font-size-device-label);
+  font-weight: 700;
+}
+
+.mj-t19__mic-denied {
+  max-width: 560px;
+}
+
+.mj-t19__mic-title {
+  margin: 0 0 calc(var(--space-unit) * 2);
+  font-size: var(--font-size-device-label);
+  font-weight: 700;
+}
+
+.mj-t19__mic-body {
+  margin: 0;
+  font-size: var(--font-size-heading);
+}
+
+.mj-t19__power {
+  position: absolute;
+  min-width: max(var(--touch-target-device-min), 160px);
+  min-height: max(var(--touch-target-device-min), 96px);
+  padding: 0 calc(var(--space-unit) * 8);
+  border: none;
+  border-radius: 48px;
+  font: inherit;
+  font-size: var(--font-size-device-label);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.mj-t19__power:focus-visible {
+  outline: 4px solid var(--color-text-primary);
+  outline-offset: 4px;
+}
+
+.mj-t19__power:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* 「켜기」는 캐릭터 아래 가운데, 「끄기」는 캐릭터와 떨어진 오른쪽 아래 구석(그림 C.D-19.31.8) */
+.mj-t19__power--on {
+  bottom: calc(var(--space-unit) * 10);
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: var(--color-brand-primary);
+  color: var(--color-surface-base);
+}
+
+.mj-t19__power--off {
+  right: calc(var(--space-unit) * 8);
+  bottom: calc(var(--space-unit) * 8);
+  background-color: var(--color-surface-card);
+  color: var(--color-text-primary);
+  border: 2px solid var(--color-border-default);
+}
+
+/* 캐릭터(자산 전 기본 도형, OQ8). 배경 색은 보조. */
+.mj-character {
+  position: relative;
+  width: clamp(200px, 28vw, 320px);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background-color: var(--color-fixed-expression);
+  transition: background-color 150ms ease-out;
+}
+
+.mj-character__eye {
+  position: absolute;
+  top: 38%;
+  width: 12%;
+  height: 16%;
+  border-radius: 50%;
+  background-color: var(--color-text-primary);
+}
+
+.mj-character__eye--left {
+  left: 28%;
+}
+
+.mj-character__eye--right {
+  right: 28%;
+}
+
+.mj-character__mouth {
+  position: absolute;
+  left: 35%;
+  right: 35%;
+  top: 66%;
+  height: 8%;
+  border-bottom: 6px solid var(--color-text-primary);
+  border-radius: 0 0 50% 50%;
+}
+
+.mj-character[data-expression="off"],
+.mj-character[data-expression="mic-request"] {
+  background-color: var(--color-border-default);
+}
+
+.mj-character[data-expression="off"] .mj-character__eye,
+.mj-character[data-expression="mic-request"] .mj-character__eye {
+  height: 3%;
+  top: 44%;
+  border-radius: 2px;
+}
+
+.mj-character[data-expression="listening"] {
+  background-color: #dff3e6;
+}
+
+.mj-character[data-expression="thinking"],
+.mj-character[data-expression="mic-denied"] {
+  background-color: #fbf0cf;
+}
+
+.mj-character[data-expression="speaking"] .mj-character__mouth {
+  height: 14%;
+  border: 6px solid var(--color-text-primary);
+  border-radius: 50%;
+}
+
+.mj-character[data-expression="reconnecting"],
+.mj-character[data-expression="connecting"] {
+  background-color: var(--color-surface-card);
+}
+
+/* ───── 디버그 로그(?debug=1) ───── */
+.mj-debug {
+  position: absolute;
+  top: calc(var(--space-unit) * 2);
+  left: calc(var(--space-unit) * 2);
+  max-height: 40vh;
+  overflow: auto;
+  padding: calc(var(--space-unit) * 2) calc(var(--space-unit) * 3);
+  border: 1px solid var(--color-border-default);
+  border-radius: 8px;
+  background-color: var(--color-surface-base);
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+}
+
+.mj-debug__title {
+  margin: 0 0 var(--space-unit);
+  font-size: 12px;
+}
+
+.mj-debug__list {
+  margin: 0;
+  padding-left: calc(var(--space-unit) * 5);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mj-character {
+    transition: none;
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "version": "seed-1",
+  "level": "SEED",
+  "entries": [
+    { "id": "SEED-DIAGNOSIS-1", "pattern": "진단", "category": "DIAGNOSIS", "appliesTo": ["OUTPUT_GATE"] },
+    { "id": "SEED-TREATMENT-1", "pattern": "치료", "category": "TREATMENT", "appliesTo": ["OUTPUT_GATE"] },
+    { "id": "SEED-SCORE-1", "pattern": "비정상", "category": "SCORE", "appliesTo": ["OUTPUT_GATE"] },
+    { "id": "SEED-CAUSE-1", "pattern": "핵심원인", "category": "CAUSE", "appliesTo": ["OUTPUT_GATE"] },
+    { "id": "SEED-GENERALIZATION-1", "pattern": "학교에서도그럴", "category": "GENERALIZATION", "appliesTo": ["OUTPUT_GATE"] },
+    { "id": "SEED-EMOTION_CLAIM-1", "pattern": "화가났군요", "category": "EMOTION_CLAIM", "appliesTo": ["OUTPUT_GATE"] },
+    { "id": "SEED-PRESSURE-1", "pattern": "꼭해야해요", "category": "PRESSURE", "appliesTo": ["OUTPUT_GATE"] }
+  ]
+}

@@ -6,7 +6,8 @@
     (ts · level · traceId · component · event · ownerHash · attrs)로 만든 JSON 한 줄을 메시지로 넘긴다.
   - 프레임워크 · 라이브러리 로그는 루트 WARN 이상만 받아 APP_ERROR 한 줄로 바꾼다. 로그 메시지 · 예외 메시지 ·
     스택은 버린다(%nopex, OD-3 3번). 요청 본문 · SQL 매개변수 · 전사가 로그에 실리지 않게 한다.
-  - errorKind(예외 클래스 이름)와 traceId(MDC)를 채우는 변환기 연결은 구조화 로그 연결 단계(Step 21 · 26)가 이 파일에 더한다.
+  - 루트 줄은 StructuredLogFormatter$AppErrorLayout이 APP_ERROR 한 줄(errorKind = 예외 클래스 단순 이름, traceId = MDC)로
+    바꾼다(구조화 로그 연결, U1 3.5 Step 21 · OD-3 3번).
 -->
 <configuration>
   <statusListener class="ch.qos.logback.core.status.NopStatusListener"/>
@@ -19,9 +20,11 @@
   </appender>
 
   <appender name="APP_ERROR_JSON" class="ch.qos.logback.core.ConsoleAppender">
-    <encoder>
+    <encoder class="ch.qos.logback.core.encoder.LayoutWrappingEncoder">
       <charset>UTF-8</charset>
-      <pattern>{"ts":"%d{yyyy-MM-dd'T'HH:mm:ss.SSS'Z',UTC}","level":"%level","traceId":null,"component":"core-api/Maintenance","event":"APP_ERROR","ownerHash":null,"attrs":{}}%n%nopex</pattern>
+      <layout class="kr.mujoong.contract.log.StructuredLogFormatter$AppErrorLayout">
+        <component>core-api/Maintenance</component>
+      </layout>
     </encoder>
   </appender>
 

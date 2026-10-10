@@ -1,0 +1,4 @@
+# realtime-activity 환경 후처리기 등록 (U1 3.5 Step 26 · SD-14 · RD-12 S1)
+# Boot 4는 환경 후처리기를 spring.factories의 org.springframework.boot.EnvironmentPostProcessor 키로 찾는다(판 맞춤).
+org.springframework.boot.EnvironmentPostProcessor=\
+kr.mujoong.realtime.startup.ProfileGuardEnvironmentPostProcessor

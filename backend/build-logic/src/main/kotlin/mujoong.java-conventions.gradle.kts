@@ -82,6 +82,15 @@ tasks.withType<Test>().configureEach {
     inputs.files(fileTree(repositoryRoot.resolve("infra/postgres")), fileTree(repositoryRoot.resolve("infra/seed")))
         .withPropertyName("infraDbFiles")
         .withPathSensitivity(PathSensitivity.RELATIVE)
+    // DB 시험(MujoongPostgres)은 두 앱의 마이그레이션 위치를 모두 적용하고 migrate 설정 · 승인 음성을 읽는다(Step 14).
+    // 상대 앱 · infra 파일이 바뀌어도 시험이 UP-TO-DATE로 건너뛰지 않게 입력으로 잡는다
+    inputs.files(
+        fileTree(repositoryRoot.resolve("infra/migrate")),
+        fileTree(repositoryRoot.resolve("infra/seed-audio")),
+        fileTree(rootProject.projectDir) { include("*/src/main/resources/db/**", "*/src/test/resources/db/**") },
+    )
+        .withPropertyName("dbMigrationFiles")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
     inputs.property("includeTags", includeTagList.joinToString(","))
     inputs.property("excludeTags", excludeTagList.joinToString(","))
     testLogging {

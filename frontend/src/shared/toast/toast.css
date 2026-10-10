@@ -1,0 +1,66 @@
+/* 토스트 (U1 3.5 Step 37 · interaction-spec 3.4 · design-system-mapping 3절) — 아래 중앙, 글 + 아이콘 */
+.mj-toast-viewport {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  pointer-events: none;
+  z-index: 50;
+}
+
+.mj-toast {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: calc(var(--space-unit) * 3);
+  max-width: min(448px, calc(100vw - 32px));
+  margin: 0 16px;
+  padding: calc(var(--space-unit) * 3) calc(var(--space-unit) * 4);
+  border-radius: var(--radius-card);
+  background-color: var(--color-text-primary);
+  color: var(--color-surface-base);
+  font-size: var(--font-size-secondary);
+}
+
+.mj-toast__icon {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 1px solid currentColor;
+  font-weight: 700;
+}
+
+.mj-toast--error .mj-toast__icon {
+  background-color: var(--color-status-disconnected);
+  border-color: var(--color-status-disconnected);
+}
+
+.mj-toast__message {
+  flex: 1;
+}
+
+.mj-toast__action {
+  flex: none;
+  min-width: var(--touch-target-min);
+  min-height: var(--touch-target-min);
+  padding: 0 calc(var(--space-unit) * 3);
+  border: 1px solid currentColor;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.mj-toast__action:focus-visible {
+  outline: 2px solid var(--color-surface-base);
+  outline-offset: 2px;
+}

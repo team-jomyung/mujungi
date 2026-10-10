@@ -300,13 +300,13 @@ J1 ~ J104는 모두 아직 확정이 아닌 가정이다. J97 ~ J104는 사람 �
   - 근거: SD-13 · E9 · BR8.1 · NFR9.7 · J84 · infra-spec 2.5 · SD-24 · J132 · J135
   - 완료 확인: 스크립트에 비밀번호 리터럴이 없고(`grep` 0건), `PG_HBA_ALLOWED_CIDR`가 비면 `02-hba.sh`가 종료 코드 1이며, Step 14 시험이 이 파일로 DB를 초기화한다.
 
-- [ ] Step 10: Core V1 마이그레이션 · JPA 엔터티 · Flyway 설정
+- [x] Step 10: Core V1 마이그레이션 · JPA 엔터티 · Flyway 설정
   - 파일: `backend/core-api/src/main/resources/db/migration/core/V1__core_base.sql`(core 12표: `core_guardian` · `core_spring_session` · `core_spring_session_attributes` · `core_consent` · `core_child` · `core_stop_expression` · `core_approved_content` · `core_approved_content_version` · `core_device`(22열 · fillfactor 90 · CHECK 4 · 부분 유일 색인 2) · `core_activity`(20열 · 부분 유일 · local_failed CHECK) · `core_outbox_event` · `core_inbox_event`(각 17열, `trace_id` 형식 CHECK, 색인)), `.../db/migration/core/afterMigrate.sql`, `backend/core-api/src/main/java/kr/mujoong/core/identity/{Guardian,Child,Consent}.java`, `.../catalog/{ApprovedContent,ApprovedContentVersion}.java`, `infra/migrate/flyway-core.conf`, `infra/migrate/flyway-realtime.conf`
   - 하는 일: data-model 시트 3절 DDL대로 만든다(timestamptz · jsonb · uuid, DB 시각 기본값 없음, FK는 RESTRICT, A3 `trace_id` · A4 `guardian_id` 열 포함). 단순 CRUD 표만 JPA 엔터티(`Instant` 필드)로 매핑하고 core_device · core_activity · Outbox/Inbox는 JDBC로 다룬다(Step 15). Flyway 설정은 이력 표 `flyway.core_schema_history`, `defaultSchema=flyway`, `createSchemas=false`, `cleanDisabled=true`.
   - 근거: BR8.2 · J43 · E1 ~ E8 · A3 · A4 · BR1.2 · BR2.4 · AC2.2.7 · BR6.2 · BR6.3 · BR5.6 · PD-8 · J115 · J116
   - 완료 확인: SQL에 `now()` · `CURRENT_TIMESTAMP` · `clock_timestamp()`가 0건이고 Step 14의 스키마 시험 대상이 된다.
 
-- [ ] Step 11: Realtime V1 마이그레이션 · JPA 엔터티 · 시드 자원
+- [x] Step 11: Realtime V1 마이그레이션 · JPA 엔터티 · 시드 자원
   - 파일: `backend/realtime-activity/src/main/resources/db/migration/realtime/V1__realtime_base.sql`(realtime 7표: `realtime_activity_session`(29열 · 부분 유일 guardian · device · 스냅샷 CHECK) · `realtime_session_event` · `realtime_session_stop_expression` · `realtime_transcript`(UNIQUE(session_id, sequence_no)) · `realtime_device_connection`(10열 · fillfactor 90) · `realtime_outbox_event` · `realtime_inbox_event`), `.../db/migration/realtime/afterMigrate.sql`, `backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/{SessionStopExpression,SessionEvent}.java`, `backend/realtime-activity/src/main/resources/gate/seed-dictionary.json`(헤더 version · level SEED, 7항목 `{id, pattern, category, appliesTo:[OUTPUT_GATE]}`: DIAGNOSIS `진단` · TREATMENT `치료` · SCORE `비정상`(사람 결정 12) · CAUSE `핵심원인` · GENERALIZATION `학교에서도그럴` · EMOTION_CLAIM `화가났군요` · PRESSURE `꼭해야해요`), `infra/seed/001-reference.sql`(멱등: 정책 1 · 승인 문구 2, `mujoong_owner`), `tools/seed/gen-approved-wav.mjs`, `infra/seed-audio/closing-v1.wav` · `infra/seed-audio/waiting-filler-v1.wav`(PCM16 · 24kHz · 모노, 합성 무음 · 톤, CLOSING 3초 이내)
   - 하는 일: Realtime 표와 시드 자원을 만든다. WAV는 생성기로 만들고 결과 파일도 커밋한다(J102). 정책 버전 자리는 J114, 시드 값은 J117.
   - 근거: BR8.2 · E4 · E9 · BR6.8 · BR7.5 · BR3.7 · A5 · J101 · J102 · J60 · R4-15 · SD-18 · NFR1.2 · AC3.3.3
@@ -320,13 +320,13 @@ J1 ~ J104는 모두 아직 확정이 아닌 가정이다. J97 ~ J104는 사람 �
   - 근거: RD-2 · RD-23 · J81 · SD-25 · J107 · J127 · J129 · J132 · J135
   - 완료 확인: `cd backend && ./gradlew --no-daemon :test-support:test -PincludeTags=u1`가 통과한다.
 
-- [ ] Step 13: contract-model · contracts · 시드 자원 시험(단위)
+- [x] Step 13: contract-model · contracts · 시드 자원 시험(단위)
   - 파일: `backend/contract-model/src/test/java/kr/mujoong/contract/` 아래 `error/ErrorCodeTest.java`(BR8.6 코드 · HTTP 표, (a)(b)(c)(e)(n)(o) 존재, message 고정 · 개인정보 없음), `audio/AudioFrameCodecTest.java`(J27 965B · 빅엔디언 순번 · 964 · 966B 거부 · 0x02 짝수 길이, BR7.1 · (s)), `event/EventEnvelopeValidationTest.java`(BR5.4 필수 7 · 모르는 필드 무시 · schemaVersion ≥ 1 · traceId 선택 (p) · BR5.9 모르는 enum), `ws/WsEnvelopeCodecTest.java`(계약 4.2 seq · opId 4종 한정 · ackOf), `trace/TraceIdsTest.java`(OD-7 형식 · 생성), `profile/ProfileGuardRulesTest.java`(SD-14 조합 1 ~ 13 · A2 · A6 · NFR9.11 · BR8.3), `log/StructuredLogFormatTest.java`(OD-1 · OD-2 키 순서 · 17종 허용 attrs · 미등록 UNKNOWN · NFR9.15), `log/OwnerHasherTest.java`(OD-4), `secret/SecretCompareTest.java`(SD-8 상수 시간 비교 · SHA-256), `time/DelayQueueTimerDriverTest.java`(운영 타이머 구동기: 마감 순서 실행 · 취소 · 같은 마감 둘 · 지난 마감 즉시 실행 · 종료 뒤 등록 거부, 수십 ms 시한을 상한 있는 래치 대기로만 확인, J138), `time/SystemMujoongClockTest.java`(UTC · 단조 값 증가), `json/JsonCodecTest.java`(모르는 필드 무시 · 모르는 enum '알 수 없음' · ISO 8601 UTC, BR8.10), `ContractFilesTest.java`(`contracts/` YAML · JSON 파싱, 스키마 2020-12 메타 검증, 예시 검증, (a) ~ (y) 표시, V-5), `tools/tests/u1/seed-audio.test.mjs`(J102 · AC3.3.3 RIFF · PCM16 · 24kHz · 모노 · CLOSING ≤ 3초 · 재생성 바이트 동일)
   - 하는 일: 데이터 모델 층(계약 타입 · 스펙 · 시드 자원)을 시험한다. 시험마다 정상 1개 + 오류 · 경계 2개 이상.
   - 근거: 위 각 ID
   - 완료 확인: `cd backend && ./gradlew --no-daemon :contract-model:test -PincludeTags=u1`와 `cd tools && npx --no-install vitest run tests/u1/seed-audio.test.mjs` 통과.
 
-- [ ] Step 14: 스키마 · 권한 · 제약 통합 시험(Testcontainers)
+- [x] Step 14: 스키마 · 권한 · 제약 통합 시험(Testcontainers)
   - 파일: `backend/core-api/src/test/java/kr/mujoong/core/db/` 아래 `CoreSchemaIT.java`(BR8.2 · J43 표 12개 · 열 수 22 · 20 · 17 · 17, JPA validate, A3 열), `SchemaPrivilegeIT.java`(BR8.1 · NFR9.7 · SD-13 · B1 ②: core_app의 realtime 읽기 · 쓰기 42501과 반대, 앱의 CREATE · ALTER · TRUNCATE 거부, public 사용 불가, 상대 이력 표 SELECT 거부 · 자기 이력 표 SELECT 허용, backup 읽기만, 앱의 `ALTER DATABASE ... data_class` 거부 SD-24, (x). SD-13 기본 권한: 시험 자원의 V2 마이그레이션(시험 전용 위치 `src/test/resources/db/testmigration/core/`, `mujoong_owner`로 적용, 운영 위치에는 두지 않음)이 만든 새 core 표에 core_app의 SELECT · INSERT · UPDATE · DELETE가 기본 권한으로 붙고 TRUNCATE는 거부되며 realtime_app은 권한이 없다. pg_hba(J135): `02-hba.sh`가 만든 `pg_hba.conf`의 허용 줄이 주어진 대역의 scram-sha-256 한 줄과 reject뿐이고, 시험 출발지가 아닌 /32를 허용 대역으로 준 별도 인스턴스에 접속하면 SQLSTATE 28000), `CoreConstraintIT.java`(BR1.2 · BR1.4 UNREGISTERED 코드 중복 금지 · EXPIRED 재사용, AC2.2.7 · BR2.4 보호자당 REGISTERED 1, RELEASED · REGISTERED CHECK, AC3.1.8 · BR6.2 · BR6.3 유일, local_failed CHECK, trace_id 형식, BR2.10 · J58 FK RESTRICT 23503), `NoSqlNowTest.java`(R2 · NFR6.4 마이그레이션 · 질의 문자열의 시각 함수 0건), `SeedReferenceSqlIT.java`(R4-15 `infra/seed` 두 번 적용 → 정책 1 · 문구 2, J114), `backend/realtime-activity/src/test/java/kr/mujoong/realtime/db/` 아래 `RealtimeSchemaIT.java`(표 7개 · 열 29 · 10 · 17 · 17 · 12, JPA validate), `RealtimeConstraintIT.java`(BR6.3 진행 중 세션 guardian · device 유일, 스냅샷 CHECK, transcript 유일, Inbox RECEIVED는 next_attempt_at 필수 BR5.6)
   - 하는 일: 실제 init 스크립트 + 두 마이그레이션 위치로 DB 동작을 시험한다. 모두 `@Tag("u1")` `@Tag("db")`. DB 백엔드는 J132(`docker` 또는 `local`)이고 결과에 백엔드 이름을 적는다.
   - 근거: 위 각 ID · E1 ~ E9 · J132 · J135
@@ -334,13 +334,13 @@ J1 ~ J104는 모두 아직 확정이 아닌 가정이다. J97 ~ J104는 사람 �
 
 ### D. 저장소 · 데이터 접근 — 구현
 
-- [ ] Step 15: Core 데이터 접근
+- [x] Step 15: Core 데이터 접근
   - 파일: `backend/core-api/src/main/java/kr/mujoong/core/device/DeviceJdbcRepository.java`(BR2.3 · BR2.5 조건부 UPDATE와 행 수, BR4.1 사본 UPDATE와 COALESCE, BR3.1 claim 회전, BR1.4 만료 · 7일 삭제, 모든 문장에 `updated_at = :now, row_version + 1`), `.../activity/ActivityCopyRepository.java`(BR5.10 · BR6.14 · BR6.2 · BR6.12 ①), `.../messaging/{CoreOutboxRepository,CoreInboxRepository}.java`(Tx-A `FOR UPDATE SKIP LOCKED` 선점 · Tx-B 상태 조건, Inbox `ON CONFLICT DO NOTHING` · 선점 UPDATE · 정리), `.../identity/{GuardianRepository,ChildRepository,ConsentRepository}.java` · `.../catalog/ApprovedContentRepository.java`(JPA), `.../config/SessionJdbcConfig.java`(Spring Session JDBC), `.../common/db/{DbRetry,ClockParams}.java`(RD-22: 40P01 · 40001 · 55P03만 멱등 연산에서 0 ~ 50ms 지터 재시도, `lock_timeout` · `statement_timeout`)
   - 하는 일: 데이터 접근 패턴(조건부 UPDATE 한 문장 + 행 수 확인, `:now` 바인딩, READ COMMITTED, 락 순서 보호자 → 코드 → 옛 기기)을 구현한다.
   - 근거: BR2.3 · BR2.5 · BR4.1 · BR4.2 · BR3.1 · BR1.4 · BR5.2 · BR5.6 · BR5.7 · BR5.10 · BR5.11 · BR6.14 · RD-22 · PD-8 · J83 · J115
   - 완료 확인: `cd backend && ./gradlew --no-daemon :core-api:compileJava` 성공, SQL 시각 함수 0건.
 
-- [ ] Step 16: Realtime 데이터 접근
+- [x] Step 16: Realtime 데이터 접근
   - 파일: `backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/{ActivitySessionRepository,SessionEventRepository,SessionStopExpressionRepository}.java`(전이 `UPDATE ... WHERE id AND status = :from` · 출발 상태가 여럿이면 FOR UPDATE 뒤 `WHERE status = :읽은 상태`, INSERT `ON CONFLICT (id) DO NOTHING`), `.../gateway/DeviceConnectionRepository.java`(BR3.7 upsert · `connection_id` 조건 기록, BR4.8 DISCONNECTED 40초 조건), `.../log/TranscriptRepository.java`(BR7.5 `insert ... on conflict (session_id, sequence_no) do update` JDBC 배치), `.../messaging/{RealtimeOutboxRepository,RealtimeInboxRepository}.java`
   - 하는 일: Realtime 쪽 같은 패턴을 구현한다(Outbox/Inbox는 앱마다 따로, LC-11).
   - 근거: BR6.6 · BR6.8 · BR3.7 · BR4.8 · BR7.5 · BR5.1 ~ 5.12 · PD-5 · RD-22
@@ -348,13 +348,13 @@ J1 ~ J104는 모두 아직 확정이 아닌 가정이다. J97 ~ J104는 사람 �
 
 ### D′. 저장소 · 데이터 접근 — 시험
 
-- [ ] Step 17: Core 데이터 접근 시험(Testcontainers)
+- [x] Step 17: Core 데이터 접근 시험(Testcontainers)
   - 파일: `backend/core-api/src/test/java/kr/mujoong/core/device/DeviceJdbcRepositoryIT.java`(AC2.2.6 · BR2.3 두 계정 동시 등록 승자 1, BR2.5 · J46 · AC2.2.7 교체 순서와 (4) 0행 주입 시 전체 롤백, BR4.1 두 경로 경합 · 늦은 보고 0행, BR4.2 REGISTERED 아님 무시, BR3.1 claim 회전, BR1.4 만료 갱신 · 7일 지난 EXPIRED 행 삭제 · 7일 직전 행 유지), `.../activity/ActivityCopyRepositoryIT.java`(BR5.10 역순 도착 · local_failed 제외, BR6.14 started_at만 갱신, BR6.3 유일 위반 → 승자 재읽기), `.../messaging/CoreMessagingRepositoryIT.java`(BR5.1 업무 쓰기가 롤백되면 Outbox 0행 · 커밋되면 1행 · 트랜잭션 밖 기록 거부(MANDATORY), BR5.2 · RD-8 두 폴러 한 행 한 번 선점 · 정렬 created_at · 재시도 대기 행이 뒤 행을 막지 않음, event_id · batch 2, BR5.6 Inbox 중복 삽입, BR5.7 선점 경주, BR5.11 payload `{}` · purged_at, A4 guardian_id NULL 0, A3 trace_id 저장), `.../common/db/DbRetryTest.java`(RD-22 멱등 연산만 재시도 · 비멱등은 즉시 실패 · 2회 상한)
   - 하는 일: 데이터 접근 층을 시험하고 돌린다.
   - 근거: 위 각 ID
   - 완료 확인: `cd backend && ./gradlew --no-daemon :core-api:test -PincludeTags=u1 --tests '*RepositoryIT' --tests '*DbRetryTest'` 통과.
 
-- [ ] Step 18: Realtime 데이터 접근 시험(Testcontainers)
+- [x] Step 18: Realtime 데이터 접근 시험(Testcontainers)
   - 파일: `backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/ActivitySessionRepositoryIT.java`(BR6.8 전이 승자 1 · 0행 재읽기 · 다중 출발 FOR UPDATE, BR6.6 ④ 중복 INSERT 무동작, status_version · row_version 증가), `.../gateway/DeviceConnectionRepositoryIT.java`(BR3.7 첫 접속 upsert · 옛 cid 기록 0행, BR4.8 40초 조건 경계 직전 · 직후), `.../log/TranscriptRepositoryIT.java`(BR7.5 PARTIAL 같은 번호 덮어쓰기 · FINAL · sequence_no 1부터 · 배치), `.../messaging/RealtimeMessagingRepositoryIT.java`(RD-8 · BR5.6 · BR5.7 · A3 · A4)
   - 하는 일: Realtime 데이터 접근 층을 시험하고 돌린다.
   - 근거: 위 각 ID
@@ -478,25 +478,25 @@ J1 ~ J104는 모두 아직 확정이 아닌 가정이다. J97 ~ J104는 사람 �
 
 ### G. 프런트 — 구현
 
-- [ ] Step 37: shared 계층
+- [x] Step 37: shared 계층
   - 파일: `frontend/src/shared/timing/{timing.ts,TimingProvider.tsx,readTimingFromEnv.ts}`(서버 컴포넌트가 런타임 환경 변수 `MUJOONG_TIMING_*` · `MUJOONG_DEVICEWEB_*`에서 읽어 첫 응답에 싣는다, 빌드 때 굽지 않음), `frontend/src/shared/protocol/{frameCodec.ts,wsEnvelope.ts,closeCodes.ts,messages.ts}`, `frontend/src/shared/copy/{ko.ts,particle.ts}`(문구표 원문 · `TEMP_COPY` J118 · 받침 조사 함수), `frontend/src/shared/errors/codeToCopy.ts`, `frontend/src/shared/toast/{ToastProvider.tsx,Toast.tsx}`(layout 수준, `role=status` · 오류 assertive), `frontend/src/middleware.ts` 또는 `frontend/src/proxy.ts`(J122 nonce · CSP), `frontend/src/shared/security/csp.ts`(CSP 헤더를 만드는 순수 함수, 미들웨어/proxy가 부름)
   - 하는 일: 두 영역이 쓰는 시간 · 프로토콜 · 문구 · 토스트를 둔다. 화면은 시간 값을 박지 않는다. CSP `connect-src`의 wss 출처는 `MUJOONG_SECURITY_ALLOWED_ORIGIN`의 스킴만 wss로 바꾼 값(포트 유지)이다(J142).
   - 근거: PD-14 · LC-2 · NFR6.1 · J27 · J118 · J122 · J142 · SD-2 · interaction-spec 1 · 3절
   - 완료 확인: `cd frontend && npx --no-install tsc --noEmit && npx --no-install eslint src/shared` 통과.
 
-- [ ] Step 38: /device(D0 · T19 · 오디오)
+- [x] Step 38: /device(D0 · T19 · 오디오)
   - 파일: `frontend/src/app/device/page.tsx`, `frontend/src/device/machine/deviceMachine.ts`(useReducer 상태 기계), `frontend/src/device/api/deviceApi.ts`(bootstrap · claim 단일 비행, localStorage 금지), `frontend/src/device/ws/wsClient.ts`(seq 방향마다 1부터 · HELLO · HEARTBEAT 송신 직전에 제어 봉투 `sentAt`을 채움(OD-8 · R3-4) · ACK · 닫기 코드별 동작), `frontend/src/device/audio/{capture.ts,pcm-capture.worklet.ts,resample.ts,player.ts}`(J121, 48 → 24kHz 선형 보간과 480표본 프레임 조립은 순수 함수 `resample.ts`로 빼고 worklet은 그 함수를 부르는 얇은 등록부로 둔다(J138), 재생 대기열 20초 · QUEUE_OVERFLOW · PLAY_APPROVED_CONTENT와 OUTPUT_BEGIN 묶음만 재생 BR7.6), `frontend/src/device/mic/micPermission.ts`(클릭 핸들러에서만 동적 import), `frontend/src/device/components/{D0View.tsx,T19View.tsx,DebugLog.tsx}`
   - 하는 일: D0 순서(me → status → bootstrap/claim, 409 → claim, 401 → 새 코드, 410 → me, 409 → 2초 뒤 status, 코드 받기 전 실패는 '연결을 확인하는 중' + 5초 재요청, 「등록되었어요」 3초 → T19 꺼짐 J56), T19 6상태(꺼짐 · 대기 · 듣는 중 · 말하는 중(실제 재생 중만) · 마무리 · 마이크 허용 안 됨), 「켜기」 → 허용 → Wake Lock → WSS, 「끄기」 → 정리 후 1000 DEVICE_OFF, 4401 → me → 401이면 D0, 4001 → 꺼짐, 1001 · 1011 · 1013 · 4400 · 4408 → 켜짐이면 5초 재접속, START_SESSION → ACK → 미리 받기 → DEVICE_READY, 0x01은 DEVICE_READY 뒤 ~ CLOSE_TRANSPORT 전만, STOP_OUTPUT · CLOSE_TRANSPORT 처리 → VOICE_SESSION_CLOSED, `?debug=1` 상태 로그, 「켜기」 · 「끄기」 72px 이상.
   - 근거: BR9.1 ~ 9.7 · BR7.6 · BR3.7 · J56 · J121 · PD-13 · PD-16 · NFR10.4 · AC6.1.1 ~ 6.1.5 · AC6.2.1 ~ 6.2.3 · AC6.2.5 · AC6.2.8 ~ 6.2.11
   - 완료 확인: `cd frontend && npx --no-install tsc --noEmit && npx --no-install eslint src/device src/app/device` 통과.
 
-- [ ] Step 39: /parent API 클라이언트 · 부품
+- [x] Step 39: /parent API 클라이언트 · 부품
   - 파일: `frontend/src/parent/api/{apiClient.ts,csrf.ts,queries.ts,types.ts}`(앱 시작 · 로그인 직후 csrf, 토큰은 메모리만, 403이면 1회 재취득 + 같은 키 1회 재시도, 두 번째 403 멈춤, 제한 `parent.request-timeout` 10초, TanStack Query v5), `frontend/src/parent/components/{BottomTabBar,DeviceCard,ConfirmDialog,CodeInput,ChipGroup,TextArea200,TranscriptList,StatusLine}.tsx`
   - 하는 일: 보호자 영역 API와 화면 부품을 만든다(접근성 체크리스트: tablist · `aria-disabled` 잠금 · alertdialog 초점 가둠 · CodeInput 칸별 `aria-label` · 오류 `aria-live=assertive` · TranscriptList `role=log`, 터치 44px). 모든 상호작용 요소에 `data-testid`.
   - 근거: SD-6 · BR2.8 · BR4.5 · BR4.6 · BR6.4 · BR6.15 · PD-12 · accessibility-checklist · interaction-spec 3절
   - 완료 확인: `cd frontend && npx --no-install tsc --noEmit && npx --no-install eslint src/parent` 통과.
 
-- [ ] Step 40: /parent 화면
+- [x] Step 40: /parent 화면
   - 파일: `frontend/src/app/parent/layout.tsx`, `frontend/src/app/parent/page.tsx`(04), `frontend/src/app/parent/device/page.tsx`(스텁 → `/parent`, J57), `frontend/src/app/parent/device/register/page.tsx`(05a), `frontend/src/app/parent/free/page.tsx`(08), `frontend/src/app/parent/sessions/[sessionId]/page.tsx`(12 + P1), `frontend/src/app/parent/sessions/[sessionId]/done/page.tsx`(17), `frontend/src/app/parent/dev-login/page.tsx`, `frontend/src/app/parent/practice/page.tsx` · `frontend/src/app/parent/records/page.tsx`(스텁 → `/parent`), `frontend/src/parent/screens/{Home04,Register05a,Free08,Live12,Done17,DevLogin}.tsx`, `frontend/src/parent/hooks/useLivePolling.ts`
   - 하는 일: 04(진입 때 1회 조회 · 기기 구역 6상태 문구 · 「기기 등록」은 없을 때만 · 「기기 상태 보기 ›」 · 탭 잠금 토스트 9-6 → 05 스텁 → 04), 05a(8칸 · '등록하고 있어요' · 404 · 409 · 429 빨간 카드 입력 유지 · 네트워크 · 5xx 토스트 + 「다시 시도」 · 「취소」 · 「←」 → 05 스텁, 해제 · 재등록 단추 없음), 08(칸 · 칩 · 200자 · 202 → 12 · 거절 사유 하나 · 키 재사용 표 2.9-C), 12(2초 폴링 · 숨기면 멈춤 · 보이면 즉시 1회 · 진행 중 요청 합류 · 연속 3회 실패 토스트 · seq 덮어쓰기 · 종료 상태 멈춤 · ACTIVE 전 「이야기 끝내기」 꺼짐 · stale 줄 · FAILED → 08 사유 카드 · CLOSING → 17 J120), P1(「아니오」 기본 초점 · 202 → 17 · 409 다시 읽기 · 503 · 401 · 네트워크 → 9-18 · 같은 requestId), 17(마무리 중 / ENDED · ENDED_UNCONFIRMED · ABORTED 사유 문구 · 시간 줄 · 「홈으로」), 시험 로그인(J119).
   - 근거: BR2.8 · BR2.9 · BR4.5 · BR4.6 · BR6.1 · BR6.4 · BR6.9 · BR6.15 · BR8.4 · J56 · J57 · J118 · J119 · J120 · AC1.4.2 ~ 1.4.5 · AC1.4.9 · AC1.4.11 · AC1.4.15 · AC2.2.x · AC3.1.x · AC3.3.x
@@ -504,13 +504,13 @@ J1 ~ J104는 모두 아직 확정이 아닌 가정이다. J97 ~ J104는 사람 �
 
 ### G′. 프런트 — 시험
 
-- [ ] Step 41: /device · shared 시험(Vitest)
+- [x] Step 41: /device · shared 시험(Vitest)
   - 파일: `frontend/tests/u1/device/device-machine.test.ts`(BR9.1 모든 간선 · J56 · (a)(b) · BR9.3 쿠키 없음(브라우저 데이터 지움 · 다른 기기) → 새 코드 · BR9.4 · BR9.7 · PD-13), `frontend/tests/u1/device/d0-view.test.tsx`(BR9.2 · AC6.1.1 ~ 6.1.5 문구 · 4 · 4 표시 · 클릭 요소 0 · 3초 표시), `frontend/tests/u1/device/t19-view.test.tsx`(BR9.5 · BR9.6 6상태 라벨 · 말하는 중은 재생 중만 · `?debug=1` · mic-denied 문구 · AC6.2.1 ~ 6.2.3 · AC6.2.5), `frontend/tests/u1/device/mic-permission.test.ts`(NFR10.4 · PD-16 클릭 전 `getUserMedia` 0건 · 거부 모킹 → mic-denied · WSS 0건), `frontend/tests/u1/device/ws-client.test.ts`(계약 4.2 seq · HELLO · HEARTBEAT 주기 · HEARTBEAT 봉투 `sentAt` 존재(OD-8) · ACK opId · 닫기 코드 4401 · 4001 · 1013 → 5초 · AC6.2.8 ~ 6.2.11 · BR3.7), `frontend/tests/u1/device/player.test.ts`(BR7.6 묶음만 재생 · 모르는 contentCode 폐기 · 20초 초과 QUEUE_OVERFLOW · PLAYBACK_MARK), `frontend/tests/u1/device/resample.test.ts`(J121 · J27 48 → 24kHz 보간 · 480표본 프레임 조립 · 경계 표본), `frontend/tests/u1/device/capture.test.ts`(AudioContext · audioWorklet 대역: 클릭 핸들러 안 생성 · 24kHz 거부 시 보간 경로 · `echoCancellation` 켬), `frontend/tests/u1/device/no-service-worker.test.ts`(NFR10.4 `serviceWorker.register` 0건 정적 검사), `frontend/tests/u1/shared/frame-codec.test.ts`(J27 965B · 빅엔디언), `frontend/tests/u1/shared/timing.test.ts`(NFR6.1 런타임 값 주입 시 동작 변화 · 박힌 숫자 없음), `frontend/tests/u1/shared/particle.test.ts`(받침 조사), `frontend/tests/u1/shared/csp.test.ts`(미들웨어/proxy 함수를 직접 불러 요청마다 다른 nonce · CSP 헤더 하나 · 런타임 환경 변수 반영, J142 origin이 `https://localhost:8443`이면 `connect-src`에 `wss://localhost:8443`), `frontend/tests/u1/shared/routes.test.tsx`(`/healthz` 200 · 스텁 라우트 → `/parent` · `/parent/dev-login`은 `MUJOONG_DEVLOGIN_ENABLED`가 true가 아니면 notFound, J119)
   - 하는 일: 기기 영역과 공용 계층을 시험하고 돌린다. 그래도 jsdom에서 실행할 수 없는 줄은 J138대로 Plan Approval의 커버리지 제외 후보 질문에 올린 목록과 대조한다.
   - 근거: 위 각 ID
   - 완료 확인: `cd frontend && npx --no-install vitest run tests/u1/device tests/u1/shared` 통과.
 
-- [ ] Step 42: /parent · 경계 lint · data-testid 시험(Vitest)
+- [x] Step 42: /parent · 경계 lint · data-testid 시험(Vitest)
   - 파일: `frontend/tests/u1/parent/api-client.test.ts`(SD-6 CSRF 1회 재취득 · 같은 키 재시도 · 두 번째 403 멈춤 · 제한 시간 주입), `frontend/tests/u1/parent/code-input.test.tsx`(BR2.8 자동 대문자 · 칸 이동 · 지우기 · 8자 붙여넣기 · 8칸 미만 「등록」 꺼짐 · 접근성 이름), `frontend/tests/u1/parent/register-05a.test.tsx`(AC2.2.1 ~ 2.2.4 · AC2.2.8 · 빨간 카드 · 입력 유지 · 토스트 · 스텁 경유 04 · BR2.9), `frontend/tests/u1/parent/home-04.test.tsx`(BR4.6 6상태 문구 · BR4.5 탭 잠금 `aria-disabled` · 토스트 9-6 · J57 · AC1.4.2 ~ 1.4.5 · AC1.4.9 · AC1.4.11 · AC1.4.15 · AC2.1.1 ~ 2.1.6 표시), `frontend/tests/u1/parent/free-08.test.tsx`(BR6.4 200자 카운터 · radiogroup · 9-12 사유 대응 · 202 → 12 · 키 재사용 표 · AC3.1.1 · AC3.1.3 · AC3.1.4 · AC3.1.6), `frontend/tests/u1/parent/live-12.test.tsx`(BR6.15 · PD-12 폴링 · 숨김 멈춤 · 3회 실패 · seq 합치기 · 종료 멈춤 · 「끝내기」 활성 조건 · stale 줄 · FAILED → 08 · CLOSING → 17 · J120 · BR6.16 · AC1.1.9 401이면 `/parent/dev-login`으로 가고 end 요청은 0건), `frontend/tests/u1/parent/p1-dialog.test.tsx`(BR6.9 · AC3.3.1 · AC3.3.8 · AC3.3.9 · 202 · 409 다시 읽기 · 503 · 네트워크 9-18 · 같은 requestId · 초점), `frontend/tests/u1/parent/done-17.test.tsx`(AC3.3.4 ~ 3.3.7 마무리 중 · 종료 사유 3종 문구 · 시간 줄 · 「홈으로」), `frontend/tests/u1/parent/dev-login.test.tsx`(AC1.1.7 · AC1.1.9 로그인 → `/parent` · 404 처리), `frontend/tests/u1/lint/eslint-boundary.test.ts`(PD-15 · NFR11.1 위반 샘플 parent → device · device → parent · shared → parent가 실제 lint 실패 · `react/no-danger` SD-11 · `getUserMedia` 제한. 위반 샘플은 파일로 두지 않고 ESLint API `lintText(code, { filePath: "src/parent/__sample__.tsx" })`로 넘겨 `eslint .`이 일부러 넣은 위반을 잡지 않게 한다), `frontend/tests/u1/shared/test-ids.test.tsx`(data-testid 규칙: 화면마다 상호작용 요소 누락 0)
   - 하는 일: 보호자 영역과 경계 규칙 · data-testid 규칙을 시험하고 돌린다. 프런트 줄 커버리지 80%를 확인한다.
   - 근거: 위 각 ID
