@@ -1,0 +1,5 @@
+# 위반 샘플: demo에서 시험 로그인을 켬 — demo-profile(A2 · NFR9.11 · CD-7)
+services:
+  core-api:
+    environment:
+      MUJOONG_DEVLOGIN_ENABLED: "true"

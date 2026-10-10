@@ -45,15 +45,20 @@ http {
         default "-";
         "~^(?<mujoong_path>[^?]*)" $mujoong_path;
     }
+    # 메서드도 원시 요청 줄에서 읽는다(오류 문서로 내부 이동하면 $request_method가 GET으로 바뀐다)
+    map $request $mujoong_log_method {
+        default "-";
+        "~^(?<mujoong_method>[A-Z]+) " $mujoong_method;
+    }
     # 반복 폴링(기기 등록 상태 · 12 진행 조회 · 헬스)의 2xx · 304는 남기지 않는다(LC-5 · OD 열린 질문 해소)
-    map "$request_method:$mujoong_log_path:$status" $mujoong_loggable {
+    map "$mujoong_log_method:$mujoong_log_path:$status" $mujoong_loggable {
         default 1;
         "~^(GET|HEAD):/api/device/bootstrap/status:(2[0-9][0-9]|304)$" 0;
         "~^(GET|HEAD):/api/sessions/[0-9a-fA-F-]{36}:(2[0-9][0-9]|304)$" 0;
         "~^(GET|HEAD):/api/health:(2[0-9][0-9]|304)$" 0;
     }
     log_format mujoong escape=default
-        'ts=$time_iso8601 requestId=$request_id method=$request_method uri=$mujoong_log_path '
+        'ts=$time_iso8601 requestId=$request_id method=$mujoong_log_method uri=$mujoong_log_path '
         'status=$status bytes=$body_bytes_sent rt=$request_time urt=$upstream_response_time '
         'upstream=$upstream_addr client=$remote_addr';
     access_log /dev/stdout mujoong if=$mujoong_loggable;

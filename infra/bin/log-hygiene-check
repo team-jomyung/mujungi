@@ -1,0 +1,195 @@
+#!/usr/bin/env bash
+# log-hygiene-check — 로그 위생 점검 (U1 3.5 Step 47 · monitoring 2.4.6 · MO-3 · MO-4 · A-23 · OD-1 · OD-2 · BR8.7 · NFR9.8 · SD-15)
+#
+# 마지막 점검 이후의 컨테이너 로그(현재 + 보존 폴더)를 읽어 위반 건수만 센다. 값은 출력하지 않는다.
+# 점검표 3-3 · 정지 점검 E5(check-since-last가 부른다)와 사람이 돌린다. 비밀 값 대조는 root가 env 파일 값을 메모리 · 파이프로만 읽어
+# 고정 문자열로 찾는다(값을 명령줄 인자 · 파일 · 출력에 두지 않는다).
+#   format   앱 로그(core-api · realtime)의 '{'로 시작하는 줄이 JSON이고 최상위 키가 정확히 ts · level · traceId · component ·
+#            event · ownerHash · attrs(이 순서)다. JVM 시작 줄 같은 비JSON 줄은 형식 대상이 아니지만 아래 검사는 받는다
+#   attrs    event가 사건 코드 17종 중 하나이고 attrs 키가 그 코드의 허용 표(OD-2, 정본은 kr.mujoong.contract.log.EventCode ·
+#            AttrKey) 안에 있고 값이 객체 · 배열이 아니다. 허용 표는 --print-allowlist로 보이고 test-host-tools.sh가 자바 정본과 대조한다
+#   names    금지 헤더 · 이름(Set-Cookie · Cookie: · Authorization · X-Internal-Token · X-CSRF-TOKEN · MUJOONG_SESSION ·
+#            MUJOONG_DEVICE*)이 앱 · web · nginx · postgres 로그에 0건
+#   secrets  env 파일(/opt/mujoong/env/*.env)의 비밀 변수 값(8자 이상)과 --values-file의 값이 모든 로그에 0건
+#   nginx    접근 로그 uri에 쿼리(?) 0건, cookie · referer 필드 0건
+#   postgres DETAIL · HINT · STATEMENT · 문장 로깅 줄 0건(log_error_verbosity=terse · log_statement=none)
+#
+# 쓰는 법: log-hygiene-check [--since <ISO UTC>] [--container-logs <디렉터리>] [--env-dir <디렉터리>] [--values-file <파일>]
+#          log-hygiene-check --print-allowlist
+#   --since           기본: /var/lib/mujoong/last-check의 ts, 없으면 24시간 전
+#   --container-logs  현재 컨테이너 대신 합성 로그 디렉터리(<서비스>.log · archive/, 시험 · 리허설)
+#   --values-file     더 찾을 값 목록(한 줄에 하나, 예: 검증 명령의 secrets.list). 파일은 600이어야 한다
+# 표준 출력: 점검마다 `CHECK <id> violations=<n>`, 끝에 `SUMMARY violations=<합>`. 값 · 일치한 줄은 출력하지 않는다.
+# 종료 코드: 0 위반 없음, 1 위반 있음, 2 전제 누락(jq · docker), 64 인자 오류
+
+set -Eeuo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=infra/bin/lib/host.sh
+. "$SCRIPT_DIR/lib/host.sh"
+
+# 사건 코드별 허용 attrs 키(OD-2 · EventCode.java와 같아야 한다 — test-host-tools.sh가 대조한다)
+readonly ALLOWLIST_JSON='{
+  "SESSION_TRANSITION": ["from","to","statusVersion","endReason","failureCode","confirmed","phase","origin"],
+  "TIMEOUT_FIRED": ["type","thresholdMs","elapsedMs"],
+  "LATENCY_TURN": ["turnSeq","tSpeechEnd","tSpeechEndSource","tProviderFirstOut","tSegmentConfirmed","tGatePass",
+    "tFirstFrameSent","tDevicePlayStart","tDevicePlayStartRecv","clockOffsetMs","rttMs","tTranscriptFinal",
+    "relayInMs","relayOutMs","providerResponseMs","quietWaitMs","unobservedReason"],
+  "SESSION_ITEMS_SERVED": ["seq","speaker","tTranscriptFinal","tViewItemReady","tViewItemFirstServed"],
+  "PLAYBACK_MARK_STOPPED": ["stopCause","tDeviceObserved","tServerRecv","clockOffsetMs","rttMs"],
+  "DEVICE_CONNECTION": ["from","to","closeCode"],
+  "INTERNAL_HTTP": ["target","outcome","statusCode","durationMs","attempt","repeat"],
+  "EVENT_DELIVERY": ["eventId","eventType","status","retryCount","durationMs"],
+  "STARTUP_RECOVERY": ["recoveredSessions","reopenedInboxRows","resetConnections","rearmedControlEvents"],
+  "METRIC_SNAPSHOT": ["outboxPending","outboxOldestPendingSec","outboxFailed","inboxDead","poolActive","poolWaitMaxMs",
+    "poolWaitExceeded","openConnections","restTotal","restLe300Ms","viewTotal","viewLe500Ms","viewFallback",
+    "sysCpuAvgPct","sysMemMaxPct","heapUsedPct","sessionsActive","breakerOpenSec"],
+  "SECURITY_AUTH_FAILED": ["kind","statusCode","repeat"],
+  "SECURITY_RATE_LIMITED": ["limiter","statusCode","repeat"],
+  "SECURITY_ORIGIN_DENIED": ["channel","statusCode","closeCode","repeat"],
+  "SECURITY_DEV_LOGIN_BLOCKED": ["profile","statusCode","repeat"],
+  "SECURITY_INTERNAL_TOKEN_FAILED": ["direction","statusCode","repeat"],
+  "APP_ERROR": ["errorKind","repeat"],
+  "QUEUE_PRESSURE": ["queue","dropped","repeat"]
+}'
+# env 파일에서 비밀로 보는 변수(infra-spec 3.7 SecureString + 앱 데이터 소스 매핑)
+readonly SECRET_VARS='POSTGRES_PASSWORD|DB_OWNER_PASSWORD|DB_CORE_PASSWORD|DB_REALTIME_PASSWORD|DB_BACKUP_PASSWORD|INTERNAL_SERVICE_TOKEN|PROVIDER_API_KEY|MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET|GOOGLE_OAUTH_CLIENT_SECRET|NEO4J_AUTH|SPRING_DATASOURCE_PASSWORD'
+
+if [ "${1:-}" = "--print-allowlist" ]; then
+  jq -r 'to_entries[] | "\(.key) \(.value | sort | join(","))"' <<<"$ALLOWLIST_JSON" | sort
+  exit 0
+fi
+
+since=""
+src=""
+env_dir="$MUJOONG_ENV_DIR"
+values_file=""
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --since) since="${2:-}"; shift ;;
+    --container-logs) src="${2:-}"; shift ;;
+    --env-dir) env_dir="${2:-}"; shift ;;
+    --values-file) values_file="${2:-}"; shift ;;
+    -h | --help) sed -n '2,27p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    *) echo "log-hygiene-check: 모르는 인자: $1" >&2; exit 64 ;;
+  esac
+  shift
+done
+if ! command -v jq >/dev/null 2>&1; then
+  echo "log-hygiene-check: 전제 누락: jq" >&2
+  exit 2
+fi
+if [ -n "$src" ] && [ ! -d "$src" ]; then
+  echo "log-hygiene-check: --container-logs 디렉터리가 없다" >&2
+  exit 64
+fi
+if [ -z "$src" ] && ! docker info >/dev/null 2>&1; then
+  echo "log-hygiene-check: 전제 누락: docker" >&2
+  exit 2
+fi
+if [ -n "$values_file" ]; then
+  if [ ! -r "$values_file" ]; then
+    echo "log-hygiene-check: --values-file을 읽을 수 없다" >&2
+    exit 64
+  fi
+  perm="$(stat -c %a "$values_file")"
+  if [ "${perm: -2}" != 00 ]; then
+    echo "log-hygiene-check: --values-file 권한이 600이 아니다" >&2
+    exit 64
+  fi
+fi
+if [ -z "$since" ]; then
+  since="$(sed -nE 's/^ts=([^ ]+).*/\1/p' "$MUJOONG_DATA_DIR/last-check" 2>/dev/null | head -n 1 || true)"
+  [ -n "$since" ] || since="$(date -u -d '24 hours ago' +%Y-%m-%dT%H:%M:%SZ)"
+fi
+if ! [[ "$since" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]+)?Z$ ]]; then
+  echo "log-hygiene-check: --since는 UTC ISO 8601(끝 Z)이다" >&2
+  exit 64
+fi
+
+umask 077
+work="$(mktemp -d)"
+trap 'rm -rf "$work"' EXIT
+mujoong_collect_logs "$since" "$work" "$src"
+
+total=0
+report() {
+  echo "CHECK $1 violations=$2"
+  total=$((total + $2))
+}
+body() { cut -d' ' -f2- "$1"; }
+
+# format · attrs(앱 로그)
+fmt=0
+attrs=0
+for svc in core-api realtime; do
+  f="$work/$svc.log"
+  [ -s "$f" ] || continue
+  read -r a b < <(body "$f" | grep -E '^\{' | jq -R -r -n --argjson allow "$ALLOWLIST_JSON" '
+    reduce (inputs | (try fromjson catch "BAD")) as $o ({f: 0, a: 0};
+      if ($o | type) != "object" then .f += 1
+      elif ($o | keys_unsorted) != ["ts","level","traceId","component","event","ownerHash","attrs"] then .f += 1
+      elif ($o.event | type) != "string" then .a += 1
+      elif ($allow[$o.event] | type) != "array" then .a += 1
+      elif ($o.attrs | type) != "object" then .a += 1
+      elif [$o.attrs | to_entries[] | select((.key as $k | $allow[$o.event] | index($k)) == null
+             or (.value | type) == "object" or (.value | type) == "array")] | length > 0 then .a += 1
+      else . end)
+    | "\(.f) \(.a)"')
+  fmt=$((fmt + ${a:-0}))
+  attrs=$((attrs + ${b:-0}))
+done
+report format "$fmt"
+report attrs "$attrs"
+
+# names(앱 · web · nginx · postgres)
+names=0
+for svc in "${MUJOONG_LOG_SERVICES[@]}"; do
+  f="$work/$svc.log"
+  [ -s "$f" ] || continue
+  n="$(body "$f" | grep -c -i -E 'set-cookie|(^|[^a-z-])cookie:|authorization|x-internal-token|x-csrf-token' || true)"
+  m="$(body "$f" | grep -c -E 'MUJOONG_SESSION|MUJOONG_DEVICE' || true)"
+  names=$((names + n + m))
+done
+report names "$names"
+
+# secrets(값은 파이프로만 grep에 넘긴다)
+secret_values() {
+  local f
+  for f in "$env_dir"/*.env; do
+    [ -r "$f" ] || continue
+    grep -E "^($SECRET_VARS)=" "$f" | cut -d= -f2- || true
+  done
+  if [ -n "$values_file" ]; then
+    cat "$values_file"
+  fi
+}
+secrets=0
+if [ "$(secret_values | awk 'length($0) >= 8' | head -n 1 | wc -l)" -gt 0 ]; then
+  for svc in "${MUJOONG_LOG_SERVICES[@]}"; do
+    f="$work/$svc.log"
+    [ -s "$f" ] || continue
+    n="$(grep -c -F -f <(secret_values | awk 'length($0) >= 8') "$f" || true)"
+    secrets=$((secrets + n))
+  done
+fi
+report secrets "$secrets"
+
+# nginx 접근 로그
+ngx=0
+if [ -s "$work/nginx.log" ]; then
+  ngx="$(body "$work/nginx.log" | grep -c -E '(^| )uri=[^ ]*\?|(^| )(cookie|referer|http_cookie|http_referer)=' || true)"
+fi
+report nginx "$ngx"
+
+# postgres
+pg=0
+if [ -s "$work/postgres.log" ]; then
+  pg="$(body "$work/postgres.log" | grep -c -E '(DETAIL|HINT|STATEMENT):|LOG:[[:space:]]+statement:' || true)"
+fi
+report postgres "$pg"
+
+echo "SUMMARY violations=$total since=$since"
+if [ "$total" -gt 0 ]; then
+  exit 1
+fi

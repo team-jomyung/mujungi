@@ -122,12 +122,29 @@ export class DeviceSimulator {
    * @param {number} [options.playbackSpeed] 재생 시간 배율(1 = 실제 길이)
    * @param {string} [options.appVersion]
    */
-  constructor({ url, origin, cookie, ca = null, mediaClient = null, auto = {}, skewMs = 0, playbackSpeed = 1, appVersion = "u1-sim-1.0" }) {
+  constructor({
+    url,
+    origin,
+    cookie,
+    ca = null,
+    mediaClient = null,
+    auto = {},
+    skewMs = 0,
+    playbackSpeed = 1,
+    appVersion = "u1-sim-1.0",
+  }) {
     this.url = url;
     this.origin = origin;
     this.ca = ca;
     this.mediaClient = mediaClient;
-    this.auto = { ack: true, heartbeat: true, prepare: true, playback: true, voiceSessionClosed: true, ...auto };
+    this.auto = {
+      ack: true,
+      heartbeat: true,
+      prepare: true,
+      playback: true,
+      voiceSessionClosed: true,
+      ...auto,
+    };
     this.skewMs = skewMs;
     this.playbackSpeed = playbackSpeed;
     this.appVersion = appVersion;
@@ -219,7 +236,11 @@ export class DeviceSimulator {
   async hello(timeoutMs = 10_000) {
     const from = this.received.length;
     this.#send("HELLO", helloPayload(this.appVersion));
-    const entry = await this.waitFor((e) => e.envelope.type === "HELLO_OK", { timeoutMs, what: "HELLO_OK", from });
+    const entry = await this.waitFor((e) => e.envelope.type === "HELLO_OK", {
+      timeoutMs,
+      what: "HELLO_OK",
+      from,
+    });
     this.helloOk = entry.envelope.payload;
     this.heartbeatIntervalMs = entry.envelope.payload.heartbeatIntervalMs;
     if (this.auto.heartbeat) {
@@ -291,7 +312,10 @@ export class DeviceSimulator {
       clearTimeout(timer);
     }
     this.#timers.clear();
-    if (this.#ws && (this.#ws.readyState === WebSocket.OPEN || this.#ws.readyState === WebSocket.CONNECTING)) {
+    if (
+      this.#ws &&
+      (this.#ws.readyState === WebSocket.OPEN || this.#ws.readyState === WebSocket.CONNECTING)
+    ) {
       this.#ws.close(code);
     }
   }
@@ -420,10 +444,13 @@ export class DeviceSimulator {
   #idle(ms) {
     return new Promise((resolve) => {
       const waiter = { resolve, timer: null };
-      waiter.timer = setTimeout(() => {
-        this.#waiters.delete(waiter);
-        resolve();
-      }, Math.max(1, ms));
+      waiter.timer = setTimeout(
+        () => {
+          this.#waiters.delete(waiter);
+          resolve();
+        },
+        Math.max(1, ms),
+      );
       this.#waiters.add(waiter);
     });
   }
@@ -437,14 +464,17 @@ export class DeviceSimulator {
   }
 
   #later(ms, fn) {
-    const timer = setTimeout(() => {
-      this.#timers.delete(timer);
-      try {
-        fn();
-      } catch (error) {
-        this.#note("timer-error", { message: error.message });
-      }
-    }, Math.max(0, ms));
+    const timer = setTimeout(
+      () => {
+        this.#timers.delete(timer);
+        try {
+          fn();
+        } catch (error) {
+          this.#note("timer-error", { message: error.message });
+        }
+      },
+      Math.max(0, ms),
+    );
     this.#timers.add(timer);
   }
 
@@ -461,7 +491,12 @@ export class DeviceSimulator {
       return;
     }
     const { envelope, problems } = parseServerEnvelope(data);
-    const entry = { envelope: envelope ?? { type: null, payload: {} }, problems, recvAtMs: Date.now(), index: this.received.length };
+    const entry = {
+      envelope: envelope ?? { type: null, payload: {} },
+      problems,
+      recvAtMs: Date.now(),
+      index: this.received.length,
+    };
     if (problems.length > 0) {
       this.protocolErrors.push({ type: envelope?.type ?? null, problems });
     }
@@ -479,7 +514,10 @@ export class DeviceSimulator {
   #onBinary(data) {
     const decoded = decodeFrame(data);
     if (!decoded.ok || decoded.frame.kind !== FRAME_KIND_OUTPUT) {
-      this.protocolErrors.push({ type: "BINARY", problems: [decoded.ok ? "서버가 0x02가 아닌 프레임을 보냈다" : decoded.reason] });
+      this.protocolErrors.push({
+        type: "BINARY",
+        problems: [decoded.ok ? "서버가 0x02가 아닌 프레임을 보냈다" : decoded.reason],
+      });
       this.#wake();
       return;
     }
@@ -594,7 +632,9 @@ export class DeviceSimulator {
             playback.startedSent = true;
             playback.startedAtMs = Date.now();
             this.#mark(playback, "STARTED");
-            this.#later(Math.max(10, audio.durationMs / this.playbackSpeed), () => this.#complete(playback));
+            this.#later(Math.max(10, audio.durationMs / this.playbackSpeed), () =>
+              this.#complete(playback),
+            );
           }
         }
         break;
@@ -605,7 +645,10 @@ export class DeviceSimulator {
         break;
       case "CLOSE_TRANSPORT": {
         const micClosedAt = this.#now();
-        this.session = this.session && this.session.sessionId === sessionId ? { ...this.session, inputOpen: false } : this.session;
+        this.session =
+          this.session && this.session.sessionId === sessionId
+            ? { ...this.session, inputOpen: false }
+            : this.session;
         this.#stopAll("CLOSE_TRANSPORT");
         this.#note("close-transport", { reason: payload.reason, sessionId, micClosedAt });
         if (this.auto.voiceSessionClosed) {
@@ -630,18 +673,29 @@ export class DeviceSimulator {
         if (!this.mediaClient) {
           throw new Error("미리 받기 클라이언트 없음");
         }
-        const res = await this.mediaClient.get(item.audioUrl, { cookies: false, headers: { accept: "audio/wav" } });
-        const wav = res.status === 200 ? inspectWav(res.body) : { ok: false, reason: `HTTP_${res.status}` };
+        const res = await this.mediaClient.get(item.audioUrl, {
+          cookies: false,
+          headers: { accept: "audio/wav" },
+        });
+        const wav =
+          res.status === 200 ? inspectWav(res.body) : { ok: false, reason: `HTTP_${res.status}` };
         if (!wav.ok) {
           prefetch = "PARTIAL";
           this.#note("prefetch-failed", { contentCode: item.contentCode, reason: wav.reason });
           continue;
         }
-        this.#prefetched.set(item.contentCode, { contentVersionId: item.contentVersionId, durationMs: wav.durationMs, bytes: wav.dataBytes });
+        this.#prefetched.set(item.contentCode, {
+          contentVersionId: item.contentVersionId,
+          durationMs: wav.durationMs,
+          bytes: wav.dataBytes,
+        });
         this.#note("prefetched", { contentCode: item.contentCode, durationMs: wav.durationMs });
       } catch (error) {
         prefetch = "PARTIAL";
-        this.#note("prefetch-failed", { contentCode: item.contentCode, reason: error.code ?? error.name });
+        this.#note("prefetch-failed", {
+          contentCode: item.contentCode,
+          reason: error.code ?? error.name,
+        });
       }
     }
     if (!this.isOpen || this.session?.sessionId !== sessionId) {
@@ -658,7 +712,12 @@ export class DeviceSimulator {
     }
     this.#send(
       "PLAYBACK_MARK",
-      playbackMarkPayload({ playbackId: playback.playbackId, status, observedAtMs: this.#now(), ...extra }),
+      playbackMarkPayload({
+        playbackId: playback.playbackId,
+        status,
+        observedAtMs: this.#now(),
+        ...extra,
+      }),
       playback.sessionId,
     );
     this.#note("mark-sent", {

@@ -57,3 +57,38 @@
   검증, 문서 예시를 가리킨 스키마로 검증, `$ref` 대상 존재, (a) ~ (y) 표시, `errors.md` ↔ `ErrorCode` 대조(V-5).
 - 계약 대역 서버 `ContractStubServer`(Step 28)가 `contracts/schemas`로 앱 사이 요청을 검사하고, `ContractConformanceIT`(Step 34)가 Core 응답이
   스키마에 맞는지 본다. `ConfigKeyContractTest`(Step 36)가 `timing.md`의 키 · 기본값을 `application.yml` · 설정 레코드와 대조한다.
+
+## 구현 대조 (U1 3.5 Step 52)
+
+U1 코드 생성을 마친 뒤 계약 파일과 구현을 다시 맞춰 보았다(계약 12절 · V-5 · BR8.11). 아래 항목은 시험이 계속 강제하므로, 다음 유닛이
+계약이나 구현 한쪽만 고치면 그 시험이 실패한다.
+
+| 대조 | 계약 쪽 | 구현 쪽 | 결과 | 계속 강제하는 시험 |
+|---|---|---|---|---|
+| 경로 · 메서드 | `parent-api.yaml` 9 · `device-api.yaml` 4 · `internal-api.yaml` 6 | Core · Realtime 컨트롤러 매핑 19 | 일치(빠진 경로 · 남는 경로 0) | `ContractConformanceIT` · `RealtimeInternalApiIT` · 각 `*ApiIT` |
+| 오류 code | `errors.md` 29 | `ErrorCode` 29 · 프런트 `TEMP_COPY.errors` 29 · Nginx 봉투 3(`RATE_LIMITED` · `VALIDATION_FAILED` · `UPSTREAM_UNAVAILABLE`) | 일치. `UPSTREAM_UNAVAILABLE`은 Nginx만 낸다(편차 (y)) | `ContractFilesTest` · `ErrorCodeTest` · 프런트 `copy.test.ts` · `infra-validate` |
+| WSS 닫기 코드 | `device-ws.asyncapi.yaml` `x-close-codes` 9 | `CloseCode` 9 · 프런트 `closeCodes.ts` 9 | 일치(1000 · 1001 · 1006 · 1011 · 1013 · 4001 · 4400 · 4401 · 4408) | `ContractFilesTest` · `WsEnvelopeCodecTest` · `DeviceGatewayIT` · `ws-protocol.test.ts` |
+| WSS 메시지 | 제어 17 + 바이너리 2(0x01 · 0x02) | `WsMessageType` 17(+ 모르는 값 `UNRECOGNIZED`) · 프런트 `messages.ts` · `wsEnvelope.ts` | 일치 | `WsEnvelopeCodecTest` · `ws-protocol.test.ts` |
+| 시간 키 · 기본값 | `timing.md` | 두 앱 `application.yml` · 설정 레코드 · 프런트 `timing-defaults.json` | 일치 | 두 앱 `ConfigKeyContractTest` · 프런트 `timing.test.ts` |
+| 포트 · 내부 주소 키 | `ports.md` | 두 앱 `application.yml`(`server.port` · 관리 9090 · `mujoong.internal-http.*`) · Compose | 일치 | 두 앱 `ConfigKeyContractTest` · `infra-validate` |
+| 편차 | `deviations.md` (a) ~ (y) 25행 | 각 스펙 파일의 `x-deviation` · `[편차 (기호)]` | 25개 모두 표와 스펙에 있음 | `ContractFilesTest` |
+
+### U1 구현 범위 메모 (편차 아님)
+
+아래는 계약을 넓히지 않고 U1이 아직 다루지 않는 값을 거절하거나, 계약이 비워 둔 세부를 정한 것이다. 받는 쪽 동작이 계약 안이므로
+`deviations.md`에 기호를 더하지 않았다. 뒤 유닛이 해당 기능을 더할 때 여기 줄을 지운다(사람 확인 후보는 U1 `code-summary.md`의 J 표).
+
+| 경로 · 메시지 | U1 동작 | 이유 · 넘김 |
+|---|---|---|
+| RT `POST /internal/sessions` `activityType: PRACTICE` | 400 `VALIDATION_FAILED` | U1에 연습 프로토콜이 없다. U5가 받는다. Core U1은 PRACTICE를 보내지 않는다 |
+| RT `POST /internal/sessions/{id}/end` `reason: CONSENT_WITHDRAWN` | 400 `VALIDATION_FAILED` | 동의 철회 전이는 U4 몫이다. U1 Core는 보내지 않는다 |
+| 두 앱의 405(맞는 경로 · 다른 메서드) | 404 `NOT_FOUND` | 계약에 405 code가 없다. 경로 존재를 드러내지 않는다(BR8.5) |
+| Core 보호자 경로의 UUID가 아닌 `{sessionId}` | 404 `NOT_FOUND` | 없는 자원과 같은 응답(BR8.5) |
+| RT 내부 경로의 UUID가 아닌 `{sessionId}` | 400 `VALIDATION_FAILED` | 내부 호출의 형식 오류로 본다(보내는 쪽은 Core뿐) |
+| Core `PUT /internal/devices/{deviceId}/connection`의 UUID가 아닌 `deviceId` | 400 `INVALID_ENVELOPE` | 보고 형식 오류로 본다(편차 (i)와 같은 code) |
+| RT 내부 경로 DB 장애 · 끝내기 명령 응답 시간 초과 | 503 `SERVICE_NOT_READY` + `Retry-After` | 계약의 503 code가 하나뿐이다(편차 (n)) |
+| 내부 본문 2MB 초과 | `/internal/events` 400 `INVALID_ENVELOPE`, 그 밖 내부 경로 400 `VALIDATION_FAILED` | BR3.9 · BR5.4 |
+| 같은 이름 쿠키가 둘 이상 | 쿠키가 없는 것으로 본다(401) | 쿠키 고정(SD-5) 공격면을 줄인다 |
+| 계정 삭제 접수 403 `ACCOUNT_DELETION_IN_PROGRESS` | 홈 · 기기 보기 · 끝내기에만 건다 | 삭제 지휘는 U2. U1에는 접수 경로가 없다 |
+| CSRF 면제 2번(구글 교환) | 경로 없음 | U2 경로. 나머지 면제 4경로 밖 변경 요청은 CSRF 필수(BR8.8) |
+| springdoc(`/v3/api-docs`) | 404(맞는 보안 체인 없음) | 계약 정본은 이 디렉터리다. dev 문서가 필요하면 체인을 따로 정한다 |

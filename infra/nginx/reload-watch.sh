@@ -37,6 +37,7 @@ nginx -c "$conf" -g 'daemon off;' &
 nginx_pid=$!
 
 stopping=0
+# shellcheck disable=SC2329  # trap이 부른다
 stop() {
   stopping=1
   kill -QUIT "$nginx_pid" 2>/dev/null || true

@@ -1,0 +1,17 @@
+# 무중 공급망 관문 예외 목록 (U1 3.5 Step 50 · cicd 2.2.2 · 2.13 · NFR9.13 · SD-16)
+#
+# 의존성 취약점(backend-deps · frontend-deps) · 이미지 취약점(images ③)에서 high 이상이 나와도 여기에 만료되지 않은 항목이 있으면 허용한다.
+# 항목마다 취약점 id(GHSA · CVE) · 사유 · 만료일(YYYY-MM-DD, 그날까지 유효)을 반드시 적는다. 만료일이 지난 항목이 하나라도 있으면
+# CI가 실패한다(ci/security-gate.py exceptions). 예외를 더하거나 늘리는 PR은 사람 리뷰 승인이 필요하다(cicd 5절 사람이 정할 것 7).
+# 형식(한 줄 키: 값, 이 순서로 쓴다 — infra/ci/image-checks.sh ③과 ci/security-gate.py가 같은 방식으로 읽는다):
+#   - id: <취약점 id>
+#     package: <생태계 · 패키지 · 경로, 사람이 읽는 설명>
+#     reason: <왜 지금 고칠 수 없고 왜 위험이 낮은가>
+#     expires: <YYYY-MM-DD>
+#     status: <candidate | approved>   (candidate는 사람 승인 전 후보다. 승인되지 않으면 이 항목을 지우고 관문이 실패하게 둔다)
+exceptions:
+  - id: GHSA-vfj7-8cjw-p6xm
+    package: "npm braces (frontend 개발 의존성만: eslint-config-next 16.4.0 → @next/eslint-plugin-next → fast-glob → micromatch → braces)"
+    reason: "고친 판이 없다(2026-10-10 npm audit). 운영 의존성(npm audit --omit=dev) 0건이고 브라우저 번들 · web 이미지(.next/standalone)에 들어가지 않는다. ESLint가 저장소 안 glob만 처리하므로 외부 입력이 닿지 않는다. 고친 판이 나오면 eslint-config-next를 올리고 이 항목을 지운다(Step 4 보고 · J 후보)"
+    expires: 2026-11-30
+    status: candidate

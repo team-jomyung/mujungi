@@ -1,0 +1,382 @@
+# 무중 demo 스택 — EC2 1대 (U1 3.5 Step 44 · infra-spec 1.1 · 2.1 ~ 2.5 · 3.7 · 4.1 · 4.2 · cicd 2.2.3 · 2.3.1 · ADR-006)
+#
+# 서비스 정의 9개: 상시 7(nginx · web · core-api · realtime · postgres · certbot · backup) + 일회성 migrate(프로필 migrate)
+# + 꺼진 neo4j(프로필 knowledge). 정본 값은 인프라 명세 2.1 ~ 2.5 · 3.7 · 4.1 · 4.2 표이고, infra/bin/infra-validate가
+# cicd 2.2.3의 Compose 불변식 12개를 이 파일에 단언한다(이 파일에만 적용, compose.dev.yml은 대상이 아니다).
+#
+# 쓰는 법(demo 호스트는 mj 래퍼가 같은 옵션으로 부른다, infra-spec 4.5.4):
+#   docker compose -p mujoong --env-file /opt/mujoong/current/release.env -f /opt/mujoong/current/compose.demo.yml <명령>
+#   - 이미지 태그(MUJOONG_REGISTRY · MUJOONG_TAG = 커밋 SHA)는 번들의 release.env가 준다(비밀 아님).
+#   - 비밀은 서비스별 env 파일(${MUJOONG_ENV_DIR}/<서비스>.env, 기본 /opt/mujoong/env, root 600)로만 받는다(infra-spec 3.7).
+#     이 파일에는 비밀 값도 비밀 변수 이름도 쓰지 않는다. 비밀이 아닌 값(프로필 · JVM 옵션 · HOSTNAME · PORT · hba 대역)만
+#     environment:에 직접 적는다.
+#   - `docker compose config`는 env 파일 값을 펼쳐 출력하므로 유효성 확인은 `config --quiet`만 쓰고, 해석이 필요한 단언은
+#     `--format json` 출력을 umask 077 임시 파일로만 받는다(출력을 로그 · 대화에 붙이지 않는다, infra-spec 2.2 · CD-11).
+#   - 검증 스택은 이 파일에 infra/compose.ci.yml을 덧붙인다(J108 · J136).
+#
+# 호스트 경로(infra-spec 4.2): 바인드 마운트는 릴리스 링크(/opt/mujoong/current)가 아니라 고정 경로만 쓴다
+# (바인드는 컨테이너를 만들 때의 링크 대상에 고정되므로). 데이터는 /var/lib/mujoong(데이터 EBS) · /var/lib/mujoong-backup(백업 EBS).
+#
+# 망(infra-spec N-2 · D-8): edge 172.30.10.0/24(nginx .10 · web .11 · core-api .12 · realtime .13 고정 IP, certbot은 고정 IP 없음),
+# backend 172.30.20.0/24 internal(외부 경로 없음). nginx · web · certbot은 backend에 없다. 호스트 게시 포트는 nginx 80 · 443뿐이다.
+
+name: mujoong
+
+x-hardening: &hardening
+  init: true
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+  ulimits:
+    core: 0
+  pids_limit: 256
+
+x-app-logging: &app-logging
+  driver: json-file
+  options:
+    mode: non-blocking
+    max-buffer-size: 4m
+    max-size: 10m
+    max-file: "5"
+
+x-small-logging: &small-logging
+  driver: json-file
+  options:
+    max-size: 10m
+    max-file: "3"
+
+x-app-environment: &app-environment
+  # 환경 프로필은 하나만 켠다(demo). dev · test · load-test와 함께 켜면 앱이 기동을 거부한다(SD-14, D3도 확인한다 CD-7)
+  SPRING_PROFILES_ACTIVE: demo
+  # JVM(infra-spec 2.5): 힙 1G · G1 · OOM 즉시 종료 · 힙 덤프 끔 · 비힙 상한 · UTC
+  JAVA_TOOL_OPTIONS: >-
+    -Xmx1g -Xms512m -XX:+UseG1GC -XX:+ExitOnOutOfMemoryError -XX:-HeapDumpOnOutOfMemoryError
+    -XX:MaxMetaspaceSize=160m -XX:ReservedCodeCacheSize=64m -XX:MaxDirectMemorySize=96m -Duser.timezone=UTC
+  # 앱은 Nginx 고정 IP에서 온 요청의 X-Forwarded-For만 믿는다(정규식 이스케이프한 한 값, infra-spec 3.3 · BR1.6)
+  SERVER_TOMCAT_REMOTEIP_INTERNALPROXIES: '172\.30\.10\.10'
+
+x-app-healthcheck: &app-healthcheck
+  # readiness = DB 연결 + 이력 버전 + validate + 시작 복구 완료(OD-11). 관리 포트 9090은 컨테이너 루프백에만 있다
+  test: ["CMD", "curl", "-fsS", "-o", "/dev/null", "--max-time", "2", "http://127.0.0.1:9090/actuator/health/readiness"]
+  interval: 10s
+  timeout: 3s
+  retries: 3
+  start_period: 60s
+  start_interval: 2s
+
+services:
+  nginx:
+    <<: *hardening
+    image: nginx:1.30.5-alpine
+    # 마스터는 root로 인증서를 읽고 워커는 nginx 사용자로 내린다. 그 밖의 권한은 없다(cicd 2.2.3 단언 11)
+    cap_add: [CHOWN, SETGID, SETUID, NET_BIND_SERVICE]
+    # 렌더된 설정의 실행 · 인증서 갱신 표지 감시(60초) 스크립트. 공식 entrypoint의 템플릿 처리는 쓰지 않는다
+    command: ["/bin/sh", "/etc/nginx/mujoong/reload-watch.sh"]
+    restart: unless-stopped
+    stop_grace_period: 10s
+    mem_limit: 128m
+    memswap_limit: 128m
+    ports:
+      - "80:80"
+      - "443:443"
+    networks:
+      edge:
+        ipv4_address: 172.30.10.10
+    env_file:
+      - ${MUJOONG_ENV_DIR:-/opt/mujoong/env}/nginx.env
+    environment:
+      # HSTS 값(비밀 아님, infra-spec 3.3 · 3.7). 렌더 때 nginx.conf에 들어가고 컨테이너는 참고로만 갖는다
+      MUJOONG_HSTS_MAX_AGE: "15552000"
+    tmpfs:
+      - /var/cache/nginx:size=32m
+      - /var/run:size=4m
+    volumes:
+      - /opt/mujoong/nginx:/etc/nginx/mujoong:ro
+      - /var/lib/mujoong/certbot/conf:/etc/letsencrypt:ro
+      - /var/lib/mujoong/certbot/www:/var/www/certbot:ro
+      - /srv/mujoong/approved-audio:/srv/mujoong/approved-audio:ro
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "-T", "2", "http://127.0.0.1/__mujoong/nginx-health"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    depends_on:
+      web:
+        condition: service_healthy
+      core-api:
+        condition: service_healthy
+      realtime:
+        condition: service_healthy
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "5"
+
+  web:
+    <<: *hardening
+    image: ${MUJOONG_REGISTRY:?MUJOONG_REGISTRY가 필요하다}/mujoong-web:${MUJOONG_TAG:?MUJOONG_TAG가 필요하다}
+    restart: unless-stopped
+    stop_grace_period: 10s
+    mem_limit: 512m
+    memswap_limit: 512m
+    networks:
+      edge:
+        ipv4_address: 172.30.10.11
+    env_file:
+      - ${MUJOONG_ENV_DIR:-/opt/mujoong/env}/web.env
+    environment:
+      # Docker가 HOSTNAME을 컨테이너 id로 채우면 컨테이너 IP에만 바인드해 루프백 헬스체크가 실패한다(R4-16)
+      HOSTNAME: 0.0.0.0
+      PORT: "3000"
+      # 시간 설정 키(MUJOONG_TIMING_*)는 계약 기본값이 이미지에 있어 바꿀 때만 여기에 적는다(NFR6.1 · LC-2)
+    tmpfs:
+      - /tmp:size=64m
+      - /app/.next/cache:size=64m,uid=1000,gid=1000,mode=0700
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "-T", "2", "http://127.0.0.1:3000/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 20s
+    depends_on:
+      core-api:
+        condition: service_healthy
+    logging: *small-logging
+
+  core-api:
+    <<: *hardening
+    image: ${MUJOONG_REGISTRY:?MUJOONG_REGISTRY가 필요하다}/mujoong-core-api:${MUJOONG_TAG:?MUJOONG_TAG가 필요하다}
+    restart: unless-stopped
+    # 앱 정상 종료 유예 30초보다 길게(불변식 I-9 · cicd 2.2.3 단언 2)
+    stop_grace_period: 40s
+    mem_limit: 1.6g
+    memswap_limit: 1.6g
+    pids_limit: 512
+    networks:
+      edge:
+        ipv4_address: 172.30.10.12
+      backend:
+        # 앱 사이 호출 이름(infra-spec D-12 · J109: mujoong.internal-http.core-base-url = http://core:8080)
+        aliases: [core]
+    env_file:
+      - ${MUJOONG_ENV_DIR:-/opt/mujoong/env}/core-api.env
+    environment:
+      <<: *app-environment
+    tmpfs:
+      - /tmp:size=64m
+    healthcheck: *app-healthcheck
+    # postgres(healthy) · migrate(완료)만 기다린다. realtime을 기다리면 배포 D5 병렬 재생성이 직렬화된다(D-18 · 단언 12)
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+        required: false
+    logging: *app-logging
+
+  realtime:
+    <<: *hardening
+    image: ${MUJOONG_REGISTRY:?MUJOONG_REGISTRY가 필요하다}/mujoong-realtime:${MUJOONG_TAG:?MUJOONG_TAG가 필요하다}
+    restart: unless-stopped
+    stop_grace_period: 40s
+    mem_limit: 1.6g
+    memswap_limit: 1.6g
+    pids_limit: 512
+    networks:
+      edge:
+        ipv4_address: 172.30.10.13
+      backend: {}
+    env_file:
+      - ${MUJOONG_ENV_DIR:-/opt/mujoong/env}/realtime.env
+    environment:
+      <<: *app-environment
+    tmpfs:
+      - /tmp:size=64m
+    healthcheck: *app-healthcheck
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+        required: false
+    logging:
+      driver: json-file
+      options:
+        mode: non-blocking
+        max-buffer-size: 4m
+        max-size: 20m
+        max-file: "5"
+
+  postgres:
+    <<: *hardening
+    image: postgres:16.15
+    # 이미지 entrypoint의 root 단계(소유권 정리 · gosu 전환)를 건너뛴다. 데이터 디렉터리는 uid 999 · 0700(infra-spec 4.2)
+    user: "999:999"
+    command: ["postgres", "-c", "config_file=/etc/postgresql/mujoong.conf"]
+    restart: unless-stopped
+    stop_grace_period: 60s
+    mem_limit: 1g
+    memswap_limit: 1g
+    shm_size: 128m
+    networks:
+      backend: {}
+    env_file:
+      - ${MUJOONG_ENV_DIR:-/opt/mujoong/env}/postgres.env
+    environment:
+      # pg_hba 허용 대역 = backend 서브넷(J135, 비밀 아님)
+      PG_HBA_ALLOWED_CIDR: 172.30.20.0/24
+    tmpfs:
+      - /var/run/postgresql:size=8m,uid=999,gid=999,mode=0775
+      - /tmp:size=64m
+    volumes:
+      - /var/lib/mujoong/postgres/data:/var/lib/postgresql/data
+      - /opt/mujoong/postgres/init:/docker-entrypoint-initdb.d:ro
+      - /opt/mujoong/postgres/postgresql.conf:/etc/postgresql/mujoong.conf:ro
+    # TCP로 점검해 초기화용 임시 서버(유닉스 소켓만)를 건강으로 오인하지 않는다. 자기 backend 주소로 부르므로 hba 거부 로그가 없다
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -q -h \"$$(hostname -i | cut -d' ' -f1)\" -p 5432 -d mujoong -U mujoong_owner"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 30s
+    logging: *small-logging
+
+  migrate:
+    <<: *hardening
+    image: ${MUJOONG_REGISTRY:?MUJOONG_REGISTRY가 필요하다}/mujoong-migrate:${MUJOONG_TAG:?MUJOONG_TAG가 필요하다}
+    profiles: [migrate]
+    # 일회성: mujoong_owner로 core → realtime 위치를 적용하고 종료한다(성공 = 종료 코드 0). 배포 D4가 `run --rm migrate`로 부른다
+    restart: "no"
+    stop_grace_period: 10s
+    mem_limit: 512m
+    memswap_limit: 512m
+    networks:
+      backend: {}
+    env_file:
+      - ${MUJOONG_ENV_DIR:-/opt/mujoong/env}/migrate.env
+    tmpfs:
+      - /tmp:size=64m
+    depends_on:
+      postgres:
+        condition: service_healthy
+    logging: *small-logging
+
+  certbot:
+    <<: *hardening
+    image: certbot/certbot:v5.8.0
+    # 12시간마다 renew(만료 30일 전부터 실제 갱신). 갱신되면 deploy hook이 표지 파일을 만들어 nginx가 60초 안에 다시 읽는다.
+    # 최초 발급도 같은 webroot 방식이다(infra-spec 4.5.1 5-c, standalone 금지 R4-14)
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        trap 'exit 0' TERM INT
+        while :; do
+          certbot renew --non-interactive --quiet --webroot -w /var/www/certbot \
+            --deploy-hook 'touch /etc/letsencrypt/renewed.flag' \
+            || echo "certbot-renew-loop: renew 실패(다음 주기에 다시 시도한다)" >&2
+          sleep 43200 & wait $$!
+        done
+      - certbot-renew-loop
+    restart: unless-stopped
+    stop_grace_period: 10s
+    mem_limit: 128m
+    memswap_limit: 128m
+    networks:
+      edge: {}
+    env_file:
+      - ${MUJOONG_ENV_DIR:-/opt/mujoong/env}/certbot.env
+    tmpfs:
+      - /tmp:size=16m
+      - /var/lib/letsencrypt:size=32m
+      - /var/log/letsencrypt:size=32m
+    volumes:
+      - /var/lib/mujoong/certbot/conf:/etc/letsencrypt
+      - /var/lib/mujoong/certbot/www:/var/www/certbot
+    healthcheck:
+      test: ["CMD", "pgrep", "-f", "certbot-renew-loop"]
+      interval: 60s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    depends_on:
+      nginx:
+        condition: service_started
+    logging: *small-logging
+
+  backup:
+    <<: *hardening
+    image: ${MUJOONG_REGISTRY:?MUJOONG_REGISTRY가 필요하다}/mujoong-backup:${MUJOONG_TAG:?MUJOONG_TAG가 필요하다}
+    # 비루트 스케줄러(supercronic) 이미지, uid 999(J128 · R4-12)
+    user: "999:999"
+    restart: unless-stopped
+    stop_grace_period: 60s
+    mem_limit: 128m
+    memswap_limit: 128m
+    networks:
+      backend: {}
+    env_file:
+      - ${MUJOONG_ENV_DIR:-/opt/mujoong/env}/backup.env
+    environment:
+      # 03:00 KST 스케줄(infra-spec 2.1 backup). 덤프 시각 · 로그 ts는 스크립트가 UTC로 쓴다
+      TZ: Asia/Seoul
+    tmpfs:
+      - /tmp:size=32m
+      # 베이스 이미지가 물려준 VOLUME에 익명 볼륨이 생기지 않게 작은 tmpfs로 덮는다(쓰지 않는 경로)
+      - /var/lib/postgresql/data:size=1m,uid=999,gid=999,mode=0700
+    volumes:
+      - /var/lib/mujoong-backup:/backups
+      - /var/log/mujoong:/var/log/mujoong
+      - /opt/mujoong/backup:/opt/mujoong/backup:ro
+    healthcheck:
+      test: ["CMD-SHELL", "grep -qsx supercronic /proc/[0-9]*/comm"]
+      interval: 60s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    depends_on:
+      postgres:
+        condition: service_healthy
+    logging: *small-logging
+
+  neo4j:
+    <<: *hardening
+    # U1은 쓰지 않는다(LC-10 · H-16). 켜는 유닛이 이미지 · 헬스 · 권한 · 메모리를 확정한다(인스턴스 상향 + infra-spec 4.1 갱신, O-5)
+    image: neo4j:5.26.31-community
+    profiles: [knowledge]
+    user: "7474:7474"
+    restart: unless-stopped
+    stop_grace_period: 10s
+    mem_limit: 1.5g
+    memswap_limit: 1.5g
+    networks:
+      backend: {}
+    env_file:
+      # 켠 뒤에만 렌더된다(NEO4J_AUTH, infra-spec 3.7). 꺼진 동안 `config --profile '*'` 점검이 파일 없이 돌게 한다
+      - path: ${MUJOONG_ENV_DIR:-/opt/mujoong/env}/neo4j.env
+        required: false
+    tmpfs:
+      - /tmp:size=64m
+    volumes:
+      - /var/lib/mujoong/neo4j/data:/data
+      - /var/lib/mujoong/neo4j/logs:/logs
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/7687'"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 60s
+    logging: *small-logging
+
+networks:
+  edge:
+    ipam:
+      config:
+        - subnet: 172.30.10.0/24
+  backend:
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.30.20.0/24

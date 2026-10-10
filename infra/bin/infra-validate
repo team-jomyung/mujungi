@@ -1,0 +1,803 @@
+#!/usr/bin/env bash
+# 무중 인프라 정적 검사 (U1 3.5 Step 48 · cicd 2.2.2 infra-validate · 2.2.3 · 2.7.2 · CD-1 · CD-8 · CD-11 · R4-1 · R4-17 · SD-3 · NFR9.6)
+#
+# CI infra-validate 작업 · 검증 명령 · 배포 D3이 부른다. 저장소(infra/bin)와 인프라 번들(<릴리스>/bin) 두 곳에서 돈다.
+# 검사(--only로 고를 수 있고, 기본은 지금 위치에서 할 수 있는 것 전부):
+#   compose-config      `docker compose config --quiet`: demo · demo(모든 프로필) · demo + ci · dev(nginx 프로필 포함)
+#   compose-invariants  cicd 2.2.3 Compose 불변식 1 ~ 12(demo에만). --kind dev면 "게시 포트는 127.0.0.1만"만 단언한다
+#   demo-profile        demo 앱 프로필 가드(CD-7 · SD-14): 해석된 demo 설정(Compose environment + env 파일)에서 core-api ·
+#                       realtime의 SPRING_PROFILES_ACTIVE가 정확히 demo이고, 어느 서비스에도 MUJOONG_DEVLOGIN_ENABLED ·
+#                       MUJOONG_LOADTEST_ENABLED가 없거나 false다(배포 D3이 --env-dir로 렌더된 env 파일에 돌린다)
+#   secret-env-files    비밀 변수는 env 파일로만: 어느 Compose 파일의 environment:에도 비밀 이름이 없고, 서비스마다
+#                       자기 이름의 env 파일 하나만 받는다(compose.ci.yml 포함)
+#   nginx               render-nginx 4가지(https · bootstrap × compose · host 업스트림) → 컨테이너 안 `nginx -t`,
+#                       렌더된 https 설정의 방어 지시어 단언, Nginx 오류 봉투 JSON(편차 (y) UPSTREAM_UNAVAILABLE) 단언
+#   [shellcheck]        infra/ · scripts/ 아래 셸 스크립트(확장자 .sh 또는 sh · bash shebang) 전부
+#   migrations          expand 단계 금지 문장(삭제 · 이름 변경 · 타입 변경 · 널 불허 추가 · 제약 강화) 검사(cicd 2.7.2)
+#   bundle              인프라 번들 Dockerfile의 복사 목록과 맥락 제한 파일, --bundle-image를 주면 실제 이미지 파일 목록
+#                       (compose.ci.yml · compose.dev.yml · ci/ · aws/ · 환경 파일 0건, 필수 항목(host/ 포함, Step 47) 있음)
+#
+# 출력: 검사마다 한 줄 `PASS <id>` · `FAIL <id>: <사유>` · `MISSING <id>: <도구>`. 값(비밀 · 설정 펼침)은 출력하지 않는다.
+# `docker compose config` 출력은 env 파일 값을 펼치므로 umask 077 임시 디렉터리에만 두고 끝에 지운다(CD-11).
+# 종료 코드: 0 모두 통과, 1 하나라도 FAIL, 2 FAIL은 없지만 고른 검사에 필요한 도구 · 입력이 없음(MISSING), 64 인자 오류
+#
+# 쓰는 법: infra-validate [--only <id,...>] [--compose <파일>]... [--kind demo|dev] [--env-dir <디렉터리>] [--release-env <파일>]
+#                         [--mem-limit-bytes <n>] [--nginx-src <디렉터리>] [--migrations <디렉터리>]... [--allow-contract]
+#                         [--bundle-dockerfile <파일>] [--bundle-image <이미지>]
+#   --compose          불변식 · config 대상 파일(여러 번, 앞 파일이 기본 · 뒤 파일이 덧붙임). 기본 compose.demo.yml
+#   --kind             불변식 종류. 기본 demo(--compose를 안 주고 dev면 compose.dev.yml)
+#   --env-dir          이미 렌더된 서비스별 env 파일 디렉터리(배포 D3: /opt/mujoong/env). 없으면 infra/ci/gen-env.sh로
+#                      임시 디렉터리에 시험 값을 만든다(저장소에서만)
+#   --release-env      Compose 보간용 비밀 아닌 값 파일(배포 D3: <릴리스>/release.env)
+#   --mem-limit-bytes  메모리 한도 합계 상한(배포 D3은 호스트 MemTotal의 70%). 기본 5.3GiB(실측 전 저장소 값, 단언 3)
+#   --allow-contract   contract PR(라벨 allow-contract + 리뷰 승인)에서만 migrations 금지 문장을 허용한다
+# 필요한 도구: docker(compose v2.24.4 이상) · jq · openssl(nginx) · shellcheck(shellcheck). 없으면 그 검사는 MISSING이다.
+
+set -Eeuo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+INFRA_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+REPO_ROOT=""
+if [ -d "$INFRA_DIR/../backend" ] && [ -f "$INFRA_DIR/ci/gen-env.sh" ]; then
+  REPO_ROOT="$(cd "$INFRA_DIR/.." && pwd)"
+fi
+readonly SCRIPT_DIR INFRA_DIR REPO_ROOT
+readonly ALL_CHECKS=(compose-config compose-invariants demo-profile secret-env-files nginx shellcheck migrations bundle)
+
+usage() {
+  sed -n '2,41p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+}
+
+only=""
+compose_files=()
+kind=demo
+env_dir=""
+release_env=""
+mem_limit_bytes=$((53 * 1024 * 1024 * 1024 / 10))
+nginx_src="$INFRA_DIR/nginx"
+migration_dirs=()
+allow_contract=0
+bundle_dockerfile="$INFRA_DIR/bundle/Dockerfile"
+bundle_image=""
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --only) only="${2:-}"; shift ;;
+    --compose) compose_files+=("${2:-}"); shift ;;
+    --kind) kind="${2:-}"; shift ;;
+    --env-dir) env_dir="${2:-}"; shift ;;
+    --release-env) release_env="${2:-}"; shift ;;
+    --mem-limit-bytes) mem_limit_bytes="${2:-}"; shift ;;
+    --nginx-src) nginx_src="${2:-}"; shift ;;
+    --migrations) migration_dirs+=("${2:-}"); shift ;;
+    --allow-contract) allow_contract=1 ;;
+    --bundle-dockerfile) bundle_dockerfile="${2:-}"; shift ;;
+    --bundle-image) bundle_image="${2:-}"; shift ;;
+    -h | --help) usage; exit 0 ;;
+    *) echo "infra-validate: 모르는 인자: $1" >&2; exit 64 ;;
+  esac
+  shift
+done
+
+case "$kind" in demo | dev) ;; *) echo "infra-validate: --kind는 demo 또는 dev다" >&2; exit 64 ;; esac
+if ! [[ "$mem_limit_bytes" =~ ^[0-9]{1,15}$ ]]; then
+  echo "infra-validate: --mem-limit-bytes는 정수(바이트)다" >&2
+  exit 64
+fi
+selected=()
+if [ -n "$only" ]; then
+  IFS=',' read -r -a requested <<<"$only"
+  for id in "${requested[@]}"; do
+    case " ${ALL_CHECKS[*]} " in
+      *" $id "*) selected+=("$id") ;;
+      *) echo "infra-validate: --only에 모르는 검사: $id" >&2; exit 64 ;;
+    esac
+  done
+else
+  selected=("${ALL_CHECKS[@]}")
+fi
+explicit_compose=0
+if [ "${#compose_files[@]}" -eq 0 ]; then
+  if [ "$kind" = dev ]; then
+    compose_files=("$INFRA_DIR/compose.dev.yml")
+  else
+    compose_files=("$INFRA_DIR/compose.demo.yml")
+  fi
+else
+  explicit_compose=1
+fi
+for f in "${compose_files[@]}"; do
+  if [ ! -f "$f" ]; then
+    echo "infra-validate: Compose 파일이 없다: $f" >&2
+    exit 64
+  fi
+done
+if [ "${#migration_dirs[@]}" -eq 0 ] && [ -n "$REPO_ROOT" ]; then
+  migration_dirs=("$REPO_ROOT/backend/core-api/src/main/resources/db/migration/core"
+    "$REPO_ROOT/backend/realtime-activity/src/main/resources/db/migration/realtime")
+fi
+
+umask 077
+work="$(mktemp -d)"
+trap 'rm -rf "$work"' EXIT
+
+fails=0
+missing=0
+pass() { echo "PASS $1"; }
+fail() {
+  echo "FAIL $1: $2"
+  fails=$((fails + 1))
+}
+miss() {
+  echo "MISSING $1: $2"
+  missing=$((missing + 1))
+}
+have() { command -v "$1" >/dev/null 2>&1; }
+# 오류 메시지는 첫 줄 몇 개만, 길이를 잘라 낸다(설정 값이 섞여 나오지 않게)
+short_err() { head -n 3 "$1" | cut -c1-240 | tr '\n' ' ' | sed 's/ $//'; }
+
+# ---- 비밀 이름과 분배표(infra-spec 3.7 · cicd 2.5.1이 정본) -----------------------------------------
+readonly SECRET_NAMES='["POSTGRES_PASSWORD","DB_OWNER_PASSWORD","DB_CORE_PASSWORD","DB_REALTIME_PASSWORD","DB_BACKUP_PASSWORD",
+  "INTERNAL_SERVICE_TOKEN","PROVIDER_API_KEY","MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET","GOOGLE_OAUTH_CLIENT_SECRET",
+  "NEO4J_AUTH","GHCR_PULL_TOKEN","SPRING_DATASOURCE_PASSWORD"]'
+readonly SECRET_TABLE='{
+  "postgres": ["DB_BACKUP_PASSWORD","DB_CORE_PASSWORD","DB_OWNER_PASSWORD","DB_REALTIME_PASSWORD","POSTGRES_PASSWORD"],
+  "migrate": ["DB_OWNER_PASSWORD"],
+  "core-api": ["GOOGLE_OAUTH_CLIENT_SECRET","INTERNAL_SERVICE_TOKEN","MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET","SPRING_DATASOURCE_PASSWORD"],
+  "realtime": ["INTERNAL_SERVICE_TOKEN","MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET","PROVIDER_API_KEY","SPRING_DATASOURCE_PASSWORD"],
+  "web": [], "nginx": [], "certbot": [],
+  "backup": ["DB_BACKUP_PASSWORD"],
+  "neo4j": ["NEO4J_AUTH"]
+}'
+
+# ---- Compose 실행 준비 -------------------------------------------------------------------------------
+compose_ready=""
+compose_env="$work/compose.env"
+prepare_compose() {
+  if [ "$compose_ready" = ok ]; then
+    return 0
+  elif [ "$compose_ready" = no ]; then
+    return 1
+  fi
+  compose_ready=no
+  if ! have docker || ! docker compose version >/dev/null 2>&1; then
+    return 1
+  fi
+  if ! have jq; then
+    return 1
+  fi
+  mkdir -p "$work/verify"
+  if [ -n "$env_dir" ]; then
+    if [ ! -d "$env_dir" ]; then
+      echo "infra-validate: --env-dir가 없다: $env_dir" >&2
+      return 1
+    fi
+    : >"$compose_env"
+    if [ -n "$release_env" ]; then
+      grep -E '^[A-Z][A-Z0-9_]*=' "$release_env" | grep -v '^MUJOONG_ENV_DIR=' >>"$compose_env" || true
+    else
+      printf 'MUJOONG_REGISTRY=mujoong.local\nMUJOONG_TAG=validate\n' >>"$compose_env"
+    fi
+    printf 'MUJOONG_ENV_DIR=%s\n' "$(cd "$env_dir" && pwd)" >>"$compose_env"
+  elif [ -n "$REPO_ROOT" ]; then
+    if ! bash "$REPO_ROOT/infra/ci/gen-env.sh" --out "$work/verify/env" --tag validate >/dev/null 2>"$work/gen-env.err"; then
+      echo "infra-validate: gen-env.sh 실패: $(short_err "$work/gen-env.err")" >&2
+      return 1
+    fi
+    cp "$work/verify/env/compose.env" "$compose_env"
+    if [ -n "$release_env" ]; then
+      grep -E '^MUJOONG_(REGISTRY|TAG)=' "$release_env" >>"$compose_env" || true
+    fi
+  else
+    echo "infra-validate: 번들에서는 --env-dir가 필요하다" >&2
+    return 1
+  fi
+  compose_ready=ok
+}
+# dc <파일...> -- <compose 인자...>
+dc() {
+  local files=()
+  while [ "$1" != "--" ]; do
+    files+=(-f "$1")
+    shift
+  done
+  shift
+  MUJOONG_VERIFY_DIR="$work/verify" docker compose --project-name mujoong-validate --env-file "$compose_env" "${files[@]}" "$@"
+}
+
+# ---- compose-config ----------------------------------------------------------------------------------
+check_compose_config() {
+  local id=compose-config
+  if ! prepare_compose; then
+    miss "$id" "docker compose · jq · 시험 env"
+    return
+  fi
+  local sets=() problems=()
+  if [ "$explicit_compose" -eq 1 ]; then
+    sets=("${compose_files[*]}")
+  else
+    sets=("$INFRA_DIR/compose.demo.yml")
+    [ -f "$INFRA_DIR/compose.ci.yml" ] && sets+=("$INFRA_DIR/compose.demo.yml $INFRA_DIR/compose.ci.yml")
+    [ -f "$INFRA_DIR/compose.dev.yml" ] && sets+=("$INFRA_DIR/compose.dev.yml")
+  fi
+  local set files label
+  for set in "${sets[@]}"; do
+    read -r -a files <<<"$set"
+    label="$(for f in "${files[@]}"; do basename "$f"; done | paste -sd+)"
+    if ! dc "${files[@]}" -- --profile '*' config --quiet >/dev/null 2>"$work/cc.err"; then
+      problems+=("$label: $(short_err "$work/cc.err")")
+    elif ! dc "${files[@]}" -- config --quiet >/dev/null 2>"$work/cc.err"; then
+      problems+=("$label(기본 프로필): $(short_err "$work/cc.err")")
+    fi
+  done
+  if [ "${#problems[@]}" -gt 0 ]; then
+    fail "$id" "${problems[*]}"
+  else
+    pass "$id"
+  fi
+}
+
+# ---- compose-invariants ------------------------------------------------------------------------------
+write_invariant_program() {
+  cat >"$work/invariants.jq" <<'JQ'
+# 입력: 해석된 config(모든 프로필). $raw: 보간 전 config. $secrets: 비밀 이름 목록. $table: 분배표. $memmax: 한도 합계 상한
+def secs: if type == "number" then .
+  else (capture("^((?<h>[0-9]+)h)?((?<m>[0-9]+)m)?((?<s>[0-9.]+)s)?$") // null) as $c
+    | if $c == null then null else (($c.h // "0") | tonumber) * 3600 + (($c.m // "0") | tonumber) * 60 + (($c.s // "0") | tonumber) end
+  end;
+def bytes: if . == null then null elif type == "number" then . else tonumber end;
+def always_on: (.profiles // []) | length == 0;
+def setof: (. // []) | sort;
+def err($n; $msg): "invariant-\($n): \($msg)";
+
+.services as $svc
+| ($svc | to_entries) as $all
+| ($all | map(select(.value | always_on))) as $on
+| (
+  # 1 게시 포트: nginx의 80 · 443뿐, 그 밖 서비스 게시 0
+  [ $all[] | select(.key != "nginx") | select((.value.ports // []) | length > 0) | err(1; "\(.key)가 포트를 게시한다") ],
+  ( ($svc.nginx.ports // []) | map("\(.host_ip // "")|\(.published)->\(.target)/\(.protocol // "tcp")") | sort ) as $np
+  | if $np != ["|443->443/tcp", "|80->80/tcp"] and $np != ["0.0.0.0|443->443/tcp", "0.0.0.0|80->80/tcp"]
+    then [ err(1; "nginx 게시 포트가 80 · 443과 다르다(\($np | join(",")))") ] else [] end,
+  [ $all[] | select((.value.network_mode // "") == "host") | err(1; "\(.key)가 network_mode host다") ],
+
+  # 2 앱 종료 유예 40초(> 앱 30초)
+  [ "core-api", "realtime" | . as $n | ($svc[$n].stop_grace_period | secs) as $g
+    | select($g != 40) | err(2; "\($n) stop_grace_period가 40초가 아니다(\($g))") ],
+
+  # 3 메모리 한도: 모든 서비스 mem_limit = memswap_limit, 상시 합계 5.075GiB · 상한 이하
+  [ $all[] | select(.value.mem_limit == null) | err(3; "\(.key)에 mem_limit이 없다") ],
+  [ $all[] | select(.value.mem_limit != null and ((.value.memswap_limit | bytes) != (.value.mem_limit | bytes)))
+    | err(3; "\(.key) memswap_limit이 mem_limit과 다르다(스왑 허용)") ],
+  ( [ $on[] | .value.mem_limit | bytes // 0 ] | add // 0 ) as $sum
+  | (5.075 * 1073741824) as $expect
+  | (if (($sum - $expect) | if . < 0 then -. else . end) > 1048576 then [ err(3; "상시 서비스 한도 합계 \($sum)B가 5.075GiB가 아니다") ] else [] end)
+    + (if $sum > $memmax then [ err(3; "상시 서비스 한도 합계 \($sum)B가 상한 \($memmax)B를 넘는다") ] else [] end),
+
+  # 4 상시 서비스: unless-stopped + 헬스체크, migrate는 no
+  [ $on[] | select(.value.restart != "unless-stopped") | err(4; "\(.key) restart가 unless-stopped가 아니다") ],
+  [ $on[] | select((.value.healthcheck == null) or (.value.healthcheck.disable == true)
+      or ((.value.healthcheck.test // []) | length == 0) or ((.value.healthcheck.test // [])[0] == "NONE"))
+    | err(4; "\(.key)에 헬스체크가 없다") ],
+  [ if ($svc.migrate != null) and (($svc.migrate.restart // "no") != "no") then err(4; "migrate restart가 no가 아니다") else empty end ],
+
+  # 5 비밀 분배: 받는 비밀 이름 = 분배표, 데이터 소스 비밀번호는 자기 역할 값
+  [ $all[] | .key as $n
+    | ((.value.environment // {}) | keys | map(select(. as $k | $secrets | index($k))) | sort) as $got
+    | (($table[$n] // []) | sort) as $want
+    | if $n == "neo4j" then (if ($got - $want) | length > 0 then err(5; "neo4j가 분배표 밖 비밀을 받는다(\($got - $want | join(",")))") else empty end)
+      elif $got != $want then err(5; "\($n) 비밀 이름 \($got | join(",")) ≠ 분배표 \($want | join(","))")
+      else empty end ],
+  [ ($svc.postgres.environment // {}) as $pg
+    | [ ["core-api", "SPRING_DATASOURCE_PASSWORD", "DB_CORE_PASSWORD"],
+        ["realtime", "SPRING_DATASOURCE_PASSWORD", "DB_REALTIME_PASSWORD"],
+        ["migrate", "DB_OWNER_PASSWORD", "DB_OWNER_PASSWORD"],
+        ["backup", "DB_BACKUP_PASSWORD", "DB_BACKUP_PASSWORD"] ][]
+    | . as [$n, $k, $pk]
+    | select($svc[$n] != null)
+    | select((($svc[$n].environment // {})[$k] // null) != ($pg[$pk] // "") or ($pg[$pk] // "") == "")
+    | err(5; "\($n) \($k)가 postgres의 \($pk)와 맞지 않는다(값은 출력하지 않음)") ],
+  [ ($svc["core-api"].environment.INTERNAL_SERVICE_TOKEN // "") as $a | ($svc.realtime.environment.INTERNAL_SERVICE_TOKEN // "") as $b
+    | if $a == "" or $a != $b then err(5; "core-api · realtime INTERNAL_SERVICE_TOKEN이 비었거나 다르다") else empty end ],
+
+  # 6 로그: json-file과 한도(monitoring-design 2.4.2 · infra-spec 2.4)
+  ( { "nginx": ["10m","5",false], "web": ["10m","3",false], "core-api": ["10m","5",true], "realtime": ["20m","5",true],
+      "postgres": ["10m","3",false], "migrate": ["10m","3",false], "certbot": ["10m","3",false], "backup": ["10m","3",false],
+      "neo4j": ["10m","3",false] } ) as $logs
+  | [ $all[] | .key as $n | .value.logging as $l | ($logs[$n] // null) as $w
+      | if $w == null then err(6; "\($n)는 로그 한도 표에 없는 서비스다")
+        elif ($l.driver // "") != "json-file" then err(6; "\($n) 로그 드라이버가 json-file이 아니다")
+        elif ($l.options["max-size"] // "") != $w[0] or (($l.options["max-file"] // "") | tostring) != $w[1]
+          then err(6; "\($n) 로그 한도가 \($w[0]) × \($w[1])이 아니다")
+        elif $w[2] and ($l.options.mode // "") != "non-blocking" then err(6; "\($n) 로그가 비차단 모드가 아니다")
+        else empty end ],
+
+  # 7 망: edge · backend 둘, backend internal, 소속 · 고정 IP
+  ( .networks // {} ) as $nets
+  | (if ($nets | keys) != ["backend", "edge"] then [ err(7; "망이 edge · backend 둘이 아니다(\($nets | keys | join(",")))") ] else [] end)
+    + (if ($nets.backend.internal // false) != true then [ err(7; "backend 망이 internal이 아니다") ] else [] end)
+    + (if ($nets.edge.internal // false) == true then [ err(7; "edge 망이 internal이다") ] else [] end)
+    + (if ([$nets.edge.ipam.config[]?.subnet] != ["172.30.10.0/24"]) or ([$nets.backend.ipam.config[]?.subnet] != ["172.30.20.0/24"])
+       then [ err(7; "망 서브넷이 edge 172.30.10.0/24 · backend 172.30.20.0/24가 아니다") ] else [] end),
+  ( { "nginx": ["edge"], "web": ["edge"], "certbot": ["edge"], "core-api": ["backend","edge"], "realtime": ["backend","edge"],
+      "postgres": ["backend"], "migrate": ["backend"], "backup": ["backend"], "neo4j": ["backend"] } ) as $member
+  | [ $all[] | .key as $n | ((.value.networks // {}) | keys) as $got
+      | if ($member[$n] // null) == null then err(7; "\($n)의 망 소속이 표에 없다")
+        elif $got != $member[$n] then err(7; "\($n) 망 소속 \($got | join(",")) ≠ \($member[$n] | join(","))")
+        else empty end ],
+  ( { "nginx": "172.30.10.10", "web": "172.30.10.11", "core-api": "172.30.10.12", "realtime": "172.30.10.13" } ) as $ips
+  | [ $ips | to_entries[] | . as $e | select(($svc[$e.key].networks.edge.ipv4_address // "") != $e.value)
+      | err(7; "\($e.key) edge 고정 IP가 \($e.value)가 아니다") ],
+  [ if (($svc["core-api"].networks.backend.aliases // []) | index("core")) == null then err(7; "core-api의 backend 별칭 core가 없다") else empty end ],
+
+  # 8 이미지 태그 고정(latest 금지), 자체 이미지는 MUJOONG_TAG 변수
+  [ $all[] | .key as $n | (.value.image // "") as $img
+    | ($img | split("@")[0] | split("/") | last) as $last
+    | if $img == "" then err(8; "\($n)에 image가 없다")
+      elif ($img | contains("@sha256:")) then empty
+      elif ($last | contains(":") | not) then err(8; "\($n) 이미지에 태그가 없다")
+      elif ($last | split(":") | last) == "latest" then err(8; "\($n) 이미지 태그가 latest다")
+      else empty end ],
+  [ "core-api", "realtime", "web", "migrate", "backup" | . as $n
+    | select(($raw[0].services[$n].image // "") | test("\\$\\{MUJOONG_TAG") | not)
+    | err(8; "\($n) 이미지 태그가 MUJOONG_TAG(커밋 SHA) 변수가 아니다") ],
+
+  # 9 서비스당 컨테이너 1개
+  [ $all[] | select(((.value.scale // 1) != 1) or ((.value.deploy.replicas // 1) != 1)) | err(9; "\(.key)가 2개 이상으로 늘어난다") ],
+
+  # 10 프로필: neo4j는 knowledge, migrate는 migrate, 상시 서비스 7개
+  [ if ($svc.neo4j.profiles // []) != ["knowledge"] then err(10; "neo4j가 프로필 knowledge에만 속하지 않는다") else empty end ],
+  [ if ($svc.migrate.profiles // []) != ["migrate"] then err(10; "migrate가 프로필 migrate에만 속하지 않는다") else empty end ],
+  [ ($on | map(.key) | sort) as $k
+    | if $k != ["backup","certbot","core-api","nginx","postgres","realtime","web"] then err(10; "상시 서비스가 7개 표와 다르다(\($k | join(",")))") else empty end ],
+
+  # 11 컨테이너 권한: cap_drop ALL(nginx만 4개 추가) · read_only · no-new-privileges · tmpfs size= · 비루트 · core 0
+  [ $all[] | .key as $n | .value as $v
+    | ( if (($v.cap_drop // []) | index("ALL")) == null then err(11; "\($n)에 cap_drop ALL이 없다") else empty end ),
+      ( ($v.cap_add // []) | sort ) as $add
+      | ( if $n == "nginx" then (if $add != ["CHOWN","NET_BIND_SERVICE","SETGID","SETUID"] then err(11; "nginx cap_add가 CHOWN · SETGID · SETUID · NET_BIND_SERVICE가 아니다") else empty end)
+          elif ($add | length) > 0 then err(11; "\($n)에 cap_add가 있다(\($add | join(",")))") else empty end ),
+      ( if $v.read_only != true then err(11; "\($n)가 read_only가 아니다") else empty end ),
+      ( if (($v.security_opt // []) | index("no-new-privileges:true")) == null then err(11; "\($n)에 no-new-privileges가 없다") else empty end ),
+      ( if $v.privileged == true then err(11; "\($n)가 privileged다") else empty end ),
+      ( [ ($v.tmpfs // [])[] | select(contains("size=") | not) ] | if length > 0 then err(11; "\($n) tmpfs에 size= 상한이 없다") else empty end ),
+      ( [ ($v.volumes // [])[] | select(((.source // "") | test("docker\\.sock$")) or ((.type // "") == "tmpfs" and ((.tmpfs.size // 0) == 0))) ]
+        | if length > 0 then err(11; "\($n)에 Docker 소켓 마운트나 상한 없는 tmpfs 볼륨이 있다") else empty end ),
+      ( if ($v.ulimits.core // null) == null then err(11; "\($n)에 ulimits core 0이 없다")
+        elif (($v.ulimits.core | type) == "number" and $v.ulimits.core != 0)
+          or (($v.ulimits.core | type) == "object" and ((($v.ulimits.core.soft // 0) != 0) or (($v.ulimits.core.hard // 0) != 0)))
+          then err(11; "\($n) ulimits core가 0이 아니다") else empty end ),
+      ( if $v.init != true then err(11; "\($n)에 init: true가 없다") else empty end ) ],
+  [ "postgres", "backup" | . as $n | select($svc[$n] != null) | select(($svc[$n].user // "") != "999:999")
+    | err(11; "\($n)가 user 999:999로 실행되지 않는다") ],
+
+  # 12 core-api depends_on = postgres(healthy) + migrate(완료, required false)
+  ( $svc["core-api"].depends_on // {} ) as $d
+  | (if ($d | keys) != ["migrate", "postgres"] then [ err(12; "core-api depends_on이 postgres · migrate가 아니다(\($d | keys | join(",")))") ] else [] end)
+    + (if ($d.postgres.condition // "") != "service_healthy" then [ err(12; "core-api의 postgres 의존이 service_healthy가 아니다") ] else [] end)
+    + (if ($d.migrate.condition // "") != "service_completed_successfully" or ($d.migrate.required != false)
+       then [ err(12; "core-api의 migrate 의존이 완료 조건 · required false가 아니다") ] else [] end)
+) | .[]
+JQ
+}
+
+check_compose_invariants() {
+  local id=compose-invariants
+  if ! prepare_compose; then
+    miss "$id" "docker compose · jq · 시험 env"
+    return
+  fi
+  if ! dc "${compose_files[@]}" -- --profile '*' config --format json >"$work/all.json" 2>"$work/ci.err" \
+    || ! dc "${compose_files[@]}" -- --profile '*' config --no-interpolate --no-env-resolution --format json >"$work/raw.json" 2>"$work/ci.err"; then
+    fail "$id" "config 해석 실패: $(short_err "$work/ci.err")"
+    return
+  fi
+  local out="$work/invariants.out"
+  if [ "$kind" = dev ]; then
+    jq -r '.services | to_entries[] | .key as $n | (.value.ports // [])[]
+      | select((.host_ip // "") != "127.0.0.1") | "dev: \($n)가 127.0.0.1이 아닌 주소에 포트를 게시한다(\(.published))"' \
+      "$work/all.json" >"$out"
+  else
+    write_invariant_program
+    if ! jq -r --slurpfile raw "$work/raw.json" --argjson secrets "$SECRET_NAMES" --argjson table "$SECRET_TABLE" \
+      --argjson memmax "$mem_limit_bytes" -f "$work/invariants.jq" "$work/all.json" >"$out" 2>"$work/jq.err"; then
+      fail "$id" "불변식 계산 실패: $(short_err "$work/jq.err")"
+      return
+    fi
+  fi
+  if [ -s "$out" ]; then
+    fail "$id" "$(sort -u "$out" | paste -sd ';' | sed 's/;/; /g')"
+  else
+    pass "$id"
+  fi
+}
+
+# ---- demo-profile -------------------------------------------------------------------------------------
+check_demo_profile() {
+  local id=demo-profile
+  if [ "$kind" != demo ]; then
+    pass "$id"
+    return
+  fi
+  if ! prepare_compose; then
+    miss "$id" "docker compose · jq · 시험 env"
+    return
+  fi
+  if ! dc "${compose_files[@]}" -- --profile '*' config --format json >"$work/dp.json" 2>"$work/dp.err"; then
+    fail "$id" "config 해석 실패: $(short_err "$work/dp.err")"
+    return
+  fi
+  jq -r '.services as $s
+    | ( ["core-api", "realtime"][] | . as $n | ($s[$n].environment.SPRING_PROFILES_ACTIVE // "")
+        | select(. != "demo") | "\($n) SPRING_PROFILES_ACTIVE가 demo 하나가 아니다(\(.))" ),
+      ( $s | to_entries[] | .key as $n | (.value.environment // {}) | to_entries[]
+        | select(.key == "MUJOONG_DEVLOGIN_ENABLED" or .key == "MUJOONG_LOADTEST_ENABLED"
+                 or .key == "MUJOONG_DEV_LOGIN_ENABLED" or .key == "MUJOONG_LOAD_TEST_ENABLED")
+        | select((.value // "" | ascii_downcase) != "false" and (.value // "") != "")
+        | "\($n) \(.key)가 켜져 있다" )' "$work/dp.json" >"$work/dp.out"
+  # Compose environment:가 env 파일 값을 가리므로 env 파일 자체에 프로필 줄이 있는지도 본다(값 비출력, CD-7 이중 방어)
+  if dc "${compose_files[@]}" -- --profile '*' config --no-env-resolution --format json >"$work/dp-raw.json" 2>/dev/null; then
+    local svc path
+    while IFS=$'\t' read -r svc path; do
+      [ -r "$path" ] || continue
+      if grep -E '^SPRING_PROFILES_ACTIVE=' "$path" | grep -qvxE 'SPRING_PROFILES_ACTIVE=demo'; then
+        echo "$svc env 파일에 demo가 아닌 SPRING_PROFILES_ACTIVE가 있다" >>"$work/dp.out"
+      fi
+    done < <(jq -r '.services | to_entries[] | .key as $n | (.value.env_file // [])[] | [$n, (.path // .)] | @tsv' "$work/dp-raw.json")
+  fi
+  if [ -s "$work/dp.out" ]; then
+    fail "$id" "$(sort -u "$work/dp.out" | paste -sd ';' | sed 's/;/; /g')"
+  else
+    pass "$id"
+  fi
+}
+
+# ---- secret-env-files ---------------------------------------------------------------------------------
+check_secret_env_files() {
+  local id=secret-env-files
+  if ! prepare_compose; then
+    miss "$id" "docker compose · jq · 시험 env"
+    return
+  fi
+  local sets=()
+  if [ "$explicit_compose" -eq 1 ]; then
+    sets=("${compose_files[*]}")
+  else
+    sets=("$INFRA_DIR/compose.demo.yml")
+    [ -f "$INFRA_DIR/compose.ci.yml" ] && sets+=("$INFRA_DIR/compose.demo.yml $INFRA_DIR/compose.ci.yml")
+    [ -f "$INFRA_DIR/compose.dev.yml" ] && sets+=("$INFRA_DIR/compose.dev.yml")
+  fi
+  : >"$work/sef.out"
+  local set files
+  for set in "${sets[@]}"; do
+    read -r -a files <<<"$set"
+    if ! dc "${files[@]}" -- --profile '*' config --no-env-resolution --format json >"$work/sef.json" 2>"$work/sef.err"; then
+      echo "config 해석 실패: $(short_err "$work/sef.err")" >>"$work/sef.out"
+      continue
+    fi
+    jq -r --argjson secrets "$SECRET_NAMES" '.services | to_entries[] | .key as $n
+      | ( (.value.environment // {}) | keys[] | select(. as $k | $secrets | index($k)) | "\($n)의 environment:에 비밀 \(.)가 있다" ),
+        ( (.value.env_file // []) as $ef
+          | if ($ef | length) > 1 then "\($n)가 env 파일을 \($ef | length)개 받는다"
+            elif ($ef | length) == 1 and (($ef[0].path // $ef[0]) | split("/") | last) != "\($n).env" then "\($n)가 남의 env 파일을 받는다"
+            else empty end )' "$work/sef.json" >>"$work/sef.out"
+  done
+  if [ -s "$work/sef.out" ]; then
+    fail "$id" "$(sort -u "$work/sef.out" | paste -sd ';' | sed 's/;/; /g')"
+  else
+    pass "$id"
+  fi
+}
+
+# ---- nginx -------------------------------------------------------------------------------------------
+nginx_image() {
+  local img
+  img="$(grep -E '^\s+image:\s*nginx:' "$INFRA_DIR/compose.demo.yml" | head -n 1 | sed -E 's/^\s+image:\s*//')"
+  echo "${img:-nginx:1.30.5-alpine}"
+}
+# shellcheck disable=SC2016  # Nginx 변수($remote_addr 등)를 글자 그대로 찾는다
+assert_nginx_directives() {
+  local dir="$1" all="$work/nginx-all.conf" problems=()
+  cat "$dir/nginx.conf" "$dir"/conf.d/*.conf "$dir"/snippets/*.conf >"$all"
+  local -a required=(
+    'server_tokens off;'
+    'ssl_reject_handshake on;'
+    'return 444;'
+    'client_header_timeout 10s;'
+    'client_body_timeout 10s;'
+    'client_max_body_size 64k;'
+    'Permissions-Policy "microphone=(self), camera=(), geolocation=()"'
+    "default-src 'none'; frame-ancestors 'none'"
+    'proxy_intercept_errors off;'
+    'limit_req_status 429;'
+    'ssl_session_tickets off;'
+    'ssl_protocols TLSv1.2 TLSv1.3;'
+    'proxy_set_header X-Forwarded-For $remote_addr;'
+    'proxy_set_header X-Trace-Id $request_id;'
+    'if ($request_uri ~* "^[^?]*(;|\\\\|%2e|%2f|%5c)")'
+    'error_page 413 =400 /__mujoong/error/400.json;'
+  )
+  local d
+  for d in "${required[@]}"; do
+    grep -qF -- "$d" "$all" || problems+=("지시어 없음: $d")
+  done
+  grep -qF '$proxy_add_x_forwarded_for' "$all" && problems+=('$proxy_add_x_forwarded_for 사용')
+  grep -qE '^\s*location\s+~' "$all" && problems+=('정규식 location 사용(3.2 허용 목록 위반)')
+  # /ws/device 블록의 버퍼링 끔 · 75초
+  local ws
+  ws="$(awk '/location = \/ws\/device \{/{f=1} f{print} f&&/^    \}/{exit}' "$dir/conf.d/https443.conf")"
+  grep -qF 'proxy_buffering off;' <<<"$ws" || problems+=('/ws/device에 proxy_buffering off 없음')
+  grep -qF 'proxy_read_timeout 75s;' <<<"$ws" || problems+=('/ws/device 읽기 75초 아님')
+  # /internal/ · /actuator/ 403
+  local loc
+  for loc in /internal/ /actuator/; do
+    awk -v l="location ^~ $loc {" 'index($0,l){f=1} f{print} f&&/^    \}/{exit}' "$dir/conf.d/https443.conf" \
+      | grep -qF 'return 403' || problems+=("$loc 403 아님")
+  done
+  # 편차 (y): 502 · 504는 상태 유지 + UPSTREAM_UNAVAILABLE, 429 RATE_LIMITED, 400 VALIDATION_FAILED, 상태 치환 금지
+  grep -qE "return 502 '\{\"code\":\"UPSTREAM_UNAVAILABLE\"" "$all" || problems+=('502 봉투 code UPSTREAM_UNAVAILABLE 없음')
+  grep -qE "return 504 '\{\"code\":\"UPSTREAM_UNAVAILABLE\"" "$all" || problems+=('504 봉투 code UPSTREAM_UNAVAILABLE 없음')
+  grep -qE "return 429 '\{\"code\":\"RATE_LIMITED\"" "$all" || problems+=('429 봉투 code RATE_LIMITED 없음')
+  grep -qE "return 400 '\{\"code\":\"VALIDATION_FAILED\"" "$all" || problems+=('400 봉투 code VALIDATION_FAILED 없음')
+  grep -qE 'error_page[^;]*\b50[0-9]\b[^;]*=[0-9]' "$all" && problems+=('5xx 상태 치환(error_page … =NNN)')
+  grep -qE '^\s*error_page\s+502\s+/__mujoong/error/502\.json;' "$all" || problems+=('error_page 502 봉투 연결 없음')
+  grep -qE '^\s*error_page\s+504\s+/__mujoong/error/504\.json;' "$all" || problems+=('error_page 504 봉투 연결 없음')
+  if [ -n "$REPO_ROOT" ] && [ -f "$REPO_ROOT/contracts/errors.md" ]; then
+    grep -qF 'UPSTREAM_UNAVAILABLE' "$REPO_ROOT/contracts/errors.md" || problems+=('contracts/errors.md에 UPSTREAM_UNAVAILABLE 없음')
+  fi
+  if [ "${#problems[@]}" -gt 0 ]; then
+    printf '%s\n' "${problems[@]}"
+  fi
+}
+check_nginx() {
+  local id=nginx
+  if ! have docker || ! have openssl; then
+    miss "$id" "docker · openssl"
+    return
+  fi
+  local host=validate.mujoong.invalid problems=() mode ups out
+  # 렌더 · nginx -t용 시험 인증서(실행 때 만들고 지운다)
+  mkdir -p "$work/certs/live/$host"
+  if ! openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:P-256 -nodes -days 1 -subj "/CN=$host" \
+    -addext "subjectAltName=DNS:$host" -keyout "$work/certs/live/$host/privkey.pem" \
+    -out "$work/certs/live/$host/fullchain.pem" >/dev/null 2>&1; then
+    fail "$id" "시험 인증서를 만들지 못했다"
+    return
+  fi
+  local image
+  image="$(nginx_image)"
+  for mode in https bootstrap; do
+    for ups in compose host; do
+      out="$work/nginx-$mode-$ups"
+      if ! SERVICE_HOST="$host" MUJOONG_SECURITY_ALLOWED_ORIGIN="https://$host" \
+        bash "$SCRIPT_DIR/render-nginx" --src "$nginx_src" --out "$out" --mode "$mode" --upstreams "$ups" \
+        >/dev/null 2>"$work/rn.err"; then
+        problems+=("render $mode/$ups: $(short_err "$work/rn.err")")
+        continue
+      fi
+      chmod -R go+rX "$out" "$work/certs"
+      if ! docker run --rm --network none --add-host host.docker.internal:127.0.0.1 --entrypoint nginx \
+        -v "$out:/etc/nginx/mujoong:ro" -v "$work/certs:/etc/letsencrypt:ro" \
+        "$image" -t -q -c /etc/nginx/mujoong/nginx.conf >/dev/null 2>"$work/nt.err"; then
+        problems+=("nginx -t $mode/$ups: $(grep -m1 -E 'emerg|error|failed' "$work/nt.err" | cut -c1-200)")
+      fi
+    done
+  done
+  if [ -d "$work/nginx-https-compose" ]; then
+    local found
+    found="$(assert_nginx_directives "$work/nginx-https-compose")"
+    [ -n "$found" ] && problems+=("$(paste -sd ';' <<<"$found" | sed 's/;/; /g')")
+  fi
+  if [ "${#problems[@]}" -gt 0 ]; then
+    fail "$id" "${problems[*]}"
+  else
+    pass "$id"
+  fi
+}
+
+# ---- shellcheck --------------------------------------------------------------------------------------
+check_shellcheck() {
+  local id=shellcheck
+  if ! have shellcheck; then
+    miss "$id" "shellcheck"
+    return
+  fi
+  local base="${REPO_ROOT:-$INFRA_DIR}" roots=() files=()
+  if [ -n "$REPO_ROOT" ]; then
+    roots=("$REPO_ROOT/infra" "$REPO_ROOT/scripts")
+  else
+    roots=("$INFRA_DIR")
+  fi
+  local f first
+  while IFS= read -r -d '' f; do
+    case "$f" in
+      *.sh) files+=("$f") ;;
+      *)
+        first="$(head -c 128 "$f" 2>/dev/null | head -n 1 | tr -d '\000' || true)"
+        case "$first" in '#!'*bash* | '#!'*/sh | '#!'*' sh') files+=("$f") ;; esac
+        ;;
+    esac
+  done < <(find "${roots[@]}" -type f -not -path '*/node_modules/*' -not -path '*/build/*' -print0 2>/dev/null)
+  if [ "${#files[@]}" -eq 0 ]; then
+    fail "$id" "검사할 셸 스크립트가 없다"
+    return
+  fi
+  local bad=()
+  for f in "${files[@]}"; do
+    if ! (cd "$base" && shellcheck -x -S style "$f" >"$work/sc.out" 2>&1); then
+      bad+=("${f#"$base"/}($(grep -oE 'SC[0-9]{4}' "$work/sc.out" | sort -u | paste -sd, -))")
+    fi
+  done
+  if [ "${#bad[@]}" -gt 0 ]; then
+    fail "$id" "${bad[*]}"
+  else
+    pass "$id"
+  fi
+}
+
+# ---- migrations --------------------------------------------------------------------------------------
+check_migrations() {
+  local id=migrations
+  if [ "${#migration_dirs[@]}" -eq 0 ]; then
+    miss "$id" "마이그레이션 디렉터리(저장소에서만)"
+    return
+  fi
+  if ! have python3; then
+    miss "$id" "python3"
+    return
+  fi
+  local d
+  for d in "${migration_dirs[@]}"; do
+    if [ ! -d "$d" ]; then
+      fail "$id" "마이그레이션 디렉터리가 없다: $d"
+      return
+    fi
+  done
+  # 주석 · 문자열을 지우고 문장 단위로 금지 형태를 찾는다(파일 이름 · 문장 번호 · 사유만 출력)
+  if ! python3 -I - "$allow_contract" "${migration_dirs[@]}" >"$work/mig.out" 2>"$work/mig.err" <<'PY'; then
+import os, re, sys
+allow = sys.argv[1] == "1"
+dirs = sys.argv[2:]
+rules = [
+    (r"\bDROP\s+(TABLE|COLUMN|SCHEMA|VIEW|MATERIALIZED\s+VIEW|SEQUENCE|TYPE|FUNCTION|PROCEDURE|INDEX|CONSTRAINT|TRIGGER|DEFAULT)\b", "삭제"),
+    (r"\bALTER\s+TABLE\b[^;]*\bDROP\b", "삭제"),
+    (r"\bRENAME\b", "이름 변경"),
+    (r"\bALTER\s+COLUMN\b[^;]*\b(SET\s+DATA\s+)?TYPE\b", "타입 변경"),
+    (r"\bALTER\s+COLUMN\b[^;]*\bSET\s+NOT\s+NULL\b", "널 불허 추가"),
+    (r"\bTRUNCATE\b", "데이터 삭제"),
+]
+problems = []
+def strip(sql):
+    sql = re.sub(r"--[^\n]*", " ", sql)
+    sql = re.sub(r"/\*.*?\*/", " ", sql, flags=re.S)
+    sql = re.sub(r"'(?:[^']|'')*'", "''", sql)
+    sql = re.sub(r"\$([A-Za-z_]*)\$.*?\$\1\$", "''", sql, flags=re.S)
+    return sql
+for d in dirs:
+    files = sorted(f for f in os.listdir(d) if f.endswith(".sql"))
+    versioned = sorted((f for f in files if re.match(r"^V\d+__", f)), key=lambda f: int(re.match(r"^V(\d+)__", f).group(1)))
+    for f in files:
+        if not (re.match(r"^V\d+__.+\.sql$", f) or re.match(r"^(after|before)\w+\.sql$", f)):
+            problems.append(f"{f}: Flyway 이름 규칙 밖")
+    for f in versioned:
+        created = set()
+        text = strip(open(os.path.join(d, f), encoding="utf-8").read())
+        for i, stmt in enumerate(s for s in text.split(";") if s.strip()):
+            norm = " ".join(stmt.split()).upper()
+            m = re.match(r"CREATE\s+(UNLOGGED\s+)?TABLE\s+(IF\s+NOT\s+EXISTS\s+)?([\w.\"]+)", norm)
+            if m:
+                created.add(m.group(3).replace('"', '').lower())
+                continue
+            # 같은 묶음(이 위치)에서 만든 새 표에 대한 ALTER TABLE ADD CONSTRAINT는 새 표 정의의 일부다
+            t = re.match(r"ALTER\s+TABLE\s+(ONLY\s+)?(IF\s+EXISTS\s+)?([\w.\"]+)", norm)
+            target = t.group(3).replace('"', '').lower() if t else None
+            if re.search(r"\bADD\s+CONSTRAINT\b", norm) and (target is None or target not in created):
+                problems.append(f"{os.path.basename(d)}/{f} 문장 {i + 1}: 기존 표 제약 강화")
+            hit = next((reason for pattern, reason in rules if re.search(pattern, norm)), None)
+            if hit is None and t:
+                # ALTER TABLE의 ADD 절마다: 기본값 없는 NOT NULL 열 추가는 이전 앱의 INSERT를 깨뜨린다
+                for clause in norm[t.end():].split(","):
+                    c = clause.strip()
+                    if re.match(r"ADD\s+(COLUMN\s+)?(IF\s+NOT\s+EXISTS\s+)?(?!CONSTRAINT\b)[\w\"]+\s", c) \
+                            and re.search(r"\bNOT\s+NULL\b", c) and not re.search(r"\bDEFAULT\b", c):
+                        hit = "기본값 없는 널 불허 열 추가"
+                        break
+            if hit:
+                problems.append(f"{os.path.basename(d)}/{f} 문장 {i + 1}: {hit}")
+if problems and not allow:
+    print("\n".join(problems))
+    sys.exit(1)
+PY
+    if [ -s "$work/mig.out" ]; then
+      fail "$id" "$(paste -sd ';' "$work/mig.out" | sed 's/;/; /g')"
+    else
+      fail "$id" "검사 실행 실패: $(short_err "$work/mig.err")"
+    fi
+    return
+  fi
+  pass "$id"
+}
+
+# ---- bundle ------------------------------------------------------------------------------------------
+readonly BUNDLE_REQUIRED=(compose.demo.yml release.env bin nginx backup postgres seed seed-audio host RUNBOOK.md)
+check_bundle() {
+  local id=bundle problems=()
+  if [ ! -f "$bundle_dockerfile" ]; then
+    miss "$id" "번들 Dockerfile($bundle_dockerfile)"
+    return
+  fi
+  # 1 Dockerfile 복사 목록: 맥락(infra/)에서 복사하는 원본이 번들 목록 안에만 있다
+  local src
+  while read -r src; do
+    case "$src" in
+      compose.demo.yml | bin/ | nginx/ | backup/ | postgres/ | seed/ | seed-audio/ | host/ | RUNBOOK.md) ;;
+      *) problems+=("Dockerfile이 번들 목록 밖을 복사한다: $src") ;;
+    esac
+  done < <(grep -E '^\s*COPY\s' "$bundle_dockerfile" | grep -v -- '--from=' | awk '{print $2}')
+  grep -qE '^\s*COPY\s+--from=release\s+release\.env\s' "$bundle_dockerfile" || problems+=('release.env 복사가 없다')
+  grep -qE '^\s*(RUN|ADD)\s' "$bundle_dockerfile" && problems+=('번들 Dockerfile에 RUN · ADD가 있다')
+  local ignore="$bundle_dockerfile.dockerignore"
+  if [ ! -f "$ignore" ]; then
+    problems+=('번들 맥락 제한 파일(Dockerfile.dockerignore)이 없다')
+  else
+    grep -qxF '*' "$ignore" || problems+=('맥락 제한 파일이 허용 목록 방식(*)이 아니다')
+    grep -qE '^!(compose\.(ci|dev)\.yml|ci|aws)/?$' "$ignore" && problems+=('맥락 제한 파일이 금지 항목을 들인다')
+  fi
+  # 2 실제 이미지 파일 목록(주면)
+  if [ -n "$bundle_image" ]; then
+    if ! have docker; then
+      miss "$id" "docker(--bundle-image)"
+      return
+    fi
+    local cid
+    if ! cid="$(docker create "$bundle_image" 2>"$work/b.err")"; then
+      fail "$id" "번들 이미지를 열 수 없다: $(short_err "$work/b.err")"
+      return
+    fi
+    docker export "$cid" | tar -t >"$work/bundle.list" 2>/dev/null || true
+    docker rm "$cid" >/dev/null 2>&1 || true
+    local item
+    for item in "${BUNDLE_REQUIRED[@]}"; do
+      grep -qE "^bundle/$item/?$" "$work/bundle.list" || problems+=("번들에 $item 없음")
+    done
+    if grep -qE '^bundle/(compose\.ci\.yml|compose\.dev\.yml|ci/|aws/)' "$work/bundle.list"; then
+      problems+=('번들에 compose.ci.yml · compose.dev.yml · ci/ · aws/ 중 하나가 있다')
+    fi
+    if grep -E '(^|/)(\.env[^/]*|[^/]+\.env)$' "$work/bundle.list" | grep -vqx 'bundle/release.env'; then
+      problems+=('번들에 환경 파일이 있다')
+    fi
+    if grep -qE '\.(pem|key|p12|jks)$' "$work/bundle.list"; then
+      problems+=('번들에 인증서 · 키 파일이 있다')
+    fi
+    if grep -vE '^(bundle/|\.dockerenv$|dev/|etc/|proc/|sys/)' "$work/bundle.list" | grep -q .; then
+      problems+=('번들에 /bundle 밖 파일이 있다')
+    fi
+  fi
+  if [ "${#problems[@]}" -gt 0 ]; then
+    fail "$id" "${problems[*]}"
+  else
+    pass "$id"
+  fi
+}
+
+for id in "${selected[@]}"; do
+  case "$id" in
+    compose-config) check_compose_config ;;
+    compose-invariants) check_compose_invariants ;;
+    demo-profile) check_demo_profile ;;
+    secret-env-files) check_secret_env_files ;;
+    nginx) check_nginx ;;
+    shellcheck) check_shellcheck ;;
+    migrations) check_migrations ;;
+    bundle) check_bundle ;;
+  esac
+done
+
+if [ "$fails" -gt 0 ]; then
+  echo "infra-validate: FAIL ${fails}건 · MISSING ${missing}건"
+  exit 1
+fi
+if [ "$missing" -gt 0 ]; then
+  echo "infra-validate: 전제 누락 ${missing}건(통과로 보지 않는다)"
+  exit 2
+fi
+echo "infra-validate: 모두 통과(${#selected[@]}건)"

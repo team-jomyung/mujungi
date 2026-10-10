@@ -30,7 +30,12 @@ export const SERVER_TO_DEVICE_TYPES = Object.freeze([
 ]);
 
 /** opId가 필수인 서버 명령(기기는 받자마자 ACK). */
-export const OP_ID_COMMANDS = Object.freeze(["START_SESSION", "PLAY_APPROVED_CONTENT", "STOP_OUTPUT", "CLOSE_TRANSPORT"]);
+export const OP_ID_COMMANDS = Object.freeze([
+  "START_SESSION",
+  "PLAY_APPROVED_CONTENT",
+  "STOP_OUTPUT",
+  "CLOSE_TRANSPORT",
+]);
 /** 봉투 sessionId가 필수인 type(보낸 쪽 기준, ws-envelope.schema.json의 if-then). */
 export const SESSION_ID_REQUIRED = Object.freeze([
   "START_SESSION",
@@ -63,9 +68,25 @@ export const CLOSE_TRANSPORT_REASONS = Object.freeze([
   "DECLINED",
   "FAILED",
 ]);
-export const PLAYBACK_STATUSES = Object.freeze(["STARTED", "PROGRESS", "COMPLETED", "STOPPED", "FAILED"]);
-export const STOP_CAUSES = Object.freeze(["LOCAL_VOICE_ACTIVITY", "STOP_OUTPUT", "CLOSE_TRANSPORT", "DISCONNECTED"]);
-export const FAILURE_REASONS = Object.freeze(["DECODE_ERROR", "AUDIO_DEVICE_ERROR", "QUEUE_OVERFLOW", "FETCH_FAILED"]);
+export const PLAYBACK_STATUSES = Object.freeze([
+  "STARTED",
+  "PROGRESS",
+  "COMPLETED",
+  "STOPPED",
+  "FAILED",
+]);
+export const STOP_CAUSES = Object.freeze([
+  "LOCAL_VOICE_ACTIVITY",
+  "STOP_OUTPUT",
+  "CLOSE_TRANSPORT",
+  "DISCONNECTED",
+]);
+export const FAILURE_REASONS = Object.freeze([
+  "DECODE_ERROR",
+  "AUDIO_DEVICE_ERROR",
+  "QUEUE_OVERFLOW",
+  "FETCH_FAILED",
+]);
 
 /** WSS 닫기 코드(device-ws.asyncapi.yaml x-close-codes). */
 export const CLOSE_CODES = Object.freeze({
@@ -81,9 +102,11 @@ export const CLOSE_CODES = Object.freeze({
 });
 
 export const MAX_ENVELOPE_SEQ = 0xffff_ffff;
-export const UUID_PATTERN = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+export const UUID_PATTERN =
+  /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 /** ISO 8601 UTC(끝 Z), 소수 초 1 ~ 9자리(common.schema.json DateTime). */
-export const DATE_TIME_PATTERN = /^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]{1,9})?Z$/;
+export const DATE_TIME_PATTERN =
+  /^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]{1,9})?Z$/;
 const CONTENT_CODE_PATTERN = /^[A-Z][A-Z0-9_]*$/;
 const APPROVED_AUDIO_URL_PATTERN = /^\/media\/approved\/[A-Za-z0-9._-]+\.wav$/;
 const ENVELOPE_KEYS = new Set(["type", "seq", "sentAt", "opId", "sessionId", "payload"]);
@@ -176,7 +199,13 @@ export function checkServerPayload(type, payload) {
   const label = `${type}.payload`;
   switch (type) {
     case "HELLO_OK":
-      checkKeys(problems, label, p, ["connectionId", "serverTime", "heartbeatIntervalMs", "audio", "session"]);
+      checkKeys(problems, label, p, [
+        "connectionId",
+        "serverTime",
+        "heartbeatIntervalMs",
+        "audio",
+        "session",
+      ]);
       requireField(problems, label, p, "connectionId", isUuid, "UUID");
       requireField(problems, label, p, "serverTime", isDateTime, "DateTime");
       requireField(problems, label, p, "heartbeatIntervalMs", isInt(1), "1 이상 정수");
@@ -186,7 +215,13 @@ export function checkServerPayload(type, payload) {
         label,
         p,
         "session",
-        isNullable((s) => typeof s === "object" && isUuid(s.sessionId) && VIEWS.includes(s.view) && typeof s.resumed === "boolean"),
+        isNullable(
+          (s) =>
+            typeof s === "object" &&
+            isUuid(s.sessionId) &&
+            VIEWS.includes(s.view) &&
+            typeof s.resumed === "boolean",
+        ),
         "null 또는 {sessionId, view, resumed}",
       );
       break;
@@ -208,7 +243,9 @@ export function checkServerPayload(type, payload) {
             (item) =>
               item !== null &&
               typeof item === "object" &&
-              Object.keys(item).every((key) => ["contentCode", "contentVersionId", "audioUrl"].includes(key)) &&
+              Object.keys(item).every((key) =>
+                ["contentCode", "contentVersionId", "audioUrl"].includes(key),
+              ) &&
               CONTENT_CODE_PATTERN.test(item.contentCode ?? "") &&
               isUuid(item.contentVersionId) &&
               APPROVED_AUDIO_URL_PATTERN.test(item.audioUrl ?? ""),
@@ -223,7 +260,14 @@ export function checkServerPayload(type, payload) {
     case "OUTPUT_BEGIN":
       checkKeys(problems, label, p, ["playbackId", "source"]);
       requireField(problems, label, p, "playbackId", isUuid, "UUID");
-      requireField(problems, label, p, "source", isEnum(["GPT_LIVE", "SCENARIO_SCRIPT"]), "출력 출처");
+      requireField(
+        problems,
+        label,
+        p,
+        "source",
+        isEnum(["GPT_LIVE", "SCENARIO_SCRIPT"]),
+        "출력 출처",
+      );
       break;
     case "OUTPUT_END":
       checkKeys(problems, label, p, ["playbackId", "totalMs"]);
@@ -233,7 +277,14 @@ export function checkServerPayload(type, payload) {
     case "PLAY_APPROVED_CONTENT":
       checkKeys(problems, label, p, ["playbackId", "contentCode", "contentVersionId"]);
       requireField(problems, label, p, "playbackId", isUuid, "UUID");
-      requireField(problems, label, p, "contentCode", (v) => typeof v === "string" && CONTENT_CODE_PATTERN.test(v), "contentCode");
+      requireField(
+        problems,
+        label,
+        p,
+        "contentCode",
+        (v) => typeof v === "string" && CONTENT_CODE_PATTERN.test(v),
+        "contentCode",
+      );
       requireField(problems, label, p, "contentVersionId", isUuid, "UUID");
       break;
     case "STOP_OUTPUT":
@@ -242,11 +293,25 @@ export function checkServerPayload(type, payload) {
       break;
     case "CLOSE_TRANSPORT":
       checkKeys(problems, label, p, ["reason"]);
-      requireField(problems, label, p, "reason", isEnum(CLOSE_TRANSPORT_REASONS), "CLOSE_TRANSPORT 사유");
+      requireField(
+        problems,
+        label,
+        p,
+        "reason",
+        isEnum(CLOSE_TRANSPORT_REASONS),
+        "CLOSE_TRANSPORT 사유",
+      );
       break;
     case "ERROR":
       checkKeys(problems, label, p, ["code", "refSeq"]);
-      requireField(problems, label, p, "code", isEnum(["UNKNOWN_TYPE", "BAD_PAYLOAD"]), "ERROR 코드");
+      requireField(
+        problems,
+        label,
+        p,
+        "code",
+        isEnum(["UNKNOWN_TYPE", "BAD_PAYLOAD"]),
+        "ERROR 코드",
+      );
       optionalField(problems, label, p, "refSeq", isNullable(isInt(1)), "null 또는 1 이상 정수");
       break;
     default:
@@ -301,7 +366,12 @@ export function parseServerEnvelope(text) {
   } else if ("sessionId" in value && value.sessionId !== null && !isUuid(value.sessionId)) {
     problem(problems, `${type}: sessionId가 UUID · null이 아니다`);
   }
-  if (SERVER_TO_DEVICE_TYPES.includes(type) && value.payload && typeof value.payload === "object" && !Array.isArray(value.payload)) {
+  if (
+    SERVER_TO_DEVICE_TYPES.includes(type) &&
+    value.payload &&
+    typeof value.payload === "object" &&
+    !Array.isArray(value.payload)
+  ) {
     problems.push(...checkServerPayload(type, value.payload));
   }
   const envelope = {
@@ -336,7 +406,14 @@ export function deviceReadyPayload(mic = "OK", player = "OK", prefetch = "OK") {
   return { mic, player, prefetch };
 }
 
-export function playbackMarkPayload({ playbackId, status, observedAtMs, stopCause = null, failureReason = null, playedRange = null }) {
+export function playbackMarkPayload({
+  playbackId,
+  status,
+  observedAtMs,
+  stopCause = null,
+  failureReason = null,
+  playedRange = null,
+}) {
   if (!PLAYBACK_STATUSES.includes(status)) {
     throw new TypeError(`PLAYBACK_MARK status가 틀렸다: ${status}`);
   }
@@ -351,5 +428,8 @@ export function playbackMarkPayload({ playbackId, status, observedAtMs, stopCaus
 }
 
 export function voiceSessionClosedPayload(outputStoppedAtMs, micClosedAtMs) {
-  return { outputStoppedAt: toIsoInstant(outputStoppedAtMs), micClosedAt: toIsoInstant(micClosedAtMs) };
+  return {
+    outputStoppedAt: toIsoInstant(outputStoppedAtMs),
+    micClosedAt: toIsoInstant(micClosedAtMs),
+  };
 }

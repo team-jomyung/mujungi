@@ -1,0 +1,4 @@
+# 위반 샘플: 서드파티 이미지 latest — 단언 8(SD-16 · I-13)
+services:
+  certbot:
+    image: certbot/certbot:latest

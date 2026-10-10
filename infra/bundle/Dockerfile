@@ -9,9 +9,10 @@
 #   docker build -f infra/bundle/Dockerfile --build-context release=<release.env가 든 임시 디렉터리> \
 #     --build-arg GIT_SHA=<40자 커밋> --build-arg MUJOONG_SOURCE_FINGERPRINT=sha256:<64자> infra
 #
-# 담는 것은 cicd 2.3.1 목록뿐이고 하나씩 명시해 복사한다: compose.demo.yml · release.env · bin/ · nginx/ · backup/ ·
-# postgres/ · seed/ · seed-audio/ · RUNBOOK.md. compose.ci.yml · compose.dev.yml · ci/ · aws/ · host/ 와 환경 파일은 넣지 않는다
-# (image-checks.sh 점검 ⑤ · infra-validate가 파일 목록을 단언한다).
+# 담는 것은 cicd 2.3.1 목록과 호스트 기준선 host/를 하나씩 명시해 복사한다: compose.demo.yml · release.env · bin/ · nginx/ · backup/ ·
+# postgres/ · seed/ · seed-audio/ · host/ · RUNBOOK.md. host/(systemd 단위 · cron · logrotate · 고정 진입점, 비밀 없음)는 Step 47이 더했다:
+# 호스트에 저장소 읽기 자격을 두지 않으므로 최초 설치(RUNBOOK 4.5.1)와 배포 D9(진입점 갱신 · 기준선 차이 경고)가 같은 SHA의 번들에서
+# 읽는다. compose.ci.yml · compose.dev.yml · ci/ · aws/ 와 환경 파일은 넣지 않는다(image-checks.sh 점검 ⑤ · infra-validate가 파일 목록을 단언한다).
 #
 # 꺼내는 법(컨테이너를 실행하지 않는다):
 #   id=$(docker create <이미지>) && docker cp "$id":/bundle/. <대상> && docker rm "$id"
@@ -30,6 +31,7 @@ COPY backup/ /bundle/backup/
 COPY postgres/ /bundle/postgres/
 COPY seed/ /bundle/seed/
 COPY seed-audio/ /bundle/seed-audio/
+COPY host/ /bundle/host/
 COPY RUNBOOK.md /bundle/RUNBOOK.md
 # 실행 파일이 없는 이미지다. docker create가 명령을 요구하므로 자리 이름만 둔다(실행하면 실패한다).
 CMD ["/bundle/not-executable"]

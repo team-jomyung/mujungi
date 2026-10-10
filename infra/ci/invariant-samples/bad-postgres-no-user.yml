@@ -1,0 +1,4 @@
+# 위반 샘플: user 없는 postgres(이미지 기본 root 시작) — 단언 11(R4-12)
+services:
+  postgres:
+    user: !reset null

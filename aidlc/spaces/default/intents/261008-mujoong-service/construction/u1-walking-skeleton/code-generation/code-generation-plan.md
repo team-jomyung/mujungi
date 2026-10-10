@@ -518,43 +518,43 @@ J1 ~ J104는 모두 아직 확정이 아닌 가정이다. J97 ~ J104는 사람 �
 
 ### H. 환경 · 빌드 설정
 
-- [ ] Step 43: 이미지 정의(Dockerfile · 번들 · 백업)
+- [x] Step 43: 이미지 정의(Dockerfile · 번들 · 백업)
   - 파일: `backend/core-api/Dockerfile` · `backend/realtime-activity/Dockerfile`(Java 21 JRE, uid 10001, curl 포함, ENV에 비밀 없음, `JAVA_TOOL_OPTIONS`는 Compose), `frontend/Dockerfile`(Node 22, standalone, uid 1000, wget · curl 중 하나), `infra/migrate/Dockerfile`(Flyway CLI 고정 태그 + 두 위치 SQL), `infra/bundle/Dockerfile`(`FROM scratch` + cicd 2.3.1 목록만 명시 복사: `compose.demo.yml` · `release.env` · `bin/` · `nginx/` · `backup/` · `postgres/` · `seed/` · `seed-audio/` · `RUNBOOK.md` → `mujoong-infra`. `compose.ci.yml` · `compose.dev.yml` · `ci/` · `aws/`는 넣지 않는다), `infra/backup/{Dockerfile,backup.sh,crontab}`(J128, `data_class` ≠ synthetic이면 거부, 임시 파일 → `pg_restore --list` → 이름 변경), `backend/.dockerignore` · `frontend/.dockerignore`
   - 하는 일: 이미지 6종을 정의한다. 모든 이미지에 `LABEL org.opencontainers.image.revision=${GIT_SHA}`와 소스 지문 라벨(J134 (가), 사람 결정 10)을 넣는다(cicd 2.3.1 규칙). **샌드박스 빌드 규칙(R-03):** 컨테이너 안 프로세스는 프록시 중계에 닿지 못하고 CA를 모른다(`/root/.ccr/README.md` 86 ~ 91행). 그래서 앱 이미지 3종(core-api · realtime · web)은 멀티 스테이지를 유지하되 A가 만든 bootJar와 `.next/standalone`을 COPY하는 것을 기본으로 해 컨테이너 안 Gradle · npm 받기를 없애고, 네트워크를 쓰는 RUN 단계(최소 HTTP 클라이언트 · backup의 패키지 · supercronic 받기 등)는 BuildKit 비밀 마운트로만 CA(`extra_ca`)와 프록시 값(`proxy_env`)을 읽는다. 빌드 인자 · ENV로 넘기면 `docker history`에 남으므로 쓰지 않는다. 최종 이미지에 CA · 프록시 값이 없음을 `docker image inspect`와 `docker history`로 확인한다. 운영 jar에 시험 클래스가 없음은 Step 5가 정의한 `verifyBootJarHasNoTestClasses`로 확인한다.
   - 근거: cicd 2.3.1 · infra-spec 2.1 · R4-12 · R4-16 · SD-24 · SD-25 · J81 · J128 · J134 · NFR9.10 · NFR12.2 · CD-7
   - 완료 확인: Docker가 있으면 `docker build`가 6종 모두 성공하고 최종 이미지에 CA · 프록시 값과 `compose.ci.yml` · `compose.dev.yml` · `ci/`가 없으며, `cd backend && ./gradlew --no-daemon verifyBootJarHasNoTestClasses` 통과.
 
-- [ ] Step 44: Nginx 템플릿 · Compose 3종 · 렌더 스크립트
+- [x] Step 44: Nginx 템플릿 · Compose 3종 · 렌더 스크립트
   - 파일: `infra/nginx/nginx.conf.tmpl`, `infra/nginx/conf.d/{http80.conf.tmpl,http80-bootstrap.conf.tmpl,https443.conf.tmpl}`, `infra/nginx/snippets/{security-headers.conf,proxy-common.conf,error-json.conf}`(502 · 504 상태 유지 + JSON code `UPSTREAM_UNAVAILABLE` (y)), `infra/nginx/html/maintenance.html`, `infra/nginx/reload-watch.sh`, `infra/compose.demo.yml`(서비스 9개 · 공통 정책 · 망 2개 · 고정 IP · 메모리 · 헬스 · 의존(core-api는 realtime을 기다리지 않음) · 이미지 `${MUJOONG_REGISTRY}/mujoong-*:${MUJOONG_TAG:?}`), `infra/compose.dev.yml`(postgres + 선택 nginx, 127.0.0.1 게시), `infra/compose.ci.yml`(검증 덧붙임: 로컬 빌드 이미지 · `fake-provider` 서비스 · `SPRING_PROFILES_ACTIVE=dev` · `MUJOONG_DEVLOGIN_ENABLED=true` · `MUJOONG_PROVIDER_URL` → 가짜 공급자 · `SERVICE_HOST=localhost` · certbot · backup 끔, J108. J136대로 nginx `ports: !override ["127.0.0.1:8443:443"]`, 각 서비스 `env_file: !override [build/verify/env/<서비스>.env]`, 호스트 절대 경로 바인드를 같은 컨테이너 경로로 다시 선언: postgres 데이터 → 이름 있는 볼륨 `verify-pgdata`, init → `./infra/postgres/init`(읽기), nginx 설정 → `build/verify/nginx`, 인증서 → `build/verify/certs`, 승인 음성 → `./infra/seed-audio`(읽기)), `infra/bin/{render-nginx,render-env}`, `infra/release.env.tmpl`, `infra/ci/gen-env.sh`(실행 때 무작위 비밀을 인프라 명세 3.7 분배표대로 서비스별 `build/verify/env/{postgres,migrate,core-api,realtime,web,nginx}.env`에 만든다. umask 077, 받지 않는 비밀은 넣지 않음, 값은 base64url · INTERNAL_SERVICE_TOKEN 43자 이상 · ownerHash 비밀 32바이트 이상, J124 · J127 · J136)
   - 하는 일: 경로(`/internal/` · `/actuator/` 403, `= /api/health`, `= /api/device/bootstrap` limit_req 30r/m burst 20 nodelay · `limit_req_status 429` + `error_page 429` RATE_LIMITED 봉투, `^~ /api/`, `= /ws/device` 75초 · `proxy_buffering off`, `^~ /media/approved/` .wav GET · HEAD, `/_next/static/`, `/`), 원시 요청 URI에 `;` · `\` · `%2e` · `%2f` · `%5c`(대소문자 무관)가 있으면 400(`/api/..;/internal/…` 우회 방지), 443 기본 서버 `ssl_reject_handshake on` + 서비스 호스트 서버, 80은 ACME 외 301 `https://${SERVICE_HOST}$request_uri`(요청 Host를 쓰지 않음) · 모르는 Host 444, TLS 1.2 · 1.3 · `ssl_session_tickets off` · HSTS, 공통 포함 파일의 보안 헤더(HSTS · nosniff · Referrer-Policy · `Permissions-Policy: microphone=(self), camera=(), geolocation=()`), `/api/` · `/media/approved/` · Nginx 오류 응답에는 `default-src 'none'; frame-ancestors 'none'` CSP(Next.js 경로는 CSP를 더하지 않음), `client_max_body_size 64k` + `error_page 413 =400`, `client_header_timeout` · `client_body_timeout` 10s, `proxy_intercept_errors off`(앱이 낸 503 통과), XFF · X-Real-IP · X-Trace-Id 덮어쓰기, 접근 로그(쿼리 · 쿠키 · Referer 없음, 폴링 2xx · 304 미기록, stdout으로 내보내 Docker json-file에 남음), `server_tokens off`. 템플릿 변수는 `SERVICE_HOST` · `MUJOONG_SECURITY_ALLOWED_ORIGIN` · HSTS뿐이고 envsubst 변수 목록을 명시한다. `docker compose config`는 env_file 값을 펼쳐 출력하므로 유효성 확인에는 `--quiet`를 쓰고, 해석이 필요한 단언은 `--format json` 출력을 umask 077 임시 파일로만 받아 처리한 뒤 지운다(출력을 로그 · 대화에 붙이지 않음, infra-spec 2.2 · CD-11).
   - 근거: BR8.9 · SD-1 · SD-2 · SD-3 · SD-12 · LC-1 ~ LC-6 · infra-spec 2.1 ~ 3.3 · 3.7 · R4-1 · R4-17 · J98 · J108 · J136 · (r)(t)(y) · NFR4.13 · NFR9.6 · NFR9.9 · NFR9.12
   - 완료 확인: `bash infra/ci/gen-env.sh`로 만든 env로 `docker compose -f infra/compose.demo.yml config --quiet` · `-f infra/compose.demo.yml -f infra/compose.ci.yml config --quiet`가 종료 코드 0이고, 렌더된 설정이 `nginx -t`를 통과한다(Docker가 있을 때).
 
-- [ ] Step 45: tools 구현(가짜 공급자 · 기기 시뮬레이터 · C안 시나리오)
+- [x] Step 45: tools 구현(가짜 공급자 · 기기 시뮬레이터 · C안 시나리오)
   - 파일: `tools/lib/{frameCodec.mjs,envelope.mjs,cookieJar.mjs,httpClient.mjs,log.mjs}`, `tools/fake-provider/{server.mjs,scenarios.mjs,Dockerfile}`(J110 선 형식, 시나리오 정상 · 금지 패턴 · 거부 · 무응답 · 지연, 받은 입력 음성 바이트 수 · 해시와 보낸 출력 음성 해시 기록), `tools/device-simulator/simulator.mjs`(WSS 클라이언트 · Cookie · Origin · HELLO · HEARTBEAT(송신 직전 제어 봉투 `sentAt`, J143) · ACK · DEVICE_READY · 0x01 20ms 프레임 · PLAYBACK_MARK · VOICE_SESSION_CLOSED · 턴별로 받은 OUTPUT_BEGIN 수와 0x02 바이트 수 · 해시 기록 · 자체 서명 CA 지정), `tools/skeleton-e2e/{run-c.mjs,steps.mjs,assertions.mjs}`(## 검증 명령(C안)의 C1 ~ C12, 본 비밀 값은 `build/verify/c/secrets.list`(600)에만 적고 로그에 쓰지 않음), `tools/dev-edge/edge.mjs`(host 모드 Nginx 대역, J133)
   - 하는 일: C안이 쓰는 시험 도구를 만든다. 앱 이미지에는 넣지 않는다(J129 · SD-25). Node 클라이언트(`ws` · `fetch`)는 프록시 에이전트를 쓰지 않고 자체 서명 CA를 `ca` 옵션으로만 넘긴다(`NODE_TLS_REJECT_UNAUTHORIZED`는 쓰지 않음). run-c.mjs의 모든 변경 요청에 `Origin: https://localhost:8443`을 붙인다(Node fetch는 Origin을 보내지 않으므로 F4 Origin 비교를 실제로 거치게 함). 모든 대기에 기한을 둔다: status REGISTERED 30초, 04 STABLE 90초, ACTIVE 30초, 턴마다 30초, ENDED 60초(application.yml 시간 키에서 계산). 넘으면 단계 id를 출력하고 종료 코드 1(J144).
   - 근거: RD-23 · J81 · J110 · J129 · J131 · J133 · J143 · J144 · OD-8 · 사람 결정 2
   - 완료 확인: `node tools/skeleton-e2e/run-c.mjs --help`가 사용법을 보이고, `tools/` 아래 모든 `.mjs`가 `node --check`를 통과한다.
 
-- [ ] Step 46: tools 시험
+- [x] Step 46: tools 시험
   - 파일: `tools/tests/u1/frame-codec.test.mjs`(965B · 순번), `tools/tests/u1/fake-provider.test.mjs`(시나리오별 응답 · 금지 패턴 출력 · 입력 · 출력 해시), `tools/tests/u1/cookie-jar.test.mjs`(Secure · Path · Max-Age=0 삭제), `tools/tests/u1/scenario-plan.test.mjs`(C1 ~ C12 순서 · 실패 시 비0 종료 · 대기 기한 초과 시 단계 id와 종료 코드 1 · 비밀 값을 출력에 쓰지 않음), `tools/tests/u1/dev-edge.test.mjs`(J133: `/internal/` · `/actuator/` 403 · 위조 `X-Trace-Id` · `X-Forwarded-For` 덮어쓰기 · WS 중계)
   - 하는 일: 시험 도구가 의도대로 동작함을 시험한다.
   - 근거: RD-23 · J129 · J133 · J144 · BR8.7
   - 완료 확인: `cd tools && npx --no-install vitest run tests/u1` 통과.
 
-- [ ] Step 47: 배포 · 호스트 · AWS 파일과 RUNBOOK(U1 최소, 정적 검사까지)
+- [x] Step 47: 배포 · 호스트 · AWS 파일과 RUNBOOK(U1 최소, 정적 검사까지)
   - 파일: `infra/bin/{deploy-stage1,deploy-apply,mj,probe-three,smoke,host-collect.sh,check-since-last,log-hygiene-check,power-mark,backup-trigger}`, `infra/host/{daemon.json,systemd/mujoong-compose.service,systemd/mujoong-power-mark.service,docker.service.d/mujoong-mounts.conf,cron.d/mujoong,logrotate.d/mujoong,sysctl.d/90-mujoong.conf,entry/deploy.sh,entry/mj,entry/host-collect.sh}`, `infra/aws/{ssm-mujoong-deploy.yml,iam-ec2-inline.json,iam-gha-deploy-trust.json,iam-gha-deploy.json}`, `infra/RUNBOOK.md`(4.5.1 순서 · '담당' 절 J104 · 매개변수 이름만 · `SERVICE_HOST` 자리표시자)
   - 하는 일: 배포 D1 ~ D9 · 롤백 · 스모크(demo는 cicd 2.6.2의 8-1 ~ 8-7, 인증 없는 확인만 J100) · 호스트 점검 · 백업 트리거 스크립트와 호스트 · IAM 정의를 만든다. 실호출(SSM · OIDC · Parameter Store · EC2)은 첫 배포 · 3.6 몫이다. `render-env`는 demo에서 `localhost` · `.invalid` 값을 거부한다. `deploy-stage1` · `deploy-apply` · `mj`는 Compose 파일로 `compose.demo.yml`만 받는다. D3에서 렌더된 env와 Compose environment의 `SPRING_PROFILES_ACTIVE`가 정확히 `demo`이고 `MUJOONG_DEVLOGIN_ENABLED` · `MUJOONG_LOADTEST_ENABLED`가 없거나 false인지 확인하고 아니면 D3 실패로 끝낸다(CD-7). `GHCR_PULL_TOKEN`은 `docker login --password-stdin`으로만 넘기고, 임시 `DOCKER_CONFIG`는 trap으로 지우며, 그 구간은 `set +x`로 둔다(cicd 2.5.2).
   - 근거: J96 · J99 · J100 · J104 · cicd 2.4 ~ 2.12 · CD-7 · infra-spec 1.4 · 3.5 · 3.6 · 4.4 · 4.5 · monitoring-design · R4-2 · R4-8 · R4-18
   - 완료 확인: 모든 셸 스크립트가 `bash -n`과 shellcheck(있으면)를 통과하고, JSON · YAML이 파싱된다.
 
-- [ ] Step 48: infra 정적 검사와 그 시험
+- [x] Step 48: infra 정적 검사와 그 시험
   - 파일: `infra/bin/infra-validate`(Compose 불변식 12개(demo에만) · `nginx -t` · `docker compose config --quiet` · shellcheck · expand 금지 SQL 검사 · 비밀 변수는 env 파일로만 · (y) 오류 JSON code 존재 · 렌더된 Nginx 설정에 Step 44의 방어 지시어(원시 URI 검사 · `ssl_reject_handshake on` · 444 · `client_header_timeout` · `client_body_timeout` · Permissions-Policy · `default-src 'none'` CSP · `proxy_intercept_errors off` · `limit_req_status 429` · `/ws/device`의 `proxy_buffering off` · `ssl_session_tickets off` · `proxy_set_header X-Forwarded-For $remote_addr`, `$proxy_add_x_forwarded_for` 0건)가 있음 · 번들 이미지 파일 목록에 `compose.ci.yml` · `compose.dev.yml` · `ci/` 0건), `infra/ci/invariant-samples/*.yml`(3망 · 게시 포트 추가 · `user` 없는 postgres · `cap_add` · core-api → realtime 의존 · 받지 않는 비밀 · dev 127.0.0.1 게시는 통과), `infra/ci/test-infra-validate.sh`(샘플마다 기대 결과 단언), `infra/ci/test-host-tools.sh`(`check-since-last` 합성 로그 MO-4 · `log-hygiene-check` grep 0 MO-3 · `render-env` 실패 시 중단 · OAuth 비밀 빈 변수 허용 CD-11 · D3 프로필 확인이 `demo,dev` · `MUJOONG_DEVLOGIN_ENABLED=true`를 거부 CD-7, 가짜 `aws`), `infra/ci/image-checks.sh`(cicd 2.3.2 이미지 점검 1 ~ 8: ① 레이어 · 번들 grep(비밀 변수 이름 · 키 형식) ② 비루트 · 베이스 태그 고정 ③ Trivy류 high 이상(`ci/security-exceptions.yml` 예외, 도구가 없으면 미실행으로 보고) ④ demo 프로필 더미 기동(postgres `user 999:999` · `cap_drop ALL` · `read_only`, migrate · seed 적용, 두 앱 readiness UP, demo + dev 거부) ⑤ 번들에 env 파일 없음과 불변식 통과 ⑥ 시험 클래스 0 ⑦ web `127.0.0.1:3000/healthz` 200 ⑧ 업스트림을 정지한 구성에서 `/` · `/api/health` · `/ws/device`가 상태 502를 유지하고 본문만 바뀜 · 앱이 낸 503은 통과, CD-2)
   - 하는 일: 정적 인프라 검사와 이미지 점검을 만들고 위반 샘플로 시험한다. 관문 음성 대조(CD-1)는 비밀 스캔이 생기는 Step 49에서 만든다.
   - 근거: CD-2 · CD-7 · CD-8 · CD-11 · MO-3 · MO-4 · R4-1 · R4-12 · R4-17 · SD-3 · NFR9.6 · NFR9.8 · NFR4.13
   - 완료 확인: `bash infra/ci/test-infra-validate.sh`와 `bash infra/ci/test-host-tools.sh`가 종료 코드 0이고, Docker가 있으면 `bash infra/ci/image-checks.sh`가 종료 코드 0이다(없으면 미실행을 code-summary에 기록하고 CI `images` 작업 몫으로 둔다).
 
-- [ ] Step 49: 검증 명령 스크립트(scripts/verify.sh)
+- [x] Step 49: 검증 명령 스크립트(scripts/verify.sh)
   - 파일: `scripts/verify.sh`, `scripts/verify/{lib.sh,a-checks.sh,a-secrets.sh,b-stack.sh,b-host.sh,c-skeleton-turn.sh,assert-schema-isolation.sh,assert-log-hygiene.sh,secret-patterns.txt}`, `infra/ci/gen-selfsigned.sh`(→ `build/verify/certs/`), `infra/ci/test-gate-negatives.sh`(CD-1: 실행 때 임시 디렉터리에 만든 가짜 비밀 · 게시 포트 추가 Compose · 틀린 Nginx 설정 · 파괴적 마이그레이션 · 경계를 넘는 import 샘플이 각각 a-secrets · infra-validate · `nginx -t` · expand 검사 · ESLint를 실패시킴. 취약 의존성 · 커버리지 하락 · `ci-gate` 경로 필터 동작은 첫 Actions 실행(3.6)에서 확인), `tools/tests/u1/verify-exit.test.mjs`(SEC-05: 임시 디렉터리에 `scripts/verify.sh` 사본과 가짜 단계 스크립트를 두어(verify.sh는 자기 위치에서 저장소 루트를 잡으므로 바꿔치기 훅이 필요 없음) 단계 실패 · 기한 초과 · 전제 누락일 때 각각 종료 코드 1 · 1 · 2이고 `report.txt`에 해당 단계 PASS 줄이 없음). `infra/ci/gen-env.sh`는 Step 44에서 만든다.
   - 하는 일: ## 검증 명령(C안)의 A · B · C와 사후 단언을 구현한다(J144).
     - 엄격 모드: `scripts/verify.sh`와 `scripts/verify/*.sh`는 `set -Eeuo pipefail`로 시작하고 `cd "$(dirname "$0")/.."`로 저장소 루트를 직접 잡는다. `trap 'rc=$?; collect_logs; cleanup; exit $rc' EXIT`로 정리한 뒤에도 원래 종료 코드를 유지한다. 단언 실패는 1, 전제 누락은 2, 그 밖의 오류도 비0이다. `SKIP_*` 같은 단계 건너뛰기 옵션은 두지 않는다(`KEEP=1`은 정리 방식만 바꿔 스택을 남긴다). `report.txt`의 PASS 줄은 그 단계가 종료 코드 0으로 끝난 뒤에만 쓴다.
@@ -570,13 +570,13 @@ J1 ~ J104는 모두 아직 확정이 아닌 가정이다. J97 ~ J104는 사람 �
   - 근거: 사람 결정 2 · J103 · J108 · J127 · J131 · J133 · J134 · J144 · B1 완료 조건 ① ② ③ · SD-13 · SD-15 · CD-1 · CD-11 · NFR9.10
   - 완료 확인: `bash -n` 통과, shellcheck가 있으면 통과(없으면 설치 시도 결과와 미실행을 code-summary에 기록), `bash scripts/verify.sh --help`가 단계 · 모드 · 종료 코드를 설명하고, `cd tools && npx --no-install vitest run tests/u1/verify-exit.test.mjs`가 통과하며, Docker가 있으면 `bash infra/ci/test-gate-negatives.sh`가 종료 코드 0이다.
 
-- [ ] Step 50: CI 워크플로
+- [x] Step 50: CI 워크플로
   - 파일: `.github/workflows/ci.yml`(PR · main: `backend`(gradle check · Testcontainers · ArchUnit · 키 대조 · bootJar 시험 클래스 0 · JaCoCo 80%) · `backend-deps` · `frontend`(npm ci · ESLint · Vitest + 80% · build · 번들 grep) · `frontend-deps` · `tools` · `secrets`(gitleaks류 + 양성 대조) · `infra-validate` · `images`(PR은 푸시 없음, 이미지 라벨에 커밋 SHA, `infra/ci/image-checks.sh`로 cicd 2.3.2 점검 1 ~ 8, `infra/ci/test-gate-negatives.sh`로 CD-1 음성 대조) · `skeleton`(main · 수동에서 `bash scripts/verify.sh`) · `ci-gate`(필수 검사 하나), 기본 `contents: read`, `packages: write`는 이미지 작업만, 서드파티 액션 SHA 고정, 머리 주석에 소유자 'A 계정 · 클라우드 담당' J104), `.github/workflows/deploy.yml`(`workflow_call` + `workflow_dispatch` 입력 `sha` · `mode` · `reason`, environment `demo`, `id-token: write`는 배포 작업만, concurrency 하나, `SERVICE_HOST` 미설정이면 배포 건너뜀 J98, 저장소 변수 `AUTO_DEPLOY`가 false이면 자동 배포 건너뜀(수동 dispatch는 허용, 측정 창 동결), D0에서 `ec2:DescribeInstanceStatus`와 SSM 온라인을 1분 간격 최대 5분 재확인하고 꺼져 있으면 건너뜀(CD-10), 배포 뒤 S5b로 공개 도메인 3종 호출과 인증서 만료 20일 이상 확인), `ci/security-exceptions.yml`(사유 · 만료일 형식, 빈 목록), `.gitleaks.toml`
   - 하는 일: CI 관문과 배포 워크플로를 정의한다. 실제 Actions 실행 · OIDC 호출은 샌드박스 밖이다. `uses:`의 SHA는 기억에 기대지 않고 `gh api repos/<owner>/<repo>/git/ref/tags/<tag>`로 조회하며, 결과가 annotated tag 객체면 `gh api repos/<owner>/<repo>/git/tags/<sha>`로 한 번 더 풀어 커밋 SHA를 얻는다. 표기는 `uses: owner/repo@<40자> # <tag>`. 조회가 안 되면 SHA를 지어내지 않고 그 액션을 미고정으로 code-summary에 보고한다.
   - 근거: J91 · J92 · cicd 2.1 ~ 2.13 · 2.2.1 S4 · S5b · 2.3.2 · CD-1 · CD-2 · CD-10 · NFR9.10 · NFR9.13 · J104
   - 완료 확인: 워크플로 YAML이 파싱되고(가능하면 actionlint), 모든 `uses:`가 40자 SHA로 고정돼 있으며, 모든 SHA가 `gh api repos/<owner>/<repo>/commits/<sha>`로 200을 받는다.
 
-- [ ] Step 51: 검증 명령 실행과 결과 기록
+- [x] Step 51: 검증 명령 실행과 결과 기록
   - 파일: 없음(결과는 `build/verify/report.txt`와 Step 53의 code-summary.md)
   - 하는 일: `bash scripts/verify.sh`를 끝까지 돌린다. 실패하면 원인을 고치고 다시 돌린다(하한 · 단언을 약화하지 않는다). Docker를 쓸 수 없으면 `--mode host`(J133)로 돌리고 `report.txt`의 `mode=host`와 `NOT_VERIFIED(host)` 줄을 그대로 보고한다. 이 실행은 사람 확인용 수동 실행이며 엔진 checkpoint 증거가 아니다(엔진 검증은 verification-command 체크포인트에서 Approve된 명령으로만, J134). compose와 host가 둘 다 불가능할 때만 돌린 부분(A 일부 등)과 건너뛴 부분을 사유와 함께 기록한다.
   - 근거: 사람 결정 2 · G7 · B1 완료 조건 ① ② ③ · org.md Walking Skeleton · J133 · J134
@@ -584,13 +584,13 @@ J1 ~ J104는 모두 아직 확정이 아닌 가정이다. J97 ~ J104는 사람 �
 
 ### I. 문서 · 추적
 
-- [ ] Step 52: 문서 마무리(README · contracts 대조 · 인라인 문서)
+- [x] Step 52: 문서 마무리(README · contracts 대조 · 인라인 문서)
   - 파일: `README.md`('개발 · 검증' 절: 전제 · 로컬 기동 · 유닛 시험 명령 · 검증 명령 · 비밀 규칙), `contracts/README.md`(구현과 다른 곳이 없는지 최종 대조), `infra/RUNBOOK.md`(검증 스택 절 보강), 공개 계약 타입 · 설정 레코드의 Javadoc
   - 하는 일: 문서와 구현이 같은지 대조한다(오류 코드 · 키 · 경로 · 닫기 코드 · 편차 목록).
   - 근거: 계약 12절 · V-5 · J96 · BR8.11
   - 완료 확인: `ContractFilesTest` · `ConfigKeyContractTest`가 다시 통과하고 문서에 비밀 값 · 실제 도메인이 없다(`git grep` 점검).
 
-- [ ] Step 53: source-manifest.json · code-summary.md · traceability.json
+- [x] Step 53: source-manifest.json · code-summary.md · traceability.json
   - 파일: `aidlc/spaces/default/intents/261008-mujoong-service/construction/u1-walking-skeleton/code-generation/source-manifest.json`(만들거나 고친 모든 경로, 생성 트리는 끝 `/`, `scripts/cloud-setup.sh` 제외), `.../code-generation/code-summary.md`(파일 목록 · Step 1 판 표 · 핵심 결정 · 시험 · 커버리지 결과 · 계획과 달라진 곳 · 건너뛴 검증 · FD 보강 A1 ~ A6과 3.3 추가 동작 반영 목록 · 임시 문구 목록 J118 · J번호 목록), `.../code-generation/traceability.json`(upstream_ids = AC 83 + NFRx.y 67 + BR 89, OK 대상은 존재하는 구현 · 시험 파일 하나, Deferred 27은 대상 유닛을 적음, 3.6 · 11/2 몫 NFR은 상태와 사유)
   - 하는 일: Step 5(생성 뒤) 산출물을 만든다. 기록 디렉터리에는 이 세 파일만 더한다. source-manifest의 U1 소스 파일(backend `src/main` · frontend `src/`)로 `backend/coverage-scope/u1.txt` · `frontend/coverage-scope/u1.json`을 채운다(J137).
   - 근거: 단계 정의 Step 5 · traceability 센서 · J97

@@ -49,3 +49,70 @@ exec powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "C:
 | `scripts/` | 검증 명령(`scripts/verify.sh`)과 단계 스크립트 |
 
 전제: JDK 21, Node 22(`.nvmrc`), Docker(Compose v2.24.4 이상) 또는 호스트 PostgreSQL 16. 비밀 값(계정 · 비밀번호 · API 키 · 토큰 · 실제 도메인)은 저장소 어디에도 두지 않고 환경 변수 이름만 쓴다. `.env*` · 인증서 · 키 파일 · `build/`는 `.gitignore`가 막는다. 유닛 시험 명령은 각 유닛의 `code-generation/unit-test-instructions.md`에 있다.
+
+### 로컬 기동(dev)
+
+앱 셋은 IDE나 호스트 프로세스로 돌리고, DB만 Compose로 띄운다. 비밀 값은 실행 때 `build/dev/env/`에 생기고 저장소에는 없다(J127).
+
+```bash
+bash infra/ci/gen-env.sh --out build/dev/env --origin http://localhost:3000 --keep-existing
+bash infra/bin/render-pgconf --out build/dev/postgres/postgresql.conf
+docker compose --env-file build/dev/env/compose.env -f infra/compose.dev.yml up -d     # postgres 127.0.0.1:5432
+(cd backend && ./gradlew --no-daemon :core-api:bootJar :realtime-activity:bootJar)
+(cd frontend && npm ci && npx --no-install next build)
+```
+
+- 마이그레이션은 `infra/migrate/flyway-{core,realtime}.conf` 순서(core → realtime)로 `mujoong_owner`가 적용하고, 참조 시드는
+  `infra/seed/001-reference.sql`이다(검증 명령 B 단계가 같은 순서로 한다).
+- 두 앱은 `SPRING_PROFILES_ACTIVE=dev`로 띄우고, 호스트에서 함께 돌릴 때는 `SPRING_DATASOURCE_URL`(127.0.0.1) ·
+  `MUJOONG_INTERNALHTTP_COREBASEURL` · `MUJOONG_INTERNALHTTP_REALTIMEBASEURL` · `SERVER_TOMCAT_REMOTEIP_INTERNALPROXIES`를 바꾸고
+  관리 포트(`MANAGEMENT_SERVER_PORT`)를 앱마다 다르게 준다. 필요한 값의 이름과 순서는 `infra/compose.dev.yml` 머리 주석과
+  `scripts/verify/b-host.sh`가 정본이다. 비밀은 `build/dev/env/<서비스>.env`의 값을 환경 변수로 넘긴다.
+- 시험 로그인(`/parent/dev-login`)은 dev 프로필 + `MUJOONG_DEVLOGIN_ENABLED=true`일 때만 열린다. demo · prod와 함께 주면 앱이
+  기동을 거부한다(SD-14 · A2).
+- 실공급자 주소(`MUJOONG_PROVIDER_URL`)는 dev에 기본값이 없다. 로컬에서는 가짜 공급자 `node tools/fake-provider/server.mjs`(8090)를 쓴다.
+
+### 유닛 시험 명령(U1)
+
+정확한 목록은 `aidlc/spaces/default/intents/261008-mujoong-service/construction/u1-walking-skeleton/code-generation/unit-test-instructions.md`가
+정본이다. 자주 쓰는 것만 옮긴다(각 줄을 저장소 루트에서 따로 실행한다).
+
+```bash
+cd backend && ./gradlew --no-daemon :contract-model:test :core-api:test :realtime-activity:test :test-support:test -PincludeTags=u1
+cd backend && ./gradlew --no-daemon :contract-model:test :core-api:test :realtime-activity:test \
+  :contract-model:jacocoTestCoverageVerification :core-api:jacocoTestCoverageVerification \
+  :realtime-activity:jacocoTestCoverageVerification -PincludeTags=u1 -PcoverageScope=u1
+cd frontend && npm ci && MUJOONG_COVERAGE_SCOPE=u1 npx --no-install vitest run tests/u1 --coverage
+cd tools && npm ci && npx --no-install vitest run tests/u1
+```
+
+- PostgreSQL이 필요한 시험(`@Tag("db")`)은 Docker(Testcontainers)나 호스트 PostgreSQL 16(`/usr/lib/postgresql/16/bin`)으로 돈다.
+  `-Pmujoong.test.db=auto|docker|local`로 고르고 기본은 auto다(J132). root로 local을 쓰면 저장소 경로를 `postgres` 사용자가 지나갈 수 있어야 한다.
+- 줄 커버리지 하한은 80%(백엔드 모듈별 JaCoCo · 프런트 `src/**` Vitest)이고 낮추지 않는다. `-PcoverageScope=u1` ·
+  `MUJOONG_COVERAGE_SCOPE=u1`은 U1이 만든 파일(`backend/coverage-scope/u1.txt` · `frontend/coverage-scope/u1.json`)만 잰다(J137).
+
+### 검증 명령(C안)
+
+```bash
+bash scripts/verify.sh                 # 전체: A(시험 · 커버리지 · 빌드 · 비밀 스캔) → B(스택 기동 · 3종 호출) → C(기기 한 턴) → 사후 단언
+bash scripts/verify.sh --mode host     # Docker 없이(로컬 PostgreSQL 16 · java -jar · Next.js · Nginx 대역). NOT_VERIFIED(host) 줄이 남는다
+bash scripts/verify.sh --engine        # 엔진 checkpoint용: 소스 지문이 같은 미리 만든 산출물로 B · C · 사후 단언만 110초 안에
+bash scripts/verify.sh --help          # 단계 · 모드 · 종료 코드
+```
+
+- 종료 코드: 0 통과, 1 단언 실패(기한 초과 포함), 2 전제 누락(통과로 보고하지 않음), 64 인자 오류. 결과는 `build/verify/report.txt`,
+  도구 출력은 `build/verify/logs/`에 남는다. 비밀 값은 둘 다에 쓰지 않는다.
+- `--engine`은 backend · frontend · infra · tools · contracts · scripts 중 무엇이든 바뀌면 E0에서 1로 끝난다. 그때는 전체 실행을 먼저 한 번 돌린다.
+- 실행 중에는 저장소를 고치지 않는다. 시작과 끝의 작업 트리가 다르면 T 단계가 1로 끝난다(SEC-18).
+- 검증 스택의 구성 · 문제 해결은 `infra/RUNBOOK.md` 17절에 있다. 실공급자는 부르지 않는다(실공급자 한 턴은 11/2 측정).
+
+### 비밀 · 도메인 규칙
+
+- 계정 · 비밀번호 · API 키 · 토큰 값 · 실제 도메인은 코드 · 설정 · 시험 · 문서 · 커밋 · 로그 어디에도 쓰지 않는다. 저장소에는 환경 변수 ·
+  매개변수 **이름**만 둔다(`POSTGRES_PASSWORD` · `DB_OWNER_PASSWORD` · `DB_CORE_PASSWORD` · `DB_REALTIME_PASSWORD` · `DB_BACKUP_PASSWORD` ·
+  `INTERNAL_SERVICE_TOKEN` · `PROVIDER_API_KEY` · `MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET` · `GOOGLE_OAUTH_CLIENT_SECRET` · `GHCR_PULL_TOKEN`).
+- 서비스 도메인은 `SERVICE_HOST` 자리표시자다(J98). 시험 origin은 `https://mujoong.invalid`(단위 · 통합)와 `https://localhost:8443`(검증 스택)뿐이다(J108).
+- 시험용 값은 실행 때 만든다: 검증 · CI는 `infra/ci/gen-env.sh`(`build/verify/env/`, umask 077, 실행 끝에 지움), Testcontainers 시험은
+  `kr.mujoong.testsupport.secret.TestSecrets`(J127). demo 서버의 값은 AWS Parameter Store `/mujoong/demo/`에만 있다(`infra/RUNBOOK.md`).
+- `docker compose config`는 env 파일 값을 펼쳐 출력하므로 `--quiet`로만 쓴다. 로그를 옮길 때는 사건 코드 · traceId · 건수만 옮긴다.
+- 비밀 스캔은 검증 명령 A4(`scripts/verify/a-secrets.sh`)와 CI `secrets` 작업(gitleaks, `.gitleaks.toml`)이 함께 맡는다.

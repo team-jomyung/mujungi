@@ -1,0 +1,6 @@
+# 무중 호스트 주기 작업 (U1 3.5 Step 47 · infra-spec 1.4 · 2.1 · monitoring 2.7.1 · LC-9)
+# 설치: /etc/cron.d/mujoong (root 0644). 출력이 없으면 메일을 보내지 않는다(호스트에 메일 전달이 없다). 오류 줄은 journald(logger)로 간다.
+# host-collect: 1분마다, 겹침 방지(flock 비차단) · 전체 20초 제한. 관찰만 하고 컨테이너를 건드리지 않는다.
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+* * * * * root flock -n /run/lock/mujoong-host-collect.lock timeout 20 /opt/mujoong/bin/host-collect.sh 2>&1 | logger -t mujoong-host-collect -p user.warning

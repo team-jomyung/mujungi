@@ -15,7 +15,13 @@
 // 출력 음성은 턴 번호와 종류로 정해지는 톤이라 같은 입력이면 같은 바이트다.
 import { BYTES_PER_MS, SAMPLE_BYTES, sha256Hex, synthesizeTone } from "../lib/frameCodec.mjs";
 
-export const CONNECTION_SCENARIOS = Object.freeze(["ok", "no-started", "delayed", "refuse", "silent"]);
+export const CONNECTION_SCENARIOS = Object.freeze([
+  "ok",
+  "no-started",
+  "delayed",
+  "refuse",
+  "silent",
+]);
 export const TURN_KINDS = Object.freeze(["normal", "forbidden"]);
 /** 시드 사전(gate/seed-dictionary.json) SCORE 항목(J101 · 사람 결정 12). */
 export const FORBIDDEN_PATTERN = "비정상";
@@ -73,7 +79,10 @@ export function outputPcmFor(turn, kind) {
     throw new RangeError(`모르는 턴 종류: ${kind}`);
   }
   const bytes = Math.round(script.outputMs * BYTES_PER_MS);
-  return synthesizeTone(bytes / SAMPLE_BYTES, { freq: script.freq + (turn - 1) * 10, amplitude: 0.2 });
+  return synthesizeTone(bytes / SAMPLE_BYTES, {
+    freq: script.freq + (turn - 1) * 10,
+    amplitude: 0.2,
+  });
 }
 
 /** 문자열을 두 조각으로(코드 포인트 경계). */
@@ -93,7 +102,14 @@ export function textSha256(text) {
  * 출력 음성 조각들 → 출력 끝. 구간 확정은 realtime이 마지막 출력 뒤 800ms 조용으로 한다(BR7.3).
  * @returns {{script: object, pcm: Buffer, itemId: string, responseId: string, steps: Array<{delayMs: number, message: object}>}}
  */
-export function buildTurn({ connection, turn, kind, responseDelayMs = DEFAULTS.responseDelayMs, chunkBytes = DEFAULTS.chunkBytes, chunkIntervalMs = DEFAULTS.chunkIntervalMs }) {
+export function buildTurn({
+  connection,
+  turn,
+  kind,
+  responseDelayMs = DEFAULTS.responseDelayMs,
+  chunkBytes = DEFAULTS.chunkBytes,
+  chunkIntervalMs = DEFAULTS.chunkIntervalMs,
+}) {
   const script = TURN_SCRIPTS[kind];
   if (!script) {
     throw new RangeError(`모르는 턴 종류: ${kind}`);
@@ -110,8 +126,14 @@ export function buildTurn({ connection, turn, kind, responseDelayMs = DEFAULTS.r
     { delayMs: 0, message: { type: "session.input_transcript.delta", itemId, delta: child1 } },
     { delayMs: 0, message: { type: "session.input_transcript.delta", itemId, delta: child2 } },
     { delayMs: 0, message: { type: "session.input_audio.speech_stopped" } },
-    { delayMs: 0, message: { type: "session.input_transcript.done", itemId, transcript: script.childText } },
-    { delayMs: responseDelayMs, message: { type: "session.output_transcript.delta", responseId, delta: ai1 } },
+    {
+      delayMs: 0,
+      message: { type: "session.input_transcript.done", itemId, transcript: script.childText },
+    },
+    {
+      delayMs: responseDelayMs,
+      message: { type: "session.output_transcript.delta", responseId, delta: ai1 },
+    },
     { delayMs: 0, message: { type: "session.output_transcript.delta", responseId, delta: ai2 } },
   ];
   for (let offset = 0; offset < pcm.length; offset += chunkBytes) {

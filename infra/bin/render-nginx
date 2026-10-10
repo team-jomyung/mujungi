@@ -12,6 +12,7 @@
 #   --upstreams compose  edge 망 고정 IP(demo · 검증 스택, 기본값)  /  host  dev 호스트 프로세스(compose.dev.yml 프로필 nginx)
 #   --env-file        값을 읽을 env 파일(여러 번 가능, 예: /opt/mujoong/env/nginx.env). 아래 세 이름만 읽고 나머지 줄은 무시한다.
 #                     파일을 셸로 source하지 않는다. 명령 환경에 이미 있는 값이 우선한다.
+#   --src <디렉터리>  템플릿 디렉터리(기본 이 스크립트의 ../nginx). infra/ci/test-infra-validate.sh가 일부러 고친 사본을 줄 때만 쓴다
 #
 # 템플릿 변수(값은 출력하지 않는다, 비밀 없음)
 #   SERVICE_HOST                     필수. 포트 없는 소문자 호스트 이름(IP 주소 불가). 서버 이름 · 301 대상 · 인증서 경로
@@ -32,7 +33,7 @@ NGINX_SRC="$(cd "$SCRIPT_DIR/../nginx" && pwd)"
 . "$SCRIPT_DIR/lib/render.sh"
 
 usage() {
-  sed -n '2,29p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+  sed -n '2,30p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
 }
 
 out=""
@@ -45,6 +46,14 @@ while [ "$#" -gt 0 ]; do
     --mode) mode="${2:-}"; shift ;;
     --upstreams) upstreams="${2:-}"; shift ;;
     --env-file) env_files+=("${2:-}"); shift ;;
+    --src)
+      if [ ! -d "${2:-}" ]; then
+        echo "render-nginx: --src 디렉터리가 없다" >&2
+        exit 64
+      fi
+      NGINX_SRC="$(cd "$2" && pwd)"
+      shift
+      ;;
     -h | --help) usage; exit 0 ;;
     *) echo "render-nginx: 모르는 인자: $1" >&2; exit 64 ;;
   esac

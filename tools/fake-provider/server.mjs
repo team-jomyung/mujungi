@@ -121,7 +121,9 @@ export async function startFakeProvider({
     const requestPath = (req.url ?? "/").split("?")[0];
     if (scenario === "refuse") {
       record({ ev: "refused", conn, path: requestPath });
-      socket.end("HTTP/1.1 503 Service Unavailable\r\nConnection: close\r\nContent-Length: 0\r\n\r\n");
+      socket.end(
+        "HTTP/1.1 503 Service Unavailable\r\nConnection: close\r\nContent-Length: 0\r\n\r\n",
+      );
       return;
     }
     if (scenario === "silent") {
@@ -193,7 +195,12 @@ export async function startFakeProvider({
           onInputAudio(message);
           break;
         case "session.close":
-          record({ ev: "session.close", conn, inputFrames: state.inputFrames, inputBytes: state.inputBytes });
+          record({
+            ev: "session.close",
+            conn,
+            inputFrames: state.inputFrames,
+            inputBytes: state.inputBytes,
+          });
           later(0, () => ws.close(1000));
           break;
         default:
@@ -203,12 +210,22 @@ export async function startFakeProvider({
 
     ws.on("close", (code) => {
       state.closed = true;
-      record({ ev: "close", conn, code, inputFrames: state.inputFrames, inputBytes: state.inputBytes, inputSha256: state.cumulative.hex() });
+      record({
+        ev: "close",
+        conn,
+        code,
+        inputFrames: state.inputFrames,
+        inputBytes: state.inputBytes,
+        inputSha256: state.cumulative.hex(),
+      });
     });
     ws.on("error", () => {});
 
     function onSessionStart(message) {
-      const childContext = message.childContext && typeof message.childContext === "object" ? message.childContext : {};
+      const childContext =
+        message.childContext && typeof message.childContext === "object"
+          ? message.childContext
+          : {};
       // 지시문 · 아이 문맥 값은 기록하지 않는다(키 목록만, SD-20 허용 필드 대조용)
       record({
         ev: "session.start",
@@ -216,7 +233,10 @@ export async function startFakeProvider({
         keys: Object.keys(message).sort(),
         childContextKeys: Object.keys(childContext).sort(),
         model: typeof message.model === "string" ? message.model.slice(0, 64) : null,
-        audio: message.audio && typeof message.audio === "object" ? { input: message.audio.input, output: message.audio.output } : null,
+        audio:
+          message.audio && typeof message.audio === "object"
+            ? { input: message.audio.input, output: message.audio.output }
+            : null,
       });
       const started = { type: "session.started", providerSessionId: `fake-provider-${conn}` };
       if (scenario === "ok") {
@@ -247,7 +267,13 @@ export async function startFakeProvider({
       state.cumulative.update(audio);
       state.turnHash.update(audio);
       state.turnFrames += 1;
-      const entry = { ev: "input", conn, frames: state.inputFrames, bytes: state.inputBytes, sha256: state.cumulative.hex() };
+      const entry = {
+        ev: "input",
+        conn,
+        frames: state.inputFrames,
+        bytes: state.inputBytes,
+        sha256: state.cumulative.hex(),
+      };
       if (audio.length !== INPUT_PAYLOAD_BYTES) {
         entry.badLength = audio.length;
       }
@@ -261,7 +287,14 @@ export async function startFakeProvider({
       const turn = state.turnIndex + 1;
       const kind = turns[state.turnIndex];
       state.turnIndex = turn;
-      const built = buildTurn({ connection: conn, turn, kind, responseDelayMs, chunkBytes, chunkIntervalMs });
+      const built = buildTurn({
+        connection: conn,
+        turn,
+        kind,
+        responseDelayMs,
+        chunkBytes,
+        chunkIntervalMs,
+      });
       record({
         ev: "turn",
         conn,
@@ -403,7 +436,10 @@ export function parseArgs(argv) {
   return options;
 }
 
-export async function main(argv = process.argv.slice(2), io = { stdout: process.stdout, stderr: process.stderr }) {
+export async function main(
+  argv = process.argv.slice(2),
+  io = { stdout: process.stdout, stderr: process.stderr },
+) {
   let options;
   try {
     options = parseArgs(argv);
@@ -417,7 +453,10 @@ export async function main(argv = process.argv.slice(2), io = { stdout: process.
   }
   const { help: _help, ...rest } = options;
   try {
-    const provider = await startFakeProvider({ ...rest, onRecord: (entry) => io.stdout.write(jsonLine(entry)) });
+    const provider = await startFakeProvider({
+      ...rest,
+      onRecord: (entry) => io.stdout.write(jsonLine(entry)),
+    });
     return { exitCode: null, provider };
   } catch (error) {
     io.stderr.write(`가짜 공급자 기동 실패: ${error.code ?? error.message}\n`);
@@ -425,7 +464,8 @@ export async function main(argv = process.argv.slice(2), io = { stdout: process.
   }
 }
 
-const isEntryPoint = process.argv[1] && pathToFileURL(path.resolve(process.argv[1])).href === import.meta.url;
+const isEntryPoint =
+  process.argv[1] && pathToFileURL(path.resolve(process.argv[1])).href === import.meta.url;
 if (isEntryPoint) {
   const result = await main();
   if (result.exitCode !== null) {

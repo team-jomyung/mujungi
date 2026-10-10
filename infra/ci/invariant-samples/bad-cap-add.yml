@@ -1,0 +1,4 @@
+# 위반 샘플: nginx 밖 서비스의 cap_add — 단언 11(NFR9.13)
+services:
+  web:
+    cap_add: [NET_ADMIN]

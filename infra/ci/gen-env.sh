@@ -18,9 +18,10 @@
 # 값 규칙(J124): 모두 base64url. INTERNAL_SERVICE_TOKEN 43자(256비트), ownerHash 비밀 43자(32바이트 이상), DB 비밀번호 32자.
 # 파일 권한: 디렉터리 0700 · 파일 0600(umask 077). 값을 표준 출력 · 로그에 쓰지 않는다(파일 · 변수 이름만 출력).
 # 매 실행은 출력 디렉터리의 *.env를 지우고 새 값으로 다시 만든다. 실행 끝 정리는 부르는 쪽(scripts/verify.sh)이 한다.
+# --keep-existing이면 서비스 파일이 모두 있을 때 아무것도 바꾸지 않는다(dev: 이미 만든 DB 볼륨의 역할 비밀번호와 맞추려고).
 #
-# 쓰는 법: bash infra/ci/gen-env.sh [--out <디렉터리>] [--service-host <호스트>] [--origin <https://호스트[:포트]>]
-#                                   [--registry <레지스트리>] [--tag <태그>]
+# 쓰는 법: bash infra/ci/gen-env.sh [--out <디렉터리>] [--service-host <호스트>] [--origin <http(s)://호스트[:포트]>]
+#                                   [--registry <레지스트리>] [--tag <태그>] [--keep-existing]
 #   기본값: --out build/verify/env, --service-host localhost, --origin https://localhost:8443(J108),
 #           --registry mujoong.local, --tag verify(infra/ci/build-images.sh의 로컬 태그와 같다)
 # 종료 코드: 0 성공, 64 인자 오류, 1 그 밖의 오류
@@ -35,6 +36,7 @@ service_host=localhost
 origin="https://localhost:8443"
 registry=mujoong.local
 tag=verify
+keep_existing=0
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -43,7 +45,8 @@ while [ "$#" -gt 0 ]; do
     --origin) origin="${2:-}"; shift ;;
     --registry) registry="${2:-}"; shift ;;
     --tag) tag="${2:-}"; shift ;;
-    -h | --help) sed -n '2,27p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    --keep-existing) keep_existing=1 ;;
+    -h | --help) sed -n '2,29p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "gen-env: 모르는 인자: $1" >&2; exit 64 ;;
   esac
   shift
@@ -53,8 +56,9 @@ if ! [[ "$service_host" =~ ^[a-z0-9]([a-z0-9.-]{0,251}[a-z0-9])?$ ]]; then
   echo "gen-env: --service-host 형식이 틀렸다" >&2
   exit 64
 fi
-if ! [[ "$origin" =~ ^https://${service_host//./\\.}(:[0-9]{1,5})?$ ]]; then
-  echo "gen-env: --origin은 https://<service-host>[:포트] 이어야 한다" >&2
+# 검증 스택은 https(J108), dev 호스트 실행만 http://localhost:3000(Secure Context 예외, infra-spec 1.3)
+if ! [[ "$origin" =~ ^https://${service_host//./\\.}(:[0-9]{1,5})?$ ]] && ! [[ "$origin" =~ ^http://localhost(:[0-9]{1,5})?$ ]]; then
+  echo "gen-env: --origin은 https://<service-host>[:포트] 또는 http://localhost[:포트] 이어야 한다" >&2
   exit 64
 fi
 if ! [[ "$registry" =~ ^[a-z0-9][a-z0-9./_-]*$ ]] || ! [[ "$tag" =~ ^[A-Za-z0-9_][A-Za-z0-9._-]{0,127}$ ]]; then
@@ -64,6 +68,18 @@ fi
 
 # 상대 경로는 현재 디렉터리 기준 절대 경로로 바꾼다(Compose env_file은 절대 경로로 넘긴다)
 case "$out" in /*) ;; *) out="$PWD/$out" ;; esac
+
+readonly SERVICE_FILES=(postgres migrate core-api realtime web nginx backup certbot compose)
+if [ "$keep_existing" -eq 1 ]; then
+  all=1
+  for f in "${SERVICE_FILES[@]}"; do
+    [ -s "$out/$f.env" ] || all=0
+  done
+  if [ "$all" -eq 1 ]; then
+    echo "gen-env: $out 의 env 파일을 그대로 둔다(--keep-existing)"
+    exit 0
+  fi
+fi
 
 # base64url 무작위 값: <바이트 수>
 rand() {
@@ -83,8 +99,10 @@ mkdir -p "$out"
 chmod 0700 "$out"
 rm -f -- "$out"/*.env
 
+# write <파일 이름> <변수=값>... — 값은 파일에만 쓰고, 출력에는 파일 이름과 변수 이름만 낸다
 write() {
-  local file="$out/$1"
+  local name="$1"
+  local file="$out/$name"
   shift
   : >"$file"
   chmod 0600 "$file"
@@ -92,7 +110,7 @@ write() {
   for line in "$@"; do
     printf '%s\n' "$line" >>"$file"
   done
-  echo "gen-env: $1 ($(cut -d= -f1 "$file" | tr '\n' ' ' | sed 's/ $//'))"
+  echo "gen-env: $name ($(cut -d= -f1 "$file" | tr '\n' ' ' | sed 's/ $//'))"
 }
 
 write postgres.env \

@@ -1,0 +1,11 @@
+{
+  "log-driver": "json-file",
+  "log-opts": {
+    "max-size": "10m",
+    "max-file": "3"
+  },
+  "shutdown-timeout": 60,
+  "no-new-privileges": true,
+  "userland-proxy": false,
+  "live-restore": false
+}

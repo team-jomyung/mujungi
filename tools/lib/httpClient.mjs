@@ -132,11 +132,24 @@ export function createHttpClient({
    * @param {number} [req.timeoutMs]
    * @returns {Promise<HttpResponse>}
    */
-  function request({ method = "GET", path, headers = {}, json, body, origin: originOption, cookies = true, timeoutMs: perRequest }) {
+  function request({
+    method = "GET",
+    path,
+    headers = {},
+    json,
+    body,
+    origin: originOption,
+    cookies = true,
+    timeoutMs: perRequest,
+  }) {
     const upper = method.toUpperCase();
     const limit = perRequest ?? timeoutMs;
     const url = new URL(base.origin);
-    const finalHeaders = { "user-agent": userAgent, accept: "application/json", ...lowerKeys(headers) };
+    const finalHeaders = {
+      "user-agent": userAgent,
+      accept: "application/json",
+      ...lowerKeys(headers),
+    };
     let payload = null;
     if (json !== undefined) {
       payload = Buffer.from(JSON.stringify(json), "utf8");
@@ -150,7 +163,11 @@ export function createHttpClient({
       finalHeaders["content-length"] = "0";
     }
     const originValue =
-      originOption === undefined || originOption === true ? (MUTATING.has(upper) ? defaultOrigin : null) : originOption || null;
+      originOption === undefined || originOption === true
+        ? MUTATING.has(upper)
+          ? defaultOrigin
+          : null
+        : originOption || null;
     if (originValue) {
       finalHeaders.origin = originValue;
     }
@@ -187,7 +204,9 @@ export function createHttpClient({
       const req = transport.request(options, (res) => {
         const chunks = [];
         res.on("data", (chunk) => chunks.push(chunk));
-        res.on("error", (error) => finish(reject, new HttpRequestError(upper, pathOnly(path), error)));
+        res.on("error", (error) =>
+          finish(reject, new HttpRequestError(upper, pathOnly(path), error)),
+        );
         res.on("end", () => {
           const response = new HttpResponse({
             method: upper,
@@ -207,7 +226,9 @@ export function createHttpClient({
         req.destroy();
         finish(reject, new HttpTimeoutError(upper, pathOnly(path), limit));
       }, limit);
-      req.on("error", (error) => finish(reject, new HttpRequestError(upper, pathOnly(path), error)));
+      req.on("error", (error) =>
+        finish(reject, new HttpRequestError(upper, pathOnly(path), error)),
+      );
       if (payload !== null) {
         req.end(payload);
       } else {

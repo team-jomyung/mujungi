@@ -1,0 +1,7 @@
+# 위반 샘플: 3망 안(certbot 전용 acme 망) — 단언 7. 기각 유지(infra-spec D-8 · R4-1)
+services:
+  certbot:
+    networks:
+      acme: {}
+networks:
+  acme: {}

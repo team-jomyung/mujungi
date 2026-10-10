@@ -1,0 +1,2287 @@
+{
+  "stage": "code-generation",
+  "unit": "u1-walking-skeleton",
+  "version": 1,
+  "writes": [
+    {
+      "path": ".editorconfig"
+    },
+    {
+      "path": ".github/workflows/ci.yml"
+    },
+    {
+      "path": ".github/workflows/deploy.yml"
+    },
+    {
+      "path": ".gitignore"
+    },
+    {
+      "path": ".gitleaks.toml"
+    },
+    {
+      "path": ".nvmrc"
+    },
+    {
+      "path": ".prettierignore"
+    },
+    {
+      "path": ".prettierrc.json"
+    },
+    {
+      "path": "README.md"
+    },
+    {
+      "path": "backend/.dockerignore"
+    },
+    {
+      "path": "backend/build-logic/build.gradle.kts"
+    },
+    {
+      "path": "backend/build-logic/settings.gradle.kts"
+    },
+    {
+      "path": "backend/build-logic/src/main/kotlin/kr/mujoong/buildlogic/MujoongBuildExtension.kt"
+    },
+    {
+      "path": "backend/build-logic/src/main/kotlin/mujoong.java-conventions.gradle.kts"
+    },
+    {
+      "path": "backend/build.gradle.kts"
+    },
+    {
+      "path": "backend/contract-model/build.gradle.kts"
+    },
+    {
+      "path": "backend/contract-model/src/main/java/kr/mujoong/contract/audio/AudioFrameCodec.java"
+    },
+    {
+      "path": "backend/contract-model/src/main/java/kr/mujoong/contract/error/ErrorCode.java"
+    },
+    {
+      "path": "backend/contract-model/src/main/java/kr/mujoong/contract/error/ErrorEnvelope.java"
+    },
+    {
+      "path": "backend/contract-model/src/main/java/kr/mujoong/contract/event/AggregateType.java"
+    },
+    {
+      "path": "backend/contract-model/src/main/java/kr/mujoong/contract/event/EventEnvelope.java"
+    },
+    {
+      "path": "backend/contract-model/src/main/java/kr/mujoong/contract/event/EventPayload.java"
+    },
+    {
+      "path": "backend/contract-model/src/main/java/kr/mujoong/contract/event/EventType.java"
+    },
+    {
+      "path": "backend/contract-model/src/main/java/kr/mujoong/contract/event/payload/DeletionCompleted.java"
+    },
+    {
+      "path": "backend/contract-model/src/main/java/kr/mujoong/contract/event/payload/DeletionRequested.java"
+    },
+    {
+      "path": "backend/contract-model/src/main/java/kr/mujoong/contract/event/payload/DeviceReleased.java"
+    },
+    {
+      "path": "backend/contract-model/src/main/java/kr/mujoong/contract/event/payload/DeviceStatusChanged.java"
+    },
+    {
+      "path": "backend/contract-model/src/main/java/kr/mujoong/contract/event/payload/SessionRecordCaptured.java"
+    },
+    {
+      "path": "backend/contract-model/src/main/java/kr/mujoong/contract/event/payload/SessionStateChanged.java"
+    },
+    {
+      "path": "backend/contract-model/src/main/java/kr/mujoong/contract/json/JsonCodec.java"
+    },
+    {
+      "path": "backend/contract-model/src/main/java/kr/mujoong/contract/log/AttrKey.java"
+    },
+    {
+      "path": "backend/contract-model/src/main/java/kr/mujoong/contract/log/EventCode.java"
+    },
+    {
+      "path": "backend/contract-model/src/main/java/kr/mujoong/contract/log/EventLog.java"
+    },
+    {
+      "path": "backend/contract-model/src/main/java/kr/mujoong/contract/log/OwnerHasher.java"
+    },
+    {
+      "path": "backend/contract-model/src/main/java/kr/mujoong/contract/log/StructuredLogFormatter.java"
+    },
+    {
+      "path": "backend/contract-model/src/main/java/kr/mujoong/contract/profile/ProfileGuardRules.java"
+    },
+    {
+      "path": "backend/contract-model/src/main/java/kr/mujoong/contract/secret/SecretCompare.java"
+    },
+    {
+      "path": "backend/contract-model/src/main/java/kr/mujoong/contract/status/ActivityType.java"
+    },
+    {
+      "path": "backend/contract-model/src/main/java/kr/mujoong/contract/status/ConnectionState.java"
+    },
+    {
+      "path": "backend/contract-model/src/main/java/kr/mujoong/contract/status/EndReason.java"
+    },
+    {
+      "path": "backend/contract-model/src/main/java/kr/mujoong/contract/status/EndRequestReason.java"
+    },
+    {
+      "path": "backend/contract-model/src/main/java/kr/mujoong/contract/status/FailureCode.java"
+    },
+    {
+      "path": "backend/contract-model/src/main/java/kr/mujoong/contract/status/RegistrationStatus.java"
+    },
+    {
+      "path": "backend/contract-model/src/main/java/kr/mujoong/contract/status/SessionStatus.java"
+    },
+    {
+      "path": "backend/contract-model/src/main/java/kr/mujoong/contract/time/DelayQueueTimerDriver.java"
+    },
+    {
+      "path": "backend/contract-model/src/main/java/kr/mujoong/contract/time/MujoongClock.java"
+    },
+    {
+      "path": "backend/contract-model/src/main/java/kr/mujoong/contract/time/SystemMujoongClock.java"
+    },
+    {
+      "path": "backend/contract-model/src/main/java/kr/mujoong/contract/time/TimerDriver.java"
+    },
+    {
+      "path": "backend/contract-model/src/main/java/kr/mujoong/contract/trace/TraceIds.java"
+    },
+    {
+      "path": "backend/contract-model/src/main/java/kr/mujoong/contract/ws/CloseCode.java"
+    },
+    {
+      "path": "backend/contract-model/src/main/java/kr/mujoong/contract/ws/WsEnvelope.java"
+    },
+    {
+      "path": "backend/contract-model/src/main/java/kr/mujoong/contract/ws/WsMessageType.java"
+    },
+    {
+      "path": "backend/contract-model/src/main/java/kr/mujoong/contract/ws/WsPayload.java"
+    },
+    {
+      "path": "backend/contract-model/src/main/java/kr/mujoong/contract/ws/message/Ack.java"
+    },
+    {
+      "path": "backend/contract-model/src/main/java/kr/mujoong/contract/ws/message/CloseTransport.java"
+    },
+    {
+      "path": "backend/contract-model/src/main/java/kr/mujoong/contract/ws/message/DeviceReady.java"
+    },
+    {
+      "path": "backend/contract-model/src/main/java/kr/mujoong/contract/ws/message/DeviceState.java"
+    },
+    {
+      "path": "backend/contract-model/src/main/java/kr/mujoong/contract/ws/message/Heartbeat.java"
+    },
+    {
+      "path": "backend/contract-model/src/main/java/kr/mujoong/contract/ws/message/HeartbeatAck.java"
+    },
+    {
+      "path": "backend/contract-model/src/main/java/kr/mujoong/contract/ws/message/Hello.java"
+    },
+    {
+      "path": "backend/contract-model/src/main/java/kr/mujoong/contract/ws/message/HelloOk.java"
+    },
+    {
+      "path": "backend/contract-model/src/main/java/kr/mujoong/contract/ws/message/OutputBegin.java"
+    },
+    {
+      "path": "backend/contract-model/src/main/java/kr/mujoong/contract/ws/message/OutputEnd.java"
+    },
+    {
+      "path": "backend/contract-model/src/main/java/kr/mujoong/contract/ws/message/PlayApprovedContent.java"
+    },
+    {
+      "path": "backend/contract-model/src/main/java/kr/mujoong/contract/ws/message/PlaybackMark.java"
+    },
+    {
+      "path": "backend/contract-model/src/main/java/kr/mujoong/contract/ws/message/SessionState.java"
+    },
+    {
+      "path": "backend/contract-model/src/main/java/kr/mujoong/contract/ws/message/StartSession.java"
+    },
+    {
+      "path": "backend/contract-model/src/main/java/kr/mujoong/contract/ws/message/StopOutput.java"
+    },
+    {
+      "path": "backend/contract-model/src/main/java/kr/mujoong/contract/ws/message/View.java"
+    },
+    {
+      "path": "backend/contract-model/src/main/java/kr/mujoong/contract/ws/message/VoiceSessionClosed.java"
+    },
+    {
+      "path": "backend/contract-model/src/main/java/kr/mujoong/contract/ws/message/WsError.java"
+    },
+    {
+      "path": "backend/contract-model/src/test/java/kr/mujoong/contract/ContractFilesTest.java"
+    },
+    {
+      "path": "backend/contract-model/src/test/java/kr/mujoong/contract/arch/ContractModelArchTest.java"
+    },
+    {
+      "path": "backend/contract-model/src/test/java/kr/mujoong/contract/audio/AudioFrameCodecTest.java"
+    },
+    {
+      "path": "backend/contract-model/src/test/java/kr/mujoong/contract/error/ErrorCodeTest.java"
+    },
+    {
+      "path": "backend/contract-model/src/test/java/kr/mujoong/contract/event/EventEnvelopeValidationTest.java"
+    },
+    {
+      "path": "backend/contract-model/src/test/java/kr/mujoong/contract/json/JsonCodecTest.java"
+    },
+    {
+      "path": "backend/contract-model/src/test/java/kr/mujoong/contract/log/OwnerHasherTest.java"
+    },
+    {
+      "path": "backend/contract-model/src/test/java/kr/mujoong/contract/log/StructuredLogFormatTest.java"
+    },
+    {
+      "path": "backend/contract-model/src/test/java/kr/mujoong/contract/profile/ProfileGuardRulesTest.java"
+    },
+    {
+      "path": "backend/contract-model/src/test/java/kr/mujoong/contract/secret/SecretCompareTest.java"
+    },
+    {
+      "path": "backend/contract-model/src/test/java/kr/mujoong/contract/time/DelayQueueTimerDriverTest.java"
+    },
+    {
+      "path": "backend/contract-model/src/test/java/kr/mujoong/contract/time/SystemMujoongClockTest.java"
+    },
+    {
+      "path": "backend/contract-model/src/test/java/kr/mujoong/contract/trace/TraceIdsTest.java"
+    },
+    {
+      "path": "backend/contract-model/src/test/java/kr/mujoong/contract/ws/WsEnvelopeCodecTest.java"
+    },
+    {
+      "path": "backend/core-api/Dockerfile"
+    },
+    {
+      "path": "backend/core-api/build.gradle.kts"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/CoreApiApplication.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/activity/ActivityCopyRepository.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/activity/ApprovedContentCatalog.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/activity/ConsentGate.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/activity/EndSessionService.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/activity/PreparingTimeoutChecker.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/activity/RealtimeSessionClient.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/activity/SessionPackageBuilder.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/activity/SessionStartBreaker.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/activity/SessionViewService.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/activity/StaleEvaluator.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/activity/StartActivityService.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/activity/web/ActivityController.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/activity/web/SessionController.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/catalog/ApprovedContent.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/catalog/ApprovedContentRepository.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/catalog/ApprovedContentVersion.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/common/db/ClockParams.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/common/db/DbRetry.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/common/db/DbSessionLimits.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/common/db/SqlErrors.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/common/deletion/DeletionParticipant.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/common/error/CoreApiException.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/config/CoreProperties.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/config/CorePropertiesConfig.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/config/CoreRuntimeConfig.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/config/SessionJdbcConfig.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/device/BootstrapService.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/device/CodeGenerator.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/device/ConnectionCopyWriter.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/device/DeviceClaimService.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/device/DeviceDeletionParticipant.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/device/DeviceExpiryCleanupJob.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/device/DeviceJdbcRepository.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/device/DeviceSecrets.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/device/DeviceTokenVerifier.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/device/DeviceVerdict.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/device/DeviceViewAssembler.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/device/RegistrationCode.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/device/RegistrationService.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/device/web/DeviceBootstrapController.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/device/web/DeviceInternalController.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/device/web/DeviceRegistrationController.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/device/web/DeviceViewController.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/health/DbHealthChecker.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/health/ReadinessState.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/identity/Child.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/identity/ChildRepository.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/identity/Consent.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/identity/ConsentRepository.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/identity/DevLoginController.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/identity/DevSeedRunner.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/identity/Guardian.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/identity/GuardianRepository.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/identity/SeedIds.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/internalhttp/InternalAuthInterceptor.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/internalhttp/InternalHttpClient.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/messaging/ControlEventRearm.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/messaging/CoreInboxDispatcher.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/messaging/CoreInboxReceiver.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/messaging/CoreInboxRepoller.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/messaging/CoreInboxRepository.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/messaging/CoreMessagingDeletionParticipant.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/messaging/CoreOutboxRepository.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/messaging/CoreOutboxSender.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/messaging/CoreOutboxWriter.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/messaging/MessagingCleanupJob.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/messaging/handler/DeviceStatusChangedHandler.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/messaging/handler/InboxHandler.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/messaging/handler/SessionStateChangedHandler.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/messaging/web/CoreInboxController.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/observability/CoreMetrics.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/observability/EventLogger.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/observability/LogMergeWindow.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/observability/OwnerHashConfig.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/observability/SecurityEventCap.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/security/DevLoginBlockedRecorder.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/security/DeviceCookieAuthFilter.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/security/DeviceCookies.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/security/GuardianPrincipal.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/security/InternalTokenFilter.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/security/OriginCheckFilter.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/security/SecurityConfig.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/security/SessionCookieConfig.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/security/ratelimit/RateLimiterConfig.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/security/ratelimit/SlidingWindowRateLimiter.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/startup/CoreStartupSequence.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/startup/DrainingLifecycle.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/startup/ProfileGuardEnvironmentPostProcessor.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/startup/RequiredSecretsCheck.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/startup/SchemaVersionCheck.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/startup/StartupFailureLine.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/web/ApiErrorController.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/web/ApiExceptionHandler.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/web/ApiResponses.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/web/BootstrapIpLimitFilter.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/web/CsrfController.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/web/ErrorEnvelopeValve.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/web/HealthController.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/web/HomeController.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/web/JsonOnlyFilter.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/web/ReadinessGateFilter.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/web/RestBodyLimitFilter.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/web/TraceIdFilter.java"
+    },
+    {
+      "path": "backend/core-api/src/main/resources/META-INF/spring.factories"
+    },
+    {
+      "path": "backend/core-api/src/main/resources/application-demo.yml"
+    },
+    {
+      "path": "backend/core-api/src/main/resources/application-dev.yml"
+    },
+    {
+      "path": "backend/core-api/src/main/resources/application-load-test.yml"
+    },
+    {
+      "path": "backend/core-api/src/main/resources/application-prod.yml"
+    },
+    {
+      "path": "backend/core-api/src/main/resources/application.yml"
+    },
+    {
+      "path": "backend/core-api/src/main/resources/db/migration/core/V1__core_base.sql"
+    },
+    {
+      "path": "backend/core-api/src/main/resources/db/migration/core/afterMigrate.sql"
+    },
+    {
+      "path": "backend/core-api/src/main/resources/logback-spring.xml"
+    },
+    {
+      "path": "backend/core-api/src/test/java/kr/mujoong/core/activity/ActivityCopies.java"
+    },
+    {
+      "path": "backend/core-api/src/test/java/kr/mujoong/core/activity/ActivityCopyRepositoryIT.java"
+    },
+    {
+      "path": "backend/core-api/src/test/java/kr/mujoong/core/activity/ActivityStartEndIT.java"
+    },
+    {
+      "path": "backend/core-api/src/test/java/kr/mujoong/core/activity/PreparingTimeoutCheckerTest.java"
+    },
+    {
+      "path": "backend/core-api/src/test/java/kr/mujoong/core/activity/RealtimeSessionClientTest.java"
+    },
+    {
+      "path": "backend/core-api/src/test/java/kr/mujoong/core/activity/SessionPackageBuilderTest.java"
+    },
+    {
+      "path": "backend/core-api/src/test/java/kr/mujoong/core/activity/SessionPackageIT.java"
+    },
+    {
+      "path": "backend/core-api/src/test/java/kr/mujoong/core/activity/SessionViewServiceTest.java"
+    },
+    {
+      "path": "backend/core-api/src/test/java/kr/mujoong/core/activity/StaleEvaluatorTest.java"
+    },
+    {
+      "path": "backend/core-api/src/test/java/kr/mujoong/core/activity/StartActivityPolicyTest.java"
+    },
+    {
+      "path": "backend/core-api/src/test/java/kr/mujoong/core/arch/CoreArchTest.java"
+    },
+    {
+      "path": "backend/core-api/src/test/java/kr/mujoong/core/catalog/ApprovedContentEntitiesTest.java"
+    },
+    {
+      "path": "backend/core-api/src/test/java/kr/mujoong/core/catalog/ApprovedContentRepositoryIT.java"
+    },
+    {
+      "path": "backend/core-api/src/test/java/kr/mujoong/core/common/db/ClockParamsTest.java"
+    },
+    {
+      "path": "backend/core-api/src/test/java/kr/mujoong/core/common/db/CoreDataAccessContext.java"
+    },
+    {
+      "path": "backend/core-api/src/test/java/kr/mujoong/core/common/db/DbRetryTest.java"
+    },
+    {
+      "path": "backend/core-api/src/test/java/kr/mujoong/core/common/db/DbSessionLimitsIT.java"
+    },
+    {
+      "path": "backend/core-api/src/test/java/kr/mujoong/core/common/db/DbTestSupport.java"
+    },
+    {
+      "path": "backend/core-api/src/test/java/kr/mujoong/core/common/db/SqlErrorsTest.java"
+    },
+    {
+      "path": "backend/core-api/src/test/java/kr/mujoong/core/config/ConfigKeyContractTest.java"
+    },
+    {
+      "path": "backend/core-api/src/test/java/kr/mujoong/core/config/CoreDataAccessWiringIT.java"
+    },
+    {
+      "path": "backend/core-api/src/test/java/kr/mujoong/core/config/SessionJdbcConfigIT.java"
+    },
+    {
+      "path": "backend/core-api/src/test/java/kr/mujoong/core/db/CoreConstraintIT.java"
+    },
+    {
+      "path": "backend/core-api/src/test/java/kr/mujoong/core/db/CoreDbFixtures.java"
+    },
+    {
+      "path": "backend/core-api/src/test/java/kr/mujoong/core/db/CoreSchemaIT.java"
+    },
+    {
+      "path": "backend/core-api/src/test/java/kr/mujoong/core/db/FlywayConfIT.java"
+    },
+    {
+      "path": "backend/core-api/src/test/java/kr/mujoong/core/db/NoSqlNowTest.java"
+    },
+    {
+      "path": "backend/core-api/src/test/java/kr/mujoong/core/db/SchemaPrivilegeIT.java"
+    },
+    {
+      "path": "backend/core-api/src/test/java/kr/mujoong/core/db/SeedReferenceSqlIT.java"
+    },
+    {
+      "path": "backend/core-api/src/test/java/kr/mujoong/core/device/CodeGeneratorTest.java"
+    },
+    {
+      "path": "backend/core-api/src/test/java/kr/mujoong/core/device/DeviceJdbcRepositoryIT.java"
+    },
+    {
+      "path": "backend/core-api/src/test/java/kr/mujoong/core/device/DeviceRecords.java"
+    },
+    {
+      "path": "backend/core-api/src/test/java/kr/mujoong/core/device/DeviceRegistrationFlowIT.java"
+    },
+    {
+      "path": "backend/core-api/src/test/java/kr/mujoong/core/device/DeviceSecretsTest.java"
+    },
+    {
+      "path": "backend/core-api/src/test/java/kr/mujoong/core/device/DeviceVerdictTest.java"
+    },
+    {
+      "path": "backend/core-api/src/test/java/kr/mujoong/core/device/RegistrationCodeTest.java"
+    },
+    {
+      "path": "backend/core-api/src/test/java/kr/mujoong/core/device/RegistrationDecisionTest.java"
+    },
+    {
+      "path": "backend/core-api/src/test/java/kr/mujoong/core/health/ReadinessStateTest.java"
+    },
+    {
+      "path": "backend/core-api/src/test/java/kr/mujoong/core/identity/DevSeedRunnerIT.java"
+    },
+    {
+      "path": "backend/core-api/src/test/java/kr/mujoong/core/identity/IdentityEntitiesTest.java"
+    },
+    {
+      "path": "backend/core-api/src/test/java/kr/mujoong/core/identity/IdentityRepositoriesIT.java"
+    },
+    {
+      "path": "backend/core-api/src/test/java/kr/mujoong/core/internalhttp/InternalAuthInterceptorTest.java"
+    },
+    {
+      "path": "backend/core-api/src/test/java/kr/mujoong/core/messaging/CoreMessagingFlowIT.java"
+    },
+    {
+      "path": "backend/core-api/src/test/java/kr/mujoong/core/messaging/CoreMessagingRepositoryIT.java"
+    },
+    {
+      "path": "backend/core-api/src/test/java/kr/mujoong/core/messaging/CoreOutboxSenderTest.java"
+    },
+    {
+      "path": "backend/core-api/src/test/java/kr/mujoong/core/messaging/DeletionParticipantsCoreIT.java"
+    },
+    {
+      "path": "backend/core-api/src/test/java/kr/mujoong/core/messaging/MessagingJobsTest.java"
+    },
+    {
+      "path": "backend/core-api/src/test/java/kr/mujoong/core/observability/EventLoggerTest.java"
+    },
+    {
+      "path": "backend/core-api/src/test/java/kr/mujoong/core/security/ratelimit/SlidingWindowRateLimiterTest.java"
+    },
+    {
+      "path": "backend/core-api/src/test/java/kr/mujoong/core/startup/CorePropertiesValidationTest.java"
+    },
+    {
+      "path": "backend/core-api/src/test/java/kr/mujoong/core/startup/CoreStartupSequenceIT.java"
+    },
+    {
+      "path": "backend/core-api/src/test/java/kr/mujoong/core/startup/CoreStartupSequenceTest.java"
+    },
+    {
+      "path": "backend/core-api/src/test/java/kr/mujoong/core/startup/ProfileGuardBootIT.java"
+    },
+    {
+      "path": "backend/core-api/src/test/java/kr/mujoong/core/startup/ProfileGuardEnvironmentPostProcessorTest.java"
+    },
+    {
+      "path": "backend/core-api/src/test/java/kr/mujoong/core/startup/SchemaVersionCheckTest.java"
+    },
+    {
+      "path": "backend/core-api/src/test/java/kr/mujoong/core/support/BusinessFixtures.java"
+    },
+    {
+      "path": "backend/core-api/src/test/java/kr/mujoong/core/support/CoreBusinessContext.java"
+    },
+    {
+      "path": "backend/core-api/src/test/java/kr/mujoong/core/support/NoTransactions.java"
+    },
+    {
+      "path": "backend/core-api/src/test/java/kr/mujoong/core/support/TestEvents.java"
+    },
+    {
+      "path": "backend/core-api/src/test/java/kr/mujoong/core/web/ContractConformanceIT.java"
+    },
+    {
+      "path": "backend/core-api/src/test/java/kr/mujoong/core/web/CookieAttributesTest.java"
+    },
+    {
+      "path": "backend/core-api/src/test/java/kr/mujoong/core/web/CoreInternalApiIT.java"
+    },
+    {
+      "path": "backend/core-api/src/test/java/kr/mujoong/core/web/CoreLogHygieneIT.java"
+    },
+    {
+      "path": "backend/core-api/src/test/java/kr/mujoong/core/web/DeviceBootstrapApiIT.java"
+    },
+    {
+      "path": "backend/core-api/src/test/java/kr/mujoong/core/web/DeviceRegisterApiIT.java"
+    },
+    {
+      "path": "backend/core-api/src/test/java/kr/mujoong/core/web/ErrorEnvelopeAndLimitsIT.java"
+    },
+    {
+      "path": "backend/core-api/src/test/java/kr/mujoong/core/web/GuardianApiIT.java"
+    },
+    {
+      "path": "backend/core-api/src/test/java/kr/mujoong/core/web/HealthAndReadinessIT.java"
+    },
+    {
+      "path": "backend/core-api/src/test/java/kr/mujoong/core/web/SecurityChainIT.java"
+    },
+    {
+      "path": "backend/core-api/src/test/java/kr/mujoong/core/web/WebErrorMappingTest.java"
+    },
+    {
+      "path": "backend/core-api/src/test/java/kr/mujoong/core/web/support/AppOutputCapture.java"
+    },
+    {
+      "path": "backend/core-api/src/test/java/kr/mujoong/core/web/support/CoreWebApp.java"
+    },
+    {
+      "path": "backend/core-api/src/test/java/kr/mujoong/core/web/support/OpenApiContracts.java"
+    },
+    {
+      "path": "backend/core-api/src/test/java/kr/mujoong/core/web/support/WebFixtures.java"
+    },
+    {
+      "path": "backend/core-api/src/test/resources/application-test.yml"
+    },
+    {
+      "path": "backend/core-api/src/test/resources/db/testmigration/core/V2__test_default_privilege_probe.sql"
+    },
+    {
+      "path": "backend/coverage-scope/u1.txt"
+    },
+    {
+      "path": "backend/gradle.properties"
+    },
+    {
+      "path": "backend/gradle/libs.versions.toml"
+    },
+    {
+      "path": "backend/gradle/wrapper/"
+    },
+    {
+      "path": "backend/gradlew"
+    },
+    {
+      "path": "backend/gradlew.bat"
+    },
+    {
+      "path": "backend/realtime-activity/Dockerfile"
+    },
+    {
+      "path": "backend/realtime-activity/build.gradle.kts"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/RealtimeApplication.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/common/db/ClockParams.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/common/db/DbRetry.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/common/db/DbSessionLimits.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/common/db/SqlErrors.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/common/db/Transactions.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/config/RealtimeProperties.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/config/RealtimePropertiesConfig.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/gate/ApprovedPlayback.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/gate/ClosingSequence.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/gate/GateDecision.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/gate/OutputGate.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/gate/SeedDictionary.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/gate/SegmentBuffer.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/gateway/ConnectionHandover.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/gateway/ConnectionSender.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/gateway/ConnectionStateWriter.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/gateway/DeviceConnection.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/gateway/DeviceConnectionRepository.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/gateway/DeviceConnectionRow.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/gateway/DeviceHandshakeInterceptor.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/gateway/DeviceLink.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/gateway/DeviceReleasedHandler.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/gateway/DeviceStatusPolicy.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/gateway/DeviceStatusPort.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/gateway/DeviceWebSocketHandler.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/gateway/DisconnectChecker.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/gateway/HeartbeatHandler.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/gateway/OutputBundle.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/gateway/SocketRegistry.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/gateway/StatusReporter.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/gateway/VerifyTokenClient.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/gateway/WebSocketConfig.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/gateway/WsFrameGuard.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/health/DbHealthChecker.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/health/ReadinessState.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/internalhttp/InternalAuthInterceptor.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/internalhttp/InternalHttpClient.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/log/AsyncRecorder.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/log/LatencyRecorder.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/log/TranscriptEntry.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/log/TranscriptRepository.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/log/TranscriptRow.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/log/TranscriptWriter.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/messaging/ControlEventRearm.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/messaging/InboxEventRow.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/messaging/InboxHandler.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/messaging/LastError.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/messaging/MessagingCleanupJob.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/messaging/NewInboxEvent.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/messaging/NewOutboxEvent.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/messaging/OutboxEventRow.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/messaging/RealtimeInboxDispatcher.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/messaging/RealtimeInboxReceiver.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/messaging/RealtimeInboxRepoller.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/messaging/RealtimeInboxRepository.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/messaging/RealtimeMessagingDeletionParticipant.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/messaging/RealtimeOutboxRepository.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/messaging/RealtimeOutboxSender.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/messaging/RealtimeOutboxWriter.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/messaging/web/RealtimeInboxController.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/observability/EventLogger.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/observability/LogMergeWindow.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/observability/OwnerHashConfig.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/observability/RealtimeMetrics.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/observability/SecurityEventCap.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/runtime/PeriodicJobs.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/runtime/RealtimeRuntimeConfig.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/runtime/TaskLauncher.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/runtime/TimerClocks.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/ActivitySessionRepository.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/ActivitySessionRow.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/ChildContext.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/ConsentSnapshot.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/EndRequestHandler.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/NewActivitySession.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/OrphanSessionChecker.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/SessionChange.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/SessionEvent.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/SessionEventRepository.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/SessionExecutor.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/SessionMailbox.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/SessionRegistry.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/SessionStateEmitter.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/SessionStopExpression.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/SessionStopExpressionRepository.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/SessionTimers.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/SessionTransitions.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/SessionViewQuery.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/StartSessionHandler.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/TombstoneMap.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/TransitionService.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/TransitionTable.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/web/SessionInternalController.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/startup/DataClassCheck.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/startup/DrainingLifecycle.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/startup/ProfileGuardEnvironmentPostProcessor.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/startup/RealtimeStartupChecks.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/startup/RealtimeStartupSequence.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/startup/SchemaVersionCheck.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/startup/StartupFailureLine.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/voice/InputRelay.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/voice/ProviderClient.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/voice/ProviderConnector.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/voice/ProviderHosts.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/voice/ProviderPort.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/voice/ProviderRequestFactory.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/web/ApiExceptionHandler.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/web/InternalBody.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/web/InternalTokenFilter.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/web/ReadinessGateFilter.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/web/TraceIdFilter.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/resources/META-INF/spring.factories"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/resources/application-demo.yml"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/resources/application-dev.yml"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/resources/application-prod.yml"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/resources/application.yml"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/resources/db/migration/realtime/V1__realtime_base.sql"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/resources/db/migration/realtime/afterMigrate.sql"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/resources/gate/seed-dictionary.json"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/resources/logback-spring.xml"
+    },
+    {
+      "path": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/arch/RealtimeArchTest.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/common/db/DbRetryTest.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/common/db/DbSessionLimitsIT.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/common/db/DbSessionLimitsTest.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/common/db/RealtimeDataAccessWiringIT.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/config/ConfigKeyContractTest.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/db/RealtimeConstraintIT.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/db/RealtimeDbFixtures.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/db/RealtimeSchemaIT.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/gate/OutputGateTest.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/gate/SeedDictionaryFileTest.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/gate/SeedDictionaryTest.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/gateway/DeviceConnectionRepositoryIT.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/gateway/DeviceStatusPolicyTest.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/gateway/WsFrameGuardTest.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/log/AsyncRecorderTest.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/log/LatencyRecorderTest.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/log/TranscriptRepositoryIT.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/messaging/MessagingValueTypesTest.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/messaging/RealtimeMessagingIT.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/messaging/RealtimeMessagingRepositoryIT.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/observability/EventLoggerMergeTest.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/ActivitySessionRepositoryIT.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/SessionExecutorTest.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/SessionLifecycleIT.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/SessionRecordEntitiesTest.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/SessionRecordsRepositoryIT.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/SessionTimersTest.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/SessionValueTypesTest.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/TransitionTableTest.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/startup/ProfileGuardBootIT.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/startup/ProfileGuardEnvironmentPostProcessorTest.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/startup/RealtimeStartupChecksTest.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/startup/RealtimeStartupRecoveryIT.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/testing/FakeDeviceLink.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/testing/FakeProviderPort.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/testing/InMemoryTransitions.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/testing/InternalApi.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/testing/ItTypeExcludeFilter.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/testing/ManualLauncher.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/testing/ManualTime.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/testing/RealtimeDb.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/testing/RealtimeItEnvironment.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/testing/RealtimeTestApp.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/testing/SessionHarness.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/voice/InputRelayTest.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/voice/ProviderClientIT.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/voice/ProviderRequestWhitelistIT.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/web/DeviceGatewayIT.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/web/RealtimeInternalApiIT.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/web/RealtimeLogHygieneIT.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/test/resources/application-test.yml"
+    },
+    {
+      "path": "backend/settings.gradle.kts"
+    },
+    {
+      "path": "backend/test-support/build.gradle.kts"
+    },
+    {
+      "path": "backend/test-support/src/main/java/kr/mujoong/testsupport/db/MujoongPostgres.java"
+    },
+    {
+      "path": "backend/test-support/src/main/java/kr/mujoong/testsupport/device/DeviceSimulatorClient.java"
+    },
+    {
+      "path": "backend/test-support/src/main/java/kr/mujoong/testsupport/http/ContractStubServer.java"
+    },
+    {
+      "path": "backend/test-support/src/main/java/kr/mujoong/testsupport/http/ReceiverDouble.java"
+    },
+    {
+      "path": "backend/test-support/src/main/java/kr/mujoong/testsupport/log/LogCapture.java"
+    },
+    {
+      "path": "backend/test-support/src/main/java/kr/mujoong/testsupport/provider/FakeProviderWsServer.java"
+    },
+    {
+      "path": "backend/test-support/src/main/java/kr/mujoong/testsupport/secret/TestSecrets.java"
+    },
+    {
+      "path": "backend/test-support/src/main/java/kr/mujoong/testsupport/time/ManualTimerDriver.java"
+    },
+    {
+      "path": "backend/test-support/src/main/java/kr/mujoong/testsupport/time/MutableClock.java"
+    },
+    {
+      "path": "backend/test-support/src/test/java/kr/mujoong/testsupport/db/MujoongPostgresTest.java"
+    },
+    {
+      "path": "backend/test-support/src/test/java/kr/mujoong/testsupport/http/ContractStubServerTest.java"
+    },
+    {
+      "path": "backend/test-support/src/test/java/kr/mujoong/testsupport/time/ManualTimerDriverTest.java"
+    },
+    {
+      "path": "backend/test-support/src/test/java/kr/mujoong/testsupport/time/MutableClockTest.java"
+    },
+    {
+      "path": "ci/security-exceptions.yml"
+    },
+    {
+      "path": "ci/security-gate.py"
+    },
+    {
+      "path": "contracts/README.md"
+    },
+    {
+      "path": "contracts/ai-io.md"
+    },
+    {
+      "path": "contracts/deviations.md"
+    },
+    {
+      "path": "contracts/device-api.yaml"
+    },
+    {
+      "path": "contracts/device-ws.asyncapi.yaml"
+    },
+    {
+      "path": "contracts/errors.md"
+    },
+    {
+      "path": "contracts/events.asyncapi.yaml"
+    },
+    {
+      "path": "contracts/internal-api.yaml"
+    },
+    {
+      "path": "contracts/parent-api.yaml"
+    },
+    {
+      "path": "contracts/ports.md"
+    },
+    {
+      "path": "contracts/schemas/activity-free-request.schema.json"
+    },
+    {
+      "path": "contracts/schemas/activity-free-response.schema.json"
+    },
+    {
+      "path": "contracts/schemas/common.schema.json"
+    },
+    {
+      "path": "contracts/schemas/csrf-response.schema.json"
+    },
+    {
+      "path": "contracts/schemas/dev-login-response.schema.json"
+    },
+    {
+      "path": "contracts/schemas/device-bootstrap-response.schema.json"
+    },
+    {
+      "path": "contracts/schemas/device-bootstrap-status-response.schema.json"
+    },
+    {
+      "path": "contracts/schemas/device-claim-response.schema.json"
+    },
+    {
+      "path": "contracts/schemas/device-me-response.schema.json"
+    },
+    {
+      "path": "contracts/schemas/device-register-request.schema.json"
+    },
+    {
+      "path": "contracts/schemas/device-register-response.schema.json"
+    },
+    {
+      "path": "contracts/schemas/device-view.schema.json"
+    },
+    {
+      "path": "contracts/schemas/empty-object.schema.json"
+    },
+    {
+      "path": "contracts/schemas/error-envelope.schema.json"
+    },
+    {
+      "path": "contracts/schemas/event-envelope.schema.json"
+    },
+    {
+      "path": "contracts/schemas/event-payloads.schema.json"
+    },
+    {
+      "path": "contracts/schemas/health-response.schema.json"
+    },
+    {
+      "path": "contracts/schemas/home-response.schema.json"
+    },
+    {
+      "path": "contracts/schemas/internal-device-connection-report.schema.json"
+    },
+    {
+      "path": "contracts/schemas/internal-session-end-request.schema.json"
+    },
+    {
+      "path": "contracts/schemas/internal-session-end-response.schema.json"
+    },
+    {
+      "path": "contracts/schemas/internal-session-start-request.schema.json"
+    },
+    {
+      "path": "contracts/schemas/internal-session-start-response.schema.json"
+    },
+    {
+      "path": "contracts/schemas/internal-session-view.schema.json"
+    },
+    {
+      "path": "contracts/schemas/internal-verify-token-request.schema.json"
+    },
+    {
+      "path": "contracts/schemas/internal-verify-token-response.schema.json"
+    },
+    {
+      "path": "contracts/schemas/live-view.schema.json"
+    },
+    {
+      "path": "contracts/schemas/session-end-request.schema.json"
+    },
+    {
+      "path": "contracts/schemas/session-end-response.schema.json"
+    },
+    {
+      "path": "contracts/schemas/ws-envelope.schema.json"
+    },
+    {
+      "path": "contracts/schemas/ws-messages.schema.json"
+    },
+    {
+      "path": "contracts/timing.md"
+    },
+    {
+      "path": "frontend/.dockerignore"
+    },
+    {
+      "path": "frontend/Dockerfile"
+    },
+    {
+      "path": "frontend/coverage-scope/u1.json"
+    },
+    {
+      "path": "frontend/eslint.config.mjs"
+    },
+    {
+      "path": "frontend/next-env.d.ts"
+    },
+    {
+      "path": "frontend/next.config.ts"
+    },
+    {
+      "path": "frontend/package-lock.json"
+    },
+    {
+      "path": "frontend/package.json"
+    },
+    {
+      "path": "frontend/src/app/device/page.tsx"
+    },
+    {
+      "path": "frontend/src/app/device/pcm-capture-worklet/route.ts"
+    },
+    {
+      "path": "frontend/src/app/healthz/route.ts"
+    },
+    {
+      "path": "frontend/src/app/layout.tsx"
+    },
+    {
+      "path": "frontend/src/app/parent/dev-login/page.tsx"
+    },
+    {
+      "path": "frontend/src/app/parent/device/page.tsx"
+    },
+    {
+      "path": "frontend/src/app/parent/device/register/page.tsx"
+    },
+    {
+      "path": "frontend/src/app/parent/free/page.tsx"
+    },
+    {
+      "path": "frontend/src/app/parent/layout.tsx"
+    },
+    {
+      "path": "frontend/src/app/parent/page.tsx"
+    },
+    {
+      "path": "frontend/src/app/parent/practice/page.tsx"
+    },
+    {
+      "path": "frontend/src/app/parent/records/page.tsx"
+    },
+    {
+      "path": "frontend/src/app/parent/sessions/"
+    },
+    {
+      "path": "frontend/src/device/DeviceApp.tsx"
+    },
+    {
+      "path": "frontend/src/device/api/deviceApi.ts"
+    },
+    {
+      "path": "frontend/src/device/audio/audioContext.ts"
+    },
+    {
+      "path": "frontend/src/device/audio/capture.ts"
+    },
+    {
+      "path": "frontend/src/device/audio/pcm-capture.worklet.ts"
+    },
+    {
+      "path": "frontend/src/device/audio/player.ts"
+    },
+    {
+      "path": "frontend/src/device/audio/resample.ts"
+    },
+    {
+      "path": "frontend/src/device/components/D0View.tsx"
+    },
+    {
+      "path": "frontend/src/device/components/DebugLog.tsx"
+    },
+    {
+      "path": "frontend/src/device/components/T19View.tsx"
+    },
+    {
+      "path": "frontend/src/device/device.css"
+    },
+    {
+      "path": "frontend/src/device/machine/deviceMachine.ts"
+    },
+    {
+      "path": "frontend/src/device/mic/micPermission.ts"
+    },
+    {
+      "path": "frontend/src/device/power/wakeLock.ts"
+    },
+    {
+      "path": "frontend/src/device/runtime/deviceRuntime.ts"
+    },
+    {
+      "path": "frontend/src/device/ws/deviceSession.ts"
+    },
+    {
+      "path": "frontend/src/device/ws/wsClient.ts"
+    },
+    {
+      "path": "frontend/src/parent/ParentProviders.tsx"
+    },
+    {
+      "path": "frontend/src/parent/api/apiClient.ts"
+    },
+    {
+      "path": "frontend/src/parent/api/csrf.ts"
+    },
+    {
+      "path": "frontend/src/parent/api/queries.ts"
+    },
+    {
+      "path": "frontend/src/parent/api/types.ts"
+    },
+    {
+      "path": "frontend/src/parent/components/BottomTabBar.tsx"
+    },
+    {
+      "path": "frontend/src/parent/components/ChipGroup.tsx"
+    },
+    {
+      "path": "frontend/src/parent/components/CodeInput.tsx"
+    },
+    {
+      "path": "frontend/src/parent/components/ConfirmDialog.tsx"
+    },
+    {
+      "path": "frontend/src/parent/components/DeviceCard.tsx"
+    },
+    {
+      "path": "frontend/src/parent/components/StatusLine.tsx"
+    },
+    {
+      "path": "frontend/src/parent/components/TextArea200.tsx"
+    },
+    {
+      "path": "frontend/src/parent/components/TranscriptList.tsx"
+    },
+    {
+      "path": "frontend/src/parent/hooks/useLivePolling.ts"
+    },
+    {
+      "path": "frontend/src/parent/navigation.ts"
+    },
+    {
+      "path": "frontend/src/parent/parent.css"
+    },
+    {
+      "path": "frontend/src/parent/screens/DevLogin.tsx"
+    },
+    {
+      "path": "frontend/src/parent/screens/Done17.tsx"
+    },
+    {
+      "path": "frontend/src/parent/screens/Free08.tsx"
+    },
+    {
+      "path": "frontend/src/parent/screens/Home04.tsx"
+    },
+    {
+      "path": "frontend/src/parent/screens/Live12.tsx"
+    },
+    {
+      "path": "frontend/src/parent/screens/Register05a.tsx"
+    },
+    {
+      "path": "frontend/src/proxy.ts"
+    },
+    {
+      "path": "frontend/src/shared/copy/ko.ts"
+    },
+    {
+      "path": "frontend/src/shared/copy/particle.ts"
+    },
+    {
+      "path": "frontend/src/shared/copy/timeText.ts"
+    },
+    {
+      "path": "frontend/src/shared/errors/codeToCopy.ts"
+    },
+    {
+      "path": "frontend/src/shared/protocol/closeCodes.ts"
+    },
+    {
+      "path": "frontend/src/shared/protocol/frameCodec.ts"
+    },
+    {
+      "path": "frontend/src/shared/protocol/messages.ts"
+    },
+    {
+      "path": "frontend/src/shared/protocol/wsEnvelope.ts"
+    },
+    {
+      "path": "frontend/src/shared/security/csp.ts"
+    },
+    {
+      "path": "frontend/src/shared/styles/tokens.css"
+    },
+    {
+      "path": "frontend/src/shared/timing/TimingProvider.tsx"
+    },
+    {
+      "path": "frontend/src/shared/timing/readTimingFromEnv.ts"
+    },
+    {
+      "path": "frontend/src/shared/timing/timing-defaults.json"
+    },
+    {
+      "path": "frontend/src/shared/timing/timing.ts"
+    },
+    {
+      "path": "frontend/src/shared/toast/Toast.tsx"
+    },
+    {
+      "path": "frontend/src/shared/toast/ToastProvider.tsx"
+    },
+    {
+      "path": "frontend/src/shared/toast/toast.css"
+    },
+    {
+      "path": "frontend/tests/u1/device/capture.test.ts"
+    },
+    {
+      "path": "frontend/tests/u1/device/d0-view.test.tsx"
+    },
+    {
+      "path": "frontend/tests/u1/device/device-api.test.ts"
+    },
+    {
+      "path": "frontend/tests/u1/device/device-app.test.tsx"
+    },
+    {
+      "path": "frontend/tests/u1/device/device-machine.test.ts"
+    },
+    {
+      "path": "frontend/tests/u1/device/device-runtime.test.ts"
+    },
+    {
+      "path": "frontend/tests/u1/device/device-session.test.ts"
+    },
+    {
+      "path": "frontend/tests/u1/device/mic-permission.test.ts"
+    },
+    {
+      "path": "frontend/tests/u1/device/no-service-worker.test.ts"
+    },
+    {
+      "path": "frontend/tests/u1/device/pcm-capture-worklet.test.ts"
+    },
+    {
+      "path": "frontend/tests/u1/device/player.test.ts"
+    },
+    {
+      "path": "frontend/tests/u1/device/resample.test.ts"
+    },
+    {
+      "path": "frontend/tests/u1/device/t19-view.test.tsx"
+    },
+    {
+      "path": "frontend/tests/u1/device/ws-client.test.ts"
+    },
+    {
+      "path": "frontend/tests/u1/lint/eslint-boundary.test.ts"
+    },
+    {
+      "path": "frontend/tests/u1/parent/api-client.test.ts"
+    },
+    {
+      "path": "frontend/tests/u1/parent/api-types.test.ts"
+    },
+    {
+      "path": "frontend/tests/u1/parent/code-input.test.tsx"
+    },
+    {
+      "path": "frontend/tests/u1/parent/dev-login.test.tsx"
+    },
+    {
+      "path": "frontend/tests/u1/parent/done-17.test.tsx"
+    },
+    {
+      "path": "frontend/tests/u1/parent/free-08.test.tsx"
+    },
+    {
+      "path": "frontend/tests/u1/parent/home-04.test.tsx"
+    },
+    {
+      "path": "frontend/tests/u1/parent/live-12.test.tsx"
+    },
+    {
+      "path": "frontend/tests/u1/parent/p1-dialog.test.tsx"
+    },
+    {
+      "path": "frontend/tests/u1/parent/register-05a.test.tsx"
+    },
+    {
+      "path": "frontend/tests/u1/setup.ts"
+    },
+    {
+      "path": "frontend/tests/u1/shared/copy.test.ts"
+    },
+    {
+      "path": "frontend/tests/u1/shared/csp.test.ts"
+    },
+    {
+      "path": "frontend/tests/u1/shared/frame-codec.test.ts"
+    },
+    {
+      "path": "frontend/tests/u1/shared/particle.test.ts"
+    },
+    {
+      "path": "frontend/tests/u1/shared/routes.test.tsx"
+    },
+    {
+      "path": "frontend/tests/u1/shared/test-ids.test.tsx"
+    },
+    {
+      "path": "frontend/tests/u1/shared/timing.test.ts"
+    },
+    {
+      "path": "frontend/tests/u1/shared/toast.test.tsx"
+    },
+    {
+      "path": "frontend/tests/u1/shared/ws-protocol.test.ts"
+    },
+    {
+      "path": "frontend/tests/u1/support/deviceHarness.tsx"
+    },
+    {
+      "path": "frontend/tests/u1/support/fakeAudio.ts"
+    },
+    {
+      "path": "frontend/tests/u1/support/fakeSocket.ts"
+    },
+    {
+      "path": "frontend/tests/u1/support/fixtures.ts"
+    },
+    {
+      "path": "frontend/tests/u1/support/nextNavigation.ts"
+    },
+    {
+      "path": "frontend/tests/u1/support/parentHarness.tsx"
+    },
+    {
+      "path": "frontend/tests/u1/support/runtimeMock.ts"
+    },
+    {
+      "path": "frontend/tests/u1/support/sourceScan.ts"
+    },
+    {
+      "path": "frontend/tests/u1/support/timingWrapper.tsx"
+    },
+    {
+      "path": "frontend/tsconfig.json"
+    },
+    {
+      "path": "frontend/vitest.config.ts"
+    },
+    {
+      "path": "infra/RUNBOOK.md"
+    },
+    {
+      "path": "infra/aws/iam-ec2-inline.json"
+    },
+    {
+      "path": "infra/aws/iam-gha-deploy-trust.json"
+    },
+    {
+      "path": "infra/aws/iam-gha-deploy.json"
+    },
+    {
+      "path": "infra/aws/ssm-mujoong-deploy.yml"
+    },
+    {
+      "path": "infra/backup/Dockerfile"
+    },
+    {
+      "path": "infra/backup/backup.sh"
+    },
+    {
+      "path": "infra/backup/crontab"
+    },
+    {
+      "path": "infra/bin/backup-trigger"
+    },
+    {
+      "path": "infra/bin/check-since-last"
+    },
+    {
+      "path": "infra/bin/deploy-apply"
+    },
+    {
+      "path": "infra/bin/deploy-stage1"
+    },
+    {
+      "path": "infra/bin/host-collect.sh"
+    },
+    {
+      "path": "infra/bin/infra-validate"
+    },
+    {
+      "path": "infra/bin/lib/host.sh"
+    },
+    {
+      "path": "infra/bin/lib/render.sh"
+    },
+    {
+      "path": "infra/bin/log-hygiene-check"
+    },
+    {
+      "path": "infra/bin/mj"
+    },
+    {
+      "path": "infra/bin/power-mark"
+    },
+    {
+      "path": "infra/bin/probe-three"
+    },
+    {
+      "path": "infra/bin/render-env"
+    },
+    {
+      "path": "infra/bin/render-nginx"
+    },
+    {
+      "path": "infra/bin/render-pgconf"
+    },
+    {
+      "path": "infra/bin/smoke"
+    },
+    {
+      "path": "infra/bundle/Dockerfile"
+    },
+    {
+      "path": "infra/bundle/Dockerfile.dockerignore"
+    },
+    {
+      "path": "infra/ci/build-images.sh"
+    },
+    {
+      "path": "infra/ci/gen-env.sh"
+    },
+    {
+      "path": "infra/ci/gen-selfsigned.sh"
+    },
+    {
+      "path": "infra/ci/image-checks.sh"
+    },
+    {
+      "path": "infra/ci/invariant-samples/bad-cap-add.yml"
+    },
+    {
+      "path": "infra/ci/invariant-samples/bad-core-depends-realtime.yml"
+    },
+    {
+      "path": "infra/ci/invariant-samples/bad-dev-public-port.yml"
+    },
+    {
+      "path": "infra/ci/invariant-samples/bad-devlogin-on.yml"
+    },
+    {
+      "path": "infra/ci/invariant-samples/bad-extra-port.yml"
+    },
+    {
+      "path": "infra/ci/invariant-samples/bad-inline-secret.yml"
+    },
+    {
+      "path": "infra/ci/invariant-samples/bad-latest-tag.yml"
+    },
+    {
+      "path": "infra/ci/invariant-samples/bad-postgres-no-user.yml"
+    },
+    {
+      "path": "infra/ci/invariant-samples/bad-profile-demo-dev.yml"
+    },
+    {
+      "path": "infra/ci/invariant-samples/bad-three-networks.yml"
+    },
+    {
+      "path": "infra/ci/invariant-samples/bad-unreceived-secret.yml"
+    },
+    {
+      "path": "infra/ci/invariant-samples/ok-dev-loopback.yml"
+    },
+    {
+      "path": "infra/ci/source-fingerprint.sh"
+    },
+    {
+      "path": "infra/ci/test-gate-negatives.sh"
+    },
+    {
+      "path": "infra/ci/test-host-tools.sh"
+    },
+    {
+      "path": "infra/ci/test-infra-validate.sh"
+    },
+    {
+      "path": "infra/compose.ci.yml"
+    },
+    {
+      "path": "infra/compose.demo.yml"
+    },
+    {
+      "path": "infra/compose.dev.yml"
+    },
+    {
+      "path": "infra/host/cron.d/mujoong"
+    },
+    {
+      "path": "infra/host/daemon.json"
+    },
+    {
+      "path": "infra/host/docker.service.d/mujoong-mounts.conf"
+    },
+    {
+      "path": "infra/host/entry/deploy.sh"
+    },
+    {
+      "path": "infra/host/entry/host-collect.sh"
+    },
+    {
+      "path": "infra/host/entry/mj"
+    },
+    {
+      "path": "infra/host/logrotate.d/mujoong"
+    },
+    {
+      "path": "infra/host/sysctl.d/90-mujoong.conf"
+    },
+    {
+      "path": "infra/host/systemd/mujoong-compose.service"
+    },
+    {
+      "path": "infra/host/systemd/mujoong-power-mark.service"
+    },
+    {
+      "path": "infra/migrate/Dockerfile"
+    },
+    {
+      "path": "infra/migrate/flyway-core.conf"
+    },
+    {
+      "path": "infra/migrate/flyway-realtime.conf"
+    },
+    {
+      "path": "infra/migrate/migrate.sh"
+    },
+    {
+      "path": "infra/nginx/conf.d/http80-bootstrap.conf.tmpl"
+    },
+    {
+      "path": "infra/nginx/conf.d/http80.conf.tmpl"
+    },
+    {
+      "path": "infra/nginx/conf.d/https443.conf.tmpl"
+    },
+    {
+      "path": "infra/nginx/html/maintenance.html"
+    },
+    {
+      "path": "infra/nginx/nginx.conf.tmpl"
+    },
+    {
+      "path": "infra/nginx/reload-watch.sh"
+    },
+    {
+      "path": "infra/nginx/snippets/error-json.conf"
+    },
+    {
+      "path": "infra/nginx/snippets/proxy-common.conf"
+    },
+    {
+      "path": "infra/nginx/snippets/security-headers.conf"
+    },
+    {
+      "path": "infra/nginx/upstreams/compose.conf"
+    },
+    {
+      "path": "infra/nginx/upstreams/host.conf"
+    },
+    {
+      "path": "infra/postgres/init/01-roles.sh"
+    },
+    {
+      "path": "infra/postgres/init/01-roles.sql"
+    },
+    {
+      "path": "infra/postgres/init/02-hba.sh"
+    },
+    {
+      "path": "infra/postgres/postgresql.conf.tmpl"
+    },
+    {
+      "path": "infra/release.env.tmpl"
+    },
+    {
+      "path": "infra/seed-audio/"
+    },
+    {
+      "path": "infra/seed/001-reference.sql"
+    },
+    {
+      "path": "scripts/verify.sh"
+    },
+    {
+      "path": "scripts/verify/HostMigrate.java"
+    },
+    {
+      "path": "scripts/verify/a-checks.sh"
+    },
+    {
+      "path": "scripts/verify/a-secrets.sh"
+    },
+    {
+      "path": "scripts/verify/assert-log-hygiene.sh"
+    },
+    {
+      "path": "scripts/verify/assert-schema-isolation.sh"
+    },
+    {
+      "path": "scripts/verify/b-host.sh"
+    },
+    {
+      "path": "scripts/verify/b-stack.sh"
+    },
+    {
+      "path": "scripts/verify/c-skeleton-turn.sh"
+    },
+    {
+      "path": "scripts/verify/lib.sh"
+    },
+    {
+      "path": "scripts/verify/secret-patterns.txt"
+    },
+    {
+      "path": "tools/.dockerignore"
+    },
+    {
+      "path": "tools/dev-edge/edge.mjs"
+    },
+    {
+      "path": "tools/device-simulator/simulator.mjs"
+    },
+    {
+      "path": "tools/fake-provider/Dockerfile"
+    },
+    {
+      "path": "tools/fake-provider/scenarios.mjs"
+    },
+    {
+      "path": "tools/fake-provider/server.mjs"
+    },
+    {
+      "path": "tools/lib/cookieJar.mjs"
+    },
+    {
+      "path": "tools/lib/envelope.mjs"
+    },
+    {
+      "path": "tools/lib/frameCodec.mjs"
+    },
+    {
+      "path": "tools/lib/httpClient.mjs"
+    },
+    {
+      "path": "tools/lib/jsonlTail.mjs"
+    },
+    {
+      "path": "tools/lib/log.mjs"
+    },
+    {
+      "path": "tools/package-lock.json"
+    },
+    {
+      "path": "tools/package.json"
+    },
+    {
+      "path": "tools/seed/gen-approved-wav.mjs"
+    },
+    {
+      "path": "tools/skeleton-e2e/assertions.mjs"
+    },
+    {
+      "path": "tools/skeleton-e2e/deadlines.mjs"
+    },
+    {
+      "path": "tools/skeleton-e2e/run-c.mjs"
+    },
+    {
+      "path": "tools/skeleton-e2e/steps.mjs"
+    },
+    {
+      "path": "tools/tests/u1/cookie-jar.test.mjs"
+    },
+    {
+      "path": "tools/tests/u1/dev-edge.test.mjs"
+    },
+    {
+      "path": "tools/tests/u1/device-simulator.test.mjs"
+    },
+    {
+      "path": "tools/tests/u1/fake-provider.test.mjs"
+    },
+    {
+      "path": "tools/tests/u1/frame-codec.test.mjs"
+    },
+    {
+      "path": "tools/tests/u1/scenario-plan.test.mjs"
+    },
+    {
+      "path": "tools/tests/u1/seed-audio.test.mjs"
+    },
+    {
+      "path": "tools/tests/u1/verify-exit.test.mjs"
+    },
+    {
+      "path": "tools/vitest.config.mjs"
+    }
+  ]
+}

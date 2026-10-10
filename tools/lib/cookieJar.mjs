@@ -137,11 +137,17 @@ export class CookieJar {
         continue;
       }
       const { attributes } = parsed;
-      if (attributes.domain && !(host === attributes.domain || host.endsWith(`.${attributes.domain}`))) {
+      if (
+        attributes.domain &&
+        !(host === attributes.domain || host.endsWith(`.${attributes.domain}`))
+      ) {
         // 다른 도메인 쿠키는 받지 않는다(RFC 6265 5.3 6단계)
         continue;
       }
-      const path = attributes.path && attributes.path.startsWith("/") ? attributes.path : defaultPath(url.pathname);
+      const path =
+        attributes.path && attributes.path.startsWith("/")
+          ? attributes.path
+          : defaultPath(url.pathname);
       const domain = attributes.domain ?? host;
       const key = `${parsed.name}\u0000${domain}\u0000${path}`;
       const now = this.#now();

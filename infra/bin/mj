@@ -1,0 +1,112 @@
+#!/usr/bin/env bash
+# mj — demo 스택용 docker compose 래퍼 (U1 3.5 Step 47 · infra-spec 4.5.4 · N-8 · cicd 2.6.1 · NFR7.4 · CD-11)
+#
+# 호스트에서는 고정 진입점 /opt/mujoong/bin/mj(infra/host/entry/mj)가 현재 릴리스의 이 스크립트를 부른다.
+# 붙이는 옵션: -p mujoong --env-file <릴리스>/release.env -f <릴리스>/compose.demo.yml, MUJOONG_ENV_DIR=/opt/mujoong/env.
+# Compose 파일은 compose.demo.yml 하나만 쓴다(덧붙임 파일 · 다른 프로젝트 · 다른 env 파일을 받지 않는다, CD-7).
+#
+# 쓰는 법: mj [--release <릴리스 폴더>] [--measurement-window] <docker compose 명령과 인자...>
+#   --release             기본 /opt/mujoong/current. 배포 스크립트가 대상 릴리스를 명시할 때 쓴다(cicd 2.6.1)
+#   --measurement-window  `down`을 허용한다. 11/2 측정 창 전용 예외(infra-spec 1.3 단계 1)이고 `-v`는 그래도 거부한다
+# 예: mj ps · mj logs --since 10m core-api · mj restart realtime · mj exec -T backup /opt/mujoong/backup/backup.sh
+#     mj --profile migrate run --rm migrate · mj config --quiet
+#
+# 거부(종료 코드 64): -f/--file · -p/--project-name · --env-file · --project-directory, --scale(서비스당 1개, NFR7.4),
+#   측정 창 표시 없는 down, down -v/--volumes, 값을 펼쳐 출력하는 config(--quiet · --services · --images · --hash ·
+#   --profiles · --volumes · --networks 중 하나가 있어야 한다. env 파일 비밀이 화면 · 로그에 남지 않게, infra-spec 2.2)
+# 종료 코드: docker compose의 종료 코드, 64 거부 · 인자 오류, 66 릴리스 폴더가 없음
+
+set -Eeuo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=infra/bin/lib/host.sh
+. "$SCRIPT_DIR/lib/host.sh"
+
+release="$MUJOONG_OPT/current"
+allow_down=0
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --release)
+      if [ -z "${2:-}" ]; then
+        echo "mj: --release <릴리스 폴더>가 필요하다" >&2
+        exit 64
+      fi
+      release="$2"
+      shift 2
+      ;;
+    --measurement-window)
+      allow_down=1
+      shift
+      ;;
+    -h | --help)
+      sed -n '2,19p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+      exit 0
+      ;;
+    *) break ;;
+  esac
+done
+if [ "$#" -eq 0 ]; then
+  echo "mj: docker compose 명령이 필요하다(예: mj ps)" >&2
+  exit 64
+fi
+if [ ! -f "$release/compose.demo.yml" ] || [ ! -f "$release/release.env" ]; then
+  echo "mj: 릴리스 폴더에 compose.demo.yml · release.env가 없다: $release" >&2
+  exit 66
+fi
+
+# 명령 이름 찾기(앞쪽 전역 옵션 --profile <p> 등은 건너뛴다)
+command=""
+args=("$@")
+for ((i = 0; i < ${#args[@]}; i++)); do
+  a="${args[$i]}"
+  case "$a" in
+    -f | --file | -p | --project-name | --env-file | --project-directory | --file=* | --project-name=* | --env-file=* | --project-directory=*)
+      echo "mj: $a 은(는) 쓸 수 없다(Compose 파일 · 프로젝트 · env 파일은 mj가 정한다)" >&2
+      exit 64
+      ;;
+    --scale | --scale=*)
+      echo "mj: --scale은 쓸 수 없다(서비스당 컨테이너 1개, NFR7.4)" >&2
+      exit 64
+      ;;
+    --profile | --parallel | --progress | --ansi)
+      i=$((i + 1))
+      ;;
+    -*) ;;
+    *)
+      if [ -z "$command" ]; then
+        command="$a"
+      fi
+      ;;
+  esac
+done
+
+case "$command" in
+  down)
+    if [ "$allow_down" -ne 1 ]; then
+      echo "mj: down은 11/2 측정 창 전용 예외다(--measurement-window). 평시에는 restart · stop을 쓴다(monitoring 2.4.3)" >&2
+      exit 64
+    fi
+    for a in "$@"; do
+      case "$a" in
+        -v | --volumes | --volumes=* | --rmi | --rmi=*)
+          echo "mj: down $a 은(는) 쓸 수 없다(데이터 · 이미지를 지우지 않는다)" >&2
+          exit 64
+          ;;
+      esac
+    done
+    ;;
+  config)
+    safe=0
+    for a in "$@"; do
+      case "$a" in
+        -q | --quiet | --services | --images | --hash | --hash=* | --profiles | --volumes | --networks) safe=1 ;;
+      esac
+    done
+    if [ "$safe" -ne 1 ]; then
+      echo "mj: config는 env 파일 값을 펼쳐 출력하므로 --quiet · --services · --images · --hash 중 하나와만 쓴다" >&2
+      exit 64
+    fi
+    ;;
+esac
+
+exec docker compose -p "$MUJOONG_PROJECT" --env-file "$release/release.env" -f "$release/compose.demo.yml" "$@"

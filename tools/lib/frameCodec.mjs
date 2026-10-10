@@ -128,7 +128,9 @@ export function synthesizeTone(sampleCount, { freq = 220, amplitude = 0.2, start
   }
   const out = Buffer.alloc(sampleCount * SAMPLE_BYTES);
   for (let i = 0; i < sampleCount; i += 1) {
-    const value = Math.round(Math.sin((2 * Math.PI * freq * (startSample + i)) / SAMPLE_RATE) * amplitude * 32_767);
+    const value = Math.round(
+      Math.sin((2 * Math.PI * freq * (startSample + i)) / SAMPLE_RATE) * amplitude * 32_767,
+    );
     out.writeInt16LE(value, i * SAMPLE_BYTES);
   }
   return out;
@@ -136,7 +138,11 @@ export function synthesizeTone(sampleCount, { freq = 220, amplitude = 0.2, start
 
 /** 입력 프레임 본문(960바이트) 하나. index는 세션 안 프레임 번호(0부터)라 프레임마다 위상이 이어진다. */
 export function synthesizeInputPayload(index, { freq = 220, amplitude = 0.2 } = {}) {
-  return synthesizeTone(INPUT_FRAME_SAMPLES, { freq, amplitude, startSample: index * INPUT_FRAME_SAMPLES });
+  return synthesizeTone(INPUT_FRAME_SAMPLES, {
+    freq,
+    amplitude,
+    startSample: index * INPUT_FRAME_SAMPLES,
+  });
 }
 
 /** SHA-256 16진. */
@@ -187,7 +193,11 @@ export class RunningHash {
  */
 export function inspectWav(data) {
   const bytes = toBuffer(data);
-  if (bytes.length < 12 || bytes.toString("ascii", 0, 4) !== "RIFF" || bytes.toString("ascii", 8, 12) !== "WAVE") {
+  if (
+    bytes.length < 12 ||
+    bytes.toString("ascii", 0, 4) !== "RIFF" ||
+    bytes.toString("ascii", 8, 12) !== "WAVE"
+  ) {
     return { ok: false, reason: "NOT_RIFF_WAVE" };
   }
   let offset = 12;
@@ -215,7 +225,12 @@ export function inspectWav(data) {
   if (format === null || dataBytes === null) {
     return { ok: false, reason: "MISSING_CHUNK" };
   }
-  if (format.audioFormat !== 1 || format.channels !== 1 || format.sampleRate !== SAMPLE_RATE || format.bitsPerSample !== 16) {
+  if (
+    format.audioFormat !== 1 ||
+    format.channels !== 1 ||
+    format.sampleRate !== SAMPLE_RATE ||
+    format.bitsPerSample !== 16
+  ) {
     return { ok: false, reason: "UNSUPPORTED_FORMAT" };
   }
   return {

@@ -1,0 +1,1442 @@
+{
+  "stage": "code-generation",
+  "unit": "u1-walking-skeleton",
+  "upstream_ids": [
+    "AC1.1.1",
+    "AC1.1.2",
+    "AC1.1.3",
+    "AC1.1.4",
+    "AC1.1.5",
+    "AC1.1.6",
+    "AC1.1.7",
+    "AC1.1.8",
+    "AC1.1.9",
+    "AC1.1.10",
+    "AC1.4.1",
+    "AC1.4.2",
+    "AC1.4.3",
+    "AC1.4.4",
+    "AC1.4.5",
+    "AC1.4.6",
+    "AC1.4.7",
+    "AC1.4.8",
+    "AC1.4.9",
+    "AC1.4.10",
+    "AC1.4.11",
+    "AC1.4.12",
+    "AC1.4.13",
+    "AC1.4.14",
+    "AC1.4.15",
+    "AC2.1.1",
+    "AC2.1.2",
+    "AC2.1.3",
+    "AC2.1.4",
+    "AC2.1.5",
+    "AC2.1.6",
+    "AC2.1.7",
+    "AC2.1.8",
+    "AC2.1.9",
+    "AC2.1.10",
+    "AC2.1.11",
+    "AC2.1.12",
+    "AC2.1.13",
+    "AC2.1.14",
+    "AC2.2.1",
+    "AC2.2.2",
+    "AC2.2.3",
+    "AC2.2.4",
+    "AC2.2.5",
+    "AC2.2.6",
+    "AC2.2.7",
+    "AC2.2.8",
+    "AC3.1.1",
+    "AC3.1.2",
+    "AC3.1.3",
+    "AC3.1.4",
+    "AC3.1.5",
+    "AC3.1.6",
+    "AC3.1.7",
+    "AC3.1.8",
+    "AC3.1.9",
+    "AC3.3.1",
+    "AC3.3.2",
+    "AC3.3.3",
+    "AC3.3.4",
+    "AC3.3.5",
+    "AC3.3.6",
+    "AC3.3.7",
+    "AC3.3.8",
+    "AC3.3.9",
+    "AC6.1.1",
+    "AC6.1.2",
+    "AC6.1.3",
+    "AC6.1.4",
+    "AC6.1.5",
+    "AC6.2.1",
+    "AC6.2.2",
+    "AC6.2.3",
+    "AC6.2.4",
+    "AC6.2.5",
+    "AC6.2.6",
+    "AC6.2.7",
+    "AC6.2.8",
+    "AC6.2.9",
+    "AC6.2.10",
+    "AC6.2.11",
+    "AC6.2.12",
+    "AC6.2.13",
+    "NFR1.1",
+    "NFR1.2",
+    "NFR1.3",
+    "NFR2.1",
+    "NFR3.1",
+    "NFR3.2",
+    "NFR4.1",
+    "NFR4.2",
+    "NFR4.3",
+    "NFR4.4",
+    "NFR4.5",
+    "NFR4.6",
+    "NFR4.7",
+    "NFR4.8",
+    "NFR4.9",
+    "NFR4.10",
+    "NFR4.11",
+    "NFR4.12",
+    "NFR4.13",
+    "NFR4.14",
+    "NFR4.15",
+    "NFR4.16",
+    "NFR5.1",
+    "NFR5.2",
+    "NFR5.3",
+    "NFR5.4",
+    "NFR5.5",
+    "NFR5.6",
+    "NFR5.7",
+    "NFR5.8",
+    "NFR6.1",
+    "NFR6.2",
+    "NFR6.3",
+    "NFR6.4",
+    "NFR6.5",
+    "NFR7.1",
+    "NFR7.2",
+    "NFR7.3",
+    "NFR7.4",
+    "NFR7.5",
+    "NFR7.6",
+    "NFR7.7",
+    "NFR7.8",
+    "NFR9.1",
+    "NFR9.2",
+    "NFR9.3",
+    "NFR9.4",
+    "NFR9.5",
+    "NFR9.6",
+    "NFR9.7",
+    "NFR9.8",
+    "NFR9.9",
+    "NFR9.10",
+    "NFR9.11",
+    "NFR9.12",
+    "NFR9.13",
+    "NFR9.14",
+    "NFR9.15",
+    "NFR10.1",
+    "NFR10.2",
+    "NFR10.3",
+    "NFR10.4",
+    "NFR11.1",
+    "NFR12.1",
+    "NFR12.2",
+    "NFR12.3",
+    "NFR12.4",
+    "BR1.1",
+    "BR1.2",
+    "BR1.3",
+    "BR1.4",
+    "BR1.5",
+    "BR1.6",
+    "BR1.7",
+    "BR2.1",
+    "BR2.2",
+    "BR2.3",
+    "BR2.4",
+    "BR2.5",
+    "BR2.6",
+    "BR2.7",
+    "BR2.8",
+    "BR2.9",
+    "BR2.10",
+    "BR3.1",
+    "BR3.2",
+    "BR3.3",
+    "BR3.4",
+    "BR3.5",
+    "BR3.6",
+    "BR3.7",
+    "BR3.8",
+    "BR3.9",
+    "BR4.1",
+    "BR4.2",
+    "BR4.3",
+    "BR4.4",
+    "BR4.5",
+    "BR4.6",
+    "BR4.7",
+    "BR4.8",
+    "BR5.1",
+    "BR5.2",
+    "BR5.3",
+    "BR5.4",
+    "BR5.5",
+    "BR5.6",
+    "BR5.7",
+    "BR5.8",
+    "BR5.9",
+    "BR5.10",
+    "BR5.11",
+    "BR5.12",
+    "BR5.13",
+    "BR5.14",
+    "BR6.1",
+    "BR6.2",
+    "BR6.3",
+    "BR6.4",
+    "BR6.5",
+    "BR6.6",
+    "BR6.7",
+    "BR6.8",
+    "BR6.9",
+    "BR6.10",
+    "BR6.11",
+    "BR6.12",
+    "BR6.13",
+    "BR6.14",
+    "BR6.15",
+    "BR6.16",
+    "BR6.17",
+    "BR7.1",
+    "BR7.2",
+    "BR7.3",
+    "BR7.4",
+    "BR7.5",
+    "BR7.6",
+    "BR8.1",
+    "BR8.2",
+    "BR8.3",
+    "BR8.4",
+    "BR8.5",
+    "BR8.6",
+    "BR8.7",
+    "BR8.8",
+    "BR8.9",
+    "BR8.10",
+    "BR8.11",
+    "BR9.1",
+    "BR9.2",
+    "BR9.3",
+    "BR9.4",
+    "BR9.5",
+    "BR9.6",
+    "BR9.7"
+  ],
+  "coverage": [
+    {
+      "id": "AC1.1.1",
+      "status": "Deferred",
+      "target": "u2-guardian-account (구글 로그인 흐름 · 02 · 03 · 04 분기) — U1 범위 밖(functional-design 추적과 같음)"
+    },
+    {
+      "id": "AC1.1.2",
+      "status": "Deferred",
+      "target": "u2-guardian-account (구글 로그인 흐름 · 02 · 03 · 04 분기) — U1 범위 밖(functional-design 추적과 같음)"
+    },
+    {
+      "id": "AC1.1.3",
+      "status": "Deferred",
+      "target": "u2-guardian-account (구글 로그인 흐름 · 02 · 03 · 04 분기) — U1 범위 밖(functional-design 추적과 같음)"
+    },
+    {
+      "id": "AC1.1.4",
+      "status": "Deferred",
+      "target": "u2-guardian-account (구글 로그인 흐름 · 02 · 03 · 04 분기) — U1 범위 밖(functional-design 추적과 같음)"
+    },
+    {
+      "id": "AC1.1.5",
+      "status": "Deferred",
+      "target": "u2-guardian-account (구글 로그인 흐름 · 02 · 03 · 04 분기) — U1 범위 밖(functional-design 추적과 같음)"
+    },
+    {
+      "id": "AC1.1.6",
+      "status": "Deferred",
+      "target": "u2-guardian-account (구글 로그인 흐름 · 02 · 03 · 04 분기) — U1 범위 밖(functional-design 추적과 같음)"
+    },
+    {
+      "id": "AC1.1.7",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/web/GuardianApiIT.java"
+    },
+    {
+      "id": "AC1.1.8",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/web/GuardianApiIT.java"
+    },
+    {
+      "id": "AC1.1.9",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/web/GuardianApiIT.java"
+    },
+    {
+      "id": "AC1.1.10",
+      "status": "Deferred",
+      "target": "u2-guardian-account (구글 로그인 흐름 · 02 · 03 · 04 분기) — U1 범위 밖(functional-design 추적과 같음)"
+    },
+    {
+      "id": "AC1.4.1",
+      "status": "Deferred",
+      "target": "u2-guardian-account (03 수정 · 05 화면 · 26 · 설정 시트 · 05 이동 · 폰 인터넷 줄 · 종료 표현 구역) — U1 범위 밖(functional-design 추적과 같음)"
+    },
+    {
+      "id": "AC1.4.2",
+      "status": "OK",
+      "target": "frontend/tests/u1/parent/home-04.test.tsx"
+    },
+    {
+      "id": "AC1.4.3",
+      "status": "OK",
+      "target": "frontend/tests/u1/parent/home-04.test.tsx"
+    },
+    {
+      "id": "AC1.4.4",
+      "status": "OK",
+      "target": "frontend/tests/u1/parent/home-04.test.tsx"
+    },
+    {
+      "id": "AC1.4.5",
+      "status": "OK",
+      "target": "frontend/tests/u1/parent/home-04.test.tsx"
+    },
+    {
+      "id": "AC1.4.6",
+      "status": "Deferred",
+      "target": "u4-activity-session (04 지금 활동 구역 · 11개 상태 재진입 · 08 네 칸 저장 · 탭 이동) — U1 범위 밖(functional-design 추적과 같음)"
+    },
+    {
+      "id": "AC1.4.7",
+      "status": "Deferred",
+      "target": "u4-activity-session (04 지금 활동 구역 · 11개 상태 재진입 · 08 네 칸 저장 · 탭 이동) — U1 범위 밖(functional-design 추적과 같음)"
+    },
+    {
+      "id": "AC1.4.8",
+      "status": "Deferred",
+      "target": "u4-activity-session (04 지금 활동 구역 · 11개 상태 재진입 · 08 네 칸 저장 · 탭 이동) — U1 범위 밖(functional-design 추적과 같음)"
+    },
+    {
+      "id": "AC1.4.9",
+      "status": "OK",
+      "target": "frontend/tests/u1/parent/home-04.test.tsx"
+    },
+    {
+      "id": "AC1.4.10",
+      "status": "Deferred",
+      "target": "u4-activity-session (04 지금 활동 구역 · 11개 상태 재진입 · 08 네 칸 저장 · 탭 이동) — U1 범위 밖(functional-design 추적과 같음)"
+    },
+    {
+      "id": "AC1.4.11",
+      "status": "OK",
+      "target": "frontend/tests/u1/parent/home-04.test.tsx"
+    },
+    {
+      "id": "AC1.4.12",
+      "status": "Deferred",
+      "target": "u2-guardian-account (03 수정 · 05 화면 · 26 · 설정 시트 · 05 이동 · 폰 인터넷 줄 · 종료 표현 구역) — U1 범위 밖(functional-design 추적과 같음)"
+    },
+    {
+      "id": "AC1.4.13",
+      "status": "Deferred",
+      "target": "u4-activity-session (04 지금 활동 구역 · 11개 상태 재진입 · 08 네 칸 저장 · 탭 이동) — U1 범위 밖(functional-design 추적과 같음)"
+    },
+    {
+      "id": "AC1.4.14",
+      "status": "Deferred",
+      "target": "u4-activity-session (04 지금 활동 칸의 '지금은 시작할 수 없어요' + 사유 한 줄 — U1은 대화 기기 구역만 맡고 지금 활동 칸은 U4 소관) — U1 범위 밖(functional-design 추적과 같음)"
+    },
+    {
+      "id": "AC1.4.15",
+      "status": "OK",
+      "target": "frontend/tests/u1/parent/home-04.test.tsx"
+    },
+    {
+      "id": "AC2.1.1",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/device/DeviceVerdictTest.java"
+    },
+    {
+      "id": "AC2.1.2",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/device/DeviceVerdictTest.java"
+    },
+    {
+      "id": "AC2.1.3",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/device/DeviceVerdictTest.java"
+    },
+    {
+      "id": "AC2.1.4",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/device/DeviceVerdictTest.java"
+    },
+    {
+      "id": "AC2.1.5",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/device/DeviceVerdictTest.java"
+    },
+    {
+      "id": "AC2.1.6",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/device/DeviceVerdictTest.java"
+    },
+    {
+      "id": "AC2.1.7",
+      "status": "Deferred",
+      "target": "u2-guardian-account (03 수정 · 05 화면 · 26 · 설정 시트 · 05 이동 · 폰 인터넷 줄 · 종료 표현 구역) — U1 범위 밖(functional-design 추적과 같음)"
+    },
+    {
+      "id": "AC2.1.8",
+      "status": "Deferred",
+      "target": "u2-guardian-account (03 수정 · 05 화면 · 26 · 설정 시트 · 05 이동 · 폰 인터넷 줄 · 종료 표현 구역) — U1 범위 밖(functional-design 추적과 같음)"
+    },
+    {
+      "id": "AC2.1.9",
+      "status": "Deferred",
+      "target": "u2-guardian-account (03 수정 · 05 화면 · 26 · 설정 시트 · 05 이동 · 폰 인터넷 줄 · 종료 표현 구역) — U1 범위 밖(functional-design 추적과 같음)"
+    },
+    {
+      "id": "AC2.1.10",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/gateway/DeviceStatusPolicyTest.java"
+    },
+    {
+      "id": "AC2.1.11",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/gateway/DeviceStatusPolicyTest.java"
+    },
+    {
+      "id": "AC2.1.12",
+      "status": "Deferred",
+      "target": "u2-guardian-account (03 수정 · 05 화면 · 26 · 설정 시트 · 05 이동 · 폰 인터넷 줄 · 종료 표현 구역) — U1 범위 밖(functional-design 추적과 같음)"
+    },
+    {
+      "id": "AC2.1.13",
+      "status": "Deferred",
+      "target": "u2-guardian-account (03 수정 · 05 화면 · 26 · 설정 시트 · 05 이동 · 폰 인터넷 줄 · 종료 표현 구역) — U1 범위 밖(functional-design 추적과 같음)"
+    },
+    {
+      "id": "AC2.1.14",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/web/GuardianApiIT.java"
+    },
+    {
+      "id": "AC2.2.1",
+      "status": "OK",
+      "target": "frontend/tests/u1/parent/register-05a.test.tsx"
+    },
+    {
+      "id": "AC2.2.2",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/web/DeviceRegisterApiIT.java"
+    },
+    {
+      "id": "AC2.2.3",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/web/DeviceRegisterApiIT.java"
+    },
+    {
+      "id": "AC2.2.4",
+      "status": "OK",
+      "target": "frontend/tests/u1/parent/register-05a.test.tsx"
+    },
+    {
+      "id": "AC2.2.5",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/web/DeviceGatewayIT.java"
+    },
+    {
+      "id": "AC2.2.6",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/device/DeviceJdbcRepositoryIT.java"
+    },
+    {
+      "id": "AC2.2.7",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/web/DeviceRegisterApiIT.java"
+    },
+    {
+      "id": "AC2.2.8",
+      "status": "OK",
+      "target": "frontend/tests/u1/parent/register-05a.test.tsx"
+    },
+    {
+      "id": "AC3.1.1",
+      "status": "OK",
+      "target": "frontend/tests/u1/parent/free-08.test.tsx"
+    },
+    {
+      "id": "AC3.1.2",
+      "status": "Deferred",
+      "target": "u4-activity-session (04 지금 활동 구역 · 11개 상태 재진입 · 08 네 칸 저장 · 탭 이동) — U1 범위 밖(functional-design 추적과 같음)"
+    },
+    {
+      "id": "AC3.1.3",
+      "status": "OK",
+      "target": "frontend/tests/u1/parent/free-08.test.tsx"
+    },
+    {
+      "id": "AC3.1.4",
+      "status": "OK",
+      "target": "frontend/tests/u1/parent/free-08.test.tsx"
+    },
+    {
+      "id": "AC3.1.5",
+      "status": "Deferred",
+      "target": "u4-activity-session (04 지금 활동 구역 · 11개 상태 재진입 · 08 네 칸 저장 · 탭 이동) — U1 범위 밖(functional-design 추적과 같음)"
+    },
+    {
+      "id": "AC3.1.6",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/activity/ActivityStartEndIT.java"
+    },
+    {
+      "id": "AC3.1.7",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/activity/SessionPackageIT.java"
+    },
+    {
+      "id": "AC3.1.8",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/activity/ActivityStartEndIT.java"
+    },
+    {
+      "id": "AC3.1.9",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/activity/PreparingTimeoutCheckerTest.java"
+    },
+    {
+      "id": "AC3.3.1",
+      "status": "OK",
+      "target": "frontend/tests/u1/parent/p1-dialog.test.tsx"
+    },
+    {
+      "id": "AC3.3.2",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/SessionLifecycleIT.java"
+    },
+    {
+      "id": "AC3.3.3",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/SessionLifecycleIT.java"
+    },
+    {
+      "id": "AC3.3.4",
+      "status": "OK",
+      "target": "frontend/tests/u1/parent/done-17.test.tsx"
+    },
+    {
+      "id": "AC3.3.5",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/SessionLifecycleIT.java"
+    },
+    {
+      "id": "AC3.3.6",
+      "status": "OK",
+      "target": "frontend/tests/u1/parent/done-17.test.tsx"
+    },
+    {
+      "id": "AC3.3.7",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/SessionLifecycleIT.java"
+    },
+    {
+      "id": "AC3.3.8",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/activity/ActivityStartEndIT.java"
+    },
+    {
+      "id": "AC3.3.9",
+      "status": "OK",
+      "target": "frontend/tests/u1/parent/p1-dialog.test.tsx"
+    },
+    {
+      "id": "AC6.1.1",
+      "status": "OK",
+      "target": "frontend/tests/u1/device/d0-view.test.tsx"
+    },
+    {
+      "id": "AC6.1.2",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/web/DeviceBootstrapApiIT.java"
+    },
+    {
+      "id": "AC6.1.3",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/web/DeviceBootstrapApiIT.java"
+    },
+    {
+      "id": "AC6.1.4",
+      "status": "OK",
+      "target": "frontend/tests/u1/device/device-api.test.ts"
+    },
+    {
+      "id": "AC6.1.5",
+      "status": "OK",
+      "target": "frontend/tests/u1/device/device-machine.test.ts"
+    },
+    {
+      "id": "AC6.2.1",
+      "status": "OK",
+      "target": "frontend/tests/u1/device/t19-view.test.tsx"
+    },
+    {
+      "id": "AC6.2.2",
+      "status": "OK",
+      "target": "frontend/tests/u1/device/mic-permission.test.ts"
+    },
+    {
+      "id": "AC6.2.3",
+      "status": "OK",
+      "target": "frontend/tests/u1/device/device-runtime.test.ts"
+    },
+    {
+      "id": "AC6.2.4",
+      "status": "Deferred",
+      "target": "u3-voice-conversation (T19 8상태 주입 · 다시 연결 중 · 탭 숨김 연결 유지 · 끼어들기 0.5초 · 터치 영역) — U1 범위 밖(functional-design 추적과 같음)"
+    },
+    {
+      "id": "AC6.2.5",
+      "status": "OK",
+      "target": "frontend/tests/u1/device/t19-view.test.tsx"
+    },
+    {
+      "id": "AC6.2.6",
+      "status": "Deferred",
+      "target": "u3-voice-conversation (T19 8상태 주입 · 다시 연결 중 · 탭 숨김 연결 유지 · 끼어들기 0.5초 · 터치 영역) — U1 범위 밖(functional-design 추적과 같음)"
+    },
+    {
+      "id": "AC6.2.7",
+      "status": "Deferred",
+      "target": "u3-voice-conversation (T19 8상태 주입 · 다시 연결 중 · 탭 숨김 연결 유지 · 끼어들기 0.5초 · 터치 영역) — U1 범위 밖(functional-design 추적과 같음)"
+    },
+    {
+      "id": "AC6.2.8",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/web/DeviceGatewayIT.java"
+    },
+    {
+      "id": "AC6.2.9",
+      "status": "OK",
+      "target": "frontend/tests/u1/device/player.test.ts"
+    },
+    {
+      "id": "AC6.2.10",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/web/DeviceGatewayIT.java"
+    },
+    {
+      "id": "AC6.2.11",
+      "status": "OK",
+      "target": "frontend/tests/u1/device/ws-client.test.ts"
+    },
+    {
+      "id": "AC6.2.12",
+      "status": "Deferred",
+      "target": "u3-voice-conversation (T19 8상태 주입 · 다시 연결 중 · 탭 숨김 연결 유지 · 끼어들기 0.5초 · 터치 영역) — U1 범위 밖(functional-design 추적과 같음)"
+    },
+    {
+      "id": "AC6.2.13",
+      "status": "Deferred",
+      "target": "u3-voice-conversation (T19 8상태 주입 · 다시 연결 중 · 탭 숨김 연결 유지 · 끼어들기 0.5초 · 터치 영역) — U1 범위 밖(functional-design 추적과 같음)"
+    },
+    {
+      "id": "NFR1.1",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/SessionLifecycleIT.java"
+    },
+    {
+      "id": "NFR1.2",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/gate/SeedDictionaryTest.java"
+    },
+    {
+      "id": "NFR1.3",
+      "status": "Deferred",
+      "target": "3.6 Build and Test로 넘김(계획 ## 시험 전략과 커버리지의 3.6 넘김 목록 · R3-21): SD-19 문구 금지 어휘 단위 시험과 화면 8곳 체크리스트(R3-21 345행). U1 문구는 frontend/src/shared/copy/ko.ts(문구표 · TEMP_COPY J118)에만 있다"
+    },
+    {
+      "id": "NFR2.1",
+      "status": "Deferred",
+      "target": "3.6 Build and Test로 넘김(계획 ## 시험 전략과 커버리지의 3.6 넘김 목록 · R3-21): SD-19 재촉 · 보상 · 만류 문구 검토(R3-21 345행). 재접속 5초 · 시한 실패는 조용히 처리(frontend/src/device, BR9.7)"
+    },
+    {
+      "id": "NFR3.1",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/activity/SessionPackageIT.java"
+    },
+    {
+      "id": "NFR3.2",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/voice/ProviderRequestWhitelistIT.java"
+    },
+    {
+      "id": "NFR4.1",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/web/DeviceGatewayIT.java"
+    },
+    {
+      "id": "NFR4.2",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/voice/ProviderClientIT.java"
+    },
+    {
+      "id": "NFR4.3",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/activity/StaleEvaluatorTest.java"
+    },
+    {
+      "id": "NFR4.4",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/SessionTimersTest.java"
+    },
+    {
+      "id": "NFR4.5",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/messaging/CoreMessagingFlowIT.java"
+    },
+    {
+      "id": "NFR4.6",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/messaging/CoreMessagingFlowIT.java"
+    },
+    {
+      "id": "NFR4.7",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/startup/RealtimeStartupRecoveryIT.java"
+    },
+    {
+      "id": "NFR4.8",
+      "status": "Deferred",
+      "target": "운영(첫 배포 뒤) 측정: 외부 프로브 위치는 O-2(10/13 팀 결정), RUNBOOK 4절 단계 8. U1은 배포 프로브 infra/bin/probe-three · infra/bin/smoke만 만들었다"
+    },
+    {
+      "id": "NFR4.9",
+      "status": "OK",
+      "target": "infra/compose.demo.yml"
+    },
+    {
+      "id": "NFR4.10",
+      "status": "OK",
+      "target": "infra/bin/deploy-apply"
+    },
+    {
+      "id": "NFR4.11",
+      "status": "OK",
+      "target": "infra/backup/backup.sh"
+    },
+    {
+      "id": "NFR4.12",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/activity/RealtimeSessionClientTest.java"
+    },
+    {
+      "id": "NFR4.13",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/web/HealthAndReadinessIT.java"
+    },
+    {
+      "id": "NFR4.14",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/activity/PreparingTimeoutCheckerTest.java"
+    },
+    {
+      "id": "NFR4.15",
+      "status": "Deferred",
+      "target": "U1 일부 구현 · 나머지 3.6 보완 후보(사람 확인, code-summary J 표): 헬스 · 열린 WSS 연결 수 · 내부 HTTP 지표와 외부 /actuator 403(검증 명령 B4)은 있고, 연결 상태 분포 게이지 mujoong_device_connection_state(OD-5)는 미구현"
+    },
+    {
+      "id": "NFR4.16",
+      "status": "Deferred",
+      "target": "3.6 Build and Test로 넘김(계획 ## 시험 전략과 커버리지의 3.6 넘김 목록 · R3-21): RD-21 폰 오프라인 주입 시험(R3-21 347행). 화면 동작(9-18 토스트 · 같은 requestId · 종료 표시 없음)은 frontend/tests/u1/parent/p1-dialog.test.tsx가 덮는다"
+    },
+    {
+      "id": "NFR5.1",
+      "status": "Deferred",
+      "target": "11/2 실공급자 측정(p95): U1은 relayIn · relayOut 시각 키를 LATENCY_TURN에 남긴다(LatencyRecorder · LatencyRecorderTest, 검증 명령 C12 키 존재 판정)"
+    },
+    {
+      "id": "NFR5.2",
+      "status": "Deferred",
+      "target": "11/2 실공급자 측정(p95 t0 → t3): U1은 t0 ~ t3 시각 키와 tSpeechEndSource를 남긴다(LatencyRecorderTest · 검증 명령 C12)"
+    },
+    {
+      "id": "NFR5.3",
+      "status": "Deferred",
+      "target": "11/2 측정(서버 몫 p95): U1은 tTranscriptFinal · tViewItemFirstServed(SESSION_ITEMS_SERVED)를 남긴다(LatencyRecorderTest · RealtimeInternalApiIT)"
+    },
+    {
+      "id": "NFR5.4",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/log/LatencyRecorderTest.java"
+    },
+    {
+      "id": "NFR5.5",
+      "status": "Deferred",
+      "target": "11/2 부하 측정(PD-18 부하 시드 도구 · L1 ~ L7은 3.6 이후, R3-21): 요청 타이머는 프레임워크 http_server_requests(경로 템플릿 라벨)"
+    },
+    {
+      "id": "NFR5.6",
+      "status": "Deferred",
+      "target": "3.6 Build and Test로 넘김(계획 ## 시험 전략과 커버리지의 3.6 넘김 목록 · R3-21): Lighthouse · 실기 측정(NFR10.1 · 10.2)과 PD-14 번들 예산. D0 · 켜기 시각은 ?debug=1 상태 로그(BR9.6)로 잰다"
+    },
+    {
+      "id": "NFR5.7",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/messaging/CoreMessagingFlowIT.java"
+    },
+    {
+      "id": "NFR5.8",
+      "status": "Deferred",
+      "target": "PD-19 PLAYBACK_MARK_STOPPED 기록 경로는 B1 이후(R3-21 348행), 0.5초 판정은 u3-voice-conversation"
+    },
+    {
+      "id": "NFR6.1",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/config/ConfigKeyContractTest.java"
+    },
+    {
+      "id": "NFR6.2",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/SessionTimersTest.java"
+    },
+    {
+      "id": "NFR6.3",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/ActivitySessionRepositoryIT.java"
+    },
+    {
+      "id": "NFR6.4",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/arch/RealtimeArchTest.java"
+    },
+    {
+      "id": "NFR6.5",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/activity/StaleEvaluatorTest.java"
+    },
+    {
+      "id": "NFR7.1",
+      "status": "Deferred",
+      "target": "11/2 측정(두 세션 동시, SCD-5 · SCD-6 표본 판정 스크립트는 3.6 이후)"
+    },
+    {
+      "id": "NFR7.2",
+      "status": "Deferred",
+      "target": "11/2 부하 측정(PD-18 · SCD-7, 부하 시드 도구는 3.6 이후)"
+    },
+    {
+      "id": "NFR7.3",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/SessionExecutorTest.java"
+    },
+    {
+      "id": "NFR7.4",
+      "status": "OK",
+      "target": "infra/bin/mj"
+    },
+    {
+      "id": "NFR7.5",
+      "status": "Deferred",
+      "target": "11/2 측정(전달 지연 p95, PD-10 · PD-18): 폴러 주기 · 배치는 설정 키(ConfigKeyContractTest), 전달 지연 타이머 mujoong_event_delivery는 구현"
+    },
+    {
+      "id": "NFR7.6",
+      "status": "Deferred",
+      "target": "U1 일부 구현 · 나머지 3.6 보완 후보(사람 확인, code-summary J 표): 풀 앱당 10 · 합계 20은 기동 검증(CorePropertiesValidationTest), 풀 대기 초과 카운터 mujoong_db_pool_wait_exceeded_total(OD-5)는 미구현"
+    },
+    {
+      "id": "NFR7.7",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/messaging/MessagingJobsTest.java"
+    },
+    {
+      "id": "NFR7.8",
+      "status": "Deferred",
+      "target": "U1 일부 구현 · 나머지 3.6 보완 후보(사람 확인, code-summary J 표): JVM · 스레드 · 풀은 프레임워크 기본 지표, 열린 WSS · 활성 세션 게이지는 RealtimeMetrics. Outbox 미전달 · 가장 오래된 PENDING 나이 · 대기열 깊이 지표와 METRIC_SNAPSHOT(OD-6 · OD-12)은 미구현"
+    },
+    {
+      "id": "NFR9.1",
+      "status": "OK",
+      "target": "infra/nginx/conf.d/https443.conf.tmpl"
+    },
+    {
+      "id": "NFR9.2",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/web/CookieAttributesTest.java"
+    },
+    {
+      "id": "NFR9.3",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/web/SecurityChainIT.java"
+    },
+    {
+      "id": "NFR9.4",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/device/DeviceSecretsTest.java"
+    },
+    {
+      "id": "NFR9.5",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/web/GuardianApiIT.java"
+    },
+    {
+      "id": "NFR9.6",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/web/CoreInternalApiIT.java"
+    },
+    {
+      "id": "NFR9.7",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/db/SchemaPrivilegeIT.java"
+    },
+    {
+      "id": "NFR9.8",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/web/CoreLogHygieneIT.java"
+    },
+    {
+      "id": "NFR9.9",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/gateway/WsFrameGuardTest.java"
+    },
+    {
+      "id": "NFR9.10",
+      "status": "OK",
+      "target": "scripts/verify/a-secrets.sh"
+    },
+    {
+      "id": "NFR9.11",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/startup/ProfileGuardBootIT.java"
+    },
+    {
+      "id": "NFR9.12",
+      "status": "OK",
+      "target": "frontend/tests/u1/shared/csp.test.ts"
+    },
+    {
+      "id": "NFR9.13",
+      "status": "Deferred",
+      "target": "3.6 Build and Test로 넘김(계획 ## 시험 전략과 커버리지의 3.6 넘김 목록 · R3-21): SD-16 의존성 관문 실측은 첫 Actions 실행. CI 작업(.github/workflows/ci.yml backend-deps · frontend-deps)과 예외 판정(ci/security-gate.py)은 U1이 만들었고 braces 예외는 사람 승인 대기"
+    },
+    {
+      "id": "NFR9.14",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/web/CoreLogHygieneIT.java"
+    },
+    {
+      "id": "NFR9.15",
+      "status": "OK",
+      "target": "backend/contract-model/src/test/java/kr/mujoong/contract/log/StructuredLogFormatTest.java"
+    },
+    {
+      "id": "NFR10.1",
+      "status": "Deferred",
+      "target": "3.6 Build and Test로 넘김(계획 ## 시험 전략과 커버리지의 3.6 넘김 목록 · R3-21): 실기 브라우저(Chrome 최신 2판) D0 ~ 끝내기, AudioWorklet · strict-dynamic(X-6) · 24kHz 문맥 · Wake Lock"
+    },
+    {
+      "id": "NFR10.2",
+      "status": "Deferred",
+      "target": "3.6 Build and Test로 넘김(계획 ## 시험 전략과 커버리지의 3.6 넘김 목록 · R3-21): 10/29 통합시험 기기 Android Chrome에서 04 · 05a · 08 · 12 · 17 · P1"
+    },
+    {
+      "id": "NFR10.3",
+      "status": "Deferred",
+      "target": "3.6 Build and Test로 넘김(계획 ## 시험 전략과 커버리지의 3.6 넘김 목록 · R3-21): iOS Safari 16.4 이상 렌더 확인"
+    },
+    {
+      "id": "NFR10.4",
+      "status": "OK",
+      "target": "frontend/tests/u1/device/mic-permission.test.ts"
+    },
+    {
+      "id": "NFR11.1",
+      "status": "OK",
+      "target": "frontend/tests/u1/lint/eslint-boundary.test.ts"
+    },
+    {
+      "id": "NFR12.1",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/messaging/DeletionParticipantsCoreIT.java"
+    },
+    {
+      "id": "NFR12.2",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/voice/InputRelayTest.java"
+    },
+    {
+      "id": "NFR12.3",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/messaging/CoreMessagingRepositoryIT.java"
+    },
+    {
+      "id": "NFR12.4",
+      "status": "OK",
+      "target": "infra/backup/backup.sh"
+    },
+    {
+      "id": "BR1.1",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/device/RegistrationCodeTest.java"
+    },
+    {
+      "id": "BR1.2",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/device/CodeGeneratorTest.java"
+    },
+    {
+      "id": "BR1.3",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/web/DeviceBootstrapApiIT.java"
+    },
+    {
+      "id": "BR1.4",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/device/DeviceJdbcRepositoryIT.java"
+    },
+    {
+      "id": "BR1.5",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/device/DeviceSecretsTest.java"
+    },
+    {
+      "id": "BR1.6",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/security/ratelimit/SlidingWindowRateLimiterTest.java"
+    },
+    {
+      "id": "BR1.7",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/web/DeviceBootstrapApiIT.java"
+    },
+    {
+      "id": "BR2.1",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/device/RegistrationDecisionTest.java"
+    },
+    {
+      "id": "BR2.2",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/device/DeviceJdbcRepositoryIT.java"
+    },
+    {
+      "id": "BR2.3",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/device/DeviceJdbcRepositoryIT.java"
+    },
+    {
+      "id": "BR2.4",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/web/DeviceRegisterApiIT.java"
+    },
+    {
+      "id": "BR2.5",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/device/DeviceJdbcRepositoryIT.java"
+    },
+    {
+      "id": "BR2.6",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/security/ratelimit/SlidingWindowRateLimiterTest.java"
+    },
+    {
+      "id": "BR2.7",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/web/DeviceRegisterApiIT.java"
+    },
+    {
+      "id": "BR2.8",
+      "status": "OK",
+      "target": "frontend/tests/u1/parent/register-05a.test.tsx"
+    },
+    {
+      "id": "BR2.9",
+      "status": "OK",
+      "target": "frontend/tests/u1/parent/home-04.test.tsx"
+    },
+    {
+      "id": "BR2.10",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/messaging/DeletionParticipantsCoreIT.java"
+    },
+    {
+      "id": "BR3.1",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/web/DeviceBootstrapApiIT.java"
+    },
+    {
+      "id": "BR3.2",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/web/CoreInternalApiIT.java"
+    },
+    {
+      "id": "BR3.3",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/device/DeviceSecretsTest.java"
+    },
+    {
+      "id": "BR3.4",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/web/CoreInternalApiIT.java"
+    },
+    {
+      "id": "BR3.5",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/web/DeviceBootstrapApiIT.java"
+    },
+    {
+      "id": "BR3.6",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/web/DeviceGatewayIT.java"
+    },
+    {
+      "id": "BR3.7",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/web/DeviceGatewayIT.java"
+    },
+    {
+      "id": "BR3.8",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/messaging/RealtimeMessagingIT.java"
+    },
+    {
+      "id": "BR3.9",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/web/RealtimeInternalApiIT.java"
+    },
+    {
+      "id": "BR4.1",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/device/DeviceJdbcRepositoryIT.java"
+    },
+    {
+      "id": "BR4.2",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/device/DeviceJdbcRepositoryIT.java"
+    },
+    {
+      "id": "BR4.3",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/device/DeviceVerdictTest.java"
+    },
+    {
+      "id": "BR4.4",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/device/DeviceVerdictTest.java"
+    },
+    {
+      "id": "BR4.5",
+      "status": "OK",
+      "target": "frontend/tests/u1/parent/home-04.test.tsx"
+    },
+    {
+      "id": "BR4.6",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/web/GuardianApiIT.java"
+    },
+    {
+      "id": "BR4.7",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/gateway/DeviceStatusPolicyTest.java"
+    },
+    {
+      "id": "BR4.8",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/gateway/DeviceConnectionRepositoryIT.java"
+    },
+    {
+      "id": "BR5.1",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/messaging/CoreMessagingRepositoryIT.java"
+    },
+    {
+      "id": "BR5.2",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/messaging/CoreMessagingRepositoryIT.java"
+    },
+    {
+      "id": "BR5.3",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/messaging/CoreOutboxSenderTest.java"
+    },
+    {
+      "id": "BR5.4",
+      "status": "OK",
+      "target": "backend/contract-model/src/test/java/kr/mujoong/contract/event/EventEnvelopeValidationTest.java"
+    },
+    {
+      "id": "BR5.5",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/messaging/CoreMessagingRepositoryIT.java"
+    },
+    {
+      "id": "BR5.6",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/messaging/CoreMessagingFlowIT.java"
+    },
+    {
+      "id": "BR5.7",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/messaging/CoreMessagingRepositoryIT.java"
+    },
+    {
+      "id": "BR5.8",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/messaging/CoreMessagingFlowIT.java"
+    },
+    {
+      "id": "BR5.9",
+      "status": "OK",
+      "target": "backend/contract-model/src/test/java/kr/mujoong/contract/event/EventEnvelopeValidationTest.java"
+    },
+    {
+      "id": "BR5.10",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/activity/ActivityCopyRepositoryIT.java"
+    },
+    {
+      "id": "BR5.11",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/messaging/CoreMessagingRepositoryIT.java"
+    },
+    {
+      "id": "BR5.12",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/startup/CoreStartupSequenceIT.java"
+    },
+    {
+      "id": "BR5.13",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/web/RealtimeLogHygieneIT.java"
+    },
+    {
+      "id": "BR5.14",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/messaging/DeletionParticipantsCoreIT.java"
+    },
+    {
+      "id": "BR6.1",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/activity/StartActivityPolicyTest.java"
+    },
+    {
+      "id": "BR6.2",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/activity/StartActivityPolicyTest.java"
+    },
+    {
+      "id": "BR6.3",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/activity/ActivityCopyRepositoryIT.java"
+    },
+    {
+      "id": "BR6.4",
+      "status": "OK",
+      "target": "frontend/tests/u1/parent/free-08.test.tsx"
+    },
+    {
+      "id": "BR6.5",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/activity/SessionPackageIT.java"
+    },
+    {
+      "id": "BR6.6",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/web/RealtimeInternalApiIT.java"
+    },
+    {
+      "id": "BR6.7",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/activity/ActivityStartEndIT.java"
+    },
+    {
+      "id": "BR6.8",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/TransitionTableTest.java"
+    },
+    {
+      "id": "BR6.9",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/activity/ActivityStartEndIT.java"
+    },
+    {
+      "id": "BR6.10",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/SessionLifecycleIT.java"
+    },
+    {
+      "id": "BR6.11",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/SessionLifecycleIT.java"
+    },
+    {
+      "id": "BR6.12",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/SessionTimersTest.java"
+    },
+    {
+      "id": "BR6.13",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/startup/RealtimeStartupRecoveryIT.java"
+    },
+    {
+      "id": "BR6.14",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/activity/ActivityCopyRepositoryIT.java"
+    },
+    {
+      "id": "BR6.15",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/activity/SessionViewServiceTest.java"
+    },
+    {
+      "id": "BR6.16",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/web/GuardianApiIT.java"
+    },
+    {
+      "id": "BR6.17",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/arch/CoreArchTest.java"
+    },
+    {
+      "id": "BR7.1",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/voice/InputRelayTest.java"
+    },
+    {
+      "id": "BR7.2",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/voice/ProviderClientIT.java"
+    },
+    {
+      "id": "BR7.3",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/gate/OutputGateTest.java"
+    },
+    {
+      "id": "BR7.4",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/gate/OutputGateTest.java"
+    },
+    {
+      "id": "BR7.5",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/log/TranscriptRepositoryIT.java"
+    },
+    {
+      "id": "BR7.6",
+      "status": "OK",
+      "target": "frontend/tests/u1/device/player.test.ts"
+    },
+    {
+      "id": "BR8.1",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/db/SchemaPrivilegeIT.java"
+    },
+    {
+      "id": "BR8.2",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/db/CoreSchemaIT.java"
+    },
+    {
+      "id": "BR8.3",
+      "status": "OK",
+      "target": "backend/contract-model/src/test/java/kr/mujoong/contract/profile/ProfileGuardRulesTest.java"
+    },
+    {
+      "id": "BR8.4",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/identity/DevSeedRunnerIT.java"
+    },
+    {
+      "id": "BR8.5",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/web/GuardianApiIT.java"
+    },
+    {
+      "id": "BR8.6",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/web/ErrorEnvelopeAndLimitsIT.java"
+    },
+    {
+      "id": "BR8.7",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/web/CoreLogHygieneIT.java"
+    },
+    {
+      "id": "BR8.8",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/web/SecurityChainIT.java"
+    },
+    {
+      "id": "BR8.9",
+      "status": "OK",
+      "target": "scripts/verify/b-stack.sh"
+    },
+    {
+      "id": "BR8.10",
+      "status": "OK",
+      "target": "backend/contract-model/src/test/java/kr/mujoong/contract/json/JsonCodecTest.java"
+    },
+    {
+      "id": "BR8.11",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/config/ConfigKeyContractTest.java"
+    },
+    {
+      "id": "BR9.1",
+      "status": "OK",
+      "target": "frontend/tests/u1/device/device-machine.test.ts"
+    },
+    {
+      "id": "BR9.2",
+      "status": "OK",
+      "target": "frontend/tests/u1/device/d0-view.test.tsx"
+    },
+    {
+      "id": "BR9.3",
+      "status": "OK",
+      "target": "frontend/tests/u1/device/device-machine.test.ts"
+    },
+    {
+      "id": "BR9.4",
+      "status": "OK",
+      "target": "frontend/tests/u1/device/d0-view.test.tsx"
+    },
+    {
+      "id": "BR9.5",
+      "status": "OK",
+      "target": "frontend/tests/u1/device/mic-permission.test.ts"
+    },
+    {
+      "id": "BR9.6",
+      "status": "OK",
+      "target": "frontend/tests/u1/device/t19-view.test.tsx"
+    },
+    {
+      "id": "BR9.7",
+      "status": "OK",
+      "target": "frontend/tests/u1/device/ws-client.test.ts"
+    }
+  ]
+}

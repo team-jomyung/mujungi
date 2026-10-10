@@ -1,0 +1,30 @@
+# 무중 demo 스택 기동 · 정지 단위 (U1 3.5 Step 47 · infra-spec 1.4 · 4.4 · 4.5.2 · N-9 · N-10 · N-14 · H-15)
+# 설치: /etc/systemd/system/mujoong-compose.service (root 0644), `systemctl daemon-reload && systemctl enable mujoong-compose.service`
+#
+# 기동(부팅 · `systemctl start`): 데이터 · 백업 볼륨 마운트(RequiresMountsFor) → 시각 동기화(chrony-wait) → Docker → 스택
+#   `mj up -d --wait --remove-orphans`(postgres → realtime · core-api 동시 → web → nginx, 이어서 certbot · backup, infra-spec 4.5.2) →
+#   보충 백업(마지막 성공이 24시간보다 오래됐으면 1회, 비동기 systemd-run, infra-spec 4.4)
+# 정지(호스트 종료 · `systemctl stop`): 정지 직전 백업(최근 1시간 안 성공이 없으면 1회, 60초 제한, 실패해도 정지 진행) →
+#   `mj stop`(nginx → web → 앱 둘(SIGTERM, 앱 유예 30초 · 컨테이너 40초) → postgres). down은 쓰지 않는다(monitoring 2.4.3)
+# power.log 기록은 mujoong-power-mark.service가 이 단위에 묶여 한다(Requires · PartOf · After).
+
+[Unit]
+Description=Mujoong demo stack (docker compose -p mujoong)
+Documentation=file:///opt/mujoong/current/RUNBOOK.md
+Requires=docker.service
+Wants=network-online.target chrony-wait.service
+After=docker.service network-online.target chrony-wait.service time-sync.target
+RequiresMountsFor=/var/lib/mujoong /var/lib/mujoong-backup
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/opt/mujoong/bin/mj up -d --wait --wait-timeout 300 --remove-orphans
+ExecStartPost=-/usr/bin/systemd-run --unit=mujoong-boot-backup --collect --quiet /opt/mujoong/current/bin/backup-trigger --trigger boot --max-age-hours 24 --timeout 600
+ExecStop=-/opt/mujoong/current/bin/backup-trigger --trigger stop --max-age-hours 1 --timeout 60
+ExecStop=/opt/mujoong/bin/mj stop
+TimeoutStartSec=420
+TimeoutStopSec=300
+
+[Install]
+WantedBy=multi-user.target

@@ -55,11 +55,20 @@ export function expectStatus(res, status, what) {
  * 오류 봉투 단언: 상태 · code, 봉투 모양 {code, message, traceId}, traceId = X-Trace-Id(OD-7).
  */
 export function expectError(res, status, code, what) {
-  check(res.status === status && res.errorCode === code, `${what}: 기대 ${status}(${code}), 실제 ${describe(res)}`);
+  check(
+    res.status === status && res.errorCode === code,
+    `${what}: 기대 ${status}(${code}), 실제 ${describe(res)}`,
+  );
   const body = res.json();
-  check(typeof body.message === "string" && body.message.length > 0, `${what}: 오류 봉투에 message가 없다`);
+  check(
+    typeof body.message === "string" && body.message.length > 0,
+    `${what}: 오류 봉투에 message가 없다`,
+  );
   const keys = Object.keys(body).sort().join(",");
-  check(keys === "code,message,traceId" || keys === "code,message", `${what}: 오류 봉투 키가 계약과 다르다(${keys})`);
+  check(
+    keys === "code,message,traceId" || keys === "code,message",
+    `${what}: 오류 봉투 키가 계약과 다르다(${keys})`,
+  );
   if (body.traceId !== undefined) {
     check(/^[0-9a-f]{32}$/.test(body.traceId), `${what}: 오류 봉투 traceId 형식이 틀렸다`);
     check(res.traceId === body.traceId, `${what}: 오류 봉투 traceId와 X-Trace-Id가 다르다`);
@@ -69,13 +78,18 @@ export function expectError(res, status, code, what) {
 /** JSON 본문(객체)을 돌려준다. 아니면 실패. */
 export function jsonBody(res, what) {
   const body = res.json();
-  check(body !== null && typeof body === "object" && !Array.isArray(body), `${what}: 본문이 JSON 객체가 아니다`);
+  check(
+    body !== null && typeof body === "object" && !Array.isArray(body),
+    `${what}: 본문이 JSON 객체가 아니다`,
+  );
   return body;
 }
 
 /** 응답 Set-Cookie 중 그 이름의 마지막 것(파싱 결과). 없으면 실패. */
 export function setCookieFrom(res, name, what) {
-  const found = res.setCookies.map(parseSetCookie).filter((cookie) => cookie !== null && cookie.name === name);
+  const found = res.setCookies
+    .map(parseSetCookie)
+    .filter((cookie) => cookie !== null && cookie.name === name);
   check(found.length > 0, `${what}: Set-Cookie ${name}이 없다`);
   return found[found.length - 1];
 }
@@ -94,7 +108,10 @@ export function expectCookieAttributes(cookie, expected, what) {
     typeof a.sameSite === "string" && a.sameSite.toLowerCase() === expected.sameSite.toLowerCase(),
     `${label}의 SameSite가 ${expected.sameSite}가 아니다(${a.sameSite ?? "없음"})`,
   );
-  check(a.path === expected.path, `${label}의 Path가 ${expected.path}가 아니다(${a.path ?? "없음"})`);
+  check(
+    a.path === expected.path,
+    `${label}의 Path가 ${expected.path}가 아니다(${a.path ?? "없음"})`,
+  );
   check(a.domain === null && !cookie.attributeNames.includes("domain"), `${label}에 Domain이 있다`);
   if (expected.deleted) {
     check(a.maxAge !== null && a.maxAge <= 0, `${label}이 지워지지 않았다(Max-Age=0이 아님)`);
@@ -102,7 +119,10 @@ export function expectCookieAttributes(cookie, expected, what) {
   }
   check(cookie.value.length > 0, `${label} 값이 비었다`);
   if (expected.maxAgeSeconds !== undefined && expected.maxAgeSeconds !== null) {
-    check(a.maxAge === expected.maxAgeSeconds, `${label}의 Max-Age가 ${expected.maxAgeSeconds}가 아니다(${a.maxAge ?? "없음"})`);
+    check(
+      a.maxAge === expected.maxAgeSeconds,
+      `${label}의 Max-Age가 ${expected.maxAgeSeconds}가 아니다(${a.maxAge ?? "없음"})`,
+    );
   } else {
     check(a.maxAge !== null && a.maxAge > 0, `${label}에 양수 Max-Age가 없다`);
   }
@@ -111,12 +131,23 @@ export function expectCookieAttributes(cookie, expected, what) {
 /** Cache-Control: no-store(SD-4). */
 export function expectNoStore(res, what) {
   const value = (res.header("cache-control") ?? "").toLowerCase();
-  check(value.split(",").map((part) => part.trim()).includes("no-store"), `${what}: Cache-Control no-store가 없다`);
+  check(
+    value
+      .split(",")
+      .map((part) => part.trim())
+      .includes("no-store"),
+    `${what}: Cache-Control no-store가 없다`,
+  );
 }
 
 /** 객체 경로 값(없으면 undefined). */
 export function at(object, dotted) {
-  return dotted.split(".").reduce((value, key) => (value === null || value === undefined ? undefined : value[key]), object);
+  return dotted
+    .split(".")
+    .reduce(
+      (value, key) => (value === null || value === undefined ? undefined : value[key]),
+      object,
+    );
 }
 
 /** LATENCY_TURN에 있어야 하는 키(J143 · OD-8). 시각 키 8종 + 출처 · 오프셋 · 왕복 · 응답 · 조용 시간. */

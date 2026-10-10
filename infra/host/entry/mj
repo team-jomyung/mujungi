@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# /opt/mujoong/bin/mj — docker compose 래퍼의 고정 진입점 (U1 3.5 Step 47 · infra-spec 4.2 · 4.5.4 · N-8 · R4-8)
+# 인자를 그대로 현재 릴리스의 mj(/opt/mujoong/current/bin/mj)에 넘긴다. 로직은 그쪽에 있다(mj --help).
+set -euo pipefail
+exec /opt/mujoong/current/bin/mj "$@"

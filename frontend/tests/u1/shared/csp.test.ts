@@ -116,7 +116,7 @@ describe("csp — 정책 문자열 · 허용 origin 변환", () => {
     "not a url",
     "http://example.invalid",
     "https://localhost:8443/app",
-    "https://user:pw@localhost:8443",
+    "https://user:pw@localhost:8443", // gitleaks:allow — 자격 포함 origin 거부를 보는 가짜 값(비밀 아님)
     "https://localhost:8443?x=1",
     "ftp://localhost",
   ])("형식이 틀리거나 위험한 허용 origin %j은 wss 출처를 만들지 않는다(닫힌 쪽)", (origin) => {

@@ -1,0 +1,455 @@
+# 무중 CI — PR 검사 · main 병합 검사 · 이미지 · 검증 명령 · 배포 호출
+# (U1 3.5 Step 50 · cicd-pipeline.md 2.1 ~ 2.4 · 2.13 · 4절 CD-1 · CD-2 · CD-8 · J91 · J103 · J104 · NFR9.10 · NFR9.13)
+#
+# 소유자: A 계정 · 클라우드 담당(J104). 실명 · 계정은 쓰지 않는다.
+#
+# 단계(cicd 2.2.1): S1 PR 검사 → S2 main 병합 커밋에서 같은 검사 → S3 이미지 6종(core-api · realtime · web · migrate · backup · infra)을
+# 커밋 SHA 태그로 GHCR에 푸시(PR은 빌드 · 점검만) → S4 · S5 배포(.github/workflows/deploy.yml, main 병합 뒤 ci-gate 통과 시).
+# 필수 검사는 항상 도는 집계 작업 `ci-gate` 하나다(CD-1). 경로 필터로 건너뛴 작업은 통과로 보고, 실패 · 취소는 막는다.
+# 경로 필터(PR만): backend/ · frontend/ · tools/ · infra/ · scripts/ · ci/. contracts/ · .github/가 바뀌면 모든 작업을 돈다.
+# main 푸시 · 수동 실행은 모든 작업, 주 1회 예약 실행은 의존성 취약점 · 비밀 스캔만 돈다(cicd 2.13). secrets는 모든 실행에서 돈다.
+# 권한: 기본 contents: read. packages: write는 images 작업만, id-token: write는 배포 호출 작업만(cicd 2.1).
+# 액션은 모두 커밋 SHA로 고정한다(`uses: 소유자/저장소@<40자> # <태그>`, 태그 → 커밋은 공개 저장소의 git 태그로 확인).
+# 도구 이미지(gitleaks · trivy)는 다이제스트로 고정한다. 실제 유료 AI API는 부르지 않는다(가짜 공급자, ADR-002).
+# 시험용 비밀은 실행 때 만들고 저장하지 않는다(J127). 저장소 Actions 비밀은 0개가 목표다(cicd 2.5.2).
+
+name: ci
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+  schedule:
+    # 매주 월요일 03:23 KST: 코드가 안 바뀌어도 새로 알려진 취약점 · 비밀 이력 스캔(cicd 2.13)
+    - cron: "23 18 * * 0"
+
+permissions:
+  contents: read
+
+# PR은 새 커밋이 오면 이전 실행을 취소한다. main 푸시 · 예약 · 수동 실행은 실행마다 따로 돌고(병합 커밋마다 검사 · 이미지가 남는다),
+# 배포 순서는 deploy.yml의 배포 동시성 그룹(진행 중 취소 없음, 대기는 최신 하나)이 정한다
+concurrency:
+  group: ci-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || format('run-{0}', github.run_id) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  GITLEAKS_IMAGE: zricethezav/gitleaks@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f # v8.30.1
+  TRIVY_IMAGE: aquasec/trivy@sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969 # 0.74.0
+
+jobs:
+  changes:
+    name: changes
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      backend_deps: ${{ steps.filter.outputs.backend_deps }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+      frontend_deps: ${{ steps.filter.outputs.frontend_deps }}
+      tools: ${{ steps.filter.outputs.tools }}
+      infra: ${{ steps.filter.outputs.infra }}
+      images: ${{ steps.filter.outputs.images }}
+      skeleton: ${{ steps.filter.outputs.skeleton }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - id: filter
+        name: 경로 필터(PR만)
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          REF: ${{ github.ref }}
+        run: |
+          set -euo pipefail
+          out() { echo "$1=$2" >>"$GITHUB_OUTPUT"; echo "$1=$2"; }
+          case "$EVENT" in
+            schedule)
+              for k in backend frontend tools infra images skeleton; do out "$k" false; done
+              out backend_deps true
+              out frontend_deps true
+              exit 0
+              ;;
+            pull_request)
+              changed="$(git diff --name-only "$BASE_SHA"...HEAD)"
+              ;;
+            *)
+              changed="__all__"
+              ;;
+          esac
+          all=false
+          if [ "$changed" = "__all__" ] || grep -qE '^(contracts/|\.github/)' <<<"$changed"; then all=true; fi
+          has() { [ "$all" = true ] || grep -qE "$1" <<<"$changed"; }
+          b=false; f=false; t=false; i=false; d=false
+          has '^backend/' && b=true
+          has '^frontend/' && f=true
+          has '^tools/' && t=true
+          has '^(infra/|scripts/)' && i=true
+          has '^ci/' && d=true
+          out backend "$b"
+          out frontend "$f"
+          out tools "$t"
+          out infra "$i"
+          if [ "$b" = true ] || [ "$d" = true ]; then out backend_deps true; else out backend_deps false; fi
+          if [ "$f" = true ] || [ "$t" = true ] || [ "$d" = true ]; then out frontend_deps true; else out frontend_deps false; fi
+          if [ "$b" = true ] || [ "$f" = true ] || [ "$t" = true ] || [ "$i" = true ] || [ "$d" = true ]; then
+            out images true
+          else
+            out images false
+          fi
+          # 검증 명령(C안)은 main 병합 · 수동 실행에서만 돈다(J103, 시간이 길다)
+          if [ "$EVENT" = workflow_dispatch ] || { [ "$EVENT" = push ] && [ "$REF" = refs/heads/main ]; }; then
+            out skeleton true
+          else
+            out skeleton false
+          fi
+
+  backend:
+    name: backend
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: gradle
+      - name: gradle check(단위 · 통합 Testcontainers · ArchUnit · 설정 키 대조 · JaCoCo 80%) · bootJar 시험 클래스 0
+        working-directory: backend
+        run: ./gradlew --no-daemon clean check verifyBootJarHasNoTestClasses -Pmujoong.test.db=docker
+      - name: 시험 · 커버리지 보고서
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: backend-reports
+          path: |
+            backend/*/build/reports/tests/
+            backend/*/build/reports/jacoco/
+          retention-days: 14
+          if-no-files-found: ignore
+
+  backend-deps:
+    name: backend-deps
+    needs: changes
+    if: needs.changes.outputs.backend_deps == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: gradle
+      - name: 예외 목록 검사(만료 · 형식 오류면 실패)
+        run: python3 -I ci/security-gate.py trivyignore ci/security-exceptions.yml >"$RUNNER_TEMP/trivyignore"
+      - name: bootJar(운영 의존성이 든 jar)
+        working-directory: backend
+        run: ./gradlew --no-daemon :core-api:bootJar :realtime-activity:bootJar
+      - name: 의존성 취약점(high 이상, 예외 목록만 허용)
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/jars"
+          cp backend/core-api/build/libs/core-api.jar backend/realtime-activity/build/libs/realtime-activity.jar "$RUNNER_TEMP/jars/"
+          docker run --rm -v "$RUNNER_TEMP/jars:/scan:ro" -v "$RUNNER_TEMP/trivyignore:/gate/trivyignore:ro" "$TRIVY_IMAGE" \
+            rootfs --quiet --scanners vuln --severity HIGH,CRITICAL --exit-code 1 --ignorefile /gate/trivyignore /scan
+
+  frontend:
+    name: frontend
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - name: ESLint(/parent ↔ /device import 경계 NFR11.1 등)
+        run: npx --no-install eslint .
+      - name: Vitest + 줄 커버리지 80%
+        run: npx --no-install vitest run tests/u1 --coverage
+      - run: npx --no-install next build
+      - name: 브라우저 번들에 키 형식 문자열 · 비밀 변수 이름 0건
+        run: |
+          set -euo pipefail
+          names='POSTGRES_PASSWORD|DB_(OWNER|CORE|REALTIME|BACKUP)_PASSWORD|INTERNAL_SERVICE_TOKEN|PROVIDER_API_KEY|MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET|GOOGLE_OAUTH_CLIENT_SECRET|GHCR_PULL_TOKEN|NEO4J_AUTH|SPRING_DATASOURCE_PASSWORD'
+          hits="$( { grep -rlE "$names" .next/static || true; grep -rlE -f <(grep -vE '^(#|$)' ../scripts/verify/secret-patterns.txt) .next/static || true; } | sort -u)"
+          if [ -n "$hits" ]; then
+            echo "::error::브라우저 번들에 비밀 이름 · 키 형식 문자열: $(echo "$hits" | head -n 5 | paste -sd, -)"
+            exit 1
+          fi
+      - name: 커버리지 보고서
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: frontend-coverage
+          path: frontend/coverage/
+          retention-days: 14
+          if-no-files-found: ignore
+
+  frontend-deps:
+    name: frontend-deps
+    needs: changes
+    if: needs.changes.outputs.frontend_deps == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+      - name: npm audit(high 이상, 예외 목록만 허용) — frontend · tools
+        run: |
+          set -euo pipefail
+          for dir in frontend tools; do
+            # npm audit는 취약점이 있으면 1로 끝난다. 판정은 security-gate가 한다(실행 오류는 거기서 2)
+            (cd "$dir" && npm audit --json >"$RUNNER_TEMP/audit-$dir.json") || true
+          done
+          python3 -I ci/security-gate.py npm-audit ci/security-exceptions.yml "$RUNNER_TEMP/audit-frontend.json" "$RUNNER_TEMP/audit-tools.json"
+
+  tools:
+    name: tools
+    needs: changes
+    if: needs.changes.outputs.tools == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: tools
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: tools/package-lock.json
+      - run: npm ci
+      - name: 시험 도구 시험(가짜 공급자 · 기기 시뮬레이터 · C안 시나리오 · dev-edge · verify 종료 코드)
+        run: npx --no-install vitest run tests/u1
+
+  secrets:
+    name: secrets
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: 추적 파일에 환경 파일 · 인증서 · 키 파일 0건
+        run: |
+          set -euo pipefail
+          bad="$(git ls-files | grep -E '(^|/)\.env($|\.)|\.(pem|key|p12|jks|pfx)$' || true)"
+          if [ -n "$bad" ]; then
+            echo "::error::추적 중인 환경 · 키 파일: $(echo "$bad" | paste -sd, -)"
+            exit 1
+          fi
+      - name: 양성 대조 — 실행 때 만든 가짜 키를 gitleaks가 잡아야 한다
+        run: |
+          set -euo pipefail
+          planted="$(mktemp -d)"
+          chmod 0755 "$planted"
+          # AWS 접근 키 id 모양의 무작위 값(실제 키가 아니다). 값은 출력하지 않는다
+          printf 'aws_access_key_id = AKIA%s\n' "$(head -c 400 /dev/urandom | tr -dc 'A-Z2-7' | head -c 16)" >"$planted/planted.txt"
+          chmod 0644 "$planted/planted.txt"
+          rc=0
+          docker run --rm -v "$planted:/scan:ro" -v "$PWD/.gitleaks.toml:/cfg/gitleaks.toml:ro" "$GITLEAKS_IMAGE" \
+            dir /scan --no-banner --redact=100 --config /cfg/gitleaks.toml --exit-code 7 >/dev/null 2>&1 || rc=$?
+          rm -rf "$planted"
+          if [ "$rc" -ne 7 ]; then
+            echo "::error::gitleaks가 심어 둔 가짜 키를 찾지 못했다(종료 코드 $rc) — 스캔이 동작하지 않는다"
+            exit 1
+          fi
+      - name: 비밀 스캔(커밋 이력 전체)
+        run: |
+          docker run --rm --user "$(id -u):$(id -g)" -e GIT_CONFIG_COUNT=1 -e GIT_CONFIG_KEY_0=safe.directory -e GIT_CONFIG_VALUE_0='*' \
+            -v "$PWD:/repo:ro" "$GITLEAKS_IMAGE" git /repo --no-banner --redact=100 --config /repo/.gitleaks.toml
+
+  infra-validate:
+    name: infra-validate
+    needs: changes
+    if: needs.changes.outputs.infra == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: 도구 판
+        run: |
+          docker compose version
+          shellcheck --version | head -n 2
+          jq --version
+      - name: infra-validate(Compose 설정 · 불변식 12 · demo 프로필 · 비밀 분배 · nginx -t · shellcheck · 마이그레이션 · 번들 목록)
+        run: bash infra/bin/infra-validate
+      - name: 위반 샘플이 거부되는지(CD-8)
+        run: bash infra/ci/test-infra-validate.sh
+      - name: 호스트 도구 시험(render-env · D3 프로필 · check-since-last · log-hygiene-check)
+        run: bash infra/ci/test-host-tools.sh
+
+  images:
+    name: images
+    needs: changes
+    if: needs.changes.outputs.images == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: gradle
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: |
+            frontend/package-lock.json
+            tools/package-lock.json
+      - name: 산출물(bootJar · Next.js standalone · tools 의존성) — 이미지 안에서 빌드하지 않는다
+        run: |
+          set -euo pipefail
+          (cd backend && ./gradlew --no-daemon :core-api:bootJar :realtime-activity:bootJar verifyBootJarHasNoTestClasses)
+          (cd frontend && npm ci && npx --no-install next build)
+          (cd tools && npm ci)
+      - name: 예외 목록 검사(만료 · 형식 오류면 실패)
+        run: python3 -I ci/security-gate.py exceptions ci/security-exceptions.yml
+      - name: 이미지 빌드(6종 + 시험 전용 가짜 공급자, 라벨 = 커밋 SHA · 소스 지문)
+        run: |
+          set -euo pipefail
+          registry="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}"
+          echo "REGISTRY=$registry" >>"$GITHUB_ENV"
+          bash infra/ci/build-images.sh --registry "$registry" --tag "$GITHUB_SHA" --log-dir "$RUNNER_TEMP/image-logs"
+      - name: trivy 실행기(다이제스트 고정 이미지, 로컬 이미지는 docker.sock으로 읽는다)
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/bin"
+          cat >"$RUNNER_TEMP/bin/trivy" <<'SH'
+          #!/usr/bin/env bash
+          exec docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v /tmp:/tmp:ro -v trivy-cache:/root/.cache \
+            "$TRIVY_IMAGE" "$@"
+          SH
+          chmod 0755 "$RUNNER_TEMP/bin/trivy"
+          echo "$RUNNER_TEMP/bin" >>"$GITHUB_PATH"
+      - name: 이미지 점검 1 ~ 8(cicd 2.3.2)
+        run: bash infra/ci/image-checks.sh --registry "$REGISTRY" --tag "$GITHUB_SHA"
+      - name: 관문 음성 대조(CD-1 — 가짜 비밀 · 게시 포트 추가 · 틀린 Nginx · 파괴적 마이그레이션 · 경계를 넘는 import)
+        run: bash infra/ci/test-gate-negatives.sh
+      - name: GHCR 푸시(main 병합만, 이미 있는 태그는 덮어쓰지 않고 실패)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$GH_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+          for name in core-api realtime web migrate backup infra; do
+            ref="$REGISTRY/mujoong-$name:$GITHUB_SHA"
+            if docker manifest inspect "$ref" >/dev/null 2>&1; then
+              echo "::error::이미 있는 태그다(덮어쓰지 않는다): $ref"
+              exit 1
+            fi
+          done
+          for name in core-api realtime web migrate backup infra; do
+            docker push --quiet "$REGISTRY/mujoong-$name:$GITHUB_SHA"
+          done
+          docker logout ghcr.io
+
+  skeleton:
+    name: skeleton
+    needs: changes
+    if: needs.changes.outputs.skeleton == 'true'
+    runs-on: ubuntu-24.04
+    # verify.sh 전체 실행의 내부 기한(기본 5400초)보다 길게 둬 verify가 스스로 기한 초과를 보고하게 한다
+    timeout-minutes: 100
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: gradle
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: |
+            frontend/package-lock.json
+            tools/package-lock.json
+      - name: 검증 명령 C안(A 정적 · 단위 · 통합 → B 기동 · 3종 호출 → C 기기 시뮬레이터 한 턴 → 사후 단언)
+        run: bash scripts/verify.sh --mode compose
+      - name: 검증 결과(report.txt — 단계별 한 줄, 비밀 값 없음)
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: skeleton-report
+          path: build/verify/report.txt
+          retention-days: 14
+          if-no-files-found: warn
+
+  ci-gate:
+    name: ci-gate
+    if: always()
+    needs: [changes, backend, backend-deps, frontend, frontend-deps, tools, secrets, infra-validate, images, skeleton]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: 집계(건너뜀은 허용, 실패 · 취소는 불허)
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          set -euo pipefail
+          jq -r 'to_entries[] | "\(.key)=\(.value.result)"' <<<"$RESULTS"
+          bad="$(jq -r '[to_entries[] | select(.value.result != "success" and .value.result != "skipped") | .key] | join(",")' <<<"$RESULTS")"
+          if [ -n "$bad" ]; then
+            echo "::error::실패 · 취소된 작업: $bad"
+            exit 1
+          fi
+          if [ "$(jq -r '.changes.result' <<<"$RESULTS")" != success ]; then
+            echo "::error::경로 필터 작업이 성공하지 않았다"
+            exit 1
+          fi
+
+  deploy:
+    name: deploy
+    needs: ci-gate
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.ci-gate.result == 'success'
+    permissions:
+      contents: read
+      id-token: write
+    uses: ./.github/workflows/deploy.yml
+    with:
+      sha: ${{ github.sha }}
+      mode: DEPLOY
+      reason: main 병합 자동 배포
+      automatic: true

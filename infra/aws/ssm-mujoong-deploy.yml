@@ -1,0 +1,35 @@
+---
+# SSM 사용자 정의 문서 mujoong-deploy (U1 3.5 Step 47 · cicd 2.5.3 · infra-spec 3.5 · 3.6 · R4-2 · CD-3 · J128)
+# 만들기(계정 관리자, RUNBOOK 4.5.1 단계 1):
+#   aws ssm create-document --name mujoong-deploy --document-type Command --document-format YAML \
+#     --content file://infra/aws/ssm-mujoong-deploy.yml --tags Key=Project,Value=mujoong Key=Environment,Value=demo
+# 문서 이름은 IAM 리소스 ARN에 그대로 들어가고 대소문자를 구분한다(kebab-case mujoong-deploy, R4-2).
+# CI 배포 역할(mujoong-gha-deploy)은 이 문서 하나만 SendCommand할 수 있다. 임의 셸 문서(AWS-RunShellScript)는 허용하지 않는다.
+# 매개변수는 형식을 검증해 명령 주입을 막는다: sha는 40자 소문자 16진수만, mode는 DEPLOY · ROLLBACK만.
+# 본문은 호스트의 고정 진입점 한 줄 호출이고, SSM 경유 배포의 deploy.log는 trigger=CI runId=none이다(J128).
+# 실행 제한 900초(cicd 3절). 출력은 마지막 DEPLOY_END 한 줄(상세는 호스트 /var/log/mujoong/deploy-<배포 id>.log).
+schemaVersion: "2.2"
+description: "Mujoong demo deploy: run /opt/mujoong/bin/deploy.sh with a validated commit SHA and mode."
+parameters:
+  sha:
+    type: String
+    description: "Commit SHA to deploy (40 lowercase hex characters)."
+    allowedPattern: "^[0-9a-f]{40}$"
+  mode:
+    type: String
+    description: "DEPLOY (normal) or ROLLBACK (skips backup D2 and migrate D4)."
+    allowedValues:
+      - DEPLOY
+      - ROLLBACK
+    default: DEPLOY
+mainSteps:
+  - action: aws:runShellScript
+    name: mujoongDeploy
+    precondition:
+      StringEquals:
+        - platformType
+        - Linux
+    inputs:
+      timeoutSeconds: "900"
+      runCommand:
+        - "/opt/mujoong/bin/deploy.sh --sha {{ sha }} --mode {{ mode }} --trigger CI --run-id none"

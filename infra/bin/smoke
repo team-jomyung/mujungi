@@ -1,0 +1,169 @@
+#!/usr/bin/env bash
+# smoke — 배포 스모크 8-1 ~ 8-6 (U1 3.5 Step 47 · cicd 2.6.2 · D8 · J100 · NFR9.1 · NFR9.6 · NFR4.9)
+#
+# 배포 D8(deploy-apply)과 사람(RUNBOOK 시작 점검 · 롤백 R5)이 호스트에서 돌린다. demo에는 시험 로그인이 없으므로 인증 없는
+# 확인만 한다(J100). 한 바퀴(시작 → ACTIVE → 끝내기)는 유료 공급자 · 로그인 수단이 필요해 넣지 않는다(cicd 2.6.2).
+#   8-1 두 앱 readiness: 컨테이너 안 http://127.0.0.1:9090/actuator/health/readiness 200 둘
+#   8-2 3종 호출 한 번(호스트 루프백으로 nginx, SNI는 서비스 호스트): health 200 · UP, /device 200, WSS 101 (probe-three --count 1)
+#   8-3 보안 경계 3건: https /actuator/health 403, https /internal/x 403, http(80) 요청 301 → https://<서비스 호스트>/...
+#   8-4 승인 음성 정적 경로: 릴리스 seed-audio/의 첫 .wav가 https /media/approved/<파일> 200
+#   8-5 컨테이너: 상시 7개 running(헬스체크가 있으면 healthy), --restarts-before에 있는 컨테이너 중 id가 같은 것의 재시작 횟수가 늘지 않음
+#   8-6 두 앱 컨테이너 로그에 STARTUP_RECOVERY 한 줄 이상(시작 복구 S3가 돌았다는 증거)
+#   (8-7 중단 시간 downtimeSec · budget은 deploy-apply의 D9가 1초 샘플러 결과로 적는다)
+#
+# 쓰는 법: smoke [--release <릴리스 폴더>] [--host <서비스 호스트>] [--connect <IP>] [--cacert <CA 파일>]
+#                [--restarts-before <파일>] [--only 8-1,8-2,...]
+#   --host 기본은 /opt/mujoong/env/nginx.env의 SERVICE_HOST(비밀 아님), --connect 기본 127.0.0.1
+#   --restarts-before  배포 전 기록(줄마다 "<서비스> <컨테이너 id> <RestartCount>"). 없으면 재시작 비교를 건너뛴다
+# 표준 출력: 점검마다 `PASS 8-n` · `FAIL 8-n: <사유>`. 값 · 본문 · 쿠키는 출력하지 않는다.
+# 종료 코드: 0 모두 통과, 1 하나라도 실패, 2 전제 누락(docker · curl · 서비스 호스트), 64 인자 오류
+
+set -Eeuo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=infra/bin/lib/host.sh
+. "$SCRIPT_DIR/lib/host.sh"
+
+release="$MUJOONG_OPT/current"
+host=""
+connect=127.0.0.1
+cacert=""
+restarts_before=""
+only="8-1,8-2,8-3,8-4,8-5,8-6"
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --release) release="${2:-}"; shift ;;
+    --host) host="${2:-}"; shift ;;
+    --connect) connect="${2:-}"; shift ;;
+    --cacert) cacert="${2:-}"; shift ;;
+    --restarts-before) restarts_before="${2:-}"; shift ;;
+    --only) only="${2:-}"; shift ;;
+    -h | --help) sed -n '2,22p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    *) echo "smoke: 모르는 인자: $1" >&2; exit 64 ;;
+  esac
+  shift
+done
+if ! [[ "$only" =~ ^8-[1-6](,8-[1-6])*$ ]]; then
+  echo "smoke: --only는 8-1 ~ 8-6 쉼표 목록이다" >&2
+  exit 64
+fi
+selected() { [[ ",$only," == *",$1,"* ]]; }
+for tool in docker curl; do
+  if ! command -v "$tool" >/dev/null 2>&1; then
+    echo "smoke: 전제 누락: $tool" >&2
+    exit 2
+  fi
+done
+if [ -z "$host" ]; then
+  host="$(mujoong_service_host)" || {
+    echo "smoke: 전제 누락: 서비스 호스트($MUJOONG_ENV_DIR/nginx.env의 SERVICE_HOST)" >&2
+    exit 2
+  }
+fi
+
+fails=0
+pass() { echo "PASS $1"; }
+fail() {
+  echo "FAIL $1: $2"
+  fails=$((fails + 1))
+}
+tls=(-sS --noproxy '*' --max-time 5 -A mujoong-smoke -o /dev/null)
+[ -n "$cacert" ] && tls+=(--cacert "$cacert")
+https_code() {
+  curl "${tls[@]}" --resolve "$host:443:$connect" -w '%{http_code}' "https://$host$1" 2>/dev/null || true
+}
+
+# 8-1
+if selected 8-1; then
+  problems=()
+  for svc in core-api realtime; do
+    cid="$(mujoong_container_id "$svc")"
+    if [ -z "$cid" ]; then
+      problems+=("$svc 컨테이너 없음")
+      continue
+    fi
+    code="$(timeout 8 docker exec "$cid" curl -s -o /dev/null -w '%{http_code}' --max-time 5 \
+      http://127.0.0.1:9090/actuator/health/readiness 2>/dev/null || true)"
+    [ "$code" = 200 ] || problems+=("$svc readiness ${code:-ERR}")
+  done
+  if [ "${#problems[@]}" -gt 0 ]; then fail 8-1 "${problems[*]}"; else pass 8-1; fi
+fi
+
+# 8-2
+if selected 8-2; then
+  probe=("$SCRIPT_DIR/probe-three" --host "$host" --connect "$connect" --count 1)
+  [ -n "$cacert" ] && probe+=(--cacert "$cacert")
+  if line="$("${probe[@]}" 2>/dev/null)"; then
+    pass 8-2
+  else
+    fail 8-2 "$(sed -E 's/^ts=[^ ]+ //' <<<"$line")"
+  fi
+fi
+
+# 8-3
+if selected 8-3; then
+  problems=()
+  code="$(https_code /actuator/health)"
+  [ "$code" = 403 ] || problems+=("/actuator/health ${code:-ERR}(기대 403)")
+  code="$(https_code /internal/x)"
+  [ "$code" = 403 ] || problems+=("/internal/x ${code:-ERR}(기대 403)")
+  raw="$(curl -sS --noproxy '*' --max-time 5 -o /dev/null --resolve "$host:80:$connect" \
+    -w '%{http_code} %{redirect_url}' "http://$host/device" 2>/dev/null || true)"
+  if [ "${raw%% *}" != 301 ] || [[ "${raw#* }" != "https://$host/device" ]]; then
+    problems+=("http 80 → ${raw%% *}(기대 301 https://<서비스 호스트>/device)")
+  fi
+  if [ "${#problems[@]}" -gt 0 ]; then fail 8-3 "${problems[*]}"; else pass 8-3; fi
+fi
+
+# 8-4
+if selected 8-4; then
+  wav="$(find "$release/seed-audio" -maxdepth 1 -type f -name '*.wav' -printf '%f\n' 2>/dev/null | sort | head -n 1)"
+  if [ -z "$wav" ]; then
+    fail 8-4 "릴리스 seed-audio/에 .wav가 없다"
+  else
+    code="$(https_code "/media/approved/$wav")"
+    if [ "$code" = 200 ]; then pass 8-4; else fail 8-4 "/media/approved/$wav ${code:-ERR}(기대 200)"; fi
+  fi
+fi
+
+# 8-5
+if selected 8-5; then
+  problems=()
+  for svc in "${MUJOONG_ALWAYS_ON[@]}"; do
+    cid="$(mujoong_container_id "$svc")"
+    if [ -z "$cid" ]; then
+      problems+=("$svc 없음")
+      continue
+    fi
+    state="$(docker inspect --format '{{.State.Status}} {{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}} {{.RestartCount}}' "$cid" 2>/dev/null || echo 'missing missing 0')"
+    read -r status health restarts <<<"$state"
+    [ "$status" = running ] || problems+=("$svc $status")
+    [ "$health" = healthy ] || [ "$health" = none ] || problems+=("$svc $health")
+    if [ -n "$restarts_before" ] && [ -r "$restarts_before" ]; then
+      before="$(awk -v s="$svc" -v id="$cid" '$1 == s && $2 == id { print $3 }' "$restarts_before")"
+      if [ -n "$before" ] && [ "$restarts" -gt "$before" ]; then
+        problems+=("$svc 재시작 $before→$restarts")
+      fi
+    fi
+  done
+  if [ "${#problems[@]}" -gt 0 ]; then fail 8-5 "${problems[*]}"; else pass 8-5; fi
+fi
+
+# 8-6
+if selected 8-6; then
+  problems=()
+  for svc in core-api realtime; do
+    cid="$(mujoong_container_id "$svc")"
+    if [ -z "$cid" ]; then
+      problems+=("$svc 없음")
+      continue
+    fi
+    n="$(docker logs "$cid" 2>&1 | grep -c '"event":"STARTUP_RECOVERY"' || true)"
+    [ "${n:-0}" -ge 1 ] || problems+=("$svc STARTUP_RECOVERY 없음")
+  done
+  if [ "${#problems[@]}" -gt 0 ]; then fail 8-6 "${problems[*]}"; else pass 8-6; fi
+fi
+
+if [ "$fails" -gt 0 ]; then
+  exit 1
+fi

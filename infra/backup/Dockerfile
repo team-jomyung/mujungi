@@ -26,6 +26,10 @@ LABEL org.opencontainers.image.title="mujoong-backup" \
 # supercronic v0.2.49 linux-amd64 (sha1 e63c11a9726b775a6a11801e81af4f3fb926aa68)
 ADD --checksum=sha256:a53ae236602c7338aba3fbaff40bda6300eae3b9fedb8261eb06cfe3724430c1 --chmod=0755 \
     https://github.com/aptible/supercronic/releases/download/v0.2.49/supercronic-linux-amd64 /usr/local/bin/supercronic
+# 덤프 · 로그 디렉터리를 uid 999 소유로 만들어 둔다. demo는 호스트 경로(/var/lib/mujoong-backup · /var/log/mujoong)를 그 위에
+# 바인드하고, 이미지 점검 ④처럼 이름 있는 볼륨을 붙이면 이 소유권이 볼륨에 복사돼 비루트로 쓸 수 있다(네트워크 없음).
+RUN install -d -o 999 -g 999 -m 0700 /backups \
+ && install -d -o 999 -g 999 -m 0750 /var/log/mujoong
 USER 999:999
 WORKDIR /tmp
 ENTRYPOINT ["/usr/local/bin/supercronic"]

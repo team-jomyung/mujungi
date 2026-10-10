@@ -1,0 +1,351 @@
+#!/usr/bin/env bash
+# probe-three — 3종 호출 프로브: health · device · wss (U1 3.5 Step 47 · infra-spec 2.6 · monitoring 2.6.1 · 2.6.2 · 2.6.5 · OD-14 · RD-19)
+#
+# 같은 실행기를 세 곳에서 쓴다.
+#   외부 프로브(가용성 SLI 정본, 실행 위치는 사람 결정 O-2): probe-three --host <서비스 호스트> --interval 60 --out probe-<날짜>.log
+#   배포 1초 샘플러(D5 ~ D8, 호스트 안 루프백): probe-three --host <서비스 호스트> --connect 127.0.0.1 --interval 1 --out <파일>
+#   스모크 8-2 · CI S5b(한 번): probe-three --host <서비스 호스트> [--connect 127.0.0.1] --count 1
+#
+# 호출(각각 제한 --timeout, 재시도 없음, TLS 검증 유지, 쿠키 · 토큰 없음)
+#   health  GET https://<호스트>/api/health → 200이고 본문 status가 UP
+#   device  GET https://<호스트>/device → 200(본문 검사 없음)
+#   wss     FULL: HTTP/1.1 업그레이드(Connection · Upgrade · Sec-WebSocket-Version 13 · 무작위 키 · 허용 Origin) → 상태 줄 101.
+#           서버 프레임은 읽지 않는다(업그레이드 뒤 4401 닫힘은 정상, J75(m)). 101이면 가린 닫기 프레임(1000) 하나를 보내고
+#           끊는다: TCP만 끊으면 realtime이 EOFException을 APP_ERROR(ERROR)로 남겨 점검표 3번 WARN 5분 창(A-7) · MO-2를
+#           잠식한다(리허설 실측). curl에 ws가 없어 openssl s_client로 보낸다.
+#           HTTP_ONLY: 업그레이드 헤더 없는 GET /ws/device → 400 · 426이면 성공(외부 pinger가 WSS를 못 할 때)
+#   net     --net-check <호스트:포트>를 주면 서비스와 무관한 대상에 TCP 접속 한 번(대상 선정은 사람). 없으면 NA
+# 판정(monitoring 2.6.1): 셋 다 성공이면 OK, 하나라도 실패하면 FAIL, net=FAIL이면 UNOBSERVED(미관측)
+#
+# 줄 형식(한 줄 키=값, UTC — 간격 60초 이상이면 분 시작 시각, 아니면 초):
+#   ts=<..> health=<코드|ERR> healthMs=<n> device=<코드|ERR> deviceMs=<n> wss=<코드|ERR> wssMs=<n> mode=<FULL|HTTP_ONLY>
+#   net=<OK|FAIL|NA> result=<OK|FAIL|UNOBSERVED>   (health가 200인데 status가 UP이 아니면 healthBody=NOT_UP을 덧붙인다)
+#
+# 쓰는 법:
+#   probe-three --host <호스트> [--connect <IP>] [--port <n>] [--origin <origin>] [--interval <초>]
+#               [--count <n> | --duration <초>] [--timeout <초>] [--mode FULL|HTTP_ONLY] [--net-check <호스트:포트>]
+#               [--cacert <CA 파일>] [--out <파일>]
+#     --connect   이름 해석 대신 이 주소로 접속(SNI · Host는 --host). 배포 샘플러 · 스모크는 127.0.0.1
+#     --origin    wss Origin(기본 https://<호스트>, 포트가 443이 아니면 :포트)
+#     --count     n번 돌고 끝낸다(기본: --duration도 없으면 1). --duration은 그 초 동안 돈다. 둘 다 없고 --interval만 있으면
+#                 신호(TERM · INT)를 받을 때까지 돈다(배포 샘플러)
+#   probe-three --summarize <샘플 파일>   배포 샘플러 결과 요약: downtimeSec(health 또는 wss 실패가 이어진 최장 초) ·
+#                                         deviceDownSec(device 실패 최장 초) · samples. 샘플이 없으면 NA
+# 표준 출력: 샘플마다 한 줄(--out을 주면 그 파일에도 덧붙임). 비밀 · 쿠키 · 본문은 출력하지 않는다.
+# 종료 코드: --count 모드에서 모든 샘플이 OK면 0, 아니면 1. 연속 모드는 0. 64 인자 오류, 2 전제 누락(curl · openssl)
+
+set -Eeuo pipefail
+
+usage() { sed -n '2,36p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
+
+# ---- 요약 ---------------------------------------------------------------------------------------------
+summarize() {
+  local file="$1"
+  if [ ! -s "$file" ]; then
+    echo "downtimeSec=NA deviceDownSec=NA samples=0"
+    return 0
+  fi
+  # ts 순으로 정렬(샘플은 병렬로 끝나 순서가 섞일 수 있다), 실패 구간의 처음 · 끝 초로 길이를 잰다
+  sed -nE 's/^ts=([^ ]+) (.*)$/\1 \2/p' "$file" | sort | while read -r ts rest; do
+    epoch="$(date -u -d "$ts" +%s 2>/dev/null)" || continue
+    printf '%s %s\n' "$epoch" "$rest"
+  done | awk '
+    function field(name,   i, kv) {
+      for (i = 2; i <= NF; i++) { split($i, kv, "="); if (kv[1] == name) return substr($i, length(name) + 2) }
+      return ""
+    }
+    function streak_close(kind) {
+      if (start[kind] != "") {
+        len = last[kind] - start[kind] + 1
+        if (len > best[kind]) best[kind] = len
+        start[kind] = ""
+      }
+    }
+    BEGIN { best["main"] = 0; best["dev"] = 0; start["main"] = ""; start["dev"] = "" }
+    {
+      n++
+      t = $1
+      health_ok = (field("health") == "200" && field("healthBody") == "")
+      wss = field("wss"); mode = field("mode")
+      wss_ok = (mode == "HTTP_ONLY") ? (wss == "400" || wss == "426") : (wss == "101")
+      dev_ok = (field("device") == "200")
+      if (health_ok && wss_ok) { streak_close("main") } else { if (start["main"] == "") start["main"] = t; last["main"] = t }
+      if (dev_ok) { streak_close("dev") } else { if (start["dev"] == "") start["dev"] = t; last["dev"] = t }
+    }
+    END {
+      streak_close("main"); streak_close("dev")
+      printf "downtimeSec=%d deviceDownSec=%d samples=%d\n", best["main"], best["dev"], n
+    }'
+}
+
+if [ "${1:-}" = "--summarize" ]; then
+  if [ -z "${2:-}" ]; then
+    echo "probe-three: --summarize <샘플 파일>" >&2
+    exit 64
+  fi
+  summarize "$2"
+  exit 0
+fi
+
+host=""
+connect=""
+port=443
+origin=""
+interval=""
+count=""
+duration=""
+timeout_sec=5
+mode=FULL
+net_check=""
+cacert=""
+out=""
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --host) host="${2:-}"; shift ;;
+    --connect) connect="${2:-}"; shift ;;
+    --port) port="${2:-}"; shift ;;
+    --origin) origin="${2:-}"; shift ;;
+    --interval) interval="${2:-}"; shift ;;
+    --count) count="${2:-}"; shift ;;
+    --duration) duration="${2:-}"; shift ;;
+    --timeout) timeout_sec="${2:-}"; shift ;;
+    --mode) mode="${2:-}"; shift ;;
+    --net-check) net_check="${2:-}"; shift ;;
+    --cacert) cacert="${2:-}"; shift ;;
+    --out) out="${2:-}"; shift ;;
+    -h | --help) usage; exit 0 ;;
+    *) echo "probe-three: 모르는 인자: $1" >&2; exit 64 ;;
+  esac
+  shift
+done
+
+if ! [[ "$host" =~ ^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*$ ]]; then
+  echo "probe-three: --host <호스트 이름>이 필요하다(소문자 호스트 이름)" >&2
+  exit 64
+fi
+if [ -n "$connect" ] && ! [[ "$connect" =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}$ ]]; then
+  echo "probe-three: --connect는 IPv4 주소다" >&2
+  exit 64
+fi
+for v in port timeout_sec; do
+  if ! [[ "${!v}" =~ ^[0-9]{1,5}$ ]] || [ "${!v}" -lt 1 ]; then
+    echo "probe-three: --${v%_sec}은(는) 1 이상 정수다" >&2
+    exit 64
+  fi
+done
+for v in interval count duration; do
+  if [ -n "${!v}" ] && { ! [[ "${!v}" =~ ^[0-9]{1,6}$ ]] || [ "${!v}" -lt 1 ]; }; then
+    echo "probe-three: --$v은(는) 1 이상 정수다" >&2
+    exit 64
+  fi
+done
+case "$mode" in FULL | HTTP_ONLY) ;; *) echo "probe-three: --mode는 FULL 또는 HTTP_ONLY다" >&2; exit 64 ;; esac
+if [ -n "$net_check" ] && ! [[ "$net_check" =~ ^[A-Za-z0-9.-]+:[0-9]{1,5}$ ]]; then
+  echo "probe-three: --net-check는 <호스트:포트>다" >&2
+  exit 64
+fi
+if [ -n "$cacert" ] && [ ! -r "$cacert" ]; then
+  echo "probe-three: --cacert 파일을 읽을 수 없다" >&2
+  exit 64
+fi
+for tool in curl openssl mkfifo od; do
+  if ! command -v "$tool" >/dev/null 2>&1; then
+    echo "probe-three: 전제 누락: $tool" >&2
+    exit 2
+  fi
+done
+
+hostport="$host"
+[ "$port" -ne 443 ] && hostport="$host:$port"
+[ -n "$origin" ] || origin="https://$hostport"
+if ! [[ "$origin" =~ ^https://[a-z0-9.-]+(:[0-9]{1,5})?$ ]]; then
+  echo "probe-three: --origin 형식이 틀렸다" >&2
+  exit 64
+fi
+if [ -z "$count" ] && [ -z "$duration" ] && [ -z "$interval" ]; then
+  count=1
+fi
+[ -n "$interval" ] || interval=60
+
+curl_args=(-sS --noproxy '*' --max-time "$timeout_sec" -A mujoong-probe-three)
+ossl_args=(-quiet -verify_return_error -verify_hostname "$host" -servername "$host")
+if [ -n "$cacert" ]; then
+  curl_args+=(--cacert "$cacert")
+  ossl_args+=(-CAfile "$cacert")
+fi
+if [ -n "$connect" ]; then
+  curl_args+=(--resolve "$host:$port:$connect")
+  ossl_args+=(-connect "$connect:$port")
+else
+  ossl_args+=(-connect "$host:$port")
+fi
+
+umask 077
+work="$(mktemp -d)"
+trap 'rm -rf "$work"' EXIT
+
+now_ms() { date +%s%3N; }
+
+# http_call <경로> <결과 파일> [curl 추가 인자...] → 결과 파일에 "<코드> <ms>"
+http_call() {
+  local path="$1" result="$2" body="$2.body" raw code secs
+  shift 2
+  raw="$(curl "${curl_args[@]}" "$@" -o "$body" -w '%{http_code} %{time_total}' "https://$hostport$path" 2>/dev/null)" || true
+  code="${raw%% *}"
+  secs="${raw##* }"
+  if ! [[ "$code" =~ ^[1-5][0-9][0-9]$ ]]; then
+    code=ERR
+  fi
+  printf '%s %s\n' "$code" "$(awk -v s="${secs:-0}" 'BEGIN { printf "%d", s * 1000 }')" >"$result"
+}
+
+# wss_full <결과 파일> → "<코드> <ms>"
+# 함수 몸통이 서브셸이다(SIGPIPE 무시 · fd 3 · 4가 바깥 셸에 새지 않게).
+wss_full() (
+  local result="$1" key start first="" ended code=ERR pid
+  trap '' PIPE
+  key="$(head -c 16 /dev/urandom | base64)"
+  mkfifo -m 600 "$result.in" "$result.out"
+  start="$(now_ms)"
+  # -no_ign_eof: -quiet가 켜는 입력 EOF 무시를 끈다. 입력(fd 3)을 닫으면 s_client가 close_notify를 보내고 끝난다.
+  timeout "$timeout_sec" openssl s_client "${ossl_args[@]}" -no_ign_eof <"$result.in" >"$result.out" 2>/dev/null &
+  pid=$!
+  # 열기 순서가 자식의 재지정 순서(<in 다음 >out)와 같아야 서로 기다리다 막히지 않는다
+  exec 3>"$result.in" 4<"$result.out"
+  printf 'GET /ws/device HTTP/1.1\r\nHost: %s\r\nUser-Agent: mujoong-probe-three\r\nConnection: Upgrade\r\nUpgrade: websocket\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Key: %s\r\nOrigin: %s\r\n\r\n' \
+    "$hostport" "$key" "$origin" >&3 2>/dev/null || true
+  IFS= read -r -t "$timeout_sec" first <&4 || true
+  ended="$(now_ms)"
+  first="${first%$'\r'}"
+  if [[ "$first" =~ ^HTTP/1\.[01]\ ([1-5][0-9][0-9]) ]]; then
+    code="${BASH_REMATCH[1]}"
+  fi
+  if [ "$code" = 101 ]; then
+    printf '%b' "$(close_frame)" >&3 2>/dev/null || true
+  fi
+  exec 3>&-
+  wait "$pid" 2>/dev/null || true
+  exec 4<&-
+  printf '%s %s\n' "$code" "$((ended - start))" >"$result"
+)
+
+# close_frame → 가린(masked) 닫기 프레임(FIN · opcode 8, 길이 2, 코드 1000)의 printf %b 이스케이프. 가림 키는 무작위 4바이트
+close_frame() {
+  local m0 m1 m2 m3
+  read -r m0 m1 m2 m3 < <(od -An -tu1 -N4 /dev/urandom)
+  printf '\\0%03o' 136 130 "$m0" "$m1" "$m2" "$m3" $((3 ^ m0)) $((232 ^ m1))
+}
+
+net_call() {
+  local result="$1"
+  if [ -z "$net_check" ]; then
+    echo NA >"$result"
+    return
+  fi
+  # shellcheck disable=SC2016  # $0 · $1은 안쪽 bash가 받는 인자다(호스트 · 포트를 문자열로 이어 붙이지 않는다)
+  if timeout 3 bash -c 'exec 3<>"/dev/tcp/$0/$1"' "${net_check%:*}" "${net_check##*:}" 2>/dev/null; then
+    echo OK >"$result"
+  else
+    echo FAIL >"$result"
+  fi
+}
+
+emit() {
+  printf '%s\n' "$1"
+  if [ -n "$out" ]; then
+    printf '%s\n' "$1" >>"$out"
+  fi
+}
+
+# sample <ts> <번호> → 한 줄을 내고, OK면 0
+sample() {
+  local ts="$1" dir="$work/s$2" h d w n hc hm dc dm wc wm net result extra=""
+  mkdir -p "$dir"
+  http_call /api/health "$dir/h" &
+  h=$!
+  http_call /device "$dir/d" &
+  d=$!
+  if [ "$mode" = FULL ]; then
+    wss_full "$dir/w" &
+  else
+    http_call /ws/device "$dir/w" -H "Origin: $origin" &
+  fi
+  w=$!
+  net_call "$dir/n" &
+  n=$!
+  wait "$h" "$d" "$w" "$n" || true
+  hc=ERR hm=0 dc=ERR dm=0 wc=ERR wm=0 net=NA
+  [ -s "$dir/h" ] && read -r hc hm <"$dir/h"
+  [ -s "$dir/d" ] && read -r dc dm <"$dir/d"
+  [ -s "$dir/w" ] && read -r wc wm <"$dir/w"
+  [ -s "$dir/n" ] && read -r net <"$dir/n"
+  local ok=1
+  if [ "$hc" = 200 ]; then
+    if ! grep -qE '"status"[[:space:]]*:[[:space:]]*"UP"' "$dir/h.body" 2>/dev/null; then
+      extra=" healthBody=NOT_UP"
+      ok=0
+    fi
+  else
+    ok=0
+  fi
+  [ "$dc" = 200 ] || ok=0
+  if [ "$mode" = FULL ]; then
+    [ "$wc" = 101 ] || ok=0
+  else
+    [ "$wc" = 400 ] || [ "$wc" = 426 ] || ok=0
+  fi
+  if [ "$net" = FAIL ]; then
+    result=UNOBSERVED
+  elif [ "$ok" -eq 1 ]; then
+    result=OK
+  else
+    result=FAIL
+  fi
+  emit "ts=$ts health=$hc healthMs=$hm device=$dc deviceMs=$dm wss=$wc wssMs=$wm mode=$mode net=$net result=$result$extra"
+  rm -rf "$dir"
+  [ "$result" = OK ]
+}
+
+stamp() {
+  if [ "$interval" -ge 60 ]; then
+    date -u +%Y-%m-%dT%H:%M:00Z
+  else
+    date -u +%Y-%m-%dT%H:%M:%SZ
+  fi
+}
+
+if [ -n "$count" ] && [ "$count" -eq 1 ]; then
+  sample "$(stamp)" 1
+  exit $?
+fi
+
+# 반복: 샘플마다 따로 돌려(호출이 제한 시간까지 걸려도 간격이 밀리지 않게) 간격마다 시작한다
+stop=0
+sleep_pid=""
+trap 'stop=1; [ -n "$sleep_pid" ] && kill "$sleep_pid" 2>/dev/null' TERM INT
+started="$(date -u +%s)"
+i=0
+failed=0
+pids=()
+while [ "$stop" -eq 0 ]; do
+  i=$((i + 1))
+  sample "$(stamp)" "$i" &
+  pids+=("$!")
+  if [ -n "$count" ] && [ "$i" -ge "$count" ]; then
+    break
+  fi
+  if [ -n "$duration" ] && [ $(($(date -u +%s) - started)) -ge "$duration" ]; then
+    break
+  fi
+  sleep "$interval" &
+  sleep_pid=$!
+  wait "$sleep_pid" 2>/dev/null || true
+  sleep_pid=""
+done
+for p in "${pids[@]}"; do
+  wait "$p" 2>/dev/null || failed=$((failed + 1))
+done
+if [ -n "$count" ] && [ "$failed" -gt 0 ]; then
+  exit 1
+fi
+exit 0

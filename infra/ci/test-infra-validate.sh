@@ -1,0 +1,170 @@
+#!/usr/bin/env bash
+# infra-validate 시험 — 위반 샘플마다 기대 결과를 단언한다 (U1 3.5 Step 48 · cicd 2.2.3 · 2.7.2 · 4절 CD-1 · CD-8 · R4-17)
+#
+# 샘플(infra/ci/invariant-samples/, 기준 파일 위에 얹는 덧붙임 파일)과 실행 때 임시 디렉터리에 만든 변형으로
+# infra/bin/infra-validate가 통과해야 할 것은 통과시키고 막아야 할 것은 막는지 본다.
+#
+#   기준                                   기대
+#   저장소 그대로(검사 8종)                통과
+#   bad-three-networks.yml                 실패 invariant-7 (3망 안 기각, R4-1 · D-8)
+#   bad-extra-port.yml                     실패 invariant-1 (관리 포트 게시)
+#   bad-postgres-no-user.yml               실패 invariant-11 (postgres root 시작)
+#   bad-cap-add.yml                        실패 invariant-11 (nginx 밖 cap_add)
+#   bad-core-depends-realtime.yml          실패 invariant-12 (core-api → realtime 의존)
+#   bad-unreceived-secret.yml              실패 invariant-5 · secret-env-files (받지 않는 비밀)
+#   bad-inline-secret.yml                  실패 secret-env-files (environment:에 비밀 이름)
+#   bad-latest-tag.yml                     실패 invariant-8 (latest 태그)
+#   bad-profile-demo-dev.yml               실패 demo-profile (demo + dev, CD-7)
+#   bad-devlogin-on.yml                    실패 demo-profile (demo에서 시험 로그인, CD-7)
+#   ok-dev-loopback.yml (dev)              통과 (dev 127.0.0.1 게시는 허용)
+#   bad-dev-public-port.yml (dev)          실패 (dev 0.0.0.0 게시)
+#   배포 D3 꼴(--env-dir · --release-env)  통과
+#   Nginx 템플릿 변형 6종                  실패 nginx (방어 지시어 빠짐 · XFF 이어 붙이기 · 5xx 상태 치환 · ws 버퍼링 · 문법 오류 · 정규식 location)
+#   마이그레이션 변형                      금지 문장 실패 · 허용 문장 통과 · --allow-contract 통과
+#   번들 Dockerfile 변형                   실패 bundle (compose.ci.yml 복사)
+#
+# 쓰는 법: bash infra/ci/test-infra-validate.sh
+# 표준 출력: 사례마다 `ok <이름>` 또는 `not ok <이름>: <이유>`. 종료 코드: 0 모두 기대대로, 1 하나라도 어긋남,
+#            2 전제 누락(docker · jq · openssl · shellcheck · python3) — 통과로 보지 않는다
+
+set -Eeuo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+readonly ROOT
+readonly VALIDATE="$ROOT/infra/bin/infra-validate"
+readonly SAMPLES="$ROOT/infra/ci/invariant-samples"
+readonly DEMO="$ROOT/infra/compose.demo.yml"
+readonly DEV="$ROOT/infra/compose.dev.yml"
+
+for tool in docker jq openssl shellcheck python3; do
+  if ! command -v "$tool" >/dev/null 2>&1; then
+    echo "test-infra-validate: 전제 누락: $tool" >&2
+    exit 2
+  fi
+done
+if ! docker info >/dev/null 2>&1; then
+  echo "test-infra-validate: 전제 누락: docker 데몬" >&2
+  exit 2
+fi
+
+umask 077
+work="$(mktemp -d)"
+trap 'rm -rf "$work"' EXIT
+
+failures=0
+total=0
+# expect <이름> <기대 종료 코드> <출력에 있어야 할 글자(빈 값이면 생략)> -- <infra-validate 인자...>
+expect() {
+  local name="$1" want_rc="$2" want_text="$3"
+  shift 4
+  total=$((total + 1))
+  local rc=0
+  bash "$VALIDATE" "$@" >"$work/out" 2>&1 || rc=$?
+  if [ "$rc" -ne "$want_rc" ]; then
+    echo "not ok $name: 종료 코드 $rc(기대 $want_rc) — $(grep -m2 -E '^(FAIL|MISSING)' "$work/out" | cut -c1-200 | paste -sd' ' -)"
+    failures=$((failures + 1))
+    return
+  fi
+  if [ -n "$want_text" ] && ! grep -qF -- "$want_text" "$work/out"; then
+    echo "not ok $name: 출력에 '$want_text'가 없다 — $(grep -m2 -E '^(FAIL|MISSING)' "$work/out" | cut -c1-200 | paste -sd' ' -)"
+    failures=$((failures + 1))
+    return
+  fi
+  echo "ok $name"
+}
+
+# 1 저장소 그대로
+expect "repo-all-checks" 0 "모두 통과(8건)" --
+
+# 2 Compose 불변식 샘플(demo)
+inv=(--only "compose-config,compose-invariants,secret-env-files" --compose "$DEMO")
+expect "bad-three-networks" 1 "invariant-7:" -- "${inv[@]}" --compose "$SAMPLES/bad-three-networks.yml"
+expect "bad-extra-port" 1 "invariant-1:" -- "${inv[@]}" --compose "$SAMPLES/bad-extra-port.yml"
+expect "bad-postgres-no-user" 1 "invariant-11: postgres" -- "${inv[@]}" --compose "$SAMPLES/bad-postgres-no-user.yml"
+expect "bad-cap-add" 1 "invariant-11: web에 cap_add" -- "${inv[@]}" --compose "$SAMPLES/bad-cap-add.yml"
+expect "bad-core-depends-realtime" 1 "invariant-12:" -- "${inv[@]}" --compose "$SAMPLES/bad-core-depends-realtime.yml"
+expect "bad-unreceived-secret(5)" 1 "invariant-5: web" -- "${inv[@]}" --compose "$SAMPLES/bad-unreceived-secret.yml"
+expect "bad-unreceived-secret(files)" 1 "FAIL secret-env-files" -- "${inv[@]}" --compose "$SAMPLES/bad-unreceived-secret.yml"
+expect "bad-inline-secret" 1 "environment:에 비밀 PROVIDER_API_KEY" -- "${inv[@]}" --compose "$SAMPLES/bad-inline-secret.yml"
+expect "bad-latest-tag" 1 "invariant-8:" -- "${inv[@]}" --compose "$SAMPLES/bad-latest-tag.yml"
+prof=(--only demo-profile --compose "$DEMO")
+expect "demo-profile-as-is" 0 "" -- "${prof[@]}"
+expect "bad-profile-demo-dev" 1 "core-api SPRING_PROFILES_ACTIVE가 demo 하나가 아니다(demo,dev)" -- "${prof[@]}" --compose "$SAMPLES/bad-profile-demo-dev.yml"
+expect "bad-devlogin-on" 1 "core-api MUJOONG_DEVLOGIN_ENABLED가 켜져 있다" -- "${prof[@]}" --compose "$SAMPLES/bad-devlogin-on.yml"
+
+# 3 dev 파일(불변식은 demo에만, dev는 127.0.0.1 게시만)
+dev=(--kind dev --only "compose-config,compose-invariants,secret-env-files" --compose "$DEV")
+expect "dev-as-is" 0 "" -- "${dev[@]}"
+expect "ok-dev-loopback" 0 "" -- "${dev[@]}" --compose "$SAMPLES/ok-dev-loopback.yml"
+expect "bad-dev-public-port" 1 "127.0.0.1이 아닌 주소" -- "${dev[@]}" --compose "$SAMPLES/bad-dev-public-port.yml"
+
+# 4 배포 D3 꼴: 이미 렌더된 env 디렉터리 + release.env, 호스트 MemTotal 70% 상한
+bash "$ROOT/infra/ci/gen-env.sh" --out "$work/d3/env" >/dev/null
+printf 'MUJOONG_REGISTRY=ghcr.io/example\nMUJOONG_TAG=0123456789abcdef0123456789abcdef01234567\n' >"$work/d3/release.env"
+expect "d3-env-dir" 0 "" -- --only compose-invariants,secret-env-files --env-dir "$work/d3/env" \
+  --release-env "$work/d3/release.env" --mem-limit-bytes 5700000000
+expect "d3-memtotal-too-small" 1 "invariant-3:" -- --only compose-invariants --env-dir "$work/d3/env" \
+  --release-env "$work/d3/release.env" --mem-limit-bytes 4000000000
+
+# 5 Nginx 템플릿 변형(사본을 고쳐 --nginx-src로 준다)
+nginx_variant() {
+  local name="$1" file="$2" script="$3"
+  rm -rf "$work/ngx-$name"
+  cp -a "$ROOT/infra/nginx" "$work/ngx-$name"
+  python3 -I - "$work/ngx-$name/$file" "$script" <<'PY'
+import sys
+path, script = sys.argv[1], sys.argv[2]
+text = open(path, encoding="utf-8").read()
+old, new = script.split("=>", 1)
+if old not in text:
+    sys.exit("변형 대상 글자가 없다: " + old)
+open(path, "w", encoding="utf-8").write(text.replace(old, new, 1))
+PY
+}
+nginx_variant no-reject conf.d/https443.conf.tmpl "    ssl_reject_handshake on;=>"
+expect "nginx-no-reject-handshake" 1 "ssl_reject_handshake on;" -- --only nginx --nginx-src "$work/ngx-no-reject"
+# shellcheck disable=SC2016  # Nginx 변수를 글자 그대로 바꾼다
+nginx_variant xff snippets/proxy-common.conf 'proxy_set_header X-Forwarded-For $remote_addr;=>proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;'
+expect "nginx-xff-append" 1 'proxy_add_x_forwarded_for 사용' -- --only nginx --nginx-src "$work/ngx-xff"
+nginx_variant status-swap snippets/error-json.conf 'error_page 502 /__mujoong/error/502.json;=>error_page 502 =503 /__mujoong/error/502.json;'
+expect "nginx-5xx-status-swap" 1 "5xx 상태 치환" -- --only nginx --nginx-src "$work/ngx-status-swap"
+nginx_variant ws-buffering conf.d/https443.conf.tmpl "        proxy_buffering off;=>"
+expect "nginx-ws-buffering" 1 "proxy_buffering off" -- --only nginx --nginx-src "$work/ngx-ws-buffering"
+nginx_variant syntax conf.d/https443.conf.tmpl "    ssl_session_tickets off;=>    ssl_session_tickets off"
+expect "nginx-syntax-error" 1 "nginx -t https/compose" -- --only nginx --nginx-src "$work/ngx-syntax"
+nginx_variant regex-location conf.d/https443.conf.tmpl '    location ^~ /internal/ {=>    location ~ ^/internal/ {'
+expect "nginx-regex-location" 1 "정규식 location" -- --only nginx --nginx-src "$work/ngx-regex-location"
+
+# 6 마이그레이션 expand 검사
+mig() {
+  local name="$1" sql="$2"
+  mkdir -p "$work/mig-$name"
+  printf 'CREATE TABLE core.sample (id uuid PRIMARY KEY, label varchar(20) NOT NULL);\nALTER TABLE core.sample ADD CONSTRAINT sample_label_ck CHECK (label <> %s);\n' "''" \
+    >"$work/mig-$name/V1__base.sql"
+  printf '%s\n' "$sql" >"$work/mig-$name/V2__change.sql"
+}
+mig drop-column "ALTER TABLE core.sample DROP COLUMN label;"
+expect "migration-drop-column" 1 "V2__change.sql 문장 1: 삭제" -- --only migrations --migrations "$work/mig-drop-column"
+mig rename "ALTER TABLE core.sample RENAME COLUMN label TO title;"
+expect "migration-rename" 1 "이름 변경" -- --only migrations --migrations "$work/mig-rename"
+mig type "ALTER TABLE core.sample ALTER COLUMN label TYPE varchar(40);"
+expect "migration-type-change" 1 "타입 변경" -- --only migrations --migrations "$work/mig-type"
+mig not-null "ALTER TABLE core.sample ADD COLUMN note varchar(10) NOT NULL;"
+expect "migration-add-not-null" 1 "기본값 없는 널 불허" -- --only migrations --migrations "$work/mig-not-null"
+mig constraint "ALTER TABLE core.sample ADD CONSTRAINT sample_label_len CHECK (length(label) > 2);"
+expect "migration-strengthen-constraint" 1 "기존 표 제약 강화" -- --only migrations --migrations "$work/mig-constraint"
+mig expand "ALTER TABLE core.sample ADD COLUMN note varchar(10) DEFAULT 'x' NOT NULL; ALTER TABLE core.sample ADD COLUMN memo text; CREATE INDEX sample_label_ix ON core.sample (label);"
+expect "migration-expand-ok" 0 "" -- --only migrations --migrations "$work/mig-expand"
+expect "migration-allow-contract" 0 "" -- --only migrations --migrations "$work/mig-drop-column" --allow-contract
+
+# 7 번들 Dockerfile 변형
+mkdir -p "$work/bundle"
+cp "$ROOT/infra/bundle/Dockerfile" "$work/bundle/Dockerfile"
+cp "$ROOT/infra/bundle/Dockerfile.dockerignore" "$work/bundle/Dockerfile.dockerignore"
+printf 'COPY compose.ci.yml /bundle/compose.ci.yml\n' >>"$work/bundle/Dockerfile"
+expect "bundle-copies-ci-file" 1 "번들 목록 밖을 복사한다: compose.ci.yml" -- --only bundle --bundle-dockerfile "$work/bundle/Dockerfile"
+
+echo "test-infra-validate: ${total}건 중 어긋남 ${failures}건"
+if [ "$failures" -gt 0 ]; then
+  exit 1
+fi

@@ -1,0 +1,113 @@
+# 무중 dev 스택 — 개발자 PC (U1 3.5 Step 44 · infra-spec 1.3 · cicd 2.4 · J108 · J135)
+#
+# postgres 하나(항상) + 선택 nginx(프로필 nginx). 앱(core-api · realtime · web)은 IDE 또는 호스트 프로세스로 돌린다.
+# demo 파일에 덧붙이는 파일이 아니라 단독 파일이다. 포트는 127.0.0.1에만 게시한다(Compose 불변식 대상이 아니고,
+# infra-validate는 dev 파일에 "게시 포트는 127.0.0.1만"과 config 유효성만 단언한다).
+#
+# 준비(한 번, 값은 저장소 밖 build/dev/에 생긴다 — 비밀 값을 저장소에 쓰지 않는다, J127):
+#   bash infra/ci/gen-env.sh --out build/dev/env --origin http://localhost:3000 --keep-existing
+#   bash infra/bin/render-pgconf --out build/dev/postgres/postgresql.conf
+#   docker compose --env-file build/dev/env/compose.env -f infra/compose.dev.yml up -d
+#   (앱은 SPRING_PROFILES_ACTIVE=dev, SPRING_DATASOURCE_URL=jdbc:postgresql://127.0.0.1:5432/mujoong,
+#    SPRING_DATASOURCE_PASSWORD=<build/dev/env/core-api.env 값>로 띄운다. 시험 로그인은 MUJOONG_DEVLOGIN_ENABLED=true로만 켠다)
+# 선택 nginx(HTTPS로 기기 웹 · 마이크를 볼 때):
+#   SERVICE_HOST=localhost MUJOONG_SECURITY_ALLOWED_ORIGIN=https://localhost:8443 \
+#     bash infra/bin/render-nginx --out build/dev/nginx --upstreams host
+#   bash infra/ci/gen-selfsigned.sh --out build/dev/certs        (live/localhost/{fullchain,privkey}.pem · ca.crt)
+#   docker compose --env-file build/dev/env/compose.env -f infra/compose.dev.yml --profile nginx up -d
+#   이때 앱은 0.0.0.0에 바인드하고 신뢰 프록시(SERVER_TOMCAT_REMOTEIP_INTERNALPROXIES)를 dev 망 게이트웨이(172\.30\.30\.1)로 준다.
+#
+# 상대 경로는 이 파일이 있는 infra/ 기준이다(Compose 프로젝트 디렉터리). MUJOONG_DEV_DIR로 산출물 위치를 바꿀 수 있다.
+
+name: mujoong-dev
+
+services:
+  postgres:
+    image: postgres:16.15
+    user: "999:999"
+    command: ["postgres", "-c", "config_file=/etc/postgresql/mujoong.conf"]
+    init: true
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    restart: unless-stopped
+    stop_grace_period: 60s
+    mem_limit: 1g
+    memswap_limit: 1g
+    shm_size: 128m
+    ports:
+      - "127.0.0.1:5432:5432"
+    networks:
+      dev: {}
+    env_file:
+      - ${MUJOONG_ENV_DIR:?MUJOONG_ENV_DIR(gen-env.sh --out 디렉터리)가 필요하다}/postgres.env
+    environment:
+      # 호스트의 127.0.0.1 게시 포트로 온 접속은 dev 망 게이트웨이 주소로 보인다(J135)
+      PG_HBA_ALLOWED_CIDR: 172.30.30.0/24
+    tmpfs:
+      - /var/run/postgresql:size=8m,uid=999,gid=999,mode=0775
+      - /tmp:size=64m
+    volumes:
+      - dev-pgdata:/var/lib/postgresql/data
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+      - ${MUJOONG_DEV_DIR:-../build/dev}/postgres/postgresql.conf:/etc/postgresql/mujoong.conf:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -q -h \"$$(hostname -i | cut -d' ' -f1)\" -p 5432 -d mujoong -U mujoong_owner"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
+  nginx:
+    image: nginx:1.30.5-alpine
+    profiles: [nginx]
+    command: ["/bin/sh", "/etc/nginx/mujoong/reload-watch.sh"]
+    init: true
+    read_only: true
+    cap_drop: [ALL]
+    cap_add: [CHOWN, SETGID, SETUID, NET_BIND_SERVICE]
+    security_opt: ["no-new-privileges:true"]
+    restart: unless-stopped
+    mem_limit: 128m
+    memswap_limit: 128m
+    ports:
+      - "127.0.0.1:8443:443"
+    networks:
+      dev: {}
+    # upstreams host.conf가 host.docker.internal(호스트 게이트웨이)의 3000 · 8080 · 8081로 보낸다
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    env_file:
+      - ${MUJOONG_ENV_DIR:?MUJOONG_ENV_DIR(gen-env.sh --out 디렉터리)가 필요하다}/nginx.env
+    tmpfs:
+      - /var/cache/nginx:size=32m
+      - /var/run:size=4m
+    volumes:
+      - ${MUJOONG_DEV_DIR:-../build/dev}/nginx:/etc/nginx/mujoong:ro
+      - ${MUJOONG_DEV_DIR:-../build/dev}/certs:/etc/letsencrypt:ro
+      - ./seed-audio:/srv/mujoong/approved-audio:ro
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "-T", "2", "http://127.0.0.1/__mujoong/nginx-health"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
+networks:
+  dev:
+    ipam:
+      config:
+        - subnet: 172.30.30.0/24
+
+volumes:
+  dev-pgdata: {}

@@ -91,7 +91,14 @@ const HOP_BY_HOP = new Set([
   "upgrade",
 ]);
 /** 클라이언트가 보낸 값을 버리고 대역이 다시 쓰는 헤더. */
-const OVERWRITTEN = new Set(["x-forwarded-for", "x-real-ip", "x-forwarded-proto", "x-forwarded-host", "x-trace-id", "forwarded"]);
+const OVERWRITTEN = new Set([
+  "x-forwarded-for",
+  "x-real-ip",
+  "x-forwarded-proto",
+  "x-forwarded-host",
+  "x-trace-id",
+  "forwarded",
+]);
 const RAW_URI_FORBIDDEN = /[;\\]|%2e|%2f|%5c/i;
 const POLLING_PATHS = [/^\/api\/device\/bootstrap\/status$/, /^\/api\/sessions\/[^/]+$/];
 const MEDIA_FILE = /^[A-Za-z0-9._-]+\.wav$/;
@@ -127,7 +134,9 @@ export function normalizeRequestTarget(rawUrl) {
   }
   const normalized = path.posix.normalize(decoded);
   const forwardPath =
-    normalized === decoded ? rawPath : encodeURI(normalized).replace(/\?/g, "%3F").replace(/#/g, "%23");
+    normalized === decoded
+      ? rawPath
+      : encodeURI(normalized).replace(/\?/g, "%3F").replace(/#/g, "%23");
   return { ok: true, path: normalized, forwardPath, query };
 }
 
@@ -259,7 +268,11 @@ export async function startEdge({
   };
 
   const access = (entry) => {
-    if (entry.method === "GET" && (entry.status === 304 || (entry.status >= 200 && entry.status < 300)) && POLLING_PATHS.some((re) => re.test(entry.path))) {
+    if (
+      entry.method === "GET" &&
+      (entry.status === 304 || (entry.status >= 200 && entry.status < 300)) &&
+      POLLING_PATHS.some((re) => re.test(entry.path))
+    ) {
       return;
     }
     log({ ts: new Date().toISOString(), event: "EDGE_ACCESS", ...entry });
@@ -322,17 +335,39 @@ export async function startEdge({
     }
     const target = normalizeRequestTarget(req.url ?? "");
     if (!target.ok) {
-      const bytes = sendEnvelope(res, 400, "VALIDATION_FAILED", traceId, "edge", { connection: "close" });
-      access({ method, path: "(rejected)", status: 400, bytes, ms: Date.now() - started, traceId, route: "edge" });
+      const bytes = sendEnvelope(res, 400, "VALIDATION_FAILED", traceId, "edge", {
+        connection: "close",
+      });
+      access({
+        method,
+        path: "(rejected)",
+        status: 400,
+        bytes,
+        ms: Date.now() - started,
+        traceId,
+        route: "edge",
+      });
       req.resume();
       return;
     }
     const route = routeFor(target.path);
     const finishLog = (status, bytes) =>
-      access({ method, path: target.path, status, bytes, ms: Date.now() - started, traceId, route });
+      access({
+        method,
+        path: target.path,
+        status,
+        bytes,
+        ms: Date.now() - started,
+        traceId,
+        route,
+      });
 
     if (route === "forbidden") {
-      res.writeHead(403, { ...securityHeaders("edge"), "content-length": "0", "x-trace-id": traceId });
+      res.writeHead(403, {
+        ...securityHeaders("edge"),
+        "content-length": "0",
+        "x-trace-id": traceId,
+      });
       res.end();
       finishLog(403, 0);
       req.resume();
@@ -345,7 +380,10 @@ export async function startEdge({
     }
     const declared = Number(req.headers["content-length"] ?? "0");
     if (Number.isFinite(declared) && declared > bodyLimitBytes) {
-      finishLog(400, sendEnvelope(res, 400, "VALIDATION_FAILED", traceId, "edge", { connection: "close" }));
+      finishLog(
+        400,
+        sendEnvelope(res, 400, "VALIDATION_FAILED", traceId, "edge", { connection: "close" }),
+      );
       req.resume();
       return;
     }
@@ -354,7 +392,10 @@ export async function startEdge({
       body = await readBody(req, bodyLimitBytes);
     } catch {
       if (!res.headersSent) {
-        finishLog(400, sendEnvelope(res, 400, "VALIDATION_FAILED", traceId, "edge", { connection: "close" }));
+        finishLog(
+          400,
+          sendEnvelope(res, 400, "VALIDATION_FAILED", traceId, "edge", { connection: "close" }),
+        );
       }
       return;
     }
@@ -440,13 +481,22 @@ export async function startEdge({
   async function serveMedia(req, res, normalizedPath, traceId, finishLog) {
     const name = normalizedPath.slice("/media/approved/".length);
     if (req.method !== "GET" && req.method !== "HEAD") {
-      res.writeHead(405, { ...securityHeaders("media"), allow: "GET, HEAD", "content-length": "0", "x-trace-id": traceId });
+      res.writeHead(405, {
+        ...securityHeaders("media"),
+        allow: "GET, HEAD",
+        "content-length": "0",
+        "x-trace-id": traceId,
+      });
       res.end();
       finishLog(405, 0);
       return;
     }
     if (!MEDIA_FILE.test(name)) {
-      res.writeHead(404, { ...securityHeaders("media"), "content-length": "0", "x-trace-id": traceId });
+      res.writeHead(404, {
+        ...securityHeaders("media"),
+        "content-length": "0",
+        "x-trace-id": traceId,
+      });
       res.end();
       finishLog(404, 0);
       return;
@@ -467,7 +517,11 @@ export async function startEdge({
       res.end(data ?? undefined);
       finishLog(200, data ? data.length : 0);
     } catch {
-      res.writeHead(404, { ...securityHeaders("media"), "content-length": "0", "x-trace-id": traceId });
+      res.writeHead(404, {
+        ...securityHeaders("media"),
+        "content-length": "0",
+        "x-trace-id": traceId,
+      });
       res.end();
       finishLog(404, 0);
     }
@@ -478,8 +532,19 @@ export async function startEdge({
     const traceId = newTraceId();
     socket.on("error", () => {});
     const reject = (status, reason, loggedPath) => {
-      socket.end(`HTTP/1.1 ${status} ${reason}\r\nConnection: close\r\nContent-Length: 0\r\nX-Trace-Id: ${traceId}\r\n\r\n`);
-      access({ method: req.method, path: loggedPath, status, bytes: 0, ms: Date.now() - started, traceId, route: "edge", upgrade: true });
+      socket.end(
+        `HTTP/1.1 ${status} ${reason}\r\nConnection: close\r\nContent-Length: 0\r\nX-Trace-Id: ${traceId}\r\n\r\n`,
+      );
+      access({
+        method: req.method,
+        path: loggedPath,
+        status,
+        bytes: 0,
+        ms: Date.now() - started,
+        traceId,
+        route: "edge",
+        upgrade: true,
+      });
     };
     if (hostnameOf(req.headers.host) !== host) {
       socket.destroy();
@@ -504,7 +569,10 @@ export async function startEdge({
       "X-Forwarded-Proto": "https",
       "X-Trace-Id": traceId,
     });
-    const upstreamSocket = net.connect({ host: upstream.hostname, port: Number(upstream.port || 80) });
+    const upstreamSocket = net.connect({
+      host: upstream.hostname,
+      port: Number(upstream.port || 80),
+    });
     let status = null;
     let connected = false;
     const closeBoth = () => {
@@ -524,7 +592,12 @@ export async function startEdge({
     });
     upstreamSocket.on("connect", () => {
       connected = true;
-      const lines = [`${req.method} ${target.forwardPath}${target.query} HTTP/1.1`, ...headers.map(([name, value]) => `${name}: ${value}`), "", ""];
+      const lines = [
+        `${req.method} ${target.forwardPath}${target.query} HTTP/1.1`,
+        ...headers.map(([name, value]) => `${name}: ${value}`),
+        "",
+        "",
+      ];
       upstreamSocket.write(lines.join("\r\n"));
       if (head && head.length > 0) {
         upstreamSocket.write(head);
@@ -551,13 +624,26 @@ export async function startEdge({
     });
     upstreamSocket.on("close", () => {
       socket.destroy();
-      access({ method: req.method, path: "/ws/device", status: status ?? 502, bytes: 0, ms: Date.now() - started, traceId, route: "realtime", upgrade: true });
+      access({
+        method: req.method,
+        path: "/ws/device",
+        status: status ?? 502,
+        bytes: 0,
+        ms: Date.now() - started,
+        traceId,
+        route: "realtime",
+        upgrade: true,
+      });
     });
     socket.on("close", () => upstreamSocket.destroy());
   });
 
   function writeUpgradeError(socket, status, traceId) {
-    const body = JSON.stringify({ code: "UPSTREAM_UNAVAILABLE", message: EDGE_ERRORS.UPSTREAM_UNAVAILABLE, traceId });
+    const body = JSON.stringify({
+      code: "UPSTREAM_UNAVAILABLE",
+      message: EDGE_ERRORS.UPSTREAM_UNAVAILABLE,
+      traceId,
+    });
     const reason = status === 504 ? "Gateway Timeout" : "Bad Gateway";
     socket.end(
       `HTTP/1.1 ${status} ${reason}\r\nContent-Type: application/json\r\nContent-Length: ${Buffer.byteLength(body)}\r\n` +
@@ -574,7 +660,12 @@ export async function startEdge({
   });
   const address = server.address();
   const port = typeof address === "object" && address ? address.port : Number(listenPortText);
-  log({ ts: new Date().toISOString(), event: "EDGE_READY", listen: `${listenHost}:${port}`, serviceHost: host });
+  log({
+    ts: new Date().toISOString(),
+    event: "EDGE_READY",
+    listen: `${listenHost}:${port}`,
+    serviceHost: host,
+  });
 
   async function close() {
     for (const socket of sockets) {
@@ -676,7 +767,10 @@ export function parseArgs(argv, env = process.env) {
   return options;
 }
 
-export async function main(argv = process.argv.slice(2), io = { stdout: process.stdout, stderr: process.stderr }) {
+export async function main(
+  argv = process.argv.slice(2),
+  io = { stdout: process.stdout, stderr: process.stderr },
+) {
   let options;
   try {
     options = parseArgs(argv);
@@ -703,7 +797,8 @@ export async function main(argv = process.argv.slice(2), io = { stdout: process.
   }
 }
 
-const isEntryPoint = process.argv[1] && pathToFileURL(path.resolve(process.argv[1])).href === import.meta.url;
+const isEntryPoint =
+  process.argv[1] && pathToFileURL(path.resolve(process.argv[1])).href === import.meta.url;
 if (isEntryPoint) {
   const result = await main();
   if (result.exitCode !== null) {

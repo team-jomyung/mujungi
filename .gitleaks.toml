@@ -1,0 +1,24 @@
+# 무중 비밀 스캔 설정 — gitleaks (U1 3.5 Step 50 · cicd 2.2.2 secrets · 2.5.2 · 2.13 · NFR9.10 · SD-16 · CD-8)
+#
+# CI secrets 작업(.github/workflows/ci.yml)과 검증 명령의 scripts/verify/a-secrets.sh(gitleaks가 있을 때)가 쓴다.
+# 기본 규칙 전부를 쓰고, 허용 목록에는 '가짜 값의 경로 · 지문과 사유'만 둔다(cicd 2.5.2). 실제 비밀을 허용 목록으로 덮지 않는다.
+# 허용 항목을 더하는 PR은 사람 리뷰 승인이 필요하다. 시험용 비밀은 저장소에 두지 않고 실행 때 만든다(J127).
+
+title = "mujoong"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "비밀 아님: 승인 음성 경로 검증 시험의 잘못된 파일 이름 목록(\"../etc/passwd.wav\" 옆의 \"closing-v1.mp3\"를 generic-api-key가 passwd 키워드로 오인). 커밋 bf5eeac부터"
+condition = "AND"
+paths = ['''(^|/)backend/core-api/src/test/java/kr/mujoong/core/catalog/ApprovedContentEntitiesTest\.java$''']
+regexTarget = "line"
+regexes = ['''@ValueSource\(strings = \{"\.\./etc/passwd\.wav", "closing-v1\.mp3"''']
+
+[[allowlists]]
+description = "비밀 아님: RFC 6455 4.1절의 예시 nonce(\"the sample nonce\"의 base64)를 이미지 점검 ⑧의 WebSocket 업그레이드 헤더에 쓴다"
+condition = "AND"
+paths = ['''(^|/)infra/ci/image-checks\.sh$''']
+regexTarget = "line"
+regexes = ['''Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==''']

@@ -10,7 +10,18 @@
 //
 // 종료 코드: 0 = C1 ~ C12 통과, 1 = 단언 실패 · 기한 초과, 2 = 인자 · 전제 누락(통과로 보고하지 않음).
 import { spawn } from "node:child_process";
-import { closeSync, existsSync, fchmodSync, fsyncSync, mkdirSync, openSync, readFileSync, statSync, writeFileSync, writeSync } from "node:fs";
+import {
+  closeSync,
+  existsSync,
+  fchmodSync,
+  fsyncSync,
+  mkdirSync,
+  openSync,
+  readFileSync,
+  statSync,
+  writeFileSync,
+  writeSync,
+} from "node:fs";
 import path from "node:path";
 import { createHash } from "node:crypto";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -107,7 +118,9 @@ export function resolveOptions(raw) {
   }
   for (const required of ["providerRecord", "realtimeLog", "sqlCmd"]) {
     if (!raw[required]) {
-      throw new UsageError(`--${required.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`)}가 필요하다`);
+      throw new UsageError(
+        `--${required.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`)}가 필요하다`,
+      );
     }
   }
   const providerRecord = path.resolve(raw.providerRecord);
@@ -124,7 +137,9 @@ export function resolveOptions(raw) {
   }
   let ca = null;
   if (baseUrl.protocol === "https:") {
-    const caPath = path.resolve(raw.ca ?? path.join(repoRoot, "build", "verify", "certs", "ca.crt"));
+    const caPath = path.resolve(
+      raw.ca ?? path.join(repoRoot, "build", "verify", "certs", "ca.crt"),
+    );
     if (!existsSync(caPath)) {
       throw new UsageError(`CA 파일이 없다: ${caPath}`);
     }
@@ -149,7 +164,9 @@ export function resolveOptions(raw) {
     providerRecord,
     realtimeLog,
     sqlCmd,
-    secretsFile: path.resolve(raw.secretsFile ?? path.join(repoRoot, "build", "verify", "c", "secrets.list")),
+    secretsFile: path.resolve(
+      raw.secretsFile ?? path.join(repoRoot, "build", "verify", "c", "secrets.list"),
+    ),
     out: path.resolve(raw.out ?? path.join(repoRoot, "build", "verify", "c", "result.json")),
     totalTimeoutMs,
   };
@@ -179,7 +196,12 @@ export class SecretBook {
 
   /** 값 하나. 쓴 줄 수(0 또는 1). */
   add(value) {
-    if (typeof value !== "string" || value.length === 0 || /[\r\n]/.test(value) || this.#seen.has(value)) {
+    if (
+      typeof value !== "string" ||
+      value.length === 0 ||
+      /[\r\n]/.test(value) ||
+      this.#seen.has(value)
+    ) {
       return 0;
     }
     this.#seen.add(value);
@@ -196,7 +218,9 @@ export class SecretBook {
       return 0;
     }
     const digest = createHash("sha256").update(value, "utf8").digest();
-    return this.add(value) + this.add(digest.toString("hex")) + this.add(digest.toString("base64url"));
+    return (
+      this.add(value) + this.add(digest.toString("hex")) + this.add(digest.toString("base64url"))
+    );
   }
 
   /** Spring Session 쿠키(세션 id의 base64)를 풀어 세션 id도 넣는다. */
@@ -217,7 +241,11 @@ export class SecretBook {
     if (typeof code !== "string" || code.length !== 8) {
       return 0;
     }
-    return this.add(code) + this.add(`${code.slice(0, 4)} ${code.slice(4)}`) + this.add(`${code.slice(0, 4)}-${code.slice(4)}`);
+    return (
+      this.add(code) +
+      this.add(`${code.slice(0, 4)} ${code.slice(4)}`) +
+      this.add(`${code.slice(0, 4)}-${code.slice(4)}`)
+    );
   }
 
   /** 전사 · AI 말 원문. */
@@ -244,7 +272,9 @@ export class SecretBook {
 export function runSql(command, role, sql, { timeoutMs = 10_000, redactor = null } = {}) {
   return new Promise((resolve, reject) => {
     const useBash = command.endsWith(".sh");
-    const child = spawn(useBash ? "bash" : command, useBash ? [command, role] : [role], { stdio: ["pipe", "pipe", "pipe"] });
+    const child = spawn(useBash ? "bash" : command, useBash ? [command, role] : [role], {
+      stdio: ["pipe", "pipe", "pipe"],
+    });
     const out = [];
     const err = [];
     let done = false;
@@ -261,7 +291,9 @@ export function runSql(command, role, sql, { timeoutMs = 10_000, redactor = null
     }, timeoutMs);
     child.stdout.on("data", (chunk) => out.push(chunk));
     child.stderr.on("data", (chunk) => err.push(chunk));
-    child.on("error", (error) => finish(reject, new Error(`SQL 명령을 실행하지 못했다(${error.code ?? error.name})`)));
+    child.on("error", (error) =>
+      finish(reject, new Error(`SQL 명령을 실행하지 못했다(${error.code ?? error.name})`)),
+    );
     child.on("close", (code, signal) => {
       if (code !== 0) {
         const first = Buffer.concat(err).toString("utf8").split("\n")[0].slice(0, 200);
@@ -290,7 +322,11 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, Math.max(0, m
  * @param {{write: (line: string) => void, totalTimeoutMs?: number|null, now?: () => number}} io
  * @returns {Promise<{exitCode: number, results: Array<object>, failedStep: string|null}>}
  */
-export async function runSteps(steps, ctx, { write, totalTimeoutMs = null, now = () => Date.now() }) {
+export async function runSteps(
+  steps,
+  ctx,
+  { write, totalTimeoutMs = null, now = () => Date.now() },
+) {
   const startedAt = now();
   const results = [];
   ctx.sleep ??= sleep;
@@ -306,7 +342,13 @@ export async function runSteps(steps, ctx, { write, totalTimeoutMs = null, now =
       }
     }
     if (budget <= 0) {
-      results.push({ id: step.id, title: step.title, status: "TIMEOUT", ms: 0, message: "전체 기한 소진" });
+      results.push({
+        id: step.id,
+        title: step.title,
+        status: "TIMEOUT",
+        ms: 0,
+        message: "전체 기한 소진",
+      });
       write(`${step.id} TIMEOUT 0.0s 전체 기한(--total-timeout) 소진`);
       return { exitCode: 1, results, failedStep: step.id };
     }
@@ -323,7 +365,12 @@ export async function runSteps(steps, ctx, { write, totalTimeoutMs = null, now =
     const outer = new Promise((_, reject) => {
       timer = setTimeout(() => {
         controller.abort();
-        reject(new StepTimeout(totalLimited ? "전체 기한(--total-timeout)" : `단계 기한 ${formatSeconds(budget)}`, budget));
+        reject(
+          new StepTimeout(
+            totalLimited ? "전체 기한(--total-timeout)" : `단계 기한 ${formatSeconds(budget)}`,
+            budget,
+          ),
+        );
       }, budget);
     });
     try {
@@ -336,7 +383,9 @@ export async function runSteps(steps, ctx, { write, totalTimeoutMs = null, now =
       const ms = now() - stepStart;
       const status = error instanceof StepTimeout ? "TIMEOUT" : "FAIL";
       const message =
-        error instanceof StepFailure || error instanceof StepTimeout ? error.message : `예외 ${error?.name ?? "Error"}: ${error?.message ?? String(error)}`;
+        error instanceof StepFailure || error instanceof StepTimeout
+          ? error.message
+          : `예외 ${error?.name ?? "Error"}: ${error?.message ?? String(error)}`;
       results.push({ id: step.id, title: step.title, status, ms, message });
       write(`${step.id} ${status} ${formatSeconds(ms)} ${message}`);
       return { exitCode: 1, results, failedStep: step.id };
@@ -359,9 +408,27 @@ export function createContext(options, { redactor, deadlines }) {
     ca: options.ca,
     deviceJar,
     parentJar,
-    device: createHttpClient({ baseUrl: options.baseUrl, ca: options.ca, origin: options.origin, jar: deviceJar, timeoutMs }),
-    parent: createHttpClient({ baseUrl: options.baseUrl, ca: options.ca, origin: options.origin, jar: parentJar, timeoutMs }),
-    media: createHttpClient({ baseUrl: options.baseUrl, ca: options.ca, origin: options.origin, jar: null, timeoutMs }),
+    device: createHttpClient({
+      baseUrl: options.baseUrl,
+      ca: options.ca,
+      origin: options.origin,
+      jar: deviceJar,
+      timeoutMs,
+    }),
+    parent: createHttpClient({
+      baseUrl: options.baseUrl,
+      ca: options.ca,
+      origin: options.origin,
+      jar: parentJar,
+      timeoutMs,
+    }),
+    media: createHttpClient({
+      baseUrl: options.baseUrl,
+      ca: options.ca,
+      origin: options.origin,
+      jar: null,
+      timeoutMs,
+    }),
     provider: new JsonlTail(options.providerRecord),
     realtimeLog: new JsonlTail(options.realtimeLog),
     secrets,
@@ -370,7 +437,8 @@ export function createContext(options, { redactor, deadlines }) {
     closers: [() => secrets.close()],
     sleep,
   };
-  ctx.sql = (role, sql, { timeoutMs: limit } = {}) => runSql(options.sqlCmd, role, sql, { timeoutMs: limit ?? timeoutMs, redactor });
+  ctx.sql = (role, sql, { timeoutMs: limit } = {}) =>
+    runSql(options.sqlCmd, role, sql, { timeoutMs: limit ?? timeoutMs, redactor });
   return ctx;
 }
 
@@ -388,7 +456,10 @@ function writeResult(file, result) {
  * @param {string[]} argv
  * @param {{stdout: {write: Function}, stderr: {write: Function}}} io
  */
-export async function main(argv = process.argv.slice(2), io = { stdout: process.stdout, stderr: process.stderr }) {
+export async function main(
+  argv = process.argv.slice(2),
+  io = { stdout: process.stdout, stderr: process.stderr },
+) {
   const redactor = new Redactor();
   const out = createLineWriter(io.stdout, redactor);
   const err = createLineWriter(io.stderr, redactor);
@@ -431,7 +502,10 @@ export async function main(argv = process.argv.slice(2), io = { stdout: process.
     failedStep: outcome.failedStep,
     startedAt: new Date(startedAt).toISOString(),
     totalMs,
-    steps: outcome.results.map((result) => ({ ...result, message: result.message ? redactor.redact(result.message) : undefined })),
+    steps: outcome.results.map((result) => ({
+      ...result,
+      message: result.message ? redactor.redact(result.message) : undefined,
+    })),
     deadlinesMs: deadlines,
     measurements: ctx.measurements,
     sessionId: ctx.state.sessionId ?? null,
@@ -445,7 +519,8 @@ export async function main(argv = process.argv.slice(2), io = { stdout: process.
   return outcome.exitCode;
 }
 
-const isEntryPoint = process.argv[1] && pathToFileURL(path.resolve(process.argv[1])).href === import.meta.url;
+const isEntryPoint =
+  process.argv[1] && pathToFileURL(path.resolve(process.argv[1])).href === import.meta.url;
 if (isEntryPoint) {
   main()
     .then((code) => {

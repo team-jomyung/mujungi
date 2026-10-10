@@ -1,0 +1,5 @@
+# 위반 샘플: demo에 dev 프로필을 함께 켬 — demo-profile(SD-14 · CD-7, 앱 프로필 가드와 이중 방어)
+services:
+  core-api:
+    environment:
+      SPRING_PROFILES_ACTIVE: demo,dev

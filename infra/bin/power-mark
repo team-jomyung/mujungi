@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# power-mark — 의도적 기동 · 정지를 power.log에 한 줄 남긴다 (U1 3.5 Step 47 · infra-spec 1.4 · N-9 · monitoring 2.6.3 · R4-7)
+#
+# systemd 단위 mujoong-power-mark.service(infra/host/systemd)가 부른다. 그 단위는 mujoong-compose.service에
+# Requires · PartOf · After로 묶여 있어 다음 네 시점에 한 번씩 돈다(수동 표시는 없다):
+#   호스트 기동 완료 · mujoong-compose 시작 완료 → POWER_READY
+#   호스트 정지 시작 · mujoong-compose 정지 시작 → POWER_STOP
+# probe-daily가 POWER_STOP부터 다음 POWER_READY까지를 가용성 분모에서 뺀다(monitoring 2.6.3, 사람 확인 O-8).
+#
+# 쓰는 법: power-mark POWER_READY|POWER_STOP
+# 줄 형식: ts=<UTC 초> event=<POWER_READY|POWER_STOP> boot=<부팅 id>   (/var/log/mujoong/power.log, root 0640)
+# 종료 코드: 0 기록함, 1 기록 실패, 64 인자 오류
+
+set -Eeuo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=infra/bin/lib/host.sh
+. "$SCRIPT_DIR/lib/host.sh"
+
+event="${1:-}"
+case "$event" in
+  POWER_READY | POWER_STOP) ;;
+  -h | --help)
+    sed -n '2,13p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+    exit 0
+    ;;
+  *)
+    echo "power-mark: POWER_READY 또는 POWER_STOP이 필요하다" >&2
+    exit 64
+    ;;
+esac
+
+boot="unknown"
+if [ -r /proc/sys/kernel/random/boot_id ]; then
+  boot="$(tr -d '\n-' </proc/sys/kernel/random/boot_id)"
+fi
+mkdir -p "$MUJOONG_LOG_DIR"
+if ! mujoong_event_line "$MUJOONG_LOG_DIR/power.log" "event=$event boot=$boot"; then
+  echo "power-mark: $MUJOONG_LOG_DIR/power.log 에 쓰지 못했다" >&2
+  exit 1
+fi

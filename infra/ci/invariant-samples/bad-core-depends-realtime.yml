@@ -1,0 +1,6 @@
+# 위반 샘플: core-api가 realtime을 기다림 — 단언 12(배포 D5 병렬 재생성이 직렬화된다, D-18 · R4-13)
+services:
+  core-api:
+    depends_on:
+      realtime:
+        condition: service_healthy

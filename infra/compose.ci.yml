@@ -1,0 +1,128 @@
+# 무중 검증 스택 덧붙임 — compose.demo.yml 위에 얹는다 (U1 3.5 Step 44 · J108 · J136 · J127 · J129 · SEC-02 · SD-25)
+#
+# 검증 명령 B · C(scripts/verify/b-stack.sh, Step 49)와 CI skeleton 작업이 쓴다. demo와 같은 이미지 · 망 · 컨테이너 정책을 두고
+# 바꾸는 것은 아래뿐이다(J108):
+#   - 이미지: 호스트에서 만든 로컬 이미지(infra/ci/build-images.sh, 기본 mujoong.local/mujoong-*:verify). 당기지 않는다(pull_policy never)
+#   - 앱 프로필 dev + MUJOONG_DEVLOGIN_ENABLED=true(SD-14 조합 2). demo 프로필 · demo 비밀은 쓰지 않는다
+#   - realtime의 공급자 주소 → 가짜 공급자 서비스 fake-provider(시험 도구 이미지, 앱 이미지 밖 J129 · SD-25)
+#   - SERVICE_HOST=localhost · 허용 origin https://localhost:8443(nginx.env · 앱 env, gen-env.sh가 만든다)
+#   - nginx 443만 호스트 127.0.0.1:8443에 게시(80은 게시하지 않는다), certbot · backup 끔
+# 시퀀스 덮어쓰기는 `!override`를 쓴다(Compose v2.24.4 이상, J136). 볼륨은 컨테이너 경로가 같은 항목을 다시 선언해 바꾼다.
+# 상대 경로는 Compose 프로젝트 디렉터리(첫 파일 compose.demo.yml이 있는 infra/) 기준이다. 값 · 렌더 산출물의 위치는 기본
+# build/verify/이고(J136), infra-validate처럼 다른 임시 디렉터리를 쓰는 도구만 MUJOONG_VERIFY_DIR(절대 경로)로 바꾼다.
+#
+# 쓰는 법(저장소 루트에서):
+#   bash infra/ci/gen-env.sh                                  # build/verify/env/{postgres,migrate,core-api,realtime,web,nginx,...}.env
+#   bash infra/ci/gen-selfsigned.sh                           # build/verify/certs/{ca.crt, live/localhost/fullchain.pem, privkey.pem}
+#   bash infra/bin/render-nginx --out build/verify/nginx --env-file build/verify/env/nginx.env
+#   bash infra/bin/render-pgconf --out build/verify/postgres/postgresql.conf
+#   bash infra/ci/build-images.sh
+#   docker compose -p mujoong-verify --env-file build/verify/env/compose.env \
+#     -f infra/compose.demo.yml -f infra/compose.ci.yml config --quiet
+#   docker compose -p mujoong-verify --env-file build/verify/env/compose.env \
+#     -f infra/compose.demo.yml -f infra/compose.ci.yml --profile migrate run --rm migrate
+#   docker compose -p mujoong-verify --env-file build/verify/env/compose.env \
+#     -f infra/compose.demo.yml -f infra/compose.ci.yml up -d --wait
+# 값 파일(build/verify/)은 저장소에 없고 실행 때 만든 뒤 지운다(J127). 이 파일에는 비밀 값 · 비밀 변수 이름이 없다.
+
+services:
+  nginx:
+    ports: !override
+      - "127.0.0.1:8443:443"
+    env_file: !override
+      - ${MUJOONG_VERIFY_DIR:-../build/verify}/env/nginx.env
+    volumes:
+      - ${MUJOONG_VERIFY_DIR:-../build/verify}/nginx:/etc/nginx/mujoong:ro
+      - ${MUJOONG_VERIFY_DIR:-../build/verify}/certs:/etc/letsencrypt:ro
+      - verify-certbot-www:/var/www/certbot:ro
+      - ./seed-audio:/srv/mujoong/approved-audio:ro
+
+  web:
+    pull_policy: never
+    env_file: !override
+      - ${MUJOONG_VERIFY_DIR:-../build/verify}/env/web.env
+    environment:
+      # 시험 로그인 화면(/parent/dev-login)은 이 값이 true일 때만 열린다(J119)
+      MUJOONG_DEVLOGIN_ENABLED: "true"
+
+  core-api:
+    pull_policy: never
+    env_file: !override
+      - ${MUJOONG_VERIFY_DIR:-../build/verify}/env/core-api.env
+    environment:
+      SPRING_PROFILES_ACTIVE: dev
+      MUJOONG_DEVLOGIN_ENABLED: "true"
+
+  realtime:
+    pull_policy: never
+    env_file: !override
+      - ${MUJOONG_VERIFY_DIR:-../build/verify}/env/realtime.env
+    environment:
+      SPRING_PROFILES_ACTIVE: dev
+      # 가짜 공급자(backend 망). 이 값을 빠뜨리면 dev 프로필에는 공급자 기본값이 없어 기동이 실패한다(실공급자로 가지 않음, J141)
+      MUJOONG_PROVIDER_URL: ws://fake-provider:8090/v1/live/sessions
+    depends_on:
+      fake-provider:
+        condition: service_healthy
+
+  postgres:
+    env_file: !override
+      - ${MUJOONG_VERIFY_DIR:-../build/verify}/env/postgres.env
+    volumes:
+      - verify-pgdata:/var/lib/postgresql/data
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+      - ${MUJOONG_VERIFY_DIR:-../build/verify}/postgres/postgresql.conf:/etc/postgresql/mujoong.conf:ro
+
+  migrate:
+    pull_policy: never
+    env_file: !override
+      - ${MUJOONG_VERIFY_DIR:-../build/verify}/env/migrate.env
+
+  certbot:
+    # 검증 스택은 자체 서명 인증서를 쓰고 발급 기관에 나가지 않는다
+    profiles: [ci-disabled]
+    env_file: !override
+      - ${MUJOONG_VERIFY_DIR:-../build/verify}/env/certbot.env
+
+  backup:
+    # 검증 스택은 백업을 돌리지 않는다(이미지 점검 ④가 따로 더미 덤프를 확인한다)
+    profiles: [ci-disabled]
+    pull_policy: never
+    env_file: !override
+      - ${MUJOONG_VERIFY_DIR:-../build/verify}/env/backup.env
+
+  fake-provider:
+    image: ${MUJOONG_REGISTRY:?MUJOONG_REGISTRY가 필요하다}/mujoong-fake-provider:${MUJOONG_TAG:?MUJOONG_TAG가 필요하다}
+    pull_policy: never
+    # 시나리오: 정상 턴 다음 금지 패턴 턴(C 9 · 10). 기록(JSON 줄)은 표준 출력 → `docker compose logs fake-provider`
+    command: ["--host", "0.0.0.0", "--port", "8090", "--scenario", "ok", "--turns", "normal,forbidden"]
+    init: true
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    ulimits:
+      core: 0
+    pids_limit: 256
+    restart: "no"
+    stop_grace_period: 10s
+    mem_limit: 256m
+    memswap_limit: 256m
+    networks:
+      backend: {}
+    tmpfs:
+      - /tmp:size=16m
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8090/healthz').then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
+volumes:
+  verify-pgdata: {}
+  verify-certbot-www: {}
