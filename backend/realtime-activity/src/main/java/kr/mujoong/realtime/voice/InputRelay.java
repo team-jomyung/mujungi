@@ -12,6 +12,7 @@ import java.util.concurrent.locks.ReentrantLock;
 import kr.mujoong.contract.audio.AudioFrameCodec;
 import kr.mujoong.contract.time.MujoongClock;
 import kr.mujoong.realtime.observability.RealtimeMetrics;
+import kr.mujoong.realtime.runtime.TaskLauncher;
 import kr.mujoong.realtime.voice.ProviderPort.ProviderSession;
 import kr.mujoong.realtime.voice.ProviderPort.ProviderUnavailableException;
 
@@ -70,6 +71,7 @@ public final class InputRelay {
     private long dropped;
     private long relayed;
     private Thread worker;
+    private boolean launching;
 
     public InputRelay(UUID sessionId, int capacity, ProviderRequestFactory factory, MujoongClock clock,
             RealtimeMetrics metrics) {
@@ -157,13 +159,25 @@ public final class InputRelay {
 
     /** 중계 가상 스레드를 띄운다. */
     public void start() {
+        start(TaskLauncher.virtualThreads());
+    }
+
+    /** 중계 작업을 띄운다(시험은 실행하지 않는 장치를 넣고 {@link #relayAvailable()}로 보낸다). */
+    public void start(TaskLauncher launcher) {
+        Objects.requireNonNull(launcher, "launcher");
         lock.lock();
         try {
-            if (worker != null || stopped) {
+            if (launching || worker != null || stopped) {
                 return;
             }
-            worker = Thread.ofVirtual().name("input-relay-" + sessionId).unstarted(this::loop);
-            worker.start();
+            launching = true;
+        } finally {
+            lock.unlock();
+        }
+        Thread thread = launcher.launch("input-relay-" + sessionId, this::loop);
+        lock.lock();
+        try {
+            worker = thread;
         } finally {
             lock.unlock();
         }

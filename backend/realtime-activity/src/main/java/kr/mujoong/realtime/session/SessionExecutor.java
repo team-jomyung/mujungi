@@ -1,0 +1,1119 @@
+package kr.mujoong.realtime.session;
+
+import java.time.Duration;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.EnumSet;
+import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Function;
+import kr.mujoong.contract.log.AttrKey;
+import kr.mujoong.contract.log.EventCode;
+import kr.mujoong.contract.log.EventLog;
+import kr.mujoong.contract.status.EndRequestReason;
+import kr.mujoong.contract.status.FailureCode;
+import kr.mujoong.contract.status.SessionStatus;
+import kr.mujoong.contract.time.MujoongClock;
+import kr.mujoong.contract.ws.message.CloseTransport;
+import kr.mujoong.contract.ws.message.OutputBegin;
+import kr.mujoong.contract.ws.message.PlayApprovedContent;
+import kr.mujoong.contract.ws.message.PlaybackMark;
+import kr.mujoong.contract.ws.message.SessionState;
+import kr.mujoong.contract.ws.message.StartSession;
+import kr.mujoong.contract.ws.message.StopOutput;
+import kr.mujoong.contract.ws.message.View;
+import kr.mujoong.realtime.config.RealtimeProperties;
+import kr.mujoong.realtime.gate.ApprovedPlayback;
+import kr.mujoong.realtime.gate.ClosingSequence;
+import kr.mujoong.realtime.gate.GateDecision;
+import kr.mujoong.realtime.gate.OutputGate;
+import kr.mujoong.realtime.gate.SegmentBuffer;
+import kr.mujoong.realtime.gateway.DeviceLink;
+import kr.mujoong.realtime.gateway.DeviceStatusPort;
+import kr.mujoong.realtime.gateway.OutputBundle;
+import kr.mujoong.realtime.log.AsyncRecorder;
+import kr.mujoong.realtime.log.LatencyRecorder;
+import kr.mujoong.realtime.log.TranscriptWriter;
+import kr.mujoong.realtime.observability.EventLogger;
+import kr.mujoong.realtime.observability.RealtimeMetrics;
+import kr.mujoong.realtime.runtime.TaskLauncher;
+import kr.mujoong.realtime.runtime.TimerClocks;
+import kr.mujoong.realtime.session.SessionMailbox.Bootstrap;
+import kr.mujoong.realtime.session.SessionMailbox.ConnectionLost;
+import kr.mujoong.realtime.session.SessionMailbox.DeviceAck;
+import kr.mujoong.realtime.session.SessionMailbox.DeviceReadyReceived;
+import kr.mujoong.realtime.session.SessionMailbox.EndOutcome;
+import kr.mujoong.realtime.session.SessionMailbox.EndRequested;
+import kr.mujoong.realtime.session.SessionMailbox.Message;
+import kr.mujoong.realtime.session.SessionMailbox.PlaybackMarkReceived;
+import kr.mujoong.realtime.session.SessionMailbox.ProviderConnected;
+import kr.mujoong.realtime.session.SessionMailbox.ProviderEventReceived;
+import kr.mujoong.realtime.session.SessionMailbox.ProviderFailed;
+import kr.mujoong.realtime.session.SessionMailbox.ServerShutdown;
+import kr.mujoong.realtime.session.SessionMailbox.TimerFired;
+import kr.mujoong.realtime.session.SessionMailbox.VoiceClosed;
+import kr.mujoong.realtime.session.SessionTimers.Kind;
+import kr.mujoong.realtime.session.TransitionTable.Trigger;
+import kr.mujoong.realtime.voice.InputRelay;
+import kr.mujoong.realtime.voice.ProviderConnector;
+import kr.mujoong.realtime.voice.ProviderPort.ProviderEvent;
+import kr.mujoong.realtime.voice.ProviderPort.ProviderSession;
+import kr.mujoong.realtime.voice.ProviderRequestFactory;
+import org.springframework.dao.DataAccessException;
+import org.springframework.transaction.TransactionException;
+
+/**
+ * 세션 하나의 직렬 실행기 (U1 3.5 Step 23 · PD-1 · PD-3 · BR6.6 ~ 6.12 · BR7.1 ~ 7.5 · SD-17 · RD-1 · RD-3 · R3-1 · R3-6 · R3-8 ·
+ * R3-19 · J54 · J126).
+ *
+ * <p>세션 상태 · 시계 · 구간 버퍼 · 게이트 판정은 이 실행기 한 스레드만 바꾼다(세션 안 잠금 없음). 반복마다 안전 편지함을 먼저 비운다. 전이는
+ * {@link SessionTransitions}의 짧은 트랜잭션이고 조건부 UPDATE의 승자만 부수 효과(기기 명령 · 시계)를 낸다. 시계 만기는 세대가 맞을 때만,
+ * 경과를 다시 재서(지연 재무장) 판정한다. 전이가 DB 장애로 실패하면 그 메시지를 {@code mujoong.session.timer-tick} 뒤 다시 처리한다.
+ * 그 밖의 예외가 반복 최상위까지 오면 APP_ERROR 한 줄을 남기고 FAILED(SERVER_RESTART)를 시도한 뒤 정리한다(J126). 출력 세대 번호는
+ * STOP_OUTPUT · CLOSING 진입 · 종료 전이 · Core 취소 · 연결 교체 · 끊김마다 오르고, 봉인한 구간과 송신 프레임마다 비교한다(SD-17).
+ */
+public final class SessionExecutor {
+
+    /** 세션 공통 설정(RealtimeProperties에서 읽는다). */
+    public record Settings(
+            Duration deviceAckTimeout,
+            Duration closingConfirm,
+            Duration disconnect,
+            Duration segmentQuiet,
+            Duration playbackExpiry,
+            Duration timerTick,
+            int inputQueueFrames,
+            int mailboxCapacity) {
+
+        public Settings {
+            Objects.requireNonNull(deviceAckTimeout, "deviceAckTimeout");
+            Objects.requireNonNull(closingConfirm, "closingConfirm");
+            Objects.requireNonNull(disconnect, "disconnect");
+            Objects.requireNonNull(segmentQuiet, "segmentQuiet");
+            Objects.requireNonNull(playbackExpiry, "playbackExpiry");
+            Objects.requireNonNull(timerTick, "timerTick");
+            if (inputQueueFrames <= 0 || mailboxCapacity <= 0) {
+                throw new IllegalArgumentException("대기열 상한은 0보다 커야 한다");
+            }
+        }
+
+        public static Settings from(RealtimeProperties properties) {
+            return new Settings(properties.timing().session().deviceAckTimeout(),
+                    properties.timing().session().closingConfirm(), properties.timing().device().disconnect(),
+                    properties.gate().segmentQuiet(), properties.timing().device().outputQueueMax(),
+                    properties.session().timerTick(), properties.limits().sessionInputQueueFrames(),
+                    properties.limits().sessionControlQueue());
+        }
+    }
+
+    /** 세션들이 함께 쓰는 장치. */
+    public record Services(
+            SessionTransitions transitions,
+            Function<UUID, Optional<? extends DeviceLink>> deviceLinks,
+            DeviceStatusPort deviceStatus,
+            ProviderConnector connector,
+            ProviderRequestFactory requests,
+            OutputGate gate,
+            AsyncRecorder recorder,
+            LatencyRecorder latency,
+            TimerClocks clocks,
+            TaskLauncher launcher,
+            EventLogger events,
+            RealtimeMetrics metrics,
+            MujoongClock clock,
+            Settings settings) {
+
+        public Services {
+            Objects.requireNonNull(transitions, "transitions");
+            Objects.requireNonNull(deviceLinks, "deviceLinks");
+            Objects.requireNonNull(deviceStatus, "deviceStatus");
+            Objects.requireNonNull(connector, "connector");
+            Objects.requireNonNull(requests, "requests");
+            Objects.requireNonNull(gate, "gate");
+            Objects.requireNonNull(recorder, "recorder");
+            Objects.requireNonNull(latency, "latency");
+            Objects.requireNonNull(clocks, "clocks");
+            Objects.requireNonNull(launcher, "launcher");
+            Objects.requireNonNull(events, "events");
+            Objects.requireNonNull(metrics, "metrics");
+            Objects.requireNonNull(clock, "clock");
+            Objects.requireNonNull(settings, "settings");
+        }
+    }
+
+    /** 고정한 승인 문구 하나(contentCode · 버전). */
+    public record ApprovedItem(String contentCode, UUID contentVersionId) {
+    }
+
+    /** 시작 명령이 고정한 세션 패키지 중 실행기가 쓰는 부분. */
+    public record Plan(
+            UUID sessionId,
+            UUID deviceId,
+            String traceId,
+            ChildContext childContext,
+            List<StartSession.ApprovedAudio> approvedAudio,
+            ApprovedItem closing,
+            ApprovedItem waitingFiller) {
+
+        public Plan {
+            Objects.requireNonNull(sessionId, "sessionId");
+            Objects.requireNonNull(deviceId, "deviceId");
+            Objects.requireNonNull(childContext, "childContext");
+            approvedAudio = List.copyOf(approvedAudio);
+        }
+
+        @Override
+        public String toString() {
+            return "Plan[sessionId=" + sessionId + "]";
+        }
+    }
+
+    private static final java.util.Set<SessionStatus> START_PHASE =
+            EnumSet.of(SessionStatus.PREPARING, SessionStatus.DEVICE_ACK);
+
+    private final Plan plan;
+    private final Services services;
+    private final SessionMailbox mailbox;
+    private final SessionTimers timers;
+    private final InputRelay relay;
+    private final SegmentBuffer segment = new SegmentBuffer();
+    private final ApprovedPlayback playback = new ApprovedPlayback();
+    private final ClosingSequence closing = new ClosingSequence();
+    private final TranscriptWriter transcripts;
+    private final AtomicLong outputGeneration = new AtomicLong();
+    private final List<Object> pendingRetry = new ArrayList<>();
+    private final Runnable onTerminated;
+
+    private volatile SessionStatus status = SessionStatus.PREPARING;
+    private volatile boolean terminated;
+    private DeviceLink link;
+    private UUID startOpId;
+    private Instant startAttemptAt;
+    private Instant closingAt;
+    private boolean startSent;
+    private boolean ackReceived;
+    private boolean deviceReady;
+    private boolean deviceUnavailable;
+    private boolean providerStarted;
+    private String providerSessionId;
+    private ProviderSession providerSession;
+    private ProviderConnector.Attempt providerAttempt;
+    private Thread thread;
+
+    /**
+     * @param onTerminated 종료 정리 뒤 레지스트리에서 지우는 함수
+     */
+    public SessionExecutor(Plan plan, Services services, SessionMailbox mailbox, Runnable onTerminated) {
+        this.plan = Objects.requireNonNull(plan, "plan");
+        this.services = Objects.requireNonNull(services, "services");
+        this.mailbox = Objects.requireNonNull(mailbox, "mailbox");
+        this.onTerminated = Objects.requireNonNull(onTerminated, "onTerminated");
+        this.timers = new SessionTimers(services.clocks(), mailbox::putSafety);
+        this.relay = new InputRelay(plan.sessionId(), services.settings().inputQueueFrames(), services.requests(),
+                services.clock(), services.metrics());
+        this.transcripts = new TranscriptWriter(plan.sessionId(), 0, services.recorder(), services.latency());
+    }
+
+    // ------------------------------------------------------------------ 실행
+
+    /** 첫 메시지(Bootstrap)를 안전 편지함 맨 앞 차례로 넣고 실행 스레드를 띄운다. */
+    public void start() {
+        mailbox.putSafety(new Bootstrap());
+        thread = services.launcher().launch("session-" + plan.sessionId(), this::run);
+    }
+
+    /** 첫 메시지만 넣는다(시험은 {@link #step()}으로 하나씩 처리한다). */
+    public void bootstrapOnly() {
+        mailbox.putSafety(new Bootstrap());
+    }
+
+    private void run() {
+        try {
+            while (!terminated) {
+                Message message = mailbox.take();
+                if (message == null) {
+                    break;
+                }
+                process(message);
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            if (!terminated) {
+                teardown();
+            }
+        }
+    }
+
+    /** 편지함에서 하나를 꺼내 처리한다(시험). 처리했으면 참. */
+    public boolean step() {
+        Message message = mailbox.poll();
+        if (message == null) {
+            return false;
+        }
+        process(message);
+        return true;
+    }
+
+    /** 편지함이 빌 때까지 처리한다(시험). 처리한 개수. */
+    public int drain() {
+        int count = 0;
+        while (!terminated && step()) {
+            count++;
+        }
+        return count;
+    }
+
+    /** 한 메시지를 처리한다. 최상위 예외 규약(R3-6 · J126)이 여기 있다. */
+    void process(Message message) {
+        if (terminated) {
+            return;
+        }
+        try {
+            handle(message);
+        } catch (DataAccessException | TransactionException e) {
+            services.events().appError(EventLog.Component.SESSION_LIFECYCLE, e);
+            scheduleRetry(message);
+        } catch (RuntimeException e) {
+            services.events().appError(EventLog.Component.SESSION_LIFECYCLE, e);
+            failFromTopLevel();
+        }
+    }
+
+    // ------------------------------------------------------------------ 외부 입구
+
+    /** 세션 편지함. */
+    public SessionMailbox mailbox() {
+        return mailbox;
+    }
+
+    public UUID sessionId() {
+        return plan.sessionId();
+    }
+
+    /** 지금 상태(실행기 사본). */
+    public SessionStatus status() {
+        return status;
+    }
+
+    /** 종료 정리를 마쳤는가. */
+    public boolean isTerminated() {
+        return terminated;
+    }
+
+    /** 실행 스레드(종료 대기 · 진단). 시험 장치로 띄웠으면 null. */
+    public Thread thread() {
+        return thread;
+    }
+
+    /** 지금 출력 세대(SD-17). */
+    public long outputGeneration() {
+        return outputGeneration.get();
+    }
+
+    /** 묶인 기기 연결 id(없으면 null). */
+    public UUID boundConnectionId() {
+        DeviceLink current = link;
+        return current == null ? null : current.connectionId();
+    }
+
+    /**
+     * 0x01 입력 프레임(WSS 수신 핸들러가 부른다, 기다리지 않는다). 묶인 연결의 프레임만 받고 수락 구간 밖이면 버린다(R3-8).
+     *
+     * @return 대기열에 넣었으면 참
+     */
+    public boolean offerAudio(UUID connectionId, long sequence, byte[] pcm, long receivedNanos) {
+        DeviceLink current = link;
+        if (terminated || current == null || !current.connectionId().equals(connectionId)) {
+            return false;
+        }
+        return relay.offer(sequence, pcm, receivedNanos);
+    }
+
+    /** 입력 중계(시험 · 진단). */
+    public InputRelay relay() {
+        return relay;
+    }
+
+    /** 시계(시험). */
+    SessionTimers timers() {
+        return timers;
+    }
+
+    // ------------------------------------------------------------------ 메시지 처리
+
+    private void handle(Message message) {
+        switch (message) {
+            case Bootstrap ignored -> onBootstrap();
+            case TimerFired fired -> onTimer(fired);
+            case EndRequested request -> onEndRequested(request);
+            case ConnectionLost lost -> onConnectionLost(lost);
+            case ServerShutdown ignored -> {
+                // 앱 종료 T3: 공급자 연결을 닫고 기록기를 비운다. 세션 행은 다음 기동 S3a가 닫는다(BR6.13)
+                closeProvider();
+                services.recorder().finish(plan.sessionId());
+            }
+            case DeviceAck ack -> onDeviceAck(ack);
+            case DeviceReadyReceived ready -> onDeviceReady(ready);
+            case PlaybackMarkReceived mark -> onPlaybackMark(mark);
+            case VoiceClosed closed -> onVoiceClosed(closed);
+            case ProviderConnected connected -> onProviderConnected(connected);
+            case ProviderFailed failed -> onProviderFailed(failed);
+            case ProviderEventReceived received -> onProviderEvent(received);
+        }
+    }
+
+    /** R3-1: START_SESSION을 먼저 보내고 그 시도 시각에 ②를 무장한 뒤 공급자 연결 스레드를 띄운다. */
+    private void onBootstrap() {
+        services.latency().register(plan.sessionId(), plan.traceId(),
+                LatencyRecorder.inputSide(relay::drainRelayInP95Millis, relay::lastVoiceFrameAt));
+        link = services.deviceLinks().apply(plan.deviceId()).filter(DeviceLink::isOpen).orElse(null);
+        startOpId = UUID.randomUUID();
+        startAttemptAt = services.clock().now();
+        boolean sent = false;
+        if (link != null) {
+            link.bindSession(plan.sessionId());
+            sent = link.sendControl(new StartSession(plan.approvedAudio()), startOpId, plan.sessionId());
+        }
+        if (!sent) {
+            // BR6.6 ⑤: 같은 처리 안에서 PREPARING → FAILED(DEVICE_NO_ACK) + UNRESPONSIVE
+            Optional<ActivitySessionRow> failed = transition(SessionStatus.PREPARING, Trigger.START_SEND_FAILED, null);
+            if (failed.isPresent()) {
+                markUnresponsive();
+                teardown();
+            } else {
+                syncFromDb();
+            }
+            return;
+        }
+        startSent = true;
+        timers.arm(Kind.DEVICE_ACK, services.settings().deviceAckTimeout());
+        providerAttempt = services.connector().connect(plan.sessionId(), plan.childContext(), event -> {
+            putFromProvider(new ProviderEventReceived(event, services.clock().now(), services.clock().monotonicNanos()));
+        }, new ProviderConnector.Callback() {
+            @Override
+            public void connected(ProviderSession session) {
+                if (!putFromProvider(new ProviderConnected(session))) {
+                    session.close();
+                }
+            }
+
+            @Override
+            public void failed(kr.mujoong.realtime.voice.ProviderPort.ProviderUnavailableException.Reason reason) {
+                putFromProvider(new ProviderFailed(reason));
+            }
+        });
+    }
+
+    private boolean putFromProvider(Message message) {
+        try {
+            return mailbox.putGeneral(message);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return false;
+        }
+    }
+
+    private void onDeviceAck(DeviceAck ack) {
+        if (!fromBoundConnection(ack.connectionId()) || !Objects.equals(ack.ackOf(), startOpId)) {
+            return;
+        }
+        if (status != SessionStatus.PREPARING) {
+            return;
+        }
+        Optional<ActivitySessionRow> row = transition(SessionStatus.PREPARING, Trigger.DEVICE_ACK, null);
+        if (row.isEmpty()) {
+            syncFromDb();
+            return;
+        }
+        ackReceived = true;
+        if (deviceUnavailable) {
+            failDeviceUnavailable();
+            return;
+        }
+        tryActivate();
+    }
+
+    private void onDeviceReady(DeviceReadyReceived ready) {
+        if (!fromBoundConnection(ready.connectionId()) || !START_PHASE.contains(status)) {
+            return;
+        }
+        if (!ready.ready().isReady()) {
+            deviceUnavailable = true;
+            if (status == SessionStatus.DEVICE_ACK) {
+                failDeviceUnavailable();
+            }
+            return;
+        }
+        deviceReady = true;
+        tryActivate();
+    }
+
+    private void failDeviceUnavailable() {
+        // BR6.8: DEVICE_READY가 사용 불가를 알리면 20초를 기다리지 않고 즉시 FAILED(DEVICE_NO_ACK), UNRESPONSIVE는 쓰지 않는다(J55)
+        Optional<ActivitySessionRow> row = transition(SessionStatus.DEVICE_ACK, Trigger.DEVICE_UNAVAILABLE, null);
+        if (row.isPresent()) {
+            afterFailed();
+        } else {
+            syncFromDb();
+        }
+    }
+
+    private void onProviderConnected(ProviderConnected connected) {
+        if (status.isTerminal() || (providerAttempt != null && providerAttempt.isCancelled())) {
+            connected.session().close();
+            return;
+        }
+        providerSession = connected.session();
+        relay.attach(providerSession);
+    }
+
+    private void onProviderFailed(ProviderFailed failed) {
+        if (!START_PHASE.contains(status)) {
+            return;
+        }
+        multiOriginFail(Trigger.PROVIDER_FAILED, FailureCode.PROVIDER_UNAVAILABLE, SessionTransitions.Origin.REALTIME);
+    }
+
+    private void tryActivate() {
+        if (status != SessionStatus.DEVICE_ACK || !deviceReady || !providerStarted) {
+            return;
+        }
+        Instant now = services.clock().now();
+        SessionChange change = SessionChange.none().withStartedAt(now);
+        if (providerSessionId != null && !providerSessionId.isBlank()
+                && providerSessionId.length() <= SessionChange.MAX_PROVIDER_SESSION_ID_LENGTH) {
+            change = change.withProviderSessionId(providerSessionId);
+        }
+        Optional<ActivitySessionRow> row = services.transitions().transition(plan.sessionId(), SessionStatus.DEVICE_ACK,
+                SessionStatus.ACTIVE, change, SessionTransitions.Origin.REALTIME, plan.traceId());
+        if (row.isEmpty()) {
+            syncFromDb();
+            return;
+        }
+        status = SessionStatus.ACTIVE;
+        timers.cancel(Kind.DEVICE_ACK);
+        relay.attach(providerSession);
+        relay.setAccepting(true);
+        relay.start(services.launcher());
+        sendControl(new SessionState(View.LISTENING));
+        armDisconnect();
+    }
+
+    private void onProviderEvent(ProviderEventReceived received) {
+        if (status.isTerminal()) {
+            return;
+        }
+        ProviderEvent event = received.event();
+        Instant at = received.receivedAt();
+        switch (event) {
+            case ProviderEvent.Started started -> {
+                if (START_PHASE.contains(status)) {
+                    providerStarted = true;
+                    providerSessionId = started.providerSessionId();
+                    tryActivate();
+                }
+            }
+            case ProviderEvent.Error ignored -> providerLost();
+            case ProviderEvent.Closed ignored -> providerLost();
+            case ProviderEvent.SpeechStopped ignored ->
+                services.latency().speechEnd(plan.sessionId(), LatencyRecorder.SpeechEndSource.PROVIDER_EVENT, at);
+            case ProviderEvent.InputTranscriptDelta delta -> {
+                if (inRelayRange()) {
+                    services.latency().inputActivity(plan.sessionId());
+                    // BR7.3: 아이 입력 재개는 열린 구간을 확정한다
+                    if (segment.isOpen()) {
+                        sealAndGate();
+                    }
+                    transcripts.childDelta(delta.itemId(), delta.delta(), at);
+                }
+            }
+            case ProviderEvent.InputTranscriptDone done -> {
+                if (inRelayRange()) {
+                    transcripts.childFinal(done.itemId(), done.transcript(), at);
+                }
+            }
+            case ProviderEvent.OutputTranscriptDelta delta -> {
+                if (inOutputRange()) {
+                    beginOutput(delta.responseId(), at);
+                    segment.addTranscript(delta.responseId(), delta.delta(), at, received.receivedNanos());
+                    timers.arm(Kind.SEGMENT_QUIET, services.settings().segmentQuiet());
+                }
+            }
+            case ProviderEvent.OutputAudioDelta delta -> {
+                if (inOutputRange()) {
+                    beginOutput(delta.responseId(), at);
+                    SegmentBuffer.Added added =
+                            segment.addAudio(delta.responseId(), delta.audio(), at, received.receivedNanos());
+                    if (added == SegmentBuffer.Added.OVERSIZE) {
+                        timers.cancel(Kind.SEGMENT_QUIET);
+                        SegmentBuffer.Sealed oversized = segment.takeOversized();
+                        discard(oversized, GateDecision.DiscardReason.SEGMENT_OVERSIZE);
+                    } else if (added == SegmentBuffer.Added.ADDED) {
+                        timers.arm(Kind.SEGMENT_QUIET, services.settings().segmentQuiet());
+                    }
+                }
+            }
+            case ProviderEvent.OutputDone done -> segment.responseDone(done.responseId());
+        }
+    }
+
+    /** 응답의 첫 출력 조각: t1을 찍고 AI 행 번호를 정해 확정 전 칸을 넣는다(PD-5 2.4). */
+    private void beginOutput(String responseId, Instant at) {
+        if (!segment.isOpen() && segment.accepts(responseId)) {
+            services.latency().providerFirstOut(plan.sessionId(), at);
+            transcripts.aiStart(at);
+        }
+    }
+
+    private void providerLost() {
+        if (START_PHASE.contains(status)) {
+            multiOriginFail(Trigger.PROVIDER_FAILED, FailureCode.PROVIDER_UNAVAILABLE, SessionTransitions.Origin.REALTIME);
+        } else {
+            // ACTIVE 뒤 공급자 끊김의 전이는 U3 범위다(BR6.8에 없음). WARN 한 줄만 남긴다(PD 2.1-C)
+            services.events().appError(EventLog.Component.VOICE_RELAY, "ProviderDisconnected", EventCode.Level.WARN);
+        }
+    }
+
+    // ------------------------------------------------------------------ 게이트
+
+    /** 구간 확정(조용 시간 만기 · 아이 입력 재개) → 검사 → 송신 직전 재확인 → 송신 또는 폐기(PD-3 표 2.3-C). */
+    private void sealAndGate() {
+        timers.cancel(Kind.SEGMENT_QUIET);
+        Instant confirmedAt = services.clock().now();
+        long confirmedNanos = services.clock().monotonicNanos();
+        SegmentBuffer.Sealed sealed = segment.seal(outputGeneration.get());
+        if (sealed == null) {
+            return;
+        }
+        services.latency().segmentConfirmed(plan.sessionId(), confirmedAt, confirmedNanos, sealed.firstOutNanos(),
+                sealed.lastOutNanos());
+        try {
+            GateDecision inspected = services.gate().inspect(sealed);
+            if (!inspected.passed()) {
+                discard(sealed, inspected.reason());
+                return;
+            }
+            DeviceLink target = link;
+            boolean activeAndCurrent = status == SessionStatus.ACTIVE && sealed.generation() == outputGeneration.get()
+                    && target != null && target.isOpen();
+            OutputGate.Rechecked<DeviceLink.AudioReservation> rechecked = services.gate().recheck(activeAndCurrent,
+                    services.recorder().isDegraded(plan.sessionId()),
+                    () -> target == null ? Optional.empty() : target.reserveAudio(sealed.totalBytes()));
+            if (!rechecked.decision().passed()) {
+                discard(sealed, rechecked.decision().reason());
+                return;
+            }
+            send(sealed, target, rechecked.reservation());
+        } catch (RuntimeException e) {
+            // 게이트 처리 중 예외는 폐기한다(fail-closed, SD-17)
+            services.events().appError(EventLog.Component.OUTPUT_GATE, e);
+            if (transcripts.hasOpenAi()) {
+                discard(sealed, GateDecision.DiscardReason.GATE_EMPTY);
+            }
+        }
+    }
+
+    private void send(SegmentBuffer.Sealed sealed, DeviceLink target, DeviceLink.AudioReservation reservation) {
+        Instant passAt = services.clock().now();
+        UUID playbackId = UUID.randomUUID();
+        services.latency().gatePassed(plan.sessionId(), playbackId, passAt);
+        transcripts.aiFinal(sealed.transcript(), true, passAt);
+        long generation = sealed.generation();
+        OutputBundle bundle = new OutputBundle(plan.sessionId(), playbackId, OutputBegin.Source.GPT_LIVE,
+                OutputBundle.frame(sealed.chunks()), sealed.totalMs(), reservation,
+                () -> outputGeneration.get() == generation,
+                firstFrameAt -> services.latency().firstFrameSent(plan.sessionId(), playbackId, firstFrameAt));
+        if (!target.sendOutput(bundle)) {
+            services.metrics().gateDiscard(GateDecision.DiscardReason.OUTBOUND_FULL.name());
+        }
+    }
+
+    /** 폐기: AI 행 FINAL · false(BR6.15), 그다음 대체 문구 판정(겹침 규칙 R3-19). */
+    private void discard(SegmentBuffer.Sealed sealed, GateDecision.DiscardReason reason) {
+        services.metrics().gateDiscard(reason.name());
+        services.latency().gateDiscarded(plan.sessionId());
+        transcripts.aiFinal(sealed == null ? "" : sealed.transcript(), false, services.clock().now());
+        if (status != SessionStatus.ACTIVE || playback.isPlaying() || plan.waitingFiller() == null) {
+            return;
+        }
+        UUID playbackId = UUID.randomUUID();
+        if (sendControl(new PlayApprovedContent(playbackId, PlayApprovedContent.WAITING_FILLER,
+                plan.waitingFiller().contentVersionId()))) {
+            playback.started(playbackId, PlayApprovedContent.WAITING_FILLER);
+            timers.arm(Kind.PLAYBACK_EXPIRY, services.settings().playbackExpiry());
+        }
+    }
+
+    private boolean inRelayRange() {
+        return status == SessionStatus.ACTIVE
+                || (status == SessionStatus.CLOSING && closing.step() != ClosingSequence.Step.TRANSPORT_CLOSED);
+    }
+
+    private boolean inOutputRange() {
+        return status == SessionStatus.ACTIVE || status == SessionStatus.CLOSING;
+    }
+
+    // ------------------------------------------------------------------ 기기 표식 · 끝내기
+
+    private void onPlaybackMark(PlaybackMarkReceived received) {
+        if (status.isTerminal() || !fromBoundConnection(received.connectionId())) {
+            return;
+        }
+        PlaybackMark mark = received.mark();
+        DeviceLink current = link;
+        switch (mark.status()) {
+            case STARTED -> services.latency().playbackStarted(plan.sessionId(), mark.playbackId(), mark.observedAt(),
+                    received.serverRecvAt(), current == null ? null : current.clockOffsetMs(),
+                    current == null ? null : current.rttMs());
+            case COMPLETED, STOPPED, FAILED -> {
+                if (mark.status() == PlaybackMark.Status.STOPPED) {
+                    logStopped(mark, received.serverRecvAt(), current);
+                }
+                if (playback.clearIfMatches(mark.playbackId())) {
+                    timers.cancel(Kind.PLAYBACK_EXPIRY);
+                }
+                if (status == SessionStatus.CLOSING && closing.onPlaybackMark(closingDevice(), mark.playbackId(),
+                        mark.status())) {
+                    // R3-8: CLOSE_TRANSPORT 송신까지만 입력을 중계한다
+                    relay.setAccepting(false);
+                    annotateQuietly(SessionStatus.CLOSING,
+                            SessionChange.none().withTransportClosedAt(services.clock().now()));
+                }
+            }
+            default -> {
+                // PROGRESS · UNRECOGNIZED는 판단에 쓰지 않는다(J123)
+            }
+        }
+    }
+
+    private void logStopped(PlaybackMark mark, Instant serverRecvAt, DeviceLink current) {
+        services.events().log(EventCode.PLAYBACK_MARK_STOPPED, EventLog.Component.SESSION_LIFECYCLE, plan.sessionId(),
+                plan.traceId(), entry -> {
+                    entry.attr(AttrKey.STOP_CAUSE, mark.stopCause()).attr(AttrKey.T_DEVICE_OBSERVED, mark.observedAt())
+                            .attr(AttrKey.T_SERVER_RECV, serverRecvAt);
+                    if (current != null && current.clockOffsetMs() != null) {
+                        entry.attr(AttrKey.CLOCK_OFFSET_MS, current.clockOffsetMs().longValue());
+                    }
+                    if (current != null && current.rttMs() != null) {
+                        entry.attr(AttrKey.RTT_MS, current.rttMs().longValue());
+                    }
+                });
+    }
+
+    private void onVoiceClosed(VoiceClosed closed) {
+        if (status != SessionStatus.CLOSING || !fromBoundConnection(closed.connectionId())) {
+            return;
+        }
+        Instant now = services.clock().now();
+        closeProvider();
+        SessionChange change = TransitionTable.changeFor(Trigger.VOICE_CLOSED, null, now).withProviderClosedAt(now)
+                .withOutputStoppedAt(closed.closed().outputStoppedAt());
+        Optional<ActivitySessionRow> row = services.transitions().transition(plan.sessionId(), SessionStatus.CLOSING,
+                SessionStatus.ENDED, change, SessionTransitions.Origin.REALTIME, plan.traceId());
+        if (row.isEmpty()) {
+            syncFromDb();
+            return;
+        }
+        status = SessionStatus.ENDED;
+        bumpGeneration();
+        sendControl(new SessionState(View.STANDBY));
+        teardown();
+    }
+
+    private void onEndRequested(EndRequested request) {
+        EndOutcome outcome = switch (request.reason()) {
+            case GUARDIAN_STOP -> guardianStop(request.requestId());
+            case CORE_ABANDONED -> coreAbandoned();
+            default -> EndOutcome.UNSUPPORTED;
+        };
+        request.result().complete(outcome);
+    }
+
+    /** J54 응답표: ACTIVE → CLOSING(첫 수락), CLOSING → 같은 답(재처리 없음), 그 밖 → 409. */
+    private EndOutcome guardianStop(UUID requestId) {
+        if (status == SessionStatus.CLOSING) {
+            return EndOutcome.CLOSING;
+        }
+        if (status != SessionStatus.ACTIVE) {
+            return EndOutcome.NOT_ACTIVE;
+        }
+        Instant now = services.clock().now();
+        Optional<ActivitySessionRow> row = services.transitions().transition(plan.sessionId(), SessionStatus.ACTIVE,
+                SessionStatus.CLOSING, SessionChange.none().withTerminationRequestedAt(now),
+                SessionTransitions.Origin.REALTIME, plan.traceId());
+        if (row.isEmpty()) {
+            syncFromDb();
+            return status == SessionStatus.CLOSING ? EndOutcome.CLOSING : EndOutcome.NOT_ACTIVE;
+        }
+        status = SessionStatus.CLOSING;
+        closingAt = now;
+        services.recorder().putEvent(new SessionEvent(UUID.randomUUID(), plan.sessionId(), "END_REQUESTED",
+                requestId == null ? null : requestId.toString(), null, now));
+        // BR6.10 ①: 서버 쪽 출력 버퍼 취소 → STOP_OUTPUT + SESSION_STATE{CLOSING} → ② 마무리 문구 1회
+        bumpGeneration();
+        timers.cancel(Kind.SEGMENT_QUIET);
+        timers.cancel(Kind.DISCONNECT);
+        timers.cancel(Kind.PLAYBACK_EXPIRY);
+        segment.reset();
+        transcripts.aiFinal("", false, now);
+        closing.begin(closingDevice(), plan.closing() == null ? null : plan.closing().contentVersionId(), playback,
+                UUID::randomUUID);
+        timers.arm(Kind.CLOSING_CONFIRM, services.settings().closingConfirm());
+        return EndOutcome.CLOSING;
+    }
+
+    /** BR6.7 (나) ~ (라): PREPARING · DEVICE_ACK · ACTIVE → FAILED(실패 코드 없음), CLOSING · 종료는 그대로 202 {}. */
+    private EndOutcome coreAbandoned() {
+        if (status == SessionStatus.CLOSING || status.isTerminal()) {
+            return EndOutcome.ACCEPTED_EMPTY;
+        }
+        multiOriginFail(Trigger.CORE_ABANDONED, null, SessionTransitions.Origin.CORE_ABANDONED);
+        return EndOutcome.ACCEPTED_EMPTY;
+    }
+
+    private void onConnectionLost(ConnectionLost lost) {
+        if (!fromBoundConnection(lost.connectionId())) {
+            return;
+        }
+        // SD-17: 연결 교체 · 끊김마다 세대를 올린다. 세션 전이는 ④ 시계(ACTIVE) · ② · ③ 시한이 정한다
+        bumpGeneration();
+        playback.clear();
+        timers.cancel(Kind.PLAYBACK_EXPIRY);
+    }
+
+    // ------------------------------------------------------------------ 시계
+
+    private void onTimer(TimerFired fired) {
+        if (!timers.consume(fired)) {
+            return;
+        }
+        runTimer(fired.kind());
+    }
+
+    private void runTimer(Kind kind) {
+        switch (kind) {
+            case DEVICE_ACK -> onStartTimeout();
+            case CLOSING_CONFIRM -> onClosingTimeout();
+            case DISCONNECT -> onDisconnectCheck();
+            case SEGMENT_QUIET -> {
+                if (inOutputRange()) {
+                    sealAndGate();
+                }
+            }
+            case PLAYBACK_EXPIRY -> playback.clear();
+            case REDELIVER -> redeliver();
+        }
+    }
+
+    /** BR6.12 ②: 송신 시도 시각부터 20초. ACK · READY 빠짐 → DEVICE_NO_ACK + UNRESPONSIVE, 아니면 PROVIDER_UNAVAILABLE(J59 (h)). */
+    private void onStartTimeout() {
+        if (!START_PHASE.contains(status)) {
+            return;
+        }
+        Duration threshold = services.settings().deviceAckTimeout();
+        Duration elapsed = Duration.between(startAttemptAt, services.clock().now());
+        if (elapsed.compareTo(threshold) < 0) {
+            timers.arm(Kind.DEVICE_ACK, threshold.minus(elapsed));
+            return;
+        }
+        FailureCode code = TransitionTable.startTimeoutCode(ackReceived, deviceReady);
+        ActivitySessionRepository.MultiOriginTransition result = services.transitions().transitionFromAny(
+                plan.sessionId(), Trigger.START_TIMEOUT.origins(), SessionStatus.FAILED,
+                read -> TransitionTable.changeFor(Trigger.START_TIMEOUT, code, services.clock().now()),
+                SessionTransitions.Origin.REALTIME, plan.traceId());
+        if (!result.transitioned()) {
+            syncFromDb();
+            return;
+        }
+        status = SessionStatus.FAILED;
+        timeoutFired("DEVICE_ACK", threshold, elapsed);
+        if (code == FailureCode.DEVICE_NO_ACK) {
+            markUnresponsive();
+        }
+        afterFailed();
+    }
+
+    /** BR6.12 ③: CLOSING 진입부터 30초. ENDED_UNCONFIRMED + UNRESPONSIVE. */
+    private void onClosingTimeout() {
+        if (status != SessionStatus.CLOSING) {
+            return;
+        }
+        Duration threshold = services.settings().closingConfirm();
+        Duration elapsed = Duration.between(closingAt, services.clock().now());
+        if (elapsed.compareTo(threshold) < 0) {
+            timers.arm(Kind.CLOSING_CONFIRM, threshold.minus(elapsed));
+            return;
+        }
+        Instant now = services.clock().now();
+        closeProvider();
+        Optional<ActivitySessionRow> row = services.transitions().transition(plan.sessionId(), SessionStatus.CLOSING,
+                SessionStatus.ENDED_UNCONFIRMED,
+                TransitionTable.changeFor(Trigger.CLOSING_TIMEOUT, null, now).withProviderClosedAt(now),
+                SessionTransitions.Origin.REALTIME, plan.traceId());
+        if (row.isEmpty()) {
+            syncFromDb();
+            return;
+        }
+        status = SessionStatus.ENDED_UNCONFIRMED;
+        timeoutFired("CLOSING_CONFIRM", threshold, elapsed);
+        markUnresponsive();
+        bumpGeneration();
+        sendControl(new SessionState(View.STANDBY));
+        teardown();
+    }
+
+    /** BR6.12 ④: 묶인 연결의 마지막 기기 메시지부터 40초. 메시지마다 다시 걸지 않고 만기 때 남은 시간으로 다시 건다. */
+    private void onDisconnectCheck() {
+        if (status != SessionStatus.ACTIVE) {
+            return;
+        }
+        Duration threshold = services.settings().disconnect();
+        Instant last = link == null ? startAttemptAt : link.lastMessageAt();
+        Duration elapsed = Duration.between(last, services.clock().now());
+        if (elapsed.compareTo(threshold) < 0) {
+            timers.arm(Kind.DISCONNECT, threshold.minus(elapsed));
+            return;
+        }
+        Instant now = services.clock().now();
+        closeProvider();
+        Optional<ActivitySessionRow> row = services.transitions().transition(plan.sessionId(), SessionStatus.ACTIVE,
+                SessionStatus.ABORTED, TransitionTable.changeFor(Trigger.DISCONNECT, null, now).withProviderClosedAt(now),
+                SessionTransitions.Origin.REALTIME, plan.traceId());
+        if (row.isEmpty()) {
+            syncFromDb();
+            return;
+        }
+        status = SessionStatus.ABORTED;
+        timeoutFired("DISCONNECT", threshold, elapsed);
+        teardown();
+    }
+
+    private void armDisconnect() {
+        Duration threshold = services.settings().disconnect();
+        Instant last = link == null ? services.clock().now() : link.lastMessageAt();
+        Duration elapsed = Duration.between(last, services.clock().now());
+        timers.arm(Kind.DISCONNECT, elapsed.isNegative() ? threshold : threshold.minus(elapsed));
+    }
+
+    private void timeoutFired(String type, Duration threshold, Duration elapsed) {
+        services.metrics().timeoutFired(type);
+        services.events().log(EventCode.TIMEOUT_FIRED, EventLog.Component.SESSION_LIFECYCLE, plan.sessionId(),
+                plan.traceId(), entry -> entry.attr(AttrKey.TYPE, type).attr(AttrKey.THRESHOLD_MS, threshold.toMillis())
+                        .attr(AttrKey.ELAPSED_MS, Math.max(0L, elapsed.toMillis())));
+    }
+
+    // ------------------------------------------------------------------ 재전달 · 최상위 예외
+
+    private void scheduleRetry(Message message) {
+        if (message instanceof TimerFired fired) {
+            pendingRetry.add(fired.kind());
+        } else {
+            pendingRetry.add(message);
+        }
+        timers.arm(Kind.REDELIVER, services.settings().timerTick());
+    }
+
+    private void redeliver() {
+        List<Object> retry = new ArrayList<>(pendingRetry);
+        pendingRetry.clear();
+        for (Object item : retry) {
+            if (terminated) {
+                return;
+            }
+            try {
+                if (item instanceof Kind kind) {
+                    runTimer(kind);
+                } else {
+                    handle((Message) item);
+                }
+            } catch (DataAccessException | TransactionException e) {
+                services.events().appError(EventLog.Component.SESSION_LIFECYCLE, e);
+                pendingRetry.add(item);
+            }
+        }
+        if (!pendingRetry.isEmpty()) {
+            timers.arm(Kind.REDELIVER, services.settings().timerTick());
+        }
+    }
+
+    /** R3-6 · J126: 최상위 예외 → FAILED(SERVER_RESTART) 시도 → 정리. 전이가 실패하면 고아 세션 점검이 닫는다. */
+    private void failFromTopLevel() {
+        try {
+            if (!status.isTerminal()) {
+                ActivitySessionRepository.MultiOriginTransition result = services.transitions().transitionFromAny(
+                        plan.sessionId(), Trigger.SERVER_RESTART.origins(), SessionStatus.FAILED,
+                        read -> TransitionTable.changeFor(Trigger.SERVER_RESTART, null, services.clock().now()),
+                        SessionTransitions.Origin.REALTIME, plan.traceId());
+                if (result.transitioned()) {
+                    status = SessionStatus.FAILED;
+                }
+            }
+        } catch (RuntimeException e) {
+            services.events().appError(EventLog.Component.SESSION_LIFECYCLE, e);
+        } finally {
+            teardown();
+        }
+    }
+
+    // ------------------------------------------------------------------ 전이 보조
+
+    private Optional<ActivitySessionRow> transition(SessionStatus from, Trigger trigger, FailureCode code) {
+        Optional<ActivitySessionRow> row = services.transitions().transition(plan.sessionId(), from, trigger.target(),
+                TransitionTable.changeFor(trigger, code, services.clock().now()), SessionTransitions.Origin.REALTIME,
+                plan.traceId());
+        row.ifPresent(value -> status = value.status());
+        return row;
+    }
+
+    /** 출발 상태가 둘 이상인 → FAILED(FOR UPDATE로 읽은 상태). 이기면 CLOSE_TRANSPORT(FAILED) 규칙과 정리를 한다. */
+    private void multiOriginFail(Trigger trigger, FailureCode code, SessionTransitions.Origin origin) {
+        ActivitySessionRepository.MultiOriginTransition result = services.transitions().transitionFromAny(
+                plan.sessionId(), trigger.origins(), SessionStatus.FAILED,
+                read -> TransitionTable.changeFor(trigger, code, services.clock().now()), origin, plan.traceId());
+        if (!result.transitioned()) {
+            syncFromDb();
+            return;
+        }
+        status = SessionStatus.FAILED;
+        afterFailed();
+    }
+
+    /** BR6.8: FAILED로 갈 때 START_SESSION이 나갔고 연결이 살아 있으면 CLOSE_TRANSPORT(FAILED) + SESSION_STATE{STANDBY}. */
+    private void afterFailed() {
+        status = SessionStatus.FAILED;
+        bumpGeneration();
+        if (startSent && link != null && link.isOpen()) {
+            sendControl(new CloseTransport(CloseTransport.Reason.FAILED));
+            sendControl(new SessionState(View.STANDBY));
+        }
+        teardown();
+    }
+
+    /** 진 전이 뒤 DB의 지금 상태로 맞춘다. 종료 상태면 정리한다. */
+    private void syncFromDb() {
+        Optional<ActivitySessionRow> row = services.transitions().find(plan.sessionId());
+        if (row.isEmpty()) {
+            teardown();
+            return;
+        }
+        status = row.get().status();
+        if (status.isTerminal()) {
+            teardown();
+        }
+    }
+
+    private void annotateQuietly(SessionStatus expected, SessionChange change) {
+        try {
+            services.transitions().annotate(plan.sessionId(), expected, change);
+        } catch (RuntimeException e) {
+            services.events().appError(EventLog.Component.SESSION_LIFECYCLE, e);
+        }
+    }
+
+    private void markUnresponsive() {
+        DeviceLink current = link;
+        if (current != null) {
+            services.deviceStatus().markUnresponsive(plan.deviceId(), current.connectionId());
+        }
+    }
+
+    private boolean fromBoundConnection(UUID connectionId) {
+        DeviceLink current = link;
+        return current != null && current.connectionId().equals(connectionId);
+    }
+
+    private boolean sendControl(kr.mujoong.contract.ws.WsPayload payload) {
+        DeviceLink current = link;
+        if (current == null || !current.isOpen()) {
+            return false;
+        }
+        if (payload instanceof StopOutput) {
+            bumpGeneration();
+        }
+        return current.sendControl(payload, null, plan.sessionId());
+    }
+
+    private ClosingSequence.Device closingDevice() {
+        return new ClosingSequence.Device() {
+            @Override
+            public boolean stopOutput(StopOutput.Reason reason) {
+                return sendControl(new StopOutput(reason));
+            }
+
+            @Override
+            public boolean sessionState(View view) {
+                return sendControl(new SessionState(view));
+            }
+
+            @Override
+            public boolean playApproved(UUID playbackId, String contentCode, UUID contentVersionId) {
+                return sendControl(new PlayApprovedContent(playbackId, contentCode, contentVersionId));
+            }
+
+            @Override
+            public boolean closeTransport(CloseTransport.Reason reason) {
+                return sendControl(new CloseTransport(reason));
+            }
+        };
+    }
+
+    private void bumpGeneration() {
+        outputGeneration.incrementAndGet();
+        DeviceLink current = link;
+        if (current != null) {
+            current.clearAudio();
+        }
+    }
+
+    private void closeProvider() {
+        ProviderConnector.Attempt attempt = providerAttempt;
+        if (attempt != null) {
+            attempt.cancel();
+        }
+        ProviderSession session = providerSession;
+        if (session != null && session.isOpen()) {
+            session.close(services.requests().sessionClose());
+        }
+    }
+
+    /** 종료 정리(PD-1 생명주기 3): 입력 수락 끝 · 공급자 정리 · 구간 버림 · 열린 행 닫기 · 기록기 마지막 플러시 · 레지스트리 제거. */
+    private void teardown() {
+        if (terminated) {
+            return;
+        }
+        terminated = true;
+        outputGeneration.incrementAndGet();
+        Instant now = services.clock().now();
+        try {
+            timers.cancelAll();
+            relay.stop();
+            closeProvider();
+            ProviderSession session = providerSession;
+            if (session != null) {
+                session.close();
+            }
+            segment.reset();
+            playback.clear();
+            transcripts.closeAll(now);
+            services.latency().sessionEnded(plan.sessionId());
+            services.recorder().finish(plan.sessionId());
+            DeviceLink current = link;
+            if (current != null) {
+                current.bindSession(null);
+            }
+        } catch (RuntimeException e) {
+            services.events().appError(EventLog.Component.SESSION_LIFECYCLE, e);
+        } finally {
+            mailbox.closeAndRelease();
+            onTerminated.run();
+        }
+    }
+
+    @Override
+    public String toString() {
+        return "SessionExecutor[sessionId=" + plan.sessionId() + ", status=" + status + "]";
+    }
+}

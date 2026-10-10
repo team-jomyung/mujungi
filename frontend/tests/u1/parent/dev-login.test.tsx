@@ -73,4 +73,39 @@ describe("시험 로그인 — 거절", () => {
     fireEvent.click(screen.getByTestId("dev-login-submit"));
     await waitFor(() => expect(screen.getByTestId("dev-login-error")).toHaveTextContent("잠시 문제가 생겼어요. 다시 시도해 주세요."));
   });
+
+  it("오류 뒤 다시 누르면 앞 오류 문구를 지우고, 성공하면 04로 간다", async () => {
+    let calls = 0;
+    const second = deferred<Response>();
+    const harness = renderParent(<DevLogin />, {
+      handler: () => {
+        calls += 1;
+        return calls === 1 ? errorResponse(503, "SERVICE_NOT_READY") : second.promise;
+      },
+    });
+    fireEvent.click(screen.getByTestId("dev-login-submit"));
+    expect(await screen.findByTestId("dev-login-error")).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("dev-login-submit"));
+    // 두 번째 요청이 진행 중일 때 앞 실패의 문구가 남아 있지 않다.
+    expect(screen.queryByTestId("dev-login-error")).toBeNull();
+    second.resolve(jsonResponse(200, GUARDIAN));
+    await waitFor(() => expect(router.replace).toHaveBeenCalledWith("/parent"));
+    expect(harness.requests("/api/dev/login")).toHaveLength(2);
+  });
+
+  it("로그인 직후 CSRF 다시 받기가 실패해도 04로 간다(SD-6 단계 1, 다음 변경 요청 앞에서 다시 받음)", async () => {
+    let csrfCalls = 0;
+    const harness = renderParent(<DevLogin />, {
+      handler: () => jsonResponse(200, GUARDIAN),
+      csrfHandler: () => {
+        csrfCalls += 1;
+        return csrfCalls === 1 ? jsonResponse(200, { token: "t-first", headerName: "X-CSRF-TOKEN" }) : errorResponse(503, "SERVICE_NOT_READY");
+      },
+    });
+    await waitFor(() => expect(harness.requests("/api/session/csrf")).toHaveLength(1));
+    fireEvent.click(screen.getByTestId("dev-login-submit"));
+    await waitFor(() => expect(router.replace).toHaveBeenCalledWith("/parent"));
+    expect(harness.requests("/api/session/csrf")).toHaveLength(2);
+    expect(screen.queryByTestId("dev-login-error")).toBeNull();
+  });
 });

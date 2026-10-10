@@ -22,6 +22,7 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.boot.transaction.autoconfigure.TransactionAutoConfiguration;
 import org.springframework.context.annotation.ComponentScan;
+import org.springframework.context.annotation.FilterType;
 import org.springframework.context.annotation.Import;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 
@@ -57,7 +58,7 @@ public final class CoreBusinessContext {
     }
 
     /**
-     * 업무 패키지 스캔(기동 순서 · 웹 계층 제외). {@code @TestConfiguration}이라 뒤 단계의 {@code @SpringBootTest}가 앱 패키지를 스캔해도
+     * 업무 패키지 스캔(기동 순서 · 웹 계층 제외: 하위 {@code *.web} 패키지의 컨트롤러는 Step 31 · 32 보안 · 쿠키 빈이 있어야 해 뺀다). {@code @TestConfiguration}이라 뒤 단계의 {@code @SpringBootTest}가 앱 패키지를 스캔해도
      * 이 설정을 집어 가지 않는다(TestTypeExcludeFilter).
      */
     @TestConfiguration(proxyBeanMethods = false)
@@ -71,7 +72,7 @@ public final class CoreBusinessContext {
         "kr.mujoong.core.health",
         "kr.mujoong.core.observability",
         "kr.mujoong.core.security.ratelimit"
-    })
+    }, excludeFilters = @ComponentScan.Filter(type = FilterType.REGEX, pattern = "kr\\.mujoong\\.core\\..*\\.web\\..*"))
     @Import({
         CorePropertiesConfig.class,
         CoreRuntimeConfig.class,

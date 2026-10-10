@@ -2,6 +2,7 @@ import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { fireEvent, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { metadata as rootMetadata } from "@/app/layout";
 import { flush, registeredDeviceApi, renderDeviceApp } from "../support/deviceHarness";
 import { codeOf, frontendRoot, relative, sourceFiles } from "../support/sourceScan";
 
@@ -34,6 +35,14 @@ describe("서비스 워커 · PWA 정적 검사", () => {
     };
     const names = [...Object.keys(packageJson.dependencies ?? {}), ...Object.keys(packageJson.devDependencies ?? {})];
     expect(names.filter((name) => /pwa|workbox|service-worker/i.test(name))).toEqual([]);
+  });
+
+  it("루트 레이아웃 메타데이터가 웹 앱 매니페스트 · 홈 화면 앱 설정을 내지 않는다", () => {
+    // Next.js는 metadata.manifest · appleWebApp으로 <link rel="manifest"> · apple-mobile-web-app-* 태그를 만든다.
+    expect(rootMetadata).not.toHaveProperty("manifest");
+    expect(rootMetadata).not.toHaveProperty("appleWebApp");
+    const layoutCode = codeOf(path.join(frontendRoot, "src/app/layout.tsx"));
+    expect(layoutCode).not.toMatch(/rel=["']manifest["']|apple-mobile-web-app/);
   });
 });
 

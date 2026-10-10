@@ -5,6 +5,7 @@ import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import kr.mujoong.realtime.config.RealtimeProperties;
+import kr.mujoong.realtime.runtime.TaskLauncher;
 import kr.mujoong.realtime.session.ChildContext;
 import kr.mujoong.realtime.voice.ProviderPort.Listener;
 import kr.mujoong.realtime.voice.ProviderPort.ProviderSession;
@@ -65,19 +66,21 @@ public class ProviderConnector {
     private final ProviderPort port;
     private final ProviderRequestFactory factory;
     private final Duration connectTimeout;
+    private final TaskLauncher launcher;
     private final String[] activeProfiles;
 
     @Autowired
     public ProviderConnector(ProviderPort port, ProviderRequestFactory factory, RealtimeProperties properties,
-            Environment environment) {
-        this(port, factory, properties.provider().connectTimeout(), environment.getActiveProfiles());
+            Environment environment, TaskLauncher launcher) {
+        this(port, factory, properties.provider().connectTimeout(), launcher, environment.getActiveProfiles());
     }
 
     public ProviderConnector(ProviderPort port, ProviderRequestFactory factory, Duration connectTimeout,
-            String... activeProfiles) {
+            TaskLauncher launcher, String... activeProfiles) {
         this.port = Objects.requireNonNull(port, "port");
         this.factory = Objects.requireNonNull(factory, "factory");
         this.connectTimeout = Objects.requireNonNull(connectTimeout, "connectTimeout");
+        this.launcher = Objects.requireNonNull(launcher, "launcher");
         this.activeProfiles = activeProfiles.clone();
     }
 
@@ -88,9 +91,11 @@ public class ProviderConnector {
         Objects.requireNonNull(listener, "listener");
         Objects.requireNonNull(callback, "callback");
         Attempt attempt = new Attempt();
-        attempt.thread = Thread.ofVirtual().name("provider-connect-" + sessionId)
-                .unstarted(() -> run(attempt, childContext, listener, callback));
-        attempt.thread.start();
+        attempt.thread = launcher.launch("provider-connect-" + sessionId,
+                () -> run(attempt, childContext, listener, callback));
+        if (attempt.isCancelled() && attempt.thread != null) {
+            attempt.thread.interrupt();
+        }
         return attempt;
     }
 

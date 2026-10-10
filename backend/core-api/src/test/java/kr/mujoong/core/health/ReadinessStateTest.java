@@ -1,7 +1,6 @@
 package kr.mujoong.core.health;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -102,6 +101,5 @@ class ReadinessStateTest {
         assertThat(checker.runOnce()).isEqualTo(State.READY);
         assertThat(events.capture().events(EventCode.APP_ERROR)).hasSize(1);
         assertThat(events.capture().anyLineContains("secret-host")).isFalse();
-        assertThat(any(Object.class)).isNull();
     }
 }

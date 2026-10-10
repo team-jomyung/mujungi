@@ -1,0 +1,444 @@
+package kr.mujoong.realtime.web;
+
+import static kr.mujoong.realtime.testing.RealtimeItEnvironment.ORIGIN;
+import static kr.mujoong.realtime.testing.RealtimeItEnvironment.WAIT;
+import static kr.mujoong.realtime.testing.RealtimeItEnvironment.awaitTrue;
+import static org.assertj.core.api.Assertions.assertThat;
+
+import java.net.http.WebSocketHandshakeException;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import kr.mujoong.contract.json.JsonCodec;
+import kr.mujoong.contract.log.EventCode;
+import kr.mujoong.contract.status.ConnectionState;
+import kr.mujoong.contract.status.SessionStatus;
+import kr.mujoong.contract.time.MujoongClock;
+import kr.mujoong.contract.ws.CloseCode;
+import kr.mujoong.contract.ws.WsEnvelope;
+import kr.mujoong.contract.ws.WsMessageType;
+import kr.mujoong.contract.ws.message.HeartbeatAck;
+import kr.mujoong.contract.ws.message.HelloOk;
+import kr.mujoong.contract.ws.message.OutputBegin;
+import kr.mujoong.contract.ws.message.PlaybackMark;
+import kr.mujoong.contract.ws.message.WsError;
+import kr.mujoong.realtime.gateway.DeviceConnection;
+import kr.mujoong.realtime.gateway.DeviceConnectionRepository;
+import kr.mujoong.realtime.gateway.SocketRegistry;
+import kr.mujoong.realtime.gateway.StatusReporter;
+import kr.mujoong.realtime.health.ReadinessState;
+import kr.mujoong.realtime.session.ActivitySessionRepository;
+import kr.mujoong.realtime.testing.InternalApi;
+import kr.mujoong.realtime.testing.ManualTime;
+import kr.mujoong.realtime.testing.RealtimeItEnvironment;
+import kr.mujoong.testsupport.device.DeviceSimulatorClient;
+import kr.mujoong.testsupport.http.ContractStubServer.RecordedRequest;
+import kr.mujoong.testsupport.http.ContractStubServer.StubResponse;
+import kr.mujoong.testsupport.log.LogCapture;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
+
+/**
+ * 기기 WSS 끝점 시험 (U1 3.5 Step 35 · BR3.6 · BR3.7 · BR4.7 · BR4.8 · SD-7 · SCD-2 · RD-4 · J55 · J123 · J125 · OD-8 · R3-4 · 편차 (j)(l)(s) ·
+ * AC2.2.5 · AC6.2.5 · AC6.2.8 ~ 6.2.11 · NFR4.1 · NFR9.4 · NFR9.9).
+ *
+ * <p>운영 끝점 {@code /ws/device}에 실제 서버(무작위 포트) · 실제 DB · Core 계약 대역 · 기기 시뮬레이터(JDK WebSocket)로 붙는다. 시간 값은
+ * 운영 값이다: verify-token 1초 · HELLO 5초 · 끊김 40초. 5초 · 40초 시한은 실제로 기다리지 않고 수동 시계({@link ManualTime})를 앞당긴다
+ * (NFR6.2). verify-token 1초 제한만 실제 HTTP 지연으로 넘긴다.
+ */
+@Tag("u1")
+@Tag("db")
+class DeviceGatewayIT {
+
+    private static final Map<String, String> PRODUCTION_TIMES = Map.of(
+            "mujoong.internal-http.verify-token-timeout", "1s",
+            "mujoong.timing.device.hello-timeout", "5s",
+            "mujoong.timing.device.disconnect", "40s");
+    private static final String VERIFY = "/internal/devices/verify-token";
+    private static final String REPORT = "/internal/devices/{deviceId}/connection";
+
+    private RealtimeItEnvironment env;
+    private LogCapture logs;
+
+    @AfterEach
+    void stop() {
+        try {
+            if (env != null) {
+                env.close();
+            }
+        } finally {
+            if (logs != null) {
+                logs.close();
+            }
+        }
+    }
+
+    @Test
+    void theOriginMustMatchExactlyAndAMissingOrNullOriginIsRefusedWith403() {
+        start(Map.of());
+
+        for (String origin : new String[] {"https://evil.invalid", null, "null", ORIGIN + "/"}) {
+            DeviceSimulatorClient.Connection refused = DeviceSimulatorClient.connect(env.app.deviceUri(), origin,
+                    env.deviceToken, WAIT);
+            assertThat(refused).isInstanceOf(DeviceSimulatorClient.Refused.class);
+            Throwable cause = ((DeviceSimulatorClient.Refused) refused).cause();
+            assertThat(cause).isInstanceOf(WebSocketHandshakeException.class);
+            assertThat(((WebSocketHandshakeException) cause).getResponse().statusCode()).isEqualTo(403);
+        }
+        assertThat(logs.events(EventCode.SECURITY_ORIGIN_DENIED)).isNotEmpty().allSatisfy(event ->
+                assertThat(LogCapture.attrs(event)).containsEntry("channel", "WSS").containsEntry("statusCode", 403));
+        // 거절된 업그레이드는 Core에 묻지도 않는다
+        assertThat(env.core.requests("POST", VERIFY)).isEmpty();
+        assertThat(env.connectDevice().isClosed()).isFalse();
+    }
+
+    @Test
+    void aMissingCookieOrARejectedTokenCloses4401AndEveryConnectionIsVerifiedAgain() {
+        start(Map.of());
+
+        DeviceSimulatorClient noCookie = DeviceSimulatorClient.open(env.app.deviceUri(), ORIGIN, null, WAIT);
+        assertThat(noCookie.awaitClose(WAIT)).contains(CloseCode.UNAUTHORIZED.code());
+        assertThat(env.core.requests("POST", VERIFY)).isEmpty();
+
+        env.verifyRoute.respond(StubResponse.error(401, kr.mujoong.contract.error.ErrorCode.INVALID_DEVICE_TOKEN));
+        DeviceSimulatorClient released = DeviceSimulatorClient.open(env.app.deviceUri(), ORIGIN, env.deviceToken, WAIT);
+        assertThat(released.awaitClose(WAIT)).contains(CloseCode.UNAUTHORIZED.code());
+        List<Map<String, Object>> failures = logs.events(EventCode.SECURITY_AUTH_FAILED);
+        assertThat(failures).hasSize(2);
+        assertThat(failures.get(0).get("level")).isEqualTo("INFO");
+        assertThat(failures.get(1).get("level")).isEqualTo("WARN");
+        assertThat(LogCapture.attrs(failures.get(1))).containsEntry("kind", "DEVICE_TOKEN").containsEntry("statusCode", 4401);
+
+        // (j) 결과를 캐시하지 않는다: 연결 두 번 = 확인 두 번
+        env.verifyRoute.respond(StubResponse.json(200, env.verifiedBody()));
+        env.core.clearRequests();
+        env.connectDevice().closeWith(CloseCode.DEVICE_OFF.code());
+        env.connectDevice();
+        assertThat(env.core.requests("POST", VERIFY)).hasSize(2).allSatisfy(request ->
+                assertThat(request.json().get("deviceToken").asString()).isEqualTo(env.deviceToken));
+        assertThat(logs.lines()).noneMatch(line -> line.contains(env.deviceToken));
+    }
+
+    @Test
+    void coreAnsweringAfterOneSecondCloses1013AndWithinOneSecondPasses() {
+        start(Map.of());
+
+        env.verifyRoute.respond(StubResponse.json(200, env.verifiedBody()).delayed(Duration.ofMillis(1_400)));
+        DeviceSimulatorClient slow = DeviceSimulatorClient.open(env.app.deviceUri(), ORIGIN, env.deviceToken, WAIT);
+        slow.sendHello();
+        assertThat(slow.awaitClose(WAIT)).contains(CloseCode.TRY_AGAIN_LATER.code());
+        assertThat(slow.received(WsMessageType.HELLO_OK)).isEmpty();
+
+        env.verifyRoute.respond(StubResponse.json(200, env.verifiedBody()).delayed(Duration.ofMillis(500)));
+        DeviceSimulatorClient intime = DeviceSimulatorClient.open(env.app.deviceUri(), ORIGIN, env.deviceToken, WAIT);
+        // 확인 결과보다 먼저 온 HELLO는 기다렸다가 처리한다(SD-7 5단계)
+        HelloOk ok = intime.hello(WAIT);
+        assertThat(ok.connectionId()).isNotNull();
+        assertThat(ok.heartbeatIntervalMs()).isPositive();
+    }
+
+    @Test
+    void helloWithinFiveSecondsPassesAndAfterFiveSecondsTheConnectionCloses4408() {
+        ManualTime time = new ManualTime();
+        startWith(Map.of(), time);
+
+        DeviceSimulatorClient patient = openVerified(time);
+        time.advance(Duration.ofMillis(4_900));
+        assertThat(patient.awaitClose(Duration.ofMillis(300))).isEmpty();
+        HelloOk ok = patient.hello(WAIT);
+        awaitTrue(() -> env.ledger().map(row -> ok.connectionId().equals(row.connectionId())).orElse(false),
+                "원장 교체");
+
+        DeviceSimulatorClient silent = openVerified(time);
+        time.advance(Duration.ofMillis(5_100));
+        assertThat(silent.awaitClose(WAIT)).contains(CloseCode.HELLO_TIMEOUT.code());
+        // HELLO 없이 닫힌 연결은 원장을 건드리지 않는다(BR3.7)
+        RealtimeItEnvironment.sleep(200);
+        assertThat(env.ledger().orElseThrow().connectionId()).isEqualTo(ok.connectionId());
+        assertThat(env.ledger().orElseThrow().state()).isEqualTo(ConnectionState.CONNECTED);
+        assertThat(patient.isClosed()).isFalse();
+    }
+
+    @Test
+    void aMalformedHelloOversizedTextAndWrongAudioFramesClose4400() {
+        start(Map.of());
+
+        DeviceSimulatorClient badHello = DeviceSimulatorClient.open(env.app.deviceUri(), ORIGIN, env.deviceToken, WAIT);
+        badHello.sendRaw("{\"type\":\"HELLO\",\"seq\":1,\"sentAt\":\"2026-10-15T09:00:00Z\",\"payload\":{}}");
+        assertThat(badHello.awaitClose(WAIT)).contains(CloseCode.PROTOCOL_ERROR.code());
+
+        DeviceSimulatorClient oversized = env.connectDevice();
+        oversized.sendRaw(heartbeatPaddedTo(8 * 1024 + 1));
+        assertThat(oversized.awaitClose(WAIT)).contains(CloseCode.PROTOCOL_ERROR.code());
+
+        DeviceSimulatorClient wrongAudio = env.connectDevice();
+        byte[] frame = new byte[966];
+        frame[0] = 0x01;
+        wrongAudio.sendBinary(frame);
+        assertThat(wrongAudio.awaitClose(WAIT)).contains(CloseCode.PROTOCOL_ERROR.code());
+
+        DeviceSimulatorClient serverFrame = env.connectDevice();
+        byte[] output = new byte[4805];
+        output[0] = 0x02;
+        serverFrame.sendBinary(output);
+        assertThat(serverFrame.awaitClose(WAIT)).contains(CloseCode.PROTOCOL_ERROR.code());
+    }
+
+    @Test
+    void unknownTypesGetAnErrorWhileIgnoredMessagesKeepTheConnectionAndHeartbeatsAreAcked() {
+        start(Map.of());
+        DeviceSimulatorClient device = env.connectDevice();
+
+        long hbSeq = device.heartbeat(25L);
+        WsEnvelope ack = device.await(envelope -> envelope.payload() instanceof HeartbeatAck heartbeatAck
+                && heartbeatAck.hbSeq() == hbSeq, WAIT);
+        assertThat(((HeartbeatAck) ack.payload()).serverTime()).isNotNull();
+
+        device.sendRaw("{\"type\":\"SOMETHING_NEW\",\"seq\":900,\"sentAt\":\"" + Instant.now() + "\",\"payload\":{}}");
+        WsEnvelope error = device.await(WsMessageType.ERROR, WAIT);
+        assertThat(((WsError) error.payload()).code()).isEqualTo(WsError.Code.UNKNOWN_TYPE);
+        assertThat(((WsError) error.payload()).refSeq()).isEqualTo(900L);
+
+        device.deviceState();
+        device.playbackMark(UUID.randomUUID(), UUID.randomUUID(), PlaybackMark.Status.PROGRESS);
+        long next = device.heartbeat(25L);
+        device.await(envelope -> envelope.payload() instanceof HeartbeatAck heartbeatAck
+                && heartbeatAck.hbSeq() == next, WAIT);
+        assertThat(device.received(WsMessageType.ERROR)).hasSize(1);
+        assertThat(device.isClosed()).isFalse();
+    }
+
+    @Test
+    void theHeartbeatSentAtGivesAClockOffsetWithinHalfTheRoundTripAndWithoutItTheTurnIsMarkedMissing() {
+        start(Map.of());
+        DeviceSimulatorClient device = env.connectDevice();
+        UUID connectionId = env.ledger().orElseThrow().connectionId();
+
+        device.clockSkew(Duration.ofSeconds(5)).heartbeat(40L);
+        awaitTrue(() -> connection(connectionId).clockOffsetMs() != null, "clockOffsetMs");
+        assertThat(connection(connectionId).clockOffsetMs()).isBetween(5_000L - 20L, 5_000L + 20L);
+        assertThat(connection(connectionId).rttMs()).isEqualTo(40L);
+
+        device.heartbeatWithoutSentAt(40L);
+        awaitTrue(() -> connection(connectionId).clockOffsetMs() == null, "offset 비움");
+        UUID sessionId = UUID.randomUUID();
+        env.start(sessionId);
+        WsEnvelope command = device.await(WsMessageType.START_SESSION, WAIT);
+        device.ack(command.opId(), sessionId);
+        device.deviceReady(sessionId, true, true);
+        awaitTrue(() -> env.app.bean(ActivitySessionRepository.class).find(sessionId)
+                .map(row -> row.status() == SessionStatus.ACTIVE).orElse(false), "ACTIVE");
+        env.provider.emitTurn("item-1", "안녕", "resp-1", "안녕 반가워", List.of(new byte[4800]));
+        WsEnvelope begin = device.await(WsMessageType.OUTPUT_BEGIN, WAIT);
+        device.playbackMark(sessionId, ((OutputBegin) begin.payload()).playbackId(), PlaybackMark.Status.STARTED);
+
+        awaitTrue(() -> logs.last(EventCode.LATENCY_TURN).isPresent(), "LATENCY_TURN");
+        assertThat(LogCapture.attrs(logs.last(EventCode.LATENCY_TURN).orElseThrow()))
+                .containsEntry("unobservedReason", "CLOCK_OFFSET_MISSING");
+    }
+
+    @Test
+    void aSecondConnectionTakesOverOnlyAtHelloOkAndTheFirstIsClosedWith4001() {
+        start(Map.of());
+        DeviceSimulatorClient first = env.connectDevice();
+        UUID firstId = env.ledger().orElseThrow().connectionId();
+
+        env.core.clearRequests();
+        DeviceSimulatorClient second = DeviceSimulatorClient.open(env.app.deviceUri(), ORIGIN, env.deviceToken, WAIT);
+        env.core.awaitRequests("POST", VERIFY, 1, WAIT);
+        // 확인만 통과하고 HELLO가 없으면 옛 연결은 그대로다
+        assertThat(first.awaitClose(Duration.ofMillis(300))).isEmpty();
+        assertThat(env.ledger().orElseThrow().connectionId()).isEqualTo(firstId);
+
+        HelloOk ok = second.hello(WAIT);
+        assertThat(env.ledger().orElseThrow().connectionId()).isEqualTo(ok.connectionId());
+        assertThat(first.awaitClose(WAIT)).contains(CloseCode.REPLACED.code());
+        assertThat(env.app.bean(SocketRegistry.class).isLive(env.deviceId, ok.connectionId())).isTrue();
+        assertThat(env.app.bean(SocketRegistry.class).isLive(env.deviceId, firstId)).isFalse();
+        // 4001로 닫힌 옛 연결은 새 연결의 상태를 덮지 않는다(BR3.7 조건부 기록)
+        RealtimeItEnvironment.sleep(300);
+        assertThat(env.ledger().orElseThrow().state()).isEqualTo(ConnectionState.CONNECTED);
+    }
+
+    @Test
+    void aFailedHandoverClosesOnlyTheNewConnectionWith1011AndNeverRequests4001() throws SQLException {
+        start(Map.of("mujoong.limits.db-lock-timeout", "200ms"));
+        DeviceSimulatorClient first = env.connectDevice();
+        UUID firstId = env.ledger().orElseThrow().connectionId();
+
+        try (Connection lock = env.db.dataSource().getConnection()) {
+            lock.setAutoCommit(false);
+            try (PreparedStatement select = lock.prepareStatement(
+                    "select device_id from realtime.realtime_device_connection where device_id = ? for update")) {
+                select.setObject(1, env.deviceId);
+                select.executeQuery().close();
+            }
+            DeviceSimulatorClient second = DeviceSimulatorClient.open(env.app.deviceUri(), ORIGIN, env.deviceToken,
+                    WAIT);
+            second.sendHello();
+            assertThat(second.awaitClose(WAIT)).contains(CloseCode.SERVER_ERROR.code());
+            assertThat(second.received(WsMessageType.HELLO_OK)).isEmpty();
+            lock.rollback();
+        }
+
+        // SCD-2: 옛 연결 · 레지스트리 · 원장은 그대로이고 4001은 요청되지 않았다
+        assertThat(first.awaitClose(Duration.ofMillis(300))).isEmpty();
+        assertThat(env.app.bean(SocketRegistry.class).isLive(env.deviceId, firstId)).isTrue();
+        assertThat(env.ledger().orElseThrow().connectionId()).isEqualTo(firstId);
+        long hbSeq = first.heartbeat(10L);
+        first.await(envelope -> envelope.payload() instanceof HeartbeatAck heartbeatAck
+                && heartbeatAck.hbSeq() == hbSeq, WAIT);
+    }
+
+    @Test
+    void deviceCloseCodesDriveTheLedgerAndAClosedSocketMakesTheNextStart423() {
+        start(Map.of());
+
+        env.connectDevice().closeWith(CloseCode.DEVICE_OFF.code());
+        awaitLedger(ConnectionState.OFFLINE);
+        env.connectDevice().closeWith(CloseCode.GOING_AWAY.code());
+        awaitLedger(ConnectionState.OFFLINE);
+
+        // TCP만 끊긴 소켓(1006)은 원장을 바꾸지 않지만 살아 있는 소켓이 아니므로 시작은 423이다(RD-4 · NFR4.1)
+        DeviceSimulatorClient dropped = env.connectDevice();
+        UUID droppedId = env.ledger().orElseThrow().connectionId();
+        dropped.close();
+        awaitTrue(() -> !env.app.bean(SocketRegistry.class).isLive(env.deviceId, droppedId), "소켓 레지스트리에서 빠짐");
+        assertThat(env.ledger().orElseThrow().state()).isEqualTo(ConnectionState.CONNECTED);
+        InternalApi.Reply start = env.api().post("/internal/sessions",
+                InternalApi.startBody(UUID.randomUUID(), env.guardianId, env.childId, env.deviceId));
+        assertThat(start.status()).isEqualTo(423);
+        assertThat(start.code()).isEqualTo("DEVICE_NOT_CONNECTED");
+    }
+
+    @Test
+    void fortySecondsOfSilenceDisconnectsTheLedgerAndTheNextHeartbeatRecovers() {
+        ManualTime time = new ManualTime();
+        startWith(Map.of(), time);
+        DeviceSimulatorClient device = env.connectDevice();
+
+        time.advance(Duration.ofSeconds(39));
+        RealtimeItEnvironment.sleep(800);
+        assertThat(env.ledger().orElseThrow().state()).isEqualTo(ConnectionState.CONNECTED);
+
+        time.advance(Duration.ofSeconds(2));
+        awaitLedger(ConnectionState.DISCONNECTED);
+        // 소켓이 열린 채 무음이어도 같다 — 같은 연결의 HEARTBEAT로 복귀(J55 · BR4.8)
+        assertThat(device.isClosed()).isFalse();
+        device.heartbeat(15L);
+        awaitLedger(ConnectionState.CONNECTED);
+        awaitTrue(() -> time.clock.now().equals(env.ledger().orElseThrow().lastSeenAt()), "last_seen_at 갱신(J125)");
+    }
+
+    @Test
+    void statusReportsIncludeOfflineRowsAndARoundSkipsTheRestAfterThreeFailures() {
+        start(Map.of());
+        env.connectDevice().closeWith(CloseCode.DEVICE_OFF.code());
+        awaitLedger(ConnectionState.OFFLINE);
+
+        awaitTrue(() -> env.core.requests("PUT", REPORT).stream().anyMatch(this::offlineReport), "OFFLINE 보고");
+        RecordedRequest report = env.core.requests("PUT", REPORT).stream().filter(this::offlineReport).findFirst()
+                .orElseThrow();
+        assertThat(report.schemaErrors()).isEmpty();
+        assertThat(report.path()).isEqualTo("/internal/devices/" + env.deviceId + "/connection");
+        assertThat(report.json().get("reportedAt").asString()).isNotBlank();
+
+        addLedgerRows(4);
+        env.connectionRoute.respond(StubResponse.error(503, kr.mujoong.contract.error.ErrorCode.SERVICE_NOT_READY));
+        StatusReporter.Round round = env.app.bean(StatusReporter.class).runOnce();
+        assertThat(round).isEqualTo(new StatusReporter.Round(0, 3, 2));
+        env.connectionRoute.respond(StubResponse.json(204, ""));
+        assertThat(env.app.bean(StatusReporter.class).runOnce()).isEqualTo(new StatusReporter.Round(5, 0, 0));
+    }
+
+    @Test
+    void whileNotReadyANewUpgradeIsAcceptedAndThenClosedWith1013() {
+        start(Map.of("mujoong.health.db-check-interval", "1h"));
+        ReadinessState readiness = env.app.bean(ReadinessState.class);
+        for (int i = 0; i < 3; i++) {
+            readiness.recordDbCheck(false);
+        }
+
+        DeviceSimulatorClient refused = DeviceSimulatorClient.open(env.app.deviceUri(), ORIGIN, env.deviceToken, WAIT);
+        assertThat(refused.awaitClose(WAIT)).contains(CloseCode.TRY_AGAIN_LATER.code());
+        assertThat(env.core.requests("POST", VERIFY)).isEmpty();
+
+        readiness.recordDbCheck(true);
+        assertThat(env.connectDevice().isClosed()).isFalse();
+    }
+
+    // ------------------------------------------------------------------ 보조
+
+    private void start(Map<String, String> extra) {
+        Map<String, String> args = new HashMap<>(PRODUCTION_TIMES);
+        args.putAll(extra);
+        env = RealtimeItEnvironment.start(args, null);
+        logs = LogCapture.attach();
+    }
+
+    private void startWith(Map<String, String> extra, ManualTime time) {
+        Map<String, String> args = new HashMap<>(PRODUCTION_TIMES);
+        args.putAll(extra);
+        env = RealtimeItEnvironment.startWith(args, time);
+        logs = LogCapture.attach();
+        assertThat(env.app.bean(MujoongClock.class)).isSameAs(time.clock);
+    }
+
+    /** 확인(verify-token)까지 끝나고 HELLO 타이머가 걸린 연결. */
+    private DeviceSimulatorClient openVerified(ManualTime time) {
+        int verified = env.core.requests("POST", VERIFY).size();
+        int pending = time.safety.pendingCount();
+        DeviceSimulatorClient device = DeviceSimulatorClient.open(env.app.deviceUri(), ORIGIN, env.deviceToken, WAIT);
+        env.core.awaitRequests("POST", VERIFY, verified + 1, WAIT);
+        awaitTrue(() -> time.safety.pendingCount() > pending, "HELLO 타이머");
+        return device;
+    }
+
+    private DeviceConnection connection(UUID connectionId) {
+        return env.app.bean(SocketRegistry.class).byConnectionId(connectionId).orElseThrow();
+    }
+
+    private void awaitLedger(ConnectionState state) {
+        awaitTrue(() -> env.ledger().map(row -> row.state() == state).orElse(false), "원장 " + state);
+    }
+
+    private boolean offlineReport(RecordedRequest request) {
+        return request.body().contains("\"state\":\"OFFLINE\"");
+    }
+
+    /** 다른 기기의 원장 행(재시작 뒤 남은 행과 같은 모양)을 더한다. */
+    private void addLedgerRows(int count) {
+        Instant now = env.app.bean(MujoongClock.class).now();
+        DeviceConnectionRepository repository = env.app.bean(DeviceConnectionRepository.class);
+        new TransactionTemplate(env.app.bean(PlatformTransactionManager.class)).executeWithoutResult(status -> {
+            for (int i = 0; i < count; i++) {
+                UUID deviceId = UUID.randomUUID();
+                UUID connectionId = UUID.randomUUID();
+                repository.handover(deviceId, connectionId, UUID.randomUUID(), UUID.randomUUID(), now);
+                repository.markClosed(deviceId, connectionId, now);
+            }
+        });
+        assertThat(repository.findAll()).hasSize(count + 1);
+    }
+
+    /** sentAt이 있는 HEARTBEAT 봉투를 패딩 필드로 정확히 {@code bytes}바이트로 만든다(모르는 필드는 무시되므로 크기만 문제다). */
+    private static String heartbeatPaddedTo(int bytes) {
+        String head = "{\"type\":\"HEARTBEAT\",\"seq\":50,\"sentAt\":\"" + Instant.now()
+                + "\",\"payload\":{\"hbSeq\":50,\"lastRttMs\":10},\"pad\":\"";
+        String tail = "\"}";
+        String text = head + "x".repeat(bytes - head.length() - tail.length()) + tail;
+        assertThat(text.getBytes(java.nio.charset.StandardCharsets.UTF_8)).hasSize(bytes);
+        Map<?, ?> parsed = JsonCodec.shared().read(text, Map.class);
+        assertThat(parsed.containsKey("pad")).isTrue();
+        return text;
+    }
+}

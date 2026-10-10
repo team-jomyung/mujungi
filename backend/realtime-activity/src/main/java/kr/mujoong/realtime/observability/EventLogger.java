@@ -194,7 +194,8 @@ public class EventLogger {
         Map<AttrKey, Object> identifying = new EnumMap<>(AttrKey.class);
         identifying.putAll(entry.attrs());
         NON_IDENTIFYING.forEach(identifying::remove);
-        return List.of(entry.event(), component, identifying);
+        // 수준도 식별 값이다: 쿠키 없는 업그레이드(INFO)와 무효 토큰(WARN)이 한 줄로 합쳐져 WARN이 묻히지 않게 한다(SD-15)
+        return List.of(entry.event(), component, entry.effectiveLevel(), identifying);
     }
 
     private void onInvalidAttr(EventCode event, String keyName) {
