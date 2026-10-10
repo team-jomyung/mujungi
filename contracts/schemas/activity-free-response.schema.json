@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mujoong.invalid/contracts/schemas/activity-free-response.schema.json",
+  "title": "08 자유대화 시작 응답",
+  "description": "POST /api/activities/free 202(BR6.1 · BR6.2). 같은 idempotencyKey 재요청은 첫 응답을 그대로 돌려준다.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["sessionId", "status"],
+  "properties": {
+    "sessionId": { "$ref": "common.schema.json#/$defs/Uuid" },
+    "status": { "type": "string", "enum": ["REQUESTED"] }
+  }
+}

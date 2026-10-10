@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mujoong.invalid/contracts/schemas/internal-session-view.schema.json",
+  "title": "내부 진행 조회 응답",
+  "description": "GET /internal/sessions/{id}/view?sinceSeq 200(계약 5절 C8 · BR6.15). 보호자 LiveView에서 observedAt · stale을 뺀 모양이다. Core가 소유를 확인한 뒤 중계하며 observedAt · stale은 Core가 채운다.",
+  "type": "object",
+  "allOf": [
+    { "$ref": "live-view.schema.json#/$defs/SessionSummaryFields" }
+  ],
+  "required": [
+    "sessionId",
+    "activityType",
+    "status",
+    "confirmed",
+    "requestedAt",
+    "statusVersion",
+    "serverTime",
+    "gaps",
+    "items",
+    "nextSeq"
+  ],
+  "properties": {
+    "statusVersion": { "type": "integer", "minimum": 0 },
+    "serverTime": { "$ref": "common.schema.json#/$defs/DateTime" },
+    "technicalPause": { "$ref": "common.schema.json#/$defs/TechnicalPause" },
+    "silenceWarning": { "$ref": "live-view.schema.json#/$defs/SilenceWarning" },
+    "practice": { "$ref": "live-view.schema.json#/$defs/Practice" },
+    "gaps": { "type": "array", "items": { "$ref": "live-view.schema.json#/$defs/Gap" } },
+    "items": { "type": "array", "items": { "$ref": "live-view.schema.json#/$defs/Bubble" } },
+    "nextSeq": { "type": "integer", "minimum": 0 }
+  },
+  "unevaluatedProperties": false
+}

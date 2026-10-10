@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mujoong.invalid/contracts/schemas/event-envelope.schema.json",
+  "title": "영속 이벤트 봉투",
+  "description": "POST /internal/events 본문(계약 6절 Envelope · BR5.4). 필수 7필드가 하나라도 없거나 형식이 틀리면 400 INVALID_ENVELOPE다. 모르는 필드는 무시한다. traceId는 선택 필드로 더했다(편차 (p) · OD-7, 형식이 틀리면 받는 쪽이 헤더 → 새 값 순으로 대신한다). 모르는 eventType · 더 높은 schemaVersion은 거절하지 않고 IGNORED로 커밋한다(BR5.9). 아래 if-then은 아는 eventType의 payload 형식을 보낸 쪽 기준으로 확인한다. 본문 상한 2MB(mujoong.limits.internal-event-body-max).",
+  "type": "object",
+  "required": ["eventId", "eventType", "schemaVersion", "occurredAt", "aggregateType", "aggregateId", "payload"],
+  "properties": {
+    "eventId": { "$ref": "common.schema.json#/$defs/Uuid" },
+    "eventType": { "type": "string", "minLength": 1, "maxLength": 100 },
+    "schemaVersion": { "type": "integer", "minimum": 1 },
+    "occurredAt": { "$ref": "common.schema.json#/$defs/DateTime" },
+    "aggregateType": { "type": "string", "enum": ["ActivitySession", "Device", "DataDeletionRequest"] },
+    "aggregateId": { "$ref": "common.schema.json#/$defs/Uuid" },
+    "traceId": { "$ref": "common.schema.json#/$defs/TraceId" },
+    "payload": { "type": "object" }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "eventType": { "const": "SessionStateChanged" } }, "required": ["eventType"] },
+      "then": {
+        "properties": {
+          "aggregateType": { "const": "ActivitySession" },
+          "payload": { "$ref": "event-payloads.schema.json#/$defs/SessionStateChanged" }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "eventType": { "const": "SessionRecordCaptured" } }, "required": ["eventType"] },
+      "then": {
+        "properties": {
+          "aggregateType": { "const": "ActivitySession" },
+          "payload": { "$ref": "event-payloads.schema.json#/$defs/SessionRecordCaptured" }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "eventType": { "const": "DeviceStatusChanged" } }, "required": ["eventType"] },
+      "then": {
+        "properties": {
+          "aggregateType": { "const": "Device" },
+          "payload": { "$ref": "event-payloads.schema.json#/$defs/DeviceStatusChanged" }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "eventType": { "const": "DeletionCompleted" } }, "required": ["eventType"] },
+      "then": {
+        "properties": {
+          "aggregateType": { "const": "DataDeletionRequest" },
+          "payload": { "$ref": "event-payloads.schema.json#/$defs/DeletionCompleted" }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "eventType": { "const": "DeviceReleased" } }, "required": ["eventType"] },
+      "then": {
+        "properties": {
+          "aggregateType": { "const": "Device" },
+          "payload": { "$ref": "event-payloads.schema.json#/$defs/DeviceReleased" }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "eventType": { "const": "DeletionRequested" } }, "required": ["eventType"] },
+      "then": {
+        "properties": {
+          "aggregateType": { "const": "DataDeletionRequest" },
+          "payload": { "$ref": "event-payloads.schema.json#/$defs/DeletionRequested" }
+        }
+      }
+    }
+  ]
+}

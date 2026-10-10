@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mujoong.invalid/contracts/schemas/device-register-request.schema.json",
+  "title": "05a 코드 등록 요청",
+  "description": "POST /api/device/register 본문(BR2.1 · 편차 (d)). 서버는 앞뒤 · 가운데 공백, 하이픈, 가운뎃점을 지우고 대문자로 바꾼 뒤(BR1.1) 영숫자 8자가 아니면 400 VALIDATION_FAILED, 발급 알파벳(common.schema.json RegistrationCode) 밖 글자가 있으면 404 CODE_NOT_FOUND로 답한다. 그래서 이 스키마는 정규화 전 입력을 받는다. 서버는 모르는 필드를 무시한다.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["code"],
+  "properties": {
+    "code": { "type": "string", "minLength": 1, "maxLength": 32 }
+  }
+}

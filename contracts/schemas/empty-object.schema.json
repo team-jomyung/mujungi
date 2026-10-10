@@ -1,0 +1,8 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mujoong.invalid/contracts/schemas/empty-object.schema.json",
+  "title": "빈 객체",
+  "description": "본문이 빈 JSON 객체 {}인 응답(POST /internal/events 200 수신 확인 등). 수신 확인은 Inbox 커밋을 뜻할 뿐 업무 완료가 아니다(BR5.6).",
+  "type": "object",
+  "maxProperties": 0
+}

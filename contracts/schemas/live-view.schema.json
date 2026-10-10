@@ -1,0 +1,127 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mujoong.invalid/contracts/schemas/live-view.schema.json",
+  "title": "LiveView",
+  "description": "12 진행 폴링 · 17 상태 응답 GET /api/sessions/{id}?sinceSeq(계약 3절 LiveView · BR6.15). U1은 SessionSummary와 statusVersion · serverTime · observedAt · stale · items · nextSeq를 채우고 technicalPause · silenceWarning · practice는 null, gaps는 빈 배열로 둔다(U3 · U4 · U5가 채움). items는 아이 전사와 게이트를 통과한 AI 말뿐이다(BR7.5). 판정값 · 08 입력 원문은 없다.",
+  "type": "object",
+  "allOf": [
+    { "$ref": "#/$defs/SessionSummaryFields" }
+  ],
+  "required": [
+    "sessionId",
+    "activityType",
+    "status",
+    "confirmed",
+    "requestedAt",
+    "statusVersion",
+    "serverTime",
+    "observedAt",
+    "stale",
+    "gaps",
+    "items",
+    "nextSeq"
+  ],
+  "properties": {
+    "statusVersion": { "type": "integer", "minimum": 0 },
+    "serverTime": { "$ref": "common.schema.json#/$defs/DateTime" },
+    "observedAt": {
+      "description": "Core가 Realtime에서 마지막으로 받은 시각. 한 번도 받지 못했으면 null",
+      "$ref": "common.schema.json#/$defs/NullableDateTime"
+    },
+    "stale": { "type": "boolean" },
+    "technicalPause": { "$ref": "common.schema.json#/$defs/TechnicalPause" },
+    "silenceWarning": { "$ref": "#/$defs/SilenceWarning" },
+    "practice": { "$ref": "#/$defs/Practice" },
+    "gaps": { "type": "array", "items": { "$ref": "#/$defs/Gap" } },
+    "items": { "type": "array", "items": { "$ref": "#/$defs/Bubble" } },
+    "nextSeq": { "type": "integer", "minimum": 0 }
+  },
+  "unevaluatedProperties": false,
+  "$defs": {
+    "SessionSummaryFields": {
+      "type": "object",
+      "properties": {
+        "sessionId": { "$ref": "common.schema.json#/$defs/Uuid" },
+        "activityType": { "$ref": "common.schema.json#/$defs/ActivityType" },
+        "status": { "$ref": "common.schema.json#/$defs/SessionStatus" },
+        "endReason": { "$ref": "common.schema.json#/$defs/NullableEndReason" },
+        "failureCode": { "$ref": "common.schema.json#/$defs/NullableFailureCode" },
+        "confirmed": { "type": "boolean" },
+        "requestedAt": { "$ref": "common.schema.json#/$defs/DateTime" },
+        "startedAt": { "$ref": "common.schema.json#/$defs/NullableDateTime" },
+        "endedAt": { "$ref": "common.schema.json#/$defs/NullableDateTime" }
+      }
+    },
+    "SessionSummary": {
+      "type": "object",
+      "allOf": [
+        { "$ref": "#/$defs/SessionSummaryFields" }
+      ],
+      "required": ["sessionId", "activityType", "status", "confirmed", "requestedAt"],
+      "unevaluatedProperties": false
+    },
+    "Bubble": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["seq", "speaker", "text", "final", "uncertain", "startedAt"],
+      "properties": {
+        "seq": { "type": "integer", "minimum": 1 },
+        "speaker": { "type": "string", "enum": ["CHILD", "AI"] },
+        "text": { "type": "string" },
+        "final": { "type": "boolean" },
+        "uncertain": { "type": "boolean" },
+        "startedAt": { "$ref": "common.schema.json#/$defs/DateTime" },
+        "endedAt": { "$ref": "common.schema.json#/$defs/NullableDateTime" }
+      }
+    },
+    "Gap": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["from", "kind"],
+      "properties": {
+        "from": { "$ref": "common.schema.json#/$defs/DateTime" },
+        "to": { "$ref": "common.schema.json#/$defs/NullableDateTime" },
+        "kind": { "type": "string", "enum": ["DISCONNECT", "UNCONFIRMED"] }
+      }
+    },
+    "SilenceWarning": {
+      "anyOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["silentSince", "endsAt"],
+          "properties": {
+            "silentSince": { "$ref": "common.schema.json#/$defs/DateTime" },
+            "endsAt": { "$ref": "common.schema.json#/$defs/DateTime" }
+          }
+        },
+        { "type": "null" }
+      ]
+    },
+    "Practice": {
+      "anyOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "goalIndex": { "type": "integer", "minimum": 0 },
+            "goalCount": { "type": "integer", "minimum": 0 },
+            "goalName": { "type": "string" },
+            "stage": {
+              "type": "string",
+              "enum": [
+                "SCENARIO_INTRO",
+                "FIRST_RESPONSE",
+                "HELP_OFFER",
+                "CUE",
+                "AFTER_CUE_RESPONSE",
+                "NEW_SCENARIO_RESPONSE"
+              ]
+            }
+          }
+        },
+        { "type": "null" }
+      ]
+    }
+  }
+}

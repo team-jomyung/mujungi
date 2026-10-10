@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mujoong.invalid/contracts/schemas/internal-session-start-response.schema.json",
+  "title": "세션 시작 명령 응답",
+  "description": "POST /internal/sessions 202(계약 5절 · BR6.6). 새 세션이면 PREPARING, 같은 sessionId 재요청이면 그 세션의 현재 상태다(BR6.6 ①).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["status"],
+  "properties": {
+    "status": { "$ref": "common.schema.json#/$defs/SessionStatus" }
+  }
+}

@@ -1,0 +1,61 @@
+# core-api test 프로필 — 시험 시간 키 축소값의 유일한 출처 (U1 3.5 Step 5 · NFR6.2 '키 값 줄이기' · J94 · J108)
+# 값은 reliability-design.md ## 3의 '시험이 줄이는 값' 열에서 시간 키만 가져온다.
+# 건수 · 크기 · 한도(발급 · 실패 한도, 배치, 재시도 횟수, 본문 크기)와 수명 키(code-ttl · session-idle · 쿠키 수명),
+# 보존 · 정리 주기, DB 잠금 · 문장 제한은 실제 값을 둔다: 줄이면 정상 흐름 시험이 도중에 만료 · 거절되기 때문이다.
+# 그런 키의 경계는 가변 Clock 앞당기기(ManualTimerDriver)나 시험별 속성으로 본다.
+# 비밀(DB 비밀번호 · 내부 토큰 · ownerHash 비밀)은 여기 두지 않고 실행마다 test-support가 만든다(J127).
+spring:
+  lifecycle:
+    timeout-per-shutdown-phase: 2s
+  datasource:
+    hikari:
+      # 문맥 캐시가 여러 앱 문맥을 붙잡아도 core_app 연결 한도(12)를 넘지 않게 작게 둔다(R3-18)
+      maximum-pool-size: 2
+      minimum-idle: 0
+
+management:
+  server:
+    # 문맥마다 무작위 관리 포트(고정 9090은 캐시된 문맥끼리 충돌한다)
+    port: 0
+
+springdoc:
+  api-docs:
+    enabled: true
+
+mujoong:
+  timing:
+    session:
+      preparing-timeout: 1s
+    core:
+      device-status-stale: 3s
+    device:
+      status-report-interval: 1s
+    cache:
+      approved-content-ttl: 1s
+      policy-version-ttl: 1s
+  outbox:
+    poll-interval: 20ms
+    retry-backoff: [10ms, 20ms, 40ms, 80ms, 160ms, 300ms]
+    claim-lease: 1s
+  inbox:
+    poll-interval: 20ms
+    retry-backoff: [10ms, 20ms, 40ms, 80ms, 160ms]
+    claim-lease: 1s
+  session:
+    timer-tick: 50ms
+  internal-http:
+    connect-timeout: 50ms
+    session-start-timeout: 300ms
+    session-end-timeout: 200ms
+    session-view-timeout: 100ms
+    event-publish-timeout: 300ms
+    breaker-open-duration: 500ms
+  health:
+    db-check-interval: 200ms
+  security:
+    allowed-origin: https://mujoong.invalid
+  metrics:
+    db-pool-wait-warn: 10ms
+  observability:
+    metric-snapshot-interval: 1s
+    log-merge-window: 500ms

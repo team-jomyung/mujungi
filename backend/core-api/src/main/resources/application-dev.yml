@@ -1,0 +1,11 @@
+# core-api dev 프로필 (U1 3.5 Step 3 · SD-14 조합 1 · 2)
+# 개발자 PC(IDE)와 Compose 검증 스택(J108)이 함께 쓴다. 주소는 application.yml 기본값(Compose 망 이름)을 두고
+# 호스트에서 돌릴 때만 환경 변수로 바꾼다. 시험 로그인은 이 파일이 아니라 MUJOONG_DEVLOGIN_ENABLED=true로만 켠다.
+mujoong:
+  security:
+    # dev는 HTTP localhost(Secure Context 예외)를 허용한다. 검증 스택은 https://localhost:8443을 환경 변수로 준다
+    allowed-origin: ${MUJOONG_SECURITY_ALLOWED_ORIGIN:http://localhost:3000}
+
+springdoc:
+  api-docs:
+    enabled: true

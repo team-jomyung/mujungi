@@ -1,0 +1,259 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mujoong.invalid/contracts/schemas/ws-messages.schema.json",
+  "title": "기기 WSS 제어 메시지 payload 17종",
+  "description": "계약 4.2 C7 텍스트 프레임 payload(봉투는 ws-envelope.schema.json). sessionId는 payload가 아니라 봉투에 싣는다. 이 스키마는 보내는 쪽 형식이다. 받는 쪽은 READY 뒤 모르는 type · 틀린 payload에 ERROR(UNKNOWN_TYPE · BAD_PAYLOAD)를 보내고 연결을 유지하며, HELLO 형식 오류 · 크기 초과 · 방향 위반은 4400으로 닫는다(편차 (s) · J123).",
+  "$defs": {
+    "HELLO": {
+      "description": "기기 → 서버. 접속 직후 첫 메시지. URL · HELLO에는 토큰을 넣지 않는다(J29). resume은 U3가 완성한다",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["appVersion", "audio"],
+      "properties": {
+        "appVersion": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "audio": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 8,
+          "items": { "type": "string", "pattern": "^[a-z0-9]+/[0-9]+/[0-9]+$" }
+        },
+        "resume": {
+          "anyOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["sessionId"],
+              "properties": { "sessionId": { "$ref": "common.schema.json#/$defs/Uuid" } }
+            },
+            { "type": "null" }
+          ]
+        }
+      }
+    },
+    "HELLO_OK": {
+      "description": "서버 → 기기. HELLO 수락. 이 시점에 같은 기기의 옛 연결을 4001로 닫는다(편차 (l) · BR3.7). U1의 session은 null이다(이어가기는 U3)",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["connectionId", "serverTime", "heartbeatIntervalMs", "audio"],
+      "properties": {
+        "connectionId": { "$ref": "common.schema.json#/$defs/Uuid" },
+        "serverTime": { "$ref": "common.schema.json#/$defs/DateTime" },
+        "heartbeatIntervalMs": { "type": "integer", "minimum": 1 },
+        "audio": { "type": "string", "enum": ["pcm16le/24000/1"] },
+        "session": {
+          "anyOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["sessionId", "view", "resumed"],
+              "properties": {
+                "sessionId": { "$ref": "common.schema.json#/$defs/Uuid" },
+                "view": { "$ref": "#/$defs/View" },
+                "resumed": { "type": "boolean" }
+              }
+            },
+            { "type": "null" }
+          ]
+        }
+      }
+    },
+    "HEARTBEAT": {
+      "description": "기기 → 서버. 5초마다(device.heartbeat-interval). 기기는 송신 직전 봉투 sentAt을 채우고 서버는 이 값으로 clockOffsetMs를 계산한다(OD-8 · R3-4)",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["hbSeq"],
+      "properties": {
+        "hbSeq": { "type": "integer", "minimum": 0 },
+        "lastRttMs": { "type": ["integer", "null"], "minimum": 0 }
+      }
+    },
+    "HEARTBEAT_ACK": {
+      "description": "서버 → 기기. HEARTBEAT를 받자마자 같은 hbSeq로",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["hbSeq", "serverTime"],
+      "properties": {
+        "hbSeq": { "type": "integer", "minimum": 0 },
+        "serverTime": { "$ref": "common.schema.json#/$defs/DateTime" }
+      }
+    },
+    "START_SESSION": {
+      "description": "서버 → 기기. 세션 PREPARING 뒤 시작 push(opId 필수). 기기는 ACK 뒤 승인 음성을 미리 받고 DEVICE_READY를 보낸다",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["approvedAudio"],
+      "properties": {
+        "approvedAudio": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["contentCode", "contentVersionId", "audioUrl"],
+            "properties": {
+              "contentCode": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]*$" },
+              "contentVersionId": { "$ref": "common.schema.json#/$defs/Uuid" },
+              "audioUrl": { "$ref": "common.schema.json#/$defs/ApprovedAudioUrl" }
+            }
+          }
+        }
+      }
+    },
+    "ACK": {
+      "description": "기기 → 서버. opId가 있는 명령을 받자마자. 받았다는 뜻만이다",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ackOf"],
+      "properties": {
+        "ackOf": { "$ref": "common.schema.json#/$defs/Uuid" }
+      }
+    },
+    "DEVICE_READY": {
+      "description": "기기 → 서버. 마이크 · 플레이어 준비와 승인 음성 미리 받기를 마치면. mic 또는 player가 UNAVAILABLE이면 즉시 FAILED(DEVICE_NO_ACK)이고, 20초 안에 ACK · DEVICE_READY · 공급자 session.started가 모두 확인되지 않으면 FAILED(DEVICE_NO_ACK 또는 PROVIDER_UNAVAILABLE)다(편차 (h))",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mic", "player", "prefetch"],
+      "properties": {
+        "mic": { "type": "string", "enum": ["OK", "UNAVAILABLE"] },
+        "player": { "type": "string", "enum": ["OK", "UNAVAILABLE"] },
+        "prefetch": { "type": "string", "enum": ["OK", "PARTIAL"] }
+      }
+    },
+    "SESSION_STATE": {
+      "description": "서버 → 기기. T19 표시가 바뀔 때. '말하는 중'은 기기가 실제 재생으로 스스로 정한다",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["view"],
+      "properties": {
+        "view": { "$ref": "#/$defs/View" }
+      }
+    },
+    "OUTPUT_BEGIN": {
+      "description": "서버 → 기기. 게이트를 통과한 AI 말 묶음 시작. 뒤따르는 바이너리 0x02가 이 묶음이다(BR7.4 · BR7.6)",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["playbackId", "source"],
+      "properties": {
+        "playbackId": { "$ref": "common.schema.json#/$defs/Uuid" },
+        "source": { "type": "string", "enum": ["GPT_LIVE", "SCENARIO_SCRIPT"] }
+      }
+    },
+    "OUTPUT_END": {
+      "description": "서버 → 기기. 그 묶음 마지막 프레임 뒤",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["playbackId"],
+      "properties": {
+        "playbackId": { "$ref": "common.schema.json#/$defs/Uuid" },
+        "totalMs": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "PLAY_APPROVED_CONTENT": {
+      "description": "서버 → 기기. 승인 문구 재생(opId 필수). U1은 CLOSING · WAITING_FILLER를 쓴다(BR6.10 · BR7.4)",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["playbackId", "contentCode", "contentVersionId"],
+      "properties": {
+        "playbackId": { "$ref": "common.schema.json#/$defs/Uuid" },
+        "contentCode": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]*$" },
+        "contentVersionId": { "$ref": "common.schema.json#/$defs/Uuid" }
+      }
+    },
+    "STOP_OUTPUT": {
+      "description": "서버 → 기기. 출력 취소(opId 필수). 실제로 멈춘 재생은 PLAYBACK_MARK(STOPPED)로만 확인한다",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reason"],
+      "properties": {
+        "reason": {
+          "type": "string",
+          "enum": ["GATE_CANCEL", "GUARDIAN_STOP", "CHILD_STOP", "SILENCE", "BEFORE_CLOSING", "SERVER_BARGE_IN", "TECHNICAL"]
+        }
+      }
+    },
+    "PLAYBACK_MARK": {
+      "description": "기기 → 서버. 실제 재생 시작 · 1초마다 진행 · 끝 · 멈춤 · 실패. observedAt은 기기 시계 값이다. U1 서버는 PROGRESS를 받아도 무시한다(J123)",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["playbackId", "status", "observedAt"],
+      "properties": {
+        "playbackId": { "$ref": "common.schema.json#/$defs/Uuid" },
+        "status": { "type": "string", "enum": ["STARTED", "PROGRESS", "COMPLETED", "STOPPED", "FAILED"] },
+        "playedRange": {
+          "anyOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["fromMs", "toMs"],
+              "properties": {
+                "fromMs": { "type": "integer", "minimum": 0 },
+                "toMs": { "type": "integer", "minimum": 0 }
+              }
+            },
+            { "type": "null" }
+          ]
+        },
+        "observedAt": { "$ref": "common.schema.json#/$defs/DateTime" },
+        "stopCause": {
+          "anyOf": [
+            { "type": "string", "enum": ["LOCAL_VOICE_ACTIVITY", "STOP_OUTPUT", "CLOSE_TRANSPORT", "DISCONNECTED"] },
+            { "type": "null" }
+          ]
+        },
+        "failureReason": {
+          "anyOf": [
+            { "type": "string", "enum": ["DECODE_ERROR", "AUDIO_DEVICE_ERROR", "QUEUE_OVERFLOW", "FETCH_FAILED"] },
+            { "type": "null" }
+          ]
+        }
+      }
+    },
+    "CLOSE_TRANSPORT": {
+      "description": "서버 → 기기. 세션 끝(opId 필수). 기기는 ACK 뒤 마이크 송신 · 재생 · 대기열을 정리하고 VOICE_SESSION_CLOSED를 보낸다",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reason"],
+      "properties": {
+        "reason": {
+          "type": "string",
+          "enum": ["ENDED", "GUARDIAN_STOP", "CHILD_STOP", "SILENCE", "DISCONNECT", "CONSENT_WITHDRAWN", "DECLINED", "FAILED"]
+        }
+      }
+    },
+    "VOICE_SESSION_CLOSED": {
+      "description": "기기 → 서버. 기기 멈춤 확인(ENDED confirmed 근거). WSS는 대기용으로 남는다",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["outputStoppedAt", "micClosedAt"],
+      "properties": {
+        "outputStoppedAt": { "$ref": "common.schema.json#/$defs/DateTime" },
+        "micClosedAt": { "$ref": "common.schema.json#/$defs/DateTime" }
+      }
+    },
+    "DEVICE_STATE": {
+      "description": "기기 → 서버. 마이크 · 소리 · 탭 보임 상태가 바뀔 때. 바뀐 필드만 실어도 된다. U1 서버는 알려진 type으로 받아 무시한다(ERROR 없음, J123)",
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "mic": { "type": "string", "enum": ["OK", "LOST"] },
+        "player": { "type": "string", "enum": ["OK", "ERROR"] },
+        "visibility": { "type": "string", "enum": ["VISIBLE", "HIDDEN"] },
+        "wakeLock": { "type": "string", "enum": ["HELD", "RELEASED"] }
+      }
+    },
+    "ERROR": {
+      "description": "서버 → 기기. READY 뒤 형식이 틀린 메시지(연결은 유지). refSeq는 문제 메시지의 봉투 seq다",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code"],
+      "properties": {
+        "code": { "type": "string", "enum": ["UNKNOWN_TYPE", "BAD_PAYLOAD"] },
+        "refSeq": { "type": ["integer", "null"], "minimum": 1 }
+      }
+    },
+    "View": {
+      "type": "string",
+      "enum": ["STANDBY", "LISTENING", "THINKING", "CLOSING"]
+    }
+  }
+}

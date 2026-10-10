@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  core-api 로그 출력 기준 설정 (U1 3.5 Step 3 · OD-1 · OD-3 · NFR9.15 · BR8.7)
+  - 한 줄 = JSON 객체 하나, 표준 출력(Docker json-file).
+  - 사건 전용 로거 MUJOONG_EVENT만 INFO. 사건 줄은 발행 지점의 사건 기록기가 OD-1 키 순서
+    (ts · level · traceId · component · event · ownerHash · attrs)로 만든 JSON 한 줄을 메시지로 넘긴다.
+  - 프레임워크 · 라이브러리 로그는 루트 WARN 이상만 받아 APP_ERROR 한 줄로 바꾼다. 로그 메시지 · 예외 메시지 ·
+    스택은 버린다(%nopex, OD-3 3번). 요청 본문 · SQL 매개변수 · 전사가 로그에 실리지 않게 한다.
+  - errorKind(예외 클래스 이름)와 traceId(MDC)를 채우는 변환기 연결은 구조화 로그 연결 단계(Step 21 · 26)가 이 파일에 더한다.
+-->
+<configuration>
+  <statusListener class="ch.qos.logback.core.status.NopStatusListener"/>
+
+  <appender name="EVENT_JSON" class="ch.qos.logback.core.ConsoleAppender">
+    <encoder>
+      <charset>UTF-8</charset>
+      <pattern>%msg%n%nopex</pattern>
+    </encoder>
+  </appender>
+
+  <appender name="APP_ERROR_JSON" class="ch.qos.logback.core.ConsoleAppender">
+    <encoder>
+      <charset>UTF-8</charset>
+      <pattern>{"ts":"%d{yyyy-MM-dd'T'HH:mm:ss.SSS'Z',UTC}","level":"%level","traceId":null,"component":"core-api/Maintenance","event":"APP_ERROR","ownerHash":null,"attrs":{}}%n%nopex</pattern>
+    </encoder>
+  </appender>
+
+  <logger name="MUJOONG_EVENT" level="INFO" additivity="false">
+    <appender-ref ref="EVENT_JSON"/>
+  </logger>
+
+  <root level="WARN">
+    <appender-ref ref="APP_ERROR_JSON"/>
+  </root>
+</configuration>

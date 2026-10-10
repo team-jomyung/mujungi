@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mujoong.invalid/contracts/schemas/csrf-response.schema.json",
+  "title": "CSRF 토큰 취득 응답",
+  "description": "GET /api/session/csrf 200(편차 (u) · SD-6 · J75). Cache-Control no-store. 토큰은 JS 메모리에만 두고 상태 변경 요청의 헤더 headerName으로 보낸다. 값은 로그에 쓰지 않는다.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["token", "headerName"],
+  "properties": {
+    "token": { "type": "string", "minLength": 16, "maxLength": 512 },
+    "headerName": { "type": "string", "enum": ["X-CSRF-TOKEN"] }
+  }
+}

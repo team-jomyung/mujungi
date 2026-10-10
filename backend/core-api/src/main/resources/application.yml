@@ -1,0 +1,179 @@
+# core-api 기본 설정 (U1 3.5 Step 3)
+# - mujoong.* 키 값의 정본: reliability-design.md ## 3 · contracts/timing.md (BR8.11 · RD-24). 소유 앱이 core-api 또는 양 앱인 키만 둔다.
+# - 비밀은 환경 변수 이름으로만 받는다(SD-12): SPRING_DATASOURCE_PASSWORD(DB_CORE_PASSWORD를 렌더러가 매핑) ·
+#   INTERNAL_SERVICE_TOKEN · MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET · GOOGLE_OAUTH_CLIENT_SECRET(U2). 값은 어느 파일에도 없다.
+# - 주소 기본값은 Compose backend 망 이름(postgres · realtime, infra-spec D-12 · J109). 호스트에서 돌릴 때는
+#   SPRING_DATASOURCE_URL · MUJOONG_INTERNALHTTP_REALTIMEBASEURL 환경 변수로 바꾼다(J133).
+# - mujoong.dev-login.enabled는 어느 프로필 파일에도 true로 쓰지 않는다(환경 변수 MUJOONG_DEVLOGIN_ENABLED, SD-14 · A2).
+spring:
+  application:
+    name: core-api
+  main:
+    banner-mode: off
+  threads:
+    virtual:
+      enabled: true
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
+  datasource:
+    url: jdbc:postgresql://postgres:5432/mujoong
+    username: core_app
+    hikari:
+      pool-name: core-api
+      maximum-pool-size: 10
+      connection-timeout: 2000
+      validation-timeout: 1000
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        default_schema: core
+        jdbc:
+          time_zone: UTC
+  flyway:
+    # 앱은 Flyway를 실행하지 않고 이력 버전만 읽는다. 적용은 migrate 컨테이너(mujoong_owner)가 한다(BR8.1 · BR8.2 · J116)
+    enabled: false
+  session:
+    jdbc:
+      initialize-schema: never
+      table-name: core_spring_session
+
+server:
+  port: 8080
+  shutdown: graceful
+  server-header: ""
+  forward-headers-strategy: native
+  error:
+    include-message: never
+    include-binding-errors: never
+    include-stacktrace: never
+    include-exception: false
+    include-path: never
+    whitelabel:
+      enabled: false
+  servlet:
+    session:
+      timeout: ${mujoong.timing.login.session-idle}
+      cookie:
+        name: MUJOONG_SESSION
+        http-only: true
+        secure: true
+        same-site: lax
+        path: /
+        max-age: ${mujoong.security.session-cookie-max-age}
+  tomcat:
+    remoteip:
+      remote-ip-header: X-Forwarded-For
+      protocol-header: X-Forwarded-Proto
+      # 기본은 아무 프록시도 신뢰하지 않는다. Compose가 환경 변수 SERVER_TOMCAT_REMOTEIP_INTERNALPROXIES로
+      # Nginx 고정 IP를 정규식으로 이스케이프한 값 하나(172\.30\.10\.10)를 준다(infra-spec 3.3 · BR1.6).
+      internal-proxies: "^$"
+
+management:
+  server:
+    port: 9090
+    address: 127.0.0.1
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: never
+  metrics:
+    distribution:
+      slo:
+        "[http.server.requests]": 100ms,300ms,500ms,1s
+
+springdoc:
+  api-docs:
+    # dev · test 프로필에서만 켠다(tech-stack 2.2). 계약 일치는 contracts/schemas 검증이 본다
+    enabled: false
+
+mujoong:
+  timing:
+    session:
+      preparing-timeout: 10s
+    core:
+      device-status-stale: 30s
+    bootstrap:
+      code-ttl: 24h
+      rate-limit:
+        max: 20
+        window: 1h
+    device:
+      register-failure-limit:
+        max: 10
+        window: 10m
+      cookie-max-age: 400d
+      # realtime이 소유하는 계약 7절 값. Core는 불변식 I-6 기동 검증에만 읽는다
+      status-report-interval: 10s
+    login:
+      session-idle: 30d
+    cache:
+      approved-content-ttl: 10m
+      policy-version-ttl: 1m
+  outbox:
+    poll-interval: 500ms
+    batch-size: 20
+    retry-backoff: [1s, 2s, 4s, 8s, 16s, 30s]
+    max-retries: 20
+    claim-lease: 30s
+    control-event-policy: REARM_ON_START
+  inbox:
+    poll-interval: 500ms
+    retry-backoff: [1s, 2s, 4s, 8s, 16s]
+    max-retries: 5
+    claim-lease: 30s
+    handler-threads: 2
+    batch-size: 20
+  retention:
+    failed-payload: 7d
+  cleanup:
+    messaging-interval: 24h
+    device-expiry-interval: 10m
+    expired-device-retention: 7d
+    batch-size: 1000
+  session:
+    timer-tick: 1s
+  bootstrap:
+    code-draw-attempts: 5
+  internal-http:
+    realtime-base-url: http://realtime:8081
+    connect-timeout: 500ms
+    session-start-timeout: 3s
+    session-start-retries: 1
+    session-end-timeout: 2s
+    session-view-timeout: 1s
+    event-publish-timeout: 3s
+    breaker-failure-threshold: 3
+    breaker-open-duration: 5s
+  health:
+    db-check-interval: 5s
+    db-failure-threshold: 3
+  limits:
+    rate-counter-max-keys: 10000
+    rest-body-max: 64KB
+    internal-event-body-max: 2MB
+    background-db-concurrency: 3
+    db-lock-timeout: 2s
+    db-statement-timeout: 10s
+    db-retry-attempts: 2
+  security:
+    session-cookie-max-age: 30d
+    allowed-origin: ${MUJOONG_SECURITY_ALLOWED_ORIGIN:}
+    event-log-rate-cap: 60
+  dev-login:
+    enabled: false
+  load-test:
+    enabled: false
+  metrics:
+    db-pool-wait-warn: 100ms
+  observability:
+    owner-hash-secret: ${MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET:}
+    metric-snapshot-interval: 60s
+    log-merge-window: 10s

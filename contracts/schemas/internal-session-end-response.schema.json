@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mujoong.invalid/contracts/schemas/internal-session-end-response.schema.json",
+  "title": "끝내기 · 정리 명령 응답",
+  "description": "POST /internal/sessions/{id}/end 202. GUARDIAN_STOP을 받은 ACTIVE · CLOSING 세션은 {status: CLOSING}, CORE_ABANDONED 정리는 빈 객체 {}다(J111 · J54 응답표).",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "status": { "type": "string", "enum": ["CLOSING"] }
+  }
+}

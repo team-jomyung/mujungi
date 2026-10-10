@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mujoong.invalid/contracts/schemas/activity-free-request.schema.json",
+  "title": "08 자유대화 시작 요청",
+  "description": "POST /api/activities/free 본문(계약 3절 · BR6.1 · BR6.4). context 네 칸은 모두 선택이고 서술 칸 둘은 200자 이하다(넘으면 400 VALIDATION_FAILED, 편차 (d)). U1은 context를 검증만 하고 저장하지도 Realtime · 공급자에 보내지도 않는다(NFR3.1). 서버는 모르는 필드를 무시한다.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["idempotencyKey"],
+  "properties": {
+    "idempotencyKey": { "$ref": "common.schema.json#/$defs/Uuid" },
+    "context": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "knownContent": { "type": "string", "maxLength": 200 },
+        "situationType": { "type": "string", "enum": ["FRIEND", "SCHOOL", "FAMILY", "ACADEMY", "OTHER"] },
+        "sourceType": { "type": "string", "enum": ["SEEN", "HEARD_FROM_CHILD"] },
+        "question": { "type": "string", "maxLength": 200 }
+      }
+    }
+  }
+}

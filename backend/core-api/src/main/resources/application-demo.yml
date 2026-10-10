@@ -1,0 +1,10 @@
+# core-api demo 프로필 (U1 3.5 Step 3 · infra-spec 1.3 · SD-14)
+# EC2 1대의 시연 환경. 허용 origin · 비밀은 Parameter Store에서 렌더링된 env 파일로만 받는다(infra-spec 3.7).
+# 이 파일에는 발급 한도 상향 값과 mujoong.load-test.* 키를 두지 않는다(A6 · SD-10).
+mujoong:
+  dev-login:
+    enabled: false
+
+springdoc:
+  api-docs:
+    enabled: false

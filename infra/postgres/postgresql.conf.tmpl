@@ -1,0 +1,40 @@
+# 무중 PostgreSQL 설정 템플릿 (U1 3.5 Step 9 · infra-spec 2.5 · SD-13 · SD-15 · NFR7.6 · NFR9.7)
+#
+# 쓰는 법: 템플릿 변수는 ${PG_LISTEN_ADDRESSES} 하나뿐이다(envsubst 변수 목록을 명시해 렌더링한다).
+#   - Compose demo · ci: '*'(컨테이너 안. 접근은 backend 망 + pg_hba 한 대역으로 제한)로 렌더링해
+#     `postgres -c config_file=<렌더 결과>`로 띄운다(hba_file은 기본값 $PGDATA/pg_hba.conf = 02-hba.sh 출력).
+#   - 시험 MujoongPostgres(local 백엔드, J132): 127.0.0.1로 렌더링해 같은 방식으로 띄운다(포트 · 소켓 디렉터리는 명령줄 -c가 덮는다).
+# 비밀 값은 이 파일에 없다. 숫자 값의 근거는 infra-spec 2.5 표다.
+
+listen_addresses = '${PG_LISTEN_ADDRESSES}'
+port = 5432
+# 풀 합계 20(core 10 + realtime 10) + 풀 밖 연결 4 이하(NFR7.6). 역할별 한도는 01-roles.sql
+max_connections = 100
+
+# 메모리(컨테이너 1.0G)
+shared_buffers = 256MB
+effective_cache_size = 512MB
+work_mem = 4MB
+maintenance_work_mem = 64MB
+# gp3(SSD)
+random_page_cost = 1.1
+
+# 인증: 비밀번호는 SCRAM으로만 저장 · 확인한다(pg_hba는 scram-sha-256 한 줄)
+password_encryption = scram-sha-256
+
+# 시각은 UTC(앱 Clock과 맞춤, BR8.10 · NFR6.4). 백업 스케줄만 KST
+timezone = 'UTC'
+log_timezone = 'UTC'
+
+# 로그 위생(SD-15 층 7 · BR8.7): DETAIL · HINT · 문장 본문에 키 · 코드 · 비밀번호 값이 실리지 않게 한다
+log_error_verbosity = terse
+log_statement = 'none'
+log_min_duration_statement = -1
+log_min_error_statement = panic
+log_connections = off
+log_disconnections = off
+log_line_prefix = '%m [%p] '
+
+# 지속성은 기본값(켬) 그대로: 데이터 안전 우선
+fsync = on
+synchronous_commit = on

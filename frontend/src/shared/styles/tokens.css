@@ -1,0 +1,45 @@
+/*
+ * 무중 디자인 토큰 (U1 3.5 Step 4 · design-system-mapping.md 2절)
+ * 값은 임시다(가정 C1, 화면 설계 PDF 값으로 바꿀 때 접근성 대비 C9를 다시 잰다 · OQ8).
+ * /parent · /device가 같은 CSS 변수를 쓴다. 상태 색은 점 · 배경 · 테두리에만 쓰고 글은 text 색을 쓴다(AC1.4.15).
+ */
+:root {
+  --color-brand-primary: #3b6fd4;
+  --color-text-primary: #1f2430;
+  --color-text-secondary: #5b6270;
+  --color-surface-base: #ffffff;
+  --color-surface-card: #f4f6fa;
+  --color-border-default: #cbd1dc;
+  --color-status-stable: #2e9e5b;
+  --color-status-unstable: #d9a400;
+  --color-status-disconnected: #d64545;
+  --color-status-unresponsive: #8a909c;
+  --color-action-danger: #c23030;
+  --color-fixed-expression: #dce8fb;
+  --space-unit: 4px;
+  --radius-card: 12px;
+
+  /* 글자 크기: 본문 16 · 보조 14 · 머리 20 · 아이 기기 라벨 28 이상 */
+  --font-size-body: 16px;
+  --font-size-secondary: 14px;
+  --font-size-heading: 20px;
+  --font-size-device-label: 28px;
+
+  /* 터치 영역: 보호자 44px 이상, 아이 기기 단추 72px 이상 */
+  --touch-target-min: 44px;
+  --touch-target-device-min: 72px;
+
+  --font-family-base: system-ui, -apple-system, "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic",
+    sans-serif;
+}
+
+html {
+  font-family: var(--font-family-base);
+  font-size: var(--font-size-body);
+  color: var(--color-text-primary);
+  background-color: var(--color-surface-base);
+}
+
+body {
+  margin: 0;
+}

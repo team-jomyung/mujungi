@@ -1,0 +1,518 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mujoong.invalid/contracts/schemas/ws-envelope.schema.json",
+  "title": "기기 WSS 제어 봉투",
+  "description": "텍스트 프레임 = JSON 제어 메시지 {type, seq, sentAt, opId?, sessionId?, payload}(계약 4.2 · J27). seq는 연결마다 · 방향마다 1부터 1씩 는다. opId는 확인이 필요한 서버 명령 4종(START_SESSION · PLAY_APPROVED_CONTENT · STOP_OUTPUT · CLOSE_TRANSPORT)에만 붙고 기기는 ACK.ackOf로 돌려준다. sentAt은 보낸 쪽 시계 값이고 기기는 HEARTBEAT 송신 직전에 채운다(OD-8 · R3-4). 텍스트 프레임 상한 8KB(mujoong.limits.ws-text-frame-max)를 넘으면 4400이다(편차 (s)). 아래 if-then은 type별 payload 형식과 opId · sessionId 규칙을 보낸 쪽 기준으로 확인한다.",
+  "x-device-to-server": [
+    "HELLO",
+    "HEARTBEAT",
+    "ACK",
+    "DEVICE_READY",
+    "PLAYBACK_MARK",
+    "VOICE_SESSION_CLOSED",
+    "DEVICE_STATE"
+  ],
+  "x-server-to-device": [
+    "HELLO_OK",
+    "HEARTBEAT_ACK",
+    "START_SESSION",
+    "SESSION_STATE",
+    "OUTPUT_BEGIN",
+    "OUTPUT_END",
+    "PLAY_APPROVED_CONTENT",
+    "STOP_OUTPUT",
+    "CLOSE_TRANSPORT",
+    "ERROR"
+  ],
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "type",
+    "seq",
+    "sentAt",
+    "payload"
+  ],
+  "properties": {
+    "type": {
+      "type": "string",
+      "enum": [
+        "HELLO",
+        "HEARTBEAT",
+        "ACK",
+        "DEVICE_READY",
+        "PLAYBACK_MARK",
+        "VOICE_SESSION_CLOSED",
+        "DEVICE_STATE",
+        "HELLO_OK",
+        "HEARTBEAT_ACK",
+        "START_SESSION",
+        "SESSION_STATE",
+        "OUTPUT_BEGIN",
+        "OUTPUT_END",
+        "PLAY_APPROVED_CONTENT",
+        "STOP_OUTPUT",
+        "CLOSE_TRANSPORT",
+        "ERROR"
+      ]
+    },
+    "seq": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 4294967295
+    },
+    "sentAt": {
+      "$ref": "common.schema.json#/$defs/DateTime"
+    },
+    "opId": {
+      "$ref": "common.schema.json#/$defs/Uuid"
+    },
+    "sessionId": {
+      "$ref": "common.schema.json#/$defs/NullableUuid"
+    },
+    "payload": {
+      "type": "object"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "HELLO"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "ws-messages.schema.json#/$defs/HELLO"
+          }
+        },
+        "not": {
+          "required": [
+            "opId"
+          ]
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "HEARTBEAT"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "ws-messages.schema.json#/$defs/HEARTBEAT"
+          }
+        },
+        "not": {
+          "required": [
+            "opId"
+          ]
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "ACK"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "ws-messages.schema.json#/$defs/ACK"
+          }
+        },
+        "not": {
+          "required": [
+            "opId"
+          ]
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "DEVICE_READY"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "ws-messages.schema.json#/$defs/DEVICE_READY"
+          },
+          "sessionId": {
+            "$ref": "common.schema.json#/$defs/Uuid"
+          }
+        },
+        "not": {
+          "required": [
+            "opId"
+          ]
+        },
+        "required": [
+          "sessionId"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "PLAYBACK_MARK"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "ws-messages.schema.json#/$defs/PLAYBACK_MARK"
+          },
+          "sessionId": {
+            "$ref": "common.schema.json#/$defs/Uuid"
+          }
+        },
+        "not": {
+          "required": [
+            "opId"
+          ]
+        },
+        "required": [
+          "sessionId"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "VOICE_SESSION_CLOSED"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "ws-messages.schema.json#/$defs/VOICE_SESSION_CLOSED"
+          },
+          "sessionId": {
+            "$ref": "common.schema.json#/$defs/Uuid"
+          }
+        },
+        "not": {
+          "required": [
+            "opId"
+          ]
+        },
+        "required": [
+          "sessionId"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "DEVICE_STATE"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "ws-messages.schema.json#/$defs/DEVICE_STATE"
+          }
+        },
+        "not": {
+          "required": [
+            "opId"
+          ]
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "HELLO_OK"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "ws-messages.schema.json#/$defs/HELLO_OK"
+          }
+        },
+        "not": {
+          "required": [
+            "opId"
+          ]
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "HEARTBEAT_ACK"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "ws-messages.schema.json#/$defs/HEARTBEAT_ACK"
+          }
+        },
+        "not": {
+          "required": [
+            "opId"
+          ]
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "START_SESSION"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "ws-messages.schema.json#/$defs/START_SESSION"
+          },
+          "sessionId": {
+            "$ref": "common.schema.json#/$defs/Uuid"
+          }
+        },
+        "required": [
+          "opId",
+          "sessionId"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "SESSION_STATE"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "ws-messages.schema.json#/$defs/SESSION_STATE"
+          }
+        },
+        "not": {
+          "required": [
+            "opId"
+          ]
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "OUTPUT_BEGIN"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "ws-messages.schema.json#/$defs/OUTPUT_BEGIN"
+          },
+          "sessionId": {
+            "$ref": "common.schema.json#/$defs/Uuid"
+          }
+        },
+        "not": {
+          "required": [
+            "opId"
+          ]
+        },
+        "required": [
+          "sessionId"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "OUTPUT_END"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "ws-messages.schema.json#/$defs/OUTPUT_END"
+          }
+        },
+        "not": {
+          "required": [
+            "opId"
+          ]
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "PLAY_APPROVED_CONTENT"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "ws-messages.schema.json#/$defs/PLAY_APPROVED_CONTENT"
+          },
+          "sessionId": {
+            "$ref": "common.schema.json#/$defs/Uuid"
+          }
+        },
+        "required": [
+          "opId",
+          "sessionId"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "STOP_OUTPUT"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "ws-messages.schema.json#/$defs/STOP_OUTPUT"
+          },
+          "sessionId": {
+            "$ref": "common.schema.json#/$defs/Uuid"
+          }
+        },
+        "required": [
+          "opId",
+          "sessionId"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "CLOSE_TRANSPORT"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "ws-messages.schema.json#/$defs/CLOSE_TRANSPORT"
+          },
+          "sessionId": {
+            "$ref": "common.schema.json#/$defs/Uuid"
+          }
+        },
+        "required": [
+          "opId",
+          "sessionId"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "ERROR"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "ws-messages.schema.json#/$defs/ERROR"
+          }
+        },
+        "not": {
+          "required": [
+            "opId"
+          ]
+        }
+      }
+    }
+  ]
+}

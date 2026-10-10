@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mujoong.invalid/contracts/schemas/device-claim-response.schema.json",
+  "title": "기기 토큰 받기 응답",
+  "description": "POST /api/device/bootstrap/claim 200(BR3.1). 토큰은 본문에 없고 Set-Cookie MUJOONG_DEVICE로만 간다.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["deviceId"],
+  "properties": {
+    "deviceId": { "$ref": "common.schema.json#/$defs/Uuid" }
+  }
+}

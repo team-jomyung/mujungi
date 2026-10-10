@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mujoong.invalid/contracts/schemas/session-end-response.schema.json",
+  "title": "P1 끝내기 응답",
+  "description": "POST /api/sessions/{id}/end 202(BR6.9). 12는 17('마무리 중')로 간다.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["status"],
+  "properties": {
+    "status": { "type": "string", "enum": ["CLOSING"] }
+  }
+}

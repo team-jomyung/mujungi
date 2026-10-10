@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mujoong.invalid/contracts/schemas/device-view.schema.json",
+  "title": "DeviceView",
+  "description": "05 · 04 대화 기기 구역 값(계약 3절 DeviceView · BR4.3 · BR4.6). 등록 줄 · 네트워크 줄 · 판정으로만 이뤄지고 판정 내부값 · 비밀 · 해시 · 전사는 없다(계약 2절 노출 금지). network.state의 UNKNOWN은 '30초 넘게 새 보고 없음(확인 불가)'이라는 정상 값이다.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["registration", "network", "verdict"],
+  "properties": {
+    "registration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status"],
+      "properties": {
+        "status": { "type": "string", "enum": ["NONE", "REGISTERED"] },
+        "codePrefix": {
+          "anyOf": [
+            { "$ref": "common.schema.json#/$defs/CodePrefix" },
+            { "type": "null" }
+          ]
+        },
+        "registeredAt": { "$ref": "common.schema.json#/$defs/NullableDateTime" }
+      }
+    },
+    "network": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state"],
+      "properties": {
+        "state": {
+          "type": "string",
+          "enum": ["STABLE", "UNSTABLE", "DISCONNECTED", "UNRESPONSIVE", "NONE", "UNKNOWN"]
+        },
+        "rttMs": { "type": ["integer", "null"], "minimum": 0 },
+        "recentDisconnects": { "type": ["integer", "null"], "minimum": 0 },
+        "since": { "$ref": "common.schema.json#/$defs/NullableDateTime" },
+        "lastSeenAt": { "$ref": "common.schema.json#/$defs/NullableDateTime" },
+        "lastReportedAt": { "$ref": "common.schema.json#/$defs/NullableDateTime" }
+      }
+    },
+    "verdict": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["canStart"],
+      "properties": {
+        "canStart": { "type": "boolean" },
+        "reasonCode": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "NO_DEVICE",
+                "DEVICE_UNSTABLE",
+                "DEVICE_DISCONNECTED",
+                "DEVICE_UNRESPONSIVE",
+                "DEVICE_STATUS_UNKNOWN"
+              ]
+            },
+            { "type": "null" }
+          ]
+        }
+      }
+    }
+  }
+}

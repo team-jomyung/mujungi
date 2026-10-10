@@ -34,3 +34,18 @@ exec powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "C:
 ```
 
 `cmd.exe //c ...` 로 감싸는 방법은 Claude Code 훅 환경(MSYS_NO_PATHCONV=1)에서 `//c`가 변환되지 않아 cmd 배너만 찍고 끝나므로 쓰지 않는다. 래퍼를 둔 뒤 Claude Code를 완전히 다시 시작한다(`/clear`로는 안 된다). Git Bash에서 `claude -p "/aidlc ..."`처럼 슬래시 명령을 넘길 때는 `MSYS_NO_PATHCONV=1`을 붙여야 `/aidlc`가 경로로 바뀌지 않는다.
+
+## 개발 · 검증
+
+애플리케이션 코드는 저장소 루트의 실행 단위 디렉터리에 둔다(U1 3.5 J97). 유닛 구분은 컴포넌트 패키지 이름과 유닛별 `source-manifest.json`으로 한다.
+
+| 디렉터리 | 내용 |
+|---|---|
+| `backend/` | Gradle 멀티 프로젝트(Java 21 · Spring Boot): `contract-model` · `core-api` · `realtime-activity` · `test-support`(시험 전용) |
+| `frontend/` | Next.js App Router 한 앱(`/parent` · `/device`, Node 22) |
+| `contracts/` | 앱 사이 · 클라이언트 계약 정본(OpenAPI · AsyncAPI · JSON Schema) |
+| `infra/` | Compose · Nginx · PostgreSQL 초기화 · 배포 스크립트 |
+| `tools/` | 가짜 공급자 · 기기 시뮬레이터 · 끝-끝 시나리오(Node 22 ESM, 앱 이미지 밖) |
+| `scripts/` | 검증 명령(`scripts/verify.sh`)과 단계 스크립트 |
+
+전제: JDK 21, Node 22(`.nvmrc`), Docker(Compose v2.24.4 이상) 또는 호스트 PostgreSQL 16. 비밀 값(계정 · 비밀번호 · API 키 · 토큰 · 실제 도메인)은 저장소 어디에도 두지 않고 환경 변수 이름만 쓴다. `.env*` · 인증서 · 키 파일 · `build/`는 `.gitignore`가 막는다. 유닛 시험 명령은 각 유닛의 `code-generation/unit-test-instructions.md`에 있다.

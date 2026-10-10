@@ -1,0 +1,7 @@
+# realtime-activity dev 프로필 (U1 3.5 Step 3 · SD-14 조합 1 · 2)
+# 개발자 PC(IDE)와 Compose 검증 스택(J108)이 함께 쓴다. 공급자 주소는 이 파일에 두지 않는다:
+# 검증 스택은 MUJOONG_PROVIDER_URL로 가짜 공급자(fake-provider)를 주고, 빠뜨리면 실공급자로 가지 않고 기동이 실패한다(J141).
+mujoong:
+  security:
+    # dev는 HTTP localhost(Secure Context 예외)를 허용한다. 검증 스택은 https://localhost:8443을 환경 변수로 준다
+    allowed-origin: ${MUJOONG_SECURITY_ALLOWED_ORIGIN:http://localhost:3000}

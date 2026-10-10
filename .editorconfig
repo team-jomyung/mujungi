@@ -1,0 +1,25 @@
+# 무중 저장소 공통 편집 규칙 (U1 3.5 Step 2 · org.md 코드 스타일)
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 2
+
+[*.{java,kt,kts,sql}]
+indent_size = 4
+
+[{gradlew,*.bat}]
+indent_size = unset
+
+[*.bat]
+end_of_line = crlf
+
+[*.md]
+trim_trailing_whitespace = false
+
+[Makefile]
+indent_style = tab

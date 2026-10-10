@@ -90,3 +90,21 @@ aidlc/diagnostics/
 
 # Git Bash 크래시 덤프
 *.stackdump
+
+# 무중 앱 저장소 — 비밀 · 빌드 산출물은 커밋하지 않는다 (U1 3.5 Step 2 · NFR9.10 · J127)
+# 환경 파일(가짜 값 포함)은 실행 때 만들거나 개인 PC에만 둔다
+.env*
+# 인증서 · 키 파일(자체 서명 인증서는 실행 때 build/verify/certs/에 생긴다, J108)
+*.pem
+*.key
+*.p12
+*.jks
+# 빌드 · 시험 산출물
+build/
+build/verify/
+.gradle/
+.kotlin/
+node_modules/
+.next/
+coverage/
+*.tsbuildinfo

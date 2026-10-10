@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mujoong.invalid/contracts/schemas/home-response.schema.json",
+  "title": "04 홈 응답",
+  "description": "GET /api/home 200(계약 3절 · J119). U1 모양: child = 시드 아이(아이가 없으면 null), device = DeviceView, currentSession = null(U4가 채움), lock = {locked: !canStart, reasonCode}.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["child", "device", "currentSession", "lock"],
+  "properties": {
+    "child": {
+      "anyOf": [
+        { "$ref": "#/$defs/Child" },
+        { "type": "null" }
+      ]
+    },
+    "device": { "$ref": "device-view.schema.json" },
+    "currentSession": {
+      "anyOf": [
+        { "$ref": "live-view.schema.json#/$defs/SessionSummary" },
+        { "type": "null" }
+      ]
+    },
+    "lock": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["locked"],
+      "properties": {
+        "locked": { "type": "boolean" },
+        "reasonCode": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "NO_DEVICE",
+                "DEVICE_UNSTABLE",
+                "DEVICE_DISCONNECTED",
+                "DEVICE_UNRESPONSIVE",
+                "DEVICE_STATUS_UNKNOWN"
+              ]
+            },
+            { "type": "null" }
+          ]
+        }
+      }
+    }
+  },
+  "$defs": {
+    "Child": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["childId", "displayName", "age", "interests"],
+      "properties": {
+        "childId": { "$ref": "common.schema.json#/$defs/Uuid" },
+        "displayName": { "type": "string", "minLength": 1, "maxLength": 10 },
+        "age": { "type": "integer", "minimum": 6, "maximum": 12 },
+        "interests": { "type": "array", "items": { "type": "string" } }
+      }
+    }
+  }
+}

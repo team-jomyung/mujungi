@@ -1,0 +1,204 @@
+# 무중 Core 아이 기기 API — U1 (C2: 아이 기기 웹 /device → Core DeviceRegistry)
+# 출처: contract-summary.md 4.1절 + 편차 (a)(b)(c)(k)(n)(o)(r) (contracts/deviations.md)
+# 본문 스키마의 정본은 contracts/schemas/*.schema.json(JSON Schema 2020-12)이다.
+openapi: 3.0.3
+info:
+  title: 무중 Core 아이 기기 API
+  version: "1"
+  description: |
+    흐름: 기기 웹 시작 → GET /device/me → 200이면 T19(꺼짐, J56), 401이면 GET /device/bootstrap/status →
+    D0(POST /device/bootstrap, 2초 status 폴링) → REGISTERED면 POST /device/bootstrap/claim → 「등록되었어요」 3초 → T19.
+    기기 웹 JS는 비밀을 읽지도 저장하지도 않는다. 비밀은 HttpOnly 쿠키로만 오가고 서버는 SHA-256 해시만 저장한다
+    (BR1.5 · BR3.3). 쿠키 유무는 서버가 판정한다(BR9.1). bootstrap과 claim은 CSRF 면제(3 · 4번, SameSite=Strict).
+servers:
+  - url: https://{host}/api
+    variables:
+      host:
+        default: localhost:8443
+        description: SERVICE_HOST 자리표시자(J98)
+x-unit: U1
+paths:
+  /device/bootstrap:
+    post:
+      operationId: issueBootstrapCode
+      summary: D0 코드 받기(BR1.1 ~ BR1.6)
+      description: |
+        유효한 bootstrap 쿠키의 UNREGISTERED 행이면 같은 코드를 돌려준다(BR1.3). 쿠키가 없거나 모르는 값 ·
+        EXPIRED · RELEASED이면 새 행 · 새 코드 · 새 쿠키다. 행이 이미 REGISTERED이면 409 ALREADY_REGISTERED로
+        기기 웹을 claim으로 보낸다(편차 (a)). 코드 추첨은 5번까지이고 모두 겹치면 503 CODE_ISSUE_FAILED(편차 (c)).
+        IP당 1시간 20회(bootstrap.rate-limit)를 넘으면 429이며 같은 쿠키의 반복 요청은 세지 않는다(편차 (k)).
+        IP는 신뢰 프록시(Nginx)가 덮어쓴 X-Forwarded-For만 쓴다(BR1.6 · BR8.9).
+      security: []
+      x-unit: U1
+      x-csrf-exempt: true
+      x-deviation: ["(a)", "(c)", "(k)"]
+      responses:
+        "201":
+          description: 코드 발급(또는 같은 쿠키의 같은 코드)
+          headers:
+            Set-Cookie:
+              description: MUJOONG_DEVICE_BOOTSTRAP(HttpOnly; Secure; SameSite=Strict; Path=/api/device; Max-Age=86400). 같은 코드를 돌려줄 때는 다시 내리지 않을 수 있다
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { $ref: "schemas/device-bootstrap-response.schema.json" }
+              example: { code: 7F3K92QD, expiresAt: "2026-10-16T09:00:00Z" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "409":
+          description: 행이 이미 REGISTERED(등록됨, claim 전) → claim으로(편차 (a))
+          x-error-codes: [ALREADY_REGISTERED]
+          x-deviation: ["(a)"]
+          content:
+            application/json:
+              schema: { $ref: "schemas/error-envelope.schema.json" }
+              example: { code: ALREADY_REGISTERED, message: 이미 등록된 기기예요., traceId: 4bf92f3577b34da6a3ce929d0e0e4736 }
+        "429":
+          description: IP당 발급 한도 초과(같은 쿠키의 반복은 세지 않음, 편차 (k)). Nginx limit_req 429도 같은 봉투다
+          x-error-codes: [RATE_LIMITED]
+          x-deviation: ["(k)"]
+          content:
+            application/json:
+              schema: { $ref: "schemas/error-envelope.schema.json" }
+              example: { code: RATE_LIMITED, message: 잠시 뒤 다시 시도해 주세요., traceId: 4bf92f3577b34da6a3ce929d0e0e4736 }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503":
+          description: 코드 추첨 5회 모두 겹침(편차 (c), 기기 웹은 5초 뒤 재요청) 또는 앱 준비 안 됨(편차 (n))
+          x-error-codes: [CODE_ISSUE_FAILED, SERVICE_NOT_READY]
+          x-deviation: ["(c)", "(n)"]
+          content:
+            application/json:
+              schema: { $ref: "schemas/error-envelope.schema.json" }
+              example: { code: CODE_ISSUE_FAILED, message: 잠시 뒤 다시 시도해 주세요., traceId: 4bf92f3577b34da6a3ce929d0e0e4736 }
+  /device/bootstrap/status:
+    get:
+      operationId: getBootstrapStatus
+      summary: D0 등록 확인(2초 폴링, BR1.7)
+      security:
+        - deviceBootstrap: []
+      x-unit: U1
+      responses:
+        "200":
+          description: PENDING · REGISTERED · EXPIRED(RELEASED도 EXPIRED). 코드는 다시 보내지 않는다
+          headers:
+            Cache-Control:
+              schema: { type: string, enum: [no-store] }
+          content:
+            application/json:
+              schema: { $ref: "schemas/device-bootstrap-status-response.schema.json" }
+              example: { status: PENDING, expiresAt: "2026-10-16T09:00:00Z" }
+        "401":
+          description: 쿠키 없음 · 모르는 값 → 기기 웹은 POST /device/bootstrap
+          x-error-codes: [BOOTSTRAP_NOT_FOUND]
+          content:
+            application/json:
+              schema: { $ref: "schemas/error-envelope.schema.json" }
+              example: { code: BOOTSTRAP_NOT_FOUND, message: 등록 정보를 찾을 수 없어요., traceId: 4bf92f3577b34da6a3ce929d0e0e4736 }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/ServiceNotReady" }
+  /device/bootstrap/claim:
+    post:
+      operationId: claimDeviceToken
+      summary: 등록된 코드로 기기 토큰 받기(BR3.1 · BR3.2)
+      description: |
+        첫 WSS 인증 전까지는 다시 부를 수 있고 부를 때마다 새 토큰으로 바꿔 앞 토큰을 무효로 한다(회전, 응답 유실 대비).
+        토큰은 본문에 없고 쿠키로만 간다. 쿠키가 없거나 모르는 비밀이면 401 BOOTSTRAP_NOT_FOUND(편차 (b)).
+      security:
+        - deviceBootstrap: []
+      x-unit: U1
+      x-csrf-exempt: true
+      x-deviation: ["(b)"]
+      responses:
+        "200":
+          description: 기기 토큰 발급
+          headers:
+            Set-Cookie:
+              description: |
+                MUJOONG_DEVICE(HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=34560000)와
+                MUJOONG_DEVICE_BOOTSTRAP 삭제(같은 Path=/api/device, Max-Age=0)
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { $ref: "schemas/device-claim-response.schema.json" }
+              example: { deviceId: 00000000-0000-4000-8000-000000000003 }
+        "401":
+          description: 쿠키 없음 · 모르는 비밀(편차 (b)) → 새 bootstrap
+          x-error-codes: [BOOTSTRAP_NOT_FOUND]
+          x-deviation: ["(b)"]
+          content:
+            application/json:
+              schema: { $ref: "schemas/error-envelope.schema.json" }
+        "409":
+          description: 아직 PENDING → 2초 뒤 status를 다시 조회
+          x-error-codes: [NOT_REGISTERED_YET]
+          content:
+            application/json:
+              schema: { $ref: "schemas/error-envelope.schema.json" }
+              example: { code: NOT_REGISTERED_YET, message: 아직 등록되지 않았어요., traceId: 4bf92f3577b34da6a3ce929d0e0e4736 }
+        "410":
+          description: 만료 · 해제 · 이미 첫 연결에 쓰임 → 기기 웹은 /device/me로 확인
+          x-error-codes: [BOOTSTRAP_CLOSED]
+          content:
+            application/json:
+              schema: { $ref: "schemas/error-envelope.schema.json" }
+              example: { code: BOOTSTRAP_CLOSED, message: 이 등록은 이미 끝났어요., traceId: 4bf92f3577b34da6a3ce929d0e0e4736 }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/ServiceNotReady" }
+  /device/me:
+    get:
+      operationId: getDeviceMe
+      summary: 기기 웹 시작 때 등록 확인(BR3.5)
+      description: 200이면 MUJOONG_DEVICE 쿠키 Max-Age를 400일로 다시 늘린다(갱신형, 서버 토큰은 만료 없음 B4).
+      security:
+        - device: []
+      x-unit: U1
+      responses:
+        "200":
+          description: 등록된 기기
+          headers:
+            Set-Cookie:
+              description: MUJOONG_DEVICE 재설정(속성은 claim과 같음)
+              schema: { type: string }
+            Cache-Control:
+              schema: { type: string, enum: [no-store] }
+          content:
+            application/json:
+              schema: { $ref: "schemas/device-me-response.schema.json" }
+              example: { deviceId: 00000000-0000-4000-8000-000000000003, registeredAt: "2026-10-15T09:00:00Z" }
+        "401":
+          description: 쿠키 없음 · 모르는 토큰 · RELEASED → D0
+          x-error-codes: [DEVICE_NOT_REGISTERED]
+          content:
+            application/json:
+              schema: { $ref: "schemas/error-envelope.schema.json" }
+              example: { code: DEVICE_NOT_REGISTERED, message: 등록되지 않은 기기예요., traceId: 4bf92f3577b34da6a3ce929d0e0e4736 }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/ServiceNotReady" }
+components:
+  securitySchemes:
+    deviceBootstrap: { type: apiKey, in: cookie, name: MUJOONG_DEVICE_BOOTSTRAP }
+    device: { type: apiKey, in: cookie, name: MUJOONG_DEVICE }
+  responses:
+    ValidationFailed:
+      description: JSON 아님 · 본문 64KB 초과(편차 (r))
+      x-error-codes: [VALIDATION_FAILED]
+      x-deviation: ["(r)"]
+      content:
+        application/json:
+          schema: { $ref: "schemas/error-envelope.schema.json" }
+    InternalError:
+      description: 처리하지 못한 서버 오류(편차 (o))
+      x-error-codes: [INTERNAL_ERROR]
+      x-deviation: ["(o)"]
+      content:
+        application/json:
+          schema: { $ref: "schemas/error-envelope.schema.json" }
+    ServiceNotReady:
+      description: 앱이 NOT_READY 또는 DRAINING(편차 (n))
+      x-error-codes: [SERVICE_NOT_READY]
+      x-deviation: ["(n)"]
+      headers:
+        Retry-After:
+          schema: { type: integer, minimum: 1 }
+      content:
+        application/json:
+          schema: { $ref: "schemas/error-envelope.schema.json" }

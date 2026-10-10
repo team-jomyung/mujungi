@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mujoong.invalid/contracts/schemas/internal-session-end-request.schema.json",
+  "title": "끝내기 · 정리 명령",
+  "description": "POST /internal/sessions/{id}/end 요청(계약 5절 · BR6.7 · BR6.9 · J54). reason CORE_ABANDONED는 Core가 포기한 세션의 정리 요청이고 requestId = sessionId다(편차 (f)).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["requestId", "reason"],
+  "properties": {
+    "requestId": { "$ref": "common.schema.json#/$defs/Uuid" },
+    "reason": { "type": "string", "enum": ["GUARDIAN_STOP", "CONSENT_WITHDRAWN", "CORE_ABANDONED"] }
+  }
+}

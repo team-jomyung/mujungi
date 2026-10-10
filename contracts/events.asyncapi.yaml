@@ -1,0 +1,144 @@
+# 무중 내부 영속 이벤트 6종 (C11) — Outbox → 내부 HTTP(POST /internal/events) → Inbox
+# 출처: contract-summary.md 6절 + 편차 (g)(p)(q) (contracts/deviations.md)
+# 봉투 · payload 스키마의 정본은 contracts/schemas/event-envelope.schema.json · event-payloads.schema.json(JSON Schema 2020-12)이다.
+asyncapi: 2.6.0
+info:
+  title: 무중 내부 영속 이벤트
+  version: "1"
+  description: |
+    각 앱은 업무 변경과 같은 로컬 트랜잭션에서 Outbox 행을 쓰고(BR5.1) 폴러가 상대 앱의 POST /internal/events로
+    하나씩 보낸다(BR5.2, 헤더 X-Internal-Token · X-Trace-Id). 받는 쪽은 Inbox에 커밋한 뒤에만 200을 돌려주고 같은
+    eventId는 한 번만 업무에 반영한다(BR5.5 ~ BR5.7, ADR-010).
+
+    순서 · 중복: 전역 순서를 가정하지 않는다. 세션 이벤트는 payload.statusVersion으로, 기기 이벤트는 봉투의
+    occurredAt으로 최신만 반영한다(편차 (g): 승인 계약 6절의 '기기 이벤트는 since로'를 occurredAt으로 바꿈 — since는
+    상태가 시작된 시각이라 같은 상태 안의 보고 순서를 가르지 못한다, BR4.1). 같은 eventId에 다른 내용이 오면 충돌로
+    기록하고 반영하지 않는다(409 EVENT_CONFLICT).
+
+    봉투 선택 필드 traceId(32자 소문자 16진수)를 더했다(편차 (p) · A3 · OD-7). 받는 쪽은 형식이 틀리면 헤더 → 새 값
+    순으로 대신하고, 두 앱의 Outbox/Inbox 네 표에 trace_id 열로 남긴다. 모르는 필드는 무시하므로 schemaVersion을
+    올리지 않는다(계약 10절 더하기만 안전).
+
+    제어 이벤트(DeviceReleased · DeletionRequested · DeletionCompleted · SessionRecordCaptured)는 20회 실패로 FAILED가
+    되어도 앱 시작 때 PENDING으로 재무장한다(A1, mujoong.outbox.control-event-policy = REARM_ON_START).
+    모든 Outbox/Inbox 행은 guardian_id를 채운다(A4). DeviceStatusChanged는 payload.guardianId가 원천이다(편차 (q)).
+x-unit: U1
+x-deviation: ["(g)", "(p)"]
+servers:
+  core:
+    url: http://core:8080/internal/events
+    protocol: http
+    description: Realtime → Core(core-inbox)
+  realtime:
+    url: http://realtime:8081/internal/events
+    protocol: http
+    description: Core → Realtime(realtime-inbox)
+defaultContentType: application/json
+channels:
+  core-inbox:
+    description: Realtime → Core. 전달 = POST http://core:8080/internal/events
+    servers: [core]
+    publish:
+      operationId: publishToCore
+      message:
+        oneOf:
+          - $ref: "#/components/messages/SessionStateChanged"
+          - $ref: "#/components/messages/SessionRecordCaptured"
+          - $ref: "#/components/messages/DeviceStatusChanged"
+          - $ref: "#/components/messages/DeletionCompleted"
+  realtime-inbox:
+    description: Core → Realtime. 전달 = POST http://realtime:8081/internal/events
+    servers: [realtime]
+    publish:
+      operationId: publishToRealtime
+      message:
+        oneOf:
+          - $ref: "#/components/messages/DeviceReleased"
+          - $ref: "#/components/messages/DeletionRequested"
+components:
+  schemas:
+    Envelope:
+      $ref: "schemas/event-envelope.schema.json"
+  messages:
+    SessionStateChanged:
+      name: SessionStateChanged
+      summary: Realtime(U4, U1 슬라이스) 발행 · Core 사본(U4) · U7 구독
+      x-aggregate-type: ActivitySession
+      x-schema-version: 1
+      x-control-event: false
+      payload:
+        $ref: "schemas/event-payloads.schema.json#/$defs/SessionStateChanged"
+      examples:
+        - name: preparing
+          payload:
+            sessionId: 00000000-0000-4000-8000-000000000020
+            guardianId: 00000000-0000-4000-8000-000000000001
+            childId: 00000000-0000-4000-8000-000000000002
+            activityType: FREE_TALK
+            status: PREPARING
+            statusVersion: 1
+            endReason: null
+            failureCode: null
+            confirmed: false
+            technicalPause: null
+            at: "2026-10-15T09:00:01Z"
+    SessionRecordCaptured:
+      name: SessionRecordCaptured
+      summary: U4 발행(종료 상태에서 한 번) · U4 ActivityRecord 구독. U1은 전달 틀 · 재무장 · 삭제 참가자의 payload 비우기만 한다
+      x-aggregate-type: ActivitySession
+      x-schema-version: 1
+      x-control-event: true
+      payload:
+        $ref: "schemas/event-payloads.schema.json#/$defs/SessionRecordCaptured"
+    DeviceStatusChanged:
+      name: DeviceStatusChanged
+      summary: Realtime(U3, U1 슬라이스) 발행(상태가 바뀔 때만) · Core DeviceRegistry 사본 · U7 구독
+      description: |
+        Core는 봉투 occurredAt(Inbox 행의 occurred_at)이 사본 reported_at보다 클 때만 덮어쓴다(편차 (g) · BR4.1).
+        occurredAt은 Realtime이 상태 UPDATE 직전에 앱 Clock으로 읽은 시각이다(BR4.8). 선택 필드 guardianId(편차 (q)).
+      x-aggregate-type: Device
+      x-schema-version: 1
+      x-control-event: false
+      x-deviation: ["(g)", "(q)"]
+      payload:
+        $ref: "schemas/event-payloads.schema.json#/$defs/DeviceStatusChanged"
+      examples:
+        - name: connected
+          payload:
+            deviceId: 00000000-0000-4000-8000-000000000003
+            state: CONNECTED
+            rttMs: null
+            recentDisconnects: 0
+            since: "2026-10-15T09:01:00Z"
+            lastSeenAt: "2026-10-15T09:01:00Z"
+            guardianId: 00000000-0000-4000-8000-000000000001
+    DeletionCompleted:
+      name: DeletionCompleted
+      summary: Realtime 발행(U4가 Realtime 쪽 참가자를 모두 돌린 뒤) · U2 AccountDeletion 구독
+      x-aggregate-type: DataDeletionRequest
+      x-schema-version: 1
+      x-control-event: true
+      payload:
+        $ref: "schemas/event-payloads.schema.json#/$defs/DeletionCompleted"
+    DeviceReleased:
+      name: DeviceReleased
+      summary: Core DeviceRegistry 발행(재등록 · 계정 삭제) · Realtime DeviceGateway 구독(4401로 닫고 OFFLINE, BR3.8)
+      x-aggregate-type: Device
+      x-schema-version: 1
+      x-control-event: true
+      payload:
+        $ref: "schemas/event-payloads.schema.json#/$defs/DeviceReleased"
+      examples:
+        - name: reregistered
+          payload:
+            deviceId: 00000000-0000-4000-8000-000000000003
+            guardianId: 00000000-0000-4000-8000-000000000001
+            reason: REREGISTERED
+    DeletionRequested:
+      name: DeletionRequested
+      summary: U2 AccountDeletion 발행 · U4 SessionLifecycle 구독(Realtime 쪽 삭제 지휘)
+      x-aggregate-type: DataDeletionRequest
+      x-schema-version: 1
+      x-control-event: true
+      payload:
+        $ref: "schemas/event-payloads.schema.json#/$defs/DeletionRequested"

@@ -1,0 +1,11 @@
+# core-api load-test 부가 프로필 (U1 3.5 Step 3 · A6 · PD-18)
+# dev와 함께만 켠다(load-test 단독 · demo · prod와 함께면 기동 거부, SD-14 조합 9 · 12 · 13).
+# 이 파일에는 부하 시험 스위치와 bootstrap 발급 한도 상향(600회 / 1시간)만 둔다.
+mujoong:
+  load-test:
+    enabled: true
+  timing:
+    bootstrap:
+      rate-limit:
+        max: 600
+        window: 1h

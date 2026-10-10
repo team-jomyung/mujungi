@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mujoong.invalid/contracts/schemas/health-response.schema.json",
+  "title": "공개 헬스 응답",
+  "description": "GET /api/health 200(편차 (t) · OD-11). 다른 필드는 없다. 앱이 NOT_READY · DRAINING이면 503 SERVICE_NOT_READY 오류 봉투다(편차 (n)).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["status"],
+  "properties": {
+    "status": { "type": "string", "enum": ["UP"] }
+  }
+}

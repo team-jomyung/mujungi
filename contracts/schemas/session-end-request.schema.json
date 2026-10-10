@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mujoong.invalid/contracts/schemas/session-end-request.schema.json",
+  "title": "P1 끝내기 요청",
+  "description": "POST /api/sessions/{id}/end 본문(BR6.9). requestId는 클라이언트가 만든 UUID이고 재시도에는 같은 값을 쓴다.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["requestId"],
+  "properties": {
+    "requestId": { "$ref": "common.schema.json#/$defs/Uuid" }
+  }
+}

@@ -1,0 +1,5 @@
+# realtime-activity prod 프로필 (U1 3.5 Step 3 · infra-spec 1.3 · SD-25 · J109 · J141)
+# prod 환경은 만들지 않는다. 프로필과 기동 가드만 코드에 둔다(실제 아동 데이터 운영 승인 D-14 뒤의 일).
+mujoong:
+  provider:
+    url: wss://api.openai.com/v1/live/sessions

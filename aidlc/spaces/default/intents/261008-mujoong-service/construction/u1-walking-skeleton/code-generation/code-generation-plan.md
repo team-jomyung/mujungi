@@ -242,25 +242,25 @@ J1 ~ J104는 모두 아직 확정이 아닌 가정이다. J97 ~ J104는 사람 �
 
 ### A. 구조 · 설정 골격
 
-- [ ] Step 1: 도구 · 버전 확인과 스택 판 고정
+- [x] Step 1: 도구 · 버전 확인과 스택 판 고정
   - 파일: 없음(결과는 Step 3 · 4의 판 고정 파일과 Step 53의 code-summary.md에 남긴다)
   - 하는 일: `java -version` · `docker version` · `docker compose version`(검증 스택의 `!override`에 v2.24.4 이상 필요, J136) · `node --version` · `gradle --version` · `psql --version` · `/usr/lib/postgresql/16/bin/initdb --version`(J132)을 확인한다. JDK 21이 없으면 설치를 시도하고(툴체인은 설치된 `/usr/lib/jvm/java-21-openjdk-amd64`를 쓰고 자동 받기에 기대지 않음), Docker 데몬이 없으면 기동을 시도한다. TLS 검증은 끄지 않는다. Docker는 `docker pull <postgres 고정 태그>`를 실제로 실행해 보고, 실패하면 데몬을 HTTPS_PROXY 환경과 함께 다시 띄운다(저장소 파일에는 쓰지 않는다). `/root/.ccr/README.md`에는 데몬 pull 절차가 없고 컨테이너 안 빌드 규칙만 있다(그 규칙은 Step 43). pull 성공 · 실패를 판 표에 적고 verify 모드(J133)와 DB 시험 백엔드(J132) 결정에 쓴다. 정확한 판을 고정할 후보를 정한다: Spring Boot 4.1.x 최신 패치(의존성 해석 판정은 빌드 파일이 생긴 Step 3 끝, J139), Gradle 래퍼 8.14.3(설치판, J139), Next.js · React 안정판(Node 22 호환, Safari 16.4 하한 확인), PostgreSQL 16 이미지 태그, Flyway CLI · Node · nginx 이미지 태그. 전환 대상인 Spring Boot 3.5.x의 OSS 지원 종료일을 spring.io에서 확인해 판 표에 적고, 지원이 끝났으면 3.5.x로 전환하기 전에 사람에게 묻는다. 공급자 Java SDK의 지원 범위(연결 · 이벤트 · 취소 · 교정)를 문서로 확인해 판 표에 적는다(tech-stack 2.2, J110은 SDK 없이 시작). 확인 결과의 기록 위치는 J140.
   - 근거: V-1 · J70 · G5 · G7 · tech-stack 2.2 · 열림 4 · J132 · J133 · J136 · J139 · J140
   - 완료 확인: 판 표(도구 · 라이브러리 · 이미지, 정확한 판 번호, Compose 판, 3.5.x 지원 종료일, 공급자 SDK 확인 결과)와 Docker pull 결과, 설치 시도 결과(성공 · 실패와 영향받는 검증)가 정리돼 있다.
 
-- [ ] Step 2: 저장소 루트 골격과 공통 설정 파일
+- [x] Step 2: 저장소 루트 골격과 공통 설정 파일
   - 파일: `.gitignore`(기존 AI-DLC 블록 유지, `.env*` · `build/` · `.gradle/` · `node_modules/` · `.next/` · `coverage/` · `build/verify/` · `*.pem` · `*.key` · `*.p12` · `*.jks` 추가, 자체 서명 인증서는 `build/verify/certs/`에 생기므로 `infra/ci/certs/` 줄은 두지 않음), `.editorconfig`, `.prettierrc.json`, `.prettierignore`, `.nvmrc`(22), `README.md`(기존 내용 유지, '개발 · 검증' 절 추가 자리), 디렉터리 `backend/` · `frontend/` · `infra/` · `contracts/` · `tools/` · `scripts/verify/` · `.github/workflows/` · `ci/`
   - 하는 일: 실행 단위 디렉터리를 만들고 비밀 · 산출물이 커밋되지 않게 한다.
   - 근거: J97 · ADR-001 · org.md 코드 스타일 · NFR9.10 · infra 시트 5-12
   - 완료 확인: `git check-ignore`로 `.env` · `.env.local` · `build/verify/env/x.env` · `build/verify/certs/x.pem` · `frontend/.next/x`가 무시되고, 기존 AI-DLC gitignore 줄이 그대로다.
 
-- [ ] Step 3: backend Gradle 멀티 프로젝트 골격과 운영 설정
+- [x] Step 3: backend Gradle 멀티 프로젝트 골격과 운영 설정
   - 파일: `backend/settings.gradle.kts`, `backend/build.gradle.kts`, `backend/gradle/libs.versions.toml`, `backend/gradlew` · `backend/gradlew.bat` · `backend/gradle/wrapper/gradle-wrapper.properties` · `gradle-wrapper.jar`, `backend/build-logic/settings.gradle.kts` · `build.gradle.kts` · `src/main/kotlin/mujoong.java-conventions.gradle.kts`, `backend/{contract-model,core-api,realtime-activity,test-support}/build.gradle.kts`, `backend/core-api/src/main/java/kr/mujoong/core/CoreApiApplication.java`, `backend/realtime-activity/src/main/java/kr/mujoong/realtime/RealtimeApplication.java`, 두 앱의 `src/main/resources/application.yml` · `application-dev.yml` · `application-demo.yml` · `application-prod.yml` · `logback-spring.xml`, `backend/core-api/src/main/resources/application-load-test.yml`(`mujoong.load-test.enabled: true`와 `mujoong.timing.bootstrap.rate-limit` max 600 · window 1시간만, A6), `backend/core-api/src/main/java/kr/mujoong/core/config/CoreProperties.java`, `backend/realtime-activity/src/main/java/kr/mujoong/realtime/config/RealtimeProperties.java`
   - 하는 일: 빌드 스크립트를 쓰기 전, 빈 `backend/`에서 `/opt/gradle/bin/gradle wrapper --gradle-version 8.14.3 --distribution-type bin --gradle-distribution-sha256-sum <services.gradle.org의 gradle-8.14.3-bin.zip.sha256 값>`을 실행해 `gradlew` · `gradlew.bat` · `gradle/wrapper/*`를 만든다(래퍼 jar는 손으로 쓰지 않음, J139). `git ls-files -s backend/gradlew`가 100755인지 확인한다. Java는 HTTPS_PROXY를 읽지 않으므로 `JAVA_TOOL_OPTIONS`에 프록시 속성이 없으면 저장소 밖 `~/.gradle/gradle.properties`에 HTTPS_PROXY에서 뽑은 `systemProp.https.proxyHost` · `systemProp.https.proxyPort`와 `systemProp.http.nonProxyHosts=localhost|127.*|[::1]`를 둔다(중계 포트는 세션마다 바뀌므로 저장소의 `gradle.properties`에는 프록시 값을 넣지 않는다). 이어서 Java 21 툴체인, Boot 플러그인, 모듈 의존(`core-api` · `realtime-activity` → `contract-model`, 서로는 의존 없음, `test-support`는 `testImplementation`만)과 운영 · 시험 라이브러리 판 전부를 `libs.versions.toml`에 선언한다(공유 파일 소유 표). `application.yml`에 `reliability-design.md ## 3`의 `mujoong.*` 키 전부(소유 앱 것만)와 표준 키(`spring.flyway.enabled=false` · `spring.jpa.hibernate.ddl-auto=validate` · `spring.jpa.open-in-view=false` · `spring.threads.virtual.enabled=true` · `server.shutdown=graceful` · `management.server.port=9090` · 노출 `health,prometheus` · probes · `spring.session.jdbc.initialize-schema=never` · `table-name=core_spring_session` · hikari 10 · 2초 · 1초 · `server.error.include-*` 끔 · `server.server-header` 비움 · `server.forward-headers-strategy=native` · `server.tomcat.remoteip.remote-ip-header=X-Forwarded-For` · `server.tomcat.remoteip.internal-proxies`(Nginx 고정 IP 172.30.10.10을 정규식으로 이스케이프한 값 하나, Compose `environment:`로 주입, 인프라 명세 3.3)를 둔다. `mujoong.dev-login.enabled`는 어느 프로필 파일에도 true로 쓰지 않는다. demo · prod 프로필 파일에는 rate-limit 상향 값과 `mujoong.load-test.*` 키가 없다(A6). `mujoong.provider.url`의 실제 공급자 기본값은 realtime의 `application-demo.yml` · `application-prod.yml`에만 둔다(J141). 타입 있는 `@ConfigurationProperties` 레코드로 묶고 기동 때 검증한다(RD-24, 불변식 I-3 · I-6 · I-10 · cookie ≤ idle · 풀 합계 ≤ 20). 비밀은 환경 변수 이름만 참조한다. 끝에 스택 판정(J139)을 한다.
   - 근거: tech-stack 2.2 · J70 · J105 · BR8.11 · RD-24 · SD-14 · PD-11 · OD-11 · R3-10 · A6 · BR1.6 · infra-spec 3.3 · J139 · J141
   - 완료 확인: `cd backend && ./gradlew --no-daemon :core-api:bootJar :realtime-activity:bootJar`가 성공한다(앱 코드는 Application 클래스뿐인 상태). J139 판정: `cd backend && ./gradlew --no-daemon :core-api:dependencies :realtime-activity:dependencies --configuration runtimeClasspath`와 같은 명령의 `--configuration testRuntimeClasspath` 출력에 FAILED 0줄, 판정 결과(4.1 유지 또는 Step 8 전 3.5.x 전환과 사유)가 판 표에 있다.
 
-- [ ] Step 4: frontend Next.js 골격과 운영 설정
+- [x] Step 4: frontend Next.js 골격과 운영 설정
   - 파일: `frontend/package.json` · `package-lock.json`(Step 1에서 고정한 판), `frontend/next.config.ts`(`output: 'standalone'`, `poweredByHeader: false`), `frontend/tsconfig.json`, `frontend/eslint.config.mjs`(영역 경계: `src/parent` ↛ `src/device`, `src/device` ↛ `src/parent`, `src/shared` ↛ 둘 다, `react/no-danger` 오류, `react/jsx-no-literals`, `getUserMedia` 호출 제한), `frontend/src/app/layout.tsx`(`lang="ko"`), `frontend/src/app/healthz/route.ts`(200), `frontend/src/shared/styles/tokens.css`(C1 토큰 임시값)
   - 하는 일: 한 앱에 `/parent` · `/device`를 두는 골격을 만든다. 서비스 워커 · PWA를 두지 않는다. 시간 설정은 빌드 때 굽지 않는다. `tsconfig.json` · `next-env.d.ts`는 `next build`가 더 고칠 것이 없는 상태로 커밋한다(빌드 뒤 `git diff` 0, 검증 명령의 작업 트리 비교 SEC-18 · J144).
   - 근거: tech-stack 2.2 L40 · NFR10.4 · NFR11.1 · PD-14 · PD-15 · SD-11 · R4-16
@@ -268,13 +268,13 @@ J1 ~ J104는 모두 아직 확정이 아닌 가정이다. J97 ~ J104는 사람 �
 
 ### B. 시험 실행기 부트스트랩
 
-- [ ] Step 5: backend 시험 실행기(JUnit 5 · 태그 · JaCoCo 80% · Testcontainers)
+- [x] Step 5: backend 시험 실행기(JUnit 5 · 태그 · JaCoCo 80% · Testcontainers)
   - 파일: `backend/build-logic/src/main/kotlin/mujoong.java-conventions.gradle.kts`(시험 설정 추가, 라이브러리 판은 Step 3이 `libs.versions.toml`에 이미 선언), `backend/core-api/src/test/resources/application-test.yml` · `backend/realtime-activity/src/test/resources/application-test.yml`(시험 시간 키 축소값, 예: `session.device-ack-timeout` 2초 · `device.disconnect` 4초 · `gate.segment-quiet` 50ms · `provider.connect-timeout` 1초), `backend/coverage-scope/u1.txt`(U1 소스 파일 목록의 자리, 내용은 Step 53이 채움, J137)
   - 하는 일: `useJUnitPlatform`에 Gradle 속성 `includeTags` · `excludeTags`(쉼표 구분)를 연결한다. `testRuntimeOnly("org.junit.platform:junit-platform-launcher")`(Boot BOM 판)를 넣는다(Gradle 9는 자동으로 넣지 않고 8.14는 폐기 경고). 시험 JVM에 `-Duser.timezone=UTC`, 시스템 속성 `mujoong.test.db`를 Gradle 속성 `-Pmujoong.test.db`(기본 auto)에서 넘긴다(J132). JaCoCo를 각 모듈에 걸고 `jacocoTestCoverageVerification`에 `LINE` `COVEREDRATIO` 최소 0.80 규칙을 두며 `check`가 의존하게 한다(제외 목록 없음). `-PcoverageScope=u1`이면 `classDirectories`를 `coverage-scope/u1.txt`의 파일로 한정한다(J137). `test-support` 모듈은 JaCoCo 하한 대상이 아니다(J107). 운영 jar에 시험 클래스가 없는지 보는 `verifyBootJarHasNoTestClasses` 작업도 여기서 정의한다(공유 파일 소유 표, Step 43은 실행만 한다).
   - 근거: Testing Contract `runner_step` · J106 · J107 · J91 · NFR6.4 · J132 · J137 · SD-25
   - 완료 확인: `cd backend && ./gradlew --no-daemon :contract-model:test :core-api:test :realtime-activity:test :test-support:test -PincludeTags=u1`가 시험 0건(NO-SOURCE)으로 성공하고, `cd backend && ./gradlew --no-daemon :contract-model:dependencies :core-api:dependencies :realtime-activity:dependencies :test-support:dependencies --configuration testRuntimeClasspath` 출력에 FAILED 0줄(NO-SOURCE는 시험 의존성을 해석하지 않으므로 따로 확인), `./gradlew --no-daemon :core-api:jacocoTestCoverageVerification --dry-run`에 작업이 잡힌다. 명령은 `unit-test-instructions.md`에 기록돼 있다.
 
-- [ ] Step 6: frontend · tools 시험 실행기(Vitest · 커버리지 80%)
+- [x] Step 6: frontend · tools 시험 실행기(Vitest · 커버리지 80%)
   - 파일: `frontend/vitest.config.ts`(환경 jsdom, `setupFiles: tests/u1/setup.ts`, `coverage.provider: 'v8'`, `coverage.include: ['src/**/*.{ts,tsx}']`, `coverage.exclude`는 `*.d.ts`만, `coverage.thresholds.lines: 80`, 환경 변수 `MUJOONG_COVERAGE_SCOPE=u1`이면 `coverage.include`를 `coverage-scope/u1.json`으로 한정, J137), `frontend/coverage-scope/u1.json`(U1 소스 파일 목록의 자리, 내용은 Step 53이 채움), `frontend/tests/u1/setup.ts`(Testing Library · jest-dom), `frontend/package.json` · `frontend/package-lock.json`(`vitest` · `@vitest/coverage-v8` · `@testing-library/react` · `@testing-library/user-event` · `@testing-library/jest-dom` · `jsdom`), `tools/package.json` · `package-lock.json`(Node 22 ESM, `ws` · `vitest`), `tools/vitest.config.mjs`(환경 node)
   - 하는 일: 프런트와 tools의 실행기를 세운다. 개발 의존성은 `npm install --save-dev --save-exact <패키지>@<Step 1 판>`으로 더해 package.json과 잠금 파일을 함께 갱신한다(잠금 파일이 어긋나면 `npm ci`가 실패한다).
   - 근거: Testing Contract `runner_step` · J106 · J107 · J129 · J137
@@ -282,19 +282,19 @@ J1 ~ J104는 모두 아직 확정이 아닌 가정이다. J97 ~ J104는 사람 �
 
 ### C. 데이터 모델 · DB 동작 — 구현
 
-- [ ] Step 7: contracts/ 정본과 편차 표시
+- [x] Step 7: contracts/ 정본과 편차 표시
   - 파일: `contracts/README.md`(소유 규칙 · 더하기만 안전 · J25 · (x)), `contracts/parent-api.yaml`(OpenAPI 3.0.3, U1 보호자 REST + `/session/csrf` (u) + `/health` (t), 오류 (d)(e)(m)(n)(o)(r), `x-unit` 표시), `contracts/device-api.yaml`(기기 REST + (a)(b)(c)(k)), `contracts/device-ws.asyncapi.yaml`(AsyncAPI 2.6.0, 메시지 · 닫기 코드 표 + (h)(j)(l)(s)), `contracts/internal-api.yaml`(C8 · C9 + (f)(i)(j)(n)(v)(w)), `contracts/events.asyncapi.yaml`(C11 6종 + (g)(p)(q)), `contracts/schemas/*.schema.json`(JSON Schema 2020-12: 오류 봉투 · WSS 봉투와 메시지 · 이벤트 봉투와 payload 6종 · DeviceView · LiveView · 내부 요청 · 응답), `contracts/errors.md`(code · HTTP · 고정 message, (y) 포함), `contracts/timing.md`(7절 키 + 7절 밖 U1 키 4종과 메시징 · 정리 · 내부 HTTP 키), `contracts/ports.md`(8080 · 8081 · 9090 · 3000, 내부 호출 이름 · 기본 URL 키, J109), `contracts/ai-io.md`(9절, 공급자 메시지 이름, 시드 사전 형식, `mujoong.provider.url`), `contracts/deviations.md`((a) ~ (t) + (u) ~ (y), 항목마다 출처 · 소비자 · 호환 분류 '더하기만')
   - 하는 일: `contract-summary.md`에서 정본 스펙을 만든다(G8). 승인 계약은 고치지 않고 편차는 스펙 안에 `x-deviation: "(a)"` 꼴로 표시한다. 미룬 경로(U2 ~ U7)는 넣지 않는다.
   - 근거: 계약 1 ~ 12절 · J20 · J59 · V-5 · 사람 결정 5 · J109 · J112
   - 완료 확인: 모든 YAML · JSON이 파싱되고, (a) ~ (y) 각각이 `deviations.md`에 한 행, 스펙 파일에 한 번 이상 표시돼 있다(Step 13 시험이 단언).
 
-- [ ] Step 8: contract-model 공통 타입
+- [x] Step 8: contract-model 공통 타입
   - 파일: `backend/contract-model/src/main/java/kr/mujoong/contract/error/{ErrorCode,ErrorEnvelope}.java`, `.../event/{EventEnvelope,EventType,AggregateType}.java` · `.../event/payload/{SessionStateChanged,SessionRecordCaptured,DeviceStatusChanged,DeletionCompleted,DeviceReleased,DeletionRequested}.java`, `.../ws/{WsEnvelope,WsMessageType,CloseCode}.java` · `.../ws/message/*.java`(17종: HELLO · HELLO_OK · HEARTBEAT · HEARTBEAT_ACK · ACK · START_SESSION · DEVICE_READY · SESSION_STATE · OUTPUT_BEGIN · OUTPUT_END · PLAY_APPROVED_CONTENT · PLAYBACK_MARK · STOP_OUTPUT · CLOSE_TRANSPORT · VOICE_SESSION_CLOSED · DEVICE_STATE(기기 → 서버, mic · player · visibility · wakeLock, 계약 4.2) · ERROR, 제어 봉투는 `sentAt` 포함), `.../audio/AudioFrameCodec.java`, `.../trace/TraceIds.java`, `.../time/{MujoongClock,SystemMujoongClock,TimerDriver,DelayQueueTimerDriver}.java`, `.../log/{EventCode,AttrKey,EventLog,StructuredLogFormatter,OwnerHasher}.java`, `.../json/JsonCodec.java`(앱 코드의 Jackson 직접 import가 모이는 한 곳, J139), `.../profile/ProfileGuardRules.java`, `.../secret/SecretCompare.java`, `.../status/{SessionStatus,EndReason,FailureCode,ConnectionState,RegistrationStatus}.java`
   - 하는 일: 두 앱이 같은 이름을 쓰는 계약 · 오류 · 시간 · 타입만 둔다. Entity · Repository · Service · Boot 설정은 두지 않는다. 시스템 시각 직접 호출은 `SystemMujoongClock` 한 곳뿐이다. 모르는 enum은 '알 수 없음'으로 읽고 모르는 필드는 무시한다.
   - 근거: LC-11 · J70 · BR8.6 · BR5.4 · BR5.9 · J27 · OD-1 ~ OD-4 · OD-7 · RD-2 · SD-14 표 · A2 · A6 · (n)(o)(p)(q) · NFR9.15
   - 완료 확인: `cd backend && ./gradlew --no-daemon :contract-model:compileJava`가 성공하고 Spring · JPA 의존이 없다.
 
-- [ ] Step 9: PostgreSQL 초기화(역할 · 스키마 · 권한)
+- [x] Step 9: PostgreSQL 초기화(역할 · 스키마 · 권한)
   - 파일: `infra/postgres/init/01-roles.sh`, `infra/postgres/init/01-roles.sql`, `infra/postgres/init/02-hba.sh`, `infra/postgres/postgresql.conf.tmpl`
   - 하는 일: 빈 볼륨에서 한 번만 실행된다. DB `mujoong`, 역할 4개(`mujoong_owner` 4 · `core_app` 12 · `realtime_app` 12 · `mujoong_backup` 2, 모두 NOSUPERUSER · NOCREATEDB · NOCREATEROLE · NOREPLICATION · NOBYPASSRLS), `REVOKE ALL ON DATABASE ... FROM PUBLIC` · `public` 스키마 권한 회수, 스키마 `core` · `realtime` · `flyway`(소유 `mujoong_owner`), 기본 권한(DML · 시퀀스만, TRUNCATE · DDL 없음), 역할별 `search_path`, `mujoong_backup`에 `pg_read_all_data`, `ALTER DATABASE mujoong SET mujoong_db.data_class = 'synthetic'`, `pg_hba`(허용 대역은 필수 환경 변수 `PG_HBA_ALLOWED_CIDR`로 받아 그 대역의 scram-sha-256 한 줄과 나머지 reject만 쓰고, 비면 종료 코드 1, J135. demo · ci Compose는 backend 서브넷 172.30.20.0/24를 넘긴다), PG 설정(UTC · `log_error_verbosity terse` · `log_statement none` 등). 비밀번호는 환경 변수를 psql 변수로 넘겨 SQL 파일에 값이 없다. Testcontainers와 호스트 PostgreSQL 백엔드(J132)도 같은 파일을 쓰고, 시험 JVM이 들어오는 출발지를 `PG_HBA_ALLOWED_CIDR`로 넘긴다.
   - 근거: SD-13 · E9 · BR8.1 · NFR9.7 · J84 · infra-spec 2.5 · SD-24 · J132 · J135
@@ -314,7 +314,7 @@ J1 ~ J104는 모두 아직 확정이 아닌 가정이다. J97 ~ J104는 사람 �
 
 ### C′. 데이터 모델 · DB 동작 — 시험
 
-- [ ] Step 12: test-support 기반(시계 · 타이머 · PostgreSQL 컨테이너 · 비밀 생성)
+- [x] Step 12: test-support 기반(시계 · 타이머 · PostgreSQL 컨테이너 · 비밀 생성)
   - 파일: `backend/test-support/src/main/java/kr/mujoong/testsupport/time/{MutableClock,ManualTimerDriver}.java`, `.../db/MujoongPostgres.java`(백엔드 `docker` · `local` · `auto`, J132: PostgreSQL 16 고정 태그 컨테이너 또는 호스트 `/usr/lib/postgresql/16/bin` 클러스터, `infra/postgres/init/` 실행, `PG_HBA_ALLOWED_CIDR`에 시험 출발지(docker는 브리지 게이트웨이 /32, local은 127.0.0.1/32)를 넘김 J135, 두 위치에 Flyway 적용, 역할별 DataSource 제공, 사용한 백엔드 이름 노출), `.../secret/TestSecrets.java`(실행마다 무작위), `.../log/LogCapture.java`(MUJOONG_EVENT 줄 수집 · JSON 파싱), `backend/test-support/src/test/java/kr/mujoong/testsupport/time/{ManualTimerDriverTest,MutableClockTest}.java`(`@Tag("u1")`: 마감 순서 실행 · 같은 마감 둘 · 취소 · 앞당긴 만큼 단조 값 증가 · 지난 마감 즉시 실행)
   - 하는 일: 시험 전용 지원을 만든다. `ManualTimerDriver.advance(d)`는 Clock을 앞당기고 도래한 타이머를 마감 순서대로 실행한다(RD-2). 운영 코드는 이 모듈에 의존하지 않는다. NFR6.2 경계 시험 전체가 이 구동기에 기대므로 자기 시험을 둔다(J107, 하한 대상은 아님). `local` 백엔드는 initdb · pg_ctl을 `runuser -u postgres`로 돌리고 JVM 종료 훅에서 멈추고 지운다.
   - 근거: RD-2 · RD-23 · J81 · SD-25 · J107 · J127 · J129 · J132 · J135

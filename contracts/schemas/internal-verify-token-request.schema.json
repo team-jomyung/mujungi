@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mujoong.invalid/contracts/schemas/internal-verify-token-request.schema.json",
+  "title": "기기 토큰 확인 요청",
+  "description": "POST /internal/devices/verify-token(계약 5절 C9 · BR3.4). WSS 핸드셰이크 쿠키 MUJOONG_DEVICE의 토큰 원문이다. 이 값은 로그 · 오류 message에 쓰지 않는다(BR8.7).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["deviceToken"],
+  "properties": {
+    "deviceToken": { "type": "string", "minLength": 1, "maxLength": 256 }
+  }
+}

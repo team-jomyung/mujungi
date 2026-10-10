@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mujoong.invalid/contracts/schemas/device-bootstrap-status-response.schema.json",
+  "title": "D0 등록 확인 응답",
+  "description": "GET /api/device/bootstrap/status 200(BR1.7). 코드를 다시 보내지 않는다. RELEASED 행도 EXPIRED로 답한다.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["status", "expiresAt"],
+  "properties": {
+    "status": { "type": "string", "enum": ["PENDING", "REGISTERED", "EXPIRED"] },
+    "expiresAt": { "$ref": "common.schema.json#/$defs/DateTime" }
+  }
+}

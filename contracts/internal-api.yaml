@@ -1,0 +1,318 @@
+# 무중 내부 API(앱 사이) — U1 (C8 시작 · 끝내기 · 진행 조회, C9 토큰 확인 · 상태 보고, C11 이벤트 전달)
+# 출처: contract-summary.md 5절 · 6절 + 편차 (f)(i)(j)(n)(o)(v)(w) (contracts/deviations.md)
+# 본문 스키마의 정본은 contracts/schemas/*.schema.json(JSON Schema 2020-12)이다.
+# 주소: Core → Realtime은 mujoong.internal-http.realtime-base-url(기본 http://realtime:8081),
+#       Realtime → Core는 mujoong.internal-http.core-base-url(기본 http://core:8080)이다(contracts/ports.md · J109).
+openapi: 3.0.3
+info:
+  title: 무중 내부 API(앱 사이)
+  version: "1"
+  description: |
+    backend 내부망에서만 닿고 Nginx가 /internal/을 밖에서 403으로 막는다(BR8.9 · SD-3). 인증은 X-Internal-Token
+    (환경 변수 INTERNAL_SERVICE_TOKEN 공유 비밀, 정확히 한 개, SHA-256 상수 시간 비교)이고 사용자 권한이 생기지 않는다
+    (BR3.9 · SD-8). 토큰이 없거나 틀리거나 여러 개면 401 UNAUTHENTICATED(J124). 호출 쪽은 인터셉터 한 곳이 X-Internal-Token과
+    X-Trace-Id를 붙이고 들어온 요청 헤더를 옮기지 않는다. 본문 상한은 2MB(mujoong.limits.internal-event-body-max)다.
+    각 호출의 시간 제한 키는 contracts/timing.md의 내부 HTTP 절에 있다.
+servers:
+  - url: http://realtime:8081
+    description: Realtime(C8 · C11 realtime-inbox)
+  - url: http://core:8080
+    description: Core(C9 · C11 core-inbox)
+x-unit: U1
+security:
+  - internal: []
+paths:
+  /internal/sessions:
+    post:
+      operationId: startSession
+      summary: "[Realtime] 세션 시작 명령(세션 패키지, BR6.5 · BR6.6)"
+      description: |
+        ① 같은 sessionId가 있으면 현재 상태를 202. ② 기기 연결이 CONNECTED가 아니면 423 DEVICE_NOT_CONNECTED.
+        ③ 보호자 · 기기에 종료 아닌 세션이 있으면 409 SESSION_IN_PROGRESS(2차 방어). ④ 한 트랜잭션에 PREPARING 세션 ·
+        기본 종료 표현 · SessionStateChanged를 쓰고 202. Core가 CORE_ABANDONED로 취소한 sessionId의 늦은 시작은
+        10분 묘비 동안 409 SESSION_NOT_ACTIVE다(편차 (v)). Core 제한 3초 · 시간 초과 1회 재시도(같은 sessionId).
+      servers:
+        - url: http://realtime:8081
+      x-unit: U1
+      x-deviation: ["(v)"]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "schemas/internal-session-start-request.schema.json" }
+            example:
+              sessionId: 00000000-0000-4000-8000-000000000020
+              idempotencyKey: 00000000-0000-4000-8000-000000000010
+              guardianId: 00000000-0000-4000-8000-000000000001
+              childId: 00000000-0000-4000-8000-000000000002
+              deviceId: 00000000-0000-4000-8000-000000000003
+              activityType: FREE_TALK
+              consentSnapshot: { policyVersion: "1.0", voiceAndText: true, guardianView: true, reportSharing: true, rawAudio: true }
+              childContext: { displayName: 하늘, age: 8, interests: [공룡, 그림] }
+              stopExpressions: [ { text: 무중아 그만할래, isDefault: true } ]
+              approvedContent:
+                CLOSING: { contentVersionId: 00000000-0000-4000-8000-000000000041, text: "오늘 이야기 즐거웠어. 다음에 또 만나!", audioUrl: /media/approved/closing-v1.wav }
+                WAITING_FILLER: { contentVersionId: 00000000-0000-4000-8000-000000000042, text: "음, 잠깐만 생각해 볼게.", audioUrl: /media/approved/waiting-filler-v1.wav }
+              practice: null
+      responses:
+        "202":
+          description: PREPARING(새 세션) 또는 같은 sessionId의 현재 상태
+          content:
+            application/json:
+              schema: { $ref: "schemas/internal-session-start-response.schema.json" }
+              example: { status: PREPARING }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "409":
+          description: 진행 중 세션(2차 방어) 또는 취소된 sessionId(10분 묘비, 편차 (v))
+          x-error-codes: [SESSION_IN_PROGRESS, SESSION_NOT_ACTIVE]
+          x-deviation: ["(v)"]
+          content:
+            application/json:
+              schema: { $ref: "schemas/error-envelope.schema.json" }
+        "423":
+          description: 기기 연결이 CONNECTED가 아님(내부 코드, Core가 DEVICE_NOT_STABLE로 번역, BR8.6)
+          x-error-codes: [DEVICE_NOT_CONNECTED]
+          content:
+            application/json:
+              schema: { $ref: "schemas/error-envelope.schema.json" }
+              example: { code: DEVICE_NOT_CONNECTED, message: 기기가 연결되어 있지 않아요., traceId: 4bf92f3577b34da6a3ce929d0e0e4736 }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/ServiceNotReady" }
+  /internal/sessions/{sessionId}/end:
+    post:
+      operationId: endSessionInternal
+      summary: "[Realtime] 끝내기 · 정리 명령(J54 응답표 · BR6.7 · BR6.9)"
+      description: |
+        응답은 Realtime 세션 행 상태로 정한다(J54 응답표, functional-spec W8).
+        reason GUARDIAN_STOP — ACTIVE: 202 {status: CLOSING}(첫 수락) · CLOSING: 202 {status: CLOSING}(재처리 없음) ·
+        PREPARING · DEVICE_ACK · 종료 상태: 409 SESSION_NOT_ACTIVE · 모르는 sessionId: 409 SESSION_NOT_ACTIVE(묘비 없음, 편차 (w) · J111).
+        reason CORE_ABANDONED(편차 (f), requestId = sessionId) — 모르는 sessionId: 10분 묘비 + 202 {} ·
+        PREPARING · DEVICE_ACK · ACTIVE: FAILED(end_reason FAILED)로 닫고 202 {} · CLOSING · 종료 상태: 202 {}(무동작).
+        Core 제한 2초, 회로 차단기 없음(R3-2).
+      servers:
+        - url: http://realtime:8081
+      x-unit: U1
+      x-deviation: ["(f)", "(w)"]
+      parameters:
+        - { name: sessionId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "schemas/internal-session-end-request.schema.json" }
+            example: { requestId: 00000000-0000-4000-8000-000000000030, reason: GUARDIAN_STOP }
+      responses:
+        "202":
+          description: "GUARDIAN_STOP 수락은 {status: CLOSING}, CORE_ABANDONED는 {}"
+          content:
+            application/json:
+              schema: { $ref: "schemas/internal-session-end-response.schema.json" }
+              example: { status: CLOSING }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "409":
+          description: 끝낼 수 있는 상태가 아님 · 모르는 sessionId의 GUARDIAN_STOP(편차 (w))
+          x-error-codes: [SESSION_NOT_ACTIVE]
+          x-deviation: ["(w)"]
+          content:
+            application/json:
+              schema: { $ref: "schemas/error-envelope.schema.json" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/ServiceNotReady" }
+  /internal/sessions/{sessionId}/view:
+    get:
+      operationId: getSessionViewInternal
+      summary: "[Realtime] 진행 조회(BR6.15). Core가 소유를 확인한 뒤 중계한다"
+      description: Core 제한 1초. 실패하면 Core는 사본으로 답하고 items를 비운다.
+      servers:
+        - url: http://realtime:8081
+      x-unit: U1
+      parameters:
+        - { name: sessionId, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: sinceSeq, in: query, required: false, schema: { type: integer, minimum: 0, default: 0 } }
+      responses:
+        "200":
+          description: LiveView(내부) — 보호자 LiveView에서 observedAt · stale을 뺀 모양
+          content:
+            application/json:
+              schema: { $ref: "schemas/internal-session-view.schema.json" }
+              example:
+                sessionId: 00000000-0000-4000-8000-000000000020
+                activityType: FREE_TALK
+                status: PREPARING
+                endReason: null
+                failureCode: null
+                confirmed: false
+                requestedAt: "2026-10-15T09:00:00Z"
+                startedAt: null
+                endedAt: null
+                statusVersion: 1
+                serverTime: "2026-10-15T09:00:01Z"
+                technicalPause: null
+                silenceWarning: null
+                practice: null
+                gaps: []
+                items: []
+                nextSeq: 0
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404":
+          description: Realtime이 모르는 세션
+          x-error-codes: [NOT_FOUND]
+          content:
+            application/json:
+              schema: { $ref: "schemas/error-envelope.schema.json" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/ServiceNotReady" }
+  /internal/devices/verify-token:
+    post:
+      operationId: verifyDeviceToken
+      summary: "[Core] WSS 핸드셰이크 쿠키의 기기 토큰 확인(BR3.4)"
+      description: |
+        REGISTERED 행의 토큰 해시와 맞을 때만 200이고, 처음 확인되면 first_connected_at을 채워 claim을 닫는다(BR3.2).
+        결과는 그 연결 하나에만 묶고 Realtime은 캐시하지 않는다 — 연결마다 다시 확인한다(편차 (j)).
+        Realtime 제한 1초(넘으면 1013).
+      servers:
+        - url: http://core:8080
+      x-unit: U1
+      x-deviation: ["(j)"]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "schemas/internal-verify-token-request.schema.json" }
+            example: { deviceToken: example-device-token-not-a-secret }
+      responses:
+        "200":
+          description: 확인됨
+          content:
+            application/json:
+              schema: { $ref: "schemas/internal-verify-token-response.schema.json" }
+              example: { deviceId: 00000000-0000-4000-8000-000000000003, guardianId: 00000000-0000-4000-8000-000000000001, childId: 00000000-0000-4000-8000-000000000002, registrationStatus: REGISTERED }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401":
+          description: 내부 토큰 실패(UNAUTHENTICATED) 또는 미등록 · RELEASED · 모르는 기기 토큰(INVALID_DEVICE_TOKEN)
+          x-error-codes: [UNAUTHENTICATED, INVALID_DEVICE_TOKEN]
+          content:
+            application/json:
+              schema: { $ref: "schemas/error-envelope.schema.json" }
+              example: { code: INVALID_DEVICE_TOKEN, message: 기기 인증에 실패했어요., traceId: 4bf92f3577b34da6a3ce929d0e0e4736 }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/ServiceNotReady" }
+  /internal/devices/{deviceId}/connection:
+    put:
+      operationId: reportDeviceConnection
+      summary: "[Core] 연결 상태 주기 보고(최신값 덮어쓰기, 유실 허용, BR4.1 · BR4.8)"
+      description: |
+        Realtime이 10초마다(device.status-report-interval) OFFLINE을 포함한 연결 행 전부를 보고한다(제한 1초).
+        state · reportedAt은 필수다(편차 (i)). Core는 reportedAt이 사본보다 클 때만 한 문장의 조건부 UPDATE로 덮어쓰고
+        늦거나 같은 보고 · REGISTERED가 아닌 기기의 보고는 버린 채 204로 답한다(BR4.1 · BR4.2).
+      servers:
+        - url: http://core:8080
+      x-unit: U1
+      x-deviation: ["(i)"]
+      parameters:
+        - { name: deviceId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "schemas/internal-device-connection-report.schema.json" }
+            example: { state: CONNECTED, rttMs: 120, recentDisconnects: 0, since: "2026-10-15T09:01:00Z", lastSeenAt: "2026-10-15T09:05:00Z", reportedAt: "2026-10-15T09:05:02Z" }
+      responses:
+        "204":
+          description: 반영 또는 버림(늦은 보고 · 등록되지 않은 기기)
+        "400":
+          description: state · reportedAt 누락 또는 형식 오류(편차 (i))
+          x-error-codes: [INVALID_ENVELOPE]
+          x-deviation: ["(i)"]
+          content:
+            application/json:
+              schema: { $ref: "schemas/error-envelope.schema.json" }
+              example: { code: INVALID_ENVELOPE, message: 요청 본문 형식이 올바르지 않아요., traceId: 4bf92f3577b34da6a3ce929d0e0e4736 }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/ServiceNotReady" }
+  /internal/events:
+    post:
+      operationId: receiveEvent
+      summary: "[Core · Realtime] 영속 이벤트 수신(Inbox, BR5.4 ~ BR5.9)"
+      description: |
+        양 앱에 같은 모양으로 있다(Realtime → Core: core-inbox, Core → Realtime: realtime-inbox, contracts/events.asyncapi.yaml).
+        봉투 검사(필수 7필드) 실패는 400 INVALID_ENVELOPE(재시도 대상 아님). 같은 eventId에 같은 해시면 200(중복),
+        다른 해시면 409 EVENT_CONFLICT. 새 eventId는 Inbox 행을 커밋한 뒤에만 200이다(ACK는 업무 완료가 아니다, BR5.6).
+        모르는 eventType · 더 높은 schemaVersion은 IGNORED로 커밋하고 200(BR5.9). 앱이 NOT_READY · DRAINING이면 503이고
+        보내는 쪽 Outbox가 재시도한다(편차 (n)).
+      x-unit: U1
+      x-deviation: ["(n)", "(p)"]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "schemas/event-envelope.schema.json" }
+            example:
+              eventId: 00000000-0000-4000-8000-000000000050
+              eventType: DeviceStatusChanged
+              schemaVersion: 1
+              occurredAt: "2026-10-15T09:01:00Z"
+              aggregateType: Device
+              aggregateId: 00000000-0000-4000-8000-000000000003
+              traceId: 4bf92f3577b34da6a3ce929d0e0e4736
+              payload: { deviceId: 00000000-0000-4000-8000-000000000003, state: CONNECTED, since: "2026-10-15T09:01:00Z", guardianId: 00000000-0000-4000-8000-000000000001 }
+      responses:
+        "200":
+          description: Inbox에 커밋됨(새 행 · 중복 · IGNORED)
+          content:
+            application/json:
+              schema: { $ref: "schemas/empty-object.schema.json" }
+              example: {}
+        "400":
+          description: 봉투 오류(재시도 대상 아님) · 본문 2MB 초과
+          x-error-codes: [INVALID_ENVELOPE]
+          content:
+            application/json:
+              schema: { $ref: "schemas/error-envelope.schema.json" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "409":
+          description: 같은 eventId에 다른 내용(기존 행은 그대로, BR5.5)
+          x-error-codes: [EVENT_CONFLICT]
+          content:
+            application/json:
+              schema: { $ref: "schemas/error-envelope.schema.json" }
+              example: { code: EVENT_CONFLICT, message: 같은 이벤트에 다른 내용이 왔어요., traceId: 4bf92f3577b34da6a3ce929d0e0e4736 }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/ServiceNotReady" }
+components:
+  securitySchemes:
+    internal: { type: apiKey, in: header, name: X-Internal-Token }
+  responses:
+    Unauthenticated:
+      description: X-Internal-Token 없음 · 틀림 · 여러 개(BR3.9 · J124)
+      x-error-codes: [UNAUTHENTICATED]
+      content:
+        application/json:
+          schema: { $ref: "schemas/error-envelope.schema.json" }
+          example: { code: UNAUTHENTICATED, message: 로그인이 필요해요., traceId: 4bf92f3577b34da6a3ce929d0e0e4736 }
+    ValidationFailed:
+      description: 본문 형식 오류 · JSON 아님 · 2MB 초과
+      x-error-codes: [VALIDATION_FAILED]
+      content:
+        application/json:
+          schema: { $ref: "schemas/error-envelope.schema.json" }
+    InternalError:
+      description: 처리하지 못한 서버 오류(편차 (o))
+      x-error-codes: [INTERNAL_ERROR]
+      x-deviation: ["(o)"]
+      content:
+        application/json:
+          schema: { $ref: "schemas/error-envelope.schema.json" }
+    ServiceNotReady:
+      description: 앱이 NOT_READY 또는 DRAINING(편차 (n))
+      x-error-codes: [SERVICE_NOT_READY]
+      x-deviation: ["(n)"]
+      headers:
+        Retry-After:
+          schema: { type: integer, minimum: 1 }
+      content:
+        application/json:
+          schema: { $ref: "schemas/error-envelope.schema.json" }

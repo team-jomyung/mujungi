@@ -1,0 +1,153 @@
+# realtime-activity 기본 설정 (U1 3.5 Step 3)
+# - mujoong.* 키 값의 정본: reliability-design.md ## 3 · contracts/timing.md (BR8.11 · RD-24). 소유 앱이 realtime 또는 양 앱인 키만 둔다.
+# - 비밀은 환경 변수 이름으로만 받는다(SD-12): SPRING_DATASOURCE_PASSWORD(DB_REALTIME_PASSWORD를 렌더러가 매핑) ·
+#   INTERNAL_SERVICE_TOKEN · PROVIDER_API_KEY · MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET. 값은 어느 파일에도 없다.
+# - 주소 기본값은 Compose backend 망 이름(postgres · core, infra-spec D-12 · J109). 호스트에서 돌릴 때는
+#   SPRING_DATASOURCE_URL · MUJOONG_INTERNALHTTP_COREBASEURL 환경 변수로 바꾼다(J133).
+# - mujoong.provider.url은 이 파일에 두지 않는다. 실제 공급자 기본값은 application-demo.yml · application-prod.yml에만 있고,
+#   검증 스택 · 시험은 MUJOONG_PROVIDER_URL로 가짜 공급자를 준다. 비어 있으면 기동 점검(S1b)이 거부한다(J141).
+spring:
+  application:
+    name: realtime-activity
+  main:
+    banner-mode: off
+  threads:
+    virtual:
+      enabled: true
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
+  datasource:
+    url: jdbc:postgresql://postgres:5432/mujoong
+    username: realtime_app
+    hikari:
+      pool-name: realtime
+      maximum-pool-size: 10
+      connection-timeout: 2000
+      validation-timeout: 1000
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        default_schema: realtime
+        jdbc:
+          time_zone: UTC
+  flyway:
+    # 앱은 Flyway를 실행하지 않고 이력 버전만 읽는다. 적용은 migrate 컨테이너(mujoong_owner)가 한다(BR8.1 · BR8.2 · J116)
+    enabled: false
+
+server:
+  port: 8081
+  shutdown: graceful
+  server-header: ""
+  forward-headers-strategy: native
+  error:
+    include-message: never
+    include-binding-errors: never
+    include-stacktrace: never
+    include-exception: false
+    include-path: never
+    whitelabel:
+      enabled: false
+  tomcat:
+    remoteip:
+      remote-ip-header: X-Forwarded-For
+      protocol-header: X-Forwarded-Proto
+      # 기본은 아무 프록시도 신뢰하지 않는다. Compose가 환경 변수 SERVER_TOMCAT_REMOTEIP_INTERNALPROXIES로
+      # Nginx 고정 IP를 정규식으로 이스케이프한 값 하나(172\.30\.10\.10)를 준다(infra-spec 3.3).
+      internal-proxies: "^$"
+
+management:
+  server:
+    port: 9090
+    address: 127.0.0.1
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: never
+  metrics:
+    distribution:
+      slo:
+        "[http.server.requests]": 100ms,300ms,500ms,1s
+
+mujoong:
+  timing:
+    session:
+      device-ack-timeout: 20s
+      closing-confirm: 30s
+    device:
+      disconnect: 40s
+      heartbeat-interval: 5s
+      hello-timeout: 5s
+      status-report-interval: 10s
+      # 초 분량(20초 × PCM16 24kHz 모노). 서버 출력 한도에도 쓴다(J73)
+      output-queue-max: 20s
+    recorder:
+      flush-interval: 200ms
+  outbox:
+    poll-interval: 500ms
+    batch-size: 20
+    retry-backoff: [1s, 2s, 4s, 8s, 16s, 30s]
+    max-retries: 20
+    claim-lease: 30s
+    control-event-policy: REARM_ON_START
+  inbox:
+    poll-interval: 500ms
+    retry-backoff: [1s, 2s, 4s, 8s, 16s]
+    max-retries: 5
+    claim-lease: 30s
+    handler-threads: 2
+    batch-size: 20
+  retention:
+    failed-payload: 7d
+  cleanup:
+    messaging-interval: 24h
+    batch-size: 1000
+  session:
+    tombstone-ttl: 10m
+    orphan-check-interval: 30s
+    timer-tick: 1s
+  device:
+    disconnect-check-interval: 5s
+  internal-http:
+    core-base-url: http://core:8080
+    connect-timeout: 500ms
+    verify-token-timeout: 1s
+    device-status-timeout: 1s
+    event-publish-timeout: 3s
+    status-round-skip-threshold: 3
+  provider:
+    connect-timeout: 10s
+  health:
+    db-check-interval: 5s
+    db-failure-threshold: 3
+  limits:
+    ws-text-frame-max: 8KB
+    internal-event-body-max: 2MB
+    session-input-queue-frames: 50
+    session-control-queue: 1000
+    device-control-queue: 100
+    recorder-queue: 200
+    recorder-flush-concurrency: 2
+    background-db-concurrency: 3
+    db-lock-timeout: 2s
+    db-statement-timeout: 10s
+    db-retry-attempts: 2
+  gate:
+    segment-quiet: 800ms
+  security:
+    allowed-origin: ${MUJOONG_SECURITY_ALLOWED_ORIGIN:}
+    event-log-rate-cap: 60
+  metrics:
+    db-pool-wait-warn: 100ms
+  observability:
+    owner-hash-secret: ${MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET:}
+    latency-log-sample-rate: 100
+    metric-snapshot-interval: 60s
+    log-merge-window: 10s

@@ -1,0 +1,280 @@
+# 무중 기기 WSS (C7) — 아이 기기 웹 ↔ Realtime DeviceGateway
+# 출처: contract-summary.md 4.2절 + 편차 (h)(j)(l)(s)(n) (contracts/deviations.md)
+# 텍스트 프레임 = JSON 제어 봉투(schemas/ws-envelope.schema.json), payload 형식은 schemas/ws-messages.schema.json이 정본이다.
+asyncapi: 2.6.0
+info:
+  title: 무중 기기 WSS(아이 기기 웹 ↔ Realtime DeviceGateway)
+  version: "1"
+  description: |
+    접속 · 인증(BR3.6 · SD-7): ① Origin이 허용 origin(mujoong.security.allowed-origin, 정확 일치)이 아니거나 없거나 null이면
+    403으로 업그레이드하지 않는다. ② 업그레이드 뒤 MUJOONG_DEVICE 쿠키가 없으면 즉시 4401. 있으면 Core
+    POST /internal/devices/verify-token(제한 1초)으로 확인하고 401이면 4401, 1초 초과면 1013으로 닫는다. 결과는 그 연결
+    하나에만 묶고 캐시하지 않는다 — 연결마다 Core에 다시 확인한다(편차 (j)). ③ 업그레이드 뒤 5초 안에 HELLO가 없으면
+    4408, HELLO 형식이 틀리면 4400. ④ HELLO를 수락해 HELLO_OK를 보내는 시점에 같은 기기의 옛 연결을 4001로 닫고 새
+    연결로 바꾼다(편차 (l): 승인 계약의 '새 연결이 인증되면'을 'HELLO_OK 시점'으로 구체화). URL · HELLO에는 토큰이 없다.
+    Realtime이 NOT_READY · DRAINING이면 새 연결은 업그레이드 뒤 1013으로 닫는다(편차 (n)).
+
+    프레임 규정(편차 (s) · J123): 텍스트 프레임은 8KB(mujoong.limits.ws-text-frame-max) 이하 JSON 봉투, 바이너리 프레임은
+    1바이트 종류 + 4바이트 순번(uint32 빅엔디언) + PCM16LE 24kHz 모노(J27). 크기 초과, 965바이트가 아닌 0x01, 서버가 받은
+    0x02, HELLO 형식 오류, 방향이 틀린 type은 ERROR 대신 4400으로 닫는다. READY(HELLO_OK) 뒤 8KB 안의 JSON이 모르는 type이거나
+    payload가 틀리면 ERROR(UNKNOWN_TYPE · BAD_PAYLOAD)를 보내고 연결을 유지한다. DEVICE_STATE · PLAYBACK_MARK(PROGRESS)는
+    받아도 무시한다(ERROR 없음).
+
+    시간(contracts/timing.md): HEARTBEAT 5초(device.heartbeat-interval) · HELLO 5초(device.hello-timeout) · 끊김 40초
+    (device.disconnect) · 시작 응답 20초(session.device-ack-timeout, ACK · DEVICE_READY에 더해 공급자 session.started가
+    없을 때도 FAILED(PROVIDER_UNAVAILABLE), 편차 (h)) · 종료 확인 30초(session.closing-confirm).
+
+    순서 · 중복: 받는 쪽은 같은 seq를 한 번만 처리한다. 서버는 옛 연결에서 온 늦은 메시지와 끝난 세션의 메시지를 버린다(BR6.11).
+x-unit: U1
+x-deviation: ["(j)", "(l)", "(s)", "(n)"]
+servers:
+  public:
+    url: "{host}/ws/device"
+    protocol: wss
+    description: Nginx → realtime:8081. 핸드셰이크에서 MUJOONG_DEVICE 쿠키 + 허용 Origin 확인
+    variables:
+      host:
+        default: localhost:8443
+        description: SERVICE_HOST 자리표시자(J98)
+x-close-codes:
+  - { code: 1000, name: DEVICE_OFF, by: 기기 「끄기」, deviceAction: "OFF", note: 서버는 즉시 OFFLINE으로 기록(BR4.8 ②) }
+  - { code: 1001, name: GOING_AWAY, by: 서버 재시작 · 배포(브라우저 페이지 이탈도 1001), deviceAction: RECONNECT, note: 기기가 보낸 1001은 즉시 OFFLINE }
+  - { code: 1006, name: ABNORMAL_CLOSURE, by: 닫기 프레임 없이 끊김(보내는 코드가 아님), deviceAction: RECONNECT, note: 40초 뒤 DISCONNECTED(BR4.8 ②) }
+  - { code: 1011, name: SERVER_ERROR, by: 서버 오류 · 연결 인계 트랜잭션 실패(새 연결만), deviceAction: RECONNECT }
+  - { code: 1013, name: TRY_AGAIN_LATER, by: Core 토큰 확인 불가 · NOT_READY · DRAINING, deviceAction: RECONNECT }
+  - { code: 4001, name: REPLACED, by: 같은 기기의 새 연결이 HELLO_OK를 받음(편차 (l)), deviceAction: "OFF", note: 자동 재접속 안 함 }
+  - { code: 4400, name: PROTOCOL_ERROR, by: HELLO 형식 오류 · 프레임 규정 위반(편차 (s)), deviceAction: RECONNECT }
+  - { code: 4401, name: UNAUTHORIZED, by: 쿠키 없음 · 무효 · RELEASED(DeviceReleased), deviceAction: RECHECK_ME, note: GET /api/device/me → 401이면 D0 }
+  - { code: 4408, name: HELLO_TIMEOUT, by: 업그레이드 뒤 HELLO 없음, deviceAction: RECONNECT }
+x-binary-frame:
+  header: "[0] 종류(0x01 입력 · 0x02 출력) / [1..4] 프레임 순번 uint32 빅엔디언 / [5..] PCM16LE 24kHz 모노"
+  inputFrameBytes: 965
+  inputPayloadBytes: 960
+  outputPayload: 2바이트 배수 · 길이 자유(공급자 조각을 게이트 뒤 그대로)
+  inputWindow: DEVICE_READY 뒤 ~ CLOSE_TRANSPORT 전, 20ms마다. 서버는 ACTIVE 전 프레임을 버린다(BR7.1)
+channels:
+  /ws/device:
+    publish:
+      description: 기기 → 서버
+      operationId: deviceToServer
+      message:
+        oneOf:
+          - $ref: "#/components/messages/HELLO"
+          - $ref: "#/components/messages/HEARTBEAT"
+          - $ref: "#/components/messages/ACK"
+          - $ref: "#/components/messages/DEVICE_READY"
+          - $ref: "#/components/messages/PLAYBACK_MARK"
+          - $ref: "#/components/messages/VOICE_SESSION_CLOSED"
+          - $ref: "#/components/messages/DEVICE_STATE"
+          - $ref: "#/components/messages/INPUT_AUDIO"
+    subscribe:
+      description: 서버 → 기기
+      operationId: serverToDevice
+      message:
+        oneOf:
+          - $ref: "#/components/messages/HELLO_OK"
+          - $ref: "#/components/messages/HEARTBEAT_ACK"
+          - $ref: "#/components/messages/START_SESSION"
+          - $ref: "#/components/messages/SESSION_STATE"
+          - $ref: "#/components/messages/OUTPUT_BEGIN"
+          - $ref: "#/components/messages/OUTPUT_END"
+          - $ref: "#/components/messages/PLAY_APPROVED_CONTENT"
+          - $ref: "#/components/messages/STOP_OUTPUT"
+          - $ref: "#/components/messages/CLOSE_TRANSPORT"
+          - $ref: "#/components/messages/ERROR"
+          - $ref: "#/components/messages/OUTPUT_AUDIO"
+components:
+  schemas:
+    Envelope:
+      $ref: "schemas/ws-envelope.schema.json"
+  messages:
+    HELLO:
+      name: HELLO
+      summary: "기기 → 서버. 접속 직후 첫 메시지(5초 안에, device.hello-timeout). 형식이 틀리면 4400(편차 (s)). 토큰을 넣지 않는다(J29)"
+      contentType: application/json
+      x-deviation: ["(s)"]
+      x-payload-schema: "schemas/ws-messages.schema.json#/$defs/HELLO"
+      payload:
+        $ref: "schemas/ws-envelope.schema.json"
+      examples:
+        - name: hello
+          payload: {"type": "HELLO", "seq": 1, "sentAt": "2026-10-15T09:01:00Z", "payload": {"appVersion": "u1", "audio": ["pcm16le/24000/1"], "resume": null}}
+    HELLO_OK:
+      name: HELLO_OK
+      summary: "서버 → 기기. HELLO 수락. 이 시점에 같은 기기의 옛 연결을 4001로 닫고 새 연결로 바꾼다(편차 (l) · BR3.7). 인증만 된 5초 동안은 CONNECTED가 아니다"
+      contentType: application/json
+      x-deviation: ["(l)"]
+      x-payload-schema: "schemas/ws-messages.schema.json#/$defs/HELLO_OK"
+      payload:
+        $ref: "schemas/ws-envelope.schema.json"
+      examples:
+        - name: hello_ok
+          payload: {"type": "HELLO_OK", "seq": 1, "sentAt": "2026-10-15T09:01:00Z", "payload": {"connectionId": "00000000-0000-4000-8000-000000000060", "serverTime": "2026-10-15T09:01:00Z", "heartbeatIntervalMs": 5000, "audio": "pcm16le/24000/1", "session": null}}
+    HEARTBEAT:
+      name: HEARTBEAT
+      summary: "기기 → 서버. 5초마다(세션과 무관). 기기는 송신 직전 봉투 sentAt을 채운다(OD-8 · R3-4)"
+      contentType: application/json
+      x-payload-schema: "schemas/ws-messages.schema.json#/$defs/HEARTBEAT"
+      payload:
+        $ref: "schemas/ws-envelope.schema.json"
+      examples:
+        - name: heartbeat
+          payload: {"type": "HEARTBEAT", "seq": 2, "sentAt": "2026-10-15T09:01:05Z", "payload": {"hbSeq": 1, "lastRttMs": null}}
+    HEARTBEAT_ACK:
+      name: HEARTBEAT_ACK
+      summary: "서버 → 기기. HEARTBEAT를 받자마자 같은 hbSeq로"
+      contentType: application/json
+      x-payload-schema: "schemas/ws-messages.schema.json#/$defs/HEARTBEAT_ACK"
+      payload:
+        $ref: "schemas/ws-envelope.schema.json"
+      examples:
+        - name: heartbeat_ack
+          payload: {"type": "HEARTBEAT_ACK", "seq": 2, "sentAt": "2026-10-15T09:01:05Z", "payload": {"hbSeq": 1, "serverTime": "2026-10-15T09:01:05Z"}}
+    START_SESSION:
+      name: START_SESSION
+      summary: "서버 → 기기. 세션 PREPARING 뒤 시작 push(opId 필수). 송신을 시도한 시각부터 20초 안에 ACK · DEVICE_READY · 공급자 session.started가 모두 확인돼 ACTIVE가 되지 않으면 FAILED(DEVICE_NO_ACK 또는 PROVIDER_UNAVAILABLE)다(편차 (h) · BR6.12 ②)"
+      contentType: application/json
+      x-deviation: ["(h)"]
+      x-payload-schema: "schemas/ws-messages.schema.json#/$defs/START_SESSION"
+      payload:
+        $ref: "schemas/ws-envelope.schema.json"
+      examples:
+        - name: start_session
+          payload: {"type": "START_SESSION", "seq": 3, "sentAt": "2026-10-15T09:02:00Z", "opId": "00000000-0000-4000-8000-000000000070", "sessionId": "00000000-0000-4000-8000-000000000020", "payload": {"approvedAudio": [{"contentCode": "CLOSING", "contentVersionId": "00000000-0000-4000-8000-000000000041", "audioUrl": "/media/approved/closing-v1.wav"}, {"contentCode": "WAITING_FILLER", "contentVersionId": "00000000-0000-4000-8000-000000000042", "audioUrl": "/media/approved/waiting-filler-v1.wav"}]}}
+    ACK:
+      name: ACK
+      summary: "기기 → 서버. opId가 있는 명령을 받자마자. START_SESSION에 대한 ACK가 DEVICE_ACK 전이의 근거다"
+      contentType: application/json
+      x-payload-schema: "schemas/ws-messages.schema.json#/$defs/ACK"
+      payload:
+        $ref: "schemas/ws-envelope.schema.json"
+      examples:
+        - name: ack
+          payload: {"type": "ACK", "seq": 3, "sentAt": "2026-10-15T09:02:00Z", "payload": {"ackOf": "00000000-0000-4000-8000-000000000070"}}
+    DEVICE_READY:
+      name: DEVICE_READY
+      summary: "기기 → 서버. 마이크 · 플레이어 준비와 승인 음성 미리 받기를 마치면(편차 (h))"
+      contentType: application/json
+      x-deviation: ["(h)"]
+      x-payload-schema: "schemas/ws-messages.schema.json#/$defs/DEVICE_READY"
+      payload:
+        $ref: "schemas/ws-envelope.schema.json"
+      examples:
+        - name: device_ready
+          payload: {"type": "DEVICE_READY", "seq": 4, "sentAt": "2026-10-15T09:02:01Z", "sessionId": "00000000-0000-4000-8000-000000000020", "payload": {"mic": "OK", "player": "OK", "prefetch": "OK"}}
+    SESSION_STATE:
+      name: SESSION_STATE
+      summary: "서버 → 기기. T19 표시가 바뀔 때(STANDBY · LISTENING · THINKING · CLOSING)"
+      contentType: application/json
+      x-payload-schema: "schemas/ws-messages.schema.json#/$defs/SESSION_STATE"
+      payload:
+        $ref: "schemas/ws-envelope.schema.json"
+      examples:
+        - name: session_state
+          payload: {"type": "SESSION_STATE", "seq": 4, "sentAt": "2026-10-15T09:02:02Z", "sessionId": "00000000-0000-4000-8000-000000000020", "payload": {"view": "LISTENING"}}
+    OUTPUT_BEGIN:
+      name: OUTPUT_BEGIN
+      summary: "서버 → 기기. 게이트를 통과한 AI 말 묶음 시작. 뒤따르는 0x02가 이 묶음이다"
+      contentType: application/json
+      x-payload-schema: "schemas/ws-messages.schema.json#/$defs/OUTPUT_BEGIN"
+      payload:
+        $ref: "schemas/ws-envelope.schema.json"
+      examples:
+        - name: output_begin
+          payload: {"type": "OUTPUT_BEGIN", "seq": 5, "sentAt": "2026-10-15T09:02:10Z", "sessionId": "00000000-0000-4000-8000-000000000020", "payload": {"playbackId": "00000000-0000-4000-8000-000000000080", "source": "GPT_LIVE"}}
+    OUTPUT_END:
+      name: OUTPUT_END
+      summary: "서버 → 기기. 그 묶음 마지막 프레임 뒤"
+      contentType: application/json
+      x-payload-schema: "schemas/ws-messages.schema.json#/$defs/OUTPUT_END"
+      payload:
+        $ref: "schemas/ws-envelope.schema.json"
+      examples:
+        - name: output_end
+          payload: {"type": "OUTPUT_END", "seq": 6, "sentAt": "2026-10-15T09:02:12Z", "sessionId": "00000000-0000-4000-8000-000000000020", "payload": {"playbackId": "00000000-0000-4000-8000-000000000080", "totalMs": 1800}}
+    PLAY_APPROVED_CONTENT:
+      name: PLAY_APPROVED_CONTENT
+      summary: "서버 → 기기. 승인 문구 재생(opId 필수). U1은 CLOSING · WAITING_FILLER"
+      contentType: application/json
+      x-payload-schema: "schemas/ws-messages.schema.json#/$defs/PLAY_APPROVED_CONTENT"
+      payload:
+        $ref: "schemas/ws-envelope.schema.json"
+      examples:
+        - name: play_approved_content
+          payload: {"type": "PLAY_APPROVED_CONTENT", "seq": 7, "sentAt": "2026-10-15T09:03:00Z", "opId": "00000000-0000-4000-8000-000000000071", "sessionId": "00000000-0000-4000-8000-000000000020", "payload": {"playbackId": "00000000-0000-4000-8000-000000000081", "contentCode": "CLOSING", "contentVersionId": "00000000-0000-4000-8000-000000000041"}}
+    STOP_OUTPUT:
+      name: STOP_OUTPUT
+      summary: "서버 → 기기. 출력 취소(opId 필수). 실제 멈춤은 PLAYBACK_MARK(STOPPED)로만 확인한다"
+      contentType: application/json
+      x-payload-schema: "schemas/ws-messages.schema.json#/$defs/STOP_OUTPUT"
+      payload:
+        $ref: "schemas/ws-envelope.schema.json"
+      examples:
+        - name: stop_output
+          payload: {"type": "STOP_OUTPUT", "seq": 8, "sentAt": "2026-10-15T09:03:00Z", "opId": "00000000-0000-4000-8000-000000000072", "sessionId": "00000000-0000-4000-8000-000000000020", "payload": {"reason": "GUARDIAN_STOP"}}
+    PLAYBACK_MARK:
+      name: PLAYBACK_MARK
+      summary: "기기 → 서버. 실제 재생 시작 · 진행 · 끝 · 멈춤 · 실패. observedAt은 기기 시계다. U1 서버는 PROGRESS를 받아도 무시한다(J123)"
+      contentType: application/json
+      x-payload-schema: "schemas/ws-messages.schema.json#/$defs/PLAYBACK_MARK"
+      payload:
+        $ref: "schemas/ws-envelope.schema.json"
+      examples:
+        - name: playback_mark
+          payload: {"type": "PLAYBACK_MARK", "seq": 5, "sentAt": "2026-10-15T09:02:10Z", "sessionId": "00000000-0000-4000-8000-000000000020", "payload": {"playbackId": "00000000-0000-4000-8000-000000000080", "status": "STARTED", "playedRange": null, "observedAt": "2026-10-15T09:02:10Z", "stopCause": null, "failureReason": null}}
+    CLOSE_TRANSPORT:
+      name: CLOSE_TRANSPORT
+      summary: "서버 → 기기. 세션 끝(opId 필수). 기기는 정리 뒤 VOICE_SESSION_CLOSED"
+      contentType: application/json
+      x-payload-schema: "schemas/ws-messages.schema.json#/$defs/CLOSE_TRANSPORT"
+      payload:
+        $ref: "schemas/ws-envelope.schema.json"
+      examples:
+        - name: close_transport
+          payload: {"type": "CLOSE_TRANSPORT", "seq": 9, "sentAt": "2026-10-15T09:03:03Z", "opId": "00000000-0000-4000-8000-000000000073", "sessionId": "00000000-0000-4000-8000-000000000020", "payload": {"reason": "GUARDIAN_STOP"}}
+    VOICE_SESSION_CLOSED:
+      name: VOICE_SESSION_CLOSED
+      summary: "기기 → 서버. 마이크 송신 · 재생 · 대기열 정리를 마치면. ENDED(confirmed true)의 근거다. WSS는 대기용으로 남는다"
+      contentType: application/json
+      x-payload-schema: "schemas/ws-messages.schema.json#/$defs/VOICE_SESSION_CLOSED"
+      payload:
+        $ref: "schemas/ws-envelope.schema.json"
+      examples:
+        - name: voice_session_closed
+          payload: {"type": "VOICE_SESSION_CLOSED", "seq": 6, "sentAt": "2026-10-15T09:03:04Z", "sessionId": "00000000-0000-4000-8000-000000000020", "payload": {"outputStoppedAt": "2026-10-15T09:03:03Z", "micClosedAt": "2026-10-15T09:03:04Z"}}
+    DEVICE_STATE:
+      name: DEVICE_STATE
+      summary: "기기 → 서버. 마이크 · 소리 · 탭 보임 상태가 바뀔 때. U1 서버는 받아 무시한다(ERROR 없음, J123)"
+      contentType: application/json
+      x-payload-schema: "schemas/ws-messages.schema.json#/$defs/DEVICE_STATE"
+      payload:
+        $ref: "schemas/ws-envelope.schema.json"
+      examples:
+        - name: device_state
+          payload: {"type": "DEVICE_STATE", "seq": 7, "sentAt": "2026-10-15T09:03:05Z", "payload": {"visibility": "HIDDEN"}}
+    ERROR:
+      name: ERROR
+      summary: "서버 → 기기. READY 뒤 모르는 type · 틀린 payload(연결은 유지). 크기 · 규격 · HELLO 형식 · 방향 위반은 ERROR가 아니라 4400이다(편차 (s) · J123)"
+      contentType: application/json
+      x-deviation: ["(s)"]
+      x-payload-schema: "schemas/ws-messages.schema.json#/$defs/ERROR"
+      payload:
+        $ref: "schemas/ws-envelope.schema.json"
+      examples:
+        - name: error
+          payload: {"type": "ERROR", "seq": 10, "sentAt": "2026-10-15T09:03:06Z", "payload": {"code": "UNKNOWN_TYPE", "refSeq": 7}}
+    INPUT_AUDIO:
+      name: INPUT_AUDIO
+      summary: 기기 → 서버 바이너리 0x01(입력 음성 20ms = 965바이트). 원음은 디스크 · DB · 로그에 쓰지 않는다(BR7.1)
+      contentType: application/octet-stream
+      x-deviation: ["(s)"]
+      payload:
+        type: string
+        format: binary
+    OUTPUT_AUDIO:
+      name: OUTPUT_AUDIO
+      summary: 서버 → 기기 바이너리 0x02(게이트를 통과한 출력 음성, OUTPUT_BEGIN 뒤). 기기는 OUTPUT_BEGIN 없이 온 0x02를 버린다(BR7.6)
+      contentType: application/octet-stream
+      payload:
+        type: string
+        format: binary

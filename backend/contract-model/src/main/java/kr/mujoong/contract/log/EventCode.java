@@ -1,0 +1,200 @@
+package kr.mujoong.contract.log;
+
+import static kr.mujoong.contract.log.AttrKey.ATTEMPT;
+import static kr.mujoong.contract.log.AttrKey.BREAKER_OPEN_SEC;
+import static kr.mujoong.contract.log.AttrKey.CHANNEL;
+import static kr.mujoong.contract.log.AttrKey.CLOCK_OFFSET_MS;
+import static kr.mujoong.contract.log.AttrKey.CLOSE_CODE;
+import static kr.mujoong.contract.log.AttrKey.CONFIRMED;
+import static kr.mujoong.contract.log.AttrKey.DIRECTION;
+import static kr.mujoong.contract.log.AttrKey.DROPPED;
+import static kr.mujoong.contract.log.AttrKey.DURATION_MS;
+import static kr.mujoong.contract.log.AttrKey.ELAPSED_MS;
+import static kr.mujoong.contract.log.AttrKey.END_REASON;
+import static kr.mujoong.contract.log.AttrKey.ERROR_KIND;
+import static kr.mujoong.contract.log.AttrKey.EVENT_ID;
+import static kr.mujoong.contract.log.AttrKey.EVENT_TYPE;
+import static kr.mujoong.contract.log.AttrKey.FAILURE_CODE;
+import static kr.mujoong.contract.log.AttrKey.FROM;
+import static kr.mujoong.contract.log.AttrKey.HEAP_USED_PCT;
+import static kr.mujoong.contract.log.AttrKey.INBOX_DEAD;
+import static kr.mujoong.contract.log.AttrKey.KIND;
+import static kr.mujoong.contract.log.AttrKey.LIMITER;
+import static kr.mujoong.contract.log.AttrKey.OPEN_CONNECTIONS;
+import static kr.mujoong.contract.log.AttrKey.ORIGIN;
+import static kr.mujoong.contract.log.AttrKey.OUTBOX_FAILED;
+import static kr.mujoong.contract.log.AttrKey.OUTBOX_OLDEST_PENDING_SEC;
+import static kr.mujoong.contract.log.AttrKey.OUTBOX_PENDING;
+import static kr.mujoong.contract.log.AttrKey.OUTCOME;
+import static kr.mujoong.contract.log.AttrKey.PHASE;
+import static kr.mujoong.contract.log.AttrKey.POOL_ACTIVE;
+import static kr.mujoong.contract.log.AttrKey.POOL_WAIT_EXCEEDED;
+import static kr.mujoong.contract.log.AttrKey.POOL_WAIT_MAX_MS;
+import static kr.mujoong.contract.log.AttrKey.PROFILE;
+import static kr.mujoong.contract.log.AttrKey.PROVIDER_RESPONSE_MS;
+import static kr.mujoong.contract.log.AttrKey.QUEUE;
+import static kr.mujoong.contract.log.AttrKey.QUIET_WAIT_MS;
+import static kr.mujoong.contract.log.AttrKey.REARMED_CONTROL_EVENTS;
+import static kr.mujoong.contract.log.AttrKey.RECOVERED_SESSIONS;
+import static kr.mujoong.contract.log.AttrKey.RELAY_IN_MS;
+import static kr.mujoong.contract.log.AttrKey.RELAY_OUT_MS;
+import static kr.mujoong.contract.log.AttrKey.REOPENED_INBOX_ROWS;
+import static kr.mujoong.contract.log.AttrKey.REPEAT;
+import static kr.mujoong.contract.log.AttrKey.RESET_CONNECTIONS;
+import static kr.mujoong.contract.log.AttrKey.REST_LE_300_MS;
+import static kr.mujoong.contract.log.AttrKey.REST_TOTAL;
+import static kr.mujoong.contract.log.AttrKey.RETRY_COUNT;
+import static kr.mujoong.contract.log.AttrKey.RTT_MS;
+import static kr.mujoong.contract.log.AttrKey.SEQ;
+import static kr.mujoong.contract.log.AttrKey.SESSIONS_ACTIVE;
+import static kr.mujoong.contract.log.AttrKey.SPEAKER;
+import static kr.mujoong.contract.log.AttrKey.STATUS;
+import static kr.mujoong.contract.log.AttrKey.STATUS_CODE;
+import static kr.mujoong.contract.log.AttrKey.STATUS_VERSION;
+import static kr.mujoong.contract.log.AttrKey.STOP_CAUSE;
+import static kr.mujoong.contract.log.AttrKey.SYS_CPU_AVG_PCT;
+import static kr.mujoong.contract.log.AttrKey.SYS_MEM_MAX_PCT;
+import static kr.mujoong.contract.log.AttrKey.TARGET;
+import static kr.mujoong.contract.log.AttrKey.THRESHOLD_MS;
+import static kr.mujoong.contract.log.AttrKey.TO;
+import static kr.mujoong.contract.log.AttrKey.TURN_SEQ;
+import static kr.mujoong.contract.log.AttrKey.TYPE;
+import static kr.mujoong.contract.log.AttrKey.T_DEVICE_OBSERVED;
+import static kr.mujoong.contract.log.AttrKey.T_DEVICE_PLAY_START;
+import static kr.mujoong.contract.log.AttrKey.T_DEVICE_PLAY_START_RECV;
+import static kr.mujoong.contract.log.AttrKey.T_FIRST_FRAME_SENT;
+import static kr.mujoong.contract.log.AttrKey.T_GATE_PASS;
+import static kr.mujoong.contract.log.AttrKey.T_PROVIDER_FIRST_OUT;
+import static kr.mujoong.contract.log.AttrKey.T_SEGMENT_CONFIRMED;
+import static kr.mujoong.contract.log.AttrKey.T_SERVER_RECV;
+import static kr.mujoong.contract.log.AttrKey.T_SPEECH_END;
+import static kr.mujoong.contract.log.AttrKey.T_SPEECH_END_SOURCE;
+import static kr.mujoong.contract.log.AttrKey.T_TRANSCRIPT_FINAL;
+import static kr.mujoong.contract.log.AttrKey.T_VIEW_ITEM_FIRST_SERVED;
+import static kr.mujoong.contract.log.AttrKey.T_VIEW_ITEM_READY;
+import static kr.mujoong.contract.log.AttrKey.UNOBSERVED_REASON;
+import static kr.mujoong.contract.log.AttrKey.VIEW_FALLBACK;
+import static kr.mujoong.contract.log.AttrKey.VIEW_LE_500_MS;
+import static kr.mujoong.contract.log.AttrKey.VIEW_TOTAL;
+
+import java.util.EnumSet;
+import java.util.Map;
+import java.util.Set;
+
+/**
+ * 사건 코드 17종(OD-2: 요구 문서 15종 + APP_ERROR · QUEUE_PRESSURE). 코드마다 기본 수준 · 허용 attrs 키 · 병합 대상 여부를 정한다.
+ * 허용 표에 없는 키는 쓸 수 없다({@link EventLog}가 막는다).
+ */
+public enum EventCode {
+    SESSION_TRANSITION(Level.INFO, false, false,
+            EnumSet.of(FROM, TO, STATUS_VERSION, END_REASON, FAILURE_CODE, CONFIRMED, PHASE, ORIGIN)),
+    TIMEOUT_FIRED(Level.WARN, false, false, EnumSet.of(TYPE, THRESHOLD_MS, ELAPSED_MS)),
+    LATENCY_TURN(Level.INFO, false, false, EnumSet.of(
+            TURN_SEQ, T_SPEECH_END, T_SPEECH_END_SOURCE, T_PROVIDER_FIRST_OUT, T_SEGMENT_CONFIRMED, T_GATE_PASS,
+            T_FIRST_FRAME_SENT, T_DEVICE_PLAY_START, T_DEVICE_PLAY_START_RECV, CLOCK_OFFSET_MS, RTT_MS, T_TRANSCRIPT_FINAL,
+            RELAY_IN_MS, RELAY_OUT_MS, PROVIDER_RESPONSE_MS, QUIET_WAIT_MS, UNOBSERVED_REASON)),
+    SESSION_ITEMS_SERVED(Level.INFO, false, false,
+            EnumSet.of(SEQ, SPEAKER, T_TRANSCRIPT_FINAL, T_VIEW_ITEM_READY, T_VIEW_ITEM_FIRST_SERVED)),
+    PLAYBACK_MARK_STOPPED(Level.INFO, false, false,
+            EnumSet.of(STOP_CAUSE, T_DEVICE_OBSERVED, T_SERVER_RECV, CLOCK_OFFSET_MS, RTT_MS)),
+    DEVICE_CONNECTION(Level.INFO, false, false, EnumSet.of(FROM, TO, CLOSE_CODE)),
+    INTERNAL_HTTP(Level.INFO, true, false,
+            EnumSet.of(TARGET, OUTCOME, STATUS_CODE, DURATION_MS, ATTEMPT, REPEAT)),
+    EVENT_DELIVERY(Level.INFO, false, false, EnumSet.of(EVENT_ID, EVENT_TYPE, STATUS, RETRY_COUNT, DURATION_MS)),
+    STARTUP_RECOVERY(Level.INFO, false, false,
+            EnumSet.of(RECOVERED_SESSIONS, REOPENED_INBOX_ROWS, RESET_CONNECTIONS, REARMED_CONTROL_EVENTS)),
+    METRIC_SNAPSHOT(Level.INFO, false, false, EnumSet.of(
+            OUTBOX_PENDING, OUTBOX_OLDEST_PENDING_SEC, OUTBOX_FAILED, INBOX_DEAD, POOL_ACTIVE, POOL_WAIT_MAX_MS,
+            POOL_WAIT_EXCEEDED, OPEN_CONNECTIONS, REST_TOTAL, REST_LE_300_MS, VIEW_TOTAL, VIEW_LE_500_MS, VIEW_FALLBACK,
+            SYS_CPU_AVG_PCT, SYS_MEM_MAX_PCT, HEAP_USED_PCT, SESSIONS_ACTIVE, BREAKER_OPEN_SEC)),
+    SECURITY_AUTH_FAILED(Level.WARN, true, true, EnumSet.of(KIND, STATUS_CODE, REPEAT)),
+    SECURITY_RATE_LIMITED(Level.WARN, true, true, EnumSet.of(LIMITER, STATUS_CODE, REPEAT)),
+    SECURITY_ORIGIN_DENIED(Level.WARN, true, true, EnumSet.of(CHANNEL, STATUS_CODE, CLOSE_CODE, REPEAT)),
+    SECURITY_DEV_LOGIN_BLOCKED(Level.WARN, true, true, EnumSet.of(PROFILE, STATUS_CODE, REPEAT)),
+    SECURITY_INTERNAL_TOKEN_FAILED(Level.WARN, true, true, EnumSet.of(DIRECTION, STATUS_CODE, REPEAT)),
+    APP_ERROR(Level.ERROR, true, false, EnumSet.of(ERROR_KIND, REPEAT)),
+    QUEUE_PRESSURE(Level.WARN, false, false, EnumSet.of(QUEUE, DROPPED, REPEAT));
+
+    /** 로그 수준(OD-1). demo는 INFO 이상만 출력한다. */
+    public enum Level {
+        ERROR,
+        WARN,
+        INFO,
+        DEBUG
+    }
+
+    private static final Set<String> SESSION_WARN_TARGETS = Set.of("FAILED", "ABORTED", "ENDED_UNCONFIRMED");
+    private static final Set<String> CONNECTION_WARN_TARGETS = Set.of("DISCONNECTED", "UNRESPONSIVE");
+    private static final Set<String> DELIVERY_WARN = Set.of("FAILED", "DEAD", "EVENT_CONFLICT");
+    private static final Set<String> DELIVERY_DEBUG = Set.of("DUPLICATE", "HANDLER_RETRY");
+
+    private final Level defaultLevel;
+    private final boolean mergeable;
+    private final boolean securityEvent;
+    private final Set<AttrKey> allowedKeys;
+
+    EventCode(Level defaultLevel, boolean mergeable, boolean securityEvent, Set<AttrKey> allowedKeys) {
+        this.defaultLevel = defaultLevel;
+        this.mergeable = mergeable;
+        this.securityEvent = securityEvent;
+        this.allowedKeys = Set.copyOf(allowedKeys);
+    }
+
+    /** 기본 수준(예외 규칙은 {@link #resolveLevel(Map)}). */
+    public Level defaultLevel() {
+        return defaultLevel;
+    }
+
+    /** 반복 병합 대상인가(INTERNAL_HTTP 실패 · SECURITY_* 5종 · APP_ERROR, OD-3 4번). */
+    public boolean isMergeable() {
+        return mergeable;
+    }
+
+    /** 보안 사건 5종인가(OD-13, 분당 상한 대상). */
+    public boolean isSecurityEvent() {
+        return securityEvent;
+    }
+
+    /** 허용 attrs 키. */
+    public Set<AttrKey> allowedKeys() {
+        return allowedKeys;
+    }
+
+    /** 이 사건에서 열거형 키가 받을 수 있는 값 집합. 연결 사건의 from · to는 연결 상태 집합이다. */
+    public Set<String> enumValues(AttrKey key) {
+        if (this == DEVICE_CONNECTION && (key == FROM || key == TO)) {
+            return AttrKey.Sets.CONNECTION;
+        }
+        return key.enumValues();
+    }
+
+    /**
+     * 열거형 attrs 값으로 수준을 정한다(OD-2 수준 열의 예외 규칙). SESSION_TRANSITION은 FAILED · ABORTED · ENDED_UNCONFIRMED로 가면
+     * WARN, DEVICE_CONNECTION은 DISCONNECTED · UNRESPONSIVE로 가면 WARN, INTERNAL_HTTP는 OK가 아니면 WARN, EVENT_DELIVERY는
+     * FAILED · DEAD · EVENT_CONFLICT가 WARN이고 DUPLICATE · HANDLER_RETRY는 DEBUG, QUEUE_PRESSURE는 RECORDER면 ERROR.
+     */
+    public Level resolveLevel(Map<AttrKey, String> enumAttrs) {
+        return switch (this) {
+            case SESSION_TRANSITION -> contains(SESSION_WARN_TARGETS, enumAttrs.get(TO)) ? Level.WARN : defaultLevel;
+            case DEVICE_CONNECTION -> contains(CONNECTION_WARN_TARGETS, enumAttrs.get(TO)) ? Level.WARN : defaultLevel;
+            case INTERNAL_HTTP -> {
+                String outcome = enumAttrs.get(OUTCOME);
+                yield outcome != null && !"OK".equals(outcome) ? Level.WARN : defaultLevel;
+            }
+            case EVENT_DELIVERY -> {
+                String status = enumAttrs.get(STATUS);
+                if (contains(DELIVERY_WARN, status)) {
+                    yield Level.WARN;
+                }
+                yield contains(DELIVERY_DEBUG, status) ? Level.DEBUG : defaultLevel;
+            }
+            case QUEUE_PRESSURE -> "RECORDER".equals(enumAttrs.get(QUEUE)) ? Level.ERROR : defaultLevel;
+            default -> defaultLevel;
+        };
+    }
+
+    /** {@code Set.of}의 contains(null)은 NPE이므로 값이 없으면 거짓으로 본다. */
+    private static boolean contains(Set<String> values, String value) {
+        return value != null && values.contains(value);
+    }
+}

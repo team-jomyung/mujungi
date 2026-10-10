@@ -1,0 +1,418 @@
+# 무중 Core 보호자 API — U1 몫 (C1 시험 로그인 · C2 기기 등록 · 상태 · C3 시작 최소 경로)
+# 출처: contract-summary.md 3절 + 편차 (d)(e)(m)(n)(o)(r)(t)(u) (contracts/deviations.md)
+# - 본문 스키마의 정본은 contracts/schemas/*.schema.json(JSON Schema 2020-12)이고 이 문서는 $ref로 가리킨다(J20 · V-5).
+# - 미룬 경로(U2 ~ U7: /auth/* · /me · /policies · /consents · /child · /sessions/current · /records · /reports …)는 넣지 않는다.
+#   소유 유닛이 더하기만 한다(계약 10절 · J25).
+# - x-unit: 경로를 만든 유닛, x-deviation: 승인 계약에 더한 편차 기호, x-error-codes: 그 응답이 낼 수 있는 오류 code(contracts/errors.md).
+openapi: 3.0.3
+info:
+  title: 무중 Core 보호자 API
+  version: "1"
+  description: |
+    보호자 웹(ParentWeb, /parent)이 부르는 Core REST. 인증은 세션 쿠키 MUJOONG_SESSION
+    (HttpOnly · Secure · SameSite=Lax · Path=/ · Domain 없음, 유휴 30일 갱신형)이고 상태 변경 요청은
+    X-CSRF-TOKEN 헤더가 필수다(BR8.8 · SD-6). 다른 보호자의 자원은 없는 자원과 같은 404로 숨긴다(BR8.5).
+    모든 응답에는 X-Trace-Id 헤더가 있고 오류 봉투의 traceId와 같다(OD-7). CORS 헤더는 내지 않는다.
+    시각은 ISO 8601 UTC다(BR8.10).
+servers:
+  - url: https://{host}/api
+    variables:
+      host:
+        default: localhost:8443
+        description: SERVICE_HOST 자리표시자(J98). 실제 도메인은 저장소에 쓰지 않는다
+x-unit: U1
+security:
+  - session: []
+paths:
+  /dev/login:
+    post:
+      operationId: devLogin
+      summary: U1 시험 로그인 — 시드 보호자 세션 쿠키를 연다(BR8.4 · J119)
+      description: |
+        dev 프로필 + mujoong.dev-login.enabled=true일 때만 200이다. 그 밖(demo · prod · enabled 거짓)에서는
+        404이고 SECURITY_DEV_LOGIN_BLOCKED가 남는다(SD-14 · A2). 본문 없이 호출한다. CSRF 면제 1번(BR8.8).
+        로그인 때 세션 ID를 교체한다(SD-5).
+      security: []
+      x-unit: U1
+      x-csrf-exempt: true
+      responses:
+        "200":
+          description: 시드 보호자 세션 발급
+          headers:
+            Set-Cookie:
+              description: MUJOONG_SESSION(HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=2592000)
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { $ref: "schemas/dev-login-response.schema.json" }
+              example: { guardianId: 00000000-0000-4000-8000-000000000001 }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/ServiceNotReady" }
+  /session/csrf:
+    get:
+      operationId: getCsrfToken
+      summary: CSRF 토큰 취득(편차 (u) · SD-6 · J75)
+      description: |
+        인증된 세션이면 {token, headerName}을 Cache-Control no-store로 답하고 세션 쿠키 Max-Age를 갱신한다.
+        익명이면 401. 토큰은 JS 메모리에만 둔다. 403 CSRF_TOKEN_INVALID를 받으면 한 번만 다시 받아 같은 요청을
+        같은 키로 한 번 더 보낸다.
+      x-unit: U1
+      x-deviation: ["(u)"]
+      responses:
+        "200":
+          description: 토큰
+          headers:
+            Cache-Control:
+              schema: { type: string, enum: [no-store] }
+          content:
+            application/json:
+              schema: { $ref: "schemas/csrf-response.schema.json" }
+              example: { token: example-csrf-token-not-a-secret, headerName: X-CSRF-TOKEN }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/ServiceNotReady" }
+  /health:
+    get:
+      operationId: getHealth
+      summary: 공개 헬스(편차 (t) · OD-11)
+      description: |
+        외부 프로브용. 요청마다 DB를 부르지 않고 앱의 준비 상태 값만 읽는다. NOT_READY · DRAINING이면
+        503 SERVICE_NOT_READY + Retry-After(편차 (n)).
+      security: []
+      x-unit: U1
+      x-deviation: ["(t)", "(n)"]
+      responses:
+        "200":
+          description: 준비됨
+          content:
+            application/json:
+              schema: { $ref: "schemas/health-response.schema.json" }
+              example: { status: UP }
+        "503": { $ref: "#/components/responses/ServiceNotReady" }
+  /home:
+    get:
+      operationId: getHome
+      summary: 04 세 구역 한 번에(J119)
+      x-unit: U1
+      responses:
+        "200":
+          description: U1 모양 — child, device(DeviceView), currentSession(null, U4), lock
+          headers:
+            Cache-Control:
+              schema: { type: string, enum: [no-store] }
+          content:
+            application/json:
+              schema: { $ref: "schemas/home-response.schema.json" }
+              example:
+                child: { childId: 00000000-0000-4000-8000-000000000002, displayName: 하늘, age: 8, interests: [공룡, 그림] }
+                device:
+                  registration: { status: NONE, codePrefix: null, registeredAt: null }
+                  network: { state: NONE }
+                  verdict: { canStart: false, reasonCode: NO_DEVICE }
+                currentSession: null
+                lock: { locked: true, reasonCode: NO_DEVICE }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/AccountDeletion" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/ServiceNotReady" }
+  /device:
+    get:
+      operationId: getDevice
+      summary: 05 두 줄 + 판정 카드(DeviceView, BR4.3 · BR4.6)
+      x-unit: U1
+      responses:
+        "200":
+          description: 기기 보기
+          headers:
+            Cache-Control:
+              schema: { type: string, enum: [no-store] }
+          content:
+            application/json:
+              schema: { $ref: "schemas/device-view.schema.json" }
+              example:
+                registration: { status: REGISTERED, codePrefix: 7F3K, registeredAt: "2026-10-15T09:00:00Z" }
+                network: { state: STABLE, rttMs: 120, recentDisconnects: 0, since: "2026-10-15T09:01:00Z", lastSeenAt: "2026-10-15T09:05:00Z", lastReportedAt: "2026-10-15T09:05:02Z" }
+                verdict: { canStart: true, reasonCode: null }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/AccountDeletion" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/ServiceNotReady" }
+  /device/register:
+    post:
+      operationId: registerDevice
+      summary: 05a 코드 등록(BR2.1 ~ BR2.7)
+      description: |
+        CSRF 필수(/api/device/** 통째 면제 없음, BR8.8). 서버는 코드를 정규화한 뒤 판정한다(편차 (d)).
+        같은 보호자의 재시도는 첫 성공과 같은 201이다(편차 (m)). 400 · 404 · 409로 끝난 요청은 보호자별
+        실패 한도(device.register-failure-limit)에 세고 넘으면 429다(BR2.6).
+      security:
+        - session: []
+          csrf: []
+      x-unit: U1
+      x-deviation: ["(d)", "(m)", "(e)", "(r)"]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "schemas/device-register-request.schema.json" }
+            example: { code: 7F3K92QD }
+      responses:
+        "201":
+          description: 등록됨(또는 같은 보호자의 재시도, 편차 (m))
+          content:
+            application/json:
+              schema: { $ref: "schemas/device-register-response.schema.json" }
+              example: { deviceId: 00000000-0000-4000-8000-000000000003, codePrefix: 7F3K, registeredAt: "2026-10-15T09:00:00Z" }
+        "400":
+          description: 정규화 뒤 영숫자 8자가 아님 · JSON 아님 · 64KB 초과(편차 (d)(r))
+          x-error-codes: [VALIDATION_FAILED]
+          x-deviation: ["(d)", "(r)"]
+          content:
+            application/json:
+              schema: { $ref: "schemas/error-envelope.schema.json" }
+              example: { code: VALIDATION_FAILED, message: 요청 형식이 올바르지 않아요., traceId: 4bf92f3577b34da6a3ce929d0e0e4736 }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403":
+          description: CSRF 토큰 · Origin 불일치(편차 (e)) 또는 계정 삭제 접수(BR2.2)
+          x-error-codes: [CSRF_TOKEN_INVALID, ACCOUNT_DELETION_IN_PROGRESS]
+          x-deviation: ["(e)"]
+          content:
+            application/json:
+              schema: { $ref: "schemas/error-envelope.schema.json" }
+              example: { code: CSRF_TOKEN_INVALID, message: 보안 확인이 만료됐어요. 다시 시도해 주세요., traceId: 4bf92f3577b34da6a3ce929d0e0e4736 }
+        "404":
+          description: 없는 코드 · 만료 · 발급 알파벳 밖 글자(BR2.1 ③)
+          x-error-codes: [CODE_NOT_FOUND]
+          content:
+            application/json:
+              schema: { $ref: "schemas/error-envelope.schema.json" }
+              example: { code: CODE_NOT_FOUND, message: 없는 코드예요., traceId: 4bf92f3577b34da6a3ce929d0e0e4736 }
+        "409":
+          description: 이미 등록된 코드 · 연결된 기존 기기(J13 · BR2.4)
+          x-error-codes: [CODE_ALREADY_REGISTERED, DEVICE_ALREADY_ACTIVE]
+          content:
+            application/json:
+              schema: { $ref: "schemas/error-envelope.schema.json" }
+              example: { code: DEVICE_ALREADY_ACTIVE, message: 이미 연결된 기기가 있어요., traceId: 4bf92f3577b34da6a3ce929d0e0e4736 }
+        "429":
+          description: 보호자별 등록 실패 한도 초과(BR2.6)
+          x-error-codes: [TOO_MANY_ATTEMPTS]
+          content:
+            application/json:
+              schema: { $ref: "schemas/error-envelope.schema.json" }
+              example: { code: TOO_MANY_ATTEMPTS, message: 잠시 뒤 다시 시도해 주세요., traceId: 4bf92f3577b34da6a3ce929d0e0e4736 }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/ServiceNotReady" }
+  /activities/free:
+    post:
+      operationId: startFreeTalk
+      summary: 08 자유대화 시작(BR6.1 ~ BR6.7)
+      description: |
+        같은 idempotencyKey를 먼저 확인하고(BR6.2) 새 키일 때만 동의 → 진행 중 세션 → 기기 안정 순으로
+        검사해 첫 사유 하나만 거절한다(BR6.1). context는 검증만 하고 저장 · 전송하지 않는다(BR6.4 · NFR3.1).
+        Realtime 내부 코드(DEVICE_NOT_CONNECTED)는 내보내지 않고 번역한다(BR8.6).
+      security:
+        - session: []
+          csrf: []
+      x-unit: U1
+      x-deviation: ["(d)", "(e)", "(r)"]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "schemas/activity-free-request.schema.json" }
+            example: { idempotencyKey: 00000000-0000-4000-8000-000000000010, context: { situationType: FRIEND, sourceType: SEEN } }
+      responses:
+        "202":
+          description: 시작 접수
+          content:
+            application/json:
+              schema: { $ref: "schemas/activity-free-response.schema.json" }
+              example: { sessionId: 00000000-0000-4000-8000-000000000020, status: REQUESTED }
+        "400":
+          description: 서술 칸 200자 초과 · 형식 오류 · 64KB 초과(편차 (d)(r))
+          x-error-codes: [VALIDATION_FAILED]
+          x-deviation: ["(d)", "(r)"]
+          content:
+            application/json:
+              schema: { $ref: "schemas/error-envelope.schema.json" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403":
+          description: 동의 없음(BR6.1 ①) · CSRF(편차 (e)) · 계정 삭제 접수
+          x-error-codes: [CONSENT_MISSING, CSRF_TOKEN_INVALID, ACCOUNT_DELETION_IN_PROGRESS]
+          content:
+            application/json:
+              schema: { $ref: "schemas/error-envelope.schema.json" }
+        "409":
+          description: 진행 중 세션(BR6.1 ② · BR6.3) · 같은 키에 다른 본문(BR6.2)
+          x-error-codes: [SESSION_IN_PROGRESS, IDEMPOTENCY_CONFLICT]
+          content:
+            application/json:
+              schema: { $ref: "schemas/error-envelope.schema.json" }
+              example: { code: SESSION_IN_PROGRESS, message: 이미 진행 중인 활동이 있어요., traceId: 4bf92f3577b34da6a3ce929d0e0e4736 }
+        "423":
+          description: 기기 판정이 안정이 아님(BR6.1 ③ · BR6.6 번역)
+          x-error-codes: [DEVICE_NOT_STABLE]
+          content:
+            application/json:
+              schema: { $ref: "schemas/error-envelope.schema.json" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503":
+          description: Realtime을 부를 수 없음(BR6.7, 로컬 FAILED) 또는 앱 준비 안 됨(편차 (n))
+          x-error-codes: [REALTIME_UNAVAILABLE, SERVICE_NOT_READY]
+          x-deviation: ["(n)"]
+          headers:
+            Retry-After:
+              description: SERVICE_NOT_READY일 때만(초, mujoong.health.db-check-interval)
+              schema: { type: integer }
+          content:
+            application/json:
+              schema: { $ref: "schemas/error-envelope.schema.json" }
+  /sessions/{sessionId}:
+    get:
+      operationId: getSessionLiveView
+      summary: 12 진행 폴링(2초) · 17 상태(BR6.15)
+      x-unit: U1
+      parameters:
+        - { name: sessionId, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: sinceSeq, in: query, required: false, schema: { type: integer, minimum: 0, default: 0 } }
+      responses:
+        "200":
+          description: 진행 보기(LiveView, U1이 채우는 값)
+          headers:
+            Cache-Control:
+              schema: { type: string, enum: [no-store] }
+          content:
+            application/json:
+              schema: { $ref: "schemas/live-view.schema.json" }
+              example:
+                sessionId: 00000000-0000-4000-8000-000000000020
+                activityType: FREE_TALK
+                status: ACTIVE
+                endReason: null
+                failureCode: null
+                confirmed: false
+                requestedAt: "2026-10-15T09:00:00Z"
+                startedAt: "2026-10-15T09:00:04Z"
+                endedAt: null
+                statusVersion: 3
+                serverTime: "2026-10-15T09:01:00Z"
+                observedAt: "2026-10-15T09:00:59Z"
+                stale: false
+                technicalPause: null
+                silenceWarning: null
+                practice: null
+                gaps: []
+                items:
+                  - { seq: 1, speaker: CHILD, text: 오늘 공룡 그렸어, final: true, uncertain: false, startedAt: "2026-10-15T09:00:10Z", endedAt: "2026-10-15T09:00:12Z" }
+                nextSeq: 1
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/ServiceNotReady" }
+  /sessions/{sessionId}/end:
+    post:
+      operationId: endSession
+      summary: P1 끝내기(GUARDIAN_STOP, BR6.9)
+      description: |
+        사본이 종료 상태일 때만 Realtime을 부르지 않고 409, 그 밖은 Realtime 응답을 최종으로 삼는다(J54).
+        재시도는 같은 requestId로 한다. 409를 받은 12는 상태를 한 번 다시 읽어 종료 상태일 때만 17로 간다.
+      security:
+        - session: []
+          csrf: []
+      x-unit: U1
+      x-deviation: ["(e)", "(w)"]
+      parameters:
+        - { name: sessionId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "schemas/session-end-request.schema.json" }
+            example: { requestId: 00000000-0000-4000-8000-000000000030 }
+      responses:
+        "202":
+          description: 끝내기 접수
+          content:
+            application/json:
+              schema: { $ref: "schemas/session-end-response.schema.json" }
+              example: { status: CLOSING }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/CsrfOrDeletion" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: 이미 끝났거나 아직 ACTIVE 전(J54). Realtime이 모르는 세션도 같다(편차 (w) · J111)
+          x-error-codes: [SESSION_NOT_ACTIVE]
+          x-deviation: ["(w)"]
+          content:
+            application/json:
+              schema: { $ref: "schemas/error-envelope.schema.json" }
+              example: { code: SESSION_NOT_ACTIVE, message: 지금은 끝낼 수 있는 상태가 아니에요., traceId: 4bf92f3577b34da6a3ce929d0e0e4736 }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503":
+          description: Realtime에 닿지 않음(화면은 '전송하지 못함') 또는 앱 준비 안 됨(편차 (n))
+          x-error-codes: [REALTIME_UNAVAILABLE, SERVICE_NOT_READY]
+          content:
+            application/json:
+              schema: { $ref: "schemas/error-envelope.schema.json" }
+components:
+  securitySchemes:
+    session: { type: apiKey, in: cookie, name: MUJOONG_SESSION }
+    csrf: { type: apiKey, in: header, name: X-CSRF-TOKEN }
+  responses:
+    Unauthenticated:
+      description: 세션 없음 · 만료(BR8.5). CSRF 판정보다 먼저 온다(SD-4 F3b)
+      x-error-codes: [UNAUTHENTICATED]
+      content:
+        application/json:
+          schema: { $ref: "schemas/error-envelope.schema.json" }
+          example: { code: UNAUTHENTICATED, message: 로그인이 필요해요., traceId: 4bf92f3577b34da6a3ce929d0e0e4736 }
+    NotFound:
+      description: 없는 자원 · 남의 자원(존재를 드러내지 않음, BR8.5) · 꺼진 시험 로그인
+      x-error-codes: [NOT_FOUND]
+      content:
+        application/json:
+          schema: { $ref: "schemas/error-envelope.schema.json" }
+          example: { code: NOT_FOUND, message: 찾을 수 없어요., traceId: 4bf92f3577b34da6a3ce929d0e0e4736 }
+    ValidationFailed:
+      description: "형식 오류 · JSON 아님 · 본문 64KB 초과(편차 (r) — 413 대신 400)"
+      x-error-codes: [VALIDATION_FAILED]
+      x-deviation: ["(r)"]
+      content:
+        application/json:
+          schema: { $ref: "schemas/error-envelope.schema.json" }
+    CsrfOrDeletion:
+      description: CSRF 토큰 · Origin 불일치(편차 (e)) 또는 계정 삭제 접수
+      x-error-codes: [CSRF_TOKEN_INVALID, ACCOUNT_DELETION_IN_PROGRESS]
+      x-deviation: ["(e)"]
+      content:
+        application/json:
+          schema: { $ref: "schemas/error-envelope.schema.json" }
+    AccountDeletion:
+      description: 계정 삭제가 접수된 보호자(계약 2절)
+      x-error-codes: [ACCOUNT_DELETION_IN_PROGRESS]
+      content:
+        application/json:
+          schema: { $ref: "schemas/error-envelope.schema.json" }
+    InternalError:
+      description: 처리하지 못한 서버 오류. 스택 · 예외 메시지 · 입력값을 담지 않는다(편차 (o))
+      x-error-codes: [INTERNAL_ERROR]
+      x-deviation: ["(o)"]
+      content:
+        application/json:
+          schema: { $ref: "schemas/error-envelope.schema.json" }
+          example: { code: INTERNAL_ERROR, message: 잠시 문제가 생겼어요. 다시 시도해 주세요., traceId: 4bf92f3577b34da6a3ce929d0e0e4736 }
+    ServiceNotReady:
+      description: 앱이 NOT_READY(DB 점검 연속 실패) 또는 DRAINING(정상 종료 중). 인증 판정보다 먼저 온다(편차 (n))
+      x-error-codes: [SERVICE_NOT_READY]
+      x-deviation: ["(n)"]
+      headers:
+        Retry-After:
+          description: 초 단위(mujoong.health.db-check-interval, J124)
+          schema: { type: integer, minimum: 1 }
+      content:
+        application/json:
+          schema: { $ref: "schemas/error-envelope.schema.json" }
+          example: { code: SERVICE_NOT_READY, message: 잠시 뒤 다시 시도해 주세요., traceId: 4bf92f3577b34da6a3ce929d0e0e4736 }

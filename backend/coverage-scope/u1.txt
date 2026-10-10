@@ -1,0 +1,4 @@
+# U1 커버리지 측정 범위 (U1 3.5 Step 5 자리 · J137)
+# -PcoverageScope=u1일 때 JaCoCo가 이 목록의 운영 소스(.java)만 잰다. 한 줄에 저장소 루트 기준 경로 하나,
+# 예: backend/core-api/src/main/java/kr/mujoong/core/device/RegistrationCode.java
+# 내용은 Step 53이 U1 source-manifest의 backend src/main 파일로 채운다. 목록에 모듈 소스가 없으면 하한 판정이 실패한다.

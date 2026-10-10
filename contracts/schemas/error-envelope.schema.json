@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mujoong.invalid/contracts/schemas/error-envelope.schema.json",
+  "title": "오류 봉투",
+  "description": "모든 REST 오류 응답 {code, message, traceId}(계약 2절 · BR8.6). 화면 문구는 code로 고른다. message는 code별 고정 문장이고(contracts/errors.md) 전사 원문 · 개인정보 · 입력값을 담지 않는다. 앱이 낸 오류는 traceId가 응답 헤더 X-Trace-Id와 같다(OD-7). Nginx가 만든 502 · 504 봉투(편차 (y))도 같은 모양이다.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["code", "message"],
+  "properties": {
+    "code": {
+      "type": "string",
+      "enum": [
+        "UNAUTHENTICATED",
+        "NOT_FOUND",
+        "VALIDATION_FAILED",
+        "CONSENT_MISSING",
+        "ACCOUNT_DELETION_IN_PROGRESS",
+        "CSRF_TOKEN_INVALID",
+        "SESSION_IN_PROGRESS",
+        "IDEMPOTENCY_CONFLICT",
+        "SESSION_NOT_ACTIVE",
+        "DEVICE_NOT_STABLE",
+        "REALTIME_UNAVAILABLE",
+        "CODE_NOT_FOUND",
+        "CODE_ALREADY_REGISTERED",
+        "DEVICE_ALREADY_ACTIVE",
+        "TOO_MANY_ATTEMPTS",
+        "RATE_LIMITED",
+        "CODE_ISSUE_FAILED",
+        "BOOTSTRAP_NOT_FOUND",
+        "NOT_REGISTERED_YET",
+        "BOOTSTRAP_CLOSED",
+        "DEVICE_NOT_REGISTERED",
+        "ALREADY_REGISTERED",
+        "INVALID_ENVELOPE",
+        "EVENT_CONFLICT",
+        "INVALID_DEVICE_TOKEN",
+        "DEVICE_NOT_CONNECTED",
+        "SERVICE_NOT_READY",
+        "INTERNAL_ERROR",
+        "UPSTREAM_UNAVAILABLE"
+      ]
+    },
+    "message": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "traceId": {
+      "$ref": "common.schema.json#/$defs/TraceId"
+    }
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "name": "mujoong-tools",
+  "version": "0.1.0",
+  "private": true,
+  "description": "무중 시험 도구 — 가짜 공급자 · 기기 시뮬레이터 · 끝-끝 시나리오 · WAV 생성기 · host 모드 Nginx 대역(앱 이미지 밖). U1 3.5 Step 6 · J129",
+  "type": "module",
+  "engines": {
+    "node": ">=22 <23"
+  },
+  "dependencies": {
+    "ws": "8.21.3"
+  },
+  "devDependencies": {
+    "vite": "7.3.6",
+    "vitest": "4.1.11"
+  }
+}

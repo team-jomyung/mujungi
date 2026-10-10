@@ -1,0 +1,13 @@
+# AI-DLC 기록 · 설계 문서 · 생성물은 Prettier 대상이 아니다 (U1 3.5 Step 2)
+aidlc/
+.claude/
+docs/
+backend/
+node_modules/
+.next/
+coverage/
+build/
+package-lock.json
+next-env.d.ts
+infra/seed-audio/
+*.wav

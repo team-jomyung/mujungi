@@ -1,0 +1,66 @@
+# realtime-activity test 프로필 — 시험 시간 키 축소값의 유일한 출처 (U1 3.5 Step 5 · NFR6.2 '키 값 줄이기' · J94 · J108 · J141)
+# 값은 reliability-design.md ## 3의 '시험이 줄이는 값' 열에서 시간 키만 가져온다(불변식 I-3 · I-10을 지킨다).
+# 건수 · 크기 · 한도(대기열 · 배치 · 재시도 횟수 · 프레임 크기)와 보존 · 정리 주기, DB 잠금 · 문장 제한은 실제 값을 둔다:
+# 줄이면 정상 흐름 시험이 도중에 거절되기 때문이다. 그런 키의 경계는 가변 Clock 앞당기기나 시험별 속성으로 본다.
+# 비밀(DB 비밀번호 · 내부 토큰 · 공급자 키 · ownerHash 비밀)은 여기 두지 않고 실행마다 test-support가 만든다(J127).
+spring:
+  lifecycle:
+    timeout-per-shutdown-phase: 2s
+  datasource:
+    hikari:
+      # 문맥 캐시가 여러 앱 문맥을 붙잡아도 realtime_app 연결 한도(12)를 넘지 않게 작게 둔다(R3-18)
+      maximum-pool-size: 2
+      minimum-idle: 0
+
+management:
+  server:
+    # 문맥마다 무작위 관리 포트(고정 9090은 캐시된 문맥끼리 충돌한다)
+    port: 0
+
+mujoong:
+  timing:
+    session:
+      device-ack-timeout: 2s
+      closing-confirm: 3s
+    device:
+      disconnect: 4s
+      heartbeat-interval: 500ms
+      hello-timeout: 500ms
+      status-report-interval: 1s
+    recorder:
+      flush-interval: 20ms
+  outbox:
+    poll-interval: 20ms
+    retry-backoff: [10ms, 20ms, 40ms, 80ms, 160ms, 300ms]
+    claim-lease: 1s
+  inbox:
+    poll-interval: 20ms
+    retry-backoff: [10ms, 20ms, 40ms, 80ms, 160ms]
+    claim-lease: 1s
+  session:
+    tombstone-ttl: 2s
+    orphan-check-interval: 1s
+    timer-tick: 50ms
+  device:
+    disconnect-check-interval: 200ms
+  internal-http:
+    connect-timeout: 50ms
+    verify-token-timeout: 100ms
+    device-status-timeout: 100ms
+    event-publish-timeout: 300ms
+  provider:
+    connect-timeout: 1s
+    # test 프로필은 루프백 공급자만 허용한다(J141). 가짜 공급자를 쓰는 시험은 무작위 포트 주소로 덮어쓴다.
+    # 기본값은 아무것도 듣지 않는 루프백 포트라 실공급자로 가지 않는다.
+    url: ws://127.0.0.1:9/fake-provider-unset
+  health:
+    db-check-interval: 200ms
+  gate:
+    segment-quiet: 50ms
+  security:
+    allowed-origin: https://mujoong.invalid
+  metrics:
+    db-pool-wait-warn: 10ms
+  observability:
+    metric-snapshot-interval: 1s
+    log-merge-window: 500ms
