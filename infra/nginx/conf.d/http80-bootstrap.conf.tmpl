@@ -1,0 +1,47 @@
+# 무중 Nginx 80 포트 — 최초 인증서 발급 전 임시 설정 (U1 3.5 Step 44 · infra-spec 2.1 nginx · 4.5.1 5-c · R4-14)
+# 템플릿 변수: SERVICE_HOST. render-nginx --mode bootstrap이 conf.d/http80.conf로 렌더하고 443 설정은 쓰지 않는다.
+# 인증서가 없으면 443이 뜨지 않으므로 이 설정으로 먼저 기동해 `certbot certonly --webroot -w /var/www/certbot`로 발급한 뒤
+# render-nginx --mode https로 다시 렌더 → nginx -t → 적재한다(갱신과 같은 webroot 방식).
+
+server {
+    listen 80 default_server;
+    server_name _;
+
+    location = /__mujoong/nginx-health {
+        allow 127.0.0.1;
+        deny all;
+        access_log off;
+        default_type text/plain;
+        return 200 "ok\n";
+    }
+
+    location / {
+        return 444;
+    }
+}
+
+server {
+    listen 80;
+    server_name ${SERVICE_HOST};
+
+    location ^~ /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+        default_type text/plain;
+        try_files $uri =404;
+    }
+
+    # 발급 전에는 HTTPS가 없으므로 301 대신 점검 페이지(상태 503)를 보인다
+    location / {
+        error_page 503 /__mujoong/maintenance.html;
+        return 503;
+    }
+
+    location = /__mujoong/maintenance.html {
+        internal;
+        root /etc/nginx/mujoong/html;
+        try_files /maintenance.html =503;
+        add_header Cache-Control "no-store" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header Content-Security-Policy "default-src 'none'; frame-ancestors 'none'" always;
+    }
+}

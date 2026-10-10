@@ -1,0 +1,140 @@
+#!/usr/bin/env bash
+# 무중 Nginx 설정 렌더 (U1 3.5 Step 44 · infra-spec 2.1 nginx · 3.3 · 4.2 · 4.5.1 5-c · cicd 2.6.1 D7 · J98 · J108 · J136)
+#
+# infra/nginx/ 템플릿을 렌더해 nginx 컨테이너가 /etc/nginx/mujoong 에 읽기 전용으로 마운트할 디렉터리를 만든다.
+#   demo   : 배포 D7이 임시 디렉터리에 렌더 → nginx -t → 고정 경로 /opt/mujoong/nginx 갱신 → nginx -s reload
+#   검증   : build/verify/nginx (compose.ci.yml, J136), SERVICE_HOST=localhost · 허용 origin https://localhost:8443
+#   CI     : infra-validate가 시험값으로 렌더해 nginx -t와 방어 지시어 단언을 돈다
+#
+# 쓰는 법: render-nginx --out <디렉터리> [--mode https|bootstrap] [--upstreams compose|host] [--env-file <파일>]...
+#   --mode https      정상 설정(80 ACME · 301 + 443) — 기본값
+#   --mode bootstrap  최초 인증서 발급 전 80 전용 임시 설정(443 없음, infra-spec 4.5.1 5-c)
+#   --upstreams compose  edge 망 고정 IP(demo · 검증 스택, 기본값)  /  host  dev 호스트 프로세스(compose.dev.yml 프로필 nginx)
+#   --env-file        값을 읽을 env 파일(여러 번 가능, 예: /opt/mujoong/env/nginx.env). 아래 세 이름만 읽고 나머지 줄은 무시한다.
+#                     파일을 셸로 source하지 않는다. 명령 환경에 이미 있는 값이 우선한다.
+#
+# 템플릿 변수(값은 출력하지 않는다, 비밀 없음)
+#   SERVICE_HOST                     필수. 포트 없는 소문자 호스트 이름(IP 주소 불가). 서버 이름 · 301 대상 · 인증서 경로
+#   MUJOONG_SECURITY_ALLOWED_ORIGIN  필수. https://<SERVICE_HOST>[:포트] 이어야 한다(CSP · Origin 판정과 같은 호스트인지 검사만 한다)
+#   MUJOONG_HSTS_MAX_AGE             선택, 기본 15552000(180일). 정수 초
+#
+# 출력 디렉터리 내용: nginx.conf · upstreams.conf · conf.d/*.conf · snippets/*.conf · html/maintenance.html · reload-watch.sh
+#   디렉터리 자체는 지우지 않고(바인드 마운트 대상일 수 있음) 안의 파일을 하나씩 임시 파일 → 이름 변경으로 바꾸며,
+#   렌더 결과에 없는 옛 .conf 파일은 지운다. 렌더 결과에 ${대문자 이름} 토큰이 남으면 실패한다.
+# 종료 코드: 0 성공, 1 값 · 렌더 오류, 64 인자 오류
+
+set -Eeuo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# 저장소에서는 infra/bin, 번들(릴리스 폴더)에서는 <릴리스>/bin — 둘 다 템플릿은 ../nginx 에 있다
+NGINX_SRC="$(cd "$SCRIPT_DIR/../nginx" && pwd)"
+# shellcheck source=infra/bin/lib/render.sh
+. "$SCRIPT_DIR/lib/render.sh"
+
+usage() {
+  sed -n '2,29p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+}
+
+out=""
+mode=https
+upstreams=compose
+env_files=()
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --out) out="${2:-}"; shift ;;
+    --mode) mode="${2:-}"; shift ;;
+    --upstreams) upstreams="${2:-}"; shift ;;
+    --env-file) env_files+=("${2:-}"); shift ;;
+    -h | --help) usage; exit 0 ;;
+    *) echo "render-nginx: 모르는 인자: $1" >&2; exit 64 ;;
+  esac
+  shift
+done
+
+if [ -z "$out" ]; then
+  echo "render-nginx: --out <디렉터리>가 필요하다" >&2
+  exit 64
+fi
+case "$mode" in https | bootstrap) ;; *) echo "render-nginx: --mode는 https 또는 bootstrap이다" >&2; exit 64 ;; esac
+case "$upstreams" in compose | host) ;; *) echo "render-nginx: --upstreams는 compose 또는 host다" >&2; exit 64 ;; esac
+
+# env 파일에서 세 이름만 읽는다(명령 환경 값이 있으면 그대로 둔다)
+read_env_file() {
+  local file="$1" line key value
+  if [ ! -r "$file" ]; then
+    echo "render-nginx: env 파일을 읽을 수 없다: $file" >&2
+    return 1
+  fi
+  while IFS= read -r line || [ -n "$line" ]; do
+    case "$line" in '' | '#'*) continue ;; esac
+    key="${line%%=*}"
+    value="${line#*=}"
+    case "$key" in
+      SERVICE_HOST | MUJOONG_SECURITY_ALLOWED_ORIGIN | MUJOONG_HSTS_MAX_AGE)
+        if [ -z "${!key:-}" ]; then
+          printf -v "$key" '%s' "$value"
+          export "${key?}"
+        fi
+        ;;
+    esac
+  done <"$file"
+}
+for f in "${env_files[@]}"; do
+  read_env_file "$f"
+done
+
+export MUJOONG_HSTS_MAX_AGE="${MUJOONG_HSTS_MAX_AGE:-15552000}"
+mujoong_require_safe_value SERVICE_HOST "$MUJOONG_HOSTNAME_RE"
+if [[ "$SERVICE_HOST" =~ ^[0-9.]+$ ]]; then
+  echo "render-nginx: SERVICE_HOST는 IP 주소가 아니라 호스트 이름이어야 한다" >&2
+  exit 1
+fi
+mujoong_require_safe_value MUJOONG_SECURITY_ALLOWED_ORIGIN "https://${SERVICE_HOST//./\\.}(:[0-9]{1,5})?"
+mujoong_require_safe_value MUJOONG_HSTS_MAX_AGE '[0-9]{1,9}'
+export SERVICE_HOST MUJOONG_SECURITY_ALLOWED_ORIGIN
+
+mkdir -p "$out"
+stage="$(mktemp -d)"
+trap 'rm -rf "$stage"' EXIT
+mkdir -p "$stage/conf.d" "$stage/snippets" "$stage/html"
+
+mujoong_render_template "$NGINX_SRC/nginx.conf.tmpl" "$stage/nginx.conf" MUJOONG_HSTS_MAX_AGE
+cp "$NGINX_SRC/upstreams/$upstreams.conf" "$stage/upstreams.conf"
+if [ "$mode" = https ]; then
+  mujoong_render_template "$NGINX_SRC/conf.d/http80.conf.tmpl" "$stage/conf.d/http80.conf" SERVICE_HOST
+  mujoong_render_template "$NGINX_SRC/conf.d/https443.conf.tmpl" "$stage/conf.d/https443.conf" SERVICE_HOST
+else
+  mujoong_render_template "$NGINX_SRC/conf.d/http80-bootstrap.conf.tmpl" "$stage/conf.d/http80.conf" SERVICE_HOST
+fi
+cp "$NGINX_SRC"/snippets/*.conf "$stage/snippets/"
+cp "$NGINX_SRC/html/maintenance.html" "$stage/html/maintenance.html"
+cp "$NGINX_SRC/reload-watch.sh" "$stage/reload-watch.sh"
+find "$stage" -type d -exec chmod 0755 {} +
+find "$stage" -type f -exec chmod 0644 {} +
+
+# 출력 디렉터리 안의 파일을 하나씩 원자적으로 바꾼다(같은 디렉터리 안 이름 변경)
+install_file() {
+  local rel="$1" dir tmp
+  dir="$(dirname "$out/$rel")"
+  mkdir -p "$dir"
+  chmod 0755 "$dir"
+  tmp="$(mktemp "$dir/.render.XXXXXX")"
+  cp "$stage/$rel" "$tmp"
+  chmod 0644 "$tmp"
+  mv -f -- "$tmp" "$out/$rel"
+}
+while IFS= read -r -d '' rel; do
+  install_file "${rel#./}"
+done < <(cd "$stage" && find . -type f -print0)
+
+# 렌더 결과에 없는 옛 설정 파일 정리(bootstrap → https 전환 등)
+for sub in conf.d snippets; do
+  for existing in "$out/$sub"/*; do
+    [ -e "$existing" ] || continue
+    if [ ! -e "$stage/$sub/$(basename "$existing")" ]; then
+      rm -f -- "$existing"
+    fi
+  done
+done
+
+echo "render-nginx: $out 에 렌더했다(mode=$mode upstreams=$upstreams)"

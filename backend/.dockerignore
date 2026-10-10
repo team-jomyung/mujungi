@@ -1,0 +1,5 @@
+# 무중 backend 이미지 빌드 맥락 (U1 3.5 Step 43 · cicd 2.3.1 · NFR9.10)
+# 허용 목록 방식: 호스트가 만든 운영 bootJar 둘만 맥락에 들인다. 소스 · 시험 · .gradle · 환경 파일 · 인증서는 들어가지 않는다.
+*
+!core-api/build/libs/core-api.jar
+!realtime-activity/build/libs/realtime-activity.jar

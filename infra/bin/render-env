@@ -1,0 +1,200 @@
+#!/usr/bin/env bash
+# 무중 서비스별 env 파일 렌더 — Parameter Store → /opt/mujoong/env/<서비스>.env (U1 3.5 Step 44 · infra-spec 3.7 · cicd 2.5.1 · D3 · J90 · J99 · CD-11 · SD-12 · R4-3 · R4-18)
+#
+# demo 호스트의 배포 D3(Step 47 deploy-stage1)이 인스턴스 프로필 권한으로 부른다. 값은 어디에도 출력하지 않는다(set +x, 이름만 출력).
+#   1. 파라미터 읽기: aws ssm get-parameters-by-path --path /mujoong/demo/ --recursive --with-decryption
+#      (--by-names면 아래 이름 목록으로 get-parameters, 실호출 확인 V-12 전 대비 R4-18)
+#   2. 검증: 필수 파라미터가 있고 비어 있지 않음, 값 문자 집합(렌더 안전), 내부 토큰 base64url 43자 이상, ownerHash 비밀 32바이트 이상,
+#      SERVICE_HOST는 공개 호스트 이름(localhost · *.invalid · IP 거부), 허용 origin은 https://<SERVICE_HOST>
+#      GOOGLE_OAUTH_CLIENT_SECRET은 U2 전에는 파라미터가 없어 빈 변수로 둔다(CD-11). GHCR_PULL_TOKEN은 파일로 쓰지 않는다(J99).
+#   3. 분배(infra-spec 3.7이 정본, 받지 않는 비밀은 넣지 않는다):
+#        postgres.env  POSTGRES_PASSWORD DB_OWNER_PASSWORD DB_CORE_PASSWORD DB_REALTIME_PASSWORD DB_BACKUP_PASSWORD
+#        migrate.env   DB_OWNER_PASSWORD
+#        core-api.env  SPRING_DATASOURCE_PASSWORD(=DB_CORE_PASSWORD) INTERNAL_SERVICE_TOKEN MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET
+#                      GOOGLE_OAUTH_CLIENT_SECRET MUJOONG_SECURITY_ALLOWED_ORIGIN
+#        realtime.env  SPRING_DATASOURCE_PASSWORD(=DB_REALTIME_PASSWORD) INTERNAL_SERVICE_TOKEN PROVIDER_API_KEY
+#                      MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET MUJOONG_SECURITY_ALLOWED_ORIGIN
+#        web.env       MUJOONG_SECURITY_ALLOWED_ORIGIN
+#        nginx.env     SERVICE_HOST MUJOONG_SECURITY_ALLOWED_ORIGIN
+#        certbot.env   SERVICE_HOST ACME_CONTACT_EMAIL
+#        backup.env    DB_BACKUP_PASSWORD BACKUP_RETENTION_DAYS(=7)
+#        neo4j.env     NEO4J_AUTH(파라미터가 있을 때만, 켠 뒤)
+#   4. 쓰기: umask 077 임시 디렉터리에서 모두 만든 뒤 출력 디렉터리(0700) 안의 파일을 하나씩 원자적으로 바꾼다(0600).
+#      검증이 하나라도 실패하면 아무 파일도 바꾸지 않는다(구 버전 유지, D3 실패).
+#
+# 쓰는 법: render-env --out <디렉터리> [--path /mujoong/demo/] [--region <리전>] [--by-names] [--allow-local-host]
+#   --allow-local-host  localhost · *.invalid 허용(리허설 · 시험 전용). demo 배포에서는 쓰지 않는다.
+# 종료 코드: 0 성공, 1 검증 실패, 2 파라미터 읽기 실패(aws · jq 없음 포함), 64 인자 오류
+
+set -Eeuo pipefail
+set +x
+umask 077
+
+out=""
+param_path="/mujoong/demo/"
+region=""
+by_names=0
+allow_local=0
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --out) out="${2:-}"; shift ;;
+    --path) param_path="${2:-}"; shift ;;
+    --region) region="${2:-}"; shift ;;
+    --by-names) by_names=1 ;;
+    --allow-local-host) allow_local=1 ;;
+    -h | --help) sed -n '2,32p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    *) echo "render-env: 모르는 인자: $1" >&2; exit 64 ;;
+  esac
+  shift
+done
+if [ -z "$out" ]; then
+  echo "render-env: --out <디렉터리>가 필요하다" >&2
+  exit 64
+fi
+if ! [[ "$param_path" =~ ^/[a-z0-9/_-]*/$ ]]; then
+  echo "render-env: --path 형식이 틀렸다(/로 시작하고 /로 끝남)" >&2
+  exit 64
+fi
+
+readonly REQUIRED=(POSTGRES_PASSWORD DB_OWNER_PASSWORD DB_CORE_PASSWORD DB_REALTIME_PASSWORD DB_BACKUP_PASSWORD
+  INTERNAL_SERVICE_TOKEN PROVIDER_API_KEY MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET
+  SERVICE_HOST MUJOONG_SECURITY_ALLOWED_ORIGIN ACME_CONTACT_EMAIL)
+readonly OPTIONAL=(GOOGLE_OAUTH_CLIENT_SECRET NEO4J_AUTH)
+# 값 문자 집합: env 파일을 따옴표 없이 쓰고 docker run --env-file · Compose가 같은 값을 읽게 하려는 제한(공백 · 따옴표 · $ · # · \ 없음)
+readonly SAFE_VALUE_RE='^[A-Za-z0-9._~+/=:@%,-]+$'
+
+for tool in aws jq base64; do
+  if ! command -v "$tool" >/dev/null 2>&1; then
+    echo "render-env: $tool 이(가) 없다" >&2
+    exit 2
+  fi
+done
+
+aws_args=(--output json)
+if [ -n "$region" ]; then
+  aws_args+=(--region "$region")
+fi
+
+declare -A param=()
+raw="$(mktemp)"
+# 파라미터 원문(base64)이 든 임시 파일은 어떤 종료에서도 지운다
+trap 'rm -f "$raw" "$raw.all"' EXIT
+if [ "$by_names" -eq 1 ]; then
+  names=()
+  for n in "${REQUIRED[@]}" "${OPTIONAL[@]}"; do
+    names+=("${param_path}${n}")
+  done
+  # get-parameters는 한 번에 10개까지 받는다
+  : >"$raw.all"
+  for ((i = 0; i < ${#names[@]}; i += 10)); do
+    if ! aws ssm get-parameters --names "${names[@]:i:10}" --with-decryption "${aws_args[@]}" >"$raw" 2>/dev/null; then
+      echo "render-env: aws ssm get-parameters 호출이 실패했다" >&2
+      rm -f "$raw.all"
+      exit 2
+    fi
+    jq -r '.Parameters[]? | [.Name, (.Value | @base64)] | @tsv' "$raw" >>"$raw.all"
+  done
+else
+  if ! aws ssm get-parameters-by-path --path "$param_path" --recursive --with-decryption "${aws_args[@]}" >"$raw" 2>/dev/null; then
+    echo "render-env: aws ssm get-parameters-by-path 호출이 실패했다" >&2
+    exit 2
+  fi
+  jq -r '.Parameters[]? | [.Name, (.Value | @base64)] | @tsv' "$raw" >"$raw.all"
+fi
+: >"$raw"
+while IFS=$'\t' read -r full_name encoded; do
+  [ -n "$full_name" ] || continue
+  name="${full_name#"$param_path"}"
+  if ! [[ "$name" =~ ^[A-Z][A-Z0-9_]*$ ]]; then
+    continue
+  fi
+  param["$name"]="$(printf '%s' "$encoded" | base64 -d)"
+done <"$raw.all"
+rm -f "$raw.all"
+
+problems=()
+for n in "${REQUIRED[@]}"; do
+  if [ -z "${param[$n]:-}" ]; then
+    problems+=("$n(없음)")
+  fi
+done
+for n in "${REQUIRED[@]}" "${OPTIONAL[@]}"; do
+  v="${param[$n]:-}"
+  if [ -n "$v" ] && ! [[ "$v" =~ $SAFE_VALUE_RE ]]; then
+    problems+=("$n(문자 집합)")
+  fi
+done
+token="${param[INTERNAL_SERVICE_TOKEN]:-}"
+if [ -n "$token" ] && { [ "${#token}" -lt 43 ] || ! [[ "$token" =~ ^[A-Za-z0-9_-]+$ ]]; }; then
+  problems+=("INTERNAL_SERVICE_TOKEN(base64url 43자 이상)")
+fi
+owner="${param[MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET]:-}"
+if [ -n "$owner" ] && [ "$(printf '%s' "$owner" | wc -c)" -lt 32 ]; then
+  problems+=("MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET(32바이트 이상)")
+fi
+host="${param[SERVICE_HOST]:-}"
+if [ -n "$host" ]; then
+  if ! [[ "$host" =~ ^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*$ ]] || [[ "$host" =~ ^[0-9.]+$ ]]; then
+    problems+=("SERVICE_HOST(호스트 이름 형식)")
+  elif [ "$allow_local" -eq 0 ] && { [ "$host" = localhost ] || [[ "$host" == *.localhost ]] || [[ "$host" == *.invalid ]] || [ "$host" = invalid ]; }; then
+    problems+=("SERVICE_HOST(demo는 localhost · .invalid 불가)")
+  fi
+  origin="${param[MUJOONG_SECURITY_ALLOWED_ORIGIN]:-}"
+  if [ -n "$origin" ] && [ "$origin" != "https://$host" ] && ! { [ "$allow_local" -eq 1 ] && [[ "$origin" =~ ^https://${host//./\\.}:[0-9]{1,5}$ ]]; }; then
+    problems+=("MUJOONG_SECURITY_ALLOWED_ORIGIN(https://<SERVICE_HOST>가 아님)")
+  fi
+fi
+email="${param[ACME_CONTACT_EMAIL]:-}"
+if [ -n "$email" ] && ! [[ "$email" =~ ^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+$ ]]; then
+  problems+=("ACME_CONTACT_EMAIL(형식)")
+fi
+if [ "${#problems[@]}" -gt 0 ]; then
+  echo "render-env: 검증 실패(파일을 바꾸지 않았다): ${problems[*]}" >&2
+  exit 1
+fi
+
+stage="$(mktemp -d)"
+trap 'rm -f "$raw" "$raw.all"; rm -rf "$stage"' EXIT
+
+# write_env <파일> <변수=파라미터>... — 값은 printf로 파일에만 쓴다
+write_env() {
+  local file="$stage/$1" pair var src
+  shift
+  : >"$file"
+  for pair in "$@"; do
+    var="${pair%%=*}"
+    src="${pair#*=}"
+    printf '%s=%s\n' "$var" "${param[$src]:-}" >>"$file"
+  done
+  chmod 0600 "$file"
+}
+write_env postgres.env POSTGRES_PASSWORD=POSTGRES_PASSWORD DB_OWNER_PASSWORD=DB_OWNER_PASSWORD \
+  DB_CORE_PASSWORD=DB_CORE_PASSWORD DB_REALTIME_PASSWORD=DB_REALTIME_PASSWORD DB_BACKUP_PASSWORD=DB_BACKUP_PASSWORD
+write_env migrate.env DB_OWNER_PASSWORD=DB_OWNER_PASSWORD
+write_env core-api.env SPRING_DATASOURCE_PASSWORD=DB_CORE_PASSWORD INTERNAL_SERVICE_TOKEN=INTERNAL_SERVICE_TOKEN \
+  MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET=MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET \
+  GOOGLE_OAUTH_CLIENT_SECRET=GOOGLE_OAUTH_CLIENT_SECRET MUJOONG_SECURITY_ALLOWED_ORIGIN=MUJOONG_SECURITY_ALLOWED_ORIGIN
+write_env realtime.env SPRING_DATASOURCE_PASSWORD=DB_REALTIME_PASSWORD INTERNAL_SERVICE_TOKEN=INTERNAL_SERVICE_TOKEN \
+  PROVIDER_API_KEY=PROVIDER_API_KEY MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET=MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET \
+  MUJOONG_SECURITY_ALLOWED_ORIGIN=MUJOONG_SECURITY_ALLOWED_ORIGIN
+write_env web.env MUJOONG_SECURITY_ALLOWED_ORIGIN=MUJOONG_SECURITY_ALLOWED_ORIGIN
+write_env nginx.env SERVICE_HOST=SERVICE_HOST MUJOONG_SECURITY_ALLOWED_ORIGIN=MUJOONG_SECURITY_ALLOWED_ORIGIN
+write_env certbot.env SERVICE_HOST=SERVICE_HOST ACME_CONTACT_EMAIL=ACME_CONTACT_EMAIL
+write_env backup.env DB_BACKUP_PASSWORD=DB_BACKUP_PASSWORD
+printf 'BACKUP_RETENTION_DAYS=7\n' >>"$stage/backup.env"
+if [ -n "${param[NEO4J_AUTH]:-}" ]; then
+  write_env neo4j.env NEO4J_AUTH=NEO4J_AUTH
+fi
+unset param
+
+mkdir -p "$out"
+chmod 0700 "$out"
+for file in "$stage"/*.env; do
+  base="$(basename "$file")"
+  tmp="$(mktemp "$out/.$base.XXXXXX")"
+  cat "$file" >"$tmp"
+  chmod 0600 "$tmp"
+  mv -f -- "$tmp" "$out/$base"
+  # 이름만 출력한다
+  echo "render-env: $base ($(cut -d= -f1 "$file" | tr '\n' ' ' | sed 's/ $//'))"
+done

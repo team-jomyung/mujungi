@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>무중 — 잠시 연결할 수 없어요</title>
+</head>
+<body>
+<!-- 무중 Nginx 점검 페이지 (U1 3.5 Step 44 · infra-spec 3.3 · R4-17). 업스트림에 닿지 못한 502 · 504 응답의 본문이다.
+     상태 코드는 원래 오류(502 · 504) 그대로이고 200으로 바꾸지 않는다. 스크립트 · 스타일 · 외부 자원이 없다(CSP default-src 'none').
+     문구는 contracts/errors.md UPSTREAM_UNAVAILABLE의 고정 문장과 같은 임시 문구다(J118). -->
+<main>
+<h1>지금은 연결할 수 없어요.</h1>
+<p>잠시 뒤 다시 시도해 주세요.</p>
+</main>
+</body>
+</html>

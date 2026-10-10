@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# 무중 PostgreSQL 설정 렌더 (U1 3.5 Step 44 · infra-spec 2.1 postgres · 2.5 · 4.2 · SD-13)
+#
+# infra/postgres/postgresql.conf.tmpl(Step 9)의 유일한 변수 ${PG_LISTEN_ADDRESSES}를 바꿔 postgres 컨테이너가
+# `postgres -c config_file=/etc/postgresql/mujoong.conf`로 읽을 파일을 만든다(읽기 전용 바인드).
+#   demo : 배포가 고정 경로 /opt/mujoong/postgres/postgresql.conf 에 렌더한다(릴리스 링크가 아님, infra-spec 4.2와 같은 이유)
+#   검증 : build/verify/postgres/postgresql.conf (compose.ci.yml)
+#   시험 : test-support MujoongPostgres는 같은 템플릿을 자바에서 직접 렌더한다(Step 12)
+#
+# 쓰는 법: render-pgconf --out <파일> [--listen <주소>]
+#   --listen  기본 '*'(컨테이너 안. 접근은 backend 망 + pg_hba 한 대역으로 제한). 쉼표로 이은 주소 목록도 받는다.
+# 종료 코드: 0 성공, 1 값 · 렌더 오류, 64 인자 오류
+
+set -Eeuo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+TEMPLATE="$(cd "$SCRIPT_DIR/../postgres" && pwd)/postgresql.conf.tmpl"
+# shellcheck source=infra/bin/lib/render.sh
+. "$SCRIPT_DIR/lib/render.sh"
+
+out=""
+listen='*'
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --out) out="${2:-}"; shift ;;
+    --listen) listen="${2:-}"; shift ;;
+    -h | --help) sed -n '2,14p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    *) echo "render-pgconf: 모르는 인자: $1" >&2; exit 64 ;;
+  esac
+  shift
+done
+if [ -z "$out" ]; then
+  echo "render-pgconf: --out <파일>이 필요하다" >&2
+  exit 64
+fi
+
+export PG_LISTEN_ADDRESSES="$listen"
+mujoong_require_safe_value PG_LISTEN_ADDRESSES '\*|[0-9A-Za-z.:,-]+'
+mkdir -p "$(dirname "$out")"
+mujoong_render_template "$TEMPLATE" "$out" PG_LISTEN_ADDRESSES
+echo "render-pgconf: $out 에 렌더했다"

@@ -1,0 +1,88 @@
+# 무중 Nginx 주 설정 템플릿 (U1 3.5 Step 44 · BR8.9 · SD-1 ~ SD-3 · LC-1 ~ LC-6 · infra-spec 2.1 nginx · 3.2 · 3.3 · OD-7 · NFR9.8 · NFR9.12)
+#
+# infra/bin/render-nginx가 렌더해 고정 경로(demo: /opt/mujoong/nginx, 검증 스택: build/verify/nginx)에 쓰고,
+# nginx 컨테이너는 그 디렉터리를 /etc/nginx/mujoong 에 읽기 전용으로 마운트해 `nginx -c /etc/nginx/mujoong/nginx.conf`로 돈다.
+# 템플릿 변수는 SERVICE_HOST · MUJOONG_HSTS_MAX_AGE 뿐이다(render-nginx가 이름을 명시해 바꾸고 MUJOONG_SECURITY_ALLOWED_ORIGIN은
+# SERVICE_HOST와 일치하는지 검사만 한다). Nginx 자체 변수($host 등)는 렌더가 건드리지 않는다.
+# 실제 도메인 값은 저장소에 없다(J98). 비밀이 없다.
+
+user nginx;
+worker_processes auto;
+pid /var/run/nginx.pid;
+error_log stderr warn;
+
+events {
+    worker_connections 1024;
+}
+
+http {
+    include /etc/nginx/mime.types;
+    default_type application/octet-stream;
+
+    # 노출 최소화(NFR9.12)
+    server_tokens off;
+
+    # read_only 루트: 쓰는 곳은 tmpfs /var/cache/nginx · /var/run 뿐이다(infra-spec 2.2)
+    client_body_temp_path /var/cache/nginx/client_temp;
+    proxy_temp_path /var/cache/nginx/proxy_temp;
+    fastcgi_temp_path /var/cache/nginx/fastcgi_temp;
+    uwsgi_temp_path /var/cache/nginx/uwsgi_temp;
+    scgi_temp_path /var/cache/nginx/scgi_temp;
+
+    sendfile on;
+    tcp_nopush on;
+    keepalive_timeout 65s;
+    server_names_hash_bucket_size 128;
+
+    # 요청 크기 · 수신 시간(NFR9.9 · J75(b)). 64KB 초과는 413 → 400 VALIDATION_FAILED 봉투(error-json.conf, 편차 (r))
+    client_max_body_size 64k;
+    client_header_timeout 10s;
+    client_body_timeout 10s;
+
+    # 접근 로그(infra-spec 3.3 · NFR9.8 · OD-7): 한 줄 키=값, 쿼리 · 쿠키 · Referer · 본문 없음.
+    # 경로는 원시 요청 URI의 ? 앞 부분이다(오류 문서로 내부 이동해도 원래 경로가 남는다).
+    map $request_uri $mujoong_log_path {
+        default "-";
+        "~^(?<mujoong_path>[^?]*)" $mujoong_path;
+    }
+    # 반복 폴링(기기 등록 상태 · 12 진행 조회 · 헬스)의 2xx · 304는 남기지 않는다(LC-5 · OD 열린 질문 해소)
+    map "$request_method:$mujoong_log_path:$status" $mujoong_loggable {
+        default 1;
+        "~^(GET|HEAD):/api/device/bootstrap/status:(2[0-9][0-9]|304)$" 0;
+        "~^(GET|HEAD):/api/sessions/[0-9a-fA-F-]{36}:(2[0-9][0-9]|304)$" 0;
+        "~^(GET|HEAD):/api/health:(2[0-9][0-9]|304)$" 0;
+    }
+    log_format mujoong escape=default
+        'ts=$time_iso8601 requestId=$request_id method=$request_method uri=$mujoong_log_path '
+        'status=$status bytes=$body_bytes_sent rt=$request_time urt=$upstream_response_time '
+        'upstream=$upstream_addr client=$remote_addr';
+    access_log /dev/stdout mujoong if=$mujoong_loggable;
+
+    # 보안 헤더 값(snippets/security-headers.conf가 쓴다). HSTS 180일, includeSubDomains · preload 없음(NFR9.1)
+    map $host $mujoong_hsts {
+        default "max-age=${MUJOONG_HSTS_MAX_AGE}";
+    }
+
+    # WSS 업그레이드(BR8.9 · SD-1)
+    map $http_upgrade $mujoong_connection_upgrade {
+        default upgrade;
+        "" close;
+    }
+
+    # 코드 발급 앞 방어선(SD-3 · NFR9.9): IP당 30r/m burst 20, 초과는 429 RATE_LIMITED 봉투. 앱 한도(IP당 1시간 20회)가 정본이다
+    limit_req_zone $binary_remote_addr zone=mujoong_bootstrap:10m rate=30r/m;
+    limit_req_status 429;
+
+    # 압축(NFR5.6): text/html은 기본 포함. WSS · 음성 파일은 대상이 아니다
+    gzip on;
+    gzip_comp_level 5;
+    gzip_min_length 1024;
+    gzip_proxied any;
+    gzip_vary on;
+    gzip_types text/css application/javascript application/json image/svg+xml;
+
+    # 업스트림(edge 망 고정 IP, infra-spec N-2) — render-nginx가 upstreams.conf를 쓴다
+    include /etc/nginx/mujoong/upstreams.conf;
+
+    include /etc/nginx/mujoong/conf.d/*.conf;
+}

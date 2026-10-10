@@ -1,0 +1,36 @@
+# 무중 Nginx 80 포트 — 인증서 발급 뒤 정상 설정 (U1 3.5 Step 44 · infra-spec 3.2 0-a · 0-b · 2.3 · SD-1 · NFR9.1)
+# 템플릿 변수: SERVICE_HOST. render-nginx --mode https가 conf.d/http80.conf로 렌더한다.
+
+# 기본 서버: 서비스 호스트가 아닌 Host는 응답 없이 연결을 끊는다(444). 컨테이너 헬스체크 경로는 루프백만 허용한다.
+server {
+    listen 80 default_server;
+    server_name _;
+
+    location = /__mujoong/nginx-health {
+        allow 127.0.0.1;
+        deny all;
+        access_log off;
+        default_type text/plain;
+        return 200 "ok\n";
+    }
+
+    location / {
+        return 444;
+    }
+}
+
+# 서비스 호스트: ACME HTTP-01 챌린지만 응답하고 나머지는 고정 호스트의 HTTPS로 301(요청의 Host를 되돌려 쓰지 않는다)
+server {
+    listen 80;
+    server_name ${SERVICE_HOST};
+
+    location ^~ /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+        default_type text/plain;
+        try_files $uri =404;
+    }
+
+    location / {
+        return 301 https://${SERVICE_HOST}$request_uri;
+    }
+}

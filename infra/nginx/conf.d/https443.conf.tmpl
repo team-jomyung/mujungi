@@ -1,0 +1,170 @@
+# 무중 Nginx 443 포트 (U1 3.5 Step 44 · BR8.9 · SD-1 ~ SD-3 · infra-spec 3.2 · 3.3 · NFR9.1 · NFR9.6 · NFR9.9 · NFR9.12 · NFR4.13 · R4-17)
+# 템플릿 변수: SERVICE_HOST. render-nginx --mode https가 conf.d/https443.conf로 렌더한다.
+#
+# 라우팅 허용 목록(infra-spec 3.2가 정본): 정확 일치(=) > 가장 긴 ^~ 접두 > 일반 접두(/). 정규식 location은 쓰지 않는다.
+# 이 표 밖의 경로가 core-api · realtime에 닿는 길은 없다. 관리 포트 9090으로는 프록시하지 않는다.
+#
+# 헤더: 모든 location이 같은 포함 파일(snippets/security-headers.conf)을 쓴다(add_header 상속 끊김 방지).
+#   CSP는 $mujoong_csp 값으로 내고, Next.js 경로(/ · /_next/static/)는 비워 두어 앱이 낸 CSP(nonce)만 통과시킨다(SD-2).
+
+# 기본 서버: 서비스 호스트가 아닌 SNI(또는 SNI 없음)는 TLS 핸드셰이크에서 거절한다(SEC-12). 인증서가 필요 없다.
+server {
+    listen 443 ssl default_server;
+    http2 on;
+    ssl_reject_handshake on;
+}
+
+server {
+    listen 443 ssl;
+    http2 on;
+    server_name ${SERVICE_HOST};
+
+    # TLS(NFR9.1): 1.2 · 1.3, Mozilla intermediate 암호군(DHE 제외 — dhparam 없음), 세션 티켓 끔, OCSP stapling 끔(D-3)
+    ssl_certificate /etc/letsencrypt/live/${SERVICE_HOST}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/${SERVICE_HOST}/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305;
+    ssl_prefer_server_ciphers off;
+    ssl_session_cache shared:mujoong_tls:10m;
+    ssl_session_timeout 1d;
+    ssl_session_tickets off;
+    ssl_stapling off;
+
+    # 프록시 시간: 연결 3초, REST · 화면 읽기 · 쓰기 15초(불변식 I-4 · LC §2.4). /ws/device는 75초로 덮는다(불변식 I-1)
+    proxy_connect_timeout 3s;
+    proxy_read_timeout 15s;
+    proxy_send_timeout 15s;
+
+    # 기본값: CSP 헤더를 내지 않는다(Next.js 경로). API · 정적 음성 · 오류 응답 location이 닫힌 값으로 덮는다
+    set $mujoong_csp "";
+
+    # 원시 URI 검사(SD-3 · NFR9.6): 경로 부분(? 앞)에 ; \ %2e %2f %5c(대소문자 무관)가 있으면 400 VALIDATION_FAILED 봉투.
+    # Tomcat이 ..;를 상위 경로로 해석해 /api/..;/internal/… 로 403 규칙을 돌아가는 우회를 막는다.
+    # 쿼리는 보지 않는다(U2 OAuth 콜백 code 값에 %2F가 들어간다). server 수준 if 안의 return에는 error_page가 걸리지 않으므로
+    # 오류 봉투 location으로 내부 이동한다(그 location이 상태 400을 낸다).
+    if ($request_uri ~* "^[^?]*(;|\\\\|%2e|%2f|%5c)") {
+        rewrite ^ /__mujoong/error/400.json last;
+    }
+
+    # Nginx가 만드는 오류 응답: 400 · 413(→400) · 429 · 502 · 504는 오류 봉투 JSON, 상태 코드는 유지(R4-17 · 편차 (r)(y))
+    include /etc/nginx/mujoong/snippets/error-json.conf;
+
+    # 1 · 2 내부 · 관리 경로는 바깥에서 403(NFR9.6 · BR3.9 · NFR4.15)
+    location ^~ /internal/ {
+        set $mujoong_csp "default-src 'none'; frame-ancestors 'none'";
+        include /etc/nginx/mujoong/snippets/security-headers.conf;
+        default_type text/plain;
+        return 403 "";
+    }
+
+    location ^~ /actuator/ {
+        set $mujoong_csp "default-src 'none'; frame-ancestors 'none'";
+        include /etc/nginx/mujoong/snippets/security-headers.conf;
+        default_type text/plain;
+        return 403 "";
+    }
+
+    # 3 공개 헬스(편차 (t)): GET만. 앱이 낸 503(준비 전)은 그대로 통과, core-api에 닿지 못하면 502 봉투
+    location = /api/health {
+        set $mujoong_csp "default-src 'none'; frame-ancestors 'none'";
+        include /etc/nginx/mujoong/snippets/security-headers.conf;
+        limit_except GET {
+            deny all;
+        }
+        include /etc/nginx/mujoong/snippets/proxy-common.conf;
+        proxy_set_header Connection "";
+        proxy_hide_header Content-Security-Policy;
+        proxy_pass http://mujoong_core_api;
+    }
+
+    # 4 코드 발급: 앞 방어선 limit_req(SD-3 · NFR9.9)
+    location = /api/device/bootstrap {
+        set $mujoong_csp "default-src 'none'; frame-ancestors 'none'";
+        include /etc/nginx/mujoong/snippets/security-headers.conf;
+        limit_req zone=mujoong_bootstrap burst=20 nodelay;
+        include /etc/nginx/mujoong/snippets/proxy-common.conf;
+        proxy_set_header Connection "";
+        proxy_hide_header Content-Security-Policy;
+        proxy_pass http://mujoong_core_api;
+    }
+
+    # 5 보호자 · 기기 REST(인증 · CSRF는 앱)
+    location ^~ /api/ {
+        set $mujoong_csp "default-src 'none'; frame-ancestors 'none'";
+        include /etc/nginx/mujoong/snippets/security-headers.conf;
+        include /etc/nginx/mujoong/snippets/proxy-common.conf;
+        proxy_set_header Connection "";
+        proxy_hide_header Content-Security-Policy;
+        proxy_pass http://mujoong_core_api;
+    }
+
+    # 6 기기 WSS: Origin · 기기 쿠키는 앱이 판정한다. 읽기 · 쓰기 75초(불변식 I-1), 버퍼링 끔
+    location = /ws/device {
+        set $mujoong_csp "default-src 'none'; frame-ancestors 'none'";
+        include /etc/nginx/mujoong/snippets/security-headers.conf;
+        include /etc/nginx/mujoong/snippets/proxy-common.conf;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $mujoong_connection_upgrade;
+        proxy_read_timeout 75s;
+        proxy_send_timeout 75s;
+        proxy_buffering off;
+        proxy_hide_header Content-Security-Policy;
+        proxy_pass http://mujoong_realtime;
+    }
+
+    # 7 승인 음성(개인정보 없음): 읽기 전용 볼륨, GET · HEAD만, 목록 끔, .wav만, 짧은 캐시
+    location ^~ /media/approved/ {
+        set $mujoong_csp "default-src 'none'; frame-ancestors 'none'";
+        include /etc/nginx/mujoong/snippets/security-headers.conf;
+        add_header Cache-Control "public, max-age=300" always;
+        limit_except GET {
+            deny all;
+        }
+        alias /srv/mujoong/approved-audio/;
+        autoindex off;
+        types {
+            audio/wav wav;
+        }
+        default_type application/octet-stream;
+        if ($uri !~ "\.wav$") {
+            return 404;
+        }
+    }
+
+    # 8 Next.js 정적 자원: 불변 캐시
+    location ^~ /_next/static/ {
+        include /etc/nginx/mujoong/snippets/security-headers.conf;
+        include /etc/nginx/mujoong/snippets/proxy-common.conf;
+        proxy_set_header Connection "";
+        proxy_hide_header Cache-Control;
+        add_header Cache-Control "public, max-age=31536000, immutable" always;
+        error_page 400 /__mujoong/error/400.json;
+        error_page 413 =400 /__mujoong/error/400.json;
+        error_page 502 504 /__mujoong/maintenance.html;
+        proxy_pass http://mujoong_web;
+    }
+
+    # 9 화면(/parent · /device · /healthz): CSP는 Next.js가 낸다. 업스트림 접속 불가는 점검 페이지(상태 502 · 504 유지)
+    location / {
+        include /etc/nginx/mujoong/snippets/security-headers.conf;
+        include /etc/nginx/mujoong/snippets/proxy-common.conf;
+        proxy_set_header Connection "";
+        error_page 400 /__mujoong/error/400.json;
+        error_page 413 =400 /__mujoong/error/400.json;
+        error_page 502 504 /__mujoong/maintenance.html;
+        proxy_pass http://mujoong_web;
+    }
+
+    # 점검 페이지(502 · 504 안내, 상태 코드는 원래 오류 그대로)
+    location = /__mujoong/maintenance.html {
+        internal;
+        # 오류 문서로 내부 이동한 요청에 본문 크기 검사를 다시 걸지 않는다(HTTP/2 413 → 400 봉투 유지, 외부 요청은 닿지 않음)
+        client_max_body_size 0;
+        set $mujoong_csp "default-src 'none'; frame-ancestors 'none'";
+        include /etc/nginx/mujoong/snippets/security-headers.conf;
+        add_header Cache-Control "no-store" always;
+        add_header X-Trace-Id $request_id always;
+        root /etc/nginx/mujoong/html;
+        try_files /maintenance.html =502;
+    }
+}

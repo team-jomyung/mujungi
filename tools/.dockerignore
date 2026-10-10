@@ -1,0 +1,9 @@
+# 빌드 문맥 tools/ 에서 가짜 공급자 이미지에 필요한 파일만 남긴다 (U1 3.5 Step 45 · J129 · SD-25)
+# 시험 · 시뮬레이터 · 시나리오 · 대역 · 개발 의존성(vitest 등)은 이미지에 들어가지 않는다.
+**
+!package.json
+!package-lock.json
+!node_modules/ws/**
+!lib/**
+!fake-provider/**
+fake-provider/Dockerfile
