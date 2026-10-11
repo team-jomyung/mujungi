@@ -40,9 +40,10 @@ import org.springframework.stereotype.Component;
  *   <li>T2: 모든 기기 WSS를 1001로 닫는다(서버가 보낸 1001은 OFFLINE 사유가 아니다, BR4.8 ②).
  *   <li>T3: 세션 실행기마다 ServerShutdown을 넣어 공급자 연결을 닫고 기록기를 비우게 하고, 실행기들이 처리를 마칠 때까지 기다린다 — 폴러를
  *       멈추기 전에 유료 연결이 닫힌다.
- *   <li>T4: 주기 작업(outbox-sender · inbox-repoll · recorder-tick · maintenance)과 처리기 풀을 멈춘다(진행 중 한 건은 마치고 남은 선점은
- *       되돌린다).
- *   <li>T5: 기록기에 남은 칸을 지금 스레드에서 쓰고 병합 창에 남은 반복 로그와 마지막 METRIC_SNAPSHOT 한 줄을 쓴다(OD-6).
+ *   <li>T4: 주기 작업(outbox-sender · inbox-repoll · recorder-tick · maintenance · metric-sample)과 처리기 풀을 멈춘다(진행 중 한 건은
+ *       마치고 남은 선점은 되돌린다).
+ *   <li>T5: 기록기에 남은 칸을 지금 스레드에서 쓰고 병합 창에 남은 반복 로그와 마지막 METRIC_SNAPSHOT 한 줄을 쓴다(OD-6). 그 줄의 적체 DB
+ *       읽기도 남은 시간 안에서만 기다리고, 못 읽으면 적체 키를 뺀다(3.6 수정 J369).
  *   <li>T6: F1b가 받아들인 진행 중 요청이 끝날 때까지 기다린다. 이 대기 동안 서버 커넥터는 열려 있다 — 프레임워크 graceful 단계(커넥터 일시
  *       정지 · 수신 소켓 닫기 = 접속 거절)는 이 메서드가 돌아온 뒤에야 시작한다. 그래서 SIGTERM 직후 새 요청은 입구 502가 아니라 앱의
  *       503이다(3.6 BT-RD-13).
@@ -120,7 +121,7 @@ public class DrainingLifecycle implements SmartLifecycle {
         recorder.drain(recorderGrace.compareTo(left) <= 0 ? recorderGrace : left);
         events.flushMerged();
         try {
-            snapshots.finalSnapshot();
+            snapshots.finalSnapshot(remaining(started));
         } catch (RuntimeException e) {
             // 마지막 줄을 못 써도 종료는 이어 간다
             events.appError(EventLog.Component.REALTIME_MAINTENANCE, e);

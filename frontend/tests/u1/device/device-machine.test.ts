@@ -264,6 +264,41 @@ describe("T19 — 켜기 · 끄기 · 닫기 코드(BR9.5 · BR9.7 · BR3.7)", (
     expect(run(state, { type: "SESSION_VIEW", view: "THINKING" })).toBe(state);
   });
 
+  it("「켜기」 뒤 한 번도 연결되지 않은 기기는 재접속 대기 · 재접속 시도 · 다시 실패 내내 마지막 화면 'connecting'을 둔다(BR9.4 · J367)", () => {
+    let state = run(step(initialDeviceState(), me({ kind: "registered", deviceId: DEVICE_ID })), { type: "TURN_ON" }, { type: "MIC_RESULT", granted: true });
+    const trailAtConnect = state.trail;
+    // 첫 시도 실패 → 5초 대기
+    state = run(state, { type: "WS_CLOSED", code: 1006, closedByDevice: false });
+    expect(displayStateOf(state)).toBe("connecting");
+    expect(pendingEffect(state)).toEqual({ kind: "delay", delay: "retry" });
+    expect(isPoweredOn(state)).toBe(true);
+    // 대기 끝 → 재접속 시도
+    state = step(state, timer);
+    expect(displayStateOf(state)).toBe("connecting");
+    expect(pendingEffect(state)).toEqual({ kind: "connect" });
+    // 재시도도 실패(1013) → 다시 대기
+    state = run(state, { type: "WS_CLOSED", code: 1013, closedByDevice: false });
+    expect(displayStateOf(state)).toBe("connecting");
+    expect(pendingEffect(state)).toEqual({ kind: "delay", delay: "retry" });
+    expect(state.trail).toEqual(trailAtConnect);
+    // 마침내 HELLO_OK면 대기이고, 그 뒤 끊기면 한 번 연결됐던 기기라 'reconnecting' · 마지막 view(J360)
+    state = step(state, timer);
+    state = step(state, (stepId) => ({ type: "WS_READY", stepId }));
+    expect(displayStateOf(state)).toBe("standby");
+    state = run(state, { type: "SESSION_VIEW", view: "LISTENING" }, { type: "WS_CLOSED", code: 1006, closedByDevice: false });
+    expect(displayStateOf(state)).toBe("reconnecting");
+    expect(state.screen === "t19" && state.view).toBe("LISTENING");
+  });
+
+  it("「끄기」 뒤 다시 「켜기」는 새 연결 주기라 그 전에 연결됐던 일과 무관하게 'connecting'이다(J367)", () => {
+    let state = run(poweredOn(), { type: "TURN_OFF" }, { type: "TURN_ON" }, { type: "MIC_RESULT", granted: true });
+    state = run(state, { type: "WS_CLOSED", code: 1006, closedByDevice: false });
+    expect(displayStateOf(state)).toBe("connecting");
+    state = step(state, timer);
+    expect(displayStateOf(state)).toBe("connecting");
+    expect(pendingEffect(state)).toEqual({ kind: "connect" });
+  });
+
   it("처음 연결(마이크 허용 뒤)은 재접속과 달리 'connecting'이다(BR9.4)", () => {
     const state = run(step(initialDeviceState(), me({ kind: "registered", deviceId: DEVICE_ID })), { type: "TURN_ON" }, { type: "MIC_RESULT", granted: true });
     expect(displayStateOf(state)).toBe("connecting");

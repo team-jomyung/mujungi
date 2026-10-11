@@ -12,18 +12,27 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Duration;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import kr.mujoong.contract.log.EventCode;
 import kr.mujoong.contract.ws.CloseCode;
+import kr.mujoong.realtime.common.db.DbPoolWaitMonitor;
+import kr.mujoong.realtime.gateway.DeviceConnectionRepository;
 import kr.mujoong.realtime.gateway.SocketRegistry;
 import kr.mujoong.realtime.health.ReadinessState;
 import kr.mujoong.realtime.log.AsyncRecorder;
+import kr.mujoong.realtime.messaging.RealtimeInboxRepository;
+import kr.mujoong.realtime.messaging.RealtimeOutboxRepository;
 import kr.mujoong.realtime.observability.EventLogger;
 import kr.mujoong.realtime.observability.RealtimeMetrics;
 import kr.mujoong.realtime.observability.snapshot.MetricSnapshotJob;
+import kr.mujoong.realtime.observability.snapshot.SystemLoad;
 import kr.mujoong.realtime.session.SessionExecutor;
 import kr.mujoong.realtime.session.SessionMailbox;
 import kr.mujoong.realtime.session.SessionRegistry;
@@ -35,6 +44,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
+import org.springframework.beans.factory.support.DefaultListableBeanFactory;
 
 /**
  * Realtime 정상 종료 순서 T1 ~ T6 (U1 3.6 수정 · RD-13 · 2.8 · R3-13 · NFR4.10 · BT-RD-13 · J304).
@@ -83,7 +93,7 @@ class DrainingLifecycleTest {
         order.verify(startupSequence).stopJobs(any());
         order.verify(recorder).drain(any());
         order.verify(events).flushMerged();
-        order.verify(snapshots).finalSnapshot();
+        order.verify(snapshots).finalSnapshot(any());
         order.verify(inFlight).awaitIdle(any());
         assertThat(readiness.state()).isEqualTo(ReadinessState.State.DRAINING);
         assertThat(draining.isRunning()).isFalse();
@@ -101,7 +111,7 @@ class DrainingLifecycleTest {
 
         assertThat(appErrorKinds()).containsExactly("ProviderCloseTimeout");
         verify(startupSequence).stopJobs(any());
-        verify(snapshots).finalSnapshot();
+        verify(snapshots).finalSnapshot(any());
         assertThat(mailbox.safetySize()).as("처리되지 않은 종료 신호가 편지함에 남아 있다").isEqualTo(1);
     }
 
@@ -144,12 +154,15 @@ class DrainingLifecycleTest {
         ArgumentCaptor<Duration> idle = ArgumentCaptor.forClass(Duration.class);
         verify(inFlight).awaitIdle(idle.capture());
         assertThat(idle.getValue()).isEqualTo(Duration.ofMillis(500));
+        ArgumentCaptor<Duration> lastLine = ArgumentCaptor.forClass(Duration.class);
+        verify(snapshots).finalSnapshot(lastLine.capture());
+        assertThat(lastLine.getValue()).as("마지막 스냅샷의 DB 읽기도 남은 0.5초 안(J369)").isEqualTo(Duration.ofMillis(500));
     }
 
     @Test
     void aRequestStillInFlightAtTheDeadlineLeavesDrainTimeoutButAFailedSnapshotDoesNotStopTheShutdown() {
         when(sessions.executors()).thenReturn(List.of());
-        doThrow(new IllegalStateException("db down")).when(snapshots).finalSnapshot();
+        doThrow(new IllegalStateException("db down")).when(snapshots).finalSnapshot(any());
         inFlight.enter();
         DrainingLifecycle draining = lifecycle(Duration.ofMillis(100));
         draining.start();
@@ -159,6 +172,51 @@ class DrainingLifecycleTest {
         assertThat(appErrorKinds()).containsExactly("IllegalStateException", "DrainTimeout");
         assertThat(draining.isRunning()).isFalse();
         assertThat(inFlight.active()).as("포기해도 요청을 끊지는 않는다(뒤 단계 graceful · SIGKILL의 몫)").isEqualTo(1);
+    }
+
+    /**
+     * 3.6 수정 J369: T5 마지막 스냅샷의 DB 읽기는 공유 마감의 남은 시간 안에서만 기다린다. 표본이 DB 읽기에 막혀 있고 마지막 줄의 적체 읽기도
+     * 막혀도 종료는 마감(2초) 안에 끝나고, 마지막 줄은 적체 네 키를 뺀 채 남는다(OD-6 기존 규칙). 리뷰: 이 읽기가 마감 계산 밖이라 DB가 느리면
+     * 30초 유예를 넘겼다.
+     */
+    @Test
+    void aStuckDatabaseCannotStretchTheShutdownThroughTheLastSnapshot() throws Exception {
+        when(sessions.executors()).thenReturn(List.of());
+        CountDownLatch release = new CountDownLatch(1);
+        CountDownLatch reading = new CountDownLatch(1);
+        RealtimeOutboxRepository slowOutbox = mock(RealtimeOutboxRepository.class);
+        when(slowOutbox.backlog()).thenAnswer(call -> {
+            reading.countDown();
+            release.await(5, TimeUnit.SECONDS);
+            return new RealtimeOutboxRepository.Backlog(0, Optional.empty(), 0);
+        });
+        RealtimeInboxRepository quietInbox = mock(RealtimeInboxRepository.class);
+        DeviceConnectionRepository quietConnections = mock(DeviceConnectionRepository.class);
+        when(quietConnections.countByState()).thenReturn(Map.of());
+        DbPoolWaitMonitor pool = new DbPoolWaitMonitor(Duration.ofMillis(100),
+                new DefaultListableBeanFactory().getBeanProvider(MeterRegistry.class),
+                new DefaultListableBeanFactory().getBeanProvider(RealtimeMetrics.class));
+        MetricSnapshotJob job = new MetricSnapshotJob(clock, Duration.ofSeconds(60), slowOutbox, quietInbox,
+                quietConnections, pool, metrics, events, SystemLoad.platform());
+        CompletableFuture<Void> stuckSample = CompletableFuture.runAsync(job::tick);
+        DrainingLifecycle draining = new DrainingLifecycle(readiness, sockets, sessions, startupSequence, recorder, events,
+                job, inFlight, clock, RECORDER_GRACE, GRACE);
+        try {
+            assertThat(reading.await(10, TimeUnit.SECONDS)).as("표본이 적체 읽기에서 막혔다").isTrue();
+            long begun = System.nanoTime();
+
+            draining.stop();
+
+            assertThat(Duration.ofNanos(System.nanoTime() - begun)).as("정상 종료 마감 안").isLessThan(GRACE.plusSeconds(1));
+            assertThat(LogCapture.attrs(logs.last(EventCode.METRIC_SNAPSHOT).orElseThrow())).as("못 읽은 적체 네 키는 뺀다")
+                    .doesNotContainKeys("outboxPending", "outboxOldestPendingSec", "outboxFailed", "inboxDead")
+                    .containsKeys("poolWaitExceeded", "openConnections");
+            assertThat(appErrorKinds()).contains("SnapshotReadTimeout");
+        } finally {
+            release.countDown();
+            stuckSample.get(10, TimeUnit.SECONDS);
+        }
+        assertThat(logs.events(EventCode.METRIC_SNAPSHOT)).as("마지막 줄 뒤 늦은 표본은 줄을 더 쓰지 않는다").hasSize(1);
     }
 
     @Test

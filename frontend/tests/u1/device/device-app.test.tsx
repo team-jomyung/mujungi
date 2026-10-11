@@ -83,6 +83,41 @@ describe("DeviceApp — 닫기 코드(BR9.7)", () => {
     expect(screen.getByTestId("t19-label")).toBeEmptyDOMElement();
   });
 
+  it("처음 연결에 실패한 기기는 재접속 대기 · 재접속 시도 · 다시 실패 동안 라벨이 비고 표정은 'connecting' 그대로다(BR9.4 · J367)", async () => {
+    renderDeviceApp(registeredDeviceApi());
+    await flush();
+    fireEvent.click(screen.getByTestId("t19-on"));
+    await flush();
+    const expectConnectingScreen = () => {
+      const view = screen.getByTestId("t19-view");
+      expect(view).toHaveAttribute("data-state", "connecting");
+      expect(view.querySelector(".mj-character")).toHaveAttribute("data-expression", "connecting");
+      expect(screen.getByTestId("t19-label")).toBeEmptyDOMElement();
+    };
+    expectConnectingScreen();
+    // 첫 시도 실패 → 5초 대기 → 재접속 시도
+    act(() => runtimeControl.events().onClosed(1006, false));
+    expectConnectingScreen();
+    await advance(5_000);
+    expect(runtimeControl.runtime.connect).toHaveBeenCalledTimes(2);
+    expectConnectingScreen();
+    // 재시도도 실패(1013) → 다시 대기 → 다시 시도
+    act(() => runtimeControl.events().onClosed(1013, false));
+    expectConnectingScreen();
+    await advance(5_000);
+    expect(runtimeControl.runtime.connect).toHaveBeenCalledTimes(3);
+    expectConnectingScreen();
+    // 연결되면 대기이고, 한 번 연결된 뒤 끊기면 마지막 view 라벨 · 'reconnecting' 표정(J360)
+    act(() => runtimeControl.events().onReady());
+    expect(screen.getByTestId("t19-view")).toHaveAttribute("data-state", "standby");
+    expect(screen.getByTestId("t19-label")).toHaveTextContent("대기");
+    act(() => runtimeControl.events().onClosed(1006, false));
+    const view = screen.getByTestId("t19-view");
+    expect(view).toHaveAttribute("data-state", "reconnecting");
+    expect(view.querySelector(".mj-character")).toHaveAttribute("data-expression", "reconnecting");
+    expect(screen.getByTestId("t19-label")).toHaveTextContent("대기");
+  });
+
   it("4401이면 실행부를 정리하고 /device/me로 확인해 401이면 D0 새 코드로 간다(AC6.2.8)", async () => {
     const api = scriptedDeviceApi({
       me: [{ kind: "registered", deviceId: DEVICE_ID }, { kind: "unregistered" }],

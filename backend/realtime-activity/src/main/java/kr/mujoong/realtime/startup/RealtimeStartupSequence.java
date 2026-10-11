@@ -38,9 +38,10 @@ import org.springframework.stereotype.Component;
  * <p>S1(프로필 가드, EnvironmentPostProcessor) · S1b({@link RealtimeStartupChecks}, 빈 생성 때)는 이미 끝났다. 웹 서버 시작(MAX − 2048)보다
  * 앞 phase에서: S2 스키마 판 확인 → S2b 데이터 등급 확인(거부면 종료 코드 1) → S3a 비종료 세션 FAILED(SERVER_RESTART) → S3b CONNECTED ·
  * UNSTABLE 연결 행 DISCONNECTED(connection_id 비움) → S3c Inbox RECEIVED 앞당김 → S3d 제어 이벤트 재무장(A1) → S3f Outbox 선점 되돌림 →
- * S3e STARTUP_RECOVERY 한 줄 → S4 주기 작업(outbox-sender · inbox-repoll · recorder-tick · maintenance) → S6 readiness READY. 사전 로딩
- * 전에는 readiness가 UP이 아니다(S1b가 끝나야 이 빈이 만들어진다). S3 각 문장은 멱등이다. maintenance는 METRIC_SNAPSHOT 표본도
- * {@code mujoong.observability.system-sample-interval}마다 돌린다(OD-6, 3.6 수정 J302).
+ * S3e STARTUP_RECOVERY 한 줄 → S4 주기 작업(outbox-sender · inbox-repoll · recorder-tick · maintenance · metric-sample) → S6 readiness
+ * READY. 사전 로딩 전에는 readiness가 UP이 아니다(S1b가 끝나야 이 빈이 만들어진다). S3 각 문장은 멱등이다. METRIC_SNAPSHOT 표본은
+ * {@code mujoong.observability.system-sample-interval}마다 표본 전용 스레드 metric-sample이 돌린다(OD-6, 3.6 수정 J302 · J368 — DB 읽기에
+ * 막혀도 maintenance의 DB 점검자 주기가 밀리지 않게).
  */
 @Component
 @SingleInstanceAssumption(si = {"SI-1", "SI-2", "SI-6"},
@@ -189,7 +190,8 @@ public class RealtimeStartupSequence implements SmartLifecycle {
         });
         created.fixedDelay(PeriodicJobs.MAINTENANCE, properties.cleanup().messagingInterval(), messagingCleanup::runOnce);
         created.fixedDelay(PeriodicJobs.MAINTENANCE, properties.observability().logMergeWindow(), events::flushMerged);
-        created.fixedDelay(PeriodicJobs.MAINTENANCE, properties.observability().systemSampleInterval(),
+        // 표본은 DB를 읽어 DB 정지 때 막히므로 maintenance(DB 점검자 · 끊김 점검 · 상태 보고)와 다른 스레드다(3.6 수정 J368)
+        created.fixedDelay(PeriodicJobs.METRIC_SAMPLE, properties.observability().systemSampleInterval(),
                 metricSnapshots::tick);
         jobs = created;
     }

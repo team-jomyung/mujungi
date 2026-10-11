@@ -14,8 +14,9 @@ import type { SessionView } from "@/shared/protocol/messages";
 //     그 밖의 요청 실패는 마지막 화면을 두고 5초 뒤 같은 단계(BR9.4).
 // T19: 꺼짐 →(켜기) 마이크 요청 →(허용) 연결 중 →(HELLO_OK) 켜짐(대기) / (거부) 마이크 허용 안 됨
 //     닫기 4401 → meCheck(→ 401이면 D0), 4001 · 「끄기」 → 꺼짐, 그 밖(1001 · 1006 · 1011 · 1013 · 4400 · 4408) → 5초 뒤 재접속.
-//     재접속 주기(reconnectWait 5초 대기 → reconnecting 접속 시도 → 실패면 다시 대기)는 내내 마지막 화면(표정 'reconnecting' ·
-//     마지막 view 라벨)을 둔다(BR9.7 · J360). reconnecting은 처음 연결(connecting)과 전이가 같고 화면만 다르다.
+//     재접속 주기(reconnectWait 5초 대기 → reconnecting 접속 시도 → 실패면 다시 대기)는 내내 마지막 화면을 둔다(BR9.7):
+//     이번 「켜기」 뒤 HELLO_OK를 받은 적이 있으면 표정 'reconnecting' · 마지막 view 라벨(J360), 한 번도 받지 못했으면 마지막 화면이
+//     '연결 중'이므로 표정 'connecting' · 빈 라벨(BR9.4 · J367). reconnecting은 처음 연결(connecting)과 전이가 같고 화면만 다르다.
 //     켜짐 안의 표시는 SESSION_STATE.view(대기 · 듣는 중 · 생각 중 · 마무리)이고 '말하는 중'은 실제 재생 중일 때만이다(BR9.6).
 
 export type DelayKind = "retry" | "statusPoll" | "registeredDisplay";
@@ -50,6 +51,8 @@ export type DeviceState =
       readonly power: PowerState;
       readonly view: SessionView;
       readonly speaking: boolean;
+      /** 이번 「켜기」 뒤 HELLO_OK를 한 번이라도 받았는지. 재접속 주기의 '마지막 화면'을 가른다(J367). 꺼짐 · 「켜기」에서 처음으로 돌아간다. */
+      readonly connectedOnce: boolean;
       readonly stepId: number;
       readonly trail: DebugTrail;
     };
@@ -91,9 +94,22 @@ function isConnectAttempt(power: PowerState): boolean {
   return power === "connecting" || power === "reconnecting";
 }
 
+/** 재접속 주기(5초 대기 · 접속 시도)인지. */
+function isReconnectCycle(power: PowerState): boolean {
+  return power === "reconnectWait" || power === "reconnecting";
+}
+
 /** 켜짐(연결을 쥔) 상태인지. 이 밖으로 나가면 마이크 · 재생 · 소켓을 정리한다. */
 export function isPoweredOn(state: DeviceState): boolean {
   return state.screen === "t19" && (isConnectAttempt(state.power) || state.power === "on" || state.power === "reconnectWait");
+}
+
+/**
+ * 라벨에 view(대기 · 듣는 중 · 생각 중 · 마무리)를 보이는 상태인지. 켜짐과, 한 번 연결됐던 기기의 재접속 주기(마지막 view 라벨, J360)다.
+ * 처음 연결 중과 한 번도 연결되지 않은 기기의 재접속 주기는 마지막 화면이 '연결 중'이라 비운다(BR9.4 · J367).
+ */
+export function showsViewLabel(state: DeviceState): boolean {
+  return state.screen === "t19" && (state.power === "on" || (isReconnectCycle(state.power) && state.connectedOnce));
 }
 
 function viewDisplay(view: SessionView, speaking: boolean): DisplayState {
@@ -130,7 +146,8 @@ export function displayStateOf(state: DeviceState): DisplayState {
       return "connecting";
     case "reconnectWait":
     case "reconnecting":
-      return "reconnecting";
+      // 마지막 화면을 둔다: 한 번도 연결되지 않았으면 '연결 중'(BR9.4 · J367), 연결됐던 기기는 'reconnecting'(J360)
+      return state.connectedOnce ? "reconnecting" : "connecting";
     default:
       return viewDisplay(state.view, state.speaking);
   }
@@ -154,8 +171,8 @@ function toD0(state: DeviceState, step: D0Step, code: CodeDisplay | null): Devic
   return withTrail({ screen: "d0", step, code, stepId: state.stepId + 1, trail: state.trail });
 }
 
-function toPower(state: DeviceState, power: PowerState, view: SessionView = "STANDBY"): DeviceState {
-  return withTrail({ screen: "t19", power, view, speaking: false, stepId: state.stepId + 1, trail: state.trail });
+function toPower(state: DeviceState, power: PowerState, view: SessionView = "STANDBY", connectedOnce = false): DeviceState {
+  return withTrail({ screen: "t19", power, view, speaking: false, connectedOnce, stepId: state.stepId + 1, trail: state.trail });
 }
 
 function wait(state: DeviceState, next: D0RequestStep, delay: DelayKind, code: CodeDisplay | null): DeviceState {
@@ -227,7 +244,7 @@ function onTimer(state: DeviceState): DeviceState {
     }
     return state;
   }
-  return state.power === "reconnectWait" ? toPower(state, "reconnecting", state.view) : state;
+  return state.power === "reconnectWait" ? toPower(state, "reconnecting", state.view, state.connectedOnce) : state;
 }
 
 function onWsClosed(state: DeviceState, code: number, closedByDevice: boolean): DeviceState {
@@ -240,8 +257,8 @@ function onWsClosed(state: DeviceState, code: number, closedByDevice: boolean): 
     case "RECHECK_ME":
       return toD0(state, { name: "meCheck" }, null);
     default:
-      // 마지막 화면을 두고 5초 뒤 다시 접속한다(BR9.7).
-      return state.screen === "t19" ? toPower(state, "reconnectWait", state.view) : state;
+      // 마지막 화면을 두고 5초 뒤 다시 접속한다(BR9.7). 연결된 적이 있는지도 그대로 둔다(J367).
+      return state.screen === "t19" ? toPower(state, "reconnectWait", state.view, state.connectedOnce) : state;
   }
 }
 
@@ -273,7 +290,7 @@ function t19Reducer(state: DeviceState & { screen: "t19" }, event: DeviceEvent):
       }
       return event.granted ? toPower(state, "connecting") : toPower(state, "micDenied");
     case "WS_READY":
-      return event.stepId === state.stepId && isConnectAttempt(state.power) ? toPower(state, "on") : state;
+      return event.stepId === state.stepId && isConnectAttempt(state.power) ? toPower(state, "on", "STANDBY", true) : state;
     case "WS_CLOSED":
       return onWsClosed(state, event.code, event.closedByDevice);
     case "TIMER_FIRED":

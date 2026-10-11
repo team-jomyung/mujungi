@@ -1,11 +1,13 @@
 package kr.mujoong.core.observability.snapshot;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.sql.Connection;
+import java.sql.SQLTransientConnectionException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Map;
@@ -14,9 +16,13 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import kr.mujoong.contract.log.EventCode;
+import kr.mujoong.core.activity.SessionStartBreaker;
 import kr.mujoong.core.common.db.DbPoolWaitMonitor;
 import kr.mujoong.core.common.db.DbTestSupport;
+import kr.mujoong.core.messaging.CoreInboxRepository;
+import kr.mujoong.core.messaging.CoreOutboxRepository;
 import kr.mujoong.core.observability.CoreMetrics;
+import kr.mujoong.core.support.TestEvents;
 import kr.mujoong.core.web.support.CoreWebApp;
 import kr.mujoong.core.web.support.CoreWebApp.Result;
 import kr.mujoong.core.web.support.WebFixtures;
@@ -24,6 +30,7 @@ import kr.mujoong.testsupport.db.MujoongPostgres.Role;
 import kr.mujoong.testsupport.http.ContractStubServer;
 import kr.mujoong.testsupport.log.LogCapture;
 import kr.mujoong.testsupport.secret.TestSecrets;
+import kr.mujoong.testsupport.time.MutableClock;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -201,6 +208,58 @@ class MetricSnapshotIT {
         assertThat(metrics.count(CoreMetrics.DB_POOL_WAIT_EXCEEDED)).isEqualTo((double) monitor.exceededTotal());
         assertThat(monitor.drainWindow().maxWait()).as("붙잡힌 300ms 가운데 대부분을 기다렸다")
                 .isGreaterThan(Duration.ofMillis(100));
+    }
+
+    /**
+     * 3.6 수정 J364: 실제 풀(연결 1개 · 획득 제한 250ms)에서 빌림 시간 초과 1회는 {@code mujoong_db_pool_wait_exceeded_total} +1이고
+     * METRIC_SNAPSHOT의 poolWaitExceeded도 1이다. HikariCP는 같은 빌림에 대기 기록(≈ 250ms)과 시간 초과 기록을 함께 부른다(리뷰 재현은 2).
+     */
+    @Test
+    void aTimedOutBorrowOnARealPoolIsOneExceededWaitInTheCounterAndTheSnapshotLine() throws Exception {
+        SimpleMeterRegistry registry = new SimpleMeterRegistry();
+        CoreMetrics metrics = new CoreMetrics(registry);
+        DefaultListableBeanFactory beans = new DefaultListableBeanFactory();
+        beans.registerSingleton("registry", registry);
+        beans.registerSingleton("metrics", metrics);
+        DbPoolWaitMonitor monitor = new DbPoolWaitMonitor(Duration.ofMillis(100),
+                beans.getBeanProvider(io.micrometer.core.instrument.MeterRegistry.class),
+                beans.getBeanProvider(CoreMetrics.class));
+        MutableClock clock = new MutableClock(Instant.parse("2001-05-01T00:00:00Z"));
+        TestEvents events = new TestEvents(clock);
+        Duration interval = Duration.ofSeconds(60);
+        HikariConfig config = new HikariConfig();
+        config.setJdbcUrl(db.postgres().jdbcUrl());
+        config.setUsername(db.postgres().username(Role.CORE_APP));
+        config.setPassword(db.postgres().password(Role.CORE_APP));
+        config.setMaximumPoolSize(1);
+        config.setConnectionTimeout(Duration.ofMillis(250).toMillis());
+        config.setPoolName("timeout-probe");
+        try (HikariDataSource pool = new HikariDataSource()) {
+            config.copyStateTo(pool);
+            monitor.apply(pool);
+            try (Connection held = pool.getConnection()) {
+                MetricSnapshotJob job = new MetricSnapshotJob(clock, interval, app.bean(CoreOutboxRepository.class),
+                        app.bean(CoreInboxRepository.class), monitor, app.bean(SessionStartBreaker.class), metrics,
+                        events.logger(), SystemLoad.platform());
+                long exceededBefore = monitor.exceededTotal();
+                double counterBefore = metrics.count(CoreMetrics.DB_POOL_WAIT_EXCEEDED);
+
+                assertThatThrownBy(pool::getConnection).isInstanceOf(SQLTransientConnectionException.class);
+
+                assertThat(monitor.exceededTotal() - exceededBefore).as("빌림 시간 초과 1회").isEqualTo(1);
+                assertThat(metrics.count(CoreMetrics.DB_POOL_WAIT_EXCEEDED) - counterBefore).isEqualTo(1.0);
+                clock.advance(interval);
+                job.tick();
+                Map<String, Object> line = LogCapture.attrs(events.capture().last(EventCode.METRIC_SNAPSHOT).orElseThrow());
+                assertThat(((Number) line.get("poolWaitExceeded")).longValue()).isEqualTo(1);
+                assertThat(((Number) line.get("poolWaitMaxMs")).longValue()).as("획득 제한만큼 기다렸다")
+                        .isGreaterThanOrEqualTo(250);
+                assertThat(held.isValid(1)).isTrue();
+            }
+            assertThat(registry.find("hikaricp.connections.timeout").tag("pool", "timeout-probe").counter())
+                    .as("품은 Micrometer 추적기는 시간 초과를 그대로 센다").isNotNull()
+                    .satisfies(counter -> assertThat(counter.count()).isEqualTo(1.0));
+        }
     }
 
     /** 앱 Clock을 스냅샷 주기만큼 앞당기고 표본을 돌려 지금까지의 구간을 한 줄로 닫는다. */

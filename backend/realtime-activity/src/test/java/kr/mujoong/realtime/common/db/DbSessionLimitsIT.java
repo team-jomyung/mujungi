@@ -11,12 +11,15 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.locks.LockSupport;
 import kr.mujoong.contract.status.ActivityType;
 import kr.mujoong.contract.status.SessionStatus;
 import kr.mujoong.realtime.common.db.DbRetry.Idempotency;
@@ -34,16 +37,15 @@ import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
-import org.springframework.jdbc.datasource.DataSourceTransactionManager;
-import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * Realtime DB 연결 상한 · 재시도 통합 시험(U1 3.5 Step 18 · RD-22).
  *
  * <p>증명: 앱 풀의 모든 연결에 lock_timeout · statement_timeout이 걸린다 · 잠금을 오래 기다리면 55P03으로 끊기고 재시도 대상으로
- * 분류된다 · 멱등 전이는 잠금이 풀린 뒤 재시도로 성립한다 · 비멱등은 한 번에 실패를 올린다. 3.6 수정(BT-TC-10)에서 더한 셋: 문장 상한을
- * 넘은 문장은 57014로 끊기고 멱등이어도 다시 하지 않는다 · 잠금이 끝내 안 풀리면 재시도 상한(첫 시도 + 2) 뒤 마지막 55P03을 앞 오류와 함께
- * 올린다 · 바깥 트랜잭션 안에서는 재시도하지 않는다(되돌려진 트랜잭션은 이어 쓸 수 없다).
+ * 분류된다 · 멱등 전이는 잠금이 풀린 뒤 재시도로 성립한다 · 비멱등은 한 번에 실패를 올린다. 3.6 수정(BT-TC-10)에서 더한 것: 문장 상한을
+ * 넘은 문장은 57014로 끊기고 멱등이어도 다시 하지 않는다. 3.6 수정 리뷰 반영(J366): 재시도 판정만 되풀이하던 두 시험(DbRetryTest와 같은
+ * 판정)을 실제 DB에서만 보이는 동작으로 바꿨다 — 실제 교착은 운영 락 대기 상한보다 먼저 40P01로 끊기고 진 쪽이 재시도로 성립한다 · 상한 안에
+ * 풀린 잠금은 기다렸다 첫 시도에 성립한다.
  */
 @Tag("u1")
 @Tag("db")
@@ -165,54 +167,117 @@ class DbSessionLimitsIT {
         }
     }
 
+    /**
+     * 실제 교착(3.6 수정 J366): 두 트랜잭션이 두 세션 행을 엇갈린 순서로 잠그면 PostgreSQL 교착 감지(deadlock_timeout, 기본 1초)가 한쪽을
+     * 끊는다. 운영 락 대기 상한(2초)보다 감지가 먼저라 55P03이 아니라 40P01이고, 드라이버 예외가 Spring 번역을 거쳐도 SQLSTATE가 남아
+     * 재시도 대상이다. 시도마다 새 트랜잭션을 여는 멱등 재시도(DbRetry 사용 규칙)로 진 쪽도 이긴 쪽이 커밋한 뒤 성립한다.
+     */
     @Test
-    void aLockThatIsNeverReleasedExhaustsTheRetriesAndKeepsEveryAttemptError() throws Exception {
-        NewActivitySession session = insertedSession();
-        try (HikariDataSource shortWait = shortLockPool("realtime-exhaust-it")) {
-            ActivitySessionRepository impatient = new ActivitySessionRepository(new NamedParameterJdbcTemplate(shortWait));
-            AtomicInteger attempts = new AtomicInteger();
-            AtomicInteger pauses = new AtomicInteger();
-            DbRetry retry = new DbRetry(2, () -> 0L, duration -> pauses.incrementAndGet());
+    void aRealDeadlockIsReportedAs40P01BeforeTheLockLimitAndTheLoserSucceedsOnItsRetry() throws Exception {
+        Duration deadlockTimeout = Duration.ofMillis(db.single(
+                "select setting::bigint from pg_settings where name = 'deadlock_timeout'", new MapSqlParameterSource(),
+                Long.class));
+        assertThat(deadlockTimeout).as("교착 감지가 운영 락 대기 상한보다 먼저다(전제)").isLessThan(RealtimeDb.LOCK_TIMEOUT);
+        NewActivitySession first = insertedSession();
+        NewActivitySession second = insertedSession();
+        CyclicBarrier bothHoldTheirFirstLock = new CyclicBarrier(2);
+        List<RuntimeException> failures = new CopyOnWriteArrayList<>();
+        AtomicInteger attempts = new AtomicInteger();
+        DbRetry retry = new DbRetry(2, () -> 0L, duration -> { });
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        try {
+            Future<Boolean> forward = pool.submit(() -> lockBothThenTransition(retry, first.id(), second.id(),
+                    bothHoldTheirFirstLock, failures, attempts));
+            Future<Boolean> backward = pool.submit(() -> lockBothThenTransition(retry, second.id(), first.id(),
+                    bothHoldTheirFirstLock, failures, attempts));
 
-            whileLocked(session, () -> assertThatThrownBy(() -> retry.execute(Idempotency.IDEMPOTENT, () -> {
-                attempts.incrementAndGet();
-                return impatient.transition(session.id(), SessionStatus.PREPARING, SessionStatus.DEVICE_ACK, T0,
-                        SessionChange.none());
-            })).isInstanceOf(DataAccessException.class)
-                    .satisfies(error -> assertThat(SqlErrors.sqlState(error)).contains(SqlErrors.LOCK_NOT_AVAILABLE))
-                    .satisfies(error -> assertThat(error.getSuppressed()).hasSize(1)
-                            .allSatisfy(previous -> assertThat(SqlErrors.isRetryable(previous)).isTrue())));
-
-            // 첫 시도 + 재시도 2회, 시도 사이 대기 2회. 앞 시도의 오류는 마지막 오류의 suppressed 사슬에 남는다
-            assertThat(attempts).hasValue(3);
-            assertThat(pauses).hasValue(2);
+            assertThat(forward.get(10, TimeUnit.SECONDS)).isTrue();
+            assertThat(backward.get(10, TimeUnit.SECONDS)).isTrue();
+        } finally {
+            pool.shutdownNow();
         }
-        assertThat(new ActivitySessionRepository(db.jdbc()).find(session.id()).orElseThrow().status())
-                .isEqualTo(SessionStatus.PREPARING);
+
+        assertThat(failures).as("교착은 한쪽만 끊는다").singleElement().satisfies(error -> {
+            assertThat(error).isInstanceOf(DataAccessException.class);
+            assertThat(SqlErrors.sqlState(error)).contains(SqlErrors.DEADLOCK_DETECTED);
+            assertThat(SqlErrors.isRetryable(error)).isTrue();
+        });
+        assertThat(attempts).as("두 쪽의 첫 시도 + 진 쪽 재시도 1회").hasValue(3);
+        ActivitySessionRepository sessions = new ActivitySessionRepository(db.jdbc());
+        assertThat(sessions.find(first.id()).orElseThrow().status()).isEqualTo(SessionStatus.DEVICE_ACK);
+        assertThat(sessions.find(second.id()).orElseThrow().status()).isEqualTo(SessionStatus.DEVICE_ACK);
     }
 
+    /**
+     * 경계(3.6 수정 J366): 락 대기 상한은 '기다리지 않음'이 아니라 '이만큼까지 기다림'이다. 기다리는 문장이 실제로 잠금 대기(pg_stat_activity
+     * wait_event_type = Lock)에 든 것을 본 뒤 상한(2초) 안에 잠금을 풀면 첫 시도가 55P03 없이 성립하고 재시도하지 않는다.
+     */
     @Test
-    void insideAnOuterTransactionTheRetryHandsTheFirstLockFailureToThatBoundary() throws Exception {
+    void aLockReleasedWithinTheLimitIsWaitedForAndTheFirstAttemptSucceedsWithoutARetry() throws Exception {
         NewActivitySession session = insertedSession();
-        try (HikariDataSource shortWait = shortLockPool("realtime-outer-tx-it")) {
-            ActivitySessionRepository impatient = new ActivitySessionRepository(new NamedParameterJdbcTemplate(shortWait));
-            TransactionTemplate outer = new TransactionTemplate(new DataSourceTransactionManager(shortWait));
-            AtomicInteger attempts = new AtomicInteger();
-            DbRetry retry = new DbRetry(2, () -> 0L, duration -> { });
+        ActivitySessionRepository sessions = new ActivitySessionRepository(db.jdbc());
+        CountDownLatch locked = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        AtomicInteger waiterPid = new AtomicInteger();
+        AtomicInteger attempts = new AtomicInteger();
+        DbRetry retry = new DbRetry(2, () -> 0L, duration -> {
+            throw new IllegalStateException("상한 안에 풀린 잠금은 재시도하지 않는다");
+        });
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        try {
+            Future<?> holder = pool.submit(() -> db.inTransaction(() -> {
+                sessions.findForUpdate(session.id()).orElseThrow();
+                locked.countDown();
+                await(release);
+            }));
+            assertThat(locked.await(10, TimeUnit.SECONDS)).isTrue();
+            Future<Boolean> waiter = pool.submit(() -> retry.execute(Idempotency.IDEMPOTENT, () -> db.inTransaction(() -> {
+                attempts.incrementAndGet();
+                waiterPid.set(backendPid());
+                return sessions.transition(session.id(), SessionStatus.PREPARING, SessionStatus.DEVICE_ACK, T0,
+                        SessionChange.none()).isPresent();
+            })));
 
-            whileLocked(session, () -> assertThatThrownBy(() -> outer.executeWithoutResult(status ->
-                    retry.execute(Idempotency.IDEMPOTENT, () -> {
-                        attempts.incrementAndGet();
-                        return impatient.transition(session.id(), SessionStatus.PREPARING, SessionStatus.DEVICE_ACK, T0,
-                                SessionChange.none());
-                    }))).isInstanceOf(DataAccessException.class)
-                    .satisfies(error -> assertThat(SqlErrors.sqlState(error)).contains(SqlErrors.LOCK_NOT_AVAILABLE)));
-
-            // 되돌려진 바깥 트랜잭션 안에서 다시 하면 25P02가 되므로 첫 실패를 바깥 경계에 넘긴다
-            assertThat(attempts).hasValue(1);
+            awaitLockWait(waiterPid);
+            assertThat(waiter).as("잠금이 풀리기 전에는 끝나지 않는다").isNotDone();
+            release.countDown();
+            waitFor(holder);
+            assertThat(waiter.get(10, TimeUnit.SECONDS)).isTrue();
+        } finally {
+            release.countDown();
+            pool.shutdownNow();
         }
-        assertThat(new ActivitySessionRepository(db.jdbc()).find(session.id()).orElseThrow().status())
-                .isEqualTo(SessionStatus.PREPARING);
+
+        assertThat(attempts).hasValue(1);
+        assertThat(sessions.find(session.id()).orElseThrow().status()).isEqualTo(SessionStatus.DEVICE_ACK);
+    }
+
+    /**
+     * 한 시도 = 한 트랜잭션: {@code lockedFirst} 행을 잠그고(첫 시도면 상대도 첫 잠금을 쥘 때까지 기다린 뒤) {@code lockedSecond} 행을 잠근 다음
+     * {@code lockedFirst}를 DEVICE_ACK으로 전이한다. 시도의 실패는 {@code failures}에 남기고 그대로 올린다(재시도 판단은 DbRetry).
+     */
+    private static boolean lockBothThenTransition(DbRetry retry, UUID lockedFirst, UUID lockedSecond,
+            CyclicBarrier bothHoldTheirFirstLock, List<RuntimeException> failures, AtomicInteger attempts) {
+        ActivitySessionRepository sessions = new ActivitySessionRepository(db.jdbc());
+        AtomicInteger mine = new AtomicInteger();
+        return retry.execute(Idempotency.IDEMPOTENT, () -> {
+            attempts.incrementAndGet();
+            boolean firstAttempt = mine.incrementAndGet() == 1;
+            try {
+                return db.inTransaction(() -> {
+                    sessions.findForUpdate(lockedFirst).orElseThrow();
+                    if (firstAttempt) {
+                        await(bothHoldTheirFirstLock);
+                    }
+                    sessions.findForUpdate(lockedSecond).orElseThrow();
+                    return sessions.transition(lockedFirst, SessionStatus.PREPARING, SessionStatus.DEVICE_ACK, T0,
+                            SessionChange.none()).isPresent();
+                });
+            } catch (RuntimeException failure) {
+                failures.add(failure);
+                throw failure;
+            }
+        });
     }
 
     /** PREPARING 세션 행 하나를 커밋한다. */
@@ -225,30 +290,34 @@ class DbSessionLimitsIT {
         return session;
     }
 
-    /** 락 대기 상한을 줄인 앱 역할 풀(문장 상한은 운영 값). */
-    private static HikariDataSource shortLockPool(String name) {
-        return RealtimeDb.limitedPool(db.postgres(), name, new DbSessionLimits(SHORT_LOCK_TIMEOUT, Duration.ofSeconds(10)));
+    /** 지금 연결(트랜잭션에 묶인 연결)의 백엔드 pid. */
+    private static int backendPid() {
+        Integer pid = db.single("select pg_backend_pid()", new MapSqlParameterSource(), Integer.class);
+        return pid == null ? -1 : pid;
     }
 
-    /** 다른 트랜잭션이 세션 행을 {@code FOR UPDATE}로 쥔 동안 {@code body}를 돌리고, 끝나면 잠금을 풀고 그 트랜잭션을 마친다. */
-    private static void whileLocked(NewActivitySession session, Runnable body) throws Exception {
-        ActivitySessionRepository sessions = new ActivitySessionRepository(db.jdbc());
-        CountDownLatch locked = new CountDownLatch(1);
-        CountDownLatch release = new CountDownLatch(1);
-        ExecutorService pool = Executors.newSingleThreadExecutor();
+    /** {@code pid}가 정해지고 그 백엔드가 잠금 대기에 들어갈 때까지 기다린다(상한 10초, 짐작한 시간을 자지 않는다). */
+    private static void awaitLockWait(AtomicInteger pid) {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+        while (System.nanoTime() < deadline) {
+            if (pid.get() > 0) {
+                List<String> waits = db.jdbc().queryForList(
+                        "select coalesce(wait_event_type, '') from pg_stat_activity where pid = :pid",
+                        new MapSqlParameterSource("pid", pid.get()), String.class);
+                if (!waits.isEmpty() && "Lock".equals(waits.get(0))) {
+                    return;
+                }
+            }
+            LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(2));
+        }
+        throw new AssertionError("백엔드 pid " + pid.get() + "가 10초 안에 잠금 대기에 들어가지 않았다");
+    }
+
+    private static void await(CyclicBarrier barrier) {
         try {
-            Future<?> holder = pool.submit(() -> db.inTransaction(() -> {
-                sessions.findForUpdate(session.id()).orElseThrow();
-                locked.countDown();
-                await(release);
-            }));
-            assertThat(locked.await(10, TimeUnit.SECONDS)).isTrue();
-            body.run();
-            release.countDown();
-            waitFor(holder);
-        } finally {
-            release.countDown();
-            pool.shutdownNow();
+            barrier.await(10, TimeUnit.SECONDS);
+        } catch (Exception failure) {
+            throw new IllegalStateException("두 트랜잭션이 첫 잠금을 쥐지 못했다", failure);
         }
     }
 

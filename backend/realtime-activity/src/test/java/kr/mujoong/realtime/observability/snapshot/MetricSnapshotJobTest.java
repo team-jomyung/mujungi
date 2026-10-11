@@ -2,6 +2,8 @@ package kr.mujoong.realtime.observability.snapshot;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.zaxxer.hikari.HikariDataSource;
@@ -19,6 +21,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalDouble;
 import java.util.Set;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import kr.mujoong.contract.log.AttrKey;
 import kr.mujoong.contract.log.EventCode;
@@ -178,12 +182,62 @@ class MetricSnapshotJobTest {
     void theFinalSnapshotWritesAPartialLineAndStopsPeriodicLines() {
         clock.advance(Duration.ofSeconds(7));
 
-        job.finalSnapshot();
+        job.finalSnapshot(Duration.ofSeconds(5));
         clock.advance(INTERVAL.multipliedBy(2));
         job.tick();
 
         assertThat(snapshots()).as("정상 종료 T5의 마지막 한 줄뿐(부분 구간)").hasSize(1);
         assertThat(LogCapture.attrs(snapshots().get(0))).containsKeys("outboxPending", "openConnections");
+    }
+
+    /**
+     * 3.6 수정 J369: 마지막 줄의 적체 읽기는 남은 시간(limit)까지만 기다린다. DB가 응답하지 않아도 limit 뒤 줄을 쓰고, 못 읽은 적체 네 키는
+     * 빼며(기존 규칙) APP_ERROR({@value MetricSnapshotJob#FINAL_READ_TIMEOUT}) 한 줄을 남긴다. 늦게 끝난 읽기는 줄을 더 쓰지 않는다.
+     */
+    @Test
+    void theLastLineDoesNotWaitForAStuckBacklogReadPastTheTimeLeft() throws Exception {
+        CountDownLatch release = new CountDownLatch(1);
+        CountDownLatch lateReadDone = new CountDownLatch(1);
+        when(outbox.backlog()).thenAnswer(call -> {
+            try {
+                release.await(10, TimeUnit.SECONDS);
+                return new RealtimeOutboxRepository.Backlog(0, Optional.empty(), 0);
+            } finally {
+                lateReadDone.countDown();
+            }
+        });
+        Duration limit = Duration.ofMillis(200);
+        long begun = System.nanoTime();
+
+        job.finalSnapshot(limit);
+
+        assertThat(Duration.ofNanos(System.nanoTime() - begun)).as("남은 시간 + 여유 안").isLessThan(limit.plusSeconds(2));
+        assertThat(LogCapture.attrs(snapshots().get(0)))
+                .doesNotContainKeys("outboxPending", "outboxOldestPendingSec", "outboxFailed", "inboxDead")
+                .containsKeys("poolActive", "poolWaitExceeded", "openConnections", "sessionsActive");
+        assertThat(logs.events(EventCode.APP_ERROR)).extracting(line -> LogCapture.attrs(line).get("errorKind"))
+                .containsExactly(MetricSnapshotJob.FINAL_READ_TIMEOUT);
+        release.countDown();
+        assertThat(lateReadDone.await(10, TimeUnit.SECONDS)).isTrue();
+        clock.advance(INTERVAL.multipliedBy(2));
+        job.tick();
+        assertThat(snapshots()).as("마지막 줄 뒤에는 줄이 없다").hasSize(1);
+    }
+
+    /** 3.6 수정 J369 경계: 남은 시간이 없으면 DB를 부르지 않고 메모리 값만으로 마지막 줄을 쓴다. */
+    @Test
+    void withNoTimeLeftTheLastLineSkipsTheDatabaseAndKeepsTheInMemoryKeys() {
+        metrics.connectionOpened();
+        clock.advance(Duration.ofSeconds(3));
+
+        job.finalSnapshot(Duration.ZERO);
+
+        verify(outbox, never()).backlog();
+        verify(connections, never()).countByState();
+        assertThat(attrs(snapshots().get(0))).containsEntry("openConnections", 1L).containsKey("poolWaitExceeded")
+                .doesNotContainKeys("outboxPending", "inboxDead");
+        assertThat(logs.events(EventCode.APP_ERROR)).extracting(line -> LogCapture.attrs(line).get("errorKind"))
+                .containsExactly(MetricSnapshotJob.FINAL_READ_TIMEOUT);
     }
 
     @Test

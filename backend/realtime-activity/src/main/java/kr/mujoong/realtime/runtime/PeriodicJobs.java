@@ -16,9 +16,9 @@ import kr.mujoong.contract.time.MujoongClock;
  * Realtime 주기 작업 스레드 (U1 3.5 Step 23 · RD-1 · RD-2 · R3-18 · reliability-design 2.2 스레드 수 표).
  *
  * <p>이름 있는 단일 플랫폼 스레드 스케줄러를 만들고 작업을 고정 지연(앞 실행이 끝난 뒤 간격)으로 건다. Realtime이 쓰는 이름은
- * {@value #OUTBOX_SENDER} · {@value #INBOX_REPOLL} · {@value #MAINTENANCE} · {@value #RECORDER_TICK} 넷이다(시계 두 개는
- * {@link TimerClocks}). 작업 예외는 오류 처리기로 넘기고 다음 주기를 계속 돈다(ScheduledExecutorService는 예외 뒤 반복을 멈추므로 감싼다).
- * 시작 순서는 기동 S4가 정하고 정지는 정상 종료 T4가 {@link #stopAll(Duration)}로 한다.
+ * {@value #OUTBOX_SENDER} · {@value #INBOX_REPOLL} · {@value #MAINTENANCE} · {@value #RECORDER_TICK} · {@value #METRIC_SAMPLE} 다섯이다
+ * (시계 두 개는 {@link TimerClocks}). 작업 예외는 오류 처리기로 넘기고 다음 주기를 계속 돈다(ScheduledExecutorService는 예외 뒤 반복을
+ * 멈추므로 감싼다). 시작 순서는 기동 S4가 정하고 정지는 정상 종료 T4가 {@link #stopAll(Duration)}로 한다.
  */
 public final class PeriodicJobs {
 
@@ -30,6 +30,11 @@ public final class PeriodicJobs {
     public static final String MAINTENANCE = "maintenance";
     /** 기록기 플러시 제출(PD-5). */
     public static final String RECORDER_TICK = "recorder-tick";
+    /**
+     * METRIC_SNAPSHOT 표본(OD-6 '앱 안 5초 표본', 3.6 수정 J368). 표본은 적체 · 연결 원장을 DB에서 읽으므로 DB가 멈추면 매번 획득 제한만큼
+     * 막힌다. maintenance와 같은 스레드면 DB 점검자(RD-16 연속 3회 → NOT_READY) · 끊김 점검이 그만큼 밀리므로 따로 둔다.
+     */
+    public static final String METRIC_SAMPLE = "metric-sample";
 
     private final Consumer<RuntimeException> errorHandler;
     private final MujoongClock clock;

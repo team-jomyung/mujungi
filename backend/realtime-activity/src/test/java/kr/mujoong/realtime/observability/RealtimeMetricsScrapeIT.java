@@ -3,6 +3,7 @@ package kr.mujoong.realtime.observability;
 import static kr.mujoong.realtime.testing.RealtimeItEnvironment.WAIT;
 import static kr.mujoong.realtime.testing.RealtimeItEnvironment.awaitTrue;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.zaxxer.hikari.HikariDataSource;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -15,6 +16,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.sql.Connection;
+import java.sql.SQLTransientConnectionException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -35,13 +37,20 @@ import kr.mujoong.contract.ws.message.PlaybackMark;
 import kr.mujoong.contract.ws.message.SessionState;
 import kr.mujoong.contract.ws.message.View;
 import kr.mujoong.realtime.common.db.DbPoolWaitMonitor;
+import kr.mujoong.realtime.gateway.DeviceConnectionRepository;
+import kr.mujoong.realtime.messaging.RealtimeInboxRepository;
+import kr.mujoong.realtime.messaging.RealtimeOutboxRepository;
+import kr.mujoong.realtime.observability.snapshot.MetricSnapshotJob;
+import kr.mujoong.realtime.observability.snapshot.SystemLoad;
 import kr.mujoong.realtime.session.ActivitySessionRepository;
 import kr.mujoong.realtime.session.StartSessionHandler;
 import kr.mujoong.realtime.testing.RealtimeItEnvironment;
+import kr.mujoong.realtime.testing.TestEventLoggers;
 import kr.mujoong.realtime.voice.ProviderRequestFactory;
 import kr.mujoong.testsupport.db.MujoongPostgres.Role;
 import kr.mujoong.testsupport.device.DeviceSimulatorClient;
 import kr.mujoong.testsupport.log.LogCapture;
+import kr.mujoong.testsupport.time.MutableClock;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
@@ -276,6 +285,56 @@ class RealtimeMetricsScrapeIT {
         assertThat(monitor.drainWindow().maxWait()).as("구간 최댓값은 붙잡힌 시간 가까이").isGreaterThan(Duration.ofMillis(100));
         assertThat(value(scrape(), "hikaricp_connections_acquire_seconds_count{pool=\"realtime\"}"))
                 .as("앱 풀에도 같은 추적기가 걸려 Boot의 hikaricp 지표가 그대로 나온다").isPositive();
+    }
+
+    /**
+     * 3.6 수정 J364: 실제 풀(연결 1개 · 획득 제한 250ms)에서 빌림 시간 초과 1회는 {@code mujoong_db_pool_wait_exceeded_total} +1이고
+     * METRIC_SNAPSHOT의 poolWaitExceeded도 1이다. HikariCP는 같은 빌림에 대기 기록(≈ 250ms)과 시간 초과 기록을 함께 부른다(리뷰 재현은 2).
+     */
+    @Test
+    void aTimedOutBorrowOnARealPoolIsOneExceededWaitInTheCounterAndTheSnapshotLine() throws Exception {
+        SimpleMeterRegistry registry = new SimpleMeterRegistry();
+        RealtimeMetrics metrics = new RealtimeMetrics(registry);
+        DefaultListableBeanFactory beans = new DefaultListableBeanFactory();
+        beans.registerSingleton("registry", registry);
+        beans.registerSingleton("metrics", metrics);
+        DbPoolWaitMonitor monitor = new DbPoolWaitMonitor(Duration.ofMillis(100),
+                beans.getBeanProvider(MeterRegistry.class), beans.getBeanProvider(RealtimeMetrics.class));
+        MutableClock clock = new MutableClock(Instant.parse("2001-05-01T00:00:00Z"));
+        LogCapture lines = LogCapture.detached();
+        Duration interval = Duration.ofSeconds(60);
+
+        try (HikariDataSource pool = new HikariDataSource()) {
+            pool.setPoolName("timeout-probe");
+            pool.setJdbcUrl(env.postgres.jdbcUrl());
+            pool.setUsername(env.postgres.username(Role.REALTIME_APP));
+            pool.setPassword(env.postgres.password(Role.REALTIME_APP));
+            pool.setMaximumPoolSize(1);
+            pool.setConnectionTimeout(Duration.ofMillis(250).toMillis());
+            monitor.apply(pool);
+            try (Connection held = pool.getConnection()) {
+                MetricSnapshotJob job = new MetricSnapshotJob(clock, interval, env.app.bean(RealtimeOutboxRepository.class),
+                        env.app.bean(RealtimeInboxRepository.class), env.app.bean(DeviceConnectionRepository.class), monitor,
+                        metrics, TestEventLoggers.strict(clock, lines, metrics), SystemLoad.platform());
+                long exceededBefore = monitor.exceededTotal();
+                double counterBefore = metrics.count(RealtimeMetrics.DB_POOL_WAIT_EXCEEDED);
+
+                assertThatThrownBy(pool::getConnection).isInstanceOf(SQLTransientConnectionException.class);
+
+                assertThat(monitor.exceededTotal() - exceededBefore).as("빌림 시간 초과 1회").isEqualTo(1);
+                assertThat(metrics.count(RealtimeMetrics.DB_POOL_WAIT_EXCEEDED) - counterBefore).isEqualTo(1.0);
+                clock.advance(interval);
+                job.tick();
+                Map<String, Object> line = LogCapture.attrs(lines.last(EventCode.METRIC_SNAPSHOT).orElseThrow());
+                assertThat(((Number) line.get("poolWaitExceeded")).longValue()).isEqualTo(1);
+                assertThat(((Number) line.get("poolWaitMaxMs")).longValue()).as("획득 제한만큼 기다렸다")
+                        .isGreaterThanOrEqualTo(250);
+                assertThat(held.isValid(1)).isTrue();
+            }
+            assertThat(registry.find("hikaricp.connections.timeout").tag("pool", "timeout-probe").counter())
+                    .as("품은 Micrometer 추적기는 시간 초과를 그대로 센다").isNotNull()
+                    .satisfies(counter -> assertThat(counter.count()).isEqualTo(1.0));
+        }
     }
 
     // ------------------------------------------------------------------ 보조

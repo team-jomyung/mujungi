@@ -8,6 +8,8 @@ import java.nio.ByteBuffer;
 import java.nio.charset.CharacterCodingException;
 import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.text.Normalizer;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -15,6 +17,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import kr.mujoong.contract.json.JsonCodec;
@@ -26,7 +29,8 @@ import org.junit.jupiter.api.Test;
  * contracts/ai-io.md 4절). 파일 형식만 본다. 로더 · 정규화 · 게이트 판정 시험은 Step 29의 SeedDictionaryTest · OutputGateTest다.
  *
  * <p>3.6 수정(BT-TC-10)에서 더한 둘: 파일이 BOM 없는 올바른 UTF-8이다(로더는 잘못된 바이트를 대체 문자로 바꿔 읽으므로 패턴이 조용히
- * 달라진다) · 키가 문서 모양 그대로다(코덱이 모르는 키를 조용히 무시하므로 '끄기' 같은 키나 오타 키가 효과 없이 남지 않게 한다).
+ * 달라진다) · 키가 문서 모양 그대로다(코덱이 모르는 키를 조용히 무시하므로 '끄기' 같은 키나 오타 키가 효과 없이 남지 않게 한다). appliesTo는
+ * 계약(contracts/ai-io.md 1절)의 네 값을 받고 그 밖의 값만 문제로 본다(3.6 수정 J365).
  */
 @Tag("u1")
 class SeedDictionaryFileTest {
@@ -36,6 +40,9 @@ class SeedDictionaryFileTest {
             Set.of("DIAGNOSIS", "TREATMENT", "SCORE", "CAUSE", "GENERALIZATION", "EMOTION_CLAIM", "PRESSURE");
     /** 정규화 뒤 형태가 아닌 글자(공백 · 구두점(% 제외) · 라틴 대문자 · 정규식 메타 문자) — SD-18 2.14 로딩 거부 조건. */
     private static final Pattern NOT_NORMALIZED = Pattern.compile("[\\s\\p{Punct}&&[^%#]]|[A-Z]|[\\u200B-\\u200D\\uFEFF]");
+
+    private static final Path REPO_ROOT =
+            Path.of(System.getProperty("mujoong.repo.root", "..")).toAbsolutePath().normalize();
 
     /** 파일 최상위 키(SeedDictionary.FileShape). */
     private static final Set<String> FILE_KEYS = Set.of("version", "level", "entries");
@@ -124,15 +131,61 @@ class SeedDictionaryFileTest {
     void everyObjectInTheFileHasExactlyTheDocumentedKeys() throws IOException {
         String json = new String(bytes(), StandardCharsets.UTF_8);
 
-        assertThat(shapeProblems(json)).as("문서 모양 밖 키 · 빠진 키 · 모르는 appliesTo 값").isEmpty();
+        assertThat(shapeProblems(json)).as("문서 모양 밖 키 · 빠진 키 · 계약 밖 appliesTo 값").isEmpty();
 
-        // 검사기가 실제로 잡는다: 오타 키(applies_to) · 효과 없는 키(enabled) · 빠진 키 · 모르는 적용 범위 · 최상위 덧붙인 키
+        // 검사기가 실제로 잡는다: 오타 키(applies_to) · 효과 없는 키(enabled) · 빠진 키 · 계약 밖 적용 범위 · 최상위 덧붙인 키
         String drifted = "{\"version\":\"v\",\"level\":\"SEED\",\"note\":\"x\",\"entries\":["
                 + "{\"id\":\"A-1\",\"pattern\":\"가\",\"category\":\"SCORE\",\"applies_to\":[\"OUTPUT_GATE\"]},"
                 + "{\"id\":\"A-2\",\"pattern\":\"나\",\"category\":\"SCORE\",\"appliesTo\":[\"INPUT_GATE\"],"
                 + "\"enabled\":false}]}";
         assertThat(shapeProblems(drifted)).containsExactlyInAnyOrder("file+note", "A-1+applies_to", "A-1-appliesTo",
                 "A-2+enabled", "A-2:INPUT_GATE");
+    }
+
+    /**
+     * 3.6 수정 J365: appliesTo는 계약(contracts/ai-io.md 1절 '금지 표현 사전 항목')의 네 값 OUTPUT_GATE · RESULT_TEXT · PDF ·
+     * APPROVED_CONTENT를 모두 받는다 — 후속 유닛이 같은 파일에 결과 문장 · PDF · 승인 콘텐츠용 항목을 더하고(4절), 로더도 그런 항목을 받아
+     * OUTPUT_GATE 항목만 게이트에 쓴다. 계약 밖 값만 문제로 본다.
+     */
+    @Test
+    void appliesToAcceptsEveryContractScopeAndFlagsOnlyValuesOutsideTheContract() throws IOException {
+        assertThat(contractAppliesTo()).as("계약 행에서 읽은 적용 범위").contains(SeedDictionary.APPLIES_TO_OUTPUT_GATE);
+        String contractScopes = "{\"version\":\"v\",\"level\":\"SEED\",\"entries\":["
+                + "{\"id\":\"B-1\",\"pattern\":\"가\",\"category\":\"SCORE\","
+                + "\"appliesTo\":[\"OUTPUT_GATE\",\"RESULT_TEXT\",\"PDF\",\"APPROVED_CONTENT\"]},"
+                + "{\"id\":\"B-2\",\"pattern\":\"나\",\"category\":\"CAUSE\",\"appliesTo\":[\"RESULT_TEXT\",\"PDF\"]},"
+                + "{\"id\":\"B-3\",\"pattern\":\"다\",\"category\":\"PRESSURE\",\"appliesTo\":[\"APPROVED_CONTENT\"]}]}";
+        String outsideTheContract = "{\"version\":\"v\",\"level\":\"SEED\",\"entries\":["
+                + "{\"id\":\"C-1\",\"pattern\":\"가\",\"category\":\"SCORE\",\"appliesTo\":[\"OUTPUT_GATE\",\"INPUT_GATE\"]},"
+                + "{\"id\":\"C-2\",\"pattern\":\"나\",\"category\":\"CAUSE\",\"appliesTo\":[\"output_gate\",\"REPORT\"]}]}";
+
+        assertThat(shapeProblems(contractScopes)).as("계약 값은 문제가 아니다").isEmpty();
+        assertThat(shapeProblems(outsideTheContract)).containsExactlyInAnyOrder("C-1:INPUT_GATE", "C-2:output_gate",
+                "C-2:REPORT");
+        // 로더도 계약 값 항목을 받는다(게이트는 OUTPUT_GATE 항목만 쓴다)
+        assertThat(SeedDictionary.loadDefault().entries()).isNotEmpty();
+        assertThat(SeedDictionary.parse(seedWith("{\"id\":\"SEED-SCORE-9\",\"pattern\":\"결과문장전용\",\"category\":\"SCORE\","
+                + "\"appliesTo\":[\"RESULT_TEXT\",\"PDF\",\"APPROVED_CONTENT\"]}")).findMatch("결과문장전용")).isEmpty();
+    }
+
+    /** 실제 시드 항목에 {@code extra} 항목 하나를 더한 사전 본문. */
+    private static String seedWith(String extra) throws IOException {
+        String json = new String(bytes(), StandardCharsets.UTF_8);
+        int close = json.lastIndexOf(']');
+        return json.substring(0, close).stripTrailing() + ",\n    " + extra + "\n  " + json.substring(close);
+    }
+
+    /** 계약(contracts/ai-io.md) '금지 표현 사전 항목' 행의 {@code appliesTo: [ … ]} 값. */
+    private static Set<String> contractAppliesTo() throws IOException {
+        String row = Files.readAllLines(REPO_ROOT.resolve("contracts/ai-io.md"), StandardCharsets.UTF_8).stream()
+                .filter(line -> line.startsWith("| 금지 표현 사전 항목 |"))
+                .findFirst()
+                .orElseThrow(() -> new IllegalStateException("contracts/ai-io.md에 '금지 표현 사전 항목' 행이 없다"));
+        Matcher matcher = Pattern.compile("appliesTo: \\[([A-Z_, ]+)]").matcher(row);
+        if (!matcher.find()) {
+            throw new IllegalStateException("'금지 표현 사전 항목' 행에 appliesTo 목록이 없다");
+        }
+        return Arrays.stream(matcher.group(1).split(",")).map(String::strip).collect(Collectors.toUnmodifiableSet());
     }
 
     /** 엄격한 UTF-8 해석 문제(BOM · 잘못된 바이트 · 대체 문자). */
@@ -156,9 +209,13 @@ class SeedDictionaryFileTest {
         return problems;
     }
 
-    /** 문서 모양과 다른 곳: {@code 대상+키}(덧붙은 키) · {@code 대상-키}(빠진 키) · {@code id:값}(모르는 appliesTo 값). */
+    /**
+     * 문서 모양과 다른 곳: {@code 대상+키}(덧붙은 키) · {@code 대상-키}(빠진 키) · {@code id:값}(계약 밖 appliesTo 값, 3.6 수정 J365 — 계약
+     * 네 값은 받는다).
+     */
     @SuppressWarnings("unchecked")
-    private static List<String> shapeProblems(String json) {
+    private static List<String> shapeProblems(String json) throws IOException {
+        Set<String> contractScopes = contractAppliesTo();
         Map<String, Object> file = JsonCodec.shared().read(json, Map.class);
         List<String> problems = new ArrayList<>(keyProblems("file", file.keySet(), FILE_KEYS));
         for (Object item : (List<Object>) file.getOrDefault("entries", List.of())) {
@@ -168,7 +225,7 @@ class SeedDictionaryFileTest {
             Object appliesTo = entry.get("appliesTo");
             if (appliesTo instanceof List<?> scopes) {
                 for (Object scope : scopes) {
-                    if (!SeedDictionary.APPLIES_TO_OUTPUT_GATE.equals(scope)) {
+                    if (!contractScopes.contains(scope)) {
                         problems.add(id + ":" + scope);
                     }
                 }

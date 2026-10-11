@@ -18,7 +18,10 @@ export type T19Display =
 
 export interface T19ViewProps {
   readonly display: T19Display;
-  /** 켜짐 상태의 라벨(대기 · 듣는 중 · 생각 중 · 말하는 중 · 마무리). 재접속 주기에는 마지막 라벨이다(J360). 없으면 비운다. */
+  /**
+   * 켜짐 상태의 라벨(대기 · 듣는 중 · 생각 중 · 말하는 중 · 마무리). 한 번 연결됐던 기기의 재접속 주기에는 마지막 라벨이다(J360). 없으면 비운다
+   * (처음 연결 중 · 한 번도 연결되지 않은 기기의 재접속 주기, J367).
+   */
   readonly label: string | null;
   readonly onTurnOn: () => void;
   readonly onTurnOff: () => void;

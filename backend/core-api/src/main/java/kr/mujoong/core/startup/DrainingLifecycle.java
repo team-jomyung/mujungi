@@ -23,7 +23,8 @@ import org.springframework.stereotype.Component;
  * <ol>
  *   <li>T1: 준비 상태를 DRAINING으로 내린다. 새 REST · /internal 요청은 필터 F1b가 503 SERVICE_NOT_READY + Retry-After로 답한다.
  *   <li>T4: 스케줄러를 멈춘다(발송 중인 한 건 · 처리 중인 처리기는 마치고, 남은 Outbox 선점은 available_at = now로 되돌린다).
- *   <li>T5: 병합 창에 남은 반복 로그를 쓰고 마지막 METRIC_SNAPSHOT 한 줄을 쓴다(OD-6).
+ *   <li>T5: 병합 창에 남은 반복 로그를 쓰고 마지막 METRIC_SNAPSHOT 한 줄을 쓴다(OD-6). 그 줄의 적체 DB 읽기는 마감(아래 30초)의 남은 시간
+ *       안에서만 기다리고, 못 읽으면 적체 키를 뺀다(3.6 수정 J369).
  *   <li>T6: F1b가 받아들인 진행 중 요청이 끝날 때까지 기다린다. 이 대기 동안 서버 커넥터는 열려 있다 — 프레임워크 graceful 단계(커넥터
  *       일시 정지 · 수신 소켓 닫기 = 접속 거절)는 이 메서드가 돌아온 뒤에야 시작한다. 그래서 SIGTERM 직후 새 요청은 Nginx 502가 아니라 앱의
  *       503이다(3.6 BT-RD-13). 대기 한도는 {@code spring.lifecycle.timeout-per-shutdown-phase}(30초)에서 T1 ~ T5에 쓴 시간을 뺀 값이다.
@@ -93,13 +94,19 @@ public class DrainingLifecycle implements SmartLifecycle {
         startupSequence.stopSchedulers();
         events.flushMerged();
         try {
-            snapshots.finalSnapshot();
+            snapshots.finalSnapshot(remaining(started));
         } catch (RuntimeException e) {
             // 마지막 줄을 못 써도 종료는 이어 간다
             events.appError(EventLog.Component.CORE_MAINTENANCE, e);
         }
-        awaitInFlight(grace.minus(clock.elapsedSince(started)));
+        awaitInFlight(remaining(started));
         running = false;
+    }
+
+    /** 마감까지 남은 시간(0 이상). */
+    private Duration remaining(long startedNanos) {
+        Duration left = grace.minus(clock.elapsedSince(startedNanos));
+        return left.isNegative() ? Duration.ZERO : left;
     }
 
     /** T6. 한도가 이미 지났으면 기다리지 않는다. */

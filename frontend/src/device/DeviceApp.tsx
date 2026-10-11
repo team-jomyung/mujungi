@@ -12,6 +12,7 @@ import {
   initialDeviceState,
   isPoweredOn,
   pendingEffect,
+  showsViewLabel,
   type DelayKind,
   type DeviceEvent,
   type DeviceState,
@@ -66,9 +67,12 @@ async function runRequest(api: DeviceApi, step: string, stepId: number): Promise
   }
 }
 
-/** T19 라벨. 켜짐과 재접속 주기(5초 대기 · 접속 시도)에는 마지막 view 라벨을 두고(BR9.7 · J360) 처음 연결 중에는 비운다(BR9.4). */
+/**
+ * T19 라벨. 켜짐과, 한 번 연결됐던 기기의 재접속 주기(5초 대기 · 접속 시도)에는 마지막 view 라벨을 두고(BR9.7 · J360), 처음 연결 중과
+ * 「켜기」 뒤 한 번도 연결되지 않은 기기의 재접속 주기에는 마지막 화면('연결 중')대로 비운다(BR9.4 · J367).
+ */
 function t19Label(state: DeviceState): string | null {
-  if (state.screen !== "t19" || (state.power !== "on" && state.power !== "reconnectWait" && state.power !== "reconnecting")) {
+  if (state.screen !== "t19" || !showsViewLabel(state)) {
     return null;
   }
   if (state.power === "on" && state.speaking) {

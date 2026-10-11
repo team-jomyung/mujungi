@@ -4,6 +4,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicReference;
 import kr.mujoong.contract.log.AttrKey;
 import kr.mujoong.contract.log.EventCode;
 import kr.mujoong.contract.log.EventLog;
@@ -21,19 +22,27 @@ import org.springframework.stereotype.Component;
 /**
  * Realtime METRIC_SNAPSHOT 한 줄과 DB에서 읽는 게이지 (U1 3.6 수정 · OD-6 · OD-12 · NFR7.8 · NFR4.15 · J299 · J302, Core와 같은 방식).
  *
- * <p>maintenance 스레드가 {@code mujoong.observability.system-sample-interval}(5초)마다 {@link #tick()}을 부른다. 매 표본은 CPU · 메모리
- * 비율과 풀 사용 연결 수를 모으고, Outbox · Inbox 적체와 연결 원장의 상태별 기기 수를 다시 읽어 {@code mujoong_outbox_*} ·
- * {@code mujoong_inbox_dead} · {@code mujoong_device_connection_state} 게이지를 갱신한다. 앱 Clock으로
+ * <p>표본 전용 스레드 metric-sample(3.6 수정 J368)이 {@code mujoong.observability.system-sample-interval}(5초)마다 {@link #tick()}을
+ * 부른다. 매 표본은 CPU · 메모리 비율과 풀 사용 연결 수를 모으고, Outbox · Inbox 적체와 연결 원장의 상태별 기기 수를 다시 읽어
+ * {@code mujoong_outbox_*} · {@code mujoong_inbox_dead} · {@code mujoong_device_connection_state} 게이지를 갱신한다. 앱 Clock으로
  * {@code mujoong.observability.metric-snapshot-interval}(60초)이 차면 METRIC_SNAPSHOT 한 줄(숫자 키만)을 쓴다. 정상 종료 T5에서
- * {@link #finalSnapshot()}이 마지막 한 줄(부분 구간)을 쓴다(reliability-design.md 2.8).
+ * {@link #finalSnapshot(Duration)}이 마지막 한 줄(부분 구간)을 쓴다(reliability-design.md 2.8).
  *
  * <p>값 규칙(구간 = 직전 줄 이후): outboxPending · outboxOldestPendingSec · outboxFailed · inboxDead · openConnections · sessionsActive ·
  * heapUsedPct는 시점 값, poolActive · poolWaitMaxMs · sysMemMaxPct는 구간 최댓값, sysCpuAvgPct는 구간 표본 평균, poolWaitExceeded는 구간
  * 증가분이다. Core 몫(restTotal · restLe300Ms · viewTotal · viewLe500Ms · viewFallback · breakerOpenSec)은 쓰지 않는다. 그 줄을 쓰는
  * 순간 적체를 읽지 못했으면(DB 장애) 낡은 시점 값을 쓰지 않고 그 네 키를 뺀다.
+ *
+ * <p>DB 읽기는 이 객체의 잠금 밖에서 한다(3.6 수정 J369): DB 읽기에 막힌 표본이 있어도 T5 마지막 줄은 그 표본을 기다리지 않는다. 마지막 줄의
+ * 적체 읽기는 정상 종료 마감의 남은 시간까지만 기다리고, 그 안에 못 읽으면 위 규칙대로 네 키를 뺀다.
  */
 @Component
 public class MetricSnapshotJob {
+
+    /** 마지막 줄의 적체를 마감 안에 읽지 못했을 때 APP_ERROR의 errorKind(3.6 수정 J369). */
+    public static final String FINAL_READ_TIMEOUT = "SnapshotReadTimeout";
+    /** 마지막 줄의 적체를 읽는 스레드 이름. */
+    private static final String FINAL_READ_THREAD = "metric-final-read";
 
     private final MujoongClock clock;
     private final Duration interval;
@@ -92,25 +101,43 @@ public class MetricSnapshotJob {
         this.lastExceeded = pool.exceededTotal();
     }
 
-    /** 표본 하나를 모으고, 스냅샷 주기가 찼으면 한 줄을 쓴다. 오래 멈췄다 돌아와도 밀린 줄을 몰아 쓰지 않는다. */
-    public synchronized void tick() {
-        sample();
-        Instant now = clock.now();
-        if (now.isBefore(nextAt)) {
-            return;
-        }
-        emit();
-        nextAt = nextAt.plus(interval);
-        if (!nextAt.isAfter(now)) {
-            nextAt = now.plus(interval);
+    /**
+     * 표본 하나를 모으고, 스냅샷 주기가 찼으면 한 줄을 쓴다. 오래 멈췄다 돌아와도 밀린 줄을 몰아 쓰지 않는다. DB 읽기(적체 · 연결 원장)는 잠금
+     * 밖이다(J369).
+     */
+    public void tick() {
+        Optional<Backlog> backlog = readBacklog();
+        readConnectionStates();
+        synchronized (this) {
+            sampleLoad();
+            latest = backlog;
+            Instant now = clock.now();
+            if (now.isBefore(nextAt)) {
+                return;
+            }
+            emit();
+            nextAt = nextAt.plus(interval);
+            if (!nextAt.isAfter(now)) {
+                nextAt = now.plus(interval);
+            }
         }
     }
 
-    /** T5: 정상 종료 때 마지막 한 줄(부분 구간)을 쓴다. 다음 주기 줄은 쓰지 않는다. */
-    public synchronized void finalSnapshot() {
-        sample();
-        emit();
-        nextAt = Instant.MAX;
+    /**
+     * T5: 정상 종료 때 마지막 한 줄(부분 구간)을 쓴다. 적체는 {@code limit}(정상 종료 마감의 남은 시간) 안에서만 읽고, 그 안에 못 읽으면
+     * APP_ERROR({@value #FINAL_READ_TIMEOUT}) 한 줄을 남기고 적체 네 키를 뺀다(3.6 수정 J369). 다음 주기 줄은 쓰지 않는다.
+     *
+     * @param limit 정상 종료 마감까지 남은 시간
+     */
+    public void finalSnapshot(Duration limit) {
+        Objects.requireNonNull(limit, "limit");
+        Optional<Backlog> backlog = readBacklogWithin(limit);
+        synchronized (this) {
+            sampleLoad();
+            latest = backlog;
+            emit();
+            nextAt = Instant.MAX;
+        }
     }
 
     /** 마지막으로 읽은 적체(게이지 값과 같다, 읽은 적이 없으면 빈 값). */
@@ -118,15 +145,34 @@ public class MetricSnapshotJob {
         return latest;
     }
 
-    private void sample() {
+    /** 메모리에서 읽는 표본(CPU · 메모리 · 풀 사용 연결). 잠금 안에서 부른다. */
+    private void sampleLoad() {
         system.cpu().ifPresent(load -> {
             cpuSum += load;
             cpuSamples++;
         });
         system.memory().ifPresent(used -> memoryMax = Math.max(memoryMax, used));
         pool.sampleActive();
-        latest = readBacklog();
-        readConnectionStates();
+    }
+
+    /**
+     * 적체를 {@code limit} 안에서만 읽는다. 읽는 스레드가 그 안에 끝나지 않으면 더 기다리지 않고 빈 값이다 — 그 스레드는 DB 제한(획득 · 문장
+     * 제한)까지 홀로 돌다 끝나고, 늦은 결과는 게이지만 바꾼다(줄은 이미 썼다).
+     */
+    private Optional<Backlog> readBacklogWithin(Duration limit) {
+        if (limit.isPositive()) {
+            AtomicReference<Optional<Backlog>> read = new AtomicReference<>(Optional.empty());
+            Thread reader = Thread.ofVirtual().name(FINAL_READ_THREAD).start(() -> read.set(readBacklog()));
+            try {
+                if (reader.join(limit)) {
+                    return read.get();
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }
+        events.appError(EventLog.Component.REALTIME_MAINTENANCE, FINAL_READ_TIMEOUT);
+        return Optional.empty();
     }
 
     /** 적체를 읽어 게이지를 바꾼다. DB 장애면 APP_ERROR(병합 대상) 한 줄만 남기고 빈 값이다(게이지는 마지막 값 유지). */

@@ -80,6 +80,58 @@ class DbPoolWaitMonitorTest {
                 .satisfies(counter -> assertThat(counter.count()).isEqualTo(1.0));
     }
 
+    /**
+     * 3.6 수정 J364(Core와 같은 규칙): HikariCP 7.0.2는 빌림 시간 초과 한 번에 같은 스레드에서
+     * {@code recordConnectionAcquiredNanos(≈ 획득 제한)}(recordBorrowTimeoutStats)를 부른 바로 뒤 {@code recordConnectionTimeout()}
+     * (createTimeoutException)을 부른다. 빌림 1회는 초과 1회다.
+     */
+    @Test
+    void aTimedOutBorrowReportedInTheOrderOfHikari702IsOneExceededWait() {
+        HikariDataSource dataSource = new HikariDataSource();
+        dataSource.setConnectionTimeout(Duration.ofSeconds(2).toMillis());
+        monitor.apply(dataSource);
+        IMetricsTracker tracker = dataSource.getMetricsTrackerFactory().create("realtime", stats);
+
+        tracker.recordConnectionAcquiredNanos(Duration.ofMillis(2003).toNanos());
+        tracker.recordConnectionTimeout();
+
+        assertThat(monitor.exceededTotal()).isEqualTo(1);
+        assertThat(metrics.count(RealtimeMetrics.DB_POOL_WAIT_EXCEEDED)).isEqualTo(1.0);
+        assertThat(monitor.drainWindow().maxWait()).as("실제로 기다린 시간").isEqualTo(Duration.ofMillis(2003));
+        assertThat(registry.find("hikaricp.connections.timeout").counter()).isNotNull()
+                .satisfies(counter -> assertThat(counter.count()).as("품은 추적기는 두 기록을 그대로 받는다").isEqualTo(1.0));
+        assertThat(registry.find("hikaricp.connections.acquire").timer()).isNotNull()
+                .satisfies(timer -> assertThat(timer.count()).isEqualTo(1));
+    }
+
+    /**
+     * 3.6 수정 J364: 시간 초과를 흡수하는 것은 '같은 스레드의 바로 앞 기록이 이미 센 대기'일 때뿐이다. Hikari 판이 바뀌어 시간 초과에 대기 기록이
+     * 없어도 1회로 세고, 반납으로 끝난 앞 빌림 · 다른 스레드의 대기 · 기준 안 대기는 시간 초과를 흡수하지 않는다.
+     */
+    @Test
+    void onlyTheCountedWaitRecordedJustBeforeOnTheSameThreadAbsorbsATimeout() throws Exception {
+        IMetricsTracker tracker = monitor.factory().create("realtime", stats);
+
+        tracker.recordConnectionTimeout();
+        assertThat(monitor.exceededTotal()).as("대기 기록 없는 시간 초과(다른 판)").isEqualTo(1);
+
+        tracker.recordConnectionAcquiredNanos(Duration.ofMillis(40).toNanos());
+        tracker.recordConnectionUsageMillis(5);
+        tracker.recordConnectionTimeout();
+        assertThat(monitor.exceededTotal()).as("느린 빌림 1 + 반납 뒤 다른 빌림의 시간 초과 1").isEqualTo(3);
+
+        Thread other = new Thread(() -> tracker.recordConnectionAcquiredNanos(Duration.ofMillis(40).toNanos()));
+        other.start();
+        other.join();
+        tracker.recordConnectionTimeout();
+        assertThat(monitor.exceededTotal()).as("다른 스레드의 느린 빌림과 이 스레드의 시간 초과는 따로 센다").isEqualTo(5);
+
+        tracker.recordConnectionAcquiredNanos(WARN.toNanos());
+        tracker.recordConnectionTimeout();
+        assertThat(monitor.exceededTotal()).as("기준 안 대기 뒤 시간 초과(기준이 획득 제한보다 긴 설정)도 1회").isEqualTo(6);
+        assertThat(metrics.count(RealtimeMetrics.DB_POOL_WAIT_EXCEEDED)).isEqualTo(6.0);
+    }
+
     @Test
     void theTrackerForwardsEveryCallSoHikariMetricsStay() {
         IMetricsTracker tracker = monitor.factory().create("realtime", stats);

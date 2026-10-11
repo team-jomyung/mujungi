@@ -16,12 +16,18 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import kr.mujoong.contract.log.EventCode;
 import kr.mujoong.contract.log.EventLog;
 import kr.mujoong.core.activity.PreparingTimeoutChecker;
+import kr.mujoong.core.activity.SessionStartBreaker;
+import kr.mujoong.core.common.db.DbPoolWaitMonitor;
 import kr.mujoong.core.config.CoreProperties;
 import kr.mujoong.core.config.CorePropertiesConfig;
 import kr.mujoong.core.device.DeviceExpiryCleanupJob;
@@ -37,15 +43,21 @@ import kr.mujoong.core.messaging.MessagingCleanupJob;
 import kr.mujoong.core.observability.CoreMetrics;
 import kr.mujoong.core.observability.EventLogger;
 import kr.mujoong.core.observability.snapshot.MetricSnapshotJob;
+import kr.mujoong.core.observability.snapshot.SystemLoad;
+import kr.mujoong.core.support.TestEvents;
 import kr.mujoong.core.web.InFlightRequests;
+import kr.mujoong.testsupport.log.LogCapture;
 import kr.mujoong.testsupport.time.MutableClock;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.mockito.InOrder;
+import org.springframework.beans.factory.support.DefaultListableBeanFactory;
 import org.springframework.boot.test.context.ConfigDataApplicationContextInitializer;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.context.SmartLifecycle;
+import org.springframework.dao.DataAccessResourceFailureException;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
  * Core 기동 · 정지 순서 단위 (RD-12 S2 ~ S6 · RD-13 T1 · T4 · T5 · BR5.12 · A1 · R3-5 · J125). S2 실패면 복구 · 준비 없이 기동이 끝나고,
@@ -162,7 +174,7 @@ class CoreStartupSequenceTest {
         InOrder order = inOrder(startup, events, snapshots);
         order.verify(startup).stopSchedulers();
         order.verify(events).flushMerged();
-        order.verify(snapshots).finalSnapshot();
+        order.verify(snapshots).finalSnapshot(any());
         assertThat(stateAtSchedulerStop.get()).isEqualTo(ReadinessState.State.DRAINING);
         assertThat(draining.isRunning()).isFalse();
     }
@@ -196,7 +208,7 @@ class CoreStartupSequenceTest {
             clock.advance(Duration.ofSeconds(5));
             return null;
         }).when(startup).stopSchedulers();
-        doThrow(new IllegalStateException("db down")).when(snapshots).finalSnapshot();
+        doThrow(new IllegalStateException("db down")).when(snapshots).finalSnapshot(any());
         DrainingLifecycle draining = new DrainingLifecycle(readiness, startup, events, snapshots, inFlight, clock,
                 Duration.ofSeconds(5));
         inFlight.enter();
@@ -208,9 +220,104 @@ class CoreStartupSequenceTest {
                 .isLessThan(Duration.ofSeconds(2));
         verify(events).appError(eq(EventLog.Component.CORE_MAINTENANCE), any(IllegalStateException.class));
         verify(events).appError(EventLog.Component.CORE_MAINTENANCE, "DrainTimeout");
+        verify(snapshots).finalSnapshot(Duration.ZERO);
         assertThat(draining.isRunning()).isFalse();
         assertThatThrownBy(() -> new DrainingLifecycle(readiness, startup, events, snapshots, inFlight, clock, Duration.ZERO))
                 .isInstanceOf(IllegalArgumentException.class).hasMessageContaining(DrainingLifecycle.GRACE_KEY);
+    }
+
+    /**
+     * 3.6 수정 J368: METRIC_SNAPSHOT 표본이 DB 읽기에서 막혀도 DB 점검자는 제 주기(시험 200ms)로 돌아 연속 3회 실패면 NOT_READY다(RD-16).
+     * 표본은 전용 스레드(metric-sample)라 maintenance 스레드를 막지 않는다. 리뷰: 같은 스레드면 DB 정지 때 표본마다 수 초씩 점검이 밀렸다.
+     */
+    @Test
+    void aSampleStuckOnTheDatabaseDoesNotHoldBackTheDbCheckerSoNotReadyComesOnTime() throws Exception {
+        JdbcTemplate down = mock(JdbcTemplate.class);
+        Set<String> checkThreads = ConcurrentHashMap.newKeySet();
+        when(down.queryForObject("select 1", Integer.class)).thenAnswer(call -> {
+            checkThreads.add(Thread.currentThread().getName());
+            throw new DataAccessResourceFailureException("db down");
+        });
+        MetricSnapshotJob stuck = mock(MetricSnapshotJob.class);
+        CountDownLatch sampling = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        AtomicReference<String> sampleThread = new AtomicReference<>();
+        org.mockito.Mockito.doAnswer(call -> {
+            sampleThread.compareAndSet(null, Thread.currentThread().getName());
+            sampling.countDown();
+            release.await(30, TimeUnit.SECONDS);
+            return null;
+        }).when(stuck).tick();
+        CoreStartupSequence started = new CoreStartupSequence(schemaCheck, inbox, outbox, rearm, sender, repoller,
+                dispatcher, mock(PreparingTimeoutChecker.class), new DbHealthChecker(down, readiness, events),
+                mock(DeviceExpiryCleanupJob.class), mock(MessagingCleanupJob.class), stuck, events, readiness, clock,
+                PROPERTIES);
+        Duration expected = PROPERTIES.health().dbCheckInterval().multipliedBy(PROPERTIES.health().dbFailureThreshold());
+        try {
+            long begun = System.nanoTime();
+            started.start();
+            assertThat(sampling.await(10, TimeUnit.SECONDS)).as("표본이 DB 읽기에서 막혔다").isTrue();
+            long deadline = System.nanoTime() + Duration.ofSeconds(10).toNanos();
+            while (readiness.state() != ReadinessState.State.NOT_READY && System.nanoTime() < deadline) {
+                Thread.sleep(5);
+            }
+            Duration took = Duration.ofNanos(System.nanoTime() - begun);
+
+            assertThat(readiness.state()).isEqualTo(ReadinessState.State.NOT_READY);
+            assertThat(release.getCount()).as("NOT_READY가 될 때 표본은 아직 막혀 있다").isEqualTo(1);
+            assertThat(took).as("연속 실패 3회 × 점검 주기 + 여유 1초").isLessThan(expected.plusSeconds(1));
+            assertThat(sampleThread.get()).isEqualTo("metric-sample");
+            assertThat(checkThreads).containsExactly("maintenance");
+        } finally {
+            release.countDown();
+            started.stopSchedulers();
+        }
+    }
+
+    /**
+     * 3.6 수정 J369: T5 마지막 스냅샷의 DB 읽기는 정상 종료 마감의 남은 시간 안에서만 기다린다. 표본이 DB 읽기에 막혀 있고 마지막 줄의 적체
+     * 읽기도 막혀도 종료는 마감(2초) 안에 끝나고, 마지막 줄은 적체 네 키를 뺀 채 남는다(OD-6 기존 규칙). 리뷰: 이 읽기가 마감 계산 밖이라 DB가
+     * 느리면 30초 유예를 넘겼다.
+     */
+    @Test
+    void aStuckDatabaseCannotStretchTheShutdownThroughTheLastSnapshot() throws Exception {
+        CountDownLatch release = new CountDownLatch(1);
+        CountDownLatch reading = new CountDownLatch(1);
+        CoreOutboxRepository slowOutbox = mock(CoreOutboxRepository.class);
+        when(slowOutbox.backlog()).thenAnswer(call -> {
+            reading.countDown();
+            release.await(5, TimeUnit.SECONDS);
+            return new CoreOutboxRepository.Backlog(0, java.util.Optional.empty(), 0);
+        });
+        CoreInboxRepository quietInbox = mock(CoreInboxRepository.class);
+        TestEvents lines = new TestEvents(clock);
+        DbPoolWaitMonitor pool = new DbPoolWaitMonitor(Duration.ofMillis(100),
+                new DefaultListableBeanFactory().getBeanProvider(io.micrometer.core.instrument.MeterRegistry.class),
+                new DefaultListableBeanFactory().getBeanProvider(CoreMetrics.class));
+        MetricSnapshotJob job = new MetricSnapshotJob(clock, Duration.ofSeconds(60), slowOutbox, quietInbox, pool,
+                new SessionStartBreaker(clock, lines.metrics(), 1, Duration.ofSeconds(5)), lines.metrics(), lines.logger(),
+                SystemLoad.platform());
+        CompletableFuture<Void> stuckSample = CompletableFuture.runAsync(job::tick);
+        Duration grace = Duration.ofSeconds(2);
+        DrainingLifecycle draining = new DrainingLifecycle(readiness, mock(CoreStartupSequence.class), events, job, inFlight,
+                clock, grace);
+        try {
+            assertThat(reading.await(10, TimeUnit.SECONDS)).as("표본이 적체 읽기에서 막혔다").isTrue();
+            long begun = System.nanoTime();
+
+            draining.stop();
+
+            assertThat(Duration.ofNanos(System.nanoTime() - begun)).as("정상 종료 마감 안").isLessThan(grace.plusSeconds(1));
+            Map<String, Object> last = LogCapture.attrs(lines.capture().last(EventCode.METRIC_SNAPSHOT).orElseThrow());
+            assertThat(last).as("못 읽은 적체 네 키는 뺀다").doesNotContainKeys("outboxPending", "outboxOldestPendingSec",
+                    "outboxFailed", "inboxDead").containsKeys("poolWaitExceeded", "restTotal");
+            assertThat(lines.capture().events(EventCode.APP_ERROR)).extracting(line -> LogCapture.attrs(line).get("errorKind"))
+                    .contains("SnapshotReadTimeout");
+        } finally {
+            release.countDown();
+            stuckSample.get(10, TimeUnit.SECONDS);
+        }
+        assertThat(lines.capture().events(EventCode.METRIC_SNAPSHOT)).as("마지막 줄 뒤 늦은 표본은 줄을 더 쓰지 않는다").hasSize(1);
     }
 
     @Test

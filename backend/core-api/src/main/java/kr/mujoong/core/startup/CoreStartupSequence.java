@@ -42,8 +42,9 @@ import org.springframework.stereotype.Component;
  *   <li>S3d: FAILED 제어 이벤트 재무장(A1).
  *   <li>S3f: 크래시로 남은 Outbox 선점 · 재시도 대기를 걷는다(R3-5).
  *   <li>S3e: STARTUP_RECOVERY 한 줄(실패해도 기동은 계속).
- *   <li>S4: outbox-sender · inbox-repoll · maintenance 스케줄러를 고정 지연으로 시작한다(처리 풀은 디스패처가 가진다). maintenance는
- *       METRIC_SNAPSHOT 표본도 {@code mujoong.observability.system-sample-interval}마다 돌린다(OD-6, 3.6 수정 J326).
+ *   <li>S4: outbox-sender · inbox-repoll · maintenance · metric-sample 스케줄러를 고정 지연으로 시작한다(처리 풀은 디스패처가 가진다).
+ *       METRIC_SNAPSHOT 표본은 {@code mujoong.observability.system-sample-interval}마다 표본 전용 metric-sample이 돌린다(OD-6, 3.6 수정
+ *       J326 · J368 — DB 읽기에 막혀도 maintenance의 DB 점검자 주기가 밀리지 않게).
  *   <li>S6: 준비 상태 READY.
  * </ol>
  *
@@ -164,7 +165,10 @@ public class CoreStartupSequence implements SmartLifecycle {
                 messagingCleanupJob::runOnce);
         fixedDelay(maintenance, properties.observability().logMergeWindow(), EventLog.Component.CORE_MAINTENANCE,
                 events::flushMerged);
-        fixedDelay(maintenance, properties.observability().systemSampleInterval(), EventLog.Component.CORE_MAINTENANCE,
+
+        // 표본은 DB를 읽어 DB 정지 때 막히므로 maintenance(DB 점검자 · PREPARING 점검)와 다른 스레드다(3.6 수정 J368)
+        ScheduledExecutorService metricSample = scheduler("metric-sample");
+        fixedDelay(metricSample, properties.observability().systemSampleInterval(), EventLog.Component.CORE_MAINTENANCE,
                 metricSnapshotJob::tick);
     }
 
