@@ -13,9 +13,17 @@ json-schema-validator = "3.0.6"
 # 가짜 공급자 시험용 WebSocket 서버(test-support 전용, J110 · J129)
 java-websocket = "1.6.0"
 jacoco = "0.8.14"
+# 보안 패치 판(3.6 수정 라운드 · CI backend-deps Trivy HIGH · CRITICAL). Boot 4.1.1 BOM의 판(Tomcat 11.0.24 ·
+# Jackson 3.1.5 · 2.22.1)보다 높여 덮는다(mujoong.java-conventions). Boot BOM이 이 판 이상을 내면 세 줄과 그 사용처를 지운다.
+tomcat-security = "11.0.26"
+jackson3-security = "3.1.7"
+jackson2-security = "2.22.3"
 
 [libraries]
 spring-boot-bom = { module = "org.springframework.boot:spring-boot-dependencies", version.ref = "spring-boot" }
+# 보안 패치 BOM(위 판 설명). Tomcat은 BOM이 없어 conventions에서 판 제약으로 올린다
+jackson3-bom = { module = "tools.jackson:jackson-bom", version.ref = "jackson3-security" }
+jackson2-bom = { module = "com.fasterxml.jackson:jackson-bom", version.ref = "jackson2-security" }
 
 # 운영(두 앱)
 spring-boot-starter-webmvc = { module = "org.springframework.boot:spring-boot-starter-webmvc" }

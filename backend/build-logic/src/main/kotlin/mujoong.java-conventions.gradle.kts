@@ -37,6 +37,20 @@ dependencies {
     "annotationProcessor"(bom)
     // Gradle 9는 런처를 자동으로 넣지 않고 8.14는 자동 주입이 폐기 예정이다. 판은 Boot BOM(Step 5)
     "testRuntimeOnly"(catalogLibrary("junit-platform-launcher"))
+
+    // 보안 패치 판(3.6 수정 라운드 · CI backend-deps): Boot 4.1.1 BOM보다 새 판으로 올린다. Gradle은 판이 충돌하면
+    // 높은 판을 고르므로 아래 BOM · 제약이 이긴다. 판은 gradle/libs.versions.toml의 *-security 한 곳이다.
+    "implementation"(platform(catalogLibrary("jackson3-bom")))
+    "implementation"(platform(catalogLibrary("jackson2-bom")))
+    val tomcatSecurityVersion = libs.findVersion("tomcat-security")
+        .orElseThrow { GradleException("gradle/libs.versions.toml에 tomcat-security 판이 없다") }.requiredVersion
+    constraints {
+        listOf("tomcat-embed-core", "tomcat-embed-el", "tomcat-embed-websocket").forEach { artifact ->
+            "implementation"("org.apache.tomcat.embed:$artifact:$tomcatSecurityVersion") {
+                because("Boot 4.1.1 BOM의 Tomcat 11.0.24 CRITICAL(CVE-2026-65182 · CVE-2026-65905 · CVE-2026-68525)")
+            }
+        }
+    }
 }
 
 tasks.withType<JavaCompile>().configureEach {
