@@ -36,7 +36,9 @@ if [ "$mode" = compose ]; then
     [ -f "$VERIFY_ENV_DIR/$f" ] || die_prereq "env 파일이 없다: build/verify/env/$f"
   done
 else
-  [ -f "$VERIFY_HOST_DIR/pgpass" ] && [ -f "$VERIFY_HOST_DIR/pg.port" ] || die_prereq "로컬 클러스터 접속 정보가 없다(B가 먼저 띄운다)"
+  if [ ! -f "$VERIFY_HOST_DIR/pgpass" ] || [ ! -f "$VERIFY_HOST_DIR/pg.port" ]; then
+    die_prereq "로컬 클러스터 접속 정보가 없다(B가 먼저 띄운다)"
+  fi
 fi
 
 # probe_sql <라벨=문장>... — DO 블록 묶음(문장은 상수, 값 없음)

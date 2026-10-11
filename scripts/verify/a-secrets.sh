@@ -54,7 +54,7 @@ pattern_rel=""
 case "$PATTERN_FILE" in "$root"/*) pattern_rel="${PATTERN_FILE#"$root"/}" ;; esac
 git ls-files -z -co --exclude-standard | while IFS= read -r -d '' f; do
   [ "$f" = "$pattern_rel" ] && continue
-  [ -f "$f" ] && [ ! -L "$f" ] || continue
+  if [ ! -f "$f" ] || [ -L "$f" ]; then continue; fi
   printf '%s\0' "$f"
 done >"$work/files"
 file_count="$(tr -cd '\0' <"$work/files" | wc -c)"

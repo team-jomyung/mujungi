@@ -13,7 +13,7 @@
 #   ⑥ 앱 이미지에 시험 클래스 · 시험 설정 · 시험 라이브러리 0건(SD-25)
 #   ⑦ web을 실제 옵션(read_only · cap_drop ALL · tmpfs · HOSTNAME=0.0.0.0 · PORT=3000)으로 띄워 컨테이너 안 127.0.0.1:3000/healthz 200(R4-16)
 #   ⑧ 업스트림이 없는 구성에서 / · /api/health · /ws/device가 상태 502를 유지하고 본문만 점검 페이지 · JSON(UPSTREAM_UNAVAILABLE)이며,
-#      앱이 낸 503은 그대로 통과한다(R4-17 · NFR4.13)
+#      앱이 낸 503은 그대로 통과한다(R4-17 · NFR4.13). 앱 컨테이너를 멈추면(docker stop) 1초 안 502 봉투, 다시 띄우면 앱 응답(J347)
 #
 # 쓰는 법: bash infra/ci/image-checks.sh [--registry <레지스트리>] [--tag <태그>] [--only 1,2,...] [--image <이름>=<참조>]...
 #   이름: core-api realtime web migrate backup infra fake-provider. --image로 하나씩 바꿀 수 있다(시험용).
@@ -216,11 +216,18 @@ for it in items:
         print(it["id"])
 PY
   fi
+  # 취약점은 종료 코드 3, Trivy 자체 오류(이미지를 못 읽음 · DB 실패 등)는 1이다. 둘 다 FAIL이지만 사유를 나눠 적는다(J353:
+  # 3.6에서 실행기 /tmp 읽기 전용 오류를 '취약점'으로 잘못 셌다). 판정 인자(심각도 · --ignore-unfixed · 예외 목록)는 그대로다
+  local rc
   for name in core-api realtime web migrate backup; do
-    if ! trivy image --quiet --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 --ignorefile "$ignore" \
-      "$(ref "$name")" >"$work/trivy-$name.log" 2>&1; then
-      problems+=("$name high 이상 취약점(로그는 CI 산출물)")
-    fi
+    rc=0
+    trivy image --quiet --severity HIGH,CRITICAL --ignore-unfixed --exit-code 3 --ignorefile "$ignore" \
+      "$(ref "$name")" >"$work/trivy-$name.log" 2>&1 || rc=$?
+    case "$rc" in
+      0) ;;
+      3) problems+=("$name high 이상 취약점 $(grep -oE '^Total: [0-9]+' "$work/trivy-$name.log" | awk '{ n += $2 } END { print n + 0 }')건") ;;
+      *) problems+=("$name trivy 실행 오류(rc=$rc): $(grep -m1 -E 'FATAL|ERROR' "$work/trivy-$name.log" | cut -c1-160)") ;;
+    esac
   done
   if [ "${#problems[@]}" -gt 0 ]; then fail ③ "${problems[*]}"; else pass ③; fi
 }
@@ -398,10 +405,10 @@ check8() {
     >/dev/null 2>&1
   SERVICE_HOST=$host MUJOONG_SECURITY_ALLOWED_ORIGIN="https://$host:8443" \
     bash "$ROOT/infra/bin/render-nginx" --out "$dir/nginx" >/dev/null
-  # 업스트림을 시험 망(172.30.99.0/24) 주소로 바꾼다(demo · 검증 스택 망과 겹치지 않게)
-  sed -i 's/172\.30\.10\./172.30.99./' "$dir/nginx/upstreams.conf"
   chmod -R go+rX "$dir"
-  # 대역: .11 · .13은 포트를 듣지 않는 컨테이너(연결 거부 → 502), .12는 /api/health에 503을 내는 앱 대역
+  # 업스트림은 서비스 이름(web · core-api · realtime)을 Docker 내장 DNS로 다시 해석한다(J347). 시험 망(172.30.99.0/24, demo · 검증
+  # 스택 망과 겹치지 않게)에 같은 이름(망 별칭)의 대역을 둔다: web · realtime은 포트를 듣지 않는 컨테이너(연결 거부 → 502),
+  # core-api는 /api/health에 503을 내는 앱 대역
   cat >"$dir/stub/refuse.conf" <<'NGX'
 events {}
 http { server { listen 9; return 444; } }
@@ -415,25 +422,27 @@ NGX
   docker network create --subnet 172.30.99.0/24 "$edge_net" >/dev/null
   local image
   image="$(grep -E '^\s+image:\s*nginx:' "$ROOT/infra/compose.demo.yml" | head -n 1 | sed -E 's/^\s+image:\s*//')"
-  run_stub() {
-    docker run -d --name "$1" --network "$edge_net" --ip "$2" -v "$dir/stub/$3:/etc/nginx/stub.conf:ro" \
+  run_stub() { # <컨테이너 이름> <서비스 이름(망 별칭)> <설정>
+    docker run -d --name "$1" --network "$edge_net" --network-alias "$2" -v "$dir/stub/$3:/etc/nginx/stub.conf:ro" \
       --entrypoint nginx "$image" -g 'daemon off;' -c /etc/nginx/stub.conf >/dev/null
   }
-  run_stub imgchk-up11 172.30.99.11 refuse.conf
-  run_stub imgchk-up12 172.30.99.12 app503.conf
-  run_stub imgchk-up13 172.30.99.13 refuse.conf
+  run_stub imgchk-up11 web refuse.conf
+  run_stub imgchk-up12 core-api app503.conf
+  run_stub imgchk-up13 realtime refuse.conf
   docker run -d --name imgchk-ngx --network "$edge_net" --ip 172.30.99.10 -p 127.0.0.1::443 \
     -v "$dir/nginx:/etc/nginx/mujoong:ro" -v "$dir/certs:/etc/letsencrypt:ro" \
     --entrypoint nginx "$image" -g 'daemon off;' -c /etc/nginx/mujoong/nginx.conf >/dev/null
   local port i
   port="$(docker port imgchk-ngx 443/tcp | head -n 1 | sed 's/.*://')"
+  # c8 [curl 인자...] — 표준 출력 "<상태> <걸린 초>", 본문은 $dir/body
   c8() {
     curl -sS --noproxy '*' --max-time 10 --cacert "$dir/certs/live/$host/fullchain.pem" \
-      --resolve "$host:$port:127.0.0.1" -o "$dir/body" -w '%{http_code}' "$@" "https://$host:$port$path" 2>/dev/null || true
+      --resolve "$host:$port:127.0.0.1" -o "$dir/body" -w '%{http_code} %{time_total}\n' "$@" "https://$host:$port$path" 2>/dev/null \
+      || echo "000 0"
   }
-  local path=/ code
+  local path=/ code secs
   for i in $(seq 1 20); do
-    code="$(c8)"
+    read -r code secs < <(c8)
     [ "$code" != "000" ] && [ -n "$code" ] && break
     sleep 0.5
   done
@@ -441,23 +450,37 @@ NGX
     problems+=("/ 상태 $code(기대 502 + 점검 페이지)")
   fi
   path=/ws/device
-  code="$(c8 --http1.1 -H 'Connection: Upgrade' -H 'Upgrade: websocket' -H 'Sec-WebSocket-Version: 13' \
-    -H 'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==')"
+  read -r code secs < <(c8 --http1.1 -H 'Connection: Upgrade' -H 'Upgrade: websocket' -H 'Sec-WebSocket-Version: 13' \
+    -H 'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==')
   if [ "$code" != 502 ] || ! grep -qF '"code":"UPSTREAM_UNAVAILABLE"' "$dir/body"; then
     problems+=("/ws/device 상태 $code(기대 502 + UPSTREAM_UNAVAILABLE)")
   fi
+  # 기동 직후에는 이름 해석이 끝나기 전일 수 있어 앱 응답(503)이 올 때까지 잠깐(최대 5초) 다시 부른다
   path=/api/health
-  code="$(c8)"
+  for i in $(seq 1 10); do
+    read -r code secs < <(c8)
+    [ "$code" = 503 ] && break
+    sleep 0.5
+  done
   if [ "$code" != 503 ] || ! grep -qF '"code":"SERVICE_NOT_READY"' "$dir/body"; then
     problems+=("앱이 낸 503이 그대로 통과하지 않았다(상태 $code)")
   fi
-  # 앱 대역을 연결 거부로 바꾸면 /api/health도 502 봉투
-  docker rm -f imgchk-up12 >/dev/null
-  run_stub imgchk-up12 172.30.99.12 refuse.conf
-  code="$(c8)"
-  if [ "$code" != 502 ] || ! grep -qF '"code":"UPSTREAM_UNAVAILABLE"' "$dir/body"; then
-    problems+=("/api/health 상태 $code(기대 502 + UPSTREAM_UNAVAILABLE)")
+  # 앱 컨테이너를 멈추면(docker stop) 이름이 풀리지 않아 곧바로 502 봉투(NFR4.13 · J347). 다시 해석 주기(1초)와 해석기 캐시(1초)를
+  # 넘겨 기다린 뒤 잰다(그 사이 요청은 이전 주소로 가 연결 3초 뒤 504일 수 있다 — 실측 0.4 ~ 1.8초 창, J347 남은 위험)
+  docker stop -t 2 imgchk-up12 >/dev/null
+  sleep 3
+  read -r code secs < <(c8)
+  if [ "$code" != 502 ] || ! grep -qF '"code":"UPSTREAM_UNAVAILABLE"' "$dir/body" || ! awk -v s="$secs" 'BEGIN { exit !(s < 1) }'; then
+    problems+=("앱 정지 뒤 /api/health 상태 $code · ${secs}초(기대 1초 안 502 + UPSTREAM_UNAVAILABLE)")
   fi
+  # 다시 띄우면 이름이 다시 풀려 앱 응답(503)이 돌아온다
+  docker start imgchk-up12 >/dev/null
+  for i in $(seq 1 10); do
+    sleep 0.5
+    read -r code secs < <(c8)
+    [ "$code" = 503 ] && break
+  done
+  [ "$code" = 503 ] || problems+=("앱을 다시 띄운 뒤 /api/health 상태 $code(기대 앱이 낸 503)")
   docker rm -f imgchk-ngx imgchk-up11 imgchk-up12 imgchk-up13 >/dev/null 2>&1 || true
   docker network rm "$edge_net" >/dev/null 2>&1 || true
   if [ "${#problems[@]}" -gt 0 ]; then fail ⑧ "${problems[*]}"; else pass ⑧; fi

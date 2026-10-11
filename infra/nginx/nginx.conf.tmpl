@@ -86,7 +86,8 @@ http {
     gzip_vary on;
     gzip_types text/css application/javascript application/json image/svg+xml;
 
-    # 업스트림(edge 망 고정 IP, infra-spec N-2) — render-nginx가 upstreams.conf를 쓴다
+    # 업스트림 — render-nginx가 upstreams.conf를 쓴다(Compose: 서비스 이름을 Docker 내장 DNS로 다시 해석, 멈춘 앱은 곧바로 502, J347 ·
+    # dev 호스트: host.docker.internal)
     include /etc/nginx/mujoong/upstreams.conf;
 
     include /etc/nginx/mujoong/conf.d/*.conf;

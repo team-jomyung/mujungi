@@ -66,6 +66,7 @@
 | `host-collect.sh` | cron 1분 수집기(`host-collect.log` · `metrics-snapshot.log`) |
 | `check-since-last` | 점검표 계산(마지막 점검 이후 최댓값) |
 | `log-hygiene-check` | 로그 위생(금지 이름 · 비밀 값 · 형식) 위반 건수 |
+| `turn-metrics` | 한 턴 지연 로그(LATENCY_TURN · SESSION_ITEMS_SERVED)로 NFR5.1 · 5.2 · 5.3(서버 몫) 값 · 표본 규칙 판정 · 미관측 사유(점검표 9번, A-13) |
 | `backup-trigger` | 배포 직전 · 정지 직전 · 기동 직후 · 수동 백업 |
 | `power-mark` | `power.log`의 `POWER_READY` · `POWER_STOP` |
 | `render-env` · `render-nginx` · `render-pgconf` · `infra-validate` | env 파일 렌더 · Nginx 설정 렌더 · PostgreSQL 설정 렌더 · 정적 검사 |
@@ -425,6 +426,7 @@ D4 실패는 구 앱이 계속 돌고 서비스 중단이 없다(`DEPLOY_END res
 ```bash
 /opt/mujoong/current/bin/check-since-last                       # [1] ~ [11]의 값과 알림
 /opt/mujoong/current/bin/check-since-last --record "<결과 · 조치 한 줄>"   # 점검을 마치며 기록
+/opt/mujoong/current/bin/turn-metrics                           # [9] 지연: NFR5.1 · 5.2 · 5.3(서버 몫), 표본 10 미만이면 보류
 ```
 
 알림이 나오면 monitoring 2.9.1 표대로 먼저 볼 곳을 보고 9절의 절차를 쓴다. `[7]` 가용성은 프로브 위치에서 `probe-daily`(11/2 측정 몫),
@@ -595,7 +597,7 @@ KEEP=1 bash scripts/verify.sh         # 끝에 스택만 남긴다(생성 비밀
 | `F FAIL` 또는 `T FAIL`만 | 실행 중 다른 작업(편집기 · 다른 에이전트)이 저장소를 고쳤다. 저장소가 조용할 때 다시 돌린다. 감사 기록(`aidlc/**/audit/`)은 비교에서 빠진다 |
 | A1의 `MujoongPostgresTest`(local)만 실패 | root로 돌 때 저장소 경로의 상위 디렉터리를 `postgres` 사용자가 지나가지 못한다(예: 0700 디렉터리 아래 복사본). 저장소를 그런 경로 밖에 두거나 `-Pmujoong.test.db=docker` 환경에서 돈다 |
 | 이미지 받기 429(Docker Hub) | 고정 태그가 로컬에 있으면 auto 모드는 pull 성공과 같이 본다. 한 번 받아 두면 된다. 다른 태그로 바꾸지 않는다 |
-| 사내 프록시 · 사설 CA 환경의 이미지 빌드 | 앱 이미지는 호스트에서 만든 jar · standalone을 COPY하고 RUN 단계 네트워크가 없다. CA가 필요한 환경에서는 `build-images.sh --extra-ca <파일>`이 BuildKit 비밀로만 넘긴다(빌드 인자 · ENV 금지, R-03) |
+| 사내 프록시 · 사설 CA 환경의 이미지 빌드 | 앱 이미지는 호스트에서 만든 jar · standalone을 COPY하고, 받을 파일(OS 패치 .deb · Flyway jar)은 BuildKit ADD가 sha256으로 고정해 받는다(RUN 단계 네트워크 없음). backup의 supercronic 빌드 단계만 Go 모듈을 받으므로 CA가 필요한 환경에서는 `build-images.sh --extra-ca <파일>`이 BuildKit 비밀로만 넘긴다(빌드 인자 · ENV 금지, R-03 · J352) |
 | 이전 실행의 잔여물 | 시작할 때 `docker compose -p mujoong-verify down -v --remove-orphans`와 남은 host 프로세스 · `/tmp/mujoong-verify-pg.*` 정리를 먼저 한다. SIGKILL로 끊긴 뒤 손으로 지울 때도 같은 명령을 쓴다 |
 | `B4.host`가 000(host 모드) | dev-edge는 모르는 Host · SNI를 연결 끊기로 거절한다(Nginx는 404 · TLS 거절). 둘 다 통과로 센다 |
 

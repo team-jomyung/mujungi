@@ -33,6 +33,11 @@ export FLYWAY_USER="mujoong_owner"
 export FLYWAY_PASSWORD="$DB_OWNER_PASSWORD"
 unset DB_OWNER_PASSWORD
 
+# Flyway CLI: 이미지의 최소 구성 jar(/flyway/lib)로 배포판 실행 스크립트와 같은 진입 클래스를 부른다(J351)
+flyway() {
+  java -cp '/flyway/lib/*' org.flywaydb.commandline.Main "$@"
+}
+
 for location in core realtime; do
   echo "mujoong-migrate: ${location} 위치 ${command} 시작"
   flyway -configFiles="/flyway/conf/flyway-${location}.conf" "$command"

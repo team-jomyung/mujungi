@@ -16,10 +16,13 @@
 #   bad-latest-tag.yml                     실패 invariant-8 (latest 태그)
 #   bad-profile-demo-dev.yml               실패 demo-profile (demo + dev, CD-7)
 #   bad-devlogin-on.yml                    실패 demo-profile (demo에서 시험 로그인, CD-7)
+#   남의 env 파일 하나만 받는 변형          실패 secret-env-files (자기 이름 env 파일 규칙, Compose 판과 무관 J346)
 #   ok-dev-loopback.yml (dev)              통과 (dev 127.0.0.1 게시는 허용)
 #   bad-dev-public-port.yml (dev)          실패 (dev 0.0.0.0 게시)
-#   배포 D3 꼴(--env-dir · --release-env)  통과
-#   Nginx 템플릿 변형 6종                  실패 nginx (방어 지시어 빠짐 · XFF 이어 붙이기 · 5xx 상태 치환 · ws 버퍼링 · 문법 오류 · 정규식 location)
+#   배포 D3 꼴(--env-dir · --release-env)  통과(env 파일 안의 비밀은 environment: 위반이 아니다 — Compose v2.38 · v5.6 모두, J346)
+#   D3 env 파일에 demo가 아닌 프로필 줄    실패 demo-profile (env 파일 자체 검사, Compose 판과 무관 J346)
+#   Nginx 템플릿 변형 7종                  실패 nginx (방어 지시어 빠짐 · XFF 이어 붙이기 · 5xx 상태 치환 · ws 버퍼링 · 문법 오류 · 정규식 location ·
+#                                          고정 IP 업스트림(이름 재해석 없음, NFR4.13 J347))
 #   마이그레이션 변형                      금지 문장 실패 · 허용 문장 통과 · --allow-contract 통과
 #   번들 Dockerfile 변형                   실패 bundle (compose.ci.yml 복사)
 #
@@ -91,6 +94,14 @@ prof=(--only demo-profile --compose "$DEMO")
 expect "demo-profile-as-is" 0 "" -- "${prof[@]}"
 expect "bad-profile-demo-dev" 1 "core-api SPRING_PROFILES_ACTIVE가 demo 하나가 아니다(demo,dev)" -- "${prof[@]}" --compose "$SAMPLES/bad-profile-demo-dev.yml"
 expect "bad-devlogin-on" 1 "core-api MUJOONG_DEVLOGIN_ENABLED가 켜져 있다" -- "${prof[@]}" --compose "$SAMPLES/bad-devlogin-on.yml"
+# 남의 env 파일 하나만 받는 변형(파일 수는 1). Compose v2.38은 config에서 env_file 키를 지우므로 이름 검사가 판과 무관한지 본다(J346)
+cat >"$work/other-env-file.yml" <<'YAML'
+services:
+  web:
+    env_file: !override
+      - ${MUJOONG_ENV_DIR:-/opt/mujoong/env}/realtime.env
+YAML
+expect "env-file-of-other-service" 1 "web가 남의 env 파일을 받는다" -- --only secret-env-files --compose "$DEMO" --compose "$work/other-env-file.yml"
 
 # 3 dev 파일(불변식은 demo에만, dev는 127.0.0.1 게시만)
 dev=(--kind dev --only "compose-config,compose-invariants,secret-env-files" --compose "$DEV")
@@ -105,6 +116,13 @@ expect "d3-env-dir" 0 "" -- --only compose-invariants,secret-env-files --env-dir
   --release-env "$work/d3/release.env" --mem-limit-bytes 5700000000
 expect "d3-memtotal-too-small" 1 "invariant-3:" -- --only compose-invariants --env-dir "$work/d3/env" \
   --release-env "$work/d3/release.env" --mem-limit-bytes 4000000000
+# env 파일 안의 비밀(값이 든 렌더 결과)은 environment: 위반이 아니다 — Compose v2.38이 env 파일을 펼쳐도 같다(J346)
+expect "d3-env-file-secrets-are-not-environment" 0 "PASS secret-env-files" -- --only secret-env-files,demo-profile \
+  --env-dir "$work/d3/env" --release-env "$work/d3/release.env"
+cp -a "$work/d3/env" "$work/d3/env-profile"
+printf 'SPRING_PROFILES_ACTIVE=demo,dev\n' >>"$work/d3/env-profile/realtime.env"
+expect "d3-env-file-profile-line" 1 "realtime env 파일에 demo가 아닌 SPRING_PROFILES_ACTIVE" -- --only demo-profile \
+  --env-dir "$work/d3/env-profile" --release-env "$work/d3/release.env"
 
 # 5 Nginx 템플릿 변형(사본을 고쳐 --nginx-src로 준다)
 nginx_variant() {
@@ -134,6 +152,9 @@ nginx_variant syntax conf.d/https443.conf.tmpl "    ssl_session_tickets off;=>  
 expect "nginx-syntax-error" 1 "nginx -t https/compose" -- --only nginx --nginx-src "$work/ngx-syntax"
 nginx_variant regex-location conf.d/https443.conf.tmpl '    location ^~ /internal/ {=>    location ~ ^/internal/ {'
 expect "nginx-regex-location" 1 "정규식 location" -- --only nginx --nginx-src "$work/ngx-regex-location"
+# 고정 IP 업스트림으로 되돌리면 멈춘 앱이 3초 뒤 504가 된다(NFR4.13, J347) — 이름 재해석(resolve)이 빠지면 실패
+nginx_variant fixed-ip upstreams/compose.conf "    server core-api:8080 resolve;=>    server 172.30.10.12:8080;"
+expect "nginx-fixed-ip-upstream" 1 "업스트림 mujoong_core_api가 core-api:8080 resolve가 아니다" -- --only nginx --nginx-src "$work/ngx-fixed-ip"
 
 # 6 마이그레이션 expand 검사
 mig() {

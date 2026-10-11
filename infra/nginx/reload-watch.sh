@@ -37,7 +37,7 @@ nginx -c "$conf" -g 'daemon off;' &
 nginx_pid=$!
 
 stopping=0
-# shellcheck disable=SC2329  # trap이 부른다
+# shellcheck disable=SC2317,SC2329  # trap이 부른다(J345: shellcheck 0.9.0은 trap 처리기 본문을 SC2317, 0.10+는 SC2329로 오판)
 stop() {
   stopping=1
   kill -QUIT "$nginx_pid" 2>/dev/null || true

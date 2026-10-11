@@ -116,10 +116,10 @@ mujoong_deploy_log "event=DEPLOY_START deployId=$deploy_id sha=$sha prevSha=$pre
 printf '%s %s\n' "$deploy_id" D1 >"$state_file"
 current_step=D1
 
-# shellcheck disable=SC2329  # trap(EXIT · INT · TERM)이 부른다
+# shellcheck disable=SC2317,SC2329  # trap(EXIT · INT · TERM)이 부른다(J345: 0.9.0 SC2317 · 0.10+ SC2329 오판)
 ended() { grep -qE "event=DEPLOY_END deployId=$deploy_id( |$)" "$MUJOONG_LOG_DIR/deploy.log" 2>/dev/null; }
 # write_end_fallback <FAIL|ABORTED> — deploy-apply가 끝 줄을 쓰지 못하고 끝났을 때만
-# shellcheck disable=SC2329  # trap(EXIT · INT · TERM)이 부른다
+# shellcheck disable=SC2317,SC2329  # trap(EXIT · INT · TERM)이 부른다(J345: 0.9.0 SC2317 · 0.10+ SC2329 오판)
 write_end_fallback() {
   local step
   ended && return 0
@@ -128,7 +128,7 @@ write_end_fallback() {
   mujoong_deploy_log "event=DEPLOY_END deployId=$deploy_id sha=$sha result=$1 failedStep=$step durationSec=$(($(mujoong_epoch) - started)) downtimeSec=NA deviceDownSec=NA budget=NA"
 }
 docker_config=""
-# shellcheck disable=SC2329  # trap(EXIT · INT · TERM)이 부른다
+# shellcheck disable=SC2317,SC2329  # trap(EXIT · INT · TERM)이 부른다(J345: 0.9.0 SC2317 · 0.10+ SC2329 오판)
 on_exit() {
   local rc=$?
   trap - EXIT INT TERM
@@ -140,7 +140,7 @@ on_exit() {
   grep -E "event=DEPLOY_END deployId=$deploy_id( |$)" "$MUJOONG_LOG_DIR/deploy.log" 2>/dev/null | tail -n 1 || true
   exit "$rc"
 }
-# shellcheck disable=SC2329  # trap(EXIT · INT · TERM)이 부른다
+# shellcheck disable=SC2317,SC2329  # trap(EXIT · INT · TERM)이 부른다(J345: 0.9.0 SC2317 · 0.10+ SC2329 오판)
 on_signal() {
   trap - INT TERM
   write_end_fallback ABORTED

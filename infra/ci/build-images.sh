@@ -6,8 +6,8 @@
 #   core-api  ← backend/core-api/build/libs/core-api.jar               (backend/core-api/Dockerfile, 맥락 backend/)
 #   realtime  ← backend/realtime-activity/build/libs/realtime-activity.jar (backend/realtime-activity/Dockerfile, 맥락 backend/)
 #   web       ← frontend/.next/standalone · .next/static                (frontend/Dockerfile, 맥락 frontend/)
-#   migrate   ← 두 앱의 db/migration 위치(BuildKit 이름 있는 맥락)       (infra/migrate/Dockerfile, 맥락 infra/migrate/)
-#   backup    ← postgres:16.15 + supercronic(ADD --checksum)            (infra/backup/Dockerfile, 맥락 infra/backup/)
+#   migrate   ← 두 앱의 db/migration 위치(BuildKit 이름 있는 맥락) + Flyway CLI 최소 jar(ADD --checksum, J351) (infra/migrate/Dockerfile, 맥락 infra/migrate/)
+#   backup    ← postgres:16.15 + supercronic(고정 소스를 고정 Go로 빌드, J352) (infra/backup/Dockerfile, 맥락 infra/backup/)
 #   infra     ← infra/ 번들 목록 + 렌더한 release.env                   (infra/bundle/Dockerfile, 맥락 infra/)
 #   fake-provider ← tools/(시험 전용, --no-test-images면 빼고, 앱 이미지 6종과 섞지 않는다) (tools/fake-provider/Dockerfile)
 #
@@ -15,10 +15,11 @@
 # 지문은 빌드 앞뒤로 두 번 계산해 같을 때만 성공한다(빌드 중 소스가 바뀌면 라벨이 거짓이 되므로 실패, J134 (가)).
 # 산출물이 자기 소스보다 오래되면(소스 파일이 산출물보다 새것) 빌드하지 않고 실패한다(낡은 jar · standalone에 새 지문을 붙이지 않음).
 #
-# 샌드박스 빌드 규칙(R-03): 지금 Dockerfile 6종에는 네트워크를 쓰는 RUN 단계가 없다(backup의 supercronic은 BuildKit ADD가
-# sha256으로 고정해 받는다). 그래도 앞으로 그런 단계가 생길 때를 위해 --extra-ca <CA 묶음>을 주면 모든 빌드에
-# `--network host --secret id=extra_ca --secret id=proxy_env`를 붙인다. 값은 BuildKit 비밀 마운트로만 넘기고 빌드 인자 · ENV로
-# 넘기지 않는다(docker history에 남지 않음). CI에서는 주지 않는다.
+# 샌드박스 빌드 규칙(R-03): 받을 파일(OS 패치 .deb · Flyway jar)은 BuildKit ADD가 sha256으로 고정해 받고 RUN 단계는 네트워크를
+# 쓰지 않는다. 예외는 backup의 supercronic 빌드 단계 하나다(Go 모듈을 받는다, J352). 프록시 · CA가 필요한 곳(샌드박스)에서는
+# --extra-ca <CA 묶음>을 주면 모든 빌드에 `--network host --secret id=extra_ca --secret id=proxy_env`를 붙이고, 그 단계가
+# 비밀 마운트(required=false)로만 읽는다. 값은 빌드 인자 · ENV로 넘기지 않는다(docker history · 실행 이미지에 남지 않음).
+# CI에서는 주지 않는다(바로 받는다).
 #
 # 쓰는 법: bash infra/ci/build-images.sh [--registry <레지스트리>] [--tag <태그>] [--only <이름,...>] [--no-test-images]
 #                                        [--extra-ca <파일>] [--log-dir <디렉터리>] [--fingerprint sha256:<64자>]

@@ -9,7 +9,7 @@
 # 쓰는 법: render-nginx --out <디렉터리> [--mode https|bootstrap] [--upstreams compose|host] [--env-file <파일>]...
 #   --mode https      정상 설정(80 ACME · 301 + 443) — 기본값
 #   --mode bootstrap  최초 인증서 발급 전 80 전용 임시 설정(443 없음, infra-spec 4.5.1 5-c)
-#   --upstreams compose  edge 망 고정 IP(demo · 검증 스택, 기본값)  /  host  dev 호스트 프로세스(compose.dev.yml 프로필 nginx)
+#   --upstreams compose  edge 망 서비스 이름(Docker 내장 DNS 재해석, demo · 검증 스택, 기본값, J347)  /  host  dev 호스트 프로세스(compose.dev.yml 프로필 nginx)
 #   --env-file        값을 읽을 env 파일(여러 번 가능, 예: /opt/mujoong/env/nginx.env). 아래 세 이름만 읽고 나머지 줄은 무시한다.
 #                     파일을 셸로 source하지 않는다. 명령 환경에 이미 있는 값이 우선한다.
 #   --src <디렉터리>  템플릿 디렉터리(기본 이 스크립트의 ../nginx). infra/ci/test-infra-validate.sh가 일부러 고친 사본을 줄 때만 쓴다

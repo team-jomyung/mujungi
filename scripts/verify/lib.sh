@@ -171,7 +171,7 @@ java_major() {
 find_java21() {
   local candidate
   for candidate in "${JAVA_HOME:+$JAVA_HOME/bin/java}" "$(command -v java 2>/dev/null || true)" /usr/lib/jvm/*21*/bin/java; do
-    [ -n "$candidate" ] && [ -x "$candidate" ] || continue
+    if [ -z "$candidate" ] || [ ! -x "$candidate" ]; then continue; fi
     if [ "$(java_major "$candidate")" = 21 ]; then
       echo "$candidate"
       return 0

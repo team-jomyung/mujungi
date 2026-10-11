@@ -350,12 +350,14 @@ jobs:
           echo "REGISTRY=$registry" >>"$GITHUB_ENV"
           bash infra/ci/build-images.sh --registry "$registry" --tag "$GITHUB_SHA" --log-dir "$RUNNER_TEMP/image-logs"
       - name: trivy 실행기(다이제스트 고정 이미지, 로컬 이미지는 docker.sock으로 읽는다)
+        # /tmp는 읽기 전용(무시 파일 경로 읽기용)이라 Trivy가 이미지를 내보낼 임시 디렉터리는 쓰기 가능한 TMPDIR로 따로 준다(J353)
         run: |
           set -euo pipefail
-          mkdir -p "$RUNNER_TEMP/bin"
+          mkdir -p "$RUNNER_TEMP/bin" "$RUNNER_TEMP/trivy-tmp"
           cat >"$RUNNER_TEMP/bin/trivy" <<'SH'
           #!/usr/bin/env bash
-          exec docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v /tmp:/tmp:ro -v trivy-cache:/root/.cache \
+          exec docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v /tmp:/tmp:ro \
+            -e TMPDIR=/trivy-tmp -v "$RUNNER_TEMP/trivy-tmp:/trivy-tmp" -v trivy-cache:/root/.cache \
             "$TRIVY_IMAGE" "$@"
           SH
           chmod 0755 "$RUNNER_TEMP/bin/trivy"

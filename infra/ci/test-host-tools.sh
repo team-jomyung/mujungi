@@ -11,6 +11,8 @@
 #     프로필 줄은 실패
 #   점검 도우미(Step 47): check-since-last(MO-4 합성 로그) · log-hygiene-check(MO-3 금지 패턴 · 비밀 값 0건)
 #     · 사건 코드별 attrs 허용 표가 자바 정본(EventCode · AttrKey)과 같은지(python3)
+#     · turn-metrics(MO-4 · NFR5.4 · OD-8, J348): 한 턴 로그로 NFR5.1 · 5.2 · 5.3 값, 표본 규칙(100 이상 p95 · 10 ~ 99 비율 · 10 미만 보류),
+#       경보선(A-13), 기기 시계 추정, 미관측 사유, 보존 폴더 · since, 인자 오류
 #
 # 쓰는 법: bash infra/ci/test-host-tools.sh
 # 표준 출력: 사례마다 `ok <이름>` 또는 `not ok <이름>: <이유>`. 종료 코드: 0 모두 기대대로, 1 하나라도 어긋남, 2 전제 누락(jq · base64)
@@ -418,6 +420,137 @@ PY
 else
   not_ok "log-hygiene-allowlist-matches-java" "python3가 없어 대조하지 못했다(전제 누락)"
 fi
+
+# ---- turn-metrics(MO-4 · NFR5.4 · OD-8, J348): 한 턴 로그만으로 NFR5.1 · 5.2 · 5.3 계산 · 표본 규칙 · 미관측 사유 ---------------------
+readonly TM="$ROOT/infra/bin/turn-metrics"
+iso_ms() { date -u -d "@$(printf '%d.%03d' $(($1 / 1000)) $(($1 % 1000)))" +%Y-%m-%dT%H:%M:%S.%3NZ; }
+# lt <t0 ms> <relayIn> <relayOut|-> <말 끝→재생 시작 ms|-> [clock|recv|none] — LATENCY_TURN 한 줄(시각은 t0 기준 상대값)
+lt() {
+  local t0="$1" rin="$2" rout="$3" tot="$4" mode="${5:-clock}"
+  jq -c -n --arg ts "$(iso_ms "$t0")" --arg te "$(iso_ms "$t0")" --arg fo "$(iso_ms $((t0 + 121)))" \
+    --arg sc "$(iso_ms $((t0 + 1027)))" --arg gp "$(iso_ms $((t0 + 1029)))" --arg ff "$(iso_ms $((t0 + 1036)))" \
+    --arg ds "$([ "$tot" = - ] || iso_ms $((t0 + tot - 1)))" --arg dr "$([ "$tot" = - ] || iso_ms $((t0 + tot + 1)))" \
+    --argjson rin "$rin" --arg rout "$rout" --arg mode "$mode" '
+    { ts: $ts, level: "INFO", traceId: null, component: "LatencyRecorder", event: "LATENCY_TURN", ownerHash: null,
+      attrs: ({ turnSeq: 1, tSpeechEnd: $te, tSpeechEndSource: "PROVIDER_EVENT", tProviderFirstOut: $fo, tSegmentConfirmed: $sc,
+                relayInMs: $rin, providerResponseMs: 104, quietWaitMs: 801 }
+        + (if $rout == "-" then { unobservedReason: "GATE_DISCARD" }
+           else { tGatePass: $gp, tFirstFrameSent: $ff, relayOutMs: ($rout | tonumber) } end)
+        + (if $ds == "" then {}
+           elif $mode == "clock" then { tDevicePlayStart: $ds, tDevicePlayStartRecv: $dr, clockOffsetMs: -1, rttMs: 2 }
+           else { tDevicePlayStartRecv: $dr, rttMs: 4, unobservedReason: "CLOCK_OFFSET_MISSING" } end)) }'
+}
+# sis <tFinal ms> <서버 몫 ms> <speaker> — SESSION_ITEMS_SERVED 한 줄(폴링 몫은 1000ms 고정)
+sis() {
+  jq -c -n --arg ts "$(iso_ms "$1")" --arg tf "$(iso_ms "$1")" --arg rd "$(iso_ms $(($1 + $2)))" --arg fs "$(iso_ms $(($1 + $2 + 1000)))" \
+    --arg sp "$3" '{ ts: $ts, level: "INFO", traceId: null, component: "ViewHandler", event: "SESSION_ITEMS_SERVED", ownerHash: null,
+      attrs: ({ seq: 1, speaker: $sp, tViewItemReady: $rd, tViewItemFirstServed: $fs } + (if $sp == "CHILD" then { tTranscriptFinal: $tf } else {} end)) }'
+}
+base_ms=$(((now_s - 3600) * 1000))
+tm_run() { # <이름> <입력 파일> → $rc · $work/tm.out
+  rc=0
+  bash "$TM" --file "$2" >"$work/tm.out" 2>&1 || rc=$?
+}
+tm_expect() { # <이름> <기대 종료 코드> <출력에 있어야 할 줄(정확히 일치하는 부분 문자열)>...
+  local name="$1" want="$2" miss=()
+  shift 2
+  local s
+  for s in "$@"; do grep -qF -- "$s" "$work/tm.out" || miss+=("$s"); done
+  if [ "$rc" -ne "$want" ] || [ "${#miss[@]}" -gt 0 ]; then
+    not_ok "$name" "종료 코드 $rc(기대 $want), 없는 줄: ${miss[*]:-없음} — $(grep -m1 '^SUMMARY' "$work/tm.out")"
+  else
+    ok "$name"
+  fi
+}
+
+# 1 한 턴 로그(3.6 PT-02 꼴): 정상 턴 1 + 게이트 폐기 턴 1, 아이 · AI 행 — 값 그대로 계산하고 표본 10개 미만이라 보류, 미관측 사유 표시
+{
+  lt "$base_ms" 1 8 1038
+  sis "$base_ms" 9 CHILD
+  sis $((base_ms + 1033)) 0 AI
+  lt $((base_ms + 2169)) 1 - -
+  sis $((base_ms + 2169)) 4 CHILD
+} >"$work/tm-one.jsonl"
+tm_run one "$work/tm-one.jsonl"
+tm_expect "turn-metrics-one-turn(PT-02 꼴, 값 · 보류 · 미관측 사유)" 0 \
+  "= 9ms(두 값이 다 있는 턴 1개)" "보류(표본 1개 < 10, 값 · 건수만)" \
+  "말 끝 → 첫 음성 재생 p95 1038ms(n=1, 기기 시계 보정 1 · 추정 0, 오차 ± 1ms)" \
+  "구간 p95: 첫 출력 121ms · 공급자 응답 104ms · 조용 대기 801ms · 게이트 2ms · 첫 프레임 7ms · 재생 시작 9ms" \
+  "(서버 몫, CHILD) p95 9ms(n=2)" "폴링 몫 p95 1000ms(참고)" "[미관측] 2턴 중 1턴(50%) — 사유: GATE_DISCARD 1" \
+  "SUMMARY turns=2 nfr5.1=보류 nfr5.2=보류 nfr5.3=보류 alerts="
+
+# 2 표본 100개 이상: p95로 판정(모두 목표 안) → 충족 · 종료 코드 0. p95는 가장 가까운 순위(120개 중 114번째: 합계 1400 ~ 1519ms → 1513ms)
+: >"$work/tm-ok.jsonl"
+for i in $(seq 0 119); do
+  t=$((base_ms + i * 5000))
+  { lt "$t" $((5 + i % 3)) $((20 + i % 5)) $((1400 + i)); sis "$t" $((40 + i % 10)) CHILD; } >>"$work/tm-ok.jsonl"
+done
+tm_run ok "$work/tm-ok.jsonl"
+tm_expect "turn-metrics-p95-judged(표본 120)" 0 "= 31ms(두 값이 다 있는 턴 120개)" "p95 1513ms(n=120" \
+  "SUMMARY turns=120 nfr5.1=충족 nfr5.2=충족 nfr5.3=충족 alerts="
+
+# 3 미달 · 경보선(A-13): relayOut 600ms → NFR5.1 미달, 합계 2.2초 → 목표(2.5초) 안이지만 경보선(2.0초) 초과 → 종료 코드 1
+: >"$work/tm-bad.jsonl"
+for i in $(seq 0 119); do
+  t=$((base_ms + i * 5000))
+  { lt "$t" 5 600 2200; sis "$t" 50 CHILD; } >>"$work/tm-bad.jsonl"
+done
+tm_run bad "$work/tm-bad.jsonl"
+tm_expect "turn-metrics-miss-and-alert(A-13)" 1 "→ 미달(p95) · 경보선 초과(A-13)" "→ 충족(p95) · 경보선 초과(A-13)" \
+  "SUMMARY turns=120 nfr5.1=미달 nfr5.2=충족 nfr5.3=충족 alerts=NFR5.1,NFR5.2"
+
+# 4 표본 10 ~ 99: 목표 이내 비율 90% 이상이면 충족(18/20), 미만이면 미달(17/20)
+ratio_case() { # <파일> <목표 밖 행 수>
+  : >"$1"
+  local i
+  for i in $(seq 0 19); do
+    if [ "$i" -lt "$2" ]; then sis $((base_ms + i * 5000)) 900 CHILD; else sis $((base_ms + i * 5000)) 100 CHILD; fi
+  done >>"$1"
+}
+ratio_case "$work/tm-r90.jsonl" 2
+tm_run r90 "$work/tm-r90.jsonl"
+tm_expect "turn-metrics-ratio-90(표본 20, 18 이내)" 1 "→ 충족(목표 이내 90%) · 경보선 초과(A-13)" "nfr5.3=충족"
+ratio_case "$work/tm-r85.jsonl" 3
+tm_run r85 "$work/tm-r85.jsonl"
+tm_expect "turn-metrics-ratio-85(표본 20, 17 이내)" 1 "→ 미달(목표 이내 85%)" "nfr5.3=미달"
+
+# 5 기기 시계 오프셋 없음(CLOCK_OFFSET_MISSING): tDevicePlayStartRecv − rttMs ÷ 2로 추정하고 추정 수 · 사유를 적는다
+lt "$base_ms" 1 8 1500 recv >"$work/tm-est.jsonl"
+tm_run est "$work/tm-est.jsonl"
+tm_expect "turn-metrics-clock-offset-estimate" 0 "p95 1499ms(n=1, 기기 시계 보정 0 · 추정 1, 오차 ± 2ms)" \
+  "[미관측] 1턴 중 1턴(100%) — 사유: CLOCK_OFFSET_MISSING 1"
+
+# 6 호스트 꼴: 합성 컨테이너 로그(docker 시각 앞붙음) + 보존 폴더, since 이전 줄은 뺀다
+r="$work/h-turn"
+mkdir -p "$r/log" "$r/data" "$r/env" "$r/c/archive"
+{
+  printf '%s %s\n' "$(dts $((now_s - 9000)))" "$(lt $(((now_s - 9000) * 1000)) 900 900 9000)"
+  printf '%s %s\n' "$(dts $((now_s - 5000)))" "$(lt $(((now_s - 5000) * 1000)) 3 9 1200)"
+} | gzip >"$r/c/archive/$(date -u -d "@$((now_s - 4000))" +%Y%m%dT%H%M%SZ)-realtime-test.log.gz"
+{
+  printf '%s %s\n' "$(dts $((now_s - 600)))" "$(lt $(((now_s - 600) * 1000)) 2 7 1100)"
+  printf '%s %s\n' "$(dts $((now_s - 600)))" "$(sis $(((now_s - 600) * 1000)) 30 CHILD)"
+  printf '%s %s\n' "$(dts $((now_s - 590)))" '{"ts":"x","level":"INFO","event":"METRIC_SNAPSHOT","attrs":{}}'
+} >"$r/c/realtime.log"
+for svc in core-api web nginx postgres; do : >"$r/c/$svc.log"; done
+rc=0
+MUJOONG_LOG_DIR="$r/log" MUJOONG_DATA_DIR="$r/data" MUJOONG_ENV_DIR="$r/env" \
+  bash "$TM" --container-logs "$r/c" --since "$since_iso" >"$work/tm.out" 2>&1 || rc=$?
+tm_expect "turn-metrics-container-logs(보존 폴더 · since)" 0 "LATENCY_TURN 2줄 · SESSION_ITEMS_SERVED 1줄" \
+  "p95(relayIn) 3ms(n=2) + p95(relayOut) 9ms(n=2) = 12ms" "SUMMARY turns=2 "
+
+# 7 빈 입력 · 인자 오류
+: >"$work/tm-empty.jsonl"
+tm_run empty "$work/tm-empty.jsonl"
+tm_expect "turn-metrics-no-turns" 0 "[미관측] LATENCY_TURN 줄이 없다(턴 0)" "SUMMARY turns=0 nfr5.1=보류 nfr5.2=보류 nfr5.3=보류 alerts="
+bad_args=0
+for args in "--nope" "--file $work/없는-파일.jsonl" "--since 2026-10-11 --file $work/tm-empty.jsonl" "--container-logs $r/c --file $work/tm-empty.jsonl"; do
+  rc=0
+  # shellcheck disable=SC2086  # 인자 목록을 일부러 낱말로 나눈다
+  bash "$TM" $args >/dev/null 2>&1 || rc=$?
+  [ "$rc" -eq 64 ] || bad_args=$((bad_args + 1))
+done
+if [ "$bad_args" -eq 0 ]; then ok "turn-metrics-arg-errors(64)"; else not_ok "turn-metrics-arg-errors" "64가 아닌 경우 ${bad_args}건"; fi
 
 echo "test-host-tools: ${total}건 중 어긋남 ${failures}건"
 if [ "$failures" -gt 0 ]; then

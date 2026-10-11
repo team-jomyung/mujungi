@@ -114,7 +114,7 @@ remove_secrets() {
   rm -rf -- "$VERIFY_ENV_DIR" "$VERIFY_C_DIR" "$VERIFY_CERT_DIR" "$VERIFY_HOST_DIR/pgpass" "$VERIFY_DIR/postgres"
 }
 
-# shellcheck disable=SC2329  # on_exit(trap)이 부른다
+# shellcheck disable=SC2317,SC2329  # on_exit(trap)이 부른다(J345: 0.9.0 SC2317 · 0.10+ SC2329 오판)
 collect_logs() {
   [ -n "$STACK_STARTED" ] || return 0
   if [ "$STACK_STARTED" = compose ] && docker_usable; then
@@ -124,7 +124,7 @@ collect_logs() {
   fi
 }
 
-# shellcheck disable=SC2329  # trap이 부른다
+# shellcheck disable=SC2317,SC2329  # trap이 부른다(J345: 0.9.0 SC2317 · 0.10+ SC2329 오판)
 on_exit() {
   local rc=$?
   trap - EXIT
@@ -332,7 +332,7 @@ report "fingerprint=$START_FINGERPRINT"
 readonly HOST_ARTIFACTS=(backend/core-api/build/libs/core-api.jar backend/realtime-activity/build/libs/realtime-activity.jar
   frontend/.next/standalone/server.js frontend/.next/BUILD_ID)
 
-# shellcheck disable=SC2329  # 아래 함수 · run_fn이 부른다
+# shellcheck disable=SC2317,SC2329  # 아래 함수 · run_fn이 부른다(J345: 간접 호출을 0.9.0은 SC2317, 0.10+는 SC2329로 오판)
 artifact_lines() {
   local f
   for f in "${HOST_ARTIFACTS[@]}"; do
@@ -344,7 +344,7 @@ artifact_lines() {
   done
 }
 
-# shellcheck disable=SC2329  # run_fn이 이름으로 부른다
+# shellcheck disable=SC2317,SC2329  # run_fn이 이름으로 부른다(J345: 간접 호출 오판)
 record_fingerprint() {
   local now
   now="$(bash infra/ci/source-fingerprint.sh)"
@@ -372,7 +372,7 @@ record_fingerprint() {
   echo "PASS F 소스 지문 · 산출물 해시 기록(build/verify/fingerprint)"
 }
 
-# shellcheck disable=SC2329  # run_fn이 이름으로 부른다
+# shellcheck disable=SC2317,SC2329  # run_fn이 이름으로 부른다(J345: 간접 호출 오판)
 engine_check() {
   local problems=()
   if [ "$resolved" = compose ]; then
@@ -419,7 +419,7 @@ run_fn() {
   fi
 }
 
-# shellcheck disable=SC2329  # run_fn이 이름으로 부른다
+# shellcheck disable=SC2317,SC2329  # run_fn이 이름으로 부른다(J345: 간접 호출 오판)
 tree_compare() {
   tree_state >"$TREE_END"
   if cmp -s "$TREE_START" "$TREE_END"; then
