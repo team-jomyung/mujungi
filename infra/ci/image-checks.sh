@@ -13,7 +13,9 @@
 #   ⑥ 앱 이미지에 시험 클래스 · 시험 설정 · 시험 라이브러리 0건(SD-25)
 #   ⑦ web을 실제 옵션(read_only · cap_drop ALL · tmpfs · HOSTNAME=0.0.0.0 · PORT=3000)으로 띄워 컨테이너 안 127.0.0.1:3000/healthz 200(R4-16)
 #   ⑧ 업스트림이 없는 구성에서 / · /api/health · /ws/device가 상태 502를 유지하고 본문만 점검 페이지 · JSON(UPSTREAM_UNAVAILABLE)이며,
-#      앱이 낸 503은 그대로 통과한다(R4-17 · NFR4.13). 앱 컨테이너를 멈추면(docker stop) 1초 안 502 봉투, 다시 띄우면 앱 응답(J347)
+#      앱이 낸 503은 그대로 통과한다(R4-17 · NFR4.13). 앱 컨테이너 셋을 멈추면(docker stop, 5회 되풀이) 첫 요청은 연결 시한 3초 +
+#      여유(4.5초) 안, 그다음 요청은 1초 안에 502(본문 그대로)이고 다시 띄우면 앱 응답(J347 · J354 · J355). 연결한 뒤 답하지 않는
+#      앱(hang)은 읽기 시한 15초 뒤 504(봉투 · 점검 페이지, J354). Nginx DNS 옵션은 compose.demo.yml nginx의 dns_opt 그대로(J355)
 #
 # 쓰는 법: bash infra/ci/image-checks.sh [--registry <레지스트리>] [--tag <태그>] [--only 1,2,...] [--image <이름>=<참조>]...
 #   이름: core-api realtime web migrate backup infra fake-provider. --image로 하나씩 바꿀 수 있다(시험용).
@@ -45,7 +47,7 @@ while [ "$#" -gt 0 ]; do
       override["${2%%=*}"]="${2#*=}"
       shift
       ;;
-    -h | --help) sed -n '2,27p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h | --help) sed -n '2,25p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "image-checks: 모르는 인자: $1" >&2; exit 64 ;;
   esac
   shift
@@ -397,6 +399,12 @@ check7() {
 }
 
 # ---- ⑧ ------------------------------------------------------------------------------------------------
+# 업스트림 정지 · 멈춤의 기대(NFR4.13 · RD-16 · reliability-design 2.11 'Nginx 502는 업스트림 접속 불가일 때만'). ⑧ 설계 J357, 근거 J354 ~ J356
+readonly C8_CYCLES=5      # 정지 → 다시 띄우기 되풀이 횟수(타이밍에 흔들리지 않음을 보인다)
+readonly C8_FIRST_MAX=4.5 # 정지 직후 첫 요청: 연결 시한(proxy_connect_timeout 3초, J356) + 여유 1.5초 안 502
+readonly C8_NEXT_MAX=1    # 그다음 요청: 1초 안 502
+readonly C8_HANG_MIN=14   # 연결한 뒤 답하지 않는 앱(hang): 읽기 시한(proxy_read_timeout 15초) 뒤 504
+readonly C8_HANG_MAX=20
 check8() {
   local problems=() host=localhost dir="$work/c8"
   mkdir -p "$dir/certs/live/$host" "$dir/stub"
@@ -407,8 +415,8 @@ check8() {
     bash "$ROOT/infra/bin/render-nginx" --out "$dir/nginx" >/dev/null
   chmod -R go+rX "$dir"
   # 업스트림은 서비스 이름(web · core-api · realtime)을 Docker 내장 DNS로 다시 해석한다(J347). 시험 망(172.30.99.0/24, demo · 검증
-  # 스택 망과 겹치지 않게)에 같은 이름(망 별칭)의 대역을 둔다: web · realtime은 포트를 듣지 않는 컨테이너(연결 거부 → 502),
-  # core-api는 /api/health에 503을 내는 앱 대역
+  # 스택 망과 겹치지 않게)에 같은 이름(망 별칭)의 대역을 고정 IP로 둔다(다시 띄우거나 바꿔 끼워도 같은 주소): web · realtime은
+  # 포트를 듣지 않는 컨테이너(연결 거부 → 502), core-api는 /api/health에 503을 내는 앱 대역
   cat >"$dir/stub/refuse.conf" <<'NGX'
 events {}
 http { server { listen 9; return 444; } }
@@ -418,69 +426,129 @@ events {}
 http { server { listen 8080; location / { add_header Retry-After 5 always; default_type application/json;
   return 503 '{"code":"SERVICE_NOT_READY","message":"stub","traceId":"stub"}'; } } }
 NGX
+  local image dnsopt
+  image="$(grep -E '^\s+image:\s*nginx:' "$ROOT/infra/compose.demo.yml" | head -n 1 | sed -E 's/^\s+image:\s*//')"
+  # Nginx 컨테이너의 DNS 옵션은 compose.demo.yml nginx의 dns_opt 그대로(ndots:1 — 내장 DNS가 멈춘 앱 이름을 바깥 DNS로 넘기지 않고
+  # 곧바로 '없음'으로 답한다. 없으면 러너의 호스트 해석기에 따라 옛 주소가 남는다, 3.6 CI ⑧ · J355)
+  dnsopt="$(sed -nE '/^\s+dns_opt:\s*\["[^"]+"\]\s*$/{s/^\s+dns_opt:\s*\["([^"]+)"\]\s*$/\1/p;q}' "$ROOT/infra/compose.demo.yml")"
+  if [ -z "$dnsopt" ]; then
+    fail ⑧ "compose.demo.yml nginx에 dns_opt가 없다(J355)"
+    return
+  fi
   docker network rm "$edge_net" >/dev/null 2>&1 || true
   docker network create --subnet 172.30.99.0/24 "$edge_net" >/dev/null
-  local image
-  image="$(grep -E '^\s+image:\s*nginx:' "$ROOT/infra/compose.demo.yml" | head -n 1 | sed -E 's/^\s+image:\s*//')"
-  run_stub() { # <컨테이너 이름> <서비스 이름(망 별칭)> <설정>
-    docker run -d --name "$1" --network "$edge_net" --network-alias "$2" -v "$dir/stub/$3:/etc/nginx/stub.conf:ro" \
+  run_stub() { # <컨테이너 이름> <IP> <서비스 이름(망 별칭)> <설정>
+    docker run -d --name "$1" --network "$edge_net" --ip "$2" --network-alias "$3" -v "$dir/stub/$4:/etc/nginx/stub.conf:ro" \
       --entrypoint nginx "$image" -g 'daemon off;' -c /etc/nginx/stub.conf >/dev/null
   }
-  run_stub imgchk-up11 web refuse.conf
-  run_stub imgchk-up12 core-api app503.conf
-  run_stub imgchk-up13 realtime refuse.conf
-  docker run -d --name imgchk-ngx --network "$edge_net" --ip 172.30.99.10 -p 127.0.0.1::443 \
+  # 멈춘 앱(hang) 대역: 연결은 받고 아무것도 답하지 않는다(같은 IP · 별칭으로 바꿔 끼운다, 시험 전용 이미지의 node)
+  run_hang() { # <컨테이너 이름> <IP> <서비스 이름(망 별칭)> <포트>
+    docker run -d --name "$1" --network "$edge_net" --ip "$2" --network-alias "$3" --entrypoint node "$(ref fake-provider)" \
+      -e "require('net').createServer(() => {}).listen($4)" >/dev/null
+  }
+  run_stub imgchk-up11 172.30.99.11 web refuse.conf
+  run_stub imgchk-up12 172.30.99.12 core-api app503.conf
+  run_stub imgchk-up13 172.30.99.13 realtime refuse.conf
+  docker run -d --name imgchk-ngx --network "$edge_net" --ip 172.30.99.10 --dns-option "$dnsopt" -p 127.0.0.1::443 \
     -v "$dir/nginx:/etc/nginx/mujoong:ro" -v "$dir/certs:/etc/letsencrypt:ro" \
     --entrypoint nginx "$image" -g 'daemon off;' -c /etc/nginx/mujoong/nginx.conf >/dev/null
-  local port i
+  local port
   port="$(docker port imgchk-ngx 443/tcp | head -n 1 | sed 's/.*://')"
-  # c8 [curl 인자...] — 표준 출력 "<상태> <걸린 초>", 본문은 $dir/body
-  c8() {
-    curl -sS --noproxy '*' --max-time 10 --cacert "$dir/certs/live/$host/fullchain.pem" \
-      --resolve "$host:$port:127.0.0.1" -o "$dir/body" -w '%{http_code} %{time_total}\n' "$@" "https://$host:$port$path" 2>/dev/null \
-      || echo "000 0"
-  }
-  local path=/ code secs
-  for i in $(seq 1 20); do
-    read -r code secs < <(c8)
-    [ "$code" != "000" ] && [ -n "$code" ] && break
-    sleep 0.5
-  done
-  if [ "$code" != 502 ] || ! grep -qF '지금은 연결할 수 없어요' "$dir/body"; then
-    problems+=("/ 상태 $code(기대 502 + 점검 페이지)")
-  fi
-  path=/ws/device
-  read -r code secs < <(c8 --http1.1 -H 'Connection: Upgrade' -H 'Upgrade: websocket' -H 'Sec-WebSocket-Version: 13' \
+  local -a ws=(--http1.1 -H 'Connection: Upgrade' -H 'Upgrade: websocket' -H 'Sec-WebSocket-Version: 13'
     -H 'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==')
-  if [ "$code" != 502 ] || ! grep -qF '"code":"UPSTREAM_UNAVAILABLE"' "$dir/body"; then
-    problems+=("/ws/device 상태 $code(기대 502 + UPSTREAM_UNAVAILABLE)")
-  fi
-  # 기동 직후에는 이름 해석이 끝나기 전일 수 있어 앱 응답(503)이 올 때까지 잠깐(최대 5초) 다시 부른다
-  path=/api/health
-  for i in $(seq 1 10); do
-    read -r code secs < <(c8)
-    [ "$code" = 503 ] && break
+  # c8 <최대 초> <본문 파일> <경로> [curl 인자...] — 한 줄 "<상태> <걸린 초>"(연결 실패 · 시간 초과는 상태 000). curl은 실패해도
+  # -w 줄을 내므로 그 한 줄만 낸다(두 줄을 내면 읽는 쪽 파이프가 먼저 닫혀 SIGPIPE로 끝난다)
+  c8() {
+    local max="$1" body="$2" p="$3" out
+    shift 3
+    out="$(curl -sS --noproxy '*' --max-time "$max" --cacert "$dir/certs/live/$host/fullchain.pem" \
+      --resolve "$host:$port:127.0.0.1" -o "$body" -w '%{http_code} %{time_total}' "$@" "https://$host:$port$p" 2>/dev/null)" || true
+    echo "${out:-000 $max}"
+  }
+  # want <꼬리표> <"상태 초"> <본문 파일> <기대 상태> <본문 json|page|app> <초 상한> [초 하한] — 어긋나면 problems에 더한다
+  want() {
+    local code="" secs="" mark desc
+    read -r code secs <<<"$2" || true
+    case "$5" in
+      json) mark='"code":"UPSTREAM_UNAVAILABLE"' desc='UPSTREAM_UNAVAILABLE' ;;
+      page) mark='지금은 연결할 수 없어요' desc='점검 페이지' ;;
+      *) mark='"code":"SERVICE_NOT_READY"' desc='앱이 낸 SERVICE_NOT_READY' ;;
+    esac
+    if [ "$code" != "$4" ] || ! grep -qF -- "$mark" "$3" 2>/dev/null \
+      || ! awk -v s="${secs:-0}" -v hi="$6" -v lo="${7:-0}" 'BEGIN { exit !(s + 0 < hi + 0 && s + 0 >= lo + 0) }'; then
+      problems+=("$1 상태 ${code:-없음} · ${secs:-?}초(기대 $4 + $desc, ${7:+${7}초 이상 }${6}초 안)")
+    fi
+  }
+  local line i
+  # 1) 연결 거부: / · /ws/device는 502(점검 페이지 · 봉투)이고, 앱이 낸 503은 그대로 통과한다. 기동 직후에는 Nginx가 아직 듣지
+  #    않거나 이름 해석 전일 수 있어 잠깐(최대 10초) 다시 부른다
+  for i in $(seq 1 20); do
+    line="$(c8 10 "$dir/b-web" /)"
+    [ "${line%% *}" != 000 ] && break
     sleep 0.5
   done
-  if [ "$code" != 503 ] || ! grep -qF '"code":"SERVICE_NOT_READY"' "$dir/body"; then
-    problems+=("앱이 낸 503이 그대로 통과하지 않았다(상태 $code)")
-  fi
-  # 앱 컨테이너를 멈추면(docker stop) 이름이 풀리지 않아 곧바로 502 봉투(NFR4.13 · J347). 다시 해석 주기(1초)와 해석기 캐시(1초)를
-  # 넘겨 기다린 뒤 잰다(그 사이 요청은 이전 주소로 가 연결 3초 뒤 504일 수 있다 — 실측 0.4 ~ 1.8초 창, J347 남은 위험)
-  docker stop -t 2 imgchk-up12 >/dev/null
-  sleep 3
-  read -r code secs < <(c8)
-  if [ "$code" != 502 ] || ! grep -qF '"code":"UPSTREAM_UNAVAILABLE"' "$dir/body" || ! awk -v s="$secs" 'BEGIN { exit !(s < 1) }'; then
-    problems+=("앱 정지 뒤 /api/health 상태 $code · ${secs}초(기대 1초 안 502 + UPSTREAM_UNAVAILABLE)")
-  fi
-  # 다시 띄우면 이름이 다시 풀려 앱 응답(503)이 돌아온다
-  docker start imgchk-up12 >/dev/null
-  for i in $(seq 1 10); do
+  want "/" "$line" "$dir/b-web" 502 page 10
+  want "/ws/device" "$(c8 10 "$dir/b-ws" /ws/device "${ws[@]}")" "$dir/b-ws" 502 json 10
+  for i in $(seq 1 20); do
+    line="$(c8 10 "$dir/b-api" /api/health)"
+    [ "${line%% *}" = 503 ] && break
     sleep 0.5
-    read -r code secs < <(c8)
-    [ "$code" = 503 ] && break
   done
-  [ "$code" = 503 ] || problems+=("앱을 다시 띄운 뒤 /api/health 상태 $code(기대 앱이 낸 503)")
+  want "앱이 낸 503 통과(/api/health)" "$line" "$dir/b-api" 503 app 10
+  # 2) 앱 컨테이너 정지(NFR4.13 · J354 · J355): 세 업스트림을 함께 멈추고 첫 요청을 동시에 보낸다. 이름 재해석 전이면 옛 주소로 가서
+  #    연결 시한(3초)을 넘기고(연결조차 못 함 = 업스트림 접속 불가 → 502), 재해석 뒤면 업스트림이 비어 곧바로 502다. 그다음 요청은
+  #    1초 안 502, 다시 띄우면 앱 응답. C8_CYCLES회 되풀이한다
+  local cycle pids=()
+  for cycle in $(seq 1 "$C8_CYCLES"); do
+    docker stop -t 2 imgchk-up11 imgchk-up12 imgchk-up13 >/dev/null
+    pids=()
+    c8 10 "$dir/b-api" /api/health >"$dir/r-api" &
+    pids+=("$!")
+    c8 10 "$dir/b-ws" /ws/device "${ws[@]}" >"$dir/r-ws" &
+    pids+=("$!")
+    c8 10 "$dir/b-web" / >"$dir/r-web" &
+    pids+=("$!")
+    wait "${pids[@]}"
+    want "정지 ${cycle}회 첫 요청 /api/health" "$(head -n 1 "$dir/r-api")" "$dir/b-api" 502 json "$C8_FIRST_MAX"
+    want "정지 ${cycle}회 첫 요청 /ws/device" "$(head -n 1 "$dir/r-ws")" "$dir/b-ws" 502 json "$C8_FIRST_MAX"
+    want "정지 ${cycle}회 첫 요청 /" "$(head -n 1 "$dir/r-web")" "$dir/b-web" 502 page "$C8_FIRST_MAX"
+    want "정지 ${cycle}회 다음 요청 /api/health" "$(c8 10 "$dir/b-api" /api/health)" "$dir/b-api" 502 json "$C8_NEXT_MAX"
+    want "정지 ${cycle}회 다음 요청 /ws/device" "$(c8 10 "$dir/b-ws" /ws/device "${ws[@]}")" "$dir/b-ws" 502 json "$C8_NEXT_MAX"
+    want "정지 ${cycle}회 다음 요청 /" "$(c8 10 "$dir/b-web" /)" "$dir/b-web" 502 page "$C8_NEXT_MAX"
+    docker start imgchk-up11 imgchk-up12 imgchk-up13 >/dev/null
+    for i in $(seq 1 20); do
+      line="$(c8 10 "$dir/b-api" /api/health)"
+      [ "${line%% *}" = 503 ] && break
+      sleep 0.5
+    done
+    want "다시 띄운 뒤(${cycle}회) /api/health" "$line" "$dir/b-api" 503 app 10
+  done
+  # 3) 연결한 뒤 답하지 않는 앱(hang)은 그대로 504다(J354): core-api · web 자리에 연결만 받는 대역을 같은 IP · 별칭으로 바꿔 끼우고,
+  #    Nginx가 그 대역에 연결해 기다리는 것(1초 안에 끝나지 않음)을 본 뒤 읽기 시한(15초)이 지나기를 동시에 기다린다
+  docker rm -f imgchk-up11 imgchk-up12 >/dev/null
+  run_hang imgchk-up11 172.30.99.11 web 3000
+  run_hang imgchk-up12 172.30.99.12 core-api 8080
+  local p ready
+  for p in /api/health /; do
+    ready=0
+    for i in $(seq 1 20); do
+      line="$(c8 1 "$dir/b-probe" "$p")"
+      if [ "${line%% *}" = 000 ]; then
+        ready=1
+        break
+      fi
+      sleep 0.5
+    done
+    [ "$ready" -eq 1 ] || problems+=("멈춘 앱 대역에 연결해 기다리지 않는다($p 상태 ${line%% *})")
+  done
+  pids=()
+  c8 25 "$dir/b-api" /api/health >"$dir/r-api" &
+  pids+=("$!")
+  c8 25 "$dir/b-web" / >"$dir/r-web" &
+  pids+=("$!")
+  wait "${pids[@]}"
+  want "멈춘 앱(hang) /api/health" "$(head -n 1 "$dir/r-api")" "$dir/b-api" 504 json "$C8_HANG_MAX" "$C8_HANG_MIN"
+  want "멈춘 앱(hang) /" "$(head -n 1 "$dir/r-web")" "$dir/b-web" 504 page "$C8_HANG_MAX" "$C8_HANG_MIN"
   docker rm -f imgchk-ngx imgchk-up11 imgchk-up12 imgchk-up13 >/dev/null 2>&1 || true
   docker network rm "$edge_net" >/dev/null 2>&1 || true
   if [ "${#problems[@]}" -gt 0 ]; then fail ⑧ "${problems[*]}"; else pass ⑧; fi

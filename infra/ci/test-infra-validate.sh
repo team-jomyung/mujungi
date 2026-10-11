@@ -17,12 +17,13 @@
 #   bad-profile-demo-dev.yml               실패 demo-profile (demo + dev, CD-7)
 #   bad-devlogin-on.yml                    실패 demo-profile (demo에서 시험 로그인, CD-7)
 #   남의 env 파일 하나만 받는 변형          실패 secret-env-files (자기 이름 env 파일 규칙, Compose 판과 무관 J346)
+#   nginx dns_opt ndots를 지운 변형         실패 nginx-dns (멈춘 앱 이름을 바깥 DNS로 넘기지 않음, NFR4.13 J355)
 #   ok-dev-loopback.yml (dev)              통과 (dev 127.0.0.1 게시는 허용)
 #   bad-dev-public-port.yml (dev)          실패 (dev 0.0.0.0 게시)
 #   배포 D3 꼴(--env-dir · --release-env)  통과(env 파일 안의 비밀은 environment: 위반이 아니다 — Compose v2.38 · v5.6 모두, J346)
 #   D3 env 파일에 demo가 아닌 프로필 줄    실패 demo-profile (env 파일 자체 검사, Compose 판과 무관 J346)
-#   Nginx 템플릿 변형 7종                  실패 nginx (방어 지시어 빠짐 · XFF 이어 붙이기 · 5xx 상태 치환 · ws 버퍼링 · 문법 오류 · 정규식 location ·
-#                                          고정 IP 업스트림(이름 재해석 없음, NFR4.13 J347))
+#   Nginx 템플릿 변형 9종                  실패 nginx (방어 지시어 빠짐 · XFF 이어 붙이기 · 5xx 상태 치환 · ws 버퍼링 · 문법 오류 · 정규식 location ·
+#                                          고정 IP 업스트림(이름 재해석 없음, NFR4.13 J347) · 504 나누기 빠짐(JSON · 화면 경로, J354))
 #   마이그레이션 변형                      금지 문장 실패 · 허용 문장 통과 · --allow-contract 통과
 #   번들 Dockerfile 변형                   실패 bundle (compose.ci.yml 복사)
 #
@@ -102,6 +103,13 @@ services:
       - ${MUJOONG_ENV_DIR:-/opt/mujoong/env}/realtime.env
 YAML
 expect "env-file-of-other-service" 1 "web가 남의 env 파일을 받는다" -- --only secret-env-files --compose "$DEMO" --compose "$work/other-env-file.yml"
+# nginx의 dns_opt ndots가 빠지면 내장 DNS가 멈춘 앱 이름을 바깥 DNS로 넘겨 옛 주소가 남을 수 있다(3.6 CI ⑧, J355)
+cat >"$work/nginx-no-ndots.yml" <<'YAML'
+services:
+  nginx:
+    dns_opt: !reset []
+YAML
+expect "nginx-dns-no-ndots" 1 "nginx-dns: nginx에 dns_opt ndots:1이 없다" -- "${inv[@]}" --compose "$work/nginx-no-ndots.yml"
 
 # 3 dev 파일(불변식은 demo에만, dev는 127.0.0.1 게시만)
 dev=(--kind dev --only "compose-config,compose-invariants,secret-env-files" --compose "$DEV")
@@ -155,6 +163,11 @@ expect "nginx-regex-location" 1 "정규식 location" -- --only nginx --nginx-src
 # 고정 IP 업스트림으로 되돌리면 멈춘 앱이 3초 뒤 504가 된다(NFR4.13, J347) — 이름 재해석(resolve)이 빠지면 실패
 nginx_variant fixed-ip upstreams/compose.conf "    server core-api:8080 resolve;=>    server 172.30.10.12:8080;"
 expect "nginx-fixed-ip-upstream" 1 "업스트림 mujoong_core_api가 core-api:8080 resolve가 아니다" -- --only nginx --nginx-src "$work/ngx-fixed-ip"
+# 504 나누기가 빠지면 멈춘 앱의 옛 주소로 연결 시한이 지난 요청이 504가 된다(NFR4.13 · RD-16, J354) — JSON 경로 · 화면 경로 각각
+nginx_variant no-504-split snippets/error-json.conf "error_page 504 = @mujoong_upstream_504;=>error_page 504 /__mujoong/error/504.json;"
+expect "nginx-504-not-split" 1 "error_page 504 나누기(@mujoong_upstream_504) 연결 없음" -- --only nginx --nginx-src "$work/ngx-no-504-split"
+nginx_variant screen-504 conf.d/https443.conf.tmpl "        error_page 504 = @mujoong_screen_504;=>        error_page 504 /__mujoong/maintenance.html;"
+expect "nginx-screen-504-not-split" 1 "화면 경로(location ^~ /_next/static/)의 502 · 504 점검 페이지 · 504 나누기가 없다" -- --only nginx --nginx-src "$work/ngx-screen-504"
 
 # 6 마이그레이션 expand 검사
 mig() {

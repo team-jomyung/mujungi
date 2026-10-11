@@ -82,6 +82,10 @@ services:
     networks:
       edge:
         ipv4_address: 172.30.10.10
+    # 업스트림 이름(web · core-api · realtime)은 Docker 내장 DNS가 답한다(J347). ndots를 적어 두면 내장 DNS가 모르는 단일 이름을
+    # 바깥 DNS로 넘기지 않고 곧바로 '없음'으로 답한다 — 멈춘 앱의 이름이 호스트 해석기의 실패 · 시간 초과로 끝나 Nginx가 옛 주소를
+    # 계속 쓰는 일이 없다(3.6 CI ⑧, J355). 점이 든 이름은 그대로 바깥 DNS로 간다
+    dns_opt: ["ndots:1"]
     env_file:
       - ${MUJOONG_ENV_DIR:-/opt/mujoong/env}/nginx.env
     environment:

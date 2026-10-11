@@ -4,7 +4,8 @@
 # CI infra-validate 작업 · 검증 명령 · 배포 D3이 부른다. 저장소(infra/bin)와 인프라 번들(<릴리스>/bin) 두 곳에서 돈다.
 # 검사(--only로 고를 수 있고, 기본은 지금 위치에서 할 수 있는 것 전부):
 #   compose-config      `docker compose config --quiet`: demo · demo(모든 프로필) · demo + ci · dev(nginx 프로필 포함)
-#   compose-invariants  cicd 2.2.3 Compose 불변식 1 ~ 12(demo에만). --kind dev면 "게시 포트는 127.0.0.1만"만 단언한다
+#   compose-invariants  cicd 2.2.3 Compose 불변식 1 ~ 12(demo에만)와 nginx dns_opt ndots(멈춘 앱 이름을 바깥 DNS로 넘기지 않음,
+#                       NFR4.13 · J355). --kind dev면 "게시 포트는 127.0.0.1만"만 단언한다
 #   demo-profile        demo 앱 프로필 가드(CD-7 · SD-14): 해석된 demo 설정(Compose environment + env 파일)에서 core-api ·
 #                       realtime의 SPRING_PROFILES_ACTIVE가 정확히 demo이고, 어느 서비스에도 MUJOONG_DEVLOGIN_ENABLED ·
 #                       MUJOONG_LOADTEST_ENABLED가 없거나 false다(배포 D3이 --env-dir로 렌더된 env 파일에 돌린다)
@@ -13,7 +14,8 @@
 #                       Compose 판(v2.38은 env 파일을 environment에 펼친다 · v5.6)과 무관하다(J346)
 #   nginx               render-nginx 4가지(https · bootstrap × compose · host 업스트림) → 컨테이너 안 `nginx -t`,
 #                       렌더된 https 설정의 방어 지시어 단언, Nginx 오류 봉투 JSON(편차 (y) UPSTREAM_UNAVAILABLE) 단언,
-#                       Compose 업스트림의 서비스 이름 재해석(resolver 127.0.0.11 · server … resolve, NFR4.13 J347) 단언
+#                       Compose 업스트림의 서비스 이름 재해석(resolver 127.0.0.11 · server … resolve, NFR4.13 J347) 단언,
+#                       504 나누기(연결조차 못 한 504는 502, JSON · 화면 경로, RD-16 · J354) 단언
 #   [shellcheck]        infra/ · scripts/ 아래 셸 스크립트(확장자 .sh 또는 sh · bash shebang) 전부
 #   migrations          expand 단계 금지 문장(삭제 · 이름 변경 · 타입 변경 · 널 불허 추가 · 제약 강화) 검사(cicd 2.7.2)
 #   bundle              인프라 번들 Dockerfile의 복사 목록과 맥락 제한 파일, --bundle-image를 주면 실제 이미지 파일 목록
@@ -47,7 +49,7 @@ readonly SCRIPT_DIR INFRA_DIR REPO_ROOT
 readonly ALL_CHECKS=(compose-config compose-invariants demo-profile secret-env-files nginx shellcheck migrations bundle)
 
 usage() {
-  sed -n '2,36p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+  sed -n '2,38p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
 }
 
 only=""
@@ -409,7 +411,12 @@ def err($n; $msg): "invariant-\($n): \($msg)";
   | (if ($d | keys) != ["migrate", "postgres"] then [ err(12; "core-api depends_on이 postgres · migrate가 아니다(\($d | keys | join(",")))") ] else [] end)
     + (if ($d.postgres.condition // "") != "service_healthy" then [ err(12; "core-api의 postgres 의존이 service_healthy가 아니다") ] else [] end)
     + (if ($d.migrate.condition // "") != "service_completed_successfully" or ($d.migrate.required != false)
-       then [ err(12; "core-api의 migrate 의존이 완료 조건 · required false가 아니다") ] else [] end)
+       then [ err(12; "core-api의 migrate 의존이 완료 조건 · required false가 아니다") ] else [] end),
+
+  # 불변식 밖 보탬(J355): nginx의 dns_opt ndots — 내장 DNS가 멈춘 앱의 이름을 바깥 DNS로 넘기지 않고 곧바로 '없음'으로 답해야
+  # Nginx 업스트림이 비고 곧바로 502가 난다(NFR4.13 · J347). 없으면 호스트 해석기의 실패 · 시간 초과에 옛 주소가 남는다(3.6 CI ⑧)
+  [ if (($svc.nginx.dns_opt // []) | index("ndots:1")) == null
+    then "nginx-dns: nginx에 dns_opt ndots:1이 없다(멈춘 앱 이름이 바깥 DNS로 넘어가 옛 주소가 남는다, J355)" else empty end ]
 ) | .[]
 JQ
 }
@@ -586,7 +593,28 @@ assert_nginx_directives() {
   grep -qE "return 400 '\{\"code\":\"VALIDATION_FAILED\"" "$all" || problems+=('400 봉투 code VALIDATION_FAILED 없음')
   grep -qE 'error_page[^;]*\b50[0-9]\b[^;]*=[0-9]' "$all" && problems+=('5xx 상태 치환(error_page … =NNN)')
   grep -qE '^\s*error_page\s+502\s+/__mujoong/error/502\.json;' "$all" || problems+=('error_page 502 봉투 연결 없음')
-  grep -qE '^\s*error_page\s+504\s+/__mujoong/error/504\.json;' "$all" || problems+=('error_page 504 봉투 연결 없음')
+  # 504 나누기(J354 · RD-16 · NFR4.13): 연결조차 못 한 504는 업스트림 접속 불가라 502, 연결한 뒤 늦은 것만 504.
+  # server 수준(JSON 봉투)과 화면 경로(점검 페이지, 두 번째 error_page 이동에 recursive_error_pages) 둘 다 본다
+  grep -qE '^\s*error_page\s+504\s+=\s+@mujoong_upstream_504;' "$all" || problems+=('error_page 504 나누기(@mujoong_upstream_504) 연결 없음')
+  local blk
+  blk="$(awk '/^location @mujoong_upstream_504 \{/{f=1} f{print} f&&/^\}/{exit}' "$dir/snippets/error-json.conf")"
+  if ! grep -qF 'if ($upstream_connect_time = "-")' <<<"$blk" || ! grep -qF 'rewrite ^ /__mujoong/error/502.json last;' <<<"$blk" \
+    || ! grep -qF 'rewrite ^ /__mujoong/error/504.json last;' <<<"$blk"; then
+    problems+=('연결 못 한 504를 502 봉투로, 연결한 뒤 504를 504 봉투로 내는 @mujoong_upstream_504가 없다')
+  fi
+  local screen
+  for screen in "location ^~ /_next/static/ {" "location / {"; do
+    blk="$(awk -v l="$screen" 'index($0,l){f=1} f{print} f&&/^    \}/{exit}' "$dir/conf.d/https443.conf")"
+    if ! grep -qE '^\s*error_page\s+502\s+/__mujoong/maintenance\.html;' <<<"$blk" \
+      || ! grep -qE '^\s*error_page\s+504\s+=\s+@mujoong_screen_504;' <<<"$blk" || ! grep -qE '^\s*recursive_error_pages\s+on;' <<<"$blk"; then
+      problems+=("화면 경로(${screen% \{})의 502 · 504 점검 페이지 · 504 나누기가 없다")
+    fi
+  done
+  blk="$(awk '/location @mujoong_screen_504 \{/{f=1} f{print} f&&/^    \}/{exit}' "$dir/conf.d/https443.conf")"
+  if ! grep -qE '^\s*error_page\s+502\s+504\s+/__mujoong/maintenance\.html;' <<<"$blk" \
+    || ! grep -qF 'if ($upstream_connect_time = "-")' <<<"$blk" || ! grep -qE '^\s*return 502;' <<<"$blk" || ! grep -qE '^\s*return 504;' <<<"$blk"; then
+    problems+=('화면 경로 504 나누기(@mujoong_screen_504)가 없다')
+  fi
   # NFR4.13(J347): Compose 업스트림은 서비스 이름을 Docker 내장 DNS로 다시 해석한다 — 멈춘 앱 컨테이너는 곧바로 502(고정 IP면 3초 뒤 504)
   local ups="$dir/upstreams.conf" pair
   if [ -f "$ups" ]; then
