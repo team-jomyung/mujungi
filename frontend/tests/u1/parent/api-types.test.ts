@@ -157,4 +157,10 @@ describe("말풍선 합치기(J23 · J120)", () => {
     expect(options.queries).toMatchObject({ retry: false, refetchOnWindowFocus: false, refetchOnReconnect: false });
     expect(options.mutations).toMatchObject({ retry: false });
   });
+
+  it("보호자 QueryClient는 브라우저의 온라인 표시와 상관없이 요청한다(networkMode always, PD-12 · NFR4.16 · J361)", () => {
+    const options = createParentQueryClient().getDefaultOptions();
+    expect(options.queries?.networkMode).toBe("always");
+    expect(options.mutations?.networkMode).toBe("always");
+  });
 });

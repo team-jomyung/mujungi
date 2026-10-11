@@ -1,3 +1,4 @@
+import { onlineManager } from "@tanstack/react-query";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { parseHome, parseLiveView } from "@/parent/api/types";
@@ -49,6 +50,8 @@ beforeEach(() => {
 
 afterEach(() => {
   Reflect.deleteProperty(document, "visibilityState");
+  // 오프라인 시험이 바꾼 TanStack 온라인 상태(모듈 단일 객체)를 되돌린다.
+  onlineManager.setOnline(true);
 });
 
 describe("12 — 폴링과 말풍선(BR6.15 · PD-12)", () => {
@@ -141,6 +144,35 @@ describe("12 — 실패 · 이동", () => {
     expect(screen.getAllByTestId("toast")).toHaveLength(1);
     await waitFor(() => expect(screen.getByTestId("live-end")).toBeEnabled());
     expect(liveCalls(harness).length).toBeGreaterThanOrEqual(5);
+  });
+
+  it("브라우저가 오프라인이어도 요청해 실패로 세고 3회면 토스트 + 「다시 시도」, 온라인이 되면 다시 읽어 이어 간다(PD-12 · J361)", async () => {
+    let online = true;
+    let reads = 0;
+    const harness = renderLive(() => {
+      if (!online) {
+        throw new TypeError("Failed to fetch");
+      }
+      reads += 1;
+      return jsonResponse(200, liveViewBody("ACTIVE", { items: [bubble({ seq: reads, speaker: "CHILD", text: `말 ${reads}` })], nextSeq: reads }));
+    });
+    await waitFor(() => expect(screen.getByTestId("live-end")).toBeEnabled());
+    // 비행기 모드 · 와이파이 꺼짐: 브라우저가 offline 사건을 내고 fetch는 TypeError로 끝난다.
+    online = false;
+    act(() => window.dispatchEvent(new Event("offline")));
+    const callsAtOffline = liveCalls(harness).length;
+    const toast = await screen.findByTestId("toast");
+    expect(toast).toHaveTextContent("연결이 원활하지 않아요");
+    expect(screen.getByTestId("toast-action")).toHaveTextContent("다시 시도");
+    expect(liveCalls(harness).length - callsAtOffline).toBeGreaterThanOrEqual(3);
+    // 마지막 데이터를 그대로 둔다.
+    expect(screen.getByTestId("live-end")).toBeEnabled();
+    const bubblesAtOffline = screen.getAllByTestId("live-bubble").length;
+    online = true;
+    act(() => window.dispatchEvent(new Event("online")));
+    await waitFor(() => expect(screen.getAllByTestId("live-bubble").length).toBeGreaterThan(bubblesAtOffline));
+    const callsAtRecovery = liveCalls(harness).length;
+    await waitFor(() => expect(liveCalls(harness).length).toBeGreaterThan(callsAtRecovery));
   });
 
   it("실패 토스트의 「다시 시도」는 바로 한 번 읽는다", async () => {

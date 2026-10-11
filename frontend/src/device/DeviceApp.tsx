@@ -66,8 +66,9 @@ async function runRequest(api: DeviceApi, step: string, stepId: number): Promise
   }
 }
 
+/** T19 라벨. 켜짐과 재접속 주기(5초 대기 · 접속 시도)에는 마지막 view 라벨을 두고(BR9.7 · J360) 처음 연결 중에는 비운다(BR9.4). */
 function t19Label(state: DeviceState): string | null {
-  if (state.screen !== "t19" || (state.power !== "on" && state.power !== "reconnectWait")) {
+  if (state.screen !== "t19" || (state.power !== "on" && state.power !== "reconnectWait" && state.power !== "reconnecting")) {
     return null;
   }
   if (state.power === "on" && state.speaking) {

@@ -2,7 +2,7 @@
 
 import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
-import { useId, useState } from "react";
+import { useId, useRef, useState } from "react";
 import { ApiError } from "../api/apiClient";
 import { queryKeys, registerDevice, useApiClient } from "../api/queries";
 import { CodeInput, emptyCodeCells, isCodeComplete } from "../components/CodeInput";
@@ -15,6 +15,7 @@ import { useToast } from "@/shared/toast/ToastProvider";
 // 8칸이 다 차야 「등록」이 켜지고 전송 중에는 꺼지며 '등록하고 있어요'로 바뀐다. 성공하면 05로 간다(U1은 05 스텁 → 04, J57).
 // 없는 코드(404) · 이미 등록된 코드(409) · 연결된 기존 기기(409) · 한도(429)는 빨간 카드이고 입력을 지우지 않는다.
 // 네트워크 · 5xx는 토스트 + 「다시 시도」. 「취소」 · 「←」는 05로 간다. 기기 검색 · 페어링 · 해제 · 재등록 단추는 없다.
+// 「다시 시도」는 실패한 렌더의 클로저가 아니라 지금 화면의 폼을 다시 제출해 보이는 코드로 보내고, 요청 중이면 막힌다(J362).
 
 function errorCardFor(error: ApiError): string | null {
   switch (error.code) {
@@ -41,13 +42,22 @@ export function Register05a() {
   const [cells, setCells] = useState<string[]>(emptyCodeCells);
   const [submitting, setSubmitting] = useState(false);
   const [errorCard, setErrorCard] = useState<string | null>(null);
+  const formRef = useRef<HTMLFormElement>(null);
+  // 요청 중 표시. submitting 상태는 다시 그린 뒤에야 바뀌므로 두 번째 요청은 이 값으로 막는다(BR2.8 · J362).
+  const inFlightRef = useRef(false);
 
   const complete = isCodeComplete(cells);
 
+  /** 토스트 「다시 시도」: 지금 화면의 입력으로 폼을 다시 제출한다(화면을 떠났으면 아무것도 하지 않는다, J362). */
+  const resubmit = () => {
+    formRef.current?.requestSubmit();
+  };
+
   const submit = async () => {
-    if (!isCodeComplete(cells) || submitting) {
+    if (!isCodeComplete(cells) || inFlightRef.current) {
       return;
     }
+    inFlightRef.current = true;
     setSubmitting(true);
     setErrorCard(null);
     try {
@@ -71,9 +81,10 @@ export function Register05a() {
       toast.show({
         message: error.kind === "http" ? messageForErrorCode(error.code) : TEMP_COPY.networkError,
         kind: "error",
-        action: { label: PROPOSED_COPY.retry, onPress: () => void submit() },
+        action: { label: PROPOSED_COPY.retry, onPress: resubmit },
       });
     } finally {
+      inFlightRef.current = false;
       setSubmitting(false);
     }
   };
@@ -99,6 +110,7 @@ export function Register05a() {
       </header>
       <main className="mj-screen__body">
         <form
+          ref={formRef}
           className="mj-register"
           noValidate
           data-testid="register-form"

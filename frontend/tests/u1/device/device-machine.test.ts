@@ -238,6 +238,38 @@ describe("T19 — 켜기 · 끄기 · 닫기 코드(BR9.5 · BR9.7 · BR3.7)", (
     expect(pendingEffect(state)).toEqual({ kind: "connect" });
   });
 
+  it("재접속 주기(5초 대기 → 접속 시도 → 다시 실패) 내내 화면은 'reconnecting'이고 마지막 view를 둔다(BR9.7 · J360)", () => {
+    let state = run(poweredOn(), { type: "SESSION_VIEW", view: "LISTENING" }, { type: "WS_CLOSED", code: 1006, closedByDevice: false });
+    const trailAtClose = state.trail;
+    state = step(state, timer);
+    expect(pendingEffect(state)).toEqual({ kind: "connect" });
+    expect(isPoweredOn(state)).toBe(true);
+    expect(displayStateOf(state)).toBe("reconnecting");
+    expect(state.screen === "t19" && state.view).toBe("LISTENING");
+    // 서버가 계속 거절하면(1013) 다시 5초 대기이고 화면은 그대로다.
+    state = run(state, { type: "WS_CLOSED", code: 1013, closedByDevice: false });
+    expect(displayStateOf(state)).toBe("reconnecting");
+    expect(pendingEffect(state)).toEqual({ kind: "delay", delay: "retry" });
+    state = step(state, timer);
+    expect(displayStateOf(state)).toBe("reconnecting");
+    expect(state.screen === "t19" && state.view).toBe("LISTENING");
+    // 접속 시도 · 대기를 오가도 상태 로그에 깜박임이 남지 않는다.
+    expect(state.trail).toEqual(trailAtClose);
+    // 접속 시도 중의 전이는 처음 연결과 같다: 늦은 HELLO_OK 무시, HELLO_OK면 대기, 4401 → D0, 4001 · 「끄기」 → 꺼짐, view 무시.
+    expect(deviceReducer(state, { type: "WS_READY", stepId: state.stepId - 1 })).toBe(state);
+    expect(displayStateOf(step(state, (stepId) => ({ type: "WS_READY", stepId })))).toBe("standby");
+    expect(run(state, { type: "WS_CLOSED", code: 4401, closedByDevice: false }).screen).toBe("d0");
+    expect(displayStateOf(run(state, { type: "WS_CLOSED", code: 4001, closedByDevice: false }))).toBe("off");
+    expect(displayStateOf(run(state, { type: "TURN_OFF" }))).toBe("off");
+    expect(run(state, { type: "SESSION_VIEW", view: "THINKING" })).toBe(state);
+  });
+
+  it("처음 연결(마이크 허용 뒤)은 재접속과 달리 'connecting'이다(BR9.4)", () => {
+    const state = run(step(initialDeviceState(), me({ kind: "registered", deviceId: DEVICE_ID })), { type: "TURN_ON" }, { type: "MIC_RESULT", granted: true });
+    expect(displayStateOf(state)).toBe("connecting");
+    expect(pendingEffect(state)).toEqual({ kind: "connect" });
+  });
+
   it("상태 로그(trail)는 최근 20개이고 마지막 값이 지금 화면이다(AC6.2.9)", () => {
     let state = poweredOn();
     for (let index = 0; index < 15; index += 1) {

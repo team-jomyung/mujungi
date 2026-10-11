@@ -17,6 +17,8 @@ import { useToast } from "@/shared/toast/ToastProvider";
 // 네 칸은 모두 선택(비워도 시작), 서술 칸 200자에서 막힘, 칩은 단일 선택. 전송 중 「자유대화 시작」이 꺼진다.
 // 202 → 12. 거절은 사유 문구 하나(mockups 9-12)를 보이고 08에 머문다. 12에서 FAILED로 돌아오면 사유 카드 한 종류(J120).
 // idempotencyKey 재사용(표 2.9-C): 응답 없음 · 시간 초과 · 403 CSRF는 같은 키(같은 본문일 때), 그 밖의 거절 · 로컬 FAILED 재생 뒤에는 새 키.
+// 토스트 「다시 시도」는 실패한 렌더의 클로저가 아니라 지금 화면의 폼을 다시 제출한다. 보이는 입력으로 보내고(고쳤으면 새 키, J232)
+// 「자유대화 시작」 요청이 진행 중이면 막힌다(BR6.4 · J362).
 // 입력 원문은 시작 요청 본문으로만 가고 화면 밖 저장소에 두지 않는다(NFR3.1).
 
 const SITUATION_OPTIONS: readonly ChipOption<SituationType>[] = [
@@ -69,6 +71,14 @@ export function Free08({ returnedFailed }: Free08Props) {
   const [submitting, setSubmitting] = useState(false);
   const [reason, setReason] = useState<string | null>(returnedFailed ? PROPOSED_COPY.free.rejectDeviceNoAck : null);
   const pendingRef = useRef<PendingStart | null>(null);
+  const formRef = useRef<HTMLFormElement>(null);
+  // 요청 중 표시. submitting 상태는 다시 그린 뒤에야 바뀌므로 두 번째 요청은 이 값으로 막는다(BR6.4 · J362).
+  const inFlightRef = useRef(false);
+
+  /** 토스트 「다시 시도」: 지금 화면의 입력으로 폼을 다시 제출한다(화면을 떠났으면 아무것도 하지 않는다, J362). */
+  const resubmit = () => {
+    formRef.current?.requestSubmit();
+  };
 
   const buildContext = (): FreeTalkContext | undefined => {
     const context: { -readonly [K in keyof FreeTalkContext]: FreeTalkContext[K] } = {};
@@ -88,9 +98,10 @@ export function Free08({ returnedFailed }: Free08Props) {
   };
 
   const submit = async () => {
-    if (submitting) {
+    if (inFlightRef.current) {
       return;
     }
+    inFlightRef.current = true;
     const context = buildContext();
     const bodyJson = JSON.stringify(context ?? null);
     const pending = pendingRef.current;
@@ -126,9 +137,10 @@ export function Free08({ returnedFailed }: Free08Props) {
       toast.show({
         message: error.kind === "http" ? messageForErrorCode(error.code) : TEMP_COPY.networkError,
         kind: "error",
-        action: { label: PROPOSED_COPY.retry, onPress: () => void submit() },
+        action: { label: PROPOSED_COPY.retry, onPress: resubmit },
       });
     } finally {
+      inFlightRef.current = false;
       setSubmitting(false);
     }
   };
@@ -146,6 +158,7 @@ export function Free08({ returnedFailed }: Free08Props) {
       </header>
       <main className="mj-screen__body">
         <form
+          ref={formRef}
           className="mj-form"
           noValidate
           data-testid="free-form"

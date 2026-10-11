@@ -171,6 +171,52 @@ describe("08 — idempotencyKey 재사용(BR6.2 · 표 2.9-C · AC3.1.8)", () =>
     expect(keys[1]).not.toBe(keys[0]);
   });
 
+  it("토스트가 떠 있는 동안 입력을 고치고 「다시 시도」를 누르면 고친 본문을 새 키로 보낸다(J232 · J362)", async () => {
+    let calls = 0;
+    const harness = setup(() => {
+      calls += 1;
+      if (calls === 1) {
+        throw new TypeError("offline");
+      }
+      return ACCEPTED();
+    });
+    fireEvent.click(screen.getByTestId("free-start"));
+    await screen.findByTestId("toast");
+    fireEvent.click(screen.getByTestId("free-situation-other"));
+    fireEvent.click(screen.getByTestId("toast-action"));
+    await waitFor(() => expect(router.push).toHaveBeenCalledWith(`/parent/sessions/${SESSION_ID}`));
+    const bodies = startBodies(harness);
+    expect(bodies).toHaveLength(2);
+    expect(bodies[0].context).toBeUndefined();
+    expect(bodies[1].context).toEqual({ situationType: "OTHER" });
+    expect(bodies[1].idempotencyKey).not.toBe(bodies[0].idempotencyKey);
+  });
+
+  it("「자유대화 시작」 요청이 진행 중이면 토스트의 「다시 시도」는 두 번째 요청을 보내지 않는다(BR6.4 · J362)", async () => {
+    const pending = deferred<Response>();
+    let calls = 0;
+    const harness = setup(() => {
+      calls += 1;
+      if (calls === 1) {
+        throw new TypeError("offline");
+      }
+      return pending.promise;
+    });
+    fireEvent.click(screen.getByTestId("free-start"));
+    await screen.findByTestId("toast");
+    fireEvent.click(screen.getByTestId("free-start"));
+    await waitFor(() => expect(screen.getByTestId("free-start")).toBeDisabled());
+    fireEvent.click(screen.getByTestId("toast-action"));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(startBodies(harness)).toHaveLength(2);
+    pending.resolve(ACCEPTED());
+    await waitFor(() => expect(router.push).toHaveBeenCalledTimes(1));
+    const keys = startBodies(harness).map((body) => body.idempotencyKey);
+    expect(keys).toHaveLength(2);
+    // 응답 없음 뒤 같은 본문이라 두 번째 시도는 같은 키다(표 2.9-C).
+    expect(keys[1]).toBe(keys[0]);
+  });
+
   it("CSRF 403이 두 번이면 멈추되 다음 시도는 같은 키다", async () => {
     let calls = 0;
     const harness = setup(() => {

@@ -1,5 +1,6 @@
+import { onlineManager } from "@tanstack/react-query";
 import { act, fireEvent, screen, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Done17 } from "@/parent/screens/Done17";
 import { SESSION_ID, errorResponse, jsonResponse, liveViewBody } from "../support/fixtures";
 import { resetRouter, router } from "../support/nextNavigation";
@@ -29,6 +30,11 @@ const pause = (ms: number) => act(() => new Promise<void>((resolve) => setTimeou
 
 beforeEach(() => {
   resetRouter();
+});
+
+afterEach(() => {
+  // 오프라인 시험이 바꾼 TanStack 온라인 상태(모듈 단일 객체)를 되돌린다.
+  onlineManager.setOnline(true);
 });
 
 describe("17 — 마무리 중 → 종료(AC3.3.4 · AC3.3.5)", () => {
@@ -122,6 +128,23 @@ describe("17 — 실패 · 이동", () => {
     expect(await screen.findByTestId("toast")).toHaveTextContent("잠시 문제가 생겼어요. 다시 시도해 주세요.");
     fail = false;
     fireEvent.click(screen.getByTestId("toast-action"));
+    expect(await screen.findByText("보호자가 끝냈어요")).toBeInTheDocument();
+  });
+
+  it("오프라인인 채 들어와도 첫 읽기 실패에 토스트 + 「다시 시도」이고, 온라인이 되면 다시 읽어 종료 카드를 보인다(PD-12 · J361)", async () => {
+    // 같은 앱 안에서 이미 offline 사건을 받은 상태(예: 12에서 끊긴 뒤 17로 옴).
+    onlineManager.setOnline(false);
+    let online = false;
+    renderDone(() => {
+      if (!online) {
+        throw new TypeError("Failed to fetch");
+      }
+      return jsonResponse(200, liveViewBody("ENDED", { endReason: "GUARDIAN_STOP", endedAt: ENDED_AT }));
+    });
+    expect(await screen.findByTestId("toast")).toHaveTextContent("잠시 문제가 생겼어요. 다시 시도해 주세요.");
+    expect(screen.getByTestId("toast-action")).toHaveTextContent("다시 시도");
+    online = true;
+    act(() => window.dispatchEvent(new Event("online")));
     expect(await screen.findByText("보호자가 끝냈어요")).toBeInTheDocument();
   });
 

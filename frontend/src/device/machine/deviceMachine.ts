@@ -14,6 +14,8 @@ import type { SessionView } from "@/shared/protocol/messages";
 //     그 밖의 요청 실패는 마지막 화면을 두고 5초 뒤 같은 단계(BR9.4).
 // T19: 꺼짐 →(켜기) 마이크 요청 →(허용) 연결 중 →(HELLO_OK) 켜짐(대기) / (거부) 마이크 허용 안 됨
 //     닫기 4401 → meCheck(→ 401이면 D0), 4001 · 「끄기」 → 꺼짐, 그 밖(1001 · 1006 · 1011 · 1013 · 4400 · 4408) → 5초 뒤 재접속.
+//     재접속 주기(reconnectWait 5초 대기 → reconnecting 접속 시도 → 실패면 다시 대기)는 내내 마지막 화면(표정 'reconnecting' ·
+//     마지막 view 라벨)을 둔다(BR9.7 · J360). reconnecting은 처음 연결(connecting)과 전이가 같고 화면만 다르다.
 //     켜짐 안의 표시는 SESSION_STATE.view(대기 · 듣는 중 · 생각 중 · 마무리)이고 '말하는 중'은 실제 재생 중일 때만이다(BR9.6).
 
 export type DelayKind = "retry" | "statusPoll" | "registeredDisplay";
@@ -25,7 +27,7 @@ export type D0Step =
   | { readonly name: "waiting"; readonly next: D0RequestStep; readonly delay: DelayKind }
   | { readonly name: "registered" };
 
-export type PowerState = "off" | "micRequest" | "micDenied" | "connecting" | "on" | "reconnectWait";
+export type PowerState = "off" | "micRequest" | "micDenied" | "connecting" | "on" | "reconnectWait" | "reconnecting";
 
 export interface CodeDisplay {
   readonly code: string;
@@ -84,9 +86,14 @@ export type DisplayState =
 
 const TRAIL_LIMIT = 20;
 
+/** 접속 단계(설계 표의 WsConnect)인지. 처음 연결과 재접속 시도는 같은 전이를 한다(J360). */
+function isConnectAttempt(power: PowerState): boolean {
+  return power === "connecting" || power === "reconnecting";
+}
+
 /** 켜짐(연결을 쥔) 상태인지. 이 밖으로 나가면 마이크 · 재생 · 소켓을 정리한다. */
 export function isPoweredOn(state: DeviceState): boolean {
-  return state.screen === "t19" && (state.power === "connecting" || state.power === "on" || state.power === "reconnectWait");
+  return state.screen === "t19" && (isConnectAttempt(state.power) || state.power === "on" || state.power === "reconnectWait");
 }
 
 function viewDisplay(view: SessionView, speaking: boolean): DisplayState {
@@ -122,6 +129,7 @@ export function displayStateOf(state: DeviceState): DisplayState {
     case "connecting":
       return "connecting";
     case "reconnectWait":
+    case "reconnecting":
       return "reconnecting";
     default:
       return viewDisplay(state.view, state.speaking);
@@ -219,7 +227,7 @@ function onTimer(state: DeviceState): DeviceState {
     }
     return state;
   }
-  return state.power === "reconnectWait" ? toPower(state, "connecting", state.view) : state;
+  return state.power === "reconnectWait" ? toPower(state, "reconnecting", state.view) : state;
 }
 
 function onWsClosed(state: DeviceState, code: number, closedByDevice: boolean): DeviceState {
@@ -265,7 +273,7 @@ function t19Reducer(state: DeviceState & { screen: "t19" }, event: DeviceEvent):
       }
       return event.granted ? toPower(state, "connecting") : toPower(state, "micDenied");
     case "WS_READY":
-      return event.stepId === state.stepId && state.power === "connecting" ? toPower(state, "on") : state;
+      return event.stepId === state.stepId && isConnectAttempt(state.power) ? toPower(state, "on") : state;
     case "WS_CLOSED":
       return onWsClosed(state, event.code, event.closedByDevice);
     case "TIMER_FIRED":
@@ -303,7 +311,7 @@ export function pendingEffect(state: DeviceState): PendingEffect {
         return { kind: "request", step: state.step.name };
     }
   }
-  if (state.power === "connecting") {
+  if (isConnectAttempt(state.power)) {
     return { kind: "connect" };
   }
   if (state.power === "reconnectWait") {

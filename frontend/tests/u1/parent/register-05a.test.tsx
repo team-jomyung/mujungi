@@ -121,6 +121,47 @@ describe("05a — 네트워크 · 5xx · 401", () => {
     expect(harness.requests("/api/device/register").map((request) => request.body)).toEqual([{ code: "7F3K92QD" }, { code: "7F3K92QD" }]);
   });
 
+  it("토스트가 떠 있는 동안 칸을 고치고 「다시 시도」를 누르면 화면에 보이는 고친 코드로 보낸다(BR2.8 · J362)", async () => {
+    let calls = 0;
+    const harness = setup(() => {
+      calls += 1;
+      return calls === 1 ? errorResponse(503, "SERVICE_NOT_READY") : jsonResponse(201, CREATED);
+    });
+    const user = await typeCode("7f3k92qx");
+    await user.click(screen.getByTestId("register-submit"));
+    await screen.findByTestId("toast");
+    await user.click(screen.getByTestId("code-cell-7"));
+    await user.keyboard("{Backspace}D");
+    expect(codeValue()).toBe("7F3K92QD");
+    await user.click(screen.getByTestId("toast-action"));
+    await waitFor(() => expect(router.push).toHaveBeenCalledWith("/parent/device"));
+    expect(harness.requests("/api/device/register").map((request) => request.body)).toEqual([{ code: "7F3K92QX" }, { code: "7F3K92QD" }]);
+  });
+
+  it("「등록」 요청이 진행 중이면 토스트의 「다시 시도」는 두 번째 요청을 보내지 않는다(BR2.8 · J362)", async () => {
+    const pending = deferred<Response>();
+    let calls = 0;
+    const harness = setup(() => {
+      calls += 1;
+      if (calls === 1) {
+        throw new TypeError("offline");
+      }
+      return pending.promise;
+    });
+    const user = await typeCode();
+    await user.click(screen.getByTestId("register-submit"));
+    await screen.findByTestId("toast");
+    await user.click(screen.getByTestId("register-submit"));
+    expect(screen.getByTestId("register-submit")).toHaveTextContent("등록하고 있어요");
+    await user.click(screen.getByTestId("toast-action"));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(harness.requests("/api/device/register")).toHaveLength(2);
+    pending.resolve(jsonResponse(201, CREATED));
+    await waitFor(() => expect(router.push).toHaveBeenCalledWith("/parent/device"));
+    expect(router.push).toHaveBeenCalledTimes(1);
+    expect(harness.requests("/api/device/register")).toHaveLength(2);
+  });
+
   it("5xx는 code 문장 토스트로 알리고 빨간 카드를 띄우지 않는다", async () => {
     setup(() => errorResponse(503, "SERVICE_NOT_READY"));
     const user = await typeCode();

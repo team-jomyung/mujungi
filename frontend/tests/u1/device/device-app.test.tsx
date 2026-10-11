@@ -48,6 +48,41 @@ describe("DeviceApp — 닫기 코드(BR9.7)", () => {
     expect(screen.getByTestId("t19-view")).toHaveAttribute("data-state", "standby");
   });
 
+  it("재접속 주기(5초 대기 → 접속 시도 → 다시 실패) 내내 라벨과 표정을 마지막 화면 그대로 둔다(BR9.7 · J360)", async () => {
+    await turnOn();
+    act(() => runtimeControl.events().onView("LISTENING"));
+    act(() => runtimeControl.events().onClosed(1006, false));
+    const expectLastScreen = () => {
+      const view = screen.getByTestId("t19-view");
+      expect(view).toHaveAttribute("data-state", "reconnecting");
+      expect(view.querySelector(".mj-character")).toHaveAttribute("data-expression", "reconnecting");
+      expect(screen.getByTestId("t19-label")).toHaveTextContent("듣는 중");
+    };
+    expectLastScreen();
+    await advance(5_000);
+    expect(runtimeControl.runtime.connect).toHaveBeenCalledTimes(2);
+    expectLastScreen();
+    // 서버가 계속 거절해도(1013) 5초마다 다시 붙으며 화면은 바뀌지 않는다.
+    act(() => runtimeControl.events().onClosed(1013, false));
+    expectLastScreen();
+    await advance(5_000);
+    expect(runtimeControl.runtime.connect).toHaveBeenCalledTimes(3);
+    expectLastScreen();
+    act(() => runtimeControl.events().onReady());
+    expect(screen.getByTestId("t19-view")).toHaveAttribute("data-state", "standby");
+    expect(screen.getByTestId("t19-label")).toHaveTextContent("대기");
+  });
+
+  it("처음 연결 중(HELLO_OK 전)에는 라벨이 비고 표정은 'connecting'이다(재접속과 구분, BR9.4)", async () => {
+    renderDeviceApp(registeredDeviceApi());
+    await flush();
+    fireEvent.click(screen.getByTestId("t19-on"));
+    await flush();
+    expect(runtimeControl.runtime.connect).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId("t19-view")).toHaveAttribute("data-state", "connecting");
+    expect(screen.getByTestId("t19-label")).toBeEmptyDOMElement();
+  });
+
   it("4401이면 실행부를 정리하고 /device/me로 확인해 401이면 D0 새 코드로 간다(AC6.2.8)", async () => {
     const api = scriptedDeviceApi({
       me: [{ kind: "registered", deviceId: DEVICE_ID }, { kind: "unregistered" }],

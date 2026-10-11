@@ -1,5 +1,6 @@
-import { fireEvent, screen, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { onlineManager } from "@tanstack/react-query";
+import { act, fireEvent, screen, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Home04 } from "@/parent/screens/Home04";
 import { errorResponse, homeBody, jsonResponse, type NetworkState } from "../support/fixtures";
 import { resetRouter, router } from "../support/nextNavigation";
@@ -17,6 +18,11 @@ function renderHome(body: Record<string, unknown>) {
 
 beforeEach(() => {
   resetRouter();
+});
+
+afterEach(() => {
+  // 오프라인 시험이 바꾼 TanStack 온라인 상태(모듈 단일 객체)를 되돌린다.
+  onlineManager.setOnline(true);
 });
 
 describe("04 대화 기기 구역 — 6상태 표시(BR4.6)", () => {
@@ -146,5 +152,29 @@ describe("04 조회(PD-12)", () => {
     renderParent(<Home04 />, { handler: () => errorResponse(401, "UNAUTHENTICATED") });
     await waitFor(() => expect(router.replace).toHaveBeenCalledWith("/parent/dev-login"));
     expect(screen.queryByTestId("toast")).toBeNull();
+  });
+
+  it("오프라인인 채 들어와도 토스트 + 「다시 시도」이고, 온라인이 된 뒤 「다시 시도」하면 읽는다(PD-12 · J361)", async () => {
+    // 같은 앱 안에서 이미 offline 사건을 받은 상태(보호자 영역의 QueryClient는 화면 이동 뒤에도 같다).
+    onlineManager.setOnline(false);
+    let online = false;
+    const harness = renderParent(<Home04 />, {
+      handler: () => {
+        if (!online) {
+          throw new TypeError("Failed to fetch");
+        }
+        return jsonResponse(200, homeBody("STABLE"));
+      },
+    });
+    expect(await screen.findByTestId("toast")).toHaveTextContent("잠시 문제가 생겼어요. 다시 시도해 주세요.");
+    expect(harness.requests("/api/home")).toHaveLength(1);
+    online = true;
+    act(() => window.dispatchEvent(new Event("online")));
+    // 온라인 사건만으로는 다시 부르지 않는다(진입 때 1회 · 재연결 재조회 끔).
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(harness.requests("/api/home")).toHaveLength(1);
+    fireEvent.click(screen.getByTestId("toast-action"));
+    expect(await screen.findByTestId("home-device-card")).toHaveAttribute("data-state", "stable");
+    expect(harness.requests("/api/home")).toHaveLength(2);
   });
 });
