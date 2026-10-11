@@ -14,13 +14,14 @@ import java.util.Objects;
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
 import kr.mujoong.contract.time.MujoongClock;
+import kr.mujoong.core.common.scaling.SingleInstanceAssumption;
 
 /**
  * 앱 메모리 슬라이딩 창 한도기 (U1 3.5 Step 19 · SD-10 · BR1.6 · BR2.6 · NFR7.4 · NFR9.9).
  *
  * <p>키마다 창({@code window}) 안의 시각 기록을 들고 {@code max}회까지 허락한다. 시각은 주입한 Clock이 정한다(NFR6.4 · R5). 키 수는
  * {@code mujoong.limits.rate-counter-max-keys}(10,000)를 넘지 않는다: 가득 차면 창이 끝난 키부터 지우고 그래도 모자라면 가장 오래전에 쓴
- * 키를 밀어낸다(LRU). 단일 인스턴스 전제라 재시작하면 0에서 시작한다.
+ * 키를 밀어낸다(LRU). 카운터는 메모리에만 있어 재시작하면 0에서 시작한다(SI-5 표식, 3.6 수정 J335).
  *
  * <p>한도기는 남용 억제 장치이지 인증 판정의 일부가 아니다. 내부 오류(예외)가 나면 요청을 통과시키고 오류 처리기(WARN 사건 ·
  * {@code mujoong_rate_limiter_errors_total})에 알린다(fail-open, SD-10). 출력 게이트의 fail-closed와 반대다.
@@ -28,6 +29,7 @@ import kr.mujoong.contract.time.MujoongClock;
  * <p>쓰임: bootstrap 발급 IP 한도(BR1.6, 20회 · 1시간, 키 {@link #ipKey}) — {@link #tryAcquire}. 등록 실패 한도(BR2.6, 10회 · 10분,
  * 키 보호자 id) — 요청 처음에 {@link #isLimited}, 400 · 404 · 409면 {@link #record}, 성공하면 {@link #clear}.
  */
+@SingleInstanceAssumption(si = "SI-5", reason = "카운터가 인스턴스마다 따로라 한도가 인스턴스 수만큼 늘고 재시작하면 초기화된다")
 public final class SlidingWindowRateLimiter {
 
     /** 한도기 이름(로그 limiter · 지표 라벨). */

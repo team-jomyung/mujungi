@@ -5,7 +5,6 @@ import java.util.ArrayDeque;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 import kr.mujoong.contract.audio.AudioFrameCodec;
@@ -242,6 +241,26 @@ public final class ConnectionSender {
         }
     }
 
+    /** 제어 레인에 기다리는 메시지 수({@code mujoong_queue_depth{queue=output_control}}, J298). */
+    public int controlDepth() {
+        lock.lock();
+        try {
+            return control.size();
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    /** 음성 레인의 묶음 수: 기다리는 묶음 + 보내는 중인 묶음({@code mujoong_queue_depth{queue=output_audio}}, J298). */
+    public int audioDepth() {
+        lock.lock();
+        try {
+            return audio.size() + (current == null ? 0 : 1);
+        } finally {
+            lock.unlock();
+        }
+    }
+
     /** 지금 할 수 있는 일을 모두 지금 스레드에서 한다(시험). 한 일의 수. */
     public int drainAvailable() {
         int done = 0;
@@ -290,7 +309,9 @@ public final class ConnectionSender {
                     return null;
                 }
                 try {
-                    workAvailable.await(1, TimeUnit.SECONDS);
+                    // 시한 없이 기다린다(3.6 수정 J306): 일을 만드는 모든 변경(넣기 · 닫기 요청 · 상대 닫힘 · 끊김)이 잠금 안에서
+                    // signalAll을 부르므로 놓치는 깨움이 없다. 예전의 1초 재확인은 시간 숫자 상수였다(NFR6.1)
+                    workAvailable.await();
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                     return null;
@@ -380,6 +401,7 @@ public final class ConnectionSender {
             closed = true;
             control.clear();
             clearAudioLocked();
+            workAvailable.signalAll();
         } finally {
             lock.unlock();
         }

@@ -25,6 +25,8 @@ import org.junit.jupiter.api.TestMethodOrder;
  *
  * <p>이 시험만 쓰는 PostgreSQL 인스턴스에 앱을 띄운다(실제로 DB를 멈춰 '요청마다 DB 미호출'을 보이기 위해). DB 점검 주기는 1시간으로 늘려
  * 스케줄러가 끼어들지 않게 하고 점검자를 시험이 직접 부른다(Retry-After = 점검 주기 초). DRAINING은 되돌아오지 않으므로 마지막에 둔다.
+ * 3.6 수정 분량: DB가 멈춘 동안 readiness만 503이고 liveness는 200이다(프로세스는 살아 있어 재시작 대상이 아니다, RD-16 앱별 liveness ·
+ * readiness), DB가 없는 한 점검은 READY로 되돌리지 못한다.
  */
 @Tag("u1")
 @Tag("db")
@@ -119,6 +121,26 @@ class HealthAndReadinessIT {
 
     @Test
     @Order(4)
+    void livenessStaysUpWhileTheDatabaseIsDownAndOnlyReadinessFollowsTheChecks() {
+        // 3번 시험이 멈춘 DB는 그대로다. 실제 점검 세 번 실패로 다시 NOT_READY가 된다
+        DbHealthChecker checker = app.bean(DbHealthChecker.class);
+        ReadinessState readiness = app.bean(ReadinessState.class);
+        assertThat(readiness.state()).isEqualTo(ReadinessState.State.READY);
+        for (int i = 0; i < 3; i++) {
+            checker.runOnce();
+        }
+        assertThat(readiness.state()).isEqualTo(ReadinessState.State.NOT_READY);
+
+        assertThat(app.management("/actuator/health/liveness").status()).as("프로세스는 살아 있다 — 재시작 대상이 아니다")
+                .isEqualTo(200);
+        assertThat(app.management("/actuator/health/readiness").status()).isEqualTo(503);
+        assertNotReady(app.get("/api/health").send());
+        assertThat(checker.runOnce()).as("DB가 없는 한 점검은 READY로 되돌리지 못한다").isEqualTo(ReadinessState.State.NOT_READY);
+        assertNotReady(app.get("/api/home").send());
+    }
+
+    @Test
+    @Order(5)
     void drainingAnswers503ToNewRequestsAndNeverReturnsToReady() {
         app.bean(DrainingLifecycle.class).stop();
         ReadinessState readiness = app.bean(ReadinessState.class);

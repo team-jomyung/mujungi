@@ -4,6 +4,7 @@ import java.util.Objects;
 import kr.mujoong.contract.time.DelayQueueTimerDriver;
 import kr.mujoong.contract.time.MujoongClock;
 import kr.mujoong.contract.time.TimerDriver;
+import kr.mujoong.realtime.common.scaling.SingleInstanceAssumption;
 
 /**
  * Realtime의 시계 두 개 (U1 3.5 Step 23 · RD-1 · RD-2 · RD-3 · R3-18 · NFR7.3).
@@ -17,6 +18,8 @@ import kr.mujoong.contract.time.TimerDriver;
  * <p>운영은 {@link DelayQueueTimerDriver} 두 개(데몬 플랫폼 스레드 둘)이고, 시험은 수동 구동기를 넣는다(NFR6.2). 마감은 모두 주입한
  * {@link MujoongClock}으로 계산한다.
  */
+@SingleInstanceAssumption(si = "SI-3",
+        reason = "안전 시한 · 구간 조용 시간 예약 대기열이 이 프로세스의 타이머 스레드에만 있어 다른 인스턴스로 옮길 수 없고 재시작하면 사라진다")
 public final class TimerClocks implements AutoCloseable {
 
     /** 시계 1 스레드 이름. */

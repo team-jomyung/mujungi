@@ -172,6 +172,13 @@ public class CoreInboxRepository {
                 """, params);
     }
 
+    /** 지금 DEAD 행 수({@code mujoong_inbox_dead} · METRIC_SNAPSHOT inboxDead, OD-12 · NFR4.14 · J322). 상태 색인을 탄다. */
+    public long countDead() {
+        Long dead = jdbc.queryForObject("select count(*) from core.core_inbox_event where status = 'DEAD'",
+                new MapSqlParameterSource(), Long.class);
+        return dead == null ? 0L : dead;
+    }
+
     /** S3c: 모든 RECEIVED 행의 다음 시도 시각을 now로 당긴다(BR5.7 · BR5.12, retry_count 유지). HTTP 수신을 열기 전에 부른다. */
     public int pullForwardReceived(Instant now) {
         return jdbc.update("update core.core_inbox_event set next_attempt_at = :now where status = 'RECEIVED'",

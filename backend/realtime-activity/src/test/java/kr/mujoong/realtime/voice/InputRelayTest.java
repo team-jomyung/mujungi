@@ -138,6 +138,34 @@ class InputRelayTest {
         assertThat(session.requests(ProviderRequestFactory.InputAudioAppend.class)).hasSize(1);
     }
 
+    @Test
+    void aWaitingRelayThreadWakesOnAttachAndEndsOnStopWithoutAPollingInterval() throws Exception {
+        // 3.6 수정 J306: 1초 재확인 없이 붙이기 · 넣기 · 멈추기의 신호로만 깨어난다
+        java.util.concurrent.atomic.AtomicReference<Thread> worker = new java.util.concurrent.atomic.AtomicReference<>();
+        relay.setAccepting(true);
+        relay.start((name, task) -> {
+            Thread thread = TaskLauncher.virtualThreads().launch(name, task);
+            worker.set(thread);
+            return thread;
+        });
+        relay.offer(1, frame(1), clock.monotonicNanos());
+        relay.offer(2, frame(2), clock.monotonicNanos());
+        assertThat(relay.queued()).as("공급자가 붙기 전에는 보내지 않고 기다린다").isEqualTo(2);
+
+        FakeProviderPort.FakeSession session = (FakeProviderPort.FakeSession) provider.open(event -> { },
+                Duration.ofSeconds(1));
+        relay.attach(session);
+        long deadline = System.nanoTime() + Duration.ofSeconds(5).toNanos();
+        while (session.requests(ProviderRequestFactory.InputAudioAppend.class).size() < 2 && System.nanoTime() < deadline) {
+            Thread.sleep(2);
+        }
+        assertThat(session.requests(ProviderRequestFactory.InputAudioAppend.class)).hasSize(2);
+
+        relay.stop();
+        worker.get().join(Duration.ofSeconds(5).toMillis());
+        assertThat(worker.get().isAlive()).as("멈추면 기다리던 스레드가 끝난다").isFalse();
+    }
+
     private static byte[] frame(int marker) {
         byte[] pcm = new byte[960];
         pcm[0] = (byte) marker;

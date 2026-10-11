@@ -21,7 +21,8 @@ import org.springframework.dao.TransientDataAccessResourceException;
 
 /**
  * 시험용 세션 전이 장치(메모리). 운영 {@code TransitionService}처럼 조건부 전이(출발 상태가 맞을 때만, 표에 있는 전이만)를 하고 성립한 전이를
- * 기록한다. {@link #failNext(int)}로 다음 몇 번의 호출을 DB 장애(DataAccessException)로 만든다.
+ * 기록한다. {@link #failNext(int)}로 다음 몇 번의 호출을 DB 장애(DataAccessException)로 만들고, {@link #loseCommitNext(int)}로 다음 몇
+ * 번의 성립한 전이를 행을 바꾼 뒤 DB 장애로 만든다(커밋은 됐는데 응답을 잃은 경우).
  */
 public final class InMemoryTransitions implements SessionTransitions {
 
@@ -34,6 +35,7 @@ public final class InMemoryTransitions implements SessionTransitions {
     private final MujoongClock clock;
     private int failures;
     private int crashes;
+    private int lostCommits;
 
     public InMemoryTransitions(MujoongClock clock) {
         this.clock = clock;
@@ -63,6 +65,11 @@ public final class InMemoryTransitions implements SessionTransitions {
         this.failures = count;
     }
 
+    /** 다음 {@code count}번의 성립한 전이는 행을 바꾼 뒤 DB 장애를 던진다(커밋 응답 유실 흉내, 리뷰 F5). */
+    public synchronized void loseCommitNext(int count) {
+        this.lostCommits = count;
+    }
+
     @Override
     public synchronized Optional<ActivitySessionRow> transition(UUID sessionId, SessionStatus from, SessionStatus to,
             SessionChange change, Origin origin, String traceId) {
@@ -74,6 +81,7 @@ public final class InMemoryTransitions implements SessionTransitions {
         ActivitySessionRow next = copy(current, to, current.statusVersion() + 1, change);
         rows.put(sessionId, next);
         applied.add(new Applied(sessionId, from, to, change, origin));
+        maybeLoseCommit();
         return Optional.of(next);
     }
 
@@ -95,6 +103,7 @@ public final class InMemoryTransitions implements SessionTransitions {
         ActivitySessionRow next = copy(current, to, current.statusVersion() + 1, change);
         rows.put(sessionId, next);
         applied.add(new Applied(sessionId, current.status(), to, change, origin));
+        maybeLoseCommit();
         return new ActivitySessionRepository.MultiOriginTransition(
                 ActivitySessionRepository.MultiOriginTransition.Outcome.TRANSITIONED, current.status(), next);
     }
@@ -133,6 +142,13 @@ public final class InMemoryTransitions implements SessionTransitions {
         if (failures > 0) {
             failures--;
             throw new TransientDataAccessResourceException("시험용 DB 장애");
+        }
+    }
+
+    private void maybeLoseCommit() {
+        if (lostCommits > 0) {
+            lostCommits--;
+            throw new TransientDataAccessResourceException("시험용 커밋 응답 유실");
         }
     }
 

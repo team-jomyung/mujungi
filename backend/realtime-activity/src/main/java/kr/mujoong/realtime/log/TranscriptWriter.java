@@ -86,6 +86,16 @@ public final class TranscriptWriter {
     }
 
     /**
+     * 열린 AI 행의 응답 끝(output.done)을 처리했다: 그 시각이 행의 tTranscriptFinal이다(OD-8 · 3.6 수정 J300). 열린 행이 없으면 아무것도 하지
+     * 않는다. 실행기는 열린 구간이 그 응답일 때만 부른다.
+     */
+    public void aiDone(Instant at) {
+        if (openAi != null) {
+            latency.aiTranscriptFinal(sessionId, openAi.seq, at);
+        }
+    }
+
+    /**
      * 게이트 판정과 함께 AI 행을 닫는다(통과 true · 폐기 false, 한 칸 한 문장, BR7.5).
      *
      * @return 닫은 번호. 열린 행이 없으면 빈 값

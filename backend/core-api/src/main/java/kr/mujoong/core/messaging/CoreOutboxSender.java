@@ -15,6 +15,7 @@ import kr.mujoong.contract.log.EventCode;
 import kr.mujoong.contract.log.EventLog;
 import kr.mujoong.contract.time.MujoongClock;
 import kr.mujoong.contract.trace.TraceIds;
+import kr.mujoong.core.common.scaling.SingleInstanceAssumption;
 import kr.mujoong.core.config.CoreProperties;
 import kr.mujoong.core.health.ReadinessState;
 import kr.mujoong.core.internalhttp.InternalHttpClient;
@@ -40,6 +41,8 @@ import org.springframework.stereotype.Component;
  * 요청이 오면 아직 보내지 않은 선점 행의 available_at을 now로 되돌리고 멈춘다.
  */
 @Component
+@SingleInstanceAssumption(si = "SI-6",
+        reason = "두 인스턴스의 발송 폴러가 같은 PENDING 행을 보낼 수 있다(SKIP LOCKED 선점이 줄이지만 수신 쪽 멱등이 흡수할 중복 전송이 남는다)")
 public class CoreOutboxSender {
 
     /** 발송 결정(BR5.3 표). */

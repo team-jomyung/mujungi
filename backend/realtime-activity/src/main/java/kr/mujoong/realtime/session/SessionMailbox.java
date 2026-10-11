@@ -50,8 +50,20 @@ public final class SessionMailbox {
     public record ConnectionLost(UUID connectionId) implements Message {
     }
 
-    /** 앱 종료(BR6.13 T5): 기록기 마지막 플러시. 세션은 닫지 않는다. */
-    public record ServerShutdown() implements Message {
+    /**
+     * 앱 종료(RD-13 T3 · BR6.13): 공급자 연결을 닫고 기록기 마지막 플러시를 신호한다. 세션은 닫지 않는다. 실행기가 처리를 마치면(실패해도)
+     * {@code handled}를 끝내고, 처리하지 못하고 사라지면 {@link #closeAndRelease}가 끝낸다 — 정상 종료는 이 약속을 기다린 뒤 폴러를 멈춘다
+     * (3.6 수정 J304).
+     */
+    public record ServerShutdown(CompletableFuture<Void> handled) implements Message {
+
+        public ServerShutdown {
+            Objects.requireNonNull(handled, "handled");
+        }
+
+        public ServerShutdown() {
+            this(new CompletableFuture<>());
+        }
     }
 
     /** START_SESSION ACK. */
@@ -105,12 +117,17 @@ public final class SessionMailbox {
         }
     }
 
-    /** 닫고 남은 끝내기 명령의 약속을 {@link SessionGone}으로 끝낸다. 나머지 메시지는 버린다(BR6.11). */
+    /**
+     * 닫고 남은 끝내기 명령의 약속을 {@link SessionGone}으로 끝낸다. 남은 종료 신호의 약속은 그냥 끝낸다(기다리는 정상 종료가 멈추지 않게,
+     * J304). 나머지 메시지는 버린다(BR6.11).
+     */
     public void closeAndRelease() {
         close();
         for (Message message : clear()) {
             if (message instanceof EndRequested request) {
                 request.result().completeExceptionally(new SessionGone());
+            } else if (message instanceof ServerShutdown shutdown) {
+                shutdown.handled().complete(null);
             }
         }
     }

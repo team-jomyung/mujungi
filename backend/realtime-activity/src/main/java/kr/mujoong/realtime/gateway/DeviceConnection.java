@@ -11,6 +11,7 @@ import kr.mujoong.contract.time.TimerDriver;
 import kr.mujoong.contract.ws.CloseCode;
 import kr.mujoong.contract.ws.WsEnvelope;
 import kr.mujoong.contract.ws.WsPayload;
+import kr.mujoong.realtime.common.scaling.SingleInstanceAssumption;
 
 /**
  * 기기 WSS 연결 하나의 메모리 상태 (U1 3.5 Step 24 · SD-7 핸드셰이크 상태 기계 · BR3.6 · BR3.7 · BR4.8 · RD-4 · OD-8).
@@ -20,6 +21,8 @@ import kr.mujoong.contract.ws.WsPayload;
  * 연결 원장 행 상태의 메모리 사본이라 HEARTBEAT마다 DB를 보지 않고 복귀(UNRESPONSIVE · DISCONNECTED → CONNECTED)가 필요한지 안다.
  * 기기 토큰은 확인이 끝나면 지운다(BR8.7).
  */
+@SingleInstanceAssumption(si = "SI-1",
+        reason = "마지막 기기 메시지 시각 · 시계 환산 입력(clockOffsetMs · rttMs) · HELLO 시계가 연결 객체 메모리에만 있어 다른 인스턴스가 받은 메시지를 볼 수 없다")
 public final class DeviceConnection implements DeviceLink {
 
     /** 핸드셰이크 상태(SD-7). */
@@ -162,6 +165,18 @@ public final class DeviceConnection implements DeviceLink {
     /** 서버가 닫기를 시작했는가. */
     public boolean isServerClosing() {
         return serverClosing.get();
+    }
+
+    /** 제어 레인 깊이(송신기가 없으면 0, J298). */
+    public int controlQueueDepth() {
+        ConnectionSender current = sender;
+        return current == null ? 0 : current.controlDepth();
+    }
+
+    /** 음성 레인 묶음 수(송신기가 없으면 0, J298). */
+    public int audioQueueDepth() {
+        ConnectionSender current = sender;
+        return current == null ? 0 : current.audioDepth();
     }
 
     /** 기기 메시지를 받았다(모든 텍스트 · 바이너리 프레임, BR6.12 ④ · RD-4). */

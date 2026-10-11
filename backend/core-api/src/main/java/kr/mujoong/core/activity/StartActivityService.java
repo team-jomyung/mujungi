@@ -51,7 +51,9 @@ import org.springframework.stereotype.Service;
  *   <li>REQUESTED 사본(status_version 0)을 넣고(ON CONFLICT DO NOTHING — 같은 키 동시 요청은 승자 행을 재생, 진행 중 하나 위반은 409)
  *       세션 패키지로 Realtime을 부른다. 202면 202 {sessionId, REQUESTED}. 423 → 로컬 FAILED(423) · DEVICE_NOT_STABLE, 409 → 로컬
  *       FAILED(409) · SESSION_IN_PROGRESS, 확정 실패 · 재시도 뒤 시간 초과 · 차단기 열림 → 로컬 FAILED(503) · REALTIME_UNAVAILABLE + 취소
- *       (CORE_ABANDONED, 응답 뒤 별도 가상 스레드). 로컬 FAILED 조건부 UPDATE가 0행이면(Realtime 이벤트가 사본을 앞섬) 202다.
+ *       (CORE_ABANDONED, 응답 뒤 별도 가상 스레드). 시간 초과 재시도 뒤의 409도 로컬 FAILED(409)에 취소를 더한다 — 첫 시작이 Realtime에서
+ *       아직 INIT이면 곧 커밋돼 진행되는데 사본이 종료 상태라 보호자 끝내기가 Realtime에 가지 않기 때문이다(BR6.6 끝 문장 · J320). 로컬
+ *       FAILED 조건부 UPDATE가 0행이면(Realtime 이벤트가 사본을 앞섬) 취소 없이 202다.
  * </ol>
  */
 @Service
@@ -194,9 +196,10 @@ public class StartActivityService implements DisposableBean {
         StartResult result = realtime.start(sessionPackage);
         return switch (result.kind()) {
             case ACCEPTED -> new Started(sessionId, SessionStatus.REQUESTED);
-            case DEVICE_NOT_CONNECTED -> finishLocally(sessionId, 423);
-            case CONFLICT -> finishLocally(sessionId, 409);
-            case UNAVAILABLE -> finishLocally(sessionId, 503);
+            case DEVICE_NOT_CONNECTED -> finishLocally(sessionId, 423, false);
+            // 시간 초과 재시도 뒤의 409는 첫 시작이 Realtime에서 아직 INIT일 수 있다 — BR6.7처럼 취소한다(BR6.6 끝 문장, J320)
+            case CONFLICT -> finishLocally(sessionId, 409, result.afterTimeoutRetry());
+            case UNAVAILABLE -> finishLocally(sessionId, 503, true);
         };
     }
 
@@ -255,12 +258,16 @@ public class StartActivityService implements DisposableBean {
                 Boolean.TRUE.equals(view.confirmed()), at), now);
     }
 
-    /** 로컬 FAILED로 닫고 코드대로 답한다. 0행이면(Realtime 이벤트가 앞섬) 지금 행을 재생한다(BR6.7). */
-    private Started finishLocally(UUID sessionId, int startResultCode) {
+    /**
+     * 로컬 FAILED로 닫고 코드대로 답한다. 0행이면(Realtime 이벤트가 앞섬) 취소 없이 지금 행을 재생한다(BR6.7).
+     *
+     * @param cancel 로컬 FAILED를 이겼을 때 CORE_ABANDONED 취소를 보내는가(503 · 시간 초과 재시도 뒤 409, BR6.6 · BR6.7)
+     */
+    private Started finishLocally(UUID sessionId, int startResultCode, boolean cancel) {
         Instant now = clock.now();
         if (activities.closeLocalFailed(sessionId, SessionStatus.REQUESTED, 0, startResultCode, now) == 1) {
             recordLocalFailure(events, metrics, sessionId, SessionStatus.REQUESTED, 0);
-            if (startResultCode == 503) {
+            if (cancel) {
                 scheduleCancel(sessionId);
             }
             throw CoreApiException.of(errorFor(startResultCode));

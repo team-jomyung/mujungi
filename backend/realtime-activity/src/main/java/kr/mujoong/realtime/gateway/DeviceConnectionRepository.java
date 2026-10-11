@@ -5,8 +5,10 @@ import java.sql.SQLException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Collection;
+import java.util.EnumMap;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -14,6 +16,7 @@ import java.util.UUID;
 import kr.mujoong.contract.status.ConnectionState;
 import kr.mujoong.realtime.common.db.ClockParams;
 import kr.mujoong.realtime.common.db.Transactions;
+import org.springframework.jdbc.core.RowCallbackHandler;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
@@ -63,6 +66,9 @@ public class DeviceConnectionRepository {
 
     private static final String SELECT_ALL = "select " + COLUMNS + " from realtime.realtime_device_connection"
             + " order by device_id";
+
+    private static final String COUNT_BY_STATE = "select connection_state, count(*) as devices"
+            + " from realtime.realtime_device_connection group by connection_state";
 
     // 첫 접속이면 OFFLINE 행을 먼저 만든다. 동시에 만들려는 다른 연결은 유일 색인에서 기다렸다가 아무것도 하지 않는다
     private static final String CREATE_IF_ABSENT = "insert into realtime.realtime_device_connection"
@@ -124,6 +130,17 @@ public class DeviceConnectionRepository {
     /** 연결 행 전부(10초 상태 보고는 OFFLINE까지 모두 보낸다, BR4.8). 보고의 reportedAt은 호출자가 읽기 직전 시각이다. */
     public List<DeviceConnectionRow> findAll() {
         return jdbc.query(SELECT_ALL, new MapSqlParameterSource(), ROW_MAPPER);
+    }
+
+    /**
+     * 상태별 기기 수({@code mujoong_device_connection_state{state}}, NFR4.15 · 3.6 수정 J299). 한 번도 접속하지 않은 기기는 행이 없어 세지
+     * 않는다(연결 원장이 아는 기기 분포다). 기기 수가 시연 규모(수십 행)라 순차 읽기 한 번이다.
+     */
+    public Map<ConnectionState, Long> countByState() {
+        Map<ConnectionState, Long> counts = new EnumMap<>(ConnectionState.class);
+        jdbc.query(COUNT_BY_STATE, new MapSqlParameterSource(), (RowCallbackHandler) rs -> counts.merge(
+                ConnectionState.fromWire(rs.getString("connection_state")), rs.getLong("devices"), Long::sum));
+        return counts;
     }
 
     /**

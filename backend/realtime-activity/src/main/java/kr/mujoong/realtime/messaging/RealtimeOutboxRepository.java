@@ -78,6 +78,11 @@ public class RealtimeOutboxRepository {
             + " where status = 'FAILED' and event_type = any(:types) and purged_at is null"
             + " and (last_error is null or last_error <> all(:excludedErrors))";
 
+    private static final String BACKLOG = "select count(*) filter (where status = 'PENDING') as pending,"
+            + " min(created_at) filter (where status = 'PENDING') as oldest_pending,"
+            + " count(*) filter (where status = 'FAILED') as failed"
+            + " from realtime.realtime_outbox_event where status in ('PENDING', 'FAILED')";
+
     private static final String PURGE_FAILED = "update realtime.realtime_outbox_event"
             + " set payload_json = cast('{}' as jsonb), purged_at = :now"
             + " where event_id in (select event_id from realtime.realtime_outbox_event"
@@ -223,6 +228,23 @@ public class RealtimeOutboxRepository {
         ClockParams.instant(params, "cutoff", Objects.requireNonNull(cutoff, "cutoff"));
         params.addValue("limit", limit);
         return jdbc.update(PURGE_FAILED, params);
+    }
+
+    /**
+     * 적체 지표(OD-12 · NFR7.8 · 3.6 수정 J302): PENDING 수와 그중 가장 오래된 created_at(선점으로 밀린 available_at과 무관), FAILED 수.
+     * 상태가 앞선 색인(realtime_outbox_event_poll_idx)을 타는 한 문장이다(METRIC_SNAPSHOT · {@code mujoong_outbox_*} 게이지).
+     */
+    public Backlog backlog() {
+        return jdbc.queryForObject(BACKLOG, new MapSqlParameterSource(), (rs, rowNum) -> new Backlog(rs.getLong("pending"),
+                Optional.ofNullable(ClockParams.instant(rs, "oldest_pending")), rs.getLong("failed")));
+    }
+
+    /** Outbox 적체: PENDING 수 · 가장 오래된 PENDING의 created_at(없으면 빈 값) · FAILED 수. */
+    public record Backlog(long pending, Optional<Instant> oldestPendingCreatedAt, long failed) {
+
+        public Backlog {
+            Objects.requireNonNull(oldestPendingCreatedAt, "oldestPendingCreatedAt");
+        }
     }
 
     private static MapSqlParameterSource idParams(UUID eventId, Instant now) {

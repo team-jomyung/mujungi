@@ -16,9 +16,11 @@ import kr.mujoong.contract.log.AttrKey;
 import kr.mujoong.contract.log.EventCode;
 import kr.mujoong.contract.log.EventLog;
 import kr.mujoong.contract.time.MujoongClock;
+import kr.mujoong.realtime.common.scaling.SingleInstanceAssumption;
 import kr.mujoong.realtime.config.RealtimeProperties;
 import kr.mujoong.realtime.log.TranscriptEntry.Speaker;
 import kr.mujoong.realtime.observability.EventLogger;
+import kr.mujoong.realtime.observability.RealtimeMetrics;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -35,8 +37,13 @@ import org.springframework.stereotype.Component;
  * <p>SESSION_ITEMS_SERVED: 기록기 커밋 직후 tViewItemReady, 12 진행 조회가 그 행을 처음 실은 시각 tViewItemFirstServed를 행마다 한 줄로
  * 남긴다(이미 실린 행은 다시 쓰지 않는다). 전사 · 원음은 담지 않는다. 스레드: 턴 시각은 세션 실행기(첫 프레임만 연결 송신기),
  * tViewItemReady는 기록기 플러시, 실림은 진행 조회 핸들러가 부른다 — 세션 단위로 동기화한다.
+ *
+ * <p>지표(3.6 수정 J300 · J301): 턴이 닫힐 때 {@code mujoong_relay_out_seconds} · {@code mujoong_turn_first_audio_seconds}, 행이 준비될 때
+ * {@code mujoong_view_item_ready_seconds{speaker}}를 넣는다. 로그 표본률({@code latency-log-sample-rate})과 무관하게 모든 턴 · 행을 센다.
  */
 @Component
+@SingleInstanceAssumption(si = "SI-12",
+        reason = "12 진행 조회가 이미 실은 행 번호 집합이 인스턴스마다 따로라 SESSION_ITEMS_SERVED 첫 제공 줄이 중복된다")
 public class LatencyRecorder {
 
     /** tSpeechEnd 출처(우선순위 순, OD-8). */
@@ -82,22 +89,28 @@ public class LatencyRecorder {
     };
 
     private final EventLogger events;
+    private final RealtimeMetrics metrics;
     private final MujoongClock clock;
     private final int sampleRatePercent;
     private final Duration retainEnded;
     private final ConcurrentHashMap<UUID, SessionTimes> sessions = new ConcurrentHashMap<>();
 
     @Autowired
-    public LatencyRecorder(EventLogger events, MujoongClock clock, RealtimeProperties properties) {
-        this(events, clock, properties.observability().latencyLogSampleRate(), properties.session().tombstoneTtl());
+    public LatencyRecorder(EventLogger events, RealtimeMetrics metrics, MujoongClock clock,
+            RealtimeProperties properties) {
+        this(events, metrics, clock, properties.observability().latencyLogSampleRate(),
+                properties.session().tombstoneTtl());
     }
 
     /**
-     * @param sampleRatePercent LATENCY_TURN 기록 비율(0 ~ 100, {@code mujoong.observability.latency-log-sample-rate})
+     * @param sampleRatePercent LATENCY_TURN 기록 비율(0 ~ 100, {@code mujoong.observability.latency-log-sample-rate}). 지표는 비율과
+     *     무관하게 모든 턴을 센다
      * @param retainEnded 끝난 세션의 행 시각을 남겨 두는 시간(끝난 뒤 12 조회의 실림 기록용)
      */
-    public LatencyRecorder(EventLogger events, MujoongClock clock, int sampleRatePercent, Duration retainEnded) {
+    public LatencyRecorder(EventLogger events, RealtimeMetrics metrics, MujoongClock clock, int sampleRatePercent,
+            Duration retainEnded) {
         this.events = Objects.requireNonNull(events, "events");
+        this.metrics = Objects.requireNonNull(metrics, "metrics");
         this.clock = Objects.requireNonNull(clock, "clock");
         if (sampleRatePercent < 0 || sampleRatePercent > 100) {
             throw new IllegalArgumentException("sampleRatePercent는 0 ~ 100이다");
@@ -149,6 +162,19 @@ public class LatencyRecorder {
     /** AI 행 번호가 정해졌다(행 시각 표에 화자를 남긴다). */
     public void aiItem(UUID sessionId, int seq) {
         withSession(sessionId, s -> s.items.computeIfAbsent(seq, key -> new ItemTimes(Speaker.AI)));
+    }
+
+    /**
+     * AI 행의 확정(done) 이벤트 처리 시각: 그 응답의 output.done을 세션 실행기가 처리한 시각(커밋 전, J300). 행의 tTranscriptFinal이 되고
+     * {@code mujoong_view_item_ready_seconds{speaker=ai}}의 시작점이다(구간 확정 대기 · 게이트가 그 뒤에 들어간다). 처음 값만 남긴다.
+     */
+    public void aiTranscriptFinal(UUID sessionId, int seq, Instant at) {
+        withSession(sessionId, s -> {
+            ItemTimes times = s.items.computeIfAbsent(seq, key -> new ItemTimes(Speaker.AI));
+            if (times.transcriptFinal == null) {
+                times.transcriptFinal = at;
+            }
+        });
     }
 
     /** 응답의 첫 출력 조각(t1). 턴이 없으면(입력 없는 출력) 기록하지 않는다. */
@@ -232,12 +258,18 @@ public class LatencyRecorder {
         });
     }
 
-    /** 기록기 커밋 직후(tViewItemReady, FINAL 행만). */
+    /**
+     * 기록기 커밋 직후(tViewItemReady, 승인과 함께 커밋한 FINAL 행만). 처음 준비된 때 행 확정 시각을 알면
+     * {@code mujoong_view_item_ready_seconds{speaker}}에 확정 → 준비 길이를 넣는다(NFR5.3 서버 몫, J300).
+     */
     public void itemReady(UUID sessionId, int seq, Speaker speaker, Instant at) {
         withSession(sessionId, s -> {
             ItemTimes times = s.items.computeIfAbsent(seq, key -> new ItemTimes(speaker));
             if (times.ready == null) {
                 times.ready = at;
+                if (times.transcriptFinal != null) {
+                    metrics.viewItemReady(times.speaker.name(), Duration.between(times.transcriptFinal, at));
+                }
             }
         });
     }
@@ -307,14 +339,15 @@ public class LatencyRecorder {
         Turn turn = s.turn;
         s.turn = null;
         Long relayIn = s.inputSide.drainRelayInP95Millis();
-        if (!sampled(turn.seq)) {
-            return;
-        }
         if (turn.speechEnd == null) {
             Instant lastFrame = s.inputSide.lastVoiceFrameAt();
             if (lastFrame != null) {
                 turn.offerSpeechEnd(SpeechEndSource.LAST_INPUT_FRAME, lastFrame);
             }
+        }
+        recordTurnMetrics(turn);
+        if (!sampled(turn.seq)) {
+            return;
         }
         Unobserved unobserved = turn.firstOut == null ? Unobserved.NO_OUTPUT : reason;
         events.log(EventCode.LATENCY_TURN, EventLog.Component.VOICE_RELAY, sessionId, s.traceId, entry -> {
@@ -341,6 +374,21 @@ public class LatencyRecorder {
                 entry.attr(AttrKey.UNOBSERVED_REASON, unobserved);
             }
         });
+    }
+
+    /**
+     * 턴 지표(J301, 로그 표본률과 무관하게 모든 턴): {@code mujoong_relay_out_seconds} = tFirstFrameSent − tSegmentConfirmed,
+     * {@code mujoong_turn_first_audio_seconds} = t3 − tSpeechEnd(t3 = tDevicePlayStart − clockOffsetMs, 서버 시계로 환산). 값 하나라도
+     * 관측하지 못했으면 그 지표는 넣지 않는다 — 시각을 만들지 않는다(OD-8 미관측 규칙, 오프셋이 없을 때의 추정은 계산 스크립트의 몫).
+     */
+    private void recordTurnMetrics(Turn turn) {
+        if (turn.firstFrameSent != null && turn.segmentConfirmed != null) {
+            metrics.relayOut(Duration.between(turn.segmentConfirmed, turn.firstFrameSent));
+        }
+        if (turn.devicePlayStart != null && turn.clockOffsetMs != null && turn.speechEnd != null) {
+            Instant t3 = turn.devicePlayStart.minusMillis(turn.clockOffsetMs);
+            metrics.turnFirstAudio(Duration.between(turn.speechEnd, t3));
+        }
     }
 
     private boolean sampled(int turnSeq) {

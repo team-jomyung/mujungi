@@ -3,6 +3,7 @@ package kr.mujoong.core.support;
 import java.net.URI;
 import kr.mujoong.contract.time.MujoongClock;
 import kr.mujoong.core.catalog.ApprovedContentRepository;
+import kr.mujoong.core.common.db.DbPoolWaitMonitor;
 import kr.mujoong.core.common.db.DbRetry;
 import kr.mujoong.core.common.db.DbSessionLimits;
 import kr.mujoong.core.config.CorePropertiesConfig;
@@ -78,6 +79,7 @@ public final class CoreBusinessContext {
         CoreRuntimeConfig.class,
         DbRetry.class,
         DbSessionLimits.class,
+        DbPoolWaitMonitor.class,
         RequiredSecretsCheck.class,
         SchemaVersionCheck.class
     })

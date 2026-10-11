@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.Duration;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 import kr.mujoong.contract.log.EventCode;
 import kr.mujoong.realtime.gateway.DeviceConnectionRepository;
 import kr.mujoong.realtime.log.TranscriptEntry.Speaker;
@@ -13,6 +15,7 @@ import kr.mujoong.realtime.runtime.TaskLauncher;
 import kr.mujoong.realtime.session.SessionEvent;
 import kr.mujoong.realtime.testing.ManualLauncher;
 import kr.mujoong.realtime.testing.SessionHarness;
+import kr.mujoong.realtime.testing.TestEventLoggers;
 import kr.mujoong.testsupport.log.LogCapture;
 import kr.mujoong.testsupport.time.MutableClock;
 import org.junit.jupiter.api.Tag;
@@ -30,8 +33,8 @@ class AsyncRecorderTest {
     private final MutableClock clock = new MutableClock();
     private final LogCapture logs = LogCapture.detached();
     private final RealtimeMetrics metrics = RealtimeMetrics.inMemory();
-    private final EventLogger events = EventLogger.forTest(clock, logs, metrics);
-    private final LatencyRecorder latency = new LatencyRecorder(events, clock, 100, Duration.ofMinutes(10));
+    private final EventLogger events = TestEventLoggers.strict(clock, logs, metrics);
+    private final LatencyRecorder latency = new LatencyRecorder(events, metrics, clock, 100, Duration.ofMinutes(10));
     private final SessionHarness.MemoryStore store = new SessionHarness.MemoryStore();
     private final ManualLauncher launcher = new ManualLauncher();
     private final UUID session = UUID.randomUUID();
@@ -141,5 +144,60 @@ class AsyncRecorderTest {
             assertThat(seen.rttMs()).isEqualTo(40);
         });
         assertThat(store.transcripts).hasSize(1);
+    }
+
+    // ------------------------------------------------------------------ 3.6 수정 J298 · J300 · J305
+
+    @Test
+    void drainWaitsForTheInFlightFlushToSignalItsEndAndThenWritesWhatIsLeft() throws Exception {
+        AsyncRecorder recorder = new AsyncRecorder(store, launcher, latency, events, metrics, clock, 200, 2);
+        recorder.putTranscript(TranscriptEntry.partial(session, 1, Speaker.CHILD, "진행 중", clock.now()));
+        recorder.tick();
+        recorder.putTranscript(TranscriptEntry.partial(session, 2, Speaker.CHILD, "남은 칸", clock.now()));
+
+        CompletableFuture<Integer> draining = CompletableFuture.supplyAsync(() -> recorder.drain(Duration.ofSeconds(30)));
+        assertThat(draining).as("진행 중 플러시가 끝났다는 신호 전에는 쓰지 않는다").isNotDone();
+        launcher.runAll("recorder-flush-");
+
+        assertThat(draining.get(10, TimeUnit.SECONDS)).as("신호를 받고 바로 남은 칸을 쓴다(30초를 기다리지 않는다)").isZero();
+        assertThat(store.transcripts).extracting(TranscriptEntry::sequenceNo).containsExactlyInAnyOrder(1, 2);
+    }
+
+    @Test
+    void drainGivesUpOnAStuckFlushAtTheWaitAndReportsTheRowsLeft() {
+        AsyncRecorder recorder = new AsyncRecorder(store, launcher, latency, events, metrics, clock, 200, 2);
+        recorder.putTranscript(TranscriptEntry.partial(session, 1, Speaker.CHILD, "막힌 칸", clock.now()));
+        recorder.tick();
+        recorder.putTranscript(TranscriptEntry.partial(session, 2, Speaker.CHILD, "남은 칸", clock.now()));
+
+        int left = recorder.drain(Duration.ofMillis(50));
+
+        assertThat(left).as("끝나지 않은 플러시의 칸은 남은 수로 돌려준다").isEqualTo(2);
+        assertThat(store.writes).isZero();
+        assertThat(recorder.drain(Duration.ZERO)).as("기다릴 시간이 없으면 바로 돌아온다").isEqualTo(2);
+    }
+
+    @Test
+    void heldRowsTotalSumsEverySessionAndOnlyApprovedFinalRowsBecomeReady() {
+        AsyncRecorder held = new AsyncRecorder(store, launcher, latency, events, metrics, clock, 200, 2);
+        UUID other = UUID.randomUUID();
+        held.putTranscript(TranscriptEntry.partial(session, 1, Speaker.CHILD, "가", clock.now()));
+        held.putTranscript(TranscriptEntry.partial(session, 2, Speaker.CHILD, "나", clock.now()));
+        held.putTranscript(TranscriptEntry.partial(other, 1, Speaker.AI, "", clock.now()));
+        assertThat(held.heldRowsTotal()).as("mujoong_queue_depth{queue=recorder}").isEqualTo(3);
+
+        AsyncRecorder recorder = new AsyncRecorder(store, TaskLauncher.inline(), latency, events, metrics, clock, 200, 2);
+        latency.register(session, null, null);
+        recorder.putTranscript(TranscriptEntry.finalized(session, 1, Speaker.CHILD, "공룡", true, clock.now(), clock.now()));
+        recorder.putTranscript(TranscriptEntry.finalized(session, 2, Speaker.AI, "폐기한 말", false, clock.now(),
+                clock.now()));
+        latency.itemsServed(session, java.util.List.of(new LatencyRecorder.ServedItem(1, Speaker.CHILD),
+                new LatencyRecorder.ServedItem(2, Speaker.AI)), clock.now());
+
+        java.util.List<java.util.Map<String, Object>> served = logs.events(EventCode.SESSION_ITEMS_SERVED);
+        assertThat(LogCapture.attrs(served.get(0))).containsKey("tViewItemReady");
+        assertThat(LogCapture.attrs(served.get(1))).as("승인 false로 닫힌 AI 행은 12에 실릴 수 있게 된 적이 없다")
+                .doesNotContainKey("tViewItemReady");
+        assertThat(recorder.heldRowsTotal()).isZero();
     }
 }

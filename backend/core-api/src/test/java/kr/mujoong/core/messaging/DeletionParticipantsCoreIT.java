@@ -41,7 +41,8 @@ import org.springframework.transaction.support.TransactionTemplate;
 /**
  * Core 계정 삭제 참가자 둘 (U1 3.5 Step 28 · BR2.10 · BR5.14 · J58 · A1 · A4 · SD-21 · RD-11). 두 번 불러도 같은 결과(멱등), FK 순서(활동 행이
  * 남으면 Device 참가자는 실패하고 아무것도 바꾸지 않음), PENDING · RECEIVED 유지, 다른 보호자 행 보존, SessionRecordCaptured 원문 정리,
- * FAILED 제어 이벤트는 지우지 않고 재무장, guardian_id NULL 0건.
+ * FAILED 제어 이벤트는 지우지 않고 재무장, guardian_id NULL 0건. 3.6 수정 분량: 지울 것이 없는 보호자는 두 참가자 모두 0건이고
+ * DeviceReleased를 쓰지 않으며, 보호자가 아직 없는 등록 대기(UNREGISTERED) 코드 행은 건드리지 않는다(7일 정리 작업 몫).
  */
 @Tag("u1")
 @Tag("db")
@@ -179,7 +180,44 @@ class DeletionParticipantsCoreIT {
         });
     }
 
+    @Test
+    void aGuardianWithNothingToDeleteGetsZeroCountsNoReleaseAndPendingCodesStay() {
+        Family family = fixtures.family(clock.now());
+        UUID pendingCode = unregisteredDevice();
+        context().run(context -> {
+            UUID requestId = UUID.randomUUID();
+
+            assertThat(context.getBean(DeviceDeletionParticipant.class).deleteByGuardian(family.guardianId(), requestId))
+                    .containsOnly(Map.entry(DeviceDeletionParticipant.DEVICE, 0));
+            assertThat(context.getBean(CoreMessagingDeletionParticipant.class).deleteByGuardian(family.guardianId(), requestId))
+                    .containsEntry(CoreMessagingDeletionParticipant.OUTBOX, 0)
+                    .containsEntry(CoreMessagingDeletionParticipant.INBOX, 0);
+
+            assertThat(count("select count(*) from core.core_outbox_event where guardian_id = :g",
+                    new MapSqlParameterSource("g", family.guardianId()))).as("기기가 없으면 DeviceReleased도 없다").isZero();
+            assertThat(db.jdbc().queryForObject("select registration_status from core.core_device where id = :id",
+                    new MapSqlParameterSource("id", pendingCode), String.class))
+                    .as("보호자 없는 등록 대기 행은 삭제 대상이 아니다").isEqualTo("UNREGISTERED");
+        });
+    }
+
     // ------------------------------------------------------------------ 도움
+
+    /** 보호자가 아직 없는 등록 대기 코드 행(기기 웹이 받은 코드). */
+    private UUID unregisteredDevice() {
+        UUID id = UUID.randomUUID();
+        MapSqlParameterSource params = kr.mujoong.core.common.db.ClockParams.at(clock.now());
+        kr.mujoong.core.common.db.ClockParams.uuid(params, "id", id);
+        kr.mujoong.core.common.db.ClockParams.instant(params, "expiresAt", clock.now().plus(Duration.ofHours(24)));
+        kr.mujoong.core.common.db.ClockParams.text(params, "code", DbTestSupport.randomCode());
+        kr.mujoong.core.common.db.ClockParams.text(params, "hash", DbTestSupport.randomHash());
+        db.jdbc().update("""
+                insert into core.core_device (id, registration_code, code_issued_at, code_expires_at, bootstrap_secret_hash,
+                    registration_status, created_at, updated_at)
+                values (:id, :code, :now, :expiresAt, :hash, 'UNREGISTERED', :now, :now)
+                """, params);
+        return db.trackDevice(id);
+    }
 
     private org.springframework.boot.test.context.runner.ApplicationContextRunner context() {
         return CoreBusinessContext.runner(postgres, clock, java.net.URI.create("http://127.0.0.1:9"),

@@ -13,6 +13,7 @@ import kr.mujoong.contract.log.EventCode;
 import kr.mujoong.contract.log.EventLog;
 import kr.mujoong.contract.time.MujoongClock;
 import kr.mujoong.core.activity.PreparingTimeoutChecker;
+import kr.mujoong.core.common.scaling.SingleInstanceAssumption;
 import kr.mujoong.core.config.CoreProperties;
 import kr.mujoong.core.device.DeviceExpiryCleanupJob;
 import kr.mujoong.core.health.DbHealthChecker;
@@ -25,6 +26,7 @@ import kr.mujoong.core.messaging.CoreOutboxRepository;
 import kr.mujoong.core.messaging.CoreOutboxSender;
 import kr.mujoong.core.messaging.MessagingCleanupJob;
 import kr.mujoong.core.observability.EventLogger;
+import kr.mujoong.core.observability.snapshot.MetricSnapshotJob;
 import org.springframework.context.SmartLifecycle;
 import org.springframework.stereotype.Component;
 
@@ -40,13 +42,18 @@ import org.springframework.stereotype.Component;
  *   <li>S3d: FAILED 제어 이벤트 재무장(A1).
  *   <li>S3f: 크래시로 남은 Outbox 선점 · 재시도 대기를 걷는다(R3-5).
  *   <li>S3e: STARTUP_RECOVERY 한 줄(실패해도 기동은 계속).
- *   <li>S4: outbox-sender · inbox-repoll · maintenance 스케줄러를 고정 지연으로 시작한다(처리 풀은 디스패처가 가진다).
+ *   <li>S4: outbox-sender · inbox-repoll · maintenance 스케줄러를 고정 지연으로 시작한다(처리 풀은 디스패처가 가진다). maintenance는
+ *       METRIC_SNAPSHOT 표본도 {@code mujoong.observability.system-sample-interval}마다 돌린다(OD-6, 3.6 수정 J326).
  *   <li>S6: 준비 상태 READY.
  * </ol>
  *
  * <p>S2 ~ S4 실패는 예외로 기동을 끝낸다(종료 코드 1). 정지는 {@link DrainingLifecycle}이 먼저 부르고 이 빈의 stop이 한 번 더 확인한다.
+ *
+ * <p>S3c · S3f는 앱당 컨테이너 1개라 다른 폴러가 선점 중인 행이 없다는 전제로 선점을 모두 걷는다(reliability-design S3f, SI-6 표식 J337).
  */
 @Component
+@SingleInstanceAssumption(si = "SI-6",
+        reason = "기동 복구(S3c · S3f)가 Inbox · Outbox 선점을 모두 걷어 다른 인스턴스가 쥔 행을 다시 보내거나 처리하게 된다")
 public class CoreStartupSequence implements SmartLifecycle {
 
     /** 웹 서버 시작(MAX − 2048)보다 앞. */
@@ -63,6 +70,7 @@ public class CoreStartupSequence implements SmartLifecycle {
     private final DbHealthChecker dbHealthChecker;
     private final DeviceExpiryCleanupJob deviceExpiryCleanupJob;
     private final MessagingCleanupJob messagingCleanupJob;
+    private final MetricSnapshotJob metricSnapshotJob;
     private final EventLogger events;
     private final ReadinessState readiness;
     private final MujoongClock clock;
@@ -83,6 +91,7 @@ public class CoreStartupSequence implements SmartLifecycle {
             DbHealthChecker dbHealthChecker,
             DeviceExpiryCleanupJob deviceExpiryCleanupJob,
             MessagingCleanupJob messagingCleanupJob,
+            MetricSnapshotJob metricSnapshotJob,
             EventLogger events,
             ReadinessState readiness,
             MujoongClock clock,
@@ -98,6 +107,7 @@ public class CoreStartupSequence implements SmartLifecycle {
         this.dbHealthChecker = Objects.requireNonNull(dbHealthChecker, "dbHealthChecker");
         this.deviceExpiryCleanupJob = Objects.requireNonNull(deviceExpiryCleanupJob, "deviceExpiryCleanupJob");
         this.messagingCleanupJob = Objects.requireNonNull(messagingCleanupJob, "messagingCleanupJob");
+        this.metricSnapshotJob = Objects.requireNonNull(metricSnapshotJob, "metricSnapshotJob");
         this.events = Objects.requireNonNull(events, "events");
         this.readiness = Objects.requireNonNull(readiness, "readiness");
         this.clock = Objects.requireNonNull(clock, "clock");
@@ -154,6 +164,8 @@ public class CoreStartupSequence implements SmartLifecycle {
                 messagingCleanupJob::runOnce);
         fixedDelay(maintenance, properties.observability().logMergeWindow(), EventLog.Component.CORE_MAINTENANCE,
                 events::flushMerged);
+        fixedDelay(maintenance, properties.observability().systemSampleInterval(), EventLog.Component.CORE_MAINTENANCE,
+                metricSnapshotJob::tick);
     }
 
     private ScheduledExecutorService scheduler(String name) {
@@ -181,7 +193,8 @@ public class CoreStartupSequence implements SmartLifecycle {
     }
 
     /**
-     * T4: 스케줄러를 멈춘다. 발송기는 진행 중 한 건을 마치고 남은 선점을 되돌린다. 진행 중 작업은 발행 제한 + 문장 제한까지 기다린다. 멱등이다.
+     * T4: 스케줄러를 멈춘다. 발송기는 진행 중 한 건을 마치고 남은 선점을 되돌린다. 진행 중 작업(처리기 포함)은 모두 합쳐 발행 제한 + 문장
+     * 제한(13초) 안에서 기다린다 — 실행기마다 따로 기다리면 합이 30초 유예를 넘을 수 있다(3.6 수정 J321). 멱등이다.
      */
     public void stopSchedulers() {
         sender.requestStop();
@@ -195,15 +208,21 @@ public class CoreStartupSequence implements SmartLifecycle {
         }
         dispatcher.shutdown();
         Duration grace = properties.internalHttp().eventPublishTimeout().plus(properties.limits().dbStatementTimeout());
+        long started = clock.monotonicNanos();
         try {
             for (ScheduledExecutorService executor : toStop) {
-                executor.awaitTermination(grace.toMillis(), TimeUnit.MILLISECONDS);
+                executor.awaitTermination(remaining(grace, started).toMillis(), TimeUnit.MILLISECONDS);
             }
-            dispatcher.awaitTermination(grace);
+            dispatcher.awaitTermination(remaining(grace, started));
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
         running = false;
+    }
+
+    private Duration remaining(Duration grace, long startedNanos) {
+        Duration left = grace.minus(clock.elapsedSince(startedNanos));
+        return left.isNegative() ? Duration.ZERO : left;
     }
 
     @Override

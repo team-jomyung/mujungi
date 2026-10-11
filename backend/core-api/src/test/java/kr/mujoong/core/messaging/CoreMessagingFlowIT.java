@@ -32,6 +32,7 @@ import kr.mujoong.core.health.ReadinessState;
 import kr.mujoong.core.messaging.CoreInboxRepository.NewInboxEvent;
 import kr.mujoong.core.messaging.CoreOutboxRepository.OutboxEvent;
 import kr.mujoong.core.observability.EventLogger;
+import kr.mujoong.core.observability.snapshot.MetricSnapshotJob;
 import kr.mujoong.core.startup.CoreStartupSequence;
 import kr.mujoong.core.startup.SchemaVersionCheck;
 import kr.mujoong.core.support.BusinessFixtures;
@@ -435,6 +436,7 @@ class CoreMessagingFlowIT {
                 context.getBean(DbHealthChecker.class),
                 context.getBean(DeviceExpiryCleanupJob.class),
                 context.getBean(MessagingCleanupJob.class),
+                context.getBean(MetricSnapshotJob.class),
                 context.getBean(EventLogger.class),
                 context.getBean(ReadinessState.class),
                 context.getBean(kr.mujoong.contract.time.MujoongClock.class),

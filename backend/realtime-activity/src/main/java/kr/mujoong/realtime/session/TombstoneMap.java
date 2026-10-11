@@ -7,6 +7,7 @@ import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import kr.mujoong.contract.time.MujoongClock;
+import kr.mujoong.realtime.common.scaling.SingleInstanceAssumption;
 import kr.mujoong.realtime.config.RealtimeProperties;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -19,6 +20,8 @@ import org.springframework.stereotype.Component;
  * SESSION_NOT_ACTIVE로 거절한다. Realtime 메모리 값이라 재시작하면 사라진다(그때 늦게 만들어진 세션은 BR6.14의 재취소로 닫힌다).
  */
 @Component
+@SingleInstanceAssumption(si = "SI-4",
+        reason = "Core 취소 묘비(10분)가 이 프로세스 메모리에만 있어 다른 인스턴스로 간 늦은 시작이 거절되지 않는다")
 public class TombstoneMap {
 
     private final ConcurrentHashMap<UUID, Instant> stones = new ConcurrentHashMap<>();

@@ -4,6 +4,7 @@ import java.time.Duration;
 import java.util.Objects;
 import kr.mujoong.contract.log.EventLog;
 import kr.mujoong.contract.time.MujoongClock;
+import kr.mujoong.realtime.common.scaling.SingleInstanceAssumption;
 import kr.mujoong.realtime.config.RealtimeProperties;
 import kr.mujoong.realtime.observability.EventLogger;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -17,6 +18,8 @@ import org.springframework.stereotype.Component;
  * DISCONNECTED로 바꾼다(소켓이 열린 채 무음이어도 같다). 바뀐 행만 DeviceStatusChanged를 쓴다. 원장 상태 변화는 세션 전이를 일으키지 않는다(BR4.7).
  */
 @Component
+@SingleInstanceAssumption(si = "SI-7",
+        reason = "인스턴스마다 5초 연결 점검이 돌아 같은 무음 행을 두고 경합한다(조건부 갱신이라 결과는 같다)")
 public class DisconnectChecker {
 
     private final DeviceConnectionRepository connections;

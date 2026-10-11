@@ -6,6 +6,7 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import kr.mujoong.contract.ws.CloseCode;
+import kr.mujoong.realtime.common.scaling.SingleInstanceAssumption;
 import org.springframework.stereotype.Component;
 
 /**
@@ -16,6 +17,8 @@ import org.springframework.stereotype.Component;
  * 명령은 423이다(RD-4). 교체는 연결 행 교체 트랜잭션을 커밋한 뒤에만 한다(R3-7).
  */
 @Component
+@SingleInstanceAssumption(si = "SI-1",
+        reason = "기기 → 현재 연결 · 연결 id → 연결 지도가 이 프로세스 메모리에만 있어 시작 명령 · 연결 대체(4001) · DeviceReleased(4401)가 소켓 없는 인스턴스로 가면 닿지 않는다")
 public class SocketRegistry {
 
     private final ConcurrentHashMap<UUID, DeviceConnection> open = new ConcurrentHashMap<>();
@@ -91,5 +94,23 @@ public class SocketRegistry {
     /** 열린 연결 수. */
     public int openCount() {
         return open.size();
+    }
+
+    /** 열린 연결들의 제어 레인 깊이 합({@code mujoong_queue_depth{queue=output_control}}, J298). */
+    public long queuedControl() {
+        long queued = 0;
+        for (DeviceConnection connection : open.values()) {
+            queued += connection.controlQueueDepth();
+        }
+        return queued;
+    }
+
+    /** 열린 연결들의 음성 레인 묶음 수 합({@code mujoong_queue_depth{queue=output_audio}}, J298). */
+    public long queuedAudio() {
+        long queued = 0;
+        for (DeviceConnection connection : open.values()) {
+            queued += connection.audioQueueDepth();
+        }
+        return queued;
     }
 }

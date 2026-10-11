@@ -5,6 +5,10 @@ import static kr.mujoong.realtime.testing.RealtimeItEnvironment.awaitTrue;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.ResultSet;
+import java.sql.Statement;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -41,6 +45,7 @@ import kr.mujoong.realtime.testing.RealtimeItEnvironment;
 import kr.mujoong.realtime.testing.RealtimeTestApp;
 import kr.mujoong.testsupport.device.DeviceSimulatorClient;
 import kr.mujoong.testsupport.http.ContractStubServer;
+import kr.mujoong.testsupport.db.MujoongPostgres.Role;
 import kr.mujoong.testsupport.http.ContractStubServer.StubResponse;
 import kr.mujoong.testsupport.log.LogCapture;
 import kr.mujoong.testsupport.provider.FakeProviderWsServer;
@@ -59,6 +64,10 @@ import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
  * <p>앱을 띄우기 전에 DB에 비종료 세션 · CONNECTED 연결 행 · 미뤄 둔 Inbox 행 · 선점된 Outbox 행 · FAILED 제어 이벤트를 넣어 두고 기동한다.
  * 복구 뒤 상태와 STARTUP_RECOVERY 한 줄, 복구가 끝나기 전에는 readiness가 UP이 아님을 본다. 기동 점검 거부는 웹 서버가 뜨기 전에 끝난다.
  * 실행기 없는 비종료 세션은 고아 세션 점검이 FAILED(SERVER_RESTART)로 한 번 닫고 같은 보호자 · 기기의 새 시작이 성공한다.
+ *
+ * <p>3.6 수정(BT-TC-10)에서 더한 둘: 복구를 한 번 더 돌려도 바꿀 행이 없다(S3 각 문장 멱등, RD-12) · S2b 데이터 등급 거부는 S3 복구보다
+ * 먼저라 남은 세션 · 연결 행을 건드리지 않고 기동을 끝낸다. 등급은 공용 DB를 바꾸지 않고 앱 연결의 세션 설정(접속 options)으로 'real'을
+ * 보이게 한다(3.6 수정 J316).
  */
 @Tag("u1")
 @Tag("db")
@@ -222,6 +231,74 @@ class RealtimeStartupRecoveryIT {
 
         assertThatThrownBy(() -> RealtimeTestApp.start(args)).hasRootCauseInstanceOf(
                 RealtimeStartupChecks.StartupRejectedException.class);
+    }
+
+    @Test
+    void aSecondRecoveryPassFindsNothingToChangeBecauseEveryS3StatementIsIdempotent() {
+        Instant now = Instant.now();
+        ActivitySessionRepository sessions = new ActivitySessionRepository(db.jdbc());
+        UUID active = seedSession(sessions, now, SessionStatus.ACTIVE);
+        UUID deviceId = UUID.randomUUID();
+        DeviceConnectionRepository connections = new DeviceConnectionRepository(db.jdbc());
+        db.inTransaction(() -> connections.handover(deviceId, UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), now));
+
+        app = RealtimeTestApp.start(args(provider.uri()));
+        RealtimeStartupSequence sequence = app.bean(RealtimeStartupSequence.class);
+        ActivitySessionRow recovered = sessions.find(active).orElseThrow();
+        assertThat(recovered.status()).isEqualTo(SessionStatus.FAILED);
+        // 첫 복구가 쓴 Outbox 행(SessionStateChanged · DeviceStatusChanged)이 모두 나간 뒤에 다시 돌린다 — 발송 중 선점 행이 없게
+        awaitTrue(() -> db.single("select count(*) from realtime.realtime_outbox_event where status <> 'PUBLISHED'",
+                new MapSqlParameterSource(), Long.class) == 0, "첫 복구 이벤트 발송");
+        long outboxRows = db.single("select count(*) from realtime.realtime_outbox_event", new MapSqlParameterSource(),
+                Long.class);
+
+        RealtimeStartupSequence.Recovery again = sequence.recover();
+
+        assertThat(again).isEqualTo(new RealtimeStartupSequence.Recovery(0, 0, 0, 0, 0));
+        ActivitySessionRow after = sessions.find(active).orElseThrow();
+        assertThat(after.status()).isEqualTo(SessionStatus.FAILED);
+        assertThat(after.statusVersion()).isEqualTo(recovered.statusVersion());
+        assertThat(db.single("select count(*) from realtime.realtime_outbox_event", new MapSqlParameterSource(),
+                Long.class)).as("두 번째 복구는 이벤트를 다시 쓰지 않는다").isEqualTo(outboxRows);
+    }
+
+    @Test
+    void aDataClassRejectionEndsStartupBeforeRecoveryTouchesAnyLeftover() throws Exception {
+        Instant now = Instant.now();
+        ActivitySessionRepository sessions = new ActivitySessionRepository(db.jdbc());
+        UUID preparing = seedSession(sessions, now, SessionStatus.PREPARING);
+        UUID deviceId = UUID.randomUUID();
+        UUID connectionId = UUID.randomUUID();
+        DeviceConnectionRepository connections = new DeviceConnectionRepository(db.jdbc());
+        db.inTransaction(() -> connections.handover(deviceId, connectionId, UUID.randomUUID(), UUID.randomUUID(), now));
+        // 공용 DB의 등급(synthetic)은 그대로 두고 앱 연결에서만 'real'로 보이게 한다(시드 사전과 함께면 SD-24 거부)
+        String realClassUrl = db.postgres().jdbcUrl() + "?options=-c%20" + DataClassCheck.SETTING + "%3Dreal";
+        assertThat(dataClassSeenBy(realClassUrl)).as("전제: 그 연결이 보는 등급").isEqualTo("real");
+        Map<String, String> args = args(provider.uri());
+        args.put("spring.datasource.url", realClassUrl);
+
+        assertThatThrownBy(() -> RealtimeTestApp.start(args))
+                .hasRootCauseInstanceOf(RealtimeStartupChecks.StartupRejectedException.class)
+                .rootCause().hasMessageContaining(DataClassCheck.SETTING + "=REAL");
+
+        // S2b가 S3a · S3b보다 먼저다: 비종료 세션도 CONNECTED 연결 행도 그대로다
+        ActivitySessionRow untouched = sessions.find(preparing).orElseThrow();
+        assertThat(untouched.status()).isEqualTo(SessionStatus.PREPARING);
+        assertThat(untouched.failureCode()).isNull();
+        assertThat(connections.find(deviceId).orElseThrow()).satisfies(row -> {
+            assertThat(row.state()).isEqualTo(ConnectionState.CONNECTED);
+            assertThat(row.connectionId()).isEqualTo(connectionId);
+        });
+    }
+
+    /** 그 접속 주소로 앱 역할이 보는 데이터 등급 설정. */
+    private String dataClassSeenBy(String jdbcUrl) throws Exception {
+        try (Connection connection = DriverManager.getConnection(jdbcUrl, db.postgres().username(Role.REALTIME_APP),
+                db.postgres().password(Role.REALTIME_APP)); Statement statement = connection.createStatement();
+                ResultSet rs = statement.executeQuery("select current_setting('" + DataClassCheck.SETTING + "', true)")) {
+            rs.next();
+            return rs.getString(1);
+        }
     }
 
     private Map<String, String> args(java.net.URI providerUrl) {

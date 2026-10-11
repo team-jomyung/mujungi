@@ -4,12 +4,14 @@ import java.net.URI;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 import kr.mujoong.realtime.voice.ProviderPort;
 import kr.mujoong.realtime.voice.ProviderRequestFactory;
 
 /**
  * 시험용 공급자 입구(realtime {@link ProviderPort} 구현이라 이 앱의 src/test에 둔다). 연결 거부 · started 없음 · 정상을 고르고, 열린
- * 세션으로 공급자 이벤트를 흘려 넣으며 받은 요청을 기록한다.
+ * 세션으로 공급자 이벤트를 흘려 넣으며 받은 요청을 기록한다. {@link #signalClosedOnClose}를 켜면 세션 닫기가 실제
+ * {@code ProviderClient}처럼 닫기를 부른 스레드에서 리스너에 Closed를 한 번 알린다(리뷰 F2 시험).
  */
 public final class FakeProviderPort implements ProviderPort {
 
@@ -26,6 +28,7 @@ public final class FakeProviderPort implements ProviderPort {
     private final URI endpoint;
     private final List<FakeSession> sessions = new ArrayList<>();
     private volatile Mode mode = Mode.OK;
+    private volatile boolean signalClosedOnClose;
 
     public FakeProviderPort() {
         this(URI.create("ws://127.0.0.1:9/fake-provider"));
@@ -39,6 +42,11 @@ public final class FakeProviderPort implements ProviderPort {
         this.mode = value;
     }
 
+    /** 이후 여는 세션의 닫기가 닫기를 부른 스레드에서 리스너에 Closed를 알리는가(실제 클라이언트의 reader.signalClosed 흉내). */
+    public void signalClosedOnClose(boolean value) {
+        this.signalClosedOnClose = value;
+    }
+
     @Override
     public URI endpoint() {
         return endpoint;
@@ -49,7 +57,7 @@ public final class FakeProviderPort implements ProviderPort {
         if (mode == Mode.REFUSE) {
             throw new ProviderUnavailableException(ProviderUnavailableException.Reason.CONNECT_FAILED);
         }
-        FakeSession session = new FakeSession(listener, mode);
+        FakeSession session = new FakeSession(listener, mode, signalClosedOnClose);
         synchronized (sessions) {
             sessions.add(session);
         }
@@ -77,12 +85,15 @@ public final class FakeProviderPort implements ProviderPort {
 
         private final Listener listener;
         private final Mode mode;
+        private final boolean signalOnClose;
+        private final AtomicBoolean closedSignalled = new AtomicBoolean();
         private final List<Object> requests = new ArrayList<>();
         private volatile boolean open = true;
 
-        private FakeSession(Listener listener, Mode mode) {
+        private FakeSession(Listener listener, Mode mode, boolean signalOnClose) {
             this.listener = listener;
             this.mode = mode;
+            this.signalOnClose = signalOnClose;
         }
 
         @Override
@@ -105,11 +116,13 @@ public final class FakeProviderPort implements ProviderPort {
         public void close(ProviderRequestFactory.SessionClose request) {
             record(request);
             open = false;
+            signalClosed();
         }
 
         @Override
         public void close() {
             open = false;
+            signalClosed();
         }
 
         @Override
@@ -133,6 +146,12 @@ public final class FakeProviderPort implements ProviderPort {
 
         private synchronized void record(Object request) {
             requests.add(request);
+        }
+
+        private void signalClosed() {
+            if (signalOnClose && closedSignalled.compareAndSet(false, true)) {
+                listener.onEvent(new ProviderEvent.Closed());
+            }
         }
     }
 }

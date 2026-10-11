@@ -36,7 +36,8 @@ import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
  * <p>실제 흐름(코드 받기 → 등록 → claim → 토큰 확인 → 연결 보고 → 시작 → 진행 조회(전사 중계) → 끝내기 → 재등록 → DeviceReleased 전달)과 보안
  * 사건 5종을 돈 뒤, 앱이 표준 출력에 쓰는 줄 · 오류 봉투 · Prometheus 지표 · 전달 끝난 Outbox 행에 내부 토큰 · 기기 토큰 · bootstrap 비밀 ·
  * 세션 쿠키 · CSRF 토큰 · 전체 등록 코드 · 08 입력 원문 · 전사 · 원시 id가 하나도 없는지 본다. 시험 로그인 차단 사건을 보려고 dev가 아닌
- * 조합으로 띄운다.
+ * 조합으로 띄운다. 3.6 수정 분량: 거절된 본문(JSON 아님 · 봉투 위반 · 모르는 enum · 형식 위반 코드 · 길이 초과 서술)에 넣은 표지가 오류 봉투 ·
+ * 출력 줄 어디에도 되울리지 않는다(SD-11 · BR5.13: 본문 · payload는 로그 · 예외 메시지에 넣지 않는다).
  */
 @Tag("u1")
 @Tag("db")
@@ -249,6 +250,38 @@ class CoreLogHygieneIT {
         assertThat(LogCapture.attrs(merged.get(1))).containsEntry("repeat", 4).containsEntry("statusCode", 401);
         assertThat(app.bean(CoreMetrics.class).count("mujoong.security.event", "type", "auth_failed") - before)
                 .as("카운터는 실제 건수").isEqualTo(5.0);
+    }
+
+    @Test
+    void rejectedBodiesAreNeverEchoedIntoEnvelopesOrOutputLines() {
+        String marker = "거절본문표지" + UUID.randomUUID();
+        Guardian guardian = WebFixtures.guardian(app, db);
+        UUID deviceId = UUID.randomUUID();
+
+        List<Result> rejected = new ArrayList<>();
+        rejected.add(app.post("/internal/events").internalToken().json("not json " + marker).send());
+        rejected.add(app.post("/internal/events").internalToken()
+                .json("{\"eventId\":\"" + marker + "\",\"eventType\":\"DeviceStatusChanged\",\"payload\":{\"note\":\"" + marker
+                        + "\"}}").send());
+        rejected.add(app.put("/internal/devices/" + deviceId + "/connection").internalToken()
+                .json("{\"state\":\"" + marker + "\",\"reportedAt\":\"" + marker + "\"}").send());
+        rejected.add(app.post("/api/device/register").session(guardian.session()).csrf(guardian.csrf())
+                .json("{\"code\":\"" + marker + "\"}").send());
+        rejected.add(app.post("/api/activities/free").session(guardian.session()).csrf(guardian.csrf())
+                .json("{\"idempotencyKey\":\"" + UUID.randomUUID() + "\",\"context\":{\"knownContent\":\"" + marker
+                        + "가".repeat(200) + "\"}}").send());
+        // 병합 창에 남은 반복 줄까지 내보낸다
+        freshWindow();
+
+        assertThat(rejected).extracting(Result::status).containsExactly(400, 400, 400, 400, 400);
+        for (Result result : rejected) {
+            assertThat(result.json()).containsOnlyKeys("code", "message", "traceId");
+            assertThat(result.body()).as("오류 봉투에 입력값이 없다").doesNotContain(marker);
+        }
+        assertThat(rejected).extracting(Result::code)
+                .containsExactly("INVALID_ENVELOPE", "INVALID_ENVELOPE", "INVALID_ENVELOPE", "VALIDATION_FAILED",
+                        "VALIDATION_FAILED");
+        assertThat(output.lines()).as("출력 줄에 거절된 본문 조각이 없다").noneMatch(line -> line.contains(marker));
     }
 
     // ------------------------------------------------------------------ 도움

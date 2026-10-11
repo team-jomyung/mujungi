@@ -9,6 +9,7 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
+import kr.mujoong.realtime.common.scaling.SingleInstanceAssumption;
 import org.springframework.stereotype.Component;
 
 /**
@@ -20,6 +21,8 @@ import org.springframework.stereotype.Component;
  * 버려진다(BR6.11).
  */
 @Component
+@SingleInstanceAssumption(si = "SI-2",
+        reason = "sessionId → 실행기 지도가 이 프로세스 메모리에만 있어 명령 · 이벤트가 실행기 없는 인스턴스로 가면 처리할 수 없다")
 public class SessionRegistry {
 
     /** 등록 상태. */
@@ -147,5 +150,14 @@ public class SessionRegistry {
     /** 등록 수. */
     public int size() {
         return entries.size();
+    }
+
+    /** 등록된 세션 편지함들의 대기 메시지 합(안전 + 일반, INIT 포함). {@code mujoong_queue_depth{queue=session_mailbox}}(J298). */
+    public long queuedMessages() {
+        long queued = 0;
+        for (Entry entry : entries.values()) {
+            queued += entry.mailbox.safetySize() + entry.mailbox.generalSize();
+        }
+        return queued;
     }
 }

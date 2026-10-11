@@ -99,7 +99,7 @@ class CorePropertiesValidationTest {
         environment.setActiveProfiles("prod");
         environment.setProperty(RequiredSecretsCheck.INTERNAL_TOKEN, "tiny");
         CoreProperties.Observability observability = new CoreProperties.Observability(shortSecret, Duration.ofSeconds(60),
-                Duration.ofSeconds(10));
+                Duration.ofSeconds(10), Duration.ofSeconds(5));
         CoreProperties properties = org.mockito.Mockito.mock(CoreProperties.class);
         org.mockito.Mockito.when(properties.observability()).thenReturn(observability);
         ByteArrayOutputStream err = new ByteArrayOutputStream();

@@ -75,6 +75,14 @@ management:
     distribution:
       slo:
         "[http.server.requests]": 100ms,300ms,500ms,1s
+        # Realtime 히스토그램 버킷(observability-design.md 2.5 표, 3.6 수정 J296). view_item_ready는 표에 값이 없어
+        # NFR5.3 서버 몫 0.5초 · 전체 1.5초를 경계에 넣었다
+        "[mujoong.session.start.to.active]": 1s,2s,4s,6s,8s,10s,15s,20s
+        "[mujoong.event.delivery]": 100ms,250ms,500ms,1s,2s,5s,10s,30s,60s,300s
+        "[mujoong.relay.in]": 10ms,25ms,50ms,100ms,200ms,300ms,500ms,1s
+        "[mujoong.relay.out]": 10ms,25ms,50ms,100ms,200ms,300ms,500ms,1s
+        "[mujoong.turn.first.audio]": 500ms,1s,1500ms,2s,2500ms,3s,4s,6s,10s
+        "[mujoong.view.item.ready]": 50ms,100ms,250ms,500ms,1s,1500ms,2s,5s
 
 mujoong:
   timing:
@@ -151,3 +159,5 @@ mujoong:
     latency-log-sample-rate: 100
     metric-snapshot-interval: 60s
     log-merge-window: 10s
+    # OD-6 '앱 안 5초 표본'(CPU · 메모리 · 풀 · 적체 · 연결 상태 게이지 갱신) 주기(3.6 수정 J302, Core와 같은 키 · 값)
+    system-sample-interval: 5s

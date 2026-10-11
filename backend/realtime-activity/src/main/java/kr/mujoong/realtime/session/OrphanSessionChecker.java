@@ -4,6 +4,7 @@ import java.util.Objects;
 import kr.mujoong.contract.log.EventLog;
 import kr.mujoong.contract.status.SessionStatus;
 import kr.mujoong.contract.time.MujoongClock;
+import kr.mujoong.realtime.common.scaling.SingleInstanceAssumption;
 import kr.mujoong.realtime.observability.EventLogger;
 import org.springframework.stereotype.Component;
 
@@ -15,6 +16,8 @@ import org.springframework.stereotype.Component;
  * {@code OrphanSessionDetected} 한 줄을 남긴다. INIT 등록은 세션 행 INSERT보다 먼저라 시작 중인 세션을 고아로 보지 않는다(SCD-1).
  */
 @Component
+@SingleInstanceAssumption(si = {"SI-2", "SI-7"},
+        reason = "이 인스턴스 레지스트리에 실행기가 없는 비종료 세션을 고아로 닫으므로 다른 인스턴스 실행기가 도는 세션도 FAILED(SERVER_RESTART)가 된다")
 public class OrphanSessionChecker {
 
     private final ActivitySessionRepository sessions;

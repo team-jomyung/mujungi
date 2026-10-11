@@ -25,6 +25,7 @@ import kr.mujoong.contract.ws.message.SessionState;
 import kr.mujoong.contract.ws.message.StartSession;
 import kr.mujoong.contract.ws.message.StopOutput;
 import kr.mujoong.contract.ws.message.View;
+import kr.mujoong.realtime.common.scaling.SingleInstanceAssumption;
 import kr.mujoong.realtime.config.RealtimeProperties;
 import kr.mujoong.realtime.gate.ApprovedPlayback;
 import kr.mujoong.realtime.gate.ClosingSequence;
@@ -71,10 +72,14 @@ import org.springframework.transaction.TransactionException;
  *
  * <p>세션 상태 · 시계 · 구간 버퍼 · 게이트 판정은 이 실행기 한 스레드만 바꾼다(세션 안 잠금 없음). 반복마다 안전 편지함을 먼저 비운다. 전이는
  * {@link SessionTransitions}의 짧은 트랜잭션이고 조건부 UPDATE의 승자만 부수 효과(기기 명령 · 시계)를 낸다. 시계 만기는 세대가 맞을 때만,
- * 경과를 다시 재서(지연 재무장) 판정한다. 전이가 DB 장애로 실패하면 그 메시지를 {@code mujoong.session.timer-tick} 뒤 다시 처리한다.
- * 그 밖의 예외가 반복 최상위까지 오면 APP_ERROR 한 줄을 남기고 FAILED(SERVER_RESTART)를 시도한 뒤 정리한다(J126). 출력 세대 번호는
- * STOP_OUTPUT · CLOSING 진입 · 종료 전이 · Core 취소 · 연결 교체 · 끊김마다 오르고, 봉인한 구간과 송신 프레임마다 비교한다(SD-17).
+ * 경과를 다시 재서(지연 재무장) 판정한다. 전이가 DB 장애로 실패하면 그 메시지를 {@code mujoong.session.timer-tick} 뒤 다시 처리하고,
+ * 다시 처리에서 커밋은 됐는데 응답을 잃은 전이를 DB에서 받아들이면 그 상태의 시한 · 부수 효과를 한 번 건다(J291). 그 밖의 예외가 반복
+ * 최상위까지 오면 APP_ERROR 한 줄을 남기고 FAILED(SERVER_RESTART)를 시도해 이기면 BR6.8 기기 명령을 낸 뒤 정리한다(J126 · J290). 출력
+ * 세대 번호는 STOP_OUTPUT · CLOSING 진입 · 종료 전이 · Core 취소 · 연결 교체 · 끊김마다 오르고, 봉인한 구간과 송신 프레임마다
+ * 비교한다(SD-17). 실행기 스레드는 공급자 쪽 생산자로서 자기 편지함을 기다리지 않는다(J289).
  */
+@SingleInstanceAssumption(si = {"SI-2", "SI-9"},
+        reason = "세션 상태 · 편지함 · 출력 세대와 세션당 공급자 연결을 이 프로세스의 실행기 하나가 쥐어 세션을 다른 인스턴스로 옮길 수 없다")
 public final class SessionExecutor {
 
     /** 세션 공통 설정(RealtimeProperties에서 읽는다). */
@@ -189,6 +194,8 @@ public final class SessionExecutor {
 
     private volatile SessionStatus status = SessionStatus.PREPARING;
     private volatile boolean terminated;
+    /** 지금 편지함 메시지를 처리하는 스레드(실행 스레드 또는 시험의 step 호출 스레드). 공급자 리스너가 이 스레드면 기다리지 않는다(J289). */
+    private volatile Thread processing;
     private DeviceLink link;
     private UUID startOpId;
     private Instant startAttemptAt;
@@ -231,6 +238,7 @@ public final class SessionExecutor {
     }
 
     private void run() {
+        processing = Thread.currentThread();
         try {
             while (!terminated) {
                 Message message = mailbox.take();
@@ -244,6 +252,8 @@ public final class SessionExecutor {
             if (!terminated) {
                 teardown();
             }
+        } finally {
+            processing = null;
         }
     }
 
@@ -271,6 +281,8 @@ public final class SessionExecutor {
         if (terminated) {
             return;
         }
+        Thread previous = processing;
+        processing = Thread.currentThread();
         try {
             handle(message);
         } catch (DataAccessException | TransactionException e) {
@@ -279,6 +291,8 @@ public final class SessionExecutor {
         } catch (RuntimeException e) {
             services.events().appError(EventLog.Component.SESSION_LIFECYCLE, e);
             failFromTopLevel();
+        } finally {
+            processing = previous;
         }
     }
 
@@ -350,10 +364,15 @@ public final class SessionExecutor {
             case TimerFired fired -> onTimer(fired);
             case EndRequested request -> onEndRequested(request);
             case ConnectionLost lost -> onConnectionLost(lost);
-            case ServerShutdown ignored -> {
-                // 앱 종료 T3: 공급자 연결을 닫고 기록기를 비운다. 세션 행은 다음 기동 S3a가 닫는다(BR6.13)
-                closeProvider();
-                services.recorder().finish(plan.sessionId());
+            case ServerShutdown shutdown -> {
+                // 앱 종료 T3: 공급자 연결을 닫고 기록기를 비운다. 세션 행은 다음 기동 S3a가 닫는다(BR6.13).
+                // 끝나면(실패해도) 정상 종료에 알린다 — T4(폴러 정지)는 공급자 닫기 뒤에 시작한다(RD-13 순서, J304)
+                try {
+                    closeProvider();
+                    services.recorder().finish(plan.sessionId());
+                } finally {
+                    shutdown.handled().complete(null);
+                }
             }
             case DeviceAck ack -> onDeviceAck(ack);
             case DeviceReadyReceived ready -> onDeviceReady(ready);
@@ -408,6 +427,12 @@ public final class SessionExecutor {
     }
 
     private boolean putFromProvider(Message message) {
+        if (Thread.currentThread() == processing) {
+            // F2 · J289: 공급자 닫기(closeProvider · 정리)는 리스너의 Closed를 닫기를 부른 스레드에서 바로 부른다. 그 스레드가 이
+            // 편지함을 비우는 실행기 자신이면 자리가 날 때까지 기다리지 않는다 — 비울 쪽이 없어 교착한다. 가득 찼으면 버린다(스스로 닫은
+            // 공급자의 끊김 알림이라 잃어도 상태가 어긋나지 않는다)
+            return mailbox.offerGeneral(message);
+        }
         try {
             return mailbox.putGeneral(message);
         } catch (InterruptedException e) {
@@ -494,6 +519,11 @@ public final class SessionExecutor {
             return;
         }
         status = SessionStatus.ACTIVE;
+        enterActive();
+    }
+
+    /** ACTIVE 진입의 승자 몫(BR6.8 · BR7.1 · BR6.12 ④): ② 시계 해제 · 입력 중계 시작 · LISTENING · 끊김 시계. */
+    private void enterActive() {
         timers.cancel(Kind.DEVICE_ACK);
         relay.attach(providerSession);
         relay.setAccepting(true);
@@ -538,8 +568,11 @@ public final class SessionExecutor {
             case ProviderEvent.OutputTranscriptDelta delta -> {
                 if (inOutputRange()) {
                     beginOutput(delta.responseId(), at);
-                    segment.addTranscript(delta.responseId(), delta.delta(), at, received.receivedNanos());
-                    timers.arm(Kind.SEGMENT_QUIET, services.settings().segmentQuiet());
+                    // J294: 음성처럼 구간에 들어간 조각만 조용 시계를 다시 건다(버린 조각은 열린 구간의 조용 시간을 늘리지 않는다)
+                    if (segment.addTranscript(delta.responseId(), delta.delta(), at, received.receivedNanos())
+                            == SegmentBuffer.Added.ADDED) {
+                        timers.arm(Kind.SEGMENT_QUIET, services.settings().segmentQuiet());
+                    }
                 }
             }
             case ProviderEvent.OutputAudioDelta delta -> {
@@ -556,12 +589,24 @@ public final class SessionExecutor {
                     }
                 }
             }
-            case ProviderEvent.OutputDone done -> segment.responseDone(done.responseId());
+            case ProviderEvent.OutputDone done -> {
+                // J300: 열린 구간이 그 응답이면 output.done 처리 시각이 열린 AI 행의 tTranscriptFinal이다(view_item_ready{ai}의 시작)
+                if (segment.isOpen() && segment.responseId().equals(done.responseId())) {
+                    transcripts.aiDone(at);
+                }
+                segment.responseDone(done.responseId());
+            }
         }
     }
 
-    /** 응답의 첫 출력 조각: t1을 찍고 AI 행 번호를 정해 확정 전 칸을 넣는다(PD-5 2.4). */
+    /**
+     * 출력 조각을 넣기 전: 열린 구간이 다른 응답의 것이면 그 자리에서 봉인해 게이트에 넣는다 — 한 구간은 한 응답이고 섞지 않는다(F1 · J286,
+     * 완결이 아닌 구간은 게이트 3단계가 GATE_EMPTY로 폐기한다). 응답의 첫 조각이면 t1을 찍고 AI 행 번호를 정해 확정 전 칸을 넣는다(PD-5 2.4).
+     */
     private void beginOutput(String responseId, Instant at) {
+        if (segment.holdsOtherThan(responseId)) {
+            sealAndGate();
+        }
         if (!segment.isOpen() && segment.accepts(responseId)) {
             services.latency().providerFirstOut(plan.sessionId(), at);
             transcripts.aiStart(at);
@@ -745,13 +790,25 @@ public final class SessionExecutor {
                 SessionStatus.CLOSING, SessionChange.none().withTerminationRequestedAt(now),
                 SessionTransitions.Origin.REALTIME, plan.traceId());
         if (row.isEmpty()) {
-            syncFromDb();
+            syncFromDb(requestId);
             return status == SessionStatus.CLOSING ? EndOutcome.CLOSING : EndOutcome.NOT_ACTIVE;
         }
         status = SessionStatus.CLOSING;
-        closingAt = now;
+        enterClosing(now, requestId);
+        return EndOutcome.CLOSING;
+    }
+
+    /**
+     * CLOSING 진입의 승자 몫(BR6.10 ① ② · BR6.12 ③).
+     *
+     * @param committedAt CLOSING 전이를 이긴 커밋 시각(30초 확인 시한의 시작점)
+     * @param requestId END_REQUESTED 기록에 남길 끝내기 요청 id(모르면 null)
+     */
+    private void enterClosing(Instant committedAt, UUID requestId) {
+        Instant now = services.clock().now();
+        closingAt = committedAt;
         services.recorder().putEvent(new SessionEvent(UUID.randomUUID(), plan.sessionId(), "END_REQUESTED",
-                requestId == null ? null : requestId.toString(), null, now));
+                requestId == null ? null : requestId.toString(), null, committedAt));
         // BR6.10 ①: 서버 쪽 출력 버퍼 취소 → STOP_OUTPUT + SESSION_STATE{CLOSING} → ② 마무리 문구 1회
         bumpGeneration();
         timers.cancel(Kind.SEGMENT_QUIET);
@@ -761,8 +818,9 @@ public final class SessionExecutor {
         transcripts.aiFinal("", false, now);
         closing.begin(closingDevice(), plan.closing() == null ? null : plan.closing().contentVersionId(), playback,
                 UUID::randomUUID);
-        timers.arm(Kind.CLOSING_CONFIRM, services.settings().closingConfirm());
-        return EndOutcome.CLOSING;
+        Duration elapsed = Duration.between(committedAt, now);
+        timers.arm(Kind.CLOSING_CONFIRM,
+                services.settings().closingConfirm().minus(elapsed.isNegative() ? Duration.ZERO : elapsed));
     }
 
     /** BR6.7 (나) ~ (라): PREPARING · DEVICE_ACK · ACTIVE → FAILED(실패 코드 없음), CLOSING · 종료는 그대로 202 {}. */
@@ -878,15 +936,17 @@ public final class SessionExecutor {
             return;
         }
         Instant now = services.clock().now();
-        closeProvider();
         Optional<ActivitySessionRow> row = services.transitions().transition(plan.sessionId(), SessionStatus.ACTIVE,
                 SessionStatus.ABORTED, TransitionTable.changeFor(Trigger.DISCONNECT, null, now).withProviderClosedAt(now),
                 SessionTransitions.Origin.REALTIME, plan.traceId());
         if (row.isEmpty()) {
+            // J292: 진 끊김 시계는 공급자를 닫지 않는다 — 행이 CLOSING이면 CLOSING이 끊김보다 우선하고(BR6.12 ③) 공급자는
+            // VOICE_SESSION_CLOSED · 30초 시한까지 열어 둔다(BR6.10 ④)
             syncFromDb();
             return;
         }
         status = SessionStatus.ABORTED;
+        closeProvider();
         timeoutFired("DISCONNECT", threshold, elapsed);
         teardown();
     }
@@ -939,7 +999,11 @@ public final class SessionExecutor {
         }
     }
 
-    /** R3-6 · J126: 최상위 예외 → FAILED(SERVER_RESTART) 시도 → 정리. 전이가 실패하면 고아 세션 점검이 닫는다. */
+    /**
+     * R3-6 · J126: 최상위 예외 → FAILED(SERVER_RESTART) 시도 → 정리. 전이가 실패하면 고아 세션 점검이 닫는다. 전이를 이기면 BR6.8대로
+     * START_SESSION이 나갔고 연결이 살아 있을 때 CLOSE_TRANSPORT(FAILED) + STANDBY를 보낸다(F4 · J290). '재시작 제외'는 보낼 연결이 없는
+     * 기동 정리(S3a) 경우이고, 실행기 예외는 연결이 살아 있을 수 있다. 전이를 이기지 못하면(승자 하나) 기기 명령 없이 정리한다.
+     */
     private void failFromTopLevel() {
         try {
             if (!status.isTerminal()) {
@@ -948,7 +1012,7 @@ public final class SessionExecutor {
                         read -> TransitionTable.changeFor(Trigger.SERVER_RESTART, null, services.clock().now()),
                         SessionTransitions.Origin.REALTIME, plan.traceId());
                 if (result.transitioned()) {
-                    status = SessionStatus.FAILED;
+                    afterFailed();
                 }
             }
         } catch (RuntimeException e) {
@@ -994,14 +1058,55 @@ public final class SessionExecutor {
 
     /** 진 전이 뒤 DB의 지금 상태로 맞춘다. 종료 상태면 정리한다. */
     private void syncFromDb() {
+        syncFromDb(null);
+    }
+
+    /**
+     * 진 전이 뒤 DB의 지금 상태로 맞춘다. 종료 상태면 정리하고, 메모리와 다른 비종료 상태를 받아들였으면 그 상태의 시한 · 부수 효과를 한
+     * 번 건다(F5 · J291).
+     *
+     * @param endRequestId CLOSING을 받아들일 때 END_REQUESTED에 남길 끝내기 요청 id(끝내기 처리 중이 아니면 null, J293)
+     */
+    private void syncFromDb(UUID endRequestId) {
         Optional<ActivitySessionRow> row = services.transitions().find(plan.sessionId());
         if (row.isEmpty()) {
             teardown();
             return;
         }
+        SessionStatus before = status;
         status = row.get().status();
         if (status.isTerminal()) {
             teardown();
+            return;
+        }
+        if (status != before) {
+            adopt(row.get(), endRequestId);
+        }
+    }
+
+    /**
+     * F5 · J291: 살아 있는 실행기의 세션 행은 이 실행기만 전이한다(고아 점검 · 기동 정리는 실행기 없는 세션만 다룬다). 그래서 DB가 메모리보다
+     * 앞선 비종료 상태면 커밋은 됐는데 응답을 잃은 이 실행기의 전이이고, 그 승자 몫은 아직 실행되지 않았다. 상태가 바뀔 때 한 번만 부르므로
+     * 중복 실행이 없다.
+     */
+    private void adopt(ActivitySessionRow row, UUID endRequestId) {
+        switch (status) {
+            case DEVICE_ACK -> {
+                // PREPARING → DEVICE_ACK(ACK): 그 사이 처리한 READY · session.started로 ACTIVE 조건을 다시 본다
+                ackReceived = true;
+                if (deviceUnavailable) {
+                    failDeviceUnavailable();
+                } else {
+                    tryActivate();
+                }
+            }
+            case ACTIVE -> enterActive();
+            case CLOSING -> enterClosing(
+                    row.terminationRequestedAt() == null ? services.clock().now() : row.terminationRequestedAt(),
+                    endRequestId);
+            default -> {
+                // PREPARING으로 되돌아가는 일은 없다(종료 상태는 위에서 정리했다)
+            }
         }
     }
 

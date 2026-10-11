@@ -83,13 +83,7 @@ public class EventLogger {
                 () -> MDC.get(TraceIds.MDC_KEY), sink, strictness, this::onInvalidAttr);
     }
 
-    /** 시험용: 수집기에 쓰는 STRICT 기록기(병합 창 10초 · 상한 60). */
-    public static EventLogger forTest(MujoongClock clock, EventLog.Sink sink, RealtimeMetrics metrics) {
-        return new EventLogger(clock, OwnerHasher.ephemeral(), sink, metrics, EventLog.Strictness.STRICT,
-                Duration.ofSeconds(10), 60);
-    }
-
-    /** test 프로필이면 STRICT, 그 밖은 LENIENT(OD-3 1번). */
+    /** test 프로필이면 STRICT, 그 밖은 LENIENT(OD-3 1번). 시험용 기록기는 시험 소스(testing.TestEventLoggers)가 만든다(3.6 수정 J308). */
     public static EventLog.Strictness strictnessFor(String... activeProfiles) {
         return Arrays.asList(activeProfiles).contains("test") ? EventLog.Strictness.STRICT : EventLog.Strictness.LENIENT;
     }

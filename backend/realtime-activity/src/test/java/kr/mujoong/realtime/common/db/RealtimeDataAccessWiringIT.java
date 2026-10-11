@@ -1,6 +1,7 @@
 package kr.mujoong.realtime.common.db;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -10,6 +11,7 @@ import java.sql.ResultSet;
 import java.sql.Statement;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import javax.sql.DataSource;
@@ -51,7 +53,9 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 import org.springframework.core.env.Environment;
+import org.springframework.dao.DataAccessException;
 import org.springframework.orm.jpa.JpaTransactionManager;
+import org.springframework.transaction.IllegalTransactionStateException;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.unit.DataSize;
@@ -63,6 +67,10 @@ import org.springframework.util.unit.DataSize;
  * 확인한다: 앱 풀의 연결에 설정 키 값의 lock_timeout · statement_timeout이 걸린다 · 트랜잭션 관리자는 JPA이고 JDBC 저장소가 그
  * 트랜잭션에 함께 묶인다(세션 행 · 기본 종료 표현 · SessionStateChanged가 한 커밋 또는 한 롤백) · Outbox의 MANDATORY 확인이 JPA
  * 트랜잭션을 활성으로 본다. 앱 전체 문맥 대신 이 묶음만 올려 다른 단계의 빈 공사 상태에 묶이지 않는다.
+ *
+ * <p>3.6 수정(BT-TC-10)에서 더한 셋: 상한 키가 없으면 상한 없는 풀이 열리기 전에 문맥이 서지 않는다 · 트랜잭션 중간의 DB 오류(유일 위반)는
+ * 앞 저장소들의 쓰기까지 함께 되돌리고 예외 번역 프록시를 지나도 SQLSTATE를 잃지 않는다 · 저장소 프록시는 트랜잭션을 스스로 열지 않아
+ * MANDATORY 쓰기가 트랜잭션 밖에서 실패한다.
  */
 @Tag("u1")
 @Tag("db")
@@ -135,6 +143,66 @@ class RealtimeDataAccessWiringIT {
                 .run(context -> assertThat(context).hasFailed());
     }
 
+    @Test
+    void aMissingLimitKeyStopsTheContextBeforeAnUnlimitedPoolOpens() {
+        runner("2s", null).run(context -> {
+            assertThat(context).hasFailed();
+            assertThat(rootCause(context.getStartupFailure())).hasMessageContaining(DbSessionLimits.STATEMENT_TIMEOUT_KEY);
+        });
+    }
+
+    @Test
+    void aFailingStatementRollsBackEveryRepositoryWriteAndKeepsItsSqlState() {
+        runner("2s", "10s").run(context -> {
+            assertThat(context).hasNotFailed();
+            TransactionTemplate transactions = new TransactionTemplate(context.getBean(PlatformTransactionManager.class));
+            ActivitySessionRepository sessions = context.getBean(ActivitySessionRepository.class);
+            SessionStopExpressionRepository stops = context.getBean(SessionStopExpressionRepository.class);
+            SessionEventRepository events = context.getBean(SessionEventRepository.class);
+            RealtimeOutboxRepository outbox = context.getBean(RealtimeOutboxRepository.class);
+            NewActivitySession session = newSession();
+            EventEnvelope event = preparing(session);
+
+            // 같은 eventId를 두 번 쓰면 두 번째 INSERT가 유일 위반이다 — 그 앞의 세션 행 · 종료 표현 · 기록 · 첫 Outbox 행도 함께 되돌린다
+            assertThatThrownBy(() -> transactions.executeWithoutResult(status -> {
+                start(sessions, stops, events, outbox, session, event);
+                outbox.insert(NewOutboxEvent.of(event, session.guardianId()), T0);
+            })).isInstanceOf(DataAccessException.class)
+                    .satisfies(error -> assertThat(SqlErrors.isUniqueViolation(error)).isTrue())
+                    .satisfies(error -> assertThat(SqlErrors.isRetryable(error)).isFalse());
+
+            assertThat(sessions.find(session.id())).isEmpty();
+            assertThat(stops.findBySession(session.id())).isEmpty();
+            assertThat(events.findBySession(session.id())).isEmpty();
+            assertThat(outbox.find(event.eventId())).isEmpty();
+        });
+    }
+
+    @Test
+    void repositoryProxiesNeverOpenATransactionSoMandatoryWritesFailOutsideOne() {
+        runner("2s", "10s").run(context -> {
+            assertThat(context).hasNotFailed();
+            ActivitySessionRepository sessions = context.getBean(ActivitySessionRepository.class);
+            RealtimeOutboxRepository outbox = context.getBean(RealtimeOutboxRepository.class);
+            NewActivitySession session = newSession();
+            EventEnvelope event = preparing(session);
+
+            assertThatThrownBy(() -> outbox.insert(NewOutboxEvent.of(event, session.guardianId()), T0))
+                    .isInstanceOf(IllegalTransactionStateException.class);
+            assertThatThrownBy(() -> sessions.findForUpdate(session.id()))
+                    .isInstanceOf(IllegalTransactionStateException.class);
+            assertThat(outbox.find(event.eventId())).isEmpty();
+        });
+    }
+
+    private static Throwable rootCause(Throwable error) {
+        Throwable current = error;
+        while (current.getCause() != null && current.getCause() != current) {
+            current = current.getCause();
+        }
+        return current;
+    }
+
     private static void start(ActivitySessionRepository sessions, SessionStopExpressionRepository stops,
             SessionEventRepository events, RealtimeOutboxRepository outbox, NewActivitySession session,
             EventEnvelope event) {
@@ -144,24 +212,30 @@ class RealtimeDataAccessWiringIT {
         outbox.insert(NewOutboxEvent.of(event, session.guardianId()), T0);
     }
 
+    /** 값이 null인 상한 키는 넣지 않는다(키 누락 시험). */
     private static ApplicationContextRunner runner(String lockTimeout, String statementTimeout) {
+        List<String> properties = new ArrayList<>(List.of(
+                "spring.datasource.url=" + postgres.jdbcUrl(),
+                "spring.datasource.username=" + postgres.username(Role.REALTIME_APP),
+                "spring.datasource.password=" + postgres.password(Role.REALTIME_APP),
+                "spring.datasource.hikari.maximum-pool-size=2",
+                "spring.jpa.hibernate.ddl-auto=validate",
+                "spring.jpa.open-in-view=false",
+                "spring.jpa.properties.hibernate.default_schema=realtime",
+                "spring.jpa.properties.hibernate.jdbc.time_zone=UTC",
+                "mujoong.limits.db-retry-attempts=2"));
+        if (lockTimeout != null) {
+            properties.add(DbSessionLimits.LOCK_TIMEOUT_KEY + "=" + lockTimeout);
+        }
+        if (statementTimeout != null) {
+            properties.add(DbSessionLimits.STATEMENT_TIMEOUT_KEY + "=" + statementTimeout);
+        }
         return new ApplicationContextRunner()
                 .withConfiguration(AutoConfigurations.of(DataSourceAutoConfiguration.class,
                         JdbcTemplateAutoConfiguration.class, HibernateJpaAutoConfiguration.class,
                         PersistenceExceptionTranslationAutoConfiguration.class))
                 .withUserConfiguration(RealtimeDataAccess.class)
-                .withPropertyValues(
-                        "spring.datasource.url=" + postgres.jdbcUrl(),
-                        "spring.datasource.username=" + postgres.username(Role.REALTIME_APP),
-                        "spring.datasource.password=" + postgres.password(Role.REALTIME_APP),
-                        "spring.datasource.hikari.maximum-pool-size=2",
-                        "spring.jpa.hibernate.ddl-auto=validate",
-                        "spring.jpa.open-in-view=false",
-                        "spring.jpa.properties.hibernate.default_schema=realtime",
-                        "spring.jpa.properties.hibernate.jdbc.time_zone=UTC",
-                        DbSessionLimits.LOCK_TIMEOUT_KEY + "=" + lockTimeout,
-                        DbSessionLimits.STATEMENT_TIMEOUT_KEY + "=" + statementTimeout,
-                        "mujoong.limits.db-retry-attempts=2");
+                .withPropertyValues(properties.toArray(String[]::new));
     }
 
     private static NewActivitySession newSession() {

@@ -2,10 +2,12 @@ package kr.mujoong.realtime.session;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.micrometer.core.instrument.Timer;
 import java.time.Duration;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 import kr.mujoong.contract.log.EventCode;
 import kr.mujoong.contract.status.EndRequestReason;
 import kr.mujoong.contract.status.FailureCode;
@@ -19,11 +21,14 @@ import kr.mujoong.contract.ws.message.StartSession;
 import kr.mujoong.contract.ws.message.StopOutput;
 import kr.mujoong.contract.ws.message.View;
 import kr.mujoong.contract.ws.message.VoiceSessionClosed;
+import kr.mujoong.realtime.log.TranscriptEntry;
+import kr.mujoong.realtime.observability.RealtimeMetrics;
 import kr.mujoong.realtime.session.SessionMailbox.EndOutcome;
 import kr.mujoong.realtime.testing.FakeProviderPort;
 import kr.mujoong.realtime.testing.InMemoryTransitions;
 import kr.mujoong.realtime.testing.SessionHarness;
 import kr.mujoong.realtime.voice.ProviderPort.ProviderEvent;
+import kr.mujoong.realtime.voice.ProviderRequestFactory;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
@@ -31,7 +36,8 @@ import org.junit.jupiter.api.Test;
  * 세션 실행기 단위 시험 (U1 3.5 Step 29 · PD-1 · R3-1 · R3-6 · SCD-1 · BR6.6 ~ 6.11 · J54 · J126 · RD-3).
  *
  * <p>생산자 여럿의 처리 순서 · 안전 편지함 우선 · 세대가 다른 타이머 무동작 · 실행기 예외 → FAILED(SERVER_RESTART) · INIT 중 명령 순서 ·
- * 종료 뒤 늦은 메시지 폐기와 시작 · 끝내기 경로를 실제 스레드 없이 확인한다.
+ * 종료 뒤 늦은 메시지 폐기와 시작 · 끝내기 경로를 실제 스레드 없이 확인한다. 3.6 수정: 앱 종료 T3 처리 알림(J304)과 AI 행 준비 시간의
+ * 시작점(J300).
  */
 @Tag("u1")
 class SessionExecutorTest {
@@ -344,6 +350,66 @@ class SessionExecutorTest {
         assertThat(pending).isCompletedExceptionally();
         assertThat(pending.exceptionNow()).isInstanceOf(SessionMailbox.SessionGone.class);
         assertThat(h.mailbox.putSafety(new SessionMailbox.ServerShutdown())).isFalse();
+    }
+
+    // ------------------------------------------------------------------ 3.6 수정: 정상 종료 T3 알림(J304) · 행 준비 시간(J300)
+
+    @Test
+    void aServerShutdownClosesTheProviderAndFlushesTheRecorderThenAcknowledgesWithoutEndingTheSession() {
+        h.activate();
+        h.provider.last().emit(new ProviderEvent.InputTranscriptDelta("item-1", "공룡"));
+        h.drain();
+        assertThat(h.store.transcripts).as("확정 전 칸은 아직 쓰지 않았다").isEmpty();
+        SessionMailbox.ServerShutdown shutdown = new SessionMailbox.ServerShutdown();
+        assertThat(h.mailbox.putSafety(shutdown)).isTrue();
+        assertThat(shutdown.handled()).isNotDone();
+
+        h.drain();
+
+        assertThat(shutdown.handled()).as("정상 종료 T4는 이 알림 뒤에 폴러를 멈춘다").isCompleted();
+        assertThat(h.provider.last().isOpen()).isFalse();
+        assertThat(h.provider.last().requests()).last().isInstanceOf(ProviderRequestFactory.SessionClose.class);
+        assertThat(h.store.transcripts).extracting(TranscriptEntry::assemblyStatus)
+                .containsExactly(TranscriptEntry.AssemblyStatus.PARTIAL);
+        assertThat(h.transitions.status(h.sessionId)).as("세션 행은 다음 기동 S3a가 닫는다").isEqualTo(SessionStatus.ACTIVE);
+        assertThat(h.executor.isTerminated()).isFalse();
+    }
+
+    @Test
+    void aServerShutdownLeftInTheMailboxAtTeardownIsStillAcknowledgedSoTheDrainNeverWaitsForIt() {
+        h.link = null;
+        h.create();
+        h.executor.bootstrapOnly();
+        SessionMailbox.ServerShutdown shutdown = new SessionMailbox.ServerShutdown();
+        h.mailbox.putSafety(shutdown);
+
+        h.executor.step();
+
+        assertThat(h.executor.isTerminated()).isTrue();
+        assertThat(shutdown.handled()).isCompleted();
+        assertThat(h.provider.openedCount()).isZero();
+    }
+
+    @Test
+    void onlyTheOutputDoneOfTheOpenResponseStartsTheAiRowsViewItemReadyTime() {
+        h.activate();
+        h.provider.last().emit(new ProviderEvent.InputTranscriptDelta("item-1", "공룡"));
+        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("r1", "공룡 좋아"));
+        h.provider.last().emit(new ProviderEvent.OutputAudioDelta("r1", new byte[4800]));
+        h.provider.last().emit(new ProviderEvent.OutputDone("r0"));
+        h.drain();
+        h.advance(Duration.ofMillis(300));
+
+        h.provider.last().emit(new ProviderEvent.OutputDone("r1"));
+        h.drain();
+        h.advance(Duration.ofMillis(500));
+
+        Timer ai = h.metrics.registry().find(RealtimeMetrics.VIEW_ITEM_READY).tag("speaker", "ai").timer();
+        assertThat(ai.count()).isEqualTo(1);
+        assertThat(ai.totalTime(TimeUnit.MILLISECONDS)).as("r1의 끝(300ms) → 게이트 통과 커밋(800ms), 다른 응답의 끝은 시작점이 아니다")
+                .isEqualTo(500.0);
+        assertThat(h.store.transcripts).filteredOn(row -> row.speaker() == TranscriptEntry.Speaker.AI)
+                .singleElement().satisfies(row -> assertThat(row.approvedForDisplay()).isTrue());
     }
 
     private void mark(UUID playbackId, PlaybackMark.Status status) {

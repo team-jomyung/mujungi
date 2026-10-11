@@ -7,6 +7,7 @@ import kr.mujoong.contract.log.AttrKey;
 import kr.mujoong.contract.log.EventCode;
 import kr.mujoong.contract.log.EventLog;
 import kr.mujoong.contract.time.MujoongClock;
+import kr.mujoong.realtime.common.scaling.SingleInstanceAssumption;
 import kr.mujoong.realtime.config.RealtimeProperties;
 import kr.mujoong.realtime.gateway.ConnectionStateWriter;
 import kr.mujoong.realtime.gateway.DisconnectChecker;
@@ -23,6 +24,7 @@ import kr.mujoong.realtime.messaging.RealtimeInboxRepository;
 import kr.mujoong.realtime.messaging.RealtimeOutboxRepository;
 import kr.mujoong.realtime.messaging.RealtimeOutboxSender;
 import kr.mujoong.realtime.observability.EventLogger;
+import kr.mujoong.realtime.observability.snapshot.MetricSnapshotJob;
 import kr.mujoong.realtime.runtime.PeriodicJobs;
 import kr.mujoong.realtime.session.OrphanSessionChecker;
 import kr.mujoong.realtime.session.TombstoneMap;
@@ -37,9 +39,12 @@ import org.springframework.stereotype.Component;
  * 앞 phase에서: S2 스키마 판 확인 → S2b 데이터 등급 확인(거부면 종료 코드 1) → S3a 비종료 세션 FAILED(SERVER_RESTART) → S3b CONNECTED ·
  * UNSTABLE 연결 행 DISCONNECTED(connection_id 비움) → S3c Inbox RECEIVED 앞당김 → S3d 제어 이벤트 재무장(A1) → S3f Outbox 선점 되돌림 →
  * S3e STARTUP_RECOVERY 한 줄 → S4 주기 작업(outbox-sender · inbox-repoll · recorder-tick · maintenance) → S6 readiness READY. 사전 로딩
- * 전에는 readiness가 UP이 아니다(S1b가 끝나야 이 빈이 만들어진다). S3 각 문장은 멱등이다.
+ * 전에는 readiness가 UP이 아니다(S1b가 끝나야 이 빈이 만들어진다). S3 각 문장은 멱등이다. maintenance는 METRIC_SNAPSHOT 표본도
+ * {@code mujoong.observability.system-sample-interval}마다 돌린다(OD-6, 3.6 수정 J302).
  */
 @Component
+@SingleInstanceAssumption(si = {"SI-1", "SI-2", "SI-6"},
+        reason = "기동 복구가 DB의 비종료 세션(S3a) · 살아 있는 연결 행(S3b) · Inbox · Outbox 선점(S3c · S3f)을 모두 이 인스턴스 것으로 보고 정리해 다른 인스턴스의 세션 · 연결을 끊는다")
 public class RealtimeStartupSequence implements SmartLifecycle {
 
     /** 웹 서버 시작(MAX − 2048)보다 앞. */
@@ -69,6 +74,7 @@ public class RealtimeStartupSequence implements SmartLifecycle {
     private final OrphanSessionChecker orphanChecker;
     private final TombstoneMap tombstones;
     private final MessagingCleanupJob messagingCleanup;
+    private final MetricSnapshotJob metricSnapshots;
     private final EventLogger events;
     private final ReadinessState readiness;
     private final MujoongClock clock;
@@ -97,6 +103,7 @@ public class RealtimeStartupSequence implements SmartLifecycle {
             OrphanSessionChecker orphanChecker,
             TombstoneMap tombstones,
             MessagingCleanupJob messagingCleanup,
+            MetricSnapshotJob metricSnapshots,
             EventLogger events,
             ReadinessState readiness,
             MujoongClock clock,
@@ -120,6 +127,7 @@ public class RealtimeStartupSequence implements SmartLifecycle {
         this.orphanChecker = Objects.requireNonNull(orphanChecker, "orphanChecker");
         this.tombstones = Objects.requireNonNull(tombstones, "tombstones");
         this.messagingCleanup = Objects.requireNonNull(messagingCleanup, "messagingCleanup");
+        this.metricSnapshots = Objects.requireNonNull(metricSnapshots, "metricSnapshots");
         this.events = Objects.requireNonNull(events, "events");
         this.readiness = Objects.requireNonNull(readiness, "readiness");
         this.clock = Objects.requireNonNull(clock, "clock");
@@ -165,7 +173,7 @@ public class RealtimeStartupSequence implements SmartLifecycle {
 
     private synchronized void startJobs() {
         PeriodicJobs created = new PeriodicJobs(
-                failure -> events.appError(EventLog.Component.REALTIME_MAINTENANCE, failure));
+                failure -> events.appError(EventLog.Component.REALTIME_MAINTENANCE, failure), clock);
         created.fixedDelay(PeriodicJobs.OUTBOX_SENDER, properties.outbox().pollInterval(), sender::runCycle);
         created.fixedDelay(PeriodicJobs.INBOX_REPOLL, properties.inbox().pollInterval(), repoller::runOnce);
         created.fixedDelay(PeriodicJobs.RECORDER_TICK, properties.timing().recorder().flushInterval(), recorder::tick);
@@ -181,30 +189,47 @@ public class RealtimeStartupSequence implements SmartLifecycle {
         });
         created.fixedDelay(PeriodicJobs.MAINTENANCE, properties.cleanup().messagingInterval(), messagingCleanup::runOnce);
         created.fixedDelay(PeriodicJobs.MAINTENANCE, properties.observability().logMergeWindow(), events::flushMerged);
+        created.fixedDelay(PeriodicJobs.MAINTENANCE, properties.observability().systemSampleInterval(),
+                metricSnapshots::tick);
         jobs = created;
     }
 
-    /**
-     * T4: 주기 작업을 멈춘다. 발송기는 진행 중 한 건을 마치고 남은 선점을 되돌린다. 진행 중 작업은 발행 제한 + 문장 제한까지 기다린다. 멱등이다.
-     */
+    /** T4를 기본 예산(발행 제한 + 문장 제한)으로 한다. 멱등이다. */
     public void stopJobs() {
+        stopJobs(stopBudget());
+    }
+
+    /**
+     * T4: 주기 작업을 멈춘다. 발송기는 진행 중 한 건을 마치고 남은 선점을 되돌린다. 진행 중 작업(처리기 포함)은 모두 합쳐 발행 제한 + 문장 제한과
+     * {@code limit} 중 짧은 쪽 안에서 기다린다 — 실행기마다 따로 기다리면 합이 정상 종료 유예를 넘을 수 있다(3.6 수정 J304). 멱등이다.
+     *
+     * @param limit 정상 종료가 이 단계에 남겨 둔 시간
+     */
+    public void stopJobs(Duration limit) {
         sender.requestStop();
         PeriodicJobs toStop;
         synchronized (this) {
             toStop = jobs;
             jobs = null;
         }
-        Duration grace = properties.internalHttp().eventPublishTimeout().plus(properties.limits().dbStatementTimeout());
+        Duration budget = stopBudget().compareTo(limit) <= 0 ? stopBudget() : limit;
+        long started = clock.monotonicNanos();
         if (toStop != null) {
-            toStop.stopAll(grace);
+            toStop.stopAll(budget);
         }
         dispatcher.shutdown();
         try {
-            dispatcher.awaitTermination(grace);
+            Duration left = budget.minus(clock.elapsedSince(started));
+            dispatcher.awaitTermination(left.isNegative() ? Duration.ZERO : left);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
         running = false;
+    }
+
+    /** 진행 중 발송 한 건(발행 제한)과 처리기 한 문장(문장 제한)이 끝날 시간. */
+    private Duration stopBudget() {
+        return properties.internalHttp().eventPublishTimeout().plus(properties.limits().dbStatementTimeout());
     }
 
     @Override

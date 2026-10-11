@@ -44,12 +44,12 @@ public final class SessionHarness {
     public final ManualTimerDriver quiet = new ManualTimerDriver(clock);
     public final LogCapture logs = LogCapture.detached();
     public final RealtimeMetrics metrics = RealtimeMetrics.inMemory();
-    public final EventLogger events = EventLogger.forTest(clock, logs, metrics);
+    public final EventLogger events = TestEventLoggers.strict(clock, logs, metrics);
     public final InMemoryTransitions transitions = new InMemoryTransitions(clock);
     public final FakeProviderPort provider = new FakeProviderPort();
     public final ManualLauncher launcher = new ManualLauncher();
     public final MemoryStore store = new MemoryStore();
-    public final LatencyRecorder latency = new LatencyRecorder(events, clock, 100, Duration.ofMinutes(10));
+    public final LatencyRecorder latency = new LatencyRecorder(events, metrics, clock, 100, Duration.ofMinutes(10));
     public final AsyncRecorder recorder = new AsyncRecorder(store, TaskLauncher.inline(), latency, events, metrics, clock,
             200, 2);
     public final List<UUID[]> unresponsive = new ArrayList<>();

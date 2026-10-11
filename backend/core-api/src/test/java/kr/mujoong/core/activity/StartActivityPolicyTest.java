@@ -12,6 +12,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
@@ -20,6 +21,7 @@ import kr.mujoong.contract.json.JsonCodec;
 import kr.mujoong.contract.log.EventCode;
 import kr.mujoong.contract.status.SessionStatus;
 import kr.mujoong.core.activity.ActivityCopyRepository.ActivityCopy;
+import kr.mujoong.core.activity.ActivityCopyRepository.NewActivity;
 import kr.mujoong.core.activity.ActivityCopyRepository.StateChange;
 import kr.mujoong.core.activity.ApprovedContentCatalog.ApprovedItem;
 import kr.mujoong.core.activity.RealtimeSessionClient.InternalSessionView;
@@ -37,6 +39,11 @@ import kr.mujoong.core.identity.Child;
 import kr.mujoong.core.identity.ChildRepository;
 import kr.mujoong.core.identity.Guardian;
 import kr.mujoong.core.identity.GuardianRepository;
+import kr.mujoong.core.internalhttp.InternalHttpClient;
+import kr.mujoong.core.internalhttp.InternalHttpClient.CallException;
+import kr.mujoong.core.internalhttp.InternalHttpClient.Outcome;
+import kr.mujoong.core.internalhttp.InternalHttpClient.Response;
+import kr.mujoong.core.internalhttp.InternalHttpClient.Target;
 import kr.mujoong.core.support.TestEvents;
 import kr.mujoong.testsupport.time.MutableClock;
 import org.junit.jupiter.api.BeforeEach;
@@ -44,6 +51,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.mockito.ArgumentCaptor;
 
 /**
  * 시작 정책 (BR6.1 ⓪ ~ ③ · BR6.2 재생 · BR6.4 · BR6.6 번역 · BR6.7 · AC3.1.1 · AC3.1.3 · AC3.1.6). BR6.1 ② 계정 잠김 방지: REQUESTED가 아닌
@@ -242,6 +250,70 @@ class StartActivityPolicyTest {
             verify(realtime, never()).cancel(any());
         }
         assertThat(events.capture().events(EventCode.SESSION_TRANSITION)).hasSize(2);
+    }
+
+    /**
+     * F3 재현(BR6.6 violation 끝 문장 · BR6.7 · functional-spec W5 6단계): 첫 시작이 시간 초과로 끝나고 같은 sessionId 재시도가 409를
+     * 받으면(첫 시작이 Realtime에서 아직 INIT이라 곧 커밋돼 실제로 진행된다) 사본은 로컬 FAILED(409)로 닫되 CORE_ABANDONED 취소를 보낸다.
+     * 취소가 없으면 사본이 종료 상태라 보호자 끝내기(BR6.9)도 Realtime에 가지 않아, 돌고 있는 세션을 아무도 끝낼 수 없다.
+     */
+    @Test
+    void conflictAfterTimeoutRetryClosesTheCopyLocallyAndCancelsTheSession() throws Exception {
+        InternalHttpClient http = mock(InternalHttpClient.class);
+        when(http.send(eq(Target.SESSION_START), any()))
+                .thenThrow(new CallException(Target.SESSION_START, Outcome.TIMEOUT, "HttpTimeoutException"))
+                .thenReturn(new Response(409, "{\"code\":\"SESSION_IN_PROGRESS\",\"message\":\"x\"}"));
+        when(http.send(eq(Target.SESSION_END), any())).thenReturn(new Response(202, "{}"));
+        StartActivityService throughClient = serviceCalling(http);
+        when(activities.closeLocalFailed(any(), eq(SessionStatus.REQUESTED), eq(0L), eq(409), eq(NOW))).thenReturn(1);
+
+        assertThatThrownBy(() -> throughClient.start(guardianId, new StartRequest(UUID.randomUUID(), null)))
+                .isInstanceOfSatisfying(CoreApiException.class,
+                        e -> assertThat(e.code()).isEqualTo(ErrorCode.SESSION_IN_PROGRESS));
+
+        UUID sessionId = insertedSessionId();
+        verify(http).send(eq(Target.SESSION_START), org.mockito.ArgumentMatchers.argThat(call -> call.attempt() == 2));
+        verify(http).send(eq(Target.SESSION_END), org.mockito.ArgumentMatchers.argThat(call -> call.path()
+                .equals("/internal/sessions/" + sessionId + "/end") && call.body().contains("\"reason\":\"CORE_ABANDONED\"")
+                && call.body().contains("\"requestId\":\"" + sessionId + "\"")));
+        verify(activities).closeLocalFailed(sessionId, SessionStatus.REQUESTED, 0, 409, NOW);
+    }
+
+    /** 재시도 없이 바로 온 409는 Realtime에 이 세션이 없다는 뜻이라 취소하지 않는다(BR6.6). 재시도 뒤 409라도 이벤트가 앞섰으면 202 · 취소 없음. */
+    @Test
+    @SuppressWarnings("unchecked")
+    void conflictWithoutRetryAndRetriedConflictThatLostTheRaceDoNotCancel() throws Exception {
+        InternalHttpClient http = mock(InternalHttpClient.class);
+        when(http.send(eq(Target.SESSION_START), any()))
+                .thenReturn(new Response(409, "{\"code\":\"SESSION_IN_PROGRESS\",\"message\":\"x\"}"))
+                .thenThrow(new CallException(Target.SESSION_START, Outcome.TIMEOUT, "HttpTimeoutException"))
+                .thenReturn(new Response(409, "{\"code\":\"SESSION_IN_PROGRESS\",\"message\":\"x\"}"));
+        StartActivityService throughClient = serviceCalling(http);
+        when(activities.closeLocalFailed(any(), eq(SessionStatus.REQUESTED), eq(0L), eq(409), eq(NOW))).thenReturn(1, 0);
+        when(activities.findById(any())).thenAnswer(call -> Optional.of(ActivityCopies.copy(call.getArgument(0), guardianId,
+                SessionStatus.PREPARING, 1, NOW)));
+
+        assertThatThrownBy(() -> throughClient.start(guardianId, new StartRequest(UUID.randomUUID(), null)))
+                .isInstanceOfSatisfying(CoreApiException.class,
+                        e -> assertThat(e.code()).isEqualTo(ErrorCode.SESSION_IN_PROGRESS));
+        assertThat(throughClient.start(guardianId, new StartRequest(UUID.randomUUID(), null)).status())
+                .as("재시도 뒤 409지만 PREPARING 이벤트가 사본을 앞섰다(0행) → 202").isEqualTo(SessionStatus.REQUESTED);
+
+        verify(http, never()).send(eq(Target.SESSION_END), any());
+    }
+
+    private StartActivityService serviceCalling(InternalHttpClient http) {
+        RealtimeSessionClient client = new RealtimeSessionClient(http,
+                new SessionStartBreaker(clock, events.metrics(), 3, Duration.ofSeconds(5)), json, Duration.ofSeconds(3), 1,
+                Duration.ofSeconds(2), Duration.ofSeconds(1));
+        return new StartActivityService(guardians, children, activities, consentGate, deviceView, catalog,
+                new SessionPackageBuilder(json), client, json, events.logger(), events.metrics(), clock, Runnable::run);
+    }
+
+    private UUID insertedSessionId() {
+        ArgumentCaptor<NewActivity> inserted = ArgumentCaptor.forClass(NewActivity.class);
+        verify(activities).insertRequested(inserted.capture());
+        return inserted.getValue().sessionId();
     }
 
     @Test

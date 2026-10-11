@@ -16,6 +16,7 @@ import kr.mujoong.core.activity.ActivityCopyRepository.ActivityCopy;
 import kr.mujoong.core.activity.RealtimeSessionClient.InternalSessionView;
 import kr.mujoong.core.activity.RealtimeSessionClient.ViewResult;
 import kr.mujoong.core.common.error.CoreApiException;
+import kr.mujoong.core.common.scaling.SingleInstanceAssumption;
 import kr.mujoong.core.observability.CoreMetrics;
 import org.springframework.stereotype.Service;
 
@@ -30,6 +31,7 @@ import org.springframework.stereotype.Service;
  * 입력 원문은 응답에 없다.
  */
 @Service
+@SingleInstanceAssumption(si = "SI-8", reason = "조회 성공 시각(observedAt)이 인스턴스마다 달라 같은 세션의 stale 판정이 흔들린다")
 public class SessionViewService {
 
     /** 기억하는 세션 수 상한(오래된 것부터 버린다). */

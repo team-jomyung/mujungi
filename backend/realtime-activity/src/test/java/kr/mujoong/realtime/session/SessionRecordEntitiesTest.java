@@ -10,7 +10,8 @@ import org.junit.jupiter.api.Test;
 
 /**
  * Step 11 엔터티 단위 시험(DB 없음): SessionStopExpression · SessionEvent의 생성 규칙. DB 대조와 왕복은 {@code RealtimeSchemaIT}.
- * 근거: entities.md SessionStopExpression · SessionEvent · BR6.5 · BR6.9 · NFR12.3(payload는 문자열 표현에 없음).
+ * 근거: entities.md SessionStopExpression · SessionEvent · BR6.5 · BR6.9 · NFR12.3(payload는 문자열 표현에 없음). 3.6 수정(BT-TC-10)에서
+ * 길이 상한의 포함 경계(V1 열 varchar(100)과 같은 100자)와 id 없는 JPA 인스턴스의 같음 규칙을 더했다.
  */
 @Tag("u1")
 class SessionRecordEntitiesTest {
@@ -82,5 +83,46 @@ class SessionRecordEntitiesTest {
                 .isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> new SessionEvent(UUID.randomUUID(), sessionId, "STATE", null, null, null))
                 .isInstanceOf(NullPointerException.class);
+    }
+
+    @Test
+    void sessionEventTypeAndOpIdAcceptExactlyTheColumnLength() {
+        UUID sessionId = UUID.randomUUID();
+        String type = "T".repeat(SessionEvent.MAX_TYPE_LENGTH);
+        String opId = "o".repeat(SessionEvent.MAX_OP_ID_LENGTH);
+
+        SessionEvent event = new SessionEvent(UUID.randomUUID(), sessionId, type, opId, null, T0);
+
+        assertThat(event.getEventType()).hasSize(100);
+        assertThat(event.getOpId()).hasSize(100);
+        assertThat(event.getPayloadJson()).isNull();
+        assertThatThrownBy(() -> new SessionEvent(null, sessionId, "STATE", null, null, T0))
+                .isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> new SessionEvent(UUID.randomUUID(), null, "STATE", null, null, T0))
+                .isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> new SessionStopExpression(null, sessionId, "무중아 그만할래", true, 0, T0))
+                .isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> new SessionStopExpression(UUID.randomUUID(), sessionId, "무중아 그만할래", true, 0, null))
+                .isInstanceOf(NullPointerException.class);
+    }
+
+    @Test
+    void entitiesWithoutAnIdEqualOnlyThemselvesAndKeepOneHashAcrossTheirLife() {
+        // JPA가 쓰는 빈 생성자(id 없음): 서로 같지 않고 자신과만 같다
+        SessionEvent blankEvent = new SessionEvent();
+        SessionEvent otherBlankEvent = new SessionEvent();
+        SessionStopExpression blankExpression = new SessionStopExpression();
+
+        assertThat(blankEvent).isEqualTo(blankEvent).isNotEqualTo(otherBlankEvent).isNotEqualTo(null);
+        assertThat(blankExpression).isEqualTo(blankExpression).isNotEqualTo(new SessionStopExpression());
+        // 해시는 id와 무관한 고정값이라 저장 전후로 바뀌지 않는다(해시 집합에 넣은 뒤 id가 생겨도 찾을 수 있다)
+        SessionEvent persisted = new SessionEvent(UUID.randomUUID(), UUID.randomUUID(), "STATE", null, null, T0);
+        assertThat(blankEvent.hashCode()).isEqualTo(persisted.hashCode());
+        assertThat(blankExpression.hashCode())
+                .isEqualTo(new SessionStopExpression(UUID.randomUUID(), UUID.randomUUID(), "그만", true, 0, T0).hashCode());
+        // 다른 엔터티 종류와는 id가 같아도 같지 않다
+        UUID shared = UUID.randomUUID();
+        assertThat((Object) new SessionEvent(shared, UUID.randomUUID(), "STATE", null, null, T0))
+                .isNotEqualTo(new SessionStopExpression(shared, UUID.randomUUID(), "그만", true, 0, T0));
     }
 }

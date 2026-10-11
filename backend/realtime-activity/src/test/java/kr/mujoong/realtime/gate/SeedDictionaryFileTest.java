@@ -4,8 +4,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.ByteBuffer;
+import java.nio.charset.CharacterCodingException;
+import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
 import java.text.Normalizer;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
@@ -20,6 +24,9 @@ import org.junit.jupiter.api.Test;
 /**
  * 시드 금지 표현 사전 자원 {@code gate/seed-dictionary.json} 시험(U1 3.5 Step 11 · 13 · A5 · J101 · 사람 결정 12 · SD-18 ·
  * contracts/ai-io.md 4절). 파일 형식만 본다. 로더 · 정규화 · 게이트 판정 시험은 Step 29의 SeedDictionaryTest · OutputGateTest다.
+ *
+ * <p>3.6 수정(BT-TC-10)에서 더한 둘: 파일이 BOM 없는 올바른 UTF-8이다(로더는 잘못된 바이트를 대체 문자로 바꿔 읽으므로 패턴이 조용히
+ * 달라진다) · 키가 문서 모양 그대로다(코덱이 모르는 키를 조용히 무시하므로 '끄기' 같은 키나 오타 키가 효과 없이 남지 않게 한다).
  */
 @Tag("u1")
 class SeedDictionaryFileTest {
@@ -30,6 +37,11 @@ class SeedDictionaryFileTest {
     /** 정규화 뒤 형태가 아닌 글자(공백 · 구두점(% 제외) · 라틴 대문자 · 정규식 메타 문자) — SD-18 2.14 로딩 거부 조건. */
     private static final Pattern NOT_NORMALIZED = Pattern.compile("[\\s\\p{Punct}&&[^%#]]|[A-Z]|[\\u200B-\\u200D\\uFEFF]");
 
+    /** 파일 최상위 키(SeedDictionary.FileShape). */
+    private static final Set<String> FILE_KEYS = Set.of("version", "level", "entries");
+    /** 항목 키(SeedDictionary.RawEntry). */
+    private static final Set<String> ENTRY_KEYS = Set.of("id", "pattern", "category", "appliesTo");
+
     record Entry(String id, String pattern, String category, List<String> appliesTo) {
     }
 
@@ -37,9 +49,13 @@ class SeedDictionaryFileTest {
     }
 
     private static Dictionary load() throws IOException {
+        return JsonCodec.shared().read(new String(bytes(), StandardCharsets.UTF_8), Dictionary.class);
+    }
+
+    private static byte[] bytes() throws IOException {
         try (InputStream in = SeedDictionaryFileTest.class.getResourceAsStream("/gate/seed-dictionary.json")) {
             assertThat(in).as("classpath gate/seed-dictionary.json").isNotNull();
-            return JsonCodec.shared().read(new String(in.readAllBytes(), StandardCharsets.UTF_8), Dictionary.class);
+            return in.readAllBytes();
         }
     }
 
@@ -82,5 +98,89 @@ class SeedDictionaryFileTest {
         // J101 알려진 틈: '점수' · '정상이에요' · '정상입니다'는 정식 사전 v1에서 더한다(시드에 없음)
         assertThat(byCategory.values().stream().flatMap(value -> Arrays.stream(value.split("\\|"))))
                 .doesNotContain("점수", "정상이에요", "정상입니다");
+    }
+
+    @Test
+    void theFileIsStrictUtf8WithoutABomSoNoPatternIsSilentlyReplaced() throws IOException {
+        assertThat(encodingProblems(bytes())).as("사전 파일 인코딩 문제").isEmpty();
+
+        // 검사기가 실제로 잡는다: BOM · 잘린 한글(3바이트 중 2바이트) · 대체 문자(U+FFFD)
+        byte[] valid = "{\"version\":\"seed-1\"}".getBytes(StandardCharsets.UTF_8);
+        byte[] bom = new byte[valid.length + 3];
+        bom[0] = (byte) 0xEF;
+        bom[1] = (byte) 0xBB;
+        bom[2] = (byte) 0xBF;
+        System.arraycopy(valid, 0, bom, 3, valid.length);
+        byte[] hangul = "진단".getBytes(StandardCharsets.UTF_8);
+        byte[] truncated = Arrays.copyOf(hangul, hangul.length - 1);
+        byte[] replaced = "진\uFFFD단".getBytes(StandardCharsets.UTF_8);
+        assertThat(encodingProblems(valid)).isEmpty();
+        assertThat(encodingProblems(bom)).containsExactly("BOM");
+        assertThat(encodingProblems(truncated)).containsExactly("MALFORMED");
+        assertThat(encodingProblems(replaced)).containsExactly("REPLACEMENT_CHARACTER");
+    }
+
+    @Test
+    void everyObjectInTheFileHasExactlyTheDocumentedKeys() throws IOException {
+        String json = new String(bytes(), StandardCharsets.UTF_8);
+
+        assertThat(shapeProblems(json)).as("문서 모양 밖 키 · 빠진 키 · 모르는 appliesTo 값").isEmpty();
+
+        // 검사기가 실제로 잡는다: 오타 키(applies_to) · 효과 없는 키(enabled) · 빠진 키 · 모르는 적용 범위 · 최상위 덧붙인 키
+        String drifted = "{\"version\":\"v\",\"level\":\"SEED\",\"note\":\"x\",\"entries\":["
+                + "{\"id\":\"A-1\",\"pattern\":\"가\",\"category\":\"SCORE\",\"applies_to\":[\"OUTPUT_GATE\"]},"
+                + "{\"id\":\"A-2\",\"pattern\":\"나\",\"category\":\"SCORE\",\"appliesTo\":[\"INPUT_GATE\"],"
+                + "\"enabled\":false}]}";
+        assertThat(shapeProblems(drifted)).containsExactlyInAnyOrder("file+note", "A-1+applies_to", "A-1-appliesTo",
+                "A-2+enabled", "A-2:INPUT_GATE");
+    }
+
+    /** 엄격한 UTF-8 해석 문제(BOM · 잘못된 바이트 · 대체 문자). */
+    private static List<String> encodingProblems(byte[] raw) {
+        List<String> problems = new ArrayList<>();
+        if (raw.length >= 3 && raw[0] == (byte) 0xEF && raw[1] == (byte) 0xBB && raw[2] == (byte) 0xBF) {
+            problems.add("BOM");
+        }
+        try {
+            String text = StandardCharsets.UTF_8.newDecoder()
+                    .onMalformedInput(CodingErrorAction.REPORT)
+                    .onUnmappableCharacter(CodingErrorAction.REPORT)
+                    .decode(ByteBuffer.wrap(raw))
+                    .toString();
+            if (text.indexOf('\uFFFD') >= 0) {
+                problems.add("REPLACEMENT_CHARACTER");
+            }
+        } catch (CharacterCodingException e) {
+            problems.add("MALFORMED");
+        }
+        return problems;
+    }
+
+    /** 문서 모양과 다른 곳: {@code 대상+키}(덧붙은 키) · {@code 대상-키}(빠진 키) · {@code id:값}(모르는 appliesTo 값). */
+    @SuppressWarnings("unchecked")
+    private static List<String> shapeProblems(String json) {
+        Map<String, Object> file = JsonCodec.shared().read(json, Map.class);
+        List<String> problems = new ArrayList<>(keyProblems("file", file.keySet(), FILE_KEYS));
+        for (Object item : (List<Object>) file.getOrDefault("entries", List.of())) {
+            Map<String, Object> entry = (Map<String, Object>) item;
+            String id = String.valueOf(entry.get("id"));
+            problems.addAll(keyProblems(id, entry.keySet(), ENTRY_KEYS));
+            Object appliesTo = entry.get("appliesTo");
+            if (appliesTo instanceof List<?> scopes) {
+                for (Object scope : scopes) {
+                    if (!SeedDictionary.APPLIES_TO_OUTPUT_GATE.equals(scope)) {
+                        problems.add(id + ":" + scope);
+                    }
+                }
+            }
+        }
+        return problems;
+    }
+
+    private static List<String> keyProblems(String owner, Set<String> actual, Set<String> expected) {
+        List<String> problems = new ArrayList<>();
+        actual.stream().filter(key -> !expected.contains(key)).sorted().forEach(key -> problems.add(owner + "+" + key));
+        expected.stream().filter(key -> !actual.contains(key)).sorted().forEach(key -> problems.add(owner + "-" + key));
+        return problems;
     }
 }

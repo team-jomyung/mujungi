@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.UUID;
@@ -39,7 +40,8 @@ import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandl
  *
  * <p>계약 OpenAPI 파일이 Core 몫으로 정한 연산과 앱의 처리기가 정확히 같고, 실제 흐름에서 받은 모든 응답이 그 연산의 문서화된 상태 · 본문 스키마 ·
  * {@code x-error-codes}에 맞는지 본다. 요청마다 모르는 필드를 덧붙여 서버가 무시하는지(계약 10절), 응답에 해시 · 토큰 · 판정 내부값 · 08 입력
- * 원문이 없는지, Core가 Realtime에 보낸 요청이 계약 스키마에 맞는지도 함께 본다.
+ * 원문이 없는지, Core가 Realtime에 보낸 요청이 계약 스키마에 맞는지도 함께 본다. 3.6 수정 분량: 대조기 자신이 문서에 없는 상태 · code · 본문을
+ * 실제로 잡는지(빈 대조로 통과하지 않음), 공개 연산 셋을 뺀 모든 Core 연산이 인증 없는 호출에 그 연산 문서의 401 code로 답하는지 본다.
  */
 @Tag("u1")
 @Tag("db")
@@ -244,6 +246,66 @@ class ContractConformanceIT {
                 new MapSqlParameterSource("g", family.guardianId()), String.class);
         assertThat(outbox).noneMatch(payload -> payload.contains(marker));
         assertThat(app.get("/api/sessions/" + sessionId).session(parent.session()).send().body()).doesNotContain(marker);
+    }
+
+    @Test
+    void theConformanceCheckerFlagsUndocumentedStatusesCodesBodiesAndOperations() {
+        Map<String, List<String>> json = Map.of("Content-Type", List.of("application/json"));
+        String traceId = "0123456789abcdef0123456789abcdef";
+
+        assertThat(contracts.violations("GET /api/health", new CoreWebApp.Result(200, json, "{\"status\":\"UP\"}")))
+                .as("문서와 맞는 응답은 통과").isEmpty();
+        assertThat(contracts.violations("GET /api/health", new CoreWebApp.Result(418, json, "{}")))
+                .anyMatch(problem -> problem.contains("문서에 없는 상태 418"));
+        String badHealth = "{\"status\":\"MAYBE\",\"extra\":1}";
+        assertThat(contracts.violations("GET /api/health", new CoreWebApp.Result(200, json, badHealth)))
+                .as("본문 스키마(enum · 추가 필드) 위반").isNotEmpty()
+                .allMatch(problem -> problem.contains("health-response.schema.json"));
+        assertThat(contracts.violations("POST /api/device/register", new CoreWebApp.Result(400, json,
+                "{\"code\":\"EVENT_CONFLICT\",\"message\":\"x\",\"traceId\":\"" + traceId + "\"}")))
+                .anyMatch(problem -> problem.contains("문서에 없는 code EVENT_CONFLICT"));
+        assertThat(contracts.violations("PUT /internal/devices/{deviceId}/connection",
+                new CoreWebApp.Result(204, Map.of(), "{\"x\":1}"))).anyMatch(problem -> problem.contains("본문이 없어야 한다"));
+        assertThat(contracts.violations("DELETE /api/home", new CoreWebApp.Result(404, json, "{}")))
+                .anyMatch(problem -> problem.contains("계약에 없는 연산"));
+    }
+
+    @Test
+    void everyProtectedCoreOperationAnswersAnAnonymousCallWithItsDocumented401() {
+        // 계약에서 security: []인 공개 연산(시험 로그인 · 헬스 · 코드 발급)과 Realtime 몫(/internal/sessions/**)을 뺀 전부
+        Set<String> publicOperations = Set.of("POST /api/dev/login", "GET /api/health", "POST /api/device/bootstrap");
+        List<String> swept = new ArrayList<>();
+        List<String> problems = new ArrayList<>();
+        for (String key : contracts.keys()) {
+            if (key.contains(" /internal/sessions") || publicOperations.contains(key)) {
+                continue;
+            }
+            String method = key.substring(0, key.indexOf(' '));
+            String path = key.substring(key.indexOf(' ') + 1)
+                    .replace("{deviceId}", UUID.randomUUID().toString())
+                    .replace("{sessionId}", UUID.randomUUID().toString());
+            Call call = app.call(method, path);
+            if (!method.equals("GET")) {
+                call = call.json("{\"idempotencyKey\":\"" + UUID.randomUUID() + "\",\"requestId\":\"" + UUID.randomUUID()
+                        + "\"}");
+            }
+            Result result = call.send();
+            swept.add(key);
+            // code는 연산 문서의 x-error-codes가 정한다(보호자 · 내부는 UNAUTHENTICATED, 기기 웹은 BOOTSTRAP_NOT_FOUND ·
+            // DEVICE_NOT_REGISTERED) — violations가 본다
+            problems.addAll(contracts.violations(key, result));
+            if (result.status() != 401) {
+                problems.add(key + ": 인증 없는 호출이 " + result.status() + " " + result.body());
+            }
+            if (!result.headerValues("Set-Cookie").isEmpty()) {
+                problems.add(key + ": 인증 없는 호출이 쿠키를 만들었다");
+            }
+        }
+
+        assertThat(swept).as("보호 연산을 실제로 훑었다")
+                .contains("GET /api/sessions/{sessionId}", "POST /api/activities/free", "GET /api/device/me",
+                        "PUT /internal/devices/{deviceId}/connection", "POST /internal/events");
+        assertThat(problems).isEmpty();
     }
 
     // ------------------------------------------------------------------ 도움

@@ -18,6 +18,9 @@ import org.springframework.stereotype.Component;
  * 시간이 지나면 HALF_OPEN이 되어 시험 호출 1건만 통과시키고 나머지는 거절한다. 시험 성공 → CLOSED, 실패 → OPEN(다시 5초). 실패 한 건은
  * 논리적 시작 호출 하나(시간 초과 1회 재시도 포함)다. 끝내기 · 취소 · 조회는 이 차단기를 거치지 않는다. 상태는
  * {@code mujoong_internal_http_breaker_state{group=core_to_realtime}}(0 · 1 · 2)로 보인다.
+ *
+ * <p>METRIC_SNAPSHOT {@code breakerOpenSec}(OD-6)을 위해 OPEN이었던 시간의 누계를 앱 Clock으로 센다. OPEN 한 번은 열린 시각부터
+ * {@code breaker-open-duration}이 지날 때까지다(그 뒤는 시험 호출을 받는 HALF_OPEN이라 거절 시간이 아니다, J325).
  */
 @Component
 public class SessionStartBreaker {
@@ -48,6 +51,7 @@ public class SessionStartBreaker {
     private int consecutiveFailures;
     private Instant openedAt;
     private boolean trialInFlight;
+    private long openings;
 
     @Autowired
     public SessionStartBreaker(MujoongClock clock, CoreMetrics metrics, CoreProperties properties) {
@@ -120,8 +124,24 @@ public class SessionStartBreaker {
         return state;
     }
 
+    /**
+     * 앱 시작 뒤 OPEN이었던 시간의 누계(지금 열려 있으면 지금까지). 지난 OPEN은 모두 열림 시간을 다 채웠다 — 다시 열리는 길은 열림 시간이
+     * 지난 뒤의 시험 실패뿐이기 때문이다.
+     */
+    public synchronized Duration openTimeTotal() {
+        if (openings == 0) {
+            return Duration.ZERO;
+        }
+        Duration current = Duration.between(openedAt, clock.now());
+        if (current.isNegative()) {
+            current = Duration.ZERO;
+        }
+        return openDuration.multipliedBy(openings - 1).plus(current.compareTo(openDuration) > 0 ? openDuration : current);
+    }
+
     private void open() {
         openedAt = clock.now();
+        openings++;
         consecutiveFailures = 0;
         moveTo(State.OPEN);
     }

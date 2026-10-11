@@ -4,6 +4,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Objects;
 import kr.mujoong.contract.time.MujoongClock;
+import kr.mujoong.realtime.common.scaling.SingleInstanceAssumption;
 import kr.mujoong.realtime.config.RealtimeProperties;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -17,6 +18,8 @@ import org.springframework.stereotype.Component;
  * 다 할 때까지 되풀이하고 각 문장은 멱등이다. 비운 FAILED 제어 이벤트는 재무장 대상에서 빠진다(A1: 다시 보낼 수 없다).
  */
 @Component
+@SingleInstanceAssumption(si = "SI-7",
+        reason = "인스턴스마다 하루 1회 정리가 돌아 같은 행을 두고 경합한다(문장이 멱등이라 결과는 같다)")
 public class MessagingCleanupJob {
 
     private final RealtimeOutboxRepository outbox;

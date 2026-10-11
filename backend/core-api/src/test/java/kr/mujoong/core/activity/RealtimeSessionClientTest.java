@@ -78,6 +78,27 @@ class RealtimeSessionClientTest {
         verify(http).send(eq(Target.SESSION_START), argThat(call -> call.attempt() == 2));
     }
 
+    /** F3(J320): 시간 초과 뒤 재시도가 받은 409는 '재시도 뒤'로 표시되고, 첫 시도의 409 · 423은 표시되지 않는다(BR6.6 끝 문장). */
+    @Test
+    void conflictAnsweredToTheTimeoutRetryIsMarkedAsAfterTheRetry() throws Exception {
+        when(http.send(eq(Target.SESSION_START), any()))
+                .thenThrow(new CallException(Target.SESSION_START, Outcome.TIMEOUT, "HttpTimeoutException"))
+                .thenReturn(new Response(409, "{\"code\":\"SESSION_IN_PROGRESS\",\"message\":\"x\"}"))
+                .thenReturn(new Response(409, "{\"code\":\"SESSION_IN_PROGRESS\",\"message\":\"x\"}"))
+                .thenReturn(new Response(423, "{\"code\":\"DEVICE_NOT_CONNECTED\",\"message\":\"x\"}"));
+
+        StartResult retried = client.start(sessionPackage());
+        StartResult direct = client.start(sessionPackage());
+        StartResult deviceGone = client.start(sessionPackage());
+
+        assertThat(retried.kind()).isEqualTo(StartKind.CONFLICT);
+        assertThat(retried.afterTimeoutRetry()).isTrue();
+        assertThat(direct.kind()).isEqualTo(StartKind.CONFLICT);
+        assertThat(direct.afterTimeoutRetry()).isFalse();
+        assertThat(deviceGone).isEqualTo(new StartResult(StartKind.DEVICE_NOT_CONNECTED, null, false));
+        assertThat(breaker.state()).as("409 · 423은 업무 응답이라 차단기 실패가 아니다").isEqualTo(SessionStartBreaker.State.CLOSED);
+    }
+
     @Test
     void secondTimeoutAndConnectionErrorAreUnavailableWithoutFurtherRetry() throws Exception {
         when(http.send(eq(Target.SESSION_START), any()))
@@ -136,6 +157,25 @@ class RealtimeSessionClientTest {
         assertThat(metrics.breakerStateValue()).isEqualTo(1);
         breaker.onSuccess(SessionStartBreaker.Permit.TRIAL);
         assertThat(breaker.state()).isEqualTo(SessionStartBreaker.State.CLOSED);
+    }
+
+    /** METRIC_SNAPSHOT breakerOpenSec의 원천(J325): 열림마다 최대 열림 시간(5초)만 쌓고, 그 뒤 반열림 · 닫힘 시간은 세지 않는다. */
+    @Test
+    void breakerOpenTimeAddsUpOnlyTheOpenPeriods() throws Exception {
+        assertThat(breaker.openTimeTotal()).isZero();
+        when(http.send(eq(Target.SESSION_START), any())).thenReturn(new Response(500, "{}"));
+        for (int i = 0; i < 3; i++) {
+            client.start(sessionPackage());
+        }
+
+        clock.advance(Duration.ofSeconds(2));
+        assertThat(breaker.openTimeTotal()).isEqualTo(Duration.ofSeconds(2));
+        clock.advance(Duration.ofSeconds(10));
+        assertThat(breaker.openTimeTotal()).isEqualTo(Duration.ofSeconds(5));
+
+        client.start(sessionPackage());
+        clock.advance(Duration.ofSeconds(1));
+        assertThat(breaker.openTimeTotal()).as("시험 호출 실패로 다시 열린 1초").isEqualTo(Duration.ofSeconds(6));
     }
 
     @Test

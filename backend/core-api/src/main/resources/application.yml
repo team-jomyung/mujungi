@@ -88,6 +88,8 @@ management:
     distribution:
       slo:
         "[http.server.requests]": 100ms,300ms,500ms,1s
+        # mujoong_event_delivery_seconds 버킷(observability-design.md 2.5 표, 3.6 수정 J322)
+        "[mujoong.event.delivery]": 100ms,250ms,500ms,1s,2s,5s,10s,30s,60s,300s
 
 springdoc:
   api-docs:
@@ -177,3 +179,5 @@ mujoong:
     owner-hash-secret: ${MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET:}
     metric-snapshot-interval: 60s
     log-merge-window: 10s
+    # OD-6 '앱 안 5초 표본'(CPU · 메모리 · 적체 게이지 갱신) 주기(3.6 수정 J326, reliability-design ## 3에 더할 키)
+    system-sample-interval: 5s

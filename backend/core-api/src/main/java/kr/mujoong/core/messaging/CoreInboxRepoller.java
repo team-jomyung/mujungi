@@ -3,6 +3,7 @@ package kr.mujoong.core.messaging;
 import java.util.Objects;
 import java.util.function.BooleanSupplier;
 import kr.mujoong.contract.time.MujoongClock;
+import kr.mujoong.core.common.scaling.SingleInstanceAssumption;
 import kr.mujoong.core.config.CoreProperties;
 import kr.mujoong.core.health.ReadinessState;
 import kr.mujoong.core.messaging.CoreInboxRepository.InboxEvent;
@@ -18,6 +19,7 @@ import org.springframework.stereotype.Component;
  * 집는다.
  */
 @Component
+@SingleInstanceAssumption(si = "SI-6", reason = "두 인스턴스의 재호출 폴러가 같은 RECEIVED 행을 함께 집어 처리 시도가 겹친다(선점 UPDATE가 승자를 정한다)")
 public class CoreInboxRepoller {
 
     private final CoreInboxRepository inbox;

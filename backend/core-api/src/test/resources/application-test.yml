@@ -59,3 +59,4 @@ mujoong:
   observability:
     metric-snapshot-interval: 1s
     log-merge-window: 500ms
+    system-sample-interval: 500ms

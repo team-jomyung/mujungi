@@ -26,6 +26,7 @@ import org.flywaydb.core.api.configuration.Configuration;
 import org.flywaydb.core.api.output.MigrateResult;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
@@ -36,6 +37,8 @@ import org.junit.jupiter.params.provider.EnumSource;
  * <p>설정 파일을 그대로 읽어(위치만 저장소 경로로 바꿈) 빈 DB에 core → realtime 순서로 적용하고, 시험 백엔드 MujoongPostgres.flyway와
  * 같은 설정인지 대조한다. 증명: 두 위치가 flyway 스키마를 함께 써도 두 번째 migrate가 성공(baselineOnMigrate · baselineVersion 0),
  * 기준선이 없으면 실패, 다시 돌리면 0건(멱등), afterMigrate.sql의 자기 이력 표 SELECT, clean 막힘, 설정 파일에 접속 정보 · 비밀 없음.
+ * 3.6 수정 분량: 설정 파일이 검증을 끄지 않아 적용된 파일을 고치거나 낮은 버전을 늦게 끼우면 migrate가 아무것도 하기 전에 거부한다(배포 때
+ * 이미 적용된 스키마와 저장소가 어긋나는 것을 막는다). 두 시험은 공용 인스턴스에 검증만 하고 이력 표를 바꾸지 않는다.
  */
 @Tag("u1")
 @Tag("db")
@@ -109,7 +112,56 @@ class FlywayConfIT {
         }
     }
 
+    @Test
+    void anAppliedMigrationEditedAfterwardsIsRejectedBeforeAnythingRuns(@TempDir Path edited) throws IOException, SQLException {
+        MujoongPostgres postgres = MujoongPostgres.sharedOrAbort();
+        copyMigrations(postgres, MigrationSet.CORE, edited);
+        Path v1 = edited.resolve("V1__core_base.sql");
+        Files.writeString(v1, Files.readString(v1, StandardCharsets.UTF_8) + "\n-- 적용한 뒤에 고친 줄\n", StandardCharsets.UTF_8);
+        List<List<Object>> before = coreHistory(postgres);
+
+        Flyway changed = flywayFromConf(postgres, MigrationSet.CORE, Map.of("flyway.locations", "filesystem:" + edited));
+
+        assertThatThrownBy(changed::validate).isInstanceOf(FlywayException.class).hasMessageContaining("checksum");
+        assertThatThrownBy(changed::migrate).as("배포의 migrate도 같은 검증으로 멈춘다").isInstanceOf(FlywayException.class)
+                .hasMessageContaining("checksum");
+        assertThat(coreHistory(postgres)).as("이력 표는 그대로").isEqualTo(before);
+        // 대조군: 고치지 않은 원본 위치는 같은 설정으로 검증을 통과한다
+        flywayFromConf(postgres, MigrationSet.CORE, Map.of()).validate();
+    }
+
+    @Test
+    void aLowerVersionAddedAfterTheAppliedOneIsRejectedInsteadOfRunningOutOfOrder(@TempDir Path late)
+            throws IOException, SQLException {
+        MujoongPostgres postgres = MujoongPostgres.sharedOrAbort();
+        copyMigrations(postgres, MigrationSet.CORE, late);
+        Files.writeString(late.resolve("V0_5__forgotten.sql"), "-- 늦게 끼운 낮은 버전\nselect 1;\n", StandardCharsets.UTF_8);
+        List<List<Object>> before = coreHistory(postgres);
+
+        Flyway withLateFile = flywayFromConf(postgres, MigrationSet.CORE, Map.of("flyway.locations", "filesystem:" + late));
+
+        assertThatThrownBy(withLateFile::migrate).as("outOfOrder를 켜지 않았다").isInstanceOf(FlywayException.class)
+                .hasMessageContaining("0.5");
+        assertThat(coreHistory(postgres)).as("늦게 끼운 버전은 적용되지 않았다").isEqualTo(before);
+    }
+
     // ------------------------------------------------------------------ 도구
+
+    /** 저장소의 마이그레이션 위치 파일을 그대로 복사한다(afterMigrate.sql 포함). */
+    private static void copyMigrations(MujoongPostgres postgres, MigrationSet set, Path target) throws IOException {
+        try (java.util.stream.Stream<Path> files = Files.list(postgres.repoRoot().resolve(set.relativeLocation()))) {
+            for (Path file : files.toList()) {
+                Files.copy(file, target.resolve(file.getFileName().toString()));
+            }
+        }
+    }
+
+    private static List<List<Object>> coreHistory(MujoongPostgres postgres) throws SQLException {
+        try (Connection owner = postgres.connect(Role.OWNER)) {
+            return query(owner, "select installed_rank, version, checksum, success from flyway.core_schema_history"
+                    + " order by installed_rank");
+        }
+    }
 
     private static Path confPath(MigrationSet set) {
         return MujoongPostgres.sharedOrAbort().repoRoot().resolve("infra/migrate/flyway-" + set.appSchema() + ".conf");

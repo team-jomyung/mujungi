@@ -7,6 +7,7 @@ import kr.mujoong.contract.json.JsonCodec;
 import kr.mujoong.contract.log.EventLog;
 import kr.mujoong.contract.status.ConnectionState;
 import kr.mujoong.contract.time.MujoongClock;
+import kr.mujoong.realtime.common.scaling.SingleInstanceAssumption;
 import kr.mujoong.realtime.config.RealtimeProperties;
 import kr.mujoong.realtime.internalhttp.InternalHttpClient;
 import kr.mujoong.realtime.observability.EventLogger;
@@ -23,6 +24,8 @@ import org.springframework.stereotype.Component;
  * 묶이지 않게).
  */
 @Component
+@SingleInstanceAssumption(si = "SI-7",
+        reason = "인스턴스마다 10초 상태 보고가 돌아 같은 원장 행을 Core에 겹쳐 보낸다(덮어쓰기라 결과는 같다)")
 public class StatusReporter {
 
     /** 보고 본문(계약 internal-device-connection-report). */

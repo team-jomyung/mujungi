@@ -68,6 +68,53 @@ class DbSessionLimitsTest {
     }
 
     @Test
+    void oneMillisecondIsTheSmallestLimitAndANegativeLimitIsRejected() {
+        // 경계: 1ms는 받고(문장 '1ms'), 1ms − 1ns는 밀리초로 0이 되므로 거부한다
+        DbSessionLimits smallest = new DbSessionLimits(Duration.ofMillis(1), Duration.ofMillis(1));
+        assertThat(smallest.connectionInitSql()).isEqualTo("select set_config('lock_timeout', '1ms', false),"
+                + " set_config('statement_timeout', '1ms', false)");
+
+        assertThatThrownBy(() -> new DbSessionLimits(Duration.ofMillis(1).minusNanos(1), Duration.ofSeconds(1)))
+                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining(DbSessionLimits.LOCK_TIMEOUT_KEY);
+        assertThatThrownBy(() -> new DbSessionLimits(Duration.ofSeconds(1), Duration.ofSeconds(-10)))
+                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining(DbSessionLimits.STATEMENT_TIMEOUT_KEY);
+    }
+
+    @Test
+    void theKeysAcceptSpringDurationFormatsButAnUnreadableValueFailsStartup() {
+        MockEnvironment iso = new MockEnvironment()
+                .withProperty(DbSessionLimits.LOCK_TIMEOUT_KEY, "PT1.5S")
+                .withProperty(DbSessionLimits.STATEMENT_TIMEOUT_KEY, "7000ms");
+        DbSessionLimits limits = new DbSessionLimits(iso);
+        assertThat(limits.lockTimeout()).isEqualTo(Duration.ofMillis(1500));
+        assertThat(limits.statementTimeout()).isEqualTo(Duration.ofSeconds(7));
+        // 단위 없는 숫자는 Spring 규칙대로 밀리초다
+        MockEnvironment bare = new MockEnvironment()
+                .withProperty(DbSessionLimits.LOCK_TIMEOUT_KEY, "250")
+                .withProperty(DbSessionLimits.STATEMENT_TIMEOUT_KEY, "10s");
+        assertThat(new DbSessionLimits(bare).lockTimeout()).isEqualTo(Duration.ofMillis(250));
+
+        MockEnvironment unreadable = new MockEnvironment()
+                .withProperty(DbSessionLimits.LOCK_TIMEOUT_KEY, "two seconds")
+                .withProperty(DbSessionLimits.STATEMENT_TIMEOUT_KEY, "10s");
+        assertThatThrownBy(() -> new DbSessionLimits(unreadable))
+                .isInstanceOf(org.springframework.boot.context.properties.bind.BindException.class)
+                .hasMessageContaining(DbSessionLimits.LOCK_TIMEOUT_KEY);
+    }
+
+    @Test
+    void aBlankExistingInitStatementCountsAsAbsentAndIsReplaced() {
+        DbSessionLimits limits = new DbSessionLimits(Duration.ofSeconds(2), Duration.ofSeconds(10));
+        try (HikariDataSource blank = new HikariDataSource()) {
+            blank.setConnectionInitSql("   ");
+
+            limits.apply(blank);
+
+            assertThat(blank.getConnectionInitSql()).isEqualTo(limits.connectionInitSql());
+        }
+    }
+
+    @Test
     void clockParamsBindUtcTimesAndTypedNulls() {
         Instant now = Instant.parse("2026-10-15T09:00:00Z");
         MapSqlParameterSource params = ClockParams.at(now);

@@ -46,7 +46,7 @@ import tools.jackson.dataformat.yaml.YAMLMapper;
 
 /**
  * 계약 정본 파일 시험(V-5 · J20 · J59 · J112 · BR8.6). {@code contracts/}의 YAML · JSON을 파싱하고, 스키마를 JSON Schema 2020-12 메타
- * 스키마로 검사하고, 모든 $ref가 풀리는지, 스펙의 예시가 가리키는 스키마를 통과하는지, (a) ~ (y) 편차 표시가 있는지, errors.md 표와
+ * 스키마로 검사하고, 모든 $ref가 풀리는지, 스펙의 예시가 가리키는 스키마를 통과하는지, (a) ~ (z) 편차 표시가 있는지, errors.md 표와
  * {@link ErrorCode}가 같은지 본다. 스펙 예시는 Java 계약 모델({@link JsonCodec})로도 읽혀야 한다(두 정본이 어긋나지 않게).
  */
 @Tag("u1")
@@ -57,7 +57,7 @@ class ContractFilesTest {
     private static final Pattern MD_MARKER = Pattern.compile("\\[편차 \\(([a-z])\\)\\]");
     private static final Pattern DEVIATION_ROW = Pattern.compile("^\\| \\(([a-z])\\) \\|.*$", Pattern.MULTILINE);
     private static final List<String> LETTERS =
-            IntStream.rangeClosed('a', 'y').mapToObj(c -> String.valueOf((char) c)).toList();
+            IntStream.rangeClosed('a', 'z').mapToObj(c -> String.valueOf((char) c)).toList();
     private static final List<String> SPEC_FILES = List.of(
             "parent-api.yaml", "device-api.yaml", "internal-api.yaml", "events.asyncapi.yaml", "device-ws.asyncapi.yaml");
     private static final List<String> MARKDOWN_FILES =
@@ -409,7 +409,7 @@ class ContractFilesTest {
         assertThat(fromTable).isEqualTo(fromEnum);
     }
 
-    // ------------------------------------------------------------------ 편차 (a) ~ (y)
+    // ------------------------------------------------------------------ 편차 (a) ~ (z)
 
     @Test
     void everyDeviationHasOneRowAndAMarkerInEachListedFile() throws IOException {

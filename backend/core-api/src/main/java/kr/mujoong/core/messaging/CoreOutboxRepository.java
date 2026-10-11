@@ -225,6 +225,21 @@ public class CoreOutboxRepository {
                 """, uuid(new MapSqlParameterSource(), "guardianId", Objects.requireNonNull(guardianId, "guardianId")));
     }
 
+    /**
+     * 적체 지표(OD-12 · NFR7.8): PENDING 수와 그중 가장 오래된 created_at(선점으로 밀린 available_at과 무관), FAILED 수. 상태 색인을 타는 한
+     * 문장이다(METRIC_SNAPSHOT · {@code mujoong_outbox_*} 게이지, J322).
+     */
+    public Backlog backlog() {
+        return jdbc.queryForObject("""
+                select count(*) filter (where status = 'PENDING') as pending,
+                       min(created_at) filter (where status = 'PENDING') as oldest_pending,
+                       count(*) filter (where status = 'FAILED') as failed
+                  from core.core_outbox_event
+                 where status in ('PENDING', 'FAILED')
+                """, new MapSqlParameterSource(), (rs, rowNum) -> new Backlog(rs.getLong("pending"),
+                Optional.ofNullable(instant(rs, "oldest_pending")), rs.getLong("failed")));
+    }
+
     /** event_id로 행을 읽는다. */
     public Optional<OutboxEvent> findById(UUID eventId) {
         List<OutboxEvent> rows = jdbc.query("select " + COLUMNS + " from core.core_outbox_event where event_id = :eventId",
@@ -344,6 +359,14 @@ public class CoreOutboxRepository {
         @Override
         public String toString() {
             return "NewOutboxEvent[eventId=" + eventId + ", eventType=" + eventType + "]";
+        }
+    }
+
+    /** Outbox 적체: PENDING 수 · 가장 오래된 PENDING의 created_at(없으면 빈 값) · FAILED 수. */
+    public record Backlog(long pending, Optional<Instant> oldestPendingCreatedAt, long failed) {
+
+        public Backlog {
+            Objects.requireNonNull(oldestPendingCreatedAt, "oldestPendingCreatedAt");
         }
     }
 

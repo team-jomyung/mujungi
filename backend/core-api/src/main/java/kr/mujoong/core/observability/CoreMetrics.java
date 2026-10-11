@@ -2,12 +2,15 @@ package kr.mujoong.core.observability;
 
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Tags;
 import io.micrometer.core.instrument.Timer;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Duration;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.LongAdder;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -18,6 +21,15 @@ import org.springframework.stereotype.Component;
  * <p>Micrometer 점 표기 이름이 Prometheus에서 {@code mujoong_..._total} · {@code mujoong_..._seconds}가 된다. 라벨 값은 열거 집합의 소문자
  * 밑줄 표기만 쓴다. id · 전사 · 토큰 · 코드 · ownerHash는 라벨이 될 수 없다(NFR9.8). 레지스트리가 없는 문맥(부분 시험 문맥)에서는 메모리
  * 레지스트리를 쓴다.
+ *
+ * <p>3.6 수정(J322 · J323): 설계 표 2.5의 Core 몫 중 빠졌던 Outbox · Inbox 게이지 4종(OD-12 · NFR7.8 · NFR4.14)과
+ * {@code mujoong_db_pool_wait_exceeded_total}(NFR7.6)을 더하고, 사건이 없으면 이름이 아예 없던 카운터(사본 폴백 · Core 시한 2종 · 풀 대기
+ * 초과)를 0으로 미리 등록한다(OD-5 시험 '이름이 모두 있다'). METRIC_SNAPSHOT(OD-6)의 REST · 12 조회 처리 시간 계수는 Prometheus 이름을
+ * 늘리지 않는 메모리 누계로 둔다(Prometheus 쪽은 {@code http_server_requests_seconds}가 같은 값을 SLO 버킷으로 보인다).
+ *
+ * <p>설계 표 2.5에서 Core가 내는 히스토그램은 {@code mujoong_event_delivery_seconds}(버킷은 application.yml SLO) ·
+ * {@code mujoong_internal_http_seconds} · {@code http_server_requests_seconds}다. 세션 시작 → ACTIVE · view_item_ready · relay ·
+ * turn_first_audio는 표의 발행 앱이 realtime이라 여기에 없다(J328).
  */
 @Component
 public class CoreMetrics {
@@ -39,9 +51,35 @@ public class CoreMetrics {
         }
     }
 
+    /** Core Outbox의 방향 라벨(설계 표 2.5 direction). */
+    public static final String OUTBOX_DIRECTION = "core_to_realtime";
+    /** Core Inbox의 방향 라벨(들어오는 방향). */
+    public static final String INBOX_DIRECTION = "realtime_to_core";
+    /** {@code mujoong_db_pool_wait_exceeded_total}의 Micrometer 이름. */
+    public static final String DB_POOL_WAIT_EXCEEDED = "mujoong.db.pool.wait.exceeded";
+    /** {@code mujoong_session_view_fallback_total}의 Micrometer 이름. */
+    public static final String SESSION_VIEW_FALLBACK = "mujoong.session.view.fallback";
+    /**
+     * METRIC_SNAPSHOT {@code restLe300Ms}의 경계(OD-6 · NFR5.5). 값은 키 이름이 고정한 계약 상수라 설정 키로 두지 않는다(J324, 시간 상수 검사의
+     * 허용 목록).
+     */
+    public static final Duration REST_FAST = Duration.ofMillis(300);
+    /** METRIC_SNAPSHOT {@code viewLe500Ms}의 경계(OD-6 · NFR5.5, J324 허용 목록). */
+    public static final Duration VIEW_FAST = Duration.ofMillis(500);
+
     private final MeterRegistry registry;
     private final AtomicInteger breakerState = new AtomicInteger(BreakerGauge.CLOSED.value());
     private final AtomicInteger readinessUp = new AtomicInteger(0);
+    // 게이지는 상태 객체를 약하게 참조하므로 필드로 붙잡아 둔다(지역 객체면 GC 뒤 NaN이 된다)
+    private final AtomicInteger livenessUp = new AtomicInteger(1);
+    private final AtomicLong outboxPending = new AtomicLong();
+    private final AtomicLong outboxOldestPendingSeconds = new AtomicLong();
+    private final AtomicLong outboxFailed = new AtomicLong();
+    private final AtomicLong inboxDead = new AtomicLong();
+    private final LongAdder restTotal = new LongAdder();
+    private final LongAdder restFast = new LongAdder();
+    private final LongAdder viewTotal = new LongAdder();
+    private final LongAdder viewFast = new LongAdder();
 
     @Autowired
     public CoreMetrics(ObjectProvider<MeterRegistry> registry) {
@@ -50,10 +88,20 @@ public class CoreMetrics {
 
     public CoreMetrics(MeterRegistry registry) {
         this.registry = Objects.requireNonNull(registry, "registry");
-        registry.gauge("mujoong.internal.http.breaker.state",
-                io.micrometer.core.instrument.Tags.of("group", "core_to_realtime"), breakerState);
-        registry.gauge("mujoong.health.up", io.micrometer.core.instrument.Tags.of("group", "readiness"), readinessUp);
-        registry.gauge("mujoong.health.up", io.micrometer.core.instrument.Tags.of("group", "liveness"), new AtomicInteger(1));
+        registry.gauge("mujoong.internal.http.breaker.state", Tags.of("group", "core_to_realtime"), breakerState);
+        registry.gauge("mujoong.health.up", Tags.of("group", "readiness"), readinessUp);
+        registry.gauge("mujoong.health.up", Tags.of("group", "liveness"), livenessUp);
+        // OD-12 · NFR7.8 · NFR4.14: 값은 maintenance 표본이 갱신한다(MetricSnapshotJob)
+        registry.gauge("mujoong.outbox.pending", Tags.of("direction", OUTBOX_DIRECTION), outboxPending);
+        registry.gauge("mujoong.outbox.oldest.pending.seconds", Tags.of("direction", OUTBOX_DIRECTION),
+                outboxOldestPendingSeconds);
+        registry.gauge("mujoong.outbox.failed", Tags.of("direction", OUTBOX_DIRECTION), outboxFailed);
+        registry.gauge("mujoong.inbox.dead", Tags.of("direction", INBOX_DIRECTION), inboxDead);
+        // 사건이 없을 때도 이름이 보이게 0으로 미리 둔다(OD-5)
+        registry.counter(DB_POOL_WAIT_EXCEEDED);
+        registry.counter(SESSION_VIEW_FALLBACK);
+        counter("mujoong.timeout.fired", "type", "preparing");
+        counter("mujoong.timeout.fired", "type", "device_status_stale");
     }
 
     /** 시험용 메모리 레지스트리 지표. */
@@ -109,7 +157,44 @@ public class CoreMetrics {
 
     /** {@code mujoong_session_view_fallback_total}: 12 조회가 사본으로 답한 횟수. */
     public void sessionViewFallback() {
-        registry.counter("mujoong.session.view.fallback").increment();
+        registry.counter(SESSION_VIEW_FALLBACK).increment();
+    }
+
+    /** {@code mujoong_db_pool_wait_exceeded_total}: 풀 연결 획득이 {@code mujoong.metrics.db-pool-wait-warn}을 넘었다(NFR7.6). */
+    public void dbPoolWaitExceeded() {
+        registry.counter(DB_POOL_WAIT_EXCEEDED).increment();
+    }
+
+    /**
+     * Outbox · Inbox 적체 게이지를 바꾼다(OD-12): PENDING 수, 가장 오래된 PENDING의 나이(초, 없으면 0), FAILED 수, Inbox DEAD 수. 모두 시점
+     * 값이다.
+     */
+    public void messagingBacklog(long pending, long oldestPendingSeconds, long failed, long dead) {
+        outboxPending.set(nonNegative(pending));
+        outboxOldestPendingSeconds.set(nonNegative(oldestPendingSeconds));
+        outboxFailed.set(nonNegative(failed));
+        inboxDead.set(nonNegative(dead));
+    }
+
+    /** 보호자 · 기기 REST 요청 하나의 서버 처리 시간(12 조회 · 헬스 · 내부 호출 제외, OD-6 restTotal · restLe300Ms). */
+    public void restRequest(Duration took) {
+        restTotal.increment();
+        if (!took.isNegative() && took.compareTo(REST_FAST) <= 0) {
+            restFast.increment();
+        }
+    }
+
+    /** 12 진행 조회 요청 하나의 서버 처리 시간(Realtime 중계 포함, OD-6 viewTotal · viewLe500Ms). */
+    public void viewRequest(Duration took) {
+        viewTotal.increment();
+        if (!took.isNegative() && took.compareTo(VIEW_FAST) <= 0) {
+            viewFast.increment();
+        }
+    }
+
+    /** METRIC_SNAPSHOT이 구간 증가분을 셈하는 누계(앱 시작 뒤 단조 증가). */
+    public RequestTotals requestTotals() {
+        return new RequestTotals(restTotal.sum(), restFast.sum(), viewTotal.sum(), viewFast.sum());
     }
 
     /** {@code mujoong_rate_limiter_evictions_total{limiter}}. */
@@ -147,11 +232,25 @@ public class CoreMetrics {
         return counter == null ? 0.0 : counter.count();
     }
 
+    /** 게이지 현재 값(시험 · 진단). 없으면 NaN. */
+    public double gauge(String name, String... tags) {
+        io.micrometer.core.instrument.Gauge gauge = registry.find(name).tags(tags).gauge();
+        return gauge == null ? Double.NaN : gauge.value();
+    }
+
     private Counter counter(String name, String... tags) {
         return registry.counter(name, tags);
     }
 
     private static String label(String value) {
         return value == null ? "none" : value.toLowerCase(Locale.ROOT);
+    }
+
+    private static long nonNegative(long value) {
+        return Math.max(0L, value);
+    }
+
+    /** REST · 12 조회 처리 시간 누계(빠른 것 = 경계 이하). */
+    public record RequestTotals(long rest, long restFast, long view, long viewFast) {
     }
 }

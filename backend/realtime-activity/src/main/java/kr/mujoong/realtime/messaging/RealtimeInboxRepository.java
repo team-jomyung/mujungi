@@ -185,6 +185,16 @@ public class RealtimeInboxRepository {
         return jdbc.update(PULL_FORWARD, ClockParams.at(now));
     }
 
+    /**
+     * 지금 DEAD 행 수({@code mujoong_inbox_dead} · METRIC_SNAPSHOT inboxDead, OD-12 · NFR4.14 · 3.6 수정 J302). 상태가 앞선 색인
+     * (realtime_inbox_event_poll_idx)을 탄다.
+     */
+    public long countDead() {
+        Long dead = jdbc.queryForObject("select count(*) from realtime.realtime_inbox_event where status = 'DEAD'",
+                new MapSqlParameterSource(), Long.class);
+        return dead == null ? 0L : dead;
+    }
+
     /** 정리(BR5.11 · SQ-18): {@code cutoff} 전에 받은 DEAD 행의 payload를 비운다(한 번에 {@code limit}행). 바뀐 행 수. */
     public int purgeDeadBefore(Instant cutoff, Instant now, int limit) {
         if (limit < 1) {

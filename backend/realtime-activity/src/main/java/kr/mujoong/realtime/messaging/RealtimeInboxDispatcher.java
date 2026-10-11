@@ -97,6 +97,8 @@ public class RealtimeInboxDispatcher implements DisposableBean {
         this.maxRetries = config.maxRetries();
         this.claimLease = config.claimLease();
         AtomicInteger threadNumber = new AtomicInteger();
+        // keepAlive 0은 시간 값이 아니다: core = max인 고정 풀이라 유휴 스레드를 줄이지 않고 이 값은 쓰이지 않는다(J307, Core J327과 같은
+        // 근거 · 시간 상수 검사 허용 목록)
         this.pool = new ThreadPoolExecutor(config.handlerThreads(), config.handlerThreads(), 0L, TimeUnit.MILLISECONDS,
                 new ArrayBlockingQueue<>(config.batchSize()),
                 runnable -> {

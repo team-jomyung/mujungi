@@ -3,12 +3,14 @@ package kr.mujoong.realtime.voice;
 import static kr.mujoong.realtime.testing.RealtimeItEnvironment.WAIT;
 import static kr.mujoong.realtime.testing.RealtimeItEnvironment.awaitTrue;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.lang.reflect.RecordComponent;
 import java.net.URI;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Base64;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -17,6 +19,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
+import kr.mujoong.contract.audio.AudioFrameCodec;
+import kr.mujoong.contract.json.JsonCodec;
 import kr.mujoong.contract.status.SessionStatus;
 import kr.mujoong.contract.ws.WsEnvelope;
 import kr.mujoong.contract.ws.WsMessageType;
@@ -37,6 +41,10 @@ import tools.jackson.databind.JsonNode;
  * <p>가짜 공급자 서버가 받은 모든 메시지의 키가 허용 목록(지시문 · childContext 세 필드 · 음성 프레임) 안이고, 세션 패키지의 다른 값(보호자 ·
  * 아이 · 기기 · 세션 id, 종료 표현, 승인 문구, 동의 판)이 요청 어디에도 없으며, 요청 레코드에 허용 밖 필드가 없고(리플렉션), 허용 목록 밖
  * 주소로는 연결을 열지 않는지 본다.
+ *
+ * <p>3.6 수정(BT-TC-10)에서 공급자로 나가기 직전의 최소화 경계를 더했다: 아이 맥락은 계약 C8 상한(이름 10자 · 관심사 10개 × 20자, 글자는
+ * 코드 포인트)으로 자르고 나이는 6 ~ 12로 묶는다 · 아이 맥락 값은 따옴표 · 역슬래시 · 제어 문자로 지시문의 따옴표 밖으로 나갈 수 없다 · 입력
+ * 음성은 정확히 960바이트 프레임만 무변환으로 나간다.
  */
 @Tag("u1")
 @Tag("db")
@@ -151,6 +159,98 @@ class ProviderRequestWhitelistIT {
                 ProviderPort.ProviderUnavailableException.Reason.HOST_NOT_ALLOWED);
         assertThat(loopbackInProd.openedCount()).isZero();
         assertThat(publicInTest.openedCount()).isZero();
+    }
+
+    @Test
+    void childContextIsCutToTheContractLimitsAndTheAgeIsClampedBeforeItLeaves() {
+        ProviderRequestFactory factory = new ProviderRequestFactory();
+        String ten = "가나다라마바사아자차";
+        List<String> interests = new ArrayList<>(List.of("  ", "가".repeat(ProviderRequestFactory.MAX_INTEREST_LENGTH + 1)));
+        for (int i = 1; i <= ProviderRequestFactory.MAX_INTERESTS + 1; i++) {
+            interests.add("관심" + i);
+        }
+
+        ProviderRequestFactory.SessionStart start = factory.sessionStart(new ChildContext("  " + ten + "카  ", 13, interests));
+
+        ProviderRequestFactory.ChildContextData data = start.childContext();
+        assertThat(data.displayName()).isEqualTo(ten);
+        assertThat(data.age()).isEqualTo(ProviderRequestFactory.MAX_AGE);
+        // 빈 관심사는 빼고 10개에서 멈춘다. 21자 관심사는 20자로 자른다
+        assertThat(data.interests()).hasSize(ProviderRequestFactory.MAX_INTERESTS)
+                .startsWith("가".repeat(ProviderRequestFactory.MAX_INTEREST_LENGTH), "관심1")
+                .doesNotContain("  ", "관심10", "관심11");
+        String wire = JsonCodec.shared().write(start);
+        assertThat(wire).contains(ten).doesNotContain(ten + "카").doesNotContain("관심10");
+
+        // 나이 경계: 5 → 6, 6 · 12 그대로, 없으면 지시문에도 없다
+        assertThat(factory.sessionStart(new ChildContext("하늘", 5, List.of())).childContext().age())
+                .isEqualTo(ProviderRequestFactory.MIN_AGE);
+        assertThat(factory.sessionStart(new ChildContext("하늘", 6, List.of())).childContext().age()).isEqualTo(6);
+        assertThat(factory.sessionStart(new ChildContext("하늘", 12, List.of())).childContext().age()).isEqualTo(12);
+        ProviderRequestFactory.SessionStart ageless = factory.sessionStart(new ChildContext("하늘", null, List.of()));
+        assertThat(ageless.childContext().age()).isNull();
+        assertThat(ageless.instructions()).doesNotContain("나이");
+        // 글자 수는 코드 포인트로 센다: 이모지(UTF-16 두 칸)를 반으로 자르지 않는다
+        String nineAndDino = "가나다라마바사아자\uD83E\uDD95";
+        assertThat(factory.sessionStart(new ChildContext(nineAndDino + "카", 8, List.of())).childContext().displayName())
+                .isEqualTo(nineAndDino);
+    }
+
+    @Test
+    void childValuesCannotLeaveTheirQuotesInTheInstructions() {
+        ProviderRequestFactory factory = new ProviderRequestFactory();
+        String name = "하\"늘\\";
+        ChildContext hostile = new ChildContext(name, 8, List.of("공\"룡", "우\n주\u0007"));
+
+        ProviderRequestFactory.SessionStart start = factory.sessionStart(hostile);
+
+        String instructions = start.instructions();
+        // 따옴표 · 역슬래시는 이스케이프되고 제어 문자는 공백이 된다 — 값이 따옴표를 닫고 지시 문장이 될 수 없다
+        assertThat(instructions).contains("이름: \"하\\\"늘\\\\\"")
+                .contains("관심사: [\"공\\\"룡\", \"우 주 \"]");
+        assertThat(instructions.chars().noneMatch(Character::isISOControl)).as("지시문의 제어 문자").isTrue();
+        assertThat(unescapedQuotes(instructions)).as("이스케이프되지 않은 따옴표 = 값 4개(이름 · 나이 · 관심사 둘)의 양 끝")
+                .isEqualTo(8);
+        // 데이터 필드에는 원래 값이 그대로 가고(선 형식 JSON이 이스케이프한다) 해석하면 같은 값이 돌아온다
+        JsonNode wire = JsonCodec.shared().read(JsonCodec.shared().write(start), JsonNode.class);
+        assertThat(wire.get("childContext").get("displayName").asString()).isEqualTo(name);
+        assertThat(wire.get("instructions").asString()).isEqualTo(instructions);
+    }
+
+    @Test
+    void onlyExact960ByteFramesLeaveAndTheyLeaveUntransformed() {
+        ProviderRequestFactory factory = new ProviderRequestFactory();
+        byte[] pcm = new byte[AudioFrameCodec.INPUT_PAYLOAD_BYTES];
+        for (int i = 0; i < pcm.length; i++) {
+            pcm[i] = (byte) (i * 7);
+        }
+
+        ProviderRequestFactory.InputAudioAppend append = factory.inputAudio(pcm);
+
+        assertThat(append.type()).isEqualTo(ProviderRequestFactory.TYPE_INPUT_AUDIO_APPEND);
+        assertThat(Base64.getDecoder().decode(append.audio())).isEqualTo(pcm);
+        for (int length : new int[] {0, AudioFrameCodec.INPUT_PAYLOAD_BYTES - 1, AudioFrameCodec.INPUT_PAYLOAD_BYTES + 1}) {
+            assertThatThrownBy(() -> factory.inputAudio(new byte[length])).as(length + "바이트")
+                    .isInstanceOf(IllegalArgumentException.class);
+        }
+        assertThatThrownBy(() -> factory.inputAudio(null)).isInstanceOf(NullPointerException.class);
+        assertThat(JsonCodec.shared().write(factory.sessionClose())).isEqualTo("{\"type\":\"session.close\"}");
+    }
+
+    /** 역슬래시로 이스케이프되지 않은 따옴표 수. */
+    private static int unescapedQuotes(String text) {
+        int count = 0;
+        boolean escaped = false;
+        for (char c : text.toCharArray()) {
+            if (escaped) {
+                escaped = false;
+            } else if (c == '\\') {
+                escaped = true;
+            } else if (c == '"') {
+                count++;
+            }
+        }
+        return count;
     }
 
     private static List<String> components(Class<?> record) {

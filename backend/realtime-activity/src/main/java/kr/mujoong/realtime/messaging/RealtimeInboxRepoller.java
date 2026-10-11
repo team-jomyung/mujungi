@@ -3,6 +3,7 @@ package kr.mujoong.realtime.messaging;
 import java.util.Objects;
 import java.util.function.BooleanSupplier;
 import kr.mujoong.contract.time.MujoongClock;
+import kr.mujoong.realtime.common.scaling.SingleInstanceAssumption;
 import kr.mujoong.realtime.config.RealtimeProperties;
 import kr.mujoong.realtime.health.ReadinessState;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -16,6 +17,8 @@ import org.springframework.stereotype.Component;
  * 디스패처의 선점 UPDATE가 정하므로(행 수 1만 처리) 수신 직후 제출과 겹쳐도 한 번만 처리된다.
  */
 @Component
+@SingleInstanceAssumption(si = "SI-6",
+        reason = "두 인스턴스의 재호출 폴러가 같은 RECEIVED 행을 함께 집어 처리 시도가 겹친다(선점 UPDATE가 승자를 정한다)")
 public class RealtimeInboxRepoller {
 
     private final RealtimeInboxRepository inbox;

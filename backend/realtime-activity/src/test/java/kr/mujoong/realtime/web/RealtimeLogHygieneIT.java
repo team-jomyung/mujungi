@@ -10,6 +10,7 @@ import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.sql.SQLException;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.HexFormat;
@@ -28,6 +29,7 @@ import kr.mujoong.contract.ws.WsMessageType;
 import kr.mujoong.contract.ws.message.OutputBegin;
 import kr.mujoong.contract.ws.message.PlayApprovedContent;
 import kr.mujoong.contract.ws.message.PlaybackMark;
+import kr.mujoong.contract.ws.message.WsError;
 import kr.mujoong.realtime.gateway.ConnectionSender;
 import kr.mujoong.realtime.gateway.DeviceWebSocketHandler;
 import kr.mujoong.realtime.gateway.WsFrameGuard;
@@ -41,6 +43,7 @@ import kr.mujoong.realtime.testing.RealtimeItEnvironment;
 import kr.mujoong.realtime.voice.InputRelay;
 import kr.mujoong.testsupport.device.DeviceSimulatorClient;
 import kr.mujoong.testsupport.log.LogCapture;
+import kr.mujoong.testsupport.provider.FakeProviderWsServer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
@@ -62,6 +65,10 @@ import org.springframework.jdbc.datasource.DelegatingDataSource;
  *   <li>DB 어느 realtime 표에도 음성 표식이 없다(원음 비저장, SD-22).
  *   <li>프레임 경로(0x01 수신 · 입력 중계 · 프레임 판정 · 송신기) 위에서 연 DB 연결이 0건이다(SD-22, 실행 중 탐지기).
  * </ul>
+ *
+ * <p>3.6 수정(BT-TC-10)에서 더한 둘: 턴 도중 공급자 오류(제3자가 보낸 code · 아직 확정 안 된 아이 · AI 조각)가 로그에 남지 않고 열린 구간은
+ * 폐기된다 · READY 뒤 거절한 기기 메시지(모르는 type · payload 위반 · 길이 위반 0x01)의 내용이 ERROR 응답 · 로그 · DB에 되돌아오지 않는다
+ * (ERROR · 4400 판정 자체는 DeviceGatewayIT가 보고 여기서는 내용이 새지 않는지를 본다, J318).
  */
 @Tag("u1")
 @Tag("db")
@@ -187,6 +194,82 @@ class RealtimeLogHygieneIT {
         assertThat(device.await(WsMessageType.START_SESSION, WAIT).sessionId()).isEqualTo(sessionId);
     }
 
+    @Test
+    void aProviderErrorMidTurnLeavesNoProviderCodeOrUnfinishedTextInLogs() {
+        String probe = UUID.randomUUID().toString().replace("-", "");
+        String providerCode = "LEAKCODE" + probe;
+        String childPartial = "하늘이미완성조각" + probe;
+        String aiPartial = "무중미완성응답" + probe;
+        DeviceSimulatorClient device = env.connectDevice();
+        UUID sessionId = UUID.randomUUID();
+        InternalApi api = env.api();
+        assertThat(api.post("/internal/sessions", InternalApi.startBody(sessionId, env.guardianId, env.childId,
+                env.deviceId)).status()).isEqualTo(202);
+        WsEnvelope command = device.await(WsMessageType.START_SESSION, WAIT);
+        device.ack(command.opId(), sessionId);
+        device.deviceReady(sessionId, true, true);
+        awaitStatus(env, sessionId, SessionStatus.ACTIVE);
+
+        // 아이 조각 → AI 출력 조각 · 음성 → 응답 끝 없이 공급자 오류(code에 표식)
+        env.provider.emit(providerEvent("session.input_transcript.delta", "item-x", childPartial, null, null, null));
+        env.provider.emit(providerEvent("session.output_transcript.delta", null, aiPartial, "resp-x", null, null));
+        env.provider.emit(providerEvent("session.output_audio.delta", null, null, "resp-x",
+                Base64.getEncoder().encodeToString(new byte[4800]), null));
+        env.provider.emit(providerEvent("session.error", null, null, null, null, providerCode));
+
+        // 빈 수집으로 통과하지 않는다: 끊김 WARN 줄이 나왔고, 완결 안 된 구간은 폐기돼 대기 문구가 나갔다(출력 0바이트)
+        awaitTrue(() -> logs.events(EventCode.APP_ERROR).stream()
+                .anyMatch(event -> "ProviderDisconnected".equals(LogCapture.attrs(event).get("errorKind"))), "끊김 줄");
+        device.await(envelope -> envelope.payload() instanceof PlayApprovedContent play
+                && PlayApprovedContent.WAITING_FILLER.equals(play.contentCode()), WAIT);
+        assertThat(device.received(WsMessageType.OUTPUT_BEGIN)).isEmpty();
+        assertThat(device.outputFrames()).isZero();
+        assertThat(api.get("/internal/sessions/" + sessionId + "/view?sinceSeq=0").body()).doesNotContain(aiPartial);
+
+        assertNoneLeaked(stdout.captured(), List.of(providerCode, probe, childPartial, aiPartial));
+        assertThat(logs.events(EventCode.APP_ERROR)).allSatisfy(event -> assertThat(LogCapture.attrs(event).keySet())
+                .isSubsetOf("errorKind", "repeat"));
+    }
+
+    @Test
+    void rejectedDeviceMessagesAfterReadyAreNeverEchoedIntoRepliesLogsOrTables() {
+        String marker = "ECHOPROBE" + UUID.randomUUID().toString().replace("-", "");
+        DeviceSimulatorClient device = env.connectDevice();
+
+        // 모르는 type과 아는 type의 payload 위반은 ERROR로 답하고 연결을 유지한다 — 답에는 code와 refSeq뿐이다
+        device.sendRaw("{\"type\":\"SOMETHING_NEW\",\"seq\":901,\"sentAt\":\"" + Instant.now()
+                + "\",\"payload\":{\"note\":\"" + marker + "\"}}");
+        device.sendRaw("{\"type\":\"DEVICE_READY\",\"seq\":902,\"sentAt\":\"" + Instant.now()
+                + "\",\"payload\":{\"sessionId\":\"" + marker + "\",\"micOk\":\"" + marker + "\"}}");
+        List<WsEnvelope> errors = device.awaitCount(WsMessageType.ERROR, 2, WAIT);
+        assertThat(errors).extracting(envelope -> ((WsError) envelope.payload()).code())
+                .containsExactly(WsError.Code.UNKNOWN_TYPE, WsError.Code.BAD_PAYLOAD);
+        assertThat(errors).extracting(envelope -> ((WsError) envelope.payload()).refSeq()).containsExactly(901L, 902L);
+        assertThat(errors).allSatisfy(envelope -> assertThat(envelope.toString()).doesNotContain(marker));
+        assertThat(device.isClosed()).isFalse();
+
+        // 길이가 틀린 0x01 프레임(표식 바이트)은 4400으로 닫는다
+        byte[] markerBytes = marker.getBytes(StandardCharsets.US_ASCII);
+        byte[] frame = new byte[1 + 300];
+        frame[0] = 0x01;
+        for (int i = 1; i < frame.length; i++) {
+            frame[i] = markerBytes[i % markerBytes.length];
+        }
+        device.sendBinary(frame);
+        assertThat(device.awaitClose(WAIT)).contains(4400);
+
+        String printed = stdout.captured();
+        assertThat(printed).as("빈 수집이 아니다").contains("\"event\":\"DEVICE_CONNECTION\"");
+        assertNoneLeaked(printed, List.of(marker, HexFormat.of().formatHex(markerBytes),
+                Base64.getEncoder().encodeToString(markerBytes)));
+        assertNoMarkerInTables(env, marker);
+    }
+
+    private static FakeProviderWsServer.Event providerEvent(String type, String itemId, String delta, String responseId,
+            String audio, String code) {
+        return new FakeProviderWsServer.Event(type, null, itemId, delta, null, responseId, audio, code);
+    }
+
     private static void assertNoneLeaked(String printed, List<String> values) {
         for (String value : values) {
             assertThat(printed).as("표준 출력에 남으면 안 되는 값").doesNotContain(value);
@@ -260,9 +343,14 @@ class RealtimeLogHygieneIT {
     }
 
     private static void assertNoMarkerInTables(RealtimeItEnvironment env) {
-        String hex = HexFormat.of().formatHex(MARKER.getBytes(StandardCharsets.US_ASCII));
+        assertNoMarkerInTables(env, MARKER);
+    }
+
+    /** realtime 표 어느 행의 글자 표현에도 표식(그대로 · 16진수)이 없다. */
+    private static void assertNoMarkerInTables(RealtimeItEnvironment env, String marker) {
+        String hex = HexFormat.of().formatHex(marker.getBytes(StandardCharsets.US_ASCII));
         for (String table : TABLES) {
-            MapSqlParameterSource params = new MapSqlParameterSource().addValue("marker", MARKER).addValue("hex", hex);
+            MapSqlParameterSource params = new MapSqlParameterSource().addValue("marker", marker).addValue("hex", hex);
             Long found = env.db.single("select count(*) from realtime." + table + " t"
                     + " where strpos(t::text, :marker) > 0 or strpos(t::text, :hex) > 0", params, Long.class);
             assertThat(found).as(table).isZero();

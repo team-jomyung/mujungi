@@ -1,5 +1,6 @@
 package kr.mujoong.realtime.session;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Objects;
 import kr.mujoong.contract.event.payload.SessionStateChanged;
@@ -17,7 +18,7 @@ import org.springframework.stereotype.Component;
  *
  * <p>{@link #write}는 전이 트랜잭션 안에서 SessionStateChanged를 Outbox에 쓴다(전이와 같은 트랜잭션, BR6.8). {@link #committed}는
  * 커밋 뒤에만 SESSION_TRANSITION 한 줄과 세션 지표를 남긴다 — 롤백된 전이는 로그 · 지표에 나오지 않는다. technicalPause는 U1에서 늘
- * null이다.
+ * null이다. ACTIVE 전이는 {@code mujoong_session_activated_total}과 {@code mujoong_session_start_to_active_seconds}를 올린다(3.6 수정 J297).
  */
 @Component
 public class SessionStateEmitter {
@@ -63,6 +64,11 @@ public class SessionStateEmitter {
         });
         if (from == null && row.status() == SessionStatus.PREPARING) {
             metrics.sessionStarted();
+        }
+        if (row.status() == SessionStatus.ACTIVE && from != SessionStatus.ACTIVE) {
+            // J297: 시작 성공률 분자와 시작 → ACTIVE 길이. 시작점은 시작 명령을 받아 PREPARING 행을 쓴 시각(created_at)이다(OD-17)
+            metrics.sessionActivated(row.startedAt() == null || row.createdAt() == null ? null
+                    : Duration.between(row.createdAt(), row.startedAt()));
         }
         if (row.status().isTerminal()) {
             metrics.sessionEnded(row.status().name(), row.endReason() == null ? null : row.endReason().name(),

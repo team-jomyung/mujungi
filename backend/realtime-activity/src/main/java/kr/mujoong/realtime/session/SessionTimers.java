@@ -7,6 +7,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.function.Consumer;
 import kr.mujoong.contract.time.TimerDriver;
+import kr.mujoong.realtime.common.scaling.SingleInstanceAssumption;
 import kr.mujoong.realtime.runtime.TimerClocks;
 
 /**
@@ -17,6 +18,8 @@ import kr.mujoong.realtime.runtime.TimerClocks;
  * 만기를 버리고(규약 2), 경과를 다시 재 남은 시간이 있으면 다시 무장한다(규약 3, 지연 재무장). 기기 응답 · 종료 확인 · 끊김 · 재생
  * 만료 · DB 재시도는 안전 시계, 구간 조용 시간은 구간 조용 시간 시계에서 돈다(RD-2 스레드 표). 시험은 두 시계에 수동 구동기를 넣는다.
  */
+@SingleInstanceAssumption(si = "SI-3",
+        reason = "세션 시한(40초 끊김 · 기기 응답 · 종료 확인 등) 예약이 이 프로세스 메모리에만 있어 다른 인스턴스가 받은 HEARTBEAT를 못 보고 ABORTED(DISCONNECT)가 오발동한다")
 public final class SessionTimers {
 
     /** 시계 종류. */

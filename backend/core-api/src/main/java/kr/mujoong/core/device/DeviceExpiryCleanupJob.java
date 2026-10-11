@@ -4,6 +4,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Objects;
 import kr.mujoong.contract.time.MujoongClock;
+import kr.mujoong.core.common.scaling.SingleInstanceAssumption;
 import kr.mujoong.core.config.CoreProperties;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -16,6 +17,7 @@ import org.springframework.stereotype.Component;
  * (7일)이 지난 EXPIRED 행을 지운다. 한 번에 {@code mujoong.cleanup.batch-size}(1,000)건씩 다 할 때까지 되풀이한다. 각 문장은 멱등이다.
  */
 @Component
+@SingleInstanceAssumption(si = "SI-7", reason = "인스턴스마다 10분 정리가 돌아 같은 행을 두고 경합한다(문장이 멱등이라 결과는 같다)")
 public class DeviceExpiryCleanupJob {
 
     private final DeviceJdbcRepository devices;

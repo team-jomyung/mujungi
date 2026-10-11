@@ -10,6 +10,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
+import kr.mujoong.contract.time.MujoongClock;
 
 /**
  * Realtime 주기 작업 스레드 (U1 3.5 Step 23 · RD-1 · RD-2 · R3-18 · reliability-design 2.2 스레드 수 표).
@@ -31,14 +32,17 @@ public final class PeriodicJobs {
     public static final String RECORDER_TICK = "recorder-tick";
 
     private final Consumer<RuntimeException> errorHandler;
+    private final MujoongClock clock;
     private final Map<String, ScheduledExecutorService> schedulers = new LinkedHashMap<>();
     private boolean stopped;
 
     /**
      * @param errorHandler 작업 예외 처리기(APP_ERROR 한 줄 등). 처리기 자신은 던지지 않아야 한다
+     * @param clock 정지 대기의 남은 시간을 재는 단조 읽기
      */
-    public PeriodicJobs(Consumer<RuntimeException> errorHandler) {
+    public PeriodicJobs(Consumer<RuntimeException> errorHandler, MujoongClock clock) {
         this.errorHandler = Objects.requireNonNull(errorHandler, "errorHandler");
+        this.clock = Objects.requireNonNull(clock, "clock");
     }
 
     /**
@@ -71,7 +75,8 @@ public final class PeriodicJobs {
     }
 
     /**
-     * 새 주기를 막고 진행 중 실행이 끝나기를 {@code grace}까지 기다린다. 두 번 불러도 된다.
+     * 새 주기를 막고 진행 중 실행이 끝나기를 모든 스레드 합쳐 {@code grace}까지 기다린다 — 스레드마다 따로 기다리면 합이 정상 종료 유예를
+     * 넘을 수 있다(3.6 수정 J304, Core J321과 같은 규칙). 두 번 불러도 된다.
      *
      * @return 모든 스레드가 기한 안에 끝났으면 true
      */
@@ -83,10 +88,12 @@ public final class PeriodicJobs {
             schedulers.clear();
         }
         toStop.forEach(ScheduledExecutorService::shutdown);
+        long started = clock.monotonicNanos();
         boolean finished = true;
         try {
             for (ScheduledExecutorService executor : toStop) {
-                finished &= executor.awaitTermination(Math.max(0L, grace.toMillis()), TimeUnit.MILLISECONDS);
+                long left = grace.minus(clock.elapsedSince(started)).toMillis();
+                finished &= executor.awaitTermination(Math.max(0L, left), TimeUnit.MILLISECONDS);
             }
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();

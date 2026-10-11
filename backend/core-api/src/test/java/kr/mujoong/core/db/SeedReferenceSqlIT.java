@@ -30,7 +30,8 @@ import org.junit.jupiter.api.Test;
  * mujoong_owner로 한 트랜잭션에 두 번 적용하고(멱등), 끝에 되돌려 공용 인스턴스에 남기지 않는다.
  *
  * <p>증명: 두 번 적용 → 정책 1 · 승인 문구 2(R4-15), 현재 정책 버전 '1.0'(J114), 승인 음성 파일이 저장소에 있다(J102), 고정 UUID(J117),
- * 다른 id로 먼저 들어온 같은 content_code에도 실패하지 않음, 앱 역할 realtime_app으로는 적용할 수 없음(BR8.1).
+ * 다른 id로 먼저 들어온 같은 content_code에도 실패하지 않음, 앱 역할 realtime_app으로는 적용할 수 없음(BR8.1). 3.6 수정 분량: 시드를 다시
+ * 적용해도 운영자가 나중에 승인한 버전 · 은퇴 처리를 되돌리지 않는다(ON CONFLICT DO NOTHING — 배포마다 다시 돌려도 안전).
  */
 @Tag("u1")
 @Tag("db")
@@ -149,6 +150,35 @@ class SeedReferenceSqlIT {
                     .isInstanceOfSatisfying(SQLException.class, e -> assertThat(e.getSQLState()).isEqualTo("42501"));
             realtime.rollback();
         }
+    }
+
+    @Test
+    void reapplyingTheSeedKeepsLaterApprovalsAndRetirementsInPlace() throws SQLException {
+        applySeed(owner);
+        UUID closingContent = (UUID) single(owner,
+                "select id from core.core_approved_content where content_code = 'CLOSING'");
+        // 운영자가 CLOSING v2를 승인하고 시드의 v1을 은퇴시켰다. 정책은 1.1로 올렸다
+        UUID closingV2 = UUID.randomUUID();
+        update(owner, "insert into core.core_approved_content_version (id, content_id, version, content_text, audio_path,"
+                + " status, created_at) values (?, ?, 2, '다음에 또 이야기하자!', 'closing-v2.wav', 'APPROVED', ?)",
+                closingV2, closingContent, T0);
+        update(owner, "update core.core_approved_content_version set status = 'RETIRED' where id = ?", CLOSING_VERSION_ID);
+        update(owner, "insert into core.core_approved_content_version (id, content_id, version, content_text, audio_path,"
+                + " status, created_at) select ?, content_id, 2, '1.1', null, 'APPROVED', ?"
+                + " from core.core_approved_content_version where id = ?", UUID.randomUUID(), T0, POLICY_VERSION_ID);
+        List<List<Object>> beforeReapply = seededRows(owner);
+
+        applySeed(owner);
+
+        assertThat(seededRows(owner)).as("시드 재적용은 행을 더하거나 고치지 않는다").isEqualTo(beforeReapply);
+        assertThat(single(owner, "select status from core.core_approved_content_version where id = ?", CLOSING_VERSION_ID))
+                .as("은퇴시킨 시드 버전이 되살아나지 않는다").isEqualTo("RETIRED");
+        assertThat(query(owner,
+                "select v.id, v.version from core.core_approved_content_version v join core.core_approved_content c"
+                        + " on c.id = v.content_id where c.content_code = 'CLOSING' and v.status = 'APPROVED'"
+                        + " order by v.version desc limit 1"))
+                .as("현재 CLOSING은 운영자의 v2").containsExactly(List.of(closingV2, 2));
+        assertThat(single(owner, CURRENT_POLICY_VERSION_SQL)).as("정책 버전도 시드 값 '1.0'으로 돌아가지 않는다").isEqualTo("1.1");
     }
 
     private static void applySeed(Connection connection) throws SQLException {

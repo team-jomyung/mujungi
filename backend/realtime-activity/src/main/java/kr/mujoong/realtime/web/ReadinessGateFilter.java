@@ -22,6 +22,9 @@ import org.springframework.web.filter.OncePerRequestFilter;
  * ({@code mujoong.health.db-check-interval} 초)로 답한다. {@code /internal/events}도 같아서 보내는 쪽 Outbox가 재시도한다. 점검자가 갱신하는
  * 상태 값 하나만 읽고 요청마다 DB를 부르지 않는다. 기기 WSS({@value WebSocketConfig#DEVICE_PATH})는 여기서 막지 않는다 — 업그레이드를
  * 받은 뒤 핸들러가 1013으로 닫는다(브라우저는 실패한 핸드셰이크의 HTTP 상태를 읽지 못한다, BR3.6).
+ *
+ * <p>정상 종료(RD-13): 판정 전에 요청을 {@link InFlightRequests}에 세고 끝나면 뺀다. T6은 받아들인 요청이 다 끝날 때까지 커넥터를 열어 둔 채
+ * 기다리므로 그동안의 새 요청은 접속 거절이 아니라 이 필터의 503이다(3.6 수정 J304, Core와 같은 방식).
  */
 @Component
 @Order(ReadinessGateFilter.ORDER)
@@ -32,10 +35,12 @@ public class ReadinessGateFilter extends OncePerRequestFilter {
 
     private final ReadinessState readiness;
     private final JsonCodec json;
+    private final InFlightRequests inFlight;
 
-    public ReadinessGateFilter(ReadinessState readiness, JsonCodec json) {
+    public ReadinessGateFilter(ReadinessState readiness, JsonCodec json, InFlightRequests inFlight) {
         this.readiness = Objects.requireNonNull(readiness, "readiness");
         this.json = Objects.requireNonNull(json, "json");
+        this.inFlight = Objects.requireNonNull(inFlight, "inFlight");
     }
 
     @Override
@@ -46,11 +51,17 @@ public class ReadinessGateFilter extends OncePerRequestFilter {
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
             throws ServletException, IOException {
-        if (!readiness.isReady()) {
-            ApiExceptionHandler.write(response, json, ErrorCode.SERVICE_NOT_READY, TraceIdFilter.traceId(request),
-                    readiness.retryAfterSeconds());
-            return;
+        // 판정 전에 센다: T6이 0을 본 뒤에 들어온 요청은 DRAINING을 보고 거절된다(받아들인 요청을 T6이 놓치지 않음)
+        inFlight.enter();
+        try {
+            if (!readiness.isReady()) {
+                ApiExceptionHandler.write(response, json, ErrorCode.SERVICE_NOT_READY, TraceIdFilter.traceId(request),
+                        readiness.retryAfterSeconds());
+                return;
+            }
+            chain.doFilter(request, response);
+        } finally {
+            inFlight.exit();
         }
-        chain.doFilter(request, response);
     }
 }

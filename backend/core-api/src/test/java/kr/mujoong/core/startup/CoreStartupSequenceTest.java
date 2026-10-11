@@ -16,6 +16,8 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import kr.mujoong.contract.log.EventCode;
 import kr.mujoong.contract.log.EventLog;
@@ -34,6 +36,8 @@ import kr.mujoong.core.messaging.CoreOutboxSender;
 import kr.mujoong.core.messaging.MessagingCleanupJob;
 import kr.mujoong.core.observability.CoreMetrics;
 import kr.mujoong.core.observability.EventLogger;
+import kr.mujoong.core.observability.snapshot.MetricSnapshotJob;
+import kr.mujoong.core.web.InFlightRequests;
 import kr.mujoong.testsupport.time.MutableClock;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Tag;
@@ -65,9 +69,12 @@ class CoreStartupSequenceTest {
     private final List<Object> published = new ArrayList<>();
     private final ReadinessState readiness = new ReadinessState(published::add, CoreMetrics.inMemory(), 3,
             Duration.ofSeconds(5));
+    private final MetricSnapshotJob snapshots = mock(MetricSnapshotJob.class);
+    private final InFlightRequests inFlight = new InFlightRequests();
     private final CoreStartupSequence sequence = new CoreStartupSequence(schemaCheck, inbox, outbox, rearm, sender,
             repoller, dispatcher, mock(PreparingTimeoutChecker.class), mock(DbHealthChecker.class),
-            mock(DeviceExpiryCleanupJob.class), mock(MessagingCleanupJob.class), events, readiness, clock, PROPERTIES);
+            mock(DeviceExpiryCleanupJob.class), mock(MessagingCleanupJob.class), snapshots, events, readiness, clock,
+            PROPERTIES);
 
     @AfterEach
     void stop() {
@@ -145,22 +152,71 @@ class CoreStartupSequenceTest {
             stateAtSchedulerStop.set(readiness.state());
             return null;
         }).when(startup).stopSchedulers();
-        DrainingLifecycle draining = new DrainingLifecycle(readiness, startup, events);
+        DrainingLifecycle draining = new DrainingLifecycle(readiness, startup, events, snapshots, inFlight, clock,
+                Duration.ofSeconds(2));
         readiness.markReady();
         draining.start();
 
         draining.stop();
 
-        InOrder order = inOrder(startup, events);
+        InOrder order = inOrder(startup, events, snapshots);
         order.verify(startup).stopSchedulers();
         order.verify(events).flushMerged();
+        order.verify(snapshots).finalSnapshot();
         assertThat(stateAtSchedulerStop.get()).isEqualTo(ReadinessState.State.DRAINING);
         assertThat(draining.isRunning()).isFalse();
     }
 
+    /** T6(3.6 수정 J321): 받아들인 요청이 끝날 때까지 돌아오지 않는다 — 그동안 커넥터가 열려 있어 새 요청은 F1b의 503이다. */
+    @Test
+    void drainingWaitsForAdmittedRequestsBeforeItReturns() throws Exception {
+        CoreStartupSequence startup = mock(CoreStartupSequence.class);
+        DrainingLifecycle draining = new DrainingLifecycle(readiness, startup, events, snapshots, inFlight, clock,
+                Duration.ofSeconds(5));
+        inFlight.enter();
+        CompletableFuture<Void> stopping = CompletableFuture.runAsync(draining::stop);
+        long deadline = System.nanoTime() + Duration.ofSeconds(5).toNanos();
+        while (readiness.state() != ReadinessState.State.DRAINING && System.nanoTime() < deadline) {
+            Thread.onSpinWait();
+        }
+        assertThat(readiness.state()).isEqualTo(ReadinessState.State.DRAINING);
+        assertThat(stopping).as("요청이 남아 있으면 기다린다").isNotDone();
+
+        inFlight.exit();
+
+        stopping.get(5, TimeUnit.SECONDS);
+        verify(events, never()).appError(any(), eq("DrainTimeout"));
+    }
+
+    /** T6 한도: 유예에서 T1 ~ T5에 쓴 시간을 빼고 기다리며, 끝나지 않은 요청이 있으면 DrainTimeout 한 줄. 마지막 스냅샷 실패도 종료를 막지 않는다. */
+    @Test
+    void drainingGivesUpAfterTheGraceAndAFailedLastSnapshotDoesNotStopIt() {
+        CoreStartupSequence startup = mock(CoreStartupSequence.class);
+        org.mockito.Mockito.doAnswer(call -> {
+            clock.advance(Duration.ofSeconds(5));
+            return null;
+        }).when(startup).stopSchedulers();
+        doThrow(new IllegalStateException("db down")).when(snapshots).finalSnapshot();
+        DrainingLifecycle draining = new DrainingLifecycle(readiness, startup, events, snapshots, inFlight, clock,
+                Duration.ofSeconds(5));
+        inFlight.enter();
+        long started = System.nanoTime();
+
+        draining.stop();
+
+        assertThat(Duration.ofNanos(System.nanoTime() - started)).as("T4가 유예를 다 써 T6은 기다리지 않는다")
+                .isLessThan(Duration.ofSeconds(2));
+        verify(events).appError(eq(EventLog.Component.CORE_MAINTENANCE), any(IllegalStateException.class));
+        verify(events).appError(EventLog.Component.CORE_MAINTENANCE, "DrainTimeout");
+        assertThat(draining.isRunning()).isFalse();
+        assertThatThrownBy(() -> new DrainingLifecycle(readiness, startup, events, snapshots, inFlight, clock, Duration.ZERO))
+                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining(DrainingLifecycle.GRACE_KEY);
+    }
+
     @Test
     void drainingStopsBeforeEverythingAndStartupRunsBeforeTheWebServer() {
-        DrainingLifecycle draining = new DrainingLifecycle(readiness, sequence, events);
+        DrainingLifecycle draining = new DrainingLifecycle(readiness, sequence, events, snapshots, inFlight, clock,
+                Duration.ofSeconds(2));
 
         assertThat(draining.getPhase()).isEqualTo(Integer.MAX_VALUE).isGreaterThan(sequence.getPhase());
         assertThat(sequence.getPhase()).isLessThan(Integer.MAX_VALUE - 2048).isGreaterThan(SmartLifecycle.DEFAULT_PHASE - 8192);

@@ -12,10 +12,13 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.locks.Condition;
+import java.util.concurrent.locks.ReentrantLock;
 import kr.mujoong.contract.log.AttrKey;
 import kr.mujoong.contract.log.EventCode;
 import kr.mujoong.contract.log.EventLog;
 import kr.mujoong.contract.time.MujoongClock;
+import kr.mujoong.realtime.common.scaling.SingleInstanceAssumption;
 import kr.mujoong.realtime.config.RealtimeProperties;
 import kr.mujoong.realtime.gateway.DeviceConnectionRepository;
 import kr.mujoong.realtime.observability.EventLogger;
@@ -42,6 +45,8 @@ import org.springframework.transaction.support.TransactionTemplate;
  * 멈추지 않는다. 기기 last_seen_at은 기기당 마지막 값 하나만 두고 HEARTBEAT 때만 넣는다(J125).
  */
 @Component
+@SingleInstanceAssumption(si = "SI-10",
+        reason = "세션별 미커밋 기록 칸(최대 200행)과 기기 last_seen 칸이 이 프로세스 메모리에만 있어 프로세스가 죽으면 잃고 다른 인스턴스로 옮길 수 없다")
 public class AsyncRecorder {
 
     /** 실제로 쓰는 곳. 운영은 {@link JdbcStore}, 단위 시험은 대역. */
@@ -53,8 +58,6 @@ public class AsyncRecorder {
         /** 기기별 마지막 시각을 쓴다(따로 한 트랜잭션). */
         void writeLastSeen(Collection<DeviceConnectionRepository.LastSeen> seen);
     }
-
-    private static final Duration DRAIN_POLL = Duration.ofMillis(5);
 
     private final Store store;
     private final TaskLauncher launcher;
@@ -68,6 +71,9 @@ public class AsyncRecorder {
     private final ConcurrentHashMap<UUID, Unit> units = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<UUID, DeviceConnectionRepository.LastSeen> lastSeen = new ConcurrentHashMap<>();
     private final AtomicBoolean seenInFlight = new AtomicBoolean();
+    // 진행 중 플러시가 끝났다는 신호(앱 종료 drain이 기다린다, 3.6 수정 J305). 잠금 순서는 이 잠금 → 칸 목록 모니터 하나뿐이다
+    private final ReentrantLock flushEndedLock = new ReentrantLock();
+    private final Condition flushEnded = flushEndedLock.newCondition();
 
     @Autowired
     public AsyncRecorder(
@@ -195,15 +201,27 @@ public class AsyncRecorder {
         }
     }
 
+    /** 모든 세션이 들고 있는 칸 수 합({@code mujoong_queue_depth{queue=recorder}}, J298). */
+    public long heldRowsTotal() {
+        long held = 0;
+        for (Unit unit : units.values()) {
+            synchronized (unit) {
+                held += unit.held();
+            }
+        }
+        return held;
+    }
+
     /**
-     * 앱 종료(BR6.13 T5): 남은 칸을 지금 스레드에서 한 번씩 쓴다. 진행 중 플러시는 {@code wait}까지 기다린다.
+     * 앱 종료(BR6.13 T5): 남은 칸을 지금 스레드에서 한 번씩 쓴다. 진행 중 플러시는 끝났다는 신호를 받을 때까지 모두 합쳐 {@code wait}까지
+     * 기다린다(3.6 수정 J305: 예전의 5ms 되풀이 확인 대신 신호). 기다릴 시간을 다 쓰면 그 세션은 건너뛴다.
      *
      * @return 남은(쓰지 못한) 칸 수
      */
     public int drain(Duration wait) {
-        Instant deadline = clock.now().plus(Objects.requireNonNull(wait, "wait"));
+        long remaining = Math.max(0L, Objects.requireNonNull(wait, "wait").toNanos());
         for (Unit unit : units.values()) {
-            runFlushInline(unit, deadline);
+            remaining = runFlushInline(unit, remaining);
         }
         if (!lastSeen.isEmpty() && seenInFlight.compareAndSet(false, true)) {
             flushLastSeen();
@@ -217,25 +235,41 @@ public class AsyncRecorder {
         return left;
     }
 
-    private void runFlushInline(Unit unit, Instant deadline) {
-        while (true) {
-            synchronized (unit) {
-                if (!unit.inFlight) {
-                    unit.inFlight = true;
-                    break;
+    /** 진행 중 플러시가 끝나기를 기다렸다가 지금 스레드에서 쓴다. 남은 기다림 시간(나노초)을 돌려준다. */
+    private long runFlushInline(Unit unit, long remainingNanos) {
+        long remaining = remainingNanos;
+        flushEndedLock.lock();
+        try {
+            while (true) {
+                synchronized (unit) {
+                    if (!unit.inFlight) {
+                        unit.inFlight = true;
+                        break;
+                    }
                 }
+                if (remaining <= 0) {
+                    return 0L;
+                }
+                remaining = flushEnded.awaitNanos(remaining);
             }
-            if (!clock.now().isBefore(deadline)) {
-                return;
-            }
-            try {
-                Thread.sleep(DRAIN_POLL);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                return;
-            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return 0L;
+        } finally {
+            flushEndedLock.unlock();
         }
         flush(unit);
+        return remaining;
+    }
+
+    /** 진행 중 플러시가 끝났다: 앱 종료 drain을 깨운다. 칸 목록 모니터 밖에서 부른다. */
+    private void signalFlushEnded() {
+        flushEndedLock.lock();
+        try {
+            flushEnded.signalAll();
+        } finally {
+            flushEndedLock.unlock();
+        }
     }
 
     private void signal(Unit unit) {
@@ -304,10 +338,12 @@ public class AsyncRecorder {
             // 실패면 다음 틱이 다시 쓴다(곧바로 되풀이하지 않는다)
             again = ok && (unit.rerun || hasFinal(unit));
         }
+        signalFlushEnded();
         if (ok) {
             Instant committedAt = clock.now();
             for (TranscriptEntry row : rows) {
-                if (row.assemblyStatus() == TranscriptEntry.AssemblyStatus.FINAL) {
+                // tViewItemReady는 FINAL 전환과 승인 true를 함께 커밋한 행만이다(OD-8 · BR7.5). 폐기한 AI 행은 12에 실리지 않는다
+                if (row.assemblyStatus() == TranscriptEntry.AssemblyStatus.FINAL && row.approvedForDisplay()) {
                     latency.itemReady(row.sessionId(), row.sequenceNo(), row.speaker(), committedAt);
                 }
             }

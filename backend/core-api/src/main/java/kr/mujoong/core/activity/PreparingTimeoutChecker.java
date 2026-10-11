@@ -9,6 +9,7 @@ import kr.mujoong.contract.log.EventLog;
 import kr.mujoong.contract.status.SessionStatus;
 import kr.mujoong.contract.time.MujoongClock;
 import kr.mujoong.core.activity.ActivityCopyRepository.ActivityCopy;
+import kr.mujoong.core.common.scaling.SingleInstanceAssumption;
 import kr.mujoong.core.config.CoreProperties;
 import kr.mujoong.core.observability.CoreMetrics;
 import kr.mujoong.core.observability.EventLogger;
@@ -25,6 +26,8 @@ import org.springframework.stereotype.Component;
  * Core가 재시작해도 남은 REQUESTED는 이 점검이 닫는다(BR6.13).
  */
 @Component
+@SingleInstanceAssumption(si = "SI-7",
+        reason = "인스턴스마다 1초 점검이 돌아 같은 사본을 두고 경합한다(조건부 UPDATE가 승자를 정해 결과 · 취소는 한 번이다)")
 public class PreparingTimeoutChecker {
 
     /** 한 번에 닫는 최대 건수(보호자당 진행 중 하나라 평소 0 ~ 수 건). */

@@ -51,8 +51,16 @@ public class RealtimeSessionClient {
         UNAVAILABLE
     }
 
-    /** 시작 결과. */
-    public record StartResult(StartKind kind, SessionStatus status, boolean breakerOpen) {
+    /**
+     * 시작 결과. {@code afterTimeoutRetry}는 이 결과가 시간 초과 뒤 같은 sessionId 재시도의 응답인지다 — 그때의 409는 첫 시작이 Realtime에서
+     * 아직 INIT(곧 커밋돼 실제로 진행)일 수 있어 호출 쪽이 취소를 보낸다(BR6.6 끝 문장 · J320).
+     */
+    public record StartResult(StartKind kind, SessionStatus status, boolean breakerOpen, boolean afterTimeoutRetry) {
+
+        /** 재시도 없이 첫 시도로 끝난 결과. */
+        public StartResult(StartKind kind, SessionStatus status, boolean breakerOpen) {
+            this(kind, status, breakerOpen, false);
+        }
     }
 
     /** 끝내기 결과 종류. */
@@ -164,7 +172,8 @@ public class RealtimeSessionClient {
 
     /**
      * 세션 패키지로 시작을 명령한다(BR6.6 · BR6.7). 차단기가 열려 있으면 호출하지 않는다. 시간 초과만 같은 본문(같은 sessionId)으로
-     * {@code session-start-retries}번 더 시도한다 — Realtime의 같은 sessionId 202(BR6.6 ①)가 멱등을 보장한다.
+     * {@code session-start-retries}번 더 시도한다 — Realtime의 같은 sessionId 202(BR6.6 ①)가 멱등을 보장한다. 재시도의 응답이면
+     * {@link StartResult#afterTimeoutRetry()}가 참이다(J320).
      */
     public StartResult start(SessionPackage sessionPackage) {
         Objects.requireNonNull(sessionPackage, "sessionPackage");
@@ -186,29 +195,30 @@ public class RealtimeSessionClient {
                     continue;
                 }
                 breaker.onFailure(permit);
-                return new StartResult(StartKind.UNAVAILABLE, null, false);
+                return new StartResult(StartKind.UNAVAILABLE, null, false, attempt > 1);
             }
-            return interpretStart(response, permit);
+            // 재시도는 시간 초과 뒤에만 하므로 두 번째 이후 시도의 응답은 '시간 초과 재시도 뒤'의 응답이다
+            return interpretStart(response, permit, attempt > 1);
         }
         breaker.onFailure(permit);
-        return new StartResult(StartKind.UNAVAILABLE, null, false);
+        return new StartResult(StartKind.UNAVAILABLE, null, false, attempts > 1);
     }
 
-    private StartResult interpretStart(Response response, SessionStartBreaker.Permit permit) {
+    private StartResult interpretStart(Response response, SessionStartBreaker.Permit permit, boolean afterTimeoutRetry) {
         int status = response.status();
         if (status >= 500) {
             breaker.onFailure(permit);
-            return new StartResult(StartKind.UNAVAILABLE, null, false);
+            return new StartResult(StartKind.UNAVAILABLE, null, false, afterTimeoutRetry);
         }
         // 업무 응답(2xx · 409 · 423)과 그 밖 4xx는 Realtime이 살아 답한 것이라 차단기 실패로 세지 않는다(RD-14)
         breaker.onSuccess(permit);
         if (response.isSuccess()) {
-            return new StartResult(StartKind.ACCEPTED, readStatus(response.body()), false);
+            return new StartResult(StartKind.ACCEPTED, readStatus(response.body()), false, afterTimeoutRetry);
         }
         return switch (status) {
-            case 423 -> new StartResult(StartKind.DEVICE_NOT_CONNECTED, null, false);
-            case 409 -> new StartResult(StartKind.CONFLICT, null, false);
-            default -> new StartResult(StartKind.UNAVAILABLE, null, false);
+            case 423 -> new StartResult(StartKind.DEVICE_NOT_CONNECTED, null, false, afterTimeoutRetry);
+            case 409 -> new StartResult(StartKind.CONFLICT, null, false, afterTimeoutRetry);
+            default -> new StartResult(StartKind.UNAVAILABLE, null, false, afterTimeoutRetry);
         };
     }
 

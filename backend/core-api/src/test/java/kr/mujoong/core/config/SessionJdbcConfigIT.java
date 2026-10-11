@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import kr.mujoong.testsupport.db.MujoongPostgres;
@@ -31,7 +32,9 @@ import org.springframework.session.jdbc.JdbcIndexedSessionRepository;
  * {@code core.core_spring_session}에 보호자 세션을 쓴다.
  *
  * <p>연결의 search_path를 일부러 public으로 바꿔도 세션이 core 스키마에 저장되는지로 표 이름 한정이 Boot 기본 설정 뒤에 적용됨을 증명한다.
- * 서버 유휴 만료는 타입 있는 설정 {@code mujoong.timing.login.session-idle}(30일)이다.
+ * 서버 유휴 만료는 타입 있는 설정 {@code mujoong.timing.login.session-idle}(30일)이다. 3.6 수정 분량: 그 30일이 실제 만료 판정을 정한다(만료
+ * 직전은 읽히고 지난 세션은 읽을 때 지워진다), 쓰기는 save 때 한 번이고(ON_SAVE) 바꾼 속성만 쓴다(ON_SET_ATTRIBUTE — 같은 세션의 겹친
+ * 요청이 읽기만 한 속성을 낡은 값으로 덮지 않는다).
  */
 @Tag("u1")
 @Tag("db")
@@ -97,6 +100,63 @@ class SessionJdbcConfigIT {
     void customizerRequiresProperties() {
         assertThatThrownBy(() -> SessionJdbcConfig.customizer(null)).isInstanceOf(NullPointerException.class);
         assertThat(SessionJdbcConfig.TABLE_NAME).isEqualTo("core.core_spring_session");
+    }
+
+    @Test
+    void theConfiguredIdleDecidesExpiryAndExpiredSessionsAreRemovedOnRead() {
+        runner(true).run(context -> {
+            SessionRepository<Session> repository = sessions(context);
+            JdbcTemplate jdbc = context.getBean(JdbcTemplate.class);
+            // 세션 저장소는 프레임워크의 시스템 시각으로 만료를 판정한다(운영 코드 밖)
+            Instant now = Instant.now();
+            Session almost = repository.createSession();
+            almost.setAttribute("guardianId", "00000000-0000-0000-0000-000000000021");
+            almost.setLastAccessedTime(now.minus(SESSION_IDLE).plus(Duration.ofMinutes(10)));
+            repository.save(almost);
+            Session expired = repository.createSession();
+            expired.setAttribute("guardianId", "00000000-0000-0000-0000-000000000022");
+            expired.setLastAccessedTime(now.minus(SESSION_IDLE).minus(Duration.ofMinutes(10)));
+            repository.save(expired);
+            try {
+                assertThat(repository.findById(almost.getId())).as("유휴 30일 10분 전(기본 30분이었다면 이미 만료)").isNotNull();
+                assertThat(repository.findById(expired.getId())).as("유휴 30일을 넘긴 세션").isNull();
+                assertThat(jdbc.queryForObject("select count(*) from core.core_spring_session where session_id = ?", Long.class,
+                        expired.getId())).as("만료 세션은 읽을 때 지운다").isZero();
+            } finally {
+                repository.deleteById(almost.getId());
+                repository.deleteById(expired.getId());
+            }
+        });
+    }
+
+    @Test
+    void attributesAreWrittenOnSaveOnlyAndAStaleCopyDoesNotOverwriteWhatItOnlyRead() {
+        runner(true).run(context -> {
+            SessionRepository<Session> repository = sessions(context);
+            Session created = repository.createSession();
+            created.setAttribute("guardianId", "old");
+            repository.save(created);
+            String id = created.getId();
+            try {
+                Session first = repository.findById(id);
+                Session second = repository.findById(id);
+                assertThat(second.<String>getAttribute("guardianId")).isEqualTo("old");
+
+                first.setAttribute("guardianId", "new");
+                assertThat(repository.findById(id).<String>getAttribute("guardianId")).as("save 전에는 쓰지 않는다(ON_SAVE)")
+                        .isEqualTo("old");
+                repository.save(first);
+                second.setAttribute("csrf", "token");
+                repository.save(second);
+
+                Session merged = repository.findById(id);
+                assertThat(merged.<String>getAttribute("guardianId")).as("늦게 저장한 사본이 읽기만 한 속성을 덮지 않는다")
+                        .isEqualTo("new");
+                assertThat(merged.<String>getAttribute("csrf")).isEqualTo("token");
+            } finally {
+                repository.deleteById(id);
+            }
+        });
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})

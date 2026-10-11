@@ -235,7 +235,9 @@ public final class InputRelay {
             lock.lock();
             try {
                 while (!stopped && (session == null || queue.isEmpty())) {
-                    available.await(1, TimeUnit.SECONDS);
+                    // 시한 없이 기다린다(3.6 수정 J306): 조건을 바꾸는 붙이기 · 넣기 · 멈추기가 잠금 안에서 signalAll을 부르고 멈추기는
+                    // 스레드도 끊는다. 예전의 1초 재확인은 시간 숫자 상수였다(NFR6.1)
+                    available.await();
                 }
                 if (stopped) {
                     return;

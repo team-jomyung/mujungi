@@ -5,6 +5,7 @@
 > (a) ~ (t)는 `docs/cloud_run_report.md` 2.1절, (u) ~ (y)는 3.5 계획 J112(사람 확인)에서 왔다.
 > 모든 항목은 **더하기만 안전**(계약 10절 · J25)이다: 필드 삭제 · 이름 변경 · 필수화가 없고, 받는 쪽은 모르는 필드 · enum · code를
 > 무시하거나 '알 수 없음'으로 처리한다. `ContractFilesTest`가 (a) ~ (y) 각각이 이 표에 한 행, 다른 계약 파일에 한 번 이상 표시돼 있음을 단언한다.
+> (z)는 3.6 수정 라운드의 독립 리뷰 F1(J285 ~ J288)에서 왔고 `ContractFilesTest`가 같은 방식으로 단언한다.
 
 ## 호환 분류
 
@@ -44,3 +45,4 @@
 | (w) | Realtime이 모르는 sessionId의 `GUARDIAN_STOP` 끝내기 → 409 `SESSION_NOT_ACTIVE`(묘비 없음, 새 code 없음). Core는 그대로 409, 12는 상태를 다시 읽는다 | V-12 · J111 · J112 | Realtime SessionLifecycle | Core ActivityCoordinator · ParentWeb | 규칙 구체화 | internal-api.yaml · parent-api.yaml · errors.md |
 | (x) | 계약 8절 C13 `owner_role: core_app`은 '쓰는 역할'로 읽고 표 · 스키마 소유는 `mujoong_owner`(앱 역할은 DDL 없음) | SD-13 · J112 | U1 실행 골격(DB 초기화) | 모든 유닛 | 해석 명시 | README.md · infra/postgres/init/01-roles.sql |
 | (y) | Nginx가 만든 502 · 504 JSON 봉투의 code `UPSTREAM_UNAVAILABLE`(상태 코드는 유지, 앱이 낸 503은 통과) | R4-17 · CD-2 · J112 | Nginx | ParentWeb · DeviceWeb · 외부 프로브 | 새 응답 | errors.md |
+| (z) | 공급자 `session.output.done`(responseId)을 그 응답의 전사 완료 신호로 쓴다 — 출력 게이트는 한 응답의 첫 조각부터 이 신호까지를 모두 담은 구간만 전사-음성 대응 근거로 보고, 신호가 없는 구간 · 앞부분이 다른 구간으로 떨어져 나간 구간 · 신호 뒤 조각이 붙은 구간 · 정규화 뒤 빈 전사를 GATE_EMPTY로 폐기한다(fail-closed, 실공급자 어댑터는 완결된 응답에만 이 신호를 보낸다). 한 구간에는 한 응답의 조각만 담고 다른 응답의 조각이 오면 열린 구간을 그 자리에서 확정해 게이트에 넣는다(BR7.3 확정 조건에 응답 경계를 더함). `responseId` 없는 출력 조각은 버린다 | 3.6 리뷰 F1 · SD-17 3단계 · BR7.4 (가) · J285 ~ J288 | 공급자(가짜 공급자 · 11/2 실공급자 어댑터, V-2) | Realtime OutputGate | 규칙 구체화 | ai-io.md |

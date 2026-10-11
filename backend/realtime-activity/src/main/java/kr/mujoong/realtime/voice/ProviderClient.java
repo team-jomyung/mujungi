@@ -18,6 +18,7 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReentrantLock;
 import kr.mujoong.contract.json.JsonCodec;
+import kr.mujoong.realtime.common.scaling.SingleInstanceAssumption;
 import kr.mujoong.realtime.config.RealtimeProperties;
 import org.springframework.beans.factory.DisposableBean;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -33,6 +34,8 @@ import org.springframework.stereotype.Component;
  * 따른다(루프백은 기본 nonProxyHosts로 직결). 공급자 클라이언트에 의존하는 패키지는 voice 하나다(ArchUnit ⑥).
  */
 @Component
+@SingleInstanceAssumption(si = "SI-9",
+        reason = "세션마다 공급자 WSS 연결을 이 프로세스에서 열어 쥐므로 세션을 다른 인스턴스로 옮길 수 없다")
 public class ProviderClient implements ProviderPort, DisposableBean {
 
     /** 공급자 키 환경 변수 이름. */
