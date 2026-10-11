@@ -523,3 +523,23 @@ C 단계는 D0 코드 → 시험 로그인 → 05a 등록 → 04 안정 → 08 �
 15. **모델 · 모드 변경.** 사용자가 실행 중 `/model`(Fable 5.1)과 `/fast`를 켰다. 산출물 어디에도 모델 식별자를 쓰지 않았다.
 16. **디스크.** 재시험 끝 무렵 디스크 사용 87%(여유 5.1GB). 빌드 캐시 · 이미지가 대부분이다.
 17. **서브에이전트 보고 파일.** 하네스가 하위 에이전트의 보고 파일 쓰기를 거부해, 보고는 응답으로 받아 제가 스크래치패드에 저장했다. 산출물(`code-summary.md` 등)에는 제가 옮겼다.
+
+## 13. 지금 상태와 다음에 이어갈 때 (2026-10-12 00:10 UTC 기준)
+
+### 13.1 엔진 상태
+
+| 항목 | 값 |
+|---|---|
+| U1 단위 체크포인트 | 수정 라운드 뒤 소스 · 산출물 지문이 바뀌어 **다시 검증 · 승인**했다: `bash scripts/verify.sh --engine` 67초 · 종료 0(그 전에 전체 `bash scripts/verify.sh` 422초 통과로 산출물 지문을 맞춤), 자율 모드라 자동 승인(`human_required: false`) |
+| 3.6 Build and Test(단독 실행) | `report --single --stage build-and-test --result completed`로 닫음(`single-stage:build-and-test` 합성 워크플로, 메인 위치 불변). 단계 산출물의 최종 판정은 사람 몫 — Not Met 0 · 실패한 명령 0이지만 Unverified 51(계획 결정 D)이 단계 정의의 실패 조건에 든다 |
+| Construction Autonomy Mode | **gated**(`bolt set-autonomy --mode gated`, 사람 지시) |
+| 워크플로 | **park**(`Workflow parked at "functional-design"`). 메인 `Current Stage`는 functional-design(U2 몫)이고 **U2는 시작하지 않았다** |
+| 브랜치 · PR | `claude/friendly-shannon-i89iyx` → main, draft PR #1. 마지막 코드 커밋 `b9a53a5`에서 CI 전부 녹색 |
+
+### 13.2 이어가는 방법
+
+1. `/aidlc --resume` → 엔진이 U2 `u2-guardian-account`의 3.1 Functional Design부터 내놓는다. gated라 단계마다 확인 질문이 뜬다.
+2. 그 전에 사람이 정할 것: 4절(3.5 전 결정 — 답했음) · 10.1(답했음) · **11.5**(3.6에서 새로 생긴 11항목) · `code-summary.md` ## 3.6 수정 라운드의 '사람이 정할 것' 표. J1 ~ J393은 전부 가정이다.
+3. 설계 문서 반영: `code-summary.md`의 '설계 문서와 달라진 곳(문서 반영 대기)' 20행은 승인된 3.1 ~ 3.4 문서를 고치지 않고 모아 둔 것이다. 사람이 승인하면 문서에 옮긴다.
+4. 로컬에서 다시 돌릴 때: `bash scripts/verify.sh`(전체, 약 7분, Docker 필요) · `bash scripts/verify.sh --engine`(약 1분, 전체 실행이 남긴 산출물 지문이 지금 소스와 같아야 함). Docker 데몬을 막 띄웠으면 `--engine`을 한 번 데운 뒤 잰다(12절 7항). 재시험 증거 `build/b-and-t/` · `build/b-and-t-r2/`는 이 PC에만 있다(gitignore).
+5. 디스크 여유가 적다(약 5GB). 다음 실행 전 빌드 캐시 · 이미지 정리를 권한다.
