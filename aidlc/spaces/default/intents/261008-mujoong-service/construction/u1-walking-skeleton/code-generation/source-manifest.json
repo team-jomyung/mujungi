@@ -319,6 +319,9 @@
       "path": "backend/core-api/src/main/java/kr/mujoong/core/common/db/ClockParams.java"
     },
     {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/common/db/DbPoolWaitMonitor.java"
+    },
+    {
       "path": "backend/core-api/src/main/java/kr/mujoong/core/common/db/DbRetry.java"
     },
     {
@@ -332,6 +335,9 @@
     },
     {
       "path": "backend/core-api/src/main/java/kr/mujoong/core/common/error/CoreApiException.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/common/scaling/SingleInstanceAssumption.java"
     },
     {
       "path": "backend/core-api/src/main/java/kr/mujoong/core/config/CoreProperties.java"
@@ -493,6 +499,12 @@
       "path": "backend/core-api/src/main/java/kr/mujoong/core/observability/SecurityEventCap.java"
     },
     {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/observability/snapshot/MetricSnapshotJob.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/observability/snapshot/SystemLoad.java"
+    },
+    {
       "path": "backend/core-api/src/main/java/kr/mujoong/core/security/DevLoginBlockedRecorder.java"
     },
     {
@@ -565,6 +577,9 @@
       "path": "backend/core-api/src/main/java/kr/mujoong/core/web/HomeController.java"
     },
     {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/web/InFlightRequests.java"
+    },
+    {
       "path": "backend/core-api/src/main/java/kr/mujoong/core/web/JsonOnlyFilter.java"
     },
     {
@@ -572,6 +587,9 @@
     },
     {
       "path": "backend/core-api/src/main/java/kr/mujoong/core/web/RestBodyLimitFilter.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/web/RestTimingFilter.java"
     },
     {
       "path": "backend/core-api/src/main/java/kr/mujoong/core/web/TraceIdFilter.java"
@@ -637,6 +655,12 @@
       "path": "backend/core-api/src/test/java/kr/mujoong/core/arch/CoreArchTest.java"
     },
     {
+      "path": "backend/core-api/src/test/java/kr/mujoong/core/arch/SingleInstanceMarkerTest.java"
+    },
+    {
+      "path": "backend/core-api/src/test/java/kr/mujoong/core/arch/TimeLiteralScanTest.java"
+    },
+    {
       "path": "backend/core-api/src/test/java/kr/mujoong/core/catalog/ApprovedContentEntitiesTest.java"
     },
     {
@@ -647,6 +671,9 @@
     },
     {
       "path": "backend/core-api/src/test/java/kr/mujoong/core/common/db/CoreDataAccessContext.java"
+    },
+    {
+      "path": "backend/core-api/src/test/java/kr/mujoong/core/common/db/DbPoolWaitMonitorTest.java"
     },
     {
       "path": "backend/core-api/src/test/java/kr/mujoong/core/common/db/DbRetryTest.java"
@@ -745,7 +772,16 @@
       "path": "backend/core-api/src/test/java/kr/mujoong/core/messaging/MessagingJobsTest.java"
     },
     {
+      "path": "backend/core-api/src/test/java/kr/mujoong/core/observability/CoreMetricsTest.java"
+    },
+    {
       "path": "backend/core-api/src/test/java/kr/mujoong/core/observability/EventLoggerTest.java"
+    },
+    {
+      "path": "backend/core-api/src/test/java/kr/mujoong/core/observability/snapshot/MetricSnapshotIT.java"
+    },
+    {
+      "path": "backend/core-api/src/test/java/kr/mujoong/core/observability/snapshot/MetricSnapshotJobTest.java"
     },
     {
       "path": "backend/core-api/src/test/java/kr/mujoong/core/security/ratelimit/SlidingWindowRateLimiterTest.java"
@@ -802,10 +838,19 @@
       "path": "backend/core-api/src/test/java/kr/mujoong/core/web/ErrorEnvelopeAndLimitsIT.java"
     },
     {
+      "path": "backend/core-api/src/test/java/kr/mujoong/core/web/GracefulDrainIT.java"
+    },
+    {
       "path": "backend/core-api/src/test/java/kr/mujoong/core/web/GuardianApiIT.java"
     },
     {
       "path": "backend/core-api/src/test/java/kr/mujoong/core/web/HealthAndReadinessIT.java"
+    },
+    {
+      "path": "backend/core-api/src/test/java/kr/mujoong/core/web/InFlightRequestsTest.java"
+    },
+    {
+      "path": "backend/core-api/src/test/java/kr/mujoong/core/web/RestTimingFilterTest.java"
     },
     {
       "path": "backend/core-api/src/test/java/kr/mujoong/core/web/SecurityChainIT.java"
@@ -862,6 +907,9 @@
       "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/common/db/ClockParams.java"
     },
     {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/common/db/DbPoolWaitMonitor.java"
+    },
+    {
       "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/common/db/DbRetry.java"
     },
     {
@@ -872,6 +920,9 @@
     },
     {
       "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/common/db/Transactions.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/common/scaling/SingleInstanceAssumption.java"
     },
     {
       "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/config/RealtimeProperties.java"
@@ -1048,10 +1099,19 @@
       "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/observability/OwnerHashConfig.java"
     },
     {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/observability/QueueDepthGauges.java"
+    },
+    {
       "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/observability/RealtimeMetrics.java"
     },
     {
       "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/observability/SecurityEventCap.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/observability/snapshot/MetricSnapshotJob.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/observability/snapshot/SystemLoad.java"
     },
     {
       "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/runtime/PeriodicJobs.java"
@@ -1180,6 +1240,9 @@
       "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/web/ApiExceptionHandler.java"
     },
     {
+      "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/web/InFlightRequests.java"
+    },
+    {
       "path": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/web/InternalBody.java"
     },
     {
@@ -1222,6 +1285,15 @@
       "path": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/arch/RealtimeArchTest.java"
     },
     {
+      "path": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/arch/SingleInstanceMarkerTest.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/arch/TimeLiteralScanTest.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/common/db/DbPoolWaitMonitorTest.java"
+    },
+    {
       "path": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/common/db/DbRetryTest.java"
     },
     {
@@ -1255,6 +1327,15 @@
       "path": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/gate/SeedDictionaryTest.java"
     },
     {
+      "path": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/gate/SegmentBufferTest.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/gateway/ConnectionSenderTest.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/gateway/ConnectionStateWriterIT.java"
+    },
+    {
       "path": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/gateway/DeviceConnectionRepositoryIT.java"
     },
     {
@@ -1285,7 +1366,19 @@
       "path": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/observability/EventLoggerMergeTest.java"
     },
     {
+      "path": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/observability/RealtimeMetricsScrapeIT.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/observability/RealtimeMetricsTest.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/observability/snapshot/MetricSnapshotJobTest.java"
+    },
+    {
       "path": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/ActivitySessionRepositoryIT.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/SessionExecutorFaultTest.java"
     },
     {
       "path": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/SessionExecutorTest.java"
@@ -1300,6 +1393,9 @@
       "path": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/SessionRecordsRepositoryIT.java"
     },
     {
+      "path": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/SessionStateEmitterTest.java"
+    },
+    {
       "path": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/SessionTimersTest.java"
     },
     {
@@ -1307,6 +1403,9 @@
     },
     {
       "path": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/TransitionTableTest.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/startup/DrainingLifecycleTest.java"
     },
     {
       "path": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/startup/ProfileGuardBootIT.java"
@@ -1319,6 +1418,9 @@
     },
     {
       "path": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/startup/RealtimeStartupRecoveryIT.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/startup/RealtimeStartupSequenceTest.java"
     },
     {
       "path": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/testing/FakeDeviceLink.java"
@@ -1354,6 +1456,9 @@
       "path": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/testing/SessionHarness.java"
     },
     {
+      "path": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/testing/TestEventLoggers.java"
+    },
+    {
       "path": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/voice/InputRelayTest.java"
     },
     {
@@ -1364,6 +1469,12 @@
     },
     {
       "path": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/web/DeviceGatewayIT.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/web/GracefulDrainIT.java"
+    },
+    {
+      "path": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/web/InFlightRequestsTest.java"
     },
     {
       "path": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/web/RealtimeInternalApiIT.java"
@@ -1994,6 +2105,9 @@
     },
     {
       "path": "infra/bin/smoke"
+    },
+    {
+      "path": "infra/bin/turn-metrics"
     },
     {
       "path": "infra/bundle/Dockerfile"

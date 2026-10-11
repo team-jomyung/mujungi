@@ -1,6 +1,6 @@
-# 무중 AI-DLC 클라우드 실행 보고 (2.6 Domain Design → 3.4 Infrastructure Design, U1)
+# 무중 AI-DLC 클라우드 실행 보고 (2.6 Domain Design → 3.6 Build and Test, U1)
 
-> 작성: 클라우드 세션(팀장 준하 대리) · 2026-10-09 · AI-DLC 2.10.0 · 범위 `mujoong-mvp` · 깊이 Standard · 시험 전략 Standard
+> 작성: 클라우드 세션(팀장 준하 대리) · 2026-10-09, 10절 이후 2026-10-10 ~ 12 추가 · AI-DLC 2.10.0 · 범위 `mujoong-mvp` · 깊이 Standard · 시험 전략 Standard
 > 브랜치 `claude/friendly-shannon-i89iyx` → main (draft PR [baikjunha/mujoong-aidlc#1](https://github.com/baikjunha/mujoong-aidlc/pull/1))
 > 이 보고는 `docs/cloud_handoff.md` 3절이 요구한 항목(단계별 산출물 경로 · 준하 제안(가정) 전체 · 열린 질문 · 3.5 전에 사람이 정할 것 · 사용량 · ERD v0.2)을 모았다.
 
@@ -11,7 +11,8 @@
 | 2.6 Domain Design · 2.7 Units Generation · 2.8 Contract Design · 2.9 Delivery Planning | 완료 · 승인(승인 근거는 7절 3항). 유닛 7개 · 볼트 7개 |
 | **U1 워킹 스켈레톤**의 3.1 Functional Design · 3.2 NFR Requirements · 3.3 NFR Design · 3.4 Infrastructure Design | **완료**(산출물 작성 · 센서 통과 · 재점검 반영) |
 | **U2 ~ U7의 3.1 ~ 3.4** | **하지 않았다.** 사람 지시(2026-10-09 "반복 순서는 unit-major 그대로 둬. U1의 3.1→3.4까지 진행하고 3.5 앞에서 멈춰")에 따라 U1에서 멈췄다. 7개 전부 진행하려던 원래 지시는 7절(공개 사항)의 정책 변경 차단과 이 지시로 대체되었다 |
-| 3.5 Code Generation | **시작하지 않았다.** `aidlc engine orchestrate next`를 3.4 완료 뒤 호출하지 않았다 |
+| 3.5 Code Generation (U1) | **완료**(2026-10-10 ~ 11, 사람 결정 1 ~ 12 반영, Plan Approval · 검증 명령 사람 클릭, 엔진 체크포인트 검증 · 승인) — 10절 |
+| 3.6 Build and Test (U1, 단독 실행) | **1차 실패 → 수정 라운드 → 재시험 Met 69 · Not Met 0 · Unverified 51** — 11절. 이어서 자율 모드 gated 전환 · park(13절) |
 | 재점검 | 3.1은 2회, 3.2 · 3.3 · 3.4는 1회씩 독립 검토(서브에이전트)를 돌려 확정 지적을 반영했다. 반영 뒤 재검토는 하지 않았다(8절) |
 
 ## 1. 단계별 산출물 경로
@@ -354,8 +355,171 @@ ERD v0.1(`60_ERD_v0.1`) 원본은 고치지 않았다. 팀이 v0.2를 만들 때
 - 기술 사실(Let's Encrypt OCSP 정책, `t3.large`의 실제 `MemTotal`, `GetParametersByPath` 권한 평가 등)은 이 환경에서 확인할 수 없어 '3.5 확인 항목'으로 남겼다.
 - 단계 정의가 지정한 reviewer(아키텍처 리뷰어, 최대 2회)를 엔진 경로로 호출하지 않았다.
 
-## 9. 다음에 이어갈 때
+## 9. 다음에 이어갈 때 (2026-10-09 시점 — 13절로 대체)
 
-- 엔진 상태: U1의 3.1 ~ 3.4 단계가 `unit complete`로 닫혀 있다. `aidlc engine orchestrate next`는 U1의 3.5 Code Generation을 시작하므로 **사람이 위 4절 1 ~ 3을 정한 뒤에** 호출한다.
-- 정책 변경(반복 순서 · 스켈레톤 자세)은 사람이 `!` 접두어로 직접 실행한다(7절 5항).
-- 이 문서와 산출물은 브랜치 `claude/friendly-shannon-i89iyx`에 있고 draft PR이 main으로 열려 있다.
+이 절은 3.5 시작 전에 쓴 것이다. 4절의 결정은 사람이 2026-10-09 ~ 10에 답했고(10.1), 3.5 · 3.6을 진행했다. 현재 상태와 이어갈 방법은 **13절**.
+
+## 10. 3.5 Code Generation (U1 워킹 스켈레톤) — 2026-10-10 ~ 11
+
+사람 지시(2026-10-09): "3.5로 진행해 … 3.6 Build and Test까지 끝나면 자율 모드를 gated로 바꾸고 park로 멈춰라. U2 3.1은 시작하지 마라." 4절의 결정 1 ~ 9를 사람이 직접 답했다(10.1).
+
+### 10.1 사람 결정
+
+| # | 결정 | 반영 |
+|---|---|---|
+| 1 | 반복 순서 unit-major · 스켈레톤 자세 off 유지, U1을 3.5로 | 그대로 |
+| 2 | 검증 명령 C안(A + B + 기기 시뮬레이터 한 턴, 가짜 공급자), Plan Approval은 사람이 선택지로 누름 | `bash scripts/verify.sh`(J103) |
+| 3 | 솔로, 클라우드 담당 A | J104 |
+| 4 | 도메인 · 인증서 · GHCR 공개 · 스모크 인증은 10/13 팀 결정 → 임시값 | J98 `SERVICE_HOST` 자리표시자 · J99 GHCR 비공개 + 읽기 토큰 · J100 시험 로그인(dev · CI만, demo 스모크는 인증 없는 확인) |
+| 5 | FD 보강 A1 ~ A6 · 계약 편차 (a) ~ (t) 반영, 목록 남김 | 코드 · 시험 · `contracts/deviations.md`, 승인 문서 본문은 고치지 않음(J130) |
+| 6 | D 담당 문서 임시값 | J101 시드 사전 범주별 1항목 · J102 임시 WAV 2개 |
+| 7 | `knowledge/documents` 원본 손대지 않음 | 지킴 |
+| 8 | J1 ~ J96 미확정 | 모든 J는 가정으로 표기 |
+| 9 | 실제 아동 데이터 운영 전 항목 열어 둠 | 열어 둠 |
+| 10 | (2026-10-10, Plan Approval 전 질문) 엔진 checkpoint 명령은 J134 (가) `bash scripts/verify.sh --engine`(120초 제한 안, 미리 만든 산출물 지문 대조) | 계획 · `verification-command.txt` |
+| 11 | (같음) Docker가 없으면 host 모드 통과 인정 | J133 |
+| 12 | (같음) 시드 사전 SCORE 항목은 `비정상` | J101 |
+
+### 10.2 승인 기록
+
+| 지점 | 결과 | 근거 |
+|---|---|---|
+| Plan Approval(53단계 · Testing Contract · 유닛 시험 지침) | **Approve Plan**(사람 클릭, 2026-10-10) | `PLAN_APPROVAL_RECORDED`, `testing-posture verify` ok |
+| Construction Verification Command | **Approve**(사람 클릭, 2026-10-11) — 세 번 물었다(12절 3항) | `VERIFICATION_COMMAND_RECORDED` · `set-construction-verification-command` |
+| U1 단위 체크포인트 | 엔진 검증 통과(`bash scripts/verify.sh --engine` 57초 · 종료 코드 0 · 증거 지문 불변) → 자율 모드 자동 승인(`human_required: false`) | `bolt checkpoint --action verify/approve` |
+| B1 ④ 스켈레톤 확인 | **Approve** — 사람이 2026-10-11 채팅으로 "워킹 스켈레톤 확인(체크포인트 통과, B1 ④) → Approve"를 **미리** 답했고, 그 조건(체크포인트 통과)이 충족된 뒤 기록했다 | 사용자 메시지(2026-10-11) |
+
+### 10.3 산출물
+
+- 계획 · 지시 · 질문: `R/construction/u1-walking-skeleton/code-generation/{code-generation-plan.md(53단계, J97 ~ J144), unit-test-instructions.md, code-generation-questions.md}`
+- 요약 · 추적: `code-summary.md`(J145 ~ J284 · 반영 목록 · 알려진 틈 · 사람이 정할 것) · `source-manifest.json`(763파일) · `traceability.json`(AC 83 = OK 56 · Deferred 27, NFRx.y 67 = OK 47 · Deferred 20, BR 89 = OK 89)
+- 애플리케이션 코드(저장소 루트, J97): `backend/`(Gradle: contract-model · core-api · realtime-activity · test-support, Java 21 · Spring Boot 4.1.1) · `frontend/`(Next.js 16.4 · React 19.3, /parent · /device) · `contracts/`(OpenAPI · AsyncAPI · JSON Schema 31, 편차 (a) ~ (y)) · `infra/`(Compose demo · dev · ci, Nginx, PostgreSQL init, migrate, backup, 배포 · AWS 정의, RUNBOOK) · `tools/`(가짜 공급자 · 기기 시뮬레이터 · 끝-끝 시나리오 C1 ~ C12 · host 모드 Nginx 대역) · `scripts/verify.sh` · `.github/workflows/{ci,deploy}.yml`
+
+### 10.4 시험 · 커버리지 (U1 범위 하한 명령)
+
+| 모듈 | 시험 | 줄 커버리지 | 하한 80% |
+|---|---|---|---|
+| contract-model | 276 | 98.53% | 통과 |
+| core-api | 506 | 95.77% | 통과 |
+| realtime-activity | 387 | 89.93% | 통과 |
+| test-support | 27 | (대상 아님) | — |
+| frontend `src/**` | 499 | 98.82% | 통과 |
+| tools | 105 | (대상 아님) | — |
+
+실패 0 · 건너뜀 0. DB 시험은 Docker(Testcontainers)와 호스트 PostgreSQL 16 두 백엔드에서 모두 돌았다. 하한 · 단언을 낮춘 곳은 없고 커버리지 제외 목록은 비어 있다.
+
+### 10.5 검증 명령 결과
+
+| 실행 | 결과 |
+|---|---|
+| `bash scripts/verify.sh`(compose, 전체 A · B · C · 사후 단언 · 작업 트리 비교) | 종료 코드 0, 341 ~ 343초 |
+| `bash scripts/verify.sh --mode host` | 종료 코드 0, 281초, `NOT_VERIFIED(host)` 5줄은 CI 몫 |
+| `bash scripts/verify.sh --engine`(수동 4회 + 재실행) | 종료 코드 0, 57 ~ 70초 |
+| 엔진 `bolt checkpoint --action verify` | `verified: true`, 57초, 증거 지문 불변 |
+
+C 단계는 D0 코드 → 시험 로그인 → 05a 등록 → 04 안정 → 08 시작 → 음성 1턴(출력 게이트 경유, 금지 패턴 턴은 기기로 0바이트 · 대기 문구 재생) → P1 끝내기 → ENDED를 끝까지 돈다. 같은 실행에서 교차 스키마 쓰기 42501(B1 ②)과 로그 위생(B1 ③)을 단언한다.
+
+### 10.6 알려진 틈 (code-summary.md ## 알려진 틈 요약)
+
+1. 시드 사전에 `점수` · `정상이에요` · `정상입니다` 없음(정식 사전 v1, D 담당).
+2. 관측 지표 일부 미구현(`mujoong_device_connection_state` · outbox/inbox 대기 지표 · 히스토그램 · METRIC_SNAPSHOT) → NFR4.15 · 7.6 · 7.8 Deferred. 구현 시점은 사람이 정한다.
+3. R3-21에 따라 3.6 이후로 넘긴 설계 시험(RD-10 · RD-13 · RD-15 · RD-21 · SD-2 · SD-10 · SD-16 · SD-19 · PD-7 ~ 9 · PD-14 · PD-17 ~ 19 · OD-5 · 6 · 9 · 10 · 12 · ArchUnit 나머지 · 접근성 · 실기 브라우저).
+4. 연결 끊김(EOFException)이 ERROR로 기록됨 → 경보 오탐 가능.
+5. SD-22 검토 거리(WS 수신 스레드의 HELLO 인계 · 닫기 DB 트랜잭션).
+6. 실행하지 못한 것: GitHub Actions 실제 실행 · OIDC · SSM · GHCR 로그인 · Let's Encrypt · 실제 EC2, gitleaks 이력 스캔 · Trivy.
+
+## 11. 3.6 Build and Test (U1, 단독 실행 `--single`) — 2026-10-11
+
+사람 지시 "3.6 Build and Test까지 끝나면 자율 모드를 gated로 바꾸고 park"에 따라 3.6을 **단독 실행**(`--single`, 메인 워크플로 위치를 바꾸지 않음)으로 돌렸다. 단계 정의상 실패 조건은 '명령 실패 · Not Met · Unverified 중 하나라도 있으면 실패'이고, 단독 실행은 사다리 2단(원인 분류 · 영향 추정)까지만 한다.
+
+### 11.1 1차 실행(실패) — 03:01 ~ 04:01 UTC, HEAD 39b33a6
+
+| 묶음 | 목표 | Met | Not Met | Unverified |
+|---|---|---|---|---|
+| 합계 | 120 | 58 | 11 | 51 |
+
+- 통과: 빌드 · 단위 1,800건(백엔드 1,196 · 프런트 499 · tools 105) · 커버리지 하한 · 통합 39클래스 · 검증 명령 전체(289초) · 엔진(59초) · 인프라 정적 검사 · 비밀 스캔 · 장애 주입 대부분.
+- 실패한 명령 2개: Trivy 운영 jar(tomcat-embed-core 11.0.24 CRITICAL 3종, jackson 3.1.5 · 2.22.1 HIGH 5종) · 이미지 ③(5종 모두 고칠 판이 있는 HIGH 이상).
+- Not Met 11개: 공급망(BT-NFR9.13) · 앱 정지 시 입구 504(BT-NFR4.13) · SIGTERM 유예 중 503 대신 접속 거절(BT-RD-13) · 허용 목록 밖 시간 상수 4종(BT-NFR6.1) · 단일 인스턴스 표식 1/12(BT-NFR7.4) · 시험 분량 미달 26클래스(BT-TC-10) · 지표 미구현(BT-NFR4.15 · 7.6 · 7.8) · METRIC_SNAPSHOT 0줄(BT-OD-06) · `turn-metrics` 없음(BT-NFR5.4).
+- Unverified 51개: 6개는 4.2 · 4.3, 2개는 U2가 맡고, **43개는 실행 계획에 맡을 단계가 없다**(11/2 측정 창 · 운영 7일 창 · 실기 · GitHub Actions 실측 등 — 계획 결정, 사람 몫).
+- 같은 날 PR #1의 GitHub Actions도 backend-deps · infra-validate · images가 실패했다(같은 공급망 원인 + Compose v2.38 env 파일 오탐 + shellcheck 0.9.0 경고).
+- 산출물: `R/construction/build-and-test/{build,integration-test,performance-test,security-test}-instructions.md` · `build-and-test-summary.md`(Target Verification Matrix 120행) · `test-results.md`(1 ~ 14절) · `cross-unit-traceability.md`(열거 335 중 AC 56 덮임 — U2 ~ U7 몫은 당연히 비어 있음).
+
+### 11.2 수정 라운드 — 사람 결정 "고친 뒤 다시 시험 → Approve, 하한 유지"
+
+사람이 미리 답한 "3.6에서 실패가 있어 고친 뒤 다시 시험할까 → Approve"와 "커버리지 하한 · 단언을 낮추자는 제안 → 하한 유지"에 따라, 측정 목표 · 하한 · 관문 · 단언 · 보안 예외 목록을 낮추지 않고 고쳤다. 고치기 전에 **독립 코드 리뷰**(읽기 전용, 반박 검증)를 한 번 돌려 확정 결함 8건(F1 high · F2 · F3 medium · F4 · F5 · FE-1 ~ 3 low)을 함께 고쳤다. 담당(서브에이전트)마다 "재현 시험 → 고침 → 통과"를 요구했고 보고에 '고치기 전 실패 확인' 여부를 적게 했다.
+
+| 커밋 | 내용 | J |
+|---|---|---|
+| `cf0a58e` | 운영 의존성 보안 판: Tomcat 11.0.26 · Jackson 3.1.7 · 2.22.3(Boot 4.1.1 BOM 위에 제약) | — |
+| `86db0b4` | 프런트 FE-1(재접속 중 마지막 화면 유지) · FE-2(오프라인에서도 실패 토스트) · FE-3(「다시 시도」가 최신 입력 · 중복 요청 차단) | J360 ~ J363 |
+| `8f44764` | 이미지 취약점(web 기반 다이제스트 + 패키지 도구 삭제, JRE openssl 패치 .deb, migrate를 JRE + Flyway CLI jar 16개로, backup gosu 삭제 · supercronic Go 1.27.2 빌드), CI Trivy 실행기 TMPDIR 결함, infra-validate Compose 판 무관 env 검사, shellcheck 0.9 · 0.11 경고 0, Nginx 업스트림 DNS 재해석, `infra/bin/turn-metrics` | J345 ~ J353 |
+| `6dbd725` | 백엔드: F1(출력 게이트 전사-음성 대응 — 한 응답만, `session.output.done`까지 받은 구간만 통과, 편차 (z)) · F2(closeProvider 자기 교착) · F4(최상위 예외 때 CLOSE_TRANSPORT · STANDBY) · F5(syncFromDb 비종료 상태 시한) · F3(재시도 뒤 409 → 취소), 지표 · METRIC_SNAPSHOT · SIGTERM 유예 중 503 · 시간 상수 → 설정 키 + 자동 검사 · 단일 인스턴스 표식 + 구조 시험 · 시험 분량 5건 이상 | J285 ~ J344 |
+| `aabce31` | 멈춘 앱은 정지 직후부터 입구 502(504 나누기 — 연결조차 못 한 것만 502, hang은 504), Nginx 컨테이너 `ndots:1`(러너 DNS와 무관), image-checks ⑧ 재설계 | J354 ~ J357 |
+| `b094c0d` | 독립 리뷰 2회차 지적 6건: 풀 대기 초과 이중 계수, 표본 전용 스레드, T5 스냅샷 마감, 처음 연결 실패 기기 라벨, 시험 2건 | J364 ~ J369 |
+| `8a9225a` | CI에서 1회 실패한 `DeviceGatewayIT`의 원인 — HEARTBEAT 복귀 경주 2개(last_seen_at 미갱신 · 원장 사본 갱신이 커밋 뒤). 3.5부터 잠복한 운영 결함을 별도 작업 트리에서 재현 · 수정 | J390 ~ J392 |
+| `b9a53a5` | CI tools 1건 실패의 원인 — 끝-끝 도구 `run-c`에서 단계 타이머와 그 기한으로 깎인 요청 제한 시간이 1ms 차로 경주해 TIMEOUT/FAIL이 갈림. 깎인 대기의 제한 시간 초과는 단계 TIMEOUT으로 보고 | J393 |
+
+### 11.3 재시험 — 17:11 ~ 22:32 UTC, HEAD b094c0d(+ 그 뒤 8a9225a는 백엔드 전체만 재실행)
+
+1차와 같은 명령 · 순서(S0 ~ S14)로 다시 돌렸다. 증거는 `build/b-and-t-r2/`(이 PC에만, gitignore).
+
+| 묶음 | 목표 | Met | Not Met | Unverified |
+|---|---|---|---|---|
+| 1차 | 120 | 58 | 11 | 51 |
+| **재시험** | 120 | **69** | **0** | 51 |
+
+- 시험 2,061건 실패 0(백엔드 1,442 · 프런트 514 · tools 105; 8a9225a 뒤 백엔드 1,451건). U1 줄 커버리지 contract-model 98.53% · core-api 96.00% · realtime 92.03% · 프런트 98.93%(하한 80%). 5건 미만 시험 클래스 0.
+- 검증 명령 전체 `RESULT PASS` 509초, 엔진 89초(110초 안). infra-validate를 CI 판 조합(shellcheck 0.9.0 × Compose v2.38.2)까지 네 가지로 통과. 이미지 5종 Trivy HIGH · CRITICAL 0, 운영 jar 0. 앱 정지 → 입구 502(첫 요청 3초 안, 그다음 수 ms), METRIC_SNAPSHOT 앱별 1줄, SIGTERM 20ms 표본 200 → 503(Retry-After) → 502 → 재기동 200.
+- **Not Met 11개 모두 Met**. 단 두 행은 사람이 읽어야 할 주석이 붙었다(11.5).
+- 1차 Met 58개 회귀 없음. Unverified 51개 사유 변동 없음(43개는 계획 결정).
+- 정직하게 적는 것: 백엔드 전체 1차 실행(U-3 · U-7)에서 시간 민감 통합 시험 3건이 실패했다. 그 시간대에 다른 서브에이전트가 재현을 위해 만든 CPU 부하(`yes` 2개, 약 7분)가 겹쳤고 재실행은 통과했다(12절 13항). 같은 종류의 흔들림이 CI에서도 1건 있었고(DeviceGatewayIT), 그 원인은 부하가 아니라 **운영 코드의 경주**로 확정해 고쳤다(`8a9225a`).
+- 성능 기준선이 1차보다 늘었다(검증 전체 289 → 509초, 엔진 59 → 89초, 강제 종료 복구 9 → 20초). 같은 기계에서 다른 Gradle 실행이 겹쳤고 재부팅 직후라 환경 요인이 크다 — 조용한 환경에서 다시 재야 비교가 된다.
+
+### 11.4 CI (PR #1, GitHub Actions)
+
+| 커밋 | 결과 |
+|---|---|
+| 39b33a6 · 50cb21b(1차) | backend-deps · infra-validate · images 실패 |
+| cf0a58e ~ 86db0b4 | backend-deps 통과, infra-validate · images 실패(고치는 중) |
+| 8f44764 | infra-validate 통과, images ⑧만 실패(러너 DNS가 멈춘 컨테이너 이름을 SERVFAIL로 답해 옛 주소 유지 — 로컬 재현 뒤 `ndots:1`) |
+| **aabce31** | **전부 통과(ci-gate 성공)** — 처음 녹색 |
+| b094c0d | backend 1건 실패(`DeviceGatewayIT` 40초 무음 복귀) → 원인 분석 · 수정 |
+| 8a9225a | tools 1건 실패(끝-끝 도구의 TIMEOUT/FAIL 경주 — 1ms 차로 두 타이머가 경주) → backend 취소, 나머지 통과 |
+| **b9a53a5** | **전부 통과(ci-gate 성공)** — 경주 수정 2건(DeviceGatewayIT · run-c)이 들어간 최종 코드 |
+
+### 11.5 사람이 정할 것 (3.6에서 새로 생긴 것 — 코드는 바꾸지 않고 열어 둠)
+
+1. **BT-RD-13 SIGTERM 503 창.** 유예 동안 커넥터를 열어 두고 503을 내도록 고쳤지만, 진행 중 요청이 없으면 T6이 수십 ms에 끝나 503 창도 수십 ms다(SIGTERM 20ms 표본 30개 중 503 2개, 나머지 502). IT-06j의 기대 순서(200 → 503 → 502 → 200)는 충족해 Met으로 적었으나, 설계 문구 '커넥터는 유예(30초) 끝까지 열어 둠'을 문자 그대로 읽으면 Not Met이다. 최소 유지 시간 키를 둘지(배포 중단 시간이 그만큼 늘어남) 사람이 정한다.
+2. **편차 (z) — `session.output.done`이 사실상 필수.** F1 수정으로 '그 응답의 완료 신호를 받은 구간만 통과'가 됐다. 계약상 '선택'이던 신호가 재생의 필요조건이 되어 11/2 실공급자 어댑터는 완결된 응답에만 이 신호를 보내야 한다. 깨는 변경으로 볼지 확인.
+3. **J354 — 연결조차 못 한 504를 502로.** errors.md '상태 코드는 그대로'를 '봉투가 502 · 504를 다른 값으로 바꾸지 않는다'로 읽어 편차를 더하지 않았다. 편차로 남기려면 (a) ~ (z)가 다 차서 표기 방식과 `ContractFilesTest`를 함께 바꿔야 한다.
+4. **J347 — 정지 직후 약 1.6초 창.** 그 안에 든 요청은 연결 시한 3초 뒤 502다(상태는 요구대로, 지연만 남음). `proxy_connect_timeout 3s`(N-12 제안값)를 유지했다.
+5. **BT-NFR7.4 SI-11 '대상 없음'.** 두 앱에 TTL 캐시 상태가 없어 표식 11/12 + 대상 없음 1. 12/12를 문자 그대로 요구하면 Not Met.
+6. **J363 — 화면 04 자동 복귀.** 오프라인으로 들어왔다가 온라인이 되면 전에는 결함 덕분에 저절로 읽혔다. 이제 토스트 「다시 시도」로 읽는다(PD-12 '진입 때 1회' 단언 유지).
+7. **SeedDictionaryFileTest의 'OUTPUT_GATE 전수' 단언**(승인된 3.5 단언)은 계약 56행보다 좁다 — 후속 유닛이 RESULT_TEXT 전용 항목을 더하면 실패한다.
+8. **gate_discard `category` 라벨 · input_frames_dropped `cause` 라벨**은 설계 문서끼리 충돌해 그대로 두었다.
+9. **시간 민감 통합 시험의 흔들림.** 경주 2개는 고쳤고 나머지 실패(부하 때 10초 대기 초과형)는 고치지 않았다. 후보: `InternalHttpClient`가 IOException을 모두 CONN_ERROR로 묶어 예외 종류가 로그에 없음, 시험 대역 서버 backlog, WAIT 10초.
+10. 설계 문서와 구현이 달라진 곳(스레드 수 표, OD-6 표본 스레드, T5 마감, 풀 대기 계수 규칙, view_item_ready 버킷, 새 키 `system-sample-interval`, BR4.8 복귀 시 last_seen_at, RD-4 사본 트랜잭션, infra-spec N-2 · 3.3 · 2.1 dns_opt, flyway 배포판 → JRE + jar, supercronic 빌드, SI-11 · SI-12 위치)은 승인 문서를 고치지 않고 `code-summary.md`의 '설계 문서와 달라진 곳' 표에 모았다. 문서 반영은 사람이 승인한 뒤.
+11. 1차와 같음: Unverified 43개의 계획 결정(D), 10/13 팀 결정(J98 ~ J100), 정식 사전 v1, J1 ~ J392 전부 미확정.
+
+## 12. 공개 사항 (3.5 · 3.6 실행)
+
+7절(2.6 ~ 3.4)에 이어지는 번호가 아니라 이 절 안의 번호다.
+
+1. **사용 한도로 여러 번 끊김.** 조직 월간 사용 한도에 3.5에서 두 번(2026-10-10, 재설정 10:40 · 16:00 UTC), 3.6 수정 라운드에서 두 번(2026-10-11, 재설정 11:40 · 20:30 UTC) 걸려 서브에이전트가 중간에 멈췄다. 재설정 뒤 같은 워크플로를 다시 돌려, 멈춘 에이전트가 이미 쓴 파일을 읽고 이어서 완성했다. 중단 시점의 미완성 코드는 `wip` 커밋으로 남아 있다(`bf5eeac` · `70585a0`).
+2. **세션 · 컨테이너 재시작 여러 번.** 그때마다 백그라운드 작업과 Docker 데몬이 멈췄다. 워크플로는 캐시된 결과로 다시 이어 갔고, Docker 데몬은 손으로 다시 띄웠다(`dockerd`, 샌드박스 전용).
+3. **검증 명령 질문을 세 번 물었다.** ① 첫 질문 뒤 세션이 끊겨 답이 질문에 묶이지 않았다. ② ③ 엔진은 화면 질문 문장이 `log decision --decision` 문자열과 같아야 답을 묶는데, 제가 질문에 명령 코드를 덧붙여 문장이 달랐다(제 실수). 결정 문자열을 질문과 같게 다시 기록한 세 번째에 영수증이 기록됐다. 사람은 Approve를 세 번 눌렀다.
+4. **시험용 무작위 값이 도구 출력에 찍힌 사고(고침).** 처음 작성된 `infra/ci/gen-env.sh`가 첫 줄 `변수=값`을 표준 출력에 찍는 결함이 있어, 실행 때 만든 무작위 시험 값 7개(DB 비밀번호 5종 등, 실제 비밀 아님)가 세션 도구 출력에 한 번 찍혔다. 그 디렉터리는 곧바로 지웠고 그 값으로 띄운 스택은 없다. 지금은 파일 · 변수 이름만 출력한다. 저장소 · 커밋에는 비밀 값이 없다(비밀 스캔 A4 · P3 걸림 0).
+5. **저장소 밖 환경 조치(샌드박스 전용, CI 영향 없음).** `downloads.gradle.org`가 출구 정책에서 403이라 설치된 Gradle 8.14.3을 `~/.gradle/wrapper/dists`에 넣어 래퍼를 돌렸다(저장소의 `distributionUrl`은 공식 주소 그대로). Maven Central이 429를 줘 `~/.gradle/init.d`에 공식 미러로 보내는 설정을 두었다. shellcheck(`/usr/local/bin`) · logrotate(apt)를 설치했다.
+6. **엔진 linter 센서 미판정.** `aidlc engine sensor-linter`가 저장소 루트에서 eslint를 돌려 `eslint-bad-output`을 냈다(설정은 `frontend/`에 있음, advisory). 프로젝트 lint(`cd frontend && npx eslint .`)는 검증 명령 A2에서 통과했고, type-check 센서는 통과했다.
+7. **엔진 검증의 첫 실행 지연.** Docker 데몬을 막 다시 띄운 직후 `--engine` 수동 실행이 B 단계 94초 기한을 넘겨 실패(112초)했다. 곧바로 다시 돌리자 61초로 통과했고, 엔진 검증은 57초였다. 데몬 재시작 직후에는 한 번 미리 돌려 데우는 것이 안전하다.
+8. **남의 단계 시험 수정.** Step 36 담당이 Step 30 · 35의 통합 시험 두 개(`SessionLifecycleIT` · `RealtimeLogHygieneIT`)의 경주를 시험 쪽에서만 고쳤다(운영 코드 변경 없음).
+9. **리뷰 범위.** 코드 생성 단계의 엔진 리뷰어는 이번 지시에 없었다. 대신 계획을 세 관점(설계 충실도 · 실행 가능성 · 보안/인프라)으로 독립 검토해 지적 58건을 Plan Approval 전에 반영했다. 생성된 코드는 3.6 1차 뒤에 **독립 코드 리뷰**(읽기 전용 서브에이전트, 반박 검증)를 두 번 돌려 확정 결함 8건 + 6건을 고쳤다(11.2). 엔진의 reviewer 경로는 쓰지 않았다.
+10. **멈춤 경고.** 3.5 뒤 엔진은 U1 체크포인트 재검증(소스가 바뀌었으므로)과 U2 Functional Design을 다음 단계로 내놓았고, Stop 훅이 그 단계를 실행하라고 반복해서 막았다(자율 모드 상한 8회 뒤 풀림). 사람 지시대로 U2는 시작하지 않았고, 자율 모드에서는 park가 거부되므로 3.6과 수정 라운드가 끝난 뒤 체크포인트를 다시 검증 · 승인하고 gated로 바꿔 park했다(13절).
+11. **3.6 1차는 실패 판정이고, 그 상태로 커밋 · PR에 남겼다.** 수정 라운드 뒤 재시험 결과를 `test-results.md` 15절로 덧붙였고 1차 기록은 지우지 않았다.
+12. **고친 뒤 생긴 사고 · 판단.** (가) 수정 중간 상태를 커밋하지 않고 담당별로 끝난 것만 커밋했다(cf0a58e ~ 8a9225a 7개). (나) CI images ⑧이 로컬에서는 통과했지만 러너에서 실패했다 — 러너 DNS 동작 차이를 로컬에서 재현해 고쳤고, 러너 안의 실제 DNS 응답은 보지 못한 추정이었으나 다음 실행(aabce31)이 통과해 확인됐다. (다) CI backend가 b094c0d에서 1건 실패했는데, 이번 변경이 만든 것이 아닌 3.5부터 잠복한 운영 경주였다(11.2 · 8a9225a).
+13. **재시험 중 CPU 부하 사고.** CI 실패를 재현하려고 띄운 서브에이전트가 지시대로 CPU 부하(`yes` 2개)를 만들었는데, 같은 기계에서 재시험 담당이 시간 민감 통합 시험을 돌리던 중이었다. 하네스가 "다른 작업 방해" 경고를 냈고, 제가 부하를 멈추고(약 7분 뒤) 그 에이전트에게 부하 없이 진행하라고 알렸다. 그 시간대의 백엔드 1차 실행에서 3건이 실패했고 재실행은 통과했다 — 두 실행을 모두 기록했다. 서로 다른 담당을 같은 기계에서 동시에 돌린 제 판단 실수다.
+14. **별도 작업 트리.** 재시험이 저장소를 쓰는 동안 원인 분석 · 경주 수정은 `git worktree`로 만든 별도 작업 트리에서 했고 패치로 가져와 적용했다(끝난 뒤 지움). 저장소 이력에는 흔적이 없다.
+15. **모델 · 모드 변경.** 사용자가 실행 중 `/model`(Fable 5.1)과 `/fast`를 켰다. 산출물 어디에도 모델 식별자를 쓰지 않았다.
+16. **디스크.** 재시험 끝 무렵 디스크 사용 87%(여유 5.1GB). 빌드 캐시 · 이미지가 대부분이다.
+17. **서브에이전트 보고 파일.** 하네스가 하위 에이전트의 보고 파일 쓰기를 거부해, 보고는 응답으로 받아 제가 스크래치패드에 저장했다. 산출물(`code-summary.md` 등)에는 제가 옮겼다.

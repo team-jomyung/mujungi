@@ -662,12 +662,12 @@ Nginx 점검 페이지 `infra/nginx/html/maintenance.html`도 `UPSTREAM_UNAVAILA
    security_event · internal_http(카운터 · 타이머 · 차단기 게이지) · session_view_fallback · health_up · ws_connections_open · sessions_active · gate_discard ·
    input_frames_dropped · recorder_rejected · rate_limiter · log_invalid_attr · event_delivery · relay_in과 프레임워크 기본 지표(jvm · hikaricp · http_server_requests)다.
    계획의 3.6 넘김 목록은 이 묶음의 '이름 표 · 스냅샷 시험'만 적었으므로 구현 시점은 사람이 정한다(## 사람이 정할 것). `traceability.json`에서 NFR4.15 ·
-   NFR7.6 · NFR7.8은 Deferred(J284).
+   NFR7.6 · NFR7.8은 Deferred(J284). → 3.6 수정 라운드에서 해소(## 3.6 수정 라운드 '무엇을 고쳤나' BT-NFR4.15 · 7.6 · 7.8 · BT-OD-06, J295 ~ J303 · J322 ~ J328; `ws_connections_open`은 설계 이름으로 바꿈 J295, traceability NFR4.15 · 7.6 · 7.8 OK).
 3. **3.6 · 그 뒤로 넘긴 시험(계획 ## 시험 전략과 커버리지, R3-21).** RD-10 8분 재시도, RD-13 SIGTERM · 정지 주입 리허설, RD-15 · LC-12 장애 격리 주입,
    RD-21(NFR4.16 폰 오프라인), SD-2 브라우저 CSP 콘솔, SD-3 중 B1 필수 밖 Nginx 시험, SD-10 한도기 전체, SD-16 의존성 관문 실측, SD-19(NFR1.3 · NFR2.1),
    SD-21 삭제 지휘 통합(U2), PD-7 캐시, PD-8 · PD-9 EXPLAIN · 질의 수, PD-14 번들 예산, PD-17 · SCD-6 표본 판정, PD-18 부하 시드 도구 · L1 ~ L7, PD-19
    PLAYBACK_MARK_STOPPED, OD-5 · OD-6 · OD-9 · OD-10 · OD-12 이름 표 · 스냅샷, ArchUnit 묶음 나머지(SD-9 · SD-22 전체 · SD-25 구조 · SCD-4 · PD-1 · PD-11 ·
-   시간 숫자 상수 검색), 접근성 axe · Lighthouse · 실기 브라우저(NFR10.1 ~ 10.3).
+   시간 숫자 상수 검색), 접근성 axe · Lighthouse · 실기 브라우저(NFR10.1 ~ 10.3). → 3.6 수정 라운드에서 일부 해소(## 3.6 수정 라운드: RD-13 SIGTERM `GracefulDrainIT` · IT-06j, SD-16 로컬 실측 ST-19 · ST-20, SCD-4 · 시간 숫자 상수 구조 시험 2종, OD-5 · OD-6 · OD-12 이름 표 · 스냅샷; 나머지는 그대로).
 4. **다른 유닛으로 넘긴 동작.** U3: ACTIVE 중 공급자 끊김 감지(지금은 WARN 로그만, 전이 없음) · HELLO resume · 재접속 백오프(U1은 5초 고정) · UNSTABLE 판정 ·
    T19 8상태 · 끼어들기 0.5초 · DEVICE_STATE 최신값 보관. U4: WAITING_CHILD · 참여 확인 · 공백 · CHILD_STOP · `GET /api/sessions/current` · CONSENT_WITHDRAWN 전이 ·
    04 지금 활동 구역 · 12 '(말하는 중)' 표시. U2: 구글 OAuth · 01 · 02 · 03 · 05 화면 · 동의 · 삭제 지휘(CSRF 면제 2번 경로 포함). U5: PRACTICE. AC 27개는
@@ -679,11 +679,11 @@ Nginx 점검 페이지 `infra/nginx/html/maintenance.html`도 `UPSTREAM_UNAVAILA
 7. **헬스체크 `start_interval`.** backup · certbot 헬스체크에 `start_interval`이 없어 Docker 25 미만에서는 배포 D6 대기가 최대 약 90초가 된다(Docker 29에서 약 15초).
 8. **실행하지 못한 것.** GitHub Actions 실제 실행 · OIDC · SSM SendCommand · GHCR 토큰 로그인 · Let's Encrypt 발급 · 실제 EC2 systemd · cron, gitleaks 이력
    스캔 · Trivy(도구 없음, image-checks ③ 미실행). 배포는 샌드박스 리허설(로컬 레지스트리 · 가짜 aws)로만 확인했다: 첫 설치 · 배포 45초(중단 14초) ·
-   롤백 42초(17초) · 재배포 44초(15초).
+   롤백 42초(17초) · 재배포 44초(15초). → 3.6 수정 라운드에서 일부 해소(## 3.6 수정 라운드: Trivy를 로컬 감싸개로 실행해 image-checks ③ · bootJar 스캔 통과, J353; Actions 실제 실행 · OIDC · SSM · 인증서 · EC2는 그대로).
 9. **Standard 분량 미달.** JPA 저장소 시험 두 클래스(2 · 3건), `SessionPackageIT` · `DevSeedRunnerIT`(3건씩). 같은 컴포넌트를 다른 시험이 함께 덮고 줄
-   커버리지는 하한 위다.
+   커버리지는 하한 위다. → 3.6 수정 라운드에서 해소(## 3.6 수정 라운드 BT-TC-10: 5건 미만 클래스 0, J318 · J341).
 10. **기타.** Flyway 두 번째 위치 이력에 버전 0 BASELINE 행(J157). Realtime `TraceIdFilter` 최후 방어선 분기 미시험(70%). Spring Boot 3.5.x 지원 종료일 ·
-    공급자 SDK 범위 미확인. 실시간 통합 시험은 부하가 걸리면 다른 경주가 더 드러날 수 있다(Step 36에서 두 건 수정, J224).
+    공급자 SDK 범위 미확인. 실시간 통합 시험은 부하가 걸리면 다른 경주가 더 드러날 수 있다(Step 36에서 두 건 수정, J224). → 3.6 수정 라운드에서 일부 해소(## 3.6 수정 라운드: HEARTBEAT 복귀 경주 2개 J390 ~ J392, run-c TIMEOUT 경주 J393; 부하형 흔들림은 '사람이 정할 것'에 남음).
 11. **사고(고침).** 처음 물려받은 `infra/ci/gen-env.sh`가 첫 줄 `변수=값`을 표준 출력에 찍는 결함이 있어 첫 실행 때 scratch 디렉터리의 무작위 시험 값 7개가
     세션 도구 출력에 찍혔다. 그 디렉터리는 곧바로 지웠고 그 값으로 띄운 스택은 없다. 지금은 파일 · 변수 이름만 출력한다(Step 44).
 
@@ -693,7 +693,7 @@ Nginx 점검 페이지 `infra/nginx/html/maintenance.html`도 `UPSTREAM_UNAVAILA
 |---|---|---|
 | 엔진 검증 명령 | `bash scripts/verify.sh --engine`을 verification-command 체크포인트에서 Approve. 기록 전 `bolt checkpoint --action verify` 금지. 소스 6곳이 바뀌면 전체 실행을 먼저 | J134 · J239 |
 | B1 ④ 스켈레톤 확인 | 종료 코드 0과 `build/verify/report.txt`를 근거로 승인(스켈레톤 자세 off라 3.6 뒤 gated 전환 정지 지점에서 질문) | 계획 ## 검증 명령 |
-| 지표 틈 | ## 알려진 틈 2의 지표 · METRIC_SNAPSHOT을 3.6 전에 U1에서 보완할지, 3.6 · 뒤 유닛으로 넘길지 | OD-5 · OD-6 · OD-12 · J284 |
+| 지표 틈 | ## 알려진 틈 2의 지표 · METRIC_SNAPSHOT을 3.6 전에 U1에서 보완할지, 3.6 · 뒤 유닛으로 넘길지 | OD-5 · OD-6 · OD-12 · J284 → 3.6 수정 라운드에서 해소(## 3.6 수정 라운드, 사람 결정 '고친 뒤 다시 시험'으로 U1에서 보완) |
 | 10/13 팀 결정 | 도메인 · 인증서(J98, 저장소 변수 `SERVICE_HOST`가 비면 배포 건너뜀), GHCR 공개 여부(J99), 스모크 인증 수단(J100), 외부 프로브 위치(O-2) | J98 ~ J100 |
 | 자동 배포 | 저장소 변수 `AUTO_DEPLOY`는 없거나 `true`면 켜짐. 처음 동결하려면 `false` | Step 50 |
 | 보안 예외 · 정책 | braces 예외 승인(J277), backend-deps trivy `--ignore-unfixed` 차이(J274) | NFR9.13 |
@@ -712,3 +712,241 @@ Nginx 점검 페이지 `infra/nginx/html/maintenance.html`도 `UPSTREAM_UNAVAILA
 | AC(U1 스토리) | 83 | 56 | 27 | Deferred는 U2 14 · U4 8 · U3 5(functional-design 추적과 같음) |
 | NFRx.y | 67 | 47 | 20 | 11/2 측정 8(NFR5.1 · 5.2 · 5.3 · 5.5 · 7.1 · 7.2 · 7.5, NFR4.8 운영 측정 포함), 3.6 넘김 8(NFR1.3 · 2.1 · 4.16 · 5.6 · 9.13 · 10.1 ~ 10.3), B1 이후 · U3 1(NFR5.8), 지표 틈 3(NFR4.15 · 7.6 · 7.8) |
 | BR | 89 | 89 | 0 | U1 규칙 전부 |
+
+## 3.6 수정 라운드 (2026-10-11)
+
+> 3.6 Build and Test 단독 실행(HEAD `39b33a6`)이 실패로 끝난 뒤 사람 결정 "고친 뒤 다시 시험 → Approve"(하한 · 단언 · 관문 · 예외 목록 유지, 도메인 · 키 · 비밀값 임시값 유지)에 따라 고친 내용의 기록이다. 커밋
+> `cf0a58e`(의존성 패치 판) · `86db0b4`(프런트 FE-1 ~ FE-3) · `8f44764`(인프라 · CI) · `6dbd725`(백엔드 F1 ~ F5 · 지표 · METRIC_SNAPSHOT · SIGTERM · 시간 상수 · 표식 · 분량) · `aabce31`(Nginx 정지 직후 502) ·
+> `b094c0d`(독립 리뷰 지적 6건) · `8a9225a`(HEARTBEAT 복귀 경주 2개) · `b9a53a5`(끝-끝 도구 run-c TIMEOUT 경주). 재시험(`test-results.md` 15절)은 `b094c0d`에서 돌았고, 그 뒤 두 커밋은 모듈 전체 명령으로만 확인했다.
+> 기존 본문은 고치지 않았다. ## 알려진 틈 · ## 사람이 정할 것의 항목 끝에 붙인 '→ 3.6 수정 라운드에서 해소(…)' 한 줄만 이 절이 더한 것이다. 모든 J번호는 준하 제안(가정)이다. 담당 보고의 원문은 scratchpad `cg/report-fix-*.md`.
+
+### 왜
+
+1. **3.6 실패(Not Met 11).** BT-TC-10(백엔드 26클래스 5건 미만) · BT-NFR9.13(bootJar HIGH · CRITICAL 21건, 이미지 5종) · BT-NFR4.13(앱 컨테이너 정지 때 입구 504) · BT-RD-13(SIGTERM 유예 중 503 0건) · BT-NFR6.1(허용 밖 시간 상수 4종) ·
+   BT-NFR7.4(단일 인스턴스 표식 1/12) · BT-NFR4.15 · 7.6 · 7.8 · BT-OD-06(지표 · METRIC_SNAPSHOT 미구현) · BT-NFR5.4(`turn-metrics` 없음).
+2. **CI 실패(PR #1, head `39b33a6`).** backend-deps · images ③(Trivy HIGH · CRITICAL), infra-validate · images ⑤(Compose v2.38.2의 `secret-env-files` 오탐), infra-validate(shellcheck 0.9.0 SC2317 · SC2015), 그리고 CI 실행기가 `/tmp`를 읽기 전용으로
+   붙여 Trivy가 FATAL로 끝나는 거짓 실패(새로 찾음).
+3. **독립 코드 리뷰 확인 결함 8건.** F1(high) 출력 게이트 전사-음성 대응 검사 없음, F2 `closeProvider` 자기 교착, F3 재시도 뒤 409에 취소 없음, F4 최상위 예외 때 기기 명령 없음, F5 `syncFromDb`가 받아들인 비종료 상태의 시한 · 부수 효과 없음, FE-1 재접속 주기에 T19 라벨 비움,
+   FE-2 오프라인에서 실패 토스트 · 재시도 안 뜸, FE-3 「다시 시도」가 옛 클로저로 옛 입력 전송.
+4. **수정 뒤 독립 리뷰 2회차 지적 6건과 CI 흔들림 2건.** 풀 대기 초과 이중 계수, `SeedDictionaryFileTest` appliesTo 범위, `DbSessionLimitsIT` 중복 2건, 처음 연결 실패 기기 라벨, 표본 스레드가 maintenance를 막음, T5 마지막 스냅샷 마감 밖 — 그리고 CI
+   `DeviceGatewayIT` 1건(HEARTBEAT 복귀 경주 2개, 잠복 결함)과 CI tools `scenario-plan.test.mjs` 1건(run-c 단계 타이머 · 요청 제한 시간 경주).
+
+### 무엇을 고쳤나
+
+**리뷰 결함 F1 ~ F5 · FE-1 ~ FE-3(모두 고치기 전 실패하는 시험을 먼저 확인)**
+
+| 결함 | 고친 곳 | 요지 | 회귀 시험 |
+|---|---|---|---|
+| F1 | `realtime/gate/SegmentBuffer.java` · `OutputGate.java` · `session/SessionExecutor.java` | 한 구간에 한 응답만, `session.output.done`을 그 응답의 전사 완료 신호로 봄, `Sealed.complete`(처음 보는 응답 · 끝 신호 받음 · 신호 뒤 조각 없음)가 아니거나 정규화 뒤 빈 전사면 GATE_EMPTY(fail-closed). 계약 `contracts/ai-io.md` 45 ~ 47행, 편차 (z) | `OutputGateTest` 7건, `SegmentBufferTest`(새) 6건 |
+| F2 | `SessionExecutor.java` `processing` 필드 · `putFromProvider` | 편지함을 처리 중인 스레드에서 오는 공급자 알림은 기다리지 않고 넣고 가득 차면 버림(다른 스레드는 배압 유지) | `SessionExecutorFaultTest`(새) 3건 |
+| F3 | `core/activity/RealtimeSessionClient.java` `StartResult.afterTimeoutRetry` · `StartActivityService.java` | 시간 초과 재시도 뒤 409면 로컬 FAILED(409) + CORE_ABANDONED 취소(BR6.6 · BR6.7, W5 6단계) | `StartActivityPolicyTest.conflictAfterTimeoutRetryClosesTheCopyLocallyAndCancelsTheSession` |
+| F4 | `SessionExecutor.java` `afterFailed()` | 최상위 예외로 FAILED 전이를 이기면 CLOSE_TRANSPORT(FAILED) + STANDBY, 못 이기면 명령 없이 정리(BR6.8) | `SessionExecutorFaultTest` 3건 |
+| F5 | `SessionExecutor.java` `syncFromDb(endRequestId)` · `adopt()` · `enterActive()` · `enterClosing()` | DB가 앞선 비종료 상태(DEVICE_ACK · ACTIVE · CLOSING)를 받아들일 때 그 상태의 시한 · 부수 효과를 한 번 걸고, 끊김 시계는 전이를 이긴 뒤에만 공급자를 닫음(BR6.12 ③) | `SessionExecutorFaultTest` 6건 |
+| FE-1 | `frontend/src/device/machine/deviceMachine.ts` · `DeviceApp.tsx` | 재접속 시도를 새 상태 `reconnecting`으로 나눠 화면은 재접속 대기와 같게(표정 `reconnecting` + 마지막 view 라벨, BR9.7). 2회차: 한 번도 연결되지 않은 기기는 `connecting` · 빈 라벨(BR9.4, `connectedOnce`) | `device-machine.test.ts` · `device-app.test.tsx` 각 2 + 2건 |
+| FE-2 | `frontend/src/parent/api/queries.ts` | 보호자 QueryClient 조회 · mutation `networkMode: "always"`(PD-12 · NFR4.16) | `api-types` · `live-12` · `done-17` · `home-04` 4건 |
+| FE-3 | `Register05a.tsx` · `Free08.tsx` | 「다시 시도」= 지금 폼 `requestSubmit()`, 진행 중 여부는 `inFlightRef`(BR2.8 · BR6.4 · J232) | `register-05a` · `free-08` 각 2건 |
+
+**Not Met 11개**
+
+| 목표 | 고친 곳 | 요지 |
+|---|---|---|
+| BT-TC-10 | 백엔드 시험 26클래스 + contract-model `SystemMujoongClockTest` | 클래스마다 5건 이상(정상 1 + 오류 · 경계 2 이상), 이름 · 위치 불변, 늘 참인 단언 없음. 5건 미만 클래스 0 |
+| BT-NFR9.13 | `backend/gradle/libs.versions.toml` · `build-logic` · Dockerfile 5종(`core-api` · `realtime-activity` · `frontend` · `infra/migrate` · `infra/backup`) · `infra/migrate/migrate.sh` · `.github/workflows/ci.yml` | Tomcat 11.0.26 · Jackson 3.1.7 · 2.22.3. JRE 기반 다이제스트 고정 + openssl 3.0.13-0ubuntu3.16 .deb(sha256), web은 node 22.23.3-alpine3.23 다이제스트 + 패키지 관리 도구 삭제, migrate는 JRE + 최소 Flyway CLI jar 16개(sha256), backup은 gosu 삭제 · supercronic 소스 빌드(Go 1.27.2). CI Trivy 실행기에 쓰기 가능한 TMPDIR, image-checks ③은 취약점과 실행 오류를 구분. 예외 목록 불변(1건) |
+| BT-NFR4.13 | `infra/nginx/upstreams/compose.conf` · `snippets/error-json.conf` · `conf.d/https443.conf.tmpl` · `infra/compose.demo.yml` · `infra/bin/infra-validate` · `infra/ci/image-checks.sh` | 업스트림을 Docker DNS 이름 + `resolve`(valid=1s)로, Nginx 컨테이너 `dns_opt: ["ndots:1"]`, 연결조차 못 한 504(`$upstream_connect_time` "-")는 502 봉투 · 점검 페이지(hang은 504 유지). 정지 직후 첫 요청도 502(3초 안), 그다음 수 ms |
+| BT-RD-13 | 두 앱 `startup/DrainingLifecycle.java` · `web/InFlightRequests.java`(새) · `web/ReadinessGateFilter.java` · Realtime `SessionMailbox` · `PeriodicJobs` · `RealtimeStartupSequence` | T1 ~ T6을 한 마감(`spring.lifecycle.timeout-per-shutdown-phase` 30초) 안에서 남은 시간만 쓰고, T6은 커넥터를 연 채 받아들인 요청이 끝날 때까지 기다림. 유예 중 새 REST 503 SERVICE_NOT_READY + Retry-After, `/internal/events` 503, 새 WSS 1013 · 열린 WSS 1001. 2회차: T5 마지막 스냅샷 DB 읽기도 공유 마감 안(`finalSnapshot(limit)`) |
+| BT-NFR6.1 | Realtime `AsyncRecorder` · `ConnectionSender` · `InputRelay` · `EventLogger`(→ 시험 소스 `TestEventLoggers`), 두 앱 `InboxDispatcher`(주석), 두 앱 `arch/TimeLiteralScanTest`(새) | 5ms 되풀이 확인 → 끝 신호 + 공유 남은 시간, 1초 재확인 → 시한 없는 대기(모든 변경이 잠금 안 `signalAll`), keepAlive 0L은 허용 목록(근거), 시험용 생성자는 시험 소스로. 자동 검사가 S13 규칙 + 3규칙으로 허용 목록(core 10 · realtime 16줄)과 대조 |
+| BT-NFR4.15 · 7.6 · 7.8 | Realtime `observability/RealtimeMetrics.java` · `QueueDepthGauges.java`(새) · `common/db/DbPoolWaitMonitor.java`(새), Core `observability/CoreMetrics.java` · `common/db/DbPoolWaitMonitor.java`(새) · `web/RestTimingFilter.java`(새), 두 앱 `application.yml`(히스토그램 버킷 `slo`) | 설계 표 2.5 이름 · 라벨로 `mujoong_device_connection_state` · `mujoong_outbox_pending` · `_oldest_pending_seconds` · `_failed` · `mujoong_inbox_dead` · `mujoong_db_pool_wait_exceeded_total` · `mujoong_queue_depth` · `session_activated_total` · `session_start_to_active_seconds` · `relay_out_seconds` · `turn_first_audio_seconds` · `view_item_ready_seconds` · `mujoong_event_delivery_seconds` 버킷. `mujoong_ws_connections_open` → 설계 이름 `mujoong_device_connections_open`(별칭 없음). liveness 게이지 NaN(약한 참조) 고침 |
+| BT-OD-06 | 두 앱 `observability/snapshot/MetricSnapshotJob.java` · `SystemLoad.java`(새), `CoreProperties` · `RealtimeProperties`, `application.yml` 새 키 `mujoong.observability.system-sample-interval: 5s` | 5초 표본 → 앱 Clock 60초 경계에 숫자 키만 한 줄(Core 16키 · Realtime 12키), 밀린 줄 몰아 쓰지 않음, DB 장애면 적체 4키 제외 + APP_ERROR, T5 마지막 줄. 2회차: 표본은 전용 스레드 `metric-sample` |
+| BT-NFR5.4 | `infra/bin/turn-metrics`(새) · `infra/ci/test-host-tools.sh`(사례 9) · `infra/RUNBOOK.md` | LATENCY_TURN · SESSION_ITEMS_SERVED만으로 NFR5.1 · 5.2 · 5.3(서버 몫) p95 · 표본 규칙 · A-13 경보선 · 미관측 사유별 건수(`check-since-last`와 같은 형식) |
+| BT-NFR7.4 | 두 앱 `common/scaling/SingleInstanceAssumption.java`(새), Core 표식 8곳 · Realtime 17곳, 두 앱 `arch/SingleInstanceMarkerTest`(새) | `@SingleInstanceAssumption(si, reason)`을 표 2.2-A의 상태를 실제로 가진 클래스에. SI-1 ~ 10 · 12 표식, SI-11은 두 앱에 그 상태(TTL 캐시)가 없어 대상 0(구조 시험이 전제 검사) |
+
+**CI 실패 4건 · 그 밖 인프라**: Trivy(위 BT-NFR9.13), `infra/bin/infra-validate` `mark_config`(서비스마다 이름표 한 줄만 든 임시 env 디렉터리로 config를 뽑아 Compose 판과 무관하게 env 파일 · 정의 키를 구분, `secret-env-files` · `demo-profile` · `nginx-dns` · 504 나누기 단언), shellcheck 0.9.0 · 0.11.0 두 판 경고 0(`scripts/verify.sh` · `infra/bin/deploy-stage1` · `infra/nginx/reload-watch.sh` SC2317 disable + 근거, SC2015 세 곳 `if`), image-checks ⑧ 재설계(연결 거부 · 세 업스트림 동시 정지 × 5 · hang, curl 실패 때 SIGPIPE로 ⑧이 소리 없이 끝나던 잠복 결함 2건 고침), `infra/ci/test-infra-validate.sh` 32 → 39건 · `test-host-tools.sh` 23 → 32건.
+
+**독립 리뷰 2회차 6건(`b094c0d`)**: 두 앱 `DbPoolWaitMonitor` 같은 빌림의 획득 기록이 이미 셌으면 시간 초과를 다시 세지 않음(J364), `SeedDictionaryFileTest` appliesTo 허용 값을 `contracts/ai-io.md`에서 읽음(J365), `DbSessionLimitsIT` 중복 2건 → 실제 교착 40P01 · 상한 안 잠금 대기(J366), 프런트 `connectedOnce`(J367), 표본 전용 스레드 `metric-sample`(J368), T5 `finalSnapshot(limit)` · `readBacklogWithin`(J369).
+
+**CI 흔들림 2건(`8a9225a` · `b9a53a5`)**: (A) 복귀 UPDATE가 `last_seen_at`을 올리지 않아 끊김 점검자가 복귀 직후 다시 DISCONNECTED로 되돌림 → 복귀 전용 SQL `MARK_CONNECTED_AGAIN`(`last_seen_at = greatest(coalesce(last_seen_at, :seenAt), :seenAt)`, J390). (B) `ConnectionStateWriter.change()`가 커밋 뒤 `mirror(row)`로 사본을 갱신해 그 사이 HEARTBEAT가 복귀를 못 띄움 → 사본 갱신을 트랜잭션 안으로, 복귀 0행이면 `resyncKnownState`(J391). 회귀 시험 `DeviceGatewayIT` 3건 · `ConnectionStateWriterIT`(새) 5건 · `DeviceConnectionRepositoryIT` 1건. tools `tools/skeleton-e2e/run-c.mjs`: 단계 타이머(1000ms)와 그 기한으로 깎인 요청 제한 시간(999ms)이 거의 같은 순간에 끝나 먼저 오는 쪽에 따라 TIMEOUT · FAIL이 갈림 → `ctx.limit`이 기한을 깎았는지 기억하고 깎인 대기의 `*TimeoutError`는 단계(또는 전체) 기한 초과 TIMEOUT으로 보고(J393), `scenario-plan.test.mjs` 3사례(깎임 → TIMEOUT, 전체 기한 → 그 이름, 깎이지 않음 → FAIL).
+
+### 결정 목록 (J285 ~ J393, 모두 준하 제안(가정))
+
+담당 보고의 J번호를 번호순으로 옮겼다(요지만, 원문 · 파일:줄은 보고). J329 ~ J334 · J358 · J359는 담당에게 배정됐지만 쓰이지 않은 번호다. J380 ~ J389는 이 문서 담당(아래 끝).
+
+| J | 내용 | 근거 |
+|---|---|---|
+| J285 | 그 응답의 전사 완료 신호는 `session.output.done`. 첫 조각부터 이 신호까지 다 담은 구간만 대응 근거로 보고 아니면 GATE_EMPTY. 편차 (z) | 공급자 선 형식의 응답 단위 완료 신호가 이것 하나, 두 가짜 공급자가 모두 보냄, SD-17 '대응 불명은 폐기' |
+| J286 | 다른 응답의 조각이 오면 열린 구간을 봉인해 게이트에 넣음(섞지 않음). 버퍼도 다른 응답 조각을 거절하고 그 id를 '본 것'으로 적음 | BR7.3 '한 응답', SD-17 2단계, 판정은 게이트 한 곳. 무조건 폐기 안은 완결 응답까지 잃어 버림 |
+| J287 | 사전과 같은 정규화(NFKC · 공백 · 제로폭 · 구두점 제거) 뒤 빈 전사는 GATE_EMPTY | 사전 검사와 같은 기준 |
+| J288 | 본 응답 id는 세션 동안 기억(상한 없음, 재설정에도 유지). responseId 없는 조각은 버림 | 크기는 응답 수에 비례, 상한을 두면 뒷부분 구간이 통과해 fail-closed에 어긋남 |
+| J289 | 편지함을 처리 중인 스레드에서 오는 공급자 알림은 기다리지 않고 넣고 가득 차면 버림 | 비우는 쪽이 실행기 하나라 기다리면 교착. 그 스레드에서 오는 알림은 스스로 닫은 공급자의 Closed뿐 |
+| J290 | 최상위 예외 때 FAILED를 이기면 BR6.8 기기 명령, 못 이기면 명령 없이 정리 | RD-1 규약 5(승자 하나) |
+| J291 | 실행기가 살아 있는 동안 행은 그 실행기만 전이하므로 DB가 앞선 비종료 상태면 응답을 잃은 자기 전이로 보고 그 승자 몫을 한 번 검 | RD-1 · BR6.12 |
+| J292 | 끊김 시계는 전이를 이긴 뒤에만 공급자를 닫음 | CLOSING이 끊김보다 우선(BR6.12 ③), 공급자는 VOICE_SESSION_CLOSED · 30초 시한까지(BR6.10 ④) |
+| J293 | CLOSING을 받아들일 때 END_REQUESTED를 한 번 기록(끝내기 처리 중이면 그 requestId, 다른 경로면 opId 없이, 시각은 이긴 커밋 시각) | 이벤트 중복 없음 |
+| J294 | 전사 조각도 구간에 들어갔을 때만 조용 시계를 다시 검 | 음성 조각과 같은 규칙 |
+| J295 | 열린 기기 연결 게이지는 설계 이름 `mujoong_device_connections_open` 하나만(옛 이름 별칭 없음) | 표 2.5 · NFR7.8, `host-collect.sh`가 이미 이 이름, 옛 이름 참조 0 |
+| J296 | 히스토그램 버킷은 YML `management.metrics.distribution.slo`에, 값은 표 2.5. `view_item_ready`는 표에 없어 50ms · 100ms · 250ms · 500ms · 1s · 1.5s · 2s · 5s | NFR6.1(시간 숫자를 코드에 두지 않음), NFR5.3 0.5초 · 1.5초 경계 |
+| J297 | `session_activated_total`은 ACTIVE 전이 커밋 뒤 한 번, `start_to_active`는 created_at → started_at(없으면 카운터만) | OD-9 전이 승자만, OD-17, OD-8 미관측 시각을 만들지 않음 |
+| J298 | `queue_depth`는 앱 전체 합, 긁을 때 메모리에서 읽음(session_mailbox · output_audio · output_control · recorder) | 표 2.5, PD-2 · PD-4 · PD-5, id를 라벨에 쓰지 않음(NFR9.8) |
+| J299 | `device_connection_state`는 원장의 상태별 행 수를 표본 주기마다 읽음. DB 장애면 마지막 값 유지, UNSTABLE 라벨은 U3 전까지 없음 | NFR4.15, 표 2.5 |
+| J300 | `view_item_ready`는 행 확정 → 승인된 FINAL 커밋 시각. 시작점은 CHILD = 입력 전사 done, AI = 그 응답의 output.done 처리 시각(AI 행 `tTranscriptFinal` 새로 기록). 폐기 행은 세지 않음 | OD-8, BR7.5 |
+| J301 | `relay_out` · `turn_first_audio`는 로그 표본률과 무관하게 모든 턴. `turn_first_audio = (tDevicePlayStart − clockOffsetMs) − tSpeechEnd`, 미관측 값이 있으면 넣지 않음 | NFR5.4, OD-8 |
+| J302 | METRIC_SNAPSHOT(Realtime): 새 키 `mujoong.observability.system-sample-interval`(5s)마다 표본, 앱 Clock 60초 경계에 한 줄, 밀린 줄 몰아 쓰지 않음, T5 마지막 줄, DB 실패면 적체 키 제외 | OD-6 |
+| J303 | 풀 대기는 DataSource 감싸개 대신 Hikari 지표 추적기 자리에서 잼(획득 시간 초과도 셈). Boot Micrometer 추적기를 품어 `hikaricp_*` 유지 | 빈 타입을 Hikari로 유지해야 DbSessionLimits · hikaricp 지표 그대로(Core J323과 같음) |
+| J304 | 정상 종료 T1 ~ T6을 한 마감 안에서 남은 시간만. T3 알림 확인 뒤 T4, T4는 예산 공유, T6은 커넥터를 연 채 받아들인 요청 대기, 막힌 단계는 APP_ERROR | reliability-design 2.8(Core J321과 같은 방식) |
+| J305 | 기록기 drain의 5ms 되풀이 확인을 끝 신호 + 공유 남은 시간으로 | NFR6.1 |
+| J306 | 송신기 · 입력 중계의 1초 재확인을 시한 없는 대기로, 모든 변경이 잠금 안 `signalAll` | 놓치는 깨움이 없어 상수 불필요 |
+| J307 | 고정 풀 keepAlive `0L`은 허용 목록 | core = max라 쓰이지 않는 필수 인자, 시간 값 아님(Core J327과 같음) |
+| J308 | `EventLogger.forTest`를 시험 소스로, `TimeLiteralScanTest`(S13 규칙 + minus · ChronoUnit · 이름 붙은 숫자 상수, 허용 16줄, 사라진 허용 줄 금지) | BT-NFR6.1(J113 나머지), Core와 같은 식 |
+| J309 | liveness 게이지의 상태 객체를 필드로 붙잡음 | 약한 참조로 3.6 긁기에서 NaN |
+| J310 | Realtime `kr.mujoong.realtime.common.scaling.SingleInstanceAssumption(String[] si, String reason)`, RUNTIME · TYPE, Core J335와 같은 모양 | SCD-4(앱 공용 패키지, 계약 라이브러리에 넣지 않음) |
+| J311 | Realtime 몫 지도(SI-1 · 2 · 3 · 4 · 6 · 7 · 9 · 10 · 12 → 17개 클래스). 표식은 상태의 소유자에만 | 표 2.2-A '상태를 가진 클래스' |
+| J312 | SI-12는 Realtime 몫(`LatencyRecorder`의 served 집합). 작업 지시(Core 몫)와 다름 | 실제 코드 위치, Core 담당(J336)과 같은 판단 |
+| J313 | `RealtimeStartupSequence`에 SI-1 · SI-2 · SI-6 | S3a · S3b · S3c · S3f가 DB 행을 모두 자기 것으로 봄(scalability 2.1, R3-5) |
+| J314 | `OrphanSessionChecker`에 SI-2 · SI-7 | 30초 점검이면서 '레지스트리에 없으면 고아' 전제 |
+| J315 | SI-5 · SI-8 · SI-11은 Realtime 몫 밖. SI-11은 TTL 캐시가 없어 대상 없음, 전제를 구조 시험이 지킴 | performance-design 표 2.5-A, A5 |
+| J316 | S2b 거부 시험은 접속 URL `options=-c mujoong_db.data_class=real`로 앱 연결에서만 'real'로 보이게 하고 먼저 단언 | 공용 DB를 건드리지 않고 조용히 통과하지 않게 |
+| J317 | 경과 규칙은 고정 읽기로 시험, 운영 Clock이 그 메서드를 고쳐 쓰지 않음을 리플렉션으로 확인, 실제 시간은 30ms 래치 하나 | 단조 값은 조절 불가, J138 |
+| J318 | 분량을 매개변수 사례로 채우지 않고 기존 시험과 겹치지 않는 부분만 더함 | 작업 지시(중복 금지) |
+| J319 | Realtime 구조 시험은 지도와 '정확히 같음'(Core 판은 containsAll) | 근거 없이 표식이 늘거나 빠지는 것을 막음 |
+| J320 | 재시도 뒤 409는 로컬 FAILED(409) + CORE_ABANDONED 취소, 응답 코드는 BR6.6 번역대로 409 | BR6.6 violation 끝 문장, functional-spec W5 6단계 |
+| J321 | T6을 Core 최고 phase SmartLifecycle 안에서. F1b가 센 진행 중 요청을 기다리고 한도는 `spring.lifecycle.timeout-per-shutdown-phase` 30초 − 지난 시간. T4는 한 기한 13초 | reliability-design 2.8, 3.5 `server.shutdown` 행 |
+| J322 | 적체 게이지는 5초 표본마다 갱신(최대 5초 낡음), 사건 없는 카운터 미리 등록, 이벤트 전달 버킷은 yml SLO | 이름이 늘 보이게 |
+| J323 | Core 풀 대기도 Hikari 추적기 자리에서(J303과 같음) | DataSource 빈 타입 · `hikaricp_*` 유지 |
+| J324 | restTotal에서 12 조회를 뺌. 300ms · 500ms 경계는 키 이름이 고정한 계약 상수라 설정 키 대신 허용 목록 | 두 목표가 다름 |
+| J325 | breakerOpenSec은 OPEN이었던 시간만(열림마다 최대 5초), 구간 값은 반올림한 누계의 차 | OD-6 값 규칙 |
+| J326 | 새 키 `mujoong.observability.system-sample-interval`(5s, 시험 500ms), 스냅샷 주기 이하여야 함. 줄은 표본 틱에서 앱 Clock으로 판정, 적체를 못 읽으면 그 4키를 뺌 | OD-6 |
+| J327 | 시간 숫자 상수 검사 규칙과 허용 목록 10줄(Core). keepAlive 0은 시간 값이 아니라 허용 | BT-NFR6.1 |
+| J328 | Core 히스토그램은 표 2.5의 Core 행만(event_delivery · internal_http · http_server_requests). 세션 시작 → ACTIVE · view_item_ready는 Realtime 몫 | 표 2.5 발행 앱 |
+| J335 | Core `kr.mujoong.core.common.scaling.SingleInstanceAssumption(si[], reason)`, RUNTIME · TYPE. 기존 Javadoc 표식은 어노테이션으로 | 이름에 SingleInstance를 넣어 S13 검색이 그대로 셈 |
+| J336 | Core 몫은 SI-5 · 6 · 7 · 8. SI-11(U1에 캐시 없음) · SI-12(Realtime)는 몫 밖, 전제가 깨지면 시험 실패 | 코드 확인, `contracts/timing.md` cache 키 'U1은 DB 직접 읽기' |
+| J337 | `CoreStartupSequence`에도 SI-6 | reliability-design S3f '단일 인스턴스라 안전' |
+| J338 | `PreparingTimeoutChecker`를 SI-7에. DbHealthChecker · MetricSnapshotJob · 로그 병합 flush는 인스턴스마다 도는 것이 맞아 표식 안 함 | 표 2.2-A |
+| J339 | 표에 번호 없는 인스턴스별 상태(StaleEvaluator 기기 래치 · SecurityEventCap · LogMergeWindow · SessionStartBreaker · CoreMetrics · DbPoolWaitMonitor · InFlightRequests)는 표식 안 함 | 표에 없는 번호를 만들지 않음(scalability 2.2 추가 여부는 사람) |
+| J340 | Core 구조 시험: 몫 목록 · 근거는 시험 안, 번호는 정규식 SI-1 ~ 12, 계약 라이브러리에 표식 없음 확인, 전제 가드 · 검색 병행, 규칙마다 위반 표본 자기 시험 | SCD-4 |
+| J341 | 분량 원칙: 클래스 이름 · 위치 불변, 미시험 동작만 더함, 늘 참인 단언은 지움 | 작업 지시 |
+| J342 | 이력 표 시험: S2 시험은 별도 PostgreSQL 인스턴스에서 바꾸고 되돌림, `FlywayConfIT` 새 시험은 공용 인스턴스에 검증만 하고 이력 표 불변 단언 | 공용 DB 보호 |
+| J343 | `SessionPackageIT` 경계 시험은 그 시험이 만든 아이 행만 바꾸고, 계약 밖 값이면 사본 INSERT · Realtime 호출 전에 멈춤을 단언 | 격리 |
+| J344 | `ClockParamsTest`는 JDBC ResultSet을 Mockito 대역으로 | 변환 함수 단위 시험, 기존 JdbcTemplate 모킹과 같은 수준 |
+| J345 | trap · 간접 호출 함수의 SC2317은 0.9.0 오판(0.10+는 SC2329)이라 함수 정의 줄에 둘을 함께 disable + 근거. SC2015는 같은 동작의 `if` | 브리핑 A-3 |
+| J346 | env 파일 검사는 '이름표 env 디렉터리'로 해석한 config로(Compose 판 무관). 보간 전 config는 demo에서만 | 브리핑 A-2, v2.38 재현 |
+| J347 | Compose 업스트림을 Docker DNS 이름 + `resolve`(valid=1s)로, 고정 IP(N-2)는 edge 유지. 정지 직후 재해석 전 창(실측 0.4 ~ 1.8초)은 남음 | 작업 지시 4, 상태 코드 계약 (y) 유지 |
+| J348 | `turn-metrics`를 `infra/bin`에. p95는 가장 가까운 순위, NFR5.1의 10 ~ 99 비율은 턴별 합, 경보선은 판정한 지표만, CLOCK_OFFSET_MISSING은 추정값으로 계산하되 미관측 사유에 셈, 미달 · 경보선 초과면 종료 코드 1 | MO-4 · OD-8 · 2.3 표본 규칙 |
+| J349 | web 기반을 node 22.23.3-alpine3.23 다이제스트로 고정, 실행 단계에서 패키지 관리 도구 삭제 | 브리핑 A-1 |
+| J350 | JRE 기반 다이제스트 고정, openssl .deb를 Ubuntu 스냅숏에서 sha256으로 받아 bind 마운트로 설치. 기반 다이제스트가 그 판 이상을 담으면 이 단계를 지움 | 같은 태그 새 다이제스트 없음, R-03 · 재현성 |
+| J351 | migrate는 JRE 기반 + 최소 Flyway CLI jar 16개(sha256 고정). 두 위치 · 기준선 · 이력 표 · afterMigrate · `FLYWAY_*` 불변 | 브리핑 A-1, 실제 PostgreSQL에서 migrate · info · validate 확인 |
+| J352 | backup은 gosu 삭제, supercronic을 고정 소스 + 고정 Go 1.27.2로 빌드 | 새 배포판 없음 |
+| J353 | CI · 샌드박스 Trivy 실행기에 쓰기 가능한 TMPDIR. ③은 취약점과 실행 오류를 나눠 보고 | 3.6에서 같은 거짓 실패 기록 |
+| J354 | 504 나누기: 연결조차 못 한 504(`$upstream_connect_time` "-")는 502 봉투 · 점검 페이지, 연결한 뒤 시한 초과만 504. errors.md '상태 코드는 그대로'를 '봉투가 502 · 504를 다른 값으로 바꾸지 않는다'로 읽어 편차를 더하지 않음 — 사람 확인 필요 | RD-16 요구, 기각 대안(연결 시한 1초 · backup 우회 · 위험으로 두기) |
+| J355 | Nginx 컨테이너 `dns_opt: ["ndots:1"]` — 내장 DNS가 모르는 단일 이름을 바깥으로 넘기지 않고 빈 답 → 업스트림 비움 | 러너 DNS SERVFAIL 추정 재현 |
+| J356 | `proxy_connect_timeout 3s` 유지(N-12 제안값) | 바꿀 근거 없음 |
+| J357 | image-checks ⑧ 재설계(연결 거부 · 세 업스트림 동시 정지 × 5회 · hang), Nginx DNS 옵션은 compose.demo.yml에서 읽음, 정지 직후 첫 요청도 502 요구(더 엄격) | 브리핑 C, CI 재현 |
+| J360 | 재접속 시도를 새 상태 `reconnecting`으로(전이는 처음 연결과 같고 화면은 재접속 대기와 같음). 처음 연결은 `connecting` + 빈 라벨 | BR9.7 · NFR4.1 · performance-design ReconnectWait |
+| J361 | 보호자 QueryClient 조회 · mutation 모두 `networkMode: "always"` | PD-12 표 2.9-A, NFR4.16 |
+| J362 | 토스트 「다시 시도」= 지금 폼 `requestSubmit`, 요청 중 여부는 ref로 막음. 화면을 떠난 뒤 누르면 아무것도 안 함 | BR2.8 · BR6.4 · J232 · 표 2.9-C |
+| J363 | 온라인 사건만으로 자동 다시 읽기는 더하지 않음(`refetchOnReconnect: false` 유지). 복귀는 12 · 17 폴링, 04는 「다시 시도」 | 승인된 단언 `api-types.test.ts:157`(PD-12 진입 때 1회) 유지 |
+| J364 | 두 앱 `DbPoolWaitMonitor`: 같은 스레드의 바로 앞 추적기 기록이 기준을 넘겨 이미 센 대기면 시간 초과를 다시 세지 않음 | HikariCP 7.0.2가 같은 빌림에 acquired(≈ 시한) + timeout을 모두 부름 |
+| J365 | `SeedDictionaryFileTest` appliesTo 허용 값을 `contracts/ai-io.md` '금지 표현 사전 항목' 행에서 읽음 | 계약 18 · 56행, 로더 동작과 맞춤 |
+| J366 | `DbSessionLimitsIT` 중복 2건 → 실제 교착 40P01(감지 시한 1초 < 락 대기 상한 2초, pg_settings 선단언) · 상한 안 잠금 대기 | 실제 DB에서만 보이는 동작 |
+| J367 | 기기 `connectedOnce`: 연결된 적 없으면 `connecting` · 빈 라벨, 있으면 `reconnecting` · 마지막 view 라벨 | BR9.4 · BR9.7, 기존 단언 불변 |
+| J368 | 표본 스레드 분리 `metric-sample`(Realtime 6 → 7, Core 3 → 4 스레드). OD-6 'maintenance 스케줄러'와 다름 | RD-16 NOT_READY 5초 × 3회가 표본에 막히지 않게 |
+| J369 | T5 마지막 스냅샷: tick DB 읽기를 잠금 밖으로, `finalSnapshot(Duration limit)` · `readBacklogWithin`(가상 스레드 + join), 못 읽으면 APP_ERROR SnapshotReadTimeout + 적체 4키 제외 | 공유 마감 30초 |
+| J370 | 1차 실행에서 시간 민감 IT 3건이 실패한 U-3 · U-7은 한 번만 다시 돌리고 두 실행을 모두 적음. 판정은 재실행으로 하되 부하 사정을 함께 | 공통 지침 9 |
+| J371 | Docker 재기동 직후 첫 `--engine`은 IT-03-warm으로 따로 기록, 판정은 다음 실행 | 3.6 공개 사항 7 |
+| J372 | BT-NFR4.13 · IT-06e · h는 J354 · J357 기준으로 재고 첫 요청의 응답 시간을 함께 적음(기대 불변) | 작업 지시 |
+| J373 | BT-RD-13은 IT-06j 기대의 상태 순서 · Retry-After · 30초 안 종료로 Met을 매기되, 503 창 실측(수십 ms)과 '커넥터를 유예 끝까지' 설계 문구 기준이면 Not Met임을 같은 행에 적어 사람이 정하게 | 리뷰 지적 1 |
+| J374 | BT-NFR7.4는 '상태를 가진 클래스에 표식'으로 읽어 SI-11을 '대상 없음'으로 두고 Met. 12/12 문자 그대로면 11/12 | J336 · J315 |
+| J375 | BT-OD-06은 65초 대기 뒤 앱별 1줄 + attrs 숫자만으로 Met. '재시작 뒤 이전 줄 보존'은 따로 재지 않음 | IT-06b 기대 문구 |
+| J376 | BT-NFR9.13 로컬 실행분(ST-19 · ST-20 ③ · npm 관문) 통과로 Met. CI 관문 실측(Actions)은 뒤 단계 | 1차 Owning Stage |
+| J377 | ST-20 ③의 PASS 한 줄에 이미지별 `trivy image` 표를 보충 증거로(판정은 image-checks) | 증거 가독성 |
+| J378 | IT-06i '해석됨' 결과는 측정 스크립트 결함(busybox nslookup rc 0)으로 분류, `getent` · `nc` · 실제 IP 접속으로 LC-5 Met 유지. 스크립트는 고치지 않음 | 범위(실행 · 기록만) |
+| J379 | Step 10 계산기(`xunit_trace.py`)를 그대로 쓰고 결과 차이만 적음 | 작업 지시 |
+| J390 | 복귀 전용 SQL `MARK_CONNECTED_AGAIN`(`last_seen_at = greatest(coalesce(last_seen_at, :seenAt), :seenAt)`), `HeartbeatHandler`가 receivedAt을 넘김, UNRESPONSIVE 복귀도 같은 경로 | 경주 (A): 끊김 점검자 `last_seen_at <= cutoff`가 복귀 직후 되돌림 |
+| J391 | `ConnectionStateWriter` 사본(`knownState`) 갱신을 트랜잭션 안(UPDATE · 이벤트 직후)으로, 복귀 0행이면 `resyncKnownState`(DbRetry IDEMPOTENT, 행이 아직 이 연결의 것일 때만) | 경주 (B): 커밋 ~ mirror 사이 HEARTBEAT가 복귀를 못 띄움 |
+| J392 | `handover()`의 커밋 뒤 knownState(CONNECTED)는 그대로 둠 | 같은 노출이 없음(가정) |
+| J393 | `run-c.mjs` `ctx.limit`이 기한을 깎았는지 기억하고, 깎인 대기의 `*TimeoutError`는 단계(또는 전체) 기한 초과 TIMEOUT으로 보고 | 단계 타이머 1000ms와 깎인 요청 제한 999ms가 같은 순간에 끝나 먼저 오는 쪽에 따라 상태가 갈림(CI tools 1건) |
+| J380 | 이 절의 결정 표는 담당 보고의 J번호를 번호순으로 요지만 옮기고(파일:줄은 보고), 배정됐지만 쓰이지 않은 번호(J329 ~ J334 · J358 · J359)를 명시 | 작업 지시 1 |
+| J381 | `source-manifest.json`은 `version` 1 유지, 새 파일 38개 경로만 더함(지운 파일 없음, `EventLogger.forTest` 이동은 파일 삭제가 아님). `scripts/cloud-setup.sh`는 3.5 이전 커밋의 세션 도구라 제외 | 형식 · 필드 불변 지시, `git diff 50cb21b HEAD --name-status` |
+| J382 | `traceability.json` Deferred → OK 4건(NFR4.15 · 7.6 · 7.8 · 9.13)은 실제 코드 + 통과한 시험이 있는 것만. NFR9.13은 로컬 스캔(ST-19 · ST-20 ③) 통과 + 패치 판 코드로 OK, target `infra/ci/image-checks.sh`; CI 관문 실측은 Matrix Owning Stage에 남김 | 작업 지시 '실제 코드 + 통과한 시험' |
+| J383 | OK 항목의 target 교체 6건(NFR6.1 → `TimeLiteralScanTest`, NFR7.4 → `SingleInstanceMarkerTest`, NFR5.4 → `test-host-tools.sh`, BR6.6 → `StartActivityPolicyTest`, BR6.8 → `SessionExecutorFaultTest`, BR9.7 → `device-machine.test.ts`)은 이번 라운드의 회귀 · 구조 시험으로 바꿈. NFR4.16은 Deferred 유지 + target 보강 | 근거 갱신 |
+| J384 | Matrix 칸 서식은 '재시험: … / 1차: …'. Not Met 11행과 값이 바뀐 Met 행(BT-TC-01 ~ 09 · BT-VC-02 · BT-NFR4.9)만 고치고 나머지 Met · Unverified 행은 1차 그대로(재시험 보고 '회귀 없음 · 사유 변동 없음') | 작업 지시 4 |
+| J385 | 백엔드 시험 수는 HEAD(`8a9225a` 뒤) 1,451건을 정본으로 적고 재시험 당시 `b094c0d` 1,442건을 함께. 1,451의 근거는 저장소 `backend/*/build/test-results/test/TEST-*.xml` 직접 집계(22:42 ~ 22:45Z, 실패 0 · 5건 미만 0) | 오케스트레이터 추가 지시 |
+| J386 | BT-RD-13 · BT-NFR7.4의 Met에는 재시험 J373 · J374의 사람 결정 주석을 같은 칸에 반드시 동반 | 재시험 보고 (5) 2 · 3 |
+| J387 | `cross-unit-traceability.md`는 같은 스크립트로 다시 센다. 판정은 1차와 같고(FR 0 · NFR 0 · AC 56) 4절 참고 열(NFR4 · 7 · 9)과 1절 OK 항목 수만 바뀌므로 그 값과 재계산 주석만 고침 | 작업 지시 5 |
+| J388 | 준비도: build-ready 충족, test-ready 충족(실패한 명령 0 · Pending 0), deployment-ready 미충족 유지(Unverified 51) | 단계 정의 성공 조건 |
+| J389 | 단계 판정 문구: 1차 '실패'는 지우지 않고 15절에 재시험 결과(실패 조건 1 · 2 해소, 3 Unverified 51은 사람 결정 D)를 적어 최종 판정은 사람 몫으로 | 작업 지시 3 |
+
+### 새 계약 편차
+
+- **(z)** `contracts/deviations.md`(머리말 한 줄 + (z) 행), `contracts/ai-io.md` 45 ~ 47행: 공급자 `session.output.done`을 그 응답의 전사 완료 신호로 보고, 첫 조각부터 이 신호까지 다 담은 구간만 재생 대응 근거로 본다(호환 분류: 규칙 구체화, J285). `ContractFilesTest`의 편차 글자 범위 a ~ y → a ~ z. **사람 확인 필요**: 원래 '선택'이던 신호가 사실상 재생의 필요조건이 된다(머리말 '더하기만 안전 · 필수화 없음'과의 관계, 11/2 실공급자 어댑터 V-2는 완결된 응답에만 이 신호를 보내야 함). 편차 글자가 다 차서 다음 편차는 표기 방식과 `ContractFilesTest`를 함께 바꿔야 한다(J354의 504 → 502 봉투 해석을 편차로 올릴 때 걸림).
+- 그 밖 계약 변경 없음(`contracts/timing.md` 불변 — 새 키 `mujoong.observability.system-sample-interval`은 observability 묶음이라 RD-24에 따라 timing.md 대상 아님).
+
+### 바뀐 시험 수 · 커버리지
+
+| 층 | 3.5(1차) | 수정 라운드 끝(HEAD `b9a53a5`) | 비고 |
+|---|---|---|---|
+| contract-model | 276 (14클래스) | **279** (14) | `SystemMujoongClockTest` +3 |
+| core-api | 506 (61) | **607** (70) | 새 클래스 9(`TimeLiteralScanTest` · `SingleInstanceMarkerTest` · `DbPoolWaitMonitorTest` · `CoreMetricsTest` · `MetricSnapshotJobTest` · `MetricSnapshotIT` · `GracefulDrainIT` · `InFlightRequestsTest` · `RestTimingFilterTest`), 기존 15클래스 분량 +31 |
+| realtime-activity | 387 (39) | **538** (54) | 새 클래스 15(`SegmentBufferTest` · `SessionExecutorFaultTest` · `TimeLiteralScanTest` · `SingleInstanceMarkerTest` · `DbPoolWaitMonitorTest` · `RealtimeMetricsTest` · `RealtimeMetricsScrapeIT` · `MetricSnapshotJobTest` · `SessionStateEmitterTest` · `ConnectionSenderTest` · `ConnectionStateWriterIT` · `DrainingLifecycleTest` · `RealtimeStartupSequenceTest` · `GracefulDrainIT` · `InFlightRequestsTest`), 재시험 당시(`b094c0d`) 529 |
+| test-support | 27 (4) | 27 (4) | 불변 |
+| **백엔드 합계** | **1,196** | **1,451** | 재시험 당시 1,442. 실패 0 · 건너뜀 0, 5건 미만 클래스 0 |
+| frontend | 499 (34파일) | **514** (34) | FE-1 ~ FE-3 +12, J367 +3 |
+| tools | 105 (8) | **106** (8) | J393 시험 추가(사례 3개, 재시험 당시 105) |
+| **전체** | **1,800** | **2,071** | |
+
+| 모듈 | 3.5 줄 커버리지(U1 범위) | 지금 | 하한 |
+|---|---|---|---|
+| contract-model | 98.53% | 98.53% (1478/1500) | 80% 통과 |
+| core-api | 95.77% | **96.00%** (4006/4173, 재시험 95.90%) | 통과 |
+| realtime-activity | 89.93% | **92.03%** (5650/6139, 재시험 5632/6120) | 통과 |
+| frontend `src/**` | 98.82% | **98.93%** (1863/1883) | 통과 |
+
+새 운영 소스 13개(Core 6 · Realtime 6 · `infra/bin/turn-metrics`)는 `backend/coverage-scope/u1.txt`(J137)에 들어 있다(머리 주석의 모듈별 줄 수 core-api 104 → 110 · realtime 112 → 117은 낡음 — 통합 담당). 하한 · 단언 · 제외 목록을 낮추거나 넓힌 곳 없음, `@Disabled` · 건너뜀 0.
+
+### 설계 문서와 달라진 곳(문서 반영 대기)
+
+승인된 설계 문서(`nfr-design/*.md` · `infrastructure-design/*.md` · `functional-design/rules.md`)는 이 라운드에서 고치지 않았다. 담당 보고가 '문서 담당에게' 넘긴 설계-구현 차이를 모았다. 반영 여부는 사람이 정한다.
+
+| 문서 · 위치 | 설계 문구 | 구현(지금) | J |
+|---|---|---|---|
+| reliability-design 2.2 스레드 수 표 | Realtime 6 · Core 3 | 표본 전용 스레드 `metric-sample` 추가 → Realtime 7 · Core 4 | J368 |
+| observability-design OD-6 | '앱 안 5초 표본은 maintenance 스케줄러' | 표본은 `metric-sample` 전용 단일 스레드(DB 점검자 · 끊김 점검과 분리) | J368 |
+| reliability-design 2.8 T5 | 마지막 METRIC_SNAPSHOT | DB 읽기를 공유 마감 안에서만, 못 읽으면 APP_ERROR SnapshotReadTimeout + 적체 4키 제외 | J369 |
+| observability-design 2.5 · 2.6 `mujoong_db_pool_wait_exceeded_total` | 'DataSource 감싸개'로 100ms 초과 계수 | Hikari 지표 추적기 자리에서 계수, 획득 시간 초과도 1회, 같은 빌림 이중 계수 없음 | J303 · J323 · J364 |
+| observability-design 표 2.5 `view_item_ready_seconds` | 버킷 값 없음 | 50ms · 100ms · 250ms · 500ms · 1s · 1.5s · 2s · 5s | J296 |
+| reliability-design ## 3 레지스트리 · observability-design ## 3 | — | 새 키 `mujoong.observability.system-sample-interval`(두 앱 5s, 시험 500ms, 스냅샷 주기 이하) | J302 · J326 |
+| observability-design 2.5 · 2.6(Core) | — | Core 히스토그램은 Core 행만, REST 300ms · 500ms 상수는 허용 목록, breakerOpenSec은 OPEN만 | J324 · J325 · J328 |
+| observability-design 표 2.5 vs security-design 5.5 · performance-design | `gate_discard{reason, category}` · `input_frames_dropped` 라벨 없음 | `gate_discard{reason}`만, `input_frames_dropped{cause}` — 문서끼리 충돌, 그대로 둠 | rt2 (5) 2 |
+| functional-design rules.md BR4.8 | HEARTBEAT 복귀 규칙 | 복귀 때 `last_seen_at`도 그 수신 시각으로 올린다(낮추지 않음) | J390 |
+| reliability-design RD-4 | 연결 상태 사본 | 사본(`knownState`)은 UPDATE와 같은 트랜잭션에서 맞추고, 복귀 0행이면 원장에서 재동기화 | J391 |
+| reliability-design RD-13 · 2.8 DRAINING | '커넥터는 유예(30초) 끝까지 열어 둠' | 커넥터는 T6(받아들인 요청 완료)까지 열림 — 진행 중 요청이 없으면 503 창은 수십 ms, 그 뒤 T7 접속 거절(입구 502) | J304 · J321(사람 결정) |
+| infra-spec N-2 | 업스트림 고정 IP | Compose 업스트림은 Docker DNS 이름 + `resolve`(valid=1s) + `zone`, 고정 IP는 edge만 | J347 |
+| infra-spec 3.3 오류 응답 | 상태 코드 그대로 | 연결조차 못 한 504 → 502 봉투 · 점검 페이지(hang 504 유지) | J354 |
+| infra-spec 2.1 Nginx 서비스 | — | `dns_opt: ["ndots:1"]` | J355 |
+| infra-spec migrate 이미지 | `flyway/flyway:12.4.0` 배포판 | JRE 기반 + 최소 Flyway CLI jar 16개(sha256), 978MB → 424MB | J351 |
+| infra-spec backup 이미지 | supercronic 배포 바이너리 · gosu | supercronic 고정 소스 + Go 1.27.2 빌드, gosu 삭제 | J352 |
+| infra-spec 앱 이미지 | 기반 태그 | 기반 다이제스트 고정 + openssl .deb 스냅숏 설치 단계 | J349 · J350 |
+| scalability-design 2.2 SCD-3 표 | 12곳 | SI-11은 U1에 그 상태 없음(대상 0), SI-12 위치는 Realtime `LatencyRecorder`, 표 밖 인스턴스별 상태(J339 후보) 추가 여부 | J312 · J315 · J336 · J339 |
+| cicd-pipeline CD-1 images ⑧ | 약 10초 | 약 50초(정지 × 5회 · hang 사례) | J357 |
+| build-and-test/integration-test-instructions.md 10절 IT-06i | `getent hosts postgres \|\| nslookup postgres` | busybox `nslookup`이 빈 응답에도 rc 0 → `getent`만 쓰도록 고칠 것(측정 스크립트 결함, 판정 영향 없음) | J378 |
+
+### 사람이 정할 것(이 라운드가 새로 올린 것)
+
+| 항목 | 내용 | 관련 |
+|---|---|---|
+| BT-RD-13 503 창 | 진행 중 요청이 없으면 SIGTERM 뒤 503 창이 수십 ms(재시험 20ms 표본 30개 중 503 2)이고 그 뒤는 T7 접속 거절(입구 502). 설계 문구 '커넥터는 유예 끝까지'대로 하려면 최소 유지 시간 키(배포 중단 증가)가 필요 — Met 판정은 상태 순서 · Retry-After 기준(J373) | J321 · J304 · J373, 리뷰 지적 1 |
+| 편차 (z) 필수화 해석 | 선택이던 `session.output.done`이 사실상 필수. 머리말 '필수화 없음'과의 관계, 실공급자 어댑터(V-2)에 요구 | J285 |
+| J354 504 → 502 봉투 | errors.md '상태 코드는 그대로'를 '봉투가 502 · 504를 다른 값으로 바꾸지 않는다'로 읽어 편차 미기재. 편차로 올리려면 글자 (a) ~ (z) 소진으로 표기 방식 · `ContractFilesTest` 변경 필요 | J354 |
+| SI-11 '대상 없음' | BT-NFR7.4 12곳 중 11곳 표식 + SI-11 대상 0. '대상 없음'을 인정할지(J374), scalability 2.2에 적을지 | J315 · J336 · J374 |
+| J363 04 자동 복귀 | 오프라인인 채 04에 들어오면 전에는 결함의 부수 효과로 온라인 때 저절로 읽혔다. 지금은 토스트 + 「다시 시도」. 자동 복귀를 원하면 PD-12 '진입 때 1회'와 기존 단언 변경 | J363 |
+| `SeedDictionaryFileTest` OUTPUT_GATE 전수 단언 | `everyCategoryHasAtLeastOneSeedEntryForTheOutputGate`가 모든 항목에 OUTPUT_GATE를 요구(계약 56행보다 좁음). 승인된 3.5 단언이라 불변 — 후속 유닛이 다른 appliesTo 항목을 더하면 바꿔야 함 | J365 |
+| J347 정지 직후 창 | 정지 직후 약 1.6초 안에 든 요청은 3초 뒤 502(상태는 요구대로, 응답 시간만 늦음). 창까지 없애려면 backup 피어 등 다른 방식(hang 504가 502로 바뀌는 부작용) | J347 · J354 |
+| 시간 민감 IT의 흔들림 | 재시험 1차 실행 3건(`DeviceRegisterApiIT` · `RealtimeLogHygieneIT` · `SessionLifecycleIT`, CPU 부하 겹침, 재실행 통과) · CI 2건. CI 2건은 경주로 확정해 고쳤다(`DeviceGatewayIT` J390 ~ J392, tools `scenario-plan` J393). 나머지 3건은 부하형 — `InternalHttpClient.java:178`(IOException을 모두 CONN_ERROR로 묶어 종류가 로그에 없음) · `ContractStubServer.java:78-80`(backlog 0) · `RealtimeItEnvironment.java:37`(WAIT 10초)이 후보 | 재시험 (5) 1, rootcause 보고 |
+| 구조 시험 규칙 차이 | Core `SingleInstanceMarkerTest`는 containsAll, Realtime은 '정확히 같음' — 맞출지 | J319 · J340 |
+| `coverage-scope/u1.txt` 머리 주석 | 모듈별 줄 수(core-api 104 → 110 · realtime 112 → 117) 낡음 | J137 |
+| F4 잔여 | 고아 세션 점검은 CLOSE_TRANSPORT · STANDBY를 보내지 않음(reliability 2.1 4번). 종료 상태 전이의 커밋 응답 유실 때 기기 명령 재발행 없음 | rt1 (5) |
+| 성능 기준선 | 재시험 값이 1차보다 10% 이상 늘어난 항목(검증 명령 509초/289, 엔진 89초/59, 강제 종료 복구 core-api 20.3초/9.1, 이벤트 전달 612ms/460)은 환경 요인(다른 Gradle 실행 · 재부팅 직후)이 커서 조용한 환경에서 다시 재야 비교 가능 | 재시험 (5) 4 |
+
+### 남은 틈
+
+- **Unverified 51(변동 없음).** 43개는 실행 계획에 맡을 단계가 없다(11/2 측정 창 · 운영 7일 창 · 실기 브라우저 · GitHub Actions 실행 · 측정 도구 일부) — 사람 결정 D로 이 라운드에서 다루지 않았다. 6개는 4.2 · 4.3, 2개는 U2 몫. BT-CD-01(Actions 관문 3종)은 로컬에서 돌리지 않았다(`aabce31`에서 CI 전부 녹색, `b094c0d` backend · `8a9225a` tools 각 1건 흔들림은 위 J390 ~ J393으로 고침 — 그 뒤 CI 결과는 다음 실행에서 확인).
+- **Not Met 0.** 재시험(`b094c0d`)에서 11개 모두 Met. 단 BT-RD-13 · BT-NFR7.4의 Met에는 사람 결정 주석이 붙어 있다(위 표).
+- **그 밖 남은 위험.** `turn-metrics`는 실공급자 · 11/2 측정 로그로 돌리지 않았다(표본 1이라 판정 모두 '보류'). 시험 프로필의 조용 시간 50ms라 부하로 output.done 처리가 50ms 넘게 늦으면 fail-closed 폐기로 통합 시험이 실패할 수 있다(rt1). `closeProvider`의 공급자 네트워크 I/O는 여전히 실행기 스레드. `SystemLoad`는 JDK `jdk.management` 모듈에 기댄다(최소 JRE로 바꾸면 기동 실패). 러너 DNS 동작(J355)은 추정 — 다음 CI ⑧로 확인. Docker 재기동 직후 `--engine`은 한 번 데워야 한다(IT-03-warm B TIMEOUT 106초, 3.6 공개 사항 7). 디스크 87%.

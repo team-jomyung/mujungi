@@ -3,6 +3,7 @@
 > 3.6 Build and Test Step 10 산출물 · 2026-10-11 · 단독 실행(`--single`) · 대화 언어 한국어
 >
 > 이것은 Construction 단계 경계 확인이 아니라 이 단계 안의 확인이다. 판정 규칙(단계 정의 Step 10): `requirements.md`의 모든 FR · NFR과 `stories.md`의 모든 세 구간 AC가, stage-level 또는 유닛별 `code-generation/traceability.json` 중 적어도 한 곳에서 status `OK`이고 그 target 파일이 저장소에 있어야 덮인 것이다. 덮이지 않은 ID는 모두 이 단계의 발견으로 승인 게이트에 올린다.
+> **재계산(2026-10-11, 수정 라운드 뒤, J387).** `construction/u1-walking-skeleton/code-generation/traceability.json`이 갱신된 뒤(NFR4.15 · 7.6 · 7.8 · 9.13 Deferred → OK, OK 항목 target 교체 6건) 같은 스크립트(`xunit_trace.py`)로 다시 셌다. 판정은 1차와 같다 — 열거 335, 덮임 AC 56, 안 덮임 279(ABSENT 252 · DEFERRED 27), 바뀐 ID 0. 바뀐 것은 1절의 OK 항목 수(192 → 196)와 4절 참고 열(NFR4 · NFR7 · NFR9)뿐이며 그 값만 고쳤다. 재시험 담당의 같은 계산(추적 파일 갱신 전, `build/b-and-t-r2/S10/xunit.json`)도 1차와 같은 값이었다.
 > 입력: `inception/requirements-analysis/requirements.md`, `inception/user-stories/stories.md`, `inception/user-stories/traceability.json`(FR · NFR → 스토리), `inception/units-generation/traceability.json`(스토리 → 유닛), `construction/u1-walking-skeleton/code-generation/traceability.json`. stage-level `construction/code-generation/traceability.json`은 없다.
 
 ## 1. 판정
@@ -18,7 +19,7 @@
 
 - **왜 실패인가.** 추적 파일은 U1 code-generation 것 하나뿐이다. U2 ~ U7은 3.1 ~ 3.5를 하지 않았다(사람 지시: U1만, U2 3.1 시작 금지). 그래서 U2 ~ U7이 맡는 AC 219개가 덮이지 않았고, 이 결과는 U2 ~ U7 Construction이 끝나기 전에는 바뀌지 않는다. U1이 맡은 스토리(US2.2 · US6.1)의 AC 13개는 모두 덮였다.
 - **FR · NFR 묶음 ID.** U1 code-generation 추적은 AC · BR · NFRx.y(U1 nfr-requirements의 세분 ID)로 추적하고 FR 번호와 NFR1 ~ NFR12 묶음 번호를 쓰지 않는다. 규칙대로 같은 ID를 찾으므로 FR 48 · NFR 12는 문자 그대로 0개 덮임이다. 4절에 참고 열(스토리 AC 중 U1 덮임 수, NFRx.y 덮임 수)을 두었지만 판정에는 쓰지 않았다 — 예를 들어 FR2.1은 스토리 AC 13개가 모두 U1에서 덮였어도 FR2.1 자체가 추적에 없어 '안 덮임'이다.
-- **대상 파일.** U1 추적의 OK 항목 192개는 target 파일이 모두 저장소에 있다(없는 것 0).
+- **대상 파일.** U1 추적의 OK 항목 196개(1차 192개)는 target 파일이 모두 저장소에 있다(없는 것 0).
 
 ## 2. 방법
 
@@ -32,7 +33,7 @@
 | 소유 유닛 | AC는 그 스토리(`USn.m`)의 유닛(units-generation 추적), FR · NFR은 user-stories 추적의 스토리 → 유닛. NFR5 · NFR7 · NFR11은 user-stories 추적이 `Deferred → nfr-requirements`로 둔 것 |
 | 참고 열 | 판정이 아니다. FR · NFR의 스토리에 속한 AC 중 U1에서 덮인 수, NFRn의 U1 세분 ID(NFRn.y) 수 |
 
-계산은 이 단계의 도움 스크립트(scratchpad `bt9/xunit_trace.py`, 결과 `xunit.json`)가 했고 아래 표는 그 결과를 그대로 옮겼다.
+계산은 이 단계의 도움 스크립트(scratchpad `bt9/xunit_trace.py`, 결과 `xunit.json`)가 했고 아래 표는 그 결과를 그대로 옮겼다. 수정 라운드 뒤 재계산도 같은 스크립트로 했다(머리말 참조).
 
 ## 3. 소유 유닛별 안 덮인 수
 
@@ -48,7 +49,7 @@
 | nfr-requirements | 0 | 0 | 3 |
 
 - FR · NFR은 소유 유닛이 여럿일 수 있어 각 유닛 칸에 겹쳐 셌다(합이 60보다 크다). U1 칸의 FR 3개(FR2 · FR2.1 · FR5)는 1절의 'FR 번호 미추적' 때문이다.
-- `nfr-requirements` 행은 user-stories 추적이 스토리 대신 NFR 요구 단계로 넘긴 NFR5 · NFR7 · NFR11이다. U1에서는 이들의 세분 ID(NFR5.x 8개 중 OK 2 · NFR7.x 8개 중 OK 3 · NFR11.1 OK)가 추적되지만 묶음 ID는 없다(4절 참고 열).
+- `nfr-requirements` 행은 user-stories 추적이 스토리 대신 NFR 요구 단계로 넘긴 NFR5 · NFR7 · NFR11이다. U1에서는 이들의 세분 ID(NFR5.x 8개 중 OK 2 · NFR7.x 8개 중 OK 5(재계산 전 3) · NFR11.1 OK)가 추적되지만 묶음 ID는 없다(4절 참고 열).
 
 ## 4. FR · NFR 판정 (60)
 
@@ -105,12 +106,12 @@
 | NFR1 | 안 덮임(추적에 없음) | US5.5, US6.4, US5.2, US3.6, US1.7, US6.3 | U3, U4, U6, U7 | 0/49 | 3 · 2 · 2 |
 | NFR2 | 안 덮임(추적에 없음) | US3.5, US6.3, US6.4, US1.7, US1.4, US4.1 | U2, U3, U4, U5, U7 | 7/55 | 1 · 0 · 0 |
 | NFR3 | 안 덮임(추적에 없음) | US6.4, US3.1, US5.2 | U3, U4, U6 | 7/27 | 2 · 2 · 2 |
-| NFR4 | 안 덮임(추적에 없음) | US6.6, US3.3, US3.6 | U4 | 9/30 | 16 · 13 · 13 |
+| NFR4 | 안 덮임(추적에 없음) | US6.6, US3.3, US3.6 | U4 | 9/30 | 16 · 14 · 14 |
 | NFR5 | 안 덮임(추적에 없음) | Deferred → nfr-requirements | nfr-requirements | — | 8 · 2 · 2 |
 | NFR6 | 안 덮임(추적에 없음) | US3.2, US3.3, US6.3, US6.6, US2.1, US3.1 | U2, U4 | 25/70 | 5 · 5 · 5 |
-| NFR7 | 안 덮임(추적에 없음) | Deferred → nfr-requirements | nfr-requirements | — | 8 · 3 · 3 |
+| NFR7 | 안 덮임(추적에 없음) | Deferred → nfr-requirements | nfr-requirements | — | 8 · 5 · 5 |
 | NFR8 | 안 덮임(추적에 없음) | US5.3 | U6 | 0/14 | — |
-| NFR9 | 안 덮임(추적에 없음) | US1.1, US5.2, US3.3 | U2, U4, U6 | 12/28 | 15 · 14 · 14 |
+| NFR9 | 안 덮임(추적에 없음) | US1.1, US5.2, US3.3 | U2, U4, U6 | 12/28 | 15 · 15 · 15 |
 | NFR10 | 안 덮임(추적에 없음) | US5.4, US1.7 | U6, U7 | 0/13 | 4 · 1 · 1 |
 | NFR11 | 안 덮임(추적에 없음) | Deferred → nfr-requirements | nfr-requirements | — | 1 · 1 · 1 |
 | NFR12 | 안 덮임(추적에 없음) | US1.6 | U2 | 0/9 | 4 · 4 · 4 |

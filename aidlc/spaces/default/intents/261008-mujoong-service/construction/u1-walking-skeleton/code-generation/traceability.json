@@ -760,13 +760,13 @@
     },
     {
       "id": "NFR4.15",
-      "status": "Deferred",
-      "target": "U1 일부 구현 · 나머지 3.6 보완 후보(사람 확인, code-summary J 표): 헬스 · 열린 WSS 연결 수 · 내부 HTTP 지표와 외부 /actuator 403(검증 명령 B4)은 있고, 연결 상태 분포 게이지 mujoong_device_connection_state(OD-5)는 미구현"
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/observability/RealtimeMetricsScrapeIT.java"
     },
     {
       "id": "NFR4.16",
       "status": "Deferred",
-      "target": "3.6 Build and Test로 넘김(계획 ## 시험 전략과 커버리지의 3.6 넘김 목록 · R3-21): RD-21 폰 오프라인 주입 시험(R3-21 347행). 화면 동작(9-18 토스트 · 같은 requestId · 종료 표시 없음)은 frontend/tests/u1/parent/p1-dialog.test.tsx가 덮는다"
+      "target": "3.6 Build and Test로 넘김(계획 ## 시험 전략과 커버리지의 3.6 넘김 목록 · R3-21): RD-21 폰 오프라인 주입 시험(R3-21 347행). 화면 동작(9-18 토스트 · 같은 requestId · 종료 표시 없음)은 frontend/tests/u1/parent/p1-dialog.test.tsx가 덮는다. 3.6 수정 라운드 FE-2(J361)로 jsdom 오프라인 시험(live-12 · done-17 · home-04 · api-types)은 더해졌고 실기 비행기 모드 1회(RD-21)만 남았다"
     },
     {
       "id": "NFR5.1",
@@ -786,7 +786,7 @@
     {
       "id": "NFR5.4",
       "status": "OK",
-      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/log/LatencyRecorderTest.java"
+      "target": "infra/ci/test-host-tools.sh"
     },
     {
       "id": "NFR5.5",
@@ -811,7 +811,7 @@
     {
       "id": "NFR6.1",
       "status": "OK",
-      "target": "backend/core-api/src/test/java/kr/mujoong/core/config/ConfigKeyContractTest.java"
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/arch/TimeLiteralScanTest.java"
     },
     {
       "id": "NFR6.2",
@@ -851,7 +851,7 @@
     {
       "id": "NFR7.4",
       "status": "OK",
-      "target": "infra/bin/mj"
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/arch/SingleInstanceMarkerTest.java"
     },
     {
       "id": "NFR7.5",
@@ -860,8 +860,8 @@
     },
     {
       "id": "NFR7.6",
-      "status": "Deferred",
-      "target": "U1 일부 구현 · 나머지 3.6 보완 후보(사람 확인, code-summary J 표): 풀 앱당 10 · 합계 20은 기동 검증(CorePropertiesValidationTest), 풀 대기 초과 카운터 mujoong_db_pool_wait_exceeded_total(OD-5)는 미구현"
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/observability/snapshot/MetricSnapshotIT.java"
     },
     {
       "id": "NFR7.7",
@@ -870,8 +870,8 @@
     },
     {
       "id": "NFR7.8",
-      "status": "Deferred",
-      "target": "U1 일부 구현 · 나머지 3.6 보완 후보(사람 확인, code-summary J 표): JVM · 스레드 · 풀은 프레임워크 기본 지표, 열린 WSS · 활성 세션 게이지는 RealtimeMetrics. Outbox 미전달 · 가장 오래된 PENDING 나이 · 대기열 깊이 지표와 METRIC_SNAPSHOT(OD-6 · OD-12)은 미구현"
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/observability/RealtimeMetricsScrapeIT.java"
     },
     {
       "id": "NFR9.1",
@@ -935,8 +935,8 @@
     },
     {
       "id": "NFR9.13",
-      "status": "Deferred",
-      "target": "3.6 Build and Test로 넘김(계획 ## 시험 전략과 커버리지의 3.6 넘김 목록 · R3-21): SD-16 의존성 관문 실측은 첫 Actions 실행. CI 작업(.github/workflows/ci.yml backend-deps · frontend-deps)과 예외 판정(ci/security-gate.py)은 U1이 만들었고 braces 예외는 사람 승인 대기"
+      "status": "OK",
+      "target": "infra/ci/image-checks.sh"
     },
     {
       "id": "NFR9.14",
@@ -1261,7 +1261,7 @@
     {
       "id": "BR6.6",
       "status": "OK",
-      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/web/RealtimeInternalApiIT.java"
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/activity/StartActivityPolicyTest.java"
     },
     {
       "id": "BR6.7",
@@ -1271,7 +1271,7 @@
     {
       "id": "BR6.8",
       "status": "OK",
-      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/TransitionTableTest.java"
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/SessionExecutorFaultTest.java"
     },
     {
       "id": "BR6.9",
@@ -1436,7 +1436,7 @@
     {
       "id": "BR9.7",
       "status": "OK",
-      "target": "frontend/tests/u1/device/ws-client.test.ts"
+      "target": "frontend/tests/u1/device/device-machine.test.ts"
     }
   ]
 }
