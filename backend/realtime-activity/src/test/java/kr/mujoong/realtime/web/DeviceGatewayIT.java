@@ -30,6 +30,8 @@ import kr.mujoong.contract.ws.message.PlaybackMark;
 import kr.mujoong.contract.ws.message.WsError;
 import kr.mujoong.realtime.gateway.DeviceConnection;
 import kr.mujoong.realtime.gateway.DeviceConnectionRepository;
+import kr.mujoong.realtime.gateway.DeviceConnectionRow;
+import kr.mujoong.realtime.gateway.DisconnectChecker;
 import kr.mujoong.realtime.gateway.SocketRegistry;
 import kr.mujoong.realtime.gateway.StatusReporter;
 import kr.mujoong.realtime.health.ReadinessState;
@@ -339,6 +341,86 @@ class DeviceGatewayIT {
         awaitTrue(() -> time.clock.now().equals(env.ledger().orElseThrow().lastSeenAt()), "last_seen_at 갱신(J125)");
     }
 
+    /**
+     * 경주 (A)의 결정적 재현(3.6 수정 J390 · BR4.8 ② · RD-4): 기록기 기기 칸(J125 · 200ms 배치)이 시험 동안 한 번도 쓰이지 않게 flush 간격을
+     * 넓혀 두면, 복귀 UPDATE가 last_seen_at을 올리지 않는 한 끊김 점검자는 복귀 직후의 CONNECTED 행을 여전히 '40초 무음'으로 보고 다시
+     * DISCONNECTED로 되돌린다(flip-back). 사본이 끊김을 안 뒤에 HEARTBEAT를 보내 경주 (B)와 섞이지 않게 한다.
+     */
+    @Test
+    void recoveryRaisesLastSeenAtSoTheDisconnectCheckDoesNotFlipItBack() {
+        ManualTime time = new ManualTime();
+        startWith(Map.of("mujoong.timing.recorder.flush-interval", "1h"), time);
+        DeviceSimulatorClient device = env.connectDevice();
+        UUID connectionId = env.ledger().orElseThrow().connectionId();
+        Instant connectedAt = time.clock.now();
+
+        time.advance(Duration.ofSeconds(41));
+        awaitLedger(ConnectionState.DISCONNECTED);
+        awaitTrue(() -> connection(connectionId).knownState() == ConnectionState.DISCONNECTED, "사본 DISCONNECTED");
+        device.heartbeat(15L);
+        awaitLedger(ConnectionState.CONNECTED);
+
+        // 기록기 배치는 아직 쓰지 않았으므로 last_seen_at을 올린 것은 복귀 UPDATE 자신뿐이다
+        DeviceConnectionRow recovered = env.ledger().orElseThrow();
+        assertThat(recovered.lastSeenAt()).isAfter(connectedAt).isEqualTo(time.clock.now());
+        // 복귀 직후 돈 끊김 점검(주기 점검과 같은 호출)은 아무것도 되돌리지 않는다
+        assertThat(env.app.bean(DisconnectChecker.class).runOnce()).isZero();
+        assertThat(env.ledger().orElseThrow().state()).isEqualTo(ConnectionState.CONNECTED);
+        // 주기 점검(200ms)이 두 번 넘게 지나도 같다
+        RealtimeItEnvironment.sleep(500);
+        assertThat(transitions()).containsExactly("OFFLINE->CONNECTED", "CONNECTED->DISCONNECTED",
+                "DISCONNECTED->CONNECTED");
+    }
+
+    /**
+     * 경주 (B)의 뒷부분(3.6 수정 J391): 사본만 원장보다 앞선 상황(끊김 트랜잭션이 사본을 맞춘 뒤 되돌아간 경우)에서 온 HEARTBEAT는 복귀
+     * UPDATE가 0행이다. 그때 원장을 다시 읽어 사본을 맞추지 않으면 사본은 영영 DISCONNECTED로 남고(원장은 CONNECTED) 다음 HEARTBEAT마다
+     * 헛된 복귀 작업만 뜬다. 0행 복귀는 상태 변화 · 이벤트 · DEVICE_CONNECTION 줄을 만들지 않는다.
+     */
+    @Test
+    void aHeartbeatWhoseRecoveryUpdatesNothingResyncsTheCopyFromTheLedger() {
+        start(Map.of());
+        DeviceSimulatorClient device = env.connectDevice();
+        UUID connectionId = env.ledger().orElseThrow().connectionId();
+
+        connection(connectionId).knownState(ConnectionState.DISCONNECTED);
+        device.heartbeat(15L);
+
+        awaitTrue(() -> connection(connectionId).knownState() == ConnectionState.CONNECTED, "사본 재동기화");
+        assertThat(env.ledger().orElseThrow().state()).isEqualTo(ConnectionState.CONNECTED);
+        RealtimeItEnvironment.sleep(200);
+        assertThat(transitions()).containsExactly("OFFLINE->CONNECTED");
+    }
+
+    /**
+     * 원인 분석의 탐침(3.6 수정 J390 · J391): 기록기 flush 간격을 끊김 점검 주기(200ms)보다 훨씬 넓혀(1초) 복귀 ~ last_seen_at 배치 사이를 키우고,
+     * 원장에서 끊김을 본 즉시(사본을 기다리지 않고) HEARTBEAT 하나를 보내는 라운드를 되풀이한다. 복귀 UPDATE가 last_seen_at을 올리지 않으면
+     * 라운드의 약 8할에서 다음 점검이 복귀를 되돌린다(flush 300ms 탐침에서는 점검보다 배치가 늦은 라운드만, 20 중 6). 라운드마다 HEARTBEAT 하나로
+     * 복귀하고 그 뒤 점검 두 번이 지나도 CONNECTED여야 하며, DEVICE_CONNECTION 전이는 라운드 수만큼의 끊김 · 복귀 쌍뿐이어야 한다(flip-back이
+     * 있으면 끊김 줄이 더 많다).
+     */
+    @Test
+    void repeatedSilenceRoundsRecoverWithASingleHeartbeatAndNeverFlipBack() {
+        ManualTime time = new ManualTime();
+        startWith(Map.of("mujoong.timing.recorder.flush-interval", "1s"), time);
+        DeviceSimulatorClient device = env.connectDevice();
+        int rounds = 10;
+
+        for (int round = 1; round <= rounds; round++) {
+            time.advance(Duration.ofSeconds(41));
+            awaitLedger(ConnectionState.DISCONNECTED);
+            device.heartbeat(15L);
+            awaitLedger(ConnectionState.CONNECTED);
+            RealtimeItEnvironment.sleep(450);
+            assertThat(env.ledger().orElseThrow().state()).as("라운드 %d 복귀 뒤 유지", round)
+                    .isEqualTo(ConnectionState.CONNECTED);
+        }
+        List<String> transitions = transitions();
+        assertThat(transitions).filteredOn("CONNECTED->DISCONNECTED"::equals).hasSize(rounds);
+        assertThat(transitions).filteredOn("DISCONNECTED->CONNECTED"::equals).hasSize(rounds);
+        assertThat(device.isClosed()).isFalse();
+    }
+
     @Test
     void statusReportsIncludeOfflineRowsAndARoundSkipsTheRestAfterThreeFailures() {
         start(Map.of());
@@ -409,6 +491,12 @@ class DeviceGatewayIT {
 
     private void awaitLedger(ConnectionState state) {
         awaitTrue(() -> env.ledger().map(row -> row.state() == state).orElse(false), "원장 " + state);
+    }
+
+    /** DEVICE_CONNECTION 줄의 전이("from->to", 남긴 순서). 원인 분석의 탐침이 모은 것과 같은 자료다(J390 · J391). */
+    private List<String> transitions() {
+        return logs.events(EventCode.DEVICE_CONNECTION).stream().map(LogCapture::attrs)
+                .map(attrs -> attrs.get("from") + "->" + attrs.get("to")).toList();
     }
 
     private boolean offlineReport(RecordedRequest request) {

@@ -34,7 +34,8 @@ import org.springframework.stereotype.Repository;
  *       상태를 덮지 않는다. 상태가 바뀐 경우에만 바뀐 행을 돌려주므로 호출자는 그때만 DeviceStatusChanged를 같은 트랜잭션에 쓴다.
  *   <li>예외는 기기 해제(BR3.8) 하나로 {@code device_id}만 조건이고 connection_id를 비운다.
  * </ul>
- * 시각은 호출자가 Clock에서 읽은 값만 쓴다(R2). last_seen_at은 HEARTBEAT를 받을 때(와 교체 때) 쓴다(J125).
+ * 시각은 호출자가 Clock에서 읽은 값만 쓴다(R2). last_seen_at은 HEARTBEAT를 받을 때(와 교체 때, 그리고 HEARTBEAT에 따른 CONNECTED 복귀 때) 쓴다
+ * (J125 · 3.6 수정 J390).
  */
 @Repository
 public class DeviceConnectionRepository {
@@ -93,6 +94,15 @@ public class DeviceConnectionRepository {
     private static final String CHANGE_STATE = "update realtime.realtime_device_connection"
             + " set connection_state = :to, updated_at = :now,"
             + " connection_id = case when :clearConnectionId then null else connection_id end"
+            + " where device_id = :deviceId and connection_id = :connectionId and connection_state = any(:from)"
+            + " returning " + COLUMNS;
+
+    // HEARTBEAT 복귀(J55)는 그 HEARTBEAT의 수신 시각으로 last_seen_at도 올린다(더 늦은 값이 이미 있으면 그대로, 3.6 수정 J390). 복귀 UPDATE가
+    // 상태만 바꾸면 기록기 배치(J125 · 200ms)가 수신 시각을 쓰기 전에 돈 끊김 점검(아래 MARK_DISCONNECTED)이 복귀 직후의 행을 다시 '40초 무음'으로
+    // 보고 DISCONNECTED로 되돌린다
+    private static final String MARK_CONNECTED_AGAIN = "update realtime.realtime_device_connection"
+            + " set connection_state = 'CONNECTED', updated_at = :now,"
+            + " last_seen_at = greatest(coalesce(last_seen_at, :seenAt), :seenAt)"
             + " where device_id = :deviceId and connection_id = :connectionId and connection_state = any(:from)"
             + " returning " + COLUMNS;
 
@@ -191,9 +201,21 @@ public class DeviceConnectionRepository {
         return written;
     }
 
-    /** 같은 연결의 다음 HEARTBEAT: UNRESPONSIVE · DISCONNECTED → CONNECTED(J55). 바뀌었으면 바뀐 행. */
-    public Optional<DeviceConnectionRow> markConnectedAgain(UUID deviceId, UUID connectionId, Instant now) {
-        return changeState(deviceId, connectionId, RECOVERABLE, ConnectionState.CONNECTED, false, now);
+    /**
+     * 같은 연결의 다음 HEARTBEAT: UNRESPONSIVE · DISCONNECTED → CONNECTED(J55). 복귀를 만든 HEARTBEAT의 수신 시각으로 last_seen_at도 올린다
+     * (이미 더 늦은 값이면 그대로, 3.6 수정 J390) — 끊김 점검(BR4.8 ②)이 복귀 직후의 행을 다시 끊김으로 보지 않게. 바뀌었으면 바뀐 행.
+     *
+     * @param seenAt 복귀를 만든 HEARTBEAT의 수신 시각
+     * @param now 상태 UPDATE 직전에 Clock으로 읽은 시각(updated_at · DeviceStatusChanged.occurredAt, BR4.8)
+     */
+    public Optional<DeviceConnectionRow> markConnectedAgain(UUID deviceId, UUID connectionId, Instant seenAt,
+            Instant now) {
+        MapSqlParameterSource params = ClockParams.at(now);
+        ClockParams.uuid(params, "deviceId", Objects.requireNonNull(deviceId, "deviceId"));
+        ClockParams.uuid(params, "connectionId", Objects.requireNonNull(connectionId, "connectionId"));
+        ClockParams.instant(params, "seenAt", Objects.requireNonNull(seenAt, "seenAt"));
+        ClockParams.textArray(params, "from", names(RECOVERABLE));
+        return single(jdbc.query(MARK_CONNECTED_AGAIN, params, ROW_MAPPER));
     }
 
     /** 명령 시한(BR4.8 ③ · BR6.12 ② ③): CONNECTED · UNSTABLE → UNRESPONSIVE. 바뀌었으면 바뀐 행. */

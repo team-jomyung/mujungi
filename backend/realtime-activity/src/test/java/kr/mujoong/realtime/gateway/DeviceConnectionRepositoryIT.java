@@ -216,11 +216,41 @@ class DeviceConnectionRepositoryIT {
 
         // J55: 같은 연결의 다음 HEARTBEAT가 CONNECTED로 되돌린다
         connections.markSeen(device, cid, boundary.plusSeconds(6), 30);
-        DeviceConnectionRow back = connections.markConnectedAgain(device, cid, boundary.plusSeconds(6)).orElseThrow();
+        DeviceConnectionRow back = connections.markConnectedAgain(device, cid, boundary.plusSeconds(6),
+                boundary.plusSeconds(6)).orElseThrow();
         assertThat(back.state()).isEqualTo(ConnectionState.CONNECTED);
-        assertThat(connections.markConnectedAgain(device, cid, boundary.plusSeconds(7))).isEmpty();
+        assertThat(connections.markConnectedAgain(device, cid, boundary.plusSeconds(7), boundary.plusSeconds(7)))
+                .isEmpty();
         assertThatThrownBy(() -> connections.markDisconnected(device, cid, boundary, Duration.ZERO))
                 .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void recoveryRaisesLastSeenAtToTheHeartbeatTimeButNeverLowersIt() {
+        UUID cid = UUID.randomUUID();
+        handover(cid, T0);
+        Instant boundary = T0.plus(DISCONNECT);
+        connections.markDisconnected(device, cid, boundary, DISCONNECT).orElseThrow();
+
+        // 복귀 UPDATE 자신이 HEARTBEAT 수신 시각을 last_seen_at에 쓴다 — 기록기 배치가 아직 쓰지 않았어도 끊김 후보가 아니다(3.6 수정 J390)
+        Instant beat = boundary.plusSeconds(1);
+        DeviceConnectionRow back = connections.markConnectedAgain(device, cid, beat, beat.plusMillis(5)).orElseThrow();
+        assertThat(back.state()).isEqualTo(ConnectionState.CONNECTED);
+        assertThat(back.lastSeenAt()).isEqualTo(beat);
+        assertThat(back.updatedAt()).isEqualTo(beat.plusMillis(5));
+        assertThat(connections.findSilent(beat.plusMillis(5), DISCONNECT)).isEmpty();
+        assertThat(connections.markDisconnected(device, cid, beat.plusMillis(5), DISCONNECT)).isEmpty();
+
+        // 기록기 배치가 더 늦은 HEARTBEAT를 먼저 썼으면 복귀는 그 값을 내리지 않는다(greatest)
+        connections.markDisconnected(device, cid, beat.plus(DISCONNECT), DISCONNECT).orElseThrow();
+        Instant later = beat.plus(DISCONNECT).plusSeconds(2);
+        assertThat(connections.markSeen(device, cid, later, 20)).isTrue();
+        DeviceConnectionRow kept = connections.markConnectedAgain(device, cid, later.minusSeconds(1), later).orElseThrow();
+        assertThat(kept.lastSeenAt()).isEqualTo(later);
+        // 옛 연결의 복귀는 0행이고 last_seen_at도 건드리지 않는다
+        assertThat(connections.markConnectedAgain(device, UUID.randomUUID(), later.plusSeconds(9), later.plusSeconds(9)))
+                .isEmpty();
+        assertThat(connections.find(device).orElseThrow().lastSeenAt()).isEqualTo(later);
     }
 
     @Test
@@ -253,10 +283,10 @@ class DeviceConnectionRepositoryIT {
         // UNRESPONSIVE도 40초 무음이면 끊김 후보다
         assertThat(connections.findSilent(T0.plusSeconds(19).plus(DISCONNECT), DISCONNECT)).hasSize(1);
 
-        assertThat(connections.markConnectedAgain(device, cid, T0.plusSeconds(22))).map(DeviceConnectionRow::state)
-                .contains(ConnectionState.CONNECTED);
-        // 이미 끊김이면 UNRESPONSIVE로 바꾸지 않는다
-        Instant silentAt = T0.plusSeconds(19).plus(DISCONNECT);
+        assertThat(connections.markConnectedAgain(device, cid, T0.plusSeconds(22), T0.plusSeconds(22)))
+                .map(DeviceConnectionRow::state).contains(ConnectionState.CONNECTED);
+        // 이미 끊김이면 UNRESPONSIVE로 바꾸지 않는다. 무음 40초는 복귀를 만든 HEARTBEAT(T0+22초)부터 센다(J390)
+        Instant silentAt = T0.plusSeconds(22).plus(DISCONNECT);
         connections.markDisconnected(device, cid, silentAt, DISCONNECT).orElseThrow();
         assertThat(connections.markUnresponsive(device, cid, silentAt.plusSeconds(1))).isEmpty();
     }

@@ -29,6 +29,11 @@ import org.springframework.transaction.support.TransactionTemplate;
  * 선택 필드 guardianId로도 싣고(편차 (q)) 행 guardian_id(A4)도 같은 값이다. 교체 이후의 DISCONNECTED · UNRESPONSIVE · OFFLINE 기록은
  * {@code device_id AND connection_id} 조건부라 대체된 옛 연결의 기록은 0행으로 버려진다. 해제(BR3.8)만 device_id 조건이다. 커밋 뒤
  * DEVICE_CONNECTION 한 줄(from · to · closeCode)을 남긴다. 트랜잭션 경계는 이 장치 하나다(RD-22, 바깥 트랜잭션이 있으면 거기에 합류).
+ *
+ * <p>연결 객체의 원장 사본(knownState, HEARTBEAT 복귀 판정 J55)은 상태 UPDATE 직후 같은 트랜잭션 안에서 맞춘다(3.6 수정 J391): UPDATE가 행
+ * 잠금을 쥔 채라 커밋된 새 상태를 DB에서 본 어떤 관찰자도 뒤처진 사본을 볼 수 없다. 커밋 뒤에 맞추면 커밋 ~ 사본 갱신 사이에 온 HEARTBEAT가
+ * 복귀 작업을 띄우지 않아 원장이 다음 HEARTBEAT까지 끊김으로 남는다. 되돌아간 트랜잭션은 사본만 앞서가게 하는데, 그때는 다음 HEARTBEAT의 복귀
+ * UPDATE가 0행이라 원장을 다시 읽어 맞출 뿐이다({@link #resyncKnownState}).
  */
 @Component
 public class ConnectionStateWriter implements DeviceStatusPort {
@@ -93,9 +98,32 @@ public class ConnectionStateWriter implements DeviceStatusPort {
         }
     }
 
-    /** 같은 연결의 HEARTBEAT(J55): UNRESPONSIVE · DISCONNECTED → CONNECTED. */
-    public Optional<DeviceConnectionRow> markConnectedAgain(UUID deviceId, UUID connectionId, String traceId) {
-        return change(deviceId, traceId, null, () -> connections.markConnectedAgain(deviceId, connectionId, clock.now()));
+    /**
+     * 같은 연결의 HEARTBEAT(J55): UNRESPONSIVE · DISCONNECTED → CONNECTED. 그 HEARTBEAT의 수신 시각으로 last_seen_at도 올린다(J390).
+     *
+     * @param seenAt 복귀를 만든 HEARTBEAT의 수신 시각
+     */
+    public Optional<DeviceConnectionRow> markConnectedAgain(UUID deviceId, UUID connectionId, Instant seenAt,
+            String traceId) {
+        Objects.requireNonNull(seenAt, "seenAt");
+        return change(deviceId, traceId, null,
+                () -> connections.markConnectedAgain(deviceId, connectionId, seenAt, clock.now()));
+    }
+
+    /**
+     * 복귀 UPDATE가 0행이었을 때(J391): 원장을 다시 읽어 그 행이 아직 이 연결의 것이면 사본을 원장 상태로 맞춘다. 사본이 원장보다 앞서간 경우
+     * (되돌아간 상태 트랜잭션 · 먼저 복귀시킨 다른 HEARTBEAT)를 바로잡는다. 다른 연결로 교체된 행이면 사본은 뜻이 없어 건드리지 않는다.
+     *
+     * @return 맞춘 상태(이 연결의 행이 아니면 빈 값)
+     */
+    public Optional<ConnectionState> resyncKnownState(DeviceConnection connection) {
+        Objects.requireNonNull(connection, "connection");
+        Optional<DeviceConnectionRow> row = connection.principal()
+                .flatMap(principal -> dbRetry.execute(DbRetry.Idempotency.IDEMPOTENT,
+                        () -> connections.find(principal.deviceId())))
+                .filter(found -> connection.connectionId().equals(found.connectionId()));
+        row.ifPresent(found -> connection.knownState(found.state()));
+        return row.map(DeviceConnectionRow::state);
     }
 
     /** 40초 무음(BR4.8 ②): {@code last_seen_at <= checkedAt − after}일 때만 DISCONNECTED. */
@@ -134,19 +162,23 @@ public class ConnectionStateWriter implements DeviceStatusPort {
             ConnectionState from = connections.find(deviceId).map(DeviceConnectionRow::state).orElse(null);
             Instant now = clock.now();
             Optional<DeviceConnectionRow> row = update.get();
-            row.ifPresent(changed -> writeEvent(changed, now, traceId));
+            row.ifPresent(changed -> {
+                writeEvent(changed, now, traceId);
+                // 사본은 커밋 전, UPDATE가 행 잠금을 쥔 동안 맞춘다(J391). 커밋이 실패해 되돌아가면 사본만 앞서가는데, 그때는 다음 HEARTBEAT가
+                // 0행 복귀를 한 번 더 시도하고 원장을 다시 읽어 맞출 뿐이다(HeartbeatHandler.recover)
+                mirror(changed);
+            });
             return new Change(from, row);
         }));
         if (result == null || result.row().isEmpty()) {
             return Optional.empty();
         }
         DeviceConnectionRow row = result.row().get();
-        mirror(row);
         logChange(deviceId, result.from(), row.state(), closeCode, traceId);
         return result.row();
     }
 
-    /** 원장 행 상태를 그 연결 객체의 사본에 반영한다(HEARTBEAT 복귀 판정, J55). */
+    /** 원장 행 상태를 그 연결 객체의 사본에 반영한다(HEARTBEAT 복귀 판정, J55). 상태 UPDATE와 같은 트랜잭션 안에서 부른다(J391). */
     private void mirror(DeviceConnectionRow row) {
         if (row.connectionId() != null) {
             sockets.byConnectionId(row.connectionId()).ifPresent(connection -> connection.knownState(row.state()));
