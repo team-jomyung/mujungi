@@ -219,6 +219,69 @@ describe("단계 실행(runSteps · SEC-05)", () => {
     expect(out.lines[2]).toBe("C3 TIMEOUT 0.0s 전체 기한(--total-timeout) 소진");
   });
 
+  it("단계 기한에 깎인 대기의 제한 시간 초과는 TIMEOUT이고, 깎이지 않은 요청 제한 시간 초과는 FAIL이다(J393)", async () => {
+    const timeoutError = () => {
+      const error = new Error("GET /x 응답이 오지 않았다");
+      error.name = "HttpTimeoutError";
+      return error;
+    };
+    // 깎임: 단계 기한 300ms가 요청 제한 60초를 깎았다 → 그 요청의 제한 시간 초과는 단계 기한 초과
+    const bound = collector();
+    const boundOutcome = await runSteps(
+      [
+        step(
+          "C1",
+          async (ctx) => {
+            ctx.limit(60_000);
+            throw timeoutError();
+          },
+          300,
+        ),
+      ],
+      { deadlines },
+      { write: bound.write },
+    );
+    expect(boundOutcome).toMatchObject({ exitCode: 1, failedStep: "C1" });
+    expect(bound.lines[0]).toMatch(/^C1 TIMEOUT .*단계 기한 .*300ms 기한 초과 \(GET \/x 응답이 오지 않았다\)/);
+    // 전체 기한이 깎은 경우는 그 이름으로
+    const total = collector();
+    let now = 0;
+    const totalOutcome = await runSteps(
+      [
+        step(
+          "C1",
+          async (ctx) => {
+            ctx.limit(60_000);
+            throw timeoutError();
+          },
+          10_000,
+        ),
+      ],
+      { deadlines },
+      { write: total.write, totalTimeoutMs: 1000, now: () => now },
+    );
+    expect(totalOutcome.exitCode).toBe(1);
+    expect(total.lines[0]).toMatch(/^C1 TIMEOUT .*전체 기한\(--total-timeout\) — 1000ms 기한 초과/);
+    // 깎이지 않음: 요청 제한 100ms가 단계 기한 300ms 안에 끝났다 → 요청 자체의 실패
+    const plain = collector();
+    const plainOutcome = await runSteps(
+      [
+        step(
+          "C1",
+          async (ctx) => {
+            ctx.limit(100);
+            throw timeoutError();
+          },
+          300,
+        ),
+      ],
+      { deadlines },
+      { write: plain.write },
+    );
+    expect(plainOutcome.exitCode).toBe(1);
+    expect(plain.lines[0]).toMatch(/^C1 FAIL .*예외 HttpTimeoutError/);
+  });
+
   it("ctx.limit은 단계 남은 시간을 넘지 않고, 예기치 못한 예외도 FAIL(종료 코드 1)이다", async () => {
     const out = collector();
     let limited = null;

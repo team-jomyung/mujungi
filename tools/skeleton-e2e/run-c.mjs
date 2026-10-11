@@ -354,8 +354,18 @@ export async function runSteps(
     }
     const controller = new AbortController();
     const stepDeadline = stepStart + budget;
+    // 단계 기한이 개별 대기(HTTP 요청 · 시뮬레이터 · 기록 따라 읽기)의 제한 시간을 깎았는지 기억한다. 깎인 대기의 제한 시간 초과는
+    // 그 단계 기한이 다한 것이라 TIMEOUT으로 보고한다 — 깎인 제한 시간(기한 − 지난 시간)과 단계 타이머가 거의 같은 순간에 끝나
+    // 어느 쪽이 먼저 오는지에 따라 FAIL · TIMEOUT이 갈리던 경주를 없앤다(3.6 수정 J393).
+    let deadlineBound = false;
     ctx.signal = controller.signal;
-    ctx.limit = (ms) => Math.max(1, Math.min(ms, stepDeadline - now()));
+    ctx.limit = (ms) => {
+      const left = stepDeadline - now();
+      if (left < ms) {
+        deadlineBound = true;
+      }
+      return Math.max(1, Math.min(ms, left));
+    };
     ctx.throwIfAborted = () => {
       if (controller.signal.aborted) {
         throw new StepTimeout(`${step.id} 단계 기한`, budget);
@@ -381,9 +391,13 @@ export async function runSteps(
     } catch (error) {
       controller.abort();
       const ms = now() - stepStart;
-      const status = error instanceof StepTimeout ? "TIMEOUT" : "FAIL";
-      const message =
-        error instanceof StepFailure || error instanceof StepTimeout
+      // 단계 기한에 깎인 대기의 제한 시간 초과(*TimeoutError)는 단계 기한 초과다(J393)
+      const boundedTimeout =
+        deadlineBound && typeof error?.name === "string" && error.name.endsWith("TimeoutError");
+      const status = error instanceof StepTimeout || boundedTimeout ? "TIMEOUT" : "FAIL";
+      const message = boundedTimeout
+        ? `${totalLimited ? "전체 기한(--total-timeout)" : `단계 기한 ${formatSeconds(budget)}`} — ${budget}ms 기한 초과 (${error.message})`
+        : error instanceof StepFailure || error instanceof StepTimeout
           ? error.message
           : `예외 ${error?.name ?? "Error"}: ${error?.message ?? String(error)}`;
       results.push({ id: step.id, title: step.title, status, ms, message });
