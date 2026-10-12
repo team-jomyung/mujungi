@@ -148,10 +148,10 @@ describe("17 — 실패 · 이동", () => {
     expect(await screen.findByText("보호자가 끝냈어요")).toBeInTheDocument();
   });
 
-  it("401은 시험 로그인, 404는 '찾을 수 없어요' 뒤 홈이다", async () => {
+  it("401은 안내 토스트 뒤 01(U2 · AC1.1.9), 404는 '찾을 수 없어요' 뒤 홈이다", async () => {
     const first = renderDone(() => errorResponse(401, "UNAUTHENTICATED"));
-    await waitFor(() => expect(router.replace).toHaveBeenCalledWith("/parent/dev-login"));
-    expect(screen.queryByTestId("toast")).toBeNull();
+    await waitFor(() => expect(router.replace).toHaveBeenCalledWith("/parent/login"));
+    expect(screen.getByTestId("toast")).toHaveTextContent("로그인이 필요해요.");
     first.view.unmount();
     resetRouter();
     renderDone(() => errorResponse(404, "NOT_FOUND"));

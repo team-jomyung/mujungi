@@ -35,7 +35,8 @@ export class ApiError extends Error {
 }
 
 export interface ApiRequest<T> {
-  readonly method: "GET" | "POST";
+  /** U2가 PUT · PATCH · DELETE를 더했다(/api/consents · /api/child · /api/me). */
+  readonly method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   readonly path: string;
   readonly body?: unknown;
   readonly parse: (json: unknown) => T;

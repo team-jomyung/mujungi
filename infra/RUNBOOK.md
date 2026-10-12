@@ -218,7 +218,21 @@ aws ssm put-parameter --name /mujoong/demo/ACME_CONTACT_EMAIL --type String --va
 aws ssm put-parameter --name /mujoong/demo/GHCR_PULL_USER --type String --value '<토큰을 만든 GitHub 사용자 이름>'
 ```
 
-- `GOOGLE_OAUTH_CLIENT_SECRET`은 U2 전에는 **만들지 않는다**(Parameter Store는 빈 값을 저장할 수 없다. 렌더러가 빈 변수로 둔다, CD-11).
+- 구글 로그인(U2): 구글 클라우드 콘솔의 OAuth 클라이언트(웹 애플리케이션)에 승인된 리디렉션 URI `https://<SERVICE_HOST>/parent/login/callback`을
+  등록하고, 받은 두 값을 넣는다. 둘 다 넣거나 둘 다 넣지 않는다(하나만 있으면 렌더러가 D3를 실패시킨다). 넣지 않으면 렌더러가 빈 변수로 두고
+  01 로그인은 실패 토스트로 끝난다(CD-11, Parameter Store는 빈 값을 저장할 수 없다).
+
+  ```bash
+  aws ssm put-parameter --name /mujoong/demo/GOOGLE_OAUTH_CLIENT_ID --type String --value '<구글 client id>'
+  umask 077; tmp="$(mktemp)"
+  read -r -s -p 'GOOGLE_OAUTH_CLIENT_SECRET: ' v && printf '%s' "$v" >"$tmp" && unset v && echo && \
+    aws ssm put-parameter --name /mujoong/demo/GOOGLE_OAUTH_CLIENT_SECRET --type SecureString --value "file://$tmp" >/dev/null
+  rm -f "$tmp"; unset tmp
+  ```
+
+  `GOOGLE_OAUTH_REDIRECT_URI`는 파라미터가 아니다: 렌더러가 `MUJOONG_SECURITY_ALLOWED_ORIGIN` + `/parent/login/callback`으로 만들어
+  `core-api.env` · `web.env`에 같은 값을 쓴다. `GOOGLE_OAUTH_CLIENT_ID`도 두 파일에 같은 이름으로 들어가고 client secret은 `core-api.env`에만 간다.
+  바꾼 뒤에는 env를 다시 렌더하고 core-api · web을 재생성해야 반영된다.
 - GHCR 패키지를 공개로 두기로 정하면 `GHCR_PULL_TOKEN` · `GHCR_PULL_USER`를 만들지 않는다(배포가 로그인하지 않는다, J99).
 - `NEO4J_AUTH`는 Neo4j를 켜는 유닛이 만든다.
 

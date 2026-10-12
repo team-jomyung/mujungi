@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mujoong.invalid/contracts/schemas/me-response.schema.json",
+  "title": "내 상태(Me)",
+  "description": "GET /api/me 200 · POST /api/auth/google 200(계약 3절 Me · U2). 01 분기용이다: consentStatus가 GIVEN이 아니면 02, childRegistered가 거짓이면 03, 둘 다면 04. deletionStatus IN_PROGRESS면 01 위 '삭제 처리 중' 안내만 보이고 구글 로그인은 세션 쿠키를 만들지 않는다(편차 (U2-d)). 이름 · 이메일 같은 개인정보는 담지 않는다.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["guardianId", "consentStatus", "childRegistered", "deletionStatus"],
+  "properties": {
+    "guardianId": { "$ref": "common.schema.json#/$defs/Uuid" },
+    "consentStatus": { "$ref": "#/$defs/ConsentStatus" },
+    "childRegistered": { "type": "boolean" },
+    "deletionStatus": { "type": "string", "enum": ["NONE", "IN_PROGRESS"] }
+  },
+  "$defs": {
+    "ConsentStatus": {
+      "description": "현재 정책 버전 4항목이 모두 GIVEN이면 GIVEN, 예전 정책 버전 하나에서 4항목의 최신 행이 모두 GIVEN이면 OUTDATED(편차 (U2-g)), 그 밖 NOT_GIVEN",
+      "type": "string",
+      "enum": ["NOT_GIVEN", "GIVEN", "OUTDATED"]
+    },
+    "ConsentType": {
+      "description": "동의 4항목(음성 수집 · 글 저장 / 보호자 열람 / 리포트 생성 · 외부 전달 / 원음 보관, FR1.2)",
+      "type": "string",
+      "enum": ["VOICE_AND_TEXT", "GUARDIAN_VIEW", "REPORT_SHARING", "RAW_AUDIO"]
+    }
+  }
+}

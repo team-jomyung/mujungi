@@ -198,9 +198,10 @@ describe("12 — 실패 · 이동", () => {
     await waitFor(() => expect(router.replace).toHaveBeenCalledWith("/parent/free?failed=1"));
   });
 
-  it("401이면 시험 로그인으로 가고 폴링을 멈추며 끝내기 요청은 보내지 않는다(AC1.1.9 · BR6.16)", async () => {
+  it("401이면 안내 토스트 뒤 01로 가고 폴링을 멈추며 끝내기 요청은 보내지 않는다(AC1.1.9 · BR6.16, U2가 01을 만듦)", async () => {
     const harness = renderLive((_sinceSeq, index) => (index === 1 ? jsonResponse(200, liveViewBody("ACTIVE")) : errorResponse(401, "UNAUTHENTICATED")));
-    await waitFor(() => expect(router.replace).toHaveBeenCalledWith("/parent/dev-login"));
+    await waitFor(() => expect(router.replace).toHaveBeenCalledWith("/parent/login"));
+    expect(screen.getByTestId("toast")).toHaveTextContent("로그인이 필요해요.");
     const after = liveCalls(harness).length;
     await pause(POLL_MS * 4);
     act(() => setVisibility("hidden"));

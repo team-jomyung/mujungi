@@ -184,17 +184,22 @@ class NoSqlNowTest {
         return total;
     }
 
+    private static String slashed(Path path) {
+        return path.toString().replace('\\', '/');
+    }
+
     private static List<Path> files(String relativeRoot, String extension, String... pathFragments) {
         Path root = REPO_ROOT.resolve(relativeRoot);
         if (!Files.isDirectory(root)) {
             return List.of();
         }
         try (Stream<Path> walk = Files.walk(root)) {
+            // 경로 조각은 '/'로 적었으므로 OS 구분자(Windows '\')를 '/'로 맞춰 비교한다(U2: Windows 개발 PC에서 0건 탐색 방지)
             return walk.filter(Files::isRegularFile)
                     .filter(path -> path.toString().endsWith(extension))
-                    .filter(path -> !path.toString().contains("/build/") && !path.toString().contains("/node_modules/"))
+                    .filter(path -> !slashed(path).contains("/build/") && !slashed(path).contains("/node_modules/"))
                     .filter(path -> pathFragments.length == 0
-                            || Stream.of(pathFragments).anyMatch(fragment -> path.toString().contains(fragment)))
+                            || Stream.of(pathFragments).anyMatch(fragment -> slashed(path).contains(fragment)))
                     .sorted()
                     .toList();
         } catch (IOException e) {

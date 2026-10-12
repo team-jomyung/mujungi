@@ -195,6 +195,9 @@ export const TEMP_COPY = {
     SERVICE_NOT_READY: "잠시 뒤 다시 시도해 주세요.",
     INTERNAL_ERROR: "잠시 문제가 생겼어요. 다시 시도해 주세요.",
     UPSTREAM_UNAVAILABLE: "지금은 연결할 수 없어요. 잠시 뒤 다시 시도해 주세요.",
+    GOOGLE_AUTH_FAILED: "로그인하지 못했어요. 다시 시도해 주세요.",
+    CHILD_NOT_REGISTERED: "아이 정보가 아직 없어요.",
+    CHILD_EXISTS: "이미 등록된 아이가 있어요.",
   },
   /** 응답 없음 · 시간 초과 · 모르는 code의 일반 문장(INTERNAL_ERROR 문장과 같다). */
   networkError: "잠시 문제가 생겼어요. 다시 시도해 주세요.",

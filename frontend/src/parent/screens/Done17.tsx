@@ -6,7 +6,7 @@ import { ApiError } from "../api/apiClient";
 import { isTerminalStatus, type LiveView, type SessionStatus } from "../api/types";
 import { BottomTabBar, type TabKey } from "../components/BottomTabBar";
 import { useLivePolling } from "../hooks/useLivePolling";
-import { PARENT_ROUTES, isUnauthenticated, routeForTab } from "../navigation";
+import { PARENT_ROUTES, goToLogin, isUnauthenticated, routeForTab } from "../navigation";
 import { COPY, PROPOSED_COPY, TEMP_COPY, abortedBody, doneTimeRangeLine, guardianStopDetail } from "@/shared/copy/ko";
 import { formatHhmm, minutesBetween } from "@/shared/copy/timeText";
 import { messageForErrorCode } from "@/shared/errors/codeToCopy";
@@ -78,7 +78,7 @@ export function Done17({ sessionId }: Done17Props) {
 
   useEffect(() => {
     if (isUnauthenticated(error)) {
-      router.replace(PARENT_ROUTES.devLogin);
+      goToLogin(router, toast);
     } else if (error instanceof ApiError && error.status === 404) {
       toast.show({ message: messageForErrorCode("NOT_FOUND"), kind: "error" });
       router.replace(PARENT_ROUTES.home);

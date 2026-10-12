@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mujoong.invalid/contracts/schemas/consents-response.schema.json",
+  "title": "동의 상태",
+  "description": "GET /api/consents 200(계약 3절 · FR1.2 · U2). status는 Me.consentStatus와 같은 규칙이다. items는 4항목마다 현재 정책 버전 기준 상태(GIVEN · NOT_GIVEN)이며 policyVersion은 현재 정책 버전이다. 변경 · 철회 API는 없다(AC1.2.8).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["status", "policyVersion", "items"],
+  "properties": {
+    "status": { "$ref": "me-response.schema.json#/$defs/ConsentStatus" },
+    "policyVersion": { "type": "string", "minLength": 1, "maxLength": 50 },
+    "items": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["type", "status"],
+        "properties": {
+          "type": { "$ref": "me-response.schema.json#/$defs/ConsentType" },
+          "status": { "type": "string", "enum": ["GIVEN", "NOT_GIVEN"] }
+        }
+      }
+    }
+  }
+}

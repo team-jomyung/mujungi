@@ -19,6 +19,7 @@ import kr.mujoong.contract.status.ConnectionState;
 import kr.mujoong.contract.status.RegistrationStatus;
 import kr.mujoong.core.common.db.ClockParams;
 import kr.mujoong.core.common.db.SqlErrors;
+import kr.mujoong.core.identity.GuardianWriteLock;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
@@ -165,10 +166,8 @@ public class DeviceJdbcRepository {
      * 커밋이 겹치지 않는다.
      */
     public Optional<String> lockGuardianStatusForShare(UUID guardianId) {
-        MapSqlParameterSource params = uuid(new MapSqlParameterSource(), "id", Objects.requireNonNull(guardianId, "guardianId"));
-        List<String> rows = jdbc.queryForList(
-                "select status from core.core_guardian where id = :id for share", params, String.class);
-        return rows.stream().findFirst();
+        // 보호자 행 잠금 SQL은 한 곳(GuardianWriteLock)에 있다. 등록 트랜잭션의 첫 잠금이라는 순서는 여기서 지킨다(U2 2차 리뷰 5)
+        return GuardianWriteLock.statusForShare(jdbc, guardianId);
     }
 
     /** 코드의 등록 가능한 행(UNREGISTERED · 만료 전, 최대 1행)을 FOR UPDATE로 잠그고 읽는다(BR2.1 ① · BR2.5 (1) · SQ-3). */

@@ -128,6 +128,8 @@ services:
     networks:
       edge:
         ipv4_address: 172.30.10.11
+    # web.env: MUJOONG_SECURITY_ALLOWED_ORIGIN · GOOGLE_OAUTH_CLIENT_ID · GOOGLE_OAUTH_REDIRECT_URI(01 구글 시작 · 콜백, Core와 같은 이름 —
+    # infra/bin/render-env가 쓴다. client secret은 web에 없다)
     env_file:
       - ${MUJOONG_ENV_DIR:-/opt/mujoong/env}/web.env
     environment:
@@ -164,6 +166,7 @@ services:
       backend:
         # 앱 사이 호출 이름(infra-spec D-12 · J109: mujoong.internal-http.core-base-url = http://core:8080)
         aliases: [core]
+    # core-api.env: 비밀 · origin과 구글 OAuth(GOOGLE_OAUTH_CLIENT_ID · GOOGLE_OAUTH_CLIENT_SECRET · GOOGLE_OAUTH_REDIRECT_URI, render-env)
     env_file:
       - ${MUJOONG_ENV_DIR:-/opt/mujoong/env}/core-api.env
     environment:

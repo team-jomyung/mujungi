@@ -11,6 +11,7 @@ import kr.mujoong.core.common.db.DbRetry;
 import kr.mujoong.core.common.deletion.DeletionParticipant;
 import kr.mujoong.core.device.DeviceJdbcRepository.DeviceRecord;
 import kr.mujoong.core.messaging.CoreOutboxWriter;
+import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -25,6 +26,7 @@ import org.springframework.transaction.support.TransactionTemplate;
  * 위반으로 예외이고 지휘가 순서를 고쳐 다시 부른다. 다른 표에 보호자 근거를 채우는 일은 하지 않는다(R3-3).
  */
 @Component
+@Order(DeletionParticipant.ORDER_DEVICE)
 public class DeviceDeletionParticipant implements DeletionParticipant {
 
     /** 반환 지도의 키. */

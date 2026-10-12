@@ -50,3 +50,23 @@
 | (aa) | 공급자 선 형식(ai-io.md 3절)에 서버 → 공급자 type 둘 — `session.response.cancel {responseId?}`(끼어들기 · 아이 종료 의도 때 만들던 · 재생하던 응답 취소)와 `session.instructions.correct {text}`(게이트 폐기 뒤 응답당 한 번 지시 교정, 서버 고정 문장) — 과 공급자 → 서버 `session.input_transcript.done`의 선택 필드 `confidence`(0 ~ 1, 불확실 표시 근거)를 더함. 모르는 type · 필드는 무시된다 | U3 design 4절 · U3-R5 · R7 · R10 · U3-J11 · J12 · J17 | Realtime VoiceRelay · 공급자(가짜 공급자, 실공급자 어댑터 V-2) | 공급자 · Realtime OutputGate · ConversationLog | 새 값 · 새 선택 필드 | ai-io.md |
 | (ab) | 다시 붙이기 구체화 — HELLO_OK 뒤 같은 기기의 진행 중 세션이 있으면 새 연결을 그 세션에 묶고 HELLO_OK.session(sessionId · view · resumed)을 채운다. HELLO resume.sessionId가 그 세션이면 resumed true(START_SESSION 재전송 없음), 아니면 resumed false로 답하고 같은 approvedAudio로 START_SESSION을 다시 보낸다(CLOSING이면 START_SESSION 대신 CLOSE_TRANSPORT). ACK를 못 받은 opId 명령은 같은 opId로 새 연결에 다시 보내되 STOP_OUTPUT은 빼고 PLAY_APPROVED_CONTENT는 가장 최근 하나만 보내며, 기기는 같은 opId를 두 번 실행하지 않는다. 끊기기 전 출력은 잇지 않는다(새 playbackId). 그 사이 세션이 끝났으면 그 연결에 STANDBY(이어간 기기에는 CLOSE_TRANSPORT도)를 보내고 기기는 지금 세션이 아닌 세션의 STANDBY를 무시한다 | U3 design 4절 · U3-R3 · R4 · U3-J5 · J7 · J8 · AC6.2.10 | Realtime DeviceGateway · SessionExecutor | DeviceWeb | 규칙 구체화 | device-ws.asyncapi.yaml |
 | (ac) | 계약 7절 예약 키 `device.unstable-disconnects`("5분 안 2회")를 Duration 하나에 담을 수 없어 `mujoong.timing.device.unstable-disconnect-window`(5m, timing.md 1절)와 `mujoong.device.unstable-disconnect-count`(2, 4절) 두 키로 나눔. 연결 보고 · DeviceStatusChanged의 `recentDisconnects`는 이 창 안 끊김 횟수다. 예약 키 `device.reconnect-backoff` · `device.playback-mark-interval` · `device.unstable-rtt` · `gate.barge-in-stop` · `gate.local-voice-min`은 값 그대로 1절로 옮김 | U3 design 4절 · U3-R1 · U3-J3 | Realtime DeviceGateway · DeviceWeb | Core DeviceRegistry · 운영 설정 | 규칙 구체화 | timing.md |
+
+## U2 편차
+
+> U2(보호자 계정)가 승인 계약 3절 · 2절에 더하거나 구체화한 곳이다. 기호는 `(U2-<글자>)`이고 U1의 (a) ~ (z)와 섞이지 않게 따로 센다.
+> YAML 스펙은 `x-u2-deviation: ["(U2-a)"]`, Markdown은 `[U2 편차 (U2-a)]`로 표시한다(U1 `ContractFilesTest`의 (a) ~ (z) 대조와 겹치지 않는다).
+> 모두 더하기만 안전하거나 아직 소비자가 없던 경로의 해석이다. 근거 가정 번호는 `docs/units/u2/design.md` 8절.
+
+| 기호 | 내용 | 출처 | 제공 | 소비자 | 호환 분류 | 표시 위치 |
+|---|---|---|---|---|---|---|
+| (U2-a) | 새 code `GOOGLE_AUTH_FAILED`(401) — `POST /api/auth/google`의 '401 구글 교환 실패'에 code 이름을 붙임 | 계약 3절 /auth/google · AC1.1.4 | Core GuardianIdentity | ParentWeb | 새 응답 | parent-api.yaml · errors.md |
+| (U2-b) | `GET /api/policies/current`는 보호자 세션이 있어야 한다(계약은 `security: []`). 02 · 02-1은 로그인 뒤에만 열린다 | U2-J6 | Core ConsentPolicy | ParentWeb | 규칙 구체화(아직 소비자 없던 경로) | parent-api.yaml |
+| (U2-c) | 약관 응답 항목 모양 `{type, title, sections[{heading, body}]}`(계약 설명의 collect · purpose … 고정 필드 대신, 항목마다 소제목이 다름) | U2-J7 · 문구표 02-1 | Core ConsentPolicy | ParentWeb | 해석 명시 | parent-api.yaml |
+| (U2-d) | 계정 삭제가 접수된 보호자의 구글 로그인은 200 Me{deletionStatus: IN_PROGRESS}이고 세션 쿠키를 만들지 않는다 | U2-J5 · AC1.6.4 | Core GuardianIdentity | ParentWeb | 해석 명시 | parent-api.yaml |
+| (U2-e) | `POST /api/auth/google`은 형식 오류 · redirectUri 불일치 · Origin 불일치 · 구글 설정 없음도 400이 아니라 401 GOOGLE_AUTH_FAILED다(로그인 실패는 한 가지로만 알린다) | U2-J1 · AC1.1.4 | Core GuardianIdentity | ParentWeb | 규칙 구체화 | parent-api.yaml |
+| (U2-f) | `PUT /api/consents`의 policyVersion이 현재 정책 버전이 아니면 400 VALIDATION_FAILED(02는 약관을 다시 읽는다) | R6 | Core ConsentPolicy | ParentWeb | 규칙 구체화 | parent-api.yaml |
+| (U2-g) | 동의 상태 OUTDATED = 현재 버전 4항목 GIVEN은 없고, 예전 정책 버전 하나에서 네 항목의 항목별 최신 행이 모두 GIVEN(그 버전의 철회가 뒤에 쌓였거나 일부 항목만 있으면 NOT_GIVEN, U2 리뷰 7). 화면은 NOT_GIVEN과 같은 02 재동의이고 앱 시작(04)에서도 02로 보낸다(U2 리뷰 6) | U2-J8 | Core ConsentPolicy | ParentWeb | 해석 명시 | parent-api.yaml |
+| (U2-h) | `DELETE /api/me` 202 본문 `{deletionRequestId}`, 같은 보호자의 재요청은 같은 id, 응답에 세션 쿠키 삭제(Max-Age=0) | AC1.6.1 · AC1.6.7 | Core AccountDeletion | ParentWeb | 해석 명시 | parent-api.yaml |
+| (U2-i) | `PUT /api/child/stop-expressions` 본문 `{items[{text}]}`(순서 = sortOrder), 기본 표현과 같은 표현도 중복으로 400. 공백은 유니코드 White_Space 속성, 글자 수는 NFC 뒤 코드 포인트(화면과 같은 규칙, U2 리뷰 8) | R9 · U2-J11 | Core ChildProfile | ParentWeb | 해석 명시 | parent-api.yaml |
+| (U2-j) | 로그 사건 표(OD-2) 더하기: `SECURITY_AUTH_FAILED`의 `kind`에 구글 로그인 실패 까닭 6종(`GOOGLE_NOT_CONFIGURED` · `GOOGLE_BAD_REQUEST` · `GOOGLE_REDIRECT_MISMATCH` · `GOOGLE_EXCHANGE_FAILED` · `GOOGLE_KEYS_UNAVAILABLE` · `GOOGLE_TOKEN_INVALID`)을 더하고, `POST /api/auth/google`의 Origin 불일치는 `SECURITY_ORIGIN_DENIED`(channel REST · statusCode 401)로 남긴다. attrs 키는 그대로이고 값 집합만 늘었다. 응답은 그대로 401 GOOGLE_AUTH_FAILED 하나 | U2 리뷰 4 · OD-2 · OD-13 | Core GuardianIdentity | 운영(로그 · 지표 `auth_failed` · `origin_denied`) | 더하기(새 열거값) | contract-model AttrKey.KIND |
+| (U2-k) | U1 `POST /api/dev/login`(dev 전용)은 시드 보호자의 계정 삭제가 접수됐으면 403 ACCOUNT_DELETION_IN_PROGRESS이고 세션을 만들지 않는다 | U2 2차 리뷰 2 · AC1.6.4 | Core GuardianIdentity(시험 로그인) | dev 화면 · 시험 | 새 응답(dev 전용) | parent-api.yaml |

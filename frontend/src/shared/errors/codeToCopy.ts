@@ -33,6 +33,10 @@ export const ERROR_CODES = [
   "SERVICE_NOT_READY",
   "INTERNAL_ERROR",
   "UPSTREAM_UNAVAILABLE",
+  // U2 보호자 계정
+  "GOOGLE_AUTH_FAILED",
+  "CHILD_NOT_REGISTERED",
+  "CHILD_EXISTS",
 ] as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[number];

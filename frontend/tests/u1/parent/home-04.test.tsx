@@ -137,7 +137,11 @@ describe("04 조회(PD-12)", () => {
   it("실패하면 토스트 + 「다시 시도」이고 다시 시도하면 다시 읽는다", async () => {
     let calls = 0;
     renderParent(<Home04 />, {
-      handler: () => {
+      handler: (path) => {
+        // U2: 04는 앱 시작 점검으로 /api/me도 읽는다 — 홈 조회 횟수만 센다
+        if (path !== "/api/home") {
+          return jsonResponse(200, homeBody("STABLE"));
+        }
         calls += 1;
         return calls === 1 ? errorResponse(500, "INTERNAL_ERROR") : jsonResponse(200, homeBody("STABLE"));
       },
@@ -148,10 +152,11 @@ describe("04 조회(PD-12)", () => {
     expect(calls).toBe(2);
   });
 
-  it("401이면 시험 로그인으로 보낸다(AC1.1.9 · J119)", async () => {
+  it("401이면 안내 토스트 뒤 01로 보낸다(AC1.1.9, U2가 01을 만들어 시험 로그인 대신)", async () => {
     renderParent(<Home04 />, { handler: () => errorResponse(401, "UNAUTHENTICATED") });
-    await waitFor(() => expect(router.replace).toHaveBeenCalledWith("/parent/dev-login"));
-    expect(screen.queryByTestId("toast")).toBeNull();
+    await waitFor(() => expect(router.replace).toHaveBeenCalledWith("/parent/login"));
+    expect(screen.getByTestId("toast")).toHaveTextContent("로그인이 필요해요.");
+    expect(router.replace).not.toHaveBeenCalledWith("/parent/dev-login");
   });
 
   it("오프라인인 채 들어와도 토스트 + 「다시 시도」이고, 온라인이 된 뒤 「다시 시도」하면 읽는다(PD-12 · J361)", async () => {
