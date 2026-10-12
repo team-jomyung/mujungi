@@ -14,7 +14,9 @@ import java.util.UUID;
  */
 public interface DeletionParticipant {
 
-    /** core_activity(세션 사본, U1 데이터 · U4가 넘겨받음) — core_device · core_child를 가리킨다. */
+    /** core_activity_record(활동 기록, U4a) — core_activity를 가리킨다. */
+    int ORDER_ACTIVITY_RECORD = 90;
+    /** core_activity(세션 사본, U1 데이터 · U4a가 넘겨받음, 08 배경 core_activity_context 포함) — core_device · core_child를 가리킨다. */
     int ORDER_ACTIVITY = 100;
     /** core_device(U1). */
     int ORDER_DEVICE = 200;

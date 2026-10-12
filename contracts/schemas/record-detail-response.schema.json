@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mujoong.invalid/contracts/schemas/record-detail-response.schema.json",
+  "title": "27 대화 기록 칸",
+  "description": "GET /api/records/{sessionId} 200(계약 3절 · U4a · AC5.2.1 · AC5.2.2). session.status는 기록의 최종 상태다. 판정값 · 구조화 결과 · 08 보호자 입력 원문 · 원음 경로는 없다(FR4.3 · A10) — 모르는 필드를 허용하지 않아 새는 것을 막는다. DECLINED는 goals · utterances · gaps가 빈 배열이고 recordScope가 null이다.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["session", "goals", "utterances", "gaps", "recordScope", "endConfirmed"],
+  "properties": {
+    "session": { "$ref": "live-view.schema.json#/$defs/SessionSummary" },
+    "goals": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["displayName", "order", "status"],
+        "properties": {
+          "displayName": { "type": "string" },
+          "order": { "type": "integer" },
+          "status": {
+            "anyOf": [
+              { "type": "string", "enum": ["DONE", "SKIPPED", "NOT_REACHED"] },
+              { "type": "null" }
+            ]
+          }
+        }
+      }
+    },
+    "utterances": { "type": "array", "items": { "$ref": "live-view.schema.json#/$defs/Bubble" } },
+    "gaps": { "type": "array", "items": { "$ref": "live-view.schema.json#/$defs/Gap" } },
+    "recordScope": {
+      "anyOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["from", "to"],
+          "properties": {
+            "from": { "$ref": "common.schema.json#/$defs/DateTime" },
+            "to": { "$ref": "common.schema.json#/$defs/DateTime" }
+          }
+        },
+        { "type": "null" }
+      ]
+    },
+    "endConfirmed": { "type": "boolean" }
+  }
+}

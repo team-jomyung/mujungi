@@ -65,6 +65,18 @@ public class ApprovedContentCatalog {
         return pinned;
     }
 
+    /**
+     * 세션 패키지에 실을 문구를 한 번에 고정한다(U4a · AC6.3.7): 승인 버전이 있고 음성이 있는 코드만 결과에 넣는다(입력 순서). 기기는 승인
+     * 음성만 재생하므로 음성 없는 승인 문구는 패키지에 싣지 않는다.
+     */
+    public Map<String, ApprovedItem> sessionContent(Collection<String> contentCodes) {
+        Map<String, ApprovedItem> pinned = new LinkedHashMap<>();
+        for (String code : Objects.requireNonNull(contentCodes, "contentCodes")) {
+            item(code).ifPresent(content -> pinned.put(code, content));
+        }
+        return pinned;
+    }
+
     /** 세션 패키지 문구: 같은 조회({@link #latestApproved})에 '음성 있음'만 더한다(2차 리뷰 6). */
     private Optional<ApprovedItem> item(String contentCode) {
         return latestApproved(contentCode)

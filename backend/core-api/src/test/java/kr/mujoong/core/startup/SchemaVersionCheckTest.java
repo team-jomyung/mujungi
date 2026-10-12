@@ -43,14 +43,14 @@ class SchemaVersionCheckTest {
 
     @Test
     void appliedVersionAtOrAboveTheBundledMigrationPasses() {
-        // 앱이 들고 온 최고 버전: V1(U1) · V2(U2)
-        assertThat(SchemaVersionCheck.expectedVersion()).isEqualTo("2");
-        history(List.of("0", "1", "2"));
+        // 앱이 들고 온 최고 버전: V1(U1) · V2(U2) · V3(U4a)
+        assertThat(SchemaVersionCheck.expectedVersion()).isEqualTo("3");
+        history(List.of("0", "1", "2", "3"));
 
-        assertThat(check.verify()).isEqualTo("2");
-
-        history(List.of("1", "2", "3"));
         assertThat(check.verify()).isEqualTo("3");
+
+        history(List.of("1", "2", "3", "4"));
+        assertThat(check.verify()).isEqualTo("4");
         assertThat(stderr.toString(StandardCharsets.UTF_8)).isEmpty();
     }
 
@@ -68,7 +68,7 @@ class SchemaVersionCheckTest {
     void onlyTheBaselineRowIsRejectedAsBehind() {
         history(List.of("0"));
 
-        assertThatThrownBy(check::verify).isInstanceOf(IllegalStateException.class).hasMessageContaining("0 < 기대 2");
+        assertThatThrownBy(check::verify).isInstanceOf(IllegalStateException.class).hasMessageContaining("0 < 기대 3");
         assertThat(stderr.toString(StandardCharsets.UTF_8)).contains("SchemaVersionBehind");
     }
 
@@ -96,10 +96,10 @@ class SchemaVersionCheckTest {
         when(jdbc.queryForList(anyString(), eq(String.class))).thenAnswer(call -> {
             String sql = call.getArgument(0);
             assertThat(sql).contains(SchemaVersionCheck.HISTORY_TABLE).contains("success").contains("version is not null");
-            return List.of("1", "2");
+            return List.of("1", "2", "3");
         });
 
-        assertThat(check.verify()).isEqualTo("2");
+        assertThat(check.verify()).isEqualTo("3");
     }
 
     private void history(List<String> versions) {

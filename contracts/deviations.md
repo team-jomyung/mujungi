@@ -66,3 +66,14 @@
 | (U2-i) | `PUT /api/child/stop-expressions` 본문 `{items[{text}]}`(순서 = sortOrder), 기본 표현과 같은 표현도 중복으로 400. 공백은 유니코드 White_Space 속성, 글자 수는 NFC 뒤 코드 포인트(화면과 같은 규칙, U2 리뷰 8) | R9 · U2-J11 | Core ChildProfile | ParentWeb | 해석 명시 | parent-api.yaml |
 | (U2-j) | 로그 사건 표(OD-2) 더하기: `SECURITY_AUTH_FAILED`의 `kind`에 구글 로그인 실패 까닭 6종(`GOOGLE_NOT_CONFIGURED` · `GOOGLE_BAD_REQUEST` · `GOOGLE_REDIRECT_MISMATCH` · `GOOGLE_EXCHANGE_FAILED` · `GOOGLE_KEYS_UNAVAILABLE` · `GOOGLE_TOKEN_INVALID`)을 더하고, `POST /api/auth/google`의 Origin 불일치는 `SECURITY_ORIGIN_DENIED`(channel REST · statusCode 401)로 남긴다. attrs 키는 그대로이고 값 집합만 늘었다. 응답은 그대로 401 GOOGLE_AUTH_FAILED 하나 | U2 리뷰 4 · OD-2 · OD-13 | Core GuardianIdentity | 운영(로그 · 지표 `auth_failed` · `origin_denied`) | 더하기(새 열거값) | contract-model AttrKey.KIND |
 | (U2-k) | U1 `POST /api/dev/login`(dev 전용)은 시드 보호자의 계정 삭제가 접수됐으면 403 ACCOUNT_DELETION_IN_PROGRESS이고 세션을 만들지 않는다 | U2 2차 리뷰 2 · AC1.6.4 | Core GuardianIdentity(시험 로그인) | dev 화면 · 시험 | 새 응답(dev 전용) | parent-api.yaml |
+
+## U4a 편차
+
+> U4a(활동 세션 Core 쪽)가 승인 계약 3절에 더하거나 구체화한 곳이다. 기호는 `(U4a-<글자>)`이고 YAML 스펙은 `x-u4a-deviation: ["(U4a-a)"]`로
+> 표시한다(U1 · U2 기호와 섞이지 않는다). 모두 더하기만 안전하거나 아직 소비자가 없던 경로의 해석이다. 근거 가정 번호는 `docs/units/u4a/design.md` 8절.
+> 세 경로(`/sessions/current` · `/records` · `/records/{sessionId}`)는 계약 3절 그대로 parent-api.yaml에 더했다(편차 아님).
+
+| 기호 | 내용 | 출처 | 제공 | 소비자 | 호환 분류 | 표시 위치 |
+|---|---|---|---|---|---|---|
+| (U4a-a) | `GET /api/sessions/current`는 늘 `{session: SessionSummary \| null}`로 감싼다(계약 설명 'SessionSummary 또는 {session: null}'의 두 모양을 하나로) | U4a-J4 · AC1.4.13 · AC1.7.4 | Core ActivityCoordinator | ParentWeb(04) · U7 알림 진입 | 해석 명시(아직 소비자 없던 경로) | parent-api.yaml |
+| (U4a-b) | `GET /api/records?date=` 줄에 `goalCount`(연습 목표 수, 자유대화 0) · `interrupted`(DISCONNECT 구간이 있음)를 더함 — 26 줄 글 "연습 · 목표 n개" · "중간에 끊김"(AC5.1.2)에 필요 | U4a-J10 · AC5.1.2 | Core ActivityRecord | ParentWeb(26, U6) | 새 선택 필드 | parent-api.yaml |

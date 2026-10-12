@@ -1,0 +1,18 @@
+# U4a 커버리지 측정 범위 (docs/units/u4a/design.md 7절 · U1 J137 · U2와 같은 형식)
+# -PcoverageScope=u4a일 때 JaCoCo가 이 목록의 운영 소스(.java)만 잰다. 한 줄에 저장소 루트 기준 경로 하나.
+# 내용은 U4a가 새로 만든 backend/core-api/src/main/java 파일 전부다. U4a가 고친 U1 파일(StartActivityService · SessionPackageBuilder ·
+# SessionViewService · RealtimeSessionClient · ApprovedContentCatalog · ActivityDeletionParticipant · SessionController · HomeController ·
+# DeletionParticipant)과 U2 파일(ChildProfileService · ConsentStatusRule)은 그 유닛 목록(u1.txt · u2.txt)으로 잰다. 모듈별 줄 수:
+#   core-api 12
+backend/core-api/src/main/java/kr/mujoong/core/activity/ActivityContextRepository.java
+backend/core-api/src/main/java/kr/mujoong/core/activity/CurrentSessionService.java
+backend/core-api/src/main/java/kr/mujoong/core/activity/LiveExtras.java
+backend/core-api/src/main/java/kr/mujoong/core/activity/PracticeStart.java
+backend/core-api/src/main/java/kr/mujoong/core/activity/web/SessionSummaryBody.java
+backend/core-api/src/main/java/kr/mujoong/core/record/ActivityRecordDeletionParticipant.java
+backend/core-api/src/main/java/kr/mujoong/core/record/ActivityRecordRepository.java
+backend/core-api/src/main/java/kr/mujoong/core/record/ActivityRecorded.java
+backend/core-api/src/main/java/kr/mujoong/core/record/RecordCalendar.java
+backend/core-api/src/main/java/kr/mujoong/core/record/RecordQueryService.java
+backend/core-api/src/main/java/kr/mujoong/core/record/SessionRecordCapturedHandler.java
+backend/core-api/src/main/java/kr/mujoong/core/record/web/RecordController.java

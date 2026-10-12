@@ -69,7 +69,9 @@ class TimeLiteralScanTest {
             new Allowed(CONTRACT + "time/DelayQueueTimerDriver.java", "unit.convert(nanos, TimeUnit.NANOSECONDS)",
                     "Delayed 계약의 단위 변환(값은 남은 나노초)이다"),
             new Allowed(CONTRACT + "time/DelayQueueTimerDriver.java", "getDelay(TimeUnit.NANOSECONDS)",
-                    "Delayed 계약의 단위 변환으로 두 지연을 비교한다"));
+                    "Delayed 계약의 단위 변환으로 두 지연을 비교한다"),
+            new Allowed(CORE + "record/RecordCalendar.java", "day.plusDays(1)",
+                    "26 달력의 '그날'은 하루 단위 날짜 경계다(다음 날 0시, U4a-J8) — 설정할 시간 값이 아니다"));
 
     @Test
     void everyTimeLiteralInCoreProductionSourcesIsOnTheAllowList() {

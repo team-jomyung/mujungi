@@ -1,6 +1,9 @@
 package kr.mujoong.core.activity;
 
 import java.time.Instant;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -25,10 +28,13 @@ import kr.mujoong.core.activity.RealtimeSessionClient.InternalSessionView;
 import kr.mujoong.core.activity.RealtimeSessionClient.StartResult;
 import kr.mujoong.core.activity.RealtimeSessionClient.ViewResult;
 import kr.mujoong.core.activity.SessionPackageBuilder.SessionPackage;
+import kr.mujoong.core.catalog.ApprovedContent;
+import kr.mujoong.core.child.ChildProfileService;
+import kr.mujoong.core.child.ChildProfileService.ChildContext;
 import kr.mujoong.core.common.error.CoreApiException;
+import kr.mujoong.core.consent.ConsentPolicyService;
+import kr.mujoong.core.consent.ConsentPolicyService.GateResult;
 import kr.mujoong.core.device.DeviceViewAssembler;
-import kr.mujoong.core.identity.Child;
-import kr.mujoong.core.identity.ChildRepository;
 import kr.mujoong.core.identity.Guardian;
 import kr.mujoong.core.identity.GuardianRepository;
 import kr.mujoong.core.observability.CoreMetrics;
@@ -36,20 +42,24 @@ import kr.mujoong.core.observability.EventLogger;
 import org.springframework.beans.factory.DisposableBean;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * 자유대화 시작 (U1 3.5 Step 22 · BR6.1 ~ BR6.7 · BR6.17 · AC3.1.1 · AC3.1.3 · AC3.1.4 · AC3.1.6 · AC3.1.8 · NFR3.1 · OD-9).
+ * 자유대화 시작 (U1 3.5 Step 22 · BR6.1 ~ BR6.7 · BR6.17 · AC3.1.1 · AC3.1.3 · AC3.1.4 · AC3.1.6 · AC3.1.8 · NFR3.1 · OD-9, U4a가 계약 8절
+ * 포트 · 08 배경 저장을 붙임 · AC3.1.2 · AC3.1.7 · AC2.3.7).
  *
  * <ol>
- *   <li>입력 검증(BR6.4): context 서술 칸 knownContent · question은 200자 이하, 고르기 칸은 계약 값만. 위반은 400. context는 검증만 하고
- *       저장하지도 Realtime에 보내지도 않는다(요청 해시의 입력일 뿐).
+ *   <li>입력 검증(BR6.4): context 서술 칸 knownContent · question은 200자 이하, 고르기 칸은 계약 값만. 위반은 400. context는 Core에만
+ *       저장하고(08 배경, 결과 구조화 입력) 세션 패키지 · Realtime에는 보내지 않는다(빌더에 넘길 인자가 없다, NFR3 · AC3.1.7).
  *   <li>⓪ 보호자가 없으면 401, 삭제 접수 상태면 403 ACCOUNT_DELETION_IN_PROGRESS.
  *   <li>⓪′ (보호자, 멱등 키) 사본이 있으면 ① ~ ③을 건너뛰고 BR6.2 재생: 요청 해시가 다르면 409 IDEMPOTENCY_CONFLICT, 로컬 FAILED면 저장된
  *       start_result_code(503 · 423 · 409 · 202) 재생, 그 밖은 첫 응답 202 {sessionId, REQUESTED}.
- *   <li>① 현재 정책 버전 4항목 동의(403 CONSENT_MISSING). ② 진행 중 사본(409 SESSION_IN_PROGRESS): REQUESTED가 아니면 Realtime view로
+ *   <li>① 아이(ChildContext 포트, 없으면 403 CONSENT_MISSING) · 현재 정책 버전 4항목 동의(ConsentGate 포트 {@code ConsentPolicyService.check},
+ *       403 CONSENT_MISSING). ② 진행 중 사본(409 SESSION_IN_PROGRESS): REQUESTED가 아니면 Realtime view로
  *       한 번 대조해 낡은 사본을 고친 뒤 다시 판정(계정 잠김 방지). ③ 기기 판정이 안정이 아니면 423 DEVICE_NOT_STABLE.
- *   <li>REQUESTED 사본(status_version 0)을 넣고(ON CONFLICT DO NOTHING — 같은 키 동시 요청은 승자 행을 재생, 진행 중 하나 위반은 409)
- *       세션 패키지로 Realtime을 부른다. 202면 202 {sessionId, REQUESTED}. 423 → 로컬 FAILED(423) · DEVICE_NOT_STABLE, 409 → 로컬
+ *   <li>REQUESTED 사본(status_version 0)과 08 배경을 한 트랜잭션에 넣고(ON CONFLICT DO NOTHING — 같은 키 동시 요청은 승자 행을 재생, 진행
+ *       중 하나 위반은 409) 세션 패키지(아이 문맥 · 종료 표현 스냅숏 · 동의 스냅숏 · 고정한 승인 문구)로 Realtime을 부른다. 202면 202 {sessionId, REQUESTED}. 423 → 로컬 FAILED(423) · DEVICE_NOT_STABLE, 409 → 로컬
  *       FAILED(409) · SESSION_IN_PROGRESS, 확정 실패 · 재시도 뒤 시간 초과 · 차단기 열림 → 로컬 FAILED(503) · REALTIME_UNAVAILABLE + 취소
  *       (CORE_ABANDONED, 응답 뒤 별도 가상 스레드). 시간 초과 재시도 뒤의 409도 로컬 FAILED(409)에 취소를 더한다 — 첫 시작이 Realtime에서
  *       아직 INIT이면 곧 커밋돼 진행되는데 사본이 종료 상태라 보호자 끝내기가 Realtime에 가지 않기 때문이다(BR6.6 끝 문장 · J320). 로컬
@@ -65,14 +75,23 @@ public class StartActivityService implements DisposableBean {
     private static final Set<String> SITUATION_TYPES = Set.of("FRIEND", "SCHOOL", "FAMILY", "ACADEMY", "OTHER");
     private static final Set<String> SOURCE_TYPES = Set.of("SEEN", "HEARD_FROM_CHILD");
 
+    /**
+     * 자유대화 패키지에 싣는 승인 문구(CLOSING · WAITING_FILLER 밖, U4a-J2): 시작 안내 · 재안내 · 대안 제안 · 공백 경고 · 종료 확인. 승인 · 음성
+     * 있는 것만 실린다(AC6.3.7 문구 버전 고정). 연습 문구(INTRO_PRACTICE · HELP_OFFER)는 U5가 연습 패키지에 싣는다.
+     */
+    static final List<String> FREE_TALK_SESSION_CONTENT =
+            List.of("INTRO_FREE_TALK", "RE_PROMPT", "DECLINE_ALTERNATIVE", "SILENCE_WARNING", "STOP_CONFIRM");
+
     private final GuardianRepository guardians;
-    private final ChildRepository children;
+    private final ChildProfileService childProfiles;
     private final ActivityCopyRepository activities;
-    private final ConsentGate consentGate;
+    private final ActivityContextRepository contexts;
+    private final ConsentPolicyService consentPolicy;
     private final DeviceViewAssembler deviceView;
     private final ApprovedContentCatalog catalog;
     private final SessionPackageBuilder packageBuilder;
     private final RealtimeSessionClient realtime;
+    private final TransactionTemplate transactions;
     private final JsonCodec json;
     private final EventLogger events;
     private final CoreMetrics metrics;
@@ -80,47 +99,69 @@ public class StartActivityService implements DisposableBean {
     private final Executor cancelExecutor;
     private final ExecutorService ownedExecutor;
 
+    /** 시작이 쓰는 저장소 · 포트 묶음(생성자 인자를 줄인다). */
+    public record Ports(
+            GuardianRepository guardians,
+            ChildProfileService childProfiles,
+            ActivityCopyRepository activities,
+            ActivityContextRepository contexts,
+            ConsentPolicyService consentPolicy,
+            DeviceViewAssembler deviceView,
+            ApprovedContentCatalog catalog) {
+
+        public Ports {
+            Objects.requireNonNull(guardians, "guardians");
+            Objects.requireNonNull(childProfiles, "childProfiles");
+            Objects.requireNonNull(activities, "activities");
+            Objects.requireNonNull(contexts, "contexts");
+            Objects.requireNonNull(consentPolicy, "consentPolicy");
+            Objects.requireNonNull(deviceView, "deviceView");
+            Objects.requireNonNull(catalog, "catalog");
+        }
+    }
+
     @Autowired
     public StartActivityService(
             GuardianRepository guardians,
-            ChildRepository children,
+            ChildProfileService childProfiles,
             ActivityCopyRepository activities,
-            ConsentGate consentGate,
+            ActivityContextRepository contexts,
+            ConsentPolicyService consentPolicy,
             DeviceViewAssembler deviceView,
             ApprovedContentCatalog catalog,
             SessionPackageBuilder packageBuilder,
             RealtimeSessionClient realtime,
+            PlatformTransactionManager transactionManager,
             JsonCodec json,
             EventLogger events,
             CoreMetrics metrics,
             MujoongClock clock) {
-        this(guardians, children, activities, consentGate, deviceView, catalog, packageBuilder, realtime, json, events,
-                metrics, clock, null);
+        this(new Ports(guardians, childProfiles, activities, contexts, consentPolicy, deviceView, catalog), packageBuilder,
+                realtime, transactionManager, json, events, metrics, clock, null);
     }
 
     /**
      * @param cancelExecutor 취소 호출을 돌릴 실행기(시험은 호출 스레드 실행기). null이면 가상 스레드 실행기를 만든다
      */
     public StartActivityService(
-            GuardianRepository guardians,
-            ChildRepository children,
-            ActivityCopyRepository activities,
-            ConsentGate consentGate,
-            DeviceViewAssembler deviceView,
-            ApprovedContentCatalog catalog,
+            Ports ports,
             SessionPackageBuilder packageBuilder,
             RealtimeSessionClient realtime,
+            PlatformTransactionManager transactionManager,
             JsonCodec json,
             EventLogger events,
             CoreMetrics metrics,
             MujoongClock clock,
             Executor cancelExecutor) {
-        this.guardians = Objects.requireNonNull(guardians, "guardians");
-        this.children = Objects.requireNonNull(children, "children");
-        this.activities = Objects.requireNonNull(activities, "activities");
-        this.consentGate = Objects.requireNonNull(consentGate, "consentGate");
-        this.deviceView = Objects.requireNonNull(deviceView, "deviceView");
-        this.catalog = Objects.requireNonNull(catalog, "catalog");
+        Objects.requireNonNull(ports, "ports");
+        this.guardians = ports.guardians();
+        this.childProfiles = ports.childProfiles();
+        this.activities = ports.activities();
+        this.contexts = ports.contexts();
+        this.consentPolicy = ports.consentPolicy();
+        this.transactions = new TransactionTemplate(Objects.requireNonNull(transactionManager, "transactionManager"));
+        this.deviceView = ports.deviceView();
+        this.catalog = ports.catalog();
         this.packageBuilder = Objects.requireNonNull(packageBuilder, "packageBuilder");
         this.realtime = Objects.requireNonNull(realtime, "realtime");
         this.json = Objects.requireNonNull(json, "json");
@@ -157,10 +198,12 @@ public class StartActivityService implements DisposableBean {
         }
 
         Instant now = clock.now();
-        Child child = children.findByGuardianId(guardianId)
+        ChildContext child = childProfiles.childContext(guardianId)
                 .orElseThrow(() -> CoreApiException.of(ErrorCode.CONSENT_MISSING));
-        String policyVersion = consentGate.check(child.getId(), now)
-                .orElseThrow(() -> CoreApiException.of(ErrorCode.CONSENT_MISSING));
+        GateResult consent = consentPolicy.check(guardianId);
+        if (!consent.ok()) {
+            throw CoreApiException.of(ErrorCode.CONSENT_MISSING);
+        }
         try {
             rejectIfInProgress(guardianId);
         } catch (CoreApiException inProgress) {
@@ -180,11 +223,24 @@ public class StartActivityService implements DisposableBean {
         ApprovedItem waitingFiller = catalog.waitingFiller()
                 .orElseThrow(() -> new IllegalStateException("승인 문구 WAITING_FILLER가 없다(시드 확인)"));
 
+        Map<String, ApprovedItem> approved = new LinkedHashMap<>();
+        approved.put(ApprovedContent.CODE_CLOSING, closing);
+        approved.put(ApprovedContent.CODE_WAITING_FILLER, waitingFiller);
+        catalog.sessionContent(FREE_TALK_SESSION_CONTENT).forEach(approved::putIfAbsent);
+
         UUID sessionId = UUID.randomUUID();
-        SessionPackage sessionPackage = packageBuilder.build(sessionId, request.idempotencyKey(), guardianId, child,
-                readiness.deviceId(), policyVersion, closing, waitingFiller);
-        boolean inserted = activities.insertRequested(new NewActivity(sessionId, guardianId, child.getId(),
-                readiness.deviceId(), ActivityType.FREE_TALK, key, requestHash, now));
+        SessionPackage sessionPackage = packageBuilder.build(sessionId, request.idempotencyKey(), guardianId,
+                readiness.deviceId(), child, consent.snapshot(), approved);
+        // 사본 행과 08 배경을 한 트랜잭션에 쓴다(배경은 이긴 요청만 쓴다, AC3.1.2 · AC3.1.8 · U4a-J1)
+        Boolean insertedResult = transactions.execute(status -> {
+            boolean wrote = activities.insertRequested(new NewActivity(sessionId, guardianId, child.childId(),
+                    readiness.deviceId(), ActivityType.FREE_TALK, key, requestHash, now));
+            if (wrote) {
+                contexts.insert(sessionId, guardianId, child.childId(), request.context(), now);
+            }
+            return wrote;
+        });
+        boolean inserted = Boolean.TRUE.equals(insertedResult);
         if (!inserted) {
             // 같은 키 동시 요청의 패자는 승자 행을 재생하고, 진행 중 하나 위반이면 409(BR6.2 · BR6.3)
             return activities.findByIdempotencyKey(guardianId, key)

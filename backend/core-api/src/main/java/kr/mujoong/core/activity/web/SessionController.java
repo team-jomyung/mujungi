@@ -1,5 +1,6 @@
 package kr.mujoong.core.activity.web;
 
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -10,7 +11,9 @@ import kr.mujoong.contract.status.ActivityType;
 import kr.mujoong.contract.status.EndReason;
 import kr.mujoong.contract.status.FailureCode;
 import kr.mujoong.contract.status.SessionStatus;
+import kr.mujoong.core.activity.CurrentSessionService;
 import kr.mujoong.core.activity.EndSessionService;
+import kr.mujoong.core.activity.LiveExtras;
 import kr.mujoong.core.activity.EndSessionService.Ended;
 import kr.mujoong.core.activity.SessionViewService;
 import kr.mujoong.core.activity.SessionViewService.LiveView;
@@ -32,8 +35,10 @@ import org.springframework.web.bind.annotation.RestController;
  * AC1.1.9).
  *
  * <ul>
- *   <li>{@code GET /api/sessions/{sessionId}?sinceSeq=n} → 200 LiveView(live-view.schema.json). technicalPause · silenceWarning · practice는
- *       null, gaps는 빈 목록(U3 · U4 · U5). items는 Realtime이 낸 아이 전사 · 승인된 AI 말을 그대로 싣는다. sinceSeq가 정수가 아니거나 음수면 400.
+ *   <li>{@code GET /api/sessions/{sessionId}?sinceSeq=n} → 200 LiveView(live-view.schema.json). gaps · technicalPause · silenceWarning ·
+ *       practice는 Realtime 값을 계약 모양으로 거른 것(U4a). items는 Realtime이 낸 아이 전사 · 승인된 AI 말을 그대로 싣는다. sinceSeq가 정수가
+ *       아니거나 음수면 400.
+ *   <li>{@code GET /api/sessions/current} → 200 {@code {session: SessionSummary | null}}(U4a, 편차 (U4a-a)).
  *   <li>{@code POST /api/sessions/{sessionId}/end} {@code {requestId}} → 202 {@code {status: CLOSING}}. 409 SESSION_NOT_ACTIVE · 503
  *       REALTIME_UNAVAILABLE. 계정 삭제 접수면 403. 같은 requestId 재시도는 서비스 · Realtime이 멱등으로 받는다.
  * </ul>
@@ -46,13 +51,19 @@ public class SessionController {
 
     private final SessionViewService viewService;
     private final EndSessionService endService;
+    private final CurrentSessionService currentSessions;
     private final GuardianRepository guardians;
     private final JsonCodec json;
 
     public SessionController(
-            SessionViewService viewService, EndSessionService endService, GuardianRepository guardians, JsonCodec json) {
+            SessionViewService viewService,
+            EndSessionService endService,
+            CurrentSessionService currentSessions,
+            GuardianRepository guardians,
+            JsonCodec json) {
         this.viewService = Objects.requireNonNull(viewService, "viewService");
         this.endService = Objects.requireNonNull(endService, "endService");
+        this.currentSessions = Objects.requireNonNull(currentSessions, "currentSessions");
         this.guardians = Objects.requireNonNull(guardians, "guardians");
         this.json = Objects.requireNonNull(json, "json");
     }
@@ -66,6 +77,17 @@ public class SessionController {
         UUID id = ApiResponses.uuid(sessionId).orElseThrow(() -> CoreApiException.of(ErrorCode.NOT_FOUND));
         LiveView view = viewService.view(guardianId, id, parseSinceSeq(sinceSeq));
         return ApiResponses.json(200, LiveViewBody.of(view));
+    }
+
+    /**
+     * 04 지금 활동 · 알림 진입 재조회 {@code GET /api/sessions/current}(U4a · AC1.4.13 · AC1.7.4 · AC1.1.6). 진행 중 사본이 있으면 그 요약,
+     * 없으면 null을 늘 {@code {session}}으로 감싼다(편차 (U4a-a)). 계정 삭제 접수면 403.
+     */
+    @GetMapping("/api/sessions/current")
+    ResponseEntity<CurrentBody> current(@AuthenticationPrincipal GuardianPrincipal guardian) {
+        UUID guardianId = GuardianPrincipal.requireActive(guardian, guardians);
+        return ApiResponses.json(200, new CurrentBody(currentSessions.current(guardianId).map(SessionSummaryBody::of)
+                .orElse(null)));
     }
 
     @PostMapping("/api/sessions/{sessionId}/end")
@@ -96,6 +118,10 @@ public class SessionController {
         }
     }
 
+    /** {@code GET /api/sessions/current} 200 본문(session-current-response.schema.json). */
+    public record CurrentBody(SessionSummaryBody session) {
+    }
+
     /** 끝내기 요청 본문(session-end-request.schema.json). */
     public record EndRequest(UUID requestId) {
     }
@@ -122,9 +148,9 @@ public class SessionController {
             String serverTime,
             String observedAt,
             boolean stale,
-            Object technicalPause,
-            Object silenceWarning,
-            Object practice,
+            Map<String, Object> technicalPause,
+            Map<String, Object> silenceWarning,
+            Map<String, Object> practice,
             List<Map<String, Object>> gaps,
             List<Map<String, Object>> items,
             long nextSeq) {
@@ -136,7 +162,55 @@ public class SessionController {
                     view.failureCode(), view.confirmed(), ApiResponses.time(view.requestedAt()),
                     ApiResponses.time(view.startedAt()), ApiResponses.time(view.endedAt()), view.statusVersion(),
                     ApiResponses.time(view.serverTime()), ApiResponses.time(view.observedAt()), view.stale(),
-                    null, null, null, view.gaps(), view.items(), view.nextSeq());
+                    technicalPause(view.technicalPause()), silenceWarning(view.silenceWarning()), practice(view.practice()),
+                    view.gaps().stream().map(LiveViewBody::gap).toList(), view.items(), view.nextSeq());
+        }
+
+        private static Map<String, Object> gap(LiveExtras.Gap gap) {
+            Map<String, Object> body = new LinkedHashMap<>();
+            body.put("from", ApiResponses.time(gap.from()));
+            body.put("to", ApiResponses.time(gap.to()));
+            body.put("kind", gap.kind());
+            return body;
+        }
+
+        private static Map<String, Object> technicalPause(LiveExtras.TechnicalPause pause) {
+            if (pause == null) {
+                return null;
+            }
+            Map<String, Object> body = new LinkedHashMap<>();
+            body.put("kind", pause.kind());
+            body.put("since", ApiResponses.time(pause.since()));
+            return body;
+        }
+
+        private static Map<String, Object> silenceWarning(LiveExtras.SilenceWarning warning) {
+            if (warning == null) {
+                return null;
+            }
+            Map<String, Object> body = new LinkedHashMap<>();
+            body.put("silentSince", ApiResponses.time(warning.silentSince()));
+            body.put("endsAt", ApiResponses.time(warning.endsAt()));
+            return body;
+        }
+
+        /** 연습 머리: 있는 값만 싣는다(스키마의 모든 필드가 선택). */
+        private static Map<String, Object> practice(LiveExtras.Practice practice) {
+            if (practice == null) {
+                return null;
+            }
+            Map<String, Object> body = new LinkedHashMap<>();
+            putIfPresent(body, "goalIndex", practice.goalIndex());
+            putIfPresent(body, "goalCount", practice.goalCount());
+            putIfPresent(body, "goalName", practice.goalName());
+            putIfPresent(body, "stage", practice.stage());
+            return body;
+        }
+
+        private static void putIfPresent(Map<String, Object> body, String key, Object value) {
+            if (value != null) {
+                body.put(key, value);
+            }
         }
 
         @Override

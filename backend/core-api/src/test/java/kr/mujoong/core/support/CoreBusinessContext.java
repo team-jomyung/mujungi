@@ -9,6 +9,7 @@ import kr.mujoong.core.common.db.DbSessionLimits;
 import kr.mujoong.core.config.CorePropertiesConfig;
 import kr.mujoong.core.config.CoreRuntimeConfig;
 import kr.mujoong.core.identity.GuardianRepository;
+import kr.mujoong.core.identity.GuardianWriteLock;
 import kr.mujoong.core.startup.RequiredSecretsCheck;
 import kr.mujoong.core.startup.SchemaVersionCheck;
 import kr.mujoong.testsupport.db.MujoongPostgres;
@@ -68,6 +69,10 @@ public final class CoreBusinessContext {
     @ComponentScan(basePackages = {
         "kr.mujoong.core.device",
         "kr.mujoong.core.activity",
+        // U4a: 시작 서비스가 계약 8절 포트(ChildContext · ConsentGate)를 쓰고, 기록 처리기가 Inbox 표에 붙는다
+        "kr.mujoong.core.child",
+        "kr.mujoong.core.consent",
+        "kr.mujoong.core.record",
         "kr.mujoong.core.messaging",
         "kr.mujoong.core.internalhttp",
         "kr.mujoong.core.health",
@@ -81,7 +86,8 @@ public final class CoreBusinessContext {
         DbSessionLimits.class,
         DbPoolWaitMonitor.class,
         RequiredSecretsCheck.class,
-        SchemaVersionCheck.class
+        SchemaVersionCheck.class,
+        GuardianWriteLock.class
     })
     static class BusinessBeans {
     }

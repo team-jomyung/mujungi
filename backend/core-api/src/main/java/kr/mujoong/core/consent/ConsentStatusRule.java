@@ -23,7 +23,7 @@ import kr.mujoong.core.identity.Consent;
  *   <li>NOT_GIVEN: 그 밖(동의 행 없음, 일부만, 철회).
  * </ul>
  *
- * <p>상태가 없는 정적 규칙이라 U1 시작 게이트(activity.ConsentGate)도 같은 판정을 쓴다. 정책 버전을 모르면 NOT_GIVEN(닫힌 쪽)이다.
+ * <p>상태가 없는 정적 규칙이다. 활동 시작 게이트는 ConsentPolicyService.check(계약 8절 포트)로 이 판정을 쓴다(U4a). 정책 버전을 모르면 NOT_GIVEN(닫힌 쪽)이다.
  */
 public final class ConsentStatusRule {
 

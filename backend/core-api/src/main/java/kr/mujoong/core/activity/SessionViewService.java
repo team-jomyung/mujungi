@@ -27,8 +27,8 @@ import org.springframework.stereotype.Service;
  * 사본으로 답하고 items는 비우고 nextSeq는 요청 값으로 두며 {@code mujoong_session_view_fallback_total}을 올린다. observedAt은 Core가
  * Realtime에서 마지막으로 받은 시각(조회 성공 수신 시각과 사본 갱신 시각 중 늦은 값, 메모리 허용)이고, 종료 아닌 세션에서
  * now − observedAt이 {@code timing.core.device-status-stale}(30초)을 넘으면 stale이다(조회 한 번 실패만으로는 stale 아님, 한 번도 받지
- * 못했으면 requested_at 기준). technicalPause · silenceWarning · practice는 null, gaps는 빈 목록(U3 · U4 · U5가 채운다). 판정값 · 08
- * 입력 원문은 응답에 없다.
+ * 못했으면 requested_at 기준). gaps · technicalPause · silenceWarning · practice는 Realtime 값을 계약 모양으로 걸러 싣는다(U4a, 값의 생산은
+ * U3 · U4b · U5). 판정값 · 08 입력 원문은 응답에 없다.
  */
 @Service
 @SingleInstanceAssumption(si = "SI-8", reason = "조회 성공 시각(observedAt)이 인스턴스마다 달라 같은 세션의 stale 판정이 흔들린다")
@@ -106,7 +106,10 @@ public class SessionViewService {
                 now,
                 observedAt,
                 staleEvaluator.isSessionStale(observedAt, copy.requestedAt(), status.isTerminal(), now),
-                List.of(),
+                LiveExtras.gaps(view.gaps()),
+                LiveExtras.technicalPause(view.technicalPause()),
+                LiveExtras.silenceWarning(view.silenceWarning()),
+                LiveExtras.practice(view.practice()),
                 items,
                 nextSeq);
     }
@@ -127,6 +130,9 @@ public class SessionViewService {
                 observedAt,
                 staleEvaluator.isSessionStale(observedAt, copy.requestedAt(), copy.status().isTerminal(), now),
                 List.of(),
+                null,
+                null,
+                null,
                 List.of(),
                 sinceSeq);
     }
@@ -150,7 +156,7 @@ public class SessionViewService {
     }
 
     /** 사본 열 문자열을 enum으로 읽는다. 없거나 모르는 값은 null('알 수 없음'은 응답에 싣지 않는다). */
-    static <E extends Enum<E>> E parse(Class<E> type, String value) {
+    public static <E extends Enum<E>> E parse(Class<E> type, String value) {
         if (value == null) {
             return null;
         }
@@ -171,8 +177,8 @@ public class SessionViewService {
     }
 
     /**
-     * 보호자 LiveView(live-view.schema.json 중 U1이 채우는 값). technicalPause · silenceWarning · practice는 U1에서 늘 null이라 필드를 두지
-     * 않는다(직렬화 쪽이 null로 쓴다, Step 31). items는 Realtime 응답을 그대로 싣는다.
+     * 보호자 LiveView(live-view.schema.json). items는 Realtime 응답을 그대로 싣는다. gaps · technicalPause · silenceWarning · practice는
+     * Realtime 값을 {@link LiveExtras}로 거른 것이고, Realtime에 닿지 못하면 빈 목록 · null이다(U4a · AC3.2.17).
      *
      * @param observedAt 한 번도 받지 못했으면 null
      */
@@ -190,7 +196,10 @@ public class SessionViewService {
             Instant serverTime,
             Instant observedAt,
             boolean stale,
-            List<Map<String, Object>> gaps,
+            List<LiveExtras.Gap> gaps,
+            LiveExtras.TechnicalPause technicalPause,
+            LiveExtras.SilenceWarning silenceWarning,
+            LiveExtras.Practice practice,
             List<Map<String, Object>> items,
             long nextSeq) {
 

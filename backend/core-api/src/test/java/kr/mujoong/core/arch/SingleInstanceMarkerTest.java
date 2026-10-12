@@ -32,10 +32,10 @@ import java.util.stream.IntStream;
 import java.util.stream.Stream;
 import kr.mujoong.contract.log.EventCode;
 import kr.mujoong.core.activity.ApprovedContentCatalog;
-import kr.mujoong.core.activity.ConsentGate;
 import kr.mujoong.core.activity.PreparingTimeoutChecker;
 import kr.mujoong.core.activity.SessionViewService;
 import kr.mujoong.core.common.scaling.SingleInstanceAssumption;
+import kr.mujoong.core.consent.PolicyTermsReader;
 import kr.mujoong.core.device.DeviceExpiryCleanupJob;
 import kr.mujoong.core.messaging.CoreInboxRepoller;
 import kr.mujoong.core.messaging.CoreOutboxSender;
@@ -108,7 +108,9 @@ class SingleInstanceMarkerTest {
     static final Set<String> NOT_CORE = Set.of("SI-1", "SI-2", "SI-3", "SI-4", "SI-9", "SI-10", "SI-11", "SI-12");
 
     /** SI-11 전제를 지는 클래스: 승인 문구 · 현재 정책 버전 읽기. */
-    static final List<Class<?>> SI_11_PREMISE = List.of(ApprovedContentCatalog.class, ConsentGate.class);
+    // U4a: 시작 동의 판정이 U1 ConsentGate에서 계약 8절 포트(ConsentPolicyService)로 옮겼다. 그 포트가 현재 정책 버전을 읽는 곳은
+    // PolicyTermsReader(→ 카탈로그)라 그 클래스가 전제를 진다
+    static final List<Class<?>> SI_11_PREMISE = List.of(ApprovedContentCatalog.class, PolicyTermsReader.class);
 
     // ------------------------------------------------------------------ 표와 표식 대조
 
