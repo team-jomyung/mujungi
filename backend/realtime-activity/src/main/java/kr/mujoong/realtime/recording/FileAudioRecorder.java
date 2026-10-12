@@ -13,13 +13,16 @@ import java.nio.file.attribute.PosixFilePermissions;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayDeque;
+import java.util.Collections;
 import java.util.EnumMap;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
@@ -50,6 +53,7 @@ import org.springframework.transaction.support.TransactionTemplate;
  *       계속, U3-J15).
  *   <li>실패: 파일 · DB 오류는 앱 오류 한 줄을 남기고 그 세션 기록만 멈춘다. 앱 종료 때는 남은 대기열을 쓰고 열린 파일을 모두 닫는다(DB 문장 제한까지
  *       기다린다).
+ *   <li>차단: 계정 삭제 참가자가 진행 중 세션을 {@link #block}하면 그 세션의 새 메타 · 파일 · 조각을 받지 않고 열린 파일을 닫는다(리뷰 반영 8).
  * </ul>
  * 원음은 로그 · 지표 라벨에 쓰지 않는다.
  */
@@ -73,6 +77,13 @@ public class FileAudioRecorder implements AudioRecordings, DisposableBean {
     private record Close(UUID sessionId, Instant endedAt) implements Item {
     }
 
+    /** 기록 차단: 그 세션의 열린 파일을 닫고 {@code done}을 끝낸다(리뷰 반영 8). */
+    private record Block(UUID sessionId, CompletableFuture<Void> done) implements Item {
+    }
+
+    /** 기억하는 차단 세션 수 상한(오래된 것부터 잊는다 — 차단은 지우는 동안의 경합만 막으면 된다). */
+    static final int MAX_BLOCKED = 10_000;
+
     private final AudioRecordingRepository repository;
     private final TransactionTemplate transactions;
     private final DbRetry dbRetry;
@@ -87,6 +98,8 @@ public class FileAudioRecorder implements AudioRecordings, DisposableBean {
 
     private final ReentrantLock lock = new ReentrantLock();
     private final Condition available = lock.newCondition();
+    /** 차단 차례를 처리했다(차단을 부른 쪽이 기다린다). */
+    private final Condition blockHandled = lock.newCondition();
     private final ArrayDeque<Item> queue = new ArrayDeque<>();
     private int queuedChunks;
     private boolean stopping;
@@ -95,6 +108,16 @@ public class FileAudioRecorder implements AudioRecordings, DisposableBean {
 
     /** 기록기 스레드만 쓰는 세션별 파일. */
     private final Map<UUID, SessionFiles> open = new HashMap<>();
+    /** 기록을 막은 세션(계정 삭제 중). 파일 만들기와 차단 등록은 {@link #creation} 잠금으로 서로를 기다린다. */
+    private final Set<UUID> blocked = Collections.synchronizedSet(Collections.newSetFromMap(new LinkedHashMap<>() {
+        private static final long serialVersionUID = 1L;
+
+        @Override
+        protected boolean removeEldestEntry(Map.Entry<UUID, Boolean> eldest) {
+            return size() > MAX_BLOCKED;
+        }
+    }));
+    private final ReentrantLock creation = new ReentrantLock();
 
     @Autowired
     public FileAudioRecorder(AudioRecordingRepository repository, PlatformTransactionManager transactionManager,
@@ -180,6 +203,60 @@ public class FileAudioRecorder implements AudioRecordings, DisposableBean {
         return true;
     }
 
+    /**
+     * 리뷰 반영 8: 세션의 원음 기록을 막는다(계정 삭제 참가자가 지우기 전에 부른다). 돌아오면 ① 그 세션의 새 메타 · 파일은 더 생기지 않고 — 만들던
+     * 것은 메타가 커밋된 뒤다 — ② 이후 넘어오는 조각은 버리며 ③ 열린 파일은 닫혔다(기록기 스레드가 차례를 처리할 때까지 앱 종료 대기 상한만큼
+     * 기다린다). 그래서 이 뒤에 메타를 조회해 지우면 지운 파일이 다시 생기지 않는다.
+     *
+     * @return 열린 파일을 닫은 것까지 확인했으면 참(기다림 상한을 넘기면 거짓 — 차단 ① ②는 그래도 걸려 있다)
+     */
+    public boolean block(UUID sessionId) {
+        Objects.requireNonNull(sessionId, "sessionId");
+        creation.lock();
+        try {
+            blocked.add(sessionId);
+        } finally {
+            creation.unlock();
+        }
+        CompletableFuture<Void> closed = new CompletableFuture<>();
+        lock.lock();
+        try {
+            queue.addLast(new Block(sessionId, closed));
+            available.signalAll();
+        } finally {
+            lock.unlock();
+        }
+        if (drainNow()) {
+            // 기록기 스레드가 없다(작업을 돌리지 않는 장치) — 지금 스레드에서 처리했다
+            return closed.isDone();
+        }
+        long remaining = stopWait.toNanos();
+        lock.lock();
+        try {
+            while (!closed.isDone()) {
+                if (remaining <= 0) {
+                    return false;
+                }
+                remaining = blockHandled.awaitNanos(remaining);
+            }
+            return true;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return false;
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    private void signalBlockHandled() {
+        lock.lock();
+        try {
+            blockHandled.signalAll();
+        } finally {
+            lock.unlock();
+        }
+    }
+
     private void startWriter() {
         lock.lock();
         try {
@@ -200,7 +277,7 @@ public class FileAudioRecorder implements AudioRecordings, DisposableBean {
     }
 
     private void offerChunk(UUID sessionId, Speaker speaker, byte[] pcm) {
-        if (pcm == null || pcm.length == 0) {
+        if (pcm == null || pcm.length == 0 || blocked.contains(sessionId)) {
             return;
         }
         boolean dropped;
@@ -277,6 +354,17 @@ public class FileAudioRecorder implements AudioRecordings, DisposableBean {
                         files.finish(close.endedAt());
                     }
                 }
+                case Block block -> {
+                    try {
+                        SessionFiles files = open.remove(block.sessionId());
+                        if (files != null) {
+                            files.finish(clock.now());
+                        }
+                    } finally {
+                        block.done().complete(null);
+                        signalBlockHandled();
+                    }
+                }
             }
         } catch (RuntimeException e) {
             events.appError(EventLog.Component.VOICE_RELAY, e);
@@ -284,6 +372,10 @@ public class FileAudioRecorder implements AudioRecordings, DisposableBean {
     }
 
     private void write(Chunk chunk) {
+        if (blocked.contains(chunk.sessionId())) {
+            // 차단 전에 대기열에 들어온 조각(리뷰 반영 8)
+            return;
+        }
         SessionFiles files = open.computeIfAbsent(chunk.sessionId(), SessionFiles::new);
         if (files.stopped) {
             return;
@@ -368,13 +460,21 @@ public class FileAudioRecorder implements AudioRecordings, DisposableBean {
             }
             String relative = sessionId + "/" + (speaker == Speaker.CHILD ? "child.pcm" : "ai.pcm");
             UUID id = UUID.randomUUID();
+            // 리뷰 반영 8: 차단 확인과 메타 만들기를 한 잠금 안에서 — 차단이 돌아온 뒤에는 새 메타가 생기지 않는다
+            creation.lock();
             try {
+                if (blocked.contains(sessionId)) {
+                    stop(startedAt);
+                    return null;
+                }
                 transactions.executeWithoutResult(status ->
                         repository.insert(id, sessionId, speaker, relative, FORMAT, startedAt, clock.now()));
             } catch (RuntimeException e) {
                 events.appError(EventLog.Component.VOICE_RELAY, e);
                 stop(startedAt);
                 return null;
+            } finally {
+                creation.unlock();
             }
             try {
                 Path path = resolve(relative);

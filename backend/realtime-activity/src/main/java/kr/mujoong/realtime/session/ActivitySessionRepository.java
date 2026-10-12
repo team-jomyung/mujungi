@@ -70,7 +70,10 @@ public class ActivitySessionRepository {
             + " where (guardian_id = :guardianId or device_id = :deviceId) and status = any(:statuses)"
             + " order by created_at, id";
 
-    private static final String SELECT_BY_STATUS = "select " + COLUMNS + " from realtime.realtime_activity_session"
+    private static final String SELECT_IN_PROGRESS_IDS_BY_GUARDIAN = "select id from realtime.realtime_activity_session"
+            + " where guardian_id = :guardianId and status = any(:statuses) order by created_at, id";
+
+    private static final String SELECT_BY_STATUS ="select " + COLUMNS + " from realtime.realtime_activity_session"
             + " where status = any(:statuses) order by created_at, id";
 
     /** 바꾸는 열 묶음. null 인자는 기존 값을 남긴다. started_at은 처음 ACTIVE 값을 남긴다. */
@@ -147,6 +150,14 @@ public class ActivitySessionRepository {
         ClockParams.uuid(params, "deviceId", Objects.requireNonNull(deviceId, "deviceId"));
         ClockParams.textArray(params, "statuses", names(IN_PROGRESS));
         return jdbc.query(SELECT_IN_PROGRESS, params, ROW_MAPPER);
+    }
+
+    /** 보호자의 진행 중 세션 id(계정 삭제 참가자가 지우기 전에 기록을 막는다, 리뷰 반영 8). */
+    public List<UUID> findInProgressIds(UUID guardianId) {
+        MapSqlParameterSource params = new MapSqlParameterSource();
+        ClockParams.uuid(params, "guardianId", Objects.requireNonNull(guardianId, "guardianId"));
+        ClockParams.textArray(params, "statuses", names(IN_PROGRESS));
+        return jdbc.query(SELECT_IN_PROGRESS_IDS_BY_GUARDIAN, params, (rs, rowNum) -> ClockParams.uuid(rs, "id"));
     }
 
     /** 진행 중(비종료) 세션 전부(BR6.13 S3a 재시작 정리 · R3-6 고아 점검). 만든 순서. */

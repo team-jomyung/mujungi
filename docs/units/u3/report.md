@@ -33,7 +33,7 @@
 | VoiceRelay(L3) | 공급자 `session.response.cancel` · `session.instructions.correct`, 확정 전사 `confidence`, ACTIVE 중 공급자 끊김은 ABORTED(DISCONNECT, PROVIDER_LOST), 동의된 세션의 원음 파일(전용 스레드 · 유계 대기열 · 세션당 64MB · 디렉터리 700 · 파일 600) | `realtime/voice/` · `realtime/recording/` · `session/SessionExecutor.java` |
 | OutputGate(L3) | 끼어들기 · 종료 의도 때 열린 구간과 그 응답의 늦은 조각 폐기, 폐기 뒤 응답당 한 번 지시 교정(범주별 고정 문장), 대화가 넘어간 미완 구간은 교정하지 않음 | `realtime/gate/OutputGate.java` · `SessionExecutor` |
 | ConversationLog(L3 · L4) | 불확실 표시(review_needed), 끊김 구간 기록과 12 조회의 `gaps`, 계정 삭제 참가자(전사 지움 · 원음 파일과 메타 · 끊김 구간 · 끊김 사건 · 연결 행) | `realtime/log/` |
-| DialogPolicy(L4) | 역할 지식을 분리한 대화 지시문, 종료 의도 판정기(STOP · CONFIRM · NONE, 20건 세트 오인식 0 · 미인식 0), 참여 판단 추적기(20초 · 재안내 · 대안 1회 · 최대 3회). 실행기는 STOP이면 출력을 취소하고 `CHILD_STOP_INTENT`를, CONFIRM이면 `CHILD_STOP_UNCLEAR`만 남긴다 | `realtime/dialog/` |
+| DialogPolicy(L4) | 역할 지식을 분리한 대화 지시문, 종료 의도 판정기(STOP · CONFIRM · NONE, 20건 세트 오인식 0 · 미인식 0), 참여 판단 추적기(20초 · 재안내 · 대안 1회 · 최대 3회 — 리뷰 반영 10으로 뺐다, 11절). 실행기는 STOP이면 출력을 취소하고 `CHILD_STOP_INTENT`를, CONFIRM이면 `CHILD_STOP_UNCLEAR`만 남긴다 | `realtime/dialog/` |
 | DeviceWeb T19(L5) | 재접속 1 · 2 · 4초 뒤 5초, '연결 끊김'과 부제 '다시 연결하고 있어요', HELLO resume와 이어가기(끊긴 재생은 STOPPED DISCONNECTED), opId 중복 실행 방지, 재생 중 아이 음성 200ms면 즉시 멈춤(LOCAL_VOICE_ACTIVITY), 1초 PROGRESS와 STOPPED playedRange, 정상값과 다를 때만 DEVICE_STATE, Wake Lock 해제 감지 | `frontend/src/device/` · `frontend/src/shared/` |
 | 도구 · CI(L5 · L6) | 가짜 공급자의 취소 · 교정 처리와 기록, `--confidence`, CI와 verify.sh가 프런트 · tools 시험 폴더 전부를 돌림 | `tools/fake-provider/` · `.github/workflows/ci.yml` · `scripts/verify/a-checks.sh` |
 
@@ -137,7 +137,7 @@ U1 동작이 U3에서 뜻대로 바뀐 곳만 기대값을 바꿨고 단언 수�
 
 막혀서 못 한 일은 없다. 아래는 다른 유닛 몫이거나 실기 · 운영에서만 확인할 수 있는 일이다.
 
-- **U4**: 종료 의도 확정 전이 CLOSING(CHILD_STOP)과 마무리 인사 · 확인 질문(STOP_CONFIRM · RE_PROMPT), 참여 판단 추적기를 시계와 함께 실행기에 연결, WAITING_CHILD · DECLINED · SILENCE 전이, UNCONFIRMED 끊김 구간, 12 화면의 끊김 구간 표시(`device.gap-display` 10초).
+- **U4**: 종료 의도 확정 전이 CLOSING(CHILD_STOP)과 마무리 인사 · 확인 질문(STOP_CONFIRM · RE_PROMPT), 참여 판단 추적기를 시계와 함께 들여 실행기에 연결(리뷰 반영 10으로 이번 PR에서 뺐다 — 커밋 867f0a0의 `dialog/JoinTracker`를 되살려 쓸 수 있다), WAITING_CHILD · DECLINED · SILENCE 전이, UNCONFIRMED 끊김 구간, 12 화면의 끊김 구간 표시(`device.gap-display` 10초).
 - **삭제 연결(U4)**: Realtime이 `DeletionRequested`를 받아 `RealtimeVoiceDeletionParticipant.deleteByGuardian`을 돌리고 `DeletionCompleted`를 내는 처리기.
 - **실공급자 어댑터(11/2, V-2)**: 응답 취소 · 지시 교정 · confidence를 실제 공급자 형식에 맞춰야 한다.
 - **실기 확인**: 에코 제거가 켜진 마이크에서 끼어들기 임계값 500이 맞는지, Wake Lock 해제와 탭 숨김 보고가 기기마다 맞는지. 클라우드 환경이라 확인하지 못했다.
@@ -150,3 +150,54 @@ U1 동작이 U3에서 뜻대로 바뀐 곳만 기대값을 바꿨고 단언 수�
 - U2가 core V2를 더하면 core-api `FlywayConfIT`의 표 수 기대값(지금 22 = core 12 + realtime V1 7 + realtime V2 3)과 충돌한다. 두 쪽이 더한 표 수를 합치면 된다.
 - `frontend/src/shared/timing/timing-defaults.json`과 `frontend/src/shared/copy/ko.ts`는 U2 · U5a도 고칠 수 있다. U3는 키와 문구를 더하기만 했으니 양쪽 줄을 모두 살리면 된다.
 - CI가 `tests` 전체를 돌게 바뀌어서 U2의 `tests/u2`도 CI에서 돈다.
+- 리뷰 반영으로 `OutputBundle`에 아홉째 구성 요소(`onFrameSent`)가 생겼다. 8인자 생성자를 남겨 두어 다른 유닛 코드는 그대로 컴파일된다. `SessionMailbox.closeAndRelease`는 이제 남은 메시지 목록을 돌려준다(반환값을 쓰지 않는 호출은 그대로).
+
+## 11. 리뷰 반영 (PR #2 리뷰 10건, 2026-10-12, 브랜치 `u3-fix`)
+
+> 원래 작업자(클라우드 세션)가 한도에 걸려 리뷰 반영은 로컬 작업자가 이어 했다. Realtime 앱만 고쳤고 `frontend/src/device/`는 고칠 필요가 없었다(아래 4 · 5의 기기 동작은 이미 있는 CLOSE_TRANSPORT · SESSION_STATE 처리로 맞다). Core · `/parent`는 건드리지 않았다.
+> 건마다 재현 시험을 먼저 쓰고 실패를 확인한 뒤(새 시험 22건 실패) 고쳐 통과시켰다. 기존 시험의 단언은 줄이지 않았다.
+
+| 번호 | 지적 | 처리 | 재현 · 확인 시험 |
+|---|---|---|---|
+| 1 | 아이 소리 유실: 이어가기가 아닌 재연결 뒤 입력 순번이 옛 값 아래라 버려짐 | **고침.** `InputRelay`가 순번을 연결마다 다시 센다(`offer(source, …)`, 연결이 바뀌면 `lastSequence`를 되돌림). 실행기 `offerAudio`가 연결 id를 넘긴다. 이어가는 기기는 순번을 이어 보내므로 그대로 받는다 | `SessionExecutorReviewU3Test.aFreshLinkThatRestartsItsFrameSequenceIsRelayedFromTheFirstFrame` · `aResumedLinkThatContinuesItsSequenceKeepsRelaying` |
+| 2 | 오판 끊김: 1006 · 전송 오류 CLOSED 뒤 40초 무음 점검이 같은 연결에 SILENT를 또 적어 두 번으로 셈 | **고침.** `markDisconnected`는 같은 connection_id에 CLOSED가 있으면 SILENT를 적지 않는다(`DeviceDisconnectRepository.exists`). 반대 순서(무음으로 이미 DISCONNECTED인 연결이 복귀 없이 늦게 닫힘)도 CLOSED를 적지 않는다. 복귀(HEARTBEAT) 뒤 다시 끊긴 것은 새 끊김이라 센다(기존 시험 그대로 통과) | `ConnectionStateWriterU3IT.aConnectionAlreadyCountedAsClosedIsNotCountedAgainWhenTheSilenceCheckMarksItDisconnected` · `aLateCloseOfAConnectionAlreadyCountedAsSilentIsNotCountedAgain` · `aSilenceAfterAnotherConnectionsCloseStillCountsAsItsOwnDisconnect` |
+| 3 | 대화 멈춤: 청유형 인용("엄마가 그만하자고 했어")이 STOP이 되고 다시 풀리지 않음 | **고침.** ① 인용 표지에 청유형 인용(`자고했` · `자고해` · `자고하` · `자고말` · `자고그랬` · `자고그러` · `자더라` · `자던데` · `자대`)과 낱말 끝 준말 "~재"(`하재` · `내재` · `두재` · `자재`)를 더했다. "재미없어" · "천재"처럼 '재'로 시작하거나 다른 말은 걸리지 않는다. "자고" 단독은 아이 자신의 강조("이제 그만하자고!")일 수 있어 넣지 않았다. ② 복구 경로: STOP 뒤(세션은 ACTIVE, CLOSING(CHILD_STOP)은 U4) 아이가 종료가 아닌 확실한 말(판정 NONE · 불확실 아님 · 기기 재생 중 아님 · 빈 말 아님)로 이어 가면 막힘을 풀고 `CHILD_STOP_LIFTED`를 남긴다. 이미 취소한 응답의 늦은 조각은 여전히 버린다(AC6.4.8). 합성 20건 세트는 그대로 오인식 0 · 미인식 0 | `StopIntentJudgeTest.hortativeReportedSpeechIsNeverAStop`(10건) · `theHortativeQuoteMarkersDoNotSwallowOrdinaryStopsOrWordsWithJae` · `SessionExecutorReviewU3Test.aChildWhoKeepsTalkingAfterAStopIntentLiftsTheOutputBlockForNewResponsesOnly` · `anUnclearOrEmptyUtteranceAfterAStopIntentDoesNotLiftIt` |
+| 4 | 재접속 멈춤: HELLO_OK.session 뒤 LinkReplaced 처리 전에 실행기가 끝나면 새 연결에 아무것도 가지 않음 | **고침.** 세 갈래를 모두 막았다. ① 실행기가 끝난 상태로 LinkReplaced를 처리하면 ② 정리(teardown) 때 편지함에 남은 LinkReplaced가 있으면(`SessionMailbox.closeAndRelease`가 남은 메시지를 돌려준다) ③ 인계가 이미 닫힌 편지함을 만나면(`putSafety` 거짓) — 모두 `SessionExecutor.standDown`으로 새 연결을 대기로 돌려보낸다. 이어간 기기(입력 창을 이미 다시 염)는 CLOSE_TRANSPORT(끝 상태에 맞는 사유: ABORTED → DISCONNECT, FAILED → FAILED, ENDED · ENDED_UNCONFIRMED → ENDED) + SESSION_STATE{STANDBY}, 이어가지 않은 기기는 STANDBY만. 그 ACK · VOICE_SESSION_CLOSED는 세션이 없어 버려진다 | `SessionExecutorReviewU3Test.aRelinkQueuedBehindTheSessionsEndSendsTheResumedDeviceBackToStandby` · `aNonResumedRelinkQueuedBehindTheEndOnlyGetsStandby` · `theStandDownHelperSendsCloseTransportOnlyToAResumedDeviceAndMapsTheEndingToAReason` · `ConnectionHandoverU3Test`(2건) |
+| 5 | 끝나 가는 세션: CLOSING에서 resumed=false면 START_SESSION을 다시 보내 마이크가 다시 열림 | **고침.** CLOSING에 세션을 모르는 기기가 붙으면 START_SESSION 대신 SESSION_STATE{CLOSING} + CLOSE_TRANSPORT(GUARDIAN_STOP)를 보낸다(`closeForUnknownDevice`). 마무리 문구 차례였으면 그 기기가 재생할 수 없으므로 건너뛰고 지금 닫으며(`ClosingSequence.closeNow`) 입력 중계를 멈추고 transport_closed_at을 적는다(R3-8). 옛 연결의 마무리 문구 · 닫기 명령은 다시 보내지 않는다. 기기의 VOICE_SESSION_CLOSED로 30초 시한 전에 ENDED가 된다. 이어가는 기기(resumed)는 기존대로 ACK 못 받은 마무리 문구를 같은 opId로 받는다 | `SessionExecutorReviewU3Test.aFreshDeviceThatJoinsAfterCloseTransportWasAckedGetsCloseTransportNotStartSession` · `aFreshDeviceThatJoinsWhileTheClosingPhraseIsPendingSkipsItAndClosesTheTransportAtOnce` · `aResumedDeviceInClosingStillGetsTheUnackedClosingPhraseAndNoExtraClose` |
+| 6 | 원음 범위: 게이트 통과 순간 기록해 기기로 못 나간 · 잘린 음성까지 남음 | **고침.** `OutputBundle`에 프레임 송신 콜백 `onFrameSent`를 더하고(8인자 생성자는 그대로 둠) `ConnectionSender`가 소켓에 쓴 직후에만 부른다. 실행기는 동의된 세션이면 이 콜백을 원음 기록 `ai`로 잇는다. OUTBOUND_FULL · 세대 변화로 잘린 나머지 · 쓰기 실패 프레임은 기록하지 않는다. 기존 `SessionVoiceU3Test`의 원음 시험은 묶음을 실제로 내보낸 뒤 같은 4,800바이트를 단언하게 고쳤다(단언은 그대로) | `SessionExecutorReviewU3Test.onlyAiFramesActuallyWrittenToTheDeviceAreRecorded` · `aiAudioCutByAGenerationChangeOrNeverWrittenIsNotRecorded` · `ConnectionSenderU3Test`(2건) |
+| 7 | 자원 누수: 정리 앞 단계가 던지면 `recording.close`가 안 불림 | **고침.** 정리 단계마다 예외를 따로 받는다(`quietly`, 앱 오류 한 줄 뒤 다음 단계). 공급자 닫기가 던져도 원음 파일 핸들 · 메타 ended_at이 닫히고 편지함 정리 · 레지스트리 제거까지 간다 | `SessionExecutorReviewU3Test.theRecordingIsClosedEvenWhenAnEarlierTeardownStepThrows` |
+| 8 | 삭제 참가자: 진행 중 세션의 원음 · 전사를 막지 않고 지워 되살아남 | **고침(최소 범위: 진행 중 세션의 기록 차단).** 참가자가 지우기 전에 그 보호자의 진행 중 세션(`ActivitySessionRepository.findInProgressIds`)마다 ① `FileAudioRecorder.block` — 새 메타 · 파일 · 조각을 받지 않고(파일 만들기와 차단 등록은 한 잠금이라 차단이 돌아온 뒤 새 메타가 생기지 않는다) 열린 파일을 닫은 뒤 돌아온다 ② `AsyncRecorder.discardTranscripts` — 대기 칸을 버리고 새 칸을 받지 않으며 진행 중 플러시가 끝나기를 기다린다(상한은 DB 문장 제한). 그다음 기존 순서로 지운다. 멱등 재호출에 기대지 않는다. 상한을 넘기면 `RecordingBlockTimeout` 앱 오류 한 줄만 남기고 진행한다(차단은 걸려 있다). 차단 목록은 메모리에 최대 1만 건(오래된 것부터 잊음) | `RealtimeVoiceDeletionParticipantIT.anInProgressSessionsRecordingIsBlockedBeforeItsRecordsAreErased` |
+| 9 | 재생 추적: 재연결 때 지운 재생 추적을 다시 보낸 PLAY_APPROVED_CONTENT에 다시 걸지 않음 | **고침.** ACK 못 받은 PLAY_APPROVED_CONTENT를 같은 playbackId로 다시 보내면 `playback.started`로 다시 추적하고 20초 만기 시계를 건다. 그 재생이 도는 동안 또 폐기돼도 대기 문구를 겹쳐 보내지 않고(R3-19), 끝 표식이 추적을 지운다 | `SessionExecutorReviewU3Test.aResentWaitingFillerIsTrackedSoASecondFillerDoesNotOverlapIt` |
+| 10 | 죽은 코드: `dialog/JoinTracker`를 main에서 부르지 않음 | **뺐다.** `JoinTracker.java` · `JoinTrackerTest.java`를 지우고 `backend/coverage-scope/u3.txt`에서 줄을 뺐다. design.md의 U3-R13(참여 판단)은 U4가 시계 · 전이와 함께 들일 규칙으로 표시했다. 지운 코드는 커밋 867f0a0에 남아 있어 U4가 되살려 쓸 수 있다 | (해당 없음 — 범위 파일에서도 빠짐) |
+
+### 11.1 판단 · 남긴 위험
+
+- **3의 복구 규칙**: STOP 뒤 아이가 종료가 아닌 말을 하면 대화를 다시 잇는다. 진짜 종료 의도 뒤 아이가 "응" 같은 짧은 말을 해도 풀린다. 지금은 U4가 없어 STOP 뒤 세션이 ACTIVE로 남아 AI가 끝까지 말하지 않는 것(지적의 '대화 멈춤')이 더 큰 문제라 이쪽을 골랐다. U4가 CLOSING(CHILD_STOP)과 확인 질문을 이으면 이 복구는 CLOSING 전까지만 뜻이 있다.
+- **8의 남은 몫(U4)**: 진행 중 세션 자체를 끝내는 전이, 막 끝나 아직 기록기 칸이 남은 세션(진행 중 목록에 없음)의 차단, 삭제 중 새 세션 시작 막기는 U4 삭제 지휘가 순서를 정해야 한다. 차단 목록은 인스턴스 메모리라 여러 인스턴스로 늘리면 공유 표시가 필요하다(U3-J25와 같은 성격).
+- **8의 Windows 차이**: 운영(Linux)은 열린 파일도 지울 수 있지만, 차단이 파일을 먼저 닫으므로 Windows에서도 시험이 통과한다.
+- **4의 사유 매핑**: 끝 상태별 CLOSE_TRANSPORT 사유는 계약 Reason 값 안에서 골랐다(새 값 없음). 계약 편차는 더하지 않았다(메시지 · 모양 그대로).
+
+### 11.2 Core 쪽 참고(고치지 않음)
+
+- 4절의 `DeviceRegisterApiIT` 50ms 연결 시한 수정안(`backend/core-api/src/test/resources/application-test.yml`의 `mujoong.internal-http.connect-timeout` → 500ms)은 U4a 작업자에게 넘긴다.
+
+### 11.3 시험 결과(리뷰 반영 뒤)
+
+이 PC(Windows 11 · Git Bash · Docker Desktop, 데모 스택이 함께 돎)에서 돌렸다. `scripts/verify.sh`는 돌리지 않았다(조정자 몫).
+
+| 항목 | 명령 | 결과 |
+|---|---|---|
+| 재현(고치기 전) | 새 시험 클래스 5개 `--tests` | 67건 중 22건 실패 — 건마다 지적한 증상으로 실패함을 확인 |
+| 백엔드 U3 + 커버리지 | `:realtime-activity:test -PincludeTags=u3 :realtime-activity:jacocoTestCoverageVerification -PcoverageScope=u3` | 19개 클래스 165건 통과(실패 0), U3 범위 줄 커버리지 **81.2%**(3,157/3,889, 전 80.54%) |
+| 백엔드 U3(다른 모듈) | `:contract-model:test :core-api:test :test-support:test -PincludeTags=u3` | 통과(u3 태그 시험 없음) |
+| 백엔드 U1 회귀 | `:contract-model:test :core-api:test :realtime-activity:test :test-support:test -PincludeTags=u1` | realtime 542건 중 3건 · core 607건 중 4건 실패 → 아래 처리 |
+| 프런트 U3 | `MUJOONG_COVERAGE_SCOPE=u3 npx --no-install vitest run tests/u3 --coverage` | 8개 파일 48건 통과, U3 범위 줄 84.46% |
+| 프런트 U1 | `npx --no-install vitest run tests/u1` | 34개 파일 514건 통과 |
+| 타입 · 린트 | `tsc --noEmit` · `eslint .` | 둘 다 0건 |
+
+U1 회귀 실패 7건의 처리:
+
+- `TimeLiteralScanTest`(realtime): **리뷰 반영 코드의 결함이었다.** 차단 대기에 `TimeUnit.MILLISECONDS`를 써서 U1의 '시간 숫자 상수 금지' 규칙에 걸렸다. `Condition.awaitNanos`로 바꿔 고쳤고 다시 돌려 통과했다.
+- `RealtimeMetricsScrapeIT`(HTTP 요청 시한) · `RealtimeInternalApiIT`(기다린 조건 미도달) — realtime, `ActivityStartEndIT`(REALTIME_UNAVAILABLE) · `GracefulDrainIT`(DB 연결 실패로 entityManagerFactory 생성 실패) — core: 두 모듈 IT가 데모 스택 옆에서 동시에 돌 때의 부하 실패로 판단했다. 그 클래스만 다시 돌리니 모두 통과했다(realtime 6개 클래스 48건 · core 2개 클래스 14건). core-api는 이번에 고치지 않았다.
+- `NoSqlNowTest.migrationAndSeedSqlNeverAskTheDatabaseForTheTime`(core): **이 PC에서 늘 실패하는 기존 문제다.** `Files.walk`로 찾은 경로를 `/src/main/resources/db/` 문자열로 거르는데 Windows 경로 구분자(`\`)와 맞지 않아 시드 파일 하나만 찾는다. 이번 변경과 무관하고 Linux CI에서는 통과한다. Core(U1 시험)라 고치지 않았다 — 고칠 때는 경로를 `/`로 바꿔 비교하면 된다.
+- 프런트 `tests/u1/lint/eslint-boundary.test.ts` 1건이 첫 전체 실행에서 시한에 걸렸다(eslint를 띄우는 시험). 단독 실행 13건 통과, 전체 재실행 514건 모두 통과.

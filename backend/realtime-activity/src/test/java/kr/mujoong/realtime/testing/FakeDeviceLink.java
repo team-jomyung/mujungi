@@ -133,7 +133,8 @@ public final class FakeDeviceLink implements DeviceLink {
     }
 
     /**
-     * 송신기처럼 묶음 하나를 내보낸다: 프레임마다 세대를 확인해 다르면 남은 프레임을 버린다. 첫 프레임 뒤 콜백을 부른다.
+     * 송신기처럼 묶음 하나를 내보낸다: 프레임마다 세대를 확인해 다르면 남은 프레임을 버린다. 보낸 프레임마다 송신 콜백을, 첫 프레임 뒤 시각
+     * 콜백을 부른다.
      *
      * @return 보낸 프레임 수
      */
@@ -147,6 +148,7 @@ public final class FakeDeviceLink implements DeviceLink {
                 synchronized (this) {
                     deliveredFrames.add(frame.clone());
                 }
+                bundle.onFrameSent().accept(frame);
                 if (count == 0) {
                     bundle.onFirstFrameSent().accept(at);
                 }

@@ -80,7 +80,11 @@ public class ConnectionHandover {
         connection.sendControl(new HelloOk(connection.connectionId(), clock.now(), heartbeatInterval.toMillis(),
                 HelloOk.AUDIO_PCM16LE_24K_MONO, info), null, null);
         if (live.isPresent() && info != null) {
-            live.get().mailbox().putSafety(new SessionMailbox.LinkReplaced(connection, info.resumed(), clock.now()));
+            SessionExecutor executor = live.get();
+            if (!executor.mailbox().putSafety(new SessionMailbox.LinkReplaced(connection, info.resumed(), clock.now()))) {
+                // 리뷰 반영 4: HELLO_OK.session을 실은 사이 실행기가 끝나 편지함이 닫혔다 — 기기가 듣는 중에 멈추지 않게 대기로 돌려보낸다
+                SessionExecutor.standDown(connection, executor.sessionId(), executor.status(), info.resumed());
+            }
         }
         return true;
     }

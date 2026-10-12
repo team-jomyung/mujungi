@@ -173,6 +173,53 @@ class ConnectionStateWriterU3IT {
         assertThat(connection.knownState()).isEqualTo(ConnectionState.UNSTABLE);
     }
 
+    /** 리뷰 반영 2: 1006 · 전송 오류로 끊긴 연결이 40초 뒤 무음 점검에도 걸리면 끊김은 한 번이다(계약 '5분 안 2회'). */
+    @Test
+    void aConnectionAlreadyCountedAsClosedIsNotCountedAgainWhenTheSilenceCheckMarksItDisconnected() {
+        UUID closedId = connection.connectionId();
+        assertThat(writer.recordDisconnect(device, closedId, DeviceDisconnectRepository.Kind.CLOSED, 1006, clock.now(),
+                "trace")).contains(1);
+
+        clock.advance(DISCONNECT.plusSeconds(1));
+        DeviceConnectionRow silent = writer.markDisconnected(device, closedId, DISCONNECT).orElseThrow();
+
+        assertThat(silent.state()).as("원장은 그대로 끊김으로 간다").isEqualTo(ConnectionState.DISCONNECTED);
+        assertThat(silent.recentDisconnects()).isEqualTo(1);
+        assertThat(disconnects.findByDevice(device)).singleElement()
+                .satisfies(event -> assertThat(event.kind()).isEqualTo(DeviceDisconnectRepository.Kind.CLOSED));
+
+        // 다시 붙자마자 UNSTABLE이 되지 않는다
+        DeviceConnection next = connect();
+        assertThat(next.knownState()).isEqualTo(ConnectionState.CONNECTED);
+        assertThat(connections.find(device).orElseThrow().recentDisconnects()).isEqualTo(1);
+    }
+
+    @Test
+    void aLateCloseOfAConnectionAlreadyCountedAsSilentIsNotCountedAgain() {
+        clock.advance(DISCONNECT.plusSeconds(1));
+        writer.markDisconnected(device, connection.connectionId(), DISCONNECT).orElseThrow();
+
+        assertThat(writer.recordDisconnect(device, connection.connectionId(), DeviceDisconnectRepository.Kind.CLOSED, 1006,
+                clock.now(), "trace")).contains(1);
+
+        assertThat(disconnects.findByDevice(device)).singleElement()
+                .satisfies(event -> assertThat(event.kind()).isEqualTo(DeviceDisconnectRepository.Kind.SILENT));
+        assertThat(connections.find(device).orElseThrow().recentDisconnects()).isEqualTo(1);
+    }
+
+    @Test
+    void aSilenceAfterAnotherConnectionsCloseStillCountsAsItsOwnDisconnect() {
+        assertThat(writer.recordDisconnect(device, UUID.randomUUID(), DeviceDisconnectRepository.Kind.CLOSED, 1006,
+                clock.now(), "trace")).contains(1);
+
+        clock.advance(DISCONNECT.plusSeconds(1));
+        DeviceConnectionRow silent = writer.markDisconnected(device, connection.connectionId(), DISCONNECT).orElseThrow();
+
+        assertThat(silent.recentDisconnects()).isEqualTo(2);
+        assertThat(disconnects.findByDevice(device)).extracting(DeviceDisconnectRepository.DisconnectEvent::kind)
+                .containsExactly(DeviceDisconnectRepository.Kind.CLOSED, DeviceDisconnectRepository.Kind.SILENT);
+    }
+
     @Test
     void aDisconnectOfAnotherDeviceDoesNotCountAndAFailedRecordIsReportedNotThrown() {
         UUID other = UUID.randomUUID();

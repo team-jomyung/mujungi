@@ -23,7 +23,9 @@ import kr.mujoong.realtime.recording.FileAudioRecorder;
 import kr.mujoong.realtime.session.ActivitySessionRepository;
 import kr.mujoong.realtime.session.ChildContext;
 import kr.mujoong.realtime.session.ConsentSnapshot;
+import kr.mujoong.realtime.runtime.TaskLauncher;
 import kr.mujoong.realtime.session.NewActivitySession;
+import kr.mujoong.realtime.session.SessionEventRepository;
 import kr.mujoong.realtime.testing.ManualLauncher;
 import kr.mujoong.realtime.testing.RealtimeDb;
 import kr.mujoong.realtime.testing.TestEventLoggers;
@@ -65,6 +67,7 @@ class RealtimeVoiceDeletionParticipantIT {
     private DeviceConnectionRepository connections;
     private AudioRecordingRepository recordings;
     private FileAudioRecorder recorder;
+    private AsyncRecorder transcriptRecorder;
     private RealtimeVoiceDeletionParticipant participant;
 
     private final UUID guardian = UUID.randomUUID();
@@ -97,9 +100,13 @@ class RealtimeVoiceDeletionParticipantIT {
         recordings = new AudioRecordingRepository(db.jdbc());
         recorder = new FileAudioRecorder(recordings, db.transactions(), new DbRetry(2, () -> 0L, duration -> { }), events,
                 metrics, clock, new ManualLauncher(), root, 1_000_000, 100, Duration.ofSeconds(5));
+        transcriptRecorder = new AsyncRecorder(new AsyncRecorder.JdbcStore(transcripts,
+                new SessionEventRepository(db.jdbc()), connections, db.transactions(), clock), TaskLauncher.inline(),
+                new LatencyRecorder(events, metrics, clock, 100, Duration.ofMinutes(10)), events, metrics, clock, 200, 2);
         participant = new RealtimeVoiceDeletionParticipant(transcripts, gaps, disconnects, connections, recordings,
-                recorder, new DbRetry(2, () -> 0L, duration -> { }), new DataSourceTransactionManager(db.dataSource()),
-                events, clock);
+                recorder, new ActivitySessionRepository(db.jdbc()), transcriptRecorder,
+                new DbRetry(2, () -> 0L, duration -> { }), new DataSourceTransactionManager(db.dataSource()), events, clock,
+                Duration.ofSeconds(5));
 
         first = insertSession(guardian, device);
         second = insertSession(guardian, device);
@@ -207,6 +214,40 @@ class RealtimeVoiceDeletionParticipantIT {
         assertThat(recordings.findLiveByGuardian(guardian)).isEmpty();
     }
 
+    /**
+     * 리뷰 반영 8: 진행 중 세션은 지우기 전에 기록을 막는다 — 지운 뒤 실행기가 계속 넘기는 원음 · 전사가 새 파일 · 메타 · 전사 행으로 되살아나지
+     * 않고, 열려 있던 원음 파일도 닫힌 뒤 지워진다(다시 부르기에 기대지 않는다).
+     */
+    @Test
+    void anInProgressSessionsRecordingIsBlockedBeforeItsRecordsAreErased() {
+        UUID live = insertSession(guardian, UUID.randomUUID(), "ACTIVE");
+        var handle = recorder.open(live);
+        handle.child(new byte[960]);
+        recorder.drainNow();
+        assertThat(recordings.findBySession(live)).as("아이 파일만 열려 있다").hasSize(1);
+        assertThat(transcriptRecorder.putTranscript(TranscriptEntry.childFinal(live, 1, "공룡 좋아", T0, T0, false))).isTrue();
+        assertThat(transcripts.findAll(live)).hasSize(1);
+
+        participant.deleteByGuardian(guardian, UUID.randomUUID());
+
+        // 실행기는 아직 돌고 있어 원음 · 전사를 계속 넘긴다
+        handle.child(new byte[960]);
+        handle.ai(new byte[960]);
+        recorder.drainNow();
+        assertThat(transcriptRecorder.putTranscript(TranscriptEntry.childFinal(live, 2, "또 말했어", T0, T0, false)))
+                .isTrue();
+        transcriptRecorder.tick();
+        handle.close(T0);
+        recorder.drainNow();
+
+        assertThat(recordings.findLiveByGuardian(guardian)).as("새 원음 메타가 생기지 않는다").isEmpty();
+        assertThat(recordings.findBySession(live)).hasSize(1);
+        assertThat(Files.exists(root.resolve(live.toString()))).as("세션 디렉터리가 되살아나지 않는다").isFalse();
+        assertThat(rawTexts(live)).as("지운 뒤 들어온 전사는 쓰지 않는다").containsExactly("");
+        assertThat(transcriptRecorder.heldRows(live)).isZero();
+        assertThat(logs.events(EventCode.APP_ERROR)).isEmpty();
+    }
+
     /** 원음 메타 + 파일(기록기를 지금 스레드에서 돌린다). */
     private void record(UUID session, boolean withAi) {
         var handle = recorder.open(session);
@@ -224,6 +265,10 @@ class RealtimeVoiceDeletionParticipantIT {
     }
 
     private static UUID insertSession(UUID guardianId, UUID deviceId) {
+        return insertSession(guardianId, deviceId, "ENDED");
+    }
+
+    private static UUID insertSession(UUID guardianId, UUID deviceId, String status) {
         ActivitySessionRepository sessions = new ActivitySessionRepository(db.jdbc());
         NewActivitySession session = new NewActivitySession(UUID.randomUUID(), guardianId, UUID.randomUUID(), deviceId,
                 ActivityType.FREE_TALK, UUID.randomUUID().toString(),
@@ -231,8 +276,8 @@ class RealtimeVoiceDeletionParticipantIT {
                 null);
         assertThat(db.inTransaction(() -> sessions.insert(session, T0))).isTrue();
         // 진행 중 세션은 보호자 · 기기당 하나라 끝난 세션으로 둔다(삭제는 끝난 기록을 지운다)
-        db.jdbc().update("update realtime.realtime_activity_session set status = 'ENDED',"
-                + " status_version = status_version + 1 where id = :id", Map.of("id", session.id()));
+        db.jdbc().update("update realtime.realtime_activity_session set status = :status,"
+                + " status_version = status_version + 1 where id = :id", Map.of("id", session.id(), "status", status));
         return session.id();
     }
 }

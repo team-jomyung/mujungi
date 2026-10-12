@@ -25,7 +25,7 @@ import kr.mujoong.realtime.voice.ProviderPort.ProviderUnavailableException;
  * <ul>
  *   <li>수락 조건(R3-8): ACTIVE부터 CLOSE_TRANSPORT 송신(또는 종료 · FAILED 전이)까지만 받는다. 그 밖의 프레임은 버리고 카운터만 센다.
  *   <li>대기열(L1) {@code mujoong.limits.session-input-queue-frames}(50)이 차면 가장 오래된 프레임을 버린다(최신 소리 우선).
- *   <li>순번이 올라가지 않는 프레임은 버린다(오래된 소리를 늦게 보내지 않는다).
+ *   <li>순번이 올라가지 않는 프레임은 버린다(오래된 소리를 늦게 보내지 않는다). 순번은 연결마다 다시 센다(리뷰 반영 1).
  *   <li>원음을 저장하지 않는다(NFR12.3): 대기열은 메모리 뿐이고 보낸 뒤 참조를 놓는다. 멈출 때 비운다. U3: 동의된 세션만 실행기가
  *       {@link AudioTap}(원음 기록기)을 붙이고, 중계는 보내는 순서대로 그 탭에도 넘긴다(U3-R9).
  *   <li>relayIn 표본(수신 직후 → 공급자 전송 호출이 돌아온 직후, 단조 읽기)을 세션별 고정 크기 링(3,000개)에 모은다. 프레임마다 로그를
@@ -67,6 +67,8 @@ public final class InputRelay {
     private boolean accepting;
     private boolean stopped;
     private long lastSequence = -1;
+    /** {@link #lastSequence}를 센 연결. */
+    private UUID sequenceSource;
     private ProviderSession session;
     private Instant lastVoiceFrameAt;
     private long dropped;
@@ -127,11 +129,22 @@ public final class InputRelay {
     }
 
     /**
-     * WSS 수신 핸들러가 부른다(기다리지 않는다).
+     * WSS 수신 핸들러가 부른다(기다리지 않는다). 순번은 한 연결 안에서만 비교한다.
      *
      * @return 대기열에 넣었으면 true
      */
     public boolean offer(long sequence, byte[] pcm, long receivedNanos) {
+        return offer(null, sequence, pcm, receivedNanos);
+    }
+
+    /**
+     * 보낸 연결과 함께 넣는다. 연결이 바뀌면 순번을 처음부터 다시 센다 — 새로 켠 기기 페이지는 frameSeq를 1부터 보내므로 옛 연결의 순번과
+     * 비교하면 그 순번을 넘을 때까지 아이 말이 모두 버려진다(리뷰 반영 1). 이어가는 기기는 순번을 이어 보내므로 다시 세어도 그대로 받는다.
+     *
+     * @param source 프레임을 보낸 연결(null이면 직전 연결과 같다고 본다)
+     * @return 대기열에 넣었으면 true
+     */
+    public boolean offer(UUID source, long sequence, byte[] pcm, long receivedNanos) {
         Objects.requireNonNull(pcm, "pcm");
         if (pcm.length != AudioFrameCodec.INPUT_PAYLOAD_BYTES) {
             throw new IllegalArgumentException("입력 프레임 본문 길이가 틀렸다");
@@ -143,6 +156,10 @@ public final class InputRelay {
             if (!accepting) {
                 countDropped(DropCause.NOT_ACCEPTING, 1);
                 return false;
+            }
+            if (source != null && !source.equals(sequenceSource)) {
+                sequenceSource = source;
+                lastSequence = -1;
             }
             if (sequence <= lastSequence) {
                 countDropped(DropCause.OUT_OF_ORDER, 1);

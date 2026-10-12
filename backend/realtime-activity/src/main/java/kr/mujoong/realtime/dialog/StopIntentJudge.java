@@ -60,11 +60,18 @@ public final class StopIntentJudge {
         }
     }
 
-    /** 남의 말 · 인용 · 역할 놀이 표지(정규화 뒤). */
+    /**
+     * 남의 말 · 인용 · 역할 놀이 표지(정규화 뒤). 청유형 인용("그만하자고 했어" · "끝내자더라")도 남의 말이다(리뷰 반영 3) — "자고" 단독은
+     * 아이 자신의 강조("이제 그만하자고!")일 수 있어 뒤에 말하기 동사가 올 때만 본다.
+     */
     private static final List<String> REPORTED = List.of(
             "라고했", "라고말했", "라고하면", "라고하더", "라고그랬", "라고해서", "라고하는", "라고하잖", "라고해",
             "이라고했", "이라고말했", "하래", "하라고", "하라고했", "하라더", "그랬어", "그러더라", "그러던데",
+            "자고했", "자고해", "자고하", "자고말", "자고그랬", "자고그러", "자더라", "자던데", "자대",
             "흉내", "인척", "척할", "척하", "역할놀이", "놀이에서", "연기", "대사");
+
+    /** 청유형 인용 준말 "~재"(= ~자고 해, "그만하재" · "끝내재") — 낱말 끝에서만 본다("재미없어" · "천재"는 아니다). */
+    private static final List<String> REPORTED_WORD_ENDINGS = List.of("하재", "내재", "두재", "자재");
 
     /** 계속하겠다는 부정 · 연장(정규화 뒤). */
     private static final List<String> CONTINUE = List.of(
@@ -131,11 +138,12 @@ public final class StopIntentJudge {
             return Judgment.NONE;
         }
         String text = normalize(transcript);
-        if (text.isEmpty() || containsAny(text, REPORTED) || containsAny(text, CONTINUE)) {
+        List<String> words = tokens(transcript);
+        if (text.isEmpty() || containsAny(text, REPORTED) || endsAnyWord(words, REPORTED_WORD_ENDINGS)
+                || containsAny(text, CONTINUE)) {
             return Judgment.NONE;
         }
         boolean question = isQuestion(transcript, text);
-        List<String> words = tokens(transcript);
         if (matchesPhrase(words, snapshot)) {
             // 물음꼴("이제 끝이야?")은 단정하지 않고 확인한다(AC6.4.5)
             return question ? Judgment.CONFIRM : new Judgment(Verdict.STOP, Basis.SNAPSHOT);
@@ -187,6 +195,11 @@ public final class StopIntentJudge {
         return words;
     }
 
+    /** 정규화하고도 남는 글자가 있는가(빈 말 · 문장 부호뿐인 전사는 말이 아니다). */
+    public static boolean hasWords(String transcript) {
+        return !normalize(transcript).isEmpty();
+    }
+
     /** 정규화: NFKC · 영문 소문자 · 한글 · 영문 · 숫자만 남긴다. */
     static String normalize(String value) {
         if (value == null) {
@@ -209,6 +222,17 @@ public final class StopIntentJudge {
         for (String needle : needles) {
             if (text.contains(needle)) {
                 return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean endsAnyWord(List<String> words, List<String> endings) {
+        for (String word : words) {
+            for (String ending : endings) {
+                if (word.endsWith(ending)) {
+                    return true;
+                }
             }
         }
         return false;

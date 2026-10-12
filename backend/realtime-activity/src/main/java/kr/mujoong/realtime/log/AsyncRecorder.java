@@ -4,10 +4,12 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Semaphore;
@@ -59,6 +61,9 @@ public class AsyncRecorder {
         void writeLastSeen(Collection<DeviceConnectionRepository.LastSeen> seen);
     }
 
+    /** 기억하는 전사 차단 세션 수 상한. */
+    static final int MAX_DISCARDED = 10_000;
+
     private final Store store;
     private final TaskLauncher launcher;
     private final LatencyRecorder latency;
@@ -71,6 +76,15 @@ public class AsyncRecorder {
     private final ConcurrentHashMap<UUID, Unit> units = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<UUID, DeviceConnectionRepository.LastSeen> lastSeen = new ConcurrentHashMap<>();
     private final AtomicBoolean seenInFlight = new AtomicBoolean();
+    /** 전사를 막은 세션(계정 삭제, 리뷰 반영 8). 오래된 것부터 잊는다 — 지우는 동안의 경합만 막으면 된다. */
+    private final Set<UUID> discarded = Collections.synchronizedSet(Collections.newSetFromMap(new LinkedHashMap<>() {
+        private static final long serialVersionUID = 1L;
+
+        @Override
+        protected boolean removeEldestEntry(Map.Entry<UUID, Boolean> eldest) {
+            return size() > MAX_DISCARDED;
+        }
+    }));
     // 진행 중 플러시가 끝났다는 신호(앱 종료 drain이 기다린다, 3.6 수정 J305). 잠금 순서는 이 잠금 → 칸 목록 모니터 하나뿐이다
     private final ReentrantLock flushEndedLock = new ReentrantLock();
     private final Condition flushEnded = flushEndedLock.newCondition();
@@ -115,6 +129,10 @@ public class AsyncRecorder {
      */
     public boolean putTranscript(TranscriptEntry entry) {
         Objects.requireNonNull(entry, "entry");
+        if (discarded.contains(entry.sessionId())) {
+            // 리뷰 반영 8: 지운 세션의 전사는 받은 것으로 하고 쓰지 않는다(실행기는 계속 돈다)
+            return true;
+        }
         while (true) {
             Unit unit = units.computeIfAbsent(entry.sessionId(), Unit::new);
             boolean flushNow;
@@ -150,6 +168,44 @@ public class AsyncRecorder {
                 unit.events.add(event);
                 return;
             }
+        }
+    }
+
+    /**
+     * 리뷰 반영 8: 세션의 전사 기록을 막는다(계정 삭제 참가자가 지우기 전에 부른다). 대기 칸을 버리고 이후 칸은 받지 않으며, 진행 중 플러시가 있으면
+     * 끝나기를 {@code wait}까지 기다린다 — 돌아온 뒤 전사를 지우면 지운 원문이 다시 쓰이지 않는다. 세션 이벤트 기록(원문 없음)은 그대로 쓴다.
+     *
+     * @return 진행 중 플러시가 없거나 끝났으면 참(기다림 상한을 넘기면 거짓 — 차단은 그래도 걸려 있다)
+     */
+    public boolean discardTranscripts(UUID sessionId, Duration wait) {
+        Objects.requireNonNull(sessionId, "sessionId");
+        discarded.add(sessionId);
+        Unit unit = units.get(sessionId);
+        if (unit == null) {
+            return true;
+        }
+        synchronized (unit) {
+            unit.pending.clear();
+        }
+        long remaining = Math.max(0L, Objects.requireNonNull(wait, "wait").toNanos());
+        flushEndedLock.lock();
+        try {
+            while (true) {
+                synchronized (unit) {
+                    if (!unit.inFlight) {
+                        return true;
+                    }
+                }
+                if (remaining <= 0) {
+                    return false;
+                }
+                remaining = flushEnded.awaitNanos(remaining);
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return false;
+        } finally {
+            flushEndedLock.unlock();
         }
     }
 
@@ -299,6 +355,10 @@ public class AsyncRecorder {
         List<TranscriptEntry> rows;
         List<SessionEvent> sessionEvents;
         synchronized (unit) {
+            if (discarded.contains(unit.sessionId)) {
+                // 리뷰 반영 8: 막은 뒤 들어왔거나 실패해 되돌린 칸도 쓰지 않는다
+                unit.pending.clear();
+            }
             rows = new ArrayList<>(unit.pending.values());
             sessionEvents = new ArrayList<>(unit.events);
             unit.taken = new LinkedHashMap<>(unit.pending);

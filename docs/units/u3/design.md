@@ -13,7 +13,7 @@ U1 워킹 스켈레톤이 만든 세션 경로(PREPARING → DEVICE_ACK → ACTI
 | VoiceRelay | 공급자 WSS(J110 선 형식) · 입력 중계 · 지시문 템플릿 | 끼어들기 때 공급자 응답 취소, 폐기 뒤 지시 교정, **동의된 세션의 원음 파일 저장**(설정 키 위치), ACTIVE 뒤 공급자 끊김 → 기술 종료 |
 | OutputGate | 구간 분할 · 전사 대응 · 시드 사전 · 세대 · 재확인 · WAITING_FILLER | 끼어들기 · 종료 의도 때 열린 구간 · 늦은 조각 폐기(응답 단위), 시드 사전 범주별 ≥ 1 유지(SCORE `비정상`), 폐기 뒤 지시 교정 호출 |
 | ConversationLog | 전사 조립 · 순번 · 승인 표시 · 12 조회 | **불확실 표시**(review_needed), **끊김 구간**(gaps) 기록과 조회 |
-| DialogPolicy | 없음(지시문은 ProviderRequestFactory 안의 고정 문장) | 대화 역할 지시문 조립(역할 지식 분리), 참여 판단 추적기(20초 · 재안내 · 20초 · 대안 1회, B17), 종료 의도 판정(종료 표현 스냅숏 + 명확 · 불명확 · 제외 규칙) |
+| DialogPolicy | 없음(지시문은 ProviderRequestFactory 안의 고정 문장) | 대화 역할 지시문 조립(역할 지식 분리), 종료 의도 판정(종료 표현 스냅숏 + 명확 · 불명확 · 제외 규칙). 참여 판단 추적기(B17)는 리뷰 반영 10으로 이번 PR에서 빼고 U4가 시계 · 전이와 함께 들인다 |
 | DeviceWeb T19 | 꺼짐 · 마이크 · 연결 중 · 대기 · 듣는 중 · 생각 중 · 말하는 중 · 마무리, 5초 고정 재접속 | **8상태 표정 · 라벨 전부**(연결 끊김 · 다시 연결 중 포함), 1 · 2 · 4초 백오프, HELLO resume, 끼어들기 로컬 감지(200ms → 0.5초 안 정지 + PLAYBACK_MARK STOPPED), PROGRESS 1초, DEVICE_STATE 송신, opId 중복 실행 방지 |
 
 건드리지 않는 것: core 스키마 · `/parent` · `frontend/src/parent/` · `aidlc/` · `README.md` · `contracts/README.md`.
@@ -22,7 +22,7 @@ U1 워킹 스켈레톤이 만든 세션 경로(PREPARING → DEVICE_ACK → ACTI
 
 - **US6.2 상태 화면 · 켜기 끄기(주)**: AC6.2.4(8상태 라벨 · 표정 · 디버그 로그 일치) · AC6.2.6(연결 끊김 · 다시 연결 중) · AC6.2.7(탭 뒤로 · 연결 유지) · AC6.2.10(재연결 때 진행 중 세션에 다시 붙임 · 두 번째 연결이 대체) · AC6.2.12(끼어들기 0.5초 · 재생 위치 보고) · AC6.2.13(큰 터치 영역 · 표정 1차). AC6.2.1 ~ 6.2.3 · 6.2.5 · 6.2.8 · 6.2.9 · 6.2.11은 U1이 만든 것을 유지한다.
 - **US6.4 자유대화 · 종료 의도 · 마무리(주)**: AC6.4.2(전언 사전 · canary 0건 — 지시문 조립 시험) · AC6.4.4 ~ 6.4.6(종료 의도 판정 · 불명확 확인 · 역할 대사 제외 — 판정기 시험, 전이는 U4) · AC6.4.7(전사 · 원음 저장 · 불확실 표시) · AC6.4.8(판정기 20회 세트 오인식 0 · 미인식 ≤ 1, 판정 기준 비전달).
-- **지원**: US2.1 AC2.1.4 · 2.1.10 · 2.1.11(불안정 판정 · 복귀 · 세션 무영향), US3.2 AC3.2.10(b)(끊김 구간 기록), US6.3 AC6.3.3 · 6.3.7 · 6.3.8(참여 판단 추적기 — 시계는 U4), US6.6 AC6.6.1 ~ 6.6.4 · 6.6.9(40초 안 재개 · 이전 출력 재재생 없음 · 공급자 끊김은 종료 · 복구 뒤 기록 보완은 gap).
+- **지원**: US2.1 AC2.1.4 · 2.1.10 · 2.1.11(불안정 판정 · 복귀 · 세션 무영향), US3.2 AC3.2.10(b)(끊김 구간 기록), US6.3 AC6.3.3 · 6.3.7 · 6.3.8(참여 판단 추적기 — 리뷰 반영 10으로 U4에 넘김), US6.6 AC6.6.1 ~ 6.6.4 · 6.6.9(40초 안 재개 · 이전 출력 재재생 없음 · 공급자 끊김은 종료 · 복구 뒤 기록 보완은 gap).
 
 ## 3. 엔터티와 마이그레이션 (realtime `V2__u3_voice_conversation.sql`, 더하기만)
 
@@ -60,7 +60,7 @@ U1 워킹 스켈레톤이 만든 세션 경로(PREPARING → DEVICE_ACK → ACTI
 | U3-R10 불확실 표시 | 공급자 확정 전사의 `confidence`(0 ~ 1)가 `uncertain-below-percent`(60)/100 미만이거나 말 끝 뒤 확정 전사가 비어 있으면 review_needed true. 전사를 고치지 않는다 | AC6.4.7 · components ConversationLog |
 | U3-R11 끊김 구간 | ACTIVE 세션의 묶인 연결이 끊기면 gap(DISCONNECT, from = 끊김 시각) 시작, 다시 붙으면 to 기록, ABORTED면 to = null. 12 조회 `gaps`에 실린다 | AC3.2.10(b) · AC6.6.4 |
 | U3-R12 종료 의도 판정 | 정규화한 확정 아이 전사에서 ① 세션 스냅숏(기본 + 추가 표현) 일치 또는 명확한 종료 표현 → STOP ② 인용 · 역할 대사 표지("~라고 했어/말했어") · 주제 거부("이거 말고") · 기기 재생 중 들어온 전사 → NONE ③ "그만" 단독 · "쉬고 싶어" 등 → CONFIRM(확정하지 않음). 판정은 실행기가 받아 STOP이면 R5와 같이 출력을 취소하고 SessionEvent `CHILD_STOP_INTENT`를 남긴다. CLOSING(CHILD_STOP) 전이와 STOP_CONFIRM 문구 재생은 U4가 같은 판정기로 잇는다 | AC6.4.4 ~ 6.4.6 · 6.4.8 · AC2.3.7 |
-| U3-R13 참여 판단 | 추적기: 참여 질문 재생 완료 → 20초 무응답 → 재안내 1회 → 20초 → DECLINED. 명시적 거부 → 대안 1회 → 재거부 → DECLINED. 불명확 발화 = 되묻기(재안내 1회에 포함). 주제 거부는 종료가 아니다. 안내 최대 3회(B17). 시간은 인자로 받는다(키 소유 U4) | AC6.3.3 ~ 6.3.8 |
+| U3-R13 참여 판단 (리뷰 반영 10: U4로 넘김 — 아래는 U4가 들일 규칙) | 추적기: 참여 질문 재생 완료 → 20초 무응답 → 재안내 1회 → 20초 → DECLINED. 명시적 거부 → 대안 1회 → 재거부 → DECLINED. 불명확 발화 = 되묻기(재안내 1회에 포함). 주제 거부는 종료가 아니다. 안내 최대 3회(B17). 시간은 인자로 받는다(키 소유 U4) | AC6.3.3 ~ 6.3.8 |
 | U3-R14 역할 지식 분리 | 대화 역할 지시문에는 아이 문맥 세 필드만 들어가고 종료 표현 · 판정 기준 · 보호자 입력 · 이전 판정 문자열이 들어가지 않는다(구조 시험) | AC6.4.2 · 6.4.8 · NFR3 · SD-20 |
 | U3-R15 T19 표시 | 라벨 · 표정은 대기 · 듣는 중 · 생각 중 · 말하는 중 · 마무리 · 연결 끊김(+ 꺼짐 · 마이크 허용 안 됨). '생각 중'은 아이 말 끝(speech_stopped · 전사 확정)부터 첫 승인 출력까지 서버가 SESSION_STATE(THINKING)로, 재생이 끝나면 LISTENING으로 보낸다(U3-J6). 한 번 연결됐던 기기의 재접속 주기는 '연결 끊김' + "다시 연결하고 있어요"(mockups 9-31), 처음 연결은 '연결 중'(BR9.4) | AC6.2.4 · 6.2.6 · D-19 |
 | U3-R16 재접속 | 끊기면 재생 · 대기열을 버리고 1 · 2 · 4초 뒤, 그 뒤 5초마다 다시 접속한다. HELLO에 마지막 sessionId를 resume으로 싣고 HELLO_OK.session이 있으면 입력 창을 다시 연다(resumed true) 또는 START_SESSION을 기다린다(false). 4001은 꺼짐 · 4401은 D0 그대로 | AC6.2.6 · 6.2.7 · J31 |
@@ -89,7 +89,7 @@ U1 워킹 스켈레톤이 만든 세션 경로(PREPARING → DEVICE_ACK → ACTI
 | L1 스키마 · 설정 | V2 마이그레이션, 저장소 3개(끊김 · 원음 메타 · gap), 설정 키 · timing.md · application.yml · test yml | `*RepositoryIT`(u3 · db), `RealtimeSchemaIT` 확장, `ConfigKeyContractTest`(u1 유지) |
 | L2 DeviceGateway | UNSTABLE 정책 · 끊김 창 · HELLO resume · HELLO_OK.session · LinkReplaced · 명령 재전송 · DEVICE_STATE · PROGRESS · UNSTABLE 지표 라벨 | `DeviceStatusPolicyTest` 확장, `UnstableJudgeTest`, `DeviceGatewayU3IT`(지연 1초 → UNSTABLE → 복귀, 끊김 2회 → UNSTABLE, resume → session, 재전송) |
 | L3 VoiceRelay · Gate | 공급자 cancel · correct, 끼어들기 처리, 공급자 끊김 → ABORTED, 원음 기록기(`recording` 패키지), 지시 교정 | `SessionExecutorU3Test`(세대 · 취소 · ABORTED · 재묶기 · 재전송), `RawAudioRecorderTest`, `FakeProviderWsServer` 확장, `SessionLifecycleU3IT`(재접속 이어가기 끝-끝, 끼어들기) |
-| L4 ConversationLog · DialogPolicy | review_needed · gap 기록 · view gaps, `dialog` 패키지(지시문 · 종료 의도 · 참여 추적기) | `StopIntentJudgeTest`(합성 20건: 오인식 0 · 미인식 ≤ 1), `JoinTrackerTest`(경계 19/21초 · 3회 상한), `DialogInstructionsTest`(canary · 판정 기준 0건), `TranscriptWriterTest` 확장 |
+| L4 ConversationLog · DialogPolicy | review_needed · gap 기록 · view gaps, `dialog` 패키지(지시문 · 종료 의도) | `StopIntentJudgeTest`(합성 20건: 오인식 0 · 미인식 ≤ 1), `DialogInstructionsTest`(canary · 판정 기준 0건), `TranscriptWriterTest` 확장. 참여 추적기와 그 시험은 리뷰 반영 10으로 U4에 넘긴다 |
 | L5 DeviceWeb | 상태 기계(백오프 · 끊김 라벨), wsClient(resume · session · opId 중복), deviceSession(resume · PROGRESS · 끼어들기), player(playedRange), `BargeInDetector`, runtime(DEVICE_STATE · 마지막 세션), T19View(연결 끊김 · 부제), timing 키 · 문구 | `frontend/tests/u3/**`(상태 8종 주입 · 디버그 로그 일치 · 백오프 1 · 2 · 4 · 5 · resume · 끼어들기 200ms/0.5초 · PROGRESS 1초 · DEVICE_STATE) + U1 시험 갱신(J360 라벨 → 화면 설계) |
 | L6 도구 · 문서 | fake-provider(`session.response.cancel` · `session.instructions.correct` 처리와 기록, `--confidence` 옵션 — L5에서 함께), deviations (aa) ~ (ac)와 계약 문서 갱신, realtime 시험 프로필 `internal-http.connect-timeout` 50ms → 500ms(3.6 재시험 흔들림 원인), report.md. device-simulator(tools)의 resume · PROGRESS 옵션은 남은 일(백엔드 IT의 `DeviceSimulatorClient`가 그 경로를 덮는다) | `tools/tests/u3`, `ContractFilesTest`(두 글자 편차 기호) |
 

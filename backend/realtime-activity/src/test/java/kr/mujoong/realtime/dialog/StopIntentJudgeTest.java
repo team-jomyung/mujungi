@@ -123,6 +123,33 @@ class StopIntentJudgeTest {
         assertThat(judge.judge(text, false).verdict()).isEqualTo(Verdict.NONE);
     }
 
+    /** 리뷰 반영 3: 청유형 인용("~자고 했어" · "~재")은 남의 말이다 — 명확한 종료 표현이 들어 있어도 STOP이 아니다. */
+    @ParameterizedTest
+    @CsvSource(delimiter = '|', value = {
+        "엄마가 그만하자고 했어",
+        "아빠가 이제 끝내자고 했어",
+        "동생이 그만하자고 말했어",
+        "형이 여기까지 하자고 그랬어",
+        "선생님이 그만하자고 해서 멈췄어",
+        "할머니가 그만하자고 하셨어",
+        "누나가 그만하재",
+        "친구가 이제 끝내재",
+        "엄마가 그만하자더라",
+        "아빠가 그만하자던데"
+    })
+    void hortativeReportedSpeechIsNeverAStop(String text) {
+        assertThat(judge.judge(text, false).verdict()).isEqualTo(Verdict.NONE);
+    }
+
+    @Test
+    void theHortativeQuoteMarkersDoNotSwallowOrdinaryStopsOrWordsWithJae() {
+        assertThat(judge.judge("그만하자", false)).isEqualTo(new Judgment(Verdict.STOP, Basis.CLEAR_PATTERN));
+        assertThat(judge.judge("재미없어 그만하자", false)).isEqualTo(new Judgment(Verdict.STOP, Basis.CLEAR_PATTERN));
+        assertThat(judge.judge("그만하자 재미없어", false)).isEqualTo(new Judgment(Verdict.STOP, Basis.CLEAR_PATTERN));
+        assertThat(judge.judge("이제 끝내 재미없어", false).verdict()).isEqualTo(Verdict.CONFIRM);
+        assertThat(judge.judge("나는 천재", false).verdict()).isEqualTo(Verdict.NONE);
+    }
+
     @Test
     void anythingConfirmedWhileTheDevicePlaysIsIgnoredAndBlankInputIsNothing() {
         assertThat(judge.judge("무중아 그만할래", true).verdict()).as("기기 재생 음성일 수 있다").isEqualTo(Verdict.NONE);

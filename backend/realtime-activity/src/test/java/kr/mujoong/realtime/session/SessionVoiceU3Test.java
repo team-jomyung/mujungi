@@ -338,7 +338,8 @@ class SessionVoiceU3Test {
         h.rawAudioConsent = true;
         h.activate();
         offerFrames(3);
-        respond("r1", "안녕 반가워", 4_800);
+        // 리뷰 반영 6: 송신기가 기기로 실제 보낸 프레임만 기록된다
+        h.link.deliver(respond("r1", "안녕 반가워", 4_800), h.clock.now());
         emitComplete("r2", "진단 결과야");
         h.advance(Duration.ofMillis(800));
         Instant endedAt = h.clock.now();
@@ -348,7 +349,7 @@ class SessionVoiceU3Test {
         assertThat(h.recordings.opened()).hasSize(1);
         assertThat(recorded.sessionId()).isEqualTo(h.sessionId);
         assertThat(recorded.childBytes()).hasSize(3 * FRAME.length);
-        assertThat(recorded.aiBytes()).as("게이트를 통과한 AI 음성만").hasSize(4_800);
+        assertThat(recorded.aiBytes()).as("게이트를 통과해 기기로 보낸 AI 음성만").hasSize(4_800);
         assertThat(recorded.closedAt()).isEqualTo(endedAt);
     }
 

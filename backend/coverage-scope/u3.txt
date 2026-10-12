@@ -40,5 +40,4 @@ backend/realtime-activity/src/main/java/kr/mujoong/realtime/voice/ProviderPort.j
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/voice/ProviderRequestFactory.java
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/voice/ProviderResponseId.java
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/dialog/StopIntentJudge.java
-backend/realtime-activity/src/main/java/kr/mujoong/realtime/dialog/JoinTracker.java
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/log/RealtimeVoiceDeletionParticipant.java

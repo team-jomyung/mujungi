@@ -227,6 +227,8 @@ public final class SessionExecutor {
     static final String EVENT_CHILD_STOP_INTENT = "CHILD_STOP_INTENT";
     /** U3-R12: 종료일 수 있으나 불명확(확인 질문 재생은 U4). */
     static final String EVENT_CHILD_STOP_UNCLEAR = "CHILD_STOP_UNCLEAR";
+    /** 리뷰 반영 3: 종료 의도 뒤 아이가 종료가 아닌 말로 대화를 이어 가 출력 막힘을 풀었다(오판 복구). */
+    static final String EVENT_CHILD_STOP_LIFTED = "CHILD_STOP_LIFTED";
     /** U3-J13: ACTIVE 중 공급자 끊김의 end_detail. */
     static final String END_DETAIL_PROVIDER_LOST = "PROVIDER_LOST";
     /** 취소 · 교정 · 재생 위치를 기억하는 응답 · 재생 수의 상한(오래된 것부터 잊는다). */
@@ -441,7 +443,8 @@ public final class SessionExecutor {
         if (terminated || current == null || !current.connectionId().equals(connectionId)) {
             return false;
         }
-        return relay.offer(sequence, pcm, receivedNanos);
+        // 리뷰 반영 1: 순번은 연결마다 다시 센다(새 페이지는 1부터 보낸다)
+        return relay.offer(connectionId, sequence, pcm, receivedNanos);
     }
 
     /** 입력 중계(시험 · 진단). */
@@ -677,8 +680,9 @@ public final class SessionExecutor {
             }
             case ProviderEvent.InputTranscriptDone done -> {
                 if (inRelayRange()) {
-                    transcripts.childFinal(done.itemId(), done.transcript(), at, uncertain(done));
-                    judgeStopIntent(done.transcript(), at);
+                    boolean uncertain = uncertain(done);
+                    transcripts.childFinal(done.itemId(), done.transcript(), at, uncertain);
+                    judgeStopIntent(done.transcript(), uncertain, at);
                     thinking();
                 }
             }
@@ -795,12 +799,24 @@ public final class SessionExecutor {
      * U3-R12 · AC6.4.4 ~ 6.4.6: ACTIVE의 확정 아이 전사로 종료 의도를 판정한다. STOP이면 대기 · 재생 중 응답을 취소하고(끼어들기와 같은 출력
      * 멈춤) 이후 공급자 출력을 받지 않으며 CHILD_STOP_INTENT를 남긴다. CONFIRM이면 CHILD_STOP_UNCLEAR만 남긴다. 상태 전이 · 마무리 인사 ·
      * 확인 질문 재생은 U4다(U3-J1 · U3-J24).
+     *
+     * <p>리뷰 반영 3(오판 복구): CLOSING(CHILD_STOP) 전이가 U4라 STOP 뒤에도 세션은 ACTIVE다. 그 뒤 아이가 종료가 아닌 확실한 말(판정 NONE ·
+     * 불확실 아님 · 기기 재생 중 아님)로 대화를 이어 가면 오판으로 보고 출력 막힘을 풀어 새 응답을 다시 보낸다. 이미 취소한 응답은 그대로 버린다
+     * (AC6.4.8 '이전 응답이 이어서 재생되지 않음'). 불명확 · 빈 말은 풀지 않는다.
      */
-    private void judgeStopIntent(String transcript, Instant at) {
-        if (status != SessionStatus.ACTIVE || stopIntent) {
+    private void judgeStopIntent(String transcript, boolean uncertain, Instant at) {
+        if (status != SessionStatus.ACTIVE) {
             return;
         }
         StopIntentJudge.Judgment judgment = stopJudge.judge(transcript, !devicePlaying.isEmpty());
+        if (stopIntent) {
+            if (judgment.verdict() == StopIntentJudge.Verdict.NONE && !uncertain && devicePlaying.isEmpty()
+                    && StopIntentJudge.hasWords(transcript)) {
+                stopIntent = false;
+                putEvent(EVENT_CHILD_STOP_LIFTED, null, at);
+            }
+            return;
+        }
         switch (judgment.verdict()) {
             case STOP -> {
                 stopIntent = true;
@@ -916,15 +932,15 @@ public final class SessionExecutor {
         services.latency().gatePassed(plan.sessionId(), playbackId, passAt);
         transcripts.aiFinal(sealed.transcript(), true, passAt);
         playbackResponses.put(playbackId, sealed.responseId());
-        if (recording != null) {
-            // U3-R9: 게이트를 통과해 기기로 보낸 AI 음성만 기록한다
-            sealed.chunks().forEach(recording::ai);
-        }
         long generation = sealed.generation();
+        // U3-R9 · 리뷰 반영 6: 기기로 실제 보낸 AI 음성 프레임만 기록한다(송신기가 소켓에 쓴 직후 넘긴다). 음성 레인에 못 들어간 묶음 ·
+        // 세대가 올라 잘린 나머지 프레임은 기록하지 않는다
+        AudioRecordings.Session aiRecording = recording;
         OutputBundle bundle = new OutputBundle(plan.sessionId(), playbackId, OutputBegin.Source.GPT_LIVE,
                 OutputBundle.frame(sealed.chunks()), sealed.totalMs(), reservation,
                 () -> outputGeneration.get() == generation,
-                firstFrameAt -> services.latency().firstFrameSent(plan.sessionId(), playbackId, firstFrameAt));
+                firstFrameAt -> services.latency().firstFrameSent(plan.sessionId(), playbackId, firstFrameAt),
+                aiRecording == null ? frame -> { } : aiRecording::ai);
         if (!target.sendOutput(bundle)) {
             services.metrics().gateDiscard(GateDecision.DiscardReason.OUTBOUND_FULL.name());
         }
@@ -1147,9 +1163,13 @@ public final class SessionExecutor {
      * U3-J4 · J5 · J7: 같은 기기의 새 연결이 HELLO_OK를 받았다(HELLO_OK는 이미 나갔다). 세션을 새 연결에 묶고 끊김 구간을 닫은 뒤, 이어가기면
      * SESSION_STATE(지금 표시 상태)와 ACK를 못 받은 명령을, 이어가기가 아니면 START_SESSION(같은 opId · 같은 승인 음성)부터 다시 보낸다. 낡은
      * STOP_OUTPUT은 다시 보내지 않는다(새 연결의 음성 레인은 비어 있다).
+     *
+     * <p>리뷰 반영: 세션이 이미 끝났으면 새 연결을 대기로 돌려보낸다(4, {@link #standDown}). CLOSING 중 세션을 모르는 기기(resume 없음)에는
+     * START_SESSION으로 입력 창을 다시 열게 하지 않고 CLOSE_TRANSPORT를 보낸다(5). 다시 보낸 승인 문구 재생은 재생 추적에 다시 넣는다(9).
      */
     private void onLinkReplaced(LinkReplaced replaced) {
         if (status.isTerminal()) {
+            standDown(replaced.link(), plan.sessionId(), status, replaced.resumed());
             return;
         }
         DeviceLink next = replaced.link();
@@ -1181,6 +1201,10 @@ public final class SessionExecutor {
             }
             return;
         }
+        if (status == SessionStatus.CLOSING && !replaced.resumed()) {
+            closeForUnknownDevice(now);
+            return;
+        }
         if (!replaced.resumed()) {
             // U3-J5: 기기가 세션을 모른다(새로 켠 페이지) — 같은 승인 음성으로 START_SESSION부터. 늦은 DEVICE_READY는 무시된다
             next.sendControl(new StartSession(plan.approvedAudio()), startOpId, plan.sessionId());
@@ -1191,11 +1215,59 @@ public final class SessionExecutor {
             if (payload instanceof StopOutput || payload instanceof StartSession) {
                 continue;
             }
-            next.sendControl(payload, pending.getKey(), plan.sessionId());
+            if (next.sendControl(payload, pending.getKey(), plan.sessionId())
+                    && payload instanceof PlayApprovedContent play) {
+                // 리뷰 반영 9: 같은 playbackId로 다시 보낸 승인 문구는 다시 재생될 것이라 추적한다(끝 표식 · 20초 만기가 지운다). 추적하지
+                // 않으면 그 사이 대기 문구가 겹쳐 나가고 '듣는 중'이 재생 중에 나간다
+                playback.started(play.playbackId(), play.contentCode());
+                timers.arm(Kind.PLAYBACK_EXPIRY, services.settings().playbackExpiry());
+            }
         }
         if (status == SessionStatus.ACTIVE) {
             armDisconnect();
         }
+    }
+
+    /**
+     * 리뷰 반영 5: CLOSING 중 세션을 모르는 기기가 붙었다(CLOSE_TRANSPORT를 처리하고 세션을 잊은 뒤 끊긴 기기 · 새로 켠 페이지). START_SESSION을
+     * 다시 보내면 기기가 마이크 입력 창을 다시 열어 30초 시한까지 열린 채 ENDED_UNCONFIRMED로 끝난다. 그래서 마무리 표시를 알리고
+     * CLOSE_TRANSPORT를 (다시) 보내 VOICE_SESSION_CLOSED로 끝나게 한다. 아직 마무리 문구 차례였으면 세션을 모르는 기기가 재생하지 못하므로
+     * 건너뛰고 지금 닫는다 — 입력 중계도 이때 멈춘다(R3-8). 옛 연결의 마무리 문구 · 닫기 명령은 다시 보내지 않는다.
+     */
+    private void closeForUnknownDevice(Instant now) {
+        pendingCommands.values().removeIf(payload -> payload instanceof PlayApprovedContent
+                || payload instanceof CloseTransport || payload instanceof StartSession);
+        sendControl(new SessionState(View.CLOSING));
+        if (closing.closeNow(closingDevice())) {
+            relay.setAccepting(false);
+            annotateQuietly(SessionStatus.CLOSING, SessionChange.none().withTransportClosedAt(now));
+        }
+    }
+
+    /**
+     * 리뷰 반영 4: 끝난 세션의 HELLO_OK.session을 받은 새 연결을 대기로 돌려보낸다. 이어간 기기(resumed)는 입력 창을 이미 다시 열었으므로
+     * CLOSE_TRANSPORT로 닫게 하고(그 ACK · VOICE_SESSION_CLOSED는 세션이 없어 버려진다), 그다음 SESSION_STATE{STANDBY}. 연결이 닫혔으면 아무것도
+     * 보내지 않는다. 실행기가 LinkReplaced를 처리하기 전에 끝났을 때(정리의 남은 편지 · 인계가 닫힌 편지함을 만났을 때) 쓴다.
+     *
+     * @param ended 세션의 끝 상태(닫기 사유를 고른다)
+     */
+    public static void standDown(DeviceLink next, UUID sessionId, SessionStatus ended, boolean resumed) {
+        if (next == null || !next.isOpen()) {
+            return;
+        }
+        if (resumed) {
+            next.sendControl(new CloseTransport(closeReasonFor(ended)), UUID.randomUUID(), sessionId);
+        }
+        next.sendControl(new SessionState(View.STANDBY), null, sessionId);
+    }
+
+    private static CloseTransport.Reason closeReasonFor(SessionStatus ended) {
+        return switch (ended) {
+            case ENDED, ENDED_UNCONFIRMED -> CloseTransport.Reason.ENDED;
+            case ABORTED -> CloseTransport.Reason.DISCONNECT;
+            case DECLINED -> CloseTransport.Reason.DECLINED;
+            default -> CloseTransport.Reason.FAILED;
+        };
     }
 
     private void logStopped(PlaybackMark mark, Instant serverRecvAt, DeviceLink current) {
@@ -1677,7 +1749,11 @@ public final class SessionExecutor {
         }
     }
 
-    /** 종료 정리(PD-1 생명주기 3): 입력 수락 끝 · 공급자 정리 · 구간 버림 · 열린 행 닫기 · 기록기 마지막 플러시 · 레지스트리 제거. */
+    /**
+     * 종료 정리(PD-1 생명주기 3): 입력 수락 끝 · 공급자 정리 · 구간 버림 · 열린 행 닫기 · 기록기 마지막 플러시 · 원음 기록 닫기 · 레지스트리 제거.
+     * 리뷰 반영 7: 단계마다 예외를 따로 받아(앱 오류 한 줄) 앞 단계가 실패해도 뒤 단계 — 특히 원음 파일 핸들과 메타의 ended_at — 를 마친다.
+     * 리뷰 반영 4: 처리하지 못하고 남은 연결 교체(LinkReplaced)는 그 새 연결을 대기로 돌려보낸다.
+     */
     private void teardown() {
         if (terminated) {
             return;
@@ -1686,31 +1762,48 @@ public final class SessionExecutor {
         outputGeneration.incrementAndGet();
         Instant now = services.clock().now();
         try {
-            timers.cancelAll();
-            relay.stop();
-            closeProvider();
-            ProviderSession session = providerSession;
-            if (session != null) {
-                session.close();
-            }
-            segment.reset();
-            playback.clear();
-            transcripts.closeAll(now);
-            services.latency().sessionEnded(plan.sessionId());
-            services.recorder().finish(plan.sessionId());
-            DeviceLink current = link;
-            if (current != null) {
-                current.bindSession(null);
-            }
+            quietly(timers::cancelAll);
+            quietly(relay::stop);
+            quietly(this::closeProvider);
+            quietly(() -> {
+                ProviderSession session = providerSession;
+                if (session != null) {
+                    session.close();
+                }
+            });
+            quietly(segment::reset);
+            quietly(playback::clear);
+            quietly(() -> transcripts.closeAll(now));
+            quietly(() -> services.latency().sessionEnded(plan.sessionId()));
+            quietly(() -> services.recorder().finish(plan.sessionId()));
+            quietly(() -> {
+                DeviceLink current = link;
+                if (current != null) {
+                    current.bindSession(null);
+                }
+            });
             pendingCommands.clear();
-            if (recording != null) {
-                recording.close(now);
+            quietly(() -> {
+                if (recording != null) {
+                    recording.close(now);
+                }
+            });
+        } finally {
+            for (Message left : mailbox.closeAndRelease()) {
+                if (left instanceof LinkReplaced replaced) {
+                    quietly(() -> standDown(replaced.link(), plan.sessionId(), status, replaced.resumed()));
+                }
             }
+            onTerminated.run();
+        }
+    }
+
+    /** 정리 단계 하나: 예외는 앱 오류 한 줄로 남기고 다음 단계로 간다. */
+    private void quietly(Runnable step) {
+        try {
+            step.run();
         } catch (RuntimeException e) {
             services.events().appError(EventLog.Component.SESSION_LIFECYCLE, e);
-        } finally {
-            mailbox.closeAndRelease();
-            onTerminated.run();
         }
     }
 

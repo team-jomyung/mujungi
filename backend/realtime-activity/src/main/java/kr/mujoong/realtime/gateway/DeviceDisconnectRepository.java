@@ -55,7 +55,10 @@ public class DeviceDisconnectRepository {
     private static final String COUNT_SINCE = "select count(*) from realtime.realtime_device_disconnect_event"
             + " where device_id = :deviceId and occurred_at > :cutoff";
 
-    private static final String SELECT_BY_DEVICE = "select " + COLUMNS + " from realtime.realtime_device_disconnect_event"
+    private static final String EXISTS_FOR_CONNECTION = "select exists(select 1 from realtime.realtime_device_disconnect_event"
+            + " where device_id = :deviceId and connection_id = :connectionId and kind = :kind)";
+
+    private static final String SELECT_BY_DEVICE ="select " + COLUMNS + " from realtime.realtime_device_disconnect_event"
             + " where device_id = :deviceId order by occurred_at, id";
 
     private static final String DELETE_BY_DEVICE = "delete from realtime.realtime_device_disconnect_event"
@@ -104,6 +107,15 @@ public class DeviceDisconnectRepository {
         ClockParams.instant(params, "cutoff", now.minus(window));
         Long count = jdbc.queryForObject(COUNT_SINCE, params, Long.class);
         return count == null ? 0 : (int) Math.min(Integer.MAX_VALUE, count);
+    }
+
+    /** 그 연결에 그 종류의 끊김이 이미 적혔는가(같은 끊김을 두 번 세지 않는다, 리뷰 반영 2). */
+    public boolean exists(UUID deviceId, UUID connectionId, Kind kind) {
+        MapSqlParameterSource params = new MapSqlParameterSource();
+        ClockParams.uuid(params, "deviceId", Objects.requireNonNull(deviceId, "deviceId"));
+        ClockParams.uuid(params, "connectionId", Objects.requireNonNull(connectionId, "connectionId"));
+        ClockParams.text(params, "kind", Objects.requireNonNull(kind, "kind").name());
+        return Boolean.TRUE.equals(jdbc.queryForObject(EXISTS_FOR_CONNECTION, params, Boolean.class));
     }
 
     /** 기기의 끊김 사건 전부(시각 순, 시험 · 진단). */

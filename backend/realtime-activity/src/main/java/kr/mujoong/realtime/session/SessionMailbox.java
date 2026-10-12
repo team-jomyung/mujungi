@@ -137,17 +137,23 @@ public final class SessionMailbox {
 
     /**
      * 닫고 남은 끝내기 명령의 약속을 {@link SessionGone}으로 끝낸다. 남은 종료 신호의 약속은 그냥 끝낸다(기다리는 정상 종료가 멈추지 않게,
-     * J304). 나머지 메시지는 버린다(BR6.11).
+     * J304). 나머지 메시지는 처리하지 않는다(BR6.11).
+     *
+     * @return 처리하지 않은 나머지 메시지(정리가 남은 연결 교체를 대기로 돌려보낸다, 리뷰 반영 4)
      */
-    public void closeAndRelease() {
+    public java.util.List<Message> closeAndRelease() {
         close();
+        java.util.List<Message> left = new java.util.ArrayList<>();
         for (Message message : clear()) {
             if (message instanceof EndRequested request) {
                 request.result().completeExceptionally(new SessionGone());
             } else if (message instanceof ServerShutdown shutdown) {
                 shutdown.handled().complete(null);
+            } else {
+                left.add(message);
             }
         }
+        return java.util.List.copyOf(left);
     }
 
     private final int generalCapacity;
