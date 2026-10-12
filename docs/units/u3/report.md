@@ -257,3 +257,37 @@ U1 회귀 실패 7건의 처리:
 - **조용 시간보다 긴 공급자 지연(3번 조사)**: 게이트는 한 응답의 첫 조각부터 끝 신호까지를 다 담은 구간만 통과시킨다(J285). 그래서 운영에서도 공급자가 한 응답의 조각 사이를 `segment-quiet`(800ms)보다 길게 비우면 그 응답의 구간이 모두 GATE_EMPTY로 버려지고 아이는 대기 문구만 듣는다(교정은 '짧게 완결' 또는 금지 패턴 범주). 조용히 사라지지는 않지만 그 턴의 답은 없다. 이번에 동작은 바꾸지 않았다 — 실공급자 조각 간격(11/2 어댑터)을 본 뒤 조용 시간을 정하거나 '끝 신호 전 봉인'을 미루는 쪽을 U4 · 운영 조율에서 정할 일이다.
 - **2번의 목록**: 해제 표현은 가정(U3-J26)이다. 목록 밖의 계속 표현("이야기 들려줘")은 풀지 못하고, 다음 확실한 계속 표현까지 AI가 말하지 않는다.
 - **4번의 기기 쪽**: 서버가 다른 세션 id로 STANDBY를 보내는 길은 `standDown`뿐이라 기기 무시 규칙과 겹치는 다른 흐름은 없다(U1 기기 시험 그대로 통과).
+
+### 13.2 시험 결과(3차 반영 뒤, main 병합 전 — 4ef0c54 + 아래 시험 수정)
+
+| 항목 | 명령 | 결과 |
+|---|---|---|
+| 재현(고치기 전) | 새 · 고친 시험 `--tests` | 백엔드 94건 중 21건 · 프런트 12건 중 1건 실패 — 건마다 지적한 증상으로 실패함을 확인 |
+| 백엔드 전체(태그 없음) | `:contract-model:test :realtime-activity:test :test-support:test` | contract-model 279 · realtime-activity 765 · test-support 27건 모두 통과 |
+| 백엔드 U3 + 커버리지 | `:realtime-activity:test -PincludeTags=u3 :realtime-activity:jacocoTestCoverageVerification -PcoverageScope=u3` | 23개 클래스 223건 통과, U3 범위 줄 커버리지 **81.7%**(3,236/3,961) |
+| SessionVoiceU3IT | `--tests '*SessionVoiceU3IT' --rerun` 3회 연속 | **3회 모두 4건 통과** |
+| 프런트 | `tsc --noEmit` · `eslint .` · `vitest run tests/u3 --coverage` · `vitest run tests/u1` | tsc 0 · eslint 0, U3 8개 파일 49건(줄 84.82%), U1 34개 파일 514건. 하나씩 차례로 돌려 이번에는 시한 초과가 없었다. `tests/u2`는 main 병합 뒤에 생긴다 |
+| core-api | — | 병합 뒤에 돌린다(아래 13.4) |
+
+- 설계 의도 대조 8번(고정 시간 대기 금지)에 비춰 3차에서 넣은 `FileAudioRecorderIT.aShutdownWhileTheWriterIsStillStarting…`의 `Thread.sleep(200)`을 '종료 스레드가 기다리는 상태(TIMED_WAITING)가 될 때까지 기다림'으로 바꿨다. 다시 돌려 10건 통과.
+
+### 13.3 설계 의도 대조(원작성자 인계 기준 — design.md 5절 U3-R1 ~ R17 · 8절 U3-J1 ~ J25)
+
+| 번호 | 원작성자 의도 | 1 ~ 3차 수정 뒤 지금 | 판단 |
+|---|---|---|---|
+| 1 | 끊김 한 건 = HELLO_OK 뒤 1006 · 전송 오류 닫힘(CLOSED) 또는 40초 무음(SILENT). 한 연결에 CLOSED와 SILENT가 둘 다 기록되면 안 됨. 1000 · 4001 · 서버 판단 닫기는 세지 않음(U3-J2) | 세지 않는 코드는 그대로다(`DeviceStatusPolicy.countsAsDisconnect`). 같은 끊김의 이중 기록은 양쪽에서 막는다 — 무음 점검은 그 연결의 CLOSED가 있으면 SILENT를 적지 않고(1차 2), 닫힘은 그 연결에서 마지막으로 들은 시각 뒤에 SILENT가 있으면 CLOSED를 적지 않는다(2차 3) | **한 군데 다르다(의도적).** 같은 연결이 무음(SILENT) 뒤 HEARTBEAT로 복귀했다가 나중에 1006으로 끊기면 SILENT와 CLOSED가 둘 다 남는다. 두 번의 서로 다른 끊김이기 때문이다. 원작성자의 시험 `ConnectionStateWriterU3IT.aSilentDisconnectIsRecorded…SecondRecoveryInsideTheWindowGoesToUnstable`도 한 연결의 무음 → 복귀 → 무음을 두 건으로 센다. 그래서 '한 연결에 한 건'이 아니라 '한 끊김에 한 건'으로 읽었다. 복귀 없는 같은 끊김에는 둘 다 남지 않는다(1차 · 2차 시험) |
+| 2 | 인용 · 역할 대사 · 주제 거부는 NONE, 스냅숏 · 명확한 종료 표현만 STOP, 물음꼴 · "그만" 단독은 CONFIRM, 합성 20건 오인식 0 · 미인식 ≤ 1. STOP이면 출력만 막고 세션은 ACTIVE(U3-R12 · J24) | 판정 순서와 분류는 그대로다. 인용 표지만 보강했다(청유형 인용, 1 · 2 · 3차). 합성 20건은 오인식 0 · 미인식 0. STOP이면 출력만 막고 세션은 ACTIVE다 | **맞다. 하나를 더했다.** STOP 뒤 적극적 계속 표현이면 막힘을 푸는 해제(`CHILD_STOP_LIFTED`, 1차 3 지시)를 더했다. U4b의 CLOSING(CHILD_STOP) 전이가 들어오기 전까지 STOP 오판이 세션 끝까지 AI를 막는 것을 풀기 위해서다. 목록은 가정 U3-J26 |
+| 3a | resume이 진행 중 세션이면 resumed true, 명령을 다시 보내지 않음 | resumed true면 START_SESSION을 다시 보내지 않는다. ACK 못 받은 PLAY_APPROVED_CONTENT(가장 최근 하나) · CLOSE_TRANSPORT는 같은 opId로 다시 보낸다 | **맞다(읽기 정리).** 원작성자의 코드와 시험(`unackedCommandsAreResentOnTheNewLinkWithTheirOpIdsButAStaleStopOutputIsNot`, resumed true)이 미확인 명령을 다시 보내므로 '다시 보내지 않는 명령'은 START_SESSION이다. (ab) · asyncapi에 그렇게 적었다 |
+| 3b | resume이 없으면 resumed false, 같은 approvedAudio로 START_SESSION 재전송 | 그대로다(ACTIVE · 시작 단계) | 맞다 |
+| 3c | CLOSING에서는 START_SESSION을 다시 보내지 않고, ACK 못 받은 CLOSE_TRANSPORT · PLAY_APPROVED_CONTENT만 같은 opId로 | resumed true면 그대로다. resumed false(세션을 모르는 기기)면 SESSION_STATE{CLOSING} + **새 opId의** CLOSE_TRANSPORT를 보내고 마무리 문구는 다시 보내지 않는다(1차 5). 재생 명령은 가장 최근 하나만(2차 4) | **resume 없는 경우만 다르다(의도적).** 세션을 모르는 기기는 그 세션의 PLAY_APPROVED_CONTENT를 재생하지 않으므로(기기 `isCurrent` 거름) 마무리 문구를 다시 보내면 30초 시한까지 기다리다 ENDED_UNCONFIRMED가 된다. 또 지적 사례(CLOSE_TRANSPORT를 ACK한 뒤 세션을 잊은 기기)에는 미확인 CLOSE_TRANSPORT가 아예 없어 같은 opId로 다시 보낼 것이 없다. '가장 최근 재생 하나만'은 (ab)에 맞췄다(3차 6) |
+| 3d | 재연결 때 InputRelay의 마지막 순번을 이어 받아 아이 소리를 버리지 않음 | 순번을 연결마다 다시 센다(1차 1). 이어가는 기기는 자기 순번을 이어 보내므로 그대로 받고, 새 페이지(1부터)도 받는다 | **목적은 맞고 방법이 다르다.** 서버 쪽 마지막 순번을 이어 받으면 새로 켠 페이지(1부터 보냄)의 프레임이 옛 순번을 넘을 때까지 모두 버려진다(1차 지적 1). 연결마다 다시 세면 두 경우 모두 버리지 않는다 |
+| 4 | ACTIVE에서 session.closed · WSS 닫힘 → ABORTED(DISCONNECT, PROVIDER_LOST), session.error는 WARN만, 시작 단계 끊김은 FAILED(PROVIDER_UNAVAILABLE)(U3-R8 · J13) | 바꾸지 않았다 | 맞다 |
+| 5 | 교정은 게이트 폐기 뒤 응답당 한 번, 범주별 고정 문장. 아이 입력 재개 · 다른 응답 도착으로 확정된 미완 구간은 교정 안 함. 전사 · 걸린 패턴은 본문에 안 넣음(U3-R7 · J12) | 2차 9번은 '어느 문장을 고르는가'만 바꿨다(폐기 구간에 금지 패턴이 있으면 사유가 미완 · 너무 김이어도 그 범주 문장). 교정을 할지 말지는 그대로 `sealAndGate`의 `!movedOn \|\| GATE_PATTERN`이 정한다 — 대화가 넘어가 확정된 미완 구간(GATE_EMPTY)은 여전히 교정하지 않는다. 문장은 여전히 `DialogInstructions.Correction` 고정 템플릿이다 | **맞다.** 응답당 한 번(`correctedResponses`)도 그대로다 |
+| 6 | 동의된 세션만 · 아이 입력과 승인된 AI 출력만, 전용 스레드 · 유계 대기열 · 세션당 64MB, 끝나면 기록기를 닫고 ended_at, 삭제는 진행 중 세션 기록을 먼저 멈춘 뒤 파일 삭제(U3-R9 · J14 · J15) | 동의 · 스레드 · 대기열 · 상한은 그대로다. AI 출력은 '실제로 기기로 보낸 프레임'만으로 좁혔다(1차 6). 정리는 단계마다 예외를 따로 받아 원음이 늘 닫힌다(1차 7). 삭제 참가자는 진행 중 세션의 원음 · 전사 기록을 먼저 막고 지운다(1차 8). 차단 · 종료가 기록기 스레드 전용 맵을 다른 스레드에서 만지지 않게 했다(2차 7 · 3차 5) | 맞다(더 좁혔다) |
+| 7 | JoinTracker는 되살리지 않음(U4b가 867f0a0에서 되살림). StopIntentJudge의 공개 메서드 이름 · 의미 유지 | JoinTracker는 없다. StopIntentJudge 공개 API(생성자 · `judge` · `Verdict` · `Basis` · `Judgment`)는 867f0a0과 같고 `continues`만 더했다. 인계에 적힌 `classify` · `phase` · `prompts`는 JoinTracker의 것(867f0a0의 `JoinTracker.classify` · `Phase` · `MAX_PROMPTS` · `prompts`)이라 이번 변경과 무관하다 | 맞다 |
+| 8 | U1 단언 · 커버리지 하한을 낮추지 않음, 시간에 민감한 시험은 상태 · 메시지 대기, 시험 프로필 internal-http.connect-timeout 500ms 유지 | U1 시험 단언은 바꾸지 않았다(1차에서 원음 시험이 묶음을 실제로 내보내게 한 것은 같은 단언을 더 엄격한 길로 지킨 것). connect-timeout은 500ms 그대로다. `SessionVoiceU3IT`는 서버 시한을 운영값으로 두고 메시지 도착을 기다린다. 3차에서 넣은 고정 대기 하나를 상태 대기로 바꿨다(13.2) | 맞다 |
+
+### 13.4 main 합치기 — 이 세션에서 하지 못함
+
+- 인계대로 `git fetch origin && git merge origin/claude/friendly-shannon-i89iyx` → `git merge main` 순서로 합치려 했다. 그러나 이 작업 세션의 권한 설정에서 `git fetch` · `git merge` · `git merge-tree`가 모두 '승인 필요'로 막혀 실행하지 못했다(우회하는 저수준 명령은 쓰지 않았다).
+- 그래서 병합 커밋, 병합 뒤 core-api(NoSqlNowTest 포함) · 백엔드 전체 · 프런트 `tests/u2` 확인은 아직이다. 충돌 푸는 법(인계 1절: FlywayConfIT 표 수 24, deviations.md 양쪽 행 유지, SchemaPrivilegeIT · timing.md · ko.ts 양쪽 내용 확인)은 그대로 따르면 된다. 병합 권한이 열리면 이어서 하겠다.

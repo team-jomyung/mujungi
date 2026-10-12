@@ -333,10 +333,13 @@ class FileAudioRecorderIT {
         recorder.open(sessionId).child(FRAME);
         awaitTrue(() -> repository.findBySession(sessionId).size() == 1);
 
-        CompletableFuture<Void> stopping = CompletableFuture.runAsync(recorder::destroy);
-        Thread.sleep(200);
+        Thread stopper = new Thread(recorder::destroy, "test-destroy");
+        stopper.start();
+        // 종료가 기록기 스레드를 받기를 기다리는 중이어야 한다(고정 시간 대기 대신 상태로 본다)
+        awaitTrue(() -> stopper.getState() == Thread.State.TIMED_WAITING);
         release.countDown();
-        stopping.get(10, TimeUnit.SECONDS);
+        stopper.join(Duration.ofSeconds(10));
+        assertThat(stopper.isAlive()).isFalse();
         starting.get(5, TimeUnit.SECONDS);
 
         assertThat(finishedOn).as("열린 파일은 기록기 스레드가 닫는다").containsExactly(writer.get());
