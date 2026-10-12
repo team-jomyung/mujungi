@@ -55,6 +55,9 @@ class ProviderRequestWhitelistIT {
             "audio.output");
     private static final Set<String> INPUT_AUDIO_KEYS = Set.of("type", "audio");
     private static final Set<String> SESSION_CLOSE_KEYS = Set.of("type");
+    /** U3(편차 (aa)): 응답 취소는 공급자가 준 응답 id만, 지시 교정은 고정 문장만 싣는다. */
+    private static final Set<String> RESPONSE_CANCEL_KEYS = Set.of("type", "responseId");
+    private static final Set<String> INSTRUCTIONS_CORRECT_KEYS = Set.of("type", "text");
     private static final Set<String> FORBIDDEN_FIELDS = Set.of("judgmentCriteria", "knownContent", "question",
             "guardianId", "childId", "deviceId", "sessionId", "email", "consentSnapshot", "practice", "goals");
 
@@ -88,6 +91,8 @@ class ProviderRequestWhitelistIT {
                     case "session.start" -> assertThat(SESSION_START_KEYS).containsAll(keys);
                     case "session.input_audio.append" -> assertThat(INPUT_AUDIO_KEYS).containsAll(keys);
                     case "session.close" -> assertThat(SESSION_CLOSE_KEYS).containsAll(keys);
+                    case "session.response.cancel" -> assertThat(RESPONSE_CANCEL_KEYS).containsAll(keys);
+                    case "session.instructions.correct" -> assertThat(INSTRUCTIONS_CORRECT_KEYS).containsAll(keys);
                     default -> throw new AssertionError("허용 밖 요청 type: " + type);
                 }
             }
@@ -115,9 +120,12 @@ class ProviderRequestWhitelistIT {
                 .containsExactly("displayName", "age", "interests");
         assertThat(components(ProviderRequestFactory.InputAudioAppend.class)).containsExactly("type", "audio");
         assertThat(components(ProviderRequestFactory.SessionClose.class)).containsExactly("type");
+        assertThat(components(ProviderRequestFactory.ResponseCancel.class)).containsExactly("type", "responseId");
+        assertThat(components(ProviderRequestFactory.InstructionsCorrect.class)).containsExactly("type", "text");
         for (Class<?> type : List.of(ProviderRequestFactory.SessionStart.class,
                 ProviderRequestFactory.ChildContextData.class, ProviderRequestFactory.AudioSpec.class,
-                ProviderRequestFactory.InputAudioAppend.class, ProviderRequestFactory.SessionClose.class)) {
+                ProviderRequestFactory.InputAudioAppend.class, ProviderRequestFactory.SessionClose.class,
+                ProviderRequestFactory.ResponseCancel.class, ProviderRequestFactory.InstructionsCorrect.class)) {
             for (RecordComponent component : type.getRecordComponents()) {
                 assertThat(Map.class.isAssignableFrom(component.getType())).as(component.getName()).isFalse();
                 assertThat(FORBIDDEN_FIELDS).doesNotContain(component.getName());
@@ -126,11 +134,12 @@ class ProviderRequestWhitelistIT {
                 }
             }
         }
-        // 공장 공개 메서드는 아이 맥락 · 음성 프레임 · 정리만 받는다(세션 패키지 전체를 받는 입구가 없다)
+        // 공장 공개 메서드는 아이 맥락 · 음성 프레임 · 정리만 받는다(세션 패키지 전체를 받는 입구가 없다). U3: 형식을 지킨 공급자 응답 id ·
+        // 고정 교정 범주만 더한다(자유 문자열 입구 없음)
         assertThat(Arrays.stream(ProviderRequestFactory.class.getDeclaredMethods())
                 .filter(method -> java.lang.reflect.Modifier.isPublic(method.getModifiers()))
                 .flatMap(method -> Arrays.stream(method.getParameterTypes())).map(Class::getSimpleName))
-                .allMatch(name -> Set.of("ChildContext", "byte[]").contains(name));
+                .allMatch(name -> Set.of("ChildContext", "byte[]", "ProviderResponseId", "Correction").contains(name));
     }
 
     @Test

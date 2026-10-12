@@ -26,7 +26,8 @@ import kr.mujoong.realtime.voice.ProviderPort.ProviderUnavailableException;
  *   <li>수락 조건(R3-8): ACTIVE부터 CLOSE_TRANSPORT 송신(또는 종료 · FAILED 전이)까지만 받는다. 그 밖의 프레임은 버리고 카운터만 센다.
  *   <li>대기열(L1) {@code mujoong.limits.session-input-queue-frames}(50)이 차면 가장 오래된 프레임을 버린다(최신 소리 우선).
  *   <li>순번이 올라가지 않는 프레임은 버린다(오래된 소리를 늦게 보내지 않는다).
- *   <li>원음을 저장하지 않는다(NFR12.3): 대기열은 메모리 뿐이고 보낸 뒤 참조를 놓는다. 멈출 때 비운다.
+ *   <li>원음을 저장하지 않는다(NFR12.3): 대기열은 메모리 뿐이고 보낸 뒤 참조를 놓는다. 멈출 때 비운다. U3: 동의된 세션만 실행기가
+ *       {@link AudioTap}(원음 기록기)을 붙이고, 중계는 보내는 순서대로 그 탭에도 넘긴다(U3-R9).
  *   <li>relayIn 표본(수신 직후 → 공급자 전송 호출이 돌아온 직후, 단조 읽기)을 세션별 고정 크기 링(3,000개)에 모은다. 프레임마다 로그를
  *       남기지 않는다(NFR5.1).
  *   <li>LAST_INPUT_FRAME: 평균 절대 진폭이 {@link #VOICE_ENERGY_THRESHOLD} 이상인 프레임만 음성 활동으로 보고 그 수신 시각을 남긴다(무음
@@ -72,6 +73,7 @@ public final class InputRelay {
     private long relayed;
     private Thread worker;
     private boolean launching;
+    private volatile AudioTap tap;
 
     public InputRelay(UUID sessionId, int capacity, ProviderRequestFactory factory, MujoongClock clock,
             RealtimeMetrics metrics) {
@@ -83,6 +85,11 @@ public final class InputRelay {
         this.factory = Objects.requireNonNull(factory, "factory");
         this.clock = Objects.requireNonNull(clock, "clock");
         this.metrics = Objects.requireNonNull(metrics, "metrics");
+    }
+
+    /** U3: 보내는 아이 프레임을 함께 받을 탭(동의된 세션의 원음 기록기, U3-R9). null이면 뗀다. */
+    public void tap(AudioTap value) {
+        this.tap = value;
     }
 
     /** 공급자 세션을 붙인다(그 전에 받은 프레임은 수락 전이라 없다). */
@@ -254,6 +261,14 @@ public final class InputRelay {
     }
 
     private boolean send(ProviderSession target, Frame frame) {
+        AudioTap currentTap = tap;
+        if (currentTap != null) {
+            try {
+                currentTap.childFrame(frame.pcm());
+            } catch (RuntimeException e) {
+                // 기록 실패가 중계를 멈추지 않는다(기록기가 스스로 오류를 남긴다)
+            }
+        }
         try {
             target.sendInputAudio(factory.inputAudio(frame.pcm()));
         } catch (ProviderUnavailableException e) {

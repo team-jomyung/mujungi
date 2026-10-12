@@ -34,10 +34,12 @@ import kr.mujoong.testsupport.time.MutableClock;
  */
 public final class SessionHarness {
 
-    /** 시험 설정: 운영 기본값을 그대로 쓴다(20초 · 30초 · 40초 · 800ms · 20초 · 1초). */
+    /** 시험 설정: 운영 기본값을 그대로 쓴다(20초 · 30초 · 40초 · 800ms · 20초 · 1초 · 불확실 기준 60%). */
     public static final SessionExecutor.Settings SETTINGS = new SessionExecutor.Settings(Duration.ofSeconds(20),
             Duration.ofSeconds(30), Duration.ofSeconds(40), Duration.ofMillis(800), Duration.ofSeconds(20),
-            Duration.ofSeconds(1), 50, 1000);
+            Duration.ofSeconds(1), 50, 1000, 60);
+    /** 시험 세션의 종료 표현 스냅숏(기본 표현 + 추가 표현 하나). */
+    public static final List<String> STOP_EXPRESSIONS = List.of("무중아 그만할래", "이제 끝");
 
     public final MutableClock clock = new MutableClock();
     public final ManualTimerDriver safety = new ManualTimerDriver(clock);
@@ -50,6 +52,9 @@ public final class SessionHarness {
     public final ManualLauncher launcher = new ManualLauncher();
     public final MemoryStore store = new MemoryStore();
     public final FakeSessionGaps gaps = new FakeSessionGaps();
+    public final FakeAudioRecordings recordings = new FakeAudioRecordings();
+    /** 원음 기록 동의(create 전에 바꾼다). */
+    public boolean rawAudioConsent;
     public final LatencyRecorder latency = new LatencyRecorder(events, metrics, clock, 100, Duration.ofMinutes(10));
     public final AsyncRecorder recorder = new AsyncRecorder(store, TaskLauncher.inline(), latency, events, metrics, clock,
             200, 2);
@@ -83,13 +88,13 @@ public final class SessionHarness {
                 (device, connection) -> unresponsive.add(new UUID[] {device, connection}),
                 new ProviderConnector(provider, new ProviderRequestFactory(), Duration.ofSeconds(10), launcher, "test"),
                 new ProviderRequestFactory(), new OutputGate(SeedDictionary.loadDefault()), recorder, latency,
-                new TimerClocks(safety, quiet), launcher, events, metrics, clock, settings, gaps);
+                new TimerClocks(safety, quiet), launcher, events, metrics, clock, settings, gaps, recordings);
         SessionExecutor.Plan plan = new SessionExecutor.Plan(sessionId, deviceId, "0123456789abcdef0123456789abcdef",
                 new ChildContext("하늘", 8, List.of("공룡")),
                 List.of(new StartSession.ApprovedAudio("CLOSING", closingVersion, "/media/approved/closing.wav"),
                         new StartSession.ApprovedAudio("WAITING_FILLER", fillerVersion, "/media/approved/filler.wav")),
                 new SessionExecutor.ApprovedItem("CLOSING", closingVersion),
-                new SessionExecutor.ApprovedItem("WAITING_FILLER", fillerVersion));
+                new SessionExecutor.ApprovedItem("WAITING_FILLER", fillerVersion), rawAudioConsent, STOP_EXPRESSIONS);
         executor = new SessionExecutor(plan, services, mailbox, () -> removed = true);
         return executor;
     }

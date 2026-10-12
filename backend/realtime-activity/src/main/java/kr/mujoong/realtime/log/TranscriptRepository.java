@@ -35,12 +35,14 @@ public class TranscriptRepository {
     private static final String COLUMNS = "id, session_id, sequence_no, speaker, text, assembly_status, review_needed,"
             + " approved_for_display, started_at, ended_at, created_at, deleted_at";
 
+    // U3: review_needed(불확실 표시, U3-R10)도 함께 쓴다 — 확정 전 행을 덮을 때만 바뀌는 것은 다른 열과 같다
     private static final String UPSERT = "insert into realtime.realtime_transcript as t (id, session_id, sequence_no,"
-            + " speaker, text, assembly_status, approved_for_display, started_at, ended_at, created_at)"
-            + " values (:id, :sessionId, :sequenceNo, :speaker, :text, :assemblyStatus, :approved, :startedAt, :endedAt,"
-            + " :now)"
+            + " speaker, text, assembly_status, review_needed, approved_for_display, started_at, ended_at, created_at)"
+            + " values (:id, :sessionId, :sequenceNo, :speaker, :text, :assemblyStatus, :reviewNeeded, :approved,"
+            + " :startedAt, :endedAt, :now)"
             + " on conflict (session_id, sequence_no) do update set text = excluded.text,"
-            + " assembly_status = excluded.assembly_status, approved_for_display = excluded.approved_for_display,"
+            + " assembly_status = excluded.assembly_status, review_needed = excluded.review_needed,"
+            + " approved_for_display = excluded.approved_for_display,"
             + " started_at = coalesce(t.started_at, excluded.started_at), ended_at = coalesce(excluded.ended_at, t.ended_at)"
             // 확정 전 행만 덮는다. 같은 번호에 다른 화자가 오면(조립 결함) 덮지 않는다
             + " where t.assembly_status = 'PARTIAL' and t.speaker = excluded.speaker";
@@ -119,6 +121,7 @@ public class TranscriptRepository {
         ClockParams.text(params, "text", entry.text());
         ClockParams.text(params, "assemblyStatus", entry.assemblyStatus().name());
         params.addValue("approved", entry.approvedForDisplay());
+        params.addValue("reviewNeeded", entry.reviewNeeded());
         ClockParams.instant(params, "startedAt", entry.startedAt());
         ClockParams.instant(params, "endedAt", entry.endedAt());
         return params;

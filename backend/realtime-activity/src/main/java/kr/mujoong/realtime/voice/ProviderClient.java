@@ -169,9 +169,12 @@ public class ProviderClient implements ProviderPort, DisposableBean {
         }
     }
 
-    /** 받은 메시지 모양(필드는 type별로 일부만 쓴다). */
+    /**
+     * 받은 메시지 모양(필드는 type별로 일부만 쓴다). U3: 확정 전사의 선택 필드 confidence(편차 (aa)) — 숫자가 아닌 값이 와도 전사를 잃지
+     * 않게 타입을 고정하지 않고 받아 {@link #confidence(Object)}가 거른다.
+     */
     record Inbound(String type, String providerSessionId, String itemId, String delta, String transcript,
-            String responseId, String audio, String code) {
+            String responseId, String audio, String code, Object confidence) {
     }
 
     /** 선 형식 → 앱 이벤트. 모르는 type · 깨진 본문은 무시(null)한다. */
@@ -191,8 +194,8 @@ public class ProviderClient implements ProviderPort, DisposableBean {
                 case "session.input_audio.speech_stopped" -> new ProviderEvent.SpeechStopped();
                 case "session.input_transcript.delta" ->
                     new ProviderEvent.InputTranscriptDelta(inbound.itemId(), nullToEmpty(inbound.delta()));
-                case "session.input_transcript.done" ->
-                    new ProviderEvent.InputTranscriptDone(inbound.itemId(), nullToEmpty(inbound.transcript()));
+                case "session.input_transcript.done" -> new ProviderEvent.InputTranscriptDone(inbound.itemId(),
+                        nullToEmpty(inbound.transcript()), confidence(inbound.confidence()));
                 case "session.output_transcript.delta" ->
                     new ProviderEvent.OutputTranscriptDelta(inbound.responseId(), nullToEmpty(inbound.delta()));
                 case "session.output_audio.delta" -> new ProviderEvent.OutputAudioDelta(inbound.responseId(),
@@ -205,6 +208,15 @@ public class ProviderClient implements ProviderPort, DisposableBean {
         } catch (IllegalArgumentException e) {
             return null;
         }
+    }
+
+    /** 숫자가 아니거나 0 ~ 1 밖이면 없는 것으로 본다(U3-J17: 값이 없으면 불확실로 보지 않는다). */
+    static Double confidence(Object value) {
+        if (!(value instanceof Number number)) {
+            return null;
+        }
+        double confidence = number.doubleValue();
+        return Double.isNaN(confidence) || confidence < 0.0 || confidence > 1.0 ? null : confidence;
     }
 
     private static String blankToNull(String value) {
@@ -239,6 +251,17 @@ public class ProviderClient implements ProviderPort, DisposableBean {
 
         @Override
         public void sendInputAudio(ProviderRequestFactory.InputAudioAppend request)
+                throws ProviderUnavailableException {
+            send(json.write(Objects.requireNonNull(request, "request")));
+        }
+
+        @Override
+        public void cancelResponse(ProviderRequestFactory.ResponseCancel request) throws ProviderUnavailableException {
+            send(json.write(Objects.requireNonNull(request, "request")));
+        }
+
+        @Override
+        public void correctInstructions(ProviderRequestFactory.InstructionsCorrect request)
                 throws ProviderUnavailableException {
             send(json.write(Objects.requireNonNull(request, "request")));
         }

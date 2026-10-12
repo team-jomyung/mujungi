@@ -34,6 +34,12 @@ public interface ProviderPort {
         /** {@code session.input_audio.append}. */
         void sendInputAudio(ProviderRequestFactory.InputAudioAppend request) throws ProviderUnavailableException;
 
+        /** U3 {@code session.response.cancel}(끼어들기 · 종료 의도, U3-J11). */
+        void cancelResponse(ProviderRequestFactory.ResponseCancel request) throws ProviderUnavailableException;
+
+        /** U3 {@code session.instructions.correct}(게이트 폐기 뒤 고정 교정 문장, U3-J12). */
+        void correctInstructions(ProviderRequestFactory.InstructionsCorrect request) throws ProviderUnavailableException;
+
         /** {@code session.close}를 보내고 연결을 닫는다. 두 번 불러도 된다. 예외를 던지지 않는다. */
         void close(ProviderRequestFactory.SessionClose request);
 
@@ -67,8 +73,15 @@ public interface ProviderPort {
         record InputTranscriptDelta(String itemId, String delta) implements ProviderEvent {
         }
 
-        /** {@code session.input_transcript.done}. */
-        record InputTranscriptDone(String itemId, String transcript) implements ProviderEvent {
+        /**
+         * {@code session.input_transcript.done}. U3: 공급자가 주면 확정 전사의 신뢰도 {@code confidence}(0 ~ 1, 불확실 표시 근거, U3-J17).
+         * 범위 밖이거나 없으면 null이다.
+         */
+        record InputTranscriptDone(String itemId, String transcript, Double confidence) implements ProviderEvent {
+
+            public InputTranscriptDone(String itemId, String transcript) {
+                this(itemId, transcript, null);
+            }
         }
 
         /** {@code session.output_transcript.delta}. */

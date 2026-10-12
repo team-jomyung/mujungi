@@ -113,6 +113,23 @@ public final class FakeProviderPort implements ProviderPort {
         }
 
         @Override
+        public void cancelResponse(ProviderRequestFactory.ResponseCancel request) throws ProviderUnavailableException {
+            if (!open) {
+                throw new ProviderUnavailableException(ProviderUnavailableException.Reason.CLOSED);
+            }
+            record(request);
+        }
+
+        @Override
+        public void correctInstructions(ProviderRequestFactory.InstructionsCorrect request)
+                throws ProviderUnavailableException {
+            if (!open) {
+                throw new ProviderUnavailableException(ProviderUnavailableException.Reason.CLOSED);
+            }
+            record(request);
+        }
+
+        @Override
         public void close(ProviderRequestFactory.SessionClose request) {
             record(request);
             open = false;

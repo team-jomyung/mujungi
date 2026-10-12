@@ -3,11 +3,15 @@ package kr.mujoong.realtime.session;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.EnumSet;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
@@ -31,11 +35,13 @@ import kr.mujoong.contract.ws.message.StopOutput;
 import kr.mujoong.contract.ws.message.View;
 import kr.mujoong.realtime.common.scaling.SingleInstanceAssumption;
 import kr.mujoong.realtime.config.RealtimeProperties;
+import kr.mujoong.realtime.dialog.DialogInstructions;
 import kr.mujoong.realtime.gate.ApprovedPlayback;
 import kr.mujoong.realtime.gate.ClosingSequence;
 import kr.mujoong.realtime.gate.GateDecision;
 import kr.mujoong.realtime.gate.OutputGate;
 import kr.mujoong.realtime.gate.SegmentBuffer;
+import kr.mujoong.realtime.gate.SeedDictionary;
 import kr.mujoong.realtime.gateway.DeviceLink;
 import kr.mujoong.realtime.gateway.DeviceStatusPort;
 import kr.mujoong.realtime.gateway.OutputBundle;
@@ -45,6 +51,7 @@ import kr.mujoong.realtime.log.SessionGapRepository;
 import kr.mujoong.realtime.log.TranscriptWriter;
 import kr.mujoong.realtime.observability.EventLogger;
 import kr.mujoong.realtime.observability.RealtimeMetrics;
+import kr.mujoong.realtime.recording.AudioRecordings;
 import kr.mujoong.realtime.runtime.TaskLauncher;
 import kr.mujoong.realtime.runtime.TimerClocks;
 import kr.mujoong.realtime.session.SessionMailbox.Bootstrap;
@@ -69,7 +76,9 @@ import kr.mujoong.realtime.voice.InputRelay;
 import kr.mujoong.realtime.voice.ProviderConnector;
 import kr.mujoong.realtime.voice.ProviderPort.ProviderEvent;
 import kr.mujoong.realtime.voice.ProviderPort.ProviderSession;
+import kr.mujoong.realtime.voice.ProviderPort.ProviderUnavailableException;
 import kr.mujoong.realtime.voice.ProviderRequestFactory;
+import kr.mujoong.realtime.voice.ProviderResponseId;
 import org.springframework.dao.DataAccessException;
 import org.springframework.transaction.TransactionException;
 
@@ -103,7 +112,8 @@ public final class SessionExecutor {
             Duration playbackExpiry,
             Duration timerTick,
             int inputQueueFrames,
-            int mailboxCapacity) {
+            int mailboxCapacity,
+            int uncertainBelowPercent) {
 
         public Settings {
             Objects.requireNonNull(deviceAckTimeout, "deviceAckTimeout");
@@ -115,6 +125,9 @@ public final class SessionExecutor {
             if (inputQueueFrames <= 0 || mailboxCapacity <= 0) {
                 throw new IllegalArgumentException("대기열 상한은 0보다 커야 한다");
             }
+            if (uncertainBelowPercent < 0 || uncertainBelowPercent > MAX_PERCENT) {
+                throw new IllegalArgumentException("불확실 기준은 0 ~ 100이다");
+            }
         }
 
         public static Settings from(RealtimeProperties properties) {
@@ -122,7 +135,7 @@ public final class SessionExecutor {
                     properties.timing().session().closingConfirm(), properties.timing().device().disconnect(),
                     properties.gate().segmentQuiet(), properties.timing().device().outputQueueMax(),
                     properties.session().timerTick(), properties.limits().sessionInputQueueFrames(),
-                    properties.limits().sessionControlQueue());
+                    properties.limits().sessionControlQueue(), properties.transcript().uncertainBelowPercent());
         }
     }
 
@@ -142,7 +155,8 @@ public final class SessionExecutor {
             RealtimeMetrics metrics,
             MujoongClock clock,
             Settings settings,
-            SessionGapPort gaps) {
+            SessionGapPort gaps,
+            AudioRecordings recordings) {
 
         public Services {
             Objects.requireNonNull(transitions, "transitions");
@@ -160,6 +174,7 @@ public final class SessionExecutor {
             Objects.requireNonNull(clock, "clock");
             Objects.requireNonNull(settings, "settings");
             Objects.requireNonNull(gaps, "gaps");
+            Objects.requireNonNull(recordings, "recordings");
         }
     }
 
@@ -167,7 +182,10 @@ public final class SessionExecutor {
     public record ApprovedItem(String contentCode, UUID contentVersionId) {
     }
 
-    /** 시작 명령이 고정한 세션 패키지 중 실행기가 쓰는 부분. */
+    /**
+     * 시작 명령이 고정한 세션 패키지 중 실행기가 쓰는 부분. U3: 원음 기록 동의(consentSnapshot.rawAudio, U3-R9)와 세션의 종료 표현 스냅숏
+     * (종료 의도 판정, U3-R12).
+     */
     public record Plan(
             UUID sessionId,
             UUID deviceId,
@@ -175,13 +193,16 @@ public final class SessionExecutor {
             ChildContext childContext,
             List<StartSession.ApprovedAudio> approvedAudio,
             ApprovedItem closing,
-            ApprovedItem waitingFiller) {
+            ApprovedItem waitingFiller,
+            boolean rawAudioConsent,
+            List<String> stopExpressions) {
 
         public Plan {
             Objects.requireNonNull(sessionId, "sessionId");
             Objects.requireNonNull(deviceId, "deviceId");
             Objects.requireNonNull(childContext, "childContext");
             approvedAudio = List.copyOf(approvedAudio);
+            stopExpressions = stopExpressions == null ? List.of() : List.copyOf(stopExpressions);
         }
 
         @Override
@@ -201,6 +222,11 @@ public final class SessionExecutor {
     static final String EVENT_MIC_LOST = "DEVICE_MIC_LOST";
     static final String EVENT_MIC_OK = "DEVICE_MIC_OK";
     static final String EVENT_PLAYER_ERROR = "DEVICE_PLAYER_ERROR";
+    /** U3-J13: ACTIVE 중 공급자 끊김의 end_detail. */
+    static final String END_DETAIL_PROVIDER_LOST = "PROVIDER_LOST";
+    /** 취소 · 교정 · 재생 위치를 기억하는 응답 · 재생 수의 상한(오래된 것부터 잊는다). */
+    static final int MAX_TRACKED = 32;
+    private static final int MAX_PERCENT = 100;
 
     private final Plan plan;
     private final Services services;
@@ -224,6 +250,18 @@ public final class SessionExecutor {
     private DeviceState.Player lastPlayer;
     private UUID progressPlaybackId;
     private Long progressPlayedToMs;
+    /** U3-R5: 취소한 응답(늦게 오는 조각을 받지 않는다). */
+    private final Set<String> cancelledResponses = bounded();
+    /** U3-R7: 교정을 이미 보낸 응답(응답당 한 번). */
+    private final Set<String> correctedResponses = bounded();
+    /** 기기로 보낸 출력 묶음의 응답(끼어들기 때 그 응답을 취소한다). */
+    private final Map<UUID, String> playbackResponses = boundedMap();
+    /** 기기가 STARTED를 알리고 아직 끝 표식이 없는 재생(생각 중 · 듣는 중 표시와 종료 의도 판정의 '재생 중'). */
+    private final Set<UUID> devicePlaying = new HashSet<>();
+    /** 실행기가 스스로 공급자를 닫았다(뒤따르는 끊김 알림은 공급자 장애가 아니다). */
+    private boolean providerClosing;
+    /** 동의된 세션의 원음 기록(동의가 없으면 null, U3-R9). */
+    private AudioRecordings.Session recording;
     /** 지금 편지함 메시지를 처리하는 스레드(실행 스레드 또는 시험의 step 호출 스레드). 공급자 리스너가 이 스레드면 기다리지 않는다(J289). */
     private volatile Thread processing;
     private DeviceLink link;
@@ -586,6 +624,11 @@ public final class SessionExecutor {
     private void enterActive() {
         timers.cancel(Kind.DEVICE_ACK);
         relay.attach(providerSession);
+        // U3-R9: 동의된 세션만 원음 기록을 연다(동의가 없으면 한 바이트도 디스크에 가지 않는다)
+        if (plan.rawAudioConsent() && recording == null) {
+            recording = services.recordings().open(plan.sessionId());
+            relay.tap(recording::child);
+        }
         relay.setAccepting(true);
         relay.start(services.launcher());
         sendControl(new SessionState(View.LISTENING));
@@ -606,27 +649,30 @@ public final class SessionExecutor {
                     tryActivate();
                 }
             }
-            case ProviderEvent.Error ignored -> providerLost();
+            case ProviderEvent.Error ignored -> providerError();
             case ProviderEvent.Closed ignored -> providerLost();
-            case ProviderEvent.SpeechStopped ignored ->
+            case ProviderEvent.SpeechStopped ignored -> {
                 services.latency().speechEnd(plan.sessionId(), LatencyRecorder.SpeechEndSource.PROVIDER_EVENT, at);
+                thinking();
+            }
             case ProviderEvent.InputTranscriptDelta delta -> {
                 if (inRelayRange()) {
                     services.latency().inputActivity(plan.sessionId());
-                    // BR7.3: 아이 입력 재개는 열린 구간을 확정한다
+                    // BR7.3: 아이 입력 재개는 열린 구간을 확정한다(대화가 넘어갔으니 완결 요청 교정은 하지 않는다)
                     if (segment.isOpen()) {
-                        sealAndGate();
+                        sealAndGate(true);
                     }
                     transcripts.childDelta(delta.itemId(), delta.delta(), at);
                 }
             }
             case ProviderEvent.InputTranscriptDone done -> {
                 if (inRelayRange()) {
-                    transcripts.childFinal(done.itemId(), done.transcript(), at);
+                    transcripts.childFinal(done.itemId(), done.transcript(), at, uncertain(done));
+                    thinking();
                 }
             }
             case ProviderEvent.OutputTranscriptDelta delta -> {
-                if (inOutputRange()) {
+                if (inOutputRange() && !cancelledResponses.contains(delta.responseId())) {
                     beginOutput(delta.responseId(), at);
                     // J294: 음성처럼 구간에 들어간 조각만 조용 시계를 다시 건다(버린 조각은 열린 구간의 조용 시간을 늘리지 않는다)
                     if (segment.addTranscript(delta.responseId(), delta.delta(), at, received.receivedNanos())
@@ -636,7 +682,7 @@ public final class SessionExecutor {
                 }
             }
             case ProviderEvent.OutputAudioDelta delta -> {
-                if (inOutputRange()) {
+                if (inOutputRange() && !cancelledResponses.contains(delta.responseId())) {
                     beginOutput(delta.responseId(), at);
                     SegmentBuffer.Added added =
                             segment.addAudio(delta.responseId(), delta.audio(), at, received.receivedNanos());
@@ -650,11 +696,14 @@ public final class SessionExecutor {
                 }
             }
             case ProviderEvent.OutputDone done -> {
-                // J300: 열린 구간이 그 응답이면 output.done 처리 시각이 열린 AI 행의 tTranscriptFinal이다(view_item_ready{ai}의 시작)
-                if (segment.isOpen() && segment.responseId().equals(done.responseId())) {
-                    transcripts.aiDone(at);
+                // U3-R5: 취소한 응답의 끝 신호는 버린다
+                if (!cancelledResponses.contains(done.responseId())) {
+                    // J300: 열린 구간이 그 응답이면 output.done 처리 시각이 열린 AI 행의 tTranscriptFinal이다(view_item_ready{ai}의 시작)
+                    if (segment.isOpen() && segment.responseId().equals(done.responseId())) {
+                        transcripts.aiDone(at);
+                    }
+                    segment.responseDone(done.responseId());
                 }
-                segment.responseDone(done.responseId());
             }
         }
     }
@@ -665,7 +714,7 @@ public final class SessionExecutor {
      */
     private void beginOutput(String responseId, Instant at) {
         if (segment.holdsOtherThan(responseId)) {
-            sealAndGate();
+            sealAndGate(true);
         }
         if (!segment.isOpen() && segment.accepts(responseId)) {
             services.latency().providerFirstOut(plan.sessionId(), at);
@@ -673,19 +722,94 @@ public final class SessionExecutor {
         }
     }
 
-    private void providerLost() {
+    /**
+     * 공급자 {@code session.error}. 시작 전이면 PROVIDER_UNAVAILABLE(contracts/ai-io.md 3절, U1 그대로). 시작 뒤에는 연결이 살아 있을 수
+     * 있어 세션을 끝내지 않는다 — PD 2.1-C의 WARN 한 줄만 남기고, 완결되지 않은 구간은 게이트가 폐기해 대기 문구로 잇는다(U1 그대로).
+     * 연결이 실제로 끊기면 뒤따르는 끊김 알림이 {@link #providerLost()}로 끝낸다(U3-R8).
+     */
+    private void providerError() {
         if (START_PHASE.contains(status)) {
             multiOriginFail(Trigger.PROVIDER_FAILED, FailureCode.PROVIDER_UNAVAILABLE, SessionTransitions.Origin.REALTIME);
-        } else {
-            // ACTIVE 뒤 공급자 끊김의 전이는 U3 범위다(BR6.8에 없음). WARN 한 줄만 남긴다(PD 2.1-C)
-            services.events().appError(EventLog.Component.VOICE_RELAY, "ProviderDisconnected", EventCode.Level.WARN);
+            return;
         }
+        services.events().appError(EventLog.Component.VOICE_RELAY, "ProviderDisconnected", EventCode.Level.WARN);
+    }
+
+    /** 공급자 연결 끊김({@code session.closed} · WSS 닫힘 · 전송 오류). */
+    private void providerLost() {
+        if (providerClosing) {
+            // 실행기가 스스로 닫은 공급자의 끊김 알림이다(정리 · 앱 종료 T3)
+            return;
+        }
+        if (START_PHASE.contains(status)) {
+            multiOriginFail(Trigger.PROVIDER_FAILED, FailureCode.PROVIDER_UNAVAILABLE, SessionTransitions.Origin.REALTIME);
+            return;
+        }
+        // PD 2.1-C의 WARN 한 줄은 그대로 남긴다
+        services.events().appError(EventLog.Component.VOICE_RELAY, "ProviderDisconnected", EventCode.Level.WARN);
+        if (status == SessionStatus.ACTIVE) {
+            abortProviderLost();
+        }
+        // CLOSING 중에는 30초 확인 시한이 우선한다(U1 그대로)
+    }
+
+    /**
+     * U3-R8 · U3-J13 · AC6.6.3 · B18: ACTIVE 중 공급자가 끊기면 음성 모델 없이 대화를 이을 수 없어 기존 전이 ACTIVE → ABORTED(DISCONNECT)로
+     * 바로 끝내고 end_detail에 PROVIDER_LOST를 적는다. 연결이 살아 있으면 CLOSE_TRANSPORT(DISCONNECT) + STANDBY.
+     */
+    private void abortProviderLost() {
+        Instant now = services.clock().now();
+        Optional<ActivitySessionRow> row = services.transitions().transition(plan.sessionId(), SessionStatus.ACTIVE,
+                SessionStatus.ABORTED, TransitionTable.changeFor(Trigger.DISCONNECT, null, now)
+                        .withEndDetail(END_DETAIL_PROVIDER_LOST).withProviderClosedAt(now),
+                SessionTransitions.Origin.REALTIME, plan.traceId());
+        if (row.isEmpty()) {
+            syncFromDb();
+            return;
+        }
+        status = SessionStatus.ABORTED;
+        closeProvider();
+        bumpGeneration();
+        DeviceLink current = link;
+        if (current != null && current.isOpen()) {
+            sendControl(new CloseTransport(CloseTransport.Reason.DISCONNECT));
+            sendControl(new SessionState(View.STANDBY));
+        }
+        teardown();
+    }
+
+    /** U3-J6: 아이 말이 끝났다(말 끝 · 전사 확정) — 듣는 중이고 재생이 없으면 '생각 중'. */
+    private void thinking() {
+        if (status == SessionStatus.ACTIVE && view == View.LISTENING && devicePlaying.isEmpty()) {
+            sendControl(new SessionState(View.THINKING));
+        }
+    }
+
+    /** U3-J6: 재생이 모두 끝났거나 보낼 응답이 없다 — 생각 중 · 재생 뒤면 '듣는 중'으로 돌아간다. */
+    private void listeningAgain() {
+        if (status == SessionStatus.ACTIVE && view != View.LISTENING && devicePlaying.isEmpty()
+                && !playback.isPlaying()) {
+            sendControl(new SessionState(View.LISTENING));
+        }
+    }
+
+    /** U3-R10 · U3-J17: 확정 전사가 비었거나 공급자 신뢰도가 기준 미만이면 불확실. 신뢰도가 없으면 불확실로 보지 않는다. */
+    private boolean uncertain(ProviderEvent.InputTranscriptDone done) {
+        if (done.transcript() == null || done.transcript().isBlank()) {
+            return true;
+        }
+        Double confidence = done.confidence();
+        return confidence != null && confidence * MAX_PERCENT < services.settings().uncertainBelowPercent();
     }
 
     // ------------------------------------------------------------------ 게이트
 
-    /** 구간 확정(조용 시간 만기 · 아이 입력 재개) → 검사 → 송신 직전 재확인 → 송신 또는 폐기(PD-3 표 2.3-C). */
-    private void sealAndGate() {
+    /**
+     * 구간 확정(조용 시간 만기 · 아이 입력 재개) → 검사 → 송신 직전 재확인 → 송신 또는 폐기(PD-3 표 2.3-C).
+     *
+     * @param movedOn 아이 입력 재개 · 다른 응답 도착으로 확정했는가(대화가 이미 넘어가 완결 요청 교정을 보내지 않는다, U3-R7)
+     */
+    private void sealAndGate(boolean movedOn) {
         timers.cancel(Kind.SEGMENT_QUIET);
         Instant confirmedAt = services.clock().now();
         long confirmedNanos = services.clock().monotonicNanos();
@@ -698,7 +822,9 @@ public final class SessionExecutor {
         try {
             GateDecision inspected = services.gate().inspect(sealed);
             if (!inspected.passed()) {
-                discard(sealed, inspected.reason());
+                // 금지 패턴은 대화가 넘어갔어도 교정한다(같은 표현을 되풀이하지 않게)
+                discard(sealed, inspected.reason(),
+                        !movedOn || inspected.reason() == GateDecision.DiscardReason.GATE_PATTERN);
                 return;
             }
             DeviceLink target = link;
@@ -716,7 +842,7 @@ public final class SessionExecutor {
             // 게이트 처리 중 예외는 폐기한다(fail-closed, SD-17)
             services.events().appError(EventLog.Component.OUTPUT_GATE, e);
             if (transcripts.hasOpenAi()) {
-                discard(sealed, GateDecision.DiscardReason.GATE_EMPTY);
+                discard(sealed, GateDecision.DiscardReason.GATE_EMPTY, !movedOn);
             }
         }
     }
@@ -726,6 +852,11 @@ public final class SessionExecutor {
         UUID playbackId = UUID.randomUUID();
         services.latency().gatePassed(plan.sessionId(), playbackId, passAt);
         transcripts.aiFinal(sealed.transcript(), true, passAt);
+        playbackResponses.put(playbackId, sealed.responseId());
+        if (recording != null) {
+            // U3-R9: 게이트를 통과해 기기로 보낸 AI 음성만 기록한다
+            sealed.chunks().forEach(recording::ai);
+        }
         long generation = sealed.generation();
         OutputBundle bundle = new OutputBundle(plan.sessionId(), playbackId, OutputBegin.Source.GPT_LIVE,
                 OutputBundle.frame(sealed.chunks()), sealed.totalMs(), reservation,
@@ -736,12 +867,20 @@ public final class SessionExecutor {
         }
     }
 
-    /** 폐기: AI 행 FINAL · false(BR6.15), 그다음 대체 문구 판정(겹침 규칙 R3-19). */
+    /** 폐기: AI 행 FINAL · false(BR6.15), 그다음 대체 문구 판정(겹침 규칙 R3-19). 교정은 사유에 따라(U3-R7). */
     private void discard(SegmentBuffer.Sealed sealed, GateDecision.DiscardReason reason) {
+        discard(sealed, reason, true);
+    }
+
+    private void discard(SegmentBuffer.Sealed sealed, GateDecision.DiscardReason reason, boolean correct) {
         services.metrics().gateDiscard(reason.name());
         services.latency().gateDiscarded(plan.sessionId());
         transcripts.aiFinal(sealed == null ? "" : sealed.transcript(), false, services.clock().now());
+        if (correct) {
+            correctAfterDiscard(sealed, reason);
+        }
         if (status != SessionStatus.ACTIVE || playback.isPlaying() || plan.waitingFiller() == null) {
+            listeningAgain();
             return;
         }
         UUID playbackId = UUID.randomUUID();
@@ -750,6 +889,98 @@ public final class SessionExecutor {
             playback.started(playbackId, PlayApprovedContent.WAITING_FILLER);
             timers.arm(Kind.PLAYBACK_EXPIRY, services.settings().playbackExpiry());
         }
+    }
+
+    /**
+     * U3-R7 · U3-J12: ACTIVE에서 GATE_PATTERN · GATE_EMPTY · SEGMENT_OVERSIZE로 폐기했으면 응답당 한 번 고정 교정 문장을 보낸다(걸린 범주의
+     * 문장, 범주를 모르거나 미완 · 너무 긴 응답이면 짧은 완결 요청). 폐기한 전사 · 걸린 패턴은 보내지 않는다.
+     */
+    private void correctAfterDiscard(SegmentBuffer.Sealed sealed, GateDecision.DiscardReason reason) {
+        if (status != SessionStatus.ACTIVE || sealed == null || sealed.responseId() == null) {
+            return;
+        }
+        DialogInstructions.Correction correction = switch (reason) {
+            case GATE_PATTERN -> services.gate().matchedCategory(sealed).map(SessionExecutor::correctionFor)
+                    .orElse(DialogInstructions.Correction.INCOMPLETE);
+            case GATE_EMPTY, SEGMENT_OVERSIZE -> DialogInstructions.Correction.INCOMPLETE;
+            default -> null;
+        };
+        if (correction == null || !correctedResponses.add(sealed.responseId())) {
+            return;
+        }
+        ProviderRequestFactory.InstructionsCorrect request = services.requests().instructionsCorrect(correction);
+        toProvider("provider-correct-", session -> session.correctInstructions(request));
+    }
+
+    static DialogInstructions.Correction correctionFor(SeedDictionary.Category category) {
+        return switch (category) {
+            case DIAGNOSIS -> DialogInstructions.Correction.DIAGNOSIS;
+            case TREATMENT -> DialogInstructions.Correction.TREATMENT;
+            case SCORE -> DialogInstructions.Correction.SCORE;
+            case CAUSE -> DialogInstructions.Correction.CAUSE;
+            case GENERALIZATION -> DialogInstructions.Correction.GENERALIZATION;
+            case EMOTION_CLAIM -> DialogInstructions.Correction.EMOTION_CLAIM;
+            case PRESSURE -> DialogInstructions.Correction.PRESSURE;
+        };
+    }
+
+    /** 응답을 취소한다(끼어들기 · 종료 의도, U3-R5 · U3-J11). 늦게 오는 그 응답의 조각은 받지 않는다. id를 모르면 지금 응답을 멈춘다. */
+    private void cancelResponses(String... responseIds) {
+        Set<String> targets = new LinkedHashSet<>();
+        for (String id : responseIds) {
+            if (id != null && !id.isBlank()) {
+                targets.add(id);
+            }
+        }
+        if (targets.isEmpty()) {
+            ProviderRequestFactory.ResponseCancel request = services.requests().responseCancel(null);
+            toProvider("provider-cancel-", session -> session.cancelResponse(request));
+            return;
+        }
+        for (String id : targets) {
+            cancelledResponses.add(id);
+            ProviderRequestFactory.ResponseCancel request =
+                    services.requests().responseCancel(ProviderResponseId.of(id).orElse(null));
+            toProvider("provider-cancel-", session -> session.cancelResponse(request));
+        }
+    }
+
+    /** 공급자 송신 하나(보조 작업). 실행기 스레드는 공급자 소켓 쓰기를 기다리지 않는다. 끊김은 리더가 따로 알린다. */
+    private void toProvider(String name, ProviderCall call) {
+        ProviderSession session = providerSession;
+        if (session == null || !session.isOpen()) {
+            return;
+        }
+        services.launcher().launch(name + plan.sessionId(), () -> {
+            try {
+                call.send(session);
+            } catch (ProviderUnavailableException e) {
+                // 공급자 끊김은 리더의 Closed로 따로 온다
+            } catch (RuntimeException e) {
+                services.events().appError(EventLog.Component.VOICE_RELAY, e);
+            }
+        });
+    }
+
+    /** 공급자 송신 한 번. */
+    @FunctionalInterface
+    private interface ProviderCall {
+        void send(ProviderSession session) throws ProviderUnavailableException;
+    }
+
+    private static <T> Set<T> bounded() {
+        return Collections.newSetFromMap(boundedMap());
+    }
+
+    private static <K, V> Map<K, V> boundedMap() {
+        return new LinkedHashMap<>() {
+            private static final long serialVersionUID = 1L;
+
+            @Override
+            protected boolean removeEldestEntry(Map.Entry<K, V> eldest) {
+                return size() > MAX_TRACKED;
+            }
+        };
     }
 
     private boolean inRelayRange() {
@@ -770,9 +1001,12 @@ public final class SessionExecutor {
         PlaybackMark mark = received.mark();
         DeviceLink current = link;
         switch (mark.status()) {
-            case STARTED -> services.latency().playbackStarted(plan.sessionId(), mark.playbackId(), mark.observedAt(),
-                    received.serverRecvAt(), current == null ? null : current.clockOffsetMs(),
-                    current == null ? null : current.rttMs());
+            case STARTED -> {
+                devicePlaying.add(mark.playbackId());
+                services.latency().playbackStarted(plan.sessionId(), mark.playbackId(), mark.observedAt(),
+                        received.serverRecvAt(), current == null ? null : current.clockOffsetMs(),
+                        current == null ? null : current.rttMs());
+            }
             case PROGRESS -> {
                 // U3-J10: 재생 진행(1초마다)은 끼어들기 · 멈춤 시점의 재생 위치 근거로만 둔다
                 progressPlaybackId = mark.playbackId();
@@ -795,6 +1029,9 @@ public final class SessionExecutor {
                     annotateQuietly(SessionStatus.CLOSING,
                             SessionChange.none().withTransportClosedAt(services.clock().now()));
                 }
+                devicePlaying.remove(mark.playbackId());
+                // U3-J6: 재생이 모두 끝나면 다시 '듣는 중'
+                listeningAgain();
             }
             default -> {
                 // UNRECOGNIZED는 판단에 쓰지 않는다(J123)
@@ -803,12 +1040,16 @@ public final class SessionExecutor {
     }
 
     /**
-     * 끼어들기(U3-R6 · U3-J10 · AC6.2.4): 기기가 아이 음성으로 재생을 멈췄다. 남은 음성 프레임을 보내지 않고(세대 올림) 열린 출력 구간은 버리며
-     * 재생 위치와 함께 BARGE_IN을 남긴다. 공급자 응답 취소 · LISTENING 복귀는 L3가 잇는다.
+     * 끼어들기(U3-R5 · U3-J10 · AC6.2.12): 기기가 아이 음성으로 재생을 멈췄다. 남은 음성 프레임을 보내지 않고(세대 올림) 공급자 응답을 취소하고
+     * 열린 출력 구간은 버리며 재생 위치와 함께 BARGE_IN을 남긴다. '듣는 중' 복귀는 끝 표식 처리가 한다(U3-J6).
      */
     private void onBargeIn(PlaybackMark mark, Instant at) {
         bumpGeneration();
         timers.cancel(Kind.SEGMENT_QUIET);
+        String playing = playbackResponses.get(mark.playbackId());
+        String open = segment.isOpen() ? segment.responseId() : null;
+        // U3-R5 · U3-J11: 재생 중이던 응답과 만들던 응답을 공급자에서도 멈춘다(남은 조각은 받지 않는다)
+        cancelResponses(playing, open);
         segment.reset();
         transcripts.aiFinal("", false, at);
         Long playedTo = mark.playedRange() != null ? mark.playedRange().toMs()
@@ -861,6 +1102,7 @@ public final class SessionExecutor {
         // SD-17: 연결 교체는 세대를 올린다(옛 묶음의 남은 프레임이 새 연결로 가지 않게)
         bumpGeneration();
         playback.clear();
+        devicePlaying.clear();
         timers.cancel(Kind.PLAYBACK_EXPIRY);
         Instant now = services.clock().now();
         if (openGapId != null) {
@@ -998,6 +1240,7 @@ public final class SessionExecutor {
         // SD-17: 연결 교체 · 끊김마다 세대를 올린다. 세션 전이는 ④ 시계(ACTIVE) · ② · ③ 시한이 정한다
         bumpGeneration();
         playback.clear();
+        devicePlaying.clear();
         timers.cancel(Kind.PLAYBACK_EXPIRY);
         // U3-J18: 진행 중 세션의 끊김 구간을 연다(새 연결이 다시 묶이면 닫고, ABORTED로 끝나면 열린 채 남는다)
         if ((status == SessionStatus.ACTIVE || status == SessionStatus.CLOSING) && openGapId == null) {
@@ -1021,7 +1264,7 @@ public final class SessionExecutor {
             case DISCONNECT -> onDisconnectCheck();
             case SEGMENT_QUIET -> {
                 if (inOutputRange()) {
-                    sealAndGate();
+                    sealAndGate(false);
                 }
             }
             case PLAYBACK_EXPIRY -> playback.clear();
@@ -1360,6 +1603,7 @@ public final class SessionExecutor {
     }
 
     private void closeProvider() {
+        providerClosing = true;
         ProviderConnector.Attempt attempt = providerAttempt;
         if (attempt != null) {
             attempt.cancel();
@@ -1396,6 +1640,9 @@ public final class SessionExecutor {
                 current.bindSession(null);
             }
             pendingCommands.clear();
+            if (recording != null) {
+                recording.close(now);
+            }
         } catch (RuntimeException e) {
             services.events().appError(EventLog.Component.SESSION_LIFECYCLE, e);
         } finally {

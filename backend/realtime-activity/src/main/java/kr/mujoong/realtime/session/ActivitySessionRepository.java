@@ -231,7 +231,7 @@ public class ActivitySessionRepository {
         MapSqlParameterSource params = ClockParams.at(now);
         ClockParams.uuid(params, "id", Objects.requireNonNull(id, "id"));
         ClockParams.text(params, "endReason", change.endReason() == null ? null : change.endReason().name());
-        ClockParams.text(params, "endDetail", change.failureCode() == null ? null : change.failureCode().name());
+        ClockParams.text(params, "endDetail", change.endDetailValue());
         ClockParams.text(params, "providerSessionId", change.providerSessionId());
         ClockParams.instant(params, "startedAt", change.startedAt());
         ClockParams.instant(params, "endedAt", change.endedAt());
