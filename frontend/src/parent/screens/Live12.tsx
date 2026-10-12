@@ -11,7 +11,7 @@ import { ConfirmDialog } from "../components/ConfirmDialog";
 import { StatusLine } from "../components/StatusLine";
 import { TranscriptList } from "../components/TranscriptList";
 import { useLivePolling } from "../hooks/useLivePolling";
-import { PARENT_ROUTES, isUnauthenticated, routeForTab } from "../navigation";
+import { PARENT_ROUTES, goToLogin, isUnauthenticated, routeForTab } from "../navigation";
 import {
   COPY,
   PROPOSED_COPY,
@@ -96,10 +96,10 @@ export function Live12({ sessionId }: Live12Props) {
     }
   }, [router, sessionId, status]);
 
-  // 401 → 시험 로그인, 404(남의 · 없는 세션) → 홈.
+  // 401 → 안내 토스트 뒤 01(AC1.1.9, 세션은 계속), 404(남의 · 없는 세션) → 홈.
   useEffect(() => {
     if (isUnauthenticated(error)) {
-      router.replace(PARENT_ROUTES.devLogin);
+      goToLogin(router, toast);
     } else if (error instanceof ApiError && error.status === 404) {
       toast.show({ message: messageForErrorCode("NOT_FOUND"), kind: "error" });
       router.replace(PARENT_ROUTES.home);
@@ -162,7 +162,8 @@ export function Live12({ sessionId }: Live12Props) {
       // 503 · 401 · 403 · 네트워크 · 시간 초과: 전송하지 못함(종료 요청됨으로 표시하지 않음, 세션은 그대로).
       toast.show({ message: PROPOSED_COPY.endSendFailed, kind: "error" });
       if (isUnauthenticated(failure)) {
-        router.replace(PARENT_ROUTES.devLogin);
+        // '전송하지 못함' 토스트를 남긴 채 01로(AC1.1.9 · AC3.3.6)
+        router.replace(PARENT_ROUTES.login);
       }
     } finally {
       setEnding(false);

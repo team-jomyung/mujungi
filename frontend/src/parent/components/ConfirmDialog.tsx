@@ -20,12 +20,26 @@ export interface ConfirmDialogProps {
   readonly dismissible?: boolean;
   /** data-testid 접두(예: 'p1' → p1-dialog · p1-yes · p1-no). */
   readonly testIdPrefix: string;
+  /** 파괴적 확인(P7 「삭제」)이면 위험 색 단추(AC1.6.9, U2). 기본은 주 단추. */
+  readonly destructive?: boolean;
 }
 
 const FOCUSABLE = "button:not([disabled]), [href], input:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])";
 
 export function ConfirmDialog(props: ConfirmDialogProps) {
-  const { open, title, body, confirmLabel, cancelLabel, onConfirm, onCancel, busy = false, dismissible = true, testIdPrefix } = props;
+  const {
+    open,
+    title,
+    body,
+    confirmLabel,
+    cancelLabel,
+    onConfirm,
+    onCancel,
+    busy = false,
+    dismissible = true,
+    testIdPrefix,
+    destructive = false,
+  } = props;
   const titleId = useId();
   const bodyId = useId();
   const dialogRef = useRef<HTMLDivElement | null>(null);
@@ -112,7 +126,7 @@ export function ConfirmDialog(props: ConfirmDialogProps) {
           </button>
           <button
             type="button"
-            className="mj-button mj-button--primary"
+            className={`mj-button ${destructive ? "mj-button--danger" : "mj-button--primary"}`}
             data-testid={`${testIdPrefix}-yes`}
             onClick={onConfirm}
             disabled={busy}

@@ -125,10 +125,11 @@ describe("08 — 거절 사유(mockups 9-12 · AC3.1.6)", () => {
     await waitFor(() => expect(screen.queryByTestId("free-reason")).toBeNull());
   });
 
-  it("401이면 시험 로그인으로 보낸다", async () => {
+  it("401이면 안내 토스트 뒤 01로 보낸다(U2 · AC1.1.9)", async () => {
     setup(() => errorResponse(401, "UNAUTHENTICATED"));
     fireEvent.click(screen.getByTestId("free-start"));
-    await waitFor(() => expect(router.replace).toHaveBeenCalledWith("/parent/dev-login"));
+    await waitFor(() => expect(router.replace).toHaveBeenCalledWith("/parent/login"));
+    expect(screen.getByTestId("toast")).toHaveTextContent("로그인이 필요해요.");
   });
 });
 
