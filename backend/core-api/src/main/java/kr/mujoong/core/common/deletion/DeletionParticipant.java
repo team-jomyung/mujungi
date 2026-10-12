@@ -11,6 +11,7 @@ import java.util.UUID;
  *
  * <p>등록(U2 지휘 틀): 참가자는 Spring 빈이면 지휘가 모두 모아 부르고, 순서는 빈의 {@code @Order} 값이다(작을수록 먼저). 외래 키
  * 순서(활동 → 기기 → 아이 쪽 → 보호자)를 아래 상수로 맞춘다. 뒤 유닛은 자기 표를 가리키는 표보다 먼저 오도록 값을 고른다.
+ * 쓰는 값: 90(U4a 활동 기록) · 100 · 200 · 250 · 300 · 900. 같은 값은 순서가 정해지지 않으니 새 상수(예: U5a ORDER_PRACTICE)는 이와 다른 값을 쓴다.
  */
 public interface DeletionParticipant {
 

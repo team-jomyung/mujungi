@@ -16,7 +16,7 @@
 | US3.3 끝내기 | P1 | U1 경로 유지(AC3.3.1 · 3.3.2 · 3.3.6 · 3.3.8 · 3.3.9) | 마무리 인사 · 30초 확인(3.3.3 ~ 3.3.5)은 U3 · U4b |
 | US3.4 예상치 못한 종료 | P2 | 12에서 ABORTED · DISCONNECT를 보면 P2 → 「확인」 → 17(AC3.4.1 · 3.4.2), 17 미확인 표시(3.4.3) | 40초 시계는 U4b |
 | US3.5 아이 무응답 | P3 | 12에서 DECLINED를 보면 P3 → 「확인」 → 04(AC3.5.1 · 3.5.2) | 20초 · 재안내는 U3 · U4b |
-| US3.6 활동 끝 | 17 | 마무리 중 · 종료 사유 한 줄(AC3.6.9 표 전부) · 정리 중 기본(3.6.2 앞부분 · 3.6.10) · 탭 잠금(3.6.6 · 3.6.7) · 「홈으로」(3.6.5) · 「오늘 기록 보기」는 보이되 꺼짐 | 정리 끝 · 정리 실패 · 27 연결(3.6.2 뒷부분 · 3.6.3 · 3.6.4 · 3.6.12)은 U6 |
+| US3.6 활동 끝 | 17 | 마무리 중 · 종료 사유 한 줄(AC3.6.9 표 전부) · 정리 중 기본(3.6.2 앞부분 · 3.6.10) · 탭 잠금(3.6.6 · 3.6.7) · 「홈으로」(3.6.5) · 「오늘 기록 보기」는 U6까지 감춤(U4a-J14) | 정리 끝 · 정리 실패 · 27 연결(3.6.2 뒷부분 · 3.6.3 · 3.6.4 · 3.6.12)은 U6 |
 | US6.3 시작 안내와 참여 확인 | (음성) | 세션 패키지에 자유대화 시작 안내 · 재안내 · 대안 · 공백 경고 · 종료 확인 문구를 **승인된 것만** 고정해 싣기(AC6.3.7 문구 버전 고정) | 재생 · 판단은 U3 · U4b |
 | US6.6 연결 끊김 대응 | 12 · 17 | 12 점선 · 복구 중 · 미확인 구간 표시, 17 연결 끊김 사유 | 끊김 판정 · 재개는 U3 · U4b |
 | US1.4 홈(지금 활동, U2가 남긴 것) | 04 | AC1.4.7 · 1.4.8 · 1.4.10 · 1.4.13 · AC1.1.6(재로그인 뒤 진행 중 표시) | 푸시 진입(AC1.7.4)은 U7(재조회 로직은 04에 있음) |
@@ -93,14 +93,14 @@ month · date는 둘 중 하나만(둘 다 · 없음 · 형식 오류는 400 VAL
 | | ABORTED · DISCONNECT | P2 "대화가 예상치 못하게 끝났어요" 「확인」 → 17 |
 | | DECLINED | P3 "아이가 대답하지 않아 시작하지 못했어요" 「확인」 → 04 |
 | | 그 밖의 종료 · CLOSING | 17. FAILED는 시작 전이면 08(사유), 시작 뒤면 17 |
-| 17 | 마무리 중(CLOSING) | U1 그대로(C.S-17.73), 「오늘 기록 보기」 보이되 꺼짐, 자유대화 · 연습 탭 잠김 「끝나는 중이에요」 |
-| | 종료 | 제목 "오늘 자유대화가 끝났어요" + 시간 줄 + 사유 카드(AC3.6.9 표: GUARDIAN_STOP 9-19 · CHILD_STOP C.S-17.72.4 ~ 5 · SILENCE C.S-17.53.4 + F1-a · DISCONNECT C.S-17.71 · UNCONFIRMED · FAILED C.S-17.58) + "기록을 정리하고 있어요"(C.S-17.16.4, 정리 상태는 U6) + 미확인 줄(confirmed false) + 「오늘 기록 보기」(꺼짐) · 「홈으로」 |
+| 17 | 마무리 중(CLOSING) | U1 그대로(C.S-17.73, 사유 줄 없음 — U4a-J21), 자유대화 · 연습 탭 잠김 「끝나는 중이에요」 |
+| | 종료 | 제목 "오늘 자유대화가 끝났어요" + 시간 줄 + 사유 카드(AC3.6.9 표: GUARDIAN_STOP 9-19 · CHILD_STOP C.S-17.72.4 ~ 5 · SILENCE C.S-17.53.4 + F1-a · DISCONNECT C.S-17.71 · UNCONFIRMED · FAILED C.S-17.58) + "기록을 정리하고 있어요"(C.S-17.16.4, 정리 상태는 U6) + 미확인 줄(confirmed false · 기기 확인 없는 종료만) + 「홈으로」(「오늘 기록 보기」는 U6) |
 
 ## 7. 시험 계획 (태그 u4a)
 
 - **단위**: 패키지 조립(종료 표현 스냅숏 · 동의 스냅숏 · 승인 문구 고정 · 배경을 넣을 길 없음), 기록 해시 · 멱등 · 충돌 · DECLINED · 사본 없음, 27 응답에서 판정값 · 08 원문이 빠짐, 달력 경계(Asia/Seoul 자정 · 달 끝), 쿼리 인자 검사.
 - **통합(Testcontainers · 무작위 포트 · Realtime 계약 대역)**: 시작 → 배경 행 + 패키지 본문(대역이 받은 JSON), 멱등 재생에 배경 한 행, 12 중계 gaps 등 전달, `/sessions/current` · `/home` 지금 활동 11개 상태, SessionRecordCaptured 수신 → 저장 · ActivityRecorded 1회 · 재전송 0회, 26 · 27 응답과 계약 대조(OpenApiContracts), 계정 삭제 참가자(세 표 0건 · 다른 보호자 무관), CONSENT_WITHDRAWN 끝내기 확인, V3 스키마(열 · 제약).
-- **화면(vitest)**: 04 지금 활동 상태별 · 조회 실패 · 탭 이동, 12 점선 · 복구 중 · 미확인 구간 · 공백 경고 · 오프라인 · P2 · P3, 17 사유 표 전부 · 정리 중 · 미확인 줄 · 기록 보기 꺼짐, 08 실패 사유.
+- **화면(vitest)**: 04 지금 활동 상태별 · 조회 실패 · 탭 이동, 12 점선 · 복구 중 · 미확인 구간 · 공백 경고 · 오프라인 · P2 · P3, 17 사유 표 전부 · 정리 중 · 미확인 줄, 08 실패 사유.
 - 커버리지 범위: `backend/coverage-scope/u4a.txt`(U4a가 새로 만든 운영 소스), `frontend/coverage-scope/u4a.json`. U4a가 고친 U1 · U2 파일은 그 유닛 범위로 잰다. 줄 커버리지 80% 이상.
 
 ## 8. 준하 제안(가정)
@@ -120,9 +120,28 @@ month · date는 둘 중 하나만(둘 다 · 없음 · 형식 오류는 400 VAL
 | U4a-J11 | 27 대화 기록 응답에 08 배경(보호자 입력 원문)을 넣지 않는다 — 지시(보호자 입력 원문은 응답에서 뺌)를 AC5.2.2 '보호자 입력 배경' 표시보다 앞에 둔다. 27에 배경을 보일지는 U6가 결과 API와 함께 정한다 | 지시 · FR4.3 · A10 |
 | U4a-J12 | 12는 ABORTED · DISCONNECT를 보면 P2, DECLINED를 보면 P3를 띄운다. 17로 바로 들어온 ABORTED는 P2 없이 사유 카드만 | AC3.4.1 · AC3.5.1 |
 | U4a-J13 | 17 CHILD_STOP 둘째 줄의 표현은 기본 표현 '무중아 그만할래'로 쓴다(LiveView에 인식된 표현이 없다) + 종료 시각 | C.S-17.72.5 |
-| U4a-J14 | 17은 종료 상태면 늘 "기록을 정리하고 있어요"를 보이고 「오늘 기록 보기」를 꺼 둔다(정리 상태 · 27 연결은 U6) | AC3.6.10 · J18 |
+| U4a-J14 | 17은 종료 상태면 늘 "기록을 정리하고 있어요"를 보인다. 「오늘 기록 보기」는 정리 상태 · 27이 생길 때(U6)까지 감춘다(U1 J120 단언 유지 — 처음 계획한 '보이되 꺼 둠'에서 바꿈) | AC3.6.10 · J18 · J120 |
 | U4a-J15 | 17 종료 확인 미확인 줄(confirmed false · DECLINED 아님)은 임시 문구 "기기 종료 확인 · 확인 안 됨" | AC3.4.3 |
-| U4a-J16 | 12에서 FAILED: startedAt이 있으면(진행 중 서버 재시작 등) 17(기기 응답 없이 끝냈어요), 없으면 08로 돌아가 failureCode 사유(DEVICE_NO_ACK 문구가 기본) | AC3.6.9 · AC3.2.4 |
+| U4a-J16 | 12 · 17에서 FAILED: failureCode가 SERVER_RESTART(진행 중 서버 재시작, U4b 3.1 표)면 17 '기기 응답 없이 끝냈어요', 그 밖 · 코드 없음(Core 로컬 FAILED)은 시작 실패라 08로 돌아가 사유를 보인다. DEVICE_NO_ACK · 코드 없음은 U1과 같은 `?failed=1`, PROVIDER_UNAVAILABLE · SCENARIO_GEN_FAILED만 `&reason=코드`(처음 계획한 startedAt 기준에서 바꿈 — U4b 3.1 표와 U1 단언에 맞춤) | AC3.6.9 · AC3.2.4 · AC3.2.5 · U4b 3.1 |
 | U4a-J17 | 12 앱 오프라인 줄은 마지막 폴링이 응답 없음(네트워크 · 시간 초과)으로 실패했을 때 보이고 마지막 성공 시각을 쓴다 | AC3.2.12 |
 | U4a-J18 | ActivityRecorded는 Spring 앱 이벤트로, 기록 저장 트랜잭션 안에서 내고 구독자는 커밋 뒤(@TransactionalEventListener AFTER_COMMIT) 받는다. U4a에는 구독자가 없다(U5 · U6) | 계약 8절 in-app-events |
 | U4a-J19 | 연습 확장점은 계약 8절 PracticeStart 포트 인터페이스만 둔다(구현 · 빈 없음). 시작 서비스 · 패키지는 자유대화만 만든다 | J17 · 지시 |
+| U4a-J20 | 세션 승인 문구 6종(INTRO_FREE_TALK · INTRO_PRACTICE · RE_PROMPT · DECLINE_ALTERNATIVE · SILENCE_WARNING · STOP_CONFIRM)의 승인 버전 v2를 참조 시드 `infra/seed/003-u4a-reference.sql`로 넣는다(앞 DRAFT v1은 RETIRED). 음성은 U1 J102와 같은 합성음 자리(`tools/seed/gen-session-wav.mjs`)이고 실제 녹음 · 사람 승인은 D 담당이 v3로 더한다. 시작 안내는 AC6.3.1 순서(AI라는 사실 · 오늘 활동 · 글 기록과 보호자 열람 · "무중아 그만할래")를 지킨 뒤 C.S-12.11.4 인사 · 질문으로, 대안 제안은 AC6.3.4대로 다른 선택지를 한 번 묻는 글로 바꿨다(002 v1 글은 마무리 인사에 가까웠다). NFR2 검사는 지금 있는 시드 금지 표현 사전(Realtime gate/seed-dictionary.json)으로 한다 | U4b 설계 8절 1 · U4b-R15 · AC6.3.1 · AC6.3.4 · AC6.3.9 · U2-J17 |
+| U4a-J21 | 17 마무리 중(CLOSING)은 SessionStateChanged에 실려 오는 마무리 사유(U4b-J7)를 사본에 두지만 화면에는 사유 줄을 내지 않는다 — 화면 설계 C.S-17.73(마무리 중 그림)에 사유 줄이 없고, 화면 설계가 U4b 설계 3.1 끝 문장('17 마무리 중이 사유 줄을 낼 수 있다')보다 앞선다. 종료 뒤(ENDED 등) 사유 카드는 AC3.6.9 표대로 낸다 | 기준 순서 1 · AC3.6.1 · C.S-17.73 |
+| U4a-J22 | 기록 해시는 두 앱이 같은 contract-model `JsonCodec.canonicalize`(키 정렬 · 공백 없음 · UTF-8)로 정규화한 record의 SHA-256 소문자 16진에 `sha256:`을 붙인 값이다. U4b-J16(키 정렬 · 공백 없는 JSON의 UTF-8 sha256)과 같은 정의이고, Realtime도 같은 함수를 써야 숫자 · 문자 표기가 어긋나지 않는다 | 계약 6절 · U4b-J16 · U4a-J6 |
+| U4a-J23 | 활동 기록 삭제 참가자 순서는 90(`ORDER_ACTIVITY_RECORD`, 사본 100보다 앞). U5a가 더할 `ORDER_PRACTICE`는 90 · 100 · 200 · 250 · 300 · 900과 다른 값을 쓴다(같은 값은 순서가 정해지지 않는다 — DeletionParticipant 주석) | J58 · 조정자 지시 |
+| U4a-J24 | 끝내기 전달은 사본이 종료 상태일 때만 Core가 409로 끊고, 그 밖(WAITING_CHILD 포함)은 Realtime 응답을 그대로 쓴다(U1 J54). 계정 삭제의 CONSENT_WITHDRAWN 끝내기는 U2 지휘가 보내고 응답(202 {CLOSING} · 202 {} · 409)과 관계없이 세션 대기 시한(30초) 뒤 데이터 삭제 · DeletionRequested로 넘어간다 — U4b 3.2 표 · U4b-J19(강제 정지)와 맞다 | U4b 설계 8절 2 · 6 · AC1.6.3 |
+| U4a-J25 | `/api/sessions/current`는 지금 Core 사본만 읽는다(Realtime에 묻지 않음). U4b가 CLOSING에 사유를 실어 보내므로 04 '종료 처리 중'과 17이 같은 사본을 본다 | U4b 설계 8절 3 · R9 |
+
+## 9. U4b 설계 8절('U4a · Core와 맞출 것')과의 대조
+
+U4b 설계(`origin/claude/friendly-shannon-i89iyx:docs/units/u4b/design.md`, 2026-10-12)의 8절 여섯 가지와 이 구현을 맞췄다. 어긋남이 있던 곳만 고쳤다.
+
+| # | U4b 기대 | U4a 구현 | 처리 |
+|---|---|---|---|
+| 1 | 시작 패키지 approvedContent에 INTRO_FREE_TALK · RE_PROMPT · DECLINE_ALTERNATIVE · STOP_CONFIRM · SILENCE_WARNING(연습이면 INTRO_PRACTICE) | 시작 서비스는 이 다섯을 '승인 · 음성 있는 것만' 싣는데(U4a-J2) 시드가 DRAFT라 하나도 실리지 않았다 | **고침**: 시드 003 + 합성음 6개(U4a-J20). 실제 시작 패키지에 일곱 키가 실리는 것을 시험(SeedU4aReferenceSqlIT). INTRO_PRACTICE는 시드만(연습 패키지는 U5) |
+| 2 | WAITING_CHILD도 GUARDIAN_STOP에 202 {CLOSING}, CONSENT_WITHDRAWN은 3.2 표 | Core 전달은 이미 맞음(U4a-J24). 12 「이야기 끝내기」는 ACTIVE만 켜졌다 | **고침**: 12가 WAITING_CHILD에서도 켬. Core 시험 추가(U4aActivityApiIT WAITING_CHILD 끝내기) |
+| 3 | CLOSING에 endReason, DECLINED = DECLINED, ENDED_UNCONFIRMED = UNCONFIRMED | U1 처리기가 상태와 관계없이 사유를 사본에 쓴다. 17 사유 표는 상태 · 사유로 고른다 | 맞음. 시험 추가(상태 사건 → 사본 사유 · 지금 활동). 마무리 중 사유 줄은 화면 설계대로 내지 않음(U4a-J21) |
+| 4 | SessionRecordCaptured는 세션당 한 번, 정산 뒤, record 모양은 계약 6절 | 처리기가 멱등 · 해시 확인 · 충돌 로그 · DECLINED 머리만 | 맞음. 해시 정의를 U4b-J16과 같게 적음(U4a-J22) |
+| 5 | 진행 조회에 technicalPause · silenceWarning · gaps(DISCONNECT · UNCONFIRMED) | Core가 계약 모양으로 걸러 중계(LiveExtras), 12가 점선 · 복구 중 · 공백 경고에 씀 | 맞음 |
+| 6 | Core가 끝내기를 보내고 30초 기다린 뒤 DeletionRequested, Realtime은 강제 정지 뒤 삭제 | U2 지휘가 진행 사본(WAITING_CHILD 포함)에 CONSENT_WITHDRAWN을 한 번 보내고 30초 대기 뒤 참가자(기록 90 → 배경 · 사본 100 → …) → DeletionRequested | 맞음(U4a-J24 · J23) |

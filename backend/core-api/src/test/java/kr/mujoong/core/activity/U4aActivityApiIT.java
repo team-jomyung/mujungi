@@ -11,6 +11,8 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 import kr.mujoong.contract.event.payload.SessionRecordCaptured;
+import kr.mujoong.contract.event.payload.SessionStateChanged;
+import kr.mujoong.contract.status.EndReason;
 import kr.mujoong.contract.json.JsonCodec;
 import kr.mujoong.contract.status.ActivityType;
 import kr.mujoong.contract.status.ConnectionState;
@@ -214,6 +216,78 @@ class U4aActivityApiIT {
             assertThat(send("GET /api/sessions/current", app.get("/api/sessions/current").session(guardian.session()))
                     .json()).as(status.name()).containsEntry("session", null);
         }
+    }
+
+    // ------------------------------------------------------------------ U4b 설계 8절과 맞춤(끝내기 · 상태 사건)
+
+    @Test
+    void aGuardianStopWhileWaitingForTheChildIsForwardedAndAnsweredClosing() {
+        // U4b 8절 2 · AC3.3.8: WAITING_CHILD도 끝낼 수 있는 상태다(C.S-12.11.5 「이야기 끝내기」)
+        Family family = family();
+        Guardian guardian = WebFixtures.guardianFor(app, family.guardianId());
+        UUID sessionId = copy(family, SessionStatus.WAITING_CHILD);
+
+        Result ended = send("POST /api/sessions/{sessionId}/end", app.post("/api/sessions/" + sessionId + "/end")
+                .session(guardian.session()).csrf(guardian.csrf()).json("{\"requestId\":\"" + UUID.randomUUID() + "\"}"));
+
+        assertThat(ended.status()).isEqualTo(202);
+        assertThat(ended.json()).containsEntry("status", "CLOSING");
+        var forwarded = realtime.requests("POST", WebFixtures.RT_END);
+        assertThat(forwarded).hasSize(1);
+        assertThat(forwarded.get(0).json().path("reason").asString()).isEqualTo("GUARDIAN_STOP");
+    }
+
+    @Test
+    void stateEventsCarryTheClosingReasonAndTheFinalReasonsIntoTheCopy() {
+        // U4b 8절 3: CLOSING에 마무리 사유가 실리고, ENDED_UNCONFIRMED는 UNCONFIRMED, DECLINED는 DECLINED다
+        Family family = family();
+        Guardian guardian = WebFixtures.guardianFor(app, family.guardianId());
+        // 사본은 status_version 1(시험 사본), 사건은 그보다 큰 버전으로 온다
+        UUID unconfirmed = copy(family, SessionStatus.ACTIVE);
+
+        deliver(stateChanged(family, unconfirmed, SessionStatus.CLOSING, 10, "CHILD_STOP"));
+        awaitStatus(unconfirmed, "CLOSING");
+        assertThat(endReason(unconfirmed)).isEqualTo("CHILD_STOP");
+        Result current = send("GET /api/sessions/current", app.get("/api/sessions/current").session(guardian.session()));
+        assertThat(map(current.json().get("session"))).containsEntry("status", "CLOSING").containsEntry("endReason", "CHILD_STOP");
+
+        deliver(stateChanged(family, unconfirmed, SessionStatus.ENDED_UNCONFIRMED, 11, "UNCONFIRMED"));
+        awaitStatus(unconfirmed, "ENDED_UNCONFIRMED");
+        assertThat(endReason(unconfirmed)).isEqualTo("UNCONFIRMED");
+
+        UUID declined = copy(family, SessionStatus.WAITING_CHILD);
+        deliver(stateChanged(family, declined, SessionStatus.DECLINED, 10, "DECLINED"));
+        awaitStatus(declined, "DECLINED");
+        assertThat(endReason(declined)).isEqualTo("DECLINED");
+    }
+
+    private static SessionStateChanged stateChanged(Family family, UUID sessionId, SessionStatus status, long version,
+            String endReason) {
+        return new SessionStateChanged(sessionId, family.guardianId(), family.childId(), ActivityType.FREE_TALK, status, version,
+                EndReason.valueOf(endReason), null, false, null, Instant.parse("2026-10-15T01:10:00Z"));
+    }
+
+    private void deliver(SessionStateChanged payload) {
+        UUID eventId = db.trackInbox(UUID.randomUUID());
+        String body = JSON.encodeEventEnvelope(JSON.envelopeFor(eventId, payload, app.clock().now(), null));
+        assertThat(app.post("/internal/events").internalToken().json(body).send().status()).isEqualTo(200);
+    }
+
+    private static void awaitStatus(UUID sessionId, String expected) {
+        long deadline = System.nanoTime() + Duration.ofSeconds(10).toNanos();
+        while (System.nanoTime() < deadline) {
+            if (expected.equals(db.jdbc().queryForObject("select status from core.core_activity where session_id = :s",
+                    new MapSqlParameterSource("s", sessionId), String.class))) {
+                return;
+            }
+            Thread.onSpinWait();
+        }
+        throw new AssertionError("사본이 10초 안에 " + expected + "가 되지 않았다");
+    }
+
+    private static String endReason(UUID sessionId) {
+        return db.jdbc().queryForObject("select end_reason from core.core_activity where session_id = :s",
+                new MapSqlParameterSource("s", sessionId), String.class);
     }
 
     // ------------------------------------------------------------------ 진행 조회(12)

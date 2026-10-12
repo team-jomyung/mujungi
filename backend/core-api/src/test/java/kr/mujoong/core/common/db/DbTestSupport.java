@@ -71,6 +71,11 @@ public final class DbTestSupport implements AutoCloseable {
         return new DbTestSupport(MujoongPostgres.sharedOrAbort());
     }
 
+    /** 시험이 따로 띄운 DB에 core_app으로 붙는다(공용 DB에 커밋하면 안 되는 참조 시드 시험, U4a). */
+    public static DbTestSupport coreApp(MujoongPostgres postgres) {
+        return new DbTestSupport(postgres);
+    }
+
     public MujoongPostgres postgres() {
         return postgres;
     }
