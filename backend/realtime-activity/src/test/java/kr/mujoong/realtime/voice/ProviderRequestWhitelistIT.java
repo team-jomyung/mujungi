@@ -24,6 +24,8 @@ import kr.mujoong.contract.json.JsonCodec;
 import kr.mujoong.contract.status.SessionStatus;
 import kr.mujoong.contract.ws.WsEnvelope;
 import kr.mujoong.contract.ws.WsMessageType;
+import kr.mujoong.contract.ws.message.SessionState;
+import kr.mujoong.contract.ws.message.View;
 import kr.mujoong.realtime.session.ActivitySessionRepository;
 import kr.mujoong.realtime.session.ChildContext;
 import kr.mujoong.realtime.session.StartSessionHandler;
@@ -74,6 +76,10 @@ class ProviderRequestWhitelistIT {
             device.deviceReady(sessionId, true, true);
             awaitTrue(() -> env.app.bean(ActivitySessionRepository.class).find(sessionId)
                     .map(row -> row.status() == SessionStatus.ACTIVE).orElse(false), "ACTIVE");
+            // LISTENING은 입력 수락을 연 뒤에 나간다. 실행기는 DB에 ACTIVE를 쓴 다음 중계를 열므로 DB의 ACTIVE만 보고 보내면
+            // 그 사이 프레임이 NOT_ACCEPTING으로 버려질 수 있다(3.6 재시험 1차 실패 원인, U3 L6 — RealtimeMetricsScrapeIT와 같은 대기)
+            device.await(envelope -> envelope.payload() instanceof SessionState state && state.view() == View.LISTENING,
+                    WAIT);
             byte[] pcm = new byte[960];
             for (int i = 0; i < 3; i++) {
                 pcm[0] = (byte) i;
