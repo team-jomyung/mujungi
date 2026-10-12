@@ -70,7 +70,7 @@ class ConfigKeyContractTest {
     /** timing.md가 키 · 기본값의 정본인 묶음(mujoong.<묶음>.*). 나머지(limits · security · …)는 reliability-design ## 3만 정본이다. */
     private static final Set<String> TIMING_GOVERNED_GROUPS = Set.of(
             "timing", "outbox", "inbox", "retention", "cleanup", "session", "device", "bootstrap", "gate",
-            "internal-http", "provider", "health", "device-web");
+            "internal-http", "provider", "health", "device-web", "text-ai");
 
     private static final Path REPO_ROOT =
             Path.of(System.getProperty("mujoong.repo.root", "..")).toAbsolutePath().normalize();
@@ -105,7 +105,9 @@ class ConfigKeyContractTest {
         }
         assertThat(notOwned).as("예약 키 · 다른 앱 · web 전용 키(빈 대조 아님)")
                 .contains("mujoong.timing.session.join-wait", "mujoong.timing.parent.poll-interval",
-                        "mujoong.device-web.retry-interval", "mujoong.timing.session.preparing-timeout");
+                        "mujoong.device-web.retry-interval", "mujoong.timing.session.preparing-timeout",
+                        "mujoong.text-ai.request-timeout", "mujoong.text-ai.retry.max-retries",
+                        "mujoong.text-ai.retry.backoff");
 
         assertThat(yml.keySet()).as("Realtime이 소유하지 않는 timing.md 키").doesNotContainAnyElementsOf(notOwned);
         List<String> undocumented = yml.keySet().stream()

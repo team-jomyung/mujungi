@@ -58,6 +58,12 @@ class TimeLiteralScanTest {
                             + " core = max라 쓰이지 않는 ThreadPoolExecutor 생성자 필수 인자다(J327)"),
             new Allowed(CORE + "messaging/CoreInboxDispatcher.java", "pool.awaitTermination(timeout.toMillis(), TimeUnit.MILLISECONDS)",
                     "단위 표기: 호출자가 준 Duration(설정 키에서 계산)을 밀리초로 넘긴다"),
+            new Allowed(CORE + "textai/TextAiGateway.java",
+                    "TimeUnit.NANOSECONDS.sleep(properties.retry().backoff().toNanos());",
+                    "단위 표기: mujoong.text-ai.retry.backoff 설정 Duration을 나노초로 넘긴다(U5a-J7)"),
+            new Allowed(CORE + "textai/TextAiGateway.java",
+                    "future.get(limit.toNanos(), TimeUnit.NANOSECONDS)",
+                    "단위 표기: 호출 한도는 mujoong.text-ai.request-timeout과 C10 전체 설정 예산의 남은 시간 중 작은 Duration이다(U5a-J7)"),
             new Allowed(CORE + "common/db/DbRetry.java", "MAX_JITTER_MILLIS = 50",
                     "DB 재시도 지터 상한 0 ~ 50ms는 J124가 허용한 코드 상수다(3.6 S13 허용 목록)"),
             new Allowed(CORE + "common/db/DbRetry.java", "Thread.sleep(duration)",
@@ -153,6 +159,21 @@ class TimeLiteralScanTest {
         assertThat(keepAlive.covers(sameFile)).isTrue();
         assertThat(keepAlive.covers(otherLine)).isFalse();
         assertThat(keepAlive.covers(otherFile)).isFalse();
+    }
+
+    @Test
+    void textAiUnitConversionsDoNotAllowHardcodedWaitsOrOtherFiles() {
+        String file = CORE + "textai/TextAiGateway.java";
+        assertThat(isAllowed(new Finding(file, 1, "TimeUnit",
+                "TimeUnit.NANOSECONDS.sleep(properties.retry().backoff().toNanos());"))).isTrue();
+        assertThat(isAllowed(new Finding(file, 2, "TimeUnit",
+                "return future.get(limit.toNanos(), TimeUnit.NANOSECONDS);"))).isTrue();
+        assertThat(isAllowed(new Finding(file, 3, "TimeUnit",
+                "TimeUnit.NANOSECONDS.sleep(250000000);"))).isFalse();
+        assertThat(isAllowed(new Finding(file, 4, "TimeUnit",
+                "return future.get(3000000000L, TimeUnit.NANOSECONDS);"))).isFalse();
+        assertThat(isAllowed(new Finding(CORE + "textai/Other.java", 5, "TimeUnit",
+                "return future.get(limit.toNanos(), TimeUnit.NANOSECONDS);"))).isFalse();
     }
 
     // ------------------------------------------------------------------ 훑기

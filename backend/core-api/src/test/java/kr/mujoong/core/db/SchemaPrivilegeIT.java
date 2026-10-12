@@ -8,6 +8,8 @@ import static kr.mujoong.core.db.CoreDbFixtures.update;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.SQLException;
@@ -19,6 +21,7 @@ import kr.mujoong.testsupport.db.MujoongPostgres.Role;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 /**
  * 스키마 · 권한 통합 시험(U1 3.5 Step 14 · B1 ②). 실제 {@code infra/postgres/init/} 스크립트(역할 · 스키마 · 권한 · 기본 권한 ·
@@ -111,7 +114,7 @@ class SchemaPrivilegeIT {
             // afterMigrate.sql이 준 자기 이력 표 SELECT(J116, 기동 점검 S2가 읽는다)
             assertThat(single(core,
                     "select max(version) from flyway.core_schema_history where success and type = 'SQL'"))
-                    .isEqualTo("1");
+                    .isEqualTo("4");
             assertThat(single(realtime,
                     "select max(version) from flyway.realtime_schema_history where success and type = 'SQL'"))
                     .isEqualTo("1");
@@ -178,11 +181,15 @@ class SchemaPrivilegeIT {
     }
 
     @Test
-    void defaultPrivilegesGiveTheCoreAppDmlOnTablesAddedByLaterMigrations() throws SQLException {
+    void defaultPrivilegesGiveTheCoreAppDmlOnTablesAddedByLaterMigrations(@TempDir Path laterMigrations)
+            throws SQLException, IOException {
         Path testLocation = postgres.repoRoot().resolve("backend/core-api/src/test/resources/db/testmigration/core");
-        // 공용 인스턴스에 V2를 남기지 않도록 따로 띄운다
+        // Keep the original probe body, but apply it after V4; never create or reserve an actual V2/V3 migration.
+        Files.copy(testLocation.resolve("V2__test_default_privilege_probe.sql"),
+                laterMigrations.resolve("V900__test_default_privilege_probe.sql"));
+        // 시험 V900이 공용 인스턴스의 이력에 남지 않도록 별도 DB를 쓴다
         try (MujoongPostgres separate = MujoongPostgres.builder().start()) {
-            separate.flyway(MigrationSet.CORE, "filesystem:" + testLocation).migrate();
+            separate.flyway(MigrationSet.CORE, "filesystem:" + laterMigrations).migrate();
             UUID id = UUID.randomUUID();
             try (Connection core = separate.connect(Role.CORE_APP);
                     Connection realtime = separate.connect(Role.REALTIME_APP)) {
@@ -203,10 +210,10 @@ class SchemaPrivilegeIT {
                 // realtime_app은 권한이 없다
                 expectSqlStateAutoCommit(INSUFFICIENT_PRIVILEGE,
                         () -> query(realtime, "select id from core.core_test_default_privilege_probe"));
-                // 시험 V2도 이력 표에 남고 core_app은 그 버전을 읽는다
+                // 시험 V900도 이력 표에 남고 core_app은 그 버전을 읽는다
                 assertThat(single(core,
                         "select max(version::int) from flyway.core_schema_history where success and type = 'SQL'"))
-                        .isEqualTo(2);
+                        .isEqualTo(900);
             }
         }
     }
