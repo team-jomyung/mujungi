@@ -50,7 +50,7 @@
 후속 유닛이 같은 규칙(`mujoong.timing.<키>`)으로 읽고 이 절의 행을 1절 모양으로 옮긴다. 값은 계약 7절 그대로다.
 U3가 옮긴 것: `device.reconnect-backoff` · `device.playback-mark-interval` · `device.unstable-rtt` · `gate.barge-in-stop` ·
 `gate.local-voice-min`(1절) 그리고 `device.unstable-disconnects`를 `timing.device.unstable-disconnect-window`(1절) +
-`device.unstable-disconnect-count`(4절)로 나눈 것(U3-J3).
+`device.unstable-disconnect-count`(4절)로 나눈 것(U3-J3) [편차 (ac)].
 
 | 키 | 계약 7절 값 | 읽을 유닛 |
 |---|---|---|

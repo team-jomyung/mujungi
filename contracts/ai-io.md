@@ -38,10 +38,12 @@
 | 서버 → 공급자 | `session.start` | `model`(코드 상수) · `instructions`(서버 템플릿 지시문, childContext는 따옴표로 묶은 데이터로만) · `childContext{displayName, age, interests}` · `audio{input: "pcm16le/24000/1", output: "pcm16le/24000/1"}` | 연결 직후 한 번. 응답 `session.started`가 ACTIVE 전이 조건의 하나다(BR6.8) |
 | 서버 → 공급자 | `session.input_audio.append` | `audio`(base64, 기기 0x01 프레임 본문 960바이트 그대로) | ACTIVE 뒤 ~ CLOSE_TRANSPORT 전 기기 프레임을 순번 순으로(BR7.1 · R3-8). 그 밖의 프레임은 버린다 |
 | 서버 → 공급자 | `session.close` | — | 종료 · FAILED 전이 뒤 공급자 세션 정리(BR6.10 ④) |
+| 서버 → 공급자 | `session.response.cancel` | `responseId`(선택 — 없으면 만들던 응답 전부) | 끼어들기(PLAYBACK_MARK STOPPED · LOCAL_VOICE_ACTIVITY)와 아이 종료 의도 판정 때 만들던 · 재생하던 응답을 취소한다. 공급자는 그 응답의 남은 조각을 보내지 않는다(U3-R5 · R12 · U3-J11 · J24) [편차 (aa)] |
+| 서버 → 공급자 | `session.instructions.correct` | `text`(서버 고정 문장) | 게이트 폐기(GATE_PATTERN · 미완 GATE_EMPTY · SEGMENT_OVERSIZE) 뒤 응답당 한 번 지시를 교정한다. 본문은 범주별 고정 템플릿이고 전사 · 걸린 패턴 · 미승인 원문을 넣지 않는다(U3-R7 · U3-J12 · SD-17) [편차 (aa)] |
 | 공급자 → 서버 | `session.started` | `providerSessionId`(선택) | 세션 시작 확인 |
 | 공급자 → 서버 | `session.input_audio.speech_stopped` | — | 아이 말 끝(tSpeechEnd 출처 PROVIDER_EVENT, OD-8) |
 | 공급자 → 서버 | `session.input_transcript.delta` | `itemId` · `delta` | 아이 전사 조립(PARTIAL, BR7.5) |
-| 공급자 → 서버 | `session.input_transcript.done` | `itemId` · `transcript` | 아이 전사 확정(FINAL, tTranscriptFinal) |
+| 공급자 → 서버 | `session.input_transcript.done` | `itemId` · `transcript` · `confidence`(선택, 0 ~ 1) | 아이 전사 확정(FINAL, tTranscriptFinal). `confidence`가 있고 `mujoong.transcript.uncertain-below-percent`(60)/100보다 낮으면 그 행을 review_needed(12 '불확실' 표시)로 적는다. 없으면 불확실로 보지 않는다(U3-R10 · U3-J17) [편차 (aa)] |
 | 공급자 → 서버 | `session.output_transcript.delta` | `responseId` · `delta` | AI 말 전사 조각. 게이트 구간 버퍼에만 쌓는다(BR7.3). 한 구간에는 한 응답의 조각만 담고 `responseId`가 없으면 버린다 [편차 (z)] |
 | 공급자 → 서버 | `session.output_audio.delta` | `responseId` · `audio`(base64) | AI 말 음성 조각. 구간이 확정 · 통과될 때까지 기기로 보내지 않는다(BR7.3 · BR7.4). 한 구간에는 한 응답의 조각만 담고 `responseId`가 없으면 버린다 [편차 (z)] |
 | 공급자 → 서버 | `session.output.done` | `responseId` | 응답 끝 알림 = 그 응답의 전사 완료 신호. 게이트는 그 응답의 첫 조각부터 이 신호까지를 모두 담은 구간만 통과시킬 수 있다 — 신호가 없으면 그 응답은 GATE_EMPTY로 폐기된다(SD-17 3단계 fail-closed). 보내는 쪽은 완결된 응답에만 보낸다. 구간 확정은 800ms 조용 · 아이 입력 재개 · 다른 응답의 조각 도착으로 한다(BR7.3) [편차 (z)] |
@@ -50,6 +52,8 @@
 
 가짜 공급자 시나리오(백엔드 시험 `FakeProviderWsServer` · C안 `tools/fake-provider/`): 정상(전사 · 출력 길이 지정) · 금지 패턴 응답 ·
 연결 거부 · `session.started` 없음 · 지연 · 연결 단계 무응답. 받은 입력 음성 바이트 수 · 해시와 보낸 출력 음성 해시를 기록한다(J131).
+U3: `session.response.cancel`을 받으면 그 응답의 남은 조각을 보내지 않고 받은 사실만 기록하며, `session.instructions.correct`는 본문 길이 · 해시만
+기록한다(원문 저장 없음). `--confidence` 옵션은 확정 전사에 `confidence` 값을 싣는다(기본은 싣지 않음).
 
 ## 4. 출력 게이트 시드 사전 형식 (SD-18 · A5 · J101)
 
