@@ -1,6 +1,9 @@
 // 보호자 웹이 쓰는 Core REST 응답 형식과 읽기 함수 (U1 3.5 Step 39 · 계약 3절 · contracts/schemas · BR4.6 · BR6.15)
 // 받는 쪽 규칙(계약 10절): 모르는 필드는 무시하고 모르는 enum 값은 'UNKNOWN'으로 읽어 오류로 끊지 않는다.
 // 필수 필드가 없거나 형식이 틀리면 ResponseShapeError(화면은 일반 오류로 처리한다).
+// U4a: 04 currentSession · 12 덧붙임(gaps · technicalPause · silenceWarning)은 api/activity.ts가 읽는다.
+
+import { parseLiveExtras, parseSessionSummary, type LiveExtras, type SessionSummary } from "./activity";
 
 /** 08 서술 칸 상한(activity-free-request.schema.json maxLength). */
 export const FREE_TEXT_MAX_LENGTH = 200;
@@ -55,6 +58,8 @@ export interface HomeView {
   readonly child: ChildSummary | null;
   readonly device: DeviceView;
   readonly lock: { readonly locked: boolean; readonly reasonCode: LockReasonCode | null };
+  /** 지금 활동(진행 중 세션 요약 또는 null, U4a · AC1.4.13). */
+  readonly currentSession: SessionSummary | null;
 }
 
 export type SessionStatus =
@@ -107,6 +112,12 @@ export interface LiveView {
   readonly stale: boolean;
   readonly items: readonly Bubble[];
   readonly nextSeq: number;
+  /** 끊김 · 미확인 구간(U4a · AC3.2.10). */
+  readonly gaps: LiveExtras["gaps"];
+  /** 기술적 일시 정지(U4a · AC6.6.1). */
+  readonly technicalPause: LiveExtras["technicalPause"];
+  /** 공백 경고(U4a · AC3.2.8). */
+  readonly silenceWarning: LiveExtras["silenceWarning"];
 }
 
 export interface RegisterResult {
@@ -275,6 +286,7 @@ export function parseHome(value: unknown): HomeView {
     child: parseChild(root.child),
     device,
     lock: { locked, reasonCode: locked ? (readLockReason(lock.reasonCode) ?? "DEVICE_STATUS_UNKNOWN") : null },
+    currentSession: parseSessionSummary(root.currentSession),
   };
 }
 
@@ -325,6 +337,7 @@ export function parseLiveView(value: unknown): LiveView {
     stale: root.stale === true,
     items,
     nextSeq: nextSeq !== null && Number.isInteger(nextSeq) && nextSeq >= 0 ? nextSeq : 0,
+    ...parseLiveExtras(root),
   };
 }
 

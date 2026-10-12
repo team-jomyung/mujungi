@@ -1,0 +1,60 @@
+/* U4a 활동 세션 화면 스타일 (docs/units/u4a/design.md 6절 · design-system-mapping.md 토큰)
+   12 끊김 · 미확인 구간 점선(AC3.2.10 · C.S-12.12.7), 공백 경고 카드(C.S-12.51), 17 정리 중 · 미확인 줄, 04 지금 활동 상태. */
+
+/* ───── 12 흐름 안의 구간 ───── */
+.mj-gap {
+  align-self: stretch;
+  margin: 0;
+  padding: var(--space-unit) 0;
+  border-top: 2px dotted var(--color-border-default);
+  border-bottom: 2px dotted var(--color-border-default);
+  color: var(--color-text-secondary);
+  font-size: 0.8125rem;
+  text-align: center;
+}
+
+.mj-gap--open {
+  border-color: var(--color-status-unstable);
+  color: var(--color-text-primary);
+}
+
+.mj-gap--unconfirmed {
+  border-style: dashed;
+}
+
+/* ───── 12 공백 경고 ───── */
+.mj-warn-card {
+  margin: 0;
+  padding: calc(var(--space-unit) * 3) calc(var(--space-unit) * 4);
+  border-left: 4px solid var(--color-status-unstable);
+}
+
+.mj-warn-card__title {
+  margin: 0 0 var(--space-unit);
+  font-weight: 700;
+}
+
+.mj-warn-card__body {
+  margin: 0;
+  color: var(--color-text-secondary);
+}
+
+/* ───── 17 정리 중 · 종료 확인 미확인 ───── */
+.mj-done__cleaning,
+.mj-done__unconfirmed {
+  margin: 0;
+  color: var(--color-text-secondary);
+}
+
+/* ───── 04 지금 활동 ───── */
+.mj-activity-card[data-state="live"] {
+  border-left: 4px solid var(--color-status-stable);
+}
+
+.mj-activity-card[data-state="closing"] {
+  border-left: 4px solid var(--color-status-unresponsive);
+}
+
+.mj-activity-card[data-state="unknown"] {
+  border-left: 4px solid var(--color-status-unstable);
+}
