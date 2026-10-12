@@ -227,8 +227,8 @@ class AccountDeletionIT {
     }
 
     @Test
-    void aSessionStoreFailureIsLoggedAndDoesNotHoldUpTheDeletionAndLaterRoundsSkipTheSweep() {
-        // 2차 리뷰 3: 세션 정리 실패 하나가 삭제 진행 전체를 막지 않는다. 정리는 Realtime 요청 전 바퀴에만 한다
+    void aSessionStoreFailureIsLoggedAndDoesNotHoldUpTheDeletionOnAnyRound() {
+        // 2차 리뷰 3: 세션 정리 실패 하나가 삭제 진행 전체를 막지 않는다. 3차 리뷰 1: 정리는 대기 바퀴에서도 한다(실패해도 대기는 그대로)
         Guardian guardian = WebFixtures.guardian(app, db);
         sessionsOf.add(guardian.id());
         UUID requestId = accept(guardian.session(), guardian.csrf());
@@ -241,11 +241,32 @@ class AccountDeletionIT {
             assertThat(logs.events(EventCode.APP_ERROR)).anySatisfy(event ->
                     assertThat(LogCapture.attrs(event)).containsEntry("errorKind", "IllegalStateException"));
         }
-        app.clock().advance(TICK);
+        app.clock().advance(SESSION_WAIT);
         assertThat(commander.process(requestId)).isEqualTo(Step.WAITING);
-        verify(failing, times(1)).closeAll(guardian.id());
+        verify(failing, times(2)).closeAll(guardian.id());
         assertThat(app.bean(DeletionRequestRepository.class).findById(requestId).orElseThrow().attemptCount())
                 .as("세션 정리 실패는 단계 실패로 세지 않는다").isZero();
+    }
+
+    @Test
+    void aSessionSavedAfterRealtimeWasAskedIsClosedByTheNextWaitingRound() {
+        // 3차 리뷰 1: 구글 로그인이 잠금 없이 ACTIVE를 읽은 직후 접수가 커밋되고, 바퀴가 Realtime 요청까지 지나간 뒤에야 세션 행이 저장되면
+        // 예전에는 그 세션이 DeletionCompleted까지 남았다. 대기 바퀴도 세션을 지운다
+        Guardian guardian = WebFixtures.guardian(app, db);
+        sessionsOf.add(guardian.id());
+        UUID requestId = accept(guardian.session(), guardian.csrf());
+        DeletionCommander commander = app.bean(DeletionCommander.class);
+        assertThat(commander.process(requestId)).isEqualTo(Step.REALTIME_REQUESTED);
+        String late = app.sessionCookieFor(guardian.id());
+        assertThat(count("select count(*) from core.core_spring_session where principal_name = :g", guardian.id().toString()))
+                .isEqualTo(1);
+
+        app.clock().advance(SESSION_WAIT);
+        assertThat(commander.process(requestId)).isEqualTo(Step.WAITING);
+
+        assertThat(count("select count(*) from core.core_spring_session where principal_name = :g", guardian.id().toString()))
+                .as("Realtime 요청 뒤 저장된 세션도 대기 바퀴가 지운다").isZero();
+        assertThat(send("GET /api/me", app.get("/api/me").session(late)).status()).isEqualTo(401);
     }
 
     @Test

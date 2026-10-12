@@ -89,7 +89,9 @@ public class AuthController {
         }
         sessions.open(request, response, loggedIn.guardianId());
         // 세션을 연 뒤 다시 읽는다: 그 사이 다른 기기의 계정 삭제가 커밋됐으면 연 세션을 닫고 '삭제 처리 중'만 준다(리뷰 2).
-        // 응답 끝에 저장되는 세션이 접수의 closeAll보다 늦을 수 있는 남은 틈은 지휘가 바퀴마다 다시 지운다(DeletionCommander).
+        // 이 다시 읽기도 잠그지 않으므로, 읽은 뒤 접수가 커밋되고 세션 행이 응답 끝에(접수의 closeAll보다 늦게) 저장되는 틈은 남는다. 그런
+        // 세션은 /api/me 외 보호자 API에서 403이고, 삭제 지휘가 대기 바퀴를 포함해 바퀴마다(대기 중이면 세션 대기 시한마다) 다시 지우며
+        // 마지막 단계가 보호자 행과 함께 지운다(DeletionCommander, 3차 리뷰 1).
         MeBody current = me.me(loggedIn.guardianId());
         if (MeAssembler.DeletionStatus.IN_PROGRESS.name().equals(current.deletionStatus())) {
             sessions.close(request);

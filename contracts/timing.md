@@ -143,4 +143,5 @@ WSS 텍스트 프레임 8KB(`mujoong.limits.ws-text-frame-max`, 넘으면 4400 [
 |---|---|---|---|---|
 | `mujoong.timing.account.deletion-tick` | `5s` | core-api | 계정 삭제 지휘 한 바퀴 주기(REQUESTED 요청을 이어 처리) | FR1.6 · U2-J18 |
 | `mujoong.timing.account.deletion-session-wait` | `30s` | core-api | 삭제 접수 뒤 진행 세션 CONSENT_WITHDRAWN 끝내기를 보낸 시각 → 사본이 종료되지 않아도 이 시간이 지나면 데이터 삭제 시작 | AC1.6.3 · U2-J18 |
-| `mujoong.timing.account.google-keys-max-age` | `6h` | core-api | 구글 id_token 서명 열쇠(JWKS) 캐시 상한 — 응답 `Cache-Control: max-age`만큼 두되 이 값을 넘지 않는다(max-age 없음 · no-store · no-cache면 캐시하지 않음). 모르는 kid면 상한 안이어도 다시 받는다 | U2 2차 리뷰 4 · U2-J2 |
+| `mujoong.timing.account.google-keys-min-age` | `1m` | core-api | 구글 서명 열쇠 캐시 바닥 — 응답 max-age가 이보다 짧으면(max-age 없음 · no-store · no-cache = 0 포함) 이만큼은 둔다(로그인 한 번에 두 번 받지 않게). `google-keys-max-age`보다 길면 기동 거부 | U2 3차 리뷰 3 · U2-J2 |
+| `mujoong.timing.account.google-keys-max-age` | `6h` | core-api | 구글 id_token 서명 열쇠(JWKS) 캐시 상한 — 응답 `Cache-Control: max-age`만큼 두되 이 값을 넘지 않는다(바닥은 `google-keys-min-age`). 모르는 kid면 상한 안이어도 다시 받는다 | U2 2차 리뷰 4 · U2-J2 |

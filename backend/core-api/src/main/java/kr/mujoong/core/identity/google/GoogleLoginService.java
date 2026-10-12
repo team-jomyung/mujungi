@@ -25,7 +25,7 @@ import org.springframework.transaction.support.TransactionTemplate;
  * <ol>
  *   <li>구글 설정(client id · secret · redirect uri)이 없거나 요청 redirectUri가 설정과 다르면 실패.
  *   <li>구글 JWKS 열쇠를 먼저 확보하고(캐시, 못 얻으면 코드를 쓰지 않고 실패 — 2차 리뷰 4), 토큰 엔드포인트와 code를 교환해 id_token을 받아
- *       열쇠로 서명을 확인한 뒤 iss · aud · exp · sub를 확인한다(리뷰 1). 캐시에 없는 kid면 열쇠를 한 번 다시 받는다.
+ *       열쇠로 서명을 확인한 뒤 iss · aud · exp · sub를 확인한다(리뷰 1). 먼저 확보한 열쇠에 없는 kid일 때만 열쇠를 한 번 다시 받는다(3차 리뷰 3).
  *   <li>sub의 보호자가 있으면 그 보호자, 없으면 한 트랜잭션에 보호자(ACTIVE) + 연결 행을 만든다(동시 첫 로그인은 유일 제약이 하나만 남기고
  *       진 쪽은 이긴 쪽 보호자를 다시 읽는다). 삭제가 끝나 연결 행이 지워진 구글 계정은 새 보호자가 된다(AC1.6.5).
  * </ol>
@@ -57,7 +57,7 @@ public class GoogleLoginService {
                         properties.guardian().google().exchangeTimeout(), json),
                 new GoogleKeyCache(new GoogleKeysClient(properties.guardian().google().jwksUri(),
                         properties.guardian().google().exchangeTimeout(), json),
-                        properties.timing().account().googleKeysMaxAge()),
+                        properties.timing().account().googleKeysMinAge(), properties.timing().account().googleKeysMaxAge()),
                 new GoogleIdTokenReader(json), socialAccounts, guardians, transactionManager, clock);
     }
 
@@ -121,7 +121,8 @@ public class GoogleLoginService {
         }
         // 열쇠를 먼저 확보한다: 구글 열쇠 주소가 잠깐 불안정해도 인가 코드를 쓰기 전에 실패해 코드가 남는다(2차 리뷰 4).
         // 캐시가 살아 있으면 받지 않는다
-        if (keyCache.keysFor(null, clock.now()).isEmpty()) {
+        Optional<Map<String, PublicKey>> early = keyCache.keysFor(null, clock.now());
+        if (early.isEmpty()) {
             return Outcome.failed(Failure.KEYS_UNAVAILABLE);
         }
         Optional<String> idToken = tokenClient.exchange(
@@ -129,8 +130,7 @@ public class GoogleLoginService {
         if (idToken.isEmpty()) {
             return Outcome.failed(Failure.EXCHANGE_FAILED);
         }
-        // 캐시에 없는 kid(구글이 열쇠를 바꾼 직후)일 때만 다시 받는다
-        Optional<Map<String, PublicKey>> keys = keyCache.keysFor(idTokens.keyId(idToken.get()).orElse(null), clock.now());
+        Optional<Map<String, PublicKey>> keys = keysForToken(early.get(), idTokens.keyId(idToken.get()).orElse(null));
         if (keys.isEmpty()) {
             return Outcome.failed(Failure.KEYS_UNAVAILABLE);
         }
@@ -141,6 +141,17 @@ public class GoogleLoginService {
         UUID guardianId = findOrCreate(identity.get().subject());
         boolean deleting = guardians.findById(guardianId).map(Guardian::isDeletionRequested).orElse(false);
         return Outcome.success(new LoggedIn(guardianId, deleting));
+    }
+
+    /**
+     * 토큰 서명 확인에 쓸 열쇠: 교환 전에 확보한 열쇠에 토큰의 kid가 있으면(또는 kid가 없으면) 그대로 쓰고 다시 받지 않는다 — 캐시가 이미
+     * 만료됐어도 로그인 한 번에 두 번 받지 않는다(3차 리뷰 3). 모르는 kid(구글이 열쇠를 바꾼 직후)일 때만 캐시에 다시 묻는다.
+     */
+    private Optional<Map<String, PublicKey>> keysForToken(Map<String, PublicKey> early, String kid) {
+        if (kid == null || early.containsKey(kid)) {
+            return Optional.of(early);
+        }
+        return keyCache.keysFor(kid, clock.now());
     }
 
     private UUID findOrCreate(String subject) {

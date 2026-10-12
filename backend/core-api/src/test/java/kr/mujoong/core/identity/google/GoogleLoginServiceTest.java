@@ -1,6 +1,7 @@
 package kr.mujoong.core.identity.google;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -14,9 +15,15 @@ import java.security.KeyPair;
 import java.security.PublicKey;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import kr.mujoong.contract.json.JsonCodec;
 import kr.mujoong.core.config.CoreProperties;
 import kr.mujoong.core.identity.Guardian;
@@ -48,7 +55,8 @@ class GoogleLoginServiceTest {
     private GoogleLoginService service(String clientId, String secret, String redirect) {
         return new GoogleLoginService(
                 new CoreProperties.Google(clientId, secret, redirect, TOKEN_URI, JWKS_URI, Duration.ofSeconds(1)),
-                tokens, new GoogleKeyCache(keys, Duration.ofHours(1)), new GoogleIdTokenReader(JsonCodec.shared()), social,
+                tokens, new GoogleKeyCache(keys, Duration.ofMinutes(1), Duration.ofHours(1)),
+                new GoogleIdTokenReader(JsonCodec.shared()), social,
                 guardians,
                 mock(PlatformTransactionManager.class), clock);
     }
@@ -144,8 +152,8 @@ class GoogleLoginServiceTest {
     }
 
     @Test
-    void theCacheIsCappedByTheTimingKeyAndANoCacheResponseIsNotKept() {
-        GoogleKeyCache cache = new GoogleKeyCache(keys, Duration.ofMinutes(5));
+    void theCacheIsCappedByTheTimingKeyAndANoCacheResponseIsKeptForTheFloorOnly() {
+        GoogleKeyCache cache = new GoogleKeyCache(keys, Duration.ofMinutes(1), Duration.ofMinutes(5));
         when(keys.fetch()).thenReturn(Optional.of(keySet(GoogleIdTokenReaderTest.KEYS, Duration.ofHours(6))));
         cache.keysFor(null, NOW);
         cache.keysFor(null, NOW.plus(Duration.ofMinutes(4)));
@@ -153,12 +161,77 @@ class GoogleLoginServiceTest {
         cache.keysFor(null, NOW.plus(Duration.ofMinutes(5)));
         verify(keys, times(2)).fetch();
 
+        // 3차 리뷰 3: max-age 0(없음 · no-store · no-cache)이어도 바닥(1분)만큼은 둔다
         when(keys.fetch()).thenReturn(Optional.of(keySet(GoogleIdTokenReaderTest.KEYS, Duration.ZERO)));
         cache.keysFor(null, NOW.plus(Duration.ofMinutes(10)));
-        cache.keysFor(null, NOW.plus(Duration.ofMinutes(10)));
+        cache.keysFor(null, NOW.plus(Duration.ofMinutes(10)).plusSeconds(59));
+        verify(keys, times(3)).fetch();
+        cache.keysFor(null, NOW.plus(Duration.ofMinutes(11)));
         verify(keys, times(4)).fetch();
         when(keys.fetch()).thenReturn(Optional.empty());
-        assertThat(cache.keysFor(null, NOW.plus(Duration.ofMinutes(10)))).as("받기 실패는 지난 열쇠로 넘어가지 않는다").isEmpty();
+        assertThat(cache.keysFor(null, NOW.plus(Duration.ofMinutes(20)))).as("받기 실패는 지난 열쇠로 넘어가지 않는다").isEmpty();
+        assertThatThrownBy(() -> new GoogleKeyCache(keys, Duration.ofHours(1), Duration.ofMinutes(5)))
+                .as("바닥이 상한보다 길면 거절").isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void aNoCacheKeySetIsFetchedOnlyOncePerLogin() {
+        // 3차 리뷰 3: max-age 0 응답이면 예전에는 교환 전 · 서명 확인 때 두 번 받았다. 교환 전에 확보한 열쇠에 kid가 있으면 그대로 쓴다
+        GoogleLoginService service = new GoogleLoginService(
+                new CoreProperties.Google("client", "secret", REDIRECT, TOKEN_URI, JWKS_URI, Duration.ofSeconds(1)),
+                tokens, new GoogleKeyCache(keys, Duration.ofNanos(1), Duration.ofHours(1)),
+                new GoogleIdTokenReader(JsonCodec.shared()), social, guardians, mock(PlatformTransactionManager.class), clock);
+        UUID guardianId = UUID.randomUUID();
+        when(social.findGuardianByGoogleSubject("sub-1")).thenReturn(Optional.of(guardianId));
+        when(guardians.findById(guardianId)).thenReturn(Optional.of(new Guardian(guardianId, NOW)));
+        when(keys.fetch()).thenReturn(Optional.of(keySet(GoogleIdTokenReaderTest.KEYS, Duration.ZERO)));
+        when(tokens.exchange(any())).thenAnswer(call -> {
+            clock.advance(Duration.ofSeconds(1));
+            return Optional.of(GoogleIdTokenReaderTest.token(GoogleIdTokenReaderTest.claims("accounts.google.com", "client",
+                    clock.now().plusSeconds(60), "sub-1")));
+        });
+
+        assertThat(service.login("code", REDIRECT).failure()).isNull();
+
+        verify(keys, times(1)).fetch();
+    }
+
+    @Test
+    void aFetchInProgressDoesNotHoldUpLoginsThatTheCacheCanAnswerAndIsSharedByThoseThatCannot() throws Exception {
+        // 3차 리뷰 4: 예전에는 synchronized 안에서 HTTP로 받아, 캐시 만료 순간 동시 로그인이 모두 줄을 섰다
+        GoogleKeyCache cache = new GoogleKeyCache(keys, Duration.ofMinutes(1), Duration.ofHours(1));
+        when(keys.fetch()).thenReturn(Optional.of(keySet(GoogleIdTokenReaderTest.KEYS, Duration.ofMinutes(10))));
+        cache.keysFor(null, NOW);
+        CountDownLatch fetching = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        when(keys.fetch()).thenAnswer(call -> {
+            fetching.countDown();
+            release.await(10, TimeUnit.SECONDS);
+            return Optional.empty();
+        });
+        ExecutorService pool = Executors.newFixedThreadPool(4);
+        try {
+            Future<Optional<Map<String, PublicKey>>> rotated = pool.submit(() -> cache.keysFor("unknown-kid", NOW));
+            assertThat(fetching.await(5, TimeUnit.SECONDS)).isTrue();
+
+            Future<Optional<Map<String, PublicKey>>> known = pool.submit(() -> cache.keysFor(null, NOW));
+            assertThat(known.get(2, TimeUnit.SECONDS)).as("캐시로 답할 수 있는 로그인은 받기를 기다리지 않는다").isPresent();
+
+            List<Future<Optional<Map<String, PublicKey>>>> sharing = List.of(
+                    pool.submit(() -> cache.keysFor("unknown-kid", NOW)),
+                    pool.submit(() -> cache.keysFor("other-kid", NOW)));
+            Thread.sleep(200);
+            release.countDown();
+
+            assertThat(rotated.get(5, TimeUnit.SECONDS)).isEmpty();
+            for (Future<Optional<Map<String, PublicKey>>> waiter : sharing) {
+                assertThat(waiter.get(5, TimeUnit.SECONDS)).as("진행 중인 받기 결과(실패)를 함께 받는다").isEmpty();
+            }
+            verify(keys, times(2)).fetch();
+        } finally {
+            release.countDown();
+            pool.shutdownNow();
+        }
     }
 
     private static GoogleKeysClient.KeySet keySet(Map<String, PublicKey> keys, Duration maxAge) {

@@ -74,11 +74,18 @@ public class DevLoginController {
         if (previous != null) {
             previous.invalidate();
         }
-        request.getSession(true);
+        HttpSession opened = request.getSession(true);
         SecurityContext context = SecurityContextHolder.createEmptyContext();
         context.setAuthentication(GuardianPrincipal.authentication(guardianId));
         SecurityContextHolder.setContext(context);
         securityContexts.saveContext(context, request, response);
+        // 위 확인은 잠그지 않은 읽기라 그 뒤 · 세션을 열기 전에 삭제 접수가 커밋될 수 있다. 세션을 연 뒤 다시 읽어 그 사이 접수됐으면 연
+        // 세션을 닫는다(구글 로그인과 같은 방식, U2 3차 리뷰 2). 다시 읽은 뒤의 틈은 삭제 지휘가 바퀴마다 지운다
+        if (guardians.findById(guardianId).map(Guardian::isDeletionRequested).orElse(true)) {
+            opened.invalidate();
+            SecurityContextHolder.clearContext();
+            throw CoreApiException.of(ErrorCode.ACCOUNT_DELETION_IN_PROGRESS);
+        }
         return ApiResponses.json(200, new DevLoginBody(guardianId));
     }
 

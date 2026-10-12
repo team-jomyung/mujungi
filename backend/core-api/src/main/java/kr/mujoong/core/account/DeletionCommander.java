@@ -32,7 +32,8 @@ import org.springframework.transaction.support.TransactionTemplate;
  *
  * <p>{@link #runOnce}는 처리할 때가 된 REQUESTED 요청을 하나씩 선점하고(FOR UPDATE SKIP LOCKED + next_attempt_at을 세션 대기 시한만큼 미룸 —
  * 여러 인스턴스 · 바퀴가 겹쳐도 한 곳만 처리) 다음 한 단계를 진행한다. 각 단계는 멱등이라 실패하면 시도 수 · 예외 종류만 남기고 다음 바퀴에
- * 다시 한다. Realtime 요청 전 바퀴는 먼저 그 보호자의 로그인 세션을 다시 지운다(접수 뒤 남은 세션 정리, 리뷰 2 · 실패해도 진행, 2차 리뷰 3).
+ * 다시 한다. 바퀴마다 먼저 그 보호자의 로그인 세션을 다시 지운다(접수 뒤 남은 세션 정리, 리뷰 2 · 실패해도 진행, 2차 리뷰 3 · 대기 바퀴 포함,
+ * 3차 리뷰 1).
  *
  * <ol>
  *   <li>진행 세션 사본이 있으면 CONSENT_WITHDRAWN 끝내기를 한 번 보내고(보낸다는 기록을 먼저 커밋 — 요청당 최대 한 번), 사본이 종료 상태가 되거나 {@code deletion-session-wait}(30초)가 지날
@@ -124,9 +125,7 @@ public class DeletionCommander {
             return Step.SKIPPED;
         }
         DeletionRequest request = snapshot.get();
-        if (request.realtimeRequestedAt() == null) {
-            sweepSessions(request);
-        }
+        sweepSessions(request);
         try {
             if (request.realtimeCompletedAt() != null) {
                 return finish(request);
@@ -157,9 +156,10 @@ public class DeletionCommander {
     }
 
     /**
-     * ⓪ 접수 직후 바퀴(Realtime 요청 전)에 로그인 세션을 다시 지운다: 접수의 closeAll이 실패했거나 접수와 겹친 로그인이 그 뒤에 세션을 저장했을 수
-     * 있다(리뷰 2). 실패는 APP_ERROR로만 남기고 삭제 진행을 막지 않는다 — 단계 실패로 세지 않고, 남은 세션은 다음 바퀴 · 마지막 단계가 지운다
-     * (2차 리뷰 3). Realtime 요청 뒤에는 새 세션이 생길 길이 없어(구글 · 시험 로그인 모두 삭제 접수면 세션을 만들지 않음) 다시 지우지 않는다.
+     * ⓪ 바퀴마다 로그인 세션을 다시 지운다: 접수의 closeAll이 실패했거나, 접수와 겹친 로그인이 그 뒤에 세션 행을 저장했을 수 있다(리뷰 2).
+     * 로그인은 잠그지 않고 ACTIVE를 읽은 뒤 응답 끝에 세션 행을 저장하므로, 그 저장은 Realtime 요청 뒤 바퀴(WAITING)보다 늦을 수도 있다 — 그래서
+     * 바퀴를 가리지 않고 지운다(3차 리뷰 1). 실패는 APP_ERROR로만 남기고 삭제 진행을 막지 않는다 — 단계 실패로 세지 않고, 남은 세션은 다음
+     * 바퀴(대기 중이면 세션 대기 시한마다) · 마지막 단계가 지운다(2차 리뷰 3). 그 사이 남은 세션도 /api/me 외 보호자 API는 403이다.
      */
     private void sweepSessions(DeletionRequest request) {
         try {
