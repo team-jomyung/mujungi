@@ -35,7 +35,7 @@ import org.springframework.transaction.support.TransactionTemplate;
  * 다시 한다. Realtime 요청 전 바퀴는 먼저 그 보호자의 로그인 세션을 다시 지운다(접수 뒤 남은 세션 정리, 리뷰 2 · 실패해도 진행, 2차 리뷰 3).
  *
  * <ol>
- *   <li>진행 세션 사본이 있으면 CONSENT_WITHDRAWN 끝내기를 한 번 보내고, 사본이 종료 상태가 되거나 {@code deletion-session-wait}(30초)가 지날
+ *   <li>진행 세션 사본이 있으면 CONSENT_WITHDRAWN 끝내기를 한 번 보내고(보낸다는 기록을 먼저 커밋 — 요청당 최대 한 번), 사본이 종료 상태가 되거나 {@code deletion-session-wait}(30초)가 지날
  *       때까지 기다린다(AC1.6.3).
  *   <li>Core 참가자를 {@code @Order} 순서로 모두 부른다(활동 → 기기 → 동의 → 아이 → 메시징, 뒤 유닛 참가자도 빈이면 함께).
  *   <li>한 트랜잭션에 DeletionRequested Outbox + 요청의 core_cleared_at · realtime_requested_at.
@@ -177,10 +177,12 @@ public class DeletionCommander {
         }
         Instant now = clock.now();
         if (request.sessionEndRequestedAt() == null) {
-            // 실패해도 시한 안에 다시 보내지 않는다: 기기 확인이 없으면 30초 뒤 데이터 삭제로 넘어간다(AC1.6.3)
-            realtime.endForConsentWithdrawal(inProgress.get().sessionId(), request.id());
+            // 보냈다는 기록을 먼저 커밋하고 보낸다(요청당 최대 한 번): 호출이 선점 시한보다 오래 걸려 다음 바퀴가 같은 요청을 선점하거나, 보낸 뒤
+            // 기록이 실패해도 다시 보내지 않는다. 실패해도 시한 안에 다시 보내지 않는다 — 기기 확인이 없으면 30초 뒤 데이터 삭제로 넘어간다
+            // (AC1.6.3). requestId는 삭제 요청 id라 Realtime 쪽에서도 같은 끝내기다
             transactions.executeWithoutResult(status ->
                     requests.markSessionEndRequested(request.id(), now, now.plus(tick)));
+            realtime.endForConsentWithdrawal(inProgress.get().sessionId(), request.id());
             return Optional.of(Step.SESSION_END_REQUESTED);
         }
         if (now.isBefore(request.sessionEndRequestedAt().plus(sessionWait))) {

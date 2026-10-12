@@ -13,6 +13,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import kr.mujoong.contract.event.payload.DeletionCompleted;
 import kr.mujoong.contract.json.JsonCodec;
 import kr.mujoong.contract.log.EventCode;
@@ -22,6 +26,7 @@ import kr.mujoong.core.account.DeletionCommander.Step;
 import kr.mujoong.core.account.DeletionRequestRepository.DeletionRequest;
 import kr.mujoong.core.activity.ActivityCopyRepository;
 import kr.mujoong.core.activity.ActivityCopyRepository.NewActivity;
+import kr.mujoong.core.activity.PreparingTimeoutChecker;
 import kr.mujoong.core.activity.RealtimeSessionClient;
 import kr.mujoong.core.common.db.DbTestSupport;
 import kr.mujoong.core.common.deletion.DeletionParticipant;
@@ -42,6 +47,7 @@ import kr.mujoong.core.web.support.WebFixtures;
 import kr.mujoong.core.web.support.WebFixtures.Guardian;
 import kr.mujoong.testsupport.http.ContractStubServer;
 import kr.mujoong.testsupport.http.ContractStubServer.RecordedRequest;
+import kr.mujoong.testsupport.http.ContractStubServer.StubResponse;
 import kr.mujoong.testsupport.log.LogCapture;
 import kr.mujoong.testsupport.secret.TestSecrets;
 import org.junit.jupiter.api.AfterAll;
@@ -95,6 +101,9 @@ class AccountDeletionIT {
                 .property("mujoong.guardian.google.jwks-uri", google.baseUrl() + U2Fixtures.JWKS_PATH)
                 .property("mujoong.timing.account.deletion-tick", "1h")
                 .property("mujoong.timing.account.deletion-session-wait", "2h")
+                // 시험이 가짜 시계를 몇 시간씩 앞당긴다. 앱 안의 U1 PREPARING 점검(실제 1초마다)이 그 시계로 시험의 REQUESTED 사본을 닫고
+                // CORE_ABANDONED 끝내기를 보내지 않게, 클래스 전체의 시계 이동(10시간 미만)보다 넉넉히 길게 둔다(벽시계 타이밍 무관)
+                .property("mujoong.timing.session.preparing-timeout", "30d")
                 .start();
     }
 
@@ -336,13 +345,65 @@ class AccountDeletionIT {
                 .as("세션 끝 확인 전에는 지우지 않는다").isEqualTo(1);
 
         app.clock().advance(TICK);
+        // 가짜 시계를 앞당긴 뒤 U1 PREPARING 점검(앱 안에서 실제 1초마다 돈다)이 그 사이에 한 바퀴 도는 경우를 늘 일으킨다 — 벽시계 타이밍에
+        // 기대지 않는다(최종 검증의 흔들림: 점검이 REQUESTED 사본을 닫고 CORE_ABANDONED 끝내기를 보냈다)
+        app.bean(PreparingTimeoutChecker.class).runOnce();
         assertThat(commander.process(requestId)).as("시한 안 · 아직 진행 중").isEqualTo(Step.WAITING);
         assertThat(realtime.requests("POST", WebFixtures.RT_END)).as("끝내기는 한 번만").hasSize(1);
 
         app.clock().advance(SESSION_WAIT);
+        app.bean(PreparingTimeoutChecker.class).runOnce();
         assertThat(commander.process(requestId)).as("시한이 지나면 데이터 삭제로").isEqualTo(Step.REALTIME_REQUESTED);
+        assertThat(realtime.requests("POST", WebFixtures.RT_END)).as("끝내기는 끝까지 한 번만").hasSize(1);
         assertThat(count("select count(*) from core.core_activity where guardian_id = :g", guardian.id())).isZero();
         assertThat(count("select count(*) from core.core_child where guardian_id = :g", guardian.id())).isZero();
+    }
+
+    @Test
+    void anEndCallStillInFlightWhenTheClaimLeaseRunsOutIsNotSentAgain() throws Exception {
+        // 지휘가 스스로 끝내기를 두 번 보내는 길: 끝내기 호출이 선점 시한보다 오래 걸리면(느린 Realtime · 멈춘 스레드) 다음 바퀴가 같은 요청을
+        // 다시 선점한다. 끝내기 기록을 호출 뒤에 남기면 그 바퀴가 또 보낸다
+        Guardian guardian = WebFixtures.guardian(app, db);
+        sessionsOf.add(guardian.id());
+        UUID childId = db.insertChild(guardian.id());
+        UUID device = fixtures.registeredDevice(guardian.id(), ConnectionState.CONNECTED, app.clock().now(), app.clock().now());
+        UUID sessionId = UUID.randomUUID();
+        app.bean(ActivityCopyRepository.class).insertRequested(new NewActivity(sessionId, guardian.id(), childId, device,
+                ActivityType.FREE_TALK, UUID.randomUUID().toString(), "hash", app.clock().now()));
+        // ACTIVE 사본(PREPARING 점검 대상이 아니다): 이 시험의 끝내기는 지휘가 보낸 것만 센다
+        db.jdbc().update("update core.core_activity set status = 'ACTIVE' where session_id = :g",
+                new MapSqlParameterSource("g", sessionId));
+        UUID requestId = accept(guardian.session(), guardian.csrf());
+        realtime.clearRequests();
+        realtime.route("POST", WebFixtures.RT_END).respond(
+                StubResponse.json(202, "{\"status\":\"CLOSING\"}").delayed(Duration.ofMillis(1500)));
+        DeletionCommander commander = app.bean(DeletionCommander.class);
+        ExecutorService pool = Executors.newSingleThreadExecutor();
+        try {
+            Future<Step> first = pool.submit(() -> commander.process(requestId));
+            awaitEndRequests(1);
+            app.clock().advance(SESSION_WAIT.plus(TICK));
+
+            Step second = commander.process(requestId);
+
+            assertThat(first.get(30, TimeUnit.SECONDS)).isEqualTo(Step.SESSION_END_REQUESTED);
+            assertThat(realtime.requests("POST", WebFixtures.RT_END)).as("끝내기는 한 번만").hasSize(1);
+            assertThat(second).as("끝내기를 이미 보냈고 시한이 지났다 → 데이터 삭제").isEqualTo(Step.REALTIME_REQUESTED);
+        } finally {
+            pool.shutdownNow();
+            realtime.route("POST", WebFixtures.RT_END).respond(StubResponse.json(202, "{\"status\":\"CLOSING\"}"));
+        }
+    }
+
+    private static void awaitEndRequests(int expected) {
+        long deadline = System.nanoTime() + Duration.ofSeconds(10).toNanos();
+        while (System.nanoTime() < deadline) {
+            if (realtime.requests("POST", WebFixtures.RT_END).size() >= expected) {
+                return;
+            }
+            Thread.onSpinWait();
+        }
+        throw new AssertionError("끝내기 요청이 10초 안에 Realtime에 닿지 않았다");
     }
 
     @Test

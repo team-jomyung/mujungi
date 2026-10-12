@@ -164,3 +164,14 @@ U1이 (a) ~ (z)를 다 써서 U2는 `(U2-x)` 기호, YAML 표시는 `x-u2-deviat
 
 2차로 바뀐 커버리지 범위: `backend/coverage-scope/u2.txt`에 `GoogleKeyCache`를 더함(29개). 고친 U1 파일 `DeviceJdbcRepository` · `DevLoginController` ·
 `ApprovedContentCatalog` · `GuardianRepository`는 U1 범위로 잰다.
+
+### 최종 검증 — `AccountDeletionIT.anInProgressSessionIsEndedWithConsentWithdrawnBeforeDataIsDeleted` 흔들림
+
+| 확인 | 처리 | 시험 |
+|---|---|---|
+| 원인(시험) | 앱 안의 U1 `PreparingTimeoutChecker`가 실제 1초마다 돌며 **시험의 가짜 시계**를 읽는다. 시험이 시계를 1시간 앞당긴 뒤 점검 한 바퀴가 다음 단계보다 먼저 돌면, 시험이 넣은 REQUESTED 사본을 '10초 넘게 PREPARING 없음'으로 닫고(진행 세션 없음 → 실패 모양 (1) `WAITING` 대신 `REALTIME_REQUESTED`) `CORE_ABANDONED` 끝내기를 보낸다(→ 모양 (2) 끝내기 2번). 벽시계 타이밍에 달려 기계가 바쁠 때 더 자주 났다. 시험 쪽 처리: 이 클래스의 `mujoong.timing.session.preparing-timeout`을 클래스 전체 시계 이동(10시간 미만)보다 넉넉한 30일로 두고, 시험은 시계를 앞당길 때마다 점검을 **직접 한 바퀴 돌려** 그 경우를 늘 일으킨다(벽시계 무관). 단언은 그대로이고 마지막 단계에도 '끝내기 한 번' 단언을 더했다 | RED: 점검을 직접 돌리게 바꾼 같은 시험이 고치기 전 매번 `expected WAITING but was REALTIME_REQUESTED` |
+| 지휘가 스스로 두 번 보낼 수 있나 | **있었다.** 끝내기를 보낸 **뒤** 별도 트랜잭션에 `sessionEndRequestedAt`을 남겨, (가) 호출이 선점 시한(세션 대기 시간)보다 오래 걸리면 다음 바퀴가 같은 요청을 다시 선점해 또 보내고 (나) 보낸 뒤 기록이 실패하면 다음 바퀴가 또 보낸다. 운영 값(시한 30초 · 끝내기 제한 2초)에서는 드물지만 시계 이동 · 긴 멈춤에서 일어난다. 고침: 기록을 **먼저 커밋하고** 보낸다(요청당 최대 한 번, 보내기 실패는 기존 규칙대로 시한 뒤 데이터 삭제). requestId는 삭제 요청 id라 Realtime에도 같은 끝내기다 | RED: `AccountDeletionIT.anEndCallStillInFlightWhenTheClaimLeaseRunsOutIsNotSentAgain`(Realtime 대역 끝내기 응답 1.5초 지연 + 첫 호출이 걸려 있는 동안 시계를 선점 시한 너머로 → 고치기 전 끝내기 2번) |
+
+확인: `AccountDeletionIT`(10건)을 5번 연속 다시 실행(`cleanTest`) 모두 통과, 프런트 시험을 함께 돌려 바쁘게 한 6번째도 통과. 그다음 backend U2 90건(줄 96.5%, 963/998, 검증 통과),
+core-api U1 회귀 609건 · U1 커버리지 검증 통과. 참고: 부하용으로 함께 돌린 프런트 시험(tests/u1 + u2) 한 번에서 638건 중 1건이 실패했다(Gradle과 CPU를 다툰 시간 초과로 보임,
+출력 꼬리만 남아 시험 이름은 확인하지 못했다). 프런트만 다시 돌리면 638건 모두 통과했고 이번에 프런트 코드는 바꾸지 않았다.
