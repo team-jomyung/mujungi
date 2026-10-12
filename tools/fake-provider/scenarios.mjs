@@ -109,6 +109,7 @@ export function buildTurn({
   responseDelayMs = DEFAULTS.responseDelayMs,
   chunkBytes = DEFAULTS.chunkBytes,
   chunkIntervalMs = DEFAULTS.chunkIntervalMs,
+  confidence = null,
 }) {
   const script = TURN_SCRIPTS[kind];
   if (!script) {
@@ -128,7 +129,10 @@ export function buildTurn({
     { delayMs: 0, message: { type: "session.input_audio.speech_stopped" } },
     {
       delayMs: 0,
-      message: { type: "session.input_transcript.done", itemId, transcript: script.childText },
+      message:
+        confidence === null
+          ? { type: "session.input_transcript.done", itemId, transcript: script.childText }
+          : { type: "session.input_transcript.done", itemId, transcript: script.childText, confidence },
     },
     {
       delayMs: responseDelayMs,

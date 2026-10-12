@@ -21,6 +21,7 @@ import {
 // 기기 WSS 클라이언트 (U1 3.5 Step 38 · 계약 4.2 · BR3.6 · BR3.7 · BR9.7 · OD-8 · R3-4 · J27 · J123)
 //
 // - 같은 origin의 /ws/device에 붙는다. 쿠키(MUJOONG_DEVICE)와 Origin은 브라우저가 싣고, URL · HELLO에는 토큰이 없다(J29).
+// - U3: 다시 붙을 때 HELLO.resume에 끊기기 전 세션 id를 싣고, HELLO_OK.session(이어가기 결과)을 onReady로 넘긴다(U3-R16).
 // - 열리면 HELLO를 보내고, HELLO_OK를 받으면 heartbeatIntervalMs마다 HEARTBEAT를 보낸다. HEARTBEAT 봉투의 sentAt은
 //   송신 직전에 채운다(서버가 clockOffsetMs를 계산한다, OD-8 · R3-4). lastRttMs는 직전 HEARTBEAT_ACK까지의 왕복 시간이다.
 // - opId가 붙은 서버 명령(START_SESSION · PLAY_APPROVED_CONTENT · STOP_OUTPUT · CLOSE_TRANSPORT)은 받자마자 ACK한다.
@@ -57,6 +58,8 @@ export interface WsClientOptions {
   readonly heartbeatFallbackMs: number;
   /** 기기 벽시계(밀리초). */
   readonly nowMs: () => number;
+  /** U3 이어가기: HELLO를 보낼 때 끊기기 전 세션 id(없으면 null, U3-R16). */
+  readonly resumeSessionId?: () => string | null;
   readonly createSocket?: (url: string) => WebSocketLike;
 }
 
@@ -168,7 +171,7 @@ export function connectWsClient(options: WsClientOptions, handlers: WsClientHand
   };
 
   socket.onopen = () => {
-    sendText("HELLO", helloPayload(options.appVersion));
+    sendText("HELLO", helloPayload(options.appVersion, options.resumeSessionId?.() ?? null));
   };
   socket.onmessage = (event: MessageEvent) => {
     if (typeof event.data === "string") {

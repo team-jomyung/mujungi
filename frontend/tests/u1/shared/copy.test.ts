@@ -77,12 +77,13 @@ describe("ko — 자리를 채우는 문구", () => {
     expect(strings.filter((text) => /^[A-Z][A-Z_]+$/.test(text))).toEqual([]);
   });
 
-  it("아이 기기 화면 글은 문구표 원문과 '연결을 확인하는 중'뿐이다(BR9.4)", () => {
+  it("아이 기기 화면 글은 문구표 원문과 '연결을 확인하는 중' · '다시 연결하고 있어요'(U3 · mockups 9-31)뿐이다(BR9.4)", () => {
     expect(COPY.device.d0Guide).toBe("보호자 앱에서 이 코드를 넣어 주세요");
     expect(COPY.device.d0Registered).toBe("등록되었어요");
     expect(COPY.device.t19MicDeniedTitle).toBe("마이크를 허용해 주세요");
     expect(COPY.device.t19MicDeniedBody).toBe("브라우저 설정에서 마이크와 소리를 켠 뒤 다시 「켜기」를 눌러요.");
-    expect(PROPOSED_COPY.device).toEqual({ d0Checking: "연결을 확인하는 중" });
+    expect(COPY.device.t19Disconnected).toBe("연결 끊김");
+    expect(PROPOSED_COPY.device).toEqual({ d0Checking: "연결을 확인하는 중", t19Reconnecting: "다시 연결하고 있어요" });
   });
 });
 

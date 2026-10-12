@@ -31,14 +31,16 @@ afterEach(() => {
 });
 
 describe("DeviceApp — 닫기 코드(BR9.7)", () => {
-  it.each([1001, 1011, 1013, 4400, 4408])("%i로 닫히면 마지막 화면을 두고 정확히 5초 뒤 다시 접속한다", async (code) => {
+  // U3-R16 · U3-J19: 한 번 연결됐던 기기는 1초 뒤 다시 접속하고 라벨은 '연결 끊김' · "다시 연결하고 있어요"다(U1은 5초 · 마지막 view 라벨)
+  it.each([1001, 1011, 1013, 4400, 4408])("%i로 닫히면 '연결 끊김'을 보이고 정확히 1초 뒤 다시 접속한다", async (code) => {
     await turnOn();
     act(() => runtimeControl.events().onView("LISTENING"));
     act(() => runtimeControl.events().onClosed(code, false));
     expect(screen.getByTestId("t19-view")).toHaveAttribute("data-state", "reconnecting");
-    expect(screen.getByTestId("t19-label")).toHaveTextContent("듣는 중");
+    expect(screen.getByTestId("t19-label")).toHaveTextContent("연결 끊김");
+    expect(screen.getByTestId("t19-sublabel")).toHaveTextContent("다시 연결하고 있어요");
     expect(runtimeControl.runtime.connect).toHaveBeenCalledTimes(1);
-    await advance(4_999);
+    await advance(999);
     expect(runtimeControl.runtime.connect).toHaveBeenCalledTimes(1);
     await advance(1);
     expect(runtimeControl.runtime.connect).toHaveBeenCalledTimes(2);
@@ -48,7 +50,7 @@ describe("DeviceApp — 닫기 코드(BR9.7)", () => {
     expect(screen.getByTestId("t19-view")).toHaveAttribute("data-state", "standby");
   });
 
-  it("재접속 주기(5초 대기 → 접속 시도 → 다시 실패) 내내 라벨과 표정을 마지막 화면 그대로 둔다(BR9.7 · J360)", async () => {
+  it("재접속 주기(대기 → 접속 시도 → 다시 실패) 내내 '연결 끊김' 화면이고 간격은 1 · 2초로 는다(BR9.7 · U3-R16 · U3-J19)", async () => {
     await turnOn();
     act(() => runtimeControl.events().onView("LISTENING"));
     act(() => runtimeControl.events().onClosed(1006, false));
@@ -56,16 +58,19 @@ describe("DeviceApp — 닫기 코드(BR9.7)", () => {
       const view = screen.getByTestId("t19-view");
       expect(view).toHaveAttribute("data-state", "reconnecting");
       expect(view.querySelector(".mj-character")).toHaveAttribute("data-expression", "reconnecting");
-      expect(screen.getByTestId("t19-label")).toHaveTextContent("듣는 중");
+      expect(screen.getByTestId("t19-label")).toHaveTextContent("연결 끊김");
+      expect(screen.getByTestId("t19-sublabel")).toHaveTextContent("다시 연결하고 있어요");
     };
     expectLastScreen();
-    await advance(5_000);
+    await advance(1_000);
     expect(runtimeControl.runtime.connect).toHaveBeenCalledTimes(2);
     expectLastScreen();
-    // 서버가 계속 거절해도(1013) 5초마다 다시 붙으며 화면은 바뀌지 않는다.
+    // 서버가 계속 거절해도(1013) 다음 간격(2초) 뒤 다시 붙으며 화면은 바뀌지 않는다.
     act(() => runtimeControl.events().onClosed(1013, false));
     expectLastScreen();
-    await advance(5_000);
+    await advance(1_999);
+    expect(runtimeControl.runtime.connect).toHaveBeenCalledTimes(2);
+    await advance(1);
     expect(runtimeControl.runtime.connect).toHaveBeenCalledTimes(3);
     expectLastScreen();
     act(() => runtimeControl.events().onReady());
@@ -107,15 +112,16 @@ describe("DeviceApp — 닫기 코드(BR9.7)", () => {
     await advance(5_000);
     expect(runtimeControl.runtime.connect).toHaveBeenCalledTimes(3);
     expectConnectingScreen();
-    // 연결되면 대기이고, 한 번 연결된 뒤 끊기면 마지막 view 라벨 · 'reconnecting' 표정(J360)
+    // 연결되면 대기이고, 한 번 연결된 뒤 끊기면 '연결 끊김' 라벨 · 'reconnecting' 표정(U3-J19, U1 J360은 마지막 view 라벨)
     act(() => runtimeControl.events().onReady());
     expect(screen.getByTestId("t19-view")).toHaveAttribute("data-state", "standby");
     expect(screen.getByTestId("t19-label")).toHaveTextContent("대기");
+    expect(screen.queryByTestId("t19-sublabel")).toBeNull();
     act(() => runtimeControl.events().onClosed(1006, false));
     const view = screen.getByTestId("t19-view");
     expect(view).toHaveAttribute("data-state", "reconnecting");
     expect(view.querySelector(".mj-character")).toHaveAttribute("data-expression", "reconnecting");
-    expect(screen.getByTestId("t19-label")).toHaveTextContent("대기");
+    expect(screen.getByTestId("t19-label")).toHaveTextContent("연결 끊김");
   });
 
   it("4401이면 실행부를 정리하고 /device/me로 확인해 401이면 D0 새 코드로 간다(AC6.2.8)", async () => {
