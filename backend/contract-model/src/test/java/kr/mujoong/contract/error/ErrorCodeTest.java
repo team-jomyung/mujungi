@@ -31,6 +31,9 @@ class ErrorCodeTest {
         table.put("ACCOUNT_DELETION_IN_PROGRESS", List.of(403));
         table.put("CSRF_TOKEN_INVALID", List.of(403));
         table.put("SESSION_IN_PROGRESS", List.of(409));
+        table.put("ALREADY_SELECTED", List.of(409));
+        table.put("RESTORE_EXPIRED", List.of(410));
+        table.put("SCENARIO_GEN_FAILED", List.of(422));
         table.put("IDEMPOTENCY_CONFLICT", List.of(409));
         table.put("SESSION_NOT_ACTIVE", List.of(409));
         table.put("DEVICE_NOT_STABLE", List.of(423));
@@ -99,6 +102,16 @@ class ErrorCodeTest {
                 ErrorCode.DEVICE_NOT_CONNECTED);
         assertThat(ErrorCode.SERVICE_NOT_READY.audiences()).contains(
                 ErrorCode.Audience.GUARDIAN, ErrorCode.Audience.DEVICE, ErrorCode.Audience.INTERNAL);
+    }
+
+    @Test
+    @Tag("u5a")
+    void accountDeletionErrorServesGuardianAndInternalWithoutChangingGuardianResponse() {
+        assertThat(ErrorCode.ACCOUNT_DELETION_IN_PROGRESS.audiences()).containsExactlyInAnyOrder(
+                ErrorCode.Audience.GUARDIAN, ErrorCode.Audience.INTERNAL);
+        assertThat(ErrorCode.ACCOUNT_DELETION_IN_PROGRESS.httpStatus()).isEqualTo(403);
+        assertThat(ErrorCode.ACCOUNT_DELETION_IN_PROGRESS.forGuardian())
+                .isSameAs(ErrorCode.ACCOUNT_DELETION_IN_PROGRESS);
     }
 
     @ParameterizedTest

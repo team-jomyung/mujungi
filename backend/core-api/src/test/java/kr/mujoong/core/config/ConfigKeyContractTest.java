@@ -32,6 +32,11 @@ import org.springframework.boot.context.properties.bind.PropertySourcesPlacehold
 import org.springframework.boot.context.properties.source.ConfigurationPropertySources;
 import org.springframework.boot.convert.ApplicationConversionService;
 import org.springframework.boot.env.YamlPropertySourceLoader;
+import org.springframework.boot.env.PropertiesPropertySourceLoader;
+import kr.mujoong.core.knowledge.KnowledgeProperties;
+import kr.mujoong.core.textai.TextAiProperties;
+import kr.mujoong.core.textai.TextAiConfiguration;
+import kr.mujoong.core.practice.ScenarioConfiguration;
 import org.springframework.core.convert.ConversionService;
 import org.springframework.core.env.EnumerablePropertySource;
 import org.springframework.core.env.MapPropertySource;
@@ -66,7 +71,7 @@ class ConfigKeyContractTest {
     /** timing.md가 키 · 기본값의 정본인 묶음(mujoong.<묶음>.*). 나머지(limits · security · …)는 reliability-design ## 3만 정본이다. */
     private static final Set<String> TIMING_GOVERNED_GROUPS = Set.of(
             "timing", "outbox", "inbox", "retention", "cleanup", "session", "device", "bootstrap", "gate",
-            "internal-http", "provider", "health", "device-web");
+            "internal-http", "provider", "health", "device-web", "text-ai");
 
     private static final Path REPO_ROOT =
             Path.of(System.getProperty("mujoong.repo.root", "..")).toAbsolutePath().normalize();
@@ -83,7 +88,7 @@ class ConfigKeyContractTest {
     @Test
     void everyTimingKeyCoreOwnsHasTheSameDefaultInApplicationYml() {
         List<TableRow> rows = timingRows();
-        Map<String, Object> yml = mujoongKeys(flatten(MAIN_RESOURCES.resolve("application.yml")));
+        Map<String, Object> yml = applicationDefaults();
 
         List<TableRow> owned = rows.stream().filter(row -> row.defaultValue() != null && row.owners().contains(APP)).toList();
         assertThat(owned).as("timing.md에서 core-api가 읽는 키(빈 대조로 통과하지 않음)").hasSizeGreaterThan(30);
@@ -93,7 +98,7 @@ class ConfigKeyContractTest {
     @Test
     void applicationYmlHoldsOnlyDocumentedTimingKeysThatCoreOwns() {
         List<TableRow> rows = timingRows();
-        Map<String, Object> yml = mujoongKeys(flatten(MAIN_RESOURCES.resolve("application.yml")));
+        Map<String, Object> yml = applicationDefaults();
         Set<String> owned = new TreeSet<>();
         Set<String> notOwned = new TreeSet<>();
         for (TableRow row : rows) {
@@ -422,6 +427,9 @@ class ConfigKeyContractTest {
 
     private static List<PropertySource<?>> load(Path file) {
         try {
+            if (file.getFileName().toString().endsWith(".properties")) {
+                return new PropertiesPropertySourceLoader().load(file.getFileName().toString(),new FileSystemResource(file));
+            }
             return new YamlPropertySourceLoader().load(file.getFileName().toString(), new FileSystemResource(file));
         } catch (IOException e) {
             throw new UncheckedIOException(e);
@@ -531,5 +539,57 @@ class ConfigKeyContractTest {
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
+    }
+
+    /** U5a adds independent records/resources; the original CoreProperties equality remains unchanged. */
+    @Test
+    @Tag("u5a")
+    void u5aDefaultsHaveExactlyTheirTypedConsumersAndBindWithoutSilentKeys() {
+        Path aiFile = MAIN_RESOURCES.resolve("u5a-ai.properties");
+        Path practiceFile = MAIN_RESOURCES.resolve("u5a-practice.properties");
+        Map<String,Object> defaults = new TreeMap<>(flatten(aiFile));
+        defaults.putAll(flatten(practiceFile));
+        Map<String,RecordComponent> leaves = new TreeMap<>(recordLeaves(TextAiProperties.class,"mujoong.text-ai"));
+        leaves.putAll(recordLeaves(KnowledgeProperties.class,"mujoong.knowledge.neo4j"));
+        Set<String> typedKeys = new TreeSet<>(leaves.keySet());
+        typedKeys.add("mujoong.timing.practice.scenario-request-timeout");
+        typedKeys.add("mujoong.timing.goal.restore-window");
+        assertThat(keyMismatches(defaults.keySet(),typedKeys,Set.of())).isEmpty();
+
+        MutablePropertySources sources = sources(aiFile,practiceFile);
+        Binder binder = new Binder(ConfigurationPropertySources.from(sources),
+                new PropertySourcesPlaceholdersResolver(sources),ApplicationConversionService.getSharedInstance());
+        TextAiProperties ai = binder.bind("mujoong.text-ai",Bindable.of(TextAiProperties.class)).orElseThrow(() -> new IllegalStateException("Missing U5a configuration"));
+        KnowledgeProperties knowledge = binder.bind("mujoong.knowledge.neo4j",Bindable.of(KnowledgeProperties.class)).orElseThrow(() -> new IllegalStateException("Missing U5a configuration"));
+        Map<String,Object> bound = new TreeMap<>(recordValues(ai,"mujoong.text-ai"));
+        bound.putAll(recordValues(knowledge,"mujoong.knowledge.neo4j"));
+        assertThat(valueMismatches(defaults,leaves,bound,placeholderResolver(aiFile,practiceFile))).isEmpty();
+        assertThat(ai.requestTimeout()).isEqualTo(Duration.ofSeconds(3));
+        assertThat(ai.retry().maxRetries()).isEqualTo(1);
+        assertThat(ai.retry().backoff()).isEqualTo(Duration.ofMillis(250));
+        assertThat(knowledge.enabled()).isFalse();
+        Duration scenarioTimeout = binder.bind("mujoong.timing.practice.scenario-request-timeout",Duration.class).orElseThrow(() -> new IllegalStateException("Missing U5a configuration"));
+        Duration restoreWindow = binder.bind("mujoong.timing.goal.restore-window",Duration.class).orElseThrow(() -> new IllegalStateException("Missing U5a configuration"));
+        assertThat(scenarioTimeout).isEqualTo(Duration.ofSeconds(15));
+        assertThat(restoreWindow).isEqualTo(Duration.ofSeconds(5));
+
+        new org.springframework.boot.test.context.runner.ApplicationContextRunner()
+                .withUserConfiguration(TextAiConfiguration.class,ScenarioConfiguration.class)
+                .run(context -> {
+                    assertThat(context).hasNotFailed();
+                    assertThat(context.getBean(ScenarioConfiguration.ScenarioLimits.class).requestTimeout()).isEqualTo(scenarioTimeout);
+                    assertThat(context.getBean(TextAiProperties.class)).isEqualTo(ai);
+                    assertThat(context.getBean(KnowledgeProperties.class)).isEqualTo(knowledge);
+                });
+    }
+
+    private static Map<String,Object> applicationDefaults() {
+        Map<String,Object> defaults = new TreeMap<>();
+        for (String file : List.of("application.yml","u5a-ai.properties","u5a-practice.properties")) {
+            Map<String,Object> values = mujoongKeys(flatten(MAIN_RESOURCES.resolve(file)));
+            assertThat(defaults.keySet()).as("Each default has one authoritative resource").doesNotContainAnyElementsOf(values.keySet());
+            defaults.putAll(values);
+        }
+        return defaults;
     }
 }

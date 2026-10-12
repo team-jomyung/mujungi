@@ -22,9 +22,12 @@
 | `NOT_FOUND` | 404 | 찾을 수 없어요. | 보호자 · 내부 | 없는 자원 · 남의 자원(존재를 드러내지 않음), 꺼진 시험 로그인, Realtime이 모르는 세션의 view | BR8.5 · BR8.3 · BR6.15 |
 | `VALIDATION_FAILED` | 400 | 요청 형식이 올바르지 않아요. | 보호자 · 기기 · 내부 | 형식 오류 · JSON 아닌 본문 · 64KB 초과(413 대신) · 등록 코드 정규화 뒤 영숫자 8자 아님 · 08 서술 칸 200자 초과 | BR2.1 · BR6.4 · [편차 (d)] · [편차 (r)] |
 | `CONSENT_MISSING` | 403 | 동의가 필요해요. | 보호자 | 현재 정책 4항목 동의 없음 | BR6.1 ① |
-| `ACCOUNT_DELETION_IN_PROGRESS` | 403 | 계정 삭제가 진행 중이에요. | 보호자 | 계정 삭제가 접수된 보호자 | 계약 2절 · BR2.2 |
+| `ACCOUNT_DELETION_IN_PROGRESS` | 403 | 계정 삭제가 진행 중이에요. | 보호자 · 내부 | 계정 삭제가 접수된 보호자 · C10의 생성/저장 전 계정 삭제 확인 | 계약 2절 · BR2.2 · C10 |
 | `CSRF_TOKEN_INVALID` | 403 | 보안 확인이 만료됐어요. 다시 시도해 주세요. | 보호자 | 상태 변경 요청의 X-CSRF-TOKEN 불일치 · Origin 불일치 | BR8.8 · SD-6 · [편차 (e)] |
 | `SESSION_IN_PROGRESS` | 409 | 이미 진행 중인 활동이 있어요. | 보호자 · 내부 | 보호자당 종료 아닌 세션 하나(Core 1차 · Realtime 2차 방어) | BR6.1 ② · BR6.3 · BR6.6 |
+| `ALREADY_SELECTED` | 409 | 이미 담은 목표예요. | 보호자 | 활성 선택의 중복 담기 | C4 · AC4.3.5 |
+| `RESTORE_EXPIRED` | 410 | 되돌릴 수 있는 시간이 지났어요. | 보호자 | 삭제 복구 시한 경과 | C4 · AC4.1.11 |
+| `SCENARIO_GEN_FAILED` | 422 | 연습 상황을 준비하지 못했어요. | 보호자 · 내부 | 자동 확인 · 재생성 두 번 실패 | C10 · AC4.2.1 |
 | `IDEMPOTENCY_CONFLICT` | 409 | 같은 요청 번호로 다른 내용이 왔어요. | 보호자 | 같은 idempotencyKey에 다른 본문 | BR6.2 |
 | `SESSION_NOT_ACTIVE` | 409 | 지금은 끝낼 수 있는 상태가 아니에요. | 보호자 · 내부 | 끝낼 수 없는 상태의 끝내기, 취소된 sessionId의 늦은 시작(10분 묘비), Realtime이 모르는 세션의 GUARDIAN_STOP | BR6.9 · [편차 (v)] · [편차 (w)] |
 | `DEVICE_NOT_STABLE` | 423 | 기기 연결이 안정되지 않았어요. | 보호자 | 기기 판정이 안정이 아님(불안정 · 끊김 · 응답 없음 · 확인 불가 · 없음), Realtime 423의 번역 | BR6.1 ③ · BR4.4 · BR6.6 |

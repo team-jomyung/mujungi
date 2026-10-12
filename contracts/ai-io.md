@@ -82,3 +82,18 @@
 
 - 음성 파일은 WAV · PCM16 · 24kHz · 모노이고 개인정보가 없다. U1 임시 파일은 생성기 `tools/seed/gen-approved-wav.mjs`가 만든 합성 무음 · 톤이다(J102, 실제 녹음은 D 담당).
 - 세션 패키지는 시작 때 문구 버전을 고정해 Realtime에 건네고(`approvedContent`), Realtime은 START_SESSION으로 기기에 미리 받게 한다.
+
+
+## 6. U5a TextAiGateway (U5a-d)
+
+Core의 사후 텍스트 AI 호출은 TextAiGateway 한 곳을 지난다. TextAiProvider의 실제 구현은 이 유닛에 없으며 기본값은 UNAVAILABLE다. 예약 환경 변수 이름은 MUJOONG_TEXT_AI_ENDPOINT, MUJOONG_TEXT_AI_MODEL, MUJOONG_TEXT_AI_API_KEY이다. 값을 넣는 것만으로 활성화되지 않으며 공급자 어댑터와 통합 검증이 필요하다. Realtime 음성 설정과 공유하지 않는다.
+
+입력 ScenarioPrompt는 목표 이름/행동 정의/기회 조건/상황 조건/관계, 나이, 관심사, 새 상황일 때 이전 상황 본문뿐이다. 아이/보호자 이름·식별자·전사·보호자 자유 입력·판정 기준은 보내지 않는다. 입력/출력 record의 문자열 표현과 예외는 본문을 숨긴다.
+
+출력 GeneratedScenario는 scenarioText, partnerRoleText, triggerScript, relationType, opportunityCondition, modelVersion, promptVersion이다. 모델이 준 validation 플래그는 받지 않는다. Gateway는 필드 크기·빈 값·모델/프롬프트 버전 및 7범주 금지 사전을 별도로 검사한다. 상황 본문 최대 8000자, 역할/대사/기회 2000자, 관계 200자, 버전 80자(ASCII 식별자). 빈·잘못된 출력과 금지 표현은 기술 재시도 대상이 아니다.
+
+Core는 고정 기회 조건과 트리거가 본문에 포함되는지 및 관계/기회 일치를 확인한다. 가상 상황 고지를 덧붙이고, 아이별 정규화 상황 지문으로 기존 ISSUED/EXPOSED 재사용을 막는다. NEW_SCENARIO의 같은 원문/문장부호 변형도 거절한다. 확인 실패는 한 번 다시 생성한 뒤 SCENARIO_GEN_FAILED(422)다. 의미적 재서술·언어 난도·정답 암시를 완전히 검사하는 것은 아니며 실제 공급자 도입 전에 승인 fixture 검토가 필요하다(U5a-J16/J17).
+
+C10 partnerRoleText는 모델 문장을 전달하지 않고 Core의 고정 역할 지시로 만든다(상대 역할만 수행, 아이의 답 대신 말하기/평가 금지, U5a-J22).
+
+일시 실패에 한한 기술 재시도 1회(3초/호출, 250ms 간격)와 내용 재생성 1회는 모두 C10 전체 15초 안에서 수행한다. UTC/단조시계 남은 예산의 작은 쪽을 사용하며 실행 Future를 제한 시간에 취소한다. 취소를 무시하는 실제 공급자는 별도 통신 시한과 취소를 반드시 구현해야 한다. 생성된 상황은 내부 C10 응답에만 있고 보호자 목록에는 상황/판정/AI 원문이 없다.

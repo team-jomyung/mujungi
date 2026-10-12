@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mujoong.invalid/contracts/schemas/practice-scenario.schema.json",
+  "type": "object",
+  "required": [
+    "scenarioId",
+    "kind",
+    "relationType",
+    "opportunityCondition",
+    "scenarioText",
+    "partnerRoleText",
+    "triggerScript",
+    "validation"
+  ],
+  "properties": {
+    "scenarioId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "kind": {
+      "enum": [
+        "ORIGINAL",
+        "NEW_SCENARIO"
+      ]
+    },
+    "relationType": {
+      "type": "string",
+      "minLength": 1
+    },
+    "opportunityCondition": {
+      "type": "string",
+      "minLength": 1
+    },
+    "scenarioText": {
+      "type": "string",
+      "minLength": 1
+    },
+    "partnerRoleText": {
+      "type": "string",
+      "minLength": 1
+    },
+    "triggerScript": {
+      "type": "string",
+      "minLength": 1
+    },
+    "validation": {
+      "type": "object",
+      "required": [
+        "goalIncluded",
+        "triggerIncluded",
+        "forbiddenFound"
+      ],
+      "properties": {
+        "goalIncluded": {
+          "const": true
+        },
+        "triggerIncluded": {
+          "const": true
+        },
+        "forbiddenFound": {
+          "const": false
+        }
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}

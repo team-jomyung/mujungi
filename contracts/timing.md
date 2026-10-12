@@ -58,12 +58,10 @@
 | `mujoong.timing.practice.help-consent-wait` | 10초 | U5 |
 | `mujoong.timing.practice.cue-budget` | 5초 | U5 |
 | `mujoong.timing.practice.judge-budget` | 5초 + 재시도 1회 | U5 |
-| `mujoong.timing.practice.scenario-request-timeout` | 15초 | U5 |
 | `mujoong.timing.gate.barge-in-stop` | 0.5초 | U3 |
 | `mujoong.timing.gate.local-voice-min` | 200ms | U3 |
 | `mujoong.timing.result.job-attempts` | 3회(간격 5 · 15초) | U6 |
 | `mujoong.timing.report.ready-target` | 60초 | U6 |
-| `mujoong.timing.goal.restore-window` | 5초 | U5 |
 
 ## 3. 계약 7절 밖 U1 시간 키 (`mujoong.timing.*` 4종, J80 · R3-17)
 
@@ -136,3 +134,19 @@ web이 읽는 1 · 3절 키의 환경 변수: `MUJOONG_TIMING_PARENT_POLLINTERVA
 본문 64KB(`mujoong.limits.rest-body-max`, 넘으면 400 VALIDATION_FAILED [편차 (r)]) · 내부 본문 2MB(`mujoong.limits.internal-event-body-max`) ·
 WSS 텍스트 프레임 8KB(`mujoong.limits.ws-text-frame-max`, 넘으면 4400 [편차 (s)]) · 입력 대기열 50프레임(`mujoong.limits.session-input-queue-frames`).
 나머지 비 timing 키(`limits.*` · `security.*` · `metrics.*` · `observability.*`)는 이 파일에 두지 않는다(RD-24).
+
+
+## 8. U5a 텍스트 AI 시간
+
+| 키 | 기본값 | 소유 앱 | 뜻 | 근거 |
+|---|---|---|---|---|
+| `mujoong.text-ai.request-timeout` | `3s` | core-api | 호출 한 번의 상한 | U5a-J7 |
+| `mujoong.text-ai.retry.max-retries` | `1` | core-api | 일시적 오류의 재시도 횟수 | U5a-J7 |
+| `mujoong.text-ai.retry.backoff` | `250ms` | core-api | 기술 재시도 사이 간격 | U5a-J7 |
+| `mujoong.timing.practice.scenario-request-timeout` | `15s` | core-api | C10 전체 생성/재생성/재시도 예산과 요청 선점 시한 | U5a-J18 |
+| `mujoong.timing.goal.restore-window` | `5s` | core-api | 삭제 요청 처리 뒤 서버 복구 시한 | C4 · U5a-J3 |
+| `mujoong.timing.parent.loading-notice-delay` | `5s` | web | 화면 18 최초 조회가 이 시간을 넘으면 안내 토스트 | 화면 18 interaction-spec · U5a-J23 |
+
+텍스트 AI 세 키의 기본값은 u5a-ai.properties, 타입은 TextAiProperties다. 기존 예약 키 mujoong.timing.practice.scenario-request-timeout=15s는 u5a-practice.properties/ScenarioLimits로 실제 사용하며 요청 선점 시한도 같다. mujoong.timing.goal.restore-window=5s는 GoalSelectionService가 읽는다. 기존 application.yml/CoreProperties를 변경하지 않고 각 유닛의 설정 자원/바인딩도 계약 시험에서 대조한다. 프런트 삭제는 기존 조작 토스트 설정(최소 3초)을 따른다.
+
+web의 loading-notice-delay는 MUJOONG_TIMING_PARENT_LOADINGNOTICEDELAY 환경 변수로 주입하고 parentLoadingNoticeDelayMs로 읽는다.
