@@ -51,6 +51,9 @@ public class SessionGapRepository {
     private static final String DELETE_BY_SESSIONS = "delete from realtime.realtime_session_gap"
             + " where session_id = any(:sessionIds)";
 
+    private static final String DELETE_BY_GUARDIAN = "delete from realtime.realtime_session_gap where session_id in"
+            + " (select id from realtime.realtime_activity_session where guardian_id = :guardianId)";
+
     private final NamedParameterJdbcTemplate jdbc;
 
     public SessionGapRepository(NamedParameterJdbcTemplate jdbc) {
@@ -84,6 +87,13 @@ public class SessionGapRepository {
         MapSqlParameterSource params = new MapSqlParameterSource();
         ClockParams.uuid(params, "sessionId", Objects.requireNonNull(sessionId, "sessionId"));
         return jdbc.query(SELECT_BY_SESSION, params, ROW_MAPPER);
+    }
+
+    /** 보호자 세션들의 구간을 지운다(삭제 참가자, U3-J16). 지운 행 수. */
+    public int deleteByGuardian(UUID guardianId) {
+        MapSqlParameterSource params = new MapSqlParameterSource();
+        ClockParams.uuid(params, "guardianId", Objects.requireNonNull(guardianId, "guardianId"));
+        return jdbc.update(DELETE_BY_GUARDIAN, params);
     }
 
     /** 세션들의 구간을 지운다(삭제 참가자, U3-J16). 지운 행 수. */

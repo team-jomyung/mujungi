@@ -61,6 +61,10 @@ public class DeviceDisconnectRepository {
     private static final String DELETE_BY_DEVICE = "delete from realtime.realtime_device_disconnect_event"
             + " where device_id = :deviceId";
 
+    private static final String DELETE_BY_GUARDIAN = "delete from realtime.realtime_device_disconnect_event"
+            + " where device_id in (select device_id from realtime.realtime_device_connection where guardian_id = :guardianId"
+            + " union select device_id from realtime.realtime_activity_session where guardian_id = :guardianId)";
+
     private static final String DELETE_BEFORE = "delete from realtime.realtime_device_disconnect_event"
             + " where occurred_at <= :cutoff";
 
@@ -107,6 +111,15 @@ public class DeviceDisconnectRepository {
         MapSqlParameterSource params = new MapSqlParameterSource();
         ClockParams.uuid(params, "deviceId", Objects.requireNonNull(deviceId, "deviceId"));
         return jdbc.query(SELECT_BY_DEVICE, params, ROW_MAPPER);
+    }
+
+    /**
+     * 보호자 기기들(연결 원장 · 세션에 남은 기기)의 끊김 기록을 지운다(삭제 참가자, U3-J16). 연결 원장 행을 지우기 전에 부른다. 지운 행 수.
+     */
+    public int deleteByGuardian(UUID guardianId) {
+        MapSqlParameterSource params = new MapSqlParameterSource();
+        ClockParams.uuid(params, "guardianId", Objects.requireNonNull(guardianId, "guardianId"));
+        return jdbc.update(DELETE_BY_GUARDIAN, params);
     }
 
     /** 기기의 끊김 기록을 지운다(삭제 참가자, U3-J16). 지운 행 수. */

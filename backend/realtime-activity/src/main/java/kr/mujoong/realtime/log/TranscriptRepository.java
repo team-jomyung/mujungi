@@ -62,6 +62,12 @@ public class TranscriptRepository {
     private static final String SELECT_MAX_SEQUENCE = "select coalesce(max(sequence_no), 0)"
             + " from realtime.realtime_transcript where session_id = :sessionId";
 
+    // U3-J16: 계정 삭제 — 원문을 비우고 deleted_at을 쓴다(행 번호는 남긴다). 다시 불러도 같다
+    private static final String ERASE_BY_GUARDIAN = "update realtime.realtime_transcript t"
+            + " set text = '', deleted_at = coalesce(t.deleted_at, :now)"
+            + " from realtime.realtime_activity_session s"
+            + " where t.session_id = s.id and s.guardian_id = :guardianId and (t.deleted_at is null or t.text <> '')";
+
     private static final Comparator<TranscriptEntry> FLUSH_ORDER =
             Comparator.comparing(TranscriptEntry::sessionId).thenComparingInt(TranscriptEntry::sequenceNo);
 
@@ -88,6 +94,13 @@ public class TranscriptRepository {
                 .map(entry -> params(entry, now))
                 .toArray(MapSqlParameterSource[]::new);
         jdbc.batchUpdate(UPSERT, batch);
+    }
+
+    /** 보호자 세션들의 전사 원문을 비우고 삭제 시각을 쓴다(계정 삭제 참가자, U3-J16). 바뀐 행 수. */
+    public int eraseByGuardian(UUID guardianId, Instant now) {
+        MapSqlParameterSource params = ClockParams.at(Objects.requireNonNull(now, "now"));
+        ClockParams.uuid(params, "guardianId", Objects.requireNonNull(guardianId, "guardianId"));
+        return jdbc.update(ERASE_BY_GUARDIAN, params);
     }
 
     /** 세션의 행 전부(지워지지 않은 것, 번호 순). */

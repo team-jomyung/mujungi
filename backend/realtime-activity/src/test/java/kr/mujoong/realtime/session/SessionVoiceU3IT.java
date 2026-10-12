@@ -63,7 +63,7 @@ class SessionVoiceU3IT {
 
     @Test
     void aBargeInCancelsTheResponseAtTheProviderAndAPatternDiscardSendsItsCorrection() {
-        env = RealtimeItEnvironment.start(Map.of("mujoong.recording.directory", recordings.toString()), null);
+        start();
         DeviceSimulatorClient device = env.connectDevice();
         UUID sessionId = activate(device, false);
 
@@ -95,7 +95,7 @@ class SessionVoiceU3IT {
 
     @Test
     void aProviderThatClosesMidSessionAbortsItAsProviderLostAndReturnsTheDeviceToStandby() {
-        env = RealtimeItEnvironment.start(Map.of("mujoong.recording.directory", recordings.toString()), null);
+        start();
         DeviceSimulatorClient device = env.connectDevice();
         UUID sessionId = activate(device, false);
 
@@ -114,7 +114,7 @@ class SessionVoiceU3IT {
 
     @Test
     void aLowConfidenceChildTranscriptIsStoredForReviewAndAConfidentOneIsNot() {
-        env = RealtimeItEnvironment.start(Map.of("mujoong.recording.directory", recordings.toString()), null);
+        start();
         DeviceSimulatorClient device = env.connectDevice();
         UUID sessionId = activate(device, false);
 
@@ -134,7 +134,7 @@ class SessionVoiceU3IT {
 
     @Test
     void rawAudioIsWrittenOnlyForAConsentedSessionAndItsMetadataIsFinishedAtTheEnd() throws Exception {
-        env = RealtimeItEnvironment.start(Map.of("mujoong.recording.directory", recordings.toString()), null);
+        start();
         DeviceSimulatorClient device = env.connectDevice();
         UUID consented = activate(device, true);
         byte[] frame = new byte[960];
@@ -173,6 +173,15 @@ class SessionVoiceU3IT {
     }
 
     // ------------------------------------------------------------------ 보조
+
+    /**
+     * 기록 디렉터리를 시험 임시 폴더로, 기기 무음 판정을 운영값(40초)으로 둔다 — 이 시험의 기기는 HEARTBEAT를 보내지 않으므로 시험 기본값(4초)이면
+     * 느린 실행에서 세션이 DISCONNECT로 끝난다(시험 경합).
+     */
+    private void start() {
+        env = RealtimeItEnvironment.start(Map.of("mujoong.recording.directory", recordings.toString(),
+                "mujoong.timing.device.disconnect", "40s"), null);
+    }
 
     private UUID activate(DeviceSimulatorClient device, boolean rawAudio) {
         UUID sessionId = UUID.randomUUID();

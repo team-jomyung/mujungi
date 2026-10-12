@@ -141,6 +141,9 @@ public class DeviceConnectionRepository {
             + " where connection_state = any(:from)"
             + " returning " + COLUMNS;
 
+    private static final String DELETE_BY_GUARDIAN = "delete from realtime.realtime_device_connection"
+            + " where guardian_id = :guardianId";
+
     private final NamedParameterJdbcTemplate jdbc;
 
     public DeviceConnectionRepository(NamedParameterJdbcTemplate jdbc) {
@@ -441,5 +444,12 @@ public class DeviceConnectionRepository {
                 throw new IllegalArgumentException("rttMs는 0 이상이어야 한다");
             }
         }
+    }
+
+    /** 보호자의 연결 원장 행을 지운다(계정 삭제 참가자, U3-J16). 지운 행 수. */
+    public int deleteByGuardian(UUID guardianId) {
+        MapSqlParameterSource params = new MapSqlParameterSource();
+        ClockParams.uuid(params, "guardianId", Objects.requireNonNull(guardianId, "guardianId"));
+        return jdbc.update(DELETE_BY_GUARDIAN, params);
     }
 }

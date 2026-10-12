@@ -98,6 +98,8 @@ class DeviceGatewayU3IT {
         device.heartbeat(1_000L);
         awaitLedger(ConnectionState.CONNECTED);
         awaitTrue(() -> connection(connectionId).knownState() == ConnectionState.CONNECTED, "사본 CONNECTED");
+        // 전이 로그는 커밋 뒤에 쓰인다(사본은 커밋 전) — 로그가 나올 때까지 기다린 뒤 순서를 본다
+        awaitTrue(() -> transitions().size() >= 3, "UNSTABLE->CONNECTED 로그");
         assertThat(transitions()).containsExactly("OFFLINE->CONNECTED", "CONNECTED->UNSTABLE", "UNSTABLE->CONNECTED");
         assertThat(device.isClosed()).isFalse();
     }

@@ -36,6 +36,7 @@ import kr.mujoong.contract.ws.message.View;
 import kr.mujoong.realtime.common.scaling.SingleInstanceAssumption;
 import kr.mujoong.realtime.config.RealtimeProperties;
 import kr.mujoong.realtime.dialog.DialogInstructions;
+import kr.mujoong.realtime.dialog.StopIntentJudge;
 import kr.mujoong.realtime.gate.ApprovedPlayback;
 import kr.mujoong.realtime.gate.ClosingSequence;
 import kr.mujoong.realtime.gate.GateDecision;
@@ -222,6 +223,10 @@ public final class SessionExecutor {
     static final String EVENT_MIC_LOST = "DEVICE_MIC_LOST";
     static final String EVENT_MIC_OK = "DEVICE_MIC_OK";
     static final String EVENT_PLAYER_ERROR = "DEVICE_PLAYER_ERROR";
+    /** U3-R12: 아이의 명확한 종료 의도(payload는 근거만, 원문 없음). CLOSING(CHILD_STOP) 전이는 U4. */
+    static final String EVENT_CHILD_STOP_INTENT = "CHILD_STOP_INTENT";
+    /** U3-R12: 종료일 수 있으나 불명확(확인 질문 재생은 U4). */
+    static final String EVENT_CHILD_STOP_UNCLEAR = "CHILD_STOP_UNCLEAR";
     /** U3-J13: ACTIVE 중 공급자 끊김의 end_detail. */
     static final String END_DETAIL_PROVIDER_LOST = "PROVIDER_LOST";
     /** 취소 · 교정 · 재생 위치를 기억하는 응답 · 재생 수의 상한(오래된 것부터 잊는다). */
@@ -258,6 +263,10 @@ public final class SessionExecutor {
     private final Map<UUID, String> playbackResponses = boundedMap();
     /** 기기가 STARTED를 알리고 아직 끝 표식이 없는 재생(생각 중 · 듣는 중 표시와 종료 의도 판정의 '재생 중'). */
     private final Set<UUID> devicePlaying = new HashSet<>();
+    /** 종료 의도 판정기(세션 스냅숏의 종료 표현, U3-R12). */
+    private final StopIntentJudge stopJudge;
+    /** 명확한 종료 의도를 받았다 — 이후 공급자 출력은 받지 않는다(U3-J24, CLOSING(CHILD_STOP)은 U4). */
+    private boolean stopIntent;
     /** 실행기가 스스로 공급자를 닫았다(뒤따르는 끊김 알림은 공급자 장애가 아니다). */
     private boolean providerClosing;
     /** 동의된 세션의 원음 기록(동의가 없으면 null, U3-R9). */
@@ -290,6 +299,7 @@ public final class SessionExecutor {
         this.relay = new InputRelay(plan.sessionId(), services.settings().inputQueueFrames(), services.requests(),
                 services.clock(), services.metrics());
         this.transcripts = new TranscriptWriter(plan.sessionId(), 0, services.recorder(), services.latency());
+        this.stopJudge = new StopIntentJudge(plan.stopExpressions());
     }
 
     // ------------------------------------------------------------------ 실행
@@ -668,10 +678,12 @@ public final class SessionExecutor {
             case ProviderEvent.InputTranscriptDone done -> {
                 if (inRelayRange()) {
                     transcripts.childFinal(done.itemId(), done.transcript(), at, uncertain(done));
+                    judgeStopIntent(done.transcript(), at);
                     thinking();
                 }
             }
             case ProviderEvent.OutputTranscriptDelta delta -> {
+                refuseAfterStopIntent(delta.responseId());
                 if (inOutputRange() && !cancelledResponses.contains(delta.responseId())) {
                     beginOutput(delta.responseId(), at);
                     // J294: 음성처럼 구간에 들어간 조각만 조용 시계를 다시 건다(버린 조각은 열린 구간의 조용 시간을 늘리지 않는다)
@@ -682,6 +694,7 @@ public final class SessionExecutor {
                 }
             }
             case ProviderEvent.OutputAudioDelta delta -> {
+                refuseAfterStopIntent(delta.responseId());
                 if (inOutputRange() && !cancelledResponses.contains(delta.responseId())) {
                     beginOutput(delta.responseId(), at);
                     SegmentBuffer.Added added =
@@ -778,9 +791,59 @@ public final class SessionExecutor {
         teardown();
     }
 
+    /**
+     * U3-R12 · AC6.4.4 ~ 6.4.6: ACTIVE의 확정 아이 전사로 종료 의도를 판정한다. STOP이면 대기 · 재생 중 응답을 취소하고(끼어들기와 같은 출력
+     * 멈춤) 이후 공급자 출력을 받지 않으며 CHILD_STOP_INTENT를 남긴다. CONFIRM이면 CHILD_STOP_UNCLEAR만 남긴다. 상태 전이 · 마무리 인사 ·
+     * 확인 질문 재생은 U4다(U3-J1 · U3-J24).
+     */
+    private void judgeStopIntent(String transcript, Instant at) {
+        if (status != SessionStatus.ACTIVE || stopIntent) {
+            return;
+        }
+        StopIntentJudge.Judgment judgment = stopJudge.judge(transcript, !devicePlaying.isEmpty());
+        switch (judgment.verdict()) {
+            case STOP -> {
+                stopIntent = true;
+                putEvent(EVENT_CHILD_STOP_INTENT, "{\"basis\":\"" + judgment.basis().name() + "\"}", at);
+                stopOutputForIntent(at);
+                listeningAgain();
+            }
+            case CONFIRM -> putEvent(EVENT_CHILD_STOP_UNCLEAR, null, at);
+            case NONE -> {
+                // 종료 의도 아님
+            }
+        }
+    }
+
+    /** 종료 의도: 남은 프레임을 보내지 않고(세대 올림) 만들던 · 재생 중이던 응답을 공급자에서 취소하고 열린 구간을 버린다. */
+    private void stopOutputForIntent(Instant at) {
+        bumpGeneration();
+        timers.cancel(Kind.SEGMENT_QUIET);
+        Set<String> targets = new LinkedHashSet<>();
+        if (segment.isOpen() && segment.responseId() != null) {
+            targets.add(segment.responseId());
+        }
+        devicePlaying.forEach(playbackId -> {
+            String responseId = playbackResponses.get(playbackId);
+            if (responseId != null) {
+                targets.add(responseId);
+            }
+        });
+        cancelResponses(targets.toArray(String[]::new));
+        segment.reset();
+        transcripts.aiFinal("", false, at);
+    }
+
+    /** 종료 의도 뒤 새 응답의 첫 조각은 공급자에서 바로 취소한다(한 번). 조각은 취소한 응답이라 버려진다. */
+    private void refuseAfterStopIntent(String responseId) {
+        if (stopIntent && responseId != null && !responseId.isBlank() && !cancelledResponses.contains(responseId)) {
+            cancelResponses(responseId);
+        }
+    }
+
     /** U3-J6: 아이 말이 끝났다(말 끝 · 전사 확정) — 듣는 중이고 재생이 없으면 '생각 중'. */
     private void thinking() {
-        if (status == SessionStatus.ACTIVE && view == View.LISTENING && devicePlaying.isEmpty()) {
+        if (status == SessionStatus.ACTIVE && view == View.LISTENING && devicePlaying.isEmpty() && !stopIntent) {
             sendControl(new SessionState(View.THINKING));
         }
     }

@@ -122,3 +122,5 @@ U1 워킹 스켈레톤이 만든 세션 경로(PREPARING → DEVICE_ACK → ACTI
 | U3-J21 | 편차 기호가 (z)까지 찼으므로 (aa) · (ab) … 두 글자를 쓰고 `ContractFilesTest`의 정규식을 넓힌다 | deviations.md 규칙 유지 |
 | U3-J22 | CI · verify.sh의 프런트 시험 명령을 `tests/u1`에서 `tests`(전 유닛)로 넓힌다(커버리지 80% 하한은 그대로). tools도 같다. 백엔드 `check`는 이미 전 태그를 돈다 | 유닛 시험이 CI에서 돌지 않으면 회귀를 못 잡는다 |
 | U3-J23 | 세션 실행기의 view(STANDBY · LISTENING · THINKING · CLOSING)를 실행기 상태로 두고 HELLO_OK.session.view에 쓴다 | 계약 HELLO_OK.session.view |
+| U3-J24 | ACTIVE의 확정 아이 전사가 STOP으로 판정되면 실행기는 만들던 · 재생 중이던 응답을 공급자에서 취소하고 그 뒤 새 응답도 첫 조각에서 취소해 기기로 보내지 않는다(세션은 ACTIVE 그대로, `CHILD_STOP_INTENT {basis}` 기록). CONFIRM은 `CHILD_STOP_UNCLEAR`만 남긴다. 기기 재생 중 확정된 전사는 판정하지 않는다. 스냅숏 표현 · 명사꼴 종료 표현은 낱말 경계로 맞추고 물음꼴이면 CONFIRM | AC6.4.4 '대기 응답을 취소하고 … 멈춘다' · AC6.4.8 '종료 확정 뒤 이전 응답이 이어서 재생되지 않는다'. CLOSING(CHILD_STOP) · 마무리 인사 · 확인 질문은 U4(U3-J1) |
+| U3-J25 | 원음 파일은 이 인스턴스의 로컬 디렉터리(`mujoong.recording.directory`)에 쓴다. 여러 인스턴스로 늘리면 공유 볼륨이나 객체 저장소로 옮겨야 삭제 참가자가 모든 파일을 찾는다. U1 단일 인스턴스 표(SI-1 ~ SI-12)는 `aidlc/` 원본이라 고치지 않고 보고서에 남긴다 | scalability-design 2.2 · 지시서 '`aidlc/` 수정 금지' |

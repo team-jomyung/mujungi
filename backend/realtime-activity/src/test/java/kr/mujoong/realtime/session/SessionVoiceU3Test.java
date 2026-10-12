@@ -352,6 +352,72 @@ class SessionVoiceU3Test {
         assertThat(recorded.closedAt()).isEqualTo(endedAt);
     }
 
+    // ------------------------------------------------------------------ 종료 의도 (U3-R12 · U3-J24)
+
+    @Test
+    void aClearStopIntentCancelsTheResponseInProgressRecordsTheEventAndRefusesLaterResponses() {
+        h.activate();
+        respond("r1", "공룡은 멋져", 4_800);
+        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("r2", "그래 그럼"));
+        h.provider.last().emit(new ProviderEvent.SpeechStopped());
+        h.drain();
+        long generation = h.executor.outputGeneration();
+
+        done("i1", "무중아 그만할래", 0.95);
+
+        assertThat(sessionEvents()).filteredOn(event -> event.getEventType().equals(SessionExecutor.EVENT_CHILD_STOP_INTENT))
+                .singleElement().satisfies(event -> assertThat(event.getPayloadJson()).isEqualTo("{\"basis\":\"SNAPSHOT\"}"));
+        assertThat(h.executor.outputGeneration()).isGreaterThan(generation);
+        assertThat(h.launcher.runAll("provider-cancel-")).isEqualTo(1);
+        assertThat(h.provider.last().requests(ProviderRequestFactory.ResponseCancel.class))
+                .extracting(ProviderRequestFactory.ResponseCancel::responseId).containsExactly("r2");
+        // 말 끝의 '생각 중'은 종료 의도 뒤 '듣는 중'으로 돌아간다(답이 오지 않는다)
+        assertThat(views()).containsExactly(View.LISTENING, View.THINKING, View.LISTENING);
+
+        // 이후 새 응답은 첫 조각에서 취소하고 기기로 보내지 않는다(전이 · 마무리 인사는 U4)
+        emitComplete("r3", "알겠어 안녕");
+        h.advance(Duration.ofSeconds(1));
+        assertThat(h.launcher.runAll("provider-cancel-")).isEqualTo(1);
+        assertThat(h.link.outputs()).hasSize(1);
+        assertThat(h.executor.status()).isEqualTo(SessionStatus.ACTIVE);
+        done("i2", "무중아 그만할래", 0.95);
+        assertThat(sessionEvents()).filteredOn(event -> event.getEventType().startsWith("CHILD_STOP")).hasSize(1);
+        assertThat(sessionEvents()).noneMatch(event -> event.getPayloadJson() != null
+                && event.getPayloadJson().contains("그만"));
+    }
+
+    @Test
+    void aStopPhraseHeardWhileTheDevicePlaysIsNotAStopAndAnUnclearOneIsOnlyRecorded() {
+        h.activate();
+        OutputBundle bundle = respond("r1", "같이 노래 부를까", 4_800);
+        mark(bundle.playbackId(), PlaybackMark.Status.STARTED, null);
+        done("i1", "무중아 그만할래", 0.9);
+        assertThat(sessionEvents()).noneMatch(event -> event.getEventType().startsWith("CHILD_STOP"));
+        assertThat(h.launcher.runAll("provider-cancel-")).isZero();
+        mark(bundle.playbackId(), PlaybackMark.Status.COMPLETED, null);
+
+        done("i2", "쉬고 싶어", 0.9);
+
+        assertThat(sessionEvents()).filteredOn(event -> event.getEventType().startsWith("CHILD_STOP"))
+                .extracting(SessionEvent::getEventType).containsExactly(SessionExecutor.EVENT_CHILD_STOP_UNCLEAR);
+        assertThat(h.launcher.runAll("provider-cancel-")).isZero();
+        // 확인만 남기고 대화는 이어진다
+        respond("r2", "그래 조금 쉬었다 할까", 4_800);
+        assertThat(h.link.outputs()).hasSize(2);
+    }
+
+    @Test
+    void stopIntentIsJudgedOnlyWhileActive() {
+        h.activate();
+        CompletableFuture<EndOutcome> stop = new CompletableFuture<>();
+        h.mailbox.putSafety(new SessionMailbox.EndRequested(UUID.randomUUID(), EndRequestReason.GUARDIAN_STOP, stop));
+        h.drain();
+
+        done("i1", "무중아 그만할래", 0.9);
+
+        assertThat(sessionEvents()).noneMatch(event -> event.getEventType().startsWith("CHILD_STOP"));
+    }
+
     // ------------------------------------------------------------------ 도움
 
     /** 응답 한 개를 끝까지 흘리고 조용 시간을 넘겨 게이트를 통과시킨다. 기기로 나간 묶음을 돌려준다. */
@@ -403,6 +469,11 @@ class SessionVoiceU3Test {
                 new kr.mujoong.contract.ws.message.VoiceSessionClosed(h.clock.now(), h.clock.now()), h.clock.now()));
         h.drain();
         assertThat(h.transitions.status(h.sessionId)).isEqualTo(SessionStatus.ENDED);
+    }
+
+    private List<SessionEvent> sessionEvents() {
+        h.recorder.tick();
+        return h.store.sessionEvents;
     }
 
     private List<View> views() {
