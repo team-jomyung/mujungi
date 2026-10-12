@@ -8,6 +8,7 @@ import java.time.Instant;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import kr.mujoong.contract.log.EventCode;
+import kr.mujoong.contract.status.EndReason;
 import kr.mujoong.contract.status.EndRequestReason;
 import kr.mujoong.contract.status.FailureCode;
 import kr.mujoong.contract.status.SessionStatus;
@@ -38,7 +39,7 @@ class SessionExecutorFaultTest {
     /** 일반 편지함 상한만 4로 줄인 설정(나머지는 운영 기본값). */
     private static final SessionExecutor.Settings SMALL_MAILBOX = new SessionExecutor.Settings(Duration.ofSeconds(20),
             Duration.ofSeconds(30), Duration.ofSeconds(40), Duration.ofMillis(800), Duration.ofSeconds(20),
-            Duration.ofSeconds(1), 50, 4);
+            Duration.ofSeconds(1), 50, 4, 60);
     private static final Duration DEADLOCK_GUARD = Duration.ofSeconds(5);
 
     private final SessionHarness h = new SessionHarness();
@@ -100,7 +101,15 @@ class SessionExecutorFaultTest {
         assertThat(h.mailbox.generalSize()).isEqualTo(1);
         h.drain();
 
-        assertThat(h.executor.status()).isEqualTo(SessionStatus.ACTIVE);
+        // U3-R8 · U3-J13(AC6.6.3 · B18): U1은 ACTIVE를 그대로 두었다. U3부터 공급자 끊김은 ABORTED(DISCONNECT, PROVIDER_LOST)로 끝낸다
+        assertThat(h.executor.status()).isEqualTo(SessionStatus.ABORTED);
+        ActivitySessionRow row = h.transitions.find(h.sessionId).orElseThrow();
+        assertThat(row.endReason()).isEqualTo(EndReason.DISCONNECT);
+        assertThat(row.endDetail()).isEqualTo("PROVIDER_LOST");
+        assertThat(h.link.sent(CloseTransport.class)).extracting(CloseTransport::reason)
+                .containsExactly(CloseTransport.Reason.DISCONNECT);
+        assertThat(h.link.sent(SessionState.class)).extracting(SessionState::view).last().isEqualTo(View.STANDBY);
+        assertThat(h.executor.isTerminated()).isTrue();
         assertThat(LogCapture.attrs(h.logs.last(EventCode.APP_ERROR).orElseThrow()))
                 .containsEntry("errorKind", "ProviderDisconnected");
     }

@@ -54,10 +54,12 @@ class ContractFilesTest {
 
     private static final String ID_PREFIX = "https://mujoong.invalid/contracts/schemas/";
     private static final String DRAFT_2020_12 = "https://json-schema.org/draft/2020-12/schema";
-    private static final Pattern MD_MARKER = Pattern.compile("\\[편차 \\(([a-z])\\)\\]");
-    private static final Pattern DEVIATION_ROW = Pattern.compile("^\\| \\(([a-z])\\) \\|.*$", Pattern.MULTILINE);
-    private static final List<String> LETTERS =
-            IntStream.rangeClosed('a', 'z').mapToObj(c -> String.valueOf((char) c)).toList();
+    private static final Pattern MD_MARKER = Pattern.compile("\\[편차 \\(([a-z]{1,2})\\)\\]");
+    private static final Pattern DEVIATION_ROW = Pattern.compile("^\\| \\(([a-z]{1,2})\\) \\|.*$", Pattern.MULTILINE);
+    /** 두 글자 기호(U3-J21): (z)가 찬 뒤 (aa)부터 쓴다. 사전순으로 섞어 TreeMap · TreeSet의 순서와 맞춘다. */
+    private static final List<String> TWO_LETTER = List.of("aa", "ab", "ac");
+    private static final List<String> LETTERS = Stream.concat(
+            IntStream.rangeClosed('a', 'z').mapToObj(c -> String.valueOf((char) c)), TWO_LETTER.stream()).sorted().toList();
     private static final List<String> SPEC_FILES = List.of(
             "parent-api.yaml", "device-api.yaml", "internal-api.yaml", "events.asyncapi.yaml", "device-ws.asyncapi.yaml");
     private static final List<String> MARKDOWN_FILES =
@@ -409,7 +411,7 @@ class ContractFilesTest {
         assertThat(fromTable).isEqualTo(fromEnum);
     }
 
-    // ------------------------------------------------------------------ 편차 (a) ~ (z)
+    // ------------------------------------------------------------------ 편차 (a) ~ (z) · (aa) ~ (ac)
 
     @Test
     void everyDeviationHasOneRowAndAMarkerInEachListedFile() throws IOException {
@@ -465,7 +467,7 @@ class ContractFilesTest {
             if (location.endsWith(".yaml")) {
                 walk(YAML.readTree(text), "", (pointer, node) -> {
                     for (JsonNode value : node.path("x-deviation")) {
-                        Matcher letter = Pattern.compile("^\\(([a-z])\\)$").matcher(value.stringValue());
+                        Matcher letter = Pattern.compile("^\\(([a-z]{1,2})\\)$").matcher(value.stringValue());
                         letters.add(letter.matches() ? letter.group(1) : "?" + value.stringValue());
                     }
                 });

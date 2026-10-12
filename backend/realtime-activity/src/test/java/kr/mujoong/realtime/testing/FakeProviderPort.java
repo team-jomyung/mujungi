@@ -89,6 +89,7 @@ public final class FakeProviderPort implements ProviderPort {
         private final AtomicBoolean closedSignalled = new AtomicBoolean();
         private final List<Object> requests = new ArrayList<>();
         private volatile boolean open = true;
+        private volatile boolean failOnClose;
 
         private FakeSession(Listener listener, Mode mode, boolean signalOnClose) {
             this.listener = listener;
@@ -113,10 +114,35 @@ public final class FakeProviderPort implements ProviderPort {
         }
 
         @Override
+        public void cancelResponse(ProviderRequestFactory.ResponseCancel request) throws ProviderUnavailableException {
+            if (!open) {
+                throw new ProviderUnavailableException(ProviderUnavailableException.Reason.CLOSED);
+            }
+            record(request);
+        }
+
+        @Override
+        public void correctInstructions(ProviderRequestFactory.InstructionsCorrect request)
+                throws ProviderUnavailableException {
+            if (!open) {
+                throw new ProviderUnavailableException(ProviderUnavailableException.Reason.CLOSED);
+            }
+            record(request);
+        }
+
+        @Override
         public void close(ProviderRequestFactory.SessionClose request) {
+            if (failOnClose) {
+                throw new IllegalStateException("시험용 공급자 닫기 실패");
+            }
             record(request);
             open = false;
             signalClosed();
+        }
+
+        /** 이후 닫기 요청(session.close)이 예외를 던지게 한다(정리 단계 실패 시험, 리뷰 반영 7). */
+        public void failOnClose(boolean value) {
+            this.failOnClose = value;
         }
 
         @Override

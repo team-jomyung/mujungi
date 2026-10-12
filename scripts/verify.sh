@@ -17,8 +17,8 @@
 # 단계(각 단계의 출력은 build/verify/logs/<단계>.log, 표준 출력은 단계마다 한 줄):
 #   A1 backend   cd backend && ./gradlew --no-daemon clean check verifyBootJarHasNoTestClasses (전체 회귀 · ArchUnit ·
 #                설정 키 대조 · 모듈 전체 JaCoCo 80%, DB 시험 백엔드는 compose=auto · host=local, J132)
-#   A2 frontend  npm ci · eslint . · vitest run tests/u1 --coverage(80%) · next build(+ standalone에 정적 자원 복사)
-#   A3 tools     npm ci · vitest run tests/u1 (J131)
+#   A2 frontend  npm ci · eslint . · vitest run tests --coverage(80%, 유닛 시험 폴더 전부) · next build(+ standalone에 정적 자원 복사)
+#   A3 tools     npm ci · vitest run tests (J131, 유닛 시험 폴더 전부)
 #   A4 secrets   scripts/verify/a-secrets.sh — 비밀 스캔 ① · 무시 규칙 ② (SEC-10)
 #   F  지문      A 동안 소스가 바뀌지 않았는지 보고 build/verify/fingerprint에 소스 지문 · 산출물 해시를 적는다(J134)
 #   E0 지문      (--engine) 미리 만든 산출물의 지문이 지금 소스 지문과 같은가

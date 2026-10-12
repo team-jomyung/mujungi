@@ -16,7 +16,8 @@ import type {
 // - 재생은 한 줄 시간표에 이어 붙인다. 대기 중인 분량이 output-queue-max(20초 분량)를 넘으면 그 재생을 FAILED(QUEUE_OVERFLOW)로 끝낸다.
 // - 실제로 소리가 나기 시작하면 STARTED, 끝까지 나면 COMPLETED, STOP_OUTPUT · CLOSE_TRANSPORT로 멈추면 STOPPED,
 //   받기 · 해석 · 장치 오류 · 대기열 초과는 FAILED를 PLAYBACK_MARK로 알린다. observedAt은 기기 시계다(OD-8).
-//   PROGRESS(1초 간격)는 U3 몫이라 보내지 않는다.
+// - U3(U3-J10): 소리가 나는 동안 progressIntervalMs마다 PROGRESS{playedRange}를 보내고, STOPPED에도 그때까지 재생한 구간을 싣는다
+//   (끼어들기 · 멈춤 시점의 재생 위치 근거). progressIntervalMs가 없으면 PROGRESS를 보내지 않는다.
 // - '말하는 중'은 승인된 소리가 실제로 나는 동안만이다(BR9.6).
 // Web Audio 의존은 AudioOutput 뒤로 숨겨 재생 규칙을 jsdom에서 시험할 수 있게 한다.
 
@@ -56,9 +57,19 @@ export interface PlayerOptions<C extends AudioClip> {
   readonly nowMs: () => number;
   readonly onMark: (sessionId: string, mark: PlaybackMarkPayload) => void;
   readonly onSpeakingChange: (speaking: boolean) => void;
+  /** PROGRESS 주기(mujoong.timing.device.playback-mark-interval, U3-J10). 없거나 0이면 보내지 않는다. */
+  readonly progressIntervalMs?: number;
+}
+
+/** 연결이 끊겨 멈춘 재생(이어간 뒤 STOPPED · DISCONNECTED로 알린다, U3-R16). */
+export interface InterruptedPlayback {
+  readonly sessionId: string;
+  readonly playbackId: string;
+  readonly playedRange: { readonly fromMs: number; readonly toMs: number } | null;
 }
 
 interface Piece {
+  readonly startSec: number;
   readonly endSec: number;
   handle: ScheduledPlayback | null;
   started: boolean;
@@ -89,6 +100,7 @@ export class AudioPlayer<C extends AudioClip> {
   private openStreamId: string | null = null;
   private timelineEndSec = 0;
   private speaking = false;
+  private progressTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor(private readonly options: PlayerOptions<C>) {}
 
@@ -194,25 +206,38 @@ export class AudioPlayer<C extends AudioClip> {
       if (playback.state !== "active") {
         continue;
       }
+      const playedRange = this.playedRange(playback);
       this.stopPieces(playback);
       playback.state = "stopped";
-      this.mark(playback, "STOPPED", { stopCause: cause });
+      this.mark(playback, "STOPPED", { stopCause: cause, playedRange });
     }
     this.playbacks.clear();
     this.timelineEndSec = 0;
     this.updateSpeaking();
   }
 
-  /** 연결이 끊겼을 때: 알릴 곳이 없으므로 표식 없이 모두 멈춘다. */
-  reset(): void {
+  /**
+   * 연결이 끊겼을 때: 알릴 곳이 없으므로 표식 없이 모두 멈춘다. U3: 멈춘 재생을 돌려줘 세션을 이어 가면 STOPPED(DISCONNECTED)로 알리게 한다
+   * (마무리 문구의 끝 표식을 기다리는 서버가 30초 확인 시한까지 기다리지 않게).
+   */
+  reset(): InterruptedPlayback[] {
     this.openStreamId = null;
+    const interrupted: InterruptedPlayback[] = [];
     for (const playback of this.playbacks.values()) {
+      if (playback.state === "active") {
+        interrupted.push({
+          sessionId: playback.sessionId,
+          playbackId: playback.playbackId,
+          playedRange: this.playedRange(playback),
+        });
+      }
       this.stopPieces(playback);
       playback.state = "stopped";
     }
     this.playbacks.clear();
     this.timelineEndSec = 0;
     this.updateSpeaking();
+    return interrupted;
   }
 
   get isSpeaking(): boolean {
@@ -256,7 +281,7 @@ export class AudioPlayer<C extends AudioClip> {
       return;
     }
     const startSec = Math.max(now, this.timelineEndSec);
-    const piece: Piece = { endSec: startSec + clip.durationSec, handle: null, started: false, ended: false };
+    const piece: Piece = { startSec, endSec: startSec + clip.durationSec, handle: null, started: false, ended: false };
     this.timelineEndSec = piece.endSec;
     playback.pieces.push(piece);
     piece.handle = this.options.output.schedule(clip, startSec, {
@@ -349,19 +374,58 @@ export class AudioPlayer<C extends AudioClip> {
     }
     if (speaking !== this.speaking) {
       this.speaking = speaking;
+      this.updateProgressTimer();
       this.options.onSpeakingChange(speaking);
     }
+  }
+
+  /** 소리가 나는 동안만 PROGRESS 타이머를 돌린다(U3-J10). */
+  private updateProgressTimer(): void {
+    const interval = this.options.progressIntervalMs ?? 0;
+    if (this.speaking && interval > 0 && this.progressTimer === null) {
+      this.progressTimer = setInterval(() => this.reportProgress(), interval);
+    } else if (!this.speaking && this.progressTimer !== null) {
+      clearInterval(this.progressTimer);
+      this.progressTimer = null;
+    }
+  }
+
+  private reportProgress(): void {
+    for (const playback of this.playbacks.values()) {
+      if (playback.state === "active" && playback.startedMarked) {
+        this.mark(playback, "PROGRESS", { playedRange: this.playedRange(playback) });
+      }
+    }
+  }
+
+  /** 시작한 재생의 지금까지 재생 구간(밀리초, 0부터). 시작하지 않았으면 null. */
+  private playedRange(playback: Playback): { readonly fromMs: number; readonly toMs: number } | null {
+    if (!playback.startedMarked) {
+      return null;
+    }
+    const now = this.options.output.currentTime();
+    let playedSec = 0;
+    for (const piece of playback.pieces) {
+      if (piece.started) {
+        playedSec += Math.max(0, Math.min(now, piece.endSec) - piece.startSec);
+      }
+    }
+    return { fromMs: 0, toMs: Math.round(playedSec * MS_PER_SECOND) };
   }
 
   private mark(
     playback: Playback,
     status: PlaybackStatus,
-    extra: { stopCause?: PlaybackStopCause; failureReason?: PlaybackFailureReason },
+    extra: {
+      stopCause?: PlaybackStopCause;
+      failureReason?: PlaybackFailureReason;
+      playedRange?: { readonly fromMs: number; readonly toMs: number } | null;
+    },
   ): void {
     this.options.onMark(playback.sessionId, {
       playbackId: playback.playbackId,
       status,
-      playedRange: null,
+      playedRange: extra.playedRange ?? null,
       observedAt: toIsoInstant(this.options.nowMs()),
       stopCause: extra.stopCause ?? null,
       failureReason: extra.failureReason ?? null,

@@ -75,10 +75,10 @@ class ConnectionStateWriterIT {
         sockets = new ProbeRegistry(connection);
         RealtimeMetrics metrics = RealtimeMetrics.inMemory();
         EventLogger events = TestEventLoggers.strict(clock, logs, metrics);
-        writer = new ConnectionStateWriter(connections,
+        writer = new ConnectionStateWriter(connections, new DeviceDisconnectRepository(db.jdbc()),
                 new RealtimeOutboxWriter(new RealtimeOutboxRepository(db.jdbc()), JsonCodec.shared()),
                 new DataSourceTransactionManager(db.dataSource()), new DbRetry(2, () -> 0L, duration -> { }), events,
-                clock, sockets);
+                clock, sockets, Duration.ofMinutes(5), 2);
         db.inTransaction(() -> connections.handover(device, connection.connectionId(), guardian, null, T0));
         connection.knownState(ConnectionState.CONNECTED);
     }

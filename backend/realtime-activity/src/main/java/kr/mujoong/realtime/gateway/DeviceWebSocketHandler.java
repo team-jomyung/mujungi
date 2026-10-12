@@ -16,6 +16,8 @@ import kr.mujoong.contract.ws.CloseCode;
 import kr.mujoong.contract.ws.WsEnvelope;
 import kr.mujoong.contract.ws.message.Ack;
 import kr.mujoong.contract.ws.message.DeviceReady;
+import kr.mujoong.contract.ws.message.DeviceState;
+import kr.mujoong.contract.ws.message.Hello;
 import kr.mujoong.contract.ws.message.PlaybackMark;
 import kr.mujoong.contract.ws.message.VoiceSessionClosed;
 import kr.mujoong.contract.ws.message.WsError;
@@ -43,6 +45,10 @@ import org.springframework.web.socket.handler.AbstractWebSocketHandler;
  * 마지막 메시지 시각을 갱신한다(BR6.12 ④). HEARTBEAT는 ACK를 먼저 보내고 세션 편지함에 넣지 않는다. ACK · DEVICE_READY · PLAYBACK_MARK ·
  * VOICE_SESSION_CLOSED는 세션 일반 편지함에, 0x01은 세션 입력 대기열에 넣는다. 일반 편지함이 가득 차면 연결을 1011로 닫는다(PD-2). 세션이
  * 없거나 끝났으면 기록 없이 버린다(BR6.11). 기기가 보낸 1000 · 1001(READY 뒤)만 즉시 OFFLINE이다(BR4.8 ②).
+ *
+ * <p>U3: HELLO의 resume 요청을 연결에 남겨 인계가 HELLO_OK.session을 채우게 하고(U3-J4), DEVICE_STATE는 연결 메모리에 합치고 지표를 올린 뒤
+ * 묶인 세션 편지함에 넣으며(U3-J9), PLAYBACK_MARK(PROGRESS)도 세션 편지함으로 간다(U3-J10). READY 뒤 네트워크로 끊긴 연결(닫기 프레임 없음 ·
+ * 전송 오류)은 끊김 사건으로 적는다(U3-J2, 보조 작업).
  */
 @Component
 public class DeviceWebSocketHandler extends AbstractWebSocketHandler {
@@ -139,7 +145,7 @@ public class DeviceWebSocketHandler extends AbstractWebSocketHandler {
             case VerifyTokenClient.Verified verified -> {
                 connection.verified(verified.principal());
                 if (connection.advance(DeviceConnection.Phase.AWAIT_VERIFY, DeviceConnection.Phase.AWAIT_HELLO)) {
-                    connection.takeDeferredHello().ifPresent(hello -> onHello(connection));
+                    connection.takeDeferredHello().ifPresent(hello -> onHello(connection, hello));
                 }
             }
             case VerifyTokenClient.Rejected rejected -> authFailed(connection, null);
@@ -172,12 +178,12 @@ public class DeviceWebSocketHandler extends AbstractWebSocketHandler {
             case WsFrameGuard.Close close -> connection.close(close.code());
             case WsFrameGuard.Error error -> connection.sendControl(new WsError(error.code(), error.refSeq()), null, null);
             case WsFrameGuard.Ignore ignored -> {
-                // DEVICE_STATE · READY 뒤 HELLO · PLAYBACK_MARK(PROGRESS): 받되 판단에 쓰지 않는다(J123)
+                // READY 뒤 두 번째 HELLO: 받되 판단에 쓰지 않는다(J123)
             }
             case WsFrameGuard.Defer defer -> {
                 connection.deferHello(defer.hello());
                 if (connection.phase() == DeviceConnection.Phase.AWAIT_HELLO) {
-                    connection.takeDeferredHello().ifPresent(hello -> onHello(connection));
+                    connection.takeDeferredHello().ifPresent(hello -> onHello(connection, hello));
                 }
             }
             case WsFrameGuard.AcceptAudio audio -> connection.close(CloseCode.PROTOCOL_ERROR);
@@ -188,8 +194,9 @@ public class DeviceWebSocketHandler extends AbstractWebSocketHandler {
     private void onEnvelope(DeviceConnection connection, WsFrameGuard.Accept accept, Instant receivedAt) {
         WsEnvelope envelope = accept.envelope();
         switch (envelope.messageType()) {
-            case HELLO -> onHello(connection);
+            case HELLO -> onHello(connection, envelope);
             case HEARTBEAT -> heartbeats.onHeartbeat(connection, envelope, accept.sentAtMissing(), receivedAt);
+            case DEVICE_STATE -> onDeviceState(connection, (DeviceState) envelope.payload(), receivedAt);
             case ACK -> route(connection, envelope,
                     new SessionMailbox.DeviceAck(connection.connectionId(), ((Ack) envelope.payload()).ackOf(), receivedAt));
             case DEVICE_READY -> route(connection, envelope, new SessionMailbox.DeviceReadyReceived(
@@ -204,12 +211,42 @@ public class DeviceWebSocketHandler extends AbstractWebSocketHandler {
         }
     }
 
-    private void onHello(DeviceConnection connection) {
+    private void onHello(DeviceConnection connection, WsEnvelope hello) {
         if (connection.phase() != DeviceConnection.Phase.AWAIT_HELLO) {
             return;
         }
+        if (hello.payload() instanceof Hello payload && payload.resume() != null) {
+            connection.resumeSessionId(payload.resume().sessionId());
+        }
         connection.cancelHelloTimer();
         handover.complete(connection);
+    }
+
+    /** U3-J9: 바뀐 필드만 합쳐 두고 지표를 올린 뒤, 묶인 세션이 있으면 편지함에 넣는다(마이크 끊김 · 플레이어 오류의 세션 기록). */
+    private void onDeviceState(DeviceConnection connection, DeviceState state, Instant receivedAt) {
+        connection.mergeDeviceState(state);
+        if (state.mic() != null) {
+            metrics.deviceState("mic", state.mic().name());
+        }
+        if (state.player() != null) {
+            metrics.deviceState("player", state.player().name());
+        }
+        if (state.visibility() != null) {
+            metrics.deviceState("visibility", state.visibility().name());
+        }
+        if (state.wakeLock() != null) {
+            metrics.deviceState("wake_lock", state.wakeLock().name());
+        }
+        UUID sessionId = connection.boundSessionId();
+        if (sessionId == null) {
+            return;
+        }
+        Optional<SessionMailbox> mailbox = sessions.mailbox(sessionId);
+        if (mailbox.isPresent() && !mailbox.get().isClosed()) {
+            // 상태 알림은 밀려도 연결을 닫을 만큼 중요하지 않다(가득 차면 버린다)
+            mailbox.get().offerGeneral(new SessionMailbox.DeviceStateReceived(connection.connectionId(), state,
+                    receivedAt));
+        }
     }
 
     /** 세션 일반 편지함에 넣는다. 세션이 없거나 닫혔으면 버리고, 가득 찼으면 연결을 1011로 닫는다(PD-2). */
@@ -257,6 +294,8 @@ public class DeviceWebSocketHandler extends AbstractWebSocketHandler {
         DeviceConnection connection = connection(session);
         events.appError(EventLog.Component.DEVICE_GATEWAY, exception);
         if (connection != null) {
+            // U3-J2: 전송 오류는 네트워크 끊김이다(서버가 1011로 닫아도 끊김 한 건으로 센다)
+            connection.markTransportFailed();
             connection.close(CloseCode.SERVER_ERROR);
         }
     }
@@ -277,16 +316,38 @@ public class DeviceWebSocketHandler extends AbstractWebSocketHandler {
         metrics.connectionClosed();
         ConnectionHandover.notifyLost(sessions, connection);
         UUID deviceId = connection.deviceId();
-        if (deviceId != null && DeviceStatusPolicy.closesToOffline(status.getCode(), connection.isServerClosing(),
-                previous == DeviceConnection.Phase.READY)) {
-            launcher.launch("device-offline-" + connection.connectionId(), () -> {
-                try {
-                    writer.markClosed(deviceId, connection.connectionId(), status.getCode(), connection.traceId());
-                } catch (RuntimeException e) {
-                    events.appError(EventLog.Component.DEVICE_GATEWAY, e);
-                }
-            });
+        if (deviceId == null) {
+            return;
         }
+        boolean reachedReady = previous == DeviceConnection.Phase.READY;
+        boolean offline = DeviceStatusPolicy.closesToOffline(status.getCode(), connection.isServerClosing(), reachedReady);
+        boolean counts = DeviceStatusPolicy.countsAsDisconnect(status.getCode(), connection.isTransportFailed(),
+                reachedReady);
+        if (!offline && !counts) {
+            return;
+        }
+        Instant closedAt = clock.now();
+        Instant lastHeardAt = connection.lastMessageAt();
+        launcher.launch("device-offline-" + connection.connectionId(), () -> {
+            try {
+                if (offline) {
+                    writer.markClosed(deviceId, connection.connectionId(), status.getCode(), connection.traceId());
+                }
+            } catch (RuntimeException e) {
+                events.appError(EventLog.Component.DEVICE_GATEWAY, e);
+            }
+            if (counts) {
+                // U3-J2: 끊김 한 건(닫기 코드와 함께). 무음으로 이미 센 뒤 이 연결에서 다시 듣지 못했으면 같은 끊김이다(2차 리뷰 3).
+                // 기록 실패는 기록 장치가 앱 오류로 남긴다
+                writer.recordDisconnect(deviceId, connection.connectionId(), DeviceDisconnectRepository.Kind.CLOSED,
+                        closeCodeFor(status.getCode()), closedAt, lastHeardAt, connection.traceId());
+            }
+        });
+    }
+
+    /** V2 CHECK 범위(1000 ~ 4999) 밖의 코드(예: 1005 · 1015 관측값)는 적지 않는다. */
+    private static Integer closeCodeFor(int code) {
+        return code >= 1000 && code <= 4999 ? code : null;
     }
 
     @Override

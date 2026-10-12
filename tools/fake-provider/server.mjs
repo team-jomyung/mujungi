@@ -8,10 +8,13 @@
 // 받은 입력 음성 프레임마다 누적 바이트 수 · 누적 SHA-256, 턴마다 그 턴 입력의 SHA-256 · 보낸 출력 음성의 바이트 수 · SHA-256 ·
 // 문장 SHA-256, session.close · 연결 닫힘. 지시문 · 아이 문맥 값 · 전사 원문은 기록하지 않는다(SD-15). C안 시나리오는 이 기록 파일을
 // 따라 읽어 "가짜 공급자가 받은 입력 해시 = 시뮬레이터가 보낸 해시", "기기가 받은 0x02 해시 = 가짜 공급자가 보낸 출력 해시"를 단언한다.
+// U3(편차 (aa)): session.response.cancel이 오면 그 응답의 남은 출력 조각을 보내지 않고 기록하며(끼어들기 · 종료 의도), 
+// session.instructions.correct는 문장 SHA-256 · 길이만 기록한다. --confidence를 주면 아이 전사 확정에 confidence를 싣는다(U3-J17).
 //
 // 쓰는 법
 //   node tools/fake-provider/server.mjs [--host 127.0.0.1] [--port 8090] [--scenario ok] [--turns normal,forbidden]
 //        [--frames-per-turn 25] [--started-delay-ms 1500] [--response-delay-ms 120] [--chunk-bytes 4800] [--chunk-interval-ms 20]
+//        [--confidence 0.4]
 //   --help 로 전체 설명. 종료 코드: 0 정상 종료(SIGTERM · SIGINT), 1 기동 실패, 2 인자 오류.
 import http from "node:http";
 import path from "node:path";
@@ -43,6 +46,7 @@ export const USAGE = `가짜 공급자 서버 (J110 선 형식, 시험 전용)
   --response-delay-ms <ms>  아이 전사 확정 뒤 AI 출력까지 지연 (기본 ${DEFAULTS.responseDelayMs})
   --chunk-bytes <n>         출력 음성 조각 크기, 2바이트 배수 (기본 ${DEFAULTS.chunkBytes})
   --chunk-interval-ms <ms>  출력 음성 조각 간격 (기본 ${DEFAULTS.chunkIntervalMs})
+  --confidence <0~1>        아이 전사 확정(session.input_transcript.done)에 실을 신뢰도 (기본 없음, U3)
   --help                    이 설명
 
 기록: 표준 출력에 JSON 한 줄씩({"ev": ...}). 키 · 지시문 · 전사 원문은 쓰지 않는다.
@@ -62,6 +66,7 @@ export const USAGE = `가짜 공급자 서버 (J110 선 형식, 시험 전용)
  * @param {number} [options.responseDelayMs]
  * @param {number} [options.chunkBytes]
  * @param {number} [options.chunkIntervalMs]
+ * @param {number | null} [options.confidence] 아이 전사 확정에 실을 신뢰도(0 ~ 1, 없으면 싣지 않는다, U3)
  * @param {(entry: object) => void} [options.onRecord] 기록 한 건(기본: 표준 출력 JSON 한 줄)
  */
 export async function startFakeProvider({
@@ -74,8 +79,12 @@ export async function startFakeProvider({
   responseDelayMs = DEFAULTS.responseDelayMs,
   chunkBytes = DEFAULTS.chunkBytes,
   chunkIntervalMs = DEFAULTS.chunkIntervalMs,
+  confidence = null,
   onRecord = (entry) => process.stdout.write(jsonLine(entry)),
 } = {}) {
+  if (confidence !== null && !(typeof confidence === "number" && confidence >= 0 && confidence <= 1)) {
+    throw new RangeError("confidence는 0 ~ 1이어야 한다");
+  }
   for (const scenario of scenarios) {
     if (!CONNECTION_SCENARIOS.includes(scenario)) {
       throw new RangeError(`모르는 연결 시나리오: ${scenario}`);
@@ -162,6 +171,10 @@ export async function startFakeProvider({
       turnFrames: 0,
       turnIndex: 0,
       closed: false,
+      /** 지금 내보내는 응답 id(취소 요청에 id가 없을 때 대상, U3). */
+      currentResponseId: null,
+      /** 취소된 응답 id(U3-R5). */
+      cancelled: new Set(),
     };
     const send = (message) => {
       if (!state.closed && ws.readyState === ws.OPEN) {
@@ -193,6 +206,24 @@ export async function startFakeProvider({
           break;
         case "session.input_audio.append":
           onInputAudio(message);
+          break;
+        case "session.response.cancel": {
+          // 끼어들기 · 종료 의도(U3-R5 · U3-J11): 그 응답(없으면 지금 응답)의 남은 출력을 보내지 않는다
+          const target = typeof message.responseId === "string" ? message.responseId : state.currentResponseId;
+          if (target !== null) {
+            state.cancelled.add(target);
+          }
+          record({ ev: "session.response.cancel", conn, hasResponseId: typeof message.responseId === "string" });
+          break;
+        }
+        case "session.instructions.correct":
+          // 고정 교정 문장(U3-J12): 원문은 남기지 않는다
+          record({
+            ev: "session.instructions.correct",
+            conn,
+            textSha256: typeof message.text === "string" ? textSha256(message.text) : null,
+            textLength: typeof message.text === "string" ? message.text.length : 0,
+          });
           break;
         case "session.close":
           record({
@@ -294,7 +325,9 @@ export async function startFakeProvider({
         responseDelayMs,
         chunkBytes,
         chunkIntervalMs,
+        confidence,
       });
+      state.currentResponseId = built.responseId;
       record({
         ev: "turn",
         conn,
@@ -322,6 +355,12 @@ export async function startFakeProvider({
       }
       const step = steps[index];
       const run = () => {
+        const responseId = step.message.responseId;
+        if (typeof responseId === "string" && state.cancelled.has(responseId)) {
+          // 취소된 응답: 남은 출력 조각 · 끝 신호를 보내지 않는다
+          record({ ev: "turn-cancelled", conn, turn, at: index });
+          return;
+        }
         if (!send(step.message)) {
           record({ ev: "turn-aborted", conn, turn, at: index });
           return;
@@ -424,6 +463,15 @@ export function parseArgs(argv) {
           throw new RangeError("--chunk-bytes는 2바이트 배수여야 한다");
         }
         options.chunkBytes = bytes;
+        break;
+      }
+      case "--confidence": {
+        const text = value();
+        const parsed = Number(text);
+        if (!/^(0(\.[0-9]+)?|1(\.0+)?)$/.test(text) || Number.isNaN(parsed)) {
+          throw new RangeError(`${arg} 값은 0 ~ 1이어야 한다`);
+        }
+        options.confidence = parsed;
         break;
       }
       case "--chunk-interval-ms":

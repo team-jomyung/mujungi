@@ -13,13 +13,15 @@ import type { SessionView } from "@/shared/protocol/messages";
 //     claim → 200: 「등록되었어요」 3초 → T19 꺼짐(J56) | 401: bootstrap | 410: meCheck | 409: 2초 뒤 status | 오류: 5초 뒤 claim
 //     그 밖의 요청 실패는 마지막 화면을 두고 5초 뒤 같은 단계(BR9.4).
 // T19: 꺼짐 →(켜기) 마이크 요청 →(허용) 연결 중 →(HELLO_OK) 켜짐(대기) / (거부) 마이크 허용 안 됨
-//     닫기 4401 → meCheck(→ 401이면 D0), 4001 · 「끄기」 → 꺼짐, 그 밖(1001 · 1006 · 1011 · 1013 · 4400 · 4408) → 5초 뒤 재접속.
-//     재접속 주기(reconnectWait 5초 대기 → reconnecting 접속 시도 → 실패면 다시 대기)는 내내 마지막 화면을 둔다(BR9.7):
-//     이번 「켜기」 뒤 HELLO_OK를 받은 적이 있으면 표정 'reconnecting' · 마지막 view 라벨(J360), 한 번도 받지 못했으면 마지막 화면이
-//     '연결 중'이므로 표정 'connecting' · 빈 라벨(BR9.4 · J367). reconnecting은 처음 연결(connecting)과 전이가 같고 화면만 다르다.
+//     닫기 4401 → meCheck(→ 401이면 D0), 4001 · 「끄기」 → 꺼짐, 그 밖(1001 · 1006 · 1011 · 1013 · 4400 · 4408) → 재접속.
+//     재접속 주기(reconnectWait 대기 → reconnecting 접속 시도 → 실패면 다시 대기): 이번 「켜기」 뒤 HELLO_OK를 받은 적이 있으면
+//     대기는 1 · 2 · 4초, 그 뒤 5초마다(U3-R16 · timing device.reconnect-backoff)이고 화면은 표정 'reconnecting' · 라벨 '연결 끊김'
+//     · "다시 연결하고 있어요"(화면 설계 C.D-19.31.7 · mockups 9-31, U3-J19 — U1 J360의 '마지막 view 라벨'을 바꿈). 한 번도 받지
+//     못했으면 5초마다이고 마지막 화면이 '연결 중'이므로 표정 'connecting' · 빈 라벨(BR9.4 · J367). reconnecting은 처음
+//     연결(connecting)과 전이가 같고 화면만 다르다.
 //     켜짐 안의 표시는 SESSION_STATE.view(대기 · 듣는 중 · 생각 중 · 마무리)이고 '말하는 중'은 실제 재생 중일 때만이다(BR9.6).
 
-export type DelayKind = "retry" | "statusPoll" | "registeredDisplay";
+export type DelayKind = "retry" | "statusPoll" | "registeredDisplay" | "reconnect";
 
 export type D0RequestStep = "meCheck" | "statusCheck" | "bootstrap" | "claim";
 
@@ -53,6 +55,8 @@ export type DeviceState =
       readonly speaking: boolean;
       /** 이번 「켜기」 뒤 HELLO_OK를 한 번이라도 받았는지. 재접속 주기의 '마지막 화면'을 가른다(J367). 꺼짐 · 「켜기」에서 처음으로 돌아간다. */
       readonly connectedOnce: boolean;
+      /** 마지막 HELLO_OK 뒤 실패한 재접속 시도 수(재접속 간격 목록의 자리, U3-R16). HELLO_OK에서 0이 된다. */
+      readonly reconnectAttempt: number;
       readonly stepId: number;
       readonly trail: DebugTrail;
     };
@@ -171,8 +175,30 @@ function toD0(state: DeviceState, step: D0Step, code: CodeDisplay | null): Devic
   return withTrail({ screen: "d0", step, code, stepId: state.stepId + 1, trail: state.trail });
 }
 
-function toPower(state: DeviceState, power: PowerState, view: SessionView = "STANDBY", connectedOnce = false): DeviceState {
-  return withTrail({ screen: "t19", power, view, speaking: false, connectedOnce, stepId: state.stepId + 1, trail: state.trail });
+function toPower(
+  state: DeviceState,
+  power: PowerState,
+  view: SessionView = "STANDBY",
+  connectedOnce = false,
+  reconnectAttempt = 0,
+): DeviceState {
+  return withTrail({
+    screen: "t19",
+    power,
+    view,
+    speaking: false,
+    connectedOnce,
+    reconnectAttempt,
+    stepId: state.stepId + 1,
+    trail: state.trail,
+  });
+}
+
+/**
+ * 한 번 연결됐던 기기의 재접속 대기 시간(U3-R16): 실패 횟수 자리의 간격(1 · 2 · 4초), 목록을 다 쓰면 재시도 간격(5초).
+ */
+export function reconnectDelayMs(attempt: number, backoffMs: readonly number[], retryIntervalMs: number): number {
+  return attempt >= 0 && attempt < backoffMs.length ? backoffMs[attempt] : retryIntervalMs;
 }
 
 function wait(state: DeviceState, next: D0RequestStep, delay: DelayKind, code: CodeDisplay | null): DeviceState {
@@ -244,7 +270,9 @@ function onTimer(state: DeviceState): DeviceState {
     }
     return state;
   }
-  return state.power === "reconnectWait" ? toPower(state, "reconnecting", state.view, state.connectedOnce) : state;
+  return state.power === "reconnectWait"
+    ? toPower(state, "reconnecting", state.view, state.connectedOnce, state.reconnectAttempt)
+    : state;
 }
 
 function onWsClosed(state: DeviceState, code: number, closedByDevice: boolean): DeviceState {
@@ -256,9 +284,14 @@ function onWsClosed(state: DeviceState, code: number, closedByDevice: boolean): 
       return toPower(state, "off");
     case "RECHECK_ME":
       return toD0(state, { name: "meCheck" }, null);
-    default:
-      // 마지막 화면을 두고 5초 뒤 다시 접속한다(BR9.7). 연결된 적이 있는지도 그대로 둔다(J367).
-      return state.screen === "t19" ? toPower(state, "reconnectWait", state.view, state.connectedOnce) : state;
+    default: {
+      // 마지막 화면을 두고 다시 접속한다(BR9.7). 연결된 적이 있는지도 그대로 둔다(J367). 접속 시도가 실패하면 시도 수가 는다(U3-R16)
+      if (state.screen !== "t19") {
+        return state;
+      }
+      const attempt = state.power === "on" ? 0 : state.reconnectAttempt + 1;
+      return toPower(state, "reconnectWait", state.view, state.connectedOnce, attempt);
+    }
   }
 }
 
@@ -332,7 +365,8 @@ export function pendingEffect(state: DeviceState): PendingEffect {
     return { kind: "connect" };
   }
   if (state.power === "reconnectWait") {
-    return { kind: "delay", delay: "retry" };
+    // 한 번 연결됐던 기기는 1 · 2 · 4초 뒤(그 뒤 5초), 한 번도 연결되지 않은 기기는 5초마다(U3-R16 · BR9.7)
+    return { kind: "delay", delay: state.connectedOnce ? "reconnect" : "retry" };
   }
   return { kind: "none" };
 }

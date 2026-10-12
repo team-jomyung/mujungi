@@ -54,6 +54,15 @@ public final class TranscriptWriter {
 
     /** 아이 입력 전사 확정: FINAL · 승인 true, 즉시 플러시(BR7.5). 정한 번호를 돌려준다. */
     public OptionalInt childFinal(String itemId, String transcript, Instant at) {
+        return childFinal(itemId, transcript, at, false);
+    }
+
+    /**
+     * U3: 아이 입력 전사 확정과 불확실 표시(U3-R10 · AC6.4.7). 전사는 고치지 않고 표시만 단다.
+     *
+     * @param reviewNeeded 공급자 신뢰도가 기준 미만이거나 확정 전사가 비었는가
+     */
+    public OptionalInt childFinal(String itemId, String transcript, Instant at, boolean reviewNeeded) {
         ChildRow row = childRows.get(key(itemId));
         if (row == null) {
             row = new ChildRow(++lastSeq, at);
@@ -65,8 +74,8 @@ public final class TranscriptWriter {
         row.closed = true;
         String text = transcript != null ? transcript : row.text.toString();
         latency.transcriptFinal(sessionId, row.seq, at);
-        boolean accepted = recorder.putTranscript(TranscriptEntry.finalized(sessionId, row.seq, Speaker.CHILD, text,
-                true, row.startedAt, at));
+        boolean accepted = recorder.putTranscript(TranscriptEntry.childFinal(sessionId, row.seq, text, row.startedAt, at,
+                reviewNeeded));
         return accepted ? OptionalInt.of(row.seq) : OptionalInt.empty();
     }
 

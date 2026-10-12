@@ -396,8 +396,9 @@ class DeviceGatewayIT {
      * 원인 분석의 탐침(3.6 수정 J390 · J391): 기록기 flush 간격을 끊김 점검 주기(200ms)보다 훨씬 넓혀(1초) 복귀 ~ last_seen_at 배치 사이를 키우고,
      * 원장에서 끊김을 본 즉시(사본을 기다리지 않고) HEARTBEAT 하나를 보내는 라운드를 되풀이한다. 복귀 UPDATE가 last_seen_at을 올리지 않으면
      * 라운드의 약 8할에서 다음 점검이 복귀를 되돌린다(flush 300ms 탐침에서는 점검보다 배치가 늦은 라운드만, 20 중 6). 라운드마다 HEARTBEAT 하나로
-     * 복귀하고 그 뒤 점검 두 번이 지나도 CONNECTED여야 하며, DEVICE_CONNECTION 전이는 라운드 수만큼의 끊김 · 복귀 쌍뿐이어야 한다(flip-back이
-     * 있으면 끊김 줄이 더 많다).
+     * 복귀하고 그 뒤 점검 두 번이 지나도 복귀 상태여야 하며, DEVICE_CONNECTION 전이는 라운드 수만큼의 끊김 · 복귀 쌍뿐이어야 한다(flip-back이
+     * 있으면 끊김 줄이 더 많다). U3(BR4.8 ①): 40초 무음도 끊김 한 건이라 5분 창 안 두 번째 라운드부터 복귀 상태는 CONNECTED가 아니라
+     * UNSTABLE이다 — 복귀 상태가 어느 쪽이든 되돌아가지 않는 것이 이 시험의 핵심이다.
      */
     @Test
     void repeatedSilenceRoundsRecoverWithASingleHeartbeatAndNeverFlipBack() {
@@ -410,14 +411,23 @@ class DeviceGatewayIT {
             time.advance(Duration.ofSeconds(41));
             awaitLedger(ConnectionState.DISCONNECTED);
             device.heartbeat(15L);
-            awaitLedger(ConnectionState.CONNECTED);
+            // U3-R1: 창(5분) 안 끊김이 두 건부터면 UNSTABLE로 복귀한다(41초 간격이라 열 라운드 모두 창 안이다)
+            ConnectionState recovered = round == 1 ? ConnectionState.CONNECTED : ConnectionState.UNSTABLE;
+            awaitLedger(recovered);
             RealtimeItEnvironment.sleep(450);
-            assertThat(env.ledger().orElseThrow().state()).as("라운드 %d 복귀 뒤 유지", round)
-                    .isEqualTo(ConnectionState.CONNECTED);
+            assertThat(env.ledger().orElseThrow().state()).as("라운드 %d 복귀 뒤 유지", round).isEqualTo(recovered);
+            // 41초 간격 무음 끊김 중 창(5분) 안에 든 수: 앞선 라운드 k는 41k초 > 41 × round − 300초일 때만 남는다
+            int current = round;
+            long inWindow = java.util.stream.IntStream.rangeClosed(1, round).filter(k -> 41L * k > 41L * current - 300L)
+                    .count();
+            assertThat(env.ledger().orElseThrow().recentDisconnects()).as("라운드 %d 창 안 끊김 횟수", round)
+                    .isEqualTo((int) inWindow);
         }
         List<String> transitions = transitions();
-        assertThat(transitions).filteredOn("CONNECTED->DISCONNECTED"::equals).hasSize(rounds);
-        assertThat(transitions).filteredOn("DISCONNECTED->CONNECTED"::equals).hasSize(rounds);
+        assertThat(transitions).filteredOn(transition -> transition.endsWith("->DISCONNECTED")).hasSize(rounds);
+        assertThat(transitions).filteredOn(transition -> transition.startsWith("DISCONNECTED->")).hasSize(rounds);
+        assertThat(transitions).filteredOn("DISCONNECTED->CONNECTED"::equals).hasSize(1);
+        assertThat(transitions).filteredOn("DISCONNECTED->UNSTABLE"::equals).hasSize(rounds - 1);
         assertThat(device.isClosed()).isFalse();
     }
 

@@ -1,15 +1,19 @@
+import { BargeInDetector } from "../audio/bargeIn";
 import { startCapture, type CapturePipeline } from "../audio/capture";
 import { AudioPlayer, createWebAudioOutput, fetchApprovedAudio, type AudioClip, type AudioOutput } from "../audio/player";
 import { holdScreenWakeLock } from "../power/wakeLock";
 import { DeviceSession } from "../ws/deviceSession";
 import { connectWsClient, deviceSocketUrl, type WebSocketLike, type WsClient } from "../ws/wsClient";
+import { DeviceStateReporter } from "./deviceStateReporter";
 import { CLOSE_CODES, DEVICE_OFF_REASON } from "@/shared/protocol/closeCodes";
 import type { SessionView } from "@/shared/protocol/messages";
 import type { Timing } from "@/shared/timing/timing";
 
 // 켜짐 상태의 기기 실행부 (U1 3.5 Step 38 · BR9.5 · BR9.7 · BR7.1 · BR7.6 · PD-14)
 // 「켜기」에서 마이크가 허용된 뒤 지연 적재되어(DeviceApp의 동적 import) 캡처 · 재생 · 화면 켜짐 유지 · WSS · 세션 처리를 묶는다.
-// 재접속 때는 캡처 · 재생을 그대로 두고 소켓만 다시 연다(5초 간격, BR9.7). 「끄기」 · 4001 · 4401이면 모두 정리한다.
+// 재접속 때는 캡처 · 재생을 그대로 두고 소켓만 다시 연다(간격은 상태 기계, BR9.7 · U3-R16). 「끄기」 · 4001 · 4401이면 모두 정리한다.
+// U3: HELLO.resume으로 끊긴 세션을 잇고(U3-R16), 소리가 나는 동안 마이크 음성이 쌓이면 재생을 멈춰 끼어들기를 알리며(U3-J20),
+// 마이크 트랙 · 재생 장치 · 탭 보임 · 화면 켜짐 유지가 바뀌면 DEVICE_STATE로 보고한다(U3-R17).
 
 /** HELLO의 appVersion(1 ~ 64자). */
 export const DEVICE_APP_VERSION = "mujoong-device-web/u1";
@@ -78,14 +82,40 @@ export async function startDeviceRuntime(options: DeviceRuntimeOptions): Promise
   let client: WsClient | null = null;
   let shutDown = false;
 
+  const doc: Document | undefined = globalThis.document;
+  const reporter = new DeviceStateReporter(
+    {
+      mic: capture !== null && capture.active ? "OK" : "LOST",
+      player: output.available ? "OK" : "ERROR",
+      visibility: doc?.visibilityState === "hidden" ? "HIDDEN" : "VISIBLE",
+      wakeLock: "RELEASED",
+    },
+    (payload) => client?.send("DEVICE_STATE", payload),
+  );
+
   const player = new AudioPlayer<AudioClip>({
     output,
     fetchAudio: fetchApprovedAudio,
     queueMaxMs: timing.deviceOutputQueueMaxMs,
     nowMs,
-    onMark: (sessionId, mark) => session.sendPlaybackMark(sessionId, mark),
+    progressIntervalMs: timing.devicePlaybackMarkIntervalMs,
+    onMark: (sessionId, mark) => {
+      // 재생 장치 오류 · 회복을 DEVICE_STATE로 알린다(U3-R17)
+      if (mark.status === "FAILED" && mark.failureReason === "AUDIO_DEVICE_ERROR") {
+        reporter.update({ player: "ERROR" });
+      } else if (mark.status === "STARTED") {
+        reporter.update({ player: "OK" });
+      }
+      session.sendPlaybackMark(sessionId, mark);
+    },
     onSpeakingChange: events.onSpeaking,
   });
+
+  // 끼어들기 로컬 감지(U3-J20): 소리가 나는 동안 아이 음성이 쌓이면 재생을 멈춘다(PLAYBACK_MARK STOPPED · LOCAL_VOICE_ACTIVITY)
+  const bargeIn = new BargeInDetector(
+    { localVoiceMinMs: timing.gateLocalVoiceMinMs, bargeInStopMs: timing.gateBargeInStopMs },
+    () => player.stopAll("LOCAL_VOICE_ACTIVITY"),
+  );
 
   const session = new DeviceSession({
     send: (type, payload, sessionId) => client?.send(type, payload, sessionId),
@@ -100,8 +130,19 @@ export async function startDeviceRuntime(options: DeviceRuntimeOptions): Promise
     nowMs,
   });
 
-  capture?.setFrameHandler((frame) => session.handleInputFrame(frame));
-  const wakeLock = holdScreenWakeLock();
+  capture?.setFrameHandler((frame) => {
+    bargeIn.feed(frame, player.isSpeaking);
+    session.handleInputFrame(frame);
+  });
+  const wakeLock = holdScreenWakeLock(undefined, undefined, (held) =>
+    reporter.update({ wakeLock: held ? "HELD" : "RELEASED" }),
+  );
+  const onVisibilityChange = () => reporter.update({ visibility: doc?.visibilityState === "hidden" ? "HIDDEN" : "VISIBLE" });
+  doc?.addEventListener("visibilitychange", onVisibilityChange);
+  const onMicEnded = () => reporter.update({ mic: "LOST" });
+  for (const track of stream.getAudioTracks?.() ?? []) {
+    track.addEventListener?.("ended", onMicEnded);
+  }
 
   return {
     connect() {
@@ -114,10 +155,16 @@ export async function startDeviceRuntime(options: DeviceRuntimeOptions): Promise
           appVersion: DEVICE_APP_VERSION,
           heartbeatFallbackMs: timing.deviceHeartbeatIntervalMs,
           nowMs,
+          resumeSessionId: () => session.resumeSessionId,
           createSocket: options.createSocket,
         },
         {
-          onReady: () => events.onReady(),
+          onReady: (message) => {
+            // 화면 전이(WS_READY)를 먼저 하고, 이어가기 결과의 표시 상태를 그 위에 얹는다(U3-R16)
+            events.onReady();
+            session.handleReady(message.session);
+            reporter.connected();
+          },
           onMessage: (message) => session.handleMessage(message),
           onOutputFrame: (frame) => session.handleOutputFrame(frame),
           onClose: (code, closedByDevice) => {
@@ -125,6 +172,8 @@ export async function startDeviceRuntime(options: DeviceRuntimeOptions): Promise
               client = null;
             }
             session.handleDisconnect();
+            reporter.disconnected();
+            bargeIn.reset();
             if (!shutDown) {
               events.onClosed(code, closedByDevice);
             }
@@ -143,7 +192,13 @@ export async function startDeviceRuntime(options: DeviceRuntimeOptions): Promise
       if (closeSocket && current !== null) {
         current.close(CLOSE_CODES.DEVICE_OFF, DEVICE_OFF_REASON);
       }
-      session.handleDisconnect();
+      // 꺼짐은 세션을 잇지 않는다(다음 「켜기」는 새 연결 주기)
+      session.forget();
+      reporter.disconnected();
+      doc?.removeEventListener("visibilitychange", onVisibilityChange);
+      for (const track of stream.getAudioTracks?.() ?? []) {
+        track.removeEventListener?.("ended", onMicEnded);
+      }
       capture?.stop();
       for (const track of stream.getTracks()) {
         track.stop();

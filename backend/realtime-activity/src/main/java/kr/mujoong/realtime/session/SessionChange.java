@@ -17,6 +17,7 @@ import kr.mujoong.contract.status.FailureCode;
  * @param outputStoppedAt 기기가 확인한 출력 멈춤 시각(VOICE_SESSION_CLOSED)
  * @param transportClosedAt 서버가 CLOSE_TRANSPORT를 보낸 시각
  * @param providerClosedAt 서버가 공급자 세션을 닫은 시각
+ * @param endDetail 실패 코드가 아닌 종료 세부(U3: ABORTED의 {@code PROVIDER_LOST}, U3-J13). 있으면 {@code end_detail}에 실패 코드 대신 쓴다
  */
 public record SessionChange(
         EndReason endReason,
@@ -27,12 +28,16 @@ public record SessionChange(
         Instant terminationRequestedAt,
         Instant outputStoppedAt,
         Instant transportClosedAt,
-        Instant providerClosedAt) {
+        Instant providerClosedAt,
+        String endDetail) {
 
     /** V1 열 길이 {@code gpt_live_session_id varchar(255)}. */
     public static final int MAX_PROVIDER_SESSION_ID_LENGTH = 255;
+    /** U3 종료 세부 형식(대문자 · 밑줄, 실패 코드 이름과 같은 모양). */
+    private static final java.util.regex.Pattern END_DETAIL = java.util.regex.Pattern.compile("^[A-Z][A-Z0-9_]{0,63}$");
 
-    private static final SessionChange NONE = new SessionChange(null, null, null, null, null, null, null, null, null);
+    private static final SessionChange NONE = new SessionChange(null, null, null, null, null, null, null, null, null,
+            null);
 
     public SessionChange {
         if (endReason == EndReason.UNRECOGNIZED) {
@@ -46,6 +51,25 @@ public record SessionChange(
             throw new IllegalArgumentException(
                     "providerSessionId는 1 ~ " + MAX_PROVIDER_SESSION_ID_LENGTH + "자여야 한다");
         }
+        if (endDetail != null && !END_DETAIL.matcher(endDetail).matches()) {
+            throw new IllegalArgumentException("endDetail은 대문자 식별자여야 한다");
+        }
+    }
+
+    /** U1 모양(종료 세부 없음). */
+    public SessionChange(EndReason endReason, FailureCode failureCode, String providerSessionId, Instant startedAt,
+            Instant endedAt, Instant terminationRequestedAt, Instant outputStoppedAt, Instant transportClosedAt,
+            Instant providerClosedAt) {
+        this(endReason, failureCode, providerSessionId, startedAt, endedAt, terminationRequestedAt, outputStoppedAt,
+                transportClosedAt, providerClosedAt, null);
+    }
+
+    /** {@code end_detail}에 쓸 값: 종료 세부가 있으면 그것, 없으면 실패 코드 이름(U1 그대로). */
+    public String endDetailValue() {
+        if (endDetail != null) {
+            return endDetail;
+        }
+        return failureCode == null ? null : failureCode.name();
     }
 
     /** 바꾸는 열 없음(상태 · 버전만). */
@@ -65,47 +89,53 @@ public record SessionChange(
 
     public SessionChange withEndReason(EndReason value) {
         return new SessionChange(value, failureCode, providerSessionId, startedAt, endedAt, terminationRequestedAt,
-                outputStoppedAt, transportClosedAt, providerClosedAt);
+                outputStoppedAt, transportClosedAt, providerClosedAt, endDetail);
     }
 
     public SessionChange withFailureCode(FailureCode value) {
         return new SessionChange(endReason, value, providerSessionId, startedAt, endedAt, terminationRequestedAt,
-                outputStoppedAt, transportClosedAt, providerClosedAt);
+                outputStoppedAt, transportClosedAt, providerClosedAt, endDetail);
     }
 
     public SessionChange withProviderSessionId(String value) {
         return new SessionChange(endReason, failureCode, value, startedAt, endedAt, terminationRequestedAt,
-                outputStoppedAt, transportClosedAt, providerClosedAt);
+                outputStoppedAt, transportClosedAt, providerClosedAt, endDetail);
     }
 
     public SessionChange withStartedAt(Instant value) {
         return new SessionChange(endReason, failureCode, providerSessionId, value, endedAt, terminationRequestedAt,
-                outputStoppedAt, transportClosedAt, providerClosedAt);
+                outputStoppedAt, transportClosedAt, providerClosedAt, endDetail);
     }
 
     public SessionChange withEndedAt(Instant value) {
         return new SessionChange(endReason, failureCode, providerSessionId, startedAt, value, terminationRequestedAt,
-                outputStoppedAt, transportClosedAt, providerClosedAt);
+                outputStoppedAt, transportClosedAt, providerClosedAt, endDetail);
     }
 
     public SessionChange withTerminationRequestedAt(Instant value) {
         return new SessionChange(endReason, failureCode, providerSessionId, startedAt, endedAt, value,
-                outputStoppedAt, transportClosedAt, providerClosedAt);
+                outputStoppedAt, transportClosedAt, providerClosedAt, endDetail);
     }
 
     public SessionChange withOutputStoppedAt(Instant value) {
         return new SessionChange(endReason, failureCode, providerSessionId, startedAt, endedAt, terminationRequestedAt,
-                value, transportClosedAt, providerClosedAt);
+                value, transportClosedAt, providerClosedAt, endDetail);
     }
 
     public SessionChange withTransportClosedAt(Instant value) {
         return new SessionChange(endReason, failureCode, providerSessionId, startedAt, endedAt, terminationRequestedAt,
-                outputStoppedAt, value, providerClosedAt);
+                outputStoppedAt, value, providerClosedAt, endDetail);
     }
 
     public SessionChange withProviderClosedAt(Instant value) {
         return new SessionChange(endReason, failureCode, providerSessionId, startedAt, endedAt, terminationRequestedAt,
-                outputStoppedAt, transportClosedAt, value);
+                outputStoppedAt, transportClosedAt, value, endDetail);
+    }
+
+    /** U3 종료 세부(예: ABORTED의 PROVIDER_LOST, U3-J13). */
+    public SessionChange withEndDetail(String value) {
+        return new SessionChange(endReason, failureCode, providerSessionId, startedAt, endedAt, terminationRequestedAt,
+                outputStoppedAt, transportClosedAt, providerClosedAt, value);
     }
 
     /** 공급자 세션 ID는 문자열 표현에 넣지 않는다. */

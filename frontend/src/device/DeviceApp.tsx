@@ -12,6 +12,7 @@ import {
   initialDeviceState,
   isPoweredOn,
   pendingEffect,
+  reconnectDelayMs,
   showsViewLabel,
   type DelayKind,
   type DeviceEvent,
@@ -19,7 +20,7 @@ import {
   type PendingEffect,
 } from "./machine/deviceMachine";
 import type { DeviceRuntime } from "./runtime/deviceRuntime";
-import { COPY } from "@/shared/copy/ko";
+import { COPY, PROPOSED_COPY } from "@/shared/copy/ko";
 import type { Timing } from "@/shared/timing/timing";
 import { useTiming } from "@/shared/timing/TimingProvider";
 
@@ -41,12 +42,15 @@ function effectKeyOf(effect: PendingEffect): EffectKey {
   }
 }
 
-function delayMs(delay: DelayKind, timing: Timing): number {
+function delayMs(delay: DelayKind, timing: Timing, reconnectAttempt: number): number {
   switch (delay) {
     case "statusPoll":
       return timing.bootstrapStatusPollMs;
     case "registeredDisplay":
       return timing.deviceWebRegisteredDisplayMs;
+    case "reconnect":
+      // 한 번 연결됐던 기기: 1 · 2 · 4초, 그 뒤 5초(U3-R16)
+      return reconnectDelayMs(reconnectAttempt, timing.deviceReconnectBackoffMs, timing.deviceWebRetryIntervalMs);
     default:
       return timing.deviceWebRetryIntervalMs;
   }
@@ -68,12 +72,16 @@ async function runRequest(api: DeviceApi, step: string, stepId: number): Promise
 }
 
 /**
- * T19 라벨. 켜짐과, 한 번 연결됐던 기기의 재접속 주기(5초 대기 · 접속 시도)에는 마지막 view 라벨을 두고(BR9.7 · J360), 처음 연결 중과
- * 「켜기」 뒤 한 번도 연결되지 않은 기기의 재접속 주기에는 마지막 화면('연결 중')대로 비운다(BR9.4 · J367).
+ * T19 라벨. 켜짐에는 view 라벨, 한 번 연결됐던 기기의 재접속 주기(대기 · 접속 시도)에는 '연결 끊김'(화면 설계 C.D-19.31.7, U3-J19 —
+ * U1 J360의 마지막 view 라벨을 바꿈), 처음 연결 중과 「켜기」 뒤 한 번도 연결되지 않은 기기의 재접속 주기에는 마지막 화면('연결 중')대로
+ * 비운다(BR9.4 · J367).
  */
 function t19Label(state: DeviceState): string | null {
   if (state.screen !== "t19" || !showsViewLabel(state)) {
     return null;
+  }
+  if (state.power !== "on") {
+    return COPY.device.t19Disconnected;
   }
   if (state.power === "on" && state.speaking) {
     return COPY.device.t19Speaking;
@@ -129,6 +137,7 @@ export function DeviceApp({ debug, api: injectedApi }: DeviceAppProps) {
   const turnOnBusyRef = useRef(false);
 
   const stepId = state.stepId;
+  const reconnectAttempt = state.screen === "t19" ? state.reconnectAttempt : 0;
   const effectKey = effectKeyOf(pendingEffect(state));
   const poweredOn = isPoweredOn(state);
   const display = displayStateOf(state);
@@ -146,7 +155,7 @@ export function DeviceApp({ debug, api: injectedApi }: DeviceAppProps) {
       });
     } else if (effectKey.startsWith("delay:")) {
       const delay = effectKey.slice("delay:".length) as DelayKind;
-      timer = window.setTimeout(() => dispatch({ type: "TIMER_FIRED", stepId }), delayMs(delay, timing));
+      timer = window.setTimeout(() => dispatch({ type: "TIMER_FIRED", stepId }), delayMs(delay, timing, reconnectAttempt));
     } else if (effectKey === "connect") {
       connectStepRef.current = stepId;
       const runtime = runtimeRef.current;
@@ -163,7 +172,7 @@ export function DeviceApp({ debug, api: injectedApi }: DeviceAppProps) {
         window.clearTimeout(timer);
       }
     };
-  }, [api, effectKey, stepId, timing]);
+  }, [api, effectKey, stepId, timing, reconnectAttempt]);
 
   // 켜짐을 벗어나면(4001 · 4401 · 꺼짐) 마이크 · 재생 · 화면 켜짐 유지를 놓는다.
   useEffect(() => {
@@ -238,7 +247,13 @@ export function DeviceApp({ debug, api: injectedApi }: DeviceAppProps) {
       {state.screen === "d0" ? (
         <D0View display={display as D0Display} code={state.code?.code ?? null} />
       ) : (
-        <T19View display={display as T19Display} label={t19Label(state)} onTurnOn={handleTurnOn} onTurnOff={handleTurnOff} />
+        <T19View
+          display={display as T19Display}
+          label={t19Label(state)}
+          subLabel={display === "reconnecting" ? PROPOSED_COPY.device.t19Reconnecting : null}
+          onTurnOn={handleTurnOn}
+          onTurnOff={handleTurnOff}
+        />
       )}
       {debug ? <DebugLog trail={state.trail} /> : null}
     </main>
