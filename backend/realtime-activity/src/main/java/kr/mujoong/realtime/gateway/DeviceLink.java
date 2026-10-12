@@ -58,6 +58,14 @@ public interface DeviceLink {
     /** 지금 묶인 세션(없으면 null). */
     UUID boundSessionId();
 
+    /**
+     * 지금 묶인 세션이 {@code expected}일 때만 묶음을 푼다 — 비교와 풀기가 한 번에 일어나, 그 사이 같은 기기의 새 세션이 이 연결을 묶었으면 그
+     * 묶음을 건드리지 않는다(3차 리뷰 4).
+     *
+     * @return 풀었으면 참
+     */
+    boolean unbindSessionIf(UUID expected);
+
     /** 출력 묶음 음성 자리 예약. 프레임을 보내며 풀고, 버리면 남은 자리를 한 번에 푼다. */
     interface AudioReservation {
 

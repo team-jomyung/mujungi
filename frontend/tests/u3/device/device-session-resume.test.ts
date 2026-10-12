@@ -234,3 +234,29 @@ describe("DeviceSession — 같은 opId로 다시 온 명령(U3-J7)", () => {
     expect(player.stopAll).toHaveBeenCalledTimes(67);
   });
 });
+
+describe("DeviceSession — 다른 세션의 대기 표시(3차 리뷰 4)", () => {
+  it("지금 세션이 아닌 세션의 STANDBY는 무시하고, 지금 세션 · 세션이 없을 때의 STANDBY는 따른다", async () => {
+    const { session, deps } = setup();
+    session.handleMessage(start());
+    await flushPromises();
+    deps.onView.mockClear();
+
+    // 끝난 옛 세션을 대기로 돌려보내는 뒤늦은 명령이 새 세션 표시를 덮지 않는다
+    session.handleMessage({ type: "SESSION_STATE", sessionId: OTHER_SESSION_ID, view: "STANDBY" });
+    expect(deps.onView).not.toHaveBeenCalled();
+    expect(session.sessionId).toBe(SESSION_ID);
+
+    session.handleMessage({ type: "SESSION_STATE", sessionId: SESSION_ID, view: "LISTENING" });
+    expect(deps.onView).toHaveBeenLastCalledWith("LISTENING");
+    session.handleMessage({ type: "SESSION_STATE", sessionId: SESSION_ID, view: "STANDBY" });
+    expect(deps.onView).toHaveBeenLastCalledWith("STANDBY");
+
+    // 세션을 닫은 뒤에는 어느 세션의 STANDBY든 따른다(대기로 돌려보내기의 원래 뜻)
+    session.handleMessage({ type: "CLOSE_TRANSPORT", opId: SECOND_OP_ID, sessionId: SESSION_ID, reason: "FAILED" });
+    expect(session.sessionId).toBeNull();
+    session.handleMessage({ type: "SESSION_STATE", sessionId: OTHER_SESSION_ID, view: "STANDBY" });
+    expect(deps.onView).toHaveBeenLastCalledWith("STANDBY");
+    expect(deps.onView).toHaveBeenCalledTimes(3);
+  });
+});

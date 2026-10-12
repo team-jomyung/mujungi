@@ -168,6 +168,24 @@ class StopIntentJudgeTest {
         assertThat(judge.judge(text, false).verdict()).isEqualTo(Verdict.NONE);
     }
 
+    /** 3차 리뷰 1: 청유형 인용 뒤에 어미(요 · 고요 · 서 · 잖아 · 구)가 더 붙어도 남의 말이다. */
+    @ParameterizedTest
+    @CsvSource(delimiter = '|', value = {
+        "누나가 그만하자더라고요",
+        "엄마가 그만하자던데요",
+        "엄마가 그만하자대서 왔어",
+        "형이 그만하자더라구",
+        "동생이 그만하자더라잖아",
+        "아빠가 끝내자더래",
+        "엄마가 그만두자대요",
+        "누나가 그만하재서 왔어",
+        "엄마가 그만하자고 그래",
+        "아빠가 그만하자고 그래서 멈췄어"
+    })
+    void hortativeQuotesWithFurtherEndingsAreStillReportedSpeech(String text) {
+        assertThat(judge.judge(text, false).verdict()).isEqualTo(Verdict.NONE);
+    }
+
     /** 2차 리뷰 6: 종료 의도를 푸는 것은 적극적인 계속 표현뿐이다(남의 말 · 주제 거부 · 평범한 말은 아니다). */
     @Test
     void onlyAnActiveContinuationCountsAsContinuing() {
@@ -177,6 +195,42 @@ class StopIntentJudgeTest {
         assertThat(judge.continues("공룡 얘기 그만")).isFalse();
         assertThat(judge.continues("공룡이 좋아")).isFalse();
         assertThat(judge.continues(null)).isFalse();
+    }
+
+    /** 3차 리뷰 2(c): 흔한 계속 표현은 종료 의도를 푼다. */
+    @ParameterizedTest
+    @CsvSource(delimiter = '|', value = {
+        "계속해",
+        "더 해 줘",
+        "또 하자",
+        "다시 하자",
+        "더 놀자",
+        "아니 계속 얘기하자",
+        "끝내지 마"
+    })
+    void commonContinuationsLiftTheStopIntent(String text) {
+        assertThat(judge.continues(text)).isTrue();
+    }
+
+    /**
+     * 3차 리뷰 2(a) · (b): 부정형 계속 표현 · 남의 말 속 계속 표현 · 판정이 STOP이나 CONFIRM인 말은 종료 의도를 풀지 않는다.
+     */
+    @ParameterizedTest
+    @CsvSource(delimiter = '|', value = {
+        "더 얘기 안 할래",
+        "더 하고 싶지 않아",
+        "계속하고 싶지 않아",
+        "계속하기 싫어",
+        "더 하자고 하지 마",
+        "형이 더 하자고 했는데 나는 그만할래",
+        "누나가 계속하재",
+        "엄마가 계속하라고 했어",
+        "다음에 또 하자",
+        "나중에 다시 하자",
+        "더 놀자는 말은 그만할래"
+    })
+    void negatedReportedOrStoppingContinuationsDoNotLift(String text) {
+        assertThat(judge.continues(text)).isFalse();
     }
 
     @Test

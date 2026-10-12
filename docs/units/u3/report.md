@@ -238,3 +238,22 @@ U1 회귀 실패 7건의 처리:
 
 - 프런트 `eslint-boundary.test.ts`의 '보호자 영역이 기기 영역을 import하면 lint가 실패한다' 한 건은 기계가 바쁠 때(이번엔 tsc · eslint를 같이 돌림) 시한에 걸리고 단독 · 재실행에서는 통과한다. 1 · 2차 모두 같은 양상이다. 이번 작업은 프런트를 고치지 않았고 U1 시험이라 손대지 않았다 — eslint 프로세스를 띄우는 시험이라 시한을 넉넉히 두거나 CI에서 따로 돌리는 것을 조정자에게 제안한다.
 - Core는 이번에도 고치지 않았다. 1차의 `NoSqlNowTest`(Windows 경로 구분자) · Core 시험 프로필 연결 시한 제안은 11절 그대로다.
+
+## 13. 3차 리뷰 반영 (조정자 3차 확인, 2026-10-12)
+
+> 2차 반영(12절)에서 생긴 회귀 2건(1 · 2)과 덜 닫힌 곳 4건(3 ~ 6), 그리고 main(U2 병합본) 합치기다. 방법은 같다 — 재현 시험을 먼저 두고 실패를 확인했다(백엔드 21건 · 프런트 1건). 이번에는 지적 6건이 모두 맞다고 보았다.
+
+| 번호 | 지적 | 처리 | 재현 · 확인 시험 |
+|---|---|---|---|
+| 1 | 회귀: 인용 표지를 낱말 끝에서만 보게 한 뒤 어미가 더 붙은 인용("그만하자더라고요" · "그만하자던데요" · "그만하자대서" · "그만하자더라구")이 CLEAR_STOP '그만하자'로 STOP | **고침.** 낱말 끝 목록을 없애고 '한 낱말 안에서 동사 줄기 끝(하 · 내 · 두 · 가 · 놀) + 청유 자 바로 뒤의 인용 어미(더라 · 던데 · 대 · 더래)' 또는 준말 '~재'(하 · 내 · 두 + 재)를 정규식으로 본다. 뒤에 요 · 고요 · 서 · 잖아 · 구가 붙어도 걸리고, "혼자 대화" · "피자 대신"은 여전히 걸리지 않는다. "~자고" 뒤 말하기 동사 첫머리에 '그래'를 더했다("그만하자고 그래") | `StopIntentJudgeTest.hortativeQuotesWithFurtherEndingsAreStillReportedSpeech`(10건) · 2차의 경계 시험 12건 · 합성 20건 세트 |
+| 2 | 덜 닫힘: 해제가 CONTINUE 부분 일치라 (a) 부정형이 풀고 (b) 남의 말 속 계속 표현이 풀고 (c) 흔한 계속 표현은 못 풂 | **고침.** 해제 전용 목록 `RELEASE`를 판정용 CONTINUE와 따로 두었다(흔한 표현 "계속해" · "더 해 줘" · "또 하자" · "다시 하자" · "더 놀자" · "끝내지 마" 더함). 풀지 않는 조건: 남의 말(인용 표지 · 청유형 인용), 표현 바로 뒤가 안 · 않 · 싫 · 말(지않 · 지마 · 기싫 포함)인 부정형, '다음에 · 나중에 · 내일'로 미루는 말, 그 말 자체를 판정하면 STOP · CONFIRM인 말. 목록은 화면 설계 · 스토리에 근거가 없어 가정 U3-J26으로 design.md에 적었다. 1차 시험의 입력(SessionExecutorReviewU3Test "더 하자")은 그대로 둔다 — 이제 "더 해 줘"도 풀린다(3차 시험이 확인) | `StopIntentJudgeTest.commonContinuationsLiftTheStopIntent`(7건) · `negatedReportedOrStoppingContinuationsDoNotLift`(11건) · `SessionExecutorReview3U3Test.negatedOrReportedContinuationsKeepTheBlockAndACommonOneLiftsIt` |
+| 3 | 흔들림: SessionVoiceU3IT의 segment-quiet가 시험값 50ms라 전사 · 음성 사이가 길면 첫 턴이 통째로 GATE_EMPTY | **고침(시험).** 이 클래스에서 `mujoong.gate.segment-quiet`도 운영값 800ms로 덮었다. 조정자 실패 기록의 turnSeq 1이 `quietWaitMs 60 · unobservedReason GATE_DISCARD`로 이 경우임을 확인했다. 제품 동작은 바꾸지 않았다(아래 남은 위험) | `SessionVoiceU3IT` 3회 연속(13.2) |
+| 4 | 5번 남은 틈: `unbind` · `standDown`이 확인 뒤 행동 | **고침.** `DeviceLink.unbindSessionIf(expected)`를 두고 `DeviceConnection`은 참조 원자값의 값 비교 CAS로 구현했다(같은 값 · 다른 객체도 맞게). 실행기 `unbind`가 이것을 쓴다. `standDown` 쪽은 기기에서 닫았다 — `deviceSession.ts`가 지금 세션이 아닌 세션의 STANDBY를 무시한다(세션이 없을 때 · 지금 세션의 STANDBY는 그대로 따름). U1 기기 시험은 깨지지 않았다 | `SessionExecutorReview3U3Test.aNewSessionThatBindsTheLinkRightAfterTheEndChecksTheBindingKeepsIt`(가짜 연결이 확인 직후 · 비교 직전에 새 세션을 묶어 경주를 재현) · `DeviceConnectionU3Test` · 프런트 `device-session-resume.test.ts` '다른 세션의 대기 표시' |
+| 5 | 7번 덜 닫힘: `destroy()`가 writer == null이면 부른 스레드가 파일 맵을 비움 | **고침.** 띄우는 호출이 아직 안 돌아왔으면 스레드를 받을 때까지(앱 종료 대기 상한) 기다리고, 부른 스레드에서 쓰는 것은 `writesOnCaller()`(작업을 돌리지 않는 장치)일 때뿐이다. 상한까지 스레드를 못 받으면 기록기 스레드가 멈춤 신호를 보고 스스로 마무리한다 | `FileAudioRecorderIT.aShutdownWhileTheWriterIsStillStartingLeavesTheFilesToTheWriterThread` |
+| 6 | 문서 | **고침.** `contracts/device-ws.asyncapi.yaml` 다시 붙이기 설명과 `deviations.md` (ab)를 지금 동작으로(STOP_OUTPUT 제외 · PLAY_APPROVED_CONTENT는 가장 최근 하나 · CLOSING의 resume 없는 기기에는 CLOSE_TRANSPORT · 끝난 세션의 STANDBY와 기기의 다른 세션 STANDBY 무시). design.md U3-J6에 '종료 의도가 걸린 동안의 말 끝과 해제 발화에는 THINKING 없음'을 더했다 | — |
+
+### 13.1 남은 위험
+
+- **조용 시간보다 긴 공급자 지연(3번 조사)**: 게이트는 한 응답의 첫 조각부터 끝 신호까지를 다 담은 구간만 통과시킨다(J285). 그래서 운영에서도 공급자가 한 응답의 조각 사이를 `segment-quiet`(800ms)보다 길게 비우면 그 응답의 구간이 모두 GATE_EMPTY로 버려지고 아이는 대기 문구만 듣는다(교정은 '짧게 완결' 또는 금지 패턴 범주). 조용히 사라지지는 않지만 그 턴의 답은 없다. 이번에 동작은 바꾸지 않았다 — 실공급자 조각 간격(11/2 어댑터)을 본 뒤 조용 시간을 정하거나 '끝 신호 전 봉인'을 미루는 쪽을 U4 · 운영 조율에서 정할 일이다.
+- **2번의 목록**: 해제 표현은 가정(U3-J26)이다. 목록 밖의 계속 표현("이야기 들려줘")은 풀지 못하고, 다음 확실한 계속 표현까지 AI가 말하지 않는다.
+- **4번의 기기 쪽**: 서버가 다른 세션 id로 STANDBY를 보내는 길은 `standDown`뿐이라 기기 무시 규칙과 겹치는 다른 흐름은 없다(U1 기기 시험 그대로 통과).

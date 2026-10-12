@@ -33,6 +33,7 @@ public final class FakeDeviceLink implements DeviceLink {
     private Long clockOffsetMs;
     private Long rttMs;
     private UUID boundSession;
+    private Runnable afterBoundRead;
     private CloseCode closedWith;
     private int clearAudioCalls;
 
@@ -203,8 +204,47 @@ public final class FakeDeviceLink implements DeviceLink {
     }
 
     @Override
-    public synchronized UUID boundSessionId() {
-        return boundSession;
+    public UUID boundSessionId() {
+        UUID read;
+        Runnable hook;
+        synchronized (this) {
+            read = boundSession;
+            hook = afterBoundRead;
+            afterBoundRead = null;
+        }
+        if (hook != null) {
+            // 경주 흉내: 읽은 값을 돌려주기 직전에 다른 쪽이 묶음을 바꾼다
+            hook.run();
+        }
+        return read;
+    }
+
+    @Override
+    public boolean unbindSessionIf(UUID expected) {
+        Runnable hook;
+        synchronized (this) {
+            hook = afterBoundRead;
+            afterBoundRead = null;
+        }
+        if (hook != null) {
+            // 경주 흉내: 비교하기 직전에 다른 쪽이 묶음을 바꾼다(비교와 풀기는 한 번에 일어난다)
+            hook.run();
+        }
+        synchronized (this) {
+            if (expected == null || !expected.equals(boundSession)) {
+                return false;
+            }
+            boundSession = null;
+            return true;
+        }
+    }
+
+    /**
+     * 다음 묶음 읽기({@link #boundSessionId()}) 직후 또는 비교 후 풀기({@link #unbindSessionIf}) 직전에 한 번 돌릴 일(묶음 경주 흉내, 3차
+     * 리뷰 4).
+     */
+    public synchronized void afterBoundSessionRead(Runnable hook) {
+        this.afterBoundRead = hook;
     }
 
     public synchronized CloseCode closedWith() {

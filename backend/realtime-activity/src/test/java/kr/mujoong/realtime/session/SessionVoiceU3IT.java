@@ -183,7 +183,9 @@ class SessionVoiceU3IT {
      * 기록 디렉터리를 시험 임시 폴더로 두고, 이 흐름이 지나는 서버 시한을 모두 운영값으로 둔다(2차 리뷰 9). 시험 프로필의 줄인 값(START 확인 2초 ·
      * 마무리 확인 3초 · HELLO 0.5초 · verify-token 0.1초 · 공급자 연결 1초 · 무음 4초)이면 기계가 바쁠 때 서버가 먼저 FAILED · ENDED_UNCONFIRMED ·
      * 1013으로 끝내 버려, 기기가 기다리던 LISTENING · CLOSE_TRANSPORT · HELLO_OK가 영영 오지 않고 시험은 '제한 PT10S'로만 실패한다. 이 클래스는
-     * 시한 경계가 아니라 정상 흐름을 보므로 줄인 값이 필요 없다.
+     * 시한 경계가 아니라 정상 흐름을 보므로 줄인 값이 필요 없다. 3차 리뷰 3: 조용 시간(segment-quiet)도 운영값 800ms로 둔다 — 가짜 공급자는 AI
+     * 전사와 음성(64KB)을 따로 보내는데, 둘 사이가 시험값 50ms를 넘으면 그 턴의 두 구간이 모두 GATE_EMPTY로 버려져 OUTPUT_BEGIN이 아예 나가지
+     * 않는다(조정자 실패: 152행 OUTPUT_BEGIN 30초 대기).
      */
     private void start() {
         env = RealtimeItEnvironment.start(Map.of("mujoong.recording.directory", recordings.toString(),
@@ -192,7 +194,8 @@ class SessionVoiceU3IT {
                 "mujoong.timing.session.closing-confirm", "30s",
                 "mujoong.timing.device.hello-timeout", "5s",
                 "mujoong.internal-http.verify-token-timeout", "1s",
-                "mujoong.provider.connect-timeout", "10s"), null);
+                "mujoong.provider.connect-timeout", "10s",
+                "mujoong.gate.segment-quiet", "800ms"), null);
     }
 
     private UUID activate(DeviceSimulatorClient device, boolean rawAudio) {

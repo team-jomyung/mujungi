@@ -301,6 +301,47 @@ class FileAudioRecorderIT {
         recorder.destroy();
     }
 
+    /**
+     * 3차 리뷰 5: 기록기 스레드가 이미 돌기 시작했지만 띄우기 호출이 아직 돌아오지 않은 사이에 앱 종료가 오면, 종료도 기록기 전용 파일 맵을 부른
+     * 쪽 스레드에서 만지지 않는다 — 기록기 스레드가 남은 일을 쓰고 파일을 닫는다.
+     */
+    @Test
+    void aShutdownWhileTheWriterIsStillStartingLeavesTheFilesToTheWriterThread() throws Exception {
+        List<Thread> finishedOn = new CopyOnWriteArrayList<>();
+        repository = new AudioRecordingRepository(db.jdbc()) {
+            @Override
+            public boolean finish(UUID id, long byteCount, Instant endedAt) {
+                finishedOn.add(Thread.currentThread());
+                return super.finish(id, byteCount, endedAt);
+            }
+        };
+        CountDownLatch release = new CountDownLatch(1);
+        AtomicReference<Thread> writer = new AtomicReference<>();
+        TaskLauncher slowToReturn = (name, task) -> {
+            Thread started = TaskLauncher.virtualThreads().launch(name, task);
+            writer.set(started);
+            try {
+                release.await();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            return started;
+        };
+        FileAudioRecorder recorder = recorder(slowToReturn, 1_000_000, 100);
+        CompletableFuture<AudioRecordings.Session> starting = CompletableFuture.supplyAsync(() -> recorder.open(sessionId));
+        awaitTrue(() -> writer.get() != null);
+        recorder.open(sessionId).child(FRAME);
+        awaitTrue(() -> repository.findBySession(sessionId).size() == 1);
+
+        CompletableFuture<Void> stopping = CompletableFuture.runAsync(recorder::destroy);
+        Thread.sleep(200);
+        release.countDown();
+        stopping.get(10, TimeUnit.SECONDS);
+        starting.get(5, TimeUnit.SECONDS);
+
+        assertThat(finishedOn).as("열린 파일은 기록기 스레드가 닫는다").containsExactly(writer.get());
+    }
+
     private static void awaitTrue(BooleanSupplier condition) throws InterruptedException {
         long deadline = System.nanoTime() + Duration.ofSeconds(10).toNanos();
         while (!condition.getAsBoolean()) {

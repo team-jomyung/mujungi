@@ -27,10 +27,14 @@ info:
     순서 · 중복: 받는 쪽은 같은 seq를 한 번만 처리한다. 서버는 옛 연결에서 온 늦은 메시지와 끝난 세션의 메시지를 버린다(BR6.11).
 
     다시 붙이기(U3 · 편차 (ab)): HELLO_OK 뒤 같은 기기의 진행 중 세션이 있으면 새 연결을 그 세션에 묶고 HELLO_OK.session에
-    sessionId · view · resumed를 싣는다. HELLO resume.sessionId가 그 세션이면 resumed true(명령을 다시 보내지 않음), 아니면
-    resumed false로 답한 뒤 같은 approvedAudio로 START_SESSION을 다시 보낸다(기기는 DEVICE_READY로 입력 창을 연다). ACK를 못
-    받은 opId 명령은 같은 opId로 새 연결에 다시 보내고, 기기는 같은 opId를 두 번 실행하지 않고 ACK만 다시 보낸다. 끊기기 전
-    출력은 잇지 않는다(새 playbackId). 종료 · ABORTED 뒤의 늦은 HELLO는 세션을 되살리지 않는다(BR6.11).
+    sessionId · view · resumed를 싣는다. HELLO resume.sessionId가 그 세션이면 resumed true(START_SESSION을 다시 보내지
+    않음), 아니면 resumed false로 답한 뒤 같은 approvedAudio로 START_SESSION을 다시 보낸다(기기는 DEVICE_READY로 입력 창을
+    연다). 단 세션이 CLOSING이면 resumed false인 기기에는 START_SESSION 대신 SESSION_STATE{CLOSING} + CLOSE_TRANSPORT를 보낸다.
+    ACK를 못 받은 opId 명령은 같은 opId로 새 연결에 다시 보내되, STOP_OUTPUT은 다시 보내지 않고 PLAY_APPROVED_CONTENT는 가장
+    최근 하나만 다시 보낸다(앞 것은 버린다). 기기는 같은 opId를 두 번 실행하지 않고 ACK만 다시 보낸다. 끊기기 전 출력은 잇지
+    않는다(새 playbackId). 종료 · ABORTED 뒤의 늦은 HELLO는 세션을 되살리지 않는다(BR6.11) — HELLO_OK.session을 실은 사이 세션이
+    끝났으면 서버는 그 연결에 SESSION_STATE{STANDBY}(이어간 기기에는 그 앞에 CLOSE_TRANSPORT)를 보내고, 기기는 지금 세션이 아닌
+    세션의 STANDBY는 무시한다.
 x-unit: U1
 x-deviation: ["(j)", "(l)", "(s)", "(n)", "(ab)"]
 servers:

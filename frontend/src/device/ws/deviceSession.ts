@@ -18,7 +18,7 @@ import type { InterruptedPlayback } from "../audio/player";
 //
 // START_SESSION → (wsClient가 ACK) → 승인 음성 미리 받기 → DEVICE_READY{mic, player, prefetch}
 //   → 입력 창 열림: 0x01 20ms 프레임을 DEVICE_READY 뒤 ~ CLOSE_TRANSPORT 전까지만 보낸다(서버는 ACTIVE 전 프레임을 버린다).
-// SESSION_STATE → T19 표시(대기 · 듣는 중 · 생각 중 · 마무리). '말하는 중'은 재생기가 정한다.
+// SESSION_STATE → T19 표시(대기 · 듣는 중 · 생각 중 · 마무리). '말하는 중'은 재생기가 정한다. 지금 세션이 아닌 세션의 STANDBY는 무시한다.
 // OUTPUT_BEGIN · 0x02 · OUTPUT_END · PLAY_APPROVED_CONTENT → 재생기(승인된 소리만, BR7.6).
 // STOP_OUTPUT → 재생 멈춤(PLAYBACK_MARK STOPPED). CLOSE_TRANSPORT → 입력 창 닫음 · 재생 · 대기열 정리 → VOICE_SESSION_CLOSED.
 // WSS는 대기용으로 남는다.
@@ -139,6 +139,10 @@ export class DeviceSession {
         void this.startSession(message.sessionId, message.approvedAudio);
         return;
       case "SESSION_STATE":
+        if (message.view === "STANDBY" && this.current !== null && message.sessionId !== this.current.sessionId) {
+          // 3차 리뷰 4: 끝난 다른 세션을 대기로 돌려보내는 뒤늦은 명령이 지금 세션의 표시를 덮지 않는다
+          return;
+        }
         if (message.view !== "UNKNOWN") {
           this.deps.onView(message.view);
         }

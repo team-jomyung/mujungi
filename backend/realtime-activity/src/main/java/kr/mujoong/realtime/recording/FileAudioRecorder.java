@@ -99,6 +99,8 @@ public class FileAudioRecorder implements AudioRecordings, DisposableBean {
     private final Condition available = lock.newCondition();
     /** 차단 차례를 처리했다(차단을 부른 쪽이 기다린다). */
     private final Condition blockHandled = lock.newCondition();
+    /** 기록기를 띄우는 호출이 돌아왔다(앱 종료가 기다린다, 3차 리뷰 5). */
+    private final Condition launched = lock.newCondition();
     private final ArrayDeque<Item> queue = new ArrayDeque<>();
     private int queuedChunks;
     private boolean stopping;
@@ -272,6 +274,7 @@ public class FileAudioRecorder implements AudioRecordings, DisposableBean {
         try {
             writer = started;
             writerLaunched = true;
+            launched.signalAll();
         } finally {
             lock.unlock();
         }
@@ -419,13 +422,27 @@ public class FileAudioRecorder implements AudioRecordings, DisposableBean {
     @Override
     public void destroy() {
         Thread running;
+        boolean onCaller;
         lock.lock();
         try {
             stopping = true;
             available.signalAll();
+            // 3차 리뷰 5: 띄우는 호출이 아직 돌아오지 않았으면 기록기 스레드가 이미 돌 수 있다 — 스레드를 받을 때까지 기다린다
+            long remaining = stopWait.toNanos();
+            while (writerStarted && !writerLaunched && remaining > 0) {
+                remaining = launched.awaitNanos(remaining);
+            }
             running = writer;
+            onCaller = writesOnCaller();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return;
         } finally {
             lock.unlock();
+        }
+        if (running == null && !onCaller) {
+            // 기다림 상한까지 스레드를 받지 못했다 — 기록기 스레드가 멈춤 신호를 보고 남은 일을 쓰고 파일을 닫는다
+            return;
         }
         if (running == null) {
             // 기록기 스레드가 없다(작업을 돌리지 않는 장치) — 남은 대기열을 지금 쓰고 열린 파일을 닫는다

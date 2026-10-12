@@ -58,7 +58,8 @@ public final class DeviceConnection implements DeviceLink {
     private volatile Long rttMs;
     private volatile Long clockOffsetMs;
     private volatile ConnectionState knownState = ConnectionState.OFFLINE;
-    private volatile UUID boundSessionId;
+    /** 묶인 세션(비교 후 풀기를 한 번에 하려고 참조 원자값으로 둔다, 3차 리뷰 4). */
+    private final AtomicReference<UUID> boundSessionId = new AtomicReference<>();
     private volatile TimerDriver.TimerHandle helloTimer;
     private final AtomicReference<WsEnvelope> deferredHello = new AtomicReference<>();
     private volatile UUID resumeSessionId;
@@ -235,13 +236,30 @@ public final class DeviceConnection implements DeviceLink {
 
     @Override
     public void bindSession(UUID sessionId) {
-        this.boundSessionId = sessionId;
+        boundSessionId.set(sessionId);
     }
 
     /** 이 연결로 START_SESSION을 받은 세션(없으면 null). */
     @Override
     public UUID boundSessionId() {
-        return boundSessionId;
+        return boundSessionId.get();
+    }
+
+    @Override
+    public boolean unbindSessionIf(UUID expected) {
+        if (expected == null) {
+            return false;
+        }
+        while (true) {
+            // compareAndSet은 참조로 비교하므로 값이 같은 지금 참조를 읽어 그것으로 바꾼다
+            UUID current = boundSessionId.get();
+            if (!expected.equals(current)) {
+                return false;
+            }
+            if (boundSessionId.compareAndSet(current, null)) {
+                return true;
+            }
+        }
     }
 
     /** HELLO 타이머(시계 1, 4408). */

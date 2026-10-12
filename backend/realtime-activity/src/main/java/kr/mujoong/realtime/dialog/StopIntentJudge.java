@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.regex.Pattern;
 
 /**
  * 아이 종료 의도 판정기 (U3 L4 · components DialogPolicy · U3-R12 · U3-J1 · U3-J24 · AC6.4.4 ~ 6.4.6 · AC6.4.8 · FR5.4).
@@ -67,17 +68,35 @@ public final class StopIntentJudge {
             "흉내", "인척", "척할", "척하", "역할놀이", "놀이에서", "연기", "대사");
 
     /**
-     * 청유형 인용이 낱말 끝에 오는 꼴(리뷰 반영 3 · 2차 리뷰 1): "그만하재" · "끝내자더라고" · "그만하자대". 공백을 지운 글자열에서 찾으면
-     * "혼자 대화" · "피자 대신"의 '자대'처럼 낱말 경계를 넘어 걸려 아이의 진짜 종료 의도를 묻으므로 낱말 끝에서만 본다.
+     * 한 낱말 안의 청유형 인용(리뷰 반영 3 · 2차 리뷰 1 · 3차 리뷰 1): 동사 줄기 끝 글자(하 · 내 · 두 · 가 · 놀) + 청유 '자' 바로 뒤에 인용 어미
+     * (더라 · 던데 · 대 · 더래)가 오거나, 준말 '~재'(= ~자고 해). 낱말 안에서만 보므로 "혼자 대화" · "피자 대신"처럼 낱말 경계를 넘어 걸리지 않고,
+     * 뒤에 요 · 고요 · 서 · 잖아 · 구가 더 붙어도("그만하자더라고요" · "그만하자대서") 걸린다.
      */
-    private static final List<String> REPORTED_WORD_ENDINGS = List.of("하재", "내재", "두재", "자재",
-            "자더라", "자더라고", "자던데", "자대", "자대요");
+    private static final Pattern HORTATIVE_QUOTE_IN_WORD =
+            Pattern.compile("(?:하|내|두|가|놀)자(?:더라|던데|대|더래)|(?:하|내|두)재");
 
     /**
-     * 청유형 인용 "~자고" 뒤에 오는 말하기 동사의 첫머리(2차 리뷰 1). "~자고"가 낱말 안에 있으면 바로 뒤가, 낱말 끝이면 다음 낱말의 첫머리가
-     * 이것이어야 인용이다("그만하자고 했어" · "그만하자고해서"). "자고" 단독은 아이 자신의 강조("이제 그만하자고!")일 수 있어 보지 않는다.
+     * 청유형 인용 "~자고" 뒤에 오는 말하기 동사의 첫머리(2차 리뷰 1 · 3차 리뷰 1 '그래'). "~자고"가 낱말 안에 있으면 바로 뒤가, 낱말 끝이면 다음
+     * 낱말의 첫머리가 이것이어야 인용이다("그만하자고 했어" · "그만하자고해서" · "그만하자고 그래"). "자고" 단독은 아이 자신의 강조("이제
+     * 그만하자고!")일 수 있어 보지 않는다.
      */
-    private static final List<String> QUOTE_VERB_HEADS = List.of("했", "해", "하", "말", "그랬", "그러");
+    private static final List<String> QUOTE_VERB_HEADS = List.of("했", "해", "하", "말", "그랬", "그러", "그래");
+
+    /**
+     * 종료 의도를 푸는 적극적 계속 표현(정규화 뒤, 2차 리뷰 6 · 3차 리뷰 2). 판정용 {@link #CONTINUE}와 따로 둔다 — 판정은 이 말들이 섞여도
+     * 종료로 보지 않는 쪽(오인식 0)이고, 해제는 이 말이 계속 의사일 때만 푸는 쪽이라 거르는 조건이 다르다. 화면 설계 · 스토리에 목록이 없어
+     * 가정이다(U3-J26).
+     */
+    private static final List<String> RELEASE = List.of(
+            "그만안", "안그만", "그만하기싫", "그만하지말", "그만하지마", "끝내기싫", "끝내지말", "끝내지마", "아직안끝", "아직그만",
+            "더할래", "더하자", "더하고싶", "더해", "더얘기", "더이야기", "더놀", "계속할래", "계속하자", "계속하고싶", "계속해",
+            "계속얘기", "계속이야기", "또하자", "또할래", "다시하자", "다시할래");
+
+    /** 계속 표현 바로 뒤에 오면 부정이 되는 말(3차 리뷰 2 (a): "더 얘기 안 할래" · "더 하고 싶지 않아" · "더 얘기 말고"). */
+    private static final List<String> RELEASE_NEGATIONS = List.of("안", "않", "싫", "말", "지않", "지마", "지말", "기싫");
+
+    /** 다음으로 미루는 말(이것이 있으면 "다음에 또 하자"처럼 지금 계속하자는 뜻이 아니다). */
+    private static final List<String> DEFERRALS = List.of("다음에", "나중에", "내일");
 
     /** 계속하겠다는 부정 · 연장(정규화 뒤). */
     private static final List<String> CONTINUE = List.of(
@@ -145,8 +164,7 @@ public final class StopIntentJudge {
         }
         String text = normalize(transcript);
         List<String> words = tokens(transcript);
-        if (text.isEmpty() || containsAny(text, REPORTED) || endsAnyWord(words, REPORTED_WORD_ENDINGS)
-                || hortativeQuote(words) || containsAny(text, CONTINUE)) {
+        if (text.isEmpty() || reported(text, words) || containsAny(text, CONTINUE)) {
             return Judgment.NONE;
         }
         boolean question = isQuestion(transcript, text);
@@ -202,11 +220,37 @@ public final class StopIntentJudge {
     }
 
     /**
-     * 적극적으로 대화를 이어 가겠다는 말인가("더 얘기하자" · "계속할래" · "그만 안 할래"). 종료 의도를 푸는 근거는 이것뿐이다 — 남의 말 · 주제
-     * 거부 · 평범한 말로 판정이 NONE인 것은 계속 의사가 아니다(2차 리뷰 6).
+     * 적극적으로 대화를 이어 가겠다는 말인가("더 얘기하자" · "계속해" · "더 해 줘" · "그만 안 할래"). 종료 의도를 푸는 근거는 이것뿐이다(2차
+     * 리뷰 6). 3차 리뷰 2: 남의 말(인용 표지 · 청유형 인용)이거나, 계속 표현 바로 뒤가 부정(안 · 않 · 싫 · 말)이거나, 다음으로 미루는 말이
+     * 있거나, 그 말 자체를 판정하면 종료 · 불명확이면 계속 의사가 아니다.
      */
     public boolean continues(String transcript) {
-        return containsAny(normalize(transcript), CONTINUE);
+        String text = normalize(transcript);
+        if (text.isEmpty() || reported(text, tokens(transcript)) || containsAny(text, DEFERRALS)
+                || judge(transcript, false).verdict() != Verdict.NONE) {
+            return false;
+        }
+        for (String phrase : RELEASE) {
+            for (int at = text.indexOf(phrase); at >= 0; at = text.indexOf(phrase, at + 1)) {
+                if (!startsWithAny(text.substring(at + phrase.length()), RELEASE_NEGATIONS)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /** 남의 말 · 인용 · 역할 놀이(부분 일치 표지, 낱말 안 청유형 인용, "~자고" + 말하기 동사). */
+    private static boolean reported(String text, List<String> words) {
+        if (containsAny(text, REPORTED) || hortativeQuote(words)) {
+            return true;
+        }
+        for (String word : words) {
+            if (HORTATIVE_QUOTE_IN_WORD.matcher(word).find()) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** 정규화: NFKC · 영문 소문자 · 한글 · 영문 · 숫자만 남긴다. */
@@ -255,17 +299,6 @@ public final class StopIntentJudge {
         for (String head : heads) {
             if (text.startsWith(head)) {
                 return true;
-            }
-        }
-        return false;
-    }
-
-    private static boolean endsAnyWord(List<String> words, List<String> endings) {
-        for (String word : words) {
-            for (String ending : endings) {
-                if (word.endsWith(ending)) {
-                    return true;
-                }
             }
         }
         return false;

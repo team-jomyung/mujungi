@@ -1807,11 +1807,12 @@ public final class SessionExecutor {
 
     /**
      * 이 세션이 묶은 연결이면 묶음을 푼다. 같은 기기의 새 세션이 이미 그 연결을 묶었으면 건드리지 않는다 — 풀면 새 세션의 입력 프레임 경로가
-     * 끊긴다(2차 리뷰 5 · 9 조사 중 찾음).
+     * 끊긴다(2차 리뷰 5 · 9 조사 중 찾음). 확인과 풀기는 연결의 비교 후 풀기 한 번이다(3차 리뷰 4: 확인한 뒤 풀면 그 사이 새 세션이 묶은 것을
+     * 지운다).
      */
     private void unbind(DeviceLink target) {
-        if (target != null && plan.sessionId().equals(target.boundSessionId())) {
-            target.bindSession(null);
+        if (target != null) {
+            target.unbindSessionIf(plan.sessionId());
         }
     }
 
