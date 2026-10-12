@@ -170,11 +170,12 @@ describe("05a — 네트워크 · 5xx · 401", () => {
     expect(screen.queryByTestId("register-error")).toBeNull();
   });
 
-  it("401이면 시험 로그인으로 보낸다(J119)", async () => {
+  it("401이면 안내 토스트 뒤 01로 보낸다(U2 · AC1.1.9)", async () => {
     setup(() => errorResponse(401, "UNAUTHENTICATED"));
     const user = await typeCode();
     await user.click(screen.getByTestId("register-submit"));
-    await waitFor(() => expect(router.replace).toHaveBeenCalledWith("/parent/dev-login"));
+    await waitFor(() => expect(router.replace).toHaveBeenCalledWith("/parent/login"));
+    expect(screen.getByTestId("toast")).toHaveTextContent("로그인이 필요해요.");
   });
 });
 

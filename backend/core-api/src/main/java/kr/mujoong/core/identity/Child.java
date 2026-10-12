@@ -74,6 +74,19 @@ public class Child {
         this.updatedAt = now;
     }
 
+    /**
+     * 03 수정(U2 · AC1.3.3 · AC1.3.9): 같은 행의 이름 · 나이 · 관심사를 바꾼다(id · 보호자는 그대로). 검증은 호출자(ChildInput)가 했다.
+     *
+     * @param interestsJson 관심사 JSON 배열 원문
+     * @param now 주입한 Clock에서 읽은 값
+     */
+    public void update(String displayName, Integer age, String interestsJson, Instant now) {
+        this.displayName = Objects.requireNonNull(displayName, "displayName");
+        this.age = age;
+        this.interestsJson = interestsJson;
+        this.updatedAt = Objects.requireNonNull(now, "now");
+    }
+
     public UUID getId() {
         return id;
     }

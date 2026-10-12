@@ -53,6 +53,10 @@ class ErrorCodeTest {
         table.put("SERVICE_NOT_READY", List.of(503));
         table.put("INTERNAL_ERROR", List.of(500));
         table.put("UPSTREAM_UNAVAILABLE", List.of(502, 504));
+        // U2가 더한 code(계약 3절 /child · 편차 (U2-a))
+        table.put("GOOGLE_AUTH_FAILED", List.of(401));
+        table.put("CHILD_NOT_REGISTERED", List.of(404));
+        table.put("CHILD_EXISTS", List.of(409));
         return table;
     }
 

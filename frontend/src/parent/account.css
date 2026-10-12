@@ -1,0 +1,311 @@
+/*
+ * U2 보호자 계정 화면 스타일 (docs/units/u2/design.md 6절 · interaction-spec 3.2 · 3.3 · 3.5 · 6절)
+ * 토큰은 shared/styles/tokens.css 값만 쓴다. 상태 색은 점 · 테두리에만 쓰고 글은 text 색이다(AC1.4.15 · AC2.1.14).
+ */
+
+/* 01 로그인 */
+.mj-login__body {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: calc(var(--space-unit) * 4);
+  min-height: 70vh;
+  text-align: center;
+}
+
+.mj-login__brand {
+  margin: 0;
+  font-size: 2rem;
+  color: var(--color-brand-primary);
+}
+
+.mj-login__subtitle {
+  margin: 0;
+  color: var(--color-text-secondary);
+}
+
+/* 머리 오른쪽 단추(04 「⚙」) */
+.mj-header--with-action {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.mj-header__action {
+  min-width: var(--touch-target-min);
+  min-height: var(--touch-target-min);
+  border: none;
+  background: transparent;
+  font-size: var(--font-size-heading);
+  color: var(--color-text-primary);
+  cursor: pointer;
+}
+
+/* 바텀 시트(SET0 · 02-1) */
+.mj-sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background-color: rgb(0 0 0 / 40%);
+  z-index: 30;
+}
+
+.mj-sheet {
+  width: 100%;
+  max-width: 480px;
+  max-height: 85vh;
+  overflow-y: auto;
+  padding: calc(var(--space-unit) * 4);
+  border-radius: var(--radius-card) var(--radius-card) 0 0;
+  background-color: var(--color-surface-base);
+  animation: mj-sheet-in 200ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mj-sheet {
+    animation: none;
+  }
+}
+
+@keyframes mj-sheet-in {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+.mj-sheet__header {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--space-unit) * 2);
+  margin-bottom: calc(var(--space-unit) * 3);
+}
+
+.mj-sheet__title {
+  margin: 0;
+  font-size: var(--font-size-heading);
+}
+
+.mj-sheet__body,
+.mj-settings {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--space-unit) * 3);
+}
+
+/* 02 동의 */
+.mj-consent-list {
+  margin: 0 0 calc(var(--space-unit) * 6);
+  padding: 0;
+  list-style: none;
+}
+
+.mj-consent-row {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--space-unit) * 2);
+  min-height: var(--touch-target-min);
+  border-bottom: 1px solid var(--color-border-default);
+}
+
+.mj-consent-row__check {
+  width: 24px;
+  height: 24px;
+}
+
+.mj-consent-row__label {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: calc(var(--space-unit) * 2);
+}
+
+.mj-badge {
+  display: inline-block;
+  padding: 0 calc(var(--space-unit) * 2);
+  border: 1px solid var(--color-brand-primary);
+  border-radius: 999px;
+  font-size: var(--font-size-secondary);
+}
+
+.mj-terms {
+  margin: 0;
+}
+
+.mj-terms__section {
+  margin-bottom: calc(var(--space-unit) * 3);
+}
+
+.mj-terms__heading {
+  font-weight: 700;
+}
+
+.mj-terms__body {
+  margin: calc(var(--space-unit)) 0 0;
+  color: var(--color-text-secondary);
+}
+
+/* 입력 칸 · 오류 글(03 · SET-01) */
+.mj-input {
+  width: 100%;
+  min-height: var(--touch-target-min);
+  padding: 0 calc(var(--space-unit) * 3);
+  border: 1px solid var(--color-border-default);
+  border-radius: 8px;
+  font-size: var(--font-size-body);
+  box-sizing: border-box;
+}
+
+.mj-input--invalid {
+  border-color: var(--color-status-disconnected);
+  border-width: 2px;
+}
+
+.mj-field__error {
+  margin: calc(var(--space-unit)) 0 0;
+  font-size: var(--font-size-secondary);
+  color: var(--color-text-primary);
+}
+
+.mj-field__error::before {
+  content: "! ";
+  color: var(--color-status-disconnected);
+}
+
+.mj-field__hint {
+  margin: calc(var(--space-unit)) 0 0;
+  font-size: var(--font-size-secondary);
+  color: var(--color-text-secondary);
+}
+
+/* 03 보기 카드 · 04 아이 구역 */
+.mj-child-card,
+.mj-child-section {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--space-unit) * 2);
+  margin-bottom: calc(var(--space-unit) * 4);
+}
+
+.mj-child-card__name {
+  margin: 0;
+  font-size: var(--font-size-heading);
+}
+
+.mj-child-card__line,
+.mj-child-card__device,
+.mj-child-section__line {
+  margin: 0;
+}
+
+/* 04 지금 활동(틀) */
+.mj-activity-card {
+  margin-top: calc(var(--space-unit) * 4);
+}
+
+.mj-activity-card__status {
+  margin: 0;
+  font-weight: 700;
+}
+
+.mj-activity-card__reason {
+  margin: calc(var(--space-unit)) 0 0;
+  color: var(--color-text-secondary);
+}
+
+/* 05 두 줄 · 판정 카드 · 종료 표현 구역 */
+.mj-device-rows,
+.mj-verdict-card,
+.mj-stop-section {
+  margin-bottom: calc(var(--space-unit) * 4);
+}
+
+.mj-device-row {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--space-unit) * 2);
+  margin: 0 0 calc(var(--space-unit) * 2);
+}
+
+.mj-device-row--detail {
+  color: var(--color-text-secondary);
+}
+
+.mj-verdict-card {
+  border-left: 6px solid var(--color-status-unresponsive);
+}
+
+.mj-verdict-card[data-state="stable"] {
+  border-left-color: var(--color-status-stable);
+}
+
+.mj-verdict-card[data-state="unstable"] {
+  border-left-color: var(--color-status-unstable);
+}
+
+.mj-verdict-card[data-state="disconnected"] {
+  border-left-color: var(--color-status-disconnected);
+}
+
+.mj-verdict-card__title {
+  margin: 0;
+  font-weight: 700;
+}
+
+.mj-verdict-card__body {
+  margin: calc(var(--space-unit) * 2) 0;
+}
+
+.mj-stop-section__default,
+.mj-stop-section__summary {
+  margin: 0 0 calc(var(--space-unit) * 2);
+}
+
+/* SET-01 종료 표현 */
+.mj-stop-list {
+  margin: 0 0 calc(var(--space-unit) * 4);
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--space-unit) * 2);
+}
+
+.mj-stop-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: calc(var(--space-unit) * 2);
+  min-height: var(--touch-target-min);
+  padding: calc(var(--space-unit) * 2) calc(var(--space-unit) * 3);
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-card);
+}
+
+.mj-stop-card--fixed {
+  background-color: var(--color-fixed-expression);
+  border-color: var(--color-brand-primary);
+}
+
+.mj-stop-card__text {
+  flex: 1;
+  min-height: var(--touch-target-min);
+  border: none;
+  background: transparent;
+  text-align: left;
+  font-size: var(--font-size-body);
+  cursor: pointer;
+}
+
+.mj-stop-input {
+  margin-bottom: calc(var(--space-unit) * 4);
+}
+
+.mj-stop-input__row {
+  display: flex;
+  gap: calc(var(--space-unit) * 2);
+}

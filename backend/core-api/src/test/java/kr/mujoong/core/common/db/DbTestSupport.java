@@ -241,6 +241,13 @@ public final class DbTestSupport implements AutoCloseable {
         }
         if (!guardians.isEmpty()) {
             MapSqlParameterSource params = new MapSqlParameterSource("ids", guardians.toArray(UUID[]::new));
+            // U2(V2) 표: 종료 표현(→ 아이) · 소셜 계정(→ 보호자) · 삭제 요청(논리 참조)
+            jdbc.update("""
+                    delete from core.core_stop_expression
+                     where child_id in (select id from core.core_child where guardian_id = any(:ids))
+                    """, params);
+            jdbc.update("delete from core.core_social_account where guardian_id = any(:ids)", params);
+            jdbc.update("delete from core.core_data_deletion_request where guardian_id = any(:ids)", params);
             jdbc.update("delete from core.core_consent where actor_guardian_id = any(:ids)", params);
             jdbc.update("delete from core.core_child where guardian_id = any(:ids)", params);
             jdbc.update("delete from core.core_guardian where id = any(:ids)", params);

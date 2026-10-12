@@ -6,10 +6,12 @@
 #   postgres.env  POSTGRES_PASSWORD DB_OWNER_PASSWORD DB_CORE_PASSWORD DB_REALTIME_PASSWORD DB_BACKUP_PASSWORD
 #   migrate.env   DB_OWNER_PASSWORD
 #   core-api.env  SPRING_DATASOURCE_PASSWORD(=core) INTERNAL_SERVICE_TOKEN MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET
-#                 GOOGLE_OAUTH_CLIENT_SECRET(빈 값, U2 전) MUJOONG_SECURITY_ALLOWED_ORIGIN
+#                 GOOGLE_OAUTH_CLIENT_ID · GOOGLE_OAUTH_CLIENT_SECRET(빈 값 — 검증 스택은 구글을 부르지 않는다)
+#                 GOOGLE_OAUTH_REDIRECT_URI(<origin>/parent/login/callback) MUJOONG_SECURITY_ALLOWED_ORIGIN
 #   realtime.env  SPRING_DATASOURCE_PASSWORD(=realtime) INTERNAL_SERVICE_TOKEN PROVIDER_API_KEY(가짜 공급자용 자리값)
 #                 MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET MUJOONG_SECURITY_ALLOWED_ORIGIN
-#   web.env       MUJOONG_SECURITY_ALLOWED_ORIGIN
+#   web.env       GOOGLE_OAUTH_CLIENT_ID(빈 값) GOOGLE_OAUTH_REDIRECT_URI MUJOONG_SECURITY_ALLOWED_ORIGIN
+#                 (구글 이름은 Core · web이 같다 — infra/bin/render-env와 같은 분배, U2 리뷰 3)
 #   nginx.env     SERVICE_HOST MUJOONG_SECURITY_ALLOWED_ORIGIN
 #   backup.env    DB_BACKUP_PASSWORD BACKUP_RETENTION_DAYS   ─┐ 검증 스택(compose.ci)은 backup · certbot을 끄지만
 #   certbot.env   SERVICE_HOST ACME_CONTACT_EMAIL            ─┘ compose.demo.yml 단독 config 검사 · 이미지 점검이 쓴다
@@ -125,7 +127,9 @@ write core-api.env \
   "SPRING_DATASOURCE_PASSWORD=$core_password" \
   "INTERNAL_SERVICE_TOKEN=$internal_token" \
   "MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET=$owner_hash_secret" \
+  "GOOGLE_OAUTH_CLIENT_ID=" \
   "GOOGLE_OAUTH_CLIENT_SECRET=" \
+  "GOOGLE_OAUTH_REDIRECT_URI=$origin/parent/login/callback" \
   "MUJOONG_SECURITY_ALLOWED_ORIGIN=$origin"
 write realtime.env \
   "SPRING_DATASOURCE_PASSWORD=$realtime_password" \
@@ -134,6 +138,8 @@ write realtime.env \
   "MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET=$owner_hash_secret" \
   "MUJOONG_SECURITY_ALLOWED_ORIGIN=$origin"
 write web.env \
+  "GOOGLE_OAUTH_CLIENT_ID=" \
+  "GOOGLE_OAUTH_REDIRECT_URI=$origin/parent/login/callback" \
   "MUJOONG_SECURITY_ALLOWED_ORIGIN=$origin"
 write nginx.env \
   "SERVICE_HOST=$service_host" \

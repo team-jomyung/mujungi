@@ -196,11 +196,11 @@ describe("Live12 P1 — 끝내기 요청(BR6.9)", () => {
     expect(screen.getByTestId("live-end")).toBeEnabled();
   });
 
-  it("401이면 같은 안내 뒤 시험 로그인으로 간다", async () => {
+  it("401이면 같은 안내 뒤 01로 간다(U2가 01을 만듦)", async () => {
     renderActive(() => errorResponse(401, "UNAUTHENTICATED"));
     await openDialog();
     fireEvent.click(screen.getByTestId("p1-yes"));
-    await waitFor(() => expect(router.replace).toHaveBeenCalledWith("/parent/dev-login"));
+    await waitFor(() => expect(router.replace).toHaveBeenCalledWith("/parent/login"));
     expect(screen.getByTestId("toast")).toHaveTextContent("끝내기 요청을 보내지 못했어요. 인터넷을 확인해 주세요.");
   });
 

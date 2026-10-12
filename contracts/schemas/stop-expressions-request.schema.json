@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mujoong.invalid/contracts/schemas/stop-expressions-request.schema.json",
+  "title": "종료 표현 저장 요청",
+  "description": "PUT /api/child/stop-expressions 본문(계약 3절 '통째 교체' · AC2.3.4 · AC2.3.6 · U2, 모양은 편차 (U2-i)). 순서대로 sortOrder 1 ~ n이 된다. 서버는 앞뒤 공백을 뺀 2 ~ 20자, 정규화(공백 제거 · 소문자) 기준 중복 · 기본 표현과 같은 표현을 400 VALIDATION_FAILED로 거절한다. 빈 목록은 추가 표현을 모두 지운다.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["items"],
+  "properties": {
+    "items": {
+      "type": "array",
+      "maxItems": 5,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["text"],
+        "properties": {
+          "text": { "type": "string", "minLength": 2, "maxLength": 20 }
+        }
+      }
+    }
+  }
+}

@@ -32,7 +32,7 @@ import org.springframework.context.annotation.Configuration;
 
 /**
  * Core V1 스키마 통합 시험(U1 3.5 Step 14). 실제 init 스크립트 + 두 마이그레이션 위치로 만든 DB에서 표 · 열 · 형식 · 색인과
- * JPA 엔터티 대조(ddl-auto=validate)를 본다.
+ * JPA 엔터티 대조(ddl-auto=validate)를 본다. U2가 V2(표 2개 · 동의 열 1개 · 부분 유일 색인 1개)를 더해 목록을 늘렸다.
  *
  * <p>증명: BR8.2 · J43(V1이 표 12개를 만든다) · E1 ~ E4 열 수(core_device 22 · core_activity 20 · Outbox/Inbox 각 17) · A3
  * trace_id 열 · J115(timestamptz · jsonb · uuid, DB 시각 기본값 없음) · PD-8(fillfactor 90 · 부분 유일 색인) · J116(이력 표) ·
@@ -42,17 +42,19 @@ import org.springframework.context.annotation.Configuration;
 @Tag("db")
 class CoreSchemaIT {
 
-    /** V1이 만드는 core 표 12개(J43). */
+    /** V1이 만드는 core 표 12개(J43) + U2 V2가 더하는 2개(core_data_deletion_request · core_social_account). */
     static final List<String> CORE_TABLES = List.of(
             "core_activity",
             "core_approved_content",
             "core_approved_content_version",
             "core_child",
             "core_consent",
+            "core_data_deletion_request",
             "core_device",
             "core_guardian",
             "core_inbox_event",
             "core_outbox_event",
+            "core_social_account",
             "core_spring_session",
             "core_spring_session_attributes",
             "core_stop_expression");
@@ -65,7 +67,7 @@ class CoreSchemaIT {
     }
 
     @Test
-    void v1CreatesExactlyTheTwelveCoreTablesOwnedByTheMigrationRole() throws SQLException {
+    void migrationsCreateExactlyTheCoreTablesOwnedByTheMigrationRole() throws SQLException {
         try (Connection owner = postgres.connect(Role.OWNER)) {
             List<List<Object>> tables = query(owner,
                     "select tablename, tableowner from pg_tables where schemaname = 'core' order by tablename");
@@ -73,10 +75,10 @@ class CoreSchemaIT {
             // 편차 (x): 표 소유는 마이그레이션 역할, 앱 역할은 쓰는 역할일 뿐이다
             assertThat(tables).allSatisfy(row -> assertThat(row.get(1)).isEqualTo("mujoong_owner"));
 
-            // 이력 표 flyway.core_schema_history에 V1이 성공으로 있다(J116). core 위치가 먼저라 기준선 행은 없다
+            // 이력 표 flyway.core_schema_history에 V1 · V2(U2)가 차례로 성공으로 있다(J116). core 위치가 먼저라 기준선 행은 없다
             List<List<Object>> history = query(owner,
                     "select version, type, success from flyway.core_schema_history order by installed_rank");
-            assertThat(history).containsExactly(List.of("1", "SQL", true));
+            assertThat(history).containsExactly(List.of("1", "SQL", true), List.of("2", "SQL", true));
         }
     }
 
@@ -88,8 +90,10 @@ class CoreSchemaIT {
         "core_inbox_event, 17",
         "core_guardian, 4",
         "core_child, 9",
-        "core_consent, 10",
+        "core_consent, 11",
         "core_stop_expression, 7",
+        "core_social_account, 6",
+        "core_data_deletion_request, 16",
         "core_approved_content, 4",
         "core_approved_content_version, 7",
         "core_spring_session, 7",
@@ -164,13 +168,16 @@ class CoreSchemaIT {
                             + " order by indexname");
             assertThat(partial.stream().map(row -> (String) row.get(0)).toList()).containsExactly(
                     "core_activity_in_progress_guardian_uk",
+                    "core_data_deletion_request_open_guardian_uk",
                     "core_device_active_guardian_uk",
                     "core_device_pending_code_uk");
             assertThat(partial).allSatisfy(row -> assertThat((String) row.get(1)).startsWith("CREATE UNIQUE INDEX"));
-            assertThat((String) partial.get(1).get(1)).contains("(guardian_id)").contains("'REGISTERED'");
-            assertThat((String) partial.get(2).get(1)).contains("(registration_code)").contains("'UNREGISTERED'");
+            assertThat((String) partial.get(2).get(1)).contains("(guardian_id)").contains("'REGISTERED'");
+            assertThat((String) partial.get(3).get(1)).contains("(registration_code)").contains("'UNREGISTERED'");
             assertThat((String) partial.get(0).get(1)).contains("'REQUESTED'").contains("'CLOSING'")
                     .doesNotContain("'ENDED'");
+            // U2: 보호자당 열린(REQUESTED) 삭제 요청 하나
+            assertThat((String) partial.get(1).get(1)).contains("(guardian_id)").contains("'REQUESTED'");
         }
     }
 

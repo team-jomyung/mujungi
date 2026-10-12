@@ -8,7 +8,7 @@ import type { FreeTalkContext, SituationType, SourceType } from "../api/types";
 import { BottomTabBar, type TabKey } from "../components/BottomTabBar";
 import { ChipGroup, type ChipOption } from "../components/ChipGroup";
 import { TextArea200 } from "../components/TextArea200";
-import { PARENT_ROUTES, routeForTab } from "../navigation";
+import { PARENT_ROUTES, goToLogin, routeForTab } from "../navigation";
 import { COPY, PROPOSED_COPY, TEMP_COPY } from "@/shared/copy/ko";
 import { messageForErrorCode } from "@/shared/errors/codeToCopy";
 import { useToast } from "@/shared/toast/ToastProvider";
@@ -121,7 +121,7 @@ export function Free08({ returnedFailed }: Free08Props) {
       }
       if (error.isUnauthenticated) {
         pendingRef.current = null;
-        router.replace(PARENT_ROUTES.devLogin);
+        goToLogin(router, toast);
         return;
       }
       const sameKeyRetry = error.isDeliveryUnknown || (error.status === 403 && error.code === "CSRF_TOKEN_INVALID");

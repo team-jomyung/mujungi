@@ -104,8 +104,12 @@ class CoreStartupSequenceIT {
             withHistoryChange(database, "update flyway.core_schema_history set success = false",
                     "update flyway.core_schema_history set success = true",
                     () -> assertRefusedAtS2(database, "성공한 버전이 없다"));
-            withHistoryChange(database, "update flyway.core_schema_history set version = '0.9' where version = '1'",
-                    "update flyway.core_schema_history set version = '1' where version = '0.9'",
+            // 적용된 버전(V1 · U2 V2)을 모두 앱 기대값보다 낮게 바꾼다(최고 0.9)
+            withHistoryChange(database,
+                    "update flyway.core_schema_history set version = case version when '1' then '0.8' when '2' then '0.9'"
+                            + " else version end",
+                    "update flyway.core_schema_history set version = case version when '0.8' then '1' when '0.9' then '2'"
+                            + " else version end",
                     () -> assertRefusedAtS2(database, "버전 0.9 < 기대 " + SchemaVersionCheck.expectedVersion()));
 
             assertThat(capture.events(EventCode.STARTUP_RECOVERY)).as("S2에서 멈춰 복구(S3)는 돌지 않았다").isEmpty();
@@ -127,20 +131,20 @@ class CoreStartupSequenceIT {
     @Test
     void aHistoryAheadOfTheAppStartsAndFailedNewerRowsDoNotCount() throws SQLException {
         MujoongPostgres database = separate();
-        // 다음 배포가 V2를 이미 올렸고(앞선 이력), 그보다 높은 V3는 실패한 채 남았다
+        // 다음 배포가 앱(V2까지)보다 앞선 V3을 이미 올렸고, 그보다 높은 V4는 실패한 채 남았다
         withHistoryChange(database, """
                 insert into flyway.core_schema_history (installed_rank, version, description, type, script, checksum,
                                                         installed_by, installed_on, execution_time, success)
-                values (100, '2', 'newer app', 'SQL', 'V2__newer_app.sql', 0, 'mujoong_owner',
+                values (100, '3', 'newer app', 'SQL', 'V3__newer_app.sql', 0, 'mujoong_owner',
                         timestamp '2001-09-09 00:00:00', 0, true),
-                       (101, '3', 'failed', 'SQL', 'V3__failed.sql', 0, 'mujoong_owner',
+                       (101, '4', 'failed', 'SQL', 'V4__failed.sql', 0, 'mujoong_owner',
                         timestamp '2001-09-09 00:00:00', 0, false)
                 """, "delete from flyway.core_schema_history where installed_rank in (100, 101)",
                 () -> runner(database).run(context -> {
                     assertThat(context).hasNotFailed();
                     assertThat(context.getBean(ReadinessState.class).state()).isEqualTo(ReadinessState.State.READY);
-                    assertThat(context.getBean(SchemaVersionCheck.class).verify()).as("성공한 최고 버전(실패한 3은 세지 않는다)")
-                            .isEqualTo("2");
+                    assertThat(context.getBean(SchemaVersionCheck.class).verify()).as("성공한 최고 버전(실패한 4는 세지 않는다)")
+                            .isEqualTo("3");
                 }));
     }
 
