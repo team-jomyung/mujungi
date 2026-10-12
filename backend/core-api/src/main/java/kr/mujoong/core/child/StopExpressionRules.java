@@ -6,6 +6,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.regex.Pattern;
 import kr.mujoong.contract.error.ErrorCode;
 import kr.mujoong.core.activity.SessionPackageBuilder;
 import kr.mujoong.core.common.error.CoreApiException;
@@ -14,7 +15,8 @@ import kr.mujoong.core.common.error.CoreApiException;
  * 종료 표현 규칙 (U2 ChildProfile · FR2.4 · AC2.3.5 · AC2.3.6 · R9 · U2-J11 · 편차 (U2-i)).
  *
  * <p>기본 표현 '무중아 그만할래'는 저장하지 않는 코드 상수(U1 BR6.5 · {@link SessionPackageBuilder#DEFAULT_STOP_EXPRESSION})이고 추가 표현은
- * 최대 5개다. 표현은 NFC로 맞추고 앞뒤 공백을 뺀 2 ~ 20자, 정규화(공백 전부 제거 · 소문자) 기준으로 서로 같거나 기본 표현과 같으면 안 된다.
+ * 최대 5개다. 표현은 NFC로 맞추고 앞뒤 공백을 뺀 2 ~ 20자(코드 포인트), 정규화(공백 전부 제거 · 소문자) 기준으로 서로 같거나 기본 표현과 같으면
+ * 안 된다. 공백은 유니코드 White_Space 속성이다 — 화면(SET-01 normalizeExpression · validateExpression)과 같은 규칙이다(리뷰 8).
  * 어긋나면 400 VALIDATION_FAILED(입력값을 예외에 담지 않는다).
  */
 public final class StopExpressionRules {
@@ -26,6 +28,10 @@ public final class StopExpressionRules {
     /** 글자 수 범위. */
     public static final int MIN_LENGTH = 2;
     public static final int MAX_LENGTH = 20;
+
+    /** 공백 = 유니코드 White_Space 속성(화면 정규식 {@code \p{White_Space}}와 같은 집합, 리뷰 8). */
+    private static final Pattern EDGE_SPACE = Pattern.compile("\\A\\p{IsWhite_Space}+|\\p{IsWhite_Space}+\\z");
+    private static final Pattern ANY_SPACE = Pattern.compile("\\p{IsWhite_Space}+");
 
     private StopExpressionRules() {
     }
@@ -49,7 +55,7 @@ public final class StopExpressionRules {
         seen.add(normalize(DEFAULT_EXPRESSION));
         List<Expression> expressions = new ArrayList<>();
         for (String raw : texts) {
-            String text = raw == null ? "" : Normalizer.normalize(raw, Normalizer.Form.NFC).strip();
+            String text = clean(raw);
             int length = text.codePointCount(0, text.length());
             if (length < MIN_LENGTH || length > MAX_LENGTH) {
                 throw invalid();
@@ -63,10 +69,16 @@ public final class StopExpressionRules {
         return expressions;
     }
 
+    /** 저장할 글: NFC 뒤 앞뒤 공백(White_Space)을 뺀다. */
+    public static String clean(String text) {
+        String nfc = Normalizer.normalize(text == null ? "" : text, Normalizer.Form.NFC);
+        return EDGE_SPACE.matcher(nfc).replaceAll("");
+    }
+
     /** 정규화: NFC → 공백 전부 제거 → 소문자(U2-J11). */
     public static String normalize(String text) {
         String nfc = Normalizer.normalize(text == null ? "" : text, Normalizer.Form.NFC);
-        return nfc.replaceAll("\\s+", "").toLowerCase(Locale.ROOT);
+        return ANY_SPACE.matcher(nfc).replaceAll("").toLowerCase(Locale.ROOT);
     }
 
     private static CoreApiException invalid() {

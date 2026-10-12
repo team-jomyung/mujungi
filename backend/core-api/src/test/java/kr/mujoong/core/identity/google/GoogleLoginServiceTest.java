@@ -32,16 +32,19 @@ class GoogleLoginServiceTest {
     private static final Instant NOW = Instant.parse("2026-10-15T00:00:00Z");
     private static final String REDIRECT = "https://mujoong.invalid/parent/login/callback";
     private static final URI TOKEN_URI = URI.create("http://127.0.0.1:9/token");
+    private static final URI JWKS_URI = URI.create("http://127.0.0.1:9/certs");
 
     private final GoogleTokenClient tokens = mock(GoogleTokenClient.class);
+    private final GoogleKeysClient keys = mock(GoogleKeysClient.class);
     private final SocialAccountRepository social = mock(SocialAccountRepository.class);
     private final GuardianRepository guardians = mock(GuardianRepository.class);
     private final MutableClock clock = new MutableClock(NOW);
 
     private GoogleLoginService service(String clientId, String secret, String redirect) {
-        return new GoogleLoginService(new CoreProperties.Google(clientId, secret, redirect, TOKEN_URI, Duration.ofSeconds(1)),
-                tokens, new GoogleIdTokenReader(JsonCodec.shared()), social, guardians, mock(PlatformTransactionManager.class),
-                clock);
+        return new GoogleLoginService(
+                new CoreProperties.Google(clientId, secret, redirect, TOKEN_URI, JWKS_URI, Duration.ofSeconds(1)),
+                tokens, keys, new GoogleIdTokenReader(JsonCodec.shared()), social, guardians,
+                mock(PlatformTransactionManager.class), clock);
     }
 
     @Test
@@ -50,11 +53,11 @@ class GoogleLoginServiceTest {
 
         assertThat(outcome.failure()).isEqualTo(Failure.NOT_CONFIGURED);
         assertThat(outcome.loggedIn()).isEmpty();
-        verifyNoInteractions(tokens);
-        assertThat(new CoreProperties.Google(null, null, null, TOKEN_URI, Duration.ofSeconds(1)).toString())
+        verifyNoInteractions(tokens, keys);
+        assertThat(new CoreProperties.Google(null, null, null, TOKEN_URI, JWKS_URI, Duration.ofSeconds(1)).toString())
                 .contains("<empty>").doesNotContain("null");
-        assertThat(new CoreProperties.Google("id", "secret-value", REDIRECT, TOKEN_URI, Duration.ofSeconds(1)).toString())
-                .doesNotContain("secret-value").contains("<redacted>");
+        assertThat(new CoreProperties.Google("id", "secret-value", REDIRECT, TOKEN_URI, JWKS_URI, Duration.ofSeconds(1))
+                .toString()).doesNotContain("secret-value").contains("<redacted>");
     }
 
     @Test
@@ -66,7 +69,7 @@ class GoogleLoginServiceTest {
         assertThat(service.login("c".repeat(2049), REDIRECT).failure()).isEqualTo(Failure.BAD_REQUEST);
         assertThat(service.login("code", null).failure()).isEqualTo(Failure.BAD_REQUEST);
         assertThat(service.login("code", "https://evil.invalid/cb").failure()).isEqualTo(Failure.REDIRECT_MISMATCH);
-        verifyNoInteractions(tokens);
+        verifyNoInteractions(tokens, keys);
     }
 
     @Test
@@ -76,6 +79,10 @@ class GoogleLoginServiceTest {
         assertThat(service.login("code", REDIRECT).failure()).isEqualTo(Failure.EXCHANGE_FAILED);
 
         when(tokens.exchange(any())).thenReturn(Optional.of("not-a-token"));
+        when(keys.fetch()).thenReturn(Optional.empty());
+        assertThat(service.login("code", REDIRECT).failure()).as("서명 열쇠를 못 읽음").isEqualTo(Failure.KEYS_UNAVAILABLE);
+
+        when(keys.fetch()).thenReturn(Optional.of(GoogleIdTokenReaderTest.KEYS));
         assertThat(service.login("code", REDIRECT).failure()).isEqualTo(Failure.TOKEN_INVALID);
 
         UUID guardianId = UUID.randomUUID();

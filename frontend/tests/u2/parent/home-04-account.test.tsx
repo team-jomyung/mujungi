@@ -72,15 +72,18 @@ describe("04 지금 활동 구역(틀, AC1.4.6 · AC1.4.14 · J18)", () => {
   });
 });
 
-describe("04 앱 시작 점검(U2-J9 · AC1.1.5 · AC1.2.7 · AC1.6.4)", () => {
+describe("04 앱 시작 점검(U2-J9 · AC1.1.5 · AC1.2.7 · AC1.6.4 · U2-J8 · 편차 (U2-g))", () => {
   it.each([
     [{ consentStatus: "NOT_GIVEN", childRegistered: false }, "/parent/login"],
     [{ consentStatus: "GIVEN", childRegistered: false }, "/parent/login"],
-    [{ consentStatus: "OUTDATED", childRegistered: true }, "/parent/login"],
+    // 리뷰 6: 약관이 바뀐 로그인된 보호자는 01이 아니라 02 재동의
+    [{ consentStatus: "OUTDATED", childRegistered: true }, "/parent/consent"],
+    [{ consentStatus: "OUTDATED", childRegistered: false }, "/parent/consent"],
     [{ deletionStatus: "IN_PROGRESS" }, "/parent/login?deleting=1"],
   ])("Me %j이면 %s", async (options, route) => {
     renderParent(<Home04 />, { handler: handler("STABLE", { "GET /api/me": () => jsonResponse(200, meBody(options)) }) });
     await waitFor(() => expect(router.replace).toHaveBeenCalledWith(route));
+    expect(router.replace).toHaveBeenCalledTimes(1);
   });
 
   it("처음 한 번을 마쳤으면 머문다", async () => {

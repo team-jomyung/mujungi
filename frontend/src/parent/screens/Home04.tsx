@@ -58,7 +58,8 @@ export function Home04() {
     });
   }, [error, errorUpdatedAt, refetch, router, toast]);
 
-  // 앱 시작 점검(U2-J9 · AC1.1.5 · AC1.2.7): 처음 한 번을 마치지 않았으면 01부터
+  // 앱 시작 점검(U2-J9 · AC1.1.5 · AC1.2.7): 처음 한 번을 마치지 않았으면 01부터. 약관이 바뀐 보호자(OUTDATED)는 이미 한 번을
+  // 마쳤으므로 02 재동의로 보낸다(U2-J8 · 편차 (U2-g) · 리뷰 6, 로그인 직후 분기 routeAfterLogin과 같다)
   const meData = me.data;
   useEffect(() => {
     if (meData === undefined) {
@@ -66,6 +67,8 @@ export function Home04() {
     }
     if (meData.deletionInProgress) {
       router.replace(PARENT_ROUTES.loginDeleting);
+    } else if (meData.consentStatus === "OUTDATED") {
+      router.replace(PARENT_ROUTES.consent);
     } else if (meData.consentStatus !== "GIVEN" || !meData.childRegistered) {
       router.replace(PARENT_ROUTES.login);
     }

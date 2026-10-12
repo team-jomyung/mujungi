@@ -16,19 +16,29 @@ import { useToast } from "@/shared/toast/ToastProvider";
 // 입력 칸이 수정 상태가 되고, 「+ 표현 추가」는 빈 입력 칸을 연다(5개면 꺼짐). 칸의 「확인」은 목록에만 반영하고(저장 전),
 // 「삭제」는 목록에서 뺀다. 「저장」이면 통째 저장 후 05, 화면 「취소」 · 「←」는 변경을 버리고 05.
 // 2 ~ 20자 · 중복(공백 · 대소문자 무시, 기본 표현 포함) · 5개를 어기면 칸 아래 오류 글과 「저장」 꺼짐. 실패는 실패로 알린다.
+// 규칙은 서버 StopExpressionRules와 글자 하나까지 같다(리뷰 8): 공백 = 유니코드 White_Space 속성, 글자 수 = NFC 뒤 코드 포인트.
+// 입력 칸에 maxLength를 두지 않는다(UTF-16 단위라 이모지 20개를 못 친다) — 넘으면 오류 글로 알린다.
 
 export const STOP_MIN_LENGTH = 2;
 export const STOP_MAX_LENGTH = 20;
 export const STOP_MAX_ITEMS = 5;
 
-/** 정규화(공백 전부 제거 · 소문자, 서버 R9와 같은 기준). */
+const EDGE_SPACE = /^\p{White_Space}+|\p{White_Space}+$/gu;
+const ANY_SPACE = /\p{White_Space}+/gu;
+
+/** 저장할 글: NFC 뒤 앞뒤 공백(White_Space)을 뺀다. */
+export function cleanExpression(text: string): string {
+  return text.normalize("NFC").replace(EDGE_SPACE, "");
+}
+
+/** 정규화(NFC → 공백 전부 제거 → 소문자, 서버 R9와 같은 기준). */
 export function normalizeExpression(text: string): string {
-  return text.normalize("NFC").replace(/\s+/g, "").toLowerCase();
+  return text.normalize("NFC").replace(ANY_SPACE, "").toLowerCase();
 }
 
 /** 칸 입력 검증: 오류 문구 또는 null(통과). {@code editingIndex}의 자기 자신과는 겹침으로 보지 않는다. */
 export function validateExpression(text: string, others: readonly string[], editingIndex: number | null): string | null {
-  const trimmed = text.trim();
+  const trimmed = cleanExpression(text);
   const length = [...trimmed].length;
   if (length < STOP_MIN_LENGTH || length > STOP_MAX_LENGTH) {
     return ACCOUNT_PROPOSED_COPY.stopLengthError;
@@ -113,7 +123,7 @@ export function StopExpressions01() {
       setDraft({ ...draft, error: problem });
       return;
     }
-    const text = draft.text.trim();
+    const text = cleanExpression(draft.text);
     setItems(draft.index === null ? [...list, text] : list.map((item, index) => (index === draft.index ? text : item)));
     setDraft(null);
   };
@@ -194,7 +204,6 @@ export function StopExpressions01() {
                 className={`mj-input${draft.error !== null ? " mj-input--invalid" : ""}`}
                 data-testid="stop-input"
                 value={draft.text}
-                maxLength={STOP_MAX_LENGTH}
                 aria-invalid={draft.error !== null}
                 aria-describedby={draft.error !== null ? errorId : undefined}
                 autoComplete="off"

@@ -18,7 +18,8 @@ import kr.mujoong.core.identity.Consent;
  *
  * <ul>
  *   <li>GIVEN: 현재 정책 버전 4항목이 모두 GIVEN.
- *   <li>OUTDATED: GIVEN은 아니고, 다른(예전) 정책 버전에 효력 있는 GIVEN 행이 있다 — 02 재동의.
+ *   <li>OUTDATED: GIVEN은 아니고, 다른(예전) 정책 버전 하나에서 네 항목의 최신 행이 모두 GIVEN이다 — 02 재동의(리뷰 7: 예전 버전도 항목별
+ *       최신 행으로 본다. 그 버전의 철회 행이 뒤에 쌓였거나 일부 항목만 있으면 동의가 아니었다).
  *   <li>NOT_GIVEN: 그 밖(동의 행 없음, 일부만, 철회).
  * </ul>
  *
@@ -92,15 +93,32 @@ public final class ConsentStatusRule {
         }
         String policyVersion = currentPolicyVersion.get();
         for (Type type : Type.values()) {
-            given.put(type, latest(consents, type, policyVersion, at).map(row -> row.isGivenAt(at)).orElse(false));
+            given.put(type, givenAt(consents, type, policyVersion, at));
         }
         if (given.values().stream().allMatch(Boolean::booleanValue)) {
             return new Evaluation(Status.GIVEN, given);
         }
         boolean olderGiven = consents.stream()
-                .anyMatch(row -> row.getPolicyVersion() != null && !policyVersion.equals(row.getPolicyVersion())
-                        && row.isGivenAt(at));
+                .map(Consent::getPolicyVersion)
+                .filter(version -> version != null && !policyVersion.equals(version))
+                .distinct()
+                .anyMatch(version -> allGivenAt(consents, version, at));
         return new Evaluation(olderGiven ? Status.OUTDATED : Status.NOT_GIVEN, given);
+    }
+
+    /** 그 정책 버전의 네 항목이 모두 GIVEN인가(항목별 최신 행 기준). */
+    private static boolean allGivenAt(Collection<Consent> consents, String policyVersion, Instant at) {
+        for (Type type : Type.values()) {
+            if (!givenAt(consents, type, policyVersion, at)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** 그 정책 버전 · 항목의 최신 효력 행이 GIVEN인가. */
+    private static boolean givenAt(Collection<Consent> consents, Type type, String policyVersion, Instant at) {
+        return latest(consents, type, policyVersion, at).map(row -> row.isGivenAt(at)).orElse(false);
     }
 
     private static Optional<Consent> latest(Collection<Consent> consents, Type type, String policyVersion, Instant at) {

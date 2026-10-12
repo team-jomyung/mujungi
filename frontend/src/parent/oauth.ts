@@ -12,9 +12,9 @@ export const OAUTH_STATE_PATH = "/parent/login";
 export const OAUTH_STATE_MAX_AGE_SECONDS = 600;
 /** 구글 인가 엔드포인트(공개 주소). */
 export const GOOGLE_AUTHORIZE_URL = "https://accounts.google.com/o/oauth2/v2/auth";
-/** 환경 변수 이름. */
-export const GOOGLE_CLIENT_ID_ENV = "MUJOONG_GOOGLE_CLIENT_ID";
-export const GOOGLE_REDIRECT_URI_ENV = "MUJOONG_GOOGLE_REDIRECT_URI";
+/** 환경 변수 이름(Core와 같은 이름 하나 — infra/bin/render-env가 core-api.env · web.env에 함께 쓴다, 리뷰 3). */
+export const GOOGLE_CLIENT_ID_ENV = "GOOGLE_OAUTH_CLIENT_ID";
+export const GOOGLE_REDIRECT_URI_ENV = "GOOGLE_OAUTH_REDIRECT_URI";
 
 export interface GoogleOAuthConfig {
   readonly clientId: string;

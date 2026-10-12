@@ -6,9 +6,8 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import kr.mujoong.contract.json.JsonCodec;
-import kr.mujoong.core.catalog.ApprovedContentRepository;
-import kr.mujoong.core.catalog.ContentCatalogService;
-import kr.mujoong.core.catalog.ContentCatalogService.PinnedContent;
+import kr.mujoong.core.activity.ApprovedContentCatalog;
+import kr.mujoong.core.activity.ApprovedContentCatalog.PinnedContent;
 import kr.mujoong.core.consent.ConsentStatusRule.Type;
 import org.springframework.stereotype.Component;
 
@@ -16,8 +15,9 @@ import org.springframework.stereotype.Component;
  * 02 · 02-1 약관 본문 읽기 (U2 ConsentPolicy · FR1.2 · FR1.3 · AC1.2.2 · AC1.2.9 · R7 · 편차 (U2-c) · U2-J7).
  *
  * <p>현재 정책 버전은 승인 문구 CONSENT_POLICY의 최신 승인 글(U1 J114)이고, 항목별 본문은 승인 문구 {@code POLICY_TERMS_<항목>}의 최신 승인
- * 버전 글(JSON {@code {title, sections[{heading, body}]}})이다. 네 항목 중 하나라도 없거나 형식이 틀리면 빈 값이다(호출자가 500).
- * 모든 항목에 '생성형 AI 안내' 절이 '동의하지 않으면' 절 바로 앞에 있어야 한다(mockups F2) — 없으면 형식 오류로 본다.
+ * 버전 글(JSON {@code {title, sections[{heading, body}]}})이다. 둘 다 U1 시작 게이트와 같은 {@link ApprovedContentCatalog}에서 읽는다(리뷰 10:
+ * 카탈로그는 하나). 네 항목 중 하나라도 없거나 형식이 틀리면 빈 값이다(호출자가 500). 모든 항목에 '생성형 AI 안내' 절이 '동의하지 않으면' 절
+ * 바로 앞에 있어야 한다(mockups F2) — 없으면 형식 오류로 본다.
  */
 @Component
 public class PolicyTermsReader {
@@ -29,19 +29,17 @@ public class PolicyTermsReader {
     /** '동의하지 않으면' 소제목(문구표 C.S-02-1.35.9). */
     public static final String IF_DENIED_HEADING = "동의하지 않으면";
 
-    private final ApprovedContentRepository repository;
-    private final ContentCatalogService catalog;
+    private final ApprovedContentCatalog catalog;
     private final JsonCodec json;
 
-    public PolicyTermsReader(ApprovedContentRepository repository, ContentCatalogService catalog, JsonCodec json) {
-        this.repository = Objects.requireNonNull(repository, "repository");
+    public PolicyTermsReader(ApprovedContentCatalog catalog, JsonCodec json) {
         this.catalog = Objects.requireNonNull(catalog, "catalog");
         this.json = Objects.requireNonNull(json, "json");
     }
 
-    /** 현재 정책 버전(J114). */
+    /** 현재 정책 버전(J114, 시작 게이트와 같은 카탈로그). */
     public Optional<String> currentPolicyVersion() {
-        return repository.findCurrentPolicyVersion();
+        return catalog.currentPolicyVersion();
     }
 
     /** 항목 하나의 약관(본문 버전 id 포함). */

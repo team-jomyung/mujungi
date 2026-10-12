@@ -68,6 +68,33 @@ class ConsentStatusRuleTest {
     }
 
     @Test
+    void anOlderVersionWithdrawnAfterItWasGivenIsNotGivenRatherThanOutdated() {
+        // 리뷰 7: 예전 버전의 항목별 최신 행이 철회면 그 버전은 동의가 아니다(아무 GIVEN 행이나 보지 않는다)
+        List<Consent> rows = new ArrayList<>(allGiven("1.0", 1, T0));
+        rows.add(new Consent(UUID.randomUUID(), GUARDIAN, UUID.randomUUID(), Type.RAW_AUDIO.name(), Consent.STATUS_WITHDRAWN,
+                2, "1.0", T0.plusSeconds(10)));
+
+        assertThat(ConsentStatusRule.evaluate(rows, Optional.of("1.1"), T0.plusSeconds(5)).status())
+                .as("철회 전에는 예전 버전 동의가 살아 있어 재동의 대상").isEqualTo(Status.OUTDATED);
+        assertThat(ConsentStatusRule.evaluate(rows, Optional.of("1.1"), T0.plusSeconds(10)).status())
+                .as("철회가 뒤에 쌓이면 예전 버전도 동의가 아니다").isEqualTo(Status.NOT_GIVEN);
+    }
+
+    @Test
+    void anOlderVersionWithOnlySomeItemsGivenIsNotOutdated() {
+        List<Consent> partial = new ArrayList<>(allGiven("1.0", 1, T0));
+        partial.removeIf(row -> row.getConsentType().equals(Type.REPORT_SHARING.name()));
+
+        assertThat(ConsentStatusRule.evaluate(partial, Optional.of("1.1"), T0).status())
+                .as("예전 버전도 네 항목이 모두 GIVEN이어야 동의였다").isEqualTo(Status.NOT_GIVEN);
+
+        List<Consent> twoOlder = new ArrayList<>(partial);
+        twoOlder.addAll(allGiven("0.9", 1, T0));
+        assertThat(ConsentStatusRule.evaluate(twoOlder, Optional.of("1.1"), T0).status())
+                .as("예전 버전 하나라도 네 항목이 살아 있으면 재동의 대상").isEqualTo(Status.OUTDATED);
+    }
+
+    @Test
     void rowsThatStartInTheFutureDoNotCountYet() {
         List<Consent> future = allGiven("1.0", 1, T0.plus(Duration.ofMinutes(1)));
 

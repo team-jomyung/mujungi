@@ -87,6 +87,25 @@ class ChildRulesTest {
         assertThat(StopExpressionRules.normalize(null)).isEmpty();
     }
 
+    /**
+     * 화면과 같은 규칙(리뷰 8): 공백 = 유니코드 White_Space 속성, 글자 수 = NFC 뒤 코드 포인트. 같은 표본을
+     * frontend/tests/u2/parent/stop-expressions.test.tsx '서버와 같은 규칙'이 쓴다.
+     */
+    @Test
+    void whitespaceAndLengthFollowTheSameUnicodeRulesAsTheScreen() {
+        assertThat(StopExpressionRules.normalize("이제　그만")).as("전각 공백").isEqualTo("이제그만");
+        assertThat(StopExpressionRules.normalize("이제 그만")).as("줄바꿈 없는 공백").isEqualTo("이제그만");
+        assertThat(StopExpressionRules.normalize("끝\u0085내")).as("NEL").isEqualTo("끝내");
+        assertThat(StopExpressionRules.normalize("이제﻿그만")).as("BOM은 공백이 아니다").isEqualTo("이제﻿그만");
+        expectInvalid(() -> StopExpressionRules.validate(List.of(" 끝 ")));
+        assertThat(StopExpressionRules.validate(List.of(" 끝내 ")).get(0).text()).isEqualTo("끝내");
+        String nfdTwenty = java.text.Normalizer.normalize("가".repeat(20), java.text.Normalizer.Form.NFD);
+        assertThat(StopExpressionRules.validate(List.of(nfdTwenty))).as("NFC로 20자").hasSize(1);
+        assertThat(StopExpressionRules.validate(List.of("😀".repeat(20)))).as("코드 포인트 20개").hasSize(1);
+        expectInvalid(() -> StopExpressionRules.validate(List.of("😀".repeat(21))));
+        expectInvalid(() -> StopExpressionRules.validate(List.of("이제　그만", "이제그만")));
+    }
+
     private static void expectInvalid(Runnable call) {
         assertThatThrownBy(call::run).isInstanceOfSatisfying(CoreApiException.class,
                 e -> assertThat(e.code()).isEqualTo(ErrorCode.VALIDATION_FAILED));

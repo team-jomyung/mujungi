@@ -10,14 +10,12 @@ import kr.mujoong.contract.json.JsonCodec;
 import kr.mujoong.contract.time.MujoongClock;
 import kr.mujoong.core.child.ChildInput.Valid;
 import kr.mujoong.core.child.StopExpressionRepository.StoredExpression;
-import kr.mujoong.core.common.db.ClockParams;
 import kr.mujoong.core.common.db.SqlErrors;
 import kr.mujoong.core.common.error.CoreApiException;
 import kr.mujoong.core.identity.Child;
 import kr.mujoong.core.identity.ChildRepository;
+import kr.mujoong.core.identity.GuardianWriteLock;
 import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
-import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -28,7 +26,9 @@ import org.springframework.transaction.support.TransactionTemplate;
  * <ul>
  *   <li>계정당 아이 하나(core_child.guardian_id 유일). 두 번째 등록은 409 CHILD_EXISTS, 없는 아이는 404 CHILD_NOT_REGISTERED.
  *   <li>수정은 같은 행을 바꾼다(childId · 보호자 그대로, 기존 활동 · 기록의 대상 아이가 바뀌지 않음, AC1.3.9).
- *   <li>종료 표현은 통째 교체(트랜잭션 안에서 아이 행을 잠근다). 저장한 표현은 다음 세션 패키지부터 쓰인다(AC2.3.7, U4가 포트로 읽음).
+ *   <li>종료 표현은 통째 교체. 저장한 표현은 다음 세션 패키지부터 쓰인다(AC2.3.7, U4가 포트로 읽음).
+ *   <li>등록 · 수정 · 교체는 트랜잭션 첫머리에 보호자 행을 잠그고 ACTIVE인지 다시 확인한다 — 계정 삭제가 접수됐으면 403
+ *       ACCOUNT_DELETION_IN_PROGRESS({@link GuardianWriteLock}, 리뷰 9).
  * </ul>
  */
 @Component
@@ -36,7 +36,7 @@ public class ChildProfileService {
 
     private final ChildRepository children;
     private final StopExpressionRepository expressions;
-    private final NamedParameterJdbcTemplate jdbc;
+    private final GuardianWriteLock guardianLock;
     private final TransactionTemplate transactions;
     private final JsonCodec json;
     private final MujoongClock clock;
@@ -44,13 +44,13 @@ public class ChildProfileService {
     public ChildProfileService(
             ChildRepository children,
             StopExpressionRepository expressions,
-            NamedParameterJdbcTemplate jdbc,
+            GuardianWriteLock guardianLock,
             PlatformTransactionManager transactionManager,
             JsonCodec json,
             MujoongClock clock) {
         this.children = Objects.requireNonNull(children, "children");
         this.expressions = Objects.requireNonNull(expressions, "expressions");
-        this.jdbc = Objects.requireNonNull(jdbc, "jdbc");
+        this.guardianLock = Objects.requireNonNull(guardianLock, "guardianLock");
         this.transactions = new TransactionTemplate(Objects.requireNonNull(transactionManager, "transactionManager"));
         this.json = Objects.requireNonNull(json, "json");
         this.clock = Objects.requireNonNull(clock, "clock");
@@ -86,6 +86,7 @@ public class ChildProfileService {
         Objects.requireNonNull(input, "input");
         try {
             return transactions.execute(status -> {
+                guardianLock.lockActive(guardianId);
                 if (children.findByGuardianId(guardianId).isPresent()) {
                     throw CoreApiException.of(ErrorCode.CHILD_EXISTS);
                 }
@@ -107,6 +108,7 @@ public class ChildProfileService {
     public ChildView update(UUID guardianId, String displayName, Integer age, List<String> interests) {
         Objects.requireNonNull(guardianId, "guardianId");
         return transactions.execute(status -> {
+            guardianLock.lockActive(guardianId);
             Child child = activeChild(guardianId).orElseThrow(() -> CoreApiException.of(ErrorCode.CHILD_NOT_REGISTERED));
             ChildView current = view(child);
             Valid next = ChildInput.forUpdate(new Valid(current.displayName(), current.age(), current.interests()),
@@ -135,9 +137,9 @@ public class ChildProfileService {
     public void replaceStopExpressions(UUID guardianId, List<String> texts) {
         List<StopExpressionRules.Expression> valid = StopExpressionRules.validate(texts);
         transactions.executeWithoutResult(status -> {
+            // 보호자 행 잠금이 같은 보호자의 동시 교체도 줄 세운다(아이는 보호자당 하나)
+            guardianLock.lockActive(guardianId);
             Child child = activeChild(guardianId).orElseThrow(() -> CoreApiException.of(ErrorCode.CHILD_NOT_REGISTERED));
-            jdbc.queryForList("select id from core.core_child where id = :id for update",
-                    ClockParams.uuid(new MapSqlParameterSource(), "id", child.getId()), UUID.class);
             expressions.replaceAll(child.getId(), valid, clock.now());
         });
     }

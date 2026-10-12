@@ -8,9 +8,8 @@ import static org.mockito.Mockito.when;
 import java.util.Optional;
 import java.util.UUID;
 import kr.mujoong.contract.json.JsonCodec;
-import kr.mujoong.core.catalog.ApprovedContentRepository;
-import kr.mujoong.core.catalog.ContentCatalogService;
-import kr.mujoong.core.catalog.ContentCatalogService.PinnedContent;
+import kr.mujoong.core.activity.ApprovedContentCatalog;
+import kr.mujoong.core.activity.ApprovedContentCatalog.PinnedContent;
 import kr.mujoong.core.consent.ConsentStatusRule.Type;
 import kr.mujoong.core.consent.PolicyTermsDevSeed.TermsSeed;
 import kr.mujoong.core.consent.PolicyTermsReader.CurrentPolicy;
@@ -22,13 +21,12 @@ import org.junit.jupiter.api.Test;
 @Tag("u2")
 class PolicyTermsReaderTest {
 
-    private final ApprovedContentRepository repository = mock(ApprovedContentRepository.class);
-    private final ContentCatalogService catalog = mock(ContentCatalogService.class);
-    private final PolicyTermsReader reader = new PolicyTermsReader(repository, catalog, JsonCodec.shared());
+    private final ApprovedContentCatalog catalog = mock(ApprovedContentCatalog.class);
+    private final PolicyTermsReader reader = new PolicyTermsReader(catalog, JsonCodec.shared());
 
     @BeforeEach
     void seedTerms() {
-        when(repository.findCurrentPolicyVersion()).thenReturn(Optional.of("1.0"));
+        when(catalog.currentPolicyVersion()).thenReturn(Optional.of("1.0"));
         for (TermsSeed seed : PolicyTermsDevSeed.TERMS) {
             when(catalog.latestApproved(seed.code())).thenReturn(Optional.of(new PinnedContent(seed.versionId(), seed.text(), null)));
         }
@@ -53,10 +51,10 @@ class PolicyTermsReaderTest {
 
     @Test
     void missingPolicyVersionOrAnyItemMakesTheWholePolicyUnavailable() {
-        when(repository.findCurrentPolicyVersion()).thenReturn(Optional.empty());
+        when(catalog.currentPolicyVersion()).thenReturn(Optional.empty());
         assertThat(reader.current()).isEmpty();
 
-        when(repository.findCurrentPolicyVersion()).thenReturn(Optional.of("1.0"));
+        when(catalog.currentPolicyVersion()).thenReturn(Optional.of("1.0"));
         when(catalog.latestApproved("POLICY_TERMS_RAW_AUDIO")).thenReturn(Optional.empty());
         assertThat(reader.current()).isEmpty();
         assertThat(reader.currentPolicyVersion()).contains("1.0");

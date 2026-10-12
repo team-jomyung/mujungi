@@ -16,6 +16,7 @@ import kr.mujoong.core.activity.RealtimeSessionClient;
 import kr.mujoong.core.common.db.ClockParams;
 import kr.mujoong.core.common.deletion.DeletionParticipant;
 import kr.mujoong.core.config.CoreProperties;
+import kr.mujoong.core.identity.GuardianSessions;
 import kr.mujoong.core.identity.SocialAccountRepository;
 import kr.mujoong.core.messaging.CoreOutboxWriter;
 import kr.mujoong.core.observability.EventLogger;
@@ -31,7 +32,7 @@ import org.springframework.transaction.support.TransactionTemplate;
  *
  * <p>{@link #runOnce}는 처리할 때가 된 REQUESTED 요청을 하나씩 선점하고(FOR UPDATE SKIP LOCKED + next_attempt_at을 세션 대기 시한만큼 미룸 —
  * 여러 인스턴스 · 바퀴가 겹쳐도 한 곳만 처리) 다음 한 단계를 진행한다. 각 단계는 멱등이라 실패하면 시도 수 · 예외 종류만 남기고 다음 바퀴에
- * 다시 한다.
+ * 다시 한다. 바퀴마다 먼저 그 보호자의 로그인 세션을 다시 지운다(접수 뒤 남은 세션 정리, 리뷰 2).
  *
  * <ol>
  *   <li>진행 세션 사본이 있으면 CONSENT_WITHDRAWN 끝내기를 한 번 보내고, 사본이 종료 상태가 되거나 {@code deletion-session-wait}(30초)가 지날
@@ -39,7 +40,7 @@ import org.springframework.transaction.support.TransactionTemplate;
  *   <li>Core 참가자를 {@code @Order} 순서로 모두 부른다(활동 → 기기 → 동의 → 아이 → 메시징, 뒤 유닛 참가자도 빈이면 함께).
  *   <li>한 트랜잭션에 DeletionRequested Outbox + 요청의 core_cleared_at · realtime_requested_at.
  *   <li>DeletionCompleted 수신(realtime_completed_at, {@link DeletionCompletedHandler}) 뒤: 참가자를 한 번 더(전달이 끝난 메시징 행 정리,
- *       BR5.14 (d)) → 한 트랜잭션에 소셜 계정 · 로그인 세션 행 · 보호자 행 삭제 + 요청 DONE.
+ *       BR5.14 (d)) → 한 트랜잭션에 소셜 계정 · 보호자 행 삭제 + 요청 DONE.
  * </ol>
  *
  * <p>Realtime 쪽 삭제와 DeletionCompleted 발행은 U4가 붙인다. 그 전까지 요청은 REQUESTED로 남고 보호자는 계속 차단된다(J19).
@@ -56,6 +57,7 @@ public class DeletionCommander {
     private final RealtimeSessionClient realtime;
     private final CoreOutboxWriter outbox;
     private final SocialAccountRepository socialAccounts;
+    private final GuardianSessions sessions;
     private final NamedParameterJdbcTemplate jdbc;
     private final TransactionTemplate transactions;
     private final EventLogger events;
@@ -71,6 +73,7 @@ public class DeletionCommander {
             RealtimeSessionClient realtime,
             CoreOutboxWriter outbox,
             SocialAccountRepository socialAccounts,
+            GuardianSessions sessions,
             NamedParameterJdbcTemplate jdbc,
             PlatformTransactionManager transactionManager,
             EventLogger events,
@@ -82,6 +85,7 @@ public class DeletionCommander {
         this.realtime = Objects.requireNonNull(realtime, "realtime");
         this.outbox = Objects.requireNonNull(outbox, "outbox");
         this.socialAccounts = Objects.requireNonNull(socialAccounts, "socialAccounts");
+        this.sessions = Objects.requireNonNull(sessions, "sessions");
         this.jdbc = Objects.requireNonNull(jdbc, "jdbc");
         this.transactions = new TransactionTemplate(Objects.requireNonNull(transactionManager, "transactionManager"));
         this.events = Objects.requireNonNull(events, "events");
@@ -121,6 +125,8 @@ public class DeletionCommander {
         }
         DeletionRequest request = snapshot.get();
         try {
+            // 바퀴마다 로그인 세션을 다시 지운다: 접수의 closeAll이 실패했거나 접수와 겹친 로그인이 그 뒤에 세션을 저장했을 수 있다(리뷰 2)
+            sessions.closeAll(request.guardianId());
             if (request.realtimeCompletedAt() != null) {
                 return finish(request);
             }
@@ -176,16 +182,17 @@ public class DeletionCommander {
         }
     }
 
-    /** ④ 마무리: 참가자 한 번 더 → 소셜 계정 · 로그인 세션 행 · 보호자 행 삭제 + DONE(한 트랜잭션). */
+    /**
+     * ④ 마무리: 참가자 한 번 더 → 소셜 계정 · 보호자 행 삭제 + DONE(한 트랜잭션). 로그인 세션은 이 바퀴 첫머리에 {@link GuardianSessions#closeAll}이
+     * 지웠고, 삭제 처리 중 계정의 로그인은 세션을 만들지 않는다(U2-J5).
+     */
     private Step finish(DeletionRequest request) {
         runParticipants(request);
         transactions.executeWithoutResult(status -> {
             Instant now = clock.now();
             socialAccounts.deleteByGuardian(request.guardianId());
-            MapSqlParameterSource params = ClockParams.uuid(new MapSqlParameterSource(), "id", request.guardianId());
-            jdbc.update("delete from core.core_spring_session where principal_name = :name",
-                    new MapSqlParameterSource("name", request.guardianId().toString()));
-            jdbc.update("delete from core.core_guardian where id = :id", params);
+            jdbc.update("delete from core.core_guardian where id = :id",
+                    ClockParams.uuid(new MapSqlParameterSource(), "id", request.guardianId()));
             requests.markDone(request.id(), now);
         });
         return Step.DONE;

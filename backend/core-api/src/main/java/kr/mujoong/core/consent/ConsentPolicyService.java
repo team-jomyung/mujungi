@@ -11,7 +11,6 @@ import java.util.Set;
 import java.util.UUID;
 import kr.mujoong.contract.error.ErrorCode;
 import kr.mujoong.contract.time.MujoongClock;
-import kr.mujoong.core.common.db.ClockParams;
 import kr.mujoong.core.common.error.CoreApiException;
 import kr.mujoong.core.consent.ConsentStatusRule.Evaluation;
 import kr.mujoong.core.consent.ConsentStatusRule.Status;
@@ -21,8 +20,7 @@ import kr.mujoong.core.identity.Child;
 import kr.mujoong.core.identity.ChildRepository;
 import kr.mujoong.core.identity.Consent;
 import kr.mujoong.core.identity.ConsentRepository;
-import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
-import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
+import kr.mujoong.core.identity.GuardianWriteLock;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -34,7 +32,8 @@ import org.springframework.transaction.support.TransactionTemplate;
  *   <li>상태: 보호자의 동의 행을 {@link ConsentStatusRule}로 판정한다(NOT_GIVEN · GIVEN · OUTDATED).
  *   <li>저장: 4항목이 한 번씩, 모두 agreed=true, 정책 버전이 현재 버전일 때만 받는다(어긋나면 400). 이미 현재 버전 4항목이 GIVEN이면 아무것도
  *       쓰지 않는다. 아니면 항목마다 consent_version을 올린 새 GIVEN 행(효력 시작 = 지금, 아이가 있으면 그 아이, 약관 본문 버전)을 쓴다.
- *       보호자 행을 잠가 같은 보호자의 동시 저장을 줄 세운다. 변경 · 철회 API는 없다(철회 = 계정 삭제, AC1.2.8).
+ *       보호자 행을 잠가 같은 보호자의 동시 저장 · 계정 삭제 접수와 줄 세우고, 잠근 행이 ACTIVE가 아니면 403
+ *       ACCOUNT_DELETION_IN_PROGRESS다({@link GuardianWriteLock}, 리뷰 9). 변경 · 철회 API는 없다(철회 = 계정 삭제, AC1.2.8).
  * </ul>
  */
 @Component
@@ -43,7 +42,7 @@ public class ConsentPolicyService {
     private final ConsentRepository consents;
     private final ChildRepository children;
     private final PolicyTermsReader terms;
-    private final NamedParameterJdbcTemplate jdbc;
+    private final GuardianWriteLock guardianLock;
     private final TransactionTemplate transactions;
     private final MujoongClock clock;
 
@@ -51,13 +50,13 @@ public class ConsentPolicyService {
             ConsentRepository consents,
             ChildRepository children,
             PolicyTermsReader terms,
-            NamedParameterJdbcTemplate jdbc,
+            GuardianWriteLock guardianLock,
             PlatformTransactionManager transactionManager,
             MujoongClock clock) {
         this.consents = Objects.requireNonNull(consents, "consents");
         this.children = Objects.requireNonNull(children, "children");
         this.terms = Objects.requireNonNull(terms, "terms");
-        this.jdbc = Objects.requireNonNull(jdbc, "jdbc");
+        this.guardianLock = Objects.requireNonNull(guardianLock, "guardianLock");
         this.transactions = new TransactionTemplate(Objects.requireNonNull(transactionManager, "transactionManager"));
         this.clock = Objects.requireNonNull(clock, "clock");
     }
@@ -115,7 +114,7 @@ public class ConsentPolicyService {
             throw CoreApiException.of(ErrorCode.VALIDATION_FAILED);
         }
         Integer written = transactions.execute(status -> {
-            lockGuardian(guardianId);
+            guardianLock.lockActive(guardianId);
             Instant now = clock.now();
             List<Consent> existing = consents.findByActorGuardianId(guardianId);
             if (ConsentStatusRule.evaluate(existing, Optional.of(current.policyVersion()), now).ok()) {
@@ -150,8 +149,4 @@ public class ConsentPolicyService {
         }
     }
 
-    private void lockGuardian(UUID guardianId) {
-        jdbc.queryForList("select id from core.core_guardian where id = :id for update",
-                ClockParams.uuid(new MapSqlParameterSource(), "id", guardianId), UUID.class);
-    }
 }

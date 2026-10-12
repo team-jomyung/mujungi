@@ -62,12 +62,14 @@ afterEach(() => {
 
 describe("oauth 도우미", () => {
   it("환경 변수 둘이 다 있어야 설정이 있다(U2-J1)", () => {
-    expect(readGoogleConfig({ MUJOONG_GOOGLE_CLIENT_ID: CLIENT_ID, MUJOONG_GOOGLE_REDIRECT_URI: REDIRECT_URI })).toEqual({
+    expect(readGoogleConfig({ GOOGLE_OAUTH_CLIENT_ID: CLIENT_ID, GOOGLE_OAUTH_REDIRECT_URI: REDIRECT_URI })).toEqual({
       clientId: CLIENT_ID,
       redirectUri: REDIRECT_URI,
     });
-    expect(readGoogleConfig({ MUJOONG_GOOGLE_CLIENT_ID: CLIENT_ID })).toBeNull();
-    expect(readGoogleConfig({ MUJOONG_GOOGLE_CLIENT_ID: " ", MUJOONG_GOOGLE_REDIRECT_URI: REDIRECT_URI })).toBeNull();
+    expect(readGoogleConfig({ GOOGLE_OAUTH_CLIENT_ID: CLIENT_ID })).toBeNull();
+    expect(readGoogleConfig({ GOOGLE_OAUTH_CLIENT_ID: " ", GOOGLE_OAUTH_REDIRECT_URI: REDIRECT_URI })).toBeNull();
+    // 리뷰 3: web은 Core와 같은 이름만 읽는다(예전 web 전용 이름은 배선에 없다)
+    expect(readGoogleConfig({ MUJOONG_GOOGLE_CLIENT_ID: CLIENT_ID, MUJOONG_GOOGLE_REDIRECT_URI: REDIRECT_URI })).toBeNull();
   });
 
   it("인가 주소는 code · openid · state를 싣고 state는 매번 새 값이다", () => {
@@ -98,8 +100,8 @@ describe("oauth 도우미", () => {
 
 describe("GET /parent/login/google", () => {
   it("state를 HttpOnly 쿠키에 두고 구글로 보낸다", () => {
-    vi.stubEnv("MUJOONG_GOOGLE_CLIENT_ID", CLIENT_ID);
-    vi.stubEnv("MUJOONG_GOOGLE_REDIRECT_URI", REDIRECT_URI);
+    vi.stubEnv("GOOGLE_OAUTH_CLIENT_ID", CLIENT_ID);
+    vi.stubEnv("GOOGLE_OAUTH_REDIRECT_URI", REDIRECT_URI);
     const response = googleStart(new NextRequest("https://mujoong.invalid/parent/login/google"));
 
     expect(response.status).toBe(302);
@@ -129,8 +131,8 @@ describe("/parent/login/callback", () => {
     ParentLoginCallbackPage({ searchParams: Promise.resolve(params) });
 
   it("state가 쿠키와 같으면 교환 화면을 그린다", async () => {
-    vi.stubEnv("MUJOONG_GOOGLE_CLIENT_ID", CLIENT_ID);
-    vi.stubEnv("MUJOONG_GOOGLE_REDIRECT_URI", REDIRECT_URI);
+    vi.stubEnv("GOOGLE_OAUTH_CLIENT_ID", CLIENT_ID);
+    vi.stubEnv("GOOGLE_OAUTH_REDIRECT_URI", REDIRECT_URI);
     cookieJar.value = "state-1";
     const element = elementOf(await call({ code: "code-1", state: "state-1" }));
     expect(element.type).toBe(LoginCallback);
@@ -145,8 +147,8 @@ describe("/parent/login/callback", () => {
     ["취소", { error: "access_denied", state: "state-1" }, "state-1"],
     ["code 여러 개", { code: ["a", "b"], state: "state-1" }, "state-1"],
   ])("%s이면 01 실패로 돌려보낸다", async (_, params, cookie) => {
-    vi.stubEnv("MUJOONG_GOOGLE_CLIENT_ID", CLIENT_ID);
-    vi.stubEnv("MUJOONG_GOOGLE_REDIRECT_URI", REDIRECT_URI);
+    vi.stubEnv("GOOGLE_OAUTH_CLIENT_ID", CLIENT_ID);
+    vi.stubEnv("GOOGLE_OAUTH_REDIRECT_URI", REDIRECT_URI);
     cookieJar.value = cookie;
     expect(await digestOf(() => call(params))).toBe("NEXT_REDIRECT;replace;/parent/login?failed=1;307;");
   });

@@ -1,19 +1,27 @@
 package kr.mujoong.core.web;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import kr.mujoong.contract.error.ErrorCode;
+import kr.mujoong.contract.json.JsonCodec;
+import kr.mujoong.contract.log.EventCode;
 import kr.mujoong.contract.status.ConnectionState;
-import kr.mujoong.core.catalog.ApprovedContentVersion;
-import kr.mujoong.core.catalog.ContentCatalogService;
+import kr.mujoong.core.activity.ApprovedContentCatalog;
+import kr.mujoong.core.child.ChildInput;
 import kr.mujoong.core.child.ChildProfileService;
 import kr.mujoong.core.child.ChildProfileService.ChildContext;
 import kr.mujoong.core.common.db.DbTestSupport;
+import kr.mujoong.core.common.error.CoreApiException;
 import kr.mujoong.core.consent.ConsentPolicyService;
 import kr.mujoong.core.consent.ConsentPolicyService.GateResult;
+import kr.mujoong.core.consent.PolicyTermsReader;
 import kr.mujoong.core.support.BusinessFixtures;
 import kr.mujoong.core.support.U2Fixtures;
 import kr.mujoong.core.web.support.CoreWebApp;
@@ -25,7 +33,9 @@ import kr.mujoong.core.web.support.WebFixtures.Guardian;
 import kr.mujoong.testsupport.http.ContractStubServer;
 import kr.mujoong.testsupport.http.ContractStubServer.RecordedRequest;
 import kr.mujoong.testsupport.http.ContractStubServer.StubResponse;
+import kr.mujoong.testsupport.log.LogCapture;
 import kr.mujoong.testsupport.secret.TestSecrets;
+import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -68,6 +78,7 @@ class GuardianAccountApiIT {
                 .property("mujoong.guardian.google.client-secret", U2Fixtures.clientSecret())
                 .property("mujoong.guardian.google.redirect-uri", U2Fixtures.REDIRECT_URI)
                 .property("mujoong.guardian.google.token-uri", google.baseUrl() + U2Fixtures.TOKEN_PATH)
+                .property("mujoong.guardian.google.jwks-uri", google.baseUrl() + U2Fixtures.JWKS_PATH)
                 .property("mujoong.timing.account.deletion-tick", "1h")
                 .start();
     }
@@ -159,7 +170,87 @@ class GuardianAccountApiIT {
         assertThat(count("select count(*) from core.core_social_account where provider_user_id = :s", subject)).isZero();
     }
 
+    @Test
+    void aTokenWithoutAValidGoogleSignatureIsRejected() {
+        // 리뷰 1: 토큰 응답이 바뀌어도(설정 실수 · 중간자) 서명 없는 id_token으로는 세션을 얻을 수 없다
+        String subject = "sub-" + UUID.randomUUID();
+        String claims = Base64.getUrlEncoder().withoutPadding().encodeToString(JsonCodec.shared().write(Map.of(
+                "iss", "https://accounts.google.com", "aud", U2Fixtures.CLIENT_ID,
+                "exp", app.clock().now().plusSeconds(300).getEpochSecond(), "sub", subject)).getBytes(StandardCharsets.UTF_8));
+        for (String header : List.of("{\"alg\":\"RS256\",\"typ\":\"JWT\"}", "{\"alg\":\"none\"}")) {
+            String token = Base64.getUrlEncoder().withoutPadding().encodeToString(header.getBytes(StandardCharsets.UTF_8))
+                    + "." + claims + ".c2ln";
+            google.route("POST", U2Fixtures.TOKEN_PATH).respond(StubResponse.json(200, "{\"id_token\":\"" + token + "\"}"));
+
+            Result forged = send("POST /api/auth/google", app.post("/api/auth/google").json(U2Fixtures.loginBody("c")));
+
+            assertThat(forged.status()).as(header).isEqualTo(401);
+            assertThat(forged.code()).isEqualTo("GOOGLE_AUTH_FAILED");
+            assertThat(forged.headerValues("Set-Cookie")).isEmpty();
+        }
+        assertThat(count("select count(*) from core.core_social_account where provider_user_id = :s", subject)).isZero();
+    }
+
+    @Test
+    void everyLoginFailureIsLoggedWithItsReasonAndAForeignOriginAsAnOriginEvent() {
+        // 리뷰 4: 까닭은 kind로 남기고 Origin 불일치는 SECURITY_ORIGIN_DENIED(REST)다. code · 토큰 · sub는 남기지 않는다
+        String subject = "sub-" + UUID.randomUUID();
+        try (LogCapture logs = LogCapture.attach()) {
+            send("POST /api/auth/google", app.post("/api/auth/google").json("not json"));
+            send("POST /api/auth/google", app.post("/api/auth/google")
+                    .json("{\"code\":\"secret-code\",\"redirectUri\":\"https://evil.invalid/cb\"}"));
+            google.route("POST", U2Fixtures.TOKEN_PATH).respond(StubResponse.json(400, "{\"error\":\"invalid_grant\"}"));
+            send("POST /api/auth/google", app.post("/api/auth/google").json(U2Fixtures.loginBody("secret-code")));
+            google.route("POST", U2Fixtures.TOKEN_PATH).respond(StubResponse.json(200,
+                    "{\"id_token\":\"" + U2Fixtures.idToken("someone-else", subject, app.clock().now().plusSeconds(60)) + "\"}"));
+            send("POST /api/auth/google", app.post("/api/auth/google").json(U2Fixtures.loginBody("secret-code")));
+            send("POST /api/auth/google", app.post("/api/auth/google").header("Origin", "https://evil.invalid")
+                    .json(U2Fixtures.loginBody("secret-code")));
+
+            assertThat(logs.events(EventCode.SECURITY_AUTH_FAILED)).extracting(event -> LogCapture.attrs(event).get("kind"))
+                    .contains("GOOGLE_BAD_REQUEST", "GOOGLE_REDIRECT_MISMATCH", "GOOGLE_EXCHANGE_FAILED", "GOOGLE_TOKEN_INVALID")
+                    .doesNotContain("GUARDIAN_SESSION");
+            assertThat(logs.events(EventCode.SECURITY_AUTH_FAILED)).allSatisfy(event ->
+                    assertThat(LogCapture.attrs(event)).containsEntry("statusCode", 401));
+            assertThat(logs.events(EventCode.SECURITY_ORIGIN_DENIED)).singleElement().satisfies(event ->
+                    assertThat(LogCapture.attrs(event)).containsEntry("channel", "REST").containsEntry("statusCode", 401));
+            assertThat(logs.lines()).noneMatch(line -> line.contains("secret-code") || line.contains(subject));
+        }
+    }
+
     // ------------------------------------------------------------------ 02 동의
+
+    @Test
+    void consentAndChildWritesAreRefusedOnceTheAccountIsMarkedForDeletion() {
+        // 리뷰 9: 요청 단계 확인(GuardianPrincipal)을 지난 뒤 다른 기기의 삭제 접수가 커밋된 경우를 서비스 직접 호출로 재현한다
+        Guardian guardian = WebFixtures.guardian(app, db);
+        trackSession(guardian.id());
+        Guardian withChild = WebFixtures.guardian(app, db);
+        trackSession(withChild.id());
+        db.insertChild(withChild.id());
+        MapSqlParameterSource ids = new MapSqlParameterSource("ids", new UUID[] {guardian.id(), withChild.id()});
+        db.jdbc().update("update core.core_guardian set status = 'DELETION_REQUESTED' where id = any(:ids)", ids);
+        ConsentPolicyService consents = app.bean(ConsentPolicyService.class);
+        ChildProfileService profiles = app.bean(ChildProfileService.class);
+        List<ConsentPolicyService.Agreement> four = List.of(new ConsentPolicyService.Agreement("VOICE_AND_TEXT", true),
+                new ConsentPolicyService.Agreement("GUARDIAN_VIEW", true), new ConsentPolicyService.Agreement("REPORT_SHARING", true),
+                new ConsentPolicyService.Agreement("RAW_AUDIO", true));
+
+        List<ThrowingCallable> writes = List.of(
+                () -> consents.give(guardian.id(), "1.0", four),
+                () -> profiles.register(guardian.id(), new ChildInput.Valid("하늘", 8, List.of())),
+                () -> profiles.update(withChild.id(), null, 9, null),
+                () -> profiles.replaceStopExpressions(withChild.id(), List.of("끝낼래")));
+        for (ThrowingCallable write : writes) {
+            assertThatThrownBy(write).isInstanceOfSatisfying(CoreApiException.class,
+                    refused -> assertThat(refused.code()).isEqualTo(ErrorCode.ACCOUNT_DELETION_IN_PROGRESS));
+        }
+        assertThat(count("select count(*) from core.core_consent where actor_guardian_id = :g", guardian.id())).isZero();
+        assertThat(count("select count(*) from core.core_child where guardian_id = :g", guardian.id())).isZero();
+        assertThat(count("select age from core.core_child where guardian_id = :g", withChild.id())).as("수정되지 않음").isEqualTo(8);
+        assertThat(count("select count(*) from core.core_stop_expression s join core.core_child c on c.id = s.child_id"
+                + " where c.guardian_id = :g", withChild.id())).isZero();
+    }
 
     @Test
     void theCurrentPolicyHasFourItemsWithTheAiNoticeAndConsentingToAllFourGivesTheGate() {
@@ -360,31 +451,36 @@ class GuardianAccountApiIT {
     }
 
     @Test
-    void theCatalogAddsVersionsWithoutOverwritingAndApprovalRetiresThePreviousOne() {
-        ContentCatalogService catalog = app.bean(ContentCatalogService.class);
+    void theSingleCatalogPinsTheLatestApprovedVersionAndSharesThePolicyVersionWithTheGate() {
+        // 리뷰 10: 승인 문구를 읽는 곳은 U1 ApprovedContentCatalog 하나다(약관 · 정책 버전 · 세션 문구 고정이 같은 곳)
+        ApprovedContentCatalog catalog = app.bean(ApprovedContentCatalog.class);
+        assertThat(app.bean(PolicyTermsReader.class).currentPolicyVersion()).isEqualTo(catalog.currentPolicyVersion())
+                .contains("1.0");
         String code = "U2_TEST_" + UUID.randomUUID().toString().substring(0, 8).toUpperCase(java.util.Locale.ROOT);
+        UUID contentId = UUID.randomUUID();
+        UUID retired = UUID.randomUUID();
+        UUID approved = UUID.randomUUID();
+        UUID draft = UUID.randomUUID();
+        MapSqlParameterSource params = new MapSqlParameterSource("code", code).addValue("content", contentId)
+                .addValue("retired", retired).addValue("approved", approved).addValue("draft", draft);
         try {
-            ApprovedContentVersion first = catalog.addVersion(code, "APPROVED_AUDIO", "첫 문구", null);
-            assertThat(first.getVersion()).isEqualTo(1);
-            assertThat(catalog.latestApproved(code)).as("DRAFT는 읽기 대상이 아니다").isEmpty();
-            assertThat(catalog.approve(first.getId())).isTrue();
-            assertThat(catalog.approve(first.getId())).as("이미 승인").isFalse();
+            db.jdbc().update("insert into core.core_approved_content (id, content_code, content_type, created_at)"
+                    + " values (:content, :code, 'APPROVED_AUDIO', now())", params);
+            db.jdbc().update("insert into core.core_approved_content_version (id, content_id, version, content_text, audio_path,"
+                    + " status, created_at) values (:retired, :content, 1, '첫 문구', null, 'RETIRED', now()),"
+                    + " (:approved, :content, 2, '둘째 문구', 'u2-test-v2.wav', 'APPROVED', now()),"
+                    + " (:draft, :content, 3, '셋째 문구', null, 'DRAFT', now())", params);
 
-            ApprovedContentVersion second = catalog.addVersion(code, "APPROVED_AUDIO", "둘째 문구", "u2-test-v2.wav");
-            assertThat(second.getVersion()).isEqualTo(2);
-            assertThat(catalog.pin(List.of(code)).get(code).contentVersionId()).as("승인 전에는 앞 버전").isEqualTo(first.getId());
-            assertThat(catalog.approve(second.getId())).isTrue();
+            Map<String, ApprovedContentCatalog.PinnedContent> pinned = catalog.pin(List.of(code, "NO_SUCH_CODE"));
 
-            Map<String, ContentCatalogService.PinnedContent> pinned = catalog.pin(List.of(code, "NO_SUCH_CODE"));
             assertThat(pinned).containsOnlyKeys(code);
-            assertThat(pinned.get(code).contentVersionId()).isEqualTo(second.getId());
+            assertThat(pinned.get(code).contentVersionId()).as("RETIRED · DRAFT가 아니라 APPROVED 버전").isEqualTo(approved);
             assertThat(pinned.get(code).text()).isEqualTo("둘째 문구");
             assertThat(pinned.get(code).audioUrl()).isEqualTo("/media/approved/u2-test-v2.wav");
-            assertThat(db.jdbc().queryForObject("select status from core.core_approved_content_version where id = :id",
-                    new MapSqlParameterSource("id", first.getId()), String.class)).isEqualTo("RETIRED");
-            assertThat(catalog.approve(UUID.randomUUID())).isFalse();
+            assertThat(pinned.get(code).toString()).doesNotContain("둘째 문구");
+            assertThat(catalog.latestApproved("POLICY_TERMS_RAW_AUDIO")).hasValueSatisfying(terms ->
+                    assertThat(terms.audioUrl()).as("약관은 음성이 없다").isNull());
         } finally {
-            MapSqlParameterSource params = new MapSqlParameterSource("code", code);
             db.jdbc().update("delete from core.core_approved_content_version where content_id in"
                     + " (select id from core.core_approved_content where content_code = :code)", params);
             db.jdbc().update("delete from core.core_approved_content where content_code = :code", params);

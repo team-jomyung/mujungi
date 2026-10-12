@@ -170,6 +170,33 @@ describe("SET-01 조회 실패", () => {
   });
 });
 
+describe("SET-01 서버와 같은 규칙(리뷰 8)", () => {
+  // 공백 = 유니코드 White_Space 속성, 글자 수 = NFC 뒤 코드 포인트. 같은 표본을
+  // backend core-api ChildRulesTest.whitespaceAndLengthFollowTheSameUnicodeRulesAsTheScreen이 쓴다.
+  it("공백 · 글자 수 표본이 서버 판정과 같다", () => {
+    expect(normalizeExpression("이제　그만")).toBe("이제그만");
+    expect(normalizeExpression("이제 그만")).toBe("이제그만");
+    expect(normalizeExpression("끝\u0085내")).toBe("끝내");
+    expect(normalizeExpression("이제﻿그만")).toBe("이제﻿그만");
+    expect(validateExpression(" 끝 ", [], null)).toBe("2~20자로 넣어 주세요");
+    expect(validateExpression(" 끝내 ", [], null)).toBeNull();
+    expect(validateExpression("가".repeat(20).normalize("NFD"), [], null)).toBeNull();
+    expect(validateExpression("😀".repeat(20), [], null)).toBeNull();
+    expect(validateExpression("😀".repeat(21), [], null)).toBe("2~20자로 넣어 주세요");
+    expect(validateExpression("이제　그만", ["이제그만"], null)).toBe("이미 있는 표현이에요");
+  });
+
+  it("입력 칸은 UTF-16 maxLength로 자르지 않는다(이모지 20개도 칠 수 있고 넘으면 오류 글)", async () => {
+    await renderStops();
+    fireEvent.click(screen.getByTestId("stop-add"));
+    expect(screen.getByTestId("stop-input")).not.toHaveAttribute("maxlength");
+    fireEvent.change(screen.getByTestId("stop-input"), { target: { value: "😀".repeat(20) } });
+    fireEvent.click(screen.getByTestId("stop-input-confirm"));
+    expect(screen.queryByTestId("stop-input-error")).toBeNull();
+    expect(screen.getAllByTestId("stop-item")).toHaveLength(2);
+  });
+});
+
 describe("SET-01 검증 도우미", () => {
   it("정규화 · 검증은 서버 규칙(R9)과 같다", () => {
     expect(normalizeExpression(" Stop  It ")).toBe("stopit");

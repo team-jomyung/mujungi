@@ -14,6 +14,7 @@ import kr.mujoong.core.common.error.CoreApiException;
 import kr.mujoong.core.config.CoreProperties;
 import kr.mujoong.core.identity.GuardianSessions;
 import kr.mujoong.core.identity.google.GoogleLoginService;
+import kr.mujoong.core.identity.google.GoogleLoginService.Failure;
 import kr.mujoong.core.identity.google.GoogleLoginService.LoggedIn;
 import kr.mujoong.core.identity.google.GoogleLoginService.Outcome;
 import kr.mujoong.core.identity.web.MeAssembler.MeBody;
@@ -33,9 +34,10 @@ import org.springframework.web.bind.annotation.RestController;
  * AC1.1.1 ~ AC1.1.4 · AC1.5.2 · AC1.5.5 · 편차 (U2-a)(U2-d)(U2-e)).
  *
  * <p>구글 로그인은 체인 C-PUB(세션이 아직 없어 CSRF 토큰도 없다)이고 대신 Origin이 있으면 허용 origin 하나와 같아야 한다(로그인 CSRF 방어,
- * 화면 쪽은 OAuth state 쿠키 U2-J4). 실패는 모두 401 GOOGLE_AUTH_FAILED + SECURITY_AUTH_FAILED(GUARDIAN_SESSION, 401)이고 세션을 만들지
- * 않는다. 삭제 처리 중 계정이면 세션 없이 Me{deletionStatus: IN_PROGRESS}만 준다. 로그아웃은 체인 C-GRD(세션 + CSRF)이고 지금 세션만
- * 끝낸다(진행 중 활동은 그대로, B2).
+ * 화면 쪽은 OAuth state 쿠키 U2-J4). 실패는 모두 401 GOOGLE_AUTH_FAILED이고 세션을 만들지 않는다. 로그는 까닭별로 남긴다: Origin 불일치는
+ * SECURITY_ORIGIN_DENIED(REST, 401), 그 밖은 SECURITY_AUTH_FAILED(kind {@code GOOGLE_<까닭>}, 401)(리뷰 4 · 편차 (U2-j)). 삭제 처리 중
+ * 계정이면 세션 없이 Me{deletionStatus: IN_PROGRESS}만 주고, 세션을 연 뒤 다시 읽어 그 사이 삭제가 접수됐으면 연 세션을 닫는다(리뷰 2).
+ * 로그아웃은 체인 C-GRD(세션 + CSRF)이고 지금 세션만 끝낸다(진행 중 활동은 그대로, B2).
  */
 @RestController
 public class AuthController {
@@ -66,24 +68,33 @@ public class AuthController {
     ResponseEntity<MeBody> google(
             HttpServletRequest request, HttpServletResponse response, @RequestBody(required = false) String body) {
         if (!originAllowed(request)) {
-            throw failed();
+            events.log(EventCode.SECURITY_ORIGIN_DENIED, EventLog.Component.SECURITY, null, entry -> entry
+                    .attr(AttrKey.CHANNEL, "REST")
+                    .attr(AttrKey.STATUS_CODE, ErrorCode.GOOGLE_AUTH_FAILED.httpStatus()));
+            throw CoreApiException.of(ErrorCode.GOOGLE_AUTH_FAILED);
         }
         GoogleLoginRequest parsed;
         try {
             parsed = ApiResponses.readJson(json, body, GoogleLoginRequest.class, ErrorCode.GOOGLE_AUTH_FAILED);
         } catch (CoreApiException e) {
-            throw failed();
+            throw failed(Failure.BAD_REQUEST);
         }
         Outcome outcome = login.login(parsed.code(), parsed.redirectUri());
         if (outcome.loggedIn().isEmpty()) {
-            throw failed();
+            throw failed(outcome.failure());
         }
         LoggedIn loggedIn = outcome.loggedIn().get();
         if (loggedIn.deletionInProgress()) {
             return ApiResponses.json(200, MeAssembler.deletionInProgress(loggedIn.guardianId()));
         }
         sessions.open(request, response, loggedIn.guardianId());
-        return ApiResponses.json(200, me.me(loggedIn.guardianId()));
+        // 세션을 연 뒤 다시 읽는다: 그 사이 다른 기기의 계정 삭제가 커밋됐으면 연 세션을 닫고 '삭제 처리 중'만 준다(리뷰 2).
+        // 응답 끝에 저장되는 세션이 접수의 closeAll보다 늦을 수 있는 남은 틈은 지휘가 바퀴마다 다시 지운다(DeletionCommander).
+        MeBody current = me.me(loggedIn.guardianId());
+        if (MeAssembler.DeletionStatus.IN_PROGRESS.name().equals(current.deletionStatus())) {
+            sessions.close(request);
+        }
+        return ApiResponses.json(200, current);
     }
 
     @PostMapping("/api/auth/logout")
@@ -100,11 +111,18 @@ public class AuthController {
         return origins.isEmpty() || (origins.size() == 1 && allowedOrigin.equals(origins.get(0)));
     }
 
-    private CoreApiException failed() {
+    /** 실패를 까닭별 kind로 남긴다(code · 토큰 · sub는 남기지 않는다, 리뷰 4). 응답은 까닭과 관계없이 401 GOOGLE_AUTH_FAILED 하나다. */
+    private CoreApiException failed(Failure failure) {
+        String kind = failureKind(failure);
         events.log(EventCode.SECURITY_AUTH_FAILED, EventLog.Component.SECURITY, null, entry -> entry
-                .attr(AttrKey.KIND, "GUARDIAN_SESSION")
+                .attr(AttrKey.KIND, kind)
                 .attr(AttrKey.STATUS_CODE, ErrorCode.GOOGLE_AUTH_FAILED.httpStatus()));
         return CoreApiException.of(ErrorCode.GOOGLE_AUTH_FAILED);
+    }
+
+    /** 로그인 실패 까닭 → SECURITY_AUTH_FAILED kind({@code GOOGLE_<까닭>}, AttrKey.KIND 등록 값). */
+    static String failureKind(Failure failure) {
+        return "GOOGLE_" + Objects.requireNonNull(failure, "failure").name();
     }
 
     /** 요청 본문(auth-google-request.schema.json). 인가 코드는 문자열 표현에 내지 않는다. */

@@ -45,19 +45,19 @@ export function Consent02() {
   const [saving, setSaving] = useState(false);
   const { error, refetch } = policy;
 
-  // 기기 뒤로가기도 「←」와 같이 P5를 연다(AC1.2.5)
-  useBackGuard(true, () => setLeaving(true));
+  // 기기 뒤로가기도 「←」와 같이 P5를 연다(AC1.2.5). 02를 떠날 때는 가드 칸을 되돌린 뒤 이동한다(리뷰 5)
+  const guard = useBackGuard(true, () => setLeaving(true));
 
   useEffect(() => {
     if (error === null) {
       return;
     }
     if (isUnauthenticated(error)) {
-      goToLogin(router, toast);
+      guard.leave(() => goToLogin(router, toast));
       return;
     }
     toast.show({ message: TEMP_COPY.networkError, kind: "error", action: { label: PROPOSED_COPY.retry, onPress: () => void refetch() } });
-  }, [error, refetch, router, toast]);
+  }, [error, guard, refetch, router, toast]);
 
   const allChecked = CONSENT_TYPES.every((type) => checked.has(type));
   const loaded = policy.data !== undefined;
@@ -83,10 +83,10 @@ export function Consent02() {
       await saveConsents(api, policy.data.policyVersion);
       const me = await fetchMe(api).catch(() => null);
       queryClient.clear();
-      router.replace(me !== null && me.childRegistered ? PARENT_ROUTES.home : PARENT_ROUTES.child);
+      guard.leave(() => router.replace(me !== null && me.childRegistered ? PARENT_ROUTES.home : PARENT_ROUTES.child));
     } catch (failure) {
       if (isUnauthenticated(failure)) {
-        goToLogin(router, toast);
+        guard.leave(() => goToLogin(router, toast));
         return;
       }
       if (failure instanceof ApiError && failure.status === 400) {
@@ -110,7 +110,7 @@ export function Consent02() {
       }
     }
     queryClient.clear();
-    router.replace(PARENT_ROUTES.login);
+    guard.leave(() => router.replace(PARENT_ROUTES.login));
   };
 
   return (

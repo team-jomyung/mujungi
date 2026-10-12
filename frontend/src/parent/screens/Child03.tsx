@@ -104,18 +104,19 @@ export function Child03() {
   const child = childQuery.data ?? null;
   const mode: "loading" | "first" | "view" | "edit" = notRegistered ? "first" : child === null ? "loading" : editing ? "edit" : "view";
 
-  useBackGuard(mode === "first", () => undefined);
+  // 처음 등록 중에는 기기 뒤로가기가 아무 일도 하지 않는다(AC1.3.2). 마치고 떠날 때는 가드 칸을 되돌린 뒤 이동한다(리뷰 5)
+  const guard = useBackGuard(mode === "first", () => undefined);
 
   useEffect(() => {
     if (error === null || notRegistered) {
       return;
     }
     if (isUnauthenticated(error)) {
-      goToLogin(router, toast);
+      guard.leave(() => goToLogin(router, toast));
       return;
     }
     toast.show({ message: TEMP_COPY.networkError, kind: "error", action: { label: PROPOSED_COPY.retry, onPress: () => void refetch() } });
-  }, [error, notRegistered, refetch, router, toast]);
+  }, [error, guard, notRegistered, refetch, router, toast]);
 
   const age = parseAge(values.age);
   const ageInvalid = values.age.trim().length > 0 && age === null;
@@ -138,7 +139,7 @@ export function Child03() {
         await registerChild(api, input);
         await queryClient.invalidateQueries({ queryKey: queryKeys.home });
         queryClient.removeQueries({ queryKey: accountQueryKeys.me });
-        router.replace(PARENT_ROUTES.home);
+        guard.leave(() => router.replace(PARENT_ROUTES.home));
         return;
       }
       const saved = await updateChild(api, input);
@@ -147,7 +148,7 @@ export function Child03() {
       setEditing(false);
     } catch (failure) {
       if (isUnauthenticated(failure)) {
-        goToLogin(router, toast);
+        guard.leave(() => goToLogin(router, toast));
         return;
       }
       toast.show({ message: ACCOUNT_PROPOSED_COPY.childSaveFailed, kind: "error" });

@@ -1,6 +1,8 @@
 package kr.mujoong.core.identity.google;
 
+import java.security.PublicKey;
 import java.time.Instant;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -22,7 +24,7 @@ import org.springframework.transaction.support.TransactionTemplate;
  *
  * <ol>
  *   <li>구글 설정(client id · secret · redirect uri)이 없거나 요청 redirectUri가 설정과 다르면 실패.
- *   <li>토큰 엔드포인트와 code를 교환해 id_token을 받고 iss · aud · exp · sub를 확인한다.
+ *   <li>토큰 엔드포인트와 code를 교환해 id_token을 받고, 구글 JWKS 열쇠로 서명을 확인한 뒤 iss · aud · exp · sub를 확인한다(리뷰 1).
  *   <li>sub의 보호자가 있으면 그 보호자, 없으면 한 트랜잭션에 보호자(ACTIVE) + 연결 행을 만든다(동시 첫 로그인은 유일 제약이 하나만 남기고
  *       진 쪽은 이긴 쪽 보호자를 다시 읽는다). 삭제가 끝나 연결 행이 지워진 구글 계정은 새 보호자가 된다(AC1.6.5).
  * </ol>
@@ -34,6 +36,7 @@ public class GoogleLoginService {
 
     private final CoreProperties.Google google;
     private final GoogleTokenClient tokenClient;
+    private final GoogleKeysClient keysClient;
     private final GoogleIdTokenReader idTokens;
     private final SocialAccountRepository socialAccounts;
     private final GuardianRepository guardians;
@@ -51,12 +54,15 @@ public class GoogleLoginService {
         this(properties.guardian().google(),
                 new GoogleTokenClient(properties.guardian().google().tokenUri(),
                         properties.guardian().google().exchangeTimeout(), json),
+                new GoogleKeysClient(properties.guardian().google().jwksUri(),
+                        properties.guardian().google().exchangeTimeout(), json),
                 new GoogleIdTokenReader(json), socialAccounts, guardians, transactionManager, clock);
     }
 
     GoogleLoginService(
             CoreProperties.Google google,
             GoogleTokenClient tokenClient,
+            GoogleKeysClient keysClient,
             GoogleIdTokenReader idTokens,
             SocialAccountRepository socialAccounts,
             GuardianRepository guardians,
@@ -64,6 +70,7 @@ public class GoogleLoginService {
             MujoongClock clock) {
         this.google = Objects.requireNonNull(google, "google");
         this.tokenClient = Objects.requireNonNull(tokenClient, "tokenClient");
+        this.keysClient = Objects.requireNonNull(keysClient, "keysClient");
         this.idTokens = Objects.requireNonNull(idTokens, "idTokens");
         this.socialAccounts = Objects.requireNonNull(socialAccounts, "socialAccounts");
         this.guardians = Objects.requireNonNull(guardians, "guardians");
@@ -81,6 +88,9 @@ public class GoogleLoginService {
         BAD_REQUEST,
         REDIRECT_MISMATCH,
         EXCHANGE_FAILED,
+        /** 서명 열쇠(JWKS)를 읽지 못했다. */
+        KEYS_UNAVAILABLE,
+        /** 서명 · iss · aud · exp · sub 중 하나가 틀렸다. */
         TOKEN_INVALID
     }
 
@@ -112,7 +122,11 @@ public class GoogleLoginService {
         if (idToken.isEmpty()) {
             return Outcome.failed(Failure.EXCHANGE_FAILED);
         }
-        Optional<GoogleIdentity> identity = idTokens.read(idToken.get(), google.clientId(), clock.now());
+        Optional<Map<String, PublicKey>> keys = keysClient.fetch();
+        if (keys.isEmpty()) {
+            return Outcome.failed(Failure.KEYS_UNAVAILABLE);
+        }
+        Optional<GoogleIdentity> identity = idTokens.read(idToken.get(), keys.get(), google.clientId(), clock.now());
         if (identity.isEmpty()) {
             return Outcome.failed(Failure.TOKEN_INVALID);
         }

@@ -1,6 +1,9 @@
 package kr.mujoong.core.account;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -16,6 +19,9 @@ import kr.mujoong.core.account.DeletionRequestRepository.DeletionRequest;
 import kr.mujoong.core.activity.ActivityCopyRepository;
 import kr.mujoong.core.activity.ActivityCopyRepository.NewActivity;
 import kr.mujoong.core.common.db.DbTestSupport;
+import kr.mujoong.core.identity.ChildRepository;
+import kr.mujoong.core.identity.GuardianSessions;
+import kr.mujoong.core.observability.EventLogger;
 import kr.mujoong.core.support.BusinessFixtures;
 import kr.mujoong.core.support.U2Fixtures;
 import kr.mujoong.core.web.support.CoreWebApp;
@@ -33,6 +39,8 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
+import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
+import org.springframework.transaction.PlatformTransactionManager;
 
 /**
  * 계정 삭제 접수 · 지휘 통합 시험(U2 AccountDeletion · FR1.6 · AC1.6.1 · AC1.6.3 ~ AC1.6.7 · R10 ~ R12 · 편차 (U2-d)(U2-h)).
@@ -73,6 +81,7 @@ class AccountDeletionIT {
                 .property("mujoong.guardian.google.client-secret", U2Fixtures.clientSecret())
                 .property("mujoong.guardian.google.redirect-uri", U2Fixtures.REDIRECT_URI)
                 .property("mujoong.guardian.google.token-uri", google.baseUrl() + U2Fixtures.TOKEN_PATH)
+                .property("mujoong.guardian.google.jwks-uri", google.baseUrl() + U2Fixtures.JWKS_PATH)
                 .property("mujoong.timing.account.deletion-tick", "1h")
                 .property("mujoong.timing.account.deletion-session-wait", "2h")
                 .start();
@@ -132,6 +141,45 @@ class AccountDeletionIT {
         assertThat(count("select count(*) from core.core_data_deletion_request where guardian_id = :g", guardian.id()))
                 .as("요청 행은 하나").isEqualTo(1);
         assertThat(send("GET /api/me", app.get("/api/me").session(lingering)).status()).isEqualTo(401);
+    }
+
+    @Test
+    void aSessionThatSlippedPastTheAcceptanceIsClosedByTheNextCommanderRound() {
+        // 리뷰 2: 로그인이 삭제 여부를 읽은 뒤 · 세션 행이 저장되기 전에 접수의 closeAll이 지나가면 세션이 남는다. 지휘 바퀴가 다시 지운다
+        Guardian guardian = WebFixtures.guardian(app, db);
+        sessionsOf.add(guardian.id());
+        UUID requestId = accept(guardian.session(), guardian.csrf());
+        String slipped = app.sessionCookieFor(guardian.id());
+        assertThat(count("select count(*) from core.core_spring_session where principal_name = :g", guardian.id().toString()))
+                .isEqualTo(1);
+
+        app.bean(DeletionCommander.class).process(requestId);
+
+        assertThat(count("select count(*) from core.core_spring_session where principal_name = :g", guardian.id().toString()))
+                .as("접수 뒤 생긴 세션도 지휘가 지운다").isZero();
+        assertThat(send("GET /api/me", app.get("/api/me").session(slipped)).status()).isEqualTo(401);
+    }
+
+    @Test
+    void aFailureToCloseSessionsAfterTheCommitStillAcceptsAndTheCommanderClosesThemLater() {
+        // 리뷰 2: 커밋 뒤 closeAll이 실패해도 접수는 이미 됐으므로 202(같은 id)이고, 남은 세션은 지휘 바퀴가 지운다
+        Guardian guardian = WebFixtures.guardian(app, db);
+        sessionsOf.add(guardian.id());
+        GuardianSessions failing = mock(GuardianSessions.class);
+        when(failing.closeAll(any())).thenThrow(new IllegalStateException("세션 저장소 오류"));
+        AccountDeletionService service = new AccountDeletionService(app.bean(DeletionRequestRepository.class),
+                app.bean(ChildRepository.class), failing, app.bean(NamedParameterJdbcTemplate.class),
+                app.bean(PlatformTransactionManager.class), app.bean(EventLogger.class), app.clock());
+
+        UUID requestId = service.request(guardian.id());
+
+        assertThat(single("select status from core.core_data_deletion_request where id = :g", requestId)).isEqualTo("REQUESTED");
+        assertThat(service.request(guardian.id())).as("다시 불러도 같은 id").isEqualTo(requestId);
+        assertThat(count("select count(*) from core.core_spring_session where principal_name = :g", guardian.id().toString()))
+                .isEqualTo(1);
+        app.bean(DeletionCommander.class).process(requestId);
+        assertThat(count("select count(*) from core.core_spring_session where principal_name = :g", guardian.id().toString()))
+                .isZero();
     }
 
     @Test

@@ -14,7 +14,7 @@
   },
   "$defs": {
     "ConsentStatus": {
-      "description": "현재 정책 버전 4항목이 모두 GIVEN이면 GIVEN, 예전 버전 동의만 있으면 OUTDATED(편차 (U2-g)), 그 밖 NOT_GIVEN",
+      "description": "현재 정책 버전 4항목이 모두 GIVEN이면 GIVEN, 예전 정책 버전 하나에서 4항목의 최신 행이 모두 GIVEN이면 OUTDATED(편차 (U2-g)), 그 밖 NOT_GIVEN",
       "type": "string",
       "enum": ["NOT_GIVEN", "GIVEN", "OUTDATED"]
     },

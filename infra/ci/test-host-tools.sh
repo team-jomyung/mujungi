@@ -4,7 +4,8 @@
 # 실제 AWS를 부르지 않는다. 임시 디렉터리의 가짜 `aws`(Parameter Store 응답 흉내)를 PATH 앞에 두고, 값은 실행 때 무작위로 만든다(J127).
 #   render-env(infra/bin/render-env)
 #     - 경로 조회 · 이름 조회 둘 다 서비스별 파일을 분배표(infra-spec 3.7)대로 만든다: 파일 0600 · 디렉터리 0700, 받지 않는 비밀 0건,
-#       데이터 소스 비밀번호 매핑, U2 전 GOOGLE_OAUTH_CLIENT_SECRET 파라미터가 없으면 빈 변수(CD-11), 출력에 값이 없다
+#       데이터 소스 비밀번호 매핑, GOOGLE_OAUTH_CLIENT_ID · SECRET 파라미터가 없으면 빈 변수(CD-11), 구글 이름은 core-api · web이 같고
+#       redirect는 허용 origin + /parent/login/callback(U2 리뷰 3), 구글 값 하나만 있으면 거부, 출력에 값이 없다
 #     - 필수 파라미터 없음 · localhost · .invalid 호스트 · 짧은 내부 토큰 · 렌더에 위험한 문자 · origin 불일치는 종료 코드 1이고
 #       이미 있는 파일을 바꾸지 않는다(D3 실패 · 구 버전 유지). aws 호출 실패 · aws 없음은 종료 코드 2
 #   D3 프로필 확인(infra/bin/infra-validate --only demo-profile, CD-7): 렌더된 env로 통과, env 파일의 시험 로그인 켬 · demo가 아닌
@@ -128,9 +129,9 @@ tree_sum() { (cd "$1" && find . -type f -print0 | sort -z | xargs -0 sha256sum) 
 declare -A WANT=(
   [postgres.env]="DB_BACKUP_PASSWORD DB_CORE_PASSWORD DB_OWNER_PASSWORD DB_REALTIME_PASSWORD POSTGRES_PASSWORD"
   [migrate.env]="DB_OWNER_PASSWORD"
-  [core-api.env]="GOOGLE_OAUTH_CLIENT_SECRET INTERNAL_SERVICE_TOKEN MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET MUJOONG_SECURITY_ALLOWED_ORIGIN SPRING_DATASOURCE_PASSWORD"
+  [core-api.env]="GOOGLE_OAUTH_CLIENT_ID GOOGLE_OAUTH_CLIENT_SECRET GOOGLE_OAUTH_REDIRECT_URI INTERNAL_SERVICE_TOKEN MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET MUJOONG_SECURITY_ALLOWED_ORIGIN SPRING_DATASOURCE_PASSWORD"
   [realtime.env]="INTERNAL_SERVICE_TOKEN MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET MUJOONG_SECURITY_ALLOWED_ORIGIN PROVIDER_API_KEY SPRING_DATASOURCE_PASSWORD"
-  [web.env]="MUJOONG_SECURITY_ALLOWED_ORIGIN"
+  [web.env]="GOOGLE_OAUTH_CLIENT_ID GOOGLE_OAUTH_REDIRECT_URI MUJOONG_SECURITY_ALLOWED_ORIGIN"
   [nginx.env]="MUJOONG_SECURITY_ALLOWED_ORIGIN SERVICE_HOST"
   [certbot.env]="ACME_CONTACT_EMAIL SERVICE_HOST"
   [backup.env]="BACKUP_RETENTION_DAYS DB_BACKUP_PASSWORD"
@@ -150,6 +151,12 @@ check_rendered() {
   done
   [ -e "$dir/neo4j.env" ] && problems+=("NEO4J_AUTH 파라미터가 없는데 neo4j.env가 생겼다")
   [ "$(value_of "$dir/core-api.env" GOOGLE_OAUTH_CLIENT_SECRET)" = "" ] || problems+=("GOOGLE_OAUTH_CLIENT_SECRET이 빈 변수가 아니다")
+  # U2 리뷰 3: Core와 web이 같은 이름을 받고 redirect는 허용 origin의 01 콜백 경로다(구글 콘솔에 같은 주소를 등록한다)
+  for f in core-api.env web.env; do
+    [ "$(value_of "$dir/$f" GOOGLE_OAUTH_CLIENT_ID)" = "" ] || problems+=("$f GOOGLE_OAUTH_CLIENT_ID가 빈 변수가 아니다")
+    [ "$(value_of "$dir/$f" GOOGLE_OAUTH_REDIRECT_URI)" = "${P[MUJOONG_SECURITY_ALLOWED_ORIGIN]}/parent/login/callback" ] \
+      || problems+=("$f GOOGLE_OAUTH_REDIRECT_URI가 허용 origin의 콜백 주소가 아니다")
+  done
   [ "$(value_of "$dir/core-api.env" SPRING_DATASOURCE_PASSWORD)" = "${P[DB_CORE_PASSWORD]}" ] || problems+=("core-api 데이터 소스 비밀번호 매핑")
   [ "$(value_of "$dir/realtime.env" SPRING_DATASOURCE_PASSWORD)" = "${P[DB_REALTIME_PASSWORD]}" ] || problems+=("realtime 데이터 소스 비밀번호 매핑")
   [ "$(value_of "$dir/backup.env" BACKUP_RETENTION_DAYS)" = 7 ] || problems+=("보관 일수 7 아님")
@@ -171,6 +178,23 @@ elif ! grep -q '^get-parameters ' "$FAKE_AWS_CALLS" || grep -q '^get-parameters-
 else
   check_rendered "render-env-by-names" "$work/env-names"
 fi
+
+# ---- render-env: 구글 OAuth 값이 있으면 Core · web 둘 다 같은 이름으로 받는다(U2 리뷰 3) ----------------------------
+google_id="u2-$(rand 9).apps.example.net"
+write_params "$work/p-google" "GOOGLE_OAUTH_CLIENT_ID=$google_id" "GOOGLE_OAUTH_CLIENT_SECRET=$(rand 24)"
+render "$work/p-google" "$work/env-google"
+google_problems=()
+if [ "$rc" -ne 0 ]; then
+  google_problems+=("종료 코드 $rc")
+else
+  for f in core-api.env web.env; do
+    [ "$(value_of "$work/env-google/$f" GOOGLE_OAUTH_CLIENT_ID)" = "$google_id" ] || google_problems+=("$f client id")
+  done
+  grep -q '^GOOGLE_OAUTH_CLIENT_SECRET=' "$work/env-google/web.env" && google_problems+=("web.env에 client secret이 있다")
+  [ -n "$(value_of "$work/env-google/core-api.env" GOOGLE_OAUTH_CLIENT_SECRET)" ] || google_problems+=("core-api client secret 없음")
+  grep -qF -- "$(grep '^GOOGLE_OAUTH_CLIENT_SECRET' "$work/p-google" | cut -f2)" "$work/render.out" && google_problems+=("출력에 비밀 값")
+fi
+if [ "${#google_problems[@]}" -gt 0 ]; then not_ok "render-env-google-oauth" "${google_problems[*]}"; else ok "render-env-google-oauth"; fi
 
 # ---- render-env: 실패하면 아무 파일도 바꾸지 않는다(D3 실패 · 구 버전 유지) --------------------------------
 expect_reject() {
@@ -203,6 +227,8 @@ write_params "$work/p-unsafe" 'PROVIDER_API_KEY=abc def$HOME'
 expect_reject "render-env-unsafe-characters" 1 "$work/p-unsafe"
 write_params "$work/p-origin" MUJOONG_SECURITY_ALLOWED_ORIGIN=https://other.example.net
 expect_reject "render-env-origin-mismatch" 1 "$work/p-origin"
+write_params "$work/p-google-half" "GOOGLE_OAUTH_CLIENT_ID=u2.apps.example.net"
+expect_reject "render-env-google-id-without-secret" 1 "$work/p-google-half"
 FAKE_AWS_FAIL=1 expect_reject "render-env-aws-failure" 2 "$work/p-ok"
 # aws가 없는 PATH: render-env가 쓰는 도구만 링크한 디렉터리
 mkdir -p "$work/noaws"
