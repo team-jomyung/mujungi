@@ -13,6 +13,8 @@ export interface Timing {
   readonly parentPollIntervalMs: number;
   /** 보호자 웹 REST 요청 제한 시간(mujoong.timing.parent.request-timeout, J80 · RD-21). */
   readonly parentRequestTimeoutMs: number;
+  /** Long parent reads show a connection hint at this threshold (interaction-spec 1). */
+  readonly parentLoadingNoticeDelayMs: number;
   /** D0 등록 상태 확인 주기(mujoong.timing.bootstrap.status-poll, BR1.7). */
   readonly bootstrapStatusPollMs: number;
   /** 기기 HEARTBEAT 주기의 대체값. HELLO_OK.heartbeatIntervalMs가 있으면 그 값이 우선이다(mujoong.timing.device.heartbeat-interval). */
@@ -52,6 +54,7 @@ function contractKey(field: TimingField, configKey: string): TimingKeySpec {
 export const TIMING_KEYS: readonly TimingKeySpec[] = [
   contractKey("parentPollIntervalMs", "mujoong.timing.parent.poll-interval"),
   contractKey("parentRequestTimeoutMs", "mujoong.timing.parent.request-timeout"),
+  contractKey("parentLoadingNoticeDelayMs", "mujoong.timing.parent.loading-notice-delay"),
   contractKey("bootstrapStatusPollMs", "mujoong.timing.bootstrap.status-poll"),
   contractKey("deviceHeartbeatIntervalMs", "mujoong.timing.device.heartbeat-interval"),
   contractKey("deviceOutputQueueMaxMs", "mujoong.timing.device.output-queue-max"),

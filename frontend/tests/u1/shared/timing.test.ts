@@ -30,6 +30,7 @@ describe("timing — 기본값과 계약", () => {
     expect(defaultTiming()).toEqual({
       parentPollIntervalMs: 2_000,
       parentRequestTimeoutMs: 10_000,
+      parentLoadingNoticeDelayMs: 5_000,
       bootstrapStatusPollMs: 2_000,
       deviceHeartbeatIntervalMs: 5_000,
       deviceOutputQueueMaxMs: 20_000,

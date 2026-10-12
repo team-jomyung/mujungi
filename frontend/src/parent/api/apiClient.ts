@@ -35,7 +35,7 @@ export class ApiError extends Error {
 }
 
 export interface ApiRequest<T> {
-  readonly method: "GET" | "POST";
+  readonly method: "GET" | "POST" | "PATCH" | "DELETE";
   readonly path: string;
   readonly body?: unknown;
   readonly parse: (json: unknown) => T;
