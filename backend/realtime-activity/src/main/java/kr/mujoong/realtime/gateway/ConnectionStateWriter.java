@@ -197,11 +197,22 @@ public class ConnectionStateWriter implements DeviceStatusPort {
      * (늦게 처리된 옛 연결의 닫힘 등) 같은 트랜잭션에서 UNSTABLE로 두고 이벤트를 쓴다. 실패는 앱 오류 한 줄로 남기고 던지지 않는다(끊김 기록은
      * 대화를 멈추게 하지 않는다).
      *
+     * <p>리뷰 반영 2 · 2차 리뷰 3: 닫힘(CLOSED)은 그 연결이 무음(SILENT)으로 이미 세어졌고 그 뒤 그 연결에서 아무것도 듣지 못했으면 같은 끊김이라
+     * 적지 않는다 — 기기가 그 사이 새 연결로 돌아왔어도 같다(원장 행을 보지 않고 사건 표로 본다, 무음 쪽의 CLOSED 확인과 대칭). 무음 뒤 그 연결이
+     * 복귀했다가 다시 끊긴 것은 새 끊김이라 센다.
+     *
      * @param occurredAt 끊김이 난 시각(닫힘 처리 시각 · 무음 점검 시각)
+     * @param lastHeardAt 그 연결에서 마지막으로 기기 메시지를 받은 시각(모르면 null — 그 연결의 무음 기록이 있기만 하면 같은 끊김으로 본다)
      * @return 창 안 끊김 횟수(이 건 포함). 실패면 빈 값
      */
     public Optional<Integer> recordDisconnect(UUID deviceId, UUID connectionId, DeviceDisconnectRepository.Kind kind,
             Integer closeCode, Instant occurredAt, String traceId) {
+        return recordDisconnect(deviceId, connectionId, kind, closeCode, occurredAt, null, traceId);
+    }
+
+    /** {@link #recordDisconnect(UUID, UUID, DeviceDisconnectRepository.Kind, Integer, Instant, String)}에 마지막 수신 시각을 더한 것. */
+    public Optional<Integer> recordDisconnect(UUID deviceId, UUID connectionId, DeviceDisconnectRepository.Kind kind,
+            Integer closeCode, Instant occurredAt, Instant lastHeardAt, String traceId) {
         Objects.requireNonNull(deviceId, "deviceId");
         Objects.requireNonNull(connectionId, "connectionId");
         Objects.requireNonNull(kind, "kind");
@@ -209,9 +220,11 @@ public class ConnectionStateWriter implements DeviceStatusPort {
         try {
             Recorded result = dbRetry.execute(DbRetry.Idempotency.IDEMPOTENT, () -> transactions.execute(status -> {
                 // 행을 먼저 잠근다: 같은 기기의 복귀 · 인계가 이 기록을 본 뒤에 횟수를 센다
-                Optional<DeviceConnectionRow> locked = connections.findForUpdate(deviceId);
+                connections.findForUpdate(deviceId);
                 Instant now = clock.now();
-                if (!alreadyCountedAsSilent(locked, connectionId, kind)) {
+                boolean sameAsSilence = kind == DeviceDisconnectRepository.Kind.CLOSED && disconnects.existsSince(deviceId,
+                        connectionId, DeviceDisconnectRepository.Kind.SILENT, lastHeardAt);
+                if (!sameAsSilence) {
                     disconnects.record(new DisconnectEvent(UUID.randomUUID(), deviceId, connectionId, kind,
                             kind == DeviceDisconnectRepository.Kind.SILENT ? null : closeCode, occurredAt), now);
                 }
@@ -236,16 +249,6 @@ public class ConnectionStateWriter implements DeviceStatusPort {
             events.appError(EventLog.Component.DEVICE_GATEWAY, e);
             return Optional.empty();
         }
-    }
-
-    /**
-     * 리뷰 반영 2: 40초 무음으로 이미 끊김(SILENT)을 센 연결이 복귀 없이 늦게 닫혔다 — 원장 행이 아직 그 연결의 DISCONNECTED면 같은 끊김이다.
-     * 복귀(HEARTBEAT) 뒤 다시 끊긴 것은 새 끊김이라 센다.
-     */
-    private static boolean alreadyCountedAsSilent(Optional<DeviceConnectionRow> locked, UUID connectionId,
-            DeviceDisconnectRepository.Kind kind) {
-        return kind == DeviceDisconnectRepository.Kind.CLOSED && locked.filter(row -> connectionId.equals(row.connectionId())
-                && row.state() == ConnectionState.DISCONNECTED).isPresent();
     }
 
     /** U3: 창보다 오래된 끊김 사건을 지운다(끊김 점검 주기 작업). 지운 행 수(실패면 0, 앱 오류 한 줄). */

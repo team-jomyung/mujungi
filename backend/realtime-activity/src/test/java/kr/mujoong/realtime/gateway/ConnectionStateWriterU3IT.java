@@ -207,6 +207,37 @@ class ConnectionStateWriterU3IT {
         assertThat(connections.find(device).orElseThrow().recentDisconnects()).isEqualTo(1);
     }
 
+    /** 2차 리뷰 3: 무음으로 센 옛 연결이 기기가 새 연결로 돌아온 뒤 늦게 1006으로 닫혀도 같은 끊김이다. */
+    @Test
+    void aLateCloseOfASilentConnectionAfterTheDeviceCameBackOnANewConnectionIsNotCountedAgain() {
+        DeviceConnection old = connection;
+        clock.advance(DISCONNECT.plusSeconds(1));
+        writer.markDisconnected(device, old.connectionId(), DISCONNECT).orElseThrow();
+        DeviceConnection next = connect();
+        assertThat(next.knownState()).isEqualTo(ConnectionState.CONNECTED);
+
+        assertThat(writer.recordDisconnect(device, old.connectionId(), DeviceDisconnectRepository.Kind.CLOSED, 1006,
+                clock.now(), old.lastMessageAt(), "trace")).contains(1);
+
+        assertThat(disconnects.findByDevice(device)).singleElement()
+                .satisfies(event -> assertThat(event.kind()).isEqualTo(DeviceDisconnectRepository.Kind.SILENT));
+        assertThat(connections.find(device).orElseThrow().state()).isEqualTo(ConnectionState.CONNECTED);
+    }
+
+    /** 같은 연결이 무음 뒤 HEARTBEAT로 복귀했다가 다시 끊기면 새 끊김이다(복귀 뒤 들은 시각이 무음 기록보다 늦다). */
+    @Test
+    void aCloseAfterTheSilentConnectionRecoveredIsANewDisconnect() {
+        clock.advance(DISCONNECT.plusSeconds(1));
+        writer.markDisconnected(device, connection.connectionId(), DISCONNECT).orElseThrow();
+        clock.advance(Duration.ofSeconds(2));
+        connection.touch(clock.now());
+        writer.markConnectedAgain(device, connection.connectionId(), clock.now(), "trace").orElseThrow();
+
+        clock.advance(Duration.ofSeconds(5));
+        assertThat(writer.recordDisconnect(device, connection.connectionId(), DeviceDisconnectRepository.Kind.CLOSED, 1006,
+                clock.now(), connection.lastMessageAt(), "trace")).contains(2);
+    }
+
     @Test
     void aSilenceAfterAnotherConnectionsCloseStillCountsAsItsOwnDisconnect() {
         assertThat(writer.recordDisconnect(device, UUID.randomUUID(), DeviceDisconnectRepository.Kind.CLOSED, 1006,

@@ -90,8 +90,8 @@ class SessionExecutorReviewU3Test {
         h.advance(Duration.ofMillis(800));
         assertThat(h.link.outputs()).isEmpty();
 
-        // 아이가 종료가 아닌 말로 대화를 이어 간다 → 막힘을 푼다(취소한 응답은 그대로 버린다)
-        done("i2", "아니야 공룡 얘기 더 해 줘");
+        // 아이가 적극적으로 대화를 이어 간다 → 막힘을 푼다(취소한 응답은 그대로 버린다, 2차 리뷰 6: 계속 표현일 때만)
+        done("i2", "아니야 공룡 얘기 더 하자");
         assertThat(eventTypes()).contains(SessionExecutor.EVENT_CHILD_STOP_LIFTED);
         h.provider.last().emit(new ProviderEvent.OutputAudioDelta("r1", new byte[4_800]));
         h.drain();

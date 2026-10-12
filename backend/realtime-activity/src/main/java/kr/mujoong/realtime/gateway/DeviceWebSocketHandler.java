@@ -327,6 +327,7 @@ public class DeviceWebSocketHandler extends AbstractWebSocketHandler {
             return;
         }
         Instant closedAt = clock.now();
+        Instant lastHeardAt = connection.lastMessageAt();
         launcher.launch("device-offline-" + connection.connectionId(), () -> {
             try {
                 if (offline) {
@@ -336,9 +337,10 @@ public class DeviceWebSocketHandler extends AbstractWebSocketHandler {
                 events.appError(EventLog.Component.DEVICE_GATEWAY, e);
             }
             if (counts) {
-                // U3-J2: 끊김 한 건(닫기 코드와 함께). 기록 실패는 기록 장치가 앱 오류로 남긴다
+                // U3-J2: 끊김 한 건(닫기 코드와 함께). 무음으로 이미 센 뒤 이 연결에서 다시 듣지 못했으면 같은 끊김이다(2차 리뷰 3).
+                // 기록 실패는 기록 장치가 앱 오류로 남긴다
                 writer.recordDisconnect(deviceId, connection.connectionId(), DeviceDisconnectRepository.Kind.CLOSED,
-                        closeCodeFor(status.getCode()), closedAt, connection.traceId());
+                        closeCodeFor(status.getCode()), closedAt, lastHeardAt, connection.traceId());
             }
         });
     }

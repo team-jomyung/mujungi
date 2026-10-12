@@ -58,7 +58,11 @@ public class DeviceDisconnectRepository {
     private static final String EXISTS_FOR_CONNECTION = "select exists(select 1 from realtime.realtime_device_disconnect_event"
             + " where device_id = :deviceId and connection_id = :connectionId and kind = :kind)";
 
-    private static final String SELECT_BY_DEVICE ="select " + COLUMNS + " from realtime.realtime_device_disconnect_event"
+    private static final String EXISTS_FOR_CONNECTION_SINCE = "select exists(select 1"
+            + " from realtime.realtime_device_disconnect_event where device_id = :deviceId and connection_id = :connectionId"
+            + " and kind = :kind and occurred_at >= :since)";
+
+    private static final String SELECT_BY_DEVICE = "select " + COLUMNS + " from realtime.realtime_device_disconnect_event"
             + " where device_id = :deviceId order by occurred_at, id";
 
     private static final String DELETE_BY_DEVICE = "delete from realtime.realtime_device_disconnect_event"
@@ -107,6 +111,21 @@ public class DeviceDisconnectRepository {
         ClockParams.instant(params, "cutoff", now.minus(window));
         Long count = jdbc.queryForObject(COUNT_SINCE, params, Long.class);
         return count == null ? 0 : (int) Math.min(Integer.MAX_VALUE, count);
+    }
+
+    /**
+     * 그 연결에 그 종류의 끊김이 {@code since} 이후(같은 시각 포함)에 적혔는가(2차 리뷰 3). {@code since}가 null이면 시각을 보지 않는다.
+     */
+    public boolean existsSince(UUID deviceId, UUID connectionId, Kind kind, Instant since) {
+        if (since == null) {
+            return exists(deviceId, connectionId, kind);
+        }
+        MapSqlParameterSource params = new MapSqlParameterSource();
+        ClockParams.uuid(params, "deviceId", Objects.requireNonNull(deviceId, "deviceId"));
+        ClockParams.uuid(params, "connectionId", Objects.requireNonNull(connectionId, "connectionId"));
+        ClockParams.text(params, "kind", Objects.requireNonNull(kind, "kind").name());
+        ClockParams.instant(params, "since", since);
+        return Boolean.TRUE.equals(jdbc.queryForObject(EXISTS_FOR_CONNECTION_SINCE, params, Boolean.class));
     }
 
     /** 그 연결에 그 종류의 끊김이 이미 적혔는가(같은 끊김을 두 번 세지 않는다, 리뷰 반영 2). */

@@ -202,6 +202,11 @@ public final class FakeDeviceLink implements DeviceLink {
         return boundSession;
     }
 
+    @Override
+    public synchronized UUID boundSessionId() {
+        return boundSession;
+    }
+
     public synchronized CloseCode closedWith() {
         return closedWith;
     }

@@ -13,10 +13,8 @@ import java.nio.file.attribute.PosixFilePermissions;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayDeque;
-import java.util.Collections;
 import java.util.EnumMap;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -28,6 +26,7 @@ import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 import kr.mujoong.contract.log.EventLog;
 import kr.mujoong.contract.time.MujoongClock;
+import kr.mujoong.realtime.common.collect.BoundedCollections;
 import kr.mujoong.realtime.common.db.DbRetry;
 import kr.mujoong.realtime.config.RealtimeProperties;
 import kr.mujoong.realtime.observability.EventLogger;
@@ -104,19 +103,14 @@ public class FileAudioRecorder implements AudioRecordings, DisposableBean {
     private int queuedChunks;
     private boolean stopping;
     private boolean writerStarted;
+    /** 기록기를 띄우는 호출이 돌아왔다(그 뒤에도 {@link #writer}가 null이면 작업을 돌리지 않는 장치다). */
+    private boolean writerLaunched;
     private Thread writer;
 
     /** 기록기 스레드만 쓰는 세션별 파일. */
     private final Map<UUID, SessionFiles> open = new HashMap<>();
     /** 기록을 막은 세션(계정 삭제 중). 파일 만들기와 차단 등록은 {@link #creation} 잠금으로 서로를 기다린다. */
-    private final Set<UUID> blocked = Collections.synchronizedSet(Collections.newSetFromMap(new LinkedHashMap<>() {
-        private static final long serialVersionUID = 1L;
-
-        @Override
-        protected boolean removeEldestEntry(Map.Entry<UUID, Boolean> eldest) {
-            return size() > MAX_BLOCKED;
-        }
-    }));
+    private final Set<UUID> blocked = BoundedCollections.synchronizedSet(MAX_BLOCKED);
     private final ReentrantLock creation = new ReentrantLock();
 
     @Autowired
@@ -190,7 +184,7 @@ public class FileAudioRecorder implements AudioRecordings, DisposableBean {
     public boolean drainNow() {
         lock.lock();
         try {
-            if (writer != null) {
+            if (!writesOnCaller()) {
                 return false;
             }
         } finally {
@@ -219,15 +213,21 @@ public class FileAudioRecorder implements AudioRecordings, DisposableBean {
             creation.unlock();
         }
         CompletableFuture<Void> closed = new CompletableFuture<>();
+        boolean onCaller;
         lock.lock();
         try {
+            if (!writerStarted) {
+                // 2차 리뷰 7: 기록기가 아직 시작하지 않았다(첫 open 전) — 열린 파일이 없다. 파일 맵은 기록기 스레드 전용이라 여기서 만지지 않는다
+                return true;
+            }
             queue.addLast(new Block(sessionId, closed));
             available.signalAll();
+            onCaller = writesOnCaller();
         } finally {
             lock.unlock();
         }
-        if (drainNow()) {
-            // 기록기 스레드가 없다(작업을 돌리지 않는 장치) — 지금 스레드에서 처리했다
+        if (onCaller && drainNow()) {
+            // 띄운 장치가 작업을 돌리지 않는다(시험) — 파일 맵을 쓰는 쪽이 원래 이 호출 스레드다
             return closed.isDone();
         }
         long remaining = stopWait.toNanos();
@@ -271,9 +271,18 @@ public class FileAudioRecorder implements AudioRecordings, DisposableBean {
         lock.lock();
         try {
             writer = started;
+            writerLaunched = true;
         } finally {
             lock.unlock();
         }
+    }
+
+    /**
+     * 2차 리뷰 7: 파일 맵({@code open})을 부른 스레드에서 다뤄도 되는가 — 기록기를 띄웠는데 장치가 스레드를 돌려주지 않았을 때(작업을 돌리지
+     * 않는 시험 장치)만이다. 띄우는 호출이 아직 돌아오지 않은 사이는 기록기 스레드가 이미 돌 수 있어 아니다. {@link #lock}을 쥐고 부른다.
+     */
+    private boolean writesOnCaller() {
+        return writer == null && (writerLaunched || !writerStarted);
     }
 
     private void offerChunk(UUID sessionId, Speaker speaker, byte[] pcm) {

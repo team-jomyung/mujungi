@@ -1,11 +1,11 @@
 package kr.mujoong.realtime.session;
 
-import static kr.mujoong.realtime.testing.RealtimeItEnvironment.WAIT;
 import static kr.mujoong.realtime.testing.RealtimeItEnvironment.awaitTrue;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -46,6 +46,11 @@ import tools.jackson.databind.JsonNode;
 @Tag("db")
 class SessionVoiceU3IT {
 
+    /**
+     * 기기 · 공급자 메시지를 기다리는 상한(2차 리뷰 9). 서버 시한을 운영값으로 둬서 느린 단계도 결국 오므로, 실패를 알리는 데만 쓰는 이 상한은
+     * 넉넉히 둔다(통과하는 실행은 메시지가 오는 즉시 돌아온다).
+     */
+    private static final Duration WAIT = Duration.ofSeconds(30);
     private static final byte[] PCM = new byte[48_000];
     private static final String TRACE = "0123456789abcdef0123456789abcdef";
 
@@ -175,12 +180,19 @@ class SessionVoiceU3IT {
     // ------------------------------------------------------------------ 보조
 
     /**
-     * 기록 디렉터리를 시험 임시 폴더로, 기기 무음 판정을 운영값(40초)으로 둔다 — 이 시험의 기기는 HEARTBEAT를 보내지 않으므로 시험 기본값(4초)이면
-     * 느린 실행에서 세션이 DISCONNECT로 끝난다(시험 경합).
+     * 기록 디렉터리를 시험 임시 폴더로 두고, 이 흐름이 지나는 서버 시한을 모두 운영값으로 둔다(2차 리뷰 9). 시험 프로필의 줄인 값(START 확인 2초 ·
+     * 마무리 확인 3초 · HELLO 0.5초 · verify-token 0.1초 · 공급자 연결 1초 · 무음 4초)이면 기계가 바쁠 때 서버가 먼저 FAILED · ENDED_UNCONFIRMED ·
+     * 1013으로 끝내 버려, 기기가 기다리던 LISTENING · CLOSE_TRANSPORT · HELLO_OK가 영영 오지 않고 시험은 '제한 PT10S'로만 실패한다. 이 클래스는
+     * 시한 경계가 아니라 정상 흐름을 보므로 줄인 값이 필요 없다.
      */
     private void start() {
         env = RealtimeItEnvironment.start(Map.of("mujoong.recording.directory", recordings.toString(),
-                "mujoong.timing.device.disconnect", "40s"), null);
+                "mujoong.timing.device.disconnect", "40s",
+                "mujoong.timing.session.device-ack-timeout", "20s",
+                "mujoong.timing.session.closing-confirm", "30s",
+                "mujoong.timing.device.hello-timeout", "5s",
+                "mujoong.internal-http.verify-token-timeout", "1s",
+                "mujoong.provider.connect-timeout", "10s"), null);
     }
 
     private UUID activate(DeviceSimulatorClient device, boolean rawAudio) {

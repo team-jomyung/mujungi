@@ -4,7 +4,6 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -20,6 +19,7 @@ import kr.mujoong.contract.log.AttrKey;
 import kr.mujoong.contract.log.EventCode;
 import kr.mujoong.contract.log.EventLog;
 import kr.mujoong.contract.time.MujoongClock;
+import kr.mujoong.realtime.common.collect.BoundedCollections;
 import kr.mujoong.realtime.common.scaling.SingleInstanceAssumption;
 import kr.mujoong.realtime.config.RealtimeProperties;
 import kr.mujoong.realtime.gateway.DeviceConnectionRepository;
@@ -77,14 +77,7 @@ public class AsyncRecorder {
     private final ConcurrentHashMap<UUID, DeviceConnectionRepository.LastSeen> lastSeen = new ConcurrentHashMap<>();
     private final AtomicBoolean seenInFlight = new AtomicBoolean();
     /** 전사를 막은 세션(계정 삭제, 리뷰 반영 8). 오래된 것부터 잊는다 — 지우는 동안의 경합만 막으면 된다. */
-    private final Set<UUID> discarded = Collections.synchronizedSet(Collections.newSetFromMap(new LinkedHashMap<>() {
-        private static final long serialVersionUID = 1L;
-
-        @Override
-        protected boolean removeEldestEntry(Map.Entry<UUID, Boolean> eldest) {
-            return size() > MAX_DISCARDED;
-        }
-    }));
+    private final Set<UUID> discarded = BoundedCollections.synchronizedSet(MAX_DISCARDED);
     // 진행 중 플러시가 끝났다는 신호(앱 종료 drain이 기다린다, 3.6 수정 J305). 잠금 순서는 이 잠금 → 칸 목록 모니터 하나뿐이다
     private final ReentrantLock flushEndedLock = new ReentrantLock();
     private final Condition flushEnded = flushEndedLock.newCondition();

@@ -55,6 +55,9 @@ public interface DeviceLink {
     /** 이 연결로 START_SESSION을 보낸 세션을 묶는다(입력 프레임 · ACK 경로). */
     void bindSession(UUID sessionId);
 
+    /** 지금 묶인 세션(없으면 null). */
+    UUID boundSessionId();
+
     /** 출력 묶음 음성 자리 예약. 프레임을 보내며 풀고, 버리면 남은 자리를 한 번에 푼다. */
     interface AudioReservation {
 

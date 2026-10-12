@@ -56,6 +56,19 @@ class ConnectionHandoverU3Test {
         assertThat(sent.get(2)).isEqualTo(new SessionState(View.STANDBY));
     }
 
+    /** 2차 리뷰 5: 그 사이 같은 기기의 새 세션이 이 연결을 묶었으면 뒤늦은 대기 명령으로 새 세션 표시를 덮지 않는다. */
+    @Test
+    void aConnectionAlreadyBoundToANewSessionIsNotSentBackToStandby() {
+        SessionMailbox closed = new SessionMailbox(10);
+        closed.close();
+        prepare(closed, sessionId);
+        when(connection.boundSessionId()).thenReturn(UUID.randomUUID());
+
+        assertThat(handover.complete(connection)).isTrue();
+
+        assertThat(sent()).singleElement().isInstanceOf(HelloOk.class);
+    }
+
     @Test
     void anOpenMailboxGetsTheRelinkAndTheConnectionGetsOnlyHelloOk() {
         SessionMailbox open = new SessionMailbox(10);

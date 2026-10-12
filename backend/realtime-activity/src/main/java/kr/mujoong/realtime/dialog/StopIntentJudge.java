@@ -60,18 +60,24 @@ public final class StopIntentJudge {
         }
     }
 
-    /**
-     * 남의 말 · 인용 · 역할 놀이 표지(정규화 뒤). 청유형 인용("그만하자고 했어" · "끝내자더라")도 남의 말이다(리뷰 반영 3) — "자고" 단독은
-     * 아이 자신의 강조("이제 그만하자고!")일 수 있어 뒤에 말하기 동사가 올 때만 본다.
-     */
+    /** 남의 말 · 인용 · 역할 놀이 표지(정규화 뒤, 부분 일치). 청유형 인용은 낱말 경계를 보는 아래 두 목록이 맡는다. */
     private static final List<String> REPORTED = List.of(
             "라고했", "라고말했", "라고하면", "라고하더", "라고그랬", "라고해서", "라고하는", "라고하잖", "라고해",
             "이라고했", "이라고말했", "하래", "하라고", "하라고했", "하라더", "그랬어", "그러더라", "그러던데",
-            "자고했", "자고해", "자고하", "자고말", "자고그랬", "자고그러", "자더라", "자던데", "자대",
             "흉내", "인척", "척할", "척하", "역할놀이", "놀이에서", "연기", "대사");
 
-    /** 청유형 인용 준말 "~재"(= ~자고 해, "그만하재" · "끝내재") — 낱말 끝에서만 본다("재미없어" · "천재"는 아니다). */
-    private static final List<String> REPORTED_WORD_ENDINGS = List.of("하재", "내재", "두재", "자재");
+    /**
+     * 청유형 인용이 낱말 끝에 오는 꼴(리뷰 반영 3 · 2차 리뷰 1): "그만하재" · "끝내자더라고" · "그만하자대". 공백을 지운 글자열에서 찾으면
+     * "혼자 대화" · "피자 대신"의 '자대'처럼 낱말 경계를 넘어 걸려 아이의 진짜 종료 의도를 묻으므로 낱말 끝에서만 본다.
+     */
+    private static final List<String> REPORTED_WORD_ENDINGS = List.of("하재", "내재", "두재", "자재",
+            "자더라", "자더라고", "자던데", "자대", "자대요");
+
+    /**
+     * 청유형 인용 "~자고" 뒤에 오는 말하기 동사의 첫머리(2차 리뷰 1). "~자고"가 낱말 안에 있으면 바로 뒤가, 낱말 끝이면 다음 낱말의 첫머리가
+     * 이것이어야 인용이다("그만하자고 했어" · "그만하자고해서"). "자고" 단독은 아이 자신의 강조("이제 그만하자고!")일 수 있어 보지 않는다.
+     */
+    private static final List<String> QUOTE_VERB_HEADS = List.of("했", "해", "하", "말", "그랬", "그러");
 
     /** 계속하겠다는 부정 · 연장(정규화 뒤). */
     private static final List<String> CONTINUE = List.of(
@@ -140,7 +146,7 @@ public final class StopIntentJudge {
         String text = normalize(transcript);
         List<String> words = tokens(transcript);
         if (text.isEmpty() || containsAny(text, REPORTED) || endsAnyWord(words, REPORTED_WORD_ENDINGS)
-                || containsAny(text, CONTINUE)) {
+                || hortativeQuote(words) || containsAny(text, CONTINUE)) {
             return Judgment.NONE;
         }
         boolean question = isQuestion(transcript, text);
@@ -195,9 +201,12 @@ public final class StopIntentJudge {
         return words;
     }
 
-    /** 정규화하고도 남는 글자가 있는가(빈 말 · 문장 부호뿐인 전사는 말이 아니다). */
-    public static boolean hasWords(String transcript) {
-        return !normalize(transcript).isEmpty();
+    /**
+     * 적극적으로 대화를 이어 가겠다는 말인가("더 얘기하자" · "계속할래" · "그만 안 할래"). 종료 의도를 푸는 근거는 이것뿐이다 — 남의 말 · 주제
+     * 거부 · 평범한 말로 판정이 NONE인 것은 계속 의사가 아니다(2차 리뷰 6).
+     */
+    public boolean continues(String transcript) {
+        return containsAny(normalize(transcript), CONTINUE);
     }
 
     /** 정규화: NFKC · 영문 소문자 · 한글 · 영문 · 숫자만 남긴다. */
@@ -221,6 +230,30 @@ public final class StopIntentJudge {
     private static boolean containsAny(String text, List<String> needles) {
         for (String needle : needles) {
             if (text.contains(needle)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** "~자고" + 말하기 동사(같은 낱말 안 또는 다음 낱말 첫머리). */
+    private static boolean hortativeQuote(List<String> words) {
+        for (int i = 0; i < words.size(); i++) {
+            String word = words.get(i);
+            for (int at = word.indexOf("자고"); at >= 0; at = word.indexOf("자고", at + 1)) {
+                String rest = word.substring(at + 2);
+                String following = rest.isEmpty() ? (i + 1 < words.size() ? words.get(i + 1) : "") : rest;
+                if (startsWithAny(following, QUOTE_VERB_HEADS)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private static boolean startsWithAny(String text, List<String> heads) {
+        for (String head : heads) {
+            if (text.startsWith(head)) {
                 return true;
             }
         }

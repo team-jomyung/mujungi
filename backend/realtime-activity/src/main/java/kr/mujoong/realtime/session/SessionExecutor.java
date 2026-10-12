@@ -3,7 +3,6 @@ package kr.mujoong.realtime.session;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -33,6 +32,7 @@ import kr.mujoong.contract.ws.message.SessionState;
 import kr.mujoong.contract.ws.message.StartSession;
 import kr.mujoong.contract.ws.message.StopOutput;
 import kr.mujoong.contract.ws.message.View;
+import kr.mujoong.realtime.common.collect.BoundedCollections;
 import kr.mujoong.realtime.common.scaling.SingleInstanceAssumption;
 import kr.mujoong.realtime.config.RealtimeProperties;
 import kr.mujoong.realtime.dialog.DialogInstructions;
@@ -258,11 +258,11 @@ public final class SessionExecutor {
     private UUID progressPlaybackId;
     private Long progressPlayedToMs;
     /** U3-R5: 취소한 응답(늦게 오는 조각을 받지 않는다). */
-    private final Set<String> cancelledResponses = bounded();
+    private final Set<String> cancelledResponses = BoundedCollections.set(MAX_TRACKED);
     /** U3-R7: 교정을 이미 보낸 응답(응답당 한 번). */
-    private final Set<String> correctedResponses = bounded();
+    private final Set<String> correctedResponses = BoundedCollections.set(MAX_TRACKED);
     /** 기기로 보낸 출력 묶음의 응답(끼어들기 때 그 응답을 취소한다). */
-    private final Map<UUID, String> playbackResponses = boundedMap();
+    private final Map<UUID, String> playbackResponses = BoundedCollections.map(MAX_TRACKED);
     /** 기기가 STARTED를 알리고 아직 끝 표식이 없는 재생(생각 중 · 듣는 중 표시와 종료 의도 판정의 '재생 중'). */
     private final Set<UUID> devicePlaying = new HashSet<>();
     /** 종료 의도 판정기(세션 스냅숏의 종료 표현, U3-R12). */
@@ -682,8 +682,10 @@ public final class SessionExecutor {
                 if (inRelayRange()) {
                     boolean uncertain = uncertain(done);
                     transcripts.childFinal(done.itemId(), done.transcript(), at, uncertain);
-                    judgeStopIntent(done.transcript(), uncertain, at);
-                    thinking();
+                    // 2차 리뷰 2: 종료 의도를 푼 발화의 응답은 막힌 동안 이미 취소됐을 수 있다 — 끝 신호가 오지 않을 '생각 중'을 보내지 않는다
+                    if (!judgeStopIntent(done.transcript(), uncertain, at)) {
+                        thinking();
+                    }
                 }
             }
             case ProviderEvent.OutputTranscriptDelta delta -> {
@@ -800,23 +802,25 @@ public final class SessionExecutor {
      * 멈춤) 이후 공급자 출력을 받지 않으며 CHILD_STOP_INTENT를 남긴다. CONFIRM이면 CHILD_STOP_UNCLEAR만 남긴다. 상태 전이 · 마무리 인사 ·
      * 확인 질문 재생은 U4다(U3-J1 · U3-J24).
      *
-     * <p>리뷰 반영 3(오판 복구): CLOSING(CHILD_STOP) 전이가 U4라 STOP 뒤에도 세션은 ACTIVE다. 그 뒤 아이가 종료가 아닌 확실한 말(판정 NONE ·
-     * 불확실 아님 · 기기 재생 중 아님)로 대화를 이어 가면 오판으로 보고 출력 막힘을 풀어 새 응답을 다시 보낸다. 이미 취소한 응답은 그대로 버린다
-     * (AC6.4.8 '이전 응답이 이어서 재생되지 않음'). 불명확 · 빈 말은 풀지 않는다.
+     * <p>리뷰 반영 3(오판 복구): CLOSING(CHILD_STOP) 전이가 U4라 STOP 뒤에도 세션은 ACTIVE다. 그 뒤 아이가 적극적으로 대화를 이어 가면
+     * ("더 얘기하자" · "계속할래" · "그만 안 할래" — 불확실 아님 · 기기 재생 중 아님) 오판으로 보고 출력 막힘을 풀어 새 응답을 다시 보낸다. 남의 말 ·
+     * 주제 거부 · 평범한 말은 풀지 않는다(2차 리뷰 6). 이미 취소한 응답은 그대로 버린다(AC6.4.8 '이전 응답이 이어서 재생되지 않음').
+     *
+     * @return 이번 발화로 종료 의도를 풀었으면 참
      */
-    private void judgeStopIntent(String transcript, boolean uncertain, Instant at) {
+    private boolean judgeStopIntent(String transcript, boolean uncertain, Instant at) {
         if (status != SessionStatus.ACTIVE) {
-            return;
+            return false;
         }
-        StopIntentJudge.Judgment judgment = stopJudge.judge(transcript, !devicePlaying.isEmpty());
         if (stopIntent) {
-            if (judgment.verdict() == StopIntentJudge.Verdict.NONE && !uncertain && devicePlaying.isEmpty()
-                    && StopIntentJudge.hasWords(transcript)) {
+            if (!uncertain && devicePlaying.isEmpty() && stopJudge.continues(transcript)) {
                 stopIntent = false;
                 putEvent(EVENT_CHILD_STOP_LIFTED, null, at);
+                return true;
             }
-            return;
+            return false;
         }
+        StopIntentJudge.Judgment judgment = stopJudge.judge(transcript, !devicePlaying.isEmpty());
         switch (judgment.verdict()) {
             case STOP -> {
                 stopIntent = true;
@@ -829,6 +833,7 @@ public final class SessionExecutor {
                 // 종료 의도 아님
             }
         }
+        return false;
     }
 
     /** 종료 의도: 남은 프레임을 보내지 않고(세대 올림) 만들던 · 재생 중이던 응답을 공급자에서 취소하고 열린 구간을 버린다. */
@@ -978,10 +983,11 @@ public final class SessionExecutor {
         if (status != SessionStatus.ACTIVE || sealed == null || sealed.responseId() == null) {
             return;
         }
+        // 폐기 사유가 미완 · 너무 김이어도 버린 구간에 금지 패턴이 있으면 그 범주의 문장을 보낸다 — 교정은 응답당 한 번이라 전사만 든 구간이
+        // 먼저 미완으로 폐기되면 금지 패턴 교정을 다시 보낼 기회가 없다(2차 리뷰 9 조사 중 찾음)
         DialogInstructions.Correction correction = switch (reason) {
-            case GATE_PATTERN -> services.gate().matchedCategory(sealed).map(SessionExecutor::correctionFor)
-                    .orElse(DialogInstructions.Correction.INCOMPLETE);
-            case GATE_EMPTY, SEGMENT_OVERSIZE -> DialogInstructions.Correction.INCOMPLETE;
+            case GATE_PATTERN, GATE_EMPTY, SEGMENT_OVERSIZE -> services.gate().matchedCategory(sealed)
+                    .map(SessionExecutor::correctionFor).orElse(DialogInstructions.Correction.INCOMPLETE);
             default -> null;
         };
         if (correction == null || !correctedResponses.add(sealed.responseId())) {
@@ -1045,21 +1051,6 @@ public final class SessionExecutor {
     @FunctionalInterface
     private interface ProviderCall {
         void send(ProviderSession session) throws ProviderUnavailableException;
-    }
-
-    private static <T> Set<T> bounded() {
-        return Collections.newSetFromMap(boundedMap());
-    }
-
-    private static <K, V> Map<K, V> boundedMap() {
-        return new LinkedHashMap<>() {
-            private static final long serialVersionUID = 1L;
-
-            @Override
-            protected boolean removeEldestEntry(Map.Entry<K, V> eldest) {
-                return size() > MAX_TRACKED;
-            }
-        };
     }
 
     private boolean inRelayRange() {
@@ -1177,9 +1168,7 @@ public final class SessionExecutor {
         if (previous != null && previous.connectionId().equals(next.connectionId())) {
             return;
         }
-        if (previous != null) {
-            previous.bindSession(null);
-        }
+        unbind(previous);
         link = next;
         next.bindSession(plan.sessionId());
         // SD-17: 연결 교체는 세대를 올린다(옛 묶음의 남은 프레임이 새 연결로 가지 않게)
@@ -1210,6 +1199,7 @@ public final class SessionExecutor {
             next.sendControl(new StartSession(plan.approvedAudio()), startOpId, plan.sessionId());
         }
         sendControl(new SessionState(view));
+        keepOnlyLatestPendingPlayback();
         for (Map.Entry<UUID, WsPayload> pending : List.copyOf(pendingCommands.entrySet())) {
             WsPayload payload = pending.getValue();
             if (payload instanceof StopOutput || payload instanceof StartSession) {
@@ -1226,6 +1216,23 @@ public final class SessionExecutor {
         if (status == SessionStatus.ACTIVE) {
             armDisconnect();
         }
+    }
+
+    /**
+     * 2차 리뷰 4: 재생 추적({@link ApprovedPlayback})은 한 칸이라 ACK 없는 승인 문구 재생 명령이 둘 이상이면 앞 것의 끝 표식이 추적을 지우지 못해
+     * '듣는 중' 복귀가 늦는다. 새 연결에는 가장 최근 재생 명령 하나만 다시 보내고 앞 것은 미확인 목록에서 뺀다 — 끊기기 전 출력은 잇지 않는다는
+     * 규칙(편차 (ab))과 같은 쪽이고, CLOSING의 마무리 문구는 늘 가장 최근 재생 명령이라(진입 때 STOP_OUTPUT 뒤 한 번) 남는다.
+     */
+    private void keepOnlyLatestPendingPlayback() {
+        UUID latest = null;
+        for (Map.Entry<UUID, WsPayload> pending : pendingCommands.entrySet()) {
+            if (pending.getValue() instanceof PlayApprovedContent) {
+                latest = pending.getKey();
+            }
+        }
+        UUID keep = latest;
+        pendingCommands.entrySet().removeIf(pending -> pending.getValue() instanceof PlayApprovedContent
+                && !pending.getKey().equals(keep));
     }
 
     /**
@@ -1253,6 +1260,11 @@ public final class SessionExecutor {
      */
     public static void standDown(DeviceLink next, UUID sessionId, SessionStatus ended, boolean resumed) {
         if (next == null || !next.isOpen()) {
+            return;
+        }
+        UUID bound = next.boundSessionId();
+        if (bound != null && !bound.equals(sessionId)) {
+            // 2차 리뷰 5: 그 사이 같은 기기의 새 세션이 이 연결을 묶었다 — 뒤늦은 대기 명령으로 새 세션 표시를 덮지 않는다
             return;
         }
         if (resumed) {
@@ -1776,12 +1788,7 @@ public final class SessionExecutor {
             quietly(() -> transcripts.closeAll(now));
             quietly(() -> services.latency().sessionEnded(plan.sessionId()));
             quietly(() -> services.recorder().finish(plan.sessionId()));
-            quietly(() -> {
-                DeviceLink current = link;
-                if (current != null) {
-                    current.bindSession(null);
-                }
-            });
+            quietly(() -> unbind(link));
             pendingCommands.clear();
             quietly(() -> {
                 if (recording != null) {
@@ -1795,6 +1802,16 @@ public final class SessionExecutor {
                 }
             }
             onTerminated.run();
+        }
+    }
+
+    /**
+     * 이 세션이 묶은 연결이면 묶음을 푼다. 같은 기기의 새 세션이 이미 그 연결을 묶었으면 건드리지 않는다 — 풀면 새 세션의 입력 프레임 경로가
+     * 끊긴다(2차 리뷰 5 · 9 조사 중 찾음).
+     */
+    private void unbind(DeviceLink target) {
+        if (target != null && plan.sessionId().equals(target.boundSessionId())) {
+            target.bindSession(null);
         }
     }
 

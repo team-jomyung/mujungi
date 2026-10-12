@@ -239,6 +239,7 @@ public final class DeviceConnection implements DeviceLink {
     }
 
     /** 이 연결로 START_SESSION을 받은 세션(없으면 null). */
+    @Override
     public UUID boundSessionId() {
         return boundSessionId;
     }

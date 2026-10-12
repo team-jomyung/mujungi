@@ -11,6 +11,12 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.BooleanSupplier;
 import kr.mujoong.contract.log.EventCode;
 import kr.mujoong.contract.status.ActivityType;
 import kr.mujoong.realtime.common.db.DbRetry;
@@ -252,6 +258,55 @@ class FileAudioRecorderIT {
                     assertThat(row.byteCount()).isEqualTo(FRAME.length);
                     assertThat(row.endedAt()).isEqualTo(T0);
                 });
+    }
+
+    /**
+     * 2차 리뷰 7: 기록기 스레드가 이미 돌기 시작했지만 띄우기 호출이 아직 돌아오지 않은 사이에 차단이 오면, 차단은 기록기 스레드 전용 파일 맵을
+     * 부른 쪽 스레드에서 만지지 않는다 — 기록기 스레드가 처리한다.
+     */
+    @Test
+    void aBlockWhileTheWriterIsStillStartingIsHandledOnTheWriterThread() throws Exception {
+        List<Thread> finishedOn = new CopyOnWriteArrayList<>();
+        repository = new AudioRecordingRepository(db.jdbc()) {
+            @Override
+            public boolean finish(UUID id, long byteCount, Instant endedAt) {
+                finishedOn.add(Thread.currentThread());
+                return super.finish(id, byteCount, endedAt);
+            }
+        };
+        CountDownLatch release = new CountDownLatch(1);
+        AtomicReference<Thread> writer = new AtomicReference<>();
+        TaskLauncher slowToReturn = (name, task) -> {
+            Thread started = TaskLauncher.virtualThreads().launch(name, task);
+            writer.set(started);
+            try {
+                release.await();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            return started;
+        };
+        FileAudioRecorder recorder = recorder(slowToReturn, 1_000_000, 100);
+        CompletableFuture<AudioRecordings.Session> starting = CompletableFuture.supplyAsync(() -> recorder.open(sessionId));
+        awaitTrue(() -> writer.get() != null);
+        AudioRecordings.Session session = recorder.open(sessionId);
+        session.child(FRAME);
+        awaitTrue(() -> repository.findBySession(sessionId).size() == 1);
+
+        assertThat(recorder.block(sessionId)).isTrue();
+
+        assertThat(finishedOn).as("열린 파일은 기록기 스레드가 닫는다").containsExactly(writer.get());
+        release.countDown();
+        starting.get(5, TimeUnit.SECONDS);
+        recorder.destroy();
+    }
+
+    private static void awaitTrue(BooleanSupplier condition) throws InterruptedException {
+        long deadline = System.nanoTime() + Duration.ofSeconds(10).toNanos();
+        while (!condition.getAsBoolean()) {
+            assertThat(System.nanoTime()).as("조건을 기다린다").isLessThan(deadline);
+            Thread.sleep(5);
+        }
     }
 
     private FileAudioRecorder recorder(TaskLauncher launcher, long maxBytes, int queue) {

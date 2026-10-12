@@ -141,6 +141,44 @@ class StopIntentJudgeTest {
         assertThat(judge.judge(text, false).verdict()).isEqualTo(Verdict.NONE);
     }
 
+    /** 2차 리뷰 1: 청유형 인용 표지는 낱말 경계를 넘어 걸리지 않는다 — "혼자 대화" · "피자 대신"의 '자대'는 인용이 아니다. */
+    @ParameterizedTest
+    @CsvSource(delimiter = '|', value = {
+        "나 혼자 대화하는 거 그만할래",
+        "피자 대신 이제 그만할래",
+        "혼자 더라도 그만할래",
+        "의자 던데 그만할래",
+        "나 혼자 고민했어 그만할래",
+        "동생이랑 같이 자고 싶어 그만할래"
+    })
+    void hortativeQuoteMarkersDoNotCrossWordBoundaries(String text) {
+        assertThat(judge.judge(text, false)).isEqualTo(new Judgment(Verdict.STOP, Basis.CLEAR_PATTERN));
+    }
+
+    @ParameterizedTest
+    @CsvSource(delimiter = '|', value = {
+        "엄마가 그만하자고 해",
+        "엄마가 그만하자고해서 멈췄어",
+        "아빠가 끝내자고 말했어",
+        "형이 그만하자고 그러더라",
+        "누나가 그만하자더라고",
+        "동생이 그만하자대"
+    })
+    void hortativeQuotesAreStillFoundWithOrWithoutASpaceBeforeTheVerb(String text) {
+        assertThat(judge.judge(text, false).verdict()).isEqualTo(Verdict.NONE);
+    }
+
+    /** 2차 리뷰 6: 종료 의도를 푸는 것은 적극적인 계속 표현뿐이다(남의 말 · 주제 거부 · 평범한 말은 아니다). */
+    @Test
+    void onlyAnActiveContinuationCountsAsContinuing() {
+        assertThat(judge.continues("아니 더 얘기하자")).isTrue();
+        assertThat(judge.continues("그만 안 할래 계속할래")).isTrue();
+        assertThat(judge.continues("엄마가 그만하라고 했어")).isFalse();
+        assertThat(judge.continues("공룡 얘기 그만")).isFalse();
+        assertThat(judge.continues("공룡이 좋아")).isFalse();
+        assertThat(judge.continues(null)).isFalse();
+    }
+
     @Test
     void theHortativeQuoteMarkersDoNotSwallowOrdinaryStopsOrWordsWithJae() {
         assertThat(judge.judge("그만하자", false)).isEqualTo(new Judgment(Verdict.STOP, Basis.CLEAR_PATTERN));

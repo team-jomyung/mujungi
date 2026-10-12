@@ -47,7 +47,8 @@ public final class OutputGate {
     }
 
     /**
-     * U3-R7: GATE_PATTERN으로 폐기한 구간이 걸린 시드 사전 범주(교정 문장 고르기). 걸리지 않았거나 판정 중 예외면 빈 값.
+     * U3-R7: 폐기한 구간의 전사가 걸리는 시드 사전 범주(교정 문장 고르기 — 미완 · 너무 김으로 폐기한 구간도 본다). 걸리지 않았거나 판정 중
+     * 예외면 빈 값.
      */
     public Optional<SeedDictionary.Category> matchedCategory(SegmentBuffer.Sealed segment) {
         try {
