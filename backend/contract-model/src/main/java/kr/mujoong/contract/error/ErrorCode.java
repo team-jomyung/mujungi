@@ -7,7 +7,8 @@ import java.util.Optional;
 import java.util.Set;
 
 /**
- * REST 오류 code 목록(BR8.6 · 계약 2절 + 편차 (a)(b)(c)(d)(e)(n)(o)(y) · J124). 정본 표는 {@code contracts/errors.md}이고
+ * REST 오류 code 목록(BR8.6 · 계약 2절 + 편차 (a)(b)(c)(d)(e)(n)(o)(y) · J124, U2가 계약 3절 /child 두 code와 편차 (U2-a)를 더함).
+ * 정본 표는 {@code contracts/errors.md}이고
  * {@code ContractFilesTest}가 code · HTTP · message · 노출을 이 enum과 대조한다.
  *
  * <p>message는 code마다 고정 문장 하나다. 전사 · 개인정보 · 입력값 · 예외 메시지를 넣지 않는다(BR8.6 · SD-11). 화면 문구는
@@ -42,7 +43,11 @@ public enum ErrorCode {
     DEVICE_NOT_CONNECTED("기기가 연결되어 있지 않아요.", EnumSet.of(Audience.INTERNAL), null, 423),
     SERVICE_NOT_READY("잠시 뒤 다시 시도해 주세요.", EnumSet.of(Audience.GUARDIAN, Audience.DEVICE, Audience.INTERNAL), "(n)", 503),
     INTERNAL_ERROR("잠시 문제가 생겼어요. 다시 시도해 주세요.", EnumSet.of(Audience.GUARDIAN, Audience.DEVICE, Audience.INTERNAL), "(o)", 500),
-    UPSTREAM_UNAVAILABLE("지금은 연결할 수 없어요. 잠시 뒤 다시 시도해 주세요.", EnumSet.of(Audience.NGINX), "(y)", 502, 504);
+    UPSTREAM_UNAVAILABLE("지금은 연결할 수 없어요. 잠시 뒤 다시 시도해 주세요.", EnumSet.of(Audience.NGINX), "(y)", 502, 504),
+    // ---- U2 보호자 계정(계약 3절 /child · /auth/google, 편차 (U2-a)) ----
+    GOOGLE_AUTH_FAILED("로그인하지 못했어요. 다시 시도해 주세요.", EnumSet.of(Audience.GUARDIAN), "(U2-a)", 401),
+    CHILD_NOT_REGISTERED("아이 정보가 아직 없어요.", EnumSet.of(Audience.GUARDIAN), null, 404),
+    CHILD_EXISTS("이미 등록된 아이가 있어요.", EnumSet.of(Audience.GUARDIAN), null, 409);
 
     /** 누가 받는 응답인가(errors.md '노출' 열). */
     public enum Audience {

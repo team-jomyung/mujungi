@@ -46,3 +46,21 @@
 | (x) | 계약 8절 C13 `owner_role: core_app`은 '쓰는 역할'로 읽고 표 · 스키마 소유는 `mujoong_owner`(앱 역할은 DDL 없음) | SD-13 · J112 | U1 실행 골격(DB 초기화) | 모든 유닛 | 해석 명시 | README.md · infra/postgres/init/01-roles.sql |
 | (y) | Nginx가 만든 502 · 504 JSON 봉투의 code `UPSTREAM_UNAVAILABLE`(상태 코드는 유지, 앱이 낸 503은 통과) | R4-17 · CD-2 · J112 | Nginx | ParentWeb · DeviceWeb · 외부 프로브 | 새 응답 | errors.md |
 | (z) | 공급자 `session.output.done`(responseId)을 그 응답의 전사 완료 신호로 쓴다 — 출력 게이트는 한 응답의 첫 조각부터 이 신호까지를 모두 담은 구간만 전사-음성 대응 근거로 보고, 신호가 없는 구간 · 앞부분이 다른 구간으로 떨어져 나간 구간 · 신호 뒤 조각이 붙은 구간 · 정규화 뒤 빈 전사를 GATE_EMPTY로 폐기한다(fail-closed, 실공급자 어댑터는 완결된 응답에만 이 신호를 보낸다). 한 구간에는 한 응답의 조각만 담고 다른 응답의 조각이 오면 열린 구간을 그 자리에서 확정해 게이트에 넣는다(BR7.3 확정 조건에 응답 경계를 더함). `responseId` 없는 출력 조각은 버린다 | 3.6 리뷰 F1 · SD-17 3단계 · BR7.4 (가) · J285 ~ J288 | 공급자(가짜 공급자 · 11/2 실공급자 어댑터, V-2) | Realtime OutputGate | 규칙 구체화 | ai-io.md |
+
+## U2 편차
+
+> U2(보호자 계정)가 승인 계약 3절 · 2절에 더하거나 구체화한 곳이다. 기호는 `(U2-<글자>)`이고 U1의 (a) ~ (z)와 섞이지 않게 따로 센다.
+> YAML 스펙은 `x-u2-deviation: ["(U2-a)"]`, Markdown은 `[U2 편차 (U2-a)]`로 표시한다(U1 `ContractFilesTest`의 (a) ~ (z) 대조와 겹치지 않는다).
+> 모두 더하기만 안전하거나 아직 소비자가 없던 경로의 해석이다. 근거 가정 번호는 `docs/units/u2/design.md` 8절.
+
+| 기호 | 내용 | 출처 | 제공 | 소비자 | 호환 분류 | 표시 위치 |
+|---|---|---|---|---|---|---|
+| (U2-a) | 새 code `GOOGLE_AUTH_FAILED`(401) — `POST /api/auth/google`의 '401 구글 교환 실패'에 code 이름을 붙임 | 계약 3절 /auth/google · AC1.1.4 | Core GuardianIdentity | ParentWeb | 새 응답 | parent-api.yaml · errors.md |
+| (U2-b) | `GET /api/policies/current`는 보호자 세션이 있어야 한다(계약은 `security: []`). 02 · 02-1은 로그인 뒤에만 열린다 | U2-J6 | Core ConsentPolicy | ParentWeb | 규칙 구체화(아직 소비자 없던 경로) | parent-api.yaml |
+| (U2-c) | 약관 응답 항목 모양 `{type, title, sections[{heading, body}]}`(계약 설명의 collect · purpose … 고정 필드 대신, 항목마다 소제목이 다름) | U2-J7 · 문구표 02-1 | Core ConsentPolicy | ParentWeb | 해석 명시 | parent-api.yaml |
+| (U2-d) | 계정 삭제가 접수된 보호자의 구글 로그인은 200 Me{deletionStatus: IN_PROGRESS}이고 세션 쿠키를 만들지 않는다 | U2-J5 · AC1.6.4 | Core GuardianIdentity | ParentWeb | 해석 명시 | parent-api.yaml |
+| (U2-e) | `POST /api/auth/google`은 형식 오류 · redirectUri 불일치 · Origin 불일치 · 구글 설정 없음도 400이 아니라 401 GOOGLE_AUTH_FAILED다(로그인 실패는 한 가지로만 알린다) | U2-J1 · AC1.1.4 | Core GuardianIdentity | ParentWeb | 규칙 구체화 | parent-api.yaml |
+| (U2-f) | `PUT /api/consents`의 policyVersion이 현재 정책 버전이 아니면 400 VALIDATION_FAILED(02는 약관을 다시 읽는다) | R6 | Core ConsentPolicy | ParentWeb | 규칙 구체화 | parent-api.yaml |
+| (U2-g) | 동의 상태 OUTDATED = 현재 버전 4항목 GIVEN은 없고 예전 버전 GIVEN 행이 있음. 화면은 NOT_GIVEN과 같은 02 재동의 | U2-J8 | Core ConsentPolicy | ParentWeb | 해석 명시 | parent-api.yaml |
+| (U2-h) | `DELETE /api/me` 202 본문 `{deletionRequestId}`, 같은 보호자의 재요청은 같은 id, 응답에 세션 쿠키 삭제(Max-Age=0) | AC1.6.1 · AC1.6.7 | Core AccountDeletion | ParentWeb | 해석 명시 | parent-api.yaml |
+| (U2-i) | `PUT /api/child/stop-expressions` 본문 `{items[{text}]}`(순서 = sortOrder), 기본 표현과 같은 표현도 중복으로 400 | R9 · U2-J11 | Core ChildProfile | ParentWeb | 해석 명시 | parent-api.yaml |

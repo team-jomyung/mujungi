@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mujoong.invalid/contracts/schemas/deletion-accepted-response.schema.json",
+  "title": "계정 삭제 접수",
+  "description": "DELETE /api/me 202(계약 3절 · FR1.6 · AC1.6.1 · AC1.6.7 · U2). 접수와 함께 보호자의 모든 로그인 세션을 끝내고 세션 쿠키를 지운다(다음 호출은 401). 다시 불러도 같은 deletionRequestId다(편차 (U2-h)).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["deletionRequestId"],
+  "properties": {
+    "deletionRequestId": { "$ref": "common.schema.json#/$defs/Uuid" }
+  }
+}

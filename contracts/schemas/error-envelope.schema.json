@@ -38,7 +38,10 @@
         "DEVICE_NOT_CONNECTED",
         "SERVICE_NOT_READY",
         "INTERNAL_ERROR",
-        "UPSTREAM_UNAVAILABLE"
+        "UPSTREAM_UNAVAILABLE",
+        "GOOGLE_AUTH_FAILED",
+        "CHILD_NOT_REGISTERED",
+        "CHILD_EXISTS"
       ]
     },
     "message": {

@@ -38,7 +38,8 @@ public record CoreProperties(
         DevLogin devLogin,
         LoadTest loadTest,
         Metrics metrics,
-        Observability observability) {
+        Observability observability,
+        Guardian guardian) {
 
     /** I-6: Core의 '확인 불가' 판정 시한은 Realtime 상태 보고 주기 세 번 이상이다(보고 두 번 유실로 stale 아님). */
     static final int STALE_TO_REPORT_RATIO = 3;
@@ -59,6 +60,7 @@ public record CoreProperties(
         required(loadTest, "mujoong.load-test");
         required(metrics, "mujoong.metrics");
         required(observability, "mujoong.observability");
+        required(guardian, "mujoong.guardian");
 
         if (security.sessionCookieMaxAge().compareTo(timing.login().sessionIdle()) > 0) {
             throw invalid("mujoong.security.session-cookie-max-age는 mujoong.timing.login.session-idle 이하여야 한다");
@@ -77,7 +79,8 @@ public record CoreProperties(
             BootstrapTiming bootstrap,
             DeviceTiming device,
             LoginTiming login,
-            CacheTiming cache) {
+            CacheTiming cache,
+            AccountTiming account) {
 
         public Timing {
             required(session, "mujoong.timing.session");
@@ -86,6 +89,15 @@ public record CoreProperties(
             required(device, "mujoong.timing.device");
             required(login, "mujoong.timing.login");
             required(cache, "mujoong.timing.cache");
+            required(account, "mujoong.timing.account");
+        }
+    }
+
+    /** U2 계정 삭제 지휘 주기 · 진행 세션 끝 대기(timing.md 8절, AC1.6.3). */
+    public record AccountTiming(Duration deletionTick, Duration deletionSessionWait) {
+        public AccountTiming {
+            positive(deletionTick, "mujoong.timing.account.deletion-tick");
+            positive(deletionSessionWait, "mujoong.timing.account.deletion-session-wait");
         }
     }
 
@@ -344,6 +356,43 @@ public record CoreProperties(
                     + ", metricSnapshotInterval=" + metricSnapshotInterval
                     + ", logMergeWindow=" + logMergeWindow
                     + ", systemSampleInterval=" + systemSampleInterval + "]";
+        }
+    }
+
+    /** U2 보호자 계정 설정(구글 OAuth, U2-J1). */
+    public record Guardian(Google google) {
+        public Guardian {
+            required(google, "mujoong.guardian.google");
+        }
+    }
+
+    /**
+     * 구글 OAuth 클라이언트(U2-J1). client-id · client-secret · redirect-uri는 환경 변수 {@code GOOGLE_OAUTH_CLIENT_ID} ·
+     * {@code GOOGLE_OAUTH_CLIENT_SECRET} · {@code GOOGLE_OAUTH_REDIRECT_URI}에서만 채우고 비어 있어도 기동은 막지 않는다(로그인이 401).
+     * 문자열 표현에 비밀 값을 내지 않는다.
+     */
+    public record Google(
+            String clientId, String clientSecret, String redirectUri, URI tokenUri, Duration exchangeTimeout) {
+
+        public Google {
+            clientId = clientId == null ? "" : clientId.trim();
+            clientSecret = clientSecret == null ? "" : clientSecret;
+            redirectUri = redirectUri == null ? "" : redirectUri.trim();
+            httpUrl(tokenUri, "mujoong.guardian.google.token-uri");
+            positive(exchangeTimeout, "mujoong.guardian.google.exchange-timeout");
+        }
+
+        /** 세 값이 모두 있어 로그인을 받을 수 있는가. */
+        public boolean configured() {
+            return !clientId.isEmpty() && !clientSecret.isEmpty() && !redirectUri.isEmpty();
+        }
+
+        @Override
+        public String toString() {
+            return "Google[clientId=" + (clientId.isEmpty() ? "<empty>" : "<set>")
+                    + ", clientSecret=" + (clientSecret.isEmpty() ? "<empty>" : "<redacted>")
+                    + ", redirectUri=" + (redirectUri.isEmpty() ? "<empty>" : "<set>")
+                    + ", tokenUri=" + tokenUri + ", exchangeTimeout=" + exchangeTimeout + "]";
         }
     }
 

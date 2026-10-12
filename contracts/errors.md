@@ -47,6 +47,9 @@
 | `SERVICE_NOT_READY` | 503 | 잠시 뒤 다시 시도해 주세요. | 보호자 · 기기 · 내부 | 앱 NOT_READY(DB 점검 연속 실패) · DRAINING(정상 종료 중). `Retry-After` 헤더(초) 동반 | RD-16 · J124 · [편차 (n)] |
 | `INTERNAL_ERROR` | 500 | 잠시 문제가 생겼어요. 다시 시도해 주세요. | 보호자 · 기기 · 내부 | 처리하지 못한 서버 오류(스택 · 예외 메시지 없음) | SD-11 · [편차 (o)] |
 | `UPSTREAM_UNAVAILABLE` | 502, 504 | 지금은 연결할 수 없어요. 잠시 뒤 다시 시도해 주세요. | Nginx | Nginx가 업스트림(앱 · web)에 닿지 못해 만든 502 · 504. 상태 코드는 그대로 두고 본문만 이 봉투로 바꾼다. 앱이 낸 503은 그대로 통과한다(`proxy_intercept_errors off`) | R4-17 · CD-2 · [편차 (y)] |
+| `GOOGLE_AUTH_FAILED` | 401 | 로그인하지 못했어요. 다시 시도해 주세요. | 보호자 | `POST /api/auth/google`의 모든 실패(code 없음 · redirectUri 불일치 · Origin 불일치 · 구글 교환 실패 · id_token 검증 실패 · 구글 설정 없음). 세션 쿠키를 만들지 않는다 | U2 · AC1.1.4 · 편차 (U2-a) |
+| `CHILD_NOT_REGISTERED` | 404 | 아이 정보가 아직 없어요. | 보호자 | 아이를 등록하지 않은 보호자의 `/api/child` 조회 · 수정 · 종료 표현 | 계약 3절 /child · U2 |
+| `CHILD_EXISTS` | 409 | 이미 등록된 아이가 있어요. | 보호자 | 계정당 아이 하나 — 두 번째 `POST /api/child` | 계약 3절 /child · AC1.3.9 · U2 |
 
 ## 응답 헤더 규칙
 

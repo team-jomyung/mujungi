@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mujoong.invalid/contracts/schemas/stop-expressions-response.schema.json",
+  "title": "종료 표현 목록(SET-01 · 05)",
+  "description": "GET /api/child/stop-expressions 200(계약 3절 · FR2.4 · AC2.1.12 · AC2.3.1 · U2). default는 고정 기본 표현(저장하지 않는 코드 상수, 삭제 · 수정 없음), items는 추가 표현(최대 5개, sortOrder 1부터).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["default", "items"],
+  "properties": {
+    "default": { "type": "string", "const": "무중아 그만할래" },
+    "items": {
+      "type": "array",
+      "maxItems": 5,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "text", "sortOrder"],
+        "properties": {
+          "id": { "$ref": "common.schema.json#/$defs/Uuid" },
+          "text": { "type": "string", "minLength": 2, "maxLength": 20 },
+          "sortOrder": { "type": "integer", "minimum": 1, "maximum": 5 }
+        }
+      }
+    }
+  }
+}

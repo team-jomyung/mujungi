@@ -119,6 +119,10 @@ mujoong:
     cache:
       approved-content-ttl: 10m
       policy-version-ttl: 1m
+    # U2 계정 삭제 지휘(timing.md 8절 · AC1.6.3)
+    account:
+      deletion-tick: 5s
+      deletion-session-wait: 30s
   outbox:
     poll-interval: 500ms
     batch-size: 20
@@ -181,3 +185,11 @@ mujoong:
     log-merge-window: 10s
     # OD-6 '앱 안 5초 표본'(CPU · 메모리 · 적체 게이지 갱신) 주기(3.6 수정 J326, reliability-design ## 3에 더할 키)
     system-sample-interval: 5s
+  # U2 구글 로그인(U2-J1). 값은 환경 변수로만 받고 비어 있으면 로그인이 401 GOOGLE_AUTH_FAILED다(기동은 막지 않는다)
+  guardian:
+    google:
+      client-id: ${GOOGLE_OAUTH_CLIENT_ID:}
+      client-secret: ${GOOGLE_OAUTH_CLIENT_SECRET:}
+      redirect-uri: ${GOOGLE_OAUTH_REDIRECT_URI:}
+      token-uri: https://oauth2.googleapis.com/token
+      exchange-timeout: 5s

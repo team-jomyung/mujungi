@@ -1,0 +1,7 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mujoong.invalid/contracts/schemas/child-response.schema.json",
+  "title": "아이 정보",
+  "description": "GET /api/child 200 · POST /api/child 201 · PATCH /api/child 200(계약 3절 Child · AC1.3.8 · U2). 모양은 홈 응답의 child와 같다. 계정당 한 명이고 수정해도 childId는 바뀌지 않는다(AC1.3.9).",
+  "$ref": "home-response.schema.json#/$defs/Child"
+}
