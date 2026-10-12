@@ -82,8 +82,8 @@ class FlywayConfIT {
                     .isInstanceOf(FlywayException.class)
                     .hasMessageContaining("non-empty schema");
 
-            // 설정 파일 그대로면 버전 0 기준선 뒤 V1이 적용된다
-            assertThat(realtime.migrate().migrationsExecuted).isEqualTo(1);
+            // 설정 파일 그대로면 버전 0 기준선 뒤 V1 · V2(U3)가 적용된다
+            assertThat(realtime.migrate().migrationsExecuted).isEqualTo(2);
             // 다시 돌리면 적용할 것이 없다(배포마다 migrate를 불러도 안전)
             assertThat(core.migrate().migrationsExecuted).isZero();
             assertThat(realtime.migrate().migrationsExecuted).isZero();
@@ -94,15 +94,16 @@ class FlywayConfIT {
                         .containsExactly(List.of("1", "SQL", true));
                 assertThat(query(owner,
                         "select version, type, success from flyway.realtime_schema_history order by installed_rank"))
-                        .containsExactly(List.of("0", "BASELINE", true), List.of("1", "SQL", true));
+                        .containsExactly(List.of("0", "BASELINE", true), List.of("1", "SQL", true), List.of("2", "SQL", true));
+                // core 12 + realtime V1 7 + realtime V2 3(U3)
                 assertThat(single(owner, "select count(*) from pg_tables where schemaname in ('core', 'realtime')"))
-                        .isEqualTo(19L);
+                        .isEqualTo(22L);
             }
             // afterMigrate.sql: 앱 역할은 자기 이력 표만 읽는다
             try (Connection coreApp = postgres.connect(Role.CORE_APP);
                     Connection realtimeApp = postgres.connect(Role.REALTIME_APP)) {
                 assertThat(single(coreApp, "select count(*) from flyway.core_schema_history")).isEqualTo(1L);
-                assertThat(single(realtimeApp, "select count(*) from flyway.realtime_schema_history")).isEqualTo(2L);
+                assertThat(single(realtimeApp, "select count(*) from flyway.realtime_schema_history")).isEqualTo(3L);
                 expectSqlStateAutoCommit("42501",
                         () -> query(coreApp, "select count(*) from flyway.realtime_schema_history"));
             }

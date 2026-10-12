@@ -57,6 +57,9 @@ mujoong:
     db-check-interval: 200ms
   gate:
     segment-quiet: 50ms
+  recording:
+    # 시험은 모듈 build 아래에 쓴다(저장소를 더럽히지 않음). 기록기 시험은 @TempDir로 덮어쓴다
+    directory: build/test-recordings
   security:
     allowed-origin: https://mujoong.invalid
   metrics:
