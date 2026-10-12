@@ -4,13 +4,17 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.net.URI;
+import java.security.KeyPair;
+import java.security.PublicKey;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import kr.mujoong.contract.json.JsonCodec;
@@ -20,6 +24,7 @@ import kr.mujoong.core.identity.GuardianRepository;
 import kr.mujoong.core.identity.SocialAccountRepository;
 import kr.mujoong.core.identity.google.GoogleLoginService.Failure;
 import kr.mujoong.core.identity.google.GoogleLoginService.Outcome;
+import kr.mujoong.core.support.U2Fixtures;
 import kr.mujoong.testsupport.time.MutableClock;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -43,7 +48,8 @@ class GoogleLoginServiceTest {
     private GoogleLoginService service(String clientId, String secret, String redirect) {
         return new GoogleLoginService(
                 new CoreProperties.Google(clientId, secret, redirect, TOKEN_URI, JWKS_URI, Duration.ofSeconds(1)),
-                tokens, keys, new GoogleIdTokenReader(JsonCodec.shared()), social, guardians,
+                tokens, new GoogleKeyCache(keys, Duration.ofHours(1)), new GoogleIdTokenReader(JsonCodec.shared()), social,
+                guardians,
                 mock(PlatformTransactionManager.class), clock);
     }
 
@@ -73,16 +79,23 @@ class GoogleLoginServiceTest {
     }
 
     @Test
+    void whenTheGoogleKeysCannotBeReadTheAuthorizationCodeIsNotSpent() {
+        // 2차 리뷰 4: 열쇠를 못 읽으면 코드를 교환하기 전에 실패한다(이미 쓴 코드로 로그인이 실패하지 않게)
+        GoogleLoginService service = service("client", "secret", REDIRECT);
+        when(keys.fetch()).thenReturn(Optional.empty());
+
+        assertThat(service.login("code", REDIRECT).failure()).isEqualTo(Failure.KEYS_UNAVAILABLE);
+        verify(tokens, never()).exchange(any());
+    }
+
+    @Test
     void exchangeOrTokenFailuresAreReportedAndAnExistingGuardianLogsIn() {
         GoogleLoginService service = service("client", "secret", REDIRECT);
+        when(keys.fetch()).thenReturn(Optional.of(keySet(GoogleIdTokenReaderTest.KEYS, Duration.ZERO)));
         when(tokens.exchange(any())).thenReturn(Optional.empty());
         assertThat(service.login("code", REDIRECT).failure()).isEqualTo(Failure.EXCHANGE_FAILED);
 
         when(tokens.exchange(any())).thenReturn(Optional.of("not-a-token"));
-        when(keys.fetch()).thenReturn(Optional.empty());
-        assertThat(service.login("code", REDIRECT).failure()).as("서명 열쇠를 못 읽음").isEqualTo(Failure.KEYS_UNAVAILABLE);
-
-        when(keys.fetch()).thenReturn(Optional.of(GoogleIdTokenReaderTest.KEYS));
         assertThat(service.login("code", REDIRECT).failure()).isEqualTo(Failure.TOKEN_INVALID);
 
         UUID guardianId = UUID.randomUUID();
@@ -100,5 +113,55 @@ class GoogleLoginServiceTest {
             assertThat(loggedIn.deletionInProgress()).isFalse();
         });
         verify(social, never()).insertGoogle(any(), any(), any());
+    }
+
+    @Test
+    void keysAreCachedForTheirMaxAgeAndFetchedAgainOnlyWhenStaleOrForAnUnknownKid() {
+        // 2차 리뷰 4: 로그인마다 받지 않는다. max-age 안에서는 캐시, 모르는 kid면 다시 받는다
+        GoogleLoginService service = service("client", "secret", REDIRECT);
+        UUID guardianId = UUID.randomUUID();
+        when(social.findGuardianByGoogleSubject("sub-1")).thenReturn(Optional.of(guardianId));
+        when(guardians.findById(guardianId)).thenReturn(Optional.of(new Guardian(guardianId, NOW)));
+        when(keys.fetch()).thenReturn(Optional.of(keySet(GoogleIdTokenReaderTest.KEYS, Duration.ofMinutes(10))));
+        when(tokens.exchange(any())).thenAnswer(call -> Optional.of(GoogleIdTokenReaderTest.token(
+                GoogleIdTokenReaderTest.claims("accounts.google.com", "client", clock.now().plusSeconds(60), "sub-1"))));
+
+        assertThat(service.login("code", REDIRECT).failure()).isNull();
+        assertThat(service.login("code", REDIRECT).failure()).isNull();
+        verify(keys, times(1)).fetch();
+
+        clock.advance(Duration.ofMinutes(10));
+        assertThat(service.login("code", REDIRECT).failure()).as("max-age가 지나면 다시 받는다").isNull();
+        verify(keys, times(2)).fetch();
+
+        KeyPair rotated = U2Fixtures.newKeyPair();
+        when(tokens.exchange(any())).thenAnswer(call -> Optional.of(U2Fixtures.sign("{\"alg\":\"RS256\",\"kid\":\"k2\"}",
+                GoogleIdTokenReaderTest.claims("accounts.google.com", "client", clock.now().plusSeconds(60), "sub-1"),
+                rotated.getPrivate())));
+        when(keys.fetch()).thenReturn(Optional.of(keySet(Map.of("k2", rotated.getPublic()), Duration.ofMinutes(10))));
+        assertThat(service.login("code", REDIRECT).failure()).as("구글이 열쇠를 바꾼 직후 — 모르는 kid").isNull();
+        verify(keys, times(3)).fetch();
+    }
+
+    @Test
+    void theCacheIsCappedByTheTimingKeyAndANoCacheResponseIsNotKept() {
+        GoogleKeyCache cache = new GoogleKeyCache(keys, Duration.ofMinutes(5));
+        when(keys.fetch()).thenReturn(Optional.of(keySet(GoogleIdTokenReaderTest.KEYS, Duration.ofHours(6))));
+        cache.keysFor(null, NOW);
+        cache.keysFor(null, NOW.plus(Duration.ofMinutes(4)));
+        verify(keys, times(1)).fetch();
+        cache.keysFor(null, NOW.plus(Duration.ofMinutes(5)));
+        verify(keys, times(2)).fetch();
+
+        when(keys.fetch()).thenReturn(Optional.of(keySet(GoogleIdTokenReaderTest.KEYS, Duration.ZERO)));
+        cache.keysFor(null, NOW.plus(Duration.ofMinutes(10)));
+        cache.keysFor(null, NOW.plus(Duration.ofMinutes(10)));
+        verify(keys, times(4)).fetch();
+        when(keys.fetch()).thenReturn(Optional.empty());
+        assertThat(cache.keysFor(null, NOW.plus(Duration.ofMinutes(10)))).as("받기 실패는 지난 열쇠로 넘어가지 않는다").isEmpty();
+    }
+
+    private static GoogleKeysClient.KeySet keySet(Map<String, PublicKey> keys, Duration maxAge) {
+        return new GoogleKeysClient.KeySet(keys, maxAge);
     }
 }

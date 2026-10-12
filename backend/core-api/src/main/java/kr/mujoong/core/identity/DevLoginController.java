@@ -31,7 +31,8 @@ import org.springframework.web.bind.annotation.RestController;
  *
  * <p>본문 없이 부르면 시드 보호자(고정 UUID, DevSeedRunner)의 보호자 세션을 연다: 들고 온 세션이 있으면 무효로 하고 새 세션을 만들어(세션 ID
  * 교체, 세션 고정 방지) 인증을 저장한다. 쿠키는 운영과 같은 Spring Session JDBC의 MUJOONG_SESSION이다. 응답은 200 {@code {guardianId}}.
- * 구글 외 로그인 · 회원가입 · 아이디 · 비밀번호 경로는 없다(BR8.4).
+ * 구글 외 로그인 · 회원가입 · 아이디 · 비밀번호 경로는 없다(BR8.4). 시드 보호자의 계정 삭제가 접수됐으면 403 ACCOUNT_DELETION_IN_PROGRESS이고
+ * 세션을 만들지 않는다(U2 편차 (U2-k)).
  */
 @RestController
 @Profile(ProfileGuardRules.DEV)
@@ -61,9 +62,13 @@ public class DevLoginController {
             throw CoreApiException.of(ErrorCode.NOT_FOUND);
         }
         UUID guardianId = SeedIds.GUARDIAN;
-        if (guardians.findById(guardianId).isEmpty()) {
-            // 시드 빈과 같은 조건이라 정상이면 늘 있다. 없으면 설정 오류(500, 세션을 만들지 않는다)
-            throw new IllegalStateException("시드 보호자가 없다(DevSeedRunner 확인)");
+        // 시드 빈과 같은 조건이라 정상이면 늘 있다. 없으면 설정 오류(500, 세션을 만들지 않는다)
+        Guardian guardian = guardians.findById(guardianId)
+                .orElseThrow(() -> new IllegalStateException("시드 보호자가 없다(DevSeedRunner 확인)"));
+        if (guardian.isDeletionRequested()) {
+            // 계정 삭제가 접수된 보호자에게 세션을 열지 않는다: 지휘의 세션 정리와 엇갈려 남은 세션이 같은 id로 다시 만든 시드 보호자에
+            // 되살아나지 않게 한다(U2 2차 리뷰 2 · 편차 (U2-k))
+            throw CoreApiException.of(ErrorCode.ACCOUNT_DELETION_IN_PROGRESS);
         }
         HttpSession previous = request.getSession(false);
         if (previous != null) {

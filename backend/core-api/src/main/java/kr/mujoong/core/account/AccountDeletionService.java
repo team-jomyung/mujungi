@@ -1,7 +1,6 @@
 package kr.mujoong.core.account;
 
 import java.time.Instant;
-import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -14,6 +13,7 @@ import kr.mujoong.core.common.error.CoreApiException;
 import kr.mujoong.core.identity.Child;
 import kr.mujoong.core.identity.ChildRepository;
 import kr.mujoong.core.identity.GuardianSessions;
+import kr.mujoong.core.identity.GuardianWriteLock;
 import kr.mujoong.core.observability.EventLogger;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
@@ -37,6 +37,7 @@ public class AccountDeletionService {
     private final DeletionRequestRepository requests;
     private final ChildRepository children;
     private final GuardianSessions sessions;
+    private final GuardianWriteLock guardianLock;
     private final NamedParameterJdbcTemplate jdbc;
     private final TransactionTemplate transactions;
     private final EventLogger events;
@@ -46,6 +47,7 @@ public class AccountDeletionService {
             DeletionRequestRepository requests,
             ChildRepository children,
             GuardianSessions sessions,
+            GuardianWriteLock guardianLock,
             NamedParameterJdbcTemplate jdbc,
             PlatformTransactionManager transactionManager,
             EventLogger events,
@@ -53,6 +55,7 @@ public class AccountDeletionService {
         this.requests = Objects.requireNonNull(requests, "requests");
         this.children = Objects.requireNonNull(children, "children");
         this.sessions = Objects.requireNonNull(sessions, "sessions");
+        this.guardianLock = Objects.requireNonNull(guardianLock, "guardianLock");
         this.jdbc = Objects.requireNonNull(jdbc, "jdbc");
         this.transactions = new TransactionTemplate(Objects.requireNonNull(transactionManager, "transactionManager"));
         this.events = Objects.requireNonNull(events, "events");
@@ -67,10 +70,7 @@ public class AccountDeletionService {
     public UUID request(UUID guardianId) {
         Objects.requireNonNull(guardianId, "guardianId");
         UUID requestId = transactions.execute(status -> {
-            MapSqlParameterSource params = ClockParams.uuid(new MapSqlParameterSource(), "id", guardianId);
-            List<String> guardian = jdbc.queryForList(
-                    "select status from core.core_guardian where id = :id for update", params, String.class);
-            if (guardian.isEmpty()) {
+            if (guardianLock.statusForUpdate(guardianId).isEmpty()) {
                 throw CoreApiException.of(ErrorCode.UNAUTHENTICATED);
             }
             Optional<DeletionRequest> open = requests.findOpenByGuardian(guardianId);
@@ -78,6 +78,7 @@ public class AccountDeletionService {
                 return open.get().id();
             }
             Instant now = clock.now();
+            MapSqlParameterSource params = ClockParams.uuid(new MapSqlParameterSource(), "id", guardianId);
             ClockParams.instant(params, "now", now);
             jdbc.update("""
                     update core.core_guardian set status = 'DELETION_REQUESTED', updated_at = :now

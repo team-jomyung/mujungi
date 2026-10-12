@@ -70,6 +70,18 @@ public final class GoogleIdTokenReader {
         return decode(parts[1]).flatMap(claims -> identity(claims, clientId, now));
     }
 
+    /** 토큰 머리의 kid(열쇠 캐시가 모르는 kid인지 보려고 서명 확인 전에 읽는다). 형식이 틀리면 빈 값. */
+    public Optional<String> keyId(String idToken) {
+        if (idToken == null) {
+            return Optional.empty();
+        }
+        String[] parts = idToken.split("\\.", -1);
+        if (parts.length != 3 || parts[0].isEmpty()) {
+            return Optional.empty();
+        }
+        return decode(parts[0]).map(header -> header.get("kid")).filter(String.class::isInstance).map(String.class::cast);
+    }
+
     private static boolean signedByGoogle(Map<?, ?> header, String[] parts, Map<String, PublicKey> keys) {
         if (!ALGORITHM.equals(header.get("alg")) || !(header.get("kid") instanceof String kid) || !keys.containsKey(kid)) {
             return false;

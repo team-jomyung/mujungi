@@ -13,6 +13,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.regex.Pattern;
 import java.util.stream.Stream;
 import kr.mujoong.core.activity.ApprovedContentCatalog;
 import kr.mujoong.core.catalog.ApprovedContentRepository;
@@ -61,13 +62,33 @@ class U2SingleSourceTest {
         assertThat(offenders).containsExactly("kr/mujoong/core/config/SessionJdbcConfig.java");
     }
 
+    @Test
+    void onlyOneClassLocksTheGuardianRow() throws IOException {
+        // 2차 리뷰 5: 보호자 행 잠금 · 상태 확인은 한 곳(락 순서 원칙, GuardianRepository 주석)
+        List<String> offenders;
+        try (Stream<Path> files = Files.walk(CORE_MAIN_SOURCES)) {
+            offenders = files.filter(path -> path.toString().endsWith(".java"))
+                    .filter(path -> codeLines(path).anyMatch(line -> GUARDIAN_LOCK.matcher(line).find()))
+                    .map(path -> CORE_MAIN_SOURCES.relativize(path).toString().replace('\\', '/'))
+                    .toList();
+        }
+        assertThat(offenders).containsExactly("kr/mujoong/core/identity/GuardianWriteLock.java");
+    }
+
+    /** 보호자 행을 FOR UPDATE · FOR SHARE로 읽는 SQL. */
+    private static final Pattern GUARDIAN_LOCK = Pattern.compile("core_guardian\\b.*\\bfor (update|share)\\b");
+
     /** 주석 줄을 뺀 코드 줄에 표 이름이 있는가. */
     private static boolean namesSessionTableInCode(Path file) {
+        return codeLines(file).anyMatch(line -> line.contains("core_spring_session"));
+    }
+
+    /** 주석 줄을 뺀 코드 줄. */
+    private static Stream<String> codeLines(Path file) {
         try {
             return Files.readAllLines(file, StandardCharsets.UTF_8).stream()
                     .map(String::strip)
-                    .filter(line -> !line.startsWith("*") && !line.startsWith("//") && !line.startsWith("/*"))
-                    .anyMatch(line -> line.contains("core_spring_session"));
+                    .filter(line -> !line.startsWith("*") && !line.startsWith("//") && !line.startsWith("/*"));
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }

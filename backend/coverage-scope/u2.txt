@@ -3,7 +3,7 @@
 # 내용은 U2가 새로 만든 backend/core-api/src/main/java 파일 전부다. U2가 고친 U1 파일(ConsentGate · ApprovedContentCatalog · ActivityCopyRepository ·
 # CoreProperties · SecurityConfig · Consent · Child · ConsentRepository · RealtimeSessionClient · DeletionParticipant · 참가자 @Order ·
 # ErrorCode)은 U1 목록(u1.txt)에 있어 U1 범위로 잰다. 모듈별 줄 수:
-#   core-api 28
+#   core-api 29
 backend/core-api/src/main/java/kr/mujoong/core/account/AccountDeletionScheduler.java
 backend/core-api/src/main/java/kr/mujoong/core/account/AccountDeletionService.java
 backend/core-api/src/main/java/kr/mujoong/core/account/DeletionCommander.java
@@ -26,6 +26,7 @@ backend/core-api/src/main/java/kr/mujoong/core/identity/GuardianSessions.java
 backend/core-api/src/main/java/kr/mujoong/core/identity/GuardianWriteLock.java
 backend/core-api/src/main/java/kr/mujoong/core/identity/SocialAccountRepository.java
 backend/core-api/src/main/java/kr/mujoong/core/identity/google/GoogleIdTokenReader.java
+backend/core-api/src/main/java/kr/mujoong/core/identity/google/GoogleKeyCache.java
 backend/core-api/src/main/java/kr/mujoong/core/identity/google/GoogleKeysClient.java
 backend/core-api/src/main/java/kr/mujoong/core/identity/google/GoogleLoginService.java
 backend/core-api/src/main/java/kr/mujoong/core/identity/google/GoogleTokenClient.java

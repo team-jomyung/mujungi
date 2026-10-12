@@ -35,13 +35,13 @@
 
 ## 3. 시험 결과
 
-리뷰 반영(7절) 뒤 다시 돌린 값이다.
+2차 리뷰 반영(7절) 뒤 다시 돌린 값이다.
 
 | 범위 | 결과 |
 |---|---|
-| backend U2(`-PincludeTags=u2`, core-api) | 76건 통과(리뷰 전 47), U2 범위 줄 커버리지 **96.5%**(914/947, 파일 28), `jacocoTestCoverageVerification -PcoverageScope=u2` 통과 |
-| backend U1 회귀(`-PincludeTags=u1`, 네 모듈) | BUILD SUCCESSFUL — contract-model 285 · core-api 609 · realtime-activity 538 · test-support 27(건너뜀 3건, U2 전부터 있던 것), 실패 0. core-api · contract-model U1 커버리지 검증(`-PcoverageScope=u1`) 통과 |
-| frontend U2(`vitest run tests/u2 --coverage`, scope u2) | 121건 통과(리뷰 전 113), 줄 커버리지 **97.36%**(555/570) |
+| backend U2(`-PincludeTags=u2`, core-api) | 89건 통과(1차 리뷰 전 47 · 1차 뒤 76), U2 범위 줄 커버리지 **96.5%**(963/998, 파일 29), `jacocoTestCoverageVerification -PcoverageScope=u2` 통과 |
+| backend U1 회귀(`-PincludeTags=u1`, 네 모듈) | BUILD SUCCESSFUL — contract-model 285 · core-api 609 · realtime-activity 538 · test-support 27(건너뜀 3건, U2 전부터 있던 것), 실패 0. core-api · contract-model U1 커버리지 검증(`-PcoverageScope=u1`) 통과. 참고: 2차 반영 중 프런트 시험과 동시에 돌린 한 번은 4건(`ActivityStartEndIT` 시작 시간 초과 · realtime 3건 DB 연결 실패로 문맥 기동 실패)이 실패했다. 그 넷만 따로 돌려 통과했고, 아무것도 함께 돌리지 않고 전체를 다시 돌려 위 결과를 얻었다(부하에 따른 실패로 판단, 코드 변경 없음) |
+| frontend U2(`vitest run tests/u2 --coverage`, scope u2) | 124건 통과(1차 리뷰 전 113 · 1차 뒤 121), 줄 커버리지 **97.37%**(556/571) |
 | frontend U1 회귀(`vitest run tests/u1 --coverage`, scope u1) | 514건 통과, U1 범위 줄 커버리지 98.47%(하한 유지) |
 | `tsc --noEmit` · `eslint .` | 오류 0 |
 | `infra/ci/test-host-tools.sh` | **돌리지 못함** — 이 세션에서 셸 시험 실행(`bash …`) 권한이 막혀 있었다. render-env 사례를 더했으므로 CI · 사람이 한 번 돌려야 한다(7절 리뷰 3) |
@@ -75,6 +75,7 @@ U1이 (a) ~ (z)를 다 써서 U2는 `(U2-x)` 기호, YAML 표시는 `x-u2-deviat
 | (U2-h) | `DELETE /api/me` 202 `{deletionRequestId}`, 재요청 같은 id, 쿠키 Max-Age=0 |
 | (U2-i) | `PUT /api/child/stop-expressions` 본문 `{items[{text}]}`, 기본 표현과 같은 표현도 400, 공백 = 유니코드 White_Space · 글자 수 = NFC 코드 포인트 |
 | (U2-j) | 로그 `SECURITY_AUTH_FAILED.kind`에 `GOOGLE_*` 까닭 6종을 더함, `/auth/google` Origin 불일치는 `SECURITY_ORIGIN_DENIED`(REST, 401). attrs 키는 그대로 |
+| (U2-k) | U1 `POST /api/dev/login`(dev 전용)은 시드 보호자의 계정 삭제가 접수됐으면 403 `ACCOUNT_DELETION_IN_PROGRESS`, 세션 없음 |
 
 새 오류 code 3개(`GOOGLE_AUTH_FAILED` · `CHILD_NOT_REGISTERED` · `CHILD_EXISTS`)는 errors.md · ErrorCode · 봉투 스키마 enum · 프런트 code 표에 함께 넣었다.
 
@@ -83,7 +84,7 @@ U1이 (a) ~ (z)를 다 써서 U2는 `(U2-x)` 기호, YAML 표시는 `x-u2-deviat
 | 번호 | 요지 |
 |---|---|
 | U2-J1 | 구글 값은 환경 변수 이름만, Core · web이 같은 이름(`GOOGLE_OAUTH_*`). 비어 있으면 로그인 401(시작은 막지 않음) |
-| U2-J2 | id_token은 구글 JWKS로 RS256 서명을 확인한 뒤 iss · aud · exp · sub(리뷰 1로 바뀜, JWKS는 로그인마다 읽음) |
+| U2-J2 | id_token은 구글 JWKS로 RS256 서명을 확인한 뒤 iss · aud · exp · sub(리뷰 1로 바뀜). JWKS는 max-age만큼(상한 6시간) 캐시하고 코드 교환 전에 확보(2차 리뷰 4) |
 | U2-J3 | 구글 이메일 저장 안 함, 식별은 sub |
 | U2-J4 | OAuth state는 HttpOnly 쿠키 + 콜백 서버 컴포넌트 비교 |
 | U2-J5 | 삭제 처리 중 로그인은 세션 없는 IN_PROGRESS 응답 |
@@ -146,3 +147,20 @@ U1이 (a) ~ (z)를 다 써서 U2는 `(U2-x)` 기호, YAML 표시는 `x-u2-deviat
 
 리뷰로 바뀐 커버리지 범위: `backend/coverage-scope/u2.txt`에서 `ContentCatalogService` 빼고 `GuardianWriteLock` · `GoogleKeysClient`를 더함(28개). 고친 U1 파일
 `ApprovedContentCatalog` · `AttrKey`는 U1 범위로 재며 U1 커버리지 검증을 통과했다.
+
+### 2차 리뷰
+
+1차 10건 가운데 8건은 그대로 두고, 2차 지적 6건을 모두 고쳤다(틀렸다고 판단해 남긴 건 없음). 1차 표의 2 · 10 처리 중 '지휘가 바퀴마다 세션을
+지운다' · '마지막 단계 세션 SQL 제거'는 아래 2 · 3으로 바뀌었다. 표기는 1차와 같다(RED = 고치기 전 실제로 돌려 실패를 봄).
+
+| # | 지적 | 처리 | 시험 |
+|---|---|---|---|
+| 1 | [화면] 새로고침 뒤 남은 가드 표시를 이 문서 칸으로 믿음 | 가드 칸 표시를 `true`가 아니라 이 문서(모듈 적재 한 번)의 무작위 id로 둔다. 맨 위 칸이 이 문서 id일 때만 가드로 보고, 다른 문서가 남긴 표시 위에서는 새 칸을 쌓는다 — leave()의 back()과 기기 뒤로가기가 같은 문서 안에서 끝난다(AC1.2.5) | RED: `back-guard.test` '다른 문서가 남긴 가드 표시 위에서는 이 문서의 칸을 새로 쌓는다' · '그 상태에서 떠나면 이 문서가 쌓은 칸만 되돌리고 이동한다'. '그 상태에서 기기 뒤로가기는 … onBack(P5)'은 jsdom이 문서 다시 불러오기를 흉내 내지 못해 고치기 전에도 통과했다(가드로 둔다) |
+| 2 | [보안] 마지막 단계에서 세션 행 삭제가 보호자 행 삭제와 원자적이지 않음 · 시험 로그인이 삭제 상태를 안 봄 | `GuardianSessions.deleteAllInCurrentTransaction`(호출자 트랜잭션, 표 이름은 `SessionJdbcConfig.TABLE_NAME` 하나)을 두고 `DeletionCommander.finish`가 소셜 계정 · 세션 행 · 보호자 행 삭제 + DONE을 한 트랜잭션에서 한다. 초반 바퀴의 `closeAll`은 그대로 둔다(3 참고). `DevLoginController`는 시드 보호자가 삭제 접수 상태면 403 `ACCOUNT_DELETION_IN_PROGRESS`이고 세션을 만들지 않는다 — U1 dev 전용 연산에 새 응답이라 편차 (U2-k)로 계약(parent-api.yaml)에 더했다 | RED: `AccountDeletionIT.aSessionSavedDuringTheLastRoundIsDeletedTogetherWithTheGuardianRow`(첫머리 closeAll 뒤 · finish 커밋 전에 세션을 저장하는 시험 참가자, 고치기 전 1건 남음), `DevLoginDeletionIT.aSeedGuardianWhoseDeletionWasAcceptedGetsNoSession`(고치기 전 200). 가드: `DevLoginDeletionIT.anActiveSeedGuardianStillLogsIn` |
+| 3 | [견고성] 바퀴 첫머리 closeAll 실패가 삭제 진행 전체를 막고 30초마다 반복 | 세션 재정리를 Realtime 요청 전 바퀴로 한정하고(그 뒤에는 구글 · 시험 로그인 모두 세션을 만들지 않아 새 세션이 생길 길이 없다), 실패는 따로 잡아 APP_ERROR(errorKind)로 남긴 뒤 진행을 계속한다(단계 실패 · 시도 수로 세지 않음). 남은 세션은 다음 초반 바퀴 · 마지막 단계(2)가 지운다 | RED: `AccountDeletionIT.aSessionStoreFailureIsLoggedAndDoesNotHoldUpTheDeletionAndLaterRoundsSkipTheSweep`(고치기 전 FAILED) |
+| 4 | [성능 · 신뢰성] JWKS를 로그인마다 캐시 없이, 코드 교환 뒤에 받음 | `GoogleKeysClient`가 `Cache-Control: max-age`를 함께 돌려주고(no-store · no-cache · 없음 = 0), 새 `GoogleKeyCache`가 max-age만큼 · 상한 `mujoong.timing.account.google-keys-max-age`(6h, timing.md 8절 · application.yml · `AccountTiming`, ConfigKeyContractTest · TimeLiteralScanTest 대상)까지 둔다. 토큰의 kid가 캐시에 없을 때만 다시 받는다. 로그인은 열쇠를 **코드 교환 전에** 확보하고, 못 얻으면 코드를 쓰지 않고 `KEYS_UNAVAILABLE`로 끝난다. 받기 실패 때 지난 열쇠로 넘어가지 않는다 | RED: `GoogleLoginServiceTest.whenTheGoogleKeysCannotBeReadTheAuthorizationCodeIsNotSpent`(고치기 전 교환을 먼저 함). RED(컴파일): `GoogleLoginServiceTest.keysAreCachedForTheirMaxAgeAndFetchedAgainOnlyWhenStaleOrForAnUnknownKid` · `theCacheIsCappedByTheTimingKeyAndANoCacheResponseIsNotKept`, `GoogleKeysClientTest.cacheControlMaxAgeIsReadFromTheResponse`(JDK HTTP 서버, 루프백 무작위 포트) · `maxAgeParsingIsStrictAndNoCacheWins` |
+| 5 | [정리] 보호자 행 잠금 SQL이 세 곳 | 보호자 행을 잠그는 SQL(FOR SHARE · FOR UPDATE)을 `GuardianWriteLock` 한 곳에 두었다: `statusForShare`(정적 — U1 `DeviceJdbcRepository.lockGuardianStatusForShare`가 생성자를 바꾸지 않고 위임, 등록 트랜잭션의 첫 잠금 순서는 그대로), `statusForUpdate`(삭제 접수), `lockActive`(동의 · 아이 · 종료 표현 쓰기). `GuardianRepository` 주석을 고쳤다. U1 시험(`RegistrationDecisionTest` 순서 확인 · `DeviceJdbcRepositoryIT`)은 손대지 않고 통과 | RED: `U2SingleSourceTest.onlyOneClassLocksTheGuardianRow`(고치기 전 세 파일) |
+| 6 | [정리] 카탈로그 안 조회 경로 둘 | `ApprovedContentCatalog.item()`을 `latestApproved(...)`에 '음성 있음' 필터를 더한 모양으로 줄였다. 레코드 둘(`ApprovedItem` · `PinnedContent`)은 남겼다: `ApprovedItem`은 U1 세션 패키지 · 시작 정책 · 시험 여러 곳이 쓰는 '음성 필수' 모양(생성자가 음성 경로를 검사)이고 `PinnedContent`는 음성이 없을 수 있는 계약 8절 ApprovedContentPin 모양이라, 하나로 합치면 U1 코드 · 시험을 함께 바꿔야 해 정리 이득보다 위험이 크다고 봤다 | 가드(동작이 같은 정리라 RED 없음): `ApprovedContentCatalogTest` 3건(세션 문구 = 같은 버전 + 음성 · 음성 없는 문구 · 승인 아닌 버전) |
+
+2차로 바뀐 커버리지 범위: `backend/coverage-scope/u2.txt`에 `GoogleKeyCache`를 더함(29개). 고친 U1 파일 `DeviceJdbcRepository` · `DevLoginController` ·
+`ApprovedContentCatalog` · `GuardianRepository`는 U1 범위로 잰다.

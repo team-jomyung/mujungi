@@ -32,10 +32,12 @@ paths:
       description: |
         dev 프로필 + mujoong.dev-login.enabled=true일 때만 200이다. 그 밖(demo · prod · enabled 거짓)에서는
         404이고 SECURITY_DEV_LOGIN_BLOCKED가 남는다(SD-14 · A2). 본문 없이 호출한다. CSRF 면제 1번(BR8.8).
-        로그인 때 세션 ID를 교체한다(SD-5).
+        로그인 때 세션 ID를 교체한다(SD-5). 시드 보호자의 계정 삭제가 접수됐으면 403 ACCOUNT_DELETION_IN_PROGRESS이고
+        세션을 만들지 않는다(편차 (U2-k)).
       security: []
       x-unit: U1
       x-csrf-exempt: true
+      x-u2-deviation: ["(U2-k)"]
       responses:
         "200":
           description: 시드 보호자 세션 발급
@@ -47,6 +49,7 @@ paths:
             application/json:
               schema: { $ref: "schemas/dev-login-response.schema.json" }
               example: { guardianId: 00000000-0000-4000-8000-000000000001 }
+        "403": { $ref: "#/components/responses/AccountDeletion" }
         "404": { $ref: "#/components/responses/NotFound" }
         "500": { $ref: "#/components/responses/InternalError" }
         "503": { $ref: "#/components/responses/ServiceNotReady" }

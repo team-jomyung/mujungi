@@ -3,24 +3,34 @@ package kr.mujoong.core.account;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import kr.mujoong.contract.event.payload.DeletionCompleted;
 import kr.mujoong.contract.json.JsonCodec;
+import kr.mujoong.contract.log.EventCode;
 import kr.mujoong.contract.status.ActivityType;
 import kr.mujoong.contract.status.ConnectionState;
 import kr.mujoong.core.account.DeletionCommander.Step;
 import kr.mujoong.core.account.DeletionRequestRepository.DeletionRequest;
 import kr.mujoong.core.activity.ActivityCopyRepository;
 import kr.mujoong.core.activity.ActivityCopyRepository.NewActivity;
+import kr.mujoong.core.activity.RealtimeSessionClient;
 import kr.mujoong.core.common.db.DbTestSupport;
+import kr.mujoong.core.common.deletion.DeletionParticipant;
+import kr.mujoong.core.config.CoreProperties;
 import kr.mujoong.core.identity.ChildRepository;
 import kr.mujoong.core.identity.GuardianSessions;
+import kr.mujoong.core.identity.GuardianWriteLock;
+import kr.mujoong.core.identity.SocialAccountRepository;
+import kr.mujoong.core.messaging.CoreOutboxWriter;
 import kr.mujoong.core.observability.EventLogger;
 import kr.mujoong.core.support.BusinessFixtures;
 import kr.mujoong.core.support.U2Fixtures;
@@ -32,6 +42,7 @@ import kr.mujoong.core.web.support.WebFixtures;
 import kr.mujoong.core.web.support.WebFixtures.Guardian;
 import kr.mujoong.testsupport.http.ContractStubServer;
 import kr.mujoong.testsupport.http.ContractStubServer.RecordedRequest;
+import kr.mujoong.testsupport.log.LogCapture;
 import kr.mujoong.testsupport.secret.TestSecrets;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
@@ -168,7 +179,8 @@ class AccountDeletionIT {
         GuardianSessions failing = mock(GuardianSessions.class);
         when(failing.closeAll(any())).thenThrow(new IllegalStateException("세션 저장소 오류"));
         AccountDeletionService service = new AccountDeletionService(app.bean(DeletionRequestRepository.class),
-                app.bean(ChildRepository.class), failing, app.bean(NamedParameterJdbcTemplate.class),
+                app.bean(ChildRepository.class), failing, app.bean(GuardianWriteLock.class),
+                app.bean(NamedParameterJdbcTemplate.class),
                 app.bean(PlatformTransactionManager.class), app.bean(EventLogger.class), app.clock());
 
         UUID requestId = service.request(guardian.id());
@@ -180,6 +192,51 @@ class AccountDeletionIT {
         app.bean(DeletionCommander.class).process(requestId);
         assertThat(count("select count(*) from core.core_spring_session where principal_name = :g", guardian.id().toString()))
                 .isZero();
+    }
+
+    @Test
+    void aSessionSavedDuringTheLastRoundIsDeletedTogetherWithTheGuardianRow() {
+        // 2차 리뷰 2: 바퀴 첫머리 closeAll과 finish 커밋 사이에 저장된 세션 행도 보호자 행과 같은 트랜잭션에서 지워져야 한다
+        Guardian guardian = WebFixtures.guardian(app, db);
+        sessionsOf.add(guardian.id());
+        UUID requestId = accept(guardian.session(), guardian.csrf());
+        List<DeletionParticipant> participants = new ArrayList<>(defaultParticipants());
+        participants.add((guardianId, request) -> {
+            app.sessionCookieFor(guardianId);
+            return Map.of();
+        });
+        DeletionCommander commander = commander(participants, app.bean(GuardianSessions.class));
+
+        assertThat(commander.process(requestId)).isEqualTo(Step.REALTIME_REQUESTED);
+        deliverDeletionCompleted(requestId, guardian.id());
+        awaitRealtimeCompleted(requestId);
+        assertThat(commander.process(requestId)).isEqualTo(Step.DONE);
+
+        assertThat(count("select count(*) from core.core_guardian where id = :g", guardian.id())).isZero();
+        assertThat(count("select count(*) from core.core_spring_session where principal_name = :g", guardian.id().toString()))
+                .as("보호자 행과 함께 지워진다(같은 id로 다시 만든 보호자에 세션이 되살아나지 않는다)").isZero();
+    }
+
+    @Test
+    void aSessionStoreFailureIsLoggedAndDoesNotHoldUpTheDeletionAndLaterRoundsSkipTheSweep() {
+        // 2차 리뷰 3: 세션 정리 실패 하나가 삭제 진행 전체를 막지 않는다. 정리는 Realtime 요청 전 바퀴에만 한다
+        Guardian guardian = WebFixtures.guardian(app, db);
+        sessionsOf.add(guardian.id());
+        UUID requestId = accept(guardian.session(), guardian.csrf());
+        GuardianSessions failing = mock(GuardianSessions.class);
+        when(failing.closeAll(any())).thenThrow(new IllegalStateException("세션 저장소 오류"));
+        DeletionCommander commander = commander(defaultParticipants(), failing);
+
+        try (LogCapture logs = LogCapture.attach()) {
+            assertThat(commander.process(requestId)).isEqualTo(Step.REALTIME_REQUESTED);
+            assertThat(logs.events(EventCode.APP_ERROR)).anySatisfy(event ->
+                    assertThat(LogCapture.attrs(event)).containsEntry("errorKind", "IllegalStateException"));
+        }
+        app.clock().advance(TICK);
+        assertThat(commander.process(requestId)).isEqualTo(Step.WAITING);
+        verify(failing, times(1)).closeAll(guardian.id());
+        assertThat(app.bean(DeletionRequestRepository.class).findById(requestId).orElseThrow().attemptCount())
+                .as("세션 정리 실패는 단계 실패로 세지 않는다").isZero();
     }
 
     @Test
@@ -339,6 +396,19 @@ class AccountDeletionIT {
         Result accepted = send("DELETE /api/me", app.call("DELETE", "/api/me").session(session).csrf(csrf));
         assertThat(accepted.status()).isEqualTo(202);
         return UUID.fromString(String.valueOf(accepted.json().get("deletionRequestId")));
+    }
+
+    private static List<DeletionParticipant> defaultParticipants() {
+        return app.context().getBeanProvider(DeletionParticipant.class).orderedStream().toList();
+    }
+
+    /** 앱 빈으로 지휘를 하나 더 만든다(참가자 · 세션 저장소만 시험이 바꾼다). */
+    private static DeletionCommander commander(List<DeletionParticipant> participants, GuardianSessions sessions) {
+        return new DeletionCommander(app.bean(DeletionRequestRepository.class), participants,
+                app.bean(ActivityCopyRepository.class), app.bean(RealtimeSessionClient.class), app.bean(CoreOutboxWriter.class),
+                app.bean(SocialAccountRepository.class), sessions, app.bean(NamedParameterJdbcTemplate.class),
+                app.bean(PlatformTransactionManager.class), app.bean(EventLogger.class), app.clock(),
+                app.bean(CoreProperties.class));
     }
 
     private final List<UUID> deliveredEvents = new ArrayList<>();

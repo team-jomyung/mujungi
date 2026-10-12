@@ -137,9 +137,10 @@ web이 읽는 1 · 3절 키의 환경 변수: `MUJOONG_TIMING_PARENT_POLLINTERVA
 WSS 텍스트 프레임 8KB(`mujoong.limits.ws-text-frame-max`, 넘으면 4400 [편차 (s)]) · 입력 대기열 50프레임(`mujoong.limits.session-input-queue-frames`).
 나머지 비 timing 키(`limits.*` · `security.*` · `metrics.*` · `observability.*`)는 이 파일에 두지 않는다(RD-24).
 
-## 8. U2 시간 키 (계정 삭제 지휘, 계약 7절 밖 — 더하기만)
+## 8. U2 시간 키 (계정 삭제 지휘 · 구글 서명 열쇠 캐시, 계약 7절 밖 — 더하기만)
 
 | 키 | 기본값 | 소유 앱 | 뜻 | 근거 |
 |---|---|---|---|---|
 | `mujoong.timing.account.deletion-tick` | `5s` | core-api | 계정 삭제 지휘 한 바퀴 주기(REQUESTED 요청을 이어 처리) | FR1.6 · U2-J18 |
 | `mujoong.timing.account.deletion-session-wait` | `30s` | core-api | 삭제 접수 뒤 진행 세션 CONSENT_WITHDRAWN 끝내기를 보낸 시각 → 사본이 종료되지 않아도 이 시간이 지나면 데이터 삭제 시작 | AC1.6.3 · U2-J18 |
+| `mujoong.timing.account.google-keys-max-age` | `6h` | core-api | 구글 id_token 서명 열쇠(JWKS) 캐시 상한 — 응답 `Cache-Control: max-age`만큼 두되 이 값을 넘지 않는다(max-age 없음 · no-store · no-cache면 캐시하지 않음). 모르는 kid면 상한 안이어도 다시 받는다 | U2 2차 리뷰 4 · U2-J2 |

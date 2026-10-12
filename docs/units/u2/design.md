@@ -23,7 +23,7 @@
 
 | 컴포넌트 | 패키지 | 주요 클래스 |
 |---|---|---|
-| GuardianIdentity | `kr.mujoong.core.identity` (+ `.google` · `.web`) | `SocialAccountRepository` · `GoogleTokenClient` · `GoogleKeysClient`(JWKS) · `GoogleIdTokenReader`(서명 · 내용 확인) · `GoogleLoginService` · `GuardianSessions` · `GuardianWriteLock`(쓰기 전 보호자 행 잠금 · 상태 재확인) · `web.AuthController` · `web.MeController` |
+| GuardianIdentity | `kr.mujoong.core.identity` (+ `.google` · `.web`) | `SocialAccountRepository` · `GoogleTokenClient` · `GoogleKeysClient`(JWKS) · `GoogleIdTokenReader`(서명 · 내용 확인) · `GoogleLoginService` · `GuardianSessions` · `GuardianWriteLock`(보호자 행 잠금 SQL의 한 곳 — FOR SHARE(U1 등록) · FOR UPDATE(삭제 접수) · 쓰기 전 ACTIVE 재확인, 2차 리뷰 5) · `GoogleKeyCache`(JWKS 캐시) · `web.AuthController` · `web.MeController` |
 | ConsentPolicy | `kr.mujoong.core.consent` (+ `.web`) | `ConsentStatusRule`(순수 규칙) · `ConsentPolicyService` · `PolicyTermsReader` · `PolicyTermsDevSeed`(dev 시드) · `ConsentDeletionParticipant` · `web.ConsentController`(`/policies/current` · `/consents`) |
 | ChildProfile | `kr.mujoong.core.child` (+ `.web`) | `ChildInput`(검증) · `ChildProfileService`(ChildContext 포트 `childContext(guardianId)` 포함) · `StopExpressionRules` · `StopExpressionRepository` · `ChildProfileDeletionParticipant`(종료 표현 → 아이) · `web.ChildController` |
 | ApprovedContentCatalog | `kr.mujoong.core.activity` (U1 클래스) | U1 `ApprovedContentCatalog`에 `latestApproved` · `pin`(계약 8절 ApprovedContentPin)을 더해 카탈로그를 하나로 둔다(리뷰 10). 약관 · 정책 버전 · 세션 문구가 같은 곳에서 읽힌다. 새 버전 · 승인은 참조 시드 SQL로 넣는다(U2-J17) |
@@ -73,7 +73,7 @@ U1 업무 문맥 시험(`CoreBusinessContext`)은 `device · activity · messagi
 |---|---|---|
 | R1 | 구글 교환: redirectUri는 설정값과 같아야 하고, Origin이 있으면 허용 origin과 같아야 한다. 토큰 엔드포인트에 code를 보내 id_token을 받고, 구글 JWKS(`jwks-uri`)의 열쇠로 RS256 서명을 확인한 뒤 iss(accounts.google.com) · aud(client id) · exp · sub를 확인한다. token-uri · jwks-uri는 https만(평문 http는 루프백 시험 주소만, 어기면 기동 거부). 실패는 모두 401 GOOGLE_AUTH_FAILED, 쿠키 없음. 로그는 까닭별 kind(`GOOGLE_*`), Origin 불일치는 SECURITY_ORIGIN_DENIED(편차 (U2-j)) | AC1.1.4 · 1.1.7 · 리뷰 1 · 4 |
 | R2 | 첫 로그인은 보호자(ACTIVE) + 소셜 계정을 만든다. 로그인 때 앞 세션을 무효로 하고 새 세션 id를 만든다(세션 고정 방지). 세션에는 보호자 id만 | AC1.1.1 · NFR9 |
-| R3 | 로그인 응답 Me로 화면이 고른다: 동의 GIVEN 아님 → 02, 아이 없음 → 03, 둘 다 → 04. 앱 시작(04 진입)에서 동의 · 아이가 없으면 01로(다음 실행은 01부터), 동의가 OUTDATED면 02 재동의로(리뷰 6). 02 · 03 처음 등록의 기기 뒤로가기 가드는 기록 칸을 한 칸만 쌓고 마치고 떠날 때 되돌린다(리뷰 5) | AC1.1.1 ~ 1.1.3 · 1.1.5 · 1.2.7 |
+| R3 | 로그인 응답 Me로 화면이 고른다: 동의 GIVEN 아님 → 02, 아이 없음 → 03, 둘 다 → 04. 앱 시작(04 진입)에서 동의 · 아이가 없으면 01로(다음 실행은 01부터), 동의가 OUTDATED면 02 재동의로(리뷰 6). 02 · 03 처음 등록의 기기 뒤로가기 가드는 기록 칸을 한 칸만 쌓고 마치고 떠날 때 되돌린다(리뷰 5). 가드 칸 표시는 이 문서의 id라 새로고침 뒤 남은 표시는 가드로 보지 않고 새 칸을 쌓는다(2차 리뷰 1) | AC1.1.1 ~ 1.1.3 · 1.1.5 · 1.2.7 |
 | R4 | 401(세션 없음 · 만료)은 어느 화면이든 토스트 "로그인이 필요해요." 뒤 01. 진행 세션에는 영향 없음 | AC1.1.9 |
 | R5 | 로그아웃은 세션만 끝낸다(세션 종료 요청 아님) | AC1.5.2 · 1.5.5 |
 | R6 | 동의 상태: 현재 정책 버전(CONSENT_POLICY 최신 승인)의 4항목이 모두 효력 있는 GIVEN이면 GIVEN, 아니고 예전 정책 버전 하나에서 4항목의 항목별 최신 행이 모두 GIVEN이면 OUTDATED(리뷰 7), 그 밖 NOT_GIVEN. 쓰기는 보호자 행을 잠그고 ACTIVE가 아니면 403 ACCOUNT_DELETION_IN_PROGRESS(리뷰 9, R8 · R9도 같다). 저장은 4항목 모두 agreed=true · 현재 버전일 때만, 항목마다 consent_version을 올린 새 행(이미 GIVEN이면 그대로 204). 변경 · 철회 API 없음 | AC1.2.4 · 1.2.8 · FR1.2 |
@@ -81,7 +81,7 @@ U1 업무 문맥 시험(`CoreBusinessContext`)은 `device · activity · messagi
 | R8 | 아이: 계정당 1명(두 번째 POST는 409). 이름은 앞뒤 공백을 뺀 1 ~ 10자, 나이 6 ~ 12 정수, 관심사 0 ~ 5개 · 각 1 ~ 10자 · 중복 없음. 수정은 같은 행을 바꾼다(id 유지) | AC1.3.5 · 1.3.8 · 1.3.9 |
 | R9 | 종료 표현: 통째 교체, 최대 5개, 앞뒤 공백을 뺀 2 ~ 20자(NFC 뒤 코드 포인트), 정규화(공백 제거 · 소문자) 기준 중복 금지 — 공백은 유니코드 White_Space 속성이고 화면과 서버가 같은 규칙(리뷰 8), 기본 표현 '무중아 그만할래'와 같은 것 금지. 기본 표현은 저장하지 않는 코드 상수 | AC2.3.1 · 2.3.5 · 2.3.6 |
 | R10 | 삭제 접수: 한 트랜잭션에서 보호자 DELETION_REQUESTED + 요청 REQUESTED 1행(이미 있으면 같은 id), 커밋 뒤 그 보호자의 모든 로그인 세션 삭제. 접수 뒤에는 /api/me 외 모든 보호자 API가 403 ACCOUNT_DELETION_IN_PROGRESS | AC1.6.1 · 1.6.7 |
-| R11 | 지휘 한 바퀴(주기 실행, 요청 행 FOR UPDATE SKIP LOCKED): ⓪ 그 보호자의 로그인 세션을 다시 지움(접수 뒤 남은 · 늦게 저장된 세션, 리뷰 2) ① 진행 세션 사본이 있으면 CONSENT_WITHDRAWN 끝내기를 한 번 보내고 사본이 종료 상태가 되거나 `deletion-session-wait`(30초)가 지날 때까지 기다림 ② Core 참가자 순서 활동 → 기기 → 동의 → 아이(종료 표현 → 아이) → 메시징(`DeletionParticipant`의 `@Order` 상수) ③ 같은 트랜잭션에 DeletionRequested Outbox ④ DeletionCompleted 수신 뒤 메시징 참가자 한 번 더 → 소셜 계정 · 로그인 세션 · 보호자 행 삭제 → 요청 DONE. 실패는 attempt_count · last_error(예외 종류 이름만) 기록 뒤 다음 바퀴 | AC1.6.3 · 1.6.6 · 1.6.7 |
+| R11 | 지휘 한 바퀴(주기 실행, 요청 행 FOR UPDATE SKIP LOCKED): ⓪ Realtime 요청 전 바퀴는 그 보호자의 로그인 세션을 다시 지움(접수 뒤 남은 · 늦게 저장된 세션, 리뷰 2 — 실패는 APP_ERROR만 남기고 진행, 2차 리뷰 3). 마지막 단계는 세션 행을 보호자 행과 같은 트랜잭션에서 지운다(2차 리뷰 2). 시험 로그인도 삭제 접수면 세션을 만들지 않는다(편차 (U2-k)) ① 진행 세션 사본이 있으면 CONSENT_WITHDRAWN 끝내기를 한 번 보내고 사본이 종료 상태가 되거나 `deletion-session-wait`(30초)가 지날 때까지 기다림 ② Core 참가자 순서 활동 → 기기 → 동의 → 아이(종료 표현 → 아이) → 메시징(`DeletionParticipant`의 `@Order` 상수) ③ 같은 트랜잭션에 DeletionRequested Outbox ④ DeletionCompleted 수신 뒤 메시징 참가자 한 번 더 → 소셜 계정 · 로그인 세션 · 보호자 행 삭제 → 요청 DONE. 실패는 attempt_count · last_error(예외 종류 이름만) 기록 뒤 다음 바퀴 | AC1.6.3 · 1.6.6 · 1.6.7 |
 | R12 | 삭제 처리 중 같은 구글 계정 로그인은 데이터 · 세션 없이 "계정을 삭제하고 있어요. 끝나면 새로 시작할 수 있어요."만. 완료 뒤 로그인은 새 보호자(02부터) | AC1.6.4 · 1.6.5 |
 | R13 | 로그 · 오류 메시지 · Outbox에 이름 · 관심사 · 종료 표현 · 구글 sub · 코드 · 토큰을 남기지 않는다(엔터티 toString도 id만) | NFR9 · 공통 완료 조건 |
 
@@ -115,7 +115,7 @@ U1 임시 동작을 대체하는 곳: 401 → `/parent/dev-login`을 01로(U1 �
 | 번호 | 준하 제안(가정) | 근거 |
 |---|---|---|
 | U2-J1 | 구글 OAuth 값은 환경 변수 이름만 둔다: Core · web이 같은 이름 `GOOGLE_OAUTH_CLIENT_ID` · `GOOGLE_OAUTH_REDIRECT_URI`를 읽고 `GOOGLE_OAUTH_CLIENT_SECRET`은 Core만(리뷰 3). `infra/bin/render-env`가 Parameter Store의 client id · secret을 core-api.env · web.env에 나누고 redirect는 허용 origin + `/parent/login/callback`으로 만든다. 비어 있으면 로그인은 401(시작은 막지 않는다 — 시연 전 팀이 값을 넣음, RUNBOOK 단계 4) | 지시 '설정 이름만' · RequiredSecretsCheck 'U2 전 비워 둠' |
-| U2-J2 | id_token은 구글 JWKS 열쇠로 RS256 서명을 확인하고 iss · aud · exp · sub를 본다(리뷰 1: TLS 직접 교환만 믿지 않는다). JWKS는 로그인마다 한 번 읽는다(캐시 없음 — 로그인이 드물고 열쇠 교체에 낡지 않는다). userinfo 호출 없음 | 리뷰 1 · OIDC Core 3.1.3.7 |
+| U2-J2 | id_token은 구글 JWKS 열쇠로 RS256 서명을 확인하고 iss · aud · exp · sub를 본다(리뷰 1: TLS 직접 교환만 믿지 않는다). 열쇠는 응답 `Cache-Control: max-age`만큼, 상한 `mujoong.timing.account.google-keys-max-age`(6시간)까지 캐시하고 모르는 kid일 때만 다시 받는다. 열쇠는 코드 교환 전에 확보해, 받지 못하면 코드를 쓰지 않고 실패한다(2차 리뷰 4). userinfo 호출 없음 | 리뷰 1 · 2차 리뷰 4 · OIDC Core 3.1.3.7 |
 | U2-J3 | 구글 이메일은 저장하지 않는다(쓰는 곳이 없음, 최소 수집 NFR9). 식별은 sub | 개인정보 최소화 |
 | U2-J4 | OAuth state는 Next 라우트 처리기가 HttpOnly 쿠키(`MUJOONG_OAUTH_STATE`, Path=/parent/login, 10분)로 두고 콜백 서버 컴포넌트가 비교한다. 보호자 JS 저장소를 쓰지 않는다(SD-6 시험) | 로그인 CSRF 방지 |
 | U2-J5 | 삭제 처리 중 계정의 구글 로그인은 200 Me{deletionStatus: IN_PROGRESS}이고 세션 쿠키를 만들지 않는다 | AC1.6.4 '어떤 API도 데이터를 주지 않음' |

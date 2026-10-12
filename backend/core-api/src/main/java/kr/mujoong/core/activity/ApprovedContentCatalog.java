@@ -65,11 +65,11 @@ public class ApprovedContentCatalog {
         return pinned;
     }
 
+    /** 세션 패키지 문구: 같은 조회({@link #latestApproved})에 '음성 있음'만 더한다(2차 리뷰 6). */
     private Optional<ApprovedItem> item(String contentCode) {
-        return repository.findLatestApproved(contentCode)
-                .filter(ApprovedContentVersion::isApproved)
-                .flatMap(version -> version.audioUrl()
-                        .map(url -> new ApprovedItem(version.getId(), version.getContentText(), url)));
+        return latestApproved(contentCode)
+                .filter(content -> content.audioUrl() != null)
+                .map(content -> new ApprovedItem(content.contentVersionId(), content.text(), content.audioUrl()));
     }
 
     /** 패키지의 승인 문구 한 칸(계약 approvedContent 값 모양). */

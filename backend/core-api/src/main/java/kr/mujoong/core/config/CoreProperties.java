@@ -93,11 +93,15 @@ public record CoreProperties(
         }
     }
 
-    /** U2 계정 삭제 지휘 주기 · 진행 세션 끝 대기(timing.md 8절, AC1.6.3). */
-    public record AccountTiming(Duration deletionTick, Duration deletionSessionWait) {
+    /**
+     * U2 계정 삭제 지휘 주기 · 진행 세션 끝 대기(AC1.6.3) · 구글 서명 열쇠 캐시 상한(2차 리뷰 4)(timing.md 8절). 열쇠 캐시는 응답의 max-age만큼 두되
+     * 이 상한을 넘지 않는다.
+     */
+    public record AccountTiming(Duration deletionTick, Duration deletionSessionWait, Duration googleKeysMaxAge) {
         public AccountTiming {
             positive(deletionTick, "mujoong.timing.account.deletion-tick");
             positive(deletionSessionWait, "mujoong.timing.account.deletion-session-wait");
+            positive(googleKeysMaxAge, "mujoong.timing.account.google-keys-max-age");
         }
     }
 

@@ -32,7 +32,7 @@ import org.springframework.transaction.support.TransactionTemplate;
  *
  * <p>{@link #runOnce}는 처리할 때가 된 REQUESTED 요청을 하나씩 선점하고(FOR UPDATE SKIP LOCKED + next_attempt_at을 세션 대기 시한만큼 미룸 —
  * 여러 인스턴스 · 바퀴가 겹쳐도 한 곳만 처리) 다음 한 단계를 진행한다. 각 단계는 멱등이라 실패하면 시도 수 · 예외 종류만 남기고 다음 바퀴에
- * 다시 한다. 바퀴마다 먼저 그 보호자의 로그인 세션을 다시 지운다(접수 뒤 남은 세션 정리, 리뷰 2).
+ * 다시 한다. Realtime 요청 전 바퀴는 먼저 그 보호자의 로그인 세션을 다시 지운다(접수 뒤 남은 세션 정리, 리뷰 2 · 실패해도 진행, 2차 리뷰 3).
  *
  * <ol>
  *   <li>진행 세션 사본이 있으면 CONSENT_WITHDRAWN 끝내기를 한 번 보내고, 사본이 종료 상태가 되거나 {@code deletion-session-wait}(30초)가 지날
@@ -40,7 +40,7 @@ import org.springframework.transaction.support.TransactionTemplate;
  *   <li>Core 참가자를 {@code @Order} 순서로 모두 부른다(활동 → 기기 → 동의 → 아이 → 메시징, 뒤 유닛 참가자도 빈이면 함께).
  *   <li>한 트랜잭션에 DeletionRequested Outbox + 요청의 core_cleared_at · realtime_requested_at.
  *   <li>DeletionCompleted 수신(realtime_completed_at, {@link DeletionCompletedHandler}) 뒤: 참가자를 한 번 더(전달이 끝난 메시징 행 정리,
- *       BR5.14 (d)) → 한 트랜잭션에 소셜 계정 · 보호자 행 삭제 + 요청 DONE.
+ *       BR5.14 (d)) → 한 트랜잭션에 소셜 계정 · 로그인 세션 행 · 보호자 행 삭제 + 요청 DONE.
  * </ol>
  *
  * <p>Realtime 쪽 삭제와 DeletionCompleted 발행은 U4가 붙인다. 그 전까지 요청은 REQUESTED로 남고 보호자는 계속 차단된다(J19).
@@ -124,9 +124,10 @@ public class DeletionCommander {
             return Step.SKIPPED;
         }
         DeletionRequest request = snapshot.get();
+        if (request.realtimeRequestedAt() == null) {
+            sweepSessions(request);
+        }
         try {
-            // 바퀴마다 로그인 세션을 다시 지운다: 접수의 closeAll이 실패했거나 접수와 겹친 로그인이 그 뒤에 세션을 저장했을 수 있다(리뷰 2)
-            sessions.closeAll(request.guardianId());
             if (request.realtimeCompletedAt() != null) {
                 return finish(request);
             }
@@ -152,6 +153,19 @@ public class DeletionCommander {
             transactions.executeWithoutResult(status ->
                     requests.recordFailure(request.id(), e.getClass().getSimpleName(), now, now.plus(tick)));
             return Step.FAILED;
+        }
+    }
+
+    /**
+     * ⓪ 접수 직후 바퀴(Realtime 요청 전)에 로그인 세션을 다시 지운다: 접수의 closeAll이 실패했거나 접수와 겹친 로그인이 그 뒤에 세션을 저장했을 수
+     * 있다(리뷰 2). 실패는 APP_ERROR로만 남기고 삭제 진행을 막지 않는다 — 단계 실패로 세지 않고, 남은 세션은 다음 바퀴 · 마지막 단계가 지운다
+     * (2차 리뷰 3). Realtime 요청 뒤에는 새 세션이 생길 길이 없어(구글 · 시험 로그인 모두 삭제 접수면 세션을 만들지 않음) 다시 지우지 않는다.
+     */
+    private void sweepSessions(DeletionRequest request) {
+        try {
+            sessions.closeAll(request.guardianId());
+        } catch (RuntimeException e) {
+            events.appError(EventLog.Component.CORE_MAINTENANCE, e);
         }
     }
 
@@ -183,14 +197,15 @@ public class DeletionCommander {
     }
 
     /**
-     * ④ 마무리: 참가자 한 번 더 → 소셜 계정 · 보호자 행 삭제 + DONE(한 트랜잭션). 로그인 세션은 이 바퀴 첫머리에 {@link GuardianSessions#closeAll}이
-     * 지웠고, 삭제 처리 중 계정의 로그인은 세션을 만들지 않는다(U2-J5).
+     * ④ 마무리: 참가자 한 번 더 → 한 트랜잭션에 소셜 계정 · 로그인 세션 행 · 보호자 행 삭제 + DONE. 세션 행을 보호자 행과 같은 트랜잭션에서 지워
+     * 둘이 함께 커밋된다 — 같은 id로 다시 생긴 보호자(dev 시드)에 세션이 되살아나지 않는다(2차 리뷰 2).
      */
     private Step finish(DeletionRequest request) {
         runParticipants(request);
         transactions.executeWithoutResult(status -> {
             Instant now = clock.now();
             socialAccounts.deleteByGuardian(request.guardianId());
+            sessions.deleteAllInCurrentTransaction(request.guardianId());
             jdbc.update("delete from core.core_guardian where id = :id",
                     ClockParams.uuid(new MapSqlParameterSource(), "id", request.guardianId()));
             requests.markDone(request.id(), now);
