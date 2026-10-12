@@ -10,6 +10,7 @@ import kr.mujoong.contract.ws.CloseCode;
 import kr.mujoong.contract.ws.message.HelloOk;
 import kr.mujoong.realtime.config.RealtimeProperties;
 import kr.mujoong.realtime.observability.EventLogger;
+import kr.mujoong.realtime.session.SessionExecutor;
 import kr.mujoong.realtime.session.SessionMailbox;
 import kr.mujoong.realtime.session.SessionRegistry;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -20,8 +21,12 @@ import org.springframework.stereotype.Component;
  *
  * <p>순서는 ① 연결 원장 행을 {@code FOR UPDATE}로 잠그고 새 connection_id · CONNECTED · DeviceStatusChanged를 한 트랜잭션에 커밋 → ② 소켓
  * 레지스트리를 새 연결로 교체 → ③ 옛 소켓이 살아 있으면 4001 REPLACED로 닫고 옛 연결에 묶인 세션에 연결 끊김을 알린다(출력 세대 올림) →
- * ④ READY로 바꾼 뒤 HELLO_OK를 보낸다. ①이 실패하면 새 연결만 1011로 닫고 옛 연결 · 레지스트리는 건드리지 않는다(SCD-2). 새 연결은 진행 중
- * 세션에 자동으로 붙지 않는다(HELLO resume은 U3, HELLO_OK.session은 비움).
+ * ④ READY로 바꾼 뒤 HELLO_OK를 보낸다. ①이 실패하면 새 연결만 1011로 닫고 옛 연결 · 레지스트리는 건드리지 않는다(SCD-2).
+ *
+ * <p>U3(U3-J4 · U3-J5 · U3-J23): 이 기기의 살아 있는 세션 실행기가 있으면 HELLO_OK.session에 {@code sessionId · view · resumed}(기기가 HELLO
+ * resume으로 그 세션을 요청했는가)를 싣고, HELLO_OK 뒤에 실행기 안전 편지함에 {@link SessionMailbox.LinkReplaced}를 넣어 실행기가 새 연결에
+ * 세션을 다시 묶게 한다(끊김 구간 닫기 · 상태 재송신 · 미확인 명령 재전달은 실행기 몫). 제어 레인은 선입선출이라 HELLO_OK가 늘 먼저 나간다. 살아
+ * 있는 세션이 없으면 session은 null이다(기기는 대기 화면으로).
  */
 @Component
 public class ConnectionHandover {
@@ -68,8 +73,15 @@ public class ConnectionHandover {
         if (!connection.advance(DeviceConnection.Phase.AWAIT_HELLO, DeviceConnection.Phase.READY)) {
             return false;
         }
+        Optional<SessionExecutor> live = sessions.liveExecutorForDevice(deviceId);
+        UUID resume = connection.resumeSessionId();
+        HelloOk.SessionInfo info = live.map(executor -> new HelloOk.SessionInfo(executor.sessionId(), executor.view(),
+                executor.sessionId().equals(resume))).orElse(null);
         connection.sendControl(new HelloOk(connection.connectionId(), clock.now(), heartbeatInterval.toMillis(),
-                HelloOk.AUDIO_PCM16LE_24K_MONO, null), null, null);
+                HelloOk.AUDIO_PCM16LE_24K_MONO, info), null, null);
+        if (live.isPresent() && info != null) {
+            live.get().mailbox().putSafety(new SessionMailbox.LinkReplaced(connection, info.resumed(), clock.now()));
+        }
         return true;
     }
 

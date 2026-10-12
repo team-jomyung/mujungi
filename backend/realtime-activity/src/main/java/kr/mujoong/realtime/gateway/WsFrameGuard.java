@@ -11,7 +11,6 @@ import kr.mujoong.contract.json.JsonCodec;
 import kr.mujoong.contract.ws.CloseCode;
 import kr.mujoong.contract.ws.WsEnvelope;
 import kr.mujoong.contract.ws.WsMessageType;
-import kr.mujoong.contract.ws.message.PlaybackMark;
 import kr.mujoong.contract.ws.message.WsError;
 import kr.mujoong.realtime.gateway.DeviceConnection.Phase;
 
@@ -24,7 +23,8 @@ import kr.mujoong.realtime.gateway.DeviceConnection.Phase;
  *   <li>텍스트: UTF-8 {@code mujoong.limits.ws-text-frame-max}(8KB) 초과는 4400. READY 전에는 형식이 맞는 HELLO만 받고 그 밖은 4400
  *       (AWAIT_VERIFY에 온 HELLO는 확인 뒤 처리하도록 미룬다). READY 뒤: JSON 봉투 필수 필드 위반은 4400, 모르는 type은
  *       ERROR(UNKNOWN_TYPE), 아는 type의 payload 위반은 ERROR(BAD_PAYLOAD)이고 연결을 유지한다. 방향이 틀린 type(서버 → 기기 메시지)은 4400.
- *       DEVICE_STATE · PLAYBACK_MARK(PROGRESS) · 두 번째 HELLO는 받아서 무시한다(ERROR 없음).
+ *       두 번째 HELLO는 받아서 무시한다(ERROR 없음). DEVICE_STATE · PLAYBACK_MARK(PROGRESS)는 U1에서 무시했으나 U3부터 처리한다(마이크 ·
+ *       재생 진행 근거, U3-J9 · U3-J10).
  *   <li>봉투 {@code sentAt}만 없거나 틀린 READY 뒤 메시지는 받되 sentAt 없음으로 표시한다 — HEARTBEAT의 clockOffsetMs를 생략하고
  *       CLOCK_OFFSET_MISSING으로 남기기 위해서다(OD-8 · R3-4).
  *   <li>바이너리: READY에서 0x01 · 965바이트만 받는다. 서버가 받은 0x02 · 길이 위반 · READY 전 프레임은 4400.
@@ -142,11 +142,7 @@ public final class WsFrameGuard {
         if (type.direction() != WsMessageType.Direction.DEVICE_TO_SERVER) {
             return PROTOCOL_ERROR;
         }
-        if (type == WsMessageType.DEVICE_STATE || type == WsMessageType.HELLO) {
-            return IGNORE;
-        }
-        if (type == WsMessageType.PLAYBACK_MARK
-                && ((PlaybackMark) envelope.payload()).status() == PlaybackMark.Status.PROGRESS) {
+        if (type == WsMessageType.HELLO) {
             return IGNORE;
         }
         if (sentAtMissing) {

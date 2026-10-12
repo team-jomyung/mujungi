@@ -11,6 +11,7 @@ import kr.mujoong.contract.time.TimerDriver;
 import kr.mujoong.contract.ws.CloseCode;
 import kr.mujoong.contract.ws.WsEnvelope;
 import kr.mujoong.contract.ws.WsPayload;
+import kr.mujoong.contract.ws.message.DeviceState;
 import kr.mujoong.realtime.common.scaling.SingleInstanceAssumption;
 
 /**
@@ -20,6 +21,9 @@ import kr.mujoong.realtime.common.scaling.SingleInstanceAssumption;
  * clockOffsetMs · rttMs는 수신 핸들러가 원자적으로 바꾸는 휘발 값이다(세션 ④ 시계 · LATENCY_TURN이 읽는다). {@link #knownState()}는
  * 연결 원장 행 상태의 메모리 사본이라 HEARTBEAT마다 DB를 보지 않고 복귀(UNRESPONSIVE · DISCONNECTED → CONNECTED)가 필요한지 안다.
  * 기기 토큰은 확인이 끝나면 지운다(BR8.7).
+ *
+ * <p>U3: HELLO의 이어가기 요청(resume.sessionId)과 마지막 DEVICE_STATE(필드별 최신값, 마이크 · 소리 · 보임 · 켜짐 유지)를 메모리에 둔다
+ * (U3-J4 · U3-J9). 둘 다 판단 근거일 뿐 원장에는 쓰지 않는다.
  */
 @SingleInstanceAssumption(si = "SI-1",
         reason = "마지막 기기 메시지 시각 · 시계 환산 입력(clockOffsetMs · rttMs) · HELLO 시계가 연결 객체 메모리에만 있어 다른 인스턴스가 받은 메시지를 볼 수 없다")
@@ -47,6 +51,7 @@ public final class DeviceConnection implements DeviceLink {
     private final Instant openedAt;
     private final AtomicReference<Phase> phase = new AtomicReference<>(Phase.AWAIT_VERIFY);
     private final AtomicBoolean serverClosing = new AtomicBoolean();
+    private final AtomicBoolean transportFailed = new AtomicBoolean();
     private volatile ConnectionSender sender;
     private volatile Principal principal;
     private volatile Instant lastMessageAt;
@@ -56,6 +61,8 @@ public final class DeviceConnection implements DeviceLink {
     private volatile UUID boundSessionId;
     private volatile TimerDriver.TimerHandle helloTimer;
     private final AtomicReference<WsEnvelope> deferredHello = new AtomicReference<>();
+    private volatile UUID resumeSessionId;
+    private volatile DeviceState knownDeviceState;
     private long lastInboundSeq;
 
     public DeviceConnection(UUID connectionId, String traceId, Instant openedAt) {
@@ -167,6 +174,16 @@ public final class DeviceConnection implements DeviceLink {
         return serverClosing.get();
     }
 
+    /** 전송 오류(TCP 끊김 · EOF)를 받았다(U3-J2: 서버가 1011로 닫아도 네트워크 끊김으로 센다). */
+    public void markTransportFailed() {
+        transportFailed.set(true);
+    }
+
+    /** 전송 오류로 끊겼는가. */
+    public boolean isTransportFailed() {
+        return transportFailed.get();
+    }
+
     /** 제어 레인 깊이(송신기가 없으면 0, J298). */
     public int controlQueueDepth() {
         ConnectionSender current = sender;
@@ -247,6 +264,33 @@ public final class DeviceConnection implements DeviceLink {
     /** 미뤄 둔 HELLO를 꺼낸다. */
     public Optional<WsEnvelope> takeDeferredHello() {
         return Optional.ofNullable(deferredHello.getAndSet(null));
+    }
+
+    /** HELLO가 이어가기를 요청한 세션(U3-J4). 없으면 null. */
+    public UUID resumeSessionId() {
+        return resumeSessionId;
+    }
+
+    public void resumeSessionId(UUID value) {
+        this.resumeSessionId = value;
+    }
+
+    /** 마지막으로 알려진 기기 상태(필드별 최신값, U3-J9). 없으면 null. */
+    public DeviceState knownDeviceState() {
+        return knownDeviceState;
+    }
+
+    /** DEVICE_STATE를 받아 바뀐 필드만 덮는다. 합친 뒤 상태를 돌려준다. */
+    public synchronized DeviceState mergeDeviceState(DeviceState update) {
+        Objects.requireNonNull(update, "update");
+        DeviceState current = knownDeviceState;
+        DeviceState merged = current == null ? update : new DeviceState(
+                update.mic() != null ? update.mic() : current.mic(),
+                update.player() != null ? update.player() : current.player(),
+                update.visibility() != null ? update.visibility() : current.visibility(),
+                update.wakeLock() != null ? update.wakeLock() : current.wakeLock());
+        knownDeviceState = merged;
+        return merged;
     }
 
     /** 기기가 먼저 닫았다(송신기를 멈춘다). */

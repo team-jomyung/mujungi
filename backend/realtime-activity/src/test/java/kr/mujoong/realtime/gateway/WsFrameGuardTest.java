@@ -27,8 +27,8 @@ import org.junit.jupiter.params.provider.EnumSource;
 /**
  * 수신 프레임 판정 시험 (U1 3.5 Step 29 · 편차 (s) · J123 · NFR9.9 · SD-7).
  *
- * <p>텍스트 8KB · 0x01 965B 경계, 0x02 수신 거부, HELLO 형식 4400, READY 뒤 모르는 type은 ERROR이고 연결 유지, DEVICE_STATE ·
- * PLAYBACK_MARK(PROGRESS)는 ERROR 없이 무시, sentAt만 빠진 봉투는 받되 표시한다.
+ * <p>텍스트 8KB · 0x01 965B 경계, 0x02 수신 거부, HELLO 형식 4400, READY 뒤 모르는 type은 ERROR이고 연결 유지, 두 번째 HELLO는 ERROR 없이
+ * 무시, DEVICE_STATE · PLAYBACK_MARK(PROGRESS)는 처리할 봉투로 받는다(U3-J9 · U3-J10, U1은 무시했다), sentAt만 빠진 봉투는 받되 표시한다.
  */
 @Tag("u1")
 class WsFrameGuardTest {
@@ -91,15 +91,20 @@ class WsFrameGuardTest {
     }
 
     @Test
-    void afterReadyDeviceStateHelloAndProgressMarksAreIgnoredWithoutError() {
+    void afterReadyDeviceStateAndProgressMarksAreAcceptedAndASecondHelloIsIgnoredWithoutError() {
         String state = text(new DeviceState(DeviceState.Mic.OK, DeviceState.Player.OK, DeviceState.Visibility.VISIBLE,
                 DeviceState.WakeLock.HELD), 3);
         String progress = text(new PlaybackMark(UUID.randomUUID(), PlaybackMark.Status.PROGRESS, null, AT, null, null),
                 4, null, UUID.randomUUID());
         String hello = text(new Hello("1.0.0", List.of("pcm16le/24000/1"), null), 5);
 
-        assertThat(guard.onText(Phase.READY, state)).isInstanceOf(WsFrameGuard.Ignore.class);
-        assertThat(guard.onText(Phase.READY, progress)).isInstanceOf(WsFrameGuard.Ignore.class);
+        // U3-J9 · U3-J10: 마이크 · 재생 진행 근거로 처리한다(ERROR 없음 · 연결 유지)
+        assertThat(guard.onText(Phase.READY, state)).isInstanceOfSatisfying(WsFrameGuard.Accept.class, accept -> {
+            assertThat(accept.envelope().messageType()).isEqualTo(WsMessageType.DEVICE_STATE);
+            assertThat(accept.sentAtMissing()).isFalse();
+        });
+        assertThat(guard.onText(Phase.READY, progress)).isInstanceOfSatisfying(WsFrameGuard.Accept.class, accept ->
+                assertThat(((PlaybackMark) accept.envelope().payload()).status()).isEqualTo(PlaybackMark.Status.PROGRESS));
         assertThat(guard.onText(Phase.READY, hello)).isInstanceOf(WsFrameGuard.Ignore.class);
     }
 

@@ -49,6 +49,7 @@ public final class SessionHarness {
     public final FakeProviderPort provider = new FakeProviderPort();
     public final ManualLauncher launcher = new ManualLauncher();
     public final MemoryStore store = new MemoryStore();
+    public final FakeSessionGaps gaps = new FakeSessionGaps();
     public final LatencyRecorder latency = new LatencyRecorder(events, metrics, clock, 100, Duration.ofMinutes(10));
     public final AsyncRecorder recorder = new AsyncRecorder(store, TaskLauncher.inline(), latency, events, metrics, clock,
             200, 2);
@@ -82,7 +83,7 @@ public final class SessionHarness {
                 (device, connection) -> unresponsive.add(new UUID[] {device, connection}),
                 new ProviderConnector(provider, new ProviderRequestFactory(), Duration.ofSeconds(10), launcher, "test"),
                 new ProviderRequestFactory(), new OutputGate(SeedDictionary.loadDefault()), recorder, latency,
-                new TimerClocks(safety, quiet), launcher, events, metrics, clock, settings);
+                new TimerClocks(safety, quiet), launcher, events, metrics, clock, settings, gaps);
         SessionExecutor.Plan plan = new SessionExecutor.Plan(sessionId, deviceId, "0123456789abcdef0123456789abcdef",
                 new ChildContext("하늘", 8, List.of("공룡")),
                 List.of(new StartSession.ApprovedAudio("CLOSING", closingVersion, "/media/approved/closing.wav"),

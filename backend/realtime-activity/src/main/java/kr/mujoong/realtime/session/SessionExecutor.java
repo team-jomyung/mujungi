@@ -4,7 +4,9 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.EnumSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -17,7 +19,9 @@ import kr.mujoong.contract.status.EndRequestReason;
 import kr.mujoong.contract.status.FailureCode;
 import kr.mujoong.contract.status.SessionStatus;
 import kr.mujoong.contract.time.MujoongClock;
+import kr.mujoong.contract.ws.WsPayload;
 import kr.mujoong.contract.ws.message.CloseTransport;
+import kr.mujoong.contract.ws.message.DeviceState;
 import kr.mujoong.contract.ws.message.OutputBegin;
 import kr.mujoong.contract.ws.message.PlayApprovedContent;
 import kr.mujoong.contract.ws.message.PlaybackMark;
@@ -37,6 +41,7 @@ import kr.mujoong.realtime.gateway.DeviceStatusPort;
 import kr.mujoong.realtime.gateway.OutputBundle;
 import kr.mujoong.realtime.log.AsyncRecorder;
 import kr.mujoong.realtime.log.LatencyRecorder;
+import kr.mujoong.realtime.log.SessionGapRepository;
 import kr.mujoong.realtime.log.TranscriptWriter;
 import kr.mujoong.realtime.observability.EventLogger;
 import kr.mujoong.realtime.observability.RealtimeMetrics;
@@ -46,8 +51,10 @@ import kr.mujoong.realtime.session.SessionMailbox.Bootstrap;
 import kr.mujoong.realtime.session.SessionMailbox.ConnectionLost;
 import kr.mujoong.realtime.session.SessionMailbox.DeviceAck;
 import kr.mujoong.realtime.session.SessionMailbox.DeviceReadyReceived;
+import kr.mujoong.realtime.session.SessionMailbox.DeviceStateReceived;
 import kr.mujoong.realtime.session.SessionMailbox.EndOutcome;
 import kr.mujoong.realtime.session.SessionMailbox.EndRequested;
+import kr.mujoong.realtime.session.SessionMailbox.LinkReplaced;
 import kr.mujoong.realtime.session.SessionMailbox.Message;
 import kr.mujoong.realtime.session.SessionMailbox.PlaybackMarkReceived;
 import kr.mujoong.realtime.session.SessionMailbox.ProviderConnected;
@@ -77,6 +84,11 @@ import org.springframework.transaction.TransactionException;
  * 최상위까지 오면 APP_ERROR 한 줄을 남기고 FAILED(SERVER_RESTART)를 시도해 이기면 BR6.8 기기 명령을 낸 뒤 정리한다(J126 · J290). 출력
  * 세대 번호는 STOP_OUTPUT · CLOSING 진입 · 종료 전이 · Core 취소 · 연결 교체 · 끊김마다 오르고, 봉인한 구간과 송신 프레임마다
  * 비교한다(SD-17). 실행기 스레드는 공급자 쪽 생산자로서 자기 편지함을 기다리지 않는다(J289).
+ *
+ * <p>U3(docs/units/u3/design.md 4 · 5절): 같은 기기의 새 연결이 HELLO_OK를 받으면 {@link LinkReplaced}로 세션을 다시 묶고(끊김 구간 닫기 ·
+ * SESSION_STATE 재송신 · ACK를 못 받은 opId 명령 재전달, 이어가기가 아니면 START_SESSION부터, U3-J4 · J5 · J7), 묶인 연결이 끊기면 끊김 구간을
+ * 연다(U3-J18). T19 표시 상태 {@link #view()}를 기억해 HELLO_OK.session에 싣고(U3-J23), DEVICE_STATE의 마이크 끊김 · 플레이어 오류와
+ * PLAYBACK_MARK(STOPPED · LOCAL_VOICE_ACTIVITY) 끼어들기를 세션 이벤트로 남긴다(U3-J9 · J10). 세션 전이 표는 U1 그대로다(U3-J1).
  */
 @SingleInstanceAssumption(si = {"SI-2", "SI-9"},
         reason = "세션 상태 · 편지함 · 출력 세대와 세션당 공급자 연결을 이 프로세스의 실행기 하나가 쥐어 세션을 다른 인스턴스로 옮길 수 없다")
@@ -129,7 +141,8 @@ public final class SessionExecutor {
             EventLogger events,
             RealtimeMetrics metrics,
             MujoongClock clock,
-            Settings settings) {
+            Settings settings,
+            SessionGapPort gaps) {
 
         public Services {
             Objects.requireNonNull(transitions, "transitions");
@@ -146,6 +159,7 @@ public final class SessionExecutor {
             Objects.requireNonNull(metrics, "metrics");
             Objects.requireNonNull(clock, "clock");
             Objects.requireNonNull(settings, "settings");
+            Objects.requireNonNull(gaps, "gaps");
         }
     }
 
@@ -179,6 +193,15 @@ public final class SessionExecutor {
     private static final java.util.Set<SessionStatus> START_PHASE =
             EnumSet.of(SessionStatus.PREPARING, SessionStatus.DEVICE_ACK);
 
+    /** ACK를 기다리는 opId 명령의 상한(U3-J7). 넘치면 가장 오래된 것부터 잊는다. */
+    static final int MAX_PENDING_COMMANDS = 16;
+    /** U3 세션 이벤트 종류(payload에 전사 · 원음 없음). */
+    static final String EVENT_LINK_REPLACED = "DEVICE_LINK_REPLACED";
+    static final String EVENT_BARGE_IN = "BARGE_IN";
+    static final String EVENT_MIC_LOST = "DEVICE_MIC_LOST";
+    static final String EVENT_MIC_OK = "DEVICE_MIC_OK";
+    static final String EVENT_PLAYER_ERROR = "DEVICE_PLAYER_ERROR";
+
     private final Plan plan;
     private final Services services;
     private final SessionMailbox mailbox;
@@ -190,10 +213,17 @@ public final class SessionExecutor {
     private final TranscriptWriter transcripts;
     private final AtomicLong outputGeneration = new AtomicLong();
     private final List<Object> pendingRetry = new ArrayList<>();
+    private final LinkedHashMap<UUID, WsPayload> pendingCommands = new LinkedHashMap<>();
     private final Runnable onTerminated;
 
     private volatile SessionStatus status = SessionStatus.PREPARING;
+    private volatile View view = View.STANDBY;
     private volatile boolean terminated;
+    private UUID openGapId;
+    private DeviceState.Mic lastMic;
+    private DeviceState.Player lastPlayer;
+    private UUID progressPlaybackId;
+    private Long progressPlayedToMs;
     /** 지금 편지함 메시지를 처리하는 스레드(실행 스레드 또는 시험의 step 호출 스레드). 공급자 리스너가 이 스레드면 기다리지 않는다(J289). */
     private volatile Thread processing;
     private DeviceLink link;
@@ -307,9 +337,29 @@ public final class SessionExecutor {
         return plan.sessionId();
     }
 
+    /** 이 세션의 기기(인계가 살아 있는 실행기를 찾는 열쇠, U3-J4). */
+    public UUID deviceId() {
+        return plan.deviceId();
+    }
+
     /** 지금 상태(실행기 사본). */
     public SessionStatus status() {
         return status;
+    }
+
+    /** 마지막으로 기기에 알린 T19 표시 상태(HELLO_OK.session.view, U3-J23). SESSION_STATE를 보낼 때마다 바뀐다. */
+    public View view() {
+        return view;
+    }
+
+    /** ACK를 기다리는 opId 명령 수(시험 · 진단). */
+    int pendingCommandCount() {
+        return pendingCommands.size();
+    }
+
+    /** 열린 끊김 구간이 있는가(시험 · 진단). */
+    boolean hasOpenGap() {
+        return openGapId != null;
     }
 
     /** 종료 정리를 마쳤는가. */
@@ -376,6 +426,8 @@ public final class SessionExecutor {
             }
             case DeviceAck ack -> onDeviceAck(ack);
             case DeviceReadyReceived ready -> onDeviceReady(ready);
+            case LinkReplaced replaced -> onLinkReplaced(replaced);
+            case DeviceStateReceived state -> onDeviceState(state);
             case PlaybackMarkReceived mark -> onPlaybackMark(mark);
             case VoiceClosed closed -> onVoiceClosed(closed);
             case ProviderConnected connected -> onProviderConnected(connected);
@@ -394,7 +446,11 @@ public final class SessionExecutor {
         boolean sent = false;
         if (link != null) {
             link.bindSession(plan.sessionId());
-            sent = link.sendControl(new StartSession(plan.approvedAudio()), startOpId, plan.sessionId());
+            StartSession startSession = new StartSession(plan.approvedAudio());
+            sent = link.sendControl(startSession, startOpId, plan.sessionId());
+            if (sent) {
+                remember(startOpId, startSession);
+            }
         }
         if (!sent) {
             // BR6.6 ⑤: 같은 처리 안에서 PREPARING → FAILED(DEVICE_NO_ACK) + UNRESPONSIVE
@@ -442,10 +498,14 @@ public final class SessionExecutor {
     }
 
     private void onDeviceAck(DeviceAck ack) {
-        if (!fromBoundConnection(ack.connectionId()) || !Objects.equals(ack.ackOf(), startOpId)) {
+        if (!fromBoundConnection(ack.connectionId())) {
             return;
         }
-        if (status != SessionStatus.PREPARING) {
+        // U3-J7: ACK가 온 명령은 연결이 바뀌어도 다시 보내지 않는다
+        if (ack.ackOf() != null) {
+            pendingCommands.remove(ack.ackOf());
+        }
+        if (!Objects.equals(ack.ackOf(), startOpId) || status != SessionStatus.PREPARING) {
             return;
         }
         Optional<ActivitySessionRow> row = transition(SessionStatus.PREPARING, Trigger.DEVICE_ACK, null);
@@ -713,9 +773,17 @@ public final class SessionExecutor {
             case STARTED -> services.latency().playbackStarted(plan.sessionId(), mark.playbackId(), mark.observedAt(),
                     received.serverRecvAt(), current == null ? null : current.clockOffsetMs(),
                     current == null ? null : current.rttMs());
+            case PROGRESS -> {
+                // U3-J10: 재생 진행(1초마다)은 끼어들기 · 멈춤 시점의 재생 위치 근거로만 둔다
+                progressPlaybackId = mark.playbackId();
+                progressPlayedToMs = mark.playedRange() == null ? null : mark.playedRange().toMs();
+            }
             case COMPLETED, STOPPED, FAILED -> {
                 if (mark.status() == PlaybackMark.Status.STOPPED) {
                     logStopped(mark, received.serverRecvAt(), current);
+                    if (mark.stopCause() == PlaybackMark.StopCause.LOCAL_VOICE_ACTIVITY) {
+                        onBargeIn(mark, received.serverRecvAt());
+                    }
                 }
                 if (playback.clearIfMatches(mark.playbackId())) {
                     timers.cancel(Kind.PLAYBACK_EXPIRY);
@@ -729,8 +797,99 @@ public final class SessionExecutor {
                 }
             }
             default -> {
-                // PROGRESS · UNRECOGNIZED는 판단에 쓰지 않는다(J123)
+                // UNRECOGNIZED는 판단에 쓰지 않는다(J123)
             }
+        }
+    }
+
+    /**
+     * 끼어들기(U3-R6 · U3-J10 · AC6.2.4): 기기가 아이 음성으로 재생을 멈췄다. 남은 음성 프레임을 보내지 않고(세대 올림) 열린 출력 구간은 버리며
+     * 재생 위치와 함께 BARGE_IN을 남긴다. 공급자 응답 취소 · LISTENING 복귀는 L3가 잇는다.
+     */
+    private void onBargeIn(PlaybackMark mark, Instant at) {
+        bumpGeneration();
+        timers.cancel(Kind.SEGMENT_QUIET);
+        segment.reset();
+        transcripts.aiFinal("", false, at);
+        Long playedTo = mark.playedRange() != null ? mark.playedRange().toMs()
+                : mark.playbackId().equals(progressPlaybackId) ? progressPlayedToMs : null;
+        putEvent(EVENT_BARGE_IN, "{\"playbackId\":\"" + mark.playbackId() + "\""
+                + (playedTo == null ? "" : ",\"playedToMs\":" + playedTo) + "}", at);
+    }
+
+    /** U3-J9: 묶인 기기의 마이크 끊김 · 복구와 플레이어 오류를 세션 이벤트로 남긴다(바뀔 때 한 번). */
+    private void onDeviceState(DeviceStateReceived received) {
+        if (status.isTerminal() || !fromBoundConnection(received.connectionId())) {
+            return;
+        }
+        DeviceState state = received.state();
+        if (state.mic() != null && state.mic() != DeviceState.Mic.UNRECOGNIZED && state.mic() != lastMic) {
+            if (state.mic() == DeviceState.Mic.LOST) {
+                putEvent(EVENT_MIC_LOST, null, received.receivedAt());
+            } else if (lastMic == DeviceState.Mic.LOST) {
+                putEvent(EVENT_MIC_OK, null, received.receivedAt());
+            }
+            lastMic = state.mic();
+        }
+        if (state.player() != null && state.player() != DeviceState.Player.UNRECOGNIZED && state.player() != lastPlayer) {
+            if (state.player() == DeviceState.Player.ERROR) {
+                putEvent(EVENT_PLAYER_ERROR, null, received.receivedAt());
+            }
+            lastPlayer = state.player();
+        }
+    }
+
+    /**
+     * U3-J4 · J5 · J7: 같은 기기의 새 연결이 HELLO_OK를 받았다(HELLO_OK는 이미 나갔다). 세션을 새 연결에 묶고 끊김 구간을 닫은 뒤, 이어가기면
+     * SESSION_STATE(지금 표시 상태)와 ACK를 못 받은 명령을, 이어가기가 아니면 START_SESSION(같은 opId · 같은 승인 음성)부터 다시 보낸다. 낡은
+     * STOP_OUTPUT은 다시 보내지 않는다(새 연결의 음성 레인은 비어 있다).
+     */
+    private void onLinkReplaced(LinkReplaced replaced) {
+        if (status.isTerminal()) {
+            return;
+        }
+        DeviceLink next = replaced.link();
+        DeviceLink previous = link;
+        if (previous != null && previous.connectionId().equals(next.connectionId())) {
+            return;
+        }
+        if (previous != null) {
+            previous.bindSession(null);
+        }
+        link = next;
+        next.bindSession(plan.sessionId());
+        // SD-17: 연결 교체는 세대를 올린다(옛 묶음의 남은 프레임이 새 연결로 가지 않게)
+        bumpGeneration();
+        playback.clear();
+        timers.cancel(Kind.PLAYBACK_EXPIRY);
+        Instant now = services.clock().now();
+        if (openGapId != null) {
+            services.gaps().close(openGapId, now);
+            openGapId = null;
+        }
+        putEvent(EVENT_LINK_REPLACED, "{\"resumed\":" + replaced.resumed() + "}", now);
+        if (START_PHASE.contains(status)) {
+            // 시작 단계: 기기가 이어가기를 안 했거나 START_SESSION의 ACK가 아직 없으면 같은 opId로 다시 보낸다(기기는 같은 opId를 다시 실행하지
+            // 않고 ACK만 한다, U3-J8)
+            if (startSent && (!replaced.resumed() || pendingCommands.containsKey(startOpId))) {
+                next.sendControl(new StartSession(plan.approvedAudio()), startOpId, plan.sessionId());
+            }
+            return;
+        }
+        if (!replaced.resumed()) {
+            // U3-J5: 기기가 세션을 모른다(새로 켠 페이지) — 같은 승인 음성으로 START_SESSION부터. 늦은 DEVICE_READY는 무시된다
+            next.sendControl(new StartSession(plan.approvedAudio()), startOpId, plan.sessionId());
+        }
+        sendControl(new SessionState(view));
+        for (Map.Entry<UUID, WsPayload> pending : List.copyOf(pendingCommands.entrySet())) {
+            WsPayload payload = pending.getValue();
+            if (payload instanceof StopOutput || payload instanceof StartSession) {
+                continue;
+            }
+            next.sendControl(payload, pending.getKey(), plan.sessionId());
+        }
+        if (status == SessionStatus.ACTIVE) {
+            armDisconnect();
         }
     }
 
@@ -840,6 +999,10 @@ public final class SessionExecutor {
         bumpGeneration();
         playback.clear();
         timers.cancel(Kind.PLAYBACK_EXPIRY);
+        // U3-J18: 진행 중 세션의 끊김 구간을 연다(새 연결이 다시 묶이면 닫고, ABORTED로 끝나면 열린 채 남는다)
+        if ((status == SessionStatus.ACTIVE || status == SessionStatus.CLOSING) && openGapId == null) {
+            openGapId = services.gaps().open(plan.sessionId(), SessionGapRepository.Kind.DISCONNECT, services.clock().now());
+        }
     }
 
     // ------------------------------------------------------------------ 시계
@@ -1130,7 +1293,11 @@ public final class SessionExecutor {
         return current != null && current.connectionId().equals(connectionId);
     }
 
-    private boolean sendControl(kr.mujoong.contract.ws.WsPayload payload) {
+    private boolean sendControl(WsPayload payload) {
+        if (payload instanceof SessionState state) {
+            // U3-J23: 연결이 없어도 표시 상태는 기억한다(다음 HELLO_OK.session.view)
+            view = state.view();
+        }
         DeviceLink current = link;
         if (current == null || !current.isOpen()) {
             return false;
@@ -1138,7 +1305,26 @@ public final class SessionExecutor {
         if (payload instanceof StopOutput) {
             bumpGeneration();
         }
-        return current.sendControl(payload, null, plan.sessionId());
+        UUID opId = null;
+        if (payload.messageType().isOpIdRequired()) {
+            opId = UUID.randomUUID();
+            remember(opId, payload);
+        }
+        return current.sendControl(payload, opId, plan.sessionId());
+    }
+
+    /** ACK를 기다리는 명령으로 둔다(U3-J7, 상한을 넘으면 가장 오래된 것부터 잊는다). */
+    private void remember(UUID opId, WsPayload payload) {
+        if (pendingCommands.size() >= MAX_PENDING_COMMANDS) {
+            UUID eldest = pendingCommands.keySet().iterator().next();
+            pendingCommands.remove(eldest);
+        }
+        pendingCommands.put(opId, payload);
+    }
+
+    /** U3 세션 이벤트 한 줄(payload는 식별자 · 숫자 · 불리언뿐, 전사 · 원음 없음). */
+    private void putEvent(String type, String payloadJson, Instant at) {
+        services.recorder().putEvent(new SessionEvent(UUID.randomUUID(), plan.sessionId(), type, null, payloadJson, at));
     }
 
     private ClosingSequence.Device closingDevice() {
@@ -1209,6 +1395,7 @@ public final class SessionExecutor {
             if (current != null) {
                 current.bindSession(null);
             }
+            pendingCommands.clear();
         } catch (RuntimeException e) {
             services.events().appError(EventLog.Component.SESSION_LIFECYCLE, e);
         } finally {

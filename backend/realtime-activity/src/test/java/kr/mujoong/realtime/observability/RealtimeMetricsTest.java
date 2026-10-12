@@ -36,7 +36,7 @@ class RealtimeMetricsTest {
         assertThat(metrics.registry().find("mujoong.ws.connections.open").meters()).as("설계와 다른 옛 이름은 없다(J295)")
                 .isEmpty();
         assertThat(labels(RealtimeMetrics.DEVICE_CONNECTION_STATE, "state"))
-                .containsExactlyInAnyOrder("offline", "connected", "disconnected", "unresponsive");
+                .containsExactlyInAnyOrder("offline", "connected", "unstable", "disconnected", "unresponsive");
         assertThat(labels(RealtimeMetrics.QUEUE_DEPTH, "queue"))
                 .containsExactlyInAnyOrder("session_mailbox", "output_audio", "output_control", "recorder");
         assertThat(labels("mujoong.outbox.pending", "direction")).containsExactly("realtime_to_core");
@@ -85,8 +85,8 @@ class RealtimeMetricsTest {
         assertThat(metrics.gauge(RealtimeMetrics.DEVICE_CONNECTION_STATE, "state", "offline")).isEqualTo(5.0);
         assertThat(metrics.gauge(RealtimeMetrics.DEVICE_CONNECTION_STATE, "state", "disconnected")).as("표에 없으면 0")
                 .isZero();
-        assertThat(metrics.registry().find(RealtimeMetrics.DEVICE_CONNECTION_STATE).tag("state", "unstable").gauge())
-                .as("UNSTABLE은 U3가 값을 더할 때까지 라벨이 없다").isNull();
+        // U3(BR4.8 ①)가 UNSTABLE 라벨을 더했다: 원천 값을 그대로 따른다(U1에서는 라벨이 없었다)
+        assertThat(metrics.gauge(RealtimeMetrics.DEVICE_CONNECTION_STATE, "state", "unstable")).isEqualTo(7.0);
     }
 
     @Test
@@ -162,8 +162,14 @@ class RealtimeMetricsTest {
         Set<String> tagKeys = registry.getMeters().stream().filter(meter -> meter.getId().getName().startsWith("mujoong."))
                 .flatMap(meter -> meter.getId().getTags().stream().map(tag -> tag.getKey()))
                 .collect(Collectors.toSet());
+        // U3: mujoong_device_state_total의 field · value도 닫힌 열거값이다(U3-J9)
         assertThat(tagKeys).as("라벨은 열거값 키만(id · 전사 · 토큰 · ownerHash 없음, NFR9.8)")
-                .isSubsetOf("group", "state", "direction", "queue", "type", "speaker");
+                .isSubsetOf("group", "state", "direction", "queue", "type", "speaker", "field", "value");
+        assertThat(registry.getMeters().stream().filter(meter -> meter.getId().getName().equals(RealtimeMetrics.DEVICE_STATE))
+                .map(meter -> meter.getId().getTag("field") + "=" + meter.getId().getTag("value"))
+                .collect(Collectors.toSet()))
+                .containsExactlyInAnyOrder("mic=ok", "mic=lost", "player=ok", "player=error", "visibility=visible",
+                        "visibility=hidden", "wake_lock=held", "wake_lock=released");
     }
 
     private Set<String> labels(String name, String key) {

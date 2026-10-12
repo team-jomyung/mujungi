@@ -116,13 +116,24 @@ public final class DeviceSimulatorClient implements AutoCloseable {
 
     /** HELLO를 보내고 HELLO_OK를 기다린다. */
     public HelloOk hello(Duration timeout) {
-        send(new Hello("u1-sim-1.0", List.of(HelloOk.AUDIO_PCM16LE_24K_MONO), null), null, null);
+        return hello(timeout, null);
+    }
+
+    /** HELLO(이어가기 요청 포함, U3)를 보내고 HELLO_OK를 기다린다. */
+    public HelloOk hello(Duration timeout, UUID resumeSessionId) {
+        sendHello(resumeSessionId);
         return (HelloOk) await(WsMessageType.HELLO_OK, timeout).payload();
     }
 
     /** HELLO만 보낸다. */
     public void sendHello() {
-        send(new Hello("u1-sim-1.0", List.of(HelloOk.AUDIO_PCM16LE_24K_MONO), null), null, null);
+        sendHello(null);
+    }
+
+    /** HELLO만 보낸다(이어가기 요청은 null이면 없음). */
+    public void sendHello(UUID resumeSessionId) {
+        send(new Hello("u1-sim-1.0", List.of(HelloOk.AUDIO_PCM16LE_24K_MONO),
+                resumeSessionId == null ? null : new Hello.Resume(resumeSessionId)), null, null);
     }
 
     /** HEARTBEAT(봉투 sentAt = 지금 + 시계 오프셋). 보낸 hbSeq. */
@@ -154,7 +165,13 @@ public final class DeviceSimulatorClient implements AutoCloseable {
     /** PLAYBACK_MARK(observedAt = 지금 + 시계 오프셋). */
     public void playbackMark(UUID sessionId, UUID playbackId, PlaybackMark.Status status) {
         PlaybackMark.StopCause cause = status == PlaybackMark.Status.STOPPED ? PlaybackMark.StopCause.STOP_OUTPUT : null;
-        send(new PlaybackMark(playbackId, status, null, deviceNow(), cause, null), null, sessionId);
+        playbackMark(sessionId, playbackId, status, null, cause);
+    }
+
+    /** PLAYBACK_MARK(재생 범위 · 멈춤 원인 지정, U3 끼어들기 · 진행 표식). */
+    public void playbackMark(UUID sessionId, UUID playbackId, PlaybackMark.Status status, PlaybackMark.PlayedRange range,
+            PlaybackMark.StopCause cause) {
+        send(new PlaybackMark(playbackId, status, range, deviceNow(), cause, null), null, sessionId);
     }
 
     /** VOICE_SESSION_CLOSED. */
@@ -163,10 +180,15 @@ public final class DeviceSimulatorClient implements AutoCloseable {
         send(new VoiceSessionClosed(now, now), null, sessionId);
     }
 
-    /** DEVICE_STATE(받되 판단에 쓰지 않는 메시지). */
+    /** DEVICE_STATE(모두 정상). */
     public void deviceState() {
-        send(new DeviceState(DeviceState.Mic.OK, DeviceState.Player.OK, DeviceState.Visibility.VISIBLE,
-                DeviceState.WakeLock.HELD), null, null);
+        deviceState(new DeviceState(DeviceState.Mic.OK, DeviceState.Player.OK, DeviceState.Visibility.VISIBLE,
+                DeviceState.WakeLock.HELD));
+    }
+
+    /** DEVICE_STATE(바뀐 필드만 실어도 된다, U3). */
+    public void deviceState(DeviceState state) {
+        send(state, null, null);
     }
 
     /** 0x01 입력 프레임 하나(960B PCM). */

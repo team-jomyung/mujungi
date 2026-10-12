@@ -16,6 +16,9 @@ import org.springframework.stereotype.Component;
  * <p>maintenance 스레드가 {@code mujoong.device.disconnect-check-interval}(5초)마다 부른다. CONNECTED · UNSTABLE 행 중
  * {@code last_seen_at <= 지금 − mujoong.timing.device.disconnect}(40초)인 것을 {@code device_id AND connection_id} 조건부로
  * DISCONNECTED로 바꾼다(소켓이 열린 채 무음이어도 같다). 바뀐 행만 DeviceStatusChanged를 쓴다. 원장 상태 변화는 세션 전이를 일으키지 않는다(BR4.7).
+ *
+ * <p>U3(U3-J2): 바꾼 행마다 기록 장치가 같은 트랜잭션에 끊김 사건(SILENT, 닫기 코드 없음)을 적고, 매 점검 끝에 창보다 오래된 끊김 사건을
+ * 지운다.
  */
 @Component
 @SingleInstanceAssumption(si = "SI-7",
@@ -48,6 +51,7 @@ public class DisconnectChecker {
         int changed = 0;
         for (DeviceConnectionRow row : connections.findSilent(clock.now(), disconnectAfter)) {
             try {
+                // U3-J2: 무음 끊김 사건은 기록 장치가 DISCONNECTED와 같은 트랜잭션에 적는다
                 if (row.connectionId() != null
                         && writer.markDisconnected(row.deviceId(), row.connectionId(), disconnectAfter).isPresent()) {
                     changed++;
@@ -56,6 +60,7 @@ public class DisconnectChecker {
                 events.appError(EventLog.Component.DEVICE_GATEWAY, e);
             }
         }
+        writer.purgeOldDisconnects();
         return changed;
     }
 }

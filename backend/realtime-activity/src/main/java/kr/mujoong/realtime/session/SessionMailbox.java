@@ -10,8 +10,10 @@ import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 import kr.mujoong.contract.status.EndRequestReason;
 import kr.mujoong.contract.ws.message.DeviceReady;
+import kr.mujoong.contract.ws.message.DeviceState;
 import kr.mujoong.contract.ws.message.PlaybackMark;
 import kr.mujoong.contract.ws.message.VoiceSessionClosed;
+import kr.mujoong.realtime.gateway.DeviceLink;
 import kr.mujoong.realtime.voice.ProviderPort;
 
 /**
@@ -48,6 +50,22 @@ public final class SessionMailbox {
 
     /** 세션에 묶인 기기 연결이 닫혔거나 대체됐다(SD-17 세대 올림). */
     public record ConnectionLost(UUID connectionId) implements Message {
+    }
+
+    /**
+     * U3-J4 · U3-J5: 같은 기기의 새 연결이 HELLO_OK를 받았다 — 실행기가 이 연결에 세션을 다시 묶고 끊김 구간을 닫은 뒤 상태 · 미확인 명령을 다시
+     * 보낸다. {@code resumed}는 기기가 HELLO resume으로 이 세션을 이어가겠다고 했는가(아니면 START_SESSION부터 다시).
+     */
+    public record LinkReplaced(DeviceLink link, boolean resumed, Instant at) implements Message {
+
+        public LinkReplaced {
+            Objects.requireNonNull(link, "link");
+            Objects.requireNonNull(at, "at");
+        }
+    }
+
+    /** U3-J9: 묶인 기기의 DEVICE_STATE(마이크 · 소리 · 보임 · 켜짐 유지, 바뀐 필드만). */
+    public record DeviceStateReceived(UUID connectionId, DeviceState state, Instant receivedAt) implements Message {
     }
 
     /**
