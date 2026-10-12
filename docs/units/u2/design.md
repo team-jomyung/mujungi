@@ -24,10 +24,10 @@
 | 컴포넌트 | 패키지 | 주요 클래스 |
 |---|---|---|
 | GuardianIdentity | `kr.mujoong.core.identity` (+ `.google` · `.web`) | `SocialAccountRepository` · `GoogleTokenClient` · `GoogleIdTokenReader` · `GoogleLoginService` · `GuardianSessions` · `web.AuthController` · `web.MeController` |
-| ConsentPolicy | `kr.mujoong.core.consent` (+ `.web`) | `ConsentStatusRule`(순수 규칙) · `ConsentPolicyService` · `PolicyTermsReader` · `web.ConsentController` · `web.PolicyController` |
-| ChildProfile | `kr.mujoong.core.child` (+ `.web`) | `ChildInput`(검증) · `ChildProfileService` · `StopExpressionRules` · `StopExpressionRepository` · `ChildContextPort` · `web.ChildController` |
-| ApprovedContentCatalog | `kr.mujoong.core.catalog` | `ContentCatalogService`(최신 승인 버전 · 고정(pin) · 새 버전 · 승인) · `ContentCatalogRepository` |
-| AccountDeletion | `kr.mujoong.core.account` | `DeletionRequestRepository` · `AccountDeletionService`(접수) · `DeletionCommander`(지휘 한 바퀴) · `AccountDeletionScheduler`(주기 실행) · `DeletionCompletedHandler`(Inbox) · `GuardianDataDeletionParticipant`(U2 데이터) |
+| ConsentPolicy | `kr.mujoong.core.consent` (+ `.web`) | `ConsentStatusRule`(순수 규칙) · `ConsentPolicyService` · `PolicyTermsReader` · `PolicyTermsDevSeed`(dev 시드) · `ConsentDeletionParticipant` · `web.ConsentController`(`/policies/current` · `/consents`) |
+| ChildProfile | `kr.mujoong.core.child` (+ `.web`) | `ChildInput`(검증) · `ChildProfileService`(ChildContext 포트 `childContext(guardianId)` 포함) · `StopExpressionRules` · `StopExpressionRepository` · `ChildProfileDeletionParticipant`(종료 표현 → 아이) · `web.ChildController` |
+| ApprovedContentCatalog | `kr.mujoong.core.catalog` | `ContentCatalogService`(최신 승인 버전 · 고정(pin) · 새 버전 · 승인, U1 `ApprovedContentRepository` 위) |
+| AccountDeletion | `kr.mujoong.core.account` | `DeletionRequestRepository` · `AccountDeletionService`(접수) · `DeletionCommander`(지휘 한 바퀴) · `AccountDeletionScheduler`(주기 실행) · `DeletionCompletedHandler`(Inbox) |
 | (U1 데이터 참가자) | `kr.mujoong.core.activity` | `ActivityDeletionParticipant`(core_activity, U1 데이터 — U4가 뒤에 넘겨받는다) |
 
 U1 업무 문맥 시험(`CoreBusinessContext`)은 `device · activity · messaging …`만 스캔하므로, U1 패키지(`activity`)에 둔 새 빈은 JPA 저장소 · 같은 패키지 빈만 쓴다(U2 빈에 기대지 않는다). U1 `ConsentGate`는 같은 규칙(`ConsentStatusRule`, 정적)과 JPA 저장소로 보호자 기준 판정을 한다.
@@ -39,7 +39,7 @@ U1 업무 문맥 시험(`CoreBusinessContext`)은 `device · activity · messagi
 | 표 | 변경 | 근거 |
 |---|---|---|
 | `core_consent` | `child_id` NOT NULL 해제(동의가 아이 등록보다 먼저), `terms_version_id uuid`(동의 당시 약관 본문 버전, FK RESTRICT) 추가, 보호자 · 항목 색인 | components Consent(아이 nullable · 약관 버전 참조) · U1 J115 '완화는 U2가 V2로' |
-| `core_child` | 이름 1 ~ 10자 · 나이 6 ~ 12 · 관심사 배열 CHECK | AC1.3.8 |
+| `core_child` | 바꾸지 않는다. 이름 · 나이 · 관심사 규칙(AC1.3.8)은 `ChildInput`에서 검증한다(DB CHECK를 걸면 U1 시험 데이터(SessionPackageIT 등)가 깨져 넣지 않음) | AC1.3.8 |
 | `core_stop_expression` | (child_id, normalized_text) 유일, 2 ~ 20자 · 순번 1 ~ 5 CHECK, child 색인 | AC2.3.6 · FR2.4 |
 | `core_social_account` (신설) | id · guardian_id(FK RESTRICT) · provider(GOOGLE) · provider_user_id(구글 sub) · created_at · updated_at, (provider, provider_user_id) 유일 | GuardianSocialAccount · AC1.6.7 '같은 구글 계정 식별'. 이메일은 저장하지 않는다(U2-J3) |
 | `core_data_deletion_request` (신설) | id · guardian_id(논리 참조, FK 없음 — 보호자 행이 지워진 뒤에도 DONE 기록이 남는다) · child_id · status(REQUESTED · DONE) · requested_at · session_end_requested_at · core_cleared_at · realtime_requested_at · realtime_completed_at · completed_at · attempt_count · next_attempt_at · last_error · created_at · updated_at, 보호자당 REQUESTED 하나(부분 유일) | DataDeletionRequest · AC1.6.1 · 1.6.7 · 1.6.8 |
@@ -65,7 +65,7 @@ U1 업무 문맥 시험(`CoreBusinessContext`)은 `device · activity · messagi
 
 `GET /api/home` · `GET /api/device`(U1)는 모양을 바꾸지 않는다. 05의 등록 줄 · 네트워크 줄 · 판정 카드는 U1 DeviceView를 그대로 쓰고(DeviceRegistry 확장 = 합산 응답을 05 화면에 연결 + 상태별 계약 시험), 종료 표현 구역은 `GET /api/child/stop-expressions`로 채운다.
 
-앱 안 포트(계약 8절 C12): `ConsentPolicyService.check(guardianId)` → {ok, status, snapshot}(ConsentGate), `ChildContextPort.get(guardianId)`(ChildContext), `ContentCatalogService.pin(codes)`(ApprovedContentPin), `DeletionParticipant`(U1 인터페이스 그대로, 참가자 등록 = Spring 빈 목록).
+앱 안 포트(계약 8절 C12): `ConsentPolicyService.check(guardianId)` → {ok, status, snapshot}(ConsentGate), `ChildProfileService.childContext(guardianId)`(ChildContext), `ContentCatalogService.pin(codes)`(ApprovedContentPin), `DeletionParticipant`(U1 인터페이스 그대로, 참가자 등록 = Spring 빈 목록).
 
 ## 5. 업무 규칙
 
@@ -81,7 +81,7 @@ U1 업무 문맥 시험(`CoreBusinessContext`)은 `device · activity · messagi
 | R8 | 아이: 계정당 1명(두 번째 POST는 409). 이름은 앞뒤 공백을 뺀 1 ~ 10자, 나이 6 ~ 12 정수, 관심사 0 ~ 5개 · 각 1 ~ 10자 · 중복 없음. 수정은 같은 행을 바꾼다(id 유지) | AC1.3.5 · 1.3.8 · 1.3.9 |
 | R9 | 종료 표현: 통째 교체, 최대 5개, 앞뒤 공백을 뺀 2 ~ 20자, 정규화(공백 제거 · 소문자) 기준 중복 금지, 기본 표현 '무중아 그만할래'와 같은 것 금지. 기본 표현은 저장하지 않는 코드 상수 | AC2.3.1 · 2.3.5 · 2.3.6 |
 | R10 | 삭제 접수: 한 트랜잭션에서 보호자 DELETION_REQUESTED + 요청 REQUESTED 1행(이미 있으면 같은 id), 커밋 뒤 그 보호자의 모든 로그인 세션 삭제. 접수 뒤에는 /api/me 외 모든 보호자 API가 403 ACCOUNT_DELETION_IN_PROGRESS | AC1.6.1 · 1.6.7 |
-| R11 | 지휘 한 바퀴(주기 실행, 요청 행 FOR UPDATE SKIP LOCKED): ① 진행 세션 사본이 있으면 CONSENT_WITHDRAWN 끝내기를 한 번 보내고 사본이 종료 상태가 되거나 `deletion-session-wait`(30초)가 지날 때까지 기다림 ② Core 참가자 순서 활동 → 기기 → U2(종료 표현 → 동의 → 아이) → 메시징 ③ 같은 트랜잭션에 DeletionRequested Outbox ④ DeletionCompleted 수신 뒤 메시징 참가자 한 번 더 → 소셜 계정 · 로그인 세션 · 보호자 행 삭제 → 요청 DONE. 실패는 attempt_count · last_error(예외 종류 이름만) 기록 뒤 다음 바퀴 | AC1.6.3 · 1.6.6 · 1.6.7 |
+| R11 | 지휘 한 바퀴(주기 실행, 요청 행 FOR UPDATE SKIP LOCKED): ① 진행 세션 사본이 있으면 CONSENT_WITHDRAWN 끝내기를 한 번 보내고 사본이 종료 상태가 되거나 `deletion-session-wait`(30초)가 지날 때까지 기다림 ② Core 참가자 순서 활동 → 기기 → 동의 → 아이(종료 표현 → 아이) → 메시징(`DeletionParticipant`의 `@Order` 상수) ③ 같은 트랜잭션에 DeletionRequested Outbox ④ DeletionCompleted 수신 뒤 메시징 참가자 한 번 더 → 소셜 계정 · 로그인 세션 · 보호자 행 삭제 → 요청 DONE. 실패는 attempt_count · last_error(예외 종류 이름만) 기록 뒤 다음 바퀴 | AC1.6.3 · 1.6.6 · 1.6.7 |
 | R12 | 삭제 처리 중 같은 구글 계정 로그인은 데이터 · 세션 없이 "계정을 삭제하고 있어요. 끝나면 새로 시작할 수 있어요."만. 완료 뒤 로그인은 새 보호자(02부터) | AC1.6.4 · 1.6.5 |
 | R13 | 로그 · 오류 메시지 · Outbox에 이름 · 관심사 · 종료 표현 · 구글 sub · 코드 · 토큰을 남기지 않는다(엔터티 toString도 id만) | NFR9 · 공통 완료 조건 |
 
