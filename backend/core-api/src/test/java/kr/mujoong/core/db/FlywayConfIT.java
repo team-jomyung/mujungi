@@ -75,7 +75,7 @@ class FlywayConfIT {
 
             // 기준선 없이 두 번째 위치를 돌리면 "비어 있지 않은 flyway 스키마 + 이력 표 없음"으로 실패한다(report-g1-b 재현)
             MigrateResult coreResult = core.migrate();
-            assertThat(coreResult.migrationsExecuted).isEqualTo(1);
+            assertThat(coreResult.migrationsExecuted).isEqualTo(2);
             Flyway realtimeWithoutBaseline =
                     flywayFromConf(postgres, MigrationSet.REALTIME, Map.of("flyway.baselineOnMigrate", "false"));
             assertThatThrownBy(realtimeWithoutBaseline::migrate)
@@ -91,17 +91,17 @@ class FlywayConfIT {
             try (Connection owner = postgres.connect(Role.OWNER)) {
                 assertThat(query(owner,
                         "select version, type, success from flyway.core_schema_history order by installed_rank"))
-                        .containsExactly(List.of("1", "SQL", true));
+                        .containsExactly(List.of("1", "SQL", true), List.of("4", "SQL", true));
                 assertThat(query(owner,
                         "select version, type, success from flyway.realtime_schema_history order by installed_rank"))
                         .containsExactly(List.of("0", "BASELINE", true), List.of("1", "SQL", true));
                 assertThat(single(owner, "select count(*) from pg_tables where schemaname in ('core', 'realtime')"))
-                        .isEqualTo(19L);
+                        .isEqualTo(26L);
             }
             // afterMigrate.sql: 앱 역할은 자기 이력 표만 읽는다
             try (Connection coreApp = postgres.connect(Role.CORE_APP);
                     Connection realtimeApp = postgres.connect(Role.REALTIME_APP)) {
-                assertThat(single(coreApp, "select count(*) from flyway.core_schema_history")).isEqualTo(1L);
+                assertThat(single(coreApp, "select count(*) from flyway.core_schema_history")).isEqualTo(2L);
                 assertThat(single(realtimeApp, "select count(*) from flyway.realtime_schema_history")).isEqualTo(2L);
                 expectSqlStateAutoCommit("42501",
                         () -> query(coreApp, "select count(*) from flyway.realtime_schema_history"));

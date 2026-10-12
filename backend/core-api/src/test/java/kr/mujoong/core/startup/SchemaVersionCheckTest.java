@@ -19,7 +19,7 @@ import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
- * S2 이력 버전 확인 (RD-12 S2 · BR8.2 · J116): 앱이 들고 온 최고 버전(V1 → "1") 이상이면 통과, 미적용 · 낮은 버전(기준선 0만) · 읽기 실패는
+ * S2 이력 버전 확인 (RD-12 S2 · BR8.2 · J116): 앱이 들고 온 최고 버전(V4 → "4") 이상이면 통과, 미적용 · 낮은 버전(기준선 0만) · 읽기 실패는
  * 기동 거부이고 거부 줄에는 errorKind · 표 이름 · 버전 숫자만 있다. 버전 비교는 숫자 단위다.
  */
 @Tag("u1")
@@ -43,13 +43,13 @@ class SchemaVersionCheckTest {
 
     @Test
     void appliedVersionAtOrAboveTheBundledMigrationPasses() {
-        assertThat(SchemaVersionCheck.expectedVersion()).isEqualTo("1");
-        history(List.of("0", "1"));
+        assertThat(SchemaVersionCheck.expectedVersion()).isEqualTo("4");
+        history(List.of("1", "4"));
 
-        assertThat(check.verify()).isEqualTo("1");
+        assertThat(check.verify()).isEqualTo("4");
 
-        history(List.of("1", "2"));
-        assertThat(check.verify()).isEqualTo("2");
+        history(List.of("1", "4", "5"));
+        assertThat(check.verify()).isEqualTo("5");
         assertThat(stderr.toString(StandardCharsets.UTF_8)).isEmpty();
     }
 
@@ -67,7 +67,7 @@ class SchemaVersionCheckTest {
     void onlyTheBaselineRowIsRejectedAsBehind() {
         history(List.of("0"));
 
-        assertThatThrownBy(check::verify).isInstanceOf(IllegalStateException.class).hasMessageContaining("0 < 기대 1");
+        assertThatThrownBy(check::verify).isInstanceOf(IllegalStateException.class).hasMessageContaining("0 < 기대 4");
         assertThat(stderr.toString(StandardCharsets.UTF_8)).contains("SchemaVersionBehind");
     }
 
@@ -95,10 +95,18 @@ class SchemaVersionCheckTest {
         when(jdbc.queryForList(anyString(), eq(String.class))).thenAnswer(call -> {
             String sql = call.getArgument(0);
             assertThat(sql).contains(SchemaVersionCheck.HISTORY_TABLE).contains("success").contains("version is not null");
-            return List.of("1");
+            return List.of("1", "4");
         });
 
-        assertThat(check.verify()).isEqualTo("1");
+        assertThat(check.verify()).isEqualTo("4");
+    }
+
+    @Test
+    void formerU1VersionCannotStartTheU5aApplication() {
+        history(List.of("1"));
+        assertThatThrownBy(check::verify).isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("1 < 기대 4");
+        assertThat(stderr.toString(StandardCharsets.UTF_8)).contains("SchemaVersionBehind");
     }
 
     private void history(List<String> versions) {
