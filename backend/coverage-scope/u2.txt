@@ -1,0 +1,33 @@
+# U2 커버리지 측정 범위 (docs/units/u2/design.md 7절 · U1 J137과 같은 형식)
+# -PcoverageScope=u2일 때 JaCoCo가 이 목록의 운영 소스(.java)만 잰다. 한 줄에 저장소 루트 기준 경로 하나.
+# 내용은 U2가 새로 만든 backend/core-api/src/main/java 파일 전부다. U2가 고친 U1 파일(ConsentGate · ActivityCopyRepository ·
+# CoreProperties · SecurityConfig · Consent · Child · ConsentRepository · RealtimeSessionClient · DeletionParticipant · 참가자 @Order ·
+# ErrorCode)은 U1 목록(u1.txt)에 있어 U1 범위로 잰다. 모듈별 줄 수:
+#   core-api 27
+backend/core-api/src/main/java/kr/mujoong/core/account/AccountDeletionScheduler.java
+backend/core-api/src/main/java/kr/mujoong/core/account/AccountDeletionService.java
+backend/core-api/src/main/java/kr/mujoong/core/account/DeletionCommander.java
+backend/core-api/src/main/java/kr/mujoong/core/account/DeletionCompletedHandler.java
+backend/core-api/src/main/java/kr/mujoong/core/account/DeletionRequestRepository.java
+backend/core-api/src/main/java/kr/mujoong/core/activity/ActivityDeletionParticipant.java
+backend/core-api/src/main/java/kr/mujoong/core/catalog/ContentCatalogService.java
+backend/core-api/src/main/java/kr/mujoong/core/child/ChildInput.java
+backend/core-api/src/main/java/kr/mujoong/core/child/ChildProfileDeletionParticipant.java
+backend/core-api/src/main/java/kr/mujoong/core/child/ChildProfileService.java
+backend/core-api/src/main/java/kr/mujoong/core/child/StopExpressionRepository.java
+backend/core-api/src/main/java/kr/mujoong/core/child/StopExpressionRules.java
+backend/core-api/src/main/java/kr/mujoong/core/child/web/ChildController.java
+backend/core-api/src/main/java/kr/mujoong/core/consent/ConsentDeletionParticipant.java
+backend/core-api/src/main/java/kr/mujoong/core/consent/ConsentPolicyService.java
+backend/core-api/src/main/java/kr/mujoong/core/consent/ConsentStatusRule.java
+backend/core-api/src/main/java/kr/mujoong/core/consent/PolicyTermsDevSeed.java
+backend/core-api/src/main/java/kr/mujoong/core/consent/PolicyTermsReader.java
+backend/core-api/src/main/java/kr/mujoong/core/consent/web/ConsentController.java
+backend/core-api/src/main/java/kr/mujoong/core/identity/GuardianSessions.java
+backend/core-api/src/main/java/kr/mujoong/core/identity/SocialAccountRepository.java
+backend/core-api/src/main/java/kr/mujoong/core/identity/google/GoogleIdTokenReader.java
+backend/core-api/src/main/java/kr/mujoong/core/identity/google/GoogleLoginService.java
+backend/core-api/src/main/java/kr/mujoong/core/identity/google/GoogleTokenClient.java
+backend/core-api/src/main/java/kr/mujoong/core/identity/web/AuthController.java
+backend/core-api/src/main/java/kr/mujoong/core/identity/web/MeAssembler.java
+backend/core-api/src/main/java/kr/mujoong/core/identity/web/MeController.java

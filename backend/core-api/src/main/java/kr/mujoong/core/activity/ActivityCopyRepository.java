@@ -215,6 +215,18 @@ public class ActivityCopyRepository {
 
     // ------------------------------------------------------------------ 내부
 
+    /**
+     * 보호자의 사본을 상태와 상관없이 모두 지운다(계정 삭제 참가자 ActivityDeletionParticipant 전용, BR2.10 FK 순서 · U2-J13). 진행 중
+     * 사본도 지운다 — 지휘가 CONSENT_WITHDRAWN 끝내기 뒤 기기 확인 또는 시한을 기다린 다음에만 부른다(AC1.6.3). 사본 상태 변경이 아니라
+     * 행 삭제라 BR6.17 허용 목록 밖이다.
+     *
+     * @return 지운 행 수
+     */
+    public int deleteAllByGuardian(UUID guardianId) {
+        return jdbc.update("delete from core.core_activity where guardian_id = :guardianId",
+                uuid(new MapSqlParameterSource(), "guardianId", Objects.requireNonNull(guardianId, "guardianId")));
+    }
+
     private Optional<ActivityCopy> single(String sql, MapSqlParameterSource params) {
         List<ActivityCopy> rows = jdbc.query(sql, params, MAPPER);
         if (rows.size() > 1) {

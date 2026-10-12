@@ -237,6 +237,13 @@ public class RealtimeSessionClient {
     }
 
     /**
+     * 계정 삭제 접수의 진행 세션 끝내기(CONSENT_WITHDRAWN, 계약 5절 · AC1.6.3, U2 삭제 지휘가 부른다). 제한 · 재시도는 보호자 끝내기와 같다.
+     */
+    public EndResult endForConsentWithdrawal(UUID sessionId, UUID requestId) {
+        return callEnd(sessionId, requestId, EndRequestReason.CONSENT_WITHDRAWN);
+    }
+
+    /**
      * Core 포기 취소(CORE_ABANDONED, requestId = sessionId, BR6.7 · 편차 (f)). 실패해도 예외를 던지지 않는다(BR6.14 재취소가 보완).
      *
      * @return Realtime이 202로 답했으면 true

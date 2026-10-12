@@ -29,6 +29,9 @@ public interface ConsentRepository extends JpaRepository<Consent, UUID> {
     List<Consent> findEffective(
             @Param("childId") UUID childId, @Param("policyVersion") String policyVersion, @Param("at") Instant at);
 
+    /** 보호자가 준 동의 행 전부(U2 보호자 기준 판정, ConsentStatusRule이 효력 · 버전을 가린다). */
+    List<Consent> findByActorGuardianId(UUID actorGuardianId);
+
     /**
      * BR6.1 ①: 현재 정책 버전의 4항목이 모두 GIVEN인가. 항목마다 효력 있는 행 중 consent_version이 가장 큰 행(같으면 효력 시작이 늦은
      * 행)이 그 항목의 현재 상태다.
