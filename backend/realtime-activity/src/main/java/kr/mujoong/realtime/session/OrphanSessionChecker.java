@@ -25,18 +25,33 @@ public class OrphanSessionChecker {
     private final SessionTransitions transitions;
     private final EventLogger events;
     private final MujoongClock clock;
+    private final RecordCaptureService captures;
 
     public OrphanSessionChecker(ActivitySessionRepository sessions, SessionRegistry registry,
-            SessionTransitions transitions, EventLogger events, MujoongClock clock) {
+            SessionTransitions transitions, EventLogger events, MujoongClock clock, RecordCaptureService captures) {
         this.sessions = Objects.requireNonNull(sessions, "sessions");
         this.registry = Objects.requireNonNull(registry, "registry");
         this.transitions = Objects.requireNonNull(transitions, "transitions");
         this.events = Objects.requireNonNull(events, "events");
         this.clock = Objects.requireNonNull(clock, "clock");
+        this.captures = Objects.requireNonNull(captures, "captures");
     }
 
-    /** 한 번 점검한다. 닫은 세션 수. */
+    /**
+     * 한 번 점검한다. 닫은 세션 수. U4b(BR1.8 · BR8.1): 고아로 닫은 세션 · 기동 정리가 닫은 세션 · 정산 쓰기가 실패한 세션처럼 스냅숏이 없는 종료
+     * 세션을 이어서 정산한다(정산 재무장).
+     */
     public int runOnce() {
+        int closed = closeOrphans();
+        try {
+            captures.captureMissing();
+        } catch (RuntimeException e) {
+            events.appError(EventLog.Component.SESSION_LIFECYCLE, e);
+        }
+        return closed;
+    }
+
+    private int closeOrphans() {
         int closed = 0;
         for (ActivitySessionRow row : sessions.findInProgress()) {
             if (registry.isAlive(row.id())) {

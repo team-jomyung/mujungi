@@ -61,6 +61,8 @@ public final class SessionHarness {
     public final FakeAudioRecordings recordings = new FakeAudioRecordings();
     /** 원음 기록 동의(create 전에 바꾼다). */
     public boolean rawAudioConsent;
+    /** U4b: 정산 입구(create 전에 바꾼다). 기본은 정산 없음 — 종료 상태로 가면 정산 창 없이 곧바로 정리한다. */
+    public kr.mujoong.realtime.session.SessionSettlement settlement = kr.mujoong.realtime.session.SessionSettlement.NONE;
     /** U4b: 활동 종류(create 전에 바꾼다). */
     public kr.mujoong.contract.status.ActivityType activityType = kr.mujoong.contract.status.ActivityType.FREE_TALK;
     /** U4b: 마무리 · 대기 문구 밖의 승인 문구(코드 → 원문, create 전에 넣는다). 없으면 그 재생은 건너뛴다(BR3.3). */
@@ -100,7 +102,7 @@ public final class SessionHarness {
                 (device, connection) -> unresponsive.add(new UUID[] {device, connection}),
                 new ProviderConnector(provider, new ProviderRequestFactory(), Duration.ofSeconds(10), launcher, "test"),
                 new ProviderRequestFactory(), new OutputGate(SeedDictionary.loadDefault()), recorder, latency,
-                new TimerClocks(safety, quiet), launcher, events, metrics, clock, settings, gaps, recordings);
+                new TimerClocks(safety, quiet), launcher, events, metrics, clock, settings, gaps, recordings, settlement);
         List<StartSession.ApprovedAudio> audio = new ArrayList<>(List.of(
                 new StartSession.ApprovedAudio("CLOSING", closingVersion, "/media/approved/closing.wav"),
                 new StartSession.ApprovedAudio("WAITING_FILLER", fillerVersion, "/media/approved/filler.wav")));

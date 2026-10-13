@@ -284,6 +284,24 @@ public class AsyncRecorder {
         return left;
     }
 
+    /**
+     * U4b 정산(BR8.1 ④): 그 세션의 남은 칸을 지금 스레드에서 쓴다. 진행 중 플러시가 있으면 끝나기를 {@code wait}까지 기다린다. 돌아온 뒤 DB의
+     * 전사 행은 실행기가 넣은 칸까지 반영돼 있다(실패한 칸은 남는다).
+     *
+     * @return 남은(쓰지 못한) 칸 수
+     */
+    public int flushSession(UUID sessionId, Duration wait) {
+        Objects.requireNonNull(sessionId, "sessionId");
+        Unit unit = units.get(sessionId);
+        if (unit == null) {
+            return 0;
+        }
+        runFlushInline(unit, Math.max(0L, Objects.requireNonNull(wait, "wait").toNanos()));
+        synchronized (unit) {
+            return unit.held() + unit.events.size();
+        }
+    }
+
     /** 진행 중 플러시가 끝나기를 기다렸다가 지금 스레드에서 쓴다. 남은 기다림 시간(나노초)을 돌려준다. */
     private long runFlushInline(Unit unit, long remainingNanos) {
         long remaining = remainingNanos;

@@ -198,9 +198,21 @@ public final class SessionExecutor {
             MujoongClock clock,
             Settings settings,
             SessionGapPort gaps,
-            AudioRecordings recordings) {
+            AudioRecordings recordings,
+            SessionSettlement settlement) {
+
+        /** U1 · U3 모양(정산 없음 — 종료 상태로 가면 정산 창 없이 곧바로 정리한다). */
+        public Services(SessionTransitions transitions, Function<UUID, Optional<? extends DeviceLink>> deviceLinks,
+                DeviceStatusPort deviceStatus, ProviderConnector connector, ProviderRequestFactory requests,
+                OutputGate gate, AsyncRecorder recorder, LatencyRecorder latency, TimerClocks clocks,
+                TaskLauncher launcher, EventLogger events, RealtimeMetrics metrics, MujoongClock clock, Settings settings,
+                SessionGapPort gaps, AudioRecordings recordings) {
+            this(transitions, deviceLinks, deviceStatus, connector, requests, gate, recorder, latency, clocks, launcher,
+                    events, metrics, clock, settings, gaps, recordings, SessionSettlement.NONE);
+        }
 
         public Services {
+            Objects.requireNonNull(settlement, "settlement");
             Objects.requireNonNull(transitions, "transitions");
             Objects.requireNonNull(deviceLinks, "deviceLinks");
             Objects.requireNonNull(deviceStatus, "deviceStatus");
@@ -413,6 +425,14 @@ public final class SessionExecutor {
     private JoinTracker join;
     /** U4b 지금 재생 중인 참여 안내의 playbackId(끝 표식이 창을 연다, 없으면 null). */
     private UUID joinPromptPlaybackId;
+    /** U4b BR8.1: 종료 뒤 정산 창 중인가(전이 0회, 늦은 아이 전사만 받는다). */
+    private boolean settling;
+    /** U4b BR8.6: 정산 기준 ended_at. */
+    private Instant sessionEndedAt;
+    /** U4b: 실행기가 닫은 공급자의 닫힘 알림을 이미 처리했다(정산 창을 더 기다리지 않는다). */
+    private boolean providerClosedSignal;
+    /** U4b BR8.6: 정산 창에서 버린 늦은 아이 전사 수. */
+    private int droppedLate;
     /** U4b BR3.3: 빠진 승인 문구를 이미 남긴 코드(세션당 코드별 1회). */
     private final Set<String> missingReported = new HashSet<>();
 
@@ -658,7 +678,7 @@ public final class SessionExecutor {
             Optional<ActivitySessionRow> failed = transition(SessionStatus.PREPARING, Trigger.START_SEND_FAILED, null);
             if (failed.isPresent()) {
                 markUnresponsive();
-                teardown();
+                afterTerminal();
             } else {
                 syncFromDb();
             }
@@ -997,9 +1017,97 @@ public final class SessionExecutor {
         return bound == null || bound.equals(plan.sessionId());
     }
 
-    /** 종료 상태로 간 뒤의 뒷일(L3: 정리. 정산은 L5가 이 자리에 붙는다). */
+    /**
+     * 종료 상태로 간 뒤의 뒷일(U4b BR8.1 · WF7): ① 공급자를 닫고 provider_closed_at ② 정산 창(공급자 연결이 닫혔다는 알림 또는 record-settle) —
+     * 그 동안 온 아이 확정 전사는 발화 시작이 ended_at보다 이르면 저장한다(BR8.6) ③ ~ ⑦ {@link #finishSettle}. 정산 입구가 없으면(실행기 단위 시험
+     * 기본값) 곧바로 정리한다. 세션당 한 번이다.
+     */
     private void afterTerminal() {
+        if (terminated || settling) {
+            return;
+        }
+        if (!services.settlement().enabled()) {
+            teardown();
+            return;
+        }
+        settling = true;
+        Instant now = services.clock().now();
+        sessionEndedAt = now;
+        try {
+            sessionEndedAt = services.transitions().find(plan.sessionId()).map(ActivitySessionRow::endedAt)
+                    .filter(Objects::nonNull).orElse(now);
+        } catch (RuntimeException e) {
+            services.events().appError(EventLog.Component.SESSION_LIFECYCLE, e);
+        }
+        timers.cancelAll();
+        relay.setAccepting(false);
+        boolean alreadyClosed = providerSession == null || providerClosedSignal;
+        closeProvider();
+        SessionStatus ended = status;
+        annotateQuietly(ended, SessionChange.none().withProviderClosedAt(now));
+        if (alreadyClosed) {
+            finishSettle();
+            return;
+        }
+        timers.arm(Kind.RECORD_SETTLE, lifecycle().recordSettle());
+    }
+
+    /**
+     * 정산 창이 끝났다(BR8.1 ③ ~ ⑦): 확장점 정산 시점 · 전사 기록기 비우기 · practice 값 · 스냅숏 + SessionRecordCaptured 한 트랜잭션. 쓰기가 실패하면
+     * 앱 오류 한 줄을 남기고 정리한다(재무장이 다시 쓴다). 이 뒤에 온 사건은 무시한다(BR8.7).
+     */
+    private void finishSettle() {
+        if (!settling || terminated) {
+            return;
+        }
+        timers.cancel(Kind.RECORD_SETTLE);
+        Instant cutoff = services.clock().now();
+        Object practice = practiceRecordForSettle(cutoff);
+        quietly(() -> transcripts.closeAll(cutoff));
+        quietly(() -> services.recorder().flushSession(plan.sessionId(), services.settings().timerTick()));
+        try {
+            services.settlement().capture(plan.sessionId(), practice, cutoff);
+        } catch (RuntimeException e) {
+            services.events().appError(EventLog.Component.SESSION_LIFECYCLE, e);
+        }
         teardown();
+    }
+
+    /** 연습 확장점의 정산 시점과 practice 값(L5: 확장점이 없으면 null). */
+    private Object practiceRecordForSettle(Instant cutoff) {
+        return null;
+    }
+
+    /**
+     * 정산 창 안 공급자 사건(BR8.6 · FR7.2): 연결 닫힘 알림이면 창을 닫고, 아이 확정 전사는 발화 시작이 ended_at보다 이르면 저장하고 아니면 버린다.
+     */
+    private void onLateProviderEvent(ProviderEvent event, Instant at) {
+        switch (event) {
+            case ProviderEvent.Closed ignored -> {
+                providerClosedSignal = true;
+                finishSettle();
+            }
+            case ProviderEvent.InputTranscriptDelta delta -> {
+                if (consentWithdrawnAt == null && startedBeforeEnd(delta.itemId(), at)) {
+                    transcripts.childDelta(delta.itemId(), delta.delta(), at);
+                }
+            }
+            case ProviderEvent.InputTranscriptDone done -> {
+                if (consentWithdrawnAt == null && startedBeforeEnd(done.itemId(), at)) {
+                    transcripts.childFinal(done.itemId(), done.transcript(), at, uncertain(done));
+                } else {
+                    droppedLate++;
+                }
+            }
+            default -> {
+                // 정산 창의 AI 출력 · 그 밖 사건은 쓰지 않는다
+            }
+        }
+    }
+
+    private boolean startedBeforeEnd(String itemId, Instant at) {
+        Instant startedAt = transcripts.childStartedAt(itemId);
+        return (startedAt != null ? startedAt : at).isBefore(sessionEndedAt);
     }
 
     /** BR2.6: 발언권을 모델에 돌려줄 때 응답 생성 요청을 한 번 보낸다. */
@@ -1040,6 +1148,9 @@ public final class SessionExecutor {
 
     private void onProviderEvent(ProviderEventReceived received) {
         if (status.isTerminal()) {
+            if (settling) {
+                onLateProviderEvent(received.event(), received.receivedAt());
+            }
             return;
         }
         ProviderEvent event = received.event();
@@ -1164,6 +1275,7 @@ public final class SessionExecutor {
     private void providerLost() {
         if (providerClosing) {
             // 실행기가 스스로 닫은 공급자의 끊김 알림이다(정리 · 앱 종료 T3)
+            providerClosedSignal = true;
             return;
         }
         if (START_PHASE.contains(status)) {
@@ -1200,7 +1312,7 @@ public final class SessionExecutor {
             sendControl(new CloseTransport(CloseTransport.Reason.DISCONNECT));
             sendControl(new SessionState(View.STANDBY));
         }
-        teardown();
+        afterTerminal();
     }
 
     /**
@@ -2001,7 +2113,7 @@ public final class SessionExecutor {
         status = SessionStatus.ENDED;
         bumpGeneration();
         sendControl(new SessionState(View.STANDBY));
-        teardown();
+        afterTerminal();
     }
 
     private void onEndRequested(EndRequested request) {
@@ -2252,9 +2364,7 @@ public final class SessionExecutor {
             case STOP_CONFIRM -> onStopConfirmWindow();
             case SILENCE -> onSilenceTimer();
             case GAP_DISPLAY -> onGapDisplayCheck();
-            case RECORD_SETTLE -> {
-                // L5에서 연결한다
-            }
+            case RECORD_SETTLE -> finishSettle();
         }
     }
 
@@ -2321,7 +2431,7 @@ public final class SessionExecutor {
         markUnresponsive();
         bumpGeneration();
         sendControl(new SessionState(View.STANDBY));
-        teardown();
+        afterTerminal();
     }
 
     /** BR6.12 ④: 묶인 연결의 마지막 기기 메시지부터 40초. 메시지마다 다시 걸지 않고 만기 때 남은 시간으로 다시 건다. */
@@ -2350,7 +2460,7 @@ public final class SessionExecutor {
         status = SessionStatus.ABORTED;
         closeProvider();
         timeoutFired("DISCONNECT", threshold, elapsed);
-        teardown();
+        afterTerminal();
     }
 
     private void armDisconnect() {
@@ -2464,7 +2574,7 @@ public final class SessionExecutor {
             sendControl(new CloseTransport(reason));
             sendControl(new SessionState(View.STANDBY));
         }
-        teardown();
+        afterTerminal();
     }
 
     /** 진 전이 뒤 DB의 지금 상태로 맞춘다. 종료 상태면 정리한다. */
@@ -2487,7 +2597,7 @@ public final class SessionExecutor {
         SessionStatus before = status;
         status = row.get().status();
         if (status.isTerminal()) {
-            teardown();
+            afterTerminal();
             return;
         }
         if (status != before) {

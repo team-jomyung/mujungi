@@ -166,6 +166,12 @@ public final class TranscriptWriter {
         return closed;
     }
 
+    /** U4b BR8.6: 그 공급자 항목의 아이 발화 시작 시각(첫 조각을 받은 시각, 처음 보는 항목이면 null). */
+    public Instant childStartedAt(String itemId) {
+        ChildRow row = childRows.get(key(itemId));
+        return row == null ? null : row.startedAt;
+    }
+
     /** 마지막으로 정한 번호. */
     public int lastSequenceNo() {
         return lastSeq;

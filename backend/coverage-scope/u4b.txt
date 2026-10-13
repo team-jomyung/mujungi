@@ -24,3 +24,8 @@ backend/realtime-activity/src/main/java/kr/mujoong/realtime/dialog/SilenceClock.
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/SessionTimers.java
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/SessionViewQuery.java
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/web/SessionInternalController.java
+# L5 정산 · 결과 스냅숏
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/ResultSnapshotBuilder.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/RecordCaptureService.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/SessionSettlement.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/OrphanSessionChecker.java

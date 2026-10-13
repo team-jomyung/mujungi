@@ -51,20 +51,27 @@ public class EndRequestHandler {
     private final SessionTransitions transitions;
     private final MujoongClock clock;
     private final Duration wait;
+    private final SessionSettlement settlement;
 
     @Autowired
     public EndRequestHandler(SessionRegistry registry, TombstoneMap tombstones, SessionTransitions transitions,
-            MujoongClock clock, RealtimeProperties properties) {
-        this(registry, tombstones, transitions, clock, properties.limits().dbLockTimeout());
+            MujoongClock clock, RealtimeProperties properties, SessionSettlement settlement) {
+        this(registry, tombstones, transitions, clock, properties.limits().dbLockTimeout(), settlement);
     }
 
     public EndRequestHandler(SessionRegistry registry, TombstoneMap tombstones, SessionTransitions transitions,
             MujoongClock clock, Duration wait) {
+        this(registry, tombstones, transitions, clock, wait, SessionSettlement.NONE);
+    }
+
+    public EndRequestHandler(SessionRegistry registry, TombstoneMap tombstones, SessionTransitions transitions,
+            MujoongClock clock, Duration wait, SessionSettlement settlement) {
         this.registry = Objects.requireNonNull(registry, "registry");
         this.tombstones = Objects.requireNonNull(tombstones, "tombstones");
         this.transitions = Objects.requireNonNull(transitions, "transitions");
         this.clock = Objects.requireNonNull(clock, "clock");
         this.wait = Objects.requireNonNull(wait, "wait");
+        this.settlement = Objects.requireNonNull(settlement, "settlement");
     }
 
     /** 명령을 처리한다. */
@@ -161,8 +168,11 @@ public class EndRequestHandler {
                 .map(value -> EndOutcome.CLOSING).orElse(EndOutcome.NOT_ACTIVE);
     }
 
-    /** 실행기 없이 FAILED로 닫은 세션의 뒷일(정산은 L5가 연결한다). 기본 구현은 아무것도 하지 않는다. */
-    protected void onFailedWithoutExecutor(UUID sessionId) {
-        // L5(BR8.1)에서 결과 스냅숏 정산을 연결한다
+    /**
+     * 실행기 없이 FAILED로 닫은 세션의 정산(BR1.9 · BR8.1): 빈 기록 스냅숏(practice null)과 SessionRecordCaptured를 쓴다. 쓰기가 실패해도 응답은
+     * 그대로다(정산 재무장이 다시 쓴다).
+     */
+    private void onFailedWithoutExecutor(UUID sessionId) {
+        settlement.captureOrDefer(sessionId, clock.now());
     }
 }

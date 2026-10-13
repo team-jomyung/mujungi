@@ -90,7 +90,24 @@ public class ResultInputSnapshotRepository {
     private static final String DELETE_BY_SESSIONS = "delete from realtime.realtime_result_input_snapshot"
             + " where session_id = any(:sessionIds)";
 
+    private static final String SELECT_TERMINAL_WITHOUT_SNAPSHOT = "select s.id from realtime.realtime_activity_session s"
+            + " where s.status in ('ENDED', 'ENDED_UNCONFIRMED', 'DECLINED', 'ABORTED', 'FAILED')"
+            + " and s.ended_at <= :endedBefore"
+            + " and not exists (select 1 from realtime.realtime_result_input_snapshot r where r.session_id = s.id)"
+            + " order by s.ended_at, s.id limit :limit";
+
     private final NamedParameterJdbcTemplate jdbc;
+
+    /**
+     * 스냅숏이 없는 종료 세션(정산 재무장 · 기동 정리, U4b BR1.8 · BR8.1). 정산 창 중인 세션을 건드리지 않게 {@code endedBefore} 이전에 끝난 것만
+     * 오래된 순으로 고른다.
+     */
+    public List<UUID> findTerminalWithoutSnapshot(Instant endedBefore, int limit) {
+        MapSqlParameterSource params = new MapSqlParameterSource();
+        ClockParams.instant(params, "endedBefore", Objects.requireNonNull(endedBefore, "endedBefore"));
+        ClockParams.integer(params, "limit", limit);
+        return jdbc.query(SELECT_TERMINAL_WITHOUT_SNAPSHOT, params, (rs, rowNum) -> ClockParams.uuid(rs, "id"));
+    }
 
     public ResultInputSnapshotRepository(NamedParameterJdbcTemplate jdbc) {
         this.jdbc = Objects.requireNonNull(jdbc, "jdbc");
