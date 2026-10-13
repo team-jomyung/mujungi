@@ -135,6 +135,7 @@ class RealtimeInternalApiIT {
         assertNotActive(end(sessionId, "GUARDIAN_STOP"));
         // ACTIVE: 202 {status: CLOSING}, CLOSING: 202 {status: CLOSING}(재처리 없음)
         device.deviceReady(sessionId, true, true);
+        env.join(sessionId);
         awaitStatus(sessionId, SessionStatus.ACTIVE);
         Reply accepted = end(sessionId, "GUARDIAN_STOP");
         assertThat(accepted.status()).isEqualTo(202);
@@ -262,6 +263,7 @@ class RealtimeInternalApiIT {
 
         device.ack(command.opId(), sessionId);
         device.deviceReady(sessionId, true, true);
+        env.join(sessionId);
         awaitStatus(sessionId, SessionStatus.ACTIVE);
         env.provider.emitTurn("item-1", "공룡이 좋아", "resp-1", "나도 공룡 좋아해", List.of(new byte[4800]));
         awaitTrue(() -> transcripts().findAll(sessionId).size() == 2

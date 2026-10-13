@@ -84,6 +84,12 @@ public final class SessionMailbox {
         }
     }
 
+    /**
+     * U4b(BR4.7 · U4b-J8): 같은 기기에 새 세션이 시작됐다 — DECLINED 마무리 인사가 남았으면 버리고(기기 명령 없이) 바로 정리 · 정산한다.
+     */
+    public record DeviceTakenOver(UUID newSessionId) implements Message {
+    }
+
     /** START_SESSION ACK. */
     public record DeviceAck(UUID connectionId, UUID ackOf, Instant receivedAt) implements Message {
     }

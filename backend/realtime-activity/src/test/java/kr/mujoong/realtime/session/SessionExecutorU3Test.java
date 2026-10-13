@@ -263,6 +263,8 @@ class SessionExecutorU3Test {
         assertThat(h.gaps.opened()).as("시작 단계의 끊김은 구간이 아니다").isEmpty();
 
         h.ackAndReady();
+        // U4b(FR11.3 활성화 경로): 참여 응답 한 번으로 ACTIVE
+        h.join();
         assertThat(h.executor.status()).isEqualTo(SessionStatus.ACTIVE);
         h.mailbox.putSafety(new SessionMailbox.ConnectionLost(h.link.connectionId()));
         h.mailbox.putSafety(new SessionMailbox.ConnectionLost(h.link.connectionId()));

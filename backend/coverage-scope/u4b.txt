@@ -12,3 +12,9 @@ backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/EndRequestHa
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/SessionStateEmitter.java
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/TransitionService.java
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/gate/ClosingSequence.java
+# L3 참여 확인
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/SessionExecutor.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/StartSessionHandler.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/voice/ProviderRequestFactory.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/voice/PracticeInstruction.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/log/TranscriptWriter.java

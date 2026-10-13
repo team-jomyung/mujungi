@@ -35,7 +35,17 @@ public final class SessionTimers {
         /** 재생 중 승인 문구 표시 만료(R3-19, output-queue-max 20초). */
         PLAYBACK_EXPIRY(false),
         /** 전이 트랜잭션이 DB 장애로 실패한 시한의 재전달(session.timer-tick). */
-        REDELIVER(false);
+        REDELIVER(false),
+        /** U4b 참여 창 끝(join-wait · join-wait-after-reprompt, BR2.2). */
+        JOIN_WINDOW(false),
+        /** U4b 종료 확인 질문 창 끝(stop-confirm-wait, BR4.3). */
+        STOP_CONFIRM(false),
+        /** U4b 공백 시계의 다음 경고 · 종료 시각(silence-warning · silence-end, BR5.3 · BR5.4). */
+        SILENCE(false),
+        /** U4b 마지막 기기 메시지 뒤 기술 일시정지(gap-display, BR6.1). */
+        GAP_DISPLAY(false),
+        /** U4b 종료 뒤 정산 창 상한(record-settle, BR8.1). */
+        RECORD_SETTLE(false);
 
         private final boolean quietClock;
 

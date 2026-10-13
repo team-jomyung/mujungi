@@ -34,10 +34,16 @@ import kr.mujoong.testsupport.time.MutableClock;
  */
 public final class SessionHarness {
 
+    /** U4b 생애 시간 값: 운영 기본값(참여 20초 · 20초, 공백 4분 · 6분, 확인 질문 20초, 정산 2초, 점선 10초). */
+    public static final SessionExecutor.Settings.Lifecycle LIFECYCLE = new SessionExecutor.Settings.Lifecycle(
+            Duration.ofSeconds(20), Duration.ofSeconds(20), Duration.ofMinutes(4), Duration.ofMinutes(6),
+            Duration.ofSeconds(20), Duration.ofSeconds(2), Duration.ofSeconds(10));
     /** 시험 설정: 운영 기본값을 그대로 쓴다(20초 · 30초 · 40초 · 800ms · 20초 · 1초 · 불확실 기준 60%). */
     public static final SessionExecutor.Settings SETTINGS = new SessionExecutor.Settings(Duration.ofSeconds(20),
             Duration.ofSeconds(30), Duration.ofSeconds(40), Duration.ofMillis(800), Duration.ofSeconds(20),
-            Duration.ofSeconds(1), 50, 1000, 60);
+            Duration.ofSeconds(1), 50, 1000, 60, LIFECYCLE);
+    /** U4b 참여 응답의 공급자 항목 id(참여 확인 대답 "응"). */
+    public static final String JOIN_ITEM = "join-reply";
     /** 시험 세션의 종료 표현 스냅숏(기본 표현 + 추가 표현 하나). */
     public static final List<String> STOP_EXPRESSIONS = List.of("무중아 그만할래", "이제 끝");
 
@@ -55,6 +61,12 @@ public final class SessionHarness {
     public final FakeAudioRecordings recordings = new FakeAudioRecordings();
     /** 원음 기록 동의(create 전에 바꾼다). */
     public boolean rawAudioConsent;
+    /** U4b: 활동 종류(create 전에 바꾼다). */
+    public kr.mujoong.contract.status.ActivityType activityType = kr.mujoong.contract.status.ActivityType.FREE_TALK;
+    /** U4b: 마무리 · 대기 문구 밖의 승인 문구(코드 → 원문, create 전에 넣는다). 없으면 그 재생은 건너뛴다(BR3.3). */
+    public final java.util.Map<String, String> extraApproved = new java.util.LinkedHashMap<>();
+    /** U4b: 승인 문구 코드 → 버전(extraApproved로 만든 것). */
+    public final java.util.Map<String, UUID> approvedVersions = new java.util.LinkedHashMap<>();
     public final LatencyRecorder latency = new LatencyRecorder(events, metrics, clock, 100, Duration.ofMinutes(10));
     public final AsyncRecorder recorder = new AsyncRecorder(store, TaskLauncher.inline(), latency, events, metrics, clock,
             200, 2);
@@ -89,12 +101,21 @@ public final class SessionHarness {
                 new ProviderConnector(provider, new ProviderRequestFactory(), Duration.ofSeconds(10), launcher, "test"),
                 new ProviderRequestFactory(), new OutputGate(SeedDictionary.loadDefault()), recorder, latency,
                 new TimerClocks(safety, quiet), launcher, events, metrics, clock, settings, gaps, recordings);
+        List<StartSession.ApprovedAudio> audio = new ArrayList<>(List.of(
+                new StartSession.ApprovedAudio("CLOSING", closingVersion, "/media/approved/closing.wav"),
+                new StartSession.ApprovedAudio("WAITING_FILLER", fillerVersion, "/media/approved/filler.wav")));
+        java.util.Map<String, SessionExecutor.ApprovedItem> approved = new java.util.LinkedHashMap<>();
+        for (java.util.Map.Entry<String, String> extra : extraApproved.entrySet()) {
+            UUID version = approvedVersions.computeIfAbsent(extra.getKey(), code -> UUID.randomUUID());
+            approved.put(extra.getKey(), new SessionExecutor.ApprovedItem(extra.getKey(), version, extra.getValue()));
+            audio.add(new StartSession.ApprovedAudio(extra.getKey(), version,
+                    "/media/approved/" + extra.getKey().toLowerCase(java.util.Locale.ROOT) + ".wav"));
+        }
         SessionExecutor.Plan plan = new SessionExecutor.Plan(sessionId, deviceId, "0123456789abcdef0123456789abcdef",
-                new ChildContext("하늘", 8, List.of("공룡")),
-                List.of(new StartSession.ApprovedAudio("CLOSING", closingVersion, "/media/approved/closing.wav"),
-                        new StartSession.ApprovedAudio("WAITING_FILLER", fillerVersion, "/media/approved/filler.wav")),
+                new ChildContext("하늘", 8, List.of("공룡")), audio,
                 new SessionExecutor.ApprovedItem("CLOSING", closingVersion),
-                new SessionExecutor.ApprovedItem("WAITING_FILLER", fillerVersion), rawAudioConsent, STOP_EXPRESSIONS);
+                new SessionExecutor.ApprovedItem("WAITING_FILLER", fillerVersion), rawAudioConsent, STOP_EXPRESSIONS,
+                activityType, approved, null);
         executor = new SessionExecutor(plan, services, mailbox, () -> removed = true);
         return executor;
     }
@@ -127,10 +148,26 @@ public final class SessionHarness {
         drain();
     }
 
-    /** ACTIVE까지 간다. */
+    /**
+     * ACTIVE까지 간다. U4b(FR11.3): ACK · READY 뒤 참여 확인(WAITING_CHILD)을 거치므로 참여 응답을 한 번 보낸다(시작 안내가 패키지에 없으면 창이
+     * 곧바로 열린다).
+     */
     public void activate() {
         boot();
         ackAndReady();
+        join();
+    }
+
+    /** U4b: 참여 확인에 아이가 "응"이라고 답한다(공급자 입력 전사 확정). */
+    public void join() {
+        childSays(JOIN_ITEM, "응");
+    }
+
+    /** 아이 확정 전사 하나를 공급자 이벤트로 흘려 넣고 처리한다. */
+    public void childSays(String itemId, String text) {
+        provider.last().emit(new kr.mujoong.realtime.voice.ProviderPort.ProviderEvent.InputTranscriptDone(itemId, text,
+                null));
+        drain();
     }
 
     /** 편지함을 비울 때까지 처리한다. */

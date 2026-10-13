@@ -35,6 +35,8 @@ public class ProviderRequestFactory {
     /** U3 선 형식 type 값(편차 (aa)). */
     public static final String TYPE_RESPONSE_CANCEL = "session.response.cancel";
     public static final String TYPE_INSTRUCTIONS_CORRECT = "session.instructions.correct";
+    /** U4b 선 형식 type 값(편차 (U4b-a)). */
+    public static final String TYPE_RESPONSE_CREATE = "session.response.create";
 
     static final int MAX_DISPLAY_NAME = 10;
     static final int MAX_INTERESTS = 10;
@@ -75,6 +77,10 @@ public class ProviderRequestFactory {
     public record InstructionsCorrect(String type, String text) {
     }
 
+    /** U4b {@code session.response.create}: 응답 생성 요청(필드 없음). */
+    public record ResponseCreate(String type) {
+    }
+
     /** 세션 시작 요청. childContext만 받는다(세션 패키지 전체 · 08 문맥을 인자로 받지 않는다). */
     public SessionStart sessionStart(ChildContext context) {
         Objects.requireNonNull(context, "context");
@@ -112,7 +118,26 @@ public class ProviderRequestFactory {
 
     /** 서버 템플릿 지시문(문장은 DialogPolicy의 역할 지시문, U3-R14). 아이 문맥 값은 따옴표 안 데이터로만 들어간다. */
     static String instructions(ChildContextData data) {
-        return DialogInstructions.role(data.displayName(), data.age(), data.interests());
+        // U4b(BR2.7): 역할 지시문 끝에 참여 확인 뒤 첫 질문 문장을 더한다
+        return DialogInstructions.role(data.displayName(), data.age(), data.interests()) + " "
+                + DialogInstructions.JOIN_FIRST_QUESTION;
+    }
+
+    /**
+     * U4b {@code session.response.create}(편차 (U4b-a) · BR2.6 · U4b-J3): 발언권을 모델에 돌려줄 때(ACTIVE 진입 · 확인 질문 뒤 계속) 응답
+     * 생성을 한 번 요청한다. 필드는 type뿐이다.
+     */
+    public ResponseCreate responseCreate() {
+        return new ResponseCreate(TYPE_RESPONSE_CREATE);
+    }
+
+    /**
+     * U4b 연습 확장점의 지시문 추가(BR10.4 · {@code instructProvider}): {@code session.instructions.correct {text}}와 같은 선 형식으로 보낸다.
+     * 문장은 확장점(U5b)이 자기 승인된 템플릿에서 만든 것이고, 검사된 값 타입({@link PracticeInstruction})으로만 받는다(자유 문자열 입구 없음).
+     */
+    public InstructionsCorrect practiceInstruction(PracticeInstruction instruction) {
+        Objects.requireNonNull(instruction, "instruction");
+        return new InstructionsCorrect(TYPE_INSTRUCTIONS_CORRECT, instruction.text());
     }
 
     private static List<String> limitInterests(List<String> interests) {

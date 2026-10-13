@@ -22,7 +22,9 @@ export const CONNECTION_SCENARIOS = Object.freeze([
   "refuse",
   "silent",
 ]);
-export const TURN_KINDS = Object.freeze(["normal", "forbidden"]);
+// U4b(FR2.1 · U4b-J3): join은 참여 확인 대답 한 마디("응")만 보내고 AI 출력은 없다(참여 전에는 서버가 응답을 막고, 참여가 확인되면
+// session.response.create를 한 번 보낸다 — 가짜 공급자는 받은 사실만 기록한다).
+export const TURN_KINDS = Object.freeze(["normal", "forbidden", "join"]);
 /** 시드 사전(gate/seed-dictionary.json) SCORE 항목(J101 · 사람 결정 12). */
 export const FORBIDDEN_PATTERN = "비정상";
 
@@ -39,6 +41,12 @@ export const TURN_SCRIPTS = Object.freeze({
     aiText: "친구가 그렇게 웃는 건 비정상이야",
     outputMs: 500,
     freq: 440,
+  }),
+  join: Object.freeze({
+    childText: "응",
+    aiText: null,
+    outputMs: 0,
+    freq: 0,
   }),
 });
 
@@ -79,6 +87,9 @@ export function outputPcmFor(turn, kind) {
     throw new RangeError(`모르는 턴 종류: ${kind}`);
   }
   const bytes = Math.round(script.outputMs * BYTES_PER_MS);
+  if (bytes === 0) {
+    return Buffer.alloc(0);
+  }
   return synthesizeTone(bytes / SAMPLE_BYTES, {
     freq: script.freq + (turn - 1) * 10,
     amplitude: 0.2,
@@ -119,9 +130,25 @@ export function buildTurn({
     throw new RangeError("출력 조각 크기는 2바이트 배수 양수여야 한다");
   }
   const itemId = `item-${connection}-${turn}`;
-  const responseId = `resp-${connection}-${turn}`;
+  const responseId = script.aiText === null ? null : `resp-${connection}-${turn}`;
   const pcm = outputPcmFor(turn, kind);
   const [child1, child2] = splitInTwo(script.childText);
+  const childSteps = [
+    { delayMs: 0, message: { type: "session.input_transcript.delta", itemId, delta: child1 } },
+    ...(child2 === "" ? [] : [{ delayMs: 0, message: { type: "session.input_transcript.delta", itemId, delta: child2 } }]),
+    { delayMs: 0, message: { type: "session.input_audio.speech_stopped" } },
+    {
+      delayMs: 0,
+      message:
+        confidence === null
+          ? { type: "session.input_transcript.done", itemId, transcript: script.childText }
+          : { type: "session.input_transcript.done", itemId, transcript: script.childText, confidence },
+    },
+  ];
+  if (script.aiText === null) {
+    // 참여 확인 대답(U4b): 아이 전사만 보내고 AI 출력은 없다
+    return { script, pcm, itemId, responseId, steps: childSteps };
+  }
   const [ai1, ai2] = splitInTwo(script.aiText);
   const steps = [
     { delayMs: 0, message: { type: "session.input_transcript.delta", itemId, delta: child1 } },

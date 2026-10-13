@@ -210,6 +210,7 @@ class RealtimeLogHygieneIT {
         WsEnvelope command = device.await(WsMessageType.START_SESSION, WAIT);
         device.ack(command.opId(), sessionId);
         device.deviceReady(sessionId, true, true);
+        env.join(sessionId);
         awaitStatus(env, sessionId, SessionStatus.ACTIVE);
 
         // 아이 조각 → AI 출력 조각 · 음성 → 응답 끝 없이 공급자 오류(code에 표식)
@@ -287,6 +288,7 @@ class RealtimeLogHygieneIT {
         WsEnvelope command = device.await(WsMessageType.START_SESSION, WAIT);
         device.ack(command.opId(), sessionId);
         device.deviceReady(sessionId, true, true);
+        env.join(sessionId);
         awaitStatus(env, sessionId, SessionStatus.ACTIVE);
         // LISTENING은 입력 수락을 연 뒤에 나간다. 실행기는 DB에 ACTIVE를 쓴 다음 중계를 열므로 DB의 ACTIVE만 보고 보내면
         // 그 사이 프레임이 NOT_ACCEPTING으로 버려질 수 있다(3.6 재시험 1차 실패 원인, U3 L6 — RealtimeMetricsScrapeIT와 같은 대기)

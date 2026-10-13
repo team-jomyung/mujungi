@@ -27,7 +27,8 @@ class TransitionTableTest {
     static Stream<Arguments> allowed() {
         return Stream.of(
                 Arguments.of(SessionStatus.PREPARING, SessionStatus.DEVICE_ACK),
-                Arguments.of(SessionStatus.DEVICE_ACK, SessionStatus.ACTIVE),
+                // U4b(FR11.3 활성화 경로): 준비가 끝나면 ACTIVE가 아니라 참여 확인(WAITING_CHILD)으로 간다
+                Arguments.of(SessionStatus.DEVICE_ACK, SessionStatus.WAITING_CHILD),
                 Arguments.of(SessionStatus.PREPARING, SessionStatus.FAILED),
                 Arguments.of(SessionStatus.DEVICE_ACK, SessionStatus.FAILED),
                 Arguments.of(SessionStatus.ACTIVE, SessionStatus.FAILED),
@@ -94,7 +95,7 @@ class TransitionTableTest {
                 .isEqualTo(FailureCode.PROVIDER_UNAVAILABLE);
         assertThat(TransitionTable.changeFor(Trigger.START_SEND_FAILED, null, AT).failureCode())
                 .isEqualTo(FailureCode.DEVICE_NO_ACK);
-        assertThat(TransitionTable.changeFor(Trigger.ACTIVATED, null, AT)).isEqualTo(SessionChange.none());
+        assertThat(TransitionTable.changeFor(Trigger.READY, null, AT)).isEqualTo(SessionChange.none());
         assertThat(TransitionTable.changeFor(Trigger.DISCONNECT, null, AT).endedAt()).isEqualTo(AT);
     }
 

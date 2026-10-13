@@ -154,6 +154,31 @@ public final class RealtimeItEnvironment implements AutoCloseable {
                 new ChildContext("하늘", 8, List.of("공룡"))), "0123456789abcdef0123456789abcdef");
     }
 
+    /**
+     * U4b(FR11.3 활성화 경로): 세션이 참여 확인(WAITING_CHILD)에 들어오면 아이가 "응"이라고 답하게 하고(가짜 공급자의 입력 전사 확정) ACTIVE가
+     * 될 때까지 기다린다. 시작 패키지에 시작 안내가 없으면 창이 곧바로 열린다.
+     */
+    public void join(UUID sessionId) {
+        awaitTrue(() -> sessionStatus(sessionId) == kr.mujoong.contract.status.SessionStatus.WAITING_CHILD,
+                "WAITING_CHILD");
+        childSays("join-" + sessionId, "응");
+        awaitTrue(() -> sessionStatus(sessionId) == kr.mujoong.contract.status.SessionStatus.ACTIVE, "ACTIVE");
+    }
+
+    /** 가짜 공급자로 아이 확정 전사 하나를 흘린다(조각 · 확정). */
+    public void childSays(String itemId, String text) {
+        provider.emit(new FakeProviderWsServer.Event("session.input_transcript.delta", null, itemId, text, null, null,
+                null, null));
+        provider.emit(new FakeProviderWsServer.Event("session.input_transcript.done", null, itemId, null, text, null,
+                null, null));
+    }
+
+    /** 세션 행의 지금 상태(없으면 null). */
+    public kr.mujoong.contract.status.SessionStatus sessionStatus(UUID sessionId) {
+        return app.bean(kr.mujoong.realtime.session.ActivitySessionRepository.class).find(sessionId)
+                .map(kr.mujoong.realtime.session.ActivitySessionRow::status).orElse(null);
+    }
+
     /** 조건이 참이 될 때까지 기다린다. */
     public static void awaitTrue(BooleanSupplier condition, String what) {
         long deadline = System.nanoTime() + WAIT.toNanos();

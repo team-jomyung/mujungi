@@ -216,6 +216,13 @@ public class StartSessionHandler {
             SessionExecutor executor = holder[0];
             registry.activate(entry, executor);
             activated = true;
+            // U4b BR4.7: 같은 기기에서 DECLINED 인사를 마치지 못한 앞 세션은 남은 인사를 버리고 바로 정리한다
+            for (SessionExecutor previous : registry.executors()) {
+                if (previous != executor && previous.deviceId().equals(command.deviceId())
+                        && previous.status() == SessionStatus.DECLINED && !previous.isTerminated()) {
+                    previous.mailbox().putSafety(new SessionMailbox.DeviceTakenOver(command.sessionId()));
+                }
+            }
             executor.start();
             return new Accepted(SessionStatus.PREPARING);
         } finally {
@@ -264,13 +271,14 @@ public class StartSessionHandler {
         }
         // U3: 원음 기록 동의(U3-R9)와 종료 표현 스냅숏(종료 의도 판정, U3-R12)을 실행기에 넘긴다
         List<String> stops = command.stopExpressions().stream().map(StopExpressionItem::text).toList();
+        // U4b: 활동 종류(시작 안내 선택 · 연습 확장점)와 승인 문구 전체(선택 코드 · 말풍선 원문)를 넘긴다
+        Map<String, SessionExecutor.ApprovedItem> approved = new LinkedHashMap<>();
+        for (Map.Entry<String, ApprovedContentItem> item : command.approvedContent().entrySet()) {
+            approved.put(item.getKey(), new SessionExecutor.ApprovedItem(item.getKey(),
+                    item.getValue().contentVersionId(), item.getValue().text()));
+        }
         return new SessionExecutor.Plan(command.sessionId(), command.deviceId(), traceId, command.childContext(), audio,
-                approved(command, PlayApprovedContent.CLOSING), approved(command, PlayApprovedContent.WAITING_FILLER),
-                command.consentSnapshot().rawAudio(), stops);
-    }
-
-    private static SessionExecutor.ApprovedItem approved(StartCommand command, String code) {
-        ApprovedContentItem item = command.approvedContent().get(code);
-        return item == null ? null : new SessionExecutor.ApprovedItem(code, item.contentVersionId());
+                approved.get(PlayApprovedContent.CLOSING), approved.get(PlayApprovedContent.WAITING_FILLER),
+                command.consentSnapshot().rawAudio(), stops, command.activityType(), approved, null);
     }
 }

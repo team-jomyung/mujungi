@@ -27,8 +27,6 @@ public final class TransitionTable {
     public enum Trigger {
         /** START_SESSION에 대한 ACK. */
         DEVICE_ACK(EnumSet.of(SessionStatus.PREPARING), SessionStatus.DEVICE_ACK, null, null, null),
-        /** U1 · U3 활성화 경로(DEVICE_ACK → ACTIVE). U4b L3이 참여 확인({@link #READY} · {@link #JOIN_ACCEPTED})으로 바꾼다. */
-        ACTIVATED(EnumSet.of(SessionStatus.DEVICE_ACK), SessionStatus.ACTIVE, null, null, null),
         /** U4b: DEVICE_READY(OK)와 공급자 session.started가 모두 확인됨 → 참여 확인(WAITING_CHILD, BR2.1). */
         READY(EnumSet.of(SessionStatus.DEVICE_ACK), SessionStatus.WAITING_CHILD, null, null, null),
         /** U4b: 참여 수락(BR2.4) → ACTIVE. */

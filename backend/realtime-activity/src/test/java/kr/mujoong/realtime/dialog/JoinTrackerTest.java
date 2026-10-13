@@ -20,6 +20,7 @@ import org.junit.jupiter.params.provider.CsvSource;
  * 불명확 발화 = 되묻기(재안내 1회에 포함), 안내 최대 3번을 시각을 인자로 넣어 확인한다.
  */
 @Tag("u3")
+@Tag("u4b")
 class JoinTrackerTest {
 
     private static final Duration WINDOW = Duration.ofSeconds(20);

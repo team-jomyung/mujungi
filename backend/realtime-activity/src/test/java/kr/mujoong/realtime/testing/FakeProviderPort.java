@@ -130,6 +130,15 @@ public final class FakeProviderPort implements ProviderPort {
             record(request);
         }
 
+        /** U4b: 응답 생성 요청을 기록한다(U4b-J3: 받은 사실만). */
+        @Override
+        public void createResponse(ProviderRequestFactory.ResponseCreate request) throws ProviderUnavailableException {
+            if (!open) {
+                throw new ProviderUnavailableException(ProviderUnavailableException.Reason.CLOSED);
+            }
+            record(request);
+        }
+
         @Override
         public void close(ProviderRequestFactory.SessionClose request) {
             if (failOnClose) {

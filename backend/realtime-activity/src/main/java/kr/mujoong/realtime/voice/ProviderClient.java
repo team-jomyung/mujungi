@@ -267,6 +267,11 @@ public class ProviderClient implements ProviderPort, DisposableBean {
         }
 
         @Override
+        public void createResponse(ProviderRequestFactory.ResponseCreate request) throws ProviderUnavailableException {
+            send(json.write(Objects.requireNonNull(request, "request")));
+        }
+
+        @Override
         public void close(ProviderRequestFactory.SessionClose request) {
             if (!closed.compareAndSet(false, true)) {
                 return;

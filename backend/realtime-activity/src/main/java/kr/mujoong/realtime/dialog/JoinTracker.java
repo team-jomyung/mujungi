@@ -8,6 +8,9 @@ import java.util.Objects;
 /**
  * 참여 판단 추적기 (U3 L4 · components DialogPolicy · U3-R13 · B17 · AC6.3.3 ~ 6.3.8 · AC3.5.1).
  *
+ * <p>U4b(L3 · BR2.2 ~ BR2.4 · U4b-J4 · U4b-J5): 커밋 5354a32에서 되살렸고 두 창 시간(처음 · 안내 뒤), 창 끝 조회, 기술 일시정지
+ * 이동을 더했다. 안내를 재생하는 중(PROMPTING)에 온 대답도 {@link #reply}가 곧바로 분류해 처리한다(창 시작을 기다리지 않는다, R-11).
+ *
  * <p>참여 질문을 재생한 뒤 아이 응답 · 무응답을 받아 다음 할 일({@link Action})만 돌려준다 — 세션 상태 · 시계 · 승인 문구 재생은 부르는 쪽(U4
  * 세션 생명주기)이 맡는다(U3-J1). 시각은 인자로 받고 대기 시간도 생성자 인자다(키 소유 U4).
  *
@@ -76,7 +79,8 @@ public final class JoinTracker {
     private static final List<String> ACCEPT_CUES = List.of("할래", "하자", "좋아", "좋지", "해볼래", "해보자", "할게",
             "재밌겠", "이야기해", "얘기해");
 
-    private final Duration noReply;
+    private final Duration firstWindow;
+    private final Duration afterPromptWindow;
     private Phase phase = Phase.PROMPTING;
     private Instant windowStart;
     private int prompts = 1;
@@ -84,13 +88,29 @@ public final class JoinTracker {
     private boolean alternativeOffered;
 
     /**
-     * @param noReply 무응답 창(AC6.3.3의 20초 — 설정 키는 U4가 가진다)
+     * @param noReply 무응답 창(처음 · 안내 뒤 같은 값)
      */
     public JoinTracker(Duration noReply) {
-        this.noReply = Objects.requireNonNull(noReply, "noReply");
-        if (noReply.isNegative() || noReply.isZero()) {
+        this(noReply, noReply);
+    }
+
+    /**
+     * U4b(U4b-J4 · BR2.2): 두 창 시간을 받는다.
+     *
+     * @param firstWindow 처음 시작 안내 뒤 창({@code mujoong.timing.session.join-wait})
+     * @param afterPromptWindow 재안내 · 되묻기 · 대안 뒤 창({@code mujoong.timing.session.join-wait-after-reprompt})
+     */
+    public JoinTracker(Duration firstWindow, Duration afterPromptWindow) {
+        this.firstWindow = positive(firstWindow, "firstWindow");
+        this.afterPromptWindow = positive(afterPromptWindow, "afterPromptWindow");
+    }
+
+    private static Duration positive(Duration value, String name) {
+        Objects.requireNonNull(value, name);
+        if (value.isNegative() || value.isZero()) {
             throw new IllegalArgumentException("무응답 창은 0보다 커야 한다");
         }
+        return value;
     }
 
     /**
@@ -204,8 +224,29 @@ public final class JoinTracker {
         return phase == Phase.JOINED || phase == Phase.DECLINED;
     }
 
+    /** U4b: 지금 열린 창의 끝 시각(창이 없으면 null). 그 시각의 대답은 만료로 본다(BR2.2). */
+    public Instant windowEnd() {
+        return phase == Phase.WAITING && windowStart != null ? windowStart.plus(window()) : null;
+    }
+
+    /**
+     * U4b(BR2.2 · U4b-J5): 기술 일시정지 동안 창을 멈춘다 — 열린 창의 시작을 멈춘 시간만큼 뒤로 민다(남은 시간부터 이어진다). 창이 없으면 아무것도
+     * 하지 않는다.
+     */
+    public void shift(Duration paused) {
+        Objects.requireNonNull(paused, "paused");
+        if (phase == Phase.WAITING && windowStart != null && paused.isPositive()) {
+            windowStart = windowStart.plus(paused);
+        }
+    }
+
+    /** 지금 창 길이: 처음 안내면 처음 창, 그 뒤 안내면 안내 뒤 창. */
+    private Duration window() {
+        return prompts <= 1 ? firstWindow : afterPromptWindow;
+    }
+
     private boolean expired(Instant at) {
-        return phase == Phase.WAITING && windowStart != null && !at.isBefore(windowStart.plus(noReply));
+        return phase == Phase.WAITING && windowStart != null && !at.isBefore(windowStart.plus(window()));
     }
 
     private Action prompt(Action action) {
