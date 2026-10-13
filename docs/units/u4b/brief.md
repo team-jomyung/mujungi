@@ -1,6 +1,6 @@
 # U4b 활동 세션 · Realtime 쪽 (u4b-activity-realtime) 구현 지시
 
-브랜치: U3가 합쳐진 main에서 `unit/u4b-activity-realtime`를 새로 만든다. U4a(활동 Core · /parent 화면, core V3)는 `unit/u4a-activity-core` 브랜치에 구현이 끝나 리뷰를 기다리고, U5a(연습 Core, core V4)는 리뷰 반영 전이다(`docs/units/README.md`).
+브랜치: main에서 `unit/u4b-activity-realtime`를 새로 만든다. U4a(활동 Core · /parent 화면, core V3)와 U5a(연습 Core, core V4)는 main에 합쳐졌다(`docs/units/README.md`). AI-DLC 작업 기록은 `aidlc/spaces/default/intents/261013-u4b-activity-realtime/`이다. U5b(`docs/units/u5b/brief.md`)가 같은 시기에 병렬로 진행되니 그 지시서의 「U4b와 맞물리는 곳」 1 ~ 4를 U5b 담당과 처음 이틀 안에 맞춘다.
 
 ## 배경
 U4b는 클라우드 세션이 설계까지 했고 구현은 하지 않았다. 설계를 정본으로 구현하고, 구현하다 설계와 달라지는 곳은 설계 문서를 고친 뒤 가정으로 남긴다.

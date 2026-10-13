@@ -5,5 +5,13 @@
     "dirName": "261008-mujoong-service",
     "scope": "mujoong-mvp",
     "status": "in-flight"
+  },
+  {
+    "uuid": "01a133da-5e9a-7a95-8ad1-267cda18eed1",
+    "slug": "u4b-activity-realtime",
+    "dirName": "261013-u4b-activity-realtime",
+    "scope": "refactor",
+    "status": "in-flight",
+    "request": "6dce3fa9"
   }
 ]
