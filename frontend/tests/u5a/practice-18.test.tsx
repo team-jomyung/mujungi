@@ -143,9 +143,9 @@ describe("18 — read and favorite failures", () => {
     expect(screen.getByText("아직 담은 목표가 없어요")).toBeVisible();
   });
 
-  it("handles 401 through the current shared login route", async () => {
+  it("handles 401 with the shared login notice and route (AC1.1.9)", async () => {
     setup(() => errorResponse(401, "UNAUTHENTICATED")); await advance();
-    expect(router.replace).toHaveBeenCalledWith("/parent/dev-login");
+    expect(router.replace).toHaveBeenCalledWith("/parent/login");
     expect(screen.getByTestId("toast")).toHaveTextContent("로그인이 필요해요.");
   });
 
@@ -185,7 +185,7 @@ describe("18 — read and favorite failures", () => {
     fireEvent.click(favorite()); await advance();
     fireEvent.click(screen.getByTestId("toast-action")); await advance();
     expect(patches).toBe(2);
-    expect(router.replace).toHaveBeenCalledWith("/parent/dev-login");
+    expect(router.replace).toHaveBeenCalledWith("/parent/login");
   });
 });
 
@@ -263,10 +263,10 @@ describe("18 — delayed deletion coordinator (AC4.1.6/11 · J3)", () => {
     expect(screen.getByTestId("toast-region-assertive")).toHaveTextContent("삭제하지 못해 목표를 되돌렸어요.");
   });
 
-  it("delete 401 restores local state and sends the user to the current login route", async () => {
+  it("delete 401 restores local state and sends the user to the login route", async () => {
     setup((_path, init) => init.method === "DELETE" ? errorResponse(401, "UNAUTHENTICATED") : jsonResponse(200, { items: GOALS }));
     await advance(); fireEvent.click(remove()); await advance(UNDO_MS + 1);
-    expect(router.replace).toHaveBeenCalledWith("/parent/dev-login");
+    expect(router.replace).toHaveBeenCalledWith("/parent/login");
   });
 });
 

@@ -5,10 +5,10 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ApiError } from "../api/apiClient";
 import { useApiClient } from "../api/queries";
-import { PARENT_ROUTES } from "../navigation";
+import { goToLogin } from "../navigation";
 import { deleteGoal, fetchGoalSelections, goalSelectionQueryKey, restoreGoal, sortGoals, updateGoalFavorite, type GoalSelection } from "./api";
 import { PRACTICE_COPY, PRACTICE_TEMP_COPY } from "./copy";
-import { PROPOSED_COPY, TEMP_COPY } from "@/shared/copy/ko";
+import { PROPOSED_COPY } from "@/shared/copy/ko";
 import { useToast } from "@/shared/toast/ToastProvider";
 import { useTiming } from "@/shared/timing/TimingProvider";
 
@@ -50,11 +50,8 @@ export function usePracticeGoals() {
 
   const authenticationFailed = useCallback((error: unknown): boolean => {
     if (!(error instanceof ApiError) || !error.isUnauthenticated) return false;
-    if (mounted.current) {
-      toast.show({ message: TEMP_COPY.errors.UNAUTHENTICATED, kind: "error" });
-      // Until U2 is merged, use the existing authentication route, without inventing an account UI.
-      router.replace(PARENT_ROUTES.devLogin);
-    }
+    // AC1.1.9: 안내 토스트 뒤 01 로그인(다른 화면과 같은 goToLogin)
+    if (mounted.current) goToLogin(router, toast);
     return true;
   }, [router, toast]);
 

@@ -60,7 +60,7 @@
 
 공용 프런트 변경은 API client의 PATCH/DELETE 지원, Toast의 선택적 종료 이유 콜백, 5초 조회 지연 안내 시간 키, 신규 오류 문구뿐이다. U1의 자리 페이지 리다이렉트 기대값은 실제 화면 렌더링 검사로 교체했다. 기존 디자인/네비게이션 구조를 사용한다.
 
-백엔드 공용 운영 변경은 ErrorCode 추가뿐이며 보안 체인과 identity/realtime 구현은 변경하지 않았다. V4 때문에 기존 U1의 V1 고정 기대값을 V4/이력 [1,4]로 갱신했고 V1만 있는 DB 거절 검사는 유지했다. 모든 계약 경로와 실행 경로의 일치 검사, 익명 요청 거절 검사, 시간 설정의 값/타입 검사에 새 유닛도 포함했다.
+백엔드 공용 운영 변경은 ErrorCode 추가뿐이며 보안 체인과 identity/realtime 구현은 변경하지 않았다. 기존 시험의 마이그레이션 기대값은 V1~V4(이력 [1,2,3,4])이고, V3까지만 있는 DB는 기동을 거절한다. 모든 계약 경로와 실행 경로의 일치 검사, 익명 요청 거절 검사, 시간 설정의 값/타입 검사에 새 유닛도 포함했다.
 
 기존 구조 시험에서 Windows 경로 구분자로 누락되던 SQL 탐색을 수정했으며 양 OS 형식과 빌드 산출물 제외 검증을 추가했다. 설정에서 읽은 두 TimeUnit 식만 허용 목록에 넣고 숫자 시간 상수 거부 검증은 유지했다. Realtime에는 설정 소유권 검사만 추가했고 운영 소스는 바꾸지 않았다.
 
@@ -81,6 +81,7 @@
 | 7 멀쩡한 상황 거절 | GeneratedScenario에서 partnerRoleText 제거, Gateway 검사에서도 뺌(design.md J22) | TextAiGatewayTest(출력 레코드 칸 대조) |
 | 8 잠금 중 외부 확인 | 근거 확인을 트랜잭션 전에 끝냄 | PracticeCoreIT `candidateEvidenceIsVerifiedBeforeTheTransactionOpens…` |
 | 9 정리 | fingerprint의 trigger 인자 제거(본문에 트리거가 들어 있어야 하므로 본문만 본다), markUsed · requireActive 삭제 | ScenarioServiceTest 지문 대조 |
+| 추가(반영 뒤 검토) | 화면 18의 401이 U2 전 임시 경로(/parent/dev-login, 운영에서는 404)로 가던 것을 다른 화면과 같은 goToLogin(안내 토스트 뒤 01, AC1.1.9)으로 바꿈 | tests/u5a/practice-18 401 세 건 |
 
 `PragmaticsKnowledge.requireVersion`은 운영 호출이 아직 없지만 남긴다. U6 기록용 재판정이 고정된 옛 버전(RETIRED 포함)의 판정 기준을 읽을 자리다.
 

@@ -11,8 +11,8 @@ U2부터는 엔진 없이, 엔진이 만든 인셉션 산출물(스토리 · 계
 | U1 워킹 스켈레톤 | main | — | `aidlc/…/construction/u1-walking-skeleton/` |
 | U2 보호자 계정 | **main 병합**(10/12, fbdb5a5). 3차 리뷰 후속 9건은 U4a 브랜치 첫 커밋(8d0f009)에 있어 U4a와 함께 main에 들어온다 | 병합됨 | `u2/brief.md` · `design.md` · `report.md` |
 | U3 음성 대화 | **main 병합**(10/13, PR #2, 2493ee3). 리뷰 3차와 종료 의도 판정 보강까지 | 병합됨 | `u3/brief-cloud.md` · `design.md` · `report.md`(9절 남은 일) |
-| U4a 활동 세션 Core · /parent 화면 | 구현 끝. 조정자 검증 통과(백엔드 전체 · U4a 커버리지 · 프런트 u4a · u1 · u2). **리뷰 전**. core V3 | `unit/u4a-activity-core` | `u4a/brief.md` · `design.md` · `report.md` |
-| U5a 연습 Core | Codex 구현 끝. 조정자 리뷰 9건과 main을 합치면 생기는 문제 2건 **반영 전**. core V4 | `unit/u5a-practice-core` | `u5a/brief.md` · `design.md` · `report.md` · **`review-1.md`** |
+| U4a 활동 세션 Core · /parent 화면 | 구현 끝. 리뷰 1차 병합 전 5건 반영, main 병합. **PR #2 CI 대기**. core V3 | `unit/u4a-activity-core` | `u4a/brief.md` · `design.md` · `report.md` · `review-1.md` |
+| U5a 연습 Core | 구현 끝. 리뷰 1차 11건 반영, U4a(main 포함) 병합. **CI 대기**(U4a 다음에 병합). core V4 | `unit/u5a-practice-core` | `u5a/brief.md` · `design.md` · `report.md`(리뷰 반영 절) · `review-1.md` |
 | U4b 활동 세션 Realtime | 설계만 있다(클라우드 세션). **구현 전**. realtime V3 | main에서 새로 `unit/u4b-activity-realtime` | `u4b/design.md` · **`u4b/brief.md`** |
 | U5b · U6 · U7 | 시작 전 | — | `aidlc/…/inception/units-generation/unit-of-work.md` U5 · U6 · U7 절. U6 · U7은 맨 아래 「U6 · U7 정본」 |
 
