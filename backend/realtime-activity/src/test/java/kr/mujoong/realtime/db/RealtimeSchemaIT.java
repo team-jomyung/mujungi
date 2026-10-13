@@ -51,6 +51,7 @@ class RealtimeSchemaIT {
             "realtime_device_disconnect_event",
             "realtime_inbox_event",
             "realtime_outbox_event",
+            "realtime_result_input_snapshot",
             "realtime_session_event",
             "realtime_session_gap",
             "realtime_session_stop_expression",
@@ -78,13 +79,14 @@ class RealtimeSchemaIT {
             // core 위치가 먼저 flyway 스키마를 썼으므로 realtime 이력은 버전 0 기준선 뒤 V1 · V2다(J116 보완)
             assertThat(query(owner,
                     "select version, type, success from flyway.realtime_schema_history order by installed_rank"))
-                    .containsExactly(List.of("0", "BASELINE", true), List.of("1", "SQL", true), List.of("2", "SQL", true));
+                    .containsExactly(List.of("0", "BASELINE", true), List.of("1", "SQL", true), List.of("2", "SQL", true),
+                            List.of("3", "SQL", true));
         }
         try (Connection realtime = postgres.connect(Role.REALTIME_APP)) {
             // 기동 점검 S2가 읽는 최신 버전
             assertThat(single(realtime,
                     "select max(version) from flyway.realtime_schema_history where success and type = 'SQL'"))
-                    .isEqualTo("2");
+                    .isEqualTo("3");
         }
     }
 
@@ -95,7 +97,7 @@ class RealtimeSchemaIT {
             assertThat(single(owner, "select script from flyway.realtime_schema_history where version = '2'"))
                     .isEqualTo("V2__u3_voice_conversation.sql");
             assertThat(V2_TABLES).allSatisfy(table -> assertThat(REALTIME_TABLES).contains(table));
-            assertThat(RealtimeSchemaIT.REALTIME_TABLES).hasSize(10);
+            assertThat(RealtimeSchemaIT.REALTIME_TABLES).hasSize(11);
         }
         try (Connection realtime = postgres.connect(Role.REALTIME_APP)) {
             // 01-roles.sql 기본 권한(편차 (x)): realtime_app은 새 표에 DML을 받고 DDL은 못 한다
@@ -133,6 +135,47 @@ class RealtimeSchemaIT {
         }
     }
 
+    /**
+     * U4b V3(FR7.1 · BR8.5 · 설계 6절): 결과 스냅숏 표 하나와 세션 guardian_id 일반 색인만 더한다. 앱 역할은 기본 권한으로 DML을 받고
+     * 외래 키는 세션 행을 지키며(RESTRICT), (session_id, snapshot_version) 유일 · 판 · 상태 · 사유 · 해시 형식 · 본문 형식 CHECK가 있다.
+     */
+    @Test
+    @Tag("u4b")
+    void v3AddsTheResultSnapshotTableAndTheGuardianIndexOnly() throws SQLException {
+        try (Connection owner = postgres.connect(Role.OWNER)) {
+            assertThat(single(owner, "select script from flyway.realtime_schema_history where version = '3'"))
+                    .isEqualTo("V3__u4b_session_lifecycle.sql");
+        }
+        try (Connection realtime = postgres.connect(Role.REALTIME_APP)) {
+            assertThat(single(realtime,
+                    "select has_table_privilege('realtime.realtime_result_input_snapshot', 'SELECT,INSERT,UPDATE,DELETE')"))
+                    .isEqualTo(true);
+            assertThat(single(realtime,
+                    "select has_table_privilege('realtime.realtime_result_input_snapshot', 'TRUNCATE')"))
+                    .as("앱 역할은 DDL성 권한이 없다").isEqualTo(false);
+            assertThat(query(realtime,
+                    "select conname, confdeltype from pg_constraint where contype = 'f'"
+                            + " and conrelid = 'realtime.realtime_result_input_snapshot'::regclass"))
+                    .containsExactly(List.of("realtime_result_input_snapshot_session_fk", "r"));
+            assertThat(single(realtime,
+                    "select count(*) from pg_constraint where contype = 'u'"
+                            + " and conname = 'realtime_result_input_snapshot_version_uk'"))
+                    .isEqualTo(1L);
+            assertThat(query(realtime,
+                    "select conname from pg_constraint where contype = 'c'"
+                            + " and conrelid = 'realtime.realtime_result_input_snapshot'::regclass order by conname"))
+                    .extracting(row -> (String) row.get(0))
+                    .containsExactly("realtime_result_input_snapshot_hash_ck", "realtime_result_input_snapshot_reason_ck",
+                            "realtime_result_input_snapshot_record_ck", "realtime_result_input_snapshot_status_ck",
+                            "realtime_result_input_snapshot_version_ck");
+            List<List<Object>> guardianIndex = query(realtime,
+                    "select indexdef from pg_indexes where schemaname = 'realtime'"
+                            + " and indexname = 'realtime_activity_session_guardian_idx'");
+            assertThat(guardianIndex).singleElement().satisfies(row -> assertThat((String) row.get(0))
+                    .startsWith("CREATE INDEX").contains("(guardian_id)").doesNotContain("WHERE"));
+        }
+    }
+
     @ParameterizedTest(name = "{0}: {1}열")
     @CsvSource({
         "realtime_activity_session, 29",
@@ -145,6 +188,7 @@ class RealtimeSchemaIT {
         "realtime_device_disconnect_event, 7",
         "realtime_audio_recording, 10",
         "realtime_session_gap, 6",
+        "realtime_result_input_snapshot, 12",
     })
     void tablesHaveTheEntityColumnCounts(String table, int expectedColumns) throws SQLException {
         try (Connection realtime = postgres.connect(Role.REALTIME_APP)) {

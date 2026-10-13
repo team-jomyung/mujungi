@@ -1,0 +1,8 @@
+# U4b 커버리지 측정 범위 (docs/units/u4b/design.md 9절 · brief.md · J137 규칙)
+# -PcoverageScope=u4b일 때 JaCoCo가 이 목록의 운영 소스(.java)만 잰다. 한 줄에 저장소 루트 기준 경로 하나.
+# 내용은 U4b가 새로 만들거나 되살린 realtime-activity 운영 소스와 U4b가 뜻을 바꾼 U1 · U3 소스다(층마다 더한다).
+# U1 · U3 목록(u1.txt · u3.txt)은 고치지 않는다. 자원(yml · sql)은 클래스가 없어 재지 않는다.
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/dialog/JoinTracker.java
+# L1 스키마 · 설정
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/ResultInputSnapshotRepository.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/config/RealtimeProperties.java

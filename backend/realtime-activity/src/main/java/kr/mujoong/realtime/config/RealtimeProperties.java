@@ -86,11 +86,33 @@ public record RealtimeProperties(
         }
     }
 
-    /** BR6.12 ② 기기 응답 20초((h) PROVIDER_UNAVAILABLE에도) · ③ 마무리 확인 30초. */
-    public record SessionTiming(Duration deviceAckTimeout, Duration closingConfirm) {
+    /**
+     * BR6.12 ② 기기 응답 20초((h) PROVIDER_UNAVAILABLE에도) · ③ 마무리 확인 30초. U4b(BR11.1 · FR10.1): 참여 창 처음 20초 · 안내 뒤 20초
+     * (BR2.2 · U4b-J4), 공백 경고 4분 · 종료 6분(BR5.3 · BR5.4), 종료 확인 질문 창 20초(BR4.3, 계약 7절 밖 U4b-J21), 정산 창 2초(BR8.1,
+     * 계약 7절 밖 U4b-J21). 공백 경고는 공백 종료보다 짧아야 한다.
+     */
+    public record SessionTiming(
+            Duration deviceAckTimeout,
+            Duration closingConfirm,
+            Duration joinWait,
+            Duration joinWaitAfterReprompt,
+            Duration silenceWarning,
+            Duration silenceEnd,
+            Duration stopConfirmWait,
+            Duration recordSettle) {
+
         public SessionTiming {
             positive(deviceAckTimeout, "mujoong.timing.session.device-ack-timeout");
             positive(closingConfirm, "mujoong.timing.session.closing-confirm");
+            positive(joinWait, "mujoong.timing.session.join-wait");
+            positive(joinWaitAfterReprompt, "mujoong.timing.session.join-wait-after-reprompt");
+            positive(silenceWarning, "mujoong.timing.session.silence-warning");
+            positive(silenceEnd, "mujoong.timing.session.silence-end");
+            positive(stopConfirmWait, "mujoong.timing.session.stop-confirm-wait");
+            positive(recordSettle, "mujoong.timing.session.record-settle");
+            if (silenceWarning.compareTo(silenceEnd) >= 0) {
+                throw invalid("mujoong.timing.session.silence-warning은 mujoong.timing.session.silence-end보다 짧아야 한다");
+            }
         }
     }
 
@@ -105,9 +127,15 @@ public record RealtimeProperties(
             Duration statusReportInterval,
             Duration outputQueueMax,
             Duration unstableRtt,
-            Duration unstableDisconnectWindow) {
+            Duration unstableDisconnectWindow,
+            Duration gapDisplay) {
 
+        /** U4b(BR6.1): 마지막 기기 메시지 뒤 이 시간이면 기술 일시정지 · 끊김 구간(점선 10초). 끊김 40초보다 짧아야 한다. */
         public DeviceTiming {
+            positive(gapDisplay, "mujoong.timing.device.gap-display");
+            if (gapDisplay != null && disconnect != null && gapDisplay.compareTo(disconnect) >= 0) {
+                throw invalid("mujoong.timing.device.gap-display는 mujoong.timing.device.disconnect보다 짧아야 한다");
+            }
             positive(disconnect, "mujoong.timing.device.disconnect");
             positive(heartbeatInterval, "mujoong.timing.device.heartbeat-interval");
             positive(helloTimeout, "mujoong.timing.device.hello-timeout");
@@ -186,12 +214,17 @@ public record RealtimeProperties(
         }
     }
 
-    /** BR6.7 묘비 10분 · R3-6 고아 세션 점검 · 타이머 전이 실패 재시도 간격. */
-    public record Session(Duration tombstoneTtl, Duration orphanCheckInterval, Duration timerTick) {
+    /**
+     * BR6.7 묘비 10분 · R3-6 고아 세션 점검 · 타이머 전이 실패 재시도 간격. U4b(BR9.1 · U4b-J21): 계정 삭제 처리기의 진행 세션 강제 정지
+     * 대기 상한 5초.
+     */
+    public record Session(Duration tombstoneTtl, Duration orphanCheckInterval, Duration timerTick,
+            Duration deletionStopWait) {
         public Session {
             positive(tombstoneTtl, "mujoong.session.tombstone-ttl");
             positive(orphanCheckInterval, "mujoong.session.orphan-check-interval");
             positive(timerTick, "mujoong.session.timer-tick");
+            positive(deletionStopWait, "mujoong.session.deletion-stop-wait");
         }
     }
 

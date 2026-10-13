@@ -103,11 +103,19 @@ class ConfigKeyContractTest {
         for (TableRow row : rows) {
             (row.defaultValue() != null && row.owners().contains(APP) ? owned : notOwned).add(row.key());
         }
+        // U4b(FR10.1 · BR11.1): 2절 예약 키 다섯은 1절로 옮겨 Realtime이 소유하고, 7절 밖 새 키 셋을 3 · 4절에 더했다
         assertThat(notOwned).as("예약 키 · 다른 앱 · web 전용 키(빈 대조 아님)")
-                .contains("mujoong.timing.session.join-wait", "mujoong.timing.parent.poll-interval",
+                .contains("mujoong.timing.practice.first-response-wait", "mujoong.timing.parent.poll-interval",
                         "mujoong.device-web.retry-interval", "mujoong.timing.session.preparing-timeout",
                         "mujoong.text-ai.request-timeout", "mujoong.text-ai.retry.max-retries",
                         "mujoong.text-ai.retry.backoff");
+        assertThat(owned).as("U4b가 옮기거나 더한 Realtime 시간 키")
+                .contains("mujoong.timing.session.join-wait", "mujoong.timing.session.join-wait-after-reprompt",
+                        "mujoong.timing.session.silence-warning", "mujoong.timing.session.silence-end",
+                        "mujoong.timing.device.gap-display", "mujoong.timing.session.stop-confirm-wait",
+                        "mujoong.timing.session.record-settle", "mujoong.session.deletion-stop-wait");
+        assertThat(notOwned).as("옮긴 키는 더 이상 예약 키가 아니다")
+                .doesNotContain("mujoong.timing.session.join-wait", "mujoong.timing.device.gap-display");
 
         assertThat(yml.keySet()).as("Realtime이 소유하지 않는 timing.md 키").doesNotContainAnyElementsOf(notOwned);
         List<String> undocumented = yml.keySet().stream()
