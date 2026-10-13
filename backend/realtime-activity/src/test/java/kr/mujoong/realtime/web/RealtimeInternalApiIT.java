@@ -188,14 +188,15 @@ class RealtimeInternalApiIT {
         assertThat(terminal.status()).isEqualTo(202);
         assertThat(sessions().find(preparing).orElseThrow().statusVersion()).isEqualTo(failed.statusVersion());
 
-        // (다) CLOSING(실행기 없는 행): 그대로 두고 202 {}
-        UUID closing = dbOnlySession(SessionStatus.CLOSING);
-        assertThat(end(closing, "CORE_ABANDONED").status()).isEqualTo(202);
-        assertThat(sessions().find(closing).orElseThrow().status()).isEqualTo(SessionStatus.CLOSING);
         // 실행기 없는 ACTIVE 행: FAILED로 닫는다(BR6.7 (나))
         UUID orphanActive = dbOnlySession(SessionStatus.ACTIVE);
         assertThat(end(orphanActive, "CORE_ABANDONED").status()).isEqualTo(202);
         assertThat(sessions().find(orphanActive).orElseThrow().status()).isEqualTo(SessionStatus.FAILED);
+        // (다) CLOSING(실행기 없는 행): 그대로 두고 202 {}
+        // U4b(FR11.2): 고아 점검이 closing-confirm 뒤 이 행을 먼저 닫지 않게 단언 바로 직전에 만든다(순서만 바꿈, 단언은 그대로)
+        UUID closing = dbOnlySession(SessionStatus.CLOSING);
+        assertThat(end(closing, "CORE_ABANDONED").status()).isEqualTo(202);
+        assertThat(sessions().find(closing).orElseThrow().status()).isEqualTo(SessionStatus.CLOSING);
         // 실행기 없는 CLOSING 행의 GUARDIAN_STOP은 202 {status: CLOSING}
         Reply closingStop = end(closing, "GUARDIAN_STOP");
         assertThat(closingStop.status()).isEqualTo(202);
