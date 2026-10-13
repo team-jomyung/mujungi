@@ -66,6 +66,7 @@ DB 시험은 Docker 대신 로컬 PostgreSQL 16(`-Pmujoong.test.db=local`)으로
 |---|---|---|
 | `RealtimeInternalApiIT` Core 취소 시험 | 실행기 없는 CLOSING 행을 일찍 만들면 부하에서 실행기 점검과 겹쳐 409가 났다 | 행 생성 순서만 바꿔 단언 바로 앞에서 만든다. 단언 줄은 그대로다(FR11.2). `--rerun-tasks` 5회 통과 |
 | `RealtimeMetricsScrapeIT.outboxAndInboxRows…`(U1) | 최종 U1 회귀 한 번에서 가장 오래된 PENDING 나이가 117초로 120초 기대에 못 미쳐 실패 | 같은 클래스 `--rerun-tasks` 3회와 모듈 check에서는 통과했다. U4b가 고치지 않은 U1 지표 경로의 시간 흔들림으로 보고 고치지 않았다. CI에서 지켜본다 |
+| `DeviceGatewayU3IT.aReconnectWithResume…`(U3, U4b의 `join` 경유) | PR #6 첫 CI(868ffab)에서 세션이 DEVICE_ACK에 머문 채 10초 안에 WAITING_CHILD가 되지 않아 실패했다. 그 10초 동안 공급자 실패 · 상태 전이 기록이 없고 CPU는 거의 쉬었다 | 로컬 재현 실패: 클래스 단독 3회, 4코어 모듈 전체 3회, 2코어 게이트웨이 시험 6회 모두 이 시험은 통과했다(4코어 1회는 위 지표 시험이, 2코어 1회는 U1 `DeviceGatewayIT` 1013 시험이 흔들렸다). 원인을 확정하지 못해 제품 코드는 바꾸지 않았다. 대신 `RealtimeItEnvironment.join`이 시한을 넘기면 세션 상태 · 가짜 공급자가 받은 type · 앱 스레드(가상 스레드 포함) 스택을 표준 출력에 남긴다. 다시 실패하면 CI `backend-reports`의 이 시험 보고서에서 실행기가 어디서 멈췄는지 본다 |
 
 ## 5. 계약 편차(`contracts/deviations.md`)
 
