@@ -15,7 +15,7 @@
 | ADR-014 | 기기는 등록(Core)과 연결(Realtime)로 나눠 소유 | J4 | Q4 · OQ11 |
 | ADR-015 | 진행 중 조회는 Realtime 중계, 끝난 기록은 종료 스냅숏으로 Core에 인계 | J5 · J6 · J10 | Q5 · Q6 |
 | ADR-016 | 연습 상황 생성은 Core, 진행 · Cue · 판정은 Realtime | J7 | Q7 |
-| ADR-017 | 리포트 PDF는 Core 서버 렌더링, AI 없음 | J8 | OQ6 · Q8 |
+| ADR-017 | 리포트는 Core가 저장 기록으로 10개 항목을 만들고 서버에서 PDF로 렌더링 | J8 | OQ6 · Q8 |
 | ADR-018 | 화면 설계 기준으로 ADR_2S · ERD를 고치는 21곳 | J12 | OQ2 |
 | ADR-019 | 두 앱 안 모듈형 컴포넌트 26개와 앱 사이 접점 셋 | J9 · J11 | 컴포넌트 경계 |
 
@@ -86,12 +86,12 @@
 - **Context** — 12는 1~2초 폴링으로 상태와 전사를 받고(FR3.2 · 점검표 9) 말풍선은 말 끝 뒤 1.5초 이내가 목표다(NFR5). 보호자 인증은 Core에만 있다(ADR-008). 26 · 27 · 28 · 30 · PDF는 끝난 활동의 전사 · 연습 기록을 읽는다. ADR-009는 상대 스키마를 직접 읽는 View를 예외 · 미정으로 두고, 개발 명세는 TranscriptAppended · PracticeStageChanged · CueDelivered · EvaluationMade · AudioSegmentUploaded 같은 진행 중 개별 이벤트를 적었다. 규칙 3: "세션이 끝나면 Outbox→Inbox로 결과를 Core에 넘긴다."
 - **Decision**
   1. 진행 중: ParentWeb → Core ActivityCoordinator(보호자 · 세션 소유 확인) → Realtime SessionLifecycle 진행 조회(내부 HTTP, 전사 since 순번). Core는 SessionStateChanged로 세션 상태 사본(core_activity)만 유지해 04 · 시작 검사에 쓴다.
-  2. 종료 뒤: SessionLifecycle이 결과 입력 스냅숏(realtime_result_input_snapshot: 아이 전사 · 승인된 AI 말 · 불확실 표시 · 끊김/미확인 구간 · 연습 목표와 단계 기록 · 판정값 · 원음 메타)을 만들어 SessionRecordCaptured로 보내고, Core ActivityRecord가 core_activity_record로 보관한다. 26 · 27 · 28 · 30 · PDF와 결과 작업은 이 Core 기록만 읽는다. DECLINED는 머리 정보만 넘긴다.
+  2. 종료 뒤: SessionLifecycle이 결과 입력 스냅숏(realtime_result_input_snapshot: 아이 전사 · 승인된 AI 말 · 불확실 표시 · 끊김/미확인 구간 · 연습 목표와 단계 기록 · 진행 중 판정값 · 원음 메타)을 만들어 SessionRecordCaptured로 보내고, Core ActivityRecord가 core_activity_record로 보관한다. 26 · 27 · 28 · 30 · PDF와 결과 작업은 이 Core 기록만 읽는다. DECLINED는 머리 정보만 넘긴다.
   3. 내부 이벤트는 Realtime → Core: SessionStateChanged · SessionRecordCaptured · DeviceStatusChanged · DeletionCompleted, Core → Realtime: DeviceReleased · DeletionRequested. 시작 · 끝내기는 즉시 명령이라 내부 HTTP다(ADR-010 "즉시 명령은 내부 HTTP"). 개발 명세의 진행 중 개별 이벤트들은 종료 스냅숏 하나로 합친다(J10).
 - **Consequences**
   - 좋아지는 것: 말풍선 지연에 Outbox 주기가 끼지 않는다. 끝난 기록은 Realtime이 멈춰도 Core에서 읽힌다. 앱 사이 이벤트 종류가 6개로 줄어 계약 · 시험이 작아진다.
   - 나빠지는 것: 전사 · 연습 기록이 Realtime 원본과 Core 기록 두 벌로 있다(삭제 때 둘 다 지운다). 진행 중 12는 Realtime 장애 때 "기기 상태 확인 불가 + 마지막 확인 시각"으로만 보인다.
-  - 보안: 조회 응답과 PDF 직렬화에서 판정값 · 구조화 결과 · 보호자 입력 원문을 뺀다(FR4.3 · A10). 스냅숏 해시로 인계 내용이 같음을 확인한다.
+  - 보안: 조회 응답과 리포트 · PDF 직렬화에서 진행 중 판정값 · 판정 근거 · 보호자 입력 원문을 뺀다. 기록용 재판정은 장면 결과 칩으로만, 경험 구조화는 출처 표시 문장으로만 나간다(FR4.3 · A10). 스냅숏 해시로 인계 내용이 같음을 확인한다.
 - **Alternatives Rejected**
   - *진행 중 이벤트마다 Core에 복제(TranscriptAppended)*: 말풍선 지연이 Outbox 주기만큼 늘고 이벤트 수가 많다.
   - *Core가 realtime 스키마를 읽기 전용 View로 읽기*: ADR-009가 예외로 미정, 스키마 결합.
@@ -109,14 +109,14 @@
   - *Realtime이 상황 생성(ADR_2S)*: ADR-011과 충돌, Realtime이 텍스트 AI · 노출 이력을 따로 가져야 한다.
   - *시작 때 모든 목표의 상황을 미리 생성*: 목표 N개 × 생성 · 확인 시간이 시작 지연(준비 10초 · 기기 응답 20초)과 겹친다.
 
-## ADR-017: 리포트 PDF는 Core 서버 렌더링, AI 없음
+## ADR-017: 리포트는 Core가 저장 기록으로 10개 항목을 만들고 서버에서 PDF로 렌더링
 
-- **Context** — 리포트 내용은 AI 없이 아이 정보 + 날짜별 대화 원문(과거 → 최신)이고 "이 문서는 진단 결과가 아닙니다" 문장을 넣으며 생활 팁 · 판정값은 없다(규칙 5 · FR6.5 · D-13). 30에서 PDF를 저장 · 공유(Web Share API)하려면 파일이 필요하다. 생성 방법은 어디에도 정해지지 않았다(점검표 3절 'PDF 생성 방법', OQ6).
-- **Decision** — Core Report가 REPORT 작업으로 서버에서 HTML 템플릿 → PDF를 렌더링한다(Java 라이브러리, 한글 글꼴 파일 임베드). 입력은 ActivityRecord의 대화 원문(판정값 · 구조화 결과 제외)과 ChildProfile의 머리 정보뿐이다. 파일은 30에서 저장 · 공유할 때 내려 주고 서버에는 메타(기간 · 활동 수 · 생성 시각 · 저장 여부)만 남긴다. 「나중에」 · 「←」로 버린 리포트는 폐기한다(A4). 라이브러리 이름(예: OpenHTMLtoPDF)과 글꼴 · 성능 검증은 3.3 NFR Design · 3.4에서 정한다.
+- **Context** — 상담용 리포트는 이름 · 순서가 고정된 10개 항목이고(FR6.5), 저장 기록(경험 구조화 · 인용 · 기록용 재판정 · 제공한 도움 · 종료 사유 · 확보 범위)과 아이 정보(이름 · 나이)만으로 채운다. 수치는 서버 집계값만 쓰고, 인용은 저장 전사와 글자 단위로 일치해야 하며, 자료가 없으면 "자료 부족"으로 둔다. "진단 결과가 아니에요" 고지를 30 · PDF에 넣는다(NFR1 · D-13). 30에서 PDF를 저장 · 공유(Web Share API)하려면 파일이 필요하다(점검표 3절 'PDF 생성 방법', OQ6).
+- **Decision** — Core Report가 REPORT 작업으로 항목을 만든다. 수치 · 목록 항목(1 · 3 · 4 · 7 · 8 · 9)은 서버가 집계 · 조립하고, 문장 항목은 TextAiGateway로 만든 뒤 인용 대조 · 금지 표현 2단계 검사를 거쳐 맞지 않으면 고정 템플릿 문장으로 바꾼다. 항목은 core_report_section에 저장하고, 30은 이 항목을 보여 주며, PDF는 서버에서 HTML 템플릿 → PDF로 렌더링한다(Java 라이브러리, 한글 글꼴 파일 임베드). 진행 중 판정값 · 점수 · 성공률은 입력에 넣지 않는다. 30에서 저장하면 리포트와 항목을 계정 삭제까지 보존하고 「나중에」 · 「←」로 버린 리포트는 폐기한다(A4). 라이브러리 이름(예: OpenHTMLtoPDF)과 글꼴 · 성능 검증은 3.3 NFR Design · 3.4에서 정한다.
 - **Consequences**
-  - 좋아지는 것: 컨테이너가 하나 덜 든다(EC2 1대). 문구 · 표현 제한(NFR1) 검사를 템플릿 한 곳에서 한다.
-  - 나빠지는 것: 서버 렌더링 메모리 · 시간을 60초 안에 맞춰야 한다(활동 20건 기준 시험, NFR8). 한글 글꼴 파일이 이미지에 들어간다.
-  - 보안: 동의 범위 밖 전사 · 인용이 들어가지 않게 입력 필드를 화이트리스트로 고정한다.
+  - 좋아지는 것: 컨테이너가 하나 덜 든다(EC2 1대). 30 화면과 PDF가 같은 저장 항목을 그리므로 내용이 어긋나지 않는다. 문구 · 표현 제한(NFR1) 검사를 항목 저장 전 한 곳에서 한다.
+  - 나빠지는 것: 텍스트 AI 호출과 서버 렌더링을 합쳐 60초 안에 맞춰야 한다(활동 20건 기준 시험, NFR8). 한글 글꼴 파일이 이미지에 들어간다.
+  - 보안: 동의 범위 밖 전사 · 인용이 들어가지 않게 입력 필드를 화이트리스트로 고정한다. 텍스트 AI에는 이름 대신 별칭을 보내고 아이 이름은 서버가 머리에만 넣는다(NFR3).
 - **Alternatives Rejected**
   - *Next.js 서버에서 헤드리스 Chromium*: 별도 브라우저 런타임이 무겁고 컨테이너가 늘어난다.
   - *보호자 브라우저 인쇄*: Android Chrome에서 파일 공유가 안 되고 기기마다 결과가 다르다.
@@ -137,14 +137,14 @@
 | 7 | 기기 상태 단계 · 끊김 시간 | 5단계 · 지연 1초 · 5분 안 2회 · 40초, Device 상태 두 축 | DeviceGateway · `components.md` 대응표 |
 | 8 | 쉬기 · 재개 | 없음(PAUSED 미구현) | SessionLifecycle |
 | 9 | 보호자 실시간 수신 | 12 말풍선 유지, 전송은 2초 폴링, 세션 조회 응답에 전사 포함 | ActivityCoordinator · ADR-015 |
-| 10 | 푸시 알림 | 웹 푸시 3종 Should, core_push_token(신설) | Notification |
+| 10 | 푸시 알림 | 웹 푸시 장애 3종 + 활동 완료 1종 Must, core_push_token(신설) | Notification |
 | 11 | 아이 선택 · 목적 입력 | 없음. core_activity_context.purpose 삭제 | ActivityContext |
 | 12 | 08 네 칸의 쓰임 | 결과 구조화 입력만, 대화 모델 미전달 | ActivityCoordinator · ResultPipeline · DialogPolicy |
 | 13 | 동의 · 철회 · 계정 삭제 | 철회 없음, 계정 삭제 접수형(DELETE /api/me 계열), core_consent.child_id nullable, 세션 동의 스냅숏 4항목 | ConsentPolicy · AccountDeletion · ActivitySession.consentSnapshot |
 | 14 | 종료 표현 | 문장 전체 2~20자 · 추가 5개, expression_suffix → expression_text(20), 인식은 Realtime이 전사로 판단 | ChildProfile · DialogPolicy |
 | 15 | 연습 세션 목표 수 | 여러 개(n/N), realtime_session_goal(신설), 단일 목표 컬럼 삭제 | PracticeProtocol · SessionGoal |
 | 16 | 결과 소유권 | Core 통일 | ADR-011 |
-| 17 | 리포트 내용 | AI 없음 원문 PDF, period_from · period_to 추가, result_id 삭제 | Report · ADR-017 |
+| 17 | 리포트 내용 | 저장 기록 기반 10개 항목(core_report_section 신설) + 서버 PDF, period_from · period_to 추가, result_id 삭제 | Report · ADR-017 |
 | 18 | 출력 게이트 | ADR-004대로, 12 말풍선은 승인된 AI 말만(approved_for_display) | OutputGate · Transcript |
 | 19 | 플랫폼 | Next.js 웹 한 앱 두 접점, PWA 아님(웹 푸시는 서비스 워커만) | ParentWeb · DeviceWeb |
 | 20 | 아이 수 모델 | 1:1, GuardianChild 없음, core_child.guardian_id UNIQUE, 시드 보호자 2 · 아이 2 · 기기 2 | ChildProfile |

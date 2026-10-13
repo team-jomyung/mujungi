@@ -35,7 +35,7 @@ U2는 기준 main에 병합되어 있다. U4a의 작업 배정은 진행 중이�
 | D3 | `docs/units/u3/design.md` · 위 U3 ref | 기기 연결·음성·전사 엔터티 |
 | D5 | `docs/units/u5a/design.md` · 위 U5a ref | 행동 정의·후보·선택·상황 엔터티와 가정 |
 | CMP | [components.md — 엔터티 소유](../../aidlc/spaces/default/intents/261008-mujoong-service/inception/domain-design/components.md#엔터티-소유) · main | 컴포넌트 소유, 미구현 엔터티, J9/J12 |
-| UNIT | [유닛 배정표](../units/README.md) · main | core V2=U2 / V3=U4a / V4=U5a, realtime V2=U3 / V3=U4b |
+| UNIT | [유닛 배정표](../units/README.md) · main | core V2=U2 / V3=U4a / V4=U5a / V5=U6 / V6=U7, realtime V2=U3 / V3=U4b / V4=U5b |
 
 요청에서 언급한 `40_` 묶음은 이 main에서 기능 명세이고, ERD의 실제 위치는 `60_ERD_v0.1`이다. 같은 묶음의 Markdown 쌍둥이를 읽어 비교했다. R2·C4·D3·D5는 이 문서 브랜치에 없는 파일이므로 일반 파일 링크 대신 경로와 ref를 기록했다. 위 표의 main 출처는 모두 §1.1의 main 커밋으로 고정한다.
 
@@ -1746,7 +1746,7 @@ erDiagram
 |---|---:|---|
 | v0.1과 현재 비교 DDL에 같은 이름으로 존재 | 24 | 열·타입·제약은 달라질 수 있으므로 이름 일치가 구조 동일을 뜻하지 않는다. |
 | v0.1에는 있고 현재 비교 DDL에는 없는 소유 엔터티 | 15 | 삭제된 표로 세지 않는다. 7절에 예정 또는 구현 결정 미확정으로 적는다. |
-| v0.1에서 의도적으로 제외 | 1 | `core_analytics_event`: 요구사항 없음, 소유:J9·1416, 결정 기준에 따라 만들지 않는다. |
+| v0.1에서 의도적으로 제외 | 1 | `core_analytics_event`: 요구사항 없음, 소유:J9·1453, 결정 기준에 따라 만들지 않는다. |
 | 현재 비교 DDL에서 새로 확인 | 7 | 보고의 신설 8표 중 4표 + 아래 구현 보조 표 3표. |
 | 보고의 신설 8표 중 아직 예정 | 4 | `core_activity_record`, `core_push_token`, `core_push_dispatch`, `realtime_session_goal`. |
 
@@ -1766,14 +1766,14 @@ erDiagram
 
 | 번호 | 보고서 명칭 → 현재 물리명 | 소유 / 완성 유닛 | 현재 상태 | 근거 |
 |---|---|---|---|---|
-| N1 | `core_device` → `core.core_device` | DeviceRegistry / U1 | main C1 구현 확인 | 보고:307, 소유:1377, C1:147 |
-| N2 | `core_activity` → `core.core_activity` | ActivityCoordinator / U4a 확장 | main C1에 사본 표 구현; U4a 기능 확장 예정 | 보고:307, 소유:1378, C1:204, U4a brief:10 |
-| N3 | `core_activity_record` | ActivityRecord / U4a | 예정; 조사한 DDL에 없음. core V3 배정 | 보고:307, 소유:1393, U4a brief:11·17 |
-| N4 | `core_behavior_definition` → `core.core_behavior_definition` | PragmaticsKnowledge / U5a | 로컬 C4 구현 확인, main 미포함 | 보고:307, 소유:1382, C4:2 |
-| N5 | `core_push_token` | Notification / U7 | 예정(Should); 물리 정의 미확정 | 보고:307, 소유:1396 |
-| N6 | `core_push_dispatch` | Notification / U7 | 예정(Should); 물리 정의 미확정 | 보고:307, 소유:1397 |
-| N7 | `realtime_device_connection` → `realtime.realtime_device_connection` | DeviceGateway / U3 완성 | main R1에 표 구현; R2에 끊김 사건 보조 표 추가 | 보고:307, 소유:1404, R1:143, R2:15 |
-| N8 | `realtime_session_goal` | PracticeProtocol / U5b | 예정; 마이그레이션 번호 미확정 | 보고:307, 소유:1408, 유닛:U5 |
+| N1 | `core_device` → `core.core_device` | DeviceRegistry / U1 | main C1 구현 확인 | 보고:307, 소유:1412, C1:147 |
+| N2 | `core_activity` → `core.core_activity` | ActivityCoordinator / U4a 확장 | main C1에 사본 표 구현; U4a 기능 확장 예정 | 보고:307, 소유:1413, C1:204, U4a brief:10 |
+| N3 | `core_activity_record` | ActivityRecord / U4a | 예정; 조사한 DDL에 없음. core V3 배정 | 보고:307, 소유:1429, U4a brief:11·17 |
+| N4 | `core_behavior_definition` → `core.core_behavior_definition` | PragmaticsKnowledge / U5a | 로컬 C4 구현 확인, main 미포함 | 보고:307, 소유:1417, C4:2 |
+| N5 | `core_push_token` | Notification / U7 | 예정; 물리 정의 미확정 | 보고:307, 소유:1433 |
+| N6 | `core_push_dispatch` | Notification / U7 | 예정; 물리 정의 미확정 | 보고:307, 소유:1434 |
+| N7 | `realtime_device_connection` → `realtime.realtime_device_connection` | DeviceGateway / U3 완성 | main R1에 표 구현; R2에 끊김 사건 보조 표 추가 | 보고:307, 소유:1441, R1:143, R2:15 |
+| N8 | `realtime_session_goal` | PracticeProtocol / U5b | 예정; 마이그레이션 번호 미확정 | 보고:307, 소유:1445, 유닛:U5 |
 
 ### 6.3 J12 열 추가·삭제 및 이름 변경 추적
 
@@ -1788,19 +1788,19 @@ erDiagram
 | `core_practice_goal_selection.sort_order` | 로컬 C4 구현, 양수 `bigint`; 보호자별 순서 유일 | 보고:308, C4:62·66 |
 | `core_practice_goal_selection.deleted_at` | 로컬 C4 구현. 추가 구현된 `restore_until`과 상태 CHECK로 소프트 삭제·복구 기한 표현 | 보고:308, C4:63·67~68 |
 | `realtime_transcript.approved_for_display` | main R1 구현, `boolean NOT NULL DEFAULT false` | 보고:308, R1:125 |
-| `realtime_cue_delivery.consent_response` | U5b 예정. 표 자체가 아직 비교 DDL에 없으므로 타입·nullability 미확정 | 보고:308, 소유:1412 |
-| `realtime_cue_delivery.contains_answer_sentence` | U5b 예정. 타입·nullability 미확정 | 보고:308, 소유:1412 |
-| `realtime_practice_attempt.not_performed_reason` | U5b 예정. 타입·nullability 미확정 | 보고:308, 소유:1410 |
+| `realtime_cue_delivery.consent_response` | U5b 예정. 표 자체가 아직 비교 DDL에 없으므로 타입·nullability 미확정 | 보고:308, 소유:1449 |
+| `realtime_cue_delivery.contains_answer_sentence` | U5b 예정. 타입·nullability 미확정 | 보고:308, 소유:1449 |
+| `realtime_practice_attempt.not_performed_reason` | U5b 예정. 타입·nullability 미확정 | 보고:308, 소유:1447 |
 
 | 제거·이동 대상 | 현재 판단 | 근거 |
 |---|---|---|
-| `core_activity_context.purpose` | 제외할 예정. ActivityContext 표가 비교 DDL에 없으므로 실제 DROP 이력 없음 | 보고:309, 소유:1379, 결정:141 |
-| `core_report_activity.result_id` | 제외할 예정. ReportActivity 표가 비교 DDL에 없으며 ActivityRecord 원문 참조를 기준으로 설계 | 보고:309, 소유:1395, 결정:147 |
-| `realtime_activity_session.practice_goal_selection_id` | main R1부터 존재하지 않음. 여러 목표의 SessionGoal로 이동할 설계이며 SessionGoal 표는 U5b 예정 | 보고:309, 소유:1400·1408, R1:22~72 |
-| `realtime_activity_session.current_practice_stage` | main R1부터 존재하지 않음. 목표별 단계는 SessionGoal의 설계 속성; 물리 열 정의 미확정 | 소유:1400·1408·1508, R1:22~72 |
-| `realtime_practice_attempt.goal_selection_id` → `session_goal_id` | 소유 표에서 이름 변경 방향을 명시. U5b 예정이므로 실제 ALTER·FK를 구현으로 표시하지 않음 | 소유:1410 |
+| `core_activity_context.purpose` | 제외할 예정. ActivityContext 표가 비교 DDL에 없으므로 실제 DROP 이력 없음 | 보고:309, 소유:1414, 결정:141 |
+| `core_report_activity.result_id` | 제외할 예정. ReportActivity 표가 비교 DDL에 없으며 ActivityRecord 원문 참조를 기준으로 설계 | 보고:309, 소유:1432, 결정:147 |
+| `realtime_activity_session.practice_goal_selection_id` | main R1부터 존재하지 않음. 여러 목표의 SessionGoal로 이동할 설계이며 SessionGoal 표는 U5b 예정 | 보고:309, 소유:1437·1408, R1:22~72 |
+| `realtime_activity_session.current_practice_stage` | main R1부터 존재하지 않음. 목표별 단계는 SessionGoal의 설계 속성; 물리 열 정의 미확정 | 소유:1437·1408·1508, R1:22~72 |
+| `realtime_practice_attempt.goal_selection_id` → `session_goal_id` | 소유 표에서 이름 변경 방향을 명시. U5b 예정이므로 실제 ALTER·FK를 구현으로 표시하지 않음 | 소유:1447 |
 
-`core_report.period_from`·`period_to`도 ADR-018 #17과 소유 표의 추가 예정 항목이다(결정:147, 소유:1394). Report 표가 비교 DDL에 없어 날짜 타입·필수성·기간 제약을 여기서 정하지 않는다.
+`core_report.period_from`·`period_to`도 ADR-018 #17과 소유 표의 추가 예정 항목이다(결정:147, 소유:1430). Report 표가 비교 DDL에 없어 날짜 타입·필수성·기간 제약을 여기서 정하지 않는다.
 
 ### 6.4 ADR-018의 21곳 번호별 추적
 
@@ -1808,8 +1808,8 @@ erDiagram
 
 | # | 원문 항목 | v0.2 데이터 구조 반영과 현재 상태 | 구현/예정 근거 |
 |---|---|---|---|
-| 1 | 기기 등록 방식 | `core_device`의 8자리 등록 코드, 등록 상태와 비밀 해시. main C1 구현. 코드 값이나 해시 실제 값은 문서에 싣지 않는다. | C1:147~198, 소유:1377 |
-| 2 | 원음 저장 | `realtime_audio_recording` 메타 표가 U3 R2에 존재. 파일 자체와 백업 방식은 ERD 외부이며 메타 존재가 모든 세션의 원음 저장을 뜻하지 않는다. | R2:32~51, 소유:1405 |
+| 1 | 기기 등록 방식 | `core_device`의 8자리 등록 코드, 등록 상태와 비밀 해시. main C1 구현. 코드 값이나 해시 실제 값은 문서에 싣지 않는다. | C1:147~198, 소유:1412 |
+| 2 | 원음 저장 | `realtime_audio_recording` 메타 표가 U3 R2에 존재. 파일 자체와 백업 방식은 ERD 외부이며 메타 존재가 모든 세션의 원음 저장을 뜻하지 않는다. | R2:32~51, 소유:1442 |
 | 3 | 세션 상태 이름 | Core 사본은 11상태, Realtime 원장은 `REQUESTED`를 제외한 10상태 CHECK. `ENDED_UNCONFIRMED` 포함; `PAUSED`, `ENDING`, `PARTIAL`, `RESULT_*` 없음. “Realtime에도 11값”으로 복사하지 않는다. | C1:235~237, R1:20·54~56 |
 | 4 | 종료 사유 값 | 양쪽 `end_reason` 열 존재. 8값은 도메인·계약 규칙이며 현재 C1/R1에는 8값을 강제하는 DB CHECK가 없다. DB enum으로 그리지 않는다. 전체 종료 흐름 완성은 U4. | 결정:134, C1:212, R1:41, 유닛:U4 |
 | 5 | 보호자 끝냄 마무리 인사 | 승인 콘텐츠·버전 표와 세션의 `closing_content_version_id`가 존재. 모든 종료에서 1회 실행은 동작 규칙으로 U4b가 완성하며 별도 “인사 횟수” 열은 만들지 않는다. | C1:115·124, R1:40, 유닛:U4 |
@@ -1817,18 +1817,18 @@ erDiagram
 | 7 | 기기 상태 단계·끊김 시간 | Core의 등록/보고 축과 Realtime 연결 원장이 분리됨. R1 연결 상태 5값, R2 끊김 사건 표가 존재. 1초·5분·40초는 시간 규칙이고 단일 상태 enum으로 두 축을 합치지 않는다. | C1:157·161·176~177, R1:143~158, R2:11~29 |
 | 8 | 쉬기·재개 | PAUSED 상태와 별도 휴식/재개 표는 없음. 의도적 비채택이며 미구현 표로 세지 않는다. | 결정:138, C1/R1 상태 CHECK |
 | 9 | 보호자 실시간 수신 | 전사 표의 `sequence_no`·승인 표시로 증분 말풍선의 저장 기반을 표현. 2초 폴링은 API/화면 동작이고 수신 채널 표를 신설하지 않는다. | R1:117~136, 결정:139 |
-| 10 | 푸시 알림 | `core_push_token`·`core_push_dispatch`는 U7 예정, 현재 비교 DDL에 없음. Should 범위라 구현 완료로 표기하지 않는다. | 소유:1396~1397, 유닛:U7 |
-| 11 | 아이 선택·목적 입력 | 1:1 아이 모델은 C1에 구현. 예정 `core_activity_context`에는 `purpose`를 계승하지 않는 설계. | C1:67, 소유:1379, 결정:141 |
-| 12 | 08 네 칸의 쓰임 | ActivityContext는 U4a 예정. 네 칸은 결과 구조화 입력 전용이라는 소유·전달 경계를 기록하고, 대화 모델용 새 열을 만들지 않는다. | `docs/units/u4a/brief.md`:10, 소유:1379, 결정:142 |
+| 10 | 푸시 알림 | `core_push_token`·`core_push_dispatch`는 U7 예정, 현재 비교 DDL에 없음. 아직 구현 전이라 구현 완료로 표기하지 않는다. | 소유:1433~1434, 유닛:U7 |
+| 11 | 아이 선택·목적 입력 | 1:1 아이 모델은 C1에 구현. 예정 `core_activity_context`에는 `purpose`를 계승하지 않는 설계. | C1:67, 소유:1414, 결정:141 |
+| 12 | 08 네 칸의 쓰임 | ActivityContext는 U4a 예정. 네 칸은 결과 구조화 입력 전용이라는 소유·전달 경계를 기록하고, 대화 모델용 새 열을 만들지 않는다. | `docs/units/u4a/brief.md`:10, 소유:1414, 결정:142 |
 | 13 | 동의·철회·계정 삭제 | C2가 `core_consent.child_id`를 nullable로 완화하고 약관 버전 FK를 추가. 계정 삭제 요청 장부는 C2, 세션의 동의 4항목+정책 버전 스냅숏은 R1. “철회 UI 없음”과 기존 DB의 `WITHDRAWN` 허용은 구별한다. | C2:14~18·60~87, C1:92, R1:59~71 |
 | 14 | 종료 표현 | C1에서 `expression_text varchar(20)`·`normalized_text varchar(40)`로 이름과 길이 변경. C2가 2~20자, 순서 1~5, 아이별 정규화 중복 방지를 추가. | C1:98~108, C2:28~33 |
-| 15 | 연습 세션 목표 수 | 단일 목표·단계 열은 R1에 없음. 여러 목표의 `realtime_session_goal` 및 시도와의 연결은 U5b 예정. | R1:22~72, 소유:1400·1408·1410 |
-| 16 | 결과 소유권 | 결과·작업·리포트 표는 Core 소유로 계획. 현재 U6 표는 비교 DDL에 없어 Realtime 결과 저장소가 구현된 것으로 그리지 않는다. | 소유:1388~1395, 결정:146, 유닛:U6 |
-| 17 | 리포트 내용 | Core의 Report/ReportActivity를 U6 예정으로 표시. 기간 두 속성 추가·`result_id` 제외, 활동 원문 기반 PDF이며 PDF 파일 저장 표를 추정하지 않는다. | 소유:1394~1395, 결정:147 |
-| 18 | 출력 게이트 | `realtime_transcript.approved_for_display` 구현. 승인되지 않은 AI 말을 보호자 말풍선으로 내보내지 않는 동작은 OutputGate/ConversationLog 책임. | R1:113~125, 소유:1407 |
+| 15 | 연습 세션 목표 수 | 단일 목표·단계 열은 R1에 없음. 여러 목표의 `realtime_session_goal` 및 시도와의 연결은 U5b 예정. | R1:22~72, 소유:1437·1408·1410 |
+| 16 | 결과 소유권 | 결과·작업·리포트 표는 Core 소유로 계획. 현재 U6 표는 비교 DDL에 없어 Realtime 결과 저장소가 구현된 것으로 그리지 않는다. | 소유:1423~1432, 결정:146, 유닛:U6 |
+| 17 | 리포트 내용 | Core의 Report/ReportActivity를 U6 예정으로 표시. 기간 두 속성 추가·`result_id` 제외, 저장 기록 기반 10개 항목 리포트(항목 표 core_report_section 예정)이며 PDF 파일 저장 표를 추정하지 않는다. | 소유:1430~1432, 결정:147 |
+| 18 | 출력 게이트 | `realtime_transcript.approved_for_display` 구현. 승인되지 않은 AI 말을 보호자 말풍선으로 내보내지 않는 동작은 OutputGate/ConversationLog 책임. | R1:113~125, 소유:1444 |
 | 19 | 플랫폼 | Next.js 두 접점과 U7 서비스 워커는 배포·클라이언트 규칙. DB 신설/삭제 대상 없음. | 결정:149 |
 | 20 | 아이 수 모델 | `core_child.guardian_id UNIQUE` 구현. GuardianChild 연결 표 없음. “계정당 아이 최대 한 명”의 DB 제약이며 계정 생성 즉시 아이가 반드시 존재한다는 뜻은 아니다. | C1:56~69, 결정:150 |
-| 21 | 목표 후보가 목록에 들어가는 방식 | 후보/근거와 보호자가 담은 선택을 C4의 별도 표로 유지. 후보 등록만으로 selection 행을 자동 생성하는 구조로 합치지 않는다. | C4:38~70, 소유:1384~1386, 결정:151 |
+| 21 | 목표 후보가 목록에 들어가는 방식 | 후보/근거와 보호자가 담은 선택을 C4의 별도 표로 유지. 후보 등록만으로 selection 행을 자동 생성하는 구조로 합치지 않는다. | C4:38~70, 소유:1419~1421, 결정:151 |
 
 ### 6.5 보고서의 E1~E9 추적
 
@@ -2265,27 +2265,29 @@ target_behavior_key → behavior_key와 scenario_type → kind는 설계 대응�
 
 | 번호 | 예정 물리명 / 엔터티 | 소유 컴포넌트 | 예정 유닛·마이그레이션 | 확인 근거 및 유의점 |
 |---|---|---|---|---|
-| P01 | `core_activity_context` / ActivityContext | ActivityCoordinator | U4a, core V3 배정 | 소유:1379, `docs/units/u4a/brief.md`:10·17. v0.1 계승 시 purpose 제외. |
-| P02 | `core_activity_record` / ActivityRecord | ActivityRecord | U4a, core V3 배정 | 소유:1393, U4a brief:11·17. 신설 8표 중 하나; 종료 스냅숏 수신 저장 원천. |
-| P03 | `realtime_result_input_snapshot` / ResultInputSnapshot | SessionLifecycle | U4b, realtime V3 배정 | 소유:1403, 유닛 U4:51·53 및 units README:15. 종료 스냅숏 생성 책임. |
-| P04 | `realtime_session_goal` / SessionGoal | PracticeProtocol | U5b, 번호 미정 | 소유:1408. 여러 목표·순서·목표별 단계와 정의 스냅숏 설계. |
-| P05 | `realtime_scenario_exposure` / ScenarioExposure | PracticeProtocol | U5b, 번호 미정 | 소유:1409. Core 시나리오와 별개의 실제 노출 기록 예정. |
-| P06 | `realtime_practice_attempt` / PracticeAttempt | PracticeProtocol | U5b, 번호 미정 | 소유:1410. session_goal_id 및 미실시 사유는 예정 변경. |
-| P07 | `realtime_practice_response` / PracticeResponse | PracticeProtocol | U5b, 번호 미정 | 소유:1411. 첫 반응·도움 뒤·새 상황 반응을 구분할 책임. |
-| P08 | `realtime_cue_delivery` / CueDelivery | PracticeProtocol | U5b, 번호 미정 | 소유:1412. 도움 동의·정답 포함 여부는 예정 속성. |
-| P09 | `realtime_evaluation` / Evaluation | ResponseEvaluator | U5b, 번호 미정 | 소유:1413. U5의 Realtime 판정 소유 엔터티. |
-| P10 | `core_result_job` / ResultJob | ResultPipeline | U6, 번호 미정 | 소유:1388, 유닛 U6:66. 작업 종류·재시도는 확정 설계를 따를 예정. |
-| P11 | `core_result_job_attempt` / ResultJobAttempt | ResultPipeline | U6, 번호 미정 | 소유:1389. 작업별 시도 기록. |
-| P12 | `core_structured_experience` / StructuredExperience | ResultPipeline | U6, 번호 미정 | 소유:1390. U5a 후보의 nullable structured_experience_id가 존재해도 이 표가 구현됐다는 뜻은 아니다. |
-| P13 | `core_result` / ActivityResult | ResultPipeline | U6, 번호 미정 | 소유:1391. 결과 버전의 Core 원장 예정. |
-| P14 | `core_session_result_state` / SessionResultState | ResultPipeline | U6, 번호 미정 | 소유:1392. 현재 노출 결과 포인터 예정. |
-| P15 | `core_report` / Report | Report | U6, 번호 미정 | 소유:1394. 기간·저장·버림 속성의 최종 SQL은 미정. |
-| P16 | `core_report_activity` / ReportActivity | Report | U6, 번호 미정 | 소유:1395. result_id를 유지한 기존 v0.1 정의를 가져오지 않음. |
-| P17 | `core_push_token` / PushSubscription | Notification | U7(Should), 번호 미정 | 소유:1396, 유닛 U7:73~74. 구현 여부와 시점은 후속 유닛 결정. |
-| P18 | `core_push_dispatch` / PushDispatch | Notification | U7(Should), 번호 미정 | 소유:1397. 구독과 발송 요청 장부를 구분할 계획. |
-| P19 | `realtime_conversation_turn` / ConversationTurn | ConversationLog | 원래 소유는 U3; 후속 처리 미확정 | 소유:1406, 유닛 U3:13·44. 그러나 조사한 R1/R2에 표가 없고 realtime_transcript.turn_id도 없음. U4b 소유로 임의 재배정하거나 폐기 결정으로 단정하지 않는다. |
+| P01 | `core_activity_context` / ActivityContext | ActivityCoordinator | U4a, core V3 배정 | 소유:1414, `docs/units/u4a/brief.md`:10·17. v0.1 계승 시 purpose 제외. |
+| P02 | `core_activity_record` / ActivityRecord | ActivityRecord | U4a, core V3 배정 | 소유:1429, U4a brief:11·17. 신설 8표 중 하나; 종료 스냅숏 수신 저장 원천. |
+| P03 | `realtime_result_input_snapshot` / ResultInputSnapshot | SessionLifecycle | U4b, realtime V3 배정 | 소유:1440, 유닛 U4:51·53 및 units README:15. 종료 스냅숏 생성 책임. |
+| P04 | `realtime_session_goal` / SessionGoal | PracticeProtocol | U5b, realtime V4 | 소유:1445. 여러 목표·순서·목표별 단계와 정의 스냅숏 설계. |
+| P05 | `realtime_scenario_exposure` / ScenarioExposure | PracticeProtocol | U5b, realtime V4 | 소유:1446. Core 시나리오와 별개의 실제 노출 기록 예정. |
+| P06 | `realtime_practice_attempt` / PracticeAttempt | PracticeProtocol | U5b, realtime V4 | 소유:1447. session_goal_id 및 미실시 사유는 예정 변경. |
+| P07 | `realtime_practice_response` / PracticeResponse | PracticeProtocol | U5b, realtime V4 | 소유:1448. 첫 반응·도움 뒤·새 상황 반응을 구분할 책임. |
+| P08 | `realtime_cue_delivery` / CueDelivery | PracticeProtocol | U5b, realtime V4 | 소유:1449. 도움 동의·정답 포함 여부는 예정 속성. |
+| P09 | `realtime_evaluation` / Evaluation | ResponseEvaluator | U5b, realtime V4 | 소유:1450. U5의 Realtime 판정 소유 엔터티. |
+| P10 | `core_result_job` / ResultJob | ResultPipeline | U6, core V5 | 소유:1423, 유닛 U6:66. 작업 종류·재시도는 확정 설계를 따를 예정. |
+| P11 | `core_result_job_attempt` / ResultJobAttempt | ResultPipeline | U6, core V5 | 소유:1424. 작업별 시도 기록. |
+| P12 | `core_structured_experience` / StructuredExperience | ResultPipeline | U6, core V5 | 소유:1425. U5a 후보의 nullable structured_experience_id가 존재해도 이 표가 구현됐다는 뜻은 아니다. |
+| P13 | `core_result` / ActivityResult | ResultPipeline | U6, core V5 | 소유:1427. 결과 버전의 Core 원장 예정. |
+| P14 | `core_session_result_state` / SessionResultState | ResultPipeline | U6, core V5 | 소유:1428. 현재 노출 결과 포인터 예정. |
+| P15 | `core_report` / Report | Report | U6, core V5 | 소유:1430. 기간·저장·버림 속성의 최종 SQL은 미정. |
+| P16 | `core_report_activity` / ReportActivity | Report | U6, core V5 | 소유:1432. result_id를 유지한 기존 v0.1 정의를 가져오지 않음. |
+| P17 | `core_push_token` / PushSubscription | Notification | U7, core V6 | 소유:1433, 유닛 U7:74~75. 장애 3종 + 활동 완료 발송을 기록한다. |
+| P18 | `core_push_dispatch` / PushDispatch | Notification | U7, core V6 | 소유:1434. 구독과 발송 요청 장부를 구분할 계획. |
+| P19 | `realtime_conversation_turn` / ConversationTurn | ConversationLog | 원래 소유는 U3; 후속 처리 미확정 | 소유:1443, 유닛 U3:13·44. 그러나 조사한 R1/R2에 표가 없고 realtime_transcript.turn_id도 없음. U4b 소유로 임의 재배정하거나 폐기 결정으로 단정하지 않는다. |
+| P20 | `core_scene_judgment` / SceneJudgment | ResultPipeline | U6, core V5 | 소유:1426. 기록용 재판정 장면 하나(값 · 시점 · 진행 중 판정과 차이). 보호자 응답에는 칩으로만 나간다. |
+| P21 | `core_report_section` / ReportSection | Report | U6, core V5 | 소유:1431. 리포트 하나에 항목 10개(sectionNo 1~10 유일), 인용은 citations JSON. |
 
-분류 합계는 **U4a 2 + U4b 1 + U5b 6 + U6 7 + U7 2 + ConversationTurn 미확정 1 = 19개**다. U4a는 진행 중이라는 문서 상태이고 위 표는 이번 비교에 선택한 커밋 집합 기준이다. 다른 작업 트리의 미커밋 구현까지 조사하거나 완료로 판정하지 않았다.
+분류 합계는 **U4a 2 + U4b 1 + U5b 6 + U6 9 + U7 2 + ConversationTurn 미확정 1 = 21개**다. U4a는 진행 중이라는 문서 상태이고 위 표는 이번 비교에 선택한 커밋 집합 기준이다. 다른 작업 트리의 미커밋 구현까지 조사하거나 완료로 판정하지 않았다.
 
 ### 7.2 기존 표 확장과 실제 표 신설의 구분
 
@@ -2294,7 +2296,7 @@ target_behavior_key → behavior_key와 scenario_type → kind는 설계 대응�
 | U4a | C1 core_activity | 세션 사본·시작 조건·08 배경·종료 기록 완성 | core_activity는 예정 표로 재계수하지 않는다. 신규 예정은 P01·P02. |
 | U4b | R1 realtime_activity_session/session_event/session_stop_expression 및 R2 session_gap | 전체 상태·시간 규칙, 종료 스냅숏과 SessionRecordCaptured | 기존 표의 추가 열을 추정하지 않는다. 신규 예정은 P03. |
 | U5b | C4의 목표·행동 정의·상황과 C1/R1 활동 기반 | 연습 시작·세션 목표·진행·도움·반응·판정 | Core U5a 7표를 다시 예정 표로 적지 않는다. 신규 예정은 P04~P09. |
-| U6 | C4 후보 등록/근거·행동 정의/생활 팁 제공 포트 | 결과 구조화·후보 생성 파이프라인·리포트 | 기존 후보 표는 U5a 소유 유지. 신규 예정은 P10~P16. |
-| U7 | 기존 계정·기기·활동 | 구독·발송 기록·웹 푸시 | 신규 예정은 P17~P18, Should 상태 유지. |
+| U6 | C4 후보 등록/근거·행동 정의/생활 팁 제공 포트 | 결과 구조화·기록용 재판정·후보 생성 파이프라인·10개 항목 리포트 | 기존 후보 표는 U5a 소유 유지. 신규 예정은 P10~P16 · P20 · P21. |
+| U7 | 기존 계정·기기·활동 | 구독·발송 기록·웹 푸시 | 신규 예정은 P17~P18. |
 
 최종 통합 전 확인할 불일치는 세 가지다. 첫째, 소유 카탈로그의 ConversationTurn이 현재 U3 DDL에 없어 후속 물리 모델 결정을 기다린다. 둘째, “상태 11개”는 Core의 REQUESTED 사본을 포함한 전체 도메인 수이며 Realtime DDL은 10개다. 셋째, 보고서의 열 수·필수성 요약보다 현재 DDL이 우선한다(Outbox/Inbox 각 17열, guardian_id nullable 등). 이는 기존 원본 문서의 소급 수정이나 새로운 SQL 변경 지시가 아니다.

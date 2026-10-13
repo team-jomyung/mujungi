@@ -14,16 +14,16 @@ U2부터는 엔진 없이, 엔진이 만든 인셉션 산출물(스토리 · 계
 | U4a 활동 세션 Core · /parent 화면 | 구현 끝. 조정자 검증 통과(백엔드 전체 · U4a 커버리지 · 프런트 u4a · u1 · u2). **리뷰 전**. core V3 | `unit/u4a-activity-core` | `u4a/brief.md` · `design.md` · `report.md` |
 | U5a 연습 Core | Codex 구현 끝. 조정자 리뷰 9건과 main을 합치면 생기는 문제 2건 **반영 전**. core V4 | `unit/u5a-practice-core` | `u5a/brief.md` · `design.md` · `report.md` · **`review-1.md`** |
 | U4b 활동 세션 Realtime | 설계만 있다(클라우드 세션). **구현 전**. realtime V3 | main에서 새로 `unit/u4b-activity-realtime` | `u4b/design.md` · **`u4b/brief.md`** |
-| U5b · U6 · U7 | 시작 전 | — | `aidlc/…/inception/units-generation/unit-of-work.md` |
+| U5b · U6 · U7 | 시작 전 | — | `aidlc/…/inception/units-generation/unit-of-work.md` U5 · U6 · U7 절. U6 · U7은 맨 아래 「U6 · U7 정본」 |
 
 ## 병합 순서 (꼭 지킨다)
 
-- Flyway `outOfOrder`가 꺼져 있어 낮은 버전이 먼저 들어가야 한다. core는 V3(U4a) → V4(U5a), realtime은 V3(U4b).
+- Flyway `outOfOrder`가 꺼져 있어 낮은 버전이 먼저 들어가야 한다. core는 V3(U4a) → V4(U5a) → V5(U6) → V6(U7), realtime은 V3(U4b) → V4(U5b).
 - 그래서 **U4a를 U5a보다 먼저** main에 합친다. U5a는 U4a가 들어간 main을 합친 뒤 V4 번호 그대로 들어온다.
 - 합칠 때 겹치는 곳
   - `FlywayConfIT` 표 수 · 이력 행, 스키마 버전 기대값 시험
   - `contracts/deviations.md` · `contracts/timing.md`(양쪽 행을 모두 둔다)
-  - `DeletionParticipant` 순서 상수. 지금 쓰는 값은 U4a 기록 90 · ACTIVITY 100 · DEVICE 200 · CONSENT 250 · CHILD_PROFILE 300 · MESSAGING 900이다. U5a의 ORDER_PRACTICE는 300보다 작고 이 값들과 겹치지 않게 정한다(예: 150).
+  - `DeletionParticipant` 순서 상수. 지금 쓰는 값은 U4a 기록 90 · ACTIVITY 100 · DEVICE 200 · CONSENT 250 · CHILD_PROFILE 300 · MESSAGING 900이다. U5a의 ORDER_PRACTICE는 300보다 작고 이 값들과 겹치지 않게 정한다(예: 150). U6(결과 · 장면 판정 · 리포트)은 70, U7(구독 · 발송 기록)은 60을 쓴다(활동 기록 90보다 먼저 지운다).
 
 ## CI (10/13 정리)
 
@@ -52,6 +52,24 @@ main CI는 U2 병합(10/12) 때부터 실패하고 있었다. 원인은 둘이�
 
 ## 규칙
 
-- 화면 설계 v1.5j가 최우선이다.
-- 마이그레이션 번호: core V2 = U2 · V3 = U4a · V4 = U5a, realtime V2 = U3 · V3 = U4b.
+- 화면 설계 v1.5j가 최우선이다. 다만 27의 연습 기록 · 28의 만드는 중 문구 · 30 · R-PDF는 `refined-mockups/mockups.md` §1의 F3 ~ F6이 앞선다(10개 항목 리포트 · 기록용 재판정).
+- 마이그레이션 번호: core V2 = U2 · V3 = U4a · V4 = U5a · V5 = U6 · V6 = U7, realtime V2 = U3 · V3 = U4b · V4 = U5b.
 - 각 작업자는 `docs/units/<유닛>/design.md` · `report.md`를 남기고, 리뷰를 거쳐 main에 합친다.
+
+## U6 · U7 정본 (지시서를 쓸 때 읽을 곳)
+
+기록 폴더 `R = aidlc/spaces/default/intents/261008-mujoong-service/`.
+
+| 무엇 | 어디 |
+|---|---|
+| 범위 · 완료 조건 | `R/inception/units-generation/unit-of-work.md` U6 · U7 절, `R/inception/delivery-planning/bolt-plan.md` B6 · B7 |
+| 요구사항 | `R/inception/requirements-analysis/requirements.md` FR4.3 · FR6.2 ~ FR6.5 · FR7.4 · FR7.6 · FR7.7 · FR7.10 · FR7.11 · NFR8 · A4 · A10 |
+| 스토리 · 수용 기준 | `R/inception/user-stories/stories.md` US1.7 · US4.3 · US5.1 ~ US5.5 |
+| 화면 | `R/inception/refined-mockups/mockups.md` S-17 · S-26 · S-27 · S-28 · S-30 · R-PDF, §1 F3 ~ F6, §9-32 ~ 9-35 |
+| 컴포넌트 · 엔터티 | `R/inception/domain-design/components.md` ResultPipeline · Report · Notification(SceneJudgment · ReportSection 포함), `decisions.md` ADR-017 |
+| 계약 | `R/inception/contract-design/contract-summary.md` 2절 노출 금지 필드 · 3절 C5 · C6 · 6절 SessionRecordCaptured.record.practice · 8절 ScenarioLookup · BehaviorDefinitionLookup · 9절, `contracts/ai-io.md` 6절 |
+
+맞물림
+- U5b(Realtime)는 결과 입력 스냅숏 record.practice의 반응 · 도움마다 scenarioId를 싣는다. U6은 이것을 기록용 재판정의 입력으로 쓴다. U5b가 합쳐지기 전에는 계약 6절 예시 값으로 만든 대역으로 시험한다.
+- ScenarioLookup · BehaviorDefinitionLookup이 U5a에 없으면 U6이 PracticeGoal · PragmaticsKnowledge에 읽기 포트를 확장으로 붙인다(J17).
+- U7의 완료 푸시는 ActivityCoordinator 세션 사본의 ACTIVE 도달 여부가 필요하다. U4a 사본에 없으면 U7이 사본에 기록 칸을 더한다(더하기만).

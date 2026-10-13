@@ -18,11 +18,11 @@ components:
       화면 설계 v1.5j 카드대로만 그린다(새 화면 없음). 12는 진행 조회를 2초 간격으로 폴링하고(A2) 다른 화면은 진입 때 1회 조회한다.
       서버 수락과 기기 실행 확인을 구분해 표시하고, 조회 실패는 마지막 확인 시각과 함께 미확인으로 남긴다(FR1.5 · FR3.2).
       판정값 · 점수 · 진단 표현을 화면에 만들지 않는다(NFR1). 보호자 폰 오프라인은 공통 오류 토스트로만 알린다(FR2.2).
-      30의 PDF는 서버가 만든 파일을 받아 저장 · Web Share로 공유하고 「나중에」 · 「←」면 버린다(FR6.5 · A4).
+      30은 10개 항목 리포트를 보여 주고, PDF는 서버가 만든 파일을 받아 저장 · Web Share로 공유하며 「나중에」 · 「←」면 버린다(FR6.5 · A4).
     responsibilities:
       - 화면 01~30 · SET0 · SET-01 · 팝업의 표시 · 분기 · 입력 검증(이름 · 나이 6~12 · 08 200자 · 종료 표현 2~20자)
       - 진행 화면 폴링 · 하단 탭 잠금(기기 안정 아님 · 마무리 중) · 중복 시작 방지
-      - 웹 푸시 구독 등록과 알림 진입 시 최신 세션 재조회(Should)
+      - 웹 푸시 구독 등록과 알림 진입 시 최신 세션 재조회
     depends_on:
       - component: GuardianIdentity
         interaction: 구글 로그인 · 로그아웃 · 로그인 상태 확인
@@ -46,13 +46,13 @@ components:
         interaction: 26 달력 · 그날 목록, 27 대화 기록 칸
         style: sync
       - component: ResultPipeline
-        interaction: 17 · 27 정리 상태, 27 생활 팁 · 목표 후보 칸, 「다시 시도」
+        interaction: 17 · 27 정리 상태, 27 끝난 이유 · 장면 결과 · 결과 문장 · 생활 팁 · 목표 후보 칸, 「다시 시도」
         style: sync
       - component: Report
-        interaction: 28 미리보기 · 생성 · 취소, 30 확인 · PDF 받기 · 저장/버림 표시
+        interaction: 28 미리보기 · 생성 · 취소, 30 리포트 확인(10개 항목) · PDF 받기 · 저장/버림 표시
         style: sync
       - component: Notification
-        interaction: 웹 푸시 구독 등록(Should)
+        interaction: 웹 푸시 구독 등록
         style: sync
       - component: AccountDeletion
         interaction: P7 계정 삭제 요청 · 삭제 처리 중 확인
@@ -407,7 +407,7 @@ components:
   - name: TextAiGateway
     summary: 사후 · 준비용 텍스트 AI 호출의 단일 출입구 (ADR_2S Core ai)
     behaviour: >
-      경험 구조화 · 목표 후보 · 상황 생성 · 의미 검토 호출을 한 곳에서 보낸다. 처리에 필요한 최소 필드만 보내고(NFR3) 금지 표현 사전으로
+      경험 구조화 · 목표 후보 · 상황 생성 · 의미 검토 · 기록용 재판정 · 결과 문장 · 리포트 항목 · 금지 표현 2차 분류 호출을 한 곳에서 보낸다. 처리에 필요한 최소 필드만 보내고(NFR3) 금지 표현 사전으로
       출력을 검사한다(NFR1). 모델 · 프롬프트 버전을 응답과 함께 돌려 호출한 쪽 엔터티에 남긴다. 기술 재시도와 시간 제한을 여기서 적용한다.
       공급자 SDK는 이 컴포넌트 밖에서 쓰지 않는다.
     responsibilities:
@@ -419,7 +419,9 @@ components:
       - component: PracticeGoal
         interaction: 상황 생성 · 자동 확인
       - component: ResultPipeline
-        interaction: 경험 구조화 · 후보 생성 · 의미 검토
+        interaction: 경험 구조화 · 후보 생성 · 의미 검토 · 기록용 재판정 · 결과 문장
+      - component: Report
+        interaction: 리포트 10개 항목 문장 생성 · 금지 표현 2차 분류
     external_dependencies:
       - name: LLM 텍스트 API
         kind: third-party-api
@@ -508,44 +510,47 @@ components:
             relationship: 상황은 아이 하나를 위해 만들어지고 그 아이에게 한 번만 노출된다
 
   - name: ResultPipeline
-    summary: 결과 작업 실행기(ResultJob) · 경험 구조화 · 목표 후보 · 생활 팁 · 결과 버전 · 17/27 정리 상태 (ADR_2S result)
+    summary: 결과 작업 실행기(ResultJob) · 경험 구조화 · 기록용 재판정 · 목표 후보 · 생활 팁 · 결과 문장 · 결과 수준 · 17/27 정리 상태 (ADR_2S result)
     behaviour: >
       작업 모델은 Core 하나다: REQUESTED → RUNNING → DONE / FAILED, 시도는 최대 3회, 서버 재시작 때 RUNNING이던 작업은 FAILED로 닫고
       보호자 「다시 시도」로만 새로 시작한다(J3). 작업 종류는 SESSION_RESULT와 REPORT이며 REPORT 실행은 Report가 등록한 처리기에 맡긴다.
-      SESSION_RESULT는 활동 기록에서 경험을 구조화하고(보호자 입력 · 아이 회상 출처 태깅, 의도 · 감정 추론 금지) 4요소 후보와 근거를 만들고
-      서버 검사 + 의미 검토를 모두 통과한 후보만 등록하며 생활 팁을 매칭한다(FR7.4 · FR6.3). 다시 시도해도 같은 활동의 결과는 한 번만
-      현재 버전이 된다(FR7.7). 미참여(DECLINED) · 기록 없는 활동은 작업을 만들지 않는다.
+      SESSION_RESULT는 활동 기록에서 경험을 구조화하고(보호자 입력 · 아이 회상 출처 태깅, 의도 · 감정 추론 금지), 연습이면 장면마다
+      기록용 재판정을 확정하고(FR7.6, 진행 중 판정과 다르면 차이 표시), 4요소 후보와 근거를 만들어 서버 검사 + 의미 검토를 모두 통과한 후보만
+      등록하며, 생활 팁을 매칭하고(FR6.3), 결과 문장과 결과 수준(FULL · PARTIAL · INSUFFICIENT)을 정한다(FR7.11). 모든 인용은 저장 전사와
+      글자 단위로 대조해 맞지 않으면 버리고, 결과 문장이 맞지 않거나 금지 표현 검사에 걸리면 고정 템플릿으로 바꾼다. 다시 시도해도 같은
+      활동의 결과는 한 번만 현재 버전이 된다(FR7.7). 미참여(DECLINED) · 기록 없는 활동은 작업을 만들지 않는다.
     responsibilities:
       - 작업 큐 · 선점 · 재시도 · 재시작 처리
-      - 경험 구조화 · 후보 생성 · 생활 팁 매칭 · 결과 버전 저장
+      - 경험 구조화 · 기록용 재판정 · 후보 생성 · 생활 팁 매칭 · 결과 문장 · 결과 수준 · 결과 버전 저장
+      - 장면 결과 칩 계산(재판정 값 → 칩 5종, FR4.3)과 27 응답 조립(판정 라벨 · 근거 문장은 응답에 넣지 않음)
       - 17 · 27 정리 상태와 「다시 시도」
     depends_on:
       - component: GuardianIdentity
         interaction: 27 결과 · 다시 시도 주체 확인
         style: sync
       - component: ActivityRecord
-        interaction: ActivityRecorded 구독 · 작업 입력 읽기
+        interaction: ActivityRecorded 구독 · 작업 입력 읽기(전사 · 연습 기록 · 진행 중 판정)
         style: event
       - component: PracticeGoal
-        interaction: 후보 · 근거 등록, 27 담김 상태
+        interaction: 후보 · 근거 등록, 27 담김 상태, 상황 대본 · 목표 정의 버전 읽기
         style: sync
       - component: PragmaticsKnowledge
-        interaction: 화용 지식 · 생활 팁 매칭
+        interaction: 화용 지식 · 핵심 기능 정의 · 판정 기준 · 생활 팁 매칭
         style: sync
       - component: TextAiGateway
-        interaction: 경험 구조화 · 후보 생성 · 의미 검토
+        interaction: 경험 구조화 · 기록용 재판정 · 후보 생성 · 의미 검토 · 결과 문장
         style: sync
     dependents:
       - component: ParentWeb
         interaction: 17 · 27 정리 상태 · 결과 · 다시 시도
       - component: Report
-        interaction: REPORT 작업 등록 · 실행
+        interaction: REPORT 작업 등록 · 실행, 구조화 결과 · 장면 판정 읽기
       - component: AccountDeletion
-        interaction: 작업 · 결과 · 구조화 결과 삭제
+        interaction: 작업 · 결과 · 구조화 결과 · 장면 판정 삭제
     external_dependencies:
       - name: PostgreSQL (core 스키마)
         kind: database
-        purpose: 작업 · 시도 · 구조화 · 결과 저장
+        purpose: 작업 · 시도 · 구조화 · 장면 판정 · 결과 저장
     entities:
       - name: ResultJob
         identifier: id
@@ -563,9 +568,19 @@ components:
           - entity: ActivityContext
             owned_by: ActivityCoordinator
             relationship: 자유대화면 08 네 칸 입력 하나를 함께 쓴다(대화 모델에는 가지 않음)
+      - name: SceneJudgment
+        identifier: id
+        attributes: [sessionId, resultId, goalSelectionId, behaviorKey, behaviorVersion, sceneNo, exposureType, value, timing, firstResponseSeq, afterHelpSeq, rationale, notDoneReason, differsFromLive, modelVersion, promptVersion, createdAt]
+        references:
+          - entity: ActivityRecord
+            owned_by: ActivityRecord
+            relationship: 장면 판정은 연습 활동 기록 하나의 장면 하나다
+          - entity: ActivityResult
+            owned_by: ResultPipeline
+            relationship: 결과 버전 하나에 속한다(다시 시도하면 새 버전에 다시 쓴다)
       - name: ActivityResult
         identifier: id
-        attributes: [sessionId, resultJobId, version, resultType, status, contentJson, modelVersion, promptVersion, createdAt, invalidatedAt]
+        attributes: [sessionId, resultJobId, version, resultType, resultLevel, status, contentJson, modelVersion, promptVersion, createdAt, invalidatedAt]
         references:
           - entity: ActivityRecord
             owned_by: ActivityRecord
@@ -604,7 +619,7 @@ components:
       - component: ResultPipeline
         interaction: ActivityRecorded로 작업 시작 · 입력 제공
       - component: Report
-        interaction: 기간 활동 목록 · 날짜별 대화 원문
+        interaction: 기간 활동 목록 · 전사(인용 대조) · 종료 사유 · 확보 범위
       - component: AccountDeletion
         interaction: 활동 기록 삭제
     external_dependencies:
@@ -627,45 +642,56 @@ components:
             relationship: Realtime이 만든 스냅숏 한 벌을 그대로 옮겨 담는다(해시로 같은 내용 확인)
 
   - name: Report
-    summary: 상담용 리포트 범위 · 생성 · PDF 렌더링 · 저장/버림 (ADR_2S report)
+    summary: 상담용 리포트 범위 · 10개 항목 생성 · 30 확인 · PDF 렌더링 · 저장/버림 (ADR_2S report)
     behaviour: >
-      AI 없이 아이 정보 + 날짜별 대화 원문(과거 → 최신)만 담고 "이 문서는 진단 결과가 아닙니다"를 넣는다. 생활 팁 · 판정값 · 요약은 없다(규칙 5).
+      범위 안 저장 기록(경험 구조화 · 인용 · 기록용 재판정 · 제공한 도움 · 종료 사유 · 확보 범위)과 아이 정보(이름 · 나이)로 이름 · 순서가
+      고정된 10개 항목을 만든다(FR6.5). 수치는 서버 집계값만 쓰고, 문장은 TextAiGateway로 만들되 인용은 저장 전사와 글자 단위로 대조해
+      맞지 않으면 빼며, 자료가 없는 항목은 "자료 부족"으로 둔다. 생성 문장이 저장 데이터와 맞지 않거나 금지 표현 검사에 걸리면 그 항목은
+      고정 템플릿 문장으로 바꾼다. 진행 중 판정값 · 점수 · 성공률 · 향상 계산은 없고 "진단 결과가 아니에요" 고지를 30 · PDF 머리 · 바닥글에 넣는다.
       범위는 기간 + 활동 체크로 정하고 진행 중 활동은 빼며 0건이면 만들지 않는다(FR6.4). 생성은 REPORT 작업으로 60초 안에 READY,
       실패는 3회 재시도 뒤 FAILED(NFR8). 「취소」는 앱이 기다리기를 멈출 뿐이고 끝난 작업은 저장 전 상태로 남아 버린다(B21).
-      서버에는 리포트 메타(기간 · 활동 수 · 생성 시각 · 저장 여부)만 남기고 「나중에」 · 「←」로 버린 리포트는 폐기한다(A4).
+      30에서 저장하면 리포트(항목 · 인용)와 메타를 계정 삭제까지 보존하고 「나중에」 · 「←」로 버린 리포트는 폐기한다(A4).
     responsibilities:
       - 28 미리보기(기간 안 활동) · 생성 요청 · 취소
+      - 10개 항목 조립(서버 집계 · 인용 대조 · 결측 표시 · 고정 템플릿 대체)
+      - 30 리포트 확인 · 저장 확인 시트 값(기간 · 활동 수 · 항목 수 · 인용 수 · 아이 정보 범위)
       - HTML 템플릿 → PDF 렌더링(한글 글꼴 임베드)
-      - 30 저장 · 버림 표시와 리포트 메타
+      - 30 저장 · 버림 표시와 리포트 보존 · 폐기
     depends_on:
       - component: GuardianIdentity
         interaction: 28 · 30 주체 확인
         style: sync
       - component: ChildProfile
-        interaction: PDF 머리(이름 · 연령 · 관심사)
+        interaction: 리포트 4항목 · PDF 머리(이름 · 나이)
         style: sync
       - component: ActivityRecord
-        interaction: 기간 안 활동 · 날짜별 대화 원문
+        interaction: 기간 안 활동 · 전사(인용 대조) · 종료 사유 · 확보 범위
         style: sync
       - component: ResultPipeline
-        interaction: REPORT 작업 등록, 실행기가 렌더링 처리기 호출
+        interaction: REPORT 작업 등록 · 실행기가 처리기 호출, 경험 구조화 · 장면 판정 · 결과 수준 읽기
         style: async
+      - component: PracticeGoal
+        interaction: 7항목 목표 이름 · 핵심 기능 정의(목표 정의 버전)
+        style: sync
+      - component: TextAiGateway
+        interaction: 항목 문장 생성 · 금지 표현 2차 분류
+        style: sync
     dependents:
       - component: ParentWeb
         interaction: 28 · 30
       - component: AccountDeletion
-        interaction: 리포트 메타 삭제
+        interaction: 리포트 · 항목 · 메타 삭제
     external_dependencies:
       - name: PDF 렌더링 라이브러리 + 한글 글꼴
         kind: other
         purpose: 서버 PDF 생성(라이브러리 · 글꼴 확정은 3.3 · 3.4)
       - name: PostgreSQL (core 스키마)
         kind: database
-        purpose: 리포트 메타 저장
+        purpose: 리포트 · 항목 · 메타 저장
     entities:
       - name: Report
         identifier: id
-        attributes: [guardianId, childId, periodFrom, periodTo, status, activityCount, generatedAt, savedAt, discardedAt, createdAt]
+        attributes: [guardianId, childId, periodFrom, periodTo, status, level, activityCount, citationCount, modelVersion, promptVersion, generatedAt, savedAt, discardedAt, createdAt]
         references:
           - entity: Guardian
             owned_by: GuardianIdentity
@@ -673,6 +699,13 @@ components:
           - entity: Child
             owned_by: ChildProfile
             relationship: 리포트 대상 아이 하나
+      - name: ReportSection
+        identifier: id
+        attributes: [reportId, sectionNo, title, text, missing, citationsJson, templated]
+        references:
+          - entity: Report
+            owned_by: Report
+            relationship: 리포트 하나에 항목 10개(sectionNo 1~10 유일)
       - name: ReportActivity
         identifier: id
         attributes: [reportId, sessionId, includedAt]
@@ -682,20 +715,22 @@ components:
             relationship: 리포트에 들어간 활동 기록 하나
 
   - name: Notification
-    summary: 웹 푸시 구독 · 발송 요청 · 중복 방지 (Should, 신설)
+    summary: 웹 푸시 구독 · 발송 요청 · 중복 방지 (장애 3종 + 활동 완료)
     behaviour: >
-      서버가 음성 대화 장애 · 기기 상태 수신 중단 · 기술 문제로 인한 종료를 감지하면 문구 3종 중 하나로 발송을 요청한다(FR7.10).
-      앱 실행 여부에 의존하지 않고, 같은 사건은 한 번만 보낸다. 발화 원문 · 대화 내용을 넣지 않는다. 요청 · 실패를 구분하고 실제 전달을
-      보장했다고 적지 않는다. 앱 닫힘 · 앱 연결만의 장애로는 알림을 만들지 않는다. iOS는 보장하지 않는다(NFR10).
+      서버가 음성 대화 장애 · 기기 상태 수신 중단 · 기술 문제로 인한 종료를 감지하면 장애 문구 3종 중 하나로, 아이가 참여해 ACTIVE를 거친
+      세션이 기술 문제가 아닌 사유(CHILD_STOP · GUARDIAN_STOP · SILENCE)로 끝나 기기 종료 확인이 저장되면(ENDED, confirmed) 완료 문구로
+      발송을 요청한다(FR7.10). 종료 확인 전 · 미확인 종료 · 참여 전 종료 · 기술 문제 종료에는 완료 푸시를 만들지 않는다. 앱 실행 여부에
+      의존하지 않고, 같은 사건은 한 번만 보낸다. 아이 이름 · 발화 원문 · 대화 내용 · 점수 · 기록 정리 완료 여부를 넣지 않는다. 요청 · 실패를
+      구분하고 실제 전달을 보장했다고 적지 않는다. 앱 닫힘 · 앱 연결만의 장애로는 알림을 만들지 않는다. iOS는 보장하지 않는다(NFR10).
     responsibilities:
       - 푸시 구독 저장 · 폐기
-      - 사건 → 문구 3종 매핑 · 중복 방지 · 발송 요청 기록
+      - 사건 → 문구 4종 매핑 · 완료 푸시 자격 판정(ACTIVE 거침 · 비기술 사유 · confirmed) · 중복 방지 · 발송 요청 기록
     depends_on:
       - component: GuardianIdentity
         interaction: 구독 주체 확인
         style: sync
       - component: ActivityCoordinator
-        interaction: 세션 상태 변화(음성 연결 문제 · 기술 종료) 구독
+        interaction: 세션 상태 변화(음성 연결 문제 · 기술 종료 · 참여 뒤 확정 종료) 구독, 세션 사본의 ACTIVE 도달 여부
         style: event
       - component: DeviceRegistry
         interaction: 기기 상태 수신 중단 구독
@@ -1344,12 +1379,12 @@ graph LR
 | ActivityCoordinator | Core | 시작 검사 · 패키지 · 끝내기 · 진행 중계 | 7개 + SessionLifecycle | ParentWeb · Notification · AccountDeletion | Activity · ActivityContext |
 | ApprovedContentCatalog | Core | 승인 문구 · 음성 버전 | — | ConsentPolicy · ActivityCoordinator | ApprovedContent · ApprovedContentVersion |
 | PragmaticsKnowledge | Core | 행동 정의 · 생활 팁 · Neo4j | — | PracticeGoal · ResultPipeline | BehaviorDefinition · SupportItem |
-| TextAiGateway | Core | 텍스트 AI 출입구 | — | PracticeGoal · ResultPipeline | — |
+| TextAiGateway | Core | 텍스트 AI 출입구 | — | PracticeGoal · ResultPipeline · Report | — |
 | PracticeGoal | Core | 후보 · 담기 · 상황 | GuardianIdentity · PragmaticsKnowledge · TextAiGateway · ActivityRecord | ParentWeb · ActivityCoordinator · PracticeProtocol · ResultPipeline · AccountDeletion | GoalRecommendation · RecommendationEvidence · PracticeGoalSelection · Scenario |
-| ResultPipeline | Core | 작업 실행기 · 결과 | GuardianIdentity · ActivityRecord · PracticeGoal · PragmaticsKnowledge · TextAiGateway | ParentWeb · Report · AccountDeletion | ResultJob · ResultJobAttempt · StructuredExperience · ActivityResult · SessionResultState |
+| ResultPipeline | Core | 작업 실행기 · 결과 · 기록용 재판정 | GuardianIdentity · ActivityRecord · PracticeGoal · PragmaticsKnowledge · TextAiGateway | ParentWeb · Report · AccountDeletion | ResultJob · ResultJobAttempt · StructuredExperience · SceneJudgment · ActivityResult · SessionResultState |
 | ActivityRecord | Core | 끝난 활동 기록 · 26 · 27 | GuardianIdentity · CoreMessaging | ParentWeb · PracticeGoal · ResultPipeline · Report · AccountDeletion | ActivityRecord |
-| Report | Core | 원문 PDF 리포트 | GuardianIdentity · ChildProfile · ActivityRecord · ResultPipeline | ParentWeb · AccountDeletion | Report · ReportActivity |
-| Notification | Core | 웹 푸시(Should) | GuardianIdentity · ActivityCoordinator · DeviceRegistry | ParentWeb · AccountDeletion | PushSubscription · PushDispatch |
+| Report | Core | 10개 항목 상담용 리포트 · PDF | GuardianIdentity · ChildProfile · ActivityRecord · ResultPipeline · PracticeGoal · TextAiGateway | ParentWeb · AccountDeletion | Report · ReportSection · ReportActivity |
+| Notification | Core | 웹 푸시(장애 3종 + 완료) | GuardianIdentity · ActivityCoordinator · DeviceRegistry | ParentWeb · AccountDeletion | PushSubscription · PushDispatch |
 | AccountDeletion | Core | 계정 삭제 지휘 | Core 11개 | ParentWeb | DataDeletionRequest |
 | CoreMessaging | Core | Outbox · Inbox | RealtimeMessaging | DeviceRegistry · ActivityCoordinator · ActivityRecord · AccountDeletion · RealtimeMessaging | CoreOutboxEvent · CoreInboxEvent |
 | SessionLifecycle | Realtime | 세션 상태 기계 · 시간 규칙 · 스냅숏 | Realtime 7개 | ActivityCoordinator | ActivitySession · SessionEvent · SessionStopExpression · ResultInputSnapshot |
@@ -1388,10 +1423,12 @@ graph LR
 | ResultJob | ResultPipeline | core_result_job | id | jobType(SESSION_RESULT · REPORT) · status(REQUESTED · RUNNING · DONE · FAILED) · idempotencyKey | — |
 | ResultJobAttempt | ResultPipeline | core_result_job_attempt | id | attemptNo(1~3) · triggerType · status | — |
 | StructuredExperience | ResultPipeline | core_structured_experience | id | contentJson(출처 태그) · status | ActivityRecord · ActivityContext |
-| ActivityResult | ResultPipeline | core_result | id | version · resultType · contentJson(생활 팁 · 후보 id) | ActivityRecord |
+| SceneJudgment | ResultPipeline | core_scene_judgment (신설) | id | goalSelectionId · sceneNo · exposureType · value · timing · differsFromLive | ActivityRecord · ActivityResult |
+| ActivityResult | ResultPipeline | core_result | id | version · resultType · resultLevel · contentJson(생활 팁 · 후보 id · 장면 결과 칩 · 결과 문장) | ActivityRecord |
 | SessionResultState | ResultPipeline | core_session_result_state | sessionId | currentResultId · jobStatus | ActivityRecord |
 | ActivityRecord | ActivityRecord | core_activity_record (신설) | sessionId | finalStatus · endReason · confirmed · transcriptJson · gapsJson · practiceJson | Guardian · Child · ResultInputSnapshot |
-| Report | Report | core_report (+period_from · period_to) | id | status · activityCount · savedAt · discardedAt | Guardian · Child |
+| Report | Report | core_report (+period_from · period_to) | id | status · level · activityCount · citationCount · savedAt · discardedAt | Guardian · Child |
+| ReportSection | Report | core_report_section (신설) | id | sectionNo(1~10) · title · text · missing · citationsJson | Report |
 | ReportActivity | Report | core_report_activity (result_id 삭제) | id | sessionId · includedAt | ActivityRecord |
 | PushSubscription | Notification | core_push_token (신설) | id | endpoint · keys · platform | Guardian |
 | PushDispatch | Notification | core_push_dispatch (신설) | id | eventKey · messageType · status | Guardian |
@@ -1413,7 +1450,7 @@ graph LR
 | Evaluation | ResponseEvaluator | realtime_evaluation | id | label(functional · partial · none · uncertain) · reason | PracticeResponse |
 | RealtimeOutboxEvent · RealtimeInboxEvent | RealtimeMessaging | realtime_outbox_event · realtime_inbox_event | eventId | eventType · status · retryCount | — |
 
-ERD v0.1의 core_analytics_event는 요구사항이 없어 만들지 않는다(J9). ERD 40테이블 중 39개가 위 소유자를 가지며, 신설은 core_device · core_activity · core_activity_record · core_behavior_definition · core_push_token · core_push_dispatch · realtime_device_connection · realtime_session_goal 8개다. 앱 사이 참조는 모두 DB FK가 없는 논리 참조다.
+ERD v0.1의 core_analytics_event는 요구사항이 없어 만들지 않는다(J9). ERD 40테이블 중 39개가 위 소유자를 가지며, 신설은 core_device · core_activity · core_activity_record · core_behavior_definition · core_push_token · core_push_dispatch · realtime_device_connection · realtime_session_goal · core_scene_judgment · core_report_section 10개다. 앱 사이 참조는 모두 DB FK가 없는 논리 참조다.
 
 ## 외부 의존
 
@@ -1425,7 +1462,7 @@ ERD v0.1의 core_analytics_event는 요구사항이 없어 만들지 않는다(J
 | Core 컴포넌트 전부(TextAiGateway · DialogPolicy 제외) | PostgreSQL core 스키마 | database | 소유 엔터티 저장 |
 | ApprovedContentCatalog | 파일 저장소(EC2 볼륨) | other | 승인 음성 파일 |
 | PragmaticsKnowledge | Neo4j | database | 공용 화용 지식 |
-| TextAiGateway | LLM 텍스트 API | third-party-api | 구조화 · 후보 · 상황 생성 |
+| TextAiGateway | LLM 텍스트 API | third-party-api | 구조화 · 기록용 재판정 · 후보 · 상황 생성 · 결과 문장 · 리포트 항목 |
 | Report | PDF 렌더링 라이브러리 + 한글 글꼴 | other | 서버 PDF |
 | Notification | 웹 푸시 서비스(VAPID) | third-party-api | Android Chrome 웹 푸시 |
 | Realtime 컴포넌트(OutputGate · DialogPolicy 제외) | PostgreSQL realtime 스키마 | database | 소유 엔터티 저장 |
@@ -1467,8 +1504,8 @@ ERD v0.1의 core_analytics_event는 요구사항이 없어 만들지 않는다(J
 | PracticeGoal | 18 · 27 담기와 상황이라는 Core 소유 연습 데이터(J1 · J7) |
 | ResultPipeline | 비동기 작업 · 재시도 · AI 산출물이라는 다른 실행 특성 |
 | ActivityRecord | 끝난 활동의 Core 원장 — 진행 중 데이터(Realtime)와 수명주기가 다르다(J6) |
-| Report | 원문 PDF라는 다른 산출물과 저장/버림 규칙 |
-| Notification | Should 기능이라 일정에 따라 통째로 미룰 수 있다 |
+| Report | 기간 단위 10개 항목 리포트 · PDF라는 다른 산출물과 저장/버림 규칙 |
+| Notification | 세션 · 기기 사건을 구독해 앱 밖으로 알리는 다른 실행 특성(구독 · VAPID · 중복 방지) |
 | AccountDeletion | 모든 데이터 주인을 지휘하는 교차 흐름을 한 곳에 모은다 |
 | CoreMessaging · RealtimeMessaging | 앱마다 자기 Outbox/Inbox만 복구한다(ADR-010) |
 | SessionLifecycle | 세션 상태의 유일한 수정자(ADR-007) |
