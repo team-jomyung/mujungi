@@ -32,3 +32,9 @@ backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/OrphanSessio
 # 연습 확장점
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/PracticeSessionExtension.java
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/NoOpPracticeSessionExtension.java
+# L6 계정 삭제
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/DeletionRequestedHandler.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/RealtimeSessionDeletionParticipant.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/log/RealtimeVoiceDeletionParticipant.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/messaging/RealtimeMessagingDeletionParticipant.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/messaging/RealtimeOutboxSender.java

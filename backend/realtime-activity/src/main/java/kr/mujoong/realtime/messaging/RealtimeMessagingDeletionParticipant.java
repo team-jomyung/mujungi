@@ -32,7 +32,13 @@ import org.springframework.transaction.support.TransactionTemplate;
  * 어느 시점에 불려도 결과가 같다. 반환 지도는 표마다 지운 행 수다(계약 8절 counts).
  */
 @Component
-public class RealtimeMessagingDeletionParticipant {
+public class RealtimeMessagingDeletionParticipant implements RealtimeDeletionParticipant {
+
+    /** U4b(BR9.2): 메시징 참가자는 마지막(900)이다. DeletionCompleted가 발행되면 한 번 더 불린다(BR9.5). */
+    @Override
+    public int order() {
+        return ORDER_MESSAGING;
+    }
 
     /** 반환 지도의 키: Outbox에서 지운 행 수. */
     public static final String OUTBOX = "realtime_outbox_event";
@@ -84,6 +90,7 @@ public class RealtimeMessagingDeletionParticipant {
      * @param deletionRequestId 삭제 요청 id(기록 상관 용도, U1은 쓰지 않는다)
      * @return 표마다 지운 행 수
      */
+    @Override
     public Map<String, Integer> deleteByGuardian(UUID guardianId, UUID deletionRequestId) {
         Objects.requireNonNull(guardianId, "guardianId");
         Objects.requireNonNull(deletionRequestId, "deletionRequestId");

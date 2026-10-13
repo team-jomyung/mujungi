@@ -90,6 +90,21 @@ public final class SessionMailbox {
     public record DeviceTakenOver(UUID newSessionId) implements Message {
     }
 
+    /**
+     * U4b(BR9.1 · U4b-J19): 계정 삭제 강제 정지 — DB 전이 · 이벤트 · 스냅숏 없이 입력 중계 · 원음 기록 · 시계 · 공급자를 닫고(연결이 살아 있으면
+     * CLOSE_TRANSPORT(CONSENT_WITHDRAWN)) 정리한다. 끝나면(실행기가 이미 끝났어도) {@code stopped}를 끝낸다.
+     */
+    public record DeletionStop(CompletableFuture<Void> stopped) implements Message {
+
+        public DeletionStop {
+            Objects.requireNonNull(stopped, "stopped");
+        }
+
+        public DeletionStop() {
+            this(new CompletableFuture<>());
+        }
+    }
+
     /** U4b(BR10.5): 연습 확장점 사건(재생 완료 · 비동기 결과). 확장점이 다른 스레드에서 post해도 실행기 스레드에서 전달된다. */
     public record PracticeEvent(PracticeSessionExtension.ExtensionEvent event) implements Message {
 
@@ -167,6 +182,8 @@ public final class SessionMailbox {
                 request.result().completeExceptionally(new SessionGone());
             } else if (message instanceof ServerShutdown shutdown) {
                 shutdown.handled().complete(null);
+            } else if (message instanceof DeletionStop stop) {
+                stop.stopped().complete(null);
             } else {
                 left.add(message);
             }

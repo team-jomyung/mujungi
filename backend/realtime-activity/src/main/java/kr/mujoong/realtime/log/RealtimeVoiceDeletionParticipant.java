@@ -46,7 +46,13 @@ import org.springframework.transaction.support.TransactionTemplate;
  * 경로는 로그에 쓰지 않는다.
  */
 @Component
-public class RealtimeVoiceDeletionParticipant {
+public class RealtimeVoiceDeletionParticipant implements kr.mujoong.realtime.messaging.RealtimeDeletionParticipant {
+
+    /** U4b(BR9.2): 음성 참가자는 100번째로 불린다. */
+    @Override
+    public int order() {
+        return ORDER_VOICE;
+    }
 
     /** 반환 지도 키: 원문을 비운 전사 행 수. */
     public static final String TRANSCRIPT = "realtime_transcript";
@@ -125,6 +131,7 @@ public class RealtimeVoiceDeletionParticipant {
      * @return 표 · 파일마다 지운(표시한) 수
      * @throws AudioFilesRemainException 지우지 못한 원음 파일이 남았다(DB 정리는 끝났다)
      */
+    @Override
     public Map<String, Integer> deleteByGuardian(UUID guardianId, UUID deletionRequestId) {
         Objects.requireNonNull(guardianId, "guardianId");
         Objects.requireNonNull(deletionRequestId, "deletionRequestId");

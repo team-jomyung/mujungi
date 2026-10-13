@@ -672,6 +672,7 @@ public final class SessionExecutor {
                     shutdown.handled().complete(null);
                 }
             }
+            case SessionMailbox.DeletionStop stop -> onDeletionStop(stop);
             case SessionMailbox.PracticeEvent event -> onPracticeEvent(event.event());
             case SessionMailbox.PracticeTimerFired fired -> onPracticeTimer(fired);
             case SessionMailbox.DeviceTakenOver ignored -> {
@@ -2705,6 +2706,26 @@ public final class SessionExecutor {
             case SILENCE -> onSilenceTimer();
             case GAP_DISPLAY -> onGapDisplayCheck();
             case RECORD_SETTLE -> finishSettle();
+        }
+    }
+
+    /**
+     * U4b 계정 삭제 강제 정지(BR9.1 · U4b-J19): DB 전이 · 사건 · 스냅숏을 만들지 않는다. 원음 기록을 떼고(정리가 파일을 닫는다) 연결이 살아 있고
+     * START_SESSION을 보냈으면 CLOSE_TRANSPORT(CONSENT_WITHDRAWN) + STANDBY를 보낸 뒤 정리한다(정산 창도 건너뛴다).
+     */
+    private void onDeletionStop(SessionMailbox.DeletionStop stop) {
+        try {
+            relay.tap(null);
+            relay.setAccepting(false);
+            DeviceLink current = link;
+            if (startSent && current != null && current.isOpen() && deviceStillOurs()) {
+                bumpGeneration();
+                sendControl(new CloseTransport(CloseTransport.Reason.CONSENT_WITHDRAWN));
+                sendControl(new SessionState(View.STANDBY));
+            }
+            teardown();
+        } finally {
+            stop.stopped().complete(null);
         }
     }
 
