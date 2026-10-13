@@ -47,7 +47,7 @@ class ScenarioServiceTest {
         when(knowledge.pinVersion("ACCEPT_STOP",1)).thenReturn(definition);
         repository=new ScenarioRepository(db.jdbc(),JsonCodec.shared());
         service=new ScenarioService(repository,id -> current.get(),id -> exposures.get(),
-                new JdbcPracticeAccountAdapter(db.jdbc(),JsonCodec.shared()),knowledge,ai,clock,db.tx(),new ScenarioLimits(Duration.ofSeconds(15)));
+                new JdbcTestPracticeAccounts(db.jdbc()),knowledge,ai,clock,db.tx(),new ScenarioLimits(Duration.ofSeconds(15)));
         when(ai.generateScenario(any(),any())).thenReturn(output("블록"));
     }
     @AfterEach void cleanUp() {
@@ -60,7 +60,7 @@ class ScenarioServiceTest {
     }
     ScenarioService.Request original() { return new ScenarioService.Request(session,goal,"ORIGINAL",null); }
     GeneratedScenario output(String material) {
-        return new GeneratedScenario(material+" 놀이 중이야. "+opportunity+" 이제 그만할래.","같이 놀던 또래 친구 역할",
+        return new GeneratedScenario(material+" 놀이 중이야. "+opportunity+" 이제 그만할래.",
                 "이제 그만할래.","PEER",opportunity,"model-test-1","prompt-test-1");
     }
     void error(Runnable action,ErrorCode code) {
@@ -78,17 +78,36 @@ class ScenarioServiceTest {
         assertThat(value.toString()).doesNotContain("블록");
     }
     @Test void invalidGoalOrTriggerIsRegeneratedOnce() {
-        var bad=new GeneratedScenario("기회도 트리거도 없다","친구","나중에","PEER",opportunity,"m1","p1");
+        var bad=new GeneratedScenario("기회도 트리거도 없다","나중에","PEER",opportunity,"m1","p1");
         when(ai.generateScenario(any(),any())).thenReturn(bad,output("공놀이"));
         assertThat(service.generate(original()).scenarioText()).contains("공놀이");
         verify(ai,times(2)).generateScenario(any(),any());
     }
     @Test void twoInvalidOutputsArePersistentlyFailedAndNeverIssued() {
-        when(ai.generateScenario(any(),any())).thenReturn(new GeneratedScenario("잘못된 상황","친구","누락","PEER",opportunity,"m1","p1"));
+        when(ai.generateScenario(any(),any())).thenReturn(new GeneratedScenario("잘못된 상황","누락","PEER",opportunity,"m1","p1"));
         error(() -> service.generate(original()),ErrorCode.SCENARIO_GEN_FAILED);
         error(() -> service.generate(original()),ErrorCode.SCENARIO_GEN_FAILED);
         verify(ai,times(2)).generateScenario(any(),any());
         assertThat(db.jdbc().queryForObject("select count(*) from core.core_scenario where guardian_id=:g",new MapSqlParameterSource("g",guardian),Integer.class)).isZero();
+    }
+    @Test void alreadyIssuedContentTwiceIs422ButTheSameKeyCanBeRetried() {
+        // U5a 리뷰 6: 이미 낸 상황과 같은 내용(또는 저장 경합)으로 두 번을 다 써도 요청 키를 FAILED로 굳히지 않는다
+        service.generate(original());
+        session=UUID.randomUUID();
+        current.set(new SessionContext(session,guardian,child,true,snapshot.goals()));
+        when(ai.generateScenario(any(),any())).thenReturn(output("블록"),output("블록"));
+        error(() -> service.generate(original()),ErrorCode.SCENARIO_GEN_FAILED);
+        when(ai.generateScenario(any(),any())).thenReturn(output("그림"));
+        assertThat(service.generate(original()).scenarioText()).contains("그림");
+        verify(ai,times(4)).generateScenario(any(),any());
+    }
+    @Test void anUnusableDefinitionVersionIsAContractValidationErrorBeforeAnyAiCall() {
+        // U5a 리뷰 2: 고정할 수 없는 정의 버전(없음 · 초안 · 미완성)은 계약 밖 500이 아니라 400이다
+        when(knowledge.pinVersion("ACCEPT_STOP",1)).thenThrow(new IllegalArgumentException("Behavior definition not found"));
+        error(() -> service.generate(original()),ErrorCode.VALIDATION_FAILED);
+        verifyNoInteractions(ai);
+        assertThat(db.jdbc().queryForObject("select count(*) from core.core_scenario_request where guardian_id=:g",
+                new MapSqlParameterSource("g",guardian),Integer.class)).as("선점도 남지 않는다").isZero();
     }
     @Test void forbiddenOutputIsNeverIssuedAndGetsOnlyOneRegeneration() {
         when(ai.generateScenario(any(),any())).thenThrow(new TextAiException(TextAiException.Reason.FORBIDDEN_OUTPUT));
@@ -219,7 +238,7 @@ class ScenarioServiceTest {
         assertThat(ScenarioContentPolicy.valid(null,"PEER",opportunity)).isFalse();
         assertThat(ScenarioContentPolicy.valid(output("블록"),"ADULT",opportunity)).isFalse();
         assertThat(ScenarioContentPolicy.valid(output("블록"),"PEER","다른 기회")).isFalse();
-        assertThat(ScenarioContentPolicy.fingerprint("Ａ  B","대사")).isEqualTo(ScenarioContentPolicy.fingerprint("a b","대사"));
+        assertThat(ScenarioContentPolicy.fingerprint("Ａ  B")).isEqualTo(ScenarioContentPolicy.fingerprint("a b"));
         var text=ScenarioContentPolicy.childText("상황");
         assertThat(ScenarioContentPolicy.childText(text)).isEqualTo(text);
     }

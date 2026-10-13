@@ -55,9 +55,11 @@ class TextAiPolicyTest {
         assertThatThrownBy(() -> new TextAiProperties.Retry(1,Duration.ofMillis(-1)))
                 .isInstanceOf(IllegalArgumentException.class);
     }
-    @Test void defaultConfigurationDisablesGraphAndProviderButCanOverrideTiming() {
+    @Test void configurationBindsTheYmlKeysDisablesGraphAndProviderAndHasNoCodeDefaults() {
+        // 값은 application.yml에만 있다(U5a 리뷰 5). 이 시험은 yml을 읽지 않으므로 같은 값을 직접 준다
         new ApplicationContextRunner().withUserConfiguration(TextAiConfiguration.class)
-                .withPropertyValues("mujoong.text-ai.request-timeout=2s")
+                .withPropertyValues("mujoong.text-ai.request-timeout=2s", "mujoong.text-ai.retry.max-retries=1",
+                        "mujoong.text-ai.retry.backoff=250ms", "mujoong.knowledge.neo4j.enabled=false")
                 .run(context -> {
                     assertThat(context).hasNotFailed();
                     assertThat(context.getBean(KnowledgeProperties.class).enabled()).isFalse();
@@ -67,5 +69,8 @@ class TextAiPolicyTest {
                     assertThatThrownBy(() -> context.getBean(TextAiProvider.class).generateScenario(null,Duration.ZERO))
                             .hasMessageContaining("UNAVAILABLE");
                 });
+        // 키가 빠지면 코드 기본값으로 조용히 돌지 않고 기동이 실패한다
+        new ApplicationContextRunner().withUserConfiguration(TextAiConfiguration.class)
+                .run(context -> assertThat(context).hasFailed());
     }
 }

@@ -2,6 +2,26 @@
 
 결정이 바뀐 경위는 이 문서에만 적는다. 다른 문서는 현재 상태만 적는다.
 
+## 2026-10-13 · U5a 리뷰 1차 반영(main 병합 포함)
+
+**배경**
+- U5a는 U2가 main에 들어오기 전에 갈라져 임시 계정 어댑터로 구현됐다. U4a(main 포함)를 합치면서 리뷰 1차(`docs/units/u5a/review-1.md`) 11건을 반영했다.
+
+**바뀐 것**
+
+| 항목 | 지금 | 이전 |
+|---|---|---|
+| 계정 · 아이 읽기 | `U2PracticeAccountAdapter`(GuardianWriteLock · ChildProfileService). 포트 메서드는 모두 추상 | 임시 `JdbcPracticeAccountAdapter`가 보호자 행을 직접 FOR UPDATE. 포트 일부가 503을 던지는 default |
+| 계정 삭제 순서 | 연습 참가자 @Order 150(아이 300보다 먼저) | 순서 없음(맨 뒤) — 연습 기록이 있으면 아이 단계에서 외래 키로 멈춤 |
+| 18 빈 상태 | 아이가 없는 보호자도 200 빈 목록 | 404 |
+| 정의 고정(pin) | FOR KEY SHARE로 읽고 used_at은 처음 한 번만 찍음. 여러 정의는 (키, 버전) 순서로 고정 | 공용 정의 행을 FOR UPDATE로 잡고 매번 UPDATE |
+| C10 정의 버전 오류 | 400 VALIDATION_FAILED | 계약 밖 500 |
+| C10 요청 키 | 두 번 모두 내용 확인 실패일 때만 422로 굳힘. 같은 내용 · 저장 경합은 같은 키로 다시 시도 가능 | 어떤 이유든 두 번 실패하면 422로 굳힘 |
+| 상대 역할 지시 | 공급자 출력에 칸이 없음(Core 고정 문장만) | 모델 값을 길이 · 금지어로 검사한 뒤 버림 |
+| 후보 근거 확인 | 트랜잭션 밖에서 먼저 | 보호자 잠금 · 정의 잠금을 쥔 채 |
+| U5a 설정 키 | application.yml(CoreProperties.timing.practice · goal, TextAiProperties, KnowledgeProperties) | `u5a-ai.properties` · `u5a-practice.properties`를 따로 읽음 |
+| 계약 절 번호 | ai-io.md 7절(U5a TextAiGateway) · timing.md 9절(U5a 시간) | 6절 · 8절(main의 U6 · U2 절과 겹침) |
+
 ## 2026-10-13 · 결과 · 리포트 · 푸시에 동훈ver 설계 반영
 
 **배경**

@@ -161,6 +161,6 @@ WSS 텍스트 프레임 8KB(`mujoong.limits.ws-text-frame-max`, 넘으면 4400 [
 | `mujoong.timing.goal.restore-window` | `5s` | core-api | 삭제 요청 처리 뒤 서버 복구 시한 | C4 · U5a-J3 |
 | `mujoong.timing.parent.loading-notice-delay` | `5s` | web | 화면 18 최초 조회가 이 시간을 넘으면 안내 토스트 | 화면 18 interaction-spec · U5a-J23 |
 
-텍스트 AI 세 키의 기본값은 u5a-ai.properties, 타입은 TextAiProperties다. 기존 예약 키 mujoong.timing.practice.scenario-request-timeout=15s는 u5a-practice.properties/ScenarioLimits로 실제 사용하며 요청 선점 시한도 같다. mujoong.timing.goal.restore-window=5s는 GoalSelectionService가 읽는다. 기존 application.yml/CoreProperties를 변경하지 않고 각 유닛의 설정 자원/바인딩도 계약 시험에서 대조한다. 프런트 삭제는 기존 조작 토스트 설정(최소 3초)을 따른다.
+core-api 키는 모두 application.yml에 둔다. 텍스트 AI 세 키는 TextAiProperties, 두 `mujoong.timing.*` 키는 CoreProperties(timing.practice · timing.goal)가 묶는다. 상황 생성 예산은 요청 선점 시한과 같고(ScenarioLimits), 복구 시한은 GoalSelectionService가 읽는다. 프런트 삭제는 기존 조작 토스트 설정(최소 3초)을 따른다.
 
 web의 loading-notice-delay는 MUJOONG_TIMING_PARENT_LOADINGNOTICEDELAY 환경 변수로 주입하고 parentLoadingNoticeDelayMs로 읽는다.

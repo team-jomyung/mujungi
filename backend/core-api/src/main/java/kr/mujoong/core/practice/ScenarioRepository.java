@@ -92,7 +92,7 @@ public class ScenarioRepository {
                 .addValue("relation",scenario.relationType()).addValue("opportunity",scenario.opportunityCondition())
                 .addValue("scene",scenario.scenarioText()).addValue("role",scenario.partnerRoleText())
                 .addValue("trigger",scenario.triggerScript()).addValue("validation",json.write(scenario.validation()))
-                .addValue("fingerprint",ScenarioContentPolicy.fingerprint(output.scenarioText(),output.triggerScript()))
+                .addValue("fingerprint",ScenarioContentPolicy.fingerprint(output.scenarioText()))
                 .addValue("model",output.modelVersion()).addValue("prompt",output.promptVersion());
         jdbc.update("""
                 insert into core.core_scenario(id,guardian_id,child_id,session_id,goal_selection_id,behavior_key,behavior_version,

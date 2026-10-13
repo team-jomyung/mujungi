@@ -17,14 +17,18 @@ public class KnowledgeJdbcRepository {
     public Optional<BehaviorDefinition> findVersion(String key, int version) {
         return readVersion(key, version, false);
     }
-    public Optional<BehaviorDefinition> lockVersion(String key, int version) {
+    /**
+     * 고정(pin)용 읽기: FOR KEY SHARE. 같은 정의 행을 여러 보호자가 함께 고정해도 서로 줄 서지 않고, 행 삭제 · 키 변경만 막는다(U5a 리뷰 1).
+     * 내용 수정은 used_at이 찍힌 뒤 트리거가 막는다.
+     */
+    public Optional<BehaviorDefinition> readForPin(String key, int version) {
         return readVersion(key, version, true);
     }
     private Optional<BehaviorDefinition> readVersion(String key, int version, boolean lock) {
         String sql = """
                 select * from core.core_behavior_definition
                 where behavior_key = :key and version = :version
-                """ + (lock ? " for update" : "");
+                """ + (lock ? " for key share" : "");
         return jdbc.query(sql, parameters(key, version), (rs, row) -> new BehaviorDefinition(
                 ClockParams.uuid(rs, "id"), rs.getString("behavior_key"), rs.getInt("version"),
                 rs.getString("display_name"), rs.getString("behavior_definition_text"),
@@ -44,17 +48,11 @@ public class KnowledgeJdbcRepository {
                 rs.getString("content_text"), rs.getString("limitation_text")));
     }
 
-    public int markUsed(String key, int version, Instant now) {
-        return jdbc.update("""
-                update core.core_behavior_definition set used_at = coalesce(used_at, :now)
-                where behavior_key = :key and version = :version and status = 'ACTIVE'
-                """, ClockParams.instant(parameters(key, version), "now", now));
-    }
-
+    /** 처음 고정할 때 한 번만 used_at을 찍는다. 이미 찍혔거나 고정할 수 없는 상태면 0건이다(같은 행을 다시 갱신하지 않는다, U5a 리뷰 1). */
     public int markPinned(String key, int version, Instant now) {
         return jdbc.update("""
-                update core.core_behavior_definition set used_at = coalesce(used_at, :now)
-                where behavior_key = :key and version = :version and status in ('ACTIVE','RETIRED')
+                update core.core_behavior_definition set used_at = :now
+                where behavior_key = :key and version = :version and used_at is null and status in ('ACTIVE','RETIRED')
                 """, ClockParams.instant(parameters(key, version), "now", now));
     }
 

@@ -125,6 +125,11 @@ mujoong:
       deletion-session-wait: 30s
       google-keys-min-age: 1m
       google-keys-max-age: 6h
+    # U5a 연습(timing.md 9절): C10 상황 생성 전체 예산(요청 선점 시한도 같다) · 목표 삭제 뒤 서버 복구 시한
+    practice:
+      scenario-request-timeout: 15s
+    goal:
+      restore-window: 5s
   outbox:
     poll-interval: 500ms
     batch-size: 20
@@ -198,3 +203,14 @@ mujoong:
       token-uri: https://oauth2.googleapis.com/token
       jwks-uri: https://www.googleapis.com/oauth2/v3/certs
       exchange-timeout: 5s
+  # U5a 텍스트 AI(timing.md 9절 · ai-io.md 7절). 기본 공급자는 '사용 불가'이고, 실제 어댑터를 붙일 때 환경 변수
+  # MUJOONG_TEXT_AI_ENDPOINT · MUJOONG_TEXT_AI_MODEL · MUJOONG_TEXT_AI_API_KEY 이름을 쓴다(이 파일에는 값을 두지 않는다)
+  text-ai:
+    request-timeout: 3s
+    retry:
+      max-retries: 1
+      backoff: 250ms
+  # 화용 지식 그래프 읽기(Neo4j). 켜려면 KnowledgeGraphLookup 어댑터 빈이 있어야 한다(U5a)
+  knowledge:
+    neo4j:
+      enabled: false

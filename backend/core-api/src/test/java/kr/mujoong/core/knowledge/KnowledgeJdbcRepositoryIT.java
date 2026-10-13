@@ -31,21 +31,23 @@ class KnowledgeJdbcRepositoryIT {
                 });
         assertThat(repository.findApprovedSupport("unknown")).isEmpty();
     }
-    @Test void firstUseTimestampIsIdempotentAndUnknownVersionIsNotMarked() {
+    @Test void firstPinTimestampIsWrittenOnceAndUnknownVersionIsNotMarked() {
         db.inRolledBackTx(status -> {
             String key=freshDefinition();
-            assertThat(repository.markUsed(key,1,DbTestSupport.EPOCH)).isEqualTo(1);
-            assertThat(repository.markUsed(key,1,DbTestSupport.EPOCH.plus(Duration.ofDays(1)))).isEqualTo(1);
+            assertThat(repository.markPinned(key,1,DbTestSupport.EPOCH)).isEqualTo(1);
+            // 이미 고정된 행은 다시 갱신하지 않는다(U5a 리뷰 1)
+            assertThat(repository.markPinned(key,1,DbTestSupport.EPOCH.plus(Duration.ofDays(1)))).isZero();
             assertThat(repository.findVersion(key,1).orElseThrow().usedAt()).isEqualTo(DbTestSupport.EPOCH);
-            assertThat(repository.markUsed(key,999,DbTestSupport.EPOCH)).isZero();
+            assertThat(repository.markPinned(key,999,DbTestSupport.EPOCH)).isZero();
             return null;
         });
     }
     @Test void usedDefinitionCannotBeRewrittenAtDatabaseBoundary() {
         assertThatThrownBy(() -> db.inRolledBackTx(status -> {
-            repository.markUsed("ACCEPT_STOP",1,DbTestSupport.EPOCH);
+            String key=freshDefinition();
+            repository.markPinned(key,1,DbTestSupport.EPOCH);
             db.jdbc().update("update core.core_behavior_definition set judgment_criteria='changed' where behavior_key=:key",
-                    Map.of("key","ACCEPT_STOP"));
+                    Map.of("key",key));
             return null;
         })).isInstanceOf(DataAccessException.class);
     }
@@ -55,25 +57,51 @@ class KnowledgeJdbcRepositoryIT {
                 "update core.core_behavior_definition set used_at=null where behavior_key=:key",
                 "update core.core_behavior_definition set status='DRAFT' where behavior_key=:key"}) {
             assertThatThrownBy(() -> db.inRolledBackTx(status -> {
-                repository.markUsed("ACCEPT_STOP",1,DbTestSupport.EPOCH);
-                db.jdbc().update(sql,Map.of("key","ACCEPT_STOP"));
+                String key=freshDefinition();
+                repository.markPinned(key,1,DbTestSupport.EPOCH);
+                db.jdbc().update(sql,Map.of("key",key));
                 return null;
             })).isInstanceOf(DataAccessException.class);
         }
     }
 
-    @Test void retiredPinnedDefinitionCanBeReadButCannotBecomeANewCandidate() {
+    @Test void retiredDefinitionCanStillBePinnedForHistoricalSessions() {
         db.inRolledBackTx(status -> {
             String key=freshDefinition();
             db.jdbc().update("update core.core_behavior_definition set status='RETIRED' where behavior_key=:key",
                     Map.of("key",key));
-            assertThat(repository.lockVersion(key,1).orElseThrow().status()).isEqualTo("RETIRED");
-            assertThat(repository.markUsed(key,1,DbTestSupport.EPOCH)).isZero();
+            assertThat(repository.readForPin(key,1).orElseThrow().status()).isEqualTo("RETIRED");
             assertThat(repository.markPinned(key,1,DbTestSupport.EPOCH)).isEqualTo(1);
             assertThat(repository.findVersion(key,1).orElseThrow().usedAt()).isEqualTo(DbTestSupport.EPOCH);
-            assertThat(repository.lockVersion("missing",1)).isEmpty();
+            assertThat(repository.readForPin("missing",1)).isEmpty();
             return null;
         });
+    }
+    @Test void pinningAPinnedDefinitionNeitherWaitsForNorBlocksAnotherGuardiansPin() throws Exception {
+        // U5a 리뷰 1: 공용 정의 행을 FOR UPDATE로 잡으면 다른 보호자의 후보 등록 · C10 생성이 그 행 앞에 줄을 서고, 보호자 잠금과 순서가
+        // 엇갈리면 교착(40P01)이 난다. 고정은 FOR KEY SHARE로 읽고 처음 한 번만 used_at을 찍는다
+        String key=freshDefinition(); // 트랜잭션 밖이라 커밋된다(고정된 정의는 지울 수 없어 키마다 새로 만든다)
+        var knowledge=new PragmaticsKnowledge(repository,new kr.mujoong.testsupport.time.MutableClock(DbTestSupport.EPOCH),
+                new KnowledgeProperties(false),java.util.Optional.empty());
+        db.inTx(status -> knowledge.pinVersion(key,1));
+        var held=new java.util.concurrent.CountDownLatch(1);
+        var release=new java.util.concurrent.CountDownLatch(1);
+        var first=db.startTx(new java.util.concurrent.atomic.AtomicInteger(),status -> {
+            knowledge.pinVersion(key,1);
+            held.countDown();
+            try { if (!release.await(10,java.util.concurrent.TimeUnit.SECONDS)) throw new AssertionError("first pin not released"); }
+            catch (InterruptedException interrupted) { Thread.currentThread().interrupt(); throw new AssertionError(interrupted); }
+            return null;
+        });
+        try {
+            assertThat(held.await(5,java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+            var second=db.startTx(new java.util.concurrent.atomic.AtomicInteger(),status -> knowledge.pinVersion(key,1));
+            assertThat(second.get(3,java.util.concurrent.TimeUnit.SECONDS).usedAt()).as("먼저 연 트랜잭션을 기다리지 않는다")
+                    .isEqualTo(DbTestSupport.EPOCH);
+        } finally {
+            release.countDown();
+        }
+        first.get(5,java.util.concurrent.TimeUnit.SECONDS);
     }
     @Test void pinLockBlocksConcurrentEditWhichFailsAfterPinCommits() throws Exception {
         String key="CONCURRENCY_"+java.util.UUID.randomUUID();
@@ -88,7 +116,7 @@ class KnowledgeJdbcRepositoryIT {
         var pinPid=new java.util.concurrent.atomic.AtomicInteger();
         var editPid=new java.util.concurrent.atomic.AtomicInteger();
         var pin=db.startTx(pinPid,status -> {
-            repository.lockVersion(key,1).orElseThrow();
+            repository.readForPin(key,1).orElseThrow();
             repository.markPinned(key,1,DbTestSupport.EPOCH);
             pinned.countDown();
             try { if (!commit.await(5,java.util.concurrent.TimeUnit.SECONDS)) throw new AssertionError("pin commit not released"); }

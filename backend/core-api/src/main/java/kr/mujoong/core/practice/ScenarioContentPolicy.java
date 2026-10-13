@@ -22,7 +22,8 @@ public final class ScenarioContentPolicy {
         return Normalizer.normalize(value, Normalizer.Form.NFKC).replace(IMAGINARY_NOTICE.strip(), "")
                 .replaceAll("[^\\p{L}\\p{N}]", "").toLowerCase(Locale.ROOT);
     }
-    public static String fingerprint(String scene, String trigger) {
+    /** 아이별 같은 상황 재사용을 막는 지문. 기회 트리거는 본문에 들어 있어야 하므로(valid) 본문만 본다(U5a 리뷰 9). */
+    public static String fingerprint(String scene) {
         return JsonCodec.shared().sha256OfCanonical(JsonCodec.shared().write(
                 java.util.List.of(normalize(scene))));
     }

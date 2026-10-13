@@ -80,7 +80,9 @@ public record CoreProperties(
             DeviceTiming device,
             LoginTiming login,
             CacheTiming cache,
-            AccountTiming account) {
+            AccountTiming account,
+            PracticeTiming practice,
+            GoalTiming goal) {
 
         public Timing {
             required(session, "mujoong.timing.session");
@@ -90,6 +92,22 @@ public record CoreProperties(
             required(login, "mujoong.timing.login");
             required(cache, "mujoong.timing.cache");
             required(account, "mujoong.timing.account");
+            required(practice, "mujoong.timing.practice");
+            required(goal, "mujoong.timing.goal");
+        }
+    }
+
+    /** U5a C10 상황 생성 전체 예산(생성 · 재생성 · 기술 재시도 포함, 요청 선점 시한도 같다)(timing.md 9절 · U5a-J18). */
+    public record PracticeTiming(Duration scenarioRequestTimeout) {
+        public PracticeTiming {
+            positive(scenarioRequestTimeout, "mujoong.timing.practice.scenario-request-timeout");
+        }
+    }
+
+    /** U5a 목표 삭제 뒤 서버가 복구를 받아 주는 시한(C4 · timing.md 9절 · U5a-J3). */
+    public record GoalTiming(Duration restoreWindow) {
+        public GoalTiming {
+            positive(restoreWindow, "mujoong.timing.goal.restore-window");
         }
     }
 

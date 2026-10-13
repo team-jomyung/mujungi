@@ -2,7 +2,6 @@ package kr.mujoong.core.knowledge;
 
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
-import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -19,33 +18,24 @@ class PragmaticsKnowledgeTest {
     private BehaviorDefinition definition(String status, String criteria) {
         return new BehaviorDefinition(UUID.randomUUID(),"test",1,"목표","행동","기회","상황",criteria,status,clock.now(),null);
     }
-    @Test void completeActiveVersionCanBeUsedWithoutChangingVersion() {
+    @Test void completeActiveVersionIsReadableAsIs() {
         var definition = definition("ACTIVE","판정");
         when(repository.findVersion("test",1)).thenReturn(Optional.of(definition));
-        when(repository.markUsed("test",1,clock.now())).thenReturn(1);
-        assertThat(service().requireActive("test",1)).isEqualTo(definition);
-        service().markUsed("test",1);
-        verify(repository).markUsed("test",1,clock.now());
+        assertThat(service().requireVersion("test",1)).isEqualTo(definition);
     }
     @Test void incompleteMissingAndDraftVersionsAreUnavailable() {
         when(repository.findVersion("missing",1)).thenReturn(Optional.empty());
-        assertThatThrownBy(() -> service().requireActive("missing",1)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> service().requireVersion("missing",1)).isInstanceOf(IllegalArgumentException.class);
         for (BehaviorDefinition definition : List.of(definition("ACTIVE"," "),definition("DRAFT","판정"))) {
             when(repository.findVersion("test",1)).thenReturn(Optional.of(definition));
-            assertThatThrownBy(() -> service().requireActive("test",1)).isInstanceOf(IllegalArgumentException.class);
+            assertThatThrownBy(() -> service().requireVersion("test",1)).isInstanceOf(IllegalArgumentException.class);
         }
         assertThat(definition("ACTIVE",null).complete()).isFalse();
     }
-    @Test void retiredVersionRemainsAvailableOnlyToPinnedReaders() {
+    @Test void retiredVersionRemainsAvailableToPinnedReaders() {
         var definition = definition("RETIRED","판정");
         when(repository.findVersion("test",1)).thenReturn(Optional.of(definition));
         assertThat(service().requireVersion("test",1)).isEqualTo(definition);
-        assertThatThrownBy(() -> service().requireActive("test",1)).isInstanceOf(IllegalArgumentException.class);
-    }
-    @Test void concurrentRetirementMakesUseFailRatherThanCommitInvalidReference() {
-        when(repository.findVersion("test",1)).thenReturn(Optional.of(definition("ACTIVE","판정")));
-        when(repository.markUsed("test",1,clock.now())).thenReturn(0);
-        assertThatThrownBy(() -> service().markUsed("test",1)).isInstanceOf(IllegalArgumentException.class);
     }
     @Test void supportRetainsConditionAndLimitation() {
         var item = new SupportItem(UUID.randomUUID(),"test","적용 조건","도움말","한계");
@@ -65,24 +55,49 @@ class PragmaticsKnowledgeTest {
         assertThat(enabled.relatedBehaviorKeys("test")).containsExactly("other");
     }
 
-    @Test void pinAcceptsHistoricalRetiredVersionAndReturnsFrozenSnapshot() {
+    @Test void firstPinStampsOnceAndReturnsTheFrozenSnapshot() {
         var retired=definition("RETIRED","판정");
-        when(repository.lockVersion("test",1)).thenReturn(Optional.of(retired));
+        var frozen=pinned(retired);
+        when(repository.readForPin("test",1)).thenReturn(Optional.of(retired));
         when(repository.markPinned("test",1,clock.now())).thenReturn(1);
-        when(repository.findVersion("test",1)).thenReturn(Optional.of(retired));
-        assertThat(service().pinVersion("test",1)).isEqualTo(retired);
-        verify(repository).lockVersion("test",1);
+        when(repository.findVersion("test",1)).thenReturn(Optional.of(frozen));
+        assertThat(service().pinVersion("test",1)).isEqualTo(frozen);
+        verify(repository).readForPin("test",1);
         verify(repository).markPinned("test",1,clock.now());
     }
-    @Test void pinRejectsMissingIncompleteDraftAndFailedUpdate() {
-        when(repository.lockVersion("test",1)).thenReturn(Optional.empty());
+    @Test void anAlreadyPinnedVersionIsReturnedWithoutWritingTheSharedRow() {
+        // U5a 리뷰 1: 이미 고정된 공용 정의 행은 다시 갱신하지 않는다(여러 보호자가 그 행 앞에 줄 서지 않게)
+        var frozen=pinned(definition("ACTIVE","판정"));
+        when(repository.readForPin("test",1)).thenReturn(Optional.of(frozen));
+        assertThat(service().pinVersion("test",1)).isEqualTo(frozen);
+        verify(repository,never()).markPinned(any(),anyInt(),any());
+    }
+    @Test void aConcurrentFirstPinIsAcceptedWhenTheRereadShowsTheStamp() {
+        var active=definition("ACTIVE","판정");
+        var frozen=pinned(active);
+        when(repository.readForPin("test",1)).thenReturn(Optional.of(active));
+        when(repository.markPinned("test",1,clock.now())).thenReturn(0);
+        when(repository.findVersion("test",1)).thenReturn(Optional.of(frozen));
+        assertThat(service().pinVersion("test",1)).isEqualTo(frozen);
+    }
+    @Test void pinRejectsMissingIncompleteDraftAndAnUnstampedReread() {
+        when(repository.readForPin("test",1)).thenReturn(Optional.empty());
         assertThatThrownBy(() -> service().pinVersion("test",1)).isInstanceOf(IllegalArgumentException.class);
         for(var definition: List.of(definition("DRAFT","판정"),definition("ACTIVE"," "))) {
-            when(repository.lockVersion("test",1)).thenReturn(Optional.of(definition));
+            when(repository.readForPin("test",1)).thenReturn(Optional.of(definition));
             assertThatThrownBy(() -> service().pinVersion("test",1)).isInstanceOf(IllegalArgumentException.class);
         }
-        when(repository.lockVersion("test",1)).thenReturn(Optional.of(definition("ACTIVE","판정")));
+        var active=definition("ACTIVE","판정");
+        when(repository.readForPin("test",1)).thenReturn(Optional.of(active));
         when(repository.markPinned("test",1,clock.now())).thenReturn(0);
+        when(repository.findVersion("test",1)).thenReturn(Optional.of(active));
         assertThatThrownBy(() -> service().pinVersion("test",1)).isInstanceOf(IllegalArgumentException.class);
+        when(repository.findVersion("test",1)).thenReturn(Optional.empty());
+        assertThatThrownBy(() -> service().pinVersion("test",1)).isInstanceOf(IllegalArgumentException.class);
+    }
+    private BehaviorDefinition pinned(BehaviorDefinition definition) {
+        return new BehaviorDefinition(definition.id(),definition.behaviorKey(),definition.version(),definition.displayName(),
+                definition.behaviorDefinitionText(),definition.opportunityCondition(),definition.scenarioCondition(),
+                definition.judgmentCriteria(),definition.status(),definition.createdAt(),clock.now());
     }
 }

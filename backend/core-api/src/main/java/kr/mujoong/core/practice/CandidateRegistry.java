@@ -1,6 +1,9 @@
 package kr.mujoong.core.practice;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import kr.mujoong.contract.error.ErrorCode;
@@ -30,26 +33,41 @@ public class CandidateRegistry {
         this.accounts=accounts;this.evidence=evidence;this.repository=repository;this.knowledge=knowledge;
         this.expressions=expressions;this.clock=clock;this.retry=retry;this.tx=new TransactionTemplate(transactions);
     }
+    /**
+     * 후보를 저장한다(같은 세션 · 행동 · 버전은 한 번만). 근거 확인(U4 · U6 포트)은 트랜잭션 밖에서 먼저 끝내고, 트랜잭션 안에서는 보호자 잠금 ·
+     * 정의 고정 · 저장만 한다(잠금을 쥔 채 외부 호출 금지, U5a 리뷰 8). 정의는 (행동 키, 버전) 순서로 고정해 여러 정의를 처음 고정하는 두
+     * 요청이 서로 엇갈려 기다리지 않게 한다. 하나라도 틀리면 전체를 되돌린다.
+     */
     public List<UUID> register(UUID sessionId,UUID childId,List<Candidate> candidates) {
         if(sessionId==null || childId==null || candidates==null || candidates.size()>100) invalid();
+        for(Candidate candidate:candidates) {
+            validate(candidate);
+            List<CandidateEvidencePort.Evidence> refs=candidate.evidence().stream()
+                .map(e->new CandidateEvidencePort.Evidence(sessionId,e.utteranceSeq(),e.kind())).toList();
+            if(!evidence.verifies(childId,sessionId,refs))invalid();
+        }
+        List<DefinitionKey> keys=candidates.stream().map(c->new DefinitionKey(c.behaviorKey(),c.behaviorVersion()))
+            .distinct().sorted(Comparator.comparing(DefinitionKey::behaviorKey).thenComparingInt(DefinitionKey::version)).toList();
         return retry.execute(DbRetry.Idempotency.IDEMPOTENT,()->tx.execute(status->{
             PracticeAccountPort.AccountContext owner=accounts.requireChild(childId,true);
             if(!owner.childId().equals(childId))throw CoreApiException.of(ErrorCode.NOT_FOUND);
+            Map<DefinitionKey,BehaviorDefinition> pinned=new HashMap<>();
+            for(DefinitionKey key:keys) {
+                BehaviorDefinition definition;
+                try { definition=knowledge.pinVersion(key.behaviorKey(),key.version()); }
+                catch(IllegalArgumentException error){throw CoreApiException.of(ErrorCode.VALIDATION_FAILED);}
+                if(!"ACTIVE".equals(definition.status()))invalid();
+                pinned.put(key,definition);
+            }
             List<UUID> ids=new ArrayList<>();
             for(Candidate candidate:candidates) {
-                validate(candidate);
-                BehaviorDefinition definition;
-                try { definition=knowledge.pinVersion(candidate.behaviorKey(),candidate.behaviorVersion());
-                    if(!"ACTIVE".equals(definition.status()))invalid(); }
-                catch(IllegalArgumentException error){throw CoreApiException.of(ErrorCode.VALIDATION_FAILED);}
-                List<CandidateEvidencePort.Evidence> refs=candidate.evidence().stream()
-                    .map(e->new CandidateEvidencePort.Evidence(sessionId,e.utteranceSeq(),e.kind())).toList();
-                if(!evidence.verifies(childId,sessionId,refs))invalid();
+                BehaviorDefinition definition=pinned.get(new DefinitionKey(candidate.behaviorKey(),candidate.behaviorVersion()));
                 ids.add(repository.register(childId,sessionId,candidate,definition.displayName(),clock.now()));
             }
             return List.copyOf(ids);
         }));
     }
+    private record DefinitionKey(String behaviorKey,int version) {}
     public List<CandidateView> viewForSession(UUID sessionId,UUID guardianId) {
         if(sessionId==null)invalid();
         var account=accounts.requireActive(guardianId,false);

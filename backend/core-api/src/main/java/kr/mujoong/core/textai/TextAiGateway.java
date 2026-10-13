@@ -89,13 +89,12 @@ public class TextAiGateway {
         if (output == null || invalidMetadata(output.modelVersion()) || invalidMetadata(output.promptVersion())) {
             throw new TextAiException(TextAiException.Reason.INVALID_OUTPUT);
         }
-        if (tooLong(output.scenarioText(), 8000) || tooLong(output.partnerRoleText(), 2000)
-                || tooLong(output.triggerScript(), 2000) || tooLong(output.opportunityCondition(), 2000)
-                || tooLong(output.relationType(), 200)) {
+        if (tooLong(output.scenarioText(), 8000) || tooLong(output.triggerScript(), 2000)
+                || tooLong(output.opportunityCondition(), 2000) || tooLong(output.relationType(), 200)) {
             throw new TextAiException(TextAiException.Reason.INVALID_OUTPUT);
         }
-        policy.requireAllowed(output.scenarioText(), output.partnerRoleText(), output.triggerScript(),
-                output.relationType(), output.opportunityCondition());
+        policy.requireAllowed(output.scenarioText(), output.triggerScript(), output.relationType(),
+                output.opportunityCondition());
     }
 
     private static boolean tooLong(String value, int maximum) { return value != null && value.length() > maximum; }

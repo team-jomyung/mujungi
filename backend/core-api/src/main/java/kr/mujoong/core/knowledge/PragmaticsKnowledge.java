@@ -22,14 +22,6 @@ public class PragmaticsKnowledge {
         this.graph = properties.enabled() ? graph : Optional.empty();
     }
 
-    public BehaviorDefinition requireActive(String key, int version) {
-        BehaviorDefinition definition = requireVersion(key, version);
-        if (!"ACTIVE".equals(definition.status())) {
-            throw new IllegalArgumentException("Behavior definition is not active");
-        }
-        return definition;
-    }
-
     /** A pinned historical version remains readable after retirement. */
     public BehaviorDefinition requireVersion(String key, int version) {
         BehaviorDefinition definition = repository.findVersion(key, version)
@@ -40,25 +32,33 @@ public class PragmaticsKnowledge {
         return definition;
     }
 
-    /** Call inside the referencing write transaction. */
-    public void markUsed(String key, int version) {
-        requireActive(key, version);
-        if (repository.markUsed(key, version, clock.now()) != 1) {
-            throw new IllegalArgumentException("Behavior definition is no longer active");
+    /**
+     * 부르는 쪽 트랜잭션 안에서 버전을 고정(pin)하고 고정된 내용을 돌려준다. 행은 FOR KEY SHARE로만 읽어 여러 보호자의 고정이 서로 기다리지 않고,
+     * used_at은 처음 한 번만 찍는다(U5a 리뷰 1). 다른 트랜잭션이 먼저 찍었으면(0건) 다시 읽어 찍힌 값을 쓴다.
+     *
+     * @throws IllegalArgumentException 없는 버전 · 미완성 · 초안이거나 고정하지 못했을 때
+     */
+    public BehaviorDefinition pinVersion(String key, int version) {
+        BehaviorDefinition definition = repository.readForPin(key, version)
+                .orElseThrow(() -> new IllegalArgumentException("Behavior definition not found"));
+        requirePinnable(definition);
+        if (definition.usedAt() != null) {
+            return definition;
         }
+        repository.markPinned(key, version, clock.now());
+        BehaviorDefinition pinned = repository.findVersion(key, version)
+                .orElseThrow(() -> new IllegalArgumentException("Behavior definition not found"));
+        requirePinnable(pinned);
+        if (pinned.usedAt() == null) {
+            throw new IllegalArgumentException("Behavior definition cannot be pinned");
+        }
+        return pinned;
     }
 
-    /** Freeze and read a pinned session version atomically in the caller's transaction. */
-    public BehaviorDefinition pinVersion(String key, int version) {
-        BehaviorDefinition definition = repository.lockVersion(key, version)
-                .orElseThrow(() -> new IllegalArgumentException("Behavior definition not found"));
+    private static void requirePinnable(BehaviorDefinition definition) {
         if (!definition.complete() || !("ACTIVE".equals(definition.status()) || "RETIRED".equals(definition.status()))) {
             throw new IllegalArgumentException("Behavior definition is incomplete or unpublished");
         }
-        if (repository.markPinned(key, version, clock.now()) != 1) {
-            throw new IllegalArgumentException("Behavior definition cannot be pinned");
-        }
-        return repository.findVersion(key, version).orElseThrow();
     }
 
     public List<SupportItem> supportItems(String behaviorKey) {

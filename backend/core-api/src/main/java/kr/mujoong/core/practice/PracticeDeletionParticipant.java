@@ -4,11 +4,16 @@ import java.util.Objects;
 import java.util.UUID;
 import kr.mujoong.core.common.db.DbRetry;
 import kr.mujoong.core.common.deletion.DeletionParticipant;
+import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
-/** Deletes only U5a-owned personal rows; shared definitions and tips remain. U2 registers this participant. */
+/**
+ * U5a가 가진 개인 행만 지운다(공용 행동 정의 · 지원 문구는 남긴다). 아이 참가자(300)보다 먼저 돌아야 아이 행 삭제가 외래 키에 막히지 않는다
+ * ({@link DeletionParticipant#ORDER_PRACTICE}, U5a 리뷰 B).
+ */
 @Component
+@Order(DeletionParticipant.ORDER_PRACTICE)
 public class PracticeDeletionParticipant implements DeletionParticipant {
     private final PracticeGoalRepository repository;
     private final PracticeAccountPort accounts;

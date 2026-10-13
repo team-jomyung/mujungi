@@ -8,9 +8,10 @@ import kr.mujoong.contract.error.ErrorCode;
 import kr.mujoong.contract.time.MujoongClock;
 import kr.mujoong.core.common.db.DbRetry;
 import kr.mujoong.core.common.error.CoreApiException;
+import kr.mujoong.core.config.CoreProperties;
 import kr.mujoong.core.knowledge.BehaviorDefinition;
 import kr.mujoong.core.knowledge.PragmaticsKnowledge;
-import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -25,16 +26,23 @@ public class GoalSelectionService {
     private final Duration restoreWindow;
     private final DbRetry retry;
     private final TransactionTemplate tx;
+    @Autowired
     public GoalSelectionService(PracticeAccountPort accounts,PracticeGoalRepository goals,PragmaticsKnowledge knowledge,
-            GoalMetadataPort metadata,MujoongClock clock,
-            @Value("${mujoong.timing.goal.restore-window}") Duration restoreWindow,
+            GoalMetadataPort metadata,MujoongClock clock,CoreProperties properties,
+            DbRetry retry,PlatformTransactionManager transactions) {
+        this(accounts,goals,knowledge,metadata,clock,properties.timing().goal().restoreWindow(),retry,transactions);
+    }
+    /** 시험용: 복구 시한을 직접 준다. */
+    GoalSelectionService(PracticeAccountPort accounts,PracticeGoalRepository goals,PragmaticsKnowledge knowledge,
+            GoalMetadataPort metadata,MujoongClock clock,Duration restoreWindow,
             DbRetry retry,PlatformTransactionManager transactions) {
         if(restoreWindow.isNegative() || restoreWindow.isZero()) throw new IllegalArgumentException("goal.restore-window");
         this.accounts=accounts;this.goals=goals;this.knowledge=knowledge;this.metadata=metadata;this.clock=clock;
         this.restoreWindow=restoreWindow;this.retry=retry;this.tx=new TransactionTemplate(transactions);
     }
+    /** 담은 목표. 아이를 아직 등록하지 않은 보호자도 빈 목록이다(18 빈 상태, U5a 리뷰 4). */
     public List<View> list(UUID guardianId) {
-        accounts.requireActive(guardianId,false);
+        accounts.requireGuardian(guardianId);
         return goals.list(guardianId).stream().map(this::view).toList();
     }
     public View add(UUID guardianId,UUID recommendationId) {

@@ -3,15 +3,13 @@ package kr.mujoong.core.practice;
 import java.time.Duration;
 import kr.mujoong.contract.error.ErrorCode;
 import kr.mujoong.core.common.error.CoreApiException;
-import org.springframework.boot.context.properties.bind.Binder;
-import org.springframework.core.env.Environment;
+import kr.mujoong.core.config.CoreProperties;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.PropertySource;
 
+/** C10 상황 생성의 포트 기본값과 시간 한도. 시간 값은 application.yml을 묶은 {@link CoreProperties}에서 읽는다(U5a 리뷰 5). */
 @Configuration(proxyBeanMethods = false)
-@PropertySource("classpath:u5a-practice.properties")
 public class ScenarioConfiguration {
     @Bean @ConditionalOnMissingBean(PracticeSessionContextPort.class)
     PracticeSessionContextPort practiceSessionContextPort() {
@@ -22,10 +20,8 @@ public class ScenarioConfiguration {
         return id -> { throw CoreApiException.of(ErrorCode.SERVICE_NOT_READY); };
     }
     @Bean
-    ScenarioLimits scenarioLimits(Environment environment) {
-        Duration timeout = Binder.get(environment).bind("mujoong.timing.practice.scenario-request-timeout", Duration.class)
-                .orElseThrow(() -> new IllegalStateException("Scenario timeout is missing"));
-        return new ScenarioLimits(timeout);
+    ScenarioLimits scenarioLimits(CoreProperties properties) {
+        return new ScenarioLimits(properties.timing().practice().scenarioRequestTimeout());
     }
     public record ScenarioLimits(Duration requestTimeout) {
         public ScenarioLimits {

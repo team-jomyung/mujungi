@@ -61,6 +61,14 @@ public class ScenarioService {
         return context.goals().stream().filter(g -> request.goalSelectionId().equals(g.goalSelectionId())).findFirst()
                 .orElseThrow(() -> CoreApiException.of(ErrorCode.NOT_FOUND));
     }
+    /** 세션이 고정한 정의 버전을 고정한다. 쓸 수 없는 버전(없음 · 초안 · 미완성 · 고정 실패)은 계약 안의 400이다(U5a 리뷰 2). */
+    private kr.mujoong.core.knowledge.BehaviorDefinition pin(GoalSnapshot goal) {
+        try {
+            return knowledge.pinVersion(goal.behaviorKey(),goal.behaviorVersion());
+        } catch (IllegalArgumentException unusable) {
+            throw CoreApiException.of(ErrorCode.VALIDATION_FAILED);
+        }
+    }
     private void authorize(SessionContext context) {
         var account=accounts.requireActive(context.guardianId(),true);
         if (!account.childId().equals(context.childId())) throw CoreApiException.of(ErrorCode.NOT_FOUND);
@@ -80,15 +88,17 @@ public class ScenarioService {
         record Prepared(kr.mujoong.core.knowledge.BehaviorDefinition definition, ScenarioRepository.Claim claim) {}
         var prepared=tx.execute(status -> {
             authorize(context);
-            var pinned=knowledge.pinVersion(goal.behaviorKey(),goal.behaviorVersion());
-            return new Prepared(pinned,repository.claim(request.key(),context,request,clock.now(),deadline));
+            return new Prepared(pin(goal),repository.claim(request.key(),context,request,clock.now(),deadline));
         });
         Objects.requireNonNull(prepared);
         var claim=prepared.claim();
         var definition=prepared.definition();
         String opportunity=previous==null ? definition.opportunityCondition() : previous.scenario().opportunityCondition();
         if (claim.replay()!=null) return claim.replay();
+        // 요청 키를 FAILED로 굳히는 것은 두 번 모두 내용 검증에 실패했을 때뿐이다. 다른 요청과의 경합 · 이미 낸 상황과 같은 내용은
+        // 다시 만들면 될 수 있으므로 키를 풀어 같은 키로 다시 요청할 수 있게 한다(U5a 리뷰 6)
         boolean validationFailed=false;
+        boolean retryableMiss=false;
         try {
             var account=accounts.requireActive(context.guardianId(),false);
             if (account.ageYears()==null) throw CoreApiException.of(ErrorCode.SERVICE_NOT_READY);
@@ -101,21 +111,22 @@ public class ScenarioService {
                     var generated=ai.generateScenario(prompt,deadline);
                     if (!ScenarioContentPolicy.valid(generated,relation,opportunity)) continue;
                     if (previous!=null && ScenarioContentPolicy.normalize(previous.scenario().scenarioText())
-                            .equals(ScenarioContentPolicy.normalize(generated.scenarioText()))) continue;
-                    if (repository.seen(context.childId(),ScenarioContentPolicy.fingerprint(generated.scenarioText(),generated.triggerScript()))) continue;
+                            .equals(ScenarioContentPolicy.normalize(generated.scenarioText()))) { retryableMiss=true; continue; }
+                    if (repository.seen(context.childId(),ScenarioContentPolicy.fingerprint(generated.scenarioText()))) { retryableMiss=true; continue; }
                     SessionContext latest=context(request);
                     if (!latest.guardianId().equals(context.guardianId()) || !latest.childId().equals(context.childId())
                             || !goal(latest,request).equals(goal)) throw CoreApiException.of(ErrorCode.NOT_FOUND);
                     return tx.execute(status -> { authorize(latest);
                         return repository.save(request.key(),claim.claimId(),latest,goal,request,generated,clock.now()); });
                 } catch (DuplicateKeyException duplicate) {
-                    // Another request won the child/content uniqueness race. Regenerate once.
+                    // 같은 아이의 같은 내용을 다른 요청이 먼저 저장했다(경합). 한 번 더 만든다
+                    retryableMiss=true;
                 } catch (TextAiException failure) {
                     if (failure.reason()==TextAiException.Reason.UNAVAILABLE || failure.reason()==TextAiException.Reason.TIMEOUT)
                         throw CoreApiException.of(ErrorCode.SERVICE_NOT_READY);
                 }
             }
-            validationFailed=true;
+            validationFailed=!retryableMiss;
             throw CoreApiException.of(ErrorCode.SCENARIO_GEN_FAILED);
         } finally {
             boolean failed=validationFailed;

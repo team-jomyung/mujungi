@@ -10,7 +10,6 @@ import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import kr.mujoong.contract.error.ErrorCode;
-import kr.mujoong.contract.json.JsonCodec;
 import kr.mujoong.core.common.db.DbTestSupport;
 import kr.mujoong.core.common.error.CoreApiException;
 import kr.mujoong.core.knowledge.*;
@@ -23,7 +22,7 @@ import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 class PracticeCoreIT {
     private DbTestSupport db;
     private MutableClock clock;
-    private JdbcPracticeAccountAdapter accounts;
+    private JdbcTestPracticeAccounts accounts;
     private PracticeGoalRepository repository;
     private PragmaticsKnowledge knowledge;
     private GoalSelectionService service;
@@ -32,7 +31,7 @@ class PracticeCoreIT {
     private final java.util.ArrayList<UUID> owners=new java.util.ArrayList<>();
     @BeforeEach void setup() {
         db=DbTestSupport.coreApp();clock=new MutableClock(DbTestSupport.EPOCH);
-        accounts=new JdbcPracticeAccountAdapter(db.jdbc(),new JsonCodec());
+        accounts=new JdbcTestPracticeAccounts(db.jdbc());
         repository=new PracticeGoalRepository(db.jdbc());
         knowledge=new PragmaticsKnowledge(new KnowledgeJdbcRepository(db.jdbc()),clock,new KnowledgeProperties(false),Optional.empty());
         var tx=new DataSourceTransactionManager(db.dataSource());
@@ -179,33 +178,41 @@ class PracticeCoreIT {
         assertThat(deleted.get("goalRecommendations")).isEqualTo(2);
         assertThat(deletion.deleteByGuardian(f.guardianId(),UUID.randomUUID()).values()).allMatch(count->count==0);
         assertThat(service.list(f.guardianId())).isEmpty();assertThat(service.list(other.guardianId())).hasSize(1);
-        assertThat(knowledge.requireActive("ACCEPT_STOP",1)).isNotNull();
+        assertThat(knowledge.requireVersion("ACCEPT_STOP",1).status()).isEqualTo("ACTIVE");
         assertThatThrownBy(()->deletion.deleteByGuardian(null,UUID.randomUUID())).isInstanceOf(NullPointerException.class);
-    }
-    @Test void temporaryBridgeRequiresKnownActiveChildAndTransactionalWriteLock(){
-        var f=family();
-        assertThat(accounts.requireActive(f.guardianId(),false)).isEqualTo(f);
-        assertThat(accounts.requireActive(f.guardianId(),false).toString()).doesNotContain("공룡");
-        error(()->accounts.requireActive(null,false),ErrorCode.UNAUTHENTICATED);
-        error(()->accounts.requireActive(UUID.randomUUID(),false),ErrorCode.UNAUTHENTICATED);
-        error(()->accounts.requireChild(UUID.randomUUID(),false),ErrorCode.NOT_FOUND);
-        error(()->accounts.requireChild(null,false),ErrorCode.VALIDATION_FAILED);
-        UUID withoutChild=db.insertGuardian("ACTIVE");owners.add(withoutChild);
-        error(()->accounts.requireActive(withoutChild,false),ErrorCode.NOT_FOUND);
-        assertThatThrownBy(()->accounts.requireActive(f.guardianId(),true)).isInstanceOf(IllegalStateException.class);
-        assertThatThrownBy(()->accounts.lockForDeletion(f.guardianId())).isInstanceOf(IllegalStateException.class);
-        db.jdbc().update("update core.core_child set interests_json=null where id=:id",Map.of("id",f.childId()));
-        assertThat(accounts.requireActive(f.guardianId(),false).interests()).isEmpty();
     }
     @Test void missingIntegrationPortsFailClosedAndMetadataIsUnknown(){
         var config=new PracticePortConfiguration();
-        assertThat(config.practiceAccountPort(db.jdbc(),new JsonCodec())).isInstanceOf(JdbcPracticeAccountAdapter.class);
         assertThat(config.candidateEvidencePort().verifies(UUID.randomUUID(),UUID.randomUUID(),List.of())).isFalse();
         assertThat(config.goalMetadataPort().lookup(UUID.randomUUID(),UUID.randomUUID(),UUID.randomUUID()))
             .isEqualTo(GoalMetadataPort.Metadata.unavailable());
-        PracticeAccountPort incomplete=(id,lock)->null;
-        error(()->incomplete.requireChild(UUID.randomUUID(),false),ErrorCode.SERVICE_NOT_READY);
-        error(()->incomplete.lockForDeletion(UUID.randomUUID()),ErrorCode.SERVICE_NOT_READY);
-        error(()->incomplete.childrenForDeletion(UUID.randomUUID()),ErrorCode.SERVICE_NOT_READY);
+    }
+    @Test void aGuardianWithoutAChildGetsAnEmptyListButStillCannotWrite(){
+        // U5a 리뷰 4: 아이를 아직 등록하지 않은 보호자의 18은 빈 상태다(404가 아니다)
+        UUID withoutChild=db.insertGuardian("ACTIVE");owners.add(withoutChild);
+        assertThat(service.list(withoutChild)).isEmpty();
+        error(()->service.add(withoutChild,UUID.randomUUID()),ErrorCode.NOT_FOUND);
+        error(()->service.list(UUID.randomUUID()),ErrorCode.UNAUTHENTICATED);
+        error(()->service.list(null),ErrorCode.UNAUTHENTICATED);
+    }
+    @Test void candidateEvidenceIsVerifiedBeforeTheTransactionOpensAndPinsFollowDefinitionOrder(){
+        // U5a 리뷰 8: 근거 확인(외부 포트)은 보호자 잠금 · 정의 고정을 쥔 트랜잭션 밖에서 끝낸다
+        var f=family();var tx=new DataSourceTransactionManager(db.dataSource());
+        List<Boolean> insideTransaction=new java.util.ArrayList<>();
+        var watching=new CandidateRegistry(accounts,(c,s,e)->{
+            insideTransaction.add(org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive());
+            return true;},repository,knowledge,new ForbiddenExpressionPolicy(),clock,NoTransactions.noRetry(),tx);
+        var evidence=List.of(new CandidateRegistry.Evidence(1,"CHILD_RECALL"));
+        UUID session=UUID.randomUUID();
+        List<UUID> ids=watching.register(session,f.childId(),List.of(
+            new CandidateRegistry.Candidate("ASK_TO_JOIN",1,"친구에게 같이 하자고 말했어요.",evidence),
+            new CandidateRegistry.Candidate("ACCEPT_STOP",1,"친구의 말을 듣고 멈췄어요.",evidence)));
+        assertThat(insideTransaction).containsExactly(false,false);
+        // 돌려주는 id는 들어온 순서 그대로다(고정 순서와 무관)
+        var views=registry.viewForSession(session,f.guardianId());
+        assertThat(ids).hasSize(2).doesNotHaveDuplicates();
+        assertThat(views).extracting(CandidateRegistry.CandidateView::recommendationId).containsExactlyInAnyOrderElementsOf(ids);
+        assertThat(db.jdbc().queryForObject("select behavior_key from core.core_goal_recommendation where id=:id",
+            Map.of("id",ids.getFirst()),String.class)).isEqualTo("ASK_TO_JOIN");
     }
 }

@@ -28,7 +28,7 @@ class TextAiGatewayTest {
                 policy, clock, executor);
     }
     private GeneratedScenario valid() {
-        return new GeneratedScenario("만들어진 이야기야. 친구가 멈추자고 말한다", "친구 역할", "이제 그만하자",
+        return new GeneratedScenario("만들어진 이야기야. 친구가 멈추자고 말한다", "이제 그만하자",
                 "친구", "친구가 멈추자고 말한다", "test-model-v1", "scenario-v1");
     }
     @Test void typedRequestHasOnlyMinimumFieldsAndOutputRetainsVersions() {
@@ -43,6 +43,10 @@ class TextAiGatewayTest {
         assertThat(ScenarioPrompt.class.getRecordComponents()).extracting("name")
                 .containsExactly("goalDisplayName", "behaviorDefinition", "opportunityCondition",
                         "scenarioCondition", "relationType", "age", "interests", "previousScenarioText");
+        // U5a 리뷰 7: 상대 역할 지시는 Core 고정 문장이라 공급자 출력에 그 칸이 없다(검사하지 않는 값으로 정상 상황을 거절하지 않는다)
+        assertThat(GeneratedScenario.class.getRecordComponents()).extracting("name")
+                .containsExactly("scenarioText", "triggerScript", "relationType", "opportunityCondition",
+                        "modelVersion", "promptVersion");
         assertThat(prompt.toString()).doesNotContain("공룡");
         assertThat(valid().toString()).doesNotContain("친구");
     }
@@ -77,7 +81,7 @@ class TextAiGatewayTest {
         AtomicInteger calls = new AtomicInteger();
         var gateway = gateway((request, timeout) -> {
             calls.incrementAndGet();
-            return new GeneratedScenario("꼭 해야 해요", "역할", "그만", "친구", "기회", "m1", "p1");
+            return new GeneratedScenario("꼭 해야 해요", "그만", "친구", "기회", "m1", "p1");
         });
         assertThatThrownBy(() -> gateway.generateScenario(prompt, clock.now().plusSeconds(15)))
                 .isInstanceOf(TextAiException.class).hasMessageContaining("FORBIDDEN_OUTPUT");
@@ -85,9 +89,9 @@ class TextAiGatewayTest {
     }
     @Test void missingMetadataAndMissingOutputAreRejected() {
         for (GeneratedScenario invalid : new GeneratedScenario[]{
-                null, new GeneratedScenario("본문", "역할", "트리거", "관계", "기회", null, "p1"),
-                new GeneratedScenario("본문", "역할", "트리거", "관계", "기회", "private metadata", "p1"),
-                new GeneratedScenario("본문", "역할", "트리거", "관계", "기회", "m1", "")}) {
+                null, new GeneratedScenario("본문", "트리거", "관계", "기회", null, "p1"),
+                new GeneratedScenario("본문", "트리거", "관계", "기회", "private metadata", "p1"),
+                new GeneratedScenario("본문", "트리거", "관계", "기회", "m1", "")}) {
             assertThatThrownBy(() -> gateway((request, timeout) -> invalid)
                     .generateScenario(prompt, clock.now().plusSeconds(15)))
                     .isInstanceOf(TextAiException.class).hasMessageContaining("INVALID_OUTPUT");
@@ -175,7 +179,7 @@ class TextAiGatewayTest {
     }
     @Test void oversizedOutputIsRejectedBeforeFurtherProcessing() {
         var gateway = gateway((request, timeout) ->
-                new GeneratedScenario("가".repeat(8001),"역할","트리거","관계","기회","m1","p1"));
+                new GeneratedScenario("가".repeat(8001),"트리거","관계","기회","m1","p1"));
         assertThatThrownBy(() -> gateway.generateScenario(prompt,clock.now().plusSeconds(15)))
                 .hasMessageContaining("INVALID_OUTPUT");
     }
