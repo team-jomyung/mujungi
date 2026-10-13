@@ -1,7 +1,7 @@
 # U4b 코드 생성 계획 — 활동 세션 Realtime 쪽
 
 > Code Generation(3.5) · 작업 기록 `261013-u4b-activity-realtime` · 유닛 없는 단일 반복(stage-level)
-> 브랜치 `unit/u4b-activity-realtime` · 저장소 루트 `/home/jdmea/mujungi`
+> 저장소 루트 `/home/jdmea/finalProject` · 현재 브랜치 `master`
 >
 > 입력
 > - 승인된 기능 설계: `construction/functional-design/functional-spec.md` · `rules.md` · `entities.md`
@@ -156,13 +156,13 @@
 
 ### L2 전이표 · 끝내기 (Business logic + API)
 
-- [ ] **Step 6. 전이표 · 사유 결정 · 끝내기 응답** — 구현
+- [x] **Step 6. 전이표 · 사유 결정 · 끝내기 응답** — 구현
   - `TransitionTable`: Trigger를 더한다(READY → WAITING_CHILD, JOIN_ACCEPTED, JOIN_DECLINED, CHILD_STOP_CONFIRMED, PRACTICE_COMPLETED, SILENCE_TIMEOUT, CONSENT_WITHDRAWN(진행 · 시작), DISCONNECT/CORE_ABANDONED/SERVER_RESTART 출발 집합에 WAITING_CHILD 추가). `END_REASONS`를 도착 상태 기준에서 Trigger별 사유 · end_detail 결정으로 바꾼다. CLOSING 진입 때 사유를 쓰고, ENDED_UNCONFIRMED는 UNCONFIRMED와 end_detail을 쓴다. 표 밖 전이는 TRANSITION_IGNORED.
   - `EndRequestHandler` · `SessionMailbox` · `SessionInternalController`: CONSENT_WITHDRAWN을 받고 응답표대로 답한다. 시작 단계는 202 {} + FAILED(CONSENT_WITHDRAWN), WAITING_CHILD · ACTIVE는 202 {CLOSING}, Core 취소는 PREPARING ~ ACTIVE만 FAILED. 반복 요청은 멱등이다. 철회 뒤 아이 전사 · 원음 저장을 차단한다.
   - `OrphanSessionChecker` · 기동 점검: WAITING_CHILD를 포함한다.
   - `SessionStateEmitter`: CLOSING에 endReason, 일시정지 중이면 technicalPause를 싣는다.
   - — FR1.1 ~ FR1.5 · BR1.1 ~ BR1.9 · BR7.2
-- [ ] **Step 7. L2 시험 작성 · 실행**
+- [x] **Step 7. L2 시험 작성 · 실행**
   - `TransitionTableU4bTest`: 전이표 칸마다 성립 · 불성립, 사유 · end_detail. 8개 이상
   - `EndRequestU4bTest`: 응답표 칸마다(사유 3 × 상태 5), 멱등, 400 사유 오류
   - `SessionStateEmitterU4bTest`: CLOSING endReason · technicalPause
@@ -171,7 +171,7 @@
 
 ### L3 참여 확인 (Business logic)
 
-- [ ] **Step 8. 참여 흐름** — 구현
+- [x] **Step 8. 참여 흐름** — 구현
   - `git show 5354a32:…/dialog/JoinTracker.java`와 `JoinTrackerTest.java`를 되살린다. 공개 메서드는 유지하고, 생성자를 `(Duration firstWindow, Duration afterPromptWindow)`로 넓힌다.
   - 재생 중(PROMPTING) 대답도 `reply()`로 즉시 처리한다(R-11).
   - 실행기 연결
@@ -189,7 +189,7 @@
   - `ProviderRequestFactory`에 `session.response.create`를 더하고, 가짜 공급자가 이를 기록하게 한다.
   - `SessionExecutor.Plan`에 activityType과 선택 승인 문구 코드(INTRO_FREE_TALK · INTRO_PRACTICE · RE_PROMPT · DECLINE_ALTERNATIVE · STOP_CONFIRM · SILENCE_WARNING)를 싣는다.
   - — FR2.1 ~ FR2.4 · BR2.1 ~ BR2.7 · BR3.1 ~ BR3.3 · BR4.7 · NFR5
-- [ ] **Step 9. L3 시험 작성 · 실행**
+- [x] **Step 9. L3 시험 작성 · 실행**
   - `JoinTrackerTest`: 되살린 시험 + 두 창
   - `SessionJoinU4bTest`: 19 · 21초 경계, 결정표 칸마다, 안내 최대 3번, 불명확 · 주제 거부, 재생 중 대답, 일시정지 중 멈춤, 빠진 문구로 DECLINED까지
   - `SessionLifecycleU4bIT`: 끝-끝 WAITING_CHILD → ACTIVE → 대화
@@ -199,14 +199,14 @@
 
 ### L4 종료 의도 · 공백 · 끊김 · 진행 조회 (Business logic + API)
 
-- [ ] **Step 10. 종료 의도 · 공백 · 일시정지** — 구현
+- [x] **Step 10. 종료 의도 · 공백 · 일시정지** — 구현
   - **StopConfirmFlow**(순수): STOP → 곧바로 CHILD_STOP. CONFIRM → STOP_CONFIRM 재생 · 출력 차단 · stop-confirm-wait 창, STOP · 참여 → 확정, 그 밖 · 만료 → 해제 + response.create. U3의 '막고 유지 → 해제'(CHILD_STOP_LIFTED) 경로를 없앤다.
   - **SilenceClock**(순수): 누적 · 멈춤 4조건 · 빈 아닌 전사 리셋, 4분 경고(SILENCE_WARNING 1회) · 6분 SILENCE
   - **기술 일시정지**: 끊김 시계를 WAITING_CHILD까지 넓힌다. gap-display(10초)에 technicalPause와 DISCONNECT 구간, 복구 시 닫기, 40초 ABORTED. CLOSING에서는 끊김 전이가 없다. ENDED_UNCONFIRMED는 UNCONFIRMED 구간을 쓴다.
   - **진행 조회**: 실행기가 불변 값으로 바꿔 쓰고 `SessionInternalController`가 technicalPause · silenceWarning을 채운다.
   - 공통 마무리 순서의 STOP_OUTPUT · CLOSE_TRANSPORT 사유 매핑, output_stopped_at · transport_closed_at 기록
   - — FR3.1 · FR3.2 · FR4.1 · FR5.1 · FR6.1 · BR4.1 ~ BR4.6 · BR5.1 ~ BR5.4 · BR6.1 ~ BR6.4 · BR7.1
-- [ ] **Step 11. L4 시험 작성 · 실행**
+- [x] **Step 11. L4 시험 작성 · 실행**
   - `StopConfirmFlowTest`: 네 경로 · 19 · 21초
   - `SessionStopU4bTest`: CHILD_STOP 마무리, 종료 확정 뒤 이전 응답 미재생
   - `SilenceClockTest`: 3:59 · 4:01 · 5:59 · 6:01, 멈춤 조건 4종, 빈 전사 미리셋, 안내 재생 미리셋
@@ -216,7 +216,7 @@
 
 ### L5 정산 · 결과 스냅숏 (Repository + Business logic)
 
-- [ ] **Step 12. 스냅숏 저장소 · 조립** — 구현
+- [x] **Step 12. 스냅숏 저장소 · 조립** — 구현
   - `ResultInputSnapshotRepository`(JDBC, Outbox와 같은 트랜잭션)
   - **ResultSnapshotBuilder**(순수)
     - utterances는 deleted_at이 빈 확정 전사 + 통과 AI 말 + 승인 문구, sequence 순
@@ -226,7 +226,7 @@
     - DECLINED · ACTIVE 전 종료는 빈 목록
     - 정규화 JSON sha256(`JsonCodec`)
   - — FR7.1 · BR8.2 ~ BR8.4
-- [ ] **Step 13. 정산 조정 · 이벤트** — 구현
+- [x] **Step 13. 정산 조정 · 이벤트** — 구현
   - **SettleCoordinator**: 종료 전이 뒤 공급자 close · provider_closed_at → 정산 창(연결 닫힘 또는 record-settle) → 확장점 정산 → 기록기 flush → practice 값 → 스냅숏 + SessionRecordCaptured Outbox 한 트랜잭션 → RECORD_CAPTURED
     - 세션당 1회
     - 정산 창 안 늦은 전사는 started_at < ended_at이면 저장
@@ -234,14 +234,14 @@
   - DECLINED는 인사 순서 뒤에 정산한다. 시작 단계 FAILED · Core 취소 · 재시작에도 빈 기록 스냅숏을 만든다(기동 점검 포함).
   - 페이로드는 BR8.8 표 + **guardianId**(R-03)이다. 계약 스키마 `event-payloads.schema.json`의 required를 모두 채운다.
   - — FR7.1 · FR7.2 · BR8.1 · BR8.5 ~ BR8.8 · NFR8
-- [ ] **Step 14. L5 시험 작성 · 실행**
+- [x] **Step 14. L5 시험 작성 · 실행**
   - `ResultSnapshotBuilderTest`: 해시 결정성(골든), DECLINED 빈 기록, deleted_at 제외, practice null/객체, recordScope. 6개 이상
   - `SessionRecordU4bIT`: 종료 다섯 경로 + 시작 실패 + 재시작마다 스냅숏 1 · 이벤트 1, 이벤트 스키마 검증(guardianId 포함), Outbox 재무장, 늦은 전사 정산 창 안팎
   - contract-model `SnapshotHashGoldenTest`에 골든을 더한다(필요 시).
 
 ### 연습 확장점 (Business logic)
 
-- [ ] **Step 15. PracticeSessionExtension** — 구현
+- [x] **Step 15. PracticeSessionExtension** — 구현
   - 인터페이스 다섯 시점 · Signal, PracticeContext · Utterance · ExtensionEvent · EndContext, PracticeOutput 능력
     - playApproved · instructProvider · requestResponse · cancelResponse · holdOutput · schedule/cancel(EXTENSION 시계, 일시정지 중 멈춤) · post
   - 기본 `NoOpPracticeSessionExtension` 빈. U5b가 빈을 등록하면 그것을 쓴다.
@@ -252,7 +252,7 @@
     - ACTIVE가 아닐 때 출력 능력 호출은 거절하고 PRACTICE_EXTENSION_FAILED{reason: NOT_ACTIVE}(R-10)
     - 예외는 기록하고 자유대화처럼 계속(정산 건너뜀 · practice null)
   - — FR9.1 · BR10.1 ~ BR10.6
-- [ ] **Step 16. 확장점 시험 작성 · 실행**
+- [x] **Step 16. 확장점 시험 작성 · 실행**
   - `PracticeExtensionU4bTest`
     - 기본 무동작으로 PRACTICE가 자유대화와 같은 전이를 밟는다.
     - 대역 확장점: LAST_GOAL → CHILD_STOP · PRACTICE_COMPLETED, NEXT_GOAL 계속
@@ -264,7 +264,7 @@
 
 ### L6 계정 삭제 (Repository + Business logic + API)
 
-- [ ] **Step 17. 삭제 처리기** — 구현
+- [x] **Step 17. 삭제 처리기** — 구현
   - `RealtimeDeletionParticipant` 인터페이스(`order()` + 기존 `deleteByGuardian` 모양 · Map 반환). 기존 음성(100) · 메시징(900)에 구현을 붙인다.
   - 세션 참가자(200) 신설: 스냅숏 → 세션 사건 → 종료 표현 → 전사 → 원음 메타 → 세션 행 순 실제 삭제
   - **DeletionRequestedHandler**(InboxHandler)
@@ -275,7 +275,7 @@
   - 재시도 건수는 Inbox 처리 기록에 누적해 합산한다(R-12).
   - 실패는 예외로 Inbox 재시도에 맡긴다.
   - — FR8.1 · BR9.1 ~ BR9.5 · NFR9
-- [ ] **Step 18. L6 시험 작성 · 실행**
+- [x] **Step 18. L6 시험 작성 · 실행**
   - `RealtimeDeletionHandlerIT`
     - 진행 세션 있음 · 없음
     - 재시도 멱등과 counts 누적(R-12)
@@ -288,18 +288,18 @@
 
 ### L7 흔들리는 시험 · 개인정보 · 검증 스크립트 · 문서
 
-- [ ] **Step 19. 흔들리는 시험** — `RealtimeInternalApiIT`의 Core 취소 시험에서 실행기 없는 CLOSING 행을 단언 바로 직전에 만들도록 순서만 바꾼다. 단언 줄은 바꾸지 않는다. 반복 실행(예: 5회)으로 202를 확인한다. — FR11.2
-- [ ] **Step 20. 개인정보 검사 시험** — `PrivacyLogU4bTest`: 참여 · 확인 질문 · 공백 · 정산 · 삭제 경로에서 로그(`LogCapture`) · SessionEvent payload · Outbox(스냅숏 record 제외)에 전사 원문 · 원음 경로가 0건인지 확인한다. — NFR4 · BR12.1
-- [ ] **Step 21. 검증 스크립트 시드 003** — `scripts/verify` 시드 순서에 `infra/seed/003-u4a-reference.sql`을 넣는다(001 → 002 → 003). 끝-끝 C 시나리오에 참여 응답 단계를 더한다. 실행은 Build and Test에서 한다(리눅스 · Docker 필요). — FR11.4
-- [ ] **Step 22. 계약 문서 · 편차** — FR11.5 · NFR8
+- [x] **Step 19. 흔들리는 시험** — `RealtimeInternalApiIT`의 Core 취소 시험에서 실행기 없는 CLOSING 행을 단언 바로 직전에 만들도록 순서만 바꾼다. 단언 줄은 바꾸지 않는다. 반복 실행(예: 5회)으로 202를 확인한다. — FR11.2
+- [x] **Step 20. 개인정보 검사 시험** — `PrivacyLogU4bTest`: 참여 · 확인 질문 · 공백 · 정산 · 삭제 경로에서 로그(`LogCapture`) · SessionEvent payload · Outbox(스냅숏 record 제외)에 전사 원문 · 원음 경로가 0건인지 확인한다. — NFR4 · BR12.1
+- [x] **Step 21. 검증 스크립트 시드 003** — `scripts/verify` 시드 순서에 `infra/seed/003-u4a-reference.sql`을 넣는다(001 → 002 → 003). 끝-끝 C 시나리오에 참여 응답 단계를 더한다. 실행은 Build and Test에서 한다(리눅스 · Docker 필요). — FR11.4
+- [x] **Step 22. 계약 문서 · 편차** — FR11.5 · NFR8
   - `contracts/deviations.md`: (U4b-a) `session.response.create`, (U4b-b) 끝내기 응답표, (U4b-c) CLOSING endReason · record 모양, (U4b-d) practice는 객체/null
   - `ai-io.md` 3절, `internal-api.yaml`, `events.asyncapi.yaml` 설명
   - 사유 설명에 PRACTICE_COMPLETED 사용
   - ContractFilesTest를 실행한다.
-- [ ] **Step 23. 설계 · 보고 문서** — FR11.5
+- [x] **Step 23. 설계 · 보고 문서** — FR11.5
   - `docs/units/u4b/design.md`: J24 갱신, 확장점 이름 · 능력(5.1), Q3 ~ Q6으로 바뀐 가정, R-03 · R-10 ~ R-12 처리
   - `docs/units/u4b/report.md` 신규: 만든 것, 시험 결과(건수 · 커버리지), 계약 편차, 가정, FR11.1 · FR11.3에서 고친 기대값 목록, 남은 일
-- [ ] **Step 24. 범위 커버리지 · 회귀 · 추적** — NFR6 · NFR7
+- [x] **Step 24. 범위 커버리지 · 회귀 · 추적** — NFR6 · NFR7
   - `u4b.txt`에 새 · 바뀐 운영 파일을 모두 넣는다.
   - u4b 범위 커버리지 80% 이상, U1 · U3 회귀, 모듈 전체 check를 돌린다.
   - `source-manifest.json` · `traceability.json` · `code-summary.md`를 쓴다.
