@@ -154,6 +154,76 @@ public final class RealtimeItEnvironment implements AutoCloseable {
                 new ChildContext("하늘", 8, List.of("공룡"))), "0123456789abcdef0123456789abcdef");
     }
 
+    /**
+     * U4b(FR11.3 활성화 경로): 세션이 참여 확인(WAITING_CHILD)에 들어오면 아이가 "응"이라고 답하게 하고(가짜 공급자의 입력 전사 확정) ACTIVE가
+     * 될 때까지 기다린다. 시작 패키지에 시작 안내가 없으면 창이 곧바로 열린다.
+     */
+    public void join(UUID sessionId) {
+        awaitOrDump(sessionId,
+                () -> sessionStatus(sessionId) == kr.mujoong.contract.status.SessionStatus.WAITING_CHILD,
+                "WAITING_CHILD");
+        childSays("join-" + sessionId, "응");
+        awaitOrDump(sessionId, () -> sessionStatus(sessionId) == kr.mujoong.contract.status.SessionStatus.ACTIVE,
+                "ACTIVE");
+    }
+
+    /**
+     * {@link #awaitTrue}와 같되, 시한을 넘기면 진단(세션 상태 · 가짜 공급자가 받은 메시지 type · 앱 스레드 스택)을 표준 출력에 남긴 뒤 실패한다.
+     * CI에서 한 번만 난 DEVICE_ACK 멈춤(PR #6)의 원인을 시험 보고서로 보기 위한 것이다. 전사 · 토큰은 찍지 않는다.
+     */
+    public void awaitOrDump(UUID sessionId, BooleanSupplier condition, String what) {
+        try {
+            awaitTrue(condition, what);
+        } catch (AssertionError e) {
+            System.out.println(diagnostics(sessionId, what));
+            throw e;
+        }
+    }
+
+    /** 진단 한 묶음(문자열). 가상 스레드까지 담으려고 HotSpot 스레드 덤프를 쓰고 kr.mujoong 프레임이 있는 스레드만 남긴다. */
+    public String diagnostics(UUID sessionId, String what) {
+        StringBuilder out = new StringBuilder("=== 진단: ").append(what).append(" 기다림 시한 초과 ===\n");
+        out.append("session status: ").append(sessionStatus(sessionId)).append('\n');
+        out.append("provider received types: ").append(provider.received().stream()
+                .map(node -> node.path("type").asText()).toList()).append('\n');
+        out.append(appThreads());
+        return out.append("=== 진단 끝 ===").toString();
+    }
+
+    private static String appThreads() {
+        try {
+            java.nio.file.Path file = java.nio.file.Files.createTempFile("realtime-it-threads", ".txt");
+            java.nio.file.Files.delete(file);
+            java.lang.management.ManagementFactory.getPlatformMXBean(com.sun.management.HotSpotDiagnosticMXBean.class)
+                    .dumpThreads(file.toString(), com.sun.management.HotSpotDiagnosticMXBean.ThreadDumpFormat.TEXT_PLAIN);
+            String dump = java.nio.file.Files.readString(file);
+            java.nio.file.Files.deleteIfExists(file);
+            StringBuilder kept = new StringBuilder();
+            for (String block : dump.split("\\R\\R")) {
+                if (block.contains("kr.mujoong.realtime") && !block.contains("jdk.internal.vm.ThreadDumper")) {
+                    kept.append(block).append("\n\n");
+                }
+            }
+            return kept.toString();
+        } catch (java.io.IOException | RuntimeException e) {
+            return "thread dump failed: " + e + '\n';
+        }
+    }
+
+    /** 가짜 공급자로 아이 확정 전사 하나를 흘린다(조각 · 확정). */
+    public void childSays(String itemId, String text) {
+        provider.emit(new FakeProviderWsServer.Event("session.input_transcript.delta", null, itemId, text, null, null,
+                null, null));
+        provider.emit(new FakeProviderWsServer.Event("session.input_transcript.done", null, itemId, null, text, null,
+                null, null));
+    }
+
+    /** 세션 행의 지금 상태(없으면 null). */
+    public kr.mujoong.contract.status.SessionStatus sessionStatus(UUID sessionId) {
+        return app.bean(kr.mujoong.realtime.session.ActivitySessionRepository.class).find(sessionId)
+                .map(kr.mujoong.realtime.session.ActivitySessionRow::status).orElse(null);
+    }
+
     /** 조건이 참이 될 때까지 기다린다. */
     public static void awaitTrue(BooleanSupplier condition, String what) {
         long deadline = System.nanoTime() + WAIT.toNanos();

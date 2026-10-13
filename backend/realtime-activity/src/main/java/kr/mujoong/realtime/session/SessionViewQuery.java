@@ -44,15 +44,25 @@ public class SessionViewQuery {
         }
     }
 
-    /** 조회 결과. {@code gaps}는 끊김 구간(시작 순, U3). */
+    /**
+     * 조회 결과. {@code gaps}는 끊김 · 미확인 구간(시작 순, U3 · U4b). {@code live}는 살아 있는 실행기의 기술 일시정지 · 공백 경고이고 종료 세션 ·
+     * 실행기 없는 세션은 둘 다 null이다(U4b BR7.1).
+     */
     public record View(ActivitySessionRow session, Instant serverTime, List<Item> items, int nextSeq,
-            List<SessionGapRepository.SessionGapRow> gaps) {
+            List<SessionGapRepository.SessionGapRow> gaps, SessionExecutor.LiveState live) {
 
         public View {
             Objects.requireNonNull(session, "session");
             Objects.requireNonNull(serverTime, "serverTime");
             items = List.copyOf(items);
             gaps = gaps == null ? List.of() : List.copyOf(gaps);
+            live = live == null || session.status().isTerminal() ? SessionExecutor.LiveState.NONE : live;
+        }
+
+        /** U3 모양(살아 있는 값 없음). */
+        public View(ActivitySessionRow session, Instant serverTime, List<Item> items, int nextSeq,
+                List<SessionGapRepository.SessionGapRow> gaps) {
+            this(session, serverTime, items, nextSeq, gaps, SessionExecutor.LiveState.NONE);
         }
     }
 
@@ -61,14 +71,16 @@ public class SessionViewQuery {
     private final SessionGapRepository gaps;
     private final LatencyRecorder latency;
     private final MujoongClock clock;
+    private final SessionRegistry registry;
 
     public SessionViewQuery(ActivitySessionRepository sessions, TranscriptRepository transcripts,
-            SessionGapRepository gaps, LatencyRecorder latency, MujoongClock clock) {
+            SessionGapRepository gaps, LatencyRecorder latency, MujoongClock clock, SessionRegistry registry) {
         this.sessions = Objects.requireNonNull(sessions, "sessions");
         this.transcripts = Objects.requireNonNull(transcripts, "transcripts");
         this.gaps = Objects.requireNonNull(gaps, "gaps");
         this.latency = Objects.requireNonNull(latency, "latency");
         this.clock = Objects.requireNonNull(clock, "clock");
+        this.registry = Objects.requireNonNull(registry, "registry");
     }
 
     /**
@@ -96,7 +108,10 @@ public class SessionViewQuery {
         if (!served.isEmpty()) {
             latency.itemsServed(sessionId, served, now);
         }
-        return Optional.of(new View(row.get(), now, items, nextSeq, gaps.findBySession(sessionId)));
+        // U4b BR7.1: 실행기가 바꿔 쓴 불변 값을 읽기만 한다(종료 세션은 View가 null로 둔다)
+        SessionExecutor.LiveState live = registry.executor(sessionId).map(SessionExecutor::liveState)
+                .orElse(SessionExecutor.LiveState.NONE);
+        return Optional.of(new View(row.get(), now, items, nextSeq, gaps.findBySession(sessionId), live));
     }
 
     /** nextSeq 규칙(BR6.15 · J23). */

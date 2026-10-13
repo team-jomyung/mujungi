@@ -114,7 +114,7 @@ class SchemaPrivilegeIT {
                     .isEqualTo("4");
             assertThat(single(realtime,
                     "select max(version) from flyway.realtime_schema_history where success and type = 'SQL'"))
-                    .isEqualTo("2");
+                    .isEqualTo("3");
             expectSqlStateAutoCommit(INSUFFICIENT_PRIVILEGE,
                     () -> query(core, "select version from flyway.realtime_schema_history"));
             expectSqlStateAutoCommit(INSUFFICIENT_PRIVILEGE,

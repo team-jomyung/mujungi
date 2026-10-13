@@ -22,8 +22,17 @@ mujoong:
     session:
       device-ack-timeout: 2s
       closing-confirm: 3s
+      # U4b-J26: U1 · U3 통합 시험이 우연히 닿지 않게 넉넉히 둔다. U4b 통합 시험만 시험 클래스 속성으로 짧게 덮어쓴다
+      join-wait: 10s
+      join-wait-after-reprompt: 10s
+      silence-warning: 1m
+      silence-end: 2m
+      stop-confirm-wait: 10s
+      record-settle: 200ms
     device:
       disconnect: 4s
+      # 끊김(4s)보다 짧아야 한다(기동 검증)
+      gap-display: 3s
       heartbeat-interval: 500ms
       hello-timeout: 500ms
       status-report-interval: 1s
@@ -41,6 +50,7 @@ mujoong:
     tombstone-ttl: 2s
     orphan-check-interval: 1s
     timer-tick: 50ms
+    deletion-stop-wait: 2s
   device:
     disconnect-check-interval: 200ms
   internal-http:

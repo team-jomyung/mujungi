@@ -38,6 +38,9 @@ public final class DialogInstructions {
         }
     }
 
+    /** U4b(BR2.7 · U4b-R3): 대화 지시문 끝에 더하는 문장 — 참여 확인 뒤 첫 질문. */
+    public static final String JOIN_FIRST_QUESTION = "참여가 확인되면 관심사나 일상 질문 하나로 시작한다.";
+
     private DialogInstructions() {
     }
 

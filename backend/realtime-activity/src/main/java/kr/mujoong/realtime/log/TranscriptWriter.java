@@ -132,6 +132,46 @@ public final class TranscriptWriter {
         aiFinal("", false, at);
     }
 
+    /**
+     * U4b BR3.1 · U4b-R14: 기기에 보낸 승인 문구를 보낸 순간 AI 말풍선 한 행으로 남긴다(FINAL · 승인 true · 문구 원문). 대기 문구 · DECLINED 인사는
+     * 부르는 쪽이 부르지 않는다.
+     *
+     * @return 정한 번호(기록기가 칸을 받지 못했으면 빈 값)
+     */
+    public OptionalInt approvedLine(String text, Instant at) {
+        Objects.requireNonNull(text, "text");
+        Objects.requireNonNull(at, "at");
+        int seq = ++lastSeq;
+        boolean accepted = recorder.putTranscript(TranscriptEntry.finalized(sessionId, seq, Speaker.AI, text, true, at,
+                at));
+        return accepted ? OptionalInt.of(seq) : OptionalInt.empty();
+    }
+
+    /**
+     * U4b BR1.7: 동의 철회 — 열린(확정 전) 아이 행을 철회 전에 받은 조각 그대로 FINAL로 닫고 이후 같은 항목의 조각 · 확정은 받지 않는다. 철회 뒤
+     * 도착한 전사는 실행기가 아예 넘기지 않는다.
+     *
+     * @return 닫은 아이 행 수
+     */
+    public int discardOpenChildren(Instant at) {
+        int closed = 0;
+        for (ChildRow row : childRows.values()) {
+            if (!row.closed) {
+                row.closed = true;
+                closed++;
+                recorder.putTranscript(TranscriptEntry.finalized(sessionId, row.seq, Speaker.CHILD, row.text.toString(),
+                        true, row.startedAt, at));
+            }
+        }
+        return closed;
+    }
+
+    /** U4b BR8.6: 그 공급자 항목의 아이 발화 시작 시각(첫 조각을 받은 시각, 처음 보는 항목이면 null). */
+    public Instant childStartedAt(String itemId) {
+        ChildRow row = childRows.get(key(itemId));
+        return row == null ? null : row.startedAt;
+    }
+
     /** 마지막으로 정한 번호. */
     public int lastSequenceNo() {
         return lastSeq;

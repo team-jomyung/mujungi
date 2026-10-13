@@ -40,6 +40,9 @@ public interface ProviderPort {
         /** U3 {@code session.instructions.correct}(게이트 폐기 뒤 고정 교정 문장, U3-J12). */
         void correctInstructions(ProviderRequestFactory.InstructionsCorrect request) throws ProviderUnavailableException;
 
+        /** U4b {@code session.response.create}(발언권 반환, 편차 (U4b-a) · BR2.6). */
+        void createResponse(ProviderRequestFactory.ResponseCreate request) throws ProviderUnavailableException;
+
         /** {@code session.close}를 보내고 연결을 닫는다. 두 번 불러도 된다. 예외를 던지지 않는다. */
         void close(ProviderRequestFactory.SessionClose request);
 

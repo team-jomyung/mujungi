@@ -41,15 +41,31 @@ public final class ClosingSequence {
 
     private Step step = Step.NOT_STARTED;
     private UUID closingPlaybackId;
+    private CloseTransport.Reason closeReason = CloseTransport.Reason.GUARDIAN_STOP;
 
-    /** ① ② (한 번만). 마무리 문구 playbackId를 돌려준다. */
+    /** ① ② (한 번만, 보호자 끝내기 사유). 마무리 문구 playbackId를 돌려준다. */
     public UUID begin(Device device, UUID closingContentVersionId, ApprovedPlayback playback, Supplier<UUID> ids) {
+        return begin(device, closingContentVersionId, playback, ids, StopOutput.Reason.GUARDIAN_STOP,
+                CloseTransport.Reason.GUARDIAN_STOP);
+    }
+
+    /**
+     * ① ② (한 번만). U4b(BR4.6 · U4b-R5): 마무리 사유와 관계없이 같은 순서이고 사유만 다르다 — STOP_OUTPUT은 GUARDIAN_STOP · CHILD_STOP ·
+     * SILENCE는 같은 값, CONSENT_WITHDRAWN은 BEFORE_CLOSING. CLOSE_TRANSPORT는 end_reason 값 그대로다.
+     *
+     * @param stopReason STOP_OUTPUT 사유
+     * @param closeReason ③에서 보낼 CLOSE_TRANSPORT 사유
+     */
+    public UUID begin(Device device, UUID closingContentVersionId, ApprovedPlayback playback, Supplier<UUID> ids,
+            StopOutput.Reason stopReason, CloseTransport.Reason closeReason) {
         Objects.requireNonNull(device, "device");
         Objects.requireNonNull(playback, "playback");
+        Objects.requireNonNull(stopReason, "stopReason");
         if (step != Step.NOT_STARTED) {
             return closingPlaybackId;
         }
-        device.stopOutput(StopOutput.Reason.GUARDIAN_STOP);
+        this.closeReason = Objects.requireNonNull(closeReason, "closeReason");
+        device.stopOutput(stopReason);
         playback.clear();
         device.sessionState(View.CLOSING);
         closingPlaybackId = ids.get();
@@ -61,6 +77,35 @@ public final class ClosingSequence {
         return closingPlaybackId;
     }
 
+    /**
+     * U4b(BR4.7 · U4b-J8): DECLINED 마무리 인사 — STOP_OUTPUT · SESSION_STATE{CLOSING} 없이 마무리 문구만 한 번 재생하고 그 끝 표식 뒤
+     * CLOSE_TRANSPORT(DECLINED)를 보낸다. 문구가 없거나 보내지 못했으면 곧바로 CLOSE_TRANSPORT를 보낸다.
+     *
+     * @return 이번에 바로 닫았으면 참(문구 없음 · 송신 실패)
+     */
+    public boolean beginFarewell(Device device, UUID closingContentVersionId, ApprovedPlayback playback,
+            Supplier<UUID> ids) {
+        Objects.requireNonNull(device, "device");
+        Objects.requireNonNull(playback, "playback");
+        if (step != Step.NOT_STARTED) {
+            return step == Step.TRANSPORT_CLOSED;
+        }
+        this.closeReason = CloseTransport.Reason.DECLINED;
+        closingPlaybackId = ids.get();
+        step = Step.AWAITING_CLOSING_MARK;
+        if (closingContentVersionId != null
+                && device.playApproved(closingPlaybackId, PlayApprovedContent.CLOSING, closingContentVersionId)) {
+            playback.started(closingPlaybackId, PlayApprovedContent.CLOSING);
+            return false;
+        }
+        return closeNow(device);
+    }
+
+    /** CLOSE_TRANSPORT로 보낼 사유(U4b). */
+    public CloseTransport.Reason closeReason() {
+        return closeReason;
+    }
+
     /** ③ 마무리 문구의 종료 표식이면 CLOSE_TRANSPORT를 보내고 참. */
     public boolean onPlaybackMark(Device device, UUID playbackId, PlaybackMark.Status status) {
         if (step != Step.AWAITING_CLOSING_MARK || !Objects.equals(playbackId, closingPlaybackId)
@@ -68,7 +113,7 @@ public final class ClosingSequence {
                         || status == PlaybackMark.Status.FAILED)) {
             return false;
         }
-        device.closeTransport(CloseTransport.Reason.GUARDIAN_STOP);
+        device.closeTransport(closeReason);
         step = Step.TRANSPORT_CLOSED;
         return true;
     }
@@ -82,7 +127,7 @@ public final class ClosingSequence {
     public boolean closeNow(Device device) {
         Objects.requireNonNull(device, "device");
         boolean first = step != Step.TRANSPORT_CLOSED;
-        device.closeTransport(CloseTransport.Reason.GUARDIAN_STOP);
+        device.closeTransport(closeReason);
         step = Step.TRANSPORT_CLOSED;
         return first;
     }

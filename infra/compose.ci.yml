@@ -94,8 +94,8 @@ services:
   fake-provider:
     image: ${MUJOONG_REGISTRY:?MUJOONG_REGISTRY가 필요하다}/mujoong-fake-provider:${MUJOONG_TAG:?MUJOONG_TAG가 필요하다}
     pull_policy: never
-    # 시나리오: 정상 턴 다음 금지 패턴 턴(C 9 · 10). 기록(JSON 줄)은 표준 출력 → `docker compose logs fake-provider`
-    command: ["--host", "0.0.0.0", "--port", "8090", "--scenario", "ok", "--turns", "normal,forbidden"]
+    # 시나리오: 참여 응답(C 8, U4b) 다음 정상 턴 · 금지 패턴 턴(C 9 · 10). 기록(JSON 줄)은 표준 출력 → `docker compose logs fake-provider`
+    command: ["--host", "0.0.0.0", "--port", "8090", "--scenario", "ok", "--turns", "join,normal,forbidden"]
     init: true
     read_only: true
     cap_drop: [ALL]

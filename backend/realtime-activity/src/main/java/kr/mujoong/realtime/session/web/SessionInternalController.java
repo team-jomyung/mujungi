@@ -43,8 +43,9 @@ import org.springframework.web.bind.annotation.RestController;
  * <ul>
  *   <li>{@code POST /internal/sessions}: 202 {status} · 409 SESSION_IN_PROGRESS · 409 SESSION_NOT_ACTIVE(묘비 (v)) · 423
  *       DEVICE_NOT_CONNECTED(BR6.6). U1 자유대화만 받는다(activityType PRACTICE는 U5가 더한다, 400).
- *   <li>{@code POST /internal/sessions/{id}/end}: J54 응답표 — 202 {status: CLOSING} · 202 {} · 409 SESSION_NOT_ACTIVE((w) 포함).
- *       CONSENT_WITHDRAWN 전이는 U4가 더하므로 400. 실행기가 제한 시간 안에 답하지 않으면 503(오류 처리기).
+ *   <li>{@code POST /internal/sessions/{id}/end}: J54 · U4b 응답표(BR1.5 · BR1.6 · BR1.9, 편차 (U4b-b)) — 202 {status: CLOSING} · 202 {} ·
+ *       409 SESSION_NOT_ACTIVE((w) 포함). 사유는 GUARDIAN_STOP · CONSENT_WITHDRAWN · CORE_ABANDONED이고 그 밖은 400. 실행기가 제한 시간 안에
+ *       답하지 않으면 503(오류 처리기).
  *   <li>{@code GET /internal/sessions/{id}/view?sinceSeq}: LiveView(내부) · 모르는 세션 404 NOT_FOUND(BR6.15).
  * </ul>
  */
@@ -220,8 +221,9 @@ public class SessionInternalController {
         out.put("endedAt", session.endedAt());
         out.put("statusVersion", session.statusVersion());
         out.put("serverTime", view.serverTime());
-        out.put("technicalPause", null);
-        out.put("silenceWarning", null);
+        // U4b BR7.1 · FR6.1: 살아 있는 실행기의 값(종료 세션은 null)
+        out.put("technicalPause", technicalPause(view.live()));
+        out.put("silenceWarning", silenceWarning(view.live()));
         out.put("practice", null);
         List<Map<String, Object>> gaps = new ArrayList<>();
         for (kr.mujoong.realtime.log.SessionGapRepository.SessionGapRow gap : view.gaps()) {
@@ -247,6 +249,26 @@ public class SessionInternalController {
         out.put("items", items);
         out.put("nextSeq", view.nextSeq());
         return out;
+    }
+
+    private static Map<String, Object> technicalPause(kr.mujoong.realtime.session.SessionExecutor.LiveState live) {
+        if (live == null || live.technicalPause() == null) {
+            return null;
+        }
+        Map<String, Object> pause = new LinkedHashMap<>();
+        pause.put("kind", live.technicalPause().kind());
+        pause.put("since", live.technicalPause().since());
+        return pause;
+    }
+
+    private static Map<String, Object> silenceWarning(kr.mujoong.realtime.session.SessionExecutor.LiveState live) {
+        if (live == null || live.silenceWarning() == null) {
+            return null;
+        }
+        Map<String, Object> warning = new LinkedHashMap<>();
+        warning.put("silentSince", live.silenceWarning().silentSince());
+        warning.put("endsAt", live.silenceWarning().endsAt());
+        return warning;
     }
 
     private ResponseEntity<String> json(HttpStatus status, Object body) {

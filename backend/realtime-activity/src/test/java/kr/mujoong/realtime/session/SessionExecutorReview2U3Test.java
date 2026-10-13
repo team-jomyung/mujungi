@@ -37,11 +37,11 @@ class SessionExecutorReview2U3Test {
 
     // ------------------------------------------------------------------ 2 생각 중 멈춤
 
+    /** U4b(FR11.3 · FD-Q3): 종료 의도는 곧바로 CLOSING이고 해제 경로가 없다 — '생각 중'을 남기지 않고 마무리 표시로 간다. */
     @Test
     void liftingTheStopIntentDoesNotLeaveTheDeviceThinking() {
         h.activate();
         done("i1", "그만할래");
-        // 해제를 일으킬 발화의 응답이 먼저 와서 막힌 동안 취소된다
         h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("r1", "그래 더 하자"));
         h.provider.last().emit(new ProviderEvent.SpeechStopped());
         h.drain();
@@ -50,9 +50,9 @@ class SessionExecutorReview2U3Test {
         h.provider.last().emit(new ProviderEvent.OutputDone("r1"));
         h.drain();
 
-        assertThat(eventTypes()).contains(SessionExecutor.EVENT_CHILD_STOP_LIFTED);
+        assertThat(eventTypes()).doesNotContain(SessionExecutor.EVENT_CHILD_STOP_LIFTED);
         assertThat(views()).as("기다릴 응답이 없으니 '생각 중'을 보내지 않는다").doesNotContain(View.THINKING);
-        assertThat(h.executor.view()).isEqualTo(View.LISTENING);
+        assertThat(h.executor.view()).isEqualTo(View.CLOSING);
     }
 
     // ------------------------------------------------------------------ 6 해제 조건
@@ -70,8 +70,10 @@ class SessionExecutorReview2U3Test {
         h.advance(Duration.ofMillis(800));
         assertThat(h.link.outputs()).isEmpty();
 
+        // U4b(FR11.3 · FD-Q3): 첫 종료 의도에서 이미 CLOSING이라 계속 표현도 출력을 다시 열지 않는다
         done("i5", "그만 안 할래 계속할래");
-        assertThat(eventTypes()).contains(SessionExecutor.EVENT_CHILD_STOP_LIFTED);
+        assertThat(eventTypes()).doesNotContain(SessionExecutor.EVENT_CHILD_STOP_LIFTED);
+        assertThat(h.executor.status()).isEqualTo(kr.mujoong.contract.status.SessionStatus.CLOSING);
     }
 
     // ------------------------------------------------------------------ 4 재생 추적 한 칸

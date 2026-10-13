@@ -285,7 +285,9 @@ class RealtimeArchTest {
             ProviderRequestFactory.SessionClose.class.getName(),
             // U3: 응답 취소 · 지시 교정(편차 (aa))도 공장만 만든다
             ProviderRequestFactory.ResponseCancel.class.getName(),
-            ProviderRequestFactory.InstructionsCorrect.class.getName());
+            ProviderRequestFactory.InstructionsCorrect.class.getName(),
+            // U4b: 응답 생성 요청(편차 (U4b-a))도 공장만 만든다
+            ProviderRequestFactory.ResponseCreate.class.getName());
 
     static final ArchRule PROVIDER_REQUESTS_ONLY_FROM_THE_FACTORY = noClasses()
             .that().doNotHaveFullyQualifiedName(ProviderRequestFactory.class.getName())

@@ -50,6 +50,35 @@ class SnapshotHashGoldenTest {
         assertThat("sha256:" + CODEC.sha256OfCanonical(CODEC.write(record))).as("snapshotHash").isEqualTo(GOLDEN);
     }
 
+    /**
+     * U4b(계약 6절 null 규칙): null 값은 키를 남기고 JSON null로 쓴다 — practice가 없으면 {@code "practice":null}, 열린 끊김 구간은
+     * {@code "to":null}. DECLINED · ACTIVE 전 종료처럼 빈 기록도 다섯 키를 모두 둔다.
+     */
+    @Test
+    @Tag("u4b")
+    void nullValuesKeepTheirKeysAsJsonNullInTheHash() {
+        Map<String, Object> gap = new LinkedHashMap<>();
+        gap.put("from", "2026-10-14T16:12:00Z");
+        gap.put("to", null);
+        gap.put("kind", "DISCONNECT");
+        Map<String, Object> record = new LinkedHashMap<>();
+        record.put("utterances", List.of());
+        record.put("gaps", List.of(gap));
+        record.put("recordScope", ordered("from", "2026-10-14T16:10:00Z", "to", "2026-10-14T16:20:00Z"));
+        record.put("practice", null);
+        record.put("audio", List.of());
+
+        assertThat(CODEC.canonicalize(CODEC.write(record))).isEqualTo(NULL_CANONICAL);
+        assertThat("sha256:" + CODEC.sha256OfCanonical(CODEC.write(record))).isEqualTo(NULL_GOLDEN);
+    }
+
+    /** 계약 정의대로 손으로 만든 정규화 JSON(null 키 유지). */
+    private static final String NULL_CANONICAL = "{\"audio\":[],\"gaps\":[{\"from\":\"2026-10-14T16:12:00Z\",\"kind\":"
+            + "\"DISCONNECT\",\"to\":null}],\"practice\":null,\"recordScope\":{\"from\":\"2026-10-14T16:10:00Z\",\"to\":"
+            + "\"2026-10-14T16:20:00Z\"},\"utterances\":[]}";
+    /** {@code printf '%s' "$NULL_CANONICAL" | sha256sum}. */
+    private static final String NULL_GOLDEN = "sha256:206346024dc521c4c50dbbce6960aadb7af2fb48fa013c69b79df6a1916afbb2";
+
     private static Map<String, Object> ordered(Object... keyValues) {
         Map<String, Object> map = new LinkedHashMap<>();
         for (int i = 0; i < keyValues.length; i += 2) {

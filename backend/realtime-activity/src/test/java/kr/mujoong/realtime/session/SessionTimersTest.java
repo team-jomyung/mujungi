@@ -41,7 +41,7 @@ class SessionTimersTest {
                 Arguments.of("운영 값", SessionHarness.SETTINGS),
                 Arguments.of("줄인 키", new SessionExecutor.Settings(Duration.ofSeconds(2), Duration.ofSeconds(3),
                         Duration.ofSeconds(4), Duration.ofMillis(50), Duration.ofSeconds(2), Duration.ofMillis(50), 50,
-                        1000, 60)));
+                        1000, 60, SessionHarness.LIFECYCLE)));
     }
 
     @ParameterizedTest(name = "{0}")

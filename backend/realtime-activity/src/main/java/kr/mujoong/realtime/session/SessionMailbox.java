@@ -84,6 +84,39 @@ public final class SessionMailbox {
         }
     }
 
+    /**
+     * U4b(BR4.7 · U4b-J8): 같은 기기에 새 세션이 시작됐다 — DECLINED 마무리 인사가 남았으면 버리고(기기 명령 없이) 바로 정리 · 정산한다.
+     */
+    public record DeviceTakenOver(UUID newSessionId) implements Message {
+    }
+
+    /**
+     * U4b(BR9.1 · U4b-J19): 계정 삭제 강제 정지 — DB 전이 · 이벤트 · 스냅숏 없이 입력 중계 · 원음 기록 · 시계 · 공급자를 닫고(연결이 살아 있으면
+     * CLOSE_TRANSPORT(CONSENT_WITHDRAWN)) 정리한다. 끝나면(실행기가 이미 끝났어도) {@code stopped}를 끝낸다.
+     */
+    public record DeletionStop(CompletableFuture<Void> stopped) implements Message {
+
+        public DeletionStop {
+            Objects.requireNonNull(stopped, "stopped");
+        }
+
+        public DeletionStop() {
+            this(new CompletableFuture<>());
+        }
+    }
+
+    /** U4b(BR10.5): 연습 확장점 사건(재생 완료 · 비동기 결과). 확장점이 다른 스레드에서 post해도 실행기 스레드에서 전달된다. */
+    public record PracticeEvent(PracticeSessionExtension.ExtensionEvent event) implements Message {
+
+        public PracticeEvent {
+            Objects.requireNonNull(event, "event");
+        }
+    }
+
+    /** U4b(BR10.4): 연습 확장점의 이름 붙은 시계 만기(타이머 스레드는 넣기만 한다, 세대로 낡은 만기를 버린다). */
+    public record PracticeTimerFired(String name, long generation) implements Message {
+    }
+
     /** START_SESSION ACK. */
     public record DeviceAck(UUID connectionId, UUID ackOf, Instant receivedAt) implements Message {
     }
@@ -121,7 +154,7 @@ public final class SessionMailbox {
         ACCEPTED_EMPTY,
         /** 409 SESSION_NOT_ACTIVE. */
         NOT_ACTIVE,
-        /** U1에 없는 사유(CONSENT_WITHDRAWN 전이는 U4가 더한다, BR6.8 마지막 줄): 400 VALIDATION_FAILED. */
+        /** 응답표 밖 사유(U4b BR1.5: GUARDIAN_STOP · CONSENT_WITHDRAWN · CORE_ABANDONED 밖): 400 VALIDATION_FAILED. */
         UNSUPPORTED
     }
 
@@ -149,6 +182,8 @@ public final class SessionMailbox {
                 request.result().completeExceptionally(new SessionGone());
             } else if (message instanceof ServerShutdown shutdown) {
                 shutdown.handled().complete(null);
+            } else if (message instanceof DeletionStop stop) {
+                stop.stopped().complete(null);
             } else {
                 left.add(message);
             }

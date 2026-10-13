@@ -90,10 +90,16 @@ paths:
         reason CORE_ABANDONED(편차 (f), requestId = sessionId) — 모르는 sessionId: 10분 묘비 + 202 {} ·
         PREPARING · DEVICE_ACK · ACTIVE: FAILED(end_reason FAILED)로 닫고 202 {} · CLOSING · 종료 상태: 202 {}(무동작).
         Core 제한 2초, 회로 차단기 없음(R3-2).
+        U4b(편차 (U4b-b)): WAITING_CHILD(참여 확인)는 ACTIVE와 같이 끝낼 수 있다 — GUARDIAN_STOP 202 {status: CLOSING},
+        CORE_ABANDONED는 FAILED + 202 {}. reason CONSENT_WITHDRAWN — PREPARING · DEVICE_ACK: FAILED(end_reason CONSENT_WITHDRAWN,
+        failure_code 없음) + 202 {} · WAITING_CHILD · ACTIVE: CLOSING(end_reason CONSENT_WITHDRAWN, 아이 녹음 즉시 중단) + 202 {status: CLOSING} ·
+        CLOSING: 202 {status: CLOSING}(사유는 처음 것, 재처리 없음) · 종료 상태 · 모르는 sessionId: 409 SESSION_NOT_ACTIVE(묘비 없음).
+        같은 세션의 반복 요청은 전이 · 기기 명령 없이 같은 응답만 돌려준다.
       servers:
         - url: http://realtime:8081
       x-unit: U1
       x-deviation: ["(f)", "(w)"]
+      x-u4b-deviation: ["(U4b-b)"]
       parameters:
         - { name: sessionId, in: path, required: true, schema: { type: string, format: uuid } }
       requestBody:
@@ -104,7 +110,7 @@ paths:
             example: { requestId: 00000000-0000-4000-8000-000000000030, reason: GUARDIAN_STOP }
       responses:
         "202":
-          description: "GUARDIAN_STOP 수락은 {status: CLOSING}, CORE_ABANDONED는 {}"
+          description: "GUARDIAN_STOP 수락은 {status: CLOSING}, CORE_ABANDONED는 {}, CONSENT_WITHDRAWN은 시작 단계 {} · WAITING_CHILD · ACTIVE · CLOSING {status: CLOSING}(편차 (U4b-b))"
           content:
             application/json:
               schema: { $ref: "schemas/internal-session-end-response.schema.json" }

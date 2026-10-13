@@ -145,16 +145,25 @@ owner_psql() {
     'PGPASSWORD="$DB_OWNER_PASSWORD" exec psql -X -q -h postgres -U mujoong_owner -d mujoong -v ON_ERROR_STOP=1 "$@"' \
     owner-psql "$@"
 }
+# U4b(FR11.4): 시드 순서 001 → 002 → 003. 003이 참여 확인 · 확인 질문 · 공백 안내 문구 6종의 승인 버전을 넣는다
 for i in 1 2; do
-  if ! owner_psql --single-transaction -f /seed/001-reference.sql; then
-    die_assert B2.seed "시드 ${i}회차 실패"
-  fi
+  for seed in 001-reference.sql 002-u2-reference.sql 003-u4a-reference.sql; do
+    if ! owner_psql --single-transaction -f "/seed/$seed"; then
+      die_assert B2.seed "시드 $seed ${i}회차 실패"
+    fi
+  done
 done
 counts="$(owner_psql -At -c "SELECT count(*) FILTER (WHERE c.content_code = 'CONSENT_POLICY'), count(*) FILTER (WHERE c.content_code IN ('CLOSING','WAITING_FILLER')) FROM core.core_approved_content c JOIN core.core_approved_content_version v ON v.content_id = c.id WHERE v.status = 'APPROVED'" || true)"
 if [ "$counts" = "1|2" ]; then
   pass B2.seed "시드 001-reference.sql 두 번 적용(멱등) → 정책 1 · 승인 문구 2(R4-15)"
 else
   die_assert B2.seed "시드 결과가 정책 1 · 문구 2가 아니다(${counts:-없음})"
+fi
+session_prompts="$(owner_psql -At -c "SELECT count(DISTINCT c.content_code) FROM core.core_approved_content c JOIN core.core_approved_content_version v ON v.content_id = c.id WHERE v.status = 'APPROVED' AND c.content_code IN ('INTRO_FREE_TALK','INTRO_PRACTICE','RE_PROMPT','DECLINE_ALTERNATIVE','SILENCE_WARNING','STOP_CONFIRM')" || true)"
+if [ "$session_prompts" = "6" ]; then
+  pass B2.seed003 "시드 002 · 003 두 번 적용(멱등) → 세션 승인 문구 6종 APPROVED(U4b 참여 확인 · 공백 안내)"
+else
+  die_assert B2.seed003 "세션 승인 문구 APPROVED가 6종이 아니다(${session_prompts:-없음})"
 fi
 
 # ---- B5 프로필 가드(앱을 올리기 전) -----------------------------------------------------------------------------------
