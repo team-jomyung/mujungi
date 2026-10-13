@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mujoong.invalid/contracts/schemas/consents-request.schema.json",
+  "title": "4항목 동의 저장 요청",
+  "description": "PUT /api/consents 본문(계약 3절 · AC1.2.4 · U2). 4항목이 한 번씩, 모두 agreed=true여야 하고 policyVersion은 현재 정책 버전이어야 한다. 어긋나면 400 VALIDATION_FAILED(현재 버전 아님 포함, 편차 (U2-f)). 서버는 모르는 필드를 무시한다.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["policyVersion", "items"],
+  "properties": {
+    "policyVersion": { "type": "string", "minLength": 1, "maxLength": 50 },
+    "items": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["type", "agreed"],
+        "properties": {
+          "type": { "$ref": "me-response.schema.json#/$defs/ConsentType" },
+          "agreed": { "type": "boolean", "enum": [true] }
+        }
+      }
+    }
+  }
+}

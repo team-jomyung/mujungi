@@ -186,7 +186,7 @@ jobs:
       - name: ESLint(/parent ↔ /device import 경계 NFR11.1 등)
         run: npx --no-install eslint .
       - name: Vitest + 줄 커버리지 80%
-        run: npx --no-install vitest run tests/u1 --coverage
+        run: npx --no-install vitest run tests --coverage
       - run: npx --no-install next build
       - name: 브라우저 번들에 키 형식 문자열 · 비밀 변수 이름 0건
         run: |
@@ -248,7 +248,7 @@ jobs:
           cache-dependency-path: tools/package-lock.json
       - run: npm ci
       - name: 시험 도구 시험(가짜 공급자 · 기기 시뮬레이터 · C안 시나리오 · dev-edge · verify 종료 코드)
-        run: npx --no-install vitest run tests/u1
+        run: npx --no-install vitest run tests
 
   secrets:
     name: secrets

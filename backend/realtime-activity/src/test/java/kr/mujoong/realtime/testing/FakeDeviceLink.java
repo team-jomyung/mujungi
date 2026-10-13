@@ -33,6 +33,7 @@ public final class FakeDeviceLink implements DeviceLink {
     private Long clockOffsetMs;
     private Long rttMs;
     private UUID boundSession;
+    private Runnable afterBoundRead;
     private CloseCode closedWith;
     private int clearAudioCalls;
 
@@ -133,7 +134,8 @@ public final class FakeDeviceLink implements DeviceLink {
     }
 
     /**
-     * 송신기처럼 묶음 하나를 내보낸다: 프레임마다 세대를 확인해 다르면 남은 프레임을 버린다. 첫 프레임 뒤 콜백을 부른다.
+     * 송신기처럼 묶음 하나를 내보낸다: 프레임마다 세대를 확인해 다르면 남은 프레임을 버린다. 보낸 프레임마다 송신 콜백을, 첫 프레임 뒤 시각
+     * 콜백을 부른다.
      *
      * @return 보낸 프레임 수
      */
@@ -147,6 +149,7 @@ public final class FakeDeviceLink implements DeviceLink {
                 synchronized (this) {
                     deliveredFrames.add(frame.clone());
                 }
+                bundle.onFrameSent().accept(frame);
                 if (count == 0) {
                     bundle.onFirstFrameSent().accept(at);
                 }
@@ -198,6 +201,50 @@ public final class FakeDeviceLink implements DeviceLink {
 
     public synchronized UUID boundSession() {
         return boundSession;
+    }
+
+    @Override
+    public UUID boundSessionId() {
+        UUID read;
+        Runnable hook;
+        synchronized (this) {
+            read = boundSession;
+            hook = afterBoundRead;
+            afterBoundRead = null;
+        }
+        if (hook != null) {
+            // 경주 흉내: 읽은 값을 돌려주기 직전에 다른 쪽이 묶음을 바꾼다
+            hook.run();
+        }
+        return read;
+    }
+
+    @Override
+    public boolean unbindSessionIf(UUID expected) {
+        Runnable hook;
+        synchronized (this) {
+            hook = afterBoundRead;
+            afterBoundRead = null;
+        }
+        if (hook != null) {
+            // 경주 흉내: 비교하기 직전에 다른 쪽이 묶음을 바꾼다(비교와 풀기는 한 번에 일어난다)
+            hook.run();
+        }
+        synchronized (this) {
+            if (expected == null || !expected.equals(boundSession)) {
+                return false;
+            }
+            boundSession = null;
+            return true;
+        }
+    }
+
+    /**
+     * 다음 묶음 읽기({@link #boundSessionId()}) 직후 또는 비교 후 풀기({@link #unbindSessionIf}) 직전에 한 번 돌릴 일(묶음 경주 흉내, 3차
+     * 리뷰 4).
+     */
+    public synchronized void afterBoundSessionRead(Runnable hook) {
+        this.afterBoundRead = hook;
     }
 
     public synchronized CloseCode closedWith() {

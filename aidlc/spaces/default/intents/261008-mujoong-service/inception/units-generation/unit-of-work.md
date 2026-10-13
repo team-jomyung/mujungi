@@ -13,8 +13,8 @@
 | U3 | u3-voice-conversation | 음성 대화 | service | L | 공유 | DeviceGateway · VoiceRelay · OutputGate · ConversationLog · DialogPolicy · DeviceWeb | T19 | 3.3 연결 · 음성 · B · E |
 | U4 | u4-activity-session | 활동 세션 | service | XL | 공유 | ActivityCoordinator · SessionLifecycle · ActivityRecord | 08 · 12 · P1 · P2 · P3 · 17 · 04(지금 활동) | 3.1 공통 활동 · B · C |
 | U5 | u5-practice | 연습 | service | L | 공유 | PracticeGoal · PracticeProtocol · ResponseEvaluator · PragmaticsKnowledge · TextAiGateway | 18 · 12(연습) | 3.4 AI · 목표 · 연습 · C · D |
-| U6 | u6-results-report | 결과와 리포트 | service | L | 공유 | ResultPipeline · Report | 26 · 27 · 28 · 30 · R-PDF · 17(정리 상태) | 3.2(기록) · 3.4 결과 · D · E |
-| U7 | u7-web-push | 웹 푸시 (Should) | service | S | 공유 | Notification | (알림 진입) | 신설 행(점검표 10) · A |
+| U6 | u6-results-report | 결과와 리포트 | service | XL | 공유 | ResultPipeline · Report | 26 · 27 · 28 · 30 · R-PDF · 17(정리 상태) | 3.2(기록) · 3.4 결과 · D · E |
+| U7 | u7-web-push | 웹 푸시 | service | S | 공유 | Notification | (알림 진입) | 신설 행(점검표 10) · A |
 
 - **kind**: 모두 `service`다. 각 유닛이 화면(Next.js) · Core · Realtime을 함께 갖는 세로 조각이어서 Construction의 설계 산출물(기능 설계 · NFR · 인프라)이 모두 적용된다. `ui` · `spec` · `library`만으로 된 유닛은 없다.
 - **배포(공유)**: 모든 유닛이 같은 세 실행 단위(Next.js 한 앱 · Core API Spring · Realtime Activity Spring)에 들어가 EC2 1대 Compose로 함께 올라간다(K2 · ADR-019). 유닛은 설계 · 개발 · 시험 단위이지 배포 단위가 아니다.
@@ -58,26 +58,27 @@
 - **완성**: PragmaticsKnowledge(행동 정의 버전 · 생활 팁 목록 · Neo4j 조회 · 초기 시드), TextAiGateway(최소 정보 · 금지 표현 검사 · 버전 기록 · 재시도), PracticeGoal(담은 목표 · 즐겨찾기 · 순서 · 소프트 삭제/복구 · 후보 · 근거 저장 · 상황 생성 · 확인 · 재생성 1회 · 노출 이력), PracticeProtocol(가중 랜덤 순서 · 단계 · 도움 동의 · Cue 요청 · 반응 분리 저장 · 다음 목표 상황 요청), ResponseEvaluator(제브 판정 · 5초 + 재시도 1회 · uncertain).
 - **화면**: 18 · 12 연습 머리(n/N · 단계 표시).
 - **확장**: ActivityCoordinator(연습 시작 · SCENARIO_GEN_FAILED), SessionLifecycle(연습 경로 · 목표 완료 → 다음 목표 · 마지막 → 종료), OutputGate(단계별 출력 규칙), VoiceRelay(상황 역할 · Cue 지시).
-- **구현 메모 · 제약**: 판정 기준 본문 · 프롬프트 · 단계 enum은 AI 입출력 계약(WBS 1.7.3, OQ4 · OQ14). 데모 시드에 아이별 담은 목표 2~3개(B22)를 넣어 U6 없이도 연습을 시험한다. 자기 데이터 삭제 참가자(후보 · 선택 · 상황 · 세션 목표 · 노출 · 시도 · 반응 · Cue · 판정)를 완료 조건에 넣는다.
+- **구현 메모 · 제약**: 판정 기준 본문 · 프롬프트 · 단계 enum은 AI 입출력 계약(WBS 1.7.3, OQ4 · OQ14). 데모 시드에 아이별 담은 목표 2~3개(B22)를 넣어 U6 없이도 연습을 시험한다. 결과 입력 스냅숏의 record.practice에는 반응 · 도움마다 scenarioId를 싣는다(U6 기록용 재판정의 입력, 계약 6절). 자기 데이터 삭제 참가자(후보 · 선택 · 상황 · 세션 목표 · 노출 · 시도 · 반응 · Cue · 판정)를 완료 조건에 넣는다.
 
 ### U6 · u6-results-report — 결과와 리포트
 
-- **무엇**: 끝난 활동의 정리(경험 구조화 · 목표 후보 · 생활 팁)와 기록 화면, 상담용 원문 PDF 리포트.
-- **완성**: ResultPipeline(작업 실행기 SESSION_RESULT · REPORT · 3회 · 재시작 FAILED · 구조화 · 후보 생성 · 의미 검토 · 생활 팁 매칭 · 결과 버전 · 다시 시도), Report(28 미리보기 · 생성 · 취소 · HTML → PDF · 한글 글꼴 · 비진단 문장 · 저장/버림 메타).
-- **화면**: 26 · 27(세 칸 · 정리 중/실패 · 후보 담기 · 연습이면 고른 목표 이름) · 28 · 30 · R-PDF · 17 정리 끝/실패.
-- **구현 메모 · 제약**: 판정값 · 구조화 결과 · 보호자 입력 원문은 27 · PDF 직렬화에서 뺀다(FR4.3 · A10). 리포트 60초 · 3회(NFR8). 자기 데이터 삭제 참가자(작업 · 결과 · 구조화 · 리포트 메타)를 완료 조건에 넣는다.
+- **무엇**: 끝난 활동의 정리(경험 구조화 · 기록용 재판정 · 목표 후보 · 생활 팁 · 결과 문장 · 결과 수준)와 기록 화면, 저장 기록으로 만든 10개 항목 상담용 리포트와 PDF.
+- **완성**: ResultPipeline(작업 실행기 SESSION_RESULT · REPORT · 3회 · 재시작 FAILED · 구조화 · 기록용 재판정(장면 판정 저장 · 진행 중 판정과 차이 표시) · 후보 생성 · 의미 검토 · 생활 팁 매칭 · 결과 문장 · 결과 수준 · 결과 버전 · 다시 시도), Report(28 미리보기 · 생성 · 취소 · 10개 항목 조립(집계 · 인용 대조 · 결측 · 고정 템플릿) · 30 확인 · 저장 확인 시트 값 · HTML → PDF · 한글 글꼴 · 고지 · 저장/버림).
+- **화면**: 26 · 27(끝난 이유 칸 · 연습 목표별 장면 결과 칩 · 결과 문장 · 제공한 도움 · 세 칸 · 정리 중/실패/자료 부족 · 후보 담기) · 28 · 30(리포트 확인 · 저장 확인 시트 · 저장했어요) · R-PDF · 17 정리 끝/실패.
+- **AI 작업**: `contracts/ai-io.md` 6절(공통 지시 · 경험 구조화 · 기록용 재판정 · 결과 문장 · 리포트 항목 · 금지 표현 2단계). 모든 인용은 저장 전사와 글자 단위로 대조한다.
+- **구현 메모 · 제약**: 진행 중 판정값 · 재판정 라벨 · 근거 문장 · 보호자 입력 원문은 27 · 30 · PDF 응답에 넣지 않고, 장면 결과는 칩 5종으로만 내보낸다(FR4.3 · A10). 연습의 재판정 입력은 결과 입력 스냅숏의 record.practice(U4b · U5b가 채움)와 PracticeGoal의 상황 대본 · 목표 정의 버전이다. U5b가 붙기 전에는 계약 6절 예시 값으로 만든 대역으로 시험한다. 리포트 60초 · 3회(NFR8). 마이그레이션은 core V5. 자기 데이터 삭제 참가자(작업 · 결과 · 구조화 · 장면 판정 · 리포트 · 항목 · 메타)를 완료 조건에 넣는다.
 
-### U7 · u7-web-push — 웹 푸시 (Should)
+### U7 · u7-web-push — 웹 푸시
 
-- **무엇**: 음성 대화 장애 · 기기 상태 수신 중단 · 기술 문제 종료 세 사건의 웹 푸시와 알림 진입 재조회.
-- **완성**: Notification(구독 · 문구 3종 · 중복 방지 · 발송 요청 기록 · 서비스 워커).
-- **구현 메모 · 제약**: Android Chrome 기준, iOS 보장 없음(NFR10). 7일 안에 못 넣으면 이 유닛을 통째로 미룰 수 있다(FR7.10). 알림 진입의 재조회 로직(04 → 12/17/04)은 U4 화면에 이미 있어야 한다(푸시 없이도 재진입에서 동작). 자기 데이터 삭제 참가자(구독 · 발송 기록).
+- **무엇**: 음성 대화 장애 · 기기 상태 수신 중단 · 기술 문제 종료 세 사건과 활동 완료의 웹 푸시, 알림 진입 재조회.
+- **완성**: Notification(구독 · 문구 4종 · 완료 푸시 자격 판정 · 중복 방지 · 발송 요청 기록 · 서비스 워커).
+- **구현 메모 · 제약**: 완료 푸시는 ACTIVE를 거친 세션이 CHILD_STOP · GUARDIAN_STOP · SILENCE로 ENDED(confirmed)가 됐을 때만 한 번 보낸다. 종료 확인 전 · ENDED_UNCONFIRMED · 참여 전 종료 · 기술 문제 종료에는 보내지 않는다(기술 문제 종료는 장애 푸시만). 판정 재료는 SessionStateChanged(상태 · endReason · confirmed · statusVersion)와 ActivityCoordinator 세션 사본의 ACTIVE 도달 여부다. Android Chrome 기준, iOS 보장 없음(NFR10). 알림 진입의 재조회 로직(04 → 12/17/04)은 U4 화면에 이미 있어야 한다(푸시 없이도 재진입에서 동작). 마이그레이션은 core V6. 자기 데이터 삭제 참가자(구독 · 발송 기록).
 
 ## 공통 완료 조건 (모든 유닛)
 
 - 자기 컴포넌트가 소유한 엔터티에 대해 **계정 삭제 참가자**(guardianId로 전부 삭제, 파일 포함)를 구현한다(J19).
 - 로그 · 오류 메시지 · Outbox 페이로드에 전사 원문 · 원음을 남기지 않는다(NFR9).
-- 판정값 · 점수 · 진단 표현을 보호자 응답에 넣지 않는다(NFR1 · FR4.3).
+- 진행 중 판정값 · 점수 · 진단 표현을 보호자 응답에 넣지 않는다. 기록용 재판정은 27 · 리포트의 장면 결과 칩으로만 드러난다(NFR1 · FR4.3).
 - 앱 사이 접점은 Contract Design(2.8)의 계약대로만 쓰고 상대 스키마를 직접 읽거나 쓰지 않는다(ADR-019).
 
 ## 준하 제안(가정)
@@ -88,4 +89,4 @@
 | J16 | 스켈레톤 = 시험 로그인 + 시드 동의 · 아이 → 실제 기기 코드 등록 → 04 → 08 → 음성 1턴(게이트 경유) → P1 → ENDED. 구글 로그인 · 참여 확인 · 시간 규칙 · 원음 저장은 뒤 유닛 | Q3 · 스코프 설명 | Delivery Planning(검증 명령) · Code Generation |
 | J17 | 컴포넌트마다 완성 유닛 하나, 다른 유닛은 계약을 지키는 확장만(연습 경로는 U5가 ActivityCoordinator · SessionLifecycle을 확장) | Q4 | Contract Design(확장 지점) |
 | J18 | 여러 유닛 데이터를 쓰는 화면(04 · 05 · 17 · 27)은 주 스토리 유닛이 틀을 만들고 뒤 유닛이 칸을 채운다 | Q5 | Functional Design |
-| J19 | 계정 삭제 지휘 틀은 U2, 각 유닛은 자기 데이터 삭제 참가자를 완료 조건으로 더한다. 웹 푸시(Should)는 U7로 떼어 미룰 수 있다 | Q6 · FR1.6 · FR7.10 | Delivery Planning |
+| J19 | 계정 삭제 지휘 틀은 U2, 각 유닛은 자기 데이터 삭제 참가자를 완료 조건으로 더한다. 웹 푸시는 U7로 뗀다 | Q6 · FR1.6 · FR7.10 | Delivery Planning |

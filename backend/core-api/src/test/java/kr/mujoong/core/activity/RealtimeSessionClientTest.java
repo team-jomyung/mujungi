@@ -12,6 +12,9 @@ import static org.mockito.Mockito.when;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import kr.mujoong.contract.json.JsonCodec;
 import kr.mujoong.contract.status.SessionStatus;
@@ -21,7 +24,8 @@ import kr.mujoong.core.activity.RealtimeSessionClient.StartKind;
 import kr.mujoong.core.activity.RealtimeSessionClient.StartResult;
 import kr.mujoong.core.activity.RealtimeSessionClient.ViewKind;
 import kr.mujoong.core.activity.SessionPackageBuilder.SessionPackage;
-import kr.mujoong.core.identity.Child;
+import kr.mujoong.core.child.ChildProfileService;
+import kr.mujoong.core.consent.ConsentPolicyService;
 import kr.mujoong.core.internalhttp.InternalHttpClient;
 import kr.mujoong.core.internalhttp.InternalHttpClient.CallException;
 import kr.mujoong.core.internalhttp.InternalHttpClient.Outcome;
@@ -244,10 +248,16 @@ class RealtimeSessionClientTest {
     }
 
     private SessionPackage sessionPackage() {
-        Child child = new Child(UUID.randomUUID(), UUID.randomUUID(), "하늘", 8, "[\"공룡\",\"그림\"]", NOW);
-        return new SessionPackageBuilder(json).build(UUID.randomUUID(), UUID.randomUUID(), child.getGuardianId(), child,
-                UUID.randomUUID(), "1.0",
-                new ApprovedItem(UUID.randomUUID(), "오늘 이야기 즐거웠어. 다음에 또 만나!", "/media/approved/closing-v1.wav"),
+        // U4a: 빌더는 계약 8절 포트 값으로 조립한다(부르는 모양만 바뀜)
+        ChildProfileService.ChildContext child = new ChildProfileService.ChildContext(UUID.randomUUID(), "하늘", 8,
+                List.of("공룡", "그림"),
+                List.of(new ChildProfileService.StopExpression(SessionPackageBuilder.DEFAULT_STOP_EXPRESSION, true)));
+        Map<String, ApprovedItem> approved = new LinkedHashMap<>();
+        approved.put("CLOSING",
+                new ApprovedItem(UUID.randomUUID(), "오늘 이야기 즐거웠어. 다음에 또 만나!", "/media/approved/closing-v1.wav"));
+        approved.put("WAITING_FILLER",
                 new ApprovedItem(UUID.randomUUID(), "음, 잠깐만 생각해 볼게.", "/media/approved/waiting-filler-v1.wav"));
+        return new SessionPackageBuilder().build(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
+                child, new ConsentPolicyService.Snapshot("1.0", true, true, true, true), approved);
     }
 }

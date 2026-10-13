@@ -8,6 +8,7 @@ import java.util.Optional;
 import java.util.UUID;
 import kr.mujoong.contract.time.MujoongClock;
 import kr.mujoong.realtime.log.LatencyRecorder;
+import kr.mujoong.realtime.log.SessionGapRepository;
 import kr.mujoong.realtime.log.TranscriptEntry.Speaker;
 import kr.mujoong.realtime.log.TranscriptRepository;
 import kr.mujoong.realtime.log.TranscriptRow;
@@ -27,7 +28,7 @@ import org.springframework.stereotype.Component;
  * </ul>
  *
  * <p>확정 행이 처음 응답에 실리면 {@link LatencyRecorder#itemsServed}로 SESSION_ITEMS_SERVED 한 줄을 남긴다(OD-8). 판정값 · 08 원문은
- * 이 응답에 들어갈 자리가 없다.
+ * 이 응답에 들어갈 자리가 없다. U3: 세션의 끊김 구간({@code gaps}, 시작 순)을 함께 읽는다(AC3.2.10(b) · U3-J18).
  */
 @Component
 public class SessionViewQuery {
@@ -43,25 +44,29 @@ public class SessionViewQuery {
         }
     }
 
-    /** 조회 결과. */
-    public record View(ActivitySessionRow session, Instant serverTime, List<Item> items, int nextSeq) {
+    /** 조회 결과. {@code gaps}는 끊김 구간(시작 순, U3). */
+    public record View(ActivitySessionRow session, Instant serverTime, List<Item> items, int nextSeq,
+            List<SessionGapRepository.SessionGapRow> gaps) {
 
         public View {
             Objects.requireNonNull(session, "session");
             Objects.requireNonNull(serverTime, "serverTime");
             items = List.copyOf(items);
+            gaps = gaps == null ? List.of() : List.copyOf(gaps);
         }
     }
 
     private final ActivitySessionRepository sessions;
     private final TranscriptRepository transcripts;
+    private final SessionGapRepository gaps;
     private final LatencyRecorder latency;
     private final MujoongClock clock;
 
     public SessionViewQuery(ActivitySessionRepository sessions, TranscriptRepository transcripts,
-            LatencyRecorder latency, MujoongClock clock) {
+            SessionGapRepository gaps, LatencyRecorder latency, MujoongClock clock) {
         this.sessions = Objects.requireNonNull(sessions, "sessions");
         this.transcripts = Objects.requireNonNull(transcripts, "transcripts");
+        this.gaps = Objects.requireNonNull(gaps, "gaps");
         this.latency = Objects.requireNonNull(latency, "latency");
         this.clock = Objects.requireNonNull(clock, "clock");
     }
@@ -91,7 +96,7 @@ public class SessionViewQuery {
         if (!served.isEmpty()) {
             latency.itemsServed(sessionId, served, now);
         }
-        return Optional.of(new View(row.get(), now, items, nextSeq));
+        return Optional.of(new View(row.get(), now, items, nextSeq, gaps.findBySession(sessionId)));
     }
 
     /** nextSeq 규칙(BR6.15 · J23). */

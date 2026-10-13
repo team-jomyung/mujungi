@@ -71,6 +71,11 @@ public final class DbTestSupport implements AutoCloseable {
         return new DbTestSupport(MujoongPostgres.sharedOrAbort());
     }
 
+    /** 시험이 따로 띄운 DB에 core_app으로 붙는다(공용 DB에 커밋하면 안 되는 참조 시드 시험, U4a). */
+    public static DbTestSupport coreApp(MujoongPostgres postgres) {
+        return new DbTestSupport(postgres);
+    }
+
     public MujoongPostgres postgres() {
         return postgres;
     }
@@ -231,16 +236,34 @@ public final class DbTestSupport implements AutoCloseable {
             MapSqlParameterSource params = new MapSqlParameterSource("ids", guardians.toArray(UUID[]::new));
             jdbc.update("delete from core.core_outbox_event where guardian_id = any(:ids)", params);
             jdbc.update("delete from core.core_inbox_event where guardian_id = any(:ids)", params);
+            // U4a(V3) 표: 08 배경 · 활동 기록(→ 세션 사본)
+            jdbc.update("delete from core.core_activity_context where guardian_id = any(:ids)", params);
+            jdbc.update("delete from core.core_activity_record where guardian_id = any(:ids)", params);
             jdbc.update("delete from core.core_activity where guardian_id = any(:ids)", params);
             jdbc.update("delete from core.core_device where guardian_id = any(:ids)", params);
         }
         if (!devices.isEmpty()) {
             MapSqlParameterSource params = new MapSqlParameterSource("ids", devices.toArray(UUID[]::new));
+            jdbc.update("""
+                    delete from core.core_activity_context
+                     where session_id in (select session_id from core.core_activity where device_id = any(:ids))
+                    """, params);
+            jdbc.update("""
+                    delete from core.core_activity_record
+                     where session_id in (select session_id from core.core_activity where device_id = any(:ids))
+                    """, params);
             jdbc.update("delete from core.core_activity where device_id = any(:ids)", params);
             jdbc.update("delete from core.core_device where id = any(:ids)", params);
         }
         if (!guardians.isEmpty()) {
             MapSqlParameterSource params = new MapSqlParameterSource("ids", guardians.toArray(UUID[]::new));
+            // U2(V2) 표: 종료 표현(→ 아이) · 소셜 계정(→ 보호자) · 삭제 요청(논리 참조)
+            jdbc.update("""
+                    delete from core.core_stop_expression
+                     where child_id in (select id from core.core_child where guardian_id = any(:ids))
+                    """, params);
+            jdbc.update("delete from core.core_social_account where guardian_id = any(:ids)", params);
+            jdbc.update("delete from core.core_data_deletion_request where guardian_id = any(:ids)", params);
             jdbc.update("delete from core.core_consent where actor_guardian_id = any(:ids)", params);
             jdbc.update("delete from core.core_child where guardian_id = any(:ids)", params);
             jdbc.update("delete from core.core_guardian where id = any(:ids)", params);

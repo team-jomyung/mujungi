@@ -6,13 +6,13 @@ import { useId, useRef, useState } from "react";
 import { ApiError } from "../api/apiClient";
 import { queryKeys, registerDevice, useApiClient } from "../api/queries";
 import { CodeInput, emptyCodeCells, isCodeComplete } from "../components/CodeInput";
-import { PARENT_ROUTES } from "../navigation";
+import { PARENT_ROUTES, goToLogin } from "../navigation";
 import { COPY, PROPOSED_COPY, TEMP_COPY } from "@/shared/copy/ko";
 import { messageForErrorCode } from "@/shared/errors/codeToCopy";
 import { useToast } from "@/shared/toast/ToastProvider";
 
 // 05a 기기 등록 (U1 3.5 Step 40 · BR2.7 · BR2.8 · BR2.9 · AC2.2.1 ~ AC2.2.4 · AC2.2.8 · mockups 9-9 · 9-10 · J118)
-// 8칸이 다 차야 「등록」이 켜지고 전송 중에는 꺼지며 '등록하고 있어요'로 바뀐다. 성공하면 05로 간다(U1은 05 스텁 → 04, J57).
+// 8칸이 다 차야 「등록」이 켜지고 전송 중에는 꺼지며 '등록하고 있어요'로 바뀐다. 성공하면 05로 간다(U2가 05 화면을 만들었다).
 // 없는 코드(404) · 이미 등록된 코드(409) · 연결된 기존 기기(409) · 한도(429)는 빨간 카드이고 입력을 지우지 않는다.
 // 네트워크 · 5xx는 토스트 + 「다시 시도」. 「취소」 · 「←」는 05로 간다. 기기 검색 · 페어링 · 해제 · 재등록 단추는 없다.
 // 「다시 시도」는 실패한 렌더의 클로저가 아니라 지금 화면의 폼을 다시 제출해 보이는 코드로 보내고, 요청 중이면 막힌다(J362).
@@ -70,7 +70,7 @@ export function Register05a() {
         return;
       }
       if (error.isUnauthenticated) {
-        router.replace(PARENT_ROUTES.devLogin);
+        goToLogin(router, toast);
         return;
       }
       const card = error.kind === "http" ? errorCardFor(error) : null;

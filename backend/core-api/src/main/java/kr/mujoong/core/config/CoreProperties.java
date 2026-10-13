@@ -38,7 +38,8 @@ public record CoreProperties(
         DevLogin devLogin,
         LoadTest loadTest,
         Metrics metrics,
-        Observability observability) {
+        Observability observability,
+        Guardian guardian) {
 
     /** I-6: Core의 '확인 불가' 판정 시한은 Realtime 상태 보고 주기 세 번 이상이다(보고 두 번 유실로 stale 아님). */
     static final int STALE_TO_REPORT_RATIO = 3;
@@ -59,6 +60,7 @@ public record CoreProperties(
         required(loadTest, "mujoong.load-test");
         required(metrics, "mujoong.metrics");
         required(observability, "mujoong.observability");
+        required(guardian, "mujoong.guardian");
 
         if (security.sessionCookieMaxAge().compareTo(timing.login().sessionIdle()) > 0) {
             throw invalid("mujoong.security.session-cookie-max-age는 mujoong.timing.login.session-idle 이하여야 한다");
@@ -77,7 +79,8 @@ public record CoreProperties(
             BootstrapTiming bootstrap,
             DeviceTiming device,
             LoginTiming login,
-            CacheTiming cache) {
+            CacheTiming cache,
+            AccountTiming account) {
 
         public Timing {
             required(session, "mujoong.timing.session");
@@ -86,6 +89,25 @@ public record CoreProperties(
             required(device, "mujoong.timing.device");
             required(login, "mujoong.timing.login");
             required(cache, "mujoong.timing.cache");
+            required(account, "mujoong.timing.account");
+        }
+    }
+
+    /**
+     * U2 계정 삭제 지휘 주기 · 진행 세션 끝 대기(AC1.6.3) · 구글 서명 열쇠 캐시 바닥 · 상한(2차 리뷰 4 · 3차 리뷰 3)(timing.md 8절). 열쇠 캐시는
+     * 응답의 max-age만큼 두되 바닥보다 짧게 두지 않고 상한을 넘지 않는다.
+     */
+    public record AccountTiming(
+            Duration deletionTick, Duration deletionSessionWait, Duration googleKeysMinAge, Duration googleKeysMaxAge) {
+        public AccountTiming {
+            positive(deletionTick, "mujoong.timing.account.deletion-tick");
+            positive(deletionSessionWait, "mujoong.timing.account.deletion-session-wait");
+            positive(googleKeysMinAge, "mujoong.timing.account.google-keys-min-age");
+            positive(googleKeysMaxAge, "mujoong.timing.account.google-keys-max-age");
+            if (googleKeysMinAge.compareTo(googleKeysMaxAge) > 0) {
+                throw new IllegalArgumentException(
+                        "mujoong.timing.account.google-keys-min-age가 mujoong.timing.account.google-keys-max-age보다 길다");
+            }
         }
     }
 
@@ -347,6 +369,45 @@ public record CoreProperties(
         }
     }
 
+    /** U2 보호자 계정 설정(구글 OAuth, U2-J1). */
+    public record Guardian(Google google) {
+        public Guardian {
+            required(google, "mujoong.guardian.google");
+        }
+    }
+
+    /**
+     * 구글 OAuth 클라이언트(U2-J1 · U2-J2). client-id · client-secret · redirect-uri는 환경 변수 {@code GOOGLE_OAUTH_CLIENT_ID} ·
+     * {@code GOOGLE_OAUTH_CLIENT_SECRET} · {@code GOOGLE_OAUTH_REDIRECT_URI}에서만 채우고 비어 있어도 기동은 막지 않는다(로그인이 401).
+     * 토큰 엔드포인트와 서명 열쇠(JWKS) 주소는 https만 받고 평문 http는 루프백 시험 주소만 받는다 — 어긋나면 기동을 거부한다.
+     * 문자열 표현에 비밀 값을 내지 않는다.
+     */
+    public record Google(
+            String clientId, String clientSecret, String redirectUri, URI tokenUri, URI jwksUri, Duration exchangeTimeout) {
+
+        public Google {
+            clientId = clientId == null ? "" : clientId.trim();
+            clientSecret = clientSecret == null ? "" : clientSecret;
+            redirectUri = redirectUri == null ? "" : redirectUri.trim();
+            secureUrl(tokenUri, "mujoong.guardian.google.token-uri");
+            secureUrl(jwksUri, "mujoong.guardian.google.jwks-uri");
+            positive(exchangeTimeout, "mujoong.guardian.google.exchange-timeout");
+        }
+
+        /** 세 값이 모두 있어 로그인을 받을 수 있는가. */
+        public boolean configured() {
+            return !clientId.isEmpty() && !clientSecret.isEmpty() && !redirectUri.isEmpty();
+        }
+
+        @Override
+        public String toString() {
+            return "Google[clientId=" + (clientId.isEmpty() ? "<empty>" : "<set>")
+                    + ", clientSecret=" + (clientSecret.isEmpty() ? "<empty>" : "<redacted>")
+                    + ", redirectUri=" + (redirectUri.isEmpty() ? "<empty>" : "<set>")
+                    + ", tokenUri=" + tokenUri + ", jwksUri=" + jwksUri + ", exchangeTimeout=" + exchangeTimeout + "]";
+        }
+    }
+
     // ---- 검증 도우미: 메시지에는 키 이름만 쓴다(값 미출력) ----
 
     private static final Set<String> LOOPBACK_HOSTS = Set.of("localhost", "127.0.0.1", "[::1]");
@@ -401,6 +462,18 @@ public record CoreProperties(
         String scheme = value.getScheme() == null ? "" : value.getScheme().toLowerCase(Locale.ROOT);
         if (!(scheme.equals("http") || scheme.equals("https")) || value.getHost() == null) {
             throw invalid("설정 키는 http(s) 주소여야 한다: " + key);
+        }
+    }
+
+    /** 비밀 · 토큰을 주고받는 바깥 주소: https만, 평문 http는 루프백 호스트(시험 대역)일 때만. */
+    static void secureUrl(URI value, String key) {
+        required(value, key);
+        String scheme = value.getScheme() == null ? "" : value.getScheme().toLowerCase(Locale.ROOT);
+        String host = value.getHost() == null ? "" : value.getHost().toLowerCase(Locale.ROOT);
+        boolean allowed = !host.isEmpty()
+                && (scheme.equals("https") || (scheme.equals("http") && LOOPBACK_HOSTS.contains(host)));
+        if (!allowed) {
+            throw invalid("설정 키는 https 주소여야 한다(평문 http는 루프백 시험 주소만): " + key);
         }
     }
 

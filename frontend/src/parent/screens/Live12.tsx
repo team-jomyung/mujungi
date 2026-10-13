@@ -3,15 +3,18 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { freeFailedRoute } from "../activity/freeFailure";
+import { liveOutcome, showsPauseLine, silentMinutes } from "../activity/livePresentation";
 import { ApiError } from "../api/apiClient";
 import { endSession, fetchHome, fetchLiveView, mergeLiveView, queryKeys, useApiClient } from "../api/queries";
 import { isTerminalStatus, type LiveView, type SessionStatus } from "../api/types";
 import { BottomTabBar, type TabKey } from "../components/BottomTabBar";
 import { ConfirmDialog } from "../components/ConfirmDialog";
+import { NoticeDialog } from "../components/NoticeDialog";
 import { StatusLine } from "../components/StatusLine";
 import { TranscriptList } from "../components/TranscriptList";
 import { useLivePolling } from "../hooks/useLivePolling";
-import { PARENT_ROUTES, isUnauthenticated, routeForTab } from "../navigation";
+import { PARENT_ROUTES, goToLogin, isUnauthenticated, routeForTab } from "../navigation";
 import {
   COPY,
   PROPOSED_COPY,
@@ -21,6 +24,7 @@ import {
   liveTalkingLine,
   liveWaitingChildLine,
 } from "@/shared/copy/ko";
+import { ACTIVITY_COPY, ACTIVITY_PROPOSED_COPY, offlineLine, silentElapsedLine } from "@/shared/copy/activity";
 import { elapsedMinuteOrdinal, formatHhmm } from "@/shared/copy/timeText";
 import { messageForErrorCode } from "@/shared/errors/codeToCopy";
 import { useToast } from "@/shared/toast/ToastProvider";
@@ -33,6 +37,9 @@ import { useToast } from "@/shared/toast/ToastProvider";
 // - P1: 「아니오」 기본 초점. 「네, 끝낼게요」 → 202면 17, 409면 상태를 한 번 다시 읽어 종료 상태 · CLOSING일 때만 17
 //   (FAILED면 08, 아직 시작 중이면 머물며 토스트), 503 · 401 · 네트워크 · 시간 초과는 '끝내기 요청을 보내지 못했어요'를 보이고
 //   '종료 요청됨'으로 표시하지 않는다. 재시도는 같은 requestId(RD-21 · 표 2.9-C).
+// U4a(AC3.2.8 · AC3.2.10 · AC3.2.12 · AC3.3.8 · AC3.4.1 · AC3.5.1 · U4a-J12 · J16 · J17): 공백 경고(경과 줄 + 카드), 끊김 · 미확인 구간
+//   점선, 복구 중 줄, 앱 오프라인 줄, 「이야기 끝내기」는 WAITING_CHILD에서도 켜짐, ABORTED · DISCONNECT는 P2 → 17, DECLINED는
+//   P3 → 04, 진행 중 서버 재시작 FAILED(SERVER_RESTART)는 17 · 그 밖의 FAILED는 08(사유 코드).
 
 /** 연속 실패가 이 횟수가 되면 토스트를 보인다(PD-12). */
 const POLL_FAILURE_TOAST_THRESHOLD = 3;
@@ -84,22 +91,22 @@ export function Live12({ sessionId }: Live12Props) {
   const status = view?.status;
   const { error, failureStreak, refetch } = polling;
 
-  // 상태에 따른 화면 이동(functional-spec 4절 표 · J120).
+  // 상태에 따른 화면 이동(functional-spec 4절 표 · J120, U4a: 연결 끊김 종료는 P2 → 17, 무응답은 P3 → 04, 서버 재시작 FAILED는 17 — U4a-J12 · J16).
+  const outcome = view === undefined ? null : liveOutcome(view);
+  const outcomeKind = outcome?.kind;
+  const failedCode = outcome?.kind === "startFailed" ? outcome.failureCode : null;
   useEffect(() => {
-    if (status === undefined) {
-      return;
-    }
-    if (status === "FAILED") {
-      router.replace(PARENT_ROUTES.freeFailed);
-    } else if (status === "CLOSING" || isTerminalStatus(status)) {
+    if (outcomeKind === "startFailed") {
+      router.replace(freeFailedRoute(failedCode));
+    } else if (outcomeKind === "done") {
       router.replace(PARENT_ROUTES.sessionDone(sessionId));
     }
-  }, [router, sessionId, status]);
+  }, [router, sessionId, outcomeKind, failedCode]);
 
-  // 401 → 시험 로그인, 404(남의 · 없는 세션) → 홈.
+  // 401 → 안내 토스트 뒤 01(AC1.1.9, 세션은 계속), 404(남의 · 없는 세션) → 홈.
   useEffect(() => {
     if (isUnauthenticated(error)) {
-      router.replace(PARENT_ROUTES.devLogin);
+      goToLogin(router, toast);
     } else if (error instanceof ApiError && error.status === 404) {
       toast.show({ message: messageForErrorCode("NOT_FOUND"), kind: "error" });
       router.replace(PARENT_ROUTES.home);
@@ -121,11 +128,8 @@ export function Live12({ sessionId }: Live12Props) {
     const previous = queryClient.getQueryData<LiveView>(queryKeys.session(sessionId));
     const fresh = await fetchLiveView(api, sessionId, previous?.nextSeq ?? 0);
     queryClient.setQueryData<LiveView>(queryKeys.session(sessionId), mergeLiveView(previous, fresh));
-    if (fresh.status === "FAILED") {
-      router.replace(PARENT_ROUTES.freeFailed);
-    } else if (fresh.status === "CLOSING" || isTerminalStatus(fresh.status)) {
-      router.replace(PARENT_ROUTES.sessionDone(sessionId));
-    } else {
+    // 이동은 위 효과(liveOutcome)가 한다. 아직 시작 중이면 머물며 알린다
+    if (liveOutcome(fresh).kind === "stay") {
       toast.show({ message: TEMP_COPY.livePreparingEndToast });
     }
   };
@@ -162,7 +166,8 @@ export function Live12({ sessionId }: Live12Props) {
       // 503 · 401 · 403 · 네트워크 · 시간 초과: 전송하지 못함(종료 요청됨으로 표시하지 않음, 세션은 그대로).
       toast.show({ message: PROPOSED_COPY.endSendFailed, kind: "error" });
       if (isUnauthenticated(failure)) {
-        router.replace(PARENT_ROUTES.devLogin);
+        // '전송하지 못함' 토스트를 남긴 채 01로(AC1.1.9 · AC3.3.6)
+        router.replace(PARENT_ROUTES.login);
       }
     } finally {
       setEnding(false);
@@ -177,8 +182,13 @@ export function Live12({ sessionId }: Live12Props) {
   };
 
   const subtitle = subtitleFor(view, childName);
-  const elapsed = elapsedLineFor(view);
-  const canEnd = status === "ACTIVE" && !ending;
+  const baseElapsed = elapsedLineFor(view);
+  const silent = view === undefined ? null : silentMinutes(view);
+  const elapsed = baseElapsed !== null && silent !== null ? silentElapsedLine(baseElapsed, silent) : baseElapsed;
+  // 앱만 오프라인: 마지막 폴링이 응답 없음으로 실패(U4a-J17 · AC3.2.12). 마지막으로 받은 시각을 보인다
+  const offline = error instanceof ApiError && error.isDeliveryUnknown && failureStreak > 0;
+  // 종료 가능 상태는 WAITING_CHILD · ACTIVE(AC3.3.8 · C.S-12.11.5 참여 기다리는 중 그림의 「이야기 끝내기」 · U4b 3.2 표)
+  const canEnd = (status === "ACTIVE" || status === "WAITING_CHILD") && !ending;
 
   return (
     <div className="mj-screen" data-testid="live-screen" data-state={status ?? "LOADING"}>
@@ -196,12 +206,28 @@ export function Live12({ sessionId }: Live12Props) {
         ) : null}
       </header>
       <main className="mj-screen__body mj-screen__body--live">
+        {offline ? (
+          <StatusLine tone="warning" testId="live-offline">
+            {offlineLine(formatHhmm(view?.serverTime))}
+          </StatusLine>
+        ) : null}
         {view?.stale === true ? (
           <StatusLine tone="warning" testId="live-stale">
             {liveStaleLine(formatHhmm(view.observedAt))}
           </StatusLine>
         ) : null}
-        <TranscriptList items={view?.items ?? []} childName={childName} />
+        {view !== undefined && showsPauseLine(view) ? (
+          <StatusLine tone="warning" testId="live-recovering">
+            {ACTIVITY_PROPOSED_COPY.live.recovering}
+          </StatusLine>
+        ) : null}
+        {silent !== null ? (
+          <section className="mj-card mj-warn-card" role="status" data-testid="live-silence-warning">
+            <p className="mj-warn-card__title">{ACTIVITY_COPY.live.warnTitle}</p>
+            <p className="mj-warn-card__body">{ACTIVITY_COPY.live.warnBody}</p>
+          </section>
+        ) : null}
+        <TranscriptList items={view?.items ?? []} childName={childName} gaps={view?.gaps ?? []} />
         <button
           type="button"
           className="mj-button mj-button--danger mj-button--block"
@@ -222,6 +248,20 @@ export function Live12({ sessionId }: Live12Props) {
         onCancel={() => setDialogOpen(false)}
         busy={ending}
         testIdPrefix="p1"
+      />
+      <NoticeDialog
+        open={outcomeKind === "unexpectedEnd"}
+        title={ACTIVITY_COPY.unexpectedEnd.title}
+        confirmLabel={ACTIVITY_COPY.unexpectedEnd.confirm}
+        onConfirm={() => router.replace(PARENT_ROUTES.sessionDone(sessionId))}
+        testIdPrefix="p2"
+      />
+      <NoticeDialog
+        open={outcomeKind === "noResponse"}
+        title={ACTIVITY_COPY.noResponse.title}
+        confirmLabel={ACTIVITY_COPY.noResponse.confirm}
+        onConfirm={() => router.replace(PARENT_ROUTES.home)}
+        testIdPrefix="p3"
       />
     </div>
   );

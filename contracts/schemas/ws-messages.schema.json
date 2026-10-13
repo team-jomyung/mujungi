@@ -171,7 +171,7 @@
       }
     },
     "PLAYBACK_MARK": {
-      "description": "기기 → 서버. 실제 재생 시작 · 1초마다 진행 · 끝 · 멈춤 · 실패. observedAt은 기기 시계 값이다. U1 서버는 PROGRESS를 받아도 무시한다(J123)",
+      "description": "기기 → 서버. 실제 재생 시작 · 1초마다 진행 · 끝 · 멈춤 · 실패. observedAt은 기기 시계 값이다. PROGRESS는 U1이 무시했고 U3부터 재생 위치로 쓴다",
       "type": "object",
       "additionalProperties": false,
       "required": ["playbackId", "status", "observedAt"],
@@ -230,7 +230,7 @@
       }
     },
     "DEVICE_STATE": {
-      "description": "기기 → 서버. 마이크 · 소리 · 탭 보임 상태가 바뀔 때. 바뀐 필드만 실어도 된다. U1 서버는 알려진 type으로 받아 무시한다(ERROR 없음, J123)",
+      "description": "기기 → 서버. 마이크 · 소리 · 탭 보임 상태가 바뀔 때. 바뀐 필드만 실어도 된다. U1은 알려진 type으로 받아 무시했고 U3부터 연결의 최신 상태로 둔다(ERROR 없음)",
       "type": "object",
       "additionalProperties": false,
       "minProperties": 1,

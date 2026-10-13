@@ -8,6 +8,10 @@
   "mujoong.timing.device.output-queue-max": "20s",
   "mujoong.device-web.retry-interval": "5s",
   "mujoong.device-web.registered-display": "3s",
+  "mujoong.timing.device.reconnect-backoff": "[1s, 2s, 4s]",
+  "mujoong.timing.device.playback-mark-interval": "1s",
+  "mujoong.timing.gate.barge-in-stop": "500ms",
+  "mujoong.timing.gate.local-voice-min": "200ms",
   "ui.toast-duration": "4s",
   "ui.toast-action-min": "3s"
 }

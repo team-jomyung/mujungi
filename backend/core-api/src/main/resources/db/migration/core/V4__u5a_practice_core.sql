@@ -1,4 +1,4 @@
--- U5a owns V4. V2 (U2) and V3 (U4a) remain reserved. All clocks are supplied by the application.
+-- U5a V4: 연습 목표 · 상황 표. V2(U2) · V3(U4a) 뒤에 적용한다. 시각은 모두 앱이 넣는다.
 CREATE TABLE core.core_behavior_definition (
  id uuid PRIMARY KEY, behavior_key varchar(120) NOT NULL, version integer NOT NULL CHECK(version>0),
  display_name text NOT NULL, behavior_definition_text text NOT NULL DEFAULT '',

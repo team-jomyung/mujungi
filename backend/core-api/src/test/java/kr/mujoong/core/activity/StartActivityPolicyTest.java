@@ -14,6 +14,7 @@ import static org.mockito.Mockito.when;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import kr.mujoong.contract.error.ErrorCode;
@@ -35,8 +36,12 @@ import kr.mujoong.core.activity.StartActivityService.Started;
 import kr.mujoong.core.common.error.CoreApiException;
 import kr.mujoong.core.device.DeviceVerdict.ReasonCode;
 import kr.mujoong.core.device.DeviceViewAssembler;
-import kr.mujoong.core.identity.Child;
-import kr.mujoong.core.identity.ChildRepository;
+import kr.mujoong.core.child.ChildProfileService;
+import kr.mujoong.core.child.ChildProfileService.ChildContext;
+import kr.mujoong.core.consent.ConsentPolicyService;
+import kr.mujoong.core.consent.ConsentPolicyService.GateResult;
+import kr.mujoong.core.consent.ConsentPolicyService.Snapshot;
+import kr.mujoong.core.consent.ConsentStatusRule.Status;
 import kr.mujoong.core.identity.Guardian;
 import kr.mujoong.core.identity.GuardianRepository;
 import kr.mujoong.core.internalhttp.InternalHttpClient;
@@ -52,6 +57,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.ArgumentCaptor;
+import org.springframework.transaction.PlatformTransactionManager;
 
 /**
  * 시작 정책 (BR6.1 ⓪ ~ ③ · BR6.2 재생 · BR6.4 · BR6.6 번역 · BR6.7 · AC3.1.1 · AC3.1.3 · AC3.1.6). BR6.1 ② 계정 잠김 방지: REQUESTED가 아닌
@@ -68,23 +74,28 @@ class StartActivityPolicyTest {
     private final TestEvents events = new TestEvents(clock);
     private final JsonCodec json = JsonCodec.shared();
     private final GuardianRepository guardians = mock(GuardianRepository.class);
-    private final ChildRepository children = mock(ChildRepository.class);
+    private final ChildProfileService children = mock(ChildProfileService.class);
     private final ActivityCopyRepository activities = mock(ActivityCopyRepository.class);
-    private final ConsentGate consentGate = mock(ConsentGate.class);
+    private final ActivityContextRepository contexts = mock(ActivityContextRepository.class);
+    private final ConsentPolicyService consentGate = mock(ConsentPolicyService.class);
     private final DeviceViewAssembler deviceView = mock(DeviceViewAssembler.class);
     private final ApprovedContentCatalog catalog = mock(ApprovedContentCatalog.class);
     private final RealtimeSessionClient realtime = mock(RealtimeSessionClient.class);
     private StartActivityService service;
-    private Child child;
+    private ChildContext child;
 
     @BeforeEach
     void setUp() {
-        service = new StartActivityService(guardians, children, activities, consentGate, deviceView, catalog,
-                new SessionPackageBuilder(json), realtime, json, events.logger(), events.metrics(), clock, Runnable::run);
-        child = new Child(UUID.randomUUID(), guardianId, "하늘", 8, "[\"공룡\"]", NOW);
+        // U4a: 아이 · 동의는 계약 8절 포트(ChildContext · ConsentGate)로 읽는다. 단언은 U1 그대로다
+        service = new StartActivityService(
+                new StartActivityService.Ports(guardians, children, activities, contexts, consentGate, deviceView, catalog),
+                new SessionPackageBuilder(), realtime, mock(PlatformTransactionManager.class), json, events.logger(),
+                events.metrics(), clock, Runnable::run);
+        child = new ChildContext(UUID.randomUUID(), "하늘", 8, List.of("공룡"),
+                List.of(new ChildProfileService.StopExpression(SessionPackageBuilder.DEFAULT_STOP_EXPRESSION, true)));
         when(guardians.findById(guardianId)).thenReturn(Optional.of(new Guardian(guardianId, NOW)));
-        when(children.findByGuardianId(guardianId)).thenReturn(Optional.of(child));
-        when(consentGate.check(child.getId(), NOW)).thenReturn(Optional.of("1.0"));
+        when(children.childContext(guardianId)).thenReturn(Optional.of(child));
+        when(consentGate.check(guardianId)).thenReturn(gate(true));
         when(activities.findByIdempotencyKey(eq(guardianId), any())).thenReturn(Optional.empty());
         when(activities.findInProgressByGuardian(guardianId)).thenReturn(Optional.empty());
         when(deviceView.readiness(guardianId)).thenReturn(new DeviceViewAssembler.Readiness(deviceId, true, null));
@@ -121,14 +132,14 @@ class StartActivityPolicyTest {
                 .isInstanceOfSatisfying(CoreApiException.class,
                         e -> assertThat(e.code()).isEqualTo(ErrorCode.ACCOUNT_DELETION_IN_PROGRESS));
 
-        when(consentGate.check(child.getId(), NOW)).thenReturn(Optional.empty());
+        when(consentGate.check(guardianId)).thenReturn(gate(false));
         when(deviceView.readiness(guardianId)).thenReturn(new DeviceViewAssembler.Readiness(null, false,
                 ReasonCode.NO_DEVICE));
         assertThatThrownBy(() -> service.start(guardianId, new StartRequest(UUID.randomUUID(), null)))
                 .isInstanceOfSatisfying(CoreApiException.class, e -> assertThat(e.code()).isEqualTo(ErrorCode.CONSENT_MISSING));
         verify(deviceView, never()).readiness(any());
 
-        when(consentGate.check(child.getId(), NOW)).thenReturn(Optional.of("1.0"));
+        when(consentGate.check(guardianId)).thenReturn(gate(true));
         when(activities.findInProgressByGuardian(guardianId)).thenReturn(Optional.of(
                 ActivityCopies.copy(UUID.randomUUID(), guardianId, SessionStatus.REQUESTED, 0, NOW)));
         assertThatThrownBy(() -> service.start(guardianId, new StartRequest(UUID.randomUUID(), null)))
@@ -152,7 +163,7 @@ class StartActivityPolicyTest {
         UUID sessionId = UUID.randomUUID();
         when(activities.findByIdempotencyKey(guardianId, key.toString())).thenReturn(Optional.of(
                 ActivityCopies.keyed(sessionId, guardianId, key.toString(), hash, false, null, NOW)));
-        when(consentGate.check(any(), any())).thenReturn(Optional.empty());
+        when(consentGate.check(any())).thenReturn(gate(false));
 
         assertThat(service.start(guardianId, request).sessionId()).isEqualTo(sessionId);
         assertThatThrownBy(() -> service.start(guardianId, new StartRequest(key, new Context("다른 내용", null, null, null))))
@@ -306,8 +317,15 @@ class StartActivityPolicyTest {
         RealtimeSessionClient client = new RealtimeSessionClient(http,
                 new SessionStartBreaker(clock, events.metrics(), 3, Duration.ofSeconds(5)), json, Duration.ofSeconds(3), 1,
                 Duration.ofSeconds(2), Duration.ofSeconds(1));
-        return new StartActivityService(guardians, children, activities, consentGate, deviceView, catalog,
-                new SessionPackageBuilder(json), client, json, events.logger(), events.metrics(), clock, Runnable::run);
+        return new StartActivityService(
+                new StartActivityService.Ports(guardians, children, activities, contexts, consentGate, deviceView, catalog),
+                new SessionPackageBuilder(), client, mock(PlatformTransactionManager.class), json, events.logger(),
+                events.metrics(), clock, Runnable::run);
+    }
+
+    /** ConsentGate 포트 응답(통과면 4항목 모두 GIVEN). */
+    private static GateResult gate(boolean ok) {
+        return new GateResult(ok, ok ? Status.GIVEN : Status.NOT_GIVEN, new Snapshot("1.0", ok, ok, ok, ok));
     }
 
     private UUID insertedSessionId() {

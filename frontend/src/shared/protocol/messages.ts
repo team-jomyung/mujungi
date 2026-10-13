@@ -26,7 +26,8 @@ const CONTENT_CODE_PATTERN = /^[A-Z][A-Z0-9_]*$/;
 export interface HelloPayload {
   readonly appVersion: string;
   readonly audio: readonly string[];
-  readonly resume: null;
+  /** U3 이어가기: 끊기기 전 세션(U3-R16). 없으면 null. */
+  readonly resume: { readonly sessionId: string } | null;
 }
 
 export interface HeartbeatPayload {
@@ -58,9 +59,40 @@ export interface VoiceSessionClosedPayload {
   readonly micClosedAt: string;
 }
 
-/** HELLO. 토큰 · 비밀을 넣지 않는다(J29 · BR3.6). resume은 U3가 완성한다. */
-export function helloPayload(appVersion: string): HelloPayload {
-  return { appVersion, audio: [AUDIO_FORMAT], resume: null };
+/** HELLO. 토큰 · 비밀을 넣지 않는다(J29 · BR3.6). U3: 끊기기 전 세션이 있으면 resume으로 싣는다(U3-R16). */
+export function helloPayload(appVersion: string, resumeSessionId: string | null = null): HelloPayload {
+  return { appVersion, audio: [AUDIO_FORMAT], resume: resumeSessionId === null ? null : { sessionId: resumeSessionId } };
+}
+
+// U3 DEVICE_STATE(U3-R17): 바뀐 필드만 싣는다(스키마 minProperties 1 · 값은 null이 아님)
+export type MicState = "OK" | "LOST";
+export type PlayerState = "OK" | "ERROR";
+export type VisibilityState = "VISIBLE" | "HIDDEN";
+export type WakeLockState = "HELD" | "RELEASED";
+
+export interface DeviceStatePayload {
+  readonly mic?: MicState;
+  readonly player?: PlayerState;
+  readonly visibility?: VisibilityState;
+  readonly wakeLock?: WakeLockState;
+}
+
+/** 정해진 필드만 담은 DEVICE_STATE. 담을 것이 없으면 null(보내지 않는다). */
+export function deviceStatePayload(fields: DeviceStatePayload): DeviceStatePayload | null {
+  const payload: { mic?: MicState; player?: PlayerState; visibility?: VisibilityState; wakeLock?: WakeLockState } = {};
+  if (fields.mic !== undefined) {
+    payload.mic = fields.mic;
+  }
+  if (fields.player !== undefined) {
+    payload.player = fields.player;
+  }
+  if (fields.visibility !== undefined) {
+    payload.visibility = fields.visibility;
+  }
+  if (fields.wakeLock !== undefined) {
+    payload.wakeLock = fields.wakeLock;
+  }
+  return Object.keys(payload).length === 0 ? null : payload;
 }
 
 export function heartbeatPayload(hbSeq: number, lastRttMs: number | null): HeartbeatPayload {
@@ -87,11 +119,20 @@ export interface ApprovedAudio {
   readonly audioUrl: string;
 }
 
+/** U3 이어가기 결과(HELLO_OK.session): 진행 중 세션과 표시 상태, 세션을 그대로 이었는지(U3-J4 · J5). */
+export interface HelloOkSession {
+  readonly sessionId: string;
+  readonly view: SessionView | "UNKNOWN";
+  readonly resumed: boolean;
+}
+
 export interface HelloOkMessage {
   readonly type: "HELLO_OK";
   readonly connectionId: string;
   readonly serverTime: string;
   readonly heartbeatIntervalMs: number;
+  /** 진행 중 세션이 있을 때만 있다(없으면 속성 자체가 없다). */
+  readonly session?: HelloOkSession;
 }
 
 export interface HeartbeatAckMessage {
@@ -202,6 +243,18 @@ function readApprovedAudio(value: unknown): ApprovedAudio[] | null {
   return items;
 }
 
+/** HELLO_OK.session(U3). 형식이 틀리면 없는 것으로 본다(세션을 이어 가지 않는다). */
+function readHelloOkSession(value: unknown): HelloOkSession | null {
+  if (typeof value !== "object" || value === null) {
+    return null;
+  }
+  const { sessionId, view, resumed } = value as Record<string, unknown>;
+  if (!isUuid(sessionId) || typeof resumed !== "boolean") {
+    return null;
+  }
+  return { sessionId, view: readView(view), resumed };
+}
+
 /** 서버 → 기기 봉투를 type별 메시지로 읽는다. 모르는 type · 틀린 payload는 null. */
 export function parseServerMessage(envelope: InboundEnvelope): ServerMessage | null {
   const { payload, opId, sessionId } = envelope;
@@ -211,7 +264,10 @@ export function parseServerMessage(envelope: InboundEnvelope): ServerMessage | n
       if (!isUuid(connectionId) || typeof serverTime !== "string" || !isPositiveInteger(heartbeatIntervalMs)) {
         return null;
       }
-      return { type: "HELLO_OK", connectionId, serverTime, heartbeatIntervalMs };
+      const session = readHelloOkSession(payload.session);
+      return session === null
+        ? { type: "HELLO_OK", connectionId, serverTime, heartbeatIntervalMs }
+        : { type: "HELLO_OK", connectionId, serverTime, heartbeatIntervalMs, session };
     }
     case "HEARTBEAT_ACK": {
       const { hbSeq, serverTime } = payload;

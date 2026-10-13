@@ -205,7 +205,7 @@ public class SessionInternalController {
         return items;
     }
 
-    /** 내부 LiveView 선 형식(internal-session-view.schema.json). U1이 채우지 않는 칸은 null · 빈 배열이다. */
+    /** 내부 LiveView 선 형식(internal-session-view.schema.json). U1이 채우지 않는 칸은 null · 빈 배열이고 gaps는 U3가 채운다. */
     static Map<String, Object> wire(SessionViewQuery.View view) {
         ActivitySessionRow session = view.session();
         Map<String, Object> out = new LinkedHashMap<>();
@@ -223,7 +223,15 @@ public class SessionInternalController {
         out.put("technicalPause", null);
         out.put("silenceWarning", null);
         out.put("practice", null);
-        out.put("gaps", List.of());
+        List<Map<String, Object>> gaps = new ArrayList<>();
+        for (kr.mujoong.realtime.log.SessionGapRepository.SessionGapRow gap : view.gaps()) {
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("from", gap.startedAt());
+            item.put("to", gap.endedAt());
+            item.put("kind", gap.kind());
+            gaps.add(item);
+        }
+        out.put("gaps", gaps);
         List<Map<String, Object>> items = new ArrayList<>();
         for (SessionViewQuery.Item item : view.items()) {
             Map<String, Object> bubble = new LinkedHashMap<>();

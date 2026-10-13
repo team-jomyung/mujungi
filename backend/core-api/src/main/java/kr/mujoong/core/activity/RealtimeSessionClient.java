@@ -90,7 +90,8 @@ public class RealtimeSessionClient {
     }
 
     /**
-     * 내부 진행 조회 응답(internal-session-view.schema.json). items는 Core가 해석하지 않고 그대로 중계한다.
+     * 내부 진행 조회 응답(internal-session-view.schema.json). items는 Core가 해석하지 않고 그대로 중계한다. gaps · technicalPause ·
+     * silenceWarning · practice는 U4a가 받아 형식을 걸러 보호자 LiveView에 싣는다(AC3.2.17 · {@link LiveExtras}).
      */
     public record InternalSessionView(
             UUID sessionId,
@@ -105,7 +106,30 @@ public class RealtimeSessionClient {
             Long statusVersion,
             Instant serverTime,
             List<Map<String, Object>> items,
-            Long nextSeq) {
+            Long nextSeq,
+            List<Map<String, Object>> gaps,
+            Map<String, Object> technicalPause,
+            Map<String, Object> silenceWarning,
+            Map<String, Object> practice) {
+
+        /** U1 모양(진행 보기 덧붙임 없음). */
+        public InternalSessionView(
+                UUID sessionId,
+                ActivityType activityType,
+                SessionStatus status,
+                EndReason endReason,
+                FailureCode failureCode,
+                Boolean confirmed,
+                Instant requestedAt,
+                Instant startedAt,
+                Instant endedAt,
+                Long statusVersion,
+                Instant serverTime,
+                List<Map<String, Object>> items,
+                Long nextSeq) {
+            this(sessionId, activityType, status, endReason, failureCode, confirmed, requestedAt, startedAt, endedAt,
+                    statusVersion, serverTime, items, nextSeq, null, null, null, null);
+        }
 
         /** 전사가 담길 수 있어 문자열 표현에 items를 내지 않는다. */
         @Override
@@ -234,6 +258,13 @@ public class RealtimeSessionClient {
     /** 보호자 끝내기(GUARDIAN_STOP, BR6.9 · J54). 제한 2초 · 재시도 없음 · 차단기 없음. */
     public EndResult end(UUID sessionId, UUID requestId) {
         return callEnd(sessionId, requestId, EndRequestReason.GUARDIAN_STOP);
+    }
+
+    /**
+     * 계정 삭제 접수의 진행 세션 끝내기(CONSENT_WITHDRAWN, 계약 5절 · AC1.6.3, U2 삭제 지휘가 부른다). 제한 · 재시도는 보호자 끝내기와 같다.
+     */
+    public EndResult endForConsentWithdrawal(UUID sessionId, UUID requestId) {
+        return callEnd(sessionId, requestId, EndRequestReason.CONSENT_WITHDRAWN);
     }
 
     /**

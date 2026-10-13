@@ -4,7 +4,8 @@
 // - COPY: 화면 설계 v1.5j 문구표 원문(키 C.화면.그림.순번). 그대로 옮기고 고치지 않는다.
 // - PROPOSED_COPY: 문구표에 없어 mockups.md 9절 · interaction-spec · 승인된 규칙(BR)이 제안한 문구(가정 C2, 임시).
 // - TEMP_COPY: 어느 설계 문서에도 글이 없어 3.5가 임시로 둔 문구(J118). code-summary에 목록을 남기고 문구표 개정 때 바꾼다.
-// 아이 기기 화면 글은 '연결을 확인하는 중'과 마이크 허용 안내뿐이다(BR9.4). 화면에 '(문구 미정)'을 보이지 않는다.
+// 아이 기기 화면 글은 '연결을 확인하는 중' · 마이크 허용 안내 · 재접속 보조 줄 '다시 연결하고 있어요'(U3)뿐이다(BR9.4). 화면에
+// '(문구 미정)'을 보이지 않는다.
 // {이름} 같은 자리는 copy 함수가 채운다(받침 조사는 particle.ts).
 
 import { attachParticle } from "./particle";
@@ -21,6 +22,7 @@ export const COPY = {
     t19Thinking: "생각 중", // C.D-19.31.4
     t19Speaking: "말하는 중", // C.D-19.31.5
     t19Closing: "마무리", // C.D-19.31.6
+    t19Disconnected: "연결 끊김", // C.D-19.31.7(U3: 한 번 연결됐던 기기의 재접속 주기, U3-J19)
     t19Off: "끄기", // C.D-19.31.8
     t19On: "켜기", // C.D-19.39.2 · C.D-19.57.4
     t19MicDeniedTitle: "마이크를 허용해 주세요", // C.D-19.57.2
@@ -98,6 +100,7 @@ export const COPY = {
 export const PROPOSED_COPY = {
   device: {
     d0Checking: "연결을 확인하는 중", // BR9.4 · interaction-spec 4절 D0 · 개발명세 D-00 오류
+    t19Reconnecting: "다시 연결하고 있어요", // mockups 9-31 · AC6.2.6(U3 재접속 주기의 보조 줄)
   },
   home: {
     disconnected: "끊김", // mockups S-04 대화 기기 · AC1.4.3
@@ -195,6 +198,9 @@ export const TEMP_COPY = {
     SERVICE_NOT_READY: "잠시 뒤 다시 시도해 주세요.",
     INTERNAL_ERROR: "잠시 문제가 생겼어요. 다시 시도해 주세요.",
     UPSTREAM_UNAVAILABLE: "지금은 연결할 수 없어요. 잠시 뒤 다시 시도해 주세요.",
+    GOOGLE_AUTH_FAILED: "로그인하지 못했어요. 다시 시도해 주세요.",
+    CHILD_NOT_REGISTERED: "아이 정보가 아직 없어요.",
+    CHILD_EXISTS: "이미 등록된 아이가 있어요.",
   },
   /** 응답 없음 · 시간 초과 · 모르는 code의 일반 문장(INTERNAL_ERROR 문장과 같다). */
   networkError: "잠시 문제가 생겼어요. 다시 시도해 주세요.",

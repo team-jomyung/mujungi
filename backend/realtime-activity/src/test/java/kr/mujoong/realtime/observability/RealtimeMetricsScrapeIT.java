@@ -101,6 +101,7 @@ class RealtimeMetricsScrapeIT {
                 .contains("mujoong_device_connections_open 0.0")
                 .contains("mujoong_device_connection_state{state=\"offline\"} 0.0")
                 .contains("mujoong_device_connection_state{state=\"connected\"} 0.0")
+                .contains("mujoong_device_connection_state{state=\"unstable\"} 0.0")
                 .contains("mujoong_device_connection_state{state=\"disconnected\"} 0.0")
                 .contains("mujoong_device_connection_state{state=\"unresponsive\"} 0.0")
                 .contains("mujoong_outbox_pending{direction=\"realtime_to_core\"}")

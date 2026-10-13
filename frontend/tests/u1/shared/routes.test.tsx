@@ -19,7 +19,8 @@ import { GET as workletRoute, dynamic as workletDynamic } from "@/app/device/pcm
 import DevicePage from "@/app/device/page";
 import ParentLayout from "@/app/parent/layout";
 import ParentHomePage from "@/app/parent/page";
-import ParentDeviceStubPage from "@/app/parent/device/page";
+import ParentDevicePage from "@/app/parent/device/page";
+import { Device05 } from "@/parent/screens/Device05";
 import ParentRegisterPage from "@/app/parent/device/register/page";
 import ParentFreePage from "@/app/parent/free/page";
 import ParentDevLoginPage from "@/app/parent/dev-login/page";
@@ -98,10 +99,13 @@ describe("라우트 처리기", () => {
 
 describe("스텁 라우트 → /parent(J57 · J119)", () => {
   it.each([
-    ["/parent/device", ParentDeviceStubPage],
     ["/parent/records", ParentRecordsStubPage],
   ])("%s는 04로 되돌린다", (_, page) => {
     expect(digestOf(page)).toBe("NEXT_REDIRECT;replace;/parent;307;");
+  });
+
+  it("/parent/device는 U2가 스텁 대신 05 화면을 그린다(J57 대체)", () => {
+    expect(elementOf(ParentDevicePage()).type).toBe(Device05);
   });
 });
 

@@ -1,0 +1,24 @@
+{
+  "$comment": "U2 커버리지 측정 범위(docs/units/u2/design.md 7절 · U1 J137과 같은 형식). MUJOONG_COVERAGE_SCOPE=u2일 때 Vitest가 files의 파일만 잰다. 항목은 저장소 루트 기준 경로이고 U2가 새로 만든 frontend/src/**/*.{ts,tsx} 전부다. U2가 고친 U1 파일(Home04 · Register05a · Free08 · Live12 · Done17 · navigation · apiClient · ConfirmDialog · device/page · parent/layout · codeToCopy · ko)은 U1 목록(u1.json)으로 잰다. CSS는 재지 않는다.",
+  "unit": "u2",
+  "files": [
+    "frontend/src/app/parent/child/page.tsx",
+    "frontend/src/app/parent/child/stop-expressions/page.tsx",
+    "frontend/src/app/parent/consent/page.tsx",
+    "frontend/src/app/parent/login/callback/page.tsx",
+    "frontend/src/app/parent/login/google/route.ts",
+    "frontend/src/app/parent/login/page.tsx",
+    "frontend/src/parent/api/account.ts",
+    "frontend/src/parent/components/BottomSheet.tsx",
+    "frontend/src/parent/components/SettingsSheet.tsx",
+    "frontend/src/parent/hooks/useBackGuard.ts",
+    "frontend/src/parent/oauth.ts",
+    "frontend/src/parent/screens/Child03.tsx",
+    "frontend/src/parent/screens/Consent02.tsx",
+    "frontend/src/parent/screens/Device05.tsx",
+    "frontend/src/parent/screens/Login01.tsx",
+    "frontend/src/parent/screens/LoginCallback.tsx",
+    "frontend/src/parent/screens/StopExpressions01.tsx",
+    "frontend/src/shared/copy/account.ts"
+  ]
+}

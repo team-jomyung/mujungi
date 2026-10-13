@@ -2,13 +2,14 @@
 
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
+import { startFailureReason } from "../activity/freeFailure";
 import { ApiError } from "../api/apiClient";
 import { startFreeTalk, useApiClient } from "../api/queries";
 import type { FreeTalkContext, SituationType, SourceType } from "../api/types";
 import { BottomTabBar, type TabKey } from "../components/BottomTabBar";
 import { ChipGroup, type ChipOption } from "../components/ChipGroup";
 import { TextArea200 } from "../components/TextArea200";
-import { PARENT_ROUTES, routeForTab } from "../navigation";
+import { PARENT_ROUTES, goToLogin, routeForTab } from "../navigation";
 import { COPY, PROPOSED_COPY, TEMP_COPY } from "@/shared/copy/ko";
 import { messageForErrorCode } from "@/shared/errors/codeToCopy";
 import { useToast } from "@/shared/toast/ToastProvider";
@@ -58,9 +59,11 @@ interface PendingStart {
 export interface Free08Props {
   /** 12에서 FAILED로 돌아왔는지(사유 카드 한 종류, J120). */
   readonly returnedFailed: boolean;
+  /** 돌아온 FAILED의 실패 코드(U4a-J16, 없으면 DEVICE_NO_ACK 문구). */
+  readonly failureCode?: string | null;
 }
 
-export function Free08({ returnedFailed }: Free08Props) {
+export function Free08({ returnedFailed, failureCode = null }: Free08Props) {
   const router = useRouter();
   const toast = useToast();
   const api = useApiClient();
@@ -69,7 +72,7 @@ export function Free08({ returnedFailed }: Free08Props) {
   const [source, setSource] = useState<SourceType | null>(null);
   const [question, setQuestion] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [reason, setReason] = useState<string | null>(returnedFailed ? PROPOSED_COPY.free.rejectDeviceNoAck : null);
+  const [reason, setReason] = useState<string | null>(returnedFailed ? startFailureReason(failureCode) : null);
   const pendingRef = useRef<PendingStart | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
   // 요청 중 표시. submitting 상태는 다시 그린 뒤에야 바뀌므로 두 번째 요청은 이 값으로 막는다(BR6.4 · J362).
@@ -121,7 +124,7 @@ export function Free08({ returnedFailed }: Free08Props) {
       }
       if (error.isUnauthenticated) {
         pendingRef.current = null;
-        router.replace(PARENT_ROUTES.devLogin);
+        goToLogin(router, toast);
         return;
       }
       const sameKeyRetry = error.isDeliveryUnknown || (error.status === 403 && error.code === "CSRF_TOKEN_INVALID");

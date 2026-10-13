@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mujoong.invalid/contracts/schemas/auth-google-request.schema.json",
+  "title": "구글 로그인 요청",
+  "description": "POST /api/auth/google 본문(계약 3절 · J21 · U2). code는 구글 인가 코드, redirectUri는 인가 요청에 쓴 주소이며 서버 설정(GOOGLE_OAUTH_REDIRECT_URI)과 같아야 한다. 서버가 code를 교환하고 브라우저는 토큰을 보지 않는다. 형식이 틀리거나 빠져도 400이 아니라 401 GOOGLE_AUTH_FAILED다(편차 (U2-e)). 서버는 모르는 필드를 무시한다.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["code", "redirectUri"],
+  "properties": {
+    "code": { "type": "string", "minLength": 1, "maxLength": 2048 },
+    "redirectUri": { "type": "string", "minLength": 1, "maxLength": 2048 }
+  }
+}

@@ -9,6 +9,7 @@ import kr.mujoong.contract.event.EventType;
 import kr.mujoong.contract.time.MujoongClock;
 import kr.mujoong.core.common.db.DbRetry;
 import kr.mujoong.core.common.deletion.DeletionParticipant;
+import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -29,6 +30,7 @@ import org.springframework.transaction.support.TransactionTemplate;
  * 삭제 지휘가 정한다(BR5.14 (d)).
  */
 @Component
+@Order(DeletionParticipant.ORDER_MESSAGING)
 public class CoreMessagingDeletionParticipant implements DeletionParticipant {
 
     /** 반환 지도의 키: Outbox에서 지운 행 수. */

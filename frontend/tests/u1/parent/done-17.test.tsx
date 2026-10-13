@@ -94,8 +94,9 @@ describe("17 — 종료 사유 3종(AC3.3.6 · AC3.3.7 · C.S-17.58 · C.S-17.71
     expect(screen.getByText("기기 연결이 끊겨 다시 잇지 못했어요. 끊기기 전까지의 기록은 남아요.")).toBeInTheDocument();
   });
 
-  it("ENDED인데 보호자 끝내기가 아니면 사유 카드 없이 제목만, DECLINED도 제목만 보인다", async () => {
-    const first = renderDone(() => jsonResponse(200, liveViewBody("ENDED", { endReason: "SILENCE", endedAt: ENDED_AT })));
+  // U4a(AC3.6.9): SILENCE · CHILD_STOP은 사유 카드가 생겼다(tests/u4a/parent/done-17-u4a.test.tsx). 사유가 없는 ENDED로 U1 단언을 둔다
+  it("ENDED인데 사유가 없으면 사유 카드 없이 제목만, DECLINED도 제목만 보인다", async () => {
+    const first = renderDone(() => jsonResponse(200, liveViewBody("ENDED", { endReason: null, endedAt: ENDED_AT })));
     expect(await screen.findByText("오늘 자유대화가 끝났어요")).toBeInTheDocument();
     expect(screen.queryByTestId("done-reason")).toBeNull();
     first.view.unmount();
@@ -148,10 +149,10 @@ describe("17 — 실패 · 이동", () => {
     expect(await screen.findByText("보호자가 끝냈어요")).toBeInTheDocument();
   });
 
-  it("401은 시험 로그인, 404는 '찾을 수 없어요' 뒤 홈이다", async () => {
+  it("401은 안내 토스트 뒤 01(U2 · AC1.1.9), 404는 '찾을 수 없어요' 뒤 홈이다", async () => {
     const first = renderDone(() => errorResponse(401, "UNAUTHENTICATED"));
-    await waitFor(() => expect(router.replace).toHaveBeenCalledWith("/parent/dev-login"));
-    expect(screen.queryByTestId("toast")).toBeNull();
+    await waitFor(() => expect(router.replace).toHaveBeenCalledWith("/parent/login"));
+    expect(screen.getByTestId("toast")).toHaveTextContent("로그인이 필요해요.");
     first.view.unmount();
     resetRouter();
     renderDone(() => errorResponse(404, "NOT_FOUND"));

@@ -67,10 +67,22 @@ public class RealtimeMetrics {
     public static final String TIMEOUT_FIRED = "mujoong.timeout.fired";
     /** {@code mujoong_recorder_rejected_total}. */
     public static final String RECORDER_REJECTED = "mujoong.recorder.rejected";
+    /** {@code mujoong_device_state_total{field,value}}: 기기가 알린 DEVICE_STATE 필드 변화 수(U3-J9). */
+    public static final String DEVICE_STATE = "mujoong.device.state";
+    /** {@code mujoong_recording_dropped_total}: 원음 기록기가 대기열 넘침 · 세션 상한으로 버린 조각 수(U3-J15). */
+    public static final String RECORDING_DROPPED = "mujoong.recording.dropped";
 
-    /** {@code mujoong_device_connection_state}의 state 값(U1이 쓰는 4종. UNSTABLE은 U3가 값을 더한다). */
+    /** {@code mujoong_device_connection_state}의 state 값(U1 4종 + U3가 더한 UNSTABLE, BR4.8 ①). */
     public static final List<ConnectionState> CONNECTION_STATES = List.of(ConnectionState.OFFLINE,
-            ConnectionState.CONNECTED, ConnectionState.DISCONNECTED, ConnectionState.UNRESPONSIVE);
+            ConnectionState.CONNECTED, ConnectionState.UNSTABLE, ConnectionState.DISCONNECTED,
+            ConnectionState.UNRESPONSIVE);
+
+    /** {@code mujoong_device_state_total}의 field → value 집합(계약 DeviceState 열거값, U3). 모르는 값은 세지 않는다. */
+    static final Map<String, List<String>> DEVICE_STATE_VALUES = Map.of(
+            "mic", List.of("ok", "lost"),
+            "player", List.of("ok", "error"),
+            "visibility", List.of("visible", "hidden"),
+            "wake_lock", List.of("held", "released"));
 
     /** Realtime이 이기는 시한 종류({@code mujoong_timeout_fired_total{type}}, 나머지 둘은 Core 몫). */
     static final List<String> REALTIME_TIMEOUT_TYPES = List.of("device_ack", "closing_confirm", "disconnect");
@@ -137,9 +149,12 @@ public class RealtimeMetrics {
         registry.counter(SESSION_ACTIVATED);
         registry.counter(DB_POOL_WAIT_EXCEEDED);
         registry.counter(RECORDER_REJECTED);
+        registry.counter(RECORDING_DROPPED);
         for (String type : REALTIME_TIMEOUT_TYPES) {
             counter(TIMEOUT_FIRED, "type", type);
         }
+        DEVICE_STATE_VALUES.forEach((field, values) -> values.forEach(value -> counter(DEVICE_STATE, "field", field,
+                "value", value)));
         timer(SESSION_START_TO_ACTIVE);
         timer(RELAY_IN);
         timer(RELAY_OUT);
@@ -211,6 +226,24 @@ public class RealtimeMetrics {
     /** {@code mujoong_recorder_rejected_total}(PD-5): 기록기 상한에서 받지 못한 새 칸. */
     public void recorderRejected() {
         registry.counter(RECORDER_REJECTED).increment();
+    }
+
+    /**
+     * {@code mujoong_device_state_total{field,value}}(U3-J9): DEVICE_STATE가 알린 필드 값 하나. 미리 등록한 열거값 밖(모르는 값)은 세지
+     * 않는다(라벨 폭주 방지, NFR9.8).
+     */
+    public void deviceState(String field, String value) {
+        String fieldLabel = label(field);
+        String valueLabel = label(value);
+        List<String> known = DEVICE_STATE_VALUES.get(fieldLabel);
+        if (known != null && known.contains(valueLabel)) {
+            counter(DEVICE_STATE, "field", fieldLabel, "value", valueLabel).increment();
+        }
+    }
+
+    /** {@code mujoong_recording_dropped_total}(U3-J15): 원음 기록기가 버린 조각 하나. */
+    public void recordingDropped() {
+        registry.counter(RECORDING_DROPPED).increment();
     }
 
     /** {@code mujoong_db_pool_wait_exceeded_total}: 풀 연결 획득이 {@code mujoong.metrics.db-pool-wait-warn}을 넘었다(NFR7.6). */

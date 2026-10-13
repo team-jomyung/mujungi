@@ -97,7 +97,10 @@ public enum AttrKey {
     SESSIONS_ACTIVE("sessionsActive", ValueType.NUMBER, null),
     BREAKER_OPEN_SEC("breakerOpenSec", ValueType.NUMBER, null),
     // SECURITY_* (OD-13)
-    KIND("kind", ValueType.ENUM, Set.of("GUARDIAN_SESSION", "DEVICE_TOKEN", "REGISTER_CODE")),
+    // GOOGLE_*: U2 구글 로그인 실패 까닭(편차 (U2-j)). 응답은 모두 401 GOOGLE_AUTH_FAILED이고 로그만 까닭을 가른다
+    KIND("kind", ValueType.ENUM, Set.of("GUARDIAN_SESSION", "DEVICE_TOKEN", "REGISTER_CODE",
+            "GOOGLE_NOT_CONFIGURED", "GOOGLE_BAD_REQUEST", "GOOGLE_REDIRECT_MISMATCH", "GOOGLE_EXCHANGE_FAILED",
+            "GOOGLE_KEYS_UNAVAILABLE", "GOOGLE_TOKEN_INVALID")),
     LIMITER("limiter", ValueType.ENUM, Set.of("BOOTSTRAP_IP", "REGISTER_FAILURE")),
     CHANNEL("channel", ValueType.ENUM, Set.of("WSS", "REST")),
     PROFILE("profile", ValueType.ENUM, Set.of("DEV", "DEMO", "PROD")),

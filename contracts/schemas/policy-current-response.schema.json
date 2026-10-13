@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mujoong.invalid/contracts/schemas/policy-current-response.schema.json",
+  "title": "현재 약관(02 · 02-1)",
+  "description": "GET /api/policies/current 200(계약 3절 · FR1.2 · FR1.3 · AC1.2.2 · AC1.2.9 · U2). policyVersion은 현재 정책 버전(승인 문구 CONSENT_POLICY 최신 승인 버전의 글)이고 items는 4항목 약관 본문이다. 항목마다 소제목이 달라 {heading, body} 목록으로 준다(편차 (U2-c)). 모든 항목의 sections에 '생성형 AI 안내' 절이 '동의하지 않으면' 절 바로 앞에 있다(mockups F2). 본문의 정본은 승인 문구 POLICY_TERMS_<type>다.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["policyVersion", "items"],
+  "properties": {
+    "policyVersion": { "type": "string", "minLength": 1, "maxLength": 50 },
+    "items": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "items": { "$ref": "#/$defs/PolicyItem" }
+    }
+  },
+  "$defs": {
+    "PolicyItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "title", "sections"],
+      "properties": {
+        "type": { "$ref": "me-response.schema.json#/$defs/ConsentType" },
+        "title": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "sections": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["heading", "body"],
+            "properties": {
+              "heading": { "type": "string", "minLength": 1, "maxLength": 100 },
+              "body": { "type": "string", "minLength": 1, "maxLength": 1000 }
+            }
+          }
+        }
+      }
+    }
+  }
+}

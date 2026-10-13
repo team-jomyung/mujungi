@@ -1,17 +1,21 @@
 package kr.mujoong.realtime.gateway;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.Optional;
 import kr.mujoong.contract.log.EventLog;
+import kr.mujoong.contract.status.ConnectionState;
 import kr.mujoong.contract.time.MujoongClock;
 import kr.mujoong.contract.ws.WsEnvelope;
 import kr.mujoong.contract.ws.message.Heartbeat;
 import kr.mujoong.contract.ws.message.HeartbeatAck;
+import kr.mujoong.realtime.config.RealtimeProperties;
 import kr.mujoong.realtime.log.AsyncRecorder;
 import kr.mujoong.realtime.log.LatencyRecorder;
 import kr.mujoong.realtime.observability.EventLogger;
 import kr.mujoong.realtime.runtime.TaskLauncher;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 /**
@@ -23,6 +27,10 @@ import org.springframework.stereotype.Component;
  * UNRESPONSIVE · DISCONNECTED면 같은 connection_id의 HEARTBEAT로 CONNECTED 복귀를 보조 작업으로 쓴다(J55). 복귀 UPDATE에는 이 HEARTBEAT의
  * 수신 시각을 넘겨 last_seen_at도 함께 올린다(3.6 수정 J390 — 기록기 배치가 쓰기 전에 끊김 점검이 돌아도 되돌리지 않게). 복귀 UPDATE가 0행이면
  * 사본이 원장보다 앞선 것이라 원장을 다시 읽어 사본을 맞춘다(J391). 수신 스레드에서 DB를 기다리지 않는다(SD-22).
+ *
+ * <p>U3(BR4.8 ① · U3-R1): ⑤ 사본이 CONNECTED인데 기기가 보낸 직전 왕복(lastRttMs)이 {@code mujoong.timing.device.unstable-rtt}를 넘으면
+ * UNSTABLE 기록을, 사본이 UNSTABLE인데 왕복이 정상이면 CONNECTED 복귀(창 안 끊김이 기준 아래일 때만)를 보조 작업으로 띄운다. 왕복 값이 없는
+ * HEARTBEAT는 불안정 판정에 쓰지 않는다.
  */
 @Component
 public class HeartbeatHandler {
@@ -32,14 +40,25 @@ public class HeartbeatHandler {
     private final TaskLauncher launcher;
     private final EventLogger events;
     private final MujoongClock clock;
+    private final Duration unstableRtt;
 
+    @Autowired
     public HeartbeatHandler(AsyncRecorder recorder, ConnectionStateWriter writer, TaskLauncher launcher,
-            EventLogger events, MujoongClock clock) {
+            EventLogger events, MujoongClock clock, RealtimeProperties properties) {
+        this(recorder, writer, launcher, events, clock, properties.timing().device().unstableRtt());
+    }
+
+    /**
+     * @param unstableRtt 불안정 판정 왕복 기준({@code mujoong.timing.device.unstable-rtt})
+     */
+    public HeartbeatHandler(AsyncRecorder recorder, ConnectionStateWriter writer, TaskLauncher launcher,
+            EventLogger events, MujoongClock clock, Duration unstableRtt) {
         this.recorder = Objects.requireNonNull(recorder, "recorder");
         this.writer = Objects.requireNonNull(writer, "writer");
         this.launcher = Objects.requireNonNull(launcher, "launcher");
         this.events = Objects.requireNonNull(events, "events");
         this.clock = Objects.requireNonNull(clock, "clock");
+        this.unstableRtt = Objects.requireNonNull(unstableRtt, "unstableRtt");
     }
 
     /**
@@ -57,11 +76,28 @@ public class HeartbeatHandler {
         connection.principal().ifPresent(principal -> {
             recorder.deviceSeen(new DeviceConnectionRepository.LastSeen(principal.deviceId(),
                     connection.connectionId(), receivedAt, rtt == null ? null : (int) Math.min(rtt, Integer.MAX_VALUE)));
-            if (DeviceStatusPolicy.heartbeatRecovers(connection.knownState())) {
+            ConnectionState known = connection.knownState();
+            if (DeviceStatusPolicy.heartbeatRecovers(known)) {
                 launcher.launch("device-recover-" + connection.connectionId(),
                         () -> recover(connection, principal, receivedAt));
+            } else if (known == ConnectionState.CONNECTED && DeviceStatusPolicy.isUnstableRtt(rtt, unstableRtt)) {
+                launcher.launch("device-unstable-" + connection.connectionId(),
+                        () -> quietly(() -> writer.markUnstable(principal.deviceId(), connection.connectionId(),
+                                connection.traceId())));
+            } else if (known == ConnectionState.UNSTABLE && rtt != null && !DeviceStatusPolicy.isUnstableRtt(rtt, unstableRtt)) {
+                launcher.launch("device-stable-" + connection.connectionId(),
+                        () -> quietly(() -> writer.markStableIfCalm(principal.deviceId(), connection.connectionId(),
+                                connection.traceId())));
             }
         });
+    }
+
+    private void quietly(Runnable work) {
+        try {
+            work.run();
+        } catch (RuntimeException e) {
+            events.appError(EventLog.Component.DEVICE_GATEWAY, e);
+        }
     }
 
     private void recover(DeviceConnection connection, DeviceConnection.Principal principal, Instant receivedAt) {

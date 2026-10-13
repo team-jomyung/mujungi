@@ -14,7 +14,7 @@
 | US1.4 | 홈 | Must | U2 | u2-guardian-account | U1(대화 기기 구역 최소) · U3(기기 5단계 값) · U4(지금 활동 구역 · 진행 중 탭 → 12) |
 | US1.5 | 설정 시트 · 로그아웃 | Must | U2 | u2-guardian-account | — |
 | US1.6 | 계정 삭제 | Should | U2 | u2-guardian-account | U3 · U4 · U5 · U6 · U7(각자 데이터 삭제 참가자), U4(진행 세션 CONSENT_WITHDRAWN 종료) |
-| US1.7 | 알림으로 돌아오기 | Should | U7 | u7-web-push | U4(재조회 → 12 · 17 · 04 로직) |
+| US1.7 | 알림으로 돌아오기 | Must | U7 | u7-web-push | U4(재조회 → 12 · 17 · 04 로직) |
 | US2.1 | 우리 집 기기 상태 | Must | U2 | u2-guardian-account | U1(상태 사본 · 판정 카드 합산) · U3(연결 5단계 판정 · 보고) |
 | US2.2 | 기기 등록 | Must | U1 | u1-walking-skeleton | — |
 | US2.3 | 종료 표현 설정 | Should | U2 | u2-guardian-account | U3(종료 의도 판단에 보조 정보로 사용) · U4(세션 스냅숏) |
@@ -28,10 +28,10 @@
 | US4.2 | 연습 세션 진행 | Must | U5 | u5-practice | U4(세션 상태 · 12 틀) · U3(역할 · Cue 지시 · 출력 규칙) |
 | US4.3 | 연습 목표 후보 담기 | Must | U6 | u6-results-report | U5(담기 · 취소 API · 후보 저장) |
 | US5.1 | 기록 달력 | Must | U6 | u6-results-report | U4(활동 기록 조회 API) |
-| US5.2 | 활동 기록 상세 | Must | U6 | u6-results-report | U4(대화 기록 칸 데이터) · U5(생활 팁 목록 · 고른 목표 이름) |
+| US5.2 | 활동 기록 상세 | Must | U6 | u6-results-report | U4(대화 기록 칸 데이터 · 끝난 이유) · U5(생활 팁 목록 · 목표 이름 · 상황 대본 · 연습 기록) |
 | US5.3 | 리포트 범위 고르기 | Must | U6 | u6-results-report | U4(기간 안 활동) |
-| US5.4 | PDF 저장 전 확인 · 저장 · 공유 | Must | U6 | u6-results-report | — |
-| US5.5 | 리포트 PDF 내용 | Must | U6 | u6-results-report | U4(대화 원문) · U2(아이 정보) |
+| US5.4 | 리포트 확인 · PDF 저장 · 공유 | Must | U6 | u6-results-report | — |
+| US5.5 | 리포트 10개 항목과 PDF | Must | U6 | u6-results-report | U4(전사 · 종료 사유) · U5(목표 정의) · U2(아이 이름 · 나이) |
 | US6.1 | 처음 켜기 · 코드 | Must | U1 | u1-walking-skeleton | — |
 | US6.2 | 상태 화면 · 켜기 끄기 | Must | U3 | u3-voice-conversation | U1(T19 최소) |
 | US6.3 | 시작 안내와 참여 확인 | Must | U4 | u4-activity-session | U3(참여 판단 · 재안내 문구 재생) · U2(승인 문구) |
@@ -48,11 +48,11 @@
 | U3 u3-voice-conversation | US6.2 → US6.4 | 2 |
 | U4 u4-activity-session | US3.1 → US6.3 → US3.2 → US3.3 → US3.6 → US3.5 → US3.4 → US6.6 | 8 |
 | U5 u5-practice | US4.1 → US4.2 → US6.5 | 3 |
-| U6 u6-results-report | US5.1 → US5.2 → US4.3 → US5.3 → US5.4 → US5.5 | 6 |
+| U6 u6-results-report | US5.1 → US5.2 → US4.3 → US5.3 → US5.5 → US5.4 | 6 |
 | U7 u7-web-push | US1.7 | 1 |
 | 합계 | | 30 |
 
-유닛 안 순서의 까닭: U2는 처음 한 번 흐름(01 → 02 → 03 → 04) 뒤에 기기 화면 · 설정 · Should 순. U4는 시작 → 참여 → 진행 → 끝 순으로 Must 다음에 장애 경로(Should). U6은 기록(26 · 27)이 있어야 담기(27 → 18)와 리포트(28 → 30 → PDF)가 선다.
+유닛 안 순서의 까닭: U2는 처음 한 번 흐름(01 → 02 → 03 → 04) 뒤에 기기 화면 · 설정 · Should 순. U4는 시작 → 참여 → 진행 → 끝 순으로 Must 다음에 장애 경로(Should). U6은 기록(26 · 27)이 있어야 담기(27 → 18)와 리포트(28 → 10개 항목 → 30 → PDF)가 선다.
 
 ## 여러 유닛에 걸친 스토리 (교차 관심사)
 
@@ -68,4 +68,4 @@
 
 - 스토리 30개 모두 주 유닛이 하나씩 있다(위 표).
 - 유닛 7개 모두 주 스토리가 하나 이상 있다(U3 · U7 각 1~2개도 독립 시험 가능한 화면 · 음성 흐름을 갖는다).
-- Must 스토리 24개(Should 6개: US1.6 · US1.7 · US2.3 · US3.4 · US3.5 · US6.6) 중 Should 유닛(U7)에 들어간 것은 없다. U7을 미뤄도 시연 네 경로는 유지된다.
+- Must 스토리 25개, Should 5개(US1.6 · US2.3 · US3.4 · US3.5 · US6.6). 웹 푸시(US1.7, U7)는 시연 네 경로 밖이지만 Must다.

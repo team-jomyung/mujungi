@@ -43,7 +43,8 @@ public class Consent {
     @Column(name = "actor_guardian_id", nullable = false, updatable = false)
     private UUID actorGuardianId;
 
-    @Column(name = "child_id", nullable = false, updatable = false)
+    /** 아이 등록 전 동의(02 → 03)는 비어 있다(U2 V2 · U2-J10). */
+    @Column(name = "child_id", updatable = false)
     private UUID childId;
 
     @Column(name = "consent_type", nullable = false, length = 50)
@@ -67,8 +68,29 @@ public class Consent {
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
+    /** 동의 당시 약관 본문 승인 버전(U2 V2, U1 시드 행은 비어 있다). */
+    @Column(name = "terms_version_id", updatable = false)
+    private UUID termsVersionId;
+
     /** JPA 전용. */
     protected Consent() {
+    }
+
+    /**
+     * 02 「동의하고 계속」이 쓰는 동의 행(U2 · R6). 아이 등록 전이면 {@code childId}가 null이다.
+     *
+     * @param termsVersionId 그 항목 약관 본문의 승인 버전 id(없으면 null)
+     */
+    public Consent(
+            UUID id,
+            UUID actorGuardianId,
+            UUID childId,
+            String consentType,
+            int consentVersion,
+            String policyVersion,
+            UUID termsVersionId,
+            Instant now) {
+        this(id, actorGuardianId, childId, consentType, STATUS_GIVEN, consentVersion, policyVersion, termsVersionId, now);
     }
 
     /**
@@ -87,9 +109,24 @@ public class Consent {
             int consentVersion,
             String policyVersion,
             Instant now) {
+        this(id, actorGuardianId, Objects.requireNonNull(childId, "childId"), consentType, consentStatus, consentVersion,
+                policyVersion, null, now);
+    }
+
+    private Consent(
+            UUID id,
+            UUID actorGuardianId,
+            UUID childId,
+            String consentType,
+            String consentStatus,
+            int consentVersion,
+            String policyVersion,
+            UUID termsVersionId,
+            Instant now) {
         this.id = Objects.requireNonNull(id, "id");
         this.actorGuardianId = Objects.requireNonNull(actorGuardianId, "actorGuardianId");
-        this.childId = Objects.requireNonNull(childId, "childId");
+        this.childId = childId;
+        this.termsVersionId = termsVersionId;
         // Set.of(...).contains(null)은 NPE를 던지므로 null을 먼저 거른다
         if (consentType == null || !TYPES.contains(consentType)) {
             throw new IllegalArgumentException("알 수 없는 동의 항목: " + consentType);
@@ -143,6 +180,10 @@ public class Consent {
 
     public Instant getCreatedAt() {
         return createdAt;
+    }
+
+    public UUID getTermsVersionId() {
+        return termsVersionId;
     }
 
     /** {@code at} 시각에 효력이 있는 GIVEN 동의인가(효력 끝은 배타). */

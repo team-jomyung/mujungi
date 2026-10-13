@@ -43,12 +43,13 @@ class SchemaVersionCheckTest {
 
     @Test
     void appliedVersionAtOrAboveTheBundledMigrationPasses() {
+        // 앱이 들고 온 최고 버전: V1(U1) · V2(U2) · V3(U4a) · V4(U5a)
         assertThat(SchemaVersionCheck.expectedVersion()).isEqualTo("4");
-        history(List.of("1", "4"));
+        history(List.of("0", "1", "2", "3", "4"));
 
         assertThat(check.verify()).isEqualTo("4");
 
-        history(List.of("1", "4", "5"));
+        history(List.of("1", "2", "3", "4", "5"));
         assertThat(check.verify()).isEqualTo("5");
         assertThat(stderr.toString(StandardCharsets.UTF_8)).isEmpty();
     }
@@ -95,17 +96,17 @@ class SchemaVersionCheckTest {
         when(jdbc.queryForList(anyString(), eq(String.class))).thenAnswer(call -> {
             String sql = call.getArgument(0);
             assertThat(sql).contains(SchemaVersionCheck.HISTORY_TABLE).contains("success").contains("version is not null");
-            return List.of("1", "4");
+            return List.of("1", "2", "3", "4");
         });
 
         assertThat(check.verify()).isEqualTo("4");
     }
 
     @Test
-    void formerU1VersionCannotStartTheU5aApplication() {
-        history(List.of("1"));
+    void historyBeforeTheU5aMigrationCannotStartTheApplication() {
+        history(List.of("1", "2", "3"));
         assertThatThrownBy(check::verify).isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("1 < 기대 4");
+                .hasMessageContaining("3 < 기대 4");
         assertThat(stderr.toString(StandardCharsets.UTF_8)).contains("SchemaVersionBehind");
     }
 

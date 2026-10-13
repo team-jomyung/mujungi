@@ -35,12 +35,14 @@ public class TranscriptRepository {
     private static final String COLUMNS = "id, session_id, sequence_no, speaker, text, assembly_status, review_needed,"
             + " approved_for_display, started_at, ended_at, created_at, deleted_at";
 
+    // U3: review_needed(불확실 표시, U3-R10)도 함께 쓴다 — 확정 전 행을 덮을 때만 바뀌는 것은 다른 열과 같다
     private static final String UPSERT = "insert into realtime.realtime_transcript as t (id, session_id, sequence_no,"
-            + " speaker, text, assembly_status, approved_for_display, started_at, ended_at, created_at)"
-            + " values (:id, :sessionId, :sequenceNo, :speaker, :text, :assemblyStatus, :approved, :startedAt, :endedAt,"
-            + " :now)"
+            + " speaker, text, assembly_status, review_needed, approved_for_display, started_at, ended_at, created_at)"
+            + " values (:id, :sessionId, :sequenceNo, :speaker, :text, :assemblyStatus, :reviewNeeded, :approved,"
+            + " :startedAt, :endedAt, :now)"
             + " on conflict (session_id, sequence_no) do update set text = excluded.text,"
-            + " assembly_status = excluded.assembly_status, approved_for_display = excluded.approved_for_display,"
+            + " assembly_status = excluded.assembly_status, review_needed = excluded.review_needed,"
+            + " approved_for_display = excluded.approved_for_display,"
             + " started_at = coalesce(t.started_at, excluded.started_at), ended_at = coalesce(excluded.ended_at, t.ended_at)"
             // 확정 전 행만 덮는다. 같은 번호에 다른 화자가 오면(조립 결함) 덮지 않는다
             + " where t.assembly_status = 'PARTIAL' and t.speaker = excluded.speaker";
@@ -59,6 +61,12 @@ public class TranscriptRepository {
 
     private static final String SELECT_MAX_SEQUENCE = "select coalesce(max(sequence_no), 0)"
             + " from realtime.realtime_transcript where session_id = :sessionId";
+
+    // U3-J16: 계정 삭제 — 원문을 비우고 deleted_at을 쓴다(행 번호는 남긴다). 다시 불러도 같다
+    private static final String ERASE_BY_GUARDIAN = "update realtime.realtime_transcript t"
+            + " set text = '', deleted_at = coalesce(t.deleted_at, :now)"
+            + " from realtime.realtime_activity_session s"
+            + " where t.session_id = s.id and s.guardian_id = :guardianId and (t.deleted_at is null or t.text <> '')";
 
     private static final Comparator<TranscriptEntry> FLUSH_ORDER =
             Comparator.comparing(TranscriptEntry::sessionId).thenComparingInt(TranscriptEntry::sequenceNo);
@@ -86,6 +94,13 @@ public class TranscriptRepository {
                 .map(entry -> params(entry, now))
                 .toArray(MapSqlParameterSource[]::new);
         jdbc.batchUpdate(UPSERT, batch);
+    }
+
+    /** 보호자 세션들의 전사 원문을 비우고 삭제 시각을 쓴다(계정 삭제 참가자, U3-J16). 바뀐 행 수. */
+    public int eraseByGuardian(UUID guardianId, Instant now) {
+        MapSqlParameterSource params = ClockParams.at(Objects.requireNonNull(now, "now"));
+        ClockParams.uuid(params, "guardianId", Objects.requireNonNull(guardianId, "guardianId"));
+        return jdbc.update(ERASE_BY_GUARDIAN, params);
     }
 
     /** 세션의 행 전부(지워지지 않은 것, 번호 순). */
@@ -119,6 +134,7 @@ public class TranscriptRepository {
         ClockParams.text(params, "text", entry.text());
         ClockParams.text(params, "assemblyStatus", entry.assemblyStatus().name());
         params.addValue("approved", entry.approvedForDisplay());
+        params.addValue("reviewNeeded", entry.reviewNeeded());
         ClockParams.instant(params, "startedAt", entry.startedAt());
         ClockParams.instant(params, "endedAt", entry.endedAt());
         return params;

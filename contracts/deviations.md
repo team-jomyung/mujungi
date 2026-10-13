@@ -6,6 +6,7 @@
 > 모든 항목은 **더하기만 안전**(계약 10절 · J25)이다: 필드 삭제 · 이름 변경 · 필수화가 없고, 받는 쪽은 모르는 필드 · enum · code를
 > 무시하거나 '알 수 없음'으로 처리한다. `ContractFilesTest`가 (a) ~ (y) 각각이 이 표에 한 행, 다른 계약 파일에 한 번 이상 표시돼 있음을 단언한다.
 > (z)는 3.6 수정 라운드의 독립 리뷰 F1(J285 ~ J288)에서 왔고 `ContractFilesTest`가 같은 방식으로 단언한다.
+> (aa) ~ (ac)는 U3 음성 대화(`docs/units/u3/design.md` 4절 · U3-J21)에서 왔다. 한 글자 기호가 (z)에서 다 차서 두 글자 기호를 쓰고 `ContractFilesTest`가 같은 방식으로 단언한다.
 
 ## 호환 분류
 
@@ -46,7 +47,40 @@
 | (x) | 계약 8절 C13 `owner_role: core_app`은 '쓰는 역할'로 읽고 표 · 스키마 소유는 `mujoong_owner`(앱 역할은 DDL 없음) | SD-13 · J112 | U1 실행 골격(DB 초기화) | 모든 유닛 | 해석 명시 | README.md · infra/postgres/init/01-roles.sql |
 | (y) | Nginx가 만든 502 · 504 JSON 봉투의 code `UPSTREAM_UNAVAILABLE`(상태 코드는 유지, 앱이 낸 503은 통과) | R4-17 · CD-2 · J112 | Nginx | ParentWeb · DeviceWeb · 외부 프로브 | 새 응답 | errors.md |
 | (z) | 공급자 `session.output.done`(responseId)을 그 응답의 전사 완료 신호로 쓴다 — 출력 게이트는 한 응답의 첫 조각부터 이 신호까지를 모두 담은 구간만 전사-음성 대응 근거로 보고, 신호가 없는 구간 · 앞부분이 다른 구간으로 떨어져 나간 구간 · 신호 뒤 조각이 붙은 구간 · 정규화 뒤 빈 전사를 GATE_EMPTY로 폐기한다(fail-closed, 실공급자 어댑터는 완결된 응답에만 이 신호를 보낸다). 한 구간에는 한 응답의 조각만 담고 다른 응답의 조각이 오면 열린 구간을 그 자리에서 확정해 게이트에 넣는다(BR7.3 확정 조건에 응답 경계를 더함). `responseId` 없는 출력 조각은 버린다 | 3.6 리뷰 F1 · SD-17 3단계 · BR7.4 (가) · J285 ~ J288 | 공급자(가짜 공급자 · 11/2 실공급자 어댑터, V-2) | Realtime OutputGate | 규칙 구체화 | ai-io.md |
+| (aa) | 공급자 선 형식(ai-io.md 3절)에 서버 → 공급자 type 둘 — `session.response.cancel {responseId?}`(끼어들기 · 아이 종료 의도 때 만들던 · 재생하던 응답 취소)와 `session.instructions.correct {text}`(게이트 폐기 뒤 응답당 한 번 지시 교정, 서버 고정 문장) — 과 공급자 → 서버 `session.input_transcript.done`의 선택 필드 `confidence`(0 ~ 1, 불확실 표시 근거)를 더함. 모르는 type · 필드는 무시된다 | U3 design 4절 · U3-R5 · R7 · R10 · U3-J11 · J12 · J17 | Realtime VoiceRelay · 공급자(가짜 공급자, 실공급자 어댑터 V-2) | 공급자 · Realtime OutputGate · ConversationLog | 새 값 · 새 선택 필드 | ai-io.md |
+| (ab) | 다시 붙이기 구체화 — HELLO_OK 뒤 같은 기기의 진행 중 세션이 있으면 새 연결을 그 세션에 묶고 HELLO_OK.session(sessionId · view · resumed)을 채운다. HELLO resume.sessionId가 그 세션이면 resumed true(START_SESSION 재전송 없음), 아니면 resumed false로 답하고 같은 approvedAudio로 START_SESSION을 다시 보낸다(CLOSING이면 START_SESSION 대신 CLOSE_TRANSPORT). ACK를 못 받은 opId 명령은 같은 opId로 새 연결에 다시 보내되 STOP_OUTPUT은 빼고 PLAY_APPROVED_CONTENT는 가장 최근 하나만 보내며, 기기는 같은 opId를 두 번 실행하지 않는다. 끊기기 전 출력은 잇지 않는다(새 playbackId). 그 사이 세션이 끝났으면 그 연결에 STANDBY(이어간 기기에는 CLOSE_TRANSPORT도)를 보내고 기기는 지금 세션이 아닌 세션의 STANDBY를 무시한다 | U3 design 4절 · U3-R3 · R4 · U3-J5 · J7 · J8 · AC6.2.10 | Realtime DeviceGateway · SessionExecutor | DeviceWeb | 규칙 구체화 | device-ws.asyncapi.yaml |
+| (ac) | 계약 7절 예약 키 `device.unstable-disconnects`("5분 안 2회")를 Duration 하나에 담을 수 없어 `mujoong.timing.device.unstable-disconnect-window`(5m, timing.md 1절)와 `mujoong.device.unstable-disconnect-count`(2, 4절) 두 키로 나눔. 연결 보고 · DeviceStatusChanged의 `recentDisconnects`는 이 창 안 끊김 횟수다. 예약 키 `device.reconnect-backoff` · `device.playback-mark-interval` · `device.unstable-rtt` · `gate.barge-in-stop` · `gate.local-voice-min`은 값 그대로 1절로 옮김 | U3 design 4절 · U3-R1 · U3-J3 | Realtime DeviceGateway · DeviceWeb | Core DeviceRegistry · 운영 설정 | 규칙 구체화 | timing.md |
 
+## U2 편차
+
+> U2(보호자 계정)가 승인 계약 3절 · 2절에 더하거나 구체화한 곳이다. 기호는 `(U2-<글자>)`이고 U1의 (a) ~ (z)와 섞이지 않게 따로 센다.
+> YAML 스펙은 `x-u2-deviation: ["(U2-a)"]`, Markdown은 `[U2 편차 (U2-a)]`로 표시한다(U1 `ContractFilesTest`의 (a) ~ (z) 대조와 겹치지 않는다).
+> 모두 더하기만 안전하거나 아직 소비자가 없던 경로의 해석이다. 근거 가정 번호는 `docs/units/u2/design.md` 8절.
+
+| 기호 | 내용 | 출처 | 제공 | 소비자 | 호환 분류 | 표시 위치 |
+|---|---|---|---|---|---|---|
+| (U2-a) | 새 code `GOOGLE_AUTH_FAILED`(401) — `POST /api/auth/google`의 '401 구글 교환 실패'에 code 이름을 붙임 | 계약 3절 /auth/google · AC1.1.4 | Core GuardianIdentity | ParentWeb | 새 응답 | parent-api.yaml · errors.md |
+| (U2-b) | `GET /api/policies/current`는 보호자 세션이 있어야 한다(계약은 `security: []`). 02 · 02-1은 로그인 뒤에만 열린다 | U2-J6 | Core ConsentPolicy | ParentWeb | 규칙 구체화(아직 소비자 없던 경로) | parent-api.yaml |
+| (U2-c) | 약관 응답 항목 모양 `{type, title, sections[{heading, body}]}`(계약 설명의 collect · purpose … 고정 필드 대신, 항목마다 소제목이 다름) | U2-J7 · 문구표 02-1 | Core ConsentPolicy | ParentWeb | 해석 명시 | parent-api.yaml |
+| (U2-d) | 계정 삭제가 접수된 보호자의 구글 로그인은 200 Me{deletionStatus: IN_PROGRESS}이고 세션 쿠키를 만들지 않는다 | U2-J5 · AC1.6.4 | Core GuardianIdentity | ParentWeb | 해석 명시 | parent-api.yaml |
+| (U2-e) | `POST /api/auth/google`은 형식 오류 · redirectUri 불일치 · Origin 불일치 · 구글 설정 없음도 400이 아니라 401 GOOGLE_AUTH_FAILED다(로그인 실패는 한 가지로만 알린다) | U2-J1 · AC1.1.4 | Core GuardianIdentity | ParentWeb | 규칙 구체화 | parent-api.yaml |
+| (U2-f) | `PUT /api/consents`의 policyVersion이 현재 정책 버전이 아니면 400 VALIDATION_FAILED(02는 약관을 다시 읽는다) | R6 | Core ConsentPolicy | ParentWeb | 규칙 구체화 | parent-api.yaml |
+| (U2-g) | 동의 상태 OUTDATED = 현재 버전 4항목 GIVEN은 없고, 예전 정책 버전 하나에서 네 항목의 항목별 최신 행이 모두 GIVEN(그 버전의 철회가 뒤에 쌓였거나 일부 항목만 있으면 NOT_GIVEN, U2 리뷰 7). 화면은 NOT_GIVEN과 같은 02 재동의이고 앱 시작(04)에서도 02로 보낸다(U2 리뷰 6) | U2-J8 | Core ConsentPolicy | ParentWeb | 해석 명시 | parent-api.yaml |
+| (U2-h) | `DELETE /api/me` 202 본문 `{deletionRequestId}`, 같은 보호자의 재요청은 같은 id, 응답에 세션 쿠키 삭제(Max-Age=0) | AC1.6.1 · AC1.6.7 | Core AccountDeletion | ParentWeb | 해석 명시 | parent-api.yaml |
+| (U2-i) | `PUT /api/child/stop-expressions` 본문 `{items[{text}]}`(순서 = sortOrder), 기본 표현과 같은 표현도 중복으로 400. 공백은 유니코드 White_Space 속성, 글자 수는 NFC 뒤 코드 포인트(화면과 같은 규칙, U2 리뷰 8) | R9 · U2-J11 | Core ChildProfile | ParentWeb | 해석 명시 | parent-api.yaml |
+| (U2-j) | 로그 사건 표(OD-2) 더하기: `SECURITY_AUTH_FAILED`의 `kind`에 구글 로그인 실패 까닭 6종(`GOOGLE_NOT_CONFIGURED` · `GOOGLE_BAD_REQUEST` · `GOOGLE_REDIRECT_MISMATCH` · `GOOGLE_EXCHANGE_FAILED` · `GOOGLE_KEYS_UNAVAILABLE` · `GOOGLE_TOKEN_INVALID`)을 더하고, `POST /api/auth/google`의 Origin 불일치는 `SECURITY_ORIGIN_DENIED`(channel REST · statusCode 401)로 남긴다. attrs 키는 그대로이고 값 집합만 늘었다. 응답은 그대로 401 GOOGLE_AUTH_FAILED 하나 | U2 리뷰 4 · OD-2 · OD-13 | Core GuardianIdentity | 운영(로그 · 지표 `auth_failed` · `origin_denied`) | 더하기(새 열거값) | contract-model AttrKey.KIND |
+| (U2-k) | U1 `POST /api/dev/login`(dev 전용)은 시드 보호자의 계정 삭제가 접수됐으면 403 ACCOUNT_DELETION_IN_PROGRESS이고 세션을 만들지 않는다 | U2 2차 리뷰 2 · AC1.6.4 | Core GuardianIdentity(시험 로그인) | dev 화면 · 시험 | 새 응답(dev 전용) | parent-api.yaml |
+
+## U4a 편차
+
+> U4a(활동 세션 Core 쪽)가 승인 계약 3절에 더하거나 구체화한 곳이다. 기호는 `(U4a-<글자>)`이고 YAML 스펙은 `x-u4a-deviation: ["(U4a-a)"]`로
+> 표시한다(U1 · U2 기호와 섞이지 않는다). 모두 더하기만 안전하거나 아직 소비자가 없던 경로의 해석이다. 근거 가정 번호는 `docs/units/u4a/design.md` 8절.
+> 세 경로(`/sessions/current` · `/records` · `/records/{sessionId}`)는 계약 3절 그대로 parent-api.yaml에 더했다(편차 아님).
+
+| 기호 | 내용 | 출처 | 제공 | 소비자 | 호환 분류 | 표시 위치 |
+|---|---|---|---|---|---|---|
+| (U4a-a) | `GET /api/sessions/current`는 늘 `{session: SessionSummary \| null}`로 감싼다(계약 설명 'SessionSummary 또는 {session: null}'의 두 모양을 하나로) | U4a-J4 · AC1.4.13 · AC1.7.4 | Core ActivityCoordinator | ParentWeb(04) · U7 알림 진입 | 해석 명시(아직 소비자 없던 경로) | parent-api.yaml |
+| (U4a-b) | `GET /api/records?date=` 줄에 `goalCount`(연습 목표 수, 자유대화 0) · `interrupted`(DISCONNECT 구간이 있음)를 더함 — 26 줄 글 "연습 · 목표 n개" · "중간에 끊김"(AC5.1.2)에 필요 | U4a-J10 · AC5.1.2 | Core ActivityRecord | ParentWeb(26, U6) | 새 선택 필드 | parent-api.yaml |
 
 ## U5a 추가 계약 (2026-10-12)
 

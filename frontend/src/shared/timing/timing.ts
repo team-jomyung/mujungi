@@ -25,6 +25,17 @@ export interface Timing {
   readonly deviceWebRetryIntervalMs: number;
   /** 「등록되었어요」 표시 시간(mujoong.device-web.registered-display, BR9.2 · J56). */
   readonly deviceWebRegisteredDisplayMs: number;
+  /**
+   * 켜짐 상태에서 끊긴 뒤 재접속 간격 목록(mujoong.timing.device.reconnect-backoff, U3-R16). 다 쓰면
+   * deviceWebRetryIntervalMs 간격으로 계속한다.
+   */
+  readonly deviceReconnectBackoffMs: readonly number[];
+  /** 재생 중 PLAYBACK_MARK PROGRESS 주기(mujoong.timing.device.playback-mark-interval, U3-J10). */
+  readonly devicePlaybackMarkIntervalMs: number;
+  /** 재생 중 아이 음성이 이만큼 쌓이면 재생을 멈춘다(끼어들기, mujoong.timing.gate.barge-in-stop, U3-J20). */
+  readonly gateBargeInStopMs: number;
+  /** 끼어들기 판정에 넣는 최소 음성 길이(mujoong.timing.gate.local-voice-min, U3-J20). */
+  readonly gateLocalVoiceMinMs: number;
   /** 조작 없는 토스트가 떠 있는 시간(ui.toast-duration, interaction-spec 1절 · 가정 C5). */
   readonly toastDurationMs: number;
   /** 조작이 달린 토스트의 최소 표시 시간(ui.toast-action-min, interaction-spec 1절 · B25). */
@@ -35,6 +46,8 @@ export type TimingField = keyof Timing;
 
 export interface TimingKeySpec {
   readonly field: TimingField;
+  /** 값 모양: 시간 하나(기본) 또는 시간 목록(예: [1s, 2s, 4s]). */
+  readonly kind?: "duration" | "durationList";
   /** timing-defaults.json · contracts/timing.md의 키. */
   readonly configKey: string;
   /** 덮어쓰는 환경 변수 이름. 계약 밖 화면 키(ui.*)는 null이다. */
@@ -46,8 +59,8 @@ export function toEnvVarName(configKey: string): string {
   return configKey.replace(/-/g, "").replace(/\./g, "_").toUpperCase();
 }
 
-function contractKey(field: TimingField, configKey: string): TimingKeySpec {
-  return { field, configKey, envVar: toEnvVarName(configKey) };
+function contractKey(field: TimingField, configKey: string, kind: "duration" | "durationList" = "duration"): TimingKeySpec {
+  return { field, configKey, envVar: toEnvVarName(configKey), kind };
 }
 
 /** web이 읽는 키 목록. 계약 키는 환경 변수로 덮어쓸 수 있다. */
@@ -60,6 +73,10 @@ export const TIMING_KEYS: readonly TimingKeySpec[] = [
   contractKey("deviceOutputQueueMaxMs", "mujoong.timing.device.output-queue-max"),
   contractKey("deviceWebRetryIntervalMs", "mujoong.device-web.retry-interval"),
   contractKey("deviceWebRegisteredDisplayMs", "mujoong.device-web.registered-display"),
+  contractKey("deviceReconnectBackoffMs", "mujoong.timing.device.reconnect-backoff", "durationList"),
+  contractKey("devicePlaybackMarkIntervalMs", "mujoong.timing.device.playback-mark-interval"),
+  contractKey("gateBargeInStopMs", "mujoong.timing.gate.barge-in-stop"),
+  contractKey("gateLocalVoiceMinMs", "mujoong.timing.gate.local-voice-min"),
   { field: "toastDurationMs", configKey: "ui.toast-duration", envVar: null },
   { field: "toastActionMinMs", configKey: "ui.toast-action-min", envVar: null },
 ];
@@ -100,13 +117,39 @@ export function parseDuration(text: string): number | null {
   return ms;
 }
 
+/**
+ * 시간 목록 표기를 밀리초 목록으로 바꾼다: "[1s, 2s, 4s]"(계약 · 기본값) 또는 "1s,2s,4s"(환경 변수, Spring 목록 바인딩).
+ * 비었거나 한 항목이라도 틀리면 null.
+ */
+export function parseDurationList(text: string): number[] | null {
+  const trimmed = text.trim();
+  const body = trimmed.startsWith("[") && trimmed.endsWith("]") ? trimmed.slice(1, -1) : trimmed;
+  const parts = body.split(",").map((part) => part.trim());
+  if (parts.length === 0 || parts.some((part) => part === "")) {
+    return null;
+  }
+  const values: number[] = [];
+  for (const part of parts) {
+    const parsed = parseDuration(part);
+    if (parsed === null) {
+      return null;
+    }
+    values.push(parsed);
+  }
+  return values;
+}
+
+function parseByKind(spec: TimingKeySpec, text: string): number | number[] | null {
+  return spec.kind === "durationList" ? parseDurationList(text) : parseDuration(text);
+}
+
 type DefaultsFile = Readonly<Record<string, string>>;
 
 const DEFAULTS: DefaultsFile = timingDefaults as DefaultsFile;
 
-function readDefault(spec: TimingKeySpec): number {
+function readDefault(spec: TimingKeySpec): number | number[] {
   const raw = DEFAULTS[spec.configKey];
-  const parsed = typeof raw === "string" ? parseDuration(raw) : null;
+  const parsed = typeof raw === "string" ? parseByKind(spec, raw) : null;
   if (parsed === null) {
     throw new TimingConfigError(spec.configKey);
   }
@@ -118,11 +161,11 @@ function readDefault(spec: TimingKeySpec): number {
  * 형식이 틀린 값은 조용히 무시하지 않고 TimingConfigError로 멈춘다(fail fast).
  */
 export function resolveTiming(source: Readonly<Record<string, string | undefined>>): Timing {
-  const values: Partial<Record<TimingField, number>> = {};
+  const values: Partial<Record<TimingField, number | number[]>> = {};
   for (const spec of TIMING_KEYS) {
     const override = spec.envVar === null ? undefined : source[spec.envVar];
     if (override !== undefined && override.trim() !== "") {
-      const parsed = parseDuration(override);
+      const parsed = parseByKind(spec, override);
       if (parsed === null) {
         throw new TimingConfigError(spec.envVar ?? spec.configKey);
       }
@@ -131,7 +174,7 @@ export function resolveTiming(source: Readonly<Record<string, string | undefined
       values[spec.field] = readDefault(spec);
     }
   }
-  return values as Timing;
+  return values as unknown as Timing;
 }
 
 /** 환경 변수 없이 기본값만으로 만든 Timing(시험 · 개발 기본). */

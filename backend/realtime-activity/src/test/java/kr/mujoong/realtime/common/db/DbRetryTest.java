@@ -134,7 +134,7 @@ class DbRetryTest {
     void theApplicationBeanTakesItsRetryCountFromTheLimitsSetting() {
         RealtimeProperties properties = mock(RealtimeProperties.class);
         when(properties.limits()).thenReturn(new RealtimeProperties.Limits(DataSize.ofKilobytes(8),
-                DataSize.ofMegabytes(2), 50, 1000, 100, 200, 2, 3, Duration.ofSeconds(2), Duration.ofSeconds(10), 1));
+                DataSize.ofMegabytes(2), 50, 1000, 100, 200, 2, 3, Duration.ofSeconds(2), Duration.ofSeconds(10), 1, 1000));
         DbRetry retry = new DbRetry(properties);
         AtomicInteger attempts = new AtomicInteger();
 

@@ -262,8 +262,11 @@ public class StartSessionHandler {
             audio.add(new StartSession.ApprovedAudio(item.getKey(), item.getValue().contentVersionId(),
                     item.getValue().audioUrl()));
         }
+        // U3: 원음 기록 동의(U3-R9)와 종료 표현 스냅숏(종료 의도 판정, U3-R12)을 실행기에 넘긴다
+        List<String> stops = command.stopExpressions().stream().map(StopExpressionItem::text).toList();
         return new SessionExecutor.Plan(command.sessionId(), command.deviceId(), traceId, command.childContext(), audio,
-                approved(command, PlayApprovedContent.CLOSING), approved(command, PlayApprovedContent.WAITING_FILLER));
+                approved(command, PlayApprovedContent.CLOSING), approved(command, PlayApprovedContent.WAITING_FILLER),
+                command.consentSnapshot().rawAudio(), stops);
     }
 
     private static SessionExecutor.ApprovedItem approved(StartCommand command, String code) {

@@ -19,7 +19,7 @@ import org.springframework.transaction.support.TransactionTemplate;
  * · statement_timeout 10초, RD-22)을 건다. 트랜잭션은 운영처럼 Spring 트랜잭션 관리자로 열어 저장소의 MANDATORY 확인이 실제로
  * 동작한다.
  *
- * <p>시험 클래스는 JVM 안에서 차례로 돌므로 각 시험 앞뒤에 {@link #wipe()}로 realtime 표 일곱 개를 비운다(폴러 · 전체 조회 시험이
+ * <p>시험 클래스는 JVM 안에서 차례로 돌므로 각 시험 앞뒤에 {@link #wipe()}로 realtime 표 열 개(V1 일곱 + U3 V2 셋)를 비운다(폴러 · 전체 조회 시험이
  * 다른 시험 행을 보지 않게).
  */
 public final class RealtimeDb implements AutoCloseable {
@@ -36,8 +36,11 @@ public final class RealtimeDb implements AutoCloseable {
             "realtime.realtime_transcript",
             "realtime.realtime_session_event",
             "realtime.realtime_session_stop_expression",
+            "realtime.realtime_audio_recording",
+            "realtime.realtime_session_gap",
             "realtime.realtime_activity_session",
             "realtime.realtime_device_connection",
+            "realtime.realtime_device_disconnect_event",
             "realtime.realtime_outbox_event",
             "realtime.realtime_inbox_event");
 

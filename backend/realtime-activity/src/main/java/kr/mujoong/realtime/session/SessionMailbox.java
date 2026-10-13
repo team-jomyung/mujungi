@@ -10,8 +10,10 @@ import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 import kr.mujoong.contract.status.EndRequestReason;
 import kr.mujoong.contract.ws.message.DeviceReady;
+import kr.mujoong.contract.ws.message.DeviceState;
 import kr.mujoong.contract.ws.message.PlaybackMark;
 import kr.mujoong.contract.ws.message.VoiceSessionClosed;
+import kr.mujoong.realtime.gateway.DeviceLink;
 import kr.mujoong.realtime.voice.ProviderPort;
 
 /**
@@ -48,6 +50,22 @@ public final class SessionMailbox {
 
     /** 세션에 묶인 기기 연결이 닫혔거나 대체됐다(SD-17 세대 올림). */
     public record ConnectionLost(UUID connectionId) implements Message {
+    }
+
+    /**
+     * U3-J4 · U3-J5: 같은 기기의 새 연결이 HELLO_OK를 받았다 — 실행기가 이 연결에 세션을 다시 묶고 끊김 구간을 닫은 뒤 상태 · 미확인 명령을 다시
+     * 보낸다. {@code resumed}는 기기가 HELLO resume으로 이 세션을 이어가겠다고 했는가(아니면 START_SESSION부터 다시).
+     */
+    public record LinkReplaced(DeviceLink link, boolean resumed, Instant at) implements Message {
+
+        public LinkReplaced {
+            Objects.requireNonNull(link, "link");
+            Objects.requireNonNull(at, "at");
+        }
+    }
+
+    /** U3-J9: 묶인 기기의 DEVICE_STATE(마이크 · 소리 · 보임 · 켜짐 유지, 바뀐 필드만). */
+    public record DeviceStateReceived(UUID connectionId, DeviceState state, Instant receivedAt) implements Message {
     }
 
     /**
@@ -119,17 +137,23 @@ public final class SessionMailbox {
 
     /**
      * 닫고 남은 끝내기 명령의 약속을 {@link SessionGone}으로 끝낸다. 남은 종료 신호의 약속은 그냥 끝낸다(기다리는 정상 종료가 멈추지 않게,
-     * J304). 나머지 메시지는 버린다(BR6.11).
+     * J304). 나머지 메시지는 처리하지 않는다(BR6.11).
+     *
+     * @return 처리하지 않은 나머지 메시지(정리가 남은 연결 교체를 대기로 돌려보낸다, 리뷰 반영 4)
      */
-    public void closeAndRelease() {
+    public java.util.List<Message> closeAndRelease() {
         close();
+        java.util.List<Message> left = new java.util.ArrayList<>();
         for (Message message : clear()) {
             if (message instanceof EndRequested request) {
                 request.result().completeExceptionally(new SessionGone());
             } else if (message instanceof ServerShutdown shutdown) {
                 shutdown.handled().complete(null);
+            } else {
+                left.add(message);
             }
         }
+        return java.util.List.copyOf(left);
     }
 
     private final int generalCapacity;

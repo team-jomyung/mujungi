@@ -93,7 +93,8 @@ describe("12 — 폴링과 말풍선(BR6.15 · PD-12)", () => {
       prepare: (queryClient) => queryClient.setQueryData(["home"], parseHome(homeBody("STABLE"))),
     });
     expect(await screen.findByText("무중이 하늘에게 말을 걸고 있어요")).toBeInTheDocument();
-    expect(screen.getByTestId("live-end")).toBeDisabled();
+    // U4a(AC3.3.8 · C.S-12.11.5): 참여 기다리는 중에도 「이야기 끝내기」가 켜진다(U1은 ACTIVE만이었다)
+    expect(screen.getByTestId("live-end")).toBeEnabled();
   });
 
   it("아이 이름을 모르면(홈 응답 없음) ACTIVE 부제를 생략하고 12에서 홈을 따로 읽지 않는다", async () => {
@@ -186,11 +187,20 @@ describe("12 — 실패 · 이동", () => {
     await waitFor(() => expect(screen.getByTestId("live-end")).toBeEnabled());
   });
 
-  it.each(["CLOSING", "ENDED", "ENDED_UNCONFIRMED", "ABORTED", "DECLINED"])("%s를 받으면 17로 가고 폴링을 멈춘다", async (status) => {
+  // U4a(AC3.5.1 · U4a-J12): DECLINED는 17이 아니라 P3 → 04다(tests/u4a/parent/live-12-u4a.test.tsx). 나머지 넷은 U1 그대로
+  it.each(["CLOSING", "ENDED", "ENDED_UNCONFIRMED", "ABORTED"])("%s를 받으면 17로 가고 폴링을 멈춘다", async (status) => {
     const harness = renderLive(() => jsonResponse(200, liveViewBody(status)));
     await waitFor(() => expect(router.replace).toHaveBeenCalledWith(`/parent/sessions/${SESSION_ID}/done`));
     await pause(POLL_MS * 4);
     expect(liveCalls(harness)).toHaveLength(1);
+  });
+
+  it("DECLINED를 받으면 폴링을 멈춘다(이동은 P3 「확인」 뒤 04, U4a)", async () => {
+    const harness = renderLive(() => jsonResponse(200, liveViewBody("DECLINED", { endReason: "DECLINED" })));
+    expect(await screen.findByTestId("p3-dialog")).toBeInTheDocument();
+    await pause(POLL_MS * 4);
+    expect(liveCalls(harness)).toHaveLength(1);
+    expect(router.replace).not.toHaveBeenCalledWith(`/parent/sessions/${SESSION_ID}/done`);
   });
 
   it("FAILED를 받으면 08 사유 카드로 간다(J120)", async () => {
@@ -198,9 +208,10 @@ describe("12 — 실패 · 이동", () => {
     await waitFor(() => expect(router.replace).toHaveBeenCalledWith("/parent/free?failed=1"));
   });
 
-  it("401이면 시험 로그인으로 가고 폴링을 멈추며 끝내기 요청은 보내지 않는다(AC1.1.9 · BR6.16)", async () => {
+  it("401이면 안내 토스트 뒤 01로 가고 폴링을 멈추며 끝내기 요청은 보내지 않는다(AC1.1.9 · BR6.16, U2가 01을 만듦)", async () => {
     const harness = renderLive((_sinceSeq, index) => (index === 1 ? jsonResponse(200, liveViewBody("ACTIVE")) : errorResponse(401, "UNAUTHENTICATED")));
-    await waitFor(() => expect(router.replace).toHaveBeenCalledWith("/parent/dev-login"));
+    await waitFor(() => expect(router.replace).toHaveBeenCalledWith("/parent/login"));
+    expect(screen.getByTestId("toast")).toHaveTextContent("로그인이 필요해요.");
     const after = liveCalls(harness).length;
     await pause(POLL_MS * 4);
     act(() => setVisibility("hidden"));

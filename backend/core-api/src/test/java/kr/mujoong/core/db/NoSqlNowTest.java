@@ -209,6 +209,7 @@ class NoSqlNowTest {
             return List.of();
         }
         try (Stream<Path> walk = Files.walk(root)) {
+            // 경로 조각은 '/'로 적었으므로 OS 구분자(Windows '\')를 '/'로 맞춰 비교한다(U2: Windows 개발 PC에서 0건 탐색 방지)
             return walk.filter(Files::isRegularFile)
                     .filter(path -> selectsPath(path.toString(), extension, pathFragments))
                     .sorted()
@@ -218,7 +219,7 @@ class NoSqlNowTest {
         }
     }
 
-    /** Normalize Windows separators before matching repository-relative directory fragments. */
+    /** Windows 구분자('\')를 '/'로 바꾼 뒤 저장소 상대 경로 조각과 맞춘다. */
     static boolean selectsPath(String path, String extension, String... pathFragments) {
         String portable = path.replace('\\', '/');
         return portable.endsWith(extension)

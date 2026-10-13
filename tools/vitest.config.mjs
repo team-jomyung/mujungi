@@ -1,7 +1,7 @@
 import { defineConfig } from "vitest/config";
 
 // 무중 시험 도구 실행기 (U1 3.5 Step 6 · J106 · J129)
-// tools는 시험 지원 코드라 커버리지 하한 대상이 아니다(J107). U1 시험 파일은 tests/u1/에만 둔다.
+// tools는 시험 지원 코드라 커버리지 하한 대상이 아니다(J107). 시험 파일은 유닛별 폴더(tests/u1/ · tests/u3/ …)에 둔다.
 export default defineConfig({
   test: {
     environment: "node",

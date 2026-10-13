@@ -44,7 +44,9 @@ mujoong:
   device:
     disconnect-check-interval: 200ms
   internal-http:
-    connect-timeout: 50ms
+    # U3: 50ms는 CPU가 포화되면 루프백 연결도 넘긴다(3.6 재시험 1차 VERIFY_TOKEN CONN_ERROR → 기기 연결 1013).
+    # 운영 기본값과 같게 두고, 응답 시한(verify-token · device-status · event-publish)은 그대로 짧게 둔다
+    connect-timeout: 500ms
     verify-token-timeout: 100ms
     device-status-timeout: 100ms
     event-publish-timeout: 300ms
@@ -57,6 +59,9 @@ mujoong:
     db-check-interval: 200ms
   gate:
     segment-quiet: 50ms
+  recording:
+    # 시험은 모듈 build 아래에 쓴다(저장소를 더럽히지 않음). 기록기 시험은 @TempDir로 덮어쓴다
+    directory: build/test-recordings
   security:
     allowed-origin: https://mujoong.invalid
   metrics:

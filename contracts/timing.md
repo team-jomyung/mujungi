@@ -16,7 +16,7 @@
   기본값 그대로 가변 Clock을 앞당겨도 확인한다(NFR6.2).
 - 시각은 모두 앱 Clock(`MujoongClock`) 기준이다. SQL `now()`를 시한 판정에 쓰지 않는다(RD-2).
 
-## 1. 계약 7절 키 — U1이 읽는 것
+## 1. 계약 7절 키 — U1 · U3가 읽는 것
 
 | 키 | 기본값 | 소유 앱 | 시계 시작점(t0) → 끝 | 근거 |
 |---|---|---|---|---|
@@ -28,6 +28,12 @@
 | `mujoong.timing.device.disconnect` | `40s` | realtime | 마지막 기기 메시지 → 연결 DISCONNECTED(영속 last_seen_at 주기 점검), ACTIVE 세션은 ABORTED(DISCONNECT, 세션별 메모리 시계) | BR4.8 ② · BR6.12 ④ · B10 |
 | `mujoong.timing.device.status-report-interval` | `10s` | realtime(core-api는 기동 검증 I-6에만 읽음) | Realtime → Core 연결 상태 주기 보고(OFFLINE 포함) | BR4.8 · J26 |
 | `mujoong.timing.device.output-queue-max` | `20s` | realtime · web | 기기 재생 대기열 상한(초 분량) · 서버 출력 구간 상한 · 재생 중 승인 문구 표식의 만료 | J31 · J73 · PD |
+| `mujoong.timing.device.unstable-rtt` | `1s` | realtime | HEARTBEAT 송신 → 응답 왕복이 이 값을 넘으면 그 연결은 UNSTABLE, 다음 정상 왕복에서 CONNECTED(U3) | BR4.8 ① · U3 design 5절 U3-R1 |
+| `mujoong.timing.device.unstable-disconnect-window` | `5m` | realtime | 끊김 사건을 세는 슬라이딩 창. `mujoong.device.unstable-disconnect-count`(4절)와 짝이며 계약 7절 `unstable-disconnects` "5분 안 2회"를 창 · 횟수 두 키로 나눈 것(U3-J3) | BR4.8 ① · U3-J3 |
+| `mujoong.timing.device.reconnect-backoff` | `[1s, 2s, 4s]` | web | 켜짐 상태에서 끊긴 뒤 재접속 간격(1 · 2 · 4초). 목록을 다 쓰면 `mujoong.device-web.retry-interval`(5초) 간격으로 계속(U3) | BR9.7 · J360 · U3 |
+| `mujoong.timing.device.playback-mark-interval` | `1s` | web | 재생 중 PLAYBACK_MARK PROGRESS 송신 주기(끝 · 멈춤 표식은 즉시) | 계약 PlaybackMark · U3 |
+| `mujoong.timing.gate.barge-in-stop` | `500ms` | web | 재생 중 아이 음성이 이 시간 이어지면 재생을 멈추고 STOPPED 표식을 보낸다(끼어들기, U3) | BR7 · U3-J20 |
+| `mujoong.timing.gate.local-voice-min` | `200ms` | web | 끼어들기 판정에 넣는 최소 음성 길이(이보다 짧은 소리는 무시) | U3-J20 |
 | `mujoong.timing.device.cookie-max-age` | `400d` | core-api | `GET /api/device/me` 성공마다 MUJOONG_DEVICE 쿠키 수명을 다시 이 값으로(서버 토큰은 만료 없음) | BR3.5 · B4 · J29 |
 | `mujoong.timing.core.device-status-stale` | `30s` | core-api | Core가 마지막 보고를 받은 시각 → '기기 상태 확인 불가'(BR4.3 ③), 12 stale(BR6.15) | B6 · RD-6 |
 | `mujoong.timing.parent.poll-interval` | `2s` | web | 12 진행 화면 폴링 주기(다른 화면은 진입 때 1회) | A2 · BR6.15 |
@@ -42,6 +48,9 @@
 ## 2. 계약 7절 키 — U1이 읽지 않는 것(이름만 예약)
 
 후속 유닛이 같은 규칙(`mujoong.timing.<키>`)으로 읽고 이 절의 행을 1절 모양으로 옮긴다. 값은 계약 7절 그대로다.
+U3가 옮긴 것: `device.reconnect-backoff` · `device.playback-mark-interval` · `device.unstable-rtt` · `gate.barge-in-stop` ·
+`gate.local-voice-min`(1절) 그리고 `device.unstable-disconnects`를 `timing.device.unstable-disconnect-window`(1절) +
+`device.unstable-disconnect-count`(4절)로 나눈 것(U3-J3) [편차 (ac)].
 
 | 키 | 계약 7절 값 | 읽을 유닛 |
 |---|---|---|
@@ -49,17 +58,11 @@
 | `mujoong.timing.session.join-wait-after-reprompt` | 20초 | U4 |
 | `mujoong.timing.session.silence-warning` | 4분 | U4 |
 | `mujoong.timing.session.silence-end` | 6분 | U4 |
-| `mujoong.timing.device.reconnect-backoff` | 1 · 2 · 4초, 그 뒤 5초 간격 | U3(U1 기기 웹은 5초 고정 `mujoong.device-web.retry-interval`) |
-| `mujoong.timing.device.playback-mark-interval` | 1초 | U3 |
-| `mujoong.timing.device.gap-display` | 10초 | U3 · U4 |
-| `mujoong.timing.device.unstable-rtt` | 1초 | U3 |
-| `mujoong.timing.device.unstable-disconnects` | 5분 안 2회 | U3 |
+| `mujoong.timing.device.gap-display` | 10초 | U4(12 화면의 끊김 구간 표시, U3는 `gaps`만 내려준다) |
 | `mujoong.timing.practice.first-response-wait` | 20초 | U5 |
 | `mujoong.timing.practice.help-consent-wait` | 10초 | U5 |
 | `mujoong.timing.practice.cue-budget` | 5초 | U5 |
 | `mujoong.timing.practice.judge-budget` | 5초 + 재시도 1회 | U5 |
-| `mujoong.timing.gate.barge-in-stop` | 0.5초 | U3 |
-| `mujoong.timing.gate.local-voice-min` | 200ms | U3 |
 | `mujoong.timing.result.job-attempts` | 3회(간격 5 · 15초) | U6 |
 | `mujoong.timing.report.ready-target` | 60초 | U6 |
 
@@ -97,6 +100,7 @@
 | `mujoong.session.orphan-check-interval` | `30s` | realtime | 고아 세션 점검 주기(FAILED SERVER_RESTART) | R3-6 · J126 |
 | `mujoong.session.timer-tick` | `1s` | core-api · realtime | Core ① DB 점검 주기, Realtime 타이머 전이 실패 재시도 간격 | RD-1 · RD-3 |
 | `mujoong.device.disconnect-check-interval` | `5s` | realtime | 연결 DISCONNECTED 주기 점검(영속 last_seen_at) | BR4.8 ② |
+| `mujoong.device.unstable-disconnect-count` | `2` | realtime | 창(`mujoong.timing.device.unstable-disconnect-window`) 안 끊김 사건이 이 횟수 이상이면 복귀한 연결을 UNSTABLE로 둔다. 사건이 창 밖으로 빠지면 다음 HEARTBEAT에 CONNECTED(U3) | BR4.8 ① · U3-J3 |
 | `mujoong.bootstrap.code-draw-attempts` | `5` | core-api | 등록 코드 추첨 시도 수(모두 겹치면 503 CODE_ISSUE_FAILED) | BR1.2 · J45 · [편차 (c)] |
 | `mujoong.gate.segment-quiet` | `800ms` | realtime | 출력 구간 확정 조용 시간 | BR7.3 · J52 |
 
@@ -127,7 +131,9 @@
 | `mujoong.device-web.registered-display` | `3s` | web | `MUJOONG_DEVICEWEB_REGISTEREDDISPLAY` | 「등록되었어요」 표시 시간 → T19 꺼짐 | BR9.2 · J56 |
 
 web이 읽는 1 · 3절 키의 환경 변수: `MUJOONG_TIMING_PARENT_POLLINTERVAL` · `MUJOONG_TIMING_BOOTSTRAP_STATUSPOLL` ·
-`MUJOONG_TIMING_DEVICE_HEARTBEATINTERVAL` · `MUJOONG_TIMING_DEVICE_OUTPUTQUEUEMAX` · `MUJOONG_TIMING_PARENT_REQUESTTIMEOUT`.
+`MUJOONG_TIMING_DEVICE_HEARTBEATINTERVAL` · `MUJOONG_TIMING_DEVICE_OUTPUTQUEUEMAX` · `MUJOONG_TIMING_PARENT_REQUESTTIMEOUT` ·
+(U3) `MUJOONG_TIMING_DEVICE_RECONNECTBACKOFF`(쉼표로 나눈 목록) · `MUJOONG_TIMING_DEVICE_PLAYBACKMARKINTERVAL` ·
+`MUJOONG_TIMING_GATE_BARGEINSTOP` · `MUJOONG_TIMING_GATE_LOCALVOICEMIN`.
 
 ## 7. 시간이 아닌 관련 한도(참고 — 정본은 reliability-design.md ## 3)
 
@@ -135,8 +141,16 @@ web이 읽는 1 · 3절 키의 환경 변수: `MUJOONG_TIMING_PARENT_POLLINTERVA
 WSS 텍스트 프레임 8KB(`mujoong.limits.ws-text-frame-max`, 넘으면 4400 [편차 (s)]) · 입력 대기열 50프레임(`mujoong.limits.session-input-queue-frames`).
 나머지 비 timing 키(`limits.*` · `security.*` · `metrics.*` · `observability.*`)는 이 파일에 두지 않는다(RD-24).
 
+## 8. U2 시간 키 (계정 삭제 지휘 · 구글 서명 열쇠 캐시, 계약 7절 밖 — 더하기만)
 
-## 8. U5a 텍스트 AI 시간
+| 키 | 기본값 | 소유 앱 | 뜻 | 근거 |
+|---|---|---|---|---|
+| `mujoong.timing.account.deletion-tick` | `5s` | core-api | 계정 삭제 지휘 한 바퀴 주기(REQUESTED 요청을 이어 처리) | FR1.6 · U2-J18 |
+| `mujoong.timing.account.deletion-session-wait` | `30s` | core-api | 삭제 접수 뒤 진행 세션 CONSENT_WITHDRAWN 끝내기를 보낸 시각 → 사본이 종료되지 않아도 이 시간이 지나면 데이터 삭제 시작 | AC1.6.3 · U2-J18 |
+| `mujoong.timing.account.google-keys-min-age` | `1m` | core-api | 구글 서명 열쇠 캐시 바닥 — 응답 max-age가 이보다 짧으면(max-age 없음 · no-store · no-cache = 0 포함) 이만큼은 둔다(로그인 한 번에 두 번 받지 않게). `google-keys-max-age`보다 길면 기동 거부 | U2 3차 리뷰 3 · U2-J2 |
+| `mujoong.timing.account.google-keys-max-age` | `6h` | core-api | 구글 id_token 서명 열쇠(JWKS) 캐시 상한 — 응답 `Cache-Control: max-age`만큼 두되 이 값을 넘지 않는다(바닥은 `google-keys-min-age`). 모르는 kid면 상한 안이어도 다시 받는다 | U2 2차 리뷰 4 · U2-J2 |
+
+## 9. U5a 텍스트 AI 시간
 
 | 키 | 기본값 | 소유 앱 | 뜻 | 근거 |
 |---|---|---|---|---|

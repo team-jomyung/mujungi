@@ -73,6 +73,20 @@ public final class ClosingSequence {
         return true;
     }
 
+    /**
+     * 마무리 문구 끝을 기다리지 않고 지금 CLOSE_TRANSPORT(GUARDIAN_STOP)를 보낸다 — 세션을 모르는 기기가 새로 붙어 마무리 문구를 재생할 수 없을
+     * 때(리뷰 반영 5). 이미 보냈으면 같은 명령을 다시 보낸다.
+     *
+     * @return 이번이 첫 CLOSE_TRANSPORT면 참(호출자가 입력 중계를 멈추고 송신 시각을 적는다)
+     */
+    public boolean closeNow(Device device) {
+        Objects.requireNonNull(device, "device");
+        boolean first = step != Step.TRANSPORT_CLOSED;
+        device.closeTransport(CloseTransport.Reason.GUARDIAN_STOP);
+        step = Step.TRANSPORT_CLOSED;
+        return first;
+    }
+
     public Step step() {
         return step;
     }

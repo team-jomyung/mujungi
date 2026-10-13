@@ -55,7 +55,8 @@ import org.springframework.security.web.util.matcher.OrRequestMatcher;
  *   <tr><td>관리</td><td>관리 포트의 Actuator(health · prometheus만 노출)</td><td>없음(컨테이너 루프백 전용)</td><td>없음</td><td>-</td></tr>
  *   <tr><td>C-INT</td><td>{@code /internal/**}</td><td>{@code X-Internal-Token} 정확히 1개</td><td>없음</td><td>면제 5번</td></tr>
  *   <tr><td>C-DEV</td><td>기기 4경로(메서드까지 정확히)</td><td>경로별 기기 쿠키</td><td>없음</td><td>면제 3 · 4번</td></tr>
- *   <tr><td>C-PUB</td><td>{@code GET /api/health} · {@code POST /api/dev/login}</td><td>없음</td><td>시험 로그인만 만든다</td><td>면제 1번</td></tr>
+ *   <tr><td>C-PUB</td><td>{@code GET /api/health} · {@code POST /api/dev/login} · {@code POST /api/auth/google}(U2)</td><td>없음</td>
+ *       <td>시험 로그인 · 구글 로그인만 만든다</td><td>면제 1번 · 2번(U2)</td></tr>
  *   <tr><td>C-GRD</td><td>그 밖의 {@code /api/**}(예: {@code POST /api/device/register})</td><td>{@code MUJOONG_SESSION}</td>
  *       <td>Spring Session JDBC</td><td>필수(예외 없음)</td></tr>
  *   <tr><td>기본</td><td>그 밖 전부</td><td>-</td><td>-</td><td>404(ERROR 디스패치만 통과)</td></tr>
@@ -75,6 +76,8 @@ public class SecurityConfig {
     public static final String CSRF_HEADER = "X-CSRF-TOKEN";
     /** 공개 헬스 경로(편차 (t)). */
     public static final String HEALTH_PATH = "/api/health";
+    /** U2 구글 로그인 경로(체인 C-PUB, 세션이 아직 없어 CSRF 면제 · 대신 Origin 확인과 OAuth state, 계약 3절 /auth/google). */
+    public static final String GOOGLE_LOGIN_PATH = "/api/auth/google";
 
     /** 보호자 세션의 SecurityContext 저장소(시험 로그인 · C-GRD가 같은 것을 쓴다). 세션은 로그인만 만든다. */
     @Bean
@@ -147,7 +150,8 @@ public class SecurityConfig {
             throws Exception {
         http.securityMatcher(new OrRequestMatcher(
                 PathPatternRequestMatcher.pathPattern(HttpMethod.GET, HEALTH_PATH),
-                PathPatternRequestMatcher.pathPattern(HttpMethod.POST, DevLoginBlockedRecorder.PATH)));
+                PathPatternRequestMatcher.pathPattern(HttpMethod.POST, DevLoginBlockedRecorder.PATH),
+                PathPatternRequestMatcher.pathPattern(HttpMethod.POST, GOOGLE_LOGIN_PATH)));
         stateless(http);
         noStore(http);
         http.addFilterBefore(new DevLoginBlockedRecorder(() -> devLogin.getIfAvailable() != null, environment, events),
