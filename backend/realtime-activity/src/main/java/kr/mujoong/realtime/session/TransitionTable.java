@@ -146,6 +146,32 @@ public final class TransitionTable {
         return false;
     }
 
+    /**
+     * BR1.1: (사건, 현재 상태)가 표에 있으면 도착 상태, 없으면 빈 값(호출자는 상태를 바꾸지 않고 TRANSITION_IGNORED를 남긴다).
+     */
+    public static java.util.Optional<SessionStatus> decide(Trigger trigger, SessionStatus from) {
+        Objects.requireNonNull(trigger, "trigger");
+        return trigger.accepts(from) ? java.util.Optional.of(trigger.target()) : java.util.Optional.empty();
+    }
+
+    /**
+     * 도착 상태만으로 정해지는 기본 사유(U4b BR1.3 · BR1.4): ENDED_UNCONFIRMED = UNCONFIRMED, ABORTED = DISCONNECT, DECLINED = DECLINED,
+     * FAILED = FAILED. ENDED는 CLOSING에 들어갈 때 쓴 사유를 그대로 두므로 null이고(사건이 정한다), 비종료 상태도 null이다. 시작 단계 동의 철회처럼
+     * 사건이 이 값을 덮을 수 있다({@link Trigger#endReason()}).
+     */
+    public static EndReason endReason(SessionStatus to) {
+        if (to == null) {
+            return null;
+        }
+        return switch (to) {
+            case ENDED_UNCONFIRMED -> EndReason.UNCONFIRMED;
+            case ABORTED -> EndReason.DISCONNECT;
+            case DECLINED -> EndReason.DECLINED;
+            case FAILED -> EndReason.FAILED;
+            default -> null;
+        };
+    }
+
     /** START 구간(PREPARING · DEVICE_ACK)에서의 전이인가(SESSION_TRANSITION phase). */
     public static boolean isStartPhase(SessionStatus from) {
         return from == SessionStatus.PREPARING || from == SessionStatus.DEVICE_ACK;

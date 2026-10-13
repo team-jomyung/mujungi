@@ -121,7 +121,7 @@ public final class SessionMailbox {
         ACCEPTED_EMPTY,
         /** 409 SESSION_NOT_ACTIVE. */
         NOT_ACTIVE,
-        /** U1에 없는 사유(CONSENT_WITHDRAWN 전이는 U4가 더한다, BR6.8 마지막 줄): 400 VALIDATION_FAILED. */
+        /** 응답표 밖 사유(U4b BR1.5: GUARDIAN_STOP · CONSENT_WITHDRAWN · CORE_ABANDONED 밖): 400 VALIDATION_FAILED. */
         UNSUPPORTED
     }
 

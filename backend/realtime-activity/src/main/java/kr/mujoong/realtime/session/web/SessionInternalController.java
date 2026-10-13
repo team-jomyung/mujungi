@@ -43,8 +43,9 @@ import org.springframework.web.bind.annotation.RestController;
  * <ul>
  *   <li>{@code POST /internal/sessions}: 202 {status} · 409 SESSION_IN_PROGRESS · 409 SESSION_NOT_ACTIVE(묘비 (v)) · 423
  *       DEVICE_NOT_CONNECTED(BR6.6). U1 자유대화만 받는다(activityType PRACTICE는 U5가 더한다, 400).
- *   <li>{@code POST /internal/sessions/{id}/end}: J54 응답표 — 202 {status: CLOSING} · 202 {} · 409 SESSION_NOT_ACTIVE((w) 포함).
- *       CONSENT_WITHDRAWN 전이는 U4가 더하므로 400. 실행기가 제한 시간 안에 답하지 않으면 503(오류 처리기).
+ *   <li>{@code POST /internal/sessions/{id}/end}: J54 · U4b 응답표(BR1.5 · BR1.6 · BR1.9, 편차 (U4b-b)) — 202 {status: CLOSING} · 202 {} ·
+ *       409 SESSION_NOT_ACTIVE((w) 포함). 사유는 GUARDIAN_STOP · CONSENT_WITHDRAWN · CORE_ABANDONED이고 그 밖은 400. 실행기가 제한 시간 안에
+ *       답하지 않으면 503(오류 처리기).
  *   <li>{@code GET /internal/sessions/{id}/view?sinceSeq}: LiveView(내부) · 모르는 세션 404 NOT_FOUND(BR6.15).
  * </ul>
  */

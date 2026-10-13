@@ -24,10 +24,14 @@ import org.springframework.stereotype.Component;
  *
  * <ul>
  *   <li>GUARDIAN_STOP: 모르는 id → 409 (w), CLOSING → 202 {CLOSING}, 그 밖 → 409.
- *   <li>CORE_ABANDONED: 모르는 id → 10분 묘비 + 202 {} ((가) · (v)), 실행기 없는 비종료(PREPARING · DEVICE_ACK · ACTIVE) → FAILED(실패 코드
- *       없음) + 202 {}, CLOSING · 종료 → 202 {} ((다) · (라)).
- *   <li>CONSENT_WITHDRAWN: U1에 없는 전이다(U4가 더한다). 400.
+ *   <li>CORE_ABANDONED: 모르는 id → 10분 묘비 + 202 {} ((가) · (v)), 실행기 없는 비종료(PREPARING · DEVICE_ACK · WAITING_CHILD · ACTIVE) →
+ *       FAILED(실패 코드 없음) + 202 {}, CLOSING · 종료 → 202 {} ((다) · (라) · U4b BR1.9).
+ *   <li>CONSENT_WITHDRAWN(U4b BR1.5 · U4b-J9): 모르는 id · 종료 → 409, CLOSING → 202 {CLOSING}(사유는 처음 것), 실행기 없는 시작 단계 →
+ *       FAILED(CONSENT_WITHDRAWN) + 202 {}, 실행기 없는 WAITING_CHILD · ACTIVE → CLOSING(CONSENT_WITHDRAWN) + 202 {CLOSING}(실행기가 없으니
+ *       마무리 순서는 없고 고아 점검이 FAILED로 닫는다).
  * </ul>
+ *
+ * <p>실행기 없이 FAILED로 닫은 세션은 정산(결과 스냅숏)을 맡긴다(U4b BR1.9 · BR8.1, {@link #onFailedWithoutExecutor}).
  */
 @Component
 public class EndRequestHandler {
@@ -66,7 +70,8 @@ public class EndRequestHandler {
     /** 명령을 처리한다. */
     public EndOutcome end(UUID sessionId, UUID requestId, EndRequestReason reason, String traceId) {
         Objects.requireNonNull(sessionId, "sessionId");
-        if (reason != EndRequestReason.GUARDIAN_STOP && reason != EndRequestReason.CORE_ABANDONED) {
+        if (reason != EndRequestReason.GUARDIAN_STOP && reason != EndRequestReason.CORE_ABANDONED
+                && reason != EndRequestReason.CONSENT_WITHDRAWN) {
             return EndOutcome.UNSUPPORTED;
         }
         Optional<SessionMailbox> mailbox = registry.mailbox(sessionId);
@@ -105,17 +110,59 @@ public class EndRequestHandler {
             return row.filter(value -> value.status() == SessionStatus.CLOSING).map(value -> EndOutcome.CLOSING)
                     .orElse(EndOutcome.NOT_ACTIVE);
         }
+        if (reason == EndRequestReason.CONSENT_WITHDRAWN) {
+            return row.map(value -> consentWithoutExecutor(value, traceId)).orElse(EndOutcome.NOT_ACTIVE);
+        }
         if (row.isEmpty()) {
             tombstones.add(sessionId);
             return EndOutcome.ACCEPTED_EMPTY;
         }
         SessionStatus status = row.get().status();
         if (TransitionTable.Trigger.CORE_ABANDONED.origins().contains(status)) {
-            transitions.transitionFromAny(sessionId, TransitionTable.Trigger.CORE_ABANDONED.origins(),
-                    SessionStatus.FAILED,
+            ActivitySessionRepository.MultiOriginTransition result = transitions.transitionFromAny(sessionId,
+                    TransitionTable.Trigger.CORE_ABANDONED.origins(), SessionStatus.FAILED,
                     read -> TransitionTable.changeFor(TransitionTable.Trigger.CORE_ABANDONED, null, clock.now()),
                     SessionTransitions.Origin.CORE_ABANDONED, traceId);
+            if (result.transitioned()) {
+                onFailedWithoutExecutor(sessionId);
+            }
         }
         return EndOutcome.ACCEPTED_EMPTY;
+    }
+
+    /** 실행기 없는 세션의 동의 철회(BR1.5): 시작 단계 FAILED(CONSENT_WITHDRAWN), 진행 중 CLOSING(CONSENT_WITHDRAWN), 종료 409. */
+    private EndOutcome consentWithoutExecutor(ActivitySessionRow row, String traceId) {
+        SessionStatus status = row.status();
+        if (status == SessionStatus.CLOSING) {
+            return EndOutcome.CLOSING;
+        }
+        if (status.isTerminal()) {
+            return EndOutcome.NOT_ACTIVE;
+        }
+        if (TransitionTable.Trigger.CONSENT_WITHDRAWN_START.accepts(status)) {
+            ActivitySessionRepository.MultiOriginTransition result = transitions.transitionFromAny(row.id(),
+                    TransitionTable.Trigger.CONSENT_WITHDRAWN_START.origins(), SessionStatus.FAILED,
+                    read -> TransitionTable.changeFor(TransitionTable.Trigger.CONSENT_WITHDRAWN_START, null, clock.now())
+                            .withTerminationRequestedAt(clock.now()),
+                    SessionTransitions.Origin.REALTIME, traceId);
+            if (result.transitioned()) {
+                onFailedWithoutExecutor(row.id());
+            }
+            return EndOutcome.ACCEPTED_EMPTY;
+        }
+        Optional<ActivitySessionRow> closing = transitions.transition(row.id(), status, SessionStatus.CLOSING,
+                TransitionTable.changeFor(TransitionTable.Trigger.CONSENT_WITHDRAWN, null, clock.now())
+                        .withTerminationRequestedAt(clock.now()),
+                SessionTransitions.Origin.REALTIME, traceId);
+        if (closing.isPresent()) {
+            return EndOutcome.CLOSING;
+        }
+        return transitions.find(row.id()).filter(value -> value.status() == SessionStatus.CLOSING)
+                .map(value -> EndOutcome.CLOSING).orElse(EndOutcome.NOT_ACTIVE);
+    }
+
+    /** 실행기 없이 FAILED로 닫은 세션의 뒷일(정산은 L5가 연결한다). 기본 구현은 아무것도 하지 않는다. */
+    protected void onFailedWithoutExecutor(UUID sessionId) {
+        // L5(BR8.1)에서 결과 스냅숏 정산을 연결한다
     }
 }

@@ -202,10 +202,11 @@ class RealtimeInternalApiIT {
     }
 
     @Test
-    void endRejectsConsentWithdrawnUnknownReasonsAndMalformedRequestsWith400() {
+    void endRejectsUnknownReasonsAndMalformedRequestsWith400() {
         UUID sessionId = dbOnlySession(SessionStatus.ACTIVE);
 
-        assertValidationFailed(end(sessionId, "CONSENT_WITHDRAWN"));
+        // U4b(FR1.4): CONSENT_WITHDRAWN은 응답표에 들어왔다(EndRequestU4bTest · SessionLifecycleU4bIT). 계약 열거의 알 수 없는 값으로 거절을 본다
+        assertValidationFailed(end(sessionId, "UNRECOGNIZED"));
         assertValidationFailed(end(sessionId, "SOMETHING_ELSE"));
         assertValidationFailed(api.post(SESSIONS + "/" + sessionId + "/end", "{\"reason\":\"GUARDIAN_STOP\"}"));
         assertValidationFailed(api.post(SESSIONS + "/" + sessionId + "/end", "not json"));

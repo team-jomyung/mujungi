@@ -18,6 +18,7 @@ import java.util.function.Function;
 import kr.mujoong.contract.log.AttrKey;
 import kr.mujoong.contract.log.EventCode;
 import kr.mujoong.contract.log.EventLog;
+import kr.mujoong.contract.status.EndReason;
 import kr.mujoong.contract.status.EndRequestReason;
 import kr.mujoong.contract.status.FailureCode;
 import kr.mujoong.contract.status.SessionStatus;
@@ -288,6 +289,13 @@ public final class SessionExecutor {
     private ProviderSession providerSession;
     private ProviderConnector.Attempt providerAttempt;
     private Thread thread;
+    /** U4b BR1.3: CLOSING에 들어갈 때 쓴 마무리 사유와 세부(30초 시한의 end_detail · STOP_OUTPUT · CLOSE_TRANSPORT 사유). */
+    private EndReason closingReason;
+    private String closingDetail;
+    /** U4b BR1.7: 동의 철회 끝내기를 받은 시각(이후 아이 전사 · 원음을 저장하지 않는다). 받지 않았으면 null. */
+    private Instant consentWithdrawnAt;
+    /** U4b BR1.7: 동의 철회 뒤 버린 아이 확정 전사 수(사건 payload는 건수만, BR12.1). */
+    private int droppedAfterConsent;
 
     /**
      * @param onTerminated 종료 정리 뒤 레지스트리에서 지우는 함수
@@ -669,6 +677,10 @@ public final class SessionExecutor {
                 thinking();
             }
             case ProviderEvent.InputTranscriptDelta delta -> {
+                if (consentWithdrawnAt != null) {
+                    // BR1.7: 동의 철회 뒤 도착한 아이 전사는 저장하지 않는다(확정 때 센다)
+                    return;
+                }
                 if (inRelayRange()) {
                     services.latency().inputActivity(plan.sessionId());
                     // BR7.3: 아이 입력 재개는 열린 구간을 확정한다(대화가 넘어갔으니 완결 요청 교정은 하지 않는다)
@@ -679,6 +691,10 @@ public final class SessionExecutor {
                 }
             }
             case ProviderEvent.InputTranscriptDone done -> {
+                if (consentWithdrawnAt != null) {
+                    droppedAfterConsent++;
+                    return;
+                }
                 if (inRelayRange()) {
                     boolean uncertain = uncertain(done);
                     transcripts.childFinal(done.itemId(), done.transcript(), at, uncertain);
@@ -1337,8 +1353,8 @@ public final class SessionExecutor {
         if (!Trigger.GUARDIAN_STOP.accepts(status)) {
             return EndOutcome.NOT_ACTIVE;
         }
-        return beginClosing(Trigger.GUARDIAN_STOP, requestId) || status == SessionStatus.CLOSING ? EndOutcome.CLOSING
-                : EndOutcome.NOT_ACTIVE;
+        beginClosing(Trigger.GUARDIAN_STOP, requestId);
+        return status == SessionStatus.CLOSING ? EndOutcome.CLOSING : EndOutcome.NOT_ACTIVE;
     }
 
     /**
@@ -1356,12 +1372,11 @@ public final class SessionExecutor {
         }
         if (START_PHASE.contains(status)) {
             failWithConsentWithdrawn();
-            return status == SessionStatus.CLOSING ? EndOutcome.CLOSING
-                    : status.isTerminal() || START_PHASE.contains(status) ? EndOutcome.ACCEPTED_EMPTY
-                    : EndOutcome.NOT_ACTIVE;
+            // 시작 단계는 202 {}(다른 전이가 먼저 이겨 종료됐어도 같은 답)
+            return status == SessionStatus.CLOSING ? EndOutcome.CLOSING : EndOutcome.ACCEPTED_EMPTY;
         }
-        return beginClosing(Trigger.CONSENT_WITHDRAWN, requestId) || status == SessionStatus.CLOSING
-                ? EndOutcome.CLOSING : EndOutcome.NOT_ACTIVE;
+        beginClosing(Trigger.CONSENT_WITHDRAWN, requestId);
+        return status == SessionStatus.CLOSING ? EndOutcome.CLOSING : EndOutcome.NOT_ACTIVE;
     }
 
     /** 시작 단계 동의 철회: FAILED(CONSENT_WITHDRAWN). START_SESSION이 나갔고 연결이 살아 있으면 CLOSE_TRANSPORT(CONSENT_WITHDRAWN). */
@@ -1393,7 +1408,7 @@ public final class SessionExecutor {
         if (open != null) {
             quietly(() -> open.close(consentWithdrawnAt));
         }
-        droppedAfterConsent += transcripts.discardOpenChildren();
+        transcripts.discardOpenChildren(consentWithdrawnAt);
     }
 
     /**
@@ -1566,9 +1581,10 @@ public final class SessionExecutor {
         }
         Instant now = services.clock().now();
         closeProvider();
+        // U4b BR1.4: UNCONFIRMED로 덮고 처음 사유(와 세부)를 end_detail에 둔다
         Optional<ActivitySessionRow> row = services.transitions().transition(plan.sessionId(), SessionStatus.CLOSING,
                 SessionStatus.ENDED_UNCONFIRMED,
-                TransitionTable.changeFor(Trigger.CLOSING_TIMEOUT, null, now).withProviderClosedAt(now),
+                TransitionTable.closingTimeoutChange(closingReason, closingDetail, now).withProviderClosedAt(now),
                 SessionTransitions.Origin.REALTIME, plan.traceId());
         if (row.isEmpty()) {
             syncFromDb();
@@ -1706,10 +1722,18 @@ public final class SessionExecutor {
 
     /** BR6.8: FAILED로 갈 때 START_SESSION이 나갔고 연결이 살아 있으면 CLOSE_TRANSPORT(FAILED) + SESSION_STATE{STANDBY}. */
     private void afterFailed() {
+        afterFailed(CloseTransport.Reason.FAILED);
+    }
+
+    /**
+     * BR6.8 · U4b BR1.5: FAILED로 갈 때 START_SESSION이 나갔고 연결이 살아 있으면 CLOSE_TRANSPORT(사유) + SESSION_STATE{STANDBY}. 시작 단계 동의
+     * 철회는 사유가 CONSENT_WITHDRAWN이다.
+     */
+    private void afterFailed(CloseTransport.Reason reason) {
         status = SessionStatus.FAILED;
         bumpGeneration();
         if (startSent && link != null && link.isOpen()) {
-            sendControl(new CloseTransport(CloseTransport.Reason.FAILED));
+            sendControl(new CloseTransport(reason));
             sendControl(new SessionState(View.STANDBY));
         }
         teardown();
@@ -1760,9 +1784,13 @@ public final class SessionExecutor {
                 }
             }
             case ACTIVE -> enterActive();
-            case CLOSING -> enterClosing(
-                    row.terminationRequestedAt() == null ? services.clock().now() : row.terminationRequestedAt(),
-                    endRequestId);
+            case CLOSING -> {
+                closingReason = row.endReason();
+                closingDetail = row.endDetail();
+                enterClosing(
+                        row.terminationRequestedAt() == null ? services.clock().now() : row.terminationRequestedAt(),
+                        endRequestId);
+            }
             default -> {
                 // PREPARING으로 되돌아가는 일은 없다(종료 상태는 위에서 정리했다)
             }

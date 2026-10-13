@@ -75,7 +75,8 @@ class TransitionTableTest {
 
     @Test
     void endReasonsFollowTheTargetState() {
-        assertThat(TransitionTable.endReason(SessionStatus.ENDED)).isEqualTo(EndReason.GUARDIAN_STOP);
+        // U4b(FR1.2 · BR1.4): ENDED는 CLOSING에 들어갈 때 사건이 쓴 사유를 그대로 둔다(도착 상태로 정하지 않음)
+        assertThat(TransitionTable.endReason(SessionStatus.ENDED)).isNull();
         assertThat(TransitionTable.endReason(SessionStatus.ENDED_UNCONFIRMED)).isEqualTo(EndReason.UNCONFIRMED);
         assertThat(TransitionTable.endReason(SessionStatus.ABORTED)).isEqualTo(EndReason.DISCONNECT);
         assertThat(TransitionTable.endReason(SessionStatus.FAILED)).isEqualTo(EndReason.FAILED);
@@ -109,7 +110,8 @@ class TransitionTableTest {
         assertThat(Trigger.SERVER_RESTART.multiOrigin()).isTrue();
         assertThat(Trigger.CORE_ABANDONED.multiOrigin()).isTrue();
         assertThat(Trigger.START_TIMEOUT.multiOrigin()).isTrue();
-        assertThat(Trigger.GUARDIAN_STOP.multiOrigin()).isFalse();
+        // U4b(FR1.3 · AC3.3.8): 보호자 끝내기는 WAITING_CHILD에서도 받는다
+        assertThat(Trigger.GUARDIAN_STOP.multiOrigin()).isTrue();
         assertThat(TransitionTable.isStartPhase(SessionStatus.PREPARING)).isTrue();
         assertThat(TransitionTable.isStartPhase(SessionStatus.DEVICE_ACK)).isTrue();
         assertThat(TransitionTable.isStartPhase(SessionStatus.ACTIVE)).isFalse();

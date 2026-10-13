@@ -328,7 +328,8 @@ class SessionExecutorTest {
         CompletableFuture<EndOutcome> stop = new CompletableFuture<>();
         CompletableFuture<EndOutcome> consent = new CompletableFuture<>();
         h.mailbox.putSafety(new SessionMailbox.EndRequested(UUID.randomUUID(), EndRequestReason.GUARDIAN_STOP, stop));
-        h.mailbox.putSafety(new SessionMailbox.EndRequested(UUID.randomUUID(), EndRequestReason.CONSENT_WITHDRAWN,
+        // U4b(FR1.4): CONSENT_WITHDRAWN은 응답표에 들어왔다. 응답표 밖 사유로 거절을 본다
+        h.mailbox.putSafety(new SessionMailbox.EndRequested(UUID.randomUUID(), EndRequestReason.UNRECOGNIZED,
                 consent));
         h.drain();
 

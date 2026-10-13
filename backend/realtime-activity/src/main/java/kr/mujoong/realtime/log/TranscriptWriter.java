@@ -132,6 +132,25 @@ public final class TranscriptWriter {
         aiFinal("", false, at);
     }
 
+    /**
+     * U4b BR1.7: 동의 철회 — 열린(확정 전) 아이 행을 철회 전에 받은 조각 그대로 FINAL로 닫고 이후 같은 항목의 조각 · 확정은 받지 않는다. 철회 뒤
+     * 도착한 전사는 실행기가 아예 넘기지 않는다.
+     *
+     * @return 닫은 아이 행 수
+     */
+    public int discardOpenChildren(Instant at) {
+        int closed = 0;
+        for (ChildRow row : childRows.values()) {
+            if (!row.closed) {
+                row.closed = true;
+                closed++;
+                recorder.putTranscript(TranscriptEntry.finalized(sessionId, row.seq, Speaker.CHILD, row.text.toString(),
+                        true, row.startedAt, at));
+            }
+        }
+        return closed;
+    }
+
     /** 마지막으로 정한 번호. */
     public int lastSequenceNo() {
         return lastSeq;

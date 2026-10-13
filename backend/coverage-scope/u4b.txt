@@ -6,3 +6,9 @@ backend/realtime-activity/src/main/java/kr/mujoong/realtime/dialog/JoinTracker.j
 # L1 스키마 · 설정
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/ResultInputSnapshotRepository.java
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/config/RealtimeProperties.java
+# L2 전이표 · 끝내기
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/TransitionTable.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/EndRequestHandler.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/SessionStateEmitter.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/TransitionService.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/gate/ClosingSequence.java
