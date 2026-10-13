@@ -13,6 +13,8 @@ import kr.mujoong.realtime.observability.EventLogger;
 import kr.mujoong.realtime.observability.RealtimeMetrics;
 import kr.mujoong.realtime.recording.AudioRecordings;
 import kr.mujoong.realtime.session.SessionExecutor;
+import kr.mujoong.realtime.session.NoOpPracticeSessionExtension;
+import kr.mujoong.realtime.session.PracticeSessionExtension;
 import kr.mujoong.realtime.session.SessionGapPort;
 import kr.mujoong.realtime.session.SessionSettlement;
 import kr.mujoong.realtime.session.SessionTransitions;
@@ -85,10 +87,12 @@ public class RealtimeRuntimeConfig {
             RealtimeProperties properties,
             SessionGapPort gaps,
             AudioRecordings recordings,
-            SessionSettlement settlement) {
-        // U4b(BR8.1): 종료 뒤 정산(결과 입력 스냅숏 + SessionRecordCaptured)은 RecordCaptureService가 맡는다
+            SessionSettlement settlement,
+            org.springframework.beans.factory.ObjectProvider<PracticeSessionExtension.Factory> practice) {
+        // U4b(BR8.1): 종료 뒤 정산(결과 입력 스냅숏 + SessionRecordCaptured)은 RecordCaptureService가 맡는다.
+        // U4b(BR10.2): 연습 확장점은 U5b가 빈을 등록하면 그것을, 없으면 무동작 공장을 쓴다
         return new SessionExecutor.Services(transitions, sockets::current, deviceStatus, connector, requests, gate,
                 recorder, latency, clocks, launcher, events, metrics, clock, SessionExecutor.Settings.from(properties), gaps,
-                recordings, settlement);
+                recordings, settlement, practice.getIfAvailable(() -> NoOpPracticeSessionExtension.FACTORY));
     }
 }

@@ -4,6 +4,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.EnumSet;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -199,9 +200,10 @@ public final class SessionExecutor {
             Settings settings,
             SessionGapPort gaps,
             AudioRecordings recordings,
-            SessionSettlement settlement) {
+            SessionSettlement settlement,
+            PracticeSessionExtension.Factory practice) {
 
-        /** U1 · U3 모양(정산 없음 — 종료 상태로 가면 정산 창 없이 곧바로 정리한다). */
+        /** U1 · U3 모양(정산 없음 — 종료 상태로 가면 정산 창 없이 곧바로 정리한다, 연습 확장점은 무동작). */
         public Services(SessionTransitions transitions, Function<UUID, Optional<? extends DeviceLink>> deviceLinks,
                 DeviceStatusPort deviceStatus, ProviderConnector connector, ProviderRequestFactory requests,
                 OutputGate gate, AsyncRecorder recorder, LatencyRecorder latency, TimerClocks clocks,
@@ -211,8 +213,19 @@ public final class SessionExecutor {
                     events, metrics, clock, settings, gaps, recordings, SessionSettlement.NONE);
         }
 
+        /** 연습 확장점은 무동작(U5b 전). */
+        public Services(SessionTransitions transitions, Function<UUID, Optional<? extends DeviceLink>> deviceLinks,
+                DeviceStatusPort deviceStatus, ProviderConnector connector, ProviderRequestFactory requests,
+                OutputGate gate, AsyncRecorder recorder, LatencyRecorder latency, TimerClocks clocks,
+                TaskLauncher launcher, EventLogger events, RealtimeMetrics metrics, MujoongClock clock, Settings settings,
+                SessionGapPort gaps, AudioRecordings recordings, SessionSettlement settlement) {
+            this(transitions, deviceLinks, deviceStatus, connector, requests, gate, recorder, latency, clocks, launcher,
+                    events, metrics, clock, settings, gaps, recordings, settlement, NoOpPracticeSessionExtension.FACTORY);
+        }
+
         public Services {
             Objects.requireNonNull(settlement, "settlement");
+            Objects.requireNonNull(practice, "practice");
             Objects.requireNonNull(transitions, "transitions");
             Objects.requireNonNull(deviceLinks, "deviceLinks");
             Objects.requireNonNull(deviceStatus, "deviceStatus");
@@ -344,6 +357,7 @@ public final class SessionExecutor {
     static final String EVENT_SILENCE_RESET = "SILENCE_RESET";
     static final String EVENT_TECHNICAL_PAUSE_STARTED = "TECHNICAL_PAUSE_STARTED";
     static final String EVENT_TECHNICAL_PAUSE_ENDED = "TECHNICAL_PAUSE_ENDED";
+    static final String EVENT_PRACTICE_EXTENSION_FAILED = "PRACTICE_EXTENSION_FAILED";
     /** U3-J13: ACTIVE 중 공급자 끊김의 end_detail. */
     static final String END_DETAIL_PROVIDER_LOST = "PROVIDER_LOST";
     /** 취소 · 교정 · 재생 위치를 기억하는 응답 · 재생 수의 상한(오래된 것부터 잊는다). */
@@ -425,6 +439,20 @@ public final class SessionExecutor {
     private JoinTracker join;
     /** U4b 지금 재생 중인 참여 안내의 playbackId(끝 표식이 창을 연다, 없으면 null). */
     private UUID joinPromptPlaybackId;
+    /** U4b 연습 확장점(PRACTICE 세션만, 예외가 나면 null로 두고 자유대화처럼 잇는다, BR10.1). */
+    private PracticeSessionExtension practice;
+    /** U4b BR10.1: 확장점 예외가 났다(정산 시점을 건너뛰고 practice는 null). */
+    private boolean practiceFailed;
+    /** U4b BR10.4: 확장점이 공급자 출력을 막았다. */
+    private boolean practiceHold;
+    /** U4b BR10.4: 확장점 시계(이름 → 예약). 기술 일시정지 동안 남은 시간만 들고 멈춘다. */
+    private final Map<String, PracticeTimer> practiceTimers = new HashMap<>();
+    private long practiceTimerGeneration;
+    /** U4b BR10.4: 확장점이 요청한 재생(playbackId → 승인 문구 코드). 끝 표식이 PLAYBACK_DONE이 된다. */
+    private final Map<UUID, String> practicePlaybacks = new HashMap<>();
+    /** U4b BR10.6: 정산 창 안에 확장점에 전달한 사건 수. */
+    private int practiceEventsInSettle;
+    private final PracticeSessionExtension.PracticeOutput practiceOutput = new PracticeOutputPort();
     /** U4b BR8.1: 종료 뒤 정산 창 중인가(전이 0회, 늦은 아이 전사만 받는다). */
     private boolean settling;
     /** U4b BR8.6: 정산 기준 ended_at. */
@@ -452,6 +480,10 @@ public final class SessionExecutor {
         Settings.Lifecycle lifecycle = services.settings().lifecycle();
         this.stopConfirm = new StopConfirmFlow(lifecycle.stopConfirmWait());
         this.silence = new SilenceClock(lifecycle.silenceWarning(), lifecycle.silenceEnd());
+        // U4b BR10.1: 연습 확장점은 PRACTICE 세션에서만 부른다(자유대화는 부르지 않는다)
+        this.practice = plan.activityType() == ActivityType.PRACTICE
+                ? Objects.requireNonNull(services.practice().create(plan.sessionId()), "practice extension")
+                : null;
     }
 
     /**
@@ -640,6 +672,8 @@ public final class SessionExecutor {
                     shutdown.handled().complete(null);
                 }
             }
+            case SessionMailbox.PracticeEvent event -> onPracticeEvent(event.event());
+            case SessionMailbox.PracticeTimerFired fired -> onPracticeTimer(fired);
             case SessionMailbox.DeviceTakenOver ignored -> {
                 if (farewellPending()) {
                     finishFarewell(false);
@@ -948,8 +982,15 @@ public final class SessionExecutor {
     /** ACTIVE 전이 승자의 뒷일: 진입 몫과 발언권 반환(응답 생성 요청 1회, BR2.6). */
     private void afterActiveWon() {
         enterActive();
-        resetSilence(services.clock().now());
+        Instant now = services.clock().now();
+        resetSilence(now);
         requestResponse();
+        // U4b BR10.1: PRACTICE면 확장점 'ACTIVE 진입'
+        if (practice != null) {
+            PracticeSessionExtension.PracticeContext context = new PracticeSessionExtension.PracticeContext(
+                    plan.sessionId(), plan.practiceJson(), plan.approved().keySet(), plan.rawAudioConsent(), now);
+            practiceSignal(() -> practice.onActive(context, practiceOutput), true);
+        }
     }
 
     /**
@@ -1073,9 +1114,291 @@ public final class SessionExecutor {
         teardown();
     }
 
-    /** 연습 확장점의 정산 시점과 practice 값(L5: 확장점이 없으면 null). */
+    /**
+     * 연습 확장점의 정산 시점과 practice 값(BR10.6 · BR8.3): 정산 창이 끝난 뒤 정산 시점을 한 번 부르고 practice 값을 받는다. 확장점이 없거나 예외가
+     * 났으면 null이다.
+     */
     private Object practiceRecordForSettle(Instant cutoff) {
-        return null;
+        PracticeSessionExtension current = practice;
+        if (current == null || practiceFailed) {
+            return null;
+        }
+        cancelPracticeTimers();
+        PracticeSessionExtension.EndContext end = new PracticeSessionExtension.EndContext(plan.sessionId(), status,
+                closingReasonOrRow(), closingDetail, sessionEndedAt, practiceEventsInSettle);
+        try {
+            current.onSettle(end);
+            return current.practiceRecord();
+        } catch (RuntimeException e) {
+            practiceFailure("EXCEPTION", e);
+            return null;
+        }
+    }
+
+    /** 정산 시점의 종료 사유(행이 정한 값, 모르면 CLOSING 사유). */
+    private EndReason closingReasonOrRow() {
+        try {
+            return services.transitions().find(plan.sessionId()).map(ActivitySessionRow::endReason).orElse(closingReason);
+        } catch (RuntimeException e) {
+            return closingReason;
+        }
+    }
+
+    // ------------------------------------------------------------------ 연습 확장점(U4b BR10.1 ~ BR10.6)
+
+    /**
+     * 확장점 시점 하나를 부르고 돌려받은 신호를 처리한다(BR10.3). 예외는 PRACTICE_EXTENSION_FAILED에 남기고 자유대화처럼 잇는다(BR10.1).
+     *
+     * @param signalsAllowed 신호를 처리하는가(CLOSING · 정산 창의 사건은 전달하되 신호를 무시한다, BR10.6 · R-10)
+     */
+    private void practiceSignal(java.util.function.Supplier<PracticeSessionExtension.Signal> call,
+            boolean signalsAllowed) {
+        PracticeSessionExtension.Signal signal;
+        try {
+            signal = call.get();
+        } catch (RuntimeException e) {
+            practiceFailure("EXCEPTION", e);
+            return;
+        }
+        if (!signalsAllowed || signal == null || signal == PracticeSessionExtension.Signal.NONE) {
+            return;
+        }
+        if (status != SessionStatus.ACTIVE) {
+            putEvent(EVENT_PRACTICE_EXTENSION_FAILED, "{\"reason\":\"SIGNAL_NOT_ACTIVE\",\"signal\":\"" + signal.name()
+                    + "\"}", services.clock().now());
+            return;
+        }
+        if (signal == PracticeSessionExtension.Signal.LAST_GOAL) {
+            // FD-Q6: 연습 완료는 CHILD_STOP + end_detail PRACTICE_COMPLETED
+            stopOutputForIntent(services.clock().now());
+            beginClosing(Trigger.PRACTICE_COMPLETED, null);
+        }
+        // NEXT_GOAL은 계속한다(다음 목표 진행은 확장점이 출력 능력으로 한다)
+    }
+
+    /** 확장점 예외(BR10.1): 남기고 확장점을 끈다 — 그 세션은 자유대화처럼 잇고 정산 시점은 건너뛰며 practice는 null이다. */
+    private void practiceFailure(String reason, RuntimeException cause) {
+        putEvent(EVENT_PRACTICE_EXTENSION_FAILED, "{\"reason\":\"" + reason + "\"}", services.clock().now());
+        services.events().appError(EventLog.Component.SESSION_LIFECYCLE, cause);
+        practiceFailed = true;
+        practice = null;
+        practiceHold = false;
+        cancelPracticeTimers();
+        practicePlaybacks.clear();
+    }
+
+    /**
+     * 확장점 사건 전달(BR10.5 · BR10.6 · R-10): ACTIVE면 전달하고 신호를 처리한다. CLOSING · 정산 창이면 전달하되 신호는 무시한다(정산 창 사건 수를
+     * 센다). 정산 뒤 · 그 밖 상태는 무시한다(BR8.7).
+     */
+    private void onPracticeEvent(PracticeSessionExtension.ExtensionEvent event) {
+        PracticeSessionExtension current = practice;
+        if (current == null || terminated) {
+            return;
+        }
+        if (status == SessionStatus.ACTIVE) {
+            practiceSignal(() -> current.onExtensionEvent(event, practiceOutput), true);
+            return;
+        }
+        if (status == SessionStatus.CLOSING || settling) {
+            if (settling) {
+                practiceEventsInSettle++;
+            }
+            practiceSignal(() -> current.onExtensionEvent(event, practiceOutput), false);
+        }
+    }
+
+    private void onPracticeTimer(SessionMailbox.PracticeTimerFired fired) {
+        PracticeTimer timer = practiceTimers.get(fired.name());
+        if (timer == null || timer.generation() != fired.generation()) {
+            return;
+        }
+        practiceTimers.remove(fired.name());
+        onPracticeEvent(new PracticeSessionExtension.ExtensionEvent(
+                PracticeSessionExtension.ExtensionEvent.Kind.TIMER_FIRED, fired.name(), null, null));
+    }
+
+    /** 확장점 시계 하나(만료 예약 또는 일시정지 중 남은 시간). */
+    private record PracticeTimer(long generation, kr.mujoong.contract.time.TimerDriver.TimerHandle handle,
+            Instant deadline, Duration remaining) {
+    }
+
+    private void schedulePracticeTimer(String name, Duration delay) {
+        cancelPracticeTimer(name);
+        long generation = ++practiceTimerGeneration;
+        Duration nonNegative = delay.isNegative() ? Duration.ZERO : delay;
+        if (technicalPause != null) {
+            practiceTimers.put(name, new PracticeTimer(generation, null, null, nonNegative));
+            return;
+        }
+        kr.mujoong.contract.time.TimerDriver.TimerHandle handle = services.clocks().safety().schedule(nonNegative,
+                () -> mailbox.putSafety(new SessionMailbox.PracticeTimerFired(name, generation)));
+        practiceTimers.put(name, new PracticeTimer(generation, handle, services.clock().now().plus(nonNegative), null));
+    }
+
+    private void cancelPracticeTimer(String name) {
+        PracticeTimer previous = practiceTimers.remove(name);
+        if (previous != null && previous.handle() != null) {
+            previous.handle().cancel();
+        }
+    }
+
+    private void cancelPracticeTimers() {
+        for (String name : List.copyOf(practiceTimers.keySet())) {
+            cancelPracticeTimer(name);
+        }
+    }
+
+    /** 기술 일시정지 동안 확장점 시계를 멈춘다(남은 시간만 든다, BR10.4). */
+    private void pausePracticeTimers(Instant now) {
+        for (Map.Entry<String, PracticeTimer> entry : List.copyOf(practiceTimers.entrySet())) {
+            PracticeTimer timer = entry.getValue();
+            if (timer.handle() == null) {
+                continue;
+            }
+            timer.handle().cancel();
+            Duration left = Duration.between(now, timer.deadline());
+            practiceTimers.put(entry.getKey(), new PracticeTimer(timer.generation(), null, null,
+                    left.isNegative() ? Duration.ZERO : left));
+        }
+    }
+
+    /** 일시정지가 끝나면 확장점 시계를 남은 시간부터 다시 건다. */
+    private void resumePracticeTimers(Instant now) {
+        for (Map.Entry<String, PracticeTimer> entry : List.copyOf(practiceTimers.entrySet())) {
+            PracticeTimer timer = entry.getValue();
+            if (timer.handle() != null) {
+                continue;
+            }
+            String name = entry.getKey();
+            long generation = timer.generation();
+            kr.mujoong.contract.time.TimerDriver.TimerHandle handle = services.clocks().safety().schedule(
+                    timer.remaining(), () -> mailbox.putSafety(new SessionMailbox.PracticeTimerFired(name, generation)));
+            practiceTimers.put(name, new PracticeTimer(generation, handle, now.plus(timer.remaining()), null));
+        }
+    }
+
+    /** 출력 능력 거절(R-10 · BR10.4): ACTIVE가 아니거나 능력 밖 요청이면 남기고 거짓. */
+    private boolean refusePractice(String capability, String reason) {
+        putEvent(EVENT_PRACTICE_EXTENSION_FAILED, "{\"reason\":\"" + reason + "\",\"capability\":\"" + capability
+                + "\"}", services.clock().now());
+        return false;
+    }
+
+    /** 출력 능력을 쓸 수 있는가(ACTIVE이고 정산 전, 확장점이 살아 있다). */
+    private boolean practiceActive() {
+        return status == SessionStatus.ACTIVE && !settling && !terminated && practice != null;
+    }
+
+    /** 실행기가 확장점에 주는 출력 능력(BR10.4). post 밖의 능력은 실행기 스레드에서만 부른다. */
+    private final class PracticeOutputPort implements PracticeSessionExtension.PracticeOutput {
+
+        @Override
+        public UUID sessionId() {
+            return plan.sessionId();
+        }
+
+        @Override
+        public boolean playApproved(String contentCode) {
+            if (!practiceActive()) {
+                return refusePractice("playApproved", "NOT_ACTIVE");
+            }
+            Instant now = services.clock().now();
+            Optional<ApprovedItem> item = contentCode == null ? Optional.empty() : plan.approvedItem(contentCode);
+            UUID playbackId = UUID.randomUUID();
+            if (item.isEmpty()) {
+                // BR3.3: 패키지에 없으면 재생만 건너뛰고 곧바로 끝난 것으로 본다
+                reportMissing(String.valueOf(contentCode), now);
+                mailbox.putSafety(new SessionMailbox.PracticeEvent(new PracticeSessionExtension.ExtensionEvent(
+                        PracticeSessionExtension.ExtensionEvent.Kind.PLAYBACK_DONE, String.valueOf(contentCode),
+                        playbackId, null)));
+                return true;
+            }
+            if (!sendControl(new PlayApprovedContent(playbackId, contentCode, item.get().contentVersionId()))) {
+                return refusePractice("playApproved", "SEND_FAILED");
+            }
+            practicePlaybacks.put(playbackId, contentCode);
+            playback.started(playbackId, contentCode);
+            timers.arm(Kind.PLAYBACK_EXPIRY, services.settings().playbackExpiry());
+            approvedBubble(item.get(), now);
+            return true;
+        }
+
+        @Override
+        public boolean instructProvider(String text) {
+            if (!practiceActive()) {
+                return refusePractice("instructProvider", "NOT_ACTIVE");
+            }
+            kr.mujoong.realtime.voice.PracticeInstruction instruction;
+            try {
+                instruction = new kr.mujoong.realtime.voice.PracticeInstruction(text);
+            } catch (RuntimeException e) {
+                return refusePractice("instructProvider", "INVALID");
+            }
+            ProviderRequestFactory.InstructionsCorrect request = services.requests().practiceInstruction(instruction);
+            toProvider("provider-practice-", session -> session.correctInstructions(request));
+            return true;
+        }
+
+        @Override
+        public boolean requestResponse() {
+            if (!practiceActive()) {
+                return refusePractice("requestResponse", "NOT_ACTIVE");
+            }
+            SessionExecutor.this.requestResponse();
+            return true;
+        }
+
+        @Override
+        public boolean cancelResponse() {
+            if (!practiceActive()) {
+                return refusePractice("cancelResponse", "NOT_ACTIVE");
+            }
+            cancelResponses();
+            return true;
+        }
+
+        @Override
+        public boolean holdOutput(boolean hold) {
+            if (!practiceActive()) {
+                return refusePractice("holdOutput", "NOT_ACTIVE");
+            }
+            practiceHold = hold;
+            if (hold) {
+                stopOutputForIntent(services.clock().now());
+            }
+            return true;
+        }
+
+        @Override
+        public boolean schedule(String name, Duration delay) {
+            if (!practiceActive()) {
+                return refusePractice("schedule", "NOT_ACTIVE");
+            }
+            if (name == null || name.isBlank() || delay == null) {
+                return refusePractice("schedule", "INVALID");
+            }
+            schedulePracticeTimer(name, delay);
+            return true;
+        }
+
+        @Override
+        public boolean cancel(String name) {
+            if (!practiceActive()) {
+                return refusePractice("cancel", "NOT_ACTIVE");
+            }
+            cancelPracticeTimer(name);
+            return true;
+        }
+
+        @Override
+        public boolean post(String name, Object value) {
+            if (name == null || name.isBlank()) {
+                return false;
+            }
+            return mailbox.putSafety(new SessionMailbox.PracticeEvent(new PracticeSessionExtension.ExtensionEvent(
+                    PracticeSessionExtension.ExtensionEvent.Kind.ASYNC_RESULT, name, null, value)));
+        }
     }
 
     /**
@@ -1123,9 +1446,10 @@ public final class SessionExecutor {
         }
     }
 
-    /** 공급자 출력을 받지 않는 때(참여 확인 중 · 종료 확인 질문 중, BR2.6 · BR4.3). */
+    /** 공급자 출력을 받지 않는 때(참여 확인 중 · 종료 확인 질문 중 · 확장점이 막은 동안, BR2.6 · BR4.3 · BR10.4). */
     private boolean outputHeld() {
-        return status == SessionStatus.WAITING_CHILD || stopConfirm.isActive();
+        return status == SessionStatus.WAITING_CHILD || stopConfirm.isActive()
+                || (practiceHold && status == SessionStatus.ACTIVE);
     }
 
     /** BR3.3: 빠진 승인 문구는 세션당 코드별 1회만 남긴다(payload는 코드만). */
@@ -1194,10 +1518,17 @@ public final class SessionExecutor {
                 }
                 if (inRelayRange()) {
                     boolean uncertain = uncertain(done);
-                    transcripts.childFinal(done.itemId(), done.transcript(), at, uncertain);
+                    java.util.OptionalInt seq = transcripts.childFinal(done.itemId(), done.transcript(), at, uncertain);
                     // U4b BR5.1: 아이의 빈 아닌 확정 전사가 공백 시계를 0으로 한다(빈 전사는 리셋하지 않는다)
                     if (status == SessionStatus.ACTIVE && done.transcript() != null && !done.transcript().isBlank()) {
                         resetSilence(at);
+                    }
+                    // U4b BR10.1: PRACTICE면 확장점 '전사 전달'(종료 의도 판정보다 먼저)
+                    if (status == SessionStatus.ACTIVE && practice != null) {
+                        PracticeSessionExtension.Utterance utterance = new PracticeSessionExtension.Utterance(
+                                seq.orElse(0), at, done.transcript() == null ? "" : done.transcript(), uncertain,
+                                !devicePlaying.isEmpty());
+                        practiceSignal(() -> practice.onChildUtterance(utterance, practiceOutput), true);
                     }
                     // 2차 리뷰 2: 종료 의도를 푼 발화의 응답은 막힌 동안 이미 취소됐을 수 있다 — 끝 신호가 오지 않을 '생각 중'을 보내지 않는다
                     if (!judgeStopIntent(done.transcript(), uncertain, at)) {
@@ -1559,6 +1890,7 @@ public final class SessionExecutor {
         pauseStartedAt = now;
         timers.cancel(Kind.JOIN_WINDOW);
         timers.cancel(Kind.STOP_CONFIRM);
+        pausePracticeTimers(now);
         if (openGapId == null) {
             openGapId = services.gaps().open(plan.sessionId(), SessionGapRepository.Kind.DISCONNECT, gapFrom);
         }
@@ -1590,6 +1922,7 @@ public final class SessionExecutor {
             stopConfirm.shift(paused);
             armStopConfirm();
         }
+        resumePracticeTimers(now);
         armGapDisplay();
     }
 
@@ -1874,6 +2207,13 @@ public final class SessionExecutor {
                     // U4b BR2.2: 참여 안내의 끝 표식을 서버가 받은 시각부터 창을 연다
                     joinPromptPlaybackId = null;
                     onJoinPromptPlayed(received.serverRecvAt());
+                }
+                String practiceCode = practicePlaybacks.remove(mark.playbackId());
+                if (practiceCode != null) {
+                    // U4b BR10.4: 확장점이 요청한 재생의 끝 → PLAYBACK_DONE(편지함을 거쳐 실행기 스레드에서 전달)
+                    mailbox.putSafety(new SessionMailbox.PracticeEvent(new PracticeSessionExtension.ExtensionEvent(
+                            PracticeSessionExtension.ExtensionEvent.Kind.PLAYBACK_DONE, practiceCode, mark.playbackId(),
+                            null)));
                 }
                 if (status == SessionStatus.ACTIVE && mark.playbackId().equals(stopConfirmPlaybackId)) {
                     // U4b BR4.3: 확인 질문의 끝 표식을 서버가 받은 시각부터 창을 연다
@@ -2748,6 +3088,7 @@ public final class SessionExecutor {
         Instant now = services.clock().now();
         try {
             quietly(timers::cancelAll);
+            quietly(this::cancelPracticeTimers);
             quietly(relay::stop);
             quietly(this::closeProvider);
             quietly(() -> {

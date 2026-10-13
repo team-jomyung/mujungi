@@ -29,3 +29,6 @@ backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/ResultSnapsh
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/RecordCaptureService.java
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/SessionSettlement.java
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/OrphanSessionChecker.java
+# 연습 확장점
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/PracticeSessionExtension.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/NoOpPracticeSessionExtension.java

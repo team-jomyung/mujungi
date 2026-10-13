@@ -90,6 +90,18 @@ public final class SessionMailbox {
     public record DeviceTakenOver(UUID newSessionId) implements Message {
     }
 
+    /** U4b(BR10.5): 연습 확장점 사건(재생 완료 · 비동기 결과). 확장점이 다른 스레드에서 post해도 실행기 스레드에서 전달된다. */
+    public record PracticeEvent(PracticeSessionExtension.ExtensionEvent event) implements Message {
+
+        public PracticeEvent {
+            Objects.requireNonNull(event, "event");
+        }
+    }
+
+    /** U4b(BR10.4): 연습 확장점의 이름 붙은 시계 만기(타이머 스레드는 넣기만 한다, 세대로 낡은 만기를 버린다). */
+    public record PracticeTimerFired(String name, long generation) implements Message {
+    }
+
     /** START_SESSION ACK. */
     public record DeviceAck(UUID connectionId, UUID ackOf, Instant receivedAt) implements Message {
     }
