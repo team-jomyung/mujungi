@@ -1,0 +1,1 @@
+"U4b 활동 세션 Realtime 쪽(u4b-activity-realtime) 구현. 설계 docs/units/u4b/design.md · 지시 docs/units/u4b/brief.md를 정본으로, main의 U1·U3 Realtime 코드 위에 SessionLifecycle 11상태·8사유, 참여 확인, 공백·끊김, 결과 스냅숏·SessionRecordCaptured, 삭제 처리기를 완성한다. 인셉션 산출물은 261008-mujoong-service 기록의 것을 그대로 쓴다. 대화와 산출물은 한국어로 쓴다(코드 식별자·고정 토큰 제외)."

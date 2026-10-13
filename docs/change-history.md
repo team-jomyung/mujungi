@@ -2,6 +2,23 @@
 
 결정이 바뀐 경위는 이 문서에만 적는다. 다른 문서는 현재 상태만 적는다.
 
+## 2026-10-13 · U4b부터 AI-DLC로 다시 진행 · U4b와 U5b 병렬
+
+**배경**
+- U2 ~ U5a는 엔진의 승인 증빙이 PC별이라 엔진 밖에서 구현했다.
+- U4b와 U5b를 두 사람이 동시에 만들면서 다시 AI-DLC를 쓰기로 했다.
+
+**바뀐 것**
+
+| 항목 | 지금 | 이전 |
+|---|---|---|
+| 작업 기록 | 담당자마다 자기 PC에서 유닛용 작업 기록을 새로 만든다(U4b: `261013-u4b-activity-realtime`). 인셉션 산출물은 `261008-mujoong-service` 기록의 것을 그대로 쓴다 | U2 ~ U5a는 기록 없이 `docs/units/<유닛>/` 문서로만 진행 |
+| 유닛 기록의 단계 | 기존 코드 파악 → Requirements Analysis(유닛 몫만) → Functional Design → Code Generation → Build and Test. 깊이 · 시험 전략 Standard | — |
+| U5 Realtime 쪽 | U5b로 이름 붙이고 U4b와 병렬로 진행한다. Core 연결 마무리(PracticeStart · 실제 어댑터 · 노출 반영 · 18 시작 · 12 머리)도 U5b가 맡는다. 병합은 U4b 다음 | U5a 보고서의 「후속 작업」에만 있었다 |
+
+**남겨 둔 것**
+- `261008-mujoong-service` 기록은 U1 확인 지점에서 멈춰 두었다(park). 마지막 통합 · Operation 때 다시 쓴다.
+
 ## 2026-10-13 · U5a 리뷰 1차 반영(main 병합 포함)
 
 **배경**

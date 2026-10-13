@@ -56,9 +56,13 @@
 
 - **Construction Verification Command**: bash scripts/verify.sh --engine
 
-- **Parked**: 2026-10-11T23:23:56Z
+
+
+- **Parked**: 2026-10-13T05:54:27Z
 
 - **Parked At Stage**: functional-design
+
+- **Parked By**: person
 
 ## Phase Progress
 <!-- Status values: Pending, Active, Verified, Skipped -->
@@ -121,7 +125,7 @@ Per unit: [TBD]
 - **Current Stage**: functional-design
 - **Next Stage**: nfr-requirements
 - **Status**: Running
-- **Last Updated**: 2026-10-11T23:23:56Z
+- **Last Updated**: 2026-10-13T05:54:27Z
 
 - **Construction Autonomy Mode**: gated
 
