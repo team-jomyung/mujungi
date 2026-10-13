@@ -38,3 +38,15 @@ backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/RealtimeSess
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/log/RealtimeVoiceDeletionParticipant.java
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/messaging/RealtimeMessagingDeletionParticipant.java
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/messaging/RealtimeOutboxSender.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/messaging/RealtimeDeletionParticipant.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/messaging/OutboxPublishedListener.java
+# 층마다 고친 U1 · U3 운영 소스(Step 24: 새 · 바뀐 운영 파일 모두)
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/dialog/DialogInstructions.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/log/AsyncRecorder.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/log/TranscriptRepository.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/runtime/RealtimeRuntimeConfig.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/SessionChange.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/SessionMailbox.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/SessionTransitions.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/voice/ProviderClient.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/voice/ProviderPort.java
