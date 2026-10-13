@@ -29,6 +29,8 @@ import kr.mujoong.contract.ws.WsMessageType;
 import kr.mujoong.contract.ws.message.OutputBegin;
 import kr.mujoong.contract.ws.message.PlayApprovedContent;
 import kr.mujoong.contract.ws.message.PlaybackMark;
+import kr.mujoong.contract.ws.message.SessionState;
+import kr.mujoong.contract.ws.message.View;
 import kr.mujoong.contract.ws.message.WsError;
 import kr.mujoong.realtime.gateway.ConnectionSender;
 import kr.mujoong.realtime.gateway.DeviceWebSocketHandler;
@@ -286,6 +288,9 @@ class RealtimeLogHygieneIT {
         device.ack(command.opId(), sessionId);
         device.deviceReady(sessionId, true, true);
         awaitStatus(env, sessionId, SessionStatus.ACTIVE);
+        // LISTENING은 입력 수락을 연 뒤에 나간다. 실행기는 DB에 ACTIVE를 쓴 다음 중계를 열므로 DB의 ACTIVE만 보고 보내면
+        // 그 사이 프레임이 NOT_ACCEPTING으로 버려질 수 있다(3.6 재시험 1차 실패 원인, U3 L6 — RealtimeMetricsScrapeIT와 같은 대기)
+        device.await(envelope -> envelope.payload() instanceof SessionState state && state.view() == View.LISTENING, WAIT);
 
         byte[] pcm = markedPcm();
         // 입력 대기열은 50프레임(L1, 넘치면 오래된 것부터 버림)이라 60프레임을 한 번에 몰아 보내면 부하에 따라 일부가 버려진다.

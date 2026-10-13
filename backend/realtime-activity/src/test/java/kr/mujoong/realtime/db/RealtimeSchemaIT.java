@@ -31,25 +31,34 @@ import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.context.annotation.Configuration;
 
 /**
- * Realtime V1 스키마 통합 시험(U1 3.5 Step 14). 실제 init 스크립트 + 두 마이그레이션 위치로 만든 DB에서 표 · 열 · 형식 · 색인 ·
- * 이력과 JPA 엔터티 대조(ddl-auto=validate)를 본다.
+ * Realtime 스키마 통합 시험(U1 3.5 Step 14 · U3 L1이 V2를 더함). 실제 init 스크립트 + 두 마이그레이션 위치로 만든 DB에서 표 · 열 ·
+ * 형식 · 색인 · 이력과 JPA 엔터티 대조(ddl-auto=validate)를 본다.
  *
- * <p>증명: BR8.2 · J43(V1이 표 7개를 만든다) · 열 수(realtime_activity_session 29 · realtime_device_connection 10 · Outbox/Inbox 각 17
- * · realtime_transcript 12, E2 · E4 · E5) · A3 trace_id · J115 · PD-8(fillfactor 90 · 진행 중 세션 부분 유일 색인 둘) · J116(core 다음
- * 적용이라 버전 0 기준선 + V1) · Step 11 JPA 엔터티 validate.
+ * <p>증명: BR8.2 · J43(V1이 표 7개를 만든다) · U3 design.md 3절(V2가 표 3개를 더한다: 끊김 사건 7열 · 원음 메타 10열 · 끊김 구간 6열,
+ * V1 표는 그대로) · 열 수(realtime_activity_session 29 · realtime_device_connection 10 · Outbox/Inbox 각 17 · realtime_transcript 12,
+ * E2 · E4 · E5) · A3 trace_id · J115 · PD-8(fillfactor 90 · 진행 중 세션 부분 유일 색인 둘) · J116(core 다음 적용이라 버전 0 기준선 +
+ * V1 + V2) · Step 11 JPA 엔터티 validate.
  */
 @Tag("u1")
 @Tag("db")
 class RealtimeSchemaIT {
 
+    /** V1 일곱 표 + U3 V2 세 표(pg_tables 이름 순). */
     static final List<String> REALTIME_TABLES = List.of(
             "realtime_activity_session",
+            "realtime_audio_recording",
             "realtime_device_connection",
+            "realtime_device_disconnect_event",
             "realtime_inbox_event",
             "realtime_outbox_event",
             "realtime_session_event",
+            "realtime_session_gap",
             "realtime_session_stop_expression",
             "realtime_transcript");
+
+    /** U3 V2가 더한 표(이 중 하나라도 V1 표와 겹치면 더하기만 한다는 BR8.2를 어긴 것이다). */
+    static final List<String> V2_TABLES = List.of(
+            "realtime_audio_recording", "realtime_device_disconnect_event", "realtime_session_gap");
 
     private static MujoongPostgres postgres;
 
@@ -59,23 +68,68 @@ class RealtimeSchemaIT {
     }
 
     @Test
-    void v1CreatesExactlyTheSevenRealtimeTablesAfterAVersionZeroBaseline() throws SQLException {
+    void v1AndV2CreateExactlyTheTenRealtimeTablesAfterAVersionZeroBaseline() throws SQLException {
         try (Connection owner = postgres.connect(Role.OWNER)) {
             List<List<Object>> tables = query(owner,
                     "select tablename, tableowner from pg_tables where schemaname = 'realtime' order by tablename");
             assertThat(tables.stream().map(row -> (String) row.get(0)).toList()).containsExactlyElementsOf(REALTIME_TABLES);
             assertThat(tables).allSatisfy(row -> assertThat(row.get(1)).isEqualTo("mujoong_owner"));
 
-            // core 위치가 먼저 flyway 스키마를 썼으므로 realtime 이력은 버전 0 기준선 뒤 V1이다(J116 보완)
+            // core 위치가 먼저 flyway 스키마를 썼으므로 realtime 이력은 버전 0 기준선 뒤 V1 · V2다(J116 보완)
             assertThat(query(owner,
                     "select version, type, success from flyway.realtime_schema_history order by installed_rank"))
-                    .containsExactly(List.of("0", "BASELINE", true), List.of("1", "SQL", true));
+                    .containsExactly(List.of("0", "BASELINE", true), List.of("1", "SQL", true), List.of("2", "SQL", true));
         }
         try (Connection realtime = postgres.connect(Role.REALTIME_APP)) {
             // 기동 점검 S2가 읽는 최신 버전
             assertThat(single(realtime,
                     "select max(version) from flyway.realtime_schema_history where success and type = 'SQL'"))
-                    .isEqualTo("1");
+                    .isEqualTo("2");
+        }
+    }
+
+    @Test
+    void v2OnlyAddsTablesAndTheAppRoleGetsDmlOnThemByDefaultPrivilege() throws SQLException {
+        try (Connection owner = postgres.connect(Role.OWNER)) {
+            // V2 파일은 CREATE TABLE · CREATE INDEX만 담는다(BR8.2: 열 삭제 · 이름 변경 · 필수화 없음)
+            assertThat(single(owner, "select script from flyway.realtime_schema_history where version = '2'"))
+                    .isEqualTo("V2__u3_voice_conversation.sql");
+            assertThat(V2_TABLES).allSatisfy(table -> assertThat(REALTIME_TABLES).contains(table));
+            assertThat(RealtimeSchemaIT.REALTIME_TABLES).hasSize(10);
+        }
+        try (Connection realtime = postgres.connect(Role.REALTIME_APP)) {
+            // 01-roles.sql 기본 권한(편차 (x)): realtime_app은 새 표에 DML을 받고 DDL은 못 한다
+            for (String table : V2_TABLES) {
+                assertThat(single(realtime,
+                        "select has_table_privilege('realtime." + table + "', 'SELECT,INSERT,UPDATE,DELETE')"))
+                        .as(table).isEqualTo(true);
+            }
+            // 외래 키는 세션 행을 지키고(ON DELETE RESTRICT), 세션 · 화자 유일, 끊김 창 질의 · gaps 조회 색인
+            assertThat(query(realtime,
+                    "select conname, confdeltype from pg_constraint where contype = 'f' and conrelid in"
+                            + " ('realtime.realtime_audio_recording'::regclass, 'realtime.realtime_session_gap'::regclass)"
+                            + " order by conname"))
+                    .containsExactly(
+                            List.of("realtime_audio_recording_session_fk", "r"),
+                            List.of("realtime_session_gap_session_fk", "r"));
+            assertThat(single(realtime,
+                    "select count(*) from pg_constraint where contype = 'u' and conname = 'realtime_audio_recording_session_speaker_uk'"))
+                    .isEqualTo(1L);
+            assertThat(query(realtime,
+                    "select indexname from pg_indexes where schemaname = 'realtime' and indexname in"
+                            + " ('realtime_device_disconnect_event_device_idx', 'realtime_session_gap_session_idx')"
+                            + " order by indexname"))
+                    .containsExactly(List.of("realtime_device_disconnect_event_device_idx"),
+                            List.of("realtime_session_gap_session_idx"));
+            // CHECK 제약: kind · speaker · close_code 범위 · ended_at ≥ started_at · byte_count ≥ 0
+            assertThat(query(realtime,
+                    "select conname from pg_constraint where contype = 'c' and conrelid in"
+                            + " ('realtime.realtime_device_disconnect_event'::regclass, 'realtime.realtime_audio_recording'::regclass,"
+                            + " 'realtime.realtime_session_gap'::regclass) order by conname"))
+                    .extracting(row -> (String) row.get(0))
+                    .contains("realtime_device_disconnect_event_kind_ck", "realtime_device_disconnect_event_code_ck",
+                            "realtime_audio_recording_speaker_ck", "realtime_audio_recording_bytes_ck",
+                            "realtime_session_gap_kind_ck", "realtime_session_gap_order_ck");
         }
     }
 
@@ -88,6 +142,9 @@ class RealtimeSchemaIT {
         "realtime_transcript, 12",
         "realtime_session_event, 6",
         "realtime_session_stop_expression, 6",
+        "realtime_device_disconnect_event, 7",
+        "realtime_audio_recording, 10",
+        "realtime_session_gap, 6",
     })
     void tablesHaveTheEntityColumnCounts(String table, int expectedColumns) throws SQLException {
         try (Connection realtime = postgres.connect(Role.REALTIME_APP)) {

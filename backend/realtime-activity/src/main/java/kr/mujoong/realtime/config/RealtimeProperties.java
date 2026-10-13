@@ -22,6 +22,11 @@ import org.springframework.util.unit.DataSize;
  * <p>기동 검증(RD-24): 모든 시간 · 건수 값이 양수, 불변식 I-3 {@code internal-http.verify-token-timeout <
  * timing.device.hello-timeout}, I-10 {@code provider.connect-timeout ≤ timing.session.device-ack-timeout},
  * 허용 origin 형식. 오류 메시지에는 키 이름만 쓴다. DB 풀 상한은 {@link RealtimePropertiesConfig}가 확인한다.
+ *
+ * <p>U3(음성 대화, docs/units/u3/design.md 4절)가 더한 키: 불안정 판정 {@code timing.device.unstable-rtt} ·
+ * {@code timing.device.unstable-disconnect-window} · {@code device.unstable-disconnect-count}(계약 7절 "5분 안 2회"를 창 · 횟수로
+ * 나눔, U3-J3), 원음 기록 {@code recording.*}(U3-J14 · U3-J15), 원음 대기열 {@code limits.recording-queue-frames}, 불확실 전사 기준
+ * {@code transcript.uncertain-below-percent}(U3-J17). 더하기만 했고 U1 키의 이름 · 뜻은 그대로다.
  */
 @ConfigurationProperties(prefix = "mujoong")
 public record RealtimeProperties(
@@ -37,6 +42,8 @@ public record RealtimeProperties(
         Health health,
         Limits limits,
         Gate gate,
+        Recording recording,
+        Transcript transcript,
         Security security,
         Metrics metrics,
         Observability observability) {
@@ -54,6 +61,8 @@ public record RealtimeProperties(
         required(health, "mujoong.health");
         required(limits, "mujoong.limits");
         required(gate, "mujoong.gate");
+        required(recording, "mujoong.recording");
+        required(transcript, "mujoong.transcript");
         required(security, "mujoong.security");
         required(metrics, "mujoong.metrics");
         required(observability, "mujoong.observability");
@@ -85,13 +94,18 @@ public record RealtimeProperties(
         }
     }
 
-    /** BR4.8 끊김 40초 · HEARTBEAT 주기(HELLO_OK로 내려줌) · HELLO 5초 · 상태 보고 10초 · 출력 대기열 20초 분량. */
+    /**
+     * BR4.8 끊김 40초 · HEARTBEAT 주기(HELLO_OK로 내려줌) · HELLO 5초 · 상태 보고 10초 · 출력 대기열 20초 분량. U3: 불안정 판정의
+     * 왕복 기준 1초와 끊김 횟수 창 5분(BR4.8 ①, U3-R1 · U3-J3).
+     */
     public record DeviceTiming(
             Duration disconnect,
             Duration heartbeatInterval,
             Duration helloTimeout,
             Duration statusReportInterval,
-            Duration outputQueueMax) {
+            Duration outputQueueMax,
+            Duration unstableRtt,
+            Duration unstableDisconnectWindow) {
 
         public DeviceTiming {
             positive(disconnect, "mujoong.timing.device.disconnect");
@@ -99,6 +113,8 @@ public record RealtimeProperties(
             positive(helloTimeout, "mujoong.timing.device.hello-timeout");
             positive(statusReportInterval, "mujoong.timing.device.status-report-interval");
             positive(outputQueueMax, "mujoong.timing.device.output-queue-max");
+            positive(unstableRtt, "mujoong.timing.device.unstable-rtt");
+            positive(unstableDisconnectWindow, "mujoong.timing.device.unstable-disconnect-window");
         }
     }
 
@@ -179,10 +195,11 @@ public record RealtimeProperties(
         }
     }
 
-    /** BR4.8 DISCONNECTED 점검 주기. */
-    public record Device(Duration disconnectCheckInterval) {
+    /** BR4.8 DISCONNECTED 점검 주기 · U3 불안정 판정 끊김 횟수(창 안 이 횟수 이상이면 UNSTABLE, U3-R1). */
+    public record Device(Duration disconnectCheckInterval, Integer unstableDisconnectCount) {
         public Device {
             positive(disconnectCheckInterval, "mujoong.device.disconnect-check-interval");
+            positive(unstableDisconnectCount, "mujoong.device.unstable-disconnect-count");
         }
     }
 
@@ -220,7 +237,7 @@ public record RealtimeProperties(
         }
     }
 
-    /** NFR9.9 · BR3.9 · PD-2 ~ PD-5 · RD-22 한도. */
+    /** NFR9.9 · BR3.9 · PD-2 ~ PD-5 · RD-22 한도. U3: 원음 기록 대기열 프레임 수(넘치면 버리고 센다, U3-J15). */
     public record Limits(
             DataSize wsTextFrameMax,
             DataSize internalEventBodyMax,
@@ -232,7 +249,8 @@ public record RealtimeProperties(
             Integer backgroundDbConcurrency,
             Duration dbLockTimeout,
             Duration dbStatementTimeout,
-            Integer dbRetryAttempts) {
+            Integer dbRetryAttempts,
+            Integer recordingQueueFrames) {
 
         public Limits {
             positive(wsTextFrameMax, "mujoong.limits.ws-text-frame-max");
@@ -246,6 +264,7 @@ public record RealtimeProperties(
             positive(dbLockTimeout, "mujoong.limits.db-lock-timeout");
             positive(dbStatementTimeout, "mujoong.limits.db-statement-timeout");
             nonNegative(dbRetryAttempts, "mujoong.limits.db-retry-attempts");
+            positive(recordingQueueFrames, "mujoong.limits.recording-queue-frames");
         }
     }
 
@@ -253,6 +272,34 @@ public record RealtimeProperties(
     public record Gate(Duration segmentQuiet) {
         public Gate {
             positive(segmentQuiet, "mujoong.gate.segment-quiet");
+        }
+    }
+
+    /**
+     * U3 원음 기록(components AudioRecording · K6 · U3-J14 · U3-J15): 동의된 세션의 아이 · AI 원음을
+     * {@code <directory>/<sessionId>/child.pcm} · {@code ai.pcm}(PCM16LE 24kHz 모노 raw)으로 쓴다. 세션당 바이트 상한을 넘으면 그
+     * 세션의 기록을 멈춘다(대화는 계속). 디렉터리는 운영에서 볼륨 경로를 환경 변수 MUJOONG_RECORDING_DIRECTORY로 준다.
+     */
+    public record Recording(String directory, DataSize maxBytesPerSession) {
+        public Recording {
+            if (directory == null || directory.isBlank()) {
+                throw invalid("필수 설정 키가 비어 있다: mujoong.recording.directory");
+            }
+            directory = directory.trim();
+            positive(maxBytesPerSession, "mujoong.recording.max-bytes-per-session");
+        }
+    }
+
+    /**
+     * U3 전사 표시 기준(AC3.2.10 · U3-J17): 공급자가 준 아이 전사 신뢰도(0 ~ 100)가 이 값보다 낮으면 {@code review_needed}
+     * (12 '불확실' 표시). 신뢰도를 주지 않는 공급자에서는 판정하지 않는다.
+     */
+    public record Transcript(Integer uncertainBelowPercent) {
+        public Transcript {
+            nonNegative(uncertainBelowPercent, "mujoong.transcript.uncertain-below-percent");
+            if (uncertainBelowPercent > Observability.MAX_PERCENT) {
+                throw invalid("설정 키는 0 이상 100 이하여야 한다: mujoong.transcript.uncertain-below-percent");
+            }
         }
     }
 

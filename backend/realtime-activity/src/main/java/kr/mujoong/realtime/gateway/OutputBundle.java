@@ -15,10 +15,12 @@ import kr.mujoong.contract.ws.message.OutputBegin;
  * <p>연결 송신기가 OUTPUT_BEGIN → 0x02 프레임들 → OUTPUT_END로 보낸다. 프레임을 보내기 전마다 {@link #stillCurrent()}(출력 세대가 묶음을
  * 만들 때와 같은가)를 확인해 STOP_OUTPUT · 종료 · 연결 교체 뒤에는 남은 프레임을 보내지 않는다(SD-17). 음성은 봉인한 구간의 바이트를 순서대로
  * 이어 {@value #FRAME_PAYLOAD_BYTES}바이트(100ms) 프레임으로 나눈다 — 바이트는 바꾸지 않는다(J131 무변환). 첫 프레임을 소켓에 쓴 직후
- * {@code onFirstFrameSent}로 tFirstFrameSent를 알린다(OD-8).
+ * {@code onFirstFrameSent}로 tFirstFrameSent를 알린다(OD-8). 프레임을 소켓에 쓸 때마다 그 본문을 {@code onFrameSent}에 넘긴다 — 원음 기록은
+ * 게이트 통과가 아니라 실제로 기기로 보낸 프레임만 남긴다(U3-R9, 리뷰 반영 6).
  *
  * @param stillCurrent 출력 세대 확인(송신기 스레드에서 불린다)
  * @param onFirstFrameSent 첫 프레임 직후 시각 수신자(송신기 스레드)
+ * @param onFrameSent 프레임 하나를 소켓에 쓴 직후 그 본문 수신자(송신기 스레드, 기다리지 않아야 한다)
  */
 public record OutputBundle(
         UUID sessionId,
@@ -28,7 +30,8 @@ public record OutputBundle(
         long totalMs,
         DeviceLink.AudioReservation reservation,
         BooleanSupplier stillCurrent,
-        Consumer<Instant> onFirstFrameSent) {
+        Consumer<Instant> onFirstFrameSent,
+        Consumer<byte[]> onFrameSent) {
 
     /** 0x02 프레임 본문 크기(100ms × PCM16 24kHz 모노). 마지막 프레임은 짧을 수 있다. */
     public static final int FRAME_PAYLOAD_BYTES = 4_800;
@@ -41,9 +44,16 @@ public record OutputBundle(
         Objects.requireNonNull(reservation, "reservation");
         Objects.requireNonNull(stillCurrent, "stillCurrent");
         Objects.requireNonNull(onFirstFrameSent, "onFirstFrameSent");
+        Objects.requireNonNull(onFrameSent, "onFrameSent");
         if (frames.isEmpty()) {
             throw new IllegalArgumentException("출력 묶음에 프레임이 없다");
         }
+    }
+
+    /** 보낸 프레임을 따로 받지 않는 묶음(원음 기록이 없는 세션). */
+    public OutputBundle(UUID sessionId, UUID playbackId, OutputBegin.Source source, List<byte[]> frames, long totalMs,
+            DeviceLink.AudioReservation reservation, BooleanSupplier stillCurrent, Consumer<Instant> onFirstFrameSent) {
+        this(sessionId, playbackId, source, frames, totalMs, reservation, stillCurrent, onFirstFrameSent, frame -> { });
     }
 
     /**

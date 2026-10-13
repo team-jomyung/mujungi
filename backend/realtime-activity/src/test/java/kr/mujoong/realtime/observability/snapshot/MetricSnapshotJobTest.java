@@ -245,7 +245,9 @@ class MetricSnapshotJobTest {
         org.assertj.core.api.Assertions.assertThatThrownBy(() -> new MetricSnapshotJob(clock, Duration.ZERO, outbox,
                 inbox, connections, pool, metrics, TestEventLoggers.strict(clock, logs, metrics), load))
                 .isInstanceOf(IllegalArgumentException.class);
-        assertThat(EnumSet.copyOf(RealtimeMetrics.CONNECTION_STATES)).doesNotContain(ConnectionState.UNSTABLE);
+        // U3(BR4.8 ①)가 UNSTABLE 값을 더했다 — 다섯 상태 모두 게이지 라벨이다
+        assertThat(EnumSet.copyOf(RealtimeMetrics.CONNECTION_STATES)).isEqualTo(EnumSet.complementOf(
+                EnumSet.of(ConnectionState.UNRECOGNIZED)));
     }
 
     private List<Map<String, Object>> snapshots() {

@@ -1,0 +1,18 @@
+# 마이그레이션 금지 문장 승인 목록 (infra-validate migrations · cicd 2.7.2의 'contract는 리뷰어 승인으로 예외')
+#
+# expand 단계 검사(infra/bin/infra-validate)는 이전 앱을 깨뜨릴 수 있는 문장(삭제 · 이름 변경 · 타입 변경 · 널 불허 추가 ·
+# 기존 표 제약 강화)을 막는다. 사람이 '이전 앱이 깨지지 않는다'고 확인한 문장만 여기에 적어 넘긴다.
+#
+# 형식: <위치>/<파일> <문장 번호> <문장 해시 12자> | 승인: <사람> <날짜> | 사유: <근거>
+#   - 위치는 마이그레이션 디렉터리 이름(core · realtime), 문장 번호는 검사기 출력의 '문장 N'
+#   - 해시는 주석 · 공백 · 문자열 값을 뺀 문장(대문자)의 sha256 앞 12자. 승인 뒤 문장이 바뀌면 다시 걸린다
+#   - 새 줄을 더하는 PR은 리뷰어 승인을 받는다. 이미 적용된 파일은 Flyway 체크섬이 수정을 막는다
+#
+# U2 core V2 (2026-10-12 병합, CI가 이 문장들로 실패하던 것을 사람 확인 뒤 승인)
+core/V2__u2_guardian_account.sql 1 b96664b0a832 | 승인: 백준하 2026-10-13 | 사유: core_consent.child_id의 널 불허를 푸는 완화다(검사기가 DROP 글자로 '삭제'로 잡음). 이전 앱(U1)은 child_id를 늘 채워 쓰므로 쓰기가 깨지지 않는다. 아이 등록 전 동의(U2-J10)에 필요하다
+core/V2__u2_guardian_account.sql 3 a14ba62a524c | 승인: 백준하 2026-10-13 | 사유: 같은 V2에서 더한 널 허용 새 열 terms_version_id에 거는 FK다. 기존 행은 NULL이라 위반이 없고 이전 앱은 이 열을 쓰지 않는다
+core/V2__u2_guardian_account.sql 4 c4af487c5c83 | 승인: 백준하 2026-10-13 | 사유: consent_version >= 1. 이전 앱이 쓰는 동의 행은 개발 시드(DevSeedRunner)뿐이고 consent_version을 1로 쓴다
+core/V2__u2_guardian_account.sql 6 fe311147a5f9 | 승인: 백준하 2026-10-13 | 사유: core_stop_expression은 U1이 비워 두는 표다(SessionPackageBuilder 기본 표현은 코드 상수). 이전 앱이 쓰지 않으므로 제약을 더해도 깨지지 않는다
+core/V2__u2_guardian_account.sql 7 62df6ffba145 | 승인: 백준하 2026-10-13 | 사유: 6과 같음(core_stop_expression 정렬 순서 1 ~ 5 검사)
+core/V2__u2_guardian_account.sql 8 726a85da65be | 승인: 백준하 2026-10-13 | 사유: 6과 같음(아이별 정규화 표현 유일)
+core/V2__u2_guardian_account.sql 9 d716eb00affe | 승인: 백준하 2026-10-13 | 사유: 6과 같음(아이별 정렬 순서 유일, 지연 검사)

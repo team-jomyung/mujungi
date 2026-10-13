@@ -36,6 +36,9 @@ import org.springframework.stereotype.Repository;
  * </ul>
  * 시각은 호출자가 Clock에서 읽은 값만 쓴다(R2). last_seen_at은 HEARTBEAT를 받을 때(와 교체 때, 그리고 HEARTBEAT에 따른 CONNECTED 복귀 때) 쓴다
  * (J125 · 3.6 수정 J390).
+ *
+ * <p>U3(BR4.8 ① · U3-R1): UNSTABLE 전이({@link #markUnstable} · {@link #markStable})와 복귀 상태 선택({@link #markRecovered}), 창 안 끊김
+ * 횟수 {@code recent_disconnects}({@link #setRecentDisconnects}, 기기 단위 통계라 device_id 조건)를 더한다. U1 메서드의 뜻은 그대로다.
  */
 @Repository
 public class DeviceConnectionRepository {
@@ -93,15 +96,27 @@ public class DeviceConnectionRepository {
 
     private static final String CHANGE_STATE = "update realtime.realtime_device_connection"
             + " set connection_state = :to, updated_at = :now,"
+            + " recent_disconnects = coalesce(:recent, recent_disconnects),"
             + " connection_id = case when :clearConnectionId then null else connection_id end"
             + " where device_id = :deviceId and connection_id = :connectionId and connection_state = any(:from)"
+            + " returning " + COLUMNS;
+
+    // U3: 기기 단위 통계(창 안 끊김 횟수)와 그에 따른 UNSTABLE(연결 id 조건 없음 — 늦게 처리된 옛 연결의 닫힘도 지금 연결의 판정에 들어간다)
+    private static final String SET_RECENT = "update realtime.realtime_device_connection"
+            + " set recent_disconnects = :recent, updated_at = :now where device_id = :deviceId"
+            + " returning " + COLUMNS;
+
+    private static final String MARK_UNSTABLE_BY_DEVICE = "update realtime.realtime_device_connection"
+            + " set connection_state = 'UNSTABLE', recent_disconnects = :recent, updated_at = :now"
+            + " where device_id = :deviceId and connection_state = 'CONNECTED'"
             + " returning " + COLUMNS;
 
     // HEARTBEAT 복귀(J55)는 그 HEARTBEAT의 수신 시각으로 last_seen_at도 올린다(더 늦은 값이 이미 있으면 그대로, 3.6 수정 J390). 복귀 UPDATE가
     // 상태만 바꾸면 기록기 배치(J125 · 200ms)가 수신 시각을 쓰기 전에 돈 끊김 점검(아래 MARK_DISCONNECTED)이 복귀 직후의 행을 다시 '40초 무음'으로
     // 보고 DISCONNECTED로 되돌린다
     private static final String MARK_CONNECTED_AGAIN = "update realtime.realtime_device_connection"
-            + " set connection_state = 'CONNECTED', updated_at = :now,"
+            + " set connection_state = :to, updated_at = :now,"
+            + " recent_disconnects = coalesce(:recent, recent_disconnects),"
             + " last_seen_at = greatest(coalesce(last_seen_at, :seenAt), :seenAt)"
             + " where device_id = :deviceId and connection_id = :connectionId and connection_state = any(:from)"
             + " returning " + COLUMNS;
@@ -126,6 +141,9 @@ public class DeviceConnectionRepository {
             + " where connection_state = any(:from)"
             + " returning " + COLUMNS;
 
+    private static final String DELETE_BY_GUARDIAN = "delete from realtime.realtime_device_connection"
+            + " where guardian_id = :guardianId";
+
     private final NamedParameterJdbcTemplate jdbc;
 
     public DeviceConnectionRepository(NamedParameterJdbcTemplate jdbc) {
@@ -135,6 +153,15 @@ public class DeviceConnectionRepository {
     /** 기기의 연결 행(한 번도 접속하지 않았으면 비어 있음, Core는 사본 없음으로 본다 BR4.3 ②). */
     public Optional<DeviceConnectionRow> find(UUID deviceId) {
         return single(jdbc.query(SELECT_BY_DEVICE, deviceParam(deviceId), ROW_MAPPER));
+    }
+
+    /**
+     * U3: 기기의 연결 행을 활성 트랜잭션 안에서 잠그고 읽는다(행이 없으면 빈 값). 상태 기록 장치가 끊김 횟수를 세기 전에 잡아, 같은 기기의 끊김 기록
+     * · 복귀 · 불안정 판정이 차례로만 돈다(세던 사이 커밋된 끊김을 놓치지 않게).
+     */
+    public Optional<DeviceConnectionRow> findForUpdate(UUID deviceId) {
+        Transactions.requireActive("DeviceConnectionRepository.findForUpdate");
+        return single(jdbc.query(LOCK, deviceParam(deviceId), ROW_MAPPER));
     }
 
     /** 연결 행 전부(10초 상태 보고는 OFFLINE까지 모두 보낸다, BR4.8). 보고의 reportedAt은 호출자가 읽기 직전 시각이다. */
@@ -210,22 +237,75 @@ public class DeviceConnectionRepository {
      */
     public Optional<DeviceConnectionRow> markConnectedAgain(UUID deviceId, UUID connectionId, Instant seenAt,
             Instant now) {
+        return markRecovered(deviceId, connectionId, seenAt, now, ConnectionState.CONNECTED, null);
+    }
+
+    /**
+     * U3 복귀(J55 + BR4.8 ①): UNRESPONSIVE · DISCONNECTED → {@code to}(창 안 끊김이 기준 이상이면 UNSTABLE, 아니면 CONNECTED,
+     * {@link DeviceStatusPolicy#recoveredState}). last_seen_at 규칙은 {@link #markConnectedAgain}과 같다.
+     *
+     * @param recentDisconnects 창 안 끊김 횟수(null이면 그대로)
+     */
+    public Optional<DeviceConnectionRow> markRecovered(UUID deviceId, UUID connectionId, Instant seenAt, Instant now,
+            ConnectionState to, Integer recentDisconnects) {
+        if (to != ConnectionState.CONNECTED && to != ConnectionState.UNSTABLE) {
+            throw new IllegalArgumentException("복귀 상태는 CONNECTED 또는 UNSTABLE이다");
+        }
         MapSqlParameterSource params = ClockParams.at(now);
         ClockParams.uuid(params, "deviceId", Objects.requireNonNull(deviceId, "deviceId"));
         ClockParams.uuid(params, "connectionId", Objects.requireNonNull(connectionId, "connectionId"));
         ClockParams.instant(params, "seenAt", Objects.requireNonNull(seenAt, "seenAt"));
         ClockParams.textArray(params, "from", names(RECOVERABLE));
+        ClockParams.text(params, "to", to.name());
+        ClockParams.integer(params, "recent", recentDisconnects);
         return single(jdbc.query(MARK_CONNECTED_AGAIN, params, ROW_MAPPER));
     }
 
     /** 명령 시한(BR4.8 ③ · BR6.12 ② ③): CONNECTED · UNSTABLE → UNRESPONSIVE. 바뀌었으면 바뀐 행. */
     public Optional<DeviceConnectionRow> markUnresponsive(UUID deviceId, UUID connectionId, Instant now) {
-        return changeState(deviceId, connectionId, UNRESPONSIVE_CANDIDATES, ConnectionState.UNRESPONSIVE, false, now);
+        return changeState(deviceId, connectionId, UNRESPONSIVE_CANDIDATES, ConnectionState.UNRESPONSIVE, false, null,
+                now);
     }
 
     /** 정상 닫기(기기 1000 · 브라우저 1001, BR4.8 ②): 즉시 OFFLINE, connection_id를 비운다. 옛 연결이면 비어 있음. */
     public Optional<DeviceConnectionRow> markClosed(UUID deviceId, UUID connectionId, Instant now) {
-        return changeState(deviceId, connectionId, CLOSABLE, ConnectionState.OFFLINE, true, now);
+        return changeState(deviceId, connectionId, CLOSABLE, ConnectionState.OFFLINE, true, null, now);
+    }
+
+    /**
+     * U3 불안정(BR4.8 ① · U3-R1): 같은 연결의 CONNECTED → UNSTABLE(왕복 초과 또는 인계 시점의 잦은 끊김). 바뀌었으면 바뀐 행.
+     *
+     * @param recentDisconnects 창 안 끊김 횟수(null이면 그대로)
+     */
+    public Optional<DeviceConnectionRow> markUnstable(UUID deviceId, UUID connectionId, Integer recentDisconnects,
+            Instant now) {
+        return changeState(deviceId, connectionId, EnumSet.of(ConnectionState.CONNECTED), ConnectionState.UNSTABLE, false,
+                recentDisconnects, now);
+    }
+
+    /** U3: 같은 연결의 UNSTABLE → CONNECTED(정상 왕복이고 창 안 끊김이 기준 아래). 바뀌었으면 바뀐 행. */
+    public Optional<DeviceConnectionRow> markStable(UUID deviceId, UUID connectionId, int recentDisconnects, Instant now) {
+        return changeState(deviceId, connectionId, EnumSet.of(ConnectionState.UNSTABLE), ConnectionState.CONNECTED, false,
+                recentDisconnects, now);
+    }
+
+    /**
+     * U3: 끊김 사건을 적은 뒤 지금 연결이 CONNECTED인데 창 안 횟수가 기준 이상이면 UNSTABLE(기기 조건 — 늦게 처리된 옛 연결의 닫힘이 새 연결의
+     * 판정에 들어간다). 바뀌었으면 바뀐 행.
+     */
+    public Optional<DeviceConnectionRow> markUnstableByDevice(UUID deviceId, int recentDisconnects, Instant now) {
+        MapSqlParameterSource params = ClockParams.at(now);
+        ClockParams.uuid(params, "deviceId", Objects.requireNonNull(deviceId, "deviceId"));
+        ClockParams.integer(params, "recent", recentDisconnects);
+        return single(jdbc.query(MARK_UNSTABLE_BY_DEVICE, params, ROW_MAPPER));
+    }
+
+    /** U3: 창 안 끊김 횟수를 쓴다(상태는 그대로, 상태 이벤트 없음). 행이 없으면 비어 있음. */
+    public Optional<DeviceConnectionRow> setRecentDisconnects(UUID deviceId, int recentDisconnects, Instant now) {
+        MapSqlParameterSource params = ClockParams.at(now);
+        ClockParams.uuid(params, "deviceId", Objects.requireNonNull(deviceId, "deviceId"));
+        ClockParams.integer(params, "recent", recentDisconnects);
+        return single(jdbc.query(SET_RECENT, params, ROW_MAPPER));
     }
 
     /**
@@ -270,12 +350,13 @@ public class DeviceConnectionRepository {
     }
 
     private Optional<DeviceConnectionRow> changeState(UUID deviceId, UUID connectionId, Set<ConnectionState> from,
-            ConnectionState to, boolean clearConnectionId, Instant now) {
+            ConnectionState to, boolean clearConnectionId, Integer recentDisconnects, Instant now) {
         MapSqlParameterSource params = ClockParams.at(now);
         ClockParams.uuid(params, "deviceId", Objects.requireNonNull(deviceId, "deviceId"));
         ClockParams.uuid(params, "connectionId", Objects.requireNonNull(connectionId, "connectionId"));
         ClockParams.textArray(params, "from", names(from));
         ClockParams.text(params, "to", to.name());
+        ClockParams.integer(params, "recent", recentDisconnects);
         params.addValue("clearConnectionId", clearConnectionId);
         return single(jdbc.query(CHANGE_STATE, params, ROW_MAPPER));
     }
@@ -363,5 +444,12 @@ public class DeviceConnectionRepository {
                 throw new IllegalArgumentException("rttMs는 0 이상이어야 한다");
             }
         }
+    }
+
+    /** 보호자의 연결 원장 행을 지운다(계정 삭제 참가자, U3-J16). 지운 행 수. */
+    public int deleteByGuardian(UUID guardianId) {
+        MapSqlParameterSource params = new MapSqlParameterSource();
+        ClockParams.uuid(params, "guardianId", Objects.requireNonNull(guardianId, "guardianId"));
+        return jdbc.update(DELETE_BY_GUARDIAN, params);
     }
 }

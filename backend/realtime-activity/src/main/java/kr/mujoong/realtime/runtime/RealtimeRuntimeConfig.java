@@ -11,7 +11,9 @@ import kr.mujoong.realtime.log.AsyncRecorder;
 import kr.mujoong.realtime.log.LatencyRecorder;
 import kr.mujoong.realtime.observability.EventLogger;
 import kr.mujoong.realtime.observability.RealtimeMetrics;
+import kr.mujoong.realtime.recording.AudioRecordings;
 import kr.mujoong.realtime.session.SessionExecutor;
+import kr.mujoong.realtime.session.SessionGapPort;
 import kr.mujoong.realtime.session.SessionTransitions;
 import kr.mujoong.realtime.startup.RealtimeStartupChecks;
 import kr.mujoong.realtime.voice.ProviderConnector;
@@ -79,8 +81,11 @@ public class RealtimeRuntimeConfig {
             EventLogger events,
             RealtimeMetrics metrics,
             MujoongClock clock,
-            RealtimeProperties properties) {
+            RealtimeProperties properties,
+            SessionGapPort gaps,
+            AudioRecordings recordings) {
         return new SessionExecutor.Services(transitions, sockets::current, deviceStatus, connector, requests, gate,
-                recorder, latency, clocks, launcher, events, metrics, clock, SessionExecutor.Settings.from(properties));
+                recorder, latency, clocks, launcher, events, metrics, clock, SessionExecutor.Settings.from(properties), gaps,
+                recordings);
     }
 }

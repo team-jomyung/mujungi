@@ -228,17 +228,19 @@ describe("T19 — 켜기 · 끄기 · 닫기 코드(BR9.5 · BR9.7 · BR3.7)", (
     expect(displayStateOf(run(poweredOn(), { type: "TURN_OFF" }))).toBe("off");
   });
 
-  it.each([1001, 1006, 1011, 1013, 4400, 4408])("닫기 %i는 마지막 화면을 두고 5초 뒤 다시 접속한다", (code) => {
+  // U3-R16: 한 번 연결됐던 기기의 재접속 대기는 'reconnect'(1 · 2 · 4초, 그 뒤 5초 — DeviceApp이 시도 수로 고른다). U1은 5초('retry')였다
+  it.each([1001, 1006, 1011, 1013, 4400, 4408])("닫기 %i는 마지막 화면을 두고 재접속 간격 뒤 다시 접속한다(U3-R16)", (code) => {
     let state = run(poweredOn(), { type: "SESSION_VIEW", view: "LISTENING" });
     state = run(state, { type: "WS_CLOSED", code, closedByDevice: false });
     expect(displayStateOf(state)).toBe("reconnecting");
     expect(state.screen === "t19" && state.view).toBe("LISTENING");
-    expect(pendingEffect(state)).toEqual({ kind: "delay", delay: "retry" });
+    expect(pendingEffect(state)).toEqual({ kind: "delay", delay: "reconnect" });
+    expect(state.screen === "t19" && state.reconnectAttempt).toBe(0);
     state = step(state, timer);
     expect(pendingEffect(state)).toEqual({ kind: "connect" });
   });
 
-  it("재접속 주기(5초 대기 → 접속 시도 → 다시 실패) 내내 화면은 'reconnecting'이고 마지막 view를 둔다(BR9.7 · J360)", () => {
+  it("재접속 주기(대기 → 접속 시도 → 다시 실패) 내내 화면은 'reconnecting'이고 마지막 view를 둔다(BR9.7 · J360 · U3-R16)", () => {
     let state = run(poweredOn(), { type: "SESSION_VIEW", view: "LISTENING" }, { type: "WS_CLOSED", code: 1006, closedByDevice: false });
     const trailAtClose = state.trail;
     state = step(state, timer);
@@ -246,10 +248,11 @@ describe("T19 — 켜기 · 끄기 · 닫기 코드(BR9.5 · BR9.7 · BR3.7)", (
     expect(isPoweredOn(state)).toBe(true);
     expect(displayStateOf(state)).toBe("reconnecting");
     expect(state.screen === "t19" && state.view).toBe("LISTENING");
-    // 서버가 계속 거절하면(1013) 다시 5초 대기이고 화면은 그대로다.
+    // 서버가 계속 거절하면(1013) 시도 수가 늘어 다음 간격(2초)을 기다리고 화면은 그대로다(U3-R16).
     state = run(state, { type: "WS_CLOSED", code: 1013, closedByDevice: false });
     expect(displayStateOf(state)).toBe("reconnecting");
-    expect(pendingEffect(state)).toEqual({ kind: "delay", delay: "retry" });
+    expect(pendingEffect(state)).toEqual({ kind: "delay", delay: "reconnect" });
+    expect(state.screen === "t19" && state.reconnectAttempt).toBe(1);
     state = step(state, timer);
     expect(displayStateOf(state)).toBe("reconnecting");
     expect(state.screen === "t19" && state.view).toBe("LISTENING");

@@ -20,8 +20,8 @@
 | B3 음성 대화 | U3 | aidlc-developer-agent | B | D(게이트 규칙 · 금지 표현 사전) | C(U4가 대화 경로 사용) | C7(B) |
 | B4 활동 세션 | U4 | aidlc-developer-agent | B · C — B는 Realtime SessionLifecycle · 시간 규칙, C는 Core ActivityCoordinator · 08 · 12 · 17 화면 | — | A(계정 삭제 · 홈) · E(활동 기록 사용) | C3 · C8 · 시간 계약 T(B) |
 | B5 연습 | U5 | aidlc-developer-agent | C | D(판정 · 상황 생성 · TextAiGateway · Neo4j 화용 지식) | B(음성 경로 · Cue 재생) · E(후보 등록) | C4 · C10(C · D) · C14(D) |
-| B6 웹 푸시(Should) | U7 | aidlc-developer-agent | A | — | C(재조회 → 12 · 17 · 04) | C6(A) |
-| B7 결과와 리포트 | U6 | aidlc-developer-agent | E | D(구조화 · 후보 생성 · 생활 팁 매칭) | C(담기 → 18) · A(삭제 참가자) | C5(E) |
+| B6 웹 푸시 | U7 | aidlc-developer-agent | A | — | C(재조회 → 12 · 17 · 04) | C6(A) |
+| B7 결과와 리포트 | U6 | aidlc-developer-agent | E | D(구조화 · 기록용 재판정 · 후보 생성 · 생활 팁 매칭 · 결과 문장 · 리포트 항목) | C(담기 → 18) · A(삭제 참가자) | C5(E) |
 
 ## 3. 사람별 짐 점검
 
@@ -41,7 +41,7 @@
 | 10/14 ~ 16 | B1 몹(DeviceRegistry · 05a) | B1 몹 운전 | B1 몹(D0 · T19 최소) | B1 몹(게이트 최소 · DB) | B1 몹(실행 골격) |
 | 10/16 ~ 22 | B2 | B3 | B4 Core 쪽(대역) | B3 게이트 규칙 · B5 판정 POC | B7 기록 화면(대역) |
 | 10/20 ~ 23 | B2 마무리 · 2차 사전 배포(10/23) | B4 Realtime 쪽 | B4 화면 · 확인 ① | B5 상황 생성 | B7 결과 작업 |
-| 10/21 ~ 27 | B6(Should) | B3 · B4 확인 ② · Cue 재생 | B5 | B5 · B7 AI 부분 | B7 리포트 · PDF |
+| 10/21 ~ 27 | B6 | B3 · B4 확인 ② · Cue 재생 | B5 | B5 · B7 AI 부분 | B7 리포트 · PDF |
 | 10/28 | 구현 완료본 배포 | 실제 연결 전환(연습) | 실제 연결 전환(연습) | 실제 연결 전환 | 실제 연결 전환(결과 · 리포트) |
 | 10/29 ~ 11/2 | 통합시험 · 결함 수정 · 재시험 · 성능 측정 · 동결(전원) | | | | |
 

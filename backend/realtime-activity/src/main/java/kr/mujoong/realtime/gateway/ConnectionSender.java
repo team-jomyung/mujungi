@@ -368,6 +368,8 @@ public final class ConnectionSender {
             broken(e);
             return;
         }
+        // 리뷰 반영 6: 소켓에 쓴 프레임만 원음 기록에 넘긴다
+        bundle.onFrameSent().accept(frame);
         if (frameIndex == 0) {
             bundle.onFirstFrameSent().accept(clock.now());
         }

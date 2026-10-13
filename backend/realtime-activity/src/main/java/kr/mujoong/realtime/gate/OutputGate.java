@@ -47,6 +47,19 @@ public final class OutputGate {
     }
 
     /**
+     * U3-R7: 폐기한 구간의 전사가 걸리는 시드 사전 범주(교정 문장 고르기 — 미완 · 너무 김으로 폐기한 구간도 본다). 걸리지 않았거나 판정 중
+     * 예외면 빈 값.
+     */
+    public Optional<SeedDictionary.Category> matchedCategory(SegmentBuffer.Sealed segment) {
+        try {
+            return segment == null || segment.transcript() == null ? Optional.empty()
+                    : dictionary.findMatch(segment.transcript()).map(SeedDictionary.Match::category);
+        } catch (RuntimeException e) {
+            return Optional.empty();
+        }
+    }
+
+    /**
      * 단계 6. 처음 걸린 조건이 사유다. 통과면 예약을 함께 돌려준다(호출자가 tGatePass를 찍고 기록기에 승인 행을 넣은 뒤 예약을 확정한다).
      *
      * @param activeAndCurrent 세션이 ACTIVE이고 구간 세대가 현재 세대와 같고 기기 연결이 살아 있는가

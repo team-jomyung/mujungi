@@ -2,7 +2,7 @@
 
 > Contract Design(2.8) 산출물 · 깊이 Standard · 2026-10-09 (클라우드 세션, 팀장 대리 판단)
 > 입력: `unit-of-work.md`(U1~U7) · `unit-of-work-dependency.md`(DAG · 통합 지점 표), `components.md`(엔터티 소유 · 앱 사이 접점 셋 · 이벤트 6종), `requirements.md`(FR · NFR5 · NFR6 · NFR9 · A1 · A2 · A10), `stories.md`(B4~B6 · B9~B11 · B13~B15 · OQ13 · OQ14), 질문 파일 `contract-design-questions.md`(Q1~Q9), 20_개발명세_1008(API · 이벤트 · 상태 기계), 50_ADR_2S(protocol · ADR-004 · 008 · 009 · 010).
-> 경로 이름은 개발 명세 1008을 따르고 화면 기준 변경(2초 폴링 · /api/child 단수 · bootstrap은 Core · 리포트 원문)을 반영했다. 상태 · 사유 이름은 화면 설계 그대로다. 숫자 시간값은 7절 시간 계약 한 곳에만 적는다.
+> 경로 이름은 개발 명세 1008을 따르고 화면 기준 변경(2초 폴링 · /api/child 단수 · bootstrap은 Core · 10개 항목 리포트)을 반영했다. 상태 · 사유 이름은 화면 설계 그대로다. 숫자 시간값은 7절 시간 계약 한 곳에만 적는다.
 
 ## 1. 계약 목록
 
@@ -31,7 +31,7 @@
 - **오류 봉투:** `{ "code": "...", "message": "...", "traceId": "..." }`. 화면 문구는 code로 고른다(mockups 9절). `message`에 전사 원문 · 개인정보를 넣지 않는다.
 - **멱등:** 시작 · 리포트 생성은 `idempotencyKey`(UUID, 클라이언트 생성), 끝내기는 `requestId`. 같은 키 재요청은 첫 결과를 그대로 돌려준다. 같은 키에 다른 본문이면 409 `IDEMPOTENCY_CONFLICT`.
 - **시각:** 모두 ISO 8601 UTC(`2026-10-15T09:00:00Z`). 날짜 질의(`date`, `month`, `from`, `to`)는 한국 시간(Asia/Seoul) 달력 날짜다.
-- **노출 금지 필드:** 판정값(label · reason) · 구조화 결과 · 보호자 08 입력 원문 · 상황 본문 · 판정 기준은 어떤 보호자 응답에도 없다(FR4.2 · FR4.3 · A10). 계약 시험에서 응답 스키마에 이 필드가 없음을 확인한다.
+- **노출 금지 필드:** 진행 중 판정값(label · reason) · 기록용 재판정 원값(value · timing · rationale) · 구조화 결과 원본(contentJson) · 보호자 08 입력 원문 · 상황 본문 · 판정 기준은 어떤 보호자 응답에도 없다. 기록용 재판정은 장면 결과 칩(`sceneChip` 5종)으로만, 경험 구조화는 27 대화 기록 칸 · 리포트 5항목의 출처 표시 문장으로만 나간다(FR4.2 · FR4.3 · A10). 계약 시험에서 응답 스키마에 금지 필드가 없음을 확인한다.
 
 ## 3. 보호자 REST (C1 ~ C6)
 
@@ -185,7 +185,7 @@ paths:
   /records/{sessionId}:
     get: { summary: 27 대화 기록 칸 · 연습이면 고른 목표 이름, responses: { "200": { description: '{session: SessionSummary, goals[{displayName, order, status}], utterances: Bubble[], gaps[], recordScope{from, to}, endConfirmed}' } } }
   /sessions/{sessionId}/result:
-    get: { summary: 27 생활 팁 · 목표 후보 칸, responses: { "200": { description: '{jobStatus: NONE|REQUESTED|RUNNING|DONE|FAILED, tips[{supportItemId, condition, content, limitation}], noTipReason?, candidates[{recommendationId, displayName, reasonText, evidence[{utteranceSeq, kind}], selected, goalSelectionId?}]}' } } }
+    get: { summary: 27 결과(연습 장면 결과 · 결과 문장) · 생활 팁 · 목표 후보 칸, responses: { "200": { description: '{jobStatus: NONE|REQUESTED|RUNNING|DONE|FAILED, resultLevel?: FULL|PARTIAL|INSUFFICIENT, sentences[{goalSelectionId?, text}], practice?{goals[{goalSelectionId, displayName, order, scenes[{sceneNo, exposureType: ORIGINAL|NEW_SCENARIO, sceneChip: DONE_IMMEDIATE|DONE_AFTER_HELP|NEXT_TIME|ON_HOLD|NOT_DONE, chipText, notDoneReason?}], help{count, consent: ACCEPTED|DECLINED|NO_RESPONSE|NONE}}]}, tips[{supportItemId, condition, content, limitation}], noTipReason?, candidates[{recommendationId, displayName, reasonText, evidence[{utteranceSeq, kind}], selected, goalSelectionId?}]}' } } }
   /sessions/{sessionId}/result/status:
     get: { summary: 17 · 27 정리 상태, responses: { "200": { description: '{sessionStatus, confirmed, jobStatus}' } } }
   /sessions/{sessionId}/result/retry:
@@ -207,7 +207,7 @@ paths:
       requestBody: { content: { application/json: { schema: { type: object, required: [from, to, sessionIds, idempotencyKey], properties: { from: { type: string, format: date }, to: { type: string, format: date }, sessionIds: { type: array, minItems: 1, items: { type: string, format: uuid } }, idempotencyKey: { type: string, format: uuid } } } } } }
       responses: { "202": { description: '{reportId, status: GENERATING}' }, "400": { description: VALIDATION_FAILED(미래 날짜 · 0건) } }
   /reports/{reportId}:
-    get: { summary: 만드는 중 폴링 · 30 확인, responses: { "200": { description: '{status: GENERATING|READY|FAILED|SAVED|DISCARDED, periodFrom, periodTo, activityCount, child{displayName, age}}' } } }
+    get: { summary: 만드는 중 폴링 · 30 리포트 확인 · 저장 확인 시트, responses: { "200": { description: '{status: GENERATING|READY|FAILED|SAVED|DISCARDED, level?: FULL|PARTIAL|INSUFFICIENT, periodFrom, periodTo, activityCount, citationCount, child{displayName, age}, notice, sections[10]{sectionNo, title, text, missing, citations[{sessionId, utteranceSeq, quote, at, source: TRANSCRIPT|GUARDIAN_INPUT|CHILD_RECALL}]}} — sections는 READY · SAVED에만' } } }
   /reports/{reportId}/pdf:
     get: { summary: 30 PDF 받기(READY · SAVED만), responses: { "200": { description: PDF 본문, content: { application/pdf: {} } }, "409": { description: REPORT_NOT_READY } } }
   /reports/{reportId}/saved:
@@ -219,7 +219,7 @@ paths:
     delete: { summary: 구독 해제, security: [ { session: [], csrf: [] } ], responses: { "204": { description: ok } } }
 ```
 
-웹 푸시 본문(U7, Notification → 브라우저): `{ "type": "VOICE_PROBLEM" | "DEVICE_STATUS_UNKNOWN" | "ENDED_BY_CONNECTION", "sessionId": "...", "sentAt": "..." }`. 화면 문구 3종은 type으로 고르고 발화 원문 · 대화 내용은 넣지 않는다(FR7.10). 알림을 누르면 04가 `/api/sessions/current`로 다시 묻는다.
+웹 푸시 본문(U7, Notification → 브라우저): `{ "type": "VOICE_PROBLEM" | "DEVICE_STATUS_UNKNOWN" | "ENDED_BY_CONNECTION" | "ACTIVITY_COMPLETED", "activityType": "FREE_TALK" | "PRACTICE", "sessionId": "...", "sentAt": "..." }`. 서비스 워커가 type(완료는 activityType까지)으로 문구 4종(FR7.10 표)을 고른다. 아이 이름 · 발화 원문 · 대화 내용 · 점수 · 기록 정리 완료 여부는 넣지 않는다. ACTIVITY_COMPLETED는 ACTIVE를 거친 세션이 CHILD_STOP · GUARDIAN_STOP · SILENCE로 ENDED(confirmed=true)가 됐을 때만 사건 키 `{sessionId}:ACTIVITY_COMPLETED`로 한 번 보낸다. 알림을 누르면 04가 `/api/sessions/current`로 다시 묻는다.
 
 ## 4. 아이 기기 REST + 기기 WSS (C2 · C7)
 
@@ -582,9 +582,9 @@ components:
               practice:
                 type: object
                 nullable: true
-                description: 판정값을 담지만 Core는 보호자 응답 · PDF에 내보내지 않는다(FR4.3)
+                description: 진행 중 판정값을 담는다. Core는 기록용 재판정(U6)의 입력으로만 쓰고 보호자 응답 · 리포트에 내보내지 않는다(FR4.3)
                 properties:
-                  goals: { type: array, items: { type: object, properties: { goalSelectionId: { type: string }, displayName: { type: string }, order: { type: integer }, status: { type: string, enum: [DONE, SKIPPED, NOT_REACHED] }, skipReason: { type: string, nullable: true }, scenarios: { type: array, items: { type: object, properties: { scenarioId: { type: string }, exposureType: { type: string, enum: [ORIGINAL, NEW_SCENARIO] }, exposedAt: { type: string } } } }, responses: { type: array, items: { type: object, properties: { responseType: { type: string, enum: [FIRST, AFTER_CUE, NEW_SCENARIO] }, utteranceSeq: { type: integer, nullable: true }, notPerformedReason: { type: string, nullable: true }, label: { type: string, enum: [functional, partial, none, uncertain, NOT_PERFORMED] } } } }, cues: { type: array, items: { type: object, properties: { consentResponse: { type: string, enum: [ACCEPTED, DECLINED, NO_RESPONSE] }, deliveredText: { type: string }, containsAnswerSentence: { type: boolean }, givenAt: { type: string } } } } } } }
+                  goals: { type: array, items: { type: object, properties: { goalSelectionId: { type: string }, displayName: { type: string }, order: { type: integer }, status: { type: string, enum: [DONE, SKIPPED, NOT_REACHED] }, skipReason: { type: string, nullable: true }, scenarios: { type: array, items: { type: object, properties: { scenarioId: { type: string }, exposureType: { type: string, enum: [ORIGINAL, NEW_SCENARIO] }, exposedAt: { type: string } } } }, responses: { type: array, items: { type: object, properties: { scenarioId: { type: string, description: 'scenarios[].scenarioId — 장면 연결(U6 기록용 재판정 입력)' }, responseType: { type: string, enum: [FIRST, AFTER_CUE, NEW_SCENARIO] }, utteranceSeq: { type: integer, nullable: true }, notPerformedReason: { type: string, nullable: true }, label: { type: string, enum: [functional, partial, none, uncertain, NOT_PERFORMED] } } } }, cues: { type: array, items: { type: object, properties: { scenarioId: { type: string }, consentResponse: { type: string, enum: [ACCEPTED, DECLINED, NO_RESPONSE] }, deliveredText: { type: string }, containsAnswerSentence: { type: boolean }, givenAt: { type: string } } } } } } }
               audio: { type: array, items: { type: object, properties: { recordingId: { type: string }, speaker: { type: string }, storagePath: { type: string }, startedAt: { type: string }, endedAt: { type: string } } } }
     DeviceStatusChanged:
       summary: U3 발행(상태가 바뀔 때만) · U1 DeviceRegistry · U7 구독
@@ -669,6 +669,10 @@ shared-schema:
     CandidateRegistry:      # 제공 U5 → 소비 U6
       register: { in: { sessionId: uuid, childId: uuid, candidates: [ { behaviorKey: string, behaviorVersion: int, reasonText: string, evidence: [ { utteranceSeq: int, kind: string } ] } ] }, out: [ recommendationId ] }
       viewForSession: { in: { sessionId: uuid, guardianId: uuid }, out: [ { recommendationId: uuid, displayName: string, reasonText: string, selected: boolean } ] }
+    ScenarioLookup:         # 제공 U5 PracticeGoal → 소비 U6(기록용 재판정 입력)
+      get: { in: { scenarioIds: [uuid] }, out: [ { scenarioId: uuid, goalSelectionId: uuid, behaviorKey: string, behaviorVersion: int, situation: string, partnerUtterance: string, triggerScript: string } ] }
+    BehaviorDefinitionLookup: # 제공 U5 PragmaticsKnowledge → 소비 U6(기록용 재판정 · 리포트 7항목)
+      get: { in: { behaviorKey: string, behaviorVersion: int }, out: { displayName: string, coreFunction: string, judgmentCriteria: string } }
     JobRunner:              # 제공 U6 ResultPipeline → 소비 U6 Report(처리기 등록)
       register: { in: { jobType: [SESSION_RESULT, REPORT], handler: "handle(job) → DONE | FAILED(code)" } }
       submit: { in: { jobType: string, subjectId: uuid, idempotencyKey: string }, out: { jobId: uuid, status: REQUESTED } }
@@ -697,6 +701,10 @@ shared-schema:
 | 상황 생성 출력 | 5절 `Scenario` 스키마 + `validation` | PracticeGoal(TextAiGateway) |
 | 목표 후보 출력 | `{ behaviorKey, behaviorVersion, reasonText, evidence[{utteranceSeq, kind: GUARDIAN_INPUT\|CHILD_RECALL}] }` — 근거 없는 후보 금지 | ResultPipeline → CandidateRegistry |
 | 경험 구조화 출력 | `{ characters[], situations[], partnerUtterances[], childReactions[], explanations[], each{text, source: GUARDIAN_INPUT\|CHILD_TRANSCRIPT, ref} }` — 의도 · 감정 필드 없음 | ResultPipeline → core_structured_experience |
+| 기록용 재판정 출력 | `{ goals[{ goalSelectionId, scenes[{ sceneNo, firstResponse{utteranceSeq, quote}, afterHelpResponse{utteranceSeq, quote}, value: functional\|partial\|none\|uncertain\|null, timing: IMMEDIATE\|AFTER_HELP, rationale, notDoneReason }] }] }` — 온도 0, 보호자에게는 칩으로만 | ResultPipeline → core_scene_judgment(U6) |
+| 결과 문장 출력 | `{ sentences[{ goalSelectionId?, text, citations[{utteranceSeq}] }] }` — 맞지 않으면 고정 템플릿 | ResultPipeline → core_result(U6) |
+| 리포트 항목 출력 | `{ sections[{ sectionNo: 2\|5\|6\|10, text, missing, citations[{activityNo, utteranceSeq, quote}] }] }` — 나머지 항목은 서버 집계 | Report → core_report_section(U6) |
+| 금지 표현 2차 분류 출력 | `{ violation: bool, category, span }` — 인용 부호 안 아이 전사는 금지 아님 | TextAiGateway(U6) |
 | 금지 표현 사전 항목 | `{ id, pattern, category: DIAGNOSIS\|TREATMENT\|SCORE\|CAUSE\|GENERALIZATION\|EMOTION_CLAIM\|PRESSURE, appliesTo: [OUTPUT_GATE, RESULT_TEXT, PDF, APPROVED_CONTENT] }` | OutputGate · TextAiGateway · Report |
 
 ## 10. 계약 소유 규칙
@@ -715,6 +723,7 @@ shared-schema:
 | C14 | 판정 기준 본문 · 프롬프트 · 대기 문구 · 금지 표현 사전 v1 내용(D 담당 문서) | U3 · U5 · U6 |
 | C1 | 약관 본문 · 정책 버전 1.0 문장(OQ7, A 담당 문서) | U2 |
 | C5 | PDF 라이브러리 · 한글 글꼴 확정(OQ6 → 3.3 · 3.4) | U6 |
+| C5 · C14 | 리포트 · 결과 문장 생성 모델과 60초 안 생성 측정(활동 20건, NFR8) | U6 |
 | C6 | VAPID 키 보관 위치(환경 변수) · 푸시 전달 시험 기기 | U7 |
 | C7 · C8 | 승인 문구 음성 파일을 무엇으로 만드나(사전 녹음 · TTS), 상황 대본(SCENARIO_SCRIPT) 음성을 GPT-Live가 대본 그대로 말하게 할지 TTS로 만들지 — 기기 계약(OUTPUT_BEGIN · PLAY_APPROVED_CONTENT)은 어느 쪽이든 같다 | U2 · U5 |
 | C7 | 기기 로컬 끼어들기 감지가 자기 재생음(에코)에 속지 않는지 — 크롬 에코 제거가 Web Audio 재생에도 듣는지 POC로 확인. 안 되면 서버 감지(GPT-Live 발화 시작 이벤트)로 바꾸고 0.5초를 다시 잰다 | U1 · U3 |

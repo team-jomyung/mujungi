@@ -161,7 +161,7 @@ public final class InMemoryTransitions implements SessionTransitions {
                 current.dataCollectionAllowed(), current.transcriptStorageAllowed(), current.childContextJson(),
                 current.introContentVersionId(), current.closingContentVersionId(),
                 or(change.endReason(), current.endReason()),
-                change.failureCode() != null ? change.failureCode().name() : current.endDetail(),
+                change.endDetailValue() != null ? change.endDetailValue() : current.endDetail(),
                 or(change.terminationRequestedAt(), current.terminationRequestedAt()),
                 or(change.outputStoppedAt(), current.outputStoppedAt()),
                 or(change.transportClosedAt(), current.transportClosedAt()),

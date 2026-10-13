@@ -23,6 +23,8 @@ export interface T19ViewProps {
    * (처음 연결 중 · 한 번도 연결되지 않은 기기의 재접속 주기, J367).
    */
   readonly label: string | null;
+  /** 라벨 아래 보조 줄(U3: 재접속 주기의 "다시 연결하고 있어요", mockups 9-31). 없으면 그리지 않는다. */
+  readonly subLabel?: string | null;
   readonly onTurnOn: () => void;
   readonly onTurnOff: () => void;
 }
@@ -37,7 +39,7 @@ function Character({ expression }: { readonly expression: T19Display }) {
   );
 }
 
-export function T19View({ display, label, onTurnOn, onTurnOff }: T19ViewProps) {
+export function T19View({ display, label, subLabel = null, onTurnOn, onTurnOff }: T19ViewProps) {
   const isOff = display === "off" || display === "mic-request" || display === "mic-denied";
   return (
     <section className="mj-t19" data-testid="t19-view" data-state={display}>
@@ -52,6 +54,11 @@ export function T19View({ display, label, onTurnOn, onTurnOff }: T19ViewProps) {
         {!isOff ? (
           <p className="mj-t19__label" role="status" aria-live="polite" data-testid="t19-label">
             {label ?? ""}
+          </p>
+        ) : null}
+        {!isOff && subLabel !== null ? (
+          <p className="mj-t19__sublabel" data-testid="t19-sublabel">
+            {subLabel}
           </p>
         ) : null}
       </div>

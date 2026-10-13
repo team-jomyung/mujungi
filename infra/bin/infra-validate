@@ -27,7 +27,7 @@
 #
 # 쓰는 법: infra-validate [--only <id,...>] [--compose <파일>]... [--kind demo|dev] [--env-dir <디렉터리>] [--release-env <파일>]
 #                         [--mem-limit-bytes <n>] [--nginx-src <디렉터리>] [--migrations <디렉터리>]... [--allow-contract]
-#                         [--bundle-dockerfile <파일>] [--bundle-image <이미지>]
+#                         [--migration-approvals <파일>] [--bundle-dockerfile <파일>] [--bundle-image <이미지>]
 #   --compose          불변식 · config 대상 파일(여러 번, 앞 파일이 기본 · 뒤 파일이 덧붙임). 기본 compose.demo.yml
 #   --kind             불변식 종류. 기본 demo(--compose를 안 주고 dev면 compose.dev.yml)
 #   --env-dir          이미 렌더된 서비스별 env 파일 디렉터리(배포 D3: /opt/mujoong/env). 없으면 infra/ci/gen-env.sh로
@@ -35,6 +35,9 @@
 #   --release-env      Compose 보간용 비밀 아닌 값 파일(배포 D3: <릴리스>/release.env)
 #   --mem-limit-bytes  메모리 한도 합계 상한(배포 D3은 호스트 MemTotal의 70%). 기본 5.3GiB(실측 전 저장소 값, 단언 3)
 #   --allow-contract   contract PR(라벨 allow-contract + 리뷰 승인)에서만 migrations 금지 문장을 허용한다
+#   --migration-approvals  사람이 승인한 금지 문장 목록(기본: 저장소의 infra/migration-approvals.txt). 한 줄에
+#                      `<위치>/<파일> <문장 번호> <문장 해시 12자> | 승인: <사람> <날짜> | 사유: <이전 앱이 깨지지 않는 근거>`.
+#                      해시는 주석 · 공백 · 문자열 값을 뺀 문장 모양의 sha256 앞 12자라, 승인 뒤 문장이 바뀌면 다시 걸린다
 # 필요한 도구: docker(compose v2.24.4 이상) · jq · openssl(nginx) · shellcheck(shellcheck). 없으면 그 검사는 MISSING이다.
 
 set -Eeuo pipefail
@@ -61,6 +64,7 @@ mem_limit_bytes=$((53 * 1024 * 1024 * 1024 / 10))
 nginx_src="$INFRA_DIR/nginx"
 migration_dirs=()
 allow_contract=0
+migration_approvals=""
 bundle_dockerfile="$INFRA_DIR/bundle/Dockerfile"
 bundle_image=""
 while [ "$#" -gt 0 ]; do
@@ -74,6 +78,7 @@ while [ "$#" -gt 0 ]; do
     --nginx-src) nginx_src="${2:-}"; shift ;;
     --migrations) migration_dirs+=("${2:-}"); shift ;;
     --allow-contract) allow_contract=1 ;;
+    --migration-approvals) migration_approvals="${2:-}"; shift ;;
     --bundle-dockerfile) bundle_dockerfile="${2:-}"; shift ;;
     --bundle-image) bundle_image="${2:-}"; shift ;;
     -h | --help) usage; exit 0 ;;
@@ -118,6 +123,13 @@ done
 if [ "${#migration_dirs[@]}" -eq 0 ] && [ -n "$REPO_ROOT" ]; then
   migration_dirs=("$REPO_ROOT/backend/core-api/src/main/resources/db/migration/core"
     "$REPO_ROOT/backend/realtime-activity/src/main/resources/db/migration/realtime")
+fi
+if [ -z "$migration_approvals" ] && [ -n "$REPO_ROOT" ] && [ -f "$REPO_ROOT/infra/migration-approvals.txt" ]; then
+  migration_approvals="$REPO_ROOT/infra/migration-approvals.txt"
+fi
+if [ -n "$migration_approvals" ] && [ ! -f "$migration_approvals" ]; then
+  echo "infra-validate: 승인 목록 파일이 없다: $migration_approvals" >&2
+  exit 64
 fi
 
 umask 077
@@ -736,11 +748,26 @@ check_migrations() {
       return
     fi
   done
-  # 주석 · 문자열을 지우고 문장 단위로 금지 형태를 찾는다(파일 이름 · 문장 번호 · 사유만 출력)
-  if ! python3 -I - "$allow_contract" "${migration_dirs[@]}" >"$work/mig.out" 2>"$work/mig.err" <<'PY'; then
-import os, re, sys
+  # 주석 · 문자열을 지우고 문장 단위로 금지 형태를 찾는다(파일 이름 · 문장 번호 · 사유만 출력).
+  # 승인 목록에 파일 · 문장 번호 · 문장 해시가 함께 맞는 문장은 사람이 승인한 contract 문장이라 넘긴다
+  if ! python3 -I - "$allow_contract" "$migration_approvals" "${migration_dirs[@]}" >"$work/mig.out" 2>"$work/mig.err" <<'PY'; then
+import hashlib, os, re, sys
 allow = sys.argv[1] == "1"
-dirs = sys.argv[2:]
+approvals_path = sys.argv[2]
+dirs = sys.argv[3:]
+approved = set()
+problems = []
+if approvals_path:
+    with open(approvals_path, encoding="utf-8") as handle:
+        for number, line in enumerate(handle, 1):
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            m = re.match(r"^(\S+/\S+\.sql)\s+(\d+)\s+([0-9a-f]{12})\s*\|(.*)$", line)
+            if not m or "승인:" not in m.group(4) or "사유:" not in m.group(4):
+                problems.append(f"승인 목록 {number}행: 형식은 '<위치>/<파일> <문장 번호> <해시 12자> | 승인: … | 사유: …'")
+                continue
+            approved.add((m.group(1), int(m.group(2)), m.group(3)))
 rules = [
     (r"\bDROP\s+(TABLE|COLUMN|SCHEMA|VIEW|MATERIALIZED\s+VIEW|SEQUENCE|TYPE|FUNCTION|PROCEDURE|INDEX|CONSTRAINT|TRIGGER|DEFAULT)\b", "삭제"),
     (r"\bALTER\s+TABLE\b[^;]*\bDROP\b", "삭제"),
@@ -749,7 +776,6 @@ rules = [
     (r"\bALTER\s+COLUMN\b[^;]*\bSET\s+NOT\s+NULL\b", "널 불허 추가"),
     (r"\bTRUNCATE\b", "데이터 삭제"),
 ]
-problems = []
 def strip(sql):
     sql = re.sub(r"--[^\n]*", " ", sql)
     sql = re.sub(r"/\*.*?\*/", " ", sql, flags=re.S)
@@ -770,6 +796,9 @@ for d in dirs:
             m = re.match(r"CREATE\s+(UNLOGGED\s+)?TABLE\s+(IF\s+NOT\s+EXISTS\s+)?([\w.\"]+)", norm)
             if m:
                 created.add(m.group(3).replace('"', '').lower())
+                continue
+            digest = hashlib.sha256(norm.encode("utf-8")).hexdigest()[:12]
+            if (f"{os.path.basename(d)}/{f}", i + 1, digest) in approved:
                 continue
             # 같은 묶음(이 위치)에서 만든 새 표에 대한 ALTER TABLE ADD CONSTRAINT는 새 표 정의의 일부다
             t = re.match(r"ALTER\s+TABLE\s+(ONLY\s+)?(IF\s+EXISTS\s+)?([\w.\"]+)", norm)

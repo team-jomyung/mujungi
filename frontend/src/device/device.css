@@ -73,6 +73,13 @@
   font-weight: 700;
 }
 
+/* U3 재접속 주기의 보조 줄("다시 연결하고 있어요", mockups 9-31) */
+.mj-t19__sublabel {
+  margin: calc(var(--space-unit) * -4) 0 0;
+  font-size: var(--font-size-body);
+  font-weight: 400;
+}
+
 .mj-t19__mic-denied {
   max-width: 560px;
 }

@@ -135,6 +135,24 @@ public class SessionRegistry {
         return entry.state == State.INIT || (executor != null && !executor.isTerminated());
     }
 
+    /**
+     * U3-J4: 기기의 살아 있는(종료 상태가 아닌) 세션 실행기. HELLO_OK 인계가 새 연결을 다시 묶을 때 쓴다. 기기당 진행 중 세션은 하나다
+     * (부분 유일 색인). 없으면 빈 값.
+     */
+    public Optional<SessionExecutor> liveExecutorForDevice(UUID deviceId) {
+        if (deviceId == null) {
+            return Optional.empty();
+        }
+        for (Entry entry : entries.values()) {
+            SessionExecutor executor = entry.executor;
+            if (executor != null && !executor.isTerminated() && deviceId.equals(executor.deviceId())
+                    && !executor.status().isTerminal()) {
+                return Optional.of(executor);
+            }
+        }
+        return Optional.empty();
+    }
+
     /** 실행 중인 실행기들(종료 · 진단). */
     public Collection<SessionExecutor> executors() {
         List<SessionExecutor> result = new ArrayList<>();

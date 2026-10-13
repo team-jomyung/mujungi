@@ -5,10 +5,10 @@
 #   backend   cd backend && ./gradlew --no-daemon clean check verifyBootJarHasNoTestClasses -Pmujoong.test.db=<db>
 #             저장소 전체 회귀(유닛 범위 명령이 아님): 세 모듈 단위 · 통합 · ArchUnit · 설정 키 대조 · 모듈 전체 JaCoCo 80% LINE.
 #             끝나면 bootJar 두 개가 있는지 보고, 시험 결과 XML에서 시험 수 · 실패 · 건너뜀을 센다.
-#   frontend  cd frontend && npm ci && npx --no-install eslint . && npx --no-install vitest run tests/u1 --coverage &&
+#   frontend  cd frontend && npm ci && npx --no-install eslint . && npx --no-install vitest run tests --coverage &&
 #             npx --no-install next build. 그 뒤 .next/static을 .next/standalone/.next/static에 복사한다(host 모드 web ·
 #             이미지 빌드가 같은 standalone을 쓴다. Next.js standalone 출력은 정적 자원을 복사하지 않는다).
-#   tools     cd tools && npm ci && npx --no-install vitest run tests/u1
+#   tools     cd tools && npm ci && npx --no-install vitest run tests
 # 커버리지 하한(80%)은 각 도구의 설정이 판정한다(JaCoCo check · Vitest thresholds). 이 스크립트는 하한을 바꾸지 않는다.
 # 출력: 도구 출력은 그대로(scripts/verify.sh가 build/verify/logs/A*.log로 보낸다) + 끝에 PASS · NOTE 줄.
 # 종료 코드: 0 통과, 1 실패, 2 전제 누락, 64 인자 오류
@@ -73,8 +73,9 @@ frontend() {
   (cd frontend && npm ci --no-audit --no-fund)
   log "frontend: eslint"
   (cd frontend && npx --no-install eslint .)
-  log "frontend: vitest run tests/u1 --coverage"
-  (cd frontend && npx --no-install vitest run tests/u1 --coverage)
+  # U3-J22: 유닛별 시험 폴더(tests/u1 · tests/u3 …)를 모두 돌린다(커버리지 80% 하한은 그대로)
+  log "frontend: vitest run tests --coverage"
+  (cd frontend && npx --no-install vitest run tests --coverage)
   log "frontend: next build"
   (cd frontend && NEXT_TELEMETRY_DISABLED=1 npx --no-install next build)
   [ -f frontend/.next/standalone/server.js ] || die_assert A2.standalone "next build가 .next/standalone/server.js를 만들지 않았다"
@@ -96,8 +97,8 @@ tools() {
   [ "$(node_major)" = 22 ] || die_prereq "Node 22가 아니다"
   log "tools: npm ci"
   (cd tools && npm ci --no-audit --no-fund)
-  log "tools: vitest run tests/u1"
-  (cd tools && npx --no-install vitest run tests/u1)
+  log "tools: vitest run tests"
+  (cd tools && npx --no-install vitest run tests)
   pass A3.tools "tools 시험 통과"
 }
 

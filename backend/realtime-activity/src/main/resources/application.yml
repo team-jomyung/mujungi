@@ -96,6 +96,10 @@ mujoong:
       status-report-interval: 10s
       # 초 분량(20초 × PCM16 24kHz 모노). 서버 출력 한도에도 쓴다(J73)
       output-queue-max: 20s
+      # U3: HEARTBEAT 왕복이 이 값을 넘으면 UNSTABLE, 다음 정상 왕복에 CONNECTED(BR4.8 ①, U3-R1)
+      unstable-rtt: 1s
+      # U3: 끊김 횟수를 세는 창. 아래 device.unstable-disconnect-count와 짝(계약 7절 "5분 안 2회", U3-J3)
+      unstable-disconnect-window: 5m
     recorder:
       flush-interval: 200ms
   outbox:
@@ -123,6 +127,7 @@ mujoong:
     timer-tick: 1s
   device:
     disconnect-check-interval: 5s
+    unstable-disconnect-count: 2
   internal-http:
     core-base-url: http://core:8080
     connect-timeout: 500ms
@@ -147,8 +152,18 @@ mujoong:
     db-lock-timeout: 2s
     db-statement-timeout: 10s
     db-retry-attempts: 2
+    # U3 원음 기록 대기열(프레임 수, 20ms 프레임 1000개 ≈ 20초). 넘치면 버리고 센다(U3-J15)
+    recording-queue-frames: 1000
   gate:
     segment-quiet: 800ms
+  recording:
+    # U3 원음 파일 디렉터리(세션 · 화자당 PCM16LE 24kHz 모노 raw, U3-J14). 컨테이너 루트 파일 시스템이 읽기 전용이라 tmpfs /tmp 아래가
+    # 기본값이고, 운영은 MUJOONG_RECORDING_DIRECTORY로 볼륨 경로를 준다. 세션당 상한을 넘으면 그 세션 기록만 멈춘다(U3-J15)
+    directory: /tmp/mujoong-recordings
+    max-bytes-per-session: 64MB
+  transcript:
+    # U3: 공급자 신뢰도(0 ~ 100)가 이 값보다 낮은 아이 전사는 review_needed(12 '불확실' 표시, AC3.2.10 · U3-J17)
+    uncertain-below-percent: 60
   security:
     allowed-origin: ${MUJOONG_SECURITY_ALLOWED_ORIGIN:}
     event-log-rate-cap: 60

@@ -113,6 +113,24 @@ public final class RealtimeItEnvironment implements AutoCloseable {
         return device;
     }
 
+    /** 이어가기 요청(HELLO resume)과 함께 연결한 결과(U3). */
+    public record Connected(DeviceSimulatorClient device, kr.mujoong.contract.ws.message.HelloOk helloOk) {
+    }
+
+    /**
+     * 기기를 연결하고 HELLO(resume = 주어진 세션)로 HELLO_OK까지 받는다(U3-J4). 원장이 이 연결(CONNECTED 또는 끊김이 잦으면 UNSTABLE)이 되고
+     * 소켓 레지스트리에 오를 때까지 기다린다.
+     */
+    public Connected connectDevice(UUID resumeSessionId) {
+        DeviceSimulatorClient device = DeviceSimulatorClient.open(app.deviceUri(), ORIGIN, deviceToken, WAIT);
+        kr.mujoong.contract.ws.message.HelloOk ok = device.hello(WAIT, resumeSessionId);
+        awaitTrue(() -> ledger().map(row -> (row.state() == ConnectionState.CONNECTED
+                || row.state() == ConnectionState.UNSTABLE) && ok.connectionId().equals(row.connectionId())).orElse(false),
+                "원장 CONNECTED · UNSTABLE");
+        awaitTrue(() -> app.bean(SocketRegistry.class).isLive(deviceId, ok.connectionId()), "소켓 레지스트리");
+        return new Connected(device, ok);
+    }
+
     /** 원장 행. */
     public Optional<DeviceConnectionRow> ledger() {
         return app.bean(DeviceConnectionRepository.class).find(deviceId);

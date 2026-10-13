@@ -35,6 +35,11 @@ describe("timing — 기본값과 계약", () => {
       deviceOutputQueueMaxMs: 20_000,
       deviceWebRetryIntervalMs: 5_000,
       deviceWebRegisteredDisplayMs: 3_000,
+      // U3: 재접속 간격 목록 · PROGRESS 주기 · 끼어들기 두 값(contracts/timing.md 1절)
+      deviceReconnectBackoffMs: [1_000, 2_000, 4_000],
+      devicePlaybackMarkIntervalMs: 1_000,
+      gateBargeInStopMs: 500,
+      gateLocalVoiceMinMs: 200,
       toastDurationMs: 4_000,
       toastActionMinMs: 3_000,
     } satisfies Timing);
