@@ -40,10 +40,11 @@
 | 방향 | type | 필드 | 쓰임 |
 |---|---|---|---|
 | 서버 → 공급자 | `session.start` | `model`(코드 상수) · `instructions`(서버 템플릿 지시문, childContext는 따옴표로 묶은 데이터로만) · `childContext{displayName, age, interests}` · `audio{input: "pcm16le/24000/1", output: "pcm16le/24000/1"}` | 연결 직후 한 번. 응답 `session.started`가 ACTIVE 전이 조건의 하나다(BR6.8) |
-| 서버 → 공급자 | `session.input_audio.append` | `audio`(base64, 기기 0x01 프레임 본문 960바이트 그대로) | ACTIVE 뒤 ~ CLOSE_TRANSPORT 전 기기 프레임을 순번 순으로(BR7.1 · R3-8). 그 밖의 프레임은 버린다 |
+| 서버 → 공급자 | `session.input_audio.append` | `audio`(base64, 기기 0x01 프레임 본문 960바이트 그대로) | ACTIVE 뒤 ~ CLOSE_TRANSPORT 전 기기 프레임을 순번 순으로(BR7.1 · R3-8). 그 밖의 프레임은 버린다. U4b: 참여 확인(WAITING_CHILD)부터 중계하고 원음 기록은 ACTIVE부터다(U4b-J2) [U4b 편차 (U4b-a)] |
 | 서버 → 공급자 | `session.close` | — | 종료 · FAILED 전이 뒤 공급자 세션 정리(BR6.10 ④) |
 | 서버 → 공급자 | `session.response.cancel` | `responseId`(선택 — 없으면 만들던 응답 전부) | 끼어들기(PLAYBACK_MARK STOPPED · LOCAL_VOICE_ACTIVITY)와 아이 종료 의도 판정 때 만들던 · 재생하던 응답을 취소한다. 공급자는 그 응답의 남은 조각을 보내지 않는다(U3-R5 · R12 · U3-J11 · J24) [편차 (aa)] |
 | 서버 → 공급자 | `session.instructions.correct` | `text`(서버 고정 문장) | 게이트 폐기(GATE_PATTERN · 미완 GATE_EMPTY · SEGMENT_OVERSIZE) 뒤 응답당 한 번 지시를 교정한다. 본문은 범주별 고정 템플릿이고 전사 · 걸린 패턴 · 미승인 원문을 넣지 않는다(U3-R7 · U3-J12 · SD-17) [편차 (aa)] |
+| 서버 → 공급자 | `session.response.create` | — | 참여 확인(WAITING_CHILD → ACTIVE) 뒤 첫 응답을 한 번 만들게 한다. 참여 전(WAITING_CHILD)에는 응답을 만들지 않고, 입력 중계만 열어 참여 대답 전사를 받는다(U4b-J3 · BR2.1). 연습 확장점의 공급자 지시는 새 type 없이 `session.instructions.correct`를 서버가 검증한 문장(`PracticeInstruction`, 전사 · 원문 없음)으로 쓴다(BR10.4) [U4b 편차 (U4b-a)] |
 | 공급자 → 서버 | `session.started` | `providerSessionId`(선택) | 세션 시작 확인 |
 | 공급자 → 서버 | `session.input_audio.speech_stopped` | — | 아이 말 끝(tSpeechEnd 출처 PROVIDER_EVENT, OD-8) |
 | 공급자 → 서버 | `session.input_transcript.delta` | `itemId` · `delta` | 아이 전사 조립(PARTIAL, BR7.5) |
@@ -58,6 +59,7 @@
 연결 거부 · `session.started` 없음 · 지연 · 연결 단계 무응답. 받은 입력 음성 바이트 수 · 해시와 보낸 출력 음성 해시를 기록한다(J131).
 U3: `session.response.cancel`을 받으면 그 응답의 남은 조각을 보내지 않고 받은 사실만 기록하며, `session.instructions.correct`는 본문 길이 · 해시만
 기록한다(원문 저장 없음). `--confidence` 옵션은 확정 전사에 `confidence` 값을 싣는다(기본은 싣지 않음).
+U4b: `session.response.create`는 받은 사실만 기록한다. 턴 종류 `join`은 참여 확인 대답("응") 전사만 보내고 AI 출력은 없다(`--turns join,normal,forbidden`) [U4b 편차 (U4b-a)].
 
 ## 4. 출력 게이트 시드 사전 형식 (SD-18 · A5 · J101)
 

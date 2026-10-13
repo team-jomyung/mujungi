@@ -82,6 +82,20 @@
 | (U4a-a) | `GET /api/sessions/current`는 늘 `{session: SessionSummary \| null}`로 감싼다(계약 설명 'SessionSummary 또는 {session: null}'의 두 모양을 하나로) | U4a-J4 · AC1.4.13 · AC1.7.4 | Core ActivityCoordinator | ParentWeb(04) · U7 알림 진입 | 해석 명시(아직 소비자 없던 경로) | parent-api.yaml |
 | (U4a-b) | `GET /api/records?date=` 줄에 `goalCount`(연습 목표 수, 자유대화 0) · `interrupted`(DISCONNECT 구간이 있음)를 더함 — 26 줄 글 "연습 · 목표 n개" · "중간에 끊김"(AC5.1.2)에 필요 | U4a-J10 · AC5.1.2 | Core ActivityRecord | ParentWeb(26, U6) | 새 선택 필드 | parent-api.yaml |
 
+## U4b 편차
+
+> U4b(활동 세션 Realtime 쪽 — 참여 확인 · 끝내기 · 정산 · 계정 삭제)가 승인 계약 3 · 6 · 9절에 더하거나 구체화한 곳이다. 기호는 `(U4b-<글자>)`이고
+> YAML 스펙은 `x-u4b-deviation: ["(U4b-a)"]`, Markdown은 `[U4b 편차 (U4b-a)]`로 표시한다(U1 · U2 · U4a 기호와 섞이지 않는다). `ContractFilesTest`는
+> 한 · 두 글자 기호만 단언하므로 유닛 접두 기호는 사람이 맞춘다(U4b-J23). 모두 더하기만 안전하거나 아직 소비자가 없던 경로의 해석이다. 근거 가정
+> 번호는 `docs/units/u4b/design.md` 8 · 10절.
+
+| 기호 | 내용 | 출처 | 제공 | 소비자 | 호환 분류 | 표시 위치 |
+|---|---|---|---|---|---|---|
+| (U4b-a) | 공급자 선 형식(ai-io.md 3절)에 서버 → 공급자 type `session.response.create`(필드 없음)를 더함 — 참여 확인(WAITING_CHILD → ACTIVE) 뒤 첫 응답을 한 번 만들게 한다. 참여 전에는 응답을 만들지 않는다. 연습 확장점의 공급자 지시는 새 type 없이 기존 `session.instructions.correct {text}`를 서버 검증 문장(`PracticeInstruction`)으로 쓴다. 모르는 type은 무시된다 | U4b-J3 · BR2.1 · BR10.4 | Realtime VoiceRelay · 공급자(가짜 공급자는 받은 사실만 기록) | 공급자 | 새 값 | ai-io.md |
+| (U4b-b) | 내부 끝내기 응답표 구체화 — WAITING_CHILD도 끝낼 수 있는 상태다(GUARDIAN_STOP 202 {status: CLOSING}, CORE_ABANDONED는 실행기 없으면 FAILED + 202 {}). reason `CONSENT_WITHDRAWN`: 시작 단계(PREPARING · DEVICE_ACK)는 FAILED(endReason CONSENT_WITHDRAWN, failureCode 없음) + 202 {}, WAITING_CHILD · ACTIVE는 CLOSING(endReason CONSENT_WITHDRAWN) + 202 {status: CLOSING}, CLOSING은 202 {status: CLOSING}(사유는 처음 것), 종료 · 모르는 id는 409 SESSION_NOT_ACTIVE | U4b-J9 · BR1.5 · BR1.9 · FR1.4 | Realtime SessionLifecycle | Core ActivityCoordinator · ConsentPolicy | 규칙 구체화 · 새 값 | internal-api.yaml |
+| (U4b-c) | SessionStateChanged는 CLOSING에서 endReason(마무리 사유)을 싣는다(ENDED는 그대로, ENDED_UNCONFIRMED는 UNCONFIRMED). 연습 마지막 목표 끝은 endReason CHILD_STOP이고 세부 사유 `PRACTICE_COMPLETED`는 세션 행 end_detail에만 남긴다. SessionRecordCaptured.record 모양을 계약 6절 SessionRecord(utterances · gaps · recordScope · practice · audio)로 정하고, snapshotHash는 키 정렬 · 공백 없는 JSON에서 null 값의 키를 남겨 JSON null로 쓴 바이트의 sha256이다. DeletionCompleted.counts는 sessions · transcripts · audioFiles · practiceRecords(없는 참가자는 0) | U4b-J7 · J16 · J17 · BR1.1 · BR8.4 · BR9.4 | Realtime SessionLifecycle · RecordCapture · 삭제 처리기 | Core ActivityRecord · AccountDeletion · U7 | 규칙 구체화 | events.asyncapi.yaml |
+| (U4b-d) | SessionRecord.practice는 객체 또는 null이다. 계약 6절 "DECLINED면 빈 배열"은 utterances · audio에만 적용하고, practice는 연습 확장점이 값을 주지 않으면(자유대화 · DECLINED · ACTIVE 전 종료 · U5b 전 PRACTICE) null이다 | FD-Q4 · BR8.3 | Realtime RecordCapture | Core ActivityRecord · U6 | 해석 명시 | events.asyncapi.yaml |
+
 ## U5a 추가 계약 (2026-10-12)
 
 | 기호 | 변경 | 근거/영향 |
