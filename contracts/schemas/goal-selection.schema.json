@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mujoong.invalid/contracts/schemas/goal-selection.schema.json",
+  "type": "object",
+  "required": [
+    "goalSelectionId",
+    "displayName",
+    "isFavorite",
+    "sortOrder",
+    "selectedAt"
+  ],
+  "properties": {
+    "goalSelectionId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "displayName": {
+      "type": "string",
+      "minLength": 1
+    },
+    "isFavorite": {
+      "type": "boolean"
+    },
+    "sortOrder": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "selectedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "sourceActivityType": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "enum": [
+        "FREE_TALK",
+        "PRACTICE",
+        null
+      ]
+    },
+    "sourceActivityAt": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date-time"
+    },
+    "practiceCount": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0
+    }
+  },
+  "additionalProperties": true
+}

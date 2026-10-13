@@ -72,6 +72,25 @@ class NoSqlNowTest {
         assertThat(offenders).as("DB 시각 함수를 담은 질의 문자열").isEmpty();
     }
 
+    @Test
+    void sqlPathSelectionHandlesBothSeparatorsAndExcludesBuildCopies() {
+        String[] fragments = {"/src/main/resources/db/", "/src/test/resources/db/"};
+        for (String separator : List.of("/", "\\")) {
+            assertThat(selectsPath("backend/core-api/src/main/resources/db/migration/core/V1__core_base.sql"
+                    .replace("/", separator), ".sql", fragments)).isTrue();
+            assertThat(selectsPath("backend/realtime-activity/src/main/resources/db/migration/realtime/afterMigrate.sql"
+                    .replace("/", separator), ".sql", fragments)).isTrue();
+            assertThat(selectsPath("backend/core-api/src/test/resources/db/testmigration/core/probe.sql"
+                    .replace("/", separator), ".sql", fragments)).isTrue();
+            assertThat(selectsPath("backend/core-api/build/copy/src/main/resources/db/duplicate.sql"
+                    .replace("/", separator), ".sql", fragments)).isFalse();
+            assertThat(selectsPath("backend/node_modules/copy/src/main/resources/db/duplicate.sql"
+                    .replace("/", separator), ".sql", fragments)).isFalse();
+            assertThat(selectsPath("backend/core-api/src/main/resources/unrelated/example.sql"
+                    .replace("/", separator), ".sql", fragments)).isFalse();
+        }
+    }
+
     // ------------------------------------------------------------------ 검출기 자기 시험
 
     @Test
@@ -184,10 +203,6 @@ class NoSqlNowTest {
         return total;
     }
 
-    private static String slashed(Path path) {
-        return path.toString().replace('\\', '/');
-    }
-
     private static List<Path> files(String relativeRoot, String extension, String... pathFragments) {
         Path root = REPO_ROOT.resolve(relativeRoot);
         if (!Files.isDirectory(root)) {
@@ -196,15 +211,21 @@ class NoSqlNowTest {
         try (Stream<Path> walk = Files.walk(root)) {
             // 경로 조각은 '/'로 적었으므로 OS 구분자(Windows '\')를 '/'로 맞춰 비교한다(U2: Windows 개발 PC에서 0건 탐색 방지)
             return walk.filter(Files::isRegularFile)
-                    .filter(path -> path.toString().endsWith(extension))
-                    .filter(path -> !slashed(path).contains("/build/") && !slashed(path).contains("/node_modules/"))
-                    .filter(path -> pathFragments.length == 0
-                            || Stream.of(pathFragments).anyMatch(fragment -> slashed(path).contains(fragment)))
+                    .filter(path -> selectsPath(path.toString(), extension, pathFragments))
                     .sorted()
                     .toList();
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
+    }
+
+    /** Windows 구분자('\')를 '/'로 바꾼 뒤 저장소 상대 경로 조각과 맞춘다. */
+    static boolean selectsPath(String path, String extension, String... pathFragments) {
+        String portable = path.replace('\\', '/');
+        return portable.endsWith(extension)
+                && !portable.contains("/build/") && !portable.contains("/node_modules/")
+                && (pathFragments.length == 0
+                        || Stream.of(pathFragments).anyMatch(portable::contains));
     }
 
     private static String readString(Path file) {

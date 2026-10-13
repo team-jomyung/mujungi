@@ -32,6 +32,8 @@ import org.springframework.boot.context.properties.bind.PropertySourcesPlacehold
 import org.springframework.boot.context.properties.source.ConfigurationPropertySources;
 import org.springframework.boot.convert.ApplicationConversionService;
 import org.springframework.boot.env.YamlPropertySourceLoader;
+import kr.mujoong.core.knowledge.KnowledgeProperties;
+import kr.mujoong.core.textai.TextAiProperties;
 import org.springframework.core.convert.ConversionService;
 import org.springframework.core.env.EnumerablePropertySource;
 import org.springframework.core.env.MapPropertySource;
@@ -66,7 +68,7 @@ class ConfigKeyContractTest {
     /** timing.md가 키 · 기본값의 정본인 묶음(mujoong.<묶음>.*). 나머지(limits · security · …)는 reliability-design ## 3만 정본이다. */
     private static final Set<String> TIMING_GOVERNED_GROUPS = Set.of(
             "timing", "outbox", "inbox", "retention", "cleanup", "session", "device", "bootstrap", "gate",
-            "internal-http", "provider", "health", "device-web");
+            "internal-http", "provider", "health", "device-web", "text-ai");
 
     private static final Path REPO_ROOT =
             Path.of(System.getProperty("mujoong.repo.root", "..")).toAbsolutePath().normalize();
@@ -136,13 +138,19 @@ class ConfigKeyContractTest {
     void applicationYmlAndCorePropertiesNameTheSameKeysWithTheSameValues() {
         Path base = MAIN_RESOURCES.resolve("application.yml");
         Map<String, Object> yml = mujoongKeys(flatten(base));
-        Map<String, RecordComponent> leaves = recordLeaves(CoreProperties.class, "mujoong");
+        Map<String, RecordComponent> leaves = new TreeMap<>(recordLeaves(CoreProperties.class, "mujoong"));
+        // U5a: 텍스트 AI · 지식 그래프는 같은 방식의 설정 레코드 둘이 묶는다(U5a 리뷰 5)
+        leaves.putAll(recordLeaves(TextAiProperties.class, "mujoong.text-ai"));
+        leaves.putAll(recordLeaves(KnowledgeProperties.class, "mujoong.knowledge.neo4j"));
 
         assertThat(keyMismatches(yml.keySet(), leaves.keySet(), RECORD_KEYS_WITHOUT_DEFAULT))
                 .as("yml 키 ↔ 설정 레코드 키").isEmpty();
 
         CoreProperties bound = bind(base);
-        Map<String, Object> boundValues = recordValues(bound, "mujoong");
+        Map<String, Object> boundValues = new TreeMap<>(recordValues(bound, "mujoong"));
+        boundValues.putAll(recordValues(bindRecord(TextAiProperties.class, "mujoong.text-ai", base), "mujoong.text-ai"));
+        boundValues.putAll(recordValues(bindRecord(KnowledgeProperties.class, "mujoong.knowledge.neo4j", base),
+                "mujoong.knowledge.neo4j"));
         assertThat(valueMismatches(yml, leaves, boundValues, placeholderResolver(base)))
                 .as("yml 값과 레코드에 묶인 값").isEmpty();
         assertThat(bound.timing().bootstrap().rateLimit().max()).isEqualTo(20);
@@ -531,5 +539,34 @@ class ConfigKeyContractTest {
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
+    }
+
+    /** U5a 키는 application.yml 한 곳에 있고 타입 있는 설정 레코드로 그대로 묶인다(U5a 리뷰 5 · timing.md 9절). */
+    @Test
+    @Tag("u5a")
+    void u5aKeysLiveInApplicationYmlAndBindToTypedRecords() {
+        Path base = MAIN_RESOURCES.resolve("application.yml");
+        try (Stream<Path> files = Files.list(MAIN_RESOURCES)) {
+            assertThat(files.map(path -> path.getFileName().toString()))
+                    .as("설정 기본값은 application*.yml에만 둔다(따로 읽는 .properties 없음)")
+                    .noneMatch(name -> name.endsWith(".properties"));
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+        TextAiProperties ai = bindRecord(TextAiProperties.class, "mujoong.text-ai", base);
+        assertThat(ai.requestTimeout()).isEqualTo(Duration.ofSeconds(3));
+        assertThat(ai.retry().maxRetries()).isEqualTo(1);
+        assertThat(ai.retry().backoff()).isEqualTo(Duration.ofMillis(250));
+        assertThat(bindRecord(KnowledgeProperties.class, "mujoong.knowledge.neo4j", base).enabled()).isFalse();
+        CoreProperties bound = bind(base);
+        assertThat(bound.timing().practice().scenarioRequestTimeout()).isEqualTo(Duration.ofSeconds(15));
+        assertThat(bound.timing().goal().restoreWindow()).isEqualTo(Duration.ofSeconds(5));
+    }
+
+    private static <T> T bindRecord(Class<T> type, String prefix, Path... files) {
+        MutablePropertySources sources = sources(files);
+        Binder binder = new Binder(ConfigurationPropertySources.from(sources), new PropertySourcesPlaceholdersResolver(sources),
+                ApplicationConversionService.getSharedInstance());
+        return binder.bind(prefix, Bindable.of(type)).orElseThrow(() -> new IllegalStateException(prefix + " 설정이 없다"));
     }
 }

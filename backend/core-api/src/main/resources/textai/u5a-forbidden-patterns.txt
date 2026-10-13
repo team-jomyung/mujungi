@@ -1,0 +1,18 @@
+// U5a conservative demonstration dictionary. Seven categories; real-provider review remains required.
+// DIAGNOSIS
+진단
+// TREATMENT
+치료
+// SCORE
+비정상
+점수
+정상이에요
+정상입니다
+// CAUSE
+핵심원인
+// GENERALIZATION
+학교에서도그럴
+// EMOTION_CLAIM
+화가났군요
+// PRESSURE
+꼭해야해요

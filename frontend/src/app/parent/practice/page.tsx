@@ -1,6 +1,6 @@
-import { redirect } from "next/navigation";
+import { Practice18 } from "@/parent/screens/Practice18";
 
-// /parent/practice — 18 연습 스텁(U1 3.5 Step 40 · J119). U5가 화면을 만들기 전까지 04로 되돌린다.
-export default function ParentPracticeStubPage(): never {
-  redirect("/parent");
+// U5a screen18. Practice launch belongs to the later U5b adapter (U5a-J4).
+export default function ParentPracticePage() {
+  return <Practice18 />;
 }

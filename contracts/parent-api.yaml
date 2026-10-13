@@ -780,6 +780,131 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "500": { $ref: "#/components/responses/InternalError" }
         "503": { $ref: "#/components/responses/ServiceNotReady" }
+  # ───────────────────────────── U5a 연습 목표 ─────────────────────────────
+  /goal-selections:
+    get:
+      operationId: getGoalSelections
+      x-unit: U5a
+      summary: 담은 목표 (즐겨찾기 먼저, 담은 순서)
+      security:
+        - session: []
+      responses:
+        "200":
+          description: 성공
+          content:
+            application/json:
+              schema: { $ref: "schemas/goal-selection-list.schema.json" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/CsrfOrDeletion" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/ServiceNotReady" }
+    post:
+      operationId: addGoalSelection
+      x-unit: U5a
+      summary: 검증된 후보 담기 (U5a-a)
+      security:
+        - session: []
+          csrf: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "schemas/goal-selection-add-request.schema.json" }
+      responses:
+        "201":
+          description: 성공
+          content:
+            application/json:
+              schema: { $ref: "schemas/goal-selection.schema.json" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/CsrfOrDeletion" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/ServiceNotReady" }
+        "409":
+          description: 이미 담은 후보
+          x-error-codes: [ALREADY_SELECTED]
+          content:
+            application/json:
+              schema: { $ref: "schemas/error-envelope.schema.json" }
+  /goal-selections/{goalSelectionId}:
+    parameters:
+      - { name: goalSelectionId, in: path, required: true, schema: { type: string, format: uuid } }
+    patch:
+      operationId: setGoalFavorite
+      x-unit: U5a
+      summary: 즐겨찾기 절대값 설정 (U5a-a)
+      security:
+        - session: []
+          csrf: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "schemas/goal-selection-favorite-request.schema.json" }
+      responses:
+        "200":
+          description: 성공
+          content:
+            application/json:
+              schema: { $ref: "schemas/goal-selection.schema.json" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/CsrfOrDeletion" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/ServiceNotReady" }
+    delete:
+      operationId: deleteGoalSelection
+      x-unit: U5a
+      summary: 소프트 삭제, 복구 시한 반환
+      description: 중복 삭제는 첫 복구 시한을 돌려주며 연장하지 않는다. UI 취소 창 동안은 요청 자체를 보내지 않는다.
+      security:
+        - session: []
+          csrf: []
+      responses:
+        "200":
+          description: 성공
+          content:
+            application/json:
+              schema: { $ref: "schemas/goal-selection-delete-response.schema.json" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/CsrfOrDeletion" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/ServiceNotReady" }
+  /goal-selections/{goalSelectionId}/restore:
+    parameters:
+      - { name: goalSelectionId, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: restoreGoalSelection
+      x-unit: U5a
+      summary: 삭제 복구 (순서와 즐겨찾기 보존)
+      security:
+        - session: []
+          csrf: []
+      responses:
+        "200":
+          description: 성공
+          content:
+            application/json:
+              schema: { $ref: "schemas/goal-selection.schema.json" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/CsrfOrDeletion" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/ServiceNotReady" }
+        "410":
+          description: 복구 시한 경과
+          x-error-codes: [RESTORE_EXPIRED]
+          content:
+            application/json:
+              schema: { $ref: "schemas/error-envelope.schema.json" }
 components:
   securitySchemes:
     session: { type: apiKey, in: cookie, name: MUJOONG_SESSION }

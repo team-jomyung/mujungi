@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mujoong.invalid/contracts/schemas/internal-practice-scenario-request.schema.json",
+  "type": "object",
+  "required": [
+    "sessionId",
+    "goalSelectionId",
+    "kind"
+  ],
+  "properties": {
+    "sessionId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "goalSelectionId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "kind": {
+      "enum": [
+        "ORIGINAL",
+        "NEW_SCENARIO"
+      ]
+    },
+    "previousScenarioId": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "uuid"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "NEW_SCENARIO"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "previousScenarioId"
+        ],
+        "properties": {
+          "previousScenarioId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "previousScenarioId": {
+            "type": "null"
+          }
+        }
+      }
+    }
+  ],
+  "additionalProperties": true
+}

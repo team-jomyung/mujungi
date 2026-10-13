@@ -31,8 +31,8 @@ import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.context.annotation.Configuration;
 
 /**
- * Core V1 스키마 통합 시험(U1 3.5 Step 14). 실제 init 스크립트 + 두 마이그레이션 위치로 만든 DB에서 표 · 열 · 형식 · 색인과
- * JPA 엔터티 대조(ddl-auto=validate)를 본다. U2가 V2(표 2개 · 동의 열 1개 · 부분 유일 색인 1개)를 더해 목록을 늘렸다.
+ * Core 스키마 통합 시험(U1 3.5 Step 14). 실제 init 스크립트 + 두 마이그레이션 위치로 만든 DB에서 표 · 열 · 형식 · 색인과
+ * JPA 엔터티 대조(ddl-auto=validate)를 본다. U2 V2 · U4a V3 · U5a V4가 더한 표도 같은 목록에 있다.
  *
  * <p>증명: BR8.2 · J43(V1이 표 12개를 만든다) · E1 ~ E4 열 수(core_device 22 · core_activity 20 · Outbox/Inbox 각 17) · A3
  * trace_id 열 · J115(timestamptz · jsonb · uuid, DB 시각 기본값 없음) · PD-8(fillfactor 90 · 부분 유일 색인) · J116(이력 표) ·
@@ -64,6 +64,16 @@ class CoreSchemaIT {
             "core_spring_session_attributes",
             "core_stop_expression");
 
+    /** U5a V4가 더하는 표 7개. */
+    static final List<String> U5A_TABLES = List.of(
+            "core_behavior_definition",
+            "core_goal_recommendation",
+            "core_practice_goal_selection",
+            "core_recommendation_evidence",
+            "core_scenario",
+            "core_scenario_request",
+            "core_support_item");
+
     private static MujoongPostgres postgres;
 
     @BeforeAll
@@ -76,15 +86,16 @@ class CoreSchemaIT {
         try (Connection owner = postgres.connect(Role.OWNER)) {
             List<List<Object>> tables = query(owner,
                     "select tablename, tableowner from pg_tables where schemaname = 'core' order by tablename");
-            assertThat(tables.stream().map(row -> (String) row.get(0)).toList()).containsExactlyElementsOf(CORE_TABLES);
+            assertThat(tables.stream().map(row -> (String) row.get(0)).toList()).containsExactlyElementsOf(
+                    java.util.stream.Stream.concat(CORE_TABLES.stream(), U5A_TABLES.stream()).sorted().toList());
             // 편차 (x): 표 소유는 마이그레이션 역할, 앱 역할은 쓰는 역할일 뿐이다
             assertThat(tables).allSatisfy(row -> assertThat(row.get(1)).isEqualTo("mujoong_owner"));
 
-            // 이력 표 flyway.core_schema_history에 V1 · V2(U2) · V3(U4a)가 차례로 성공으로 있다(J116). core 위치가 먼저라 기준선 행은 없다
+            // 이력 표 flyway.core_schema_history에 V1 · V2(U2) · V3(U4a) · V4(U5a)가 차례로 성공으로 있다(J116). core 위치가 먼저라 기준선 행은 없다
             List<List<Object>> history = query(owner,
                     "select version, type, success from flyway.core_schema_history order by installed_rank");
             assertThat(history).containsExactly(List.of("1", "SQL", true), List.of("2", "SQL", true),
-                    List.of("3", "SQL", true));
+                    List.of("3", "SQL", true), List.of("4", "SQL", true));
         }
     }
 
@@ -106,6 +117,13 @@ class CoreSchemaIT {
         "core_spring_session_attributes, 3",
         "core_activity_context, 9",
         "core_activity_record, 23",
+        "core_behavior_definition, 11",
+        "core_support_item, 8",
+        "core_goal_recommendation, 11",
+        "core_recommendation_evidence, 6",
+        "core_practice_goal_selection, 13",
+        "core_scenario, 22",
+        "core_scenario_request, 13",
     })
     void tablesHaveTheEntityColumnCounts(String table, int expectedColumns) throws SQLException {
         try (Connection core = postgres.connect(Role.CORE_APP)) {

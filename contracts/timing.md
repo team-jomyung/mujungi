@@ -47,7 +47,8 @@
 
 ## 2. 계약 7절 키 — U1이 읽지 않는 것(이름만 예약)
 
-후속 유닛이 같은 규칙(`mujoong.timing.<키>`)으로 읽고 이 절의 행을 1절 모양으로 옮긴다. 값은 계약 7절 그대로다.
+후속 유닛이 같은 규칙(`mujoong.timing.<키>`)으로 읽고 이 절의 행을 1절 또는 그 유닛의 절로 옮긴다. 값은 계약 7절 그대로다.
+U5a가 옮긴 것: `practice.scenario-request-timeout`(9절).
 U3가 옮긴 것: `device.reconnect-backoff` · `device.playback-mark-interval` · `device.unstable-rtt` · `gate.barge-in-stop` ·
 `gate.local-voice-min`(1절) 그리고 `device.unstable-disconnects`를 `timing.device.unstable-disconnect-window`(1절) +
 `device.unstable-disconnect-count`(4절)로 나눈 것(U3-J3) [편차 (ac)].
@@ -63,10 +64,8 @@ U3가 옮긴 것: `device.reconnect-backoff` · `device.playback-mark-interval` 
 | `mujoong.timing.practice.help-consent-wait` | 10초 | U5 |
 | `mujoong.timing.practice.cue-budget` | 5초 | U5 |
 | `mujoong.timing.practice.judge-budget` | 5초 + 재시도 1회 | U5 |
-| `mujoong.timing.practice.scenario-request-timeout` | 15초 | U5 |
 | `mujoong.timing.result.job-attempts` | 3회(간격 5 · 15초) | U6 |
 | `mujoong.timing.report.ready-target` | 60초 | U6 |
-| `mujoong.timing.goal.restore-window` | 5초 | U5 |
 
 ## 3. 계약 7절 밖 U1 시간 키 (`mujoong.timing.*` 4종, J80 · R3-17)
 
@@ -151,3 +150,18 @@ WSS 텍스트 프레임 8KB(`mujoong.limits.ws-text-frame-max`, 넘으면 4400 [
 | `mujoong.timing.account.deletion-session-wait` | `30s` | core-api | 삭제 접수 뒤 진행 세션 CONSENT_WITHDRAWN 끝내기를 보낸 시각 → 사본이 종료되지 않아도 이 시간이 지나면 데이터 삭제 시작 | AC1.6.3 · U2-J18 |
 | `mujoong.timing.account.google-keys-min-age` | `1m` | core-api | 구글 서명 열쇠 캐시 바닥 — 응답 max-age가 이보다 짧으면(max-age 없음 · no-store · no-cache = 0 포함) 이만큼은 둔다(로그인 한 번에 두 번 받지 않게). `google-keys-max-age`보다 길면 기동 거부 | U2 3차 리뷰 3 · U2-J2 |
 | `mujoong.timing.account.google-keys-max-age` | `6h` | core-api | 구글 id_token 서명 열쇠(JWKS) 캐시 상한 — 응답 `Cache-Control: max-age`만큼 두되 이 값을 넘지 않는다(바닥은 `google-keys-min-age`). 모르는 kid면 상한 안이어도 다시 받는다 | U2 2차 리뷰 4 · U2-J2 |
+
+## 9. U5a 텍스트 AI 시간
+
+| 키 | 기본값 | 소유 앱 | 뜻 | 근거 |
+|---|---|---|---|---|
+| `mujoong.text-ai.request-timeout` | `3s` | core-api | 호출 한 번의 상한 | U5a-J7 |
+| `mujoong.text-ai.retry.max-retries` | `1` | core-api | 일시적 오류의 재시도 횟수 | U5a-J7 |
+| `mujoong.text-ai.retry.backoff` | `250ms` | core-api | 기술 재시도 사이 간격 | U5a-J7 |
+| `mujoong.timing.practice.scenario-request-timeout` | `15s` | core-api | C10 전체 생성/재생성/재시도 예산과 요청 선점 시한 | U5a-J18 |
+| `mujoong.timing.goal.restore-window` | `5s` | core-api | 삭제 요청 처리 뒤 서버 복구 시한 | C4 · U5a-J3 |
+| `mujoong.timing.parent.loading-notice-delay` | `5s` | web | 화면 18 최초 조회가 이 시간을 넘으면 안내 토스트 | 화면 18 interaction-spec · U5a-J23 |
+
+core-api 키는 모두 application.yml에 둔다. 텍스트 AI 세 키는 TextAiProperties, 두 `mujoong.timing.*` 키는 CoreProperties(timing.practice · timing.goal)가 묶는다. 상황 생성 예산은 요청 선점 시한과 같고(ScenarioLimits), 복구 시한은 GoalSelectionService가 읽는다. 프런트 삭제는 기존 조작 토스트 설정(최소 3초)을 따른다.
+
+web의 loading-notice-delay는 MUJOONG_TIMING_PARENT_LOADINGNOTICEDELAY 환경 변수로 주입하고 parentLoadingNoticeDelayMs로 읽는다.

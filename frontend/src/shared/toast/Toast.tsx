@@ -8,6 +8,8 @@ import { useEffect, useRef, useState } from "react";
 // - 오류는 assertive, 그 밖은 polite 영역에 놓는다(영역은 늘 렌더해 둬 보조기기가 바뀐 글을 읽게 한다).
 
 export type ToastKind = "info" | "error";
+/** Optional lifecycle observers use expiration, rather than a second timer (U5a-J3). */
+export type ToastCloseReason = "expired" | "action" | "dismissed" | "replaced";
 
 export interface ToastAction {
   readonly label: string;
@@ -30,7 +32,7 @@ interface ToastCardProps {
   readonly toast: ActiveToast;
   readonly durationMs: number;
   readonly actionMinMs: number;
-  readonly onDismiss: (id: number) => void;
+  readonly onDismiss: (id: number, reason: ToastCloseReason) => void;
 }
 
 function ToastCard({ toast, durationMs, actionMinMs, onDismiss }: ToastCardProps) {
@@ -44,7 +46,7 @@ function ToastCard({ toast, durationMs, actionMinMs, onDismiss }: ToastCardProps
         setExpired(true);
         return;
       }
-      onDismiss(toast.id);
+      onDismiss(toast.id, "expired");
     }, visibleMs);
     return () => window.clearTimeout(timer);
   }, [toast.id, visibleMs, onDismiss]);
@@ -52,13 +54,13 @@ function ToastCard({ toast, durationMs, actionMinMs, onDismiss }: ToastCardProps
   const handleBlur = () => {
     focusedRef.current = false;
     if (expired) {
-      onDismiss(toast.id);
+      onDismiss(toast.id, "expired");
     }
   };
 
   const handleAction = () => {
     toast.action?.onPress();
-    onDismiss(toast.id);
+    onDismiss(toast.id, "action");
   };
 
   return (
@@ -88,7 +90,7 @@ interface ToastViewportProps {
   readonly toast: ActiveToast | null;
   readonly durationMs: number;
   readonly actionMinMs: number;
-  readonly onDismiss: (id: number) => void;
+  readonly onDismiss: (id: number, reason: ToastCloseReason) => void;
 }
 
 /** polite · assertive 두 영역을 늘 두고 토스트는 종류에 맞는 영역에 그린다. */

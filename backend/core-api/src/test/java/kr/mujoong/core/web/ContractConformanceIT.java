@@ -283,6 +283,7 @@ class ContractConformanceIT {
             String method = key.substring(0, key.indexOf(' '));
             String path = key.substring(key.indexOf(' ') + 1)
                     .replace("{deviceId}", UUID.randomUUID().toString())
+                    .replace("{goalSelectionId}", UUID.randomUUID().toString())
                     .replace("{sessionId}", UUID.randomUUID().toString());
             Call call = app.call(method, path);
             if (!method.equals("GET")) {
@@ -304,7 +305,10 @@ class ContractConformanceIT {
 
         assertThat(swept).as("보호 연산을 실제로 훑었다")
                 .contains("GET /api/sessions/{sessionId}", "POST /api/activities/free", "GET /api/device/me",
-                        "PUT /internal/devices/{deviceId}/connection", "POST /internal/events");
+                        "PUT /internal/devices/{deviceId}/connection", "POST /internal/events",
+                        "GET /api/goal-selections", "POST /api/goal-selections",
+                        "PATCH /api/goal-selections/{goalSelectionId}", "DELETE /api/goal-selections/{goalSelectionId}",
+                        "POST /api/goal-selections/{goalSelectionId}/restore", "POST /internal/practice/scenarios");
         assertThat(problems).isEmpty();
     }
 

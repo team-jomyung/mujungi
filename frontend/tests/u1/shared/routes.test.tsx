@@ -12,6 +12,7 @@ import { Free08 } from "@/parent/screens/Free08";
 import { Home04 } from "@/parent/screens/Home04";
 import { Live12 } from "@/parent/screens/Live12";
 import { Register05a } from "@/parent/screens/Register05a";
+import { Practice18 } from "@/parent/screens/Practice18";
 import RootLayout, { metadata as rootMetadata, viewport } from "@/app/layout";
 import { GET as healthz, dynamic as healthzDynamic } from "@/app/healthz/route";
 import { GET as workletRoute, dynamic as workletDynamic } from "@/app/device/pcm-capture-worklet/route";
@@ -23,7 +24,7 @@ import { Device05 } from "@/parent/screens/Device05";
 import ParentRegisterPage from "@/app/parent/device/register/page";
 import ParentFreePage from "@/app/parent/free/page";
 import ParentDevLoginPage from "@/app/parent/dev-login/page";
-import ParentPracticeStubPage from "@/app/parent/practice/page";
+import ParentPracticePage from "@/app/parent/practice/page";
 import ParentRecordsStubPage from "@/app/parent/records/page";
 import ParentLivePage from "@/app/parent/sessions/[sessionId]/page";
 import ParentDonePage from "@/app/parent/sessions/[sessionId]/done/page";
@@ -98,7 +99,6 @@ describe("라우트 처리기", () => {
 
 describe("스텁 라우트 → /parent(J57 · J119)", () => {
   it.each([
-    ["/parent/practice", ParentPracticeStubPage],
     ["/parent/records", ParentRecordsStubPage],
   ])("%s는 04로 되돌린다", (_, page) => {
     expect(digestOf(page)).toBe("NEXT_REDIRECT;replace;/parent;307;");
@@ -124,6 +124,9 @@ describe("/parent/dev-login — MUJOONG_DEVLOGIN_ENABLED가 정확히 true일 �
 });
 
 describe("화면 라우트", () => {
+  it("/parent/practice는 U5a의 실제 18 화면을 연결한다", () => {
+    expect(elementOf(ParentPracticePage()).type).toBe(Practice18);
+  });
   it("/parent · /parent/device/register는 04 · 05a를 그린다", () => {
     expect(elementOf(ParentHomePage()).type).toBe(Home04);
     expect(elementOf(ParentRegisterPage()).type).toBe(Register05a);

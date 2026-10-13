@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mujoong.invalid/contracts/schemas/goal-selection-add-request.schema.json",
+  "type": "object",
+  "required": [
+    "recommendationId"
+  ],
+  "properties": {
+    "recommendationId": {
+      "type": "string",
+      "format": "uuid"
+    }
+  },
+  "additionalProperties": true
+}

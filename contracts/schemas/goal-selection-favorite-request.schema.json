@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mujoong.invalid/contracts/schemas/goal-selection-favorite-request.schema.json",
+  "type": "object",
+  "required": [
+    "isFavorite"
+  ],
+  "properties": {
+    "isFavorite": {
+      "type": "boolean"
+    }
+  },
+  "additionalProperties": true
+}
