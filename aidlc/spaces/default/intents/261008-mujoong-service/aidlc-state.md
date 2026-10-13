@@ -13,8 +13,8 @@
 - **Practices Affirmed Timestamp**:
 
 ## Scope Configuration
-- **Stages to Execute**: 0.1, 0.2, 0.3, 2.3, 2.4, 2.5, 2.6, 2.7, 2.8, 2.9, 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 4.1, 4.2, 4.3
-- **Stages to Skip**: 1.1 (intent-capture), 1.2 (market-research), 1.3 (feasibility), 1.4 (scope-definition), 1.5 (team-formation), 1.6 (rough-mockups), 1.7 (approval-handoff), 2.1 (reverse-engineering), 2.2 (practices-discovery), 3.7 (ci-pipeline), 4.4 (observability-setup), 4.5 (incident-response), 4.6 (performance-validation), 4.7 (feedback-optimization)
+- **Stages to Execute**: 0.1, 0.2, 0.3, 2.3, 2.4, 2.5, 2.6, 2.7, 2.8, 2.9, 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.7
+- **Stages to Skip**: 1.1 (intent-capture), 1.2 (market-research), 1.3 (feasibility), 1.4 (scope-definition), 1.5 (team-formation), 1.6 (rough-mockups), 1.7 (approval-handoff), 2.1 (reverse-engineering), 2.2 (practices-discovery), 3.7 (ci-pipeline)
 - **Depth**: Standard
 - **Test Strategy**: Standard
 - **Review Override**: none
@@ -30,7 +30,7 @@
 - **Build System**: Unknown
 
 ## Execution Plan Summary
-- **Total Stages**: 19
+- **Total Stages**: 23
 - **Completed**: 10
 - **In Progress**: functional-design
 
@@ -115,17 +115,17 @@ Per unit: [TBD]
 - [ ] deployment-pipeline — EXECUTE
 - [ ] environment-provisioning — EXECUTE
 - [ ] deployment-execution — EXECUTE
-- [ ] observability-setup — SKIP
-- [ ] incident-response — SKIP
-- [ ] performance-validation — SKIP
-- [ ] feedback-optimization — SKIP
+- [ ] observability-setup — EXECUTE
+- [ ] incident-response — EXECUTE
+- [ ] performance-validation — EXECUTE
+- [ ] feedback-optimization — EXECUTE
 
 ## Current Status
 - **Lifecycle Phase**: CONSTRUCTION
 - **Current Stage**: functional-design
 - **Next Stage**: nfr-requirements
 - **Status**: Running
-- **Last Updated**: 2026-10-13T05:54:27Z
+- **Last Updated**: 2026-10-13T08:18:13Z
 
 - **Construction Autonomy Mode**: gated
 

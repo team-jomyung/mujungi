@@ -1319,35 +1319,115 @@ public final class SessionExecutor {
     private void onEndRequested(EndRequested request) {
         EndOutcome outcome = switch (request.reason()) {
             case GUARDIAN_STOP -> guardianStop(request.requestId());
+            case CONSENT_WITHDRAWN -> consentWithdrawn(request.requestId());
             case CORE_ABANDONED -> coreAbandoned();
             default -> EndOutcome.UNSUPPORTED;
         };
         request.result().complete(outcome);
     }
 
-    /** J54 응답표: ACTIVE → CLOSING(첫 수락), CLOSING → 같은 답(재처리 없음), 그 밖 → 409. */
+    /**
+     * J54 · U4b 응답표(BR1.5 · BR1.6): WAITING_CHILD · ACTIVE → CLOSING(GUARDIAN_STOP, 첫 수락), CLOSING → 같은 답(재처리 없음), 시작 단계 ·
+     * 종료 → 409.
+     */
     private EndOutcome guardianStop(UUID requestId) {
         if (status == SessionStatus.CLOSING) {
             return EndOutcome.CLOSING;
         }
-        if (status != SessionStatus.ACTIVE) {
+        if (!Trigger.GUARDIAN_STOP.accepts(status)) {
             return EndOutcome.NOT_ACTIVE;
         }
-        Instant now = services.clock().now();
-        Optional<ActivitySessionRow> row = services.transitions().transition(plan.sessionId(), SessionStatus.ACTIVE,
-                SessionStatus.CLOSING, SessionChange.none().withTerminationRequestedAt(now),
-                SessionTransitions.Origin.REALTIME, plan.traceId());
-        if (row.isEmpty()) {
-            syncFromDb(requestId);
-            return status == SessionStatus.CLOSING ? EndOutcome.CLOSING : EndOutcome.NOT_ACTIVE;
-        }
-        status = SessionStatus.CLOSING;
-        enterClosing(now, requestId);
-        return EndOutcome.CLOSING;
+        return beginClosing(Trigger.GUARDIAN_STOP, requestId) || status == SessionStatus.CLOSING ? EndOutcome.CLOSING
+                : EndOutcome.NOT_ACTIVE;
     }
 
     /**
-     * CLOSING 진입의 승자 몫(BR6.10 ① ② · BR6.12 ③).
+     * U4b 응답표의 동의 철회 행(BR1.5 · BR1.7 · U4b-R9 · U4b-J9): 시작 단계 → FAILED(CONSENT_WITHDRAWN) + 202 {}, WAITING_CHILD · ACTIVE →
+     * CLOSING(CONSENT_WITHDRAWN) + 202 {CLOSING}, CLOSING → 202 {CLOSING}(사유는 처음 것), 종료 → 409. 받은 순간부터 아이 전사 · 원음을 저장하지
+     * 않는다(반복 요청은 같은 응답만, BR1.6).
+     */
+    private EndOutcome consentWithdrawn(UUID requestId) {
+        if (status.isTerminal()) {
+            return EndOutcome.NOT_ACTIVE;
+        }
+        blockChildRecording();
+        if (status == SessionStatus.CLOSING) {
+            return EndOutcome.CLOSING;
+        }
+        if (START_PHASE.contains(status)) {
+            failWithConsentWithdrawn();
+            return status == SessionStatus.CLOSING ? EndOutcome.CLOSING
+                    : status.isTerminal() || START_PHASE.contains(status) ? EndOutcome.ACCEPTED_EMPTY
+                    : EndOutcome.NOT_ACTIVE;
+        }
+        return beginClosing(Trigger.CONSENT_WITHDRAWN, requestId) || status == SessionStatus.CLOSING
+                ? EndOutcome.CLOSING : EndOutcome.NOT_ACTIVE;
+    }
+
+    /** 시작 단계 동의 철회: FAILED(CONSENT_WITHDRAWN). START_SESSION이 나갔고 연결이 살아 있으면 CLOSE_TRANSPORT(CONSENT_WITHDRAWN). */
+    private void failWithConsentWithdrawn() {
+        ActivitySessionRepository.MultiOriginTransition result = services.transitions().transitionFromAny(
+                plan.sessionId(), Trigger.CONSENT_WITHDRAWN_START.origins(), SessionStatus.FAILED,
+                read -> TransitionTable.changeFor(Trigger.CONSENT_WITHDRAWN_START, null, services.clock().now())
+                        .withTerminationRequestedAt(services.clock().now()),
+                SessionTransitions.Origin.REALTIME, plan.traceId());
+        if (!result.transitioned()) {
+            syncFromDb();
+            return;
+        }
+        afterFailed(CloseTransport.Reason.CONSENT_WITHDRAWN);
+    }
+
+    /**
+     * BR1.7: 동의 철회를 받은 뒤의 아이 전사 · 원음은 저장하지 않는다. 원음 기록을 닫고(아이 · AI 모두) 이후 아이 전사는 버리며 버린 건수를
+     * 센다(사건 payload는 건수만, BR12.1).
+     */
+    private void blockChildRecording() {
+        if (consentWithdrawnAt != null) {
+            return;
+        }
+        consentWithdrawnAt = services.clock().now();
+        relay.tap(null);
+        AudioRecordings.Session open = recording;
+        recording = null;
+        if (open != null) {
+            quietly(() -> open.close(consentWithdrawnAt));
+        }
+        droppedAfterConsent += transcripts.discardOpenChildren();
+    }
+
+    /**
+     * WAITING_CHILD · ACTIVE → CLOSING 전이(BR1.3): 사건이 정한 사유를 CLOSING에 쓰고 승자만 마무리 순서를 시작한다(BR1.2 · BR4.6).
+     *
+     * @return 이 호출이 전이를 이겼으면 참(지면 DB 상태로 맞춘다)
+     */
+    private boolean beginClosing(Trigger trigger, UUID requestId) {
+        if (!trigger.accepts(status) || trigger.target() != SessionStatus.CLOSING) {
+            return false;
+        }
+        Instant now = services.clock().now();
+        SessionStatus from = status;
+        Optional<ActivitySessionRow> row = services.transitions().transition(plan.sessionId(), from,
+                SessionStatus.CLOSING, TransitionTable.changeFor(trigger, null, now).withTerminationRequestedAt(now),
+                SessionTransitions.Origin.REALTIME, plan.traceId(), transitionExtras());
+        if (row.isEmpty()) {
+            syncFromDb(requestId);
+            return false;
+        }
+        status = SessionStatus.CLOSING;
+        closingReason = row.get().endReason() != null ? row.get().endReason() : trigger.endReason();
+        closingDetail = row.get().endDetail();
+        enterClosing(now, requestId);
+        return true;
+    }
+
+    /** 전이와 함께 쓸 값(L2: 없음. 기술 일시정지는 L4가 싣는다). */
+    private SessionTransitions.Extras transitionExtras() {
+        return SessionTransitions.Extras.none();
+    }
+
+    /**
+     * CLOSING 진입의 승자 몫(BR6.10 ① ② · BR6.12 ③ · BR4.5 · BR4.6).
      *
      * @param committedAt CLOSING 전이를 이긴 커밋 시각(30초 확인 시한의 시작점)
      * @param requestId END_REQUESTED 기록에 남길 끝내기 요청 id(모르면 null)
@@ -1357,7 +1437,7 @@ public final class SessionExecutor {
         closingAt = committedAt;
         services.recorder().putEvent(new SessionEvent(UUID.randomUUID(), plan.sessionId(), "END_REQUESTED",
                 requestId == null ? null : requestId.toString(), null, committedAt));
-        // BR6.10 ①: 서버 쪽 출력 버퍼 취소 → STOP_OUTPUT + SESSION_STATE{CLOSING} → ② 마무리 문구 1회
+        // BR6.10 ① · BR4.5: 서버 쪽 출력 버퍼 취소 → STOP_OUTPUT + SESSION_STATE{CLOSING} → ② 마무리 문구 1회
         bumpGeneration();
         timers.cancel(Kind.SEGMENT_QUIET);
         timers.cancel(Kind.DISCONNECT);
@@ -1365,13 +1445,39 @@ public final class SessionExecutor {
         segment.reset();
         transcripts.aiFinal("", false, now);
         closing.begin(closingDevice(), plan.closing() == null ? null : plan.closing().contentVersionId(), playback,
-                UUID::randomUUID);
+                UUID::randomUUID, stopReasonFor(closingReason), closeReasonForClosing(closingReason));
         Duration elapsed = Duration.between(committedAt, now);
         timers.arm(Kind.CLOSING_CONFIRM,
                 services.settings().closingConfirm().minus(elapsed.isNegative() ? Duration.ZERO : elapsed));
     }
 
-    /** BR6.7 (나) ~ (라): PREPARING · DEVICE_ACK · ACTIVE → FAILED(실패 코드 없음), CLOSING · 종료는 그대로 202 {}. */
+    /** BR4.6: STOP_OUTPUT 사유 — GUARDIAN_STOP · CHILD_STOP · SILENCE는 같은 값, CONSENT_WITHDRAWN은 BEFORE_CLOSING. */
+    static StopOutput.Reason stopReasonFor(EndReason reason) {
+        if (reason == null) {
+            return StopOutput.Reason.GUARDIAN_STOP;
+        }
+        return switch (reason) {
+            case CHILD_STOP -> StopOutput.Reason.CHILD_STOP;
+            case SILENCE -> StopOutput.Reason.SILENCE;
+            case CONSENT_WITHDRAWN -> StopOutput.Reason.BEFORE_CLOSING;
+            default -> StopOutput.Reason.GUARDIAN_STOP;
+        };
+    }
+
+    /** BR4.6: CLOSE_TRANSPORT 사유는 마무리 사유(end_reason) 값 그대로다. */
+    static CloseTransport.Reason closeReasonForClosing(EndReason reason) {
+        if (reason == null) {
+            return CloseTransport.Reason.GUARDIAN_STOP;
+        }
+        return switch (reason) {
+            case CHILD_STOP -> CloseTransport.Reason.CHILD_STOP;
+            case SILENCE -> CloseTransport.Reason.SILENCE;
+            case CONSENT_WITHDRAWN -> CloseTransport.Reason.CONSENT_WITHDRAWN;
+            default -> CloseTransport.Reason.GUARDIAN_STOP;
+        };
+    }
+
+    /** BR6.7 (나) ~ (라) · BR1.9: PREPARING · DEVICE_ACK · WAITING_CHILD · ACTIVE → FAILED(실패 코드 없음), CLOSING · 종료는 그대로 202 {}. */
     private EndOutcome coreAbandoned() {
         if (status == SessionStatus.CLOSING || status.isTerminal()) {
             return EndOutcome.ACCEPTED_EMPTY;
