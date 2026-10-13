@@ -79,7 +79,7 @@ export const STEPS = Object.freeze([
   { id: "C7", title: "08 자유대화 시작 202", budget: (d) => 2 * d.request, run: stepStart },
   {
     id: "C8",
-    title: "START_SESSION → ACK · DEVICE_READY → ACTIVE",
+    title: "START_SESSION → ACK · DEVICE_READY → 시작 안내 · 참여 응답 → ACTIVE",
     budget: (d) => d.active + 2 * d.request,
     run: stepActive,
   },
@@ -593,6 +593,7 @@ async function stepActive(ctx) {
       },
     ),
   );
+  await stepJoin(ctx);
   ctx.measurements.activeReachedMs = Date.now() - ctx.state.startRequestedAt;
   const view = await waitUntil(
     ctx,
@@ -609,6 +610,83 @@ async function stepActive(ctx) {
   check(
     view.sessionId === sessionId && view.activityType === "FREE_TALK",
     "12 진행 보기: sessionId · activityType이 다르다",
+  );
+  // U4b: 참여 전의 AI 줄(승인된 시작 안내)은 뒤 턴의 AI 말 수에서 뺀다
+  ctx.state.preTurnAiSeqs = new Set(itemTexts(view, "AI").map((item) => item.seq));
+}
+
+/**
+ * U4b 참여 확인(FR2.1 · BR2.1 · U4b-J3): DEVICE_READY 뒤 WAITING_CHILD에서 시작 안내(INTRO_FREE_TALK, 시드 003의 승인 문구)를 재생하고, 재생
+ * 완료 뒤 참여 창에서 아이가 "응"이라고 답하면 ACTIVE가 되고 Realtime이 session.response.create를 한 번 보낸다. 가짜 공급자 턴 계획의 첫
+ * 턴은 join이다(--turns join,normal,forbidden).
+ */
+async function stepJoin(ctx) {
+  const { deadlines } = ctx;
+  const sim = ctx.state.sim;
+  const sessionId = ctx.state.sessionId;
+  const before = ctx.state.simMarkBeforeStart;
+  const intro = await bounded(
+    ctx,
+    sim.waitFor(
+      (e) =>
+        e.envelope.type === "PLAY_APPROVED_CONTENT" &&
+        e.envelope.payload.contentCode === "INTRO_FREE_TALK" &&
+        e.envelope.sessionId === sessionId,
+      {
+        timeoutMs: ctx.limit(deadlines.active),
+        what: "PLAY_APPROVED_CONTENT(INTRO_FREE_TALK) — 시드 003 승인 문구",
+        from: before.receivedIndex,
+      },
+    ),
+  );
+  const introId = intro.envelope.payload.playbackId;
+  await bounded(
+    ctx,
+    sim.waitForEvent(
+      (e) => e.kind === "mark-sent" && e.playbackId === introId && e.status === "COMPLETED",
+      {
+        timeoutMs: ctx.limit(deadlines.active),
+        what: "INTRO_FREE_TALK PLAYBACK_MARK COMPLETED 송신",
+        from: before.eventIndex,
+      },
+    ),
+  );
+  const listening = await framesPerTurn(ctx);
+  check(
+    listening.turns?.[0] === "join",
+    "가짜 공급자 턴 계획이 join으로 시작하지 않는다(--turns join,normal,forbidden 필요)",
+  );
+  const sent = await sim.sendInputFrames(listening.framesPerTurn);
+  const turn = await bounded(
+    ctx,
+    ctx.provider.waitFor(
+      (e) => e.ev === "turn" && e.conn === ctx.state.providerConn && e.turn === 1,
+      {
+        timeoutMs: ctx.limit(deadlines.turn),
+        what: "가짜 공급자 참여 응답 턴 시작",
+        from: ctx.state.providerMark,
+      },
+    ),
+  );
+  check(turn.kind === "join", `가짜 공급자 턴 1 종류가 join이 아니다(${turn.kind})`);
+  check(
+    turn.frames === sent.frames && turn.inputSha256 === sent.sha256,
+    "참여 응답 턴: 공급자가 받은 입력이 보낸 프레임과 다르다(무변환 중계 실패)",
+  );
+  check(
+    turn.childTextSha256 === textSha256(TURN_SCRIPTS.join.childText) && turn.aiTextSha256 === null,
+    "참여 응답 턴: 가짜 공급자 문장이 scenarios.mjs와 다르다(같은 판의 tools를 써야 한다)",
+  );
+  await bounded(
+    ctx,
+    ctx.provider.waitFor(
+      (e) => e.ev === "session.response.create" && e.conn === ctx.state.providerConn,
+      {
+        timeoutMs: ctx.limit(deadlines.turn),
+        what: "참여 확인 뒤 session.response.create 수신",
+        from: ctx.state.providerMark,
+      },
+    ),
   );
 }
 
@@ -635,7 +713,7 @@ async function runTurn(ctx, turnNumber, kind) {
   const listening = await framesPerTurn(ctx);
   check(
     listening.turns?.[turnNumber - 1] === kind,
-    `가짜 공급자 턴 계획이 ${kind}로 시작하지 않는다(--turns normal,forbidden 필요)`,
+    `가짜 공급자 턴 ${turnNumber}이 ${kind}가 아니다(--turns join,normal,forbidden 필요)`,
   );
   const snapshot = sim.snapshot();
   const sent = await sim.sendInputFrames(listening.framesPerTurn);
@@ -674,7 +752,8 @@ async function stepNormalTurn(ctx) {
   const sim = ctx.state.sim;
   const sessionId = ctx.state.sessionId;
   await ensureRtt(ctx, deadlines.hello);
-  const { snapshot, turn, script } = await runTurn(ctx, 1, "normal");
+  // U4b: 턴 1은 참여 응답(join)이라 정상 턴은 2번째다
+  const { snapshot, turn, script } = await runTurn(ctx, 2, "normal");
   ctx.secrets.addText(script.childText);
   ctx.secrets.addText(script.aiText);
   const begin = await bounded(
@@ -755,7 +834,7 @@ async function stepForbiddenTurn(ctx) {
   const { deadlines } = ctx;
   const sim = ctx.state.sim;
   const sessionId = ctx.state.sessionId;
-  const { snapshot, turn, script } = await runTurn(ctx, 2, "forbidden");
+  const { snapshot, turn, script } = await runTurn(ctx, 3, "forbidden");
   ctx.secrets.addText(script.childText);
   ctx.secrets.addText(script.aiText);
   check(
@@ -765,7 +844,7 @@ async function stepForbiddenTurn(ctx) {
   await bounded(
     ctx,
     ctx.provider.waitFor(
-      (e) => e.ev === "turn-emitted" && e.conn === ctx.state.providerConn && e.turn === 2,
+      (e) => e.ev === "turn-emitted" && e.conn === ctx.state.providerConn && e.turn === 3,
       {
         timeoutMs: ctx.limit(deadlines.turn),
         what: "가짜 공급자 금지 턴 송신 완료",
@@ -842,9 +921,11 @@ async function stepForbiddenTurn(ctx) {
     ),
     "12 items에 금지 문장이 있다(BR7.5)",
   );
+  // U4b: 참여 전의 AI 줄(승인된 시작 안내)은 세지 않는다
+  const turnAi = itemTexts(view, "AI").filter((item) => !ctx.state.preTurnAiSeqs?.has(item.seq));
   check(
-    itemTexts(view, "AI").length === 1,
-    `12 items의 AI 말이 1건(승인된 첫 턴)이 아니다(${itemTexts(view, "AI").length})`,
+    turnAi.length === 1,
+    `12 items의 AI 말이 1건(승인된 첫 턴)이 아니다(${turnAi.length})`,
   );
 
   // realtime_transcript: 폐기된 AI 행은 approved_for_display false, 통과한 행은 true(BR7.4 · BR7.5 · A5). 문장 원문 대신 해시로 묻는다.
