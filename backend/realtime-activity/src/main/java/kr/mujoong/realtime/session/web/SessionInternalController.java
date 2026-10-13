@@ -221,8 +221,9 @@ public class SessionInternalController {
         out.put("endedAt", session.endedAt());
         out.put("statusVersion", session.statusVersion());
         out.put("serverTime", view.serverTime());
-        out.put("technicalPause", null);
-        out.put("silenceWarning", null);
+        // U4b BR7.1 · FR6.1: 살아 있는 실행기의 값(종료 세션은 null)
+        out.put("technicalPause", technicalPause(view.live()));
+        out.put("silenceWarning", silenceWarning(view.live()));
         out.put("practice", null);
         List<Map<String, Object>> gaps = new ArrayList<>();
         for (kr.mujoong.realtime.log.SessionGapRepository.SessionGapRow gap : view.gaps()) {
@@ -248,6 +249,26 @@ public class SessionInternalController {
         out.put("items", items);
         out.put("nextSeq", view.nextSeq());
         return out;
+    }
+
+    private static Map<String, Object> technicalPause(kr.mujoong.realtime.session.SessionExecutor.LiveState live) {
+        if (live == null || live.technicalPause() == null) {
+            return null;
+        }
+        Map<String, Object> pause = new LinkedHashMap<>();
+        pause.put("kind", live.technicalPause().kind());
+        pause.put("since", live.technicalPause().since());
+        return pause;
+    }
+
+    private static Map<String, Object> silenceWarning(kr.mujoong.realtime.session.SessionExecutor.LiveState live) {
+        if (live == null || live.silenceWarning() == null) {
+            return null;
+        }
+        Map<String, Object> warning = new LinkedHashMap<>();
+        warning.put("silentSince", live.silenceWarning().silentSince());
+        warning.put("endsAt", live.silenceWarning().endsAt());
+        return warning;
     }
 
     private ResponseEntity<String> json(HttpStatus status, Object body) {

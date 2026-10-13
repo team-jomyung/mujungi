@@ -36,11 +36,13 @@ class SessionExecutorReview3U3Test {
         h.advance(Duration.ofMillis(800));
         assertThat(h.link.outputs()).isEmpty();
 
+        // U4b(FR11.3 · FD-Q3): 첫 종료 의도에서 곧바로 CLOSING이라 흔한 계속 표현도 출력을 다시 열지 않는다
         done("i4", "더 해 줘");
-        assertThat(eventTypes()).contains(SessionExecutor.EVENT_CHILD_STOP_LIFTED);
+        assertThat(eventTypes()).doesNotContain(SessionExecutor.EVENT_CHILD_STOP_LIFTED);
         emitComplete("r2", "티라노는 아주 컸어");
         h.advance(Duration.ofMillis(800));
-        assertThat(h.link.outputs()).hasSize(1);
+        assertThat(h.link.outputs()).isEmpty();
+        assertThat(h.executor.status()).isEqualTo(kr.mujoong.contract.status.SessionStatus.CLOSING);
     }
 
     @Test

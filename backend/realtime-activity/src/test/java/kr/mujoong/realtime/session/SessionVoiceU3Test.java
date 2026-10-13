@@ -372,15 +372,16 @@ class SessionVoiceU3Test {
         assertThat(h.launcher.runAll("provider-cancel-")).isEqualTo(1);
         assertThat(h.provider.last().requests(ProviderRequestFactory.ResponseCancel.class))
                 .extracting(ProviderRequestFactory.ResponseCancel::responseId).containsExactly("r2");
-        // 말 끝의 '생각 중'은 종료 의도 뒤 '듣는 중'으로 돌아간다(답이 오지 않는다)
-        assertThat(views()).containsExactly(View.LISTENING, View.THINKING, View.LISTENING);
+        // U4b(FR11.3 · BR4.2): 종료 의도는 곧바로 CLOSING(CHILD_STOP) — '생각 중' 뒤 마무리 표시로 간다
+        assertThat(views()).containsExactly(View.LISTENING, View.THINKING, View.CLOSING);
 
-        // 이후 새 응답은 첫 조각에서 취소하고 기기로 보내지 않는다(전이 · 마무리 인사는 U4)
+        // 이후 새 응답은 기기로 보내지 않는다(CLOSING에서는 게이트가 막는다, BR4.5)
         emitComplete("r3", "알겠어 안녕");
         h.advance(Duration.ofSeconds(1));
-        assertThat(h.launcher.runAll("provider-cancel-")).isEqualTo(1);
         assertThat(h.link.outputs()).hasSize(1);
-        assertThat(h.executor.status()).isEqualTo(SessionStatus.ACTIVE);
+        assertThat(h.executor.status()).isEqualTo(SessionStatus.CLOSING);
+        assertThat(h.transitions.find(h.sessionId).orElseThrow().endReason())
+                .isEqualTo(kr.mujoong.contract.status.EndReason.CHILD_STOP);
         done("i2", "무중아 그만할래", 0.95);
         assertThat(sessionEvents()).filteredOn(event -> event.getEventType().startsWith("CHILD_STOP")).hasSize(1);
         assertThat(sessionEvents()).noneMatch(event -> event.getPayloadJson() != null
@@ -399,11 +400,17 @@ class SessionVoiceU3Test {
 
         done("i2", "쉬고 싶어", 0.9);
 
-        assertThat(sessionEvents()).filteredOn(event -> event.getEventType().startsWith("CHILD_STOP"))
-                .extracting(SessionEvent::getEventType).containsExactly(SessionExecutor.EVENT_CHILD_STOP_UNCLEAR);
-        assertThat(h.launcher.runAll("provider-cancel-")).isZero();
-        // 확인만 남기고 대화는 이어진다
-        respond("r2", "그래 조금 쉬었다 할까", 4_800);
+        // U4b(FR11.3 · BR4.3): 불명확한 종료 의도는 확인 질문으로 간다(사건 STOP_CONFIRM_ASKED, 확인 중 출력 막음)
+        assertThat(sessionEvents()).noneMatch(event -> event.getEventType().startsWith("CHILD_STOP"));
+        assertThat(sessionEvents()).extracting(SessionEvent::getEventType)
+                .contains(SessionExecutor.EVENT_STOP_CONFIRM_ASKED);
+        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("r2", "그래 조금 쉬었다 할까"));
+        h.drain();
+        assertThat(h.link.outputs()).as("확인 중에는 응답을 내보내지 않는다").hasSize(1);
+        // 대답 없이 확인 창이 끝나면 대화를 잇는다(종료를 확정하지 않는다)
+        h.advanceAlive(Duration.ofSeconds(21));
+        assertThat(h.executor.status()).isEqualTo(SessionStatus.ACTIVE);
+        respond("r3", "그래 조금 쉬었다 할까", 4_800);
         assertThat(h.link.outputs()).hasSize(2);
     }
 

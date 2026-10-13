@@ -39,7 +39,10 @@ import kr.mujoong.realtime.common.scaling.SingleInstanceAssumption;
 import kr.mujoong.realtime.config.RealtimeProperties;
 import kr.mujoong.realtime.dialog.DialogInstructions;
 import kr.mujoong.realtime.dialog.JoinTracker;
+import kr.mujoong.realtime.dialog.SilenceClock;
+import kr.mujoong.realtime.dialog.StopConfirmFlow;
 import kr.mujoong.realtime.dialog.StopIntentJudge;
+import kr.mujoong.contract.event.payload.SessionStateChanged;
 import kr.mujoong.realtime.gate.ApprovedPlayback;
 import kr.mujoong.realtime.gate.ClosingSequence;
 import kr.mujoong.realtime.gate.GateDecision;
@@ -323,6 +326,12 @@ public final class SessionExecutor {
     static final String EVENT_JOIN_ACCEPTED = "JOIN_ACCEPTED";
     static final String EVENT_JOIN_DECLINED = "JOIN_DECLINED";
     static final String EVENT_APPROVED_CONTENT_MISSING = "APPROVED_CONTENT_MISSING";
+    static final String EVENT_STOP_CONFIRM_ASKED = "STOP_CONFIRM_ASKED";
+    static final String EVENT_STOP_CONFIRM_RESOLVED = "STOP_CONFIRM_RESOLVED";
+    static final String EVENT_SILENCE_WARNED = "SILENCE_WARNED";
+    static final String EVENT_SILENCE_RESET = "SILENCE_RESET";
+    static final String EVENT_TECHNICAL_PAUSE_STARTED = "TECHNICAL_PAUSE_STARTED";
+    static final String EVENT_TECHNICAL_PAUSE_ENDED = "TECHNICAL_PAUSE_ENDED";
     /** U3-J13: ACTIVE 중 공급자 끊김의 end_detail. */
     static final String END_DETAIL_PROVIDER_LOST = "PROVIDER_LOST";
     /** 취소 · 교정 · 재생 위치를 기억하는 응답 · 재생 수의 상한(오래된 것부터 잊는다). */
@@ -361,8 +370,19 @@ public final class SessionExecutor {
     private final Set<UUID> devicePlaying = new HashSet<>();
     /** 종료 의도 판정기(세션 스냅숏의 종료 표현, U3-R12). */
     private final StopIntentJudge stopJudge;
-    /** 명확한 종료 의도를 받았다 — 이후 공급자 출력은 받지 않는다(U3-J24, CLOSING(CHILD_STOP)은 U4). */
-    private boolean stopIntent;
+    /** U4b 종료 확인 질문 흐름(BR4.3 · BR4.4). 확인 중이면 공급자 출력을 막는다. */
+    private final StopConfirmFlow stopConfirm;
+    /** U4b 지금 재생 중인 확인 질문의 playbackId(끝 표식이 창을 연다, 없으면 null). */
+    private UUID stopConfirmPlaybackId;
+    /** U4b 공백 시계(ACTIVE에서만, BR5.1 ~ BR5.4). */
+    private final SilenceClock silence;
+    /** U4b 켜진 기술 일시정지(없으면 null, BR6.1 · BR6.2). */
+    private SessionStateChanged.TechnicalPause technicalPause;
+    /** U4b 기술 일시정지를 켠 서버 시각(창 · 시계를 멈춘 시간 계산). */
+    private Instant pauseStartedAt;
+    /** U4b 진행 조회가 읽는 살아 있는 값(실행기 스레드만 바꿔 쓴다, BR7.1). */
+    private final java.util.concurrent.atomic.AtomicReference<LiveState> live =
+            new java.util.concurrent.atomic.AtomicReference<>(LiveState.NONE);
     /** 실행기가 스스로 공급자를 닫았다(뒤따르는 끊김 알림은 공급자 장애가 아니다). */
     private boolean providerClosing;
     /** 동의된 세션의 원음 기록(동의가 없으면 null, U3-R9). */
@@ -409,6 +429,23 @@ public final class SessionExecutor {
                 services.clock(), services.metrics());
         this.transcripts = new TranscriptWriter(plan.sessionId(), 0, services.recorder(), services.latency());
         this.stopJudge = new StopIntentJudge(plan.stopExpressions());
+        Settings.Lifecycle lifecycle = services.settings().lifecycle();
+        this.stopConfirm = new StopConfirmFlow(lifecycle.stopConfirmWait());
+        this.silence = new SilenceClock(lifecycle.silenceWarning(), lifecycle.silenceEnd());
+    }
+
+    /**
+     * 진행 조회가 읽는 살아 있는 값(U4b BR7.1 · WF10): 기술 일시정지 · 공백 경고. 실행기 스레드가 바뀔 때마다 불변 값 하나로 바꿔 쓰고 조회는 읽기만
+     * 한다. 종료 세션은 둘 다 null이다.
+     */
+    public record LiveState(SessionStateChanged.TechnicalPause technicalPause, SilenceClock.Warning silenceWarning) {
+
+        static final LiveState NONE = new LiveState(null, null);
+    }
+
+    /** 진행 조회 값(다른 스레드에서 읽는다). */
+    public LiveState liveState() {
+        return status.isTerminal() ? LiveState.NONE : live.get();
     }
 
     // ------------------------------------------------------------------ 실행
@@ -472,6 +509,7 @@ public final class SessionExecutor {
         processing = Thread.currentThread();
         try {
             handle(message);
+            afterMessage();
         } catch (DataAccessException | TransactionException e) {
             services.events().appError(EventLog.Component.SESSION_LIFECYCLE, e);
             scheduleRetry(message);
@@ -817,7 +855,7 @@ public final class SessionExecutor {
 
     private void armJoinWindow() {
         Instant end = join == null ? null : join.windowEnd();
-        if (end == null) {
+        if (end == null || technicalPause != null) {
             return;
         }
         Duration left = Duration.between(services.clock().now(), end);
@@ -890,6 +928,7 @@ public final class SessionExecutor {
     /** ACTIVE 전이 승자의 뒷일: 진입 몫과 발언권 반환(응답 생성 요청 1회, BR2.6). */
     private void afterActiveWon() {
         enterActive();
+        resetSilence(services.clock().now());
         requestResponse();
     }
 
@@ -976,9 +1015,9 @@ public final class SessionExecutor {
         }
     }
 
-    /** 공급자 출력을 받지 않는 때(참여 확인 중). */
+    /** 공급자 출력을 받지 않는 때(참여 확인 중 · 종료 확인 질문 중, BR2.6 · BR4.3). */
     private boolean outputHeld() {
-        return status == SessionStatus.WAITING_CHILD;
+        return status == SessionStatus.WAITING_CHILD || stopConfirm.isActive();
     }
 
     /** BR3.3: 빠진 승인 문구는 세션당 코드별 1회만 남긴다(payload는 코드만). */
@@ -1045,6 +1084,10 @@ public final class SessionExecutor {
                 if (inRelayRange()) {
                     boolean uncertain = uncertain(done);
                     transcripts.childFinal(done.itemId(), done.transcript(), at, uncertain);
+                    // U4b BR5.1: 아이의 빈 아닌 확정 전사가 공백 시계를 0으로 한다(빈 전사는 리셋하지 않는다)
+                    if (status == SessionStatus.ACTIVE && done.transcript() != null && !done.transcript().isBlank()) {
+                        resetSilence(at);
+                    }
                     // 2차 리뷰 2: 종료 의도를 푼 발화의 응답은 막힌 동안 이미 취소됐을 수 있다 — 끝 신호가 오지 않을 '생각 중'을 보내지 않는다
                     if (!judgeStopIntent(done.transcript(), uncertain, at)) {
                         thinking();
@@ -1053,7 +1096,6 @@ public final class SessionExecutor {
             }
             case ProviderEvent.OutputTranscriptDelta delta -> {
                 refuseHeldResponse(delta.responseId());
-                refuseAfterStopIntent(delta.responseId());
                 if (inOutputRange() && !cancelledResponses.contains(delta.responseId())) {
                     beginOutput(delta.responseId(), at);
                     // J294: 음성처럼 구간에 들어간 조각만 조용 시계를 다시 건다(버린 조각은 열린 구간의 조용 시간을 늘리지 않는다)
@@ -1065,7 +1107,6 @@ public final class SessionExecutor {
             }
             case ProviderEvent.OutputAudioDelta delta -> {
                 refuseHeldResponse(delta.responseId());
-                refuseAfterStopIntent(delta.responseId());
                 if (inOutputRange() && !cancelledResponses.contains(delta.responseId())) {
                     beginOutput(delta.responseId(), at);
                     SegmentBuffer.Added added =
@@ -1146,7 +1187,7 @@ public final class SessionExecutor {
         Optional<ActivitySessionRow> row = services.transitions().transition(plan.sessionId(), status,
                 SessionStatus.ABORTED, TransitionTable.changeFor(Trigger.DISCONNECT, null, now)
                         .withEndDetail(END_DETAIL_PROVIDER_LOST).withProviderClosedAt(now),
-                SessionTransitions.Origin.REALTIME, plan.traceId());
+                SessionTransitions.Origin.REALTIME, plan.traceId(), transitionExtras());
         if (row.isEmpty()) {
             syncFromDb();
             return;
@@ -1163,42 +1204,301 @@ public final class SessionExecutor {
     }
 
     /**
-     * U3-R12 · AC6.4.4 ~ 6.4.6: ACTIVE의 확정 아이 전사로 종료 의도를 판정한다. STOP이면 대기 · 재생 중 응답을 취소하고(끼어들기와 같은 출력
-     * 멈춤) 이후 공급자 출력을 받지 않으며 CHILD_STOP_INTENT를 남긴다. CONFIRM이면 CHILD_STOP_UNCLEAR만 남긴다. 상태 전이 · 마무리 인사 ·
-     * 확인 질문 재생은 U4다(U3-J1 · U3-J24).
+     * U3-R12 · U4b(FR3.1 · BR4.1 ~ BR4.4 · FD-Q3): ACTIVE의 확정 아이 전사로 종료 의도를 판정한다(기기 재생 중 전사는 판정기가 NONE으로 본다).
+     * STOP이면 곧바로 CLOSING(CHILD_STOP)이다. CONFIRM이면 확인 질문(STOP_CONFIRM)을 재생하고 공급자 출력을 막은 뒤, 재생 완료부터
+     * stop-confirm-wait 안의 첫 확정 전사가 STOP이거나 참여 분류 ACCEPT면 CHILD_STOP으로 확정하고, 그 밖이거나 창이 끝나면 막은 것을 풀고 응답 생성
+     * 요청을 한 번 보낸다. U3의 '막고 ACTIVE 유지 → 적극적 계속이면 해제'(CHILD_STOP_LIFTED) 경로는 없앴다.
      *
-     * <p>리뷰 반영 3(오판 복구): CLOSING(CHILD_STOP) 전이가 U4라 STOP 뒤에도 세션은 ACTIVE다. 그 뒤 아이가 적극적으로 대화를 이어 가면
-     * ("더 얘기하자" · "계속할래" · "그만 안 할래" — 불확실 아님 · 기기 재생 중 아님) 오판으로 보고 출력 막힘을 풀어 새 응답을 다시 보낸다. 남의 말 ·
-     * 주제 거부 · 평범한 말은 풀지 않는다(2차 리뷰 6). 이미 취소한 응답은 그대로 버린다(AC6.4.8 '이전 응답이 이어서 재생되지 않음').
-     *
-     * @return 이번 발화로 종료 의도를 풀었으면 참
+     * @return 이번 발화를 종료 의도 흐름이 맡았으면 참('생각 중'을 보내지 않는다)
      */
     private boolean judgeStopIntent(String transcript, boolean uncertain, Instant at) {
         if (status != SessionStatus.ACTIVE) {
             return false;
         }
-        if (stopIntent) {
-            if (!uncertain && devicePlaying.isEmpty() && stopJudge.continues(transcript)) {
-                stopIntent = false;
-                putEvent(EVENT_CHILD_STOP_LIFTED, null, at);
-                return true;
-            }
-            return false;
+        if (stopConfirm.isActive()) {
+            boolean stop = stopJudge.judge(transcript, false).verdict() == StopIntentJudge.Verdict.STOP;
+            applyStopDecision(stopConfirm.onReply(transcript, stop, at), "REPLY", at);
+            return true;
         }
         StopIntentJudge.Judgment judgment = stopJudge.judge(transcript, !devicePlaying.isEmpty());
-        switch (judgment.verdict()) {
-            case STOP -> {
-                stopIntent = true;
-                putEvent(EVENT_CHILD_STOP_INTENT, "{\"basis\":\"" + judgment.basis().name() + "\"}", at);
+        StopConfirmFlow.Decision decision = stopConfirm.onJudgment(judgment.verdict());
+        if (decision == StopConfirmFlow.Decision.CLOSE) {
+            putEvent(EVENT_CHILD_STOP_INTENT, "{\"basis\":\"" + judgment.basis().name() + "\"}", at);
+        }
+        applyStopDecision(decision, null, at);
+        return decision != StopConfirmFlow.Decision.NONE;
+    }
+
+    /**
+     * 확인 질문 흐름의 결정을 실행한다.
+     *
+     * @param cause RESOLVED 사건의 근거(REPLY · EXPIRED, 질문 전이면 null)
+     */
+    private void applyStopDecision(StopConfirmFlow.Decision decision, String cause, Instant at) {
+        switch (decision) {
+            case CLOSE -> {
+                timers.cancel(Kind.STOP_CONFIRM);
+                stopConfirmPlaybackId = null;
+                if (cause != null) {
+                    putEvent(EVENT_STOP_CONFIRM_RESOLVED, "{\"result\":\"STOP\",\"cause\":\"" + cause + "\"}", at);
+                }
                 stopOutputForIntent(at);
+                beginClosing(Trigger.CHILD_STOP_CONFIRMED, null);
+            }
+            case ASK -> {
+                stopOutputForIntent(at);
+                putEvent(EVENT_STOP_CONFIRM_ASKED, null, at);
+                playStopConfirm();
+            }
+            case RESUME -> {
+                timers.cancel(Kind.STOP_CONFIRM);
+                stopConfirmPlaybackId = null;
+                putEvent(EVENT_STOP_CONFIRM_RESOLVED,
+                        "{\"result\":\"CONTINUE\",\"cause\":\"" + (cause == null ? "REPLY" : cause) + "\"}", at);
+                requestResponse();
                 listeningAgain();
             }
-            case CONFIRM -> putEvent(EVENT_CHILD_STOP_UNCLEAR, null, at);
             case NONE -> {
                 // 종료 의도 아님
             }
         }
-        return false;
+    }
+
+    /** 확인 질문 재생(BR4.3 · BR3.1 · BR3.3): 보낸 순간 말풍선, 끝 표식이 창을 연다. 패키지에 없으면 곧바로 창을 연다. */
+    private void playStopConfirm() {
+        Instant now = services.clock().now();
+        Optional<ApprovedItem> item = plan.approvedItem(STOP_CONFIRM);
+        if (item.isEmpty()) {
+            reportMissing(STOP_CONFIRM, now);
+        } else {
+            UUID playbackId = UUID.randomUUID();
+            if (sendControl(new PlayApprovedContent(playbackId, STOP_CONFIRM, item.get().contentVersionId()))) {
+                stopConfirmPlaybackId = playbackId;
+                playback.started(playbackId, STOP_CONFIRM);
+                timers.arm(Kind.PLAYBACK_EXPIRY, services.settings().playbackExpiry());
+                approvedBubble(item.get(), now);
+                return;
+            }
+        }
+        stopConfirmPlaybackId = null;
+        onStopConfirmPlayed(now);
+    }
+
+    private void onStopConfirmPlayed(Instant at) {
+        stopConfirm.promptPlayed(at);
+        armStopConfirm();
+    }
+
+    private void armStopConfirm() {
+        Instant end = stopConfirm.windowEnd();
+        if (end == null || technicalPause != null) {
+            return;
+        }
+        Duration left = Duration.between(services.clock().now(), end);
+        timers.arm(Kind.STOP_CONFIRM, left.isNegative() ? Duration.ZERO : left);
+    }
+
+    // ------------------------------------------------------------------ 공백 시계 · 기술 일시정지 · 진행 조회(U4b L4)
+
+    /**
+     * 메시지 하나를 처리한 뒤(BR5.2 · BR7.1): 공백 시계의 멈춤 조건을 다시 보고 다음 판정 시각에 시계를 다시 걸며, 진행 조회 값을 바꿔 쓴다. 상태
+     * 변화는 모두 메시지 처리 안에서만 일어나므로 메시지 경계에서 보면 충분하다.
+     */
+    private void afterMessage() {
+        if (terminated) {
+            live.set(LiveState.NONE);
+            return;
+        }
+        Instant now = services.clock().now();
+        if (status == SessionStatus.ACTIVE) {
+            silence.setPaused(silencePaused(), now);
+            armSilence(now);
+        } else if (timers.isArmed(Kind.SILENCE)) {
+            timers.cancel(Kind.SILENCE);
+        }
+        publishLive(now);
+    }
+
+    /** BR5.2 멈춤 조건: 기기 재생 중 · 서버 출력 대기(열린 구간 · 게이트 대기 · 대기 문구) · 기술 일시정지 · 확인 질문 대기. */
+    private boolean silencePaused() {
+        return !devicePlaying.isEmpty() || playback.isPlaying() || segment.isOpen() || transcripts.hasOpenAi()
+                || technicalPause != null || stopConfirm.isActive();
+    }
+
+    private void armSilence(Instant now) {
+        Instant deadline = silence.nextDeadline(now);
+        if (deadline == null) {
+            if (timers.isArmed(Kind.SILENCE)) {
+                timers.cancel(Kind.SILENCE);
+            }
+            return;
+        }
+        if (timers.isArmed(Kind.SILENCE) && deadline.equals(timers.deadline(Kind.SILENCE))) {
+            return;
+        }
+        Duration left = Duration.between(now, deadline);
+        timers.arm(Kind.SILENCE, left.isNegative() ? Duration.ZERO : left);
+    }
+
+    /** 공백 시계 만기: 누적 4분이면 경고 1회, 6분이면 CLOSING(SILENCE)(BR5.3 · BR5.4). */
+    private void onSilenceTimer() {
+        if (status != SessionStatus.ACTIVE) {
+            return;
+        }
+        Instant now = services.clock().now();
+        switch (silence.tick(now)) {
+            case WARN -> onSilenceWarning(now);
+            case END -> beginClosing(Trigger.SILENCE_TIMEOUT, null);
+            case NONE -> {
+                // 멈췄다 이어진 만큼 늦게 다시 건다(afterMessage)
+            }
+        }
+    }
+
+    /** BR5.3 · U4b-J11: 공백 경고를 켜고 패키지에 있으면 SILENCE_WARNING을 한 번 재생한다(재생은 시계를 리셋하지 않는다). */
+    private void onSilenceWarning(Instant now) {
+        putEvent(EVENT_SILENCE_WARNED, "{\"silentMs\":" + silence.accumulated(now).toMillis() + "}", now);
+        Optional<ApprovedItem> item = plan.approvedItem(SILENCE_WARNING);
+        if (item.isEmpty()) {
+            reportMissing(SILENCE_WARNING, now);
+            return;
+        }
+        if (playback.isPlaying()) {
+            return;
+        }
+        UUID playbackId = UUID.randomUUID();
+        if (sendControl(new PlayApprovedContent(playbackId, SILENCE_WARNING, item.get().contentVersionId()))) {
+            playback.started(playbackId, SILENCE_WARNING);
+            timers.arm(Kind.PLAYBACK_EXPIRY, services.settings().playbackExpiry());
+            approvedBubble(item.get(), now);
+        }
+    }
+
+    /** BR5.1: ACTIVE 진입 · 아이의 빈 아닌 확정 전사가 공백을 0으로 한다. 경고를 껐으면 SILENCE_RESET을 남긴다. */
+    private void resetSilence(Instant at) {
+        boolean wasWarned = silence.isWarned();
+        silence.reset(at);
+        if (wasWarned) {
+            putEvent(EVENT_SILENCE_RESET, null, at);
+        }
+    }
+
+    /** 진행 조회 값을 바꿔 쓴다(BR7.1). 공백 경고는 ACTIVE에서만 있다. */
+    private void publishLive(Instant now) {
+        SilenceClock.Warning warning = status == SessionStatus.ACTIVE ? silence.warning(now) : null;
+        live.set(technicalPause == null && warning == null ? LiveState.NONE : new LiveState(technicalPause, warning));
+    }
+
+    /** 이 세션의 끊김 시계 기준(묶인 연결의 마지막 기기 메시지 수신 시각, U4b-R7). */
+    private Instant lastDeviceMessageAt() {
+        DeviceLink current = link;
+        return current == null ? startAttemptAt : current.lastMessageAt();
+    }
+
+    /** BR6.1: 마지막 기기 메시지 뒤 gap-display에 기술 일시정지를 켜는 시계(WAITING_CHILD · ACTIVE). */
+    private void armGapDisplay() {
+        if (!Trigger.DISCONNECT.accepts(status) || technicalPause != null) {
+            return;
+        }
+        Duration threshold = lifecycle().gapDisplay();
+        Duration elapsed = Duration.between(lastDeviceMessageAt(), services.clock().now());
+        timers.arm(Kind.GAP_DISPLAY, elapsed.isNegative() ? threshold : threshold.minus(elapsed));
+    }
+
+    /**
+     * 점선 시계 만기(BR6.1 · BR6.2). 일시정지 중이면 회복을 본다 — HEARTBEAT는 편지함을 거치지 않으므로 timer-tick마다 마지막 메시지 시각을 본다.
+     */
+    private void onGapDisplayCheck() {
+        Instant now = services.clock().now();
+        if (technicalPause != null) {
+            DeviceLink current = link;
+            if (current != null && current.isOpen() && current.lastMessageAt().isAfter(technicalPause.since())) {
+                endPause(now);
+            } else {
+                timers.arm(Kind.GAP_DISPLAY, services.settings().timerTick());
+            }
+            return;
+        }
+        if (!Trigger.DISCONNECT.accepts(status)) {
+            return;
+        }
+        Instant last = lastDeviceMessageAt();
+        Duration threshold = lifecycle().gapDisplay();
+        Duration elapsed = Duration.between(last, now);
+        if (elapsed.compareTo(threshold) < 0) {
+            timers.arm(Kind.GAP_DISPLAY, threshold.minus(elapsed));
+            return;
+        }
+        startPause(last, last);
+    }
+
+    /**
+     * 기술 일시정지를 켠다(BR6.1 · U4b-J13): technicalPause{DEVICE, since}, 끊김 구간(U3와 같은 행), 참여 창 · 확인 질문 창 · 공백 시계 멈춤.
+     *
+     * @param since 마지막 기기 메시지 시각
+     * @param gapFrom 끊김 구간을 새로 열 때의 시작 시각
+     */
+    private void startPause(Instant since, Instant gapFrom) {
+        if (technicalPause != null || !Trigger.DISCONNECT.accepts(status)) {
+            return;
+        }
+        Instant now = services.clock().now();
+        technicalPause = new SessionStateChanged.TechnicalPause(SessionStateChanged.TechnicalPause.Kind.DEVICE, since);
+        pauseStartedAt = now;
+        timers.cancel(Kind.JOIN_WINDOW);
+        timers.cancel(Kind.STOP_CONFIRM);
+        if (openGapId == null) {
+            openGapId = services.gaps().open(plan.sessionId(), SessionGapRepository.Kind.DISCONNECT, gapFrom);
+        }
+        putEvent(EVENT_TECHNICAL_PAUSE_STARTED, "{\"kind\":\"DEVICE\"}", now);
+        timers.arm(Kind.GAP_DISPLAY, services.settings().timerTick());
+    }
+
+    /** 기기 메시지가 다시 왔거나 다시 묶였다(BR6.2): 구간을 닫고 일시정지를 끈 뒤 멈췄던 창을 남은 시간부터 잇는다. */
+    private void endPause(Instant now) {
+        if (technicalPause == null) {
+            return;
+        }
+        Duration paused = pauseStartedAt == null ? Duration.ZERO : Duration.between(pauseStartedAt, now);
+        technicalPause = null;
+        pauseStartedAt = null;
+        if (paused.isNegative()) {
+            paused = Duration.ZERO;
+        }
+        if (openGapId != null) {
+            services.gaps().close(openGapId, now);
+            openGapId = null;
+        }
+        putEvent(EVENT_TECHNICAL_PAUSE_ENDED, "{\"pausedMs\":" + paused.toMillis() + "}", now);
+        if (status == SessionStatus.WAITING_CHILD && join != null) {
+            join.shift(paused);
+            armJoinWindow();
+        }
+        if (stopConfirm.isActive()) {
+            stopConfirm.shift(paused);
+            armStopConfirm();
+        }
+        armGapDisplay();
+    }
+
+    /** 묶인 연결에서 기기 메시지가 왔다(BR6.2). */
+    private void deviceHeard() {
+        if (technicalPause != null) {
+            endPause(services.clock().now());
+        }
+    }
+
+    /** 확인 질문 창 시계 만기(BR4.4): 대답이 없으면 대화를 잇는다. */
+    private void onStopConfirmWindow() {
+        if (status != SessionStatus.ACTIVE || !stopConfirm.isActive()) {
+            return;
+        }
+        StopConfirmFlow.Decision decision = stopConfirm.tick(services.clock().now());
+        if (decision == StopConfirmFlow.Decision.NONE) {
+            armStopConfirm();
+            return;
+        }
+        applyStopDecision(decision, "EXPIRED", services.clock().now());
     }
 
     /** 종료 의도: 남은 프레임을 보내지 않고(세대 올림) 만들던 · 재생 중이던 응답을 공급자에서 취소하고 열린 구간을 버린다. */
@@ -1220,16 +1520,9 @@ public final class SessionExecutor {
         transcripts.aiFinal("", false, at);
     }
 
-    /** 종료 의도 뒤 새 응답의 첫 조각은 공급자에서 바로 취소한다(한 번). 조각은 취소한 응답이라 버려진다. */
-    private void refuseAfterStopIntent(String responseId) {
-        if (stopIntent && responseId != null && !responseId.isBlank() && !cancelledResponses.contains(responseId)) {
-            cancelResponses(responseId);
-        }
-    }
-
     /** U3-J6: 아이 말이 끝났다(말 끝 · 전사 확정) — 듣는 중이고 재생이 없으면 '생각 중'. */
     private void thinking() {
-        if (status == SessionStatus.ACTIVE && view == View.LISTENING && devicePlaying.isEmpty() && !stopIntent) {
+        if (status == SessionStatus.ACTIVE && view == View.LISTENING && devicePlaying.isEmpty() && !outputHeld()) {
             sendControl(new SessionState(View.THINKING));
         }
     }
@@ -1433,6 +1726,7 @@ public final class SessionExecutor {
         if ((status.isTerminal() && !farewellPending()) || !fromBoundConnection(received.connectionId())) {
             return;
         }
+        deviceHeard();
         PlaybackMark mark = received.mark();
         if (status == SessionStatus.DECLINED) {
             // U4b BR4.7: DECLINED 마무리 인사의 끝 표식 → CLOSE_TRANSPORT(DECLINED) → 정리
@@ -1468,6 +1762,11 @@ public final class SessionExecutor {
                     // U4b BR2.2: 참여 안내의 끝 표식을 서버가 받은 시각부터 창을 연다
                     joinPromptPlaybackId = null;
                     onJoinPromptPlayed(received.serverRecvAt());
+                }
+                if (status == SessionStatus.ACTIVE && mark.playbackId().equals(stopConfirmPlaybackId)) {
+                    // U4b BR4.3: 확인 질문의 끝 표식을 서버가 받은 시각부터 창을 연다
+                    stopConfirmPlaybackId = null;
+                    onStopConfirmPlayed(received.serverRecvAt());
                 }
                 if (status == SessionStatus.CLOSING && closing.onPlaybackMark(closingDevice(), mark.playbackId(),
                         mark.status())) {
@@ -1510,6 +1809,7 @@ public final class SessionExecutor {
         if (status.isTerminal() || !fromBoundConnection(received.connectionId())) {
             return;
         }
+        deviceHeard();
         DeviceState state = received.state();
         if (state.mic() != null && state.mic() != DeviceState.Mic.UNRECOGNIZED && state.mic() != lastMic) {
             if (state.mic() == DeviceState.Mic.LOST) {
@@ -1554,9 +1854,20 @@ public final class SessionExecutor {
         devicePlaying.clear();
         timers.cancel(Kind.PLAYBACK_EXPIRY);
         Instant now = services.clock().now();
+        // U4b BR6.2: 다시 묶이면 일시정지를 끄고 구간을 닫는다
+        endPause(now);
         if (openGapId != null) {
             services.gaps().close(openGapId, now);
             openGapId = null;
+        }
+        // 재생 추적을 비웠으므로 끝 표식을 기다리던 참여 안내 · 확인 질문은 지금 끝난 것으로 본다(창이 영영 열리지 않는 일을 막는다)
+        if (status == SessionStatus.WAITING_CHILD && joinPromptPlaybackId != null) {
+            joinPromptPlaybackId = null;
+            onJoinPromptPlayed(now);
+        }
+        if (status == SessionStatus.ACTIVE && stopConfirmPlaybackId != null) {
+            stopConfirmPlaybackId = null;
+            onStopConfirmPlayed(now);
         }
         putEvent(EVENT_LINK_REPLACED, "{\"resumed\":" + replaced.resumed() + "}", now);
         if (START_PHASE.contains(status)) {
@@ -1590,7 +1901,7 @@ public final class SessionExecutor {
                 timers.arm(Kind.PLAYBACK_EXPIRY, services.settings().playbackExpiry());
             }
         }
-        if (status == SessionStatus.ACTIVE) {
+        if (Trigger.DISCONNECT.accepts(status)) {
             armDisconnect();
         }
     }
@@ -1784,7 +2095,8 @@ public final class SessionExecutor {
         Instant now = services.clock().now();
         SessionStatus from = status;
         Optional<ActivitySessionRow> row = services.transitions().transition(plan.sessionId(), from,
-                SessionStatus.CLOSING, TransitionTable.changeFor(trigger, null, now).withTerminationRequestedAt(now),
+                SessionStatus.CLOSING, TransitionTable.changeFor(trigger, null, now).withTerminationRequestedAt(now)
+                        .withOutputStoppedAt(now),
                 SessionTransitions.Origin.REALTIME, plan.traceId(), transitionExtras());
         if (row.isEmpty()) {
             syncFromDb(requestId);
@@ -1797,9 +2109,9 @@ public final class SessionExecutor {
         return true;
     }
 
-    /** 전이와 함께 쓸 값(L2: 없음. 기술 일시정지는 L4가 싣는다). */
+    /** 전이와 함께 쓸 값: 전이 시점에 켜진 기술 일시정지(BR7.2). */
     private SessionTransitions.Extras transitionExtras() {
-        return SessionTransitions.Extras.none();
+        return SessionTransitions.Extras.pause(technicalPause);
     }
 
     /**
@@ -1819,7 +2131,12 @@ public final class SessionExecutor {
         timers.cancel(Kind.DISCONNECT);
         timers.cancel(Kind.PLAYBACK_EXPIRY);
         timers.cancel(Kind.JOIN_WINDOW);
+        timers.cancel(Kind.STOP_CONFIRM);
+        timers.cancel(Kind.SILENCE);
+        timers.cancel(Kind.GAP_DISPLAY);
         joinPromptPlaybackId = null;
+        stopConfirm.cancel();
+        stopConfirmPlaybackId = null;
         segment.reset();
         transcripts.aiFinal("", false, now);
         closing.begin(closingDevice(), plan.closing() == null ? null : plan.closing().contentVersionId(), playback,
@@ -1877,9 +2194,14 @@ public final class SessionExecutor {
         playback.clear();
         devicePlaying.clear();
         timers.cancel(Kind.PLAYBACK_EXPIRY);
-        // U3-J18: 진행 중 세션의 끊김 구간을 연다(새 연결이 다시 묶이면 닫고, ABORTED로 끝나면 열린 채 남는다)
-        if ((status == SessionStatus.ACTIVE || status == SessionStatus.CLOSING) && openGapId == null) {
-            openGapId = services.gaps().open(plan.sessionId(), SessionGapRepository.Kind.DISCONNECT, services.clock().now());
+        // U3-J18 · U4b BR6.1: 진행 중 세션의 끊김 구간을 연다(새 연결이 다시 묶이면 닫고, ABORTED로 끝나면 열린 채 남는다).
+        // WAITING_CHILD · ACTIVE는 기술 일시정지도 곧바로 켠다(연결이 닫히면 점선 시계를 기다리지 않는다)
+        Instant now = services.clock().now();
+        if ((Trigger.DISCONNECT.accepts(status) || status == SessionStatus.CLOSING) && openGapId == null) {
+            openGapId = services.gaps().open(plan.sessionId(), SessionGapRepository.Kind.DISCONNECT, now);
+        }
+        if (Trigger.DISCONNECT.accepts(status)) {
+            startPause(lastDeviceMessageAt(), now);
         }
     }
 
@@ -1920,11 +2242,18 @@ public final class SessionExecutor {
                     joinPromptPlaybackId = null;
                     onJoinPromptPlayed(services.clock().now());
                 }
+                if (status == SessionStatus.ACTIVE && stopConfirmPlaybackId != null) {
+                    stopConfirmPlaybackId = null;
+                    onStopConfirmPlayed(services.clock().now());
+                }
             }
             case REDELIVER -> redeliver();
             case JOIN_WINDOW -> onJoinWindow();
-            case STOP_CONFIRM, SILENCE, GAP_DISPLAY, RECORD_SETTLE -> {
-                // L4 · L5에서 연결한다
+            case STOP_CONFIRM -> onStopConfirmWindow();
+            case SILENCE -> onSilenceTimer();
+            case GAP_DISPLAY -> onGapDisplayCheck();
+            case RECORD_SETTLE -> {
+                // L5에서 연결한다
             }
         }
     }
@@ -1985,6 +2314,9 @@ public final class SessionExecutor {
             return;
         }
         status = SessionStatus.ENDED_UNCONFIRMED;
+        // U4b BR6.4 · U4b-J14: CLOSING 진입부터 ended_at까지를 UNCONFIRMED 구간으로 남긴다
+        quietly(() -> services.gaps().close(
+                services.gaps().open(plan.sessionId(), SessionGapRepository.Kind.UNCONFIRMED, closingAt), now));
         timeoutFired("CLOSING_CONFIRM", threshold, elapsed);
         markUnresponsive();
         bumpGeneration();
@@ -1994,7 +2326,8 @@ public final class SessionExecutor {
 
     /** BR6.12 ④: 묶인 연결의 마지막 기기 메시지부터 40초. 메시지마다 다시 걸지 않고 만기 때 남은 시간으로 다시 건다. */
     private void onDisconnectCheck() {
-        if (status != SessionStatus.ACTIVE) {
+        // U4b BR6.3: WAITING_CHILD까지 넓혔다. CLOSING에는 끊김 전이가 없다
+        if (!Trigger.DISCONNECT.accepts(status)) {
             return;
         }
         Duration threshold = services.settings().disconnect();
@@ -2005,9 +2338,9 @@ public final class SessionExecutor {
             return;
         }
         Instant now = services.clock().now();
-        Optional<ActivitySessionRow> row = services.transitions().transition(plan.sessionId(), SessionStatus.ACTIVE,
+        Optional<ActivitySessionRow> row = services.transitions().transition(plan.sessionId(), status,
                 SessionStatus.ABORTED, TransitionTable.changeFor(Trigger.DISCONNECT, null, now).withProviderClosedAt(now),
-                SessionTransitions.Origin.REALTIME, plan.traceId());
+                SessionTransitions.Origin.REALTIME, plan.traceId(), transitionExtras());
         if (row.isEmpty()) {
             // J292: 진 끊김 시계는 공급자를 닫지 않는다 — 행이 CLOSING이면 CLOSING이 끊김보다 우선하고(BR6.12 ③) 공급자는
             // VOICE_SESSION_CLOSED · 30초 시한까지 열어 둔다(BR6.10 ④)
@@ -2025,6 +2358,7 @@ public final class SessionExecutor {
         Instant last = link == null ? services.clock().now() : link.lastMessageAt();
         Duration elapsed = Duration.between(last, services.clock().now());
         timers.arm(Kind.DISCONNECT, elapsed.isNegative() ? threshold : threshold.minus(elapsed));
+        armGapDisplay();
     }
 
     private void timeoutFired(String type, Duration threshold, Duration elapsed) {

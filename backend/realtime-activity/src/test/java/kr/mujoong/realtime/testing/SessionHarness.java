@@ -198,6 +198,25 @@ public final class SessionHarness {
         drain();
     }
 
+    /**
+     * U4b: 기기가 살아 있게(HEARTBEAT처럼 마지막 메시지 시각을 1초마다 새로 하며) 시간을 앞당긴다. WAITING_CHILD · ACTIVE는 점선(10초) · 끊김(40초)
+     * 시계가 돌므로, 끊김을 보지 않는 시험은 이것으로 기다린다.
+     */
+    public void advanceAlive(Duration duration) {
+        Instant target = clock.now().plus(duration);
+        Duration step = Duration.ofSeconds(1);
+        while (clock.now().isBefore(target)) {
+            Duration left = Duration.between(clock.now(), target);
+            if (link != null) {
+                link.touch(clock.now());
+            }
+            advance(left.compareTo(step) < 0 ? left : step);
+        }
+        if (link != null) {
+            link.touch(clock.now());
+        }
+    }
+
     private Optional<Instant> earliest(Instant target) {
         Optional<Instant> a = safety.nextDeadline().filter(at -> !at.isAfter(target));
         Optional<Instant> b = quiet.nextDeadline().filter(at -> !at.isAfter(target));

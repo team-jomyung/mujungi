@@ -78,10 +78,10 @@ class SessionJoinU4bTest {
         withPrompts();
         h.rawAudioConsent = true;
         toWaitingChild();
-        h.advance(Duration.ofSeconds(5));
+        h.advanceAlive(Duration.ofSeconds(5));
         mark(plays().getFirst(), PlaybackMark.Status.COMPLETED);
 
-        h.advance(Duration.ofSeconds(19));
+        h.advanceAlive(Duration.ofSeconds(19));
         h.childSays("i-1", "응");
 
         assertThat(h.executor.status()).isEqualTo(SessionStatus.ACTIVE);
@@ -103,14 +103,14 @@ class SessionJoinU4bTest {
         toWaitingChild();
         mark(plays().getFirst(), PlaybackMark.Status.COMPLETED);
 
-        h.advance(Duration.ofSeconds(19));
+        h.advanceAlive(Duration.ofSeconds(19));
         assertThat(plays()).hasSize(1);
-        h.advance(Duration.ofSeconds(2));
+        h.advanceAlive(Duration.ofSeconds(2));
         assertThat(plays()).extracting(PlayApprovedContent::contentCode)
                 .containsExactly(SessionExecutor.INTRO_FREE_TALK, SessionExecutor.RE_PROMPT);
 
         mark(plays().getLast(), PlaybackMark.Status.COMPLETED);
-        h.advance(Duration.ofSeconds(21));
+        h.advanceAlive(Duration.ofSeconds(21));
 
         ActivitySessionRow row = h.transitions.find(h.sessionId).orElseThrow();
         assertThat(row.status()).isEqualTo(SessionStatus.DECLINED);
@@ -178,7 +178,7 @@ class SessionJoinU4bTest {
         assertThat(plays()).extracting(PlayApprovedContent::contentCode)
                 .containsExactly(SessionExecutor.INTRO_FREE_TALK, SessionExecutor.RE_PROMPT);
         assertThat(h.executor.status()).isEqualTo(SessionStatus.WAITING_CHILD);
-        h.advance(Duration.ofSeconds(20));
+        h.advanceAlive(Duration.ofSeconds(20));
         assertThat(h.transitions.status(h.sessionId)).as("재안내를 쓴 뒤 무응답은 DECLINED").isEqualTo(SessionStatus.DECLINED);
     }
 
@@ -193,7 +193,7 @@ class SessionJoinU4bTest {
         h.childSays("i-2", "싫어");
         mark(plays().getLast(), PlaybackMark.Status.COMPLETED);
         h.childSays("i-3", "모르겠는데");
-        h.advance(Duration.ofSeconds(20));
+        h.advanceAlive(Duration.ofSeconds(20));
 
         assertThat(plays()).filteredOn(play -> !PlayApprovedContent.CLOSING.equals(play.contentCode())).hasSize(3);
         assertThat(h.transitions.status(h.sessionId)).isEqualTo(SessionStatus.DECLINED);
@@ -215,9 +215,9 @@ class SessionJoinU4bTest {
         assertThat(plays()).isEmpty();
         assertThat(h.executor.timers().isArmed(SessionTimers.Kind.JOIN_WINDOW)).as("곧바로 재생 완료로 본다").isTrue();
 
-        h.advance(Duration.ofSeconds(20));
+        h.advanceAlive(Duration.ofSeconds(20));
         assertThat(h.executor.status()).isEqualTo(SessionStatus.WAITING_CHILD);
-        h.advance(Duration.ofSeconds(20));
+        h.advanceAlive(Duration.ofSeconds(20));
 
         assertThat(h.transitions.status(h.sessionId)).isEqualTo(SessionStatus.DECLINED);
         assertThat(events(SessionExecutor.EVENT_APPROVED_CONTENT_MISSING)).extracting(SessionEvent::getPayloadJson)
@@ -235,7 +235,7 @@ class SessionJoinU4bTest {
         h.provider.last().emit(new ProviderEvent.OutputAudioDelta("resp-early", new byte[480]));
         h.provider.last().emit(new ProviderEvent.OutputDone("resp-early"));
         h.drain();
-        h.advance(Duration.ofSeconds(1));
+        h.advanceAlive(Duration.ofSeconds(1));
         h.launcher.runAll("provider-cancel-");
 
         assertThat(h.provider.last().requests(ProviderRequestFactory.ResponseCancel.class))
@@ -247,11 +247,11 @@ class SessionJoinU4bTest {
     @Test
     void theFarewellIsCappedByTheClosingConfirmWhenNoMarkComes() {
         toWaitingChild();
-        h.advance(Duration.ofSeconds(40));
+        h.advanceAlive(Duration.ofSeconds(40));
         assertThat(h.transitions.status(h.sessionId)).isEqualTo(SessionStatus.DECLINED);
         assertThat(h.link.sent(CloseTransport.class)).isEmpty();
 
-        h.advance(h.settings.closingConfirm());
+        h.advanceAlive(h.settings.closingConfirm());
 
         assertThat(h.link.sent(CloseTransport.class)).extracting(CloseTransport::reason)
                 .containsExactly(CloseTransport.Reason.DECLINED);
@@ -261,7 +261,7 @@ class SessionJoinU4bTest {
     @Test
     void aNewSessionOnTheSameDeviceDropsTheRemainingFarewellWithoutDeviceCommands() {
         toWaitingChild();
-        h.advance(Duration.ofSeconds(40));
+        h.advanceAlive(Duration.ofSeconds(40));
         assertThat(h.transitions.status(h.sessionId)).isEqualTo(SessionStatus.DECLINED);
 
         h.link.bindSession(UUID.randomUUID());
@@ -314,7 +314,7 @@ class SessionJoinU4bTest {
         toWaitingChild();
         assertThat(h.executor.timers().isArmed(SessionTimers.Kind.JOIN_WINDOW)).isFalse();
 
-        h.advance(h.settings.playbackExpiry());
+        h.advanceAlive(h.settings.playbackExpiry());
 
         assertThat(h.executor.timers().isArmed(SessionTimers.Kind.JOIN_WINDOW)).isTrue();
     }
