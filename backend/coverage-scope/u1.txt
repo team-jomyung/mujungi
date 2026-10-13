@@ -5,7 +5,7 @@
 # build-logic은 클래스가 없어 재지 않는다. test-support 줄은 하한 대상이 아니라 판정에 쓰이지 않는다(J107).
 # 뒤 유닛은 이 파일을 고치지 않고 자기 목록(coverage-scope/u<n>.txt)을 만든다. 모듈별 줄 수:
 #   contract-model 55
-#   core-api 104
+#   core-api 103 (U4a: activity/ConsentGate.java를 지워 계약 8절 ConsentGate 포트로 바꿔 한 줄 뺐다 — 없는 파일은 목록에 둘 수 없다)
 #   realtime-activity 112
 #   test-support 9
 backend/contract-model/src/main/java/kr/mujoong/contract/audio/AudioFrameCodec.java
@@ -66,7 +66,6 @@ backend/contract-model/src/main/java/kr/mujoong/contract/ws/message/WsError.java
 backend/core-api/src/main/java/kr/mujoong/core/CoreApiApplication.java
 backend/core-api/src/main/java/kr/mujoong/core/activity/ActivityCopyRepository.java
 backend/core-api/src/main/java/kr/mujoong/core/activity/ApprovedContentCatalog.java
-backend/core-api/src/main/java/kr/mujoong/core/activity/ConsentGate.java
 backend/core-api/src/main/java/kr/mujoong/core/activity/EndSessionService.java
 backend/core-api/src/main/java/kr/mujoong/core/activity/PreparingTimeoutChecker.java
 backend/core-api/src/main/java/kr/mujoong/core/activity/RealtimeSessionClient.java

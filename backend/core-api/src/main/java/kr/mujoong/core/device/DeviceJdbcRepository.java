@@ -60,9 +60,12 @@ public class DeviceJdbcRepository {
     private static final RowMapper<DeviceRecord> DEVICE_MAPPER = DeviceJdbcRepository::mapDevice;
 
     private final NamedParameterJdbcTemplate jdbc;
+    private final GuardianWriteLock guardianLock;
 
     public DeviceJdbcRepository(NamedParameterJdbcTemplate jdbc) {
         this.jdbc = Objects.requireNonNull(jdbc, "jdbc");
+        // 생성자 모양(U1 시험이 직접 만든다)은 그대로 두고 같은 jdbc로 잠금 한 곳을 만든다(U2 3차 리뷰 7 — 잠금 호출은 모두 인스턴스 메서드)
+        this.guardianLock = new GuardianWriteLock(jdbc);
     }
 
     // ------------------------------------------------------------------ 코드 발급 · 상태 · 만료 (BR1.2 ~ BR1.4 · BR1.7)
@@ -167,7 +170,7 @@ public class DeviceJdbcRepository {
      */
     public Optional<String> lockGuardianStatusForShare(UUID guardianId) {
         // 보호자 행 잠금 SQL은 한 곳(GuardianWriteLock)에 있다. 등록 트랜잭션의 첫 잠금이라는 순서는 여기서 지킨다(U2 2차 리뷰 5)
-        return GuardianWriteLock.statusForShare(jdbc, guardianId);
+        return guardianLock.statusForShare(guardianId);
     }
 
     /** 코드의 등록 가능한 행(UNREGISTERED · 만료 전, 최대 1행)을 FOR UPDATE로 잠그고 읽는다(BR2.1 ① · BR2.5 (1) · SQ-3). */

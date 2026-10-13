@@ -312,6 +312,7 @@ paths:
                   - { seq: 1, speaker: CHILD, text: 오늘 공룡 그렸어, final: true, uncertain: false, startedAt: "2026-10-15T09:00:10Z", endedAt: "2026-10-15T09:00:12Z" }
                 nextSeq: 1
         "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/AccountDeletion" }
         "404": { $ref: "#/components/responses/NotFound" }
         "500": { $ref: "#/components/responses/InternalError" }
         "503": { $ref: "#/components/responses/ServiceNotReady" }
@@ -666,6 +667,117 @@ paths:
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/CsrfOrDeletion" }
         "404": { $ref: "#/components/responses/ChildNotRegistered" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/ServiceNotReady" }
+  # ───────────────────────────── U4a 활동 세션 Core 쪽 ─────────────────────────────
+  /sessions/current:
+    get:
+      operationId: getCurrentSession
+      summary: 04 지금 활동 · 알림 진입 재조회(AC1.4.13 · AC1.7.4) — 진행 중(REQUESTED ~ CLOSING) 세션 요약 또는 null
+      description: 늘 {session}으로 감싼다(편차 (U4a-a)). 종료 상태 세션은 null이다(종료 확인 미확인 표시는 17 · 27).
+      x-unit: U4a
+      x-u4a-deviation: ["(U4a-a)"]
+      responses:
+        "200":
+          description: 지금 활동
+          headers:
+            Cache-Control:
+              schema: { type: string, enum: [no-store] }
+          content:
+            application/json:
+              schema: { $ref: "schemas/session-current-response.schema.json" }
+              example:
+                session:
+                  sessionId: 00000000-0000-4000-8000-000000000020
+                  activityType: FREE_TALK
+                  status: ACTIVE
+                  endReason: null
+                  failureCode: null
+                  confirmed: false
+                  requestedAt: "2026-10-15T09:00:00Z"
+                  startedAt: "2026-10-15T09:00:04Z"
+                  endedAt: null
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/AccountDeletion" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/ServiceNotReady" }
+  /records:
+    get:
+      operationId: getRecords
+      summary: 26 달력(month) · 그날 목록(date) — 끝난 활동 기록(AC5.1.1 · AC5.1.2 · AC5.1.8)
+      description: |
+        month(yyyy-MM)와 date(yyyy-MM-dd) 중 하나만 준다(둘 다 · 없음 · 형식 오류는 400). 날짜 · 달 경계는 Asia/Seoul이다.
+        ENDED · ENDED_UNCONFIRMED · ABORTED는 linkable true, DECLINED는 linkable false(시작하지 못함 한 줄, B19), FAILED는 보이지 않는다.
+        줄마다 goalCount(연습 목표 수) · interrupted(중간에 끊김)를 더했다(편차 (U4a-b)).
+      x-unit: U4a
+      x-u4a-deviation: ["(U4a-b)"]
+      parameters:
+        - { name: month, in: query, required: false, schema: { type: string, pattern: '^\d{4}-\d{2}$' } }
+        - { name: date, in: query, required: false, schema: { type: string, format: date } }
+      responses:
+        "200":
+          description: month면 {days}, date면 {items}
+          headers:
+            Cache-Control:
+              schema: { type: string, enum: [no-store] }
+          content:
+            application/json:
+              schema: { $ref: "schemas/records-response.schema.json" }
+              example:
+                items:
+                  - sessionId: 00000000-0000-4000-8000-000000000020
+                    activityType: FREE_TALK
+                    startedAt: "2026-10-15T01:31:00Z"
+                    endedAt: "2026-10-15T01:52:00Z"
+                    finalStatus: ENDED
+                    endReason: GUARDIAN_STOP
+                    linkable: true
+                    goalCount: 0
+                    interrupted: false
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/AccountDeletion" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/ServiceNotReady" }
+  /records/{sessionId}:
+    get:
+      operationId: getRecordDetail
+      summary: 27 대화 기록 칸 · 연습이면 고른 목표 이름(AC5.2.1 · AC5.2.2)
+      description: |
+        판정값 · 구조화 결과 · 08 보호자 입력 원문 · 원음 경로는 없다(FR4.3 · A10). DECLINED는 머리 정보만(빈 목록).
+        남의 세션 · 없는 세션 · 기록이 아직 없는 세션 · FAILED는 404다.
+      x-unit: U4a
+      parameters:
+        - { name: sessionId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: 대화 기록 칸
+          headers:
+            Cache-Control:
+              schema: { type: string, enum: [no-store] }
+          content:
+            application/json:
+              schema: { $ref: "schemas/record-detail-response.schema.json" }
+              example:
+                session:
+                  sessionId: 00000000-0000-4000-8000-000000000020
+                  activityType: FREE_TALK
+                  status: ENDED
+                  endReason: GUARDIAN_STOP
+                  failureCode: null
+                  confirmed: true
+                  requestedAt: "2026-10-15T01:30:58Z"
+                  startedAt: "2026-10-15T01:31:00Z"
+                  endedAt: "2026-10-15T01:52:00Z"
+                goals: []
+                utterances:
+                  - { seq: 1, speaker: AI, text: 안녕 무중이야, final: true, uncertain: false, startedAt: "2026-10-15T01:31:02Z", endedAt: "2026-10-15T01:31:04Z" }
+                gaps: []
+                recordScope: { from: "2026-10-15T01:31:00Z", to: "2026-10-15T01:52:00Z" }
+                endConfirmed: true
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/AccountDeletion" }
+        "404": { $ref: "#/components/responses/NotFound" }
         "500": { $ref: "#/components/responses/InternalError" }
         "503": { $ref: "#/components/responses/ServiceNotReady" }
 components:

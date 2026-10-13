@@ -80,40 +80,49 @@ describe("useBackGuard — 기록 칸", () => {
   });
 });
 
-describe("useBackGuard — 새로고침 뒤(2차 리뷰 1)", () => {
-  // 새로고침해도 history.state의 가드 표시는 남지만 그 칸 앞의 칸은 이전 문서다. 그 표시를 '이 문서가 쌓은 칸'으로 믿으면
-  // leave()의 back()이 문서 전체를 다시 불러 이동이 일어나지 않고, 기기 뒤로가기는 P5 대신 02를 다시 불러온다.
-  function leaveStaleMarker() {
-    window.history.replaceState({ [GUARD_KEY]: "이전-문서" }, "", window.location.href);
+describe("useBackGuard — 새로고침 뒤(2차 리뷰 1 · 3차 리뷰 5)", () => {
+  // 새로고침해도 history.state의 가드 표시는 남는다. 그 아래 기본 칸도 pushState로 생긴 같은 문서 칸이라(브라우저 확인: back()은 popstate만
+  // 내고 다시 불러오지 않는다) 남의 표시 칸을 이 문서의 가드 칸으로 넘겨받는다. 새 칸을 쌓으면 leave()가 남의 칸까지만 되돌려, 그 아래
+  // 02 기본 칸이 기록에 남는다(03에서 뒤로가기 → 02).
+  /** 새로고침 직전 기록 [기본 칸, 이전 문서 가드 칸]을 만든다. */
+  function reloadedOverStaleGuard() {
+    window.history.pushState({ base: true }, "", window.location.href);
+    window.history.pushState({ base: true, [GUARD_KEY]: "이전-문서" }, "", window.location.href);
   }
 
-  it("다른 문서가 남긴 가드 표시 위에서는 이 문서의 칸을 새로 쌓는다", () => {
-    leaveStaleMarker();
-    // 앞 시험의 back()이 남긴 앞쪽 칸 때문에 history.length는 그대로일 수 있어 쌓은 횟수를 센다
+  function markOf(): unknown {
+    return (window.history.state as Record<string, unknown> | null)?.[GUARD_KEY];
+  }
+
+  it("다른 문서가 남긴 가드 칸은 새 칸을 쌓지 않고 이 문서의 가드 칸으로 넘겨받는다", () => {
+    reloadedOverStaleGuard();
     const push = vi.spyOn(window.history, "pushState");
     render(<GuardProbe onBack={vi.fn()} navigate={vi.fn()} />);
-    expect(push).toHaveBeenCalledTimes(1);
+    expect(push).not.toHaveBeenCalled();
     push.mockRestore();
-    expect((window.history.state as Record<string, unknown>)[GUARD_KEY]).not.toBe("이전-문서");
+    expect(markOf()).toEqual(expect.any(String));
+    expect(markOf()).not.toBe("이전-문서");
+    expect((window.history.state as Record<string, unknown>).base).toBe(true);
   });
 
-  it("그 상태에서 기기 뒤로가기는 같은 문서 안에서 onBack(P5)을 부른다", async () => {
-    leaveStaleMarker();
+  it("그 상태에서 기기 뒤로가기는 onBack(P5)을 부르고 가드 칸을 다시 쌓는다", async () => {
+    reloadedOverStaleGuard();
     const onBack = vi.fn();
     render(<GuardProbe onBack={onBack} navigate={vi.fn()} />);
     act(() => window.history.back());
     await waitFor(() => expect(onBack).toHaveBeenCalledTimes(1));
-    expect((window.history.state as Record<string, unknown>)[GUARD_KEY]).not.toBe("이전-문서");
+    expect(markOf()).not.toBe("이전-문서");
+    expect(markOf()).toEqual(expect.any(String));
   });
 
-  it("그 상태에서 떠나면 이 문서가 쌓은 칸만 되돌리고 이동한다", async () => {
-    leaveStaleMarker();
+  it("그 상태에서 떠나면 기본 칸까지 되돌린 뒤 이동한다 — replace가 기본 칸을 덮어 02가 기록에 남지 않는다", async () => {
+    reloadedOverStaleGuard();
     const seen: unknown[] = [];
-    const navigate = vi.fn(() => seen.push((window.history.state as Record<string, unknown> | null)?.[GUARD_KEY]));
+    const navigate = vi.fn(() => seen.push(window.history.state));
     render(<GuardProbe onBack={vi.fn()} navigate={navigate} />);
     fireEvent.click(screen.getByTestId("leave"));
     await waitFor(() => expect(navigate).toHaveBeenCalledTimes(1));
-    expect(seen).toEqual(["이전-문서"]);
+    expect(seen).toEqual([{ base: true }]);
   });
 });
 

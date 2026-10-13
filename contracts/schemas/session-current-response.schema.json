@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mujoong.invalid/contracts/schemas/session-current-response.schema.json",
+  "title": "지금 활동",
+  "description": "GET /api/sessions/current 200(계약 3절 · U4a · 편차 (U4a-a)). 진행 중(REQUESTED ~ CLOSING) 세션 요약 또는 null을 늘 session으로 감싼다.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["session"],
+  "properties": {
+    "session": {
+      "anyOf": [
+        { "$ref": "live-view.schema.json#/$defs/SessionSummary" },
+        { "type": "null" }
+      ]
+    }
+  }
+}

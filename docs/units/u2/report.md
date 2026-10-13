@@ -175,3 +175,24 @@ U1이 (a) ~ (z)를 다 써서 U2는 `(U2-x)` 기호, YAML 표시는 `x-u2-deviat
 확인: `AccountDeletionIT`(10건)을 5번 연속 다시 실행(`cleanTest`) 모두 통과, 프런트 시험을 함께 돌려 바쁘게 한 6번째도 통과. 그다음 backend U2 90건(줄 96.5%, 963/998, 검증 통과),
 core-api U1 회귀 609건 · U1 커버리지 검증 통과. 참고: 부하용으로 함께 돌린 프런트 시험(tests/u1 + u2) 한 번에서 638건 중 1건이 실패했다(Gradle과 CPU를 다툰 시간 초과로 보임,
 출력 꼬리만 남아 시험 이름은 확인하지 못했다). 프런트만 다시 돌리면 638건 모두 통과했고 이번에 프런트 코드는 바꾸지 않았다.
+
+### 3차 리뷰 (U4a 작업자가 처리, 브랜치 `unit/u4a-activity-core` 첫 커밋)
+
+3차 리뷰에 남은 7건과 U3 보고서가 Core 쪽에 남긴 1건이다. 건마다 재현 시험을 같이 두었다. 이번에는 고치기 전 코드로 새 시험을 돌려 보지 못했다
+(이 세션에서 파일을 잠시 되돌려 돌리는 명령에 권한이 없었다). 그래서 "재현"은 고치기 전 코드에서 실패하는 까닭을 코드로 확인한 시험이고, "가드"는
+재발 방지 시험이다. 화면 쪽 5번만 실제 브라우저(Chromium, Playwright)로 기록 동작을 먼저 확인했다.
+
+| # | 지적 | 처리 | 시험 |
+|---|---|---|---|
+| 1 | [보안] 세션 재정리를 Realtime 요청 전 바퀴로만 한정 — 잠금 없는 로그인의 세션 행이 바퀴가 지나간 뒤 저장되면 DeletionCompleted까지 남음 | `DeletionCommander`가 **바퀴마다**(대기 바퀴 포함, 대기 중이면 세션 대기 시한마다) 실패 격리된 `closeAll`을 부른다. 실패는 그대로 APP_ERROR만 남기고 단계 실패로 세지 않는다. `AuthController` 주석을 사실에 맞게 고쳤다(다시 읽기도 잠그지 않아 틈이 남고, 그 세션은 /api/me 외 403, 지휘가 바퀴마다 · 마지막 단계가 지운다) | 재현: `AccountDeletionIT.aSessionSavedAfterRealtimeWasAskedIsClosedByTheNextWaitingRound`(Realtime 요청 뒤 세션 저장 → 대기 바퀴가 지움). 2차의 `…LaterRoundsSkipTheSweep`은 방침이 바뀌어 `aSessionStoreFailureIsLoggedAndDoesNotHoldUpTheDeletionOnAnyRound`(대기 바퀴도 정리 · 실패해도 진행 · 시도 수 0)로 바꿨다 |
+| 2 | [보안] 시험 로그인의 삭제 확인이 잠금 없는 읽기 | `DevLoginController`가 세션을 연 **뒤** 보호자를 다시 읽어 그 사이 접수됐으면(또는 행이 없으면) 연 세션을 닫고 403 `ACCOUNT_DELETION_IN_PROGRESS`(구글 경로와 같은 방식, 편차 (U2-k) 그대로). 다시 읽은 뒤의 틈은 1번이 닫는다 | 재현: `DevLoginRaceTest.aDeletionAcceptedWhileTheSessionWasOpeningClosesThatSessionAndAnswersForbidden`(첫 읽기 ACTIVE · 둘째 DELETION_REQUESTED). 가드: `anActiveSeedGuardianKeepsTheNewSession`, 기존 `DevLoginDeletionIT` 2건 |
+| 3 | [성능] max-age 0이면 로그인 한 번에 JWKS를 두 번 받음 | 로그인은 코드 교환 전에 확보한 열쇠에 토큰 kid가 있으면(또는 kid가 없으면) 그대로 쓰고 다시 받지 않는다(모르는 kid일 때만 캐시에 다시 묻는다). 캐시에 바닥 `mujoong.timing.account.google-keys-min-age`(1m, timing.md 8절 · application.yml · `AccountTiming`, 상한보다 길면 기동 거부)를 두었다 | 재현: `GoogleLoginServiceTest.aNoCacheKeySetIsFetchedOnlyOncePerLogin`(바닥을 1ns로 둬 캐시가 만료된 상태에서도 받기 1회). `theCacheIsCappedByTheTimingKeyAndANoCacheResponseIsKeptForTheFloorOnly`(no-cache도 바닥 1분은 캐시 · 바닥 > 상한 거절)로 2차 시험의 'no-cache는 캐시 안 함' 단언을 바꿨다 |
+| 4 | [성능] keysFor가 synchronized 안에서 HTTP fetch | `GoogleKeyCache`가 받는 동안 락을 쥐지 않는다: 캐시로 답할 수 있는 호출은 곧바로 답하고, 받기가 필요한 호출들은 진행 중인 요청 하나(`CompletableFuture`)를 함께 기다린다. 실패 · 예외도 함께 받은 빈 값으로 끝나 기다리는 호출이 멈추지 않는다 | 재현: `GoogleLoginServiceTest.aFetchInProgressDoesNotHoldUpLoginsThatTheCacheCanAnswerAndIsSharedByThoseThatCannot`(받기가 막힌 동안 캐시 답 2초 안 · 기다린 두 호출이 받기 1회를 나눔 — 예전 코드는 첫 단언에서 막힌다) |
+| 5 | [화면] 새로고침 뒤 leave()가 남의 가드 칸 위에서 replace해 02 기본 칸이 남음 | 방침: 새로고침 · 다시 불러오기 뒤 맨 위 칸에 다른 문서가 남긴 가드 표시가 있으면 **새 칸을 쌓지 않고 그 칸을 이 문서의 가드 칸으로 넘겨받는다**(표시만 이 문서 id로 replaceState). pushState로 쌓인 칸은 새로고침 뒤에도 같은 문서 칸이어서(Chromium에서 확인: 새로고침 뒤 back()은 popstate만 내고 다시 불러오지 않음) 그 아래 기본 칸으로 back() 할 수 있고, 이어지는 replace 이동이 기본 칸을 덮어 02가 기록에 남지 않는다. 2차 리뷰 1의 '이전 문서 칸으로 back()하면 문서를 다시 불러온다'는 전제는 브라우저 동작과 달랐다 | `back-guard.test` '새로고침 뒤' 3건을 방침에 맞춤: 넘겨받기(새 칸 0 · 표시가 이 문서 id), 그 상태의 기기 뒤로가기 → onBack, 떠나기 → 기본 칸(`{base: true}`)까지 되돌린 뒤 이동(예전 코드는 남의 가드 칸에서 이동) |
+| 6 | [정리] 잠금 단일화 시험 정규식이 한 줄 SQL만 잡음 | 파일 단위로 코드 줄을 이어 붙여, 같은 자바 문장(';' 전까지) 안에서 `core_guardian … for (no key update \| update \| key share \| share)`를 대소문자 · 줄바꿈 무관(DOTALL)으로 찾는다. 허용 목록은 `GuardianWriteLock` 하나 | 재현: `U2SingleSourceTest.theGuardianLockCheckSeesSqlSplitOverLines`(텍스트 블록 · 이어 붙이기 · no key update는 잡고, 다른 문장의 FOR UPDATE는 잡지 않음 — 예전 정규식은 앞 둘을 놓친다) |
+| 7 | [정리] statusForShare만 static | 세 메서드 모두 인스턴스 메서드로 통일. U1 `DeviceJdbcRepository`는 생성자 모양을 바꾸지 않고 같은 jdbc로 `GuardianWriteLock`을 만들어 쓴다(U1 시험 그대로) | 가드: `U2SingleSourceTest.guardianLockCallsHaveOneShape`(공개 static 메서드 0개) |
+| 8 | [시험] (U3 보고) DeviceRegisterApiIT 흔들림 — Core 시험 연결 시한 50ms | `application-test.yml`의 `mujoong.internal-http.connect-timeout`을 운영값 500ms로(연결 시한은 줄이지 않는다는 주석). `docs/units/u3/report.md`는 이 브랜치에 없어(U3는 클라우드 작업 중) 지시서의 수정안을 따랐다 | core-api U1 회귀 609건 통과(아래) |
+
+확인(3차 반영 뒤): 바뀐 시험 묶음(`AccountDeletionIT` 11 · `U2SingleSourceTest` 5 · `DevLoginDeletionIT` 2 · `DevLoginRaceTest` 2 · `GoogleLoginServiceTest` 8 = 28건) 통과,
+core-api U1 회귀(`-PincludeTags=u1`) 609건 통과 · U1 커버리지 검증 통과, 프런트 `back-guard.test` 8건 통과. U2 전체(`-PincludeTags=u2`) · 커버리지는 U4a 시험과 함께
+다시 돌려 `docs/units/u4a/report.md`에 적는다.

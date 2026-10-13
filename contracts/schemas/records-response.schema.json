@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mujoong.invalid/contracts/schemas/records-response.schema.json",
+  "title": "26 기록 달력 · 그날 목록",
+  "description": "GET /api/records 200(계약 3절 · U4a). month면 {days}, date면 {items}. FAILED는 보이지 않고 DECLINED는 linkable false(B19). goalCount · interrupted는 편차 (U4a-b).",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["days"],
+      "properties": {
+        "days": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["date", "count"],
+            "properties": {
+              "date": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+              "count": { "type": "integer", "minimum": 1 }
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["items"],
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["sessionId", "activityType", "finalStatus", "linkable", "goalCount", "interrupted"],
+            "properties": {
+              "sessionId": { "$ref": "common.schema.json#/$defs/Uuid" },
+              "activityType": { "$ref": "common.schema.json#/$defs/ActivityType" },
+              "startedAt": { "$ref": "common.schema.json#/$defs/NullableDateTime" },
+              "endedAt": { "$ref": "common.schema.json#/$defs/NullableDateTime" },
+              "finalStatus": { "type": "string", "enum": ["ENDED", "ENDED_UNCONFIRMED", "ABORTED", "DECLINED"] },
+              "endReason": { "$ref": "common.schema.json#/$defs/NullableEndReason" },
+              "linkable": { "type": "boolean" },
+              "goalCount": { "type": "integer", "minimum": 0 },
+              "interrupted": { "type": "boolean" }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

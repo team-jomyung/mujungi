@@ -1,6 +1,7 @@
 package kr.mujoong.core.child;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -182,7 +183,8 @@ public class ChildProfileService {
 
     private ChildView view(Child child) {
         String[] interests = child.getInterestsJson() == null ? new String[0] : json.read(child.getInterestsJson(), String[].class);
+        // 저장 값에 null 칸이 있어도(U1 시드 · 손으로 넣은 행) 조회가 깨지지 않게 뺀다(U4a — 세션 시작이 이 포트를 쓴다)
         return new ChildView(child.getId(), child.getDisplayName(), child.getAge() == null ? 0 : child.getAge(),
-                List.of(interests));
+                Arrays.stream(interests).filter(Objects::nonNull).toList());
     }
 }

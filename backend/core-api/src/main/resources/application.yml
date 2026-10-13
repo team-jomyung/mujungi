@@ -123,6 +123,7 @@ mujoong:
     account:
       deletion-tick: 5s
       deletion-session-wait: 30s
+      google-keys-min-age: 1m
       google-keys-max-age: 6h
   outbox:
     poll-interval: 500ms

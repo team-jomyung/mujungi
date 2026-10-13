@@ -42,9 +42,14 @@ import org.springframework.context.annotation.Configuration;
 @Tag("db")
 class CoreSchemaIT {
 
-    /** V1이 만드는 core 표 12개(J43) + U2 V2가 더하는 2개(core_data_deletion_request · core_social_account). */
+    /**
+     * V1이 만드는 core 표 12개(J43) + U2 V2가 더하는 2개(core_data_deletion_request · core_social_account) + U4a V3가 더하는 2개
+     * (core_activity_context · core_activity_record).
+     */
     static final List<String> CORE_TABLES = List.of(
             "core_activity",
+            "core_activity_context",
+            "core_activity_record",
             "core_approved_content",
             "core_approved_content_version",
             "core_child",
@@ -75,10 +80,11 @@ class CoreSchemaIT {
             // 편차 (x): 표 소유는 마이그레이션 역할, 앱 역할은 쓰는 역할일 뿐이다
             assertThat(tables).allSatisfy(row -> assertThat(row.get(1)).isEqualTo("mujoong_owner"));
 
-            // 이력 표 flyway.core_schema_history에 V1 · V2(U2)가 차례로 성공으로 있다(J116). core 위치가 먼저라 기준선 행은 없다
+            // 이력 표 flyway.core_schema_history에 V1 · V2(U2) · V3(U4a)가 차례로 성공으로 있다(J116). core 위치가 먼저라 기준선 행은 없다
             List<List<Object>> history = query(owner,
                     "select version, type, success from flyway.core_schema_history order by installed_rank");
-            assertThat(history).containsExactly(List.of("1", "SQL", true), List.of("2", "SQL", true));
+            assertThat(history).containsExactly(List.of("1", "SQL", true), List.of("2", "SQL", true),
+                    List.of("3", "SQL", true));
         }
     }
 
@@ -98,6 +104,8 @@ class CoreSchemaIT {
         "core_approved_content_version, 7",
         "core_spring_session, 7",
         "core_spring_session_attributes, 3",
+        "core_activity_context, 9",
+        "core_activity_record, 23",
     })
     void tablesHaveTheEntityColumnCounts(String table, int expectedColumns) throws SQLException {
         try (Connection core = postgres.connect(Role.CORE_APP)) {

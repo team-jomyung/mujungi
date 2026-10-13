@@ -23,7 +23,8 @@ import org.springframework.stereotype.Component;
  *       ACCOUNT_DELETION_IN_PROGRESS, 쓰기가 먼저면 접수가 그 뒤에 와 지휘가 지운다.
  * </ul>
  *
- * <p>모두 트랜잭션 안에서만 부른다. 행이 없으면 빈 값(세션만 남은 계정)이다.
+ * <p>모두 트랜잭션 안에서만 부른다. 행이 없으면 빈 값(세션만 남은 계정)이다. 호출 모양은 인스턴스 메서드 하나로 통일했다(3차 리뷰 7 — U1
+ * {@code DeviceJdbcRepository}는 생성자 모양을 바꾸지 않고 같은 jdbc로 이 클래스를 만들어 쓴다).
  */
 @Component
 public class GuardianWriteLock {
@@ -37,14 +38,14 @@ public class GuardianWriteLock {
         this.jdbc = Objects.requireNonNull(jdbc, "jdbc");
     }
 
-    /** 보호자 행을 FOR SHARE로 읽어 상태를 돌려준다(U1 등록 트랜잭션의 첫 잠금, 생성자 주입 없이 부를 수 있게 정적). */
-    public static Optional<String> statusForShare(NamedParameterJdbcTemplate jdbc, UUID guardianId) {
-        return status(jdbc, FOR_SHARE, guardianId);
+    /** 보호자 행을 FOR SHARE로 읽어 상태를 돌려준다(U1 등록 트랜잭션의 첫 잠금). */
+    public Optional<String> statusForShare(UUID guardianId) {
+        return status(FOR_SHARE, guardianId);
     }
 
     /** 보호자 행을 FOR UPDATE로 읽어 상태를 돌려준다. */
     public Optional<String> statusForUpdate(UUID guardianId) {
-        return status(jdbc, FOR_UPDATE, guardianId);
+        return status(FOR_UPDATE, guardianId);
     }
 
     /**
@@ -59,8 +60,8 @@ public class GuardianWriteLock {
         }
     }
 
-    private static Optional<String> status(NamedParameterJdbcTemplate jdbc, String sql, UUID guardianId) {
-        List<String> rows = Objects.requireNonNull(jdbc, "jdbc").queryForList(sql,
+    private Optional<String> status(String sql, UUID guardianId) {
+        List<String> rows = jdbc.queryForList(sql,
                 ClockParams.uuid(new MapSqlParameterSource(), "id", Objects.requireNonNull(guardianId, "guardianId")),
                 String.class);
         return rows.stream().findFirst();
