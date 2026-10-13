@@ -190,6 +190,22 @@ expect "migration-strengthen-constraint" 1 "기존 표 제약 강화" -- --only 
 mig expand "ALTER TABLE core.sample ADD COLUMN note varchar(10) DEFAULT 'x' NOT NULL; ALTER TABLE core.sample ADD COLUMN memo text; CREATE INDEX sample_label_ix ON core.sample (label);"
 expect "migration-expand-ok" 0 "" -- --only migrations --migrations "$work/mig-expand"
 expect "migration-allow-contract" 0 "" -- --only migrations --migrations "$work/mig-drop-column" --allow-contract
+# 승인 목록: 파일 · 문장 번호 · 문장 해시가 모두 맞는 문장만 넘긴다(다른 문장 · 형식이 틀린 줄은 실패)
+mkdir -p "$work/mig-approved/core"
+printf 'CREATE TABLE core.sample (id uuid PRIMARY KEY, label varchar(20) NOT NULL);\n' >"$work/mig-approved/core/V1__base.sql"
+printf 'ALTER TABLE core.sample ADD CONSTRAINT sample_label_len CHECK (length(label) > 2);\n' >"$work/mig-approved/core/V2__change.sql"
+approved_hash="$(printf '%s' 'ALTER TABLE CORE.SAMPLE ADD CONSTRAINT SAMPLE_LABEL_LEN CHECK (LENGTH(LABEL) > 2)' | sha256sum | cut -c1-12)"
+printf '# 시험\ncore/V2__change.sql 1 %s | 승인: 시험 2026-10-13 | 사유: 시험 표\n' "$approved_hash" >"$work/approvals-ok.txt"
+expect "migration-approved-statement" 0 "" -- --only migrations --migrations "$work/mig-approved/core" \
+  --migration-approvals "$work/approvals-ok.txt"
+printf 'core/V2__change.sql 1 000000000000 | 승인: 시험 2026-10-13 | 사유: 다른 문장의 해시\n' >"$work/approvals-other.txt"
+expect "migration-approval-other-statement" 1 "기존 표 제약 강화" -- --only migrations --migrations "$work/mig-approved/core" \
+  --migration-approvals "$work/approvals-other.txt"
+printf 'core/V2__change.sql 1 %s | 사유: 승인한 사람이 없다\n' "$approved_hash" >"$work/approvals-unsigned.txt"
+expect "migration-approval-unsigned" 1 "승인 목록 1행" -- --only migrations --migrations "$work/mig-approved/core" \
+  --migration-approvals "$work/approvals-unsigned.txt"
+# 저장소 승인 목록(infra/migration-approvals.txt)으로 실제 두 위치가 통과한다
+expect "migration-repo-approvals" 0 "" -- --only migrations
 
 # 7 번들 Dockerfile 변형
 mkdir -p "$work/bundle"

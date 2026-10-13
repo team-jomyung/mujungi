@@ -44,7 +44,8 @@ mujoong:
   session:
     timer-tick: 50ms
   internal-http:
-    connect-timeout: 50ms
+    # 연결 시한은 줄이지 않는다(운영값 500ms): 50ms는 바쁜 기계에서 루프백 연결도 넘겨 DeviceRegisterApiIT 등이 흔들렸다(U3 보고 · U2 3차 리뷰 8)
+    connect-timeout: 500ms
     session-start-timeout: 300ms
     session-end-timeout: 200ms
     session-view-timeout: 100ms
