@@ -49,7 +49,7 @@ graph BT
   U4["U4 활동 세션"]
   U5["U5 연습"]
   U6["U6 결과와 리포트"]
-  U7["U7 웹 푸시 (Should)"]
+  U7["U7 웹 푸시"]
   U2 --> U1
   U3 --> U1
   U4 --> U1
@@ -80,9 +80,9 @@ graph BT
 | U5 → U2 | PracticeGoal → GuardianIdentity, 연습 데이터 삭제 참가자 → AccountDeletion | 앱 안 호출 |
 | U5 → U3 | PracticeProtocol → VoiceRelay(역할 · Cue 지시) · OutputGate(단계별 출력 규칙) · DeviceGateway(기회 트리거 대본 재생) · ConversationLog(반응 전사) | Realtime 안 호출 |
 | U5 → U4 | PracticeGoal → ActivityRecord(ActivityRecorded), U5의 확장: ActivityCoordinator(연습 시작) · SessionLifecycle(연습 경로 → PracticeProtocol), PracticeProtocol → PracticeGoal은 Realtime → Core 내부 HTTP | 앱 안 이벤트 · 확장 · 앱 사이 내부 HTTP |
-| U6 → U2 | ResultPipeline · Report → GuardianIdentity, Report → ChildProfile(PDF 머리), 결과 데이터 삭제 참가자 → AccountDeletion | 앱 안 호출 |
-| U6 → U4 | ResultPipeline → ActivityRecord(ActivityRecorded · 작업 입력), Report → ActivityRecord(기간 활동 · 원문), 17 · 27 화면이 U4 화면 틀을 채움 | 앱 안 이벤트 · 호출 |
-| U6 → U5 | ResultPipeline → PracticeGoal(후보 · 근거 등록 · 담김 상태) · PragmaticsKnowledge(생활 팁 · 화용 지식) · TextAiGateway(구조화 · 후보 생성) | 앱 안 호출 |
+| U6 → U2 | ResultPipeline · Report → GuardianIdentity, Report → ChildProfile(리포트 4항목 · PDF 머리), 결과 데이터 삭제 참가자 → AccountDeletion | 앱 안 호출 |
+| U6 → U4 | ResultPipeline → ActivityRecord(ActivityRecorded · 작업 입력), Report → ActivityRecord(기간 활동 · 전사 인용 대조 · 종료 사유), 17 · 27 화면이 U4 화면 틀을 채움 | 앱 안 이벤트 · 호출 |
+| U6 → U5 | ResultPipeline → PracticeGoal(후보 · 근거 등록 · 담김 상태 · 상황 대본 · 목표 정의 버전) · PragmaticsKnowledge(생활 팁 · 화용 지식 · 핵심 기능 정의 · 판정 기준) · TextAiGateway(구조화 · 기록용 재판정 · 후보 생성 · 결과 문장), Report → PracticeGoal(목표 이름 · 핵심 기능 정의) · TextAiGateway(리포트 항목) | 앱 안 호출 |
 | U7 → U1 | Notification → DeviceRegistry(기기 상태 수신 중단 사건) | 앱 안 이벤트 |
 | U7 → U2 | Notification → GuardianIdentity, 구독 삭제 참가자 → AccountDeletion | 앱 안 호출 |
 | U7 → U4 | Notification → ActivityCoordinator(세션 상태 사본 변화) | 앱 안 이벤트 |
