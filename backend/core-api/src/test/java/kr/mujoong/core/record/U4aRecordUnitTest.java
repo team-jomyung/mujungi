@@ -23,6 +23,8 @@ import kr.mujoong.contract.status.ActivityType;
 import kr.mujoong.contract.status.SessionStatus;
 import kr.mujoong.core.activity.ActivityCopyRepository;
 import kr.mujoong.core.activity.ActivityCopyRepository.ActivityCopy;
+import kr.mujoong.core.identity.Guardian;
+import kr.mujoong.core.identity.GuardianWriteLock;
 import kr.mujoong.core.messaging.CoreInboxRepository.InboxEvent;
 import kr.mujoong.core.messaging.handler.InboxHandler.Result;
 import kr.mujoong.core.support.TestEvents;
@@ -41,16 +43,48 @@ class U4aRecordUnitTest {
     private static final Instant NOW = Instant.parse("2026-10-15T00:00:00Z");
     private static final JsonCodec JSON = JsonCodec.shared();
 
+    private final GuardianWriteLock guardianLock = mock(GuardianWriteLock.class);
     private final ActivityCopyRepository activities = mock(ActivityCopyRepository.class);
     private final ActivityRecordRepository records = mock(ActivityRecordRepository.class);
     private final ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
     private final TestEvents events = new TestEvents(new MutableClock(NOW));
-    private final SessionRecordCapturedHandler handler = new SessionRecordCapturedHandler(activities, records, publisher,
-            events.logger(), JSON);
+    private final SessionRecordCapturedHandler handler = new SessionRecordCapturedHandler(guardianLock, activities,
+            records, publisher, events.logger(), JSON);
 
     private final UUID sessionId = UUID.randomUUID();
     private final UUID guardianId = UUID.randomUUID();
     private final UUID childId = UUID.randomUUID();
+
+    @org.junit.jupiter.api.BeforeEach
+    void activeGuardian() {
+        when(guardianLock.statusForShare(guardianId)).thenReturn(Optional.of(Guardian.STATUS_ACTIVE));
+    }
+
+    @Test
+    void aRecordArrivingAfterTheDeletionRequestIsDiscardedWithOneLogLine() {
+        when(activities.findById(sessionId)).thenReturn(Optional.of(copy(guardianId, childId)));
+        when(guardianLock.statusForShare(guardianId)).thenReturn(Optional.of(Guardian.STATUS_DELETION_REQUESTED));
+
+        assertThat(handler.handle(event(captured(SessionStatus.ENDED, record(), null)), NOW)).isEqualTo(Result.done());
+
+        verifyNoInteractions(records, publisher);
+        assertThat(events.capture().events(EventCode.APP_ERROR)).singleElement()
+                .satisfies(line -> assertThat(kr.mujoong.testsupport.log.LogCapture.attrs(line))
+                        .containsEntry("errorKind", "RecordAfterDeletion"));
+        assertThat(String.join("\n", events.capture().lines())).doesNotContain("블록");
+    }
+
+    @Test
+    void aRecordForAGuardianRowThatIsAlreadyGoneIsDiscardedToo() {
+        when(guardianLock.statusForShare(guardianId)).thenReturn(Optional.empty());
+
+        handler.handle(event(captured(SessionStatus.ENDED, record(), null)), NOW);
+
+        verifyNoInteractions(activities, records, publisher);
+        assertThat(events.capture().events(EventCode.APP_ERROR)).singleElement()
+                .satisfies(line -> assertThat(kr.mujoong.testsupport.log.LogCapture.attrs(line))
+                        .containsEntry("errorKind", "RecordAfterDeletion"));
+    }
 
     @Test
     void anEventWithoutAMatchingCopyIsDroppedWithoutStoring() {

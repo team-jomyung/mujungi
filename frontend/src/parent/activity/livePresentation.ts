@@ -19,16 +19,23 @@ export type LiveOutcome =
 /** 진행 중에 실패한 코드(서버 재시작, A7) — 17 '기기 응답 없이 끝냈어요'(AC3.6.9). 그 밖의 FAILED는 시작 실패라 08이다. */
 export const RUNNING_FAILURE_CODES: readonly string[] = ["SERVER_RESTART"];
 
-/** FAILED가 시작 실패(08로 돌아감)인지. 코드가 없으면(Core 로컬 FAILED) 시작 실패다(U1 J120과 같다). */
-export function isStartFailure(view: Pick<LiveView, "status" | "failureCode">): boolean {
-  return view.status === "FAILED" && !(view.failureCode !== null && RUNNING_FAILURE_CODES.includes(view.failureCode));
+/**
+ * FAILED가 시작 실패(08로 돌아감)인지. 코드가 없으면(Core 로컬 FAILED) 시작 실패다(U1 J120과 같다). 서버 재시작이라도 시작 전
+ * (startedAt 없음 — PREPARING · DEVICE_ACK에서 재시작)이면 시작 실패다(AC3.6.9는 '진행 중' 재시작만 17, AC3.1.9 · U4a 리뷰 R3).
+ */
+export function isStartFailure(view: Pick<LiveView, "status" | "failureCode" | "startedAt">): boolean {
+  if (view.status !== "FAILED") {
+    return false;
+  }
+  const runningFailure = view.failureCode !== null && RUNNING_FAILURE_CODES.includes(view.failureCode);
+  return !runningFailure || view.startedAt === null;
 }
 
 /**
  * 상태 → 할 일: 진행 중이면 머문다, CLOSING · 종료는 17, 연결 끊김 종료는 P2 → 17, 무응답(DECLINED)은 P3 → 04, 시작 실패 FAILED는 08 사유
  * (진행 중 서버 재시작 FAILED는 17 '기기 응답 없이 끝냈어요', AC3.6.9 · U4a-J16).
  */
-export function liveOutcome(view: Pick<LiveView, "status" | "endReason" | "failureCode">): LiveOutcome {
+export function liveOutcome(view: Pick<LiveView, "status" | "endReason" | "failureCode" | "startedAt">): LiveOutcome {
   const { status } = view;
   if (status === "FAILED") {
     return isStartFailure(view) ? { kind: "startFailed", failureCode: view.failureCode } : { kind: "done" };

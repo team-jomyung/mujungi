@@ -73,7 +73,8 @@ public class SessionController {
             @AuthenticationPrincipal GuardianPrincipal guardian,
             @PathVariable("sessionId") String sessionId,
             @RequestParam(name = "sinceSeq", required = false) String sinceSeq) {
-        UUID guardianId = GuardianPrincipal.require(guardian);
+        // 삭제 접수된 보호자는 /api/me 외 403(계약 2절 · AC1.6.4 · U4a 리뷰 R2): 진행 조회도 전사를 돌려주지 않는다
+        UUID guardianId = GuardianPrincipal.requireActive(guardian, guardians);
         UUID id = ApiResponses.uuid(sessionId).orElseThrow(() -> CoreApiException.of(ErrorCode.NOT_FOUND));
         LiveView view = viewService.view(guardianId, id, parseSinceSeq(sinceSeq));
         return ApiResponses.json(200, LiveViewBody.of(view));

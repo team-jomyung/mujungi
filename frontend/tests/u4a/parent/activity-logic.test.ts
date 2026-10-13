@@ -57,6 +57,12 @@ describe("12 상태 → 할 일(liveOutcome · AC3.4.1 · AC3.5.1 · AC3.6.9 · 
     expect(isStartFailure(view("FAILED", { failureCode: "SERVER_RESTART" }))).toBe(false);
     expect(isStartFailure(view("ACTIVE"))).toBe(false);
   });
+
+  it("시작 전(startedAt 없음)에 서버가 재시작된 FAILED는 17이 아니라 08 시작 실패다(AC3.1.9 · AC3.6.9 · 리뷰 R3)", () => {
+    const beforeStart = view("FAILED", { endReason: "FAILED", failureCode: "SERVER_RESTART", startedAt: null });
+    expect(isStartFailure(beforeStart)).toBe(true);
+    expect(liveOutcome(beforeStart)).toEqual({ kind: "startFailed", failureCode: "SERVER_RESTART" });
+  });
 });
 
 describe("12 공백 경고 · 복구 중 · 흐름(AC3.2.8 · AC3.2.10 · U4a-J19)", () => {

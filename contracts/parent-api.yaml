@@ -312,6 +312,7 @@ paths:
                   - { seq: 1, speaker: CHILD, text: 오늘 공룡 그렸어, final: true, uncertain: false, startedAt: "2026-10-15T09:00:10Z", endedAt: "2026-10-15T09:00:12Z" }
                 nextSeq: 1
         "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/AccountDeletion" }
         "404": { $ref: "#/components/responses/NotFound" }
         "500": { $ref: "#/components/responses/InternalError" }
         "503": { $ref: "#/components/responses/ServiceNotReady" }

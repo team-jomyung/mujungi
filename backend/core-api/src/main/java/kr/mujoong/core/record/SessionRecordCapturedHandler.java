@@ -12,6 +12,8 @@ import kr.mujoong.contract.log.EventLog;
 import kr.mujoong.contract.status.SessionStatus;
 import kr.mujoong.core.activity.ActivityCopyRepository;
 import kr.mujoong.core.activity.ActivityCopyRepository.ActivityCopy;
+import kr.mujoong.core.identity.Guardian;
+import kr.mujoong.core.identity.GuardianWriteLock;
 import kr.mujoong.core.messaging.CoreInboxRepository.InboxEvent;
 import kr.mujoong.core.messaging.handler.InboxHandler;
 import kr.mujoong.core.observability.EventLogger;
@@ -23,7 +25,10 @@ import org.springframework.stereotype.Component;
  * SessionRecordCaptured 처리기 (U4a ActivityRecord · 계약 6절 · ADR-010 §2.5 · FR3.5 · 설계 R5 · R6 · U4a-J6 · J7).
  *
  * <ol>
- *   <li>세션 사본이 없거나 보호자 · 아이가 다르면 저장하지 않고 끝낸다(지워진 계정 · 잘못된 이벤트).
+ *   <li>보호자 행을 첫 잠금(FOR SHARE)으로 읽는다. 보호자가 없거나 ACTIVE가 아니면(계정 삭제 접수 뒤 도착) 저장 · 발행 없이 APP_ERROR
+ *       {@code RecordAfterDeletion} 한 줄을 남기고 끝낸다(AC1.6.8 · U2 design 늦은 이벤트 폐기). 삭제 지휘의 접수와 같은 행을 잠그므로
+ *       접수가 먼저 커밋되면 이 단계에서 걸러지고, 이 트랜잭션이 먼저면 접수가 기다렸다가 뒤에 참가자가 지운다.
+ *   <li>세션 사본이 없거나 보호자 · 아이가 다르면 저장하지 않고 APP_ERROR {@code RecordWithoutSession} 한 줄을 남긴다(지워진 사본 · 잘못된 이벤트).
  *   <li>{@code snapshotHash}가 {@code sha256:} + record 정규화 JSON의 SHA-256과 다르면 처리 실패({@link SnapshotHashMismatchException}) —
  *       Inbox 재호출을 타고 DEAD로 남는다(조용히 버리지 않는다).
  *   <li>DECLINED는 머리 정보만 저장한다(발화 · 구간 · 연습 · 원음은 받아도 비운다).
@@ -39,6 +44,7 @@ public class SessionRecordCapturedHandler implements InboxHandler {
 
     static final String HASH_PREFIX = "sha256:";
 
+    private final GuardianWriteLock guardianLock;
     private final ActivityCopyRepository activities;
     private final ActivityRecordRepository records;
     private final ApplicationEventPublisher publisher;
@@ -46,11 +52,13 @@ public class SessionRecordCapturedHandler implements InboxHandler {
     private final JsonCodec json;
 
     public SessionRecordCapturedHandler(
+            GuardianWriteLock guardianLock,
             ActivityCopyRepository activities,
             ActivityRecordRepository records,
             ApplicationEventPublisher publisher,
             EventLogger events,
             JsonCodec json) {
+        this.guardianLock = Objects.requireNonNull(guardianLock, "guardianLock");
         this.activities = Objects.requireNonNull(activities, "activities");
         this.records = Objects.requireNonNull(records, "records");
         this.publisher = Objects.requireNonNull(publisher, "publisher");
@@ -69,9 +77,15 @@ public class SessionRecordCapturedHandler implements InboxHandler {
         if (payload == null || !payload.problems().isEmpty()) {
             return Result.done();
         }
+        Optional<String> guardianStatus = guardianLock.statusForShare(payload.guardianId());
+        if (guardianStatus.isEmpty() || !Guardian.STATUS_ACTIVE.equals(guardianStatus.get())) {
+            events.appError(EventLog.Component.ACTIVITY_COORDINATOR, "RecordAfterDeletion");
+            return Result.done();
+        }
         Optional<ActivityCopy> copy = activities.findById(payload.sessionId());
         if (copy.isEmpty() || !copy.get().guardianId().equals(payload.guardianId())
                 || !copy.get().childId().equals(payload.childId())) {
+            events.appError(EventLog.Component.ACTIVITY_COORDINATOR, "RecordWithoutSession");
             return Result.done();
         }
         if (!snapshotHash(payload.record()).equals(payload.snapshotHash())) {

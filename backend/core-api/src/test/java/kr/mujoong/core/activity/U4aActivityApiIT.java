@@ -408,6 +408,32 @@ class U4aActivityApiIT {
                 .isEqualTo(400);
     }
 
+    @Test
+    void afterTheDeletionRequestReadsAre403AndALateRecordIsNotStored() {
+        // 리뷰 R1 · R2: 계약 2절(/api/me 외 403) · AC1.6.4 · AC1.6.8(삭제 접수 뒤 도착한 기록은 저장 · 발행하지 않는다)
+        Family family = family();
+        Guardian guardian = WebFixtures.guardianFor(app, family.guardianId());
+        UUID sessionId = copy(family, SessionStatus.ENDED);
+        db.jdbc().update("update core.core_guardian set status = 'DELETION_REQUESTED' where id = :id",
+                new MapSqlParameterSource("id", family.guardianId()));
+
+        for (String[] read : new String[][] {
+                {"GET /api/sessions/{sessionId}", "/api/sessions/" + sessionId},
+                {"GET /api/sessions/current", "/api/sessions/current"},
+                {"GET /api/records", "/api/records?month=2026-10"},
+                {"GET /api/records/{sessionId}", "/api/records/" + sessionId}}) {
+            Result refused = send(read[0], app.get(read[1]).session(guardian.session()));
+            assertThat(refused.status()).as(read[1]).isEqualTo(403);
+            assertThat(refused.json()).as(read[1]).containsEntry("code", "ACCOUNT_DELETION_IN_PROGRESS");
+        }
+
+        deliver(captured(family, sessionId, SessionStatus.ENDED, practiceRecord()));
+        awaitProcessed(1);
+        assertThat(count("select count(*) from core.core_activity_record where session_id = :g", sessionId))
+                .as("삭제 접수 뒤 도착한 기록은 저장하지 않는다").isZero();
+        assertThat(app.bean(RecordedEvents.class).events()).as("ActivityRecorded도 내지 않는다").isEmpty();
+    }
+
     // ------------------------------------------------------------------ 계정 삭제 참가자
 
     @Test
@@ -426,10 +452,12 @@ class U4aActivityApiIT {
                     """, new MapSqlParameterSource("id", UUID.randomUUID()).addValue("g", family.guardianId()));
         }
 
-        List<DeletionParticipant> participants = app.context().getBeanProvider(DeletionParticipant.class).orderedStream()
-                .toList();
+        // 순번이 아니라 타입으로 집는다: U6(70) · U7(60) 참가자가 더 앞에 붙어도 이 시험은 그대로다(리뷰 R4)
+        List<DeletionParticipant> participants = List.of(
+                app.bean(kr.mujoong.core.record.ActivityRecordDeletionParticipant.class),
+                app.bean(ActivityDeletionParticipant.class));
         Map<String, Integer> deleted = new LinkedHashMap<>();
-        for (DeletionParticipant participant : participants.subList(0, 2)) {
+        for (DeletionParticipant participant : participants) {
             deleted.putAll(participant.deleteByGuardian(mine.guardianId(), UUID.randomUUID()));
         }
 
