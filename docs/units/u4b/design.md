@@ -128,7 +128,7 @@ stateDiagram-v2
 | U4b-R14 승인 문구 말풍선 | 기기에 보낸 승인 문구(시작 안내 · 재안내 · 대안 · 확인 질문 · 공백 안내 · 마무리 인사)는 보낸 순간 AI 전사 한 행(FINAL, approved_for_display true, 문구 원문)으로 남긴다. 대기 문구(WAITING_FILLER)는 남기지 않는다. DECLINED면 그 세션의 전사 행을 지운다 | C.S-12.11.4(참여 기다리는 중 말풍선) · AC3.5.1 · U4b-J1 |
 | U4b-R15 빠진 승인 문구 | 시작 명령에서 필수는 CLOSING · WAITING_FILLER뿐이다. 다른 코드가 패키지에 없으면 그 재생만 건너뛰고(곧바로 재생이 끝난 것으로 본다) 시계와 횟수는 그대로 진행하며 SessionEvent `APPROVED_CONTENT_MISSING`{code}를 한 번 남긴다 | 시작 명령 스키마 · U4b-J18 |
 | U4b-R16 삭제 처리기 | DeletionRequested를 받으면 ① 그 보호자의 비종료 세션 실행기를 강제 정지한다(입력 중계 · 원음 기록 닫기 · 타이머 · 공급자 닫기, 연결이 살아 있으면 CLOSE_TRANSPORT(CONSENT_WITHDRAWN), DB 전이 · 이벤트 · 스냅숏 없이, 상한 deletion-stop-wait) ② 음성 참가자(U3) → 세션 참가자(U4b: 스냅숏 · 세션 사건 · 종료 표현 · 전사 · 원음 행 · 끊김 구간 · 세션 행을 FK 순서로 실제 삭제) → 메시징 참가자(U1) ③ 마지막 트랜잭션에 DeletionCompleted{counts} Outbox ④ 그 행이 PUBLISHED가 되면 메시징 참가자를 한 번 더 부른다(BR5.14 (d)). 놓치면 하루 정리 작업이 지운다. 같은 deletionRequestId의 DeletionCompleted가 이미 있으면 다시 쓰지 않는다. 파일 삭제가 남으면 예외로 Inbox 재시도에 맡긴다 | AC1.6.3 · 1.6.6 · 1.6.7 · 1.6.8 · BR5.14 · U2 설계 R11 |
-| U4b-R17 연습 확장점 | PRACTICE도 INTRO_PRACTICE와 참여 확인까지 같다. ACTIVE 뒤 연습 진행과 목표 끝 마무리는 U5b가 PracticeProtocol로 붙인다. 그 전까지 PRACTICE의 ACTIVE는 자유대화처럼 동작한다 | unit-of-work U4 · J17 |
+| U4b-R17 연습 확장점 | PRACTICE도 INTRO_PRACTICE와 참여 확인까지 같다. ACTIVE 뒤 연습 진행과 목표 끝 마무리는 U5b가 확장점 `PracticeSessionExtension`(세션마다 `PracticeSessionExtension.Factory`가 하나 만든다, 기본 `NoOpPracticeSessionExtension`)으로 붙인다. 들어오는 시점 다섯: onActive · onChildUtterance(종료 의도 판정보다 먼저) · onExtensionEvent(재생 완료 · 확장점 시계 · 비동기 결과) · onSettle · practiceRecord. 출력 능력(`PracticeOutput`): playApproved(시작 패키지 승인 문구) · instructProvider(검증된 `PracticeInstruction` 문장) · requestResponse · cancelResponse · holdOutput · schedule · cancel(확장점 시계, 기술 일시정지 때 멈춤) · post(비동기 결과). 금지: 상태 전이 · DB 쓰기 · 기기 원시 명령 — 상태는 Signal(NEXT_GOAL 계속 · LAST_GOAL은 CLOSING(CHILD_STOP, end_detail PRACTICE_COMPLETED))로만 바꾼다. 확장점 예외는 PRACTICE_EXTENSION_FAILED에 남기고 그 세션은 자유대화처럼 잇는다. 그 전까지 PRACTICE의 ACTIVE는 자유대화처럼 동작한다(Realtime 내부 시작 API는 아직 PRACTICE를 400으로 막는다 — U5b가 연다) | unit-of-work U4 · J17 · FD-Q1 · BR10.1 ~ BR10.6 |
 
 ## 6. 엔터티와 마이그레이션 (`V3__u4b_session_lifecycle.sql`, 더하기만)
 
@@ -151,6 +151,7 @@ V1 · V2는 손대지 않는다. 앱은 validate만 하므로 기동 스키마 �
   - (U4b-a) `ai-io.md`: `session.response.create` — 새 값.
   - (U4b-b) `internal-api.yaml`: 끝내기 응답표 구체화(WAITING_CHILD 종료 가능, 시작 단계 CONSENT_WITHDRAWN은 202 {}와 FAILED(CONSENT_WITHDRAWN)) — 규칙 구체화.
   - (U4b-c) `events.asyncapi.yaml` · `event-payloads.schema.json`: CLOSING의 endReason과 SessionRecordCaptured.record 모양(contract-summary 6절, 선택 필드만) — 규칙 구체화.
+  - (U4b-d) `events.asyncapi.yaml`: record.practice는 객체 또는 null(FD-Q4, U4b-J28) — 해석 명시.
 - **시간 키**: `timing.md` 2절의 다섯 키를 1절로 옮기고, 3절에 둘(stop-confirm-wait · record-settle), 4절에 하나(session.deletion-stop-wait)를 더한다.
 
 ## 8. U4a · Core와 맞출 것 (조정자 전달용)
@@ -205,6 +206,14 @@ U1 시험은 단언을 줄이지 않는다. 활성화 경로(ACTIVE 앞의 WAITI
 | U4b-J21 | 계약 7절 밖 새 키 셋(stop-confirm-wait 20초 · record-settle 2초 · deletion-stop-wait 5초)을 timing.md 3 · 4절에 둔다 | NFR6 '시간 값은 한 곳' · 시간 상수 자동 검사 |
 | U4b-J22 | 로그 사건 · 속성 표(OD-2)는 바꾸지 않는다. 새 시계 · 판정은 SessionEvent(JOIN_* · STOP_CONFIRM_* · SILENCE_* · TECHNICAL_PAUSE_* · RECORD_CAPTURED)로 남기고, payload에 전사 원문을 넣지 않는다 | U3-J10과 같은 이유(OD-2 원본은 `aidlc/`) · BR6.9 |
 | U4b-J23 | 편차 기호는 U2처럼 (U4b-a)부터 쓴다. ContractFilesTest는 한 · 두 글자 기호만 단언하므로 유닛 접두 기호는 사람이 맞춘다 | main의 U2 편차 (U2-a) ~ (U2-k) |
-| U4b-J24 | PR #2(U3)가 열려 있는 동안 U4b 커밋은 이 브랜치에 푸시하지 않는다(PR #2에 섞이면 U3만 합칠 수 없다). 이 설계 커밋은 조정자의 u3-fix 푸시를 받은 뒤 함께 푸시한다(먼저 푸시하면 조정자 푸시가 거절된다). PR #2가 합쳐지면 main에서 같은 브랜치를 다시 시작하고 U4b 커밋을 그 위로 옮겨 층마다 푸시한 뒤 새 PR을 연다 | 조정자 지시 '네 브랜치에서 층마다 커밋 · 푸시' · 'U3가 합쳐지면 main을 받아 와' |
+| U4b-J24 | (갱신 2026-10-13) PR #2(U3)는 main에 합쳐졌다. U4b는 main에서 시작한 브랜치 `unit/u4b-activity-realtime`에서 층마다 시험을 돌리고 `feat(u4b): …`로 커밋한 뒤, main으로 PR을 열고 CI가 통과하면 합친다. 앞 문장('PR #2가 열려 있는 동안 푸시하지 않는다')은 폐기한다 | 유닛 작업 기록 261013-u4b-activity-realtime 요구사항 제약 절 · 검토 R-06 |
 | U4b-J25 | PRACTICE는 INTRO_PRACTICE와 참여 확인까지 같고 ACTIVE 뒤는 U5b가 붙인다 | J17 |
 | U4b-J26 | 시험 프로필의 새 시간 값은 U1 · U3 통합 시험이 우연히 닿지 않게 넉넉히 두고(예: 참여 대기 10초, 공백 경고 1분 · 종료 2분), U4b 통합 시험만 짧게 덮어쓴다. 경계값은 가변 시계 단위 시험으로 본다 | 시험이 부하에 흔들리지 않게(U3 보고서 4절) |
+| U4b-J27 | (FD-Q3) STOP은 곧바로 CLOSING(CHILD_STOP)이다. U3의 '출력만 막고 ACTIVE 유지 → 적극적 계속이면 해제(CHILD_STOP_LIFTED)' 경로는 없앤다. '적극적 계속이면 대화를 잇는다'는 판단은 확인 질문 대기 안에서만 쓴다. U3 시험의 해제 경로 기대값은 새 경로로 바꿨다(보고서 6절 목록) | 기능 설계 FD-Q3(A) · U4b-R4 |
+| U4b-J28 | (FD-Q4) record.practice는 언제나 객체 또는 null이다. 자유대화 · DECLINED · ACTIVE 전 종료 · U5b 전 PRACTICE는 null. 계약 6절 '빈 배열'은 utterances · audio에만 적용한다(편차 (U4b-d)) | 기능 설계 FD-Q4(A) |
+| U4b-J29 | (FD-Q5) Realtime 삭제 참가자는 공통 인터페이스 `RealtimeDeletionParticipant`와 순서 값(음성 100 · 연습 150 자리 · 세션 200 · 메시징 900)을 둔다. 처리기는 순서대로 부르고 U5b는 순서 값 150으로 빈만 등록한다 | 기능 설계 FD-Q5(A) · U4b-R16 |
+| U4b-J30 | (FD-Q6) 연습 마지막 목표 끝은 CHILD_STOP을 다시 쓰고 세션 행 end_detail에 PRACTICE_COMPLETED를 남긴다. 사유 열거는 그대로라 편차가 아니고 계약 이벤트 설명에 이 사용을 적었다 | 기능 설계 FD-Q6(A) · 검토 R-02 |
+| U4b-J31 | (R-03) SessionRecordCaptured는 계약 스키마의 필수 칸을 모두 채운다 — guardianId · childId는 세션 행에서, termination은 세션 행 네 시각(없으면 null)에서 | 코드 생성 계획 R-03 · BR8.8 |
+| U4b-J32 | (R-10) 연습 확장점의 출력 능력은 ACTIVE에서만 받는다. CLOSING · 정산 창 · 종료 상태의 호출은 거절하고 PRACTICE_EXTENSION_FAILED{reason: NOT_ACTIVE}에 남긴다. CLOSING · 정산 창 안의 확장점 사건은 전달하되 신호는 무시한다 | 코드 생성 계획 R-10 · BR10.4 |
+| U4b-J33 | (R-11) 안내 재생 중(창이 열리기 전) 온 아이 확정 전사도 JoinTracker `reply()`로 곧바로 분류 · 처리한다(5354a32 동작). 결정표는 창 안과 같다 | 코드 생성 계획 R-11 · U4b-R2 |
+| U4b-J34 | (R-12, 계획과 다름) 삭제 처리는 모든 DB 삭제가 Inbox 처리 한 트랜잭션 안이라 실패 시도는 부분 커밋이 없다. 그래서 처리 메모 칸에 앞 시도의 건수를 누적하지 않고(그런 칸도 없다) 재시도가 지울 행을 처음부터 다시 센다. 트랜잭션 밖에서 먼저 사라지는 원음 파일 때문에 audioFiles는 지운 파일 수가 아니라 음성 참가자가 삭제 표시한 원음 메타 행 수로 센다 | 코드 생성 계획 R-12 · BR9.4 |
