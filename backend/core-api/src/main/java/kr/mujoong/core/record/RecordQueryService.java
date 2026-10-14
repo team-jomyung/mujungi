@@ -44,6 +44,11 @@ public class RecordQueryService {
         this.json = Objects.requireNonNull(json, "json");
     }
 
+    /** U5b 내부 읽기 포트. 보호자 응답 경로에는 원본 practice를 내보내지 않는다. */
+    public java.util.Optional<String> practiceSnapshot(UUID guardianId, UUID sessionId) {
+        return records.findOwned(sessionId,guardianId).map(record -> record.practiceJson()==null ? "null" : record.practiceJson());
+    }
+
     /** 26 달력: DECLINED와 BR14.1의 재시작 실패를 포함한 기록 날짜와 수. */
     public List<DayCount> days(UUID guardianId, YearMonth month) {
         RecordCalendar.Range range = RecordCalendar.of(month);

@@ -114,8 +114,8 @@ describe("/parent/dev-login — MUJOONG_DEVLOGIN_ENABLED가 정확히 true일 �
 });
 
 describe("화면 라우트", () => {
-  it("/parent/practice는 U5a의 실제 18 화면을 연결한다", () => {
-    expect(elementOf(ParentPracticePage()).type).toBe(Practice18);
+  it("/parent/practice는 U5a의 실제 18 화면을 연결한다", async () => {
+    expect(elementOf(await ParentPracticePage()).type).toBe(Practice18);
   });
   it("/parent · /parent/device/register는 04 · 05a를 그린다", () => {
     expect(elementOf(ParentHomePage()).type).toBe(Home04);

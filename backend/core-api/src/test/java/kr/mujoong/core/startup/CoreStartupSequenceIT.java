@@ -104,13 +104,15 @@ class CoreStartupSequenceIT {
             withHistoryChange(database, "update flyway.core_schema_history set success = false",
                     "update flyway.core_schema_history set success = true",
                     () -> assertRefusedAtS2(database, "성공한 버전이 없다"));
-            // 적용된 버전(V1 · U2 V2 · U4a V3 · U5a V4 · U6 V5 · U7 V6)을 모두 앱 기대값보다 낮게 바꾼다(최고 0.11)
+            // 적용된 V1~V7을 모두 앱 기대값보다 낮게 바꾼다(최고 0.12).
             withHistoryChange(database,
                     "update flyway.core_schema_history set version = case version when '1' then '0.6' when '2' then '0.7'"
-                            + " when '3' then '0.8' when '4' then '0.9' when '5' then '0.10' when '6' then '0.11' else version end",
+                            + " when '3' then '0.8' when '4' then '0.9' when '5' then '0.10'"
+                            + " when '6' then '0.11' when '7' then '0.12' else version end",
                     "update flyway.core_schema_history set version = case version when '0.6' then '1' when '0.7' then '2'"
-                            + " when '0.8' then '3' when '0.9' then '4' when '0.10' then '5' when '0.11' then '6' else version end",
-                    () -> assertRefusedAtS2(database, "버전 0.11 < 기대 " + SchemaVersionCheck.expectedVersion()));
+                            + " when '0.8' then '3' when '0.9' then '4' when '0.10' then '5'"
+                            + " when '0.11' then '6' when '0.12' then '7' else version end",
+                    () -> assertRefusedAtS2(database, "버전 0.12 < 기대 " + SchemaVersionCheck.expectedVersion()));
 
             assertThat(capture.events(EventCode.STARTUP_RECOVERY)).as("S2에서 멈춰 복구(S3)는 돌지 않았다").isEmpty();
         }
@@ -131,20 +133,20 @@ class CoreStartupSequenceIT {
     @Test
     void aHistoryAheadOfTheAppStartsAndFailedNewerRowsDoNotCount() throws SQLException {
         MujoongPostgres database = separate();
-        // 다음 배포가 앱(V6까지, U7)보다 앞선 V7을 이미 올렸고, 그보다 높은 V8은 실패한 채 남았다
+        // 다음 배포가 앱(V7까지, U5b)보다 앞선 V8을 이미 올렸고, 그보다 높은 V9는 실패한 채 남았다
         withHistoryChange(database, """
                 insert into flyway.core_schema_history (installed_rank, version, description, type, script, checksum,
                                                         installed_by, installed_on, execution_time, success)
-                values (100, '7', 'newer app', 'SQL', 'V7__newer_app.sql', 0, 'mujoong_owner',
+                values (100, '8', 'newer app', 'SQL', 'V8__newer_app.sql', 0, 'mujoong_owner',
                         timestamp '2001-09-09 00:00:00', 0, true),
-                       (101, '8', 'failed', 'SQL', 'V8__failed.sql', 0, 'mujoong_owner',
+                       (101, '9', 'failed', 'SQL', 'V9__failed.sql', 0, 'mujoong_owner',
                         timestamp '2001-09-09 00:00:00', 0, false)
                 """, "delete from flyway.core_schema_history where installed_rank in (100, 101)",
                 () -> runner(database).run(context -> {
                     assertThat(context).hasNotFailed();
                     assertThat(context.getBean(ReadinessState.class).state()).isEqualTo(ReadinessState.State.READY);
-                    assertThat(context.getBean(SchemaVersionCheck.class).verify()).as("성공한 최고 버전(실패한 8은 세지 않는다)")
-                            .isEqualTo("7");
+                    assertThat(context.getBean(SchemaVersionCheck.class).verify()).as("성공한 최고 버전(실패한 9는 세지 않는다)")
+                            .isEqualTo("8");
                 }));
     }
 

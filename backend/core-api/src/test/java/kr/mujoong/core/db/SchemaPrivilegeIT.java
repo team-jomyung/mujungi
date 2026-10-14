@@ -108,13 +108,13 @@ class SchemaPrivilegeIT {
     void eachAppReadsOnlyItsOwnFlywayHistoryTable() throws SQLException {
         try (Connection core = postgres.connect(Role.CORE_APP);
                 Connection realtime = postgres.connect(Role.REALTIME_APP)) {
-            // afterMigrate.sql이 준 자기 이력 표 SELECT(J116, 기동 점검 S2가 읽는다). core 최고 버전은 U7의 V6
+            // afterMigrate.sql이 준 자기 이력 표 SELECT(J116, 기동 점검 S2가 읽는다). core 최고 버전은 U5b의 V7, realtime은 U5b의 V4
             assertThat(single(core,
                     "select max(version) from flyway.core_schema_history where success and type = 'SQL'"))
-                    .isEqualTo("6");
+                    .isEqualTo("7");
             assertThat(single(realtime,
                     "select max(version) from flyway.realtime_schema_history where success and type = 'SQL'"))
-                    .isEqualTo("3");
+                    .isEqualTo("4");
             expectSqlStateAutoCommit(INSUFFICIENT_PRIVILEGE,
                     () -> query(core, "select version from flyway.realtime_schema_history"));
             expectSqlStateAutoCommit(INSUFFICIENT_PRIVILEGE,

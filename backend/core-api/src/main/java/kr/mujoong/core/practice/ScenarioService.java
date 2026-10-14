@@ -75,8 +75,19 @@ public class ScenarioService {
     }
 
     public Scenario generate(Request request) {
+        return generate(request, () -> context(request));
+    }
+
+    /** 시작 준비 소유자가 선점과 동의를 다시 확인하는 내부 경로. C10의 ACTIVE 검사는 바꾸지 않는다. */
+    public Scenario generatePrepared(Request request, java.util.function.Supplier<SessionContext> preparation) {
+        if (!"ORIGINAL".equals(request.kind()) || request.previousScenarioId()!=null)
+            throw CoreApiException.of(ErrorCode.VALIDATION_FAILED);
+        return generate(request, preparation);
+    }
+
+    private Scenario generate(Request request, java.util.function.Supplier<SessionContext> source) {
         Instant deadline=clock.now().plus(limits.requestTimeout());
-        SessionContext context=context(request);
+        SessionContext context=source.get();
         GoalSnapshot goal=goal(context,request);
         ScenarioRepository.Stored previous=request.previousScenarioId()==null ? null : repository.require(request.previousScenarioId());
         if (previous!=null && (!previous.sessionId().equals(context.sessionId()) || !previous.childId().equals(context.childId())
@@ -113,7 +124,7 @@ public class ScenarioService {
                     if (previous!=null && ScenarioContentPolicy.normalize(previous.scenario().scenarioText())
                             .equals(ScenarioContentPolicy.normalize(generated.scenarioText()))) { retryableMiss=true; continue; }
                     if (repository.seen(context.childId(),ScenarioContentPolicy.fingerprint(generated.scenarioText()))) { retryableMiss=true; continue; }
-                    SessionContext latest=context(request);
+                    SessionContext latest=source.get();
                     if (!latest.guardianId().equals(context.guardianId()) || !latest.childId().equals(context.childId())
                             || !goal(latest,request).equals(goal)) throw CoreApiException.of(ErrorCode.NOT_FOUND);
                     return tx.execute(status -> { authorize(latest);

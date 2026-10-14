@@ -2,20 +2,30 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { startFailureReason } from "../activity/freeFailure";
+import { useApiClient } from "../api/queries";
 import { BottomTabBar, type TabKey } from "../components/BottomTabBar";
-import { PARENT_ROUTES, routeForTab } from "../navigation";
+import { PARENT_ROUTES, goToLogin, routeForTab } from "../navigation";
 import type { GoalSelection } from "../practice/api";
 import { PRACTICE_COPY, PRACTICE_TEMP_COPY, goalMeta } from "../practice/copy";
 import { usePracticeGoals } from "../practice/usePracticeGoals";
+import { PracticeStartAction } from "../practice/PracticeStartAction";
+import { practiceStartPort } from "../practice/startApi";
 import { PROPOSED_COPY } from "@/shared/copy/ko";
+import { useToast } from "@/shared/toast/ToastProvider";
 import "../practice/practice.css";
 
-/** AC4.1.1/2/5–9/11/13. Starting and weighted random session order remain U5b (J4). */
-export function Practice18() {
+/** AC4.1.1/2/5–11/13. 추첨 순서는 Core가 고정하고 화면은 선택 ID만 전달한다. */
+export function Practice18({ returnedFailed = false, failureCode = null }: { returnedFailed?: boolean; failureCode?: string | null }) {
   const router = useRouter();
+  const api = useApiClient();
+  const toast = useToast();
+  const port = useMemo(() => practiceStartPort(api), [api]);
   const goals = usePracticeGoals();
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
+  const [startLocked, setStartLocked] = useState(false);
+  const [showReturnedFailure, setShowReturnedFailure] = useState(returnedFailed);
   const visible = goals.items ?? [];
   const selectedCount = visible.filter((goal) => selected.has(goal.goalSelectionId)).length;
 
@@ -38,11 +48,11 @@ export function Practice18() {
         {items.map((goal) => {
           const id = goal.goalSelectionId;
           const checked = selected.has(id);
-          const busy = goals.busyIds.has(id);
+          const busy = startLocked || goals.busyIds.has(id);
           return (
             <li key={id} className="mj-practice__goal" data-testid={`goal-${id}`} data-selected={checked} aria-busy={busy}>
               <label className="mj-practice__select">
-                <input type="checkbox" checked={checked} onChange={() => toggleSelected(id)} aria-label={PRACTICE_TEMP_COPY.select(goal.displayName)} />
+                <input type="checkbox" checked={checked} disabled={startLocked} onChange={() => toggleSelected(id)} aria-label={PRACTICE_TEMP_COPY.select(goal.displayName)} />
                 <span className="mj-practice__text">
                   <span className="mj-practice__name">{goal.displayName}</span>
                   <span className="mj-practice__meta">{goalMeta(goal)}</span>
@@ -66,6 +76,7 @@ export function Practice18() {
       <header className="mj-header"><h1 className="mj-header__title">{PRACTICE_COPY.title}</h1></header>
       <main className="mj-screen__body" aria-busy={goals.isFetching}>
         <div role="status" aria-live="polite" className="mj-visually-hidden">{PRACTICE_TEMP_COPY.selectedCount(selectedCount)}</div>
+        {showReturnedFailure ? <p className="mj-reason-card" role="alert">{startFailureReason(failureCode)}</p> : null}
         {goals.needsRecovery ? (
           <div className="mj-reason-card" data-testid="practice-recovery">
             <p>{PRACTICE_TEMP_COPY.verifyFailed}</p>
@@ -85,13 +96,12 @@ export function Practice18() {
             <Link className="mj-button mj-button--primary mj-button--block" href={PARENT_ROUTES.free} onClick={goals.cancelPending}>{PRACTICE_COPY.goFree}</Link>
           </section>
         ) : <>{group(visible.filter((goal) => goal.isFavorite), true)}{group(visible.filter((goal) => !goal.isFavorite), false)}</>}
-        {goals.items !== undefined && visible.length > 0 ? (
-          <div className="mj-practice__start">
-            <button type="button" className="mj-button mj-button--primary mj-button--block" disabled aria-describedby="practice-unavailable" data-testid="practice-start">
-              {selectedCount === 0 ? PRACTICE_COPY.choose : PRACTICE_COPY.start(selectedCount)}
-            </button>
-            <p id="practice-unavailable" className="mj-practice__notice">{PRACTICE_TEMP_COPY.startUnavailable}</p>
-          </div>
+        {goals.items !== undefined && (visible.length > 0 || startLocked) ? (
+          <PracticeStartAction selected={[...selected]} owned={visible.map((goal) => goal.goalSelectionId)} port={port}
+            newKey={() => crypto.randomUUID()} blocked={goals.needsRecovery || goals.busyIds.size > 0 || goals.isFetching}
+            onLockedChange={setStartLocked} onSubmitting={() => { setShowReturnedFailure(false); goals.cancelPending(); }}
+            onRejected={(code) => { if (code === "UNAUTHENTICATED") goToLogin(router, toast); }}
+            onAccepted={(sessionId) => router.push(PARENT_ROUTES.session(sessionId))} />
         ) : null}
       </main>
       <BottomTabBar active="practice" lockMessage={null} onNavigate={navigate} onLockedPress={() => undefined} />

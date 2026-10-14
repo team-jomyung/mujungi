@@ -32,8 +32,8 @@ beforeEach(() => { vi.useFakeTimers(); resetRouter(); });
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks(); });
 
 describe("18 — list, selection and scope", () => {
-  it("connects the actual route, never starts an activity or exposes scenario/evaluation", async () => {
-    expect(ParentPracticePage().type).toBe(Practice18);
+  it("connects the actual route, enables explicit U5b start and never starts on selection", async () => {
+    expect((await ParentPracticePage()).type).toBe(Practice18);
     const harness = setup();
     await advance();
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("이번에 살펴볼 목표");
@@ -42,9 +42,9 @@ describe("18 — list, selection and scope", () => {
     fireEvent.click(check());
     fireEvent.click(check("차례 기다리기"));
     expect(screen.getByTestId("practice-start")).toHaveTextContent("선택한 2개로 연습 시작");
-    expect(screen.getByTestId("practice-start")).toBeDisabled();
-    expect(screen.getByText("연습 시작 기능을 준비하고 있어요.")).toBeVisible();
-    fireEvent.click(screen.getByTestId("practice-start"));
+    // U5b 통합 승인: 영구 비활성 자리 대신 선택 후 시작 가능, 선택만으로 전송하지 않음.
+    expect(screen.getByTestId("practice-start")).toBeEnabled();
+    expect(screen.queryByText("연습 시작 기능을 준비하고 있어요.")).toBeNull();
     expect(harness.requests(/activities/)).toHaveLength(0);
     fireEvent.click(check());
     expect(screen.getByTestId("practice-start")).toHaveTextContent("선택한 1개로 연습 시작");

@@ -1,0 +1,18 @@
+# 독립 부품의 명시 바인딩 입력. Spring 애플리케이션이 자동 로드하지 않는다.
+# 실제 설정 소유권·RealtimeProperties 등록은 후속 통합 계획 승인 후 처리한다.
+mujoong:
+  timing:
+    practice:
+      first-response-wait: 20s
+      help-consent-wait: 10s
+      cue-budget: 5s
+      # 다음 두 값은 U5b 로컬 제안이며 I3 통합 합의가 남아 있다.
+      after-cue-response-wait: 20s
+      new-scenario-response-wait: 20s
+      scenario-budget: 15s
+      judge-budget: 5s
+      # Q6 전체 12초에는 최초 저장부터 최종 커밋까지가 포함된다.
+      judge-total-budget: 12s
+      judge-budget-version: u5b-q6
+      judge-retry-delay: 0s
+      # judge-finalization-reserve는 운영 검증 후 명시한다. 임의 기본값 없음.

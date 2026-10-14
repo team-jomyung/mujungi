@@ -15,6 +15,8 @@ import { StatusLine } from "../components/StatusLine";
 import { TranscriptList } from "../components/TranscriptList";
 import { useLivePolling } from "../hooks/useLivePolling";
 import { PARENT_ROUTES, goToLogin, isUnauthenticated, routeForTab } from "../navigation";
+import { PracticeHeader } from "../practice/PracticeHeader";
+import { U5B_COPY } from "../practice/u5bCopy";
 import {
   COPY,
   PROPOSED_COPY,
@@ -58,7 +60,7 @@ function subtitleFor(view: LiveView | undefined, childName: string | null): stri
     case "WAITING_CHILD":
       return childName === null ? null : liveWaitingChildLine(childName);
     case "ACTIVE":
-      return childName === null ? null : liveTalkingLine(childName);
+      return childName === null ? null : view.activityType === "PRACTICE" ? U5B_COPY.practicing(childName) : liveTalkingLine(childName);
     default:
       return null;
   }
@@ -95,13 +97,14 @@ export function Live12({ sessionId }: Live12Props) {
   const outcome = view === undefined ? null : liveOutcome(view);
   const outcomeKind = outcome?.kind;
   const failedCode = outcome?.kind === "startFailed" ? outcome.failureCode : null;
+  const isPractice = view?.activityType === "PRACTICE";
   useEffect(() => {
     if (outcomeKind === "startFailed") {
-      router.replace(freeFailedRoute(failedCode));
+      router.replace(isPractice ? `${PARENT_ROUTES.practice}?failed=1&reason=${encodeURIComponent(failedCode ?? "DEVICE_NO_ACK")}` : freeFailedRoute(failedCode));
     } else if (outcomeKind === "done") {
       router.replace(PARENT_ROUTES.sessionDone(sessionId));
     }
-  }, [router, sessionId, outcomeKind, failedCode]);
+  }, [router, sessionId, outcomeKind, failedCode, isPractice]);
 
   // 401 → 안내 토스트 뒤 01(AC1.1.9, 세션은 계속), 404(남의 · 없는 세션) → 홈.
   useEffect(() => {
@@ -193,12 +196,15 @@ export function Live12({ sessionId }: Live12Props) {
   return (
     <div className="mj-screen" data-testid="live-screen" data-state={status ?? "LOADING"}>
       <header className="mj-header mj-header--stacked">
-        <h1 className="mj-header__title">{COPY.live.header}</h1>
+        {isPractice ? <PracticeHeader primary progress={view.practice}
+          issue={error ? "fetch" : view.practiceIssue}>
+          {subtitle !== null ? <p className="mj-header__subtitle" role="status" data-testid="live-status">{subtitle}</p> : null}
+        </PracticeHeader> : <><h1 className="mj-header__title">{COPY.live.header}</h1>
         {subtitle !== null ? (
           <p className="mj-header__subtitle" role="status" data-testid="live-status">
             {subtitle}
           </p>
-        ) : null}
+        ) : null}</>}
         {elapsed !== null ? (
           <p className="mj-header__meta" data-testid="live-elapsed">
             {elapsed}
@@ -235,10 +241,10 @@ export function Live12({ sessionId }: Live12Props) {
           disabled={!canEnd}
           onClick={() => setDialogOpen(true)}
         >
-          {COPY.live.endButton}
+          {isPractice ? U5B_COPY.endButton : COPY.live.endButton}
         </button>
       </main>
-      <BottomTabBar active="free" lockMessage={null} onNavigate={handleNavigate} onLockedPress={(message) => toast.show({ message })} />
+      <BottomTabBar active={isPractice ? "practice" : "free"} lockMessage={null} onNavigate={handleNavigate} onLockedPress={(message) => toast.show({ message })} />
       <ConfirmDialog
         open={dialogOpen}
         title={COPY.endDialog.title}

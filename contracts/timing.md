@@ -195,3 +195,23 @@ web의 loading-notice-delay는 MUJOONG_TIMING_PARENT_LOADINGNOTICEDELAY 환경 �
 | `mujoong.timing.push.retry-backoff` | `[5s, 30s, 2m]` | core-api | 최초 발송 뒤 재시도 간격 | AC1.7.5 · U7-J6 |
 | `mujoong.timing.push.send-timeout` | `5s` | core-api | 수신처 한 곳의 HTTP 발송 상한 | FR7.10 · U7-J11 |
 | `mujoong.timing.push.device-status-check` | `10s` | core-api | 등록 기기의 보고 신선도 점검 주기 | AC1.7.2 · U7-J7 |
+
+## 12. U5b 연습 런타임
+
+2절의 U5 이름 공간은 아래 별도 타입 `PracticeProperties`가 사용한다. 기본 파일은 `backend/realtime-activity/src/main/resources/practice/u5b-runtime.yml`이며 환경 설정이 우선한다. 기존 U1 `RealtimeProperties`/application.yml의 키 집합을 바꾸지 않고 U5b 설정 시험으로 별도 대조한다. 실제 운영 소유는 Realtime의 연습 모듈이다.
+
+| 설정 키 | U5b 기본 | 시작·끝 |
+|---|---|---|
+| `mujoong.timing.practice.first-response-wait` | `20s` | 원 상황 실제 재생 완료 → 첫 반응 |
+| `mujoong.timing.practice.help-consent-wait` | `10s` | 도움 질문 실제 재생 완료 → 동의 |
+| `mujoong.timing.practice.cue-budget` | `5s` | 도움 요청 → 실제 재생 시작 |
+| `mujoong.timing.practice.after-cue-response-wait` | `20s` | 도움 재생 완료 → 반응 |
+| `mujoong.timing.practice.new-scenario-response-wait` | `20s` | 새 상황 재생 완료 → 반응 |
+| `mujoong.timing.practice.scenario-budget` | `15s` | C10 준비 시작 → 결과 |
+| `mujoong.timing.practice.judge-budget` | `5s` | 판정 한 호출 상한, 최대 두 시도 |
+| `mujoong.timing.practice.judge-total-budget` | `12s` | 반응 수락 → 최종 DB 커밋, 종료 뒤에도 원래 시한 유지 |
+| `mujoong.timing.practice.judge-finalization-reserve` | `2s` | 전체 예산 중 최종 저장용 확보, 부하 검증 전 가정 |
+| `mujoong.timing.practice.judge-retry-delay` | `0s` | 남은 예산 안에서 재시도 예약 |
+| `mujoong.timing.practice.judge-budget-version` | `u5b-q6-r2` | 반응마다 고정하는 예산 판 |
+
+반응·도움 시계는 기술 일시정지 동안 멈춘다. 판정의 전체 예산은 일시정지나 재시작으로 연장하지 않는다. 프로세스/DB 장애 뒤 시한을 넘겨 복구된 결과는 `PracticeEvaluationRecoveredAfterDeadline` 오류로 관측하고 12초 성공 건수로 보고하지 않는다.

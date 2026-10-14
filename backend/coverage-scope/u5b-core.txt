@@ -1,0 +1,9 @@
+backend/core-api/src/main/java/kr/mujoong/core/practice/start/FrozenGoal.java
+backend/core-api/src/main/java/kr/mujoong/core/practice/start/PreparedPracticePackageMapper.java
+backend/core-api/src/main/java/kr/mujoong/core/practice/start/WeightedGoalOrder.java
+backend/core-api/src/main/java/kr/mujoong/core/practice/start/PracticeStartRequest.java
+backend/core-api/src/main/java/kr/mujoong/core/practice/start/PracticePreparationRepository.java
+backend/core-api/src/main/java/kr/mujoong/core/practice/start/PracticeStartService.java
+backend/core-api/src/main/java/kr/mujoong/core/practice/start/RecordedScenarioExposures.java
+backend/core-api/src/main/java/kr/mujoong/core/practice/start/PracticeExposureReconciler.java
+backend/core-api/src/main/java/kr/mujoong/core/practice/web/PracticeStartController.java

@@ -210,6 +210,77 @@ paths:
               example: { code: TOO_MANY_ATTEMPTS, message: 잠시 뒤 다시 시도해 주세요., traceId: 4bf92f3577b34da6a3ce929d0e0e4736 }
         "500": { $ref: "#/components/responses/InternalError" }
         "503": { $ref: "#/components/responses/ServiceNotReady" }
+  /activities/practice:
+    post:
+      operationId: startPractice
+      summary: 18 선택 목표로 연습 시작
+      x-unit: U5b
+      x-u5b-deviation: ["(U5b-a)"]
+      description: |
+        보호자·키별 목표 정의와 순서·sessionId를 고정하고 첫 상황을 준비한 뒤 REQUESTED를 만든다.
+        준비 중 SERVICE_NOT_READY 및 결과 불명의 통신 실패는 같은 키로 재시도한다.
+        확정 실패를 받은 뒤 사용자가 새로 시작할 때에는 새 키를 쓴다.
+      security:
+        - session: []
+          csrf: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [idempotencyKey, goalSelectionIds]
+              properties:
+                idempotencyKey: { type: string, format: uuid }
+                goalSelectionIds:
+                  type: array
+                  minItems: 1
+                  uniqueItems: true
+                  items: { type: string, format: uuid }
+      responses:
+        "202":
+          description: 첫 상황 준비 뒤 시작 접수
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [sessionId, status, goalCount]
+                properties:
+                  sessionId: { type: string, format: uuid }
+                  status: { const: REQUESTED }
+                  goalCount: { type: integer, minimum: 1 }
+        "400":
+          description: 선택 없음·중복·유효하지 않은 목표
+          content:
+            application/json:
+              schema: { $ref: "schemas/error-envelope.schema.json" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403":
+          description: CSRF·동의·보호자 삭제 상태에 따른 거절
+          content:
+            application/json:
+              schema: { $ref: "schemas/error-envelope.schema.json" }
+        "409":
+          description: SESSION_IN_PROGRESS 또는 IDEMPOTENCY_CONFLICT
+          content:
+            application/json:
+              schema: { $ref: "schemas/error-envelope.schema.json" }
+        "422":
+          description: SCENARIO_GEN_FAILED — 첫 상황 내용 생성 두 번 실패, Realtime 시작 없음
+          content:
+            application/json:
+              schema: { $ref: "schemas/error-envelope.schema.json" }
+        "423":
+          description: DEVICE_NOT_STABLE
+          content:
+            application/json:
+              schema: { $ref: "schemas/error-envelope.schema.json" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503":
+          description: SERVICE_NOT_READY는 같은 키 재시도, REALTIME_UNAVAILABLE 확정 실패는 새 키로 다시 시작
+          content:
+            application/json:
+              schema: { $ref: "schemas/error-envelope.schema.json" }
   /activities/free:
     post:
       operationId: startFreeTalk

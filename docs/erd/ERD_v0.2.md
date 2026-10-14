@@ -2,6 +2,8 @@
 
 작성일: 2026-10-12. U7 증분 갱신일: 2026-10-14. 이 문서는 v0.1 개념 모델을 실제 마이그레이션과 대조한 데이터 사전이다.
 
+2026-10-14 U5b 통합의 새 표·실제 물리명·관계는 [§8 U5b 통합 갱신](#8-2026-10-14-u5b-통합-갱신)을 먼저 본다. §1~§7은 2026-10-12 조사 스냅숏으로 보존하며, 그 합계나 예정 목록을 현재 전체 저장소의 상태로 읽지 않는다.
+
 ## 1. 기준과 읽는 법
 
 ### 1.1 10/12 고정 스냅숏 및 U7 증분 상태
@@ -2425,3 +2427,181 @@ target_behavior_key → behavior_key와 scenario_type → kind는 설계 대응�
 | U7 | 기존 계정·기기·활동 + C6 구독·발송 기록 2표 | 웹 푸시 기능 시험·통합 결과는 U7 report에서 추적 | P17~P18은 예정에서 제외. N5/N6 및 §3.22~3.23에 SQL 구현을 기록하며 운영 병합은 U6 V5 뒤에 한다. |
 
 최종 통합 전 확인할 불일치는 세 가지다. 첫째, 소유 카탈로그의 ConversationTurn이 현재 U3 DDL에 없어 후속 물리 모델 결정을 기다린다. 둘째, “상태 11개”는 Core의 REQUESTED 사본을 포함한 전체 도메인 수이며 Realtime DDL은 10개다. 셋째, 보고서의 열 수·필수성 요약보다 현재 DDL이 우선한다(Outbox/Inbox 각 17열, guardian_id nullable 등). 이는 기존 원본 문서의 소급 수정이나 새로운 SQL 변경 지시가 아니다.
+
+## 8. 2026-10-14 U5b 통합 갱신
+
+### 8.1 범위와 SQL 정본
+
+이 절은 U5b 통합 브랜치의 **새 표 6개·39열**만 추가 대조한다. Core 준비 원본 1표·13열과 Realtime 연습 원본 5표·26열이다. 기존 §1~§7의 전체 합계를 다시 산정하거나 U4·U6·U7의 구현·병합·배포 상태를 판정하지 않는다. SQL 파일의 존재는 실제 DB 적용이나 시험 통과를 뜻하지 않는다. 실행 증거는 [U5b 보고서](../units/u5b/report.md)를 따른다.
+
+| 스키마·실제 표 | 열 | 소유 컴포넌트·유닛 | 정본 |
+|---|---:|---|---|
+| `core.core_practice_preparation` | 13 | ActivityCoordinator(PracticeStart) / U5b | [core V7](../../backend/core-api/src/main/resources/db/migration/core/V7__u5b_practice_preparation.sql) |
+| `realtime.realtime_session_goal` | 7 | PracticeProtocol / U5b | [realtime V4](../../backend/realtime-activity/src/main/resources/db/migration/realtime/V4__u5b_practice.sql) |
+| `realtime.realtime_practice_attempt` | 5 | PracticeProtocol / U5b | realtime V4 |
+| `realtime.realtime_practice_response` | 7 | PracticeProtocol / U5b | realtime V4 |
+| `realtime.realtime_practice_cue` | 4 | PracticeProtocol / U5b | realtime V4 |
+| `realtime.realtime_practice_evaluation` | 3 | ResponseEvaluator / U5b | realtime V4 |
+
+Core V7은 V5(U6)·V6(U7) 배정을 보존한 번호다. Realtime V4는 U4b V3 뒤에 적용하는 정식 `db/migration/realtime` 파일이며, 이전 독립 구현의 `db/pending/realtime` 파일을 별도로 중복 적용하지 않는다. 두 SQL은 새 표와 색인만 추가하고 기존 표의 열·제약·자료를 바꾸지 않는다. FK는 Core 2개·Realtime 5개이며, 스키마 간 물리 FK는 없다.
+
+이하 열 표의 NULL은 SQL 선언 기준이다. PK는 NOT NULL을 포함한다. `GENERATED` 열은 SQL의 저장 생성 열이며 DEFAULT와 구별한다. 제약명이 생략된 PK·UNIQUE·FK·CHECK의 이름은 PostgreSQL이 생성하므로 문서에서 임의로 이름을 붙이지 않는다.
+
+### 8.2 `core.core_practice_preparation` — 13열
+
+| 열 | 타입 | NULL | DEFAULT / 생성식 | SQL 제약·참조 |
+|---|---|---|---|---|
+| `session_id` | `uuid` | 불가 | 없음 | PK. 활동·Realtime 세션과 동일 식별자를 쓰는 논리 참조이며 해당 세션 FK는 없음 |
+| `guardian_id` | `uuid` | 불가 | 없음 | FK → `core.core_guardian(id)` ON DELETE RESTRICT |
+| `child_id` | `uuid` | 불가 | 없음 | FK → `core.core_child(id)` ON DELETE RESTRICT |
+| `idempotency_key` | `uuid` | 불가 | 없음 | `UNIQUE(guardian_id, idempotency_key)` 참여 |
+| `request_hash` | `varchar(64)` | 불가 | 없음 | 별도 해시 형식 CHECK 없음 |
+| `goals_json` | `jsonb` | 불가 | 없음 | `jsonb_typeof(goals_json) = 'array'` |
+| `status` | `varchar(20)` | 불가 | 없음 | `PREPARING`, `READY`, `FAILED` 중 하나 |
+| `claim_id` | `uuid` | 불가 | 없음 | 별도 FK·UNIQUE 없음 |
+| `lease_until` | `timestamptz` | 불가 | 없음 | DB 시각 기본값 없음 |
+| `first_scenario_id` | `uuid` | 허용 | 없음 | Core 시나리오 논리 참조, 물리 FK 없음 |
+| `exposure_reconciled_at` | `timestamptz` | 허용 | 없음 | 실제 노출 반영 확인 시각 |
+| `created_at` | `timestamptz` | 불가 | 없음 | 앱 시각을 바인딩 |
+| `updated_at` | `timestamptz` | 불가 | 없음 | 앱 시각을 바인딩 |
+
+| 종류 | 정의 |
+|---|---|
+| 복합 UNIQUE | `(guardian_id, idempotency_key)` |
+| CHECK | `(status = 'READY') = (first_scenario_id IS NOT NULL)` — READY일 때만 첫 상황 식별자가 존재 |
+| 명시 복합 B-tree | `core_practice_preparation_unreconciled_idx(status, exposure_reconciled_at, created_at)` — READY·미정산 조건과 생성 순 조회 지원, 비유일 일반 인덱스 |
+| 지원 인덱스 | PK 1개 + 복합 UNIQUE 1개 |
+
+`goals_json`은 준비 시 고정한 목표·정의·가중치·순서 원본이다. SQL은 배열 형식만 제한하며, 목표 수·개별 필드·동일 키 요청 해시·lease 경합 규칙은 애플리케이션 검증이다. 준비 상태를 기존 `core_activity`의 상태 열에 추가하지 않는다.
+
+### 8.3 `realtime.realtime_session_goal` — 7열
+
+| 열 | 타입 | NULL | DEFAULT / 생성식 | SQL 제약·참조 |
+|---|---|---|---|---|
+| `id` | `uuid` | 불가 | 없음 | PK |
+| `session_id` | `uuid` | 불가 | 없음 | FK → `realtime.realtime_activity_session(id)` |
+| `guardian_id` | `uuid` | 불가 | 없음 | Core 보호자 논리 참조, 물리 FK 없음 |
+| `goal_selection_id` | `uuid` | 불가 | 없음 | Core 선택 목표 논리 참조, 물리 FK 없음 |
+| `goal_order` | `integer` | 불가 | 없음 | `goal_order > 0` |
+| `terminated` | `boolean` | 불가 | `false` | 종료·정산 후 새 변경 차단용 원장 |
+| `data` | `jsonb` | 불가 | 없음 | `jsonb_typeof(data) = 'object'` |
+
+| 종류 | 정의 |
+|---|---|
+| 복합 UNIQUE | `(session_id, goal_selection_id)` 및 `(session_id, goal_order)` |
+| FK 삭제 동작 | SQL에 ON DELETE 미지정 → NO ACTION. CASCADE 없음 |
+| 명시 B-tree | `realtime_session_goal_guardian_idx(guardian_id)` |
+| 지원 인덱스 | PK 1개 + UNIQUE 2개 |
+
+이름·행동 정의 키/버전·판정 기준 스냅숏·현재 단계·목표 상태·생략 사유·세대는 `data` 안의 불변 모델 값이다. 별도 SQL 열로 세지 않는다.
+
+### 8.4 `realtime.realtime_practice_attempt` — 5열
+
+| 열 | 타입 | NULL | DEFAULT / 생성식 | SQL 제약·참조 |
+|---|---|---|---|---|
+| `id` | `uuid` | 불가 | 없음 | PK |
+| `session_goal_id` | `uuid` | 불가 | 없음 | FK → `realtime.realtime_session_goal(id)`, ON DELETE 미지정(NO ACTION) |
+| `attempt_type` | `text` | 불가 | 없음 | `ORIGINAL`, `NEW_SCENARIO` 중 하나 |
+| `scenario_id` | `uuid` | 허용 | 없음 | Core 상황 논리 참조, Core 표로 향하는 FK 없음 |
+| `data` | `jsonb` | 불가 | 없음 | 원본 상태·직전 상황·실노출 시각·준비 실패 사유 |
+
+| 종류 | 정의 |
+|---|---|
+| 복합 UNIQUE | `(session_goal_id, attempt_type)` 및 `(id, scenario_id)` |
+| CHECK 1 | `((data->>'state' IN ('ISSUED','EXPOSED','COMPLETED')) = (scenario_id IS NOT NULL)) IS TRUE` |
+| CHECK 2 | `(data->>'state' <> 'PREPARATION_FAILED' OR (scenario_id IS NULL AND data->>'preparationFailure' IS NOT NULL AND data->>'exposedAt' IS NULL)) IS TRUE` |
+| 인덱스 | 명시 CREATE INDEX 없음. PK 1개 + UNIQUE 2개가 지원 인덱스를 만듦 |
+
+`(id, scenario_id)` UNIQUE는 반응·도움의 복합 FK 대상이다. 별도의 `realtime_scenario_exposure` 표를 만들지 않는다. 실제 노출 증거는 이 표의 **`data.exposedAt`**에 저장한다. 이는 JSON 속성이며 `exposed_at` SQL 열이 아니다. 준비 실패 때는 `scenario_id`가 NULL이고, 가짜 상황·가짜 반응 행을 만들지 않는다. `data.state` 전체 허용 값은 애플리케이션 모델이 제한하며 위 두 CHECK를 완전한 상태 enum 제약으로 확대 해석하지 않는다.
+
+### 8.5 `realtime.realtime_practice_response` — 7열
+
+| 열 | 타입 | NULL | DEFAULT / 생성식 | SQL 제약·참조 |
+|---|---|---|---|---|
+| `id` | `uuid` | 불가 | 없음 | PK |
+| `attempt_id` | `uuid` | 불가 | 없음 | 복합 FK 참여 |
+| `scenario_id` | `uuid` | 불가 | 없음 | `(attempt_id, scenario_id)` → `realtime_practice_attempt(id, scenario_id)` |
+| `response_type` | `text` | 불가 | 없음 | `FIRST`, `AFTER_CUE`, `NEW_SCENARIO` 중 하나 |
+| `data` | `jsonb` | 불가 | 없음 | 반응 원본·판정 예산·세대·토큰·확정 값 |
+| `evaluation_state` | `text` | 선언상 허용 | `GENERATED ALWAYS AS (data->>'evaluationState') STORED` | 아래 CHECK가 NULL을 거부 |
+| `label` | `text` | 허용 | `GENERATED ALWAYS AS (data->>'label') STORED` | 대기 중 NULL, 확정 조건은 아래 CHECK |
+
+| 종류 | 정의 |
+|---|---|
+| 복합 UNIQUE | `(attempt_id, response_type)` |
+| FK 삭제 동작 | 복합 FK ON DELETE 미지정 → NO ACTION |
+| CHECK 1 | `(evaluation_state IN ('PENDING','FINALIZED','TERMINATED_PENDING')) IS TRUE` |
+| CHECK 2 | `(CASE WHEN evaluation_state = 'FINALIZED' THEN label IS NOT NULL AND data->>'closedAt' IS NOT NULL ELSE label IS NULL AND data->>'closedAt' IS NULL END) IS TRUE` |
+| CHECK 3 | `(CASE WHEN label = 'NOT_PERFORMED' THEN data->>'utteranceSeq' IS NULL AND data->>'notPerformedReason' IS NOT NULL AND data->'work' IS NULL ELSE (data->>'utteranceSeq')::integer > 0 AND data->>'notPerformedReason' IS NULL AND (data->'work'->>'attemptsStarted')::integer BETWEEN 0 AND 2 END) IS TRUE` |
+| 명시 B-tree | `realtime_practice_response_pending_idx(evaluation_state)` — 이름과 달리 부분 WHERE 조건 없는 일반 인덱스 |
+| 지원 인덱스 | PK 1개 + UNIQUE 1개 |
+
+`label` 전체 enum은 이 표의 별도 CHECK로 선언되어 있지 않다. 무반응/유효 반응의 필드 조건과 평가 표의 라벨 CHECK, 애플리케이션 모델 검증을 구분한다. `TERMINATED_PENDING`은 내부 보존 상태이며 외부 진행 단계나 U6 계약 enum에 추가한 값이 아니다.
+
+### 8.6 `realtime.realtime_practice_cue` — 4열
+
+| 열 | 타입 | NULL | DEFAULT / 생성식 | SQL 제약·참조 |
+|---|---|---|---|---|
+| `id` | `uuid` | 불가 | 없음 | PK |
+| `attempt_id` | `uuid` | 불가 | 없음 | UNIQUE, 복합 FK 참여 |
+| `scenario_id` | `uuid` | 불가 | 없음 | `(attempt_id, scenario_id)` → `realtime_practice_attempt(id, scenario_id)` |
+| `data` | `jsonb` | 불가 | 없음 | 도움 동의·전달 상태·실제 문구·정답 포함 여부·재생 시각 |
+
+| 종류 | 정의 |
+|---|---|
+| FK 삭제 동작 | 복합 FK ON DELETE 미지정 → NO ACTION |
+| CHECK 1 | `(data->>'consentResponse' IN ('ACCEPTED','DECLINED','NO_RESPONSE')) IS TRUE` |
+| CHECK 2 | `(data->>'givenAt' IS NULL OR (data->>'consentResponse' = 'ACCEPTED' AND data->>'deliveredText' IS NOT NULL)) IS TRUE` |
+| 인덱스 | 명시 CREATE INDEX 없음. PK 1개 + `UNIQUE(attempt_id)` 1개 |
+
+예정 이름 `realtime_cue_delivery`의 책임을 이 표가 구현한다. 거부·무응답에도 동의 결과 행은 존재할 수 있으므로 Cue 행의 존재를 실제 재생으로 간주하지 않는다. 실제 재생은 JSON의 `givenAt`과 전달 증거로 구분한다.
+
+### 8.7 `realtime.realtime_practice_evaluation` — 3열
+
+| 열 | 타입 | NULL | DEFAULT / 생성식 | SQL 제약·참조 |
+|---|---|---|---|---|
+| `id` | `uuid` | 불가 | 없음 | PK |
+| `response_id` | `uuid` | 불가 | 없음 | UNIQUE, FK → `realtime.realtime_practice_response(id)`, ON DELETE 미지정(NO ACTION) |
+| `data` | `jsonb` | 불가 | 없음 | 최종 라벨·근거 발화 번호·검토 필요·시도 수·모델/프롬프트 버전 |
+
+| 종류 | 정의 |
+|---|---|
+| CHECK 1 | `(data->>'label' IN ('functional','partial','none','uncertain')) IS TRUE` |
+| CHECK 2 | `((data->>'attempts')::integer BETWEEN 0 AND 2) IS TRUE` |
+| 인덱스 | 명시 CREATE INDEX 없음. PK 1개 + `UNIQUE(response_id)` 1개 |
+
+예정 이름 `realtime_evaluation`의 책임을 이 표가 구현한다. 무반응은 반응 표의 `NOT_PERFORMED`로 남기며 이 평가 표의 라벨에는 포함하지 않는다. 최종 평가와 해당 반응의 FINALIZED 갱신은 애플리케이션의 같은 트랜잭션이 담당한다.
+
+### 8.8 물리 관계와 텍스트 대체
+
+```mermaid
+erDiagram
+    core_guardian ||--o{ core_practice_preparation : guardian_id
+    core_child ||--o{ core_practice_preparation : child_id
+    realtime_activity_session ||--o{ realtime_session_goal : session_id
+    realtime_session_goal ||--o{ realtime_practice_attempt : session_goal_id
+    realtime_practice_attempt ||--o{ realtime_practice_response : "id_scenario_id"
+    realtime_practice_attempt ||--o| realtime_practice_cue : "id_scenario_id"
+    realtime_practice_response ||--o| realtime_practice_evaluation : response_id
+```
+
+- Core 준비 행 하나는 보호자 한 명과 아이 한 명을 반드시 참조한다. 두 FK 모두 RESTRICT이며 부모 삭제 전에 준비 원본을 정리한다.
+- Realtime 세션 하나에 여러 목표, 목표 하나에 여러 시도가 연결된다. `(session_goal_id, attempt_type)` UNIQUE와 종류 CHECK 때문에 실제 시도 종류별 최대 한 행이다.
+- 반응·도움은 시도 ID만이 아니라 **시도 ID와 scenario_id의 쌍**을 물리 FK로 참조한다. 다른 상황에 반응이나 도움을 잘못 귀속할 수 없다.
+- 한 시도의 반응은 response_type별 한 행이고 도움은 최대 한 행이다. 한 반응의 평가는 최대 한 행이다. Realtime 다섯 FK는 NO ACTION이며 CASCADE 삭제가 없다.
+- Core 준비 `session_id`·`first_scenario_id`, Realtime 목표의 `guardian_id`·`goal_selection_id`, 시도의 `scenario_id`는 다른 원장과 연결하는 논리 식별자다. 위 도식에는 물리 FK만 그렸다.
+- Realtime 삭제 참가자 150은 평가 → 반응 → 도움 → 시도 → 목표를 삭제하고, 뒤의 세션 참가자 200이 부모 세션을 정리한다. 이 순서는 애플리케이션 규칙이며 FK에 CASCADE를 더하지 않았다.
+
+### 8.9 이전 예정 목록과의 차이
+
+| 이전 항목 | 이번 구현 | 변경 분류·근거 |
+|---|---|---|
+| 준비 원본 표 없음 | `core_practice_preparation` 13열 신설 | 추가. Core V7, 첫 상황 준비·동일 키 원본·실제 노출 반영의 영속 경계 |
+| P04 `realtime_session_goal` 예정 | 동명 7열 표 구현 | 예정→U5b 브랜치 구현. Realtime V4 |
+| P05 `realtime_scenario_exposure` 예정 | 별도 표 없이 `realtime_practice_attempt.data.exposedAt`에 저장 | 물리 설계 통합. 기존 표 DROP이 아님 |
+| P06 `realtime_practice_attempt` 예정 | 동명 5열 표 구현 | 예정→U5b 브랜치 구현. 목표별 ORIGINAL/NEW_SCENARIO 유일 |
+| P07 `realtime_practice_response` 예정 | 동명 7열 표 구현 | 예정→U5b 브랜치 구현. scenario 복합 FK, 판정 상태/라벨 저장 생성 열 |
+| P08 `realtime_cue_delivery` 예정 | 실제 이름 `realtime_practice_cue`, 4열 | 예정 물리명과 구현명 차이. 기존 표 RENAME이 아님 |
+| P09 `realtime_evaluation` 예정 | 실제 이름 `realtime_practice_evaluation`, 3열 | 예정 물리명과 구현명 차이. 기존 표 RENAME이 아님 |
+
+§7의 P04~P09는 과거 조사 기록이며 U5b의 현재 DDL 해석에는 이 절을 우선한다. 그 밖의 예정 항목은 이번 갱신에서 상태를 바꾸지 않는다. `data` JSON의 필드와 상태 전이는 [U5b 설계](../units/u5b/design.md) 및 모델 소스를 함께 보되, SQL 제약이 아닌 규칙을 DB가 강제한다고 표시하지 않는다.

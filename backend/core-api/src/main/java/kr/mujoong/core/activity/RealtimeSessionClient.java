@@ -201,13 +201,26 @@ public class RealtimeSessionClient {
      */
     public StartResult start(SessionPackage sessionPackage) {
         Objects.requireNonNull(sessionPackage, "sessionPackage");
-        UUID sessionId = sessionPackage.sessionId();
+        return start(sessionPackage.sessionId(),json.write(sessionPackage));
+    }
+
+    /** U5b 고정 목표는 공통 패키지의 개인정보 허용 목록을 바꾸지 않고 C8에 더한다. */
+    public StartResult startPractice(SessionPackage sessionPackage, Map<String,Object> practice) {
+        Objects.requireNonNull(sessionPackage, "sessionPackage");
+        if(sessionPackage.activityType()!=ActivityType.PRACTICE) throw new IllegalArgumentException("practice activity required");
+        var body=new java.util.LinkedHashMap<String,Object>();
+        Map<?,?> common=json.read(json.write(sessionPackage),Map.class);
+        common.forEach((key,value)->body.put(key.toString(),value));
+        body.put("practice",Map.copyOf(practice));
+        return start(sessionPackage.sessionId(),json.write(body));
+    }
+
+    private StartResult start(UUID sessionId, String body) {
         SessionStartBreaker.Permit permit = breaker.acquire();
         if (permit == SessionStartBreaker.Permit.REJECTED) {
             http.recordBreakerOpen(sessionId);
             return new StartResult(StartKind.UNAVAILABLE, null, true);
         }
-        String body = json.write(sessionPackage);
         int attempts = 1 + startRetries;
         for (int attempt = 1; attempt <= attempts; attempt++) {
             Response response;
