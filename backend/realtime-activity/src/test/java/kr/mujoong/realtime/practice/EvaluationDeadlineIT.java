@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 @Tag("u5b")
+@Tag("db")
 class EvaluationDeadlineIT {
     @Test void clockRollbackCannotMakeExpiredProviderResponseValidAgain() {
         var f = new EvaluationFixture(); f.start(f.evaluator());

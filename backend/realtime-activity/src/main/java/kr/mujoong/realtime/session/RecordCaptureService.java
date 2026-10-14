@@ -11,6 +11,8 @@ import kr.mujoong.contract.event.payload.SessionRecordCaptured;
 import kr.mujoong.contract.json.JsonCodec;
 import kr.mujoong.contract.log.EventLog;
 import kr.mujoong.contract.status.EndReason;
+import kr.mujoong.contract.status.ActivityType;
+import kr.mujoong.contract.status.SessionStatus;
 import kr.mujoong.contract.time.MujoongClock;
 import kr.mujoong.realtime.common.db.DbRetry;
 import kr.mujoong.realtime.config.RealtimeProperties;
@@ -34,7 +36,7 @@ import org.springframework.transaction.support.TransactionTemplate;
  * guardianId는 세션 행 guardian_id다(R-03). 계약 검사({@code problems})를 통과하지 못하면 쓰지 않고 예외로 올린다.
  *
  * <p>실행기가 정산 창을 끝낸 뒤 부르고(practice 값 포함), 실행기 없이 닫힌 세션(Core 취소 · 고아 점검 · 기동 정리 · 실행기 최상위 예외)은
- * {@link #captureMissing}이 practice null로 다시 쓴다(재무장, BR1.8).
+ * {@link #captureMissing}이 연습 원본 복구 후 다시 쓴다(재무장, BR1.8).
  */
 @Component
 public class RecordCaptureService implements SessionSettlement {
@@ -58,6 +60,7 @@ public class RecordCaptureService implements SessionSettlement {
     private final MujoongClock clock;
     private final EventLogger events;
     private final Duration settleGrace;
+    private PracticeRecordRecovery practiceRecovery;
 
     @Autowired
     public RecordCaptureService(ActivitySessionRepository sessions, TranscriptRepository transcripts,
@@ -81,13 +84,38 @@ public class RecordCaptureService implements SessionSettlement {
         this.settleGrace = properties.timing().session().recordSettle();
     }
 
+    @Autowired(required = false)
+    public void setPracticeRecovery(PracticeRecordRecovery practiceRecovery) {
+        this.practiceRecovery = Objects.requireNonNull(practiceRecovery);
+    }
+
     @Override
     public boolean capture(UUID sessionId, Object practice, Instant cutoffAt) {
         Objects.requireNonNull(sessionId, "sessionId");
         Objects.requireNonNull(cutoffAt, "cutoffAt");
+        Object resolvedPractice = dbRetry.execute(DbRetry.Idempotency.IDEMPOTENT,
+                () -> recoverPractice(sessionId, practice));
         Boolean written = dbRetry.execute(DbRetry.Idempotency.IDEMPOTENT,
-                () -> transactions.execute(status -> write(sessionId, practice, cutoffAt)));
+                () -> transactions.execute(status -> write(sessionId, resolvedPractice, cutoffAt)));
         return Boolean.TRUE.equals(written);
+    }
+
+    private Object recoverPractice(UUID sessionId, Object supplied) {
+        if (supplied != null || snapshots.exists(sessionId)) return supplied;
+        ActivitySessionRow session = sessions.find(sessionId)
+                .orElseThrow(() -> new IllegalStateException("정산할 세션 행이 없다: " + sessionId));
+        if (!session.status().isTerminal())
+            throw new IllegalStateException("종료 세션만 정산한다: " + session.status());
+        if (!requiresPractice(session)) return null;
+        if (practiceRecovery == null) throw new IllegalStateException("연습 원본 복구 연결이 없다");
+        Object recovered = practiceRecovery.recover(sessionId);
+        if (recovered == null) throw new IllegalStateException("시작한 연습의 결과 원본이 없다");
+        return recovered;
+    }
+
+    private static boolean requiresPractice(ActivitySessionRow session) {
+        return session.activityType() == ActivityType.PRACTICE && session.startedAt() != null
+                && session.status() != SessionStatus.DECLINED;
     }
 
     /** 쓰기가 실패하면 앱 오류 한 줄을 남기고 정산 재무장({@link #captureMissing})에 맡긴다. */
@@ -110,6 +138,8 @@ public class RecordCaptureService implements SessionSettlement {
         if (!session.status().isTerminal()) {
             throw new IllegalStateException("종료 세션만 정산한다: " + session.status());
         }
+        if (practice == null && requiresPractice(session))
+            throw new IllegalStateException("시작한 연습의 결과 원본이 없다");
         ResultSnapshotBuilder.Built built = ResultSnapshotBuilder.build(new ResultSnapshotBuilder.Input(session,
                 transcripts.findAll(sessionId), gaps.findBySession(sessionId), audio.findBySession(sessionId),
                 practice), json);

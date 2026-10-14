@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 @Tag("u5b")
+@Tag("db")
 class PracticeProtocolTest {
     @Test void previousGoalTimerCannotCloseNextGoalsTwentySecondOpportunity() {
         var f = new ProtocolFixture(2); completeFirstGoalAtTwoSeconds(f);

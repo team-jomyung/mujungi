@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 @Tag("u5b")
+@Tag("db")
 class PracticeRecordProjectorTest {
     final PracticeRecordProjector projector = new PracticeRecordProjector();
     ProtocolFixture finished() {

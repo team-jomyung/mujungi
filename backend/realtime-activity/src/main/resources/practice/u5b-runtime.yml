@@ -1,0 +1,14 @@
+mujoong:
+  timing:
+    practice:
+      first-response-wait: 20s
+      help-consent-wait: 10s
+      cue-budget: 5s
+      after-cue-response-wait: 20s
+      new-scenario-response-wait: 20s
+      scenario-budget: 15s
+      judge-budget: 5s
+      judge-total-budget: 12s
+      judge-finalization-reserve: 2s
+      judge-retry-delay: 0s
+      judge-budget-version: u5b-q6-r2

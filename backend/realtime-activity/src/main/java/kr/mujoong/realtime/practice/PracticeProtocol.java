@@ -26,8 +26,9 @@ public final class PracticeProtocol {
     private final ScenarioPort scenarios;
     private final EvaluationPort evaluation;
     private final Consumer<RuntimeException> failures;
+    private final boolean skipFailedScenario;
     private int index;
-    private boolean started, ended, awaitingAgreement, opportunityOpen, questionDone, cueStarted;
+    private boolean started, ended, stopping, awaitingAgreement, opportunityOpen, questionDone, cueStarted;
     private PracticeAttempt attempt;
     private Scene scene;
     private Output pendingOutput;
@@ -38,6 +39,12 @@ public final class PracticeProtocol {
     public PracticeProtocol(PracticeRepository repository, List<SessionGoal> goals, MujoongClock clock,
             TimerDriver timers, Executor events, PracticeTiming timing, EvaluationBudget evaluationBudget,
             OutputPort output, ScenarioPort scenarios, EvaluationPort evaluation, Consumer<RuntimeException> failures) {
+        this(repository, goals, clock, timers, events, timing, evaluationBudget, output, scenarios, evaluation, failures, false);
+    }
+    public PracticeProtocol(PracticeRepository repository, List<SessionGoal> goals, MujoongClock clock,
+            TimerDriver timers, Executor events, PracticeTiming timing, EvaluationBudget evaluationBudget,
+            OutputPort output, ScenarioPort scenarios, EvaluationPort evaluation, Consumer<RuntimeException> failures,
+            boolean skipFailedScenario) {
         this.repository = Objects.requireNonNull(repository); this.goals = new ArrayList<>(goals);
         PracticeChecks.require(!goals.isEmpty(), "고정 목표 필요");
         this.clock = Objects.requireNonNull(clock); this.timers = Objects.requireNonNull(timers);
@@ -45,11 +52,15 @@ public final class PracticeProtocol {
         this.evaluationBudget = Objects.requireNonNull(evaluationBudget); this.output = Objects.requireNonNull(output);
         this.scenarios = Objects.requireNonNull(scenarios); this.evaluation = Objects.requireNonNull(evaluation);
         this.failures = Objects.requireNonNull(failures);
+        this.skipFailedScenario = skipFailedScenario;
     }
     public synchronized SessionGoal currentGoal() { return goals.get(index); }
+    public synchronized UUID currentScenarioId() { return attempt == null ? null : attempt.scenarioId(); }
+    public synchronized Scene currentScene() { return scene; }
+    public int goalCount() { return goals.size(); }
     public synchronized boolean awaitingAgreement() { return awaitingAgreement; }
     public synchronized void start(Scene firstScene) {
-        if (started || ended) return;
+        if (started || ended || stopping) return;
         repository.initialize(goals); started = true;
         transition(Stage.SCENARIO_INTRO); issue(firstScene, AttemptType.ORIGINAL, null);
     }
@@ -79,11 +90,14 @@ public final class PracticeProtocol {
         return new WorkOwner(goal.id(), attempt.id(), goal.currentStage(), goal.generation(), attempt.state());
     }
     private boolean owns(WorkOwner expected) {
-        return !ended && !awaitingAgreement && expected.equals(owner());
+        return !ended && !stopping && !awaitingAgreement && expected.equals(owner());
     }
     private void schedule(Duration delay, Runnable action) {
+        scheduleFrom(clock.now(), delay, action);
+    }
+    private void scheduleFrom(Instant startedAt, Duration delay, Runnable action) {
         var expected = owner();
-        Instant deadline = clock.now().plus(delay);
+        Instant deadline = startedAt.plus(delay);
         timers.scheduleAt(deadline, () -> events.execute(() -> {
             synchronized (this) {
                 if (owns(expected) && !clock.now().isBefore(deadline)) action.run();
@@ -93,7 +107,17 @@ public final class PracticeProtocol {
     /** 합의된 어댑터가 실제 재생 사실만 전달해야 한다. 단순 PLAYBACK_DONE은 이 입력이 아니다. */
     public synchronized void playback(UUID correlation, UUID scenarioId, long generation, Playback fact,
             String actualText, boolean containsAnswerSentence) {
-        if (ended || awaitingAgreement || pendingOutput == null || !pendingOutput.correlationId().equals(correlation)
+        playback(correlation, scenarioId, generation, fact, actualText, containsAnswerSentence, clock.now());
+    }
+    public synchronized void playback(UUID correlation, UUID scenarioId, long generation, Playback fact,
+            String actualText, boolean containsAnswerSentence, Instant receivedAt) {
+        playback(correlation, scenarioId, generation, fact, actualText, containsAnswerSentence, receivedAt, Duration.ZERO);
+    }
+    public synchronized void playback(UUID correlation, UUID scenarioId, long generation, Playback fact,
+            String actualText, boolean containsAnswerSentence, Instant receivedAt, Duration pausedFor) {
+        Objects.requireNonNull(receivedAt);
+        PracticeChecks.require(pausedFor != null && !pausedFor.isNegative(), "일시정지 겹침 시간 오류");
+        if (ended || stopping || awaitingAgreement || pendingOutput == null || !pendingOutput.correlationId().equals(correlation)
                 || !pendingOutput.scenarioId().equals(scenarioId) || currentGoal().generation() != generation) return;
         var kind = pendingOutput.kind();
         if (fact == Playback.FAILED || fact == Playback.INTERRUPTED || fact == Playback.OMITTED) {
@@ -108,33 +132,33 @@ public final class PracticeProtocol {
         if (kind == OutputKind.CUE && fact == Playback.STARTED && !cueStarted) {
             PracticeChecks.text(actualText, "실제 도움 전사"); cueStarted = true;
             cue = new CueDelivery(cue.id(), cue.attemptId(), cue.scenarioId(), Consent.ACCEPTED,
-                    DeliveryState.STARTED, actualText, clock.now(), containsAnswerSentence);
+                    DeliveryState.STARTED, actualText, receivedAt, containsAnswerSentence);
             repository.saveCue(cue); return;
         }
         if (fact != Playback.COMPLETED) return;
         if (kind == OutputKind.SCENARIO) {
             attempt = new PracticeAttempt(attempt.id(), attempt.sessionGoalId(), attempt.attemptType(), AttemptState.EXPOSED,
-                    attempt.scenarioId(), attempt.previousScenarioId(), clock.now(), null);
+                    attempt.scenarioId(), attempt.previousScenarioId(), receivedAt, null);
             repository.saveAttempt(attempt);
-            open(attempt.attemptType() == AttemptType.ORIGINAL ? Stage.FIRST_RESPONSE : Stage.NEW_SCENARIO_RESPONSE);
+            open(attempt.attemptType() == AttemptType.ORIGINAL ? Stage.FIRST_RESPONSE : Stage.NEW_SCENARIO_RESPONSE, receivedAt, pausedFor);
         } else if (kind == OutputKind.HELP_QUESTION && !questionDone) {
             questionDone = true;
-            schedule(timing.helpConsent(), () -> consent(Consent.NO_RESPONSE, generation));
+            scheduleFrom(receivedAt.plus(pausedFor), timing.helpConsent(), () -> consent(Consent.NO_RESPONSE, generation));
         } else if (kind == OutputKind.CUE && cueStarted) {
             cue = new CueDelivery(cue.id(), cue.attemptId(), cue.scenarioId(), Consent.ACCEPTED,
                     DeliveryState.COMPLETED, cue.deliveredText(), cue.givenAt(), cue.containsAnswerSentence());
-            repository.saveCue(cue); open(Stage.AFTER_CUE_RESPONSE);
+            repository.saveCue(cue); open(Stage.AFTER_CUE_RESPONSE, receivedAt, pausedFor);
         }
     }
-    private void open(Stage stage) {
-        transition(stage); opportunityOpen = true; openedAt = clock.now();
+    private void open(Stage stage, Instant receivedAt, Duration pausedFor) {
+        transition(stage); opportunityOpen = true; openedAt = receivedAt;
         Duration wait = switch (stage) {
             case FIRST_RESPONSE -> timing.firstResponse();
             case AFTER_CUE_RESPONSE -> timing.afterCueResponse();
             case NEW_SCENARIO_RESPONSE -> timing.newScenarioResponse();
             default -> throw new IllegalStateException("반응 단계가 아님");
         };
-        schedule(wait, this::noResponse);
+        scheduleFrom(receivedAt.plus(pausedFor), wait, this::noResponse);
     }
     private ResponseType responseType() {
         return switch (currentGoal().currentStage()) {
@@ -145,7 +169,7 @@ public final class PracticeProtocol {
         };
     }
     public synchronized void response(int utteranceSeq, String text, UUID scenarioId, long generation) {
-        if (ended || !opportunityOpen || currentGoal().generation() != generation || !attempt.scenarioId().equals(scenarioId)) return;
+        if (ended || stopping || !opportunityOpen || currentGoal().generation() != generation || !attempt.scenarioId().equals(scenarioId)) return;
         PracticeChecks.text(text, "반응"); Instant accepted = clock.now();
         var candidate = new PracticeResponse(UUID.randomUUID(), attempt.id(), scenarioId, responseType(), utteranceSeq,
                 EvaluationState.PENDING, generation, accepted, evaluationBudget.begin(accepted), null, null, openedAt, null);
@@ -162,7 +186,7 @@ public final class PracticeProtocol {
         if (type == ResponseType.FIRST) help(); else if (type == ResponseType.AFTER_CUE) prepareNew(); else completeGoal();
     }
     public synchronized void judged(UUID responseId) {
-        if (ended || !responseId.equals(pendingResponse)) return;
+        if (ended || stopping || !responseId.equals(pendingResponse)) return;
         var p = repository.response(responseId).orElseThrow();
         if (p.evaluationState() != EvaluationState.FINALIZED || p.evaluationGeneration() != currentGoal().generation()) return;
         pendingResponse = null;
@@ -172,7 +196,7 @@ public final class PracticeProtocol {
     }
     private void help() { transition(Stage.HELP_OFFER); send(OutputKind.HELP_QUESTION); }
     public synchronized void consent(Consent value, long generation) {
-        if (ended || awaitingAgreement || currentGoal().currentStage() != Stage.HELP_OFFER
+        if (ended || stopping || awaitingAgreement || currentGoal().currentStage() != Stage.HELP_OFFER
                 || currentGoal().generation() != generation || !questionDone) return;
         cue = new CueDelivery(UUID.randomUUID(), attempt.id(), attempt.scenarioId(), value,
                 value == Consent.ACCEPTED ? DeliveryState.REQUESTED : DeliveryState.NOT_GIVEN, null, null, null);
@@ -214,7 +238,11 @@ public final class PracticeProtocol {
         if (attempt.state() != AttemptState.PREPARING) return;
         attempt = new PracticeAttempt(attempt.id(), attempt.sessionGoalId(), attempt.attemptType(), AttemptState.PREPARATION_FAILED,
                 null, attempt.previousScenarioId(), null, reason); repository.saveAttempt(attempt);
-        if (attempt.attemptType() == AttemptType.NEW_SCENARIO) { awaitingAgreement = true; return; }
+        if (attempt.attemptType() == AttemptType.NEW_SCENARIO) {
+            if (skipFailedScenario) failCurrentGoal(reason == PreparationFailure.TIMEOUT ? "TIME_OVER" : "SCENARIO_FAILED");
+            else awaitingAgreement = true;
+            return;
+        }
         var skipped = currentGoal().progress(GoalStatus.SKIPPED, currentGoal().currentStage(), reason.name());
         repository.saveGoal(skipped); goals.set(index, skipped); nextGoal();
     }
@@ -225,6 +253,36 @@ public final class PracticeProtocol {
     private void nextGoal() {
         if (index + 1 == goals.size()) { ended = true; output.lastGoal(currentGoal().sessionId()); return; }
         index++; cue = null; transition(Stage.SCENARIO_INTRO); prepare(AttemptType.ORIGINAL, null);
+    }
+    public synchronized void failCurrentGoal(String reason) {
+        if (ended || stopping) return;
+        PracticeChecks.text(reason, "목표 생략 사유");
+        if (pendingResponse != null && repository.response(pendingResponse)
+                .map(p -> p.evaluationState() != EvaluationState.FINALIZED).orElse(false))
+            throw new IllegalStateException("판정 중인 목표를 생략할 수 없다");
+        if (pendingOutput != null) output.cancel(pendingOutput.correlationId());
+        pendingOutput = null; pendingResponse = null; opportunityOpen = false; awaitingAgreement = false;
+        var skipped = currentGoal().progress(GoalStatus.SKIPPED, currentGoal().currentStage(), reason);
+        repository.saveGoal(skipped); goals.set(index, skipped); nextGoal();
+    }
+    /** 진행만 멈춘다. 이미 수락한 판정의 저장 시한과 소유권은 유지한다. */
+    public synchronized void stopProgress() {
+        if (stopping) return;
+        stopping = true; opportunityOpen = false;
+        if (pendingOutput != null) output.cancel(pendingOutput.correlationId());
+        pendingOutput = null;
+    }
+    public synchronized Duration settlementDelay(Instant now) {
+        Objects.requireNonNull(now);
+        Instant deadline = repository.snapshot(currentGoal().sessionId()).responses().stream()
+                .filter(p -> p.evaluationState() == EvaluationState.PENDING)
+                .map(p -> p.work().deadlineAt()).max(Instant::compareTo).orElse(now);
+        return deadline.isAfter(now) ? Duration.between(now, deadline) : Duration.ZERO;
+    }
+    public synchronized void settle() {
+        stopProgress();
+        repository.settle(currentGoal().sessionId());
+        ended = true;
     }
     public synchronized void terminate() {
         if (ended) return;

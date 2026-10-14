@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 @Tag("u5b")
+@Tag("db")
 class PracticeRepositoryIT {
     @Test void keepsUniqueOpportunityAndOriginalBudgetAcrossRestart() {
         var db = new PracticeDb(); var first = db.pending();

@@ -1,4 +1,4 @@
--- U5b 독립 저장 구조. 공유 환경 적용/자동 탐색 위치 이동은 실제 U4b V3 뒤 별도 승인으로 한다.
+-- U5b 연습 원본 다섯 표. U4b V3 뒤 추가하며 기존 표와 자료는 바꾸지 않는다.
 -- data는 내부 불변 모델 원본이며 EvaluationWork도 response에 속한다.
 -- 시각은 앱 Clock으로 전달한다. 외부 계약 상태를 추가하지 않는다.
 CREATE TABLE realtime.realtime_session_goal (

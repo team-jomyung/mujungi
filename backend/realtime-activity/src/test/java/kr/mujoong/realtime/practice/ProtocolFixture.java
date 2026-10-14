@@ -26,6 +26,9 @@ final class ProtocolFixture implements OutputPort {
     ProtocolFixture() { this(1); }
     ProtocolFixture(int count) { this(count, java.util.function.UnaryOperator.identity()); }
     ProtocolFixture(int count, java.util.function.UnaryOperator<PracticeRepository> repository) {
+        this(count, repository, false);
+    }
+    ProtocolFixture(int count, java.util.function.UnaryOperator<PracticeRepository> repository, boolean skipFailedScenario) {
         var goals = new ArrayList<SessionGoal>(); goals.add(db.goal);
         for (int i = 2; i <= count; i++) goals.add(new SessionGoal(UUID.randomUUID(), db.session, db.guardian,
                 UUID.randomUUID(), i, "목표 " + i, "turn", 1, "고정 기준", GoalStatus.PENDING, null, 0, null));
@@ -33,7 +36,7 @@ final class ProtocolFixture implements OutputPort {
             new PracticeTiming(Duration.ofSeconds(20), Duration.ofSeconds(10), Duration.ofSeconds(5), Duration.ofSeconds(20),
                     Duration.ofSeconds(20), Duration.ofSeconds(15)), EvaluationFixture.budget(), this,
             (session, goal, prior) -> { previous.add(prior); var future = new CompletableFuture<Scene>(); scenes.add(future); return future; },
-            (response, criteria, text) -> judgments.add(response), failures::add);
+            (response, criteria, text) -> judgments.add(response), failures::add, skipFailedScenario);
         protocol.start(first);
     }
     static Scene scene() { return new Scene(UUID.randomUUID(), "합성 상황", "친구", "차례를 말해 줘"); }

@@ -450,6 +450,14 @@ public final class SessionExecutor {
     private long practiceTimerGeneration;
     /** U4b BR10.4: 확장점이 요청한 재생(playbackId → 승인 문구 코드). 끝 표식이 PLAYBACK_DONE이 된다. */
     private final Map<UUID, String> practicePlaybacks = new HashMap<>();
+    private volatile kr.mujoong.realtime.voice.PracticeSpeech pendingPracticeSpeech;
+    private final Map<UUID, kr.mujoong.realtime.voice.PracticeSpeech> practiceAudio = new HashMap<>();
+    private final java.util.ArrayDeque<Runnable> practiceProviderQueue = new java.util.ArrayDeque<>();
+    private boolean practiceProviderRunning;
+    private final java.util.ArrayDeque<PracticeSessionExtension.ExtensionEvent> pausedPracticeEvents = new java.util.ArrayDeque<>();
+    private Instant practicePauseStartedAt;
+    private record PracticePause(Instant from, Instant to) { }
+    private final java.util.ArrayList<PracticePause> practicePauses = new java.util.ArrayList<>();
     /** U4b BR10.6: 정산 창 안에 확장점에 전달한 사건 수. */
     private int practiceEventsInSettle;
     private final PracticeSessionExtension.PracticeOutput practiceOutput = new PracticeOutputPort();
@@ -490,7 +498,10 @@ public final class SessionExecutor {
      * 진행 조회가 읽는 살아 있는 값(U4b BR7.1 · WF10): 기술 일시정지 · 공백 경고. 실행기 스레드가 바뀔 때마다 불변 값 하나로 바꿔 쓰고 조회는 읽기만
      * 한다. 종료 세션은 둘 다 null이다.
      */
-    public record LiveState(SessionStateChanged.TechnicalPause technicalPause, SilenceClock.Warning silenceWarning) {
+    public record LiveState(SessionStateChanged.TechnicalPause technicalPause, SilenceClock.Warning silenceWarning,
+            PracticeSessionExtension.Progress practice) {
+
+        public LiveState(SessionStateChanged.TechnicalPause pause, SilenceClock.Warning warning) { this(pause, warning, null); }
 
         static final LiveState NONE = new LiveState(null, null);
     }
@@ -985,7 +996,7 @@ public final class SessionExecutor {
         enterActive();
         Instant now = services.clock().now();
         resetSilence(now);
-        requestResponse();
+        if (practice == null || !practice.controlsOutput()) requestResponse();
         // U4b BR10.1: PRACTICE면 확장점 'ACTIVE 진입'
         if (practice != null) {
             PracticeSessionExtension.PracticeContext context = new PracticeSessionExtension.PracticeContext(
@@ -1068,6 +1079,7 @@ public final class SessionExecutor {
         if (terminated || settling) {
             return;
         }
+        stopPracticeProgress();
         if (!services.settlement().enabled()) {
             teardown();
             return;
@@ -1102,13 +1114,19 @@ public final class SessionExecutor {
         if (!settling || terminated) {
             return;
         }
+        if (practice != null && practice.controlsOutput()) {
+            Duration remaining = practice.settlementDelay(services.clock().now());
+            if (remaining.isPositive()) {
+                timers.arm(Kind.RECORD_SETTLE, remaining);
+                return;
+            }
+        }
         timers.cancel(Kind.RECORD_SETTLE);
         Instant cutoff = services.clock().now();
-        Object practice = practiceRecordForSettle(cutoff);
         quietly(() -> transcripts.closeAll(cutoff));
         quietly(() -> services.recorder().flushSession(plan.sessionId(), services.settings().timerTick()));
         try {
-            services.settlement().capture(plan.sessionId(), practice, cutoff);
+            services.settlement().capture(plan.sessionId(), practiceRecordForSettle(cutoff), cutoff);
         } catch (RuntimeException e) {
             services.events().appError(EventLog.Component.SESSION_LIFECYCLE, e);
         }
@@ -1131,6 +1149,7 @@ public final class SessionExecutor {
             current.onSettle(end);
             return current.practiceRecord();
         } catch (RuntimeException e) {
+            if (current.controlsOutput()) throw e;
             practiceFailure("EXCEPTION", e);
             return null;
         }
@@ -1157,6 +1176,7 @@ public final class SessionExecutor {
         PracticeSessionExtension.Signal signal;
         try {
             signal = call.get();
+            publishLive(services.clock().now());
         } catch (RuntimeException e) {
             practiceFailure("EXCEPTION", e);
             return;
@@ -1181,6 +1201,15 @@ public final class SessionExecutor {
     private void practiceFailure(String reason, RuntimeException cause) {
         putEvent(EVENT_PRACTICE_EXTENSION_FAILED, "{\"reason\":\"" + reason + "\"}", services.clock().now());
         services.events().appError(EventLog.Component.SESSION_LIFECYCLE, cause);
+        if (practice != null && practice.controlsOutput()) {
+            stopPracticeProgress();
+            practiceHold = true;
+            cancelPracticeTimers();
+            if (status == SessionStatus.ACTIVE) {
+                multiOriginFail(Trigger.SERVER_RESTART, FailureCode.SERVER_RESTART, SessionTransitions.Origin.REALTIME);
+            }
+            return;
+        }
         practiceFailed = true;
         practice = null;
         practiceHold = false;
@@ -1193,12 +1222,24 @@ public final class SessionExecutor {
      * 센다). 정산 뒤 · 그 밖 상태는 무시한다(BR8.7).
      */
     private void onPracticeEvent(PracticeSessionExtension.ExtensionEvent event) {
+        if (event.name().equals("u5b-voice-failed") && event.value() instanceof kr.mujoong.realtime.voice.PracticeSpeech speech) {
+            if (speech.equals(pendingPracticeSpeech)) {
+                pendingPracticeSpeech = null; practiceHold = true;
+                practicePlayback(speech, kr.mujoong.realtime.practice.PracticePorts.Playback.FAILED);
+            }
+            return;
+        }
         PracticeSessionExtension current = practice;
         if (current == null || terminated) {
             return;
         }
+        if (status == SessionStatus.ACTIVE && practiceProgressPaused() && current.controlsOutput()) {
+            pausedPracticeEvents.addLast(event);
+            return;
+        }
         if (status == SessionStatus.ACTIVE) {
-            practiceSignal(() -> current.onExtensionEvent(event, practiceOutput), true);
+            var delivered = withPracticePause(event);
+            practiceSignal(() -> current.onExtensionEvent(delivered, practiceOutput), true);
             return;
         }
         if (status == SessionStatus.CLOSING || settling) {
@@ -1206,15 +1247,57 @@ public final class SessionExecutor {
                 practiceEventsInSettle++;
             }
             practiceSignal(() -> current.onExtensionEvent(event, practiceOutput), false);
+            if (settling && current.controlsOutput()) finishSettle();
         }
+    }
+
+    private PracticeSessionExtension.ExtensionEvent withPracticePause(PracticeSessionExtension.ExtensionEvent event) {
+        if (!(event.value() instanceof PracticeSessionExtension.PlaybackFact fact) || fact.receivedAt() == null) return event;
+        Duration paused = fact.pausedFor();
+        for (PracticePause interval : practicePauses) {
+            Instant from = fact.receivedAt().isAfter(interval.from()) ? fact.receivedAt() : interval.from();
+            if (from.isBefore(interval.to())) paused = paused.plus(Duration.between(from, interval.to()));
+        }
+        return new PracticeSessionExtension.ExtensionEvent(event.kind(), event.name(), event.correlationId(),
+                new PracticeSessionExtension.PlaybackFact(fact.speech(), fact.status(), fact.text(), fact.receivedAt(), paused));
+    }
+
+    private void practicePlayback(kr.mujoong.realtime.voice.PracticeSpeech speech,
+            kr.mujoong.realtime.practice.PracticePorts.Playback fact) {
+        practicePlayback(speech, fact, services.clock().now());
+    }
+
+    private void practicePlayback(kr.mujoong.realtime.voice.PracticeSpeech speech,
+            kr.mujoong.realtime.practice.PracticePorts.Playback fact, Instant receivedAt) {
+        mailbox.putSafety(new SessionMailbox.PracticeEvent(new PracticeSessionExtension.ExtensionEvent(
+                PracticeSessionExtension.ExtensionEvent.Kind.PLAYBACK_FACT, "u5b-playback", speech.correlationId(),
+                new PracticeSessionExtension.PlaybackFact(speech, fact, speech.text(), receivedAt))));
+    }
+
+    private void stopPracticeProgress() {
+        if (practice == null || !practice.controlsOutput()) return;
+        practice.onStopping();
+        pendingPracticeSpeech = null;
+        practiceAudio.clear();
+        pausedPracticeEvents.clear();
+        practicePauseStartedAt = null;
+        practicePauses.clear();
+        cancelPracticeTimers();
+        practiceHold = true;
     }
 
     private void onPracticeTimer(SessionMailbox.PracticeTimerFired fired) {
         PracticeTimer timer = practiceTimers.get(fired.name());
-        if (timer == null || timer.generation() != fired.generation()) {
+        if (timer == null || timer.handle() == null || timer.generation() != fired.generation()) {
             return;
         }
         practiceTimers.remove(fired.name());
+        if (fired.name().startsWith("u5b-audio-")) {
+            UUID playbackId = UUID.fromString(fired.name().substring("u5b-audio-".length()));
+            var speech = practiceAudio.remove(playbackId);
+            if (speech != null) practicePlayback(speech, kr.mujoong.realtime.practice.PracticePorts.Playback.FAILED);
+            return;
+        }
         onPracticeEvent(new PracticeSessionExtension.ExtensionEvent(
                 PracticeSessionExtension.ExtensionEvent.Kind.TIMER_FIRED, fired.name(), null, null));
     }
@@ -1228,7 +1311,7 @@ public final class SessionExecutor {
         cancelPracticeTimer(name);
         long generation = ++practiceTimerGeneration;
         Duration nonNegative = delay.isNegative() ? Duration.ZERO : delay;
-        if (technicalPause != null) {
+        if (practiceProgressPaused()) {
             practiceTimers.put(name, new PracticeTimer(generation, null, null, nonNegative));
             return;
         }
@@ -1250,8 +1333,25 @@ public final class SessionExecutor {
         }
     }
 
-    /** 기술 일시정지 동안 확장점 시계를 멈춘다(남은 시간만 든다, BR10.4). */
+    private boolean practiceProgressPaused() {
+        return technicalPause != null || (practice != null && practice.controlsOutput() && stopConfirm.isActive());
+    }
+
+    private void interruptPracticeSpeech(Instant now) {
+        if (practice == null || !practice.controlsOutput()) return;
+        var interrupted = new LinkedHashSet<kr.mujoong.realtime.voice.PracticeSpeech>(practiceAudio.values());
+        if (pendingPracticeSpeech != null) interrupted.add(pendingPracticeSpeech);
+        pendingPracticeSpeech = null;
+        practiceHold = true;
+        for (UUID playbackId : List.copyOf(practiceAudio.keySet())) cancelPracticeTimer("u5b-audio-" + playbackId);
+        practiceAudio.clear();
+        interrupted.forEach(speech -> practicePlayback(speech,
+                kr.mujoong.realtime.practice.PracticePorts.Playback.INTERRUPTED, now));
+    }
+
+    /** 기술 일시정지와 종료 확인 동안 남은 반응 시간을 보존한다. */
     private void pausePracticeTimers(Instant now) {
+        if (practice != null && practice.controlsOutput() && practicePauseStartedAt == null) practicePauseStartedAt = now;
         for (Map.Entry<String, PracticeTimer> entry : List.copyOf(practiceTimers.entrySet())) {
             PracticeTimer timer = entry.getValue();
             if (timer.handle() == null) {
@@ -1259,13 +1359,18 @@ public final class SessionExecutor {
             }
             timer.handle().cancel();
             Duration left = Duration.between(now, timer.deadline());
-            practiceTimers.put(entry.getKey(), new PracticeTimer(timer.generation(), null, null,
+            practiceTimers.put(entry.getKey(), new PracticeTimer(++practiceTimerGeneration, null, null,
                     left.isNegative() ? Duration.ZERO : left));
         }
     }
 
     /** 일시정지가 끝나면 확장점 시계를 남은 시간부터 다시 건다. */
     private void resumePracticeTimers(Instant now) {
+        if (practiceProgressPaused()) return;
+        if (practicePauseStartedAt != null) {
+            practicePauses.add(new PracticePause(practicePauseStartedAt, now));
+            practicePauseStartedAt = null;
+        }
         for (Map.Entry<String, PracticeTimer> entry : List.copyOf(practiceTimers.entrySet())) {
             PracticeTimer timer = entry.getValue();
             if (timer.handle() != null) {
@@ -1276,6 +1381,9 @@ public final class SessionExecutor {
             kr.mujoong.contract.time.TimerDriver.TimerHandle handle = services.clocks().safety().schedule(
                     timer.remaining(), () -> mailbox.putSafety(new SessionMailbox.PracticeTimerFired(name, generation)));
             practiceTimers.put(name, new PracticeTimer(generation, handle, now.plus(timer.remaining()), null));
+        }
+        while (!pausedPracticeEvents.isEmpty()) {
+            mailbox.putSafety(new SessionMailbox.PracticeEvent(pausedPracticeEvents.removeFirst()));
         }
     }
 
@@ -1293,6 +1401,46 @@ public final class SessionExecutor {
 
     /** 실행기가 확장점에 주는 출력 능력(BR10.4). post 밖의 능력은 실행기 스레드에서만 부른다. */
     private final class PracticeOutputPort implements PracticeSessionExtension.PracticeOutput {
+
+        @Override public boolean speak(kr.mujoong.realtime.voice.PracticeSpeech speech) {
+            if (!practiceActive() || providerSession == null || !providerSession.isOpen()) return false;
+            bumpGeneration();
+            timers.cancel(Kind.SEGMENT_QUIET);
+            if (segment.isOpen() && segment.responseId() != null) cancelledResponses.add(segment.responseId());
+            segment.reset();
+            transcripts.aiFinal("", false, services.clock().now());
+            pendingPracticeSpeech = speech;
+            practiceHold = false;
+            ProviderRequestFactory.InstructionsCorrect request = services.requests().practiceSpeech(speech);
+            ProviderSession provider = providerSession;
+            long generation = outputGeneration.get();
+            enqueuePracticeProvider("provider-practice-speech-", () -> {
+                try {
+                    if (generation != outputGeneration.get() || status != SessionStatus.ACTIVE || !provider.isOpen()) return;
+                    provider.cancelResponse(services.requests().responseCancel(null));
+                    provider.correctInstructions(request);
+                    if (generation != outputGeneration.get() || status != SessionStatus.ACTIVE) return;
+                    provider.createResponse(services.requests().responseCreate());
+                } catch (Exception failure) {
+                    practiceOutput.post("u5b-voice-failed", speech);
+                }
+            });
+            return true;
+        }
+
+        @Override public boolean cancelSpeech(UUID correlationId) {
+            if (pendingPracticeSpeech != null && pendingPracticeSpeech.correlationId().equals(correlationId)) {
+                pendingPracticeSpeech = null; practiceHold = true;
+                stopOutputForIntent(services.clock().now());
+            }
+            for (var entry : List.copyOf(practiceAudio.entrySet())) {
+                if (entry.getValue().correlationId().equals(correlationId)) {
+                    practiceAudio.remove(entry.getKey()); cancelPracticeTimer("u5b-audio-" + entry.getKey());
+                    stopOutputForIntent(services.clock().now());
+                }
+            }
+            return true;
+        }
 
         @Override
         public UUID sessionId() {
@@ -1524,15 +1672,17 @@ public final class SessionExecutor {
                     if (status == SessionStatus.ACTIVE && done.transcript() != null && !done.transcript().isBlank()) {
                         resetSilence(at);
                     }
-                    // U4b BR10.1: PRACTICE면 확장점 '전사 전달'(종료 의도 판정보다 먼저)
-                    if (status == SessionStatus.ACTIVE && practice != null) {
+                    boolean controlledPractice = practice != null && practice.controlsOutput();
+                    boolean stopHandled = controlledPractice && judgeStopIntent(done.transcript(), uncertain, at);
+                    if (!stopHandled && status == SessionStatus.ACTIVE && practice != null
+                            && !(controlledPractice && technicalPause != null)) {
                         PracticeSessionExtension.Utterance utterance = new PracticeSessionExtension.Utterance(
                                 seq.orElse(0), at, done.transcript() == null ? "" : done.transcript(), uncertain,
                                 !devicePlaying.isEmpty());
                         practiceSignal(() -> practice.onChildUtterance(utterance, practiceOutput), true);
                     }
                     // 2차 리뷰 2: 종료 의도를 푼 발화의 응답은 막힌 동안 이미 취소됐을 수 있다 — 끝 신호가 오지 않을 '생각 중'을 보내지 않는다
-                    if (!judgeStopIntent(done.transcript(), uncertain, at)) {
+                    if (!(controlledPractice ? stopHandled : judgeStopIntent(done.transcript(), uncertain, at))) {
                         thinking();
                     }
                 }
@@ -1690,6 +1840,10 @@ public final class SessionExecutor {
                 beginClosing(Trigger.CHILD_STOP_CONFIRMED, null);
             }
             case ASK -> {
+                if (practice != null && practice.controlsOutput()) {
+                    pausePracticeTimers(at);
+                    interruptPracticeSpeech(at);
+                }
                 stopOutputForIntent(at);
                 putEvent(EVENT_STOP_CONFIRM_ASKED, null, at);
                 playStopConfirm();
@@ -1699,7 +1853,11 @@ public final class SessionExecutor {
                 stopConfirmPlaybackId = null;
                 putEvent(EVENT_STOP_CONFIRM_RESOLVED,
                         "{\"result\":\"CONTINUE\",\"cause\":\"" + (cause == null ? "REPLY" : cause) + "\"}", at);
-                requestResponse();
+                if (practice != null && practice.controlsOutput()) {
+                    resumePracticeTimers(at);
+                } else {
+                    requestResponse();
+                }
                 listeningAgain();
             }
             case NONE -> {
@@ -1830,7 +1988,9 @@ public final class SessionExecutor {
     /** 진행 조회 값을 바꿔 쓴다(BR7.1). 공백 경고는 ACTIVE에서만 있다. */
     private void publishLive(Instant now) {
         SilenceClock.Warning warning = status == SessionStatus.ACTIVE ? silence.warning(now) : null;
-        live.set(technicalPause == null && warning == null ? LiveState.NONE : new LiveState(technicalPause, warning));
+        PracticeSessionExtension.Progress progress = practice == null ? null : practice.progress();
+        live.set(technicalPause == null && warning == null && progress == null ? LiveState.NONE
+                : new LiveState(technicalPause, warning, progress));
     }
 
     /** 이 세션의 끊김 시계 기준(묶인 연결의 마지막 기기 메시지 수신 시각, U4b-R7). */
@@ -1892,6 +2052,10 @@ public final class SessionExecutor {
         timers.cancel(Kind.JOIN_WINDOW);
         timers.cancel(Kind.STOP_CONFIRM);
         pausePracticeTimers(now);
+        if (practice != null && practice.controlsOutput()) {
+            interruptPracticeSpeech(now);
+            stopOutputForIntent(now);
+        }
         if (openGapId == null) {
             openGapId = services.gaps().open(plan.sessionId(), SessionGapRepository.Kind.DISCONNECT, gapFrom);
         }
@@ -2015,6 +2179,11 @@ public final class SessionExecutor {
                         !movedOn || inspected.reason() == GateDecision.DiscardReason.GATE_PATTERN);
                 return;
             }
+            if (practice != null && practice.controlsOutput()
+                    && (pendingPracticeSpeech == null || !pendingPracticeSpeech.matches(sealed.transcript()))) {
+                discard(sealed, GateDecision.DiscardReason.GATE_PATTERN, false);
+                return;
+            }
             DeviceLink target = link;
             boolean activeAndCurrent = status == SessionStatus.ACTIVE && sealed.generation() == outputGeneration.get()
                     && target != null && target.isOpen();
@@ -2041,6 +2210,12 @@ public final class SessionExecutor {
         services.latency().gatePassed(plan.sessionId(), playbackId, passAt);
         transcripts.aiFinal(sealed.transcript(), true, passAt);
         playbackResponses.put(playbackId, sealed.responseId());
+        var speech = pendingPracticeSpeech;
+        if (speech != null) {
+            pendingPracticeSpeech = null; practiceHold = true;
+            practiceAudio.put(playbackId, speech);
+            schedulePracticeTimer("u5b-audio-" + playbackId, services.settings().playbackExpiry());
+        }
         long generation = sealed.generation();
         // U3-R9 · 리뷰 반영 6: 기기로 실제 보낸 AI 음성 프레임만 기록한다(송신기가 소켓에 쓴 직후 넘긴다). 음성 레인에 못 들어간 묶음 ·
         // 세대가 올라 잘린 나머지 프레임은 기록하지 않는다
@@ -2052,6 +2227,10 @@ public final class SessionExecutor {
                 aiRecording == null ? frame -> { } : aiRecording::ai);
         if (!target.sendOutput(bundle)) {
             services.metrics().gateDiscard(GateDecision.DiscardReason.OUTBOUND_FULL.name());
+            if (speech != null) {
+                practiceAudio.remove(playbackId); cancelPracticeTimer("u5b-audio-" + playbackId);
+                practicePlayback(speech, kr.mujoong.realtime.practice.PracticePorts.Playback.FAILED);
+            }
         }
     }
 
@@ -2064,6 +2243,12 @@ public final class SessionExecutor {
         services.metrics().gateDiscard(reason.name());
         services.latency().gateDiscarded(plan.sessionId());
         transcripts.aiFinal(sealed == null ? "" : sealed.transcript(), false, services.clock().now());
+        if (pendingPracticeSpeech != null) {
+            var speech = pendingPracticeSpeech; pendingPracticeSpeech = null; practiceHold = true;
+            cancelResponses(sealed == null ? null : sealed.responseId());
+            practicePlayback(speech, kr.mujoong.realtime.practice.PracticePorts.Playback.FAILED);
+            return;
+        }
         if (correct) {
             correctAfterDiscard(sealed, reason);
         }
@@ -2140,13 +2325,34 @@ public final class SessionExecutor {
         if (session == null || !session.isOpen()) {
             return;
         }
-        services.launcher().launch(name + plan.sessionId(), () -> {
+        Runnable work = () -> {
             try {
                 call.send(session);
             } catch (ProviderUnavailableException e) {
                 // 공급자 끊김은 리더의 Closed로 따로 온다
             } catch (RuntimeException e) {
                 services.events().appError(EventLog.Component.VOICE_RELAY, e);
+            }
+        };
+        if (practice != null && practice.controlsOutput()) enqueuePracticeProvider(name, work);
+        else services.launcher().launch(name + plan.sessionId(), work);
+    }
+
+    private void enqueuePracticeProvider(String name, Runnable work) {
+        synchronized (practiceProviderQueue) {
+            practiceProviderQueue.addLast(work);
+            if (practiceProviderRunning) return;
+            practiceProviderRunning = true;
+        }
+        services.launcher().launch(name + plan.sessionId(), () -> {
+            while (true) {
+                Runnable next;
+                synchronized (practiceProviderQueue) {
+                    next = practiceProviderQueue.pollFirst();
+                    if (next == null) { practiceProviderRunning = false; return; }
+                }
+                try { next.run(); }
+                catch (RuntimeException failure) { services.events().appError(EventLog.Component.VOICE_RELAY, failure); }
             }
         });
     }
@@ -2174,6 +2380,19 @@ public final class SessionExecutor {
         }
         deviceHeard();
         PlaybackMark mark = received.mark();
+        var speech = practiceAudio.get(mark.playbackId());
+        if (speech != null && mark.status() != PlaybackMark.Status.PROGRESS) {
+            var fact = switch (mark.status()) {
+                case STARTED -> kr.mujoong.realtime.practice.PracticePorts.Playback.STARTED;
+                case COMPLETED -> kr.mujoong.realtime.practice.PracticePorts.Playback.COMPLETED;
+                case STOPPED -> kr.mujoong.realtime.practice.PracticePorts.Playback.INTERRUPTED;
+                default -> kr.mujoong.realtime.practice.PracticePorts.Playback.FAILED;
+            };
+            if (mark.status() != PlaybackMark.Status.STARTED) {
+                practiceAudio.remove(mark.playbackId()); cancelPracticeTimer("u5b-audio-" + mark.playbackId());
+            }
+            practicePlayback(speech, fact, received.serverRecvAt());
+        }
         if (status == SessionStatus.DECLINED) {
             // U4b BR4.7: DECLINED 마무리 인사의 끝 표식 → CLOSE_TRANSPORT(DECLINED) → 정리
             if (closing.onPlaybackMark(closingDevice(), mark.playbackId(), mark.status())) {
@@ -2574,6 +2793,7 @@ public final class SessionExecutor {
      * @param requestId END_REQUESTED 기록에 남길 끝내기 요청 id(모르면 null)
      */
     private void enterClosing(Instant committedAt, UUID requestId) {
+        stopPracticeProgress();
         Instant now = services.clock().now();
         closingAt = committedAt;
         services.recorder().putEvent(new SessionEvent(UUID.randomUUID(), plan.sessionId(), "END_REQUESTED",

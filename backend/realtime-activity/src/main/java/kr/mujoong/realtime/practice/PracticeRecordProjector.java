@@ -2,6 +2,7 @@ package kr.mujoong.realtime.practice;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Comparator;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -13,7 +14,8 @@ public final class PracticeRecordProjector {
     public record Ready(PracticeRecord practice) implements Projection { }
     public record Deferred(String agreement) implements Projection { }
     public record PracticeRecord(List<GoalRecord> goals) { public PracticeRecord { goals = List.copyOf(goals); } }
-    public record GoalRecord(UUID goalSelectionId, String displayName, int order, GoalStatus status, String skipReason,
+    public record GoalRecord(UUID goalSelectionId, String displayName, String behaviorKey, int behaviorVersion,
+            int order, GoalStatus status, String skipReason,
             List<ScenarioRecord> scenarios, List<ResponseRecord> responses, List<CueRecord> cues) {
         public GoalRecord { scenarios = List.copyOf(scenarios); responses = List.copyOf(responses); cues = List.copyOf(cues); }
     }
@@ -23,11 +25,17 @@ public final class PracticeRecordProjector {
         @Override public String toString() { return "CueRecord[scenarioId=" + scenarioId + "]"; }
     }
     public Projection project(PracticeRepository.Snapshot snapshot) {
+        return project(snapshot, false);
+    }
+    public Projection projectSettled(PracticeRepository.Snapshot snapshot) {
+        return project(snapshot, true);
+    }
+    private Projection project(PracticeRepository.Snapshot snapshot, boolean settled) {
         if (snapshot.responses().stream().anyMatch(p -> p.evaluationState() != EvaluationState.FINALIZED)) return new Deferred("I2");
-        if (snapshot.attempts().stream().anyMatch(a -> a.attemptType() == AttemptType.NEW_SCENARIO && a.state() == AttemptState.PREPARATION_FAILED))
+        if (!settled && snapshot.attempts().stream().anyMatch(a -> a.attemptType() == AttemptType.NEW_SCENARIO && a.state() == AttemptState.PREPARATION_FAILED))
             return new Deferred("I4");
         if (snapshot.goals().stream().anyMatch(g -> g.status() == GoalStatus.RUNNING || g.status() == GoalStatus.PENDING)
-                || snapshot.attempts().stream().anyMatch(a -> a.state() == AttemptState.PREPARING)) return new Deferred("I2/I4");
+                || (!settled && snapshot.attempts().stream().anyMatch(a -> a.state() == AttemptState.PREPARING))) return new Deferred("I2/I4");
         var goals = snapshot.goals().stream().collect(Collectors.toMap(SessionGoal::id, Function.identity()));
         var attempts = snapshot.attempts().stream().collect(Collectors.toMap(PracticeAttempt::id, Function.identity()));
         var evaluations = snapshot.evaluations().stream().collect(Collectors.toMap(Evaluation::responseId, Function.identity()));
@@ -42,12 +50,15 @@ public final class PracticeRecordProjector {
         for (var c : snapshot.cues()) {
             var a = attempts.get(c.attemptId()); PracticeChecks.require(a != null && a.exposedAt() != null, "도움 장면 노출 증거 필요"); c.requireAttempt(a);
         }
-        return new Ready(new PracticeRecord(snapshot.goals().stream().map(g -> new GoalRecord(g.goalSelectionId(), g.displayName(),
-                g.order(), g.status(), g.skipReason(), snapshot.attempts().stream().filter(a -> a.sessionGoalId().equals(g.id()) && a.exposedAt() != null)
+        return new Ready(new PracticeRecord(snapshot.goals().stream().sorted(Comparator.comparingInt(SessionGoal::order)).map(g -> new GoalRecord(g.goalSelectionId(), g.displayName(),
+                g.behaviorKey(), g.behaviorVersion(), g.order(), g.status(), g.skipReason(), snapshot.attempts().stream().filter(a -> a.sessionGoalId().equals(g.id()) && a.exposedAt() != null)
+                    .sorted(Comparator.comparing(PracticeAttempt::attemptType))
                     .map(a -> new ScenarioRecord(a.scenarioId(), a.attemptType(), a.exposedAt())).toList(),
                 snapshot.responses().stream().filter(p -> attempts.get(p.attemptId()).sessionGoalId().equals(g.id()))
+                    .sorted(Comparator.comparing(PracticeResponse::responseType))
                     .map(p -> new ResponseRecord(p.scenarioId(), p.responseType(), p.utteranceSeq(), p.notPerformedReason(), p.label())).toList(),
                 snapshot.cues().stream().filter(c -> attempts.get(c.attemptId()).sessionGoalId().equals(g.id()))
+                    .sorted(Comparator.comparing(c -> attempts.get(c.attemptId()).attemptType()))
                     .map(c -> new CueRecord(c.scenarioId(), c.consentResponse(), c.deliveredText(), c.containsAnswerSentence(), c.givenAt())).toList())).toList()));
     }
 }

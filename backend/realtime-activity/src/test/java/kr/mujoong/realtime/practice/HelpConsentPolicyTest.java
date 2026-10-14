@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 @Tag("u5b")
+@Tag("db")
 class HelpConsentPolicyTest {
     @Test void silenceAtTwentyRecordsNoResponseAndAsksWithoutEvaluation() {
         var f = new ProtocolFixture(); f.intro(); f.timers.advance(Duration.ofMillis(19_999));

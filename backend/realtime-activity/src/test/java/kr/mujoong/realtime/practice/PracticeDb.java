@@ -6,22 +6,16 @@ import java.util.UUID;
 import kr.mujoong.realtime.session.*;
 import kr.mujoong.contract.status.ActivityType;
 import kr.mujoong.testsupport.db.MujoongPostgres;
-import org.springframework.core.io.ClassPathResource;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
-import org.springframework.jdbc.datasource.init.ResourceDatabasePopulator;
 import org.springframework.transaction.support.TransactionTemplate;
 import static kr.mujoong.realtime.practice.PracticeTypes.*;
 
-/** U5b 전용 폐기 DB. 실제 V3를 모사하지 않고 V1/V2 위 저장 제약만 시험한다. */
+/** U5b 전용 폐기 DB. 배포와 같은 V1~V4 마이그레이션으로 저장 제약을 시험한다. */
 final class PracticeDb {
     static final MujoongPostgres DB = MujoongPostgres.builder().start();
     static final JdbcTemplate JDBC = new JdbcTemplate(DB.dataSource(MujoongPostgres.Role.REALTIME_APP));
     static final TransactionTemplate TX = new TransactionTemplate(new DataSourceTransactionManager(DB.dataSource(MujoongPostgres.Role.REALTIME_APP)));
-    static {
-        new ResourceDatabasePopulator(new ClassPathResource("db/pending/realtime/V4__u5b_practice.sql"))
-                .execute(DB.dataSource(MujoongPostgres.Role.OWNER));
-    }
     final JdbcPracticeRepository repository = new JdbcPracticeRepository(JDBC, TX);
     final UUID session = UUID.randomUUID();
     final UUID guardian = UUID.randomUUID();

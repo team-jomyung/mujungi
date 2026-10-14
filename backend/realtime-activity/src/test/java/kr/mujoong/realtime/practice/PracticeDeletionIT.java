@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 @Tag("u5b")
+@Tag("db")
 class PracticeDeletionIT {
     @Test void deletesOwnFiveTablesAndPreservesSessionAndOtherGuardian() {
         var db = new PracticeDb(); var other = new PracticeDb(); var p = db.pending();

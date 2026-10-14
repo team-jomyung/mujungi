@@ -12,7 +12,7 @@ import kr.mujoong.contract.json.JsonCodec;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.support.TransactionTemplate;
 
-/** 운영 빈 미등록. 주입받은 업무 트랜잭션 안에서 외부 호출 없이 원자 저장한다. */
+/** 주입받은 업무 트랜잭션 안에서 외부 호출 없이 원자 저장한다. */
 public final class JdbcPracticeRepository implements PracticeRepository {
     private static final String G = "realtime.realtime_session_goal";
     private static final String A = "realtime.realtime_practice_attempt";
@@ -199,6 +199,25 @@ public final class JdbcPracticeRepository implements PracticeRepository {
                 jdbc.update("update " + G + " set data=?::jsonb where id=?", json.write(remaining), g.id());
             }
             jdbc.update("update " + G + " set terminated=true where session_id=?", session); return null;
+        });
+    }
+    @Override public void settle(UUID session) {
+        atomic(() -> {
+            lock(session);
+            var ending = snapshot(session);
+            if (ending.goals().isEmpty()) throw new IllegalStateException("정산할 연습 목표 원본이 없다");
+            if (ending.responses().stream().anyMatch(p -> p.evaluationState() != EvaluationState.FINALIZED))
+                throw new IllegalStateException("확정되지 않은 연습 반응이 남았다");
+            for (var goal : ending.goals()) {
+                if (goal.status() != GoalStatus.PENDING && goal.status() != GoalStatus.RUNNING) continue;
+                boolean exposed = ending.attempts().stream()
+                        .anyMatch(a -> a.sessionGoalId().equals(goal.id()) && a.exposedAt() != null);
+                var finalGoal = goal.progress(exposed ? GoalStatus.SKIPPED : GoalStatus.NOT_REACHED,
+                        goal.currentStage(), exposed ? "ACTIVITY_ENDED" : null);
+                jdbc.update("update " + G + " set data=?::jsonb where id=?", json.write(finalGoal), goal.id());
+            }
+            jdbc.update("update " + G + " set terminated=true where session_id=?", session);
+            return null;
         });
     }
     @Override public void delete(UUID guardian) {

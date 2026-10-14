@@ -9,14 +9,13 @@ import kr.mujoong.contract.status.EndReason;
 import kr.mujoong.contract.status.SessionStatus;
 
 /**
- * 연습 경로 확장점 (U4b · FR9.1 · BR10.1 ~ BR10.6 · FD-Q1 · functional-spec 5.1 · R-10). U5b가 실행기를 고치지 않고 ACTIVE 안의 연습 단계를
- * 진행하도록 붙는 자리다.
+ * 연습 경로 확장점 (U4b · FR9.1 · BR10.1 ~ BR10.6 · R-10). U5b는 타입 있는 출력과 재생 증거로 ACTIVE 안의 연습 단계를 진행한다.
  *
  * <p>PRACTICE 세션에서만, 실행기 스레드에서 부른다(세션당 직렬). 세션마다 {@link Factory}가 한 개를 만든다. 들어오는 시점은 다섯 개다.
  *
  * <ul>
- *   <li>{@link #onActive}: ACTIVE 진입(참여 확인 뒤, 응답 생성 요청을 보낸 다음).
- *   <li>{@link #onChildUtterance}: ACTIVE 중 아이 확정 전사(종료 의도 판정보다 먼저).
+ *   <li>{@link #onActive}: 참여 확인 뒤 ACTIVE 진입. 출력권을 가진 확장은 자유 응답 요청을 생략한다.
+ *   <li>{@link #onChildUtterance}: ACTIVE 중 아이 확정 전사. 출력권을 가진 확장에는 종료 의도가 맡은 발화를 전달하지 않는다.
  *   <li>{@link #onExtensionEvent}: 확장점 사건(재생 완료 · 확장점 시계 만료 · 비동기 결과). 실행기 편지함을 거쳐 실행기 스레드에서 들어온다.
  *   <li>{@link #onSettle}: 종료 전이 뒤 정산 창이 끝난 다음 한 번(남은 목표 NOT_REACHED 정리 등).
  *   <li>{@link #practiceRecord}: 스냅숏 직전 practice 값(객체 또는 null, FD-Q4).
@@ -25,7 +24,7 @@ import kr.mujoong.contract.status.SessionStatus;
  * <p>상태를 바꾸려면 {@link Signal}을 돌려준다: NEXT_GOAL은 계속, LAST_GOAL은 CLOSING(CHILD_STOP, end_detail PRACTICE_COMPLETED). 출력은
  * {@link PracticeOutput}의 능력으로만 낸다 — 상태 전이 · DB 쓰기 · 기기 원시 명령은 능력에 없다. ACTIVE가 아닐 때(CLOSING · 정산 창 · 종료)의
  * 출력 능력 호출은 거절되고 PRACTICE_EXTENSION_FAILED{reason: NOT_ACTIVE}로 남는다(R-10). CLOSING · 정산 창 안의 확장점 사건은 전달되지만 신호는
- * 무시한다. 확장점 예외는 PRACTICE_EXTENSION_FAILED에 남기고 그 세션은 자유대화처럼 이어진다(정산 시점 건너뜀 · practice null).
+ * 무시한다. 출력권을 가진 확장의 예외는 기록을 보존하며 종료하고, 기존 확장의 예외는 이전 자유대화 경로를 유지한다.
  */
 public interface PracticeSessionExtension {
 
@@ -88,6 +87,7 @@ public interface PracticeSessionExtension {
         /** 사건 종류. */
         public enum Kind {
             PLAYBACK_DONE,
+            PLAYBACK_FACT,
             TIMER_FIRED,
             ASYNC_RESULT
         }
@@ -144,7 +144,37 @@ public interface PracticeSessionExtension {
 
         /** 다른 스레드에서 끝난 비동기 작업 결과를 ASYNC_RESULT로 편지함에 넣는다. 세션이 끝났으면 거짓. */
         boolean post(String name, Object value);
+
+        default boolean speak(kr.mujoong.realtime.voice.PracticeSpeech speech) { return false; }
+
+        default boolean cancelSpeech(UUID correlationId) { return false; }
     }
+
+    record PlaybackFact(kr.mujoong.realtime.voice.PracticeSpeech speech,
+            kr.mujoong.realtime.practice.PracticePorts.Playback status, String text, Instant receivedAt, Duration pausedFor) {
+        public PlaybackFact {
+            Objects.requireNonNull(pausedFor, "pausedFor");
+            if (pausedFor.isNegative()) throw new IllegalArgumentException("negative playback pause");
+        }
+        public PlaybackFact(kr.mujoong.realtime.voice.PracticeSpeech speech,
+                kr.mujoong.realtime.practice.PracticePorts.Playback status, String text, Instant receivedAt) {
+            this(speech, status, text, receivedAt, Duration.ZERO);
+        }
+        public PlaybackFact(kr.mujoong.realtime.voice.PracticeSpeech speech,
+                kr.mujoong.realtime.practice.PracticePorts.Playback status, String text) { this(speech, status, text, null); }
+        @Override public String toString() { return "PlaybackFact[status=" + status + "]"; }
+    }
+
+    record Progress(int goalIndex, int goalCount, String goalName, String stage) { }
+
+    /** 실제 연습은 출력권을 소유하고, 무동작·기존 확장은 기존 경로를 유지한다. */
+    default boolean controlsOutput() { return false; }
+
+    default Progress progress() { return null; }
+
+    default void onStopping() { }
+
+    default Duration settlementDelay(Instant now) { return Duration.ZERO; }
 
     /** 세션마다 확장점 하나를 만든다(Spring 빈). U5b가 빈을 등록하지 않으면 {@link NoOpPracticeSessionExtension#FACTORY}다. */
     @FunctionalInterface

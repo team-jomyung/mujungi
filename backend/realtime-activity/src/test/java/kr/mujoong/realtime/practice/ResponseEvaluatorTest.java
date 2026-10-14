@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 @Tag("u5b")
+@Tag("db")
 class ResponseEvaluatorTest {
     @Test void savesBeforeCallAndCommitsOnce() {
         var f = new EvaluationFixture(); f.start(f.evaluator());

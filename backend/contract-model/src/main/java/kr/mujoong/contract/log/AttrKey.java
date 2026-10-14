@@ -57,7 +57,7 @@ public enum AttrKey {
     CLOSE_CODE("closeCode", ValueType.NUMBER, null),
     // INTERNAL_HTTP
     TARGET("target", ValueType.ENUM, Set.of(
-            "SESSION_START", "SESSION_END", "SESSION_VIEW", "VERIFY_TOKEN", "DEVICE_STATUS", "EVENT_PUBLISH")),
+            "SESSION_START", "SESSION_END", "SESSION_VIEW", "VERIFY_TOKEN", "DEVICE_STATUS", "EVENT_PUBLISH", "PRACTICE_SCENARIO")),
     OUTCOME("outcome", ValueType.ENUM, Set.of("OK", "TIMEOUT", "CONN_ERROR", "HTTP_4XX", "HTTP_5XX", "BREAKER_OPEN")),
     STATUS_CODE("statusCode", ValueType.NUMBER, null),
     DURATION_MS("durationMs", ValueType.NUMBER, null),

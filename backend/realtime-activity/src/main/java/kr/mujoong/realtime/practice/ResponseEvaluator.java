@@ -2,6 +2,7 @@ package kr.mujoong.realtime.practice;
 
 import java.time.Instant;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.Executor;
 import java.util.function.Consumer;
@@ -39,6 +40,22 @@ public final class ResponseEvaluator {
             timers.scheduleAt(p.work().cutoff(), () -> dispatch(() -> timeout(p.id(), p.evaluationGeneration())));
             calls.execute(() -> guarded(() -> attempt(p.id(), p.evaluationGeneration(), criteria, responseText)));
         });
+    }
+    /** 기동 중 놓친 판정은 원래 호출 시한이 지난 뒤에만 복구한다. 지연 복구를 성능 통과로 세지 않는다. */
+    public static Optional<Completion> recoverExpired(PracticeRepository repository, UUID responseId, MujoongClock clock) {
+        var pending = repository.response(responseId)
+                .filter(p -> p.evaluationState() == EvaluationState.PENDING);
+        if (pending.isEmpty()) return Optional.empty();
+        var response = pending.get();
+        Instant now = clock.now();
+        if (now.isBefore(response.work().cutoff())) return Optional.empty();
+        var result = new Evaluation(UUID.randomUUID(), responseId, Label.uncertain, "원래 판정 시한 만료 후 복구",
+                null, true, response.work().attemptsStarted(), null, null);
+        Instant deadline = response.work().deadlineAt();
+        boolean saved = now.isBefore(deadline)
+                ? repository.finalizeWithinBudget(responseId, response.evaluationGeneration(), null, result, deadline, clock)
+                : repository.finalizeResult(responseId, response.evaluationGeneration(), null, result, now);
+        return saved ? Optional.of(new Completion(responseId, clock.now().isBefore(deadline))) : Optional.empty();
     }
     private void guarded(Runnable action) {
         try { action.run(); } catch (RuntimeException failure) { failures.accept(failure); }
