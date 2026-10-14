@@ -16,14 +16,14 @@
 ARG JRE_IMAGE=eclipse-temurin:21.0.12_8-jre-noble@sha256:7739f0ffce786528961eea6bf46d9610ee968ac6127c9b2e93494757bdecce9f
 
 # 0단계: 기반 이미지 OS 보안 패치(J350, 이미지 점검 ③). 같은 태그의 더 새 다이제스트가 아직 없어(Docker Hub 2026-09-18 판이
-# openssl 3.0.13-0ubuntu3.15) 고친 판 .deb를 Ubuntu 스냅숏 주소(바뀌지 않는 주소)에서 sha256으로 고정해 받는다.
+# openssl 3.0.13-0ubuntu3.15) 고친 판 .deb를 Ubuntu 공식 보안 저장소에서 판과 sha256을 고정해 받는다.
 # BuildKit ADD가 받으므로 RUN 단계 네트워크가 없다(R-03). 실행 이미지에는 .deb가 남지 않는다(bind 마운트로만 설치).
 # core-api · migrate Dockerfile과 같은 값이다(셋을 함께 바꾼다). 기반 다이제스트가 이 판 이상을 담으면 이 단계를 지운다.
 FROM scratch AS os-patches
 ADD --checksum=sha256:219f43b1cd836a4da550938db5fda93160d269d39a4edcf1f1ce698a470db797 \
-    https://snapshot.ubuntu.com/ubuntu/20261011T000000Z/pool/main/o/openssl/libssl3t64_3.0.13-0ubuntu3.16_amd64.deb /debs/
+    https://security.ubuntu.com/ubuntu/pool/main/o/openssl/libssl3t64_3.0.13-0ubuntu3.16_amd64.deb /debs/
 ADD --checksum=sha256:675b84971ffd4467707008c25ef7520f90ea7c23ef27b7a76b0dccf1d7c4dc3f \
-    https://snapshot.ubuntu.com/ubuntu/20261011T000000Z/pool/main/o/openssl/openssl_3.0.13-0ubuntu3.16_amd64.deb /debs/
+    https://security.ubuntu.com/ubuntu/pool/main/o/openssl/openssl_3.0.13-0ubuntu3.16_amd64.deb /debs/
 
 # 1단계: bootJar를 계층별로 푼다
 FROM ${JRE_IMAGE} AS layers
