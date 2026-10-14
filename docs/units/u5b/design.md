@@ -94,7 +94,7 @@ Realtime V4의 SessionGoal·PracticeAttempt·PracticeResponse·CueDelivery·Eval
 | Realtime 시작 | PRACTICE 전용 확장을 빈으로 등록한다. 참여 수락 후 자유 대화의 최초 응답을 먼저 요청하지 않고 첫 상황부터 진행한다. FREE_TALK와 기존 NoOp 확장의 행동은 유지한다. |
 | 출력·재생 | 상황/Cue에 타입 있는 최소 입력을 전달한다. 상황 ID·출력 상관 ID·목표 세대와 실제 provider 응답/기기 재생을 연결한다. STARTED/COMPLETED/FAILED/STOPPED를 구분하고, 출력 거절·음성 누락·재생 실패를 완료로 취급하지 않는다. 실제 완료만 반응 기회/상황 노출을 열며 Cue는 실제 시작/완료 증거를 보존한다. |
 | 실행·시간 | 기존 SessionExecutor의 직렬 사건 큐에서 프로토콜을 호출하고 비동기 완료는 큐로 되돌린다. 반응 기회·도움 대기·Cue 시한은 U4b의 기술 일시정지와 함께 멈춘다. 평가자는 별도 실행기와 동일 EvaluationClock을 사용하며 기존 전체 예산을 연장하지 않는다. |
-| 기록·조회 | 계약 여섯 단계와 진행 네 필드만 공개한다. 원본 저장과 평가 결과를 기준으로 `record.practice`를 만들고 마지막 목표는 기존 LAST_GOAL→CLOSING을 사용한다. 판정 중 종료와 새 상황 실패의 외부 표현은 아래 결정 대기 항목을 확정한 뒤 구현한다. |
+| 기록·조회 | 계약 여섯 단계와 진행 네 필드만 공개한다. 원본 저장과 평가 결과를 기준으로 `record.practice`를 만들고, 목표마다 시작 때 고정한 behaviorKey/behaviorVersion을 함께 싣는다. 마지막 목표는 기존 LAST_GOAL→CLOSING을 사용한다. 판정 중 종료와 새 상황 실패는 아래 사용자 결정 U5b-I7/I8을 따른다. |
 | 삭제·DB | realtime V4의 다섯 표를 실제 migration 경로에 등록한다. 삭제 참가자 150은 세션 참가자 200 앞에서 FK 역순으로 삭제한다. Core 준비 원본도 삭제 참가자로 정리한다. V3→V4 원본 보존과 삭제 멱등/롤백을 시험한다. |
 | 화면 | 18의 기존 목표 조작을 유지하고 시작 API를 연결한다. 요청 중/미확인에는 원래 선택을 고정하며 재시도한다. 12의 기존 조회 루프에 activityType/practice를 연결하고 연습 머리·단계·끝내기를 표시한다. 조회 실패는 마지막 확인 상태를 유지한다. |
 
@@ -111,6 +111,7 @@ Realtime V4의 SessionGoal·PracticeAttempt·PracticeResponse·CueDelivery·Eval
 | U5b-I7 · 사용자 확정 | NEW_SCENARIO 생성 실패 시 기존 원본을 보존하고 해당 목표를 미완료(SKIPPED, SCENARIO_FAILED/TIME_OVER)로 기록한 뒤 다음 목표를 진행한다. 마지막 목표이면 기존 마무리 경로로 간다. 생성하지 못한 상황 ID나 반응 행은 만들지 않는다. |
 | U5b-I8 · 사용자 확정 | 판정 중 종료 시 원래 판정 시한 안에서 기다려 최종 결과에 포함한다. 새로운 반응·단계 진행은 멈추고 이미 수락한 반응의 평가만 원래 시한으로 마친다. 종료 때문에 자동 uncertain을 만들지 않는다. 재시작/저장 장애로 원래 시한을 넘긴 반응은 실패를 관측하고 원본 시한을 보존한 채 지연 복구하며, 12초 충족으로 보고하지 않는다. |
 | U5b-I9 | U5b 시간 설정은 별도 타입 PracticeProperties와 `practice/u5b-runtime.yml`로 로드한다. 환경 설정이 기본 파일보다 우선한다. 기존 RealtimeProperties/application.yml 소유 키와 U1 설정 단언은 유지하고 U5b 바인딩 시험을 추가한다. |
+| U5b-I10 | 실제 PLAYBACK_MARK의 서버 수신 시각을 PlaybackFact에 전달한다. 상황 노출/반응 시작·도움 질문 대기·Cue givenAt을 큐 처리 시각으로 늦추지 않는다. STOP_CONFIRM은 기술 일시정지와 같이 연습 진행 시계/사건을 잠시 보류한다. 확인 질문을 부른 발화와 그 대답은 연습 반응으로 세지 않고, 재생 중인 연습 발화는 INTERRUPTED로 남긴다. 계속하기면 남은 시계와 보류 사건을 이어 처리하며 자유대화 응답을 새로 요청하지 않는다. 이미 수락된 판정의 원래 전체 시한은 연장하지 않는다. |
 
 ### 시험 계획
 

@@ -133,6 +133,41 @@ jobs:
           path: |
             backend/*/build/reports/tests/
             backend/*/build/reports/jacoco/
+            backend/*/build/test-results/test/
+          retention-days: 14
+          if-no-files-found: ignore
+
+  u5b-scope:
+    name: u5b-scope
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: gradle
+      - name: Realtime U5b DB 포함 · 범위 줄 80%
+        working-directory: backend
+        run: ./gradlew --no-daemon :realtime-activity:test :realtime-activity:jacocoTestCoverageVerification -PincludeTags=u5b -PcoverageScope=u5b -Pmujoong.test.db=docker
+      - name: Core U5b DB 포함 · 범위 줄 80%
+        if: ${{ !cancelled() }}
+        working-directory: backend
+        run: ./gradlew --no-daemon :core-api:test :core-api:jacocoTestCoverageVerification -PincludeTags=u5b -PcoverageScope=u5b-core -Pmujoong.test.db=docker
+      - name: U5b 시험 · 커버리지 보고서
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: u5b-reports
+          path: |
+            backend/*/build/reports/tests/
+            backend/*/build/reports/jacoco/
+            backend/*/build/test-results/test/
           retention-days: 14
           if-no-files-found: ignore
 
@@ -188,6 +223,10 @@ jobs:
       - name: Vitest + 줄 커버리지 80%
         run: npx --no-install vitest run tests --coverage
       - run: npx --no-install next build
+      - name: U5b 프런트 범위 줄 80%
+        env:
+          MUJOONG_COVERAGE_SCOPE: u5b
+        run: npx --no-install vitest run tests/u5b --coverage
       - name: 브라우저 번들에 키 형식 문자열 · 비밀 변수 이름 0건
         run: |
           set -euo pipefail
@@ -415,14 +454,17 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: skeleton-report
-          path: build/verify/report.txt
+          path: |
+            build/verify/report.txt
+            build/verify/A1.log
+            backend/*/build/test-results/test/
           retention-days: 14
           if-no-files-found: warn
 
   ci-gate:
     name: ci-gate
     if: always()
-    needs: [changes, backend, backend-deps, frontend, frontend-deps, tools, secrets, infra-validate, images, skeleton]
+    needs: [changes, backend, u5b-scope, backend-deps, frontend, frontend-deps, tools, secrets, infra-validate, images, skeleton]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:

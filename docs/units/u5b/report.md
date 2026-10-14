@@ -1,4 +1,56 @@
-# U5b 독립 구현 실행 기록
+# U5b 구현 · 통합 실행 기록
+
+## 2026-10-14 통합 인수 진행
+
+`bdf47ec`의 독립 구현을 보존한 채 `codex/u5b-integration`에서 실제 연결을 구현한다. 아래 기존 기록은 독립 구현 당시의 실행 증거다. 현재 설계와 사용자 확정 정책은 design.md 9절을 따른다. AI-DLC 엔진이 없는 환경에서 다른 작업자의 승인 기록을 이어 쓰지 않았다.
+
+### 구현
+
+- Core V7 준비 원장, POST /api/activities/practice, 고정 목표·순서·같은 키 재사용, C8 첫 상황 전달, ACTIVE C10 어댑터, ActivityRecorded 후 실제 노출 정산과 재시도.
+- Realtime V4 자동 적용, 실제 PracticeSessionExtension, 단계별 타입 발화·실제 재생 상관관계·진행 조회, 원래 평가 시한을 지키는 종료 정산, 재시작 후 기록 복구, 삭제 참가자 150.
+- 화면 18 시작 및 재시도, 화면 12 연습 머리·단계·끝내기. 오류·미확인 응답에 따라 멱등 키를 보존하거나 새로 만든다.
+- 부모 API·시간·포트·편차 문서 및 ERD §8. Core V5(U6) → V6(U7) → V7(이 PR) 병합 순서는 사람이 지킨다. Realtime V3는 이미 기준 main에 포함된다.
+
+### 확인한 실행 결과
+
+| 검증 | 결과 |
+|---|---|
+| 프런트 전체 | 59파일 835건 통과, 줄 3102/3143 = 98.69% |
+| 프런트 U5b | 3파일 32건 통과, 범위 줄 82/82 = 100% |
+| 프런트 정적·빌드 | typecheck · ESLint · Next production build 통과 |
+| Core U5b 비DB | 36건 통과, DB 시험 8건 포함 전체 시험 소스 컴파일 통과 |
+| Realtime U5b 비DB | 70건 통과, 정지 겹침·처리 실패·원래 판정 시한 정산 포함 |
+| 기존 기능 포함 로컬 비DB 회귀 | u1/u3/u4b/u5b 태그. contract-model 293/293, Core 406/407, Realtime 857/858, test-support 21/21. 총 1577/1579 통과. 아래 기존 Windows 종료 시간 시험 2건 실패 |
+| DB·리눅스·스켈레톤 | 로컬 Docker를 재시작/정리하지 않았다. 전체 비DB 회귀 중 기존 ScenarioServiceTest의 DB 태그 누락으로 Testcontainers 자동 호출이 발생해 그 실행을 중단했다. DB 검증은 GitHub Actions에서 진행 |
+
+프런트 RED는 21건 중 13실패·8통과였고 실제 연결 후 기존 화면 포함 76건 통과, 최종 전체 835건을 확인했다. DB/삭제·정산·복구는 새 타입/API가 없는 상태의 컴파일 실패를 먼저 확인한 뒤 구현했다. Core 최초 실행은 준비 중 코드가 작성되어 RED 증거를 확보하지 못했으므로 실패 확인으로 계수하지 않는다.
+
+### 계약과 가정
+
+- 편차 (U5b-a)~(U5b-e), 가정 U5b-I1~I10은 contracts/deviations.md와 design.md 9절에 있다.
+- 사용자 확정: 두 번째 상황 생성 실패는 이전 기록을 보존한 미완료 목표 뒤 다음 목표 진행. 판정 중 종료는 원래 제한 시간까지 기다려 결과 포함.
+- 실제 공급자·장치 확인은 별도다. TextAiProvider/EvaluationProvider/CueProvider의 운영 기본은 미연결이며 가짜 성공을 만들지 않는다. 시험 대역은 테스트 소스에서만 사용한다.
+- 판정 최종 저장 예산 2초는 운영 부하로 입증되지 않았다. 장애 뒤 시한을 넘겨 복구한 판정은 별도 오류로 관측하며 12초 충족으로 보고하지 않는다.
+- 기존 U1/U3/U4/U5a 단언·하한을 낮추지 않는다. 실제 새 스키마의 표 수·최고 버전 기대값과 18의 시작 비활성 단언, 비동기 페이지 호출 방식만 기능 변경에 맞춰 갱신한다.
+
+### 남은 일
+
+최종 JVM 회귀·DB/스키마/범위 커버리지 CI 확인, PR 및 수동 스켈레톤 실행 결과 기록. 실제 장치 음성·Cue 내용 품질·실공급자·부하 성능은 이 환경에서 실행하지 않았고 후속 검증 대상이다.
+
+#### 기존 Windows 종료 시간 시험
+
+`CoreStartupSequenceTest`와 Realtime `DrainingLifecycleTest`의 `aStuckDatabaseCannotStretchTheShutdownThroughTheLastSnapshot`가 최종 로컬 회귀에서 각각 4.665초/4.558초로 3초 제한을 넘겼다. 시험·DrainingLifecycle·MetricSnapshotJob·SystemLoad는 기준 main과 같다. 동일 JDK의 새 JVM에서 OperatingSystemMXBean.getCpuLoad() 첫 호출을 별도 측정한 결과 약 2.479초, 후속 호출은 0.1ms 미만이었다. 시험은 DB 읽기 제한 2초 뒤 이 첫 측정까지 포함하므로 실패와 부합하지만, 실패 당시 구간별 계측이 없어 원인을 단정하지 않는다. 단언과 운영 구현을 바꾸지 않고 Linux CI에서 재확인한다.
+
+#### U6 인계
+
+U6 PR #11의 소비 형식을 읽기 검토했다. `record.practice.goals[].behaviorKey/behaviorVersion`은 세션 시작 때 고정한 값으로 추가해 정의 조회 입력을 맞췄다. U6 코드와 브랜치는 수정하지 않았다. U6 담당자가 확인할 두 항목은 다음과 같다.
+
+- `HelpSummarizer`: `cues.size()`에는 거절·무응답·재생 전 실패도 포함된다. 실제 도움 횟수는 `givenAt` 증거로 집계해야 한다.
+- `NotDoneReasonMapper`: `goal.skipReason=TIME_OVER`를 소비해야 새 상황 생성 시간초과를 일반 `ACTIVITY_ENDED`와 구분할 수 있다.
+
+---
+
+## 독립 구현 당시 실행 기록
 
 승인된 Step1~15의 U5b 독립 부품 구현 및 계약 대역 시험 결과다. 전체 U5b 통합 완료를 의미하지 않는다. Q1~Q6 결정과 I1~I5 미합의 상태를 유지한다.
 

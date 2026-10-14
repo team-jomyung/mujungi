@@ -42,8 +42,8 @@ U5a는 U2/U4/U5b/U6 구현을 소유하지 않는다. 다음 Java 포트는 Core
 | PracticeAccountPort | U2 아이·계정 공개 부품 | U2PracticeAccountAdapter(GuardianWriteLock · ChildProfileService). 쓰기 트랜잭션은 보호자 행을 첫 잠금으로 잡고 삭제 중 계정을 거절한다. 목록 조회는 아이가 없어도 빈 목록 |
 | CandidateEvidencePort | U4 실제 전사/행동 사실과 U6 추천 결과 연결 | 확인 불가 반환, 근거 없는 후보 등록 거절 |
 | GoalMetadataPort | U4 기록 읽기 | 메타 필드 null (0회로 위장하지 않음) |
-| PracticeSessionContextPort | U4/U5b 활성 세션과 고정된 GoalSnapshot | SERVICE_NOT_READY. 세션 UUID만으로 성공을 꾸미지 않음 |
-| ScenarioRecordPort | U4 실제 노출 기록 읽기 | SERVICE_NOT_READY. 활동 기록 뒤 reconcileExposures로 반영 |
+| PracticeSessionContextPort | U4/U5b 활성 세션과 고정된 GoalSnapshot | V7 준비 원본과 ActivityCopy로 ACTIVE·보호자·고정 목표를 확인. 준비 원본이 없으면 SERVICE_NOT_READY |
+| ScenarioRecordPort | U4 실제 노출 기록 읽기 | ActivityRecord의 practice.goals[].scenarios[].exposedAt만 사용. 커밋 뒤 reconcileExposures 및 미정산 준비의 주기 재조회 |
 | KnowledgeGraphLookup | 필요 시 Neo4j 읽기 전용 어댑터 | mujoong.knowledge.neo4j.enabled=false, 원장은 PostgreSQL |
 | TextAiProvider | 추후 실공급자 어댑터 | UNAVAILABLE. 가짜 구현은 시험 소스에서만 |
 
