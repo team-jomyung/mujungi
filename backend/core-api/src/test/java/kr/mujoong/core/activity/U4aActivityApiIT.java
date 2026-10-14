@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.locks.LockSupport;
 import kr.mujoong.contract.event.payload.SessionRecordCaptured;
 import kr.mujoong.contract.event.payload.SessionStateChanged;
 import kr.mujoong.contract.status.EndReason;
@@ -344,6 +345,7 @@ class U4aActivityApiIT {
         deliver(captured(family, sessionId, SessionStatus.ENDED, record));
         deliver(captured(family, sessionId, SessionStatus.ENDED, record));
         awaitProcessed(2);
+        awaitRecordedEvent(sessionId);
 
         assertThat(count("select count(*) from core.core_activity_record where session_id = :g", sessionId)).isEqualTo(1);
         assertThat(app.bean(RecordedEvents.class).events()).as("ActivityRecorded는 처음 저장 때 한 번(커밋 뒤)").singleElement()
@@ -562,6 +564,18 @@ class U4aActivityApiIT {
             Thread.onSpinWait();
         }
         throw new AssertionError("Inbox 처리기가 10초 안에 끝나지 않았다");
+    }
+
+    /** DB 커밋 뒤 실행되는 구독자까지 도착했는지 별도로 기다린다. */
+    private void awaitRecordedEvent(UUID sessionId) {
+        long deadline = System.nanoTime() + Duration.ofSeconds(10).toNanos();
+        while (System.nanoTime() < deadline) {
+            if (app.bean(RecordedEvents.class).events().stream().anyMatch(event -> event.sessionId().equals(sessionId))) {
+                return;
+            }
+            LockSupport.parkNanos(Duration.ofMillis(10).toNanos());
+        }
+        throw new AssertionError("ActivityRecorded 구독자가 10초 안에 받지 못했다");
     }
 
     private int contexts(UUID guardianId) {

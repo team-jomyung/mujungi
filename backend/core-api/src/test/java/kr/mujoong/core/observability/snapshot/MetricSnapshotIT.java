@@ -64,7 +64,10 @@ class MetricSnapshotIT {
         db = DbTestSupport.coreApp();
         String token = TestSecrets.internalServiceToken();
         realtime = WebFixtures.realtime(token);
-        app = CoreWebApp.builder(db.postgres()).internalToken(token).realtime(realtime.baseUrl()).start();
+        app = CoreWebApp.builder(db.postgres()).internalToken(token).realtime(realtime.baseUrl())
+                // 이 시험은 tick을 직접 호출하므로 주기 작업이 같은 표본 구간을 먼저 닫지 않게 한다.
+                .property("mujoong.observability.system-sample-interval", "30d")
+                .start();
         logs = LogCapture.attach();
     }
 
