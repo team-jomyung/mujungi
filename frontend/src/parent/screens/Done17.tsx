@@ -11,6 +11,8 @@ import { fetchHome, queryKeys, useApiClient } from "../api/queries";
 import { isTerminalStatus, type LiveView, type SessionStatus } from "../api/types";
 import { BottomTabBar, type TabKey } from "../components/BottomTabBar";
 import { useLivePolling } from "../hooks/useLivePolling";
+import { useResultStatusPolling } from "../hooks/useResultStatusPolling";
+import { RESULT_TEMP_COPY as RESULT_COPY } from "@/shared/copy/result";
 import { PARENT_ROUTES, goToLogin, isUnauthenticated, routeForTab } from "../navigation";
 import { COPY, PROPOSED_COPY, TEMP_COPY, doneTimeRangeLine } from "@/shared/copy/ko";
 import { formatHhmm, minutesBetween } from "@/shared/copy/timeText";
@@ -52,6 +54,8 @@ export function Done17({ sessionId }: Done17Props) {
   const { view, error, failureStreak, refetch } = polling;
   const status = view?.status;
   const startFailed = view !== undefined && isStartFailure(view);
+  const resultPolling = useResultStatusPolling(sessionId, status !== undefined && isTerminalStatus(status) && !startFailed);
+  const jobStatus = resultPolling.data?.jobStatus;
   const failureCode = view?.failureCode ?? null;
 
   useEffect(() => {
@@ -112,11 +116,13 @@ export function Done17({ sessionId }: Done17Props) {
             {presentation.unconfirmedLine}
           </p>
         ) : null}
-        {presentation.cleaningLine !== null ? (
-          <p className="mj-done__cleaning" role="status" data-testid="done-cleaning">
-            {presentation.cleaningLine}
+        {!presentation.closing && jobStatus !== "NONE" ? (
+          <p className="mj-done__cleaning" role="status" aria-live="polite" data-testid="done-cleaning">
+            {jobStatus === "DONE" ? RESULT_COPY.done : jobStatus === "FAILED" ? RESULT_COPY.failed : RESULT_COPY.cleaning}
           </p>
         ) : null}
+        {jobStatus === "DONE" ? <button type="button" className="mj-button mj-button--block" data-testid="done-view-record" onClick={() => router.push(PARENT_ROUTES.recordDetail(sessionId))}>{RESULT_COPY.viewRecord}</button> : null}
+        {jobStatus === "FAILED" ? <button type="button" className="mj-button mj-button--block" data-testid="done-retry-in-record" onClick={() => router.push(PARENT_ROUTES.recordDetail(sessionId))}>{RESULT_COPY.retryInRecord}</button> : null}
         <button type="button" className="mj-button mj-button--primary mj-button--block" data-testid="done-home" onClick={() => router.push(PARENT_ROUTES.home)}>
           {COPY.done.home}
         </button>

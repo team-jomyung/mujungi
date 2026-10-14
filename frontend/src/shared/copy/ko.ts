@@ -174,6 +174,8 @@ export const TEMP_COPY = {
     CSRF_TOKEN_INVALID: "보안 확인이 만료됐어요. 다시 시도해 주세요.",
     SESSION_IN_PROGRESS: "이미 진행 중인 활동이 있어요.",
     IDEMPOTENCY_CONFLICT: "같은 요청 번호로 다른 내용이 왔어요.",
+    JOB_NOT_FAILED: "지금은 다시 시도할 수 없어요.",
+    REPORT_NOT_READY: "리포트가 아직 준비되지 않았어요.",
     SESSION_NOT_ACTIVE: "지금은 끝낼 수 있는 상태가 아니에요.",
     ALREADY_SELECTED: "이미 담은 목표예요.",
     RESTORE_EXPIRED: "되돌릴 수 있는 시간이 지났어요.",

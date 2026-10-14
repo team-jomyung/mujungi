@@ -106,10 +106,10 @@ describe("17 — 종료 사유 3종(AC3.3.6 · AC3.3.7 · C.S-17.58 · C.S-17.71
     expect(screen.getByTestId("done-view")).toHaveAttribute("data-state", "DECLINED");
   });
 
-  it("「오늘 기록 보기」는 감추고 「홈으로」는 04로 간다(J120)", async () => {
-    renderDone(() => jsonResponse(200, liveViewBody("ENDED", { endReason: "GUARDIAN_STOP", endedAt: ENDED_AT })));
+  it("정리 끝(DONE)에서 「오늘 기록 보기」를 보이고 「홈으로」는 04로 간다(U6)", async () => {
+    renderParent(<Done17 sessionId={SESSION_ID} />, { handler: path => jsonResponse(200, path.endsWith("/result/status") ? { jobStatus: "DONE", sessionStatus: "ENDED", confirmed: true } : liveViewBody("ENDED", { endReason: "GUARDIAN_STOP", endedAt: ENDED_AT })) });
     await screen.findByText("보호자가 끝냈어요");
-    expect(screen.queryByText(/기록 보기/)).toBeNull();
+    expect(await screen.findByTestId("done-view-record")).toHaveTextContent("오늘 기록 보기");
     fireEvent.click(screen.getByTestId("done-home"));
     expect(router.push).toHaveBeenCalledWith("/parent");
     fireEvent.click(screen.getByTestId("tab-free"));

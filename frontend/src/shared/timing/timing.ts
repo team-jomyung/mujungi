@@ -9,6 +9,8 @@ import timingDefaults from "./timing-defaults.json";
 
 /** web이 쓰는 시간 값(밀리초). */
 export interface Timing {
+  /** U6 리포트 접수 뒤 기다리는 상한(BR11.8). */
+  readonly reportReadyTargetMs: number;
   /** 12 진행 폴링 주기(mujoong.timing.parent.poll-interval, BR6.15 · PD-12). */
   readonly parentPollIntervalMs: number;
   /** 보호자 웹 REST 요청 제한 시간(mujoong.timing.parent.request-timeout, J80 · RD-21). */
@@ -65,6 +67,7 @@ function contractKey(field: TimingField, configKey: string, kind: "duration" | "
 
 /** web이 읽는 키 목록. 계약 키는 환경 변수로 덮어쓸 수 있다. */
 export const TIMING_KEYS: readonly TimingKeySpec[] = [
+  contractKey("reportReadyTargetMs", "mujoong.timing.report.ready-target"),
   contractKey("parentPollIntervalMs", "mujoong.timing.parent.poll-interval"),
   contractKey("parentRequestTimeoutMs", "mujoong.timing.parent.request-timeout"),
   contractKey("parentLoadingNoticeDelayMs", "mujoong.timing.parent.loading-notice-delay"),

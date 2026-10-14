@@ -138,21 +138,24 @@ describe("12 — 끝내기 · P2 · P3 · 실패(AC3.3.8 · AC3.4.1 · AC3.5.1 �
 });
 
 describe("17 — 사유 표 · 정리 중 · 미확인 줄(AC3.6.9 · AC3.4.3 · AC3.6.10)", () => {
-  function renderDone(body: Record<string, unknown>) {
+  function renderDone(body: Record<string, unknown>, resultStatus: () => string = () => "REQUESTED") {
     return renderParent(<Done17 sessionId={SESSION_ID} />, {
       timing: { parentPollIntervalMs: POLL_MS },
-      handler: () => jsonResponse(200, body),
+      handler: path => jsonResponse(200, path.endsWith("/result/status") ? { jobStatus: resultStatus(), sessionStatus: body.status, confirmed: body.confirmed } : body),
       prepare: (queryClient) => queryClient.setQueryData(["home"], parseHome(homeBody("STABLE"))),
     });
   }
 
   it("CHILD_STOP은 '하늘이 끝내자고 했어요' + 기본 표현 · 시각, 정리 중 줄", async () => {
-    renderDone(liveViewBody("ENDED", { endReason: "CHILD_STOP", confirmed: true, endedAt: ENDED_AT }));
+    let jobStatus = "REQUESTED";
+    renderDone(liveViewBody("ENDED", { endReason: "CHILD_STOP", confirmed: true, endedAt: ENDED_AT }), () => jobStatus);
     expect(await screen.findByText("하늘이 끝내자고 했어요")).toBeInTheDocument();
     expect(screen.getByTestId("done-reason")).toHaveTextContent("\"무중아 그만할래\" · 10:21");
     expect(screen.getByTestId("done-cleaning")).toHaveTextContent("기록을 정리하고 있어요");
     expect(screen.queryByTestId("done-unconfirmed")).toBeNull();
     expect(screen.queryByText(/기록 보기/)).toBeNull();
+    jobStatus = "DONE";
+    expect(await screen.findByTestId("done-view-record")).toHaveTextContent("오늘 기록 보기");
   });
 
   it("SILENCE는 자동 종료 사유(F1-a 문구)", async () => {

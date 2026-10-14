@@ -29,6 +29,7 @@ describe("timing — 기본값과 계약", () => {
   it("기본값은 contracts/timing.md와 같은 값이다(2s · 10s · 2s · 5s · 20s · 5s · 3s)", () => {
     expect(defaultTiming()).toEqual({
       parentPollIntervalMs: 2_000,
+      reportReadyTargetMs: 60_000,
       parentRequestTimeoutMs: 10_000,
       parentLoadingNoticeDelayMs: 5_000,
       bootstrapStatusPollMs: 2_000,
