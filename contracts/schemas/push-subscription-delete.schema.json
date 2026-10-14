@@ -1,0 +1,9 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mujoong.invalid/contracts/schemas/push-subscription-delete.schema.json",
+  "title": "현재 기기 웹 푸시 해제",
+  "type": "object", "additionalProperties": false, "required": ["endpoint"],
+  "properties": {
+    "endpoint": {"type": "string", "format": "uri", "maxLength": 2048, "pattern": "^https://"}
+  }
+}

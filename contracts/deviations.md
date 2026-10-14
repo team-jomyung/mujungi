@@ -121,3 +121,13 @@
 | (U6-j) | AC3.6.12 정리 끝 READY는 작업 상태 DONE | C19 |
 | (U6-k) | PDF는 메모리 렌더라 서버 파일과 삭제 단계 없음 | Q6 A · FR10.3 |
 | (U6-l) | 자유대화 결과 문장은 저장 · API · 리포트만, 27 미표시 | Q5 A |
+## U7 웹 푸시 계약
+
+| 기호 | 변경 | 근거/영향 |
+|---|---|---|
+| (U7-a) | 세션 인증 GET `/push-subscription/vapid-public-key` → `{enabled,publicKey}`. 미설정은 false/null, 응답 no-store. private key · subject는 반환하지 않는다. | C6의 프런트 구독 준비 정보 보완 · U7-J5 |
+| (U7-b) | 다른 보호자가 소유한 endpoint의 PUT은 409 `PUSH_SUBSCRIPTION_CONFLICT`, 고정 문구는 errors.md. 기존 보호자 소유를 변경하지 않는다. | C6의 endpoint 유일성과 소유권 · U7-J4 |
+| (U7-c) | DELETE `/push-subscription` 본문은 `{endpoint}`. 현재 보호자의 그 기기만 해제하며 알 수 없는/타인 주소도 204다. | 사용자 확인(현재 기기만) · U7-J3 |
+| (U7-d) | 푸시 클릭은 `/sessions/{id}`로 해당 세션을 재조회한다. 진행 중 12, CLOSING/종료 17, 조회 실패/UNKNOWN은 04 미확인이다. | C6의 이전 current-only 문구를 U4a review-1 4절과 U7 지시서가 정정 · AC1.7.4 |
+
+서버 payload는 `{type,activityType,sessionId,sentAt}`만 보낸다. type은 `VOICE_PROBLEM`, `DEVICE_STATUS_UNKNOWN`, `ENDED_BY_CONNECTION`, `ACTIVITY_COMPLETED`이고 기존 이벤트 계약은 수정하지 않는다. 네 문구의 정본은 `frontend/src/shared/copy/ko.ts`다.

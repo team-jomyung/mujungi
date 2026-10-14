@@ -17,7 +17,7 @@ U4b부터는 다시 AI-DLC를 쓴다. 담당자마다 자기 PC에서 유닛용 
 | U4b 활동 세션 Realtime | **main 병합**(10/14, PR #8, 7a22b67). realtime V3 | 병합됨 | `u4b/design.md` · `u4b/brief.md` |
 | U5b 연습 Realtime · 연결 마무리 | **지시서 준비됨**. U4b와 병렬로 진행하고, 각자 자기 PC에서 AI-DLC 작업 기록을 새로 만든다. 병합은 U4b 다음. realtime V4 | main에서 새로 `unit/u5b-practice` | **`u5b/brief.md`** |
 | U6 결과와 리포트 | **진행 중**. `261014-u6-result-report` 코드 생성·검증, core V5. U5b 합류 후 연습 전체 흐름 확인 예정 | `unit/u6-results-report` | `u6/brief.md` · `u6/design.md` · `u6/report.md` |
-| U7 웹 푸시 | 시작 전. core V6이라 U6 다음에 병합한다 | — | `aidlc/…/inception/units-generation/unit-of-work.md` U7 절, 맨 아래 「U6 · U7 정본」 |
+| U7 웹 푸시 | **구현 · PR CI 통과, 검토 대기**(10/14, PR #10). 시간 키 · 구독 API · 삭제 참가자(60)를 추가했다. core V6이라 U6(V5) 다음에 사람이 병합한다. 실기 확인은 남아 있다 | `unit/u7-web-push` | `u7/brief.md` · `u7/design.md` · `u7/report.md` · 맨 아래 「U6 · U7 정본」 |
 
 ## 병합 순서 (꼭 지킨다)
 

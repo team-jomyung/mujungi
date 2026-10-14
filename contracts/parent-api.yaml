@@ -1139,6 +1139,65 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "500": { $ref: "#/components/responses/InternalError" }
         "503": { $ref: "#/components/responses/ServiceNotReady" }
+  /push-subscription:
+    put:
+      operationId: putPushSubscription
+      summary: 현재 기기의 웹 푸시 구독 등록 또는 갱신
+      x-unit: U7
+      security: [{ session: [], csrf: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "schemas/push-subscription-request.schema.json" }
+      responses:
+        "204": { description: 등록됨 }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/CsrfOrDeletion" }
+        "409":
+          description: 다른 보호자 소유의 endpoint
+          x-error-codes: [PUSH_SUBSCRIPTION_CONFLICT]
+          content:
+            application/json:
+              schema: { $ref: "schemas/error-envelope.schema.json" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/ServiceNotReady" }
+    delete:
+      operationId: deletePushSubscription
+      summary: 현재 기기의 웹 푸시 구독 해제
+      description: 요청 endpoint만 해제한다. 없거나 다른 보호자 소유인 주소도 204이며 다른 기기는 유지한다.
+      x-unit: U7
+      x-u7-deviation: ["(U7-c)"]
+      security: [{ session: [], csrf: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "schemas/push-subscription-delete.schema.json" }
+      responses:
+        "204": { description: 해제됨 또는 이미 없음 }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/CsrfOrDeletion" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/ServiceNotReady" }
+  /push-subscription/vapid-public-key:
+    get:
+      operationId: getPushVapidPublicKey
+      summary: 웹 푸시 활성 여부와 공개 키 조회
+      x-unit: U7
+      x-u7-deviation: ["(U7-a)"]
+      responses:
+        "200":
+          description: 비활성이면 enabled=false와 publicKey=null
+          content:
+            application/json:
+              schema: { $ref: "schemas/push-vapid-key.schema.json" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/AccountDeletion" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/ServiceNotReady" }
 components:
   securitySchemes:
     session: { type: apiKey, in: cookie, name: MUJOONG_SESSION }

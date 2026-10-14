@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mujoong.invalid/contracts/schemas/push-vapid-key.schema.json",
+  "title": "웹 푸시 공개 설정",
+  "type": "object", "additionalProperties": false, "required": ["enabled", "publicKey"],
+  "properties": {
+    "enabled": {"type": "boolean"}, "publicKey": {"type": ["string", "null"]}
+  },
+  "if": {"properties": {"enabled": {"const": false}}},
+  "then": {"properties": {"publicKey": {"type": "null"}}},
+  "else": {"properties": {"publicKey": {"type": "string", "minLength": 1}}}
+}

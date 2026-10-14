@@ -140,6 +140,11 @@ mujoong:
     report:
       ready-target: 60s
       unsaved-retention: 24h
+    push:
+      dispatch-poll: 1s
+      retry-backoff: [5s, 30s, 2m]
+      send-timeout: 5s
+      device-status-check: 10s
   outbox:
     poll-interval: 500ms
     batch-size: 20

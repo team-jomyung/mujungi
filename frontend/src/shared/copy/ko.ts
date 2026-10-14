@@ -180,6 +180,7 @@ export const TEMP_COPY = {
     ALREADY_SELECTED: "이미 담은 목표예요.",
     RESTORE_EXPIRED: "되돌릴 수 있는 시간이 지났어요.",
     SCENARIO_GEN_FAILED: "연습 상황을 준비하지 못했어요.",
+    PUSH_SUBSCRIPTION_CONFLICT: "알림 구독을 다시 등록해 주세요.",
     DEVICE_NOT_STABLE: "기기 연결이 안정되지 않았어요.",
     REALTIME_UNAVAILABLE: "지금은 연결할 수 없어요. 잠시 뒤 다시 시도해 주세요.",
     CODE_NOT_FOUND: "없는 코드예요.",
@@ -206,6 +207,37 @@ export const TEMP_COPY = {
   },
   /** 응답 없음 · 시간 초과 · 모르는 code의 일반 문장(INTERNAL_ERROR 문장과 같다). */
   networkError: "잠시 문제가 생겼어요. 다시 시도해 주세요.",
+} as const;
+
+/** U7 알림 정본: US1.7 AC1.7.1~1.7.3 · mockups §9-35(완료). */
+export const PUSH_COPY = {
+  problem: {
+    VOICE_PROBLEM: "대화 중 음성 연결 문제가 발생했어요.",
+    DEVICE_STATUS_UNKNOWN: "기기 상태를 확인할 수 없어요.",
+    ENDED_BY_CONNECTION: "연결 문제로 활동이 종료됐어요.",
+  },
+  completedTitle: { FREE_TALK: "자유대화가 끝났어요", PRACTICE: "연습이 끝났어요" },
+  completedBody: "앱에서 최신 상태를 확인해 주세요",
+} as const;
+
+/** U7 SET0 추가행 임시 문구: 기존 문구표에 설정 행이 없어 둠(U7 설계 · J118 관례). */
+export const PUSH_TEMP_COPY = {
+  heading: "이 기기 알림",
+  enable: "알림 켜기",
+  disable: "알림 끄기",
+  reregister: "다시 등록",
+  checking: "알림 설정을 확인하고 있어요",
+  unsupported: "이 브라우저에서는 알림을 지원하지 않아요",
+  unavailable: "알림을 준비하고 있어요",
+  denied: "브라우저 설정에서 알림을 허용해 주세요.",
+  dismissed: "알림이 허용되지 않았어요. 다시 켜서 허용해 주세요.",
+  unverified: "알림 켜기를 눌러 이 계정의 알림을 등록해 주세요.",
+  on: "이 기기에서 알림을 받아요",
+  off: "이 기기 알림이 꺼져 있어요",
+  loadFailed: "알림 설정을 불러오지 못했어요.",
+  enableFailed: "알림을 켜지 못했어요. 다시 시도해 주세요.",
+  disableFailed: "알림을 끄지 못했어요. 다시 시도해 주세요.",
+  cleanupFailed: "서버 알림은 꺼졌어요. 이 기기의 알림 해제를 다시 시도해 주세요.",
 } as const;
 
 // ───────────── 자리를 채우는 문구 ─────────────

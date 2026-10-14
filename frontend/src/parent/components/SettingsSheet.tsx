@@ -8,6 +8,7 @@ import { useApiClient } from "../api/queries";
 import { PARENT_ROUTES, isUnauthenticated } from "../navigation";
 import { BottomSheet } from "./BottomSheet";
 import { ConfirmDialog } from "./ConfirmDialog";
+import { PushSettingsRow } from "./PushSettingsRow";
 import { ACCOUNT_COPY, ACCOUNT_TEMP_COPY, deleteDialogBody } from "@/shared/copy/account";
 import { useToast } from "@/shared/toast/ToastProvider";
 
@@ -77,6 +78,7 @@ export function SettingsSheet({ open, childName, onClose }: SettingsSheetProps) 
     <>
       <BottomSheet open={open && !confirmingDelete} title={ACCOUNT_COPY.settings.title} onClose={onClose} withBack testIdPrefix="settings">
         <div className="mj-sheet__body mj-settings">
+          <PushSettingsRow />
           <button
             type="button"
             className="mj-button mj-button--secondary mj-button--block"

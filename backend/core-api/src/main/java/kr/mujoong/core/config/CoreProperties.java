@@ -84,7 +84,8 @@ public record CoreProperties(
             PracticeTiming practice,
             GoalTiming goal,
             ResultTiming result,
-            ReportTiming report) {
+            ReportTiming report,
+            PushTiming push) {
 
         public Timing {
             required(session, "mujoong.timing.session");
@@ -98,6 +99,7 @@ public record CoreProperties(
             required(goal, "mujoong.timing.goal");
             required(result, "mujoong.timing.result");
             required(report, "mujoong.timing.report");
+            required(push, "mujoong.timing.push");
         }
     }
 
@@ -123,6 +125,17 @@ public record CoreProperties(
         public ReportTiming {
             positive(readyTarget, "mujoong.timing.report.ready-target");
             positive(unsavedRetention, "mujoong.timing.report.unsaved-retention");
+        }
+    }
+
+    public record PushTiming(Duration dispatchPoll, List<Duration> retryBackoff,
+            Duration sendTimeout, Duration deviceStatusCheck) {
+        public PushTiming {
+            positive(dispatchPoll, "mujoong.timing.push.dispatch-poll");
+            positiveList(retryBackoff, "mujoong.timing.push.retry-backoff");
+            positive(sendTimeout, "mujoong.timing.push.send-timeout");
+            positive(deviceStatusCheck, "mujoong.timing.push.device-status-check");
+            retryBackoff = List.copyOf(retryBackoff);
         }
     }
 

@@ -70,10 +70,15 @@ describe("보안 · 기기 규칙(SD-11 · NFR10.4 · PD-16)", () => {
     expect(await rulesFor("src/device/mic/micPermission.ts", code)).toEqual([]);
   }, TIMEOUT_MS);
 
-  it("서비스 워커 등록은 어디서든 오류다(micPermission.ts 포함)", async () => {
+  it("서비스 워커 등록은 U7 전용 모듈 밖에서 오류다(micPermission.ts 포함)", async () => {
     const code = 'export function sample() {\n  return navigator.serviceWorker.register("/sw.js");\n}\n';
     expect(await rulesFor("src/device/__sample__.ts", code)).toContain("no-restricted-syntax");
     expect(await rulesFor("src/device/mic/micPermission.ts", code)).toContain("no-restricted-syntax");
+    expect(await rulesFor("src/shared/__sample__.ts", code)).toContain("no-restricted-syntax");
+    expect(await rulesFor("src/parent/__sample__.ts", code)).toContain("no-restricted-syntax");
+    expect(await rulesFor("src/parent/push/browserPush.ts", code)).toEqual([]);
+    const mic = "export function sample() { return navigator.mediaDevices.getUserMedia({ audio: true }); }";
+    expect(await rulesFor("src/parent/push/browserPush.ts", mic)).toContain("no-restricted-syntax");
   }, TIMEOUT_MS);
 
   it("화면 글을 JSX에 직접 쓰면 오류다(문구는 copy 모듈에서만, react/jsx-no-literals)", async () => {

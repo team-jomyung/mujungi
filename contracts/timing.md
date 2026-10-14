@@ -187,3 +187,11 @@ web의 loading-notice-delay는 MUJOONG_TIMING_PARENT_LOADINGNOTICEDELAY 환경 �
 | `mujoong.text-ai.result.prompt-version` | `v1` | core-api | 프롬프트 리소스 버전 | U6-J |
 
 생성 온도 `mujoong.text-ai.result.temperature-generation=0.2`, 재판정 온도 `temperature-judgment=0`, 프롬프트 버전 `prompt-version=v1`, `mujoong.limits.result-workers=2`는 시간이 아닌 설정이다. 실행 스레드 하나는 REPORT 전용이다. 17 · 27 · 28도 정리/생성 중에만 기존 `parent.poll-interval`을 사용한다(U6-h).
+## 11. U7 웹 푸시 시간
+
+| 키 | 기본값 | 소유 앱 | 뜻 | 근거 |
+|---|---|---|---|---|
+| `mujoong.timing.push.dispatch-poll` | `1s` | core-api | 발송 요청 점검 주기 | AC1.7.5 · U7-J6 |
+| `mujoong.timing.push.retry-backoff` | `[5s, 30s, 2m]` | core-api | 최초 발송 뒤 재시도 간격 | AC1.7.5 · U7-J6 |
+| `mujoong.timing.push.send-timeout` | `5s` | core-api | 수신처 한 곳의 HTTP 발송 상한 | FR7.10 · U7-J11 |
+| `mujoong.timing.push.device-status-check` | `10s` | core-api | 등록 기기의 보고 신선도 점검 주기 | AC1.7.2 · U7-J7 |

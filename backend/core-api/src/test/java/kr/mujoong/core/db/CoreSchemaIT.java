@@ -32,7 +32,7 @@ import org.springframework.context.annotation.Configuration;
 
 /**
  * Core 스키마 통합 시험(U1 3.5 Step 14). 실제 init 스크립트 + 두 마이그레이션 위치로 만든 DB에서 표 · 열 · 형식 · 색인과
- * JPA 엔터티 대조(ddl-auto=validate)를 본다. U2 V2 · U4a V3 · U5a V4가 더한 표도 같은 목록에 있다.
+ * JPA 엔터티 대조(ddl-auto=validate)를 본다. U2 V2 · U4a V3 · U5a V4 · U6 V5 · U7 V6가 더한 표도 같은 목록에 있다.
  *
  * <p>증명: BR8.2 · J43(V1이 표 12개를 만든다) · E1 ~ E4 열 수(core_device 22 · core_activity 20 · Outbox/Inbox 각 17) · A3
  * trace_id 열 · J115(timestamptz · jsonb · uuid, DB 시각 기본값 없음) · PD-8(fillfactor 90 · 부분 유일 색인) · J116(이력 표) ·
@@ -82,6 +82,9 @@ class CoreSchemaIT {
             "core_report_section", "core_result_job", "core_result_job_attempt", "core_scene_judgment",
             "core_session_result_state", "core_structured_experience");
 
+    /** U7 V6가 더하는 푸시 표 2개. */
+    static final List<String> U7_TABLES = List.of("core_push_dispatch", "core_push_subscription");
+
     @BeforeAll
     static void startDatabase() {
         postgres = MujoongPostgres.sharedOrAbort();
@@ -93,15 +96,17 @@ class CoreSchemaIT {
             List<List<Object>> tables = query(owner,
                     "select tablename, tableowner from pg_tables where schemaname = 'core' order by tablename");
             assertThat(tables.stream().map(row -> (String) row.get(0)).toList()).containsExactlyElementsOf(
-                    java.util.stream.Stream.of(CORE_TABLES, U5A_TABLES, U6_TABLES).flatMap(List::stream).sorted().toList());
+                    java.util.stream.Stream.of(CORE_TABLES, U5A_TABLES, U6_TABLES, U7_TABLES)
+                            .flatMap(List::stream).sorted().toList());
             // 편차 (x): 표 소유는 마이그레이션 역할, 앱 역할은 쓰는 역할일 뿐이다
             assertThat(tables).allSatisfy(row -> assertThat(row.get(1)).isEqualTo("mujoong_owner"));
 
-            // 이력 표 flyway.core_schema_history에 V1 · V2(U2) · V3(U4a) · V4(U5a)가 차례로 성공으로 있다(J116). core 위치가 먼저라 기준선 행은 없다
+            // V1 · V2(U2) · V3(U4a) · V4(U5a) · V5(U6) · V6(U7)가 차례로 성공으로 있다(J116). core 위치가 먼저라 기준선 행은 없다
             List<List<Object>> history = query(owner,
                     "select version, type, success from flyway.core_schema_history order by installed_rank");
             assertThat(history).containsExactly(List.of("1", "SQL", true), List.of("2", "SQL", true),
-                    List.of("3", "SQL", true), List.of("4", "SQL", true), List.of("5", "SQL", true));
+                    List.of("3", "SQL", true), List.of("4", "SQL", true), List.of("5", "SQL", true),
+                    List.of("6", "SQL", true));
         }
     }
 
@@ -188,7 +193,7 @@ class CoreSchemaIT {
     }
 
     @Test
-    void coreDeviceHasFillfactor90AndThePartialUniqueIndexesMatchTheirQueries() throws SQLException {
+    void coreDeviceHasFillfactor90AndThePartialIndexesMatchTheirQueries() throws SQLException {
         try (Connection core = postgres.connect(Role.CORE_APP)) {
             assertThat(single(core,
                     "select array_to_string(reloptions, ',') from pg_class c join pg_namespace n on n.oid = c.relnamespace"
@@ -203,8 +208,16 @@ class CoreSchemaIT {
                     "core_data_deletion_request_open_guardian_uk",
                     "core_device_active_guardian_uk",
                     "core_device_pending_code_uk",
+                    "core_push_dispatch_due_idx",
+                    "core_push_subscription_active_guardian_idx",
                     "core_result_job_subject_active_idx");
-            assertThat(partial).allSatisfy(row -> assertThat((String) row.get(1)).startsWith("CREATE UNIQUE INDEX"));
+            assertThat(partial.subList(0, 4)).allSatisfy(row -> assertThat((String) row.get(1)).startsWith("CREATE UNIQUE INDEX"));
+            assertThat((String) partial.get(4).get(1)).startsWith("CREATE INDEX")
+                    .contains("(next_attempt_at, requested_at)").contains("'REQUESTED'");
+            assertThat((String) partial.get(5).get(1)).startsWith("CREATE INDEX")
+                    .contains("(guardian_id)").contains("revoked_at IS NULL");
+            assertThat((String) partial.get(6).get(1)).startsWith("CREATE UNIQUE INDEX")
+                    .contains("(subject_id)").contains("'REQUESTED'").contains("'RUNNING'");
             assertThat((String) partial.get(2).get(1)).contains("(guardian_id)").contains("'REGISTERED'");
             assertThat((String) partial.get(3).get(1)).contains("(registration_code)").contains("'UNREGISTERED'");
             assertThat((String) partial.get(0).get(1)).contains("'REQUESTED'").contains("'CLOSING'")

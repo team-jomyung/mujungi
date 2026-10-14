@@ -15,6 +15,7 @@ import kr.mujoong.core.activity.ActivityCopyRepository.ActivityCopy;
 import kr.mujoong.core.activity.ActivityCopyRepository.StateChange;
 import kr.mujoong.core.activity.RealtimeSessionClient;
 import kr.mujoong.core.messaging.CoreInboxRepository.InboxEvent;
+import kr.mujoong.core.notification.PushEventRecorder;
 import org.springframework.stereotype.Component;
 
 /**
@@ -37,11 +38,14 @@ public class SessionStateChangedHandler implements InboxHandler {
     private final ActivityCopyRepository activities;
     private final RealtimeSessionClient realtime;
     private final JsonCodec json;
+    private final PushEventRecorder push;
 
-    public SessionStateChangedHandler(ActivityCopyRepository activities, RealtimeSessionClient realtime, JsonCodec json) {
+    public SessionStateChangedHandler(ActivityCopyRepository activities, RealtimeSessionClient realtime, JsonCodec json,
+            PushEventRecorder push) {
         this.activities = Objects.requireNonNull(activities, "activities");
         this.realtime = Objects.requireNonNull(realtime, "realtime");
         this.json = Objects.requireNonNull(json, "json");
+        this.push = Objects.requireNonNull(push, "push");
     }
 
     @Override
@@ -59,15 +63,26 @@ public class SessionStateChangedHandler implements InboxHandler {
             return Result.done();
         }
         UUID sessionId = payload.sessionId();
+        var before = activities.findById(sessionId);
+        if (before.isEmpty() || !before.get().guardianId().equals(payload.guardianId())) {
+            return Result.done();
+        }
+        boolean pushAllowed = push.lockGuardian(before.get().guardianId());
         StateChange change = new StateChange(sessionId, status, payload.statusVersion(), known(payload.endReason()),
                 known(payload.failureCode()), Boolean.TRUE.equals(payload.confirmed()), payload.at());
         if (activities.applyStateChange(change, now) == 1) {
+            if (pushAllowed) {
+                activities.findById(sessionId).ifPresent(copy -> push.record(copy, payload, true, now));
+            }
             return Result.done();
         }
         if (status == SessionStatus.ACTIVE) {
             activities.fillStartedAtIfMissing(sessionId, payload.at(), now);
         }
         Optional<ActivityCopy> copy = activities.findById(sessionId);
+        if (pushAllowed) {
+            copy.ifPresent(current -> push.record(current, payload, false, now));
+        }
         if (copy.isPresent() && copy.get().localFailed() && status.isNonTerminal()) {
             return Result.then(() -> realtime.cancelOrThrow(sessionId));
         }
