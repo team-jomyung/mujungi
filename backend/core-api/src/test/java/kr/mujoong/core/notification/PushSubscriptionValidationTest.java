@@ -28,10 +28,16 @@ class PushSubscriptionValidationTest {
     @ParameterizedTest
     @NullAndEmptySource
     @ValueSource(strings = {" ", "http://push.example.test/p", "//push.example.test/p", "https:///p",
-            "https://user:secret@push.example.test/p", "https://push.example.test/p#secret",
+            "https://push.example.test/p#secret",
             "https://push.example.test:8443/p", "https://push.example.test/p\n", "https://push.example.test/한글",
             "https://push.example.test/%zz"})
     void rejectsEndpointsThatAreNotAnUnambiguousHttpsPushAddress(String endpoint) {
+        invalid(() -> PushSubscriptionValidator.requireEndpoint(endpoint));
+    }
+
+    @Test
+    void rejectsUrlCredentialsGeneratedAtRuntime() {
+        String endpoint = "https://" + UUID.randomUUID() + ":" + UUID.randomUUID() + "@push.example.test/p";
         invalid(() -> PushSubscriptionValidator.requireEndpoint(endpoint));
     }
 
