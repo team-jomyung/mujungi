@@ -22,9 +22,8 @@ import kr.mujoong.core.web.support.WebFixtures;
 import kr.mujoong.testsupport.http.ContractStubServer;
 import kr.mujoong.testsupport.http.ContractStubServer.StubResponse;
 import kr.mujoong.testsupport.secret.TestSecrets;
-import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
@@ -35,27 +34,28 @@ import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
  *
  * <p>시험 로그인을 보려고 dev + 스위치 켬 조합(SD-14 조합 13)으로 띄운다. 시드 보호자 밖의 보호자는 픽스처 행과 저장소에 직접 만든 세션을 쓴다
  * (운영 로그인과 같은 SecurityContext 모양). Realtime은 계약 대역이고 진행 조회는 기본 404(폴백)이다.
+ * 시험마다 앱과 시계를 새로 만들고, 앱 종료로 타이머를 마친 뒤 행을 지워 앞 시험의 자동 취소가 다음 시험에 섞이지 않게 한다.
  */
 @Tag("u1")
 @Tag("db")
 class GuardianApiIT {
 
     private static final String LOGIN = "/api/dev/login";
-    private static DbTestSupport db;
-    private static BusinessFixtures fixtures;
-    private static ContractStubServer realtime;
-    private static CoreWebApp app;
-    private static final List<UUID> SESSION_OWNERS = new CopyOnWriteArrayList<>();
+    private DbTestSupport db;
+    private BusinessFixtures fixtures;
+    private ContractStubServer realtime;
+    private CoreWebApp app;
+    private final List<UUID> sessionOwners = new CopyOnWriteArrayList<>();
 
-    @BeforeAll
-    static void start() {
+    @BeforeEach
+    void start() {
         db = DbTestSupport.coreApp();
         BusinessFixtures.applyReferenceSeed(db.postgres());
         fixtures = new BusinessFixtures(db);
         String token = TestSecrets.internalServiceToken();
         realtime = WebFixtures.realtime(token);
         db.trackGuardian(SeedIds.GUARDIAN);
-        SESSION_OWNERS.add(SeedIds.GUARDIAN);
+        sessionOwners.add(SeedIds.GUARDIAN);
         app = CoreWebApp.builder(db.postgres())
                 .internalToken(token)
                 .realtime(realtime.baseUrl())
@@ -63,23 +63,23 @@ class GuardianApiIT {
                 .start();
     }
 
-    @AfterAll
-    static void stop() {
-        if (app != null) {
-            app.close();
-        }
-        if (realtime != null) {
-            realtime.close();
-        }
-        if (db != null) {
-            WebFixtures.deleteSessions(db, SESSION_OWNERS.toArray(UUID[]::new));
-            db.close();
-        }
-    }
-
     @AfterEach
-    void resetRealtime() {
-        realtime.route("GET", WebFixtures.RT_VIEW).respond(StubResponse.error(404, kr.mujoong.contract.error.ErrorCode.NOT_FOUND));
+    void stop() {
+        try {
+            if (app != null) app.close();
+        } finally {
+            try {
+                if (realtime != null) realtime.close();
+            } finally {
+                if (db != null) {
+                    try {
+                        WebFixtures.deleteSessions(db, sessionOwners.toArray(UUID[]::new));
+                    } finally {
+                        db.close();
+                    }
+                }
+            }
+        }
     }
 
     @Test
@@ -320,32 +320,32 @@ class GuardianApiIT {
 
     // ------------------------------------------------------------------ 도움
 
-    private static Family readyFamily() {
+    private Family readyFamily() {
         Family family = fixtures.family(app.clock().now().minusSeconds(3_600));
         fixtures.registeredDevice(family.guardianId(), ConnectionState.CONNECTED, app.clock().now(), app.clock().now());
         return family;
     }
 
-    private static String newSession(UUID guardianId) {
-        SESSION_OWNERS.add(guardianId);
+    private String newSession(UUID guardianId) {
+        sessionOwners.add(guardianId);
         return app.sessionCookieFor(guardianId);
     }
 
-    private static UUID startFreeTalk(String session, String csrf) {
+    private UUID startFreeTalk(String session, String csrf) {
         Result started = app.post("/api/activities/free").session(session).csrf(csrf)
                 .json("{\"idempotencyKey\":\"" + UUID.randomUUID() + "\"}").send();
         assertThat(started.status()).as("시작").isEqualTo(202);
         return UUID.fromString(String.valueOf(started.json().get("sessionId")));
     }
 
-    private static void report(UUID deviceId, String state) {
+    private void report(UUID deviceId, String state) {
         String now = ApiResponses.time(app.clock().now());
         Result result = app.put("/internal/devices/" + deviceId + "/connection").internalToken()
                 .json("{\"state\":\"" + state + "\",\"reportedAt\":\"" + now + "\"}").send();
         assertThat(result.status()).isEqualTo(204);
     }
 
-    private static String internalView(UUID sessionId) {
+    private String internalView(UUID sessionId) {
         String now = ApiResponses.time(app.clock().now());
         return "{\"sessionId\":\"" + sessionId + "\",\"activityType\":\"FREE_TALK\",\"status\":\"ACTIVE\",\"endReason\":null,"
                 + "\"failureCode\":null,\"confirmed\":false,\"requestedAt\":\"" + now + "\",\"startedAt\":\"" + now + "\","
@@ -355,7 +355,7 @@ class GuardianApiIT {
                 + "\"nextSeq\":1}";
     }
 
-    static String sessionStateChanged(UUID sessionId, Family family, String status, int version) {
+    String sessionStateChanged(UUID sessionId, Family family, String status, int version) {
         String now = ApiResponses.time(app.clock().now());
         return "{\"eventId\":\"" + db.trackInbox(UUID.randomUUID()) + "\",\"eventType\":\"SessionStateChanged\",\"schemaVersion\":1,"
                 + "\"occurredAt\":\"" + now + "\",\"aggregateType\":\"ActivitySession\",\"aggregateId\":\"" + sessionId + "\","
@@ -364,12 +364,12 @@ class GuardianApiIT {
                 + ",\"confirmed\":false,\"at\":\"" + now + "\"}}";
     }
 
-    private static void postEvent(String envelope) {
+    private void postEvent(String envelope) {
         Result result = app.post("/internal/events").internalToken().json(envelope).send();
         assertThat(result.status()).as("이벤트 수신").isEqualTo(200);
     }
 
-    private static void awaitStatus(String session, UUID sessionId, String status) {
+    private void awaitStatus(String session, UUID sessionId, String status) {
         long deadline = System.nanoTime() + Duration.ofSeconds(10).toNanos();
         while (!status.equals(copyStatus(sessionId))) {
             assertThat(System.nanoTime()).as("사본이 %s가 되지 않았다", status).isLessThan(deadline);
@@ -383,7 +383,7 @@ class GuardianApiIT {
         assertThat(app.get("/api/sessions/" + sessionId).session(session).send().json().get("status")).isEqualTo(status);
     }
 
-    private static String copyStatus(UUID sessionId) {
+    private String copyStatus(UUID sessionId) {
         return db.jdbc().queryForObject("select status from core.core_activity where session_id = :id",
                 new MapSqlParameterSource("id", sessionId), String.class);
     }
