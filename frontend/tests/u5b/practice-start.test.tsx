@@ -27,11 +27,11 @@ it("전송 결과 미확인 뒤에도 키와 원래 선택을 유지한다", asy
   await coordinator.submit(["b"], ["a", "b"]);
   expect(port.mock.calls[0][0]).toEqual(port.mock.calls[1][0]); expect(port.mock.calls[1][0].goalSelectionIds).toEqual(["a"]);
 });
-it("확정 거절 후 바뀐 선택은 별도 논리 요청이며 기존 선택 재시도는 같은 키다", async () => {
+it("확정 거절 뒤 명시 재시도는 선택이 같아도 새 키다(U5b-I5)", async () => {
   let sequence = 0; const port = vi.fn().mockResolvedValue({ kind: "rejected", code: "SCENARIO_GEN_FAILED" });
   const coordinator = new PracticeStartCoordinator(port, () => `key-${++sequence}`);
   await coordinator.submit(["a"], ["a", "b"]); await coordinator.submit(["a"], ["a", "b"]); await coordinator.submit(["b"], ["a", "b"]);
-  expect(port.mock.calls.map((call) => call[0].idempotencyKey)).toEqual(["key-1", "key-1", "key-2"]);
+  expect(port.mock.calls.map((call) => call[0].idempotencyKey)).toEqual(["key-1", "key-2", "key-3"]);
 });
 it("선택 0개 단추는 비활성이고 선택만으로 호출하지 않는다", () => {
   const port = vi.fn(); render(<PracticeStartAction selected={[]} owned={["a"]} port={port} newKey={() => "key"} onAccepted={vi.fn()} />);
@@ -48,7 +48,7 @@ it("키보드 제출 중 비활성 상태를 알리고 수락 뒤 한 번 이동
 it("상황 준비 실패를 표시하고 선택 수를 유지한다", async () => {
   render(<PracticeStartAction selected={["a", "b"]} owned={["a", "b"]} port={async () => ({ kind: "rejected", code: "SCENARIO_GEN_FAILED" })}
     newKey={() => "key"} onAccepted={vi.fn()} />);
-  fireEvent.click(screen.getByRole("button")); expect(await screen.findByText(/상황을 준비하지 못했어요/)).toBeVisible();
+  fireEvent.click(screen.getByRole("button")); expect(await screen.findByText(/연습 상황을 만들지 못했어요/)).toBeVisible();
   expect(screen.getByRole("button")).toHaveTextContent("2개"); expect(screen.getByRole("button")).toBeEnabled();
 });
 it("통신 오류를 시작 실패나 성공으로 표시하지 않는다", async () => {

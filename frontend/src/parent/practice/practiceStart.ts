@@ -8,7 +8,7 @@ export function ownedSelection(selected: readonly string[], owned: readonly stri
   return [...new Set(selected)].filter((id) => available.has(id)).sort();
 }
 
-/** 합의되지 않은 API 경로를 가정하지 않는 시작 조정자. 미확인 요청은 같은 키·선택을 보존한다. */
+/** 미확인 요청은 같은 키·선택을 보존하고 확정 거절 뒤 명시 재시도만 새 키를 쓴다(U5b-I5). */
 export class PracticeStartCoordinator {
   private request: StartRequest | null = null;
   private running: Promise<StartOutcome> | null = null;
@@ -19,7 +19,7 @@ export class PracticeStartCoordinator {
     if (this.running) return this.running;
     if (this.outcome?.kind === "accepted") return Promise.resolve(this.outcome);
     const ids = ownedSelection(selected, owned);
-    if (!this.request || (this.outcome?.kind === "rejected" && JSON.stringify(ids) !== JSON.stringify(this.request.goalSelectionIds))) {
+    if (!this.request || this.outcome?.kind === "rejected") {
       if (ids.length === 0) return Promise.reject(new Error("선택 목표가 없어요."));
       this.request = Object.freeze({ idempotencyKey: this.key(), goalSelectionIds: Object.freeze(ids) });
     }

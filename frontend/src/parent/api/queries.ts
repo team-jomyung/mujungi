@@ -10,6 +10,7 @@ import {
   parseLiveView,
   parseRegisterResult,
   parseStartResult,
+  ResponseShapeError,
   type Bubble,
   type DevLoginResult,
   type EndResult,
@@ -82,7 +83,11 @@ export function startFreeTalk(api: ApiClient, body: StartFreeTalkBody): Promise<
 /** GET /api/sessions/{id}?sinceSeq=n — 12 진행 · 17 상태(BR6.15). */
 export function fetchLiveView(api: ApiClient, sessionId: string, sinceSeq: number, signal?: AbortSignal): Promise<LiveView> {
   const path = `/api/sessions/${encodeURIComponent(sessionId)}?sinceSeq=${sinceSeq}`;
-  return api.request({ method: "GET", path, parse: parseLiveView, csrf: false, signal });
+  return api.request({ method: "GET", path, parse: (body) => {
+    const view = parseLiveView(body);
+    if (view.sessionId !== sessionId) throw new ResponseShapeError("sessionId");
+    return view;
+  }, csrf: false, signal });
 }
 
 /** POST /api/sessions/{id}/end — P1 끝내기(재시도는 같은 requestId, BR6.9 · RD-21). */
@@ -128,5 +133,7 @@ export function mergeLiveView(previous: LiveView | undefined, next: LiveView): L
   if (previous === undefined || previous.sessionId !== next.sessionId) {
     return next;
   }
-  return { ...next, items: mergeBubbles(previous.items, next.items) };
+  if ((previous.activityType === "PRACTICE" || next.activityType === "PRACTICE") && next.statusVersion < previous.statusVersion) return previous;
+  return { ...next, items: mergeBubbles(previous.items, next.items),
+    practice: next.activityType === "PRACTICE" && next.practiceIssue === "invalid" ? previous.practice : next.practice };
 }
