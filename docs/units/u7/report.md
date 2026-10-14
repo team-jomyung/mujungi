@@ -38,10 +38,16 @@
 |---|---|---|
 | PR CI 최초 | 38512294126 · 4319707 | FAIL · 아래 3건 수정 후 재실행 |
 | workflow_dispatch 최초 | 38512325637 · 4319707 | FAIL · skeleton A1에서 같은 backend 회귀 실패 |
-| U7 backend 범위 줄 80% | 미실행 | 대기 |
+| PR CI 2차 | 38513076295 · b2be606 | 기존 계정 시험 경합 1건, 같은 코드로 실패 작업 재실행 |
+| workflow_dispatch 2차 | 38513073071 · b2be606 | backend/frontend/이미지 PASS, skeleton A4 예시 URL 형식 검사 실패 후 수정 |
+| U7 backend 범위 줄 80% | 38513073071 · 93시험/실패 0/건너뜀 0 | PASS · 92.60%(901/973) |
 | U7 frontend 범위 줄 80% | 38512294126 · 89시험 | PASS · 89.23%(257/288) |
 
 최초 CI에서 Core 921건 중 3건 실패/건너뜀 0건을 확인했다. 신규 구독 충돌 code가 error-envelope JSON Schema 열거형에 빠진 1건을 추가했고, 기존 CoreStartupSequenceIT 2건은 V6까지 낮은 버전으로 바꾸는 fixture와 미래 성공 V7/실패 V8 fixture로 갱신했다. 기동 거부/성공 및 실패 이력 무시 단언을 유지했다. 나머지 U7 DB 사건/발송/삭제/경합 시험은 통과했다. Windows에서 실패했던 기존 종료 시한 두 시험은 Linux CI에서 통과했다.
+
+2차 수동 CI는 backend 전체 2,264건/실패 0/건너뜀 0과 frontend 전체를 통과했다. skeleton A4가 부적합 URL 거부 시험의 고정 userinfo 예시를 키 형식으로 잡아, 이 시험값도 실행 때 UUID로 생성하게 변경했다. 검사 규칙/예외는 바꾸지 않았으며 같은 패턴의 로컬 검사도 일치 0건이다.
+
+2차 PR의 `GuardianApiIT.endIs202ClosingAndAnotherGuardiansIdsLookExactlyLikeUnknownIds`는 이전 시험의 REQUESTED 세션이 공유 시계 +3.001초 후 1초 준비 시한을 넘으면서 배경 취소 요청이 기록되는 경합이었다. 로그상 이전/현재 세션 소유자는 달랐고 현재 타인 요청은 404였다. 같은 코드의 수동 CI에서는 전체 회귀가 통과했다. 기존 전역 요청 0건 단언을 완화하지 않았으며 시험 경계의 사본/타이머 격리는 조정자에게 남긴다.
 
 ## 계약 · 판단 · 설계 차이
 
