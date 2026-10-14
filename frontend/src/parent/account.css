@@ -97,6 +97,24 @@
   gap: calc(var(--space-unit) * 3);
 }
 
+/* U7 SET0: 기존 단추·문자·간격 토큰, 한 기기의 알림 상태와 조작. */
+.mj-push-settings {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--space-unit) * 2);
+}
+
+.mj-push-settings__status {
+  margin: 0;
+  font-size: var(--font-size-secondary);
+}
+
+.mj-push-settings__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: calc(var(--space-unit) * 2);
+}
+
 /* 02 동의 */
 .mj-consent-list {
   margin: 0 0 calc(var(--space-unit) * 6);
