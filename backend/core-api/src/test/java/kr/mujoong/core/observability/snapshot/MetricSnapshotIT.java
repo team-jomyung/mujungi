@@ -65,6 +65,8 @@ class MetricSnapshotIT {
         String token = TestSecrets.internalServiceToken();
         realtime = WebFixtures.realtime(token);
         app = CoreWebApp.builder(db.postgres()).internalToken(token).realtime(realtime.baseUrl()).start();
+        // 이 시험은 tick을 직접 호출한다. 주기 작업 종료를 기다린 뒤 표본 구간을 수동으로 진행한다.
+        app.bean(kr.mujoong.core.startup.CoreStartupSequence.class).stopSchedulers();
         logs = LogCapture.attach();
     }
 

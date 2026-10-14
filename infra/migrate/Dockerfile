@@ -25,9 +25,9 @@ ARG JRE_IMAGE=eclipse-temurin:21.0.12_8-jre-noble@sha256:7739f0ffce786528961eea6
 # 0단계: 기반 이미지 OS 보안 패치(J350). core-api · realtime-activity Dockerfile과 같은 값이다(셋을 함께 바꾼다)
 FROM scratch AS os-patches
 ADD --checksum=sha256:219f43b1cd836a4da550938db5fda93160d269d39a4edcf1f1ce698a470db797 \
-    https://snapshot.ubuntu.com/ubuntu/20261011T000000Z/pool/main/o/openssl/libssl3t64_3.0.13-0ubuntu3.16_amd64.deb /debs/
+    https://security.ubuntu.com/ubuntu/pool/main/o/openssl/libssl3t64_3.0.13-0ubuntu3.16_amd64.deb /debs/
 ADD --checksum=sha256:675b84971ffd4467707008c25ef7520f90ea7c23ef27b7a76b0dccf1d7c4dc3f \
-    https://snapshot.ubuntu.com/ubuntu/20261011T000000Z/pool/main/o/openssl/openssl_3.0.13-0ubuntu3.16_amd64.deb /debs/
+    https://security.ubuntu.com/ubuntu/pool/main/o/openssl/openssl_3.0.13-0ubuntu3.16_amd64.deb /debs/
 
 # 1단계: Flyway CLI 최소 구성(Maven Central, sha256 고정, 읽기 전용 0644). 판을 바꾸면 sha256도 같이 바꾼다
 FROM scratch AS flyway-lib

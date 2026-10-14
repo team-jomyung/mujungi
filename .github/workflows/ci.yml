@@ -418,6 +418,14 @@ jobs:
           registry="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}"
           echo "REGISTRY=$registry" >>"$GITHUB_ENV"
           bash infra/ci/build-images.sh --registry "$registry" --tag "$GITHUB_SHA" --log-dir "$RUNNER_TEMP/image-logs"
+      - name: 이미지 빌드 실패 진단
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: image-build-logs
+          path: ${{ runner.temp }}/image-logs/
+          retention-days: 14
+          if-no-files-found: ignore
       - name: trivy 실행기(다이제스트 고정 이미지, 로컬 이미지는 docker.sock으로 읽는다)
         # /tmp는 읽기 전용(무시 파일 경로 읽기용)이라 Trivy가 이미지를 내보낼 임시 디렉터리는 쓰기 가능한 TMPDIR로 따로 준다(J353)
         run: |
@@ -487,6 +495,8 @@ jobs:
           path: |
             build/verify/report.txt
             build/verify/logs/A1.log
+            build/verify/logs/B.log
+            build/verify/logs/images/
             backend/*/build/test-results/test/
           retention-days: 14
           if-no-files-found: warn
