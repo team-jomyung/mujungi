@@ -47,18 +47,18 @@ public class SessionResultHandler implements JobHandler {
         Map<String,Object> common=new LinkedHashMap<>();common.put("transcript",transcript);common.put("endReason",r.endReason());
         if(!insufficient){
             if(free){var structureInput=new LinkedHashMap<>(common);structureInput.putAll(input.background());
-                experience=verifiedExperience(ai.call("structure",structureInput,input.aliases(),job.deadline()),quotes);
+                experience=verifiedExperience(ai.call("structure",structureInput,input.aliases(),job.deadline(),()->requireAiAccess(job)),quotes);
             }else{
                 var judgeInput=new LinkedHashMap<>(common);judgeInput.put("goals",judgmentGoals(practice,job.guardianId(),r.sessionId()));
-                var output=ai.call("judgment",judgeInput,input.aliases(),job.deadline());
+                var output=ai.call("judgment",judgeInput,input.aliases(),job.deadline(),()->requireAiAccess(job));
                 scenes=sceneRows(practice,output,quotes,false);
             }
             level=ResultLevelCalculator.after(r,practice,experience);
             var sentenceInput=new LinkedHashMap<>(common);sentenceInput.put("structured",experience);sentenceInput.put("scenes",publicScenes(scenes));
-            sentenceDrafts=objects(ai.call("sentences",sentenceInput,input.aliases(),job.deadline()).get("sentences"));
+            sentenceDrafts=objects(ai.call("sentences",sentenceInput,input.aliases(),job.deadline(),()->requireAiAccess(job)).get("sentences"));
             var active=definitions.active();var candidateInput=new LinkedHashMap<>(common);candidateInput.put("structured",experience);candidateInput.put("scenes",publicScenes(scenes));
             candidateInput.put("definitions",active.stream().map(d->Map.of("behaviorKey",d.behaviorKey(),"behaviorVersion",d.version(),"displayName",d.displayName(),"coreFunction",d.behaviorDefinitionText())).toList());
-            candidateDrafts=candidateScreen.screen(objects(ai.call("candidates",candidateInput,input.aliases(),job.deadline()).get("candidates")),active,quotes);
+            candidateDrafts=candidateScreen.screen(objects(ai.call("candidates",candidateInput,input.aliases(),job.deadline(),()->requireAiAccess(job)).get("candidates")),active,quotes);
         }else if(!free&&!practice.isEmpty())scenes=sceneRows(practice,Map.of(),quotes,true);
 
         List<OutputChecker.Draft> checks=new ArrayList<>();List<Map<String,Object>> sentences=new ArrayList<>();
@@ -77,7 +77,7 @@ public class SessionResultHandler implements JobHandler {
             for(int i=0;i<candidateDrafts.size();i++){var c=candidateDrafts.get(i);checks.add(new OutputChecker.Draft("c"+i,c.reasonText(),c.evidence().stream().map(e->quotes.get(e.utteranceSeq())).toList(),null));}
         }
         // INSUFFICIENT는 이 목록이 비어 2차 분류도 호출하지 않는다.
-        var checked=checker.check(checks,job.deadline());
+        var checked=checker.check(checks,job.deadline(),()->requireAiAccess(job));
         for(var s:sentences){s.put("text",checked.get(s.remove("checkId")));}
         List<CandidateRegistry.Candidate> candidates=new ArrayList<>();for(int i=0;i<candidateDrafts.size();i++)if(checked.get("c"+i)!=null)candidates.add(candidateDrafts.get(i));
         Set<String> keys=new LinkedHashSet<>();for(var goal:goals(practice))if(!text(goal,"behaviorKey").isBlank())keys.add(text(goal,"behaviorKey"));candidates.forEach(c->keys.add(c.behaviorKey()));
@@ -85,6 +85,8 @@ public class SessionResultHandler implements JobHandler {
         Map<String,Object> finalExperience=experience;List<SceneJudgmentRepository.Scene> finalScenes=scenes;String finalLevel=level;
         var stored=new AtomicReference<ActivityResultRepository.Result>();
         boolean done=job.commit(()->{
+            // BR5.5의 AI 없는 INSUFFICIENT는 유지하며, AI 처리 뒤 동의 상실은 확정 전에 막는다.
+            if(!insufficient)requireAiAccess(job);
             var previous=results.current(r.sessionId());
             var result=results.insert(r.sessionId(),job.jobId(),finalLevel,json.write(sentences),json.write(help),json.write(match.tips()),match.noTipReason(),json.write(Map.of("hiddenTips",match.hidden(),"promptVersion",ai.promptVersion())),json.write(candidates),job.clock().now());
             stored.set(result);if(!finalExperience.isEmpty())structured.insert(result.id(),r.sessionId(),json.write(finalExperience),job.clock().now());
@@ -92,6 +94,10 @@ public class SessionResultHandler implements JobHandler {
             previous.ifPresent(p->results.invalidate(p.id(),job.clock().now()));
         },()->{if(!candidates.isEmpty())registry.register(r.sessionId(),r.childId(),candidates);tx.executeWithoutResult(t->results.candidatesRegistered(stored.get().id(),job.clock().now()));});
         return done?Outcome.done():Outcome.failed("INTERNAL",false);
+    }
+    private void requireAiAccess(JobContext job){
+        job.requireActiveGuardian();
+        if(!consent.check(job.guardianId()).snapshot().voiceAndText())throw new ResultAiException("CONSENT_WITHDRAWN");
     }
     private Input load(JobContext job){
         var input=records.find(job.subjectId(),job.guardianId()).orElse(null);if(input==null)return null;
@@ -107,7 +113,7 @@ public class SessionResultHandler implements JobHandler {
     }
     private List<Map<String,Object>> judgmentGoals(Map<String,Object> practice,UUID guardian,UUID session){
         return goals(practice).stream().map(goal->{var copy=new LinkedHashMap<>(goal);try{var d=definitions.get(text(goal,"behaviorKey"),(int)number(goal,"behaviorVersion"));copy.put("coreFunction",d.behaviorDefinitionText());copy.put("judgmentCriteria",d.judgmentCriteria());}catch(IllegalArgumentException missing){/* BR12.2: 고정 정의가 없으면 정의 없이 재판정한다. */}
-            var ids=objects(goal.get("responses")).stream().map(r->uuid(r.get("scenarioId"))).filter(Objects::nonNull).distinct().toList();copy.put("scenarios",ids.stream().map(id->Map.of("scenarioId",id,"content",scenarios.get(id,guardian,session))).toList());return (Map<String,Object>)copy;}).toList();
+            var ids=objects(goal.get("responses")).stream().map(r->uuid(r.get("scenarioId"))).filter(Objects::nonNull).distinct().toList();copy.put("scenarios",ids.stream().flatMap(id->scenarios.get(id,guardian,session).stream().map(content->Map.of("scenarioId",id,"content",content))).toList());return (Map<String,Object>)copy;}).toList();
     }
     private List<SceneJudgmentRepository.Scene> sceneRows(Map<String,Object> practice,Map<String,Object> output,Map<Long,String> quotes,boolean insufficient){
         List<SceneJudgmentRepository.Scene> result=new ArrayList<>();
@@ -117,7 +123,14 @@ public class SessionResultHandler implements JobHandler {
                 var response=objects(goal.get("responses")).stream().filter(r->responseType.equals(r.get("responseType"))).findFirst().orElse(Map.of());
                 var judged=objects(generated.get("scenes")).stream().filter(s->number(s,"sceneNo")==sceneNo).findFirst().orElse(Map.of());
                 String value=insufficient?null:(String)judged.get("value"),timing=(String)judged.get("timing");
-                for(String ref:List.of("firstResponse","afterHelpResponse")){var citation=object(judged.get(ref));if(!citation.isEmpty()&&!QuoteMatcher.matches(text(citation,"quote"),quotes.get(number(citation,"utteranceSeq"))))value=null;}
+                if("functional".equals(value)&&timing==null)timing="IMMEDIATE";
+                var first=object(judged.get("firstResponse"));var after=object(judged.get("afterHelpResponse"));
+                var helped=objects(goal.get("responses")).stream().filter(r->"AFTER_CUE".equals(r.get("responseType"))
+                    &&response.get("scenarioId")!=null&&Objects.equals(response.get("scenarioId"),r.get("scenarioId"))).toList();
+                boolean firstValid=matchesResponse(first,response,quotes);
+                boolean afterValid=helped.stream().anyMatch(r->matchesResponse(after,r,quotes));
+                if((!first.isEmpty()&&!firstValid)||(!after.isEmpty()&&!afterValid))value=null;
+                if(value!=null&&("AFTER_HELP".equals(timing)?!afterValid:!firstValid))value=null;
                 if(response.isEmpty()||number(response,"utteranceSeq")==0)value=null;
                 String reason=value==null?reasons.map(goal,response):null;
                 if(value==null)timing=null;String live=text(response,"label");
@@ -125,6 +138,11 @@ public class SessionResultHandler implements JobHandler {
             }
         }
         return result;
+    }
+    private static boolean matchesResponse(Map<String,Object> citation,Map<String,Object> response,Map<Long,String> quotes){
+        long seq=number(response,"utteranceSeq");
+        return seq>0&&!citation.isEmpty()&&seq==number(citation,"utteranceSeq")
+            &&QuoteMatcher.matches(text(citation,"quote"),quotes.get(seq));
     }
     private List<Map<String,Object>> publicScenes(List<SceneJudgmentRepository.Scene> scenes){return scenes.stream().map(s->Map.<String,Object>of("goalSelectionId",s.goalSelectionId(),"sceneNo",s.sceneNo(),"sceneChip",s.sceneChip(),"chipText",SceneChipMapper.text(s.sceneChip(),s.notDoneReason()))).toList();}
     private String template(StoredRecord r,Map<String,Object> goal,List<SceneJudgmentRepository.Scene> scenes){

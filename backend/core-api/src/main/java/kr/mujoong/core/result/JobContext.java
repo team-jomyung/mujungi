@@ -9,8 +9,10 @@ public final class JobContext {
     private final ResultJob job;
     private final MujoongClock clock;
     private final Committer committer;
+    private final Runnable accessCheck;
     private boolean committed;
-    JobContext(ResultJob job,MujoongClock clock,Committer committer){this.job=job;this.clock=clock;this.committer=committer;}
+    JobContext(ResultJob job,MujoongClock clock,Committer committer,Runnable accessCheck){this.job=job;this.clock=clock;this.committer=committer;this.accessCheck=accessCheck;}
+    public void requireActiveGuardian(){accessCheck.run();}
     public UUID jobId(){return job.id();}
     public UUID subjectId(){return job.subjectId();}
     public UUID guardianId(){return job.guardianId();}

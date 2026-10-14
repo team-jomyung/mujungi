@@ -19,10 +19,12 @@ import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 @Tag("u6") @Tag("db") class ReportHandlerIT {
     DbTestSupport db;MutableClock clock;ExecutorService executor;FakeResultTextProvider provider;ResultJobRepository jobs;ReportRepository reports;
     SessionResultStateRepository states;ActivityResultRepository results;StructuredExperienceRepository structures;ResultRecordReader reader;JobRunner runner;
+    kr.mujoong.core.consent.ConsentPolicyService consent;
     UUID guardian,child,reportId;DataSourceTransactionManager tm;
     @BeforeEach void setup(){db=DbTestSupport.coreApp();clock=new MutableClock();executor=Executors.newVirtualThreadPerTaskExecutor();provider=new FakeResultTextProvider();provider.response=this::normal;
         jobs=new ResultJobRepository(db.jdbc());reports=new ReportRepository(db.jdbc());states=new SessionResultStateRepository(db.jdbc());results=new ActivityResultRepository(db.jdbc());structures=new StructuredExperienceRepository(db.jdbc());reader=mock(ResultRecordReader.class);tm=new DataSourceTransactionManager(db.dataSource());
-        var ai=new ResultTextGateway(provider,ResultTextGatewayTest.properties(Duration.ofSeconds(10)),clock,executor,JsonCodec.shared());var handler=new ReportHandler(reports,reader,states,results,new SceneJudgmentRepository(db.jdbc()),structures,mock(BehaviorDefinitionLookup.class),new QuoteCandidatePicker(),new ReportAssembler(),ai,new OutputChecker(new ForbiddenDictionary(),ai),tm);
+        consent=mock(kr.mujoong.core.consent.ConsentPolicyService.class);when(consent.check(any())).thenReturn(new kr.mujoong.core.consent.ConsentPolicyService.GateResult(true,null,new kr.mujoong.core.consent.ConsentPolicyService.Snapshot("v1",true,true,true,true)));
+        var ai=new ResultTextGateway(provider,ResultTextGatewayTest.properties(Duration.ofSeconds(10)),clock,executor,JsonCodec.shared());var handler=new ReportHandler(reports,reader,states,results,new SceneJudgmentRepository(db.jdbc()),structures,mock(BehaviorDefinitionLookup.class),new QuoteCandidatePicker(),new ReportAssembler(),ai,new OutputChecker(new ForbiddenDictionary(),ai),tm,consent);
         runner=new JobRunner(jobs,new ReportJobStateAdapter(reports),new GuardianWriteLock(db.jdbc()),clock,JobRunnerTest.properties(),tm,List.of(handler),mock(EventLogger.class));
         guardian=db.insertGuardian("ACTIVE");child=db.insertChild(guardian);reportId=UUID.randomUUID();
     }
@@ -56,5 +58,79 @@ import org.springframework.jdbc.datasource.DataSourceTransactionManager;
         provider.response=r->{try{Thread.sleep(2000);}catch(InterruptedException e){Thread.currentThread().interrupt();throw new ResultAiException("TIMEOUT");}return normal(r);};
         var loop=new JobRunnerLoop(runner,JobRunnerTest.properties(),mock(EventLogger.class));long start=System.nanoTime();
         try{loop.start();assertThat(sessionStarted.await(2,TimeUnit.SECONDS)).isTrue();while(!reports.find(reportId).orElseThrow().status().equals("READY")&&TimeUnit.NANOSECONDS.toSeconds(System.nanoTime()-start)<15)Thread.sleep(50);assertThat(reports.find(reportId).orElseThrow().status()).isEqualTo("READY");assertThat(sessionFinished.getCount()).isEqualTo(1);System.out.println("U6_REPORT_D elapsed_ms="+TimeUnit.NANOSECONDS.toMillis(System.nanoTime()-start));}finally{loop.stop();}
+    }
+
+    kr.mujoong.core.account.DeletionRequestRepository requestDeletion(){
+        var requests=new kr.mujoong.core.account.DeletionRequestRepository(db.jdbc());
+        new kr.mujoong.core.account.AccountDeletionService(requests,mock(kr.mujoong.core.identity.ChildRepository.class),
+            mock(kr.mujoong.core.identity.GuardianSessions.class),new GuardianWriteLock(db.jdbc()),db.jdbc(),tm,
+            mock(EventLogger.class),clock).request(guardian);
+        return requests;
+    }
+    @Test void realCreatedReportIsNotSentAfterDeletionRequestBeforeParticipants(){
+        prepare(1,Duration.ofSeconds(60));
+        UUID session=reports.activities(reportId).getFirst().sessionId();var record=reader.find(session,guardian).orElseThrow().record();
+        when(reader.reportRecords(guardian,child)).thenReturn(List.of(record));
+        var children=mock(kr.mujoong.core.child.ChildProfileService.class);
+        when(children.childContext(guardian)).thenReturn(Optional.of(new kr.mujoong.core.child.ChildProfileService.ChildContext(child,"민수",7,List.of(),List.of())));
+        var properties=JobRunnerTest.properties();when(properties.timing().report()).thenReturn(new kr.mujoong.core.config.CoreProperties.ReportTiming(Duration.ofSeconds(60),Duration.ofHours(24)));
+        var service=new ReportService(reports,reader,children,states,jobs,new GuardianWriteLock(db.jdbc()),clock,properties,JsonCodec.shared(),tm);
+        LocalDate today=clock.now().atZone(ReportService.ZONE).toLocalDate();
+        var created=service.create(guardian,today,today,List.of(session),UUID.randomUUID().toString());
+        var requests=requestDeletion();
+        assertThat(requests.findOpenByGuardian(guardian).orElseThrow().coreClearedAt()).isNull();
+        assertThat(db.jdbc().queryForObject("select status from core.core_guardian where id=:id",Map.of("id",guardian),String.class)).isEqualTo("DELETION_REQUESTED");
+        var job=runner.claim("REPORT").stream().filter(j->j.subjectId().equals(created.reportId())).findFirst().orElseThrow();
+        runner.execute(job);
+        assertThat(provider.requests).isEmpty();assertThat(jobs.find(job.id()).orElseThrow().lastErrorCode()).isEqualTo("ACCOUNT_DELETING");
+        assertThat(reports.find(created.reportId()).orElseThrow().status()).isEqualTo("FAILED");
+        assertThat(reports.activities(created.reportId())).hasSize(1);
+    }
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(booleans={false,true})
+    void withdrawnActivityNeverSuppliesQuotesOrResultsEvenWhenDone(boolean done){
+        var job=prepare(2,Duration.ofSeconds(60));var session=reports.activities(reportId).getFirst().sessionId();
+        var r=reader.find(session,guardian).orElseThrow().record();
+        var withdrawn=new ActivityRecordRepository.StoredRecord(r.sessionId(),guardian,child,r.activityType(),r.finalStatus(),"CONSENT_WITHDRAWN",
+            r.confirmed(),r.startedAt(),r.endedAt(),r.listedAt(),r.recordFrom(),r.recordTo(),
+            r.transcriptJson().replace("같이 블록 쌓자","철회 비밀 내용"),r.gapsJson(),r.practiceJson(),r.snapshotHash(),r.recordedAt());
+        when(reader.find(session,guardian)).thenReturn(Optional.of(new ResultRecordReader.Input(withdrawn,"ENDED",null,true)));
+        if(!done)db.jdbc().update("update core.core_session_result_state set job_status='NONE' where session_id=:id",Map.of("id",session));
+        runner.execute(job);
+        var request=provider.requests.stream().filter(q->q.task().equals("report")).findFirst().orElseThrow();
+        assertThat(JsonCodec.shared().write(request.input())).doesNotContain("철회 비밀 내용");
+        assertThat(ResultData.objects(request.input().get("activities"))).hasSize(1);
+        assertThat(ResultData.objects(request.input().get("sections")).stream().flatMap(s->ResultData.objects(s.get("quotes")).stream()))
+            .allSatisfy(q->assertThat(((Number)q.get("activityNo")).intValue()).isNotEqualTo(1));
+        assertThat(reports.sections(reportId).stream().flatMap(s->s.citations().stream())).noneMatch(c->c.sessionId().equals(session));
+        assertThat(reports.find(reportId).orElseThrow().status()).isEqualTo("READY");
+        assertThat(reports.activities(reportId).stream().filter(a->a.sessionId().equals(session)).findFirst().orElseThrow().resultStatus()).isEqualTo(done?"DONE":"NONE");
+    }
+    @Test void missingCurrentConsentStopsBeforeReportInputIsRead(){
+        var job=prepare(1,Duration.ofSeconds(60));clearInvocations(reader);
+        when(consent.check(guardian)).thenReturn(new kr.mujoong.core.consent.ConsentPolicyService.GateResult(false,null,new kr.mujoong.core.consent.ConsentPolicyService.Snapshot("v1",false,true,true,true)));
+        runner.execute(job);assertThat(provider.requests).isEmpty();verifyNoInteractions(reader);
+        assertThat(jobs.find(job.id()).orElseThrow().lastErrorCode()).isEqualTo("INTERNAL");
+        assertThat(jobs.find(job.id()).orElseThrow().status()).isEqualTo("FAILED");
+    }
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(booleans={false,true})
+    void deletionOrWithdrawalAfterReportCallPreventsClassifier(boolean deletion){
+        var job=prepare(1,Duration.ofSeconds(60));
+        provider.response=r->{
+            assertThat(org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive()).isFalse();
+            if(deletion)requestDeletion();else when(consent.check(guardian)).thenReturn(new kr.mujoong.core.consent.ConsentPolicyService.GateResult(false,null,new kr.mujoong.core.consent.ConsentPolicyService.Snapshot("v1",false,true,true,true)));
+            return normal(r);
+        };
+        runner.execute(job);assertThat(provider.requests).extracting(ResultTextProvider.Request::task).containsExactly("report");
+        assertThat(jobs.find(job.id()).orElseThrow().lastErrorCode()).isEqualTo(deletion?"ACCOUNT_DELETING":"INTERNAL");
+        assertThat(reports.sections(reportId)).isEmpty();assertThat(reports.find(reportId).orElseThrow().status()).isEqualTo("FAILED");
+    }
+    @Test void withdrawalDuringClassifierPreventsPublishingReport(){
+        var job=prepare(1,Duration.ofSeconds(60));
+        provider.response=r->{if(r.task().equals("classify"))when(consent.check(guardian)).thenReturn(new kr.mujoong.core.consent.ConsentPolicyService.GateResult(false,null,new kr.mujoong.core.consent.ConsentPolicyService.Snapshot("v1",false,true,true,true)));return normal(r);};
+        runner.execute(job);assertThat(provider.requests).extracting(ResultTextProvider.Request::task).containsExactly("report","classify");
+        assertThat(reports.sections(reportId)).isEmpty();assertThat(reports.find(reportId).orElseThrow().status()).isEqualTo("FAILED");
+        assertThat(jobs.find(job.id()).orElseThrow().lastErrorCode()).isEqualTo("INTERNAL");
     }
 }

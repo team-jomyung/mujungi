@@ -1,78 +1,61 @@
 # 코드 품질 평가 (Code Quality Assessment)
 
-> 기준 커밋 `3748083`. 시험 · 린트 · CI · 문서 · 기술 부채의 단일 기록처다. 다른 산출물은 이 문서의 절을 참조한다. 시험을 실제로 돌려 본 결과는 아니다(정적 스캔).
+> 기준 커밋 `7a22b67`. CI 작업 목록은 `component-inventory.md` ci-workflow에만 적는다.
 
-## 1. 종합 판정
+## 시험
 
-| 축 | 판정 | 요지 |
+| 영역 | 위치 · 수 | 도구 |
 |---|---|---|
-| 시험 | 좋음 | `@Test` 526개(realtime) + 140개(contract-model · test-support), 실행기 단위 하네스 · 계약 스키마 검증 · 구조 규칙 시험까지 갖춤 |
-| 구조 강제 | 매우 좋음 | ArchUnit · `TimeLiteralScanTest` · `ConfigKeyContractTest` · `SingleInstanceMarkerTest` · `verifyBootJarHasNoTestClasses` |
-| 린트 | 보통 | 전용 Java 린터 없음. `javac -Xlint:all`와 위 구조 시험이 대신함 |
-| CI | 좋음 | 경로 필터 · 백엔드 check · 의존 취약점 · 비밀 검사 · 마이그레이션 expand 검사 · 이미지 |
-| 문서 | 매우 좋음 | 거의 모든 클래스에 한국어 Javadoc + 설계 ID 추적, 계약 정본 분리 |
-| 부채 | 주의 | 표식 부채(TODO 0건)는 적지만 U4 확장 지점과 시험 하드코딩이 U4b에 직접 걸림 |
+| core-api | `backend/core-api/src/test/java/kr/mujoong/core/**` 113개 + `V90__test_default_privilege_probe.sql` | JUnit 5 · AssertJ · Mockito · Spring Boot Test · Testcontainers · ArchUnit · json-schema-validator |
+| realtime-activity | `backend/realtime-activity/src/test/java/**` 115개 | 같음 |
+| contract-model | 15개 | JUnit |
+| test-support | 4개 | JUnit |
+| frontend | `frontend/tests/{u1,u2,u3,u4a,u5a}/**` 56개 `*.test.ts(x)` | Vitest · Testing Library · jsdom |
+| tools | `tools/tests/` | Vitest |
 
-## 2. 시험
+### 커버리지 설정 (있음)
 
-### 규모와 분포
-- `backend/realtime-activity/src/test/java/kr/mujoong/realtime/{arch,common,config,db,dialog,gate,gateway,log,messaging,observability,recording,session,startup,testing,voice,web}` — 시험 클래스 약 80개 + `testing/` 지원 14개, `@Test` 526개.
-- 태그(`@Tag` 선언 수): `u1` 54 · `u3` 23 · `db` 28. **`u4b` 태그는 아직 없다.** contract-model: `u1` 18 · `u4a` 1(`SnapshotHashGoldenTest`) · `u5a` 1.
-- 세션 관련: `TransitionTableTest` · `SessionTimersTest` · `SessionExecutorTest` · `SessionExecutorFaultTest` · `SessionExecutorU3Test` · `SessionExecutorReview{,2,3}U3Test` · `SessionLifecycleIT` · `SessionVoiceU3IT/Test` · `ActivitySessionRepositoryIT` · `SessionRecordsRepositoryIT` · `web/RealtimeInternalApiIT` · `session/web/SessionInternalControllerU3Test` · `dialog/StopIntentJudgeTest`.
-- 실행기 대역(`testing/`): `SessionHarness` · `InMemoryTransitions` · `FakeDeviceLink` · `FakeProviderPort` · `FakeSessionGaps` · `FakeAudioRecordings` · `ManualTime` · `ManualLauncher` · `RealtimeItEnvironment` · `RealtimeTestApp` · `InternalApi`.
+- 백엔드: 모듈마다 JaCoCo LINE 80%를 `check`에 건다(test-support 제외). `-PcoverageScope=<u>` → `backend/coverage-scope/<u>.txt` 파일만 측정, 목록이 비거나 없는 파일이 있으면 실패. 현재 u1 · u2 · u3 · u4a · u4b · u5a — **u6 없음**.
+- 프런트: `vitest.config.ts` v8 줄 80%, `MUJOONG_COVERAGE_SCOPE=<u>` → `frontend/coverage-scope/<u>.json`. 현재 u1 · u2 · u3 · u4a · u5a — **u6 없음**.
+- 태그(`@Tag`): db 75 · u1 142 · u2 15 · u3 24 · u4a 5 · u4b 24 · u5a 11 — **u6 없음**.
+- CI는 범위 없이 모듈 전체 80%도 돈다.
 
-### 커버리지 설정
-- JaCoCo 0.8.14, `check` → `jacocoTestCoverageVerification`, LINE COVEREDRATIO ≥ 0.80, 제외 목록 없음(`test-support`만 `coverageFloorApplies=false`).
-- `-PcoverageScope=<이름>`이면 `backend/coverage-scope/<이름>.txt`에 적힌 이 모듈 운영 소스만 측정. 목록이 비거나 파일이 없으면 빌드 실패.
-- 현재 범위 파일: `u1.txt`(301줄, realtime 119줄) · `u3.txt`(44줄, realtime 41줄) · `u2` · `u4a` · `u5a`(realtime 0줄). **`u4b.txt` 없음.**
-- CI는 범위 없이 모듈 전체 80%로 `clean check verifyBootJarHasNoTestClasses -Pmujoong.test.db=docker`. U4b는 범위 80%와 모듈 전체 80%를 둘 다 지켜야 한다.
+## 정적 검사 · 구조 규칙
 
-### 구조 · 규약 시험
-`RealtimeArchTest`(core 참조 금지 · test-support 의존 금지 · 프레임 경로 JDBC/파일/Outbox 금지 · 시스템 시계 금지 · 공급자 클라이언트 voice 한정 · 요청은 팩토리만) · `TimeLiteralScanTest`(운영 소스 시간 숫자 상수 0건) · `SingleInstanceMarkerTest` · `ConfigKeyContractTest`(`contracts/timing.md` ↔ `application.yml` ↔ 설정 레코드 이름 · 기본값 대조).
+- 프런트: ESLint flat config(`/parent` ↔ `/device` import 경계, `react/no-danger`, `react/jsx-no-literals`로 문구는 copy 모듈만, getUserMedia · 서비스 워커 제한), Prettier, `.editorconfig`. `eslint-disable` 0건.
+- 백엔드: 포매터 · 정적 분석 플러그인 없음(spotless · checkstyle · errorprone 0). 대신 `javac -Xlint:all` + 시험으로 거는 규칙:
+  - `CoreArchTest`(ArchUnit): realtime 참조 0 · 시험 코드 의존 0 · 시스템 시각 직접 읽기 0 · 세션 사본 쓰기 위치 제한
+  - `TimeLiteralScanTest` · `NoSqlNowTest`: 시간 상수 · SQL `now()` 금지
+  - `ConfigKeyContractTest`: `contracts/timing.md` ↔ `application.yml` ↔ `CoreProperties` 키 · 기본값 일치
+  - `ContractConformanceIT`: 응답 ↔ `contracts/schemas` 대조
+- 표지: 운영 소스 TODO · FIXME · HACK 0건, `@SuppressWarnings` 6건(unchecked 캐스트).
 
-## 3. 린트 · 정적 검사
-- 백엔드 전용 린터(Checkstyle · Spotless · PMD · SpotBugs · Error Prone) **없음**.
-- 대체 관문: `-Xlint:all,-processing,-serial,-this-escape,-try`, 위 구조 시험, `verifyBootJarHasNoTestClasses`. 저장소 루트 `.editorconfig`.
-- 운영 소스 `@SuppressWarnings` 2건, TODO/FIXME/HACK 0건.
-- 프런트: `frontend/eslint.config.mjs`(ESLint 9, 훑기).
+## 문서
 
-## 4. CI/CD
-- `.github/workflows/ci.yml` 작업: `changes`(경로 필터) · `backend`(gradle check + bootJar 시험 클래스 0) · `backend-deps`(Trivy HIGH 이상, 예외 `ci/security-exceptions.yml`) · `frontend`(ESLint · Vitest 80% · next build · 번들 비밀 검사) · `frontend-deps` · `tools` · `secrets`(gitleaks) · `infra-validate`(마이그레이션 expand 검사, 승인 목록 `infra/migration-approvals.txt`) · `images`.
-- `.github/workflows/deploy.yml`: OIDC · SSM 배포. 저장소 변수 `SERVICE_HOST` · `AUTO_DEPLOY`가 없어 실제 배포는 건너뜀.
-- `infra-validate`는 기존 표에 제약을 더하는 마이그레이션 문장을 막는다. 파일 · 문장 번호 · 문장 해시가 맞는 승인 줄이 있어야 통과. 새 표만 더하는 마이그레이션은 해당 없음.
+루트 `README.md`, `contracts/README.md`, `infra/RUNBOOK.md`, 유닛별 `docs/units/<u>/{brief,design,report}.md`. 운영 코드는 한국어 Javadoc에 근거 ID(FR · BR · J · AC)를 촘촘히 단다. 예외: U5a 코드(`knowledge` · `practice` · `textai`)는 영어 한 줄 압축 주석이라 주변 관례와 다르다.
 
-## 5. 문서
-- 클래스 Javadoc이 한국어로 거의 전부 있고 BR · J · U3-R · U3-J · SD · RD · PD 등 설계 ID로 추적된다.
-- 계약 정본 `contracts/`(README · timing · errors · deviations · ports · ai-io · OpenAPI/AsyncAPI · JSON Schema 51개), 계약 자체를 `ContractFilesTest`가 메타 검증.
-- 유닛별 `docs/units/<unit>/{brief,design,report}.md`, 운영 런북 `infra/RUNBOOK.md`.
+## 기술 부채 (U6 관련 우선)
 
-## 6. 기술 부채 · U4b 위험 (이 절이 단일 기록처)
+| # | 내용 | 위치 | U6 영향 |
+|---|---|---|---|
+| D1 | `ActivityRecorded` 운영 구독자 0, `ScenarioService.reconcileExposures` 운영 호출자 0 | `record/ActivityRecorded.java`, `practice/ScenarioService.java:138` | ResultPipeline이 첫 구독자. 재발행 없음 → 누락 복구 필요 |
+| D2 | U6 자리표시 기본 빈(근거 포트 false · 메타 null · SERVICE_NOT_READY) | `practice/PracticePortConfiguration.java`, `practice/ScenarioConfiguration.java` | 같은 타입 빈으로 교체 |
+| D3 | `ScenarioLookup` · `BehaviorDefinitionLookup` 타입 없음 | `practice/` · `knowledge/` | U6가 확장으로 추가 |
+| D4 | `TextAiProvider` · `TextAiGateway`가 상황 생성 전용 | `textai/` | 6절 작업용 확장 필요 |
+| D5 | 금지 표현 사전 형식 불일치(txt 18줄 vs ai-io.md 6.6 JSON `appliesTo`), Realtime `gate/seed-dictionary.json`과 별개 | `resources/textai/u5a-forbidden-patterns.txt` | 넓히면 U5a `CandidateRegistry` 동작도 바뀜 |
+| D6 | 설정 키 불일치: ai-io `mujoong.ai.*` vs 코드 `mujoong.text-ai.*`; `result.job-attempts` · `report.ready-target`은 timing.md 예약표에만 | `TextAiProperties`, `contracts/timing.md` 2절 | `ConfigKeyContractTest` 때문에 세 곳 동시 변경 |
+| D7 | 26 화면 스텁, `/api/records` 클라이언트 없음, 17 「오늘 기록 보기」 감춤 | `frontend/src/app/parent/records/page.tsx`, `Done17.tsx` | U1 J120 · U4a-J14 단언을 U6가 바꿈(설계에 까닭 기록) |
+| D8 | PDF 저장 자리 · 글꼴 없음(읽기 전용 루트 · tmpfs 64m · 영속 볼륨 없음) | `infra/compose.demo.yml`, `core-api/Dockerfile` | compose · Dockerfile · `infra-validate` 불변식 변경 필요(OQ6) |
+| D9 | `core_goal_recommendation.structured_experience_id`(FK 없음) | `V4__u5a_practice_core.sql` | V5에서 FK를 걸면 `migration-approvals.txt` 승인 필요 |
+| D10 | `DeletionParticipant` Javadoc 상수 목록 · `DeletionCommander` 주석 | `common/deletion/DeletionParticipant.java` | 70 추가 시 같이 갱신 |
+| D11 | `record.practice` 내부 모양이 `contracts/`에 없음(정본 contract-summary 6절만), 값은 U5b 전 null | `realtime/session/ResultSnapshotBuilder.java` | PRACTICE 경로는 계약 예시 대역으로만 시험 가능 |
+| D12 | 큰 파일 `SessionExecutor.java` 3167줄, `MujoongPostgres.java` 971줄 | realtime · test-support | U6 무관 |
 
-| ID | 항목 | 근거 위치 | U4b 영향 | 심각도 |
-|---|---|---|---|---|
-| D1 | **스키마 판 기대값이 시험에 하드코딩** — realtime V3 추가 시 깨짐 | `realtime-activity/src/test/java/kr/mujoong/realtime/db/RealtimeSchemaIT.java:47-98`(표 10개 · 이력 0/1/2 · 최고 판 "2" `containsExactly`/`hasSize(10)`, `u1` 태그), `backend/core-api/src/test/java/kr/mujoong/core/db/FlywayConfIT.java:87,99,102`(realtime 이력 · `migrationsExecuted == 2` · 표 합계 33), `SchemaPrivilegeIT` | brief는 'U1 · U3 시험 단언'과 `backend/core-api`를 건드리지 말라고 하나, U3는 V2 때(커밋 47db8f2) 이 셋과 `RealtimeDb`를 함께 고쳤다. **요구사항 단계에서 '스키마 판 기대값 갱신은 예외로 허용'을 명시적으로 결정해야 한다.** U5b(V4)와 병합 순서(V3 → V4)도 맞춰야 함 | 높음 |
-| D2 | **`JoinTracker`가 main에 없음** | 커밋 `5354a32`(및 `867f0a0`)의 `dialog/JoinTracker.java` · `JoinTrackerTest.java`. 공개 API `JoinTracker(Duration noReply)` 단일 창 · `promptPlayed` · `reply` · `tick` · `classify` · `phase` · `prompts` · `isFinished` · `MAX_PROMPTS = 3` | 되살린 뒤 U4b-J4대로 두 창(join-wait · join-wait-after-reprompt)으로 넓혀야 함. 범위 파일 `u4b.txt`에 포함 | 높음 |
-| D3 | **`TransitionTable.END_REASONS`가 도착 상태로 사유를 고정** | `session/TransitionTable.java:93-97`(ENDED → GUARDIAN_STOP 등), `Trigger` 12종(24 ~ 60행)에 WAITING_CHILD · DECLINED 도착 · CHILD_STOP · SILENCE · CONSENT_WITHDRAWN 없음, `ACTIVATED`는 DEVICE_ACK → ACTIVE | 설계는 '사건이 사유를 정함'. 같은 CLOSING → ENDED가 여러 사유를 가지므로 사유를 Trigger(또는 CLOSING 진입 사건)에 실어야 함. `ACTIVATED` 도착을 WAITING_CHILD로. DB 제약은 이미 WAITING_CHILD · DECLINED를 허용(V1 54 ~ 56행 · 75 ~ 80행) | 높음 |
-| D4 | **시간 키 미배선 + 3중 동기화 제약** | `contracts/timing.md` 2절(58 ~ 62행) `join-wait` · `join-wait-after-reprompt` · `silence-warning` · `silence-end` · `device.gap-display`는 이름만 예약. `config/RealtimeProperties.java:90` `SessionTiming`은 `deviceAckTimeout` · `closingConfirm`뿐, yml에도 없음. 설계 4절 신설 3키(`stop-confirm-wait` · `record-settle` · `mujoong.session.deletion-stop-wait`)는 계약에 없음 | 새 키마다 `contracts/timing.md`(2절 → 1절 이동 · 신설) · `application.yml` · `application-test.yml` · `RealtimeProperties`를 함께 고쳐야 `ConfigKeyContractTest` 통과. 코드에 숫자 시간 상수를 두면 `TimeLiteralScanTest` 실패. `timing.md`는 U5b와 병합 충돌 지점 | 높음 |
-| D5 | **흔들리는 U1 시험** | `web/RealtimeInternalApiIT.java:164` `coreAbandonedClosesNonTerminalSessionsAndLeavesATombstoneForUnknownIds`. 191 ~ 193행 `dbOnlySession(CLOSING)`의 실행기 없는 행이 `application-test.yml`의 `closing-confirm: 3s` · `orphan-check-interval: 1s` 때문에 단언 전에 FAILED가 될 수 있음(부하 시 202 대신 409) | U4b 몫으로 지정됨(docs/units/README.md · U3 report 9절 · brief 「먼저 할 것」 2). CLOSING 동작을 바꾸면 더 흔들릴 수 있음. 행 생성을 단언 직전으로 옮기거나 이 클래스 시한만 늘리되, '단언 의미 불변' 수정임을 기록 | 중 |
-| D6 | **`SessionExecutor` 비대화** | `session/SessionExecutor.java` 1,832줄(메시지 처리 · 시계 · 게이트 · 종료 의도 · 재연결 · 정리). 그 밖 500줄 초과: `dialog/StopIntentJudge.java`(565) · `log/AsyncRecorder.java`(531) · `recording/FileAudioRecorder.java`(619) | 세션 단일 스레드 설계상 의도된 집중이나 U4b 기능을 더하면 2,500줄을 넘을 수 있음. 판정을 순수 클래스로 빼는 기존 패턴 유지 여부를 functional-design에서 결정 | 중 |
-| D7 | **세션 패키지 `Plan`에 `activityType` · 추가 승인 문구 키 없음** | `contracts/schemas/internal-session-start-request.schema.json:66-80`(`approvedContent` 필수 CLOSING · WAITING_FILLER, 나머지는 `additionalProperties`), `SessionExecutor.Plan`(190행)은 `closing` · `waitingFiller`만 | 시작 안내(INTRO_FREE_TALK · INTRO_PRACTICE) · 확인 질문 · 재안내를 고르려면 Plan 확장 필요. 문구가 없을 때 소리 없이 시계만 도는 경로(U4b-R15)를 시험으로 지켜야 함. U5b brief 87행도 확인 항목으로 둠 | 중 |
-| D8 | 종료 의도가 출력만 막고 ACTIVE 유지 | `session/SessionExecutor.java:226-270 · 803-838`(`stopIntent` 플래그, CONFIRM은 `CHILD_STOP_UNCLEAR` 이벤트만, `CHILD_STOP_LIFTED` 해제) | STOP → CLOSING(CHILD_STOP)이 되면 해제 경로의 뜻이 바뀜. U3 리뷰 수정(report 11 ~ 14절) 동작과 맞춰 정리 | 중 |
-| D9 | `CONSENT_WITHDRAWN` 끝내기가 400 | `session/EndRequestHandler.java:29` · `SessionMailbox.java:124` · `web/SessionInternalController.java:47` | U4b가 CLOSING(CONSENT_WITHDRAWN) 경로를 연결 | 중 |
-| D10 | `DeletionRequested` 처리기 없음 · 삭제 참가자 미연결 · 세션 행 삭제 참가자 없음 | `messaging/InboxHandler.java:14`, `messaging/RealtimeMessagingDeletionParticipant.java:31`, `log/RealtimeVoiceDeletionParticipant.java:34,45,169` | U4b 처리기 신설 → 진행 세션 강제 정지 → 참가자 순서 → `DeletionCompleted` | 중 |
-| D11 | 결과 입력 스냅숏 저장소 · `SessionRecordCaptured` 생산 코드 없음 | realtime V1 · V2에 표 없음, `contract-model/.../payload/SessionRecordCaptured.java`는 `record` · `termination`을 Map으로 둠 | V3 표 + 정산 + 1회 발행. `snapshotHash` null 키 규칙을 계약 6절에 적고 `SnapshotHashGoldenTest`에 골든 추가 | 중 |
-| D12 | 진행 조회 필드 미구현 · 자리만 있는 값 | `web/SessionInternalController.java:223-224`(`technicalPause` · `silenceWarning` 늘 null), `session/NewActivitySession.java:14`(`intro_content_version_id` 늘 null), `log/SessionGapRepository.java:20`(UNCONFIRMED 구간 자리만) | U4b가 채움 | 저 |
-| D13 | 끊김 시계가 ACTIVE에서만 유효 · 시계 Kind 부족 | `SessionTimers.Kind`(26 ~ 38행)에 참여 대기 · 공백 · 점선 · 확인 질문 대기 · 정산 없음, `onDisconnectCheck`(`SessionExecutor.java:1480`)는 `status != ACTIVE`면 무시 | WAITING_CHILD 확장과 Kind 추가 | 중 |
-| D14 | 작업 트리 파일 모드 왕복(스캔 범위 밖, 참고) | 셸 스크립트 · `backend/gradlew` 41개 파일이 `MM` 상태(100755 ↔ 100644) | 첫 커밋 전에 정리하지 않으면 실행 비트가 빠진 스크립트가 커밋될 위험 | 저 |
+## 종합
 
-코드 안 `U4` 언급은 19곳이며 위 D3 · D8 ~ D13이 대표 지점이다.
-
-## 7. 권고 (다음 단계 입력)
-1. 요구사항 단계에서 D1(스키마 판 기대값 갱신 허용 범위)과 D5(흔들리는 시험 수정의 '단언 의미 불변' 기준)를 명시적 결정으로 남긴다.
-2. `u4b` 태그와 `backend/coverage-scope/u4b.txt`(U1 형식, realtime 운영 소스만)를 먼저 만든다.
-3. 시간 키는 계약 · yml · 레코드 세 곳을 한 커밋에서 고친다(D4).
-4. 실행기 비대화(D6)는 판정 순수 클래스 분리 패턴을 기본값으로 두고 functional-design에서 확정한다.
+- 구조 규칙 · 계약 대조 · 커버리지 관문이 시험으로 강하게 걸려 있어 **회귀 방어가 좋다**(healthy).
+- U6 관점의 위험은 코드 품질보다 **빈 확장점과 계약 공백**(D1 ~ D6 · D11)이다. 특히 D6은 설정 키 하나 더하는 일이 계약 파일 수정까지 번지는 결합점이다.
 
 ## Sources
-- 개발자 스캔 `developer-scan.md` (Test Coverage · Code Quality Indicators · Technical Debt Signals · Handoff Risks)
-- `TransitionTable.java` 20 ~ 100행 직접 확인(D3)
+
+- 개발자 스캔 `.../developer-scan.md`(Test Coverage · Code Quality Indicators · Technical Debt Signals · Risks)

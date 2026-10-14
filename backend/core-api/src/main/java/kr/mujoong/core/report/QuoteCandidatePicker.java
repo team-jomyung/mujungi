@@ -14,7 +14,7 @@ public class QuoteCandidatePicker {
     }
     public List<Quote> pick(List<ReportInput> inputs){
         List<Quote> result=new ArrayList<>();
-        for(var input:inputs.stream().sorted(Comparator.comparing((ReportInput i)->i.record().listedAt()).reversed().thenComparingInt(ReportInput::activityNo)).toList()){
+        for(var input:inputs.stream().filter(ReportInput::aiAllowed).sorted(Comparator.comparing((ReportInput i)->i.record().listedAt()).reversed().thenComparingInt(ReportInput::activityNo)).toList()){
             var utterances=transcript(input.record().transcriptJson()).stream().filter(u->"CHILD".equals(u.get("speaker"))&&!Boolean.TRUE.equals(u.get("uncertain")))
                 .sorted(Comparator.comparing((Map<String,Object> u)->!ResultData.meaningful(u)).thenComparingLong(u->number(u,"seq"))).limit(5).toList();
             for(var u:utterances){if(result.size()==30)return List.copyOf(result);result.add(new Quote(input.activityNo(),input.record().sessionId(),number(u,"seq"),text(u,"text"),at(u,input.record().listedAt()),"TRANSCRIPT"));}

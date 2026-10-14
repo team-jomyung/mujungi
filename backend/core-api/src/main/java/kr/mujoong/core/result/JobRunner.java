@@ -35,14 +35,23 @@ public class JobRunner {
         return expired;
     });}
     public void execute(ResultJob job){
-        JobContext context=new JobContext(job,clock,(writer,after)->commit(job,writer,after));
+        JobContext context=new JobContext(job,clock,(writer,after)->commit(job,writer,after),()->requireActiveGuardian(job));
         Outcome outcome;
-        try{JobHandler handler=handlers.get(job.jobType());outcome=handler==null?Outcome.failed("INTERNAL",false):handler.handle(context);}
-        catch(ResultAiException error){outcome=Outcome.failed(error.code(),true);}
+        try{context.requireActiveGuardian();JobHandler handler=handlers.get(job.jobType());outcome=handler==null?Outcome.failed("INTERNAL",false):handler.handle(context);}
+        catch(ResultAiException error){
+            // 동의 상실은 공급자 실패가 아니다. 기존 영속 오류 열거값으로 닫고 자동 재전송하지 않는다.
+            outcome=error.code().equals("CONSENT_WITHDRAWN")?Outcome.failed("INTERNAL",false):Outcome.failed(error.code(),true);
+        }
         catch(RuntimeException error){outcome=Outcome.failed("INTERNAL",true);}
         if(context.committed())return;
         if(outcome==null||outcome.successful())outcome=Outcome.failed("INTERNAL",false);
         Outcome failed=outcome;tx.executeWithoutResult(t->failure(job,failed));
+    }
+    private void requireActiveGuardian(ResultJob job){
+        tx.executeWithoutResult(t->{
+            if(!guardians.statusForShare(job.guardianId()).orElse("").equals("ACTIVE"))
+                throw new ResultAiException("ACCOUNT_DELETING");
+        });
     }
     private boolean commit(ResultJob job,Runnable writer,Runnable after){
         boolean committed=Boolean.TRUE.equals(tx.execute(t->{

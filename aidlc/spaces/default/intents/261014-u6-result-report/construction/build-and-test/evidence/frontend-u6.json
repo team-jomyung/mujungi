@@ -1,0 +1,1 @@
+{"command":"MUJOONG_COVERAGE_SCOPE=u6 npx vitest run tests/u6 --coverage --maxWorkers=2","exit_code":0,"files":8,"tests":61,"failures":0,"duration_seconds":13.81,"coverage":{"lines":{"covered":228,"total":274,"percent":83.21},"statements_percent":86.03,"branches_percent":78.63,"functions_percent":84.37},"note":"이번 실행 도구 출력 집계. 범위 줄 80% 하한 통과."}

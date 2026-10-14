@@ -415,7 +415,8 @@
       "status": "OK",
       "target": "backend/core-api/src/main/java/kr/mujoong/core/result/SceneChipMapper.java",
       "tests": [
-        "backend/core-api/src/test/java/kr/mujoong/core/result/SceneChipMapperTest.java"
+        "backend/core-api/src/test/java/kr/mujoong/core/result/SceneChipMapperTest.java",
+        "backend/core-api/src/test/java/kr/mujoong/core/result/SessionResultHandlerIT.java"
       ]
     },
     {
@@ -463,7 +464,8 @@
       "status": "OK",
       "target": "backend/core-api/src/main/java/kr/mujoong/core/result/ResultLevelCalculator.java",
       "tests": [
-        "backend/core-api/src/test/java/kr/mujoong/core/result/ResultLevelCalculatorTest.java"
+        "backend/core-api/src/test/java/kr/mujoong/core/result/ResultLevelCalculatorTest.java",
+        "backend/core-api/src/test/java/kr/mujoong/core/result/SessionResultHandlerIT.java"
       ]
     },
     {
@@ -791,7 +793,8 @@
       "status": "OK",
       "target": "backend/core-api/src/main/java/kr/mujoong/core/practice/ScenarioLookup.java",
       "tests": [
-        "backend/core-api/src/test/java/kr/mujoong/core/result/U5aExtensionU6IT.java"
+        "backend/core-api/src/test/java/kr/mujoong/core/result/U5aExtensionU6IT.java",
+        "backend/core-api/src/test/java/kr/mujoong/core/result/SessionResultHandlerIT.java"
       ]
     },
     {
@@ -1179,7 +1182,9 @@
       "status": "OK",
       "target": "backend/core-api/src/main/java/kr/mujoong/core/result/SessionResultHandler.java",
       "tests": [
-        "backend/core-api/src/test/java/kr/mujoong/core/result/SessionResultHandlerIT.java"
+        "backend/core-api/src/test/java/kr/mujoong/core/result/SessionResultHandlerIT.java",
+        "backend/core-api/src/test/java/kr/mujoong/core/result/ReportHandlerIT.java",
+        "backend/core-api/src/test/java/kr/mujoong/core/result/ResultRetryIT.java"
       ]
     },
     {

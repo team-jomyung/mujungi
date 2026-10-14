@@ -18,8 +18,12 @@ public class ResultTextGateway {
     private final ExecutorService executor;private final JsonCodec json;
     public ResultTextGateway(ResultTextProvider provider,TextAiProperties properties,MujoongClock clock,@Qualifier("textAiExecutor") ExecutorService executor,JsonCodec json){this.provider=provider;this.properties=Objects.requireNonNull(properties.result());this.clock=clock;this.executor=executor;this.json=json;}
     public String promptVersion(){return properties.promptVersion();}
-    @SuppressWarnings("unchecked")
     public Map<String,Object> call(String task,Map<String,Object> data,Map<String,String> aliases,Instant deadline){
+        return call(task,data,aliases,deadline,()->{});
+    }
+    @SuppressWarnings("unchecked")
+    public Map<String,Object> call(String task,Map<String,Object> data,Map<String,String> aliases,Instant deadline,Runnable accessCheck){
+        accessCheck.run();
         Duration remaining=Duration.between(clock.now(),deadline);if(remaining.isNegative()||remaining.isZero()||Thread.currentThread().isInterrupted())throw new ResultAiException("TIMEOUT");
         Duration limit=remaining.compareTo(properties.requestTimeout())<0?remaining:properties.requestTimeout();
         var references=new LinkedHashMap<String,String>();
@@ -28,6 +32,7 @@ public class ResultTextGateway {
         try{instructions=new ClassPathResource("prompts/result/"+task+"."+properties.promptVersion()+".txt").getContentAsString(StandardCharsets.UTF_8);}catch(java.io.IOException e){throw new ResultAiException("INTERNAL");}
         var request=new ResultTextProvider.Request(task,instructions,input,task.equals("judgment")||task.equals("classify")?properties.temperatureJudgment():properties.temperatureGeneration(),properties.promptVersion());
         Future<String> future;
+        accessCheck.run(); // 입력 조립 중 철회·삭제가 접수됐으면 공급자에게 넘기지 않는다.
         try{future=executor.submit(()->provider.generate(request,limit));}catch(RejectedExecutionException e){throw new ResultAiException("PROVIDER_UNAVAILABLE");}
         String output;
         try{output=future.get(limit.toNanos(),TimeUnit.NANOSECONDS);}

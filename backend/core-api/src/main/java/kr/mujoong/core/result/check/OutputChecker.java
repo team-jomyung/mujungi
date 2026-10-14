@@ -12,11 +12,14 @@ public class OutputChecker {
     public record Draft(String id,String text,List<String> verifiedQuotes,String fallback){}
     public boolean firstPass(Draft draft){return draft.text()!=null&&!draft.text().isBlank()&&QuoteMatcher.allVerified(draft.text(),draft.verifiedQuotes())&&NumberGuard.allowed(draft.text())&&dictionary.allowed(draft.text());}
     public Map<String,String> check(List<Draft> drafts,Instant deadline){
+        return check(drafts,deadline,()->{});
+    }
+    public Map<String,String> check(List<Draft> drafts,Instant deadline,Runnable accessCheck){
         Map<String,String> result=new LinkedHashMap<>();List<Draft> clean=new ArrayList<>();
         for(Draft draft:drafts){if(result.containsKey(draft.id()))throw new IllegalArgumentException("DUPLICATE_TEXT_ID");result.put(draft.id(),draft.fallback());if(firstPass(draft))clean.add(draft);}
         if(clean.isEmpty())return result;
         var input=clean.stream().map(d->Map.<String,Object>of("id",d.id(),"text",d.text())).toList();
-        var output=gateway.call("classify",Map.of("sentences",input),Map.of(),deadline);
+        var output=gateway.call("classify",Map.of("sentences",input),Map.of(),deadline,accessCheck);
         if(!(output.get("results") instanceof List<?> rows))throw new ResultAiException("SCHEMA_INVALID");
         Map<String,Boolean> violations=new HashMap<>();
         for(Object row:rows){if(!(row instanceof Map<?,?> m)||!(m.get("id") instanceof String id)||!(m.get("violation") instanceof Boolean violation)||violations.putIfAbsent(id,violation)!=null)throw new ResultAiException("SCHEMA_INVALID");}

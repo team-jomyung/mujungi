@@ -17,16 +17,18 @@ public class ReportHandler implements JobHandler {
     private final ReportRepository reports;private final ResultRecordReader records;private final SessionResultStateRepository states;
     private final ActivityResultRepository results;private final SceneJudgmentRepository scenes;private final StructuredExperienceRepository structures;
     private final BehaviorDefinitionLookup definitions;private final QuoteCandidatePicker picker;private final ReportAssembler assembler;
+    private final kr.mujoong.core.consent.ConsentPolicyService consent;
     private final ResultTextGateway ai;private final OutputChecker checker;private final TransactionTemplate tx;
     public ReportHandler(ReportRepository reports,ResultRecordReader records,SessionResultStateRepository states,ActivityResultRepository results,
             SceneJudgmentRepository scenes,StructuredExperienceRepository structures,BehaviorDefinitionLookup definitions,QuoteCandidatePicker picker,
-            ReportAssembler assembler,ResultTextGateway ai,OutputChecker checker,PlatformTransactionManager transactions){
+            ReportAssembler assembler,ResultTextGateway ai,OutputChecker checker,PlatformTransactionManager transactions,kr.mujoong.core.consent.ConsentPolicyService consent){
         this.reports=reports;this.records=records;this.states=states;this.results=results;this.scenes=scenes;this.structures=structures;this.definitions=definitions;
-        this.picker=picker;this.assembler=assembler;this.ai=ai;this.checker=checker;tx=new TransactionTemplate(transactions);
+        this.picker=picker;this.assembler=assembler;this.ai=ai;this.checker=checker;this.consent=consent;tx=new TransactionTemplate(transactions);
     }
     public String jobType(){return "REPORT";}
     private record Snapshot(ReportRepository.Report report,List<ReportInput> inputs){}
     public Outcome handle(JobContext job){
+        requireAiAccess(job);
         Snapshot snapshot=tx.execute(t->load(job));if(snapshot==null)return Outcome.failed("REPORT_DISCARDED",false);
         var inputs=snapshot.inputs();var assembled=assembler.assemble(snapshot.report(),inputs);var quotes=picker.pick(inputs);
         Map<Integer,List<QuoteCandidatePicker.Quote>> candidates=new LinkedHashMap<>();for(int no:List.of(2,6,10))candidates.put(no,quotes);
@@ -36,7 +38,7 @@ public class ReportHandler implements JobHandler {
         Set<Integer> quotedActivities=new HashSet<>();quotes.forEach(q->quotedActivities.add(q.activityNo()));
         var activityData=inputs.stream().filter(i->quotedActivities.contains(i.activityNo())).map(i->{Map<String,Object> data=new LinkedHashMap<>();data.put("activityNo",i.activityNo());data.put("activityType",i.record().activityType());data.put("confirmed",i.record().confirmed());data.put("endReason",i.record().endReason());if(i.done()){data.put("sentences",transcript(i.result().sentencesJson()).stream().map(s->text(s,"text")).toList());data.put("structured",i.structured());}return data;}).toList();
         Map<String,String> aliases=snapshot.report().childDisplayName()==null?Map.of():Map.of(snapshot.report().childDisplayName(),"아이");
-        var generated=objects(ai.call("report",Map.of("sections",requestSections,"activities",activityData),aliases,job.deadline()).get("sections"));
+        var generated=objects(ai.call("report",Map.of("sections",requestSections,"activities",activityData),aliases,job.deadline(),()->requireAiAccess(job)).get("sections"));
         List<OutputChecker.Draft> drafts=new ArrayList<>();Map<Integer,List<ReportRepository.Citation>> chosen=new HashMap<>();Map<Integer,String> body=new HashMap<>();
         for(int no:List.of(2,5,6,10)){
             var section=generated.stream().filter(s->number(s,"sectionNo")==no).findFirst().orElse(Map.of());
@@ -48,14 +50,18 @@ public class ReportHandler implements JobHandler {
             body.put(no,text);chosen.put(no,validated);
             drafts.add(new OutputChecker.Draft("section"+no,invalid?null:text,validated.stream().map(ReportRepository.Citation::quote).filter(Objects::nonNull).toList(),null));
         }
-        var checked=checker.check(drafts,job.deadline());
+        var checked=checker.check(drafts,job.deadline(),()->requireAiAccess(job));
         for(int no:List.of(2,5,6,10)){
             boolean templated=checked.get("section"+no)==null;var citations=templated?candidates.get(no).stream().sorted(Comparator.comparing(QuoteCandidatePicker.Quote::at)).map(QuoteCandidatePicker.Quote::citation).toList():chosen.get(no);
             String text=templated?fallback(citations):body.get(no);boolean missing=templated&&citations.isEmpty();if(no==10)text=ReportAssembler.LIMITATION+"\n"+text;
             assembled.put(no,new ReportRepository.Section(no,ReportAssembler.TITLES.get(no-1),text,missing,templated,citations));
         }
-        boolean done=job.commit(()->{for(var input:inputs)reports.resultStatus(job.subjectId(),input.record().sessionId(),input.status());if(!reports.writeSections(job.subjectId(),job.jobId(),assembler.level(inputs),List.copyOf(assembled.values())))throw new IllegalStateException("REPORT_DISCARDED");},()->{});
+        boolean done=job.commit(()->{requireAiAccess(job);for(var input:inputs)reports.resultStatus(job.subjectId(),input.record().sessionId(),input.status());if(!reports.writeSections(job.subjectId(),job.jobId(),assembler.level(inputs),List.copyOf(assembled.values())))throw new IllegalStateException("REPORT_DISCARDED");},()->{});
         return done?Outcome.done():Outcome.failed("REPORT_DISCARDED",false);
+    }
+    private void requireAiAccess(JobContext job){
+        job.requireActiveGuardian();
+        if(!consent.check(job.guardianId()).snapshot().voiceAndText())throw new ResultAiException("CONSENT_WITHDRAWN");
     }
     private Snapshot load(JobContext job){
         var report=reports.findOwned(job.subjectId(),job.guardianId()).orElse(null);if(report==null||!report.status().equals("GENERATING"))return null;

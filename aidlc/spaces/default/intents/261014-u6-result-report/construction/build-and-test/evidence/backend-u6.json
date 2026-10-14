@@ -1,0 +1,1 @@
+{"command":"./gradlew --no-daemon :contract-model:test :core-api:test :core-api:jacocoTestCoverageVerification -PincludeTags=u6 -PcoverageScope=u6","exit_code":0,"duration":"1m51s","tests":232,"failures":0,"errors":0,"skipped":0,"covered":1203,"missed":184,"report_metrics":["U6_REPORT_A elapsed_ms=11394 activities=20","U6_REPORT_D elapsed_ms=4303"]}
