@@ -1,0 +1,20 @@
+package kr.mujoong.core.practice.start;
+
+import java.util.Objects;
+import java.util.UUID;
+
+/** 준비 원본의 불변 값. 새 저장/API 계약은 I5 합의 전 미연결이다. */
+public record FrozenGoal(UUID goalSelectionId, String displayName, String behaviorKey, int behaviorVersion,
+        String judgmentCriteriaSnapshot, int savedSortOrder, int selectionRank, int selectedCount,
+        boolean favoriteAtPreparation, int favoriteMultiplier, int weight, int order) {
+    public FrozenGoal {
+        Objects.requireNonNull(goalSelectionId);
+        if (displayName == null || displayName.isBlank() || behaviorKey == null || behaviorKey.isBlank()
+                || judgmentCriteriaSnapshot == null || judgmentCriteriaSnapshot.isBlank()) throw new IllegalArgumentException("고정 목표의 승인 정의 필요");
+        if (behaviorVersion < 1 || selectedCount < 1 || selectionRank < 1 || selectionRank > selectedCount
+                || order < 1 || order > selectedCount || favoriteMultiplier != (favoriteAtPreparation ? 2 : 1)
+                || weight != Math.multiplyExact(favoriteMultiplier, selectedCount - selectionRank + 1))
+            throw new IllegalArgumentException("고정 목표의 순위·가중치 오류");
+    }
+    @Override public String toString() { return "FrozenGoal[id=" + goalSelectionId + ", order=" + order + "]"; }
+}

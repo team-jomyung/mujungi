@@ -1,0 +1,3 @@
+backend/core-api/src/main/java/kr/mujoong/core/practice/start/FrozenGoal.java
+backend/core-api/src/main/java/kr/mujoong/core/practice/start/PreparedPracticePackageMapper.java
+backend/core-api/src/main/java/kr/mujoong/core/practice/start/WeightedGoalOrder.java
