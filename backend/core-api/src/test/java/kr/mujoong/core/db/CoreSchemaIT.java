@@ -87,7 +87,9 @@ class CoreSchemaIT {
             List<List<Object>> tables = query(owner,
                     "select tablename, tableowner from pg_tables where schemaname = 'core' order by tablename");
             assertThat(tables.stream().map(row -> (String) row.get(0)).toList()).containsExactlyElementsOf(
-                    java.util.stream.Stream.concat(CORE_TABLES.stream(), U5A_TABLES.stream()).sorted().toList());
+                    java.util.stream.Stream.of(CORE_TABLES, U5A_TABLES,
+                            List.of("core_push_dispatch", "core_push_subscription"))
+                            .flatMap(List::stream).sorted().toList());
             // 편차 (x): 표 소유는 마이그레이션 역할, 앱 역할은 쓰는 역할일 뿐이다
             assertThat(tables).allSatisfy(row -> assertThat(row.get(1)).isEqualTo("mujoong_owner"));
 
@@ -95,7 +97,7 @@ class CoreSchemaIT {
             List<List<Object>> history = query(owner,
                     "select version, type, success from flyway.core_schema_history order by installed_rank");
             assertThat(history).containsExactly(List.of("1", "SQL", true), List.of("2", "SQL", true),
-                    List.of("3", "SQL", true), List.of("4", "SQL", true));
+                    List.of("3", "SQL", true), List.of("4", "SQL", true), List.of("6", "SQL", true));
         }
     }
 
@@ -196,8 +198,12 @@ class CoreSchemaIT {
                     "core_activity_in_progress_guardian_uk",
                     "core_data_deletion_request_open_guardian_uk",
                     "core_device_active_guardian_uk",
-                    "core_device_pending_code_uk");
-            assertThat(partial).allSatisfy(row -> assertThat((String) row.get(1)).startsWith("CREATE UNIQUE INDEX"));
+                    "core_device_pending_code_uk",
+                    "core_push_dispatch_due_idx",
+                    "core_push_subscription_active_guardian_idx");
+            assertThat(partial.subList(0, 4)).allSatisfy(row -> assertThat((String) row.get(1)).startsWith("CREATE UNIQUE INDEX"));
+            assertThat((String) partial.get(4).get(1)).startsWith("CREATE INDEX").contains("'REQUESTED'");
+            assertThat((String) partial.get(5).get(1)).startsWith("CREATE INDEX").contains("revoked_at IS NULL");
             assertThat((String) partial.get(2).get(1)).contains("(guardian_id)").contains("'REGISTERED'");
             assertThat((String) partial.get(3).get(1)).contains("(registration_code)").contains("'UNREGISTERED'");
             assertThat((String) partial.get(0).get(1)).contains("'REQUESTED'").contains("'CLOSING'")

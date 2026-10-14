@@ -104,3 +104,14 @@
 | U5a-b | C10 논리 키/claim/응답 재전송, 기존 성공/내용 실패 보존, 미연결·생성 중 503, 소유/활성 확인 오류 | U5a-J5/J18. Realtime이 상황 id로 중복 재생을 막아야 함. 기존 요청/성공 필드 유지 |
 | U5a-c | 소비자 소유 포트(계정은 U2 부품 어댑터), 실제 근거/세션 없는 호출 실패, 노출 기록 대조 | U2/U4/U6 소유 기능은 구현하지 않음 |
 | U5a-d | 공급자 포트·최소 DTO·독립 금지 검사·기술 재시도·버전 기록, 보수적 구조/지문 검사 | U5a-J7/J16/J17. 공급자 미연결은 비활성; 의미 검증 완료로 주장하지 않음 |
+
+## U7 웹 푸시 계약
+
+| 기호 | 변경 | 근거/영향 |
+|---|---|---|
+| (U7-a) | 세션 인증 GET `/push-subscription/vapid-public-key` → `{enabled,publicKey}`. 미설정은 false/null, 응답 no-store. private key · subject는 반환하지 않는다. | C6의 프런트 구독 준비 정보 보완 · U7-J5 |
+| (U7-b) | 다른 보호자가 소유한 endpoint의 PUT은 409 `PUSH_SUBSCRIPTION_CONFLICT`, 고정 문구는 errors.md. 기존 보호자 소유를 변경하지 않는다. | C6의 endpoint 유일성과 소유권 · U7-J4 |
+| (U7-c) | DELETE `/push-subscription` 본문은 `{endpoint}`. 현재 보호자의 그 기기만 해제하며 알 수 없는/타인 주소도 204다. | 사용자 확인(현재 기기만) · U7-J3 |
+| (U7-d) | 푸시 클릭은 `/sessions/{id}`로 해당 세션을 재조회한다. 진행 중 12, CLOSING/종료 17, 조회 실패/UNKNOWN은 04 미확인이다. | C6의 이전 current-only 문구를 U4a review-1 4절과 U7 지시서가 정정 · AC1.7.4 |
+
+서버 payload는 `{type,activityType,sessionId,sentAt}`만 보낸다. type은 `VOICE_PROBLEM`, `DEVICE_STATUS_UNKNOWN`, `ENDED_BY_CONNECTION`, `ACTIVITY_COMPLETED`이고 기존 이벤트 계약은 수정하지 않는다. 네 문구의 정본은 `frontend/src/shared/copy/ko.ts`다.

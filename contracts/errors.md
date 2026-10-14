@@ -26,6 +26,7 @@
 | `CSRF_TOKEN_INVALID` | 403 | 보안 확인이 만료됐어요. 다시 시도해 주세요. | 보호자 | 상태 변경 요청의 X-CSRF-TOKEN 불일치 · Origin 불일치 | BR8.8 · SD-6 · [편차 (e)] |
 | `SESSION_IN_PROGRESS` | 409 | 이미 진행 중인 활동이 있어요. | 보호자 · 내부 | 보호자당 종료 아닌 세션 하나(Core 1차 · Realtime 2차 방어) | BR6.1 ② · BR6.3 · BR6.6 |
 | `ALREADY_SELECTED` | 409 | 이미 담은 목표예요. | 보호자 | 활성 선택의 중복 담기 | C4 · AC4.3.5 |
+| `PUSH_SUBSCRIPTION_CONFLICT` | 409 | 알림 구독을 다시 등록해 주세요. | 보호자 | 다른 보호자가 소유한 endpoint의 PUT 등록. 기존 소유자를 바꾸지 않는다 | C6 · U7-J4 · 편차 (U7-b) |
 | `RESTORE_EXPIRED` | 410 | 되돌릴 수 있는 시간이 지났어요. | 보호자 | 삭제 복구 시한 경과 | C4 · AC4.1.11 |
 | `SCENARIO_GEN_FAILED` | 422 | 연습 상황을 준비하지 못했어요. | 보호자 · 내부 | 자동 확인 · 재생성 두 번 실패 | C10 · AC4.2.1 |
 | `IDEMPOTENCY_CONFLICT` | 409 | 같은 요청 번호로 다른 내용이 왔어요. | 보호자 | 같은 idempotencyKey에 다른 본문 | BR6.2 |

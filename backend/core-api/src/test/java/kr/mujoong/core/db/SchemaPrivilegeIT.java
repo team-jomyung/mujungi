@@ -111,7 +111,7 @@ class SchemaPrivilegeIT {
             // afterMigrate.sql이 준 자기 이력 표 SELECT(J116, 기동 점검 S2가 읽는다). core 최고 버전은 U5a의 V4
             assertThat(single(core,
                     "select max(version) from flyway.core_schema_history where success and type = 'SQL'"))
-                    .isEqualTo("4");
+                    .isEqualTo("6");
             assertThat(single(realtime,
                     "select max(version) from flyway.realtime_schema_history where success and type = 'SQL'"))
                     .isEqualTo("3");

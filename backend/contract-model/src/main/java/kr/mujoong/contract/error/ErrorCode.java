@@ -23,6 +23,7 @@ public enum ErrorCode {
     CSRF_TOKEN_INVALID("보안 확인이 만료됐어요. 다시 시도해 주세요.", EnumSet.of(Audience.GUARDIAN), "(e)", 403),
     SESSION_IN_PROGRESS("이미 진행 중인 활동이 있어요.", EnumSet.of(Audience.GUARDIAN, Audience.INTERNAL), null, 409),
     ALREADY_SELECTED("이미 담은 목표예요.", EnumSet.of(Audience.GUARDIAN), null, 409),
+    PUSH_SUBSCRIPTION_CONFLICT("알림 구독을 다시 등록해 주세요.", EnumSet.of(Audience.GUARDIAN), "(U7-b)", 409),
     RESTORE_EXPIRED("되돌릴 수 있는 시간이 지났어요.", EnumSet.of(Audience.GUARDIAN), null, 410),
     SCENARIO_GEN_FAILED("연습 상황을 준비하지 못했어요.", EnumSet.of(Audience.GUARDIAN, Audience.INTERNAL), null, 422),
     IDEMPOTENCY_CONFLICT("같은 요청 번호로 다른 내용이 왔어요.", EnumSet.of(Audience.GUARDIAN), null, 409),

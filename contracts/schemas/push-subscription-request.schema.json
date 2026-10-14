@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mujoong.invalid/contracts/schemas/push-subscription-request.schema.json",
+  "title": "웹 푸시 구독 등록",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["endpoint", "keys", "platform"],
+  "properties": {
+    "endpoint": {"type": "string", "format": "uri", "maxLength": 2048, "pattern": "^https://"},
+    "keys": {
+      "type": "object", "additionalProperties": false, "required": ["p256dh", "auth"],
+      "properties": {
+        "p256dh": {"type": "string", "minLength": 86, "maxLength": 88},
+        "auth": {"type": "string", "minLength": 22, "maxLength": 24}
+      }
+    },
+    "platform": {"type": "string", "minLength": 1, "maxLength": 40}
+  }
+}

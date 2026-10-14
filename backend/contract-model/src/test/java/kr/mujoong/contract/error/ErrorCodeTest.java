@@ -32,6 +32,7 @@ class ErrorCodeTest {
         table.put("CSRF_TOKEN_INVALID", List.of(403));
         table.put("SESSION_IN_PROGRESS", List.of(409));
         table.put("ALREADY_SELECTED", List.of(409));
+        table.put("PUSH_SUBSCRIPTION_CONFLICT", List.of(409));
         table.put("RESTORE_EXPIRED", List.of(410));
         table.put("SCENARIO_GEN_FAILED", List.of(422));
         table.put("IDEMPOTENCY_CONFLICT", List.of(409));
