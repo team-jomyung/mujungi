@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mujoong.invalid/contracts/schemas/report-response.schema.json",
+  "title": "28 만드는 중 · 30 리포트 확인",
+  "description": "GET /api/reports/{reportId} 200(계약 3절 C5 · U6 BR10.1). sections는 READY · SAVED에서만 10개를 내고 GENERATING · FAILED · DISCARDED는 빈 배열이다. 진행 중 판정값 · 판정 라벨 · 점수 · 관심사 · 08 원문은 칸이 없다(BR8.2). 보호자 입력 출처 인용은 quote가 없다(편차 (U6-g)).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["status", "periodFrom", "periodTo", "activityCount", "citationCount", "child", "notice", "sections"],
+  "properties": {
+    "status": { "type": "string", "enum": ["GENERATING", "READY", "FAILED", "SAVED", "DISCARDED"] },
+    "level": {
+      "anyOf": [
+        { "type": "string", "enum": ["FULL", "PARTIAL", "INSUFFICIENT"] },
+        { "type": "null" }
+      ]
+    },
+    "periodFrom": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+    "periodTo": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+    "activityCount": { "type": "integer", "minimum": 0 },
+    "citationCount": { "type": "integer", "minimum": 0 },
+    "child": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["displayName", "age"],
+      "properties": {
+        "displayName": { "type": ["string", "null"] },
+        "age": { "type": ["integer", "null"], "minimum": 0 }
+      }
+    },
+    "notice": { "type": "string", "minLength": 1 },
+    "sections": {
+      "type": "array",
+      "maxItems": 10,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["sectionNo", "title", "text", "missing", "citations"],
+        "properties": {
+          "sectionNo": { "type": "integer", "minimum": 1, "maximum": 10 },
+          "title": { "type": "string", "minLength": 1 },
+          "text": { "type": "string" },
+          "missing": { "type": "boolean" },
+          "citations": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["sessionId", "source"],
+              "properties": {
+                "sessionId": { "$ref": "common.schema.json#/$defs/Uuid" },
+                "utteranceSeq": { "type": ["integer", "null"], "minimum": 1 },
+                "quote": { "type": ["string", "null"] },
+                "at": { "$ref": "common.schema.json#/$defs/NullableDateTime" },
+                "source": { "type": "string", "enum": ["TRANSCRIPT", "GUARDIAN_INPUT", "CHILD_RECALL"] }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

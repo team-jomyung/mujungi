@@ -3,7 +3,8 @@
 // 필수 필드가 없거나 형식이 틀리면 ResponseShapeError(화면은 일반 오류로 처리한다).
 // U4a: 04 currentSession · 12 덧붙임(gaps · technicalPause · silenceWarning)은 api/activity.ts가 읽는다.
 
-import { parseLiveExtras, parseSessionSummary, type LiveExtras, type SessionSummary } from "./activity";
+import { parseLiveExtras, parseSessionSummary, type ActivityKind, type LiveExtras, type SessionSummary } from "./activity";
+import { parsePracticeProgress, type PracticeProgress, type ProgressIssue } from "../practice/practiceProgress";
 
 /** 08 서술 칸 상한(activity-free-request.schema.json maxLength). */
 export const FREE_TEXT_MAX_LENGTH = 200;
@@ -99,6 +100,9 @@ export interface Bubble {
 
 export interface LiveView {
   readonly sessionId: string;
+  readonly activityType: ActivityKind;
+  readonly practice: PracticeProgress | null;
+  readonly practiceIssue: ProgressIssue;
   readonly status: SessionStatus;
   readonly endReason: EndReason | null;
   readonly failureCode: string | null;
@@ -322,8 +326,13 @@ export function parseLiveView(value: unknown): LiveView {
   const items = Array.isArray(root.items) ? root.items.map(parseBubble).filter((item): item is Bubble => item !== null) : [];
   const nextSeq = optionalNumber(root, "nextSeq");
   const endReason = root.endReason === null || root.endReason === undefined ? null : oneOf(root.endReason, END_REASONS, "UNKNOWN");
+  const activityType = oneOf<ActivityKind>(root.activityType, ["FREE_TALK", "PRACTICE"], "UNKNOWN");
+  const practice = activityType === "PRACTICE" ? parsePracticeProgress(root.practice) : null;
   return {
     sessionId: requiredString(root, "sessionId"),
+    activityType,
+    practice,
+    practiceIssue: activityType === "PRACTICE" && root.status === "ACTIVE" && practice === null ? "invalid" : null,
     status: oneOf(root.status, SESSION_STATUSES, "UNKNOWN"),
     endReason,
     failureCode: optionalString(root, "failureCode"),

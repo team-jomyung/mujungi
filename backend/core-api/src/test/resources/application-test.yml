@@ -24,6 +24,16 @@ springdoc:
 
 mujoong:
   timing:
+    result:
+      job-attempts: 3
+      job-retry-backoff: [50ms, 150ms]
+      job-tick: 50ms
+      attempt-timeout: 3s
+      reconcile-interval: 5m
+      undecided-limit: 1h
+    report:
+      ready-target: 60s
+      unsaved-retention: 24h
     session:
       preparing-timeout: 1s
     core:

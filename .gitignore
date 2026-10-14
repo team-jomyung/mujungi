@@ -83,6 +83,7 @@ aidlc/diagnostics/
 # which was proven to corrupt the multi-line audit blocks) ·
 # aidlc/spaces/*/intents/*/<phase>/<stage>/*.md (artifacts + diary).
 .claude/settings.local.json
+aidlc.settings.local.json
 # END AI-DLC:gitignore
 
 # Claude Code 에이전트 워크트리(기계 로컬)

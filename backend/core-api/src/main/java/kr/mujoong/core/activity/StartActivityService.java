@@ -98,6 +98,12 @@ public class StartActivityService implements DisposableBean {
     private final MujoongClock clock;
     private final Executor cancelExecutor;
     private final ExecutorService ownedExecutor;
+    private kr.mujoong.core.identity.GuardianWriteLock practiceGuardianLock;
+
+    @Autowired(required=false)
+    void practiceGuardianLock(kr.mujoong.core.identity.GuardianWriteLock value) {
+        this.practiceGuardianLock=value;
+    }
 
     /** 시작이 쓰는 저장소 · 포트 묶음(생성자 인자를 줄인다). */
     public record Ports(
@@ -185,13 +191,42 @@ public class StartActivityService implements DisposableBean {
      */
     public Started start(UUID guardianId, StartRequest request) {
         validate(request);
+        return start(guardianId,request,UUID.randomUUID(),ActivityType.FREE_TALK,
+                json.sha256OfCanonical(json.write(request)),null);
+    }
+
+    public Started startPractice(UUID guardianId, UUID key, UUID sessionId, String requestHash,
+            Map<String,Object> practice) {
+        return start(guardianId,new StartRequest(key,null),sessionId,ActivityType.PRACTICE,requestHash,practice);
+    }
+
+    /** 준비가 외부 호출을 하기 전에 적용하는 시작 문턱. 최종 시작에서도 같은 검사를 다시 한다. */
+    public void checkPracticeReadiness(UUID guardianId) {
+        Guardian guardian=guardians.findById(guardianId).orElseThrow(()->CoreApiException.of(ErrorCode.UNAUTHENTICATED));
+        if(guardian.isDeletionRequested()) throw CoreApiException.of(ErrorCode.ACCOUNT_DELETION_IN_PROGRESS);
+        if(childProfiles.childContext(guardianId).isEmpty() || !consentPolicy.check(guardianId).ok())
+            throw CoreApiException.of(ErrorCode.CONSENT_MISSING);
+        rejectIfInProgress(guardianId);
+        if(!deviceView.readiness(guardianId).canStart()) throw CoreApiException.of(ErrorCode.DEVICE_NOT_STABLE);
+    }
+
+    public Optional<Started> replayPractice(UUID guardianId, UUID key, String hash) {
+        return activities.findByIdempotencyKey(guardianId,key.toString()).map(copy->replay(copy,hash));
+    }
+
+    public boolean isActivePractice(UUID guardianId, UUID childId, UUID sessionId) {
+        return activities.findOwned(sessionId,guardianId).filter(c->c.childId().equals(childId)
+                && c.activityType()==ActivityType.PRACTICE && c.status()==SessionStatus.ACTIVE).isPresent();
+    }
+
+    private Started start(UUID guardianId, StartRequest request, UUID sessionId, ActivityType activityType,
+            String requestHash, Map<String,Object> practice) {
         Guardian guardian = guardians.findById(Objects.requireNonNull(guardianId, "guardianId"))
                 .orElseThrow(() -> CoreApiException.of(ErrorCode.UNAUTHENTICATED));
         if (guardian.isDeletionRequested()) {
             throw CoreApiException.of(ErrorCode.ACCOUNT_DELETION_IN_PROGRESS);
         }
         String key = request.idempotencyKey().toString();
-        String requestHash = json.sha256OfCanonical(json.write(request));
         Optional<ActivityCopy> existing = activities.findByIdempotencyKey(guardianId, key);
         if (existing.isPresent()) {
             return replay(existing.get(), requestHash);
@@ -227,14 +262,22 @@ public class StartActivityService implements DisposableBean {
         approved.put(ApprovedContent.CODE_CLOSING, closing);
         approved.put(ApprovedContent.CODE_WAITING_FILLER, waitingFiller);
         catalog.sessionContent(FREE_TALK_SESSION_CONTENT).forEach(approved::putIfAbsent);
+        if(activityType==ActivityType.PRACTICE) {
+            approved.remove("INTRO_FREE_TALK");
+            catalog.sessionContent(List.of("INTRO_PRACTICE","HELP_OFFER")).forEach(approved::putIfAbsent);
+        }
 
-        UUID sessionId = UUID.randomUUID();
         SessionPackage sessionPackage = packageBuilder.build(sessionId, request.idempotencyKey(), guardianId,
                 readiness.deviceId(), child, consent.snapshot(), approved);
+        if(activityType==ActivityType.PRACTICE) sessionPackage=sessionPackage.forPractice();
         // 사본 행과 08 배경을 한 트랜잭션에 쓴다(배경은 이긴 요청만 쓴다, AC3.1.2 · AC3.1.8 · U4a-J1)
         Boolean insertedResult = transactions.execute(status -> {
+            if(activityType==ActivityType.PRACTICE) {
+                Objects.requireNonNull(practiceGuardianLock,"practice guardian lock").lockActive(guardianId);
+                if(!consentPolicy.check(guardianId).ok()) throw CoreApiException.of(ErrorCode.CONSENT_MISSING);
+            }
             boolean wrote = activities.insertRequested(new NewActivity(sessionId, guardianId, child.childId(),
-                    readiness.deviceId(), ActivityType.FREE_TALK, key, requestHash, now));
+                    readiness.deviceId(), activityType, key, requestHash, now));
             if (wrote) {
                 contexts.insert(sessionId, guardianId, child.childId(), request.context(), now);
             }
@@ -249,7 +292,8 @@ public class StartActivityService implements DisposableBean {
         }
         logTransition(sessionId, "NONE", SessionStatus.REQUESTED, 0, false);
 
-        StartResult result = realtime.start(sessionPackage);
+        StartResult result = activityType==ActivityType.PRACTICE
+                ? realtime.startPractice(sessionPackage,practice) : realtime.start(sessionPackage);
         return switch (result.kind()) {
             case ACCEPTED -> new Started(sessionId, SessionStatus.REQUESTED);
             case DEVICE_NOT_CONNECTED -> finishLocally(sessionId, 423, false);

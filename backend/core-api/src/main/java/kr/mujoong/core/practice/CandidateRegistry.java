@@ -73,6 +73,14 @@ public class CandidateRegistry {
         var account=accounts.requireActive(guardianId,false);
         return repository.candidates(account.childId(),sessionId);
     }
+    public List<ResultCandidateView> viewForResult(UUID sessionId,UUID guardianId) {
+        var account=accounts.requireActive(guardianId,false);
+        return repository.resultCandidates(account.childId(),sessionId);
+    }
+    public record ResultCandidateView(UUID recommendationId,String displayName,String reasonText,List<Evidence> evidence,
+            boolean selected,UUID goalSelectionId) {
+        @Override public String toString(){return "ResultCandidateView[id="+recommendationId+"]";}
+    }
     private void validate(Candidate candidate) {
         if(candidate==null || candidate.behaviorKey()==null || candidate.behaviorKey().isBlank()
                 || candidate.behaviorVersion()<1 || candidate.reasonText()==null || candidate.reasonText().isBlank()

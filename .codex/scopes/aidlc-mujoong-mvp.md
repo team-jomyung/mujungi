@@ -1,0 +1,56 @@
+---
+name: mujoong-mvp
+depth: Standard
+keywords: []
+description: "무중(Mujoong) 서비스 구축 - Ideation 생략, Inception·Construction 전체, Operation은 EC2 1대 배포 실행까지"
+skeleton: on
+review_cap: none
+guard_policy: strict
+sensors: on
+learnings: off
+summary_confirmation: off
+---
+
+# mujoong-mvp scope
+
+6~12세 아이의 화용 능력 지원 AI 음성 대화 서비스 '무중'을, 이미 갖춰진 문서 묶음
+(화면설계 v1.5j · 개발명세 · 요구사항 v1.1 · GPT-Live 기능명세 · ADR_2S · ERD v0.1 ·
+WBS v0.5 · 점검표 1008)에서 곧바로 구현으로 옮기기 위해 작성한 맞춤 스코프.
+2026-10-08 composer 제안을 사람이 수정 없이 승인했다. 기준 문서가 서로 다르면
+화면 설계 v1.5j가 맞다.
+
+Guard Policy는 strict: 울타리를 하나도 내리지 않으며, 승인 뒤 입력이 바뀌면 조용히
+계속하지 않고 그 승인을 다시 연다. Code Generation의 Plan Approval 울타리가 그대로
+유지되어, 사람이 계획을 명시적으로 승인하기 전에는 개발자 에이전트 디스패치가 거부된다.
+
+리뷰 상한(`review_cap`)은 none: 스테이지 리뷰어 패스를 두지 않고 각 단계의 승인
+게이트에서 사람이 직접 판단한다(속도 설정). Walking skeleton은 on: 가장 얇은 끝-끝
+조각(기기 코드 등록 → 홈 → 음성 1턴 중계 → 종료)을 사람이 승인한 실제 검증 명령으로
+먼저 통과시킨 뒤 5인 담당 유닛을 병렬로 흩는다. 센서는 on, 학습 의식(learnings)과
+요약 확인(summary confirmation)은 off(속도 설정). 테스트 전략은 깊이 Standard에서
+상속한다.
+
+## 왜 이 단계들을 실행하고 저 단계들을 건너뛰는가
+
+Ideation 7단계는 모두 SKIP - 의도 · 시장 · 타당성 · 범위 · 팀 · 목업 · 승인이 이미
+knowledge/documents 문서로 존재한다. Inception은 reverse-engineering(Greenfield,
+분석할 코드 없음)과 practices-discovery(사람 지시로 제외; org.md 기본값인 test-after ·
+트렁크 기반 · squash-merge 적용)만 빼고 requirements-analysis → user-stories →
+refined-mockups → domain-design → units-generation → contract-design →
+delivery-planning을 전부 돈다. refined-mockups는 새로 그리지 않고 화면설계 v1.5j를
+옮기는 수준이다. Construction은 functional-design → nfr-requirements → nfr-design →
+infrastructure-design → code-generation → build-and-test를 돌고, ci-pipeline은 사람
+지시로 SKIP한다(5명이 7일간 한 트렁크에 머지하는데 자동 게이트가 없고
+deployment-pipeline이 소비하는 ci-config · quality-gates가 비므로 그 단계가 품질
+게이트를 인라인으로 정의한다). Operation은 deployment-pipeline →
+environment-provisioning → deployment-execution까지(EC2 1대 · Docker Compose · Nginx,
+ADR-006) 넣고, observability-setup · incident-response · performance-validation ·
+feedback-optimization은 2026-11-05 제출로 끝나는 프로젝트라 SKIP한다.
+
+승인 시 되돌릴 후보로 기록한 단계: 1순위 practices-discovery(비용 2, 테스트 · CI가
+전무해 기계 심사는 EXECUTE를 권함), 2순위 ci-pipeline.
+
+## 구성
+
+33단계 중 19 EXECUTE / 14 SKIP, 승인 게이트 16개. 키워드 없음 - `/aidlc --scope
+mujoong-mvp`로만 선택되며 자동 추론에는 참여하지 않는다.

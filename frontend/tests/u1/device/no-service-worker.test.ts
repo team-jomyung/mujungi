@@ -11,11 +11,20 @@ import { codeOf, frontendRoot, relative, sourceFiles } from "../support/sourceSc
 // 실행 확인: /device 착지와 「켜기」 동안 navigator.serviceWorker.register 호출이 0건이다.
 
 describe("서비스 워커 · PWA 정적 검사", () => {
-  it("src 어디에도 serviceWorker 사용 · register 호출이 없다", () => {
+  it("U7 보호자 전용 등록 모듈 밖에는 serviceWorker 사용 · register 호출이 없다", () => {
     const offenders = sourceFiles(path.join(frontendRoot, "src"))
+      .filter((file) => relative(file) !== "src/parent/push/browserPush.ts")
       .filter((file) => /serviceWorker|\.register\s*\(\s*["'`][^"'`]*sw[^"'`]*\.js/.test(codeOf(file)))
       .map(relative);
     expect(offenders).toEqual([]);
+  });
+
+  it("U7의 좁은 예외는 부모 scope만 등록하고 fetch·캐시·PWA를 만들지 않는다", () => {
+    const registration = codeOf(path.join(frontendRoot, "src/parent/push/browserPush.ts"));
+    expect(registration).toContain('const WORKER_SCOPE = "/parent/"');
+    expect(registration).toContain('const WORKER_PATH = "/parent/push-worker"');
+    const worker = codeOf(path.join(frontendRoot, "src/parent/push/pushWorker.ts"));
+    expect(worker).not.toMatch(/addEventListener\(["']fetch|caches\.|CacheStorage|importScripts|workbox/i);
   });
 
   it("정적 파일에 서비스 워커 스크립트 · 웹 앱 매니페스트가 없다", () => {

@@ -1,0 +1,420 @@
+{
+  "version": "result-v1",
+  "level": "DRAFT",
+  "entries": [
+    {
+      "id": "U6-DIAGNOSIS-1",
+      "pattern": "진단",
+      "category": "DIAGNOSIS",
+      "appliesTo": [
+        "RESULT_TEXT",
+        "PDF"
+      ]
+    },
+    {
+      "id": "U6-DIAGNOSIS-2",
+      "pattern": "자폐",
+      "category": "DIAGNOSIS",
+      "appliesTo": [
+        "RESULT_TEXT",
+        "PDF"
+      ]
+    },
+    {
+      "id": "U6-DIAGNOSIS-3",
+      "pattern": "asd",
+      "category": "DIAGNOSIS",
+      "appliesTo": [
+        "RESULT_TEXT",
+        "PDF"
+      ]
+    },
+    {
+      "id": "U6-DIAGNOSIS-4",
+      "pattern": "scd",
+      "category": "DIAGNOSIS",
+      "appliesTo": [
+        "RESULT_TEXT",
+        "PDF"
+      ]
+    },
+    {
+      "id": "U6-DIAGNOSIS-5",
+      "pattern": "adhd",
+      "category": "DIAGNOSIS",
+      "appliesTo": [
+        "RESULT_TEXT",
+        "PDF"
+      ]
+    },
+    {
+      "id": "U6-DIAGNOSIS-6",
+      "pattern": "장애",
+      "category": "DIAGNOSIS",
+      "appliesTo": [
+        "RESULT_TEXT",
+        "PDF"
+      ]
+    },
+    {
+      "id": "U6-DIAGNOSIS-7",
+      "pattern": "증상",
+      "category": "DIAGNOSIS",
+      "appliesTo": [
+        "RESULT_TEXT",
+        "PDF"
+      ]
+    },
+    {
+      "id": "U6-DIAGNOSIS-8",
+      "pattern": "의심되",
+      "category": "DIAGNOSIS",
+      "appliesTo": [
+        "RESULT_TEXT",
+        "PDF"
+      ]
+    },
+    {
+      "id": "U6-DIAGNOSIS-9",
+      "pattern": "검사가필요",
+      "category": "DIAGNOSIS",
+      "appliesTo": [
+        "RESULT_TEXT",
+        "PDF"
+      ]
+    },
+    {
+      "id": "U6-SCORE-1",
+      "pattern": "점수",
+      "category": "SCORE",
+      "appliesTo": [
+        "RESULT_TEXT",
+        "PDF"
+      ]
+    },
+    {
+      "id": "U6-SCORE-2",
+      "pattern": "등급",
+      "category": "SCORE",
+      "appliesTo": [
+        "RESULT_TEXT",
+        "PDF"
+      ]
+    },
+    {
+      "id": "U6-SCORE-3",
+      "pattern": "%",
+      "category": "SCORE",
+      "appliesTo": [
+        "RESULT_TEXT",
+        "PDF"
+      ]
+    },
+    {
+      "id": "U6-SCORE-4",
+      "pattern": "퍼센트",
+      "category": "SCORE",
+      "appliesTo": [
+        "RESULT_TEXT",
+        "PDF"
+      ]
+    },
+    {
+      "id": "U6-SCORE-5",
+      "pattern": "백분위",
+      "category": "SCORE",
+      "appliesTo": [
+        "RESULT_TEXT",
+        "PDF"
+      ]
+    },
+    {
+      "id": "U6-SCORE-6",
+      "pattern": "향상률",
+      "category": "SCORE",
+      "appliesTo": [
+        "RESULT_TEXT",
+        "PDF"
+      ]
+    },
+    {
+      "id": "U6-SCORE-7",
+      "pattern": "성공률",
+      "category": "SCORE",
+      "appliesTo": [
+        "RESULT_TEXT",
+        "PDF"
+      ]
+    },
+    {
+      "id": "U6-SCORE-8",
+      "pattern": "정답률",
+      "category": "SCORE",
+      "appliesTo": [
+        "RESULT_TEXT",
+        "PDF"
+      ]
+    },
+    {
+      "id": "U6-SCORE-9",
+      "pattern": "상위",
+      "category": "SCORE",
+      "appliesTo": [
+        "RESULT_TEXT",
+        "PDF"
+      ]
+    },
+    {
+      "id": "U6-SCORE-10",
+      "pattern": "하위",
+      "category": "SCORE",
+      "appliesTo": [
+        "RESULT_TEXT",
+        "PDF"
+      ]
+    },
+    {
+      "id": "U6-TREATMENT-1",
+      "pattern": "치료",
+      "category": "TREATMENT",
+      "appliesTo": [
+        "RESULT_TEXT",
+        "PDF"
+      ]
+    },
+    {
+      "id": "U6-TREATMENT-2",
+      "pattern": "처방",
+      "category": "TREATMENT",
+      "appliesTo": [
+        "RESULT_TEXT",
+        "PDF"
+      ]
+    },
+    {
+      "id": "U6-CAUSE-1",
+      "pattern": "부족하",
+      "category": "CAUSE",
+      "appliesTo": [
+        "RESULT_TEXT",
+        "PDF"
+      ]
+    },
+    {
+      "id": "U6-CAUSE-2",
+      "pattern": "결함",
+      "category": "CAUSE",
+      "appliesTo": [
+        "RESULT_TEXT",
+        "PDF"
+      ]
+    },
+    {
+      "id": "U6-CAUSE-3",
+      "pattern": "문제가있",
+      "category": "CAUSE",
+      "appliesTo": [
+        "RESULT_TEXT",
+        "PDF"
+      ]
+    },
+    {
+      "id": "U6-CAUSE-4",
+      "pattern": "핵심원인",
+      "category": "CAUSE",
+      "appliesTo": [
+        "RESULT_TEXT",
+        "PDF"
+      ]
+    },
+    {
+      "id": "U6-CAUSE-5",
+      "pattern": "원인은",
+      "category": "CAUSE",
+      "appliesTo": [
+        "RESULT_TEXT",
+        "PDF"
+      ]
+    },
+    {
+      "id": "U6-CAUSE-6",
+      "pattern": "못한다",
+      "category": "CAUSE",
+      "appliesTo": [
+        "RESULT_TEXT",
+        "PDF"
+      ]
+    },
+    {
+      "id": "U6-CAUSE-7",
+      "pattern": "서툴다",
+      "category": "CAUSE",
+      "appliesTo": [
+        "RESULT_TEXT",
+        "PDF"
+      ]
+    },
+    {
+      "id": "U6-GENERALIZATION-1",
+      "pattern": "학교에서도",
+      "category": "GENERALIZATION",
+      "appliesTo": [
+        "RESULT_TEXT",
+        "PDF"
+      ]
+    },
+    {
+      "id": "U6-GENERALIZATION-2",
+      "pattern": "항상",
+      "category": "GENERALIZATION",
+      "appliesTo": [
+        "RESULT_TEXT",
+        "PDF"
+      ]
+    },
+    {
+      "id": "U6-GENERALIZATION-3",
+      "pattern": "늘그",
+      "category": "GENERALIZATION",
+      "appliesTo": [
+        "RESULT_TEXT",
+        "PDF"
+      ]
+    },
+    {
+      "id": "U6-GENERALIZATION-4",
+      "pattern": "언제나",
+      "category": "GENERALIZATION",
+      "appliesTo": [
+        "RESULT_TEXT",
+        "PDF"
+      ]
+    },
+    {
+      "id": "U6-GENERALIZATION-5",
+      "pattern": "친구들과도그럴",
+      "category": "GENERALIZATION",
+      "appliesTo": [
+        "RESULT_TEXT",
+        "PDF"
+      ]
+    },
+    {
+      "id": "U6-EMOTION_CLAIM-1",
+      "pattern": "고싶었던거",
+      "category": "EMOTION_CLAIM",
+      "appliesTo": [
+        "RESULT_TEXT",
+        "PDF"
+      ]
+    },
+    {
+      "id": "U6-EMOTION_CLAIM-2",
+      "pattern": "때문에속상",
+      "category": "EMOTION_CLAIM",
+      "appliesTo": [
+        "RESULT_TEXT",
+        "PDF"
+      ]
+    },
+    {
+      "id": "U6-EMOTION_CLAIM-3",
+      "pattern": "화가났던것같",
+      "category": "EMOTION_CLAIM",
+      "appliesTo": [
+        "RESULT_TEXT",
+        "PDF"
+      ]
+    },
+    {
+      "id": "U6-EMOTION_CLAIM-4",
+      "pattern": "성격이",
+      "category": "EMOTION_CLAIM",
+      "appliesTo": [
+        "RESULT_TEXT",
+        "PDF"
+      ]
+    },
+    {
+      "id": "U6-EMOTION_CLAIM-5",
+      "pattern": "일부러",
+      "category": "EMOTION_CLAIM",
+      "appliesTo": [
+        "RESULT_TEXT",
+        "PDF"
+      ]
+    },
+    {
+      "id": "U6-PRESSURE-1",
+      "pattern": "꼭좋아",
+      "category": "PRESSURE",
+      "appliesTo": [
+        "RESULT_TEXT",
+        "PDF"
+      ]
+    },
+    {
+      "id": "U6-PRESSURE-2",
+      "pattern": "반드시",
+      "category": "PRESSURE",
+      "appliesTo": [
+        "RESULT_TEXT",
+        "PDF"
+      ]
+    },
+    {
+      "id": "U6-PRESSURE-3",
+      "pattern": "효과가있",
+      "category": "PRESSURE",
+      "appliesTo": [
+        "RESULT_TEXT",
+        "PDF"
+      ]
+    },
+    {
+      "id": "U6-PRESSURE-4",
+      "pattern": "이렇게말해야해",
+      "category": "PRESSURE",
+      "appliesTo": [
+        "RESULT_TEXT",
+        "PDF"
+      ]
+    },
+    {
+      "id": "U6-PRESSURE-5",
+      "pattern": "고쳐야",
+      "category": "PRESSURE",
+      "appliesTo": [
+        "RESULT_TEXT",
+        "PDF"
+      ]
+    },
+    {
+      "id": "U6-PRESSURE-6",
+      "pattern": "매일해야",
+      "category": "PRESSURE",
+      "appliesTo": [
+        "RESULT_TEXT",
+        "PDF"
+      ]
+    },
+    {
+      "id": "U6-PRESSURE-7",
+      "pattern": "꾸준히해야",
+      "category": "PRESSURE",
+      "appliesTo": [
+        "RESULT_TEXT",
+        "PDF"
+      ]
+    },
+    {
+      "id": "U6-PRESSURE-8",
+      "pattern": "계속해야",
+      "category": "PRESSURE",
+      "appliesTo": [
+        "RESULT_TEXT",
+        "PDF"
+      ]
+    }
+  ]
+}

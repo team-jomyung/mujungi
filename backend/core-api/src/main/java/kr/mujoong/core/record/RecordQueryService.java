@@ -25,7 +25,8 @@ import org.springframework.stereotype.Service;
  * 26 · 27 대화 기록 조회 (U4a ActivityRecord · AC5.1.1 · AC5.1.2 · AC5.1.8 · AC5.2.1 · AC5.2.2 · FR4.3 · A10 · 설계 R7 · R8).
  *
  * <p>보호자 응답에서 뺄 것을 빼는 곳이 여기 하나다: 연습의 판정(label) · Cue · 상황 · 응답 묶음, 원음 경로, termination, 08 배경 원문,
- * 구조화 결과는 응답 모양에 자리가 없다(목표는 이름 · 순서 · 상태만). DECLINED는 머리 정보만, FAILED는 목록에 없고 상세는 404다.
+ * 구조화 결과는 응답 모양에 자리가 없다(목표는 이름 · 순서 · 상태만). DECLINED는 머리 정보만 보인다.
+ * BR14.1에 따라 발화가 있는 SERVER_RESTART 실패 기록은 목록과 상세에 포함한다.
  */
 @Service
 public class RecordQueryService {
@@ -43,7 +44,12 @@ public class RecordQueryService {
         this.json = Objects.requireNonNull(json, "json");
     }
 
-    /** 26 달력: 그달 기록이 있는 날과 수(DECLINED 포함 · FAILED 빼고, B19). */
+    /** U5b 내부 읽기 포트. 보호자 응답 경로에는 원본 practice를 내보내지 않는다. */
+    public java.util.Optional<String> practiceSnapshot(UUID guardianId, UUID sessionId) {
+        return records.findOwned(sessionId,guardianId).map(record -> record.practiceJson()==null ? "null" : record.practiceJson());
+    }
+
+    /** 26 달력: DECLINED와 BR14.1의 재시작 실패를 포함한 기록 날짜와 수. */
     public List<DayCount> days(UUID guardianId, YearMonth month) {
         RecordCalendar.Range range = RecordCalendar.of(month);
         return records.countByDay(guardianId, range.from(), range.to(), RecordCalendar.ZONE.getId());
@@ -58,14 +64,15 @@ public class RecordQueryService {
     /**
      * 27 대화 기록 칸.
      *
-     * @throws CoreApiException 404(남의 · 없는 · 기록 아직 없음 · FAILED, U4a-J9)
+     * @throws CoreApiException 404(남의 · 없는 · 기록 아직 없음 · BR14.1에 해당하지 않는 FAILED)
      */
     public Detail detail(UUID guardianId, UUID sessionId) {
         StoredRecord record = records.findOwned(sessionId, guardianId)
-                .filter(found -> !"FAILED".equals(found.finalStatus()))
                 .orElseThrow(() -> CoreApiException.of(ErrorCode.NOT_FOUND));
         ActivityCopy copy = activities.findOwned(sessionId, guardianId)
                 .orElseThrow(() -> CoreApiException.of(ErrorCode.NOT_FOUND));
+        if("FAILED".equals(record.finalStatus())&&!RecordEligibility.restartFailed(record.finalStatus(),copy.status().name(),copy.failureCode(),!maps(record.transcriptJson()).isEmpty()))
+            throw CoreApiException.of(ErrorCode.NOT_FOUND);
         boolean declined = "DECLINED".equals(record.finalStatus());
         List<Bubble> utterances = declined ? List.of() : bubbles(record.transcriptJson());
         List<LiveExtras.Gap> gaps = declined ? List.of() : LiveExtras.gaps(maps(record.gapsJson()));
@@ -79,8 +86,8 @@ public class RecordQueryService {
     private ListItem listItem(StoredRecord record) {
         boolean declined = "DECLINED".equals(record.finalStatus());
         int goalCount = declined ? 0 : goals(record.practiceJson()).size();
-        boolean interrupted = !declined && LiveExtras.gaps(maps(record.gapsJson())).stream()
-                .anyMatch(gap -> "DISCONNECT".equals(gap.kind()));
+        boolean interrupted = "FAILED".equals(record.finalStatus()) || (!declined && LiveExtras.gaps(maps(record.gapsJson())).stream()
+                .anyMatch(gap -> "DISCONNECT".equals(gap.kind())));
         return new ListItem(record, !declined, goalCount, interrupted);
     }
 

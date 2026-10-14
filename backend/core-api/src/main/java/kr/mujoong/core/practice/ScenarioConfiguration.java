@@ -12,12 +12,27 @@ import org.springframework.context.annotation.Configuration;
 @Configuration(proxyBeanMethods = false)
 public class ScenarioConfiguration {
     @Bean @ConditionalOnMissingBean(PracticeSessionContextPort.class)
-    PracticeSessionContextPort practiceSessionContextPort() {
-        return id -> { throw CoreApiException.of(ErrorCode.SERVICE_NOT_READY); };
+    PracticeSessionContextPort practiceSessionContextPort(
+            kr.mujoong.core.practice.start.PracticePreparationRepository preparations,
+            kr.mujoong.core.activity.StartActivityService activities) {
+        return id -> {
+            var p=preparations.findSession(id).filter(value->"READY".equals(value.status()))
+                    .orElseThrow(()->CoreApiException.of(ErrorCode.SERVICE_NOT_READY));
+            return kr.mujoong.core.practice.start.PracticeStartService.context(p,
+                    activities.isActivePractice(p.guardianId(),p.childId(),id));
+        };
     }
     @Bean @ConditionalOnMissingBean(ScenarioRecordPort.class)
-    ScenarioRecordPort scenarioRecordPort() {
-        return id -> { throw CoreApiException.of(ErrorCode.SERVICE_NOT_READY); };
+    ScenarioRecordPort scenarioRecordPort(
+            kr.mujoong.core.practice.start.PracticePreparationRepository preparations,
+            kr.mujoong.core.record.RecordQueryService records,
+            kr.mujoong.contract.json.JsonCodec json) {
+        return id -> {
+            var p=preparations.findSession(id).orElseThrow(()->CoreApiException.of(ErrorCode.SERVICE_NOT_READY));
+            String raw=records.practiceSnapshot(p.guardianId(),id).orElseThrow(()->CoreApiException.of(ErrorCode.NOT_FOUND));
+            return new ScenarioRecordPort.RecordedExposures(id,p.guardianId(),p.childId(),
+                    kr.mujoong.core.practice.start.RecordedScenarioExposures.parse(raw,json));
+        };
     }
     @Bean
     ScenarioLimits scenarioLimits(CoreProperties properties) {

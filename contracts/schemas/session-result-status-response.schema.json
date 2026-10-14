@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mujoong.invalid/contracts/schemas/session-result-status-response.schema.json",
+  "title": "17 · 27 정리 상태",
+  "description": "GET /api/sessions/{sessionId}/result/status 200(계약 3절 C5 · U6 BR8.3). sessionStatus · confirmed는 활동 사본에서, jobStatus는 세션 결과 머리 행에서 읽는다. 머리 행이 아직 없으면 정리 대상 판정(BR2.2)과 사본 상태로 REQUESTED 또는 NONE을 낸다. 17의 정리 끝은 jobStatus DONE이다(편차 (U6-j)).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["sessionStatus", "confirmed", "jobStatus"],
+  "properties": {
+    "sessionStatus": { "$ref": "common.schema.json#/$defs/SessionStatus" },
+    "confirmed": { "type": "boolean" },
+    "jobStatus": { "$ref": "session-result-response.schema.json#/$defs/JobStatus" }
+  }
+}

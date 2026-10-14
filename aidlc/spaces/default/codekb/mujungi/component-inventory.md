@@ -1,118 +1,96 @@
 # 컴포넌트 목록 (Component Inventory)
 
-> 기준 커밋 `3748083`. 아래 `###` 제목이 `reverse-engineering-timestamp.md` `analyzed.components`의 이름과 글자 그대로 같다. 상태 평가: 건강(healthy) · 주의(at-risk) · 저하(degraded). 괄호 숫자는 운영 파일 수.
+> 기준 커밋 `7a22b67`. `###` 제목은 `reverse-engineering-timestamp.md` Scope of Analysis의 `analyzed.components`와 글자 그대로 맞춘다.
+> 상태 등급: healthy(건강) · at-risk(주의) · degraded(손상). 깊게 본 컴포넌트만 등급을 매긴다.
 
-## 요약
-
-| 컴포넌트 | 종류 | 상태 | U4b 관련도 |
-|---|---|---|---|
-| contract-model | 라이브러리 모듈 | 건강 | 중(스냅숏 해시 골든 · 사유 열거는 이미 있음) |
-| test-support | 시험 라이브러리 모듈 | 건강 | 중(대역 재사용) |
-| build-logic | 빌드 규약 | 건강 | 저(커버리지 범위 파일만) |
-| contracts | 계약 정본 | 건강 | 높음(timing · deviations 편집) |
-| realtime.session | 앱 패키지 | 주의 | 매우 높음 |
-| realtime.dialog | 앱 패키지 | 주의 | 높음 |
-| realtime.gateway | 앱 패키지 | 건강 | 중 |
-| realtime.voice | 앱 패키지 | 건강 | 저 ~ 중 |
-| realtime.gate | 앱 패키지 | 건강 | 높음 |
-| realtime.log | 앱 패키지 | 주의 | 높음 |
-| realtime.messaging | 앱 패키지 | 주의 | 높음 |
-| realtime.recording | 앱 패키지 | 건강 | 중(삭제) |
-| realtime.runtime | 앱 패키지 | 건강 | 저 |
-| realtime.internalhttp | 앱 패키지 | 건강 | 저 |
-| realtime.startup | 앱 패키지 | 건강 | 중(스키마 판) |
-| realtime.web | 앱 패키지 | 건강 | 저 |
-| realtime.config | 앱 패키지 | 주의 | 높음(시간 키) |
-| realtime.observability | 앱 패키지 | 건강 | 저 |
-| realtime.common | 앱 패키지 | 건강 | 저 |
-
-'주의' 판정의 근거는 `code-quality-assessment.md` 「기술 부채」에 있다.
-
-## 모듈 · 계약
-
-### contract-model
-- **책임**: 두 앱이 같은 이름으로 쓰는 계약 타입(상태 · 사유 · 실패 코드 열거, 이벤트 봉투 · 페이로드, 기기 WSS 메시지, 정규화 JSON · 해시, 시계 추상화, 구조화 로그, 오류 코드, 오디오 프레임 코덱, 프로필 가드).
-- **의존**: Jackson 3 · SLF4J/Logback만. Spring · JPA 금지(ArchUnit).
-- **피의존**: `realtime-activity`(implementation) · `core-api`(implementation) · `test-support`(api).
-- **비고**: `SessionStatus` 11상태 · `EndReason` 8사유가 이미 정의돼 U4b에 열거 추가가 필요 없다. `SessionRecordCaptured` 페이로드는 `record` · `termination`을 Map으로 둔다.
-
-### test-support
-- **책임**: 시험 전용 대역 — `MujoongPostgres`(Testcontainers 또는 로컬 PG 바이너리, 두 위치 Flyway 적용, 역할별 DataSource) · `DeviceSimulatorClient` · `ContractStubServer` · `ReceiverDouble` · `FakeProviderWsServer`(Java-WebSocket) · `LogCapture` · `MutableClock` · `ManualTimerDriver` · `TestSecrets`.
-- **의존**: `contract-model`(api), Testcontainers, Java-WebSocket.
-- **피의존**: 두 앱의 `testImplementation`만(운영 의존 금지, ArchUnit · `verifyBootJarHasNoTestClasses`).
-- **비고**: `coverageFloorApplies=false`.
+## 깊게 본 컴포넌트
 
 ### build-logic
-- **책임**: 규약 플러그인 `mujoong.java-conventions`(Java 21 툴체인 · `-Xlint:all` · 재현 가능 아카이브 · UTC 시험 JVM · 태그 필터 · 시험 DB 모드 · 계약 · 인프라 파일을 시험 입력으로 · JaCoCo 80% · 커버리지 범위 · 보안 판 강제)와 `MujoongBuildExtension.coverageFloorApplies`.
-- **의존**: Gradle kotlin-dsl. **피의존**: 모든 모듈.
+- **위치**: `backend/build-logic/` (convention plugin `mujoong.java-conventions`)
+- **책임**: Java 21 툴체인 · Boot BOM · 보안 판 제약(Jackson · Tomcat) · 시험 태그 필터(`-PincludeTags/-PexcludeTags`) · JaCoCo LINE 80% 하한(test-support 제외) · `-PcoverageScope=<u>` · `verifyBootJarHasNoTestClasses`.
+- **U6 관련**: `backend/coverage-scope/u6.txt`가 없으면 `-PcoverageScope=u6`이 실패한다. 기존 u1 ~ u5a 목록은 건드리지 않는다.
+- **상태**: healthy
+
+### contract-model
+- **위치**: `backend/contract-model/` (깊게 본 곳: `build.gradle.kts`, `src/main/java/kr/mujoong/contract/event/`)
+- **책임**: 두 앱 공용 계약 — 이벤트 봉투 · payload · `EventType` 6종 · `AggregateType`, 그 밖에 오류 코드 · 상태 열거 · WS 메시지 · 시계 · `JsonCodec`. Spring · JPA 없음.
+- **의존**: 없음(라이브러리 루트). core-api · realtime-activity가 implementation, test-support가 api로 씀.
+- **상태**: healthy
+
+### core.record
+- **위치**: `backend/core-api/src/main/java/kr/mujoong/core/record/`
+- **책임**: 활동 기록 원장(`core.core_activity_record`, V3) 저장 · 조회. `SessionRecordCapturedHandler`(보호자 행 FOR SHARE → 사본 대조 → `snapshotHash` 재계산 → DECLINED 본문 비움 → `insertIfAbsent` 처음일 때만 `ActivityRecorded` 발행, 다른 해시는 APP_ERROR `EventConflict`). `RecordQueryService` · `RecordCalendar` · `web/RecordController`(26 · 27 재료). `ActivityRecordDeletionParticipant`(90).
+- **데이터**: PK `session_id`(→ `core_activity` RESTRICT), guardian · child FK RESTRICT, `final_status`, `confirmed`, `transcript_json`(seq · speaker CHILD|AI · text · uncertain · startedAt · endedAt) · `gaps_json` · `practice_json`(nullable) · `audio_refs_json` · `termination_json` · `source_snapshot_id` · `snapshot_version` · `snapshot_hash`. `StoredRecord`는 audio · termination을 읽지 않는다. 목록은 FAILED 제외(`LISTED_STATUSES`).
+- **U6 관련**: `ActivityRecorded` 운영 구독자 0 — ResultPipeline이 첫 구독자. 재발행이 없으므로 누락 복구 경로 필요.
+- **상태**: at-risk (발행된 사건을 받는 쪽이 없고, 놓친 사건을 다시 낼 방법이 없음)
+
+### core.practice
+- **위치**: `backend/core-api/src/main/java/kr/mujoong/core/practice/`
+- **책임**: 연습 목표 선택(`GoalSelectionService`, `/api/goal-selections`), 상황 생성(`ScenarioService` · `ScenarioRepository` · `ScenarioContentPolicy`), 목표 후보 등록(`CandidateRegistry.register` · `viewForSession`), 삭제 참가자(150).
+- **확장점(기본 빈, `@ConditionalOnMissingBean`)**: `PracticePortConfiguration` — `CandidateEvidencePort` 늘 false, `GoalMetadataPort` null 메타. `ScenarioConfiguration` — `PracticeSessionContextPort` · `ScenarioRecordPort` SERVICE_NOT_READY.
+- **U6 관련**: `CandidateEvidencePort` 실제 어댑터, `ScenarioLookup`(없음, 재료 `ScenarioRepository.find(UUID)` → `Stored` = Scenario + 소유 id), `ScenarioService.reconcileExposures(sessionId)`(운영 호출자 0, `ScenarioService.java:138`). `core_goal_recommendation.structured_experience_id uuid`(FK 없음, V4)는 U6 구조화 결과 자리로 보임.
+- **상태**: at-risk (자리표시 근거 포트로 후보 등록이 늘 실패)
+
+### core.knowledge
+- **위치**: `backend/core-api/src/main/java/kr/mujoong/core/knowledge/`
+- **책임**: 화용 지식 — `PragmaticsKnowledge.requireVersion(key, version)`(DRAFT · 미완성만 거절, RETIRED 허용) · `pinVersion`(FOR KEY SHARE + `used_at` 최초 기록) · `supportItems(behaviorKey)`(APPROVED 지원 문구 — 생활 팁 매칭 재료) · `relatedBehaviorKeys`(Neo4j 꺼짐이면 빈 목록). `BehaviorDefinition`에 `judgmentCriteria` · `behaviorDefinitionText`.
+- **U6 관련**: `BehaviorDefinitionLookup` 없음 — U6가 공개 서비스 위에 읽기 포트로 더한다(다른 패키지가 저장소를 직접 읽지 않음).
+- **상태**: healthy
+
+### core.textai
+- **위치**: `backend/core-api/src/main/java/kr/mujoong/core/textai/`
+- **책임**: 텍스트 AI 게이트웨이(`TextAiGateway.generateScenario`), 공급자 SPI(`TextAiProvider.generateScenario` 한 메서드), 기본 UNAVAILABLE(`TextAiConfiguration`), 설정 `mujoong.text-ai.*`(`TextAiProperties`), 금지 표현 정책(`ForbiddenExpressionPolicy`, 사전 `resources/textai/u5a-forbidden-patterns.txt` — `//` 범주 주석 + 줄 패턴 18줄, `appliesTo` 없음).
+- **U6 관련**: 구조화 · 재판정 · 결과 문장 · 리포트 · 금지 2차 분류 입출력 없음. ai-io.md 6.6 사전(JSON · `appliesTo` RESULT_TEXT · PDF · 7범주)과 형식 불일치. ai-io.md 6.1의 `mujoong.ai.*` 표기와 코드 키 불일치. `CandidateRegistry`가 같은 정책을 쓰므로 패턴 추가는 U5a 동작도 바꾼다.
+- **상태**: at-risk (U6 요구 대비 표면이 좁고 사전 · 키 이름이 계약과 어긋남)
+
+### core.common.deletion
+- **위치**: `backend/core-api/src/main/java/kr/mujoong/core/common/deletion/DeletionParticipant.java`
+- **책임**: 계정 삭제 참가자 순서 상수 — ACTIVITY_RECORD 90 · ACTIVITY 100 · PRACTICE 150 · DEVICE 200 · CONSENT 250 · CHILD_PROFILE 300 · MESSAGING 900. 참가자는 `@Order` 빈 · 멱등 · 한 트랜잭션 · `DbRetry IDEMPOTENT`.
+- **U6 관련**: `ORDER_RESULT = 70` 없음. 상수를 더할 때 Javadoc "쓰는 값" 목록과 `DeletionCommander` 주석 순서 설명도 같이 고쳐야 한다.
+- **상태**: healthy
+
+### realtime.result-snapshot
+- **위치**: `backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/ResultSnapshotBuilder.java` · `PracticeSessionExtension.java`, `db/migration/realtime/`
+- **책임**: 종료 시 결과 입력 스냅숏 생성(utterances: FINAL · deleted_at 없음 · 아이 전사 + 승인 AI 말, gaps, recordScope, practice, audio) → `realtime.realtime_result_input_snapshot`(V3) → `SessionRecordCaptured`. DECLINED · ACTIVE 전 종료는 utterances · audio 빈 목록.
+- **U6 관련**: 연습 확장점이 `NoOpPracticeSessionExtension`이라 PRACTICE의 `practice`는 U5b 전까지 null(편차 U4b-d). U6는 realtime 스키마를 바꾸지 않는다.
+- **상태**: healthy (U4b 설계대로; practice null은 의도된 공백)
 
 ### contracts
-- **책임**: API · 메시지 · 이벤트 · 시간 값 · 오류 · 편차의 정본(OpenAPI 3 · AsyncAPI 2 · JSON Schema 51개 · Markdown).
-- **피의존**: 두 앱의 시험(`ContractFilesTest` · `InternalApi` · `ConfigKeyContractTest`)이 시험 입력으로 읽는다.
-- **비고**: `timing.md` 2절의 `join-wait` 등은 '이름만 예약'. U5b와 병합 충돌 지점(`timing.md` · `deviations.md`).
+- **위치**: `contracts/` (깊게 본 곳: `ai-io.md` · `ports.md` · `timing.md` · `deviations.md` · `parent-api.yaml`)
+- **책임**: 계약 정본. `timing.md`는 `ConfigKeyContractTest`가 `application.yml` · `CoreProperties`와 대조한다.
+- **U6 관련**: `parent-api.yaml`에 C5 없음. `timing.md` 2절 예약표에만 `mujoong.timing.result.job-attempts` · `mujoong.timing.report.ready-target`('읽을 유닛 U6')이 있고 yml · `CoreProperties.Timing`에는 없다. `record.practice` 내부 모양은 파일에 없다. 편차는 `deviations.md`에 `(U6-a)`부터.
+- **상태**: at-risk (U6 계약 공백)
 
-## realtime-activity 패키지
+### infra.migrate
+- **위치**: `infra/migrate/`(Dockerfile · `flyway-core.conf` · `flyway-realtime.conf` · `migrate.sh`), `infra/migration-approvals.txt`, `infra/compose.demo.yml`
+- **책임**: Flyway 적용 컨테이너(`baselineOnMigrate=true` · `baselineVersion=0` · `validateMigrationNaming=true` · `outOfOrder` 기본 false). 앱은 `SchemaVersionCheck`로 클래스패스 최고 버전 이상인지 확인만. 파괴 문장은 CI `infra-validate`가 막고 승인 목록 줄(위치 · 문장 번호 · 해시 12자 · 승인자 · 사유)로만 통과.
+- **U6 관련**: V5는 새 표만 더하면 승인 불필요. 기존 표 FK · 제약 강화는 승인 줄 필요. V5 파일과 migrate 이미지가 함께 배포돼야 함. compose.demo의 core-api는 `read_only: true` · `/tmp` tmpfs 64m · `mem_limit 1.6g` · 영속 볼륨 없음 → PDF 저장 자리 없음.
+- **상태**: healthy
 
-### realtime.session
-- **책임**: SessionLifecycle 핵심. 세션당 직렬 실행기, 전이 표, 전이 기록(한 전이 = 한 트랜잭션 + `SessionStateChanged` Outbox), 시계(Kind 6종: DEVICE_ACK · CLOSING_CONFIRM · DISCONNECT · SEGMENT_QUIET · PLAYBACK_EXPIRY · REDELIVER), 편지함, 시작 · 끝내기 처리, 묘비, 고아 세션 점검, 진행 조회, 세션 저장소.
-- **주요 클래스 (24 + web 1)**: `SessionExecutor`(1,832줄) · `TransitionTable` · `TransitionService`/`SessionTransitions` · `SessionTimers` · `SessionMailbox` · `SessionRegistry` · `StartSessionHandler` · `EndRequestHandler` · `TombstoneMap` · `OrphanSessionChecker` · `SessionStateEmitter` · `SessionViewQuery` · `ActivitySessionRepository`/`Row`(29열) · `SessionEventRepository` · `SessionStopExpressionRepository` · `SessionGapPort` · `ChildContext` · `ConsentSnapshot` · `NewActivitySession` · `web/SessionInternalController`.
-- **의존**: dialog · gate · voice · gateway(송신) · log · recording · messaging · runtime · config · common.db · contract-model.
-- **피의존**: web(컨트롤러 경유 Core) · gateway(편지함 사건) · voice(공급자 사건).
+### ci-workflow
+- **위치**: `.github/workflows/ci.yml`
+- **책임**: changes · backend(`./gradlew clean check` + bootJar 시험 클래스 0) · backend-deps(Trivy HIGH+) · frontend(eslint · vitest 80% · next build · 번들 비밀 검사) · frontend-deps(npm audit) · tools · secrets(gitleaks) · infra-validate(Compose · 불변식 · `nginx -t` · shellcheck · 마이그레이션 파괴 문장) · images(6종 빌드 · trivy · 점검 · 관문 음성 대조) · skeleton(`scripts/verify.sh --mode compose`) · ci-gate · deploy.
+- **U6 관련**: CI는 범위 없는 모듈 전체 80%도 돈다 → U6 코드는 u6 범위 80%와 core-api · frontend 전체 80%를 함께 지켜야 한다.
+- **상태**: healthy
 
-### realtime.dialog
-- **책임**: 대화 판정 순수 로직. `StopIntentJudge`(565줄, STOP/CONFIRM/NONE + `continues` 해제 판정, 상태를 바꾸지 않음) · `DialogInstructions`(역할 지시문 · 교정 문장).
-- **비고**: `JoinTracker`가 **없다**(U3 1차 리뷰에서 제거). 커밋 `5354a32`(및 `867f0a0`)에 `JoinTracker.java` · `JoinTrackerTest.java`가 있으며 공개 API는 `JoinTracker(Duration noReply)` · `promptPlayed` · `reply` · `tick` · `classify` · `phase` · `prompts` · `isFinished` · `MAX_PROMPTS = 3`.
+### frontend.parent.records
+- **위치**: `frontend/src/app/parent/records/page.tsx` (+ `frontend/package.json` · `vitest.config.ts` · `coverage-scope/`)
+- **책임**: 26 기록 화면 자리 — 현재 `/parent`로 redirect만. `/api/records` 클라이언트 · 타입 없음. `Done17.tsx`가 「오늘 기록 보기」 감춤(`tests/u1/parent/done-17.test.tsx:109` J120 단언).
+- **U6 관련**: 26 · 27 · 28 · 30 · R-PDF와 17 정리 상태를 새로 만든다. `frontend/coverage-scope/u6.json` 없음(현재 u1 · u2 · u3 · u4a · u5a).
+- **상태**: degraded (화면 없음 · 스텁)
 
-### realtime.gateway
-- **책임**: 기기 WSS — 설정(`/ws/device`) · 핸드셰이크 · 연결 상태 기계 · 연결당 송신 스레드 · HELLO 인계(4001) · 연결 상태 저장과 Core 보고 · 끊김(40초 무음) · 하트비트 · 토큰 검증 클라이언트 · `DeviceReleased` 처리 · 소켓 레지스트리 · 프레임 검사.
-- **주요 클래스 (21)**: `WebSocketConfig` · `DeviceHandshakeInterceptor` · `DeviceWebSocketHandler` · `DeviceConnection` · `ConnectionSender` · `ConnectionHandover` · `ConnectionStateWriter`/`DeviceStatusPort` · `DeviceConnectionRepository` · `DeviceDisconnectRepository` · `DisconnectChecker` · `HeartbeatHandler` · `StatusReporter` · `VerifyTokenClient` · `DeviceReleasedHandler` · `SocketRegistry` · `WsFrameGuard` · `OutputBundle`.
-- **의존**: internalhttp · session(편지함) · messaging(InboxHandler) · contract-model `ws`.
+## 훑기만 한 컴포넌트 (등급 없음)
 
-### realtime.voice
-- **책임**: 외부 음성 공급자 중계. `ProviderClient`(JDK WebSocket) · `ProviderPort` · `ProviderConnector`(세션당 가상 스레드) · `ProviderRequestFactory`(유일한 요청 생성 경로) · `ProviderHosts`(허용 목록) · `InputRelay` · `AudioTap` · `ProviderResponseId`.
-- **의존**: runtime(TaskLauncher) · config. 공급자 클라이언트 사용은 voice 패키지로 한정(ArchUnit).
-
-### realtime.gate
-- **책임**: 출력 관문. `OutputGate` · `SegmentBuffer`(20초 상한) · `SeedDictionary`(`gate/seed-dictionary.json`) · `GateDecision` · `ClosingSequence`(CLOSING 진입 순서 BR6.10) · `ApprovedPlayback`.
-- **의존**: gateway(송신) · contract-model `ws`.
-
-### realtime.log
-- **책임**: 비동기 기록. `AsyncRecorder`(531줄) · `TranscriptWriter`/`Repository`/`Row`/`Entry` · `LatencyRecorder`(LATENCY_TURN) · `SessionGapRepository`/`SessionGapWriter`(DISCONNECT · UNCONFIRMED) · `RealtimeVoiceDeletionParticipant`(부르는 곳 없음).
-- **의존**: common.db · runtime.
-
-### realtime.messaging
-- **책임**: Outbox(`RealtimeOutboxWriter` · `RealtimeOutboxRepository` · `RealtimeOutboxSender` · `ControlEventRearm`), Inbox(`web/RealtimeInboxController` · `RealtimeInboxReceiver` · `RealtimeInboxDispatcher` · `RealtimeInboxRepoller` · `RealtimeInboxRepository` · `InboxHandler`), `MessagingCleanupJob`, `RealtimeMessagingDeletionParticipant`(부르는 곳 없음), 값 타입.
-- **의존**: internalhttp(송신) · common.db · runtime(PeriodicJobs) · contract-model `event`.
-
-### realtime.recording
-- **책임**: PCM 녹음. `AudioRecordings` · `FileAudioRecorder`(619줄, 전용 스레드) · `AudioRecordingRepository`.
-
-### realtime.runtime
-- **책임**: 스레드 · 시계 기반. `PeriodicJobs`(이름 있는 단일 스레드 5종: outbox-sender · inbox-repoll · maintenance · recorder-tick · metric-sample) · `TaskLauncher`(가상 스레드, 시험은 inline) · `TimerClocks`(safety · 기타) · `RealtimeRuntimeConfig`(`MujoongClock` 빈).
-
-### realtime.internalhttp
-- **책임**: Realtime → Core HTTP. `InternalHttpClient`(대상 그룹별 JDK HttpClient) · `InternalAuthInterceptor`(`X-Internal-Token` · `X-Trace-Id`).
-
-### realtime.startup
-- **책임**: 기동 · 종료 순서. `ProfileGuardEnvironmentPostProcessor`(S1) · `RealtimeStartupChecks`(S1b) · `RealtimeStartupSequence`(S2 ~ S6) · `SchemaVersionCheck`(Flyway 이력 표 읽기만) · `DataClassCheck` · `DrainingLifecycle`(T1 ~ T6) · `StartupFailureLine`.
-
-### realtime.web
-- **책임**: 필터 체인과 공통 웹. `TraceIdFilter`(F1) · `ReadinessGateFilter`(F1b) · `InternalTokenFilter`(C-INT) · `InFlightRequests` · `InternalBody`(2MB) · `ApiExceptionHandler`.
-
-### realtime.config
-- **책임**: 설정 바인딩. `RealtimeProperties`(450줄) · `RealtimePropertiesConfig`.
-- **비고**: `SessionTiming`(90행)은 `deviceAckTimeout` · `closingConfirm` 두 필드뿐.
-
-### realtime.observability
-- **책임**: 지표 · 스냅숏 · 상태 점검. `observability`(6, `RealtimeMetrics` 지표 이름 한 곳) + `snapshot`(2) + `health`(2).
-
-### realtime.common
-- **책임**: 공용 기반. `common.db`(`DbRetry` · `DbSessionLimits` · `Transactions` · `ClockParams` · `SqlErrors` · `DbPoolWaitMonitor`) · `common.collect`(1) · `common.scaling`(`@SingleInstanceAssumption`).
-
-## 의존 방향 요약
-
-교차 모듈 · 외부 의존은 `dependencies.md`에 있다. 앱 내부 핵심 방향: `web`/`gateway`/`voice` → `session` → {`dialog`, `gate`, `log`, `recording`, `messaging`} → `common.db`; `gateway`/`messaging` → `internalhttp`; 모두 → `runtime` · `config` · `contract-model`.
+| 컴포넌트 | 위치 | 한 줄 |
+|---|---|---|
+| core.messaging | `core/messaging/` | Core Outbox/Inbox(적재 · 전송 · 수신 · 재폴링 · 정리), 삭제 참가자 900 |
+| core.activity | `core/activity/` | 활동 시작 · 종료 · 보기 · 사본 · 준비 시한("ActivityCoordinator" 로그 컴포넌트). `ActivityCopy`에 ACTIVE 도달 칸 없음, `startedAt`이 대용 |
+| core 기타 | `core/{account,catalog,child,consent,device,identity,security,internalhttp,health,observability,startup,config,web,common/db}/` | U1 · U2 · U3 기능 · 공통 |
+| realtime 기타 | `backend/realtime-activity/src/main/java/` | 세션 실행기 · 대화 · 게이트웨이 · 음성 · 게이트 · 전사 · 원음 · 메시징 등(U4b 영역) |
+| test-support | `backend/test-support/` | PostgreSQL 시험 백엔드 · 가변 시계 · 계약 대역 · 가짜 공급자 WS · 로그 수집 |
+| tools | `tools/` | 가짜 공급자 · 기기 시뮬레이터 · skeleton-e2e · seed |
+| 알림(U7) | — | 코드 없음 |
 
 ## Sources
-- 개발자 스캔 `developer-scan.md` (Packages Found · Technical Debt Signals · Handoff)
-- `find backend/realtime-activity/src/main/java -type d`로 패키지 구조 직접 확인
+
+- 개발자 스캔 `.../developer-scan.md`(Packages Found · Technical Debt Signals · U6 관련 코드 위치 · Risks)

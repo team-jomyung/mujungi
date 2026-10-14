@@ -3,7 +3,7 @@
 //   import 문자열 검사(no-restricted-imports)와 해석된 경로 검사(import/no-restricted-paths)를 함께 건다.
 // - react/no-danger 오류(SD-11), 화면 문구는 copy 모듈에서만(react/jsx-no-literals).
 // - getUserMedia는 src/device/mic/micPermission.ts(「켜기」 클릭 핸들러에서 동적 import)에서만 부른다(NFR10.4 · PD-16).
-// - 서비스 워커를 등록하지 않는다(NFR10.4).
+// - 기기·공용의 서비스 워커는 금지. U7 부모 전용 등록 모듈 한 곳만 예외(U7-J9).
 import { defineConfig, globalIgnores } from "eslint/config";
 import nextVitals from "eslint-config-next/core-web-vitals";
 import nextTypescript from "eslint-config-next/typescript";
@@ -90,6 +90,18 @@ export default defineConfig([
     files: ["src/shared/**/*.{ts,tsx}"],
     rules: {
       "no-restricted-imports": ["error", { patterns: [...DEVICE_IMPORT_PATTERNS, ...PARENT_IMPORT_PATTERNS] }],
+    },
+  },
+  {
+    files: ["src/parent/push/browserPush.ts"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector: "MemberExpression[property.name='getUserMedia'], MemberExpression[property.value='getUserMedia']",
+          message: "getUserMedia는 src/device/mic/micPermission.ts에서만 부른다(NFR10.4 · PD-16).",
+        },
+      ],
     },
   },
   {

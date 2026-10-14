@@ -217,3 +217,21 @@ U1 시험은 단언을 줄이지 않는다. 활성화 경로(ACTIVE 앞의 WAITI
 | U4b-J32 | (R-10) 연습 확장점의 출력 능력은 ACTIVE에서만 받는다. CLOSING · 정산 창 · 종료 상태의 호출은 거절하고 PRACTICE_EXTENSION_FAILED{reason: NOT_ACTIVE}에 남긴다. CLOSING · 정산 창 안의 확장점 사건은 전달하되 신호는 무시한다 | 코드 생성 계획 R-10 · BR10.4 |
 | U4b-J33 | (R-11) 안내 재생 중(창이 열리기 전) 온 아이 확정 전사도 JoinTracker `reply()`로 곧바로 분류 · 처리한다(5354a32 동작). 결정표는 창 안과 같다 | 코드 생성 계획 R-11 · U4b-R2 |
 | U4b-J34 | (R-12, 계획과 다름) 삭제 처리는 모든 DB 삭제가 Inbox 처리 한 트랜잭션 안이라 실패 시도는 부분 커밋이 없다. 그래서 처리 메모 칸에 앞 시도의 건수를 누적하지 않고(그런 칸도 없다) 재시도가 지울 행을 처음부터 다시 센다. 트랜잭션 밖에서 먼저 사라지는 원음 파일 때문에 audioFiles는 지운 파일 수가 아니라 음성 참가자가 삭제 표시한 원음 메타 행 수로 센다 | 코드 생성 계획 R-12 · BR9.4 |
+
+## 11. U5b 실제 확장 연결 부록 (2026-10-14)
+
+이 절은 U5b 통합 브랜치의 `PracticeRuntimeConfiguration` · `RuntimePracticeExtension` · `SessionExecutor` · `PracticeRecordProjector` 구현을 설명한다. 위의 U4b 단독 구현 이력은 보존한다. 실제 U5b가 출력권을 갖는 PRACTICE 경로에는 아래 규칙이 우선하며, FREE_TALK와 `controlsOutput() == false`인 기존 확장의 경로는 유지한다.
+
+| 접점 | 연결된 동작 |
+|---|---|
+| 생성 · ACTIVE 진입 | `PracticeSessionExtension.Factory` 빈이 세션마다 RuntimePracticeExtension을 만든다. C8의 고정 목표/정의 버전/판정 기준과 첫 상황으로 프로토콜을 시작한다. `controlsOutput()`이 true이면 ACTIVE 직후 일반 `session.response.create`를 먼저 보내지 않는다. |
+| 발화 능력 | 기존 PracticeOutput에 `speak(PracticeSpeech)` · `cancelSpeech(correlationId)`를 추가한다. 상황/도움 질문/Cue를 타입 있는 값으로 받고, 출력 상관 ID · 상황 ID · 목표 세대는 서버 안에서만 사용한다. 공급자에는 `ProviderRequestFactory.practiceSpeech`가 최소 역할/발화 데이터로 만든 기존 instructions.correct와 response.create를 보낸다. 상세 형식은 `contracts/ai-io.md` 8절이다. |
+| 재생 증거 | `PLAYBACK_FACT`와 `PlaybackFact{speech,status,text,receivedAt}`를 추가한다. 실제 기기 STARTED/COMPLETED/STOPPED/FAILED를 각각 STARTED/COMPLETED/INTERRUPTED/FAILED로 넘기고 PROGRESS는 완료로 세지 않는다. U5b는 기존 PLAYBACK_DONE을 상황 노출/반응 기회의 근거로 쓰지 않는다. |
+| 시각 · 일시정지 | 재생 사실의 서버 수신 시각을 노출/도움 시각과 반응 창 시작에 쓴다. 기술 일시정지와 STOP_CONFIRM 동안 U5b 진행 시계의 남은 시간을 보존하고 확장 사건을 보류한다. 계속할 때 남은 시간과 보류 사건을 잇는다. 이미 수락한 반응 판정의 별도 EvaluationClock/원래 시한은 연장하지 않는다. |
+| 아이 발화 · 종료 의도 | 실제 U5b 출력권 경로는 종료 의도 판정을 먼저 한다. 종료 확인을 부른 발화와 확인 대답을 연습 답으로 다시 넘기지 않는다. 확인 질문을 시작하면 진행 중인 연습 발화를 INTERRUPTED로 남긴다. 계속하기에서 자유대화 응답을 요청하지 않는다. |
+| 진행 조회 | `progress()`가 `goalIndex`(1부터) · `goalCount` · `goalName` · 공개 여섯 단계의 `stage`만 반환한다. 상황/도움 본문과 판정은 진행 응답에 넣지 않는다. LAST_GOAL은 기존 CLOSING(CHILD_STOP, end_detail PRACTICE_COMPLETED)을 사용한다. |
+| 종료 · 정산 | `onStopping()`은 새 단계/출력/기회를 멈춘다. `settlementDelay(now)`는 이미 수락한 반응의 원래 판정 시한 안에서 기다리게 한다. `onSettle` 뒤 원본에서 practiceRecord를 투영한다. 확정되지 않은 반응이나 잘못된 원본이 있으면 null 스냅숏으로 성공 처리하지 않는다. |
+| 실패 · 재시작 | 실제 U5b의 확장 오류는 진행을 멈추고 ACTIVE이면 기존 종료 경로로 들어간다. 정산 실패는 원본을 보존하며 RecordCaptureService의 PracticeRecordRecovery가 `JdbcPracticeRecordRecovery`를 통해 다시 정산한다. 원래 판정 시한을 넘긴 복구는 별도 오류로 관측하고 시한 내 성공으로 바꾸지 않는다. |
+| 내부 기록 · 삭제 | goals에 시작 때 고정한 behaviorKey/behaviorVersion을 싣고, scenarios/responses/cues의 scenarioId 연결을 유지한다. 실제 노출된 상황만 scenarios에 들어간다. U5b 삭제 참가자 150이 연습 다섯 표를 세션 참가자 200보다 먼저 정리한다. |
+
+이 연결은 공급자 선 형식에 새 type이나 기기 WSS 메시지를 추가하지 않는다. 실제 Cue/평가 공급자의 기본 빈은 미연결 실패이며, 장치·실공급자·부하 검증 결과는 U5b report.md에서 별도로 확인한다.

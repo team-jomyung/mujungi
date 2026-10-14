@@ -48,7 +48,8 @@ public class InternalHttpClient implements DisposableBean {
     public enum Target {
         VERIFY_TOKEN(Group.VERIFY, true, EventLog.Component.DEVICE_GATEWAY),
         DEVICE_STATUS(Group.STATUS, false, EventLog.Component.DEVICE_GATEWAY),
-        EVENT_PUBLISH(Group.EVENTS, false, EventLog.Component.REALTIME_MESSAGING);
+        EVENT_PUBLISH(Group.EVENTS, false, EventLog.Component.REALTIME_MESSAGING),
+        PRACTICE_SCENARIO(Group.PRACTICE, false, EventLog.Component.SESSION_LIFECYCLE);
 
         private final Group group;
         private final boolean logSuccess;
@@ -80,7 +81,8 @@ public class InternalHttpClient implements DisposableBean {
     public enum Group {
         VERIFY,
         STATUS,
-        EVENTS
+        EVENTS,
+        PRACTICE
     }
 
     /** 호출 결과 분류(OD-2 outcome 열거). */

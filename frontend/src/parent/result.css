@@ -1,0 +1,8 @@
+/* U6: 달력은 충분한 누름 영역과 문자 선택 표시를 함께 둔다. */
+.mj-calendar-heading { display: flex; align-items: center; justify-content: space-between; }
+.mj-calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 2px; text-align: center; }
+.mj-calendar-day { border: 1px solid transparent; border-radius: 8px; background: transparent; }
+.mj-calendar-day[aria-pressed="true"] { border: 2px solid currentColor; background: #e7efe6; font-weight: bold; }
+.mj-calendar-day:disabled { color: #777; cursor: not-allowed; }
+.mj-report-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+.mj-chip { display: inline-block; padding: 6px 10px; border: 1px solid currentColor; border-radius: 12px; margin: 4px; }

@@ -19,7 +19,7 @@ import org.springframework.transaction.support.TransactionTemplate;
  * · statement_timeout 10초, RD-22)을 건다. 트랜잭션은 운영처럼 Spring 트랜잭션 관리자로 열어 저장소의 MANDATORY 확인이 실제로
  * 동작한다.
  *
- * <p>시험 클래스는 JVM 안에서 차례로 돌므로 각 시험 앞뒤에 {@link #wipe()}로 realtime 표 열 개(V1 일곱 + U3 V2 셋)를 비운다(폴러 · 전체 조회 시험이
+ * <p>시험 클래스는 JVM 안에서 차례로 돌므로 각 시험 앞뒤에 {@link #wipe()}로 realtime 표를 외래 키 순서로 비운다(폴러 · 전체 조회 시험이
  * 다른 시험 행을 보지 않게).
  */
 public final class RealtimeDb implements AutoCloseable {
@@ -33,6 +33,11 @@ public final class RealtimeDb implements AutoCloseable {
 
     /** 외래 키 순서(자식 → 부모)로 비울 표. */
     private static final List<String> TABLES = List.of(
+            "realtime.realtime_practice_evaluation",
+            "realtime.realtime_practice_response",
+            "realtime.realtime_practice_cue",
+            "realtime.realtime_practice_attempt",
+            "realtime.realtime_session_goal",
             // U4b V3: 결과 스냅숏은 세션 행을 가리키므로 먼저 비운다
             "realtime.realtime_result_input_snapshot",
             "realtime.realtime_transcript",
@@ -115,7 +120,7 @@ public final class RealtimeDb implements AutoCloseable {
         });
     }
 
-    /** realtime 표 일곱 개를 비운다(앱 역할의 DELETE 권한, TRUNCATE는 앱에 없다 SD-13). */
+    /** realtime 표를 비운다(앱 역할의 DELETE 권한, TRUNCATE는 앱에 없다 SD-13). */
     public void wipe() {
         for (String table : TABLES) {
             jdbc.update("delete from " + table, new MapSqlParameterSource());

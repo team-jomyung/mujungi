@@ -1,22 +1,25 @@
-# 팀 ERD v0.2 — 구현 SQL 기준
+# 팀 ERD v0.2 — 10/12 구현 스냅숏 + U7 V6 증분
 
-작성일: 2026-10-12. 이 문서는 v0.1 개념 모델을 실제 마이그레이션과 대조한 데이터 사전이다.
+작성일: 2026-10-12. U7 증분 갱신일: 2026-10-14. 이 문서는 v0.1 개념 모델을 실제 마이그레이션과 대조한 데이터 사전이다.
+
+2026-10-14 U5b 통합의 새 표·실제 물리명·관계는 [§8 U5b 통합 갱신](#8-2026-10-14-u5b-통합-갱신)을 먼저 본다. §1~§7은 2026-10-12 조사 스냅숏으로 보존하며, 그 합계나 예정 목록을 현재 전체 저장소의 상태로 읽지 않는다.
 
 ## 1. 기준과 읽는 법
 
-### 1.1 스냅숏 및 구현 상태
+### 1.1 10/12 고정 스냅숏 및 U7 증분 상태
 
-**구현 DDL이 확인된 애플리케이션 테이블은 총 31개·354열**이다. 최신 `origin/main`의 **21개**와 아직 병합되지 않은 U3 원격 브랜치 **3개**, U5a 로컬 브랜치 **7개**를 문서상 합산했다. 이 합계는 현재 main 또는 실행 중인 DB의 스키마가 아니다. DB에 접속하거나 마이그레이션을 실행하지 않았으며, 예약된 core V3을 건너뛰어 V4를 운영에 적용하라는 뜻도 아니다.
+**이 문서가 상세화한 애플리케이션 테이블은 총 33개·378열**이다. 10/12 고정 스냅숏의 **31개·354열**에 U7 V6의 **2개·24열**만 더했다. 이번 갱신은 U7 범위이며, U4a를 비롯한 다른 유닛의 이후 병합 상태·DDL은 재조사하지 않았다. 따라서 이 합계는 최신 main 전체 또는 실행 중인 DB의 스키마가 아니다. U7 V6은 구현 브랜치의 SQL 확인이며 실제 DB 적용 완료를 뜻하지 않는다. 운영 병합은 U6 V5 뒤에 한다.
 
 | 상태 | 고정 ref / 커밋 | 대상 SQL | 테이블 | 열 |
 |---|---|---|---:|---:|
 | main 구현 | `origin/main@2c116870705259302fc71ba884e7cba6990f415c` | core V1+V2, realtime V1 | 21 | 247 |
 | U3 원격 구현·main 미병합 | `origin/claude/friendly-shannon-i89iyx@5354a3201e3d81acec6b9a55846ee35b981a6a65` | realtime V2 | 3 | 23 |
 | U5a 로컬 구현·main 미병합 | `unit/u5a-practice-core@d25124e53aa7e3d8ac2700d56debf66f4d6402be` | core V4 | 7 | 84 |
-| 문서상 구현 합계 | 위 세 스냅숏의 합집합 | core 21개 + realtime 10개 | **31** | **354** |
+| U7 로컬 구현·main 미병합 | `unit/u7-web-push` 작업 트리, 2026-10-14 확인 | core V6 | 2 | 24 |
+| 문서상 구현 합계 | 기존 세 스냅숏 + U7 V6 | core 23개 + realtime 10개 | **33** | **378** |
 | 예정 / DDL 미확정 | §7에 별도 수록 | 아직 CREATE TABLE 없음 | 합계에서 제외 | 타입·제약 미확정 |
 
-U2는 기준 main에 병합되어 있다. U4a의 작업 배정은 진행 중이지만 이 문서의 조사 대상에는 core V3 DDL이 없으므로 해당 새 테이블은 예정으로 표시한다. 기존 U1 테이블의 존재와 그 테이블을 사용하는 후속 유닛의 기능 완료는 구별한다.
+U2는 10/12 기준 main에 병합되어 있다. U7 이외의 상태 서술은 당시 조사 범위를 유지한다. 예를 들어 core V3 DDL은 기존 스냅숏에 없으므로 U4a 새 테이블은 이 문서에서 여전히 예정으로 표시되며, 현재 main의 U4a 구현 유무를 판정한 것이 아니다. 기존 U1 테이블의 존재와 후속 유닛의 기능 완료도 구별한다.
 
 ### 1.2 정본과 출처
 
@@ -31,9 +34,11 @@ U2는 기준 main에 병합되어 있다. U4a의 작업 배정은 진행 중이�
 | R1 | [realtime V1](../../backend/realtime-activity/src/main/resources/db/migration/realtime/V1__realtime_base.sql) · main | Realtime 기반 7개 테이블 |
 | R2 | `backend/realtime-activity/src/main/resources/db/migration/realtime/V2__u3_voice_conversation.sql` · 위 U3 ref | U3 3개 추가 |
 | C4 | `backend/core-api/src/main/resources/db/migration/core/V4__u5a_practice_core.sql` · 위 U5a ref | U5a 7개 추가 |
+| C6 | [core V6](../../backend/core-api/src/main/resources/db/migration/core/V6__u7_web_push.sql) · `unit/u7-web-push` 작업 트리, 2026-10-14 | U7 2개 추가, 기존 표 변경 없음 |
 | D2 | [U2 설계](../units/u2/design.md) · main | 보호자 계정 엔터티 |
 | D3 | `docs/units/u3/design.md` · 위 U3 ref | 기기 연결·음성·전사 엔터티 |
 | D5 | `docs/units/u5a/design.md` · 위 U5a ref | 행동 정의·후보·선택·상황 엔터티와 가정 |
+| D7 | [U7 설계](../units/u7/design.md) · `unit/u7-web-push` (`8453ece`에서 설계 시작) | 구독·발송 기록, 현재 기기 해제, 수신처 스냅숏·재시도·계정 삭제 |
 | CMP | [components.md — 엔터티 소유](../../aidlc/spaces/default/intents/261008-mujoong-service/inception/domain-design/components.md#엔터티-소유) · main | 컴포넌트 소유, 미구현 엔터티, J9/J12 |
 | UNIT | [유닛 배정표](../units/README.md) · main | core V2=U2 / V3=U4a / V4=U5a / V5=U6 / V6=U7, realtime V2=U3 / V3=U4b / V4=U5b |
 
@@ -55,16 +60,18 @@ git show d25124e53aa7e3d8ac2700d56debf66f4d6402be:backend/core-api/src/main/reso
 - 열 표의 DEFAULT `없음`은 선언 부재다. PK가 암시하는 NOT NULL, NULL 허용, 기본값을 별도로 구분한다. 긴 SQL 식은 공백·줄바꿈만 정리했다.
 - CHECK의 UNKNOWN 허용 여부, 복합 UNIQUE, 부분 인덱스 조건은 SQL 그대로 보존한다. 애플리케이션 검증·시간 제한·보존 정책은 DB 제약으로 그리지 않는다.
 - PK/UNIQUE가 만드는 지원 인덱스와 명시적 CREATE INDEX를 구분한다. FK만으로 자식 열 인덱스가 생긴다고 가정하지 않는다.
-- Flyway의 `flyway.core_schema_history`, `flyway.realtime_schema_history`는 애플리케이션 31개에서 제외한다. 이력 표의 구조는 Flyway가 생성하며 여기서 다루는 버전 SQL에 CREATE TABLE이 없다. 이름·스키마 근거는 [core 설정](../../infra/migrate/flyway-core.conf), [realtime 설정](../../infra/migrate/flyway-realtime.conf)이다.
+- Flyway의 `flyway.core_schema_history`, `flyway.realtime_schema_history`는 애플리케이션 33개에서 제외한다. 이력 표의 구조는 Flyway가 생성하며 여기서 다루는 버전 SQL에 CREATE TABLE이 없다. 이름·스키마 근거는 [core 설정](../../infra/migrate/flyway-core.conf), [realtime 설정](../../infra/migrate/flyway-realtime.conf)이다.
 - 비밀값, 접속 주소, 실제 도메인, 운영 데이터 예시는 기재하지 않는다. `data_class`는 분류 메타데이터이며 모든 테이블에 실제로 존재하는 공통 열이 아니다.
 
 ## 2. 스키마별 테이블과 소유
 
-| 스키마 | main 구현 | 브랜치 구현·미병합 | 합계 | 열 | 물리 FK | 명시 CREATE INDEX |
+| 스키마 | 10/12 기준 main | 기존 브랜치 + U7 증분 | 문서상 합계 | 열 | 물리 FK | 명시 CREATE INDEX |
 |---|---:|---:|---:|---:|---:|---:|
-| core | 14 | U5a 7 | **21** | 234 | 18 | 18 |
+| core | 14 | U5a 7 + U7 2 | **23** | 258 | 20 | 21 |
 | realtime | 7 | U3 3 | **10** | 120 | 5 | 8 |
-| 합계 | **21** | **10** | **31** | **354** | **23** | **26** |
+| 합계 | **21** | **12** | **33** | **378** | **25** | **29** |
+
+main·브랜치 구분은 §1.1의 고정 스냅숏 기준이며 최신 통합 스키마의 수치가 아니다. U7 증분은 2표·24열·물리 FK 2개·명시 인덱스 3개다.
 
 ### 2.1 Core
 
@@ -91,6 +98,8 @@ git show d25124e53aa7e3d8ac2700d56debf66f4d6402be:backend/core-api/src/main/reso
 | `core.core_practice_goal_selection` | PracticeGoal | U5a | C4 | 13 | U5a 로컬·미병합 |
 | `core.core_scenario` | PracticeGoal | U5a | C4 | 22 | U5a 로컬·미병합 |
 | `core.core_scenario_request` | PracticeGoal (구현 추가) | U5a | C4 | 13 | U5a 로컬·미병합 |
+| `core.core_push_subscription` | Notification | U7 | C6 | 9 | U7 로컬·미병합 |
+| `core.core_push_dispatch` | Notification | U7 | C6 | 15 | U7 로컬·미병합 |
 
 ### 2.2 Realtime
 
@@ -107,11 +116,11 @@ git show d25124e53aa7e3d8ac2700d56debf66f4d6402be:backend/core-api/src/main/reso
 | `realtime.realtime_audio_recording` | VoiceRelay | U3 | R2 | 10 | U3 원격·미병합 |
 | `realtime.realtime_session_gap` | ConversationLog (구현 추가) | U3 | R2 | 6 | U3 원격·미병합 |
 
-이후 §3·§4는 위 **31개 구현 테이블만** 상세화한다. DDL 없는 테이블의 열·타입·제약은 §7에서 미확정으로 남긴다.
+이후 §3·§4는 위 **33개 구현 테이블만** 상세화한다. DDL 없는 테이블의 열·타입·제약은 §7에서 미확정으로 남긴다.
 
 ## 3. Core 스키마 상세
 
-이 절은 `origin/main@2c11687`의 V1+V2에 `unit/u5a-practice-core@d25124e`의 V4를 **문서상 합산**한 열·제약 목록이다. V4를 main에 병합하거나 DB에 적용한 결과를 뜻하지 않는다. 애플리케이션 표는 main 14개, U5a 로컬 7개로 총21개이며 Flyway 이력 표는 제외한다. V4에는 ALTER TABLE이 없으며 기존 표를 바꾸는 구문은 V2에 있다.
+이 절은 `origin/main@2c11687`의 V1+V2에 `unit/u5a-practice-core@d25124e`의 V4와 `unit/u7-web-push`의 V6를 **문서상 합산**한 열·제약 목록이다. 최신 main이나 DB 적용 결과를 뜻하지 않는다. 기존 스냅숏의 main 14개·U5a 7개에 U7 2개를 더한 총23개이며 Flyway 이력 표는 제외한다. V4·V6에는 ALTER TABLE이 없으며 기존 표를 바꾸는 구문은 V2에 있다. U7 상세는 §3.22~3.23이며, 다른 유닛의 이후 변경은 이번 증분 범위가 아니다.
 
 소유 근거: `aidlc/spaces/default/intents/261008-mujoong-service/inception/domain-design/components.md`의 컴포넌트 요약·엔터티 소유 (`origin/main@2c11687`), `docs/units/u2/design.md` 2~3절 (`origin/main@2c11687`), `docs/units/u5a/design.md` 2~4절·가정 J5/J8/J9/J15/J18/J19 (`unit/u5a-practice-core@d25124e`). 타입·제약은 아래 SQL 정본을 우선한다.
 
@@ -968,6 +977,96 @@ V1/V2/V4에서 이 표의 트리거 선언 없음.
 
 이 표에도 물리 FK가 없다. result_scenario_id·previous_scenario_id를 포함한 모든 UUID 관계는 논리 참조다. request_key는 논리 생성 요청의 멱등 키, claim_id/lease_until은 작업 선점 토큰/만료다. SQL은 kind 목록과 READY↔result_scenario_id 존재만 검증한다; ORIGINAL/NEW_SCENARIO와 previous_scenario_id의 조합은 이 표의 CHECK가 아니다.
 
+### 3.22 `core.core_push_subscription`
+
+소유 컴포넌트: **Notification**. 상태·유닛: **U7 V6 로컬 구현, main 미병합**. 열 9개. 이전 예정 이름 `core_push_token`을 이 이름으로 확정했으며, 기존 표를 RENAME한 이력이 아니다(N5).
+
+SQL 근거: [V6__u7_web_push.sql](../../backend/core-api/src/main/resources/db/migration/core/V6__u7_web_push.sql) (`unit/u7-web-push` 작업 트리, 2026-10-14). 의미·소유 근거: [U7 설계](../units/u7/design.md) 엔터티/API/계정 삭제 절(D7), Notification 엔터티 소유(CMP).
+
+| 열 | SQL 타입 | NULL | DEFAULT | 열 단위 제약·의미 |
+|---|---|---|---|---|
+| `id` | `uuid` | NOT NULL (PK가 부여) | 없음 | `PRIMARY KEY`, 앱 생성 식별자 |
+| `guardian_id` | `uuid` | NOT NULL (명시) | 없음 | `REFERENCES core.core_guardian(id) ON DELETE RESTRICT` |
+| `endpoint` | `text` | NOT NULL (명시) | 없음 | `UNIQUE`, 보호자 전체에서 주소 하나당 한 구독 |
+| `p256dh` | `text` | NOT NULL (명시) | 없음 | 수신 공개 키의 base64url 표현 |
+| `auth` | `text` | NOT NULL (명시) | 없음 | 수신 인증 비밀의 base64url 표현 |
+| `platform` | `varchar(40)` | NOT NULL (명시) | 없음 | 클라이언트 구분, SQL enum 아님 |
+| `created_at` | `timestamptz` | NOT NULL (명시) | 없음 | 앱 시계의 최초 등록 시각 |
+| `last_used_at` | `timestamptz` | NULL 허용 | 없음 | push 서비스가 전송을 승인한 시각 |
+| `revoked_at` | `timestamptz` | NULL 허용 | 없음 | 현재 기기 구독 해제 시각 |
+
+**제약**
+
+| 식별/종류 | SQL 정의 |
+|---|---|
+| 이름 미지정 / PRIMARY KEY (열 선언) | `id uuid PRIMARY KEY` |
+| 이름 미지정 / FOREIGN KEY (열 선언) | `guardian_id uuid NOT NULL REFERENCES core.core_guardian(id) ON DELETE RESTRICT` |
+| 이름 미지정 / UNIQUE (열 선언) | `endpoint text NOT NULL UNIQUE` |
+| 이름 미지정 / CHECK | `CHECK (octet_length(endpoint) BETWEEN 1 AND 2048 AND lower(left(endpoint, 8)) = 'https://')` |
+| 이름 미지정 / CHECK | `CHECK (btrim(p256dh) <> '')` |
+| 이름 미지정 / CHECK | `CHECK (btrim(auth) <> '')` |
+| 이름 미지정 / CHECK | `CHECK (btrim(platform) <> '')` |
+
+**명시적 인덱스**
+
+| 이름 | UNIQUE | SQL 정의 |
+|---|---|---|
+| `core_push_subscription_active_guardian_idx` | 아니요 | `CREATE INDEX core_push_subscription_active_guardian_idx ON core.core_push_subscription(guardian_id) WHERE revoked_at IS NULL;` |
+
+PK·endpoint UNIQUE의 지원 인덱스는 위 제약에 포함한다. V6에 트리거 선언은 없다. guardian FK는 NOT DEFERRABLE이며 ON UPDATE는 기본 NO ACTION이다. 전체 endpoint UNIQUE는 해제된 행도 포함한다. 같은 보호자의 재등록은 키·플랫폼 갱신과 `revoked_at=NULL`로 재활성화하며, 타 보호자 소유 주소는 이전하지 않는다. DELETE API는 현재 보호자와 요청 endpoint 한 쌍만 해제한다. 404/410 만료와 계정 삭제는 행을 물리 삭제한다(D7).
+
+앱은 ASCII·HTTPS·443·사용자 정보/fragment 없음과 P-256 곡선 위의 65바이트 점·16바이트 auth를 검증한다. SQL CHECK가 URI 전체·키 곡선·키 길이를 검증한다고 해석하지 않는다. endpoint·키는 로그·문자열 표현에서 가리며 이 문서에 예시 값을 넣지 않는다.
+
+### 3.23 `core.core_push_dispatch`
+
+소유 컴포넌트: **Notification**. 상태·유닛: **U7 V6 로컬 구현, main 미병합**. 열 15개(N6).
+
+SQL 근거: [V6__u7_web_push.sql](../../backend/core-api/src/main/resources/db/migration/core/V6__u7_web_push.sql) (`unit/u7-web-push` 작업 트리, 2026-10-14). 의미·소유 근거: [U7 설계](../units/u7/design.md) 엔터티/사건 규칙/발송·장애 복구 절(D7).
+
+| 열 | SQL 타입 | NULL | DEFAULT | 열 단위 제약·의미 |
+|---|---|---|---|---|
+| `id` | `uuid` | NOT NULL (PK가 부여) | 없음 | `PRIMARY KEY`, 앱 생성 식별자 |
+| `guardian_id` | `uuid` | NOT NULL (명시) | 없음 | `REFERENCES core.core_guardian(id) ON DELETE RESTRICT` |
+| `session_id` | `uuid` | NOT NULL (명시) | 없음 | Core 활동 사본의 논리 식별자, FK 없음 |
+| `event_type` | `varchar(40)` | NOT NULL (명시) | 없음 | 아래 CHECK의 알림 4종 |
+| `event_key` | `text` | NOT NULL (명시) | 없음 | `UNIQUE`, 세션과 논리 사건의 멱등 키 |
+| `status` | `varchar(20)` | NOT NULL (명시) | 없음 | REQUESTED/SENT/FAILED/SKIPPED |
+| `attempt_count` | `integer` | NOT NULL (명시) | 없음 | 0 이상 발송 라운드 수 |
+| `last_error_code` | `varchar(80)` | NULL 허용 | 없음 | 입력·주소·키가 없는 오류 코드 |
+| `requested_at` | `timestamptz` | NOT NULL (명시) | 없음 | 앱 시계의 최초 사건 요청 시각 |
+| `sent_at` | `timestamptz` | NULL 허용 | 없음 | 수신처 중 push 서비스의 전송 승인 시각 |
+| `activity_type` | `varchar(20)` | NOT NULL (명시) | 없음 | FREE_TALK/PRACTICE |
+| `next_attempt_at` | `timestamptz` | NOT NULL (명시) | 없음 | 다음 발송 라운드 가능 시각 |
+| `claim_id` | `uuid` | NULL 허용 | 없음 | 발송 점유 세대 |
+| `lease_until` | `timestamptz` | NULL 허용 | 없음 | 점유 기한, claim_id와 함께 NULL/비NULL |
+| `recipient_progress` | `jsonb` | NOT NULL (명시) | 없음 | 사건 생성 시 고정한 구독 UUID별 진행 상태 객체 |
+
+**제약**
+
+| 식별/종류 | SQL 정의 |
+|---|---|
+| 이름 미지정 / PRIMARY KEY (열 선언) | `id uuid PRIMARY KEY` |
+| 이름 미지정 / FOREIGN KEY (열 선언) | `guardian_id uuid NOT NULL REFERENCES core.core_guardian(id) ON DELETE RESTRICT` |
+| 이름 미지정 / UNIQUE (열 선언) | `event_key text NOT NULL UNIQUE` |
+| 이름 미지정 / CHECK | `CHECK (event_type IN ('VOICE_PROBLEM', 'DEVICE_STATUS_UNKNOWN', 'ENDED_BY_CONNECTION', 'ACTIVITY_COMPLETED'))` |
+| 이름 미지정 / CHECK | `CHECK (status IN ('REQUESTED', 'SENT', 'FAILED', 'SKIPPED'))` |
+| 이름 미지정 / CHECK | `CHECK (attempt_count >= 0)` |
+| 이름 미지정 / CHECK | `CHECK (btrim(event_key) <> '')` |
+| 이름 미지정 / CHECK | `CHECK (activity_type IN ('FREE_TALK', 'PRACTICE'))` |
+| 이름 미지정 / CHECK | `CHECK ((claim_id IS NULL) = (lease_until IS NULL))` |
+| 이름 미지정 / CHECK | `CHECK (jsonb_typeof(recipient_progress) = 'object')` |
+
+**명시적 인덱스**
+
+| 이름 | UNIQUE | SQL 정의 |
+|---|---|---|
+| `core_push_dispatch_guardian_idx` | 아니요 | `CREATE INDEX core_push_dispatch_guardian_idx ON core.core_push_dispatch(guardian_id);` |
+| `core_push_dispatch_due_idx` | 아니요 | `CREATE INDEX core_push_dispatch_due_idx ON core.core_push_dispatch(next_attempt_at, requested_at) WHERE status = 'REQUESTED';` |
+
+PK·event_key UNIQUE의 지원 인덱스는 위 제약에 포함한다. V6에 트리거 선언은 없다. guardian FK는 NOT DEFERRABLE이며 ON UPDATE는 기본 NO ACTION이다. session_id, recipient_progress 안의 구독 UUID, claim_id에는 FK가 없다. JSON CHECK는 최상위 객체만 강제하며 수신처 UUID·상태·횟수의 내부 모양과 endpoint/키 배제는 앱 책임이다.
+
+event_key는 세션과 논리 사건을 결합한다. VOICE_PROBLEM은 정지 종류·시각까지 구분하므로 `UNIQUE(session_id,event_type)`를 추정하지 않는다. 구독이 없으면 SKIPPED로 남기며 뒤에 등록한 기기는 이미 생긴 사건에 추가되지 않는다. 일부 기기 승인 후 다른 기기를 재시도하면 전체 status가 REQUESTED/FAILED여도 sent_at이 있을 수 있다. SQL에는 status와 sent_at의 동치 CHECK가 없다. SENT는 push 서비스 승인으로 실제 휴대폰 표시·전달 완료를 보장하지 않는다(D7).
+
 ## 4. Realtime 스키마 상세
 
 이 절은 `origin/main`의 V1과 **main에 아직 병합되지 않은 U3 원격 브랜치의 V2**를 합쳐 읽는 비교용 스냅숏이다. V2의 표가 현재 main 또는 실행 중 DB에 적용됐다는 뜻이 아니다. DB 접속·마이그레이션 실행 없이 SQL 선언만 문서화했다.
@@ -1512,7 +1611,7 @@ Core→Realtime 이벤트 수락·재처리 장부. 소유 컴포넌트: **Realt
 
 ## 5. 관계도와 텍스트 대체
 
-아래 세 도표의 선은 **모두 SQL로 선언된 물리 FK**다. 교차 스키마 논리 참조는 선으로 섞지 않고 §5.5에 적는다. 선의 점선/실선은 Mermaid ER 표기에서 비식별/식별 관계를 구별하며, 점선도 실제 FK다. 엔터티 상자에는 읽기 편하도록 PK만 표시했다. 모든 열과 복합 키는 §3·§4가 정본이다. §5.2의 보호자·아이 상자는 기존 main 테이블을 다시 그린 것이며 신규 표로 세지 않는다.
+아래 네 도표(§5.1~5.3, §5.6)의 선은 **모두 SQL로 선언된 물리 FK**다. 교차 스키마 논리 참조는 선으로 섞지 않고 §5.5에 적는다. 선의 점선/실선은 Mermaid ER 표기에서 비식별/식별 관계를 구별하며, 점선도 실제 FK다. 기존 도표는 PK만 표시하며 U7 도표에는 참조·멱등 키도 표시했다. 모든 열과 복합 키는 §3·§4가 정본이다. 다시 그린 보호자·아이 상자는 신규 표로 세지 않는다.
 
 카디널리티는 DB가 허용하는 최소·최대다. `||`=정확히 1, `o|` 또는 `|o`=0..1, `o{`=0..N이다. 부모가 존재한다고 자식이 반드시 생기는 것은 아니다. 부분 UNIQUE의 조건부 유일성은 별도 주석으로 적는다.
 
@@ -1657,7 +1756,7 @@ erDiagram
     realtime_activity_session ||..o{ realtime_session_gap : "session_id"
 ```
 
-### 5.4 텍스트 대체: 물리 FK 23개
+### 5.4 텍스트 대체: 물리 FK 25개
 
 도표를 표시할 수 없는 환경에서는 아래 표가 같은 관계 전체를 설명한다. 화살표는 **자식 열 → 부모 키**다. “부모 허용”은 자식 한 행에서 참조 부모가 NULL일 수 있는지, “자식 수”는 부모 한 행에 연결될 수 있는 자식 수다. ON UPDATE는 전부 명시되지 않아 기본 NO ACTION이다.
 
@@ -1686,6 +1785,8 @@ erDiagram
 | 21 | `realtime.realtime_transcript(session_id)` → `realtime.realtime_activity_session(id)` | 1 (필수) | 0..N | RESTRICT |
 | 22 | `realtime.realtime_audio_recording(session_id)` → `realtime.realtime_activity_session(id)` | 1 (필수) | 0..2 | RESTRICT |
 | 23 | `realtime.realtime_session_gap(session_id)` → `realtime.realtime_activity_session(id)` | 1 (필수) | 0..N | RESTRICT |
+| 24 | `core.core_push_subscription(guardian_id)` → `core.core_guardian(id)` | 1 (필수) | 0..N | RESTRICT |
+| 25 | `core.core_push_dispatch(guardian_id)` → `core.core_guardian(id)` | 1 (필수) | 0..N | RESTRICT |
 
 - 보호자는 `core_child.guardian_id UNIQUE` 때문에 아이를 최대 한 명 가진다. 소셜 계정은 `guardian_id` 자체가 UNIQUE가 아니므로 SQL상 0..N이다.
 - 보호자와 기기는 전체 이력에서는 0..N이다. `registration_status='REGISTERED'`에 한해 보호자별 기기 하나라는 부분 UNIQUE가 적용된다. 기기의 guardian_id는 NULL 허용이다.
@@ -1716,12 +1817,39 @@ erDiagram
 | `core_scenario_request.guardian_id/child_id/session_id/goal_selection_id/previous_scenario_id/result_scenario_id` | 생성 요청 범위와 이전·결과 시나리오 | 임대·멱등 요청 장부; SQL FK 없음. C4/D5 |
 | 양쪽 Outbox/Inbox의 `event_id/aggregate_id/guardian_id` | 이벤트 중복 방지·집합체·보호자 라우팅 | 상대 Outbox와 Inbox, 업무 집합체, 보호자 간 FK 없음. 열 NULL 여부는 §3·§4대로. C1/R1 |
 | 예정 `realtime_session_goal` ↔ Core 선택/행동 정의, 예정 `core_activity_record` ↔ 종료 스냅숏 | 다음 유닛의 계약·스냅숏 연결 | 아직 DDL 없음. 목표 순서·결과·리포트 등 예정 연결은 §7 및 CMP가 근거이고 FK로 확정하지 않음. |
+| `core_push_dispatch.session_id` | Core `core_activity.session_id` | 활동 소유자·상태는 앱에서 재확인하며 물리 FK 없음. Realtime 원장이나 U6 결과 표로 직접 연결하지 않음. C6/D7 |
+| `core_push_dispatch.recipient_progress`의 구독 UUID | `core_push_subscription.id` | 사건 생성 시 고정한 수신처의 논리 참조. 구독 만료·삭제 후에도 발송 결과를 구분하며 FK 없음. endpoint·키 사본은 넣지 않음. C6/D7 |
+
+### 5.6 Core 푸시 (U7 V6 로컬·미병합)
+
+```mermaid
+erDiagram
+    core_guardian {
+        uuid id PK
+    }
+    core_push_subscription {
+        uuid id PK
+        uuid guardian_id FK
+        text endpoint UK
+    }
+    core_push_dispatch {
+        uuid id PK
+        uuid guardian_id FK
+        text event_key UK
+        uuid session_id
+        jsonb recipient_progress
+    }
+    core_guardian ||..o{ core_push_subscription : "guardian_id"
+    core_guardian ||..o{ core_push_dispatch : "guardian_id"
+```
+
+도표의 두 관계는 C6의 물리 FK다. session_id 및 JSON 안의 구독 UUID는 위 §5.5의 논리 관계이므로 FK 선을 그리지 않는다. 보호자당 여러 브라우저 구독을 허용하며, 계정 삭제 참가자 순서60에서 발송 기록→구독을 지운 뒤 후속 참가자가 보호자를 정리한다(D7).
 
 ## 6. v0.1 대비 변경표
 
 ### 6.1 물리 구조 전반과 비교 기준
 
-이 절의 **구현 확인**은 선정한 Git 커밋에 `CREATE TABLE` 또는 `ALTER TABLE`이 있다는 뜻이다. main 병합이나 실제 DB 적용 완료를 뜻하지 않는다. **예정**은 컴포넌트 소유 엔터티에는 있으나 선정한 마이그레이션 집합에는 없다는 뜻이며, 아래 표는 예정 엔터티의 SQL 타입·열·제약을 새로 정하지 않는다.
+이 절의 **구현 확인**은 선정한 Git 커밋 및 U7 작업 트리에 `CREATE TABLE` 또는 `ALTER TABLE`이 있다는 뜻이다. main 병합이나 실제 DB 적용 완료를 뜻하지 않는다. **예정**은 컴포넌트 소유 엔터티에는 있으나 선정한 마이그레이션 집합에는 없다는 뜻이며, 아래 표는 예정 엔터티의 SQL 타입·열·제약을 새로 정하지 않는다.
 
 원본은 요청에서 언급한 `40_묶음`이 아니라 `aidlc/spaces/default/knowledge/documents/60_ERD_v0.1/`에서 확인했다. 저장소의 숨김·무시 파일을 포함한 `aidlc/`, `docs/` 검색에서 ERD 데이터 사전 Markdown은 `ERD_데이터사전_v0.1.md` 한 파일만 확인했다. 같은 폴더의 `mujoong_ERD_PostgreSQL_1007.sql`에는 40개 `CREATE TABLE`이 있다. 이 원본과 그림은 수정하지 않는다.
 
@@ -1739,18 +1867,19 @@ erDiagram
 | R1 | `origin/main@2c11687:backend/realtime-activity/src/main/resources/db/migration/realtime/V1__realtime_base.sql` |
 | R2 | `origin/claude/friendly-shannon-i89iyx@5354a32:backend/realtime-activity/src/main/resources/db/migration/realtime/V2__u3_voice_conversation.sql` |
 | C4 | `unit/u5a-practice-core@d25124e:backend/core-api/src/main/resources/db/migration/core/V4__u5a_practice_core.sql` |
+| C6 | `unit/u7-web-push:backend/core-api/src/main/resources/db/migration/core/V6__u7_web_push.sql`, 2026-10-14 작업 트리 |
 
-브랜치를 전환하거나 병합하지 않고 각 Git 객체의 DDL을 대조했다. main의 C1+C2+R1은 **21표(Core 14 + Realtime 7)**이고, 미병합 R2의 3표와 로컬 C4의 7표까지 비교 대상으로 합치면 **31표(Core 21 + Realtime 10)**다. 이는 하나의 main 마이그레이션 실행 결과가 아니다.
+기존 조사는 각 Git 객체의 DDL을 대조했다. 10/12 기준 main의 C1+C2+R1은 **21표(Core 14 + Realtime 7)**이고, R2 3표·C4 7표를 합친 **31표**에 이번 C6 2표를 더하면 **33표(Core 23 + Realtime 10)**다. 이는 하나의 main 마이그레이션 실행 결과가 아니며 U7 이외 유닛의 이후 변경은 반영하지 않았다.
 
 | v0.1과의 관계 | 표 수 | 해석 |
 |---|---:|---|
 | v0.1과 현재 비교 DDL에 같은 이름으로 존재 | 24 | 열·타입·제약은 달라질 수 있으므로 이름 일치가 구조 동일을 뜻하지 않는다. |
 | v0.1에는 있고 현재 비교 DDL에는 없는 소유 엔터티 | 15 | 삭제된 표로 세지 않는다. 7절에 예정 또는 구현 결정 미확정으로 적는다. |
 | v0.1에서 의도적으로 제외 | 1 | `core_analytics_event`: 요구사항 없음, 소유:J9·1453, 결정 기준에 따라 만들지 않는다. |
-| 현재 비교 DDL에서 새로 확인 | 7 | 보고의 신설 8표 중 4표 + 아래 구현 보조 표 3표. |
-| 보고의 신설 8표 중 아직 예정 | 4 | `core_activity_record`, `core_push_token`, `core_push_dispatch`, `realtime_session_goal`. |
+| 현재 비교 DDL에서 새로 확인 | 9 | 보고의 신설 8표 중 6표(N5는 `core_push_subscription`으로 확정) + 아래 구현 보조 표 3표. |
+| 보고의 신설 8표 중 아직 예정 | 2 | 이 문서의 기존 스냅숏 기준 `core_activity_record`, `realtime_session_goal`. U7 N5/N6는 C6 구현으로 이동. |
 
-따라서 `40 = 24 + 15 + 1`, `31 = 24 + 7`이며 단순히 “40표에서 9표 삭제”라고 쓰면 틀린다. 현재 비교 DDL에 없는 소유 엔터티는 기존 15개와 신설 예정 4개를 합쳐 **19개**다.
+따라서 `40 = 24 + 15 + 1`, `33 = 24 + 9`이며 원본 40표와의 숫자 차이를 삭제 마이그레이션으로 해석하면 틀린다. 위 분류에서 비교 DDL에 없는 소유 엔터티는 기존 15개와 신설 예정 2개를 합쳐 **17개**다.
 
 | v0.1/신설 8표 목록 밖에서 추가 구현된 보조 표 | 목적과 현재 상태 | 근거 |
 |---|---|---|
@@ -1770,8 +1899,8 @@ erDiagram
 | N2 | `core_activity` → `core.core_activity` | ActivityCoordinator / U4a 확장 | main C1에 사본 표 구현; U4a 기능 확장 예정 | 보고:307, 소유:1413, C1:204, U4a brief:10 |
 | N3 | `core_activity_record` | ActivityRecord / U4a | 예정; 조사한 DDL에 없음. core V3 배정 | 보고:307, 소유:1429, U4a brief:11·17 |
 | N4 | `core_behavior_definition` → `core.core_behavior_definition` | PragmaticsKnowledge / U5a | 로컬 C4 구현 확인, main 미포함 | 보고:307, 소유:1417, C4:2 |
-| N5 | `core_push_token` | Notification / U7 | 예정; 물리 정의 미확정 | 보고:307, 소유:1433 |
-| N6 | `core_push_dispatch` | Notification / U7 | 예정; 물리 정의 미확정 | 보고:307, 소유:1434 |
+| N5 | 이전 예정 `core_push_token` → `core.core_push_subscription` | Notification / U7 | C6 CREATE TABLE 구현, 9열·보호자 FK·endpoint 유일. main 미병합, 기존 표 RENAME 아님 | 보고:307, 소유:1433, C6, D7, §3.22 |
+| N6 | `core_push_dispatch` → `core.core_push_dispatch` | Notification / U7 | C6 CREATE TABLE 구현, 15열·보호자 FK·event_key 유일·수신처별 진행 상태. main 미병합 | 보고:307, 소유:1434, C6, D7, §3.23 |
 | N7 | `realtime_device_connection` → `realtime.realtime_device_connection` | DeviceGateway / U3 완성 | main R1에 표 구현; R2에 끊김 사건 보조 표 추가 | 보고:307, 소유:1441, R1:143, R2:15 |
 | N8 | `realtime_session_goal` | PracticeProtocol / U5b | 예정; 마이그레이션 번호 미확정 | 보고:307, 소유:1445, 유닛:U5 |
 
@@ -1817,7 +1946,7 @@ erDiagram
 | 7 | 기기 상태 단계·끊김 시간 | Core의 등록/보고 축과 Realtime 연결 원장이 분리됨. R1 연결 상태 5값, R2 끊김 사건 표가 존재. 1초·5분·40초는 시간 규칙이고 단일 상태 enum으로 두 축을 합치지 않는다. | C1:157·161·176~177, R1:143~158, R2:11~29 |
 | 8 | 쉬기·재개 | PAUSED 상태와 별도 휴식/재개 표는 없음. 의도적 비채택이며 미구현 표로 세지 않는다. | 결정:138, C1/R1 상태 CHECK |
 | 9 | 보호자 실시간 수신 | 전사 표의 `sequence_no`·승인 표시로 증분 말풍선의 저장 기반을 표현. 2초 폴링은 API/화면 동작이고 수신 채널 표를 신설하지 않는다. | R1:117~136, 결정:139 |
-| 10 | 푸시 알림 | `core_push_token`·`core_push_dispatch`는 U7 예정, 현재 비교 DDL에 없음. 아직 구현 전이라 구현 완료로 표기하지 않는다. | 소유:1433~1434, 유닛:U7 |
+| 10 | 푸시 알림 | U7 C6의 `core_push_subscription`·`core_push_dispatch` 구현. 이전 예정 `core_push_token`은 새 물리명으로 확정. 장애 3종+완료의 사건 키·수신처 스냅숏·재시도 상태를 기록하며 실제 폰 표시를 보장하지 않는다. | 소유:1433~1434, C6, D7, §3.22~3.23 |
 | 11 | 아이 선택·목적 입력 | 1:1 아이 모델은 C1에 구현. 예정 `core_activity_context`에는 `purpose`를 계승하지 않는 설계. | C1:67, 소유:1414, 결정:141 |
 | 12 | 08 네 칸의 쓰임 | ActivityContext는 U4a 예정. 네 칸은 결과 구조화 입력 전용이라는 소유·전달 경계를 기록하고, 대화 모델용 새 열을 만들지 않는다. | `docs/units/u4a/brief.md`:10, 소유:1414, 결정:142 |
 | 13 | 동의·철회·계정 삭제 | C2가 `core_consent.child_id`를 nullable로 완화하고 약관 버전 FK를 추가. 계정 삭제 요청 장부는 C2, 세션의 동의 4항목+정책 버전 스냅숏은 R1. “철회 UI 없음”과 기존 DB의 `WITHDRAWN` 허용은 구별한다. | C2:14~18·60~87, C1:92, R1:59~71 |
@@ -1842,7 +1971,7 @@ erDiagram
 | E6 | 종료 표현 이름·길이 변경 | C1 expression_text(20), normalized_text(40); C2 추가 제약은 6.4 #14 참고. | 보고:321, C1:98, C2:28 |
 | E7 | audio_path 의미 고정 | C1은 파일명 형태의 상대 .wav 경로만 허용하며 설명상 승인 음성 정적 경로 아래에 대응. 외부 URL 또는 실제 배포 주소를 쓰지 않는다. | 보고:322, C1:113·138~139 |
 | E8 | trace_id 및 모든 행 guardian_id 채움 | trace_id 선택 열은 네 표에 구현. guardian_id도 존재하나 DB에서는 nullable이다. “모든 행 채움”은 앱 처리 규칙이며 NOT NULL 제약으로 과장하지 않는다. | 보고:323, C1:265·275·300·310, R1:172·182·207·217 |
-| E9 | DB 역할·스키마·Flyway 이력·데이터 등급 | init에 core/realtime 업무 스키마와 flyway 이력 스키마, owner·앱 둘·backup 역할 및 synthetic 등급이 존재. 이력 표 2개는 업무 표 31개와 별도. | 보고:324, `infra/postgres/init/01-roles.sql`:27~48·63·73~99; `infra/migrate/flyway-core.conf`:11~14, `flyway-realtime.conf`:11~14 |
+| E9 | DB 역할·스키마·Flyway 이력·데이터 등급 | init에 core/realtime 업무 스키마와 flyway 이력 스키마, owner·앱 둘·backup 역할 및 synthetic 등급이 존재. 이력 표 2개는 이 문서의 업무 표 33개와 별도. | 보고:324, `infra/postgres/init/01-roles.sql`:27~48·63·73~99; `infra/migrate/flyway-core.conf`:11~14, `flyway-realtime.conf`:11~14; U7 증분 C6 |
 
 ### 6.6 구현 Core 테이블별 v0.1 차이
 
@@ -2281,13 +2410,11 @@ target_behavior_key → behavior_key와 scenario_type → kind는 설계 대응�
 | P14 | `core_session_result_state` / SessionResultState | ResultPipeline | U6, core V5 | 소유:1428. 현재 노출 결과 포인터 예정. |
 | P15 | `core_report` / Report | Report | U6, core V5 | 소유:1430. 기간·저장·버림 속성의 최종 SQL은 미정. |
 | P16 | `core_report_activity` / ReportActivity | Report | U6, core V5 | 소유:1432. result_id를 유지한 기존 v0.1 정의를 가져오지 않음. |
-| P17 | `core_push_token` / PushSubscription | Notification | U7, core V6 | 소유:1433, 유닛 U7:74~75. 장애 3종 + 활동 완료 발송을 기록한다. |
-| P18 | `core_push_dispatch` / PushDispatch | Notification | U7, core V6 | 소유:1434. 구독과 발송 요청 장부를 구분할 계획. |
 | P19 | `realtime_conversation_turn` / ConversationTurn | ConversationLog | 원래 소유는 U3; 후속 처리 미확정 | 소유:1443, 유닛 U3:13·44. 그러나 조사한 R1/R2에 표가 없고 realtime_transcript.turn_id도 없음. U4b 소유로 임의 재배정하거나 폐기 결정으로 단정하지 않는다. |
 | P20 | `core_scene_judgment` / SceneJudgment | ResultPipeline | U6, core V5 | 소유:1426. 기록용 재판정 장면 하나(값 · 시점 · 진행 중 판정과 차이). 보호자 응답에는 칩으로만 나간다. |
 | P21 | `core_report_section` / ReportSection | Report | U6, core V5 | 소유:1431. 리포트 하나에 항목 10개(sectionNo 1~10 유일), 인용은 citations JSON. |
 
-분류 합계는 **U4a 2 + U4b 1 + U5b 6 + U6 9 + U7 2 + ConversationTurn 미확정 1 = 21개**다. U4a는 진행 중이라는 문서 상태이고 위 표는 이번 비교에 선택한 커밋 집합 기준이다. 다른 작업 트리의 미커밋 구현까지 조사하거나 완료로 판정하지 않았다.
+분류 합계는 **U4a 2 + U4b 1 + U5b 6 + U6 9 + ConversationTurn 미확정 1 = 19개**다. P17·P18은 U7 V6 구현으로 §3.22·§3.23에 이동했으며 추적 번호는 다시 매기지 않았다. U7 이외 상태는 기존 고정 스냅숏 기준을 유지하며 이후 구현·병합 여부를 재판정하지 않았다.
 
 ### 7.2 기존 표 확장과 실제 표 신설의 구분
 
@@ -2297,6 +2424,184 @@ target_behavior_key → behavior_key와 scenario_type → kind는 설계 대응�
 | U4b | R1 realtime_activity_session/session_event/session_stop_expression 및 R2 session_gap | 전체 상태·시간 규칙, 종료 스냅숏과 SessionRecordCaptured | 기존 표의 추가 열을 추정하지 않는다. 신규 예정은 P03. |
 | U5b | C4의 목표·행동 정의·상황과 C1/R1 활동 기반 | 연습 시작·세션 목표·진행·도움·반응·판정 | Core U5a 7표를 다시 예정 표로 적지 않는다. 신규 예정은 P04~P09. |
 | U6 | C4 후보 등록/근거·행동 정의/생활 팁 제공 포트 | 결과 구조화·기록용 재판정·후보 생성 파이프라인·10개 항목 리포트 | 기존 후보 표는 U5a 소유 유지. 신규 예정은 P10~P16 · P20 · P21. |
-| U7 | 기존 계정·기기·활동 | 구독·발송 기록·웹 푸시 | 신규 예정은 P17~P18. |
+| U7 | 기존 계정·기기·활동 + C6 구독·발송 기록 2표 | 웹 푸시 기능 시험·통합 결과는 U7 report에서 추적 | P17~P18은 예정에서 제외. N5/N6 및 §3.22~3.23에 SQL 구현을 기록하며 운영 병합은 U6 V5 뒤에 한다. |
 
 최종 통합 전 확인할 불일치는 세 가지다. 첫째, 소유 카탈로그의 ConversationTurn이 현재 U3 DDL에 없어 후속 물리 모델 결정을 기다린다. 둘째, “상태 11개”는 Core의 REQUESTED 사본을 포함한 전체 도메인 수이며 Realtime DDL은 10개다. 셋째, 보고서의 열 수·필수성 요약보다 현재 DDL이 우선한다(Outbox/Inbox 각 17열, guardian_id nullable 등). 이는 기존 원본 문서의 소급 수정이나 새로운 SQL 변경 지시가 아니다.
+
+## 8. 2026-10-14 U5b 통합 갱신
+
+### 8.1 범위와 SQL 정본
+
+이 절은 U5b 통합 브랜치의 **새 표 6개·39열**만 추가 대조한다. Core 준비 원본 1표·13열과 Realtime 연습 원본 5표·26열이다. 기존 §1~§7의 전체 합계를 다시 산정하거나 U4·U6·U7의 구현·병합·배포 상태를 판정하지 않는다. SQL 파일의 존재는 실제 DB 적용이나 시험 통과를 뜻하지 않는다. 실행 증거는 [U5b 보고서](../units/u5b/report.md)를 따른다.
+
+| 스키마·실제 표 | 열 | 소유 컴포넌트·유닛 | 정본 |
+|---|---:|---|---|
+| `core.core_practice_preparation` | 13 | ActivityCoordinator(PracticeStart) / U5b | [core V7](../../backend/core-api/src/main/resources/db/migration/core/V7__u5b_practice_preparation.sql) |
+| `realtime.realtime_session_goal` | 7 | PracticeProtocol / U5b | [realtime V4](../../backend/realtime-activity/src/main/resources/db/migration/realtime/V4__u5b_practice.sql) |
+| `realtime.realtime_practice_attempt` | 5 | PracticeProtocol / U5b | realtime V4 |
+| `realtime.realtime_practice_response` | 7 | PracticeProtocol / U5b | realtime V4 |
+| `realtime.realtime_practice_cue` | 4 | PracticeProtocol / U5b | realtime V4 |
+| `realtime.realtime_practice_evaluation` | 3 | ResponseEvaluator / U5b | realtime V4 |
+
+Core V7은 V5(U6)·V6(U7) 배정을 보존한 번호다. Realtime V4는 U4b V3 뒤에 적용하는 정식 `db/migration/realtime` 파일이며, 이전 독립 구현의 `db/pending/realtime` 파일을 별도로 중복 적용하지 않는다. 두 SQL은 새 표와 색인만 추가하고 기존 표의 열·제약·자료를 바꾸지 않는다. FK는 Core 2개·Realtime 5개이며, 스키마 간 물리 FK는 없다.
+
+이하 열 표의 NULL은 SQL 선언 기준이다. PK는 NOT NULL을 포함한다. `GENERATED` 열은 SQL의 저장 생성 열이며 DEFAULT와 구별한다. 제약명이 생략된 PK·UNIQUE·FK·CHECK의 이름은 PostgreSQL이 생성하므로 문서에서 임의로 이름을 붙이지 않는다.
+
+### 8.2 `core.core_practice_preparation` — 13열
+
+| 열 | 타입 | NULL | DEFAULT / 생성식 | SQL 제약·참조 |
+|---|---|---|---|---|
+| `session_id` | `uuid` | 불가 | 없음 | PK. 활동·Realtime 세션과 동일 식별자를 쓰는 논리 참조이며 해당 세션 FK는 없음 |
+| `guardian_id` | `uuid` | 불가 | 없음 | FK → `core.core_guardian(id)` ON DELETE RESTRICT |
+| `child_id` | `uuid` | 불가 | 없음 | FK → `core.core_child(id)` ON DELETE RESTRICT |
+| `idempotency_key` | `uuid` | 불가 | 없음 | `UNIQUE(guardian_id, idempotency_key)` 참여 |
+| `request_hash` | `varchar(64)` | 불가 | 없음 | 별도 해시 형식 CHECK 없음 |
+| `goals_json` | `jsonb` | 불가 | 없음 | `jsonb_typeof(goals_json) = 'array'` |
+| `status` | `varchar(20)` | 불가 | 없음 | `PREPARING`, `READY`, `FAILED` 중 하나 |
+| `claim_id` | `uuid` | 불가 | 없음 | 별도 FK·UNIQUE 없음 |
+| `lease_until` | `timestamptz` | 불가 | 없음 | DB 시각 기본값 없음 |
+| `first_scenario_id` | `uuid` | 허용 | 없음 | Core 시나리오 논리 참조, 물리 FK 없음 |
+| `exposure_reconciled_at` | `timestamptz` | 허용 | 없음 | 실제 노출 반영 확인 시각 |
+| `created_at` | `timestamptz` | 불가 | 없음 | 앱 시각을 바인딩 |
+| `updated_at` | `timestamptz` | 불가 | 없음 | 앱 시각을 바인딩 |
+
+| 종류 | 정의 |
+|---|---|
+| 복합 UNIQUE | `(guardian_id, idempotency_key)` |
+| CHECK | `(status = 'READY') = (first_scenario_id IS NOT NULL)` — READY일 때만 첫 상황 식별자가 존재 |
+| 명시 복합 B-tree | `core_practice_preparation_unreconciled_idx(status, exposure_reconciled_at, created_at)` — READY·미정산 조건과 생성 순 조회 지원, 비유일 일반 인덱스 |
+| 지원 인덱스 | PK 1개 + 복합 UNIQUE 1개 |
+
+`goals_json`은 준비 시 고정한 목표·정의·가중치·순서 원본이다. SQL은 배열 형식만 제한하며, 목표 수·개별 필드·동일 키 요청 해시·lease 경합 규칙은 애플리케이션 검증이다. 준비 상태를 기존 `core_activity`의 상태 열에 추가하지 않는다.
+
+### 8.3 `realtime.realtime_session_goal` — 7열
+
+| 열 | 타입 | NULL | DEFAULT / 생성식 | SQL 제약·참조 |
+|---|---|---|---|---|
+| `id` | `uuid` | 불가 | 없음 | PK |
+| `session_id` | `uuid` | 불가 | 없음 | FK → `realtime.realtime_activity_session(id)` |
+| `guardian_id` | `uuid` | 불가 | 없음 | Core 보호자 논리 참조, 물리 FK 없음 |
+| `goal_selection_id` | `uuid` | 불가 | 없음 | Core 선택 목표 논리 참조, 물리 FK 없음 |
+| `goal_order` | `integer` | 불가 | 없음 | `goal_order > 0` |
+| `terminated` | `boolean` | 불가 | `false` | 종료·정산 후 새 변경 차단용 원장 |
+| `data` | `jsonb` | 불가 | 없음 | `jsonb_typeof(data) = 'object'` |
+
+| 종류 | 정의 |
+|---|---|
+| 복합 UNIQUE | `(session_id, goal_selection_id)` 및 `(session_id, goal_order)` |
+| FK 삭제 동작 | SQL에 ON DELETE 미지정 → NO ACTION. CASCADE 없음 |
+| 명시 B-tree | `realtime_session_goal_guardian_idx(guardian_id)` |
+| 지원 인덱스 | PK 1개 + UNIQUE 2개 |
+
+이름·행동 정의 키/버전·판정 기준 스냅숏·현재 단계·목표 상태·생략 사유·세대는 `data` 안의 불변 모델 값이다. 별도 SQL 열로 세지 않는다.
+
+### 8.4 `realtime.realtime_practice_attempt` — 5열
+
+| 열 | 타입 | NULL | DEFAULT / 생성식 | SQL 제약·참조 |
+|---|---|---|---|---|
+| `id` | `uuid` | 불가 | 없음 | PK |
+| `session_goal_id` | `uuid` | 불가 | 없음 | FK → `realtime.realtime_session_goal(id)`, ON DELETE 미지정(NO ACTION) |
+| `attempt_type` | `text` | 불가 | 없음 | `ORIGINAL`, `NEW_SCENARIO` 중 하나 |
+| `scenario_id` | `uuid` | 허용 | 없음 | Core 상황 논리 참조, Core 표로 향하는 FK 없음 |
+| `data` | `jsonb` | 불가 | 없음 | 원본 상태·직전 상황·실노출 시각·준비 실패 사유 |
+
+| 종류 | 정의 |
+|---|---|
+| 복합 UNIQUE | `(session_goal_id, attempt_type)` 및 `(id, scenario_id)` |
+| CHECK 1 | `((data->>'state' IN ('ISSUED','EXPOSED','COMPLETED')) = (scenario_id IS NOT NULL)) IS TRUE` |
+| CHECK 2 | `(data->>'state' <> 'PREPARATION_FAILED' OR (scenario_id IS NULL AND data->>'preparationFailure' IS NOT NULL AND data->>'exposedAt' IS NULL)) IS TRUE` |
+| 인덱스 | 명시 CREATE INDEX 없음. PK 1개 + UNIQUE 2개가 지원 인덱스를 만듦 |
+
+`(id, scenario_id)` UNIQUE는 반응·도움의 복합 FK 대상이다. 별도의 `realtime_scenario_exposure` 표를 만들지 않는다. 실제 노출 증거는 이 표의 **`data.exposedAt`**에 저장한다. 이는 JSON 속성이며 `exposed_at` SQL 열이 아니다. 준비 실패 때는 `scenario_id`가 NULL이고, 가짜 상황·가짜 반응 행을 만들지 않는다. `data.state` 전체 허용 값은 애플리케이션 모델이 제한하며 위 두 CHECK를 완전한 상태 enum 제약으로 확대 해석하지 않는다.
+
+### 8.5 `realtime.realtime_practice_response` — 7열
+
+| 열 | 타입 | NULL | DEFAULT / 생성식 | SQL 제약·참조 |
+|---|---|---|---|---|
+| `id` | `uuid` | 불가 | 없음 | PK |
+| `attempt_id` | `uuid` | 불가 | 없음 | 복합 FK 참여 |
+| `scenario_id` | `uuid` | 불가 | 없음 | `(attempt_id, scenario_id)` → `realtime_practice_attempt(id, scenario_id)` |
+| `response_type` | `text` | 불가 | 없음 | `FIRST`, `AFTER_CUE`, `NEW_SCENARIO` 중 하나 |
+| `data` | `jsonb` | 불가 | 없음 | 반응 원본·판정 예산·세대·토큰·확정 값 |
+| `evaluation_state` | `text` | 선언상 허용 | `GENERATED ALWAYS AS (data->>'evaluationState') STORED` | 아래 CHECK가 NULL을 거부 |
+| `label` | `text` | 허용 | `GENERATED ALWAYS AS (data->>'label') STORED` | 대기 중 NULL, 확정 조건은 아래 CHECK |
+
+| 종류 | 정의 |
+|---|---|
+| 복합 UNIQUE | `(attempt_id, response_type)` |
+| FK 삭제 동작 | 복합 FK ON DELETE 미지정 → NO ACTION |
+| CHECK 1 | `(evaluation_state IN ('PENDING','FINALIZED','TERMINATED_PENDING')) IS TRUE` |
+| CHECK 2 | `(CASE WHEN evaluation_state = 'FINALIZED' THEN label IS NOT NULL AND data->>'closedAt' IS NOT NULL ELSE label IS NULL AND data->>'closedAt' IS NULL END) IS TRUE` |
+| CHECK 3 | `(CASE WHEN label = 'NOT_PERFORMED' THEN data->>'utteranceSeq' IS NULL AND data->>'notPerformedReason' IS NOT NULL AND data->'work' IS NULL ELSE (data->>'utteranceSeq')::integer > 0 AND data->>'notPerformedReason' IS NULL AND (data->'work'->>'attemptsStarted')::integer BETWEEN 0 AND 2 END) IS TRUE` |
+| 명시 B-tree | `realtime_practice_response_pending_idx(evaluation_state)` — 이름과 달리 부분 WHERE 조건 없는 일반 인덱스 |
+| 지원 인덱스 | PK 1개 + UNIQUE 1개 |
+
+`label` 전체 enum은 이 표의 별도 CHECK로 선언되어 있지 않다. 무반응/유효 반응의 필드 조건과 평가 표의 라벨 CHECK, 애플리케이션 모델 검증을 구분한다. `TERMINATED_PENDING`은 내부 보존 상태이며 외부 진행 단계나 U6 계약 enum에 추가한 값이 아니다.
+
+### 8.6 `realtime.realtime_practice_cue` — 4열
+
+| 열 | 타입 | NULL | DEFAULT / 생성식 | SQL 제약·참조 |
+|---|---|---|---|---|
+| `id` | `uuid` | 불가 | 없음 | PK |
+| `attempt_id` | `uuid` | 불가 | 없음 | UNIQUE, 복합 FK 참여 |
+| `scenario_id` | `uuid` | 불가 | 없음 | `(attempt_id, scenario_id)` → `realtime_practice_attempt(id, scenario_id)` |
+| `data` | `jsonb` | 불가 | 없음 | 도움 동의·전달 상태·실제 문구·정답 포함 여부·재생 시각 |
+
+| 종류 | 정의 |
+|---|---|
+| FK 삭제 동작 | 복합 FK ON DELETE 미지정 → NO ACTION |
+| CHECK 1 | `(data->>'consentResponse' IN ('ACCEPTED','DECLINED','NO_RESPONSE')) IS TRUE` |
+| CHECK 2 | `(data->>'givenAt' IS NULL OR (data->>'consentResponse' = 'ACCEPTED' AND data->>'deliveredText' IS NOT NULL)) IS TRUE` |
+| 인덱스 | 명시 CREATE INDEX 없음. PK 1개 + `UNIQUE(attempt_id)` 1개 |
+
+예정 이름 `realtime_cue_delivery`의 책임을 이 표가 구현한다. 거부·무응답에도 동의 결과 행은 존재할 수 있으므로 Cue 행의 존재를 실제 재생으로 간주하지 않는다. 실제 재생은 JSON의 `givenAt`과 전달 증거로 구분한다.
+
+### 8.7 `realtime.realtime_practice_evaluation` — 3열
+
+| 열 | 타입 | NULL | DEFAULT / 생성식 | SQL 제약·참조 |
+|---|---|---|---|---|
+| `id` | `uuid` | 불가 | 없음 | PK |
+| `response_id` | `uuid` | 불가 | 없음 | UNIQUE, FK → `realtime.realtime_practice_response(id)`, ON DELETE 미지정(NO ACTION) |
+| `data` | `jsonb` | 불가 | 없음 | 최종 라벨·근거 발화 번호·검토 필요·시도 수·모델/프롬프트 버전 |
+
+| 종류 | 정의 |
+|---|---|
+| CHECK 1 | `(data->>'label' IN ('functional','partial','none','uncertain')) IS TRUE` |
+| CHECK 2 | `((data->>'attempts')::integer BETWEEN 0 AND 2) IS TRUE` |
+| 인덱스 | 명시 CREATE INDEX 없음. PK 1개 + `UNIQUE(response_id)` 1개 |
+
+예정 이름 `realtime_evaluation`의 책임을 이 표가 구현한다. 무반응은 반응 표의 `NOT_PERFORMED`로 남기며 이 평가 표의 라벨에는 포함하지 않는다. 최종 평가와 해당 반응의 FINALIZED 갱신은 애플리케이션의 같은 트랜잭션이 담당한다.
+
+### 8.8 물리 관계와 텍스트 대체
+
+```mermaid
+erDiagram
+    core_guardian ||--o{ core_practice_preparation : guardian_id
+    core_child ||--o{ core_practice_preparation : child_id
+    realtime_activity_session ||--o{ realtime_session_goal : session_id
+    realtime_session_goal ||--o{ realtime_practice_attempt : session_goal_id
+    realtime_practice_attempt ||--o{ realtime_practice_response : "id_scenario_id"
+    realtime_practice_attempt ||--o| realtime_practice_cue : "id_scenario_id"
+    realtime_practice_response ||--o| realtime_practice_evaluation : response_id
+```
+
+- Core 준비 행 하나는 보호자 한 명과 아이 한 명을 반드시 참조한다. 두 FK 모두 RESTRICT이며 부모 삭제 전에 준비 원본을 정리한다.
+- Realtime 세션 하나에 여러 목표, 목표 하나에 여러 시도가 연결된다. `(session_goal_id, attempt_type)` UNIQUE와 종류 CHECK 때문에 실제 시도 종류별 최대 한 행이다.
+- 반응·도움은 시도 ID만이 아니라 **시도 ID와 scenario_id의 쌍**을 물리 FK로 참조한다. 다른 상황에 반응이나 도움을 잘못 귀속할 수 없다.
+- 한 시도의 반응은 response_type별 한 행이고 도움은 최대 한 행이다. 한 반응의 평가는 최대 한 행이다. Realtime 다섯 FK는 NO ACTION이며 CASCADE 삭제가 없다.
+- Core 준비 `session_id`·`first_scenario_id`, Realtime 목표의 `guardian_id`·`goal_selection_id`, 시도의 `scenario_id`는 다른 원장과 연결하는 논리 식별자다. 위 도식에는 물리 FK만 그렸다.
+- Realtime 삭제 참가자 150은 평가 → 반응 → 도움 → 시도 → 목표를 삭제하고, 뒤의 세션 참가자 200이 부모 세션을 정리한다. 이 순서는 애플리케이션 규칙이며 FK에 CASCADE를 더하지 않았다.
+
+### 8.9 이전 예정 목록과의 차이
+
+| 이전 항목 | 이번 구현 | 변경 분류·근거 |
+|---|---|---|
+| 준비 원본 표 없음 | `core_practice_preparation` 13열 신설 | 추가. Core V7, 첫 상황 준비·동일 키 원본·실제 노출 반영의 영속 경계 |
+| P04 `realtime_session_goal` 예정 | 동명 7열 표 구현 | 예정→U5b 브랜치 구현. Realtime V4 |
+| P05 `realtime_scenario_exposure` 예정 | 별도 표 없이 `realtime_practice_attempt.data.exposedAt`에 저장 | 물리 설계 통합. 기존 표 DROP이 아님 |
+| P06 `realtime_practice_attempt` 예정 | 동명 5열 표 구현 | 예정→U5b 브랜치 구현. 목표별 ORIGINAL/NEW_SCENARIO 유일 |
+| P07 `realtime_practice_response` 예정 | 동명 7열 표 구현 | 예정→U5b 브랜치 구현. scenario 복합 FK, 판정 상태/라벨 저장 생성 열 |
+| P08 `realtime_cue_delivery` 예정 | 실제 이름 `realtime_practice_cue`, 4열 | 예정 물리명과 구현명 차이. 기존 표 RENAME이 아님 |
+| P09 `realtime_evaluation` 예정 | 실제 이름 `realtime_practice_evaluation`, 3열 | 예정 물리명과 구현명 차이. 기존 표 RENAME이 아님 |
+
+§7의 P04~P09는 과거 조사 기록이며 U5b의 현재 DDL 해석에는 이 절을 우선한다. 그 밖의 예정 항목은 이번 갱신에서 상태를 바꾸지 않는다. `data` JSON의 필드와 상태 전이는 [U5b 설계](../units/u5b/design.md) 및 모델 소스를 함께 보되, SQL 제약이 아닌 규칙을 DB가 강제한다고 표시하지 않는다.

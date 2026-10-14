@@ -82,7 +82,10 @@ public record CoreProperties(
             CacheTiming cache,
             AccountTiming account,
             PracticeTiming practice,
-            GoalTiming goal) {
+            GoalTiming goal,
+            ResultTiming result,
+            ReportTiming report,
+            PushTiming push) {
 
         public Timing {
             required(session, "mujoong.timing.session");
@@ -94,6 +97,45 @@ public record CoreProperties(
             required(account, "mujoong.timing.account");
             required(practice, "mujoong.timing.practice");
             required(goal, "mujoong.timing.goal");
+            required(result, "mujoong.timing.result");
+            required(report, "mujoong.timing.report");
+            required(push, "mujoong.timing.push");
+        }
+    }
+
+    /** U6 BR1 · BR2: 작업 재시도 · 실행 · 누락 판정의 시간 계약. */
+    public record ResultTiming(Integer jobAttempts, List<Duration> jobRetryBackoff, Duration jobTick,
+            Duration attemptTimeout, Duration reconcileInterval, Duration undecidedLimit) {
+        public ResultTiming {
+            positive(jobAttempts, "mujoong.timing.result.job-attempts");
+            positiveList(jobRetryBackoff, "mujoong.timing.result.job-retry-backoff");
+            if (jobAttempts != 3 || jobRetryBackoff.size() != jobAttempts - 1) {
+                throw invalid("mujoong.timing.result 시도 수와 재시도 간격이 계약과 다르다");
+            }
+            jobRetryBackoff = List.copyOf(jobRetryBackoff);
+            positive(jobTick, "mujoong.timing.result.job-tick");
+            positive(attemptTimeout, "mujoong.timing.result.attempt-timeout");
+            positive(reconcileInterval, "mujoong.timing.result.reconcile-interval");
+            positive(undecidedLimit, "mujoong.timing.result.undecided-limit");
+        }
+    }
+
+    /** U6 BR9.4 · BR10.4: 리포트 절대 마감과 미저장 보존. */
+    public record ReportTiming(Duration readyTarget, Duration unsavedRetention) {
+        public ReportTiming {
+            positive(readyTarget, "mujoong.timing.report.ready-target");
+            positive(unsavedRetention, "mujoong.timing.report.unsaved-retention");
+        }
+    }
+
+    public record PushTiming(Duration dispatchPoll, List<Duration> retryBackoff,
+            Duration sendTimeout, Duration deviceStatusCheck) {
+        public PushTiming {
+            positive(dispatchPoll, "mujoong.timing.push.dispatch-poll");
+            positiveList(retryBackoff, "mujoong.timing.push.retry-backoff");
+            positive(sendTimeout, "mujoong.timing.push.send-timeout");
+            positive(deviceStatusCheck, "mujoong.timing.push.device-status-check");
+            retryBackoff = List.copyOf(retryBackoff);
         }
     }
 
@@ -311,7 +353,8 @@ public record CoreProperties(
             Integer backgroundDbConcurrency,
             Duration dbLockTimeout,
             Duration dbStatementTimeout,
-            Integer dbRetryAttempts) {
+            Integer dbRetryAttempts,
+            Integer resultWorkers) {
 
         public Limits {
             positive(rateCounterMaxKeys, "mujoong.limits.rate-counter-max-keys");
@@ -321,6 +364,10 @@ public record CoreProperties(
             positive(dbLockTimeout, "mujoong.limits.db-lock-timeout");
             positive(dbStatementTimeout, "mujoong.limits.db-statement-timeout");
             nonNegative(dbRetryAttempts, "mujoong.limits.db-retry-attempts");
+            positive(resultWorkers, "mujoong.limits.result-workers");
+            if (resultWorkers != 2 || resultWorkers > backgroundDbConcurrency) {
+                throw invalid("mujoong.limits.result-workers는 전용 스레드 둘이며 DB 동시성 이하여야 한다");
+            }
         }
     }
 

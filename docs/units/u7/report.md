@@ -1,0 +1,79 @@
+# U7 웹 푸시 구현 보고
+
+상태: 구현 · U7/전체 자동 시험 · PR CI · 수동 skeleton 통과, 리뷰 대기. PR [#10](https://github.com/team-jomyung/mujungi/pull/10)에서 검토한다. 이 보고는 병합 승인이 아니다. U6 V5 다음에 사람이 병합한다.
+
+## 만든 것
+
+- Core V6: 구독 9열, 발송 요청 15열. endpoint/event_key 유일, 구독별 발송 결과를 영속화한다.
+- 세션·CSRF 보호 PUT/DELETE 구독 API. 해제는 사용자 확인대로 현재 endpoint만 대상이다. VAPID 공개 설정 GET은 인증/no-store다.
+- Inbox 사본 갱신과 같은 트랜잭션에서 음성 문제 · 연결 종료 · 정상 완료를 기록한다. 등록 기기 보고 신선도는 서버 주기 점검으로 판정한다. 중복 사건, 종료/복구 뒤 장애 알림, 계정 삭제를 차단한다.
+- VAPID 암호화 발송, 구독별 성공 checkpoint, 재시도, 410/404 만료 구독 삭제. 발송 전 공인 DNS 확인과 연결 고정, TLS 검증, 리디렉션 금지, 설정 시간 제한을 적용한다.
+- 보호자 전용 서비스 워커와 SET0 알림 줄. sessionId 개별 재조회로 12/17/04 미확인에 진입하며 기존 일반 홈 흐름을 유지한다.
+- 삭제 참가자 60, API/오류/시간 계약, ERD N5/N6, U7 커버리지 범위를 추가했다.
+
+## 단계와 검증
+
+각 층의 시험을 구현 전에 작성하고 미구현 실패를 확인했다. 최초 backend 의존성 접근자 준비 실패는 TDD 증거로 세지 않았으며, 그 뒤 신규 클래스/메서드 부재의 컴파일 실패를 별도로 확인했다. frontend는 미구현 5파일 실패 후 구현하여 통과했다.
+
+| 단계 | 커밋 | 현재 확인 |
+|---|---|---|
+| 설계 | 8453ece | 구현 전에 설계/가정 기록 |
+| ① 구독 · V6 · 삭제 | 04a9579 | 순수 구독 15건, 스키마/구독/API DB 13건 통과 |
+| ② 사건 감지 | a81814f | 규칙/신선도/설정 23건, Inbox/SQL 경합 DB 11건 통과 |
+| ③ 발송 | 2440c14 | 전송/암호/설정/상태 단위 21건, 발송 DB 10건 통과 |
+| ④ 보호자 웹 | d1f7531 | U7 89건 통과, 전용 범위 줄 89.23%(257/288) |
+
+- Windows: JDK 21, 별도 Node 22. 전역 런타임 설정을 변경하지 않았다.
+- Docker 엔진에 연결되지 않았으며 시작 시도 중 사용자가 오류 창을 확인했다. 시작 대기 CLI만 취소했고 Docker 재시작/초기화/기존 컨테이너 변경을 하지 않았다. DB 시험을 로컬 통과로 기록하지 않는다.
+- 로컬 backend 전체 비 DB 회귀: 1,668건 중 1,645 통과, 21 건너뜀, 기존 종료 시한 시험 2건 실패. Core/Realtime의 `aStuckDatabaseCannotStretchTheShutdownThroughTheLastSnapshot`이 3초 상한을 넘었다. 기존 단언을 완화하지 않고 별도 재확인 및 CI 결과를 남긴다.
+- frontend: 초기 로컬 전체 회귀 61파일/868시험 통과. PR CI에서 최종 전체 62파일/893시험, 전체 줄 98.60%(3170/3215), U7 전용 6파일/89시험, 범위 줄 89.23%(257/288)를 확인했다. 계정 조건 우선 확인, 캐시 상태 이동 금지, 구독 조회/해제 경합은 각각 재현 실패 후 수정했다.
+- typecheck · ESLint · Next standalone 빌드 통과. 영향받는 기존 계정/서비스 워커/경계 시험 41건도 다시 통과했다.
+- 실제 standalone 서버에서 `/parent/push-worker`의 200, `text/javascript; charset=utf-8`, `Cache-Control: no-cache`, push/notificationclick 핸들러와 fetch 핸들러 부재를 확인했다. 검증용 로컬 서버만 띄운 뒤 종료했다.
+
+### CI
+
+기존 전체 backend/frontend 검사와 하한을 유지하고 그 뒤 U7 태그/범위 전용 검사를 더했다. 기존 보고서를 먼저 업로드하여 U7 재실행 결과와 섞지 않는다.
+
+| 실행 | 번호 · 커밋 | 결과 |
+|---|---|---|
+| PR CI 최초 | 38512294126 · 4319707 | FAIL · 아래 3건 수정 후 재실행 |
+| workflow_dispatch 최초 | 38512325637 · 4319707 | FAIL · skeleton A1에서 같은 backend 회귀 실패 |
+| PR CI 2차 | 38513076295 · b2be606 | 기존 계정 시험 경합 1건; 재실행은 최신 커밋 push로 자동 취소 |
+| workflow_dispatch 2차 | 38513073071 · b2be606 | backend/frontend/이미지 PASS, skeleton A4 예시 URL 형식 검사 실패 후 수정 |
+| PR CI 3차 | 38513960423 · 9edd1dd | PASS |
+| workflow_dispatch 3차 | 38513959520 · 9edd1dd | A1 실패 2회; 기존 보고서에는 실패 시험 이름이 없어 진단 산출물 보강 |
+| PR CI 구현 최종 | [38515320170](https://github.com/team-jomyung/mujungi/actions/runs/38515320170) · 3113b15 | PASS · 모든 필수 관문 |
+| workflow_dispatch 구현 최종 | [38515317111](https://github.com/team-jomyung/mujungi/actions/runs/38515317111) · 3113b15 | PASS · skeleton C1~C12 및 모든 필수 관문 |
+| U7 backend 범위 줄 80% | 38515320170 · 93시험/실패 0/건너뜀 0 | PASS · 92.60%(901/973) |
+| U7 frontend 범위 줄 80% | 38515320170 · 89시험 | PASS · 89.23%(257/288) |
+
+최초 CI에서 Core 921건 중 3건 실패/건너뜀 0건을 확인했다. 신규 구독 충돌 code가 error-envelope JSON Schema 열거형에 빠진 1건을 추가했고, 기존 CoreStartupSequenceIT 2건은 V6까지 낮은 버전으로 바꾸는 fixture와 미래 성공 V7/실패 V8 fixture로 갱신했다. 기동 거부/성공 및 실패 이력 무시 단언을 유지했다. 나머지 U7 DB 사건/발송/삭제/경합 시험은 통과했다. Windows에서 실패했던 기존 종료 시한 두 시험은 Linux CI에서 통과했다.
+
+2차 수동 CI는 backend 전체 2,264건/실패 0/건너뜀 0과 frontend 전체를 통과했다. skeleton A4가 부적합 URL 거부 시험의 고정 userinfo 예시를 키 형식으로 잡아, 이 시험값도 실행 때 UUID로 생성하게 변경했다. 검사 규칙/예외는 바꾸지 않았으며 같은 패턴의 로컬 검사도 일치 0건이다.
+
+2차 PR의 `GuardianApiIT.endIs202ClosingAndAnotherGuardiansIdsLookExactlyLikeUnknownIds`는 이전 시험의 REQUESTED 세션이 공유 시계 +3.001초 후 1초 준비 시한을 넘으면서 배경 취소 요청이 기록되는 경합이었다. 로그상 이전/현재 세션 소유자는 달랐고 현재 타인 요청은 404였다. 기존 전역 요청 0건 단언을 유지하며 이 시험 클래스의 앱/시계/대역/추적 데이터를 BeforeEach/AfterEach로 격리했다. 매번 실제 앱을 종료한 뒤 데이터를 지우며 임의 상태 조작·수면·시한 완화는 넣지 않았다.
+
+3차 수동 A1 실패의 개별 원인은 원래 산출물에 상세 로그가 없어 확인하지 못했다. 이후 실패 때 A1 로그와 기존 backend 시험 보고서를 별도 artifact에 보존한다. 관문과 하한은 그대로다.
+
+구현 최종 PR 실행은 backend 전체 2,264건(contract-model 296 · core-api 921 · realtime-activity 1,020 · test-support 27), 실패/건너뜀 0건이다. 기존 유닛을 포함한 전체 검증과 U7 전용 검증을 모두 통과했다. frontend 전체 893건 및 U7 89건, 보안 · 의존성 · 인프라 · 이미지 관문도 통과했다. 문서 마감 커밋은 이 구현/시험 기준 커밋 `3113b15`의 코드와 설정을 바꾸지 않는다.
+
+수동 실행의 `skeleton-report/report.txt`는 revision `3113b15d6581`, `RESULT PASS rc=0 total=477s`다. A1 전체 backend 2,264건, A2 frontend, A3 도구, A4 비밀 형식, B compose 기동/마이그레이션/호출, C1~C12 기기 시뮬레이터, P1 스키마 권한/P2 로그 위생/P3 비밀 값, T 작업 트리 무변경까지 통과했다. 이력 비밀 스캔은 별도 secrets 작업에서 통과했다. 배포는 이 feature 브랜치 실행 대상이 아니다.
+
+## 계약 · 판단 · 설계 차이
+
+- (U7-a) 활성 여부/공개 키 GET, (U7-b) 다른 계정 endpoint 409, (U7-c) 현재 endpoint DELETE 본문, (U7-d) sessionId 개별 재조회. `contracts/deviations.md`와 API/JSON Schema를 함께 갱신했다.
+- 판단 U7-J1~J18은 design.md에 있다. endpoint ASCII 2048자 제한, 수신처 snapshot, pause kind+since 사건 키, 워커 tag=sessionId+type, 스키마 검증 기대값 추가, 계정 조건/새 조회 우선을 명시했다.
+- 완료 사본의 endReason이 후속 이벤트에서 null이 되는 경우 영구 재시도가 되지 않도록 전송 자격에서 명시적으로 제외하고 재현 DB 시험을 추가했다.
+- 라이브러리의 RFC VAPID 만료 시계는 라이브러리 내부 시스템 시계이고 앱 사건/재시도는 MujoongClock이다. JWT 서명/만료 범위와 실제 암호문 독립 복호화를 시험한다.
+- 네 알림 모두 TTL=0이다. 오프라인 단말에 나중에 전달할 목적으로 push 서비스에 보관하지 않는다. HTTP 성공은 서비스 승인이고 실제 표시 확인이 아니다. 승인 뒤 DB 기록 전 장애의 외부 중복 가능성은 Topic/tag로 완화하며 정확한 1회 전달로 주장하지 않는다.
+- U1의 기존 전역 SW 금지는 U7의 보호자 등록 모듈/worker route에만 좁은 예외를 두었다. 기기 SW 등록 0회, 오프라인/PWA 금지 단언은 유지한다.
+- ERD는 기존 10/12 스냅숏에 U7 증분만 반영한 문서임을 표시했다. 다른 유닛의 과거 기록을 이번 작업의 최신 구현으로 바꾸지 않았다.
+
+## 시연 확인
+
+Android Chrome 실기에서 화면이 꺼진 상태의 장애 1종/완료 1종 수신과 알림 클릭은 **미수행**이다. 실제 VAPID 키/실기 장치가 연결된 환경에서 확인해야 한다. 자동 워커 시험이나 HTTP 승인 결과로 실기 확인을 대체하지 않는다.
+
+## 남은 일
+
+- Android Chrome 실기 수신/클릭 확인.
+- U6 V5 병합 후 스키마 이력/표 수와 삭제 참가자 순서 병합 조정. main에 직접 push하거나 PR을 병합하지 않는다.

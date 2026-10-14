@@ -13,6 +13,7 @@ import { Home04 } from "@/parent/screens/Home04";
 import { Live12 } from "@/parent/screens/Live12";
 import { Register05a } from "@/parent/screens/Register05a";
 import { Practice18 } from "@/parent/screens/Practice18";
+import { Records26 } from "@/parent/screens/Records26";
 import RootLayout, { metadata as rootMetadata, viewport } from "@/app/layout";
 import { GET as healthz, dynamic as healthzDynamic } from "@/app/healthz/route";
 import { GET as workletRoute, dynamic as workletDynamic } from "@/app/device/pcm-capture-worklet/route";
@@ -25,7 +26,7 @@ import ParentRegisterPage from "@/app/parent/device/register/page";
 import ParentFreePage from "@/app/parent/free/page";
 import ParentDevLoginPage from "@/app/parent/dev-login/page";
 import ParentPracticePage from "@/app/parent/practice/page";
-import ParentRecordsStubPage from "@/app/parent/records/page";
+import ParentRecordsPage from "@/app/parent/records/page";
 import ParentLivePage from "@/app/parent/sessions/[sessionId]/page";
 import ParentDonePage from "@/app/parent/sessions/[sessionId]/done/page";
 import { SESSION_ID, testTiming } from "../support/fixtures";
@@ -42,15 +43,6 @@ vi.mock("next/server", async (importOriginal) => ({
 }));
 
 const NOT_FOUND_DIGEST = "NEXT_HTTP_ERROR_FALLBACK;404";
-
-function digestOf(run: () => unknown): string | null {
-  try {
-    run();
-  } catch (error) {
-    return typeof error === "object" && error !== null ? String((error as { digest?: unknown }).digest) : null;
-  }
-  return null;
-}
 
 async function asyncDigestOf(run: () => Promise<unknown>): Promise<string | null> {
   try {
@@ -98,10 +90,8 @@ describe("라우트 처리기", () => {
 });
 
 describe("스텁 라우트 → /parent(J57 · J119)", () => {
-  it.each([
-    ["/parent/records", ParentRecordsStubPage],
-  ])("%s는 04로 되돌린다", (_, page) => {
-    expect(digestOf(page)).toBe("NEXT_REDIRECT;replace;/parent;307;");
+  it("/parent/records는 U6의 실제 26 화면을 연결한다", () => {
+    expect(elementOf(elementOf(ParentRecordsPage()).props.children).type).toBe(Records26);
   });
 
   it("/parent/device는 U2가 스텁 대신 05 화면을 그린다(J57 대체)", () => {
@@ -124,8 +114,8 @@ describe("/parent/dev-login — MUJOONG_DEVLOGIN_ENABLED가 정확히 true일 �
 });
 
 describe("화면 라우트", () => {
-  it("/parent/practice는 U5a의 실제 18 화면을 연결한다", () => {
-    expect(elementOf(ParentPracticePage()).type).toBe(Practice18);
+  it("/parent/practice는 U5a의 실제 18 화면을 연결한다", async () => {
+    expect(elementOf(await ParentPracticePage()).type).toBe(Practice18);
   });
   it("/parent · /parent/device/register는 04 · 05a를 그린다", () => {
     expect(elementOf(ParentHomePage()).type).toBe(Home04);

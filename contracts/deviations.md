@@ -104,3 +104,41 @@
 | U5a-b | C10 논리 키/claim/응답 재전송, 기존 성공/내용 실패 보존, 미연결·생성 중 503, 소유/활성 확인 오류 | U5a-J5/J18. Realtime이 상황 id로 중복 재생을 막아야 함. 기존 요청/성공 필드 유지 |
 | U5a-c | 소비자 소유 포트(계정은 U2 부품 어댑터), 실제 근거/세션 없는 호출 실패, 노출 기록 대조 | U2/U4/U6 소유 기능은 구현하지 않음 |
 | U5a-d | 공급자 포트·최소 DTO·독립 금지 검사·기술 재시도·버전 기록, 보수적 구조/지문 검사 | U5a-J7/J16/J17. 공급자 미연결은 비활성; 의미 검증 완료로 주장하지 않음 |
+
+## U6 편차
+
+| 기호 | 변경 | 승인 근거 · 영향 |
+|---|---|---|
+| (U6-a) | 미확인 종료 제외는 종료 전 세션 제외로 해석. ENDED_UNCONFIRMED · ABORTED도 정리하되 FULL 불가 | 요구사항 Q1 A |
+| (U6-b) | SERVER_RESTART FAILED이고 발화가 있으면 정리 · 26 · 27 · 28 노출. records enum FAILED 추가 | Q2 B · FR15, U4a-J9와 AC5.1.8 · AC5.3.5 일부 변경 |
+| (U6-c) | 27에서 08 배경 원문 표시 제외 | Q4 B · AC5.2.2 일부 변경 |
+| (U6-d) | 최초 포함 총 3회 시도, 간격 5 · 15초 | C2 |
+| (U6-e) | 리포트 60초는 접수부터 서버 절대 마감, 시도 횟수보다 우선 | Q3 A · AC5.3.11 |
+| (U6-f) | ai-io 설정 mujoong.ai.*를 mujoong.text-ai.result.*로 통일 | C1 |
+| (U6-g) | CHILD_TRANSCRIPT를 CHILD_RECALL로 통일. GUARDIAN_INPUT 인용은 quote 없음 | C7 |
+| (U6-h) | 17 · 27 정리 중, 28 만드는 중에도 2초 폴링, 끝나면 중단 | C18 · 원 A2 확장 |
+| (U6-i) | 팁 선택 title 필드와 nullable core_support_item.title 추가 | C14 · S-27 |
+| (U6-j) | AC3.6.12 정리 끝 READY는 작업 상태 DONE | C19 |
+| (U6-k) | PDF는 메모리 렌더라 서버 파일과 삭제 단계 없음 | Q6 A · FR10.3 |
+| (U6-l) | 자유대화 결과 문장은 저장 · API · 리포트만, 27 미표시 | Q5 A |
+
+## U7 웹 푸시 계약
+
+| 기호 | 변경 | 근거/영향 |
+|---|---|---|
+| (U7-a) | 세션 인증 GET `/push-subscription/vapid-public-key` → `{enabled,publicKey}`. 미설정은 false/null, 응답 no-store. private key · subject는 반환하지 않는다. | C6의 프런트 구독 준비 정보 보완 · U7-J5 |
+| (U7-b) | 다른 보호자가 소유한 endpoint의 PUT은 409 `PUSH_SUBSCRIPTION_CONFLICT`, 고정 문구는 errors.md. 기존 보호자 소유를 변경하지 않는다. | C6의 endpoint 유일성과 소유권 · U7-J4 |
+| (U7-c) | DELETE `/push-subscription` 본문은 `{endpoint}`. 현재 보호자의 그 기기만 해제하며 알 수 없는/타인 주소도 204다. | 사용자 확인(현재 기기만) · U7-J3 |
+| (U7-d) | 푸시 클릭은 `/sessions/{id}`로 해당 세션을 재조회한다. 진행 중 12, CLOSING/종료 17, 조회 실패/UNKNOWN은 04 미확인이다. | C6의 이전 current-only 문구를 U4a review-1 4절과 U7 지시서가 정정 · AC1.7.4 |
+
+서버 payload는 `{type,activityType,sessionId,sentAt}`만 보낸다. type은 `VOICE_PROBLEM`, `DEVICE_STATUS_UNKNOWN`, `ENDED_BY_CONNECTION`, `ACTIVITY_COMPLETED`이고 기존 이벤트 계약은 수정하지 않는다. 네 문구의 정본은 `frontend/src/shared/copy/ko.ts`다.
+
+## U5b 통합 편차
+
+| 기호 | 내용 | 근거 |
+|---|---|---|
+| (U5b-a) | POST /api/activities/practice의 준비를 REQUESTED 전에 영속화한다. 202에 goalCount를 포함하며 준비 중 SERVICE_NOT_READY는 같은 키 재시도다. 확정 실패 뒤 새 시작만 새 키를 쓴다. | U5b design 9절 I2/I5, 기존 C8/C10 및 18 |
+| (U5b-b) | 실제 연습 확장은 최초 자유 응답을 막고 타입 있는 speak와 PLAYBACK_FACT를 사용한다. 상황/도움의 승인 발화와 실제 전사가 일치해야 기기로 보내며 STARTED/COMPLETED/실패를 구분한다. 기존 NoOp 확장 동작은 유지한다. | I1, FR5, 실제 노출만 기록 |
+| (U5b-c) | 새 상황 생성 실패는 기존 원본을 보존한 SKIPPED(SCENARIO_FAILED/TIME_OVER) 후 다음 목표다. 판정 중 종료는 원래 시한까지 대기한다. 종료 스냅숏 실패는 원본에서 재무장하며 판정 지연 복구는 12초 성공과 구분한다. | 사용자 결정 I7/I8 |
+| (U5b-d) | INTERNAL_HTTP target에 PRACTICE_SCENARIO를 추가하고 C10에 별도 연결 풀을 사용한다. URL은 기존 Core 내부 주소에 고정한다. | C10, 토큰 확인/상태 보고와 지연 격리 |
+| (U5b-e) | 판정 전체 12초·최종 저장 예산 2초 및 후속 반응 20초를 U5b 타입 설정으로 등록한다. 2초는 부하 검증 전 초깃값이다. | 기존 Q6, 인수 가정 I4/I9, timing.md U5b 절 |

@@ -1,0 +1,29 @@
+{
+  "$comment": "U6 신규 및 변경 운영 TypeScript 전체. 하한 80%, 제외 없음.",
+  "unit": "u6",
+  "files": [
+    "frontend/src/app/parent/layout.tsx",
+    "frontend/src/app/parent/records/[sessionId]/page.tsx",
+    "frontend/src/app/parent/records/page.tsx",
+    "frontend/src/app/parent/reports/[reportId]/page.tsx",
+    "frontend/src/app/parent/reports/new/page.tsx",
+    "frontend/src/parent/api/reports.ts",
+    "frontend/src/parent/api/results.ts",
+    "frontend/src/parent/components/EndReasonCard.tsx",
+    "frontend/src/parent/components/LiveRegion.tsx",
+    "frontend/src/parent/components/MonthCalendar.tsx",
+    "frontend/src/parent/components/SceneChip.tsx",
+    "frontend/src/parent/hooks/useReportPolling.ts",
+    "frontend/src/parent/hooks/useResultStatusPolling.ts",
+    "frontend/src/parent/navigation.ts",
+    "frontend/src/parent/screens/Done17.tsx",
+    "frontend/src/parent/screens/RecordDetail27.tsx",
+    "frontend/src/parent/screens/Records26.tsx",
+    "frontend/src/parent/screens/Report30.tsx",
+    "frontend/src/parent/screens/ReportRange28.tsx",
+    "frontend/src/shared/copy/ko.ts",
+    "frontend/src/shared/copy/result.ts",
+    "frontend/src/shared/errors/codeToCopy.ts",
+    "frontend/src/shared/timing/timing.ts"
+  ]
+}

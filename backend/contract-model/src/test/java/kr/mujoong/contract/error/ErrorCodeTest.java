@@ -32,9 +32,12 @@ class ErrorCodeTest {
         table.put("CSRF_TOKEN_INVALID", List.of(403));
         table.put("SESSION_IN_PROGRESS", List.of(409));
         table.put("ALREADY_SELECTED", List.of(409));
+        table.put("PUSH_SUBSCRIPTION_CONFLICT", List.of(409));
         table.put("RESTORE_EXPIRED", List.of(410));
         table.put("SCENARIO_GEN_FAILED", List.of(422));
         table.put("IDEMPOTENCY_CONFLICT", List.of(409));
+        table.put("JOB_NOT_FAILED", List.of(409));
+        table.put("REPORT_NOT_READY", List.of(409));
         table.put("SESSION_NOT_ACTIVE", List.of(409));
         table.put("DEVICE_NOT_STABLE", List.of(423));
         table.put("REALTIME_UNAVAILABLE", List.of(503));

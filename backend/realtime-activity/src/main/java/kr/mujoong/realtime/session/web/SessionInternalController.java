@@ -224,7 +224,7 @@ public class SessionInternalController {
         // U4b BR7.1 · FR6.1: 살아 있는 실행기의 값(종료 세션은 null)
         out.put("technicalPause", technicalPause(view.live()));
         out.put("silenceWarning", silenceWarning(view.live()));
-        out.put("practice", null);
+        out.put("practice", view.live().practice());
         List<Map<String, Object>> gaps = new ArrayList<>();
         for (kr.mujoong.realtime.log.SessionGapRepository.SessionGapRow gap : view.gaps()) {
             Map<String, Object> item = new LinkedHashMap<>();

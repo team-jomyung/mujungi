@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://mujoong.invalid/contracts/schemas/records-response.schema.json",
   "title": "26 기록 달력 · 그날 목록",
-  "description": "GET /api/records 200(계약 3절 · U4a). month면 {days}, date면 {items}. FAILED는 보이지 않고 DECLINED는 linkable false(B19). goalCount · interrupted는 편차 (U4a-b).",
+  "description": "GET /api/records 200(계약 3절 · U4a). month면 {days}, date면 {items}. FAILED는 정리 대상인 재시작 FAILED(사본 FAILED + SERVER_RESTART + 전사 발화 1개 이상)만 보이고 26은 '중간에 끊김'으로 적는다(U6 BR14.1 · BR14.2 · 편차 (U6-b)). DECLINED는 linkable false(B19). goalCount · interrupted는 편차 (U4a-b).",
   "oneOf": [
     {
       "type": "object",
@@ -39,7 +39,7 @@
               "activityType": { "$ref": "common.schema.json#/$defs/ActivityType" },
               "startedAt": { "$ref": "common.schema.json#/$defs/NullableDateTime" },
               "endedAt": { "$ref": "common.schema.json#/$defs/NullableDateTime" },
-              "finalStatus": { "type": "string", "enum": ["ENDED", "ENDED_UNCONFIRMED", "ABORTED", "DECLINED"] },
+              "finalStatus": { "type": "string", "enum": ["ENDED", "ENDED_UNCONFIRMED", "ABORTED", "DECLINED", "FAILED"] },
               "endReason": { "$ref": "common.schema.json#/$defs/NullableEndReason" },
               "linkable": { "type": "boolean" },
               "goalCount": { "type": "integer", "minimum": 0 },
