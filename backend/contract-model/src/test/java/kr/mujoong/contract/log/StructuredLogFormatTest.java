@@ -260,7 +260,7 @@ class StructuredLogFormatTest {
 
     @Test
     void traceIdComesFromTheSupplierOnlyWhenWellFormedAndCanBeOverridden() {
-        String fromBadSupplier = log(EventLog.App.CORE_API, EventLog.Strictness.STRICT, "bad\ntrace")
+        String fromBadSupplier = log(EventLog.App.CORE_API, EventLog.Strictness.STRICT, "invalid\ntrace")
                 .event(EventCode.STARTUP_RECOVERY, EventLog.Component.CORE_MAINTENANCE)
                 .render();
         String sessionTrace = TraceIds.newTraceId();
@@ -274,7 +274,7 @@ class StructuredLogFormatTest {
                 .render();
 
         assertThat((String) parse(fromBadSupplier).get("traceId")).matches("^[0-9a-f]{32}$");
-        assertThat(fromBadSupplier).doesNotContain("bad");
+        assertThat(fromBadSupplier).doesNotContain("invalid");
         assertThat(parse(overridden).get("traceId")).isEqualTo(sessionTrace);
         assertThat(parse(badOverride).get("traceId")).isEqualTo(TRACE);
     }
