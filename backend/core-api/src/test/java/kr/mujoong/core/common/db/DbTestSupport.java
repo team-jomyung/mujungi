@@ -234,6 +234,8 @@ public final class DbTestSupport implements AutoCloseable {
         }
         if (!guardians.isEmpty()) {
             MapSqlParameterSource params = new MapSqlParameterSource("ids", guardians.toArray(UUID[]::new));
+            jdbc.update("delete from core.core_push_dispatch where guardian_id = any(:ids)", params);
+            jdbc.update("delete from core.core_push_subscription where guardian_id = any(:ids)", params);
             jdbc.update("delete from core.core_outbox_event where guardian_id = any(:ids)", params);
             jdbc.update("delete from core.core_inbox_event where guardian_id = any(:ids)", params);
             // U4a(V3) 표: 08 배경 · 활동 기록(→ 세션 사본)

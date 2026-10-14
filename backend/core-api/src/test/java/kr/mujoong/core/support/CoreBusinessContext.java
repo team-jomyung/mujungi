@@ -87,7 +87,9 @@ public final class CoreBusinessContext {
         DbPoolWaitMonitor.class,
         RequiredSecretsCheck.class,
         SchemaVersionCheck.class,
-        GuardianWriteLock.class
+        GuardianWriteLock.class,
+        kr.mujoong.core.notification.PushEventRepository.class,
+        kr.mujoong.core.notification.PushEventRecorder.class
     })
     static class BusinessBeans {
     }

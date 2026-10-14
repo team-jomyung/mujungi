@@ -82,7 +82,8 @@ public record CoreProperties(
             CacheTiming cache,
             AccountTiming account,
             PracticeTiming practice,
-            GoalTiming goal) {
+            GoalTiming goal,
+            PushTiming push) {
 
         public Timing {
             required(session, "mujoong.timing.session");
@@ -94,6 +95,18 @@ public record CoreProperties(
             required(account, "mujoong.timing.account");
             required(practice, "mujoong.timing.practice");
             required(goal, "mujoong.timing.goal");
+            required(push, "mujoong.timing.push");
+        }
+    }
+
+    public record PushTiming(Duration dispatchPoll, List<Duration> retryBackoff,
+            Duration sendTimeout, Duration deviceStatusCheck) {
+        public PushTiming {
+            positive(dispatchPoll, "mujoong.timing.push.dispatch-poll");
+            positiveList(retryBackoff, "mujoong.timing.push.retry-backoff");
+            positive(sendTimeout, "mujoong.timing.push.send-timeout");
+            positive(deviceStatusCheck, "mujoong.timing.push.device-status-check");
+            retryBackoff = List.copyOf(retryBackoff);
         }
     }
 

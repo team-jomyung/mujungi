@@ -170,3 +170,12 @@ WSS 텍스트 프레임 8KB(`mujoong.limits.ws-text-frame-max`, 넘으면 4400 [
 core-api 키는 모두 application.yml에 둔다. 텍스트 AI 세 키는 TextAiProperties, 두 `mujoong.timing.*` 키는 CoreProperties(timing.practice · timing.goal)가 묶는다. 상황 생성 예산은 요청 선점 시한과 같고(ScenarioLimits), 복구 시한은 GoalSelectionService가 읽는다. 프런트 삭제는 기존 조작 토스트 설정(최소 3초)을 따른다.
 
 web의 loading-notice-delay는 MUJOONG_TIMING_PARENT_LOADINGNOTICEDELAY 환경 변수로 주입하고 parentLoadingNoticeDelayMs로 읽는다.
+
+## 10. U7 웹 푸시 시간
+
+| 키 | 기본값 | 소유 앱 | 뜻 | 근거 |
+|---|---|---|---|---|
+| `mujoong.timing.push.dispatch-poll` | `1s` | core-api | 발송 요청 점검 주기 | AC1.7.5 · U7-J6 |
+| `mujoong.timing.push.retry-backoff` | `[5s, 30s, 2m]` | core-api | 최초 발송 뒤 재시도 간격 | AC1.7.5 · U7-J6 |
+| `mujoong.timing.push.send-timeout` | `5s` | core-api | 수신처 한 곳의 HTTP 발송 상한 | FR7.10 · U7-J11 |
+| `mujoong.timing.push.device-status-check` | `10s` | core-api | 등록 기기의 보고 신선도 점검 주기 | AC1.7.2 · U7-J7 |
