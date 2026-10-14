@@ -124,6 +124,11 @@ public class SessionPackageBuilder {
             List<StopExpression> stopExpressions,
             Map<String, ApprovedItem> approvedContent) {
 
+        public SessionPackage forPractice() {
+            return new SessionPackage(sessionId,idempotencyKey,guardianId,childId,deviceId,ActivityType.PRACTICE,
+                    consentSnapshot,childContext,stopExpressions,approvedContent);
+        }
+
         public SessionPackage {
             Objects.requireNonNull(sessionId, "sessionId");
             Objects.requireNonNull(idempotencyKey, "idempotencyKey");

@@ -79,6 +79,12 @@ public class CoreStartupSequence implements SmartLifecycle {
 
     private final List<ScheduledExecutorService> schedulers = new ArrayList<>();
     private volatile boolean running;
+    private kr.mujoong.core.practice.start.PracticeExposureReconciler practiceExposures;
+
+    @org.springframework.beans.factory.annotation.Autowired(required=false)
+    void practiceExposures(kr.mujoong.core.practice.start.PracticeExposureReconciler value) {
+        this.practiceExposures=value;
+    }
 
     public CoreStartupSequence(
             SchemaVersionCheck schemaVersionCheck,
@@ -158,6 +164,8 @@ public class CoreStartupSequence implements SmartLifecycle {
         ScheduledExecutorService maintenance = scheduler("maintenance");
         fixedDelay(maintenance, properties.session().timerTick(), EventLog.Component.ACTIVITY_COORDINATOR,
                 preparingTimeoutChecker::runOnce);
+        if(practiceExposures!=null) fixedDelay(maintenance,properties.health().dbCheckInterval(),
+                EventLog.Component.ACTIVITY_COORDINATOR,practiceExposures::runOnce);
         fixedDelay(maintenance, properties.health().dbCheckInterval(), EventLog.Component.HEALTH, dbHealthChecker::runOnce);
         fixedDelay(maintenance, properties.cleanup().deviceExpiryInterval(), EventLog.Component.DEVICE_REGISTRY,
                 deviceExpiryCleanupJob::runOnce);

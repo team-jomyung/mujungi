@@ -87,15 +87,16 @@ class CoreSchemaIT {
             List<List<Object>> tables = query(owner,
                     "select tablename, tableowner from pg_tables where schemaname = 'core' order by tablename");
             assertThat(tables.stream().map(row -> (String) row.get(0)).toList()).containsExactlyElementsOf(
-                    java.util.stream.Stream.concat(CORE_TABLES.stream(), U5A_TABLES.stream()).sorted().toList());
+                    java.util.stream.Stream.concat(java.util.stream.Stream.concat(CORE_TABLES.stream(), U5A_TABLES.stream()),
+                            java.util.stream.Stream.of("core_practice_preparation")).sorted().toList());
             // 편차 (x): 표 소유는 마이그레이션 역할, 앱 역할은 쓰는 역할일 뿐이다
             assertThat(tables).allSatisfy(row -> assertThat(row.get(1)).isEqualTo("mujoong_owner"));
 
-            // 이력 표 flyway.core_schema_history에 V1 · V2(U2) · V3(U4a) · V4(U5a)가 차례로 성공으로 있다(J116). core 위치가 먼저라 기준선 행은 없다
+            // 이력 표 flyway.core_schema_history에 V1 · V2(U2) · V3(U4a) · V4(U5a) · V7(U5b)가 차례로 성공으로 있다(J116).
             List<List<Object>> history = query(owner,
                     "select version, type, success from flyway.core_schema_history order by installed_rank");
             assertThat(history).containsExactly(List.of("1", "SQL", true), List.of("2", "SQL", true),
-                    List.of("3", "SQL", true), List.of("4", "SQL", true));
+                    List.of("3", "SQL", true), List.of("4", "SQL", true), List.of("7", "SQL", true));
         }
     }
 

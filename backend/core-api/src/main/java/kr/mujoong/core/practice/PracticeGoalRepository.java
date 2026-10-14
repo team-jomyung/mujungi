@@ -100,6 +100,7 @@ public class PracticeGoalRepository {
     }
     public Map<String,Integer> deleteByGuardian(UUID guardianId,List<UUID> children) {
         MapSqlParameterSource p=new MapSqlParameterSource("guardian",guardianId).addValue("children",children);
+        int preparations=jdbc.update("delete from core.core_practice_preparation where guardian_id=:guardian",p);
         int requests=jdbc.update("delete from core.core_scenario_request where guardian_id=:guardian",p);
         int scenarios=jdbc.update("delete from core.core_scenario where guardian_id=:guardian",p);
         int selections=jdbc.update("delete from core.core_practice_goal_selection where guardian_id=:guardian",p);
@@ -111,7 +112,7 @@ public class PracticeGoalRepository {
             delete from core.core_goal_recommendation r
             where r.child_id in (:children)
             """,p);
-        return Map.of("scenarioRequests",requests,"scenarios",scenarios,"goalSelections",selections,
+        return Map.of("practicePreparations",preparations,"scenarioRequests",requests,"scenarios",scenarios,"goalSelections",selections,
                 "recommendationEvidence",evidence,"goalRecommendations",candidates);
     }
     private static GoalSelection selection(ResultSet r,int n) throws SQLException {
