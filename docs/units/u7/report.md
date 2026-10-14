@@ -1,6 +1,6 @@
 # U7 웹 푸시 구현 보고
 
-상태: 구현 및 로컬 검증 진행 중. DB 통합 · PR CI · 수동 skeleton 결과는 아래에 실행 후 갱신한다. 이 보고는 병합 승인이 아니다. U6 V5 다음에 사람이 병합한다.
+상태: 구현 · U7/전체 자동 시험 · PR CI · 수동 skeleton 통과, 리뷰 대기. PR [#10](https://github.com/team-jomyung/mujungi/pull/10)에서 검토한다. 이 보고는 병합 승인이 아니다. U6 V5 다음에 사람이 병합한다.
 
 ## 만든 것
 
@@ -40,10 +40,12 @@
 | workflow_dispatch 최초 | 38512325637 · 4319707 | FAIL · skeleton A1에서 같은 backend 회귀 실패 |
 | PR CI 2차 | 38513076295 · b2be606 | 기존 계정 시험 경합 1건; 재실행은 최신 커밋 push로 자동 취소 |
 | workflow_dispatch 2차 | 38513073071 · b2be606 | backend/frontend/이미지 PASS, skeleton A4 예시 URL 형식 검사 실패 후 수정 |
-| PR CI 최신 | 38513960423 · 9edd1dd | PASS |
+| PR CI 3차 | 38513960423 · 9edd1dd | PASS |
 | workflow_dispatch 3차 | 38513959520 · 9edd1dd | A1 실패 2회; 기존 보고서에는 실패 시험 이름이 없어 진단 산출물 보강 |
-| U7 backend 범위 줄 80% | 38513960423 · 93시험/실패 0/건너뜀 0 | PASS · 92.60%(901/973) |
-| U7 frontend 범위 줄 80% | 38512294126 · 89시험 | PASS · 89.23%(257/288) |
+| PR CI 구현 최종 | [38515320170](https://github.com/team-jomyung/mujungi/actions/runs/38515320170) · 3113b15 | PASS · 모든 필수 관문 |
+| workflow_dispatch 구현 최종 | [38515317111](https://github.com/team-jomyung/mujungi/actions/runs/38515317111) · 3113b15 | PASS · skeleton C1~C12 및 모든 필수 관문 |
+| U7 backend 범위 줄 80% | 38515320170 · 93시험/실패 0/건너뜀 0 | PASS · 92.60%(901/973) |
+| U7 frontend 범위 줄 80% | 38515320170 · 89시험 | PASS · 89.23%(257/288) |
 
 최초 CI에서 Core 921건 중 3건 실패/건너뜀 0건을 확인했다. 신규 구독 충돌 code가 error-envelope JSON Schema 열거형에 빠진 1건을 추가했고, 기존 CoreStartupSequenceIT 2건은 V6까지 낮은 버전으로 바꾸는 fixture와 미래 성공 V7/실패 V8 fixture로 갱신했다. 기동 거부/성공 및 실패 이력 무시 단언을 유지했다. 나머지 U7 DB 사건/발송/삭제/경합 시험은 통과했다. Windows에서 실패했던 기존 종료 시한 두 시험은 Linux CI에서 통과했다.
 
@@ -52,6 +54,10 @@
 2차 PR의 `GuardianApiIT.endIs202ClosingAndAnotherGuardiansIdsLookExactlyLikeUnknownIds`는 이전 시험의 REQUESTED 세션이 공유 시계 +3.001초 후 1초 준비 시한을 넘으면서 배경 취소 요청이 기록되는 경합이었다. 로그상 이전/현재 세션 소유자는 달랐고 현재 타인 요청은 404였다. 기존 전역 요청 0건 단언을 유지하며 이 시험 클래스의 앱/시계/대역/추적 데이터를 BeforeEach/AfterEach로 격리했다. 매번 실제 앱을 종료한 뒤 데이터를 지우며 임의 상태 조작·수면·시한 완화는 넣지 않았다.
 
 3차 수동 A1 실패의 개별 원인은 원래 산출물에 상세 로그가 없어 확인하지 못했다. 이후 실패 때 A1 로그와 기존 backend 시험 보고서를 별도 artifact에 보존한다. 관문과 하한은 그대로다.
+
+구현 최종 PR 실행은 backend 전체 2,264건(contract-model 296 · core-api 921 · realtime-activity 1,020 · test-support 27), 실패/건너뜀 0건이다. 기존 유닛을 포함한 전체 검증과 U7 전용 검증을 모두 통과했다. frontend 전체 893건 및 U7 89건, 보안 · 의존성 · 인프라 · 이미지 관문도 통과했다. 문서 마감 커밋은 이 구현/시험 기준 커밋 `3113b15`의 코드와 설정을 바꾸지 않는다.
+
+수동 실행의 `skeleton-report/report.txt`는 revision `3113b15d6581`, `RESULT PASS rc=0 total=477s`다. A1 전체 backend 2,264건, A2 frontend, A3 도구, A4 비밀 형식, B compose 기동/마이그레이션/호출, C1~C12 기기 시뮬레이터, P1 스키마 권한/P2 로그 위생/P3 비밀 값, T 작업 트리 무변경까지 통과했다. 이력 비밀 스캔은 별도 secrets 작업에서 통과했다. 배포는 이 feature 브랜치 실행 대상이 아니다.
 
 ## 계약 · 판단 · 설계 차이
 
@@ -69,6 +75,5 @@ Android Chrome 실기에서 화면이 꺼진 상태의 장애 1종/완료 1종 �
 
 ## 남은 일
 
-- 최종 로컬 변경 검증, PR/수동 CI와 U7 범위 결과 기록.
 - Android Chrome 실기 수신/클릭 확인.
 - U6 V5 병합 후 스키마 이력/표 수와 삭제 참가자 순서 병합 조정. main에 직접 push하거나 PR을 병합하지 않는다.

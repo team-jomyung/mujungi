@@ -17,7 +17,7 @@ U4b부터는 다시 AI-DLC를 쓴다. 담당자마다 자기 PC에서 유닛용 
 | U4b 활동 세션 Realtime | **진행 중**(10/13 시작). AI-DLC 작업 기록 `261013-u4b-activity-realtime`으로 진행한다. realtime V3 | `unit/u4b-activity-realtime` | `u4b/design.md` · `u4b/brief.md` |
 | U5b 연습 Realtime · 연결 마무리 | **지시서 준비됨**. U4b와 병렬로 진행하고, 각자 자기 PC에서 AI-DLC 작업 기록을 새로 만든다. 병합은 U4b 다음. realtime V4 | main에서 새로 `unit/u5b-practice` | **`u5b/brief.md`** |
 | U6 결과와 리포트 | **지시서 준비됨**. U5b를 기다리지 않고 시작한다. 연습 결과는 계약 6절 예시 값 대역으로 시험하고, U4b · U5b가 들어오면 끝에서 끝까지 다시 시험한다. core V5라 다른 유닛을 기다리지 않고 병합할 수 있다 | main에서 새로 `unit/u6-results-report` | **`u6/brief.md`** |
-| U7 웹 푸시 | **지시서 준비됨**(10/14). U5b · U6을 기다리지 않고 시작한다. 시간 키 · 구독 API · 삭제 참가자(60)는 더하기만. core V6이라 U6(V5) 다음에 병합한다 | main에서 새로 `unit/u7-web-push` | **`u7/brief.md`** · 맨 아래 「U6 · U7 정본」 |
+| U7 웹 푸시 | **구현 · PR CI 통과, 검토 대기**(10/14, PR #10). 시간 키 · 구독 API · 삭제 참가자(60)를 추가했다. core V6이라 U6(V5) 다음에 사람이 병합한다. 실기 확인은 남아 있다 | `unit/u7-web-push` | `u7/brief.md` · `u7/design.md` · `u7/report.md` · 맨 아래 「U6 · U7 정본」 |
 
 ## 병합 순서 (꼭 지킨다)
 
