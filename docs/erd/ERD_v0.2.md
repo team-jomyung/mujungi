@@ -2344,7 +2344,7 @@ Core V7은 V5(U6)·V6(U7) 배정을 보존한 번호다. Realtime V4는 U4b V3 �
 |---|---|
 | 복합 UNIQUE | `(guardian_id, idempotency_key)` |
 | CHECK | `(status = 'READY') = (first_scenario_id IS NOT NULL)` — READY일 때만 첫 상황 식별자가 존재 |
-| 명시 부분 B-tree | `core_practice_preparation_unreconciled_idx(created_at) WHERE status = 'READY' AND exposure_reconciled_at IS NULL` |
+| 명시 복합 B-tree | `core_practice_preparation_unreconciled_idx(status, exposure_reconciled_at, created_at)` — READY·미정산 조건과 생성 순 조회 지원, 비유일 일반 인덱스 |
 | 지원 인덱스 | PK 1개 + 복합 UNIQUE 1개 |
 
 `goals_json`은 준비 시 고정한 목표·정의·가중치·순서 원본이다. SQL은 배열 형식만 제한하며, 목표 수·개별 필드·동일 키 요청 해시·lease 경합 규칙은 애플리케이션 검증이다. 준비 상태를 기존 `core_activity`의 상태 열에 추가하지 않는다.

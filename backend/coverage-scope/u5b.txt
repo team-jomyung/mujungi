@@ -29,3 +29,4 @@ backend/realtime-activity/src/main/java/kr/mujoong/realtime/practice/SessionPrac
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/practice/JdbcPracticeRecordRecovery.java
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/PracticeRecordRecovery.java
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/voice/PracticeSpeech.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/voice/PracticeInstruction.java

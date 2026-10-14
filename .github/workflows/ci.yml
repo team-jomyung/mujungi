@@ -456,7 +456,7 @@ jobs:
           name: skeleton-report
           path: |
             build/verify/report.txt
-            build/verify/A1.log
+            build/verify/logs/A1.log
             backend/*/build/test-results/test/
           retention-days: 14
           if-no-files-found: warn

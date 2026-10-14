@@ -18,8 +18,9 @@
 | 프런트 전체 | 59파일 835건 통과, 줄 3102/3143 = 98.69% |
 | 프런트 U5b | 3파일 32건 통과, 범위 줄 82/82 = 100% |
 | 프런트 정적·빌드 | typecheck · ESLint · Next production build 통과 |
-| Core U5b 비DB | 36건 통과, DB 시험 8건 포함 전체 시험 소스 컴파일 통과 |
+| Core U5b CI | 44건 통과(비DB 36 + DB 8), 줄 233/238 = 97.90%, run 38534201993 |
 | Realtime U5b 비DB | 70건 통과, 정지 겹침·처리 실패·원래 판정 시한 정산 포함 |
+| Realtime U5b CI | 147건 통과, 줄 843/872 = 96.67%, run 38534201993. 공급자 입구 후속 수정 뒤 최종 결과로 갱신 예정 |
 | 기존 기능 포함 로컬 비DB 회귀 | u1/u3/u4b/u5b 태그. contract-model 293/293, Core 406/407, Realtime 857/858, test-support 21/21. 총 1577/1579 통과. 아래 기존 Windows 종료 시간 시험 2건 실패 |
 | DB·리눅스·스켈레톤 | 로컬 Docker를 재시작/정리하지 않았다. 전체 비DB 회귀 중 기존 ScenarioServiceTest의 DB 태그 누락으로 Testcontainers 자동 호출이 발생해 그 실행을 중단했다. DB 검증은 GitHub Actions에서 진행 |
 
@@ -40,6 +41,8 @@
 #### 기존 Windows 종료 시간 시험
 
 `CoreStartupSequenceTest`와 Realtime `DrainingLifecycleTest`의 `aStuckDatabaseCannotStretchTheShutdownThroughTheLastSnapshot`가 최종 로컬 회귀에서 각각 4.665초/4.558초로 3초 제한을 넘겼다. 시험·DrainingLifecycle·MetricSnapshotJob·SystemLoad는 기준 main과 같다. 동일 JDK의 새 JVM에서 OperatingSystemMXBean.getCpuLoad() 첫 호출을 별도 측정한 결과 약 2.479초, 후속 호출은 0.1ms 미만이었다. 시험은 DB 읽기 제한 2초 뒤 이 첫 측정까지 포함하므로 실패와 부합하지만, 실패 당시 구간별 계측이 없어 원인을 단정하지 않는다. 단언과 운영 구현을 바꾸지 않고 Linux CI에서 재확인한다.
+
+첫 Linux CI(38534163447)에서는 위 종료 시간 시험 두 건이 모두 통과했다. 대신 새 비유일 부분 인덱스와 공급자 공개 메서드 입력 타입이 기존 계약 검사에 걸렸다. 새 V7 인덱스를 같은 조회를 지원하는 일반 복합 인덱스로 바꾸고, 발화는 기존 PracticeInstruction 입구로 전달하도록 수정했다. 기존 시험 단언과 허용 목록은 유지한다.
 
 #### U6 인계
 

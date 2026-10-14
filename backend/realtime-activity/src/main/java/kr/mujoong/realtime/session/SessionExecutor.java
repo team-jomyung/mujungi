@@ -1411,7 +1411,8 @@ public final class SessionExecutor {
             transcripts.aiFinal("", false, services.clock().now());
             pendingPracticeSpeech = speech;
             practiceHold = false;
-            ProviderRequestFactory.InstructionsCorrect request = services.requests().practiceSpeech(speech);
+            ProviderRequestFactory.InstructionsCorrect request = services.requests().practiceInstruction(
+                    kr.mujoong.realtime.voice.PracticeInstruction.forSpeech(speech));
             ProviderSession provider = providerSession;
             long generation = outputGeneration.get();
             enqueuePracticeProvider("provider-practice-speech-", () -> {

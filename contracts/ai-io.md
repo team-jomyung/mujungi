@@ -224,7 +224,7 @@ C10 partnerRoleText는 모델에 받지 않고 Core의 고정 역할 지시로 �
 
 ## 8. U5b 연습 발화 · Cue · 재생 증거
 
-실제 연결은 `RuntimePracticeExtension` → `PracticeOutput.speak(PracticeSpeech)` → `ProviderRequestFactory.practiceSpeech`다. `PracticeSpeech`는 서버 내부에서만 `correlationId` · `scenarioId` · `generation` · `kind` · `partnerRole` · `text`를 가진다. kind는 `SCENARIO` · `HELP_QUESTION` · `CUE`이며, 상대 역할은 200자 이하, 발화는 10201자 이하이고 빈 값과 허용하지 않은 제어 문자를 거절한다. 문자열 표현에는 본문을 넣지 않는다.
+실제 연결은 `RuntimePracticeExtension` → `PracticeOutput.speak(PracticeSpeech)` → `PracticeInstruction.forSpeech` → 기존 `ProviderRequestFactory.practiceInstruction` 입구다. `PracticeSpeech`는 서버 내부에서만 `correlationId` · `scenarioId` · `generation` · `kind` · `partnerRole` · `text`를 가진다. kind는 `SCENARIO` · `HELP_QUESTION` · `CUE`이며, 상대 역할은 200자 이하, 발화는 10201자 이하이고 빈 값과 허용하지 않은 제어 문자를 거절한다. 공급자 팩토리 앞에서 식별자를 버리고 역할·발화 JSON과 고정 템플릿만 남긴다. 기존 자유 지시문 생성자의 500자 제한은 유지하고, 타입 검증을 통과한 발화 템플릿만 JSON 이스케이프를 포함한 64000자 상한을 쓴다. 문자열 표현에는 본문을 넣지 않는다.
 
 | 경계 | 실제 입력 · 출력과 검사 |
 |---|---|

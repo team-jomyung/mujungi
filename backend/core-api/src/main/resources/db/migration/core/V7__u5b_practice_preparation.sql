@@ -17,4 +17,4 @@ CREATE TABLE core.core_practice_preparation (
  CHECK ((status = 'READY') = (first_scenario_id IS NOT NULL))
 );
 CREATE INDEX core_practice_preparation_unreconciled_idx
- ON core.core_practice_preparation(created_at) WHERE status = 'READY' AND exposure_reconciled_at IS NULL;
+ ON core.core_practice_preparation(status, exposure_reconciled_at, created_at);
