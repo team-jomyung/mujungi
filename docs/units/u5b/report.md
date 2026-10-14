@@ -1,8 +1,8 @@
 # U5b 구현 · 통합 실행 기록
 
-## 2026-10-14 통합 인수 진행
+## 2026-10-14 통합 인수 완료
 
-`bdf47ec`의 독립 구현을 보존한 채 `codex/u5b-integration`에서 실제 연결을 구현한다. 아래 기존 기록은 독립 구현 당시의 실행 증거다. 현재 설계와 사용자 확정 정책은 design.md 9절을 따른다. AI-DLC 엔진이 없는 환경에서 다른 작업자의 승인 기록을 이어 쓰지 않았다.
+`bdf47ec`의 독립 구현을 보존한 채 `codex/u5b-integration`에서 실제 연결을 구현했다. 코드 검증 기준은 `191c93a`, 인수 PR은 [#12](https://github.com/team-jomyung/mujungi/pull/12)다. 아래 기존 기록은 독립 구현 당시의 실행 증거다. 현재 설계와 사용자 확정 정책은 design.md 9절을 따른다. AI-DLC 엔진이 없는 환경에서 다른 작업자의 승인 기록을 이어 쓰지 않았다.
 
 ### 구현
 
@@ -18,11 +18,13 @@
 | 프런트 전체 | 59파일 835건 통과, 줄 3102/3143 = 98.69% |
 | 프런트 U5b | 3파일 32건 통과, 범위 줄 82/82 = 100% |
 | 프런트 정적·빌드 | typecheck · ESLint · Next production build 통과 |
-| Core U5b CI | 44건 통과(비DB 36 + DB 8), 줄 233/238 = 97.90%, run 38534201993 |
-| Realtime U5b 비DB | 70건 통과, 정지 겹침·처리 실패·원래 판정 시한 정산 포함 |
-| Realtime U5b CI | 147건 통과, 줄 843/872 = 96.67%, run 38534201993. 공급자 입구 후속 수정 뒤 최종 결과로 갱신 예정 |
+| Core U5b CI | 44건 통과(비DB 36 + DB 8), 줄 233/238 = 97.90%, run 38535259816 |
+| Realtime U5b CI | 148건 통과, 줄 863/892 = 96.75%, run 38535259816. 정지 겹침·처리 실패·원래 판정 시한 정산·공급자 입력 제한 포함 |
+| 최종 Linux 백엔드 전체 | contract-model 294, Core 872, Realtime 1168, test-support 27. 총 2361건 통과, 실패·건너뜀 0건, PR run 38535264330 |
+| PR CI | [38535264330](https://github.com/team-jomyung/mujungi/actions/runs/38535264330) 성공: backend · u5b-scope · frontend · 의존성 · secrets · tools · infra-validate · images · ci-gate |
 | 기존 기능 포함 로컬 비DB 회귀 | u1/u3/u4b/u5b 태그. contract-model 293/293, Core 406/407, Realtime 857/858, test-support 21/21. 총 1577/1579 통과. 아래 기존 Windows 종료 시간 시험 2건 실패 |
-| DB·리눅스·스켈레톤 | 로컬 Docker를 재시작/정리하지 않았다. 전체 비DB 회귀 중 기존 ScenarioServiceTest의 DB 태그 누락으로 Testcontainers 자동 호출이 발생해 그 실행을 중단했다. DB 검증은 GitHub Actions에서 진행 |
+| 로컬 Docker | 재시작/정리하지 않았다. 전체 비DB 회귀 중 기존 ScenarioServiceTest의 DB 태그 누락으로 Testcontainers 자동 호출이 발생해 그 실행을 중단했다. 최종 DB 검증은 GitHub Actions에서 통과 |
+| 수동 스켈레톤 | [38535259816, attempt 2, job 115759916604](https://github.com/team-jomyung/mujungi/actions/runs/38535259816/job/115759916604) 성공. A1~A4 · B · C · P1~P3 · T, `RESULT PASS rc=0 total=508s` |
 
 프런트 RED는 21건 중 13실패·8통과였고 실제 연결 후 기존 화면 포함 76건 통과, 최종 전체 835건을 확인했다. DB/삭제·정산·복구는 새 타입/API가 없는 상태의 컴파일 실패를 먼저 확인한 뒤 구현했다. Core 최초 실행은 준비 중 코드가 작성되어 RED 증거를 확보하지 못했으므로 실패 확인으로 계수하지 않는다.
 
@@ -36,13 +38,17 @@
 
 ### 남은 일
 
-최종 JVM 회귀·DB/스키마/범위 커버리지 CI 확인, PR 및 수동 스켈레톤 실행 결과 기록. 실제 장치 음성·Cue 내용 품질·실공급자·부하 성능은 이 환경에서 실행하지 않았고 후속 검증 대상이다.
+실제 장치 음성·Cue 내용 품질·실공급자·부하 성능은 이 환경에서 실행하지 않았고 후속 검증 대상이다. Core V5 → V6 → V7 순서 확인과 병합은 사람이 한다.
 
 #### 기존 Windows 종료 시간 시험
 
-`CoreStartupSequenceTest`와 Realtime `DrainingLifecycleTest`의 `aStuckDatabaseCannotStretchTheShutdownThroughTheLastSnapshot`가 최종 로컬 회귀에서 각각 4.665초/4.558초로 3초 제한을 넘겼다. 시험·DrainingLifecycle·MetricSnapshotJob·SystemLoad는 기준 main과 같다. 동일 JDK의 새 JVM에서 OperatingSystemMXBean.getCpuLoad() 첫 호출을 별도 측정한 결과 약 2.479초, 후속 호출은 0.1ms 미만이었다. 시험은 DB 읽기 제한 2초 뒤 이 첫 측정까지 포함하므로 실패와 부합하지만, 실패 당시 구간별 계측이 없어 원인을 단정하지 않는다. 단언과 운영 구현을 바꾸지 않고 Linux CI에서 재확인한다.
+`CoreStartupSequenceTest`와 Realtime `DrainingLifecycleTest`의 `aStuckDatabaseCannotStretchTheShutdownThroughTheLastSnapshot`가 최종 로컬 회귀에서 각각 4.665초/4.558초로 3초 제한을 넘겼다. 시험·DrainingLifecycle·MetricSnapshotJob·SystemLoad는 기준 main과 같다. 동일 JDK의 새 JVM에서 OperatingSystemMXBean.getCpuLoad() 첫 호출을 별도 측정한 결과 약 2.479초, 후속 호출은 0.1ms 미만이었다. 시험은 DB 읽기 제한 2초 뒤 이 첫 측정까지 포함하므로 실패와 부합하지만, 실패 당시 구간별 계측이 없어 원인을 단정하지 않는다. 단언과 운영 구현을 바꾸지 않았으며 최종 Linux PR CI에서는 두 시험 모두 통과했다.
 
 첫 Linux CI(38534163447)에서는 위 종료 시간 시험 두 건이 모두 통과했다. 대신 새 비유일 부분 인덱스와 공급자 공개 메서드 입력 타입이 기존 계약 검사에 걸렸다. 새 V7 인덱스를 같은 조회를 지원하는 일반 복합 인덱스로 바꾸고, 발화는 기존 PracticeInstruction 입구로 전달하도록 수정했다. 기존 시험 단언과 허용 목록은 유지한다.
+
+#### 수동 CI의 간헐 실패
+
+같은 `191c93a`의 수동 run 38535259816 첫 실행은 기존 Realtime 시험 두 곳에서 대기 실패가 발생했다. backend 작업의 `SessionLifecycleIT.aFullTurnThenGuardianStopEndsConfirmedWithTheClosingSequenceOnce`는 DEVICE_ACK 제한 2000ms를 2001ms에 넘겨 PROVIDER_UNAVAILABLE로 끝났다. 이 시험과 시작 환경은 기준 main과 같고 FREE_TALK 경로는 U5b 확장을 실행하지 않는다. skeleton A1의 `RealtimeDeletionHandlerIT.aFileThatCannotBeDeletedFailsTheAttemptAndTheRetryFinishesWithTheFullCount`는 원음 파일 두 개 생성을 기다리다 실패했다. 같은 HEAD의 PR backend에서는 두 시험 모두 통과했다. 정확한 지연 원인은 확정하지 않았고 기존 단언·시간 제한은 변경하지 않았다. skeleton만 재실행한 attempt 2는 A1 전체 회귀를 포함해 508초에 통과했다.
 
 #### U6 인계
 
