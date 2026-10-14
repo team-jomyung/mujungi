@@ -85,6 +85,28 @@ public final class InMemoryTransitions implements SessionTransitions {
         return Optional.of(next);
     }
 
+    /** U4b: 전이와 함께 쓴 값(DECLINED 전사 삭제 · 일시정지)을 기록한다. 이긴 전이만 남는다. */
+    @Override
+    public synchronized Optional<ActivitySessionRow> transition(UUID sessionId, SessionStatus from, SessionStatus to,
+            SessionChange change, Origin origin, String traceId, Extras extras) {
+        Optional<ActivitySessionRow> row = transition(sessionId, from, to, change, origin, traceId);
+        if (row.isPresent() && extras != null) {
+            extrasApplied.add(new AppliedExtras(sessionId, to, extras));
+        }
+        return row;
+    }
+
+    /** U4b: 이긴 전이와 함께 쓴 값. */
+    public record AppliedExtras(UUID sessionId, SessionStatus to, Extras extras) {
+    }
+
+    private final List<AppliedExtras> extrasApplied = new ArrayList<>();
+
+    /** U4b: 이긴 전이와 함께 쓴 값들. */
+    public synchronized List<AppliedExtras> extrasApplied() {
+        return List.copyOf(extrasApplied);
+    }
+
     @Override
     public synchronized ActivitySessionRepository.MultiOriginTransition transitionFromAny(UUID sessionId,
             Set<SessionStatus> origins, SessionStatus to, Function<SessionStatus, SessionChange> changeFor,

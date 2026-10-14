@@ -201,6 +201,7 @@ class DeviceGatewayU3IT {
         WsEnvelope start = device.await(WsMessageType.START_SESSION, WAIT);
         device.ack(start.opId(), sessionId);
         device.deviceReady(sessionId, true, true);
+        env.join(sessionId);
         awaitStatus(sessionId, SessionStatus.ACTIVE);
         int statusVersion = session(sessionId).statusVersion();
 
@@ -319,6 +320,7 @@ class DeviceGatewayU3IT {
         WsEnvelope start = device.await(WsMessageType.START_SESSION, WAIT);
         device.ack(start.opId(), sessionId);
         device.deviceReady(sessionId, true, true);
+        env.join(sessionId);
         awaitStatus(sessionId, SessionStatus.ACTIVE);
         device.await(envelope -> envelope.payload() instanceof SessionState state && state.view() == View.LISTENING, WAIT);
         return sessionId;

@@ -165,6 +165,7 @@ class RealtimeMetricsScrapeIT {
         WsEnvelope command = device.await(WsMessageType.START_SESSION, WAIT);
         device.ack(command.opId(), sessionId);
         device.deviceReady(sessionId, true, true);
+        env.join(sessionId);
         awaitTrue(() -> status(sessionId) == SessionStatus.ACTIVE, "ACTIVE");
         // LISTENING은 입력 수락을 연 뒤에 나간다 — 그 뒤의 프레임은 버려지지 않는다
         device.await(envelope -> envelope.payload() instanceof SessionState state && state.view() == View.LISTENING,

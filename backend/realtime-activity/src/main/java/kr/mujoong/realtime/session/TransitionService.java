@@ -11,6 +11,7 @@ import kr.mujoong.contract.status.SessionStatus;
 import kr.mujoong.contract.time.MujoongClock;
 import kr.mujoong.realtime.common.db.DbRetry;
 import kr.mujoong.realtime.log.AsyncRecorder;
+import kr.mujoong.realtime.log.TranscriptRepository;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -30,6 +31,7 @@ public class TransitionService implements SessionTransitions {
     public static final String TRANSITION_IGNORED = "TRANSITION_IGNORED";
 
     private final ActivitySessionRepository sessions;
+    private final TranscriptRepository transcripts;
     private final SessionStateEmitter emitter;
     private final TransactionTemplate transactions;
     private final DbRetry dbRetry;
@@ -39,6 +41,7 @@ public class TransitionService implements SessionTransitions {
 
     public TransitionService(
             ActivitySessionRepository sessions,
+            TranscriptRepository transcripts,
             SessionStateEmitter emitter,
             PlatformTransactionManager transactionManager,
             DbRetry dbRetry,
@@ -46,6 +49,7 @@ public class TransitionService implements SessionTransitions {
             JsonCodec json,
             MujoongClock clock) {
         this.sessions = Objects.requireNonNull(sessions, "sessions");
+        this.transcripts = Objects.requireNonNull(transcripts, "transcripts");
         this.emitter = Objects.requireNonNull(emitter, "emitter");
         this.transactions = new TransactionTemplate(Objects.requireNonNull(transactionManager, "transactionManager"));
         this.dbRetry = Objects.requireNonNull(dbRetry, "dbRetry");
@@ -57,6 +61,17 @@ public class TransitionService implements SessionTransitions {
     @Override
     public Optional<ActivitySessionRow> transition(UUID sessionId, SessionStatus from, SessionStatus to,
             SessionChange change, Origin origin, String traceId) {
+        return transition(sessionId, from, to, change, origin, traceId, Extras.none());
+    }
+
+    /**
+     * U4b: 전이와 같은 트랜잭션에서 기술 일시정지를 SessionStateChanged에 싣고(BR7.2), DECLINED면 그 세션의 전사 행을 지운다(BR3.2).
+     * 진 전이(0행)는 아무것도 지우지 않는다.
+     */
+    @Override
+    public Optional<ActivitySessionRow> transition(UUID sessionId, SessionStatus from, SessionStatus to,
+            SessionChange change, Origin origin, String traceId, Extras extras) {
+        Objects.requireNonNull(extras, "extras");
         if (!TransitionTable.allowed(from, to)) {
             ignored(sessionId, from, to, "NOT_ALLOWED");
             return Optional.empty();
@@ -65,7 +80,12 @@ public class TransitionService implements SessionTransitions {
                 () -> transactions.execute(status -> {
                     Instant now = clock.now();
                     Optional<ActivitySessionRow> row = sessions.transition(sessionId, from, to, now, change);
-                    row.ifPresent(value -> emitter.write(value, now, traceId));
+                    row.ifPresent(value -> {
+                        if (extras.eraseTranscripts()) {
+                            transcripts.deleteBySession(sessionId);
+                        }
+                        emitter.write(value, now, traceId, extras.technicalPause());
+                    });
                     return row;
                 }));
         if (changed == null || changed.isEmpty()) {

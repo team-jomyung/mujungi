@@ -10,6 +10,7 @@
 // 따라 읽어 "가짜 공급자가 받은 입력 해시 = 시뮬레이터가 보낸 해시", "기기가 받은 0x02 해시 = 가짜 공급자가 보낸 출력 해시"를 단언한다.
 // U3(편차 (aa)): session.response.cancel이 오면 그 응답의 남은 출력 조각을 보내지 않고 기록하며(끼어들기 · 종료 의도), 
 // session.instructions.correct는 문장 SHA-256 · 길이만 기록한다. --confidence를 주면 아이 전사 확정에 confidence를 싣는다(U3-J17).
+// U4b(편차 (U4b-a)): session.response.create는 받은 사실만 기록하고, 턴 종류 join은 참여 확인 대답("응")만 보낸다(AI 출력 없음).
 //
 // 쓰는 법
 //   node tools/fake-provider/server.mjs [--host 127.0.0.1] [--port 8090] [--scenario ok] [--turns normal,forbidden]
@@ -40,7 +41,8 @@ export const USAGE = `가짜 공급자 서버 (J110 선 형식, 시험 전용)
   --port <번호>             들을 포트 (기본 8090, 0이면 빈 포트)
   --scenario <목록>         연결 시나리오, 쉼표 목록이면 n번째 연결에 n번째 값(끝 값 반복)
                             ok | no-started | delayed | refuse | silent (기본 ok)
-  --turns <목록>            입력 프레임 묶음마다 낼 턴 normal | forbidden (기본 normal,forbidden)
+  --turns <목록>            입력 프레임 묶음마다 낼 턴 normal | forbidden | join (기본 normal,forbidden)
+                            join은 참여 확인 대답("응")만 보낸다(U4b, AI 출력 없음)
   --frames-per-turn <n>     턴 하나를 여는 입력 프레임 수 (기본 ${DEFAULTS.framesPerTurn})
   --started-delay-ms <ms>   delayed 시나리오의 session.started 지연 (기본 ${DEFAULTS.startedDelayMs})
   --response-delay-ms <ms>  아이 전사 확정 뒤 AI 출력까지 지연 (기본 ${DEFAULTS.responseDelayMs})
@@ -225,6 +227,10 @@ export async function startFakeProvider({
             textLength: typeof message.text === "string" ? message.text.length : 0,
           });
           break;
+        case "session.response.create":
+          // U4b(편차 (U4b-a) · U4b-J3): 참여 확인 · 확인 질문 뒤 발언권 반환 — 받은 사실만 기록한다
+          record({ ev: "session.response.create", conn });
+          break;
         case "session.close":
           record({
             ev: "session.close",
@@ -341,7 +347,7 @@ export async function startFakeProvider({
         outputBytes: built.pcm.length,
         outputSha256: sha256Hex(built.pcm),
         childTextSha256: textSha256(built.script.childText),
-        aiTextSha256: textSha256(built.script.aiText),
+        aiTextSha256: built.script.aiText === null ? null : textSha256(built.script.aiText),
       });
       state.turnHash = new RunningHash();
       state.turnFrames = 0;

@@ -66,8 +66,9 @@ class SessionExecutorTest {
         h.activate();
 
         assertThat(h.executor.status()).isEqualTo(SessionStatus.ACTIVE);
+        // U4b(FR11.3 활성화 경로): 참여 확인(WAITING_CHILD)을 거친다
         assertThat(h.transitions.applied()).extracting(InMemoryTransitions.Applied::to)
-                .containsExactly(SessionStatus.DEVICE_ACK, SessionStatus.ACTIVE);
+                .containsExactly(SessionStatus.DEVICE_ACK, SessionStatus.WAITING_CHILD, SessionStatus.ACTIVE);
         assertThat(h.link.sent(SessionState.class)).extracting(SessionState::view).containsExactly(View.LISTENING);
         assertThat(h.executor.relay().isAccepting()).isTrue();
         assertThat(h.executor.timers().isArmed(SessionTimers.Kind.DEVICE_ACK)).isFalse();
@@ -85,7 +86,8 @@ class SessionExecutorTest {
         h.provider.last().emit(new ProviderEvent.Started("late"));
         h.drain();
 
-        assertThat(h.executor.status()).isEqualTo(SessionStatus.ACTIVE);
+        // U4b(FR11.3 활성화 경로): 둘 다 오면 참여 확인(WAITING_CHILD)으로 간다
+        assertThat(h.executor.status()).isEqualTo(SessionStatus.WAITING_CHILD);
     }
 
     @Test
@@ -328,7 +330,8 @@ class SessionExecutorTest {
         CompletableFuture<EndOutcome> stop = new CompletableFuture<>();
         CompletableFuture<EndOutcome> consent = new CompletableFuture<>();
         h.mailbox.putSafety(new SessionMailbox.EndRequested(UUID.randomUUID(), EndRequestReason.GUARDIAN_STOP, stop));
-        h.mailbox.putSafety(new SessionMailbox.EndRequested(UUID.randomUUID(), EndRequestReason.CONSENT_WITHDRAWN,
+        // U4b(FR1.4): CONSENT_WITHDRAWN은 응답표에 들어왔다. 응답표 밖 사유로 거절을 본다
+        h.mailbox.putSafety(new SessionMailbox.EndRequested(UUID.randomUUID(), EndRequestReason.UNRECOGNIZED,
                 consent));
         h.drain();
 

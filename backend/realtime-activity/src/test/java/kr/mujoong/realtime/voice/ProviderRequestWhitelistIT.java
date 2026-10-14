@@ -60,6 +60,8 @@ class ProviderRequestWhitelistIT {
     /** U3(편차 (aa)): 응답 취소는 공급자가 준 응답 id만, 지시 교정은 고정 문장만 싣는다. */
     private static final Set<String> RESPONSE_CANCEL_KEYS = Set.of("type", "responseId");
     private static final Set<String> INSTRUCTIONS_CORRECT_KEYS = Set.of("type", "text");
+    /** U4b(편차 (U4b-a)): 응답 생성 요청은 type뿐이다. */
+    private static final Set<String> RESPONSE_CREATE_KEYS = Set.of("type");
     private static final Set<String> FORBIDDEN_FIELDS = Set.of("judgmentCriteria", "knownContent", "question",
             "guardianId", "childId", "deviceId", "sessionId", "email", "consentSnapshot", "practice", "goals");
 
@@ -74,6 +76,7 @@ class ProviderRequestWhitelistIT {
             WsEnvelope start = device.await(WsMessageType.START_SESSION, WAIT);
             device.ack(start.opId(), sessionId);
             device.deviceReady(sessionId, true, true);
+            env.join(sessionId);
             awaitTrue(() -> env.app.bean(ActivitySessionRepository.class).find(sessionId)
                     .map(row -> row.status() == SessionStatus.ACTIVE).orElse(false), "ACTIVE");
             // LISTENING은 입력 수락을 연 뒤에 나간다. 실행기는 DB에 ACTIVE를 쓴 다음 중계를 열므로 DB의 ACTIVE만 보고 보내면
@@ -99,6 +102,8 @@ class ProviderRequestWhitelistIT {
                     case "session.close" -> assertThat(SESSION_CLOSE_KEYS).containsAll(keys);
                     case "session.response.cancel" -> assertThat(RESPONSE_CANCEL_KEYS).containsAll(keys);
                     case "session.instructions.correct" -> assertThat(INSTRUCTIONS_CORRECT_KEYS).containsAll(keys);
+                    // U4b(편차 (U4b-a)): 참여 확인 뒤 발언권 반환은 type만 싣는다
+                    case "session.response.create" -> assertThat(RESPONSE_CREATE_KEYS).containsAll(keys);
                     default -> throw new AssertionError("허용 밖 요청 type: " + type);
                 }
             }
@@ -128,6 +133,7 @@ class ProviderRequestWhitelistIT {
         assertThat(components(ProviderRequestFactory.SessionClose.class)).containsExactly("type");
         assertThat(components(ProviderRequestFactory.ResponseCancel.class)).containsExactly("type", "responseId");
         assertThat(components(ProviderRequestFactory.InstructionsCorrect.class)).containsExactly("type", "text");
+        assertThat(components(ProviderRequestFactory.ResponseCreate.class)).containsExactly("type");
         for (Class<?> type : List.of(ProviderRequestFactory.SessionStart.class,
                 ProviderRequestFactory.ChildContextData.class, ProviderRequestFactory.AudioSpec.class,
                 ProviderRequestFactory.InputAudioAppend.class, ProviderRequestFactory.SessionClose.class,
@@ -145,7 +151,9 @@ class ProviderRequestWhitelistIT {
         assertThat(Arrays.stream(ProviderRequestFactory.class.getDeclaredMethods())
                 .filter(method -> java.lang.reflect.Modifier.isPublic(method.getModifiers()))
                 .flatMap(method -> Arrays.stream(method.getParameterTypes())).map(Class::getSimpleName))
-                .allMatch(name -> Set.of("ChildContext", "byte[]", "ProviderResponseId", "Correction").contains(name));
+                // U4b: 연습 확장점 지시문은 검사된 값 타입(PracticeInstruction)으로만 받는다(BR10.4)
+                .allMatch(name -> Set.of("ChildContext", "byte[]", "ProviderResponseId", "Correction",
+                        "PracticeInstruction").contains(name));
     }
 
     @Test

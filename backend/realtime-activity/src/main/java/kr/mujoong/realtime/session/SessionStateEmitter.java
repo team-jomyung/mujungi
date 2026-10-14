@@ -33,12 +33,23 @@ public class SessionStateEmitter {
         this.metrics = Objects.requireNonNull(metrics, "metrics");
     }
 
-    /** 전이 트랜잭션 안에서 SessionStateChanged를 쓴다. */
+    /** 전이 트랜잭션 안에서 SessionStateChanged를 쓴다(기술 일시정지 없음). */
     public void write(ActivitySessionRow row, Instant at, String traceId) {
+        write(row, at, traceId, null);
+    }
+
+    /**
+     * 전이 트랜잭션 안에서 SessionStateChanged를 쓴다. U4b(BR7.2): CLOSING도 행의 end_reason(마무리 사유)을 그대로 싣고, 전이 시점에
+     * 기술 일시정지 중이면 technicalPause를 싣는다.
+     *
+     * @param technicalPause 전이 시점의 기술 일시정지(없으면 null)
+     */
+    public void write(ActivitySessionRow row, Instant at, String traceId,
+            SessionStateChanged.TechnicalPause technicalPause) {
         Objects.requireNonNull(row, "row");
         SessionStateChanged payload = new SessionStateChanged(row.id(), row.guardianId(), row.childId(),
                 row.activityType(), row.status(), (long) row.statusVersion(), row.endReason(), row.failureCode(),
-                row.confirmed(), null, at);
+                row.confirmed(), technicalPause, at);
         outbox.write(payload, row.guardianId(), at, traceId);
     }
 

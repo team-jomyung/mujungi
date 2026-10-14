@@ -76,6 +76,7 @@ class SessionLifecycleIT {
         device.ack(start.opId(), sessionId);
         awaitStatus(sessionId, SessionStatus.DEVICE_ACK);
         device.deviceReady(sessionId, true, true);
+        env.join(sessionId);
         awaitStatus(sessionId, SessionStatus.ACTIVE);
         device.await(envelope -> envelope.payload() instanceof SessionState state && state.view() == View.LISTENING,
                 WAIT);
@@ -132,8 +133,9 @@ class SessionLifecycleIT {
         assertThat(device.received(WsMessageType.PLAY_APPROVED_CONTENT)).hasSize(1);
         assertThat(device.received(WsMessageType.CLOSE_TRANSPORT)).hasSize(1);
         assertThat(device.outputFrames()).isEqualTo(framesBefore);
+        // U4b(FR11.3 · BR3.1): 마무리 인사 말풍선 한 행이 더해져 AI 행은 셋(턴 · 마무리 인사 · 늦은 말)
         awaitTrue(() -> transcripts(sessionId).stream().filter(t -> t.speaker()
-                == kr.mujoong.realtime.log.TranscriptEntry.Speaker.AI).count() == 2, "늦은 AI 행");
+                == kr.mujoong.realtime.log.TranscriptEntry.Speaker.AI).count() == 3, "늦은 AI 행");
         assertThat(transcripts(sessionId).get(transcripts(sessionId).size() - 1).approvedForDisplay()).isFalse();
         assertThat(logs.lines()).noneMatch(line -> line.contains("나도 공룡 좋아해") || line.contains(env.deviceToken));
     }
@@ -253,6 +255,7 @@ class SessionLifecycleIT {
         WsEnvelope start = device.await(WsMessageType.START_SESSION, WAIT);
         device.ack(start.opId(), sessionId);
         device.deviceReady(sessionId, true, true);
+        env.join(sessionId);
         awaitStatus(sessionId, SessionStatus.ACTIVE);
         return sessionId;
     }

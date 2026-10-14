@@ -79,29 +79,30 @@ class SessionExecutorReviewU3Test {
 
     // ------------------------------------------------------------------ 3 오판 뒤 복구
 
+    /**
+     * U4b(FR11.3 · FD-Q3 · BR4.2): 명확한 종료 의도는 곧바로 CLOSING(CHILD_STOP)이다. U3의 '막고 ACTIVE 유지 → 계속 표현이면 해제' 경로가
+     * 없어졌으므로, 그 뒤 계속 표현을 해도 출력이 다시 열리지 않는다(해제 사건 없음).
+     */
     @Test
     void aChildWhoKeepsTalkingAfterAStopIntentLiftsTheOutputBlockForNewResponsesOnly() {
         h.activate();
         done("i1", "그만할래");
         assertThat(eventTypes()).contains(SessionExecutor.EVENT_CHILD_STOP_INTENT);
+        assertThat(h.executor.status()).isEqualTo(SessionStatus.CLOSING);
 
-        // 막힌 동안의 응답은 첫 조각에서 취소되고 기기로 가지 않는다
+        // 종료 확정 뒤의 응답은 기기로 가지 않는다(BR4.5)
         emitComplete("r1", "그래 알았어");
         h.advance(Duration.ofMillis(800));
         assertThat(h.link.outputs()).isEmpty();
 
-        // 아이가 적극적으로 대화를 이어 간다 → 막힘을 푼다(취소한 응답은 그대로 버린다, 2차 리뷰 6: 계속 표현일 때만)
         done("i2", "아니야 공룡 얘기 더 하자");
-        assertThat(eventTypes()).contains(SessionExecutor.EVENT_CHILD_STOP_LIFTED);
-        h.provider.last().emit(new ProviderEvent.OutputAudioDelta("r1", new byte[4_800]));
-        h.drain();
-        h.advance(Duration.ofMillis(800));
-        assertThat(h.link.outputs()).as("취소한 응답의 늦은 조각은 여전히 버린다").isEmpty();
-
+        assertThat(eventTypes()).doesNotContain(SessionExecutor.EVENT_CHILD_STOP_LIFTED);
         emitComplete("r2", "티라노는 아주 컸어");
         h.advance(Duration.ofMillis(800));
-        assertThat(h.link.outputs()).hasSize(1);
-        assertThat(h.executor.status()).isEqualTo(SessionStatus.ACTIVE);
+        assertThat(h.link.outputs()).isEmpty();
+        assertThat(h.executor.status()).isEqualTo(SessionStatus.CLOSING);
+        assertThat(h.transitions.find(h.sessionId).orElseThrow().endReason())
+                .isEqualTo(kr.mujoong.contract.status.EndReason.CHILD_STOP);
     }
 
     @Test

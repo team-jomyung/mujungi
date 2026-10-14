@@ -237,6 +237,7 @@ class DeviceGatewayIT {
         WsEnvelope command = device.await(WsMessageType.START_SESSION, WAIT);
         device.ack(command.opId(), sessionId);
         device.deviceReady(sessionId, true, true);
+        env.join(sessionId);
         awaitTrue(() -> env.app.bean(ActivitySessionRepository.class).find(sessionId)
                 .map(row -> row.status() == SessionStatus.ACTIVE).orElse(false), "ACTIVE");
         env.provider.emitTurn("item-1", "안녕", "resp-1", "안녕 반가워", List.of(new byte[4800]));

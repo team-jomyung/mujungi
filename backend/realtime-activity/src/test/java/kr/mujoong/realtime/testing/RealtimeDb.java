@@ -33,6 +33,8 @@ public final class RealtimeDb implements AutoCloseable {
 
     /** 외래 키 순서(자식 → 부모)로 비울 표. */
     private static final List<String> TABLES = List.of(
+            // U4b V3: 결과 스냅숏은 세션 행을 가리키므로 먼저 비운다
+            "realtime.realtime_result_input_snapshot",
             "realtime.realtime_transcript",
             "realtime.realtime_session_event",
             "realtime.realtime_session_stop_expression",

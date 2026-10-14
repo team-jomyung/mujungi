@@ -33,8 +33,12 @@ public record SessionChange(
 
     /** V1 열 길이 {@code gpt_live_session_id varchar(255)}. */
     public static final int MAX_PROVIDER_SESSION_ID_LENGTH = 255;
-    /** U3 종료 세부 형식(대문자 · 밑줄, 실패 코드 이름과 같은 모양). */
-    private static final java.util.regex.Pattern END_DETAIL = java.util.regex.Pattern.compile("^[A-Z][A-Z0-9_]{0,63}$");
+    /**
+     * 종료 세부 형식(대문자 · 밑줄, 실패 코드 이름과 같은 모양). U4b(BR1.4): ENDED_UNCONFIRMED는 처음 사유와 그 세부를 '/'로 이어 적는다
+     * (예: {@code CHILD_STOP/PRACTICE_COMPLETED}).
+     */
+    private static final java.util.regex.Pattern END_DETAIL =
+            java.util.regex.Pattern.compile("^[A-Z][A-Z0-9_]{0,63}(/[A-Z][A-Z0-9_]{0,63})?$");
 
     private static final SessionChange NONE = new SessionChange(null, null, null, null, null, null, null, null, null,
             null);

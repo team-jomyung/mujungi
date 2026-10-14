@@ -22,7 +22,12 @@
 |---|---|---|---|---|
 | `mujoong.timing.session.preparing-timeout` | `10s` | core-api | Core가 REQUESTED 사본을 만든 시각 → PREPARING 이벤트가 없으면 로컬 FAILED + CORE_ABANDONED 취소 | BR6.12 ① · B5 |
 | `mujoong.timing.session.device-ack-timeout` | `20s` | realtime | START_SESSION 송신을 시도한 시각 → ACK · DEVICE_READY(OK) · 공급자 `session.started`가 모두 확인돼 ACTIVE가 되지 않으면 FAILED. ACK 또는 DEVICE_READY가 빠졌으면 DEVICE_NO_ACK, 둘은 왔는데 `session.started`가 없으면 PROVIDER_UNAVAILABLE [편차 (h)] | BR6.12 ② · NFR6 · B7 · J59(h) |
-| `mujoong.timing.session.closing-confirm` | `30s` | realtime | CLOSING 전이를 이긴 커밋 시각 → VOICE_SESSION_CLOSED가 없으면 ENDED_UNCONFIRMED. 끊김보다 우선 | BR6.12 ③ · B11 |
+| `mujoong.timing.session.closing-confirm` | `30s` | realtime | CLOSING 전이를 이긴 커밋 시각 → VOICE_SESSION_CLOSED가 없으면 ENDED_UNCONFIRMED. 끊김보다 우선. U4b: DECLINED 뒤 마무리 인사 대기 상한으로도 쓴다 | BR6.12 ③ · B11 · U4b-J8 |
+| `mujoong.timing.session.join-wait` | `20s` | realtime | 시작 안내(참여 질문) 재생 완료 보고를 서버가 받은 시각 → 응답 없으면 재안내(U4b). 기술 일시정지 동안 멈춘다 | 계약 7절 · U4b-J4 · U4b-J5 |
+| `mujoong.timing.session.join-wait-after-reprompt` | `20s` | realtime | 재안내 · 되묻기 · 대안 재생 완료 보고 수신 → 응답 없으면 재안내(아직 안 썼으면) 또는 DECLINED(U4b) | 계약 7절 · U4b-J4 |
+| `mujoong.timing.session.silence-warning` | `4m` | realtime | ACTIVE 공백 누적(기기 재생 · 서버 출력 대기 · 기술 일시정지 · 확인 질문 대기 동안 멈춤) → 12 경고 + SILENCE_WARNING 1회(U4b) | 계약 7절 · U4b-R6 · U4b-J10 · U4b-J11 |
+| `mujoong.timing.session.silence-end` | `6m` | realtime | 같은 공백 누적 → CLOSING(SILENCE)(U4b) | 계약 7절 · U4b-R6 · B9 |
+| `mujoong.timing.device.gap-display` | `10s` | realtime | WAITING_CHILD · ACTIVE에서 마지막 기기 메시지 → 기술 일시정지(technicalPause) · 끊김 구간(DISCONNECT) 시작, 12 점선(U4b) | 계약 7절 · U4b-R7 · U4b-J13 |
 | `mujoong.timing.device.heartbeat-interval` | `5s` | realtime · web | 기기 HEARTBEAT 송신 주기. Realtime이 HELLO_OK.heartbeatIntervalMs로 내려준다 | ADR-005 · J27 |
 | `mujoong.timing.device.hello-timeout` | `5s` | realtime | WSS 업그레이드 → HELLO 없으면 4408 | BR3.6 ③ · J29 |
 | `mujoong.timing.device.disconnect` | `40s` | realtime | 마지막 기기 메시지 → 연결 DISCONNECTED(영속 last_seen_at 주기 점검), ACTIVE 세션은 ABORTED(DISCONNECT, 세션별 메모리 시계) | BR4.8 ② · BR6.12 ④ · B10 |
@@ -52,14 +57,11 @@ U5a가 옮긴 것: `practice.scenario-request-timeout`(9절).
 U3가 옮긴 것: `device.reconnect-backoff` · `device.playback-mark-interval` · `device.unstable-rtt` · `gate.barge-in-stop` ·
 `gate.local-voice-min`(1절) 그리고 `device.unstable-disconnects`를 `timing.device.unstable-disconnect-window`(1절) +
 `device.unstable-disconnect-count`(4절)로 나눈 것(U3-J3) [편차 (ac)].
+U4b가 옮긴 것: `session.join-wait` · `session.join-wait-after-reprompt` · `session.silence-warning` · `session.silence-end` ·
+`device.gap-display`(1절, BR11.1).
 
 | 키 | 계약 7절 값 | 읽을 유닛 |
 |---|---|---|
-| `mujoong.timing.session.join-wait` | 20초 | U4 |
-| `mujoong.timing.session.join-wait-after-reprompt` | 20초 | U4 |
-| `mujoong.timing.session.silence-warning` | 4분 | U4 |
-| `mujoong.timing.session.silence-end` | 6분 | U4 |
-| `mujoong.timing.device.gap-display` | 10초 | U4(12 화면의 끊김 구간 표시, U3는 `gaps`만 내려준다) |
 | `mujoong.timing.practice.first-response-wait` | 20초 | U5 |
 | `mujoong.timing.practice.help-consent-wait` | 10초 | U5 |
 | `mujoong.timing.practice.cue-budget` | 5초 | U5 |
@@ -67,7 +69,7 @@ U3가 옮긴 것: `device.reconnect-backoff` · `device.playback-mark-interval` 
 | `mujoong.timing.result.job-attempts` | 3회(간격 5 · 15초) | U6 |
 | `mujoong.timing.report.ready-target` | 60초 | U6 |
 
-## 3. 계약 7절 밖 U1 시간 키 (`mujoong.timing.*` 4종, J80 · R3-17)
+## 3. 계약 7절 밖 U1 · U4b 시간 키 (`mujoong.timing.*` U1 4종 · U4b 2종, J80 · R3-17 · U4b-J21)
 
 | 키 | 기본값 | 소유 앱 | 뜻 | 근거 |
 |---|---|---|---|---|
@@ -75,6 +77,8 @@ U3가 옮긴 것: `device.reconnect-backoff` · `device.playback-mark-interval` 
 | `mujoong.timing.recorder.flush-interval` | `200ms` | realtime | 전사 기록기 플러시 주기 | J73 · PD-5 |
 | `mujoong.timing.cache.approved-content-ttl` | `10m` | core-api | 승인 문구 캐시 수명(U1은 DB 직접 읽기로 대신, PD-7은 3.6) | J73 · PD |
 | `mujoong.timing.cache.policy-version-ttl` | `1m` | core-api | 현재 정책 버전 캐시 수명 | J73 · PD · J114 |
+| `mujoong.timing.session.stop-confirm-wait` | `20s` | realtime | 종료 확인 질문(STOP_CONFIRM) 재생 완료 보고 수신 → 대답 없으면 막은 출력을 풀고 대화를 잇는다(U4b). 기술 일시정지 동안 멈춘다 | U4b-R4 · U4b-J6 · U4b-J21 |
+| `mujoong.timing.session.record-settle` | `2s` | realtime | 종료 전이 뒤 공급자를 닫은 시각 → 공급자 연결이 닫히거나 이 시간이 지나면 정산 창을 끝내고 결과 스냅숏을 쓴다(U4b) | U4b-R11 · U4b-J15 · U4b-J21 |
 
 ## 4. 메시징 · 정리 · 보존 · 세션 보조 키
 
@@ -100,6 +104,7 @@ U3가 옮긴 것: `device.reconnect-backoff` · `device.playback-mark-interval` 
 | `mujoong.session.tombstone-ttl` | `10m` | realtime | Core 취소(CORE_ABANDONED) 묘비 수명. 그 sessionId의 늦은 시작은 409 SESSION_NOT_ACTIVE | BR6.6 · BR6.7 · [편차 (v)] |
 | `mujoong.session.orphan-check-interval` | `30s` | realtime | 고아 세션 점검 주기(FAILED SERVER_RESTART) | R3-6 · J126 |
 | `mujoong.session.timer-tick` | `1s` | core-api · realtime | Core ① DB 점검 주기, Realtime 타이머 전이 실패 재시도 간격 | RD-1 · RD-3 |
+| `mujoong.session.deletion-stop-wait` | `5s` | realtime | 계정 삭제 처리기가 그 보호자의 진행 세션 실행기를 강제 정지하고 기다리는 상한. 넘기면 처리 실패로 Inbox 재시도(U4b) | U4b-R16 · U4b-J19 · U4b-J21 |
 | `mujoong.device.disconnect-check-interval` | `5s` | realtime | 연결 DISCONNECTED 주기 점검(영속 last_seen_at) | BR4.8 ② |
 | `mujoong.device.unstable-disconnect-count` | `2` | realtime | 창(`mujoong.timing.device.unstable-disconnect-window`) 안 끊김 사건이 이 횟수 이상이면 복귀한 연결을 UNSTABLE로 둔다. 사건이 창 밖으로 빠지면 다음 HEARTBEAT에 CONNECTED(U3) | BR4.8 ① · U3-J3 |
 | `mujoong.bootstrap.code-draw-attempts` | `5` | core-api | 등록 코드 추첨 시도 수(모두 겹치면 503 CODE_ISSUE_FAILED) | BR1.2 · J45 · [편차 (c)] |

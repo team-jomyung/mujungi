@@ -39,7 +39,7 @@ class SessionExecutorFaultTest {
     /** 일반 편지함 상한만 4로 줄인 설정(나머지는 운영 기본값). */
     private static final SessionExecutor.Settings SMALL_MAILBOX = new SessionExecutor.Settings(Duration.ofSeconds(20),
             Duration.ofSeconds(30), Duration.ofSeconds(40), Duration.ofMillis(800), Duration.ofSeconds(20),
-            Duration.ofSeconds(1), 50, 4, 60);
+            Duration.ofSeconds(1), 50, 4, 60, SessionHarness.LIFECYCLE);
     private static final Duration DEADLOCK_GUARD = Duration.ofSeconds(5);
 
     private final SessionHarness h = new SessionHarness();
@@ -253,17 +253,18 @@ class SessionExecutorFaultTest {
         h.transitions.loseCommitNext(1);
         h.mailbox.offerGeneral(new SessionMailbox.DeviceReadyReceived(h.link.connectionId(), ready(), h.clock.now()));
         h.drain();
-        assertThat(h.transitions.status(h.sessionId)).isEqualTo(SessionStatus.ACTIVE);
+        // U4b(FR11.3 활성화 경로): 준비가 끝나면 참여 확인(WAITING_CHILD)으로 간다
+        assertThat(h.transitions.status(h.sessionId)).isEqualTo(SessionStatus.WAITING_CHILD);
         assertThat(h.executor.status()).isEqualTo(SessionStatus.DEVICE_ACK);
 
         h.advance(Duration.ofSeconds(1));
 
-        assertThat(h.executor.status()).isEqualTo(SessionStatus.ACTIVE);
+        assertThat(h.executor.status()).isEqualTo(SessionStatus.WAITING_CHILD);
         assertThat(h.link.sent(SessionState.class)).extracting(SessionState::view).containsExactly(View.LISTENING);
         assertThat(h.executor.relay().isAccepting()).isTrue();
         assertThat(h.executor.timers().isArmed(SessionTimers.Kind.DEVICE_ACK)).isFalse();
         assertThat(h.executor.timers().isArmed(SessionTimers.Kind.DISCONNECT)).isTrue();
-        assertThat(h.transitions.applied()).filteredOn(a -> a.to() == SessionStatus.ACTIVE).hasSize(1);
+        assertThat(h.transitions.applied()).filteredOn(a -> a.to() == SessionStatus.WAITING_CHILD).hasSize(1);
     }
 
     @Test
@@ -279,14 +280,15 @@ class SessionExecutorFaultTest {
 
         h.advance(Duration.ofSeconds(1));
 
-        assertThat(h.executor.status()).isEqualTo(SessionStatus.ACTIVE);
-        assertThat(h.transitions.status(h.sessionId)).isEqualTo(SessionStatus.ACTIVE);
+        // U4b(FR11.3 활성화 경로): 준비가 끝나면 참여 확인(WAITING_CHILD)으로 간다
+        assertThat(h.executor.status()).isEqualTo(SessionStatus.WAITING_CHILD);
+        assertThat(h.transitions.status(h.sessionId)).isEqualTo(SessionStatus.WAITING_CHILD);
         assertThat(h.link.sent(SessionState.class)).extracting(SessionState::view).containsExactly(View.LISTENING);
 
         // 20초 시계가 와도 ACK를 받은 세션을 DEVICE_NO_ACK로 닫지 않는다
         h.advance(Duration.ofSeconds(20));
         assertThat(h.transitions.applied()).extracting(InMemoryTransitions.Applied::to)
-                .containsExactly(SessionStatus.DEVICE_ACK, SessionStatus.ACTIVE);
+                .containsExactly(SessionStatus.DEVICE_ACK, SessionStatus.WAITING_CHILD);
         assertThat(h.unresponsive).isEmpty();
     }
 

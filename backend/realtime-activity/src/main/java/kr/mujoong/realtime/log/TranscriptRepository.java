@@ -68,6 +68,13 @@ public class TranscriptRepository {
             + " from realtime.realtime_activity_session s"
             + " where t.session_id = s.id and s.guardian_id = :guardianId and (t.deleted_at is null or t.text <> '')";
 
+    // U4b BR3.2: DECLINED 세션은 그 세션의 전사 행을 모두 지운다(전이와 같은 트랜잭션)
+    private static final String DELETE_BY_SESSION = "delete from realtime.realtime_transcript where session_id = :sessionId";
+
+    // U4b BR9.3: 계정 삭제 세션 참가자(200)가 남은 전사 행을 실제로 지운다(세션 행보다 먼저)
+    private static final String DELETE_BY_SESSIONS = "delete from realtime.realtime_transcript"
+            + " where session_id = any(:sessionIds)";
+
     private static final Comparator<TranscriptEntry> FLUSH_ORDER =
             Comparator.comparing(TranscriptEntry::sessionId).thenComparingInt(TranscriptEntry::sequenceNo);
 
@@ -101,6 +108,22 @@ public class TranscriptRepository {
         MapSqlParameterSource params = ClockParams.at(Objects.requireNonNull(now, "now"));
         ClockParams.uuid(params, "guardianId", Objects.requireNonNull(guardianId, "guardianId"));
         return jdbc.update(ERASE_BY_GUARDIAN, params);
+    }
+
+    /** U4b BR3.2: 세션의 전사 행을 모두 지운다(DECLINED 전이 트랜잭션 안). 지운 행 수. */
+    public int deleteBySession(UUID sessionId) {
+        return jdbc.update(DELETE_BY_SESSION, sessionParam(sessionId));
+    }
+
+    /** U4b BR9.3: 세션들의 전사 행을 실제로 지운다(계정 삭제 세션 참가자). 지운 행 수. */
+    public int deleteBySessions(java.util.List<UUID> sessionIds) {
+        Objects.requireNonNull(sessionIds, "sessionIds");
+        if (sessionIds.isEmpty()) {
+            return 0;
+        }
+        MapSqlParameterSource params = new MapSqlParameterSource();
+        ClockParams.uuidArray(params, "sessionIds", sessionIds);
+        return jdbc.update(DELETE_BY_SESSIONS, params);
     }
 
     /** 세션의 행 전부(지워지지 않은 것, 번호 순). */

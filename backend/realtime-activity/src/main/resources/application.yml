@@ -89,8 +89,17 @@ mujoong:
     session:
       device-ack-timeout: 20s
       closing-confirm: 30s
+      # U4b(BR11.1): 참여 창(처음 · 안내 뒤) · 공백 경고 · 공백 종료(계약 7절), 종료 확인 질문 창 · 정산 창(7절 밖, U4b-J21)
+      join-wait: 20s
+      join-wait-after-reprompt: 20s
+      silence-warning: 4m
+      silence-end: 6m
+      stop-confirm-wait: 20s
+      record-settle: 2s
     device:
       disconnect: 40s
+      # U4b(BR6.1): 마지막 기기 메시지 뒤 기술 일시정지 · 끊김 구간 시작(점선 10초)
+      gap-display: 10s
       heartbeat-interval: 5s
       hello-timeout: 5s
       status-report-interval: 10s
@@ -125,6 +134,8 @@ mujoong:
     tombstone-ttl: 10m
     orphan-check-interval: 30s
     timer-tick: 1s
+    # U4b(BR9.1): 계정 삭제 처리기의 진행 세션 강제 정지 대기 상한(U4b-J21)
+    deletion-stop-wait: 5s
   device:
     disconnect-check-interval: 5s
     unstable-disconnect-count: 2

@@ -27,7 +27,8 @@ class TransitionTableTest {
     static Stream<Arguments> allowed() {
         return Stream.of(
                 Arguments.of(SessionStatus.PREPARING, SessionStatus.DEVICE_ACK),
-                Arguments.of(SessionStatus.DEVICE_ACK, SessionStatus.ACTIVE),
+                // U4b(FR11.3 활성화 경로): 준비가 끝나면 ACTIVE가 아니라 참여 확인(WAITING_CHILD)으로 간다
+                Arguments.of(SessionStatus.DEVICE_ACK, SessionStatus.WAITING_CHILD),
                 Arguments.of(SessionStatus.PREPARING, SessionStatus.FAILED),
                 Arguments.of(SessionStatus.DEVICE_ACK, SessionStatus.FAILED),
                 Arguments.of(SessionStatus.ACTIVE, SessionStatus.FAILED),
@@ -75,7 +76,8 @@ class TransitionTableTest {
 
     @Test
     void endReasonsFollowTheTargetState() {
-        assertThat(TransitionTable.endReason(SessionStatus.ENDED)).isEqualTo(EndReason.GUARDIAN_STOP);
+        // U4b(FR1.2 · BR1.4): ENDED는 CLOSING에 들어갈 때 사건이 쓴 사유를 그대로 둔다(도착 상태로 정하지 않음)
+        assertThat(TransitionTable.endReason(SessionStatus.ENDED)).isNull();
         assertThat(TransitionTable.endReason(SessionStatus.ENDED_UNCONFIRMED)).isEqualTo(EndReason.UNCONFIRMED);
         assertThat(TransitionTable.endReason(SessionStatus.ABORTED)).isEqualTo(EndReason.DISCONNECT);
         assertThat(TransitionTable.endReason(SessionStatus.FAILED)).isEqualTo(EndReason.FAILED);
@@ -93,7 +95,7 @@ class TransitionTableTest {
                 .isEqualTo(FailureCode.PROVIDER_UNAVAILABLE);
         assertThat(TransitionTable.changeFor(Trigger.START_SEND_FAILED, null, AT).failureCode())
                 .isEqualTo(FailureCode.DEVICE_NO_ACK);
-        assertThat(TransitionTable.changeFor(Trigger.ACTIVATED, null, AT)).isEqualTo(SessionChange.none());
+        assertThat(TransitionTable.changeFor(Trigger.READY, null, AT)).isEqualTo(SessionChange.none());
         assertThat(TransitionTable.changeFor(Trigger.DISCONNECT, null, AT).endedAt()).isEqualTo(AT);
     }
 
@@ -109,7 +111,8 @@ class TransitionTableTest {
         assertThat(Trigger.SERVER_RESTART.multiOrigin()).isTrue();
         assertThat(Trigger.CORE_ABANDONED.multiOrigin()).isTrue();
         assertThat(Trigger.START_TIMEOUT.multiOrigin()).isTrue();
-        assertThat(Trigger.GUARDIAN_STOP.multiOrigin()).isFalse();
+        // U4b(FR1.3 · AC3.3.8): 보호자 끝내기는 WAITING_CHILD에서도 받는다
+        assertThat(Trigger.GUARDIAN_STOP.multiOrigin()).isTrue();
         assertThat(TransitionTable.isStartPhase(SessionStatus.PREPARING)).isTrue();
         assertThat(TransitionTable.isStartPhase(SessionStatus.DEVICE_ACK)).isTrue();
         assertThat(TransitionTable.isStartPhase(SessionStatus.ACTIVE)).isFalse();

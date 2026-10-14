@@ -65,6 +65,9 @@ public class RealtimeOutboxSender {
 
     private volatile boolean stopping;
 
+    /** U4b(BR9.5): PUBLISHED 뒤 뒷일(예: DeletionCompleted 발행 뒤 메시징 삭제 참가자 한 번 더). */
+    private volatile List<OutboxPublishedListener> publishedListeners = List.of();
+
     @Autowired
     public RealtimeOutboxSender(
             RealtimeOutboxRepository outbox,
@@ -73,9 +76,16 @@ public class RealtimeOutboxSender {
             ReadinessState readiness,
             EventLogger events,
             MujoongClock clock,
-            RealtimeProperties properties) {
+            RealtimeProperties properties,
+            org.springframework.beans.factory.ObjectProvider<OutboxPublishedListener> listeners) {
         this(outbox, http, json, readiness::isReady, events, clock, properties.outbox(),
                 properties.internalHttp().eventPublishTimeout());
+        this.publishedListeners = listeners.orderedStream().toList();
+    }
+
+    /** PUBLISHED 뒤 뒷일을 바꾼다(시험). */
+    public void publishedListeners(List<OutboxPublishedListener> listeners) {
+        this.publishedListeners = List.copyOf(listeners);
     }
 
     public RealtimeOutboxSender(
@@ -203,6 +213,9 @@ public class RealtimeOutboxSender {
             case PUBLISHED -> {
                 changed = outbox.markPublished(row.eventId(), now);
                 deliveryStatus = "PUBLISHED";
+                if (changed) {
+                    notifyPublished(row);
+                }
             }
             case FAILED_IMMEDIATE, FAILED_EXHAUSTED -> {
                 changed = outbox.markFailed(row.eventId(), lastError);
@@ -228,6 +241,17 @@ public class RealtimeOutboxSender {
                 entry.attr(AttrKey.EVENT_TYPE, type.wire());
             }
         });
+    }
+
+    /** U4b(BR9.5): 발행 뒤 뒷일. 실패는 앱 오류 한 줄로 남기고 발행 결과는 바꾸지 않는다. */
+    private void notifyPublished(OutboxEventRow row) {
+        for (OutboxPublishedListener listener : publishedListeners) {
+            try {
+                listener.published(row);
+            } catch (RuntimeException e) {
+                events.appError(EventLog.Component.REALTIME_MESSAGING, e);
+            }
+        }
     }
 
     private void releaseRest(List<OutboxEventRow> rest) {

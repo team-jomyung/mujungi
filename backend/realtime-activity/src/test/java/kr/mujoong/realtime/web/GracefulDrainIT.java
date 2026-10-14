@@ -169,6 +169,7 @@ class GracefulDrainIT {
         WsEnvelope command = device.await(WsMessageType.START_SESSION, WAIT);
         device.ack(command.opId(), sessionId);
         device.deviceReady(sessionId, true, true);
+        env.join(sessionId);
         awaitTrue(() -> env.app.bean(ActivitySessionRepository.class).find(sessionId).orElseThrow().status()
                 == SessionStatus.ACTIVE, "ACTIVE");
         awaitTrue(() -> env.provider.openConnections() == 1, "공급자 연결");

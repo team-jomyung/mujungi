@@ -135,6 +135,7 @@ class RealtimeInternalApiIT {
         assertNotActive(end(sessionId, "GUARDIAN_STOP"));
         // ACTIVE: 202 {status: CLOSING}, CLOSING: 202 {status: CLOSING}(재처리 없음)
         device.deviceReady(sessionId, true, true);
+        env.join(sessionId);
         awaitStatus(sessionId, SessionStatus.ACTIVE);
         Reply accepted = end(sessionId, "GUARDIAN_STOP");
         assertThat(accepted.status()).isEqualTo(202);
@@ -187,14 +188,15 @@ class RealtimeInternalApiIT {
         assertThat(terminal.status()).isEqualTo(202);
         assertThat(sessions().find(preparing).orElseThrow().statusVersion()).isEqualTo(failed.statusVersion());
 
-        // (다) CLOSING(실행기 없는 행): 그대로 두고 202 {}
-        UUID closing = dbOnlySession(SessionStatus.CLOSING);
-        assertThat(end(closing, "CORE_ABANDONED").status()).isEqualTo(202);
-        assertThat(sessions().find(closing).orElseThrow().status()).isEqualTo(SessionStatus.CLOSING);
         // 실행기 없는 ACTIVE 행: FAILED로 닫는다(BR6.7 (나))
         UUID orphanActive = dbOnlySession(SessionStatus.ACTIVE);
         assertThat(end(orphanActive, "CORE_ABANDONED").status()).isEqualTo(202);
         assertThat(sessions().find(orphanActive).orElseThrow().status()).isEqualTo(SessionStatus.FAILED);
+        // (다) CLOSING(실행기 없는 행): 그대로 두고 202 {}
+        // U4b(FR11.2): 고아 점검이 closing-confirm 뒤 이 행을 먼저 닫지 않게 단언 바로 직전에 만든다(순서만 바꿈, 단언은 그대로)
+        UUID closing = dbOnlySession(SessionStatus.CLOSING);
+        assertThat(end(closing, "CORE_ABANDONED").status()).isEqualTo(202);
+        assertThat(sessions().find(closing).orElseThrow().status()).isEqualTo(SessionStatus.CLOSING);
         // 실행기 없는 CLOSING 행의 GUARDIAN_STOP은 202 {status: CLOSING}
         Reply closingStop = end(closing, "GUARDIAN_STOP");
         assertThat(closingStop.status()).isEqualTo(202);
@@ -202,10 +204,11 @@ class RealtimeInternalApiIT {
     }
 
     @Test
-    void endRejectsConsentWithdrawnUnknownReasonsAndMalformedRequestsWith400() {
+    void endRejectsUnknownReasonsAndMalformedRequestsWith400() {
         UUID sessionId = dbOnlySession(SessionStatus.ACTIVE);
 
-        assertValidationFailed(end(sessionId, "CONSENT_WITHDRAWN"));
+        // U4b(FR1.4): CONSENT_WITHDRAWN은 응답표에 들어왔다(EndRequestU4bTest · SessionLifecycleU4bIT). 계약 열거의 알 수 없는 값으로 거절을 본다
+        assertValidationFailed(end(sessionId, "UNRECOGNIZED"));
         assertValidationFailed(end(sessionId, "SOMETHING_ELSE"));
         assertValidationFailed(api.post(SESSIONS + "/" + sessionId + "/end", "{\"reason\":\"GUARDIAN_STOP\"}"));
         assertValidationFailed(api.post(SESSIONS + "/" + sessionId + "/end", "not json"));
@@ -261,6 +264,7 @@ class RealtimeInternalApiIT {
 
         device.ack(command.opId(), sessionId);
         device.deviceReady(sessionId, true, true);
+        env.join(sessionId);
         awaitStatus(sessionId, SessionStatus.ACTIVE);
         env.provider.emitTurn("item-1", "공룡이 좋아", "resp-1", "나도 공룡 좋아해", List.of(new byte[4800]));
         awaitTrue(() -> transcripts().findAll(sessionId).size() == 2
