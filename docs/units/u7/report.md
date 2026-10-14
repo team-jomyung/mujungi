@@ -26,7 +26,7 @@
 - Windows: JDK 21, 별도 Node 22. 전역 런타임 설정을 변경하지 않았다.
 - Docker 엔진에 연결되지 않았으며 시작 시도 중 사용자가 오류 창을 확인했다. 시작 대기 CLI만 취소했고 Docker 재시작/초기화/기존 컨테이너 변경을 하지 않았다. DB 시험을 로컬 통과로 기록하지 않는다.
 - 로컬 backend 전체 비 DB 회귀: 1,668건 중 1,645 통과, 21 건너뜀, 기존 종료 시한 시험 2건 실패. Core/Realtime의 `aStuckDatabaseCannotStretchTheShutdownThroughTheLastSnapshot`이 3초 상한을 넘었다. 기존 단언을 완화하지 않고 별도 재확인 및 CI 결과를 남긴다.
-- frontend: 초기 전체 회귀 61파일/868시험 통과. 최종 U7 전용 검증은 6파일/89시험 통과, 범위 줄 89.23%(257/288)다. 계정 조건 우선 확인, 캐시 상태 이동 금지, 구독 조회/해제 경합은 각각 재현 실패 후 수정했다.
+- frontend: 초기 로컬 전체 회귀 61파일/868시험 통과. PR CI에서 최종 전체 62파일/893시험, 전체 줄 98.60%(3170/3215), U7 전용 6파일/89시험, 범위 줄 89.23%(257/288)를 확인했다. 계정 조건 우선 확인, 캐시 상태 이동 금지, 구독 조회/해제 경합은 각각 재현 실패 후 수정했다.
 - typecheck · ESLint · Next standalone 빌드 통과. 영향받는 기존 계정/서비스 워커/경계 시험 41건도 다시 통과했다.
 - 실제 standalone 서버에서 `/parent/push-worker`의 200, `text/javascript; charset=utf-8`, `Cache-Control: no-cache`, push/notificationclick 핸들러와 fetch 핸들러 부재를 확인했다. 검증용 로컬 서버만 띄운 뒤 종료했다.
 
@@ -36,10 +36,12 @@
 
 | 실행 | 번호 · 커밋 | 결과 |
 |---|---|---|
-| PR CI | 미실행 | 대기 |
-| workflow_dispatch ci.yml (skeleton C1~C12 포함) | 미실행 | 대기 |
+| PR CI 최초 | 38512294126 · 4319707 | FAIL · 아래 3건 수정 후 재실행 |
+| workflow_dispatch 최초 | 38512325637 · 4319707 | FAIL · skeleton A1에서 같은 backend 회귀 실패 |
 | U7 backend 범위 줄 80% | 미실행 | 대기 |
-| U7 frontend 범위 줄 80% | 로컬 89시험 | PASS · 89.23%(257/288), CI 대기 |
+| U7 frontend 범위 줄 80% | 38512294126 · 89시험 | PASS · 89.23%(257/288) |
+
+최초 CI에서 Core 921건 중 3건 실패/건너뜀 0건을 확인했다. 신규 구독 충돌 code가 error-envelope JSON Schema 열거형에 빠진 1건을 추가했고, 기존 CoreStartupSequenceIT 2건은 V6까지 낮은 버전으로 바꾸는 fixture와 미래 성공 V7/실패 V8 fixture로 갱신했다. 기동 거부/성공 및 실패 이력 무시 단언을 유지했다. 나머지 U7 DB 사건/발송/삭제/경합 시험은 통과했다. Windows에서 실패했던 기존 종료 시한 두 시험은 Linux CI에서 통과했다.
 
 ## 계약 · 판단 · 설계 차이
 
