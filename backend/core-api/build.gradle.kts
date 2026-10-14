@@ -19,6 +19,8 @@ dependencies {
     implementation(libs.spring.boot.starter.validation)
     implementation(libs.micrometer.registry.prometheus)
     implementation(libs.postgresql)
+    // U6 BR10.6: 파일 저장 없는 텍스트 PDF(LGPL-2.1-or-later).
+    implementation("com.openhtmltopdf:openhtmltopdf-pdfbox:1.0.10")
     // OpenAPI 문서는 dev · test 프로필에서만 켠다(application.yml 기본 꺼짐, tech-stack 2.2)
     implementation(libs.springdoc.openapi.webmvc.api)
 

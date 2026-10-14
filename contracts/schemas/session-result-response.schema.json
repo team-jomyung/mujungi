@@ -1,0 +1,143 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mujoong.invalid/contracts/schemas/session-result-response.schema.json",
+  "title": "27 결과 · 생활 팁 · 목표 후보",
+  "description": "GET /api/sessions/{sessionId}/result 200(계약 3절 C5 · U6 BR8.1 · BR8.2). 장면 결과는 칩 5종으로만 낸다. 진행 중 판정 · 재판정 원값(value · timing · rationale) · 구조화 원본 · 08 원문 · 상황 본문 · 판정 기준 · 매칭 로그 · 등록 대기 후보는 칸이 없다(additionalProperties false). 현재 결과 버전이 없으면 jobStatus만 채우고 나머지는 빈 값이다. 생활 팁의 title은 선택 필드다(편차 (U6-i)). 자유대화 결과 문장은 응답에 있지만 27은 그리지 않는다(편차 (U6-l)).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["jobStatus", "sentences", "tips", "candidates"],
+  "properties": {
+    "jobStatus": { "$ref": "#/$defs/JobStatus" },
+    "resultLevel": {
+      "anyOf": [
+        { "type": "string", "enum": ["FULL", "PARTIAL", "INSUFFICIENT"] },
+        { "type": "null" }
+      ]
+    },
+    "sentences": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["text"],
+        "properties": {
+          "goalSelectionId": { "$ref": "common.schema.json#/$defs/NullableUuid" },
+          "text": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "practice": {
+      "anyOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["goals"],
+          "properties": {
+            "goals": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/PracticeGoal" }
+            }
+          }
+        },
+        { "type": "null" }
+      ]
+    },
+    "tips": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["supportItemId", "condition", "content", "limitation"],
+        "properties": {
+          "supportItemId": { "$ref": "common.schema.json#/$defs/Uuid" },
+          "title": { "type": "string", "minLength": 1 },
+          "condition": { "type": "string" },
+          "content": { "type": "string", "minLength": 1 },
+          "limitation": { "type": "string" }
+        }
+      }
+    },
+    "noTipReason": {
+      "anyOf": [
+        { "type": "string", "enum": ["NEED_MORE_OBSERVATION"] },
+        { "type": "null" }
+      ]
+    },
+    "candidates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["recommendationId", "displayName", "reasonText", "evidence", "selected"],
+        "properties": {
+          "recommendationId": { "$ref": "common.schema.json#/$defs/Uuid" },
+          "displayName": { "type": "string", "minLength": 1 },
+          "reasonText": { "type": "string" },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["utteranceSeq", "kind"],
+              "properties": {
+                "utteranceSeq": { "type": "integer", "minimum": 1 },
+                "kind": { "type": "string", "enum": ["CHILD_RECALL", "GUARDIAN_INPUT"] }
+              }
+            }
+          },
+          "selected": { "type": "boolean" },
+          "goalSelectionId": { "$ref": "common.schema.json#/$defs/NullableUuid" }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "JobStatus": {
+      "description": "세션 정리 작업 상태(BR1.11 · BR8.3). NONE = 정리 대상이 아님(DECLINED · 발화 0건 · 기록이 오지 않는 세션)",
+      "type": "string",
+      "enum": ["NONE", "REQUESTED", "RUNNING", "DONE", "FAILED"]
+    },
+    "PracticeGoal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["goalSelectionId", "displayName", "order", "scenes", "help"],
+      "properties": {
+        "goalSelectionId": { "$ref": "common.schema.json#/$defs/Uuid" },
+        "displayName": { "type": "string", "minLength": 1 },
+        "order": { "type": "integer", "minimum": 1 },
+        "scenes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["sceneNo", "exposureType", "sceneChip", "chipText"],
+            "properties": {
+              "sceneNo": { "type": "integer", "enum": [1, 2] },
+              "exposureType": { "type": "string", "enum": ["ORIGINAL", "NEW_SCENARIO"] },
+              "sceneChip": {
+                "type": "string",
+                "enum": ["DONE_IMMEDIATE", "DONE_AFTER_HELP", "NEXT_TIME", "ON_HOLD", "NOT_DONE"]
+              },
+              "chipText": { "type": "string", "minLength": 1 },
+              "notDoneReason": {
+                "anyOf": [
+                  { "type": "string", "enum": ["TIME_OVER", "SCENARIO_FAILED", "ACTIVITY_ENDED", "NO_RESPONSE"] },
+                  { "type": "null" }
+                ]
+              }
+            }
+          }
+        },
+        "help": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["count", "consent"],
+          "properties": {
+            "count": { "type": "integer", "minimum": 0 },
+            "consent": { "type": "string", "enum": ["ACCEPTED", "DECLINED", "NO_RESPONSE", "NONE"] }
+          }
+        }
+      }
+    }
+  }
+}

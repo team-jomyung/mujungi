@@ -27,8 +27,8 @@ import org.springframework.stereotype.Repository;
 @Repository
 public class ActivityRecordRepository {
 
-    /** 26에 보이는 최종 상태(FAILED는 보이지 않는다, AC5.1.8). */
-    static final String LISTED_STATUSES = "final_status in ('ENDED', 'ENDED_UNCONFIRMED', 'ABORTED', 'DECLINED')";
+    /** BR14.1: 발화가 있고 사본이 SERVER_RESTART로 실패한 기록도 보인다. */
+    public static final String LISTED_STATUSES = RecordEligibility.LISTED_SQL;
 
     private static final String COLUMNS = """
             session_id, guardian_id, child_id, activity_type, final_status, end_reason, confirmed, started_at, ended_at,
@@ -99,6 +99,12 @@ public class ActivityRecordRepository {
                 + " from core.core_activity_record where session_id = :sessionId and guardian_id = :guardianId", params,
                 ActivityRecordRepository::map).stream().findFirst();
     }
+    public List<StoredRecord> missingResultHeads(){
+        return jdbc.query("select "+COLUMNS+" from core.core_activity_record where not exists (select 1 from core.core_session_result_state s where s.session_id=core_activity_record.session_id) order by recorded_at,session_id limit 100",new MapSqlParameterSource(),ActivityRecordRepository::map);
+    }
+    public Optional<StoredRecord> findForChild(UUID session,UUID child){return jdbc.query("select "+COLUMNS+" from core.core_activity_record where session_id=:session and child_id=:child",new MapSqlParameterSource("session",session).addValue("child",child),ActivityRecordRepository::map).stream().findFirst();}
+    /** BR9.1: 현재 아이의 보고 가능한 전체 기록. DECLINED는 리포트에서 제외한다. */
+    public List<StoredRecord> reportRecords(UUID guardian,UUID child){return jdbc.query("select "+COLUMNS+" from core.core_activity_record where guardian_id=:guardian and child_id=:child and "+LISTED_STATUSES+" and final_status <> 'DECLINED' order by listed_at,session_id",new MapSqlParameterSource("guardian",guardian).addValue("child",child),ActivityRecordRepository::map);}
 
     /** [from, to) 안에 줄 시각이 있는 26 목록 기록(시각 순). */
     public List<StoredRecord> findListedBetween(UUID guardianId, Instant from, Instant to) {

@@ -114,6 +114,17 @@ public class PracticeGoalRepository {
         return Map.of("scenarioRequests",requests,"scenarios",scenarios,"goalSelections",selections,
                 "recommendationEvidence",evidence,"goalRecommendations",candidates);
     }
+    public List<CandidateRegistry.ResultCandidateView> resultCandidates(UUID child,UUID session) {
+        return jdbc.query("select r.id,r.display_name,r.reason_text,s.id selection_id from core.core_goal_recommendation r "
+                + "left join core.core_practice_goal_selection s on s.recommendation_id=r.id and s.status='ACTIVE' "
+                + "where r.child_id=:child and r.source_session_id=:session and r.status='ACTIVE' order by r.created_at,r.id",
+                Map.of("child",child,"session",session),(r,n)->{
+                    UUID id=r.getObject("id",UUID.class),selected=r.getObject("selection_id",UUID.class);
+                    var refs=jdbc.query("select utterance_sequence_no,evidence_type from core.core_recommendation_evidence where recommendation_id=:id order by utterance_sequence_no,evidence_type",
+                            Map.of("id",id),(e,i)->new CandidateRegistry.Evidence(e.getLong(1),e.getString(2)));
+                    return new CandidateRegistry.ResultCandidateView(id,r.getString("display_name"),r.getString("reason_text"),refs,selected!=null,selected);
+                });
+    }
     private static GoalSelection selection(ResultSet r,int n) throws SQLException {
         return new GoalSelection(r.getObject("id",UUID.class),r.getObject("guardian_id",UUID.class),
                 r.getObject("child_id",UUID.class),r.getObject("recommendation_id",UUID.class),

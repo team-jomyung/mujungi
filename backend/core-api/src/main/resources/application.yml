@@ -130,6 +130,16 @@ mujoong:
       scenario-request-timeout: 15s
     goal:
       restore-window: 5s
+    result:
+      job-attempts: 3
+      job-retry-backoff: [5s, 15s]
+      job-tick: 1s
+      attempt-timeout: 30s
+      reconcile-interval: 5m
+      undecided-limit: 1h
+    report:
+      ready-target: 60s
+      unsaved-retention: 24h
   outbox:
     poll-interval: 500ms
     batch-size: 20
@@ -173,6 +183,7 @@ mujoong:
     rest-body-max: 64KB
     internal-event-body-max: 2MB
     background-db-concurrency: 3
+    result-workers: 2
     db-lock-timeout: 2s
     db-statement-timeout: 10s
     db-retry-attempts: 2
@@ -207,6 +218,11 @@ mujoong:
   # MUJOONG_TEXT_AI_ENDPOINT · MUJOONG_TEXT_AI_MODEL · MUJOONG_TEXT_AI_API_KEY 이름을 쓴다(이 파일에는 값을 두지 않는다)
   text-ai:
     request-timeout: 3s
+    result:
+      request-timeout: 10s
+      temperature-judgment: 0
+      temperature-generation: 0.2
+      prompt-version: v1
     retry:
       max-retries: 1
       backoff: 250ms

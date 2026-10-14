@@ -115,7 +115,7 @@ U4b: `session.response.create`는 받은 사실만 기록한다. 턴 종류 `joi
 | 항목 | 규칙 |
 |---|---|
 | 입력 최소화(NFR3) | 아이 이름 대신 "아이", 다른 사람은 별칭(친구 A). 보호자 · 아이 · 세션 id, 이메일, 원음은 보내지 않는다. 활동은 요청 안 번호(activityNo)로 가리키고 서버가 세션으로 되돌린다. 08 네 칸은 경험 구조화에만 넣는다. 동의 철회 · 삭제된 자료는 넣지 않는다 |
-| 온도 | 기록용 재판정 0, 생성 작업은 낮은 값. 모델 · 값은 설정(`mujoong.ai.*`) |
+| 온도 | 기록용 재판정 0, 생성 작업 0.2. 설정 `mujoong.text-ai.result.*` [U6 편차 (U6-f)] |
 | 출력 검사 순서 | ① JSON 스키마 ② 인용 대조: `quote`가 그 utteranceSeq의 저장 전사와 글자 단위로 같아야 한다(앞뒤 공백만 무시). 다르면 그 인용을 버린다 ③ 금지 표현 2단계(6.6) |
 | 실패 | 공급자 오류 · 시간 초과 · 스키마 실패는 결과 작업의 시도 실패다(timing `result.job-attempts`). 인용 · 금지 표현에 걸린 문장은 실패가 아니라 고정 템플릿으로 바꾼다 |
 
@@ -204,8 +204,21 @@ FR7.11 표대로 FULL · PARTIAL · INSUFFICIENT를 정한다. 내용 있는 아
 | EMOTION_CLAIM | 고 싶었던 거, 때문에 속상, 화가 났던 것 같, 성격이, 일부러 |
 | PRESSURE | 꼭 좋아, 반드시, 효과가 있, 이렇게 말해야 해, 고쳐야, 매일 해야, 꾸준히 해야, 계속 해야 |
 
-- 2차: 1차에 걸린 문장과 결과 문장 · 리포트 문장 전체를 텍스트 AI로 한 번 더 분류한다. 지시: "아래 문장이 금지 중 하나에 해당하는지 판단하라. 아이가 직접 한 말을 인용 부호 안에 그대로 옮긴 것은 금지가 아니다. 해당하면 분류와 문제 구간을 돌려준다." 출력 `{ "violation": true, "category": "EMOTION_CLAIM", "span": "…" }`.
+- 2차(U6-J 초안): 1차를 통과한 결과 문장 · 후보 이유 또는 리포트 AI 항목을 작업당 한 번에 묶는다. 입력 `{ "sentences": [{"id":"s1", "text":"…"}] }`, 출력 `{ "results": [{"id":"s1", "violation":true, "category":"EMOTION_CLAIM", "span":"…"}] }`. 모든 요청 id가 정확히 한 번 나와야 한다. 지시: "아래 문장이 금지 중 하나에 해당하는지 판단하라. 저장 전사와 대조를 통과한 직접 인용은 금지가 아니다. 해당하면 분류와 문제 구간을 돌려준다." 승인 생활 팁은 1차 사전만 적용한다(BR7.2).
 - 걸리면: 결과 문장 · 리포트 항목은 고정 템플릿(6.3 · 6.5), 생활 팁은 보여 주지 않는다(FR6.3 '추가 관찰 필요').
+
+### 6.7 경험 구조화 (U6-J 초안)
+
+자유대화 전사(seq · speaker · text · uncertain), 종료 사유 · 확보 범위와 08 네 칸(knownContent · situationType · sourceType · question)을 입력한다. 아이 이름은 '아이', 인물은 별칭으로 바꾸고 식별자 · 원음은 보내지 않는다. 08 네 칸은 이 작업에만 전달한다.
+출력은 `{ "characters": [{"alias":"친구 A", "source":"CHILD_RECALL", "utteranceSeq":1}], "situation": null, "partnerUtterance": null, "childResponse": null, "explanation": null }`이다. null이 아닌 칸은 `{text, source, utteranceSeq?}`이며 source는 GUARDIAN_INPUT 또는 CHILD_RECALL이다. CHILD_RECALL은 실제 아이 발화 번호와 글자 단위 근거가 필요하다. 의도 · 감정 등 추가 속성을 받지 않는다. 지시: 입력에 있는 사실만 분리하고 출처를 붙이며 없는 칸은 null로 둔다.
+
+### 6.8 목표 후보 (U6-J 초안)
+
+전사, 검증된 구조화(자유대화) 또는 장면 칩(연습), ACTIVE 정의 목록(behaviorKey · behaviorVersion · displayName · coreFunction)을 입력한다. 출력 `{ "candidates": [{"behaviorKey":"…", "behaviorVersion":1, "reasonText":"…", "evidence":[{"utteranceSeq":1,"quote":"…","kind":"CHILD_RECALL"}]}] }`에서 근거 인용 · ACTIVE 정의 · 금지 표현을 서버가 확인한 최대 3개만 등록한다. 근거 없는 후보와 보호자 입력만 근거인 후보는 버린다. 지시: 관찰된 아이 회상 발화만 근거로 쓰고 의도 · 감정을 단정하지 않는다.
+
+### 6.9 U6 호출 예산과 생활 팁
+
+결과 · 리포트 호출은 `mujoong.text-ai.result.request-timeout`과 작업 시도 잔여 시간 중 작은 값으로 제한한다. 게이트웨이 재시도 없이 작업당 총 3회 시도한다. INSUFFICIENT 사전 판정이면 AI 없이 DONE이다. 생활 팁은 목표 · 검증 후보 behaviorKey와 승인 항목의 교집합을 서버에서 찾고, title · condition · content · limitation에 1차 금지 사전을 적용한다. 사전 · 프롬프트는 U6-J 초안이고 D 담당 확인 대상이다.
 
 ## 7. U5a TextAiGateway (U5a-d)
 
