@@ -487,6 +487,8 @@ jobs:
           path: |
             build/verify/report.txt
             build/verify/logs/A1.log
+            build/verify/logs/B.log
+            build/verify/logs/images/
             backend/*/build/test-results/test/
           retention-days: 14
           if-no-files-found: warn
