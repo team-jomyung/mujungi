@@ -48,6 +48,12 @@ class TimeLiteralScanTest {
 
     /** 허용 목록. 시간 값이 아니거나(단위 표기 · 단위 변환 · 고정 풀 keepAlive) 계약 · 결정이 값을 고정한 상수뿐이다. */
     static final List<Allowed> ALLOWED = List.of(
+            new Allowed(CORE + "result/JobRunnerLoop.java",
+                    "scheduler.scheduleWithFixedDelay(this::tick,0,tickMillis,TimeUnit.MILLISECONDS)",
+                    "단위 표기: 반복 주기는 result.job-tick 설정 Duration이다. 최초 지연 0은 즉시 시작을 뜻한다(U6)"),
+            new Allowed(CORE + "result/ResultTextGateway.java",
+                    "future.get(limit.toNanos(),TimeUnit.NANOSECONDS)",
+                    "단위 표기: result.request-timeout 설정과 작업 마감까지 남은 Duration 중 작은 한도다(U6)"),
             new Allowed(CORE + "startup/CoreStartupSequence.java", "delay.toMillis(), delay.toMillis(), TimeUnit.MILLISECONDS",
                     "단위 표기: 값은 설정 키 Duration을 밀리초로 넘긴 것이다(scheduleWithFixedDelay에 Duration 판이 없다)"),
             new Allowed(CORE + "startup/CoreStartupSequence.java",

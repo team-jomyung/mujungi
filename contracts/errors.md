@@ -29,6 +29,8 @@
 | `RESTORE_EXPIRED` | 410 | 되돌릴 수 있는 시간이 지났어요. | 보호자 | 삭제 복구 시한 경과 | C4 · AC4.1.11 |
 | `SCENARIO_GEN_FAILED` | 422 | 연습 상황을 준비하지 못했어요. | 보호자 · 내부 | 자동 확인 · 재생성 두 번 실패 | C10 · AC4.2.1 |
 | `IDEMPOTENCY_CONFLICT` | 409 | 같은 요청 번호로 다른 내용이 왔어요. | 보호자 | 같은 idempotencyKey에 다른 본문 | BR6.2 |
+| `JOB_NOT_FAILED` | 409 | 지금은 다시 시도할 수 없어요. | 보호자 | 결과 작업이 FAILED가 아님 | U6 BR2.4 |
+| `REPORT_NOT_READY` | 409 | 리포트가 아직 준비되지 않았어요. | 보호자 | READY · SAVED가 아닌 PDF · 저장 요청 | U6 BR10.2 · BR10.6 |
 | `SESSION_NOT_ACTIVE` | 409 | 지금은 끝낼 수 있는 상태가 아니에요. | 보호자 · 내부 | 끝낼 수 없는 상태의 끝내기, 취소된 sessionId의 늦은 시작(10분 묘비), Realtime이 모르는 세션의 GUARDIAN_STOP | BR6.9 · [편차 (v)] · [편차 (w)] |
 | `DEVICE_NOT_STABLE` | 423 | 기기 연결이 안정되지 않았어요. | 보호자 | 기기 판정이 안정이 아님(불안정 · 끊김 · 응답 없음 · 확인 불가 · 없음), Realtime 423의 번역 | BR6.1 ③ · BR4.4 · BR6.6 |
 | `REALTIME_UNAVAILABLE` | 503 | 지금은 연결할 수 없어요. 잠시 뒤 다시 시도해 주세요. | 보호자 | Realtime 호출 실패 · 시간 초과(시작은 로컬 FAILED), 끝내기가 Realtime에 닿지 않음 | BR6.7 · BR6.9 |

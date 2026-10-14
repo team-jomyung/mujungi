@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mujoong.invalid/contracts/schemas/report-create-response.schema.json",
+  "title": "28 리포트 생성 접수",
+  "description": "POST /api/reports 202(계약 3절 C5 · U6 BR9.2). 새 키면 GENERATING 리포트를 만들고, 같은 키 · 같은 본문이면 첫 결과의 reportId와 지금 상태를 돌려준다.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["reportId", "status"],
+  "properties": {
+    "reportId": { "$ref": "common.schema.json#/$defs/Uuid" },
+    "status": { "type": "string", "enum": ["GENERATING", "READY", "FAILED", "SAVED", "DISCARDED"] }
+  }
+}

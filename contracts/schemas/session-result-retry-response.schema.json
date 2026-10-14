@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mujoong.invalid/contracts/schemas/session-result-retry-response.schema.json",
+  "title": "27 「다시 시도」 접수",
+  "description": "POST /api/sessions/{sessionId}/result/retry 202(계약 3절 C5 · U6 BR2.4). 현재 작업이 FAILED일 때만 새 차수 작업을 만들고 jobStatus REQUESTED를 돌려준다. 앱은 202 · 409 모두 정리 상태 폴링을 다시 시작한다.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["jobStatus"],
+  "properties": {
+    "jobStatus": { "type": "string", "enum": ["REQUESTED"] }
+  }
+}

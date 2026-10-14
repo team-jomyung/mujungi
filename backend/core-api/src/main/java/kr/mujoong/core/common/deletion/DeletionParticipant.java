@@ -15,6 +15,9 @@ import java.util.UUID;
  */
 public interface DeletionParticipant {
 
+    /** U6 결과 · 리포트(10개 표) — 활동 기록 참가자(90)보다 먼저 지운다. */
+    int ORDER_RESULT = 70;
+
     /** core_activity_record(활동 기록, U4a) — core_activity를 가리킨다. */
     int ORDER_ACTIVITY_RECORD = 90;
     /** core_activity(세션 사본, U1 데이터 · U4a가 넘겨받음, 08 배경 core_activity_context 포함) — core_device · core_child를 가리킨다. */

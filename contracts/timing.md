@@ -66,8 +66,6 @@ U4b가 옮긴 것: `session.join-wait` · `session.join-wait-after-reprompt` · 
 | `mujoong.timing.practice.help-consent-wait` | 10초 | U5 |
 | `mujoong.timing.practice.cue-budget` | 5초 | U5 |
 | `mujoong.timing.practice.judge-budget` | 5초 + 재시도 1회 | U5 |
-| `mujoong.timing.result.job-attempts` | 3회(간격 5 · 15초) | U6 |
-| `mujoong.timing.report.ready-target` | 60초 | U6 |
 
 ## 3. 계약 7절 밖 U1 · U4b 시간 키 (`mujoong.timing.*` U1 4종 · U4b 2종, J80 · R3-17 · U4b-J21)
 
@@ -170,3 +168,22 @@ WSS 텍스트 프레임 8KB(`mujoong.limits.ws-text-frame-max`, 넘으면 4400 [
 core-api 키는 모두 application.yml에 둔다. 텍스트 AI 세 키는 TextAiProperties, 두 `mujoong.timing.*` 키는 CoreProperties(timing.practice · timing.goal)가 묶는다. 상황 생성 예산은 요청 선점 시한과 같고(ScenarioLimits), 복구 시한은 GoalSelectionService가 읽는다. 프런트 삭제는 기존 조작 토스트 설정(최소 3초)을 따른다.
 
 web의 loading-notice-delay는 MUJOONG_TIMING_PARENT_LOADINGNOTICEDELAY 환경 변수로 주입하고 parentLoadingNoticeDelayMs로 읽는다.
+
+## 10. U6 결과 · 리포트 시간
+
+| 키 | 기본값 | 소유 앱 | 뜻 | 근거 |
+|---|---|---|---|---|
+| `mujoong.timing.result.job-attempts` | `3` | core-api | 최초 포함 총 시도 수 | BR1.7 · U6-d |
+| `mujoong.timing.result.job-retry-backoff` | `[5s, 15s]` | core-api | 실패 뒤 다음 시도 간격 | BR1.7 |
+| `mujoong.timing.result.job-tick` | `1s` | core-api | 실행기 주기 | FD-Q2 |
+| `mujoong.timing.result.attempt-timeout` | `30s` | core-api | 세션 결과 시도 시한 | FD-Q2 |
+| `mujoong.timing.result.reconcile-interval` | `5m` | core-api | 누락 · 후보 등록 · 리포트 정리 점검 | FD-Q2 |
+| `mujoong.timing.result.undecided-limit` | `1h` | core-api | 기록 저장 뒤 UNDECIDED 판정 유예 상한 | R-12 |
+| `mujoong.timing.report.ready-target` | `60s` | core-api · web | 리포트 접수부터 절대 마감 | BR9.4 · U6-e |
+| `mujoong.timing.report.unsaved-retention` | `24h` | core-api | 저장 안 된 READY · FAILED 보존 | FD-Q2 |
+| `mujoong.text-ai.result.request-timeout` | `10s` | core-api | AI 한 번의 최대 시한(시도 잔여 시간 이하) | FD-Q2 |
+| `mujoong.text-ai.result.temperature-judgment` | `0` | core-api | 재판정 온도 | ai-io 6.1 |
+| `mujoong.text-ai.result.temperature-generation` | `0.2` | core-api | 생성 온도 | ai-io 6.1 |
+| `mujoong.text-ai.result.prompt-version` | `v1` | core-api | 프롬프트 리소스 버전 | U6-J |
+
+생성 온도 `mujoong.text-ai.result.temperature-generation=0.2`, 재판정 온도 `temperature-judgment=0`, 프롬프트 버전 `prompt-version=v1`, `mujoong.limits.result-workers=2`는 시간이 아닌 설정이다. 실행 스레드 하나는 REPORT 전용이다. 17 · 27 · 28도 정리/생성 중에만 기존 `parent.poll-interval`을 사용한다(U6-h).

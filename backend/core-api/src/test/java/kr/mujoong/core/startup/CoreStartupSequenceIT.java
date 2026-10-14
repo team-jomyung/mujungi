@@ -104,13 +104,13 @@ class CoreStartupSequenceIT {
             withHistoryChange(database, "update flyway.core_schema_history set success = false",
                     "update flyway.core_schema_history set success = true",
                     () -> assertRefusedAtS2(database, "성공한 버전이 없다"));
-            // 적용된 버전(V1 · U2 V2 · U4a V3 · U5a V4)을 모두 앱 기대값보다 낮게 바꾼다(최고 0.9)
+            // 적용된 버전(V1 · U2 V2 · U4a V3 · U5a V4 · U6 V5)을 모두 앱 기대값보다 낮게 바꾼다(최고 0.10)
             withHistoryChange(database,
                     "update flyway.core_schema_history set version = case version when '1' then '0.6' when '2' then '0.7'"
-                            + " when '3' then '0.8' when '4' then '0.9' else version end",
+                            + " when '3' then '0.8' when '4' then '0.9' when '5' then '0.10' else version end",
                     "update flyway.core_schema_history set version = case version when '0.6' then '1' when '0.7' then '2'"
-                            + " when '0.8' then '3' when '0.9' then '4' else version end",
-                    () -> assertRefusedAtS2(database, "버전 0.9 < 기대 " + SchemaVersionCheck.expectedVersion()));
+                            + " when '0.8' then '3' when '0.9' then '4' when '0.10' then '5' else version end",
+                    () -> assertRefusedAtS2(database, "버전 0.10 < 기대 " + SchemaVersionCheck.expectedVersion()));
 
             assertThat(capture.events(EventCode.STARTUP_RECOVERY)).as("S2에서 멈춰 복구(S3)는 돌지 않았다").isEmpty();
         }

@@ -26,6 +26,8 @@ public enum ErrorCode {
     RESTORE_EXPIRED("되돌릴 수 있는 시간이 지났어요.", EnumSet.of(Audience.GUARDIAN), null, 410),
     SCENARIO_GEN_FAILED("연습 상황을 준비하지 못했어요.", EnumSet.of(Audience.GUARDIAN, Audience.INTERNAL), null, 422),
     IDEMPOTENCY_CONFLICT("같은 요청 번호로 다른 내용이 왔어요.", EnumSet.of(Audience.GUARDIAN), null, 409),
+    JOB_NOT_FAILED("지금은 다시 시도할 수 없어요.", EnumSet.of(Audience.GUARDIAN), null, 409),
+    REPORT_NOT_READY("리포트가 아직 준비되지 않았어요.", EnumSet.of(Audience.GUARDIAN), null, 409),
     SESSION_NOT_ACTIVE("지금은 끝낼 수 있는 상태가 아니에요.", EnumSet.of(Audience.GUARDIAN, Audience.INTERNAL), "(w)", 409),
     DEVICE_NOT_STABLE("기기 연결이 안정되지 않았어요.", EnumSet.of(Audience.GUARDIAN), null, 423),
     REALTIME_UNAVAILABLE("지금은 연결할 수 없어요. 잠시 뒤 다시 시도해 주세요.", EnumSet.of(Audience.GUARDIAN), null, 503),

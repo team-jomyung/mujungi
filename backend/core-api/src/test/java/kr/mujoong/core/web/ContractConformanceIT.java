@@ -284,6 +284,7 @@ class ContractConformanceIT {
             String path = key.substring(key.indexOf(' ') + 1)
                     .replace("{deviceId}", UUID.randomUUID().toString())
                     .replace("{goalSelectionId}", UUID.randomUUID().toString())
+                    .replace("{reportId}", UUID.randomUUID().toString())
                     .replace("{sessionId}", UUID.randomUUID().toString());
             Call call = app.call(method, path);
             if (!method.equals("GET")) {

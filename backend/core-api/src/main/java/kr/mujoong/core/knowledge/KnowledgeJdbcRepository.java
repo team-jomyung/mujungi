@@ -17,6 +17,11 @@ public class KnowledgeJdbcRepository {
     public Optional<BehaviorDefinition> findVersion(String key, int version) {
         return readVersion(key, version, false);
     }
+    public List<BehaviorDefinition> activeDefinitions() {
+        return jdbc.query("select behavior_key,version from core.core_behavior_definition where status='ACTIVE' order by behavior_key,version",
+                new MapSqlParameterSource(),(rs,n)->findVersion(rs.getString(1),rs.getInt(2)).orElseThrow())
+                .stream().filter(BehaviorDefinition::complete).toList();
+    }
     /**
      * 고정(pin)용 읽기: FOR KEY SHARE. 같은 정의 행을 여러 보호자가 함께 고정해도 서로 줄 서지 않고, 행 삭제 · 키 변경만 막는다(U5a 리뷰 1).
      * 내용 수정은 used_at이 찍힌 뒤 트리거가 막는다.

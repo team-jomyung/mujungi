@@ -1,0 +1,221 @@
+# U6 코드 생성 요약
+
+2026-10-14. 승인된 test-after 계약으로 구현과 시험을 이어갔다. 이 기록은 zero-Unit이므로 단계 정의에 따라 source-manifest.json을 만들지 않는다.
+
+## 구현 결정
+
+- AI 입력 조립 전·공급자 제출 직전·후속 분류 전에 현재 동의와 보호자 상태를 확인한다. 철회 활동은 리포트 인용·구조화·문장 입력에서 제외한다. 삭제 접수와 기존 REPORT 실행의 실제 서비스 경로를 회귀 시험으로 확인한다.
+- 분류 중 동의 상실도 최종 확정에서 차단하여 새 결과·항목·후보를 공개하지 않는다. 기존 INTERNAL 오류로 즉시 FAILED 처리하고 자동 재시도하지 않으며, 수동 재시도는 현재 동의가 없으면 CONSENT_MISSING이다. BR5.5의 철회 활동은 AI 없는 INSUFFICIENT/DONE을 유지하고, 리포트 필터가 NONE/DONE 저장 상태를 덮어쓰지 않는다.
+- 장면 인용은 목표·FIRST/NEW_SCENARIO·AFTER_CUE·scenario 및 발화 번호/원문으로 검증한다. 도움 발화는 IMMEDIATE 근거를 대신하지 못한다. functional의 timing 생략/null은 IMMEDIATE로 정규화하고 누락·타인 상황은 안전하게 제외한다.
+
+- 결과 작업과 리포트 작업은 공통 DB 선점·재시도·마감 실행기를 공유하고 REPORT 전용 슬롯을 둔다. 호출은 트랜잭션 밖, 최종 쓰기는 lease·삭제 상태를 다시 검사한다.
+- 기록 읽기는 ResultRecordReader 공개 포트를 사용한다. 기존 U4a·U5a 서비스를 통째로 복제하지 않고 정리 대상 판별과 읽기 확장만 연결했다.
+- PDFBox 첫 렌더의 디스크 폰트 캐시를 실제 제한 컨테이너에서 발견해 내장 메모리 폰트 매퍼로 수정했다. 새 JVM 테스트와 20활동 컨테이너 스모크가 새 임시 파일 0개를 확인했다.
+- 프런트 폴링 시험은 fake timer로 2초·60초 경계와 최종 상태·언마운트 해제를 확인한다. 화면·URL·API·문구·접근성·PDF 저장 순서를 U6 시험으로 검증한다.
+- 기존 timing 기본값 단언은 사용자 승인된 reportReadyTargetMs만 추가했다. records stub redirect는 승인된 실제 Records26 진입으로 갱신했다. V5 마이그레이션으로 달라진 표·열·인덱스·버전·오류 목록 fixture만 좁게 수정했으며 검증이나 커버리지 기준은 낮추지 않았다.
+- 시간 스캐너 허용은 설정 Duration을 Java 시간 단위 인자로 전달하는 두 줄에만 파일·조각·근거로 한정했다.
+
+## 검증과 편차
+
+- 변경 contract-model ErrorCode 범위 100%(59/59), 운영 bootJar 시험 항목 0건. 소스 커밋은 backend/계약 `206b1c3`, frontend `aea6e99`이며 승인 계획의 이전 미커밋 구현도 영역별로 함께 정리했다. 각 커밋 전 cached summary에서 불필요한 실행 비트 변경이 없음을 확인했다.
+
+- backend 전체 check 성공: core 1,040 · contract 298 · realtime 1,020 · test-support 24 통과, 기존 3 skip. 전체 줄 core 96.21%, contract 98.47%, realtime 92.84%.
+- backend U6 212개 통과, 변경 core 범위 줄 86.17%(1,171/1,359). REPORT A 11,213ms, D 4,123ms. 프런트 전체 864개 통과·줄 98.55%, U6 61개 통과·줄 83.21%. lint·typecheck 성공.
+- 제한 컨테이너 PDF 1,709ms·28,194바이트·7페이지·임시 파일 0개. 동일 HEAD 기준선 이미지 대비 +19,816,192바이트. 생성·변경 자바 69개와 TS/TSX 23개를 범위 파일에 누락 없이 반영했다.
+- 실제 AI 공급자 미연결은 승인된 범위다. 기본 UNAVAILABLE로 AI가 필요한 작업은 3회 뒤 FAILED이며, INSUFFICIENT는 AI 없이 DONE이다. READY 성능은 가짜 공급자 기준이다.
+- 추적표 215행(BR·상세 FR·NFR·연결된 AC·상위 묶음/원본 ID), OK 대상·시험 파일 경로 존재 확인 완료.
+
+최종 수치와 정확한 제한 조건은 `docs/units/u6/report.md`를 따른다. 최초 동시 Gradle 실행은 결과 디렉터리 충돌이 있어 최종 증빙에서 제외하고 순차 재실행한다. 코드 생성 계획 Step31의 일반 source-manifest 언급보다 zero-Unit 단계 규칙을 적용한다. 커버리지 파일은 새 파일과 변경된 기존 운영 소스를 모두 포함한다.
+
+가정 U6-J(D 담당 AI 초안), U6-K(Core 단일 인스턴스), U5b 사상표 통합, 팀장 자유대화 문장 확인, Android Chrome 수동 확인은 design.md·report.md에 명시했다. 계약 편차 정본은 contracts/deviations.md다.
+
+## 생성·변경 파일
+
+아래는 U6 애플리케이션·시험·계약·문서의 전체 경로다. 별도로 이 디렉터리의 계획 체크박스·code-summary.md·traceability.json을 갱신한다. 프레임워크·이전 intent·codekb의 기존 변경은 이 작업 목록에 포함하지 않는다.
+
+- `backend/contract-model/src/main/java/kr/mujoong/contract/error/ErrorCode.java`
+- `backend/contract-model/src/test/java/kr/mujoong/contract/error/ErrorCodeTest.java`
+- `backend/core-api/build.gradle.kts`
+- `backend/core-api/src/main/java/kr/mujoong/core/common/deletion/DeletionParticipant.java`
+- `backend/core-api/src/main/java/kr/mujoong/core/config/CoreProperties.java`
+- `backend/core-api/src/main/java/kr/mujoong/core/knowledge/BehaviorDefinitionLookup.java`
+- `backend/core-api/src/main/java/kr/mujoong/core/knowledge/KnowledgeJdbcRepository.java`
+- `backend/core-api/src/main/java/kr/mujoong/core/knowledge/SupportLibrary.java`
+- `backend/core-api/src/main/java/kr/mujoong/core/practice/CandidateRegistry.java`
+- `backend/core-api/src/main/java/kr/mujoong/core/practice/PracticeGoalRepository.java`
+- `backend/core-api/src/main/java/kr/mujoong/core/practice/ScenarioLookup.java`
+- `backend/core-api/src/main/java/kr/mujoong/core/record/ActivityRecordRepository.java`
+- `backend/core-api/src/main/java/kr/mujoong/core/record/RecordEligibility.java`
+- `backend/core-api/src/main/java/kr/mujoong/core/record/RecordQueryService.java`
+- `backend/core-api/src/main/java/kr/mujoong/core/record/ResultRecordReader.java`
+- `backend/core-api/src/main/java/kr/mujoong/core/report/QuoteCandidatePicker.java`
+- `backend/core-api/src/main/java/kr/mujoong/core/report/ReportAssembler.java`
+- `backend/core-api/src/main/java/kr/mujoong/core/report/ReportHandler.java`
+- `backend/core-api/src/main/java/kr/mujoong/core/report/ReportInput.java`
+- `backend/core-api/src/main/java/kr/mujoong/core/report/ReportJobStateAdapter.java`
+- `backend/core-api/src/main/java/kr/mujoong/core/report/ReportRepository.java`
+- `backend/core-api/src/main/java/kr/mujoong/core/report/ReportRetentionAdapter.java`
+- `backend/core-api/src/main/java/kr/mujoong/core/report/ReportService.java`
+- `backend/core-api/src/main/java/kr/mujoong/core/report/package-info.java`
+- `backend/core-api/src/main/java/kr/mujoong/core/report/pdf/EmbeddedFontMapper.java`
+- `backend/core-api/src/main/java/kr/mujoong/core/report/pdf/ReportPdfRenderer.java`
+- `backend/core-api/src/main/java/kr/mujoong/core/report/pdf/package-info.java`
+- `backend/core-api/src/main/java/kr/mujoong/core/report/web/ReportController.java`
+- `backend/core-api/src/main/java/kr/mujoong/core/report/web/package-info.java`
+- `backend/core-api/src/main/java/kr/mujoong/core/result/ActivityResultRepository.java`
+- `backend/core-api/src/main/java/kr/mujoong/core/result/CandidateScreen.java`
+- `backend/core-api/src/main/java/kr/mujoong/core/result/HelpSummarizer.java`
+- `backend/core-api/src/main/java/kr/mujoong/core/result/JobContext.java`
+- `backend/core-api/src/main/java/kr/mujoong/core/result/JobHandler.java`
+- `backend/core-api/src/main/java/kr/mujoong/core/result/JobRunner.java`
+- `backend/core-api/src/main/java/kr/mujoong/core/result/JobRunnerLoop.java`
+- `backend/core-api/src/main/java/kr/mujoong/core/result/NotDoneReasonMapper.java`
+- `backend/core-api/src/main/java/kr/mujoong/core/result/Outcome.java`
+- `backend/core-api/src/main/java/kr/mujoong/core/result/ReportJobState.java`
+- `backend/core-api/src/main/java/kr/mujoong/core/result/ReportRetention.java`
+- `backend/core-api/src/main/java/kr/mujoong/core/result/ResultAiException.java`
+- `backend/core-api/src/main/java/kr/mujoong/core/result/ResultAiSchema.java`
+- `backend/core-api/src/main/java/kr/mujoong/core/result/ResultData.java`
+- `backend/core-api/src/main/java/kr/mujoong/core/result/ResultDeletionParticipant.java`
+- `backend/core-api/src/main/java/kr/mujoong/core/result/ResultEligibility.java`
+- `backend/core-api/src/main/java/kr/mujoong/core/result/ResultEvidenceAdapter.java`
+- `backend/core-api/src/main/java/kr/mujoong/core/result/ResultIntake.java`
+- `backend/core-api/src/main/java/kr/mujoong/core/result/ResultJob.java`
+- `backend/core-api/src/main/java/kr/mujoong/core/result/ResultJobRepository.java`
+- `backend/core-api/src/main/java/kr/mujoong/core/result/ResultLevelCalculator.java`
+- `backend/core-api/src/main/java/kr/mujoong/core/result/ResultQueryService.java`
+- `backend/core-api/src/main/java/kr/mujoong/core/result/ResultReconciler.java`
+- `backend/core-api/src/main/java/kr/mujoong/core/result/ResultRetryService.java`
+- `backend/core-api/src/main/java/kr/mujoong/core/result/ResultTextConfiguration.java`
+- `backend/core-api/src/main/java/kr/mujoong/core/result/ResultTextGateway.java`
+- `backend/core-api/src/main/java/kr/mujoong/core/result/ResultTextProvider.java`
+- `backend/core-api/src/main/java/kr/mujoong/core/result/SceneChipMapper.java`
+- `backend/core-api/src/main/java/kr/mujoong/core/result/SceneJudgmentRepository.java`
+- `backend/core-api/src/main/java/kr/mujoong/core/result/SessionResultHandler.java`
+- `backend/core-api/src/main/java/kr/mujoong/core/result/SessionResultStateRepository.java`
+- `backend/core-api/src/main/java/kr/mujoong/core/result/StructuredExperienceRepository.java`
+- `backend/core-api/src/main/java/kr/mujoong/core/result/TipMatcher.java`
+- `backend/core-api/src/main/java/kr/mujoong/core/result/check/ForbiddenDictionary.java`
+- `backend/core-api/src/main/java/kr/mujoong/core/result/check/NumberGuard.java`
+- `backend/core-api/src/main/java/kr/mujoong/core/result/check/OutputChecker.java`
+- `backend/core-api/src/main/java/kr/mujoong/core/result/check/QuoteMatcher.java`
+- `backend/core-api/src/main/java/kr/mujoong/core/result/check/package-info.java`
+- `backend/core-api/src/main/java/kr/mujoong/core/result/package-info.java`
+- `backend/core-api/src/main/java/kr/mujoong/core/result/web/ResultController.java`
+- `backend/core-api/src/main/java/kr/mujoong/core/result/web/package-info.java`
+- `backend/core-api/src/main/java/kr/mujoong/core/textai/TextAiProperties.java`
+- `backend/core-api/src/main/resources/application.yml`
+- `backend/core-api/src/main/resources/db/migration/core/V5__u6_results_report.sql`
+- `backend/core-api/src/main/resources/forbidden/result-v1.json`
+- `backend/core-api/src/main/resources/prompts/result/candidates.v1.txt`
+- `backend/core-api/src/main/resources/prompts/result/classify.v1.txt`
+- `backend/core-api/src/main/resources/prompts/result/judgment.v1.txt`
+- `backend/core-api/src/main/resources/prompts/result/report.v1.txt`
+- `backend/core-api/src/main/resources/prompts/result/sentences.v1.txt`
+- `backend/core-api/src/main/resources/prompts/result/structure.v1.txt`
+- `backend/core-api/src/main/resources/report/fonts/NotoSansKR-Bold.ttf`
+- `backend/core-api/src/main/resources/report/fonts/NotoSansKR-Regular.ttf`
+- `backend/core-api/src/main/resources/report/fonts/OFL.txt`
+- `backend/core-api/src/main/resources/report/template.html`
+- `backend/core-api/src/test/java/kr/mujoong/core/arch/TimeLiteralScanTest.java`
+- `backend/core-api/src/test/java/kr/mujoong/core/common/db/DbTestSupport.java`
+- `backend/core-api/src/test/java/kr/mujoong/core/db/CoreSchemaIT.java`
+- `backend/core-api/src/test/java/kr/mujoong/core/db/FlywayConfIT.java`
+- `backend/core-api/src/test/java/kr/mujoong/core/db/SchemaPrivilegeIT.java`
+- `backend/core-api/src/test/java/kr/mujoong/core/report/QuoteCandidatePickerTest.java`
+- `backend/core-api/src/test/java/kr/mujoong/core/report/ReportApiIT.java`
+- `backend/core-api/src/test/java/kr/mujoong/core/report/ReportAssemblerTest.java`
+- `backend/core-api/src/test/java/kr/mujoong/core/report/ReportPdfColdStartTest.java`
+- `backend/core-api/src/test/java/kr/mujoong/core/report/ReportPdfTest.java`
+- `backend/core-api/src/test/java/kr/mujoong/core/report/ReportRepositoryIT.java`
+- `backend/core-api/src/test/java/kr/mujoong/core/report/ReportServiceIT.java`
+- `backend/core-api/src/test/java/kr/mujoong/core/report/ReportTestData.java`
+- `backend/core-api/src/test/java/kr/mujoong/core/report/pdf/EmbeddedFontMapperTest.java`
+- `backend/core-api/src/test/java/kr/mujoong/core/result/FakeResultTextProvider.java`
+- `backend/core-api/src/test/java/kr/mujoong/core/result/JobRunnerIT.java`
+- `backend/core-api/src/test/java/kr/mujoong/core/result/JobRunnerLoopTest.java`
+- `backend/core-api/src/test/java/kr/mujoong/core/result/JobRunnerTest.java`
+- `backend/core-api/src/test/java/kr/mujoong/core/result/NotDoneReasonMapperTest.java`
+- `backend/core-api/src/test/java/kr/mujoong/core/result/RecordFailedExposureU6IT.java`
+- `backend/core-api/src/test/java/kr/mujoong/core/result/ReportHandlerIT.java`
+- `backend/core-api/src/test/java/kr/mujoong/core/result/ResultApiIT.java`
+- `backend/core-api/src/test/java/kr/mujoong/core/result/ResultDeletionIT.java`
+- `backend/core-api/src/test/java/kr/mujoong/core/result/ResultEligibilityTest.java`
+- `backend/core-api/src/test/java/kr/mujoong/core/result/ResultEvidenceAdapterIT.java`
+- `backend/core-api/src/test/java/kr/mujoong/core/result/ResultIntakeIT.java`
+- `backend/core-api/src/test/java/kr/mujoong/core/result/ResultJobRepositoryIT.java`
+- `backend/core-api/src/test/java/kr/mujoong/core/result/ResultLevelCalculatorTest.java`
+- `backend/core-api/src/test/java/kr/mujoong/core/result/ResultReconcilerTest.java`
+- `backend/core-api/src/test/java/kr/mujoong/core/result/ResultRetryIT.java`
+- `backend/core-api/src/test/java/kr/mujoong/core/result/ResultTextGatewayTest.java`
+- `backend/core-api/src/test/java/kr/mujoong/core/result/SceneChipMapperTest.java`
+- `backend/core-api/src/test/java/kr/mujoong/core/result/SessionResultHandlerIT.java`
+- `backend/core-api/src/test/java/kr/mujoong/core/result/SessionResultStateRepositoryIT.java`
+- `backend/core-api/src/test/java/kr/mujoong/core/result/TipMatcherTest.java`
+- `backend/core-api/src/test/java/kr/mujoong/core/result/U5aExtensionU6IT.java`
+- `backend/core-api/src/test/java/kr/mujoong/core/result/U6SchemaIT.java`
+- `backend/core-api/src/test/java/kr/mujoong/core/result/U6WebTestSupport.java`
+- `backend/core-api/src/test/java/kr/mujoong/core/result/check/ForbiddenDictionaryTest.java`
+- `backend/core-api/src/test/java/kr/mujoong/core/result/check/NumberGuardTest.java`
+- `backend/core-api/src/test/java/kr/mujoong/core/result/check/OutputCheckerTest.java`
+- `backend/core-api/src/test/java/kr/mujoong/core/result/check/QuoteMatcherTest.java`
+- `backend/core-api/src/test/java/kr/mujoong/core/startup/CoreStartupSequenceIT.java`
+- `backend/core-api/src/test/java/kr/mujoong/core/startup/SchemaVersionCheckTest.java`
+- `backend/core-api/src/test/java/kr/mujoong/core/web/ContractConformanceIT.java`
+- `backend/core-api/src/test/resources/application-test.yml`
+- `backend/coverage-scope/u6.txt`
+- `contracts/ai-io.md`
+- `contracts/deviations.md`
+- `contracts/errors.md`
+- `contracts/parent-api.yaml`
+- `contracts/schemas/records-response.schema.json`
+- `contracts/schemas/report-create-request.schema.json`
+- `contracts/schemas/report-create-response.schema.json`
+- `contracts/schemas/report-preview-response.schema.json`
+- `contracts/schemas/report-response.schema.json`
+- `contracts/schemas/session-result-response.schema.json`
+- `contracts/schemas/session-result-retry-response.schema.json`
+- `contracts/schemas/session-result-status-response.schema.json`
+- `contracts/timing.md`
+- `docs/units/README.md`
+- `docs/units/u6/design.md`
+- `docs/units/u6/report.md`
+- `frontend/coverage-scope/u6.json`
+- `frontend/src/app/parent/layout.tsx`
+- `frontend/src/app/parent/records/[sessionId]/page.tsx`
+- `frontend/src/app/parent/records/page.tsx`
+- `frontend/src/app/parent/reports/[reportId]/page.tsx`
+- `frontend/src/app/parent/reports/new/page.tsx`
+- `frontend/src/parent/api/reports.ts`
+- `frontend/src/parent/api/results.ts`
+- `frontend/src/parent/components/EndReasonCard.tsx`
+- `frontend/src/parent/components/LiveRegion.tsx`
+- `frontend/src/parent/components/MonthCalendar.tsx`
+- `frontend/src/parent/components/SceneChip.tsx`
+- `frontend/src/parent/hooks/useReportPolling.ts`
+- `frontend/src/parent/hooks/useResultStatusPolling.ts`
+- `frontend/src/parent/navigation.ts`
+- `frontend/src/parent/result.css`
+- `frontend/src/parent/screens/Done17.tsx`
+- `frontend/src/parent/screens/RecordDetail27.tsx`
+- `frontend/src/parent/screens/Records26.tsx`
+- `frontend/src/parent/screens/Report30.tsx`
+- `frontend/src/parent/screens/ReportRange28.tsx`
+- `frontend/src/shared/copy/ko.ts`
+- `frontend/src/shared/copy/result.ts`
+- `frontend/src/shared/errors/codeToCopy.ts`
+- `frontend/src/shared/timing/timing-defaults.json`
+- `frontend/src/shared/timing/timing.ts`
+- `frontend/tests/u1/parent/done-17.test.tsx`
+- `frontend/tests/u1/shared/routes.test.tsx`
+- `frontend/tests/u1/shared/timing.test.ts`
+- `frontend/tests/u4a/parent/screens-u4a.test.tsx`
+- `frontend/tests/u6/parent/api-u6.test.ts`
+- `frontend/tests/u6/parent/done-17-result.test.tsx`
+- `frontend/tests/u6/parent/hooks-u6.test.tsx`
+- `frontend/tests/u6/parent/record-27.test.tsx`
+- `frontend/tests/u6/parent/records-26.test.tsx`
+- `frontend/tests/u6/parent/report-28.test.tsx`
+- `frontend/tests/u6/parent/report-30.test.tsx`
+- `frontend/tests/u6/parent/routes-u6.test.tsx`
+- `frontend/tests/u6/parent/support.ts`

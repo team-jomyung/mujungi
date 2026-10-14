@@ -224,6 +224,14 @@ public final class DbTestSupport implements AutoCloseable {
 
     /** 커밋한 행을 외래 키 순서로 지운다(멱등). */
     public void cleanUp() {
+        // U6 비동기 결과도 같은 시험 보호자 범위에서 먼저 정리한다(운영 삭제 참가자와 같은 FK 순서).
+        if (!guardians.isEmpty()) {
+            var results = new kr.mujoong.core.result.ResultDeletionParticipant(jdbc,
+                    new kr.mujoong.core.identity.GuardianWriteLock(jdbc), transactionManager);
+            for (UUID guardian : guardians) {
+                results.deleteByGuardian(guardian, UUID.randomUUID());
+            }
+        }
         if (!outboxEvents.isEmpty()) {
             jdbc.update("delete from core.core_outbox_event where event_id = any(:ids)",
                     new MapSqlParameterSource("ids", outboxEvents.toArray(UUID[]::new)));

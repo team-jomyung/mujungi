@@ -1,0 +1,1 @@
+{"command":"npx vitest run --coverage --maxWorkers=2","exit_code":0,"files":64,"tests":864,"failures":0,"duration_seconds":117.03,"line_coverage":{"covered":3145,"total":3191,"percent":98.55},"lint_exit_code":0,"typecheck_exit_code":0,"build_exit_code":0,"adapted_existing_screen_tests":28,"adapted_existing_screen_failures":0}
