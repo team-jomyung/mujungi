@@ -19,6 +19,8 @@ dependencies {
     implementation(libs.spring.boot.starter.validation)
     implementation(libs.micrometer.registry.prometheus)
     implementation(libs.postgresql)
+    implementation(libs.push2u.core)
+    implementation(libs.httpclient5)
     // OpenAPI 문서는 dev · test 프로필에서만 켠다(application.yml 기본 꺼짐, tech-stack 2.2)
     implementation(libs.springdoc.openapi.webmvc.api)
 

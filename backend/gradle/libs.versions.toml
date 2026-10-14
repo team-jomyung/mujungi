@@ -13,6 +13,7 @@ json-schema-validator = "3.0.6"
 # 가짜 공급자 시험용 WebSocket 서버(test-support 전용, J110 · J129)
 java-websocket = "1.6.0"
 jacoco = "0.8.14"
+push2u = "0.3.0"
 # 보안 패치 판(3.6 수정 라운드 · CI backend-deps Trivy HIGH · CRITICAL). Boot 4.1.1 BOM의 판(Tomcat 11.0.24 ·
 # Jackson 3.1.5 · 2.22.1)보다 높여 덮는다(mujoong.java-conventions). Boot BOM이 이 판 이상을 내면 세 줄과 그 사용처를 지운다.
 tomcat-security = "11.0.26"
@@ -39,6 +40,8 @@ flyway-core = { module = "org.flywaydb:flyway-core" }
 flyway-database-postgresql = { module = "org.flywaydb:flyway-database-postgresql" }
 micrometer-registry-prometheus = { module = "io.micrometer:micrometer-registry-prometheus" }
 postgresql = { module = "org.postgresql:postgresql" }
+push2u-core = { module = "com.the13haven:push2u-core", version.ref = "push2u" }
+httpclient5 = { module = "org.apache.httpcomponents.client5:httpclient5" }
 hikaricp = { module = "com.zaxxer:HikariCP" }
 springdoc-openapi-webmvc-api = { module = "org.springdoc:springdoc-openapi-starter-webmvc-api", version.ref = "springdoc" }
 

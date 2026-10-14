@@ -48,6 +48,9 @@ class TimeLiteralScanTest {
 
     /** 허용 목록. 시간 값이 아니거나(단위 표기 · 단위 변환 · 고정 풀 keepAlive) 계약 · 결정이 값을 고정한 상수뿐이다. */
     static final List<Allowed> ALLOWED = List.of(
+            new Allowed(CORE + "notification/transport/PinnedPushHttpClient.java",
+                    "attempt.get(timeout.toNanos(), TimeUnit.NANOSECONDS)",
+                    "U7: 설정 send-timeout의 나노초 단위 변환이다. 대기 시간 상수는 허용하지 않는다"),
             new Allowed(CORE + "startup/CoreStartupSequence.java", "delay.toMillis(), delay.toMillis(), TimeUnit.MILLISECONDS",
                     "단위 표기: 값은 설정 키 Duration을 밀리초로 넘긴 것이다(scheduleWithFixedDelay에 Duration 판이 없다)"),
             new Allowed(CORE + "startup/CoreStartupSequence.java",
