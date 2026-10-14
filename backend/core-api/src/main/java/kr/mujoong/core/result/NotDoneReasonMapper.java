@@ -10,7 +10,7 @@ public class NotDoneReasonMapper {
     public String map(Map<String,Object> goal,Map<String,Object> response){
         if("NOT_REACHED".equals(goal.get("status")))return "ACTIVITY_ENDED";
         if("SKIPPED".equals(goal.get("status"))&&Set.of("TIME_OVER","TIMEOUT").contains(ResultData.text(goal,"skipReason")))return "TIME_OVER";
-        if("SKIPPED".equals(goal.get("status"))&&Set.of("SCENARIO_FAILED","SCENARIO_GEN_FAILED").contains(ResultData.text(goal,"skipReason")))return "SCENARIO_FAILED";
+        if("SKIPPED".equals(goal.get("status"))&&Set.of("SCENARIO_FAILED","SCENARIO_GEN_FAILED","GENERATION_FAILED","VALIDATION_FAILED","UNAVAILABLE").contains(ResultData.text(goal,"skipReason")))return "SCENARIO_FAILED";
         String reason=ResultData.text(response,"notPerformedReason");
         if(Set.of("TIME_OVER","TIME_LIMIT","TIMEOUT").contains(reason))return "TIME_OVER";
         if(Set.of("NO_RESPONSE","SILENCE").contains(reason))return "NO_RESPONSE";
