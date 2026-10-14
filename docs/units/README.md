@@ -1,4 +1,4 @@
-# 유닛 병렬 구현 — 현황과 인계 (2026-10-13 기준)
+# 유닛 병렬 구현 — 현황과 인계 (2026-10-14 기준)
 
 U1 워킹 스켈레톤은 AI-DLC 엔진으로 끝까지 만들었다(설계 · 코드 · 시험 · 감사 기록이 `aidlc/` 아래에 있다).
 U2 ~ U5a는 엔진 없이, 엔진이 만든 인셉션 산출물(스토리 · 계약 · 컴포넌트 · 유닛 · 볼트 계획)과 U1 코드를 스펙으로 삼아 유닛별 작업자가 병렬로 구현했다.
@@ -14,9 +14,9 @@ U4b부터는 다시 AI-DLC를 쓴다. 담당자마다 자기 PC에서 유닛용 
 | U3 음성 대화 | **main 병합**(10/13, PR #2, 2493ee3). 리뷰 3차와 종료 의도 판정 보강까지 | 병합됨 | `u3/brief-cloud.md` · `design.md` · `report.md`(9절 남은 일) |
 | U4a 활동 세션 Core · /parent 화면 | **main 병합**(10/13, PR #2, 7a8a1d7). 리뷰 1차 병합 전 5건 반영. core V3 | 병합됨 | `u4a/brief.md` · `design.md` · `report.md` · `review-1.md` |
 | U5a 연습 Core | **main 병합**(10/13, PR #4, de2cbe6). 리뷰 1차 11건 반영. core V4 | 병합됨 | `u5a/brief.md` · `design.md` · `report.md`(리뷰 반영 절) · `review-1.md` |
-| U4b 활동 세션 Realtime | **진행 중**(10/13 시작). AI-DLC 작업 기록 `261013-u4b-activity-realtime`으로 진행한다. realtime V3 | `unit/u4b-activity-realtime` | `u4b/design.md` · `u4b/brief.md` |
+| U4b 활동 세션 Realtime | **main 병합**(10/14, PR #8, 7a22b67). realtime V3 | 병합됨 | `u4b/design.md` · `u4b/brief.md` |
 | U5b 연습 Realtime · 연결 마무리 | **지시서 준비됨**. U4b와 병렬로 진행하고, 각자 자기 PC에서 AI-DLC 작업 기록을 새로 만든다. 병합은 U4b 다음. realtime V4 | main에서 새로 `unit/u5b-practice` | **`u5b/brief.md`** |
-| U6 결과와 리포트 | **지시서 준비됨**. U5b를 기다리지 않고 시작한다. 연습 결과는 계약 6절 예시 값 대역으로 시험하고, U4b · U5b가 들어오면 끝에서 끝까지 다시 시험한다. core V5라 다른 유닛을 기다리지 않고 병합할 수 있다 | main에서 새로 `unit/u6-results-report` | **`u6/brief.md`** |
+| U6 결과와 리포트 | **진행 중**. `261014-u6-result-report` 코드 생성·검증, core V5. U5b 합류 후 연습 전체 흐름 확인 예정 | `unit/u6-results-report` | `u6/brief.md` · `u6/design.md` · `u6/report.md` |
 | U7 웹 푸시 | 시작 전. core V6이라 U6 다음에 병합한다 | — | `aidlc/…/inception/units-generation/unit-of-work.md` U7 절, 맨 아래 「U6 · U7 정본」 |
 
 ## 병합 순서 (꼭 지킨다)
