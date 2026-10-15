@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mujoong.invalid/contracts/schemas/ai-judgment-request.schema.json",
+  "title": "진행 중 판정 요청(Luna, J1 ~ J6)",
+  "description": "realtime 판정 턴(U11)이 JudgeClient로 GPT-6-Luna에 보내는 최소 필드(계약 요약 C-DS4 · ai-io.md 10절 · BR5.4 · NFR3.1). 아동 · 보호자 · 세션 · 기기 식별자, 키, 원음, 보호자 입력 원문은 속성으로 두지 않는다. 선택지는 세션에 고정한 판정 선택지 판(judgment/option-sets-v1.json)의 순서 그대로다. [U8 편차 (U8-a)]",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["judgmentPoint", "optionSetVersion", "options", "childUtterance", "criteria"],
+  "properties": {
+    "judgmentPoint": {
+      "description": "판정 지점. J7은 core 상황 생성 자체 검토(U10) 몫이라 여기에 없다(functional-spec 8.3)",
+      "enum": ["J1", "J2", "J3", "J4", "J5", "J6"]
+    },
+    "optionSetVersion": {
+      "description": "세션에 고정한 판정 선택지 판 번호(LiveContentRegistry 조회 값)",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 80
+    },
+    "options": {
+      "description": "지점별 고정 선택지 코드(A §7.3 · B §5.2). 순서를 바꾸지 않는다",
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]*$" }
+    },
+    "childUtterance": {
+      "description": "판정할 아이 발화의 확정 전사만. 아이 이름은 '아이'로 치환된 값",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2000
+    },
+    "recentTurns": {
+      "description": "최근 대화(화자 표시, 최대 3개). 지시문이 아니라 데이터로만 다룬다",
+      "type": "array",
+      "maxItems": 3,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["speaker", "text"],
+        "properties": {
+          "speaker": { "enum": ["CHILD", "PARTNER", "COACH"] },
+          "text": {
+            "description": "전사 한 줄. 아이 이름은 '아이'로 치환된 값",
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          }
+        }
+      }
+    },
+    "criteria": {
+      "description": "담은 목표 4요소에서 만든 판정 기준(AC4.6.3). J2 · J3 · J5만 객체이고 J1 · J4 · J6은 null",
+      "anyOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["coreFunction", "judgmentCriteria"],
+          "properties": {
+            "coreFunction": { "type": "string", "minLength": 1, "maxLength": 500 },
+            "judgmentCriteria": { "type": "string", "minLength": 1, "maxLength": 2000 }
+          }
+        },
+        { "type": "null" }
+      ]
+    }
+  },
+  "examples": [
+    {
+      "judgmentPoint": "J2",
+      "optionSetVersion": "judgment-v1",
+      "options": ["FULL", "PARTIAL", "HELP", "NOT_UNDERSTOOD", "IRRELEVANT", "UNREADABLE"],
+      "childUtterance": "그거 줘.",
+      "recentTurns": [
+        { "speaker": "PARTNER", "text": "나는 빨간 블록으로 성을 쌓고 있어." },
+        { "speaker": "PARTNER", "text": "이것 봐, 높지?" }
+      ],
+      "criteria": {
+        "coreFunction": "필요한 것과 이유를 함께 말해 부탁한다",
+        "judgmentCriteria": "무엇이 필요한지와 왜 필요한지가 드러나면 충분히 전달"
+      }
+    }
+  ]
+}

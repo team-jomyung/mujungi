@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mujoong.invalid/contracts/schemas/ai-scenario-review-output.schema.json",
+  "title": "연습 장면 대본 자체 검토 출력(Luna 구조화 출력, J7)",
+  "description": "생성과 분리한 별도 요청의 응답(계약 요약 C-DS5 · FR2.1 · FR2.2). APPROVE만 승인이고 REJECT · UNCERTAIN · 누락 · 시간 초과는 승인이 아니다. APPROVE여도 서버 검사 실패면 막는다. 승인 사유 목록의 최종 값은 U10이 더한다. 재시도는 REQUEST_BOUNDED(ai-io.md 10절). [U8 편차 (U8-a)]",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["verdict", "reasons"],
+  "properties": {
+    "verdict": { "enum": ["APPROVE", "REJECT", "UNCERTAIN"] },
+    "reasons": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "ANSWER_INCLUDED",
+          "EARLY_CUE",
+          "PRESSURE",
+          "AGE_MISMATCH",
+          "GOAL_MISMATCH",
+          "REPETITION",
+          "OTHER_APPROVED_REASON"
+        ]
+      }
+    }
+  },
+  "examples": [
+    { "verdict": "APPROVE", "reasons": [] },
+    { "verdict": "REJECT", "reasons": ["ANSWER_INCLUDED", "EARLY_CUE"] }
+  ]
+}
