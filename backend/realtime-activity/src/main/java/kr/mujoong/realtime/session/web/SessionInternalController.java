@@ -60,7 +60,20 @@ public class SessionInternalController {
     /** 시작 명령 본문(internal-session-start-request.schema.json). */
     record StartBody(UUID sessionId, UUID idempotencyKey, UUID guardianId, UUID childId, UUID deviceId,
             ActivityType activityType, ConsentBody consentSnapshot, ChildBody childContext,
-            List<StopBody> stopExpressions, Map<String, ApprovedBody> approvedContent) {
+            List<StopBody> stopExpressions, Map<String, ApprovedBody> approvedContent,
+            Map<String, SpeechBody> approvedSpeech) {
+
+        /** U1 ~ U5b 모양(approvedSpeech 없음). */
+        StartBody(UUID sessionId, UUID idempotencyKey, UUID guardianId, UUID childId, UUID deviceId,
+                ActivityType activityType, ConsentBody consentSnapshot, ChildBody childContext,
+                List<StopBody> stopExpressions, Map<String, ApprovedBody> approvedContent) {
+            this(sessionId, idempotencyKey, guardianId, childId, deviceId, activityType, consentSnapshot, childContext,
+                    stopExpressions, approvedContent, null);
+        }
+    }
+
+    /** 음성 없는 승인 발화 한 칸(선택 속성 approvedSpeech 값, U8 편차 U8-b). */
+    record SpeechBody(UUID contentVersionId, String text) {
     }
 
     record ConsentBody(String policyVersion, Boolean voiceAndText, Boolean guardianView, Boolean reportSharing,
@@ -151,7 +164,27 @@ public class SessionInternalController {
         InternalBody.check(body.activityType() == ActivityType.FREE_TALK, "activityType");
         return new StartSessionHandler.StartCommand(body.sessionId(), body.idempotencyKey(), body.guardianId(),
                 body.childId(), body.deviceId(), body.activityType(), consent(body.consentSnapshot()),
-                child(body.childContext()), stops(body.stopExpressions()), approved(body.approvedContent()));
+                child(body.childContext()), stops(body.stopExpressions()), approved(body.approvedContent()),
+                speech(body.approvedSpeech()));
+    }
+
+    /**
+     * 선택 속성 approvedSpeech(U8 · BR1.2 · NFR6.1). 없으면 빈 것으로 본다. 있으면 계약 스키마의 code 형식 · contentVersionId · text(1 ~ 200자)를
+     * approvedContent와 같은 방식으로 검사한다. approvedContent와 code가 겹치는 처리는 시작 처리기가 한다(겹친 쪽을 버리고 APP_ERROR 한 줄).
+     */
+    private static Map<String, StartSessionHandler.ApprovedSpeechItem> speech(Map<String, SpeechBody> body) {
+        Map<String, StartSessionHandler.ApprovedSpeechItem> items = new LinkedHashMap<>();
+        if (body == null) {
+            return items;
+        }
+        for (Map.Entry<String, SpeechBody> entry : body.entrySet()) {
+            InternalBody.check(CONTENT_CODE.matcher(entry.getKey()).matches(), "approvedSpeech.key");
+            SpeechBody value = InternalBody.required(entry.getValue(), "approvedSpeech.value");
+            items.put(entry.getKey(), new StartSessionHandler.ApprovedSpeechItem(
+                    InternalBody.required(value.contentVersionId(), "approvedSpeech.contentVersionId"),
+                    InternalBody.text(value.text(), "approvedSpeech.text", 1, 200)));
+        }
+        return items;
     }
 
     private static ConsentSnapshot consent(ConsentBody body) {
