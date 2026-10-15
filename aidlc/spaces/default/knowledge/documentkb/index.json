@@ -1114,6 +1114,46 @@
       "related_intent_ids": [
         "01a13e5c-0ac9-786b-8d26-8e248e3c22b1"
       ]
+    },
+    {
+      "id": "01a1403f-77ef-76e0-99a7-8206fe684d97",
+      "source": {
+        "kind": "managed",
+        "path": "documents/MUJUNG_SERVICE_HANDOFF_SPRING_2026-10-15.zip"
+      },
+      "sha256": "56f2262aece21c3b712a7797c9c331336666aef5ca690c9ddbe06b136952bf4d",
+      "bytes": 185996,
+      "indexed_at": "2026-10-15T15:47:43.723Z",
+      "extraction": {
+        "state": "unsupported_type",
+        "detectedType": "application/octet-stream"
+      },
+      "summary": {
+        "state": "absent"
+      },
+      "related_intent_ids": [
+        "01a13e5c-0ac9-786b-8d26-8e248e3c22b1"
+      ]
+    },
+    {
+      "id": "01a1403f-783f-74dc-b638-9487828e14a7",
+      "source": {
+        "kind": "managed",
+        "path": "documents/social-comm-poc.zip"
+      },
+      "sha256": "1ef2fc0b20af95ef4ea6e64e5be120a18e2f4b29def489e927e91bc9e0523352",
+      "bytes": 15159610,
+      "indexed_at": "2026-10-15T15:47:43.789Z",
+      "extraction": {
+        "state": "unsupported_type",
+        "detectedType": "application/octet-stream"
+      },
+      "summary": {
+        "state": "absent"
+      },
+      "related_intent_ids": [
+        "01a13e5c-0ac9-786b-8d26-8e248e3c22b1"
+      ]
     }
   ]
 }

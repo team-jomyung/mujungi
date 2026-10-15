@@ -1,0 +1,37 @@
+{
+  "stage": "units-generation",
+  "upstream_ids": [
+    "US1.1", "US1.2", "US1.3", "US1.4", "US1.5", "US1.6", "US1.7", "US1.8", "US1.9", "US1.10",
+    "US2.1", "US2.2", "US2.3", "US2.4", "US2.5",
+    "US3.1", "US3.2",
+    "US4.1", "US4.2", "US4.3", "US4.4", "US4.5", "US4.6",
+    "US5.1", "US5.2"
+  ],
+  "coverage": [
+    { "id": "US1.1", "status": "OK", "target": "U12" },
+    { "id": "US1.2", "status": "OK", "target": "U12" },
+    { "id": "US1.3", "status": "OK", "target": "U12" },
+    { "id": "US1.4", "status": "OK", "target": "U12" },
+    { "id": "US1.5", "status": "OK", "target": "U12" },
+    { "id": "US1.6", "status": "OK", "target": "U12" },
+    { "id": "US1.7", "status": "OK", "target": "U11" },
+    { "id": "US1.8", "status": "OK", "target": "U11" },
+    { "id": "US1.9", "status": "OK", "target": "U12" },
+    { "id": "US1.10", "status": "OK", "target": "U11" },
+    { "id": "US2.1", "status": "OK", "target": "U13" },
+    { "id": "US2.2", "status": "OK", "target": "U13" },
+    { "id": "US2.3", "status": "OK", "target": "U13" },
+    { "id": "US2.4", "status": "OK", "target": "U9" },
+    { "id": "US2.5", "status": "OK", "target": "U11" },
+    { "id": "US3.1", "status": "OK", "target": "U10" },
+    { "id": "US3.2", "status": "OK", "target": "U15" },
+    { "id": "US4.1", "status": "OK", "target": "U14" },
+    { "id": "US4.2", "status": "OK", "target": "U14" },
+    { "id": "US4.3", "status": "OK", "target": "U14" },
+    { "id": "US4.4", "status": "OK", "target": "U14" },
+    { "id": "US4.5", "status": "OK", "target": "U14" },
+    { "id": "US4.6", "status": "OK", "target": "U14" },
+    { "id": "US5.1", "status": "OK", "target": "U15" },
+    { "id": "US5.2", "status": "OK", "target": "U15" }
+  ]
+}
