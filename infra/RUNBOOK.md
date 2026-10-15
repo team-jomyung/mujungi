@@ -303,13 +303,18 @@ demo에는 dev 시드가 없다. `infra/seed/`의 멱등 SQL을 `migrate`와 같
 
 ```bash
 PG_IMAGE="$(sed -nE 's/^[[:space:]]+image:[[:space:]]*(postgres:[^[:space:]]+).*/\1/p' "$R/compose.demo.yml" | head -n 1)"
-docker run --rm --network mujoong_backend --env-file /opt/mujoong/env/migrate.env -v "$R/seed:/seed:ro" --entrypoint sh "$PG_IMAGE" \
-  -c 'PGPASSWORD="$DB_OWNER_PASSWORD" psql -X -q -h postgres -U mujoong_owner -d mujoong -v ON_ERROR_STOP=1 --single-transaction -f /seed/001-reference.sql'
+# 시드는 번호 순서(001 → 002 → 003 → 004)로 적용한다. 검증 명령 B 단계와 같은 순서다(scripts/verify/b-stack.sh)
+for seed in 001-reference.sql 002-u2-reference.sql 003-u4a-reference.sql 004-u8-reference.sql; do
+  docker run --rm --network mujoong_backend --env-file /opt/mujoong/env/migrate.env -v "$R/seed:/seed:ro" --entrypoint sh "$PG_IMAGE" \
+    -c 'PGPASSWORD="$DB_OWNER_PASSWORD" psql -X -q -h postgres -U mujoong_owner -d mujoong -v ON_ERROR_STOP=1 --single-transaction -f "/seed/$1"' \
+    seed "$seed"
+done
 docker run --rm --network mujoong_backend --env-file /opt/mujoong/env/migrate.env --entrypoint sh "$PG_IMAGE" \
   -c 'PGPASSWORD="$DB_OWNER_PASSWORD" psql -X -At -h postgres -U mujoong_owner -d mujoong -c "SELECT c.content_code, count(*) FROM core.core_approved_content c JOIN core.core_approved_content_version v ON v.content_id = c.id WHERE v.status = '"'"'APPROVED'"'"' GROUP BY 1 ORDER BY 1"'
 ```
 
-확인: `CLOSING|1` · `CONSENT_POLICY|1` · `WAITING_FILLER|1`(정책 버전 1, 승인 문구 2).
+확인: `CLOSING|1` · `CONSENT_POLICY|1` · `WAITING_FILLER|1`(정책 버전 1, 승인 문구 2)과 002 · 003의 승인 줄, U8 004의 `COACH_SWITCH|1` ·
+`D_REST_ACK|1` · `D_REST_ACK_START|1` · `HELP_OFFER|1` · `PEER_RETURN|1`(음성 없는 승인 발화, `HELP_OFFER`는 v2만 APPROVED).
 
 ### 단계 5-c. 스택 기동과 최초 인증서 발급(webroot) [호스트]
 
