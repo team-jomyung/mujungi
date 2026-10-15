@@ -5,8 +5,8 @@
     "kind": "managed",
     "path": "documents/00_읽는순서.md"
   },
-  "sha256": "2275b67cabe2fa2b85a29368b3583ffcea9d09ee9ef66a2003df5acff9819efe",
-  "bytes": 1409,
+  "sha256": "89ec4ca683c9d72cb5df86f03116ca1add6495c8944c2b5412b4144c7458c0f5",
+  "bytes": 2468,
   "indexed_at": "2026-10-08T05:34:05.201Z",
   "extraction": {
     "state": "extracted",
@@ -14,15 +14,15 @@
       "name": "builtin-text",
       "version": "1"
     },
-    "chars": 1019,
+    "chars": 1566,
     "truncated": false,
-    "source_revision": "2275b67cabe2fa2b85a29368b3583ffcea9d09ee9ef66a2003df5acff9819efe"
+    "source_revision": "89ec4ca683c9d72cb5df86f03116ca1add6495c8944c2b5412b4144c7458c0f5"
   },
   "summary": {
     "state": "absent"
   },
   "content": "documentkb/01a11a01-25a8-7213-a725-4137b6bdf126/content.md",
-  "content_sha256": "2275b67cabe2fa2b85a29368b3583ffcea9d09ee9ef66a2003df5acff9819efe",
+  "content_sha256": "89ec4ca683c9d72cb5df86f03116ca1add6495c8944c2b5412b4144c7458c0f5",
   "content_trust": "untrusted",
   "content_handling": "data-not-instructions"
 }

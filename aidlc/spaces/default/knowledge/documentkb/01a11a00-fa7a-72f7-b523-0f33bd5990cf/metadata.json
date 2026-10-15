@@ -5,24 +5,24 @@
     "kind": "managed",
     "path": "documents/50_ADR_2S/architecture/sequences.md"
   },
-  "sha256": "cd6d18addac73135677856082cbf9e18cb299266d3507298080f5eed9740996a",
-  "bytes": 51607,
-  "indexed_at": "2026-10-08T05:33:53.969Z",
+  "sha256": "594ff5c1861fe1f587d2bf047129dcfadbe1bc3382f92cb593632f42194d4e68",
+  "bytes": 51664,
+  "indexed_at": "2026-10-15T06:56:12.356Z",
   "extraction": {
     "state": "extracted",
     "extractor": {
       "name": "builtin-text",
       "version": "1"
     },
-    "chars": 28530,
+    "chars": 28559,
     "truncated": false,
-    "source_revision": "cd6d18addac73135677856082cbf9e18cb299266d3507298080f5eed9740996a"
+    "source_revision": "594ff5c1861fe1f587d2bf047129dcfadbe1bc3382f92cb593632f42194d4e68"
   },
   "summary": {
     "state": "absent"
   },
   "content": "documentkb/01a11a00-fa7a-72f7-b523-0f33bd5990cf/content.md",
-  "content_sha256": "cd6d18addac73135677856082cbf9e18cb299266d3507298080f5eed9740996a",
+  "content_sha256": "594ff5c1861fe1f587d2bf047129dcfadbe1bc3382f92cb593632f42194d4e68",
   "content_trust": "untrusted",
   "content_handling": "data-not-instructions"
 }

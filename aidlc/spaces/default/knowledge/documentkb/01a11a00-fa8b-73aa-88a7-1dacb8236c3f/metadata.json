@@ -5,24 +5,24 @@
     "kind": "managed",
     "path": "documents/50_ADR_2S/architecture/system-architecture.md"
   },
-  "sha256": "bfda171136f3684452bfa32250912f84a226d28af5a2bbb0d0b49569edf3a61a",
-  "bytes": 44605,
-  "indexed_at": "2026-10-08T05:33:53.969Z",
+  "sha256": "a0ab861a4b55ab573e1fa38094c191a6707bebdefbb3198e4fe9516b18b4c8aa",
+  "bytes": 44657,
+  "indexed_at": "2026-10-15T06:56:12.356Z",
   "extraction": {
     "state": "extracted",
     "extractor": {
       "name": "builtin-text",
       "version": "1"
     },
-    "chars": 24553,
+    "chars": 24580,
     "truncated": false,
-    "source_revision": "bfda171136f3684452bfa32250912f84a226d28af5a2bbb0d0b49569edf3a61a"
+    "source_revision": "a0ab861a4b55ab573e1fa38094c191a6707bebdefbb3198e4fe9516b18b4c8aa"
   },
   "summary": {
     "state": "absent"
   },
   "content": "documentkb/01a11a00-fa8b-73aa-88a7-1dacb8236c3f/content.md",
-  "content_sha256": "bfda171136f3684452bfa32250912f84a226d28af5a2bbb0d0b49569edf3a61a",
+  "content_sha256": "a0ab861a4b55ab573e1fa38094c191a6707bebdefbb3198e4fe9516b18b4c8aa",
   "content_trust": "untrusted",
   "content_handling": "data-not-instructions"
 }

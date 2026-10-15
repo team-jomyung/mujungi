@@ -5,24 +5,24 @@
     "kind": "managed",
     "path": "documents/20_개발명세_1008/개발명세_1008_결정기록_역할_빈칸.md"
   },
-  "sha256": "3576a8adc86dd1c85f5f358d087741aa5211d1385ea5fdb8c140c24ebb10c190",
-  "bytes": 11134,
-  "indexed_at": "2026-10-08T05:33:46.737Z",
+  "sha256": "a4546bb6ea50faa45d1f764f9d27dae7cd7f274f743c3e9cdfd8ea090c5b8f73",
+  "bytes": 11218,
+  "indexed_at": "2026-10-15T06:56:16.374Z",
   "extraction": {
     "state": "extracted",
     "extractor": {
       "name": "builtin-text",
       "version": "1"
     },
-    "chars": 6975,
+    "chars": 6995,
     "truncated": false,
-    "source_revision": "3576a8adc86dd1c85f5f358d087741aa5211d1385ea5fdb8c140c24ebb10c190"
+    "source_revision": "a4546bb6ea50faa45d1f764f9d27dae7cd7f274f743c3e9cdfd8ea090c5b8f73"
   },
   "summary": {
     "state": "absent"
   },
   "content": "documentkb/01a11a00-dd9d-7f5c-821b-accbc6a47e6e/content.md",
-  "content_sha256": "3576a8adc86dd1c85f5f358d087741aa5211d1385ea5fdb8c140c24ebb10c190",
+  "content_sha256": "a4546bb6ea50faa45d1f764f9d27dae7cd7f274f743c3e9cdfd8ea090c5b8f73",
   "content_trust": "untrusted",
   "content_handling": "data-not-instructions"
 }

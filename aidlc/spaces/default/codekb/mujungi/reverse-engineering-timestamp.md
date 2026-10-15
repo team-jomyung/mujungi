@@ -2,124 +2,119 @@
 
 | 항목 | 값 |
 |---|---|
-| 수행 일시 (UTC) | 2026-10-14T00:25:08Z |
+| 수행 날짜 | 2026-10-15 |
 | 저장소 | `mujungi` (프로젝트 루트, 단일 저장소) |
-| 브랜치 | `unit/u6-result-report` (= origin/main) |
-| 커밋 | `7a22b67b455075d588f6dc11da8403d5cd6878c1` |
-| 인텐트 | `261014-u6-result-report` |
-| 스캔 종류 | 전체 재스캔(사람 결정, 이전 저장소 STALE) — 9개 산출물 통째 교체, 실제 깊게 본 범위가 저장소 일부라 `kind: partial` |
-| 사전 스냅숏 | paths `./`, store_generation `sha256:5c9a44bb7c17e7eb218ed84bb7b52ae6c26f25c2dcd036b271fca10cca4beefe`, source_fingerprint `git:8f0d2f0400f6af6c01e00e0887beb74d61f861cb` |
+| 브랜치 | `feat/doc-sync-code-update` (= origin/main `72d7034`, 앱 코드는 커밋과 같음) |
+| 커밋 | `72d70344495b41768feb34208c1aaca88d65296d` (`72d7034`) |
+| 인텐트 | `261015-doc-sync-code-update` |
+| 스캔 종류 | 전체 재스캔(사람 결정) — 9개 산출물 통째 교체, 범위 블록은 이번 실행만으로 작성. 깊게 본 범위가 저장소 일부라 `kind: partial` |
+| 사전 스냅숏 | paths `./`, store_generation `sha256:c32875ebd6d3dcda1968c6900052cc9d10a025c9704ac35325739223f96bdf99`, source_fingerprint `git:b59e231b61408caec80b386d72452aa1a19b3e81` |
 | 수행 | 1단계 개발자 코드 스캔 → 2단계 아키텍트 합성 |
+| 깊이 | Standard |
 
 ## 범위 설명
 
-- 이전 저장소(인텐트 `261013-u4b-activity-realtime`, 커밋 `3748083`)는 방향 잡기로만 쓰였고, 이 산출물은 모두 이번 스캔 결과로 다시 썼다. 이전의 깊은 범위(`backend/realtime-activity/` 전체 등)는 이번에 다시 확인하지 않았으므로 깊은 범위로 옮기지 않았다.
-- **깊게 분석**: U6 접점 — Gradle 빌드 설정 · build-logic, contract-model 이벤트, core-api의 `record` · `knowledge` · `practice` · `textai` · `common/deletion` · 설정 · 마이그레이션 · 금지 사전 · Dockerfile, realtime의 결과 스냅숏 · 연습 확장점 · 마이그레이션, 커버리지 범위, 계약 5개 파일, 프런트 26 스텁 · 시험 설정, infra 마이그레이션 · 승인 목록 · demo compose, CI, U6 지시서.
-- **훑기만**: core-api 나머지 패키지 · 시험, realtime 나머지, 프런트 화면 · 시험, 나머지 계약 파일, infra 나머지, tools · scripts · ci · docs.
-- 작업 트리: 소스 변경 없음(AI-DLC 기록 파일만 변경).
+- 이전 저장소(인텐트 `261015-local-run-readiness`, 로컬 실행 · 통합 관점)의 산출물은 이어 쓰지 않았다. 이번 산출물은 모두 이번 스캔 결과로 다시 썼다. 그 결과 이전 저장소가 깊게 봤던 infra · scripts · tools 실행 경로 일부는 이번 블록에서 `shallow.paths`로 내려갔다.
+- **깊게 분석**: Gradle 빌드 설정 전체 · 규약 플러그인, contract-model의 `ws` · `event` · `status`, 음성 공급자 연결 3파일 · 역할 지시문 · 연습 런타임 기본 빈 · WS 설정, 텍스트 AI · 결과 문장 기본 빈, 두 앱 설정 yml(일부 프로필), 두 앱 마이그레이션, 프런트 빌드 · 시험 · 린트 설정과 `src/app` 라우트, tools 패키지 설정, CI 워크플로, HTTP 계약 3종과 계약 README, Prettier 설정.
+- **얕게**: 두 앱의 업무 로직 본문(패키지 · 클래스 목록 · REST 매핑 줄 · 크기만), contract-model의 나머지 패키지, test-support, 시험 디렉터리(개수 · 태그), 나머지 자원 파일, 커버리지 범위 목록, 프런트 `src`의 parent · device · shared와 시험, tools 하위 도구, infra, scripts, ci, deploy 워크플로, AsyncAPI · 스키마 · 규칙 문서, docs.
+- 아키텍트 합성 단계에서 패키지별 파일 · 줄 수, 상태 enum 값, `ProviderRequestFactory` 상수, `PracticeRuntimeConfiguration` 46~51행, `WebSocketConfig` 등록 줄, 두 앱 yml 키 묶음, 마이그레이션 파일 목록, 프런트 라우트 목록을 다시 확인했다.
+- 작업 트리: 앱 소스 변경 없음. 스캔 시작 시 CodeKB 9개 파일에 이전 인텐트(`261015-local-run-readiness`)가 게시한 커밋 전 수정이 있었고, 이번 게시가 그것을 통째로 교체한다.
 
 ## Scope of Analysis
 
 ```yaml
 scope_version: 1
 kind: partial
-intent: 261014-u6-result-report
-fingerprint: 201ba2b6302a561312d2c531723adb423d5eaac7
+intent: 261015-doc-sync-code-update
+fingerprint: 7df0a347e53499719b8e456892784b84cf15a208
 analyzed:
   paths:
     - backend/settings.gradle.kts
     - backend/build.gradle.kts
     - backend/gradle/libs.versions.toml
     - backend/gradle.properties
+    - backend/gradle/wrapper/gradle-wrapper.properties
     - backend/build-logic/
     - backend/contract-model/build.gradle.kts
-    - backend/contract-model/src/main/java/kr/mujoong/contract/event/
     - backend/core-api/build.gradle.kts
-    - backend/core-api/src/main/java/kr/mujoong/core/record/
-    - backend/core-api/src/main/java/kr/mujoong/core/knowledge/
-    - backend/core-api/src/main/java/kr/mujoong/core/practice/
-    - backend/core-api/src/main/java/kr/mujoong/core/textai/
-    - backend/core-api/src/main/java/kr/mujoong/core/common/deletion/
-    - backend/core-api/src/main/resources/application.yml
-    - backend/core-api/src/main/resources/db/migration/core/
-    - backend/core-api/src/main/resources/textai/
-    - backend/core-api/Dockerfile
     - backend/realtime-activity/build.gradle.kts
-    - backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/ResultSnapshotBuilder.java
-    - backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/PracticeSessionExtension.java
-    - backend/realtime-activity/src/main/resources/db/migration/realtime/
     - backend/test-support/build.gradle.kts
-    - backend/coverage-scope/
-    - contracts/ai-io.md
-    - contracts/ports.md
-    - contracts/timing.md
-    - contracts/deviations.md
-    - contracts/parent-api.yaml
+    - backend/contract-model/src/main/java/kr/mujoong/contract/ws/
+    - backend/contract-model/src/main/java/kr/mujoong/contract/event/
+    - backend/contract-model/src/main/java/kr/mujoong/contract/status/
+    - backend/realtime-activity/src/main/java/kr/mujoong/realtime/voice/ProviderHosts.java
+    - backend/realtime-activity/src/main/java/kr/mujoong/realtime/voice/ProviderRequestFactory.java
+    - backend/realtime-activity/src/main/java/kr/mujoong/realtime/voice/ProviderClient.java
+    - backend/realtime-activity/src/main/java/kr/mujoong/realtime/dialog/DialogInstructions.java
+    - backend/realtime-activity/src/main/java/kr/mujoong/realtime/practice/PracticeRuntimeConfiguration.java
+    - backend/realtime-activity/src/main/java/kr/mujoong/realtime/gateway/WebSocketConfig.java
+    - backend/core-api/src/main/java/kr/mujoong/core/textai/TextAiConfiguration.java
+    - backend/core-api/src/main/java/kr/mujoong/core/result/ResultTextConfiguration.java
+    - backend/core-api/src/main/resources/application.yml
+    - backend/realtime-activity/src/main/resources/application.yml
+    - backend/realtime-activity/src/main/resources/application-prod.yml
+    - backend/realtime-activity/src/main/resources/application-demo.yml
+    - backend/core-api/src/main/resources/db/migration/core/
+    - backend/realtime-activity/src/main/resources/db/migration/realtime/
     - frontend/package.json
+    - frontend/next.config.ts
     - frontend/vitest.config.ts
-    - frontend/coverage-scope/
-    - frontend/src/app/parent/records/page.tsx
-    - infra/migration-approvals.txt
-    - infra/migrate/
-    - infra/compose.demo.yml
+    - frontend/eslint.config.mjs
+    - frontend/src/app/
+    - tools/package.json
     - .github/workflows/ci.yml
-    - docs/units/u6/brief.md
+    - contracts/README.md
+    - contracts/parent-api.yaml
+    - contracts/device-api.yaml
+    - contracts/internal-api.yaml
+    - .prettierrc.json
   components:
     - build-logic
-    - contract-model
-    - core.record
-    - core.practice
-    - core.knowledge
-    - core.textai
-    - core.common.deletion
-    - realtime.result-snapshot
-    - contracts
-    - infra.migrate
+    - code-style-config
     - ci-workflow
-    - frontend.parent.records
+    - app-config
+    - db-migrations
+    - contracts.http-openapi
+    - contract-model.ws
+    - contract-model.event
+    - contract-model.status
+    - realtime.ws-gateway-config
+    - realtime.voice-provider
+    - realtime.dialog-instructions
+    - realtime.practice-runtime-config
+    - core.textai-config
+    - core.result-text-config
+    - frontend.build-config
+    - frontend.app-routes
+    - tools.package
 shallow:
   paths:
-    - backend/core-api/src/main/java/kr/mujoong/core/account/
-    - backend/core-api/src/main/java/kr/mujoong/core/activity/
-    - backend/core-api/src/main/java/kr/mujoong/core/catalog/
-    - backend/core-api/src/main/java/kr/mujoong/core/child/
-    - backend/core-api/src/main/java/kr/mujoong/core/common/db/
-    - backend/core-api/src/main/java/kr/mujoong/core/config/
-    - backend/core-api/src/main/java/kr/mujoong/core/consent/
-    - backend/core-api/src/main/java/kr/mujoong/core/device/
-    - backend/core-api/src/main/java/kr/mujoong/core/health/
-    - backend/core-api/src/main/java/kr/mujoong/core/identity/
-    - backend/core-api/src/main/java/kr/mujoong/core/internalhttp/
-    - backend/core-api/src/main/java/kr/mujoong/core/messaging/
-    - backend/core-api/src/main/java/kr/mujoong/core/observability/
-    - backend/core-api/src/main/java/kr/mujoong/core/security/
-    - backend/core-api/src/main/java/kr/mujoong/core/startup/
-    - backend/core-api/src/main/java/kr/mujoong/core/web/
-    - backend/core-api/src/test/
+    - backend/core-api/src/main/java/
     - backend/realtime-activity/src/main/java/
+    - backend/contract-model/src/main/java/kr/mujoong/contract/
+    - backend/test-support/src/main/
+    - backend/core-api/src/test/
     - backend/realtime-activity/src/test/
     - backend/contract-model/src/test/
-    - backend/test-support/src/
+    - backend/test-support/src/test/
+    - backend/core-api/src/main/resources/
+    - backend/realtime-activity/src/main/resources/
+    - backend/coverage-scope/
+    - frontend/coverage-scope/
     - frontend/src/
     - frontend/tests/
-    - frontend/eslint.config.mjs
-    - contracts/schemas/
-    - contracts/events.asyncapi.yaml
-    - contracts/internal-api.yaml
-    - contracts/device-api.yaml
-    - contracts/device-ws.asyncapi.yaml
-    - infra/bin/
-    - infra/ci/
-    - infra/nginx/
-    - infra/postgres/
-    - infra/seed/
-    - infra/seed-audio/
-    - infra/aws/
-    - infra/host/
-    - infra/backup/
-    - infra/bundle/
     - tools/
+    - infra/
     - scripts/
     - ci/
+    - .github/workflows/deploy.yml
+    - contracts/schemas/
+    - contracts/device-ws.asyncapi.yaml
+    - contracts/events.asyncapi.yaml
+    - contracts/deviations.md
+    - contracts/ai-io.md
+    - contracts/timing.md
+    - contracts/errors.md
+    - contracts/ports.md
     - docs/
 ```

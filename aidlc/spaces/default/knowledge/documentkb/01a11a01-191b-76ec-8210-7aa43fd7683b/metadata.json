@@ -5,8 +5,8 @@
     "kind": "managed",
     "path": "documents/80_점검표_1008/개발전환_점검표_1008.md"
   },
-  "sha256": "40090a6af17b64723bf5b1d3c3f6b36c76879e7640c757a5ca92ea542dc862bf",
-  "bytes": 26364,
+  "sha256": "f0fbe849d99e2e60cb42439a444bc63d68938eebfaa734a4d4677fa13c7b9364",
+  "bytes": 26596,
   "indexed_at": "2026-10-08T05:34:01.988Z",
   "extraction": {
     "state": "extracted",
@@ -14,15 +14,15 @@
       "name": "builtin-text",
       "version": "1"
     },
-    "chars": 16384,
+    "chars": 16469,
     "truncated": false,
-    "source_revision": "40090a6af17b64723bf5b1d3c3f6b36c76879e7640c757a5ca92ea542dc862bf"
+    "source_revision": "f0fbe849d99e2e60cb42439a444bc63d68938eebfaa734a4d4677fa13c7b9364"
   },
   "summary": {
     "state": "absent"
   },
   "content": "documentkb/01a11a01-191b-76ec-8210-7aa43fd7683b/content.md",
-  "content_sha256": "40090a6af17b64723bf5b1d3c3f6b36c76879e7640c757a5ca92ea542dc862bf",
+  "content_sha256": "f0fbe849d99e2e60cb42439a444bc63d68938eebfaa734a4d4677fa13c7b9364",
   "content_trust": "untrusted",
   "content_handling": "data-not-instructions"
 }

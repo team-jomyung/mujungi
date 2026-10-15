@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "id": "01a13e58-f52f-7b02-a821-9e3dcd2d6b23",
+  "source": {
+    "kind": "managed",
+    "path": "documents/15_기술명세_AI동작_1015/무중_기술명세서_v0.3.md"
+  },
+  "sha256": "84886ae02af4fd53743aba2c27ab17e3ab8e4aeb46f596c49d6fec48abba3161",
+  "bytes": 126826,
+  "indexed_at": "2026-10-15T06:56:19.507Z",
+  "extraction": {
+    "state": "extracted",
+    "extractor": {
+      "name": "builtin-text",
+      "version": "1"
+    },
+    "chars": 73135,
+    "truncated": false,
+    "source_revision": "84886ae02af4fd53743aba2c27ab17e3ab8e4aeb46f596c49d6fec48abba3161"
+  },
+  "summary": {
+    "state": "absent"
+  },
+  "content": "documentkb/01a13e58-f52f-7b02-a821-9e3dcd2d6b23/content.md",
+  "content_sha256": "84886ae02af4fd53743aba2c27ab17e3ab8e4aeb46f596c49d6fec48abba3161",
+  "content_trust": "untrusted",
+  "content_handling": "data-not-instructions"
+}

@@ -5,8 +5,8 @@
     "kind": "managed",
     "path": "documents/30_요구사항_v1.1/요구사항_명세서_v1.1.md"
   },
-  "sha256": "39525113db9dec2f91bd43636545585f4e4dfd263d0f3d3c484a3af36dcbcea0",
-  "bytes": 196169,
+  "sha256": "d66a1dcb645bca02b88b4591f079f0ee301e900ea4e15989bb14f21c7e37dcd5",
+  "bytes": 196405,
   "indexed_at": "2026-10-08T05:33:50.365Z",
   "extraction": {
     "state": "extracted",
@@ -14,15 +14,15 @@
       "name": "builtin-text",
       "version": "1"
     },
-    "chars": 96736,
+    "chars": 96712,
     "truncated": false,
-    "source_revision": "39525113db9dec2f91bd43636545585f4e4dfd263d0f3d3c484a3af36dcbcea0"
+    "source_revision": "d66a1dcb645bca02b88b4591f079f0ee301e900ea4e15989bb14f21c7e37dcd5"
   },
   "summary": {
     "state": "absent"
   },
   "content": "documentkb/01a11a00-ebcb-7a4c-9cd9-56e5db640192/content.md",
-  "content_sha256": "39525113db9dec2f91bd43636545585f4e4dfd263d0f3d3c484a3af36dcbcea0",
+  "content_sha256": "d66a1dcb645bca02b88b4591f079f0ee301e900ea4e15989bb14f21c7e37dcd5",
   "content_trust": "untrusted",
   "content_handling": "data-not-instructions"
 }

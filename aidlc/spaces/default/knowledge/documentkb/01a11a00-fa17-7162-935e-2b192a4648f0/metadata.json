@@ -5,24 +5,24 @@
     "kind": "managed",
     "path": "documents/50_ADR_2S/ADR-007-module-boundaries.md"
   },
-  "sha256": "4b051ada57ab5ba4b803a68e00d010fcb66bf534a40192ab31abcbdd28866b47",
-  "bytes": 67097,
-  "indexed_at": "2026-10-08T05:33:53.969Z",
+  "sha256": "44baf97d2e46ab63a72e342def7c0a3d79a99ca0e6ec0248811d7ed4c867bc1c",
+  "bytes": 65628,
+  "indexed_at": "2026-10-15T06:56:12.356Z",
   "extraction": {
     "state": "extracted",
     "extractor": {
       "name": "builtin-text",
       "version": "1"
     },
-    "chars": 39519,
+    "chars": 38000,
     "truncated": false,
-    "source_revision": "4b051ada57ab5ba4b803a68e00d010fcb66bf534a40192ab31abcbdd28866b47"
+    "source_revision": "44baf97d2e46ab63a72e342def7c0a3d79a99ca0e6ec0248811d7ed4c867bc1c"
   },
   "summary": {
     "state": "absent"
   },
   "content": "documentkb/01a11a00-fa17-7162-935e-2b192a4648f0/content.md",
-  "content_sha256": "4b051ada57ab5ba4b803a68e00d010fcb66bf534a40192ab31abcbdd28866b47",
+  "content_sha256": "44baf97d2e46ab63a72e342def7c0a3d79a99ca0e6ec0248811d7ed4c867bc1c",
   "content_trust": "untrusted",
   "content_handling": "data-not-instructions"
 }
