@@ -1,206 +1,209 @@
 # 아키텍처 (Architecture)
 
-> 기준 커밋 `7a22b67`. 컴포넌트 상세는 `component-inventory.md`, 의존 표는 `dependencies.md`, API 목록은 `api-documentation.md`에 한 번만 적고 여기서는 관계와 흐름만 다룬다.
+> 기준: 커밋 `72d7034`, 2026-10-15 전체 재스캔. 구성 요소 목록 · 책임은 [component-inventory.md](component-inventory.md), 엔드포인트 목록은 [api-documentation.md](api-documentation.md)가 정본이다. 이 문서는 구조 · 흐름 · 결정만 적는다.
 
 ## Architecture Analysis
 
 ### System Overview
 
-두 개의 Spring Boot 앱과 한 개의 Next.js 앱, 공용 계약 라이브러리로 된 시스템이다.
+두 개의 Spring Boot 앱과 한 개의 Next.js 웹 앱, 한 개의 PostgreSQL 인스턴스로 이뤄진 시스템이다.
 
-- **core-api**(:8080) — 보호자 API · 기기 등록 · 활동 사본 · 활동 기록 · 연습 Core · 계정 삭제 지휘 · Core 메시징. Spring Security · 세션(JDBC) 사용.
-- **realtime-activity**(:8081) — 기기 WebSocket · 세션 실행기 · 음성 중계 · 출력 게이트 · 전사 · 원음 · 결과 입력 스냅숏. Spring Security 없음(내부 토큰 · 기기 토큰).
-- **frontend** — Next.js App Router 한 앱, `/parent` · `/device` 두 영역(ESLint로 import 경계 강제).
-- **contract-model** — 두 앱 공용 계약(이벤트 payload · 오류 코드 · 상태 열거 · WS 메시지 · 시계 · JSON 코덱 · 로그). Spring · JPA 없음.
-- 데이터: PostgreSQL 16 한 인스턴스, 스키마 `core` · `realtime` 분리, 이력 표 `flyway.core_schema_history` · `flyway.realtime_schema_history`. 마이그레이션은 앱이 아닌 migrate 컨테이너가 적용하고, 앱은 기동 때 `SchemaVersionCheck`로 확인만 한다.
+- **core-api**(8080): 보호자 REST · 기기 부트스트랩 REST · 계정/동의/아이/기기 등록 · 활동 시작과 조회 · 연습 목표/상황 생성 · 결과 작업 · 리포트 PDF · 웹 푸시. 스키마 `core`.
+- **realtime-activity**(8081): 아이 기기 WSS 게이트웨이(`/ws/device`) · 세션 수명 주기 · 음성 공급자 중계 · 출력 게이트 · 대화 기록 · 원음 녹음 · 연습 런타임. 스키마 `realtime`.
+- **frontend**: 한 개의 Next.js App Router 앱이 `/parent`(보호자)와 `/device`(아이 기기) 두 화면 묶음을 제공한다.
+- **contract-model**: 두 앱이 함께 쓰는 계약 타입 라이브러리(WS 메시지 · 이벤트 · 상태 enum · 오류 봉투 · 시계 · 로그). Spring 의존 없음.
+- **PostgreSQL 16**: 한 인스턴스, 스키마 · 역할 분리(`core`/core_app, `realtime`/realtime_app). 마이그레이션은 앱이 아니라 별도 `migrate` 이미지(Flyway)가 실행한다.
+- 앞단 **Nginx**(demo)가 TLS를 끝내고 프런트 · 두 앱으로 경로를 나눈다.
 
 ### Architectural Style
 
-**두 개의 모듈형 모놀리스(서비스 2개) + 이벤트 통합.**
+**분리된 두 서비스 + 공유 계약 라이브러리 + 단일 DB 스키마 분리**(작은 마이크로서비스 2개, 모듈형 내부). 근거:
 
-- 근거: 앱 사이 코드 의존 0(ArchUnit `CoreArchTest`가 core → `kr.mujoong.realtime` 참조를 막음). 통신은 내부 HTTP(C-INT, 내부 토큰) · Outbox/Inbox 이벤트 6종뿐.
-- 앱 안은 기능 패키지(`record` · `practice` · `knowledge` · `textai` …) 단위 모듈. 모듈 사이 확장은 **Java 포트 + `@ConditionalOnMissingBean` 기본 빈**(뒤 유닛이 같은 타입 빈을 두면 교체)과 **Spring 앱 이벤트**(`ActivityRecorded`, 커밋 뒤 전달)로 한다.
-- 시계 · 시간 값은 주입(`mujoong.timing.*`, 시스템 시각 직접 읽기 금지 — ArchUnit · `TimeLiteralScanTest` · `NoSqlNowTest`).
+- Gradle 모듈 사이에서 `core-api` ↛ `realtime-activity` 직접 의존이 없고, CI 불변식 샘플(`bad-core-depends-realtime.yml`)과 ArchUnit 시험(`core/arch` · `realtime/arch`)이 이를 막는다.
+- 앱 사이 통신은 내부 HTTP(`/internal/*`, 내부 토큰)와 Outbox/Inbox 영속 이벤트(HTTP 전달)뿐이다.
+- 각 앱 내부는 기능 패키지(core 23개 · realtime 17개)로 나뉜 모듈형 모놀리스다.
+- 배포는 demo 단일 EC2 호스트의 Docker Compose(IaC 없음).
 
 ### Component Relationships
 
 ```mermaid
 flowchart LR
-  subgraph FE["frontend (Next.js)"]
-    P["/parent"]
-    D["/device"]
-  end
-  subgraph CORE["core-api"]
-    REC["core.record"]
-    PRA["core.practice"]
-    KNO["core.knowledge"]
-    TAI["core.textai"]
-    DEL["core.common.deletion"]
-    MSG["core.messaging (skimmed)"]
-    ACT["core.activity (skimmed)"]
-    U6["U6 ResultPipeline / Report (없음)"]
-  end
-  subgraph RT["realtime-activity"]
-    SES["realtime.result-snapshot"]
-  end
-  CM["contract-model"]
-  DB[("PostgreSQL core / realtime")]
-
-  P -->|"REST /api"| REC
-  P -->|"REST /api"| PRA
-  D -->|"WebSocket"| RT
-  RT -->|"Outbox SessionRecordCaptured"| MSG
-  MSG -->|"Inbox dispatch"| REC
-  REC -.->|"ActivityRecorded (구독자 0)"| U6
-  U6 -.->|"register"| PRA
-  U6 -.->|"Lookup 포트 (없음)"| KNO
-  U6 -.->|"분석 AI (확장 필요)"| TAI
-  PRA --> KNO
-  PRA --> TAI
-  DEL --> REC
-  DEL --> PRA
-  CORE --> CM
-  RT --> CM
-  CORE --> DB
-  RT --> DB
+    subgraph Browser["브라우저"]
+        P["frontend /parent<br/>보호자 화면"]
+        D["frontend /device<br/>아이 기기 화면"]
+    end
+    N["Nginx<br/>TLS · 경로 분기"]
+    subgraph Core["core-api :8080"]
+        CW["web · security<br/>보호자 REST"]
+        CA["activity · practice"]
+        CR["result · report · record"]
+        CN["notification<br/>웹 푸시"]
+        CM["messaging<br/>Outbox/Inbox"]
+        CT["textai · ResultTextProvider<br/>(기본 UNAVAILABLE)"]
+    end
+    subgraph RT["realtime-activity :8081"]
+        RG["gateway<br/>/ws/device"]
+        RS["session<br/>SessionExecutor"]
+        RV["voice<br/>ProviderClient"]
+        RGT["gate · dialog"]
+        RP["practice<br/>(판정 · 단서 기본 미연결)"]
+        RM["messaging<br/>Outbox/Inbox"]
+        RL["log · recording"]
+    end
+    DB[("PostgreSQL 16<br/>schema core / realtime")]
+    VP["외부 음성 AI<br/>wss api.openai.com"]
+    G["Google OAuth"]
+    WP["Web Push 서비스"]
+    P --> N
+    D --> N
+    N --> CW
+    N --> RG
+    CW --> CA
+    CA -- "내부 HTTP /internal/sessions" --> RS
+    RS -- "내부 HTTP /internal/devices/verify-token 등" --> CW
+    RP -- "내부 HTTP /internal/practice/scenarios" --> CA
+    RG --> RS
+    RS --> RV
+    RS --> RGT
+    RS --> RP
+    RS --> RL
+    RV --> VP
+    CM <-->|"이벤트 /internal/events"| RM
+    CR --> CT
+    CA --> CT
+    CR --> CN
+    CN --> WP
+    CW --> G
+    Core --> DB
+    RT --> DB
 ```
 
-텍스트 대안: 보호자 화면은 Core REST(`core.record` · `core.practice`)를, 아이 기기는 Realtime WebSocket을 부른다. Realtime은 활동이 끝나면 결과 입력 스냅숏을 `SessionRecordCaptured`로 Outbox에 넣고, Core 메시징(Inbox)이 `core.record`에 넘긴다. `core.record`는 원장에 처음 저장할 때 `ActivityRecorded`를 내지만 받는 쪽이 없다. 점선은 U6가 만들 연결이다: ResultPipeline이 `ActivityRecorded`를 구독하고, `core.practice`의 `CandidateRegistry`로 후보를 넣고, `core.knowledge`에서 행동 정의를 읽고(포트 없음), `core.textai`로 분석 AI를 부른다(메서드 확장 필요). 계정 삭제 지휘(`core.common.deletion`)는 순서 상수대로 참가자를 부른다. 두 앱 모두 `contract-model`과 PostgreSQL을 쓴다.
+텍스트 대안: 브라우저의 보호자 화면과 기기 화면은 Nginx를 거쳐 각각 core-api REST와 realtime-activity WebSocket에 닿는다. core-api는 활동을 시작할 때 realtime-activity의 내부 HTTP를 부르고, realtime-activity는 기기 토큰 검증 · 연결 보고 · 연습 상황 조회를 core-api 내부 HTTP로 부른다. 두 앱은 Outbox/Inbox 이벤트를 서로의 `/internal/events`로 전달한다. realtime-activity만 외부 음성 AI와 WebSocket으로 연결하고, core-api만 Google OAuth · 웹 푸시 · 텍스트 AI 포트를 쓴다. 두 앱은 같은 PostgreSQL의 서로 다른 스키마를 쓴다.
 
 ### Data Flow
 
-1. 활동 중 데이터는 `realtime` 스키마에만 쓴다(전사 · 원음 · 세션 상태).
-2. 종료 시 `ResultSnapshotBuilder`가 `realtime.realtime_result_input_snapshot`(realtime V3)에 스냅숏을 저장: `{utterances, gaps, recordScope{from,to}, practice, audio}` + `snapshotHash`. DECLINED · ACTIVE 전 종료는 utterances · audio 빈 목록. `practice`는 `PracticeSessionExtension` 값인데 현재 `NoOpPracticeSessionExtension`이라 **null**(편차 U4b-d).
-3. `SessionRecordCaptured`(Realtime → Core, Outbox/Inbox) → `SessionRecordCapturedHandler`가 `core.core_activity_record`(core V3)에 멱등 저장.
-4. 보호자 조회는 `RecordQueryService`가 원장을 읽어 노출 금지 필드를 뺀 모양으로 응답.
-5. 계정 삭제는 Core가 `DeletionRequested`를 Realtime에 보내고 Core 참가자들을 순서대로 실행, Realtime은 `DeletionCompleted`로 답한다.
+1. **활동 시작**: 보호자 REST → Core가 활동 · 세션 패키지를 만들고 → Realtime `POST /internal/sessions` → Realtime이 기기 WS로 `START_SESSION` → 기기 `ACK` · `DEVICE_READY` → 공급자 세션 시작.
+2. **음성 턴**: 기기 마이크 PCM16LE 24kHz 모노 20ms 프레임(바이너리 0x01, 960바이트) → Realtime `InputRelay` → 공급자 `session.input_audio.append` → 공급자 출력 텍스트 · 음성 → `OutputGate`가 문장 단위로 승인/폐기 → 승인분만 기기 재생(`OUTPUT_BEGIN/END`, `PLAY_APPROVED_CONTENT`).
+3. **상태 전파**: Realtime 세션 전이 → `SessionStateChanged` Outbox → Core Inbox → Core 세션 뷰 · 보호자 화면 폴링(react-query).
+4. **결과**: 세션 종료 → `SessionRecordCaptured`(대화 기록 스냅샷) → Core 결과 작업(JobRunner) → 결과 수준 · AI 문장(텍스트 AI) · 금지 표현 검사 → 결과 상태 → 웹 푸시.
+5. **삭제**: Core `DeletionRequested` → Realtime 삭제 참여자 → `DeletionCompleted`.
 
-### Key Design Decisions (코드에서 관찰한 것)
+### Interaction Diagrams
 
-| 결정 | 관찰 근거 | 영향 |
+#### 1) 자유 대화 시작 → 첫 턴
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant P as 보호자 화면
+    participant C as core-api
+    participant R as realtime-activity
+    participant D as 아이 기기
+    participant V as 음성 공급자
+    P->>C: POST /api/activities/free
+    C->>C: StartActivityService 활동 행 · 세션 패키지 생성
+    C->>R: POST /internal/sessions
+    R->>R: StartSessionHandler 상태 REQUESTED 에서 PREPARING
+    R-->>C: 세션 시작 응답
+    C-->>P: 활동 · 세션 id
+    R->>D: WS START_SESSION
+    D->>R: WS ACK
+    R->>R: 상태 DEVICE_ACK
+    D->>R: WS DEVICE_READY
+    R->>V: session.start 모델 gpt-live-1
+    V-->>R: session.started
+    R->>R: 상태 WAITING_CHILD 이후 ACTIVE
+    R->>D: WS SESSION_STATE
+    D->>R: 바이너리 음성 프레임 0x01
+    R->>V: session.input_audio.append
+    V-->>R: session.output_transcript.delta 와 session.output_audio.delta
+    R->>R: OutputGate 문장 승인 판단
+    R->>D: WS OUTPUT_BEGIN, 승인 음성, OUTPUT_END
+    R--)C: 이벤트 SessionStateChanged
+    P->>C: GET /api/sessions/current 폴링
+```
+
+텍스트 대안: 보호자가 자유 대화를 시작하면 Core가 활동을 만들고 Realtime 내부 API로 세션을 연다. Realtime은 기기에 START_SESSION을 보내고, 기기의 ACK · DEVICE_READY를 받은 뒤 공급자 세션을 연다. 아이 음성은 바이너리 프레임으로 들어와 공급자로 중계되고, 공급자 출력은 출력 게이트를 통과한 것만 기기로 재생된다. 상태 변화는 이벤트로 Core에 전달되고 보호자 화면은 폴링으로 본다.
+
+#### 2) 종료 → 결과 생성
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant P as 보호자 화면
+    participant C as core-api
+    participant R as realtime-activity
+    participant D as 아이 기기
+    participant V as 음성 공급자
+    participant T as 텍스트 AI 포트
+    alt 보호자 종료
+        P->>C: POST /api/sessions/ID/end
+        C->>R: POST /internal/sessions/ID/end
+    else 침묵 또는 아이 중단 의도
+        R->>R: SilenceClock 또는 StopIntentJudge
+    end
+    R->>R: 상태 CLOSING
+    R->>D: WS STOP_OUTPUT 와 CLOSE_TRANSPORT
+    R->>V: session.close
+    R->>R: 상태 ENDED 또는 다른 끝 상태
+    R--)C: 이벤트 SessionRecordCaptured
+    C->>C: SessionResultHandler 결과 작업 등록
+    C->>C: ResultLevelCalculator 1단계
+    C->>T: 결과 문장 요청
+    T-->>C: 기본 빈은 PROVIDER_UNAVAILABLE
+    C->>C: 결과 상태 저장, 재시도 가능
+    P->>C: GET /api/sessions/ID/result/status
+```
+
+텍스트 대안: 보호자 종료는 Core를 거쳐 Realtime 내부 종료 API로, 침묵 · 아이 중단 의도는 Realtime 안에서 바로 종료를 시작한다. Realtime은 CLOSING에서 기기 출력과 전송을 닫고 공급자 세션을 닫은 뒤 끝 상태로 간다. 대화 기록 스냅샷 이벤트를 받은 Core는 결과 작업을 돌리는데, 지금 기본 텍스트 AI 빈은 항상 실패하므로 운영 환경에서는 AI 결과 문장이 만들어지지 않는다.
+
+#### 3) 연습 활동 준비
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant P as 보호자 화면
+    participant C as core-api
+    participant T as 텍스트 AI 포트
+    participant R as realtime-activity
+    P->>C: GET 또는 POST /api/goal-selections
+    P->>C: POST /api/activities/practice
+    C->>C: PracticeStartService 목표 고정
+    C->>T: ScenarioPrompt 상황 생성
+    T-->>C: 기본 빈은 UNAVAILABLE
+    C->>R: POST /internal/sessions 연습 패키지
+    R->>C: POST /internal/practice/scenarios
+    R->>R: 연습 런타임 판정 · 단서, 기본 미연결
+```
+
+텍스트 대안: 연습 시작 시 Core가 목표를 고정하고 텍스트 AI로 상황을 만들어 Realtime에 넘기며, Realtime은 필요할 때 Core 내부 API로 상황을 다시 조회한다. 상황 생성 · 판정 · 단서의 기본 공급자는 모두 미연결이라 생성 실패 시 `SCENARIO_GEN_FAILED` 경로를 탄다(실패 처리 본문은 얕게 봄).
+
+### Key Design Decisions
+
+| 결정 | 근거 · 위치 | 영향 |
 |---|---|---|
-| 앱 사이 코드 의존 금지, 이벤트 · 내부 HTTP만 | ArchUnit `CoreArchTest` ① | U6는 Realtime 코드를 직접 쓸 수 없다. 입력은 Core 원장뿐 |
-| 기록 첫 저장 때만 `ActivityRecorded` 발행(멱등) | `SessionRecordCapturedHandler`: `insertIfAbsent`가 처음일 때만 publish, 같은 해시 재수신 무시, 다른 해시는 `EventConflict` | 재시작 · 리스너 실패로 놓친 결과 작업을 다시 잡을 경로가 없다 — U6 JobRunner가 접수 누락 복구를 다뤄야 한다 |
-| 확장점은 포트 + 교체 가능한 기본 빈 | `PracticePortConfiguration` · `ScenarioConfiguration` · `TextAiConfiguration`의 `@ConditionalOnMissingBean` | U6가 같은 타입 빈을 두면 기본 자리표시가 빠진다(실행기 수정 불필요) |
-| 시간 값은 `contracts/timing.md` ↔ `application.yml` ↔ `CoreProperties` 3중 일치 | `ConfigKeyContractTest` | `result.job-attempts` · `report.ready-target`을 쓰려면 세 곳을 같이 고쳐야 한다 |
-| 마이그레이션은 더하기만, 파괴 문장은 승인 목록 | CI `infra-validate` + `infra/migration-approvals.txt` | V5가 새 표만 더하면 승인 불필요, 기존 표 FK · 제약 강화는 승인 줄 필요 |
-| 계정 삭제는 순서 상수 참가자 체인 | `DeletionParticipant`(90 · 100 · 150 · 200 · 250 · 300 · 900) | U6 결과는 활동 기록(90)보다 먼저(70) 지워야 한다 |
-
-## Interaction Diagrams
-
-### 1. 활동 종료 → 활동 기록 → (U6) 결과 작업 접수
-
-```mermaid
-sequenceDiagram
-  participant RT as realtime SessionExecutor
-  participant RSB as ResultSnapshotBuilder
-  participant OB as Realtime Outbox
-  participant IN as Core Inbox
-  participant H as SessionRecordCapturedHandler
-  participant DB as core_activity_record
-  participant RP as U6 ResultPipeline (없음)
-
-  RT->>RSB: 종료 시 스냅숏 생성
-  RSB->>RSB: utterances, gaps, recordScope, practice(null), audio, snapshotHash
-  RSB->>OB: SessionRecordCaptured 적재
-  OB->>IN: POST /internal/events
-  IN->>H: dispatch
-  H->>H: 보호자 행 FOR SHARE, 사본 대조, snapshotHash 재계산
-  alt 해시 불일치
-    H-->>IN: 예외 (Inbox 재시도 후 DEAD)
-  else 처음 저장
-    H->>DB: insertIfAbsent
-    H-->>RP: ActivityRecorded (AFTER_COMMIT 전제, 현재 구독자 0)
-  else 같은 해시 재수신
-    H->>H: 무시 (이벤트 재발행 없음)
-  end
-```
-
-텍스트 대안: Realtime 실행기가 끝나면 스냅숏을 만들어 Outbox로 `SessionRecordCaptured`를 보낸다. Core Inbox가 핸들러에 넘기고, 핸들러는 보호자 행을 잠그고 해시를 다시 계산한다. 불일치면 예외로 재시도 끝에 DEAD, 처음이면 원장에 넣고 `ActivityRecorded`를 낸다(지금은 받는 쪽 없음). 같은 해시 재수신은 조용히 무시한다.
-
-### 2. (U6 예정) 결과 작업이 목표 후보를 등록하는 경로 — 현재 동작
-
-```mermaid
-sequenceDiagram
-  participant RP as U6 ResultPipeline (없음)
-  participant CR as CandidateRegistry
-  participant EP as CandidateEvidencePort
-  participant FP as ForbiddenExpressionPolicy
-  participant PK as PragmaticsKnowledge
-  participant DB as core_goal_recommendation
-
-  RP->>CR: register(sessionId, childId, candidates 100개 이하)
-  CR->>EP: 근거 확인 (트랜잭션 밖)
-  EP-->>CR: false (기본 자리표시 빈)
-  CR-->>RP: VALIDATION_FAILED
-  Note over CR,EP: U6 어댑터가 근거 전사 확인을 구현해 기본 빈을 교체해야 아래가 진행된다
-  CR->>FP: reasonText 2000자 이하, 금지 사전 통과
-  CR->>PK: pinVersion (ACTIVE만)
-  CR->>DB: 후보와 근거 저장
-```
-
-텍스트 대안: `register`는 먼저 `CandidateEvidencePort`로 근거를 확인하는데, 기본 빈이 늘 false라 지금은 모든 등록이 VALIDATION_FAILED다. U6가 근거 전사 확인 어댑터를 두면 그 뒤로 금지 표현 검사, 보호자 잠금, 행동 정의 pin(ACTIVE만), 후보 · 근거 저장이 이어진다.
-
-### 3. 보호자 기록 조회 (U4a, 26 · 27 재료)
-
-```mermaid
-sequenceDiagram
-  participant FE as /parent (26 스텁)
-  participant RC as RecordController
-  participant QS as RecordQueryService
-  participant DB as core_activity_record
-
-  FE->>RC: GET /api/records?month or date
-  RC->>QS: 목록 조회 (FAILED 제외)
-  QS->>DB: 읽기
-  QS-->>RC: 날짜별 수 또는 줄 (linkable, goalCount, interrupted)
-  FE->>RC: GET /api/records/{sessionId}
-  RC->>QS: 상세
-  QS-->>RC: session, goals, utterances, gaps, recordScope, endConfirmed (FAILED 404, DECLINED 머리만)
-```
-
-텍스트 대안: 현재 프런트 26 페이지는 redirect만 하므로 이 API를 부르는 클라이언트가 없다. API 자체는 달력용 날짜별 수, 그날 목록, 상세(대화 기록 칸)를 내고, 판정 · 구조화 · 08 원문은 응답에 없다.
-
-### 4. 계정 삭제 순서 (U6가 70으로 끼어들 자리)
-
-```mermaid
-flowchart LR
-  C["DeletionCommander"] --> R70["70 ORDER_RESULT (U6, 없음)"]
-  R70 --> A90["90 ACTIVITY_RECORD"]
-  A90 --> A100["100 ACTIVITY"]
-  A100 --> P150["150 PRACTICE"]
-  P150 --> D200["200 DEVICE"]
-  D200 --> C250["250 CONSENT"]
-  C250 --> CH300["300 CHILD_PROFILE"]
-  CH300 --> M900["900 MESSAGING"]
-```
-
-텍스트 대안: 삭제 지휘자는 순서 상수가 작은 참가자부터 부른다. 지금은 90(활동 기록) → 100 → 150 → 200 → 250 → 300 → 900이고, U6 결과 데이터(작업 · 결과 · 구조화 · 장면 판정 · 리포트 · PDF)는 활동 기록을 가리키므로 70으로 먼저 지워야 한다. U7은 60을 쓸 예정이다(지시서).
-
-## U6 접점 요약
-
-| 접점 | 현재 상태 | 위치 |
-|---|---|---|
-| 입력 이벤트 | `ActivityRecorded` 발행됨, 운영 구독자 0 | `core/record/ActivityRecorded.java`, `SessionRecordCapturedHandler.java` |
-| 입력 데이터 | 원장 transcript · gaps · practice JSON, PRACTICE의 practice는 U5b 전 null | `core.core_activity_record`(V3), `realtime/session/ResultSnapshotBuilder.java` |
-| 후보 출력 | `CandidateRegistry.register` 있음, 근거 포트 기본 false | `core/practice/CandidateRegistry.java:173`, `PracticePortConfiguration.java:12` |
-| 지식 읽기 | `ScenarioLookup` · `BehaviorDefinitionLookup` 없음, 재료 `ScenarioRepository.find` · `PragmaticsKnowledge.requireVersion` | `core/practice/`, `core/knowledge/` |
-| 분석 AI | `TextAiProvider` · `TextAiGateway`는 `generateScenario`만, 기본 UNAVAILABLE | `core/textai/` |
-| 보호자 API | C5 경로 없음 | `contracts/parent-api.yaml` |
-| 데이터 | core 최신 V4, V5 자리 비어 있음, `core_goal_recommendation.structured_experience_id`(FK 없음) | `db/migration/core/` |
-| 삭제 | 70 상수 없음 | `core/common/deletion/DeletionParticipant.java` |
-| PDF | 라이브러리 · 한글 글꼴 · 쓰기 가능 볼륨 없음 | `libs.versions.toml`, `core-api/Dockerfile`, `infra/compose.demo.yml` |
-| 화면 | 26 redirect 스텁, 17 「오늘 기록 보기」 감춤 | `frontend/src/app/parent/records/page.tsx`, `Done17.tsx` |
-| 알림(U7) | 코드 없음 | — |
+| 앱 2개 분리, 직접 의존 금지 | `settings.gradle.kts`, ArchUnit, CI 불변식 | 음성 실시간 부하와 보호자 REST를 따로 배포 · 확장. 대신 내부 HTTP · 이벤트 계약 관리 비용 |
+| 계약 정본은 `contracts/`, 코드 타입은 `contract-model` | `contracts/README.md` 소유 · 깨는 변경 규칙 | 계약 변경 시 정본 · `deviations.md` · 계약 시험 · 프런트 파서를 함께 바꿔야 함 |
+| Outbox/Inbox + HTTP 전달 | `core.messaging` · `realtime.messaging`, 재시도 backoff 설정 | 브로커 없이 최소 한 번 전달. 수신 측 멱등 처리 필요 |
+| 한 DB, 스키마 · 역할 분리, 마이그레이션은 별도 이미지 | `infra/migrate/flyway-{core,realtime}.conf`, 앱 `spring.flyway.enabled=false` | 앱이 스키마를 바꾸지 않음. 번호 순서 · expand 검사 · 승인 목록 필요(TD-7) |
+| 음성 공급자 SDK 없이 JDK WebSocket, 허용 호스트 고정 | `ProviderHosts`(`api.openai.com`), `ProviderClient` | 의존 최소화. 선 형식을 직접 소유(TD-2) |
+| 출력 게이트로 공급자 출력을 문장 단위 승인 | `realtime.gate.OutputGate` · `SeedDictionary` | 아동 안전. 지연 증가 |
+| AI 포트는 인터페이스 + 기본 실패 빈 | `TextAiConfiguration`, `ResultTextConfiguration`, `PracticeRuntimeConfiguration:46-51` | 비밀 없이도 기동 · 시험 가능(fail-closed). 운영 어댑터가 없음(TD-1) |
+| 시간 값은 설정 키로, 계약 문서와 대조 | `mujoong.timing.*` ↔ `contracts/timing.md` ↔ 프런트 `timing-defaults.json` | 값 변경 시 세 곳 동시 수정(TD-6) |
+| 한 Next.js 앱에 `/parent` · `/device` 공존, ESLint로 경계 | `frontend/eslint.config.mjs` | 배포 단순. import 경계는 린트 규칙에 의존 |
 
 ### Improvement Opportunities
 
-- **결과 작업 접수 누락 복구**: `ActivityRecorded`가 한 번만 나므로, 결과 작업 표를 원장과 대조해 빠진 세션을 다시 접수하는 경로(기동 시 · 주기)가 필요하다.
-- **AI 게이트웨이 확장 방식**: `TextAiProvider`에 작업별 메서드를 더할지, 작업 종류를 인자로 받는 일반 메서드를 둘지 설계에서 정해야 한다(U5a 동작 보존 전제).
-- **금지 표현 사전 이원화**: U5a txt 사전과 ai-io.md 6.6 JSON(`appliesTo`) 형식이 다르고 `CandidateRegistry`가 같은 정책을 쓰므로, 넓히면 U5a 동작이 바뀐다.
-- **설정 키 이름 통일**: ai-io.md `mujoong.ai.*` ↔ 코드 `mujoong.text-ai.*`.
+1. **AI 공급자 어댑터 추가**(TD-1): 텍스트 AI · 결과 문장 · 판정 · 단서의 운영 어댑터를 포트 뒤에 붙이고, 기본 실패 빈은 시험 · 비밀 없는 기동용으로만 남긴다. 갱신 문서(`15_기술명세_AI동작_1015` · `40_기능명세_GPT-Live`)와 맞출 때 첫 후보 경계.
+2. **음성 공급자 선 형식 격리**(TD-2): `ProviderRequestFactory` · `ProviderClient`의 type 문자열을 한 어댑터로 모으고, 가짜 공급자(`tools/fake-provider/`, `test-support/.../provider/`)와 같은 정의를 공유하면 실공급자 형식 변경 비용이 줄어든다.
+3. **`SessionExecutor` 분해**(TD-4): 3,388줄에 상태 · 타이머 · 출력 · 연습 확장이 섞여 있다. 문서 차이로 세션 동작을 바꿀 때 변경 범위가 커진다.
+4. **시간 값 단일 정본화**(TD-6): 설정 · 계약 문서 · 프런트 JSON 세 곳을 생성 또는 시험으로 묶는다(현재는 시험 대조).
+5. **서식 검사 CI 추가**(TD-5): Java 포매터 · Prettier 검사 부재로 압축 서식이 막히지 않는다.
 
-## Sources
+## 보안 · 준수 관점 요약
 
-- 개발자 스캔 `.../inception/reverse-engineering/developer-scan.md`(Build Dependencies · APIs Discovered · Technical Debt Signals · U6 관련 코드 위치)
-- `docs/units/u6/brief.md`(70 삭제 순서, U7 60)
+- 보호자 REST: Spring Security + JDBC 세션, CSRF(`/api/session/csrf`), Origin 검사, 속도 제한(`SlidingWindowRateLimiter`). 기기: 쿠키 인증 필터 · 기기 토큰(Core가 검증).
+- 내부 API: 양쪽 `InternalTokenFilter`(Realtime은 Spring Security 없이 이 필터만).
+- 외부 호스트 고정: 음성 공급자 `api.openai.com`, 웹 푸시는 공개 DNS · 고정 HTTP 클라이언트(`PinnedPushHttpClient` · `PublicPushEndpointPolicy`).
+- 오류 응답에서 메시지 · 스택 숨김(`server.error.*`), 관리 포트 9090은 127.0.0.1 바인딩.
+- 아동 데이터 삭제는 삭제 참여자 패턴(양쪽 `*DeletionParticipant`)과 삭제 이벤트로 처리.

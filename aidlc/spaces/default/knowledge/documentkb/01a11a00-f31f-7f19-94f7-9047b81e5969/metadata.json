@@ -5,8 +5,8 @@
     "kind": "managed",
     "path": "documents/40_기능명세_GPT-Live/GPT-Live_AI_Voice_Device_Requirements_v0.1.md"
   },
-  "sha256": "a662d642b710419f38443c33478ad4eadc467c4244adfa7ed90db9b513ca2c76",
-  "bytes": 62469,
+  "sha256": "73b9eda3ee4e09efd4035ebf13d8dc7dea98aec1b713d4625ccced87c137008e",
+  "bytes": 62860,
   "indexed_at": "2026-10-08T05:33:52.240Z",
   "extraction": {
     "state": "extracted",
@@ -14,15 +14,15 @@
       "name": "builtin-text",
       "version": "1"
     },
-    "chars": 31865,
+    "chars": 32088,
     "truncated": false,
-    "source_revision": "a662d642b710419f38443c33478ad4eadc467c4244adfa7ed90db9b513ca2c76"
+    "source_revision": "73b9eda3ee4e09efd4035ebf13d8dc7dea98aec1b713d4625ccced87c137008e"
   },
   "summary": {
     "state": "absent"
   },
   "content": "documentkb/01a11a00-f31f-7f19-94f7-9047b81e5969/content.md",
-  "content_sha256": "a662d642b710419f38443c33478ad4eadc467c4244adfa7ed90db9b513ca2c76",
+  "content_sha256": "73b9eda3ee4e09efd4035ebf13d8dc7dea98aec1b713d4625ccced87c137008e",
   "content_trust": "untrusted",
   "content_handling": "data-not-instructions"
 }

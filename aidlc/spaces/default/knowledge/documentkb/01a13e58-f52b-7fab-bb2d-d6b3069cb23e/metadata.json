@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "id": "01a13e58-f52b-7fab-bb2d-d6b3069cb23e",
+  "source": {
+    "kind": "managed",
+    "path": "documents/15_기술명세_AI동작_1015/무중_AI동작명세_v0.2.md"
+  },
+  "sha256": "8cb17dd848fcbd23b3c8712fb5cfb9fba4fa266340dbb748f54675627be65889",
+  "bytes": 84729,
+  "indexed_at": "2026-10-15T06:56:19.507Z",
+  "extraction": {
+    "state": "extracted",
+    "extractor": {
+      "name": "builtin-text",
+      "version": "1"
+    },
+    "chars": 45529,
+    "truncated": false,
+    "source_revision": "8cb17dd848fcbd23b3c8712fb5cfb9fba4fa266340dbb748f54675627be65889"
+  },
+  "summary": {
+    "state": "absent"
+  },
+  "content": "documentkb/01a13e58-f52b-7fab-bb2d-d6b3069cb23e/content.md",
+  "content_sha256": "8cb17dd848fcbd23b3c8712fb5cfb9fba4fa266340dbb748f54675627be65889",
+  "content_trust": "untrusted",
+  "content_handling": "data-not-instructions"
+}

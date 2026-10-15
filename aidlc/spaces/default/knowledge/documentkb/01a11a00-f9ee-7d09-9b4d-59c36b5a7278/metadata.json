@@ -5,24 +5,24 @@
     "kind": "managed",
     "path": "documents/50_ADR_2S/ADR-002-technology-defaults.md"
   },
-  "sha256": "2493a6ac5290c5d43eb8a128c20178c002302a62653c861ee7c1a7b2c7da1c02",
-  "bytes": 31673,
-  "indexed_at": "2026-10-08T05:33:53.969Z",
+  "sha256": "c31eefacb46e3cb3b7c2ba090ac649797fe8b1b39e07fad3d52c9346a65b6c6a",
+  "bytes": 31784,
+  "indexed_at": "2026-10-15T06:56:12.356Z",
   "extraction": {
     "state": "extracted",
     "extractor": {
       "name": "builtin-text",
       "version": "1"
     },
-    "chars": 16918,
+    "chars": 16975,
     "truncated": false,
-    "source_revision": "2493a6ac5290c5d43eb8a128c20178c002302a62653c861ee7c1a7b2c7da1c02"
+    "source_revision": "c31eefacb46e3cb3b7c2ba090ac649797fe8b1b39e07fad3d52c9346a65b6c6a"
   },
   "summary": {
     "state": "absent"
   },
   "content": "documentkb/01a11a00-f9ee-7d09-9b4d-59c36b5a7278/content.md",
-  "content_sha256": "2493a6ac5290c5d43eb8a128c20178c002302a62653c861ee7c1a7b2c7da1c02",
+  "content_sha256": "c31eefacb46e3cb3b7c2ba090ac649797fe8b1b39e07fad3d52c9346a65b6c6a",
   "content_trust": "untrusted",
   "content_handling": "data-not-instructions"
 }

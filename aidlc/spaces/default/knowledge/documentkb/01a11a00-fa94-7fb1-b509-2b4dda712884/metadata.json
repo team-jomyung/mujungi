@@ -5,24 +5,24 @@
     "kind": "managed",
     "path": "documents/50_ADR_2S/decision-log.md"
   },
-  "sha256": "13459056667137188a5df50762f8877a5e7a6444b8b80c7e2a31fc497a7f589f",
-  "bytes": 38432,
-  "indexed_at": "2026-10-08T05:33:53.969Z",
+  "sha256": "a92497f813c80aa59ac96d2506a85cdaeafeae3dda59f30f162e52a1fff9277a",
+  "bytes": 38697,
+  "indexed_at": "2026-10-15T06:56:12.356Z",
   "extraction": {
     "state": "extracted",
     "extractor": {
       "name": "builtin-text",
       "version": "1"
     },
-    "chars": 22331,
+    "chars": 22463,
     "truncated": false,
-    "source_revision": "13459056667137188a5df50762f8877a5e7a6444b8b80c7e2a31fc497a7f589f"
+    "source_revision": "a92497f813c80aa59ac96d2506a85cdaeafeae3dda59f30f162e52a1fff9277a"
   },
   "summary": {
     "state": "absent"
   },
   "content": "documentkb/01a11a00-fa94-7fb1-b509-2b4dda712884/content.md",
-  "content_sha256": "13459056667137188a5df50762f8877a5e7a6444b8b80c7e2a31fc497a7f589f",
+  "content_sha256": "a92497f813c80aa59ac96d2506a85cdaeafeae3dda59f30f162e52a1fff9277a",
   "content_trust": "untrusted",
   "content_handling": "data-not-instructions"
 }

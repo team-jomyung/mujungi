@@ -1,62 +1,94 @@
 # 코드 구조 (Code Structure)
 
-> 기준 커밋 `7a22b67`. 컴포넌트 책임은 `component-inventory.md`, 빌드 의존은 `dependencies.md`에 있다.
+> 기준: 커밋 `72d7034`, 2026-10-15 전체 재스캔. 구성 요소별 책임은 [component-inventory.md](component-inventory.md), 빌드 의존은 [dependencies.md](dependencies.md)를 본다.
 
-## 최상위 배치
+## 저장소 최상위
 
-| 경로 | 종류 | 내용 |
+| 경로 | 분류 | 내용 |
 |---|---|---|
-| `backend/` | Gradle 멀티 프로젝트 `mujoong-backend` | `build-logic`(포함 빌드) · `contract-model` · `core-api` · `realtime-activity` · `test-support` · `coverage-scope/` |
-| `frontend/` | npm `mujoong-frontend` (Next.js App Router) | `src/app` · `src/parent` · `src/device` · `src/shared` · `src/proxy.ts`, `tests/{u1,u2,u3,u4a,u5a}`, `coverage-scope/` |
-| `tools/` | npm `mujoong-tools` (ESM) | 가짜 공급자 · 기기 시뮬레이터 · skeleton-e2e · dev-edge · seed |
-| `contracts/` | 계약 정본 | `parent-api.yaml` · `internal-api.yaml` · `device-api.yaml` · `device-ws.asyncapi.yaml` · `events.asyncapi.yaml` · `schemas/`(46개) · `ai-io.md` · `ports.md` · `timing.md` · `errors.md` · `deviations.md` |
-| `infra/` | 배포 · 검증 | `compose.{demo,dev,ci}.yml` · `migrate/` · `nginx/` · `postgres/` · `seed/` · `seed-audio/` · `bin/` · `host/` · `aws/` · `backup/` · `bundle/` · `ci/` · `migration-approvals.txt` · `RUNBOOK.md` |
-| `scripts/` | bash | `verify.sh`(정적 · 단위 · 통합 → 기동 → 기기 시뮬레이터 한 턴) · `cloud-setup.sh` |
-| `ci/` | Python | `security-gate.py` · 취약점 예외 목록 |
-| `docs/` | Markdown | `units/u2 ~ u6/{brief,design,report}.md`, ERD, 변경 이력 |
-| `.github/workflows/` | CI | `ci.yml` · `deploy.yml` |
+| `backend/` | 앱 소스 | Gradle 멀티 프로젝트: `contract-model` · `core-api` · `realtime-activity` · `test-support` + 포함 빌드 `build-logic`, `coverage-scope/*.txt` |
+| `frontend/` | 앱 소스 | Next.js 웹 앱 1개(`src/app` 라우트 · `src/parent` · `src/device` · `src/shared`), `tests/u1…u7`, `coverage-scope/*.json` |
+| `tools/` | 시험 도구 | `fake-provider` · `device-simulator` · `skeleton-e2e` · `dev-edge` · `seed` · `lib`, `tests/` |
+| `contracts/` | 계약 정본 | OpenAPI 3개 · AsyncAPI 2개 · JSON Schema 60개 · 규칙 문서(`timing` · `errors` · `ports` · `ai-io` · `deviations`) |
+| `infra/` | 배포 구성 | Compose(dev · ci · demo) · nginx · migrate · postgres · backup · bundle · seed · seed-audio · host · bin · aws · ci 스크립트, `RUNBOOK.md`, `migration-approvals.txt` |
+| `scripts/` | 검증 | `verify.sh`(A · B · C 단계) + `verify/*`, `cloud-setup.sh` |
+| `ci/` | CI 보조 | `security-gate.py`, `security-exceptions.yml` |
+| `.github/workflows/` | CI/CD | `ci.yml`, `deploy.yml` |
+| `docs/` | 문서 | `units/<u>/{brief,design,report}.md`, `erd/`, `change-history.md`, `project-description.md`, `aidlc_drafts/` |
+| `aidlc/`, `.claude/` 등 | 작업 방식 | AI-DLC 기록 · 설정(스캔 제외) |
 
-## core-api 패키지 (`kr.mujoong.core`)
+## 백엔드 패키지 구조
 
-운영 소스 약 19.4천 줄 · 178개 파일. **굵게** 표시한 것이 이번에 깊게 본 패키지다.
+루트 패키지: `kr.mujoong.contract` · `kr.mujoong.core` · `kr.mujoong.realtime` · (test-support) 하위.
 
-| 패키지 | 주요 파일 |
-|---|---|
-| **`record`** (U4a) | `ActivityRecorded` · `ActivityRecordRepository` · `RecordCalendar` · `RecordQueryService` · `SessionRecordCapturedHandler` · `ActivityRecordDeletionParticipant` · `web/RecordController` |
-| **`practice`** (U5a) | `CandidateRegistry` · `CandidateEvidencePort` · `GoalMetadataPort` · `PracticeSessionContextPort` · `ScenarioRecordPort` · `PracticePortConfiguration` · `ScenarioConfiguration` · `ScenarioService` · `ScenarioRepository` · `Scenario` · `ScenarioContentPolicy` · `GoalSelection(Service)` · `PracticeGoalRepository` · `PracticeAccountPort` · `U2PracticeAccountAdapter` · `PracticeDeletionParticipant` · `web/GoalSelectionController` |
-| **`knowledge`** (U5a) | `PragmaticsKnowledge` · `BehaviorDefinition` · `SupportItem` · `KnowledgeGraphLookup` · `KnowledgeJdbcRepository` · `KnowledgeProperties` |
-| **`textai`** (U5a) | `TextAiGateway` · `TextAiProvider` · `TextAiConfiguration` · `TextAiProperties` · `TextAiException` · `ForbiddenExpressionPolicy` · `ScenarioPrompt` · `GeneratedScenario` |
-| **`common/deletion`** | `DeletionParticipant`(순서 상수) |
-| `messaging` | `CoreOutboxWriter/Sender/Repository` · `CoreInboxReceiver/Dispatcher/Repoller/Repository` · `ControlEventRearm` · `MessagingCleanupJob` · `CoreMessagingDeletionParticipant` · `handler/` · `web/` |
-| `activity` | `StartActivityService` · `EndSessionService` · `SessionViewService` · `ActivityCopyRepository` · `CurrentSessionService` · `PreparingTimeoutChecker` … ("ActivityCoordinator"는 클래스가 아니라 이 패키지와 로그 컴포넌트 이름) |
-| `account` · `catalog` · `child` · `consent` · `device` · `identity` · `security` · `internalhttp` · `health` · `observability` · `startup` · `config` · `web` · `common/db` | 훑기만 함(파일 목록 · 필요한 서명) |
+### contract-model (`kr.mujoong.contract`, 약 4.2천 줄)
 
-리소스: `application.yml`, `db/migration/core/`(V1 base · V2 U2 · V3 U4a · V4 U5a · `afterMigrate.sql`), `textai/u5a-forbidden-patterns.txt`. 시험 전용 `src/test/resources/db/testmigration/core/V90__test_default_privilege_probe.sql`.
+| 패키지 | 파일 · 줄 | 내용 |
+|---|---|---|
+| `ws` | 22 · 996 | `WsMessageType`(17종) · `WsEnvelope` · `WsPayload` · `CloseCode` · `message/*` |
+| `event` | 10 · 595 | `EventType`(6종) · `EventEnvelope` · `AggregateType` · `payload/*` |
+| `status` | 7 · 202 | `SessionStatus` · `EndReason` · `EndRequestReason` · `FailureCode` · `ActivityType` · `ConnectionState` · `RegistrationStatus` |
+| `log` | 5 · 956 | 구조화 로그 |
+| `json` | 1 · 448 | Jackson 3 직접 사용 유일 지점 |
+| `time` · `audio` · `error` · `profile` · `secret` · `trace` | 소형 | 시계 · 음성 형식 · 오류 봉투 · 프로필 · 비밀 · 추적 |
 
-## realtime-activity (`kr.mujoong.realtime`)
+### core-api (`kr.mujoong.core`, 23 패키지, 약 23.6천 줄)
 
-운영 소스 약 24천 줄. 이번에는 `session/ResultSnapshotBuilder.java` · `session/PracticeSessionExtension.java`(+ `NoOpPracticeSessionExtension`)와 `db/migration/realtime/`(V1 · V2 U3 · V3 U4b · `afterMigrate.sql`)만 깊게 봤다. 나머지 패키지는 목록만 훑었다(U6 무관). `session/SessionExecutor.java` 3167줄.
+| 패키지 | 파일 · 줄 | 역할 |
+|---|---|---|
+| `activity` | 18 · 2,787 | 활동 시작 · 종료 · 현재 세션 · 세션 뷰, Realtime 내부 클라이언트 |
+| `device` | 17 · 2,222 | 등록 코드 · 부트스트랩 · claim · 기기 토큰 검증 · 연결 문구 |
+| `messaging` | 14 · 2,024 | Core Outbox/Inbox, 상태 · 기기 상태 이벤트 처리기 |
+| `identity` | 20 · 1,938 | Google 로그인 · dev 로그인 · 시드 · 보호자/아이/동의 엔티티 |
+| `notification` | 29 · 1,710 | 웹 푸시 구독 · 발송 스케줄 · VAPID 전송 |
+| `practice` | 29 · 1,586 | 목표 선택 · 상황 · 연습 시작 · 내부 상황 API |
+| `web` | 14 · 1,205 | 공통 웹(홈 · 정책 · 오류 처리 등) |
+| `result` | 41 · 1,169 | 결과 작업 · 수준 계산 · AI 결과 스키마 · 금지 사전 · 팁 · 재시도 (압축 서식, TD-5) |
+| `security` | 10 · 1,135 | 보안 설정 · 기기 쿠키 · Origin · 내부 토큰 · 속도 제한 |
+| `record` | 9 · 957 | 기록 목록 · 상세 |
+| `observability` | 7 · 952 | 지표 · 로그 |
+| `config` | 4 · 688 | `CoreProperties`(576줄) 등 |
+| `consent` · `startup` · `account` · `child` · `common` | 각 5~8 | 동의 · 기동 점검 · 계정 삭제 · 아이 · 공통 |
+| `report` | 14 · 495 | 리포트 조립 · PDF 렌더 · 보존 (압축 서식) |
+| `internalhttp` | 2 · 377 | 내부 HTTP 클라이언트 · 인증 인터셉터 |
+| `catalog` · `textai` · `knowledge` · `health` | 소형 | 승인 콘텐츠 목록 · 텍스트 AI 포트 · 지식 그래프 포트 · 헬스 |
 
-## contract-model (`kr.mujoong.contract`)
+### realtime-activity (`kr.mujoong.realtime`, 17 패키지, 약 25.9천 줄)
 
-`event/`(`EventType` · `EventEnvelope` · `EventPayload` · `AggregateType` · `payload/`)를 깊게 봤다. 그 밖에 오류 코드 · 상태 열거 · `ws/message/`(18종) · 시계 · `JsonCodec` · 로그.
+| 패키지 | 파일 · 줄 | 역할 |
+|---|---|---|
+| `session` | 34 · 7,885 | 세션 상태 · 전이 표 · 타이머 · 실행기(`SessionExecutor` 3,388줄) · 기록 캡처 · 내부 컨트롤러 |
+| `gateway` | 21 · 3,552 | `/ws/device` 핸들러 · 핸드셰이크 · 하트비트 · 연결 상태 · 소켓 등록 |
+| `messaging` | 19 · 1,960 | Realtime Outbox/Inbox |
+| `log` | 9 · 1,948 | 대화 기록 · 지연 · 세션 공백 기록 |
+| `practice` | 29 · 1,609 | 연습 런타임(판정 · 단서 · 상황 클라이언트) |
+| `voice` | 10 · 1,390 | 공급자 연결 · 요청 생성 · 입력 중계 · 음성 탭 |
+| `dialog` | 5 · 1,208 | 역할 지시문 · 침묵 시계 · 중단 의도 판정(565줄) · 중단 확인 · 합류 추적 |
+| `observability` | 8 · 1,151 | 지표 |
+| `gate` | 6 · 885 | 출력 게이트 · 문장 버퍼 · 시드 사전 · 승인 재생 · 마무리 순서 |
+| `startup` · `recording` · `common` · `web` · `config` · `internalhttp` · `runtime` · `health` | 소형~중형 | 기동 · 원음 녹음(`FileAudioRecorder` 619줄) · 공통 · 웹 · 설정 · 내부 HTTP · 타이머/작업 실행기 · 헬스 |
 
-## frontend
+### test-support
 
-- `src/app/parent/records/page.tsx` — `/parent`로 redirect만 하는 스텁(26).
-- `/api/records` 클라이언트 · 타입 없음. `Done17.tsx`는 「오늘 기록 보기」를 감춤(문구 `shared/copy/activity.ts:34 viewRecord`는 있음).
-- 화면 문구는 copy 모듈에만(`react/jsx-no-literals`), `/parent` ↔ `/device` import 금지(ESLint).
+`db`(PostgreSQL 시험 DB, 971줄) · `device`(기기 시뮬레이터) · `http`(계약 대역) · `provider`(가짜 공급자 WS) · `time`(가변 Clock) · `log` · `secret`.
+
+## 자원 파일
+
+- core: `application{,-dev,-demo,-prod,-load-test}.yml`, `db/migration/core/V1~V7 + afterMigrate.sql`, `prompts/result/*.v1.txt`, `forbidden/result-v1.json`, `textai/u5a-forbidden-patterns.txt`, `report/`(폰트 등), `logback-spring.xml`.
+- realtime: `application{,-dev,-demo,-prod}.yml`, `db/migration/realtime/V1~V4 + afterMigrate.sql`, `gate/`(시드 사전), `practice/u5b-*.yml`, `logback-spring.xml`.
+
+## 프런트엔드 구조
+
+- `src/app/` 라우트: `/parent`(홈) · `/parent/login`(+ `callback`, `google` route) · `/parent/dev-login` · `/parent/consent` · `/parent/child`(+ `stop-expressions`) · `/parent/device`(+ `register`) · `/parent/free` · `/parent/practice` · `/parent/sessions/[sessionId]`(+ `done`) · `/parent/records`(+ `[sessionId]`) · `/parent/reports/new` · `/parent/reports/[reportId]` · `/parent/push-worker`(route) · `/device` · `/device/pcm-capture-worklet`(route) · `/healthz`(route).
+- `src/parent/`: `screens/`(17 스크린: Login01 · LoginCallback · DevLogin · Consent02 · Child03 · Home04 · Device05 · Register05a · Free08 · Live12 · Done17 · Practice18 · Records26 · RecordDetail27 · ReportRange28 · Report30 · StopExpressions01), `api/` · `activity/` · `practice/` · `push/` · `hooks/` · `components/`.
+- `src/device/`: `components/`(D0View · T19View · DebugLog), `machine/`(화면 상태 기계) · `ws/` · `mic/` · `audio/` · `runtime/` · `power/` · `api/`.
+- `src/shared/`: `protocol/`(WS 계약 대응) · `timing/`(`timing-defaults.json`) · `copy/`(화면 문구) · `errors/` · `security/` · `styles/` · `toast/`.
 
 ## 코드 패턴
 
-- **포트와 교체 가능한 기본 빈**: 소비 유닛이 포트를 정의하고 `@ConditionalOnMissingBean` 기본 구현(거절 · null · SERVICE_NOT_READY · UNAVAILABLE)을 둔다.
-- **Spring 앱 이벤트 + 커밋 뒤 전달**: `ActivityRecorded`, 구독은 `@TransactionalEventListener(AFTER_COMMIT)` 전제.
-- **Outbox/Inbox**: 앱 사이 이벤트는 같은 트랜잭션에서 Outbox 적재 → 내부 HTTP 전달 → Inbox 멱등 처리 · 재시도 · DEAD.
-- **삭제 참가자**: `@Order` 빈 · 멱등 · 한 트랜잭션 · `DbRetry IDEMPOTENT`(본보기 `ActivityRecordDeletionParticipant`).
-- **응답 모양으로 노출 금지**: 서비스가 내부 필드를 응답 레코드에 싣지 않음 + `ContractConformanceIT` 스키마 대조.
-- **주석 형식**: 대부분 한국어 Javadoc에 근거 ID(FR · BR · J · AC). U5a 코드(`knowledge` · `practice` · `textai`)는 영어 한 줄 압축 주석.
-
-## Sources
-
-- 개발자 스캔 `.../developer-scan.md`(Packages Found · Build System · U6 관련 코드 위치)
-- 패키지 파일 목록 재확인(`ls`, 커밋 `7a22b67`)
+- **포트 + 기본 빈**: 외부 AI · 지식 그래프는 인터페이스와 `@ConditionalOnMissingBean` 기본 실패 빈(TD-1).
+- **삭제 참여자**: 각 패키지가 `*DeletionParticipant`를 구현해 계정 삭제에 참여.
+- **Outbox/Inbox 쌍**: Writer · Sender · Repository · Receiver · Dispatcher · Repoller · CleanupJob · `ControlEventRearm`이 양 앱에 대칭으로 있음.
+- **전이 표**: `TransitionTable` · `SessionTransitions` · `TransitionService`로 상태 전이를 표로 관리.
+- **주석**: 한국어 Javadoc, 결정 ID(J · BR · U*-J · 편차) 인용.
+- **화면 문구**: 프런트 화면 문구는 `shared/copy` 모듈만(ESLint `react/jsx-no-literals`).

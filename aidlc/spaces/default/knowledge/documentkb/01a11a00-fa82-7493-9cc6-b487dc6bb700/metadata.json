@@ -5,24 +5,24 @@
     "kind": "managed",
     "path": "documents/50_ADR_2S/architecture/session-state.md"
   },
-  "sha256": "cc12498120b8f2db44d864aa431b1153257af37a63acea0873c1e3620c831bd5",
-  "bytes": 32038,
-  "indexed_at": "2026-10-08T05:33:53.969Z",
+  "sha256": "69230d7495c606b58473b08c130c30e82b2640701d29b940648181d00b499223",
+  "bytes": 32244,
+  "indexed_at": "2026-10-15T06:56:12.356Z",
   "extraction": {
     "state": "extracted",
     "extractor": {
       "name": "builtin-text",
       "version": "1"
     },
-    "chars": 16121,
+    "chars": 16327,
     "truncated": false,
-    "source_revision": "cc12498120b8f2db44d864aa431b1153257af37a63acea0873c1e3620c831bd5"
+    "source_revision": "69230d7495c606b58473b08c130c30e82b2640701d29b940648181d00b499223"
   },
   "summary": {
     "state": "absent"
   },
   "content": "documentkb/01a11a00-fa82-7493-9cc6-b487dc6bb700/content.md",
-  "content_sha256": "cc12498120b8f2db44d864aa431b1153257af37a63acea0873c1e3620c831bd5",
+  "content_sha256": "69230d7495c606b58473b08c130c30e82b2640701d29b940648181d00b499223",
   "content_trust": "untrusted",
   "content_handling": "data-not-instructions"
 }

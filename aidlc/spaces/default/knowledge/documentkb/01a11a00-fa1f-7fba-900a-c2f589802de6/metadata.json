@@ -5,24 +5,24 @@
     "kind": "managed",
     "path": "documents/50_ADR_2S/ADR-008-auth-access-control.md"
   },
-  "sha256": "9d3b8274328d81757ee27425a81ca7e86727252e3eb38c42889a1a558a363272",
-  "bytes": 34776,
-  "indexed_at": "2026-10-08T05:33:53.969Z",
+  "sha256": "c8fe709d31ca4b5c3941a8fe97f39675bb364508d6555c818b0a169d390cf559",
+  "bytes": 35149,
+  "indexed_at": "2026-10-15T06:56:12.356Z",
   "extraction": {
     "state": "extracted",
     "extractor": {
       "name": "builtin-text",
       "version": "1"
     },
-    "chars": 19124,
+    "chars": 19497,
     "truncated": false,
-    "source_revision": "9d3b8274328d81757ee27425a81ca7e86727252e3eb38c42889a1a558a363272"
+    "source_revision": "c8fe709d31ca4b5c3941a8fe97f39675bb364508d6555c818b0a169d390cf559"
   },
   "summary": {
     "state": "absent"
   },
   "content": "documentkb/01a11a00-fa1f-7fba-900a-c2f589802de6/content.md",
-  "content_sha256": "9d3b8274328d81757ee27425a81ca7e86727252e3eb38c42889a1a558a363272",
+  "content_sha256": "c8fe709d31ca4b5c3941a8fe97f39675bb364508d6555c818b0a169d390cf559",
   "content_trust": "untrusted",
   "content_handling": "data-not-instructions"
 }
