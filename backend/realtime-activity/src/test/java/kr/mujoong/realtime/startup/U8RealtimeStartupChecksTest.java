@@ -89,6 +89,51 @@ class U8RealtimeStartupChecksTest {
         assertThat(loaded[0]).isFalse();
     }
 
+    @Test
+    void theSpringConstructorReadsTheEnvironmentAndLoadsTheVersionResources() {
+        org.springframework.mock.env.MockEnvironment environment = new org.springframework.mock.env.MockEnvironment()
+                .withProperty(RealtimeStartupChecks.INTERNAL_TOKEN, TestSecrets.internalServiceToken())
+                .withProperty(RealtimeStartupChecks.PROVIDER_API_KEY, TestSecrets.base64Url(24));
+        environment.setActiveProfiles("test");
+        kr.mujoong.realtime.config.RealtimeProperties properties = org.mockito.Mockito.mock(
+                kr.mujoong.realtime.config.RealtimeProperties.class, org.mockito.Mockito.RETURNS_DEEP_STUBS);
+        org.mockito.Mockito.when(properties.observability().ownerHashSecret()).thenReturn(TestSecrets.ownerHashSecret());
+        org.mockito.Mockito.when(properties.provider().url()).thenReturn(LOOPBACK);
+
+        RealtimeStartupChecks checks = new RealtimeStartupChecks(environment, properties);
+
+        assertThat(checks.liveContent().guardrail().modes()).hasSize(3);
+        assertThat(err.toString(StandardCharsets.UTF_8)).isEmpty();
+    }
+
+    @Test
+    void aClasspathWithoutTheVersionResourcesIsMissingAndOtherBrokenShapesAreNamed() {
+        Thread thread = Thread.currentThread();
+        ClassLoader original = thread.getContextClassLoader();
+        thread.setContextClassLoader(new java.net.URLClassLoader(new java.net.URL[0], null));
+        try {
+            assertThatThrownBy(LiveContentResources::loadDefault).isInstanceOf(LiveContentResources.LoadException.class)
+                    .satisfies(e -> assertThat(((LiveContentResources.LoadException) e).problem())
+                            .isEqualTo(LiveContentResources.Problem.MISSING));
+        } finally {
+            thread.setContextClassLoader(original);
+        }
+        String judgment = resource(LiveContentResources.JUDGMENT_RESOURCE);
+        String guardrail = resource(LiveContentResources.GUARDRAIL_RESOURCE);
+        assertProblem(judgment, "{broken", LiveContentResources.Problem.PARSE_FAILED);
+        assertProblem(judgment, guardrail.replace("\"version\": \"jev-guardrail-v1\"", "\"version\": \" \""),
+                LiveContentResources.Problem.BAD_VERSION);
+        assertProblem(judgment, guardrail.replaceFirst(",\\s*\"modes\": \\[[^\\]]*\\]", ""), LiveContentResources.Problem.BAD_MODES);
+        assertProblem("{\"version\":\"judgment-v1\",\"source\":\"x\"}", guardrail, LiveContentResources.Problem.BAD_JUDGMENT_POINTS);
+        assertThat(LiveContentResources.parse(judgment, guardrail).guardrail().toString()).doesNotContain("검수기");
+    }
+
+    private static void assertProblem(String judgment, String guardrail, LiveContentResources.Problem problem) {
+        assertThatThrownBy(() -> LiveContentResources.parse(judgment, guardrail))
+                .isInstanceOf(LiveContentResources.LoadException.class)
+                .satisfies(e -> assertThat(((LiveContentResources.LoadException) e).problem()).isEqualTo(problem));
+    }
+
     private static String resource(String name) {
         try (var in = U8RealtimeStartupChecksTest.class.getClassLoader().getResourceAsStream(name)) {
             return new String(in.readAllBytes(), StandardCharsets.UTF_8);
