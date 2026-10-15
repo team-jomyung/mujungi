@@ -1,7 +1,3 @@
-locals {
-  name = "mujungi"
-}
-
 # 🏢 VPC — 우리 전용 네트워크
 resource "aws_vpc" "main" {
   cidr_block           = "10.0.0.0/16"
