@@ -129,8 +129,8 @@ tree_sum() { (cd "$1" && find . -type f -print0 | sort -z | xargs -0 sha256sum) 
 declare -A WANT=(
   [postgres.env]="DB_BACKUP_PASSWORD DB_CORE_PASSWORD DB_OWNER_PASSWORD DB_REALTIME_PASSWORD POSTGRES_PASSWORD"
   [migrate.env]="DB_OWNER_PASSWORD"
-  [core-api.env]="GOOGLE_OAUTH_CLIENT_ID GOOGLE_OAUTH_CLIENT_SECRET GOOGLE_OAUTH_REDIRECT_URI INTERNAL_SERVICE_TOKEN MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET MUJOONG_SECURITY_ALLOWED_ORIGIN SPRING_DATASOURCE_PASSWORD"
-  [realtime.env]="INTERNAL_SERVICE_TOKEN MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET MUJOONG_SECURITY_ALLOWED_ORIGIN PROVIDER_API_KEY SPRING_DATASOURCE_PASSWORD"
+  [core-api.env]="GOOGLE_OAUTH_CLIENT_ID GOOGLE_OAUTH_CLIENT_SECRET GOOGLE_OAUTH_REDIRECT_URI INTERNAL_SERVICE_TOKEN MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET MUJOONG_SECURITY_ALLOWED_ORIGIN OPENAI_API_KEY SPRING_DATASOURCE_PASSWORD"
+  [realtime.env]="INTERNAL_SERVICE_TOKEN JEV_API_KEY MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET MUJOONG_SECURITY_ALLOWED_ORIGIN OPENAI_API_KEY PROVIDER_API_KEY SPRING_DATASOURCE_PASSWORD"
   [web.env]="GOOGLE_OAUTH_CLIENT_ID GOOGLE_OAUTH_REDIRECT_URI MUJOONG_SECURITY_ALLOWED_ORIGIN"
   [nginx.env]="MUJOONG_SECURITY_ALLOWED_ORIGIN SERVICE_HOST"
   [certbot.env]="ACME_CONTACT_EMAIL SERVICE_HOST"
@@ -151,6 +151,11 @@ check_rendered() {
   done
   [ -e "$dir/neo4j.env" ] && problems+=("NEO4J_AUTH 파라미터가 없는데 neo4j.env가 생겼다")
   [ "$(value_of "$dir/core-api.env" GOOGLE_OAUTH_CLIENT_SECRET)" = "" ] || problems+=("GOOGLE_OAUTH_CLIENT_SECRET이 빈 변수가 아니다")
+  # U8(SD3): 선택 비밀 OPENAI_API_KEY · JEV_API_KEY는 파라미터가 없으면 빈 변수다(앱이 실제 어댑터를 끈다)
+  for f in core-api.env realtime.env; do
+    [ "$(value_of "$dir/$f" OPENAI_API_KEY)" = "" ] || problems+=("$f OPENAI_API_KEY가 빈 변수가 아니다")
+  done
+  [ "$(value_of "$dir/realtime.env" JEV_API_KEY)" = "" ] || problems+=("realtime JEV_API_KEY가 빈 변수가 아니다")
   # U2 리뷰 3: Core와 web이 같은 이름을 받고 redirect는 허용 origin의 01 콜백 경로다(구글 콘솔에 같은 주소를 등록한다)
   for f in core-api.env web.env; do
     [ "$(value_of "$dir/$f" GOOGLE_OAUTH_CLIENT_ID)" = "" ] || problems+=("$f GOOGLE_OAUTH_CLIENT_ID가 빈 변수가 아니다")
@@ -196,6 +201,28 @@ else
 fi
 if [ "${#google_problems[@]}" -gt 0 ]; then not_ok "render-env-google-oauth" "${google_problems[*]}"; else ok "render-env-google-oauth"; fi
 
+# ---- render-env: U8 AI 키는 앱별 최소 범위로 나뉜다(SD3 — Luna는 core-api · realtime, 제브는 realtime만) ----------------
+openai_key="$(rand 32)"
+jev_key="$(rand 32)"
+write_params "$work/p-ai" -GOOGLE_OAUTH_CLIENT_SECRET "OPENAI_API_KEY=$openai_key" "JEV_API_KEY=$jev_key"
+render "$work/p-ai" "$work/env-ai"
+ai_problems=()
+if [ "$rc" -ne 0 ]; then
+  ai_problems+=("종료 코드 $rc")
+else
+  for f in core-api.env realtime.env; do
+    [ "$(value_of "$work/env-ai/$f" OPENAI_API_KEY)" = "$openai_key" ] || ai_problems+=("$f OPENAI_API_KEY")
+  done
+  [ "$(value_of "$work/env-ai/realtime.env" JEV_API_KEY)" = "$jev_key" ] || ai_problems+=("realtime JEV_API_KEY")
+  grep -q '^JEV_API_KEY=' "$work/env-ai/core-api.env" && ai_problems+=("core-api.env에 JEV_API_KEY가 있다")
+  for f in web.env nginx.env certbot.env backup.env postgres.env migrate.env; do
+    grep -qE '^(OPENAI_API_KEY|JEV_API_KEY)=' "$work/env-ai/$f" && ai_problems+=("$f에 AI 키가 있다")
+  done
+  grep -qF -- "$openai_key" "$work/render.out" && ai_problems+=("출력에 OPENAI_API_KEY 값")
+  grep -qF -- "$jev_key" "$work/render.out" && ai_problems+=("출력에 JEV_API_KEY 값")
+fi
+if [ "${#ai_problems[@]}" -gt 0 ]; then not_ok "render-env-u8-ai-keys" "${ai_problems[*]}"; else ok "render-env-u8-ai-keys"; fi
+
 # ---- render-env: 실패하면 아무 파일도 바꾸지 않는다(D3 실패 · 구 버전 유지) --------------------------------
 expect_reject() {
   local name="$1" want_rc="$2" params="$3"
@@ -229,6 +256,10 @@ write_params "$work/p-origin" MUJOONG_SECURITY_ALLOWED_ORIGIN=https://other.exam
 expect_reject "render-env-origin-mismatch" 1 "$work/p-origin"
 write_params "$work/p-google-half" "GOOGLE_OAUTH_CLIENT_ID=u2.apps.example.net"
 expect_reject "render-env-google-id-without-secret" 1 "$work/p-google-half"
+# U8: 선택 비밀도 값 문자 집합 검사를 받는다
+# shellcheck disable=SC2016  # 렌더에 위험한 글자($ · 공백)를 그대로 넣는다
+write_params "$work/p-ai-unsafe" 'JEV_API_KEY=abc def$HOME'
+expect_reject "render-env-u8-ai-key-unsafe-characters" 1 "$work/p-ai-unsafe"
 FAKE_AWS_FAIL=1 expect_reject "render-env-aws-failure" 2 "$work/p-ok"
 # aws가 없는 PATH: render-env가 쓰는 도구만 링크한 디렉터리
 mkdir -p "$work/noaws"

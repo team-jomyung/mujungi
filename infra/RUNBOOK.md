@@ -235,6 +235,17 @@ aws ssm put-parameter --name /mujoong/demo/GHCR_PULL_USER --type String --value 
   바꾼 뒤에는 env를 다시 렌더하고 core-api · web을 재생성해야 반영된다.
 - GHCR 패키지를 공개로 두기로 정하면 `GHCR_PULL_TOKEN` · `GHCR_PULL_USER`를 만들지 않는다(배포가 로그인하지 않는다, J99).
 - `NEO4J_AUTH`는 Neo4j를 켜는 유닛이 만든다.
+- (선택, U8) Luna 키 `OPENAI_API_KEY`(core-api · realtime이 받음)와 제브 키 `JEV_API_KEY`(realtime만 받음). 넣지 않으면 렌더러가 빈 변수로 두고
+  앱은 실제 어댑터를 끈다. 실제 아동 데이터 전달은 공급자 약관 · 보호자 동의 확인 전까지 막혀 있다(R-F15, `contracts/ai-io.md` 10절).
+
+  ```bash
+  umask 077; tmp="$(mktemp)"
+  read -r -s -p 'OPENAI_API_KEY: ' v && printf '%s' "$v" >"$tmp" && unset v && echo && \
+    aws ssm put-parameter --name /mujoong/demo/OPENAI_API_KEY --type SecureString --value "file://$tmp" >/dev/null
+  read -r -s -p 'JEV_API_KEY: ' v && printf '%s' "$v" >"$tmp" && unset v && echo && \
+    aws ssm put-parameter --name /mujoong/demo/JEV_API_KEY --type SecureString --value "file://$tmp" >/dev/null
+  rm -f "$tmp"; unset tmp
+  ```
 
 확인: `aws ssm get-parameters-by-path --path /mujoong/demo/ --query 'Parameters[].Name'`의 이름 목록이 3.7 표와 같다(값은 조회하지 않는다).
 
@@ -518,6 +529,8 @@ supercronic) · 배포 직전(D2) · 정지 직전(최근 1시간 성공이 없�
 | `INTERNAL_SERVICE_TOKEN` | 새 값 입력 → 같은 SHA로 `DEPLOY`(두 앱이 함께 다시 만들어진다. 잠시 어긋나도 Outbox가 401을 재시도한다) |
 | `DB_CORE_PASSWORD` · `DB_REALTIME_PASSWORD` · `DB_BACKUP_PASSWORD` · `DB_OWNER_PASSWORD` | 슈퍼유저로 `ALTER ROLE`(아래) → 파라미터 갱신 → 같은 SHA로 `DEPLOY` |
 | `PROVIDER_API_KEY` | 공급자 콘솔에서 새 키 → 파라미터 갱신 → 같은 SHA로 `DEPLOY`(realtime만 다시 만들어진다) |
+| `OPENAI_API_KEY` | 공급자 콘솔에서 새 키 → 파라미터 갱신 → 같은 SHA로 `DEPLOY`(core-api · realtime이 다시 만들어진다) |
+| `JEV_API_KEY` | 공급자 콘솔에서 새 키 → 파라미터 갱신 → 같은 SHA로 `DEPLOY`(realtime만 다시 만들어진다) |
 | `MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET` | 파라미터 갱신 → 같은 SHA로 `DEPLOY`(이후 ownerHash 값이 바뀐다) |
 | `GHCR_PULL_TOKEN` | 새 읽기 전용 토큰(만료 90일 이하) → 파라미터 갱신(배포 때만 쓰인다) |
 

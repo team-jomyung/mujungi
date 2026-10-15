@@ -22,6 +22,7 @@
 #   bad-dev-public-port.yml (dev)          실패 (dev 0.0.0.0 게시)
 #   배포 D3 꼴(--env-dir · --release-env)  통과(env 파일 안의 비밀은 environment: 위반이 아니다 — Compose v2.38 · v5.6 모두, J346)
 #   D3 env 파일에 demo가 아닌 프로필 줄    실패 demo-profile (env 파일 자체 검사, Compose 판과 무관 J346)
+#   U8 AI 키 분배 변형 3종                 실패 invariant-5(제브 키가 core-api로 · realtime에 Luna 키 없음) · secret-env-files(environment:에 JEV_API_KEY)
 #   Nginx 템플릿 변형 9종                  실패 nginx (방어 지시어 빠짐 · XFF 이어 붙이기 · 5xx 상태 치환 · ws 버퍼링 · 문법 오류 · 정규식 location ·
 #                                          고정 IP 업스트림(이름 재해석 없음, NFR4.13 J347) · 504 나누기 빠짐(JSON · 화면 경로, J354))
 #   마이그레이션 변형                      금지 문장 실패 · 허용 문장 통과 · --allow-contract 통과
@@ -131,6 +132,23 @@ cp -a "$work/d3/env" "$work/d3/env-profile"
 printf 'SPRING_PROFILES_ACTIVE=demo,dev\n' >>"$work/d3/env-profile/realtime.env"
 expect "d3-env-file-profile-line" 1 "realtime env 파일에 demo가 아닌 SPRING_PROFILES_ACTIVE" -- --only demo-profile \
   --env-dir "$work/d3/env-profile" --release-env "$work/d3/release.env"
+# U8(SD3): OPENAI_API_KEY는 core-api · realtime, JEV_API_KEY는 realtime만 받는다(분배표). 위 d3-env-dir이 바른 분배를 통과시키고,
+# 아래 변형은 제브 키가 core-api로 새거나 realtime에서 Luna 키가 빠지면 invariant-5로 막히는지 본다
+cp -a "$work/d3/env" "$work/d3/env-jev-core"
+printf 'JEV_API_KEY=\n' >>"$work/d3/env-jev-core/core-api.env"
+expect "u8-jev-key-leaks-to-core-api" 1 "invariant-5: core-api 비밀 이름" -- --only compose-invariants \
+  --env-dir "$work/d3/env-jev-core" --release-env "$work/d3/release.env" --mem-limit-bytes 5700000000
+cp -a "$work/d3/env" "$work/d3/env-no-openai"
+grep -v '^OPENAI_API_KEY=' "$work/d3/env/realtime.env" >"$work/d3/env-no-openai/realtime.env"
+expect "u8-openai-key-missing-in-realtime" 1 "invariant-5: realtime 비밀 이름" -- --only compose-invariants \
+  --env-dir "$work/d3/env-no-openai" --release-env "$work/d3/release.env" --mem-limit-bytes 5700000000
+cat >"$work/inline-jev.yml" <<'YAML'
+services:
+  realtime:
+    environment:
+      JEV_API_KEY: placeholder-not-a-secret
+YAML
+expect "u8-inline-jev-key" 1 "environment:에 비밀 JEV_API_KEY" -- "${inv[@]}" --compose "$work/inline-jev.yml"
 
 # 5 Nginx 템플릿 변형(사본을 고쳐 --nginx-src로 준다)
 nginx_variant() {

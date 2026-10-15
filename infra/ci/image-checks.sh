@@ -116,7 +116,7 @@ short_err() { head -n 3 "$1" | cut -c1-240 | tr '\n' ' ' | sed 's/ $//'; }
 
 # 키 형식(값 모양) — 출력은 파일 이름 · 건수만. 비밀 스캔(a-secrets)이 이 파일을 키로 오인하지 않게 개인 키 머리글은 글자를 나눠 적는다
 readonly KEY_PATTERNS='AKIA[0-9A-Z]{16}|gh[pousr]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{50,}|(^|[^A-Za-z0-9_-])sk-[A-Za-z0-9_-]{20,}|-----BEGIN ([A-Z]+ )?PRIV''ATE KEY-----|xox[abprs]-[A-Za-z0-9-]{10,}|[a-z][a-z0-9+.-]*://[^/[:space:]:@"'\'']+:[^/[:space:]@"'\'']+@[A-Za-z0-9.-]+'
-readonly SECRET_NAME_PATTERN='POSTGRES_PASSWORD|DB_(OWNER|CORE|REALTIME|BACKUP)_PASSWORD|INTERNAL_SERVICE_TOKEN|PROVIDER_API_KEY|MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET|GOOGLE_OAUTH_CLIENT_SECRET|GHCR_PULL_TOKEN|NEO4J_AUTH|SPRING_DATASOURCE_PASSWORD'
+readonly SECRET_NAME_PATTERN='POSTGRES_PASSWORD|DB_(OWNER|CORE|REALTIME|BACKUP)_PASSWORD|INTERNAL_SERVICE_TOKEN|PROVIDER_API_KEY|OPENAI_API_KEY|JEV_API_KEY|MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET|GOOGLE_OAUTH_CLIENT_SECRET|GHCR_PULL_TOKEN|NEO4J_AUTH|SPRING_DATASOURCE_PASSWORD'
 readonly PROXY_PATTERN='https?_proxy|HTTPS?_PROXY|NO_PROXY|ca-bundle|\.ccr|extra_ca|proxy_env'
 
 # copy_out <이미지> <경로> <대상 디렉터리> — 컨테이너를 실행하지 않고 파일을 꺼낸다
