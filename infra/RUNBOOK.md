@@ -687,3 +687,5 @@ KEEP=1 bash scripts/verify.sh         # 끝에 스택만 남긴다(생성 비밀
 
 - `docker compose ... config`는 `--quiet`로만 쓴다. 병합 결과가 필요하면 `--format json`을 umask 077 임시 파일로만 받아 처리한 뒤 지운다.
 - 이 스택의 로그 · `report.txt`를 이슈에 옮길 때도 0절 규칙을 따른다(사건 코드 · traceId · 건수만).
+
+수동 demo 스택이 같은 PC에서 실행 중이라 네트워크 대역이 겹치면 수동 스택을 내리지 말고, 비어 있는 /24 대역 두 개를 검증에 지정한다. 예: `MUJOONG_VERIFY_EDGE_PREFIX=172.30.210 MUJOONG_VERIFY_BACKEND_PREFIX=172.30.220 bash scripts/verify.sh --mode compose`. 기존 Docker 망과 겹치지 않는지 먼저 확인한다. 검증용 고정 IP와 PostgreSQL 허용 대역은 함께 바뀌며 backend의 internal 격리와 localhost 게시 포트는 유지한다. 변수를 생략하면 기존 기본 대역을 쓴다.
