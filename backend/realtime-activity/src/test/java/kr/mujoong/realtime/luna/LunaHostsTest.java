@@ -100,9 +100,10 @@ class LunaHostsTest {
     void runtimeSchemaResourcesAreByteIdenticalToTheContractOriginals() throws IOException {
         List<Path> originals;
         try (Stream<Path> files = Files.list(REPO_ROOT.resolve("contracts/schemas"))) {
-            originals = files.filter(file -> file.getFileName().toString().matches("ai-.*\\.schema\\.json")).sorted().toList();
+            originals = files.filter(file -> file.getFileName().toString().matches("ai-.*\\.schema\\.json|common\\.schema\\.json"))
+                    .sorted().toList();
         }
-        assertThat(originals).as("contracts/schemas/ai-*.schema.json(빈 대조 아님)").hasSizeGreaterThanOrEqualTo(7);
+        assertThat(originals).as("contracts/schemas/ai-*.schema.json + common(빈 대조 아님)").hasSizeGreaterThanOrEqualTo(8);
         for (Path original : originals) {
             String name = original.getFileName().toString();
             try (InputStream resource = getClass().getClassLoader().getResourceAsStream("luna/schemas/" + name)) {
@@ -111,6 +112,6 @@ class LunaHostsTest {
             }
         }
         assertThat(getClass().getClassLoader().getResource("luna/schemas/guardrail-request.schema.json"))
-                .as("ai-* 밖 스키마는 복사하지 않는다").isNull();
+                .as("ai-* · common 밖 스키마는 복사하지 않는다").isNull();
     }
 }

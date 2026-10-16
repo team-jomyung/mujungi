@@ -42,10 +42,11 @@ dependencies {
     testImplementation(libs.jackson.dataformat.yaml)
 }
 
-// U9 Q3-A · SD12: 계약 스키마 정본 contracts/schemas/ai-*.schema.json을 실행 자원 luna/schemas/로 복사한다(정본 한 곳, R-F5)
+// U9 Q3-A · SD12: 계약 스키마 정본 contracts/schemas/ai-*.schema.json을 실행 자원 luna/schemas/로 복사한다(정본 한 곳, R-F5).
+// ai-rejudgment-output이 common.schema.json#/$defs/Uuid를 가리키므로 common.schema.json도 함께 복사한다(U9 Code Generation 편차)
 tasks.processResources {
     from(rootProject.projectDir.parentFile.resolve("contracts/schemas")) {
-        include("ai-*.schema.json")
+        include("ai-*.schema.json", "common.schema.json")
         into("luna/schemas")
     }
 }
