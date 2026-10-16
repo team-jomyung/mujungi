@@ -1,0 +1,14 @@
+{
+  "stage": "infrastructure-design",
+  "unit": "u9-luna-clients",
+  "upstream_ids": ["NFR3.4", "NFR3.6", "NFR3.7", "NFR3.9", "NFR5.1", "NFR5.2", "NFR5.4"],
+  "coverage": [
+    { "id": "NFR3.4", "status": "OK", "target": "새 방화벽 · 보안 그룹 없음, 나가는 HTTPS api.openai.com만(GPT-Live와 같은 호스트)" },
+    { "id": "NFR3.6", "status": "OK", "target": "U8 OPENAI_API_KEY 분배 그대로(render-env OPTIONAL · compose.demo.yml · b-stack.sh), 새 비밀 이름 없음" },
+    { "id": "NFR3.7", "status": "Deferred", "target": "RUNBOOK R-F15 확인 기록 표 · 투입 순서는 U9 Code Generation 산출물(cicd-pipeline.md 4절에 순서 정의)" },
+    { "id": "NFR3.9", "status": "OK", "target": "프록시 · 중계 없는 직접 HTTPS 경로(인프라 변경 없음)" },
+    { "id": "NFR5.1", "status": "OK", "target": "cicd-pipeline.md 1절 3행 build-logic luna-live 고정 제외 · lunaLiveTest 미연결, 6행 빌드 구성 시험(check 안), 2절 CI 명령 변경 없음" },
+    { "id": "NFR5.2", "status": "OK", "target": "cicd-pipeline.md 5절 개발자 PC lunaLiveTest · build/luna-live/report.txt" },
+    { "id": "NFR5.4", "status": "OK", "target": "cicd-pipeline.md 2절 기존 trivy bootJar rootfs 스캔 + Code Generation 로컬 1회, 걸릴 때 판 올림 → R-M7 예외 승인 순서" }
+  ]
+}

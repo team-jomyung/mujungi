@@ -19,7 +19,15 @@ public record PracticeSpeech(UUID correlationId, UUID scenarioId, long generatio
         }
     }
     public boolean matches(String actual) {
-        return actual != null && text.replaceAll("\\s+", "").equals(actual.replaceAll("\\s+", ""));
+        return sameWithoutAsciiWhitespace(text, actual);
+    }
+
+    /**
+     * 승인 원문과 실제 전사가 공백만 빼고 정확히 같은가(U5b 규칙, U8 LiveContentRegistry도 같은 규칙을 쓴다 — NFR2.1 · SD6). 정규식
+     * {@code \s}는 ASCII 공백(space · \t · \n · \x0B · \f · \r)만이라 NBSP · 전각 공백 · 제로폭 문자가 끼면 다르다(안전 쪽).
+     */
+    public static boolean sameWithoutAsciiWhitespace(String approved, String actual) {
+        return approved != null && actual != null && approved.replaceAll("\\s+", "").equals(actual.replaceAll("\\s+", ""));
     }
     @Override public String toString() { return "PracticeSpeech[kind=" + kind + ", generation=" + generation + "]"; }
 }

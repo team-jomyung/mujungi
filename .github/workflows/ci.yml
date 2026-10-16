@@ -246,7 +246,7 @@ jobs:
       - name: 브라우저 번들에 키 형식 문자열 · 비밀 변수 이름 0건
         run: |
           set -euo pipefail
-          names='POSTGRES_PASSWORD|DB_(OWNER|CORE|REALTIME|BACKUP)_PASSWORD|INTERNAL_SERVICE_TOKEN|PROVIDER_API_KEY|MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET|GOOGLE_OAUTH_CLIENT_SECRET|GHCR_PULL_TOKEN|NEO4J_AUTH|SPRING_DATASOURCE_PASSWORD'
+          names='POSTGRES_PASSWORD|DB_(OWNER|CORE|REALTIME|BACKUP)_PASSWORD|INTERNAL_SERVICE_TOKEN|PROVIDER_API_KEY|OPENAI_API_KEY|JEV_API_KEY|MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET|GOOGLE_OAUTH_CLIENT_SECRET|GHCR_PULL_TOKEN|NEO4J_AUTH|SPRING_DATASOURCE_PASSWORD'
           hits="$( { grep -rlE "$names" .next/static || true; grep -rlE -f <(grep -vE '^(#|$)' ../scripts/verify/secret-patterns.txt) .next/static || true; } | sort -u)"
           if [ -n "$hits" ]; then
             echo "::error::브라우저 번들에 비밀 이름 · 키 형식 문자열: $(echo "$hits" | head -n 5 | paste -sd, -)"

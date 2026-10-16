@@ -227,6 +227,8 @@ Core의 사후 텍스트 AI 호출은 TextAiGateway 한 곳을 지난다. TextAi
 
 입력 ScenarioPrompt는 목표 이름/행동 정의/기회 조건/상황 조건/관계, 나이, 관심사, 새 상황일 때 이전 상황 본문뿐이다. 아이/보호자 이름·식별자·전사·보호자 자유 입력·판정 기준은 보내지 않는다. 입력/출력 record의 문자열 표현과 예외는 본문을 숨긴다.
 
+- **열린 점(U10에서 정함):** U9 Luna 어댑터(`LunaTextAiProvider`)는 지금 관심사를 공급자로 보내지 않는다. `interests`가 10.10 보내기 전 정리의 금지 키(기존 결과 게이트웨이 `PRIVATE_KEYS`)라서 넣어도 지워지기 때문이다. 이 절의 입력 목록과 금지 키가 부딪히므로, 관심사를 보낼지는 U10이 새 스키마로 바꿀 때 정한다.
+
 출력 GeneratedScenario는 scenarioText, triggerScript, relationType, opportunityCondition, modelVersion, promptVersion이다(상대 역할 지시는 모델에 받지 않는다, 아래). 모델이 준 validation 플래그는 받지 않는다. Gateway는 필드 크기·빈 값·모델/프롬프트 버전 및 7범주 금지 사전을 별도로 검사한다. 상황 본문 최대 8000자, 대사/기회 2000자, 관계 200자, 버전 80자(ASCII 식별자). 빈·잘못된 출력과 금지 표현은 기술 재시도 대상이 아니다.
 
 Core는 고정 기회 조건과 트리거가 본문에 포함되는지 및 관계/기회 일치를 확인한다. 가상 상황 고지를 덧붙이고, 아이별 정규화 상황 지문으로 기존 ISSUED/EXPOSED 재사용을 막는다. NEW_SCENARIO의 같은 원문/문장부호 변형도 거절한다. 확인 실패는 한 번 다시 생성한 뒤 SCENARIO_GEN_FAILED(422)다. 두 번 모두 내용 확인에 실패했을 때만 그 요청 키를 실패로 굳히고, 이미 낸 상황과 같은 내용 · 다른 요청과의 저장 경합으로 끝난 422는 같은 키로 다시 요청하면 새로 만든다. 세션이 고정한 정의 버전을 쓸 수 없으면 400 VALIDATION_FAILED다. 의미적 재서술·언어 난도·정답 암시를 완전히 검사하는 것은 아니며 실제 공급자 도입 전에 승인 fixture 검토가 필요하다(U5a-J16/J17).
@@ -255,3 +257,137 @@ C10 partnerRoleText는 모델에 받지 않고 Core의 고정 역할 지시로 �
 보호자 진행 조회는 `practice{goalIndex, goalCount, goalName, stage}`뿐이다. 상황 · Cue 원문, 진행 중 판정과 판정 기준은 보내지 않는다. 내부 `record.practice`의 응답/도움은 각자 scenarioId를 보존하고, 노출 정산은 `scenarios[].exposedAt`만 사용한다.
 
 `CueProvider`와 진행 중 판정 공급자의 운영 기본은 미연결 실패다. 이 문서는 실제 공급자 연결 · 장치 재생 · 부하 검증 완료를 뜻하지 않는다. 해당 구현과 검증은 별도 인계 항목이다.
+
+## 10. U8 공통 규칙 (GPT-6-Luna · 제브 구조화 입출력 · 판 리소스 · 승인 발화)
+
+U8(계약 · 버전 리소스)이 정한 공통 규칙이다. Luna · 제브 구조화 입출력의 **정본은 아래 JSON Schema 파일**이고, 이 절은 규칙 · 금지 필드 · 실패 처리만 적는다. 코드는 같은 파일로 공급자에 구조화 출력을 요청하고, 프롬프트 판(`promptVersion`)과 스키마 판은 함께 올린다. 각 단위(U9 ~ U15)는 더하기만 한다 [U8 편차 (U8-a)].
+
+### 10.1 스키마 파일
+
+| 파일(`contracts/schemas/`) | 목적 | 호출 경로(단위) |
+|---|---|---|
+| `ai-judgment-request.schema.json` | 진행 중 판정 요청(J1 ~ J6, 공급자로 보내는 최소 필드) | realtime 판정 턴(U11) · `JudgeClient`(U9) |
+| `ai-judgment-output.schema.json` | 진행 중 판정 출력(1 · 2순위와 확률) | 같음 |
+| `ai-scenario-output.schema.json` | 연습 장면 대본 생성 출력(상대 역할 지시는 받지 않음, 7절 U5a-J22) | core 상황 생성(U10) |
+| `ai-scenario-review-output.schema.json` | 생성과 분리한 자체 검토 출력(J7) | 같음 |
+| `ai-goal-candidate-output.schema.json` | 목표 후보(6.8 U6 초안을 대체) | core 결과 작업(U14) |
+| `ai-rejudgment-output.schema.json` | 새 연습 흐름 기록용 재판정 | 같음 |
+| `ai-seed-output.schema.json` | 새 씨앗 | core 씨앗 생성(U15) |
+| `guardrail-request.schema.json` | 제브 검사 요청(내부 형식, 어댑터가 공급자 형식으로 바꿈) | realtime 출력 게이트(U13) · `GuardrailClient` |
+| `guardrail-result.schema.json` | 제브 검사 결과(내부 형식) | 같음 |
+| `practice-record-v2.schema.json` | 기록 캡처 이벤트 `record.practice` 새 흐름 형식(`flowVersion` 필수) | U12가 채우고 U11이 발행, U14가 읽음 [U8 편차 (U8-d)] |
+
+- 요청 스키마는 루트와 하위 객체 모두 `additionalProperties: false`로 닫는다. 아이 관련 문자열 필드의 `description`에는 "아이 이름은 '아이'로 치환된 값"을 적는다.
+- 길이 초과 · 빈 응답 · 스키마 최종 실패는 어떤 목적에서도 성공으로 저장하지 않는다. 실패 사유 코드 · 모델 · 프롬프트 판 · 지연만 기록하고 요청 · 응답 원문은 남기지 않는다(BR5.3 · R-F14).
+
+### 10.2 금지 필드와 외부 전달
+
+- 외부 AI(Luna · 제브)로 보내는 필드는 스키마가 허용한 최소 필드뿐이다. 다음은 어느 요청 스키마의 속성도 될 수 없다: 아동 · 보호자 · 세션 · 기기 식별자(`childId` · `guardianId` · `sessionId` · `deviceId` 등), 키(`apiKey` 등), 원음(`audio`), 보호자 입력 원문, 이메일, 동의 상태. 아이 이름은 '아이'로 바꾼다(BR5.4 · NFR3.1).
+- **R-F15** 공급자 약관 · 보호자 동의 확인 전에는 실제 아동 데이터를 외부 모델로 보내지 않는다. 실호출은 합성 자료로만 한다. U9는 코드로 판정하지 않고 RUNBOOK 확인 기록으로 지킨다(편차 U9-b). 키(`OPENAI_API_KEY`)를 넣는 순간 실제 어댑터가 켜지므로, `infra/RUNBOOK.md` 단계 4의 R-F15 확인 기록 표에 한 줄을 남기기 전에는 운영 환경에 키를 넣지 않는다 [U9 편차 (U9-b)].
+- 시험 · CI · 검증은 가짜 공급자만 쓴다(R-F1). 테스트 대역의 성공을 실공급자 성공으로 표시하지 않는다(R-M11).
+
+### 10.3 목적 → 호출 경로 → 재시도 분류
+
+| 목적 | 호출 경로(단위) | 분류 | 호출 안 재시도 · 실패 뒤 |
+|---|---|---|---|
+| 진행 중 판정 J1 ~ J6 | realtime 판정 턴(U11) | `NONE` | 재시도 없음. `mujoong.timing.judgment.live-budget`(2초) 초과 · 형식 오류 · 선택지 밖 코드는 판정 보류 |
+| 상황 생성 | core 상황 생성 요청(U10) | `REQUEST_BOUNDED` | 일시 실패 기술 재시도 1회 + 내용 재생성 1회(스키마 불일치 포함), 7절 15초 예산 안. 실패는 `SCENARIO_GEN_FAILED` |
+| 자체 검토(J7) | core 상황 생성 요청(U10) | `REQUEST_BOUNDED` | 같은 15초 예산 |
+| 새 씨앗 | core 결과 작업 뒤 씨앗 생성(U15) | `REQUEST_BOUNDED` | 실패하면 `skill_ref=NONE` 유지 |
+| 결과 문장 | core 결과 작업(U14) | `JOB_ATTEMPT` | 호출 안 재시도 없음. 결과 작업 시도 실패로 세고 작업 재시도(timing.md 10절)로 다시 한다 |
+| 목표 후보 | core 결과 작업(U14) | `JOB_ATTEMPT` | 같음(지금 코드에서 결과 작업 안에서만 부른다) |
+| 기록용 재판정 | core 결과 작업(U14) | `JOB_ATTEMPT` | 같음 |
+
+- 예산 밖 재시도 · 무한 재시도는 없다. 다른 경로에서 부르게 되면 그 단위가 분류를 다시 정한다(BR5.2).
+- 6.9의 '작업당 총 3회'는 U14가 시도 수를 바꿀 때 함께 고친다(BR3.2). 새 HTTP 오류 code는 없다 — 판정 · 제브 실패는 내부 사유(보류 · 막힘), 상황 생성 실패는 기존 `SCENARIO_GEN_FAILED`다(BR7.3).
+
+### 10.4 판 리소스와 세션 고정
+
+- 판정 질문 · 선택지(J1 ~ J6, A §7.3 · B §5.2)는 realtime `judgment/option-sets-v1.json`, 제브 시스템 프롬프트 · 7개 범주 · 모드(C §3.1 · §3.3)는 `guardrail/policy-v1.json`에 둔다. J7은 core 상황 생성 자체 검토 프롬프트(U10)라 realtime 판에 넣지 않는다.
+- realtime은 기동 때 두 파일을 읽어 검증하고, 파일이 없거나 형식이 틀리면 기동을 거부한다(BR2.1 · 4절 시드 사전과 같은 방식).
+- 세션을 받을 때 두 판의 번호와 패키지의 승인 문구 판(`approvedContent` · `approvedSpeech`)을 세션 계획에 고정하고, 세션 정산이 끝나면 놓는다. 판정 · 검사 기록 행은 고정된 판 번호를 함께 남긴다(BR2.2, 기록은 U11 · U13).
+
+### 10.5 원문 일치와 제브 생략
+
+- 원문 일치는 출력 전사에서 공백을 뺀 문자열이 세션에 고정한 승인 발화 또는 등록된 대본 문장과 **정확히 같을 때만** `MATCHED`다. 공백은 ASCII 공백(space · `\t` · `\n` · `\x0B` · `\f` · `\r`)만 뺀다(`PracticeSpeech.matches`와 같은 규칙). NBSP · 전각 공백 · 제로폭 문자가 끼면 `NOT_MATCHED`다. 다른 정규화 · 유사도 판단은 하지 않는다(BR1.4 · NFR2.1).
+- 세션 계획이 없으면(고정 전 · 놓은 뒤) `UNKNOWN`이다. 대본 등록 전의 대본 문장은 `NOT_MATCHED`다.
+- **`MATCHED`일 때만** 제브 검사를 생략할 수 있다. `UNKNOWN` · `NOT_MATCHED`는 제브 생략 근거가 아니며 새 발화로 검사한다(NFR2.2 · AC2.2.3, 판단은 U13).
+
+### 10.6 승인 발화(`APPROVED_SPEECH`)
+
+- 음성 파일 없이 GPT-Live 지시 + 원문 일치로 재생하는 승인 문구는 `content_type` `APPROVED_SPEECH`로 시드한다(`infra/seed/004-u8-reference.sql`). 기존 `APPROVED_AUDIO`(음성 파일 필수)는 그대로다 [U8 편차 (U8-e)].
+- core는 활동 유형별 허용 목록에 있고 `APPROVED_SPEECH`이며 APPROVED 판이 있는 code만 시작 패키지의 선택 속성 `approvedSpeech`(`{contentVersionId, text}`)에 싣는다. 한 code는 `approvedContent` · `approvedSpeech` 중 하나에만 들어간다. realtime이 두 맵에서 같은 code를 받으면 `approvedSpeech` 쪽을 버리고 `APP_ERROR`(`errorKind` `APPROVED_SPEECH_DUPLICATE_CODE`)만 남긴다 — 문구 텍스트는 로그에 남기지 않는다 [U8 편차 (U8-b)].
+
+| content_code | 넣는 활동 | 정본 |
+|---|---|---|
+| `HELP_OFFER` | PRACTICE | B §3.1 `D_OFFER_HELP` 예시(v2 APPROVED, v1 DRAFT '같이 살펴볼까?'는 RETIRED) |
+| `D_REST_ACK_START` | FREE_TALK · PRACTICE | B §3.1 `D_REST_ACK_START` |
+| `D_REST_ACK` | FREE_TALK · PRACTICE | B §3.1 `D_REST_ACK` |
+| `COACH_SWITCH` | PRACTICE | B §8.5 코치 역할 전환 표현 |
+| `PEER_RETURN` | PRACTICE | B §8.5 친구 역할 복귀 표현 |
+
+- `D_REPROMPT`는 B §3.1에서 '직전에 아이에게 한 무중의 말(출력 전사 그대로)'을 다시 말하는 지시라 고정 원문이 없다. 그래서 시드하지 않는다.
+
+### 10.7 비밀 이름
+
+- `OPENAI_API_KEY`(Luna): core-api · realtime-activity가 각자 받는다. `JEV_API_KEY`(제브): realtime-activity만 받는다. 둘 다 선택(OPTIONAL)이고, 비었거나 공백뿐이면 미설정으로 보고 실제 어댑터를 끈다(U9 · U13).
+- Neo4j는 기존 `NEO4J_AUTH`를 쓴다. GPT-Live의 `PROVIDER_API_KEY`는 FR12.2 전까지 그대로다. 7절의 core 예약 이름 `MUJOONG_TEXT_AI_API_KEY`는 쓰지 않는다(BR4.2). 값은 어디에도 쓰지 않고 이름만 둔다(R-F3).
+
+### 10.8 U9 Luna 호출 감사 로그 (`LUNA_CALL` · `LUNA_STARTUP`)
+
+Luna 호출부(core-api · realtime-activity 각자)는 공급자 시도마다 `LUNA_CALL` 한 줄을 남긴다. 공급자를 부르지 않은 실패(`FORBIDDEN_INPUT` · 시한 0 · 보내기 직전 주소 재확인의 `REQUEST_REJECTED` · 빈 키의 `AUTH_FAILED`)도 `attempt` 0으로 한 줄 남기고, 이 경우는 실패의 시도 수(`attemptsUsed`)에 세지 않는다. 요청 · 응답 본문, 전사, 이름, 키는 어떤 속성에도 담지 않는다(U9 BR6.1 · BR6.2 · R-F14). 정본은 `kr.mujoong.contract.log.EventCode` · `AttrKey`이고 `infra/bin/log-hygiene-check` 허용 표와 대조한다(`infra/ci/test-host-tools.sh`).
+
+| 사건 | 속성 | 값 형식 | 값 |
+|---|---|---|---|
+| `LUNA_CALL` | `lunaPurpose` | ENUM | `JUDGMENT_LIVE` · `SCENARIO_GENERATION` · `SCENARIO_REVIEW` · `SEED_GENERATION` · `RESULT_TEXT` · `GOAL_CANDIDATES` · `REJUDGMENT` |
+| `LUNA_CALL` | `lunaOutcome` | ENUM | `OK` · `AUTH_FAILED` · `RATE_LIMITED` · `SERVER_ERROR` · `REQUEST_REJECTED` · `TRANSPORT_ERROR` · `TIMEOUT` · `EMPTY_OUTPUT` · `LENGTH_EXCEEDED` · `REFUSED` · `SCHEMA_INVALID` · `FORBIDDEN_INPUT` · `MODEL_MISSING` |
+| `LUNA_CALL` | `model` · `responseModel` · `promptVersion` | LABEL | `[A-Za-z0-9][A-Za-z0-9._-]{0,63}`. 요청 모델, 응답 모델(받았을 때), 보낸 프롬프트 판 |
+| `LUNA_CALL` | `sentFields` | NAME_LIST | 보낸 입력의 최상위 키 이름을 쉼표로 이은 값. 이름마다 `[A-Za-z][A-Za-z0-9_]{0,63}`, 최대 32개 |
+| `LUNA_CALL` | `latencyMs` · `attempt` | NUMBER | 시도 지연(밀리초), 시도 번호 1 ~ 3(미호출 실패는 0) |
+| `LUNA_STARTUP` | `lunaState` | ENUM | `ENABLED`(env `OPENAI_API_KEY` 있음) · `DISABLED_NO_KEY`(없음 · 공백) |
+
+- 형식에 맞지 않는 LABEL · NAME_LIST 값은 조용히 버리지 않고 `UNKNOWN`으로 쓴다. `lunaOutcome`이 `OK`가 아니면 줄 수준은 WARN이다.
+- 줄의 `component`는 `core-api/LunaClient` 또는 `realtime/LunaClient`다.
+
+### 10.9 U9 Luna 호출 설정 · 주소
+
+- 허용 호스트: `api.openai.com`
+- 주소 규칙: demo · prod · 프로필 없음 · 모르는 프로필 · `lunaLiveTest`는 `https` + 허용 호스트만(STRICT), dev는 그 규칙 또는 루프백(DEV), test는 루프백만(TEST). 어기면 기동을 거부하고(`MUJOONG_STARTUP_REJECTED`), 보내기 직전에도 같은 규칙으로 다시 확인한다. 리다이렉트를 따르지 않고 프록시를 쓰지 않는다(U9 BR1.4 · SD3).
+- 실제 어댑터는 env `OPENAI_API_KEY`가 비어 있지 않고 공백뿐이 아닐 때만 켜진다(10.7 · U9 Q2-B). 아래 키는 시간 값이 아니며 `timing.md`에 두지 않는다. 시도 시한은 기존 키(core `mujoong.text-ai.request-timeout` · `mujoong.text-ai.result.request-timeout`, realtime `mujoong.timing.judgment.live-budget`)와 호출자 마감 중 짧은 쪽이다(U9 BR5.1).
+
+| 설정 키 | 기본값 | 앱 | 뜻 |
+|---|---|---|---|
+| `mujoong.luna.model` | `${OPENAI_ANALYSIS_MODEL:gpt-6-luna}` | core-api | 요청 모델 이름. env가 비면 `gpt-6-luna` |
+| `mujoong.luna.model` | `${OPENAI_JUDGE_MODEL:gpt-6-luna}` | realtime | 같음 |
+| `mujoong.luna.base-url` | `https://api.openai.com/v1` | core-api · realtime | Responses API 기준 주소(`{base-url}/responses`). test 프로필은 루프백으로 덮어쓴다 |
+| `mujoong.luna.max-response-bytes` | `1000000` | core-api · realtime | 응답 본문 바이트 상한. 넘으면 `LENGTH_EXCEEDED` |
+| `mujoong.luna.purpose.<목적>.max-output-tokens` | `4000` | core-api · realtime | 요청 `max_output_tokens`. core 목적: `scenario-generation` · `scenario-review` · `seed-generation` · `result-text` · `goal-candidates` · `rejudgment`, realtime 목적: `judgment-live` |
+| `mujoong.luna.purpose.<목적>.reasoning-effort` | `medium` | core-api · realtime | 요청 `reasoning.effort`(`none` · `minimal` · `low` · `medium` · `high`) |
+
+### 10.10 U9 호출 방식 · 실패 사유 · 기존 어댑터
+
+- **호출 방식:** 두 앱이 각자(코드 공유 없음) JDK `HttpClient` + `JsonCodec`으로 Responses API `POST {base-url}/responses`를 직접 부른다 [U9 편차 (U9-a)]. 리다이렉트를 따르지 않고(3xx는 `REQUEST_REJECTED`) 프록시를 쓰지 않으며, 응답 본문은 `max-response-bytes`까지만 읽는다. 요청은 `model` · `instructions`(버전 파일의 지시) · `input`(정리된 데이터의 JSON 문자열, 지시와 다른 자리) · `text.format` · `max_output_tokens` · `reasoning.effort` · `store: false`이고 `temperature`는 보내지 않는다(기존 `ResultTextProvider.Request.temperature`는 받기만 하고 무시).
+- **보내기 전 정리:** 모든 깊이에서 10.2 금지 키(+ core 결과 게이트웨이의 `audioRefs` · `audioRefsJson` · `interests` 등)를 지우고, 호출자가 준 별칭 표로 아이 이름을 바꾸며, 이메일 · 휴대전화 모양 값을 '연락처'로 가린다. 남으면 · 요청 스키마(`ai-judgment-request`)에 맞지 않으면 부르지 않고 `FORBIDDEN_INPUT`이다. UUID → '참조N'과 복원은 지금 `ResultTextGateway`가 맡는다.
+  - 금지 키는 대소문자와 `_` · `-`를 가리지 않고 비교한다(`child_name` · `Child-Id` · `api_key` · `guardian-id`도 지운다). 정리 뒤 안전망은 이 비교를 다시 쓰지 않는 독립 검사로, 글자 · 숫자 밖 문자를 모두 뺀 꼴(예: `child.name`)까지 보고 남으면 `FORBIDDEN_INPUT`이다.
+  - 별칭은 긴 이름부터(길이가 같으면 사전순) 한 번만 훑으며 바꾼다. 이름끼리 포함 관계(예: '민수'와 '수')여도 결과가 별칭 표 순서에 기대지 않고, 바꿔 넣은 별칭을 짧은 이름이 다시 바꾸지 않는다. 빈 이름은 무시한다.
+  - realtime 호출부는 보내기 전 준비(정리 · 요청 스키마 검증 · 본문 조립) 중 예기치 못한 런타임 오류도 호출 스레드로 던지지 않고 `APP_ERROR`(예외 종류 이름만) 한 줄과 `FORBIDDEN_INPUT`(시도 0) 실패 완료로 바꾼다.
+- **스키마:** 빌드가 `contracts/schemas/ai-*.schema.json`(+ 그 파일이 가리키는 `common.schema.json`)을 실행 자원 `luna/schemas/`로 복사한다. 요청 `text.format`에는 공급자가 받는 키워드(`type` · `properties` · `required` · `additionalProperties` · `items` · `enum` · `const` · `anyOf` · `$defs` · `$ref` · `description`)만 남긴 사본을 싣고(다른 파일 `$ref`는 정의를 끼워 넣음), 모든 객체가 닫히고 모든 속성이 required일 때만 `strict: true`다. 응답 검증은 언제나 원본 계약 스키마 전체로 한다. 스키마를 읽지 못하거나 정상 예시가 검증을 통과하지 못하면 기동을 거부한다.
+- **시도 · 재시도:** 시도 시한 = min(호출자 마감까지 남은 시간, 목적 시한 키). 0 이하면 부르지 않고 `TIMEOUT`. 재시도는 10.3 분류대로 `REQUEST_BOUNDED`만 일시 실패 기술 재시도 1회 + 스키마 불일치 재요청 1회(합계 ≤ 3)이고, 대기 = max(`mujoong.text-ai.retry.backoff`, 429 `Retry-After`)가 남은 시간보다 짧고, 대기 뒤 남는 시간이 최소 시도 창(새 키 없이 `mujoong.text-ai.retry.backoff` 값을 그대로 씀) 이상일 때만 한다. 401 · 403은 재시도하지 않는다.
+
+| 실패 사유 | 언제 | 일시 | `TextAiProvider` 어댑터(BR8.1) | `ResultTextProvider` 어댑터(BR8.2) |
+|---|---|---|---|---|
+| `AUTH_FAILED` | 401 · 403 | 아니오 | `UNAVAILABLE` · retryable=false | `PROVIDER_ERROR` |
+| `RATE_LIMITED` | 429 | 예 | `UNAVAILABLE` · retryable=true | `PROVIDER_ERROR` |
+| `SERVER_ERROR` | 5xx · JSON이 아닌 응답 · 완료가 아닌 상태 | 예 | `UNAVAILABLE` · retryable=true | `PROVIDER_ERROR` |
+| `REQUEST_REJECTED` | 그 밖 4xx(스키마 거절 포함) · 3xx · 허용 밖 주소 | 아니오 | `UNAVAILABLE` · retryable=false | `PROVIDER_ERROR` |
+| `TRANSPORT_ERROR` | 연결 · 읽기 오류 | 예 | `UNAVAILABLE` · retryable=true | `PROVIDER_ERROR` |
+| `TIMEOUT` | 시도 시한 초과 · 남은 시간 없음 | 아니오 | `TIMEOUT` · retryable=true | `TIMEOUT` |
+| `EMPTY_OUTPUT` | 출력 텍스트가 빔 | 예 | `UNAVAILABLE` · retryable=true | `SCHEMA_INVALID` |
+| `LENGTH_EXCEEDED` | `status: incomplete` · 본문 바이트 상한 초과 | 아니오 | `INVALID_OUTPUT` | `SCHEMA_INVALID` |
+| `REFUSED` | 거절(refusal) 출력 | 아니오 | `INVALID_OUTPUT` | `SCHEMA_INVALID` |
+| `SCHEMA_INVALID` | 원본 계약 스키마 위반 · JSON 객체가 아님 | 아니오 | `INVALID_OUTPUT` | `SCHEMA_INVALID` |
+| `FORBIDDEN_INPUT` | 정리 뒤 금지 키 잔존 · 요청 스키마 위반 · (realtime) 보내기 전 준비 중 예기치 못한 오류 | 아니오 | `UNAVAILABLE` · retryable=false | `INTERNAL` |
+| `MODEL_MISSING` | 응답 `model` 없음 | 아니오 | `INVALID_OUTPUT` | `PROVIDER_ERROR` |
+
+- **기존 인터페이스 어댑터:** core `TextAiProvider`(상황 생성 지시 `prompts/scenario/generation.v1.txt`, 판 `scenario-generation.v1`) · `ResultTextProvider`(`prompts/result/{task}.{판}.txt`)의 Luna 구현은 출력 스키마 파일 없이 `json_object`로 **언제나 시도 1회**만 부른다. 재시도는 바깥 `TextAiGateway`(기술 재시도)와 결과 작업이 이미 한다. 길이 · 판 정규식 · 금지 표현(`TextAiGateway`), `ResultAiSchema` · 참조 복원 · 인용 대조(`ResultTextGateway`), 1차 사전 · `classify`(`OutputChecker`)는 그대로 돈다. 새 스키마로 바꾸는 일은 U10 · U14가 한다.
+- **실호출 시험:** 사람이 env에 키를 넣고 돌리는 `./gradlew lunaLiveTest`(태그 `luna-live`)만 실공급자를 부른다. 기본 `test` · `check` · CI · `verify.sh`는 루프백 대역만 쓴다. 키가 없으면 `SKIPPED_NO_KEY`로 끝나고, 결과는 '실제 API · 합성 자료' 증거로 따로 보고한다 [U9 편차 (U9-c)].

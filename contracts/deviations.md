@@ -142,3 +142,30 @@
 | (U5b-c) | 새 상황 생성 실패는 기존 원본을 보존한 SKIPPED(SCENARIO_FAILED/TIME_OVER) 후 다음 목표다. 판정 중 종료는 원래 시한까지 대기한다. 종료 스냅숏 실패는 원본에서 재무장하며 판정 지연 복구는 12초 성공과 구분한다. | 사용자 결정 I7/I8 |
 | (U5b-d) | INTERNAL_HTTP target에 PRACTICE_SCENARIO를 추가하고 C10에 별도 연결 풀을 사용한다. URL은 기존 Core 내부 주소에 고정한다. | C10, 토큰 확인/상태 보고와 지연 격리 |
 | (U5b-e) | 판정 전체 12초·최종 저장 예산 2초 및 후속 반응 20초를 U5b 타입 설정으로 등록한다. 2초는 부하 검증 전 초깃값이다. | 기존 Q6, 인수 가정 I4/I9, timing.md U5b 절 |
+
+## U8 편차
+
+> U8(계약 · 버전 리소스, 작업 기록 261015-doc-sync-code-update)이 계약 요약 C-DS2 · C-DS4 ~ C-DS9 · C-DS13 · C-DS14를 계약 파일로 옮기며
+> 더하거나 구체화한 곳이다. 기호는 `(U8-<글자>)`이고 YAML 스펙은 `x-u8-deviation: ["(U8-a)"]`, Markdown은 `[U8 편차 (U8-a)]`로 표시한다
+> (U1 `ContractFilesTest`의 한 · 두 글자 기호와 섞이지 않는다). 모두 더하기만 안전하다 — 기존 필드 · enum · 키의 이름과 뜻은 그대로다.
+> 근거는 U8 Functional Design `functional-spec.md` 8절 · `rules.md` BR1 ~ BR7 · NFR Design `security-design.md` SD1 ~ SD7.
+
+| 기호 | 내용 | 출처 | 제공 | 소비자 | 호환 분류 | 표시 위치 |
+|---|---|---|---|---|---|---|
+| (U8-a) | Luna · 제브 구조화 입출력 스키마 9종(`ai-judgment-request` · `ai-judgment-output` · `ai-scenario-output` · `ai-scenario-review-output` · `ai-goal-candidate-output` · `ai-rejudgment-output` · `ai-seed-output` · `guardrail-request` · `guardrail-result`)과 ai-io.md 10절 공통 규칙(금지 필드 · R-F15 · 목적별 재시도 분류 · 원문 일치와 제브 생략 · 비밀 이름). 장면 출력에 `partnerRole`을 받지 않고(7절 U5a-J22), `guardrail-result.categories`는 C §3.1의 7개 범주 이름 배열로 구체화했으며, `ai-rejudgment-output.timing`은 functional이 아니면 null이다 | C-DS4 ~ C-DS8 · BR5.1 ~ BR5.5 · SD1 · SD2 · SD6 | U8 계약(U9 · U10 · U11 · U13 · U14 · U15가 구현) | U9 ~ U15 | 새 스키마 · 규칙 구체화 | ai-io.md · schemas/ai-*.schema.json · schemas/guardrail-*.schema.json |
+| (U8-b) | 세션 시작 요청 선택 속성 `approvedSpeech`(`{code: {contentVersionId, text}}`, 음성 파일 없는 승인 발화). 없으면 빈 것으로 본다. 한 code는 `approvedContent` · `approvedSpeech` 중 하나에만 있고, Realtime이 겹친 code를 받으면 `approvedSpeech` 쪽을 버리고 `APP_ERROR`(`errorKind` `APPROVED_SPEECH_DUPLICATE_CODE`)만 남긴다. 배포는 같은 릴리스, 따로면 Realtime 먼저 | BR1.2 · BR1.3 · NFR6.1 · SD7 | Core ActivityCoordinator(`StartActivityService`) | Realtime `StartSessionHandler` · `LiveContentRegistry` | 새 선택 필드 | internal-api.yaml · schemas/internal-session-start-request.schema.json · ai-io.md |
+| (U8-c) | timing.md 13절 새 시간 키 7개(`judgment.live-budget` · `judgment.response-ready` · `guardrail.jev-budget` · `conversation.no-response-wait` · `conversation.focus-max` · `conversation.goal-active-limit` · `knowledge.graph-budget`). 화면이 읽지 않는 서버 키라 `frontend/src/shared/timing/timing-defaults.json`에 넣지 않는다 — 서버 키에서 R-M5 '세 곳'은 timing.md · 소유 앱 `application.yml` · 설정 레코드로 읽는다(기존 `result.*` · `text-ai.*`와 같은 처리). 계약 요약 C-DS13의 `practice.*` 세 키는 U5b 이름 공간과 섞이지 않게 `conversation.*`로, `result.retry-delays`는 기존 10절 키와 겹쳐 만들지 않는다 | BR3.1 · BR3.2 · functional-spec 8.2 | U8 계약 | U11 · U12 · U13 · U15 | 새 키 · 해석 명시 | timing.md |
+| (U8-d) | `SessionRecordCaptured.record.practice` 새 연습 흐름 형식 `practice-record-v2.schema.json`(`flowVersion` 필수). `flowVersion`이 없으면 U5b 형식이고, 형식 구분에 `snapshotVersion`을 쓰지 않는다(계약 요약 C-DS2의 'snapshotVersion을 올려 구분'을 대체). 봉투 `schemaVersion`은 그대로 | BR6.1 · NFR6.2 · Contract Design 검토 R-03 | U12(채움) · U11(발행) | U14 | 새 선택 필드 · 해석 명시 | events.asyncapi.yaml · schemas/practice-record-v2.schema.json · ai-io.md |
+| (U8-e) | 승인 문구 `content_type` 새 값 `APPROVED_SPEECH`(음성 파일 없이 GPT-Live 지시 + 원문 일치로 재생). 004 시드가 `HELP_OFFER` 부모 행을 이 값으로 바꾸고 v1 DRAFT를 RETIRED, v2 APPROVED를 넣으며 `D_REST_ACK_START` · `D_REST_ACK` · `COACH_SWITCH` · `PEER_RETURN`을 더한다. `D_REPROMPT`는 정본에 고정 원문이 없어 넣지 않는다 | BR1.1 · Q1-A · 설계 검토 R-01 | U8 시드(`infra/seed/004-u8-reference.sql`) | Core ApprovedContentCatalog · U11 · U12 | 새 값 | ai-io.md · infra/seed/004-u8-reference.sql |
+
+## U9 편차
+
+> U9(Luna 호출부, 작업 기록 261015-doc-sync-code-update)가 요구사항 FR1.1 · R-F15 · R-F1과 다르게 정한 곳이다. 기호는 `(U9-<글자>)`이고
+> Markdown은 `[U9 편차 (U9-a)]`로 표시한다. 근거는 U9 Functional Design `functional-spec.md` 9절 · `rules.md` BR1.7 · BR9.2 · BR9.3과
+> 질문지 Q1-A · Q2-B · Q4 추가 요구다. 기존 필드 · 키 · 오류 코드의 이름과 뜻은 바꾸지 않는다.
+
+| 기호 | 내용 | 출처 | 제공 | 소비자 | 호환 분류 | 표시 위치 |
+|---|---|---|---|---|---|---|
+| (U9-a) | FR1.1의 `openai-java` SDK 대신 JDK `HttpClient` + `JsonCodec`으로 같은 Responses API(`POST /v1/responses`)를 직접 부른다. Jackson 2 · OkHttp · Kotlin 런타임을 들이지 않아 J139(Jackson은 `JsonCodec` 한 곳)와 바깥 호출 관례를 지키고 새 의존성 점검 대상이 없다 | Q1-A · J139 | core `CoreLunaClient` · realtime `RealtimeLunaClient` | U10 · U11 · U14 · U15 | 구현 방식 변경(외부 계약 같음) | ai-io.md 10.10 |
+| (U9-b) | R-F15(약관 · 보호자 동의 범위 확인 전 실제 아동 데이터 전송 금지)를 코드 스위치로 판정하지 않고 `infra/RUNBOOK.md` 단계 4의 확인 기록 표(확인자 · 날짜 · 약관 판 · 환경)로 지킨다. 키(`OPENAI_API_KEY`)가 있으면 실제 어댑터가 켜지므로 기록 없이 키를 넣지 않는 절차가 유일한 방어선이다 | Q2-B · BR1.7 · SD10 | 운영 절차(RUNBOOK) | demo 운영자 | 판정 방법 변경 | ai-io.md 10.2 · infra/RUNBOOK.md |
+| (U9-c) | 사람이 키를 넣고 직접 돌리는 실호출 시험 `./gradlew lunaLiveTest`(태그 `luna-live`)를 둔다. R-F1(시험 · CI · 검증에서 실공급자 금지)의 글자와 다르지만, 기본 `test` · `check` · CI · `verify.sh`에서 언제나 빠지고(빌드 규칙 고정 제외 + 루트 `verifyLunaLiveIsolation`), 합성 자료만 쓰며, 결과는 '실제 API · 합성 자료' 증거로 따로 보고한다. 키가 없으면 `SKIPPED_NO_KEY` | Q4 추가 요구 · BR9.2 · BR9.3 | `backend/build-logic` `mujoong.java-conventions` · 두 앱 `*LunaLiveTest` | 사람(개발 PC) | 새 선택 작업 | ai-io.md 10.10 |

@@ -1,65 +1,87 @@
 # API 문서 (API Documentation)
 
-> 기준 커밋 `7a22b67`. 계약 정본은 `contracts/`다. 여기서는 표면과 U6 관련 사실만 적는다.
+> 기준: 커밋 `72d7034`, 2026-10-15 전체 재스캔. 계약 정본은 `contracts/`이며, 이 문서는 코드에 실제로 있는 표면을 요약한다. 계약 소유 · 깨는 변경 규칙은 `contracts/README.md`, 편차는 `contracts/deviations.md`(67행)에 있다.
 
-## 1. 보호자 REST (`/api`, core-api) — `contracts/parent-api.yaml`
+## 1. 보호자 REST (core-api, 계약 `contracts/parent-api.yaml` 34경로)
 
-경로 22개: `dev/login` · `session/csrf` · `health` · `home` · `device` · `device/register` · `activities/free` · `sessions/{id}` · `sessions/{id}/end` · `auth/google` · `auth/logout` · `me` · `policies/current` · `consents` · `child` · `child/stop-expressions` · `sessions/current` · `records` · `records/{sessionId}` · `goal-selections` · `goal-selections/{id}` · `goal-selections/{id}/restore`.
+구현: `backend/core-api/src/main/java/kr/mujoong/core/**/web/*Controller.java` 등. 컨트롤러 매핑 줄 기준으로 확인했고, 본문 처리 규칙은 얕게 봤다.
 
-**C5(결과 · 리포트) 경로는 계약 파일에 없다.** U6 지시서가 더할 경로: `GET /api/sessions/{id}/result` · `/result/status` · `POST /result/retry`, `GET /api/reports/preview` · `POST /api/reports` · `GET /api/reports/{id}` · `/pdf` · `POST /saved` · `/discard`(정본 contract-summary 3절).
-
-### 기록 (U4a) — `record/web/RecordController.java`
-
-| 요청 | 응답 |
+| 영역 | 메서드 · 경로 |
 |---|---|
-| `GET /api/records?month=yyyy-MM` | 날짜별 기록 수 |
-| `GET /api/records?date=yyyy-MM-dd` | 줄: `linkable` · `goalCount` · `interrupted` (FAILED 제외) |
-| `GET /api/records/{sessionId}` | `session` · `goals`(이름 · 순서 · 상태) · `utterances` · `gaps` · `recordScope` · `endConfirmed`. FAILED → 404, DECLINED → 머리만 |
+| 세션 · 헬스 | `GET /api/session/csrf`, `GET /api/health`, `POST /api/dev/login`(dev 전용) |
+| 인증 · 계정 | `POST /api/auth/google`, `POST /api/auth/logout`, `GET /api/me`, `DELETE /api/me` |
+| 정책 · 동의 | `GET /api/policies/current`, `GET /api/consents`, `PUT /api/consents` |
+| 아이 | `GET /api/child`, `POST /api/child`, `PATCH /api/child`, `GET /api/child/stop-expressions`, `PUT /api/child/stop-expressions` |
+| 홈 · 기기 | `GET /api/home`, `GET /api/device`, `POST /api/device/register` |
+| 활동 · 세션 | `POST /api/activities/free`, `POST /api/activities/practice`, `GET /api/sessions/current`, `GET /api/sessions/{id}`, `POST /api/sessions/{id}/end` |
+| 연습 목표 | `GET /api/goal-selections`, `POST /api/goal-selections`, `PATCH /api/goal-selections/{id}`, `DELETE /api/goal-selections/{id}`, `POST /api/goal-selections/{id}/restore` |
+| 결과 | `GET /api/sessions/{id}/result`, `GET /api/sessions/{id}/result/status`, `POST /api/sessions/{id}/result/retry` |
+| 기록 | `GET /api/records`, `GET /api/records/{sessionId}` |
+| 리포트 | `GET /api/reports/preview`, `POST /api/reports`, `GET /api/reports/{id}`, `GET /api/reports/{id}/pdf`, `POST /api/reports/{id}/saved`, `POST /api/reports/{id}/discard` |
+| 웹 푸시 | `PUT /api/push-subscription`, `DELETE /api/push-subscription`, `GET /api/push-subscription/vapid-public-key` |
 
-스키마: `contracts/schemas/records-response.schema.json` · `record-detail-response.schema.json`. 판정 · 구조화 · 08 원문은 응답에 없다(FR4.3 · A10).
+인증: JDBC 세션 쿠키 + CSRF, Origin 검사, 속도 제한. 오류는 공통 오류 봉투(`contracts/schemas/error-envelope.schema.json`, 코드 목록 `contracts/errors.md`).
 
-### 연습 목표 (U5a) — `practice/web/GoalSelectionController.java`
+## 2. 아이 기기 REST (core-api, 계약 `contracts/device-api.yaml` 4경로)
 
-`GET/POST /api/goal-selections`, `PATCH/DELETE /api/goal-selections/{id}`, `POST /api/goal-selections/{id}/restore`. 27의 후보 「담기」가 `POST`를 쓸 예정.
+`DeviceBootstrapController`: `/api/device/bootstrap` · `/api/device/bootstrap/status` · `/api/device/bootstrap/claim` · `/api/device/me`. 기기 쿠키 인증(`DeviceCookieAuthFilter`).
 
-## 2. 내부 HTTP (C-INT, 내부 토큰) — `contracts/internal-api.yaml`
+## 3. 앱 사이 내부 HTTP (계약 `contracts/internal-api.yaml` 7경로)
 
-7개: `/internal/sessions`(시작) · `/internal/sessions/{id}/end` · `/internal/sessions/{id}/view` · `/internal/devices/verify-token` · `/internal/devices/{id}/connection` · `/internal/events`(Outbox 수신) · `/internal/practice/scenarios`(C10, Core 소유).
-
-## 3. 앱 사이 이벤트 (Outbox/Inbox) — `contract-model/.../event/EventType.java`, `contracts/events.asyncapi.yaml`
-
-| 이벤트 | 방향 |
-|---|---|
-| `SessionStateChanged` · `SessionRecordCaptured` · `DeviceStatusChanged` · `DeletionCompleted` | Realtime → Core |
-| `DeviceReleased` · `DeletionRequested` | Core → Realtime |
-
-`SessionRecordCaptured.record` = `{utterances, gaps, recordScope{from,to}, practice, audio}` + `snapshotHash`. **`record.practice`의 내부 모양(goals[].responses[] · cues[] · scenarioId)은 `contracts/` 파일에 없고 정본 contract-summary 6절에만 있다.** 현재 값은 늘 null(U5b 전).
-
-## 4. 앱 내부 사건 (Spring) — core-api
-
-`ActivityRecorded(sessionId, guardianId, childId, activityType, finalStatus, recordedAt)` — 기록 첫 저장 트랜잭션에서 발행, 구독은 `@TransactionalEventListener(AFTER_COMMIT)` 전제. 운영 구독자 0개(시험 `U4aActivityApiIT.RecordedEvents`만).
-
-## 5. Java 포트 (core-api 내부) — `contracts/ports.md` 4절
-
-| 포트 | 소유 · 방향 | 기본 빈 (현재) |
+| 제공 앱 | 경로 | 호출자 · 용도 |
 |---|---|---|
-| `CandidateRegistry.register(sessionId, childId, candidates≤100)` · `viewForSession` | U5a 제공 | 실제 구현. 근거 kind ∈ {GUARDIAN_INPUT, CHILD_RECALL}, `reasonText` ≤2000자 · 금지 사전 통과, 정의 pin은 ACTIVE만 |
-| `CandidateEvidencePort` | U5a 소비, U6가 어댑터 제공 | 늘 `false` → 모든 등록 VALIDATION_FAILED |
-| `GoalMetadataPort` | U5a 소비 | null 메타 |
-| `PracticeSessionContextPort` · `ScenarioRecordPort` | U5a 소비 | SERVICE_NOT_READY |
-| `KnowledgeGraphLookup` | U5a | Neo4j 꺼짐이면 빈 목록 |
-| `TextAiProvider` · `TextAiGateway` | U5a | `generateScenario` 한 메서드, 기본 UNAVAILABLE |
-| `ScenarioLookup` · `BehaviorDefinitionLookup` | U6가 U5a 컴포넌트에 더할 예정 | **타입 없음**. 재료: `ScenarioRepository.find(UUID)` · `PragmaticsKnowledge.requireVersion(key, version)`(RETIRED 허용) |
+| core-api | `POST /internal/devices/verify-token` | Realtime이 WS 핸드셰이크 때 기기 토큰 검증 |
+| core-api | `/internal/devices/{id}/connection` | Realtime이 기기 연결 상태 보고 |
+| core-api | `/internal/practice/scenarios` | Realtime 연습 런타임이 상황 조회 |
+| core-api | `POST /internal/events` | Realtime Outbox → Core Inbox |
+| realtime-activity | `POST /internal/sessions` | Core가 세션 시작 |
+| realtime-activity | `POST /internal/sessions/{id}/end` | Core가 보호자 종료 전달 |
+| realtime-activity | `GET /internal/sessions/{id}/view` | Core가 세션 뷰 조회 |
+| realtime-activity | `POST /internal/events` | Core Outbox → Realtime Inbox |
 
-## 6. AI 입출력 — `contracts/ai-io.md`
+(계약 7경로와 코드 8개 항목의 차이는 `/internal/events`가 양쪽에 같은 계약으로 있기 때문이다.) 보호: 내부 토큰(`InternalTokenFilter`, Core 쪽은 `InternalAuthInterceptor`로 송신). Realtime은 Spring Security를 쓰지 않는다.
 
-6절(U6 분석 AI): 6.1 공통 지시 · 6.2 기록용 재판정 출력 JSON · 장면 칩 표 · 6.3 결과 문장 · 6.4 결과 수준 · 6.5 리포트 10항목 · 6.6 금지 표현 2단계. 7절은 U5a `TextAiGateway`. 코드에는 6절용 입출력 타입이 없다.
+## 4. 기기 WebSocket (realtime-activity, 계약 `contracts/device-ws.asyncapi.yaml`)
 
-## 7. 기기 WebSocket
+- 경로 `/ws/device`(`WebSocketConfig.DEVICE_PATH`), 허용 Origin 1개, 핸드셰이크 인터셉터가 기기 토큰 검증.
+- 제어 메시지(JSON 봉투 `WsEnvelope`) 17종 — `WsMessageType`:
+  `HELLO` · `HELLO_OK` · `HEARTBEAT` · `HEARTBEAT_ACK` · `START_SESSION` · `ACK` · `DEVICE_READY` · `SESSION_STATE` · `OUTPUT_BEGIN` · `OUTPUT_END` · `PLAY_APPROVED_CONTENT` · `PLAYBACK_MARK` · `STOP_OUTPUT` · `CLOSE_TRANSPORT` · `VOICE_SESSION_CLOSED` · `DEVICE_STATE` · `ERROR`.
+- 바이너리 음성 프레임: 입력 타입 바이트 `0x01`, 960바이트 = 20ms PCM16LE 24kHz 모노.
+- 닫기 코드: `CloseCode`.
+- 프런트 대응 구현: `frontend/src/shared/protocol/`.
 
-`contracts/device-ws.asyncapi.yaml`, `contract-model/.../ws/message/`(18종). Realtime 소유, U6 무관.
+## 5. 영속 이벤트 (Outbox/Inbox, 계약 `contracts/events.asyncapi.yaml`)
 
-## Sources
+`EventType` 6종(봉투 `EventEnvelope`):
 
-- 개발자 스캔 `.../developer-scan.md`(APIs Discovered · U6 관련 코드 위치)
-- `docs/units/u6/brief.md`(C5 경로 목록)
+| 방향 | 이벤트 |
+|---|---|
+| Realtime → Core | `SessionStateChanged`, `SessionRecordCaptured`, `DeviceStatusChanged`, `DeletionCompleted` |
+| Core → Realtime | `DeviceReleased`, `DeletionRequested` |
+
+전달: HTTP `POST /internal/events`, 재시도 backoff(Realtime Outbox 예: 1s→30s, 최대 20회, claim lease 30s). 제어 이벤트 정책 `REARM_ON_START`.
+
+## 6. 외부 음성 AI 공급자 (나가는 WebSocket, realtime-activity)
+
+- 주소: `wss://api.openai.com/v1/live/sessions`(`application-{demo,prod}.yml`), 허용 호스트 `api.openai.com` 고정(`ProviderHosts`).
+- 모델 상수 `gpt-live-1`, 음성 형식 `pcm16le/24000/1`(입출력).
+- 송신 type 6종(`ProviderRequestFactory`): `session.start` · `session.input_audio.append` · `session.close` · `session.response.cancel` · `session.instructions.correct` · `session.response.create`.
+- 수신 type 9종(`ProviderClient`): `session.started` · `session.input_audio.speech_stopped` · `session.input_transcript.delta` · `session.input_transcript.done` · `session.output_transcript.delta` · `session.output_audio.delta` · `session.output.done` · `session.error` · `session.closed`.
+- 이 형식은 프로젝트가 정의한 것(결정 J110, 편차 (aa) · (U4b-a))이며 가짜 공급자(`tools/fake-provider/server.mjs`)가 같은 형식을 흉내 낸다. 위험은 [code-quality-assessment.md](code-quality-assessment.md) TD-2.
+
+## 7. 외부 텍스트 AI 포트 (core-api)
+
+- `core.textai.TextAiProvider`(U5a 연습 상황 생성), `core.result.ResultTextProvider`(U6 결과 · 리포트 문장). 입력 · 출력 규칙은 `contracts/ai-io.md`, 포트 목록은 `contracts/ports.md`.
+- 운영 어댑터 없음. 기본 빈은 각각 `TextAiException.Reason.UNAVAILABLE` · `PROVIDER_UNAVAILABLE`(TD-1). 환경 변수 이름(`MUJOONG_TEXT_AI_ENDPOINT/MODEL/API_KEY`)만 `application.yml` 주석에 있음.
+
+## 8. 기타 외부 연동
+
+- Google OAuth: 토큰 · JWKS(`core.identity.GoogleTokenClient` · `GoogleKeysClient` · `GoogleKeyCache`).
+- Web Push VAPID: push2u, `core.notification.VapidPushSender` · `PinnedPushHttpClient`.
+- Neo4j 지식 그래프: `core.knowledge.KnowledgeGraphLookup` 인터페이스만, `mujoong.knowledge.neo4j.enabled=false`(TD-3).
+
+## 9. 운영 · 문서 엔드포인트
+
+- Actuator: 관리 포트 9090(127.0.0.1), 헬스 · Prometheus 지표.
+- springdoc OpenAPI: dev · test 프로필에서만 켜짐.
+- 프런트 `/healthz` route.

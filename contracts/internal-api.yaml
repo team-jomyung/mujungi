@@ -35,6 +35,7 @@ paths:
         - url: http://realtime:8081
       x-unit: U1
       x-deviation: ["(v)"]
+      x-u8-deviation: ["(U8-b)"]
       requestBody:
         required: true
         content:
@@ -53,6 +54,8 @@ paths:
               approvedContent:
                 CLOSING: { contentVersionId: 00000000-0000-4000-8000-000000000041, text: "오늘 이야기 즐거웠어. 다음에 또 만나!", audioUrl: /media/approved/closing-v1.wav }
                 WAITING_FILLER: { contentVersionId: 00000000-0000-4000-8000-000000000042, text: "음, 잠깐만 생각해 볼게.", audioUrl: /media/approved/waiting-filler-v1.wav }
+              approvedSpeech:
+                D_REST_ACK: { contentVersionId: 00000000-0000-4000-8000-0000000008b3, text: "잠깐 쉬고 싶구나. 천천히 해도 괜찮아." }
               practice: null
       responses:
         "202":

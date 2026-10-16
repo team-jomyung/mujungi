@@ -215,6 +215,45 @@ public class RealtimeSessionClient {
         return start(sessionPackage.sessionId(),json.write(body));
     }
 
+    /**
+     * 음성 파일 없는 승인 발화를 함께 보낸다(U8 · BR1.2 · 편차 U8-b). 본문은 공통 패키지 뒤에 선택 속성 {@code approvedSpeech}를 더한 것이고,
+     * 비어 있으면 {@link #start(SessionPackage)}와 같은 본문이다(더하기만, NFR6.1).
+     */
+    public StartResult start(SessionPackage sessionPackage, Map<String, ApprovedContentCatalog.SpeechItem> approvedSpeech) {
+        Objects.requireNonNull(sessionPackage, "sessionPackage");
+        Objects.requireNonNull(approvedSpeech, "approvedSpeech");
+        if (approvedSpeech.isEmpty()) {
+            return start(sessionPackage);
+        }
+        return start(sessionPackage.sessionId(), json.write(withApprovedSpeech(sessionPackage, approvedSpeech)));
+    }
+
+    /** 연습 시작 + 승인 발화(U8). {@code approvedSpeech}가 비면 {@link #startPractice(SessionPackage, Map)}와 같은 본문이다. */
+    public StartResult startPractice(SessionPackage sessionPackage, Map<String, Object> practice,
+            Map<String, ApprovedContentCatalog.SpeechItem> approvedSpeech) {
+        Objects.requireNonNull(sessionPackage, "sessionPackage");
+        Objects.requireNonNull(approvedSpeech, "approvedSpeech");
+        if (approvedSpeech.isEmpty()) {
+            return startPractice(sessionPackage, practice);
+        }
+        if (sessionPackage.activityType() != ActivityType.PRACTICE) {
+            throw new IllegalArgumentException("practice activity required");
+        }
+        Map<String, Object> body = withApprovedSpeech(sessionPackage, approvedSpeech);
+        body.put("practice", Map.copyOf(practice));
+        return start(sessionPackage.sessionId(), json.write(body));
+    }
+
+    /** 공통 패키지 필드(입력 순서) 뒤에 approvedSpeech(입력 순서)를 붙인 본문. */
+    private Map<String, Object> withApprovedSpeech(SessionPackage sessionPackage,
+            Map<String, ApprovedContentCatalog.SpeechItem> approvedSpeech) {
+        var body = new java.util.LinkedHashMap<String, Object>();
+        Map<?, ?> common = json.read(json.write(sessionPackage), Map.class);
+        common.forEach((key, value) -> body.put(key.toString(), value));
+        body.put("approvedSpeech", new java.util.LinkedHashMap<>(approvedSpeech));
+        return body;
+    }
+
     private StartResult start(UUID sessionId, String body) {
         SessionStartBreaker.Permit permit = breaker.acquire();
         if (permit == SessionStartBreaker.Permit.REJECTED) {

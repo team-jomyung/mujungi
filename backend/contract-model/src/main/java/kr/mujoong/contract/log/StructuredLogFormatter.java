@@ -27,6 +27,12 @@ public final class StructuredLogFormatter {
             DateTimeFormatter.ofPattern("uuuu-MM-dd'T'HH:mm:ss.SSS'Z'").withZone(ZoneOffset.UTC);
     /** errorKind 허용 형식(OD-2). */
     private static final Pattern ERROR_KIND = Pattern.compile("^[A-Za-z][A-Za-z0-9_.$]{0,99}$");
+    /** LABEL 값 형식(모델 이름 · 프롬프트 판, U9 SD6). */
+    private static final Pattern LABEL = Pattern.compile("^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$");
+    /** NAME_LIST의 이름 하나 형식(U9 SD6). */
+    private static final Pattern FIELD_NAME = Pattern.compile("^[A-Za-z][A-Za-z0-9_]{0,63}$");
+    /** NAME_LIST 이름 수 상한(U9 SD6). */
+    static final int MAX_NAME_LIST_SIZE = 32;
 
     private StructuredLogFormatter() {
     }
@@ -103,6 +109,31 @@ public final class StructuredLogFormatter {
     /** errorKind로 쓸 수 있는 형식인가. */
     public static boolean isValidErrorKind(String errorKind) {
         return errorKind != null && ERROR_KIND.matcher(errorKind).matches();
+    }
+
+    /** LABEL 값으로 쓸 수 있는 형식인가(U9 SD6). */
+    public static boolean isValidLabel(String value) {
+        return value != null && LABEL.matcher(value).matches();
+    }
+
+    /** NAME_LIST 값으로 쓸 수 있는 형식인가(쉼표로 이은 이름, 최대 32개, 빈 목록 허용 · U9 SD6). */
+    public static boolean isValidNameList(String value) {
+        if (value == null) {
+            return false;
+        }
+        if (value.isEmpty()) {
+            return true;
+        }
+        String[] names = value.split(",", -1);
+        if (names.length > MAX_NAME_LIST_SIZE) {
+            return false;
+        }
+        for (String name : names) {
+            if (!FIELD_NAME.matcher(name).matches()) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private static void appendValue(StringBuilder json, Object value) {

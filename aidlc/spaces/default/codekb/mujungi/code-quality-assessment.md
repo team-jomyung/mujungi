@@ -1,61 +1,62 @@
 # 코드 품질 평가 (Code Quality Assessment)
 
-> 기준 커밋 `7a22b67`. CI 작업 목록은 `component-inventory.md` ci-workflow에만 적는다.
+> 기준: 커밋 `72d7034`, 2026-10-15 전체 재스캔. 이 문서가 기술 부채(TD-n) 목록의 정본이며, 다른 문서는 TD 번호로 가리킨다.
 
-## 시험
+## 1. 시험
 
-| 영역 | 위치 · 수 | 도구 |
+| 위치 | 규모 | 비고 |
 |---|---|---|
-| core-api | `backend/core-api/src/test/java/kr/mujoong/core/**` 113개 + `V90__test_default_privilege_probe.sql` | JUnit 5 · AssertJ · Mockito · Spring Boot Test · Testcontainers · ArchUnit · json-schema-validator |
-| realtime-activity | `backend/realtime-activity/src/test/java/**` 115개 | 같음 |
-| contract-model | 15개 | JUnit |
-| test-support | 4개 | JUnit |
-| frontend | `frontend/tests/{u1,u2,u3,u4a,u5a}/**` 56개 `*.test.ts(x)` | Vitest · Testing Library · jsdom |
-| tools | `tools/tests/` | Vitest |
+| `backend/contract-model/src/test/` | 15 클래스 · @Test 120 | 계약 타입 |
+| `backend/core-api/src/test/` | 157 클래스 · @Test 996 | ArchUnit `core/arch` 포함 |
+| `backend/realtime-activity/src/test/` | 126 클래스 · @Test 819 | ArchUnit `realtime/arch` 포함 |
+| `backend/test-support/src/test/` | 4 클래스 · @Test 21 | |
+| `frontend/tests/u1 … u7/` | 시험 파일 73 | Vitest + Testing Library + jsdom |
+| `tools/tests/u1 · u3 · u4a · u4b/` | 11 | Vitest |
+| `infra/ci/test-*.sh` | — | Bash 음성 대조 시험 |
+| `tools/skeleton-e2e/`, `scripts/verify/c-skeleton-turn.sh` | — | 끝-끝 스켈레톤 |
 
-### 커버리지 설정 (있음)
+백엔드 시험 태그: db 107 · u1 142 · u2 15 · u3 24 · u4a 5 · u4b 24 · u5a 11 · u5b 34 · u6 35 · u7 17.
 
-- 백엔드: 모듈마다 JaCoCo LINE 80%를 `check`에 건다(test-support 제외). `-PcoverageScope=<u>` → `backend/coverage-scope/<u>.txt` 파일만 측정, 목록이 비거나 없는 파일이 있으면 실패. 현재 u1 · u2 · u3 · u4a · u4b · u5a — **u6 없음**.
-- 프런트: `vitest.config.ts` v8 줄 80%, `MUJOONG_COVERAGE_SCOPE=<u>` → `frontend/coverage-scope/<u>.json`. 현재 u1 · u2 · u3 · u4a · u5a — **u6 없음**.
-- 태그(`@Tag`): db 75 · u1 142 · u2 15 · u3 24 · u4a 5 · u4b 24 · u5a 11 — **u6 없음**.
-- CI는 범위 없이 모듈 전체 80%도 돈다.
+커버리지: 백엔드 JaCoCo 줄 80% 하한(모듈별, test-support 제외), `-PcoverageScope=<유닛>`로 `backend/coverage-scope/*.txt` 범위 측정. 프런트 v8 줄 80% 하한, `MUJOONG_COVERAGE_SCOPE`로 `frontend/coverage-scope/*.json` 범위 측정. CI가 전체 + U5b · U7 범위를 따로 검증. org 기본 `classic` 범위의 줄 80% 하한은 이미 CI에 걸려 있다.
 
-## 정적 검사 · 구조 규칙
+시험 개수 · 태그만 확인했고 시험 본문 품질은 보지 않았다.
 
-- 프런트: ESLint flat config(`/parent` ↔ `/device` import 경계, `react/no-danger`, `react/jsx-no-literals`로 문구는 copy 모듈만, getUserMedia · 서비스 워커 제한), Prettier, `.editorconfig`. `eslint-disable` 0건.
-- 백엔드: 포매터 · 정적 분석 플러그인 없음(spotless · checkstyle · errorprone 0). 대신 `javac -Xlint:all` + 시험으로 거는 규칙:
-  - `CoreArchTest`(ArchUnit): realtime 참조 0 · 시험 코드 의존 0 · 시스템 시각 직접 읽기 0 · 세션 사본 쓰기 위치 제한
-  - `TimeLiteralScanTest` · `NoSqlNowTest`: 시간 상수 · SQL `now()` 금지
-  - `ConfigKeyContractTest`: `contracts/timing.md` ↔ `application.yml` ↔ `CoreProperties` 키 · 기본값 일치
-  - `ContractConformanceIT`: 응답 ↔ `contracts/schemas` 대조
-- 표지: 운영 소스 TODO · FIXME · HACK 0건, `@SuppressWarnings` 6건(unchecked 캐스트).
+## 2. 린트 · 서식
 
-## 문서
+- 프런트: ESLint flat config(`frontend/eslint.config.mjs`) — next core-web-vitals · typescript, `/parent` ↔ `/device` ↔ `shared` import 경계, `react/no-danger`, `react/jsx-no-literals`(화면 문구는 copy 모듈만), `getUserMedia` 사용처 1곳, 서비스 워커 금지(U7 보호자 SW 예외).
+- 백엔드: javac `-Xlint:all`(경고를 오류로 바꾸지 않음) + ArchUnit 계층 · 의존 규칙. Java 포매터(Spotless · Checkstyle) 없음.
+- `.prettierrc.json`(printWidth 100) · `.editorconfig` 있음. CI에 Prettier 검사 단계 없음.
 
-루트 `README.md`, `contracts/README.md`, `infra/RUNBOOK.md`, 유닛별 `docs/units/<u>/{brief,design,report}.md`. 운영 코드는 한국어 Javadoc에 근거 ID(FR · BR · J · AC)를 촘촘히 단다. 예외: U5a 코드(`knowledge` · `practice` · `textai`)는 영어 한 줄 압축 주석이라 주변 관례와 다르다.
+## 3. CI/CD
 
-## 기술 부채 (U6 관련 우선)
+- `.github/workflows/ci.yml` 작업: changes · backend(`gradle clean check verifyBootJarHasNoTestClasses`) · u5b-scope · U7 범위 · backend-deps(Trivy) · frontend(ESLint · Vitest 커버리지 · `next build` · 번들 비밀 문자열 0건) · frontend-deps(npm audit) · tools · secrets(gitleaks) · infra-validate(Compose 불변식 12 · `nginx -t` · shellcheck · 마이그레이션 expand 검사) · images(6종 빌드 · Trivy · 이미지 점검 · GHCR 푸시) · skeleton. 액션은 커밋 SHA 고정.
+- `.github/workflows/deploy.yml`(단계 이름만 확인): 수동/자동 DEPLOY · ROLLBACK, OIDC → SSM `mujoong-deploy`, demo 환경. `docs/units/README.md`에 따르면 `SERVICE_HOST` · `AUTO_DEPLOY` 변수가 없어 실제 배포 단계는 건너뛴다.
 
-| # | 내용 | 위치 | U6 영향 |
-|---|---|---|---|
-| D1 | `ActivityRecorded` 운영 구독자 0, `ScenarioService.reconcileExposures` 운영 호출자 0 | `record/ActivityRecorded.java`, `practice/ScenarioService.java:138` | ResultPipeline이 첫 구독자. 재발행 없음 → 누락 복구 필요 |
-| D2 | U6 자리표시 기본 빈(근거 포트 false · 메타 null · SERVICE_NOT_READY) | `practice/PracticePortConfiguration.java`, `practice/ScenarioConfiguration.java` | 같은 타입 빈으로 교체 |
-| D3 | `ScenarioLookup` · `BehaviorDefinitionLookup` 타입 없음 | `practice/` · `knowledge/` | U6가 확장으로 추가 |
-| D4 | `TextAiProvider` · `TextAiGateway`가 상황 생성 전용 | `textai/` | 6절 작업용 확장 필요 |
-| D5 | 금지 표현 사전 형식 불일치(txt 18줄 vs ai-io.md 6.6 JSON `appliesTo`), Realtime `gate/seed-dictionary.json`과 별개 | `resources/textai/u5a-forbidden-patterns.txt` | 넓히면 U5a `CandidateRegistry` 동작도 바뀜 |
-| D6 | 설정 키 불일치: ai-io `mujoong.ai.*` vs 코드 `mujoong.text-ai.*`; `result.job-attempts` · `report.ready-target`은 timing.md 예약표에만 | `TextAiProperties`, `contracts/timing.md` 2절 | `ConfigKeyContractTest` 때문에 세 곳 동시 변경 |
-| D7 | 26 화면 스텁, `/api/records` 클라이언트 없음, 17 「오늘 기록 보기」 감춤 | `frontend/src/app/parent/records/page.tsx`, `Done17.tsx` | U1 J120 · U4a-J14 단언을 U6가 바꿈(설계에 까닭 기록) |
-| D8 | PDF 저장 자리 · 글꼴 없음(읽기 전용 루트 · tmpfs 64m · 영속 볼륨 없음) | `infra/compose.demo.yml`, `core-api/Dockerfile` | compose · Dockerfile · `infra-validate` 불변식 변경 필요(OQ6) |
-| D9 | `core_goal_recommendation.structured_experience_id`(FK 없음) | `V4__u5a_practice_core.sql` | V5에서 FK를 걸면 `migration-approvals.txt` 승인 필요 |
-| D10 | `DeletionParticipant` Javadoc 상수 목록 · `DeletionCommander` 주석 | `common/deletion/DeletionParticipant.java` | 70 추가 시 같이 갱신 |
-| D11 | `record.practice` 내부 모양이 `contracts/`에 없음(정본 contract-summary 6절만), 값은 U5b 전 null | `realtime/session/ResultSnapshotBuilder.java` | PRACTICE 경로는 계약 예시 대역으로만 시험 가능 |
-| D12 | 큰 파일 `SessionExecutor.java` 3167줄, `MujoongPostgres.java` 971줄 | realtime · test-support | U6 무관 |
+## 4. 문서화
 
-## 종합
+- 루트 `README.md` · `AGENTS.md`, `infra/RUNBOOK.md`(demo 운영 정본), `contracts/README.md` + `deviations.md`(편차 67행), `docs/units/<u>/{brief,design,report}.md`, `docs/erd/ERD_v0.2.md`, `docs/change-history.md`.
+- 코드 주석: 한국어 Javadoc이 촘촘하고 결정 ID(J · BR · U*-J · 편차)를 인용한다. TODO · FIXME는 앱 소스에 0건(남은 일은 문서로 관리).
 
-- 구조 규칙 · 계약 대조 · 커버리지 관문이 시험으로 강하게 걸려 있어 **회귀 방어가 좋다**(healthy).
-- U6 관점의 위험은 코드 품질보다 **빈 확장점과 계약 공백**(D1 ~ D6 · D11)이다. 특히 D6은 설정 키 하나 더하는 일이 계약 파일 수정까지 번지는 결합점이다.
+## 5. 기술 부채 (TD)
 
-## Sources
+| ID | 내용 | 위치 · 증거 | 영향 | 갱신 문서 작업과의 관계 |
+|---|---|---|---|---|
+| TD-1 | **AI 공급자 운영 어댑터 부재 — 기본 빈이 항상 실패(fail-closed)** | `core/textai/TextAiConfiguration.java`(`unavailableTextAiProvider` → `TextAiException.Reason.UNAVAILABLE`), `core/result/ResultTextConfiguration.java`(`PROVIDER_UNAVAILABLE`), `realtime/practice/PracticeRuntimeConfiguration.java:46-51`(`EvaluationProvider` 실패 future, `CueProvider.UNAVAILABLE`). 실제 구현은 시험 대역(`FakeResultTextProvider` 등)뿐. 환경 변수 이름 `MUJOONG_TEXT_AI_ENDPOINT/MODEL/API_KEY`는 `application.yml` 주석에만 있음 | 운영에서 상황 생성 · 결과 문장 · 리포트 · 연습 판정 · 단서가 동작하지 않음. 기동 · 시험은 비밀 없이 가능 | `15_기술명세_AI동작_1015` 반영 시 핵심 변경 지점 |
+| TD-2 | **음성 공급자 선 형식이 프로젝트 정의(J110)** | 모델 `gpt-live-1`, `session.*` type 체계, URL `/v1/live/sessions` — `realtime/voice/ProviderRequestFactory.java:27-39`, `ProviderClient.java:190-205`, `application-{demo,prod}.yml` | 실공급자 형식과 다르면 연결 불가. 가짜 공급자(`tools/fake-provider/server.mjs`) · `test-support` 대역도 같은 형식이라 함께 바꿔야 함 | `40_기능명세_GPT-Live` 반영 시 핵심 변경 지점 |
+| TD-3 | 지식 그래프(Neo4j) 읽기 어댑터 없음 | `core/knowledge/KnowledgeGraphLookup` 인터페이스만, `mujoong.knowledge.neo4j.enabled=false`. Compose demo에 `neo4j` 서비스(프로필 knowledge)는 있음 | 기능 미사용, 설정 · 이미지만 존재 | 문서가 지식 그래프를 요구하면 새 어댑터 필요 |
+| TD-4 | **거대 클래스 `SessionExecutor`** | `realtime/session/SessionExecutor.java` 3,388줄(상태 · 타이머 · 출력 · 연습 확장 실행). 다음: `FileAudioRecorder` 619 · `CoreProperties` 576 · `StopIntentJudge` 565 | 세션 동작 변경의 영향 범위 · 리뷰 비용 큼 | 세션 전이 · 시간 값 변경 시 집중 스캔 필요 |
+| TD-5 | **압축 서식(한 줄에 메서드 전체)** | U6 계열 `core/report/web/ReportController.java`, `core/report/ReportRepository.java`, `core/result/SessionResultHandler.java`, `core/result/ResultAiSchema.java`, `core/result/ResultTextConfiguration.java`, 프런트 `parent/screens/Report30.tsx` · `RecordDetail27.tsx` · `ReportRange28.tsx` · `parent/api/results.ts`(250자 넘는 줄 다수) | 가독성 · diff 리뷰 저하. CI에 Java 포매터 · Prettier 검사가 없어 막히지 않음 | 결과 · 리포트 수정 시 서식 정리 여부 결정 필요 |
+| TD-6 | **시간 값이 세 곳에 중복** | 두 앱 `application.yml`의 `mujoong.timing.*` ↔ `contracts/timing.md` ↔ `frontend/src/shared/timing/timing-defaults.json`(시험이 대조) | 하나만 바꾸면 시험 실패 또는 불일치 | 문서의 시간 값 변경은 세 곳 동시 수정 |
+| TD-7 | **마이그레이션 번호 · 승인 규칙** | 다음 번호 core V8 · realtime V5, Flyway `outOfOrder` 꺼짐, 기존 표 제약 강화는 `infra/migration-approvals.txt` 승인 행이 있어야 CI expand 검사 통과 | 병렬 브랜치에서 번호 충돌 위험 | DB 변경 시 번호 · 승인 행 함께 |
+| TD-8 | **커버리지 범위 목록 유지 부담** | `backend/coverage-scope/*.txt` · `frontend/coverage-scope/*.json` + 유닛 태그 u1~u7 | 파일을 옮기거나 새로 만들면 목록 수정 필요(목록에 없는 파일이면 측정 실패) | 새 파일 추가 시 범위 목록 · 태그 수정 |
+| TD-9 | 유닛 혼합 이력 | U2~U5a는 엔진 없이 병렬 구현, U5b · U6 · U7은 통합 브랜치로 반영(`docs/units/README.md`) | 유닛마다 설계 문서 · 편차 기록의 밀도가 다름 | 문서 차이 계산 시 유닛별 편차 확인 |
+| TD-10 | 알려진 흔들림 · 남은 일 | `RealtimeInternalApiIT` 부하 시 409, 세션 문구 6종 음성이 합성음 자리(`infra/seed-audio/*-v1|v2.wav`), 시드 003을 검증 스크립트 · RUNBOOK 시드 순서에 넣는 일 | 시험 간헐 실패, 데모 음성 품질 | — |
 
-- 개발자 스캔 `.../developer-scan.md`(Test Coverage · Code Quality Indicators · Technical Debt Signals · Risks)
+## 6. 이번 스캔의 확인 한계
+
+- 업무 로직 본문(core result · practice · activity, realtime session · gateway, frontend parent · device)은 얕게 봤다. 위 TD 중 TD-1 · TD-2 · TD-6은 파일을 직접 읽어 확인했고, TD-4 · TD-5는 크기 · 줄 길이로 판단했다.
+- 문서 차이가 특정 기능에 걸리면 그 경로를 집중 스캔해야 한다([reverse-engineering-timestamp.md](reverse-engineering-timestamp.md)의 `shallow.paths`).
+
+## 7. 종합
+
+시험 · CI · 계약 관리는 촘촘하다(시험 약 2천 개, 줄 80% 하한, 계약 시험, 불변식 검사). 약점은 (1) 외부 AI 운영 어댑터가 없고 음성 선 형식이 자체 정의라 실공급자 연결이 검증되지 않은 점, (2) 세션 실행기 집중과 압축 서식, (3) 시간 값 · 커버리지 범위 · 마이그레이션처럼 여러 곳을 함께 고쳐야 하는 규칙이다.

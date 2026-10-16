@@ -1,0 +1,14 @@
+{
+  "stage": "nfr-requirements",
+  "unit": "u8-contracts-catalog",
+  "upstream_ids": ["NFR1", "NFR2", "NFR3", "NFR4", "NFR5", "NFR6", "NFR7"],
+  "coverage": [
+    { "id": "NFR1", "status": "N/A", "target": "U8은 시간 키만 정의한다. 실측은 키를 쓰는 단위와 Build and Test(가정 1)" },
+    { "id": "NFR2", "status": "OK", "target": "NFR2.1, NFR2.2, NFR2.3, NFR2.4" },
+    { "id": "NFR3", "status": "OK", "target": "NFR3.1, NFR3.2, NFR3.3, NFR3.4, NFR3.5, NFR3.6, NFR3.7" },
+    { "id": "NFR4", "status": "N/A", "target": "관측 지표는 판정 · 제브 단위(U11 · U13) 몫. U8은 판 번호 조회만 제공(NFR2.4)" },
+    { "id": "NFR5", "status": "N/A", "target": "시험 방침은 tech-stack-decisions.md 시험 행과 functional-spec.md 7절. 별도 NFR 하위 요구 없음" },
+    { "id": "NFR6", "status": "OK", "target": "NFR6.1, NFR6.2" },
+    { "id": "NFR7", "status": "N/A", "target": "운영 격리(mujoong-manual)는 U8 계약 · 설정과 관계없음" }
+  ]
+}

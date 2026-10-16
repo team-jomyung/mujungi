@@ -16,6 +16,7 @@ import kr.mujoong.core.common.db.DbTestSupport;
 import kr.mujoong.core.support.BusinessFixtures;
 import kr.mujoong.core.support.BusinessFixtures.Family;
 import kr.mujoong.core.support.CoreBusinessContext;
+import kr.mujoong.core.support.U8Fixtures;
 import kr.mujoong.testsupport.db.MujoongPostgres;
 import kr.mujoong.testsupport.http.ContractStubServer;
 import kr.mujoong.testsupport.http.ContractStubServer.RecordedRequest;
@@ -56,6 +57,8 @@ class SessionPackageIT {
     static void database() {
         postgres = MujoongPostgres.sharedOrAbort();
         BusinessFixtures.applyReferenceSeed(postgres);
+        // U8(편차 U8-b): dev 시드를 쓰는 다른 시험이 공용 DB에 승인 발화 행을 남기므로 시험 순서와 무관하게 늘 있게 둔다(넣기 전용)
+        U8Fixtures.insertApprovedSpeech(postgres);
     }
 
     @BeforeEach
@@ -88,8 +91,11 @@ class SessionPackageIT {
                     .doesNotContain("FRIEND").doesNotContain("HEARD_FROM_CHILD").doesNotContain("@")
                     .doesNotContainIgnoringCase("email");
             JsonNode body = request.json();
+            // U8(편차 U8-b): 계약 필드에 선택 속성 approvedSpeech가 더해졌다. 자유대화는 허용 목록의 두 code만 싣는다
             assertThat(fieldNames(body)).containsExactlyInAnyOrder("sessionId", "idempotencyKey", "guardianId", "childId",
-                    "deviceId", "activityType", "consentSnapshot", "childContext", "stopExpressions", "approvedContent");
+                    "deviceId", "activityType", "consentSnapshot", "childContext", "stopExpressions", "approvedContent",
+                    "approvedSpeech");
+            assertThat(fieldNames(body.path("approvedSpeech"))).containsExactly("D_REST_ACK_START", "D_REST_ACK");
             assertThat(body.path("sessionId").asString()).isEqualTo(started.sessionId().toString());
             assertThat(body.path("idempotencyKey").asString()).isEqualTo(key.toString());
             assertThat(body.path("guardianId").asString()).isEqualTo(family.guardianId().toString());

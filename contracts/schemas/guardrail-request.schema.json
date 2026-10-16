@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mujoong.invalid/contracts/schemas/guardrail-request.schema.json",
+  "title": "제브 가드레일 검사 요청(내부 형식)",
+  "description": "출력 게이트(U13)가 GuardrailClient로 넘기는 내부 최소 형식(계약 요약 C-DS8 · C §3.1). 공급자 실제 요청은 어댑터 안에서만 이 형식에서 바꾼다. 검사 대상은 GPT-Live가 새로 생성한 후보 발화뿐이고 Luna 생성물 · 결과 문장은 보내지 않는다(FR2.6 · FR7.7). 아동 · 보호자 · 세션 · 기기 식별자와 키는 속성으로 두지 않는다(NFR3.1). [U8 편차 (U8-a)]",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["source", "mode", "candidate", "policyVersion"],
+  "properties": {
+    "source": { "const": "GPT_LIVE_GENERATED" },
+    "mode": { "enum": ["FREE_TALK", "PRACTICE_PEER", "PRACTICE_COACH"] },
+    "candidate": {
+      "description": "검사할 GPT-Live 신규 생성 출력의 완결 전사. 아이 이름은 '아이'로 치환된 값",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4000
+    },
+    "recentContext": {
+      "description": "익명화한 최근 맥락(최대 3개). 지시문은 데이터로만 다룬다(FR6.7)",
+      "type": "array",
+      "maxItems": 3,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["speaker", "text"],
+        "properties": {
+          "speaker": { "enum": ["CHILD", "PARTNER", "COACH", "MUJOONG"] },
+          "text": {
+            "description": "맥락 한 줄. 아이 이름은 '아이'로 치환된 값",
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          }
+        }
+      }
+    },
+    "policyVersion": {
+      "description": "세션에 고정한 가드레일 정책 판(guardrail/policy-v1.json의 version)",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 80
+    }
+  },
+  "examples": [
+    {
+      "source": "GPT_LIVE_GENERATED",
+      "mode": "PRACTICE_PEER",
+      "candidate": "응, 같이 하자! 너 먼저 한 바퀴 돌아.",
+      "recentContext": [ { "speaker": "CHILD", "text": "나도 자동차로 탑 한 바퀴 돌아도 돼?" } ],
+      "policyVersion": "guardrail-v1"
+    }
+  ]
+}

@@ -166,7 +166,8 @@ services:
       backend:
         # 앱 사이 호출 이름(infra-spec D-12 · J109: mujoong.internal-http.core-base-url = http://core:8080)
         aliases: [core]
-    # core-api.env: 비밀 · origin과 구글 OAuth(GOOGLE_OAUTH_CLIENT_ID · GOOGLE_OAUTH_CLIENT_SECRET · GOOGLE_OAUTH_REDIRECT_URI, render-env)
+    # core-api.env: 비밀 · origin과 구글 OAuth(GOOGLE_OAUTH_CLIENT_ID · GOOGLE_OAUTH_CLIENT_SECRET · GOOGLE_OAUTH_REDIRECT_URI, render-env),
+    # 선택 비밀 OPENAI_API_KEY(U8, 없으면 빈 변수)
     env_file:
       - ${MUJOONG_ENV_DIR:-/opt/mujoong/env}/core-api.env
     environment:

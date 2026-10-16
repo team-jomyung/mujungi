@@ -33,6 +33,8 @@ import org.springframework.boot.context.properties.source.ConfigurationPropertyS
 import org.springframework.boot.convert.ApplicationConversionService;
 import org.springframework.boot.env.YamlPropertySourceLoader;
 import kr.mujoong.core.knowledge.KnowledgeProperties;
+import kr.mujoong.core.luna.LunaHosts;
+import kr.mujoong.core.luna.LunaProperties;
 import kr.mujoong.core.textai.TextAiProperties;
 import org.springframework.core.convert.ConversionService;
 import org.springframework.core.env.EnumerablePropertySource;
@@ -142,6 +144,8 @@ class ConfigKeyContractTest {
         // U5a: 텍스트 AI · 지식 그래프는 같은 방식의 설정 레코드 둘이 묶는다(U5a 리뷰 5)
         leaves.putAll(recordLeaves(TextAiProperties.class, "mujoong.text-ai"));
         leaves.putAll(recordLeaves(KnowledgeProperties.class, "mujoong.knowledge.neo4j"));
+        // U9 SD12: Luna 호출 설정도 같은 방식의 레코드가 묶는다
+        leaves.putAll(recordLeaves(LunaProperties.class, "mujoong.luna"));
 
         assertThat(keyMismatches(yml.keySet(), leaves.keySet(), RECORD_KEYS_WITHOUT_DEFAULT))
                 .as("yml 키 ↔ 설정 레코드 키").isEmpty();
@@ -151,6 +155,7 @@ class ConfigKeyContractTest {
         boundValues.putAll(recordValues(bindRecord(TextAiProperties.class, "mujoong.text-ai", base), "mujoong.text-ai"));
         boundValues.putAll(recordValues(bindRecord(KnowledgeProperties.class, "mujoong.knowledge.neo4j", base),
                 "mujoong.knowledge.neo4j"));
+        boundValues.putAll(recordValues(bindRecord(LunaProperties.class, "mujoong.luna", base), "mujoong.luna"));
         assertThat(valueMismatches(yml, leaves, boundValues, placeholderResolver(base)))
                 .as("yml 값과 레코드에 묶인 값").isEmpty();
         assertThat(bound.timing().bootstrap().rateLimit().max()).isEqualTo(20);
@@ -162,15 +167,21 @@ class ConfigKeyContractTest {
         Path base = MAIN_RESOURCES.resolve("application.yml");
         Path testYml = TEST_RESOURCES.resolve("application-test.yml");
         Map<String, Object> overrides = mujoongKeys(flatten(testYml));
-        Map<String, RecordComponent> leaves = recordLeaves(CoreProperties.class, "mujoong");
+        Map<String, RecordComponent> leaves = new TreeMap<>(recordLeaves(CoreProperties.class, "mujoong"));
+        // U9 BR1.4: test 프로필은 Luna 주소를 루프백으로 덮어쓴다(SD12 레코드)
+        leaves.putAll(recordLeaves(LunaProperties.class, "mujoong.luna"));
 
         assertThat(overrides).as("시험 축소값(빈 대조 아님)").isNotEmpty();
         assertThat(overrides.keySet()).as("설정 레코드가 읽지 않는 시험 키(오타는 조용히 버려진다)")
                 .allMatch(leaves::containsKey);
 
         CoreProperties bound = bind(base, testYml);
-        assertThat(valueMismatches(overrides, leaves, recordValues(bound, "mujoong"), placeholderResolver(base, testYml)))
+        Map<String, Object> boundValues = new TreeMap<>(recordValues(bound, "mujoong"));
+        LunaProperties luna = bindRecord(LunaProperties.class, "mujoong.luna", base, testYml);
+        boundValues.putAll(recordValues(luna, "mujoong.luna"));
+        assertThat(valueMismatches(overrides, leaves, boundValues, placeholderResolver(base, testYml)))
                 .as("시험 값이 레코드에 그대로 묶임").isEmpty();
+        assertThat(LunaHosts.check(luna.baseUrl(), LunaHosts.Mode.TEST)).as("test 프로필 Luna 주소는 루프백(BR1.4)").isEmpty();
         assertThat(bound.timing().session().preparingTimeout()).isLessThan(Duration.ofSeconds(10));
     }
 

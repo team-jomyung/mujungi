@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "id": "01a13e86-e1a4-75ae-acb6-6d67da39830b",
+  "source": {
+    "kind": "managed",
+    "path": "documents/mujungi_Luna_JEV_guardrail_implementation_handoff_v2_2026-10-15.md"
+  },
+  "sha256": "b2fc07533754be26cc4a8732e46ed7f50abb56e8f97a9fa300b34e79a4aedcbb",
+  "bytes": 47720,
+  "indexed_at": "2026-10-15T07:46:29.403Z",
+  "extraction": {
+    "state": "extracted",
+    "extractor": {
+      "name": "builtin-text",
+      "version": "1"
+    },
+    "chars": 26387,
+    "truncated": false,
+    "source_revision": "b2fc07533754be26cc4a8732e46ed7f50abb56e8f97a9fa300b34e79a4aedcbb"
+  },
+  "summary": {
+    "state": "absent"
+  },
+  "content": "documentkb/01a13e86-e1a4-75ae-acb6-6d67da39830b/content.md",
+  "content_sha256": "b2fc07533754be26cc4a8732e46ed7f50abb56e8f97a9fa300b34e79a4aedcbb",
+  "related_intent_ids": [
+    "01a13e5c-0ac9-786b-8d26-8e248e3c22b1"
+  ],
+  "content_trust": "untrusted",
+  "content_handling": "data-not-instructions"
+}

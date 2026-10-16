@@ -72,7 +72,11 @@ public final class EventLog {
         VOICE_RELAY(App.REALTIME, "VoiceRelay"),
         OUTPUT_GATE(App.REALTIME, "OutputGate"),
         REALTIME_MESSAGING(App.REALTIME, "RealtimeMessaging"),
-        REALTIME_MAINTENANCE(App.REALTIME, "Maintenance");
+        REALTIME_MAINTENANCE(App.REALTIME, "Maintenance"),
+        /** U9 Luna 호출부(core-api/LunaClient, BR6.3). 두 앱이 같은 이름을 각자 쓴다(코드 공유 없음, R-F5). */
+        CORE_LUNA_CLIENT(App.CORE_API, "LunaClient"),
+        /** U9 Luna 호출부(realtime/LunaClient, BR6.3). */
+        REALTIME_LUNA_CLIENT(App.REALTIME, "LunaClient");
 
         private final App app;
         private final String name;
@@ -218,7 +222,10 @@ public final class EventLog {
             return value == null ? this : attr(key, value.name());
         }
 
-        /** 열거값 · 식별자 문자열. 등록되지 않은 열거값은 UNKNOWN. null이면 키를 쓰지 않는다. */
+        /**
+         * 열거값 · 식별자 · 라벨 · 이름 목록 문자열. 등록되지 않은 열거값과 형식이 틀린 식별자 · 라벨 · 이름 목록은 UNKNOWN(U9 SD6).
+         * null이면 키를 쓰지 않는다.
+         */
         public Entry attr(AttrKey key, String value) {
             if (value == null) {
                 return this;
@@ -229,6 +236,18 @@ public final class EventLog {
                 }
                 return this;
             }
+            if (key.valueType() == AttrKey.ValueType.LABEL) {
+                if (accept(key, AttrKey.ValueType.LABEL)) {
+                    attrs.put(key, StructuredLogFormatter.isValidLabel(value) ? value : AttrKey.UNKNOWN);
+                }
+                return this;
+            }
+            if (key.valueType() == AttrKey.ValueType.NAME_LIST) {
+                if (accept(key, AttrKey.ValueType.NAME_LIST)) {
+                    attrs.put(key, StructuredLogFormatter.isValidNameList(value) ? value : AttrKey.UNKNOWN);
+                }
+                return this;
+            }
             if (accept(key, AttrKey.ValueType.ENUM)) {
                 boolean registered = ENUM_FORMAT.matcher(value).matches() && event.enumValues(key).contains(value);
                 String normalized = registered ? value : AttrKey.UNKNOWN;
@@ -236,6 +255,15 @@ public final class EventLog {
                 enumAttrs.put(key, normalized);
             }
             return this;
+        }
+
+        /** 이름 목록 값(쉼표로 잇는다, U9 SD6). 목록 형식이 틀리면 UNKNOWN. null이면 키를 쓰지 않는다. */
+        public Entry attr(AttrKey key, java.util.List<String> names) {
+            if (names == null) {
+                return this;
+            }
+            boolean wellFormed = names.stream().noneMatch(Objects::isNull);
+            return attr(key, wellFormed ? String.join(",", names) : AttrKey.UNKNOWN);
         }
 
         /** 완성된 줄(쓰지 않음). 병합 · 시험에 쓴다. */

@@ -80,3 +80,7 @@ mujoong:
     metric-snapshot-interval: 1s
     log-merge-window: 500ms
     system-sample-interval: 500ms
+  luna:
+    # U9 BR1.4: test 프로필은 루프백 주소만 받는다. 아무것도 듣지 않는 포트라 실공급자로 가지 않는다(R-F1).
+    # 대역을 쓰는 시험은 LunaResponsesStub 주소로 덮어쓴다
+    base-url: http://127.0.0.1:9/v1

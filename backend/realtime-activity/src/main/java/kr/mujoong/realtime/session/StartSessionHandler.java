@@ -12,6 +12,7 @@ import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import kr.mujoong.contract.log.EventLog;
 import kr.mujoong.contract.status.ActivityType;
 import kr.mujoong.contract.status.ConnectionState;
 import kr.mujoong.contract.status.SessionStatus;
@@ -20,6 +21,7 @@ import kr.mujoong.contract.ws.message.PlayApprovedContent;
 import kr.mujoong.contract.ws.message.StartSession;
 import kr.mujoong.realtime.common.db.DbRetry;
 import kr.mujoong.realtime.config.RealtimeProperties;
+import kr.mujoong.realtime.content.LiveContentRegistry;
 import kr.mujoong.realtime.gateway.DeviceConnectionRepository;
 import kr.mujoong.realtime.gateway.DeviceConnectionRow;
 import kr.mujoong.realtime.gateway.SocketRegistry;
@@ -40,6 +42,8 @@ import org.springframework.transaction.support.TransactionTemplate;
  *   <li>한 트랜잭션: 세션 행(PREPARING, 패키지 고정) + 종료 표현 + SessionStateChanged(PREPARING)(④). 충돌 · 부분 유일 색인 위반이면
  *       id로 다시 읽어 있으면 그 상태로 202, 없으면 409.
  *   <li>커밋 뒤 실행기를 띄운다 — 실행기가 START_SESSION을 먼저 보내고 ②를 무장한다(⑤ · R3-1). 실패면 등록을 지운다.
+ *   <li>U8: 실행기를 만들기 직전 판 번호 · 승인 문구 판을 {@link LiveContentRegistry}에 고정하고, 실행기 종료 정리(정산 뒤) 또는 시작 실패에서
+ *       놓는다(BR2.2 · SD4). 선택 속성 approvedSpeech가 없는 옛 패키지도 그대로 받는다(NFR6.1).
  * </ol>
  */
 @Component
@@ -56,7 +60,8 @@ public class StartSessionHandler {
             ConsentSnapshot consentSnapshot,
             ChildContext childContext,
             List<StopExpressionItem> stopExpressions,
-            Map<String, ApprovedContentItem> approvedContent) {
+            Map<String, ApprovedContentItem> approvedContent,
+            Map<String, ApprovedSpeechItem> approvedSpeech) {
 
         public StartCommand {
             Objects.requireNonNull(sessionId, "sessionId");
@@ -68,6 +73,15 @@ public class StartSessionHandler {
             Objects.requireNonNull(childContext, "childContext");
             stopExpressions = stopExpressions == null ? List.of() : List.copyOf(stopExpressions);
             approvedContent = approvedContent == null ? Map.of() : new LinkedHashMap<>(approvedContent);
+            approvedSpeech = approvedSpeech == null ? Map.of() : new LinkedHashMap<>(approvedSpeech);
+        }
+
+        /** U1 ~ U5b 모양(approvedSpeech 없음 — 옛 패키지, U8 NFR6.1). */
+        public StartCommand(UUID sessionId, UUID idempotencyKey, UUID guardianId, UUID childId, UUID deviceId,
+                ActivityType activityType, ConsentSnapshot consentSnapshot, ChildContext childContext,
+                List<StopExpressionItem> stopExpressions, Map<String, ApprovedContentItem> approvedContent) {
+            this(sessionId, idempotencyKey, guardianId, childId, deviceId, activityType, consentSnapshot, childContext,
+                    stopExpressions, approvedContent, Map.of());
         }
 
         /** 아이 맥락 · 동의 · 문구 원문은 문자열 표현에 넣지 않는다(BR8.7). */
@@ -84,6 +98,18 @@ public class StartSessionHandler {
     /** 고정한 승인 문구 한 건. */
     public record ApprovedContentItem(UUID contentVersionId, String text, String audioUrl) {
     }
+
+    /** 고정한 음성 없는 승인 발화 한 건(시작 패키지 approvedSpeech 값, U8 편차 U8-b). 글은 문자열 표현에 내지 않는다. */
+    public record ApprovedSpeechItem(UUID contentVersionId, String text) {
+
+        @Override
+        public String toString() {
+            return "ApprovedSpeechItem[contentVersionId=" + contentVersionId + "]";
+        }
+    }
+
+    /** approvedContent와 같은 code가 approvedSpeech에도 있을 때 남기는 APP_ERROR errorKind(U8 SD4, 문구 원문 없음). */
+    public static final String APPROVED_SPEECH_DUPLICATE_CODE = "APPROVED_SPEECH_DUPLICATE_CODE";
 
     /** 처리 결과. */
     public sealed interface StartResult {
@@ -119,6 +145,7 @@ public class StartSessionHandler {
     private final DbRetry dbRetry;
     private final MujoongClock clock;
     private final Duration joinWait;
+    private final LiveContentRegistry liveContent;
 
     @Autowired
     public StartSessionHandler(
@@ -133,7 +160,9 @@ public class StartSessionHandler {
             PlatformTransactionManager transactionManager,
             DbRetry dbRetry,
             MujoongClock clock,
-            RealtimeProperties properties) {
+            RealtimeProperties properties,
+            LiveContentRegistry liveContent) {
+        this.liveContent = Objects.requireNonNull(liveContent, "liveContent");
         this.registry = Objects.requireNonNull(registry, "registry");
         this.tombstones = Objects.requireNonNull(tombstones, "tombstones");
         this.sessions = Objects.requireNonNull(sessions, "sessions");
@@ -210,9 +239,16 @@ public class StartSessionHandler {
                         .orElseGet(() -> new Rejected(Reason.SESSION_IN_PROGRESS));
             }
             emitter.committed(null, created.get(), SessionTransitions.Origin.REALTIME, traceId);
+            // U8(BR2.2 · W1): 실행 계획을 만들 때 판 번호와 승인 문구 판을 세션 콘텐츠 계획으로 고정하고, 실행기 종료 정리(정산 뒤)에서 놓는다
+            pinContent(command);
             SessionExecutor[] holder = new SessionExecutor[1];
-            holder[0] = new SessionExecutor(plan(command, traceId), services, entry.mailbox(),
-                    () -> registry.remove(command.sessionId(), holder[0]));
+            holder[0] = new SessionExecutor(plan(command, traceId), services, entry.mailbox(), () -> {
+                try {
+                    registry.remove(command.sessionId(), holder[0]);
+                } finally {
+                    liveContent.release(command.sessionId());
+                }
+            });
             SessionExecutor executor = holder[0];
             registry.activate(entry, executor);
             activated = true;
@@ -228,8 +264,32 @@ public class StartSessionHandler {
         } finally {
             if (!activated) {
                 registry.abandon(entry);
+                liveContent.release(command.sessionId());
             }
         }
+    }
+
+    /**
+     * 세션 콘텐츠 계획을 고정한다(U8 W1 · BR1.2 · SD4). 같은 code가 approvedContent에도 있으면 approvedSpeech 쪽을 버리고 APP_ERROR
+     * {@value #APPROVED_SPEECH_DUPLICATE_CODE}만 남긴다(문구 텍스트 · code 값은 남기지 않는다).
+     */
+    void pinContent(StartCommand command) {
+        Map<String, UUID> contentVersions = new LinkedHashMap<>();
+        command.approvedContent().forEach((code, item) -> contentVersions.put(code, item.contentVersionId()));
+        Map<String, LiveContentRegistry.SpeechText> speech = new LinkedHashMap<>();
+        boolean duplicate = false;
+        for (Map.Entry<String, ApprovedSpeechItem> item : command.approvedSpeech().entrySet()) {
+            if (command.approvedContent().containsKey(item.getKey())) {
+                duplicate = true;
+                continue;
+            }
+            speech.put(item.getKey(),
+                    new LiveContentRegistry.SpeechText(item.getValue().contentVersionId(), item.getValue().text()));
+        }
+        if (duplicate) {
+            services.events().appError(EventLog.Component.SESSION_LIFECYCLE, APPROVED_SPEECH_DUPLICATE_CODE);
+        }
+        liveContent.pin(command.sessionId(), contentVersions, speech);
     }
 
     /** ④ 한 트랜잭션. 충돌(같은 id)이면 빈 값. */

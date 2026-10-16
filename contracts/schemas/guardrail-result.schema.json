@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mujoong.invalid/contracts/schemas/guardrail-result.schema.json",
+  "title": "제브 가드레일 검사 결과(어댑터가 만드는 내부 형식)",
+  "description": "어댑터가 공급자 응답을 바꿔 만드는 내부 형식(계약 요약 C-DS8 · C §3.1). categories는 C §3.1의 7개 범주 이름 배열이다(계약 요약의 object 표기를 C의 배열 모양으로 구체화). BLOCK · REVIEW · 시간 초과 · 연결 실패 · 잘못된 JSON · 정책 판 불일치는 송신하지 않는다. 실검사 모드에서 자동 ALLOW는 없다(FR6.4). 기록에는 이유 코드 · 정책 판 · 지연 · 판정만 남긴다. [U8 편차 (U8-a)]",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["decision", "categories", "reasonCode", "policyVersion"],
+  "properties": {
+    "decision": { "enum": ["ALLOW", "BLOCK", "REVIEW"] },
+    "categories": {
+      "type": "array",
+      "uniqueItems": true,
+      "maxItems": 7,
+      "items": {
+        "enum": ["DIAGNOSIS", "TREATMENT", "SCORE", "CAUSE", "GENERALIZATION", "EMOTION_CLAIM", "PRESSURE"]
+      }
+    },
+    "policyFlags": {
+      "description": "맥락 규칙 플래그. 구체 값은 정책 판 계약으로 정한다(C §3.1)",
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]*$" }
+    },
+    "reasonCode": {
+      "description": "로그에 남길 수 있는 최소 이유 코드. 모델의 자유 서술을 담지 않는다",
+      "type": "string",
+      "pattern": "^[A-Z][A-Z0-9_]{0,79}$"
+    },
+    "reviewNeeded": {
+      "description": "decision이 REVIEW이면 true",
+      "type": "boolean"
+    },
+    "policyVersion": { "type": "string", "minLength": 1, "maxLength": 80 }
+  },
+  "examples": [
+    {
+      "decision": "BLOCK",
+      "categories": ["GENERALIZATION"],
+      "policyFlags": ["UNSUPPORTED_CHILD_TRAIT_CLAIM"],
+      "reasonCode": "UNSUPPORTED_GENERALIZATION",
+      "reviewNeeded": false,
+      "policyVersion": "guardrail-v1"
+    }
+  ]
+}

@@ -86,7 +86,11 @@ class TimeLiteralScanTest {
             new Allowed(CONTRACT + "time/DelayQueueTimerDriver.java", "getDelay(TimeUnit.NANOSECONDS)",
                     "Delayed 계약의 단위 변환으로 두 지연을 비교한다"),
             new Allowed(CORE + "record/RecordCalendar.java", "day.plusDays(1)",
-                    "26 달력의 '그날'은 하루 단위 날짜 경계다(다음 날 0시, U4a-J8) — 설정할 시간 값이 아니다"));
+                    "26 달력의 '그날'은 하루 단위 날짜 경계다(다음 날 0시, U4a-J8) — 설정할 시간 값이 아니다"),
+            new Allowed(CORE + "luna/LunaTransport.java", ".orTimeout(limit.toNanos(), TimeUnit.NANOSECONDS)",
+                    "단위 표기: 시도 시한은 호출자 마감과 text-ai 설정 키 중 작은 Duration이다(U9 BR5.1 · SD3, orTimeout에 Duration 판이 없다)"),
+            new Allowed(CORE + "luna/CoreLunaClient.java", "TimeUnit.NANOSECONDS.sleep(duration.toNanos())",
+                    "단위 표기: 재시도 대기는 mujoong.text-ai.retry.backoff 설정 또는 공급자 Retry-After Duration이다(U9 BR3.6 · SD5)"));
 
     @Test
     void everyTimeLiteralInCoreProductionSourcesIsOnTheAllowList() {

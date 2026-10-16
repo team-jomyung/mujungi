@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mujoong.invalid/contracts/schemas/ai-rejudgment-output.schema.json",
+  "title": "기록용 재판정 출력(Luna 구조화 출력, 새 연습 흐름)",
+  "description": "core 결과 작업(U14)이 새 연습 흐름(record.practice.flowVersion이 있는 기록)의 장면마다 받는 재판정 모양(계약 요약 C-DS6 · FR7.4, ai-io.md 6.2를 새 시점에 맞춤). timing은 value가 functional일 때만 값이 있고 그 밖은 null이다. 재시도는 JOB_ATTEMPT(ai-io.md 10절). [U8 편차 (U8-a)]",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["scenes"],
+  "properties": {
+    "scenes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["sceneRunId", "value", "timing"],
+        "properties": {
+          "sceneRunId": { "$ref": "common.schema.json#/$defs/Uuid" },
+          "value": { "enum": ["functional", "partial", "none", "uncertain"] },
+          "timing": { "enum": ["IMMEDIATE", "AFTER_REASK", "AFTER_HELP", null] }
+        }
+      }
+    }
+  },
+  "examples": [
+    {
+      "scenes": [
+        { "sceneRunId": "00000000-0000-4000-8000-000000000901", "value": "functional", "timing": "AFTER_REASK" },
+        { "sceneRunId": "00000000-0000-4000-8000-000000000902", "value": "uncertain", "timing": null }
+      ]
+    }
+  ]
+}

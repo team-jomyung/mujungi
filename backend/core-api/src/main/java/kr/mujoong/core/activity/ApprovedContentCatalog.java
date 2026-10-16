@@ -19,6 +19,8 @@ import org.springframework.stereotype.Component;
  * audioUrl, 세션에 고정). 현재 정책 버전은 CONSENT_POLICY의 APPROVED 최고 버전 content_text다(J114, 임시 '1.0'). B1은 캐시 없이 DB를
  * 직접 읽는다(PD-7 캐시는 3.6 이후, R3-21 344행). 승인 문구 · 음성이 없으면 시작할 수 없으므로 빈 값을 돌려주고 호출자가 실패로 다룬다.
  * 새 버전 · 승인은 참조 시드(infra/seed)로 넣는다 — 앱에 쓰기 경로는 없다(U2-J17).
+ *
+ * <p>U8: 음성 파일 없는 승인 발화(APPROVED_SPEECH)는 {@link #approvedSpeech}가 고정해 시작 패키지의 선택 속성 approvedSpeech로 넘긴다(BR1.2).
  */
 @Component
 public class ApprovedContentCatalog {
@@ -77,6 +79,26 @@ public class ApprovedContentCatalog {
         return pinned;
     }
 
+    /**
+     * 음성 파일 없는 승인 발화를 한 번에 고정한다(U8 · BR1.2 · BR1.3 · 설계 검토 R-01 ③). 종류가 {@link ApprovedContent#TYPE_APPROVED_SPEECH}이고
+     * APPROVED 판이 있는 code만 결과에 넣는다(입력 순서). 판은 {@link #latestApproved}와 같은 APPROVED 최고 판이고, 음성 있는 항목만 거르는
+     * {@link #sessionContent}는 쓰지 않는다. 종류 행이 없거나 다른 종류(APPROVED_AUDIO · POLICY_TERMS 등)인 code는 빠진다.
+     *
+     * @return code → 고정 발화(시작 패키지 approvedSpeech 값 모양)
+     */
+    public Map<String, SpeechItem> approvedSpeech(Collection<String> contentCodes) {
+        Map<String, SpeechItem> pinned = new LinkedHashMap<>();
+        for (String code : Objects.requireNonNull(contentCodes, "contentCodes")) {
+            boolean speech = repository.findByContentCode(code)
+                    .map(content -> ApprovedContent.TYPE_APPROVED_SPEECH.equals(content.getContentType()))
+                    .orElse(false);
+            if (speech) {
+                latestApproved(code).ifPresent(content -> pinned.put(code, new SpeechItem(content.contentVersionId(), content.text())));
+            }
+        }
+        return pinned;
+    }
+
     /** 세션 패키지 문구: 같은 조회({@link #latestApproved})에 '음성 있음'만 더한다(2차 리뷰 6). */
     private Optional<ApprovedItem> item(String contentCode) {
         return latestApproved(contentCode)
@@ -95,6 +117,28 @@ public class ApprovedContentCatalog {
             if (audioUrl == null || !audioUrl.startsWith(ApprovedContentVersion.AUDIO_URL_PREFIX)) {
                 throw new IllegalArgumentException("audioUrl은 /media/approved/ 상대 경로여야 한다");
             }
+        }
+    }
+
+    /**
+     * 패키지의 음성 없는 승인 발화 한 칸(계약 approvedSpeech 값 모양 {contentVersionId, text}, U8 편차 U8-b). 글은 계약 길이(1 ~ 200자) 안이어야
+     * 하고, 문자열 표현에는 내지 않는다.
+     */
+    public record SpeechItem(UUID contentVersionId, String text) {
+
+        /** 계약 approvedSpeech.text 최대 길이(코드 포인트). */
+        public static final int TEXT_MAX = 200;
+
+        public SpeechItem {
+            Objects.requireNonNull(contentVersionId, "contentVersionId");
+            if (text == null || text.isBlank() || text.codePointCount(0, text.length()) > TEXT_MAX) {
+                throw new IllegalArgumentException("승인 발화 text가 비었거나 계약 길이를 넘는다");
+            }
+        }
+
+        @Override
+        public String toString() {
+            return "SpeechItem[contentVersionId=" + contentVersionId + "]";
         }
     }
 

@@ -12,6 +12,7 @@ import java.util.function.Supplier;
 import java.util.regex.Pattern;
 import kr.mujoong.contract.log.OwnerHasher;
 import kr.mujoong.realtime.config.RealtimeProperties;
+import kr.mujoong.realtime.content.LiveContentResources;
 import kr.mujoong.realtime.gate.SeedDictionary;
 import kr.mujoong.realtime.voice.ProviderHosts;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -31,6 +32,8 @@ import org.springframework.stereotype.Component;
  *       호스트만(J141). 규칙은 {@link ProviderHosts} 한 곳이다.
  *   <li>시드 사전 로딩: 파일 없음 · 파싱 실패 · 중복 id · 빈 범주 · 패턴 문법 위반이면 거부(SD-18 · A5). 로딩한 사전은
  *       {@link #dictionary()}로 출력 게이트와 S2b가 쓴다(읽기 전용 상수, 핫 리로드 없음).
+ *   <li>U8 판 리소스 적재: 판정 선택지 판 · 가드레일 정책 판이 없거나 형식이 틀리면 거부(BR2.1 · SD5). 로딩한 판은
+ *       {@link #liveContent()}로 세션 콘텐츠 계획({@code LiveContentRegistry})이 쓴다.
  * </ol>
  *
  * <p>Core에도 같은 비밀 규칙의 점검이 따로 있다(LC-11). 내부 토큰 형식 판정 {@link #isValidInternalToken}은 내부 HTTP 인증 장치도 쓴다.
@@ -56,8 +59,9 @@ public class RealtimeStartupChecks {
     private static final Set<String> PUBLIC_PROFILES = Set.of("demo", "prod");
 
     private final SeedDictionary dictionary;
+    private final LiveContentResources liveContent;
 
-    /** Spring 생성자: 환경 변수 · 설정 · classpath 사전으로 점검한다. */
+    /** Spring 생성자: 환경 변수 · 설정 · classpath 사전 · 판 리소스로 점검한다. */
     @Autowired
     public RealtimeStartupChecks(Environment environment, RealtimeProperties properties) {
         this(new Inputs(
@@ -66,17 +70,29 @@ public class RealtimeStartupChecks {
                         properties.observability().ownerHashSecret(),
                         properties.provider().url(),
                         List.of(environment.getActiveProfiles())),
-                SeedDictionary::loadDefault);
+                SeedDictionary::loadDefault, LiveContentResources::loadDefault);
     }
 
     /**
-     * 시험 · 대역 생성자.
+     * 시험 · 대역 생성자(U1 모양). 판 리소스는 classpath 기본 판을 읽는다.
      *
      * @param dictionaryLoader 사전 적재기(운영은 classpath 리소스)
      */
     public RealtimeStartupChecks(Inputs inputs, Supplier<SeedDictionary> dictionaryLoader) {
+        this(inputs, dictionaryLoader, LiveContentResources::loadDefault);
+    }
+
+    /**
+     * 시험 · 대역 생성자(U8). 판 리소스(판정 선택지 · 가드레일 정책) 적재가 실패해도 기동을 거부한다(BR2.1 · NFR2.3 · SD5).
+     *
+     * @param dictionaryLoader 사전 적재기(운영은 classpath 리소스)
+     * @param liveContentLoader 판 리소스 적재기(운영은 classpath 리소스)
+     */
+    public RealtimeStartupChecks(Inputs inputs, Supplier<SeedDictionary> dictionaryLoader,
+            Supplier<LiveContentResources> liveContentLoader) {
         Objects.requireNonNull(inputs, "inputs");
         Objects.requireNonNull(dictionaryLoader, "dictionaryLoader");
+        Objects.requireNonNull(liveContentLoader, "liveContentLoader");
         List<String> problems = problems(inputs);
         if (!problems.isEmpty()) {
             throw reject("기동 점검 S1b 거부(값 미출력): " + String.join(", ", problems));
@@ -87,11 +103,22 @@ public class RealtimeStartupChecks {
             // 메시지는 사유 열거값과 항목 id · 범주 이름뿐이다(패턴 · 전사 값 없음, SD-18)
             throw reject("기동 점검 S1b 거부: " + e.getMessage());
         }
+        try {
+            this.liveContent = Objects.requireNonNull(liveContentLoader.get(), "liveContent");
+        } catch (LiveContentResources.LoadException e) {
+            // 메시지는 사유 열거값과 자원 · 지점 · 키 이름뿐이다(질문 · 선택지 · 프롬프트 원문 없음, U8 SD5)
+            throw reject("기동 점검 S1b 거부: " + e.getMessage());
+        }
     }
 
     /** 로딩을 마친 시드 사전(읽기 전용). */
     public SeedDictionary dictionary() {
         return dictionary;
+    }
+
+    /** 로딩을 마친 판 리소스(읽기 전용, U8). */
+    public LiveContentResources liveContent() {
+        return liveContent;
     }
 
     /**

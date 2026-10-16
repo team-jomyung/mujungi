@@ -78,6 +78,20 @@
         }
       }
     },
+    "approvedSpeech": {
+      "description": "음성 파일 없는 승인 발화(content_type APPROVED_SPEECH, U8 · BR1.2). 선택 속성이고 없으면 빈 것으로 본다. 각 code의 APPROVED 최고 판을 세션에 고정한다(BR1.3). 한 code는 approvedContent와 approvedSpeech 중 하나에만 들어간다(스키마로 막지 못해 Core 조립 시험 · Realtime 수신 검사가 확인). [U8 편차 (U8-b)]",
+      "type": "object",
+      "propertyNames": { "pattern": "^[A-Z][A-Z0-9_]*$" },
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["contentVersionId", "text"],
+        "properties": {
+          "contentVersionId": { "$ref": "common.schema.json#/$defs/Uuid" },
+          "text": { "type": "string", "minLength": 1, "maxLength": 200 }
+        }
+      }
+    },
     "practice": {
       "description": "U5 확장 자리. U1 자유대화에서는 null이다. 판정 기준은 판정 역할에만 쓰고 공급자 요청에는 넣지 않는다(NFR3.2 · SD-20)",
       "anyOf": [

@@ -22,3 +22,10 @@ condition = "AND"
 paths = ['''(^|/)infra/ci/image-checks\.sh$''']
 regexTarget = "line"
 regexes = ['''Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==''']
+
+[[allowlists]]
+description = "비밀 아님: U9 작업 기록이 예전 오탐을 설명하며 인용한 모델 이름 \"gpt-6-luna-2026.10\"(시험 응답 모델 속성 값)을 generic-api-key가 키로 오인. 커밋 5386f9f부터 이력에 남는다(이력 재작성 대신 허용, 사람 리뷰 필요 R-F9)"
+condition = "AND"
+paths = ['''(^|/)aidlc/spaces/default/intents/261015-doc-sync-code-update/construction/u9-luna-clients/code-generation/code-summary\.md$''']
+regexTarget = "line"
+regexes = ['''AttrKey\.RESPONSE_MODEL, "gpt-6-luna-2026\.10"''']

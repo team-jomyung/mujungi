@@ -77,12 +77,50 @@ public record RealtimeProperties(
         }
     }
 
-    /** 계약 7절 시간 키와 J80이 허용한 7절 밖 시간 키(recorder). */
-    public record Timing(SessionTiming session, DeviceTiming device, RecorderTiming recorder) {
+    /**
+     * 계약 7절 시간 키와 J80이 허용한 7절 밖 시간 키(recorder). U8(timing.md 13절 · BR3.1)이 판정 · 가드레일 · 새 연습 흐름 묶음을 더했다.
+     */
+    public record Timing(
+            SessionTiming session,
+            DeviceTiming device,
+            RecorderTiming recorder,
+            JudgmentTiming judgment,
+            GuardrailTiming guardrail,
+            ConversationTiming conversation) {
         public Timing {
             required(session, "mujoong.timing.session");
             required(device, "mujoong.timing.device");
             required(recorder, "mujoong.timing.recorder");
+            required(judgment, "mujoong.timing.judgment");
+            required(guardrail, "mujoong.timing.guardrail");
+            required(conversation, "mujoong.timing.conversation");
+        }
+    }
+
+    /** U8(timing.md 13절): 진행 중 판정 Luna 한 번의 상한(FR3.4) · 아이 말 끝 뒤 응답 준비 대기(FR5.3). U11이 읽는다. */
+    public record JudgmentTiming(Duration liveBudget, Duration responseReady) {
+        public JudgmentTiming {
+            positive(liveBudget, "mujoong.timing.judgment.live-budget");
+            positive(responseReady, "mujoong.timing.judgment.response-ready");
+        }
+    }
+
+    /** U8(timing.md 13절): 제브 가드레일 검사 한 번의 상한(FR6.2). 넘기면 막힘이다. U13이 읽는다. */
+    public record GuardrailTiming(Duration jevBudget) {
+        public GuardrailTiming {
+            positive(jevBudget, "mujoong.timing.guardrail.jev-budget");
+        }
+    }
+
+    /**
+     * U8(timing.md 13절): 새 연습 흐름의 무응답 재안내 대기(AC1.9.1) · 집중 연습 상한(AC1.5.4) · 목표 진행 상한(FR4.5). U5b의
+     * {@code timing.practice}와 이름 공간을 나눴다. U12가 읽는다.
+     */
+    public record ConversationTiming(Duration noResponseWait, Duration focusMax, Duration goalActiveLimit) {
+        public ConversationTiming {
+            positive(noResponseWait, "mujoong.timing.conversation.no-response-wait");
+            positive(focusMax, "mujoong.timing.conversation.focus-max");
+            positive(goalActiveLimit, "mujoong.timing.conversation.goal-active-limit");
         }
     }
 

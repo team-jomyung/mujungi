@@ -29,5 +29,21 @@
     "scope": "refactor",
     "status": "in-flight",
     "request": "710b595d"
+  },
+  {
+    "uuid": "01a13ce8-9b59-7095-8992-5995c18eff30",
+    "slug": "local-run-readiness",
+    "dirName": "261015-local-run-readiness",
+    "scope": "classic",
+    "status": "in-flight",
+    "request": "ccecef79"
+  },
+  {
+    "uuid": "01a13e5c-0ac9-786b-8d26-8e248e3c22b1",
+    "slug": "doc-sync-code-update",
+    "dirName": "261015-doc-sync-code-update",
+    "scope": "classic",
+    "status": "complete",
+    "request": "e4d25f62"
   }
 ]
