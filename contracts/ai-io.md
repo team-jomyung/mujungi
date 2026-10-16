@@ -346,3 +346,18 @@ Luna 호출부(core-api · realtime-activity 각자)는 공급자 시도마다 `
 
 - 형식에 맞지 않는 LABEL · NAME_LIST 값은 조용히 버리지 않고 `UNKNOWN`으로 쓴다. `lunaOutcome`이 `OK`가 아니면 줄 수준은 WARN이다.
 - 줄의 `component`는 `core-api/LunaClient` 또는 `realtime/LunaClient`다.
+
+### 10.9 U9 Luna 호출 설정 · 주소
+
+- 허용 호스트: `api.openai.com`
+- 주소 규칙: demo · prod · 프로필 없음 · 모르는 프로필 · `lunaLiveTest`는 `https` + 허용 호스트만(STRICT), dev는 그 규칙 또는 루프백(DEV), test는 루프백만(TEST). 어기면 기동을 거부하고(`MUJOONG_STARTUP_REJECTED`), 보내기 직전에도 같은 규칙으로 다시 확인한다. 리다이렉트를 따르지 않고 프록시를 쓰지 않는다(U9 BR1.4 · SD3).
+- 실제 어댑터는 env `OPENAI_API_KEY`가 비어 있지 않고 공백뿐이 아닐 때만 켜진다(10.7 · U9 Q2-B). 아래 키는 시간 값이 아니며 `timing.md`에 두지 않는다. 시도 시한은 기존 키(core `mujoong.text-ai.request-timeout` · `mujoong.text-ai.result.request-timeout`, realtime `mujoong.timing.judgment.live-budget`)와 호출자 마감 중 짧은 쪽이다(U9 BR5.1).
+
+| 설정 키 | 기본값 | 앱 | 뜻 |
+|---|---|---|---|
+| `mujoong.luna.model` | `${OPENAI_ANALYSIS_MODEL:gpt-6-luna}` | core-api | 요청 모델 이름. env가 비면 `gpt-6-luna` |
+| `mujoong.luna.model` | `${OPENAI_JUDGE_MODEL:gpt-6-luna}` | realtime | 같음 |
+| `mujoong.luna.base-url` | `https://api.openai.com/v1` | core-api · realtime | Responses API 기준 주소(`{base-url}/responses`). test 프로필은 루프백으로 덮어쓴다 |
+| `mujoong.luna.max-response-bytes` | `1000000` | core-api · realtime | 응답 본문 바이트 상한. 넘으면 `LENGTH_EXCEEDED` |
+| `mujoong.luna.purpose.<목적>.max-output-tokens` | `4000` | core-api · realtime | 요청 `max_output_tokens`. core 목적: `scenario-generation` · `scenario-review` · `seed-generation` · `result-text` · `goal-candidates` · `rejudgment`, realtime 목적: `judgment-live` |
+| `mujoong.luna.purpose.<목적>.reasoning-effort` | `medium` | core-api · realtime | 요청 `reasoning.effort`(`none` · `minimal` · `low` · `medium` · `high`) |

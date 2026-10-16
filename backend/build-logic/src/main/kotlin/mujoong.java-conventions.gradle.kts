@@ -114,6 +114,48 @@ tasks.withType<Test>().configureEach {
     finalizedBy(tasks.named("jacocoTestReport"))
 }
 
+// ---- Luna 실호출 시험 분리 (U9 SD8 · BR9.3 · NFR5.1 · 편차 U9-c) ----
+// 실공급자를 부르는 시험(@Tag("luna-live"))은 기본 test 작업에서 언제나 빠지고, 사람이 키를 넣고 돌리는 lunaLiveTest만 포함한다.
+// 고정 제외는 공통 withType<Test> 블록이 아니라 기본 test 작업에만 건다(lunaLiveTest의 포함 필터와 부딪히지 않게).
+// lunaLiveTest는 check · build에 물리지 않는다. 확인은 루트 verifyLunaLiveIsolation(check가 의존)이 한다.
+
+/** 실호출 시험 태그. */
+val lunaLiveTag = "luna-live"
+
+tasks.named<Test>("test") {
+    options {
+        (this as JUnitPlatformOptions).excludeTags(lunaLiveTag)
+    }
+    // 고정 제외 값도 -PexcludeTags와 같이 작업 입력(캐시 키)에 넣는다
+    inputs.property("fixedExcludeTags", lunaLiveTag)
+    // 기본 시험은 실제 키를 보지 않는다(R-F1 · R-F3). 개발 PC env에 키가 있어도 시험 JVM에는 넘기지 않는다
+    environment.remove("OPENAI_API_KEY")
+}
+
+val testSourceSet = the<SourceSetContainer>()["test"]
+tasks.register<Test>("lunaLiveTest") {
+    group = "verification"
+    description = "Luna 실호출 시험(@Tag(\"luna-live\"), 사람이 env OPENAI_API_KEY를 넣고 돌림). 키가 없으면 SKIPPED_NO_KEY로 끝난다."
+    testClassesDirs = testSourceSet.output.classesDirs
+    classpath = testSourceSet.runtimeClasspath
+    options {
+        (this as JUnitPlatformOptions).setIncludeTags(setOf(lunaLiveTag))
+    }
+    inputs.property("fixedIncludeTags", lunaLiveTag)
+    // 결과 보고서(원문 없음, 목적 · 응답 모델 · 지연 · 사유만)
+    val report = layout.buildDirectory.file("luna-live/report.txt")
+    outputs.file(report).withPropertyName("lunaLiveReport")
+    systemProperty("mujoong.luna.live.report", report.get().asFile.absolutePath)
+    // 실호출은 매번 새로 돈다(캐시된 '통과'를 다시 보고하지 않음)
+    outputs.upToDateWhen { false }
+    // 공통 블록의 커버리지 보고(jacocoTestReport → test 의존)를 끈다: 실호출 작업이 기본 시험을 끌고 오지 않게
+    setFinalizedBy(emptyList<Any>())
+    extensions.configure<JacocoTaskExtension> {
+        isEnabled = false
+    }
+    shouldRunAfter(tasks.named("test"))
+}
+
 // ---- 커버리지 (Step 5 · J91 · J107 · J137) ----
 
 val coverageScopeName: String? = providers.gradleProperty("coverageScope").orNull

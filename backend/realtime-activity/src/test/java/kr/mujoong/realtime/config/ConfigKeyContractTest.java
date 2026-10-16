@@ -25,6 +25,8 @@ import java.util.TreeSet;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
+import kr.mujoong.realtime.luna.LunaHosts;
+import kr.mujoong.realtime.luna.LunaProperties;
 import kr.mujoong.realtime.voice.ProviderHosts;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -80,7 +82,9 @@ class ConfigKeyContractTest {
     /** 환경 변수로만 받는 값(비밀이 아닌 시험 값). */
     private static final Map<String, Object> ENV = Map.of(
             "MUJOONG_SECURITY_ALLOWED_ORIGIN", "https://mujoong.invalid",
-            "MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET", "");
+            "MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET", "",
+            // U9 BR1.5: 판정 모델 이름은 env로만 받는다(비밀 아님). 시험 값은 기본 이름과 같다
+            "OPENAI_JUDGE_MODEL", "gpt-6-luna");
 
     // ------------------------------------------------------------------ timing.md ↔ application.yml
 
@@ -150,13 +154,16 @@ class ConfigKeyContractTest {
     void applicationYmlAndRealtimePropertiesNameTheSameKeysWithTheSameValues() {
         Path base = MAIN_RESOURCES.resolve("application.yml");
         Map<String, Object> yml = mujoongKeys(flatten(base));
-        Map<String, RecordComponent> leaves = recordLeaves(RealtimeProperties.class, "mujoong");
+        Map<String, RecordComponent> leaves = new TreeMap<>(recordLeaves(RealtimeProperties.class, "mujoong"));
+        // U9 SD12: Luna 호출 설정은 따로 묶는 레코드다
+        leaves.putAll(recordLeaves(LunaProperties.class, "mujoong.luna"));
 
         assertThat(keyMismatches(yml.keySet(), leaves.keySet(), RECORD_KEYS_WITHOUT_DEFAULT))
                 .as("yml 키 ↔ 설정 레코드 키").isEmpty();
 
         RealtimeProperties bound = bind(base);
-        Map<String, Object> boundValues = recordValues(bound, "mujoong");
+        Map<String, Object> boundValues = new TreeMap<>(recordValues(bound, "mujoong"));
+        boundValues.putAll(recordValues(bindLuna(base), "mujoong.luna"));
         assertThat(valueMismatches(yml, leaves, boundValues, placeholderResolver(base)))
                 .as("yml 값과 레코드에 묶인 값").isEmpty();
         assertThat(bound.provider().url()).as("application.yml만으로는 공급자 주소가 비어 기동 점검(S1b)이 거부한다").isNull();
@@ -168,15 +175,21 @@ class ConfigKeyContractTest {
         Path base = MAIN_RESOURCES.resolve("application.yml");
         Path testYml = TEST_RESOURCES.resolve("application-test.yml");
         Map<String, Object> overrides = mujoongKeys(flatten(testYml));
-        Map<String, RecordComponent> leaves = recordLeaves(RealtimeProperties.class, "mujoong");
+        Map<String, RecordComponent> leaves = new TreeMap<>(recordLeaves(RealtimeProperties.class, "mujoong"));
+        // U9 BR1.4: test 프로필은 Luna 주소를 루프백으로 덮어쓴다(SD12 레코드)
+        leaves.putAll(recordLeaves(LunaProperties.class, "mujoong.luna"));
 
         assertThat(overrides).as("시험 축소값(빈 대조 아님)").isNotEmpty();
         assertThat(overrides.keySet()).as("설정 레코드가 읽지 않는 시험 키(오타는 조용히 버려진다)")
                 .allMatch(leaves::containsKey);
 
         RealtimeProperties bound = bind(base, testYml);
-        assertThat(valueMismatches(overrides, leaves, recordValues(bound, "mujoong"), placeholderResolver(base, testYml)))
+        Map<String, Object> boundValues = new TreeMap<>(recordValues(bound, "mujoong"));
+        LunaProperties luna = bindLuna(base, testYml);
+        boundValues.putAll(recordValues(luna, "mujoong.luna"));
+        assertThat(valueMismatches(overrides, leaves, boundValues, placeholderResolver(base, testYml)))
                 .as("시험 값이 레코드에 그대로 묶임").isEmpty();
+        assertThat(LunaHosts.check(luna.baseUrl(), LunaHosts.Mode.TEST)).as("test 프로필 Luna 주소는 루프백(BR1.4)").isEmpty();
         assertThat(bound.timing().session().deviceAckTimeout()).isLessThan(Duration.ofSeconds(20));
         assertThat(bound.internalHttp().verifyTokenTimeout()).isLessThan(bound.timing().device().helloTimeout());
     }
@@ -451,6 +464,15 @@ class ConfigKeyContractTest {
 
     private static PropertySourcesPlaceholdersResolver placeholderResolver(Path... files) {
         return new PropertySourcesPlaceholdersResolver(sources(files));
+    }
+
+    /** {@code mujoong.luna.*}를 Luna 설정 레코드로 묶는다(U9 SD12). */
+    static LunaProperties bindLuna(Path... files) {
+        MutablePropertySources sources = sources(files);
+        Binder binder = new Binder(ConfigurationPropertySources.from(sources),
+                new PropertySourcesPlaceholdersResolver(sources), ApplicationConversionService.getSharedInstance());
+        return binder.bind("mujoong.luna", Bindable.of(LunaProperties.class))
+                .orElseThrow(() -> new IllegalStateException("mujoong.luna 설정을 묶지 못했다"));
     }
 
     static RealtimeProperties bind(Path... files) {
