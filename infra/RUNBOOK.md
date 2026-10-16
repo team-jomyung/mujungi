@@ -235,8 +235,29 @@ aws ssm put-parameter --name /mujoong/demo/GHCR_PULL_USER --type String --value 
   바꾼 뒤에는 env를 다시 렌더하고 core-api · web을 재생성해야 반영된다.
 - GHCR 패키지를 공개로 두기로 정하면 `GHCR_PULL_TOKEN` · `GHCR_PULL_USER`를 만들지 않는다(배포가 로그인하지 않는다, J99).
 - `NEO4J_AUTH`는 Neo4j를 켜는 유닛이 만든다.
+- **(U9) `OPENAI_API_KEY`를 넣기 전 R-F15 확인 — 기록 없이는 넣지 않는다.** 키를 넣는 순간 core-api · realtime의 Luna 어댑터가 켜지고
+  실제 아동 대화 · 결과 자료가 공급자로 나갈 수 있다. 코드가 막지 않으므로(편차 U9-b) 이 확인이 유일한 방어선이다.
+  - [ ] 공급자 약관 · 데이터 사용 조건(학습 사용 · 보존 · 저장 끔 `store=false` 적용 범위)을 확인했다.
+  - [ ] 공급자의 개인정보 처리 조건(처리 위치 · 하위 처리자 · 삭제)을 확인했다.
+  - [ ] 아동 데이터의 외부 모델 전달이 보호자 동의 범위 안인지 확인했다(동의 문구 · 판).
+  - [ ] 아래 확인 기록 표에 한 줄을 남겼다(키 값 · 계정 정보는 적지 않는다, R-F3).
+
+  | 확인자 | 확인 날짜(UTC) | 확인한 약관 · 처리 조건 판(또는 문서 날짜) | 환경 | 비고 |
+  |---|---|---|---|---|
+  | (아직 없음 — 첫 투입 전에 채운다) | | | demo | |
+
+  demo에 키를 넣는 날의 순서(cicd-pipeline 4절):
+  0. 모델 이름을 기본값(`gpt-6-luna`)이 아닌 값으로 쓰려면 먼저 `OPENAI_ANALYSIS_MODEL` · `OPENAI_JUDGE_MODEL`을 `infra/compose.demo.yml` ·
+     `render-env`에 더하는 변경이 병합돼 있어야 한다(없으면 기본값으로만 동작).
+  1. 위 확인 기록 표에 한 줄을 남긴다. 기록이 없으면 넣지 않는다.
+  2. 아래 명령으로 Parameter Store에 `OPENAI_API_KEY`를 넣고, 같은 SHA로 `DEPLOY`를 다시 실행한다(12절 회전 표와 같은 길: core-api · realtime이
+     다시 만들어진다).
+  3. 기동 로그에서 `LUNA_STARTUP` `lunaState=ENABLED`를 확인한다(8.4).
+  - **롤백:** Parameter Store의 `OPENAI_API_KEY`를 비우고(빈 값 또는 삭제) 같은 SHA로 `DEPLOY`를 다시 실행한 뒤 `LUNA_STARTUP`
+    `lunaState=DISABLED_NO_KEY`를 확인한다. 어댑터가 꺼지면 지금과 같은 실패 경로라 데이터 변경 · 마이그레이션 되돌림이 없다. 재기동만으로는
+    컨테이너 환경이 갱신되지 않으므로 쓰지 않는다.
 - (선택, U8) Luna 키 `OPENAI_API_KEY`(core-api · realtime이 받음)와 제브 키 `JEV_API_KEY`(realtime만 받음). 넣지 않으면 렌더러가 빈 변수로 두고
-  앱은 실제 어댑터를 끈다. 실제 아동 데이터 전달은 공급자 약관 · 보호자 동의 확인 전까지 막혀 있다(R-F15, `contracts/ai-io.md` 10절).
+  앱은 실제 어댑터를 끈다. `OPENAI_API_KEY`는 바로 위 R-F15 확인 기록이 있을 때만 넣는다(`contracts/ai-io.md` 10.2 · 10.10).
 
   ```bash
   umask 077; tmp="$(mktemp)"
@@ -486,6 +507,23 @@ mj logs --no-log-prefix --since 1h core-api realtime 2>/dev/null | grep -E '"eve
 - 키를 넣지 않은 지금은 `LUNA_STARTUP` `DISABLED_NO_KEY`만 보이고 `LUNA_CALL`은 없다(어댑터 꺼짐 = 기존 실패 경로).
 - `lunaOutcome`이 `OK`가 아닌 줄은 WARN이다. `AUTH_FAILED`가 이어지면 키를 확인하고(12절 회전), `RATE_LIMITED` · `SERVER_ERROR`가
   이어지면 공급자 상태를 본다. 호출자마다 실패 경로(판정 보류 · 결과 작업 재시도 · `SCENARIO_GEN_FAILED`)가 따로 있다.
+
+### 8.5 Luna 실호출 시험 `lunaLiveTest` (U9, 개발 PC) [개발 PC]
+
+실공급자를 부르는 유일한 시험이다(편차 U9-c). 기본 `test` · `check` · CI · `verify.sh`에는 들어가지 않는다. 키는 그 PC의 env로만 넣고
+채팅 · 파일 · 저장소에 두지 않는다(R-F3 · R-F13). 합성 자료만 보낸다(R-F15).
+
+```bash
+cd backend
+read -r -s -p 'OPENAI_API_KEY: ' OPENAI_API_KEY && export OPENAI_API_KEY && echo
+./gradlew lunaLiveTest          # core-api · realtime 둘 다(하나만이면 :core-api:lunaLiveTest)
+unset OPENAI_API_KEY
+cat core-api/build/luna-live/report.txt realtime-activity/build/luna-live/report.txt
+```
+
+- 보고서 한 줄 = 목적 · 결과 사유 · 응답 모델 · 지연(원문 없음). 키가 없으면 `outcome=SKIPPED_NO_KEY`이고 시험은 '건너뜀'이다(통과 아님).
+- 결과는 '실제 API · 합성 자료' 증거로만 적고, 기본 시험 · 끝-끝 결과(테스트 대역)와 섞지 않는다(R-M11).
+- 첫 실행에서는 목적마다 요청용 스키마 사본이 거절되지 않는지(`REQUEST_REJECTED` 아님)와 `temperature` 없이 받아들여지는지를 먼저 본다.
 
 ## 9. 복구 시나리오 (infra-spec 4.5.3)
 

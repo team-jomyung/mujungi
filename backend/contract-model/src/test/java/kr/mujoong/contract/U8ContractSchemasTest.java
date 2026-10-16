@@ -300,6 +300,9 @@ class U8ContractSchemasTest {
         assertThat(section).as("ai-io.md 10절").isNotEmpty();
         assertThat(section).contains("**R-F15** 공급자 약관 · 보호자 동의 확인 전에는 실제 아동 데이터를 외부 모델로 보내지 않는다. "
                 + "실호출은 합성 자료로만 한다.");
+        // U9 SD10 · NFR3.7(R-M10): 'U9가 정한다' 자리는 U9의 결정 문장으로 바뀌었다(편차 U9-b). 옛 위임 문장이 남지 않는다
+        assertThat(section).contains("U9는 코드로 판정하지 않고 RUNBOOK 확인 기록으로 지킨다(편차 U9-b)");
+        assertThat(section).doesNotContain("'확인됨' 상태를 코드에서 판정하는 방법은 U9가 정한다");
         assertThat(section).contains("`MUJOONG_TEXT_AI_API_KEY`는 쓰지 않는다");
         assertThat(section).contains("`UNKNOWN` · `NOT_MATCHED`는 제브 생략 근거가 아니며");
         for (String file : U8_SCHEMAS) {

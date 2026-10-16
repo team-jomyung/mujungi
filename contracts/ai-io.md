@@ -281,7 +281,7 @@ U8(계약 · 버전 리소스)이 정한 공통 규칙이다. Luna · 제브 구
 ### 10.2 금지 필드와 외부 전달
 
 - 외부 AI(Luna · 제브)로 보내는 필드는 스키마가 허용한 최소 필드뿐이다. 다음은 어느 요청 스키마의 속성도 될 수 없다: 아동 · 보호자 · 세션 · 기기 식별자(`childId` · `guardianId` · `sessionId` · `deviceId` 등), 키(`apiKey` 등), 원음(`audio`), 보호자 입력 원문, 이메일, 동의 상태. 아이 이름은 '아이'로 바꾼다(BR5.4 · NFR3.1).
-- **R-F15** 공급자 약관 · 보호자 동의 확인 전에는 실제 아동 데이터를 외부 모델로 보내지 않는다. 실호출은 합성 자료로만 한다. '확인됨' 상태를 코드에서 판정하는 방법은 U9가 정한다(BR5.5).
+- **R-F15** 공급자 약관 · 보호자 동의 확인 전에는 실제 아동 데이터를 외부 모델로 보내지 않는다. 실호출은 합성 자료로만 한다. U9는 코드로 판정하지 않고 RUNBOOK 확인 기록으로 지킨다(편차 U9-b). 키(`OPENAI_API_KEY`)를 넣는 순간 실제 어댑터가 켜지므로, `infra/RUNBOOK.md` 단계 4의 R-F15 확인 기록 표에 한 줄을 남기기 전에는 운영 환경에 키를 넣지 않는다 [U9 편차 (U9-b)].
 - 시험 · CI · 검증은 가짜 공급자만 쓴다(R-F1). 테스트 대역의 성공을 실공급자 성공으로 표시하지 않는다(R-M11).
 
 ### 10.3 목적 → 호출 경로 → 재시도 분류
@@ -361,3 +361,28 @@ Luna 호출부(core-api · realtime-activity 각자)는 공급자 시도마다 `
 | `mujoong.luna.max-response-bytes` | `1000000` | core-api · realtime | 응답 본문 바이트 상한. 넘으면 `LENGTH_EXCEEDED` |
 | `mujoong.luna.purpose.<목적>.max-output-tokens` | `4000` | core-api · realtime | 요청 `max_output_tokens`. core 목적: `scenario-generation` · `scenario-review` · `seed-generation` · `result-text` · `goal-candidates` · `rejudgment`, realtime 목적: `judgment-live` |
 | `mujoong.luna.purpose.<목적>.reasoning-effort` | `medium` | core-api · realtime | 요청 `reasoning.effort`(`none` · `minimal` · `low` · `medium` · `high`) |
+
+### 10.10 U9 호출 방식 · 실패 사유 · 기존 어댑터
+
+- **호출 방식:** 두 앱이 각자(코드 공유 없음) JDK `HttpClient` + `JsonCodec`으로 Responses API `POST {base-url}/responses`를 직접 부른다 [U9 편차 (U9-a)]. 리다이렉트를 따르지 않고(3xx는 `REQUEST_REJECTED`) 프록시를 쓰지 않으며, 응답 본문은 `max-response-bytes`까지만 읽는다. 요청은 `model` · `instructions`(버전 파일의 지시) · `input`(정리된 데이터의 JSON 문자열, 지시와 다른 자리) · `text.format` · `max_output_tokens` · `reasoning.effort` · `store: false`이고 `temperature`는 보내지 않는다(기존 `ResultTextProvider.Request.temperature`는 받기만 하고 무시).
+- **보내기 전 정리:** 모든 깊이에서 10.2 금지 키(+ core 결과 게이트웨이의 `audioRefs` · `audioRefsJson` · `interests` 등)를 지우고, 호출자가 준 별칭 표로 아이 이름을 바꾸며, 이메일 · 휴대전화 모양 값을 '연락처'로 가린다. 남으면 · 요청 스키마(`ai-judgment-request`)에 맞지 않으면 부르지 않고 `FORBIDDEN_INPUT`이다. UUID → '참조N'과 복원은 지금 `ResultTextGateway`가 맡는다.
+- **스키마:** 빌드가 `contracts/schemas/ai-*.schema.json`(+ 그 파일이 가리키는 `common.schema.json`)을 실행 자원 `luna/schemas/`로 복사한다. 요청 `text.format`에는 공급자가 받는 키워드(`type` · `properties` · `required` · `additionalProperties` · `items` · `enum` · `const` · `anyOf` · `$defs` · `$ref` · `description`)만 남긴 사본을 싣고(다른 파일 `$ref`는 정의를 끼워 넣음), 모든 객체가 닫히고 모든 속성이 required일 때만 `strict: true`다. 응답 검증은 언제나 원본 계약 스키마 전체로 한다. 스키마를 읽지 못하거나 정상 예시가 검증을 통과하지 못하면 기동을 거부한다.
+- **시도 · 재시도:** 시도 시한 = min(호출자 마감까지 남은 시간, 목적 시한 키). 0 이하면 부르지 않고 `TIMEOUT`. 재시도는 10.3 분류대로 `REQUEST_BOUNDED`만 일시 실패 기술 재시도 1회 + 스키마 불일치 재요청 1회(합계 ≤ 3)이고, 대기 = max(`mujoong.text-ai.retry.backoff`, 429 `Retry-After`)가 남은 시간보다 짧을 때만 한다. 401 · 403은 재시도하지 않는다.
+
+| 실패 사유 | 언제 | 일시 | `TextAiProvider` 어댑터(BR8.1) | `ResultTextProvider` 어댑터(BR8.2) |
+|---|---|---|---|---|
+| `AUTH_FAILED` | 401 · 403 | 아니오 | `UNAVAILABLE` · retryable=false | `PROVIDER_ERROR` |
+| `RATE_LIMITED` | 429 | 예 | `UNAVAILABLE` · retryable=true | `PROVIDER_ERROR` |
+| `SERVER_ERROR` | 5xx · JSON이 아닌 응답 · 완료가 아닌 상태 | 예 | `UNAVAILABLE` · retryable=true | `PROVIDER_ERROR` |
+| `REQUEST_REJECTED` | 그 밖 4xx(스키마 거절 포함) · 3xx · 허용 밖 주소 | 아니오 | `UNAVAILABLE` · retryable=false | `PROVIDER_ERROR` |
+| `TRANSPORT_ERROR` | 연결 · 읽기 오류 | 예 | `UNAVAILABLE` · retryable=true | `PROVIDER_ERROR` |
+| `TIMEOUT` | 시도 시한 초과 · 남은 시간 없음 | 아니오 | `TIMEOUT` · retryable=true | `TIMEOUT` |
+| `EMPTY_OUTPUT` | 출력 텍스트가 빔 | 예 | `UNAVAILABLE` · retryable=true | `SCHEMA_INVALID` |
+| `LENGTH_EXCEEDED` | `status: incomplete` · 본문 바이트 상한 초과 | 아니오 | `INVALID_OUTPUT` | `SCHEMA_INVALID` |
+| `REFUSED` | 거절(refusal) 출력 | 아니오 | `INVALID_OUTPUT` | `SCHEMA_INVALID` |
+| `SCHEMA_INVALID` | 원본 계약 스키마 위반 · JSON 객체가 아님 | 아니오 | `INVALID_OUTPUT` | `SCHEMA_INVALID` |
+| `FORBIDDEN_INPUT` | 정리 뒤 금지 키 잔존 · 요청 스키마 위반 | 아니오 | `UNAVAILABLE` · retryable=false | `INTERNAL` |
+| `MODEL_MISSING` | 응답 `model` 없음 | 아니오 | `INVALID_OUTPUT` | `PROVIDER_ERROR` |
+
+- **기존 인터페이스 어댑터:** core `TextAiProvider`(상황 생성 지시 `prompts/scenario/generation.v1.txt`, 판 `scenario-generation.v1`) · `ResultTextProvider`(`prompts/result/{task}.{판}.txt`)의 Luna 구현은 출력 스키마 파일 없이 `json_object`로 **언제나 시도 1회**만 부른다. 재시도는 바깥 `TextAiGateway`(기술 재시도)와 결과 작업이 이미 한다. 길이 · 판 정규식 · 금지 표현(`TextAiGateway`), `ResultAiSchema` · 참조 복원 · 인용 대조(`ResultTextGateway`), 1차 사전 · `classify`(`OutputChecker`)는 그대로 돈다. 새 스키마로 바꾸는 일은 U10 · U14가 한다.
+- **실호출 시험:** 사람이 env에 키를 넣고 돌리는 `./gradlew lunaLiveTest`(태그 `luna-live`)만 실공급자를 부른다. 기본 `test` · `check` · CI · `verify.sh`는 루프백 대역만 쓴다. 키가 없으면 `SKIPPED_NO_KEY`로 끝나고, 결과는 '실제 API · 합성 자료' 증거로 따로 보고한다 [U9 편차 (U9-c)].
