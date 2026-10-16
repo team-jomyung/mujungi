@@ -534,14 +534,40 @@ cat core-api/build/luna-live/report.txt realtime-activity/build/luna-live/report
 ```bash
 cd backend
 read -r -s -p 'OPENAI_API_KEY: ' OPENAI_API_KEY && export OPENAI_API_KEY && echo
-LUNA_REACH_TIMEOUT_SECONDS=60 LUNA_REACH_COUNT=5 ./gradlew :realtime-activity:lunaReachTest
+./gradlew :realtime-activity:lunaReachTest
 unset OPENAI_API_KEY
 cat realtime-activity/build/luna-reach/report.md
 ```
 
-- 선택 env: `LUNA_REACH_TIMEOUT_SECONDS`(1 ~ 600, 기본 60) · `LUNA_REACH_COUNT`(1 ~ 20, 기본 5) · `OPENAI_JUDGE_MODEL`(비면 운영 기본 모델). 비밀이 아니다.
+- 선택 env: `LUNA_REACH_TIMEOUT_SECONDS`(1 ~ 600, 기본 60) · `LUNA_REACH_COUNT`(1 ~ 20, 기본 2 — 공급자 사용량 한도 때문에 낮게 둔다) ·
+  `OPENAI_JUDGE_MODEL`(비면 운영 기본 모델). 비밀이 아니다.
 - 보고서 첫 줄은 `outcome=REACHED|NOT_REACHED|SKIPPED_NO_KEY`다. REACHED는 1회 이상 OK다. 표는 회차 · 사유 · 응답 모델 · 스키마 통과 ·
-  1 · 2순위 코드와 확률 · 지연이고, 요약은 성공 수 · 지연 중앙값 · 최대 · 2초 이하 비율 · 10초 이하 비율이다. 원문 · 키 · 주소는 없다.
+  1 · 2순위 코드와 확률 · 지연 · 사용량(응답 `usage`의 토큰 숫자)이고, 요약은 성공 수 · 지연 중앙값 · 최대 · 2초 이하 비율 · 10초 이하 비율 ·
+  사용량 합계다. 사용량을 받지 못한 회차(TIMEOUT 등)는 '모름'이고 과금 여부를 단정하지 않는다. 원문 · 키 · 주소는 없다.
+- 운영 클라이언트는 응답 `usage`를 버리므로, 이 도구는 같은 운영 부품(정리 · 스키마 · 본문 조립 · 전송 · 응답 해석)을 같은 순서로 직접 부른다.
+  사유 분류가 운영과 같은지는 기본 시험(`LunaReachIsolationTest`, 루프백 대역)이 대조한다.
+- 금액은 계산하지 않는다. 단가는 OpenAI 결제 화면에서 확인한다(보고서는 사용량만 남긴다).
+- 결과는 '실제 API · 합성 자료' 증거로만 따로 적는다(R-M11). 키가 없으면 `SKIPPED_NO_KEY`이고 시험은 '건너뜀'이다(통과 아님).
+
+### 8.7 GPT-Live 격리 실호출 `gptLiveTest` (U11, 개발 PC) [개발 PC]
+
+U11 첫 작업(위험 R1)의 실호출 확인이다. 기본 `test` · `check` · CI · `verify.sh`에는 들어가지 않는다(루트 `verifyGptLiveIsolation`).
+합성 음성만 보내고(R-F15), 키는 그 PC의 env로만 넣는다(R-F3 · R-F13). 한 실행이 형식마다 연결을 한 번씩 연다(기본 앱 · 키트 두 번).
+
+```bash
+cd backend
+read -r -s -p 'PROVIDER_API_KEY: ' PROVIDER_API_KEY && export PROVIDER_API_KEY && echo
+./gradlew :realtime-activity:gptLiveTest
+unset PROVIDER_API_KEY
+cat realtime-activity/build/gpt-live/report.md
+```
+
+- 선택 env(비밀 아님): `GPT_LIVE_FORMATS`(`app` · `kit` 중 쉼표로, 기본 `app,kit`, `kit`만 주면 키트 형식 한 번만) ·
+  `GPT_LIVE_INPUT_PCM`(합성 말소리 파일 경로, WAV 또는 PCM16LE 모노 원시, 없으면 저장소 합성음 자리 파일) ·
+  `GPT_LIVE_INPUT_RATE`(원시 PCM의 표본율, 기본 24000, 키트 TTS 캐시는 16000).
+- 보고서 첫 줄은 `outcome=…`(앱 형식 ① · ② 기준, 돌리지 않았으면 `NOT_RUN`), 다음 줄은 `kitFormat=…`이다. 표는 항목 · 앱 형식 · 키트 형식이고
+  오류 사건(가린 문장) · 지원 type 목록 · 수신 사건 모양 · 사용량(`session.usage.updated` 마지막 값 · 세션 길이) 행이 있다.
+- 금액은 계산하지 않는다. 단가는 OpenAI 결제 화면에서 확인한다(보고서는 사용량만 남긴다).
 - 결과는 '실제 API · 합성 자료' 증거로만 따로 적는다(R-M11). 키가 없으면 `SKIPPED_NO_KEY`이고 시험은 '건너뜀'이다(통과 아님).
 
 ## 9. 복구 시나리오 (infra-spec 4.5.3)

@@ -11,12 +11,20 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import kr.mujoong.contract.json.JsonCodec;
 import kr.mujoong.contract.time.MujoongClock;
+import kr.mujoong.realtime.observability.RealtimeMetrics;
+import kr.mujoong.realtime.testing.TestEventLoggers;
+import kr.mujoong.testsupport.log.LogCapture;
+import kr.mujoong.testsupport.time.MutableClock;
+import kr.mujoong.testsupport.luna.LunaResponsesStub;
+import kr.mujoong.testsupport.luna.LunaResponsesStub.Reply;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -105,7 +113,7 @@ class LunaReachIsolationTest {
     void timeoutAndCountEnvAreParsedWithDefaultsAndBounds() {
         assertThat(LunaReachProbe.timeoutSeconds(null)).isEqualTo(60);
         assertThat(LunaReachProbe.timeoutSeconds(" 90 ")).isEqualTo(90);
-        assertThat(LunaReachProbe.count("")).isEqualTo(5);
+        assertThat(LunaReachProbe.count("")).as("사용량 한도 때문에 기본 2회").isEqualTo(2);
         assertThat(LunaReachProbe.count("3")).isEqualTo(3);
         assertThatThrownBy(() -> LunaReachProbe.timeoutSeconds("0")).isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> LunaReachProbe.timeoutSeconds("601")).isInstanceOf(IllegalArgumentException.class);
@@ -146,14 +154,16 @@ class LunaReachIsolationTest {
         AtomicReference<Duration> timeoutSeen = new AtomicReference<>();
         List<LunaRequest> requests = new ArrayList<>();
         String output = "{\"first\":{\"option\":\"END_CLEAR\",\"probability\":0.8123},\"second\":{\"option\":\"WAT\",\"probability\":0.1}}";
+        Map<String, Long> usage = new LinkedHashMap<>();
+        usage.put("input_tokens", 300L);
+        usage.put("output_tokens", 40L);
         LunaReachProbe.CallerFactory fake = (properties, timeout, env, clock) -> {
             timeoutSeen.set(timeout);
-            return request -> {
+            return (request, limit) -> {
                 requests.add(request);
                 return requests.size() == 2
-                        ? CompletableFuture.failedFuture(new LunaException(LunaFailureReason.TIMEOUT, 1))
-                        : CompletableFuture.completedFuture(new LunaResult(output, "gpt-6-luna-x", request.promptVersion(),
-                                Duration.ofMillis(1500 * requests.size()), 1));
+                        ? new LunaReachProbe.CallResult("TIMEOUT", null, null, 30_000, null)
+                        : new LunaReachProbe.CallResult("OK", "gpt-6-luna-x", output, 1500L * requests.size(), usage);
             };
         };
         Map<String, String> env = Map.of(LunaTransport.API_KEY_ENV, "fake-not-a-key", LunaReachProbe.TIMEOUT_ENV, "30",
@@ -169,10 +179,70 @@ class LunaReachIsolationTest {
         assertThat(result.attempts()).extracting(LunaReachProbe.Attempt::reason).containsExactly("OK", "TIMEOUT", "OK");
         assertThat(result.attempts().getFirst().first()).isEqualTo("END_CLEAR 0.81");
         assertThat(result.attempts().getFirst().second()).isEqualTo("WAT(선택지 밖) 0.10");
+        assertThat(result.summary().usageTotals()).containsEntry("input_tokens", 600L).containsEntry("output_tokens", 80L);
+        assertThat(result.summary().usageUnknown()).isEqualTo(1);
         String written = Files.readString(report, StandardCharsets.UTF_8);
         assertThat(written).startsWith("outcome=REACHED evidence=REAL_API_SYNTHETIC")
-                .contains("| 회차 | 결과 사유 | 응답 모델 | 스키마 통과 | 1순위 | 2순위 | 지연 ms |", "| 2 | TIMEOUT |")
-                .doesNotContain("fake-not-a-key", LunaReachProbe.CHILD_UTTERANCE, "\"probability\"", "https://");
+                .contains("| 회차 | 결과 사유 | 응답 모델 | 스키마 통과 | 1순위 | 2순위 | 지연 ms | 사용량(토큰) |",
+                        "| 2 | TIMEOUT | - | - | - | - | 30000 | 모름 |", "input_tokens=300 output_tokens=40 |",
+                        "사용량 합계(받은 회차): input_tokens=600 output_tokens=80 · 모름 1회", LunaReachProbe.PRICE_NOTE)
+                .doesNotContain("fake-not-a-key", LunaReachProbe.CHILD_UTTERANCE, "\"probability\"", "https://", "$", "USD");
+    }
+
+    @Test
+    void usageIsReadFromNumericFieldsAndIsUnknownWithoutABody() {
+        String body = "{\"status\":\"completed\",\"usage\":{\"input_tokens\":312,\"input_tokens_details\":{\"cached_tokens\":0},"
+                + "\"output_tokens\":58,\"output_tokens_details\":{\"reasoning_tokens\":40},\"total_tokens\":370,\"note\":\"x\"}}";
+
+        Map<String, Long> usage = LunaReachProbe.usageOf(JSON, body);
+
+        assertThat(usage).containsExactly(Map.entry("input_tokens", 312L), Map.entry("input_tokens_details.cached_tokens", 0L),
+                Map.entry("output_tokens", 58L), Map.entry("output_tokens_details.reasoning_tokens", 40L),
+                Map.entry("total_tokens", 370L));
+        assertThat(LunaReachProbe.usageOf(JSON, "{\"error\":{}}")).isNull();
+        assertThat(LunaReachProbe.usageOf(JSON, "<html>")).isNull();
+        assertThat(LunaReachProbe.usageText(null)).isEqualTo("모름");
+    }
+
+    @Test
+    void theProbeClassifiesEveryReplyLikeTheOperationalClientAndOnlyOncePerCall() throws Exception {
+        LunaReachProbe.OptionSet set = new LunaReachProbe(Map.<String, String>of()::get, Path.of("unused"), NEVER, new FixedClock())
+                .j6Options();
+        String valid = "{\"first\":{\"option\":\"END_CLEAR\",\"probability\":0.7},\"second\":{\"option\":\"REST\",\"probability\":0.2}}";
+        List<Reply> replies = List.of(Reply.ok("gpt-6-luna", valid), Reply.status(500), Reply.rateLimited(1), Reply.status(401),
+                Reply.status(400), Reply.incomplete("gpt-6-luna"), Reply.emptyOutput("gpt-6-luna"), Reply.refusal("gpt-6-luna"),
+                Reply.noModel(valid), Reply.ok("gpt-6-luna", "{\"first\":{\"option\":\"END_CLEAR\",\"probability\":2}}"),
+                Reply.json(200, "<html>"), Reply.json(200, "{\"status\":\"cancelled\",\"model\":\"m\"}"),
+                Reply.redirect("https://x.invalid/"));
+        MutableClock clock = new MutableClock();
+        try (LunaResponsesStub stub = LunaResponsesStub.start()) {
+            RealtimeLunaClient operational = RealtimeLunaTestFixtures.client(stub.baseUrl(), Duration.ofSeconds(5),
+                    TestEventLoggers.strict(clock, LogCapture.detached(), RealtimeMetrics.inMemory()), clock);
+            LunaReachProbe.OperationalCaller probe = new LunaReachProbe.OperationalCaller(
+                    RealtimeLunaTestFixtures.properties(stub.baseUrl()),
+                    RealtimeLunaTestFixtures.transport(stub.baseUrl(), LunaHosts.Mode.TEST), clock);
+            for (Reply reply : replies) {
+                LunaRequest request = new LunaRequest(LunaPurpose.JUDGMENT_LIVE, LunaReachProbe.PROMPT_VERSION,
+                        LunaReachProbe.INSTRUCTIONS, LunaReachProbe.j6Input(set), Map.of(), clock.now().plusSeconds(5));
+                stub.respond(reply);
+                String expected;
+                try {
+                    operational.call(request).toCompletableFuture().get(10, TimeUnit.SECONDS);
+                    expected = "OK";
+                } catch (ExecutionException failure) {
+                    expected = ((LunaException) failure.getCause()).reason().name();
+                }
+                int before = stub.requestCount();
+                stub.respond(reply);
+
+                LunaReachProbe.CallResult actual = probe.call(request, Duration.ofSeconds(5));
+
+                assertThat(actual.reason()).as("대본 %s", reply.status()).isEqualTo(expected);
+                assertThat(stub.requestCount() - before).as("호출 1회").isEqualTo(1);
+            }
+            assertThat(stub.requests().getLast().body()).isEqualTo(stub.requests().get(stub.requestCount() - 2).body());
+            probe.close();
+        }
     }
 
     // ---- 요약 · 보고서 ----
@@ -207,8 +277,9 @@ class LunaReachIsolationTest {
         List<String> lines = report.lines().toList();
         assertThat(lines.getFirst()).isEqualTo("outcome=NOT_REACHED evidence=REAL_API_SYNTHETIC");
         assertThat(lines.stream().filter(line -> line.startsWith("| ") && !line.startsWith("| 회차")).toList()).hasSize(2)
-                .allSatisfy(line -> assertThat(line.split("\\|", -1)).hasSize(9));
-        assertThat(report).contains("| 2 | SCHEMA_INVALID | - | 불통과 |", "성공(OK): 0/2", "중앙값 - · 최대 -",
+                .allSatisfy(line -> assertThat(line.split("\\|", -1)).as("8칸(사용량 포함)").hasSize(10));
+        assertThat(report).contains("| 2 | SCHEMA_INVALID | - | 불통과 |", "| 60000 | 모름 |", "성공(OK): 0/2", "중앙값 - · 최대 -",
+                "사용량 합계(받은 회차): - · 모름 2회", LunaReachProbe.PRICE_NOTE,
                 "2초 이하(live-budget 안, 전체 회차 기준): 0% (0/2)", "시도 시한: 60초");
     }
 }

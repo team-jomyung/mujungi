@@ -13,6 +13,7 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -79,6 +80,10 @@ final class GptLiveProbe {
     static final String INPUT_PCM_ENV = "GPT_LIVE_INPUT_PCM";
     /** 원시 PCM 입력 파일의 표본율 env 이름(비밀 아님, 기본 24000). */
     static final String INPUT_RATE_ENV = "GPT_LIVE_INPUT_RATE";
+    /** 시도할 형식 env 이름(비밀 아님, 기본 {@code app,kit}, {@code kit}만 주면 키트 형식 한 번만). */
+    static final String FORMATS_ENV = "GPT_LIVE_FORMATS";
+    /** 보고서 머리 문장(금액을 계산하지 않는다). */
+    static final String PRICE_NOTE = "단가는 OpenAI 결제 화면에서 확인한다(이 보고서는 사용량만 남긴다).";
     /** 보고서 경로 시스템 속성(gptLiveTest 작업이 build/gpt-live/report.md로 넣는다). */
     static final String REPORT_PROPERTY = "mujoong.gpt.live.report";
     /** 기본 입력: 저장소의 합성음 자리 파일(저장소 루트 기준). */
@@ -137,11 +142,12 @@ final class GptLiveProbe {
     private static final Pattern BASE64 = Pattern.compile("^[A-Za-z0-9+/]+={0,2}$");
     private static final Pattern MASK_HANGUL = Pattern.compile("[\\uAC00-\\uD7A3\\u3131-\\u318E]+([\\s,.!?]*[\\uAC00-\\uD7A3\\u3131-\\u318E]+)*");
 
-    /** 실행 결과(① · ② 기준, BR9.2). */
+    /** 실행 결과(① · ② 기준, BR9.2). NOT_RUN은 env {@value #FORMATS_ENV}에서 고르지 않은 형식이다. */
     enum Outcome {
         PASS,
         FAIL,
-        SKIPPED_NO_KEY
+        SKIPPED_NO_KEY,
+        NOT_RUN
     }
 
     /** 항목 하나의 판정. INFO는 통과 · 실패가 아니라 다음 단계 입력이다. */
@@ -253,19 +259,45 @@ final class GptLiveProbe {
             return blocked;
         }
         Row host = new Row("공급자 주소 규칙", "demo 프로필 주소가 ProviderHosts demo 규칙(wss · 허용 호스트) 통과", Verdict.PASS);
+        Set<Mode> formats = formats(env.apply(FORMATS_ENV));
         InputAudio input = loadInput();
-        Attempt app = attempt(Mode.APP, url, key, input);
-        Attempt kit = attempt(Mode.KIT, url, key, input);
+        String notSelected = "실행 안 함(env " + FORMATS_ENV + "에 없음)";
+        Attempt app = formats.contains(Mode.APP) ? attempt(Mode.APP, url, key, input) : notRun(Mode.APP, notSelected, Outcome.NOT_RUN);
+        Attempt kit = formats.contains(Mode.KIT) ? attempt(Mode.KIT, url, key, input) : notRun(Mode.KIT, notSelected, Outcome.NOT_RUN);
         Result result = new Result(host, app, kit);
         writeReport(result, input);
         return result;
+    }
+
+    /** 시도할 형식(env {@value #FORMATS_ENV}, 기본 app,kit). 모르는 값 · 빈 목록이면 거절한다(부르기 전). */
+    static Set<Mode> formats(String value) throws IOException {
+        if (value == null || value.isBlank()) {
+            return EnumSet.of(Mode.APP, Mode.KIT);
+        }
+        Set<Mode> formats = EnumSet.noneOf(Mode.class);
+        for (String part : value.split(",")) {
+            String name = part.strip().toLowerCase(Locale.ROOT);
+            if (name.isEmpty()) {
+                continue;
+            }
+            switch (name) {
+                case "app" -> formats.add(Mode.APP);
+                case "kit" -> formats.add(Mode.KIT);
+                default -> throw new IOException(FORMATS_ENV + "는 app · kit 중에서 쉼표로 고른다");
+            }
+        }
+        if (formats.isEmpty()) {
+            throw new IOException(FORMATS_ENV + "가 비었다");
+        }
+        return formats;
     }
 
     /** 보고서 행 순서(두 시도가 같은 순서로 채운다). */
     static final List<String> ITEMS = List.of("① 서버 쪽 음성 전송 · 출력 수신", "② instructions.correct + response.create 뒤 응답",
             "③ speech_stopped", "④ 종료 형식", "⑤-1 응답 생성 확인 사건(첫 조각 전 응답 id)", "⑤-2 자동 응답 · 막기 수단",
             "오류 사건(error · session.error)", "지원 type 목록(오류 문장에서)", "수신 사건 모양(type별 첫 사건, 키 · 값 타입)",
-            "연결 끊김 · 끊기기 전 마지막 사건", "앱 해석기(ProviderClient.Reader) 이해", "참고: 앱이 모르는 type");
+            "연결 끊김 · 끊기기 전 마지막 사건", "앱 해석기(ProviderClient.Reader) 이해", "참고: 앱이 모르는 type",
+            "사용량(session.usage.updated 마지막 값 · 세션 길이)");
 
     /** 키가 없을 때의 결과(모든 항목 SKIPPED_NO_KEY, 통과 아님). */
     static Result skipped() {
@@ -275,7 +307,11 @@ final class GptLiveProbe {
     }
 
     private static Attempt notRun(Mode mode, String why, Outcome outcome) {
-        Verdict verdict = outcome == Outcome.SKIPPED_NO_KEY ? Verdict.SKIPPED_NO_KEY : Verdict.FAIL;
+        Verdict verdict = switch (outcome) {
+            case SKIPPED_NO_KEY -> Verdict.SKIPPED_NO_KEY;
+            case NOT_RUN -> Verdict.INFO;
+            default -> Verdict.FAIL;
+        };
         return new Attempt(mode, outcome, ITEMS.stream().map(item -> new Row(item, why, verdict)).toList());
     }
 
@@ -518,11 +554,43 @@ final class GptLiveProbe {
     }
 
     /** 받은 원시 메시지에서 뽑은 것: type 이름 · 응답 id · 키 이름 · 출력 음성 바이트 수 · 오류 필드(값 원문 없음). */
-    record RawFrame(int seq, String type, String responseId, List<String> keys, int audioBytes, ErrorInfo error, String shape) {
+    record RawFrame(int seq, String type, String responseId, List<String> keys, int audioBytes, ErrorInfo error, String shape,
+            String usage) {
 
         RawFrame(int seq, String type, String responseId, List<String> keys) {
-            this(seq, type, responseId, keys, 0, null, "-");
+            this(seq, type, responseId, keys, 0, null, "-", null);
         }
+    }
+
+    /** 사용량을 담는 사건 type(마지막 값을 보고서에 쓴다). */
+    static final String USAGE_TYPE = "session.usage.updated";
+
+    /**
+     * 사용량 숫자 필드를 이름=값으로(값 원문 중 숫자만). {@code usage} 객체가 있으면 그 안을, 없으면 사건 최상위를 본다. 한 단계 안의 숫자는
+     * {@code 바깥.안} 이름. 숫자가 없으면 null.
+     */
+    static String usageNumbers(Map<?, ?> fields) {
+        Map<?, ?> source = fields.get("usage") instanceof Map<?, ?> usage ? usage : fields;
+        List<String> parts = new ArrayList<>();
+        for (Map.Entry<?, ?> entry : source.entrySet()) {
+            String name = safe(String.valueOf(entry.getKey()));
+            if (entry.getValue() instanceof Number number) {
+                parts.add(name + "=" + numberText(number));
+            } else if (entry.getValue() instanceof Map<?, ?> inner) {
+                for (Map.Entry<?, ?> detail : inner.entrySet()) {
+                    if (detail.getValue() instanceof Number number) {
+                        parts.add(name + "." + safe(String.valueOf(detail.getKey())) + "=" + numberText(number));
+                    }
+                }
+            }
+        }
+        return parts.isEmpty() ? null : String.join(" ", parts);
+    }
+
+    private static String numberText(Number number) {
+        double value = number.doubleValue();
+        return value == Math.rint(value) && !Double.isInfinite(value) ? Long.toString((long) value)
+                : String.format(Locale.ROOT, "%.3f", value);
     }
 
     /** 오류 문장에서 뽑은 type 이름 목록. */
@@ -614,7 +682,8 @@ final class GptLiveProbe {
                     textToken(body.get("code")), paramToken(body.get("param")), maskMessage(body.get("message")), lists.supported(),
                     lists.rejected());
         }
-        return new RawFrame(seq, type, responseId, keys, audioBytes, error, shapeOf(fields, 0));
+        String usage = type.equals(USAGE_TYPE) || type.equals("session.closed") ? usageNumbers(fields) : null;
+        return new RawFrame(seq, type, responseId, keys, audioBytes, error, shapeOf(fields, 0), usage);
     }
 
     private static String responseIdOf(Map<?, ?> fields) {
@@ -716,6 +785,8 @@ final class GptLiveProbe {
         private volatile Integer closeCode;
         private volatile String socketError;
         private volatile String lastTypeBeforeClose;
+        private volatile long startedNanos;
+        private volatile long closedNanos;
 
         Tap(JsonCodec json) {
             this.json = json;
@@ -759,7 +830,13 @@ final class GptLiveProbe {
         }
 
         void record(String message) {
-            add(parseRaw(json, rawCount(), message));
+            RawFrame frame = parseRaw(json, rawCount(), message);
+            if (frame.type().equals("session.started") && startedNanos == 0) {
+                startedNanos = System.nanoTime();
+            } else if (frame.type().equals("session.closed") && closedNanos == 0) {
+                closedNanos = System.nanoTime();
+            }
+            add(frame);
         }
 
         private void markClosed() {
@@ -768,7 +845,15 @@ final class GptLiveProbe {
                     lastTypeBeforeClose = raw.isEmpty() ? "(받은 사건 없음)" : raw.getLast().type();
                 }
             }
+            if (closedNanos == 0) {
+                closedNanos = System.nanoTime();
+            }
             add(new RawFrame(rawCount(), CLOSED_MARK, null, List.of()));
+        }
+
+        /** session.started ~ 닫힘(session.closed 또는 소켓 닫힘) 길이 ms. 둘 중 하나가 없으면 null. */
+        Long sessionMillis() {
+            return startedNanos == 0 || closedNanos == 0 ? null : TimeUnit.NANOSECONDS.toMillis(closedNanos - startedNanos);
         }
 
         private void add(RawFrame frame) {
@@ -1127,7 +1212,21 @@ final class GptLiveProbe {
                 .forEach(frame -> unknown.merge(frame.type(), 1, Integer::sum));
         rows.add(new Row(ITEMS.get(11), unknown.isEmpty() ? "없음" : unknown.toString(), Verdict.INFO));
 
+        // 사용량
+        rows.add(new Row(ITEMS.get(12), describeUsage(raw, tap.sessionMillis()), Verdict.INFO));
+
         return new Attempt(mode, one && two ? Outcome.PASS : Outcome.FAIL, rows);
+    }
+
+    /** 사용량 행: session.usage.updated 건수 · 마지막 값, session.closed에 실린 값, 세션 길이(금액 계산 없음). */
+    static String describeUsage(List<RawFrame> raw, Long sessionMillis) {
+        List<RawFrame> updates = raw.stream().filter(frame -> frame.type().equals(USAGE_TYPE)).toList();
+        String last = updates.stream().map(RawFrame::usage).filter(java.util.Objects::nonNull).reduce((first, second) -> second)
+                .orElse(null);
+        String closed = raw.stream().filter(frame -> frame.type().equals("session.closed")).map(RawFrame::usage)
+                .filter(java.util.Objects::nonNull).findFirst().orElse(null);
+        return USAGE_TYPE + " " + updates.size() + "건 · 마지막 " + (last == null ? "없음" : last) + " · session.closed 사용량 "
+                + (closed == null ? "없음" : closed) + " · 세션 길이(started ~ 닫힘) " + (sessionMillis == null ? "모름" : sessionMillis + "ms");
     }
 
     /** 오류 사건들의 지원 type 목록(합쳐 중복 제거 · 정렬)과 거절된 값. */
@@ -1309,6 +1408,7 @@ final class GptLiveProbe {
         out.append("# GPT-Live 격리 실호출 보고서 (U11 W7 · FR9.1 · BR9.2)\n\n");
         out.append("outcome=").append(result.outcome()).append(" evidence=").append(skipped ? "NONE" : "REAL_API_SYNTHETIC").append('\n');
         out.append("kitFormat=").append(result.kitOutcome()).append("\n\n");
+        out.append("- ").append(PRICE_NOTE).append('\n');
         out.append("- 실행 시각(UTC): ").append(nowUtc).append('\n');
         if (skipped) {
             out.append("- 증거 종류: 없음(실호출 안 함). SKIPPED_NO_KEY는 통과로 보지 않는다(BR9.1).\n");

@@ -12,8 +12,9 @@ import org.junit.jupiter.api.Test;
  * {@code ./gradlew :realtime-activity:gptLiveTest}로만 돈다(기본 test는 {@code gpt-live}를 고정 제외). 키가 없으면 보고서에
  * {@code SKIPPED_NO_KEY}를 쓰고 이 시험은 건너뜀으로 끝난다(통과 아님).
  *
- * <p>통과 조건은 계속 · 중단 기준인 ① 서버 쪽 음성 전송 · 출력 수신과 ② 지시 교정 + 응답 생성 뒤 응답이다. ③ ~ ⑤는 보고서 표에 관측으로 남긴다.
- * 결과는 {@code [실호출-합성]} 증거다(R-M11).
+ * <p>통과 조건은 계속 · 중단 기준인 ① 서버 쪽 음성 전송 · 출력 수신과 ② 지시 교정 + 응답 생성 뒤 응답이다. 앱 형식을 돌렸으면 앱 형식이
+ * 기준이고(BR9.2), env {@code GPT_LIVE_FORMATS=kit}로 키트 형식만 돌렸으면 키트 형식이 기준이다. ③ ~ ⑤ · 사용량은 보고서 표에 관측으로
+ * 남긴다. 결과는 {@code [실호출-합성]} 증거다(R-M11).
  */
 @Tag("gpt-live")
 class GptLiveCallTest {
@@ -26,6 +27,7 @@ class GptLiveCallTest {
 
         assumeTrue(result.outcome() != GptLiveProbe.Outcome.SKIPPED_NO_KEY,
                 "SKIPPED_NO_KEY: env PROVIDER_API_KEY 없음(실호출 안 함, 통과 아님)");
-        assertThat(result.outcome()).as("① · ② 실호출 결과(보고서 " + probe.report() + ")").isEqualTo(GptLiveProbe.Outcome.PASS);
+        GptLiveProbe.Outcome judged = result.outcome() == GptLiveProbe.Outcome.NOT_RUN ? result.kitOutcome() : result.outcome();
+        assertThat(judged).as("① · ② 실호출 결과(보고서 " + probe.report() + ")").isEqualTo(GptLiveProbe.Outcome.PASS);
     }
 }

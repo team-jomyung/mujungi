@@ -303,6 +303,49 @@ class GptLiveIsolationTest {
     }
 
     @Test
+    void usageEventsKeepNumericFieldsAndTheLastValueWins() {
+        List<GptLiveProbe.RawFrame> raw = List.of(
+                GptLiveProbe.parseRaw(JSON, 0, "{\"type\":\"session.started\",\"session\":{\"id\":\"s\"}}"),
+                GptLiveProbe.parseRaw(JSON, 1, "{\"type\":\"session.usage.updated\",\"usage\":{\"seconds\":1.5,\"note\":\"x\"}}"),
+                GptLiveProbe.parseRaw(JSON, 2, "{\"type\":\"session.usage.updated\",\"usage\":{\"seconds\":12.25,"
+                        + "\"audio\":{\"input_seconds\":6,\"output_seconds\":6.25}}}"),
+                GptLiveProbe.parseRaw(JSON, 3, "{\"type\":\"session.closed\",\"reason\":\"client\",\"usage\":{\"seconds\":12.5}}"));
+
+        String usage = GptLiveProbe.describeUsage(raw, 13_000L);
+
+        assertThat(usage).isEqualTo("session.usage.updated 2건 · 마지막 seconds=12.250 audio.input_seconds=6 audio.output_seconds=6.250"
+                + " · session.closed 사용량 seconds=12.500 · 세션 길이(started ~ 닫힘) 13000ms");
+        assertThat(GptLiveProbe.usageNumbers(Map.of("type", "session.usage.updated", "seconds", 3))).isEqualTo("seconds=3");
+        assertThat(GptLiveProbe.describeUsage(List.of(), null))
+                .isEqualTo("session.usage.updated 0건 · 마지막 없음 · session.closed 사용량 없음 · 세션 길이(started ~ 닫힘) 모름");
+    }
+
+    @Test
+    void theFormatsEnvSelectsAttemptsAndRejectsUnknownValues() throws IOException {
+        assertThat(GptLiveProbe.formats(null)).containsExactly(GptLiveProbe.Mode.APP, GptLiveProbe.Mode.KIT);
+        assertThat(GptLiveProbe.formats(" kit ")).containsExactly(GptLiveProbe.Mode.KIT);
+        assertThat(GptLiveProbe.formats("APP,kit,")).containsExactly(GptLiveProbe.Mode.APP, GptLiveProbe.Mode.KIT);
+        assertThatThrownBy(() -> GptLiveProbe.formats("webrtc")).isInstanceOf(IOException.class);
+        assertThatThrownBy(() -> GptLiveProbe.formats(" , ")).isInstanceOf(IOException.class);
+    }
+
+    @Test
+    void aKitOnlyRunReportsTheAppColumnAsNotRunAndThePriceNote() {
+        GptLiveProbe.Row host = new GptLiveProbe.Row("공급자 주소 규칙", "통과", GptLiveProbe.Verdict.PASS);
+        GptLiveProbe.Attempt app = new GptLiveProbe.Attempt(GptLiveProbe.Mode.APP, GptLiveProbe.Outcome.NOT_RUN,
+                GptLiveProbe.ITEMS.stream().map(item -> new GptLiveProbe.Row(item, "실행 안 함", GptLiveProbe.Verdict.INFO)).toList());
+        GptLiveProbe.Attempt kit = new GptLiveProbe.Attempt(GptLiveProbe.Mode.KIT, GptLiveProbe.Outcome.PASS,
+                GptLiveProbe.ITEMS.stream().map(item -> new GptLiveProbe.Row(item, "관측", GptLiveProbe.Verdict.PASS)).toList());
+
+        String report = GptLiveProbe.renderReport(new GptLiveProbe.Result(host, app, kit), null, "2026-10-16T00:00:00Z");
+
+        assertThat(report.lines().toList()).contains("outcome=NOT_RUN evidence=REAL_API_SYNTHETIC", "kitFormat=PASS",
+                "- " + GptLiveProbe.PRICE_NOTE);
+        assertThat(report).contains("| 사용량(session.usage.updated 마지막 값 · 세션 길이) | **INFO** · 실행 안 함 | **PASS** · 관측 |")
+                .doesNotContain("USD", "$");
+    }
+
+    @Test
     void outputAudioIsCountedInBothAppAndKitShapes() {
         String audio = Base64.getEncoder().encodeToString(new byte[480]);
 
