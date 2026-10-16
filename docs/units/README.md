@@ -13,12 +13,12 @@ U4b부터는 다시 AI-DLC를 쓴다. 담당자마다 자기 PC에서 유닛용 
 
 | 줄 | 순서 | 유닛 | 상태 | 브랜치 | 마이그레이션 | 지시서 |
 |---|---|---|---|---|---|---|
-| 공통 | 1 | U8 계약 · 버전 리소스 | **구현 완료**(10/16) · PR 전 | `unit/u8-contracts-catalog` → `unit/u9-luna-clients`에 포함 | 없음 | `R/construction/u8-contracts-catalog/` |
-| 공통 | 2 | U9 Luna 호출부 | **구현 완료**(10/16) · PR 전. `verify.sh` PASS | `unit/u9-luna-clients` | 없음 | `R/construction/u9-luna-clients/` |
-| realtime | 3 → 4 → 6 | U11 판정 턴 → U13 제브 게이트 → U12 새 연습 흐름 | U8 · U9 담당자가 이어 맡음. U12는 U13 뒤 대역으로 일부, U10 병합 뒤 완료 | `unit/u11-…` · `unit/u13-…` · `unit/u12-…` | realtime V5 · V6 · V7 | (작성 예정) |
+| 공통 | 1 | U8 계약 · 버전 리소스 | **main 병합**(10/16, PR #21) | `unit/u8-contracts-catalog` → `unit/u9-luna-clients`에 포함 | 없음 | `R/construction/u8-contracts-catalog/` |
+| 공통 | 2 | U9 Luna 호출부 | **main 병합**(10/16, PR #21). main CI #60 skeleton 통과 | `unit/u9-luna-clients` | 없음 | `R/construction/u9-luna-clients/` |
+| realtime | 3 → 4 → 6 | U11 판정 턴 → U13 제브 게이트 → U12 새 연습 흐름 | U8 · U9 담당자가 이어 맡음. **U11 시작**(10/16). U12는 U13 뒤 대역으로 일부, U10 병합 뒤 완료 | `unit/u11-judgment-turn` · `unit/u13-…` · `unit/u12-…` | realtime V5 · V6 · V7 | `u11/brief.md`(U13 · U12는 앞 볼트 뒤 작성) |
 | core | 3 → 4 → 5 | U15 지식 그래프 → U14 목표 · 결과 → U10 상황 생성 | **팀원에게 넘김** | `unit/u15-knowledge-graph` · `unit/u14-goal-result` · `unit/u10-scenario-generation` | core V8 · V9 · V10 | `u15/brief.md` · `u14/brief.md` · `u10/brief.md` |
 
-- **시작 브랜치**: U8 · U9는 `unit/u9-luna-clients` PR 하나로 `main`에 들어간다. 그 전에 시작하면 `unit/u9-luna-clients`에서 따고, 병합 뒤 `main`을 merge해 따라잡는다.
+- **시작 브랜치**: U8 · U9는 PR #21로 `main`에 합쳐졌다(`main` CI #60 skeleton 통과). 새 볼트는 최신 `main`에서 딴다.
 - **두 줄은 서로 기다리지 않는다.** core와 realtime은 Flyway 이력이 따로라서다. 같은 앱 안에서만 번호 순서대로 합친다.
 - **두 줄이 만나는 곳은 U12 ↔ U10 대본 계약(C-DS1)뿐이다.** U12 담당자가 `practice-scenario.schema.json` 선택 필드를 계약 PR로 먼저 넣고 대역으로 개발한다. U10은 그 계약을 쓰고, 고칠 곳이 있으면 두 담당자가 같은 날 함께 합친다. U12는 U10 병합 뒤 실제 대본으로 마무리한다.
 - **삭제 순서 상수**: 지금 60 · 70 · 90 · 100 · 150 · 200 · 250 · 300 · 900을 쓴다. U15 그래프 제안값은 80이다.
