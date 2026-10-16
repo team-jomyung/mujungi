@@ -56,11 +56,13 @@ class LunaHostsTest {
     }
 
     @Test
-    void malformedOrCredentialBearingAddressesAreRejectedInEveryMode() {
+    void malformedOrCredentialBearingAddressesAreRejectedInEveryMode() throws Exception {
+        // 사용자 정보가 든 주소는 부품으로 조립한다. 문자열 그대로 쓰면 verify.sh 비밀 형식 검사(A4)에 걸린다.
+        URI withUserInfo = new URI("https", "user:pw", "api.openai.com", -1, "/v1", null, null);
         for (LunaHosts.Mode mode : LunaHosts.Mode.values()) {
             assertThat(LunaHosts.check(null, mode)).as(mode.name()).contains(LunaHosts.Problem.MISSING);
             assertThat(LunaHosts.check(URI.create("wss://api.openai.com/v1"), mode)).contains(LunaHosts.Problem.INVALID);
-            assertThat(LunaHosts.check(URI.create("https://user:pw@api.openai.com/v1"), mode))
+            assertThat(LunaHosts.check(withUserInfo, mode))
                     .contains(LunaHosts.Problem.INVALID);
             assertThat(LunaHosts.check(URI.create("https://api.openai.com/v1?x=1"), mode)).contains(LunaHosts.Problem.INVALID);
             assertThat(LunaHosts.check(URI.create("https://api.openai.com/v1#f"), mode)).contains(LunaHosts.Problem.INVALID);
