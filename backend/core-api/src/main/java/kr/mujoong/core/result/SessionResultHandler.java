@@ -106,7 +106,7 @@ public class SessionResultHandler implements JobHandler {
             stored.set(result);if(!finalExperience.isEmpty())structured.insert(result.id(),r.sessionId(),json.write(finalExperience),job.clock().now());
             for(var scene:finalScenes)judgments.insert(result.id(),r.sessionId(),scene,job.clock().now());
             previous.ifPresent(p->results.invalidate(p.id(),job.clock().now()));
-        },()->{if(generatedGoals&&!generatedPending.candidates().isEmpty())goalDelivery.deliver(job.guardianId(),r.childId(),r.sessionId(),stored.get().id(),generatedPending);else if(!candidates.isEmpty())registry.register(r.sessionId(),r.childId(),candidates);tx.executeWithoutResult(t->results.candidatesRegistered(stored.get().id(),job.clock().now()));});
+        },()->{if(generatedGoals)goalDelivery.deliver(job.guardianId(),r.childId(),r.sessionId(),stored.get().id(),generatedPending);else if(!candidates.isEmpty())registry.register(r.sessionId(),r.childId(),candidates);tx.executeWithoutResult(t->results.candidatesRegistered(stored.get().id(),job.clock().now()));});
         return done?Outcome.done():Outcome.failed("INTERNAL",false);
     }
     private void requireAiAccess(JobContext job){

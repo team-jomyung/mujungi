@@ -13,7 +13,7 @@ U15 기준 커밋 1a4ef7b 위의 unit/u14-goal-result에서 한 개발자가 순
 
 씨앗 AI/graph 동안 DB 잠금을 유지하지 않는다. 결과 재생성의 늦은 pending은 최신 current_result_id 확인으로 거절하며 이전 후보를 무효화하고 이미 담은 스냅샷은 보존한다. 외부 씨앗 응답 뒤에는 동의·삭제·최신 결과를 다시 확인한다. 실패는 NONE과 DONE을 유지한다.
 
-## 실제 검증
+## c096283 기준 전체 검증 증거
 
 각 층 구현 직후 해당 시험을 작성·실행했다. 같은 사례의 중복 실행은 합산하지 않았다.
 
@@ -59,3 +59,17 @@ NFR5의 동기화는 기존 설정 소유권을 따른다. 결과 작업 키는 
 GOAL_CANDIDATES의 provider 책임은 별도 중복 adapter 대신 기존 CoreLunaClient + GoalCandidateGateway로 구현하고 해당 gateway 시험에 호출·schema·입력 검증을 모았다. v2 기록의 PostgreSQL 저장은 U14ResultPipelineIT, 목표 REST는 U14ResultApiIT에 함께 검증했다. 계획상의 책임은 유지하며 시험 파일을 책임별로 통합했다.
 
 strict 공개 계약은 legacy reasonText와 새 displayEvidence를 분리하고 선택 요청 형태를 유지한다. 생산부·스키마·프런트 파서는 같은 릴리스로 배포해야 한다(contracts/deviations.md U14-a/U14-b). 직접적인 실제 키·유료 AI·실기기는 사용하지 않았다. PostgreSQL은 실제 컨테이너, AI/U15 외부 동작은 대역·합성 자료 증거다. 배포/병합은 수행하지 않았다.
+
+## 독립 검토 1차 이후 경계 보완
+
+위 전체 backend3135개/3skip와 frontend994개/98.55%는 c096283 기준 증거다. 아래 수정 후 전체 backend/compose/CI를 새로 통과했다고 주장하지 않으며 부모의 Build and Test에서 새 커밋으로 실행한다. 프런트/RT 소스와 계약·마이그레이션은 이번 보완에서 변경하지 않았다.
+
+- R-01: 현대 후보가 빈 목록이어도 즉시 handler와 durable replay가 PracticeGoal의 정리를 실행한다. 빈 정리는 AI/seed를 부르지 않으며 동의 철회 후 INSUFFICIENT도 완료한다. active guardian/child/현재 DONE 결과·원본 기록 확인은 유지한다. 담기 보호자 잠금 안에서 후보 출처 결과와 현재 결과의 일치를 추가 확인해 커밋 후 callback 전 구간도 막았다. 기존 선택 스냅샷 읽기는 유지한다.
+- R-02: GOAL_CANDIDATES 입력의 모든 깊이에 있는 저장 UUID를 호출별 임시 참조로 치환한다. 같은 UUID 관계는 호출 안에서 유지하고 다음 호출에는 새 참조를 사용한다. seed:S1 등 별도 skillRef 허용 목록 ID는 변하지 않는다. 실제 연습 scene 모양·중첩 배열/객체와 seed 연결을 요청 capture로 검증했다.
+- R-03: modern 후보 요청과 근거 허용 목록에서 uncertain=true 전사를 제외했다. 혼합 기록에서 불확실 발화만 근거인 후보는 버리고 유효 발화 후보는 유지한다. legacy ResultData.childQuotes는 수정하지 않았다.
+
+각 경계 구현 뒤 바로 해당 시험을 작성·실행했다. R-01 첫24개 실행은 새 실제 기록 fixture에 부모 activity가 없어 FK1개 실패했고 fixture를 고쳐24개 모두 통과했다(33초). R-02 gateway10개 PASS(12초), R-03 gateway/validator22개 PASS(10초)다. 이후 관련 전체214개 PASS(72초), U14 태그19클래스161개 PASS·실패/오류/skip0(46초), 줄837/926=90.39%로 기존80% 관문을 통과했다. 겹치는 실행 수는 합산하지 않는다.
+
+관련214개 명령은 backend에서 ./gradlew --init-script ../../u14-wsl-build.init.gradle :core-api:test --tests 'kr.mujoong.core.practicegoal.*' --tests kr.mujoong.core.result.SessionResultHandlerIT --tests kr.mujoong.core.result.ResultReconcilerTest --tests kr.mujoong.core.result.U14ResultPipelineIT --tests 'kr.mujoong.core.practice.*' -Pmujoong.test.db=docker였다. 태그/범위 명령은 앞의 동일 명령을 새 소스로 다시 실행했다. 현재 XML은 /tmp/mujungi-u14-verification-build/core-api/build 아래이며 별도 verification/review-repair-results.json에 집계를 보존했다. 기존 두 검증 집계 JSON은 덮지 않았다.
+
+추적성58행 대상은 모두 존재하며 NFR3을 새 빈 목록 재생 PG 시험으로 연결했다. U15 기준 이후 변경 운영 Java26개와 scope 목록의 집합은 계속 정확히 같다. 기존 다른 유닛의 동작 단언/하한·리뷰 파일·엔진 상태는 이번 수정에서 변경하지 않았다.

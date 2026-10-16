@@ -42,6 +42,12 @@ public class GoalCandidateRepository {
     }
     private static final String VERSION="select v.*,c.source_session_id from core.core_goal_candidate_version v join core.core_goal_candidate c on c.id=v.candidate_id and c.child_id=v.child_id where c.status='ACTIVE' ";
     public Optional<Version> version(UUID child,UUID handle){return jdbc.query(VERSION+"and v.child_id=:child and v.id=:id",Map.of("child",child,"id",handle),this::version).stream().findFirst();}
+    public boolean sourceIsCurrent(Version version){return Boolean.TRUE.equals(jdbc.queryForObject("""
+        select exists(select 1 from core.core_goal_candidate c
+          join core.core_session_result_state h on h.session_id=c.source_session_id and h.child_id=c.child_id
+          join core.core_activity_record r on r.session_id=h.session_id and r.child_id=h.child_id and r.guardian_id=h.guardian_id
+         where c.id=:id and c.child_id=:child and c.source_key like cast(h.current_result_id as text)||':%')
+        """,Map.of("id",version.candidateId(),"child",version.childId()),Boolean.class));}
     public Optional<Version> current(UUID child,UUID candidate){return jdbc.query(VERSION+"and v.child_id=:child and c.id=:id and v.version=c.current_version",Map.of("child",child,"id",candidate),this::version).stream().findFirst();}
     public List<Version> candidates(UUID child,UUID session){return jdbc.query(VERSION+"and v.child_id=:child and c.source_session_id=:session and v.version=c.current_version order by c.created_at,c.id",Map.of("child",child,"session",session),this::version);}
     public boolean fromResult(UUID candidate,UUID result){return Boolean.TRUE.equals(jdbc.queryForObject("select exists(select 1 from core.core_goal_candidate where id=:id and source_key like :prefix)",Map.of("id",candidate,"prefix",result+":%"),Boolean.class));}

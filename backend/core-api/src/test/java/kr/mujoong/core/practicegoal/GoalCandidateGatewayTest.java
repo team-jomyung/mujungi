@@ -27,4 +27,24 @@ class GoalCandidateGatewayTest {
     @Test void accessDeniedNeverCallsProvider(){assertThatThrownBy(()->gateway.generate(guardian,child,Map.of(),Map.of(),deadline,()->{throw new IllegalStateException("WITHDRAWN");})).isInstanceOf(IllegalStateException.class);verifyNoInteractions(luna);}
     @Test void providerFailureHasNoInnerRetry(){when(luna.call(any(LunaRequest.class))).thenThrow(new LunaException(LunaFailureReason.TIMEOUT,1));assertThatThrownBy(()->run(Map.of())).isInstanceOf(kr.mujoong.core.result.ResultAiException.class);verify(luna,times(1)).call(any(LunaRequest.class));}
     @Test void absenceOfCoreClientIsExplicitlyUnavailable(){assertThat(new GoalCandidateGateway(Optional.empty(),knowledge,new GoalCandidateValidator(new ForbiddenDictionary()),checker).available()).isFalse();}
+    @Test void practiceStoredIdentifiersBecomeConsistentPerCallReferencesAtEveryDepth(){
+        UUID goal=UUID.randomUUID(),scene=UUID.randomUUID(),utterance=UUID.randomUUID();var input=Map.<String,Object>of("scenes",List.of(Map.of("goalSelectionId",goal,"sceneNo",3,"sceneChip","DONE_IMMEDIATE","chipText","바로 전달","nested",Map.of("goalRef",goal.toString(),"sceneRunId",scene.toString(),"utterances",List.of(Map.of("id",utterance))))));
+        run(input);run(input);var capture=ArgumentCaptor.forClass(LunaRequest.class);verify(luna,times(2)).call(capture.capture());
+        var first=capture.getAllValues().getFirst().input();String serialized=JsonCodec.shared().write(first);assertThat(serialized).doesNotContain(goal.toString(),scene.toString(),utterance.toString()).contains("sceneNo","DONE_IMMEDIATE","바로 전달");
+        var row=kr.mujoong.core.result.ResultData.objects(first.get("scenes")).getFirst();assertThat(kr.mujoong.core.result.ResultData.object(row.get("nested")).get("goalRef")).isEqualTo(row.get("goalSelectionId"));assertThat(capture.getAllValues().getLast().input()).isNotEqualTo(first);
+    }
+    @Test void seedCatalogIdentifierRemainsValidWhileStoredSceneIdentifiersAreReplaced(){
+        var signature=new kr.mujoong.core.knowledge.StructureSignature("PRODUCE","참여 의도를 상대가 이해하도록 표현한다","상대의 의도 1층","YES","YES");var seed=new kr.mujoong.core.knowledge.KnowledgeSeed("seed:S1",kr.mujoong.core.knowledge.KnowledgeSeed.Origin.POC,"참여 표현",signature,"참여 의도를 표현한다","표현","참여 의미","FRIEND_CLOSE","FRIEND_PRIVATE",true);when(knowledge.seedSummaries(guardian,child)).thenReturn(List.of(seed));
+        var draft=new GoalCandidateValidatorTest().draft();draft.put("skillRef","seed:S1");when(luna.call(any(LunaRequest.class))).thenReturn(new LunaResult(JsonCodec.shared().write(Map.of("candidates",List.of(draft))),"fake","goal-candidates.v1",Duration.ZERO,1,false));UUID goal=UUID.randomUUID();assertThat(run(Map.of("transcript",List.of(Map.of("seq",1,"speaker","CHILD","text","같이 할래")),"scenes",List.of(Map.of("goalSelectionId",goal))))).singleElement().extracting(GoalCandidateRepository.Draft::skillRef).isEqualTo("seed:S1");var capture=ArgumentCaptor.forClass(LunaRequest.class);verify(luna).call(capture.capture());assertThat(JsonCodec.shared().write(capture.getValue().input())).contains("seed:S1").doesNotContain(goal.toString());
+    }
+    @Test void mixedTranscriptDropsUncertainEvidenceCandidateAndKeepsCertainCandidate(){
+        var uncertain=new GoalCandidateValidatorTest().draft();uncertain.put("displayName","다시 묻기");uncertain.put("evidence",List.of(Map.of("utteranceSeq",2,"quote","아마 함께 할래")));var certain=new GoalCandidateValidatorTest().draft();
+        when(luna.call(any(LunaRequest.class))).thenReturn(new LunaResult(JsonCodec.shared().write(Map.of("candidates",List.of(uncertain,certain))),"fake","goal-candidates.v1",Duration.ZERO,1,false));
+        var result=run(Map.of("transcript",List.of(Map.of("seq",1,"speaker","CHILD","text","같이 할래","uncertain",false),Map.of("seq",2,"speaker","CHILD","text","아마 함께 할래","uncertain",true))));
+        assertThat(result).singleElement().extracting(GoalCandidateRepository.Draft::displayName).isEqualTo("물어보기");var capture=ArgumentCaptor.forClass(LunaRequest.class);verify(luna).call(capture.capture());assertThat(JsonCodec.shared().write(capture.getValue().input())).contains("같이 할래").doesNotContain("아마 함께 할래");
+    }
+    @Test void uncertainOnlyTranscriptCannotGroundACandidate(){
+        var draft=new GoalCandidateValidatorTest().draft();when(luna.call(any(LunaRequest.class))).thenReturn(new LunaResult(JsonCodec.shared().write(Map.of("candidates",List.of(draft))),"fake","goal-candidates.v1",Duration.ZERO,1,false));
+        assertThat(run(Map.of("transcript",List.of(Map.of("seq",1,"speaker","CHILD","text","같이 할래","uncertain",true))))).isEmpty();
+    }
 }

@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service;
 /** U14 new-schema provider; legacy U6 providers remain supported separately. */
 @Service
 public class GoalCandidateGateway {
+    private static final java.util.regex.Pattern STORED_UUID=java.util.regex.Pattern.compile("(?i)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}");
     private final Optional<CoreLunaClient> luna;
     private final ChildKnowledgeService knowledge;
     private final GoalCandidateValidator validator;
@@ -28,7 +29,12 @@ public class GoalCandidateGateway {
         request.put("seedSummaries",catalog.stream().map(s->Map.of("seedId",s.seedId(),"label",s.label(),"signature",s.signature(),"invariantSentence",s.invariantSentence())).toList());
         // Whitelist input fields: age, account identifiers, raw guardian input and audio never enter this request.
         request.keySet().retainAll(Set.of("transcript","structured","scenes","seedSummaries","endReason"));
+        // Only the modern candidate boundary excludes uncertain material; legacy result readers are unchanged.
+        request.put("transcript",objects(request.get("transcript")).stream().filter(row->!Boolean.TRUE.equals(row.get("uncertain"))).toList());
         request=new LinkedHashMap<>(new LunaInputSanitizer(json).sanitize(request,aliases).payload());
+        // Local UUIDs become per-call aliases; the separate seed:* skillRef catalog identifiers stay unchanged.
+        Map<String,String> references=new HashMap<>();
+        request.replaceAll((key,value)->referenceIds(value,references));
         var quotes=childQuotes(objects(request.get("transcript")));
         String prompt;try{prompt=new ClassPathResource("prompts/goal/goal-candidates.v1.txt").getContentAsString(StandardCharsets.UTF_8);}catch(java.io.IOException missing){throw new ResultAiException("INTERNAL");}
         access.run();LunaResult generated;
@@ -42,5 +48,11 @@ public class GoalCandidateGateway {
         var checked=checker.check(checks,deadline,access);var kept=new ArrayList<GoalCandidateRepository.Draft>();
         for(int i=0;i<candidates.size();i++)if(checked.get("goal-reason-"+i)!=null&&checked.get("goal-display-"+i)!=null&&checked.get("goal-name-"+i)!=null&&checked.get("goal-target-"+i)!=null)kept.add(candidates.get(i));
         return List.copyOf(kept);
+    }
+    private Object referenceIds(Object value,Map<String,String> references){
+        if(value instanceof Map<?,?> map){Map<String,Object> result=new LinkedHashMap<>();map.forEach((key,item)->result.put((String)referenceIds(String.valueOf(key),references),referenceIds(item,references)));return result;}
+        if(value instanceof List<?> list)return list.stream().map(item->referenceIds(item,references)).toList();
+        if(value instanceof String text){var matches=STORED_UUID.matcher(text);return matches.replaceAll(match->references.computeIfAbsent(match.group().toLowerCase(Locale.ROOT),id->"참조-"+UUID.randomUUID()));}
+        return value;
     }
 }

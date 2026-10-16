@@ -10,7 +10,7 @@ U15의 1a4ef7b 위에서 unit/u14-goal-result를 순차 개발했다. 불변 후
 - 새 후보 공개 응답은 displayEvidence를 제공하고 내부 reasonText/fourElements/skillRef를 제외한다. 프런트 파서만 기존 화면 모델로 변환했다. 기존 27 화면은 수정하지 않았다.
 - 기존 결과70/연습150 삭제 순서를 유지했다. 새 선택→버전→후보 FK 순서 삭제와 늦은 응답/재생 거절, 부분 실패 rollback을 검증했다.
 
-## 시험 증거
+## c096283 기준 시험 증거
 
 | 종류 | 실제 결과 |
 |---|---|
@@ -46,3 +46,11 @@ V9의 실제 사람 승인은 migration-review.md와 infra/migration-approvals.t
 ## 남은 일
 
 Code Generation의 네 번째 커밋 후 부모가 독립 검토, 전체 compose verify.sh, authorized branch push·PR CI를 이어간다. U15 PR 병합과 U14 병합/배포는 이 개발자가 수행하지 않았다. U10/U11/U12의 상황 생성·진행 판정은 C-DS10/U8 포트 소비 범위로 남는다.
+
+## 1차 독립 검토 보완
+
+R-01~R-03의 운영 경계를 보완했다. 빈 현대 후보도 이전 후보를 정리하고, 담기 트랜잭션은 현재 출처 결과를 확인해 callback 전의 오래된 핸들도 거절한다. 동의 철회 후 AI 없는 빈 정리/DONE·durable replay·기존 선택 보존·타 아동/삭제 경계를 실제 PostgreSQL로 검증했다. 공급자 입력의 모든 깊이 저장 UUID는 호출별 참조로 바꾸고 seed:* 연결은 유지한다. uncertain 발화는 modern 후보 요청/근거에서 제외하며 legacy 전역 읽기는 유지했다.
+
+수정 후 관련 회귀214개 PASS, U14 태그19클래스161개 PASS(실패/오류/skip0),26파일 범위 줄837/926=90.39%다. 첫 보완 시험의 실제 기록 fixture FK1개 실패도 보존했고 올바른 부모 활동 fixture를 넣은 재실행은 통과했다. 추적성58행/대상 존재와 범위26개 전수 일치를 확인했다.
+
+이 결과는 c096283의 전수 backend3135개와 frontend994개 증거를 대체하지 않는다. 프런트/RT 소스는 보완에서 불변이며 새 전체검사를 실행했다고 표시하지 않았다. 수정 커밋의 전체 backend/compose/PR CI는 부모가 후속 Build and Test에서 검증한다. 자세한 명령과 구분된 집계는 Code Generation 요약 및 verification/review-repair-results.json에 있다.

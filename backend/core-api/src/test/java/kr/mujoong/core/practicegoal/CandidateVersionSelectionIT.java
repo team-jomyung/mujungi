@@ -14,9 +14,10 @@ import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 @Tag("u14") @Tag("db")
 class CandidateVersionSelectionIT {
     DbTestSupport db;GoalCandidateRepository repository;GeneratedGoalService service;ConsentPolicyService consent;
+    CandidateSeedReplayIT fixture;
     UUID guardian,child,session;MutableClock clock=new MutableClock();
     @BeforeEach void setup(){
-        db=DbTestSupport.coreApp();guardian=db.insertGuardian("ACTIVE");child=db.insertChild(guardian);session=UUID.randomUUID();
+        fixture=new CandidateSeedReplayIT();fixture.setup();db=fixture.db;guardian=fixture.guardian;child=fixture.child;session=fixture.session;
         repository=new GoalCandidateRepository(db.jdbc());var accounts=mock(PracticeAccountPort.class);
         var context=new PracticeAccountPort.AccountContext(guardian,child,null,List.of());
         when(accounts.requireActive(guardian,true)).thenAnswer(i->{new GuardianWriteLock(db.jdbc()).lockActive(guardian);return context;});
@@ -24,8 +25,8 @@ class CandidateVersionSelectionIT {
         consent=mock(ConsentPolicyService.class);when(consent.check(guardian)).thenReturn(new ConsentPolicyService.GateResult(true,null,new ConsentPolicyService.Snapshot("v1",true,true,true,true)));
         service=new GeneratedGoalService(repository,accounts,consent,clock,new DataSourceTransactionManager(db.dataSource()));
     }
-    @AfterEach void close(){if(db!=null){repository.deleteGuardian(guardian);db.close();}}
-    GoalCandidateRepository.Version version(){return db.inTx(t->repository.register(child,session,"candidate0",new GoalCandidateRepository.Draft("합성목표","합성장면","전달",new FourElements("놀이","친구","참여","말하기"),"NONE","합성 근거",List.of(new GoalCandidateRepository.Evidence(1,"같이 할래")),null),clock.now()));}
+    @AfterEach void close(){if(fixture!=null)fixture.close();}
+    GoalCandidateRepository.Version version(){return db.inTx(t->repository.register(child,session,fixture.result+":0",new GoalCandidateRepository.Draft("합성목표","합성장면","전달",new FourElements("놀이","친구","참여","말하기"),"NONE","합성 근거",List.of(new GoalCandidateRepository.Evidence(1,"같이 할래")),null),clock.now()));}
     @Test void observedOldHandlePinsOldVersion(){var old=version();db.inTx(t->repository.linkSeed(old,"seed:1",clock.now()));var saved=service.add(guardian,old.id()).orElseThrow();assertThat(repository.saved(child,saved.id()).orElseThrow().skillRef()).isEqualTo("NONE");}
     @Test void latestHandlePinsSeed(){var old=version();var latest=db.inTx(t->repository.linkSeed(old,"seed:1",clock.now())).orElseThrow();var saved=service.add(guardian,latest.id()).orElseThrow();assertThat(repository.saved(child,saved.id()).orElseThrow().skillRef()).isEqualTo("seed:1");}
     @Test void newVersionDoesNotReplaceActiveSelection(){var old=version();var saved=service.add(guardian,old.id()).orElseThrow();var latest=db.inTx(t->repository.linkSeed(old,"seed:1",clock.now())).orElseThrow();assertThat(service.add(guardian,latest.id()).orElseThrow().id()).isEqualTo(saved.id());}
@@ -34,4 +35,7 @@ class CandidateVersionSelectionIT {
     @Test void sameHandleRetryIsIdempotent(){var v=version();assertThat(service.add(guardian,v.id()).orElseThrow().id()).isEqualTo(service.add(guardian,v.id()).orElseThrow().id());}
     @Test void withdrawnConsentCannotSelect(){var v=version();when(consent.check(guardian)).thenReturn(new ConsentPolicyService.GateResult(false,null,new ConsentPolicyService.Snapshot("v1",false,true,true,true)));assertThatThrownBy(()->service.add(guardian,v.id())).isInstanceOf(kr.mujoong.core.common.error.CoreApiException.class);assertThat(repository.list(guardian)).isEmpty();}
     @Test void favoriteAndRestoreKeepPinnedContext(){var v=version();var selected=service.add(guardian,v.id()).orElseThrow();assertThat(service.favorite(guardian,selected.id(),true).isFavorite()).isTrue();service.delete(guardian,selected.id(),java.time.Duration.ofSeconds(30));assertThat(service.restore(guardian,selected.id()).recommendationId()).isEqualTo(v.id());}
+    @Test void replacedResultRejectsOldHandleBeforePendingDelivery(){var v=version();fixture.publish();assertThat(repository.version(child,v.id())).isPresent();assertThatThrownBy(()->service.add(guardian,v.id())).isInstanceOf(kr.mujoong.core.common.error.CoreApiException.class);assertThat(repository.list(guardian)).isEmpty();}
+    @Test void replacedResultKeepsAlreadySelectedSnapshotReadable(){var v=version();var selected=service.add(guardian,v.id()).orElseThrow();fixture.publish();assertThat(repository.saved(child,selected.id()).orElseThrow().candidateVersion()).isEqualTo(1);}
+    @Test void removedSourceCannotBeSelectedEvenBeforeCleanup(){var v=version();db.jdbc().update("delete from core.core_activity_record where session_id=:s",Map.of("s",session));assertThatThrownBy(()->service.add(guardian,v.id())).isInstanceOf(kr.mujoong.core.common.error.CoreApiException.class);}
 }

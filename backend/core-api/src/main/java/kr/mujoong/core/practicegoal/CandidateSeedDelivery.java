@@ -37,7 +37,7 @@ public class CandidateSeedDelivery {
     public void deliver(UUID guardian,UUID child,UUID session,UUID result,Pending pending){
         if(!"goal-candidates-v1".equals(pending.format()))throw new IllegalArgumentException("Unknown pending format");
         List<GoalCandidateRepository.Version> registered=tx.execute(t->{
-            requireCurrent(guardian,child,session,result);
+            requireCurrent(guardian,child,session,result,!pending.candidates().isEmpty());
             repository.invalidatePrevious(child,session,result);
             List<GoalCandidateRepository.Version> versions=new ArrayList<>();
             for(int i=0;i<pending.candidates().size();i++)versions.add(repository.register(child,session,result+":"+i,pending.candidates().get(i),clock.now()));
@@ -59,7 +59,12 @@ public class CandidateSeedDelivery {
         }
     }
     private void requireCurrent(UUID guardian,UUID child,UUID session,UUID result){
-        if(!child.equals(accounts.requireActive(guardian,true).childId())||!consent.check(guardian).ok())throw CoreApiException.of(ErrorCode.CONSENT_MISSING);
+        requireCurrent(guardian,child,session,result,true);
+    }
+    private void requireCurrent(UUID guardian,UUID child,UUID session,UUID result,boolean requiresConsent){
+        if(!child.equals(accounts.requireActive(guardian,true).childId()))throw CoreApiException.of(ErrorCode.NOT_FOUND);
+        // Clearing obsolete candidates is not AI processing and must finish after consent withdrawal too.
+        if(requiresConsent&&!consent.check(guardian).ok())throw CoreApiException.of(ErrorCode.CONSENT_MISSING);
         Integer count=jdbc.queryForObject("select count(*) from core.core_session_result_state s join core.core_activity_record r on r.session_id=s.session_id and r.guardian_id=s.guardian_id and r.child_id=s.child_id where s.guardian_id=:g and s.child_id=:c and s.session_id=:s and s.current_result_id=:r and s.job_status='DONE'",Map.of("g",guardian,"c",child,"s",session,"r",result),Integer.class);
         if(count==null||count!=1)throw CoreApiException.of(ErrorCode.NOT_FOUND);
     }

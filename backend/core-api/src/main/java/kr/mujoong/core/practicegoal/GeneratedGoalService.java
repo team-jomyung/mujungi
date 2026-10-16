@@ -28,6 +28,7 @@ public class GeneratedGoalService {
         if(repository.version(current.childId(),handle).isEmpty())return Optional.empty();
         return write(guardian,owner->{
         var version=repository.version(owner.childId(),handle);if(version.isEmpty())return Optional.empty();
+        if(!repository.sourceIsCurrent(version.get()))throw CoreApiException.of(ErrorCode.NOT_FOUND);
         UUID id=repository.select(guardian,version.get(),clock.now());return repository.selection(guardian,id);
     });}
     public Optional<GoalSelection> find(UUID guardian,UUID id){

@@ -281,7 +281,7 @@
     {
       "id": "NFR3",
       "status": "OK",
-      "target": "backend/core-api/src/test/java/kr/mujoong/core/practicegoal/U14DeletionIT.java"
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/practicegoal/U14EmptyCandidateReplayIT.java"
     },
     {
       "id": "NFR4",
