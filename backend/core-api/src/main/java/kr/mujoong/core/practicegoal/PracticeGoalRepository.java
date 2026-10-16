@@ -105,6 +105,9 @@ public class PracticeGoalRepository {
         int requests=jdbc.update("delete from core.core_scenario_request where guardian_id=:guardian",p);
         int scenarios=jdbc.update("delete from core.core_scenario where guardian_id=:guardian",p);
         int selections=jdbc.update("delete from core.core_practice_goal_selection where guardian_id=:guardian",p);
+        int saved=jdbc.update("delete from core.core_saved_goal where guardian_id=:guardian",p);
+        int versions=children.isEmpty() ? 0 : jdbc.update("delete from core.core_goal_candidate_version where child_id in (:children)",p);
+        int generated=children.isEmpty() ? 0 : jdbc.update("delete from core.core_goal_candidate where child_id in (:children)",p);
         int evidence=children.isEmpty() ? 0 : jdbc.update("""
             delete from core.core_recommendation_evidence e using core.core_goal_recommendation r
             where e.recommendation_id=r.id and r.child_id in (:children)
@@ -114,7 +117,8 @@ public class PracticeGoalRepository {
             where r.child_id in (:children)
             """,p);
         return Map.of("practicePreparations",preparations,"scenarioRequests",requests,"scenarios",scenarios,"goalSelections",selections,
-                "recommendationEvidence",evidence,"goalRecommendations",candidates);
+                "recommendationEvidence",evidence,"goalRecommendations",candidates,
+                "savedGoals",saved,"goalCandidateVersions",versions,"goalCandidates",generated);
     }
     public List<CandidateRegistry.ResultCandidateView> resultCandidates(UUID child,UUID session) {
         return jdbc.query("select r.id,r.display_name,r.reason_text,s.id selection_id from core.core_goal_recommendation r "

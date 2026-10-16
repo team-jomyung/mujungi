@@ -20,6 +20,10 @@ public class PinnedSavedGoalReader implements SavedGoalReader {
     }
     /** Result/report-owned historical reads retain deleted selection snapshots; C-DS10 stays active-only. */
     public Optional<SavedGoalView> historical(UUID child,UUID selection){return read(child,selection,false);}
+    /** Distinguishes a missing historical reference (fallback) from a known other child's selection (reject). */
+    public boolean belongsToAnotherChild(UUID child,UUID selection){
+        return Boolean.TRUE.equals(jdbc.queryForObject("select exists(select 1 from core.core_saved_goal where id=:id and child_id<>:child union all select 1 from core.core_practice_goal_selection where id=:id and child_id<>:child)",java.util.Map.of("id",selection,"child",child),Boolean.class));
+    }
     private Optional<SavedGoalView> read(UUID child,UUID selection,boolean active){
         if(child==null||selection==null)return Optional.empty();
         try{var owner=accounts.requireChild(child,false);if(!consent.check(owner.guardianId()).ok())return Optional.empty();}

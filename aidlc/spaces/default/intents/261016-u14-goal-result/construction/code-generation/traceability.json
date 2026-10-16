@@ -1,0 +1,358 @@
+{
+  "stage": "code-generation",
+  "upstream_ids": [
+    "FR1.1",
+    "FR1.2",
+    "FR2.1",
+    "FR2.2",
+    "FR2.3",
+    "FR3.1",
+    "FR3.2",
+    "FR3.3",
+    "FR3.4",
+    "FR3.5",
+    "FR4.1",
+    "FR4.2",
+    "AC4.1.1",
+    "AC4.1.2",
+    "AC4.1.3",
+    "AC4.1.5",
+    "AC4.1.4",
+    "AC4.2.1",
+    "AC4.2.2",
+    "AC4.2.3",
+    "AC4.2.4",
+    "AC4.3.1",
+    "AC4.3.2",
+    "AC4.4.1",
+    "AC4.4.2",
+    "AC4.5.1",
+    "AC4.5.4",
+    "AC4.5.7",
+    "AC4.5.2",
+    "AC4.5.3",
+    "AC4.5.6",
+    "AC4.5.8",
+    "AC4.5.5",
+    "AC4.6.1",
+    "AC4.6.5",
+    "AC4.6.4",
+    "AC5.1.1",
+    "AC5.1.2",
+    "AC5.1.3",
+    "AC4.6.2",
+    "AC4.6.3",
+    "NFR1",
+    "NFR2",
+    "NFR3",
+    "NFR4",
+    "NFR5",
+    "BR1.1",
+    "BR1.2",
+    "BR2.1",
+    "BR2.2",
+    "BR2.3",
+    "BR3.1",
+    "BR3.2",
+    "BR3.3",
+    "BR3.4",
+    "BR3.5",
+    "BR4.1",
+    "BR4.2"
+  ],
+  "coverage": [
+    {
+      "id": "FR1.1",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/practicegoal/GoalCandidateRepository.java"
+    },
+    {
+      "id": "FR1.2",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/practicegoal/PinnedSavedGoalReader.java"
+    },
+    {
+      "id": "FR2.1",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/practicegoal/GoalCandidateGateway.java"
+    },
+    {
+      "id": "FR2.2",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/practicegoal/GoalCandidateValidator.java"
+    },
+    {
+      "id": "FR2.3",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/practicegoal/CandidateSeedDelivery.java"
+    },
+    {
+      "id": "FR3.1",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/result/SceneReportMapper.java"
+    },
+    {
+      "id": "FR3.2",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/result/PracticeRecordV2.java"
+    },
+    {
+      "id": "FR3.3",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/result/RejudgmentGateway.java"
+    },
+    {
+      "id": "FR3.4",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/config/CoreProperties.java"
+    },
+    {
+      "id": "FR3.5",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/report/ReportAssembler.java"
+    },
+    {
+      "id": "FR4.1",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/result/ResultQueryService.java"
+    },
+    {
+      "id": "FR4.2",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/practicegoal/PracticeGoalRepository.java"
+    },
+    {
+      "id": "AC4.1.1",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/result/SceneReportMapper.java"
+    },
+    {
+      "id": "AC4.1.2",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/result/SceneReportMapper.java"
+    },
+    {
+      "id": "AC4.1.3",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/result/SceneReportMapper.java"
+    },
+    {
+      "id": "AC4.1.5",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/result/SceneReportMapper.java"
+    },
+    {
+      "id": "AC4.1.4",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/result/RejudgmentGateway.java"
+    },
+    {
+      "id": "AC4.2.1",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/result/PracticeRecordV2.java"
+    },
+    {
+      "id": "AC4.2.2",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/result/PracticeRecordV2.java"
+    },
+    {
+      "id": "AC4.2.3",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/result/PracticeRecordV2.java"
+    },
+    {
+      "id": "AC4.2.4",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/result/PracticeRecordV2.java"
+    },
+    {
+      "id": "AC4.3.1",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/report/ReportAssembler.java"
+    },
+    {
+      "id": "AC4.3.2",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/report/ReportAssembler.java"
+    },
+    {
+      "id": "AC4.4.1",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/config/CoreProperties.java"
+    },
+    {
+      "id": "AC4.4.2",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/config/CoreProperties.java"
+    },
+    {
+      "id": "AC4.5.1",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/practicegoal/GoalCandidateGateway.java"
+    },
+    {
+      "id": "AC4.5.4",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/practicegoal/GoalCandidateGateway.java"
+    },
+    {
+      "id": "AC4.5.7",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/practicegoal/GoalCandidateGateway.java"
+    },
+    {
+      "id": "AC4.5.2",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/practicegoal/GoalCandidateValidator.java"
+    },
+    {
+      "id": "AC4.5.3",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/practicegoal/GoalCandidateValidator.java"
+    },
+    {
+      "id": "AC4.5.6",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/practicegoal/GoalCandidateValidator.java"
+    },
+    {
+      "id": "AC4.5.8",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/practicegoal/GoalCandidateValidator.java"
+    },
+    {
+      "id": "AC4.5.5",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/result/ResultQueryService.java"
+    },
+    {
+      "id": "AC4.6.1",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/practicegoal/GoalCandidateRepository.java"
+    },
+    {
+      "id": "AC4.6.5",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/practicegoal/GoalCandidateRepository.java"
+    },
+    {
+      "id": "AC4.6.4",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/practicegoal/PinnedSavedGoalReader.java"
+    },
+    {
+      "id": "AC5.1.1",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/practicegoal/CandidateSeedDelivery.java"
+    },
+    {
+      "id": "AC5.1.2",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/practicegoal/CandidateSeedDelivery.java"
+    },
+    {
+      "id": "AC5.1.3",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/practicegoal/CandidateSeedDelivery.java"
+    },
+    {
+      "id": "AC4.6.2",
+      "status": "N/A",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/practicegoal/SavedGoalReader.java",
+      "reason": "C-DS10 포트 제공까지 U14. 상황 생성/진행 판정은 U10/U11/U12 범위."
+    },
+    {
+      "id": "AC4.6.3",
+      "status": "N/A",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/practicegoal/SavedGoalReader.java",
+      "reason": "C-DS10 포트 제공까지 U14. 상황 생성/진행 판정은 U10/U11/U12 범위."
+    },
+    {
+      "id": "NFR1",
+      "status": "OK",
+      "target": "backend/coverage-scope/u14.txt"
+    },
+    {
+      "id": "NFR2",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/practicegoal/GoalCandidateGatewayTest.java"
+    },
+    {
+      "id": "NFR3",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/practicegoal/U14DeletionIT.java"
+    },
+    {
+      "id": "NFR4",
+      "status": "OK",
+      "target": "docs/units/u14/migration-review.md"
+    },
+    {
+      "id": "NFR5",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/result/U14TimingContractTest.java"
+    },
+    {
+      "id": "BR1.1",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/practicegoal/GoalCandidateRepository.java"
+    },
+    {
+      "id": "BR1.2",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/practicegoal/PinnedSavedGoalReader.java"
+    },
+    {
+      "id": "BR2.1",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/practicegoal/GoalCandidateGateway.java"
+    },
+    {
+      "id": "BR2.2",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/practicegoal/GoalCandidateValidator.java"
+    },
+    {
+      "id": "BR2.3",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/practicegoal/CandidateSeedDelivery.java"
+    },
+    {
+      "id": "BR3.1",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/result/SceneReportMapper.java"
+    },
+    {
+      "id": "BR3.2",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/result/PracticeRecordV2.java"
+    },
+    {
+      "id": "BR3.3",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/result/RejudgmentGateway.java"
+    },
+    {
+      "id": "BR3.4",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/config/CoreProperties.java"
+    },
+    {
+      "id": "BR3.5",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/report/ReportAssembler.java"
+    },
+    {
+      "id": "BR4.1",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/result/ResultQueryService.java"
+    },
+    {
+      "id": "BR4.2",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/practicegoal/PracticeGoalRepository.java"
+    }
+  ],
+  "reverse": []
+}

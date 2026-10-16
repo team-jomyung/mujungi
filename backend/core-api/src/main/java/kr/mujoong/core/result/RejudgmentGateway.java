@@ -20,6 +20,7 @@ public class RejudgmentGateway {
         var scenes=PracticeRecordV2.read(practice);if(scenes.isEmpty())return List.of();
         Map<String,PracticeRecordV2.Scene> handles=new LinkedHashMap<>();List<Map<String,Object>> input=new ArrayList<>();
         for(var scene:scenes){
+            if(goals.belongsToAnotherChild(child,scene.goalRef()))throw new ResultAiException("SCHEMA_INVALID");
             // Ephemeral UUID handles satisfy the schema without exposing stored scene/selection identifiers.
             String handle=UUID.randomUUID().toString();handles.put(handle,scene);
             Map<String,Object> row=new LinkedHashMap<>();row.put("sceneRunId",handle);row.put("sceneKind",scene.sceneKind());row.put("facts",scene.facts());row.put("variantSkipReason",scene.variantSkipReason());

@@ -51,17 +51,17 @@
 - [x] Step 16. 구현 직후 RejudgmentGatewayTest, U14SceneProjectionTest, U14MixedReportIT, U14ResultPipelineIT를 작성·실행한다. 빠진/중복/불명 scene·value/timing 모순·단순 재발화·세종류timing·differs내부·unsafe표현·legacy/새혼합·없는2번째장면미생성·도움없음비실패를 검증한다. (FR3.1·FR3.3·FR3.5)
 - [x] Step 17. JobRunner/관련 timing을 총4회·5/15/30초로 맞추고 양 앱 application.yml, contracts/timing.md, frontend timing-defaults.json, ai-io.md 6.9/10.3을 같은 변경으로 갱신한다. 세 JOB_ATTEMPT 목적은 각 시도당 내부재시도0, lease·manual retry·최종FAILED를 유지한다. (FR3.4, NFR5; US4.4)
 - [x] Step 18. 구현 직후 U14ResultRetryIT와 U14TimingContractTest를 작성·실행한다. 최초+추가3회·각지연·5번째실행없음·분류별재시도·내부call count·최종실패/수동재요청·lease경합과 양앱/계약/frontend 기본값 동등을 검증한다. 기존 다른 유닛 단언은 수정하지 않는다. (FR3.4, NFR1·NFR5)
-- [ ] Step 19. 위 층 및 앞 층 시험 후 feat(u14): 새 연습 결과와 재판정 및 재시도 구현 으로 시간 정본 전체를 함께 커밋한다. (FR3.1~FR3.5)
+- [x] Step 19. 위 층 및 앞 층 시험 후 feat(u14): 새 연습 결과와 재판정 및 재시도 구현 으로 시간 정본 전체를 함께 커밋한다. (FR3.1~FR3.5)
 
 ### 커밋 4: 보호자 REST + 삭제
 
-- [ ] Step 20. ResultQueryService/결과 DTO·선택/목록 REST에 새 후보 displayEvidence와 장면 timing을 투영하고 내부 reasonText/fourElements/skillRef/live/differs를 제외한다. legacy response 유지, strict schema에서 깨는 변경 분류와 parent-api/schema 예시·deviations를 함께 확정한다. (FR4.1; US4.1·US4.5·US4.6)
-- [ ] Step 21. 구현 직후 U14ResultApiIT/U14GoalApiIT를 작성·실행한다. 새·legacy 직렬화, 비공개 필드 부재, timing 보존, 불변 추천핸들 선택, 기존 경로/오류봉투·인증·타아동 격리를 검증한다. (FR4.1, NFR3)
-- [ ] Step 22. frontend/src/parent/api/results.ts의 새 displayEvidence→기존 화면 모델 최소 adapter를 구현하고 바로 frontend/tests/u14/results.test.ts를 작성·실행한다. legacy reasonText·새 displayEvidence·timing·선택핸들·null/빈값을 검증한다. 27 화면과 chip enum은 변경하지 않는다. (FR4.1, NFR5; US4.5)
-- [ ] Step 23. 기존 ResultDeletionParticipant(70)/PracticeDeletionParticipant(150)를 확장하여 새 사실·판정·pending·후보버전·evidence·선택 snapshot을 FK 순서대로 지우고 late callback/replay의 부활을 막는다. U15(80)와 기존 잠금 순서를 유지한다. (FR4.2, NFR3)
-- [ ] Step 24. 구현 직후 U14DeletionIT를 작성·실행한다. 아동·계정·기록 삭제, 일부실패 비완료, AI/seed 지연응답·pending replay·선택 경합, 철회와 중복 삭제를 확인한다. (FR4.2, NFR3)
-- [ ] Step 25. backend/coverage-scope/u14.txt에 모든 새/수정 운영 Java 경로를 빠짐없이 넣고 태그 시험·실제 범위80%·계약대조·ArchUnit·기존 전체 backend check·frontend lint/coverage/build를 검증한다. 범위검증 빈목록/없는파일 실패와 기존 하한을 그대로 둔다. 전체 verify.sh compose는 Build and Test에서 모든 변경과 함께 실행한다. (NFR1~NFR5)
-- [ ] Step 26. 앞 단계들과 REST/삭제 검증이 통과하면 feat(u14): 보호자 결과 조회와 삭제 확장 으로 커밋한다. code-summary.md·traceability.json·docs/units/u14/report.md에 구현파일·시험실측·편차·남은제약을 기록한다. traceability는 이 기록의 FR/NFR/BR 각각을 실제 경로 하나에 연결한다. 검토는 완료 산출물 뒤 부모가 순차 요청한다. 검토 보완 후 Build and Test/전체verify·PR CI를 완료하고 authorized branch push만 수행하며 배포·PR병합은 하지 않는다. (전체 FR/NFR/BR)
+- [x] Step 20. ResultQueryService/결과 DTO·선택/목록 REST에 새 후보 displayEvidence와 장면 timing을 투영하고 내부 reasonText/fourElements/skillRef/live/differs를 제외한다. legacy response 유지, strict schema에서 깨는 변경 분류와 parent-api/schema 예시·deviations를 함께 확정한다. (FR4.1; US4.1·US4.5·US4.6)
+- [x] Step 21. 구현 직후 U14ResultApiIT/U14GoalApiIT를 작성·실행한다. 새·legacy 직렬화, 비공개 필드 부재, timing 보존, 불변 추천핸들 선택, 기존 경로/오류봉투·인증·타아동 격리를 검증한다. (FR4.1, NFR3)
+- [x] Step 22. frontend/src/parent/api/results.ts의 새 displayEvidence→기존 화면 모델 최소 adapter를 구현하고 바로 frontend/tests/u14/results.test.ts를 작성·실행한다. legacy reasonText·새 displayEvidence·timing·선택핸들·null/빈값을 검증한다. 27 화면과 chip enum은 변경하지 않는다. (FR4.1, NFR5; US4.5)
+- [x] Step 23. 기존 ResultDeletionParticipant(70)/PracticeDeletionParticipant(150)를 확장하여 새 사실·판정·pending·후보버전·evidence·선택 snapshot을 FK 순서대로 지우고 late callback/replay의 부활을 막는다. U15(80)와 기존 잠금 순서를 유지한다. (FR4.2, NFR3)
+- [x] Step 24. 구현 직후 U14DeletionIT를 작성·실행한다. 아동·계정·기록 삭제, 일부실패 비완료, AI/seed 지연응답·pending replay·선택 경합, 철회와 중복 삭제를 확인한다. (FR4.2, NFR3)
+- [x] Step 25. backend/coverage-scope/u14.txt에 모든 새/수정 운영 Java 경로를 빠짐없이 넣고 태그 시험·실제 범위80%·계약대조·ArchUnit·기존 전체 backend check·frontend lint/coverage/build를 검증한다. 범위검증 빈목록/없는파일 실패와 기존 하한을 그대로 둔다. 전체 verify.sh compose는 Build and Test에서 모든 변경과 함께 실행한다. (NFR1~NFR5)
+- [x] Step 26. 앞 단계들과 REST/삭제 검증이 통과하면 feat(u14): 보호자 결과 조회와 삭제 확장 으로 커밋한다. code-summary.md·traceability.json·docs/units/u14/report.md에 구현파일·시험실측·편차·남은제약을 기록한다. traceability는 이 기록의 FR/NFR/BR 각각을 실제 경로 하나에 연결한다. 검토는 완료 산출물 뒤 부모가 순차 요청한다. 검토 보완 후 Build and Test/전체verify·PR CI를 완료하고 authorized branch push만 수행하며 배포·PR병합은 하지 않는다. (전체 FR/NFR/BR)
 
 ## 시험 계획과 완료 조건
 

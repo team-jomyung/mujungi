@@ -14,6 +14,24 @@ class PracticeGoalRepositoryIT {
     GoalCandidateRepository.Draft draft(){return new GoalCandidateRepository.Draft("물어보기","합성 놀이 장면","함께 물어보기",new FourElements("친구와 놀 때","친구","참여하고 싶다","함께 해도 돼?"),"NONE","합성 근거",List.of(new GoalCandidateRepository.Evidence(1,"함께 해도 돼?")),null);}
     GoalCandidateRepository.Version register(){return db.inTx(t->goals.register(child,session,"source:0",draft(),now));}
     @Test void storesFullCandidateContext(){var v=register();assertThat(v.content()).isEqualTo(draft());assertThat(v.version()).isEqualTo(1);}
+    @Test void rejudgmentRejectsAnotherChildsGeneratedGoalBeforeAi(){
+        UUID otherGuardian=db.insertGuardian("ACTIVE"),otherChild=db.insertChild(otherGuardian);
+        var version=db.inTx(t->goals.register(otherChild,UUID.randomUUID(),"other",draft(),now));UUID selection=db.inTx(t->goals.select(otherGuardian,version,now));
+        rejectsForeignSelection(selection);goals.deleteGuardian(otherGuardian);
+    }
+    @Test void rejudgmentRejectsAnotherChildsLegacyGoalBeforeAi(){
+        UUID otherGuardian=db.insertGuardian("ACTIVE"),otherChild=db.insertChild(otherGuardian);var legacy=new kr.mujoong.core.practice.PracticeGoalRepository(db.jdbc());
+        var candidate=new kr.mujoong.core.practice.CandidateRegistry.Candidate("ACCEPT_STOP",1,"합성 근거",List.of(new kr.mujoong.core.practice.CandidateRegistry.Evidence(1,"CHILD_RECALL")));
+        UUID recommendation=db.inTx(t->legacy.register(otherChild,UUID.randomUUID(),candidate,"합성목표",now));
+        UUID selection=db.inTx(t->legacy.insertSelection(otherGuardian,otherChild,new kr.mujoong.core.practice.PracticeGoalRepository.Recommendation(recommendation,"ACCEPT_STOP",1,"ACTIVE"),"합성목표",now));
+        rejectsForeignSelection(selection);legacy.deleteByGuardian(otherGuardian,List.of(otherChild));
+    }
+    void rejectsForeignSelection(UUID selection){
+        var reader=new PinnedSavedGoalReader(goals,org.mockito.Mockito.mock(kr.mujoong.core.practice.PracticeAccountPort.class),org.mockito.Mockito.mock(kr.mujoong.core.consent.ConsentPolicyService.class),db.jdbc());
+        var luna=org.mockito.Mockito.mock(kr.mujoong.core.luna.CoreLunaClient.class);var gateway=new kr.mujoong.core.result.RejudgmentGateway(Optional.of(luna),reader);
+        var practice=Map.<String,Object>of("flowVersion",kr.mujoong.core.result.PracticeRecordV2.VERSION,"scenes",List.of(Map.of("sceneRunId",UUID.randomUUID().toString(),"goalRef",selection.toString(),"sceneKind","BASE","startedAt",now.toString())));
+        assertThatThrownBy(()->gateway.judge(child,practice,List.of(),Map.of(),now.plusSeconds(30),()->{})).isInstanceOf(kr.mujoong.core.result.ResultAiException.class);org.mockito.Mockito.verifyNoInteractions(luna);
+    }
     @Test void historicalSnapshotSurvivesSoftDeleteWhilePublicSavedGoalIsEmpty(){var version=register();UUID selected=db.inTx(t->goals.select(guardian,version,now));goals.delete(selected,now,now.plusSeconds(30));assertThat(goals.saved(child,selected)).isEmpty();assertThat(goals.historical(child,selected).orElseThrow().targetExpression()).isEqualTo(version.content().targetExpression());assertThat(goals.selection(guardian,selected).orElseThrow().displayName()).isEqualTo(version.content().displayName());assertThat(goals.historical(UUID.randomUUID(),selected)).isEmpty();}
     @Test void legacySavedGoalReaderPreservesBehaviorVersion(){
         var legacy=new kr.mujoong.core.practice.PracticeGoalRepository(db.jdbc());

@@ -44,6 +44,7 @@ public class GoalCandidateRepository {
     public Optional<Version> version(UUID child,UUID handle){return jdbc.query(VERSION+"and v.child_id=:child and v.id=:id",Map.of("child",child,"id",handle),this::version).stream().findFirst();}
     public Optional<Version> current(UUID child,UUID candidate){return jdbc.query(VERSION+"and v.child_id=:child and c.id=:id and v.version=c.current_version",Map.of("child",child,"id",candidate),this::version).stream().findFirst();}
     public List<Version> candidates(UUID child,UUID session){return jdbc.query(VERSION+"and v.child_id=:child and c.source_session_id=:session and v.version=c.current_version order by c.created_at,c.id",Map.of("child",child,"session",session),this::version);}
+    public boolean fromResult(UUID candidate,UUID result){return Boolean.TRUE.equals(jdbc.queryForObject("select exists(select 1 from core.core_goal_candidate where id=:id and source_key like :prefix)",Map.of("id",candidate,"prefix",result+":%"),Boolean.class));}
     public void invalidatePrevious(UUID child,UUID session,UUID result){jdbc.update("update core.core_goal_candidate set status='INVALIDATED' where child_id=:child and source_session_id=:session and source_key not like :prefix",Map.of("child",child,"session",session,"prefix",result+":%"));}
     public Optional<Version> linkSeed(Version expected,String seed,Instant now){
         var p=Map.of("id",expected.candidateId(),"child",expected.childId(),"version",expected.version());

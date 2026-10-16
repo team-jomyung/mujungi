@@ -8,6 +8,16 @@
 - C-DS10 SavedGoalReader.find는 활성 선택만 읽는다. 기록용 내부 historical 읽기는 소유권·동의 확인 뒤 soft-delete 선택의 고정 버전도 읽는다. 결과가 새로 생성돼 이전 후보를 무효화해도 이미 담은 목표 스냅샷은 유지된다.
 - REJUDGMENT는 저장 sceneRunId를 직접 전송하지 않고 호출마다 임시 UUID 참조를 만들어 스키마 형식을 지킨 뒤 복원한다. liveOutcome이 없거나 ABSTAINED이면 관측 차이를 추정하지 않는다. NONE은 실제 전달 시점이 없다는 관측으로만 비교한다. 라벨/확률 원값을 만들지 않는다.
 
+## 공통 DB 계약 기준선 정합
+
+첫 전체 backend check는 core 1546개 중9개 실패(rc1,391초)였다. 새 V9를 적용했지만 공통 스키마/기동 시험이 V8 목록과 fixture를 고정한 차이였다. 부모 검토에 따라 아래5파일만 정확한 새 DB 계약에 맞췄다. 이는 신규 사용자 승인을 받았다는 기록이 아니라, '다른 유닛 단언 불변' 원칙 중 공통 DB 계약 기준선 유지의 좁은 구현상 예외다.
+
+- CoreSchemaIT: 새3표·부분 유일 인덱스·성공 이력9를 정확 목록에 추가했다. containsExactly와 소유 역할 검사는 그대로다.
+- FlywayConfIT: 적용 수8→9, 성공 이력9, core표42→45/전체58→61, core 이력8→9다. 멱등0·권한42501·clean/체크섬/낮은판 거절은 그대로다.
+- SchemaPrivilegeIT: 성공 최고판8→9다. 교차 스키마/이력 접근 거절은 그대로다.
+- SchemaVersionCheckTest: 현재9·더 높은10 통과, 바로 이전8 거절을 검증한다. 빈 이력/기준선/읽기 실패/낮은3의 거절과 숫자 비교를 유지했다.
+- CoreStartupSequenceIT: 모든1~9를 실제로 낮추고 복원하며, 앞선10/실패11 fixture로 기동 경계를 보존했다. 운영 SchemaVersionCheck를 바꾸지 않았다.
+
 ## 검증 증거의 범위
 
 시험은 합성 기록과 가짜 공급자/포트만 사용한다. 실제 공급자·실제 아동·실제 기기 성공을 주장하지 않는다. V9의 사람 승인과 PostgreSQL upgrade 검증은 migration-review.md에 별도로 기록한다. 최종 개수·커버리지·전체검증 결과는 report.md와 Code Generation 요약에 실제 측정치로 기록한다.
