@@ -132,3 +132,68 @@ gradle.taskGraph.whenReady {
         }
     }
 }
+
+// ---- Luna 응답 여부 확인 시험 분리 확인 (U11 Step 2 · 3 조사) ----
+// gptLiveTest와 같은 네 가지를 단언한다: check · test 작업 그래프에 lunaReachTest 없음, realtime-activity에 lunaReachTest가 있고
+// 포함 목록 = luna-reach, 모든 모듈의 기본 test 제외 목록에 luna-reach 있음, 기본 test가 OPENAI_API_KEY를 시험 JVM에 넘기지 않음.
+val lunaReachTag = "luna-reach"
+val lunaReachProblems = mutableListOf<String>()
+val lunaReachModules = mutableListOf<String>()
+
+val verifyLunaReachIsolation = tasks.register("verifyLunaReachIsolation") {
+    group = "verification"
+    description = "lunaReachTest가 check · 기본 test와 분리돼 있는지 확인한다(U11)."
+    doLast {
+        if (lunaReachProblems.isNotEmpty()) {
+            throw GradleException("Luna 응답 여부 확인 시험 분리 위반: ${lunaReachProblems.joinToString("; ")}")
+        }
+        logger.lifecycle(
+            "verifyLunaReachIsolation: 모듈 ${lunaReachModules.sorted()} — check · test 그래프에 lunaReachTest 없음, " +
+                "모든 test는 ${lunaReachTag} 제외 · OPENAI_API_KEY 없음, lunaReachTest는 ${lunaReachTag}만",
+        )
+    }
+}
+
+tasks.named("check") {
+    dependsOn(verifyLunaReachIsolation)
+}
+
+gradle.taskGraph.whenReady {
+    if (!hasTask(verifyLunaReachIsolation.get())) {
+        return@whenReady
+    }
+    val modules = subprojects.filter { it.tasks.findByName("lunaReachTest") != null }
+    lunaReachModules += modules.map { it.name }
+    if ("realtime-activity" !in lunaReachModules) {
+        lunaReachProblems += "realtime-activity에 lunaReachTest 작업이 없다"
+    }
+    val reachable = mutableSetOf<Task>()
+    val roots = listOf(tasks.getByName("check")) +
+        subprojects.mapNotNull { it.tasks.findByName("check") } +
+        subprojects.mapNotNull { it.tasks.findByName("test") }
+    val pending = ArrayDeque(roots)
+    while (pending.isNotEmpty()) {
+        val task = pending.removeFirst()
+        if (reachable.add(task)) {
+            pending.addAll(task.taskDependencies.getDependencies(task))
+        }
+    }
+    reachable.filter { it.name == "lunaReachTest" }.forEach { lunaReachProblems += "check · test 그래프에 ${it.path}가 있다" }
+    for (module in subprojects) {
+        val test = module.tasks.findByName("test") as? Test ?: continue
+        val testOptions = test.options as JUnitPlatformOptions
+        if (lunaReachTag !in testOptions.excludeTags) {
+            lunaReachProblems += "${test.path} 제외 목록에 ${lunaReachTag} 없음(${testOptions.excludeTags})"
+        }
+        if (test.environment.containsKey("OPENAI_API_KEY")) {
+            lunaReachProblems += "${test.path}가 OPENAI_API_KEY를 시험 JVM에 넘긴다"
+        }
+    }
+    for (module in modules) {
+        val reach = module.tasks.getByName("lunaReachTest") as Test
+        val reachOptions = reach.options as JUnitPlatformOptions
+        if (reachOptions.includeTags != setOf(lunaReachTag)) {
+            lunaReachProblems += "${reach.path} 포함 목록이 ${lunaReachTag} 하나가 아님(${reachOptions.includeTags})"
+        }
+    }
+}

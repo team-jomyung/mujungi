@@ -525,6 +525,25 @@ cat core-api/build/luna-live/report.txt realtime-activity/build/luna-live/report
 - 결과는 '실제 API · 합성 자료' 증거로만 적고, 기본 시험 · 끝-끝 결과(테스트 대역)와 섞지 않는다(R-M11).
 - 첫 실행에서는 목적마다 요청용 스키마 사본이 거절되지 않는지(`REQUEST_REJECTED` 아님)와 `temperature` 없이 받아들여지는지를 먼저 본다.
 
+### 8.6 Luna 응답 여부 · 지연 확인 `lunaReachTest` (U11, 개발 PC) [개발 PC]
+
+8.5는 운영 시한(`mujoong.timing.judgment.live-budget` 2초)에 묶여 `TIMEOUT`이면 Luna가 응답하는지 알 수 없다. 이 작업은 realtime 운영
+호출부를 그대로 쓰고 시도 시한만 넉넉히 줘서 합성 J6 판정 요청을 여러 번 보낸다(운영 설정은 바꾸지 않는다). 기본 `test` · `check` · CI ·
+`verify.sh`에는 들어가지 않는다(루트 `verifyLunaReachIsolation`). 합성 자료만 보내고(R-F15), 키는 그 PC의 env로만 넣는다(R-F3 · R-F13).
+
+```bash
+cd backend
+read -r -s -p 'OPENAI_API_KEY: ' OPENAI_API_KEY && export OPENAI_API_KEY && echo
+LUNA_REACH_TIMEOUT_SECONDS=60 LUNA_REACH_COUNT=5 ./gradlew :realtime-activity:lunaReachTest
+unset OPENAI_API_KEY
+cat realtime-activity/build/luna-reach/report.md
+```
+
+- 선택 env: `LUNA_REACH_TIMEOUT_SECONDS`(1 ~ 600, 기본 60) · `LUNA_REACH_COUNT`(1 ~ 20, 기본 5) · `OPENAI_JUDGE_MODEL`(비면 운영 기본 모델). 비밀이 아니다.
+- 보고서 첫 줄은 `outcome=REACHED|NOT_REACHED|SKIPPED_NO_KEY`다. REACHED는 1회 이상 OK다. 표는 회차 · 사유 · 응답 모델 · 스키마 통과 ·
+  1 · 2순위 코드와 확률 · 지연이고, 요약은 성공 수 · 지연 중앙값 · 최대 · 2초 이하 비율 · 10초 이하 비율이다. 원문 · 키 · 주소는 없다.
+- 결과는 '실제 API · 합성 자료' 증거로만 따로 적는다(R-M11). 키가 없으면 `SKIPPED_NO_KEY`이고 시험은 '건너뜀'이다(통과 아님).
+
 ## 9. 복구 시나리오 (infra-spec 4.5.3)
 
 | 상황 | 감지 | 조치 |

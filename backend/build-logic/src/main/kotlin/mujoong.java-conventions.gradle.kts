@@ -178,6 +178,20 @@ tasks.named<Test>("test") {
     systemProperty("mujoong.test.liveIsolated", "true")
 }
 
+// ---- Luna 응답 여부 확인 시험 분리 (U11 Step 2 · 3 조사, lunaLiveTest · gptLiveTest와 같은 방식) ----
+// 실제 Luna를 넉넉한 시한으로 부르는 시험(@Tag("luna-reach"))은 모든 모듈의 기본 test 작업에서 언제나 빠진다. OPENAI_API_KEY는 위
+// luna-live 블록이 이미 지운다. lunaReachTest 작업은 realtime-activity 빌드 파일에만 있고 확인은 루트 verifyLunaReachIsolation이 한다.
+
+/** Luna 응답 여부 확인 시험 태그. */
+val lunaReachTag = "luna-reach"
+
+tasks.named<Test>("test") {
+    options {
+        (this as JUnitPlatformOptions).excludeTags(lunaReachTag)
+    }
+    inputs.property("fixedExcludeTagsLunaReach", lunaReachTag)
+}
+
 // ---- 커버리지 (Step 5 · J91 · J107 · J137) ----
 
 val coverageScopeName: String? = providers.gradleProperty("coverageScope").orNull

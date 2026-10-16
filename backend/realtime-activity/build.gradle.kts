@@ -52,12 +52,12 @@ tasks.bootJar {
 // 기본 test는 build-logic 규약이 gpt-live를 고정 제외하고 키를 지운다. 이 작업은 check · build에 물리지 않고,
 // 루트 verifyGptLiveIsolation(check가 의존)이 check 작업 그래프에 이 작업이 없음을 확인한다.
 val gptLiveTag = "gpt-live"
-val gptLiveTestSourceSet = sourceSets["test"]
+val liveTestSourceSet = sourceSets["test"]
 tasks.register<Test>("gptLiveTest") {
     group = "verification"
     description = "GPT-Live 격리 실호출(@Tag(\"gpt-live\"), 사람이 env PROVIDER_API_KEY를 넣고 돌림). 키가 없으면 SKIPPED_NO_KEY로 끝난다."
-    testClassesDirs = gptLiveTestSourceSet.output.classesDirs
-    classpath = gptLiveTestSourceSet.runtimeClasspath
+    testClassesDirs = liveTestSourceSet.output.classesDirs
+    classpath = liveTestSourceSet.runtimeClasspath
     options {
         (this as JUnitPlatformOptions).setIncludeTags(setOf(gptLiveTag))
     }
@@ -78,6 +78,39 @@ tasks.register<Test>("gptLiveTest") {
         isEnabled = false
     }
     // 진행 상황(관측 요약 한 줄)을 보이게 한다
+    testLogging {
+        events("passed", "failed", "skipped")
+        showStandardStreams = true
+    }
+    shouldRunAfter(tasks.named("test"))
+}
+
+// ---- Luna 응답 여부 · 지연 확인 (U11 Step 2 · 3 조사, lunaLiveTest · gptLiveTest와 같은 방식) ----
+// @Tag("luna-reach") 시험만 돈다. 사람이 env OPENAI_API_KEY를 넣고 ./gradlew :realtime-activity:lunaReachTest로 직접 돌린다.
+// 운영 Luna 호출부를 그대로 쓰되 시도 시한만 넉넉히(env LUNA_REACH_TIMEOUT_SECONDS) 준다. 기본 test는 build-logic 규약이
+// luna-reach를 고정 제외하고 키를 지운다. 이 작업은 check · build에 물리지 않고 루트 verifyLunaReachIsolation이 확인한다.
+val lunaReachTag = "luna-reach"
+tasks.register<Test>("lunaReachTest") {
+    group = "verification"
+    description = "Luna 응답 여부 · 지연 확인(@Tag(\"luna-reach\"), 사람이 env OPENAI_API_KEY를 넣고 돌림). 키가 없으면 SKIPPED_NO_KEY로 끝난다."
+    testClassesDirs = liveTestSourceSet.output.classesDirs
+    classpath = liveTestSourceSet.runtimeClasspath
+    options {
+        (this as JUnitPlatformOptions).setIncludeTags(setOf(lunaReachTag))
+    }
+    inputs.property("fixedIncludeTags", lunaReachTag)
+    // 결과 보고서(회차 · 사유 · 응답 모델 · 선택지 코드 · 지연만, 요청 · 응답 원문 · 키 · 주소 없음)
+    val report = layout.buildDirectory.file("luna-reach/report.md")
+    outputs.file(report).withPropertyName("lunaReachReport")
+    systemProperty("mujoong.luna.reach.report", report.get().asFile.absolutePath)
+    doFirst {
+        report.get().asFile.delete()
+    }
+    outputs.upToDateWhen { false }
+    setFinalizedBy(emptyList<Any>())
+    extensions.configure<JacocoTaskExtension> {
+        isEnabled = false
+    }
     testLogging {
         events("passed", "failed", "skipped")
         showStandardStreams = true
