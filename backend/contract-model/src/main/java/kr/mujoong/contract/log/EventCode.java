@@ -19,7 +19,12 @@ import static kr.mujoong.contract.log.AttrKey.FROM;
 import static kr.mujoong.contract.log.AttrKey.HEAP_USED_PCT;
 import static kr.mujoong.contract.log.AttrKey.INBOX_DEAD;
 import static kr.mujoong.contract.log.AttrKey.KIND;
+import static kr.mujoong.contract.log.AttrKey.LATENCY_MS;
 import static kr.mujoong.contract.log.AttrKey.LIMITER;
+import static kr.mujoong.contract.log.AttrKey.LUNA_OUTCOME;
+import static kr.mujoong.contract.log.AttrKey.LUNA_PURPOSE;
+import static kr.mujoong.contract.log.AttrKey.LUNA_STATE;
+import static kr.mujoong.contract.log.AttrKey.MODEL;
 import static kr.mujoong.contract.log.AttrKey.OPEN_CONNECTIONS;
 import static kr.mujoong.contract.log.AttrKey.ORIGIN;
 import static kr.mujoong.contract.log.AttrKey.OUTBOX_FAILED;
@@ -31,6 +36,7 @@ import static kr.mujoong.contract.log.AttrKey.POOL_ACTIVE;
 import static kr.mujoong.contract.log.AttrKey.POOL_WAIT_EXCEEDED;
 import static kr.mujoong.contract.log.AttrKey.POOL_WAIT_MAX_MS;
 import static kr.mujoong.contract.log.AttrKey.PROFILE;
+import static kr.mujoong.contract.log.AttrKey.PROMPT_VERSION;
 import static kr.mujoong.contract.log.AttrKey.PROVIDER_RESPONSE_MS;
 import static kr.mujoong.contract.log.AttrKey.QUEUE;
 import static kr.mujoong.contract.log.AttrKey.QUIET_WAIT_MS;
@@ -41,10 +47,12 @@ import static kr.mujoong.contract.log.AttrKey.RELAY_OUT_MS;
 import static kr.mujoong.contract.log.AttrKey.REOPENED_INBOX_ROWS;
 import static kr.mujoong.contract.log.AttrKey.REPEAT;
 import static kr.mujoong.contract.log.AttrKey.RESET_CONNECTIONS;
+import static kr.mujoong.contract.log.AttrKey.RESPONSE_MODEL;
 import static kr.mujoong.contract.log.AttrKey.REST_LE_300_MS;
 import static kr.mujoong.contract.log.AttrKey.REST_TOTAL;
 import static kr.mujoong.contract.log.AttrKey.RETRY_COUNT;
 import static kr.mujoong.contract.log.AttrKey.RTT_MS;
+import static kr.mujoong.contract.log.AttrKey.SENT_FIELDS;
 import static kr.mujoong.contract.log.AttrKey.SEQ;
 import static kr.mujoong.contract.log.AttrKey.SESSIONS_ACTIVE;
 import static kr.mujoong.contract.log.AttrKey.SPEAKER;
@@ -82,8 +90,9 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * 사건 코드 17종(OD-2: 요구 문서 15종 + APP_ERROR · QUEUE_PRESSURE). 코드마다 기본 수준 · 허용 attrs 키 · 병합 대상 여부를 정한다.
- * 허용 표에 없는 키는 쓸 수 없다({@link EventLog}가 막는다).
+ * 사건 코드 19종(OD-2: 요구 문서 15종 + APP_ERROR · QUEUE_PRESSURE, U9 SD6: LUNA_CALL · LUNA_STARTUP). 코드마다 기본 수준 · 허용 attrs
+ * 키 · 병합 대상 여부를 정한다. 허용 표에 없는 키는 쓸 수 없다({@link EventLog}가 막는다). LUNA_CALL은 시도마다 한 줄이어야 해서(BR6.1)
+ * 병합하지 않는다.
  */
 public enum EventCode {
     SESSION_TRANSITION(Level.INFO, false, false,
@@ -113,7 +122,10 @@ public enum EventCode {
     SECURITY_DEV_LOGIN_BLOCKED(Level.WARN, true, true, EnumSet.of(PROFILE, STATUS_CODE, REPEAT)),
     SECURITY_INTERNAL_TOKEN_FAILED(Level.WARN, true, true, EnumSet.of(DIRECTION, STATUS_CODE, REPEAT)),
     APP_ERROR(Level.ERROR, true, false, EnumSet.of(ERROR_KIND, REPEAT)),
-    QUEUE_PRESSURE(Level.WARN, false, false, EnumSet.of(QUEUE, DROPPED, REPEAT));
+    QUEUE_PRESSURE(Level.WARN, false, false, EnumSet.of(QUEUE, DROPPED, REPEAT)),
+    LUNA_CALL(Level.INFO, false, false, EnumSet.of(
+            LUNA_PURPOSE, LUNA_OUTCOME, MODEL, RESPONSE_MODEL, PROMPT_VERSION, SENT_FIELDS, LATENCY_MS, ATTEMPT)),
+    LUNA_STARTUP(Level.INFO, false, false, EnumSet.of(LUNA_STATE));
 
     /** 로그 수준(OD-1). demo는 INFO 이상만 출력한다. */
     public enum Level {
@@ -171,7 +183,8 @@ public enum EventCode {
     /**
      * 열거형 attrs 값으로 수준을 정한다(OD-2 수준 열의 예외 규칙). SESSION_TRANSITION은 FAILED · ABORTED · ENDED_UNCONFIRMED로 가면
      * WARN, DEVICE_CONNECTION은 DISCONNECTED · UNRESPONSIVE로 가면 WARN, INTERNAL_HTTP는 OK가 아니면 WARN, EVENT_DELIVERY는
-     * FAILED · DEAD · EVENT_CONFLICT가 WARN이고 DUPLICATE · HANDLER_RETRY는 DEBUG, QUEUE_PRESSURE는 RECORDER면 ERROR.
+     * FAILED · DEAD · EVENT_CONFLICT가 WARN이고 DUPLICATE · HANDLER_RETRY는 DEBUG, QUEUE_PRESSURE는 RECORDER면 ERROR, LUNA_CALL은
+     * lunaOutcome이 OK가 아니면 WARN(U9 SD6).
      */
     public Level resolveLevel(Map<AttrKey, String> enumAttrs) {
         return switch (this) {
@@ -189,6 +202,10 @@ public enum EventCode {
                 yield contains(DELIVERY_DEBUG, status) ? Level.DEBUG : defaultLevel;
             }
             case QUEUE_PRESSURE -> "RECORDER".equals(enumAttrs.get(QUEUE)) ? Level.ERROR : defaultLevel;
+            case LUNA_CALL -> {
+                String outcome = enumAttrs.get(LUNA_OUTCOME);
+                yield outcome != null && !"OK".equals(outcome) ? Level.WARN : defaultLevel;
+            }
             default -> defaultLevel;
         };
     }

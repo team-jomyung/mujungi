@@ -330,3 +330,19 @@ U8(계약 · 버전 리소스)이 정한 공통 규칙이다. Luna · 제브 구
 
 - `OPENAI_API_KEY`(Luna): core-api · realtime-activity가 각자 받는다. `JEV_API_KEY`(제브): realtime-activity만 받는다. 둘 다 선택(OPTIONAL)이고, 비었거나 공백뿐이면 미설정으로 보고 실제 어댑터를 끈다(U9 · U13).
 - Neo4j는 기존 `NEO4J_AUTH`를 쓴다. GPT-Live의 `PROVIDER_API_KEY`는 FR12.2 전까지 그대로다. 7절의 core 예약 이름 `MUJOONG_TEXT_AI_API_KEY`는 쓰지 않는다(BR4.2). 값은 어디에도 쓰지 않고 이름만 둔다(R-F3).
+
+### 10.8 U9 Luna 호출 감사 로그 (`LUNA_CALL` · `LUNA_STARTUP`)
+
+Luna 호출부(core-api · realtime-activity 각자)는 공급자 시도마다 `LUNA_CALL` 한 줄을 남긴다. 공급자를 부르지 않은 실패(`FORBIDDEN_INPUT` · 시한 0)도 `attempt` 0으로 한 줄 남긴다. 요청 · 응답 본문, 전사, 이름, 키는 어떤 속성에도 담지 않는다(U9 BR6.1 · BR6.2 · R-F14). 정본은 `kr.mujoong.contract.log.EventCode` · `AttrKey`이고 `infra/bin/log-hygiene-check` 허용 표와 대조한다(`infra/ci/test-host-tools.sh`).
+
+| 사건 | 속성 | 값 형식 | 값 |
+|---|---|---|---|
+| `LUNA_CALL` | `lunaPurpose` | ENUM | `JUDGMENT_LIVE` · `SCENARIO_GENERATION` · `SCENARIO_REVIEW` · `SEED_GENERATION` · `RESULT_TEXT` · `GOAL_CANDIDATES` · `REJUDGMENT` |
+| `LUNA_CALL` | `lunaOutcome` | ENUM | `OK` · `AUTH_FAILED` · `RATE_LIMITED` · `SERVER_ERROR` · `REQUEST_REJECTED` · `TRANSPORT_ERROR` · `TIMEOUT` · `EMPTY_OUTPUT` · `LENGTH_EXCEEDED` · `REFUSED` · `SCHEMA_INVALID` · `FORBIDDEN_INPUT` · `MODEL_MISSING` |
+| `LUNA_CALL` | `model` · `responseModel` · `promptVersion` | LABEL | `[A-Za-z0-9][A-Za-z0-9._-]{0,63}`. 요청 모델, 응답 모델(받았을 때), 보낸 프롬프트 판 |
+| `LUNA_CALL` | `sentFields` | NAME_LIST | 보낸 입력의 최상위 키 이름을 쉼표로 이은 값. 이름마다 `[A-Za-z][A-Za-z0-9_]{0,63}`, 최대 32개 |
+| `LUNA_CALL` | `latencyMs` · `attempt` | NUMBER | 시도 지연(밀리초), 시도 번호 1 ~ 3(미호출 실패는 0) |
+| `LUNA_STARTUP` | `lunaState` | ENUM | `ENABLED`(env `OPENAI_API_KEY` 있음) · `DISABLED_NO_KEY`(없음 · 공백) |
+
+- 형식에 맞지 않는 LABEL · NAME_LIST 값은 조용히 버리지 않고 `UNKNOWN`으로 쓴다. `lunaOutcome`이 `OK`가 아니면 줄 수준은 WARN이다.
+- 줄의 `component`는 `core-api/LunaClient` 또는 `realtime/LunaClient`다.

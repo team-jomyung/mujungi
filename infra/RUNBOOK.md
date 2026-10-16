@@ -473,6 +473,20 @@ S8 `deploy.log` 마지막 OK sha = main 최신 → S9 프로브 3종 OK → S10 
 E1 `sessionsActive` 0 → E2 정기 점검 → E3 `backup.log` 최근 성공(없으면 `backup-trigger --trigger manual`) → E4 표별 행 수 기록
 (어느 표든 5만 행 미만) → E5 `log-hygiene-check` 위반 0 → E6 콘솔 Stop.
 
+### 8.4 Luna 사건 줄 (U9)
+
+core-api · realtime은 기동 때 `LUNA_STARTUP` 한 줄(`lunaState` `ENABLED` · `DISABLED_NO_KEY`)을, Luna 공급자 시도마다 `LUNA_CALL` 한 줄
+(`lunaPurpose` · `lunaOutcome` · `model` · `responseModel` · `promptVersion` · `sentFields` · `latencyMs` · `attempt`)을 남긴다.
+본문 · 전사 · 이름 · 키는 없다. 속성 표는 `contracts/ai-io.md` 10.8이고 `log-hygiene-check` 허용 표에도 같은 목록이 있다.
+
+```bash
+mj logs --no-log-prefix --since 1h core-api realtime 2>/dev/null | grep -E '"event":"LUNA_(STARTUP|CALL)"' | jq -c '{component, event, attrs}'
+```
+
+- 키를 넣지 않은 지금은 `LUNA_STARTUP` `DISABLED_NO_KEY`만 보이고 `LUNA_CALL`은 없다(어댑터 꺼짐 = 기존 실패 경로).
+- `lunaOutcome`이 `OK`가 아닌 줄은 WARN이다. `AUTH_FAILED`가 이어지면 키를 확인하고(12절 회전), `RATE_LIMITED` · `SERVER_ERROR`가
+  이어지면 공급자 상태를 본다. 호출자마다 실패 경로(판정 보류 · 결과 작업 재시도 · `SCENARIO_GEN_FAILED`)가 따로 있다.
+
 ## 9. 복구 시나리오 (infra-spec 4.5.3)
 
 | 상황 | 감지 | 조치 |

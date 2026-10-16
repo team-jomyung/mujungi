@@ -469,13 +469,33 @@ for m in re.finditer(r"([A-Z_]+)\(Level\.\w+,\s*(?:true|false),\s*(?:true|false)
 print("\n".join(sorted(rows)))
 PY
   bash "$LHC" --print-allowlist >"$work/allow.script"
-  if [ "$(wc -l <"$work/allow.java")" -eq 17 ] && diff -q "$work/allow.java" "$work/allow.script" >/dev/null; then
-    ok "log-hygiene-allowlist-matches-java(17종)"
+  # U9 SD6: LUNA_CALL · LUNA_STARTUP을 더해 19종이다(정본 EventCode.java와 같은 커밋에서 고친다, R-M10)
+  if [ "$(wc -l <"$work/allow.java")" -eq 19 ] && diff -q "$work/allow.java" "$work/allow.script" >/dev/null; then
+    ok "log-hygiene-allowlist-matches-java(19종)"
   else
     not_ok "log-hygiene-allowlist-matches-java" "$(diff "$work/allow.java" "$work/allow.script" | head -n 4 | paste -sd' ' -)"
   fi
 else
   not_ok "log-hygiene-allowlist-matches-java" "python3가 없어 대조하지 못했다(전제 누락)"
+fi
+
+# U9 SD6: Luna 사건 두 줄(허용 속성만)은 attrs 위반 0, 허용 밖 속성(input)을 단 LUNA_CALL은 위반 1
+r="$work/h-luna"
+make_root "$r"
+{
+  app_line $((now_s - 500)) INFO LUNA_STARTUP '{"lunaState":"DISABLED_NO_KEY"}'
+  app_line $((now_s - 400)) INFO LUNA_CALL \
+    '{"lunaPurpose":"RESULT_TEXT","lunaOutcome":"OK","model":"gpt-6-luna","responseModel":"gpt-6-luna","promptVersion":"v1","sentFields":"task,turns","latencyMs":812,"attempt":1}'
+} >>"$r/c/core-api.log"
+run_tool "$r" "$LHC" --since "$since_iso"
+luna_clean="$(grep '^CHECK attrs ' "$work/tool.out" || true)"
+app_line $((now_s - 300)) WARN LUNA_CALL '{"lunaPurpose":"JUDGMENT_LIVE","lunaOutcome":"TIMEOUT","attempt":1,"input":"x"}' >>"$r/c/realtime.log"
+run_tool "$r" "$LHC" --since "$since_iso"
+luna_dirty="$(grep '^CHECK attrs ' "$work/tool.out" || true)"
+if [ "$luna_clean" = 'CHECK attrs violations=0' ] && [ "$luna_dirty" = 'CHECK attrs violations=1' ]; then
+  ok "log-hygiene-luna-events(U9 SD6: LUNA_STARTUP · LUNA_CALL 허용 속성)"
+else
+  not_ok "log-hygiene-luna-events" "깨끗한 줄 [$luna_clean] · 허용 밖 속성 [$luna_dirty]"
 fi
 
 # ---- turn-metrics(MO-4 · NFR5.4 · OD-8, J348): 한 턴 로그만으로 NFR5.1 · 5.2 · 5.3 계산 · 표본 규칙 · 미관측 사유 ---------------------

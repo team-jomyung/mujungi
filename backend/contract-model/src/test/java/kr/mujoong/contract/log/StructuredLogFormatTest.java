@@ -89,12 +89,13 @@ class StructuredLogFormatTest {
     }
 
     @Test
-    void thereAreExactly17EventCodesAndNoFreeTextAttrKeys() {
+    void thereAreExactly19EventCodesAndNoFreeTextAttrKeys() {
+        // U9 SD6: 로그 계약 변경(LUNA_CALL · LUNA_STARTUP)과 같은 커밋에서 정본 목록을 늘린다(R-M10). 정확 일치 단언은 그대로다
         assertThat(Arrays.stream(EventCode.values()).map(Enum::name)).containsExactly(
                 "SESSION_TRANSITION", "TIMEOUT_FIRED", "LATENCY_TURN", "SESSION_ITEMS_SERVED", "PLAYBACK_MARK_STOPPED",
                 "DEVICE_CONNECTION", "INTERNAL_HTTP", "EVENT_DELIVERY", "STARTUP_RECOVERY", "METRIC_SNAPSHOT",
                 "SECURITY_AUTH_FAILED", "SECURITY_RATE_LIMITED", "SECURITY_ORIGIN_DENIED", "SECURITY_DEV_LOGIN_BLOCKED",
-                "SECURITY_INTERNAL_TOKEN_FAILED", "APP_ERROR", "QUEUE_PRESSURE");
+                "SECURITY_INTERNAL_TOKEN_FAILED", "APP_ERROR", "QUEUE_PRESSURE", "LUNA_CALL", "LUNA_STARTUP");
         Set<String> keyNames = Arrays.stream(AttrKey.values()).map(AttrKey::key).collect(Collectors.toSet());
         assertThat(keyNames).doesNotContain(
                 "message", "text", "transcript", "audio", "token", "cookie", "code", "email", "password", "secret", "input",

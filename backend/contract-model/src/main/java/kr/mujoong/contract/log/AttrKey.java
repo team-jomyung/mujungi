@@ -9,7 +9,8 @@ import java.util.Set;
  * {@code UNKNOWN}으로 바꿔 쓴다(OD-1). 사건 코드별로 같은 키의 열거 집합이 다르면 {@link EventCode}가 덮어쓴다(from · to).
  *
  * <p>전사 · 원음 · 토큰 · 쿠키 · 등록 코드 · 보호자 입력 · 비밀 · 이메일 · 자유 문자열을 담는 키는 없다(OD-3 5번 · NFR9.8 · BR8.7).
- * UUID는 {@link #EVENT_ID} 하나만 허용한다.
+ * UUID는 {@link #EVENT_ID} 하나만 허용한다. 문자열 값 형식 {@link ValueType#LABEL} · {@link ValueType#NAME_LIST}는 형식이 고정된 짧은
+ * 식별자만 받는다(U9 SD6).
  */
 public enum AttrKey {
     // SESSION_TRANSITION
@@ -109,7 +110,20 @@ public enum AttrKey {
     ERROR_KIND("errorKind", ValueType.IDENTIFIER, null),
     // QUEUE_PRESSURE
     QUEUE("queue", ValueType.ENUM, Set.of("INPUT_FRAMES", "GENERAL_MAILBOX", "OUTPUT_AUDIO", "OUTPUT_CONTROL", "RECORDER")),
-    DROPPED("dropped", ValueType.NUMBER, null);
+    DROPPED("dropped", ValueType.NUMBER, null),
+    // LUNA_CALL · LUNA_STARTUP (U9 SD6 · BR6.1 · NFR3.5). 본문 · 전사 · 이름 · 키를 담는 키는 없다
+    LUNA_PURPOSE("lunaPurpose", ValueType.ENUM, Set.of(
+            "JUDGMENT_LIVE", "SCENARIO_GENERATION", "SCENARIO_REVIEW", "SEED_GENERATION", "RESULT_TEXT", "GOAL_CANDIDATES",
+            "REJUDGMENT")),
+    LUNA_OUTCOME("lunaOutcome", ValueType.ENUM, Set.of(
+            "OK", "AUTH_FAILED", "RATE_LIMITED", "SERVER_ERROR", "REQUEST_REJECTED", "TRANSPORT_ERROR", "TIMEOUT",
+            "EMPTY_OUTPUT", "LENGTH_EXCEEDED", "REFUSED", "SCHEMA_INVALID", "FORBIDDEN_INPUT", "MODEL_MISSING")),
+    MODEL("model", ValueType.LABEL, null),
+    RESPONSE_MODEL("responseModel", ValueType.LABEL, null),
+    PROMPT_VERSION("promptVersion", ValueType.LABEL, null),
+    SENT_FIELDS("sentFields", ValueType.NAME_LIST, null),
+    LATENCY_MS("latencyMs", ValueType.NUMBER, null),
+    LUNA_STATE("lunaState", ValueType.ENUM, Set.of("ENABLED", "DISABLED_NO_KEY"));
 
     /** 값 형식(OD-1 표). */
     public enum ValueType {
@@ -124,7 +138,14 @@ public enum AttrKey {
         /** UUID(EVENT_DELIVERY.eventId만). */
         UUID,
         /** 예외 클래스 단순 이름 꼴 {@code [A-Za-z][A-Za-z0-9_.$]{0,99}}(errorKind만). */
-        IDENTIFIER
+        IDENTIFIER,
+        /** 모델 이름 · 프롬프트 판 꼴 {@code [A-Za-z0-9][A-Za-z0-9._-]{0,63}}(U9 SD6). 어긋나면 UNKNOWN. */
+        LABEL,
+        /**
+         * 쉼표로 이은 필드 이름 목록. 이름마다 {@code [A-Za-z][A-Za-z0-9_]{0,63}}, 최대 32개(U9 SD6, 빈 목록 허용). 하나라도 어긋나면
+         * 전체가 UNKNOWN.
+         */
+        NAME_LIST
     }
 
     /** 등록되지 않은 열거값을 대신하는 값(OD-1). */
