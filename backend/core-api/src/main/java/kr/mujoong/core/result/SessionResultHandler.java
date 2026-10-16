@@ -26,6 +26,10 @@ public class SessionResultHandler implements JobHandler {
     private final NotDoneReasonMapper reasons;private final ActivityResultRepository results;private final StructuredExperienceRepository structured;
     private final SceneJudgmentRepository judgments;private final CandidateRegistry registry;private final JsonCodec json;
     private final TransactionTemplate tx;
+    private kr.mujoong.core.practicegoal.GoalCandidateGateway goalCandidates;
+    private kr.mujoong.core.practicegoal.CandidateSeedDelivery goalDelivery;
+    @org.springframework.beans.factory.annotation.Autowired
+    void generatedGoals(kr.mujoong.core.practicegoal.GoalCandidateGateway gateway,kr.mujoong.core.practicegoal.CandidateSeedDelivery delivery){goalCandidates=gateway;goalDelivery=delivery;}
     public SessionResultHandler(ResultRecordReader records,ActivityContextRepository contexts,ConsentPolicyService consent,ChildRepository children,
             BehaviorDefinitionLookup definitions,ScenarioLookup scenarios,ResultTextGateway ai,OutputChecker checker,CandidateScreen candidateScreen,
             TipMatcher tips,NotDoneReasonMapper reasons,ActivityResultRepository results,StructuredExperienceRepository structured,
@@ -44,6 +48,8 @@ public class SessionResultHandler implements JobHandler {
         boolean free=r.activityType().equals("FREE_TALK");
         Map<String,Object> experience=new LinkedHashMap<>();List<SceneJudgmentRepository.Scene> scenes=new ArrayList<>();
         List<Map<String,Object>> sentenceDrafts=List.of();List<CandidateRegistry.Candidate> candidateDrafts=List.of();
+        List<kr.mujoong.core.practicegoal.GoalCandidateRepository.Draft> generatedDrafts=List.of();
+        boolean generatedGoals=goalCandidates!=null&&goalCandidates.available();
         Map<String,Object> common=new LinkedHashMap<>();common.put("transcript",transcript);common.put("endReason",r.endReason());
         if(!insufficient){
             if(free){var structureInput=new LinkedHashMap<>(common);structureInput.putAll(input.background());
@@ -56,9 +62,10 @@ public class SessionResultHandler implements JobHandler {
             level=ResultLevelCalculator.after(r,practice,experience);
             var sentenceInput=new LinkedHashMap<>(common);sentenceInput.put("structured",experience);sentenceInput.put("scenes",publicScenes(scenes));
             sentenceDrafts=objects(ai.call("sentences",sentenceInput,input.aliases(),job.deadline(),()->requireAiAccess(job)).get("sentences"));
-            var active=definitions.active();var candidateInput=new LinkedHashMap<>(common);candidateInput.put("structured",experience);candidateInput.put("scenes",publicScenes(scenes));
-            candidateInput.put("definitions",active.stream().map(d->Map.of("behaviorKey",d.behaviorKey(),"behaviorVersion",d.version(),"displayName",d.displayName(),"coreFunction",d.behaviorDefinitionText())).toList());
-            candidateDrafts=candidateScreen.screen(objects(ai.call("candidates",candidateInput,input.aliases(),job.deadline(),()->requireAiAccess(job)).get("candidates")),active,quotes);
+            var candidateInput=new LinkedHashMap<>(common);candidateInput.put("structured",experience);candidateInput.put("scenes",publicScenes(scenes));
+            if(generatedGoals)generatedDrafts=goalCandidates.generate(job.guardianId(),r.childId(),candidateInput,input.aliases(),job.deadline(),()->requireAiAccess(job));
+            else{var active=definitions.active();candidateInput.put("definitions",active.stream().map(d->Map.of("behaviorKey",d.behaviorKey(),"behaviorVersion",d.version(),"displayName",d.displayName(),"coreFunction",d.behaviorDefinitionText())).toList());
+                candidateDrafts=candidateScreen.screen(objects(ai.call("candidates",candidateInput,input.aliases(),job.deadline(),()->requireAiAccess(job)).get("candidates")),active,quotes);}
         }else if(!free&&!practice.isEmpty())scenes=sceneRows(practice,Map.of(),quotes,true);
 
         List<OutputChecker.Draft> checks=new ArrayList<>();List<Map<String,Object>> sentences=new ArrayList<>();
@@ -84,15 +91,16 @@ public class SessionResultHandler implements JobHandler {
         var match=tips.match(keys);var help=goals(practice).stream().map(g->Map.of("goalSelectionId",text(g,"goalSelectionId"),"help",HelpSummarizer.summarize(g))).toList();
         Map<String,Object> finalExperience=experience;List<SceneJudgmentRepository.Scene> finalScenes=scenes;String finalLevel=level;
         var stored=new AtomicReference<ActivityResultRepository.Result>();
+        var generatedPending=kr.mujoong.core.practicegoal.CandidateSeedDelivery.Pending.of(generatedDrafts);
         boolean done=job.commit(()->{
             // BR5.5의 AI 없는 INSUFFICIENT는 유지하며, AI 처리 뒤 동의 상실은 확정 전에 막는다.
             if(!insufficient)requireAiAccess(job);
             var previous=results.current(r.sessionId());
-            var result=results.insert(r.sessionId(),job.jobId(),finalLevel,json.write(sentences),json.write(help),json.write(match.tips()),match.noTipReason(),json.write(Map.of("hiddenTips",match.hidden(),"promptVersion",ai.promptVersion())),json.write(candidates),job.clock().now());
+            var result=results.insert(r.sessionId(),job.jobId(),finalLevel,json.write(sentences),json.write(help),json.write(match.tips()),match.noTipReason(),json.write(Map.of("hiddenTips",match.hidden(),"promptVersion",ai.promptVersion())),json.write(generatedGoals?generatedPending:candidates),job.clock().now());
             stored.set(result);if(!finalExperience.isEmpty())structured.insert(result.id(),r.sessionId(),json.write(finalExperience),job.clock().now());
             for(var scene:finalScenes)judgments.insert(result.id(),r.sessionId(),scene,job.clock().now());
             previous.ifPresent(p->results.invalidate(p.id(),job.clock().now()));
-        },()->{if(!candidates.isEmpty())registry.register(r.sessionId(),r.childId(),candidates);tx.executeWithoutResult(t->results.candidatesRegistered(stored.get().id(),job.clock().now()));});
+        },()->{if(generatedGoals)goalDelivery.deliver(job.guardianId(),r.childId(),r.sessionId(),stored.get().id(),generatedPending);else if(!candidates.isEmpty())registry.register(r.sessionId(),r.childId(),candidates);tx.executeWithoutResult(t->results.candidatesRegistered(stored.get().id(),job.clock().now()));});
         return done?Outcome.done():Outcome.failed("INTERNAL",false);
     }
     private void requireAiAccess(JobContext job){

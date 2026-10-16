@@ -62,7 +62,20 @@
               }
             }
           },
-          "displayEvidence": { "type": "string", "minLength": 1, "maxLength": 40 }
+          "displayEvidence": { "type": "string", "minLength": 1, "maxLength": 40 },
+          "structureSignature": {
+            "description": "U14 내부 씨앗 연결용 선택 추상화. 원문/식별자를 복사하지 않는다. 없으면 NONE 유지.",
+            "type": ["object", "null"],
+            "additionalProperties": false,
+            "required": ["targetSkill", "requiredInference", "perspectiveStructure", "decidableByEvidence", "directCheckAllowed"],
+            "properties": {
+              "targetSkill": { "enum": ["RECOGNIZE", "PRODUCE", "REPAIR"] },
+              "requiredInference": { "type": "string", "minLength": 1, "maxLength": 500 },
+              "perspectiveStructure": { "enum": ["상대의 의도 1층", "상대의 지식 상태 1층", "상대가 나를 어떻게 봤을지 2층"] },
+              "decidableByEvidence": { "enum": ["YES", "NO"] },
+              "directCheckAllowed": { "enum": ["YES", "NO"] }
+            }
+          }
         }
       }
     }

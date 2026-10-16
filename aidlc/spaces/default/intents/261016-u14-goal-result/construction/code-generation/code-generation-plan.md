@@ -33,14 +33,14 @@
 - [x] Step 4. 구현 직후 U14MigrationIT를 작성·실행한다. V8→V9 데이터 보존/legacy 쓰기, 후보 버전 불변·유일성·FK, 장면3 이상, 시도4와5 거절, AFTER_REASK 허용을 PostgreSQL에서 확인한다. 마이그레이션 승인 검사가 실제 사람 확인을 요구하면 구체 SQL/해시/근거를 부모에게 전달하며 우회하지 않는다. (NFR1·NFR4)
 - [x] Step 5. PracticeGoal을 후보·선택의 단일 writer로 구현하고 legacy 클래스는 호환 facade로 연결한다. SavedGoalReader와 SavedGoalView/FourElements를 C-DS10 그대로 제공한다. recommendationId는 불변 버전 UUID로 하고 선택은 관측한 버전을 고정한다. active child+stable candidate 중복 담기는 기존 선택 반환, 삭제·복원 충돌은 기존 오류 의미를 따른다. (FR1.1·FR1.2, BR1.1·BR1.2; US4.6)
 - [x] Step 6. 구현 직후 SavedGoalReaderTest, PracticeGoalRepositoryIT, CandidateVersionSelectionIT를 작성·실행한다. 기본·없음·legacy·타 아동·철회·삭제와 v1조회→v2게시→v1담기(NONE), v2담기(seed), v1활성시v2담기, 동시담기, 삭제뒤v2담기, v1복원충돌을 검증한다. (FR1.1·FR1.2, NFR3; US4.6)
-- [ ] Step 7. 위 층 시험과 기존 목표 관련 회귀가 초록인 상태에서 U14 관련 경로만 feat(u14): 목표 버전 저장과 담은 목표 읽기 구현 으로 커밋한다. stage 전 cached diff와 mode 변경을 확인하며 generated manifest·U15 audit·scratch는 섞지 않는다. (NFR1·NFR4)
+- [x] Step 7. 위 층 시험과 기존 목표 관련 회귀가 초록인 상태에서 U14 관련 경로만 feat(u14): 목표 버전 저장과 담은 목표 읽기 구현 으로 커밋한다. stage 전 cached diff와 mode 변경을 확인하며 generated manifest·U15 audit·scratch는 섞지 않는다. (NFR1·NFR4)
 
 ### 커밋 2: Luna 목표 후보 + skillRef 검증 + 새 씨앗 연결
 
-- [ ] Step 8. GOAL_CANDIDATES 전용 schema/provider 경로와 후보 입력·검증을 구현한다. 식별자·연령·원음 제외/이름 비식별화, 최대3·이름12·displayEvidence40·4요소·정확 seq/quote·seed 허용 목록/NONE·OutputChecker/classify를 적용한다. 기존 RESULT_TEXT와 나누고 JOB_ATTEMPT 내부 재시도를 추가하지 않는다. NONE에 필요한 선택적 구조 추상화는 동일 응답의 검증된 내부 스키마로 받고 상수/원문 서명은 만들지 않는다. 계약 변경·편차를 함께 남긴다. (FR2.1·FR2.2, NFR2; US4.5)
-- [ ] Step 9. 구현 직후 GoalCandidateValidatorTest, GoalCandidateGatewayTest, LunaGoalCandidateProviderTest를 작성·실행한다. 5~8개/컴포넌트 이상으로 빈후보·길이·4요소빈칸·근거불일치·잘못된seed·금지표현·잘못된JSON·익명화·호출1회·후보없음에도DONE 가능을 검증한다. (FR2.1·FR2.2, NFR2·NFR3)
-- [ ] Step 10. 결과의 durable pending 후보 정본을 확장하고 커밋 후 등록·NONE 씨앗 생성·비교 후 새 버전 게시를 구현한다. 동일 candidate+version idempotency, 삭제/철회/최신버전 재확인, 실패 NONE 유지·DONE 불변을 보장한다. 외부 AI/graph 동안 DB 잠금을 잡지 않는다. (FR2.3·FR4.2, BR2.3·BR4.2; US4.5·US4.6)
-- [ ] Step 11. 구현 직후 CandidateSeedLinkTest와 CandidateSeedReplayIT를 작성·실행한다. 정상 새버전·graphoff·실패·타임아웃·구조없음·중복 callback·stale버전·동시담기·삭제/철회 경합·재생 후 한 번 게시를 확인한다. U15는 fake 포트로 격리한다. (FR2.3, NFR2·NFR3)
+- [x] Step 8. GOAL_CANDIDATES 전용 schema/provider 경로와 후보 입력·검증을 구현한다. 식별자·연령·원음 제외/이름 비식별화, 최대3·이름12·displayEvidence40·4요소·정확 seq/quote·seed 허용 목록/NONE·OutputChecker/classify를 적용한다. 기존 RESULT_TEXT와 나누고 JOB_ATTEMPT 내부 재시도를 추가하지 않는다. NONE에 필요한 선택적 구조 추상화는 동일 응답의 검증된 내부 스키마로 받고 상수/원문 서명은 만들지 않는다. 계약 변경·편차를 함께 남긴다. (FR2.1·FR2.2, NFR2; US4.5)
+- [x] Step 9. 구현 직후 GoalCandidateValidatorTest, GoalCandidateGatewayTest, LunaGoalCandidateProviderTest를 작성·실행한다. 5~8개/컴포넌트 이상으로 빈후보·길이·4요소빈칸·근거불일치·잘못된seed·금지표현·잘못된JSON·익명화·호출1회·후보없음에도DONE 가능을 검증한다. (FR2.1·FR2.2, NFR2·NFR3)
+- [x] Step 10. 결과의 durable pending 후보 정본을 확장하고 커밋 후 등록·NONE 씨앗 생성·비교 후 새 버전 게시를 구현한다. 동일 candidate+version idempotency, 삭제/철회/최신버전 재확인, 실패 NONE 유지·DONE 불변을 보장한다. 외부 AI/graph 동안 DB 잠금을 잡지 않는다. (FR2.3·FR4.2, BR2.3·BR4.2; US4.5·US4.6)
+- [x] Step 11. 구현 직후 CandidateSeedLinkTest와 CandidateSeedReplayIT를 작성·실행한다. 정상 새버전·graphoff·실패·타임아웃·구조없음·중복 callback·stale버전·동시담기·삭제/철회 경합·재생 후 한 번 게시를 확인한다. U15는 fake 포트로 격리한다. (FR2.3, NFR2·NFR3)
 - [ ] Step 12. 위 층 시험 및 이전 층 회귀 후 feat(u14): Luna 후보 생성과 씨앗 연결 구현 으로 코드·동일 계약 변경을 함께 커밋한다. (FR2.1~FR2.3)
 
 ### 커밋 3: 새 결과 · 재판정 · 4회 재시도

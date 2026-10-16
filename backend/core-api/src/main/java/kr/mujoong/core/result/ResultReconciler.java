@@ -20,6 +20,9 @@ public class ResultReconciler implements SmartLifecycle {
     private final ResultJobRepository jobs;private final SessionResultStateRepository states;private final CandidateRegistry candidates;
     private final ReportRetention retention;private final MujoongClock clock;private final JsonCodec json;private final EventLogger events;
     private final java.time.Duration interval;private final TransactionTemplate tx;private ThreadPoolTaskScheduler scheduler;
+    private kr.mujoong.core.practicegoal.CandidateSeedDelivery goalDelivery;
+    @org.springframework.beans.factory.annotation.Autowired
+    void generatedGoals(kr.mujoong.core.practicegoal.CandidateSeedDelivery delivery){goalDelivery=delivery;}
     public ResultReconciler(ResultRecordReader records,ResultIntake intake,ActivityResultRepository results,ResultJobRepository jobs,
             SessionResultStateRepository states,CandidateRegistry candidates,ReportRetention retention,MujoongClock clock,JsonCodec json,
             EventLogger events,CoreProperties properties,PlatformTransactionManager transactions){
@@ -35,8 +38,12 @@ public class ResultReconciler implements SmartLifecycle {
         var job=jobs.find(result.jobId()).orElse(null);if(job==null)return;
         var head=states.find(result.sessionId(),job.guardianId()).orElse(null);
         if(head==null||!head.jobStatus().equals("DONE")||!result.id().equals(head.currentResultId()))return;
-        var pending=json.read(result.pendingCandidatesJson(),CandidateRegistry.Candidate[].class);
-        if(pending.length>0)candidates.register(result.sessionId(),head.childId(),Arrays.asList(pending));
+        Object content=json.read(result.pendingCandidatesJson(),Object.class);
+        if(content instanceof java.util.Map<?,?>){
+            if(goalDelivery==null)throw new IllegalStateException("Goal delivery unavailable");
+            goalDelivery.deliver(job.guardianId(),head.childId(),result.sessionId(),result.id(),json.read(result.pendingCandidatesJson(),kr.mujoong.core.practicegoal.CandidateSeedDelivery.Pending.class));
+        }else{var pending=json.read(result.pendingCandidatesJson(),CandidateRegistry.Candidate[].class);
+            if(pending.length>0)candidates.register(result.sessionId(),head.childId(),Arrays.asList(pending));}
         tx.executeWithoutResult(t->results.candidatesRegistered(result.id(),clock.now()));
     }
     private void failure(){events.appError(EventLog.Component.CORE_MAINTENANCE,"ResultReconcileFailed");}

@@ -44,6 +44,7 @@ public class GoalCandidateRepository {
     public Optional<Version> version(UUID child,UUID handle){return jdbc.query(VERSION+"and v.child_id=:child and v.id=:id",Map.of("child",child,"id",handle),this::version).stream().findFirst();}
     public Optional<Version> current(UUID child,UUID candidate){return jdbc.query(VERSION+"and v.child_id=:child and c.id=:id and v.version=c.current_version",Map.of("child",child,"id",candidate),this::version).stream().findFirst();}
     public List<Version> candidates(UUID child,UUID session){return jdbc.query(VERSION+"and v.child_id=:child and c.source_session_id=:session and v.version=c.current_version order by c.created_at,c.id",Map.of("child",child,"session",session),this::version);}
+    public void invalidatePrevious(UUID child,UUID session,UUID result){jdbc.update("update core.core_goal_candidate set status='INVALIDATED' where child_id=:child and source_session_id=:session and source_key not like :prefix",Map.of("child",child,"session",session,"prefix",result+":%"));}
     public Optional<Version> linkSeed(Version expected,String seed,Instant now){
         var p=Map.of("id",expected.candidateId(),"child",expected.childId(),"version",expected.version());
         int changed=jdbc.update("update core.core_goal_candidate set current_version=current_version+1 where id=:id and child_id=:child and current_version=:version and status='ACTIVE'",p);
@@ -67,7 +68,7 @@ public class GoalCandidateRepository {
         return id;
     }
     public Optional<SavedGoalReader.SavedGoalView> saved(UUID child,UUID selection){
-        return jdbc.query(SELECTION+"where s.child_id=:child and s.id=:id and s.status='ACTIVE' and c.status='ACTIVE'",Map.of("child",child,"id",selection),(r,n)->new SavedGoalReader.SavedGoalView(uuid(r,"id"),child,SavedGoalReader.SavedGoalView.Kind.CANDIDATE,r.getString("candidate_id"),r.getInt("version"),r.getString("target_expression"),json.read(r.getString("four_elements_json"),FourElements.class),r.getString("skill_ref"),null,null)).stream().findFirst();
+        return jdbc.query(SELECTION+"where s.child_id=:child and s.id=:id and s.status='ACTIVE'",Map.of("child",child,"id",selection),(r,n)->new SavedGoalReader.SavedGoalView(uuid(r,"id"),child,SavedGoalReader.SavedGoalView.Kind.CANDIDATE,r.getString("candidate_id"),r.getInt("version"),r.getString("target_expression"),json.read(r.getString("four_elements_json"),FourElements.class),r.getString("skill_ref"),null,null)).stream().findFirst();
     }
     public void favorite(UUID id,boolean favorite){jdbc.update("update core.core_saved_goal set is_favorite=:f where id=:id",Map.of("id",id,"f",favorite));}
     public void delete(UUID id,Instant now,Instant until){jdbc.update("update core.core_saved_goal set status='DELETED',deleted_at=:now,restore_until=:until where id=:id and status='ACTIVE'",instant(at(now).addValue("id",id),"until",until));}
