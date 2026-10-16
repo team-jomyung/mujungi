@@ -146,6 +146,10 @@ tasks.register<Test>("lunaLiveTest") {
     val report = layout.buildDirectory.file("luna-live/report.txt")
     outputs.file(report).withPropertyName("lunaLiveReport")
     systemProperty("mujoong.luna.live.report", report.get().asFile.absolutePath)
+    // 보고서는 실행마다 새로 쓴다(지난 실행 결과가 섞이지 않게)
+    doFirst {
+        report.get().asFile.delete()
+    }
     // 실호출은 매번 새로 돈다(캐시된 '통과'를 다시 보고하지 않음)
     outputs.upToDateWhen { false }
     // 공통 블록의 커버리지 보고(jacocoTestReport → test 의존)를 끈다: 실호출 작업이 기본 시험을 끌고 오지 않게
