@@ -160,6 +160,24 @@ tasks.register<Test>("lunaLiveTest") {
     shouldRunAfter(tasks.named("test"))
 }
 
+// ---- GPT-Live 실호출 시험 분리 (U11 FR9.1 · BR9.1 · 기능 설계 W7, U9-c와 같은 방식) ----
+// 실제 GPT-Live를 부르는 시험(@Tag("gpt-live"))은 모든 모듈의 기본 test 작업에서 언제나 빠진다. 사람이 키를 넣고 돌리는
+// gptLiveTest 작업은 realtime-activity 빌드 파일에만 있고 check · build에 물리지 않는다. 확인은 루트 verifyGptLiveIsolation이 한다.
+
+/** GPT-Live 실호출 시험 태그. */
+val gptLiveTag = "gpt-live"
+
+tasks.named<Test>("test") {
+    options {
+        (this as JUnitPlatformOptions).excludeTags(gptLiveTag)
+    }
+    inputs.property("fixedExcludeTagsGptLive", gptLiveTag)
+    // 기본 시험은 GPT-Live 키를 보지 않는다(R-F1 · R-F3). 개발 PC env에 키가 있어도 시험 JVM에는 넘기지 않는다
+    environment.remove("PROVIDER_API_KEY")
+    // 기본 test JVM이라는 표시(GptLiveIsolationTest가 이 JVM에서 키가 지워졌는지 본다)
+    systemProperty("mujoong.test.liveIsolated", "true")
+}
+
 // ---- 커버리지 (Step 5 · J91 · J107 · J137) ----
 
 val coverageScopeName: String? = providers.gradleProperty("coverageScope").orNull

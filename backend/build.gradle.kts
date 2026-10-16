@@ -67,3 +67,68 @@ gradle.taskGraph.whenReady {
         }
     }
 }
+
+// ---- GPT-Live 실호출 시험 분리 확인 (U11 FR9.1 · BR9.1 · 기능 설계 W7) ----
+// lunaLiveTest와 같은 방식이다. 네 가지를 단언한다: check · test 작업 그래프에 gptLiveTest 없음, realtime-activity에 gptLiveTest가 있고
+// 포함 목록 = gpt-live, 모든 모듈의 기본 test 제외 목록에 gpt-live 있음, 기본 test가 PROVIDER_API_KEY를 시험 JVM에 넘기지 않음.
+val gptLiveTag = "gpt-live"
+val gptLiveProblems = mutableListOf<String>()
+val gptLiveModules = mutableListOf<String>()
+
+val verifyGptLiveIsolation = tasks.register("verifyGptLiveIsolation") {
+    group = "verification"
+    description = "gptLiveTest가 check · 기본 test와 분리돼 있는지 확인한다(U11 BR9.1)."
+    doLast {
+        if (gptLiveProblems.isNotEmpty()) {
+            throw GradleException("GPT-Live 실호출 시험 분리 위반: ${gptLiveProblems.joinToString("; ")}")
+        }
+        logger.lifecycle(
+            "verifyGptLiveIsolation: 모듈 ${gptLiveModules.sorted()} — check · test 그래프에 gptLiveTest 없음, " +
+                "모든 test는 ${gptLiveTag} 제외 · PROVIDER_API_KEY 없음, gptLiveTest는 ${gptLiveTag}만",
+        )
+    }
+}
+
+tasks.named("check") {
+    dependsOn(verifyGptLiveIsolation)
+}
+
+gradle.taskGraph.whenReady {
+    if (!hasTask(verifyGptLiveIsolation.get())) {
+        return@whenReady
+    }
+    val modules = subprojects.filter { it.tasks.findByName("gptLiveTest") != null }
+    gptLiveModules += modules.map { it.name }
+    if ("realtime-activity" !in gptLiveModules) {
+        gptLiveProblems += "realtime-activity에 gptLiveTest 작업이 없다"
+    }
+    val reachable = mutableSetOf<Task>()
+    val roots = listOf(tasks.getByName("check")) +
+        subprojects.mapNotNull { it.tasks.findByName("check") } +
+        subprojects.mapNotNull { it.tasks.findByName("test") }
+    val pending = ArrayDeque(roots)
+    while (pending.isNotEmpty()) {
+        val task = pending.removeFirst()
+        if (reachable.add(task)) {
+            pending.addAll(task.taskDependencies.getDependencies(task))
+        }
+    }
+    reachable.filter { it.name == "gptLiveTest" }.forEach { gptLiveProblems += "check · test 그래프에 ${it.path}가 있다" }
+    for (module in subprojects) {
+        val test = module.tasks.findByName("test") as? Test ?: continue
+        val testOptions = test.options as JUnitPlatformOptions
+        if (gptLiveTag !in testOptions.excludeTags) {
+            gptLiveProblems += "${test.path} 제외 목록에 ${gptLiveTag} 없음(${testOptions.excludeTags})"
+        }
+        if (test.environment.containsKey("PROVIDER_API_KEY")) {
+            gptLiveProblems += "${test.path}가 PROVIDER_API_KEY를 시험 JVM에 넘긴다"
+        }
+    }
+    for (module in modules) {
+        val live = module.tasks.getByName("gptLiveTest") as Test
+        val liveOptions = live.options as JUnitPlatformOptions
+        if (liveOptions.includeTags != setOf(gptLiveTag)) {
+            gptLiveProblems += "${live.path} 포함 목록이 ${gptLiveTag} 하나가 아님(${liveOptions.includeTags})"
+        }
+    }
+}

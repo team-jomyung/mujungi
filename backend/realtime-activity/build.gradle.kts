@@ -46,3 +46,41 @@ tasks.processResources {
 tasks.bootJar {
     archiveFileName.set("realtime-activity.jar")
 }
+
+// ---- GPT-Live 격리 실호출 (U11 FR9.1 · BR9.1 · 기능 설계 W7, lunaLiveTest와 같은 방식) ----
+// @Tag("gpt-live") 시험만 돈다. 사람이 env PROVIDER_API_KEY를 넣고 ./gradlew :realtime-activity:gptLiveTest로 직접 돌린다.
+// 기본 test는 build-logic 규약이 gpt-live를 고정 제외하고 키를 지운다. 이 작업은 check · build에 물리지 않고,
+// 루트 verifyGptLiveIsolation(check가 의존)이 check 작업 그래프에 이 작업이 없음을 확인한다.
+val gptLiveTag = "gpt-live"
+val gptLiveTestSourceSet = sourceSets["test"]
+tasks.register<Test>("gptLiveTest") {
+    group = "verification"
+    description = "GPT-Live 격리 실호출(@Tag(\"gpt-live\"), 사람이 env PROVIDER_API_KEY를 넣고 돌림). 키가 없으면 SKIPPED_NO_KEY로 끝난다."
+    testClassesDirs = gptLiveTestSourceSet.output.classesDirs
+    classpath = gptLiveTestSourceSet.runtimeClasspath
+    options {
+        (this as JUnitPlatformOptions).setIncludeTags(setOf(gptLiveTag))
+    }
+    inputs.property("fixedIncludeTags", gptLiveTag)
+    // 결과 보고서(항목 · 관측 · 통과 여부만, 전사 원문 · 음성 · 키 없음)
+    val report = layout.buildDirectory.file("gpt-live/report.md")
+    outputs.file(report).withPropertyName("gptLiveReport")
+    systemProperty("mujoong.gpt.live.report", report.get().asFile.absolutePath)
+    // 보고서는 실행마다 새로 쓴다(지난 실행 결과가 섞이지 않게)
+    doFirst {
+        report.get().asFile.delete()
+    }
+    // 실호출은 매번 새로 돈다(캐시된 '통과'를 다시 보고하지 않음)
+    outputs.upToDateWhen { false }
+    // 공통 블록의 커버리지 보고(jacocoTestReport → test 의존)를 끈다: 실호출 작업이 기본 시험을 끌고 오지 않게
+    setFinalizedBy(emptyList<Any>())
+    extensions.configure<JacocoTaskExtension> {
+        isEnabled = false
+    }
+    // 진행 상황(관측 요약 한 줄)을 보이게 한다
+    testLogging {
+        events("passed", "failed", "skipped")
+        showStandardStreams = true
+    }
+    shouldRunAfter(tasks.named("test"))
+}
