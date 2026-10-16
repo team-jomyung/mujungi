@@ -5,6 +5,26 @@ U2 ~ U5a는 엔진 없이, 엔진이 만든 인셉션 산출물(스토리 · 계
 엔진의 승인 증빙이 클론별이라 다른 PC로 넘어가지 않았기 때문이다(`aidlc/` 감사 기록 c63ff7e 참고).
 U4b부터는 다시 AI-DLC를 쓴다. 담당자마다 자기 PC에서 유닛용 작업 기록을 새로 만들고, 인셉션 산출물은 `261008-mujoong-service` 기록의 것을 그대로 쓴다. 남의 작업 기록은 이어 가지 않는다(만드는 법은 `u5b/brief.md` 「AI-DLC로 진행하는 법」).
 
+## U8 ~ U15 문서 동기화 볼트 (2026-10-16 기준)
+
+화면 설계 v1.5j와 새 문서(Luna · 제브 · 지식 그래프)에 코드를 맞추는 작업이다. 인셉션은 `261015-doc-sync-code-update` 기록에서 끝났다. 정본 폴더는 `R = aidlc/spaces/default/intents/261015-doc-sync-code-update/`다.
+- 순서 근거: `R/inception/delivery-planning/bolt-plan.md` · `risk-and-sequencing-rationale.md` · `team-allocation.md`
+- 외부 의존: `R/inception/delivery-planning/external-dependency-map.md`
+
+| 줄 | 순서 | 유닛 | 상태 | 브랜치 | 마이그레이션 | 지시서 |
+|---|---|---|---|---|---|---|
+| 공통 | 1 | U8 계약 · 버전 리소스 | **구현 완료**(10/16) · PR 전 | `unit/u8-contracts-catalog` → `unit/u9-luna-clients`에 포함 | 없음 | `R/construction/u8-contracts-catalog/` |
+| 공통 | 2 | U9 Luna 호출부 | **구현 완료**(10/16) · PR 전. `verify.sh` PASS | `unit/u9-luna-clients` | 없음 | `R/construction/u9-luna-clients/` |
+| realtime | 3 → 4 → 6 | U11 판정 턴 → U13 제브 게이트 → U12 새 연습 흐름 | U8 · U9 담당자가 이어 맡음. U12는 U13 뒤 대역으로 일부, U10 병합 뒤 완료 | `unit/u11-…` · `unit/u13-…` · `unit/u12-…` | realtime V5 · V6 · V7 | (작성 예정) |
+| core | 3 → 4 → 5 | U15 지식 그래프 → U14 목표 · 결과 → U10 상황 생성 | **팀원에게 넘김** | `unit/u15-knowledge-graph` · `unit/u14-goal-result` · `unit/u10-scenario-generation` | core V8 · V9 · V10 | `u15/brief.md` · `u14/brief.md` · `u10/brief.md` |
+
+- **시작 브랜치**: U8 · U9는 `unit/u9-luna-clients` PR 하나로 `main`에 들어간다. 그 전에 시작하면 `unit/u9-luna-clients`에서 따고, 병합 뒤 `main`을 merge해 따라잡는다.
+- **두 줄은 서로 기다리지 않는다.** core와 realtime은 Flyway 이력이 따로라서다. 같은 앱 안에서만 번호 순서대로 합친다.
+- **두 줄이 만나는 곳은 U12 ↔ U10 대본 계약(C-DS1)뿐이다.** U12 담당자가 `practice-scenario.schema.json` 선택 필드를 계약 PR로 먼저 넣고 대역으로 개발한다. U10은 그 계약을 쓰고, 고칠 곳이 있으면 두 담당자가 같은 날 함께 합친다. U12는 U10 병합 뒤 실제 대본으로 마무리한다.
+- **삭제 순서 상수**: 지금 60 · 70 · 90 · 100 · 150 · 200 · 250 · 300 · 900을 쓴다. U15 그래프 제안값은 80이다.
+- **이 PC가 WSL Ubuntu이고 `date`가 uutils이면** `%3N` 자릿수가 깨진다. 그래서 `infra/ci/test-host-tools.sh` turn-metrics 2건이 실패한다. GNU `date`(`gnudate`)를 PATH 앞에 두고 돈다. CI에는 영향이 없다.
+- 실호출(`./gradlew lunaLiveTest`)은 사람이 키를 넣고 합성 자료로만 한다. 넣기 전에 `infra/RUNBOOK.md` 단계 4의 R-F15 확인 기록을 먼저 남긴다(편차 (U9-b) · (U9-c)).
+
 ## 현황
 
 | 유닛 | 상태 | 브랜치 | 문서 |
