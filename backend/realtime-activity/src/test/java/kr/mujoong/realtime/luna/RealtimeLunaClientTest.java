@@ -1,7 +1,12 @@
 package kr.mujoong.realtime.luna;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import java.net.URI;
 import java.net.http.HttpHeaders;
@@ -11,8 +16,10 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 import kr.mujoong.contract.json.JsonCodec;
 import kr.mujoong.contract.log.EventCode;
 import kr.mujoong.realtime.observability.EventLogger;
@@ -172,6 +179,61 @@ class RealtimeLunaClientTest {
         assertThat(capture.events(EventCode.LUNA_CALL)).hasSize(3)
                 .allSatisfy(line -> assertThat(LogCapture.attrs(line)).containsEntry("attempt", 0));
         assertThat(capture.anyLineContains("보호자 메모")).isFalse();
+    }
+
+    @Test
+    void aRefusalBeforeSendingIsNotCountedAsAnAttempt() {
+        LunaTransport strictHost = RealtimeLunaTestFixtures.transport(stub.baseUrl(), LunaHosts.Mode.STRICT);
+        LunaTransport noKey = new LunaTransport(stub.baseUrl(), LunaHosts.Mode.TEST, () -> null, 1000);
+        stub.respond(Reply.ok(MODEL, RealtimeLunaTestFixtures.example("ai-judgment-output.schema.json")));
+
+        LunaException rejected = failure(clientWith(strictHost).call(request()).toCompletableFuture());
+        LunaException unauthorized = failure(clientWith(noKey).call(request()).toCompletableFuture());
+
+        assertThat(rejected.reason()).isEqualTo(LunaFailureReason.REQUEST_REJECTED);
+        assertThat(unauthorized.reason()).isEqualTo(LunaFailureReason.AUTH_FAILED);
+        assertThat(List.of(rejected.attemptsUsed(), unauthorized.attemptsUsed())).as("검토 R-04: 보내지 않았으면 0").containsOnly(0);
+        assertThat(stub.requestCount()).isZero();
+        assertThat(capture.events(EventCode.LUNA_CALL)).hasSize(2)
+                .allSatisfy(line -> assertThat(LogCapture.attrs(line)).containsEntry("attempt", 0));
+        assertThat(strictHost.rejectBeforeSend(Duration.ofSeconds(1))).contains(LunaFailureReason.REQUEST_REJECTED);
+        assertThat(RealtimeLunaTestFixtures.transport(stub.baseUrl(), LunaHosts.Mode.TEST).rejectBeforeSend(Duration.ZERO))
+                .contains(LunaFailureReason.TIMEOUT);
+    }
+
+    @Test
+    void anUnexpectedRuntimeErrorBeforeSendingBecomesAFailedStageInsteadOfAThrow() {
+        LunaSchemas broken = mock(LunaSchemas.class);
+        when(broken.isValidRequest(any(), any())).thenThrow(new IllegalStateException("합성 입력 본문이 담긴 메시지"));
+        RealtimeLunaClient fragile = new RealtimeLunaClient(RealtimeLunaTestFixtures.properties(stub.baseUrl()), Duration.ofSeconds(2),
+                broken, new LunaInputSanitizer(JsonCodec.shared()), RealtimeLunaTestFixtures.transport(stub.baseUrl(),
+                LunaHosts.Mode.TEST), events, clock, JsonCodec.shared());
+
+        AtomicReference<CompletionStage<LunaResult>> returned = new AtomicReference<>();
+        assertThatCode(() -> returned.set(fragile.call(request()))).as("검토 R-05: 호출 스레드로 던지지 않는다").doesNotThrowAnyException();
+        LunaException failure = failure(returned.get().toCompletableFuture());
+
+        assertThat(failure.reason()).isEqualTo(LunaFailureReason.FORBIDDEN_INPUT);
+        assertThat(failure.attemptsUsed()).isZero();
+        assertThat(failure.getMessage()).doesNotContain("합성 입력");
+        assertThat(stub.requestCount()).isZero();
+        assertThat(capture.events(EventCode.APP_ERROR)).singleElement()
+                .satisfies(line -> assertThat(LogCapture.attrs(line)).containsEntry("errorKind", "IllegalStateException"));
+        assertThat(capture.anyLineContains("합성 입력")).isFalse();
+
+        assertThat(failure(client.call(null).toCompletableFuture()).reason()).as("null 요청도 실패 완료")
+                .isEqualTo(LunaFailureReason.FORBIDDEN_INPUT);
+        EventLogger failingLog = mock(EventLogger.class);
+        doThrow(new IllegalStateException("기록 실패 대역")).when(failingLog).appError(any(), any(Throwable.class));
+        RealtimeLunaClient silent = RealtimeLunaTestFixtures.client(stub.baseUrl(), Duration.ofSeconds(2), failingLog, clock);
+        assertThat(failure(silent.call(null).toCompletableFuture()).reason()).as("기록이 실패해도 던지지 않는다")
+                .isEqualTo(LunaFailureReason.FORBIDDEN_INPUT);
+    }
+
+    private RealtimeLunaClient clientWith(LunaTransport transport) {
+        return new RealtimeLunaClient(RealtimeLunaTestFixtures.properties(stub.baseUrl()), Duration.ofSeconds(2),
+                LunaSchemas.loadDefault(JsonCodec.shared()), new LunaInputSanitizer(JsonCodec.shared()), transport, events, clock,
+                JsonCodec.shared());
     }
 
     @Test

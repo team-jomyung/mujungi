@@ -14,7 +14,7 @@ import java.util.regex.Pattern;
  * @param promptVersion 보낸 프롬프트 판(감사 로그 · 결과에 붙음)
  * @param instructions 버전 파일에서 읽은 시스템 지시. 요청 {@code instructions} 자리로만 간다
  * @param input 데이터. 정리(금지 키 · 별칭 · 연락처) 뒤 요청 {@code input} 자리에 JSON 문자열로 간다
- * @param aliases 아이 표시 이름 → '아이' 같은 별칭 표(비면 치환 없음)
+ * @param aliases 아이 표시 이름 → '아이' 같은 별칭 표(비면 치환 없음). 긴 이름 먼저인 순서로 고정해 보관한다
  * @param deadline 호출자 마감({@code MujoongClock} 기준)
  * @param outputMode 계약 스키마로 받을지, 기존 인터페이스 어댑터처럼 JSON 객체로 한 번만 받을지
  */
@@ -41,7 +41,7 @@ public record LunaRequest(LunaPurpose purpose, String promptVersion, String inst
         }
         Objects.requireNonNull(input, "input");
         input = Collections.unmodifiableMap(new LinkedHashMap<>(input));
-        aliases = aliases == null ? Map.of() : Map.copyOf(aliases);
+        aliases = ordered(aliases);
         Objects.requireNonNull(deadline, "deadline");
         Objects.requireNonNull(outputMode, "outputMode");
     }
@@ -56,6 +56,15 @@ public record LunaRequest(LunaPurpose purpose, String promptVersion, String inst
     public static LunaRequest legacy(LunaPurpose purpose, String promptVersion, String instructions, Map<String, Object> input,
             Map<String, String> aliases, Instant deadline) {
         return new LunaRequest(purpose, promptVersion, instructions, input, aliases, deadline, OutputMode.LEGACY_JSON_OBJECT);
+    }
+
+    /** 별칭 표를 치환 순서(긴 이름 먼저, 같으면 사전순)로 고정한 읽기 전용 사본. 빈 이름 · null 값은 뺀다(검토 R-01). */
+    private static Map<String, String> ordered(Map<String, String> aliases) {
+        Map<String, String> copy = new LinkedHashMap<>();
+        for (Map.Entry<String, String> alias : LunaInputSanitizer.orderedAliases(aliases)) {
+            copy.put(alias.getKey(), alias.getValue());
+        }
+        return Collections.unmodifiableMap(copy);
     }
 
     @Override

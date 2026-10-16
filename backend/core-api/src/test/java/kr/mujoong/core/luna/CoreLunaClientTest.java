@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Map;
 import kr.mujoong.contract.log.EventCode;
 import kr.mujoong.core.support.TestEvents;
+import kr.mujoong.core.textai.TextAiProperties;
 import kr.mujoong.testsupport.log.LogCapture;
 import kr.mujoong.testsupport.luna.LunaResponsesStub;
 import kr.mujoong.testsupport.luna.LunaResponsesStub.Reply;
@@ -183,6 +184,59 @@ class CoreLunaClientTest {
         LunaRequest legacy = LunaRequest.legacy(LunaPurpose.SCENARIO_GENERATION, "v1", "JSON", input(), Map.of(),
                 clock.now().plusSeconds(10));
         assertThat(failure(legacy).attemptsUsed()).as("기존 어댑터 요청 1회(BR3.4)").isEqualTo(1);
+    }
+
+    @Test
+    void noRetryWhenTheTimeLeftAfterTheWaitIsBelowTheBackoffWindow() {
+        // 시험 값: backoff 1초(최소 시도 창). 대역 응답은 빠르고 시험 시계는 대기 대역만 앞당긴다
+        TextAiProperties wideBackoff = new TextAiProperties(Duration.ofSeconds(2), new TextAiProperties.Retry(1, Duration.ofSeconds(1)),
+                new TextAiProperties.Result(Duration.ofSeconds(3), 0, 0.2, "v1"));
+        CoreLunaClient tight = LunaTestFixtures.client(stub.baseUrl(), clock, events, sleeper, wideBackoff);
+        String valid = LunaTestFixtures.example("ai-seed-output.schema.json");
+        stub.respond(Reply.status(503), Reply.ok(MODEL, valid));
+
+        LunaException tooLittle = failure(tight, LunaRequest.of(LunaPurpose.SEED_GENERATION, "v1", "JSON", input(), Map.of(),
+                clock.now().plusMillis(1500)));
+
+        assertThat(tooLittle.reason()).as("남은 1.5초 > 대기 1초지만 대기 뒤 0.5초 < backoff 1초(검토 R-03)")
+                .isEqualTo(LunaFailureReason.SERVER_ERROR);
+        assertThat(tooLittle.attemptsUsed()).isEqualTo(1);
+        assertThat(sleeper.waits).isEmpty();
+        assertThat(stub.requestCount()).isEqualTo(1);
+
+        stub.respond(Reply.status(503), Reply.ok(MODEL, valid));
+        LunaResult enough = tight.call(LunaRequest.of(LunaPurpose.SEED_GENERATION, "v1", "JSON", input(), Map.of(),
+                clock.now().plusMillis(2500)));
+        assertThat(enough.attemptsUsed()).as("대기 뒤 1.5초 ≥ backoff 1초면 재시도").isEqualTo(2);
+        assertThat(sleeper.waits).containsExactly(Duration.ofSeconds(1));
+    }
+
+    @Test
+    void aRefusalBeforeSendingIsNotCountedAsAnAttempt() {
+        LunaProperties props = LunaTestFixtures.properties(stub.baseUrl());
+        CoreLunaClient strictHost = new CoreLunaClient(props, LunaTestFixtures.timing(), LunaSchemas.loadDefault(LunaTestFixtures.JSON),
+                new LunaInputSanitizer(LunaTestFixtures.JSON), LunaTestFixtures.transport(stub.baseUrl(), LunaHosts.Mode.STRICT),
+                events.logger(), clock, LunaTestFixtures.JSON, sleeper);
+        CoreLunaClient blankKey = new CoreLunaClient(props, LunaTestFixtures.timing(), LunaSchemas.loadDefault(LunaTestFixtures.JSON),
+                new LunaInputSanitizer(LunaTestFixtures.JSON), new LunaTransport(stub.baseUrl(), LunaHosts.Mode.TEST, () -> " ", 1000),
+                events.logger(), clock, LunaTestFixtures.JSON, sleeper);
+        stub.respond(Reply.ok(MODEL, LunaTestFixtures.example("ai-scenario-review-output.schema.json")));
+
+        LunaException rejected = failure(strictHost, request(LunaPurpose.SCENARIO_REVIEW));
+        LunaException noKey = failure(blankKey, request(LunaPurpose.SCENARIO_REVIEW));
+
+        assertThat(rejected.reason()).isEqualTo(LunaFailureReason.REQUEST_REJECTED);
+        assertThat(noKey.reason()).isEqualTo(LunaFailureReason.AUTH_FAILED);
+        assertThat(List.of(rejected.attemptsUsed(), noKey.attemptsUsed())).as("검토 R-04: 보내지 않았으면 0").containsOnly(0);
+        assertThat(stub.requestCount()).isZero();
+        assertThat(lunaCalls()).extracting(line -> LogCapture.attrs(line).get("lunaOutcome"))
+                .containsExactly("REQUEST_REJECTED", "AUTH_FAILED");
+        assertThat(lunaCalls()).allSatisfy(line -> assertThat(LogCapture.attrs(line)).containsEntry("attempt", 0));
+        assertThat(sleeper.waits).isEmpty();
+    }
+
+    private static LunaException failure(CoreLunaClient target, LunaRequest request) {
+        return assertFailure(() -> target.call(request));
     }
 
     @Test

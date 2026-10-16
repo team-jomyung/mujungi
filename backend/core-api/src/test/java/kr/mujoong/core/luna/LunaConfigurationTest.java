@@ -95,6 +95,18 @@ class LunaConfigurationTest {
         assertThat(events.capture().anyLineContains(LunaTestFixtures.FAKE_KEY)).isFalse();
     }
 
+    @Test
+    void closingTheContextClosesTheSharedHttpClient() {
+        List<LunaTransport> seen = new ArrayList<>();
+        runner("https://api.openai.com/v1").withPropertyValues("OPENAI_API_KEY=" + LunaTestFixtures.FAKE_KEY).run(context -> {
+            LunaTransport transport = context.getBean(LunaTransport.class);
+            assertThat(transport.isClosed()).isFalse();
+            seen.add(transport);
+        });
+        assertThat(seen).singleElement().satisfies(transport -> assertThat(transport.isClosed())
+                .as("검토 R-06: 컨텍스트가 닫히면 destroyMethod로 닫힌다").isTrue());
+    }
+
     // ------------------------------------------------------------------ 기존 인터페이스 빈 (Step 14 · SD11 · AC2.3.3 · NFR2.2)
 
     ApplicationContextRunner adapters(String... extra) {

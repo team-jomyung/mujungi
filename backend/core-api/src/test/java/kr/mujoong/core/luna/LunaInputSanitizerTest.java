@@ -99,6 +99,84 @@ class LunaInputSanitizerTest {
         assertThat(result.toString()).isEqualTo("SanitizedInput[redacted]");
     }
 
+    @Test
+    void overlappingNamesAreReplacedLongestFirstWhateverTheTableOrderAndNoFragmentRemains() {
+        Map<String, Object> input = Map.of("utterance", "민수가 수진이랑 민수야 하고 불렀어", "note", "민준이와 민이 왔다");
+        Map<String, String> shortFirst = new LinkedHashMap<>();
+        shortFirst.put("수", "아이");
+        shortFirst.put("민", "아이");
+        shortFirst.put("민수", "아이");
+        shortFirst.put("민준", "아이");
+        Map<String, String> longFirst = new LinkedHashMap<>();
+        longFirst.put("민준", "아이");
+        longFirst.put("민수", "아이");
+        longFirst.put("민", "아이");
+        longFirst.put("수", "아이");
+
+        SanitizedInput a = sanitizer.sanitize(input, shortFirst);
+        SanitizedInput b = sanitizer.sanitize(input, longFirst);
+
+        assertThat(a.payload()).as("표 순서와 관계없이 같은 결과").isEqualTo(b.payload());
+        assertThat(a.payload()).containsEntry("utterance", "아이가 아이진이랑 아이야 하고 불렀어")
+                .containsEntry("note", "아이이와 아이이 왔다");
+        String sent = JsonCodec.shared().write(a.payload());
+        assertThat(sent).doesNotContain("민", "수", "준");
+    }
+
+    @Test
+    void aReplacedAliasIsNeverMatchedAgainByAShorterName() {
+        Map<String, String> aliases = new LinkedHashMap<>();
+        aliases.put("아", "아이");
+        aliases.put("하늘", "아이");
+
+        SanitizedInput result = sanitizer.sanitize(Map.of("text", "하늘 아빠"), aliases);
+
+        assertThat(result.payload()).as("'아이' 안의 '아'를 다시 바꾸지 않는다").containsEntry("text", "아이 아이빠");
+        assertThat(LunaInputSanitizer.orderedAliases(aliases)).extracting(Map.Entry::getKey).containsExactly("하늘", "아");
+        Map<String, String> withNull = new LinkedHashMap<>();
+        withNull.put(null, "아이");
+        withNull.put("별", null);
+        withNull.put("", "아이");
+        assertThat(LunaInputSanitizer.orderedAliases(withNull)).isEmpty();
+        assertThat(LunaRequest.of(LunaPurpose.RESULT_TEXT, "v1", "i", Map.of(), Map.of("수", "아이", "민수", "아이", " ", "x"),
+                java.time.Instant.EPOCH).aliases().keySet()).containsExactly("민수", "수");
+    }
+
+    @Test
+    void forbiddenKeyVariantsWithUnderscoresHyphensAndCaseAreRemoved() {
+        Map<String, Object> nested = new LinkedHashMap<>();
+        nested.put("Child-Id", "c-1");
+        nested.put("guardian-id", "g-1");
+        nested.put("text", "블록");
+        Map<String, Object> input = new LinkedHashMap<>();
+        input.put("child_name", "하늘이");
+        input.put("api_key", "k-1");
+        input.put("DEVICE_ID", "d-1");
+        input.put("session-id", "s-1");
+        input.put("turns", List.of(nested));
+        input.put("goal_name", "부탁하기");
+
+        SanitizedInput result = sanitizer.sanitize(input, Map.of());
+
+        assertThat(result.payload()).containsOnlyKeys("turns", "goal_name");
+        assertThat(JsonCodec.shared().write(result.payload())).doesNotContain("하늘이", "k-1", "d-1", "s-1", "c-1", "g-1");
+        assertThat(LunaInputSanitizer.isForbiddenKey("Audio_Refs_Json")).isTrue();
+        assertThat(LunaInputSanitizer.isForbiddenKey("goal_name")).isFalse();
+    }
+
+    @Test
+    void theSafetyNetIsAnIndependentCheckThatCatchesVariantsTheFirstPassMisses() {
+        assertThat(LunaInputSanitizer.isForbiddenKey("child.name")).as("1차는 _ · -만 지운다").isFalse();
+        assertThat(LunaInputSanitizer.containsForbiddenKey(Map.of("a", Map.of("child.name", "x")))).isTrue();
+        assertThat(LunaInputSanitizer.containsForbiddenKey(Map.of("a", List.of(Map.of("guardian id", "x"))))).isTrue();
+        assertThat(LunaInputSanitizer.containsForbiddenKey(Map.of("api_key", "x"))).isTrue();
+        assertThat(LunaInputSanitizer.containsForbiddenKey(Map.of("goal.name", "x", "maxTokens", 1))).isFalse();
+
+        assertThatThrownBy(() -> sanitizer.sanitize(Map.of("child.name", "하늘이"), Map.of()))
+                .isInstanceOf(LunaException.class).hasMessage("Luna failure: FORBIDDEN_INPUT")
+                .satisfies(e -> assertThat(((LunaException) e).attemptsUsed()).isZero());
+    }
+
     /** 직렬화하면 실패하는 값(합성). */
     static final class Unserializable {
         public String getValue() {

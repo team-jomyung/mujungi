@@ -52,6 +52,54 @@ class RealtimeLunaInputAndSchemaTest {
     }
 
     @Test
+    void overlappingNamesAreReplacedLongestFirstAndNoFragmentRemains() {
+        Map<String, Object> input = Map.of("childUtterance", "민수가 수진이랑 민준이랑 민이를 불렀어");
+        Map<String, String> shortFirst = new LinkedHashMap<>();
+        shortFirst.put("수", "아이");
+        shortFirst.put("민", "아이");
+        shortFirst.put("민수", "아이");
+        shortFirst.put("민준", "아이");
+        Map<String, String> longFirst = new LinkedHashMap<>();
+        longFirst.put("민준", "아이");
+        longFirst.put("민수", "아이");
+        longFirst.put("민", "아이");
+        longFirst.put("수", "아이");
+
+        SanitizedInput a = sanitizer.sanitize(input, shortFirst);
+        SanitizedInput b = sanitizer.sanitize(input, longFirst);
+
+        assertThat(a.payload()).isEqualTo(b.payload())
+                .containsEntry("childUtterance", "아이가 아이진이랑 아이이랑 아이이를 불렀어");
+        assertThat(JSON.write(a.payload())).doesNotContain("민", "수", "준");
+        Map<String, String> reMatch = new LinkedHashMap<>();
+        reMatch.put("아", "아이");
+        reMatch.put("별이", "아이");
+        assertThat(sanitizer.sanitize(Map.of("t", "별이 아빠"), reMatch).payload()).as("바꾼 '아이'를 다시 바꾸지 않는다")
+                .containsEntry("t", "아이 아이빠");
+        assertThat(new LunaRequest(LunaPurpose.JUDGMENT_LIVE, "v1", "i", Map.of(), shortFirst, java.time.Instant.EPOCH)
+                .aliases().keySet()).containsExactly("민수", "민준", "민", "수");
+    }
+
+    @Test
+    void forbiddenKeyVariantsAreRemovedAndTheSafetyNetChecksIndependently() {
+        Map<String, Object> input = new LinkedHashMap<>(RealtimeLunaTestFixtures.judgmentInput("그거 줘."));
+        input.put("child_name", "별이");
+        input.put("Device-Id", "d-1");
+        input.put("recentTurns", List.of(Map.of("speaker", "CHILD", "text", "안녕", "guardian_id", "g-1", "API-KEY", "k-1")));
+
+        SanitizedInput result = sanitizer.sanitize(input, Map.of());
+
+        assertThat(JSON.write(result.payload())).doesNotContain("별이", "d-1", "g-1", "k-1");
+        assertThat(result.sentFieldNames()).doesNotContain("child_name", "Device-Id");
+        assertThat(LunaInputSanitizer.isForbiddenKey("session_id")).isTrue();
+        assertThat(LunaInputSanitizer.isForbiddenKey("child.name")).isFalse();
+        assertThat(LunaInputSanitizer.containsForbiddenKey(Map.of("x", List.of(Map.of("child.name", 1))))).isTrue();
+        assertThat(LunaInputSanitizer.containsForbiddenKey(Map.of("judgment_point", "J2"))).isFalse();
+        assertThatThrownBy(() -> sanitizer.sanitize(Map.of("device id", "d-1"), Map.of())).isInstanceOf(LunaException.class)
+                .hasMessage("Luna failure: FORBIDDEN_INPUT");
+    }
+
+    @Test
     void theJudgmentRequestCopyKeepsOnlyProviderKeywordsAndIsStrict() {
         LunaSchemas schemas = LunaSchemas.loadDefault(JSON);
         LunaSchemas.OutputSchemaPair pair = schemas.pair(LunaPurpose.JUDGMENT_LIVE);

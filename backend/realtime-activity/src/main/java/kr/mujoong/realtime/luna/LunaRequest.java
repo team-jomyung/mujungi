@@ -33,8 +33,17 @@ public record LunaRequest(LunaPurpose purpose, String promptVersion, String inst
         }
         Objects.requireNonNull(input, "input");
         input = Collections.unmodifiableMap(new LinkedHashMap<>(input));
-        aliases = aliases == null ? Map.of() : Map.copyOf(aliases);
+        aliases = ordered(aliases);
         Objects.requireNonNull(deadline, "deadline");
+    }
+
+    /** 별칭 표를 치환 순서(긴 이름 먼저, 같으면 사전순)로 고정한 읽기 전용 사본. 빈 이름 · null 값은 뺀다(검토 R-01). */
+    private static Map<String, String> ordered(Map<String, String> aliases) {
+        Map<String, String> copy = new LinkedHashMap<>();
+        for (Map.Entry<String, String> alias : LunaInputSanitizer.orderedAliases(aliases)) {
+            copy.put(alias.getKey(), alias.getValue());
+        }
+        return Collections.unmodifiableMap(copy);
     }
 
     @Override

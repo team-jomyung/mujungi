@@ -75,6 +75,19 @@ class RealtimeLunaConfigurationTest {
     }
 
     @Test
+    void closingTheContextClosesTheSharedHttpClient() {
+        List<LunaTransport> seen = new java.util.ArrayList<>();
+        runner("https://api.openai.com/v1").withPropertyValues("OPENAI_API_KEY=" + RealtimeLunaTestFixtures.FAKE_KEY)
+                .run(context -> {
+                    LunaTransport transport = context.getBean(LunaTransport.class);
+                    assertThat(transport.isClosed()).isFalse();
+                    seen.add(transport);
+                });
+        assertThat(seen).singleElement().satisfies(transport -> assertThat(transport.isClosed())
+                .as("검토 R-06: 컨텍스트가 닫히면 destroyMethod로 닫힌다").isTrue());
+    }
+
+    @Test
     void addressesOutsideTheProfileRuleRefuseStartup() {
         runner("http://127.0.0.1:9/v1").run(context -> assertThat(context).as("프로필 없음 = STRICT").hasFailed());
         runner("https://api.openai.com/v1")

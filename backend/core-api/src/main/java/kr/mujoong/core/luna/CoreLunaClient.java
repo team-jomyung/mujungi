@@ -29,8 +29,9 @@ import kr.mujoong.core.textai.TextAiProperties;
  *   <li>시도마다 시한 = min(마감까지 남은 시간, 목적 시한 키)(BR5.1). 0 이하면 부르지 않고 TIMEOUT.
  *   <li>응답 분류(BR4.4 → BR4.1 → BR4.3 → BR4.2): 상태 코드 → 미완료 · 거절 → 빈 출력 → 모델 → 원본 계약 스키마.
  *   <li>재시도(BR3): REQUEST_BOUNDED만 일시 실패 기술 재시도 1 · 스키마 불일치 재요청 1(합계 ≤ 3). 대기 = max(backoff, Retry-After)이고
- *       남은 시간이 대기보다 길 때만 한다(BR3.6 · NFR1.3). NONE · JOB_ATTEMPT · 기존 어댑터 요청은 1회.
- *   <li>시도마다 {@code LUNA_CALL} 한 줄(BR6.1). 본문 · 이름 · 키는 남기지 않는다(BR6.2).
+ *       남은 시간이 대기보다 길고 대기 뒤 backoff 이상 남을 때만 한다(BR3.6 · NFR1.3 · 검토 R-03). NONE · JOB_ATTEMPT · 기존 어댑터 요청은 1회.
+ *   <li>시도마다 {@code LUNA_CALL} 한 줄(BR6.1). 본문 · 이름 · 키는 남기지 않는다(BR6.2). 보내기 전에 끝나면(정리 실패 · 시한 0 · 주소 재확인 ·
+ *       빈 키) {@code attempt=0} 한 줄이고 시도 수에 세지 않는다(검토 R-04).
  * </ol>
  *
  * <p>시각은 {@link MujoongClock}으로만 읽고 시간 값은 {@code mujoong.text-ai.*} 설정에서만 온다(BR5.2 · R-F6 · R-F7).
@@ -101,6 +102,12 @@ public class CoreLunaClient {
                 }
                 throw new LunaException(LunaFailureReason.TIMEOUT, attempts);
             }
+            // 주소 재확인 · 빈 키로 보내기 전에 끝나면 공급자 시도로 세지 않는다(LUNA_CALL attempt=0, 검토 R-04)
+            Optional<LunaFailureReason> notSent = transport.rejectBeforeSend(limit);
+            if (notSent.isPresent()) {
+                audit(request, input.sentFieldNames(), notSent.get().name(), null, Duration.ZERO, 0);
+                throw new LunaException(notSent.get(), attempts);
+            }
             attempts++;
             long started = clock.monotonicNanos();
             Attempt attempt = attempt(body, limit, request, schema);
@@ -122,9 +129,7 @@ public class CoreLunaClient {
             } else {
                 throw new LunaException(attempt.failure, attempts);
             }
-            // 남은 시간이 대기보다 길지 않으면 재시도하지 않고 마지막 실패를 돌려준다(BR3.6 · NFR1.3)
-            Duration left = remaining(request.deadline());
-            if (left.compareTo(wait) <= 0) {
+            if (!worthRetrying(remaining(request.deadline()), wait)) {
                 throw new LunaException(attempt.failure, attempts);
             }
             if (!wait.isZero()) {
@@ -210,6 +215,15 @@ public class CoreLunaClient {
                 entry.attr(AttrKey.RESPONSE_MODEL, responseModel);
             }
         });
+    }
+
+    /**
+     * 재시도할 만한가(BR3.6 · NFR1.3 · 검토 R-03). 대기가 남은 시간보다 짧아야 하고, 대기 뒤에도 최소 시도 창이 남아야 한다. 최소 시도 창은 새 숫자
+     * 시간 값을 두지 않고 기존 설정 {@code mujoong.text-ai.retry.backoff}를 그대로 쓴다(R-F7). 몇 밀리초짜리 시도로 공급자를 부르고 곧바로
+     * TIMEOUT이 되는 낭비를 막는다. 아니면 마지막 실패를 그대로 돌려준다.
+     */
+    private boolean worthRetrying(Duration left, Duration wait) {
+        return left.compareTo(wait) > 0 && left.minus(wait).compareTo(timing.retry().backoff()) >= 0;
     }
 
     private Duration purposeTimeout(LunaPurpose purpose) {

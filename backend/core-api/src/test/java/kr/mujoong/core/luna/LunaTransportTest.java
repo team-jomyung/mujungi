@@ -100,6 +100,28 @@ class LunaTransportTest {
     }
 
     @Test
+    void thePreSendCheckNamesTheRefusalWithoutSendingAndCloseShutsTheClient() {
+        try (LunaResponsesStub stub = LunaResponsesStub.start()) {
+            LunaTransport strict = LunaTestFixtures.transport(stub.baseUrl(), LunaHosts.Mode.STRICT);
+            LunaTransport noKey = new LunaTransport(stub.baseUrl(), LunaHosts.Mode.TEST, () -> null, 1000);
+            LunaTransport ok = LunaTestFixtures.transport(stub.baseUrl(), LunaHosts.Mode.TEST);
+
+            assertThat(strict.rejectBeforeSend(Duration.ofSeconds(1))).contains(LunaFailureReason.REQUEST_REJECTED);
+            assertThat(noKey.rejectBeforeSend(Duration.ofSeconds(1))).contains(LunaFailureReason.AUTH_FAILED);
+            assertThat(ok.rejectBeforeSend(Duration.ZERO)).contains(LunaFailureReason.TIMEOUT);
+            assertThat(ok.rejectBeforeSend(null)).contains(LunaFailureReason.TIMEOUT);
+            assertThat(ok.rejectBeforeSend(Duration.ofSeconds(1))).isEmpty();
+            assertThat(stub.requestCount()).isZero();
+
+            assertThat(ok.isClosed()).isFalse();
+            ok.close();
+            assertThat(ok.isClosed()).as("검토 R-06: 공유 HttpClient가 닫힌다").isTrue();
+            strict.close();
+            noKey.close();
+        }
+    }
+
+    @Test
     void aConnectionFailureIsATransportErrorAndNoMessageCarriesTheKey() {
         LunaTransport transport = LunaTestFixtures.transport(URI.create("http://127.0.0.1:9/v1"), LunaHosts.Mode.TEST);
 

@@ -36,7 +36,7 @@ import java.util.function.Supplier;
  *   <li>시도 시한은 본문 수신 끝까지 덮는다({@code orTimeout}). 넘거나 호출자가 Future를 취소하면 진행 중인 요청을 취소한다.
  * </ul>
  */
-public final class LunaTransport {
+public final class LunaTransport implements AutoCloseable {
 
     /** 공급자 키 env 이름(contracts/ai-io.md 10.7). */
     public static final String API_KEY_ENV = "OPENAI_API_KEY";
@@ -79,14 +79,13 @@ public final class LunaTransport {
      */
     public CompletableFuture<RawResponse> send(String body, Duration limit) {
         Objects.requireNonNull(body, "body");
-        if (limit == null || limit.isNegative() || limit.isZero()) {
-            return CompletableFuture.failedFuture(new LunaException(LunaFailureReason.TIMEOUT, 0));
-        }
-        if (LunaHosts.check(endpoint, mode).isPresent()) {
-            return CompletableFuture.failedFuture(new LunaException(LunaFailureReason.REQUEST_REJECTED, 0));
+        Optional<LunaFailureReason> rejected = rejectBeforeSend(limit);
+        if (rejected.isPresent()) {
+            return CompletableFuture.failedFuture(new LunaException(rejected.get(), 0));
         }
         String key = apiKey.get();
         if (key == null || key.isBlank()) {
+            // rejectBeforeSend 뒤 키가 사라진 드문 경우도 보내지 않는다
             return CompletableFuture.failedFuture(new LunaException(LunaFailureReason.AUTH_FAILED, 0));
         }
         HttpRequest request = HttpRequest.newBuilder(endpoint)
@@ -116,6 +115,35 @@ public final class LunaTransport {
             }
         });
         return returned;
+    }
+
+    /**
+     * 보내기 전에 거절할 사유(검토 R-04). 시한 0 이하 → TIMEOUT, 허용 밖 주소 → REQUEST_REJECTED, 빈 키 → AUTH_FAILED. 호출부는 이 사유로 끝난
+     * 경우를 공급자 시도로 세지 않는다({@code LUNA_CALL attempt=0}). {@link #send}도 같은 확인을 한다.
+     */
+    Optional<LunaFailureReason> rejectBeforeSend(Duration limit) {
+        if (limit == null || limit.isNegative() || limit.isZero()) {
+            return Optional.of(LunaFailureReason.TIMEOUT);
+        }
+        if (LunaHosts.check(endpoint, mode).isPresent()) {
+            return Optional.of(LunaFailureReason.REQUEST_REJECTED);
+        }
+        String key = apiKey.get();
+        if (key == null || key.isBlank()) {
+            return Optional.of(LunaFailureReason.AUTH_FAILED);
+        }
+        return Optional.empty();
+    }
+
+    /** 앱 컨텍스트가 닫힐 때 {@link HttpClient}를 닫는다(검토 R-06). 진행 중인 요청이 끝나기를 기다린다. */
+    @Override
+    public void close() {
+        client.close();
+    }
+
+    /** 공유 {@link HttpClient}가 닫혔는가(시험 확인용). */
+    boolean isClosed() {
+        return client.isTerminated();
     }
 
     /** 실패 원인을 사유 코드로 바꾼다. 원인 메시지는 버린다(BR6.2). */

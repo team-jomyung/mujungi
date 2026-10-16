@@ -5,6 +5,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.CompletionStage;
@@ -23,8 +24,8 @@ import kr.mujoong.realtime.observability.EventLogger;
  * <ol>
  *   <li>입력 정리(BR2.1 ~ BR2.3) → 요청 스키마({@code ai-judgment-request}) 검증(BR2.4). 실패면 공급자를 부르지 않고 FORBIDDEN_INPUT.
  *   <li>요청 조립(BR1.6 · BR1.8 · BR2.5 · BR4.5): {@code store=false}, {@code temperature} 없음, 지시와 데이터 자리 분리, 요청용 스키마 사본.
- *   <li>시한 = min(마감까지 남은 시간, {@code mujoong.timing.judgment.live-budget})(BR5.1). 0 이하면 부르지 않고 TIMEOUT. 넘으면 요청을
- *       취소한다. 돌려받은 Future를 호출자가 취소해도 요청을 취소한다.
+ *   <li>시한 = min(마감까지 남은 시간, {@code mujoong.timing.judgment.live-budget})(BR5.1). 0 이하면 부르지 않고 TIMEOUT. 주소 재확인 ·
+ *       빈 키로 거절되면 부르지 않고 그 사유(시도 0, 검토 R-04). 넘으면 요청을 취소한다. 돌려받은 Future를 호출자가 취소해도 요청을 취소한다.
  *   <li>응답 분류(BR4.4 → BR4.1 → BR4.3 → BR4.2)와 {@code LUNA_CALL} 한 줄(BR6.1).
  * </ol>
  */
@@ -55,9 +56,29 @@ public class RealtimeLunaClient {
     }
 
     /**
-     * 공급자를 한 번 부른다. 실패는 {@link LunaException}(사유 코드만)을 원인으로 하는 예외 완료다. 이 메서드는 던지지 않는다.
+     * 공급자를 한 번 부른다. 실패는 {@link LunaException}(사유 코드만)을 원인으로 하는 예외 완료다. 이 메서드는 호출 스레드로 던지지 않는다(검토
+     * R-05): 보내기 전 준비(정리 · 스키마 검증 · 본문 조립) 중 예기치 못한 런타임 오류도 {@code APP_ERROR}(예외 종류 이름만) 한 줄을 남기고
+     * {@code FORBIDDEN_INPUT}(시도 0) 예외 완료로 바꾼다. 준비하지 못한 요청은 보내지 않는다는 fail-closed 판단이다.
      */
     public CompletionStage<LunaResult> call(LunaRequest request) {
+        try {
+            return start(request);
+        } catch (RuntimeException unexpected) {
+            return unexpectedFailure(unexpected);
+        }
+    }
+
+    private CompletableFuture<LunaResult> unexpectedFailure(RuntimeException unexpected) {
+        try {
+            // 원인 메시지 · 스택은 입력을 담을 수 있어 남기지 않는다(BR6.2). 예외 종류 이름만 APP_ERROR로 남긴다
+            events.appError(EventLog.Component.REALTIME_LUNA_CLIENT, unexpected);
+        } catch (RuntimeException loggingFailed) {
+            // 기록 자체가 실패해도 호출자에게 던지지 않는다(던지지 않는다는 계약이 먼저다). 실패 완료는 아래에서 그대로 돌려준다
+        }
+        return CompletableFuture.failedFuture(new LunaException(LunaFailureReason.FORBIDDEN_INPUT, 0));
+    }
+
+    private CompletionStage<LunaResult> start(LunaRequest request) {
         Objects.requireNonNull(request, "request");
         SanitizedInput input;
         try {
@@ -76,6 +97,12 @@ public class RealtimeLunaClient {
         if (limit.isNegative() || limit.isZero()) {
             audit(request, input.sentFieldNames(), LunaFailureReason.TIMEOUT.name(), null, Duration.ZERO, 0);
             return CompletableFuture.failedFuture(new LunaException(LunaFailureReason.TIMEOUT, 0));
+        }
+        // 주소 재확인 · 빈 키로 보내기 전에 끝나면 공급자 시도로 세지 않는다(LUNA_CALL attempt=0, 검토 R-04)
+        Optional<LunaFailureReason> notSent = transport.rejectBeforeSend(limit);
+        if (notSent.isPresent()) {
+            audit(request, input.sentFieldNames(), notSent.get().name(), null, Duration.ZERO, 0);
+            return CompletableFuture.failedFuture(new LunaException(notSent.get(), 0));
         }
         LunaSchemas.OutputSchemaPair schema = schemas.pair(request.purpose());
         String body = json.write(new ResponsesRequest(properties.model(), request.instructions(), inputJson, schema,

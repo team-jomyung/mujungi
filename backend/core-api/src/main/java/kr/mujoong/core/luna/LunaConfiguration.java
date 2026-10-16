@@ -42,7 +42,8 @@ public class LunaConfiguration {
                 environment.getActiveProfiles());
     }
 
-    @Bean
+    /** 컨텍스트가 닫힐 때 공유 HttpClient를 닫는다(검토 R-06). */
+    @Bean(destroyMethod = "close")
     @Conditional(LunaKeyPresentCondition.class)
     LunaTransport lunaTransport(LunaProperties properties, LunaStartup startup, Environment environment) {
         return new LunaTransport(properties.baseUrl(), startup.mode(),
