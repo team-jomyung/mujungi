@@ -12,4 +12,5 @@
 <!-- example: 2026-05-29T10:14:32Z — picked TDD over BDD this run; the team is unit-first and the domain is well-understood -->
 
 ## Open questions
+- 2026-10-16T02:05:00Z — U9 응답 크기 상한 1MB는 기존 ResultTextGateway가 문자 수(output.length())로 세는 값에 맞췄다; U9 Code Generation에서 바이트로 셀지 문자로 셀지 한 줄로 정한다.
 <!-- example: 2026-05-29T10:14:32Z — confirm the retention window with compliance before the next stage hardens the schema -->

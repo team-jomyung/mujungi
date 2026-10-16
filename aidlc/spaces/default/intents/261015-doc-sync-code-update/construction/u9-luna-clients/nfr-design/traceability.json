@@ -1,0 +1,28 @@
+{
+  "stage": "nfr-design",
+  "unit": "u9-luna-clients",
+  "upstream_ids": ["NFR1.1", "NFR1.2", "NFR1.3", "NFR2.1", "NFR2.2", "NFR3.1", "NFR3.2", "NFR3.3", "NFR3.4", "NFR3.5", "NFR3.6", "NFR3.7", "NFR3.8", "NFR3.9", "NFR3.10", "NFR4.1", "NFR5.1", "NFR5.2", "NFR5.3", "NFR5.4", "NFR6.1"],
+  "coverage": [
+    { "id": "NFR1.1", "status": "OK", "target": "SD5 시도 시한 min(마감, 목적 키), MujoongClock, SD3 본문 수신까지 orTimeout" },
+    { "id": "NFR1.2", "status": "OK", "target": "SD6 LUNA_CALL 지연 속성" },
+    { "id": "NFR1.3", "status": "OK", "target": "SD5 재시도 대기 max(backoff, Retry-After) ≥ 남은 시간이면 재시도 없음" },
+    { "id": "NFR2.1", "status": "OK", "target": "SD4 분류 순서와 원본 계약 스키마 검증, 부분 응답 성공 금지" },
+    { "id": "NFR2.2", "status": "OK", "target": "SD11 키 조건 · 반대 조건으로 빈 하나만, 컨텍스트 시험" },
+    { "id": "NFR3.1", "status": "OK", "target": "SD1 LunaInputSanitizer 금지 키 제거 · 잔존 시 미호출" },
+    { "id": "NFR3.2", "status": "OK", "target": "SD1 별칭 · 연락처 치환, 3절 잔여 위험" },
+    { "id": "NFR3.3", "status": "OK", "target": "SD2 고정 요청 레코드(store=false, temperature 없음)" },
+    { "id": "NFR3.4", "status": "OK", "target": "SD3 LunaHosts.check(uri, mode) STRICT 기본, 기동 · 보내기 직전 확인, SD12 설정 키 대조" },
+    { "id": "NFR3.5", "status": "OK", "target": "SD6 속성 표(ENUM · LABEL · NAME_LIST · NUMBER) 고정 · toString [redacted] · 예외 사유 코드만 · 로그 계약 동시 수정" },
+    { "id": "NFR3.6", "status": "OK", "target": "SD3 키는 LunaTransport가 env에서 헤더로만" },
+    { "id": "NFR3.7", "status": "OK", "target": "SD10 RUNBOOK 확인 기록 표 · ai-io.md 10.2 문장 교체" },
+    { "id": "NFR3.8", "status": "OK", "target": "SD7 ArchUnit 패키지 경계" },
+    { "id": "NFR3.9", "status": "OK", "target": "SD3 Redirect NEVER · 프록시 없음 · 3xx REQUEST_REJECTED" },
+    { "id": "NFR3.10", "status": "OK", "target": "SD3 바이트 상한 수신기 · LENGTH_EXCEEDED, SD12 max-response-bytes 키 대조" },
+    { "id": "NFR4.1", "status": "OK", "target": "SD6 LUNA_CALL 사유 · 모델 · 판 · 지연" },
+    { "id": "NFR5.1", "status": "OK", "target": "SD8 기본 test에만 luna-live 제외, lunaLiveTest check 미연결, 빌드 구성 시험" },
+    { "id": "NFR5.2", "status": "OK", "target": "SD8 SKIPPED_NO_KEY · 합성 자료 · build/luna-live/report.txt" },
+    { "id": "NFR5.3", "status": "OK", "target": "logical-components.md 컴포넌트별 시험, @Tag(\"u9\"), coverage-scope/u9.txt" },
+    { "id": "NFR5.4", "status": "OK", "target": "SD9 의존성 이동 직후 취약점 스캔 · image-checks" },
+    { "id": "NFR6.1", "status": "OK", "target": "SD11 인터페이스 · 게이트웨이 흐름 유지, 기준선 회귀 0" }
+  ]
+}
