@@ -41,7 +41,8 @@ public class ResultReconciler implements SmartLifecycle {
         Object content=json.read(result.pendingCandidatesJson(),Object.class);
         if(content instanceof java.util.Map<?,?>){
             if(goalDelivery==null)throw new IllegalStateException("Goal delivery unavailable");
-            goalDelivery.deliver(job.guardianId(),head.childId(),result.sessionId(),result.id(),json.read(result.pendingCandidatesJson(),kr.mujoong.core.practicegoal.CandidateSeedDelivery.Pending.class));
+            var pending=json.read(result.pendingCandidatesJson(),kr.mujoong.core.practicegoal.CandidateSeedDelivery.Pending.class);
+            if(!pending.candidates().isEmpty())goalDelivery.deliver(job.guardianId(),head.childId(),result.sessionId(),result.id(),pending);
         }else{var pending=json.read(result.pendingCandidatesJson(),CandidateRegistry.Candidate[].class);
             if(pending.length>0)candidates.register(result.sessionId(),head.childId(),Arrays.asList(pending));}
         tx.executeWithoutResult(t->results.candidatesRegistered(result.id(),clock.now()));

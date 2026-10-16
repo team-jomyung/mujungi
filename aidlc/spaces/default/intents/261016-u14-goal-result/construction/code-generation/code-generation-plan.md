@@ -41,16 +41,16 @@
 - [x] Step 9. 구현 직후 GoalCandidateValidatorTest, GoalCandidateGatewayTest, LunaGoalCandidateProviderTest를 작성·실행한다. 5~8개/컴포넌트 이상으로 빈후보·길이·4요소빈칸·근거불일치·잘못된seed·금지표현·잘못된JSON·익명화·호출1회·후보없음에도DONE 가능을 검증한다. (FR2.1·FR2.2, NFR2·NFR3)
 - [x] Step 10. 결과의 durable pending 후보 정본을 확장하고 커밋 후 등록·NONE 씨앗 생성·비교 후 새 버전 게시를 구현한다. 동일 candidate+version idempotency, 삭제/철회/최신버전 재확인, 실패 NONE 유지·DONE 불변을 보장한다. 외부 AI/graph 동안 DB 잠금을 잡지 않는다. (FR2.3·FR4.2, BR2.3·BR4.2; US4.5·US4.6)
 - [x] Step 11. 구현 직후 CandidateSeedLinkTest와 CandidateSeedReplayIT를 작성·실행한다. 정상 새버전·graphoff·실패·타임아웃·구조없음·중복 callback·stale버전·동시담기·삭제/철회 경합·재생 후 한 번 게시를 확인한다. U15는 fake 포트로 격리한다. (FR2.3, NFR2·NFR3)
-- [ ] Step 12. 위 층 시험 및 이전 층 회귀 후 feat(u14): Luna 후보 생성과 씨앗 연결 구현 으로 코드·동일 계약 변경을 함께 커밋한다. (FR2.1~FR2.3)
+- [x] Step 12. 위 층 시험 및 이전 층 회귀 후 feat(u14): Luna 후보 생성과 씨앗 연결 구현 으로 코드·동일 계약 변경을 함께 커밋한다. (FR2.1~FR2.3)
 
 ### 커밋 3: 새 결과 · 재판정 · 4회 재시도
 
-- [ ] Step 13. practice-record-v2 reader/내부 모델을 구현한다. flowVersion 부재만 legacy, 정확한 새버전만 v2, 미지원버전/중복 sceneRunId 거절, 실제 시작 장면/goalRef·가변양수 번호·알려진 fact dedupe·변형생략/종료 구분을 보존한다. snapshotVersion 의미는 바꾸지 않는다. (FR3.2, BR3.2; US4.2·US4.3)
-- [ ] Step 14. 구현 직후 PracticeRecordV2Test와 PracticeRecordV2IT를 작성·실행한다. legacy·새버전·미지원·1/3개장면·시작안한장면·unknown fact·중복fact·중복ID·변형생략·타아동목표를 검증한다. U12 생산부 대신 계약 fixture를 쓴다. (FR3.2, NFR3)
-- [ ] Step 15. REJUDGMENT gateway/provider와 장면 결과 저장을 구현한다. 실제 sceneRunId 집합 일치·value/timing 일관성·AFTER_REASK·differs_from_live를 보존하고 진행중 판정과 다르면 기록용 판정을 사용한다. 저장·27칩·report mapper를 분리하며 safe 목표표현8자/전달 fallback, legacy 문구 유지, 혼합 report는 raw timing으로 집계한다. (FR3.1·FR3.3·FR3.5; US4.1·US4.3)
-- [ ] Step 16. 구현 직후 RejudgmentGatewayTest, U14SceneProjectionTest, U14MixedReportIT, U14ResultPipelineIT를 작성·실행한다. 빠진/중복/불명 scene·value/timing 모순·단순 재발화·세종류timing·differs내부·unsafe표현·legacy/새혼합·없는2번째장면미생성·도움없음비실패를 검증한다. (FR3.1·FR3.3·FR3.5)
-- [ ] Step 17. JobRunner/관련 timing을 총4회·5/15/30초로 맞추고 양 앱 application.yml, contracts/timing.md, frontend timing-defaults.json, ai-io.md 6.9/10.3을 같은 변경으로 갱신한다. 세 JOB_ATTEMPT 목적은 각 시도당 내부재시도0, lease·manual retry·최종FAILED를 유지한다. (FR3.4, NFR5; US4.4)
-- [ ] Step 18. 구현 직후 U14ResultRetryIT와 U14TimingContractTest를 작성·실행한다. 최초+추가3회·각지연·5번째실행없음·분류별재시도·내부call count·최종실패/수동재요청·lease경합과 양앱/계약/frontend 기본값 동등을 검증한다. 기존 다른 유닛 단언은 수정하지 않는다. (FR3.4, NFR1·NFR5)
+- [x] Step 13. practice-record-v2 reader/내부 모델을 구현한다. flowVersion 부재만 legacy, 정확한 새버전만 v2, 미지원버전/중복 sceneRunId 거절, 실제 시작 장면/goalRef·가변양수 번호·알려진 fact dedupe·변형생략/종료 구분을 보존한다. snapshotVersion 의미는 바꾸지 않는다. (FR3.2, BR3.2; US4.2·US4.3)
+- [x] Step 14. 구현 직후 PracticeRecordV2Test와 PracticeRecordV2IT를 작성·실행한다. legacy·새버전·미지원·1/3개장면·시작안한장면·unknown fact·중복fact·중복ID·변형생략·타아동목표를 검증한다. U12 생산부 대신 계약 fixture를 쓴다. (FR3.2, NFR3)
+- [x] Step 15. REJUDGMENT gateway/provider와 장면 결과 저장을 구현한다. 실제 sceneRunId 집합 일치·value/timing 일관성·AFTER_REASK·differs_from_live를 보존하고 진행중 판정과 다르면 기록용 판정을 사용한다. 저장·27칩·report mapper를 분리하며 safe 목표표현8자/전달 fallback, legacy 문구 유지, 혼합 report는 raw timing으로 집계한다. (FR3.1·FR3.3·FR3.5; US4.1·US4.3)
+- [x] Step 16. 구현 직후 RejudgmentGatewayTest, U14SceneProjectionTest, U14MixedReportIT, U14ResultPipelineIT를 작성·실행한다. 빠진/중복/불명 scene·value/timing 모순·단순 재발화·세종류timing·differs내부·unsafe표현·legacy/새혼합·없는2번째장면미생성·도움없음비실패를 검증한다. (FR3.1·FR3.3·FR3.5)
+- [x] Step 17. JobRunner/관련 timing을 총4회·5/15/30초로 맞추고 양 앱 application.yml, contracts/timing.md, frontend timing-defaults.json, ai-io.md 6.9/10.3을 같은 변경으로 갱신한다. 세 JOB_ATTEMPT 목적은 각 시도당 내부재시도0, lease·manual retry·최종FAILED를 유지한다. (FR3.4, NFR5; US4.4)
+- [x] Step 18. 구현 직후 U14ResultRetryIT와 U14TimingContractTest를 작성·실행한다. 최초+추가3회·각지연·5번째실행없음·분류별재시도·내부call count·최종실패/수동재요청·lease경합과 양앱/계약/frontend 기본값 동등을 검증한다. 기존 다른 유닛 단언은 수정하지 않는다. (FR3.4, NFR1·NFR5)
 - [ ] Step 19. 위 층 및 앞 층 시험 후 feat(u14): 새 연습 결과와 재판정 및 재시도 구현 으로 시간 정본 전체를 함께 커밋한다. (FR3.1~FR3.5)
 
 ### 커밋 4: 보호자 REST + 삭제

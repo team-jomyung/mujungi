@@ -38,9 +38,9 @@ public class GoalCandidateGateway {
         if(!(output.get("candidates") instanceof List<?>))throw new ResultAiException("SCHEMA_INVALID");
         var candidates=validator.validate(objects(output.get("candidates")),catalog.stream().map(s->s.seedId()).collect(java.util.stream.Collectors.toSet()),quotes);
         var checks=new ArrayList<OutputChecker.Draft>();
-        for(int i=0;i<candidates.size();i++){var c=candidates.get(i);var refs=c.evidence().stream().map(GoalCandidateRepository.Evidence::quote).toList();checks.add(new OutputChecker.Draft("goal-reason-"+i,c.reasonText(),refs,null));checks.add(new OutputChecker.Draft("goal-display-"+i,c.displayEvidence(),refs,null));}
+        for(int i=0;i<candidates.size();i++){var c=candidates.get(i);var refs=c.evidence().stream().map(GoalCandidateRepository.Evidence::quote).toList();checks.add(new OutputChecker.Draft("goal-reason-"+i,c.reasonText(),refs,null));checks.add(new OutputChecker.Draft("goal-display-"+i,c.displayEvidence(),refs,null));checks.add(new OutputChecker.Draft("goal-name-"+i,c.displayName(),refs,null));checks.add(new OutputChecker.Draft("goal-target-"+i,c.targetExpression(),refs,null));}
         var checked=checker.check(checks,deadline,access);var kept=new ArrayList<GoalCandidateRepository.Draft>();
-        for(int i=0;i<candidates.size();i++)if(checked.get("goal-reason-"+i)!=null&&checked.get("goal-display-"+i)!=null)kept.add(candidates.get(i));
+        for(int i=0;i<candidates.size();i++)if(checked.get("goal-reason-"+i)!=null&&checked.get("goal-display-"+i)!=null&&checked.get("goal-name-"+i)!=null&&checked.get("goal-target-"+i)!=null)kept.add(candidates.get(i));
         return List.copyOf(kept);
     }
 }

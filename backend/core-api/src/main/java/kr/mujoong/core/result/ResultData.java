@@ -11,7 +11,7 @@ public final class ResultData {
     public static String text(Map<String,Object> map,String key){return map.get(key) instanceof String s?s:"";}
     public static long number(Map<String,Object> map,String key){return map.get(key) instanceof Number n?n.longValue():0;}
     public static UUID uuid(Object value){try{return value==null?null:UUID.fromString(value.toString());}catch(IllegalArgumentException e){return null;}}
-    public static List<Map<String,Object>> goals(Map<String,Object> practice){return objects(practice.get("goals"));}
+    public static List<Map<String,Object>> goals(Map<String,Object> practice){return PracticeRecordV2.present(practice)?PracticeRecordV2.goals(practice):objects(practice.get("goals"));}
     public static boolean meaningful(Map<String,Object> utterance){return "CHILD".equals(utterance.get("speaker"))&&!Boolean.TRUE.equals(utterance.get("uncertain"))&&text(utterance,"text").strip().split("\\s+").length>=3;}
     public static Map<Long,String> childQuotes(List<Map<String,Object>> transcript){Map<Long,String> result=new LinkedHashMap<>();for(var u:transcript)if("CHILD".equals(u.get("speaker"))&&number(u,"seq")>0)result.put(number(u,"seq"),text(u,"text"));return result;}
 }

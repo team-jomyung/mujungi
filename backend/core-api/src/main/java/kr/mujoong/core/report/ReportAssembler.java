@@ -28,7 +28,7 @@ public class ReportAssembler {
                 if(!input.done())continue;
                 UUID id=uuid(goal.get("goalSelectionId"));String key=text(goal,"behaviorKey")+":"+number(goal,"behaviorVersion");if(key.equals(":0"))key=String.valueOf(id);
                 var scenes=input.scenes().stream().filter(s->s.goalSelectionId().equals(id)).toList();if(scenes.isEmpty())continue;
-                String line=text(goal,"displayName")+" · 장면 "+scenes.size()+"개 · "+String.join(" · ",scenes.stream().map(s->"장면 "+s.sceneNo()+" · "+SceneChipMapper.text(s.sceneChip(),s.notDoneReason())).toList())+" · 도움 "+help.size()+"회";
+                String line=text(goal,"displayName")+" · 장면 "+scenes.size()+"개 · "+String.join(" · ",scenes.stream().map(s->"장면 "+s.sceneNo()+" · "+kr.mujoong.core.result.SceneReportMapper.text(s)).toList())+" · 도움 "+help.size()+"회";
                 sceneLines.add(line);history.computeIfAbsent(key,k->new ArrayList<>()).add(input.record().listedAt().atZone(ReportService.ZONE).toLocalDate()+" · "+line);historySessions.computeIfAbsent(key,k->new HashSet<>()).add(input.record().sessionId());
             }
         }

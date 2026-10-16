@@ -14,6 +14,7 @@ class PracticeGoalRepositoryIT {
     GoalCandidateRepository.Draft draft(){return new GoalCandidateRepository.Draft("물어보기","합성 놀이 장면","함께 물어보기",new FourElements("친구와 놀 때","친구","참여하고 싶다","함께 해도 돼?"),"NONE","합성 근거",List.of(new GoalCandidateRepository.Evidence(1,"함께 해도 돼?")),null);}
     GoalCandidateRepository.Version register(){return db.inTx(t->goals.register(child,session,"source:0",draft(),now));}
     @Test void storesFullCandidateContext(){var v=register();assertThat(v.content()).isEqualTo(draft());assertThat(v.version()).isEqualTo(1);}
+    @Test void historicalSnapshotSurvivesSoftDeleteWhilePublicSavedGoalIsEmpty(){var version=register();UUID selected=db.inTx(t->goals.select(guardian,version,now));goals.delete(selected,now,now.plusSeconds(30));assertThat(goals.saved(child,selected)).isEmpty();assertThat(goals.historical(child,selected).orElseThrow().targetExpression()).isEqualTo(version.content().targetExpression());assertThat(goals.selection(guardian,selected).orElseThrow().displayName()).isEqualTo(version.content().displayName());assertThat(goals.historical(UUID.randomUUID(),selected)).isEmpty();}
     @Test void legacySavedGoalReaderPreservesBehaviorVersion(){
         var legacy=new kr.mujoong.core.practice.PracticeGoalRepository(db.jdbc());
         var candidate=new kr.mujoong.core.practice.CandidateRegistry.Candidate("ACCEPT_STOP",1,"합성 근거",List.of(new kr.mujoong.core.practice.CandidateRegistry.Evidence(1,"CHILD_RECALL")));
