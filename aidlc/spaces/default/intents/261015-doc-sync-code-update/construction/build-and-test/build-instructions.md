@@ -37,5 +37,5 @@ cd backend && ./gradlew --no-daemon clean check verifyBootJarHasNoTestClasses -P
 |---|---|---|
 | `verify.sh` `PREREQ 전제 누락: JDK 21 · jq` | 도구 없음 | 별도 터미널에서 `sudo apt-get install -y openjdk-21-jdk-headless jq` |
 | `B3.up FAIL` nginx `failed to bind host port 127.0.0.1:8443` | 다른 프로그램이 8443을 씀 | 그 프로그램을 끄고 다시(사용자 수동 스택 `mujoong-manual`은 건드리지 않음, R-F12) |
-| `A4.patterns FAIL` | 작업 트리 파일에 키 형식 문자열(예: `scheme://user:pw@host`) | 문자열을 부품으로 조립하거나 지운다. 허용 목록으로 덮지 않는다(R-F9) |
+| `A4.patterns FAIL` | 작업 트리 파일에 키 형식 문자열(예: 주소 안에 사용자 이름 · 비밀번호를 넣은 URL) | 문자열을 부품으로 조립하거나 지운다. 허용 목록으로 덮지 않는다(R-F9) |
 | `infra-validate` shellcheck MISSING | shellcheck 없음 | 설치하거나 `koalaman/shellcheck` 컨테이너로 검사. CI는 항상 돈다 |
