@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mujoong.invalid/contracts/schemas/ai-scenario-output.schema.json",
+  "title": "연습 장면 대본 생성 출력(Luna 구조화 출력)",
+  "description": "core 상황 생성(U10)이 Luna에 요청하는 생성 응답 모양(계약 요약 C-DS5 · C-DS1 scenes). 상대 역할 지시(partnerRole)는 모델에 받지 않고 Core 고정 역할 지시로 만든다(ai-io.md 7절 U5a-J22, Contract Design 검토 R-04). 재시도는 REQUEST_BOUNDED(ai-io.md 10절). 생성물은 제브로 보내지 않는다(FR2.6). [U8 편차 (U8-a)]",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["scenes"],
+  "properties": {
+    "scenes": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "sceneKey",
+          "sceneKind",
+          "sceneDescription",
+          "opportunitySentence",
+          "reexplanation",
+          "relation",
+          "place",
+          "topic"
+        ],
+        "properties": {
+          "sceneKey": { "type": "string", "pattern": "^[A-Za-z0-9_-]{1,40}$" },
+          "sceneKind": { "enum": ["BASE", "VARIANT"] },
+          "sceneDescription": {
+            "description": "장면 설명(1 ~ 3문장, 정답 표현 없음). 아이 이름은 '아이'로 치환된 값",
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 8000
+          },
+          "opportunitySentence": {
+            "description": "기회 문장(세션 동안 고정). 아이 이름은 '아이'로 치환된 값",
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          },
+          "reexplanation": {
+            "description": "상황 다시 설명(FR4.3). 아이 이름은 '아이'로 치환된 값",
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          },
+          "focusPoints": {
+            "description": "집중 연습 요점(코치 역할에서만 쓴다)",
+            "type": "array",
+            "maxItems": 3,
+            "items": { "type": "string", "minLength": 1, "maxLength": 500 }
+          },
+          "expressionExamples": {
+            "description": "표현 예시. 코치 역할 · 동의 뒤에만 쓴다(FR4.4)",
+            "type": "array",
+            "maxItems": 3,
+            "items": { "type": "string", "minLength": 1, "maxLength": 500 }
+          },
+          "relation": { "type": "string", "minLength": 1, "maxLength": 200 },
+          "place": { "type": "string", "minLength": 1, "maxLength": 200 },
+          "topic": { "type": "string", "minLength": 1, "maxLength": 200 }
+        }
+      }
+    }
+  },
+  "examples": [
+    {
+      "scenes": [
+        {
+          "sceneKey": "base-1",
+          "sceneKind": "BASE",
+          "sceneDescription": "무중이랑 블록 놀이를 한다고 생각해 보자. 무중이가 친구야. 아이는 탑 꼭대기에 올릴 빨간 블록이 필요한데, 빨간 블록은 무중이한테 다 있어.",
+          "opportunitySentence": "이것 봐, 높지?",
+          "reexplanation": "아이는 빨간 블록이 하나 필요해. 빨간 블록은 친구한테 있어.",
+          "focusPoints": ["친구 물건을 쓰고 싶을 때는 하고 싶은 걸 말하고 물어보면 돼"],
+          "expressionExamples": ["나도 블록 하나 써도 돼?"],
+          "relation": "FRIEND_CLOSE",
+          "place": "HOME",
+          "topic": "블록 놀이"
+        }
+      ]
+    }
+  ]
+}

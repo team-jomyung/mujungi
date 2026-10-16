@@ -11,7 +11,7 @@ A. 새 컴포넌트 `PracticeConversation`(새 상태 기계 + 판정 턴)을 �
 B. 기존 `PracticeProtocol`을 그 자리에서 새 상태 기계로 고쳐 쓴다 — 장점: 코드가 하나 / 단점: 레거시 판정 · Cue 의존을 떼는 동안 과거 기록 호환과 새 흐름이 한 클래스에 섞이고, 되돌리기 어렵다
 X. Other (please specify)
 
-[Answer]:
+[Answer]: A
 
 ## Q2. Luna가 만든 목표 후보와 담은 목표의 주인 (엔티티 소유)
 
@@ -21,7 +21,7 @@ A. 새 컴포넌트 `PracticeGoal`(core)을 두고 `GoalCandidate` · `SavedGoal
 B. 후보는 `core.result`, 담은 목표는 `core.practice`가 지금처럼 나눠 소유하고 스키마만 바꾼다 — 장점: 옮기는 코드가 적다 / 단점: 후보 버전 참조가 모듈 경계를 넘고, 판정 기준을 만들 때 두 곳을 봐야 한다
 X. Other (please specify)
 
-[Answer]:
+[Answer]: A
 
 ## Q3. 27 화면 — '되묻기 뒤' 장면이 있는 기록을 열 때 (스토리 · 시안 검토 지적 R-01)
 
@@ -33,4 +33,14 @@ C. `AFTER_REASK` 장면은 27에서 칩을 그리지 않는다(다른 장면의 
 D. Q5-A를 바꿔 27에 새 칩 '되묻기 뒤 전달'을 그린다(화면 설계 RP-1 선택 2)
 X. Other (please specify)
 
-[Answer]:
+[Answer]: A
+
+## Q4. 조원 하네스의 GPT-Live 연결 방식을 받아들일까 (추가 자료 `knowledge/documents/MUJUNG_SERVICE_HANDOFF_SPRING_2026-10-15.zip`)
+
+조원 패키지(reference 0.1, 실제 API 호출 0회)의 Spring 예제는 `POST https://api.openai.com/v1/live/sessions`로 세션을 만들고 `transport: webrtc`로 **브라우저가 OpenAI와 직접 음성을 주고받는다**. 서버는 sideband(`wss …/v1/live/sessions/{id}/attach`)로 제어만 한다. 패키지 문서(`docs/INTEGRATION_FLOW.txt` · `GUARDRAILS.txt`) 스스로 "이 방식은 이미 재생된 말을 막을 수 없으므로 Jev 강제 차단이 된 서비스라고 표시하면 안 된다"고 적는다. 지금 코드와 요구사항(FR5 판정 턴 출력 보류, FR6.3 제브 ALLOW 뒤에만 송신)은 **서버가 음성을 받아 게이트를 통과한 것만 기기로 보내는** 구조다. 지금 서버의 선 형식(`session.start` 등)은 실제 API로 확인한 적이 없다(요구사항 열린 항목 5).
+
+A. 서버 중계 구조를 유지한다. 조원 패키지는 실제 GPT-Live 세션 생성 · 종료 · 이벤트 형식의 참고 자료로 `VoiceRelay` 어댑터에만 반영하고(서버 쪽 전송 방식은 FR12.2 실호출로 확정), 가드레일 정책 · 24개 오프라인 시험 사례는 `JevGuardrail` · 시험 계획의 입력으로 쓴다 — 장점: FR5 · FR6 보류 · 차단이 그대로 가능하다 / 단점: 서버 쪽 전송(WebSocket 등)이 GPT-Live에서 되는지 아직 모른다 (추천)
+B. 조원 방식(브라우저 WebRTC 직접 연결 + 서버 sideband)으로 바꾼다 — 장점: 조원 코드를 많이 재사용하고 지연이 줄 수 있다 / 단점: 재생 전 보류 · 제브 차단이 불가능해 FR5 · FR6 · US1.10 · US2.1을 다시 써야 하고, 기기 화면 · 출력 게이트 구조가 바뀐다
+X. Other (please specify)
+
+[Answer]: A

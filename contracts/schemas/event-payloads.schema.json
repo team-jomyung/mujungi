@@ -55,7 +55,10 @@
         "snapshotId": { "$ref": "common.schema.json#/$defs/Uuid" },
         "snapshotVersion": { "type": "integer" },
         "snapshotHash": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
-        "record": { "type": ["object", "null"] }
+        "record": {
+          "description": "계약 6절 SessionRecord. record.practice에 flowVersion이 있으면 새 연습 흐름 형식(practice-record-v2.schema.json)이고, 없으면 U5b 형식이다. 형식 구분에 snapshotVersion을 쓰지 않는다(BR6.1 · U8 편차 U8-d)",
+          "type": ["object", "null"]
+        }
       }
     },
     "DeviceStatusChanged": {

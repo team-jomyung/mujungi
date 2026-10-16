@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mujoong.invalid/contracts/schemas/practice-record-v2.schema.json",
+  "title": "기록 캡처 이벤트 record.practice — 새 연습 흐름 형식",
+  "description": "SessionRecordCaptured.record.practice의 새 흐름 모양(계약 요약 C-DS2 · FR7.5 · BR6.1). flowVersion이 있으면 이 형식이고, 없으면 U5b 형식으로 읽는다. 형식 구분에 snapshotVersion을 쓰지 않고 그 뜻(세션당 한 판)은 바꾸지 않는다(NFR6.2). 진행 중 판정 라벨 · 확률 원값은 싣지 않는다(FR3.6 · FR3.7). 받는 쪽(U14)은 모르는 facts 값을 무시한다. [U8 편차 (U8-d)]",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["flowVersion", "scenes"],
+  "properties": {
+    "flowVersion": { "const": "practice-conversation-v1" },
+    "scenes": {
+      "description": "실제로 SCENE_INTRO를 재생한 장면만(US4.2)",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["sceneRunId", "goalRef", "sceneKind", "startedAt"],
+        "properties": {
+          "sceneRunId": { "$ref": "common.schema.json#/$defs/Uuid" },
+          "goalRef": { "$ref": "common.schema.json#/$defs/Uuid" },
+          "scenarioRef": { "$ref": "common.schema.json#/$defs/Uuid" },
+          "sceneKind": { "enum": ["BASE", "VARIANT"] },
+          "startedAt": { "type": "string", "format": "date-time" },
+          "liveOutcome": {
+            "description": "진행 중 판정 요약. 라벨 · 확률 원값은 싣지 않는다",
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "timing": { "enum": ["IMMEDIATE", "AFTER_REASK", "AFTER_HELP", "NONE", "ABSTAINED"] }
+            }
+          },
+          "facts": {
+            "description": "FR7.3 기록 사실",
+            "type": "array",
+            "items": {
+              "enum": [
+                "REASK_RESOLVED",
+                "SITUATION_EXPLAINED",
+                "FOCUS_HELP",
+                "EXPRESSION_EXAMPLE",
+                "HELP_ACCEPTED",
+                "HELP_DECLINED",
+                "COACH_SWITCH",
+                "COACH_RETURN",
+                "ORIGINAL_SCENE_RETURN",
+                "VARIANT_PLAYED",
+                "VARIANT_SKIPPED",
+                "END_REQUEST",
+                "TIMEOUT",
+                "TRANSCRIPT_FAILED",
+                "PLAYBACK_FAILED"
+              ]
+            }
+          },
+          "variantSkipReason": {
+            "enum": ["NO_VARIANT", "DECLINED", "TIME_LIMIT", "FOCUS_LIMIT", "END_OR_REST", null]
+          }
+        }
+      }
+    }
+  },
+  "examples": [
+    {
+      "flowVersion": "practice-conversation-v1",
+      "scenes": [
+        {
+          "sceneRunId": "00000000-0000-4000-8000-000000000911",
+          "goalRef": "00000000-0000-4000-8000-000000000912",
+          "scenarioRef": "00000000-0000-4000-8000-000000000913",
+          "sceneKind": "BASE",
+          "startedAt": "2026-10-15T09:02:00Z",
+          "liveOutcome": { "timing": "AFTER_REASK" },
+          "facts": ["REASK_RESOLVED", "VARIANT_SKIPPED"],
+          "variantSkipReason": "DECLINED"
+        }
+      ]
+    }
+  ]
+}

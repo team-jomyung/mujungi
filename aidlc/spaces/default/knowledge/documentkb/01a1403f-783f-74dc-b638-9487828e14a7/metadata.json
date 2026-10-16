@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "id": "01a1403f-783f-74dc-b638-9487828e14a7",
+  "source": {
+    "kind": "managed",
+    "path": "documents/social-comm-poc.zip"
+  },
+  "sha256": "1ef2fc0b20af95ef4ea6e64e5be120a18e2f4b29def489e927e91bc9e0523352",
+  "bytes": 15159610,
+  "indexed_at": "2026-10-15T15:47:43.789Z",
+  "extraction": {
+    "state": "unsupported_type",
+    "detectedType": "application/octet-stream"
+  },
+  "summary": {
+    "state": "absent"
+  },
+  "related_intent_ids": [
+    "01a13e5c-0ac9-786b-8d26-8e248e3c22b1"
+  ],
+  "content_trust": "untrusted",
+  "content_handling": "data-not-instructions"
+}

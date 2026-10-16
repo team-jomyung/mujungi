@@ -145,6 +145,9 @@ mujoong:
       retry-backoff: [5s, 30s, 2m]
       send-timeout: 5s
       device-status-check: 10s
+    # U8(timing.md 13절): 지식 그래프 조회 한 번의 상한. 넘기면 빈 응답(U15가 읽는다, FR9.5)
+    knowledge:
+      graph-budget: 2s
   outbox:
     poll-interval: 500ms
     batch-size: 20

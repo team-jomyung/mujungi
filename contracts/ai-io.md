@@ -255,3 +255,78 @@ C10 partnerRoleText는 모델에 받지 않고 Core의 고정 역할 지시로 �
 보호자 진행 조회는 `practice{goalIndex, goalCount, goalName, stage}`뿐이다. 상황 · Cue 원문, 진행 중 판정과 판정 기준은 보내지 않는다. 내부 `record.practice`의 응답/도움은 각자 scenarioId를 보존하고, 노출 정산은 `scenarios[].exposedAt`만 사용한다.
 
 `CueProvider`와 진행 중 판정 공급자의 운영 기본은 미연결 실패다. 이 문서는 실제 공급자 연결 · 장치 재생 · 부하 검증 완료를 뜻하지 않는다. 해당 구현과 검증은 별도 인계 항목이다.
+
+## 10. U8 공통 규칙 (GPT-6-Luna · 제브 구조화 입출력 · 판 리소스 · 승인 발화)
+
+U8(계약 · 버전 리소스)이 정한 공통 규칙이다. Luna · 제브 구조화 입출력의 **정본은 아래 JSON Schema 파일**이고, 이 절은 규칙 · 금지 필드 · 실패 처리만 적는다. 코드는 같은 파일로 공급자에 구조화 출력을 요청하고, 프롬프트 판(`promptVersion`)과 스키마 판은 함께 올린다. 각 단위(U9 ~ U15)는 더하기만 한다 [U8 편차 (U8-a)].
+
+### 10.1 스키마 파일
+
+| 파일(`contracts/schemas/`) | 목적 | 호출 경로(단위) |
+|---|---|---|
+| `ai-judgment-request.schema.json` | 진행 중 판정 요청(J1 ~ J6, 공급자로 보내는 최소 필드) | realtime 판정 턴(U11) · `JudgeClient`(U9) |
+| `ai-judgment-output.schema.json` | 진행 중 판정 출력(1 · 2순위와 확률) | 같음 |
+| `ai-scenario-output.schema.json` | 연습 장면 대본 생성 출력(상대 역할 지시는 받지 않음, 7절 U5a-J22) | core 상황 생성(U10) |
+| `ai-scenario-review-output.schema.json` | 생성과 분리한 자체 검토 출력(J7) | 같음 |
+| `ai-goal-candidate-output.schema.json` | 목표 후보(6.8 U6 초안을 대체) | core 결과 작업(U14) |
+| `ai-rejudgment-output.schema.json` | 새 연습 흐름 기록용 재판정 | 같음 |
+| `ai-seed-output.schema.json` | 새 씨앗 | core 씨앗 생성(U15) |
+| `guardrail-request.schema.json` | 제브 검사 요청(내부 형식, 어댑터가 공급자 형식으로 바꿈) | realtime 출력 게이트(U13) · `GuardrailClient` |
+| `guardrail-result.schema.json` | 제브 검사 결과(내부 형식) | 같음 |
+| `practice-record-v2.schema.json` | 기록 캡처 이벤트 `record.practice` 새 흐름 형식(`flowVersion` 필수) | U12가 채우고 U11이 발행, U14가 읽음 [U8 편차 (U8-d)] |
+
+- 요청 스키마는 루트와 하위 객체 모두 `additionalProperties: false`로 닫는다. 아이 관련 문자열 필드의 `description`에는 "아이 이름은 '아이'로 치환된 값"을 적는다.
+- 길이 초과 · 빈 응답 · 스키마 최종 실패는 어떤 목적에서도 성공으로 저장하지 않는다. 실패 사유 코드 · 모델 · 프롬프트 판 · 지연만 기록하고 요청 · 응답 원문은 남기지 않는다(BR5.3 · R-F14).
+
+### 10.2 금지 필드와 외부 전달
+
+- 외부 AI(Luna · 제브)로 보내는 필드는 스키마가 허용한 최소 필드뿐이다. 다음은 어느 요청 스키마의 속성도 될 수 없다: 아동 · 보호자 · 세션 · 기기 식별자(`childId` · `guardianId` · `sessionId` · `deviceId` 등), 키(`apiKey` 등), 원음(`audio`), 보호자 입력 원문, 이메일, 동의 상태. 아이 이름은 '아이'로 바꾼다(BR5.4 · NFR3.1).
+- **R-F15** 공급자 약관 · 보호자 동의 확인 전에는 실제 아동 데이터를 외부 모델로 보내지 않는다. 실호출은 합성 자료로만 한다. '확인됨' 상태를 코드에서 판정하는 방법은 U9가 정한다(BR5.5).
+- 시험 · CI · 검증은 가짜 공급자만 쓴다(R-F1). 테스트 대역의 성공을 실공급자 성공으로 표시하지 않는다(R-M11).
+
+### 10.3 목적 → 호출 경로 → 재시도 분류
+
+| 목적 | 호출 경로(단위) | 분류 | 호출 안 재시도 · 실패 뒤 |
+|---|---|---|---|
+| 진행 중 판정 J1 ~ J6 | realtime 판정 턴(U11) | `NONE` | 재시도 없음. `mujoong.timing.judgment.live-budget`(2초) 초과 · 형식 오류 · 선택지 밖 코드는 판정 보류 |
+| 상황 생성 | core 상황 생성 요청(U10) | `REQUEST_BOUNDED` | 일시 실패 기술 재시도 1회 + 내용 재생성 1회(스키마 불일치 포함), 7절 15초 예산 안. 실패는 `SCENARIO_GEN_FAILED` |
+| 자체 검토(J7) | core 상황 생성 요청(U10) | `REQUEST_BOUNDED` | 같은 15초 예산 |
+| 새 씨앗 | core 결과 작업 뒤 씨앗 생성(U15) | `REQUEST_BOUNDED` | 실패하면 `skill_ref=NONE` 유지 |
+| 결과 문장 | core 결과 작업(U14) | `JOB_ATTEMPT` | 호출 안 재시도 없음. 결과 작업 시도 실패로 세고 작업 재시도(timing.md 10절)로 다시 한다 |
+| 목표 후보 | core 결과 작업(U14) | `JOB_ATTEMPT` | 같음(지금 코드에서 결과 작업 안에서만 부른다) |
+| 기록용 재판정 | core 결과 작업(U14) | `JOB_ATTEMPT` | 같음 |
+
+- 예산 밖 재시도 · 무한 재시도는 없다. 다른 경로에서 부르게 되면 그 단위가 분류를 다시 정한다(BR5.2).
+- 6.9의 '작업당 총 3회'는 U14가 시도 수를 바꿀 때 함께 고친다(BR3.2). 새 HTTP 오류 code는 없다 — 판정 · 제브 실패는 내부 사유(보류 · 막힘), 상황 생성 실패는 기존 `SCENARIO_GEN_FAILED`다(BR7.3).
+
+### 10.4 판 리소스와 세션 고정
+
+- 판정 질문 · 선택지(J1 ~ J6, A §7.3 · B §5.2)는 realtime `judgment/option-sets-v1.json`, 제브 시스템 프롬프트 · 7개 범주 · 모드(C §3.1 · §3.3)는 `guardrail/policy-v1.json`에 둔다. J7은 core 상황 생성 자체 검토 프롬프트(U10)라 realtime 판에 넣지 않는다.
+- realtime은 기동 때 두 파일을 읽어 검증하고, 파일이 없거나 형식이 틀리면 기동을 거부한다(BR2.1 · 4절 시드 사전과 같은 방식).
+- 세션을 받을 때 두 판의 번호와 패키지의 승인 문구 판(`approvedContent` · `approvedSpeech`)을 세션 계획에 고정하고, 세션 정산이 끝나면 놓는다. 판정 · 검사 기록 행은 고정된 판 번호를 함께 남긴다(BR2.2, 기록은 U11 · U13).
+
+### 10.5 원문 일치와 제브 생략
+
+- 원문 일치는 출력 전사에서 공백을 뺀 문자열이 세션에 고정한 승인 발화 또는 등록된 대본 문장과 **정확히 같을 때만** `MATCHED`다. 공백은 ASCII 공백(space · `\t` · `\n` · `\x0B` · `\f` · `\r`)만 뺀다(`PracticeSpeech.matches`와 같은 규칙). NBSP · 전각 공백 · 제로폭 문자가 끼면 `NOT_MATCHED`다. 다른 정규화 · 유사도 판단은 하지 않는다(BR1.4 · NFR2.1).
+- 세션 계획이 없으면(고정 전 · 놓은 뒤) `UNKNOWN`이다. 대본 등록 전의 대본 문장은 `NOT_MATCHED`다.
+- **`MATCHED`일 때만** 제브 검사를 생략할 수 있다. `UNKNOWN` · `NOT_MATCHED`는 제브 생략 근거가 아니며 새 발화로 검사한다(NFR2.2 · AC2.2.3, 판단은 U13).
+
+### 10.6 승인 발화(`APPROVED_SPEECH`)
+
+- 음성 파일 없이 GPT-Live 지시 + 원문 일치로 재생하는 승인 문구는 `content_type` `APPROVED_SPEECH`로 시드한다(`infra/seed/004-u8-reference.sql`). 기존 `APPROVED_AUDIO`(음성 파일 필수)는 그대로다 [U8 편차 (U8-e)].
+- core는 활동 유형별 허용 목록에 있고 `APPROVED_SPEECH`이며 APPROVED 판이 있는 code만 시작 패키지의 선택 속성 `approvedSpeech`(`{contentVersionId, text}`)에 싣는다. 한 code는 `approvedContent` · `approvedSpeech` 중 하나에만 들어간다. realtime이 두 맵에서 같은 code를 받으면 `approvedSpeech` 쪽을 버리고 `APP_ERROR`(`errorKind` `APPROVED_SPEECH_DUPLICATE_CODE`)만 남긴다 — 문구 텍스트는 로그에 남기지 않는다 [U8 편차 (U8-b)].
+
+| content_code | 넣는 활동 | 정본 |
+|---|---|---|
+| `HELP_OFFER` | PRACTICE | B §3.1 `D_OFFER_HELP` 예시(v2 APPROVED, v1 DRAFT '같이 살펴볼까?'는 RETIRED) |
+| `D_REST_ACK_START` | FREE_TALK · PRACTICE | B §3.1 `D_REST_ACK_START` |
+| `D_REST_ACK` | FREE_TALK · PRACTICE | B §3.1 `D_REST_ACK` |
+| `COACH_SWITCH` | PRACTICE | B §8.5 코치 역할 전환 표현 |
+| `PEER_RETURN` | PRACTICE | B §8.5 친구 역할 복귀 표현 |
+
+- `D_REPROMPT`는 B §3.1에서 '직전에 아이에게 한 무중의 말(출력 전사 그대로)'을 다시 말하는 지시라 고정 원문이 없다. 그래서 시드하지 않는다.
+
+### 10.7 비밀 이름
+
+- `OPENAI_API_KEY`(Luna): core-api · realtime-activity가 각자 받는다. `JEV_API_KEY`(제브): realtime-activity만 받는다. 둘 다 선택(OPTIONAL)이고, 비었거나 공백뿐이면 미설정으로 보고 실제 어댑터를 끈다(U9 · U13).
+- Neo4j는 기존 `NEO4J_AUTH`를 쓴다. GPT-Live의 `PROVIDER_API_KEY`는 FR12.2 전까지 그대로다. 7절의 core 예약 이름 `MUJOONG_TEXT_AI_API_KEY`는 쓰지 않는다(BR4.2). 값은 어디에도 쓰지 않고 이름만 둔다(R-F3).

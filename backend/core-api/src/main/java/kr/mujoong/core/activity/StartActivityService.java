@@ -24,6 +24,7 @@ import kr.mujoong.core.activity.ActivityCopyRepository.ActivityCopy;
 import kr.mujoong.core.activity.ActivityCopyRepository.NewActivity;
 import kr.mujoong.core.activity.ActivityCopyRepository.StateChange;
 import kr.mujoong.core.activity.ApprovedContentCatalog.ApprovedItem;
+import kr.mujoong.core.activity.ApprovedContentCatalog.SpeechItem;
 import kr.mujoong.core.activity.RealtimeSessionClient.InternalSessionView;
 import kr.mujoong.core.activity.RealtimeSessionClient.StartResult;
 import kr.mujoong.core.activity.RealtimeSessionClient.ViewResult;
@@ -81,6 +82,19 @@ public class StartActivityService implements DisposableBean {
      */
     static final List<String> FREE_TALK_SESSION_CONTENT =
             List.of("INTRO_FREE_TALK", "RE_PROMPT", "DECLINE_ALTERNATIVE", "SILENCE_WARNING", "STOP_CONFIRM");
+
+    /** 연습 패키지에 더 싣는 음성 있는 승인 문구(U5). HELP_OFFER는 U8부터 음성 없는 승인 발화라 아래 목록으로 옮겼다. */
+    static final List<String> PRACTICE_SESSION_CONTENT = List.of("INTRO_PRACTICE");
+
+    /**
+     * 활동 유형별 음성 없는 승인 발화 허용 목록(U8 functional-spec 8.1 표 · BR1.2). 이 목록에 있고 종류가 APPROVED_SPEECH이며 APPROVED 판이
+     * 있는 code만 approvedSpeech에 싣는다. 목록 밖 code(CONSENT_POLICY · POLICY_TERMS_* · DRAFT만 있는 code)는 싣지 않는다.
+     */
+    static final List<String> FREE_TALK_APPROVED_SPEECH =
+            List.of(ApprovedContent.CODE_D_REST_ACK_START, ApprovedContent.CODE_D_REST_ACK);
+    static final List<String> PRACTICE_APPROVED_SPEECH = List.of(ApprovedContent.CODE_HELP_OFFER,
+            ApprovedContent.CODE_D_REST_ACK_START, ApprovedContent.CODE_D_REST_ACK, ApprovedContent.CODE_COACH_SWITCH,
+            ApprovedContent.CODE_PEER_RETURN);
 
     private final GuardianRepository guardians;
     private final ChildProfileService childProfiles;
@@ -264,8 +278,9 @@ public class StartActivityService implements DisposableBean {
         catalog.sessionContent(FREE_TALK_SESSION_CONTENT).forEach(approved::putIfAbsent);
         if(activityType==ActivityType.PRACTICE) {
             approved.remove("INTRO_FREE_TALK");
-            catalog.sessionContent(List.of("INTRO_PRACTICE","HELP_OFFER")).forEach(approved::putIfAbsent);
+            catalog.sessionContent(PRACTICE_SESSION_CONTENT).forEach(approved::putIfAbsent);
         }
+        Map<String, SpeechItem> speech = approvedSpeech(activityType, approved);
 
         SessionPackage sessionPackage = packageBuilder.build(sessionId, request.idempotencyKey(), guardianId,
                 readiness.deviceId(), child, consent.snapshot(), approved);
@@ -292,8 +307,14 @@ public class StartActivityService implements DisposableBean {
         }
         logTransition(sessionId, "NONE", SessionStatus.REQUESTED, 0, false);
 
-        StartResult result = activityType==ActivityType.PRACTICE
-                ? realtime.startPractice(sessionPackage,practice) : realtime.start(sessionPackage);
+        // 승인 발화가 없으면 옛 본문 그대로 보낸다(더하기만, NFR6.1 · 편차 U8-b)
+        StartResult result;
+        if (activityType == ActivityType.PRACTICE) {
+            result = speech.isEmpty() ? realtime.startPractice(sessionPackage, practice)
+                    : realtime.startPractice(sessionPackage, practice, speech);
+        } else {
+            result = speech.isEmpty() ? realtime.start(sessionPackage) : realtime.start(sessionPackage, speech);
+        }
         return switch (result.kind()) {
             case ACCEPTED -> new Started(sessionId, SessionStatus.REQUESTED);
             case DEVICE_NOT_CONNECTED -> finishLocally(sessionId, 423, false);
@@ -301,6 +322,18 @@ public class StartActivityService implements DisposableBean {
             case CONFLICT -> finishLocally(sessionId, 409, result.afterTimeoutRetry());
             case UNAVAILABLE -> finishLocally(sessionId, 503, true);
         };
+    }
+
+    /**
+     * 활동 유형의 허용 목록으로 음성 없는 승인 발화를 고른다(U8 · BR1.2 · BR1.3). 한 code는 두 맵 중 하나에만 들어간다 — approvedContent에 이미
+     * 있는 code는 approvedSpeech에서 뺀다(음성 있는 판이 먼저, 기존 기기 계약 그대로).
+     */
+    Map<String, SpeechItem> approvedSpeech(ActivityType activityType, Map<String, ApprovedItem> approved) {
+        List<String> allowed = activityType == ActivityType.PRACTICE ? PRACTICE_APPROVED_SPEECH : FREE_TALK_APPROVED_SPEECH;
+        Map<String, SpeechItem> speech = new LinkedHashMap<>(catalog.approvedSpeech(allowed));
+        speech.keySet().removeIf(approved::containsKey);
+        speech.keySet().retainAll(allowed);
+        return speech;
     }
 
     /** BR6.2 재생. */

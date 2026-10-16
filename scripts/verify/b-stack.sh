@@ -106,7 +106,8 @@ b1_assertions() {
   names_json="$(printf '%s\n' "${VERIFY_SECRET_NAMES[@]}" | jq -R . | jq -sc .)"
   actual="$(jq -c --argjson secret "$names_json" '[.services | to_entries[] |
       {key, value: ([(.value.environment // {}) | keys[] | select(. as $k | $secret | index($k))] | sort)}] | from_entries' "$json")"
-  expected='{"core-api":["GOOGLE_OAUTH_CLIENT_SECRET","INTERNAL_SERVICE_TOKEN","MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET","SPRING_DATASOURCE_PASSWORD"],"fake-provider":[],"migrate":["DB_OWNER_PASSWORD"],"nginx":[],"postgres":["DB_BACKUP_PASSWORD","DB_CORE_PASSWORD","DB_OWNER_PASSWORD","DB_REALTIME_PASSWORD","POSTGRES_PASSWORD"],"realtime":["INTERNAL_SERVICE_TOKEN","MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET","PROVIDER_API_KEY","SPRING_DATASOURCE_PASSWORD"],"web":[]}'
+  # U8(SD3): OPENAI_API_KEY는 core-api · realtime, JEV_API_KEY는 realtime만(검증 스택에서는 빈 값)
+  expected='{"core-api":["GOOGLE_OAUTH_CLIENT_SECRET","INTERNAL_SERVICE_TOKEN","MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET","OPENAI_API_KEY","SPRING_DATASOURCE_PASSWORD"],"fake-provider":[],"migrate":["DB_OWNER_PASSWORD"],"nginx":[],"postgres":["DB_BACKUP_PASSWORD","DB_CORE_PASSWORD","DB_OWNER_PASSWORD","DB_REALTIME_PASSWORD","POSTGRES_PASSWORD"],"realtime":["INTERNAL_SERVICE_TOKEN","JEV_API_KEY","MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET","OPENAI_API_KEY","PROVIDER_API_KEY","SPRING_DATASOURCE_PASSWORD"],"web":[]}'
   if [ "$(jq -S -c . <<<"$actual")" = "$(jq -S -c . <<<"$expected")" ]; then
     pass B1.secrets "서비스별 비밀 변수 이름 = 인프라 명세 3.7 분배표(7개 서비스)"
   else
@@ -146,8 +147,9 @@ owner_psql() {
     owner-psql "$@"
 }
 # U4b(FR11.4): 시드 순서 001 → 002 → 003. 003이 참여 확인 · 확인 질문 · 공백 안내 문구 6종의 승인 버전을 넣는다
+# U8(BR1.1): 004가 음성 없는 승인 발화(APPROVED_SPEECH) 5종을 넣고 HELP_OFFER를 v2로 올린다
 for i in 1 2; do
-  for seed in 001-reference.sql 002-u2-reference.sql 003-u4a-reference.sql; do
+  for seed in 001-reference.sql 002-u2-reference.sql 003-u4a-reference.sql 004-u8-reference.sql; do
     if ! owner_psql --single-transaction -f "/seed/$seed"; then
       die_assert B2.seed "시드 $seed ${i}회차 실패"
     fi

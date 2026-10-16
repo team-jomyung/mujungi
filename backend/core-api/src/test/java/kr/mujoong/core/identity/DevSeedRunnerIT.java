@@ -10,6 +10,7 @@ import java.util.UUID;
 import kr.mujoong.core.common.db.DbTestSupport;
 import kr.mujoong.core.support.BusinessFixtures;
 import kr.mujoong.core.support.CoreBusinessContext;
+import kr.mujoong.core.support.U8Fixtures;
 import kr.mujoong.testsupport.db.MujoongPostgres;
 import kr.mujoong.testsupport.secret.TestSecrets;
 import kr.mujoong.testsupport.time.MutableClock;
@@ -104,6 +105,8 @@ class DevSeedRunnerIT {
     @Test
     void besideTheReferenceSeedOnlyTheFamilyIsAddedAndBothSeedsShareTheFixedIds() {
         BusinessFixtures.applyReferenceSeed(postgres);
+        // U8: 참조 시드에 004의 승인 발화 행도 있는 상태로 둔다(공용 DB의 다른 시험 순서와 무관하게 가족 6행만 센다, 넣기 전용 픽스처)
+        U8Fixtures.insertApprovedSpeech(postgres);
         // 다른 시험 클래스가 남긴 시드 가족이 있어도 빈 상태에서 센다(끝나면 다시 정리)
         db.cleanUp();
         db.trackGuardian(SeedIds.GUARDIAN);

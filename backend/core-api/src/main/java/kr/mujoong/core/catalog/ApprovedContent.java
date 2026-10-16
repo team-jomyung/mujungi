@@ -25,8 +25,24 @@ public class ApprovedContent {
     /** 현재 정책 버전 문자열의 자리(최고 APPROVED 버전 행의 content_text, J114). */
     public static final String CODE_CONSENT_POLICY = "CONSENT_POLICY";
 
+    /** 도움 제안(PRACTICE, U8: 004 시드가 APPROVED_SPEECH v2로 올림). */
+    public static final String CODE_HELP_OFFER = "HELP_OFFER";
+    /** 시작 안내 중 휴식 요청을 받아 주는 승인 발화(U8 · B §3.1 D_REST_ACK_START). */
+    public static final String CODE_D_REST_ACK_START = "D_REST_ACK_START";
+    /** 활동 중 휴식 요청을 받아 주는 승인 발화(U8 · B §3.1 D_REST_ACK). */
+    public static final String CODE_D_REST_ACK = "D_REST_ACK";
+    /** 코치 역할 전환 표현(U8 · B §8.5). */
+    public static final String CODE_COACH_SWITCH = "COACH_SWITCH";
+    /** 친구 역할 복귀 표현(U8 · B §8.5). */
+    public static final String CODE_PEER_RETURN = "PEER_RETURN";
+
     /** 승인 음성이 딸린 문구(J117). */
     public static final String TYPE_APPROVED_AUDIO = "APPROVED_AUDIO";
+    /**
+     * 음성 파일 없이 GPT-Live 지시 + 공백 제거 완전 일치로 재생하는 승인 발화(U8 · BR1.2 · 편차 U8-e). 시작 패키지 approvedSpeech로만
+     * 넘긴다.
+     */
+    public static final String TYPE_APPROVED_SPEECH = "APPROVED_SPEECH";
     /** 정책 버전 문자열(음성 없음, J114 · J 후보). */
     public static final String TYPE_POLICY_VERSION = "POLICY_VERSION";
 

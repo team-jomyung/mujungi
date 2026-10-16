@@ -151,8 +151,9 @@ fi
 pass B2.migrate "migrate(mujoong_owner, infra/migrate/flyway-*.conf, core → realtime)"
 
 # U4b(FR11.4): 시드 순서 001 → 002 → 003. 003이 참여 확인 · 확인 질문 · 공백 안내 문구 6종의 승인 버전을 넣는다
+# U8(BR1.1): 004가 음성 없는 승인 발화(APPROVED_SPEECH) 5종을 넣고 HELP_OFFER를 v2로 올린다
 for i in 1 2; do
-  for seed in 001-reference.sql 002-u2-reference.sql 003-u4a-reference.sql; do
+  for seed in 001-reference.sql 002-u2-reference.sql 003-u4a-reference.sql 004-u8-reference.sql; do
     host_psql mujoong_owner --single-transaction -f "infra/seed/$seed" >>"$VERIFY_LOG_DIR/b-seed.log" 2>&1 ||
       die_assert B2.seed "시드 $seed ${i}회차 실패(logs/b-seed.log)"
   done

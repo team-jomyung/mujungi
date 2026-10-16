@@ -215,3 +215,19 @@ web의 loading-notice-delay는 MUJOONG_TIMING_PARENT_LOADINGNOTICEDELAY 환경 �
 | `mujoong.timing.practice.judge-budget-version` | `u5b-q6-r2` | 반응마다 고정하는 예산 판 |
 
 반응·도움 시계는 기술 일시정지 동안 멈춘다. 판정의 전체 예산은 일시정지나 재시작으로 연장하지 않는다. 프로세스/DB 장애 뒤 시한을 넘겨 복구된 결과는 `PracticeEvaluationRecoveredAfterDeadline` 오류로 관측하고 12초 성공 건수로 보고하지 않는다.
+
+레거시 `practice.judge-*` 키는 U12가 새 연습 흐름(13절 `conversation.*` · `judgment.*`)으로 바꾼 뒤에도 과거(U5b) 경로용으로 남는다 [U8 편차 (U8-c)].
+
+## 13. U8 새 연습 흐름 · 판정 · 가드레일 · 그래프
+
+U8(계약 · 버전 리소스)이 더한 키다. 새 연습 흐름 키는 12절 U5b의 `mujoong.timing.practice`(`practice/u5b-runtime.yml` 바인딩)와 섞이지 않게 `mujoong.timing.conversation` 아래에 둔다. Realtime 키는 `RealtimeProperties.timing`의 `judgment` · `guardrail` · `conversation` 묶음, Core 키는 `CoreProperties.timing.knowledge`가 읽는다. 화면이 읽지 않는 서버 키라 `frontend/src/shared/timing/timing-defaults.json`에는 넣지 않는다 — 서버 키에서 R-M5의 '세 곳'은 이 표 · 소유 앱 `application.yml` · 설정 레코드다(BR3.1) [U8 편차 (U8-c)]. 결과 재시도 횟수 · 간격은 10절 키가 정본이고 새 키를 만들지 않는다(BR3.2).
+
+| 키 | 기본값 | 소유 앱 | 뜻 | 근거 |
+|---|---|---|---|---|
+| `mujoong.timing.judgment.live-budget` | `2s` | realtime | 진행 중 판정(J1 ~ J6) Luna 호출 한 번의 상한. 넘기면 재시도 없이 판정 보류(U11) | FR3.4 |
+| `mujoong.timing.judgment.response-ready` | `10s` | realtime | 아이 말이 끝난 뒤 이 시간 안에 응답이 준비되지 않으면 보류 되묻기(`D_HOLD`, U11) | FR5.3 |
+| `mujoong.timing.guardrail.jev-budget` | `800ms` | realtime | 제브 가드레일 검사 한 번의 상한. 넘기면 막힘(자동 ALLOW 없음, U13) | FR6.2 |
+| `mujoong.timing.conversation.no-response-wait` | `10s` | realtime | 새 연습 흐름의 무응답 재안내 대기(U12) | AC1.9.1 |
+| `mujoong.timing.conversation.focus-max` | `90s` | realtime | 집중 연습 한 번의 상한(U12) | AC1.5.4 |
+| `mujoong.timing.conversation.goal-active-limit` | `10m` | realtime | 목표 하나의 진행 상한(U12) | FR4.5 |
+| `mujoong.timing.knowledge.graph-budget` | `2s` | core-api | 지식 그래프 조회 한 번의 상한. 넘기면 빈 응답(U15) | FR9.5 |

@@ -85,9 +85,11 @@ public record CoreProperties(
             GoalTiming goal,
             ResultTiming result,
             ReportTiming report,
-            PushTiming push) {
+            PushTiming push,
+            KnowledgeTiming knowledge) {
 
         public Timing {
+            required(knowledge, "mujoong.timing.knowledge");
             required(session, "mujoong.timing.session");
             required(core, "mujoong.timing.core");
             required(bootstrap, "mujoong.timing.bootstrap");
@@ -136,6 +138,13 @@ public record CoreProperties(
             positive(sendTimeout, "mujoong.timing.push.send-timeout");
             positive(deviceStatusCheck, "mujoong.timing.push.device-status-check");
             retryBackoff = List.copyOf(retryBackoff);
+        }
+    }
+
+    /** U8(timing.md 13절 · BR3.1): 지식 그래프 조회 한 번의 상한(FR9.5). 넘기면 빈 응답이다. U15가 읽는다. */
+    public record KnowledgeTiming(Duration graphBudget) {
+        public KnowledgeTiming {
+            positive(graphBudget, "mujoong.timing.knowledge.graph-budget");
         }
     }
 

@@ -8,8 +8,10 @@
 #   core-api.env  SPRING_DATASOURCE_PASSWORD(=core) INTERNAL_SERVICE_TOKEN MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET
 #                 GOOGLE_OAUTH_CLIENT_ID · GOOGLE_OAUTH_CLIENT_SECRET(빈 값 — 검증 스택은 구글을 부르지 않는다)
 #                 GOOGLE_OAUTH_REDIRECT_URI(<origin>/parent/login/callback) MUJOONG_SECURITY_ALLOWED_ORIGIN
+#                 OPENAI_API_KEY(빈 값 — 검증 · CI는 실제 Luna를 부르지 않는다, R-F1 · U8 SD3)
 #   realtime.env  SPRING_DATASOURCE_PASSWORD(=realtime) INTERNAL_SERVICE_TOKEN PROVIDER_API_KEY(가짜 공급자용 자리값)
 #                 MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET MUJOONG_SECURITY_ALLOWED_ORIGIN
+#                 OPENAI_API_KEY · JEV_API_KEY(빈 값 — 실제 Luna · 제브를 부르지 않는다)
 #   web.env       GOOGLE_OAUTH_CLIENT_ID(빈 값) GOOGLE_OAUTH_REDIRECT_URI MUJOONG_SECURITY_ALLOWED_ORIGIN
 #                 (구글 이름은 Core · web이 같다 — infra/bin/render-env와 같은 분배, U2 리뷰 3)
 #   nginx.env     SERVICE_HOST MUJOONG_SECURITY_ALLOWED_ORIGIN
@@ -130,13 +132,16 @@ write core-api.env \
   "GOOGLE_OAUTH_CLIENT_ID=" \
   "GOOGLE_OAUTH_CLIENT_SECRET=" \
   "GOOGLE_OAUTH_REDIRECT_URI=$origin/parent/login/callback" \
-  "MUJOONG_SECURITY_ALLOWED_ORIGIN=$origin"
+  "MUJOONG_SECURITY_ALLOWED_ORIGIN=$origin" \
+  "OPENAI_API_KEY="
 write realtime.env \
   "SPRING_DATASOURCE_PASSWORD=$realtime_password" \
   "INTERNAL_SERVICE_TOKEN=$internal_token" \
   "PROVIDER_API_KEY=$provider_key" \
   "MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET=$owner_hash_secret" \
-  "MUJOONG_SECURITY_ALLOWED_ORIGIN=$origin"
+  "MUJOONG_SECURITY_ALLOWED_ORIGIN=$origin" \
+  "OPENAI_API_KEY=" \
+  "JEV_API_KEY="
 write web.env \
   "GOOGLE_OAUTH_CLIENT_ID=" \
   "GOOGLE_OAUTH_REDIRECT_URI=$origin/parent/login/callback" \
