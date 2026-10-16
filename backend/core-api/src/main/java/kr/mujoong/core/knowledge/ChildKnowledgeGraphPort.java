@@ -5,6 +5,7 @@ import java.util.UUID;
 
 /** BR1·BR5: 모든 아동 자료 접근은 childId를 필수로 전달한다. */
 public interface ChildKnowledgeGraphPort {
+    default void prepareSchema() {}
     List<KnowledgeSeed> seeds(UUID childId);
     String begin();
     void replaceBase(String transaction, UUID childId, SeedCatalog catalog);

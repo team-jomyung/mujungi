@@ -91,6 +91,17 @@ class U15GraphModelTest {
         assertThatThrownBy(() -> graph.replaceBase(next, child, new SeedCatalog("v1", "b".repeat(64), catalog().seeds())))
                 .isInstanceOf(IllegalArgumentException.class);
     }
+    @Test void competingVersionsCannotOverwriteCommittedDigest() {
+        var graph = new MemoryChildKnowledgeGraph();
+        UUID first = UUID.randomUUID(), second = UUID.randomUUID();
+        String a = graph.begin(), b = graph.begin();
+        graph.replaceBase(a, first, catalog());
+        graph.replaceBase(b, second, new SeedCatalog("v1", "b".repeat(64), catalog().seeds()));
+        graph.commit(a);
+        assertThatThrownBy(() -> graph.commit(b)).isInstanceOf(IllegalArgumentException.class);
+        assertThat(graph.seeds(second)).isEmpty();
+        graph.terminate(b);
+    }
     @Test void deletionIsChildScopedAndIdempotent() {
         var graph = new MemoryChildKnowledgeGraph();
         UUID child = UUID.randomUUID(), other = UUID.randomUUID();

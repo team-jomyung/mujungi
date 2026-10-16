@@ -11,6 +11,7 @@ public final class MemoryChildKnowledgeGraph implements ChildKnowledgeGraphPort 
     private final Map<UUID, Map<String, KnowledgeSeed>> children = new HashMap<>();
     private final Map<String, String> versions = new HashMap<>();
     private final Map<String, List<Runnable>> transactions = new HashMap<>();
+    private final Map<String, Map<String, String>> transactionVersions = new HashMap<>();
 
     @Override public synchronized List<KnowledgeSeed> seeds(UUID childId) {
         return children.getOrDefault(childId, Map.of()).values().stream()
@@ -20,6 +21,7 @@ public final class MemoryChildKnowledgeGraph implements ChildKnowledgeGraphPort 
     @Override public synchronized String begin() {
         String id = UUID.randomUUID().toString();
         transactions.put(id, new ArrayList<>());
+        transactionVersions.put(id, new HashMap<>());
         return id;
     }
 
@@ -30,10 +32,13 @@ public final class MemoryChildKnowledgeGraph implements ChildKnowledgeGraphPort 
     }
 
     @Override public synchronized void replaceBase(String id, UUID child, SeedCatalog catalog) {
+        transaction(id);
         String existing = versions.get(catalog.version());
         if (existing != null && !existing.equals(catalog.digest())) {
             throw new IllegalArgumentException("Catalog version conflict");
         }
+        String staged = transactionVersions.get(id).putIfAbsent(catalog.version(), catalog.digest());
+        if (staged != null && !staged.equals(catalog.digest())) throw new IllegalArgumentException("Catalog version conflict");
         transaction(id).add(() -> {
             versions.put(catalog.version(), catalog.digest());
             Map<String, KnowledgeSeed> seeds = children.computeIfAbsent(child, ignored -> new HashMap<>());
@@ -61,12 +66,19 @@ public final class MemoryChildKnowledgeGraph implements ChildKnowledgeGraphPort 
 
     @Override public synchronized void commit(String id) {
         List<Runnable> work = transaction(id);
+        transactionVersions.get(id).forEach((version, digest) -> {
+            if (versions.containsKey(version) && !versions.get(version).equals(digest)) {
+                throw new IllegalArgumentException("Catalog version conflict");
+            }
+        });
         work.forEach(Runnable::run);
         transactions.remove(id);
+        transactionVersions.remove(id);
     }
 
     @Override public synchronized boolean terminate(String id) {
         transactions.remove(id);
+        transactionVersions.remove(id);
         return true;
     }
 }
