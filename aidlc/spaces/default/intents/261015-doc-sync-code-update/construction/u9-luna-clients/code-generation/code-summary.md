@@ -109,7 +109,7 @@
 - 실공급자: Responses API의 미완료 · 거절 필드 모양, 요청용 스키마 사본 수락, `temperature` 없는 요청 수락, `json_object` 형식의 'JSON' 단어 요구 여부 — 첫 `lunaLiveTest`에서 확인한다.
 - 전체 shellcheck(`infra-validate`), `image-checks.sh`, 끝-끝 `verify.sh`(Build and Test 몫).
 - `test-host-tools.sh`의 turn-metrics 2건은 변경 전부터 이 PC에서 실패한다(U9 밖).
-- gitleaks(CI와 같은 이미지 · 설정)로 U9 커밋을 검사하다 `LunaEventLogTest`의 `AttrKey.RESPONSE_MODEL, "gpt-6-luna-2026.10"` 한 줄이 `generic-api-key` 오탐으로 잡혔다. CI는 이력 전체를 보므로, push하지 않은 로컬 이력을 다시 써서 값을 상수로 옮겼다(허용 목록 추가 없음, R-F9). 다시 검사해 0건.
+- gitleaks(CI와 같은 이미지 · 설정)로 U9 커밋을 검사하다 `LunaEventLogTest`의 응답 모델 속성 값(날짜가 붙은 모델 이름) 한 줄이 `generic-api-key` 오탐으로 잡혔다. CI는 이력 전체를 보므로, push하지 않은 로컬 이력을 다시 써서 값을 상수로 옮겼다(허용 목록 추가 없음, R-F9). 다시 검사해 0건.
 - 개발 PC env에 `OPENAI_API_KEY`가 있어도 기본 `test` 작업은 시험 JVM에서 그 키를 지운다. IDE에서 시험을 직접 돌리면 이 보호가 없다.
 - `OPENAI_ANALYSIS_MODEL` · `OPENAI_JUDGE_MODEL`을 Compose · `render-env`에 넣는 일은 demo 투입 작업(이번 범위 밖)이다. 없으면 `gpt-6-luna`로 동작한다.
 
