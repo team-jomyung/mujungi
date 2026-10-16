@@ -1,0 +1,22 @@
+# U15 신규 운영 소스와 변경한 공통 운영 소스 전부. 제외 없음.
+backend/core-api/src/main/java/kr/mujoong/core/child/ChildProfileService.java
+backend/core-api/src/main/java/kr/mujoong/core/common/deletion/DeletionParticipant.java
+backend/core-api/src/main/java/kr/mujoong/core/knowledge/ChildKnowledgeGraphPort.java
+backend/core-api/src/main/java/kr/mujoong/core/knowledge/ChildKnowledgeService.java
+backend/core-api/src/main/java/kr/mujoong/core/knowledge/KnowledgeAccessPolicy.java
+backend/core-api/src/main/java/kr/mujoong/core/knowledge/KnowledgeConfiguration.java
+backend/core-api/src/main/java/kr/mujoong/core/knowledge/KnowledgeDeletionParticipant.java
+backend/core-api/src/main/java/kr/mujoong/core/knowledge/KnowledgeLedgerRepository.java
+backend/core-api/src/main/java/kr/mujoong/core/knowledge/KnowledgeProperties.java
+backend/core-api/src/main/java/kr/mujoong/core/knowledge/KnowledgeSeed.java
+backend/core-api/src/main/java/kr/mujoong/core/knowledge/MemoryChildKnowledgeGraph.java
+backend/core-api/src/main/java/kr/mujoong/core/knowledge/Neo4jChildKnowledgeGraph.java
+backend/core-api/src/main/java/kr/mujoong/core/knowledge/SeedArchiveLoader.java
+backend/core-api/src/main/java/kr/mujoong/core/knowledge/SeedCatalog.java
+backend/core-api/src/main/java/kr/mujoong/core/knowledge/SeedContentValidator.java
+backend/core-api/src/main/java/kr/mujoong/core/knowledge/SeedGenerationProperties.java
+backend/core-api/src/main/java/kr/mujoong/core/knowledge/SeedGenerationService.java
+backend/core-api/src/main/java/kr/mujoong/core/knowledge/StructureSignature.java
+backend/core-api/src/main/java/kr/mujoong/core/knowledge/VariantPlanner.java
+backend/core-api/src/main/java/kr/mujoong/core/luna/CoreLunaClient.java
+backend/core-api/src/main/java/kr/mujoong/core/luna/LunaCallBudget.java

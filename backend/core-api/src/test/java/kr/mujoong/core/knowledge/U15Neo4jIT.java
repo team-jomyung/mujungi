@@ -97,6 +97,33 @@ class U15Neo4jIT {
         assertThat(graph.seeds(child)).isEmpty();
         assertThat(graph.seeds(other)).hasSize(1);
     }
+    @Test void concurrentCommitAndTerminationCannotResurrectAfterCleanup() throws Exception {
+        UUID child = UUID.randomUUID();
+        String tx = graph.begin();
+        graph.writeGeneratedSeed(tx, child, U15GraphModelTest.seed("seed:G0001", KnowledgeSeed.Origin.GENERATED));
+        var start = new java.util.concurrent.CountDownLatch(1);
+        try (var workers = java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor()) {
+            var commit = workers.submit(() -> {
+                start.await();
+                try { graph.commit(tx); } catch (IllegalStateException alreadyClosed) { /* rollback won */ }
+                return true;
+            });
+            var rollback = workers.submit(() -> {
+                start.await();
+                try { return graph.terminate(tx); } catch (IllegalStateException concurrentCommit) { return false; }
+            });
+            start.countDown();
+            commit.get(5, java.util.concurrent.TimeUnit.SECONDS);
+            rollback.get(5, java.util.concurrent.TimeUnit.SECONDS);
+            assertThat(graph.terminate(tx)).isTrue();
+            String cleanup = graph.begin();
+            graph.deleteChild(cleanup, child);
+            graph.commit(cleanup);
+            assertThat(connection().seeds(child)).isEmpty();
+            assertThatThrownBy(() -> graph.commit(tx)).isInstanceOf(IllegalStateException.class);
+            assertThat(connection().seeds(child)).isEmpty();
+        }
+    }
     @Test void refusesHandleInjection() {
         assertThatThrownBy(() -> graph.terminate("../../commit")).isInstanceOf(IllegalArgumentException.class);
     }

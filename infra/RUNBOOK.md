@@ -234,7 +234,7 @@ aws ssm put-parameter --name /mujoong/demo/GHCR_PULL_USER --type String --value 
   `core-api.env` · `web.env`에 같은 값을 쓴다. `GOOGLE_OAUTH_CLIENT_ID`도 두 파일에 같은 이름으로 들어가고 client secret은 `core-api.env`에만 간다.
   바꾼 뒤에는 env를 다시 렌더하고 core-api · web을 재생성해야 반영된다.
 - GHCR 패키지를 공개로 두기로 정하면 `GHCR_PULL_TOKEN` · `GHCR_PULL_USER`를 만들지 않는다(배포가 로그인하지 않는다, J99).
-- `NEO4J_AUTH`는 Neo4j를 켜는 유닛이 만든다.
+- `NEO4J_AUTH`는 Neo4j와 U15 core-api가 함께 사용한다. render-env는 같은 기존 파라미터를 각각 neo4j.env와 core-api.env로 전달한다. 값이 없으면 core-api의 그래프 기능은 기본 경로로 동작하며 과거 그래프 삭제는 RETRY로 남는다. 공개 Compose 보간값으로 넣지 않는다.
 - **(U9) `OPENAI_API_KEY`를 넣기 전 R-F15 확인 — 기록 없이는 넣지 않는다.** 키를 넣는 순간 core-api · realtime의 Luna 어댑터가 켜지고
   실제 아동 대화 · 결과 자료가 공급자로 나갈 수 있다. 코드가 막지 않으므로(편차 U9-b) 이 확인이 유일한 방어선이다.
   - [ ] 공급자 약관 · 데이터 사용 조건(학습 사용 · 보존 · 저장 끔 `store=false` 적용 범위)을 확인했다.
