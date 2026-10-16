@@ -7,6 +7,8 @@
 #   - realtime의 공급자 주소 → 가짜 공급자 서비스 fake-provider(시험 도구 이미지, 앱 이미지 밖 J129 · SD-25)
 #   - SERVICE_HOST=localhost · 허용 origin https://localhost:8443(nginx.env · 앱 env, gen-env.sh가 만든다)
 #   - nginx 443만 호스트 127.0.0.1:8443에 게시(80은 게시하지 않는다), certbot · backup 끔
+#   - 수동 demo 스택과 동시에 검증할 때 MUJOONG_VERIFY_EDGE_PREFIX / BACKEND_PREFIX로 검증 망의 /24 대역만 분리할 수 있다.
+#     기본값은 demo와 같다. 네트워크의 내부 격리와 고정 IP 끝자리는 유지하고 PostgreSQL 허용 대역도 함께 맞춘다.
 # 시퀀스 덮어쓰기는 `!override`를 쓴다(Compose v2.24.4 이상, J136). 볼륨은 컨테이너 경로가 같은 항목을 다시 선언해 바꾼다.
 # 상대 경로는 Compose 프로젝트 디렉터리(첫 파일 compose.demo.yml이 있는 infra/) 기준이다. 값 · 렌더 산출물의 위치는 기본
 # build/verify/이고(J136), infra-validate처럼 다른 임시 디렉터리를 쓰는 도구만 MUJOONG_VERIFY_DIR(절대 경로)로 바꾼다.
@@ -27,6 +29,9 @@
 
 services:
   nginx:
+    networks:
+      edge:
+        ipv4_address: ${MUJOONG_VERIFY_EDGE_PREFIX:-172.30.10}.10
     ports: !override
       - "127.0.0.1:8443:443"
     env_file: !override
@@ -38,6 +43,9 @@ services:
       - ./seed-audio:/srv/mujoong/approved-audio:ro
 
   web:
+    networks:
+      edge:
+        ipv4_address: ${MUJOONG_VERIFY_EDGE_PREFIX:-172.30.10}.11
     pull_policy: never
     env_file: !override
       - ${MUJOONG_VERIFY_DIR:-../build/verify}/env/web.env
@@ -46,6 +54,9 @@ services:
       MUJOONG_DEVLOGIN_ENABLED: "true"
 
   core-api:
+    networks:
+      edge:
+        ipv4_address: ${MUJOONG_VERIFY_EDGE_PREFIX:-172.30.10}.12
     pull_policy: never
     env_file: !override
       - ${MUJOONG_VERIFY_DIR:-../build/verify}/env/core-api.env
@@ -54,6 +65,9 @@ services:
       MUJOONG_DEVLOGIN_ENABLED: "true"
 
   realtime:
+    networks:
+      edge:
+        ipv4_address: ${MUJOONG_VERIFY_EDGE_PREFIX:-172.30.10}.13
     pull_policy: never
     env_file: !override
       - ${MUJOONG_VERIFY_DIR:-../build/verify}/env/realtime.env
@@ -66,6 +80,8 @@ services:
         condition: service_healthy
 
   postgres:
+    environment:
+      PG_HBA_ALLOWED_CIDR: ${MUJOONG_VERIFY_BACKEND_PREFIX:-172.30.20}.0/24
     env_file: !override
       - ${MUJOONG_VERIFY_DIR:-../build/verify}/env/postgres.env
     volumes:
@@ -122,6 +138,16 @@ services:
       options:
         max-size: 10m
         max-file: "3"
+
+networks:
+  edge:
+    ipam:
+      config: !override
+        - subnet: ${MUJOONG_VERIFY_EDGE_PREFIX:-172.30.10}.0/24
+  backend:
+    ipam:
+      config: !override
+        - subnet: ${MUJOONG_VERIFY_BACKEND_PREFIX:-172.30.20}.0/24
 
 volumes:
   verify-pgdata: {}
