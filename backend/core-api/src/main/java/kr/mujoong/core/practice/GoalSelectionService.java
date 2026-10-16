@@ -26,6 +26,9 @@ public class GoalSelectionService {
     private final Duration restoreWindow;
     private final DbRetry retry;
     private final TransactionTemplate tx;
+    private kr.mujoong.core.practicegoal.GeneratedGoalService generated;
+    @Autowired(required=false)
+    void generatedGoals(kr.mujoong.core.practicegoal.GeneratedGoalService service){this.generated=service;}
     @Autowired
     public GoalSelectionService(PracticeAccountPort accounts,PracticeGoalRepository goals,PragmaticsKnowledge knowledge,
             GoalMetadataPort metadata,MujoongClock clock,CoreProperties properties,
@@ -43,10 +46,13 @@ public class GoalSelectionService {
     /** 담은 목표. 아이를 아직 등록하지 않은 보호자도 빈 목록이다(18 빈 상태, U5a 리뷰 4). */
     public List<View> list(UUID guardianId) {
         accounts.requireGuardian(guardianId);
-        return goals.list(guardianId).stream().map(this::view).toList();
+        var all=new java.util.ArrayList<>(goals.list(guardianId));
+        if(generated!=null)try{all.addAll(generated.list(guardianId));}catch(CoreApiException unavailable){if(unavailable.code()!=ErrorCode.CONSENT_MISSING&&unavailable.code()!=ErrorCode.NOT_FOUND)throw unavailable;}
+        return all.stream().map(this::view).toList();
     }
     public View add(UUID guardianId,UUID recommendationId) {
         required(recommendationId);
+        if(generated!=null){var saved=generated.add(guardianId,recommendationId);if(saved.isPresent())return view(saved.get());}
         return write(guardianId,account -> {
             PracticeGoalRepository.Recommendation candidate=goals.recommendation(account.childId(),recommendationId)
                     .filter(r->"ACTIVE".equals(r.status())).orElseThrow(()->CoreApiException.of(ErrorCode.NOT_FOUND));
@@ -62,6 +68,7 @@ public class GoalSelectionService {
     }
     public View favorite(UUID guardianId,UUID id,Boolean favorite) {
         required(id);if(favorite==null)throw CoreApiException.of(ErrorCode.VALIDATION_FAILED);
+        if(generated!=null&&generated.find(guardianId,id).isPresent())return view(generated.favorite(guardianId,id,favorite));
         return write(guardianId,account -> {
             GoalSelection current=owned(guardianId,id);
             if(!current.active())throw CoreApiException.of(ErrorCode.NOT_FOUND);
@@ -70,6 +77,7 @@ public class GoalSelectionService {
     }
     public Instant delete(UUID guardianId,UUID id) {
         required(id);
+        if(generated!=null&&generated.find(guardianId,id).isPresent())return generated.delete(guardianId,id,restoreWindow);
         return write(guardianId,account -> {
             GoalSelection current=owned(guardianId,id);
             if(!current.active())return current.restoreUntil();
@@ -79,6 +87,7 @@ public class GoalSelectionService {
     }
     public View restore(UUID guardianId,UUID id) {
         required(id);
+        if(generated!=null&&generated.find(guardianId,id).isPresent())return view(generated.restore(guardianId,id));
         return write(guardianId,account -> {
             GoalSelection current=owned(guardianId,id);
             if(current.active())return view(current);
