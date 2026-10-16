@@ -21,6 +21,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.TreeSet;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -29,6 +30,7 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BooleanSupplier;
 import java.util.function.Function;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import javax.sound.sampled.AudioFormat;
 import javax.sound.sampled.AudioInputStream;
@@ -127,6 +129,12 @@ final class GptLiveProbe {
     private static final Pattern MASK_URL = Pattern.compile("(?i)\\b(wss?|https?)://\\S+");
     private static final Pattern MASK_HOST = Pattern.compile("(?i)\\b[a-z0-9-]+(\\.[a-z0-9-]+)*\\.(com|net|org|io|ai|kr|dev|app)\\b");
     private static final Pattern MASK_QUOTED = Pattern.compile("\"[^\"]*\"|'[^']*'|“[^”]*”|‘[^’]*’");
+    /** 사건 type 이름 모양(소문자 · 숫자 · 밑줄, 점으로 둘 이상 이음). */
+    static final Pattern TYPE_NAME = Pattern.compile("^[a-z][a-z0-9_]*(\\.[a-z0-9_]+)+$");
+    /** 따옴표로 시작하는 type 이름과 그 끝(닫는 따옴표 · 말줄임 · 문장 끝 = 잘림). */
+    private static final Pattern QUOTED_TYPE =
+            Pattern.compile("['\"‘“]([a-z][a-z0-9_]*(?:\\.[a-z0-9_]+)+)(['\"’”]|…|\\.\\.\\.|$)");
+    private static final Pattern BASE64 = Pattern.compile("^[A-Za-z0-9+/]+={0,2}$");
     private static final Pattern MASK_HANGUL = Pattern.compile("[\\uAC00-\\uD7A3\\u3131-\\u318E]+([\\s,.!?]*[\\uAC00-\\uD7A3\\u3131-\\u318E]+)*");
 
     /** 실행 결과(① · ② 기준, BR9.2). */
@@ -256,8 +264,8 @@ final class GptLiveProbe {
     /** 보고서 행 순서(두 시도가 같은 순서로 채운다). */
     static final List<String> ITEMS = List.of("① 서버 쪽 음성 전송 · 출력 수신", "② instructions.correct + response.create 뒤 응답",
             "③ speech_stopped", "④ 종료 형식", "⑤-1 응답 생성 확인 사건(첫 조각 전 응답 id)", "⑤-2 자동 응답 · 막기 수단",
-            "오류 사건(error · session.error)", "연결 끊김 · 끊기기 전 마지막 사건", "앱 해석기(ProviderClient.Reader) 이해",
-            "참고: 앱이 모르는 type");
+            "오류 사건(error · session.error)", "지원 type 목록(오류 문장에서)", "수신 사건 모양(type별 첫 사건, 키 · 값 타입)",
+            "연결 끊김 · 끊기기 전 마지막 사건", "앱 해석기(ProviderClient.Reader) 이해", "참고: 앱이 모르는 type");
 
     /** 키가 없을 때의 결과(모든 항목 SKIPPED_NO_KEY, 통과 아님). */
     static Result skipped() {
@@ -490,8 +498,15 @@ final class GptLiveProbe {
         }
     }
 
-    /** 오류 사건 필드(가린 뒤). */
-    record ErrorInfo(String type, String code, String param, String message) {
+    /**
+     * 오류 사건 필드(가린 뒤). {@code supportedTypes}는 오류 문장의 "Supported values" 뒤 따옴표 안 type 이름 전부(가림 · 200자 자르기 전
+     * 원문에서, 끝이 잘린 이름은 "(잘림)" 표시), {@code rejectedTypes}는 그 앞(거절된 값)의 type 이름이다.
+     */
+    record ErrorInfo(String type, String code, String param, String message, List<String> supportedTypes, List<String> rejectedTypes) {
+
+        ErrorInfo(String type, String code, String param, String message) {
+            this(type, code, param, message, List.of(), List.of());
+        }
 
         String describe() {
             return "type=" + nullText(type) + " code=" + nullText(code) + " param=" + nullText(param) + " message=" + nullText(message);
@@ -503,11 +518,74 @@ final class GptLiveProbe {
     }
 
     /** 받은 원시 메시지에서 뽑은 것: type 이름 · 응답 id · 키 이름 · 출력 음성 바이트 수 · 오류 필드(값 원문 없음). */
-    record RawFrame(int seq, String type, String responseId, List<String> keys, int audioBytes, ErrorInfo error) {
+    record RawFrame(int seq, String type, String responseId, List<String> keys, int audioBytes, ErrorInfo error, String shape) {
 
         RawFrame(int seq, String type, String responseId, List<String> keys) {
-            this(seq, type, responseId, keys, 0, null);
+            this(seq, type, responseId, keys, 0, null, "-");
         }
+    }
+
+    /** 오류 문장에서 뽑은 type 이름 목록. */
+    record TypeLists(List<String> supported, List<String> rejected) {
+    }
+
+    /**
+     * 오류 문장 원문에서 따옴표 안 type 이름 모양({@link #TYPE_NAME})을 뽑는다. "Supported values" 뒤는 지원 목록, 앞은 거절된 값이다. 끝 따옴표
+     * 없이 문장이 끝난 이름은 나온 만큼 "(잘림)"을 붙인다. 중복 제거 · 정렬.
+     */
+    static TypeLists typeLists(Object value) {
+        if (value == null) {
+            return new TypeLists(List.of(), List.of());
+        }
+        String message = String.valueOf(value);
+        int marker = message.toLowerCase(Locale.ROOT).indexOf("supported values");
+        String head = marker < 0 ? message : message.substring(0, marker);
+        String tail = marker < 0 ? "" : message.substring(marker);
+        return new TypeLists(quotedTypeNames(tail), quotedTypeNames(head));
+    }
+
+    private static List<String> quotedTypeNames(String text) {
+        Set<String> names = new TreeSet<>();
+        Matcher matcher = QUOTED_TYPE.matcher(text);
+        while (matcher.find()) {
+            String closing = matcher.group(2);
+            boolean complete = closing.equals("'") || closing.equals("\"") || closing.equals("’") || closing.equals("”");
+            names.add(complete ? matcher.group(1) : matcher.group(1) + "(잘림)");
+        }
+        return List.copyOf(names);
+    }
+
+    /**
+     * 사건 하나의 JSON 모양: 키 이름과 값 타입만(값 없음). 문자열은 base64 모양이면 {@code string(base64)}, 객체는 한 단계 더 펼친다. 예
+     * {@code {type:string, response_id:string, delta:string(base64)}}. 해석기 맞춤(FR12.2) 근거이고 원문 · 음성 · 전사는 담지 않는다.
+     */
+    static String shapeOf(Object value, int depth) {
+        if (value == null) {
+            return "null";
+        }
+        if (value instanceof String text) {
+            return text.length() >= 16 && text.length() % 4 == 0 && BASE64.matcher(text).matches() ? "string(base64)" : "string";
+        }
+        if (value instanceof Boolean) {
+            return "boolean";
+        }
+        if (value instanceof Number) {
+            return "number";
+        }
+        if (value instanceof List<?> list) {
+            return list.isEmpty() || depth >= 2 ? "array" : "array<" + shapeOf(list.getFirst(), depth + 1) + ">";
+        }
+        if (value instanceof Map<?, ?> map) {
+            if (depth >= 2) {
+                return "object";
+            }
+            List<String> parts = new ArrayList<>();
+            for (Map.Entry<?, ?> entry : map.entrySet()) {
+                parts.add(safe(String.valueOf(entry.getKey())) + ":" + shapeOf(entry.getValue(), depth + 1));
+            }
+            return "{" + String.join(", ", parts) + "}";
+        }
+        return "unknown";
     }
 
     /**
@@ -531,10 +609,12 @@ final class GptLiveProbe {
         ErrorInfo error = null;
         if (type.equals("error") || type.equals("session.error")) {
             Map<?, ?> body = fields.get("error") instanceof Map<?, ?> nested ? nested : fields;
+            TypeLists lists = typeLists(body.get("message"));
             error = new ErrorInfo(type.equals("error") ? textToken(body.get("type")) : textToken(fields.get("type")),
-                    textToken(body.get("code")), paramToken(body.get("param")), maskMessage(body.get("message")));
+                    textToken(body.get("code")), paramToken(body.get("param")), maskMessage(body.get("message")), lists.supported(),
+                    lists.rejected());
         }
-        return new RawFrame(seq, type, responseId, keys, audioBytes, error);
+        return new RawFrame(seq, type, responseId, keys, audioBytes, error, shapeOf(fields, 0));
     }
 
     private static String responseIdOf(Map<?, ?> fields) {
@@ -579,7 +659,10 @@ final class GptLiveProbe {
         return SAFE_PARAM.matcher(text).matches() ? text : "(형식 밖)";
     }
 
-    /** 오류 문장: 앞 200자만, 키 · 주소 · 따옴표 안 값 · 한글 문장(전사 모양)을 가리고 줄바꿈 · 표 구분자를 없앤다(R-F3 · R-F14). */
+    /**
+     * 오류 문장: 앞 200자만, 키 · 주소 · 따옴표 안 값 · 한글 문장(전사 모양)을 가리고 줄바꿈 · 표 구분자를 없앤다(R-F3 · R-F14). 따옴표 안 값이
+     * 사건 type 이름 모양({@link #TYPE_NAME}, 예 {@code session.input_audio.append})이면 가리지 않는다.
+     */
     static String maskMessage(Object value) {
         if (value == null) {
             return null;
@@ -588,13 +671,32 @@ final class GptLiveProbe {
         if (text.length() > ERROR_MESSAGE_MAX) {
             text = text.substring(0, ERROR_MESSAGE_MAX) + "…";
         }
+        // type 이름 모양의 따옴표 값은 자리표로 빼 두고 나머지를 가린 뒤 되돌린다(다른 가림 규칙이 건드리지 않게)
+        List<String> kept = new ArrayList<>();
+        Matcher quoted = MASK_QUOTED.matcher(text);
+        StringBuilder held = new StringBuilder();
+        while (quoted.find()) {
+            String whole = quoted.group();
+            String inner = whole.substring(1, whole.length() - 1);
+            String replacement = whole;
+            if (TYPE_NAME.matcher(inner).matches()) {
+                kept.add(whole);
+                replacement = "\u0001" + (kept.size() - 1) + "\u0001";
+            }
+            quoted.appendReplacement(held, Matcher.quoteReplacement(replacement));
+        }
+        quoted.appendTail(held);
+        text = held.toString();
         // 한글 문장을 먼저 가린다(뒤 단계의 한글 대체 문구가 다시 가려지지 않게)
         text = MASK_HANGUL.matcher(text).replaceAll("[문장 가림]");
         text = MASK_KEY.matcher(text).replaceAll("[키 가림]");
         text = MASK_URL.matcher(text).replaceAll("[주소 가림]");
         text = MASK_HOST.matcher(text).replaceAll("[주소 가림]");
         text = MASK_QUOTED.matcher(text).replaceAll("[값 가림]");
-        return text.replace('|', '/').replaceAll("[\\r\\n\\t]+", " ").strip();
+        for (int i = 0; i < kept.size(); i++) {
+            text = text.replace("\u0001" + i + "\u0001", kept.get(i));
+        }
+        return text.replace('|', '/').replaceAll("[\\r\\n\\t\\u0001]+", " ").strip();
     }
 
     /**
@@ -1005,11 +1107,17 @@ final class GptLiveProbe {
         rows.add(new Row(ITEMS.get(6), errors.isEmpty() ? "없음" : errors.size() + "건 — " + describeErrors(errors),
                 errors.isEmpty() ? Verdict.INFO : Verdict.FAIL));
 
+        // 지원 type 목록(오류 문장에서, 200자 자르기 · 가림 전 원문 기준)
+        rows.add(new Row(ITEMS.get(7), describeTypeLists(errors), Verdict.INFO));
+
+        // 수신 사건 모양(type별 첫 사건)
+        rows.add(new Row(ITEMS.get(8), describeShapes(raw), Verdict.INFO));
+
         // 연결 끊김 · 마지막 사건
-        rows.add(new Row(ITEMS.get(7), describeClose(tap, closedEarly, closedMessage), Verdict.INFO));
+        rows.add(new Row(ITEMS.get(9), describeClose(tap, closedEarly, closedMessage), Verdict.INFO));
 
         // 앱 해석기 이해
-        rows.add(new Row(ITEMS.get(8), "session.started " + parsed.started + "건 · speech_stopped " + parsed.speechStopped
+        rows.add(new Row(ITEMS.get(10), "session.started " + parsed.started + "건 · speech_stopped " + parsed.speechStopped
                 + "건 · 출력 음성 " + parsed.outputAudio + "조각(" + parsed.outputAudioBytes + "바이트) · output.done " + parsed.outputDone
                 + "건 (원시 출력 음성 " + totalAudioBytes + "바이트)", Verdict.INFO));
 
@@ -1017,9 +1125,39 @@ final class GptLiveProbe {
         Map<String, Integer> unknown = new TreeMap<>();
         raw.stream().filter(frame -> !KNOWN_TYPES.contains(frame.type()) && !frame.type().equals(CLOSED_MARK))
                 .forEach(frame -> unknown.merge(frame.type(), 1, Integer::sum));
-        rows.add(new Row(ITEMS.get(9), unknown.isEmpty() ? "없음" : unknown.toString(), Verdict.INFO));
+        rows.add(new Row(ITEMS.get(11), unknown.isEmpty() ? "없음" : unknown.toString(), Verdict.INFO));
 
         return new Attempt(mode, one && two ? Outcome.PASS : Outcome.FAIL, rows);
+    }
+
+    /** 오류 사건들의 지원 type 목록(합쳐 중복 제거 · 정렬)과 거절된 값. */
+    static String describeTypeLists(List<ErrorInfo> errors) {
+        Set<String> supported = new TreeSet<>();
+        Set<String> rejected = new TreeSet<>();
+        for (ErrorInfo error : errors) {
+            supported.addAll(error.supportedTypes());
+            rejected.addAll(error.rejectedTypes());
+        }
+        if (supported.isEmpty() && rejected.isEmpty()) {
+            return "없음 — 오류 문장에 type 이름 목록이 없었다";
+        }
+        return "지원 " + supported.size() + "개 " + supported + " · 거절된 값 " + (rejected.isEmpty() ? "없음" : rejected.toString());
+    }
+
+    /** type별 첫 사건의 모양(키 · 값 타입만). */
+    static String describeShapes(List<RawFrame> raw) {
+        Map<String, String> shapes = new LinkedHashMap<>();
+        for (RawFrame frame : raw) {
+            if (!frame.type().equals(CLOSED_MARK) && frame.shape() != null && !"-".equals(frame.shape())) {
+                shapes.putIfAbsent(frame.type(), frame.shape());
+            }
+        }
+        if (shapes.isEmpty()) {
+            return "없음";
+        }
+        List<String> parts = new ArrayList<>();
+        shapes.forEach((type, shape) -> parts.add(type + " " + shape));
+        return String.join(" ; ", parts);
     }
 
     static String describeErrors(List<ErrorInfo> errors) {

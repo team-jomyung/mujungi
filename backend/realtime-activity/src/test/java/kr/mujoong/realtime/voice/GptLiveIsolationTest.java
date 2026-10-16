@@ -253,6 +253,56 @@ class GptLiveIsolationTest {
     }
 
     @Test
+    void typeNamesInQuotesStayVisibleWhileKeysAndKoreanAreMasked() {
+        String masked = GptLiveProbe.maskMessage("Invalid value: 'session.instructions.correct'. Supported values are: "
+                + "'session.start', \"session.input_audio.append\". key sk-abcdef123456 value '아이 말' 'Value1' https://x.example.com");
+
+        assertThat(masked).contains("'session.instructions.correct'", "'session.start'", "\"session.input_audio.append\"",
+                "[키 가림]", "[주소 가림]", "[값 가림]")
+                .doesNotContain("sk-abcdef123456", "아이 말", "Value1", "example.com", "\u0001");
+    }
+
+    @Test
+    void supportedTypeListsComeFromTheFullMessageEvenWhenItIsCutOff() {
+        String message = "Invalid value: 'session.instructions.correct'. Supported values are: 'session.start', "
+                + "'session.input_audio.append', 'session.close', 'session.start', 'session.output_audio.fixtu";
+
+        GptLiveProbe.TypeLists lists = GptLiveProbe.typeLists(message);
+        GptLiveProbe.RawFrame frame = GptLiveProbe.parseRaw(JSON, 0, "{\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\","
+                + "\"code\":\"invalid_value\",\"param\":\"type\",\"message\":\"" + "y".repeat(300) + " " + message + "\"}}");
+
+        assertThat(lists.rejected()).containsExactly("session.instructions.correct");
+        assertThat(lists.supported()).containsExactly("session.close", "session.input_audio.append",
+                "session.output_audio.fixtu(잘림)", "session.start");
+        assertThat(frame.error().supportedTypes()).as("200자 자르기 전 원문에서 뽑는다").contains("session.close", "session.start");
+        assertThat(GptLiveProbe.describeTypeLists(List.of(frame.error(), frame.error())))
+                .startsWith("지원 4개 [session.close, session.input_audio.append, session.output_audio.fixtu(잘림), session.start]")
+                .contains("거절된 값 [session.instructions.correct]");
+        assertThat(GptLiveProbe.typeLists("no list here").supported()).isEmpty();
+        assertThat(GptLiveProbe.describeTypeLists(List.of())).startsWith("없음");
+    }
+
+    @Test
+    void eventShapesKeepKeysAndValueTypesOnlyOncePerType() {
+        String audio = Base64.getEncoder().encodeToString(new byte[480]);
+        List<GptLiveProbe.RawFrame> raw = List.of(
+                GptLiveProbe.parseRaw(JSON, 0, "{\"type\":\"session.output_audio.delta\",\"response_id\":\"resp_1\",\"delta\":\""
+                        + audio + "\"}"),
+                GptLiveProbe.parseRaw(JSON, 1, "{\"type\":\"session.output_audio.delta\",\"response_id\":\"resp_1\",\"extra\":1}"),
+                GptLiveProbe.parseRaw(JSON, 2, "{\"type\":\"session.output_transcript.delta\",\"delta\":{\"text\":\"안녕 하늘아\","
+                        + "\"start_ms\":120,\"final\":false},\"items\":[{\"id\":\"a\"}]}"),
+                new GptLiveProbe.RawFrame(3, GptLiveProbe.CLOSED_MARK, null, List.of()));
+
+        String shapes = GptLiveProbe.describeShapes(raw);
+
+        assertThat(shapes).isEqualTo("session.output_audio.delta {type:string, response_id:string, delta:string(base64)} ; "
+                + "session.output_transcript.delta {type:string, delta:{text:string, start_ms:number, final:boolean}, "
+                + "items:array<object>}");
+        assertThat(shapes).doesNotContain("resp_1", "안녕", audio, "120");
+        assertThat(GptLiveProbe.shapeOf(null, 0)).isEqualTo("null");
+    }
+
+    @Test
     void outputAudioIsCountedInBothAppAndKitShapes() {
         String audio = Base64.getEncoder().encodeToString(new byte[480]);
 
