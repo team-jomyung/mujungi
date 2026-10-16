@@ -10,6 +10,7 @@ CREATE TABLE core.core_child_graph_state (
     base_version varchar(100),
     next_generated_number bigint NOT NULL DEFAULT 1 CHECK (next_generated_number > 0),
     graph_may_exist boolean NOT NULL DEFAULT false,
+    initialization_transaction_id varchar(200),
     state varchar(10) NOT NULL DEFAULT 'ACTIVE' CHECK (state IN ('ACTIVE','DELETING'))
 );
 CREATE INDEX core_child_graph_guardian_idx ON core.core_child_graph_state(guardian_id);
@@ -48,4 +49,9 @@ CREATE TABLE core.core_graph_deleted_source (
     child_id uuid NOT NULL REFERENCES core.core_child_graph_state(child_id) ON DELETE RESTRICT,
     activity_id uuid NOT NULL,
     PRIMARY KEY(child_id,activity_id)
+);
+-- 아동 행 삭제 전후 재진입을 막는 비참조 표식. 계정 삭제 참가자가 마지막에 정리한다.
+CREATE TABLE core.core_graph_deleted_child (
+    child_id uuid PRIMARY KEY,
+    guardian_id uuid NOT NULL
 );

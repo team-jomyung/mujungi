@@ -19,13 +19,14 @@ public class KnowledgeLedgerRepository {
 
     public KnowledgeLedgerRepository(NamedParameterJdbcTemplate jdbc) { this.jdbc = jdbc; }
 
-    public record ChildState(UUID childId, UUID guardianId, String baseVersion, boolean graphMayExist, String state) {}
+    public record ChildState(UUID childId, UUID guardianId, String baseVersion, boolean graphMayExist, String state, String initializationTransactionId) {}
     public record Operation(UUID childId, UUID activityId, String candidateRef, String seedId, String state,
             String reusedSeedId, String transactionId, KnowledgeSeed seed, String model, String promptVersion,
             Instant deadline) {}
     public record Reservation(Operation operation, boolean created) {}
 
     public ChildState ensure(UUID guardian, UUID child) {
+        if (deletedChild(child)) throw new IllegalStateException("Knowledge child deleted");
         jdbc.update("insert into core.core_child_graph_state(child_id,guardian_id) values (:child,:guardian) on conflict do nothing",
                 Map.of("child", child, "guardian", guardian));
         ChildState state = child(child).orElseThrow();
@@ -36,7 +37,7 @@ public class KnowledgeLedgerRepository {
     public Optional<ChildState> child(UUID child) {
         return jdbc.query("select * from core.core_child_graph_state where child_id=:child",
                 Map.of("child", child), (rs, n) -> new ChildState(child, rs.getObject("guardian_id", UUID.class),
-                        rs.getString("base_version"), rs.getBoolean("graph_may_exist"), rs.getString("state")))
+                        rs.getString("base_version"), rs.getBoolean("graph_may_exist"), rs.getString("state"), rs.getString("initialization_transaction_id")))
                 .stream().findFirst();
     }
 
@@ -47,6 +48,11 @@ public class KnowledgeLedgerRepository {
 
     public void markMayExist(UUID child) {
         jdbc.update("update core.core_child_graph_state set graph_may_exist=true where child_id=:child", Map.of("child", child));
+    }
+
+    public void initialization(UUID child, String handle) {
+        jdbc.update("update core.core_child_graph_state set initialization_transaction_id=:handle,graph_may_exist=true where child_id=:child",
+                new MapSqlParameterSource("child", child).addValue("handle", handle));
     }
 
     public void baseLoaded(UUID child, SeedCatalog catalog, Instant now) {
@@ -65,6 +71,11 @@ public class KnowledgeLedgerRepository {
 
     public List<Operation> pending(UUID child) {
         return operations("child_id=:child and state in ('PROJECTING','CLEANUP_REQUIRED')", Map.of("child", child));
+    }
+
+    public void expireReservations(UUID child, Instant now) {
+        jdbc.update("update core.core_seed_generation_operation set state='NONE' where child_id=:child and state='RESERVED' and deadline<=:now",
+                ClockParams.instant(new MapSqlParameterSource("child", child), "now", now));
     }
 
     private List<Operation> operations(String predicate, Map<String, ?> params) {
@@ -127,11 +138,20 @@ public class KnowledgeLedgerRepository {
 
     public void markDeleting(UUID child, UUID activity) {
         if (activity == null) {
+            jdbc.update("insert into core.core_graph_deleted_child(child_id,guardian_id) select child_id,guardian_id from core.core_child_graph_state where child_id=:child on conflict do nothing", Map.of("child", child));
             jdbc.update("update core.core_child_graph_state set state='DELETING' where child_id=:child", Map.of("child", child));
         } else {
             jdbc.update("insert into core.core_graph_deleted_source(child_id,activity_id) values (:child,:activity) on conflict do nothing",
                     Map.of("child", child, "activity", activity));
         }
+    }
+
+    public boolean deletedChild(UUID child) {
+        return jdbc.queryForObject("select count(*) from core.core_graph_deleted_child where child_id=:child", Map.of("child", child), Integer.class) > 0;
+    }
+
+    public void forgetDeletedChildren(UUID guardian) {
+        jdbc.update("delete from core.core_graph_deleted_child where guardian_id=:guardian", Map.of("guardian", guardian));
     }
 
     public List<String> sourceSeeds(UUID child, UUID activity) {
