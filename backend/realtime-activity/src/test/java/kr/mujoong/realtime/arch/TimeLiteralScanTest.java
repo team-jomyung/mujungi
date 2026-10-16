@@ -85,7 +85,9 @@ class TimeLiteralScanTest {
             new Allowed(CONTRACT + "time/DelayQueueTimerDriver.java", "unit.convert(nanos, TimeUnit.NANOSECONDS)",
                     "Delayed 계약의 단위 변환(값은 남은 나노초)이다"),
             new Allowed(CONTRACT + "time/DelayQueueTimerDriver.java", "getDelay(TimeUnit.NANOSECONDS)",
-                    "Delayed 계약의 단위 변환으로 두 지연을 비교한다"));
+                    "Delayed 계약의 단위 변환으로 두 지연을 비교한다"),
+            new Allowed(RT + "luna/LunaTransport.java", ".orTimeout(limit.toNanos(), TimeUnit.NANOSECONDS)",
+                    "단위 표기: 시도 시한은 호출자 마감과 timing.judgment.live-budget 중 작은 Duration이다(U9 BR5.1 · SD3, orTimeout에 Duration 판이 없다)"));
 
     @Test
     void everyTimeLiteralInRealtimeProductionSourcesIsOnTheAllowList() {
