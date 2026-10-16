@@ -41,6 +41,7 @@ CREATE TABLE core.generated_seed (
     seed jsonb NOT NULL,
     model varchar(100) NOT NULL,
     prompt_version varchar(100) NOT NULL,
+    check_codes jsonb NOT NULL DEFAULT '[]'::jsonb,
     created_at timestamptz NOT NULL,
     PRIMARY KEY(child_id,seed_id),
     UNIQUE(child_id,candidate_ref)

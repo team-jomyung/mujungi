@@ -147,6 +147,82 @@ class U15ServiceIT {
             assertThat(f.ledger.deletedChild(f.child)).isFalse();
         }
     }
+    @Test void contextVersionIsCapturedWithItsSeedAcrossRefresh() {
+        try (var f = new Fixture()) {
+            var before = f.service.skillContext(f.guardian, f.child, "seed:S1").orElseThrow();
+            var next = new SeedCatalog("v2", "c".repeat(64), U15GraphModelTest.catalog().seeds());
+            try (var newer = new ChildKnowledgeService(f.ledger, f.access, f.graph,
+                    new DataSourceTransactionManager(f.db.dataSource()), f.clock, next, true, Duration.ofSeconds(2))) {
+                assertThat(newer.initializeChild(f.guardian, f.child)).isTrue();
+                var after = newer.skillContext(f.guardian, f.child, "seed:S1").orElseThrow();
+                assertThat(before.graphVersion()).isEqualTo("v1");
+                assertThat(after.graphVersion()).isEqualTo("v2");
+                assertThat(after.seed().seedId()).isEqualTo(before.seed().seedId());
+            }
+        }
+    }
+    @Test void failedSourceDeletionHidesSeedsFromReadModelAndRebuildButRetainsCleanupTargets() {
+        try (var f = new Fixture()) {
+            f.response(U15RulesTest.output("뜻을 살펴본다"));
+            assertThat(f.generator().generateSeed(f.request("a")).seedId()).isEqualTo("seed:G0001");
+            UUID other = UUID.randomUUID();
+            when(f.access.source(f.guardian, f.child, other)).thenReturn(new KnowledgeAccessPolicy.Source(List.of(), List.of()));
+            var otherRequest = new SeedGenerationService.Request(f.guardian, f.child, other, "b", "NONE", U15GraphModelTest.SIGNATURE);
+            f.response(U15RulesTest.output("차이를 생각한다"));
+            assertThat(f.generator().generateSeed(otherRequest).seedId()).isEqualTo("seed:G0002");
+            doThrow(new IllegalStateException("offline")).when(f.graph).deleteSeeds(anyString(), eq(f.child), anyList());
+            assertThatThrownBy(() -> f.service.deleteGeneratedSeedsForRecord(f.guardian, f.child, f.activity)).isInstanceOf(IllegalStateException.class);
+            assertThat(f.ledger.sourceSeeds(f.child, f.activity)).containsExactly("seed:G0001");
+            assertThat(f.service.seedSummaries(f.guardian, f.child)).extracting(KnowledgeSeed::seedId).containsExactlyInAnyOrder("seed:S1", "seed:G0002");
+            assertThat(f.service.skillContext(f.guardian, f.child, "seed:G0001")).isEmpty();
+            String wipe = f.graph.begin(); f.graph.deleteChild(wipe, f.child); f.graph.commit(wipe);
+            assertThat(f.service.initializeChild(f.guardian, f.child)).isTrue();
+            assertThat(f.graph.seeds(f.child)).extracting(KnowledgeSeed::seedId).containsExactlyInAnyOrder("seed:S1", "seed:G0002");
+            when(f.luna.call(any(), any())).thenAnswer(call -> {
+                assertThat(JsonCodec.shared().write(call.getArgument(0))).doesNotContain("seed:G0001");
+                return new LunaResult("{\"outcome\":\"NONE\",\"none_reason\":\"NO_VALID_SEED\"}", "fake", "v2", Duration.ZERO, 1, false);
+            });
+            f.generator().generateSeed(new SeedGenerationService.Request(f.guardian, f.child, other, "c", "NONE", U15GraphModelTest.SIGNATURE));
+            verify(f.luna, times(3)).call(any(), any());
+            doCallRealMethod().when(f.graph).deleteSeeds(anyString(), eq(f.child), anyList());
+            f.service.deleteGeneratedSeedsForRecord(f.guardian, f.child, f.activity);
+            assertThat(f.ledger.sourceSeeds(f.child, f.activity)).isEmpty();
+            assertThat(f.ledger.successful(f.child)).extracting(KnowledgeSeed::seedId).containsExactly("seed:G0002");
+        }
+    }
+    @Test void failedForeignInvocationCannotCancelOwnedReservation() throws Exception {
+        try (var f = new Fixture(); var workers = java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor()) {
+            var entered = new java.util.concurrent.CountDownLatch(1);
+            var release = new java.util.concurrent.CountDownLatch(1);
+            when(f.luna.call(any(), any())).thenAnswer(call -> {
+                entered.countDown();
+                assertThat(release.await(5, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+                return new LunaResult(JsonCodec.shared().write(U15RulesTest.output("뜻을 살펴본다")), "fake", "v2", Duration.ZERO, 1, false);
+            });
+            var generator = f.generator();
+            var first = workers.submit(() -> generator.generateSeed(f.request("same")));
+            try {
+                assertThat(entered.await(3, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+                UUID invalid = UUID.randomUUID();
+                when(f.access.source(f.guardian, f.child, invalid)).thenThrow(new IllegalStateException("source unavailable"));
+                assertThat(generator.generateSeed(new SeedGenerationService.Request(f.guardian, f.child, invalid, "same", "NONE", U15GraphModelTest.SIGNATURE)).seedId()).isEqualTo("NONE");
+                assertThat(f.ledger.operation(f.child, "same").orElseThrow().state()).isEqualTo("RESERVED");
+            } finally { release.countDown(); }
+            assertThat(first.get(8, java.util.concurrent.TimeUnit.SECONDS).seedId()).isEqualTo("seed:G0001");
+            assertThat(generator.generateSeed(f.request("same")).seedId()).isEqualTo("seed:G0001");
+        }
+    }
+    @Test void validationEvidenceDistinguishesAcceptanceAndFinalRejection() {
+        try (var f = new Fixture()) {
+            f.response(U15RulesTest.output("뜻을 살펴본다"));
+            assertThat(f.generator().generateSeed(f.request("good")).seedId()).isEqualTo("seed:G0001");
+            assertThat(f.ledger.operation(f.child, "good").orElseThrow().checkCodes()).containsExactly("CONTENT_ACCEPTED");
+            assertThat(f.db.jdbc().queryForObject("select check_codes::text from core.generated_seed where child_id=:child", Map.of("child", f.child), String.class)).contains("CONTENT_ACCEPTED");
+            f.response(U15RulesTest.output("가상아이의 이야기"));
+            assertThat(f.generator().generateSeed(f.request("bad")).seedId()).isEqualTo("NONE");
+            assertThat(f.ledger.operation(f.child, "bad").orElseThrow().checkCodes()).containsExactly("CONTENT_REJECTED");
+        }
+    }
     @Test void initializedReadAndNoneReference() {
         try (var f = new Fixture()) {
             assertThat(f.service.seedSummaries(f.guardian, f.child)).hasSize(1);

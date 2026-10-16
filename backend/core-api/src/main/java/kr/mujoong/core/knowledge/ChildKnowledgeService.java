@@ -119,44 +119,52 @@ public class ChildKnowledgeService implements AutoCloseable {
     }
 
     public List<KnowledgeSeed> seedSummaries(UUID guardian, UUID child) {
-        if (!enabled) return List.of();
+        return readBounded(guardian, child).seeds();
+    }
+
+    private Read readBounded(UUID guardian, UUID child) {
+        if (!enabled) return new Read(List.of(), false, null);
         var future = executor.submit(() -> transaction(() -> read(guardian, child)));
         try {
             Read result = future.get(budget.toNanos(), TimeUnit.NANOSECONDS);
             if (result.initialize()) requestInitialization(guardian, child);
-            return result.seeds();
+            return result;
         } catch (InterruptedException e) {
             future.cancel(true);
             Thread.currentThread().interrupt();
-            return List.of();
+            return new Read(List.of(), false, null);
         } catch (java.util.concurrent.ExecutionException | java.util.concurrent.TimeoutException e) {
             future.cancel(true);
-            return List.of();
+            return new Read(List.of(), false, null);
         }
     }
 
     private Read read(UUID guardian, UUID child) {
         access.requireAllowed(guardian, child);
-        if (ledger.deletedChild(child)) return new Read(List.of(), false);
+        if (ledger.deletedChild(child)) return new Read(List.of(), false, null);
         var state = ledger.child(child);
-        if (state.isEmpty()) return new Read(List.of(), true);
+        if (state.isEmpty()) return new Read(List.of(), true, null);
         requireActive(state.get());
         if (!catalog.version().equals(state.get().baseVersion()) || state.get().initializationTransactionId() != null
-                || !ledger.pending(child).isEmpty()) return new Read(List.of(), true);
+                || !ledger.pending(child).isEmpty()) return new Read(List.of(), true, null);
         Set<String> success = ledger.successful(child).stream().map(KnowledgeSeed::seedId).collect(java.util.stream.Collectors.toSet());
         List<KnowledgeSeed> seeds = graph.seeds(child).stream().filter(KnowledgeSeed::enabled)
                 .filter(seed -> seed.origin() == KnowledgeSeed.Origin.POC || success.contains(seed.seedId())).toList();
-        return new Read(seeds, seeds.isEmpty());
+        return new Read(seeds, seeds.isEmpty(), state.get().baseVersion());
     }
 
-    public Optional<KnowledgeSeed> skillContext(UUID guardian, UUID child, String seedId) {
+    public record SkillContext(KnowledgeSeed seed, String graphVersion) {}
+
+    public Optional<SkillContext> skillContext(UUID guardian, UUID child, String seedId) {
         if (seedId == null || "NONE".equals(seedId)) return Optional.empty();
-        return seedSummaries(guardian, child).stream().filter(seed -> seed.seedId().equals(seedId)).findFirst();
+        Read read = readBounded(guardian, child);
+        return read.seeds().stream().filter(seed -> seed.seedId().equals(seedId))
+                .map(seed -> new SkillContext(seed, read.version())).findFirst();
     }
 
     public Optional<VariantPlanner.Plan> variantPlan(UUID guardian, UUID child, String seedId,
             VariantPlanner.Context context, List<VariantPlanner.Exposure> actualExposures) {
-        return skillContext(guardian, child, seedId).flatMap(seed -> planner.plan(seed, context, actualExposures));
+        return skillContext(guardian, child, seedId).flatMap(value -> planner.plan(value.seed(), context, actualExposures));
     }
 
     public void deleteChild(UUID guardian, UUID child) { delete(guardian, child, null); }
@@ -195,6 +203,6 @@ public class ChildKnowledgeService implements AutoCloseable {
     void requireTime(Instant deadline) {
         if (!clock.now().isBefore(deadline)) throw new IllegalStateException("Knowledge deadline expired");
     }
-    private record Read(List<KnowledgeSeed> seeds, boolean initialize) {}
+    private record Read(List<KnowledgeSeed> seeds, boolean initialize, String version) {}
     @Override public void close() { executor.shutdownNow(); }
 }

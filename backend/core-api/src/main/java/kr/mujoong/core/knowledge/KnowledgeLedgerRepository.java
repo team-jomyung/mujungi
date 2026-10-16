@@ -22,7 +22,7 @@ public class KnowledgeLedgerRepository {
     public record ChildState(UUID childId, UUID guardianId, String baseVersion, boolean graphMayExist, String state, String initializationTransactionId) {}
     public record Operation(UUID childId, UUID activityId, String candidateRef, String seedId, String state,
             String reusedSeedId, String transactionId, KnowledgeSeed seed, String model, String promptVersion,
-            Instant deadline) {}
+            Instant deadline, List<String> checkCodes) {}
     public record Reservation(Operation operation, boolean created) {}
 
     public ChildState ensure(UUID guardian, UUID child) {
@@ -84,7 +84,8 @@ public class KnowledgeLedgerRepository {
                         rs.getString("candidate_ref"), rs.getString("seed_id"), rs.getString("state"),
                         rs.getString("reused_seed_id"), rs.getString("graph_transaction_id"),
                         rs.getString("validated_seed") == null ? null : json.read(rs.getString("validated_seed"), KnowledgeSeed.class),
-                        rs.getString("model"), rs.getString("prompt_version"), ClockParams.instant(rs, "deadline")));
+                        rs.getString("model"), rs.getString("prompt_version"), ClockParams.instant(rs, "deadline"),
+                        java.util.Arrays.asList(json.read(rs.getString("check_codes"), String[].class))));
     }
 
     public Reservation reserve(UUID child, UUID activity, String candidate, Instant deadline) {
@@ -114,9 +115,10 @@ public class KnowledgeLedgerRepository {
 
     public void committed(Operation op, Instant now) {
         if (!"PROJECTING".equals(op.state())) throw new IllegalStateException("Projection required");
-        jdbc.update("insert into core.generated_seed(child_id,seed_id,activity_id,candidate_ref,seed,model,prompt_version,created_at) values (:child,:id,:activity,:candidate,cast(:seed as jsonb),:model,:prompt,:now)",
+        jdbc.update("insert into core.generated_seed(child_id,seed_id,activity_id,candidate_ref,seed,model,prompt_version,check_codes,created_at) values (:child,:id,:activity,:candidate,cast(:seed as jsonb),:model,:prompt,cast(:checks as jsonb),:now)",
                 ClockParams.instant(key(op).addValue("id", op.seedId()).addValue("activity", op.activityId())
-                        .addValue("seed", json.write(op.seed())).addValue("model", op.model()).addValue("prompt", op.promptVersion()), "now", now));
+                        .addValue("seed", json.write(op.seed())).addValue("model", op.model()).addValue("prompt", op.promptVersion())
+                        .addValue("checks", json.write(op.checkCodes())), "now", now));
         jdbc.update("update core.core_seed_generation_operation set state='COMMITTED' where child_id=:child and candidate_ref=:candidate", key(op));
     }
 
@@ -126,8 +128,21 @@ public class KnowledgeLedgerRepository {
     }
 
     public List<KnowledgeSeed> successful(UUID child) {
-        return jdbc.query("select seed from core.generated_seed where child_id=:child order by seed_id",
+        return jdbc.query("select g.seed from core.generated_seed g where g.child_id=:child and not exists (select 1 from core.core_graph_deleted_source d where d.child_id=g.child_id and d.activity_id=g.activity_id) order by g.seed_id",
                 Map.of("child", child), (rs, n) -> json.read(rs.getString(1), KnowledgeSeed.class));
+    }
+
+    public void check(Operation op, String code) {
+        if (!java.util.Set.of("CONTENT_ACCEPTED", "CONTENT_REJECTED", "MODEL_NONE", "DUPLICATE_REUSED", "GENERATION_FAILED").contains(code)) {
+            throw new IllegalArgumentException("Unknown validation code");
+        }
+        jdbc.update("update core.core_seed_generation_operation set check_codes=case when check_codes @> cast(:codes as jsonb) then check_codes else check_codes || cast(:codes as jsonb) end where child_id=:child and candidate_ref=:candidate and activity_id=:activity and seed_id=:id",
+                key(op).addValue("activity", op.activityId()).addValue("id", op.seedId()).addValue("codes", json.write(List.of(code))));
+    }
+
+    public void finishOwnedReservation(Operation op) {
+        jdbc.update("update core.core_seed_generation_operation set state='NONE' where child_id=:child and candidate_ref=:candidate and activity_id=:activity and seed_id=:id and state='RESERVED'",
+                key(op).addValue("activity", op.activityId()).addValue("id", op.seedId()));
     }
 
     public boolean deletedSource(UUID child, UUID activity) {

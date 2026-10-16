@@ -51,6 +51,7 @@ public class SeedGenerationService {
         List<KnowledgeSeed> catalog = knowledge.seedSummaries(request.guardianId(), request.childId());
         if (catalog.isEmpty()) return Result.none("CATALOG_UNAVAILABLE");
         Instant deadline = knowledge.clock.now().plus(budget);
+        KnowledgeLedgerRepository.Operation owned = null;
         try {
             var reservation = knowledge.transaction(() -> {
                 eligible(request, deadline);
@@ -61,10 +62,11 @@ public class SeedGenerationService {
             var operation = reservation.operation();
             if (!operation.activityId().equals(request.activityId())) return Result.none("CANDIDATE_SOURCE_MISMATCH");
             if (!reservation.created()) return replay(request, operation, catalog);
+            owned = operation;
             return generate(request, operation, catalog);
         } catch (RuntimeException e) {
             // BR4: 실패 사유는 고정 코드로만 반환한다. PROJECTING은 성공으로 승격하지 않는다.
-            finishReserved(request);
+            if (owned != null) finishReserved(request, owned);
             return Result.none("GENERATION_FAILED");
         }
     }
@@ -93,17 +95,22 @@ public class SeedGenerationService {
             Map<?, ?> output = json.read(result.outputJson(), Map.class);
             try {
                 String outcome = String.valueOf(output.get("outcome"));
-                if ("NONE".equals(outcome)) return finish(request, operation, null);
+                if ("NONE".equals(outcome)) {
+                    recordCheck(operation, "MODEL_NONE");
+                    return finish(request, operation, null);
+                }
                 if ("DUPLICATE".equals(outcome)) {
                     String id = String.valueOf(output.get("duplicate_of"));
                     if (catalog.stream().noneMatch(s -> s.seedId().equals(id))) throw new IllegalArgumentException("Unknown duplicate");
                     return finish(request, operation, id);
                 }
                 KnowledgeSeed seed = validator.generated(operation.seedId(), output, source.rawTexts(), source.names());
+                recordCheck(operation, "CONTENT_ACCEPTED");
                 Optional<String> duplicate = catalog.stream().filter(s -> sameStructure(s, seed)).map(KnowledgeSeed::seedId).findFirst();
                 if (duplicate.isPresent()) return finish(request, operation, duplicate.get());
                 return project(request, operation, seed, result);
             } catch (IllegalArgumentException invalid) {
+                recordCheck(operation, "CONTENT_REJECTED");
                 if (!attempts.takeCorrection()) return finish(request, operation, null);
             }
         }
@@ -117,6 +124,7 @@ public class SeedGenerationService {
                 return Result.none("REFERENCE_GONE");
             }
             knowledge.ledger.finish(operation, reused);
+            if (reused != null) knowledge.ledger.check(operation, "DUPLICATE_REUSED");
             return reused == null ? Result.none("NO_VALID_SEED") : new Result(reused, "REUSED");
         });
     }
@@ -161,12 +169,16 @@ public class SeedGenerationService {
                 .filter(s -> s.origin() == KnowledgeSeed.Origin.POC || successful.contains(s.seedId())).toList();
     }
 
-    private void finishReserved(Request request) {
+    private void recordCheck(KnowledgeLedgerRepository.Operation operation, String code) {
+        knowledge.transaction(() -> { knowledge.ledger.check(operation, code); return null; });
+    }
+
+    private void finishReserved(Request request, KnowledgeLedgerRepository.Operation owned) {
         try {
             knowledge.transaction(() -> {
                 knowledge.access.requireAllowed(request.guardianId(), request.childId());
-                knowledge.ledger.operation(request.childId(), request.candidateRef()).filter(op -> "RESERVED".equals(op.state()))
-                        .ifPresent(op -> knowledge.ledger.finish(op, null));
+                knowledge.ledger.check(owned, "GENERATION_FAILED");
+                knowledge.ledger.finishOwnedReservation(owned);
                 return null;
             });
         } catch (RuntimeException ignored) {

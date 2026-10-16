@@ -12,4 +12,6 @@ LunaCallBudget는 기술 재시도 1회와 스키마/내용 수정 슬롯 1회, 
 
 U14는 결과 작업에서 생성 포트를 호출하고 skillRef를 연결한다. U10은 실제 노출을 전달하고 변형 계획을 대본/보존 판정에 함께 사용한다. 이 호출 연결은 이번 U15에 포함되지 않는다. 표면 어휘와 설정은 contracts/knowledge-graph.md를 따른다.
 
+검토 보완: skillContext는 SkillContext(seed, graphVersion)를 반환하며 둘은 동일 보호자 잠금 안에서 읽는다. 삭제 표식이 있는 기록의 성공 씨앗은 읽기·중복 선택·AI 목록·재구성 모두에서 제외하되 정리 대상 ID는 보존한다. 실패 정리는 해당 호출이 생성한 정확한 activityId/seedId 예약에만 적용한다. checkCodes는 CONTENT_ACCEPTED, CONTENT_REJECTED, MODEL_NONE, DUPLICATE_REUSED, GENERATION_FAILED의 유한 목록에서 중복 없이 기록하며 성공 시 generated_seed에도 복사한다. 원문/예외 메시지는 이 기록에 포함하지 않는다.
+
 호환 조정: 기존 KnowledgeProperties(boolean) 생성자와 KnowledgeGraphLookup 단일 메서드를 유지했다. ChildProfileService의 초기화 연결은 부분 Spring 컨텍스트에서도 기존 등록이 가능하도록 선택 주입한다. 새 설정 record는 ConfigKeyContractTest의 비교 목록에 등록했고 Duration 단위 변환 한 줄만 시간 리터럴 검사 근거 목록에 추가했다. JaCoCo는 CP437 원본 ZIP을 클래스 ZIP으로 해석하지 않도록 mainClassesDirs를 사용하며 범위 필터와 모든 운영 클래스 및 80% 하한을 유지한다.

@@ -8,7 +8,7 @@ U15는 기존 core-api의 내부 포트다. 공개 HTTP API나 realtime 계약�
 |---|---|---|
 | initializeChild | 보호자·아동 | 멱등 초기화, 장애 시 다음 조회 재시도 |
 | seedSummaries | 보호자·아동 | 활성 씨앗 목록, 오류/꺼짐/2초 초과 시 빈 목록 |
-| skillContext | 보호자·아동·seedId | 구조 5필드·불변 문장·보존 조건·관계/자리·판, NONE/없음은 빈 값 |
+| skillContext | 보호자·아동·seedId | SkillContext(seed, graphVersion): 동일 보호자 잠금 읽기의 씨앗 구조·보존 조건·관계/자리와 적용 판. NONE/없음은 빈 값 |
 | variantPlan | 보호자·아동·seedId·기본 맥락·실제 노출 | SAME_CONTEXT/NEAR의 한 요소 변경 계획, 만들 수 없으면 빈 값 |
 | generateSeed | 보호자·아동·활동·후보 참조·추상화 구조 | 같은 아동의 기존/새 seedId 또는 NONE, result_status 변경 없음 |
 | deleteChild | 보호자·아동 | 해당 아동 투영/생성 원장만 삭제, 실패는 재시도 |
