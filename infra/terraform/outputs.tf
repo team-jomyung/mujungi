@@ -9,3 +9,7 @@ output "ec2_instance_id" {
 output "ecr_urls" {
   value = { for k, r in aws_ecr_repository.app : k => r.repository_url }
 }
+
+output "cloudfront_url" {
+  value = "https://${aws_cloudfront_distribution.main.domain_name}"
+}
