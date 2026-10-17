@@ -1,7 +1,9 @@
 package kr.mujoong.realtime.log;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.OptionalInt;
@@ -24,6 +26,8 @@ public final class TranscriptWriter {
     private final Map<String, ChildRow> childRows = new HashMap<>();
     private int lastSeq;
     private AiRow openAi;
+    /** U13 BR5.5: 제브 검사를 기다리는 보관 행(최대 검사 중 1건 + 대기열 1칸). */
+    private final List<Held> heldRows = new ArrayList<>();
 
     /**
      * @param lastSequenceNo 이미 쓴 가장 큰 번호(새 세션은 0)
@@ -120,7 +124,45 @@ public final class TranscriptWriter {
         return OptionalInt.of(row.seq);
     }
 
-    /** 종료 · 취소 때 열린 행을 모두 닫는다: 아이 조각은 지금 텍스트로 FINAL · true, AI 행은 FINAL · false(fail-closed). */
+    /**
+     * U13 BR5.5: 열린 AI 행을 보관 손잡이로 분리한다 — 구간이 제브 검사를 기다리는 동안 행은 DB에서 PARTIAL로 남고, 그 뒤에 도착하는 조각은
+     * {@link #aiStart}가 새 행 번호를 만든다. 결과가 나오면 {@link #aiFinal(Held, String, boolean, Instant)}로 한 번에 닫는다. 열린 행이 없으면
+     * 닫을 것이 없는 손잡이를 돌려준다(null이 아니다).
+     */
+    public Held aiHold() {
+        Held held = new Held(openAi);
+        openAi = null;
+        if (held.row != null) {
+            heldRows.add(held);
+        }
+        return held;
+    }
+
+    /**
+     * U13 BR5.5: 보관한 AI 행을 닫는다(통과 true · 폐기 false). 열린 AI 행({@link #openAi})은 건드리지 않는다. 이미 닫은 손잡이면 아무것도 하지
+     * 않는다.
+     *
+     * @return 닫은 번호. 닫을 행이 없으면 빈 값
+     */
+    public OptionalInt aiFinal(Held held, String text, boolean approved, Instant endedAt) {
+        Objects.requireNonNull(held, "held");
+        if (held.row == null || held.closed) {
+            return OptionalInt.empty();
+        }
+        held.closed = true;
+        heldRows.remove(held);
+        AiRow row = held.row;
+        recorder.putTranscript(TranscriptEntry.finalized(sessionId, row.seq, Speaker.AI, text == null ? "" : text,
+                approved, row.startedAt, endedAt));
+        return OptionalInt.of(row.seq);
+    }
+
+    /** 보관 중인(아직 닫지 않은) AI 행 수. */
+    public int heldCount() {
+        return heldRows.size();
+    }
+
+    /** 종료 · 취소 때 열린 행을 모두 닫는다: 아이 조각은 지금 텍스트로 FINAL · true, AI 행(보관 행 포함)은 FINAL · false(fail-closed). */
     public void closeAll(Instant at) {
         for (ChildRow row : childRows.values()) {
             if (!row.closed) {
@@ -130,6 +172,9 @@ public final class TranscriptWriter {
             }
         }
         aiFinal("", false, at);
+        for (Held held : List.copyOf(heldRows)) {
+            aiFinal(held, "", false, at);
+        }
     }
 
     /**
@@ -194,5 +239,20 @@ public final class TranscriptWriter {
     }
 
     private record AiRow(int seq, Instant startedAt) {
+    }
+
+    /** U13 BR5.5: 제브 검사를 기다리는 AI 행의 보관 손잡이(실행기 스레드 전용). 문자열 표현에 번호만 낸다. */
+    public static final class Held {
+        private final AiRow row;
+        private boolean closed;
+
+        private Held(AiRow row) {
+            this.row = row;
+        }
+
+        @Override
+        public String toString() {
+            return "Held[seq=" + (row == null ? "none" : String.valueOf(row.seq)) + ", closed=" + closed + "]";
+        }
     }
 }

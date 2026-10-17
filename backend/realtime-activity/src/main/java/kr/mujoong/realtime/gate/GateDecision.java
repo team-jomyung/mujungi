@@ -19,7 +19,17 @@ public record GateDecision(boolean passed, DiscardReason reason) {
         GATE_PATTERN,
         NOT_ACTIVE,
         RECORDER_DEGRADED,
-        OUTBOUND_FULL
+        OUTBOUND_FULL,
+        /** 제브가 막음(BLOCK) (U13 BR3.3). */
+        GUARDRAIL_BLOCK,
+        /** 제브가 사람 검토 필요로 판정(REVIEW) (U13 BR3.3). */
+        GUARDRAIL_REVIEW,
+        /** 제브 검사 시간 초과 (U13 BR3.3). */
+        GUARDRAIL_TIMEOUT,
+        /** 제브 전송 오류 · 잘못된 JSON · 정책 판 불일치 · 어댑터 없음 · 요청 거절 (U13 BR3.3). */
+        GUARDRAIL_ERROR,
+        /** 제브 대기열이 차 새 구간을 폐기 (U13 BR5.3). */
+        GUARDRAIL_QUEUE_FULL
     }
 
     public GateDecision {

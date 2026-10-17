@@ -62,6 +62,8 @@ import kr.mujoong.realtime.gate.SeedDictionary;
 import kr.mujoong.realtime.gateway.DeviceLink;
 import kr.mujoong.realtime.gateway.DeviceStatusPort;
 import kr.mujoong.realtime.gateway.OutputBundle;
+import kr.mujoong.realtime.guardrail.GuardrailRequest;
+import kr.mujoong.realtime.guardrail.GuardrailSupport;
 import kr.mujoong.realtime.log.AsyncRecorder;
 import kr.mujoong.realtime.log.LatencyRecorder;
 import kr.mujoong.realtime.log.SessionGapRepository;
@@ -223,7 +225,20 @@ public final class SessionExecutor {
             AudioRecordings recordings,
             SessionSettlement settlement,
             PracticeSessionExtension.Factory practice,
-            JudgmentSupport judgment) {
+            JudgmentSupport judgment,
+            GuardrailSupport guardrail) {
+
+        /** 제브 장치 없음(U13 전 모양, 제브 단계를 건너뛰고 지금 흐름이 그대로 돈다 — {@link GuardrailSupport#DISABLED}). */
+        public Services(SessionTransitions transitions, Function<UUID, Optional<? extends DeviceLink>> deviceLinks,
+                DeviceStatusPort deviceStatus, ProviderConnector connector, ProviderRequestFactory requests,
+                OutputGate gate, AsyncRecorder recorder, LatencyRecorder latency, TimerClocks clocks,
+                TaskLauncher launcher, EventLogger events, RealtimeMetrics metrics, MujoongClock clock, Settings settings,
+                SessionGapPort gaps, AudioRecordings recordings, SessionSettlement settlement,
+                PracticeSessionExtension.Factory practice, JudgmentSupport judgment) {
+            this(transitions, deviceLinks, deviceStatus, connector, requests, gate, recorder, latency, clocks, launcher,
+                    events, metrics, clock, settings, gaps, recordings, settlement, practice, judgment,
+                    GuardrailSupport.DISABLED);
+        }
 
         /** 판정 장치 없음(U11 전 모양, 판정 턴을 열지 않는다). */
         public Services(SessionTransitions transitions, Function<UUID, Optional<? extends DeviceLink>> deviceLinks,
@@ -260,6 +275,7 @@ public final class SessionExecutor {
             Objects.requireNonNull(settlement, "settlement");
             Objects.requireNonNull(practice, "practice");
             Objects.requireNonNull(judgment, "judgment");
+            Objects.requireNonNull(guardrail, "guardrail");
             Objects.requireNonNull(transitions, "transitions");
             Objects.requireNonNull(deviceLinks, "deviceLinks");
             Objects.requireNonNull(deviceStatus, "deviceStatus");
@@ -455,6 +471,10 @@ public final class SessionExecutor {
     private final Set<UUID> devicePlaying = new HashSet<>();
     /** U11 판정 턴 협력 객체(열린 턴 · 최근 전사 · 기록, 실행기 스레드 전용). */
     private final JudgmentCoordinator judgment;
+    /** U13 제브 게이트 협력 객체(검사 상태 · 검사표 · 대기열 · 턴 재지시, 실행기 스레드 전용, NFR8). 여기에는 호출 지점과 아래 카운터만 둔다. */
+    private final GuardrailCoordinator guardrail;
+    /** U13 BR4.4: 입력 묶음을 처음 연 횟수(단조 증가). 검사 요청 뒤 늘었으면 아이가 새로 말을 시작한 것이다(같은 묶음의 꼬리 조각은 세지 않는다). */
+    private long inputGroupOpens;
     /** U11 W2: 지금 처리 중인 아이 확정 전사의 대화 기록 순번(판정 요청 · 기록용, 원문 아님). */
     private int currentTranscriptSeq;
     /** U11 R-14: 새 전사가 J6를 대체할 때 그 전사의 종료 의도 판정(CONFIRM이면 연습 시계를 풀지 않는다). */
@@ -554,6 +574,7 @@ public final class SessionExecutor {
         this.transcripts = new TranscriptWriter(plan.sessionId(), 0, services.recorder(), services.latency());
         this.stopJudge = new StopIntentJudge(plan.stopExpressions());
         this.judgment = new JudgmentCoordinator(services.judgment(), plan, services.settings().instructionWait(), new JudgmentEnv());
+        this.guardrail = new GuardrailCoordinator(services.guardrail(), plan, new GuardrailEnv());
         Settings.Lifecycle lifecycle = services.settings().lifecycle();
         this.stopConfirm = new StopConfirmFlow(lifecycle.stopConfirmWait());
         this.silence = new SilenceClock(lifecycle.silenceWarning(), lifecycle.silenceEnd());
@@ -736,6 +757,11 @@ public final class SessionExecutor {
         return timers;
     }
 
+    /** 제브 게이트 협력 객체(시험). */
+    GuardrailCoordinator guardrail() {
+        return guardrail;
+    }
+
     // ------------------------------------------------------------------ 메시지 처리
 
     private void handle(Message message) {
@@ -746,6 +772,8 @@ public final class SessionExecutor {
             case ConnectionLost lost -> onConnectionLost(lost);
             case SessionMailbox.JudgmentArrived arrived -> judgment.onArrived(arrived);
             case SessionMailbox.JudgmentInstructionFailed failed -> judgment.onInstructionFailed(failed);
+            case SessionMailbox.GuardrailArrived arrived -> guardrail.onArrived(arrived);
+            case SessionMailbox.GuardrailRetryNotHeard notHeard -> guardrail.onRetryNotHeard(notHeard);
             case ServerShutdown shutdown -> {
                 judgment.onExit();
                 // 앱 종료 T3: 공급자 연결을 닫고 기록기를 비운다. 세션 행은 다음 기동 S3a가 닫는다(BR6.13).
@@ -1639,7 +1667,7 @@ public final class SessionExecutor {
         public boolean sendInstruction(UUID turnId, InstructionTemplates.NextAction action) {
             return SessionExecutor.this.sendInstruction(OutputGeneration.BumpReason.SERVER_SEND, "provider-judgment-",
                     id -> services.requests().instructionsAppend(id, action.content()),
-                    () -> mailbox.putSafety(new SessionMailbox.JudgmentInstructionFailed(turnId)));
+                    () -> mailbox.putSafety(new SessionMailbox.JudgmentInstructionFailed(turnId)), true);
         }
 
         @Override
@@ -1668,6 +1696,126 @@ public final class SessionExecutor {
                 case READY -> Kind.JUDGMENT_READY;
                 case INSTRUCTION -> Kind.JUDGMENT_INSTRUCTION;
             };
+        }
+    }
+
+    /** 제브 게이트 협력 객체가 실행기에 닿는 자리(U13). */
+    private final class GuardrailEnv implements GuardrailCoordinator.Env {
+
+        @Override
+        public SessionStatus status() {
+            return status;
+        }
+
+        @Override
+        public boolean terminated() {
+            return terminated;
+        }
+
+        @Override
+        public Instant now() {
+            return services.clock().now();
+        }
+
+        @Override
+        public UUID connectionId() {
+            DeviceLink current = link;
+            return current != null && current.isOpen() ? current.connectionId() : null;
+        }
+
+        @Override
+        public long deviceGeneration() {
+            return outputGeneration.get();
+        }
+
+        @Override
+        public long providerGeneration() {
+            return outputGen.generation();
+        }
+
+        @Override
+        public boolean outputHeld() {
+            return SessionExecutor.this.outputHeld();
+        }
+
+        @Override
+        public long inputGroupOpenCount() {
+            return inputGroupOpens;
+        }
+
+        @Override
+        public UUID practiceSpeechId() {
+            var speech = pendingPracticeSpeech;
+            return speech == null ? null : speech.correlationId();
+        }
+
+        @Override
+        public TranscriptWriter.Held holdAiRow() {
+            return transcripts.aiHold();
+        }
+
+        @Override
+        public boolean recheckAndSend(SegmentBuffer.Sealed sealed, TranscriptWriter.Held held, boolean ownsLatency) {
+            return SessionExecutor.this.recheckAndSend(sealed, held, ownsLatency);
+        }
+
+        @Override
+        public void discardForRetry(SegmentBuffer.Sealed sealed, TranscriptWriter.Held held,
+                GateDecision.DiscardReason reason, boolean ownsLatency) {
+            recordDiscard(sealed, held, reason, ownsLatency);
+        }
+
+        @Override
+        public void abandon(SegmentBuffer.Sealed sealed, TranscriptWriter.Held held, GateDecision.DiscardReason reason) {
+            discard(sealed, reason, false, held, true);
+        }
+
+        @Override
+        public void discardSilent(SegmentBuffer.Sealed sealed, TranscriptWriter.Held held,
+                GateDecision.DiscardReason reasonOrNull) {
+            if (reasonOrNull != null) {
+                services.metrics().gateDiscard(reasonOrNull.name());
+            }
+            closeAiRow(sealed, held);
+        }
+
+        @Override
+        public void finishAbandoned() {
+            finishDiscard();
+        }
+
+        @Override
+        public void listeningAgain() {
+            SessionExecutor.this.listeningAgain();
+        }
+
+        @Override
+        public boolean sendReplay(GuardrailCoordinator.ReplayableInstruction instruction, UUID retryId) {
+            return SessionExecutor.this.sendInstruction(OutputGeneration.BumpReason.GUARDRAIL_RETRY, instruction.name(),
+                    instruction.build(), () -> mailbox.putSafety(new SessionMailbox.GuardrailRetryNotHeard(retryId)), false);
+        }
+
+        @Override
+        public boolean sendRetryFreeTurn(UUID retryId) {
+            return SessionExecutor.this.sendInstruction(OutputGeneration.BumpReason.GUARDRAIL_RETRY,
+                    "provider-guardrail-retry-",
+                    id -> services.requests().instructionsAppend(id, InstructionTemplates.Retry.RETRY_FREE_TURN.content()),
+                    () -> mailbox.putSafety(new SessionMailbox.GuardrailRetryNotHeard(retryId)), false);
+        }
+
+        @Override
+        public boolean postFromProvider(SessionMailbox.Message message) {
+            return SessionExecutor.this.putFromProvider(message);
+        }
+
+        @Override
+        public void appError(String reasonCode, EventCode.Level level) {
+            services.events().appError(EventLog.Component.OUTPUT_GATE, reasonCode, level);
+        }
+
+        @Override
+        public void appError(RuntimeException error) {
+            services.events().appError(EventLog.Component.OUTPUT_GATE, error);
         }
     }
 
@@ -1895,7 +2043,7 @@ public final class SessionExecutor {
      */
     private void requestResponse(InstructionTemplates.ResponseStart start) {
         sendInstruction(OutputGeneration.BumpReason.SERVER_SEND, "provider-respond-",
-                id -> services.requests().responseStart(id, start), null);
+                id -> services.requests().responseStart(id, start), null, true);
     }
 
     /** 공급자 출력을 받지 않는 때(참여 확인 중 · 종료 확인 질문 중 · 확장점이 막은 동안, BR2.6 · BR4.3 · BR10.4). */
@@ -1988,6 +2136,7 @@ public final class SessionExecutor {
     /** 조각을 현재 묶음에 더하고(없으면 묶음을 연다) 조용 시계를 다시 건다. 묶음 id를 돌려준다. */
     private String groupInputDelta(ProviderEvent.InputTranscriptDelta delta) {
         if (inputGroupId == null) {
+            inputGroupOpens++;
             inputGroupId = delta.itemId() != null ? delta.itemId() : "in-" + (++inputGroupSeq);
             inputGroup.setLength(0);
         }
@@ -2052,6 +2201,8 @@ public final class SessionExecutor {
                 resetSilence(at);
             }
             currentTranscriptSeq = seq.orElse(0);
+            // U13 호출 지점 ③: 아이 확정 전사 = 새 턴(재지시 수를 0으로, 마지막 서버 지시를 지운다)
+            guardrail.onNewTurn(done.transcript());
             if (status == SessionStatus.ACTIVE) {
                 judgment.remember(currentTranscriptSeq, done.transcript(), at);
                 if (judgment.isOpen()) {
@@ -2117,7 +2268,10 @@ public final class SessionExecutor {
         long gen = outputGen.generation();
         if (!segment.isOpen()) {
             instructionNotHeard = null;
-            services.latency().providerFirstOut(plan.sessionId(), at);
+            if (!guardrail.isChecking()) {
+                // U13 BR5.6: 앞 구간의 제브 검사 중에 시작한 구간의 첫 조각은 앞 턴의 지연 기록을 덮지 않는다
+                services.latency().providerFirstOut(plan.sessionId(), at);
+            }
             transcripts.aiStart(at);
         }
         if (transcript != null) {
@@ -2215,6 +2369,16 @@ public final class SessionExecutor {
      */
     private boolean sendInstruction(OutputGeneration.BumpReason reason, String name,
             java.util.function.Function<String, ProviderRequestFactory.InstructionsAppend> build, Runnable onFailure) {
+        return sendInstruction(reason, name, build, onFailure, false);
+    }
+
+    /**
+     * @param replayable 제브 막힘 뒤 같은 지시를 한 번 다시 보낼 수 있게 마지막 서버 지시로 기억하는가(U13 W2b: 판정 뒤 다음 행동 지시 · 응답 시작
+     *     지시만 참). 거짓이면 기억을 지운다(다른 종류의 지시 · 재지시 자신)
+     */
+    private boolean sendInstruction(OutputGeneration.BumpReason reason, String name,
+            java.util.function.Function<String, ProviderRequestFactory.InstructionsAppend> build, Runnable onFailure,
+            boolean replayable) {
         ProviderSession session = providerSession;
         if (session == null || !session.isOpen()) {
             return false;
@@ -2228,6 +2392,7 @@ public final class SessionExecutor {
         timers.cancel(Kind.SEGMENT_QUIET);
         timers.arm(Kind.INSTRUCTION_WAIT, services.settings().instructionWait());
         instructionNotHeard = onFailure;
+        guardrail.onServerInstruction(replayable ? new GuardrailCoordinator.ReplayableInstruction(name, build) : null);
         sendQueue.submit(new ProviderSendQueue.Job(name, session, request, onFailure));
         return true;
     }
@@ -2741,6 +2906,7 @@ public final class SessionExecutor {
     private void stopOutputForIntent(Instant at) {
         bumpGeneration();
         bumpOutput(OutputGeneration.BumpReason.STOP_INTENT);
+        guardrail.onTurnBoundary();
         transcripts.aiFinal("", false, at);
     }
 
@@ -2753,8 +2919,9 @@ public final class SessionExecutor {
 
     /** U3-J6: 재생이 모두 끝났거나 보낼 응답이 없다 — 생각 중 · 재생 뒤면 '듣는 중'으로 돌아간다. */
     private void listeningAgain() {
-        if (judgment.isOpen() || practiceThinking) {
-            // U11 BR3.6: 열린 판정 턴(또는 확장이 요청한 생각 중 유지) 동안은 듣는 중으로 되돌리지 않는다
+        if (judgment.isOpen() || practiceThinking || guardrail.holdsThinking()) {
+            // U11 BR3.6: 열린 판정 턴(또는 확장이 요청한 생각 중 유지) 동안은 듣는 중으로 되돌리지 않는다.
+            // U13 BR3.4: 제브 검사 · 재지시 응답을 기다리는 동안도 같다
             return;
         }
         if (status == SessionStatus.ACTIVE && view != View.LISTENING && devicePlaying.isEmpty()
@@ -2791,8 +2958,11 @@ public final class SessionExecutor {
         if (sealed == null) {
             return;
         }
-        services.latency().segmentConfirmed(plan.sessionId(), confirmedAt, confirmedNanos, sealed.firstOutNanos(),
-                sealed.lastOutNanos());
+        if (!guardrail.isChecking()) {
+            // U13 BR5.6: 앞 구간의 제브 검사 중에 봉인된 구간은 앞 턴의 구간 확정 시각 · 지연 기록을 덮지 않는다
+            services.latency().segmentConfirmed(plan.sessionId(), confirmedAt, confirmedNanos, sealed.firstOutNanos(),
+                    sealed.lastOutNanos());
+        }
         // U11 W8-5: 공급자 출력 끝(tTranscriptFinal)은 구간의 마지막 조각 시각이다(봉인 시각이 아니라 800ms 대기가 지표에 섞이지 않는다)
         transcripts.aiDone(sealed.lastOutAt());
         try {
@@ -2803,22 +2973,23 @@ public final class SessionExecutor {
                         !movedOn || inspected.reason() == GateDecision.DiscardReason.GATE_PATTERN);
                 return;
             }
-            if (practice != null && practice.controlsOutput()
+            boolean practiceControlled = practice != null && practice.controlsOutput();
+            if (practiceControlled
                     && (pendingPracticeSpeech == null || !pendingPracticeSpeech.matches(sealed.transcript()))) {
                 discard(sealed, GateDecision.DiscardReason.GATE_PATTERN, false);
                 return;
             }
-            DeviceLink target = link;
-            boolean activeAndCurrent = status == SessionStatus.ACTIVE && sealed.generation() == outputGeneration.get()
-                    && target != null && target.isOpen();
-            OutputGate.Rechecked<DeviceLink.AudioReservation> rechecked = services.gate().recheck(activeAndCurrent,
-                    services.recorder().isDegraded(plan.sessionId()),
-                    () -> target == null ? Optional.empty() : target.reserveAudio(sealed.totalBytes()));
-            if (!rechecked.decision().passed()) {
-                discard(sealed, rechecked.decision().reason());
+            if (!practiceControlled && guardrail.enabled() && status == SessionStatus.ACTIVE) {
+                // U13 호출 지점 ①(BR3.1): GPT-Live가 그 자리에서 만든 새 발화는 제브가 ALLOW한 것만 recheck → send로 간다. 연습이 출력을 쥐고
+                // 있으면(원문 일치 통과) 제브를 부르지 않는다(BR7.6). 결과는 GuardrailArrived로 돌아와 이어진다 — 여기서는 기다리지 않는다
+                try {
+                    guardrail.begin(sealed, GuardrailRequest.Mode.FREE_TALK, null);
+                } catch (RuntimeException e) {
+                    guardrail.onBeginFailed(sealed, e);
+                }
                 return;
             }
-            send(sealed, target, rechecked.reservation());
+            recheckAndSend(sealed, null, true);
         } catch (RuntimeException e) {
             // 게이트 처리 중 예외는 폐기한다(fail-closed, SD-17)
             services.events().appError(EventLog.Component.OUTPUT_GATE, e);
@@ -2828,12 +2999,47 @@ public final class SessionExecutor {
         }
     }
 
+    /**
+     * 송신 직전 재확인(NOT_ACTIVE · RECORDER_DEGRADED · 출력 레인 예약)을 하고 통과하면 보낸다. 제브 단계가 있으면 유효한 ALLOW가 온 뒤에 불린다
+     * (U13 BR3.2 — 출력 레인 예약도 그때 한다. 예약에 실패하면 막힘 흐름이 아니라 지금과 같은 폐기다).
+     *
+     * @param held 제브 검사를 기다리며 보관한 AI 행(없으면 null — 열린 AI 행을 닫는다)
+     * @param ownsLatency 지연 기록의 턴이 이 구간의 것인가(대기열에서 꺼낸 구간은 앞 턴의 기록을 덮지 않는다, BR5.6)
+     * @return 기기로 보냈으면 참, recheck에서 폐기했으면 거짓
+     */
+    private boolean recheckAndSend(SegmentBuffer.Sealed sealed, TranscriptWriter.Held held, boolean ownsLatency) {
+        DeviceLink target = link;
+        boolean activeAndCurrent = status == SessionStatus.ACTIVE && sealed.generation() == outputGeneration.get()
+                && target != null && target.isOpen();
+        OutputGate.Rechecked<DeviceLink.AudioReservation> rechecked = services.gate().recheck(activeAndCurrent,
+                services.recorder().isDegraded(plan.sessionId()),
+                () -> target == null ? Optional.empty() : target.reserveAudio(sealed.totalBytes()));
+        if (!rechecked.decision().passed()) {
+            discard(sealed, rechecked.decision().reason(), true, held, ownsLatency);
+            return false;
+        }
+        send(sealed, target, rechecked.reservation(), held, ownsLatency);
+        return true;
+    }
+
     private void send(SegmentBuffer.Sealed sealed, DeviceLink target, DeviceLink.AudioReservation reservation) {
+        send(sealed, target, reservation, null, true);
+    }
+
+    private void send(SegmentBuffer.Sealed sealed, DeviceLink target, DeviceLink.AudioReservation reservation,
+            TranscriptWriter.Held held, boolean ownsLatency) {
         Instant passAt = services.clock().now();
         correctionsInARow = 0;
         UUID playbackId = UUID.randomUUID();
-        services.latency().gatePassed(plan.sessionId(), playbackId, passAt);
-        transcripts.aiFinal(sealed.transcript(), true, passAt);
+        if (ownsLatency) {
+            services.latency().gatePassed(plan.sessionId(), playbackId, passAt);
+        }
+        // 보호자 화면 승인(aiFinal true)은 유효한 ALLOW 뒤 기기로 보내는 시점이다(U13 BR8.4). 보관 행이면 그 손잡이로 닫아 새로 열린 행을 건드리지 않는다
+        if (held != null) {
+            transcripts.aiFinal(held, sealed.transcript(), true, passAt);
+        } else {
+            transcripts.aiFinal(sealed.transcript(), true, passAt);
+        }
         var speech = pendingPracticeSpeech;
         if (speech != null) {
             pendingPracticeSpeech = null; practiceHold = true;
@@ -2864,9 +3070,20 @@ public final class SessionExecutor {
     }
 
     private void discard(SegmentBuffer.Sealed sealed, GateDecision.DiscardReason reason, boolean correct) {
-        services.metrics().gateDiscard(reason.name());
-        services.latency().gateDiscarded(plan.sessionId());
-        transcripts.aiFinal(sealed == null ? "" : sealed.transcript(), false, services.clock().now());
+        discard(sealed, reason, correct, null, true);
+    }
+
+    /**
+     * @param held 제브 검사를 기다리며 보관한 AI 행(없으면 null — 열린 AI 행을 닫는다)
+     * @param ownsLatency 지연 기록의 턴이 이 구간의 것인가(U13 BR5.6)
+     */
+    private void discard(SegmentBuffer.Sealed sealed, GateDecision.DiscardReason reason, boolean correct,
+            TranscriptWriter.Held held, boolean ownsLatency) {
+        if (!isGuardrailReason(reason)) {
+            // U13 훅(BR6.6): 재지시 응답이 제브에 닿기 전에 어떤 길로든 폐기되면 협력 객체는 RETRYING에서 IDLE로 돌아온다. 마무리는 아래가 한다
+            guardrail.onDiscardedBeforeCheck();
+        }
+        recordDiscard(sealed, held, reason, ownsLatency);
         if (pendingPracticeSpeech != null) {
             var speech = pendingPracticeSpeech; pendingPracticeSpeech = null; practiceHold = true;
             bumpOutput(OutputGeneration.BumpReason.PRACTICE_DISCARD);
@@ -2876,6 +3093,37 @@ public final class SessionExecutor {
         if (correct) {
             correctAfterDiscard(sealed, reason);
         }
+        finishDiscard();
+    }
+
+    private static boolean isGuardrailReason(GateDecision.DiscardReason reason) {
+        return switch (reason) {
+            case GUARDRAIL_BLOCK, GUARDRAIL_REVIEW, GUARDRAIL_TIMEOUT, GUARDRAIL_ERROR, GUARDRAIL_QUEUE_FULL -> true;
+            default -> false;
+        };
+    }
+
+    /** 폐기의 기록 부분: 지표 · 지연 기록 · AI 행 FINAL 거짓(보관 행이면 그 손잡이로). */
+    private void recordDiscard(SegmentBuffer.Sealed sealed, TranscriptWriter.Held held, GateDecision.DiscardReason reason,
+            boolean ownsLatency) {
+        services.metrics().gateDiscard(reason.name());
+        if (ownsLatency) {
+            services.latency().gateDiscarded(plan.sessionId());
+        }
+        closeAiRow(sealed, held);
+    }
+
+    private void closeAiRow(SegmentBuffer.Sealed sealed, TranscriptWriter.Held held) {
+        String text = sealed == null ? "" : sealed.transcript();
+        if (held != null) {
+            transcripts.aiFinal(held, text, false, services.clock().now());
+        } else {
+            transcripts.aiFinal(text, false, services.clock().now());
+        }
+    }
+
+    /** 폐기의 마무리: 대기 문구 재생 또는 '듣는 중' 복귀. */
+    private void finishDiscard() {
         if (status != SessionStatus.ACTIVE || playback.isPlaying() || plan.waitingFiller() == null) {
             listeningAgain();
             return;
@@ -3032,6 +3280,7 @@ public final class SessionExecutor {
         bumpGeneration();
         // U11 BR3.4: 공급자 응답 취소 대신 출력 세대를 올려 재생 중이던 · 만들던 응답의 남은 조각을 버린다(열린 구간도 버린다)
         bumpOutput(OutputGeneration.BumpReason.BARGE_IN);
+        guardrail.onTurnBoundary();
         transcripts.aiFinal("", false, at);
         Long playedTo = mark.playedRange() != null ? mark.playedRange().toMs()
                 : mark.playbackId().equals(progressPlaybackId) ? progressPlayedToMs : null;
@@ -3907,6 +4156,8 @@ public final class SessionExecutor {
             quietly(sendQueue::shutdown);
             quietly(this::cancelPracticeTimers);
             quietly(judgment::shutdown);
+            // U13 호출 지점 ④: 진행 중인 제브 요청을 취소한다(보관 행은 아래 closeAll이 닫는다, BR4.5)
+            quietly(guardrail::onExit);
             quietly(relay::stop);
             quietly(this::closeProvider);
             quietly(() -> {

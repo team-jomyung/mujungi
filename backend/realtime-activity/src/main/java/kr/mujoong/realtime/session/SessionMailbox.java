@@ -137,6 +137,26 @@ public final class SessionMailbox {
         }
     }
 
+    /**
+     * U13 BR3.1: 제브 검사 결과(완료 콜백 스레드가 일반 편지함에 넣는다). 판정 결과와 같은 길이다 — 안전 편지함은 일반 편지함보다 먼저 비워져, 이미
+     * 쌓인 기기 · 공급자 사건이 반영되기 전 상태로 ALLOW가 검증되기 때문이다. 요청 id가 지금 검사표와 다르면 실행기가 버린다.
+     */
+    public record GuardrailArrived(UUID requestId, kr.mujoong.realtime.guardrail.GuardrailVerdict verdict) implements Message {
+
+        public GuardrailArrived {
+            Objects.requireNonNull(requestId, "requestId");
+            Objects.requireNonNull(verdict, "verdict");
+        }
+    }
+
+    /** U13 BR6.6: 제브 재지시의 새 말이 시한 안에 시작하지 않았거나 송신이 실패했다(큐 스레드에서도 넣는다). */
+    public record GuardrailRetryNotHeard(UUID retryId) implements Message {
+
+        public GuardrailRetryNotHeard {
+            Objects.requireNonNull(retryId, "retryId");
+        }
+    }
+
     /** START_SESSION ACK. */
     public record DeviceAck(UUID connectionId, UUID ackOf, Instant receivedAt) implements Message {
     }
