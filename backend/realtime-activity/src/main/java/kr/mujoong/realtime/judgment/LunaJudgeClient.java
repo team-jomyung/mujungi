@@ -58,17 +58,28 @@ public final class LunaJudgeClient implements JudgeClient {
         } catch (RuntimeException unexpected) {
             return CompletableFuture.completedFuture(failure(unexpected, clock.elapsedSince(started)));
         }
-        return call.handle((result, failure) -> {
+        CompletableFuture<LunaResult> lunaFuture = call.toCompletableFuture();
+        CompletableFuture<JudgeOutcome> outcome = new CompletableFuture<>();
+        lunaFuture.whenComplete((result, failure) -> {
             Duration latency = clock.elapsedSince(started);
             if (failure != null) {
-                return failure(failure, latency);
+                outcome.complete(failure(failure, latency));
+                return;
             }
             try {
-                return validator.validate(result.outputJson(), request.options(), latency, result.responseModel(), prompt.version());
+                outcome.complete(
+                        validator.validate(result.outputJson(), request.options(), latency, result.responseModel(), prompt.version()));
             } catch (RuntimeException unexpected) {
-                return JudgeOutcome.abstained(AbstainReason.SCHEMA_INVALID, latency, result.responseModel(), prompt.version());
+                outcome.complete(JudgeOutcome.abstained(AbstainReason.SCHEMA_INVALID, latency, result.responseModel(), prompt.version()));
             }
         });
+        // 판정 턴이 닫히며 결과를 취소하면 진행 중인 공급자 요청도 취소한다(U9 호출부가 취소를 받아 연결을 끊는다)
+        outcome.whenComplete((value, failure) -> {
+            if (outcome.isCancelled()) {
+                lunaFuture.cancel(true);
+            }
+        });
+        return outcome;
     }
 
     private JudgeOutcome failure(Throwable failure, Duration latency) {

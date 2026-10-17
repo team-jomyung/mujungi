@@ -205,6 +205,18 @@ class LunaJudgeClientTest {
     }
 
     @Test
+    void cancellingTheOutcomeCancelsTheProviderCall() {
+        CompletableFuture<kr.mujoong.realtime.luna.LunaResult> inFlight = new CompletableFuture<>();
+        LunaJudgeClient cancellable = new LunaJudgeClient(request -> inFlight, PROMPT, new JudgeOutcomeValidator(0.6, 0.15, JSON), clock);
+
+        CompletableFuture<JudgeOutcome> outcome = cancellable.judge(request("그거 줘.", Duration.ofSeconds(4)), UUID.randomUUID())
+                .toCompletableFuture();
+        outcome.cancel(true);
+
+        assertThat(inFlight.isCancelled()).isTrue();
+    }
+
+    @Test
     void theRequestValueRejectsWhatTheContractForbids() {
         Map<String, String> none = Map.of();
         assertThatThrownBy(() -> new JudgeRequest(JudgmentPoint.J1, "judgment-v1", List.of("A", "A"), "x", List.of(), null, none, false,
