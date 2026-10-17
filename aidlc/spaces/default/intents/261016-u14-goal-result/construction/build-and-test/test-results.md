@@ -36,4 +36,8 @@
 
 ## 외부 CI와 최종 판정
 
-PR push와 CI 확인을 이어간다. 이 단계가 실행 중인 동안 CI 결과만 Pending이며 전체 목표표는 build-and-test-summary.md에 있다. 테스트 대역/실제 PostgreSQL/합성 기기 증거를 실AI/실기기 성공으로 표시하지 않는다. 배포·병합은 수행하지 않는다.
+PR push와 CI 확인까지 완료했다. 전체 목표표11행은 build-and-test-summary.md에서 모두 Met다. 테스트 대역/실제 PostgreSQL/합성 기기 증거를 실AI/실기기 성공으로 표시하지 않는다. 배포·병합은 수행하지 않는다.
+
+PR27을 main 대상으로 열고 1dbcd7ca89166c3103bf5ac4cafab510be7f1477을 원격에 push했다. d5d4d4f 이후 backend/frontend/contracts/tools/infra/scripts/ci/.github 변경0으로 로컬 검증 소스와 운영 내용이 같다. CI38988761751의 최초 U5b scope 작업117266226334는 시험 실행 전 plugin classpath의 org.jetbrains.kotlin:kotlin-stdlib:2.0.21을 plugins.gradle.org에서 찾지 못해 실패했다. 시험/coverage 실패로 표시하지 않으며 다른 작업이 끝난 뒤 같은 커밋의 실패 작업을 재실행한다. frontend/도구/인프라/secrets는 통과한 상태다.
+
+동일 커밋의 U5b scope 작업을 재실행했고 attempt2의117267825639는 U5b realtime/core 및 U7 범위80%를 모두 통과했다. ci-gate117268598522가 SUCCESS다. backend·의존성·frontend·tools·infra·images·secrets를 포함한 실행 작업 모두 SUCCESS를 PR 조회로 확인했다. 정상 PR 조건에 따른 skeleton/deploy SKIPPED는 성공 실행으로 세지 않는다. 링크는 https://github.com/team-jomyung/mujungi/actions/runs/38988761751 이며 실제 rollup은 verification/github-ci-results.json에 보존했다. 구현·기준 변경 없는 동일 커밋 재실행으로 최종 목표를 충족했다.

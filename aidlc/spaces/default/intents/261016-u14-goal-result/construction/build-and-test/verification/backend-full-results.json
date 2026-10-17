@@ -92,7 +92,7 @@
     "GRADLE_OPTS": "-Dorg.gradle.parallel=false -Dorg.gradle.workers.max=2"
   },
   "notes": [
-    "Whole compose is still running; A1 success alone does not mean end-to-end PASS.",
+    "Captured at A1 completion; the separate compose-results.json records the later whole-run PASS.",
     "Module totals include U14 tests; never add filtered retry totals.",
     "No test assertions, thresholds or timeout values changed."
   ]

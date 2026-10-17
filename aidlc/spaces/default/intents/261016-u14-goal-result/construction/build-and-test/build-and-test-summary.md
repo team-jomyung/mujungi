@@ -6,7 +6,7 @@
 
 ## Target Verification Matrix
 
-Source의 requirements는 inception/requirements-analysis/requirements.md, Testing Contract는 construction/code-generation/code-generation-plan.md다. 모든 확인의 Owning Stage는 Build and Test이며 CI는 같은 단계의 외부 증거다. 현재 Actual/Evidence/Verdict는 실행 준비 상태다.
+Source의 requirements는 inception/requirements-analysis/requirements.md, Testing Contract는 construction/code-generation/code-generation-plan.md다. 모든 확인의 Owning Stage는 Build and Test이며 CI는 같은 단계의 외부 증거다. 아래 Actual/Evidence/Verdict는 실제 로컬 실행과 PR27의 CI 결과다.
 
 | Target ID | Source | Expected | Actual | Evidence | Owning Stage | Verdict |
 |---|---|---|---|---|---|---|
@@ -14,7 +14,7 @@ Source의 requirements는 inception/requirements-analysis/requirements.md, Testi
 | NFR1-backend | Testing Contract | core/RT/contract 모듈 줄≥80%, 전체 회귀 실패0 | 3149개 실패0/LOCAL3skip, core96.11%·RT93.34%·contract98.45% | verification/backend-full-results.json | Build and Test | Met |
 | NFR1-frontend | Testing Contract | frontend src 줄≥80%, lint/build/시험 성공 | 전체994개/74파일,98.55%, eslint/Next build 성공 | verification/compose-results.json A2 | Build and Test | Met |
 | NFR1-e2e | requirements NFR1 | verify.sh compose 전체 PASS | rc0/747초, A/B/C/P1/P2/P3/T 모두 PASS | verification/compose-results.json | Build and Test | Met |
-| NFR1-ci | requirements NFR1 | PR ci-gate 성공 | Pending | Pending | Build and Test | Pending |
+| NFR1-ci | requirements NFR1 | PR ci-gate 성공 | PR27,1dbcd7c,CI38988761751 attempt2 ci-gate SUCCESS; 실행 작업 모두 SUCCESS | verification/github-ci-results.json | Build and Test | Met |
 | NFR2 | requirements NFR2 | 가짜 AI, 비밀/민감자료 유출0 | 가짜 공급자 확인, A4/P2/P3 PASS, 저장 UUID/uncertain capture 시험 PASS | compose-results.json 및 U14 태그 | Build and Test | Met |
 | NFR3 | requirements NFR3 | 소유권·철회·삭제/늦은 응답 회귀 성공 | PG 선택·삭제·빈 재생·철회/late callback 시험 포함161개 PASS | u14-final-results.json 및 traceability | Build and Test | Met |
 | NFR4 | requirements NFR4 | V1~8 불변, V9 호환9시험·승인8해시·검사 성공 | V9 시험9개 포함, 기존 migration 변경0, 검사 rc0 | u14-final-results.json, migration-review.md, 승인 목록 | Build and Test | Met |
@@ -24,4 +24,4 @@ Source의 requirements는 inception/requirements-analysis/requirements.md, Testi
 
 ## 준비와 제한
 
-전용 ext4 복사본과 Docker 환경의 로컬 빌드/시험은 PASS다. CI 검증까지 이 단계에서 계속하며 NFR1-ci가 Pending인 동안 단계 전체의 최종 성공을 보고하지 않는다. 배포/병합은 요청 범위가 아니다. U15는 PR26 미병합이며 선행 병합이 필요하다. U14-a/b는 생산부와 파서·스키마 동시 배포가 필요하다. 실AI/실기기 품질 및 U12 생산부 연동 성공을 주장하지 않는다.
+전용 ext4 복사본과 Docker 환경의 로컬 빌드/시험 및 PR CI는 PASS, 적용 목표11행 모두 Met다. 최초 CI U5b 작업은 시험 전 Kotlin 의존성 다운로드 실패였고 동일 커밋의 해당 작업 재실행으로 통과했다. secrets의 이력 검사도 SUCCESS다. PR 규칙상 skeleton/deploy는 SKIPPED이며 skeleton은 로컬 전체 compose로 보완했다. 배포/병합은 요청 범위가 아니다. U15는 PR26 미병합이며 선행 병합이 필요하다. U14-a/b는 생산부와 파서·스키마 동시 배포가 필요하다. 실AI/실기기 품질 및 U12 생산부 연동 성공을 주장하지 않는다.

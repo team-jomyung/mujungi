@@ -45,7 +45,7 @@ V9의 실제 사람 승인은 migration-review.md와 infra/migration-approvals.t
 
 ## 남은 일
 
-U15 PR26 선행 병합이 필요하며 U14 병합/배포는 수행하지 않는다. U10/U11/U12의 상황 생성·진행 판정은 C-DS10/U8 포트 소비 범위로 남는다. 수정 소스의 전체 로컬 검증은 아래와 같이 완료했고 branch push·PR CI를 이어간다.
+U15 PR26 선행 병합이 필요하며 U14 병합/배포는 수행하지 않는다. U10/U11/U12의 상황 생성·진행 판정은 C-DS10/U8 포트 소비 범위로 남는다. 수정 소스의 전체 로컬 검증·branch push·PR27 CI까지 완료했다.
 
 ## 1차 독립 검토 보완
 
@@ -70,8 +70,12 @@ R-01~R-03의 운영 경계를 보완했다. 빈 현대 후보도 이전 후보�
 | 최종 U14 태그·범위 | 19클래스161개 실패/오류/skip0, 837/926줄=90.39% |
 | migration | 승인8해시로 infra 검사 PASS, V8→V9 호환9시험 포함 |
 | 실제 AI·실제 기기 | 실행하지 않음 |
-| PR CI | push 뒤 확인 중 |
+| PR CI | PR27, CI38988761751 attempt2 ci-gate SUCCESS, 실행 검사 모두 SUCCESS |
 
 첫 전체 compose는 기존 RT 삭제 시험의 PT10S와 U15 Neo4j 초기화 오류로 A1 rc1/384초였다. 해당 클래스는 원 단언·기한으로 각각4개/9개 모두 PASS했다. 모듈 동시 실행만 제한한 GRADLE_OPTS로 전체 clean 검증을 다시 실행해 위3149개와 끝-끝을 통과했다. 제품 소스·시험 단언·하한·기한은 수정하지 않았다. 실패를 없었던 것으로 합산하지 않고 construction/build-and-test/test-results.md에 구분했다. 로컬 gitleaks 이력 도구는 없으므로 이력 검사는 CI secrets에서 별도로 확인한다.
 
 전체 집계는 활성 U14 기록 construction/build-and-test/verification/의 backend-full-results.json·compose-results.json·u14-final-results.json에 보존했다. 전체 XML을 수집한 뒤 U14 태그 필터를 실행했으므로 둘의 수와 커버리지를 서로 바꾸지 않았다. FR/NFR17개 추적 누락0이며 전체 추적58행의 대상 존재도 확인했다.
+
+## 원격 결과
+
+[U14 PR27](https://github.com/team-jomyung/mujungi/pull/27)을 main 대상으로 열었다. 전체 CI를 검증한 커밋은1dbcd7ca89166c3103bf5ac4cafab510be7f1477이며 d5d4d4f 이후 운영/시험/계약/빌드 소스 변경0이다. [CI38988761751](https://github.com/team-jomyung/mujungi/actions/runs/38988761751)은 U5b 작업의 Kotlin 의존성 다운로드 실패 뒤 동일 커밋의 해당 작업만 재실행하여 attempt2의 ci-gate와 실행 검사 전부 SUCCESS를 확인했다. PR 규칙에 따른 skeleton/deploy SKIPPED는 실제 성공으로 부풀리지 않는다. CI secrets의 이력 검사도 통과했다. 최종 문서 반영 커밋에서도 제품 소스는 바꾸지 않는다.
