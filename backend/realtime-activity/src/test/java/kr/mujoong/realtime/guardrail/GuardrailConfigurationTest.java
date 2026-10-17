@@ -6,8 +6,11 @@ import static org.mockito.Mockito.when;
 
 import java.time.Duration;
 import java.util.List;
+import kr.mujoong.contract.json.JsonCodec;
 import kr.mujoong.contract.log.EventCode;
 import kr.mujoong.realtime.config.RealtimeProperties;
+import kr.mujoong.realtime.content.LiveContentRegistry;
+import kr.mujoong.realtime.content.LiveContentResources;
 import kr.mujoong.realtime.observability.EventLogger;
 import kr.mujoong.realtime.observability.RealtimeMetrics;
 import kr.mujoong.realtime.runtime.TaskLauncher;
@@ -19,6 +22,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.mock.env.MockEnvironment;
 
 /**
  * 제브 게이트 빈 조립 시험 (U13 BR1.3 ~ BR1.6 · BR9.2). 기동 점검이 정한 모드로 포트 구현과 장치 묶음이 만들어지고, 비실검사(STUB · OFF)로 시작하면 기동
@@ -54,17 +58,40 @@ class GuardrailConfigurationTest {
         return logs.events(EventCode.APP_ERROR).stream().map(event -> (String) LogCapture.attrs(event).get("errorKind")).toList();
     }
 
+    private GuardrailClient client(GuardrailMode mode, MockEnvironment environment) {
+        return configuration.guardrailClient(checksWith(mode), new GuardrailProperties("", "https://" + JevHosts.ALLOWED_HOSTS.iterator().next(), "jev-model-1"),
+                environment, budget(Duration.ofMillis(800)), new LiveContentRegistry(LiveContentResources.loadDefault()), new MutableClock(),
+                JsonCodec.shared());
+    }
+
     @Test
-    void theClientImplementationFollowsTheModeAndARealWithoutAnAdapterIsABlockingPlaceholderNotAnAutoAllow() {
-        GuardrailClient stub = configuration.guardrailClient(checksWith(GuardrailMode.STUB));
-        GuardrailClient real = configuration.guardrailClient(checksWith(GuardrailMode.REAL));
-        GuardrailClient off = configuration.guardrailClient(checksWith(GuardrailMode.OFF));
+    void theClientImplementationFollowsTheModeAndRealIsTheJevAdapterThatIsUnavailableWithoutAKey() {
+        MockEnvironment withoutKey = new MockEnvironment();
+        GuardrailClient stub = client(GuardrailMode.STUB, withoutKey);
+        GuardrailClient real = client(GuardrailMode.REAL, withoutKey);
+        GuardrailClient off = client(GuardrailMode.OFF, withoutKey);
 
         assertThat(stub).isInstanceOf(StubGuardrailClient.class);
         assertThat(stub.mode()).isEqualTo(GuardrailMode.STUB);
+        assertThat(real).isInstanceOf(JevGuardrailClient.class);
         assertThat(real.mode()).isEqualTo(GuardrailMode.REAL);
-        assertThat(real.available()).as("실제 어댑터가 붙기 전 자리는 막힘으로 끝난다").isFalse();
+        assertThat(real.available()).as("키가 없으면 어댑터는 막힘으로 끝난다(자동 ALLOW 아님)").isFalse();
+        assertThat(off).isInstanceOf(UnavailableGuardrailClient.class);
         assertThat(off.mode()).isEqualTo(GuardrailMode.OFF);
+    }
+
+    @Test
+    void theRealAdapterReadsTheKeyFromTheEnvironmentAtCallTimeAndTheSystemPromptComesFromThePinnedPolicy() {
+        MockEnvironment environment = new MockEnvironment();
+        GuardrailClient real = client(GuardrailMode.REAL, environment);
+        assertThat(real.available()).isFalse();
+        environment.setProperty(JevGuardrailClient.API_KEY_ENV, "fake-key-not-real");
+        assertThat(real.available()).as("보관하지 않고 호출 때마다 환경에서 읽는다").isTrue();
+
+        LiveContentRegistry content = new LiveContentRegistry(LiveContentResources.loadDefault());
+        String version = content.resources().guardrail().version();
+        assertThat(GuardrailConfiguration.systemPrompt(content, version)).hasValue(content.resources().guardrail().systemPrompt());
+        assertThat(GuardrailConfiguration.systemPrompt(content, "other-version")).isEmpty();
     }
 
     @Test

@@ -87,7 +87,9 @@ class TimeLiteralScanTest {
             new Allowed(CONTRACT + "time/DelayQueueTimerDriver.java", "getDelay(TimeUnit.NANOSECONDS)",
                     "Delayed 계약의 단위 변환으로 두 지연을 비교한다"),
             new Allowed(RT + "luna/LunaTransport.java", ".orTimeout(limit.toNanos(), TimeUnit.NANOSECONDS)",
-                    "단위 표기: 시도 시한은 호출자 마감과 timing.judgment.live-budget 중 작은 Duration이다(U9 BR5.1 · SD3, orTimeout에 Duration 판이 없다)"));
+                    "단위 표기: 시도 시한은 호출자 마감과 timing.judgment.live-budget 중 작은 Duration이다(U9 BR5.1 · SD3, orTimeout에 Duration 판이 없다)"),
+            new Allowed(RT + "guardrail/JevGuardrailClient.java", ".orTimeout(limit.toNanos(), TimeUnit.NANOSECONDS)",
+                    "단위 표기: 검사 시한은 검사표 마감까지 남은 시간과 timing.guardrail.jev-budget 중 작은 Duration이다(U13 BR2.1, orTimeout에 Duration 판이 없다)"));
 
     @Test
     void everyTimeLiteralInRealtimeProductionSourcesIsOnTheAllowList() {
