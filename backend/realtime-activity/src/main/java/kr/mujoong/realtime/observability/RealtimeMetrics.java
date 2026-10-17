@@ -71,6 +71,23 @@ public class RealtimeMetrics {
     public static final String DEVICE_STATE = "mujoong.device.state";
     /** {@code mujoong_recording_dropped_total}: 원음 기록기가 대기열 넘침 · 세션 상한으로 버린 조각 수(U3-J15). */
     public static final String RECORDING_DROPPED = "mujoong.recording.dropped";
+    /** {@code mujoong_guardrail_calls_total{mode,source}}: 제브 단계 출처별 수 — 새 발화 호출 / 승인 원문 재생 생략(U13 BR8.5 ①). */
+    public static final String GUARDRAIL_CALLS = "mujoong.guardrail.calls";
+    /** {@code mujoong_guardrail_latency_seconds{mode}}: 제브 요청 → 결과 지연 히스토그램(P50 · P95 · P99, U13 BR8.5 ②). */
+    public static final String GUARDRAIL_LATENCY = "mujoong.guardrail.latency";
+    /** {@code mujoong_guardrail_blocked_total{mode,decision}}: 제브가 막았거나 검사 실패로 폐기한 수(시간 초과는 따로, U13 BR8.5 ③). */
+    public static final String GUARDRAIL_BLOCKED = "mujoong.guardrail.blocked";
+    /** {@code mujoong_guardrail_timeout_total{mode}}: 제브 시간 초과 수(U13 BR8.5 ④). */
+    public static final String GUARDRAIL_TIMEOUT = "mujoong.guardrail.timeout";
+    /** {@code mujoong_guardrail_perceived_wait_seconds{mode}}: 제브를 거친 턴의 아이 체감 대기 — 말 끝 → 기기 첫 소리(U13 BR8.5 ⑤). */
+    public static final String GUARDRAIL_PERCEIVED_WAIT = "mujoong.guardrail.perceived.wait";
+
+    /** {@code mujoong_guardrail_*}의 mode 값(비실검사 STUB은 REAL과 구분한다, OFF는 제브 단계가 없어 값이 없다). */
+    static final List<String> GUARDRAIL_MODES = List.of("real", "stub");
+    /** {@code mujoong_guardrail_calls_total}의 source 값. */
+    static final List<String> GUARDRAIL_SOURCES = List.of("new_utterance", "approved_verbatim_skipped");
+    /** {@code mujoong_guardrail_blocked_total}의 decision 값(시간 초과는 {@link #GUARDRAIL_TIMEOUT}). */
+    static final List<String> GUARDRAIL_BLOCK_DECISIONS = List.of("block", "review", "error");
 
     /** {@code mujoong_device_connection_state}의 state 값(U1 4종 + U3가 더한 UNSTABLE, BR4.8 ①). */
     public static final List<ConnectionState> CONNECTION_STATES = List.of(ConnectionState.OFFLINE,
@@ -155,6 +172,17 @@ public class RealtimeMetrics {
         }
         DEVICE_STATE_VALUES.forEach((field, values) -> values.forEach(value -> counter(DEVICE_STATE, "field", field,
                 "value", value)));
+        for (String mode : GUARDRAIL_MODES) {
+            for (String source : GUARDRAIL_SOURCES) {
+                counter(GUARDRAIL_CALLS, "mode", mode, "source", source);
+            }
+            for (String decision : GUARDRAIL_BLOCK_DECISIONS) {
+                counter(GUARDRAIL_BLOCKED, "mode", mode, "decision", decision);
+            }
+            counter(GUARDRAIL_TIMEOUT, "mode", mode);
+            timer(GUARDRAIL_LATENCY, "mode", mode);
+            timer(GUARDRAIL_PERCEIVED_WAIT, "mode", mode);
+        }
         timer(SESSION_START_TO_ACTIVE);
         timer(RELAY_IN);
         timer(RELAY_OUT);
@@ -214,6 +242,31 @@ public class RealtimeMetrics {
     /** {@code mujoong_gate_discard_total{reason}}(SD-17 · PD-3): 폐기 사유 열거값만. 전사 · 일치 문구는 쓰지 않는다. */
     public void gateDiscard(String reason) {
         counter("mujoong.gate.discard", "reason", label(reason)).increment();
+    }
+
+    /** {@code mujoong_guardrail_calls_total{mode,source}}(U13 BR8.5 ①): source는 new_utterance 또는 approved_verbatim_skipped. */
+    public void guardrailCall(String mode, String source) {
+        counter(GUARDRAIL_CALLS, "mode", label(mode), "source", label(source)).increment();
+    }
+
+    /** {@code mujoong_guardrail_latency_seconds{mode}}(U13 BR8.5 ②): 요청 → 결과 지연. */
+    public void guardrailLatency(String mode, Duration latency) {
+        record(timer(GUARDRAIL_LATENCY, "mode", label(mode)), latency);
+    }
+
+    /** {@code mujoong_guardrail_blocked_total{mode,decision}}(U13 BR8.5 ③): decision은 block · review · error. */
+    public void guardrailBlocked(String mode, String decision) {
+        counter(GUARDRAIL_BLOCKED, "mode", label(mode), "decision", label(decision)).increment();
+    }
+
+    /** {@code mujoong_guardrail_timeout_total{mode}}(U13 BR8.5 ④). */
+    public void guardrailTimeout(String mode) {
+        counter(GUARDRAIL_TIMEOUT, "mode", label(mode)).increment();
+    }
+
+    /** {@code mujoong_guardrail_perceived_wait_seconds{mode}}(U13 BR8.5 ⑤): 제브를 거친 턴의 말 끝 → 기기 첫 소리. */
+    public void guardrailPerceivedWait(String mode, Duration wait) {
+        record(timer(GUARDRAIL_PERCEIVED_WAIT, "mode", label(mode)), wait);
     }
 
     /** {@code mujoong_input_frames_dropped_total{cause}}(PD-4): 대기열 넘침 · ACTIVE 밖 프레임. */

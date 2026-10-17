@@ -103,6 +103,8 @@ public class RealtimeRuntimeConfig {
                         properties.timing().judgment().liveBudget(), judgmentPrompt.version(),
                         liveContent.resources().judgment()),
                 // U13: 제브 게이트(모드는 기동 점검이 정했다). 정책 판은 세션에 고정되는 정책 리소스의 판이다. OFF면 검사 없음(DISABLED)이다
-                guardrail.enabled() ? guardrail.withPolicyVersion(liveContent.resources().guardrail().version()) : guardrail);
+                // 승인 원문 일치는 콘텐츠 레지스트리를 좁은 포트로만 연결한다(BR7.4). MATCHED만 생략 근거다(BR7.2)
+                guardrail.enabled() ? guardrail.withPolicyVersion(liveContent.resources().guardrail().version())
+                        .withApprovedVerbatim(kr.mujoong.realtime.guardrail.ApprovedVerbatimPort.of(liveContent)) : guardrail);
     }
 }

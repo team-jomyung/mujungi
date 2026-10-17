@@ -163,8 +163,10 @@ class RealtimeMetricsTest {
                 .flatMap(meter -> meter.getId().getTags().stream().map(tag -> tag.getKey()))
                 .collect(Collectors.toSet());
         // U3: mujoong_device_state_total의 field · value도 닫힌 열거값이다(U3-J9)
+        // U13(BR8.5): mujoong_guardrail_*의 mode(real · stub) · source · decision도 닫힌 열거값이다
         assertThat(tagKeys).as("라벨은 열거값 키만(id · 전사 · 토큰 · ownerHash 없음, NFR9.8)")
-                .isSubsetOf("group", "state", "direction", "queue", "type", "speaker", "field", "value");
+                .isSubsetOf("group", "state", "direction", "queue", "type", "speaker", "field", "value", "mode", "source",
+                        "decision");
         assertThat(registry.getMeters().stream().filter(meter -> meter.getId().getName().equals(RealtimeMetrics.DEVICE_STATE))
                 .map(meter -> meter.getId().getTag("field") + "=" + meter.getId().getTag("value"))
                 .collect(Collectors.toSet()))

@@ -1809,6 +1809,34 @@ public final class SessionExecutor {
         }
 
         @Override
+        public RealtimeMetrics metrics() {
+            return services.metrics();
+        }
+
+        @Override
+        public void armCheckTimer(Duration delay) {
+            timers.arm(Kind.GUARDRAIL_CHECK, delay);
+        }
+
+        @Override
+        public void cancelCheckTimer() {
+            timers.cancel(Kind.GUARDRAIL_CHECK);
+        }
+
+        @Override
+        public void markCheckedTurn(String mode) {
+            services.latency().guardrailChecked(plan.sessionId(), mode);
+        }
+
+        @Override
+        public void practiceBlocked(PracticeSessionExtension.GuardrailBlockedEvent event) {
+            // 연습 확장점 알림(BR6.5): 안전 편지함을 거쳐 실행기 스레드에서 전달한다. 운영에서 연습 모드 검사를 시작하는 것은 U12다
+            mailbox.putSafety(new SessionMailbox.PracticeEvent(new PracticeSessionExtension.ExtensionEvent(
+                    PracticeSessionExtension.ExtensionEvent.Kind.GUARDRAIL_BLOCKED, "guardrail-blocked",
+                    event.correlationId(), event)));
+        }
+
+        @Override
         public void appError(String reasonCode, EventCode.Level level) {
             services.events().appError(EventLog.Component.OUTPUT_GATE, reasonCode, level);
         }
@@ -2979,15 +3007,25 @@ public final class SessionExecutor {
                 discard(sealed, GateDecision.DiscardReason.GATE_PATTERN, false);
                 return;
             }
-            if (!practiceControlled && guardrail.enabled() && status == SessionStatus.ACTIVE) {
-                // U13 호출 지점 ①(BR3.1): GPT-Live가 그 자리에서 만든 새 발화는 제브가 ALLOW한 것만 recheck → send로 간다. 연습이 출력을 쥐고
-                // 있으면(원문 일치 통과) 제브를 부르지 않는다(BR7.6). 결과는 GuardrailArrived로 돌아와 이어진다 — 여기서는 기다리지 않는다
-                try {
-                    guardrail.begin(sealed, GuardrailRequest.Mode.FREE_TALK, null);
-                } catch (RuntimeException e) {
-                    guardrail.onBeginFailed(sealed, e);
+            if (practiceControlled && guardrail.enabled()) {
+                // U13 분류 ①(BR7.1): 연습이 출력을 쥐고 승인 발화와 원문이 같으면 제브를 부르지 않고 기존 게이트 검사만 거친 재생이다
+                guardrail.onVerbatimSkipped(GuardrailCoordinator.SOURCE_PRACTICE_SPEECH, sealed.transcript());
+            } else if (!practiceControlled && guardrail.enabled() && status == SessionStatus.ACTIVE) {
+                // U13 분류 ②(BR7.1): 레지스트리가 승인 원문 · 등록 대본과 원문 일치(MATCHED)로 확인한 출력도 제브를 건너뛴다. UNKNOWN ·
+                // NOT_MATCHED(일치를 확인할 수 없음)는 새 발화로 검사한다(BR7.2)
+                Optional<String> verbatim = guardrail.verbatimSource(sealed.transcript());
+                if (verbatim.isPresent()) {
+                    guardrail.onVerbatimSkipped(verbatim.get(), sealed.transcript());
+                } else {
+                    // U13 호출 지점 ①(BR3.1): GPT-Live가 그 자리에서 만든 새 발화는 제브가 ALLOW한 것만 recheck → send로 간다. 결과는
+                    // GuardrailArrived로 돌아와 이어진다 — 여기서는 기다리지 않는다
+                    try {
+                        guardrail.begin(sealed, GuardrailRequest.Mode.FREE_TALK, null);
+                    } catch (RuntimeException e) {
+                        guardrail.onBeginFailed(sealed, e);
+                    }
+                    return;
                 }
-                return;
             }
             recheckAndSend(sealed, null, true);
         } catch (RuntimeException e) {
@@ -3722,6 +3760,7 @@ public final class SessionExecutor {
             case JUDGMENT_LIVE -> judgment.onTimer(JudgmentTurn.TimerKind.LIVE);
             case JUDGMENT_READY -> judgment.onTimer(JudgmentTurn.TimerKind.READY);
             case JUDGMENT_INSTRUCTION -> judgment.onTimer(JudgmentTurn.TimerKind.INSTRUCTION);
+            case GUARDRAIL_CHECK -> guardrail.onCheckTimerFired();
             case PLAYBACK_EXPIRY -> {
                 playback.clear();
                 if (status == SessionStatus.WAITING_CHILD && joinPromptPlaybackId != null) {

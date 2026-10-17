@@ -83,6 +83,9 @@ management:
         "[mujoong.relay.out]": 10ms,25ms,50ms,100ms,200ms,300ms,500ms,1s
         "[mujoong.turn.first.audio]": 500ms,1s,1500ms,2s,2500ms,3s,4s,6s,10s
         "[mujoong.view.item.ready]": 50ms,100ms,250ms,500ms,1s,1500ms,2s,5s
+        # U13(BR8.5): 제브 지연은 검사 상한 800ms(timing.guardrail.jev-budget)를 경계에 넣었고, 체감 대기는 turn.first.audio와 같은 칸이다
+        "[mujoong.guardrail.latency]": 100ms,200ms,300ms,500ms,800ms,1s
+        "[mujoong.guardrail.perceived.wait]": 500ms,1s,1500ms,2s,2500ms,3s,4s,6s,10s
 
 mujoong:
   timing:

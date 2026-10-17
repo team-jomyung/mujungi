@@ -1,5 +1,6 @@
 package kr.mujoong.realtime.session;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -21,6 +22,7 @@ import kr.mujoong.realtime.guardrail.GuardrailRequestFactory;
 import kr.mujoong.realtime.guardrail.GuardrailSupport;
 import kr.mujoong.realtime.guardrail.GuardrailVerdict;
 import kr.mujoong.realtime.log.TranscriptWriter;
+import kr.mujoong.realtime.observability.RealtimeMetrics;
 import kr.mujoong.realtime.voice.ProviderRequestFactory;
 
 /**
@@ -64,6 +66,10 @@ final class GuardrailCoordinator {
     static final String REASON_LATE_DROPPED = "GUARDRAIL_LATE_DROPPED";
     /** 협력 객체 안 예외로 fail-closed 했다. */
     static final String REASON_FAULT = "GuardrailFault";
+    /** 검사 안전 타이머가 먼저 만기되어 시간 초과 막힘으로 닫았다(앱 오류 사유 코드). */
+    static final String REASON_CHECK_TIMER = "GuardrailCheckTimer";
+    /** 연습이 쥔 승인 발화와 원문이 같아 제브를 건너뛴 재생의 사유 코드(BR7.5). 레지스트리 출처는 {@code APPROVED_SPEECH} · {@code SESSION_SCRIPT}다. */
+    static final String SOURCE_PRACTICE_SPEECH = "PRACTICE_SPEECH";
 
     /**
      * 다시 보낼 수 있는 서버 지시(마지막 서버 지시, BR6.2 · W2b). 이름과 지시를 만드는 방법만 쥐고 전사 원문은 담지 않는다.
@@ -139,6 +145,27 @@ final class GuardrailCoordinator {
         boolean sendRetryFreeTurn(UUID retryId);
 
         boolean postFromProvider(SessionMailbox.Message message);
+
+        /** 지표(U13 BR8.5). 없으면 null — 지표 없는 시험 환경에서는 세지 않는다. */
+        default RealtimeMetrics metrics() {
+            return null;
+        }
+
+        /** 검사 안전 타이머를 건다(검사 요청을 보낸 직후, 같은 종류는 바뀐다). */
+        default void armCheckTimer(Duration delay) {
+        }
+
+        /** 검사 안전 타이머를 끈다. */
+        default void cancelCheckTimer() {
+        }
+
+        /** 지금 턴이 제브 검사를 거친다고 지연 기록에 표시한다(체감 대기 지표, BR8.5 ⑤). */
+        default void markCheckedTurn(String mode) {
+        }
+
+        /** 연습 모드 요청의 두 번째 막힘을 연습 확장점에 알린다(BR6.5, 운영 호출자는 U12). */
+        default void practiceBlocked(PracticeSessionExtension.GuardrailBlockedEvent event) {
+        }
 
         void appError(String reasonCode, EventCode.Level level);
 
@@ -280,12 +307,75 @@ final class GuardrailCoordinator {
             env.appError(REASON_LATE_DROPPED, EventCode.Level.INFO);
             return;
         }
+        env.cancelCheckTimer();
         ticket = null;
         inFlight = null;
+        countLatency(arrived.verdict());
         try {
             resolve(current, arrived.verdict());
         } catch (RuntimeException e) {
             failClosed(current, e);
+        }
+    }
+
+    /**
+     * 검사 안전 타이머가 만기됐다(포트 규약을 어겨 결과가 상한의 두 배가 되도록 오지 않았다). 시간 초과 막힘으로 닫는다 — 기기를 '생각 중'에서
+     * 풀고 대기열을 놓는 길은 일반 시간 초과와 같다. 늦게 도착하는 결과는 검사표가 없어 버려진다. 검사 중이 아니면 아무것도 하지 않는다.
+     */
+    void onCheckTimerFired() {
+        Ticket current = ticket;
+        if (state != State.CHECKING || current == null) {
+            return;
+        }
+        cancelInFlight();
+        ticket = null;
+        env.appError(REASON_CHECK_TIMER, EventCode.Level.WARN);
+        GuardrailVerdict timedOut = GuardrailVerdict.failed(GuardrailVerdict.Failure.TIMEOUT, support.policyVersion(),
+                support.budget().toMillis());
+        countLatency(timedOut);
+        try {
+            resolve(current, timedOut);
+        } catch (RuntimeException e) {
+            failClosed(current, e);
+        }
+    }
+
+    /**
+     * 분류 ②(BR7.1): 이 출력 전사가 승인 원문 · 등록 대본과 원문 일치(MATCHED)이면 출처 사유 코드를 돌려준다. 앞 검사가 진행 중이거나 대기열에 구간이
+     * 있으면 순서를 지키려고 생략하지 않고 비어 있다(그 구간은 새 발화로 검사한다 — 안전한 쪽). 제브를 건너뛰는 모드(OFF)에서도 비어 있다.
+     */
+    Optional<String> verbatimSource(String transcript) {
+        if (!support.enabled()) {
+            return Optional.empty();
+        }
+        refreshRetrying();
+        if (state == State.CHECKING || queue != null) {
+            return Optional.empty();
+        }
+        return support.approved().matchedSource(plan.sessionId(), transcript);
+    }
+
+    /**
+     * 승인 원문과 일치해 제브를 부르지 않고 기존 게이트 검사와 송신 직전 재확인만 거치는 재생이다(BR7.1 · BR7.5). 호출 수 지표에는 '원문 재생 생략'으로
+     * 세고 검사 기록 한 행(APPROVED_VERBATIM_SKIPPED, ALLOW, 지연 0)을 남긴다. 재지시를 기다리던 중이면 그 응답이 이 재생이므로 IDLE로 돌아온다.
+     */
+    void onVerbatimSkipped(String sourceReason, String transcript) {
+        Objects.requireNonNull(sourceReason, "sourceReason");
+        if (!support.enabled()) {
+            return;
+        }
+        if (state == State.RETRYING) {
+            state = State.IDLE;
+            retryId = null;
+        }
+        RealtimeMetrics metrics = env.metrics();
+        if (metrics != null) {
+            metrics.guardrailCall(support.mode().name(), "approved_verbatim_skipped");
+        }
+        record(UUID.randomUUID(), GuardrailEventRecord.SourceKind.APPROVED_VERBATIM_SKIPPED,
+                GuardrailEventRecord.Decision.ALLOW, sourceReason, 0L);
+        if (transcript != null && !transcript.isBlank()) {
+            remember(GuardrailRequest.Speaker.MUJOONG, transcript);
         }
     }
 
@@ -355,11 +445,16 @@ final class GuardrailCoordinator {
         Instant deadline = env.now().plus(support.budget());
         CompletionStage<GuardrailVerdict> stage = support.client().check(request.get(), deadline);
         inFlight = stage;
+        RealtimeMetrics metrics = env.metrics();
+        if (metrics != null) {
+            metrics.guardrailCall(support.mode().name(), "new_utterance");
+        }
         UUID requestId = created.requestId();
         String policy = support.policyVersion();
         stage.whenComplete((verdict, error) -> env.postFromProvider(new SessionMailbox.GuardrailArrived(requestId,
                 verdict != null ? verdict
                         : GuardrailVerdict.failed(GuardrailVerdict.Failure.TRANSPORT_ERROR, policy, 0L))));
+        env.armCheckTimer(support.safetyDelay());
     }
 
     private void enqueue(SegmentBuffer.Sealed sealed, GuardrailRequest.Mode mode, UUID practiceSpeechId) {
@@ -415,6 +510,7 @@ final class GuardrailCoordinator {
     // ---- 결과 처리 ----
 
     private void resolve(Ticket current, GuardrailVerdict verdict) {
+        countVerdict(verdict);
         VoidCause cause = voidCause(current);
         if (cause != null) {
             voided(current, verdict, cause);
@@ -468,6 +564,9 @@ final class GuardrailCoordinator {
         state = State.IDLE;
         retryId = null;
         record(current.requestId(), GuardrailEventRecord.Decision.ALLOW, verdict.reasonCode(), verdict.latencyMs());
+        if (!current.fromQueue()) {
+            env.markCheckedTurn(support.mode().name());
+        }
         boolean sent = env.recheckAndSend(current.sealed(), current.held(), !current.fromQueue());
         if (sent) {
             remember(GuardrailRequest.Speaker.MUJOONG, current.sealed().transcript());
@@ -483,6 +582,15 @@ final class GuardrailCoordinator {
             state = State.IDLE;
             retryId = null;
             discardQueue();
+            if (current.mode() != GuardrailRequest.Mode.FREE_TALK) {
+                // 연습 모드 요청의 두 번째 막힘은 연습 확장점에 알린다(BR6.5). 운영에서 이 모드를 시작하는 것은 U12다. 알림 실패가 포기를 막지 않는다
+                try {
+                    env.practiceBlocked(new PracticeSessionExtension.GuardrailBlockedEvent(current.practiceSpeechId(),
+                            current.mode(), verdict.reasonCode(), true));
+                } catch (RuntimeException e) {
+                    env.appError(e);
+                }
+            }
             env.abandon(current.sealed(), current.held(), reason);
             return;
         }
@@ -552,7 +660,38 @@ final class GuardrailCoordinator {
 
     // ---- 도우미 ----
 
+    /** 판정별 지표(BR8.5 ③ ④): 시간 초과는 따로, 막힘 · 검토 · 검사 실패는 차단 수로 센다. 무효 여부와 상관없이 제브가 낸 결과를 센다. */
+    private void countVerdict(GuardrailVerdict verdict) {
+        RealtimeMetrics metrics = env.metrics();
+        if (metrics == null) {
+            return;
+        }
+        String mode = support.mode().name();
+        switch (verdict.decision()) {
+            case ALLOW -> {
+            }
+            case BLOCK -> metrics.guardrailBlocked(mode, "block");
+            case REVIEW -> metrics.guardrailBlocked(mode, "review");
+            case FAILED -> {
+                if (verdict.failure() == GuardrailVerdict.Failure.TIMEOUT) {
+                    metrics.guardrailTimeout(mode);
+                } else {
+                    metrics.guardrailBlocked(mode, "error");
+                }
+            }
+        }
+    }
+
+    /** 제브 지연 지표(BR8.5 ②): 요청을 보낸 뒤 결과까지. 부르지 않은 결과(지연 0)는 넣지 않는다. */
+    private void countLatency(GuardrailVerdict verdict) {
+        RealtimeMetrics metrics = env.metrics();
+        if (metrics != null && verdict.latencyMs() > 0L) {
+            metrics.guardrailLatency(support.mode().name(), Duration.ofMillis(verdict.latencyMs()));
+        }
+    }
+
     private void cancelInFlight() {
+        env.cancelCheckTimer();
         CompletionStage<GuardrailVerdict> stage = inFlight;
         inFlight = null;
         if (stage instanceof Future<?> future) {
@@ -589,6 +728,12 @@ final class GuardrailCoordinator {
 
     /** 검사 기록 한 건(BR8.1, 새 발화). 기록 실패는 흐름을 막지 않는다. */
     private void record(UUID id, GuardrailEventRecord.Decision decision, String reasonCode, long latencyMs) {
+        record(id, GuardrailEventRecord.SourceKind.NEW_UTTERANCE, decision, reasonCode, latencyMs);
+    }
+
+    /** 검사 기록 한 건(BR8.1 · BR7.5, 출처 구분 포함). 기록 실패는 흐름을 막지 않는다. */
+    private void record(UUID id, GuardrailEventRecord.SourceKind sourceKind, GuardrailEventRecord.Decision decision,
+            String reasonCode, long latencyMs) {
         kr.mujoong.realtime.guardrail.GuardrailEventRecorder recorder = support.recorder();
         if (recorder == null || plan.guardianId() == null) {
             return;
@@ -596,8 +741,7 @@ final class GuardrailCoordinator {
         try {
             int latency = (int) Math.min(Integer.MAX_VALUE, Math.max(0L, latencyMs));
             recorder.put(new GuardrailEventRecord(id, plan.guardianId(), plan.sessionId(), support.mode(),
-                    GuardrailEventRecord.SourceKind.NEW_UTTERANCE, decision, reasonCode, support.policyVersion(), latency,
-                    env.now()));
+                    sourceKind, decision, reasonCode, support.policyVersion(), latency, env.now()));
         } catch (RuntimeException e) {
             env.appError(e);
         }

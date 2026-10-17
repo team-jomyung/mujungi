@@ -96,7 +96,10 @@ public interface PracticeSessionExtension {
             JUDGMENT_ABSTAINED,
             /** U11 BR8.3: 판정 중 모은 출력 전사(값 {@code {text}}, 비어 있으면 보내지 않는다). */
             HELD_OUTPUT_TRANSCRIPT,
-            /** U11 BR8.3: 가드레일 차단 사건의 자리(아직 보내지 않는다). */
+            /**
+             * U11 BR8.3 자리 · U13 BR6.5 정의: 연습 모드 제브 검사가 재지시 뒤에도 막혔다(값 {@link GuardrailBlockedEvent}, 전사 없음). 운영에서
+             * 연습 모드 검사를 시작해 이 사건을 만드는 것은 U12다 — 지금 운영 연습 경로는 제브를 부르지 않으므로 보내지 않는다.
+             */
             GUARDRAIL_BLOCKED,
             /** U11 BR6.4: 아이가 쉬고 싶다는 뜻을 밝혔다(출력권 연습에만 알린다). */
             REST_REQUESTED
@@ -110,6 +113,27 @@ public interface PracticeSessionExtension {
         @Override
         public String toString() {
             return "ExtensionEvent[kind=" + kind + ", name=" + name + "]";
+        }
+    }
+
+    /**
+     * 연습 모드 제브 검사가 재지시 뒤에도 막혔다는 알림 값(U13 BR6.5, {@link ExtensionEvent.Kind#GUARDRAIL_BLOCKED}의 값). 전사 원문 · 후보 문장은
+     * 담지 않는다(R-F14).
+     *
+     * @param correlationId 연습 발화 correlationId(검사를 시작한 연습 발화)
+     * @param mode PRACTICE_PEER 또는 PRACTICE_COACH
+     * @param reasonCode 막힘 사유 코드(제브 사유 코드 또는 실패 종류)
+     * @param retried 재지시를 한 번 한 뒤의 두 번째 막힘이면 참(지금은 언제나 참이다)
+     */
+    record GuardrailBlockedEvent(UUID correlationId, kr.mujoong.realtime.guardrail.GuardrailRequest.Mode mode,
+            String reasonCode, boolean retried) {
+
+        public GuardrailBlockedEvent {
+            Objects.requireNonNull(mode, "mode");
+            Objects.requireNonNull(reasonCode, "reasonCode");
+            if (mode == kr.mujoong.realtime.guardrail.GuardrailRequest.Mode.FREE_TALK) {
+                throw new IllegalArgumentException("연습 모드의 사건만 확장점에 알린다");
+            }
         }
     }
 

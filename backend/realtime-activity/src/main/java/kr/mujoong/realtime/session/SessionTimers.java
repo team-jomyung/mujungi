@@ -55,7 +55,9 @@ public final class SessionTimers {
         /** U11 BR4.1: 판정 대상 확정 전사 시각 + response-ready(10s). 판정 단계에만 걸고 지시 단계 진입 때 푼다. */
         JUDGMENT_READY(false),
         /** U11 BR4.5: 지시 단계 진입 + response-ready(10s). 지시 응답이 시작되면 끈다. */
-        JUDGMENT_INSTRUCTION(false);
+        JUDGMENT_INSTRUCTION(false),
+        /** U13 안전망: 제브 요청을 보낸 뒤 검사 상한(jev-budget)의 두 배. 포트 규약대로 결과가 오면 끄고, 오지 않으면 시간 초과 막힘으로 닫는다. */
+        GUARDRAIL_CHECK(false);
 
         private final boolean quietClock;
 
