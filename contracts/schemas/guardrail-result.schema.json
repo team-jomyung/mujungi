@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://mujoong.invalid/contracts/schemas/guardrail-result.schema.json",
   "title": "제브 가드레일 검사 결과(어댑터가 만드는 내부 형식)",
-  "description": "어댑터가 공급자 응답을 바꿔 만드는 내부 형식(계약 요약 C-DS8 · C §3.1). categories는 C §3.1의 7개 범주 이름 배열이다(계약 요약의 object 표기를 C의 배열 모양으로 구체화). BLOCK · REVIEW · 시간 초과 · 연결 실패 · 잘못된 JSON · 정책 판 불일치는 송신하지 않는다. 실검사 모드에서 자동 ALLOW는 없다(FR6.4). 기록에는 이유 코드 · 정책 판 · 지연 · 판정만 남긴다. [U8 편차 (U8-a)]",
+  "description": "어댑터가 공급자 응답을 바꿔 만드는 내부 형식(계약 요약 C-DS8 · C §3.1). categories는 C §3.1의 7개 범주 이름 배열이다(계약 요약의 object 표기를 C의 배열 모양으로 구체화). BLOCK · REVIEW · 시간 초과 · 연결 실패 · 잘못된 응답은 송신하지 않는다. 실검사 모드에서 자동 ALLOW는 없다(FR6.4). 기록에는 이유 코드 · 정책 판 · 지연 · 판정만 남긴다. 공급자(제브) 응답은 choice · probabilities이고 어댑터가 ai-io.md 10.12 규칙으로 이 형식을 만든다: BLOCK이면 reasonCode와 categories는 고른 라벨, REVIEW이면 reasonCode는 PASS_BELOW_THRESHOLD 또는 PASS_TIED, policyVersion은 요청에 실은 판이다. [U8 편차 (U8-a)] [U13 편차 (U13-c)]",
   "type": "object",
   "additionalProperties": false,
   "required": ["decision", "categories", "reasonCode", "policyVersion"],
@@ -37,10 +37,10 @@
     {
       "decision": "BLOCK",
       "categories": ["GENERALIZATION"],
-      "policyFlags": ["UNSUPPORTED_CHILD_TRAIT_CLAIM"],
-      "reasonCode": "UNSUPPORTED_GENERALIZATION",
+      "policyFlags": [],
+      "reasonCode": "GENERALIZATION",
       "reviewNeeded": false,
-      "policyVersion": "jev-guardrail-v1"
+      "policyVersion": "jev-guardrail-v2"
     }
   ]
 }
