@@ -1,3 +1,9 @@
+locals {
+  ecr               = { for k, r in aws_ecr_repository.app : k => r.repository_url }
+  jdbc_url          = "jdbc:postgresql://${aws_db_instance.main.address}:5432/${aws_db_instance.main.db_name}?sslmode=require"
+  cloudfront_origin = "https://${aws_cloudfront_distribution.main.domain_name}"
+}
+
 # ──────────── web (Next.js) ────────────
 resource "aws_ecs_task_definition" "web" {
   family                   = "mujoong-web"
@@ -109,7 +115,7 @@ resource "aws_ecs_task_definition" "migrate" {
 
   container_definitions = jsonencode([{
     name      = "migrate"
-    image     = "${local.ecr["migrate"]}:${local.migrate_image_tag}"
+    image     = "${local.ecr["migrate"]}:${local.backend_image_tag}"
     essential = true
     memory    = 1024
 
@@ -132,4 +138,61 @@ resource "aws_ecs_task_definition" "migrate" {
       }
     }
   }])
+}
+
+# ──────────── core-api (Spring Boot) ────────────
+resource "aws_ecs_task_definition" "core_api" {
+  family                   = "mujoong-core-api"
+  network_mode             = "bridge"
+  requires_compatibilities = ["EC2"]
+  execution_role_arn       = aws_iam_role.ecs_execution.arn
+
+  container_definitions = jsonencode([{
+    name      = "core-api"
+    image     = "${local.ecr["core-api"]}:${local.backend_image_tag}"
+    essential = true
+    memory    = 1536
+
+    portMappings = [{
+      containerPort = 8080
+      hostPort      = 8080
+      protocol      = "tcp"
+    }]
+
+    # 공개 설정값 — 코드 바뀌면 여기만 고치면 됨
+    environment = [
+      { name = "SPRING_PROFILES_ACTIVE", value = "demo" },
+      { name = "SPRING_DATASOURCE_URL", value = local.jdbc_url },
+      { name = "SPRING_DATASOURCE_USERNAME", value = "core_app" },
+      { name = "MUJOONG_SECURITY_ALLOWED_ORIGIN", value = local.cloudfront_origin },
+      { name = "MUJOONG_INTERNALHTTP_REALTIMEBASEURL", value = "http://172.17.0.1:8081" }
+    ]
+
+    # 비밀값 — SSM에서 실행 순간 주입
+    secrets = [
+      { name = "SPRING_DATASOURCE_PASSWORD", valueFrom = "${local.ssm_prefix}/db/DB_CORE_PASSWORD" },
+      { name = "INTERNAL_SERVICE_TOKEN", valueFrom = "${local.ssm_prefix}/app/INTERNAL_SERVICE_TOKEN" },
+      { name = "MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET", valueFrom = "${local.ssm_prefix}/app/MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET" }
+    ]
+
+    logConfiguration = {
+      logDriver = "awslogs"
+      options = {
+        awslogs-group         = aws_cloudwatch_log_group.app["core-api"].name
+        awslogs-region        = "ap-northeast-2"
+        awslogs-stream-prefix = "core-api"
+      }
+    }
+  }])
+}
+
+resource "aws_ecs_service" "core_api" {
+  name            = "mujoong-core-api"
+  cluster         = aws_ecs_cluster.main.id
+  task_definition = aws_ecs_task_definition.core_api.arn
+  desired_count   = 1
+  launch_type     = "EC2"
+
+  deployment_minimum_healthy_percent = 0
+  deployment_maximum_percent         = 100
 }
