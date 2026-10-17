@@ -19,7 +19,8 @@ class PracticeMigrationRegistrationTest {
     @Test
     void migrationIsVisibleToTheDeploymentAndStartupCheck() {
         assertThat(new ClassPathResource("db/migration/realtime/V4__u5b_practice.sql").exists()).isTrue();
-        assertThat(SchemaVersionCheck.expectedVersion()).isEqualTo("4");
+        assertThat(new ClassPathResource("db/migration/realtime/V5__u11_judgment_turn.sql").exists()).isTrue();
+        assertThat(SchemaVersionCheck.expectedVersion()).isEqualTo("5");
     }
 
     @Test
@@ -27,6 +28,6 @@ class PracticeMigrationRegistrationTest {
         var jdbc = mock(JdbcTemplate.class);
         when(jdbc.queryForList(anyString(), eq(String.class))).thenReturn(List.of("0", "1", "2", "3"));
         assertThatThrownBy(() -> new SchemaVersionCheck(jdbc).verify())
-                .hasMessageContaining("버전 3 < 기대 4");
+                .hasMessageContaining("버전 3 < 기대 5");
     }
 }

@@ -46,7 +46,8 @@ public record RealtimeProperties(
         Transcript transcript,
         Security security,
         Metrics metrics,
-        Observability observability) {
+        Observability observability,
+        Judgment judgment) {
 
     public RealtimeProperties {
         required(timing, "mujoong.timing");
@@ -66,6 +67,7 @@ public record RealtimeProperties(
         required(security, "mujoong.security");
         required(metrics, "mujoong.metrics");
         required(observability, "mujoong.observability");
+        required(judgment, "mujoong.judgment");
 
         if (internalHttp.verifyTokenTimeout().compareTo(timing.device().helloTimeout()) >= 0) {
             throw invalid("불변식 I-3: mujoong.internal-http.verify-token-timeout는 "
@@ -354,6 +356,17 @@ public record RealtimeProperties(
         }
     }
 
+    /**
+     * U11 진행 중 판정 보류 기준 (BR1.3, 시간 값이 아니라 timing.md에 두지 않는다). 1순위 확률이 {@code minConfidence}보다 작거나 1 · 2순위
+     * 확률 차이가 {@code minMargin}보다 작으면 판정 보류다(같은 값은 확정 쪽). 둘 다 0 이상 1 이하다. 판정 시한은 {@code timing.judgment.live-budget}이다.
+     */
+    public record Judgment(Double minConfidence, Double minMargin) {
+        public Judgment {
+            unitInterval(minConfidence, "mujoong.judgment.min-confidence");
+            unitInterval(minMargin, "mujoong.judgment.min-margin");
+        }
+    }
+
     /** BR7.3 출력 구간 조용 시간. */
     public record Gate(Duration segmentQuiet) {
         public Gate {
@@ -454,6 +467,13 @@ public record RealtimeProperties(
             throw invalid("필수 설정 키가 없다: " + key);
         }
         return value;
+    }
+
+    static void unitInterval(Double value, String key) {
+        required(value, key);
+        if (value.isNaN() || value < 0.0 || value > 1.0) {
+            throw invalid("설정 키는 0 이상 1 이하여야 한다: " + key);
+        }
     }
 
     static void positive(Duration value, String key) {

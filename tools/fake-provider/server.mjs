@@ -30,7 +30,6 @@ import { jsonLine } from "../lib/log.mjs";
 import {
   CONNECTION_SCENARIOS,
   DEFAULTS,
-  DEFAULT_INSTRUCTION_FILLER_MS,
   TURN_KINDS,
   SUPPORTED_TYPES,
   ACK_LEAD_MS,
@@ -78,7 +77,6 @@ export const USAGE = `가짜 공급자 서버 (실호출 관측 선 형식, 시�
  * @param {number} [options.responseDelayMs]
  * @param {number} [options.chunkBytes]
  * @param {number} [options.chunkIntervalMs]
- * @param {number} [options.instructionFillerMs] 지시 뒤 채움 길이(일반600ms, 악조건은 명시적으로700ms)
  * @param {(entry: object) => void} [options.onRecord] 기록 한 건(기본: 표준 출력 JSON 한 줄)
  */
 export async function startFakeProvider({
@@ -91,7 +89,6 @@ export async function startFakeProvider({
   responseDelayMs = DEFAULTS.responseDelayMs,
   chunkBytes = DEFAULTS.chunkBytes,
   chunkIntervalMs = DEFAULTS.chunkIntervalMs,
-  instructionFillerMs = DEFAULT_INSTRUCTION_FILLER_MS,
   onRecord = (entry) => process.stdout.write(jsonLine(entry)),
 } = {}) {
   for (const scenario of scenarios) {
@@ -106,9 +103,6 @@ export async function startFakeProvider({
   }
   if (!Number.isInteger(framesPerTurn) || framesPerTurn < 1) {
     throw new RangeError("frames-per-turn은 1 이상 정수여야 한다");
-  }
-  if (!Number.isSafeInteger(instructionFillerMs) || instructionFillerMs < 0) {
-    throw new RangeError("지시 채움 길이는 0 이상 안전한 정수여야 한다");
   }
 
   const records = [];
@@ -364,7 +358,6 @@ export async function startFakeProvider({
         chunkIntervalMs,
         clockMs: state.audioMs,
         pendingAckEndMs: state.pendingAckEndMs,
-        instructionFillerMs,
       });
       state.audioMs += built.audioMsAdded;
       if (built.usedAck) {

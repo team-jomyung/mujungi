@@ -540,7 +540,7 @@ cat core-api/build/luna-live/report.txt realtime-activity/build/luna-live/report
 
 ### 8.6 Luna 응답 여부 · 지연 확인 `lunaReachTest` (U11, 개발 PC) [개발 PC]
 
-8.5는 운영 시한(`mujoong.timing.judgment.live-budget` 2초)에 묶여 `TIMEOUT`이면 Luna가 응답하는지 알 수 없다. 이 작업은 realtime 운영
+8.5는 운영 시한(`mujoong.timing.judgment.live-budget` 4초)에 묶여 `TIMEOUT`이면 Luna가 응답하는지 알 수 없다. 이 작업은 realtime 운영
 호출부를 그대로 쓰고 시도 시한만 넉넉히 줘서 합성 J6 판정 요청을 여러 번 보낸다(운영 설정은 바꾸지 않는다). 기본 `test` · `check` · CI ·
 `verify.sh`에는 들어가지 않는다(루트 `verifyLunaReachIsolation`). 합성 자료만 보내고(R-F15), 키는 그 PC의 env로만 넣는다(R-F3 · R-F13).
 
@@ -555,7 +555,7 @@ cat realtime-activity/build/luna-reach/report.md
 - 선택 env: `LUNA_REACH_TIMEOUT_SECONDS`(1 ~ 600, 기본 60) · `LUNA_REACH_COUNT`(1 ~ 20, 기본 2 — 공급자 사용량 한도 때문에 낮게 둔다) ·
   `OPENAI_JUDGE_MODEL`(비면 운영 기본 모델). 비밀이 아니다.
 - 보고서 첫 줄은 `outcome=REACHED|NOT_REACHED|SKIPPED_NO_KEY`다. REACHED는 1회 이상 OK다. 표는 회차 · 사유 · 응답 모델 · 스키마 통과 ·
-  1 · 2순위 코드와 확률 · 지연 · 사용량(응답 `usage`의 토큰 숫자)이고, 요약은 성공 수 · 지연 중앙값 · 최대 · 2초 이하 비율 · 10초 이하 비율 ·
+  1 · 2순위 코드와 확률 · 지연 · 사용량(응답 `usage`의 토큰 숫자)이고, 요약은 성공 수 · 지연 중앙값 · 최대 · 4초 이하 비율 · 10초 이하 비율 ·
   사용량 합계다. 사용량을 받지 못한 회차(TIMEOUT 등)는 '모름'이고 과금 여부를 단정하지 않는다. 원문 · 키 · 주소는 없다.
 - 운영 클라이언트는 응답 `usage`를 버리므로, 이 도구는 같은 운영 부품(정리 · 스키마 · 본문 조립 · 전송 · 응답 해석)을 같은 순서로 직접 부른다.
   사유 분류가 운영과 같은지는 기본 시험(`LunaReachIsolationTest`, 루프백 대역)이 대조한다.

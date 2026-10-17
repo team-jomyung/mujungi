@@ -89,7 +89,17 @@ public interface PracticeSessionExtension {
             PLAYBACK_DONE,
             PLAYBACK_FACT,
             TIMER_FIRED,
-            ASYNC_RESULT
+            ASYNC_RESULT,
+            /** U11 BR8.3: 판정 결과(이름 {@code judgment}, 값 {@code {point, firstOption, secondOption}} — 확률 없음). */
+            JUDGMENT_RESULT,
+            /** U11 BR8.3: 판정 보류 · 장애(값 {@code {point, abstainReason}}, 장애는 사유 FAULT). */
+            JUDGMENT_ABSTAINED,
+            /** U11 BR8.3: 판정 중 모은 출력 전사(값 {@code {text}}, 비어 있으면 보내지 않는다). */
+            HELD_OUTPUT_TRANSCRIPT,
+            /** U11 BR8.3: 가드레일 차단 사건의 자리(아직 보내지 않는다). */
+            GUARDRAIL_BLOCKED,
+            /** U11 BR6.4: 아이가 쉬고 싶다는 뜻을 밝혔다(출력권 연습에만 알린다). */
+            REST_REQUESTED
         }
 
         public ExtensionEvent {
@@ -148,6 +158,19 @@ public interface PracticeSessionExtension {
         default boolean speak(kr.mujoong.realtime.voice.PracticeSpeech speech) { return false; }
 
         default boolean cancelSpeech(UUID correlationId) { return false; }
+
+        /**
+         * U11 BR8.1: 아이 확정 전사 하나에 대한 진행 중 판정(J2 ~ J5)을 요청한다. 거절(ACTIVE 아님 · 열린 턴 있음 · 지점 밖 · 최근 전사 4개 밖 ·
+         * 공급자 없음)이면 거짓이다. 결과는 JUDGMENT_RESULT · JUDGMENT_ABSTAINED 사건으로 온다.
+         */
+        default boolean requestJudgment(kr.mujoong.realtime.judgment.JudgmentPoint point, long transcriptSeq, UUID correlationId,
+                java.util.Map<String, Object> criteria) { return false; }
+
+        /** U11 BR8.1: 역할 전환 안내의 자리(지금은 규칙만 있고 동작은 없다). */
+        default boolean announceRoleSwitch(String toRole) { return false; }
+
+        /** U11 BR8.1: '생각 중' 표시를 유지하거나(true) 풀도록(false) 요청한다. ACTIVE에서만 받는다. */
+        default boolean setThinking(boolean on) { return false; }
     }
 
     record PlaybackFact(kr.mujoong.realtime.voice.PracticeSpeech speech,

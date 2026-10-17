@@ -114,7 +114,8 @@ mujoong:
     # U8(timing.md 13절): 진행 중 판정 Luna 한 번 상한 · 응답 준비 대기(U11), 제브 검사 상한(U13), 새 연습 흐름(U12).
     # 새 연습 흐름 키는 U5b의 timing.practice(practice/u5b-runtime.yml)와 섞지 않으려고 conversation 아래에 둔다
     judgment:
-      live-budget: 2s
+      # U11: 2s → 4s(사람 결정 2026-10-16, 편차 (U11-b)). 실호출 Luna 지연 2.6 · 2.9초를 담는다. contracts/timing.md 13절 · 설정 레코드와 같은 값
+      live-budget: 4s
       response-ready: 10s
     guardrail:
       jev-budget: 800ms
@@ -125,7 +126,7 @@ mujoong:
     # U11(timing.md 14절, 설계 개정 A4 · A7): 값은 실호출 3회 관측 기준 임시값이고 Build and Test 실호출로 확정한다
     provider:
       input-transcript-quiet: 1500ms
-      new-speech-margin: 600ms
+      new-speech-margin: 700ms
   outbox:
     poll-interval: 500ms
     batch-size: 20
@@ -202,6 +203,10 @@ mujoong:
     log-merge-window: 10s
     # OD-6 '앱 안 5초 표본'(CPU · 메모리 · 풀 · 적체 · 연결 상태 게이지 갱신) 주기(3.6 수정 J302, Core와 같은 키 · 값)
     system-sample-interval: 5s
+  # U11 진행 중 판정 보류 기준(BR1.3, 시간 값이 아니다): 1순위 확률 < min-confidence 또는 1 · 2순위 차이 < min-margin이면 판정 보류. 같은 값은 확정
+  judgment:
+    min-confidence: 0.6
+    min-margin: 0.15
   # U9 Luna 호출부(contracts/ai-io.md 10.9). 키 env OPENAI_API_KEY가 있고 enabled가 true일 때만 RealtimeLunaClient가 켜진다(BR1.1 · U11 BR12.3, 값은 env에만).
   # 시간 값이 아니다: 시도 시한은 timing.judgment.live-budget(BR5.1). demo · prod는 https + api.openai.com만, test는 루프백만(BR1.4)
   luna:

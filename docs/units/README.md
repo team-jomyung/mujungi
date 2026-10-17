@@ -15,7 +15,7 @@ U4b부터는 다시 AI-DLC를 쓴다. 담당자마다 자기 PC에서 유닛용 
 |---|---|---|---|---|---|---|
 | 공통 | 1 | U8 계약 · 버전 리소스 | **main 병합**(10/16, PR #21) | `unit/u8-contracts-catalog` → `unit/u9-luna-clients`에 포함 | 없음 | `R/construction/u8-contracts-catalog/` |
 | 공통 | 2 | U9 Luna 호출부 | **main 병합**(10/16, PR #21). main CI #60 skeleton 통과 | `unit/u9-luna-clients` | 없음 | `R/construction/u9-luna-clients/` |
-| realtime | 3 → 4 → 6 | U11 판정 턴 → U13 제브 게이트 → U12 새 연습 흐름 | U8 · U9 담당자가 이어 맡음. **U11 시작**(10/16). U12는 U13 뒤 대역으로 일부, U10 병합 뒤 완료 | `unit/u11-judgment-turn` · `unit/u13-…` · `unit/u12-…` | realtime V5 · V6 · V7 | `u11/brief.md`(U13 · U12는 앞 볼트 뒤 작성) |
+| realtime | 3 → 4 → 6 | U11 판정 턴 → U13 제브 게이트 → U12 새 연습 흐름 | U8 · U9 담당자가 이어 맡음. **U11 PR1(선 형식 · 키 통일) main 병합**(10/17, PR #28), **PR2(판정 턴) 진행 중**(`docs/units/u11/design.md` · `report.md`). U12는 U13 뒤 대역으로 일부, U10 병합 뒤 완료 | `unit/u11-judgment-turn` · `unit/u13-…` · `unit/u12-…` | realtime V5 · V6 · V7 | `u11/brief.md` · `u11/design.md` · `u11/report.md`(U13 · U12는 앞 볼트 뒤 작성) |
 | core | 3 → 4 → 5 | U15 지식 그래프 → U14 목표 · 결과 → U10 상황 생성 | **팀원에게 넘김** | `unit/u15-knowledge-graph` · `unit/u14-goal-result` · `unit/u10-scenario-generation` | core V8 · V9 · V10 | `u15/brief.md` · `u14/brief.md` · `u10/brief.md` |
 
 - **시작 브랜치**: U8 · U9는 PR #21로 `main`에 합쳐졌다(`main` CI #60 skeleton 통과). 새 볼트는 최신 `main`에서 딴다.

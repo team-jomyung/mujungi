@@ -77,6 +77,9 @@ public final class SessionHarness {
     public final LatencyRecorder latency = new LatencyRecorder(events, metrics, clock, 100, Duration.ofMinutes(10));
     public final AsyncRecorder recorder = new AsyncRecorder(store, TaskLauncher.inline(), latency, events, metrics, clock,
             200, 2);
+    /** U11: 판정 기록기(메모리 저장소 {@link MemoryStore#judgments}에 쓴다, 실행기 연결은 Step 20 · 21). */
+    public final kr.mujoong.realtime.judgment.JudgmentLiveRecorder judgmentRecorder =
+            new kr.mujoong.realtime.judgment.JudgmentLiveRecorder(store, TaskLauncher.inline(), events);
     public final List<UUID[]> unresponsive = new ArrayList<>();
     public final UUID sessionId = UUID.randomUUID();
     public final UUID guardianId = UUID.randomUUID();
@@ -88,6 +91,18 @@ public final class SessionHarness {
     public FakeDeviceLink link;
     public SessionExecutor executor;
     public boolean removed;
+    /** U11: 판정 장치(create 전에 {@link #useJudge()}로 바꾼다). 기본은 공급자 없음 — 판정 턴을 열지 않는다. */
+    public kr.mujoong.realtime.session.JudgmentSupport judgment = kr.mujoong.realtime.session.JudgmentSupport.NONE;
+    /** U11: {@link #useJudge()} 뒤의 시험용 판정기. */
+    public FakeJudgeClient judge;
+
+    /** 시험용 판정기를 쓴다(create 전에 부른다): 공급자 있음, 기록은 {@link MemoryStore#judgments}로 간다. */
+    public FakeJudgeClient useJudge() {
+        judge = new FakeJudgeClient();
+        judgment = new kr.mujoong.realtime.session.JudgmentSupport(judge, judgmentRecorder, Duration.ofSeconds(4), "prompt-v1",
+                kr.mujoong.realtime.content.LiveContentResources.loadDefault().judgment());
+        return judge;
+    }
 
     public SessionHarness() {
         this(SETTINGS);
@@ -109,7 +124,7 @@ public final class SessionHarness {
                 new ProviderConnector(provider, new ProviderRequestFactory(), Duration.ofSeconds(10), launcher, "test"),
                 new ProviderRequestFactory(), new OutputGate(SeedDictionary.loadDefault()), recorder, latency,
                 new TimerClocks(safety, quiet), launcher, events, metrics, clock, settings, gaps, recordings, settlement,
-                practice);
+                practice, judgment);
         List<StartSession.ApprovedAudio> audio = new ArrayList<>(List.of(
                 new StartSession.ApprovedAudio("CLOSING", closingVersion, "/media/approved/closing.wav"),
                 new StartSession.ApprovedAudio("WAITING_FILLER", fillerVersion, "/media/approved/filler.wav")));
@@ -124,7 +139,7 @@ public final class SessionHarness {
                 new ChildContext("하늘", 8, List.of("공룡")), audio,
                 new SessionExecutor.ApprovedItem("CLOSING", closingVersion),
                 new SessionExecutor.ApprovedItem("WAITING_FILLER", fillerVersion), rawAudioConsent, STOP_EXPRESSIONS,
-                activityType, approved, practiceJson);
+                activityType, approved, practiceJson, guardianId);
         executor = new SessionExecutor(plan, services, mailbox, () -> removed = true);
         return executor;
     }
@@ -268,13 +283,15 @@ public final class SessionHarness {
     }
 
     /** 메모리 기록기 저장소. */
-    public static final class MemoryStore implements AsyncRecorder.Store {
+    public static final class MemoryStore implements AsyncRecorder.Store, kr.mujoong.realtime.judgment.JudgmentLiveRecorder.Store {
 
         public final List<TranscriptEntry> transcripts = new ArrayList<>();
         public final List<SessionEvent> sessionEvents = new ArrayList<>();
         public final List<DeviceConnectionRepository.LastSeen> lastSeen = new ArrayList<>();
         public int failuresLeft;
         public int writes;
+        /** U11: 판정 기록(id = turnId, 같은 id는 덮어쓴다). */
+        public final List<kr.mujoong.realtime.judgment.JudgmentLiveRecord> judgments = new ArrayList<>();
 
         @Override
         public synchronized void write(UUID sessionId, List<TranscriptEntry> rows, List<SessionEvent> events) {
@@ -294,6 +311,16 @@ public final class SessionHarness {
                 }
             }
             sessionEvents.addAll(events);
+        }
+
+        @Override
+        public synchronized void write(kr.mujoong.realtime.judgment.JudgmentLiveRecord record) {
+            if (failuresLeft > 0) {
+                failuresLeft--;
+                throw new org.springframework.dao.TransientDataAccessResourceException("시험용 기록기 장애");
+            }
+            judgments.removeIf(old -> old.id().equals(record.id()));
+            judgments.add(record);
         }
 
         @Override

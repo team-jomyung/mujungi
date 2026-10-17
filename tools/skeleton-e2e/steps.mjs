@@ -25,6 +25,7 @@ import {
   isUuid,
   jsonBody,
   missingAttrs,
+  missingLatencyAttrs,
   pickAttrs,
   setCookieFrom,
 } from "./assertions.mjs";
@@ -1169,7 +1170,7 @@ async function stepEnded(ctx) {
   const latency = await bounded(
     ctx,
     ctx.realtimeLog.waitFor(
-      (e) => e.event === "LATENCY_TURN" && missingAttrs(e, LATENCY_TURN_KEYS).length === 0,
+      (e) => e.event === "LATENCY_TURN" && missingLatencyAttrs(e).length === 0,
       {
         timeoutMs: ctx.limit(deadlines.ended),
         what: latencyNote(ctx),
@@ -1223,7 +1224,7 @@ function latencyNote(ctx) {
     return "LATENCY_TURN 줄 없음";
   }
   const best = lines
-    .map((line) => missingAttrs(line, LATENCY_TURN_KEYS))
+    .map((line) => missingLatencyAttrs(line))
     .sort((a, b) => a.length - b.length)[0];
   return `LATENCY_TURN ${lines.length}줄, 가장 가까운 줄에 빠진 키: ${best.join(",")}`;
 }

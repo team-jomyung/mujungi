@@ -130,3 +130,40 @@
 6. 연습 확장점의 `instructProvider`는 이제 곧 발화를 시작한다(지시 = 발화). 확장점이 `instructProvider` 직후 `requestResponse`를 부르면 앞 발화는 세대 올림으로 버려지고 뒤 것만 들린다(낭비).
 7. 승인된 발화 지시문 길이 상한(500토큰)은 `PracticeInstruction.forSpeech`가 64000자까지 허용하는 기존 값 그대로다 — 긴 발화는 공급자가 거절할 수 있다(이 작업 밖).
 8. 실제 공급자 · 실제 기기 · 아이 목소리 성공은 이 작업에 없다(가짜 공급자 증거만, R-M11). `verify.sh` 전체는 돌리지 않았다(Build and Test).
+
+## 4. PR2 판정 턴 (Step 15 ~ 29, 브랜치 `unit/u11-judgment-turn`, 2026-10-17)
+
+> 증거 구분(R-M11): 이 절의 모든 시험은 **테스트 대역**(가짜 판정기 · 가짜 공급자 · 수동 시계 · 루프백 Luna)이다. 실제 Luna 판정 품질 · 실제 GPT-Live의 한 번만 지시 동작 · 실제 기기는 없다. 실호출 증거는 `real-call-evidence.md`(PR1, `[실호출-합성]`)에만 있다.
+
+### 4.1 만든 것
+
+- **데이터(Step 15 ~ 16)**: realtime V5 `realtime_judgment_live`, 저장소(id = turnId 덮어쓰기), 비동기 기록기(전용 칸 · 일시 실패 재시도 · 제약 위반 폐기), 삭제 참여자(순서 180), 시험 장치 `MemoryStore` 변형. 판 번호 · 표 목록 단언 3곳(`RealtimeSchemaIT` · `PracticeMigrationRegistrationTest` · `PracticeMigrationIT`)을 새 사실로만 갱신했고, core-api 이력 단언 두 곳(`FlywayConfIT` · `SchemaPrivilegeIT`)도 realtime V5 사실(실행 4 → 5, 이력 5 → 6, 표 61 → 62, 최대 버전 4 → 5)로 올렸다(낮춘 것 없음).
+- **설정(Step 17)**: `mujoong.judgment.min-confidence` 0.6 · `min-margin` 0.15(0 ~ 1 검사), `mujoong.timing.judgment.live-budget` 2s → **4s**(realtime `application.yml` · `contracts/timing.md` 13절 · 설정 레코드 세 곳, 편차 `(U11-b)`).
+- **판정 호출(Step 18)**: `JudgeClient` · `LunaJudgeClient`(한 번 호출 · 재시도 없음 · 4.000초 보류) · `UnavailableJudgeClient` · `JudgeOutcomeValidator`(선택지 밖 · 중복 · 확률 범위 · 0.6 / 0.15, 경계값은 확정).
+- **지시 템플릿(Step 19)**: `InstructionTemplates.NextAction`(HOLD_REASK · REST_ACK_AND_RETURN · REST_ACK_ONLY, 한 번만 + 짧은 맞장구), 프롬프트 `judgment/prompt-v1.txt` · `JudgmentPrompt`, `JudgmentConfiguration`(Luna 빈이 있으면 실제, 없으면 보류 구현).
+- **참고(심사 R-01)**: `HOLD_REASK`는 지금 운영 호출처가 없다. U12 확장점이 부를 때를 위해 예약해 둔 지시이며, 시험으로만 검증한다.
+- **참고(심사 R-02)**: 바꾼 단언은 `SingleInstanceMarkerTest` SI-10(재고에 `JudgmentLiveRecorder` 추가), `U8TimingPropertiesTest`, Luna 시험 5개의 live-budget 2s→4s이다.
+- **판정 턴(Step 20)**: `JudgmentTurn` 상태 기계(AWAITING_RESULT / INSTRUCTING / CLOSED, 결과 CONFIRMED · ABSTAINED · FAULT_CANCELLED · STOPPED · SUPERSEDED · SESSION_EXITED), 시계 3개(`JUDGMENT_LIVE` · `JUDGMENT_READY` · `JUDGMENT_INSTRUCTION`), 모은 전사 2000자, 늦은 결과 거르기.
+- **실행기 연결(Step 21 ~ 24)**: `JudgmentCoordinator` · `JudgmentSupport` + `SessionExecutor` 얇은 연결. J1 · J6 · 휴식 · 종료 근거 `LUNA_J6`, 확장점 능력 3개 · 이벤트 5개, 장애 · 세션 이탈 회복, R-13 · R-14.
+- **회귀 · 범위(Step 25 ~ 27)**: Luna 없음 회귀 시험 4개(같은 시나리오를 옛 흐름 · 가짜 판정기 `available()=false` · `UnavailableJudgeClient` 세 장치에서 비교), `contracts/deviations.md` 행 정리(`(U11-b)`가 `(U11-c)` 가운데 끼어든 것을 바로잡음), `backend/coverage-scope/u11.txt`(44개 파일).
+- **문서(Step 28)**: `docs/units/u11/design.md` · `report.md`, `docs/units/README.md` 현황.
+
+### 4.2 시험 (테스트 대역)
+
+- 신규 JUnit 122개: `JudgeOutcomeValidatorTest` 8 · `LunaJudgeClientTest` 13 · `JudgmentInstructionsTest` 7 · `JudgmentConfigurationTest` 3 · `JudgmentTurnTest` 18 · `JudgmentLiveRecorderTest` 8 · `JudgmentLiveRepositoryIT` 5 · `JudgmentLiveSchemaIT` 5 · `JudgmentSettingsTest` 5 · `JudgmentPackageArchTest` 2 · `JudgmentTurnExecutorTest` 9 · `JoinJudgmentExecutorTest` 8 · `StopJudgmentExecutorTest` 11 · `JudgmentExtensionPortTest` 9 · `JudgmentFaultExecutorTest` 7 · `JudgmentNoProviderRegressionTest` 4.
+- 전체 확인: `./gradlew clean check verifyBootJarHasNoTestClasses -Pmujoong.test.db=docker`에서 realtime-activity 1471개 · contract-model · test-support 통과, JaCoCo 하한 유지. core-api의 `ReportPdfTest.twentyActivityReportCreatesNoTemporaryFiles`는 병렬 실행 때 다른 시험의 `/tmp/tomcat.*` 임시 폴더 때문에 가끔 실패하는 기존 불안정 시험이다(U6, 단독 재실행 통과). `cd tools && npx vitest run` 131개, `infra-validate` 8 / 8, `test-infra-validate` 46 / 0, `test-host-tools` 37 / 0.
+- 앞 유닛 U3 · U4b · U5b 실행기 시험은 **단언 변경 없이** 통과(판정기가 없을 때 흐름이 달라지지 않음).
+- u11 범위 줄 커버리지: 모듈 전체 시험 기준 **92.0%**(4322 / 4698). `-PincludeTags=u11`만으로는 67.0%인데, 목록에 든 앞 유닛 코드(`SessionExecutor` 59% 등)를 u3 · u4b 태그 시험이 덮기 때문이다. 목록을 줄이거나 하한을 낮추지 않았다.
+
+### 4.3 계획 대비 편차 · 위험
+
+1. 실행기 연결(Step 21 ~ 24)의 운영 코드는 한 커밋(`f243a59`)이다. J1 · J6 · 확장점 · 장애가 같은 실행기 메서드를 공유해 나눌 수 없었다. 시험은 단계별로 커밋했다.
+2. `Services` · `Plan`에 인자를 더했다(`JudgmentSupport` · `guardianId`). 옛 시그니처 오버로드를 남겨 기존 시험은 그대로 컴파일된다. `guardianId`가 없으면 판정 기록을 쓰지 않는다.
+3. `StopIntentJudge.Basis.LUNA_J6`은 realtime 내부 값이라 계약 변경이 없다.
+4. 판정 턴의 지시 시계(진입 + 10초)는 한 번 닫고 두 번째 기회가 없다. 늦은 새 말은 일반 게이트를 거친다.
+5. 공급자 `error` 사건은 지금처럼 고정 WARN만 남기고 열린 턴을 닫지 않는다(시험이 단언).
+6. 열린 턴을 닫을 때 Luna 요청을 취소하므로 늦은 결과 폐기 경로는 이미 큐에 있던 결과에만 닿는다.
+7. J1 기록의 `inputTranscriptSeq`는 0이다(WAITING_CHILD 전사는 저장하지 않음).
+8. R-13 전달은 기술적 일시 정지 중에도 ACTIVE면 일어난다(기존은 정지 중 출력권 연습의 발화 전달을 막음, 희귀 경우).
+9. `uncertain`은 항상 false다(공급자가 신뢰도를 주지 않음).
+10. 실제 Luna 프롬프트 품질 · 한 번만 지시 준수(표본 1) · 새 말 시작 여유 600ms · 입력 전사 묶음 1500ms · 연습 승인 문구 낭독 첫 600ms 잘림은 Build and Test 실호출 항목이다(`docs/units/u11/report.md`).

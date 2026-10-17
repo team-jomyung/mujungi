@@ -31,7 +31,7 @@ import org.springframework.core.io.ClassPathResource;
  * verify.sh에서는 빠진다(build-logic 고정 제외 + 루트 {@code verifyLunaReachIsolation}). 키가 없으면 부르지 않고 {@code SKIPPED_NO_KEY}를
  * 보고하며 이것은 통과가 아니다.
  *
- * <p>U9 {@code lunaLiveTest}는 운영 시한 {@code mujoong.timing.judgment.live-budget}(2초)에 묶여 TIMEOUT이면 Luna가 응답 자체를 하는지 알 수
+ * <p>U9 {@code lunaLiveTest}는 운영 시한 {@code mujoong.timing.judgment.live-budget}(4초)에 묶여 TIMEOUT이면 Luna가 응답 자체를 하는지 알 수
  * 없다. 이 도구는 시도 시한만 넉넉히 준다(env {@value #TIMEOUT_ENV}, 기본 {@value #DEFAULT_TIMEOUT_SECONDS}초). 운영 설정은 바꾸지 않는다.
  *
  * <p>공급자 사용량(usage 토큰)을 남기려고 {@link RealtimeLunaClient#call}을 거치지 않고, 그 안의 운영 부품을 같은 순서로 직접 부른다: 입력 정리
@@ -64,7 +64,7 @@ final class LunaReachProbe {
     static final String CONFIG_RESOURCE = "application.yml";
     static final String PROMPT_VERSION = "u11-reach.v1";
     /** 운영 시도 시한(live-budget)과 비교하는 기준. */
-    static final Duration LIVE_BUDGET = Duration.ofSeconds(2);
+    static final Duration LIVE_BUDGET = Duration.ofSeconds(4);
     static final Duration TEN_SECONDS = Duration.ofSeconds(10);
     /** 운영 전송부 시한 뒤 바깥 대기 여유. */
     static final Duration OUTER_MARGIN = Duration.ofSeconds(10);
@@ -446,7 +446,7 @@ final class LunaReachProbe {
         return token != null && SAFE_TOKEN.matcher(token).matches() ? token : "(형식 밖)";
     }
 
-    /** 요약: 지연 중앙값 · 최대는 OK 회차만, 2초 · 10초 이하 수는 OK이면서 그 안에 끝난 회차, 사용량은 받은 회차 합계 · 모름 회차 수. */
+    /** 요약: 지연 중앙값 · 최대는 OK 회차만, 4초 · 10초 이하 수는 OK이면서 그 안에 끝난 회차, 사용량은 받은 회차 합계 · 모름 회차 수. */
     static Summary summarize(List<Attempt> attempts) {
         List<Long> ok = attempts.stream().filter(attempt -> "OK".equals(attempt.reason())).map(Attempt::latencyMillis).sorted().toList();
         Long median = null;
@@ -522,7 +522,7 @@ final class LunaReachProbe {
         out.append("- 성공(OK): ").append(summary.ok()).append('/').append(summary.attempts()).append('\n');
         out.append("- 지연(OK 회차): 중앙값 ").append(summary.medianMillis() == null ? "-" : summary.medianMillis() + "ms")
                 .append(" · 최대 ").append(summary.maxMillis() == null ? "-" : summary.maxMillis() + "ms").append('\n');
-        out.append("- 2초 이하(live-budget 안, 전체 회차 기준): ").append(percent(summary.withinBudget(), summary.attempts())).append('\n');
+        out.append("- 4초 이하(live-budget 안, 전체 회차 기준): ").append(percent(summary.withinBudget(), summary.attempts())).append('\n');
         out.append("- 10초 이하(전체 회차 기준): ").append(percent(summary.withinTenSeconds(), summary.attempts())).append('\n');
         out.append("- 사용량 합계(받은 회차): ").append(summary.usageTotals().isEmpty() ? "-" : usageText(summary.usageTotals()))
                 .append(" · ").append(USAGE_UNKNOWN).append(' ').append(summary.usageUnknown()).append("회\n");

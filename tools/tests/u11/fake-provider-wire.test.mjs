@@ -11,7 +11,6 @@ import { sha256Hex, synthesizeInputPayload } from "../../lib/frameCodec.mjs";
 import { startFakeProvider } from "../../fake-provider/server.mjs";
 import {
   ACK_LEAD_MS,
-  DEFAULT_INSTRUCTION_FILLER_MS,
   FILLER_MS,
   SUPPORTED_TYPES,
   buildTurn,
@@ -191,7 +190,7 @@ describe("가짜 공급자 — 실호출 관측 선 형식(U11-a)", () => {
   });
 
   it("지시를 받은 뒤의 새 말은 확인 end_ms 뒤에서 시작하고 전사가 음성보다 앞서며 앞에 낡은 꼬리 채움 음성이 있다", async () => {
-    const provider = await start({ turns: ["normal"], chunkBytes: 4800, instructionFillerMs: FILLER_MS });
+    const provider = await start({ turns: ["normal"], chunkBytes: 4800 });
     const client = await session(provider);
     client.ws.send(JSON.stringify({ type: "session.instructions.append", event_id: "e1", delegation_id: null, content: "고정 문장" }));
     await waitUntil(() => types(client).includes("session.instructions.appended"));
@@ -224,7 +223,7 @@ describe("가짜 공급자 — 실호출 관측 선 형식(U11-a)", () => {
     expect(audioBytes - turn.outputBytes).toBe((firstSpeech.start_ms - 0 + FILLER_MS) * 48);
   });
 
-  it("일반 지시 채움은 실제600ms 계약과 같고 서버 수신 경계 뒤에는 정확한 새 PCM만 남는다", async () => {
+  it("일반 지시 채움은 실제700ms 계약과 같고 서버 수신 경계 뒤에는 정확한 새 PCM만 남는다", async () => {
     const root = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
     const timing = readFileSync(resolve(root, "contracts/timing.md"), "utf8");
     const config = readFileSync(
@@ -235,9 +234,9 @@ describe("가짜 공급자 — 실호출 관측 선 형식(U11-a)", () => {
     expect(contractRows).toHaveLength(1);
     expect(configRows).toHaveLength(1);
     const marginMs = Number(contractRows[0][1]);
-    expect(marginMs).toBe(600);
+    expect(marginMs).toBe(700);
     expect(Number(configRows[0][1])).toBe(marginMs);
-    expect(DEFAULT_INSTRUCTION_FILLER_MS).toBe(marginMs);
+    expect(FILLER_MS).toBe(marginMs);
     expect(FILLER_MS).toBe(700);
 
     const pcm = outputPcmFor(1, "normal");
@@ -271,8 +270,4 @@ describe("가짜 공급자 — 실호출 관측 선 형식(U11-a)", () => {
     expect(sha256Hex(accepted)).toBe(turn.outputSha256);
   });
 
-  it.each([-1, 1.5, Number.NaN])("잘못된 지시 채움 길이 %s는 서버 기동과 턴 생성에서 거절한다", async (instructionFillerMs) => {
-    expect(() => buildTurn({ connection: 1, turn: 1, kind: "normal", instructionFillerMs })).toThrow(RangeError);
-    await expect(startFakeProvider({ port: 0, instructionFillerMs })).rejects.toThrow(RangeError);
-  });
 });
