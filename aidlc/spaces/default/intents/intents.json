@@ -67,10 +67,10 @@
     "slug": "u10-scenario-generation",
     "dirName": "261017-u10-scenario-generation",
     "scope": "refactor",
-    "status": "in-flight",
+    "status": "complete",
     "request": "980c75f1"
-    },
-    {
+  },
+  {
     "uuid": "01a14356-2e9b-7e34-9574-9734bfa04975",
     "slug": "u11-judgment-turn",
     "dirName": "261016-u11-judgment-turn",
