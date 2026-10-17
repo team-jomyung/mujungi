@@ -1,0 +1,169 @@
+{
+  "stage": "code-generation",
+  "unit": "u15-knowledge-graph",
+  "version": 1,
+  "writes": [
+    {
+      "path": "backend/build-logic/src/main/kotlin/mujoong.java-conventions.gradle.kts"
+    },
+    {
+      "path": "backend/core-api/build.gradle.kts"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/child/ChildProfileService.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/common/deletion/DeletionParticipant.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/knowledge/ChildKnowledgeGraphPort.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/knowledge/ChildKnowledgeService.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/knowledge/KnowledgeAccessPolicy.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/knowledge/KnowledgeConfiguration.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/knowledge/KnowledgeDeletionParticipant.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/knowledge/KnowledgeLedgerRepository.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/knowledge/KnowledgeProperties.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/knowledge/KnowledgeSeed.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/knowledge/MemoryChildKnowledgeGraph.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/knowledge/Neo4jChildKnowledgeGraph.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/knowledge/SeedArchiveLoader.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/knowledge/SeedCatalog.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/knowledge/SeedContentValidator.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/knowledge/SeedGenerationProperties.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/knowledge/SeedGenerationService.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/knowledge/StructureSignature.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/knowledge/VariantPlanner.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/luna/CoreLunaClient.java"
+    },
+    {
+      "path": "backend/core-api/src/main/java/kr/mujoong/core/luna/LunaCallBudget.java"
+    },
+    {
+      "path": "backend/core-api/src/main/resources/application.yml"
+    },
+    {
+      "path": "backend/core-api/src/main/resources/db/migration/core/V8__u15_knowledge_graph.sql"
+    },
+    {
+      "path": "backend/core-api/src/main/resources/knowledge/seed-generation.v2.txt"
+    },
+    {
+      "path": "backend/core-api/src/test/java/kr/mujoong/core/arch/TimeLiteralScanTest.java"
+    },
+    {
+      "path": "backend/core-api/src/test/java/kr/mujoong/core/config/ConfigKeyContractTest.java"
+    },
+    {
+      "path": "backend/core-api/src/test/java/kr/mujoong/core/knowledge/U15AccessPolicyTest.java"
+    },
+    {
+      "path": "backend/core-api/src/test/java/kr/mujoong/core/knowledge/U15ConfigurationTest.java"
+    },
+    {
+      "path": "backend/core-api/src/test/java/kr/mujoong/core/knowledge/U15GraphModelTest.java"
+    },
+    {
+      "path": "backend/core-api/src/test/java/kr/mujoong/core/knowledge/U15LedgerIT.java"
+    },
+    {
+      "path": "backend/core-api/src/test/java/kr/mujoong/core/knowledge/U15LunaBudgetTest.java"
+    },
+    {
+      "path": "backend/core-api/src/test/java/kr/mujoong/core/knowledge/U15Neo4jIT.java"
+    },
+    {
+      "path": "backend/core-api/src/test/java/kr/mujoong/core/knowledge/U15RulesTest.java"
+    },
+    {
+      "path": "backend/core-api/src/test/java/kr/mujoong/core/knowledge/U15SeedArchiveLoaderTest.java"
+    },
+    {
+      "path": "backend/core-api/src/test/java/kr/mujoong/core/knowledge/U15ServiceIT.java"
+    },
+    {
+      "path": "backend/coverage-scope/u15.txt"
+    },
+    {
+      "path": "contracts/knowledge-graph.md"
+    },
+    {
+      "path": "docs/units/u15/environment.example"
+    },
+    {
+      "path": "docs/units/u15/implementation.md"
+    },
+    {
+      "path": "docs/units/u15/report.md"
+    },
+    {
+      "path": "infra/RUNBOOK.md"
+    },
+    {
+      "path": "infra/bin/infra-validate"
+    },
+    {
+      "path": "infra/bin/render-env"
+    },
+    {
+      "path": "infra/ci/gen-env.sh"
+    },
+    {
+      "path": "infra/ci/test-host-tools.sh"
+    },
+    {
+      "path": "backend/core-api/src/test/java/kr/mujoong/core/db/FlywayConfIT.java"
+    },
+    {
+      "path": "backend/core-api/src/test/java/kr/mujoong/core/db/SchemaPrivilegeIT.java"
+    },
+    {
+      "path": "backend/core-api/src/test/java/kr/mujoong/core/db/CoreSchemaIT.java"
+    },
+    {
+      "path": "backend/core-api/src/test/java/kr/mujoong/core/startup/SchemaVersionCheckTest.java"
+    },
+    {
+      "path": "backend/core-api/src/test/java/kr/mujoong/core/startup/CoreStartupSequenceIT.java"
+    },
+    {
+      "path": "scripts/verify/b-stack.sh"
+    },
+    {
+      "path": "infra/compose.ci.yml"
+    }
+  ]
+}

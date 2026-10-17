@@ -236,6 +236,8 @@ fun JacocoReportBase.limitToCoverageScope() {
 
 tasks.named<JacocoReport>("jacocoTestReport") {
     dependsOn(tasks.named("test"))
+    // 실행 자원의 원본 ZIP을 클래스 아카이브로 분석하지 않는다. 모든 운영 클래스는 그대로 포함한다.
+    classDirectories.setFrom(mainClassesDirs)
     reports {
         xml.required.set(true)
         html.required.set(true)
@@ -245,6 +247,7 @@ tasks.named<JacocoReport>("jacocoTestReport") {
 
 tasks.named<JacocoCoverageVerification>("jacocoTestCoverageVerification") {
     dependsOn(tasks.named("test"))
+    classDirectories.setFrom(mainClassesDirs)
     limitToCoverageScope()
 }
 

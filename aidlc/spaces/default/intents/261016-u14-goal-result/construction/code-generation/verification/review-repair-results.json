@@ -1,0 +1,183 @@
+{
+  "baseCommit": "c096283",
+  "stage": "code-generation lead repair after review iteration 1",
+  "source": "original working tree with R-01/R-02/R-03 repairs",
+  "fakeProvidersOnly": true,
+  "unchangedFullEvidence": {
+    "backend": "verification/backend-check-results.json (3135 tests, 3 LOCAL skips, c096283)",
+    "frontend": "994 tests, 98.55% lines, c096283 frontend unchanged"
+  },
+  "history": [
+    {
+      "scope": "R-01 initial PostgreSQL",
+      "tests": 24,
+      "failures": 1,
+      "reason": "new fixture missing parent core_activity FK row; fixture corrected"
+    },
+    {
+      "scope": "R-01 PostgreSQL rerun",
+      "exitCode": 0,
+      "tests": 24,
+      "failures": 0,
+      "skipped": 0,
+      "seconds": 33
+    },
+    {
+      "scope": "R-02 gateway",
+      "exitCode": 0,
+      "tests": 10,
+      "seconds": 12
+    },
+    {
+      "scope": "R-03 gateway and validator",
+      "exitCode": 0,
+      "tests": 22,
+      "seconds": 10
+    }
+  ],
+  "relatedRegression": {
+    "command": "./gradlew --init-script ../../u14-wsl-build.init.gradle :core-api:test --tests 'kr.mujoong.core.practicegoal.*' --tests kr.mujoong.core.result.SessionResultHandlerIT --tests kr.mujoong.core.result.ResultReconcilerTest --tests kr.mujoong.core.result.U14ResultPipelineIT --tests 'kr.mujoong.core.practice.*' -Pmujoong.test.db=docker",
+    "exitCode": 0,
+    "seconds": 72,
+    "skipped": 0,
+    "errors": 0,
+    "failures": 0,
+    "tests": 214
+  },
+  "unitTag": {
+    "command": "./gradlew --init-script ../../u14-wsl-build.init.gradle :core-api:test :core-api:jacocoTestReport :core-api:jacocoTestCoverageVerification -PincludeTags=u14 -PcoverageScope=u14 -Pmujoong.test.db=docker",
+    "exitCode": 0,
+    "seconds": 46,
+    "stats": {
+      "errors": 0,
+      "tests": 161,
+      "failures": 0,
+      "skipped": 0
+    },
+    "covered": 837,
+    "missed": 89,
+    "suites": [
+      {
+        "tests": 6,
+        "failures": 0,
+        "name": "kr.mujoong.core.practice.U14LegacyCompatibilityIT",
+        "skipped": 0
+      },
+      {
+        "tests": 10,
+        "failures": 0,
+        "name": "kr.mujoong.core.practicegoal.CandidateSeedLinkTest",
+        "skipped": 0
+      },
+      {
+        "tests": 8,
+        "failures": 0,
+        "name": "kr.mujoong.core.practicegoal.CandidateSeedReplayIT",
+        "skipped": 0
+      },
+      {
+        "tests": 11,
+        "failures": 0,
+        "name": "kr.mujoong.core.practicegoal.CandidateVersionSelectionIT",
+        "skipped": 0
+      },
+      {
+        "tests": 12,
+        "failures": 0,
+        "name": "kr.mujoong.core.practicegoal.GoalCandidateGatewayTest",
+        "skipped": 0
+      },
+      {
+        "tests": 10,
+        "failures": 0,
+        "name": "kr.mujoong.core.practicegoal.GoalCandidateValidatorTest",
+        "skipped": 0
+      },
+      {
+        "tests": 12,
+        "failures": 0,
+        "name": "kr.mujoong.core.practicegoal.PracticeGoalRepositoryIT",
+        "skipped": 0
+      },
+      {
+        "tests": 6,
+        "failures": 0,
+        "name": "kr.mujoong.core.practicegoal.SavedGoalReaderTest",
+        "skipped": 0
+      },
+      {
+        "tests": 8,
+        "failures": 0,
+        "name": "kr.mujoong.core.practicegoal.U14DeletionIT",
+        "skipped": 0
+      },
+      {
+        "tests": 6,
+        "failures": 0,
+        "name": "kr.mujoong.core.practicegoal.U14EmptyCandidateReplayIT",
+        "skipped": 0
+      },
+      {
+        "tests": 9,
+        "failures": 0,
+        "name": "kr.mujoong.core.practicegoal.U14MigrationIT",
+        "skipped": 0
+      },
+      {
+        "tests": 6,
+        "failures": 0,
+        "name": "kr.mujoong.core.report.U14MixedReportIT",
+        "skipped": 0
+      },
+      {
+        "tests": 13,
+        "failures": 0,
+        "name": "kr.mujoong.core.result.PracticeRecordV2Test",
+        "skipped": 0
+      },
+      {
+        "tests": 10,
+        "failures": 0,
+        "name": "kr.mujoong.core.result.RejudgmentGatewayTest",
+        "skipped": 0
+      },
+      {
+        "tests": 7,
+        "failures": 0,
+        "name": "kr.mujoong.core.result.U14ResultApiIT",
+        "skipped": 0
+      },
+      {
+        "tests": 7,
+        "failures": 0,
+        "name": "kr.mujoong.core.result.U14ResultPipelineIT",
+        "skipped": 0
+      },
+      {
+        "tests": 6,
+        "failures": 0,
+        "name": "kr.mujoong.core.result.U14ResultRetryIT",
+        "skipped": 0
+      },
+      {
+        "tests": 8,
+        "failures": 0,
+        "name": "kr.mujoong.core.result.U14SceneProjectionTest",
+        "skipped": 0
+      },
+      {
+        "tests": 6,
+        "failures": 0,
+        "name": "kr.mujoong.core.result.U14TimingContractTest",
+        "skipped": 0
+      }
+    ],
+    "lineRatio": 0.9038876889848813
+  },
+  "scopePaths": 26,
+  "scopeExactMatch": true,
+  "traceabilityRows": 58,
+  "traceabilityMissingTargets": 0,
+  "reportPath": "/tmp/mujungi-u14-verification-build/core-api/build/reports/jacoco/test/jacocoTestReport.xml",
+  "followup": "Parent runs independent review iteration 2 and full backend/compose/CI on repair commit; not claimed completed here."
+}

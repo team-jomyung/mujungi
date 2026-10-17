@@ -1,8 +1,33 @@
+> 현재 범위의 정본은 바로 아래 U14 갱신절이다. 그 뒤 원문은 보존 이력이며 재검증 범위는 timestamp에 한정한다.
+
+## U14 집중 갱신 — 변경 표면
+
+운영 서비스·저장소는 core.practice / core.result, 보고 투영은 core.report.ReportAssembler다. core V4에 후보·선택의 행동 정의 FK가 있으며 V5에 결과 시도·장면 제약이 있다. V8 파일은 U15로 이미 존재하므로 U14는 V9를 새로 추가한다. 적용된 V4/V5를 편집하지 않는다.
+
+U15 ChildKnowledgeService, SeedGenerationService, StructureSignature는 구현되어 있고 별도 ChildKnowledgeGraphPort 및 Neo4j/메모리 어댑터 파일이 존재한다. 이번에는 서비스 통합 경계만 깊게 읽었으며 Cypher·전체 그래프 내부는 재검증하지 않았다. U14는 SavedGoalReader를 제공해야 한다(현 practice/result 선언 검색에서 미발견).
+
+정확한 deep 파일은 timestamp에 제한한다. 나머지 기존 구조 설명은 보존한 과거 관찰이다.
+
+---
+
 # 코드 구조 (Code Structure)
 
-> 기준(혼합): **이번 갱신** = 커밋 `9bcc706`(= main `7e30ee8` + U11 지시서), 2026-10-16 집중 스캔(인텐트 `261016-u11-judgment-turn`). 갱신한 곳은 `contracts/` 행, contract-model `ws` · `event` 행, realtime-activity 표 전체, realtime 자원 파일, 「realtime 세션 실행기 내부 지도」 절, 코드 패턴의 표시 항목이다.
-> **그 밖의 문장** = 커밋 `72d7034`(2026-10-15 전체 재스캔) 그대로이며 그 뒤 core-api · frontend · tools 변경은 다시 확인하지 않았다(STALE).
-> 구성 요소별 책임은 [component-inventory.md](component-inventory.md), 빌드 의존은 [dependencies.md](dependencies.md)를 본다.
+> 최신 확인: 2026-10-16, HEAD 7e30ee8, U15 집중 분석. 아래 최신 절이 U15 관련 과거 설명보다 우선한다. 이전 분석 본문은 이력으로 보존하며 이번 범위 밖의 검증 주장은 shallow로 낮췄다.
+
+## U15 집중 분석 구조
+
+- core/knowledge: 모델, JDBC 저장소, 서비스, 공개 그래프 포트.
+- core/luna: 선택적 외부 호출, 입력 정리, 목적별 스키마, 제한 재시도.
+- core/common/deletion 및 account/DeletionCommander: 멱등 삭제 참가자와 재시도 지휘.
+- core/result/check/ForbiddenDictionary: 금지문구 검사. 리포트 안내문 예외를 씨앗에 그대로 사용하지 않는다.
+- contracts/schemas/ai-seed-output.schema.json: 현재 두 필드만 허용. core-api processResources가 복사하므로 별도 정본을 만들지 않는다.
+- core V7 및 afterMigrate: 기존 마이그레이션 경계. U15 V8은 아직 없다.
+
+정확한 검증 파일 목록은 시점 문서에 한정한다. 아래 전체 트리는 이전 스캔의 보존 자료다.
+
+## 이전 분석 기록 — 2026-10-15, 현재 범위 밖은 재검증하지 않음
+
+> 기준: 커밋 `72d7034`, 2026-10-15 전체 재스캔. 구성 요소별 책임은 [component-inventory.md](component-inventory.md), 빌드 의존은 [dependencies.md](dependencies.md)를 본다.
 
 ## 저장소 최상위
 
@@ -11,12 +36,12 @@
 | `backend/` | 앱 소스 | Gradle 멀티 프로젝트: `contract-model` · `core-api` · `realtime-activity` · `test-support` + 포함 빌드 `build-logic`, `coverage-scope/*.txt` |
 | `frontend/` | 앱 소스 | Next.js 웹 앱 1개(`src/app` 라우트 · `src/parent` · `src/device` · `src/shared`), `tests/u1…u7`, `coverage-scope/*.json` |
 | `tools/` | 시험 도구 | `fake-provider` · `device-simulator` · `skeleton-e2e` · `dev-edge` · `seed` · `lib`, `tests/` |
-| `contracts/` | 계약 정본 | (2026-10-16 갱신) OpenAPI 3개 · AsyncAPI 2개 · JSON Schema 71개(U8이 Luna · 제브 스키마 9종 · `practice-record-v2` 등을 더함) · 규칙 문서(`timing` 233줄 · `errors` · `ports` · `ai-io` 393줄 · `deviations` 171줄) |
+| `contracts/` | 계약 정본 | OpenAPI 3개 · AsyncAPI 2개 · JSON Schema 60개 · 규칙 문서(`timing` · `errors` · `ports` · `ai-io` · `deviations`) |
 | `infra/` | 배포 구성 | Compose(dev · ci · demo) · nginx · migrate · postgres · backup · bundle · seed · seed-audio · host · bin · aws · ci 스크립트, `RUNBOOK.md`, `migration-approvals.txt` |
 | `scripts/` | 검증 | `verify.sh`(A · B · C 단계) + `verify/*`, `cloud-setup.sh` |
 | `ci/` | CI 보조 | `security-gate.py`, `security-exceptions.yml` |
 | `.github/workflows/` | CI/CD | `ci.yml`, `deploy.yml` |
-| `docs/` | 문서 | `units/<u>/{brief,design,report}.md`(U11 지시서 `docs/units/u11/brief.md` 포함), `erd/`, `change-history.md`, `project-description.md`, `aidlc_drafts/` |
+| `docs/` | 문서 | `units/<u>/{brief,design,report}.md`, `erd/`, `change-history.md`, `project-description.md`, `aidlc_drafts/` |
 | `aidlc/`, `.claude/` 등 | 작업 방식 | AI-DLC 기록 · 설정(스캔 제외) |
 
 ## 백엔드 패키지 구조
@@ -27,14 +52,14 @@
 
 | 패키지 | 파일 · 줄 | 내용 |
 |---|---|---|
-| `ws` | 22 · 996 | `WsMessageType`(17종 + `UNRECOGNIZED`) · `WsEnvelope` · `WsPayload` · `CloseCode` · `message/*`(메시지 레코드 17개 + 보기 열거 `View`: STANDBY · LISTENING · THINKING · CLOSING · UNRECOGNIZED) (2026-10-16 재확인) |
-| `event` | 10 · 595 | `EventType`(6종) · `EventEnvelope` · `EventPayload` · `AggregateType` · `payload/*`(6종). `SessionRecordCaptured.record`는 `Map<String, Object>`로 해석 없이 실어 나름 (2026-10-16 재확인) |
+| `ws` | 22 · 996 | `WsMessageType`(17종) · `WsEnvelope` · `WsPayload` · `CloseCode` · `message/*` |
+| `event` | 10 · 595 | `EventType`(6종) · `EventEnvelope` · `AggregateType` · `payload/*` |
 | `status` | 7 · 202 | `SessionStatus` · `EndReason` · `EndRequestReason` · `FailureCode` · `ActivityType` · `ConnectionState` · `RegistrationStatus` |
 | `log` | 5 · 956 | 구조화 로그 |
 | `json` | 1 · 448 | Jackson 3 직접 사용 유일 지점 |
 | `time` · `audio` · `error` · `profile` · `secret` · `trace` | 소형 | 시계 · 음성 형식 · 오류 봉투 · 프로필 · 비밀 · 추적 |
 
-### core-api (`kr.mujoong.core`, 23 패키지, 약 23.6천 줄 — 72d7034 기준)
+### core-api (`kr.mujoong.core`, 23 패키지, 약 23.6천 줄)
 
 | 패키지 | 파일 · 줄 | 역할 |
 |---|---|---|
@@ -55,33 +80,20 @@
 | `internalhttp` | 2 · 377 | 내부 HTTP 클라이언트 · 인증 인터셉터 |
 | `catalog` · `textai` · `knowledge` · `health` | 소형 | 승인 콘텐츠 목록 · 텍스트 AI 포트 · 지식 그래프 포트 · 헬스 |
 
-U9 이후 core에 Luna 호출부(`CoreLunaClient`, `contracts/deviations.md` U9-a)가 더해졌으나 이번 스캔은 core를 다시 세지 않았다.
-
-### realtime-activity (`kr.mujoong.realtime`, 19 패키지, 194 파일 · 28,141줄 — 2026-10-16 재집계)
+### realtime-activity (`kr.mujoong.realtime`, 17 패키지, 약 25.9천 줄)
 
 | 패키지 | 파일 · 줄 | 역할 |
 |---|---|---|
-| `session` | 34 · 7,978 | 세션 상태 · 전이 표 · 타이머(`SessionTimers.Kind` 11종) · 직렬 실행기(`SessionExecutor` 3,388줄) · 편지함(`SessionMailbox`) · 확장점 포트(`PracticeSessionExtension` · `NoOpPracticeSessionExtension`) · 정산 · 기록 캡처(`RecordCaptureService` · `ResultSnapshotBuilder`) · 내부 컨트롤러(`web/`) |
-| `gateway` | 21 · 3,552 | `/ws/device` 핸들러 · 핸드셰이크 · 하트비트 · 연결 상태 · 소켓 등록 (얕게) |
-| `messaging` | 19 · 1,960 | Realtime Outbox/Inbox, 삭제 참여자 계약 `RealtimeDeletionParticipant`(`order()`: 음성 100 → 연습 150 → 세션 200 → 메시징 900) |
-| `log` | 9 · 1,948 | 대화 기록(`TranscriptWriter` · `TranscriptRepository` · `AsyncRecorder`) · 지연 · 세션 공백 기록 |
-| `practice` | 29 · 1,609 | U5b 레거시 연습 런타임(`RuntimePracticeExtension`, `controlsOutput()=true`), 포트 `EvaluationProvider` · `CueProvider` · `PracticePorts`, 기본 빈 `PracticeRuntimeConfiguration` |
-| `luna` | 15 · 1,529 | **U9 신규.** `RealtimeLunaClient`(목적 `JUDGMENT_LIVE` 하나) · `LunaTransport`(JDK `HttpClient`) · `LunaConfiguration`(키 있을 때만 빈) · `LunaKeyPresentCondition` · `LunaRequest` · `LunaResult` · `LunaException` · `LunaFailureReason` · `LunaPurpose` · `LunaProperties` · `LunaSchemas` · `LunaInputSanitizer` · `SanitizedInput` · `LunaHosts` · `LunaStartup` |
-| `voice` | 10 · 1,398 | 공급자 포트(`ProviderPort`) · 선 형식 클라이언트(`ProviderClient`) · 요청 생성(`ProviderRequestFactory`) · 연결(`ProviderConnector`) · 입력 중계(`InputRelay`) · 음성 탭 · 연습 지시 값 타입(`PracticeInstruction` 500자 · 제어 문자 금지, `PracticeSpeech`) · `ProviderResponseId` |
-| `dialog` | 5 · 1,208 | 역할 지시문(`DialogInstructions`: `Correction` 열거 · `JOIN_FIRST_QUESTION`) · 침묵 시계 · 종료 의도 판정(`StopIntentJudge`) · 종료 확인 · 참여 추적(`JoinTracker`). 상태 없는 판정기 |
+| `session` | 34 · 7,885 | 세션 상태 · 전이 표 · 타이머 · 실행기(`SessionExecutor` 3,388줄) · 기록 캡처 · 내부 컨트롤러 |
+| `gateway` | 21 · 3,552 | `/ws/device` 핸들러 · 핸드셰이크 · 하트비트 · 연결 상태 · 소켓 등록 |
+| `messaging` | 19 · 1,960 | Realtime Outbox/Inbox |
+| `log` | 9 · 1,948 | 대화 기록 · 지연 · 세션 공백 기록 |
+| `practice` | 29 · 1,609 | 연습 런타임(판정 · 단서 · 상황 클라이언트) |
+| `voice` | 10 · 1,390 | 공급자 연결 · 요청 생성 · 입력 중계 · 음성 탭 |
+| `dialog` | 5 · 1,208 | 역할 지시문 · 침묵 시계 · 중단 의도 판정(565줄) · 중단 확인 · 합류 추적 |
 | `observability` | 8 · 1,151 | 지표 |
-| `startup` | 8 · 921 | 기동 점검 |
-| `gate` | 6 · 885 | 출력 게이트(`OutputGate` 상태 없음: `inspect` · `recheck`) · 판정 결과(`GateDecision`) · 문장 버퍼(`SegmentBuffer`) · 시드 사전 · 승인 재생(`ApprovedPlayback`) · 마무리 순서. 프레임 경로(영속 API 금지) |
-| `recording` | 3 · 798 | 원음 녹음(`FileAudioRecorder`) |
-| `common` | 8 · 682 | 공통 |
-| `web` | 6 · 560 | 웹 |
-| `config` | 2 · 553 | `RealtimeProperties`(루트 레코드, `Timing` · `JudgmentTiming` 포함) |
-| `content` | 2 · 504 | **U8 신규.** `LiveContentRegistry`(세션별 판 고정 · `plan(sessionId)`) · `LiveContentResources`(판정 선택지 · 가드레일 정책 판 리소스 읽기) |
-| `internalhttp` | 2 · 370 | 내부 HTTP |
-| `runtime` | 4 · 326 | 실행기 배선(`RealtimeRuntimeConfig`: `Services` 묶음 · 런처 · 타이머 드라이버) |
-| `health` | 2 · 191 | 헬스 |
-
-시험: `backend/realtime-activity/src/test/java/kr/mujoong/realtime/` 164 파일(arch · config · content · db · dialog · gate · gateway · log · luna · messaging · observability · practice · recording · session · startup · testing · voice · web).
+| `gate` | 6 · 885 | 출력 게이트 · 문장 버퍼 · 시드 사전 · 승인 재생 · 마무리 순서 |
+| `startup` · `recording` · `common` · `web` · `config` · `internalhttp` · `runtime` · `health` | 소형~중형 | 기동 · 원음 녹음(`FileAudioRecorder` 619줄) · 공통 · 웹 · 설정 · 내부 HTTP · 타이머/작업 실행기 · 헬스 |
 
 ### test-support
 
@@ -89,8 +101,30 @@ U9 이후 core에 Luna 호출부(`CoreLunaClient`, `contracts/deviations.md` U9-
 
 ## 자원 파일
 
-- core: `application{,-dev,-demo,-prod,-load-test}.yml`, `db/migration/core/V1~V7 + afterMigrate.sql`, `prompts/result/*.v1.txt`, `forbidden/result-v1.json`, `textai/u5a-forbidden-patterns.txt`, `report/`(폰트 등), `logback-spring.xml`. (72d7034 기준)
-- realtime (2026-10-16 갱신): `application{,-dev,-demo,-prod}.yml`(`mujoong.timing.judgment.*` · `mujoong.luna.*` 포함, `luna.model` 기본 `${OPENAI_JUDGE_MODEL:gpt-6-luna}`), `db/migration/realtime/V1__realtime_base` · `V2__u3_voice_conversation` · `V3__u4b_session_lifecycle` · `V4__u5b_practice` + `afterMigrate.sql`, `gate/`(시드 사전), `judgment/option-sets-v1.json`(J1 ~ J6 선택지), `guardrail/policy-v1.json`, `practice/u5b-*.yml`, `logback-spring.xml`. 빌드 때 `luna/schemas/`에 `contracts/schemas/ai-*.schema.json` · `common.schema.json`이 복사된다.
+- core: `application{,-dev,-demo,-prod,-load-test}.yml`, `db/migration/core/V1~V7 + afterMigrate.sql`, `prompts/result/*.v1.txt`, `forbidden/result-v1.json`, `textai/u5a-forbidden-patterns.txt`, `report/`(폰트 등), `logback-spring.xml`.
+- realtime: `application{,-dev,-demo,-prod}.yml`, `db/migration/realtime/V1~V4 + afterMigrate.sql`, `gate/`(시드 사전), `practice/u5b-*.yml`, `logback-spring.xml`.
+
+## 프런트엔드 구조
+
+- `src/app/` 라우트: `/parent`(홈) · `/parent/login`(+ `callback`, `google` route) · `/parent/dev-login` · `/parent/consent` · `/parent/child`(+ `stop-expressions`) · `/parent/device`(+ `register`) · `/parent/free` · `/parent/practice` · `/parent/sessions/[sessionId]`(+ `done`) · `/parent/records`(+ `[sessionId]`) · `/parent/reports/new` · `/parent/reports/[reportId]` · `/parent/push-worker`(route) · `/device` · `/device/pcm-capture-worklet`(route) · `/healthz`(route).
+- `src/parent/`: `screens/`(17 스크린: Login01 · LoginCallback · DevLogin · Consent02 · Child03 · Home04 · Device05 · Register05a · Free08 · Live12 · Done17 · Practice18 · Records26 · RecordDetail27 · ReportRange28 · Report30 · StopExpressions01), `api/` · `activity/` · `practice/` · `push/` · `hooks/` · `components/`.
+- `src/device/`: `components/`(D0View · T19View · DebugLog), `machine/`(화면 상태 기계) · `ws/` · `mic/` · `audio/` · `runtime/` · `power/` · `api/`.
+- `src/shared/`: `protocol/`(WS 계약 대응) · `timing/`(`timing-defaults.json`) · `copy/`(화면 문구) · `errors/` · `security/` · `styles/` · `toast/`.
+
+## 코드 패턴
+
+- **포트 + 기본 빈**: 외부 AI · 지식 그래프는 인터페이스와 `@ConditionalOnMissingBean` 기본 실패 빈(TD-1).
+- **삭제 참여자**: 각 패키지가 `*DeletionParticipant`를 구현해 계정 삭제에 참여.
+- **Outbox/Inbox 쌍**: Writer · Sender · Repository · Receiver · Dispatcher · Repoller · CleanupJob · `ControlEventRearm`이 양 앱에 대칭으로 있음.
+- **전이 표**: `TransitionTable` · `SessionTransitions` · `TransitionService`로 상태 전이를 표로 관리.
+- **주석**: 한국어 Javadoc, 결정 ID(J · BR · U*-J · 편차) 인용.
+- **화면 문구**: 프런트 화면 문구는 `shared/copy` 모듈만(ESLint `react/jsx-no-literals`).
+
+---
+
+## U11 집중 갱신 (261016-u11-judgment-turn, 2026-10-16 스캔 — main 병합 때 보존한 절)
+
+> main의 U14 · U15 갱신본을 바탕으로 두고, U11 작업 기록의 집중 스캔에서 갱신한 절만 아래에 보존했다. 줄 번호 · 커밋은 2026-10-16 `9bcc706` 기준이며 PR1(선 형식 정비) 이전 코드다.
 
 ## realtime 세션 실행기 내부 지도 (2026-10-16 집중 스캔)
 
@@ -105,23 +139,3 @@ U9 이후 core에 Luna 호출부(`CoreLunaClient`, `contracts/deviations.md` U9-
 | 기술 일시정지 | L2046 ~ | `startPause` |
 | 생각 중 · 게이트 · 공급자 송신 | L2116 ~ L2375 | `thinking()`(L2135) · `listeningAgain()`(L2142), `sealAndGate`(L2165 ~ L2206), `toProvider`(L2324 ~ L2340) · `enqueuePracticeProvider`(L2342 ~ L2361) |
 | 정산 | L1113 | `finishSettle` → `SessionSettlement.capture` |
-
-## 프런트엔드 구조 (72d7034 기준)
-
-- `src/app/` 라우트: `/parent`(홈) · `/parent/login`(+ `callback`, `google` route) · `/parent/dev-login` · `/parent/consent` · `/parent/child`(+ `stop-expressions`) · `/parent/device`(+ `register`) · `/parent/free` · `/parent/practice` · `/parent/sessions/[sessionId]`(+ `done`) · `/parent/records`(+ `[sessionId]`) · `/parent/reports/new` · `/parent/reports/[reportId]` · `/parent/push-worker`(route) · `/device` · `/device/pcm-capture-worklet`(route) · `/healthz`(route).
-- `src/parent/`: `screens/`(17 스크린: Login01 · LoginCallback · DevLogin · Consent02 · Child03 · Home04 · Device05 · Register05a · Free08 · Live12 · Done17 · Practice18 · Records26 · RecordDetail27 · ReportRange28 · Report30 · StopExpressions01), `api/` · `activity/` · `practice/` · `push/` · `hooks/` · `components/`.
-- `src/device/`: `components/`(D0View · T19View · DebugLog), `machine/`(화면 상태 기계) · `ws/` · `mic/` · `audio/` · `runtime/` · `power/` · `api/`.
-- `src/shared/`: `protocol/`(WS 계약 대응) · `timing/`(`timing-defaults.json`) · `copy/`(화면 문구) · `errors/` · `security/` · `styles/` · `toast/`.
-
-## 코드 패턴
-
-- **포트 + 기본 빈**: 외부 AI · 지식 그래프는 인터페이스와 `@ConditionalOnMissingBean` 기본 실패 빈(TD-1). (2026-10-16 갱신) U9 Luna는 반대로 **키가 있을 때만 실제 빈**(`@Conditional(LunaKeyPresentCondition)`)이고 기본 빈이 없다 — 호출하는 쪽이 빈 부재를 처리해야 한다.
-- **삭제 참여자**: 각 패키지가 `*DeletionParticipant`를 구현해 계정 삭제에 참여. realtime은 `order()` 오름차순 실행.
-- **Outbox/Inbox 쌍**: Writer · Sender · Repository · Receiver · Dispatcher · Repoller · CleanupJob · `ControlEventRearm`이 양 앱에 대칭으로 있음.
-- **전이 표**: `TransitionTable` · `SessionTransitions` · `TransitionService`로 상태 전이를 표로 관리.
-- **(2026-10-16 갱신) 세션당 직렬 실행기 + 편지함**: 다른 스레드는 `SessionMailbox`(안전 편지함 `putSafety` 포함)에 메시지를 넣고 실행기 스레드만 상태를 바꾼다. 공급자 · 기기 송신은 보조 작업(가상 스레드)으로 내보낸다.
-- **(2026-10-16 갱신) 확장점 능력 추가는 `default` 메서드**: `PracticeOutput.speak` · `cancelSpeech`가 `default … { return false; }` — 기존 구현(`RuntimePracticeExtension` · `NoOpPracticeSessionExtension` · 시험 대역 `RecordingPracticeExtension`)을 고치지 않고 능력을 넓힌다.
-- **(2026-10-16 갱신) 세대 번호 · 취소 목록**: 출력권 확장의 `speak`는 `bumpGeneration` · `cancelledResponses`로 이전 응답을 버리고 지시 뒤 첫 응답을 받는다.
-- **(2026-10-16 갱신) 같은 파일 안 두 서식**: `SessionExecutor`의 U5b 추가분(`speak` L1405 ~ L1428, `enqueuePracticeProvider`)과 `PracticeSessionExtension` L148 ~ L166은 한 줄 여러 문장 · 완전 한정 이름(`java.util.…`, `kr.mujoong.realtime.voice.PracticeSpeech`)을 쓴다. 팀 규칙 Q7-A대로 손대는 부분만 정리 대상.
-- **주석**: 한국어 Javadoc, 결정 ID(J · BR · U*-J · 편차) 인용. `SessionExecutor` 머리 주석은 U1 · U3 범위까지만 설명하고 U4b · U5b 추가분은 메서드 주석에 흩어져 있다.
-- **화면 문구**: 프런트 화면 문구는 `shared/copy` 모듈만(ESLint `react/jsx-no-literals`).

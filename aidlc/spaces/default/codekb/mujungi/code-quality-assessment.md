@@ -1,62 +1,99 @@
+> 현재 범위의 정본은 바로 아래 U14 갱신절이다. 그 뒤 원문은 보존 이력이며 재검증 범위는 timestamp에 한정한다.
+
+## U14 집중 갱신 — 확인 사실과 검증 계획
+
+이번 스캔은 읽기만 했고 시험·커버리지를 실행하지 않았다. U15의 이전 보고/CI 수치는 이번 U14 검증 결과로 재사용하지 않는다. result/practice 시험 목록과 SceneChipMapperTest·JobRunnerTest를 확인했다. u14.txt는 아직 없고 u6/u15 범위 목록은 있다. 새 시험은 u14 태그·LINE 80% 범위를 추가하고 타 유닛 단언·하한을 낮추지 않는다.
+
+주요 회귀: 기존 행동 목표 읽기, 후보 버전 고정·동시 선택·삭제, 새 목표 근거 검증, invalid skillRef 거절 및 NONE 처리, seed 생성 장애 후 결과 DONE 유지, 기존 U5b와 새 flowVersion 혼합 리포트, 3개 이상 실제 장면, AFTER_REASK 저장/API/report와 27 칩 분리, 4번째 시도 및 5/15/30초 backoff, 삭제 중 늦은 쓰기 차단. fake 공급자만 사용한다.
+
+중요 발견: V5의 attempt_count뿐 아니라 core_result_job_attempt.attempt_no도 1..3 제약이다. 4회 시도에서 두 제약을 함께 검토해야 한다. V4의 후보·선택은 행동 키/버전 NOT NULL과 복합 FK이므로 새 후보용 저장 구조를 호환 확장해야 한다. migration-approvals.txt는 실제 사람이 확인한 문장 해시·이름·날짜를 요구한다. 승인자의 이름을 만들어 적지 않는다.
+
+품질: 책임 명명·출력 검증·잠금 경계는 양호하나 SessionResultHandler/ResultAiSchema/ReportAssembler의 압축된 로직은 보통 수준이며 버전 분기로 복잡도가 늘어날 위험이 있다. U15가 구현되었으므로 아래 TD-3의 어댑터 부재와 U15 미구현 서술은 더 이상 현재 사실이 아니다.
+
+---
+
 # 코드 품질 평가 (Code Quality Assessment)
 
-> 기준(혼합): **이번 갱신** = 커밋 `9bcc706`(= main `7e30ee8` + U11 지시서), 2026-10-16 집중 스캔(인텐트 `261016-u11-judgment-turn`). 갱신 · 확장한 곳은 1절의 realtime 행, 5절 TD-1 · TD-2 · TD-4 · TD-7 · TD-8의 표시 내용, 새 6절 「U11 판정 턴 관점 위험(U11-Rn)」이다.
-> **그 밖의 문장** = 커밋 `72d7034`(2026-10-15 전체 재스캔) 그대로다(STALE). 이 문서가 기술 부채(TD-n)와 U11 위험(U11-Rn) 목록의 정본이며, 다른 문서는 번호로 가리킨다.
+> 최신 확인: 2026-10-16, HEAD 7e30ee8, U15 집중 분석. 아래 최신 절이 U15 관련 과거 설명보다 우선한다. 이전 분석 본문은 이력으로 보존하며 이번 범위 밖의 검증 주장은 shallow로 낮췄다.
+
+## U15 검증 결과와 후속 위험
+
+기존 PragmaticsKnowledgeTest는 disabled 무호출, enabled-without-adapter 오류, 공개 행동키와 과거 정의를 고정한다. U15에서 이 단언을 보존한다. LunaArchTest와 기존 Luna 경계도 회귀 대상이다. U15 기능 자체는 미구현이며 통과율·커버리지 수치를 아직 보고하지 않는다.
+
+필수 검증: child A/B 격리, 멱등 쓰기·삭제, NONE/꺼짐, 실제 Neo4j Cypher CRUD, 2초 제한과 늦은 작업, V8 권한·마이그레이션, 생성/삭제 경쟁, 외부 삭제 실패 재시도, 원문/개인정보 비노출, 내용 검증·재생성 예산, source zip 해시 보존, u15 LINE 80% 및 기존 u2/u5a/u6/u9 회귀.
+
+이번 기준 실행은 Java 컴파일까지 진행했으나 PostgreSQL 초기화 스크립트의 CRLF 때문에 컨테이너가 exit 127로 실패했다(env: bash\\r). 성공한 기준 시험으로 취급하지 않는다. Linux 실행용 체크아웃 줄바꿈을 복구한 뒤 재검증해야 한다.
+
+우선 위험: 삭제 실패를 빈 값으로 삼키는 오류, 삭제 후 늦은 생성 쓰기, 결과 FK와 삭제 순서 충돌, Luna 선택적 빈의 필수 주입, 중첩 재시도, 리포트용 금지문구 예외 오용. 아래 오래된 기술 부채 중 Luna 미연결 평가는 이번에 확인된 U9 구현으로 대체한다.
+
+## 이전 분석 기록 — 2026-10-15, 현재 범위 밖은 재검증하지 않음
+
+> 기준: 커밋 `72d7034`, 2026-10-15 전체 재스캔. 이 문서가 기술 부채(TD-n) 목록의 정본이며, 다른 문서는 TD 번호로 가리킨다.
 
 ## 1. 시험
 
 | 위치 | 규모 | 비고 |
 |---|---|---|
-| `backend/contract-model/src/test/` | 15 클래스 · @Test 120 | 계약 타입 (72d7034) |
-| `backend/core-api/src/test/` | 157 클래스 · @Test 996 | ArchUnit `core/arch` 포함 (72d7034) |
-| `backend/realtime-activity/src/test/` | (2026-10-16 갱신) 164 파일 | ArchUnit `realtime/arch`(`RealtimeArchTest` · `LunaArchTest` · `U8LiveContentArchTest` · `SingleInstanceMarkerTest` · `TimeLiteralScanTest`), 실행기 시험 장치 `testing/`, 설정 대조 `config/ConfigKeyContractTest`, 스키마 `db/RealtimeSchemaIT` |
-| `backend/test-support/src/test/` | 4 클래스 · @Test 21 | (72d7034) |
-| `frontend/tests/u1 … u7/` | 시험 파일 73 | Vitest + Testing Library + jsdom (72d7034) |
-| `tools/tests/u1 · u3 · u4a · u4b/` | 11 | Vitest (72d7034) |
+| `backend/contract-model/src/test/` | 15 클래스 · @Test 120 | 계약 타입 |
+| `backend/core-api/src/test/` | 157 클래스 · @Test 996 | ArchUnit `core/arch` 포함 |
+| `backend/realtime-activity/src/test/` | 126 클래스 · @Test 819 | ArchUnit `realtime/arch` 포함 |
+| `backend/test-support/src/test/` | 4 클래스 · @Test 21 | |
+| `frontend/tests/u1 … u7/` | 시험 파일 73 | Vitest + Testing Library + jsdom |
+| `tools/tests/u1 · u3 · u4a · u4b/` | 11 | Vitest |
 | `infra/ci/test-*.sh` | — | Bash 음성 대조 시험 |
 | `tools/skeleton-e2e/`, `scripts/verify/c-skeleton-turn.sh` | — | 끝-끝 스켈레톤 |
 
-백엔드 시험 태그(72d7034, 전 모듈): db 107 · u1 142 · u2 15 · u3 24 · u4a 5 · u4b 24 · u5a 11 · u5b 34 · u6 35 · u7 17.
-(2026-10-16 갱신) realtime-activity 시험 태그(클래스 기준): db 43 · u1 54 · u3 24 · u4b 23 · u5b 27 · u8 9 · u9 5 · `luna-live` 1(격리). **`u11` 태그 시험은 아직 없다.**
+백엔드 시험 태그: db 107 · u1 142 · u2 15 · u3 24 · u4a 5 · u4b 24 · u5a 11 · u5b 34 · u6 35 · u7 17.
 
-커버리지: 백엔드 JaCoCo 줄 80% 하한(모듈별, test-support 제외), `-PcoverageScope=<유닛>`로 `backend/coverage-scope/*.txt` 범위 측정(빈 목록 · 없는 파일이면 실패, J137). 프런트 v8 줄 80% 하한, `MUJOONG_COVERAGE_SCOPE`로 `frontend/coverage-scope/*.json` 범위 측정. CI가 전체 + U5b · U7 범위를 따로 검증. (2026-10-16 확인) `backend/coverage-scope/u11.txt`는 아직 없다.
+커버리지: 백엔드 JaCoCo 줄 80% 하한(모듈별, test-support 제외), `-PcoverageScope=<유닛>`로 `backend/coverage-scope/*.txt` 범위 측정. 프런트 v8 줄 80% 하한, `MUJOONG_COVERAGE_SCOPE`로 `frontend/coverage-scope/*.json` 범위 측정. CI가 전체 + U5b · U7 범위를 따로 검증. org 기본 `classic` 범위의 줄 80% 하한은 이미 CI에 걸려 있다.
 
-실행기 시험 장치(2026-10-16 확인): `testing/SessionHarness`(수동 시계 `MutableClock` · `ManualTimerDriver` · `FakeProviderPort` · `ManualLauncher` · `FakeDeviceLink` · `MemoryStore`), 확장점 대역 `RecordingPracticeExtension`. `ManualLauncher`는 등록한 작업을 등록 순서대로 한 스레드에서 돌린다 → 운영의 가상 스레드 경쟁(U11-R2)을 재현하지 못한다.
-
-이번 스캔에서 시험은 돌리지 않았다(읽기 전용). 기준선은 Code Generation 전에 잰다.
+시험 개수 · 태그만 확인했고 시험 본문 품질은 보지 않았다.
 
 ## 2. 린트 · 서식
 
 - 프런트: ESLint flat config(`frontend/eslint.config.mjs`) — next core-web-vitals · typescript, `/parent` ↔ `/device` ↔ `shared` import 경계, `react/no-danger`, `react/jsx-no-literals`(화면 문구는 copy 모듈만), `getUserMedia` 사용처 1곳, 서비스 워커 금지(U7 보호자 SW 예외).
-- 백엔드: javac `-Xlint:all,-processing,-serial,-this-escape,-try`(경고를 오류로 바꾸지 않음) + ArchUnit 계층 · 의존 규칙 + `TimeLiteralScanTest`. Java 포매터(Spotless · Checkstyle) · 줄 길이 검사 없음.
+- 백엔드: javac `-Xlint:all`(경고를 오류로 바꾸지 않음) + ArchUnit 계층 · 의존 규칙. Java 포매터(Spotless · Checkstyle) 없음.
 - `.prettierrc.json`(printWidth 100) · `.editorconfig` 있음. CI에 Prettier 검사 단계 없음.
-- (2026-10-16 갱신) `SessionExecutor` 안 두 서식: U5b 추가분(`speak` L1405 ~ L1428, `enqueuePracticeProvider` L2342 ~ L2361)과 `PracticeSessionExtension` L148 ~ L166이 한 줄 여러 문장 · 완전 한정 이름(`java.util.…` 22곳 등)을 쓴다. 팀 규칙 Q7-A: 손대는 부분만 정리.
 
 ## 3. CI/CD
 
-- `.github/workflows/ci.yml` 작업: changes · backend(`gradle clean check verifyBootJarHasNoTestClasses`) · u5b-scope · U7 범위 · backend-deps(Trivy) · frontend(ESLint · Vitest 커버리지 · `next build` · 번들 비밀 문자열 0건) · frontend-deps(npm audit) · tools · secrets(gitleaks) · infra-validate(Compose 불변식 12 · `nginx -t` · shellcheck · 마이그레이션 expand 검사) · images(6종 빌드 · Trivy · 이미지 점검 · GHCR 푸시) · skeleton. 액션은 커밋 SHA 고정. (72d7034; 2026-10-16에는 이름만 확인)
-- `.github/workflows/deploy.yml`(단계 이름만 확인): 수동/자동 DEPLOY · ROLLBACK, OIDC → SSM `mujoong-deploy`, demo 환경. `SERVICE_HOST` · `AUTO_DEPLOY` 변수가 없어 실제 배포 단계는 건너뛴다.
-- (2026-10-16 갱신) 실호출 시험 `lunaLiveTest`는 CI · `check`에 없고 루트 `verifyLunaLiveIsolation`이 격리를 강제한다(편차 U9-c). GPT-Live 실선 형식을 확인하는 같은 격리 작업은 없다.
+- `.github/workflows/ci.yml` 작업: changes · backend(`gradle clean check verifyBootJarHasNoTestClasses`) · u5b-scope · U7 범위 · backend-deps(Trivy) · frontend(ESLint · Vitest 커버리지 · `next build` · 번들 비밀 문자열 0건) · frontend-deps(npm audit) · tools · secrets(gitleaks) · infra-validate(Compose 불변식 12 · `nginx -t` · shellcheck · 마이그레이션 expand 검사) · images(6종 빌드 · Trivy · 이미지 점검 · GHCR 푸시) · skeleton. 액션은 커밋 SHA 고정.
+- `.github/workflows/deploy.yml`(단계 이름만 확인): 수동/자동 DEPLOY · ROLLBACK, OIDC → SSM `mujoong-deploy`, demo 환경. `docs/units/README.md`에 따르면 `SERVICE_HOST` · `AUTO_DEPLOY` 변수가 없어 실제 배포 단계는 건너뛴다.
 
 ## 4. 문서화
 
-- 루트 `README.md` · `AGENTS.md`, `infra/RUNBOOK.md`(demo 운영 정본), `contracts/README.md` + `deviations.md`(171줄, U8 · U9 편차 표 포함), `docs/units/<u>/{brief,design,report}.md`(U11 지시서 포함), `docs/erd/ERD_v0.2.md`, `docs/change-history.md`.
-- 코드 주석: 한국어 Javadoc이 촘촘하고 결정 ID(J · BR · U*-J · 편차)를 인용한다. TODO · FIXME는 앱 소스에 0건(남은 일은 문서로 관리). (2026-10-16 갱신) `SessionExecutor` 머리 주석은 U1 · U3 범위까지만 설명하고 U4b · U5b 추가분은 메서드 주석에 흩어져 있다.
+- 루트 `README.md` · `AGENTS.md`, `infra/RUNBOOK.md`(demo 운영 정본), `contracts/README.md` + `deviations.md`(편차 67행), `docs/units/<u>/{brief,design,report}.md`, `docs/erd/ERD_v0.2.md`, `docs/change-history.md`.
+- 코드 주석: 한국어 Javadoc이 촘촘하고 결정 ID(J · BR · U*-J · 편차)를 인용한다. TODO · FIXME는 앱 소스에 0건(남은 일은 문서로 관리).
 
 ## 5. 기술 부채 (TD)
 
-| ID | 내용 | 위치 · 증거 | 영향 | 관계 |
+| ID | 내용 | 위치 · 증거 | 영향 | 갱신 문서 작업과의 관계 |
 |---|---|---|---|---|
-| TD-1 | **AI 공급자 운영 어댑터 부재 — 기본 빈이 항상 실패(fail-closed)** | `core/textai/TextAiConfiguration.java`(`unavailableTextAiProvider` → `UNAVAILABLE`), `core/result/ResultTextConfiguration.java`(`PROVIDER_UNAVAILABLE`) — 72d7034. `realtime/practice/PracticeRuntimeConfiguration.java` L46 ~ L48(`EvaluationProvider` 실패 future "판정 공급자 미연결", `CueProvider.UNAVAILABLE`) — 2026-10-16 재확인. (2026-10-16 갱신) U9가 realtime `RealtimeLunaClient`(`JUDGMENT_LIVE`)를 더했으나 **키가 있을 때만 빈**이고 소비자가 없다. core `CoreLunaClient`는 미재확인 | 운영에서 레거시 연습 판정 · 단서가 동작하지 않음. 판정 턴은 Luna 위에 새로 짜야 함 | U11-R6 |
-| TD-2 | **음성 공급자 선 형식이 프로젝트 정의(J110)** | 모델 `gpt-live-1`, `session.*` type 체계, URL `/v1/live/sessions` — `realtime/voice/ProviderRequestFactory.java`, `ProviderClient.java`, `application-{demo,prod}.yml`, `contracts/ai-io.md` 3절 | 실공급자 형식과 다르면 연결 불가. 가짜 공급자 · `test-support` 대역도 같은 형식이라 함께 바꿔야 함. (2026-10-16 갱신) 응답 생성 확인 사건이 없다 | U11-R1 |
-| TD-3 | 지식 그래프(Neo4j) 읽기 어댑터 없음 | `core/knowledge/KnowledgeGraphLookup` 인터페이스만, `mujoong.knowledge.neo4j.enabled=false`. Compose demo에 `neo4j` 서비스(프로필 knowledge)는 있음 | 기능 미사용, 설정 · 이미지만 존재 | — |
-| TD-4 | **거대 클래스 `SessionExecutor`** | `realtime/session/SessionExecutor.java` 3,388줄 · 상태 필드 약 70 · 메서드 약 130, 이 파일만 17번 커밋. 다음: `FileAudioRecorder` 619 · `CoreProperties` 576 · `StopIntentJudge` 565 | 세션 동작 변경의 영향 범위 · 리뷰 비용 큼. U11 · U13 · U12가 차례로 고침 | U11-R10 |
-| TD-5 | **압축 서식(한 줄에 메서드 전체)** | U6 계열 `core/report/web/ReportController.java`, `core/report/ReportRepository.java`, `core/result/SessionResultHandler.java`, `core/result/ResultAiSchema.java`, `core/result/ResultTextConfiguration.java`, 프런트 `parent/screens/Report30.tsx` · `RecordDetail27.tsx` · `ReportRange28.tsx` · `parent/api/results.ts`. (2026-10-16 갱신) realtime `SessionExecutor` · `PracticeSessionExtension`의 U5b 추가분 | 가독성 · diff 리뷰 저하. CI에 Java 포매터 · Prettier 검사가 없어 막히지 않음 | 팀 Q7-A |
-| TD-6 | **시간 값이 세 곳에 중복** | 두 앱 `application.yml`의 `mujoong.timing.*` ↔ `contracts/timing.md` ↔ `frontend/src/shared/timing/timing-defaults.json`(시험이 대조). 서버 전용 키는 timing.md · `application.yml` · 설정 레코드(편차 U8-c) | 하나만 바꾸면 시험 실패 또는 불일치 | R-M5 |
-| TD-7 | **마이그레이션 번호 · 승인 규칙** | 다음 번호 core V8 · realtime V5, Flyway `outOfOrder` 꺼짐, 기존 표 제약 강화는 `infra/migration-approvals.txt` 승인 행 필요. (2026-10-16 갱신) realtime 판 단언이 "4"에 묶임 | 병렬 브랜치 번호 충돌, V5 추가 시 앞 유닛 시험 단언 수정 필요 | U11-R4 |
-| TD-8 | **커버리지 범위 목록 유지 부담** | `backend/coverage-scope/*.txt` · `frontend/coverage-scope/*.json` + 유닛 태그. (2026-10-16 확인) `u11.txt` 없음 | 파일을 옮기거나 새로 만들면 목록 수정 필요 | — |
-| TD-9 | 유닛 혼합 이력 | U2~U5a는 엔진 없이 병렬 구현, U5b · U6 · U7은 통합 브랜치로 반영(`docs/units/README.md`) | 유닛마다 설계 문서 · 편차 기록의 밀도가 다름 | — |
+| TD-1 | **AI 공급자 운영 어댑터 부재 — 기본 빈이 항상 실패(fail-closed)** | `core/textai/TextAiConfiguration.java`(`unavailableTextAiProvider` → `TextAiException.Reason.UNAVAILABLE`), `core/result/ResultTextConfiguration.java`(`PROVIDER_UNAVAILABLE`), `realtime/practice/PracticeRuntimeConfiguration.java:46-51`(`EvaluationProvider` 실패 future, `CueProvider.UNAVAILABLE`). 실제 구현은 시험 대역(`FakeResultTextProvider` 등)뿐. 환경 변수 이름 `MUJOONG_TEXT_AI_ENDPOINT/MODEL/API_KEY`는 `application.yml` 주석에만 있음 | 운영에서 상황 생성 · 결과 문장 · 리포트 · 연습 판정 · 단서가 동작하지 않음. 기동 · 시험은 비밀 없이 가능 | `15_기술명세_AI동작_1015` 반영 시 핵심 변경 지점 |
+| TD-2 | **음성 공급자 선 형식이 프로젝트 정의(J110)** | 모델 `gpt-live-1`, `session.*` type 체계, URL `/v1/live/sessions` — `realtime/voice/ProviderRequestFactory.java:27-39`, `ProviderClient.java:190-205`, `application-{demo,prod}.yml` | 실공급자 형식과 다르면 연결 불가. 가짜 공급자(`tools/fake-provider/server.mjs`) · `test-support` 대역도 같은 형식이라 함께 바꿔야 함 | `40_기능명세_GPT-Live` 반영 시 핵심 변경 지점 |
+| TD-3 | 지식 그래프(Neo4j) 읽기 어댑터 없음 | `core/knowledge/KnowledgeGraphLookup` 인터페이스만, `mujoong.knowledge.neo4j.enabled=false`. Compose demo에 `neo4j` 서비스(프로필 knowledge)는 있음 | 기능 미사용, 설정 · 이미지만 존재 | 문서가 지식 그래프를 요구하면 새 어댑터 필요 |
+| TD-4 | **거대 클래스 `SessionExecutor`** | `realtime/session/SessionExecutor.java` 3,388줄(상태 · 타이머 · 출력 · 연습 확장 실행). 다음: `FileAudioRecorder` 619 · `CoreProperties` 576 · `StopIntentJudge` 565 | 세션 동작 변경의 영향 범위 · 리뷰 비용 큼 | 세션 전이 · 시간 값 변경 시 집중 스캔 필요 |
+| TD-5 | **압축 서식(한 줄에 메서드 전체)** | U6 계열 `core/report/web/ReportController.java`, `core/report/ReportRepository.java`, `core/result/SessionResultHandler.java`, `core/result/ResultAiSchema.java`, `core/result/ResultTextConfiguration.java`, 프런트 `parent/screens/Report30.tsx` · `RecordDetail27.tsx` · `ReportRange28.tsx` · `parent/api/results.ts`(250자 넘는 줄 다수) | 가독성 · diff 리뷰 저하. CI에 Java 포매터 · Prettier 검사가 없어 막히지 않음 | 결과 · 리포트 수정 시 서식 정리 여부 결정 필요 |
+| TD-6 | **시간 값이 세 곳에 중복** | 두 앱 `application.yml`의 `mujoong.timing.*` ↔ `contracts/timing.md` ↔ `frontend/src/shared/timing/timing-defaults.json`(시험이 대조) | 하나만 바꾸면 시험 실패 또는 불일치 | 문서의 시간 값 변경은 세 곳 동시 수정 |
+| TD-7 | **마이그레이션 번호 · 승인 규칙** | 다음 번호 core V8 · realtime V5, Flyway `outOfOrder` 꺼짐, 기존 표 제약 강화는 `infra/migration-approvals.txt` 승인 행이 있어야 CI expand 검사 통과 | 병렬 브랜치에서 번호 충돌 위험 | DB 변경 시 번호 · 승인 행 함께 |
+| TD-8 | **커버리지 범위 목록 유지 부담** | `backend/coverage-scope/*.txt` · `frontend/coverage-scope/*.json` + 유닛 태그 u1~u7 | 파일을 옮기거나 새로 만들면 목록 수정 필요(목록에 없는 파일이면 측정 실패) | 새 파일 추가 시 범위 목록 · 태그 수정 |
+| TD-9 | 유닛 혼합 이력 | U2~U5a는 엔진 없이 병렬 구현, U5b · U6 · U7은 통합 브랜치로 반영(`docs/units/README.md`) | 유닛마다 설계 문서 · 편차 기록의 밀도가 다름 | 문서 차이 계산 시 유닛별 편차 확인 |
 | TD-10 | 알려진 흔들림 · 남은 일 | `RealtimeInternalApiIT` 부하 시 409, 세션 문구 6종 음성이 합성음 자리(`infra/seed-audio/*-v1|v2.wav`), 시드 003을 검증 스크립트 · RUNBOOK 시드 순서에 넣는 일 | 시험 간헐 실패, 데모 음성 품질 | — |
+
+## 6. 이번 스캔의 확인 한계
+
+- 업무 로직 본문(core result · practice · activity, realtime session · gateway, frontend parent · device)은 얕게 봤다. 위 TD 중 TD-1 · TD-2 · TD-6은 파일을 직접 읽어 확인했고, TD-4 · TD-5는 크기 · 줄 길이로 판단했다.
+- 문서 차이가 특정 기능에 걸리면 그 경로를 집중 스캔해야 한다([reverse-engineering-timestamp.md](reverse-engineering-timestamp.md)의 `shallow.paths`).
+
+## 7. 종합
+
+시험 · CI · 계약 관리는 촘촘하다(시험 약 2천 개, 줄 80% 하한, 계약 시험, 불변식 검사). 약점은 (1) 외부 AI 운영 어댑터가 없고 음성 선 형식이 자체 정의라 실공급자 연결이 검증되지 않은 점, (2) 세션 실행기 집중과 압축 서식, (3) 시간 값 · 커버리지 범위 · 마이그레이션처럼 여러 곳을 함께 고쳐야 하는 규칙이다.
+
+---
+
+## U11 집중 갱신 (261016-u11-judgment-turn, 2026-10-16 스캔 — main 병합 때 보존한 절)
+
+> main의 U14 · U15 갱신본을 바탕으로 두고, U11 작업 기록의 집중 스캔에서 갱신한 절만 아래에 보존했다. 줄 번호 · 커밋은 2026-10-16 `9bcc706` 기준이며 PR1(선 형식 정비) 이전 코드다.
 
 ## 6. (2026-10-16 갱신) U11 판정 턴 관점 위험 (U11-Rn)
 
@@ -83,13 +120,3 @@
 - 확장점 포트는 더하기만으로 넓힐 수 있다 — `PracticeOutput`의 `default false` 선례(`speak` · `cancelSpeech`), `ExtensionEvent.Kind`를 다 훑는 `switch`가 운영 · 시험 코드에 없음(값 추가가 컴파일을 깨지 않음).
 - 레거시 `EvaluationProvider`(U5b)와 새 `JudgeClient`는 이름 · 역할이 겹치지만 별개로 둔다(지시서).
 - 스캔 범위에서 `Instant.now()` · `System.currentTimeMillis()` 직접 사용은 없다. 숫자 리터럴은 `SegmentBuffer.MAX_BYTES`(바이트) · `InputRelay.VOICE_ENERGY_THRESHOLD`(진폭) · `LunaTransport`의 `Retry-After` 해석 정도이고 허용 목록으로 관리된다.
-
-## 7. 이번 스캔의 확인 한계
-
-- 2026-10-15 전체 재스캔: 업무 로직 본문(core result · practice · activity, realtime session · gateway, frontend parent · device)은 얕게 봤다. TD-1 · TD-2 · TD-6은 파일을 직접 읽어 확인했고, TD-4 · TD-5는 크기 · 줄 길이로 판단했다.
-- 2026-10-16 집중 스캔: realtime 실행기 · 확장점 · 게이트 · 공급자 · Luna · 판 리소스 · 판정 계약을 깊게 봤다. gateway · messaging(삭제 참여자 밖) · startup · observability · recording · health · web · internalhttp, 연습 런타임 본문, 나머지 시험 본문, core-api · frontend · tools · infra는 다시 보지 않았다. 시험은 돌리지 않았다.
-- 저장소 판정이 STALE이므로 2026-10-15의 깊은 경로는 범위 블록에서 `shallow.paths`로 내렸다([reverse-engineering-timestamp.md](reverse-engineering-timestamp.md)).
-
-## 8. 종합
-
-시험 · CI · 계약 관리는 촘촘하다(시험 약 2천 개, 줄 80% 하한, 계약 시험, 불변식 검사, Luna 실호출 격리). 약점은 (1) 외부 AI 운영 경로가 부분적이고 음성 선 형식이 자체 정의라 실공급자 연결이 검증되지 않은 점, (2) 세션 실행기 집중과 압축 서식, (3) 시간 값 · 커버리지 범위 · 마이그레이션처럼 여러 곳을 함께 고쳐야 하는 규칙이다. (2026-10-16 갱신) U11 판정 턴은 확장점 · Luna 호출부 · 판 리소스라는 좋은 기반 위에 서지만, 보류 출력 갈래(U11-R3) · 송신 순서(U11-R2) · 선 형식 가정(U11-R1)은 그대로 기대면 요구를 어기므로 Functional Design에서 먼저 풀어야 한다.

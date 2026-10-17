@@ -1,7 +1,30 @@
+> 현재 범위의 정본은 바로 아래 U14 갱신절이다. 그 뒤 원문은 보존 이력이며 재검증 범위는 timestamp에 한정한다.
+
+## U14 현재 API·계약 차이
+
+ResultQueryService.Scene은 sceneNo, exposureType, sceneChip, chipText, notDoneReason만 낸다. raw timing과 flowVersion은 현재 없다. session-result-response는 additionalProperties=false이고 sceneNo도 [1,2]로 닫혀 있으므로 선택 필드·enum 확장조차 엄격 소비자 영향을 분류해야 한다(contracts/README.md:30,50).
+
+기존 후보 DTO와 스키마는 reasonText를 공개하고 frontend/src/parent/api/results.ts:28은 text(c.reasonText)를 필수 파싱한다. 새 후보에서 내부 reasonText를 제거하면 이 파서도 함께 바꿔야 한다. 대안은 공개 displayEvidence를 추가하고 파서에서 기존 화면 모델의 reasonText로 옮기는 최소 어댑터다. 27 화면 소스는 유지할 수 있으나 계약의 필드 삭제·의미 변경 분류 및 legacy fallback 회귀가 필요하다. 원문 AI reasonText를 공개하는 해결은 C-DS12를 충족하지 않는다. 이 선택은 후속 설계 사항이다.
+
+U15 실제 API: seedSummaries(guardian,child), skillContext(guardian,child,seedId) → Optional<SkillContext(seed,graphVersion)>, generateSeed(Request) → Result(seedId,reason). Request에는 guardianId,childId,activityId,candidateRef,skillRef와 StructureSignature 5값이 필수다. 현재 goal 후보 계약의 fourElements만으로 이 5값이 제공되지는 않는다. 추론을 임의 상수로 채우지 말고 후보 생성 계약/프롬프트에서 안전한 내부 구조를 제공할지 설계한다.
+
+SavedGoalReader의 C-DS10은 U14 신규 제공 대상이며 구현 완료로 적지 않는다.
+
+---
+
 # API 문서 (API Documentation)
 
-> 기준(혼합): **이번 갱신** = 커밋 `9bcc706`(= main `7e30ee8` + U11 지시서), 2026-10-16 집중 스캔(인텐트 `261016-u11-judgment-turn`). 갱신 · 확장한 곳은 4절(기기 WS `View`), 5절(`SessionRecordCaptured` 형식 구분), 6절(공급자 선 형식의 빈틈), 새 6A절(Luna Responses API), 새 10절(realtime 앱 안 확장점 포트), 새 11절(판정 관련 계약 문서)이다.
-> **그 밖의 문장** = 커밋 `72d7034`(2026-10-15 전체 재스캔) 그대로다(STALE). 계약 정본은 `contracts/`이며, 이 문서는 코드에 실제로 있는 표면을 요약한다. 계약 소유 · 깨는 변경 규칙은 `contracts/README.md`, 편차는 `contracts/deviations.md`(171줄, U8 · U9 편차 표 포함)에 있다.
+> 최신 확인: 2026-10-16, HEAD 7e30ee8, U15 집중 분석. 아래 최신 절이 U15 관련 과거 설명보다 우선한다. 이전 분석 본문은 이력으로 보존하며 이번 범위 밖의 검증 주장은 shallow로 낮췄다.
+
+## U15 포트 현황 및 계약 차이
+
+현재 KnowledgeGraphLookup은 findRelatedBehaviorKeys(String)만 제공하며 공개 카탈로그 전용이다. U15 공개 HTTP 엔드포인트는 발견하지 않았다. C-DS11의 seedSummaries, skillContext, variantPlan, writeGeneratedSeed, deleteChild 및 초기화는 추가 설계·구현 대상이다. 아동별 메서드는 명시적 childId와 소유 관계 검증을 필요로 한다.
+
+ai-seed-output.schema.json은 skillName(1~80), invariantSentence(1~200), additionalProperties=false다. 구조 서명·허용값 및 정본 A §6.4 길이 규칙은 추가 확인 대상이다. DeletionCompleted.Counts는 기존 realtime 삭제 항목 4개이며 U15 때문에 임의 확장하지 않는다.
+
+## 이전 분석 기록 — 2026-10-15, 현재 범위 밖은 재검증하지 않음
+
+> 기준: 커밋 `72d7034`, 2026-10-15 전체 재스캔. 계약 정본은 `contracts/`이며, 이 문서는 코드에 실제로 있는 표면을 요약한다. 계약 소유 · 깨는 변경 규칙은 `contracts/README.md`, 편차는 `contracts/deviations.md`(67행)에 있다.
 
 ## 1. 보호자 REST (core-api, 계약 `contracts/parent-api.yaml` 34경로)
 
@@ -35,7 +58,7 @@
 | core-api | `/internal/devices/{id}/connection` | Realtime이 기기 연결 상태 보고 |
 | core-api | `/internal/practice/scenarios` | Realtime 연습 런타임이 상황 조회 |
 | core-api | `POST /internal/events` | Realtime Outbox → Core Inbox |
-| realtime-activity | `POST /internal/sessions` | Core가 세션 시작. (U8 편차 U8-b) 선택 속성 `approvedSpeech`(음성 파일 없는 승인 발화) |
+| realtime-activity | `POST /internal/sessions` | Core가 세션 시작 |
 | realtime-activity | `POST /internal/sessions/{id}/end` | Core가 보호자 종료 전달 |
 | realtime-activity | `GET /internal/sessions/{id}/view` | Core가 세션 뷰 조회 |
 | realtime-activity | `POST /internal/events` | Core Outbox → Realtime Inbox |
@@ -45,9 +68,8 @@
 ## 4. 기기 WebSocket (realtime-activity, 계약 `contracts/device-ws.asyncapi.yaml`)
 
 - 경로 `/ws/device`(`WebSocketConfig.DEVICE_PATH`), 허용 Origin 1개, 핸드셰이크 인터셉터가 기기 토큰 검증.
-- 제어 메시지(JSON 봉투 `WsEnvelope`) 17종 — `WsMessageType`(+ 해석 불가 `UNRECOGNIZED`):
+- 제어 메시지(JSON 봉투 `WsEnvelope`) 17종 — `WsMessageType`:
   `HELLO` · `HELLO_OK` · `HEARTBEAT` · `HEARTBEAT_ACK` · `START_SESSION` · `ACK` · `DEVICE_READY` · `SESSION_STATE` · `OUTPUT_BEGIN` · `OUTPUT_END` · `PLAY_APPROVED_CONTENT` · `PLAYBACK_MARK` · `STOP_OUTPUT` · `CLOSE_TRANSPORT` · `VOICE_SESSION_CLOSED` · `DEVICE_STATE` · `ERROR`.
-- (2026-10-16 갱신) T19 표시 상태 `View`: `STANDBY` · `LISTENING` · `THINKING` · `CLOSING`(+ `UNRECOGNIZED`, 보내지 않음). '생각 중'은 `SESSION_STATE{view: THINKING}`이다. '말하는 중'은 기기가 실제 재생으로 스스로 정한다(BR9.6). 서버는 `thinking()`이 출력 보류 중이 아닐 때만 THINKING을 보내고 `listeningAgain()`으로 LISTENING에 돌아간다. 판정 턴용 새 WS 메시지는 필요 없고, 기존 `SESSION_STATE`의 보내는 조건만 바뀐다.
 - 바이너리 음성 프레임: 입력 타입 바이트 `0x01`, 960바이트 = 20ms PCM16LE 24kHz 모노.
 - 닫기 코드: `CloseCode`.
 - 프런트 대응 구현: `frontend/src/shared/protocol/`.
@@ -63,36 +85,18 @@
 
 전달: HTTP `POST /internal/events`, 재시도 backoff(Realtime Outbox 예: 1s→30s, 최대 20회, claim lease 30s). 제어 이벤트 정책 `REARM_ON_START`.
 
-(2026-10-16 갱신) **`SessionRecordCaptured` 형식 구분**: 계약 타입(`contract-model` `event/payload/SessionRecordCaptured`)은 `record`를 `Map<String, Object>`로 해석하지 않고 실어 나른다. `record.practice`에 `flowVersion`(`"practice-conversation-v1"`)이 있으면 새 연습 흐름 형식(`contracts/schemas/practice-record-v2.schema.json`)이고, 없으면 U5b 형식이다(편차 U8-d). `snapshotVersion` · 봉투 `schemaVersion`은 형식 구분에 쓰지 않는다. 계약상 역할: U12가 채우고 U11이 발행하고 U14가 읽는다. 발행 경로는 `finishSettle` → `SessionSettlement.capture` → `RecordCaptureService.write`(스냅숏 행 + Outbox 한 트랜잭션, 세션당 한 번)이고, `practice` 값은 확장점 `practiceRecord()` 결과 그대로라 U11이 계약 타입을 고칠 필요는 없다.
-
-`DeletionCompleted.counts`에 판정 저장 표(`judgment_live`)를 넣을지는 열린 질문이다(U8 contract-summary 4절, U11 · U13 · U15).
-
 ## 6. 외부 음성 AI 공급자 (나가는 WebSocket, realtime-activity)
 
 - 주소: `wss://api.openai.com/v1/live/sessions`(`application-{demo,prod}.yml`), 허용 호스트 `api.openai.com` 고정(`ProviderHosts`).
 - 모델 상수 `gpt-live-1`, 음성 형식 `pcm16le/24000/1`(입출력).
 - 송신 type 6종(`ProviderRequestFactory`): `session.start` · `session.input_audio.append` · `session.close` · `session.response.cancel` · `session.instructions.correct` · `session.response.create`.
-- 수신 type 9종(`ProviderClient`): `session.started` · `session.input_audio.speech_stopped` · `session.input_transcript.delta` · `session.input_transcript.done` · `session.output_transcript.delta` · `session.output_audio.delta` · `session.output.done` · `session.error` · `session.closed`. (2026-10-16 확인: 개발자 스캔 보고의 "10종"은 같은 목록을 센 것이며 실제 type 수는 9다.)
-- 이 형식은 프로젝트가 정의한 것(결정 J110, 편차 (aa) · (U4b-a), `contracts/ai-io.md` 3절)이며 가짜 공급자(`tools/fake-provider/server.mjs`)가 같은 형식을 흉내 낸다. 위험은 [code-quality-assessment.md](code-quality-assessment.md) TD-2.
-- (2026-10-16 갱신) **응답 생성 확인 사건이 없다.** `response.created` 류 수신 사건이 없어 응답 id(`ProviderResponseId`)는 첫 출력 조각(`output_transcript.delta` · `output_audio.delta`)으로만 알 수 있다. 그래서 `session.response.create`와 그 뒤 응답을 1:1로 묶을 공식 신호가 없다(U11-R1).
-- (2026-10-16 갱신) 송신 순서: `ProviderClient.Session`의 송신 잠금은 동시 쓰기만 막고 순서를 보장하지 않는다. 순서는 실행기의 직렬 큐(`enqueuePracticeProvider`)를 탈 때만 보장된다(U11-R2).
+- 수신 type 9종(`ProviderClient`): `session.started` · `session.input_audio.speech_stopped` · `session.input_transcript.delta` · `session.input_transcript.done` · `session.output_transcript.delta` · `session.output_audio.delta` · `session.output.done` · `session.error` · `session.closed`.
+- 이 형식은 프로젝트가 정의한 것(결정 J110, 편차 (aa) · (U4b-a))이며 가짜 공급자(`tools/fake-provider/server.mjs`)가 같은 형식을 흉내 낸다. 위험은 [code-quality-assessment.md](code-quality-assessment.md) TD-2.
 
-## 6A. (2026-10-16 갱신) 외부 Luna 판정 API (나가는 HTTP, realtime-activity — U9)
-
-- 호출부: `kr.mujoong.realtime.luna.RealtimeLunaClient.call(LunaRequest)` → `CompletionStage<LunaResult>`. 던지지 않고 실패는 `LunaException(LunaFailureReason)`으로 예외 완료한다.
-- 표면: OpenAI Responses API `POST {base-url}/responses`(`mujoong.luna.base-url` 기본 `https://api.openai.com/v1`), 구조화 출력 `json_schema`, `store=false`. SDK 없이 JDK `HttpClient`(`LunaTransport`) + `JsonCodec`(편차 U9-a).
-- 목적: `LunaPurpose.JUDGMENT_LIVE` 하나(설정 `mujoong.luna.purpose.judgment-live`: `max-output-tokens` 4000 · `reasoning-effort` medium). 모델 `${OPENAI_JUDGE_MODEL:gpt-6-luna}`.
-- 시한: min(요청 마감, `mujoong.timing.judgment.live-budget` 2s). 재시도 없음(`attemptsUsed` 언제나 1). 호출자가 Future를 취소하면 HTTP 요청도 취소한다.
-- 요청: `LunaRequest(purpose, promptVersion, instructions, input(Map), aliases, deadline)`. `input`은 `ai-judgment-request.schema.json` 모양 — `judgmentPoint` · `optionSetVersion` · `options` · `childUtterance` · `criteria`(J1 · J4 · J6은 null) · `recentTurns`(≤ 3). 보내기 전 요청 스키마 검증 실패는 `FORBIDDEN_INPUT`(시도 0). 입력 정리 `LunaInputSanitizer`.
-- 출력: `ai-judgment-output.schema.json` — `first` · `second` 두 칸, 각 `{option: ^[A-Z][A-Z0-9_]*$, probability: 0~1}`. 스키마는 요청의 `options` 집합 · `first ≠ second` · 확률 합을 묶지 않는다(U11-R5).
-- 빈 조건: 환경 변수 `OPENAI_API_KEY`가 있을 때만 `LunaTransport` · `RealtimeLunaClient` 빈이 생긴다(`LunaConfiguration` L51). 없으면 빈 자체가 없다(U11-R6).
-- 허용 호스트: demo · prod는 https + `api.openai.com`만, test는 루프백만(`LunaHosts`, BR1.4).
-- 감사 로그 `LUNA_CALL` · `LUNA_STARTUP`(ai-io.md 10.8). 실호출 시험은 `./gradlew lunaLiveTest`(태그 `luna-live`)로 격리(편차 U9-c).
-
-## 7. 외부 텍스트 AI 포트 (core-api, 72d7034 기준)
+## 7. 외부 텍스트 AI 포트 (core-api)
 
 - `core.textai.TextAiProvider`(U5a 연습 상황 생성), `core.result.ResultTextProvider`(U6 결과 · 리포트 문장). 입력 · 출력 규칙은 `contracts/ai-io.md`, 포트 목록은 `contracts/ports.md`.
-- 72d7034 기준 운영 어댑터 없음. 기본 빈은 각각 `TextAiException.Reason.UNAVAILABLE` · `PROVIDER_UNAVAILABLE`(TD-1). 환경 변수 이름(`MUJOONG_TEXT_AI_ENDPOINT/MODEL/API_KEY`)만 `application.yml` 주석에 있음. U9 `CoreLunaClient`가 그 뒤 들어왔으나(편차 U9-a) 이번 스캔은 core를 다시 보지 않았다.
+- 운영 어댑터 없음. 기본 빈은 각각 `TextAiException.Reason.UNAVAILABLE` · `PROVIDER_UNAVAILABLE`(TD-1). 환경 변수 이름(`MUJOONG_TEXT_AI_ENDPOINT/MODEL/API_KEY`)만 `application.yml` 주석에 있음.
 
 ## 8. 기타 외부 연동
 
@@ -105,6 +109,24 @@
 - Actuator: 관리 포트 9090(127.0.0.1), 헬스 · Prometheus 지표.
 - springdoc OpenAPI: dev · test 프로필에서만 켜짐.
 - 프런트 `/healthz` route.
+
+---
+
+## U11 집중 갱신 (261016-u11-judgment-turn, 2026-10-16 스캔 — main 병합 때 보존한 절)
+
+> main의 U14 · U15 갱신본을 바탕으로 두고, U11 작업 기록의 집중 스캔에서 갱신한 절만 아래에 보존했다. 줄 번호 · 커밋은 2026-10-16 `9bcc706` 기준이며 PR1(선 형식 정비) 이전 코드다.
+
+## 6A. (2026-10-16 갱신) 외부 Luna 판정 API (나가는 HTTP, realtime-activity — U9)
+
+- 호출부: `kr.mujoong.realtime.luna.RealtimeLunaClient.call(LunaRequest)` → `CompletionStage<LunaResult>`. 던지지 않고 실패는 `LunaException(LunaFailureReason)`으로 예외 완료한다.
+- 표면: OpenAI Responses API `POST {base-url}/responses`(`mujoong.luna.base-url` 기본 `https://api.openai.com/v1`), 구조화 출력 `json_schema`, `store=false`. SDK 없이 JDK `HttpClient`(`LunaTransport`) + `JsonCodec`(편차 U9-a).
+- 목적: `LunaPurpose.JUDGMENT_LIVE` 하나(설정 `mujoong.luna.purpose.judgment-live`: `max-output-tokens` 4000 · `reasoning-effort` medium). 모델 `${OPENAI_JUDGE_MODEL:gpt-6-luna}`.
+- 시한: min(요청 마감, `mujoong.timing.judgment.live-budget` 2s). 재시도 없음(`attemptsUsed` 언제나 1). 호출자가 Future를 취소하면 HTTP 요청도 취소한다.
+- 요청: `LunaRequest(purpose, promptVersion, instructions, input(Map), aliases, deadline)`. `input`은 `ai-judgment-request.schema.json` 모양 — `judgmentPoint` · `optionSetVersion` · `options` · `childUtterance` · `criteria`(J1 · J4 · J6은 null) · `recentTurns`(≤ 3). 보내기 전 요청 스키마 검증 실패는 `FORBIDDEN_INPUT`(시도 0). 입력 정리 `LunaInputSanitizer`.
+- 출력: `ai-judgment-output.schema.json` — `first` · `second` 두 칸, 각 `{option: ^[A-Z][A-Z0-9_]*$, probability: 0~1}`. 스키마는 요청의 `options` 집합 · `first ≠ second` · 확률 합을 묶지 않는다(U11-R5).
+- 빈 조건: 환경 변수 `OPENAI_API_KEY`가 있을 때만 `LunaTransport` · `RealtimeLunaClient` 빈이 생긴다(`LunaConfiguration` L51). 없으면 빈 자체가 없다(U11-R6).
+- 허용 호스트: demo · prod는 https + `api.openai.com`만, test는 루프백만(`LunaHosts`, BR1.4).
+- 감사 로그 `LUNA_CALL` · `LUNA_STARTUP`(ai-io.md 10.8). 실호출 시험은 `./gradlew lunaLiveTest`(태그 `luna-live`)로 격리(편차 U9-c).
 
 ## 10. (2026-10-16 갱신) realtime 앱 안 확장점 포트 (Java, U11 소유 · U12 구현)
 

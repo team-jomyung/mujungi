@@ -1,7 +1,28 @@
+> 현재 범위의 정본은 바로 아래 U14 갱신절이다. 그 뒤 원문은 보존 이력이며 재검증 범위는 timestamp에 한정한다.
+
+## U14 집중 갱신 — 실제 의존
+
+SessionResultHandler → ResultTextGateway, OutputChecker, CandidateScreen, CandidateRegistry, 결과/장면 저장소. CandidateRegistry → PracticeGoalRepository, PracticeAccountPort, CandidateEvidencePort, PragmaticsKnowledge. ReportAssembler → SceneChipMapper. U14 소유 이전 시 기존 import·서비스 생성자·시험 대역을 깨지 않게 경계를 제공해야 한다.
+
+U15 SeedGenerationService → ChildKnowledgeService + Optional<CoreLunaClient> + SeedContentValidator이며 기능 비활성·키 없음은 정상 NONE이다. 후보 확정 이후 별도 실패 경계에서 호출하고 결과 상태와 결합하지 않는다. 후보 참조·버전과 활동 id를 안정적으로 묶어 재처리 시 중복 생성되지 않아야 한다.
+
+GOAL_CANDIDATES/REJUDGMENT/RESULT_TEXT의 JOB_ATTEMPT 정책은 작업 수준에서 재시도한다. 안쪽 재시도를 더하지 않는다. 이전 전체 의존 목록은 이번에 전체 재확인한 것이 아니다.
+
+---
+
 # 의존 관계 (Dependencies)
 
-> 기준(혼합): **이번 갱신** = 커밋 `9bcc706`(= main `7e30ee8` + U11 지시서), 2026-10-16 집중 스캔(인텐트 `261016-u11-judgment-turn`). 갱신 · 확장한 곳은 3 · 4절의 realtime 행, 새 6절(realtime 안 패키지 의존 · 구조 제약), 5절 변경 연쇄의 표시 행이다.
-> **그 밖의 문장** = 커밋 `72d7034`(2026-10-15 전체 재스캔) 그대로다(STALE). 판 번호는 [technology-stack.md](technology-stack.md), 엔드포인트는 [api-documentation.md](api-documentation.md)가 정본이다.
+> 최신 확인: 2026-10-16, HEAD 7e30ee8, U15 집중 분석. 아래 최신 절이 U15 관련 과거 설명보다 우선한다. 이전 분석 본문은 이력으로 보존하며 이번 범위 밖의 검증 주장은 shallow로 낮췄다.
+
+## U15 의존과 선택적 구성
+
+core-api → contract-model(운영), test-support(시험). PragmaticsKnowledge → JDBC + clock + properties + optional graph. CoreLunaClient → sanitizer + schemas + transport + event logger + clock + JsonCodec. DeletionCommander → ordered participants + TransactionTemplate.
+
+OPENAI_API_KEY 없는 기본 CI에서 CoreLunaClient는 미구성이다. 생성 서비스는 이 경로를 지원해야 한다. Neo4j 사용 시 기존 NEO4J_AUTH 전달 배선을 core에도 연결해야 하며 새 비밀 이름을 만들지 않는다. 전체 저장소 무순환을 검증한 것은 아니다.
+
+## 이전 분석 기록 — 2026-10-15, 현재 범위 밖은 재검증하지 않음
+
+> 기준: 커밋 `72d7034`, 2026-10-15 전체 재스캔. 판 번호는 [technology-stack.md](technology-stack.md), 엔드포인트는 [api-documentation.md](api-documentation.md)가 정본이다.
 
 ## 1. 내부 모듈 의존 (빌드)
 
@@ -12,21 +33,19 @@ flowchart TD
     TS["test-support"]
     CA["core-api"]
     RA["realtime-activity"]
-    CS["contracts/schemas<br/>ai-*.schema.json"]
     BL -.->|적용| CM
     BL -.->|적용| TS
     BL -.->|적용| CA
     BL -.->|적용| RA
-    %% 점선은 규약 플러그인 적용, 실선은 Gradle 의존, 굵은 화살표는 자원 복사
+    %% 점선은 규약 플러그인 적용, 실선은 Gradle 의존
     CA -->|implementation| CM
     RA -->|implementation| CM
     TS -->|api| CM
     CA -->|testImplementation| TS
     RA -->|testImplementation| TS
-    CS ==>|"processResources 복사 luna/schemas"| RA
 ```
 
-텍스트 대안: `core-api`와 `realtime-activity`는 `contract-model`을 implementation으로, `test-support`를 testImplementation으로 쓴다. `test-support`는 `contract-model`을 api로 노출한다. `build-logic` 규약 플러그인은 네 모듈 모두에 적용된다. `core-api`와 `realtime-activity` 사이에는 빌드 의존이 없다(ArchUnit · CI 불변식이 막음). (2026-10-16 갱신) `realtime-activity`의 `processResources`가 `contracts/schemas/`의 `ai-*.schema.json`과 `common.schema.json`을 실행 자원 `luna/schemas/`로 복사하므로, 판정 스키마를 고치면 realtime 실행 자원도 함께 바뀐다.
+텍스트 대안: `core-api`와 `realtime-activity`는 `contract-model`을 implementation으로, `test-support`를 testImplementation으로 쓴다. `test-support`는 `contract-model`을 api로 노출한다. `build-logic` 규약 플러그인은 네 모듈 모두에 적용된다. `core-api`와 `realtime-activity` 사이에는 빌드 의존이 없다(ArchUnit · CI 불변식이 막음).
 
 ## 2. 런타임 의존 (앱 사이)
 
@@ -43,10 +62,9 @@ flowchart TD
 
 | 의존 | 사용 앱 | 접점 | 비고 |
 |---|---|---|---|
-| 음성 AI 공급자 | realtime-activity | `voice.ProviderClient`, 호스트 고정 `api.openai.com` | 선 형식 자체 정의(TD-2), 응답 생성 확인 사건 없음(U11-R1) |
-| (2026-10-16 갱신) Luna Responses API | realtime-activity | `luna.RealtimeLunaClient` → `LunaTransport`(JDK `HttpClient`) | 키 `OPENAI_API_KEY` 있을 때만 빈, demo · prod는 `api.openai.com`만(`LunaHosts`). 판정 턴 소비자 없음 |
-| 텍스트 AI | core-api | `textai.TextAiProvider`, `result.ResultTextProvider` | 72d7034 기준 운영 어댑터 없음(TD-1). U9 `CoreLunaClient` 미재확인 |
-| 연습 판정 · 단서 공급자(레거시) | realtime-activity | `EvaluationProvider`, `CueProvider` | 기본 미연결(TD-1, 2026-10-16 재확인) |
+| 음성 AI 공급자 | realtime-activity | `voice.ProviderClient`, 호스트 고정 `api.openai.com` | 선 형식 자체 정의(TD-2) |
+| 텍스트 AI | core-api | `textai.TextAiProvider`, `result.ResultTextProvider` | 운영 어댑터 없음(TD-1) |
+| 연습 판정 · 단서 공급자 | realtime-activity | `EvaluationProvider`, `CueProvider` | 기본 미연결(TD-1) |
 | Google OAuth | core-api | `identity.Google*` | |
 | Web Push 서비스 | core-api | push2u, `notification.VapidPushSender` | 공개 DNS 정책 · 고정 HTTP 클라이언트 |
 | Neo4j | core-api | `knowledge.KnowledgeGraphLookup` | 꺼짐, 어댑터 없음(TD-3) |
@@ -57,7 +75,7 @@ flowchart TD
 |---|---|
 | contract-model | Jackson 3(직접 import는 `kr.mujoong.contract.json` 한 곳). Spring · JPA 없음 |
 | core-api | Spring Boot(webmvc · security · session-jdbc · data-jpa · jdbc · flyway · actuator · validation), PostgreSQL JDBC, Micrometer Prometheus, springdoc(dev · test), openhtmltopdf-pdfbox, push2u-core, HttpClient5 |
-| realtime-activity | (2026-10-16 갱신) Spring Boot(webmvc · websocket · data-jpa · jdbc · flyway · actuator · validation), flyway-database-postgresql, PostgreSQL JDBC, Micrometer Prometheus, **json-schema-validator(실행 범위)**, JDK WebSocket · HttpClient. 시험: jackson-dataformat-yaml |
+| realtime-activity | Spring Boot(webmvc · websocket · data-jpa · jdbc · flyway · actuator · validation), PostgreSQL JDBC, Micrometer Prometheus, JDK WebSocket |
 | test-support | Testcontainers PostgreSQL, Java-WebSocket, JUnit |
 | 백엔드 시험 공통 | JUnit 5 · AssertJ · Mockito · ArchUnit · json-schema-validator · JaCoCo |
 | frontend | Next.js · React · react-query, 시험 Vitest · Testing Library · jsdom, 린트 ESLint |
@@ -70,14 +88,16 @@ flowchart TD
 | 바꾸는 것 | 함께 바꿀 것 |
 |---|---|
 | `contracts/` 계약 | `contract-model` 타입 · `contracts/deviations.md` · 계약 시험(ContractFilesTest 등) · 프런트 `shared/protocol` 파서 |
-| 음성 공급자 선 형식 | `realtime/voice/*` · `tools/fake-provider/` · `backend/test-support/.../provider/` · realtime 시험 `testing/FakeProviderPort` |
-| 시간 값 | 두 앱 `application.yml` · `contracts/timing.md` · `frontend/src/shared/timing/timing-defaults.json`. (2026-10-16 갱신) 서버 전용 키(timing.md 13절 `judgment.*` 등)는 timing.md · 소유 앱 `application.yml` · 설정 레코드(`RealtimeProperties`) 세 곳(편차 U8-c) |
-| DB 스키마 | 다음 번호(core V8 · realtime V5) · 제약 강화 시 `infra/migration-approvals.txt`. (2026-10-16 갱신) realtime V5는 `RealtimeSchemaIT`의 표 목록 · 최신 판 "4" 단언과 `PracticeMigrationRegistrationTest`의 `expectedVersion()` == "4" 단언에 닿는다(U11-R4) |
-| 파일 추가 · 이동 | `backend/coverage-scope/*.txt` · `frontend/coverage-scope/*.json` · 유닛 시험 태그. (2026-10-16 확인) `u11.txt` · `@Tag("u11")`은 아직 없다 |
-| (2026-10-16 갱신) 판정 스키마 `contracts/schemas/ai-judgment-*.schema.json` | realtime 실행 자원(빌드 복사) · `LunaSchemas` 검증 · 계약 시험 |
-| (2026-10-16 갱신) `mujoong.*` 새 설정 키 | 같은 앱 설정 레코드(루트 `RealtimeProperties`에 한 칸) · `ConfigKeyContractTest` 대조. 별도 설정 클래스로 두면 시험 바인딩 수정이 필요해 R-F2와 부딪힐 수 있음(U11-R8) |
-| (2026-10-16 갱신) 확장점 포트 `PracticeSessionExtension` | 구현 3곳(`NoOpPracticeSessionExtension` · `RuntimePracticeExtension` · 시험 `RecordingPracticeExtension`) — 능력은 `default` 메서드로 더하면 연쇄가 없다 |
-| (2026-10-16 갱신) 새 realtime 표 | `RealtimeDeletionParticipant` 구현과 `order()` 위치(세션 200 앞), `DeletionCompleted.counts` 포함 여부(열린 질문) |
+| 음성 공급자 선 형식 | `realtime/voice/*` · `tools/fake-provider/` · `backend/test-support/.../provider/` |
+| 시간 값 | 두 앱 `application.yml` · `contracts/timing.md` · `frontend/src/shared/timing/timing-defaults.json` |
+| DB 스키마 | 다음 번호(core V8 · realtime V5) · 제약 강화 시 `infra/migration-approvals.txt` |
+| 파일 추가 · 이동 | `backend/coverage-scope/*.txt` · `frontend/coverage-scope/*.json` · 유닛 시험 태그 |
+
+---
+
+## U11 집중 갱신 (261016-u11-judgment-turn, 2026-10-16 스캔 — main 병합 때 보존한 절)
+
+> main의 U14 · U15 갱신본을 바탕으로 두고, U11 작업 기록의 집중 스캔에서 갱신한 절만 아래에 보존했다. 줄 번호 · 커밋은 2026-10-16 `9bcc706` 기준이며 PR1(선 형식 정비) 이전 코드다.
 
 ## 6. (2026-10-16 갱신) realtime-activity 안 패키지 의존 · 구조 제약
 

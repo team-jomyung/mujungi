@@ -17,6 +17,8 @@ public interface DeletionParticipant {
 
     /** U6 결과 · 리포트(10개 표) — 활동 기록 참가자(90)보다 먼저 지운다. */
     int ORDER_RESULT = 70;
+    /** U15 그래프 및 생성 원장 — 결과 뒤, 활동 기록 앞. */
+    int ORDER_KNOWLEDGE_GRAPH = 80;
     /** U7 푸시 구독과 발송 기록 — 활동 기록·활동 사본을 지우기 전에 정리한다. */
     int ORDER_PUSH = 60;
 

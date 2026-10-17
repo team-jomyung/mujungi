@@ -1,0 +1,8 @@
+# 실제 값은 이 예시에 넣지 않는다. 비밀은 로컬 비추적 환경 파일 또는 기존 비밀 저장소에 입력한다.
+MUJOONG_KNOWLEDGE_NEO4J_ENABLED=false
+MUJOONG_KNOWLEDGE_NEO4J_ENDPOINT=http://neo4j:7474
+MUJOONG_KNOWLEDGE_SEED_GENERATION_ENABLED=true
+# 기존 비밀 이름. core-api.env와 neo4j.env에 동일 인증값을 전달한다.
+NEO4J_AUTH=
+# core-api 생성 기능용 기존 비밀. 시험에서는 사용하지 않는다.
+OPENAI_API_KEY=

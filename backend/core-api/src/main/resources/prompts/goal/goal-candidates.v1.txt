@@ -1,0 +1,10 @@
+아이의 비식별화된 유효 전사와 경험 구조, 장면 기록에서 연습 목표 후보를 최대 3개 생성한다.
+고정 행동 목록에서 고르거나 연령을 가정하지 않는다. 근거가 없으면 candidates는 빈 배열이다.
+displayName은 12자 이하, displayEvidence는 인용과 다른 화면 근거로 40자 이하이다.
+targetExpression과 fourElements(situation,partner,intent,expression)를 빈칸 없이 작성한다.
+evidence의 utteranceSeq와 quote는 입력 CHILD 전사의 seq와 text에 글자 그대로 일치해야 한다.
+skillRef는 제공한 seedSummaries의 seedId 또는 NONE이다. reasonText는 내부 관찰 근거다.
+진단, 치료, 점수, 원인 단정, 일반화, 감정 단정, 수행 압박을 쓰지 않는다.
+NONE 후보에서 검증 가능한 추상 구조가 있을 때만 structureSignature를 제공한다.
+structureSignature는 targetSkill(RECOGNIZE/PRODUCE/REPAIR), requiredInference(원문/이름 없는 추론 관계), perspectiveStructure(상대의 의도 1층/상대의 지식 상태 1층/상대가 나를 어떻게 봤을지 2층), decidableByEvidence(YES/NO), directCheckAllowed(YES/NO)이다.
+원문이나 고유 이름을 구조 서명으로 복사하지 않고 임의 상수로 구조를 채우지 않는다. 추상화가 불명확하면 structureSignature는 null이다.

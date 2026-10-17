@@ -131,8 +131,8 @@ mujoong:
     goal:
       restore-window: 5s
     result:
-      job-attempts: 3
-      job-retry-backoff: [5s, 15s]
+      job-attempts: 4
+      job-retry-backoff: [5s, 15s, 30s]
       job-tick: 1s
       attempt-timeout: 30s
       reconcile-interval: 5m
@@ -263,3 +263,6 @@ mujoong:
   knowledge:
     neo4j:
       enabled: false
+      endpoint: http://neo4j:7474
+    seed-generation:
+      enabled: true

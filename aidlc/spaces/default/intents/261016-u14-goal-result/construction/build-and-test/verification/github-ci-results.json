@@ -1,0 +1,144 @@
+{
+  "headRefOid": "1dbcd7ca89166c3103bf5ac4cafab510be7f1477",
+  "state": "OPEN",
+  "statusCheckRollup": [
+    {
+      "__typename": "CheckRun",
+      "completedAt": "2026-10-17T00:58:00Z",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/team-jomyung/mujungi/actions/runs/38988761751/job/117267856459",
+      "name": "changes",
+      "startedAt": "2026-10-17T00:57:54Z",
+      "status": "COMPLETED",
+      "workflowName": "ci"
+    },
+    {
+      "__typename": "CheckRun",
+      "completedAt": "2026-10-17T00:58:25Z",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/team-jomyung/mujungi/actions/runs/38988761751/job/117267848595",
+      "name": "secrets",
+      "startedAt": "2026-10-17T00:57:54Z",
+      "status": "COMPLETED",
+      "workflowName": "ci"
+    },
+    {
+      "__typename": "CheckRun",
+      "completedAt": "2026-10-17T01:04:32Z",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/team-jomyung/mujungi/actions/runs/38988761751/job/117267859301",
+      "name": "backend",
+      "startedAt": "2026-10-17T00:58:02Z",
+      "status": "COMPLETED",
+      "workflowName": "ci"
+    },
+    {
+      "__typename": "CheckRun",
+      "completedAt": "2026-10-17T01:07:58Z",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/team-jomyung/mujungi/actions/runs/38988761751/job/117267825639",
+      "name": "u5b-scope",
+      "startedAt": "2026-10-17T01:04:48Z",
+      "status": "COMPLETED",
+      "workflowName": "ci"
+    },
+    {
+      "__typename": "CheckRun",
+      "completedAt": "2026-10-17T01:00:29Z",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/team-jomyung/mujungi/actions/runs/38988761751/job/117267858846",
+      "name": "backend-deps",
+      "startedAt": "2026-10-17T00:58:02Z",
+      "status": "COMPLETED",
+      "workflowName": "ci"
+    },
+    {
+      "__typename": "CheckRun",
+      "completedAt": "2026-10-17T00:59:47Z",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/team-jomyung/mujungi/actions/runs/38988761751/job/117267826507",
+      "name": "frontend",
+      "startedAt": "2026-10-17T00:58:02Z",
+      "status": "COMPLETED",
+      "workflowName": "ci"
+    },
+    {
+      "__typename": "CheckRun",
+      "completedAt": "2026-10-17T00:58:14Z",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/team-jomyung/mujungi/actions/runs/38988761751/job/117267854174",
+      "name": "frontend-deps",
+      "startedAt": "2026-10-17T00:58:02Z",
+      "status": "COMPLETED",
+      "workflowName": "ci"
+    },
+    {
+      "__typename": "CheckRun",
+      "completedAt": "2026-10-17T00:58:25Z",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/team-jomyung/mujungi/actions/runs/38988761751/job/117267852453",
+      "name": "tools",
+      "startedAt": "2026-10-17T00:58:02Z",
+      "status": "COMPLETED",
+      "workflowName": "ci"
+    },
+    {
+      "__typename": "CheckRun",
+      "completedAt": "2026-10-17T00:59:02Z",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/team-jomyung/mujungi/actions/runs/38988761751/job/117267827038",
+      "name": "infra-validate",
+      "startedAt": "2026-10-17T00:58:02Z",
+      "status": "COMPLETED",
+      "workflowName": "ci"
+    },
+    {
+      "__typename": "CheckRun",
+      "completedAt": "2026-10-17T01:03:40Z",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/team-jomyung/mujungi/actions/runs/38988761751/job/117267863178",
+      "name": "images",
+      "startedAt": "2026-10-17T00:58:02Z",
+      "status": "COMPLETED",
+      "workflowName": "ci"
+    },
+    {
+      "__typename": "CheckRun",
+      "completedAt": "2026-10-17T00:58:00Z",
+      "conclusion": "SKIPPED",
+      "detailsUrl": "https://github.com/team-jomyung/mujungi/actions/runs/38988761751/job/117267826916",
+      "name": "skeleton",
+      "startedAt": "2026-10-17T01:04:46Z",
+      "status": "COMPLETED",
+      "workflowName": "ci"
+    },
+    {
+      "__typename": "CheckRun",
+      "completedAt": "2026-10-17T01:08:03Z",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/team-jomyung/mujungi/actions/runs/38988761751/job/117268598522",
+      "name": "ci-gate",
+      "startedAt": "2026-10-17T01:08:00Z",
+      "status": "COMPLETED",
+      "workflowName": "ci"
+    },
+    {
+      "__typename": "CheckRun",
+      "completedAt": "2026-10-17T01:08:03Z",
+      "conclusion": "SKIPPED",
+      "detailsUrl": "https://github.com/team-jomyung/mujungi/actions/runs/38988761751/job/117268620307",
+      "name": "deploy",
+      "startedAt": "2026-10-17T01:08:03Z",
+      "status": "COMPLETED",
+      "workflowName": "ci"
+    }
+  ],
+  "url": "https://github.com/team-jomyung/mujungi/pull/27",
+  "runId": 38988761751,
+  "runAttempt": 2,
+  "retryReason": "First u5b-scope failed before tests because plugin repository could not resolve kotlin-stdlib:2.0.21; same-commit job retry passed without code/config/assertion changes.",
+  "limits": [
+    "skeleton is skipped by normal PR rules; local full compose supplied premerge E2E proof.",
+    "deploy skipped; no merge or deployment."
+  ]
+}

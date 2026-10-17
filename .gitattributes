@@ -1,0 +1,5 @@
+# Keep Linux entrypoints runnable in Windows/WSL checkouts.
+*.sh text eol=lf
+**/gradlew text eol=lf
+infra/bin/* text eol=lf
+infra/bin/lib/* text eol=lf

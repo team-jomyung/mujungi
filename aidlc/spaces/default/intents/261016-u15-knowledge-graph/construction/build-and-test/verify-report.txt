@@ -1,0 +1,79 @@
+mode=compose
+engine=0
+started=2026-10-16T13:09:33Z
+revision=3cee1bbfe4a4
+fingerprint=sha256:78b2d7221618171321a1c762d87649038600167cbf4fcc2f389f3d4372a9d1b9
+  A1.bootjar PASS bootJar 두 개 · 시험 클래스 0
+  A1.tests PASS 시험 2987건 · 실패 0 · 건너뜀 3 · DB 시험 백엔드 요청 auto · JaCoCo 80% LINE(check)
+A1 PASS 327s backend 회귀(gradle clean check verifyBootJarHasNoTestClasses, DB 시험 백엔드 auto)
+  A2.build PASS eslint · vitest(80% 줄) · next build · standalone 정적 자원
+  A2.coverage NOTE 줄 커버리지 98.55%(src/**)
+A2 PASS 66s frontend(npm ci · eslint · vitest 80% · next build)
+  A3.tools PASS tools 시험 통과
+A3 PASS 10s tools(npm ci · vitest)
+  A4.patterns PASS 키 형식 9종 · 파일 2821개, 걸림 0
+  A4.gitleaks NOTE gitleaks가 없어 이력 스캔은 CI secrets 작업 몫이다(작업 트리는 키 형식 grep으로 봤다)
+  A4.ignore PASS .env* · build/verify/ · *.pem · *.key 무시 규칙
+A4 PASS 1s 비밀 스캔 ① · 무시 규칙 ②
+F PASS 1s 소스 지문 · 산출물 해시 기록(J134)
+  B0.images PASS 이미지 5종 빌드(라벨: revision · 소스 지문)
+  B1.config PASS demo + ci 병합 설정 config --quiet 유효
+  B1.ports PASS 호스트 게시 포트는 nginx 127.0.0.1:8443→443 하나
+  B1.secrets PASS 서비스별 비밀 변수 이름 = 인프라 명세 3.7 분배표(7개 서비스)
+  B1.disabled PASS certbot · backup 꺼짐
+  B1.provider PASS realtime 공급자 주소 = 가짜 공급자(실공급자 아님, J141)
+  B2.postgres PASS postgres(init: 역할 · 스키마 · pg_hba) healthy
+  B2.migrate PASS migrate(mujoong_owner, core → realtime) 종료 코드 0
+  B2.seed PASS 시드 001-reference.sql 두 번 적용(멱등) → 정책 1 · 승인 문구 2(R4-15)
+  B2.seed003 PASS 시드 002 · 003 두 번 적용(멱등) → 세션 승인 문구 6종 APPROVED(U4b 참여 확인 · 공백 안내)
+  B5.core-api.demo-devlogin PASS core-api 이미지가 demo-devlogin 구성에서 기동 거부(비0 · MUJOONG_STARTUP_REJECTED)
+  B5.realtime.demo-devlogin PASS realtime 이미지가 demo-devlogin 구성에서 기동 거부(비0 · MUJOONG_STARTUP_REJECTED)
+  B5.core-api.demo-dev PASS core-api 이미지가 demo-dev 구성에서 기동 거부(비0 · MUJOONG_STARTUP_REJECTED)
+  B5.realtime.demo-dev PASS realtime 이미지가 demo-dev 구성에서 기동 거부(비0 · MUJOONG_STARTUP_REJECTED)
+  B3.up PASS nginx · web · core-api · realtime · postgres · fake-provider running/healthy
+  B4.health PASS GET /api/health 200 {"status":"UP"}
+  B4.device PASS GET /device 200
+  B4.ws PASS /ws/device 업그레이드 101(허용 Origin · 쿠키 없음) → 4401 닫힘
+  B4.forbidden/internal/x PASS GET /internal/x 403
+  B4.forbidden/actuator/health PASS GET /actuator/health 403
+  B4.body64k PASS 64KB+1 본문 POST /api/device/register → 400 VALIDATION_FAILED 봉투
+  B4.trace PASS 위조 X-Trace-Id가 응답 헤더 · 봉투 traceId에 없다(OD-7)
+  B4.rawuri PASS /api/..;/internal/x 400
+  B4.sni PASS SNI other.invalid TLS 거절(대조 localhost 검증 통과)
+  B4.host PASS Host: other.invalid 요청 거절(상태 404)
+B PASS 90s compose 스택(이미지 · 병합 설정 · migrate · 시드 · 프로필 가드 · 기동 · 3종 호출 · SD-3)
+  C0.secrets PASS gen-env 비밀 값 8개를 비밀 목록에 넣음(값 미출력)
+  C0.sql PASS SQL 래퍼 core_app · realtime_app 접속
+  C1 PASS 0.1s D0 — 기기 확인 401 · 코드 발급 201 · bootstrap 쿠키
+  C2 PASS 0.4s 시험 로그인 · CSRF · 홈 NO_DEVICE
+  C3 PASS 0.1s 05a — CSRF · Origin 거부 뒤 등록 201
+  C4 PASS 0.1s REGISTERED → claim 200 · 기기 쿠키
+  C5 PASS 0.1s 켜기 — Origin 403 · HELLO_OK · HEARTBEAT
+  C6 PASS 0.6s 04 안정(STABLE · canStart)
+  C7 PASS 0.2s 08 자유대화 시작 202
+  C8 PASS 4.6s START_SESSION → ACK · DEVICE_READY → 시작 안내 · 참여 응답 → ACTIVE
+  C9 PASS 2.2s 음성 1턴(정상) — 무변환 중계 · 게이트 통과 · 12 items
+  C10 PASS 5.0s 게이트 경유(금지 문장) — 출력 0 · WAITING_FILLER 1
+  C11 PASS 4.5s P1 끝내기 — STOP · CLOSING 1회 · CLOSE_TRANSPORT 뒤 중계 없음
+  C12 PASS 0.9s ENDED(confirmed) · STANDBY · LATENCY_TURN 키
+  C.turn PASS C1 ~ C12 통과(D0 → 시험 로그인 → 05a → 04 안정 → 08 → 음성 1턴 → 게이트 경유 → P1 → ENDED)
+C PASS 19s 기기 시뮬레이터 한 턴(C1 ~ C12)
+  P1.core_app.cross_insert PASS core_app: INSERT INTO realtime.realtime_transcript DEFAULT VALUES → SQLSTATE 42501
+  P1.core_app.create_own PASS core_app: CREATE TABLE core.mujoong_verify_probe (id int) → SQLSTATE 42501
+  P1.core_app.create_public PASS core_app: CREATE TABLE public.mujoong_verify_probe (id int) → SQLSTATE 42501
+  P1.realtime_app.cross_insert PASS realtime_app: INSERT INTO core.core_device DEFAULT VALUES → SQLSTATE 42501
+  P1.realtime_app.create_own PASS realtime_app: CREATE TABLE realtime.mujoong_verify_probe (id int) → SQLSTATE 42501
+  P1.realtime_app.create_public PASS realtime_app: CREATE TABLE public.mujoong_verify_probe (id int) → SQLSTATE 42501
+P1 PASS 2s 교차 스키마 쓰기 · CREATE TABLE 42501(B1 ②)
+  P2.collect NOTE 150줄 수집(build/verify/logs/compose.log)
+  P2.startup.core PASS core-api STARTUP_RECOVERY 1줄
+  P2.startup.realtime PASS realtime STARTUP_RECOVERY 1줄
+  P2.ended PASS realtime SESSION_TRANSITION(→ ENDED) 1줄
+  P2.latency PASS realtime LATENCY_TURN 2줄
+  P2.access PASS Nginx 접근 로그 32줄
+  P2.secrets PASS 비밀 값 28개 × 대상 7개 파일, 일치 0건
+P2 PASS 1s 로그 위생(B1 ③)
+  P3.values PASS 값 24개 · 파일 2821개 대조, 걸림 0(합성 대본 문장 4개 제외)
+P3 PASS 0s 비밀 값이 추적 · 무시되지 않은 파일에 0건(a-secrets ③)
+T PASS 0s 작업 트리 시작 · 끝 비교(SEC-18)
+RESULT PASS rc=0 total=519s

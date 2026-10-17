@@ -48,6 +48,8 @@ class TimeLiteralScanTest {
 
     /** 허용 목록. 시간 값이 아니거나(단위 표기 · 단위 변환 · 고정 풀 keepAlive) 계약 · 결정이 값을 고정한 상수뿐이다. */
     static final List<Allowed> ALLOWED = List.of(
+            new Allowed(CORE + "knowledge/ChildKnowledgeService.java", "future.get(budget.toNanos(), TimeUnit.NANOSECONDS)",
+                    "U15: knowledge.graph-budget 설정 Duration의 나노초 단위 변환이다. 신규 시간 상수 없음"),
             new Allowed(CORE + "result/JobRunnerLoop.java",
                     "scheduler.scheduleWithFixedDelay(this::tick,0,tickMillis,TimeUnit.MILLISECONDS)",
                     "단위 표기: 반복 주기는 result.job-tick 설정 Duration이다. 최초 지연 0은 즉시 시작을 뜻한다(U6)"),

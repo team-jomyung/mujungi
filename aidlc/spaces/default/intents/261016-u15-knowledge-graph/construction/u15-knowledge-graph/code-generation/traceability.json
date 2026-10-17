@@ -1,0 +1,452 @@
+{
+  "stage": "code-generation",
+  "unit": "u15-knowledge-graph",
+  "upstream_ids": [
+    "FR1.1",
+    "BR1.1",
+    "FR1.2",
+    "BR1.2",
+    "FR1.3",
+    "BR1.3",
+    "FR1.4",
+    "BR1.4",
+    "FR1.5",
+    "BR1.5",
+    "FR2.1",
+    "BR2.1",
+    "FR2.2",
+    "BR2.2",
+    "FR2.3",
+    "BR2.3",
+    "FR2.4",
+    "BR2.4",
+    "FR2.5",
+    "BR2.5",
+    "FR3.1",
+    "BR3.1",
+    "FR3.2",
+    "BR3.2",
+    "FR3.3",
+    "BR3.3",
+    "FR4.1",
+    "BR4.1",
+    "FR4.2",
+    "BR4.2",
+    "FR4.3",
+    "BR4.3",
+    "FR4.4",
+    "BR4.4",
+    "FR4.5",
+    "BR4.5",
+    "FR4.6",
+    "BR4.6",
+    "FR4.7",
+    "BR4.7",
+    "FR5.1",
+    "BR5.1",
+    "FR5.2",
+    "BR5.2",
+    "FR5.3",
+    "BR5.3",
+    "FR5.4",
+    "BR5.4",
+    "FR5.5",
+    "BR5.5",
+    "FR6.1",
+    "BR6.1",
+    "FR6.2",
+    "BR6.2",
+    "NFR1",
+    "NFR2",
+    "NFR3",
+    "NFR4",
+    "NFR5",
+    "NFR6",
+    "FR1",
+    "FR2",
+    "FR3",
+    "FR4",
+    "FR5",
+    "FR6",
+    "FR8.3",
+    "FR9.1",
+    "FR9.2",
+    "FR9.3",
+    "FR9.4",
+    "FR9.5",
+    "FR9.6",
+    "FR9.7"
+  ],
+  "coverage": [
+    {
+      "id": "FR1.1",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/knowledge/U15ServiceIT.java"
+    },
+    {
+      "id": "BR1.1",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/knowledge/U15ServiceIT.java"
+    },
+    {
+      "id": "FR1.2",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/knowledge/U15ServiceIT.java"
+    },
+    {
+      "id": "BR1.2",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/knowledge/U15ServiceIT.java"
+    },
+    {
+      "id": "FR1.3",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/knowledge/U15ServiceIT.java"
+    },
+    {
+      "id": "BR1.3",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/knowledge/U15ServiceIT.java"
+    },
+    {
+      "id": "FR1.4",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/knowledge/U15ServiceIT.java"
+    },
+    {
+      "id": "BR1.4",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/knowledge/U15ServiceIT.java"
+    },
+    {
+      "id": "FR1.5",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/knowledge/U15ServiceIT.java"
+    },
+    {
+      "id": "BR1.5",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/knowledge/U15ServiceIT.java"
+    },
+    {
+      "id": "FR2.1",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/knowledge/U15SeedArchiveLoaderTest.java"
+    },
+    {
+      "id": "BR2.1",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/knowledge/U15SeedArchiveLoaderTest.java"
+    },
+    {
+      "id": "FR2.2",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/knowledge/U15SeedArchiveLoaderTest.java"
+    },
+    {
+      "id": "BR2.2",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/knowledge/U15SeedArchiveLoaderTest.java"
+    },
+    {
+      "id": "FR2.3",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/knowledge/U15SeedArchiveLoaderTest.java"
+    },
+    {
+      "id": "BR2.3",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/knowledge/U15SeedArchiveLoaderTest.java"
+    },
+    {
+      "id": "FR2.4",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/knowledge/U15SeedArchiveLoaderTest.java"
+    },
+    {
+      "id": "BR2.4",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/knowledge/U15SeedArchiveLoaderTest.java"
+    },
+    {
+      "id": "FR2.5",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/knowledge/U15SeedArchiveLoaderTest.java"
+    },
+    {
+      "id": "BR2.5",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/knowledge/U15SeedArchiveLoaderTest.java"
+    },
+    {
+      "id": "FR3.1",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/knowledge/U15RulesTest.java"
+    },
+    {
+      "id": "BR3.1",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/knowledge/U15RulesTest.java"
+    },
+    {
+      "id": "FR3.2",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/knowledge/U15RulesTest.java"
+    },
+    {
+      "id": "BR3.2",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/knowledge/U15RulesTest.java"
+    },
+    {
+      "id": "FR3.3",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/knowledge/U15RulesTest.java"
+    },
+    {
+      "id": "BR3.3",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/knowledge/U15RulesTest.java"
+    },
+    {
+      "id": "FR4.1",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/knowledge/U15ServiceIT.java"
+    },
+    {
+      "id": "BR4.1",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/knowledge/U15ServiceIT.java"
+    },
+    {
+      "id": "FR4.2",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/knowledge/U15ServiceIT.java"
+    },
+    {
+      "id": "BR4.2",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/knowledge/U15ServiceIT.java"
+    },
+    {
+      "id": "FR4.3",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/knowledge/U15ServiceIT.java"
+    },
+    {
+      "id": "BR4.3",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/knowledge/U15ServiceIT.java"
+    },
+    {
+      "id": "FR4.4",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/knowledge/U15ServiceIT.java"
+    },
+    {
+      "id": "BR4.4",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/knowledge/U15ServiceIT.java"
+    },
+    {
+      "id": "FR4.5",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/knowledge/U15ServiceIT.java"
+    },
+    {
+      "id": "BR4.5",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/knowledge/U15ServiceIT.java"
+    },
+    {
+      "id": "FR4.6",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/knowledge/U15ServiceIT.java"
+    },
+    {
+      "id": "BR4.6",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/knowledge/U15ServiceIT.java"
+    },
+    {
+      "id": "FR4.7",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/knowledge/U15ServiceIT.java"
+    },
+    {
+      "id": "BR4.7",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/knowledge/U15ServiceIT.java"
+    },
+    {
+      "id": "FR5.1",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/knowledge/U15ServiceIT.java"
+    },
+    {
+      "id": "BR5.1",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/knowledge/U15ServiceIT.java"
+    },
+    {
+      "id": "FR5.2",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/knowledge/U15ServiceIT.java"
+    },
+    {
+      "id": "BR5.2",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/knowledge/U15ServiceIT.java"
+    },
+    {
+      "id": "FR5.3",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/knowledge/U15ServiceIT.java"
+    },
+    {
+      "id": "BR5.3",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/knowledge/U15ServiceIT.java"
+    },
+    {
+      "id": "FR5.4",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/knowledge/U15ServiceIT.java"
+    },
+    {
+      "id": "BR5.4",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/knowledge/U15ServiceIT.java"
+    },
+    {
+      "id": "FR5.5",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/knowledge/U15ServiceIT.java"
+    },
+    {
+      "id": "BR5.5",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/knowledge/U15ServiceIT.java"
+    },
+    {
+      "id": "FR6.1",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/knowledge/U15ConfigurationTest.java"
+    },
+    {
+      "id": "BR6.1",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/knowledge/U15ConfigurationTest.java"
+    },
+    {
+      "id": "FR6.2",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/knowledge/U15ConfigurationTest.java"
+    },
+    {
+      "id": "BR6.2",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/knowledge/U15ConfigurationTest.java"
+    },
+    {
+      "id": "NFR1",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/knowledge/U15ServiceIT.java"
+    },
+    {
+      "id": "NFR2",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/knowledge/U15AccessPolicyTest.java"
+    },
+    {
+      "id": "NFR3",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/knowledge/U15Neo4jIT.java"
+    },
+    {
+      "id": "NFR4",
+      "status": "Deferred",
+      "target": "docs/units/u15/report.md"
+    },
+    {
+      "id": "NFR5",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/knowledge/U15ConfigurationTest.java"
+    },
+    {
+      "id": "NFR6",
+      "status": "Deferred",
+      "target": "docs/units/u15/implementation.md"
+    },
+    {
+      "id": "FR1",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/knowledge/U15ServiceIT.java"
+    },
+    {
+      "id": "FR2",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/knowledge/U15SeedArchiveLoaderTest.java"
+    },
+    {
+      "id": "FR3",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/knowledge/U15RulesTest.java"
+    },
+    {
+      "id": "FR4",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/knowledge/U15ServiceIT.java"
+    },
+    {
+      "id": "FR5",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/knowledge/U15ServiceIT.java"
+    },
+    {
+      "id": "FR6",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/knowledge/U15ConfigurationTest.java"
+    },
+    {
+      "id": "FR8.3",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/knowledge/U15ServiceIT.java"
+    },
+    {
+      "id": "FR9.1",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/knowledge/U15RulesTest.java"
+    },
+    {
+      "id": "FR9.2",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/knowledge/U15SeedArchiveLoaderTest.java"
+    },
+    {
+      "id": "FR9.3",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/knowledge/U15AccessPolicyTest.java"
+    },
+    {
+      "id": "FR9.4",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/knowledge/U15ServiceIT.java"
+    },
+    {
+      "id": "FR9.5",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/knowledge/U15ConfigurationTest.java"
+    },
+    {
+      "id": "FR9.6",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/knowledge/U15RulesTest.java"
+    },
+    {
+      "id": "FR9.7",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/knowledge/U15ServiceIT.java"
+    }
+  ]
+}

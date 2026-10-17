@@ -5,7 +5,7 @@ import { ResponseShapeError, type Bubble } from "./types";
 /** C5 공개 DTO. 내부 판정·배경·매칭 칸을 화면에 전달하지 않는다. */
 export type JobStatus = "NONE" | "REQUESTED" | "RUNNING" | "DONE" | "FAILED";
 export interface ResultStatus { jobStatus: JobStatus; sessionStatus: string; confirmed: boolean }
-export interface Scene { sceneNo: number; exposureType: string; sceneChip: string; chipText: string; notDoneReason?: string | null }
+export interface Scene { sceneNo: number; exposureType: string; sceneChip: string; chipText: string; notDoneReason?: string | null; timing?: "IMMEDIATE" | "AFTER_REASK" | "AFTER_HELP" | null }
 export interface ResultGoal { goalSelectionId: string; displayName: string; order: number; scenes: Scene[]; help: { count: number; consent: string } }
 export interface Candidate { recommendationId: string; displayName: string; reasonText: string; evidence: { utteranceSeq: number; kind: string }[]; selected: boolean; goalSelectionId: string | null }
 export interface SessionResult { jobStatus: JobStatus; resultLevel: string | null; sentences: { text: string; goalSelectionId: string | null }[]; practice: { goals: ResultGoal[] } | null; tips: { supportItemId: string; title: string | null; condition: string; content: string; limitation: string }[]; candidates: Candidate[] }
@@ -17,13 +17,14 @@ export function text(value: unknown): string { if (typeof value !== "string") th
 export function nullableText(value: unknown): string | null { return value == null ? null : text(value); }
 export function count(value: unknown): number { if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) throw new ResponseShapeError("count"); return value; }
 function job(value: unknown): JobStatus { if (!["NONE", "REQUESTED", "RUNNING", "DONE", "FAILED"].includes(String(value))) throw new ResponseShapeError("jobStatus"); return value as JobStatus; }
+function timing(value: unknown): Scene["timing"] { if (value === null) return null; if (value === "IMMEDIATE" || value === "AFTER_REASK" || value === "AFTER_HELP") return value; throw new ResponseShapeError("timing"); }
 export function parseResultStatus(value: unknown): ResultStatus { const r = object(value); return { jobStatus: job(r.jobStatus), sessionStatus: text(r.sessionStatus), confirmed: r.confirmed === true }; }
 export function parseResult(value: unknown): SessionResult {
   const r = object(value);
   return { jobStatus: job(r.jobStatus), resultLevel: nullableText(r.resultLevel), sentences: rows(r.sentences).map(s => ({ text: text(s.text), goalSelectionId: nullableText(s.goalSelectionId) })),
-    practice: r.practice == null ? null : { goals: rows(object(r.practice).goals).map(g => ({ goalSelectionId: text(g.goalSelectionId), displayName: text(g.displayName), order: count(g.order), scenes: rows(g.scenes).map(s => ({ sceneNo: count(s.sceneNo), exposureType: text(s.exposureType), sceneChip: text(s.sceneChip), chipText: text(s.chipText), notDoneReason: nullableText(s.notDoneReason) })), help: { count: count(object(g.help).count), consent: text(object(g.help).consent) } })) },
+    practice: r.practice == null ? null : { goals: rows(object(r.practice).goals).map(g => ({ goalSelectionId: text(g.goalSelectionId), displayName: text(g.displayName), order: count(g.order), scenes: rows(g.scenes).map(s => ({ sceneNo: count(s.sceneNo), exposureType: text(s.exposureType), sceneChip: text(s.sceneChip), chipText: text(s.chipText), notDoneReason: nullableText(s.notDoneReason), ...(s.timing === undefined ? {} : { timing: timing(s.timing) }) })), help: { count: count(object(g.help).count), consent: text(object(g.help).consent) } })) },
     tips: rows(r.tips).map(t => ({ supportItemId: text(t.supportItemId), title: nullableText(t.title), condition: text(t.condition), content: text(t.content), limitation: text(t.limitation) })),
-    candidates: rows(r.candidates).map(c => ({ recommendationId: text(c.recommendationId), displayName: text(c.displayName), reasonText: text(c.reasonText), selected: c.selected === true, goalSelectionId: nullableText(c.goalSelectionId), evidence: rows(c.evidence).map(e => ({ utteranceSeq: count(e.utteranceSeq), kind: text(e.kind) })) })) };
+    candidates: rows(r.candidates).map(c => ({ recommendationId: text(c.recommendationId), displayName: text(c.displayName), reasonText: text(c.displayEvidence ?? c.reasonText), selected: c.selected === true, goalSelectionId: nullableText(c.goalSelectionId), evidence: rows(c.evidence).map(e => ({ utteranceSeq: count(e.utteranceSeq), kind: text(e.kind) })) })) };
 }
 const resultPath = (id: string) => `/api/sessions/${encodeURIComponent(id)}/result`;
 export const resultStatusKey = (id: string) => ["result-status", id] as const;

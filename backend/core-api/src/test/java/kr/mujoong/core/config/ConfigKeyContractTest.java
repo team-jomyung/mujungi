@@ -33,6 +33,7 @@ import org.springframework.boot.context.properties.source.ConfigurationPropertyS
 import org.springframework.boot.convert.ApplicationConversionService;
 import org.springframework.boot.env.YamlPropertySourceLoader;
 import kr.mujoong.core.knowledge.KnowledgeProperties;
+import kr.mujoong.core.knowledge.SeedGenerationProperties;
 import kr.mujoong.core.luna.LunaHosts;
 import kr.mujoong.core.luna.LunaProperties;
 import kr.mujoong.core.textai.TextAiProperties;
@@ -144,6 +145,7 @@ class ConfigKeyContractTest {
         // U5a: 텍스트 AI · 지식 그래프는 같은 방식의 설정 레코드 둘이 묶는다(U5a 리뷰 5)
         leaves.putAll(recordLeaves(TextAiProperties.class, "mujoong.text-ai"));
         leaves.putAll(recordLeaves(KnowledgeProperties.class, "mujoong.knowledge.neo4j"));
+        leaves.putAll(recordLeaves(SeedGenerationProperties.class, "mujoong.knowledge.seed-generation"));
         // U9 SD12: Luna 호출 설정도 같은 방식의 레코드가 묶는다
         leaves.putAll(recordLeaves(LunaProperties.class, "mujoong.luna"));
 
@@ -155,6 +157,8 @@ class ConfigKeyContractTest {
         boundValues.putAll(recordValues(bindRecord(TextAiProperties.class, "mujoong.text-ai", base), "mujoong.text-ai"));
         boundValues.putAll(recordValues(bindRecord(KnowledgeProperties.class, "mujoong.knowledge.neo4j", base),
                 "mujoong.knowledge.neo4j"));
+        boundValues.putAll(recordValues(bindRecord(SeedGenerationProperties.class, "mujoong.knowledge.seed-generation", base),
+                "mujoong.knowledge.seed-generation"));
         boundValues.putAll(recordValues(bindRecord(LunaProperties.class, "mujoong.luna", base), "mujoong.luna"));
         assertThat(valueMismatches(yml, leaves, boundValues, placeholderResolver(base)))
                 .as("yml 값과 레코드에 묶인 값").isEmpty();

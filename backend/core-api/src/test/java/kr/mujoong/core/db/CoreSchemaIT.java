@@ -87,6 +87,9 @@ class CoreSchemaIT {
 
     /** U5b V7가 더하는 연습 시작 준비 표 1개. */
     static final List<String> U5B_TABLES = List.of("core_practice_preparation");
+    static final List<String> U15_TABLES = List.of("core_graph_version", "core_child_graph_state",
+            "core_seed_generation_operation", "generated_seed", "core_graph_deleted_source", "core_graph_deleted_child");
+    static final List<String> U14_TABLES = List.of("core_goal_candidate", "core_goal_candidate_version", "core_saved_goal");
 
     @BeforeAll
     static void startDatabase() {
@@ -99,18 +102,18 @@ class CoreSchemaIT {
             List<List<Object>> tables = query(owner,
                     "select tablename, tableowner from pg_tables where schemaname = 'core' order by tablename");
             assertThat(tables.stream().map(row -> (String) row.get(0)).toList()).containsExactlyElementsOf(
-                    java.util.stream.Stream.of(CORE_TABLES, U5A_TABLES, U6_TABLES, U7_TABLES, U5B_TABLES)
+                    java.util.stream.Stream.of(CORE_TABLES, U5A_TABLES, U6_TABLES, U7_TABLES, U5B_TABLES, U15_TABLES, U14_TABLES)
                             .flatMap(List::stream).sorted().toList());
             // 편차 (x): 표 소유는 마이그레이션 역할, 앱 역할은 쓰는 역할일 뿐이다
             assertThat(tables).allSatisfy(row -> assertThat(row.get(1)).isEqualTo("mujoong_owner"));
 
-            // V1 · V2(U2) · V3(U4a) · V4(U5a) · V5(U6) · V6(U7) · V7(U5b)가 차례로 성공으로 있다(J116).
+            // V1 · V2(U2) · V3(U4a) · V4(U5a) · V5(U6) · V6(U7) · V7(U5b) · V8(U15) · V9(U14)가 차례로 성공으로 있다(J116).
             // core 위치가 먼저라 기준선 행은 없다.
             List<List<Object>> history = query(owner,
                     "select version, type, success from flyway.core_schema_history order by installed_rank");
             assertThat(history).containsExactly(List.of("1", "SQL", true), List.of("2", "SQL", true),
                     List.of("3", "SQL", true), List.of("4", "SQL", true), List.of("5", "SQL", true),
-                    List.of("6", "SQL", true), List.of("7", "SQL", true));
+                    List.of("6", "SQL", true), List.of("7", "SQL", true), List.of("8", "SQL", true), List.of("9", "SQL", true));
         }
     }
 
@@ -215,7 +218,8 @@ class CoreSchemaIT {
                     "core_device_pending_code_uk",
                     "core_push_dispatch_due_idx",
                     "core_push_subscription_active_guardian_idx",
-                    "core_result_job_subject_active_idx");
+                    "core_result_job_subject_active_idx",
+                    "core_saved_goal_active_candidate_idx");
             assertThat(partial.subList(0, 4)).allSatisfy(row -> assertThat((String) row.get(1)).startsWith("CREATE UNIQUE INDEX"));
             assertThat((String) partial.get(4).get(1)).startsWith("CREATE INDEX")
                     .contains("(next_attempt_at, requested_at)").contains("'REQUESTED'");

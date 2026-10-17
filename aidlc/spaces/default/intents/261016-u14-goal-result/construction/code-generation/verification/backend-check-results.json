@@ -1,0 +1,85 @@
+{
+  "command": "./gradlew --init-script ../../u14-wsl-build.init.gradle check -Pmujoong.test.db=docker",
+  "workingDirectory": "backend",
+  "baseCommit": "347de28",
+  "source": "original working tree, fourth layer and exact V9 shared test baselines",
+  "finalExitCode": 0,
+  "finalElapsedSeconds": 225,
+  "reuse": "core-api, contract-model and test-support successful identical-source/input tasks UP-TO-DATE; complete unfiltered realtime-activity suite rerun",
+  "modules": [
+    {
+      "covered": 1528,
+      "errors": 0,
+      "module": "contract-model",
+      "failures": 0,
+      "skipped": 0,
+      "tests": 322,
+      "missed": 23
+    },
+    {
+      "covered": 9602,
+      "errors": 0,
+      "module": "core-api",
+      "failures": 0,
+      "skipped": 0,
+      "tests": 1547,
+      "missed": 395
+    },
+    {
+      "covered": 10253,
+      "errors": 0,
+      "module": "realtime-activity",
+      "failures": 0,
+      "skipped": 0,
+      "tests": 1235,
+      "missed": 735
+    },
+    {
+      "covered": 558,
+      "errors": 0,
+      "module": "test-support",
+      "failures": 0,
+      "skipped": 3,
+      "tests": 31,
+      "missed": 747
+    }
+  ],
+  "history": [
+    {
+      "scope": "first full check",
+      "exitCode": 1,
+      "elapsedSeconds": 391,
+      "coreTests": 1546,
+      "coreFailures": 9,
+      "reason": "V8 fixed shared schema/startup expectations versus approved V9",
+      "realtimeCheck": "PASS"
+    },
+    {
+      "scope": "five shared V9 baseline classes",
+      "exitCode": 0,
+      "elapsedSeconds": 61,
+      "tests": 56,
+      "failures": 0,
+      "skipped": 0
+    },
+    {
+      "scope": "second full check",
+      "exitCode": 1,
+      "elapsedSeconds": 386,
+      "coreTests": 1547,
+      "coreFailures": 0,
+      "realtimeTests": 1235,
+      "realtimeFailures": 1,
+      "reason": "existing RealtimeDeletionHandlerIT device-message PT10S timeout; no RT source changes"
+    },
+    {
+      "scope": "RealtimeDeletionHandlerIT",
+      "exitCode": 0,
+      "elapsedSeconds": 33,
+      "tests": 4,
+      "failures": 0,
+      "skipped": 0
+    }
+  ],
+  "coverageReportPath": "/tmp/mujungi-u14-verification-build/<module>/build/reports/jacoco/test/jacocoTestReport.xml"
+}

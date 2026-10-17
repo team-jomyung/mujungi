@@ -872,7 +872,7 @@ paths:
               schema: { $ref: "schemas/goal-selection-list.schema.json" }
         "400": { $ref: "#/components/responses/ValidationFailed" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
-        "403": { $ref: "#/components/responses/CsrfOrDeletion" }
+        "403": { $ref: "#/components/responses/GoalWriteForbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "500": { $ref: "#/components/responses/InternalError" }
         "503": { $ref: "#/components/responses/ServiceNotReady" }
@@ -896,7 +896,7 @@ paths:
               schema: { $ref: "schemas/goal-selection.schema.json" }
         "400": { $ref: "#/components/responses/ValidationFailed" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
-        "403": { $ref: "#/components/responses/CsrfOrDeletion" }
+        "403": { $ref: "#/components/responses/GoalWriteForbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "500": { $ref: "#/components/responses/InternalError" }
         "503": { $ref: "#/components/responses/ServiceNotReady" }
@@ -929,7 +929,7 @@ paths:
               schema: { $ref: "schemas/goal-selection.schema.json" }
         "400": { $ref: "#/components/responses/ValidationFailed" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
-        "403": { $ref: "#/components/responses/CsrfOrDeletion" }
+        "403": { $ref: "#/components/responses/GoalWriteForbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "500": { $ref: "#/components/responses/InternalError" }
         "503": { $ref: "#/components/responses/ServiceNotReady" }
@@ -949,7 +949,7 @@ paths:
               schema: { $ref: "schemas/goal-selection-delete-response.schema.json" }
         "400": { $ref: "#/components/responses/ValidationFailed" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
-        "403": { $ref: "#/components/responses/CsrfOrDeletion" }
+        "403": { $ref: "#/components/responses/GoalWriteForbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "500": { $ref: "#/components/responses/InternalError" }
         "503": { $ref: "#/components/responses/ServiceNotReady" }
@@ -971,7 +971,7 @@ paths:
               schema: { $ref: "schemas/goal-selection.schema.json" }
         "400": { $ref: "#/components/responses/ValidationFailed" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
-        "403": { $ref: "#/components/responses/CsrfOrDeletion" }
+        "403": { $ref: "#/components/responses/GoalWriteForbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "500": { $ref: "#/components/responses/InternalError" }
         "503": { $ref: "#/components/responses/ServiceNotReady" }
@@ -991,6 +991,7 @@ paths:
       operationId: getSessionResult
       x-unit: U6
       summary: 세션 결과 조회
+      description: U14 새 결과는 가변 양수 sceneNo와 timing(AFTER_REASK 포함)을 보존한다. 새 후보는 displayEvidence만 공개하며 내부 reasonText/fourElements/skillRef는 공개하지 않는다. 레거시 응답은 유지한다. strict 소비자는 같은 릴리스에서 갱신한다(U14-b).
       responses:
         "200":
           description: 성공
@@ -1292,6 +1293,12 @@ components:
       description: "형식 오류 · JSON 아님 · 본문 64KB 초과(편차 (r) — 413 대신 400)"
       x-error-codes: [VALIDATION_FAILED]
       x-deviation: ["(r)"]
+      content:
+        application/json:
+          schema: { $ref: "schemas/error-envelope.schema.json" }
+    GoalWriteForbidden:
+      description: CSRF 오류 · 삭제 접수 또는 생성 목표의 필수 동의 철회
+      x-error-codes: [CSRF_TOKEN_INVALID, ACCOUNT_DELETION_IN_PROGRESS, CONSENT_MISSING]
       content:
         application/json:
           schema: { $ref: "schemas/error-envelope.schema.json" }

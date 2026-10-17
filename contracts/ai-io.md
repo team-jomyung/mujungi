@@ -241,7 +241,7 @@ FR7.11 표대로 FULL · PARTIAL · INSUFFICIENT를 정한다. 내용 있는 아
 
 ### 6.9 U6 호출 예산과 생활 팁
 
-결과 · 리포트 호출은 `mujoong.text-ai.result.request-timeout`과 작업 시도 잔여 시간 중 작은 값으로 제한한다. 게이트웨이 재시도 없이 작업당 총 3회 시도한다. INSUFFICIENT 사전 판정이면 AI 없이 DONE이다. 생활 팁은 목표 · 검증 후보 behaviorKey와 승인 항목의 교집합을 서버에서 찾고, title · condition · content · limitation에 1차 금지 사전을 적용한다. 사전 · 프롬프트는 U6-J 초안이고 D 담당 확인 대상이다.
+결과 · 리포트 호출은 `mujoong.text-ai.result.request-timeout`과 작업 시도 잔여 시간 중 작은 값으로 제한한다. 게이트웨이 재시도 없이 작업당 최초 1회와 추가 최대 3회, 총 4회 시도하며 지연은 5·15·30초다(U14·FR7.6). INSUFFICIENT 사전 판정이면 AI 없이 DONE이다. 생활 팁은 레거시 목표 · 검증 후보 behaviorKey와 승인 항목의 교집합을 서버에서 찾고, 생성 후보를 임의 behaviorKey로 바꾸지 않는다. title · condition · content · limitation에 1차 금지 사전을 적용한다.
 
 ## 7. U5a TextAiGateway (U5a-d)
 
@@ -286,6 +286,8 @@ U8(계약 · 버전 리소스)이 정한 공통 규칙이다. Luna · 제브 구
 
 ### 10.1 스키마 파일
 
+U15 씨앗 v2는 GENERATED/DUPLICATE/NONE의 배타적 출력 분기를 사용한다. 필드·중복 원장·재시도 공유 규칙은 [지식 그래프 내부 계약](knowledge-graph.md)을 따른다. outcome 없는 기존 2필드 출력은 공통 호출부 호환용이며 U15 생성 성공으로 수락하지 않는다.
+
 | 파일(`contracts/schemas/`) | 목적 | 호출 경로(단위) |
 |---|---|---|
 | `ai-judgment-request.schema.json` | 진행 중 판정 요청(J1 ~ J6, 공급자로 보내는 최소 필드) | realtime 판정 턴(U11) · `JudgeClient`(U9) |
@@ -321,7 +323,7 @@ U8(계약 · 버전 리소스)이 정한 공통 규칙이다. Luna · 제브 구
 | 기록용 재판정 | core 결과 작업(U14) | `JOB_ATTEMPT` | 같음 |
 
 - 예산 밖 재시도 · 무한 재시도는 없다. 다른 경로에서 부르게 되면 그 단위가 분류를 다시 정한다(BR5.2).
-- 6.9의 '작업당 총 3회'는 U14가 시도 수를 바꿀 때 함께 고친다(BR3.2). 새 HTTP 오류 code는 없다 — 판정 · 제브 실패는 내부 사유(보류 · 막힘), 상황 생성 실패는 기존 `SCENARIO_GEN_FAILED`다(BR7.3).
+- U14는 6.9와 timing.result를 최초 포함 총4회·추가 지연5/15/30초로 맞춘다(BR3.2). GOAL_CANDIDATES·REJUDGMENT·RESULT_TEXT는 각 작업 시도 안에서 추가 재시도를 하지 않는다. 새 HTTP 오류 code는 없다 — 판정 · 제브 실패는 내부 사유(보류 · 막힘), 상황 생성 실패는 기존 `SCENARIO_GEN_FAILED`다(BR7.3).
 
 ### 10.4 판 리소스와 세션 고정
 

@@ -16,5 +16,5 @@ public final class ResultLevelCalculator {
                 :!ResultData.goals(practice).isEmpty()&&ResultData.goals(practice).stream().allMatch(ResultLevelCalculator::firstResponse);
         return normal&&enough?"FULL":"PARTIAL";
     }
-    private static boolean firstResponse(Map<String,Object> goal){return ResultData.objects(goal.get("responses")).stream().anyMatch(r->Set.of("FIRST","NEW_SCENARIO").contains(ResultData.text(r,"responseType"))&&ResultData.number(r,"utteranceSeq")>0);}
+    private static boolean firstResponse(Map<String,Object> goal){if(PracticeRecordV2.VERSION.equals(goal.get("flowVersion")))return goal.get("scenes") instanceof List<?> scenes&&!scenes.isEmpty();return ResultData.objects(goal.get("responses")).stream().anyMatch(r->Set.of("FIRST","NEW_SCENARIO").contains(ResultData.text(r,"responseType"))&&ResultData.number(r,"utteranceSeq")>0);}
 }
