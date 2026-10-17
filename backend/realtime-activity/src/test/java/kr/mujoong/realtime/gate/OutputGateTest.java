@@ -125,19 +125,18 @@ class OutputGateTest {
     void inspectionNeverLooksAtTheSessionStateAndFailsClosedOnBrokenSegments() {
         OutputGate gate = new OutputGate(SeedDictionary.loadDefault());
         SegmentBuffer buffer = new SegmentBuffer();
-        buffer.addTranscript("r", "안녕", Instant.EPOCH, 0);
-        buffer.addAudio("r", new byte[3], Instant.EPOCH, 1);
+        buffer.addTranscript(1, true, "안녕", Instant.EPOCH, 0);
+        buffer.addAudio(1, false, new byte[3], Instant.EPOCH, 1);
 
-        assertThat(gate.inspect(buffer.seal(1)).reason()).isEqualTo(DiscardReason.GATE_EMPTY);
+        assertThat(gate.inspect(buffer.sealQuiet(1)).reason()).isEqualTo(DiscardReason.GATE_EMPTY);
         assertThat(gate.inspect(null).reason()).isEqualTo(DiscardReason.GATE_EMPTY);
-        // 응답 끝 신호가 없으면 전사-음성 대응 근거가 없다(리뷰 F1, SD-17 3단계)
-        buffer.addTranscript("t", "안녕", Instant.EPOCH, 0);
-        buffer.addAudio("t", new byte[2], Instant.EPOCH, 1);
-        assertThat(gate.inspect(buffer.seal(98)).reason()).isEqualTo(DiscardReason.GATE_EMPTY);
-        buffer.addTranscript("s", "안녕", Instant.EPOCH, 0);
-        buffer.addAudio("s", new byte[2], Instant.EPOCH, 1);
-        buffer.responseDone("s");
-        assertThat(gate.inspect(buffer.seal(99)).passed()).isTrue();
+        // 첫 조각부터 끊김까지를 담지 않았으면(세대가 바뀌어 닫음) 전사-음성 대응 근거가 없다(리뷰 F1, SD-17 3단계)
+        buffer.addTranscript(2, true, "안녕", Instant.EPOCH, 0);
+        buffer.addAudio(2, false, new byte[2], Instant.EPOCH, 1);
+        assertThat(gate.inspect(buffer.sealByGeneration(98)).reason()).isEqualTo(DiscardReason.GATE_EMPTY);
+        buffer.addTranscript(3, true, "안녕", Instant.EPOCH, 0);
+        buffer.addAudio(3, false, new byte[2], Instant.EPOCH, 1);
+        assertThat(gate.inspect(buffer.sealQuiet(99)).passed()).isTrue();
     }
 
     @Test

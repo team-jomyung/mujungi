@@ -86,7 +86,8 @@ public record RealtimeProperties(
             RecorderTiming recorder,
             JudgmentTiming judgment,
             GuardrailTiming guardrail,
-            ConversationTiming conversation) {
+            ConversationTiming conversation,
+            ProviderTiming provider) {
         public Timing {
             required(session, "mujoong.timing.session");
             required(device, "mujoong.timing.device");
@@ -94,6 +95,17 @@ public record RealtimeProperties(
             required(judgment, "mujoong.timing.judgment");
             required(guardrail, "mujoong.timing.guardrail");
             required(conversation, "mujoong.timing.conversation");
+            required(provider, "mujoong.timing.provider");
+        }
+    }
+
+    /**
+     * U11(timing.md 14절 · BR11.7): 아이 말이 끝난 뒤 자동 응답이 시작되기를 기다리는 시간. 출력 세대의 끊김 확인이 '자동 응답이 아직 시작 전인데 끊김으로
+     * 잘못 보는 일'을 막는 데 쓴다. 값은 실호출 관측(말 끝 → 자동 응답 첫 조각 시간)으로 정한다.
+     */
+    public record ProviderTiming(Duration autoResponseStart) {
+        public ProviderTiming {
+            positive(autoResponseStart, "mujoong.timing.provider.auto-response-start");
         }
     }
 

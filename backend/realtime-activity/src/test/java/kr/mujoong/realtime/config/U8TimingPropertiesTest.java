@@ -54,10 +54,13 @@ class U8TimingPropertiesTest {
         RealtimeProperties.Timing bound = ConfigKeyContractTest.bind(APPLICATION_YML).timing();
 
         assertThatThrownBy(() -> new RealtimeProperties.Timing(bound.session(), bound.device(), bound.recorder(),
-                null, bound.guardrail(), bound.conversation()))
+                null, bound.guardrail(), bound.conversation(), bound.provider()))
                 .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("mujoong.timing.judgment");
         assertThatThrownBy(() -> new RealtimeProperties.Timing(bound.session(), bound.device(), bound.recorder(),
-                bound.judgment(), bound.guardrail(), null))
+                bound.judgment(), bound.guardrail(), null, bound.provider()))
                 .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("mujoong.timing.conversation");
+        assertThatThrownBy(() -> new RealtimeProperties.Timing(bound.session(), bound.device(), bound.recorder(),
+                bound.judgment(), bound.guardrail(), bound.conversation(), null))
+                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("mujoong.timing.provider");
     }
 }

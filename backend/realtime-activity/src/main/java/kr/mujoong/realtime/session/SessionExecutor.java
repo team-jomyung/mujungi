@@ -1407,7 +1407,7 @@ public final class SessionExecutor {
             if (!practiceActive() || providerSession == null || !providerSession.isOpen()) return false;
             bumpGeneration();
             timers.cancel(Kind.SEGMENT_QUIET);
-            if (segment.isOpen() && segment.responseId() != null) cancelledResponses.add(segment.responseId());
+            if (segment.isOpen()) cancelledResponses.add(COMPAT_RESPONSE);
             segment.reset();
             transcripts.aiFinal("", false, services.clock().now());
             pendingPracticeSpeech = speech;
@@ -1696,7 +1696,7 @@ public final class SessionExecutor {
                 if (inOutputRange() && !cancelledResponses.contains(COMPAT_RESPONSE)) {
                     beginOutput(COMPAT_RESPONSE, at);
                     // J294: 음성처럼 구간에 들어간 조각만 조용 시계를 다시 건다(버린 조각은 열린 구간의 조용 시간을 늘리지 않는다)
-                    if (segment.addTranscript(COMPAT_RESPONSE, delta.delta(), at, received.receivedNanos())
+                    if (segment.addTranscript(0L, true, delta.delta(), at, received.receivedNanos())
                             == SegmentBuffer.Added.ADDED) {
                         timers.arm(Kind.SEGMENT_QUIET, services.settings().segmentQuiet());
                     }
@@ -1707,7 +1707,7 @@ public final class SessionExecutor {
                 if (inOutputRange() && !cancelledResponses.contains(COMPAT_RESPONSE)) {
                     beginOutput(COMPAT_RESPONSE, at);
                     SegmentBuffer.Added added =
-                            segment.addAudio(COMPAT_RESPONSE, delta.audio(), at, received.receivedNanos());
+                            segment.addAudio(0L, true, delta.audio(), at, received.receivedNanos());
                     if (added == SegmentBuffer.Added.OVERSIZE) {
                         timers.cancel(Kind.SEGMENT_QUIET);
                         SegmentBuffer.Sealed oversized = segment.takeOversized();
@@ -1725,10 +1725,10 @@ public final class SessionExecutor {
      * 완결이 아닌 구간은 게이트 3단계가 GATE_EMPTY로 폐기한다). 응답의 첫 조각이면 t1을 찍고 AI 행 번호를 정해 확정 전 칸을 넣는다(PD-5 2.4).
      */
     private void beginOutput(String responseId, Instant at) {
-        if (segment.holdsOtherThan(responseId)) {
+        if (segment.holdsOtherThan(0L)) {
             sealAndGate(true);
         }
-        if (!segment.isOpen() && segment.accepts(responseId)) {
+        if (!segment.isOpen()) {
             services.latency().providerFirstOut(plan.sessionId(), at);
             transcripts.aiStart(at);
         }
@@ -2110,8 +2110,8 @@ public final class SessionExecutor {
         bumpGeneration();
         timers.cancel(Kind.SEGMENT_QUIET);
         Set<String> targets = new LinkedHashSet<>();
-        if (segment.isOpen() && segment.responseId() != null) {
-            targets.add(segment.responseId());
+        if (segment.isOpen()) {
+            targets.add(COMPAT_RESPONSE);
         }
         devicePlaying.forEach(playbackId -> {
             String responseId = playbackResponses.get(playbackId);
@@ -2159,7 +2159,11 @@ public final class SessionExecutor {
         timers.cancel(Kind.SEGMENT_QUIET);
         Instant confirmedAt = services.clock().now();
         long confirmedNanos = services.clock().monotonicNanos();
-        SegmentBuffer.Sealed sealed = segment.seal(outputGeneration.get());
+        // 아이 입력 재개로 닫을 때는 조각이 이미 끊김 시간만큼 끊겨 있었어야 '완전'이다(응답이 이어지던 중이면 불완전, U11 BR11.6)
+        Instant lastOutAt = segment.lastOutAt();
+        boolean quietEnough = lastOutAt != null && !confirmedAt.isBefore(lastOutAt.plus(services.settings().segmentQuiet()));
+        SegmentBuffer.Sealed sealed = movedOn ? segment.sealEarly(outputGeneration.get(), quietEnough)
+                : segment.sealQuiet(outputGeneration.get());
         if (sealed == null) {
             return;
         }
@@ -2203,7 +2207,7 @@ public final class SessionExecutor {
         UUID playbackId = UUID.randomUUID();
         services.latency().gatePassed(plan.sessionId(), playbackId, passAt);
         transcripts.aiFinal(sealed.transcript(), true, passAt);
-        playbackResponses.put(playbackId, sealed.responseId());
+        playbackResponses.put(playbackId, COMPAT_RESPONSE);
         var speech = pendingPracticeSpeech;
         if (speech != null) {
             pendingPracticeSpeech = null; practiceHold = true;
@@ -2239,7 +2243,7 @@ public final class SessionExecutor {
         transcripts.aiFinal(sealed == null ? "" : sealed.transcript(), false, services.clock().now());
         if (pendingPracticeSpeech != null) {
             var speech = pendingPracticeSpeech; pendingPracticeSpeech = null; practiceHold = true;
-            cancelResponses(sealed == null ? null : sealed.responseId());
+            cancelResponses(sealed == null ? null : COMPAT_RESPONSE);
             practicePlayback(speech, kr.mujoong.realtime.practice.PracticePorts.Playback.FAILED);
             return;
         }
@@ -2263,7 +2267,7 @@ public final class SessionExecutor {
      * 문장, 범주를 모르거나 미완 · 너무 긴 응답이면 짧은 완결 요청). 폐기한 전사 · 걸린 패턴은 보내지 않는다.
      */
     private void correctAfterDiscard(SegmentBuffer.Sealed sealed, GateDecision.DiscardReason reason) {
-        if (status != SessionStatus.ACTIVE || sealed == null || sealed.responseId() == null) {
+        if (status != SessionStatus.ACTIVE || sealed == null) {
             return;
         }
         // 폐기 사유가 미완 · 너무 김이어도 버린 구간에 금지 패턴이 있으면 그 범주의 문장을 보낸다 — 교정은 응답당 한 번이라 전사만 든 구간이
@@ -2273,7 +2277,7 @@ public final class SessionExecutor {
                     .map(SessionExecutor::correctionFor).orElse(DialogInstructions.Correction.INCOMPLETE);
             default -> null;
         };
-        if (correction == null || !correctedResponses.add(sealed.responseId())) {
+        if (correction == null || !correctedResponses.add(COMPAT_RESPONSE + sealed.outputGen())) {
             return;
         }
         ProviderRequestFactory.InstructionsAppend request = services.requests().instructionsAppend(correction);
@@ -2451,7 +2455,7 @@ public final class SessionExecutor {
         bumpGeneration();
         timers.cancel(Kind.SEGMENT_QUIET);
         String playing = playbackResponses.get(mark.playbackId());
-        String open = segment.isOpen() ? segment.responseId() : null;
+        String open = segment.isOpen() ? COMPAT_RESPONSE : null;
         // U3-R5 · U3-J11: 재생 중이던 응답과 만들던 응답을 공급자에서도 멈춘다(남은 조각은 받지 않는다)
         cancelResponses(playing, open);
         segment.reset();

@@ -122,6 +122,9 @@ mujoong:
       no-response-wait: 10s
       focus-max: 90s
       goal-active-limit: 10m
+    # U11(timing.md 14절): 말 끝 → 자동 응답 시작 대기. 실호출 관측(W7 ⑧) 전까지 segment-quiet와 같은 값으로 둔다(임시)
+    provider:
+      auto-response-start: 800ms
   outbox:
     poll-interval: 500ms
     batch-size: 20
