@@ -3,3 +3,5 @@
 **/gradlew text eol=lf
 infra/bin/* text eol=lf
 infra/bin/lib/* text eol=lf
+*.bash text eol=lf
+*.sql  text eol=lf
