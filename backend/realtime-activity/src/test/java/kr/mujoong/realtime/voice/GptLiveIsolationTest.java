@@ -414,6 +414,18 @@ class GptLiveIsolationTest {
     }
 
     @Test
+    void theProbesRawAppendIsTheSameWireShapeTheProductionFactoryBuilds() {
+        GptLiveProbe probe = probe(Map.of());
+        ProviderRequestFactory factory = new ProviderRequestFactory();
+
+        String raw = probe.appendMessage("gl-x", GptLiveProbe.INSTRUCTION_P2);
+        String production = JSON.write(factory.instructionsAppend("gl-x", GptLiveProbe.INSTRUCTION_P2));
+
+        assertThat(JSON.read(raw, Map.class)).isEqualTo(JSON.read(production, Map.class));
+        assertThat(production).contains("\"delegation_id\":null");
+    }
+
+    @Test
     void theFixedInstructionsAskForOneMarkerEachAndStayShort() {
         assertThat(GptLiveProbe.INSTRUCTION_P2).contains(GptLiveProbe.MARKER_P2).doesNotContain(GptLiveProbe.MARKER_P3);
         assertThat(GptLiveProbe.INSTRUCTION_P3).contains(GptLiveProbe.MARKER_P3).doesNotContain(GptLiveProbe.MARKER_P2);

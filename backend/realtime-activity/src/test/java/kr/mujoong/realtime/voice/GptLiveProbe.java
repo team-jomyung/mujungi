@@ -57,7 +57,8 @@ import org.springframework.core.io.ClassPathResource;
  * <p>한 실행의 흐름(추가 전용 실험, U11 Step 12 입력): 연결 → {@code session.start}(표본율 env {@value #RATE_ENV}, 기본 24000) → 합성 말소리 발화와
  * 지시 추가({@code session.instructions.append}) 실험 단계 P1 ~ P4(+ 선택 P5)를 단계마다 2초 이상 조용한 틈을 두고 차례로 → {@code session.close}.
  * <b>{@code response.create}는 보내지 않는다</b>(클라이언트 위임 세션은 거절한다고 실호출로 관측됐다). 지시 추가 메시지는 운영 팩토리가 아니라 이 도구가
- * 원시 JSON({@code event_id} · {@code delegation_id: null} · {@code content})으로 만든다 — 운영 팩토리 수정은 이 실험 결과가 나온 뒤 따로 한다.
+ * 원시 JSON({@code event_id} · {@code delegation_id: null} · {@code content})으로 만든다 — 운영 팩토리({@code ProviderRequestFactory#instructionsAppend})는
+ * 실호출 3회 결과로 같은 모양을 만들도록 고쳤고, 이 도구는 실험이 운영 코드에 기대지 않게 원시 JSON을 그대로 쓴다(격리 시험이 두 모양이 같음을 대조한다).
  * 지시가 먹혔는지는 전사 원문을 남기지 않고 보려고 <b>표식 낱말</b>(P2 {@value #MARKER_P2}, P3 {@value #MARKER_P3})로 가린다: 지시문이 "응답의 첫 낱말을
  * 표식으로 시작하라"고 시키고, 도구가 출력 전사에 표식이 있는지를 메모리에서만 확인해 예 · 아니오와 개수 · 시간만 남긴다.
  * <ul>
