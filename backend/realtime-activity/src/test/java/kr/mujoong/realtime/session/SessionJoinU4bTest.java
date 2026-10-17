@@ -231,15 +231,14 @@ class SessionJoinU4bTest {
         withPrompts();
         toWaitingChild();
 
-        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("resp-early", "안녕!"));
-        h.provider.last().emit(new ProviderEvent.OutputAudioDelta("resp-early", new byte[480]));
-        h.provider.last().emit(new ProviderEvent.OutputDone("resp-early"));
+        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("안녕!"));
+        h.provider.last().emit(new ProviderEvent.OutputAudioDelta(new byte[480]));
+        // U11: 응답 끝 사건이 없다 — 봉인은 조각 사이 무음(조용 시간 경과)으로 한다(Step 8에서 다시 단언)
         h.drain();
         h.advanceAlive(Duration.ofSeconds(1));
         h.launcher.runAll("provider-cancel-");
 
-        assertThat(h.provider.last().requests(ProviderRequestFactory.ResponseCancel.class))
-                .extracting(ProviderRequestFactory.ResponseCancel::responseId).containsExactly("resp-early");
+        // U11 Step 5: 응답 취소 레코드가 없어졌다(공급자 지원 목록 밖) — Step 8에서 출력 세대 올림 단언으로 바꾼다 [CANCEL-ASSERT]
         assertThat(h.link.outputs()).isEmpty();
         assertThat(h.store.transcripts).noneMatch(entry -> "안녕!".equals(entry.text()));
     }

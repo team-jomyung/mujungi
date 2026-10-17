@@ -1,4 +1,4 @@
-// 가짜 공급자 시험 (U1 3.5 Step 46 · J110 선 형식 · J131 · RD-23 · SD-15 · SD-20 · contracts/ai-io.md 3절)
+// 가짜 공급자 시험 (U1 3.5 Step 46 · J131 · RD-23 · SD-15 · SD-20 · U11 실호출 관측 선 형식 · contracts/ai-io.md 3절)
 // 무작위 포트에 띄운 가짜 공급자에 ws 클라이언트(= realtime ProviderClient 역할)로 붙어 시나리오별 응답 · 금지 패턴 출력 ·
 // 입력 · 출력 해시 기록을 확인한다. 실공급자 · 실제 키는 쓰지 않는다(Bearer 값은 시험이 만든 무작위 문자열).
 import { randomBytes } from "node:crypto";
@@ -96,10 +96,11 @@ function connect(
 function sessionStart() {
   return {
     type: "session.start",
-    model: "gpt-live-1",
-    instructions: "시험 지시문",
-    childContext: { displayName: "하늘", age: 8, interests: ["공룡"] },
-    audio: { input: "pcm16le/24000/1", output: "pcm16le/24000/1" },
+    session: {
+      model: "gpt-live-1",
+      instructions: "시험 지시문 하늘 공룡",
+      audio: { format: { type: "audio/pcm", rate: 24000 } },
+    },
   };
 }
 
@@ -130,14 +131,26 @@ function httpGet(port, path) {
   });
 }
 
-const decodeAudio = (messages, responseId) =>
+/** 받은 출력 음성 조각들(응답 id가 없으므로 턴 순서대로 앞에서부터 바이트 수만큼 자른다). */
+const decodeAudio = (messages) =>
   Buffer.concat(
     messages
-      .filter((m) => m.type === "session.output_audio.delta" && m.responseId === responseId)
-      .map((m) => Buffer.from(m.audio, "base64")),
+      .filter((m) => m.type === "session.output_audio.delta")
+      .map((m) => Buffer.from(m.delta, "base64")),
   );
 
-describe("정상 연결 · 턴(J110 선 형식)", () => {
+/** 응답 끝 사건이 없으므로 출력 음성이 기대 바이트 수만큼 모일 때까지 기다린다(응답 경계는 조각 뒤의 무음). */
+const waitForAudioBytes = async (client, bytes, timeoutMs = 3000) => {
+  const deadline = Date.now() + timeoutMs;
+  while (decodeAudio(client.messages).length < bytes) {
+    if (Date.now() > deadline) {
+      throw new Error("기다린 출력 음성이 모이지 않았다");
+    }
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+};
+
+describe("정상 연결 · 턴(실호출 관측 선 형식)", () => {
   it("session.start에 session.started로 답하고 기록에는 키 목록만 남긴다(SD-20)", async () => {
     const records = [];
     const provider = await start({ onRecord: (entry) => records.push(entry) });
@@ -146,10 +159,11 @@ describe("정상 연결 · 턴(J110 선 형식)", () => {
     client.ws.send(JSON.stringify(sessionStart()));
     const started = await client.waitFor((m) => m.type === "session.started");
 
-    expect(started.providerSessionId).toBe("fake-provider-1");
+    expect(started.session.id).toBe("fake-provider-1");
     const startRecord = records.find((entry) => entry.ev === "session.start");
-    expect(startRecord.keys).toEqual(["audio", "childContext", "instructions", "model", "type"]);
-    expect(startRecord.childContextKeys).toEqual(["age", "displayName", "interests"]);
+    expect(startRecord.keys).toEqual(["session", "type"]);
+    expect(startRecord.sessionKeys).toEqual(["audio", "instructions", "model"]);
+    expect(startRecord.audioFormat).toEqual({ type: "audio/pcm", rate: 24000 });
     expect(records.find((entry) => entry.ev === "connect")).toMatchObject({
       bearer: true,
       scenario: "ok",
@@ -162,14 +176,15 @@ describe("정상 연결 · 턴(J110 선 형식)", () => {
     expect(text).not.toContain(client.bearer);
   });
 
-  it("입력 프레임 묶음마다 아이 전사 → 말 끝 → 확정 → AI 전사 · 출력 음성 → 끝 순서로 보낸다", async () => {
+  it("입력 프레임 묶음마다 아이 전사 → 말 끝 → 확정 → AI 전사 · 출력 음성 순서로 보내고 응답 끝 사건은 없다", async () => {
     const provider = await start({ turns: ["normal"] });
     const client = connect(provider);
     await client.opened;
     client.ws.send(JSON.stringify(sessionStart()));
     await client.waitFor((m) => m.type === "session.started");
     sendFrames(client.ws, 0, 3);
-    await client.waitFor((m) => m.type === "session.output.done");
+    await waitForAudioBytes(client, outputPcmFor(1, "normal").length);
+    await new Promise((resolve) => setTimeout(resolve, 60));
 
     const types = client.messages
       .map((m) => m.type)
@@ -182,8 +197,11 @@ describe("정상 연결 · 턴(J110 선 형식)", () => {
       "session.input_transcript.done",
       "session.output_transcript.delta",
       "session.output_transcript.delta",
-      "session.output.done",
     ]);
+    // 응답 id도 응답 끝 사건도 없다: 응답 경계는 마지막 조각 뒤의 무음이다
+    expect(client.messages.some((m) => "responseId" in m)).toBe(false);
+    expect(client.messages.some((m) => m.type === "session.output.done")).toBe(false);
+    expect(client.messages.filter((m) => m.type === "session.output_audio.delta").every((m) => typeof m.delta === "string")).toBe(true);
     const script = TURN_SCRIPTS.normal;
     const childDeltas = client.messages
       .filter((m) => m.type === "session.input_transcript.delta")
@@ -210,9 +228,10 @@ describe("정상 연결 · 턴(J110 선 형식)", () => {
     client.ws.send(JSON.stringify(sessionStart()));
     await client.waitFor((m) => m.type === "session.started");
     const first = sendFrames(client.ws, 0, 3);
-    await client.waitFor((m) => m.type === "session.output.done" && m.responseId === "resp-1-1");
+    const firstBytes = outputPcmFor(1, "normal").length;
+    await waitForAudioBytes(client, firstBytes);
     const second = sendFrames(client.ws, 3, 3);
-    await client.waitFor((m) => m.type === "session.output.done" && m.responseId === "resp-1-2");
+    await waitForAudioBytes(client, firstBytes + outputPcmFor(2, "forbidden").length);
 
     const turns = records.filter((entry) => entry.ev === "turn");
     expect(turns.map((turn) => turn.kind)).toEqual(["normal", "forbidden"]);
@@ -227,8 +246,11 @@ describe("정상 연결 · 턴(J110 선 형식)", () => {
       frames: 3,
       inputSha256: sha256Hex(Buffer.concat(second)),
     });
+    const allAudio = decodeAudio(client.messages);
+    let offset = 0;
     for (const [index, turn] of turns.entries()) {
-      const audio = decodeAudio(client.messages, turn.responseId);
+      const audio = allAudio.subarray(offset, offset + turn.outputBytes);
+      offset += turn.outputBytes;
       expect(audio.length).toBe(turn.outputBytes);
       expect(sha256Hex(audio)).toBe(turn.outputSha256);
       expect(turn.aiTextSha256).toBe(textSha256(TURN_SCRIPTS[turn.kind].aiText));
@@ -242,7 +264,7 @@ describe("정상 연결 · 턴(J110 선 형식)", () => {
     });
     // 금지 턴 AI 문장에는 시드 사전 SCORE 패턴이 있고, 기록에는 문장 원문이 없다
     const forbiddenText = client.messages
-      .filter((m) => m.type === "session.output_transcript.delta" && m.responseId === "resp-1-2")
+      .filter((m) => m.type === "session.output_transcript.delta")
       .map((m) => m.delta)
       .join("");
     expect(forbiddenText).toContain(FORBIDDEN_PATTERN);
@@ -256,7 +278,7 @@ describe("정상 연결 · 턴(J110 선 형식)", () => {
     expect(records.find((entry) => entry.ev === "session.close")).toMatchObject({ inputFrames: 9 });
   });
 
-  it("규격 밖 입력 길이는 badLength로, 모르는 type은 type만 기록한다", async () => {
+  it("규격 밖 입력 길이는 badLength로, 지원 목록 밖 type은 error 사건으로 답하고 type만 기록한다", async () => {
     const records = [];
     const provider = await start({ onRecord: (entry) => records.push(entry) });
     const client = connect(provider);
@@ -267,12 +289,29 @@ describe("정상 연결 · 턴(J110 선 형식)", () => {
         audio: Buffer.alloc(10).toString("base64"),
       }),
     );
-    client.ws.send(JSON.stringify({ type: "session.unknown", secret: "값" }));
+    client.ws.send(JSON.stringify({ type: "session.response.cancel", secret: "값" }));
+    client.ws.send(JSON.stringify({ type: "session.thinking.append", text: "값" }));
     client.ws.send("not json");
     await new Promise((resolve) => setTimeout(resolve, 100));
     expect(records.find((entry) => entry.ev === "input")).toMatchObject({ badLength: 10 });
-    expect(records.find((entry) => entry.ev === "recv-unknown")).toMatchObject({
-      type: "session.unknown",
+    expect(records.find((entry) => entry.ev === "recv-unsupported")).toMatchObject({
+      type: "session.response.cancel",
+    });
+    // 실호출에서 관측한 모양: error{invalid_request_error, invalid_value, param type}
+    expect(client.messages).toEqual([
+      {
+        type: "error",
+        error: {
+          type: "invalid_request_error",
+          code: "invalid_value",
+          message: "Invalid value",
+          param: "type",
+        },
+      },
+    ]);
+    // 지원 목록 안의 type은 조용히 받는다
+    expect(records.find((entry) => entry.ev === "recv-ignored")).toMatchObject({
+      type: "session.thinking.append",
     });
     expect(records.some((entry) => entry.ev === "bad-message")).toBe(true);
     expect(JSON.stringify(records)).not.toContain("값");
@@ -280,12 +319,17 @@ describe("정상 연결 · 턴(J110 선 형식)", () => {
 });
 
 describe("연결 시나리오(RD-5 · NFR4.2)", () => {
-  it("refuse는 업그레이드를 503으로, Bearer가 없으면 401로 거절한다", async () => {
-    const provider = await start({ scenarios: ["refuse", "ok"] });
+  it("refuse는 업그레이드를 503으로 거절하고, Bearer가 없어도 연결을 받는다(U11 BR12.2)", async () => {
+    const records = [];
+    const provider = await start({
+      scenarios: ["refuse", "ok"],
+      onRecord: (entry) => records.push(entry),
+    });
     const refused = connect(provider);
     await expect(refused.opened).rejects.toMatchObject({ status: 503 });
     const noKey = connect(provider, { bearer: null });
-    await expect(noKey.opened).rejects.toMatchObject({ status: 401 });
+    await noKey.opened;
+    expect(records.find((entry) => entry.ev === "connect")).toMatchObject({ conn: 2, bearer: false });
   });
 
   it("no-started는 session.started를 보내지 않고, delayed는 지연 뒤에 보낸다", async () => {
@@ -330,7 +374,10 @@ describe("시나리오 데이터 · 인자", () => {
     expect(outputPcmFor(2, "normal").equals(a.pcm)).toBe(false);
     const chunks = a.steps.filter((step) => step.message.type === "session.output_audio.delta");
     expect(chunks).toHaveLength(Math.ceil(a.pcm.length / 4800));
-    expect(a.steps.at(-1).message).toEqual({ type: "session.output.done", responseId: "resp-1-1" });
+    // 응답 끝 사건 · 응답 id가 없다(U11): 마지막 단계는 마지막 출력 음성 조각이다
+    expect(a.steps.at(-1).message.type).toBe("session.output_audio.delta");
+    expect(a.steps.some((step) => "responseId" in step.message || step.message.type === "session.output.done")).toBe(false);
+    expect(Buffer.concat(chunks.map((step) => Buffer.from(step.message.delta, "base64"))).equals(a.pcm)).toBe(true);
     expect(() => buildTurn({ connection: 1, turn: 1, kind: "normal", chunkBytes: 3 })).toThrow(
       RangeError,
     );

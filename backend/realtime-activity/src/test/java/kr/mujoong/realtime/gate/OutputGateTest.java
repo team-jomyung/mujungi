@@ -72,7 +72,7 @@ class OutputGateTest {
     void anEmptyTranscriptOrAForbiddenPatternIsDiscardedWithTheFillerAndAnUnapprovedRow() {
         h.activate();
         childSpeaks();
-        h.provider.last().emit(new ProviderEvent.OutputAudioDelta("r1", AUDIO));
+        h.provider.last().emit(new ProviderEvent.OutputAudioDelta(AUDIO));
         h.drain();
         h.advance(Duration.ofMillis(800));
 
@@ -224,15 +224,15 @@ class OutputGateTest {
         h.activate();
         childSpeaks();
         // 계약은 전사 · 음성 순서를 정하지 않는다: 응답 r1의 음성이 먼저 다 오고 전사는 앞부분만 왔다
-        h.provider.last().emit(new ProviderEvent.OutputAudioDelta("r1", AUDIO));
-        h.provider.last().emit(new ProviderEvent.OutputAudioDelta("r1", AUDIO));
-        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("r1", "그건 아마 "));
+        h.provider.last().emit(new ProviderEvent.OutputAudioDelta(AUDIO));
+        h.provider.last().emit(new ProviderEvent.OutputAudioDelta(AUDIO));
+        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("그건 아마 "));
         h.drain();
         // 아이 입력 재개가 구간을 봉인한다(J193) — 응답 끝 신호가 아직 없다
         h.provider.last().emit(new ProviderEvent.InputTranscriptDelta("item-2", "근데"));
         h.drain();
-        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("r1", "치료가 필요해요"));
-        h.provider.last().emit(new ProviderEvent.OutputDone("r1"));
+        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("치료가 필요해요"));
+        // U11: 응답 끝 사건이 없다 — 봉인은 조각 사이 무음(조용 시간 경과)으로 한다(Step 8에서 다시 단언)
         h.drain();
         h.advance(Duration.ofMillis(800));
 
@@ -248,8 +248,8 @@ class OutputGateTest {
     void aResponseCutByTheQuietTimeBeforeItsDoneSignalIsDiscardedInBothParts() {
         h.activate();
         childSpeaks();
-        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("r1", "그건 아마 "));
-        h.provider.last().emit(new ProviderEvent.OutputAudioDelta("r1", AUDIO));
+        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("그건 아마 "));
+        h.provider.last().emit(new ProviderEvent.OutputAudioDelta(AUDIO));
         h.drain();
         // 공급자가 응답 중간에 800ms 멈추면 부분 전사로 봉인된다
         h.advance(Duration.ofMillis(800));
@@ -267,13 +267,13 @@ class OutputGateTest {
     void aQuietExpiryThatOvertakesQueuedDeltasCannotApproveTheUncheckedRest() {
         h.activate();
         childSpeaks();
-        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("r1", "그건 아마 "));
-        h.provider.last().emit(new ProviderEvent.OutputAudioDelta("r1", AUDIO));
+        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("그건 아마 "));
+        h.provider.last().emit(new ProviderEvent.OutputAudioDelta(AUDIO));
         h.drain();
         // 실행기가 밀린 사이 남은 조각 · 응답 끝은 일반 편지함에 쌓이고, 조용 만기는 안전 편지함으로 먼저 들어간다
-        h.provider.last().emit(new ProviderEvent.OutputAudioDelta("r1", AUDIO));
-        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("r1", "치료가 필요해요"));
-        h.provider.last().emit(new ProviderEvent.OutputDone("r1"));
+        h.provider.last().emit(new ProviderEvent.OutputAudioDelta(AUDIO));
+        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("치료가 필요해요"));
+        // U11: 응답 끝 사건이 없다 — 봉인은 조각 사이 무음(조용 시간 경과)으로 한다(Step 8에서 다시 단언)
         h.clock.advance(Duration.ofMillis(800));
         h.quiet.runDue();
         assertThat(h.mailbox.safetySize()).isEqualTo(1);
@@ -291,10 +291,10 @@ class OutputGateTest {
         h.activate();
         childSpeaks();
         // 응답 A의 전사와 응답 B의 음성이 800ms 안에 섞여 온다
-        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("rA", "안녕"));
-        h.provider.last().emit(new ProviderEvent.OutputAudioDelta("rB", AUDIO));
-        h.provider.last().emit(new ProviderEvent.OutputDone("rB"));
-        h.provider.last().emit(new ProviderEvent.OutputDone("rA"));
+        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("안녕"));
+        h.provider.last().emit(new ProviderEvent.OutputAudioDelta(AUDIO));
+        // U11: 응답 끝 사건이 없다 — 봉인은 조각 사이 무음(조용 시간 경과)으로 한다(Step 8에서 다시 단언)
+        // U11: 응답 끝 사건이 없다 — 봉인은 조각 사이 무음(조용 시간 경과)으로 한다(Step 8에서 다시 단언)
         h.drain();
         h.advance(Duration.ofMillis(800));
 
@@ -308,9 +308,9 @@ class OutputGateTest {
         h.activate();
         childSpeaks();
         output("rA", "공룡을 좋아하는구나");
-        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("rB", "검사해 보니 비정상이에요"));
-        h.provider.last().emit(new ProviderEvent.OutputAudioDelta("rB", AUDIO));
-        h.provider.last().emit(new ProviderEvent.OutputDone("rB"));
+        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("검사해 보니 비정상이에요"));
+        h.provider.last().emit(new ProviderEvent.OutputAudioDelta(AUDIO));
+        // U11: 응답 끝 사건이 없다 — 봉인은 조각 사이 무음(조용 시간 경과)으로 한다(Step 8에서 다시 단언)
         h.drain();
         h.advance(Duration.ofMillis(800));
 
@@ -341,11 +341,11 @@ class OutputGateTest {
     void aWholeResponseWithItsDoneSignalPassesEvenWhenItsAudioCameFirst() {
         h.activate();
         childSpeaks();
-        h.provider.last().emit(new ProviderEvent.OutputAudioDelta("r1", AUDIO));
-        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("r1", "그건 아마 "));
-        h.provider.last().emit(new ProviderEvent.OutputAudioDelta("r1", AUDIO));
-        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("r1", "공룡일 거야"));
-        h.provider.last().emit(new ProviderEvent.OutputDone("r1"));
+        h.provider.last().emit(new ProviderEvent.OutputAudioDelta(AUDIO));
+        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("그건 아마 "));
+        h.provider.last().emit(new ProviderEvent.OutputAudioDelta(AUDIO));
+        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("공룡일 거야"));
+        // U11: 응답 끝 사건이 없다 — 봉인은 조각 사이 무음(조용 시간 경과)으로 한다(Step 8에서 다시 단언)
         h.drain();
         h.advance(Duration.ofMillis(800));
 
@@ -361,10 +361,10 @@ class OutputGateTest {
     }
 
     private void output(String responseId, String text) {
-        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta(responseId, text));
-        h.provider.last().emit(new ProviderEvent.OutputAudioDelta(responseId, AUDIO));
-        h.provider.last().emit(new ProviderEvent.OutputAudioDelta(responseId, AUDIO));
-        h.provider.last().emit(new ProviderEvent.OutputDone(responseId));
+        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta(text));
+        h.provider.last().emit(new ProviderEvent.OutputAudioDelta(AUDIO));
+        h.provider.last().emit(new ProviderEvent.OutputAudioDelta(AUDIO));
+        // U11: 응답 끝 사건이 없다 — 봉인은 조각 사이 무음(조용 시간 경과)으로 한다(Step 8에서 다시 단언)
         h.drain();
     }
 

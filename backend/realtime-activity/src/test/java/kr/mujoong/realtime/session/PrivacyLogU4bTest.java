@@ -136,9 +136,9 @@ class PrivacyLogU4bTest {
         h.rawAudioConsent = true;
         h.activate();
         h.childSays("i-1", "티라노가 제일 커 벨로키랍토르");
-        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("r-1", "응 정말 커 트리케라톱스"));
-        h.provider.last().emit(new ProviderEvent.OutputAudioDelta("r-1", new byte[4_800]));
-        h.provider.last().emit(new ProviderEvent.OutputDone("r-1"));
+        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("응 정말 커 트리케라톱스"));
+        h.provider.last().emit(new ProviderEvent.OutputAudioDelta(new byte[4_800]));
+        // U11: 응답 끝 사건이 없다 — 봉인은 조각 사이 무음(조용 시간 경과)으로 한다(Step 8에서 다시 단언)
         h.drain();
         h.provider.last().emit(new ProviderEvent.InputTranscriptDelta("late", "마지막"));
         h.drain();

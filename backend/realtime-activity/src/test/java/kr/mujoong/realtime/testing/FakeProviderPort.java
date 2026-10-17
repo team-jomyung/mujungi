@@ -113,16 +113,9 @@ public final class FakeProviderPort implements ProviderPort {
             record(request);
         }
 
+        /** U11: 지시문 추가({@code session.instructions.append})를 기록한다. */
         @Override
-        public void cancelResponse(ProviderRequestFactory.ResponseCancel request) throws ProviderUnavailableException {
-            if (!open) {
-                throw new ProviderUnavailableException(ProviderUnavailableException.Reason.CLOSED);
-            }
-            record(request);
-        }
-
-        @Override
-        public void correctInstructions(ProviderRequestFactory.InstructionsCorrect request)
+        public void appendInstructions(ProviderRequestFactory.InstructionsAppend request)
                 throws ProviderUnavailableException {
             if (!open) {
                 throw new ProviderUnavailableException(ProviderUnavailableException.Reason.CLOSED);

@@ -76,7 +76,7 @@ class RealtimeDeletionHandlerIT {
         DeviceSimulatorClient device = env.connectDevice();
         UUID sessionId = activate(device, true);
         device.sendAudio(new byte[960]);
-        env.provider.emitTurn("item-1", "공룡이 좋아", "resp-1", "나도 공룡 좋아해", List.of(new byte[4800]));
+        env.provider.emitTurn("item-1", "공룡이 좋아", "나도 공룡 좋아해", List.of(new byte[4800]));
         device.await(WsMessageType.OUTPUT_END, WAIT);
         endConfirmed(device, sessionId);
         awaitTrue(() -> count("realtime_result_input_snapshot", sessionId) == 1, "스냅숏");
@@ -160,7 +160,7 @@ class RealtimeDeletionHandlerIT {
         DeviceSimulatorClient device = env.connectDevice();
         UUID sessionId = activate(device, true);
         device.sendAudio(new byte[960]);
-        env.provider.emitTurn("item-1", "공룡이 좋아", "resp-1", "나도 공룡 좋아해", List.of(new byte[4800]));
+        env.provider.emitTurn("item-1", "공룡이 좋아", "나도 공룡 좋아해", List.of(new byte[4800]));
         device.await(WsMessageType.OUTPUT_END, WAIT);
         endConfirmed(device, sessionId);
         awaitTrue(() -> filesUnder(sessionId) == 2, "원음 파일 둘");

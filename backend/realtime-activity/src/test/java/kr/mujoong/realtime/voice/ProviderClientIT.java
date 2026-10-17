@@ -61,17 +61,19 @@ class ProviderClientIT {
             session.sendInputAudio(factory.inputAudio(pcm));
             server.await("session.input_audio.append", 1, WAIT);
             byte[] out = {1, 2, 3, 4};
-            server.emitTurn("item-1", "안녕", "resp-1", "반가워", List.of(out));
-            server.emit(new FakeProviderWsServer.Event("session.error", null, null, null, null, null, null, "rate"));
-            server.emit(new FakeProviderWsServer.Event("unknown.type", null, null, null, null, null, null, null));
-            awaitTrue(() -> events.stream().anyMatch(ProviderEvent.Error.class::isInstance), "session.error");
+            server.emitTurn("item-1", "안녕", "반가워", List.of(out));
+            server.emitUsage(3.0);
+            server.emitError("invalid_request_error", "invalid_value", "type");
+            server.emit(new FakeProviderWsServer.Event("unknown.type", null, null, null));
+            awaitTrue(() -> events.stream().anyMatch(ProviderEvent.Error.class::isInstance), "error");
 
+            // 응답 끝 사건이 없다(실호출 미관측) — 음성은 delta로 오고 모르는 type은 이벤트가 되지 않는다
             assertThat(events).extracting(event -> event.getClass().getSimpleName()).containsExactly("Started",
                     "InputTranscriptDelta", "SpeechStopped", "InputTranscriptDone", "OutputTranscriptDelta",
-                    "OutputAudioDelta", "OutputDone", "Error");
+                    "OutputAudioDelta", "UsageUpdated", "Error");
             ProviderEvent.OutputAudioDelta audio = (ProviderEvent.OutputAudioDelta) events.get(5);
             assertThat(audio.audio()).isEqualTo(out);
-            assertThat(audio.responseId()).isEqualTo("resp-1");
+            assertThat(((ProviderEvent.Error) events.get(7)).code()).isEqualTo("invalid_value");
             assertThat(((ProviderEvent.InputTranscriptDone) events.get(3)).transcript()).isEqualTo("안녕");
             assertThat(server.bearerHeaders()).containsExactly(true);
             assertThat(server.audioHashes()).hasSize(1);

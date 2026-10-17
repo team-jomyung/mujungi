@@ -83,7 +83,7 @@ class SessionLifecycleIT {
 
         // 한 턴: 아이 전사 → AI 출력(게이트 통과) → OUTPUT_BEGIN · 0x02 · OUTPUT_END
         device.heartbeat(30L);
-        env.provider.emitTurn("item-1", "공룡이 좋아", "resp-1", "나도 공룡 좋아해", List.of(PCM, PCM));
+        env.provider.emitTurn("item-1", "공룡이 좋아", "나도 공룡 좋아해", List.of(PCM, PCM));
         WsEnvelope begin = device.await(WsMessageType.OUTPUT_BEGIN, WAIT);
         device.await(WsMessageType.OUTPUT_END, WAIT);
         assertThat(((OutputBegin) begin.payload()).source()).isEqualTo(OutputBegin.Source.GPT_LIVE);
@@ -119,7 +119,7 @@ class SessionLifecycleIT {
         assertThat(play.contentCode()).isEqualTo(PlayApprovedContent.CLOSING);
         // CLOSING 뒤 도착한 공급자 출력은 기기로 한 바이트도 가지 않는다(NFR1.1 · SD-17)
         int framesBefore = device.outputFrames();
-        env.provider.emitTurn("item-2", "응", "resp-2", "늦은 말", List.of(PCM));
+        env.provider.emitTurn("item-2", "응", "늦은 말", List.of(PCM));
         device.playbackMark(sessionId, play.playbackId(), PlaybackMark.Status.COMPLETED);
         WsEnvelope close = device.await(WsMessageType.CLOSE_TRANSPORT, WAIT);
         assertThat(((CloseTransport) close.payload()).reason()).isEqualTo(CloseTransport.Reason.GUARDIAN_STOP);
@@ -145,7 +145,7 @@ class SessionLifecycleIT {
         DeviceSimulatorClient device = env.connectDevice();
         UUID sessionId = activate(device);
 
-        env.provider.emitTurn("item-1", "나 어때?", "resp-1", "검사해 보니 비정상이에요", List.of(PCM));
+        env.provider.emitTurn("item-1", "나 어때?", "검사해 보니 비정상이에요", List.of(PCM));
 
         WsEnvelope filler = device.await(WsMessageType.PLAY_APPROVED_CONTENT, WAIT);
         assertThat(((PlayApprovedContent) filler.payload()).contentCode()).isEqualTo(PlayApprovedContent.WAITING_FILLER);

@@ -552,7 +552,7 @@ async function stepActive(ctx) {
   );
   check(ready.prefetch === "OK", "승인 음성 미리 받기가 OK가 아니다(/media/approved/*.wav)");
 
-  // 가짜 공급자: 이 세션의 연결 · session.start(Bearer) · session.started
+  // 가짜 공급자: 이 세션의 연결 · session.start(키가 비면 Authorization 헤더 없음, U11 BR12.2) · session.started
   const mark = ctx.state.providerMark;
   const connect = await bounded(
     ctx,
@@ -562,7 +562,7 @@ async function stepActive(ctx) {
       from: mark,
     }),
   );
-  check(connect.bearer === true, "공급자 연결에 Authorization Bearer가 없다");
+  check(connect.bearer === false, "검증 환경은 GPT-Live 키를 두지 않는데 공급자 연결에 Authorization Bearer가 실렸다(U11 BR12.2)");
   ctx.state.providerConn = connect.conn;
   const started = await bounded(
     ctx,
@@ -572,14 +572,15 @@ async function stepActive(ctx) {
       from: mark,
     }),
   );
-  const allowedKeys = ["audio", "childContext", "instructions", "model", "type"];
+  const allowedKeys = ["session", "type"];
   check(
     started.keys.every((key) => allowedKeys.includes(key)),
     `session.start에 허용 목록 밖 필드가 있다(SD-20): ${started.keys.filter((key) => !allowedKeys.includes(key)).join(",")}`,
   );
+  const allowedSessionKeys = ["audio", "instructions", "model"];
   check(
-    started.childContextKeys.every((key) => ["age", "displayName", "interests"].includes(key)),
-    "session.start.childContext에 세 필드 밖 값이 있다(SD-20)",
+    started.sessionKeys.every((key) => allowedSessionKeys.includes(key)),
+    "session.start.session에 model · instructions · audio 밖 값이 있다(SD-20, 아이 정보는 지시문 문장 안에만)",
   );
 
   await bounded(
@@ -617,7 +618,7 @@ async function stepActive(ctx) {
 
 /**
  * U4b 참여 확인(FR2.1 · BR2.1 · U4b-J3): DEVICE_READY 뒤 WAITING_CHILD에서 시작 안내(INTRO_FREE_TALK, 시드 003의 승인 문구)를 재생하고, 재생
- * 완료 뒤 참여 창에서 아이가 "응"이라고 답하면 ACTIVE가 되고 Realtime이 session.response.create를 한 번 보낸다. 가짜 공급자 턴 계획의 첫
+ * 완료 뒤 참여 창에서 아이가 "응"이라고 답하면 ACTIVE가 되고 Realtime이 response.create를 한 번 보낸다. 가짜 공급자 턴 계획의 첫
  * 턴은 join이다(--turns join,normal,forbidden).
  */
 async function stepJoin(ctx) {
@@ -680,10 +681,10 @@ async function stepJoin(ctx) {
   await bounded(
     ctx,
     ctx.provider.waitFor(
-      (e) => e.ev === "session.response.create" && e.conn === ctx.state.providerConn,
+      (e) => e.ev === "response.create" && e.conn === ctx.state.providerConn,
       {
         timeoutMs: ctx.limit(deadlines.turn),
-        what: "참여 확인 뒤 session.response.create 수신",
+        what: "참여 확인 뒤 response.create 수신",
         from: ctx.state.providerMark,
       },
     ),

@@ -54,9 +54,9 @@ class PracticeExecutorIntegrationTest {
         @Override public Object practiceRecord() { return Map.of("goals", List.of()); }
     }
     void audio(String text) {
-        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("practice-1", text));
-        h.provider.last().emit(new ProviderEvent.OutputAudioDelta("practice-1", new byte[4800]));
-        h.provider.last().emit(new ProviderEvent.OutputDone("practice-1")); h.drain();
+        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta(text));
+        h.provider.last().emit(new ProviderEvent.OutputAudioDelta(new byte[4800]));
+        // U11: 응답 끝 사건이 없다 — 봉인은 조각 사이 무음(조용 시간 경과)으로 한다(Step 8에서 다시 단언) h.drain();
         h.advance(Duration.ofMillis(800));
     }
     void mark(UUID id, PlaybackMark.Status status) {
@@ -68,7 +68,7 @@ class PracticeExecutorIntegrationTest {
         assertThat(h.provider.last().requests().stream().filter(ProviderRequestFactory.ResponseCreate.class::isInstance)).hasSize(1);
         assertThat(h.executor.liveState().practice()).isEqualTo(new PracticeSessionExtension.Progress(1, 2, "차례", "SCENARIO_INTRO"));
         var requests = h.provider.last().requests();
-        assertThat(requests.stream().filter(ProviderRequestFactory.InstructionsCorrect.class::isInstance)).hasSize(1);
+        assertThat(requests.stream().filter(ProviderRequestFactory.InstructionsAppend.class::isInstance)).hasSize(1);
     }
     @Test void onlyMatchingActualPlaybackMarksAreDeliveredAndDuplicatesAreIgnored() {
         h.activate(); audio("내 차례야.");

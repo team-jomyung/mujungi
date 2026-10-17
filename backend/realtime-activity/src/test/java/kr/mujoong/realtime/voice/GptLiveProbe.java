@@ -970,7 +970,6 @@ final class GptLiveProbe {
                         outputAudio++;
                         outputAudioBytes += delta.audio().length;
                     }
-                    case ProviderEvent.OutputDone done -> outputDone++;
                     default -> {
                         // 그 밖의 사건은 세지 않는다
                     }
@@ -1077,14 +1076,7 @@ final class GptLiveProbe {
         settlePhaseA(tap, phaseA, audioStart);
         boolean autoResponse = phaseA.outputAudio > 0;
         if (autoResponse && !phaseA.outputSettled() && !phaseA.closed) {
-            // 자동 응답 정리 실패는 ②에서 그대로 드러난다
-            send(() -> {
-                if (app) {
-                    session.cancelResponse(factory.responseCancel(null));
-                } else {
-                    sendText(link, json.write(factory.responseCancel(null)));
-                }
-            });
+            // U11: 응답 취소 type은 공급자 지원 목록 밖이라 보내지 않는다. 자동 응답이 끝나기를 기다리기만 한다(Step 10에서 이 도구를 다시 쓴다)
             drainFor(tap, phaseA, audioStart, SETTLE_QUIET);
         }
 
@@ -1098,10 +1090,10 @@ final class GptLiveProbe {
         } else {
             instructionFailure = send(() -> {
                 if (app) {
-                    session.correctInstructions(factory.instructionsCorrect(DialogInstructions.Correction.INCOMPLETE));
+                    session.appendInstructions(factory.instructionsAppend(DialogInstructions.Correction.INCOMPLETE));
                     session.createResponse(factory.responseCreate());
                 } else {
-                    sendText(link, json.write(factory.instructionsCorrect(DialogInstructions.Correction.INCOMPLETE)));
+                    sendText(link, json.write(factory.instructionsAppend(DialogInstructions.Correction.INCOMPLETE)));
                     sendText(link, json.write(factory.responseCreate()));
                 }
             });

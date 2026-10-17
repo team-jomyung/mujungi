@@ -86,7 +86,6 @@ import kr.mujoong.realtime.voice.ProviderPort.ProviderEvent;
 import kr.mujoong.realtime.voice.ProviderPort.ProviderSession;
 import kr.mujoong.realtime.voice.ProviderPort.ProviderUnavailableException;
 import kr.mujoong.realtime.voice.ProviderRequestFactory;
-import kr.mujoong.realtime.voice.ProviderResponseId;
 import org.springframework.dao.DataAccessException;
 import org.springframework.transaction.TransactionException;
 
@@ -360,6 +359,8 @@ public final class SessionExecutor {
     static final String EVENT_PRACTICE_EXTENSION_FAILED = "PRACTICE_EXTENSION_FAILED";
     /** U3-J13: ACTIVE 중 공급자 끊김의 end_detail. */
     static final String END_DETAIL_PROVIDER_LOST = "PROVIDER_LOST";
+    /** U11 Step 5 임시 호환: 응답 id가 없어진 조각을 세대 0 하나로 묶는 열쇠(Step 7에서 출력 세대로 바꾸며 제거한다). */
+    private static final String COMPAT_RESPONSE = "gen-0";
     /** 취소 · 교정 · 재생 위치를 기억하는 응답 · 재생 수의 상한(오래된 것부터 잊는다). */
     static final int MAX_TRACKED = 32;
     private static final int MAX_PERCENT = 100;
@@ -1411,15 +1412,14 @@ public final class SessionExecutor {
             transcripts.aiFinal("", false, services.clock().now());
             pendingPracticeSpeech = speech;
             practiceHold = false;
-            ProviderRequestFactory.InstructionsCorrect request = services.requests().practiceInstruction(
+            ProviderRequestFactory.InstructionsAppend request = services.requests().practiceInstruction(
                     kr.mujoong.realtime.voice.PracticeInstruction.forSpeech(speech));
             ProviderSession provider = providerSession;
             long generation = outputGeneration.get();
             enqueuePracticeProvider("provider-practice-speech-", () -> {
                 try {
                     if (generation != outputGeneration.get() || status != SessionStatus.ACTIVE || !provider.isOpen()) return;
-                    provider.cancelResponse(services.requests().responseCancel(null));
-                    provider.correctInstructions(request);
+                    provider.appendInstructions(request);
                     if (generation != outputGeneration.get() || status != SessionStatus.ACTIVE) return;
                     provider.createResponse(services.requests().responseCreate());
                 } catch (Exception failure) {
@@ -1485,8 +1485,8 @@ public final class SessionExecutor {
             } catch (RuntimeException e) {
                 return refusePractice("instructProvider", "INVALID");
             }
-            ProviderRequestFactory.InstructionsCorrect request = services.requests().practiceInstruction(instruction);
-            toProvider("provider-practice-", session -> session.correctInstructions(request));
+            ProviderRequestFactory.InstructionsAppend request = services.requests().practiceInstruction(instruction);
+            toProvider("provider-practice-", session -> session.appendInstructions(request));
             return true;
         }
 
@@ -1688,23 +1688,26 @@ public final class SessionExecutor {
                     }
                 }
             }
+            case ProviderEvent.UsageUpdated ignored -> {
+                // 사용량 초는 파싱만 한다(실호출 도구 보고서가 기록). 지표 이름은 contracts 표에 없어 이 단위에서 더하지 않는다
+            }
             case ProviderEvent.OutputTranscriptDelta delta -> {
-                refuseHeldResponse(delta.responseId());
-                if (inOutputRange() && !cancelledResponses.contains(delta.responseId())) {
-                    beginOutput(delta.responseId(), at);
+                refuseHeldResponse(COMPAT_RESPONSE);
+                if (inOutputRange() && !cancelledResponses.contains(COMPAT_RESPONSE)) {
+                    beginOutput(COMPAT_RESPONSE, at);
                     // J294: 음성처럼 구간에 들어간 조각만 조용 시계를 다시 건다(버린 조각은 열린 구간의 조용 시간을 늘리지 않는다)
-                    if (segment.addTranscript(delta.responseId(), delta.delta(), at, received.receivedNanos())
+                    if (segment.addTranscript(COMPAT_RESPONSE, delta.delta(), at, received.receivedNanos())
                             == SegmentBuffer.Added.ADDED) {
                         timers.arm(Kind.SEGMENT_QUIET, services.settings().segmentQuiet());
                     }
                 }
             }
             case ProviderEvent.OutputAudioDelta delta -> {
-                refuseHeldResponse(delta.responseId());
-                if (inOutputRange() && !cancelledResponses.contains(delta.responseId())) {
-                    beginOutput(delta.responseId(), at);
+                refuseHeldResponse(COMPAT_RESPONSE);
+                if (inOutputRange() && !cancelledResponses.contains(COMPAT_RESPONSE)) {
+                    beginOutput(COMPAT_RESPONSE, at);
                     SegmentBuffer.Added added =
-                            segment.addAudio(delta.responseId(), delta.audio(), at, received.receivedNanos());
+                            segment.addAudio(COMPAT_RESPONSE, delta.audio(), at, received.receivedNanos());
                     if (added == SegmentBuffer.Added.OVERSIZE) {
                         timers.cancel(Kind.SEGMENT_QUIET);
                         SegmentBuffer.Sealed oversized = segment.takeOversized();
@@ -1712,16 +1715,6 @@ public final class SessionExecutor {
                     } else if (added == SegmentBuffer.Added.ADDED) {
                         timers.arm(Kind.SEGMENT_QUIET, services.settings().segmentQuiet());
                     }
-                }
-            }
-            case ProviderEvent.OutputDone done -> {
-                // U3-R5: 취소한 응답의 끝 신호는 버린다
-                if (!cancelledResponses.contains(done.responseId())) {
-                    // J300: 열린 구간이 그 응답이면 output.done 처리 시각이 열린 AI 행의 tTranscriptFinal이다(view_item_ready{ai}의 시작)
-                    if (segment.isOpen() && segment.responseId().equals(done.responseId())) {
-                        transcripts.aiDone(at);
-                    }
-                    segment.responseDone(done.responseId());
                 }
             }
         }
@@ -2283,8 +2276,8 @@ public final class SessionExecutor {
         if (correction == null || !correctedResponses.add(sealed.responseId())) {
             return;
         }
-        ProviderRequestFactory.InstructionsCorrect request = services.requests().instructionsCorrect(correction);
-        toProvider("provider-correct-", session -> session.correctInstructions(request));
+        ProviderRequestFactory.InstructionsAppend request = services.requests().instructionsAppend(correction);
+        toProvider("provider-correct-", session -> session.appendInstructions(request));
     }
 
     static DialogInstructions.Correction correctionFor(SeedDictionary.Category category) {
@@ -2307,17 +2300,9 @@ public final class SessionExecutor {
                 targets.add(id);
             }
         }
-        if (targets.isEmpty()) {
-            ProviderRequestFactory.ResponseCancel request = services.requests().responseCancel(null);
-            toProvider("provider-cancel-", session -> session.cancelResponse(request));
-            return;
-        }
-        for (String id : targets) {
-            cancelledResponses.add(id);
-            ProviderRequestFactory.ResponseCancel request =
-                    services.requests().responseCancel(ProviderResponseId.of(id).orElse(null));
-            toProvider("provider-cancel-", session -> session.cancelResponse(request));
-        }
+        // U11 Step 5 임시 호환: session.response.cancel은 공급자 지원 목록에 없어 보내지 않는다. 세대 0 고정이라 지금은 취소한 응답 표시만 남기고,
+        // 실제 대체(출력 세대 올림 + 기기 정지)는 Step 7에서 채우며 이 호환 코드는 그때 제거한다.
+        cancelledResponses.addAll(targets);
     }
 
     /** 공급자 송신 하나(보조 작업). 실행기 스레드는 공급자 소켓 쓰기를 기다리지 않는다. 끊김은 리더가 따로 알린다. */

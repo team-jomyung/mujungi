@@ -275,7 +275,7 @@ class DeviceGatewayU3IT {
         assertThat(connection(connectionId).knownDeviceState()).isEqualTo(new DeviceState(DeviceState.Mic.OK,
                 DeviceState.Player.OK, null, DeviceState.WakeLock.RELEASED));
 
-        env.provider.emitTurn("item-1", "공룡 이야기", "resp-1", "공룡은 아주 오래전에 살았어", List.of(PCM));
+        env.provider.emitTurn("item-1", "공룡 이야기", "공룡은 아주 오래전에 살았어", List.of(PCM));
         WsEnvelope begin = device.await(WsMessageType.OUTPUT_BEGIN, WAIT);
         UUID playbackId = ((OutputBegin) begin.payload()).playbackId();
         device.playbackMark(sessionId, playbackId, PlaybackMark.Status.STARTED);

@@ -72,7 +72,7 @@ class SessionVoiceU3IT {
         DeviceSimulatorClient device = env.connectDevice();
         UUID sessionId = activate(device, false);
 
-        env.provider.emitTurn("item-1", "공룡 이야기", "resp-1", "공룡은 아주 오래전에 살았어", List.of(PCM));
+        env.provider.emitTurn("item-1", "공룡 이야기", "공룡은 아주 오래전에 살았어", List.of(PCM));
         // U3-J6: 말 끝 신호에 '생각 중'
         device.await(envelope -> envelope.payload() instanceof SessionState state && state.view() == View.THINKING, WAIT);
         UUID playbackId = ((OutputBegin) device.await(WsMessageType.OUTPUT_BEGIN, WAIT).payload()).playbackId();
@@ -87,7 +87,7 @@ class SessionVoiceU3IT {
         device.await(envelope -> envelope.payload() instanceof SessionState state && state.view() == View.LISTENING
                 && device.received(WsMessageType.SESSION_STATE).size() >= 3, WAIT);
 
-        env.provider.emitTurn("item-2", "또 해 줘", "resp-2", "진단 결과는 이래", List.of(PCM));
+        env.provider.emitTurn("item-2", "또 해 줘", "진단 결과는 이래", List.of(PCM));
         device.await(envelope -> envelope.payload() instanceof PlayApprovedContent play
                 && PlayApprovedContent.WAITING_FILLER.equals(play.contentCode()), WAIT);
         List<JsonNode> corrections = env.provider.await("session.instructions.correct", 1, WAIT);
@@ -148,7 +148,7 @@ class SessionVoiceU3IT {
             device.sendAudio(frame);
         }
         env.provider.await("session.input_audio.append", 5, WAIT);
-        env.provider.emitTurn("item-1", "안녕", "resp-1", "반가워 하늘아", List.of(PCM));
+        env.provider.emitTurn("item-1", "안녕", "반가워 하늘아", List.of(PCM));
         device.await(WsMessageType.OUTPUT_BEGIN, WAIT);
         endConfirmed(device, consented);
 

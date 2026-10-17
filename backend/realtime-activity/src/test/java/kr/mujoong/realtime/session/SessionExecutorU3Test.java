@@ -207,9 +207,9 @@ class SessionExecutorU3Test {
     @Test
     void aLocalVoiceStopMarkRecordsBargeInWithThePlayedPositionAndStopsTheRemainingFrames() {
         h.activate();
-        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("r1", "공룡은 아주 오래전에 살았어"));
-        h.provider.last().emit(new ProviderEvent.OutputAudioDelta("r1", new byte[48_000]));
-        h.provider.last().emit(new ProviderEvent.OutputDone("r1"));
+        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("공룡은 아주 오래전에 살았어"));
+        h.provider.last().emit(new ProviderEvent.OutputAudioDelta(new byte[48_000]));
+        // U11: 응답 끝 사건이 없다 — 봉인은 조각 사이 무음(조용 시간 경과)으로 한다(Step 8에서 다시 단언)
         h.drain();
         h.advance(Duration.ofMillis(800));
         assertThat(h.link.outputs()).hasSize(1);

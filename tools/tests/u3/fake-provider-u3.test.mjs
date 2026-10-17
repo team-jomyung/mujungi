@@ -1,5 +1,5 @@
-// 가짜 공급자 U3 추가분 시험 (편차 (aa) · U3-R5 · U3-J11 · U3-J12 · U3-J17 · contracts/ai-io.md 3절)
-// 응답 취소가 남은 출력을 멈추는지, 지시 교정은 원문 없이 해시만 기록하는지, --confidence가 아이 전사 확정에 실리는지 본다.
+// 가짜 공급자 U3 추가분 시험 (편차 (aa) → (U11-a) · U3-J12 · U3-J17 · contracts/ai-io.md 3절)
+// 응답 취소가 지원 목록 밖 type으로 거절되는지, 지시 추가는 원문 없이 해시만 기록하는지, --confidence가 아이 전사 확정에 실리는지 본다.
 import { randomBytes } from "node:crypto";
 import { afterEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
@@ -58,7 +58,7 @@ async function waitUntil(condition, timeoutMs = 3000) {
 async function startedSession(provider) {
   const client = connect(provider);
   await client.opened;
-  client.ws.send(JSON.stringify({ type: "session.start", model: "m", instructions: "i", childContext: {}, audio: {} }));
+  client.ws.send(JSON.stringify({ type: "session.start", session: { model: "m", instructions: "i", audio: { format: { type: "audio/pcm", rate: 24000 } } } }));
   await waitUntil(() => client.messages.some((message) => message.type === "session.started"));
   return client;
 }
@@ -69,33 +69,30 @@ function sendFrames(ws, count) {
   }
 }
 
-describe("가짜 공급자 — 응답 취소(U3-R5)", () => {
-  it("취소한 응답의 남은 출력 조각 · 끝 신호를 보내지 않고 기록한다", async () => {
+describe("가짜 공급자 — 응답 취소는 지원 목록 밖(U11 편차 (U11-a), 옛 U3-R5)", () => {
+  it("응답 취소 type에는 error{invalid_value}로 답하고 출력을 멈추지 않는다(끼어들기는 서버 출력 세대가 버린다)", async () => {
     const provider = await start({ turns: ["normal"], chunkBytes: 480, chunkIntervalMs: 20 });
     const client = await startedSession(provider);
     sendFrames(client.ws, 3);
     await waitUntil(() => client.messages.some((message) => message.type === "session.output_audio.delta"));
-    const responseId = client.messages.find((message) => message.type === "session.output_audio.delta").responseId;
 
-    client.ws.send(JSON.stringify({ type: "session.response.cancel", responseId }));
-    await waitUntil(() => provider.records.some((entry) => entry.ev === "turn-cancelled"));
-    const deltas = client.messages.filter((message) => message.type === "session.output_audio.delta").length;
-    await new Promise((resolve) => setTimeout(resolve, 150));
-
-    expect(client.messages.filter((message) => message.type === "session.output_audio.delta")).toHaveLength(deltas);
-    expect(client.messages.some((message) => message.type === "session.output.done")).toBe(false);
-    expect(provider.records.find((entry) => entry.ev === "session.response.cancel")).toMatchObject({ hasResponseId: true });
-  });
-
-  it("id 없는 취소는 지금 내보내는 응답을 멈춘다", async () => {
-    const provider = await start({ turns: ["normal"], chunkBytes: 480, chunkIntervalMs: 20 });
-    const client = await startedSession(provider);
-    sendFrames(client.ws, 3);
-    await waitUntil(() => client.messages.some((message) => message.type === "session.output_audio.delta"));
     client.ws.send(JSON.stringify({ type: "session.response.cancel" }));
-    await waitUntil(() => provider.records.some((entry) => entry.ev === "turn-cancelled"));
-    expect(provider.records.find((entry) => entry.ev === "session.response.cancel")).toMatchObject({ hasResponseId: false });
-    expect(client.messages.some((message) => message.type === "session.output.done")).toBe(false);
+    await waitUntil(() => client.messages.some((message) => message.type === "error"));
+    const turn = provider.records.find((entry) => entry.ev === "turn");
+    await waitUntil(
+      () =>
+        client.messages
+          .filter((message) => message.type === "session.output_audio.delta")
+          .reduce((sum, message) => sum + Buffer.from(message.delta, "base64").length, 0) === turn.outputBytes,
+    );
+
+    expect(client.messages.find((message) => message.type === "error").error).toMatchObject({
+      type: "invalid_request_error",
+      code: "invalid_value",
+      param: "type",
+    });
+    expect(provider.records.find((entry) => entry.ev === "recv-unsupported")).toMatchObject({ type: "session.response.cancel" });
+    expect(provider.records.some((entry) => entry.ev === "turn-cancelled")).toBe(false);
   });
 });
 
@@ -105,9 +102,9 @@ describe("가짜 공급자 — 지시 교정 · 신뢰도(U3-J12 · U3-J17)", ()
     const provider = await start({ onRecord: (entry) => records.push(JSON.stringify(entry)) });
     const client = await startedSession(provider);
     const text = "방금 응답은 아이에게 전하지 않았다. 한두 문장의 완결된 말로 짧게 다시 답한다.";
-    client.ws.send(JSON.stringify({ type: "session.instructions.correct", text }));
-    await waitUntil(() => provider.records.some((entry) => entry.ev === "session.instructions.correct"));
-    expect(provider.records.find((entry) => entry.ev === "session.instructions.correct")).toMatchObject({
+    client.ws.send(JSON.stringify({ type: "session.instructions.append", text }));
+    await waitUntil(() => provider.records.some((entry) => entry.ev === "session.instructions.append"));
+    expect(provider.records.find((entry) => entry.ev === "session.instructions.append")).toMatchObject({
       textSha256: textSha256(text),
       textLength: text.length,
     });

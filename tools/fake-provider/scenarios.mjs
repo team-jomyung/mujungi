@@ -1,4 +1,7 @@
-// 가짜 공급자 시나리오 (U1 3.5 Step 45 · J110 · J131 · RD-5 · RD-23 · NFR4.2 · SD-17 · contracts/ai-io.md 3절)
+// 가짜 공급자 시나리오 (U1 3.5 Step 45 · J131 · RD-5 · RD-23 · NFR4.2 · SD-17 · U11 BR11.10 · contracts/ai-io.md 3절)
+//
+// 선 형식은 실호출로 관측한 것만 쓴다(U11 편차 (U11-a)): 출력 음성은 session.output_audio.delta{delta}(base64)이고 응답 id · 응답 끝 사건이
+// 없다 — 응답 경계는 마지막 조각 뒤의 무음이다. 출력 전사 · 입력 전사 · 말 끝 사건의 이름은 관측되지 않아 기존 가정 이름을 임시로 쓴다(미확인).
 //
 // 연결 시나리오(연결마다 하나): ok · no-started · delayed · refuse · silent
 //   ok         session.start에 곧바로 session.started
@@ -109,9 +112,9 @@ export function textSha256(text) {
 }
 
 /**
- * 한 턴의 선 형식 메시지와 앞 지연(ms). J110: 아이 전사 조각 → 말 끝 → 아이 전사 확정 → (지연) → AI 전사 조각 →
- * 출력 음성 조각들 → 출력 끝. 구간 확정은 realtime이 마지막 출력 뒤 800ms 조용으로 한다(BR7.3).
- * @returns {{script: object, pcm: Buffer, itemId: string, responseId: string, steps: Array<{delayMs: number, message: object}>}}
+ * 한 턴의 선 형식 메시지와 앞 지연(ms). 아이 전사 조각 → 말 끝 → 아이 전사 확정 → (지연) → AI 전사 조각 → 출력 음성 조각들.
+ * 응답 끝 사건은 없다. 구간 확정은 realtime이 마지막 출력 뒤 800ms 조용으로 한다(U11 BR11.6).
+ * @returns {{script: object, pcm: Buffer, itemId: string, steps: Array<{delayMs: number, message: object}>}}
  */
 export function buildTurn({
   connection,
@@ -130,7 +133,6 @@ export function buildTurn({
     throw new RangeError("출력 조각 크기는 2바이트 배수 양수여야 한다");
   }
   const itemId = `item-${connection}-${turn}`;
-  const responseId = script.aiText === null ? null : `resp-${connection}-${turn}`;
   const pcm = outputPcmFor(turn, kind);
   const [child1, child2] = splitInTwo(script.childText);
   const childSteps = [
@@ -147,7 +149,7 @@ export function buildTurn({
   ];
   if (script.aiText === null) {
     // 참여 확인 대답(U4b): 아이 전사만 보내고 AI 출력은 없다
-    return { script, pcm, itemId, responseId, steps: childSteps };
+    return { script, pcm, itemId, steps: childSteps };
   }
   const [ai1, ai2] = splitInTwo(script.aiText);
   const steps = [
@@ -163,17 +165,43 @@ export function buildTurn({
     },
     {
       delayMs: responseDelayMs,
-      message: { type: "session.output_transcript.delta", responseId, delta: ai1 },
+      message: { type: "session.output_transcript.delta", delta: ai1 },
     },
-    { delayMs: 0, message: { type: "session.output_transcript.delta", responseId, delta: ai2 } },
+    { delayMs: 0, message: { type: "session.output_transcript.delta", delta: ai2 } },
   ];
   for (let offset = 0; offset < pcm.length; offset += chunkBytes) {
     const chunk = pcm.subarray(offset, Math.min(offset + chunkBytes, pcm.length));
     steps.push({
       delayMs: offset === 0 ? 0 : chunkIntervalMs,
-      message: { type: "session.output_audio.delta", responseId, audio: chunk.toString("base64") },
+      message: { type: "session.output_audio.delta", delta: chunk.toString("base64") },
     });
   }
-  steps.push({ delayMs: 0, message: { type: "session.output.done", responseId } });
-  return { script, pcm, itemId, responseId, steps };
+  return { script, pcm, itemId, steps };
+}
+
+/** 실호출 오류 문장에서 확인한 공급자 지원 type 전부(U11-a). 이 밖의 type에는 error 사건으로 답한다. */
+export const SUPPORTED_TYPES = Object.freeze([
+  "session.start",
+  "session.update",
+  "session.close",
+  "session.input_audio.append",
+  "session.input_audio.mute",
+  "session.input_audio.unmute",
+  "session.instructions.append",
+  "session.thinking.append",
+  "session.commentary.append",
+  "session.output_audio.fixture.play",
+  "response.create",
+  "response.item.create",
+  "decision.create",
+  "decision.item.create",
+  "decision.item.delete",
+]);
+
+/** 지원 목록 밖 type에 대한 오류 사건(실호출 관측 모양, message는 고정 문장). */
+export function unsupportedTypeError() {
+  return {
+    type: "error",
+    error: { type: "invalid_request_error", code: "invalid_value", message: "Invalid value", param: "type" },
+  };
 }

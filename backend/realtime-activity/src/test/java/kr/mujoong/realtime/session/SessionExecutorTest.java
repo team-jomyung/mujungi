@@ -215,7 +215,7 @@ class SessionExecutorTest {
         boolean accepted = h.mailbox.offerGeneral(new SessionMailbox.PlaybackMarkReceived(h.link.connectionId(),
                 new PlaybackMark(UUID.randomUUID(), PlaybackMark.Status.COMPLETED, null, h.clock.now(), null, null),
                 h.clock.now()));
-        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("r1", "늦은 말"));
+        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("늦은 말"));
 
         assertThat(accepted).isFalse();
         assertThat(h.drain()).isZero();
@@ -397,13 +397,13 @@ class SessionExecutorTest {
     void onlyTheOutputDoneOfTheOpenResponseStartsTheAiRowsViewItemReadyTime() {
         h.activate();
         h.provider.last().emit(new ProviderEvent.InputTranscriptDelta("item-1", "공룡"));
-        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("r1", "공룡 좋아"));
-        h.provider.last().emit(new ProviderEvent.OutputAudioDelta("r1", new byte[4800]));
-        h.provider.last().emit(new ProviderEvent.OutputDone("r0"));
+        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("공룡 좋아"));
+        h.provider.last().emit(new ProviderEvent.OutputAudioDelta(new byte[4800]));
+        // U11: 응답 끝 사건이 없다 — 봉인은 조각 사이 무음(조용 시간 경과)으로 한다(Step 8에서 다시 단언)
         h.drain();
         h.advance(Duration.ofMillis(300));
 
-        h.provider.last().emit(new ProviderEvent.OutputDone("r1"));
+        // U11: 응답 끝 사건이 없다 — 봉인은 조각 사이 무음(조용 시간 경과)으로 한다(Step 8에서 다시 단언)
         h.drain();
         h.advance(Duration.ofMillis(500));
 

@@ -212,10 +212,8 @@ public final class RealtimeItEnvironment implements AutoCloseable {
 
     /** 가짜 공급자로 아이 확정 전사 하나를 흘린다(조각 · 확정). */
     public void childSays(String itemId, String text) {
-        provider.emit(new FakeProviderWsServer.Event("session.input_transcript.delta", null, itemId, text, null, null,
-                null, null));
-        provider.emit(new FakeProviderWsServer.Event("session.input_transcript.done", null, itemId, null, text, null,
-                null, null));
+        provider.emit(new FakeProviderWsServer.Event("session.input_transcript.delta", itemId, text, null));
+        provider.emit(new FakeProviderWsServer.Event("session.input_transcript.done", itemId, null, text));
     }
 
     /** 세션 행의 지금 상태(없으면 null). */

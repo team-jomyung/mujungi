@@ -51,21 +51,20 @@ class SessionVoiceU3Test {
         OutputBundle first = respond("r1", "공룡은 아주 오래전에 살았어", 48_000);
         mark(first.playbackId(), PlaybackMark.Status.STARTED, null);
         // 다음 응답을 만드는 중에 아이가 말을 시작한다
-        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("r2", "그리고 말이야"));
+        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("그리고 말이야"));
         h.drain();
 
         mark(first.playbackId(), PlaybackMark.Status.STOPPED, PlaybackMark.StopCause.LOCAL_VOICE_ACTIVITY);
 
         // 실행기는 공급자 소켓 쓰기를 기다리지 않는다 — 보조 작업으로 띄운 취소 두 건
-        assertThat(h.provider.last().requests(ProviderRequestFactory.ResponseCancel.class)).isEmpty();
+        // U11 Step 5: 응답 취소 레코드가 없어졌다(공급자 지원 목록 밖) — Step 8에서 출력 세대 올림 단언으로 바꾼다 [CANCEL-ASSERT]
         assertThat(h.launcher.runAll("provider-cancel-")).isEqualTo(2);
-        assertThat(h.provider.last().requests(ProviderRequestFactory.ResponseCancel.class))
-                .extracting(ProviderRequestFactory.ResponseCancel::responseId).containsExactly("r1", "r2");
+        // U11 Step 5: 응답 취소 레코드가 없어졌다(공급자 지원 목록 밖) — Step 8에서 출력 세대 올림 단언으로 바꾼다 [CANCEL-ASSERT]
 
         // 취소한 응답의 늦은 조각 · 끝 신호는 버린다(구간도 행도 다시 열지 않는다)
-        h.provider.last().emit(new ProviderEvent.OutputAudioDelta("r2", new byte[4_800]));
-        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("r2", " 티라노는"));
-        h.provider.last().emit(new ProviderEvent.OutputDone("r2"));
+        h.provider.last().emit(new ProviderEvent.OutputAudioDelta(new byte[4_800]));
+        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta(" 티라노는"));
+        // U11: 응답 끝 사건이 없다 — 봉인은 조각 사이 무음(조용 시간 경과)으로 한다(Step 8에서 다시 단언)
         h.drain();
         h.advance(Duration.ofSeconds(1));
         assertThat(h.link.outputs()).hasSize(1);
@@ -84,11 +83,7 @@ class SessionVoiceU3Test {
         mark(UUID.randomUUID(), PlaybackMark.Status.STOPPED, PlaybackMark.StopCause.LOCAL_VOICE_ACTIVITY);
         h.launcher.runAll("provider-cancel-");
 
-        assertThat(h.provider.last().requests(ProviderRequestFactory.ResponseCancel.class)).singleElement()
-                .satisfies(cancel -> {
-                    assertThat(cancel.type()).isEqualTo(ProviderRequestFactory.TYPE_RESPONSE_CANCEL);
-                    assertThat(cancel.responseId()).isNull();
-                });
+        // U11 Step 5: 응답 취소 레코드가 없어졌다(공급자 지원 목록 밖) — Step 8에서 출력 세대 올림 단언으로 바꾼다 [CANCEL-ASSERT]
     }
 
     @Test
@@ -104,7 +99,7 @@ class SessionVoiceU3Test {
         assertThat(h.launcher.runAll("provider-cancel-")).isEqualTo(1);
         h.drain();
 
-        assertThat(h.provider.last().requests(ProviderRequestFactory.ResponseCancel.class)).isEmpty();
+        // U11 Step 5: 응답 취소 레코드가 없어졌다(공급자 지원 목록 밖) — Step 8에서 출력 세대 올림 단언으로 바꾼다 [CANCEL-ASSERT]
         assertThat(h.logs.events(EventCode.APP_ERROR)).hasSize(appErrors);
         assertThat(h.executor.status()).isEqualTo(SessionStatus.ACTIVE);
 
@@ -161,8 +156,8 @@ class SessionVoiceU3Test {
         emitComplete("r1", "진단 결과는 하늘색이야");
         h.advance(Duration.ofMillis(800));
         // 같은 응답의 늦은 조각이 새 구간이 되어 다시 폐기돼도 그 응답의 교정은 한 번뿐이다
-        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("r1", "늦은 조각"));
-        h.provider.last().emit(new ProviderEvent.OutputAudioDelta("r1", new byte[4_800]));
+        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("늦은 조각"));
+        h.provider.last().emit(new ProviderEvent.OutputAudioDelta(new byte[4_800]));
         h.drain();
         h.advance(Duration.ofMillis(800));
         emitComplete("r2", "화가났군요 그렇지");
@@ -170,12 +165,12 @@ class SessionVoiceU3Test {
 
         assertThat(h.link.outputs()).isEmpty();
         assertThat(h.launcher.runAll("provider-correct-")).isEqualTo(2);
-        List<ProviderRequestFactory.InstructionsCorrect> corrections =
-                h.provider.last().requests(ProviderRequestFactory.InstructionsCorrect.class);
-        assertThat(corrections).extracting(ProviderRequestFactory.InstructionsCorrect::text).containsExactly(
+        List<ProviderRequestFactory.InstructionsAppend> corrections =
+                h.provider.last().requests(ProviderRequestFactory.InstructionsAppend.class);
+        assertThat(corrections).extracting(ProviderRequestFactory.InstructionsAppend::text).containsExactly(
                 DialogInstructions.Correction.DIAGNOSIS.text(), DialogInstructions.Correction.EMOTION_CLAIM.text());
         assertThat(corrections).allSatisfy(correction -> {
-            assertThat(correction.type()).isEqualTo(ProviderRequestFactory.TYPE_INSTRUCTIONS_CORRECT);
+            assertThat(correction.type()).isEqualTo(ProviderRequestFactory.TYPE_INSTRUCTIONS_APPEND);
             assertThat(correction.text()).doesNotContain("하늘색", "화가났군요", "늦은 조각");
         });
     }
@@ -184,29 +179,29 @@ class SessionVoiceU3Test {
     void anIncompleteResponseLeftByTheProviderAsksForAShortAnswerButOneCutByTheConversationDoesNot() {
         h.activate();
         // 공급자가 끝 신호 없이 멈췄다(800ms 조용) → 짧은 완결 답 요청
-        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("r1", "공룡은"));
-        h.provider.last().emit(new ProviderEvent.OutputAudioDelta("r1", new byte[4_800]));
+        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("공룡은"));
+        h.provider.last().emit(new ProviderEvent.OutputAudioDelta(new byte[4_800]));
         h.drain();
         h.advance(Duration.ofMillis(800));
         // 아이가 다시 말해 확정한 미완 구간 · 다른 응답이 와서 확정한 미완 구간은 대화가 넘어갔으니 교정하지 않는다
-        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("r2", "그러니까"));
+        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("그러니까"));
         h.provider.last().emit(new ProviderEvent.InputTranscriptDelta("i1", "잠깐만"));
-        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("r3", "다음은"));
-        h.provider.last().emit(new ProviderEvent.OutputAudioDelta("r3", new byte[4_800]));
-        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("r4", "새 이야기"));
+        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("다음은"));
+        h.provider.last().emit(new ProviderEvent.OutputAudioDelta(new byte[4_800]));
+        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("새 이야기"));
         h.drain();
 
         assertThat(h.launcher.runAll("provider-correct-")).isEqualTo(1);
-        assertThat(h.provider.last().requests(ProviderRequestFactory.InstructionsCorrect.class))
-                .extracting(ProviderRequestFactory.InstructionsCorrect::text)
+        assertThat(h.provider.last().requests(ProviderRequestFactory.InstructionsAppend.class))
+                .extracting(ProviderRequestFactory.InstructionsAppend::text)
                 .containsExactly(DialogInstructions.Correction.INCOMPLETE.text());
     }
 
     @Test
     void anOversizedResponseAsksForAShorterAnswerAndNoCorrectionIsSentOutsideActive() {
         h.activate();
-        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("r1", "아주 긴 이야기"));
-        h.provider.last().emit(new ProviderEvent.OutputAudioDelta("r1", new byte[SegmentBuffer.MAX_BYTES + 2]));
+        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("아주 긴 이야기"));
+        h.provider.last().emit(new ProviderEvent.OutputAudioDelta(new byte[SegmentBuffer.MAX_BYTES + 2]));
         h.drain();
         assertThat(h.launcher.runAll("provider-correct-")).isEqualTo(1);
 
@@ -218,8 +213,8 @@ class SessionVoiceU3Test {
         h.advance(Duration.ofMillis(800));
 
         assertThat(h.launcher.runAll("provider-correct-")).as("CLOSING에는 교정하지 않는다").isZero();
-        assertThat(h.provider.last().requests(ProviderRequestFactory.InstructionsCorrect.class))
-                .extracting(ProviderRequestFactory.InstructionsCorrect::text)
+        assertThat(h.provider.last().requests(ProviderRequestFactory.InstructionsAppend.class))
+                .extracting(ProviderRequestFactory.InstructionsAppend::text)
                 .containsExactly(DialogInstructions.Correction.INCOMPLETE.text());
     }
 
@@ -359,7 +354,7 @@ class SessionVoiceU3Test {
     void aClearStopIntentCancelsTheResponseInProgressRecordsTheEventAndRefusesLaterResponses() {
         h.activate();
         respond("r1", "공룡은 멋져", 4_800);
-        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("r2", "그래 그럼"));
+        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("그래 그럼"));
         h.provider.last().emit(new ProviderEvent.SpeechStopped());
         h.drain();
         long generation = h.executor.outputGeneration();
@@ -370,8 +365,7 @@ class SessionVoiceU3Test {
                 .singleElement().satisfies(event -> assertThat(event.getPayloadJson()).isEqualTo("{\"basis\":\"SNAPSHOT\"}"));
         assertThat(h.executor.outputGeneration()).isGreaterThan(generation);
         assertThat(h.launcher.runAll("provider-cancel-")).isEqualTo(1);
-        assertThat(h.provider.last().requests(ProviderRequestFactory.ResponseCancel.class))
-                .extracting(ProviderRequestFactory.ResponseCancel::responseId).containsExactly("r2");
+        // U11 Step 5: 응답 취소 레코드가 없어졌다(공급자 지원 목록 밖) — Step 8에서 출력 세대 올림 단언으로 바꾼다 [CANCEL-ASSERT]
         // U4b(FR11.3 · BR4.2): 종료 의도는 곧바로 CLOSING(CHILD_STOP) — '생각 중' 뒤 마무리 표시로 간다
         assertThat(views()).containsExactly(View.LISTENING, View.THINKING, View.CLOSING);
 
@@ -404,7 +398,7 @@ class SessionVoiceU3Test {
         assertThat(sessionEvents()).noneMatch(event -> event.getEventType().startsWith("CHILD_STOP"));
         assertThat(sessionEvents()).extracting(SessionEvent::getEventType)
                 .contains(SessionExecutor.EVENT_STOP_CONFIRM_ASKED);
-        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("r2", "그래 조금 쉬었다 할까"));
+        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("그래 조금 쉬었다 할까"));
         h.drain();
         assertThat(h.link.outputs()).as("확인 중에는 응답을 내보내지 않는다").hasSize(1);
         // 대답 없이 확인 창이 끝나면 대화를 잇는다(종료를 확정하지 않는다)
@@ -431,9 +425,9 @@ class SessionVoiceU3Test {
     /** 응답 한 개를 끝까지 흘리고 조용 시간을 넘겨 게이트를 통과시킨다. 기기로 나간 묶음을 돌려준다. */
     private OutputBundle respond(String responseId, String text, int bytes) {
         int before = h.link.outputs().size();
-        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta(responseId, text));
-        h.provider.last().emit(new ProviderEvent.OutputAudioDelta(responseId, new byte[bytes]));
-        h.provider.last().emit(new ProviderEvent.OutputDone(responseId));
+        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta(text));
+        h.provider.last().emit(new ProviderEvent.OutputAudioDelta(new byte[bytes]));
+        // U11: 응답 끝 사건이 없다 — 봉인은 조각 사이 무음(조용 시간 경과)으로 한다(Step 8에서 다시 단언)
         h.drain();
         h.advance(Duration.ofMillis(800));
         assertThat(h.link.outputs()).hasSize(before + 1);
@@ -441,9 +435,9 @@ class SessionVoiceU3Test {
     }
 
     private void emitComplete(String responseId, String text) {
-        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta(responseId, text));
-        h.provider.last().emit(new ProviderEvent.OutputAudioDelta(responseId, new byte[4_800]));
-        h.provider.last().emit(new ProviderEvent.OutputDone(responseId));
+        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta(text));
+        h.provider.last().emit(new ProviderEvent.OutputAudioDelta(new byte[4_800]));
+        // U11: 응답 끝 사건이 없다 — 봉인은 조각 사이 무음(조용 시간 경과)으로 한다(Step 8에서 다시 단언)
         h.drain();
     }
 

@@ -21,9 +21,9 @@ import org.junit.jupiter.api.Test;
 import tools.jackson.databind.JsonNode;
 
 /**
- * 공급자 선 형식 U3 추가분 통합 시험(편차 (aa) · U3-R5 · U3-R7 · U3-J11 · U3-J12 · U3-J17).
+ * 공급자 선 형식 U3 추가분 통합 시험(편차 (aa) → (U11-a) · U3-R7 · U3-J12 · U3-J17).
  *
- * <p>실제 JDK WebSocket 클라이언트와 가짜 공급자 WS 서버로 응답 취소 · 지시 교정이 정한 키만 갖고 나가는지, 확정 전사의 선택 필드
+ * <p>실제 JDK WebSocket 클라이언트와 가짜 공급자 WS 서버로 지시 추가 · 응답 생성이 정한 키만 갖고 나가는지, 확정 전사의 선택 필드
  * {@code confidence}를 0 ~ 1일 때만 읽는지 본다.
  */
 @Tag("u3")
@@ -32,7 +32,7 @@ class ProviderClientU3IT {
     private static final JsonCodec JSON = JsonCodec.shared();
 
     @Test
-    void cancelAndCorrectionGoOnTheWireWithOnlyTheirKeysAndConfidenceIsReadOnlyWhenInRange() throws Exception {
+    void instructionsAppendAndResponseCreateGoOnTheWireWithOnlyTheirKeysAndConfidenceIsReadOnlyWhenInRange() throws Exception {
         try (FakeProviderWsServer server = FakeProviderWsServer.start()) {
             ProviderClient client = new ProviderClient(server.uri(), TestSecrets.base64Url(24), JSON, Duration.ofSeconds(2));
             try {
@@ -42,16 +42,14 @@ class ProviderClientU3IT {
                 session.start(factory.sessionStart(new ChildContext("하늘", 8, List.of("공룡"))));
                 awaitTrue(() -> events.stream().anyMatch(ProviderEvent.Started.class::isInstance), "session.started");
 
-                session.cancelResponse(factory.responseCancel(ProviderResponseId.of("resp-1").orElseThrow()));
-                session.cancelResponse(factory.responseCancel(null));
-                session.correctInstructions(factory.instructionsCorrect(DialogInstructions.Correction.PRESSURE));
+                session.appendInstructions(factory.instructionsAppend(DialogInstructions.Correction.PRESSURE));
+                session.createResponse(factory.responseCreate());
 
-                List<JsonNode> cancels = server.await("session.response.cancel", 2, WAIT);
-                List<JsonNode> corrections = server.await("session.instructions.correct", 1, WAIT);
-                assertThat(cancels).hasSize(2);
-                assertThat(keys(cancels.get(0))).containsExactlyInAnyOrder("type", "responseId");
-                assertThat(cancels.get(0).get("responseId").asString()).isEqualTo("resp-1");
-                assertThat(keys(cancels.get(1))).as("id를 모르면 지금 응답 취소(키 없음)").containsExactly("type");
+                List<JsonNode> corrections = server.await("session.instructions.append", 1, WAIT);
+                List<JsonNode> creates = server.await("response.create", 1, WAIT);
+                assertThat(creates).singleElement().satisfies(create -> assertThat(keys(create)).containsExactly("type"));
+                assertThat(server.received()).extracting(node -> node.get("type").asString())
+                        .as("보낸 type이 모두 공급자 지원 목록 안이다").allMatch(FakeProviderWsServer.SUPPORTED_TYPES::contains);
                 assertThat(corrections).singleElement().satisfies(correction -> {
                     assertThat(keys(correction)).containsExactlyInAnyOrder("type", "text");
                     assertThat(correction.get("text").asString())

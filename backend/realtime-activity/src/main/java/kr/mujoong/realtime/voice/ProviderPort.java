@@ -34,13 +34,10 @@ public interface ProviderPort {
         /** {@code session.input_audio.append}. */
         void sendInputAudio(ProviderRequestFactory.InputAudioAppend request) throws ProviderUnavailableException;
 
-        /** U3 {@code session.response.cancel}(끼어들기 · 종료 의도, U3-J11). */
-        void cancelResponse(ProviderRequestFactory.ResponseCancel request) throws ProviderUnavailableException;
+        /** {@code session.instructions.append}(게이트 폐기 뒤 고정 교정 문장 · 연습 지시문 · 판정 뒤 지시, U11 BR11.4). */
+        void appendInstructions(ProviderRequestFactory.InstructionsAppend request) throws ProviderUnavailableException;
 
-        /** U3 {@code session.instructions.correct}(게이트 폐기 뒤 고정 교정 문장, U3-J12). */
-        void correctInstructions(ProviderRequestFactory.InstructionsCorrect request) throws ProviderUnavailableException;
-
-        /** U4b {@code session.response.create}(발언권 반환, 편차 (U4b-a) · BR2.6). */
+        /** {@code response.create}(발언권 반환 · 지시 뒤 응답 요청, 편차 (U4b-a) → (U11-a)). */
         void createResponse(ProviderRequestFactory.ResponseCreate request) throws ProviderUnavailableException;
 
         /** {@code session.close}를 보내고 연결을 닫는다. 두 번 불러도 된다. 예외를 던지지 않는다. */
@@ -68,7 +65,7 @@ public interface ProviderPort {
         record Started(String providerSessionId) implements ProviderEvent {
         }
 
-        /** {@code session.input_audio.speech_stopped}(tSpeechEnd 출처 PROVIDER_EVENT). */
+        /** {@code session.input_audio.speech_stopped}(미확인 이름, tSpeechEnd 출처 PROVIDER_EVENT). */
         record SpeechStopped() implements ProviderEvent {
         }
 
@@ -87,12 +84,15 @@ public interface ProviderPort {
             }
         }
 
-        /** {@code session.output_transcript.delta}. */
-        record OutputTranscriptDelta(String responseId, String delta) implements ProviderEvent {
+        /**
+         * 출력 전사 조각. 응답 id가 없다(U11 BR11.3). 사건 이름은 실호출로 확인되지 않았다(미확인, 기존 {@code session.output_transcript.delta}를
+         * 임시로 쓰고 실호출 확인 단계에서 확정한다).
+         */
+        record OutputTranscriptDelta(String delta) implements ProviderEvent {
         }
 
-        /** {@code session.output_audio.delta}(PCM16LE). */
-        record OutputAudioDelta(String responseId, byte[] audio) implements ProviderEvent {
+        /** {@code session.output_audio.delta}(PCM16LE, 응답 id 없음 — 응답 경계는 출력 세대가 조각 사이 무음으로 본다). */
+        record OutputAudioDelta(byte[] audio) implements ProviderEvent {
 
             public OutputAudioDelta {
                 audio = Objects.requireNonNull(audio, "audio").clone();
@@ -105,26 +105,25 @@ public interface ProviderPort {
 
             @Override
             public boolean equals(Object other) {
-                return other instanceof OutputAudioDelta that && Objects.equals(responseId, that.responseId)
-                        && java.util.Arrays.equals(audio, that.audio);
+                return other instanceof OutputAudioDelta that && java.util.Arrays.equals(audio, that.audio);
             }
 
             @Override
             public int hashCode() {
-                return Objects.hash(responseId, java.util.Arrays.hashCode(audio));
+                return java.util.Arrays.hashCode(audio);
             }
 
             @Override
             public String toString() {
-                return "OutputAudioDelta[responseId=" + responseId + ", bytes=" + audio.length + "]";
+                return "OutputAudioDelta[bytes=" + audio.length + "]";
             }
         }
 
-        /** {@code session.output.done}. */
-        record OutputDone(String responseId) implements ProviderEvent {
+        /** {@code session.usage.updated}: 누적 사용 초(지표용, 전사 · 음성 없음). */
+        record UsageUpdated(double seconds) implements ProviderEvent {
         }
 
-        /** {@code session.error}. code는 공급자가 준 짧은 값이고 로그에는 쓰지 않는다. */
+        /** {@code error{error{type, code, param}}}. code는 공급자가 준 짧은 값이고 로그에는 쓰지 않는다(message 원문은 읽지 않는다). */
         record Error(String code) implements ProviderEvent {
         }
 

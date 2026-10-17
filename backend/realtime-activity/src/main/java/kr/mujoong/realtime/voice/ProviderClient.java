@@ -118,6 +118,7 @@ public class ProviderClient implements ProviderPort, DisposableBean {
         private final JsonCodec json;
         private final StringBuilder text = new StringBuilder();
         private final AtomicBoolean closed = new AtomicBoolean();
+        private final java.util.concurrent.atomic.AtomicInteger unknownTypes = new java.util.concurrent.atomic.AtomicInteger();
 
         Reader(Listener listener, JsonCodec json) {
             this.listener = listener;
@@ -135,7 +136,7 @@ public class ProviderClient implements ProviderPort, DisposableBean {
             if (last) {
                 String message = text.toString();
                 text.setLength(0);
-                ProviderEvent event = parse(json, message);
+                ProviderEvent event = parse(json, message, unknownTypes::incrementAndGet);
                 if (event instanceof ProviderEvent.Closed) {
                     signalClosed();
                 } else if (event != null) {
@@ -163,6 +164,11 @@ public class ProviderClient implements ProviderPort, DisposableBean {
             signalClosed();
         }
 
+        /** 모르는 type으로 받아 무시한 메시지 수(type 이름 · 본문은 남기지 않는다). */
+        int unknownTypeCount() {
+            return unknownTypes.get();
+        }
+
         void signalClosed() {
             if (closed.compareAndSet(false, true)) {
                 listener.onEvent(new ProviderEvent.Closed());
@@ -171,15 +177,36 @@ public class ProviderClient implements ProviderPort, DisposableBean {
     }
 
     /**
-     * 받은 메시지 모양(필드는 type별로 일부만 쓴다). U3: 확정 전사의 선택 필드 confidence(편차 (aa)) — 숫자가 아닌 값이 와도 전사를 잃지
-     * 않게 타입을 고정하지 않고 받아 {@link #confidence(Object)}가 거른다.
+     * 받은 메시지 모양(필드는 type별로 일부만 쓴다, 실호출 관측 모양 U11-a). 출력 음성은 {@code delta}(base64)이고 응답 id는 없다. U3: 확정
+     * 전사의 선택 필드 confidence(편차 (aa)) — 숫자가 아닌 값이 와도 전사를 잃지 않게 타입을 고정하지 않고 받아 {@link #confidence(Object)}가
+     * 거른다. 입력 전사 · 말 끝 사건의 이름과 필드는 실호출로 확인되지 않았다(미확인, 기존 가정 이름).
      */
-    record Inbound(String type, String providerSessionId, String itemId, String delta, String transcript,
-            String responseId, String audio, String code, Object confidence) {
+    record Inbound(String type, String itemId, String delta, String transcript, Object confidence,
+            SessionRef session, UsageBody usage, ErrorBody error) {
+    }
+
+    /** {@code session.started}의 {@code session} 객체에서 읽는 것: 공급자 세션 id. */
+    record SessionRef(String id) {
+    }
+
+    /** {@code session.usage.updated}의 {@code usage} 객체: 누적 사용 초. */
+    record UsageBody(Double seconds) {
+    }
+
+    /** {@code error} 사건의 {@code error} 객체. message 원문은 읽지 않는다(R-F14). */
+    record ErrorBody(String type, String code, String param) {
     }
 
     /** 선 형식 → 앱 이벤트. 모르는 type · 깨진 본문은 무시(null)한다. */
     static ProviderEvent parse(JsonCodec json, String message) {
+        return parse(json, message, () -> { });
+    }
+
+    /**
+     * 선 형식 → 앱 이벤트. 모르는 type이면 {@code onUnknown}을 한 번 부르고 null을 돌려준다(개수만 센다, 본문 · type 이름을 남기지 않는다).
+     * 깨진 본문 · 디코드 실패 조각도 null이다.
+     */
+    static ProviderEvent parse(JsonCodec json, String message, Runnable onUnknown) {
         Inbound inbound;
         try {
             inbound = json.read(message, Inbound.class);
@@ -191,20 +218,26 @@ public class ProviderClient implements ProviderPort, DisposableBean {
         }
         try {
             return switch (inbound.type()) {
-                case "session.started" -> new ProviderEvent.Started(blankToNull(inbound.providerSessionId()));
+                case "session.started" -> new ProviderEvent.Started(
+                        inbound.session() == null ? null : blankToNull(inbound.session().id()));
                 case "session.input_audio.speech_stopped" -> new ProviderEvent.SpeechStopped();
                 case "session.input_transcript.delta" ->
                     new ProviderEvent.InputTranscriptDelta(inbound.itemId(), nullToEmpty(inbound.delta()));
                 case "session.input_transcript.done" -> new ProviderEvent.InputTranscriptDone(inbound.itemId(),
                         nullToEmpty(inbound.transcript()), confidence(inbound.confidence()));
                 case "session.output_transcript.delta" ->
-                    new ProviderEvent.OutputTranscriptDelta(inbound.responseId(), nullToEmpty(inbound.delta()));
-                case "session.output_audio.delta" -> new ProviderEvent.OutputAudioDelta(inbound.responseId(),
-                        Base64.getDecoder().decode(nullToEmpty(inbound.audio())));
-                case "session.output.done" -> new ProviderEvent.OutputDone(inbound.responseId());
-                case "session.error" -> new ProviderEvent.Error(nullToEmpty(inbound.code()));
+                    new ProviderEvent.OutputTranscriptDelta(nullToEmpty(inbound.delta()));
+                case "session.output_audio.delta" ->
+                    new ProviderEvent.OutputAudioDelta(Base64.getDecoder().decode(nullToEmpty(inbound.delta())));
+                case "session.usage.updated" -> inbound.usage() == null || inbound.usage().seconds() == null
+                        || inbound.usage().seconds() < 0 ? null : new ProviderEvent.UsageUpdated(inbound.usage().seconds());
+                case "error" -> new ProviderEvent.Error(
+                        inbound.error() == null ? "" : nullToEmpty(inbound.error().code()));
                 case "session.closed" -> new ProviderEvent.Closed();
-                default -> null;
+                default -> {
+                    onUnknown.run();
+                    yield null;
+                }
             };
         } catch (IllegalArgumentException e) {
             return null;
@@ -257,12 +290,7 @@ public class ProviderClient implements ProviderPort, DisposableBean {
         }
 
         @Override
-        public void cancelResponse(ProviderRequestFactory.ResponseCancel request) throws ProviderUnavailableException {
-            send(json.write(Objects.requireNonNull(request, "request")));
-        }
-
-        @Override
-        public void correctInstructions(ProviderRequestFactory.InstructionsCorrect request)
+        public void appendInstructions(ProviderRequestFactory.InstructionsAppend request)
                 throws ProviderUnavailableException {
             send(json.write(Objects.requireNonNull(request, "request")));
         }

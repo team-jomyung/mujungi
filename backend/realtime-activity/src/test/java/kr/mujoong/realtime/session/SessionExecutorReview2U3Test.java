@@ -42,12 +42,12 @@ class SessionExecutorReview2U3Test {
     void liftingTheStopIntentDoesNotLeaveTheDeviceThinking() {
         h.activate();
         done("i1", "그만할래");
-        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("r1", "그래 더 하자"));
+        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("그래 더 하자"));
         h.provider.last().emit(new ProviderEvent.SpeechStopped());
         h.drain();
 
         done("i2", "아니 더 얘기하자");
-        h.provider.last().emit(new ProviderEvent.OutputDone("r1"));
+        // U11: 응답 끝 사건이 없다 — 봉인은 조각 사이 무음(조용 시간 경과)으로 한다(Step 8에서 다시 단언)
         h.drain();
 
         assertThat(eventTypes()).doesNotContain(SessionExecutor.EVENT_CHILD_STOP_LIFTED);
@@ -139,18 +139,18 @@ class SessionExecutorReview2U3Test {
     @Test
     void aDiscardedSegmentHoldingAForbiddenPatternGetsThatCategorysCorrectionWhateverTheDiscardReason() {
         h.activate();
-        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("r1", "진단 결과는 이래"));
+        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("진단 결과는 이래"));
         h.drain();
         h.advance(Duration.ofMillis(800));
-        h.provider.last().emit(new ProviderEvent.OutputAudioDelta("r1", new byte[4_800]));
-        h.provider.last().emit(new ProviderEvent.OutputDone("r1"));
+        h.provider.last().emit(new ProviderEvent.OutputAudioDelta(new byte[4_800]));
+        // U11: 응답 끝 사건이 없다 — 봉인은 조각 사이 무음(조용 시간 경과)으로 한다(Step 8에서 다시 단언)
         h.drain();
         h.advance(Duration.ofMillis(800));
 
         assertThat(h.link.outputs()).isEmpty();
         h.launcher.runAll("provider-correct-");
-        assertThat(h.provider.last().requests(ProviderRequestFactory.InstructionsCorrect.class))
-                .extracting(ProviderRequestFactory.InstructionsCorrect::text)
+        assertThat(h.provider.last().requests(ProviderRequestFactory.InstructionsAppend.class))
+                .extracting(ProviderRequestFactory.InstructionsAppend::text)
                 .containsExactly(DialogInstructions.Correction.DIAGNOSIS.text());
     }
 
@@ -171,9 +171,9 @@ class SessionExecutorReview2U3Test {
     }
 
     private void emitComplete(String responseId, String text) {
-        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta(responseId, text));
-        h.provider.last().emit(new ProviderEvent.OutputAudioDelta(responseId, new byte[4_800]));
-        h.provider.last().emit(new ProviderEvent.OutputDone(responseId));
+        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta(text));
+        h.provider.last().emit(new ProviderEvent.OutputAudioDelta(new byte[4_800]));
+        // U11: 응답 끝 사건이 없다 — 봉인은 조각 사이 무음(조용 시간 경과)으로 한다(Step 8에서 다시 단언)
         h.drain();
     }
 

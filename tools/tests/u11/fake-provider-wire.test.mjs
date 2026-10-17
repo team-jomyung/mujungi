@@ -1,0 +1,152 @@
+// 가짜 공급자 실호출 관측 선 형식 시험 (U11 FR12.3 · BR11.10 · 편차 (U11-a))
+// 응답 id · 응답 끝 사건이 없고, 음성은 delta(base64)이며, 지원 목록 밖 type에는 error{invalid_value}로 답하고, 응답 경계는 조각 사이 무음임을 본다.
+// 실공급자 · 실제 키는 쓰지 않는다. 시험이 만든 무작위 값만 쓴다.
+import { randomBytes } from "node:crypto";
+import { afterEach, describe, expect, it } from "vitest";
+import WebSocket from "ws";
+import { synthesizeInputPayload } from "../../lib/frameCodec.mjs";
+import { startFakeProvider } from "../../fake-provider/server.mjs";
+import {
+  SUPPORTED_TYPES,
+  buildTurn,
+  unsupportedTypeError,
+} from "../../fake-provider/scenarios.mjs";
+
+const providers = [];
+const sockets = [];
+
+afterEach(async () => {
+  for (const socket of sockets.splice(0)) {
+    socket.terminate();
+  }
+  for (const provider of providers.splice(0)) {
+    await provider.close();
+  }
+});
+
+async function start(options = {}) {
+  const provider = await startFakeProvider({
+    port: 0,
+    framesPerTurn: 3,
+    responseDelayMs: 5,
+    chunkBytes: 960,
+    chunkIntervalMs: 2,
+    onRecord: () => {},
+    ...options,
+  });
+  providers.push(provider);
+  return provider;
+}
+
+async function waitUntil(condition, timeoutMs = 3000) {
+  const deadline = Date.now() + timeoutMs;
+  while (!condition()) {
+    if (Date.now() > deadline) {
+      throw new Error("기다린 조건이 오지 않았다");
+    }
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+}
+
+async function session(provider, { bearer = true } = {}) {
+  const headers = bearer ? { authorization: `Bearer ${randomBytes(16).toString("base64url")}` } : {};
+  const ws = new WebSocket(provider.url, { headers });
+  sockets.push(ws);
+  const received = [];
+  ws.on("message", (data) => received.push({ at: Date.now(), message: JSON.parse(data.toString("utf8")) }));
+  ws.on("error", () => {});
+  await new Promise((resolve, reject) => {
+    ws.once("open", resolve);
+    ws.once("error", reject);
+  });
+  ws.send(
+    JSON.stringify({
+      type: "session.start",
+      session: { model: "m", instructions: "i", audio: { format: { type: "audio/pcm", rate: 24000 } } },
+    }),
+  );
+  await waitUntil(() => received.some((entry) => entry.message.type === "session.started"));
+  return { ws, received };
+}
+
+const types = (client) => client.received.map((entry) => entry.message.type);
+
+describe("가짜 공급자 — 실호출 관측 선 형식(U11-a)", () => {
+  it("session.started는 중첩 session.id를 싣고 응답 id · 응답 끝 사건은 어디에도 없다", async () => {
+    const provider = await start({ turns: ["normal"] });
+    const client = await session(provider);
+    client.ws.send(JSON.stringify({ type: "response.create" }));
+    for (let i = 0; i < 3; i += 1) {
+      client.ws.send(
+        JSON.stringify({ type: "session.input_audio.append", audio: synthesizeInputPayload(i).toString("base64") }),
+      );
+    }
+    await waitUntil(() => types(client).includes("session.output_audio.delta"));
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    expect(client.received[0].message).toEqual({ type: "session.started", session: { id: "fake-provider-1" } });
+    for (const { message } of client.received) {
+      expect(message).not.toHaveProperty("responseId");
+      expect(message.type).not.toBe("session.output.done");
+      expect(message.type).not.toBe("session.error");
+    }
+  });
+
+  it("출력 음성은 delta(base64) 하나만 싣는다 — audio · responseId 필드가 없다", () => {
+    const built = buildTurn({ connection: 1, turn: 1, kind: "normal", chunkBytes: 960 });
+    const audio = built.steps.filter((step) => step.message.type === "session.output_audio.delta");
+
+    expect(audio.length).toBeGreaterThan(1);
+    for (const step of audio) {
+      expect(Object.keys(step.message).sort()).toEqual(["delta", "type"]);
+      expect(Buffer.from(step.message.delta, "base64").length).toBeLessThanOrEqual(960);
+    }
+    expect(Buffer.concat(audio.map((step) => Buffer.from(step.message.delta, "base64"))).equals(built.pcm)).toBe(true);
+  });
+
+  it("응답 경계는 마지막 조각 뒤의 무음이다 — 조각이 모두 온 뒤에는 아무 사건도 따라오지 않는다", async () => {
+    const provider = await start({ turns: ["normal"] });
+    const client = await session(provider);
+    for (let i = 0; i < 3; i += 1) {
+      client.ws.send(
+        JSON.stringify({ type: "session.input_audio.append", audio: synthesizeInputPayload(i).toString("base64") }),
+      );
+    }
+    const turnEnd = () => provider.records.some((entry) => entry.ev === "turn-emitted");
+    await waitUntil(turnEnd);
+    const count = client.received.length;
+    await new Promise((resolve) => setTimeout(resolve, 150));
+
+    expect(client.received).toHaveLength(count);
+    expect(client.received.at(-1).message.type).toBe("session.output_audio.delta");
+  });
+
+  it("지원 목록 밖 type에는 error{invalid_request_error, invalid_value, param type}로 답하고 message를 되비추지 않는다", async () => {
+    const records = [];
+    const provider = await start({ onRecord: (entry) => records.push(entry) });
+    const client = await session(provider);
+    client.ws.send(JSON.stringify({ type: "session.response.create", secret: "비밀값" }));
+    await waitUntil(() => types(client).includes("error"));
+
+    const error = client.received.find((entry) => entry.message.type === "error").message;
+    expect(error).toEqual(unsupportedTypeError());
+    expect(error.error).toMatchObject({ type: "invalid_request_error", code: "invalid_value", param: "type" });
+    expect(JSON.stringify(error)).not.toContain("session.response.create");
+    expect(JSON.stringify(records)).not.toContain("비밀값");
+  });
+
+  it("운영이 쓰는 다섯 type과 지원 목록 열다섯 개는 error 없이 받는다", async () => {
+    const provider = await start();
+    const client = await session(provider, { bearer: false });
+    expect(SUPPORTED_TYPES).toHaveLength(15);
+    for (const type of ["session.instructions.append", "response.create", "session.update", "session.thinking.append"]) {
+      client.ws.send(JSON.stringify({ type, text: "고정 문장" }));
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    expect(types(client)).toEqual(["session.started"]);
+    expect(provider.records.filter((entry) => entry.ev === "recv-unsupported")).toHaveLength(0);
+    expect(provider.records.find((entry) => entry.ev === "session.instructions.append")).toMatchObject({ textLength: 5 });
+    expect(provider.records.find((entry) => entry.ev === "connect")).toMatchObject({ bearer: false });
+  });
+});

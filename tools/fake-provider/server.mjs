@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// 가짜 공급자 서버 (U1 3.5 Step 45 · J110 선 형식 · J129 · J131 · RD-5 · RD-23 · SD-20 · SD-25 · contracts/ai-io.md 3절)
+// 가짜 공급자 서버 (U1 3.5 Step 45 · J129 · J131 · RD-5 · RD-23 · SD-20 · SD-25 · U11 BR11.10 · contracts/ai-io.md 3절)
 //
 // realtime(VoiceRelay)이 `MUJOONG_PROVIDER_URL`로 붙는 대역 WS 서버다. 앱 이미지에 넣지 않고 dev · ci Compose 서비스와 host 모드
 // 프로세스로만 돈다(J129 · SD-25). 텍스트 프레임 JSON 한 개 = 메시지 한 개(공통 필드 type), 음성은 base64 PCM16LE 24kHz 모노다.
@@ -8,9 +8,12 @@
 // 받은 입력 음성 프레임마다 누적 바이트 수 · 누적 SHA-256, 턴마다 그 턴 입력의 SHA-256 · 보낸 출력 음성의 바이트 수 · SHA-256 ·
 // 문장 SHA-256, session.close · 연결 닫힘. 지시문 · 아이 문맥 값 · 전사 원문은 기록하지 않는다(SD-15). C안 시나리오는 이 기록 파일을
 // 따라 읽어 "가짜 공급자가 받은 입력 해시 = 시뮬레이터가 보낸 해시", "기기가 받은 0x02 해시 = 가짜 공급자가 보낸 출력 해시"를 단언한다.
-// U3(편차 (aa)): session.response.cancel이 오면 그 응답의 남은 출력 조각을 보내지 않고 기록하며(끼어들기 · 종료 의도), 
-// session.instructions.correct는 문장 SHA-256 · 길이만 기록한다. --confidence를 주면 아이 전사 확정에 confidence를 싣는다(U3-J17).
-// U4b(편차 (U4b-a)): session.response.create는 받은 사실만 기록하고, 턴 종류 join은 참여 확인 대답("응")만 보낸다(AI 출력 없음).
+// U11(편차 (U11-a)): 실호출로 관측한 형식만 말한다 — 세션 시작은 중첩 session{model, instructions, audio{format{type, rate}}}, 출력 음성은
+// session.output_audio.delta{delta}(응답 id · 응답 끝 사건 없음), 오류는 error{error{type, code, param}}이고, 지원 목록 밖 type에는
+// error{invalid_request_error, invalid_value, param type}으로 답한다(응답 취소 type은 없다). session.instructions.append는 문장 SHA-256 ·
+// 길이만 기록한다. 키(Authorization)는 보지 않고 Bearer 형식 여부만 기록한다 — 키가 비면 헤더가 없고 연결은 받는다(BR12.2).
+// --confidence를 주면 아이 전사 확정에 confidence를 싣는다(U3-J17). response.create는 받은 사실만 기록하고, 턴 종류 join은 참여 확인
+// 대답("응")만 보낸다(AI 출력 없음).
 //
 // 쓰는 법
 //   node tools/fake-provider/server.mjs [--host 127.0.0.1] [--port 8090] [--scenario ok] [--turns normal,forbidden]
@@ -27,13 +30,15 @@ import {
   CONNECTION_SCENARIOS,
   DEFAULTS,
   TURN_KINDS,
+  SUPPORTED_TYPES,
   buildTurn,
   parseList,
   scenarioForConnection,
   textSha256,
+  unsupportedTypeError,
 } from "./scenarios.mjs";
 
-export const USAGE = `가짜 공급자 서버 (J110 선 형식, 시험 전용)
+export const USAGE = `가짜 공급자 서버 (실호출 관측 선 형식, 시험 전용)
 
 쓰는 법: node tools/fake-provider/server.mjs [옵션]
 
@@ -143,12 +148,7 @@ export async function startFakeProvider({
       socket.on("close", () => held.delete(socket));
       return;
     }
-    if (!bearer) {
-      // 키가 없는 연결은 받지 않는다(실공급자와 같은 모양, 키 값은 보지 않는다)
-      record({ ev: "unauthorized", conn, path: requestPath });
-      socket.end("HTTP/1.1 401 Unauthorized\r\nConnection: close\r\nContent-Length: 0\r\n\r\n");
-      return;
-    }
+    // U11 BR12.2: 키가 비면 Authorization 헤더가 없다. 가짜 공급자는 헤더를 보지 않고 연결을 받는다(Bearer 형식인지만 기록)
     wss.handleUpgrade(req, socket, head, (ws) => {
       record({ ev: "connect", conn, path: requestPath, bearer, scenario });
       attach(ws, conn, scenario);
@@ -173,10 +173,6 @@ export async function startFakeProvider({
       turnFrames: 0,
       turnIndex: 0,
       closed: false,
-      /** 지금 내보내는 응답 id(취소 요청에 id가 없을 때 대상, U3). */
-      currentResponseId: null,
-      /** 취소된 응답 id(U3-R5). */
-      cancelled: new Set(),
     };
     const send = (message) => {
       if (!state.closed && ws.readyState === ws.OPEN) {
@@ -209,27 +205,18 @@ export async function startFakeProvider({
         case "session.input_audio.append":
           onInputAudio(message);
           break;
-        case "session.response.cancel": {
-          // 끼어들기 · 종료 의도(U3-R5 · U3-J11): 그 응답(없으면 지금 응답)의 남은 출력을 보내지 않는다
-          const target = typeof message.responseId === "string" ? message.responseId : state.currentResponseId;
-          if (target !== null) {
-            state.cancelled.add(target);
-          }
-          record({ ev: "session.response.cancel", conn, hasResponseId: typeof message.responseId === "string" });
-          break;
-        }
-        case "session.instructions.correct":
-          // 고정 교정 문장(U3-J12): 원문은 남기지 않는다
+        case "session.instructions.append":
+          // 고정 교정 · 지시 문장(U11): 원문은 남기지 않는다
           record({
-            ev: "session.instructions.correct",
+            ev: "session.instructions.append",
             conn,
             textSha256: typeof message.text === "string" ? textSha256(message.text) : null,
             textLength: typeof message.text === "string" ? message.text.length : 0,
           });
           break;
-        case "session.response.create":
-          // U4b(편차 (U4b-a) · U4b-J3): 참여 확인 · 확인 질문 뒤 발언권 반환 — 받은 사실만 기록한다
-          record({ ev: "session.response.create", conn });
+        case "response.create":
+          // 참여 확인 · 확인 질문 뒤 발언권 반환과 지시 뒤 응답 요청 — 받은 사실만 기록한다
+          record({ ev: "response.create", conn });
           break;
         case "session.close":
           record({
@@ -241,7 +228,14 @@ export async function startFakeProvider({
           later(0, () => ws.close(1000));
           break;
         default:
-          record({ ev: "recv-unknown", conn, type: message.type.slice(0, 64) });
+          if (SUPPORTED_TYPES.includes(message.type)) {
+            // 지원 목록 안이지만 이 대역이 쓰지 않는 type: 조용히 받는다
+            record({ ev: "recv-ignored", conn, type: message.type });
+          } else {
+            // 지원 목록 밖(예: 응답 취소): 실공급자처럼 error 사건으로 답한다(type 이름은 기록에 64자까지만)
+            record({ ev: "recv-unsupported", conn, type: message.type.slice(0, 64) });
+            send(unsupportedTypeError());
+          }
       }
     });
 
@@ -259,23 +253,21 @@ export async function startFakeProvider({
     ws.on("error", () => {});
 
     function onSessionStart(message) {
-      const childContext =
-        message.childContext && typeof message.childContext === "object"
-          ? message.childContext
-          : {};
-      // 지시문 · 아이 문맥 값은 기록하지 않는다(키 목록만, SD-20 허용 필드 대조용)
+      const body = message.session && typeof message.session === "object" ? message.session : {};
+      const format =
+        body.audio && typeof body.audio === "object" && body.audio.format && typeof body.audio.format === "object"
+          ? body.audio.format
+          : null;
+      // 지시문(아이 정보가 든 문장)은 기록하지 않는다(키 목록만, SD-20 허용 필드 대조용)
       record({
         ev: "session.start",
         conn,
         keys: Object.keys(message).sort(),
-        childContextKeys: Object.keys(childContext).sort(),
-        model: typeof message.model === "string" ? message.model.slice(0, 64) : null,
-        audio:
-          message.audio && typeof message.audio === "object"
-            ? { input: message.audio.input, output: message.audio.output }
-            : null,
+        sessionKeys: Object.keys(body).sort(),
+        model: typeof body.model === "string" ? body.model.slice(0, 64) : null,
+        audioFormat: format ? { type: format.type, rate: format.rate } : null,
       });
-      const started = { type: "session.started", providerSessionId: `fake-provider-${conn}` };
+      const started = { type: "session.started", session: { id: `fake-provider-${conn}` } };
       if (scenario === "ok") {
         state.started = true;
         send(started);
@@ -333,7 +325,6 @@ export async function startFakeProvider({
         chunkIntervalMs,
         confidence,
       });
-      state.currentResponseId = built.responseId;
       record({
         ev: "turn",
         conn,
@@ -343,7 +334,6 @@ export async function startFakeProvider({
         inputBytes: state.turnHash.bytes,
         inputSha256: state.turnHash.hex(),
         itemId: built.itemId,
-        responseId: built.responseId,
         outputBytes: built.pcm.length,
         outputSha256: sha256Hex(built.pcm),
         childTextSha256: textSha256(built.script.childText),
@@ -361,12 +351,6 @@ export async function startFakeProvider({
       }
       const step = steps[index];
       const run = () => {
-        const responseId = step.message.responseId;
-        if (typeof responseId === "string" && state.cancelled.has(responseId)) {
-          // 취소된 응답: 남은 출력 조각 · 끝 신호를 보내지 않는다
-          record({ ev: "turn-cancelled", conn, turn, at: index });
-          return;
-        }
         if (!send(step.message)) {
           record({ ev: "turn-aborted", conn, turn, at: index });
           return;

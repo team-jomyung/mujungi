@@ -52,15 +52,15 @@ import tools.jackson.databind.JsonNode;
 @Tag("db")
 class ProviderRequestWhitelistIT {
 
-    private static final Set<String> SESSION_START_KEYS = Set.of("type", "model", "instructions", "childContext",
-            "childContext.displayName", "childContext.age", "childContext.interests", "audio", "audio.input",
-            "audio.output");
+    /** U11(편차 (U11-a)): 중첩 session{model, instructions, audio{format{type, rate}}}. 아이 정보는 지시문 문장 안에만 있다. */
+    private static final Set<String> SESSION_START_KEYS = Set.of("type", "session", "session.model",
+            "session.instructions", "session.audio", "session.audio.format", "session.audio.format.type",
+            "session.audio.format.rate");
     private static final Set<String> INPUT_AUDIO_KEYS = Set.of("type", "audio");
     private static final Set<String> SESSION_CLOSE_KEYS = Set.of("type");
-    /** U3(편차 (aa)): 응답 취소는 공급자가 준 응답 id만, 지시 교정은 고정 문장만 싣는다. */
-    private static final Set<String> RESPONSE_CANCEL_KEYS = Set.of("type", "responseId");
-    private static final Set<String> INSTRUCTIONS_CORRECT_KEYS = Set.of("type", "text");
-    /** U4b(편차 (U4b-a)): 응답 생성 요청은 type뿐이다. */
+    /** U11: 지시 추가는 고정 문장만 싣는다(응답 취소는 없다 — 공급자 지원 목록 밖). */
+    private static final Set<String> INSTRUCTIONS_APPEND_KEYS = Set.of("type", "text");
+    /** 응답 생성 요청은 type뿐이다. */
     private static final Set<String> RESPONSE_CREATE_KEYS = Set.of("type");
     private static final Set<String> FORBIDDEN_FIELDS = Set.of("judgmentCriteria", "knownContent", "question",
             "guardianId", "childId", "deviceId", "sessionId", "email", "consentSnapshot", "practice", "goals");
@@ -100,10 +100,9 @@ class ProviderRequestWhitelistIT {
                     case "session.start" -> assertThat(SESSION_START_KEYS).containsAll(keys);
                     case "session.input_audio.append" -> assertThat(INPUT_AUDIO_KEYS).containsAll(keys);
                     case "session.close" -> assertThat(SESSION_CLOSE_KEYS).containsAll(keys);
-                    case "session.response.cancel" -> assertThat(RESPONSE_CANCEL_KEYS).containsAll(keys);
-                    case "session.instructions.correct" -> assertThat(INSTRUCTIONS_CORRECT_KEYS).containsAll(keys);
-                    // U4b(편차 (U4b-a)): 참여 확인 뒤 발언권 반환은 type만 싣는다
-                    case "session.response.create" -> assertThat(RESPONSE_CREATE_KEYS).containsAll(keys);
+                    case "session.instructions.append" -> assertThat(INSTRUCTIONS_APPEND_KEYS).containsAll(keys);
+                    // 참여 확인 뒤 발언권 반환은 type만 싣는다
+                    case "response.create" -> assertThat(RESPONSE_CREATE_KEYS).containsAll(keys);
                     default -> throw new AssertionError("허용 밖 요청 type: " + type);
                 }
             }
@@ -125,24 +124,23 @@ class ProviderRequestWhitelistIT {
 
     @Test
     void theRequestRecordsDeclareOnlyWhitelistedComponentsAndNoFreeFormMaps() {
-        assertThat(components(ProviderRequestFactory.SessionStart.class))
-                .containsExactly("type", "model", "instructions", "childContext", "audio");
-        assertThat(components(ProviderRequestFactory.ChildContextData.class))
-                .containsExactly("displayName", "age", "interests");
+        assertThat(components(ProviderRequestFactory.SessionStart.class)).containsExactly("type", "session");
+        assertThat(components(ProviderRequestFactory.SessionBody.class)).containsExactly("model", "instructions", "audio");
+        assertThat(components(ProviderRequestFactory.AudioSpec.class)).containsExactly("format");
+        assertThat(components(ProviderRequestFactory.AudioFormat.class)).containsExactly("type", "rate");
         assertThat(components(ProviderRequestFactory.InputAudioAppend.class)).containsExactly("type", "audio");
         assertThat(components(ProviderRequestFactory.SessionClose.class)).containsExactly("type");
-        assertThat(components(ProviderRequestFactory.ResponseCancel.class)).containsExactly("type", "responseId");
-        assertThat(components(ProviderRequestFactory.InstructionsCorrect.class)).containsExactly("type", "text");
+        assertThat(components(ProviderRequestFactory.InstructionsAppend.class)).containsExactly("type", "text");
         assertThat(components(ProviderRequestFactory.ResponseCreate.class)).containsExactly("type");
-        for (Class<?> type : List.of(ProviderRequestFactory.SessionStart.class,
-                ProviderRequestFactory.ChildContextData.class, ProviderRequestFactory.AudioSpec.class,
+        for (Class<?> type : List.of(ProviderRequestFactory.SessionStart.class, ProviderRequestFactory.SessionBody.class,
+                ProviderRequestFactory.AudioSpec.class, ProviderRequestFactory.AudioFormat.class,
                 ProviderRequestFactory.InputAudioAppend.class, ProviderRequestFactory.SessionClose.class,
-                ProviderRequestFactory.ResponseCancel.class, ProviderRequestFactory.InstructionsCorrect.class)) {
+                ProviderRequestFactory.InstructionsAppend.class, ProviderRequestFactory.ResponseCreate.class)) {
             for (RecordComponent component : type.getRecordComponents()) {
                 assertThat(Map.class.isAssignableFrom(component.getType())).as(component.getName()).isFalse();
                 assertThat(FORBIDDEN_FIELDS).doesNotContain(component.getName());
                 if (Collection.class.isAssignableFrom(component.getType())) {
-                    assertThat(component.getGenericType().getTypeName()).isEqualTo("java.util.List<java.lang.String>");
+                    throw new AssertionError("요청 레코드에 컬렉션 필드가 없다(아이 정보는 지시문 문장 안에만 있다): " + component.getName());
                 }
             }
         }
@@ -152,8 +150,7 @@ class ProviderRequestWhitelistIT {
                 .filter(method -> java.lang.reflect.Modifier.isPublic(method.getModifiers()))
                 .flatMap(method -> Arrays.stream(method.getParameterTypes())).map(Class::getSimpleName))
                 // U4b: 연습 확장점 지시문은 검사된 값 타입(PracticeInstruction)으로만 받는다(BR10.4)
-                .allMatch(name -> Set.of("ChildContext", "byte[]", "ProviderResponseId", "Correction",
-                        "PracticeInstruction").contains(name));
+                .allMatch(name -> Set.of("ChildContext", "byte[]", "int", "Correction", "PracticeInstruction").contains(name));
     }
 
     @Test
@@ -195,28 +192,28 @@ class ProviderRequestWhitelistIT {
 
         ProviderRequestFactory.SessionStart start = factory.sessionStart(new ChildContext("  " + ten + "카  ", 13, interests));
 
-        ProviderRequestFactory.ChildContextData data = start.childContext();
-        assertThat(data.displayName()).isEqualTo(ten);
-        assertThat(data.age()).isEqualTo(ProviderRequestFactory.MAX_AGE);
+        // 아이 정보는 지시문 문장 안에만 있다(선 형식 필드 없음)
+        String instructions = start.session().instructions();
+        assertThat(instructions).contains("이름: \"" + ten + "\"").doesNotContain(ten + "카");
+        assertThat(instructions).contains("나이: \"" + ProviderRequestFactory.MAX_AGE + "\"");
         // 빈 관심사는 빼고 10개에서 멈춘다. 21자 관심사는 20자로 자른다
-        assertThat(data.interests()).hasSize(ProviderRequestFactory.MAX_INTERESTS)
-                .startsWith("가".repeat(ProviderRequestFactory.MAX_INTEREST_LENGTH), "관심1")
-                .doesNotContain("  ", "관심10", "관심11");
+        assertThat(instructions).contains("\"" + "가".repeat(ProviderRequestFactory.MAX_INTEREST_LENGTH) + "\"", "\"관심1\"")
+                .doesNotContain("가".repeat(ProviderRequestFactory.MAX_INTEREST_LENGTH + 1), "관심10", "관심11");
+        assertThat(instructions).containsOnlyOnce("관심9");
         String wire = JsonCodec.shared().write(start);
         assertThat(wire).contains(ten).doesNotContain(ten + "카").doesNotContain("관심10");
 
         // 나이 경계: 5 → 6, 6 · 12 그대로, 없으면 지시문에도 없다
-        assertThat(factory.sessionStart(new ChildContext("하늘", 5, List.of())).childContext().age())
-                .isEqualTo(ProviderRequestFactory.MIN_AGE);
-        assertThat(factory.sessionStart(new ChildContext("하늘", 6, List.of())).childContext().age()).isEqualTo(6);
-        assertThat(factory.sessionStart(new ChildContext("하늘", 12, List.of())).childContext().age()).isEqualTo(12);
+        assertThat(factory.sessionStart(new ChildContext("하늘", 5, List.of())).session().instructions())
+                .contains("나이: \"" + ProviderRequestFactory.MIN_AGE + "\"");
+        assertThat(factory.sessionStart(new ChildContext("하늘", 6, List.of())).session().instructions()).contains("나이: \"6\"");
+        assertThat(factory.sessionStart(new ChildContext("하늘", 12, List.of())).session().instructions()).contains("나이: \"12\"");
         ProviderRequestFactory.SessionStart ageless = factory.sessionStart(new ChildContext("하늘", null, List.of()));
-        assertThat(ageless.childContext().age()).isNull();
-        assertThat(ageless.instructions()).doesNotContain("나이");
+        assertThat(ageless.session().instructions()).doesNotContain("나이");
         // 글자 수는 코드 포인트로 센다: 이모지(UTF-16 두 칸)를 반으로 자르지 않는다
         String nineAndDino = "가나다라마바사아자\uD83E\uDD95";
-        assertThat(factory.sessionStart(new ChildContext(nineAndDino + "카", 8, List.of())).childContext().displayName())
-                .isEqualTo(nineAndDino);
+        assertThat(factory.sessionStart(new ChildContext(nineAndDino + "카", 8, List.of())).session().instructions())
+                .contains("이름: \"" + nineAndDino + "\"").doesNotContain(nineAndDino + "카");
     }
 
     @Test
@@ -227,17 +224,16 @@ class ProviderRequestWhitelistIT {
 
         ProviderRequestFactory.SessionStart start = factory.sessionStart(hostile);
 
-        String instructions = start.instructions();
+        String instructions = start.session().instructions();
         // 따옴표 · 역슬래시는 이스케이프되고 제어 문자는 공백이 된다 — 값이 따옴표를 닫고 지시 문장이 될 수 없다
         assertThat(instructions).contains("이름: \"하\\\"늘\\\\\"")
                 .contains("관심사: [\"공\\\"룡\", \"우 주 \"]");
         assertThat(instructions.chars().noneMatch(Character::isISOControl)).as("지시문의 제어 문자").isTrue();
         assertThat(unescapedQuotes(instructions)).as("이스케이프되지 않은 따옴표 = 값 4개(이름 · 나이 · 관심사 둘)의 양 끝")
                 .isEqualTo(8);
-        // 데이터 필드에는 원래 값이 그대로 가고(선 형식 JSON이 이스케이프한다) 해석하면 같은 값이 돌아온다
+        // 선 형식 JSON이 이스케이프하고, 해석하면 같은 지시문이 돌아온다
         JsonNode wire = JsonCodec.shared().read(JsonCodec.shared().write(start), JsonNode.class);
-        assertThat(wire.get("childContext").get("displayName").asString()).isEqualTo(name);
-        assertThat(wire.get("instructions").asString()).isEqualTo(instructions);
+        assertThat(wire.get("session").get("instructions").asString()).isEqualTo(instructions);
     }
 
     @Test

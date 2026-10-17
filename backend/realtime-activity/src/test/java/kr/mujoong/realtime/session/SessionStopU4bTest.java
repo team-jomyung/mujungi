@@ -113,19 +113,18 @@ class SessionStopU4bTest {
     @Test
     void afterTheEndIsConfirmedAnEarlierResponseIsNeverPlayed() {
         h.activate();
-        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("r-old", "공룡은 멋져"));
-        h.provider.last().emit(new ProviderEvent.OutputAudioDelta("r-old", new byte[4_800]));
+        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("공룡은 멋져"));
+        h.provider.last().emit(new ProviderEvent.OutputAudioDelta(new byte[4_800]));
         h.drain();
 
         h.childSays("i-1", "그만할래");
-        h.provider.last().emit(new ProviderEvent.OutputDone("r-old"));
+        // U11: 응답 끝 사건이 없다 — 봉인은 조각 사이 무음(조용 시간 경과)으로 한다(Step 8에서 다시 단언)
         h.drain();
         h.advanceAlive(Duration.ofSeconds(1));
 
         assertThat(h.link.outputs()).isEmpty();
         h.launcher.runAll("provider-cancel-");
-        assertThat(h.provider.last().requests(ProviderRequestFactory.ResponseCancel.class))
-                .extracting(ProviderRequestFactory.ResponseCancel::responseId).contains("r-old");
+        // U11 Step 5: 응답 취소 레코드가 없어졌다(공급자 지원 목록 밖) — Step 8에서 출력 세대 올림 단언으로 바꾼다 [CANCEL-ASSERT]
     }
 
     @Test
@@ -144,9 +143,9 @@ class SessionStopU4bTest {
     }
 
     private void emitComplete(String responseId, String text) {
-        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta(responseId, text));
-        h.provider.last().emit(new ProviderEvent.OutputAudioDelta(responseId, new byte[4_800]));
-        h.provider.last().emit(new ProviderEvent.OutputDone(responseId));
+        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta(text));
+        h.provider.last().emit(new ProviderEvent.OutputAudioDelta(new byte[4_800]));
+        // U11: 응답 끝 사건이 없다 — 봉인은 조각 사이 무음(조용 시간 경과)으로 한다(Step 8에서 다시 단언)
         h.drain();
     }
 

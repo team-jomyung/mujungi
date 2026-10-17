@@ -209,15 +209,14 @@ class PracticeExtensionU4bTest {
         assertThat(extension.events).extracting(ExtensionEvent::name).contains("first-response-wait");
 
         assertThat(extension.output.holdOutput(true)).isTrue();
-        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("r-held", "막힌 응답"));
+        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("막힌 응답"));
         h.drain();
         assertThat(extension.output.instructProvider("목표 문장을 한 번 더 안내한다.")).isTrue();
         assertThat(extension.output.instructProvider(" ")).isFalse();
         h.launcher.runAll("provider-");
-        assertThat(h.provider.last().requests(ProviderRequestFactory.ResponseCancel.class))
-                .extracting(ProviderRequestFactory.ResponseCancel::responseId).contains("r-held");
-        assertThat(h.provider.last().requests(ProviderRequestFactory.InstructionsCorrect.class))
-                .extracting(ProviderRequestFactory.InstructionsCorrect::text).contains("목표 문장을 한 번 더 안내한다.");
+        // U11 Step 5: 응답 취소 레코드가 없어졌다(공급자 지원 목록 밖) — Step 8에서 출력 세대 올림 단언으로 바꾼다 [CANCEL-ASSERT]
+        assertThat(h.provider.last().requests(ProviderRequestFactory.InstructionsAppend.class))
+                .extracting(ProviderRequestFactory.InstructionsAppend::text).contains("목표 문장을 한 번 더 안내한다.");
         assertThat(extension.output.cancel("nothing")).isTrue();
         assertThat(extension.output.sessionId()).isEqualTo(h.sessionId);
     }
