@@ -43,6 +43,10 @@
       "type": "string",
       "minLength": 1
     },
+    "scriptVersion": {"type": "string", "const": "scenario-script.v1"},
+    "scenes": {"type": "array", "minItems": 1, "items": {"type": "object", "required": ["sceneKey", "sceneKind", "sceneDescription", "opportunitySentence", "reexplanation", "partnerRole"], "additionalProperties": true}},
+    "selfReview": {"type": "object", "required": ["verdict", "model", "promptVersion"], "properties": {"verdict": {"const": "APPROVE"}, "model": {"type": "string", "minLength": 1}, "promptVersion": {"const": "scenario-review.v1"}}, "additionalProperties": false},
+    "generation": {"type": "object", "required": ["model", "promptVersion", "graphContextUsed", "calls"], "properties": {"model": {"type": "string", "minLength": 1}, "promptVersion": {"const": "scenario-generation.v2"}, "graphContextUsed": {"type": "boolean"}, "calls": {"type": "integer", "minimum": 2, "maximum": 6}}, "additionalProperties": false},
     "validation": {
       "type": "object",
       "required": [

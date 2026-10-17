@@ -176,3 +176,11 @@
 |---|---|---|---|
 | (U14-a) | GOAL_CANDIDATES의 NONE 후보에 선택적 내부 structureSignature를 더한다. U15의 다섯 구조 값을 동일 후보 응답에서 받고 검증하며, 누락/잘못된 추상화/원문·이름 검증 실패는 NONE을 유지한다. 임의 상수 서명이나 추가 추상화 AI 호출을 만들지 않는다. 결과 커밋 후 candidate/version 멱등 키로 생성하고 새 불변 버전으로 게시한다. | 승인 U14 Functional Design D2·FR2.3, C-DS10, U15 StructureSignature | strict 스키마의 추가 출력 속성을 이전 소비자는 거절하므로 생산/소비를 같은 릴리스에서 갱신한다. 보호자 공개 속성이 아니다. |
 | (U14-b) | 새 결과의 장면 번호는 양의 가변 정수이며 timing을 제공한다. 생성 후보는 reasonText 대신 displayEvidence를 공개하고 recommendationId는 불변 후보 버전이다. legacy 후보/장면 응답은 기존 모양을 유지한다. 프런트 API 파서는 displayEvidence를 기존 화면 모델의 reasonText로 변환한다. | 승인 U14 D1·D3·D4·D6, FR3.1·FR4.1 | strict 응답 소비자는 새 속성과 후보의 대체 필드를 거절할 수 있으므로 schema·API 생산부·프런트 파서를 같은 릴리스로 갱신한다. 기존 27개 화면의 모델과 칩은 유지한다. |
+
+## U10 편차
+
+| 기호 | 내용 | 근거 | 호환 분류 |
+|---|---|---|---|
+| (U10-a) | C-DS1에 선택 scriptVersion/scenes/selfReview/generation을 추가한다. C8의 기존 behaviorKey/version은 기존 행동에 그대로 유지하고, 후보는 candidate:<candidateRef>와 고정 후보 버전을 운반 식별자로 사용하며 goalKind/candidateRef/candidateVersion/goalContext를 선택 확장한다. 후보를 기존 행동 정의로 매핑하거나 카탈로그 행을 만들지 않는다. 생성·판정의 정본은 고정 goalContext다. | 승인 U10 FR3·FR4, functional-spec W1/W6 | 기존 8필수 필드와 추가 필드 허용을 유지한다. 현재 RT는 운반 필드와 판정 기준을 저장한다. 신규 후보를 모르는 구버전 Core로 롤백하면 신규 후보의 생성은 지원되지 않을 수 있다. U12 소비·실기기는 별도 검증이다. |
+
+U10 검토 사유는 ANSWER_INCLUDED/EARLY_CUE/PRESSURE/AGE_MISMATCH/GOAL_MISMATCH/REPETITION/FORBIDDEN_CONTENT/INCOMPLETE_SCENE/INVARIANT_MISMATCH/SKILL_MISMATCH/TRANSFER_MISMATCH/UNCHANGED_VARIANT로 닫으며 APPROVE에는 빈 reasons만 허용한다. 생성 scenario-generation.v2, 검토 scenario-review.v1, 공개 대본 scenario-script.v1을 함께 사용한다.
