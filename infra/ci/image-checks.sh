@@ -8,7 +8,7 @@
 #   ③ 취약점 스캔(Trivy, high 이상, ci/security-exceptions.yml 예외). 도구가 없으면 SKIP(미실행)으로 보고하고 실패로 세지 않는다
 #   ④ demo 프로필 더미 기동: postgres(999 · cap_drop ALL · read_only · tmpfs) → migrate → 시드 두 번(정책 1 · 문구 2) →
 #      두 앱 readiness UP(공급자 접속 없음) → backup 스케줄러 생존 + 더미 덤프 1회 OK → 프로필 가드(demo + dev, demo + 시험 로그인)와
-#      필수 비밀 누락이 기동을 거부(CD-7)
+#      필수 비밀 누락이 기동을 거부(CD-7). U13: realtime은 제브 키 · 주소 · 모델도 필수이고 키가 비면 기동을 거부한다(BR9.1)
 #   ⑤ 번들 이미지 파일 목록(환경 파일 · compose.ci.yml · compose.dev.yml · ci/ 0건)과 번들의 compose.demo.yml 불변식 통과
 #   ⑥ 앱 이미지에 시험 클래스 · 시험 설정 · 시험 라이브러리 0건(SD-25)
 #   ⑦ web을 실제 옵션(read_only · cap_drop ALL · tmpfs · HOSTNAME=0.0.0.0 · PORT=3000)으로 띄워 컨테이너 안 127.0.0.1:3000/healthz 200(R4-16)
@@ -248,8 +248,11 @@ check4() {
   chmod 0755 "$work/verify" "$work/verify/postgres"
   # demo 프로필은 GPT-Live 키가 필수다(U11 BR12.2). gen-env.sh는 키 자리값을 넣지 않으므로 더미 기동에만 실행 때 만든 무작위 값을 이 덮어쓰기
   # 파일(임시 폴더, 실행 끝에 지움)로 준다. 접속하지 않고 어디에도 남기지 않는다(R-F3)
-  local dummy_key
+  # U13(BR9.1): demo realtime은 제브 키 · 허용 호스트 주소 · 고정 버전 모델도 필수다(REAL 모드가 공개 프로필 기본값이고 대역 · 비활성은 기동 거부).
+  # 키는 같은 방식으로 실행 때 만든 무작위 값이고, 주소는 허용 호스트 목록 안의 형식만 맞춘다(접속하지 않는다, 모델 이름은 가짜 고정 버전)
+  local dummy_key dummy_jev_key
   dummy_key="$(openssl rand -hex 24)"
+  dummy_jev_key="$(openssl rand -hex 24)"
   # demo 프로필 · 실공급자 주소 형식(접속하지 않는다) · backup 켬. 이미지 이름은 --image 덮어쓰기를 반영한다
   cat >"$work/imgchk.yml" <<YAML
 services:
@@ -264,6 +267,9 @@ services:
       SPRING_PROFILES_ACTIVE: demo
       MUJOONG_PROVIDER_URL: wss://api.openai.com/v1/live/sessions
       OPENAI_API_KEY: $dummy_key
+      JEV_API_KEY: $dummy_jev_key
+      JEV_BASE_URL: https://api.typesafe.ai
+      JEV_MODEL: jev-guardrail-imgchk-1
   migrate:
     image: $(ref migrate)
   fake-provider:
@@ -345,6 +351,16 @@ YAML
     problems+=("realtime이 OPENAI_API_KEY 없는 demo 구성에서 기동을 거부하지 않았다(rc=$rc)")
   elif ! grep -qF 'MUJOONG_STARTUP_REJECTED ' "$work/c4-guard.log"; then
     problems+=("realtime OPENAI_API_KEY 없는 demo 구성이 기동 거부 줄 없이 끝났다(rc=$rc)")
+  fi
+  # U13 BR9.1: demo realtime은 제브 키가 비면 기동을 거부한다(공개 프로필에서 제브 없이 뜨면 아이 발화가 검사 없이 나간다)
+  rc=0
+  MUJOONG_VERIFY_DIR="$work/verify" timeout 90 docker compose -p "$project" --env-file "$work/compose.env" \
+    -f "$ROOT/infra/compose.demo.yml" -f "$ROOT/infra/compose.ci.yml" -f "$work/imgchk.yml" \
+    run --rm --no-deps -e "JEV_API_KEY=" realtime >"$work/c4-guard.log" 2>&1 || rc=$?
+  if [ "$rc" -eq 0 ] || [ "$rc" -eq 124 ]; then
+    problems+=("realtime이 JEV_API_KEY 없는 demo 구성에서 기동을 거부하지 않았다(rc=$rc)")
+  elif ! grep -qF 'MUJOONG_STARTUP_REJECTED ' "$work/c4-guard.log"; then
+    problems+=("realtime JEV_API_KEY 없는 demo 구성이 기동 거부 줄 없이 끝났다(rc=$rc)")
   fi
   dc4 down -v --remove-orphans >/dev/null 2>&1 || true
   if [ "${#problems[@]}" -gt 0 ]; then fail ④ "${problems[*]}"; else pass ④; fi

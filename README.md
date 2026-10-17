@@ -111,8 +111,8 @@ bash scripts/verify.sh --help          # 단계 · 모드 · 종료 코드
 - 계정 · 비밀번호 · API 키 · 토큰 값 · 실제 도메인은 코드 · 설정 · 시험 · 문서 · 커밋 · 로그 어디에도 쓰지 않는다. 저장소에는 환경 변수 ·
   매개변수 **이름**만 둔다(`POSTGRES_PASSWORD` · `DB_OWNER_PASSWORD` · `DB_CORE_PASSWORD` · `DB_REALTIME_PASSWORD` · `DB_BACKUP_PASSWORD` ·
   `INTERNAL_SERVICE_TOKEN` · `OPENAI_API_KEY` · `JEV_API_KEY` · `MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET` ·
-  `GOOGLE_OAUTH_CLIENT_SECRET` · `GHCR_PULL_TOKEN` · `NEO4J_AUTH`). `OPENAI_API_KEY`(GPT-Live 음성 중계와 Luna 판정, core-api · realtime)는 demo 프로필의 realtime에서만 필수이고 `JEV_API_KEY`(제브, realtime)는
-  선택이다. 검증 · CI에서는 모두 빈 값이라 실제 공급자를 부르지 않는다(`contracts/ai-io.md` 10.7절).
+  `GOOGLE_OAUTH_CLIENT_SECRET` · `GHCR_PULL_TOKEN` · `NEO4J_AUTH`). `OPENAI_API_KEY`(GPT-Live 음성 중계와 Luna 판정, core-api · realtime)는 demo 프로필의 realtime에서만 필수이고 `JEV_API_KEY`(제브, realtime)도 demo에서 필수다(U13: 키 · 주소 `JEV_BASE_URL` ·
+  모델 `JEV_MODEL`이 없으면 demo realtime이 기동을 거부하므로 배포 전에 Parameter Store에 먼저 넣는다, `infra/RUNBOOK.md` 단계 4). 검증 · CI에서는 모두 빈 값(제브는 dev 프로필 기본 대역)이라 실제 공급자를 부르지 않는다(`contracts/ai-io.md` 10.7절).
 - 서비스 도메인은 `SERVICE_HOST` 자리표시자다(J98). 시험 origin은 `https://mujoong.invalid`(단위 · 통합)와 `https://localhost:8443`(검증 스택)뿐이다(J108).
 - 시험용 값은 실행 때 만든다: 검증 · CI는 `infra/ci/gen-env.sh`(`build/verify/env/`, umask 077, 실행 끝에 지움), Testcontainers 시험은
   `kr.mujoong.testsupport.secret.TestSecrets`(J127). demo 서버의 값은 AWS Parameter Store `/mujoong/demo/`에만 있다(`infra/RUNBOOK.md`).
