@@ -1,3 +1,24 @@
+> 최신 정본: 아래 U10 갱신절(2026-10-17, HEAD eb34c68bf24e4520881b7ffebe1070564554dfc9). 이후 U14/U15/전체 분석 본문은 역사 자료이며, 이번에 검증한 범위는 timestamp의 analyzed 목록만이다.
+
+## U10 집중 갱신 — 변경이 필요한 위치
+
+| 구분 | 현재 파일·책임 |
+|---|---|
+| 서비스/유스케이스 | practice/ScenarioService, practice/start/PracticeStartService: 선점·재생성·준비/발급 |
+| 저장소/모델 | ScenarioRepository, Scenario, GeneratedScenario, ScenarioPrompt: 기존 단일 대본 |
+| 경계/검사 | ScenarioContentPolicy, textai/ForbiddenExpressionPolicy, TextAiGateway |
+| 외부 어댑터/구성 | luna/adapter/LunaTextAiProvider, CoreLunaClient, LunaRequest/Purpose/CallBudget, ScenarioConfiguration |
+| 목표 읽기 | practicegoal/SavedGoalReader, PinnedSavedGoalReader, FourElements |
+| 그래프 읽기 | knowledge/ChildKnowledgeService, VariantPlanner, KnowledgeSeed |
+| 내부 HTTP | practice/web/ScenarioInternalController |
+| DB | core V4 기존 대본표·V9 목표 버전표 존재, V10 없음 |
+| 계약 | ai-scenario-output/review 스키마 존재, practice-scenario 새4필드 없음 |
+| 시험/범위 | 기존 ScenarioServiceTest(u5a), u9/u14/u15 경계시험 존재; u10.txt 없음 |
+
+FrozenGoal과 GoalSnapshot은 behaviorKey/version 기반이다. PreparedPracticePackageMapper는 기존 Scenario 8필드만 첫 대본 Map으로 옮긴다. 따라서 새 후보 입력과 scenes 전달은 이 준비 경로까지 추적해야 한다. 빌드 출력·의존·캐시와 AI-DLC 설치는 분석 대상에서 제외했다.
+
+---
+
 > 현재 범위의 정본은 바로 아래 U14 갱신절이다. 그 뒤 원문은 보존 이력이며 재검증 범위는 timestamp에 한정한다.
 
 ## U14 집중 갱신 — 변경 표면
@@ -119,3 +140,5 @@ U15 ChildKnowledgeService, SeedGenerationService, StructureSignature는 구현�
 - **전이 표**: `TransitionTable` · `SessionTransitions` · `TransitionService`로 상태 전이를 표로 관리.
 - **주석**: 한국어 Javadoc, 결정 ID(J · BR · U*-J · 편차) 인용.
 - **화면 문구**: 프런트 화면 문구는 `shared/copy` 모듈만(ESLint `react/jsx-no-literals`).
+
+

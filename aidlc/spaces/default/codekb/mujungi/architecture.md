@@ -1,3 +1,37 @@
+> 최신 정본: 아래 U10 갱신절(2026-10-17, HEAD eb34c68bf24e4520881b7ffebe1070564554dfc9). 이후 U14/U15/전체 분석 본문은 역사 자료이며, 이번에 검증한 범위는 timestamp의 analyzed 목록만이다.
+
+## U10 Architecture Analysis — 확인된 실행 경계
+
+ScenarioService는 요청 마감 생성→세션/목표 확인→보호자 잠금 아래 정의 고정·요청 선점→잠금 밖 TextAiGateway 호출→독립 검사→세션·동의 재확인→저장 순서다. 동일 요청 READY는 기존 대본을 재사용하며 중복 내용은 아이별 지문으로 거절한다. 현재 내용 시도는 최대2회다.
+
+TextAiGateway는 실행기 Future·wall/monotonic 남은시간으로 호출을 제한하고 기술 재시도를 소유한다. LunaTextAiProvider는 legacy json_object 1회만 부른다. CONTRACT 호출로 전환하면 CoreLunaClient의 REQUEST_BOUNDED 재시도가 켜지므로 바깥 재시도와 중복되지 않도록 소유권을 설계해야 한다.
+
+U14 SavedGoalReader는 childId/selectionId에 고정한 CANDIDATE 또는 LEGACY_BEHAVIOR를 돌려준다. U15 ChildKnowledgeService가 skillContext/variantPlan을 제공한다. 이름이 비슷한 KnowledgeGraphLookup은 공개 행동키 전용이다. variantPlan은 skillContext를 다시 조회하므로 별도2회 호출이 전체2초 보장을 자동으로 제공하지 않는다.
+
+## Interaction Diagrams — U10 전환 전 사실
+
+```mermaid
+sequenceDiagram
+    participant Start as PracticeStartService
+    participant Gen as ScenarioService
+    participant DB as Core 저장소
+    participant Gate as TextAiGateway
+    participant Luna as LunaTextAiProvider
+    Start->>DB: 기존 선택·행동 정의 고정 및 준비 선점
+    Start->>Gen: generatePrepared
+    Gen->>DB: 요청 선점
+    Gen->>Gate: 생성, 같은 마감
+    Gate->>Luna: json_object 단일 시도
+    Luna-->>Gate: 기존 GeneratedScenario
+    Gate-->>Gen: 사전·메타 검증 결과
+    Gen->>Gen: 관계·기회·트리거·중복 검사
+    Gen->>DB: 동의·세션·lease 확인 후 발급
+```
+
+텍스트 대체: 준비 서비스는 기존 행동 정의 목표를 고정하고 생성 서비스를 부른다. 생성·사전 검사는 잠금 밖에서 실행하고 발급 직전 권한·세션·lease를 다시 확인한다. 현재 별도 자체 검토 요청은 없다. U10에서 이 경계를 보존하며 새 흐름을 추가해야 한다.
+
+---
+
 > 현재 범위의 정본은 바로 아래 U14 갱신절이다. 그 뒤 원문은 보존 이력이며 재검증 범위는 timestamp에 한정한다.
 
 ## U14 Architecture Analysis — 현재 흐름
@@ -266,3 +300,5 @@ sequenceDiagram
 - 외부 호스트 고정: 음성 공급자 `api.openai.com`, 웹 푸시는 공개 DNS · 고정 HTTP 클라이언트(`PinnedPushHttpClient` · `PublicPushEndpointPolicy`).
 - 오류 응답에서 메시지 · 스택 숨김(`server.error.*`), 관리 포트 9090은 127.0.0.1 바인딩.
 - 아동 데이터 삭제는 삭제 참여자 패턴(양쪽 `*DeletionParticipant`)과 삭제 이벤트로 처리.
+
+

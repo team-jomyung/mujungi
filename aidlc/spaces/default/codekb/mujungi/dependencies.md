@@ -1,3 +1,18 @@
+> 최신 정본: 아래 U10 갱신절(2026-10-17, HEAD eb34c68bf24e4520881b7ffebe1070564554dfc9). 이후 U14/U15/전체 분석 본문은 역사 자료이며, 이번에 검증한 범위는 timestamp의 analyzed 목록만이다.
+
+## U10 집중 갱신 — 실제 호출 의존
+
+- ScenarioService → ScenarioRepository, PracticeSessionContextPort, ScenarioRecordPort, PracticeAccountPort, PragmaticsKnowledge, TextAiGateway, clock, tx, limits.
+- PracticeStartService → 기존 practice.PracticeGoalRepository, PragmaticsKnowledge, 준비/상황 저장소, ScenarioService, StartActivityService. 새 core_saved_goal을 직접 읽지 않는다.
+- TextAiGateway → TextAiProvider, ForbiddenExpressionPolicy, 실행기, 시간/재시도 설정.
+- LunaTextAiProvider → CoreLunaClient → sanitizer/schemas/transport/eventlogger/clock. 기존 어댑터는 legacy 모드라 안쪽 재시도가 없다.
+- PinnedSavedGoalReader → GoalCandidateRepository, PracticeAccountPort, ConsentPolicyService, JDBC. U10은 제공 포트로 읽고 다른 단위 표를 임의 복제하지 않는다.
+- ChildKnowledgeService → 원장·접근정책·graph port·VariantPlanner. variantPlan은 skillContext 재조회, 조회는 budget 기반 Future다.
+
+LunaCallBudget는 총3시도와 기술1/내용1슬롯을 공유한다. 생성→검토→재생성→재검토 정상4호출에 그대로 적용하면 마지막 검토가 막힌다. U15 동작·시험을 바꾸지 않는 U10 예산 설계가 필요하다. 전체 무순환/최신의존 취약점을 이번 읽기 작업에서 재검증한 것은 아니다.
+
+---
+
 > 현재 범위의 정본은 바로 아래 U14 갱신절이다. 그 뒤 원문은 보존 이력이며 재검증 범위는 timestamp에 한정한다.
 
 ## U14 집중 갱신 — 실제 의존
@@ -92,3 +107,5 @@ flowchart TD
 | 시간 값 | 두 앱 `application.yml` · `contracts/timing.md` · `frontend/src/shared/timing/timing-defaults.json` |
 | DB 스키마 | 다음 번호(core V8 · realtime V5) · 제약 강화 시 `infra/migration-approvals.txt` |
 | 파일 추가 · 이동 | `backend/coverage-scope/*.txt` · `frontend/coverage-scope/*.json` · 유닛 시험 태그 |
+
+

@@ -1,3 +1,19 @@
+> 최신 정본: 아래 U10 갱신절(2026-10-17, HEAD eb34c68bf24e4520881b7ffebe1070564554dfc9). 이후 U14/U15/전체 분석 본문은 역사 자료이며, 이번에 검증한 범위는 timestamp의 analyzed 목록만이다.
+
+## U10 현재 API·계약
+
+- POST /internal/practice/scenarios: sessionId, goalSelectionId, kind(ORIGINAL/NEW_SCENARIO), previousScenarioId를 받는다. 내부 인증 체인이 보호한다. ScenarioInternalController는 현재 Scenario 레코드를 그대로 반환한다.
+- practice-scenario.schema.json은 기존8필드가 필수이고 additionalProperties=true다. scriptVersion/scenes/selfReview/generation은 아직 없다. 새필드는 선택으로 추가해야 한다.
+- ai-scenario-output.schema.json은 scenes 배열과 BASE/VARIANT를 이미 정의한다. partnerRole은 생성 출력에 없고 Core의 고정 문장을 쓴다.
+- ai-scenario-review-output.schema.json은 verdict(APPROVE/REJECT/UNCERTAIN), reasons enum을 정의한다. 최종 J7 목록은 지시서의 후속 확정 대상이다.
+- SavedGoalReader.find(childId, selectionId)는 활성 선택만 반환한다. CANDIDATE에는 고정 candidateVersion·targetExpression·fourElements·skillRef, LEGACY_BEHAVIOR에는 legacyBehaviorKey/version이 있다. PinnedSavedGoalReader는 소유·동의를 검사한다.
+- ChildKnowledgeService.skillContext(guardian, child, seedId)는 Optional<SkillContext(seed,graphVersion)>; variantPlan은 context·실제 노출을 받아 한축 변형 계획을 돌려준다.
+- 현재 ScenarioService의 공급자 UNAVAILABLE/TIMEOUT은 SERVICE_NOT_READY다. U10 최종 생성실패 SCENARIO_GEN_FAILED 요구와 기존 U5a 단언의 호환 해석은 Requirements/Design에서 명시해야 하며 이 스캔은 오류 의미를 바꾸지 않았다.
+
+U12 계약 PR이 먼저 있으면 재사용한다는 지시는 유지한다. 이번 브랜치의 스키마에는 해당 선택 필드가 없음을 확인했다. 원격 PR 재고 확인은 지휘자의 별도 증거이며 이 스캔은 동료에게 메시지를 보내지 않았다.
+
+---
+
 > 현재 범위의 정본은 바로 아래 U14 갱신절이다. 그 뒤 원문은 보존 이력이며 재검증 범위는 timestamp에 한정한다.
 
 ## U14 현재 API·계약 차이
@@ -109,3 +125,5 @@ ai-seed-output.schema.json은 skillName(1~80), invariantSentence(1~200), additio
 - Actuator: 관리 포트 9090(127.0.0.1), 헬스 · Prometheus 지표.
 - springdoc OpenAPI: dev · test 프로필에서만 켜짐.
 - 프런트 `/healthz` route.
+
+

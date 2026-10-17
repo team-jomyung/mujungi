@@ -1,3 +1,25 @@
+> 최신 정본: 아래 U10 갱신절(2026-10-17, HEAD eb34c68bf24e4520881b7ffebe1070564554dfc9). 이후 U14/U15/전체 분석 본문은 역사 자료이며, 이번에 검증한 범위는 timestamp의 analyzed 목록만이다.
+
+## U10 집중 갱신 — 확인된 회귀·위험
+
+이번 단계는 읽기·분석만 했으며 시험을 실행하지 않았다. 이전 U14/U15 통과 수치를 U10 기준시험으로 재사용하지 않는다.
+
+기존 ScenarioServiceTest(u5a)는 동일요청 재사용, 2회 내용 실패 미발급, 중복 대본 재생성, 소유/세션 검사, 삭제 중 늦은 쓰기, lease 만료, 요청 선점 경쟁, 실제 노출 정산을 검증한다. UNAVAILABLE/TIMEOUT→SERVICE_NOT_READY 단언도 있다. 다른 유닛 단언을 수정하지 않고 U10 실패 의미와 연결 방식을 명확히 해야 한다.
+
+| 위험 | 코드 근거·후속 확인 |
+|---|---|
+| 새 목표 시작 미연결 | PracticeStartService:90의 기존선택조회, FrozenGoal 필수 behaviorKey/version, ScenarioService:67 정의고정 |
+| 첫 대본 선택필드 유실 | PreparedPracticePackageMapper:28은 기존8필드 Map만 복사 |
+| 중첩 재시도/보정 부족 | TextAiGateway의 기술루프, CoreLunaClient:128~132, LunaCallBudget:17의 최대3 |
+| 그래프 전체예산 | ChildKnowledgeService:167의 skillContext 재조회; 순차2회가 최대4초 소모 가능 |
+| 자체검토만 신뢰할 위험 | 현재 ScenarioContentPolicy는 관계·기회·트리거 문자열 관계만 검사; 새 장면·변형 보존 판정은 추가해야 함 |
+| 관심사 정책 미확정 | LunaInputSanitizer 금지키와 LunaTextAiProvider 입력제외; Functional Design 사람 질문 |
+| 실호출 증거 부족 | fake 시험은 실제15초 성능 증명이 아님; live는 별도 승인·합성자료 확인 후 구분 |
+
+명명·안전한 예외/메타 분리는 양호, 서비스의 여러 책임·압축서식과 레거시/새 계약 분기는 보통 수준이다. 전면 리팩터링은 범위 밖이다. U10 태그·coverage-scope/u10.txt 및 최소80% 줄 검증은 아직 없다. 모듈/다른유닛 회귀·계약 대조·전체 검증·GitHub CI는 후속 단계에서 수행한다.
+
+---
+
 > 현재 범위의 정본은 바로 아래 U14 갱신절이다. 그 뒤 원문은 보존 이력이며 재검증 범위는 timestamp에 한정한다.
 
 ## U14 집중 갱신 — 확인 사실과 검증 계획
@@ -88,3 +110,5 @@
 ## 7. 종합
 
 시험 · CI · 계약 관리는 촘촘하다(시험 약 2천 개, 줄 80% 하한, 계약 시험, 불변식 검사). 약점은 (1) 외부 AI 운영 어댑터가 없고 음성 선 형식이 자체 정의라 실공급자 연결이 검증되지 않은 점, (2) 세션 실행기 집중과 압축 서식, (3) 시간 값 · 커버리지 범위 · 마이그레이션처럼 여러 곳을 함께 고쳐야 하는 규칙이다.
+
+
