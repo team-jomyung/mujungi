@@ -2,6 +2,9 @@ locals {
   ecr               = { for k, r in aws_ecr_repository.app : k => r.repository_url }
   jdbc_url          = "jdbc:postgresql://${aws_db_instance.main.address}:5432/${aws_db_instance.main.db_name}?sslmode=require"
   cloudfront_origin = "https://${aws_cloudfront_distribution.main.domain_name}"
+  # demo 전용: 접속 시 데이터 등급 표지 (RDS는 DB 단위 커스텀 설정 불가 → 세션 단위로 우회)
+  # ⚠️ 실제 아동 데이터 DB에는 절대 사용 금지
+  jdbc_url_demo = "${local.jdbc_url}&options=-c%20mujoong_db.data_class=synthetic"
 }
 
 # ──────────── web (Next.js) ────────────
@@ -190,6 +193,62 @@ resource "aws_ecs_service" "core_api" {
   name            = "mujoong-core-api"
   cluster         = aws_ecs_cluster.main.id
   task_definition = aws_ecs_task_definition.core_api.arn
+  desired_count   = 1
+  launch_type     = "EC2"
+
+  deployment_minimum_healthy_percent = 0
+  deployment_maximum_percent         = 100
+}
+
+# ──────────── realtime (Spring Boot) ────────────
+resource "aws_ecs_task_definition" "realtime" {
+  family                   = "mujoong-realtime"
+  network_mode             = "bridge"
+  requires_compatibilities = ["EC2"]
+  execution_role_arn       = aws_iam_role.ecs_execution.arn
+
+  container_definitions = jsonencode([{
+    name      = "realtime"
+    image     = "${local.ecr["realtime"]}:${local.backend_image_tag}"
+    essential = true
+    memory    = 1536
+
+    portMappings = [{
+      containerPort = 8081
+      hostPort      = 8081
+      protocol      = "tcp"
+    }]
+
+    environment = [
+      { name = "SPRING_PROFILES_ACTIVE", value = "demo" },
+      { name = "SPRING_DATASOURCE_URL", value = local.jdbc_url_demo },
+      { name = "SPRING_DATASOURCE_USERNAME", value = "realtime_app" },
+      { name = "MUJOONG_INTERNALHTTP_COREBASEURL", value = "http://172.17.0.1:8080" },
+      { name = "MUJOONG_SECURITY_ALLOWED_ORIGIN", value = local.cloudfront_origin }
+    ]
+
+    secrets = [
+      { name = "SPRING_DATASOURCE_PASSWORD", valueFrom = "${local.ssm_prefix}/db/DB_REALTIME_PASSWORD" },
+      { name = "INTERNAL_SERVICE_TOKEN", valueFrom = "${local.ssm_prefix}/app/INTERNAL_SERVICE_TOKEN" },
+      { name = "MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET", valueFrom = "${local.ssm_prefix}/app/MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET" },
+      { name = "PROVIDER_API_KEY", valueFrom = "${local.ssm_prefix}/app/PROVIDER_API_KEY" }
+    ]
+
+    logConfiguration = {
+      logDriver = "awslogs"
+      options = {
+        awslogs-group         = aws_cloudwatch_log_group.app["realtime"].name
+        awslogs-region        = "ap-northeast-2"
+        awslogs-stream-prefix = "realtime"
+      }
+    }
+  }])
+}
+
+resource "aws_ecs_service" "realtime" {
+  name            = "mujoong-realtime"
+  cluster         = aws_ecs_cluster.main.id
+  task_definition = aws_ecs_task_definition.realtime.arn
   desired_count   = 1
   launch_type     = "EC2"
 
