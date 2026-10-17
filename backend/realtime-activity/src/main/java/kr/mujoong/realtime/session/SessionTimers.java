@@ -49,7 +49,13 @@ public final class SessionTimers {
         /** U11 A3: 지시를 보낸 뒤 새 말이 시작하기를 기다리는 시한(response-ready, 지시 송신 시각부터). */
         INSTRUCTION_WAIT(false),
         /** U11 A7: 입력 전사 조각이 이만큼 오지 않으면 그 묶음을 확정 전사로 본다(input-transcript-quiet). */
-        INPUT_TRANSCRIPT_QUIET(true);
+        INPUT_TRANSCRIPT_QUIET(true),
+        /** U11 BR1.4: 판정 턴 열기 + live-budget(4s). 정확히 4.000초에 닿으면 보류(TIMEOUT). */
+        JUDGMENT_LIVE(false),
+        /** U11 BR4.1: 판정 대상 확정 전사 시각 + response-ready(10s). 판정 단계에만 걸고 지시 단계 진입 때 푼다. */
+        JUDGMENT_READY(false),
+        /** U11 BR4.5: 지시 단계 진입 + response-ready(10s). 지시 응답이 시작되면 끈다. */
+        JUDGMENT_INSTRUCTION(false);
 
         private final boolean quietClock;
 

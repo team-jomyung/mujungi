@@ -50,7 +50,9 @@ public final class StopIntentJudge {
         /** 세션 스냅숏의 종료 표현. */
         SNAPSHOT,
         /** 판정기의 명확한 종료 표현. */
-        CLEAR_PATTERN
+        CLEAR_PATTERN,
+        /** U11 W2: Luna 종료 판정(J6)의 END_CLEAR(세션 사건 payload의 근거 값). */
+        LUNA_J6
     }
 
     /** 판정과 근거(STOP이 아니면 근거 null). */

@@ -33,7 +33,7 @@ class LunaActivationTest {
 
     private ApplicationContextRunner runner(boolean key, Boolean switchValue) {
         RealtimeProperties realtime = mock(RealtimeProperties.class, RETURNS_DEEP_STUBS);
-        when(realtime.timing().judgment().liveBudget()).thenReturn(Duration.ofSeconds(2));
+        when(realtime.timing().judgment().liveBudget()).thenReturn(Duration.ofSeconds(4));
         ApplicationContextRunner runner = new ApplicationContextRunner()
                 .withUserConfiguration(LunaConfiguration.class)
                 .withBean(JsonCodec.class, JsonCodec::shared)

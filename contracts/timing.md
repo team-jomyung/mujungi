@@ -224,7 +224,7 @@ U8(계약 · 버전 리소스)이 더한 키다. 새 연습 흐름 키는 12절 
 
 | 키 | 기본값 | 소유 앱 | 뜻 | 근거 |
 |---|---|---|---|---|
-| `mujoong.timing.judgment.live-budget` | `2s` | realtime | 진행 중 판정(J1 ~ J6) Luna 호출 한 번의 상한. 넘기면 재시도 없이 판정 보류(U11) | FR3.4 |
+| `mujoong.timing.judgment.live-budget` | `4s` | realtime | 진행 중 판정(J1 ~ J6) Luna 호출 한 번의 상한. 판정 턴을 연 시각부터 정확히 4.000초에 닿으면 재시도 없이 판정 보류(U11, 2s → 4s: 사람 결정 2026-10-16, 편차 (U11-b)) | FR3.4 · U11-b |
 | `mujoong.timing.judgment.response-ready` | `10s` | realtime | 아이 말이 끝난 뒤 이 시간 안에 응답이 준비되지 않으면 보류 되묻기(`D_HOLD`, U11) | FR5.3 |
 | `mujoong.timing.guardrail.jev-budget` | `800ms` | realtime | 제브 가드레일 검사 한 번의 상한. 넘기면 막힘(자동 ALLOW 없음, U13) | FR6.2 |
 | `mujoong.timing.conversation.no-response-wait` | `10s` | realtime | 새 연습 흐름의 무응답 재안내 대기(U12) | AC1.9.1 |
@@ -239,4 +239,4 @@ U11(선 형식 정비)이 더한 키다. 공급자 실호출에는 응답 id도 
 | 키 | 기본값 | 소유 앱 | 뜻 | 근거 |
 |---|---|---|---|---|
 | `mujoong.timing.provider.input-transcript-quiet` | `1500ms` | realtime | 입력 전사 조각(`session.input_transcript.delta`)이 이만큼 오지 않으면 그 묶음을 확정 전사로 본다. 전사가 음성보다 0.2 ~ 2초 앞서 도착하고 모델이 말 끝 전에 반응하므로 아이의 쉼보다 길게 잡는다. 아이가 길게 쉬면 한 발화가 둘로 나뉠 수 있다 | A7 · U11-a |
-| `mujoong.timing.provider.new-speech-margin` | `600ms` | realtime | 지시 뒤 새 말의 전사 `start_ms`에 더하는 여유. 오디오 시계(출력 바이트 / 48 ms)가 (새 말 시작 + 이 값)에 닿는 첫 음성 조각부터 받는다. 전사 시간선과 오디오 시계의 어긋남(단계마다 0.2 ~ 0.4초 늘어남)을 덮는다. 낡은 꼬리가 새는 것보다 첫 낱말이 잘리는 쪽을 택한다 | A4 · U11-a |
+| `mujoong.timing.provider.new-speech-margin` | `700ms` | realtime | 지시 뒤 새 말의 전사 `start_ms`에 더하는 여유. 오디오 시계(출력 바이트 / 48 ms)가 (새 말 시작 + 이 값)에 닿는 첫 음성 조각부터 받는다. 전사 시간선과 오디오 시계의 어긋남(단계마다 0.2 ~ 0.4초 늘어남)을 덮는다. 낡은 꼬리가 새는 것보다 첫 낱말이 잘리는 쪽을 택한다 | A4 · U11-a |

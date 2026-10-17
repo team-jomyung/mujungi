@@ -57,7 +57,7 @@ export const TURN_SCRIPTS = Object.freeze({
   }),
 });
 
-/** 지시에 대한 새 말 앞에 두는 낡은 꼬리 흉내 음성의 길이(realtime new-speech-margin 600ms보다 길다). */
+/** 지시에 대한 새 말 앞에 두는 낡은 꼬리 흉내 음성의 길이(realtime new-speech-margin 700ms와 같다: 앱이 이 채움을 전부 버려야 C9 바이트가 맞는다). */
 export const FILLER_MS = 700;
 /** 지시 확인 end_ms = 지시를 받은 때의 오디오 시계 + 이 값(추정 끝). */
 export const ACK_LEAD_MS = 300;

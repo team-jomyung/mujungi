@@ -38,6 +38,30 @@ public final class InstructionTemplates {
         }
     }
 
+    /**
+     * 판정 턴이 보내는 다음 행동 지시 (U11 FR3.3 · FR4.2 · FR6.4 · BR3.5 · BR4.2). 고정 문장뿐이라 판정 라벨 · 확률 · 기준 · 아이 원문이 들어갈
+     * 자리가 없다(채울 값이 없고 {@link #content()}가 인자를 받지 않는다). 모두 맞장구로 시작해 범위를 닫는다.
+     */
+    public enum NextAction {
+        /** 판정 보류 뒤: 교정 없이 짧게 다시 말해 달라고 한다(BR4.2). */
+        HOLD_REASK(INTERJECTION_LEAD + " 방금 말을 잘 못 알아들었다고 가볍게 말하고, 한 번만 더 짧게 말해 달라고 다정하게 부탁한다. "),
+        /** 쉬고 싶다는 뜻을 받아 주고 곧 이어서 하자고 한다(BR6.4). */
+        REST_ACK_AND_RETURN(INTERJECTION_LEAD + " 쉬고 싶다는 마음을 받아 주고, 잠깐 숨을 고른 뒤 이어서 해 보자고 다정하게 말한다. "),
+        /** 쉬고 싶다는 뜻만 받아 주고 아이가 다시 말할 때까지 기다린다(BR6.4). */
+        REST_ACK_ONLY(INTERJECTION_LEAD + " 쉬고 싶다는 마음을 받아 주고, 편할 때 말해 달라고 다정하게 말한다. ");
+
+        private final String lead;
+
+        NextAction(String lead) {
+            this.lead = lead;
+        }
+
+        /** 공급자에 보낼 문장(범위를 닫는 문장 포함, 500자 이하). */
+        public String content() {
+            return scoped(lead);
+        }
+    }
+
     private InstructionTemplates() {
     }
 

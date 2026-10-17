@@ -14,6 +14,7 @@ import {
   StepTimeout,
   expectCookieAttributes,
   missingAttrs,
+  missingLatencyAttrs,
   LATENCY_TURN_KEYS,
 } from "../../skeleton-e2e/assertions.mjs";
 import {
@@ -611,5 +612,23 @@ describe("SQL 래퍼 · 기록 따라 읽기", () => {
     });
     expect(missingAttrs(latency, LATENCY_TURN_KEYS)).toHaveLength(LATENCY_TURN_KEYS.length - 1);
     expect(new StepTimeout("x", 5)).toBeInstanceOf(Error);
+  });
+
+  it("LATENCY_TURN: tTranscriptFinal은 말 끝 출처가 INPUT_TRANSCRIPT_FINAL일 때만 요구한다(U11 편차)", () => {
+    const base = Object.fromEntries(
+      LATENCY_TURN_KEYS.filter((key) => key !== "tTranscriptFinal").map((key) => [key, "v"]),
+    );
+    expect(missingLatencyAttrs({ attrs: { ...base, tSpeechEndSource: "LAST_INPUT_FRAME" } })).toEqual([]);
+    expect(missingLatencyAttrs({ attrs: { ...base, tSpeechEndSource: "INPUT_TRANSCRIPT_FINAL" } })).toEqual([
+      "tTranscriptFinal",
+    ]);
+    expect(
+      missingLatencyAttrs({
+        attrs: { ...base, tSpeechEndSource: "INPUT_TRANSCRIPT_FINAL", tTranscriptFinal: "v" },
+      }),
+    ).toEqual([]);
+    expect(missingLatencyAttrs({ attrs: { ...base, tSpeechEndSource: "LAST_INPUT_FRAME", tGatePass: null } })).toEqual([
+      "tGatePass",
+    ]);
   });
 });
