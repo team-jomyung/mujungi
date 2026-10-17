@@ -144,3 +144,11 @@ C9는 `tools/skeleton-e2e/steps.mjs:804`의 원 정확 바이트 단언에서336
 각 한정 명령은 이번 검증판에서1회씩 실행했다. 전체 tools는 A3의133건으로 충족해 중복 실행하지 않았다. 한정 실행의 XML/JaCoCo는 전체 모듈 커버리지 근거로 사용하지 않는다. P1 교차 스키마/CREATE 거절42501, P2 민감 값0, P3 추적/비무시 파일 비밀 값0, T 시작/끝 불변 모두 통과다. 로컬 gitleaks 이력 검사는 도구 미설치로 미실행이며 CI secrets가 담당한다.
 
 현재 남은 증거는 U10 push·PR의 필수 GitHub CI다. R-06의 준비 READY 마감 경계는 기존 미충족/위험 수용 그대로이고 실제 공급자15초·판단 품질은 미검증이다. 자동 명령 통과로 이 두 목표를 Met로 올리거나 완전한 배포 준비 상태라고 표시하지 않는다.
+
+## Push and PR CI
+
+브랜치 `unit/u10-scenario-generation`을 원본 저장소에서 push하고 [PR31](https://github.com/team-jomyung/mujungi/pull/31)을 생성했다. 기록 커밋 `41bc1289d8722fa52d3b1a23c0052e8de90e36f1`은 전체 검증 소스7125ee0에서 문서10파일만 추가한 판이다. backend/frontend/tools/infra/scripts/contracts/.github의 미커밋 소스 차이는0이고 검증된 제품 소스는 그대로다.
+
+[CI39040062848](https://github.com/team-jomyung/mujungi/actions/runs/39040062848)는 completed/success다. changes·secrets(전체 이력 gitleaks와 양성 대조 포함)·backend·frontend·tools·backend-deps·frontend-deps·u5b-scope·infra-validate·images·ci-gate가 모두 실제 실행 성공했다. skeleton과 deploy는 PR 정책으로 skipped이며 실행 성공으로 합산하지 않는다. skeleton은 위 로컬 전체 Compose 실행을 별도 근거로 쓴다. PR은 MERGEABLE이지만 main 병합·배포는 실행하지 않았다.
+
+이 CI 결과를 적는 후속 문서 커밋도 push하고 PR Checks에서 그 커밋의 최종 결과를 추가 확인한다. 문서에 자기 자신의 미래 커밋 해시나 미래 성공을 적지 않는다. R-05/R-06의 기존 수용은 유지하며 최초15초 목표 미충족·실호출 미검증 및 cross-unit-traceability의 입력 N/A 분류를 공개한다. 따라서 자동 명령과 CI 성공만으로 Build and Test의 모든 품질 목표 충족을 선언하지 않는다.
