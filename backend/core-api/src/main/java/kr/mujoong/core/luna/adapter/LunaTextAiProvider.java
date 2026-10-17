@@ -32,7 +32,7 @@ import org.springframework.core.io.ClassPathResource;
  * <p>입력에 아이 관심사({@code interests})는 넣지 않는다: Luna 호출부의 금지 키(BR2.1 — 기존 ResultTextGateway PRIVATE_KEYS)라 넣어도
  * 지워진다. 새 상황 스키마로 바꾸는 U10이 관심사 전달 여부를 다시 정한다.
  */
-public final class LunaTextAiProvider implements TextAiProvider {
+public final class LunaTextAiProvider implements TextAiProvider,kr.mujoong.core.textai.ScenarioScriptProvider {
 
     /** 상황 생성 지시 실행 자원. */
     public static final String INSTRUCTIONS = "prompts/scenario/generation.v1.txt";
@@ -43,6 +43,8 @@ public final class LunaTextAiProvider implements TextAiProvider {
     private final MujoongClock clock;
     private final JsonCodec json;
     private final String instructions;
+    private final String scriptInstructions;
+    private final String reviewInstructions;
 
     public LunaTextAiProvider(CoreLunaClient client, MujoongClock clock, JsonCodec json) {
         this.client = Objects.requireNonNull(client, "client");
@@ -50,8 +52,31 @@ public final class LunaTextAiProvider implements TextAiProvider {
         this.json = Objects.requireNonNull(json, "json");
         try {
             this.instructions = new ClassPathResource(INSTRUCTIONS).getContentAsString(StandardCharsets.UTF_8);
+            this.scriptInstructions = new ClassPathResource("prompts/scenario/generation.v2.txt").getContentAsString(StandardCharsets.UTF_8);
+            this.reviewInstructions = new ClassPathResource("prompts/scenario/review.v1.txt").getContentAsString(StandardCharsets.UTF_8);
         } catch (IOException e) {
             throw new IllegalStateException("상황 생성 지시 자원이 없다: " + INSTRUCTIONS, e);
+        }
+    }
+
+    @Override public Generated generate(Call request) {
+        var result=structured(request,LunaPurpose.SCENARIO_GENERATION,"scenario-generation.v2",scriptInstructions);
+        try { return new Generated(json.read(result.outputJson(),kr.mujoong.core.textai.ScenarioScript.class),result.responseModel()); }
+        catch(RuntimeException invalid){throw new Failure(Failure.Kind.CONTENT,java.util.Optional.empty());}
+    }
+    @Override public Reviewed review(Call request) {
+        var result=structured(request,LunaPurpose.SCENARIO_REVIEW,"scenario-review.v1",reviewInstructions);
+        try { return new Reviewed(json.read(result.outputJson(),kr.mujoong.core.textai.ScenarioReview.class),result.responseModel()); }
+        catch(RuntimeException invalid){throw new Failure(Failure.Kind.CONTENT,java.util.Optional.empty());}
+    }
+    private LunaResult structured(Call request,LunaPurpose purpose,String version,String resource) {
+        try {return client.call(new LunaRequest(purpose,version,resource,request.input(),request.aliases(),request.deadline(),LunaRequest.OutputMode.CONTRACT_SINGLE_CALL));}
+        catch(LunaException failure) {
+            var kind=failure.isTransient()?Failure.Kind.TRANSIENT:switch(failure.reason()) {
+                case LENGTH_EXCEEDED,REFUSED,SCHEMA_INVALID,MODEL_MISSING -> Failure.Kind.CONTENT;
+                default -> Failure.Kind.PERMANENT;
+            };
+            throw new Failure(kind,failure.retryAfter());
         }
     }
 

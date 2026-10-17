@@ -18,12 +18,12 @@
 - [x] Step 4 — 모델/스키마를 구현한 뒤 U10ScenarioContractTest·U10ScenarioMigrationIT를 작성·실행한다. V9 fixture 보존, 구버전 INSERT, V10 선택 필드 null 및 새 모양을 검증한다. 기존 계약 대조는 고치지 않는다. (FR3.3,NFR2)
 - [x] Step 5 — ScenarioRepository에 확장 필드 왕복과 recentExposed 권한·EXPOSED·시각·정렬·최근3건·문자 상한을 구현한다. 읽기 오류를 빈 이력으로 바꾸지 않는다. timeout은 전용 읽기 트랜잭션과 최초 잔여 마감을 사용한다. (BR1.3,BR2.2,BR3.3)
 - [x] Step 6 — 저장소 구현 뒤 U10ScenarioRepositoryIT를 작성·실행한다. 과거/새 행 재조회, 지정 원본과 실제 노출 분리, 교차 아이·ISSUED 제외, 정렬·제한·빈 값/오류·삭제·경합을 시험한다. (FR1.3,FR2.3,FR3.3)
-- [ ] Step 7 — 이 층 검증 후 첫 커밋 feat(u10): 대본 저장 형식과 선택 계약 확장. 해당 소스·계약·시험과 자기 기록만 명시적으로 스테이지하고 mode change를 확인한다. push는 전체 검증 뒤다.
-- [ ] Step 8 — core.textai의 구조화 생성/검토 단일 호출 경계, CoreLunaClient의 스키마 강제 단일 호출 모드, LunaTextAiProvider 연결을 구현한다. 기존 CONTRACT/LEGACY 동작과 다른 유닛 LunaCallBudget3은 유지한다. (FR1.1,BR8.1)
-- [ ] Step 9 — Luna 단일 호출을 구현한 뒤 U10ScenarioLunaProviderTest·U10LunaSingleCallTest를 작성·실행한다. 별도 목적/스키마/프롬프트, 유효 APPROVE만 허용, 기존 경로 회귀, 오류별 내부 재시도0을 검증한다. (FR1.1,FR1.2,NFR4)
-- [ ] Step 10 — ScenarioScriptGenerator와 독립 서버 검사를 구현한다. 생성→별도 검토→검사→내용수정1→재검토, 기술재시도 전체1, BASE-only 검토1, 총 최대6이되 최초15초 잔여만 사용한다. 정각/늦은 결과/취소를 저장하지 않는다. (FR1,FR2,FR6,NFR1)
-- [ ] Step 11 — 생성/검사 구현 뒤 U10ScenarioGenerationTest·U10ScenarioValidationTest·U10ScenarioDeadlineTest를 작성·실행한다. 정상·REJECT·UNCERTAIN·누락·스키마·APPROVE+서버거절·두 번 실패·중복·반려 대본 발급0·기술재시도·대기·취소를 검증한다. (BR1,BR2,BR6.2,BR8.1)
-- [ ] Step 12 — 해당 층 통과 후 두 번째 커밋 feat(u10): 생성과 별도 검토 및 발급 검사 구현.
+- [x] Step 7 — 이 층 검증 후 첫 커밋 feat(u10): 대본 저장 형식과 선택 계약 확장. 해당 소스·계약·시험과 자기 기록만 명시적으로 스테이지하고 mode change를 확인한다. push는 전체 검증 뒤다.
+- [x] Step 8 — core.textai의 구조화 생성/검토 단일 호출 경계, CoreLunaClient의 스키마 강제 단일 호출 모드, LunaTextAiProvider 연결을 구현한다. 기존 CONTRACT/LEGACY 동작과 다른 유닛 LunaCallBudget3은 유지한다. (FR1.1,BR8.1)
+- [x] Step 9 — Luna 단일 호출을 구현한 뒤 U10ScenarioLunaProviderTest·U10LunaSingleCallTest를 작성·실행한다. 별도 목적/스키마/프롬프트, 유효 APPROVE만 허용, 기존 경로 회귀, 오류별 내부 재시도0을 검증한다. (FR1.1,FR1.2,NFR4)
+- [x] Step 10 — ScenarioScriptGenerator와 독립 서버 검사를 구현한다. 생성→별도 검토→검사→내용수정1→재검토, 기술재시도 전체1, BASE-only 검토1, 총 최대6이되 최초15초 잔여만 사용한다. 정각/늦은 결과/취소를 저장하지 않는다. (FR1,FR2,FR6,NFR1)
+- [x] Step 11 — 생성/검사 구현 뒤 U10ScenarioGenerationTest·U10ScenarioValidationTest·U10ScenarioDeadlineTest를 작성·실행한다. 정상·REJECT·UNCERTAIN·누락·스키마·APPROVE+서버거절·두 번 실패·중복·반려 대본 발급0·기술재시도·대기·취소를 검증한다. (BR1,BR2,BR6.2,BR8.1)
+- [x] Step 12 — 해당 층 통과 후 두 번째 커밋 feat(u10): 생성과 별도 검토 및 발급 검사 구현.
 - [ ] Step 13 — 목적별 관심사 허용 정리와 ScenarioPrivacyContextPort 운영 어댑터를 구현한다. ChildProfileService 소유 경계에서 이름을 얻어 생성·검토 모두에 비공개 별칭으로 적용한다. 조회 실패·소유 불일치·유효 이름 없음은 공급자 미호출이다. 다른 AI 목적의 interests 금지 유지, 원래 이름은 저장/로그/기본 출력 금지다. (FR7,설계 R-01)
 - [ ] Step 14 — 개인정보 경계 구현 뒤 U10ScenarioPrivacyTest·U10ScenarioPrivacyIT를 작성·실행한다. 관심사·목표·이력·지정 원본·검토 생성물 속 이름/연락처, 비공개·비로그·오류/다른 아이·다른 목적 금지 시험을 수행한다. (BR7,NFR6)
 - [ ] Step 15 — SavedGoalReader 기준으로 기존 행동/후보 typed 고정 맥락을 FrozenGoal·WeightedGoalOrder·GoalSnapshot 및 시작 준비에 연결한다. 후보는 candidate:<candidateRef> 운반 이름 공간과 별도 kind/version/context이며 임의 행동 매핑·카탈로그 행 추가가 없다. 과거 JSON/생성자는 기존 행동 기본값이다. (FR4)

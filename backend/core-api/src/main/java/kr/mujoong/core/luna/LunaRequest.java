@@ -27,6 +27,8 @@ public record LunaRequest(LunaPurpose purpose, String promptVersion, String inst
     public enum OutputMode {
         /** 목적의 출력 스키마(있으면 json_schema, 없으면 json_object)와 목적의 재시도 분류를 쓴다. */
         CONTRACT,
+        /** U10: 계약 스키마 검증은 유지하되 재시도는 바깥 요청 예산만 소유한다. */
+        CONTRACT_SINGLE_CALL,
         /** 기존 인터페이스 어댑터: json_object 1회, 재시도 없음(BR3.4 · BR4.2). */
         LEGACY_JSON_OBJECT
     }
