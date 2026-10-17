@@ -95,6 +95,21 @@ public final class SessionHarness {
     public kr.mujoong.realtime.session.JudgmentSupport judgment = kr.mujoong.realtime.session.JudgmentSupport.NONE;
     /** U11: {@link #useJudge()} 뒤의 시험용 판정기. */
     public FakeJudgeClient judge;
+    /** U13: 제브 기록기(메모리 저장소 {@link MemoryStore#guardrails}에 쓴다). */
+    public final kr.mujoong.realtime.guardrail.GuardrailEventRecorder guardrailRecorder =
+            new kr.mujoong.realtime.guardrail.GuardrailEventRecorder(store, TaskLauncher.inline(), events);
+    /** U13: 제브 장치(create 전에 {@link #useGuardrail()}로 바꾼다). 기본은 검사 없음(DISABLED) — 제브 단계를 건너뛴다. */
+    public kr.mujoong.realtime.guardrail.GuardrailSupport guardrail = kr.mujoong.realtime.guardrail.GuardrailSupport.DISABLED;
+    /** U13: {@link #useGuardrail()} 뒤의 시험용 제브 대역(손으로 푸는 약속). */
+    public FakeGuardrailClient guard;
+
+    /** 시험용 제브 대역을 쓴다(create 전에 부른다): 실제 모드(REAL 표시), 기록은 {@link MemoryStore#guardrails}로 간다. 대역일 뿐 실제 제브가 아니다. */
+    public FakeGuardrailClient useGuardrail() {
+        guard = new FakeGuardrailClient();
+        guardrail = new kr.mujoong.realtime.guardrail.GuardrailSupport(kr.mujoong.realtime.guardrail.GuardrailMode.REAL, guard,
+                guardrailRecorder, Duration.ofMillis(800), FakeGuardrailClient.POLICY);
+        return guard;
+    }
 
     /** 시험용 판정기를 쓴다(create 전에 부른다): 공급자 있음, 기록은 {@link MemoryStore#judgments}로 간다. */
     public FakeJudgeClient useJudge() {
@@ -124,7 +139,7 @@ public final class SessionHarness {
                 new ProviderConnector(provider, new ProviderRequestFactory(), Duration.ofSeconds(10), launcher, "test"),
                 new ProviderRequestFactory(), new OutputGate(SeedDictionary.loadDefault()), recorder, latency,
                 new TimerClocks(safety, quiet), launcher, events, metrics, clock, settings, gaps, recordings, settlement,
-                practice, judgment);
+                practice, judgment, guardrail);
         List<StartSession.ApprovedAudio> audio = new ArrayList<>(List.of(
                 new StartSession.ApprovedAudio("CLOSING", closingVersion, "/media/approved/closing.wav"),
                 new StartSession.ApprovedAudio("WAITING_FILLER", fillerVersion, "/media/approved/filler.wav")));
@@ -283,7 +298,8 @@ public final class SessionHarness {
     }
 
     /** 메모리 기록기 저장소. */
-    public static final class MemoryStore implements AsyncRecorder.Store, kr.mujoong.realtime.judgment.JudgmentLiveRecorder.Store {
+    public static final class MemoryStore implements AsyncRecorder.Store, kr.mujoong.realtime.judgment.JudgmentLiveRecorder.Store,
+            kr.mujoong.realtime.guardrail.GuardrailEventRecorder.Store {
 
         public final List<TranscriptEntry> transcripts = new ArrayList<>();
         public final List<SessionEvent> sessionEvents = new ArrayList<>();
@@ -292,6 +308,8 @@ public final class SessionHarness {
         public int writes;
         /** U11: 판정 기록(id = turnId, 같은 id는 덮어쓴다). */
         public final List<kr.mujoong.realtime.judgment.JudgmentLiveRecord> judgments = new ArrayList<>();
+        /** U13: 제브 검사 기록(id = 검사 요청 id, 같은 id는 덮어쓴다). */
+        public final List<kr.mujoong.realtime.guardrail.GuardrailEventRecord> guardrails = new ArrayList<>();
 
         @Override
         public synchronized void write(UUID sessionId, List<TranscriptEntry> rows, List<SessionEvent> events) {
@@ -321,6 +339,12 @@ public final class SessionHarness {
             }
             judgments.removeIf(old -> old.id().equals(record.id()));
             judgments.add(record);
+        }
+
+        @Override
+        public synchronized void write(kr.mujoong.realtime.guardrail.GuardrailEventRecord record) {
+            guardrails.removeIf(old -> old.id().equals(record.id()));
+            guardrails.add(record);
         }
 
         @Override
