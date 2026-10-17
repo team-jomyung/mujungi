@@ -168,7 +168,8 @@ resource "aws_ecs_task_definition" "core_api" {
       { name = "SPRING_DATASOURCE_URL", value = local.jdbc_url },
       { name = "SPRING_DATASOURCE_USERNAME", value = "core_app" },
       { name = "MUJOONG_SECURITY_ALLOWED_ORIGIN", value = local.cloudfront_origin },
-      { name = "MUJOONG_INTERNALHTTP_REALTIMEBASEURL", value = "http://172.17.0.1:8081" }
+      { name = "MUJOONG_INTERNALHTTP_REALTIMEBASEURL", value = "http://172.17.0.1:8081" },
+      { name = "SERVER_TOMCAT_REMOTEIP_INTERNALPROXIES", value = "^172\\.17\\.0\\.1$" }
     ]
 
     # 비밀값 — SSM에서 실행 순간 주입
@@ -224,7 +225,8 @@ resource "aws_ecs_task_definition" "realtime" {
       { name = "SPRING_DATASOURCE_URL", value = local.jdbc_url_demo },
       { name = "SPRING_DATASOURCE_USERNAME", value = "realtime_app" },
       { name = "MUJOONG_INTERNALHTTP_COREBASEURL", value = "http://172.17.0.1:8080" },
-      { name = "MUJOONG_SECURITY_ALLOWED_ORIGIN", value = local.cloudfront_origin }
+      { name = "MUJOONG_SECURITY_ALLOWED_ORIGIN", value = local.cloudfront_origin },
+      { name = "SERVER_TOMCAT_REMOTEIP_INTERNALPROXIES", value = "^172\\.17\\.0\\.1$" }
     ]
 
     secrets = [
