@@ -176,7 +176,7 @@ describe("정상 연결 · 턴(실호출 관측 선 형식)", () => {
     expect(text).not.toContain(client.bearer);
   });
 
-  it("입력 프레임 묶음마다 아이 전사 → 말 끝 → 확정 → AI 전사 · 출력 음성 순서로 보내고 응답 끝 사건은 없다", async () => {
+  it("입력 프레임 묶음마다 아이 전사 조각 → AI 전사 · 출력 음성 순서로 보내고 입력 전사 완료 · 말 끝 · 응답 끝 사건은 없다", async () => {
     const provider = await start({ turns: ["normal"] });
     const client = connect(provider);
     await client.opened;
@@ -193,11 +193,16 @@ describe("정상 연결 · 턴(실호출 관측 선 형식)", () => {
       "session.started",
       "session.input_transcript.delta",
       "session.input_transcript.delta",
-      "session.input_audio.speech_stopped",
-      "session.input_transcript.done",
       "session.output_transcript.delta",
       "session.output_transcript.delta",
     ]);
+    // 완료 · 말 끝 · 응답 끝 사건은 어디에도 없다(서버가 입력 전사 조각을 묶어 아이 말의 끝을 정한다, 설계 개정 A7)
+    expect(client.messages.some((m) => m.type === "session.input_transcript.done")).toBe(false);
+    expect(client.messages.some((m) => m.type === "session.input_audio.speech_stopped")).toBe(false);
+    // 전사 조각은 start_ms · end_ms · delta · event_id를 싣고 출력 전사가 음성보다 앞서 도착한다
+    for (const m of client.messages.filter((x) => x.type.endsWith("_transcript.delta"))) {
+      expect(Object.keys(m).sort()).toEqual(["delta", "end_ms", "event_id", "start_ms", "type"]);
+    }
     // 응답 id도 응답 끝 사건도 없다: 응답 경계는 마지막 조각 뒤의 무음이다
     expect(client.messages.some((m) => "responseId" in m)).toBe(false);
     expect(client.messages.some((m) => m.type === "session.output.done")).toBe(false);
@@ -207,9 +212,6 @@ describe("정상 연결 · 턴(실호출 관측 선 형식)", () => {
       .filter((m) => m.type === "session.input_transcript.delta")
       .map((m) => m.delta);
     expect(childDeltas.join("")).toBe(script.childText);
-    expect(client.messages.find((m) => m.type === "session.input_transcript.done").transcript).toBe(
-      script.childText,
-    );
     const aiDeltas = client.messages
       .filter((m) => m.type === "session.output_transcript.delta")
       .map((m) => m.delta);

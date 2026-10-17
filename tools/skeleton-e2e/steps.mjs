@@ -618,8 +618,9 @@ async function stepActive(ctx) {
 
 /**
  * U4b 참여 확인(FR2.1 · BR2.1 · U4b-J3): DEVICE_READY 뒤 WAITING_CHILD에서 시작 안내(INTRO_FREE_TALK, 시드 003의 승인 문구)를 재생하고, 재생
- * 완료 뒤 참여 창에서 아이가 "응"이라고 답하면 ACTIVE가 되고 Realtime이 response.create를 한 번 보낸다. 가짜 공급자 턴 계획의 첫
- * 턴은 join이다(--turns join,normal,forbidden).
+ * 완료 뒤 참여 창에서 아이가 "응"이라고 답하면 ACTIVE가 되고 Realtime이 첫 응답 지시(session.instructions.append)를 한 번 보낸다 —
+ * 응답 요청 type(response.create)은 없다(설계 개정 A1). 지시는 delegation_id를 null로 싣는다(키가 있어야 한다). 가짜 공급자 턴 계획의 첫
+ * 턴은 join이다(--turns join,normal,forbidden). 아이 "응"은 입력 전사 조각뿐이고 서버가 조용해진 뒤 확정한다(설계 개정 A7).
  */
 async function stepJoin(ctx) {
   const { deadlines } = ctx;
@@ -678,16 +679,24 @@ async function stepJoin(ctx) {
     turn.childTextSha256 === textSha256(TURN_SCRIPTS.join.childText) && turn.aiTextSha256 === null,
     "참여 응답 턴: 가짜 공급자 문장이 scenarios.mjs와 다르다(같은 판의 tools를 써야 한다)",
   );
-  await bounded(
+  const append = await bounded(
     ctx,
     ctx.provider.waitFor(
-      (e) => e.ev === "response.create" && e.conn === ctx.state.providerConn,
+      (e) => e.ev === "session.instructions.append" && e.conn === ctx.state.providerConn,
       {
         timeoutMs: ctx.limit(deadlines.turn),
-        what: "참여 확인 뒤 response.create 수신",
+        what: "참여 확인 뒤 첫 응답 지시(session.instructions.append) 수신",
         from: ctx.state.providerMark,
       },
     ),
+  );
+  check(
+    append.delegationIdPresent === true && append.delegationIdNull === true,
+    "첫 응답 지시: delegation_id 키가 null로 실려 있어야 한다(공급자는 키가 없으면 거절한다)",
+  );
+  check(
+    !ctx.provider.entries.some((e) => e.ev === "response.create" && e.conn === ctx.state.providerConn),
+    "응답 요청 type(response.create)은 보내지 않는다(client 위임 세션은 거절한다)",
   );
 }
 

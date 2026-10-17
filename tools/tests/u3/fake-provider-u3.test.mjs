@@ -96,40 +96,27 @@ describe("가짜 공급자 — 응답 취소는 지원 목록 밖(U11 편차 (U1
   });
 });
 
-describe("가짜 공급자 — 지시 교정 · 신뢰도(U3-J12 · U3-J17)", () => {
-  it("교정 문장은 해시 · 길이만 남기고 원문은 기록하지 않는다", async () => {
+describe("가짜 공급자 — 지시 교정(U3-J12, 설계 개정 A1 · A6)", () => {
+  it("교정 지시는 해시 · 길이만 남기고 원문은 기록하지 않는다", async () => {
     const records = [];
     const provider = await start({ onRecord: (entry) => records.push(JSON.stringify(entry)) });
     const client = await startedSession(provider);
     const text = "방금 응답은 아이에게 전하지 않았다. 한두 문장의 완결된 말로 짧게 다시 답한다.";
-    client.ws.send(JSON.stringify({ type: "session.instructions.append", text }));
+    client.ws.send(JSON.stringify({ type: "session.instructions.append", event_id: "e1", delegation_id: null, content: text }));
     await waitUntil(() => provider.records.some((entry) => entry.ev === "session.instructions.append"));
     expect(provider.records.find((entry) => entry.ev === "session.instructions.append")).toMatchObject({
       textSha256: textSha256(text),
       textLength: text.length,
+      delegationIdPresent: true,
+      delegationIdNull: true,
     });
     expect(records.join("\n")).not.toContain("완결된 말");
   });
 
-  it("--confidence를 주면 아이 전사 확정에 싣고, 주지 않으면 싣지 않는다", async () => {
-    const provider = await start({ turns: ["normal"], confidence: 0.4 });
-    const client = await startedSession(provider);
-    sendFrames(client.ws, 3);
-    await waitUntil(() => client.messages.some((message) => message.type === "session.input_transcript.done"));
-    expect(client.messages.find((message) => message.type === "session.input_transcript.done").confidence).toBe(0.4);
-
+  it("전사 신뢰도 인자는 없다 — 공급자는 입력 전사 완료 사건도 신뢰도도 보내지 않는다", async () => {
+    expect(() => parseArgs(["--confidence", "0.4"])).toThrow(RangeError);
     const plain = buildTurn({ connection: 1, turn: 1, kind: "normal" });
-    const done = plain.steps.find((step) => step.message.type === "session.input_transcript.done").message;
-    expect("confidence" in done).toBe(false);
-  });
-
-  it("신뢰도 인자는 0 ~ 1만 받는다", async () => {
-    expect(parseArgs(["--confidence", "0.4"]).confidence).toBe(0.4);
-    expect(parseArgs(["--confidence", "1"]).confidence).toBe(1);
-    expect(parseArgs(["--confidence", "0"]).confidence).toBe(0);
-    for (const wrong of ["1.5", "-0.1", "abc", ".5"]) {
-      expect(() => parseArgs(["--confidence", wrong]), wrong).toThrow(RangeError);
-    }
-    await expect(startFakeProvider({ port: 0, confidence: 2, onRecord: () => {} })).rejects.toThrow(RangeError);
+    expect(plain.steps.some((step) => step.message.type === "session.input_transcript.done")).toBe(false);
+    expect(plain.steps.some((step) => "confidence" in step.message)).toBe(false);
   });
 });
