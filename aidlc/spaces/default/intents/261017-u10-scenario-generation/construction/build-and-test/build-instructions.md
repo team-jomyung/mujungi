@@ -2,7 +2,7 @@
 
 ## Sources
 
-승인된 code-generation의 계획·시험 지침·코드 요약과 Testing Contract를 따른다. 기준 제품 커밋은 `1e4db60d449153dd9848f527e0d31d5f3590912c`다. 제품 소스는 이 단계에서 바꾸지 않는다. 사용자는 R-05(RT 검증 위험)와 R-06(별도 준비 READY 마감 누락)을 위험으로 수용하고 다음 검증으로 진행하도록 승인했다. 이 승인은 시험 결과를 합격으로 바꾸지 않는다.
+승인된 code-generation의 계획·시험 지침·코드 요약과 Testing Contract를 따른다. 최초 제품 커밋은 `1e4db60`이며 새 main의 U11을 합친 검증 커밋은 `6cd526fe4279aebb4d5eff6a9b1703a4c8f2c54f`다. U10 운영 구현은 유지했다. 사용자는 R-05(RT 검증 위험)와 R-06(별도 준비 READY 마감 누락)을 위험으로 수용하고 다음 검증으로 진행하도록 승인했다. 이 승인은 시험 결과를 합격으로 바꾸지 않는다.
 
 ## Prerequisites
 
@@ -15,10 +15,12 @@ WSL Ubuntu, JDK 21, Node 22, Docker/Compose, Git, GNU date, shellcheck를 사용
 저장소 루트에서 아래 전체 명령을 한 번 실행한다. Node 22 경로를 PATH 앞에 두며 Gradle 동시 작업 수만 제한한다. 시험 시한·단언·커버리지·검증 단계는 바꾸지 않는다.
 
 ```sh
-GRADLE_OPTS='-Dorg.gradle.parallel=false -Dorg.gradle.workers.max=1' bash scripts/verify.sh --mode compose
+GRADLE_OPTS='-Dorg.gradle.parallel=false -Dorg.gradle.workers.max=1 -Dorg.gradle.jvmargs=-Xmx768m' bash scripts/verify.sh --mode compose
 ```
 
 전체 명령은 backend clean check와 운영 JAR 시험 클래스 검사, frontend 설치·lint·전체 커버리지·빌드, tools 전체 시험, 비밀 검사, 이미지 빌드, Compose 기동·마이그레이션·시드·프로필 검사, 기기 대역 한 턴 및 P1/P2/P3/T 단언을 수행한다. 생성 결과는 검증 사본의 `build/verify/report.txt`와 `build/verify/logs/`다. 모든 필수 단계와 최종 RESULT가 PASS이고 종료 코드가 0이어야 이 명령의 성공이다.
+
+검증 호스트에서는 Node22 경로를 앞에 두고 MUJOONG_VERIFY_EDGE_PREFIX=172.30.210, MUJOONG_VERIFY_BACKEND_PREFIX=172.30.220으로 별도 네트워크를 지정했다. Windows→WSL의 PATH 공백 인자 문제를 피하려면 환경 변수를 wsl의 env 인자로 전달하거나 Ubuntu 안에서 위 명령을 실행한다. 768MiB는 검증용 Gradle JVM 상한이며 운영 앱·시험의 시한·단언을 바꾸지 않는다.
 
 ## Verification and troubleshooting
 

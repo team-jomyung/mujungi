@@ -6,7 +6,7 @@
 
 ## Readiness
 
-실행 준비 중이다. 제품 기준은 `1e4db60d449153dd9848f527e0d31d5f3590912c`, 새 사본 `/home/pdypd/mujungi-u10-final-verify`다. 배포·U10 main 병합·U12 실제 소비·실기기는 범위 밖이다. 실행이 끝나기 전 성공으로 보고하지 않는다.
+최종 검증 커밋은 main U11을 합친 `6cd526f`, 사본은 `/home/pdypd/mujungi-u10-final-verify`다. 전체 명령은758초에 FAIL: backend3416건과 frontend994건은 통과했으나 U11 tools 시험1건이 실패했다. 빌드 산출물은 생성됐지만 전체 검증/배포 준비 완료 판정은 하지 않는다. push·PR·CI는 이 새 실패의 처리 판단 뒤 진행한다. U10 main 병합·배포·U12 실제 소비·실기기는 범위 밖이다.
 
 ## Test inventory
 
@@ -16,21 +16,21 @@
 
 | Target ID | Source | Expected | Actual | Evidence | Owning Stage | Verdict |
 |---|---|---|---|---|---|---|
-| T-BUILD | Testing Contract / 빌드, NFR2 | JAR·frontend 빌드 및 전체 명령 성공 | Pending | Pending | Build and Test | Pending |
-| T-REGRESSION | NFR2 / 기존 전체 회귀 | 기존 단위·통합·계약·ArchUnit 성공, 원 단언 유지 | Pending | Pending | Build and Test | Pending |
-| T-U10 | Testing Contract / Standard | u10 시험 0건 아님, 핵심 경계와 실패 대조 성공 | Pending | Pending | Build and Test | Pending |
-| T-MODULE-COV | team Testing Posture | Core·RT·계약·frontend 모듈 줄80% 이상 | Pending | Pending | Build and Test | Pending |
-| T-U10-COV | NFR2 | 실제 운영27파일 범위 줄80%, 누락/빈 범위 실패 | Pending | Pending | Build and Test | Pending |
-| T-DEADLINE | NFR1, FR2.3 | 최초15초 마감을 첫 전달까지 유지, 늦은 성공0 | Pending | Pending | Build and Test | Pending |
-| T-GRAPH-BUDGET | FR5.2, NFR1 | 그래프 합계2초·장애 기본 경로·진실한 graphContextUsed | Pending | Pending | Build and Test | Pending |
-| T-RETRY | NFR1, FR2.2 | 기술1·내용1·최대6호출을 최초 잔여 안에서만 수행 | Pending | Pending | Build and Test | Pending |
-| T-COMPAT | FR3·FR4, NFR4 | V10 더하기만·과거 자료/쓰기·기존 C8/C10 필수 값 유지 | Pending | Pending | Build and Test | Pending |
-| T-PRIVACY | FR7, NFR3·NFR6 | 공급자 최소 입력·권한/동의/삭제 재확인·민감 로그0 | Pending | Pending | Build and Test | Pending |
-| T-E2E | team Walking Skeleton | 전체 verify.sh의 A/B/C/P1/P2/P3/T 성공 | Pending | Pending | Build and Test | Pending |
-| T-INFRA | R-M2~5, team Testing Posture | Compose·마이그레이션·프로필·이미지/관문 검사 성공 | Pending | Pending | Build and Test | Pending |
-| T-CI | 지시서 / 완료 조건, R-M1 | 최종 PR 커밋의 필수 ci-gate 성공 | Pending | Pending | Build and Test | Pending |
-| T-EVIDENCE | NFR5 | 자동 대역/실호출/실기기 증거를 분리, 미측정 공개 | Pending | Pending | Build and Test | Pending |
-| T-LIVE-LATENCY | 원 FR2.5, 지시서 실호출 관측 | 준비 확인 후 합성 실호출15초 관측 | Pending | Pending | 별도 준비 확인 필요 / 예정된 후속 검증 단계 없음 | Pending |
+| T-BUILD | Testing Contract / 빌드, NFR2 | JAR·frontend 빌드 및 전체 명령 성공 | JAR/Next 빌드 PASS, 전체 A3 실패 | test-results.md / report.txt | Build and Test | Not Met |
+| T-REGRESSION | NFR2 / 기존 전체 회귀 | 기존 단위·통합·계약·ArchUnit 성공, 원 단언 유지 | backend3416·frontend994 PASS, tools130/131 | A1/A2/A3.log | Build and Test | Not Met |
+| T-U10 | Testing Contract / Standard | u10 시험 0건 아님, 핵심 경계와 실패 대조 성공 | 22클래스160건, 실패/오류/skip0 | JUnit XML 및 test-results.md | Build and Test | Met |
+| T-MODULE-COV | team Testing Posture | Core·RT·계약·frontend 모듈 줄80% 이상 | 96.1781/93.4167/98.4526/98.55% | JaCoCo XML / frontend coverage | Build and Test | Met |
+| T-U10-COV | NFR2 | 실제 운영27파일 범위 줄80%, 누락/빈 범위 실패 | 1372/1418줄=96.7560%, 누락0 | coverage-scope/u10.txt / JaCoCo | Build and Test | Met |
+| T-DEADLINE | NFR1, FR2.3 | 최초15초 마감을 첫 전달까지 유지, 늦은 성공0 | 별도 준비 READY 경계 R-06 미수리, 기존 위험 수용 | review-02.md / test-results.md | Build and Test | Not Met |
+| T-GRAPH-BUDGET | FR5.2, NFR1 | 그래프 합계2초·장애 기본 경로·진실한 graphContextUsed | 관련 U10 자동 대조 통과 | U10Deadline/Graph/PlannedGeneration 시험 | Build and Test | Met |
+| T-RETRY | NFR1, FR2.2 | 기술1·내용1·최대6호출을 최초 잔여 안에서만 수행 | 관련 생성·복구 대조 통과 | U10 시험 XML | Build and Test | Met |
+| T-COMPAT | FR3·FR4, NFR4 | V10 더하기만·과거 자료/쓰기·기존 C8/C10 필수 값 유지 | PG/계약/첫 패키지 대조 통과 | U10Repository/Preparation/PlannedGeneration XML | Build and Test | Met |
+| T-PRIVACY | FR7, NFR3·NFR6 | 공급자 최소 입력·권한/동의/삭제 재확인·민감 로그0 | U10 대조 및 A4 PASS, 스택 P2/P3 미실행 | U10 XML / A4 출력 / test-results.md | Build and Test | Unverified |
+| T-E2E | team Walking Skeleton | 전체 verify.sh의 A/B/C/P1/P2/P3/T 성공 | A3 실패로 B/C/사후 단언 미실행 | report.txt RESULT FAIL | Build and Test | Unverified |
+| T-INFRA | R-M2~5, team Testing Posture | Compose·마이그레이션·프로필·이미지/관문 검사 성공 | 정적8건·음성대조46건 PASS, 이미지/CI 미실행 | infra-validate / test-infra-validate 출력 | Build and Test | Unverified |
+| T-CI | 지시서 / 완료 조건, R-M1 | 최종 PR 커밋의 필수 ci-gate 성공 | push/PR 전 수리 판단 대기 | test-results.md | Build and Test | Unverified |
+| T-EVIDENCE | NFR5 | 자동 대역/실호출/실기기 증거를 분리, 미측정 공개 | 대역/실호출/실기기 구분과 중단/실패 이력 보존 | test-results.md / performance-test-instructions.md | Build and Test | Met |
+| T-LIVE-LATENCY | 원 FR2.5, 지시서 실호출 관측 | 준비 확인 후 합성 실호출15초 관측 | 실제 공급자 호출 미실행 | performance-test-instructions.md | 별도 준비 확인 필요 / 예정된 후속 검증 단계 없음 | Unverified |
 
 ## Known limitations
 
