@@ -192,6 +192,22 @@ tasks.named<Test>("test") {
     inputs.property("fixedExcludeTagsLunaReach", lunaReachTag)
 }
 
+// ---- 제브 실호출 시험 분리 (U13 Step 15b, lunaLiveTest · lunaReachTest와 같은 방식) ----
+// 실제 제브를 부르는 시험(@Tag("jev-live"))은 모든 모듈의 기본 test 작업에서 언제나 빠지고, 시험 JVM에는 제브 키가 넘어가지 않는다(R-F1 · R-F3).
+// jevLiveTest 작업은 realtime-activity 빌드 파일에만 있고 check · build에 물리지 않는다. 확인은 루트 verifyJevLiveIsolation이 한다.
+
+/** 제브 실호출 시험 태그. */
+val jevLiveTag = "jev-live"
+
+tasks.named<Test>("test") {
+    options {
+        (this as JUnitPlatformOptions).excludeTags(jevLiveTag)
+    }
+    inputs.property("fixedExcludeTagsJevLive", jevLiveTag)
+    // 기본 시험은 제브 키를 보지 않는다. 개발 PC env에 키가 있어도 시험 JVM에는 넘기지 않는다
+    environment.remove("JEV_API_KEY")
+}
+
 // ---- 커버리지 (Step 5 · J91 · J107 · J137) ----
 
 val coverageScopeName: String? = providers.gradleProperty("coverageScope").orNull
