@@ -565,7 +565,35 @@ cat realtime-activity/build/luna-reach/report.md
 ### 8.7 GPT-Live 격리 실호출 `gptLiveTest` (U11, 개발 PC) [개발 PC]
 
 U11 첫 작업(위험 R1)의 실호출 확인이다. 기본 `test` · `check` · CI · `verify.sh`에는 들어가지 않는다(루트 `verifyGptLiveIsolation`).
-합성 음성만 보내고(R-F15), 키는 그 PC의 env로만 넣는다(R-F3 · R-F13). 한 실행이 형식마다 연결을 한 번씩 연다(기본 앱 · 키트 두 번).
+합성 음성만 보내고(R-F15), 키는 그 PC의 env로만 넣는다(R-F3 · R-F13). 키를 넣기 전에 단계 4의 R-F15 확인 기록(확인 대상: Luna 판정 · GPT-Live 음성 중계)을
+남긴다. 운영 송수신 부품(팩토리 · 세션 · 해석기) 하나로만 시도하고 한 실행이 연결을 한 번 연다(옛 키트 형식 비교 모드는 없앴다). 흐름은 세션 시작 →
+합성 말소리 여러 발화 → 고정 지시문 추가 두 번 → 응답 생성 → (선택) `session.update` → 종료이고, 결과는 설계 W7 확인 ① ~ ⑨를 항목마다 판정 · 관측으로 남긴다.
+
+```bash
+cd backend
+read -r -s -p 'OPENAI_API_KEY: ' OPENAI_API_KEY && export OPENAI_API_KEY && echo
+./gradlew :realtime-activity:gptLiveTest
+unset OPENAI_API_KEY
+cat realtime-activity/build/gpt-live/report.md
+```
+
+- 선택 env(비밀 아님): `GPT_LIVE_RATE`(세션 시작에 싣는 입력 표본율, 기본 24000 — 24kHz 수락 확인, 거절되면 16000으로도 시도) ·
+  `GPT_LIVE_INPUT_PCM`(합성 말소리 파일 경로, WAV 또는 PCM16LE 모노 원시, 없으면 저장소 합성음 자리 파일) ·
+  `GPT_LIVE_INPUT_RATE`(원시 PCM의 표본율, 기본 24000, 키트 TTS 캐시는 16000) ·
+  `GPT_LIVE_UTTERANCES`(자동 응답을 관찰하려고 보내는 발화 수, 기본 3, 1 ~ 10 — 비용이 발화 수에 비례한다) ·
+  `GPT_LIVE_UPDATE_JSON`(자동 응답을 끄는 `session.update` 메시지 JSON, type이 `session.update`인 객체. 없으면 그 시험은 건너뛴다).
+- 보고서 첫 줄은 `outcome=…`(① 입력 표본율 수락과 ⑦ append + create 뒤 응답이 모두 PASS일 때만 PASS), 다음 줄은 `rate=… utterances=…`이다.
+  표는 항목 · 판정 · 관측이고 ① ~ ⑨ 뒤에 종료 형식 · 오류 사건(가린 문장) · 지원 type 목록 · 수신 사건 모양 · 사용량(`session.usage.updated` 마지막 값 ·
+  세션 길이) 행이 있다. ②(출력 전사 사건)가 `NOT_OBSERVED`면 구현을 멈추고 사람과 다시 정한다(BR9.2). 전사 원문 · 음성 · 키는 담지 않는다(R-F14).
+- 금액은 계산하지 않는다. 단가는 OpenAI 결제 화면에서 확인한다(보고서는 사용량만 남긴다).
+- 결과는 '실제 API · 합성 자료' 증거로만 따로 적는다(R-M11). 키가 없으면 `SKIPPED_NO_KEY`이고 시험은 '건너뜀'이다(통과 아님).
+
+### 8.7 GPT-Live 격리 실호출 `gptLiveTest` (U11, 개발 PC) [개발 PC]
+
+U11 첫 작업(위험 R1)의 실호출 확인이다. 기본 `test` · `check` · CI · `verify.sh`에는 들어가지 않는다(루트 `verifyGptLiveIsolation`).
+합성 음성만 보내고(R-F15), 키는 그 PC의 env로만 넣는다(R-F3 · R-F13). 키를 넣기 전에 단계 4의 R-F15 확인 기록(확인 대상: Luna 판정 · GPT-Live 음성 중계)을
+남긴다. 운영 송수신 부품(팩토리 · 세션 · 해석기) 하나로만 시도하고 한 실행이 연결을 한 번 연다(옛 키트 형식 비교 모드는 없앴다). 흐름은 세션 시작 →
+합성 말소리 여러 발화 → 고정 지시문 추가 두 번 → 응답 생성 → (선택) `session.update` → 종료이고, 결과는 설계 W7 확인 ① ~ ⑨를 항목마다 판정 · 관측으로 남긴다.
 
 ```bash
 cd backend

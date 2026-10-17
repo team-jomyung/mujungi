@@ -79,20 +79,18 @@ class GptLiveIsolationTest {
     }
 
     @Test
-    void withoutAKeyTheProbeReportsSkippedForBothFormatsAndNeverConnects(@TempDir Path dir) throws IOException {
+    void withoutAKeyTheProbeReportsSkippedForEveryItemAndNeverConnects(@TempDir Path dir) throws IOException {
         Path report = dir.resolve("gpt-live/report.md");
         GptLiveProbe probe = new GptLiveProbe(Map.<String, String>of()::get, REPO_ROOT, report, NEVER_OPEN);
 
         GptLiveProbe.Result result = probe.run();
 
         assertThat(result.outcome()).isEqualTo(GptLiveProbe.Outcome.SKIPPED_NO_KEY);
-        assertThat(result.kitOutcome()).isEqualTo(GptLiveProbe.Outcome.SKIPPED_NO_KEY);
-        assertThat(result.app().rows()).hasSize(GptLiveProbe.ITEMS.size())
+        assertThat(result.rows()).hasSize(GptLiveProbe.ITEMS.size())
                 .allSatisfy(row -> assertThat(row.verdict()).isEqualTo(GptLiveProbe.Verdict.SKIPPED_NO_KEY));
         assertThat(GptLiveProbe.anyVerdict(result, GptLiveProbe.Verdict.PASS)).as("건너뜀은 통과가 아니다").isFalse();
         String written = Files.readString(report, StandardCharsets.UTF_8);
-        assertThat(written).contains("outcome=SKIPPED_NO_KEY evidence=NONE", "kitFormat=SKIPPED_NO_KEY",
-                "SKIPPED_NO_KEY는 통과로 보지 않는다", "| 항목 | 앱 형식 | 키트 형식 |");
+        assertThat(written).contains("outcome=SKIPPED_NO_KEY evidence=NONE", "SKIPPED_NO_KEY는 통과로 보지 않는다", "| 항목 | 판정 · 관측 |");
     }
 
     @Test
@@ -133,7 +131,7 @@ class GptLiveIsolationTest {
     @Test
     void anEnvRawPcmFileUsesTheGivenRateAndTheLastFrameIsZeroPadded(@TempDir Path dir) throws IOException {
         Path pcm = dir.resolve("synthetic.pcm");
-        byte[] bytes = new byte[GptLiveProbe.KIT_FRAME_BYTES + 40];
+        byte[] bytes = new byte[640 + 40];
         Arrays.fill(bytes, (byte) 7);
         Files.write(pcm, bytes);
 
@@ -143,10 +141,11 @@ class GptLiveIsolationTest {
         assertThat(input.sourceLabel()).startsWith("env " + GptLiveProbe.INPUT_PCM_ENV).contains("16000Hz")
                 .doesNotContain(dir.toString());
         assertThat(input.fromEnv()).isTrue();
-        List<byte[]> kitFrames = input.framesAt(GptLiveProbe.KIT_RATE, GptLiveProbe.KIT_FRAME_BYTES);
-        assertThat(kitFrames).hasSize(2 + GptLiveProbe.TRAILING_SILENCE_FRAMES);
-        assertThat(kitFrames.get(1)[39]).isEqualTo((byte) 7);
-        assertThat(kitFrames.get(1)[40]).isZero();
+        List<byte[]> frames16k = input.framesAt(16_000, 640);
+        assertThat(frames16k).hasSize(2 + GptLiveProbe.TRAILING_SILENCE_FRAMES);
+        assertThat(frames16k.get(1)[39]).isEqualTo((byte) 7);
+        assertThat(frames16k.get(1)[40]).isZero();
+        assertThat(input.framesAt(16_000, 640, 3)).as("무음 프레임 수를 지정할 수 있다").hasSize(5);
     }
 
     @Test
@@ -180,37 +179,39 @@ class GptLiveIsolationTest {
         assertThat((int) middle).as("16kHz 800번째 표본 ≈ 24kHz 1200번째(12000)").isBetween(11_900, 12_100);
     }
 
-    // ---- 키트 형식 메시지 ----
+    // ---- 운영 형식 요청 · 환경 옵션 ----
 
     @Test
-    void kitFormatSessionStartHasTheKitShapeAndNoChildData() {
-        String start = probe(Map.of()).kitSessionStart();
-        Map<?, ?> message = JSON.read(start, Map.class);
+    void theSessionStartUsesTheProductionFactoryShapeAndTheRateOption() {
+        ProviderRequestFactory factory = new ProviderRequestFactory();
+        kr.mujoong.realtime.session.ChildContext context = new kr.mujoong.realtime.session.ChildContext("하늘", 8, List.of("블록"));
 
-        assertThat(keys(message)).containsExactly("type", "event_id", "session");
-        assertThat(message.get("type")).isEqualTo("session.start");
-        Map<?, ?> session = (Map<?, ?>) message.get("session");
-        assertThat(keys(session)).containsExactlyInAnyOrder("model", "instructions", "audio", "delegation");
-        assertThat(session.get("model")).isEqualTo(ProviderRequestFactory.MODEL);
-        assertThat(session.get("instructions")).isEqualTo(GptLiveProbe.KIT_INSTRUCTIONS);
-        assertThat(session.get("audio")).isEqualTo(Map.of("format", Map.of("type", "audio/pcm", "rate", 16_000)));
-        assertThat(session.get("delegation")).isEqualTo(Map.of("type", "client"));
-        assertThat(start).doesNotContain("childContext", "displayName", "interests", "하늘");
+        Map<?, ?> start24 = JSON.read(JSON.write(factory.sessionStart(context)), Map.class);
+        Map<?, ?> start16 = JSON.read(JSON.write(factory.sessionStart(context, 16_000)), Map.class);
+
+        assertThat(keys(start24)).containsExactly("type", "session");
+        Map<?, ?> session = (Map<?, ?>) start24.get("session");
+        assertThat(keys(session)).containsExactlyInAnyOrder("model", "instructions", "audio");
+        assertThat(session.get("audio")).isEqualTo(Map.of("format", Map.of("type", "audio/pcm", "rate", 24_000)));
+        assertThat(((Map<?, ?>) start16.get("session")).get("audio"))
+                .isEqualTo(Map.of("format", Map.of("type", "audio/pcm", "rate", 16_000)));
     }
 
     @Test
-    void kitFormatAudioAndCloseMessagesUseTheSameTypeNames() {
+    void theRateUtterancesAndUpdateEnvsAreValidatedBeforeAnyCall() throws IOException {
+        assertThat(GptLiveProbe.sessionRate(null)).isEqualTo(24_000);
+        assertThat(GptLiveProbe.sessionRate(" 16000 ")).isEqualTo(16_000);
+        assertThatThrownBy(() -> GptLiveProbe.sessionRate("abc")).isInstanceOf(IOException.class);
+        assertThatThrownBy(() -> GptLiveProbe.sessionRate("96000")).isInstanceOf(IOException.class);
+        assertThat(GptLiveProbe.utteranceCount(null)).isEqualTo(GptLiveProbe.DEFAULT_UTTERANCES);
+        assertThat(GptLiveProbe.utteranceCount("5")).isEqualTo(5);
+        assertThatThrownBy(() -> GptLiveProbe.utteranceCount("0")).isInstanceOf(IOException.class);
+        assertThatThrownBy(() -> GptLiveProbe.utteranceCount("99")).isInstanceOf(IOException.class);
         GptLiveProbe probe = probe(Map.of());
-        byte[] frame = new byte[GptLiveProbe.KIT_FRAME_BYTES];
-
-        Map<?, ?> append = JSON.read(probe.kitAudioAppend(frame), Map.class);
-        Map<?, ?> close = JSON.read(probe.kitSessionClose(), Map.class);
-
-        assertThat(keys(append)).containsExactly("type", "audio");
-        assertThat(append.get("type")).isEqualTo(ProviderRequestFactory.TYPE_INPUT_AUDIO_APPEND);
-        assertThat(Base64.getDecoder().decode((String) append.get("audio"))).hasSize(640);
-        assertThat(keys(close)).containsExactly("type", "event_id");
-        assertThat(close.get("type")).isEqualTo(ProviderRequestFactory.TYPE_SESSION_CLOSE);
+        assertThat(probe.updateMessage(null)).isNull();
+        assertThat(probe.updateMessage("{\"type\":\"session.update\",\"session\":{}}")).contains("session.update");
+        assertThatThrownBy(() -> probe.updateMessage("{\"type\":\"session.close\"}")).isInstanceOf(IOException.class);
+        assertThatThrownBy(() -> probe.updateMessage("not json")).isInstanceOf(IOException.class);
     }
 
     // ---- 원시 관측 · 오류 사건 ----
@@ -321,32 +322,7 @@ class GptLiveIsolationTest {
     }
 
     @Test
-    void theFormatsEnvSelectsAttemptsAndRejectsUnknownValues() throws IOException {
-        assertThat(GptLiveProbe.formats(null)).containsExactly(GptLiveProbe.Mode.APP, GptLiveProbe.Mode.KIT);
-        assertThat(GptLiveProbe.formats(" kit ")).containsExactly(GptLiveProbe.Mode.KIT);
-        assertThat(GptLiveProbe.formats("APP,kit,")).containsExactly(GptLiveProbe.Mode.APP, GptLiveProbe.Mode.KIT);
-        assertThatThrownBy(() -> GptLiveProbe.formats("webrtc")).isInstanceOf(IOException.class);
-        assertThatThrownBy(() -> GptLiveProbe.formats(" , ")).isInstanceOf(IOException.class);
-    }
-
-    @Test
-    void aKitOnlyRunReportsTheAppColumnAsNotRunAndThePriceNote() {
-        GptLiveProbe.Row host = new GptLiveProbe.Row("공급자 주소 규칙", "통과", GptLiveProbe.Verdict.PASS);
-        GptLiveProbe.Attempt app = new GptLiveProbe.Attempt(GptLiveProbe.Mode.APP, GptLiveProbe.Outcome.NOT_RUN,
-                GptLiveProbe.ITEMS.stream().map(item -> new GptLiveProbe.Row(item, "실행 안 함", GptLiveProbe.Verdict.INFO)).toList());
-        GptLiveProbe.Attempt kit = new GptLiveProbe.Attempt(GptLiveProbe.Mode.KIT, GptLiveProbe.Outcome.PASS,
-                GptLiveProbe.ITEMS.stream().map(item -> new GptLiveProbe.Row(item, "관측", GptLiveProbe.Verdict.PASS)).toList());
-
-        String report = GptLiveProbe.renderReport(new GptLiveProbe.Result(host, app, kit), null, "2026-10-16T00:00:00Z");
-
-        assertThat(report.lines().toList()).contains("outcome=NOT_RUN evidence=REAL_API_SYNTHETIC", "kitFormat=PASS",
-                "- " + GptLiveProbe.PRICE_NOTE);
-        assertThat(report).contains("| 사용량(session.usage.updated 마지막 값 · 세션 길이) | **INFO** · 실행 안 함 | **PASS** · 관측 |")
-                .doesNotContain("USD", "$");
-    }
-
-    @Test
-    void outputAudioIsCountedInBothAppAndKitShapes() {
+    void outputAudioIsCountedFromTheObservedDeltaShapeAndOlderShapesToo() {
         String audio = Base64.getEncoder().encodeToString(new byte[480]);
 
         GptLiveProbe.RawFrame app = GptLiveProbe.parseRaw(JSON, 0,
@@ -377,45 +353,42 @@ class GptLiveIsolationTest {
         assertThat(tap.rawSnapshot()).extracting(GptLiveProbe.RawFrame::type).containsExactly("error", GptLiveProbe.CLOSED_MARK);
     }
 
+
     @Test
-    void responseCreatedCandidatesStopAtTheFirstNewOutputDelta() {
+    void boundaryCandidatesListOnlyUnknownResponseEndLikeTypesWithoutValues() {
         List<GptLiveProbe.RawFrame> raw = List.of(
-                new GptLiveProbe.RawFrame(0, "session.output.done", "old", List.of("responseId", "type")),
-                new GptLiveProbe.RawFrame(1, "session.response.created", "r2", List.of("responseId", "type")),
-                new GptLiveProbe.RawFrame(2, "session.output_audio.delta", "r2", List.of("audio", "responseId", "type")),
-                new GptLiveProbe.RawFrame(3, "session.later.unknown", null, List.of("type")));
+                new GptLiveProbe.RawFrame(0, "session.started", null, List.of("session", "type")),
+                new GptLiveProbe.RawFrame(1, "session.output_audio.delta", null, List.of("delta", "type")),
+                new GptLiveProbe.RawFrame(2, "session.response.completed", "ignored-value", List.of("response", "type")),
+                new GptLiveProbe.RawFrame(3, "session.response.completed", null, List.of("response", "type")),
+                new GptLiveProbe.RawFrame(4, "session.later.unknown", null, List.of("type")));
 
-        String found = GptLiveProbe.responseCreatedCandidates(raw, 1, Set.of("r2"));
-        String empty = GptLiveProbe.responseCreatedCandidates(raw, 2, Set.of("r2"));
+        String found = GptLiveProbe.boundaryCandidates(raw);
 
-        assertThat(found).contains("session.response.created", "새 응답과 같음").doesNotContain("session.later.unknown");
-        assertThat(empty).startsWith("없음");
+        assertThat(found).isEqualTo("session.response.completed 2건(키 [response, type])");
+        assertThat(found).doesNotContain("ignored-value", "session.later.unknown");
+        assertThat(GptLiveProbe.boundaryCandidates(raw.subList(0, 2))).isEqualTo("없음");
     }
 
-    // ---- 보고서 ----
-
     @Test
-    void theReportHasAppAndKitColumnsWithTheAppOutcomeOnTop() {
+    void theReportHasOneColumnWithTheOutcomeOnTopAndNeverCarriesTranscriptsAudioOrKeys() {
         GptLiveProbe.Row host = new GptLiveProbe.Row("공급자 주소 규칙", "통과", GptLiveProbe.Verdict.PASS);
-        List<GptLiveProbe.Row> appRows = GptLiveProbe.ITEMS.stream()
-                .map(item -> new GptLiveProbe.Row(item, "앱 관측 | 구분자", GptLiveProbe.Verdict.FAIL)).toList();
-        List<GptLiveProbe.Row> kitRows = GptLiveProbe.ITEMS.stream()
-                .map(item -> new GptLiveProbe.Row(item, "키트 관측", GptLiveProbe.Verdict.PASS)).toList();
-        GptLiveProbe.Result result = new GptLiveProbe.Result(host,
-                new GptLiveProbe.Attempt(GptLiveProbe.Mode.APP, GptLiveProbe.Outcome.FAIL, appRows),
-                new GptLiveProbe.Attempt(GptLiveProbe.Mode.KIT, GptLiveProbe.Outcome.PASS, kitRows));
+        List<GptLiveProbe.Row> rows = GptLiveProbe.ITEMS.stream()
+                .map(item -> new GptLiveProbe.Row(item, "관측 | 구분자", GptLiveProbe.Verdict.INFO)).toList();
+        GptLiveProbe.Result result = new GptLiveProbe.Result(GptLiveProbe.Outcome.FAIL, host, rows, 24_000);
         GptLiveProbe.InputAudio input = new GptLiveProbe.InputAudio("저장소 합성음 자리 파일", false, 24_000, new byte[48_000]);
 
-        String report = GptLiveProbe.renderReport(result, input, "2026-10-16T00:00:00Z");
+        String report = GptLiveProbe.renderReport(result, input, 3, "2026-10-17T00:00:00Z");
 
         List<String> lines = report.lines().toList();
-        assertThat(lines).contains("outcome=FAIL evidence=REAL_API_SYNTHETIC", "kitFormat=PASS", "| 항목 | 앱 형식 | 키트 형식 |");
-        assertThat(lines.indexOf("outcome=FAIL evidence=REAL_API_SYNTHETIC")).isLessThan(lines.indexOf("kitFormat=PASS"));
+        assertThat(lines).contains("outcome=FAIL evidence=REAL_API_SYNTHETIC", "rate=24000 utterances=3", "| 항목 | 판정 · 관측 |",
+                "- " + GptLiveProbe.PRICE_NOTE);
         List<String> tableRows = lines.stream().filter(line -> line.startsWith("| ") && !line.startsWith("| 항목")).toList();
         assertThat(tableRows).hasSize(1 + GptLiveProbe.ITEMS.size())
-                .allSatisfy(line -> assertThat(line.split("\\|", -1)).hasSize(5));
-        assertThat(tableRows.get(1)).contains("**FAIL** · 앱 관측 / 구분자", "**PASS** · 키트 관측");
-        assertThat(report).contains("1000ms", "앱 형식 24000Hz · 키트 형식 16000Hz");
-        assertThat(GptLiveProbe.summary(result)).startsWith("GPT-Live 실호출 앱 형식 FAIL · 키트 형식 PASS");
+                .allSatisfy(line -> assertThat(line.split("\\|", -1)).hasSize(4));
+        assertThat(tableRows.get(1)).contains("**INFO** · 관측 / 구분자");
+        assertThat(report).contains("1000ms").doesNotContain("USD", "$", "키트");
+        assertThat(GptLiveProbe.summary(result)).startsWith("GPT-Live 실호출 FAIL — ①=INFO");
+        assertThat(GptLiveProbe.ITEMS).hasSize(17).startsWith("① 입력 표본율 수락(세션 시작 · 음성 송신 · 출력 수신)");
     }
 }
