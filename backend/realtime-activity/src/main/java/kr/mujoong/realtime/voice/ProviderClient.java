@@ -29,7 +29,7 @@ import org.springframework.stereotype.Component;
  * 공급자 WSS 클라이언트 (U1 3.5 Step 25 · J110 · BR7.2 · RD-5 · SD-15 · SD-20 · contracts/ai-io.md 2 · 3절).
  *
  * <p>SDK 없이 JDK {@link WebSocket}으로 선 형식(텍스트 프레임 JSON 한 개 = 메시지 한 개, 공통 필드 type)을 주고받는다. 키는 환경 변수
- * {@code PROVIDER_API_KEY}이고 {@code Authorization: Bearer} 헤더로만 보낸다(값을 로그 · 예외 메시지에 쓰지 않는다). 요청 본문은
+ * {@code OPENAI_API_KEY}이고 {@code Authorization: Bearer} 헤더로만 보낸다. 키가 비면 헤더를 싣지 않는다(BR12.2, 가짜 공급자는 헤더를 보지 않는다). 값을 로그 · 예외 메시지에 쓰지 않는다. 요청 본문은
  * {@link ProviderRequestFactory}의 레코드만 직렬화하고, 요청 · 이벤트 본문 · 전사를 로그에 쓰지 않는다. 프록시는 JVM 기본 선택기를
  * 따른다(루프백은 기본 nonProxyHosts로 직결). 공급자 클라이언트에 의존하는 패키지는 voice 하나다(ArchUnit ⑥).
  */
@@ -39,7 +39,7 @@ import org.springframework.stereotype.Component;
 public class ProviderClient implements ProviderPort, DisposableBean {
 
     /** 공급자 키 환경 변수 이름. */
-    public static final String API_KEY = "PROVIDER_API_KEY";
+    public static final String API_KEY = "OPENAI_API_KEY";
 
     private final URI url;
     private final String apiKey;
@@ -77,14 +77,15 @@ public class ProviderClient implements ProviderPort, DisposableBean {
             throws ProviderUnavailableException, InterruptedException {
         Objects.requireNonNull(listener, "listener");
         Objects.requireNonNull(timeout, "timeout");
-        if (url == null || apiKey == null || apiKey.isBlank()) {
+        if (url == null) {
             throw new ProviderUnavailableException(ProviderUnavailableException.Reason.CONNECT_FAILED);
         }
         Reader reader = new Reader(listener, json);
-        CompletableFuture<WebSocket> future = http.newWebSocketBuilder()
-                .connectTimeout(timeout)
-                .header("Authorization", "Bearer " + apiKey)
-                .buildAsync(url, reader);
+        WebSocket.Builder builder = http.newWebSocketBuilder().connectTimeout(timeout);
+        if (apiKey != null && !apiKey.isBlank()) {
+            builder.header("Authorization", "Bearer " + apiKey);
+        }
+        CompletableFuture<WebSocket> future = builder.buildAsync(url, reader);
         try {
             WebSocket socket = future.get(Math.max(1L, timeout.toMillis()), TimeUnit.MILLISECONDS);
             return new Session(socket, reader, json, sendTimeout);
@@ -117,6 +118,7 @@ public class ProviderClient implements ProviderPort, DisposableBean {
         private final JsonCodec json;
         private final StringBuilder text = new StringBuilder();
         private final AtomicBoolean closed = new AtomicBoolean();
+        private final java.util.concurrent.atomic.AtomicInteger unknownTypes = new java.util.concurrent.atomic.AtomicInteger();
 
         Reader(Listener listener, JsonCodec json) {
             this.listener = listener;
@@ -134,7 +136,7 @@ public class ProviderClient implements ProviderPort, DisposableBean {
             if (last) {
                 String message = text.toString();
                 text.setLength(0);
-                ProviderEvent event = parse(json, message);
+                ProviderEvent event = parse(json, message, unknownTypes::incrementAndGet);
                 if (event instanceof ProviderEvent.Closed) {
                     signalClosed();
                 } else if (event != null) {
@@ -162,6 +164,11 @@ public class ProviderClient implements ProviderPort, DisposableBean {
             signalClosed();
         }
 
+        /** 모르는 type으로 받아 무시한 메시지 수(type 이름 · 본문은 남기지 않는다). */
+        int unknownTypeCount() {
+            return unknownTypes.get();
+        }
+
         void signalClosed() {
             if (closed.compareAndSet(false, true)) {
                 listener.onEvent(new ProviderEvent.Closed());
@@ -170,15 +177,39 @@ public class ProviderClient implements ProviderPort, DisposableBean {
     }
 
     /**
-     * 받은 메시지 모양(필드는 type별로 일부만 쓴다). U3: 확정 전사의 선택 필드 confidence(편차 (aa)) — 숫자가 아닌 값이 와도 전사를 잃지
-     * 않게 타입을 고정하지 않고 받아 {@link #confidence(Object)}가 거른다.
+     * 받은 메시지 모양(필드는 type별로 일부만 쓴다, 실호출 관측 모양 U11-a). 출력 음성은 {@code delta}(base64)이고 응답 id는 없다. 전사 조각은
+     * {@code start_ms} · {@code end_ms} · {@code delta} · {@code event_id}, 지시 확인 사건은 {@code client_event_id} · {@code start_ms} ·
+     * {@code end_ms}를 싣는다. 입력 전사 완료 · 말 끝 · 응답 끝 사건과 전사 신뢰도는 오지 않는다(서버가 묶는다, 설계 개정 A7).
      */
-    record Inbound(String type, String providerSessionId, String itemId, String delta, String transcript,
-            String responseId, String audio, String code, Object confidence) {
+    record Inbound(String type, String itemId, String delta,
+            SessionRef session, UsageBody usage, ErrorBody error,
+            @com.fasterxml.jackson.annotation.JsonProperty("client_event_id") String clientEventId,
+            @com.fasterxml.jackson.annotation.JsonProperty("start_ms") Long startMs,
+            @com.fasterxml.jackson.annotation.JsonProperty("end_ms") Long endMs) {
+    }
+
+    /** {@code session.started}의 {@code session} 객체에서 읽는 것: 공급자 세션 id. */
+    record SessionRef(String id) {
+    }
+
+    /** {@code session.usage.updated}의 {@code usage} 객체: 누적 사용 초. */
+    record UsageBody(Double seconds) {
+    }
+
+    /** {@code error} 사건의 {@code error} 객체. message 원문은 읽지 않는다(R-F14). */
+    record ErrorBody(String type, String code, String param) {
     }
 
     /** 선 형식 → 앱 이벤트. 모르는 type · 깨진 본문은 무시(null)한다. */
     static ProviderEvent parse(JsonCodec json, String message) {
+        return parse(json, message, () -> { });
+    }
+
+    /**
+     * 선 형식 → 앱 이벤트. 모르는 type이면 {@code onUnknown}을 한 번 부르고 null을 돌려준다(개수만 센다, 본문 · type 이름을 남기지 않는다).
+     * 깨진 본문 · 디코드 실패 조각도 null이다.
+     */
+    static ProviderEvent parse(JsonCodec json, String message, Runnable onUnknown) {
         Inbound inbound;
         try {
             inbound = json.read(message, Inbound.class);
@@ -190,27 +221,41 @@ public class ProviderClient implements ProviderPort, DisposableBean {
         }
         try {
             return switch (inbound.type()) {
-                case "session.started" -> new ProviderEvent.Started(blankToNull(inbound.providerSessionId()));
-                case "session.input_audio.speech_stopped" -> new ProviderEvent.SpeechStopped();
-                case "session.input_transcript.delta" ->
-                    new ProviderEvent.InputTranscriptDelta(inbound.itemId(), nullToEmpty(inbound.delta()));
-                case "session.input_transcript.done" -> new ProviderEvent.InputTranscriptDone(inbound.itemId(),
-                        nullToEmpty(inbound.transcript()), confidence(inbound.confidence()));
-                case "session.output_transcript.delta" ->
-                    new ProviderEvent.OutputTranscriptDelta(inbound.responseId(), nullToEmpty(inbound.delta()));
-                case "session.output_audio.delta" -> new ProviderEvent.OutputAudioDelta(inbound.responseId(),
-                        Base64.getDecoder().decode(nullToEmpty(inbound.audio())));
-                case "session.output.done" -> new ProviderEvent.OutputDone(inbound.responseId());
-                case "session.error" -> new ProviderEvent.Error(nullToEmpty(inbound.code()));
+                case "session.started" -> new ProviderEvent.Started(
+                        inbound.session() == null ? null : blankToNull(inbound.session().id()));
+                case "session.input_transcript.delta" -> new ProviderEvent.InputTranscriptDelta(inbound.itemId(),
+                        nullToEmpty(inbound.delta()), millis(inbound.startMs()), millis(inbound.endMs()));
+                case "session.output_transcript.delta" -> new ProviderEvent.OutputTranscriptDelta(nullToEmpty(inbound.delta()),
+                        millis(inbound.startMs()), millis(inbound.endMs()));
+                case "session.instructions.appended" -> inbound.clientEventId() == null || inbound.clientEventId().isBlank()
+                        ? null
+                        : new ProviderEvent.InstructionsAppended(inbound.clientEventId(), millis(inbound.startMs()),
+                                millis(inbound.endMs()));
+                case "session.output_audio.delta" ->
+                    new ProviderEvent.OutputAudioDelta(Base64.getDecoder().decode(nullToEmpty(inbound.delta())));
+                case "session.usage.updated" -> inbound.usage() == null || inbound.usage().seconds() == null
+                        || inbound.usage().seconds() < 0 ? null : new ProviderEvent.UsageUpdated(inbound.usage().seconds());
+                case "error" -> new ProviderEvent.Error(
+                        inbound.error() == null ? "" : nullToEmpty(inbound.error().code()));
                 case "session.closed" -> new ProviderEvent.Closed();
-                default -> null;
+                default -> {
+                    onUnknown.run();
+                    yield null;
+                }
             };
         } catch (IllegalArgumentException e) {
             return null;
         }
     }
 
-    /** 숫자가 아니거나 0 ~ 1 밖이면 없는 것으로 본다(U3-J17: 값이 없으면 불확실로 보지 않는다). */
+    private static long millis(Long value) {
+        return value == null || value < 0 ? -1L : value;
+    }
+
+    /**
+     * 숫자가 아니거나 0 ~ 1 밖이면 없는 것으로 본다(U3-J17: 값이 없으면 불확실로 보지 않는다). 공급자는 입력 전사 신뢰도를 보내지 않는다(설계 개정
+     * A7 — 서버가 만든 확정 전사는 신뢰도 null = 확실). 공급자가 나중에 주면 쓰는 변환 규칙으로만 남긴다.
+     */
     static Double confidence(Object value) {
         if (!(value instanceof Number number)) {
             return null;
@@ -256,18 +301,8 @@ public class ProviderClient implements ProviderPort, DisposableBean {
         }
 
         @Override
-        public void cancelResponse(ProviderRequestFactory.ResponseCancel request) throws ProviderUnavailableException {
-            send(json.write(Objects.requireNonNull(request, "request")));
-        }
-
-        @Override
-        public void correctInstructions(ProviderRequestFactory.InstructionsCorrect request)
+        public void appendInstructions(ProviderRequestFactory.InstructionsAppend request)
                 throws ProviderUnavailableException {
-            send(json.write(Objects.requireNonNull(request, "request")));
-        }
-
-        @Override
-        public void createResponse(ProviderRequestFactory.ResponseCreate request) throws ProviderUnavailableException {
             send(json.write(Objects.requireNonNull(request, "request")));
         }
 

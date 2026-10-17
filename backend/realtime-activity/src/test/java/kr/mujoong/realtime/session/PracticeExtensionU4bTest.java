@@ -17,6 +17,7 @@ import kr.mujoong.contract.ws.message.PlaybackMark;
 import kr.mujoong.contract.ws.message.StopOutput;
 import kr.mujoong.contract.ws.message.VoiceSessionClosed;
 import kr.mujoong.realtime.session.PracticeSessionExtension.ExtensionEvent;
+import kr.mujoong.realtime.dialog.InstructionTemplates;
 import kr.mujoong.realtime.session.PracticeSessionExtension.Signal;
 import kr.mujoong.realtime.testing.InMemoryTransitions;
 import kr.mujoong.realtime.testing.RecordingPracticeExtension;
@@ -209,15 +210,15 @@ class PracticeExtensionU4bTest {
         assertThat(extension.events).extracting(ExtensionEvent::name).contains("first-response-wait");
 
         assertThat(extension.output.holdOutput(true)).isTrue();
-        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("r-held", "막힌 응답"));
+        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("막힌 응답"));
         h.drain();
         assertThat(extension.output.instructProvider("목표 문장을 한 번 더 안내한다.")).isTrue();
         assertThat(extension.output.instructProvider(" ")).isFalse();
         h.launcher.runAll("provider-");
-        assertThat(h.provider.last().requests(ProviderRequestFactory.ResponseCancel.class))
-                .extracting(ProviderRequestFactory.ResponseCancel::responseId).contains("r-held");
-        assertThat(h.provider.last().requests(ProviderRequestFactory.InstructionsCorrect.class))
-                .extracting(ProviderRequestFactory.InstructionsCorrect::text).contains("목표 문장을 한 번 더 안내한다.");
+        assertThat(h.link.outputs()).as("출력을 막은 동안의 조각은 기기로 가지 않는다").isEmpty();
+        assertThat(h.provider.last().requests(ProviderRequestFactory.InstructionsAppend.class))
+                .extracting(ProviderRequestFactory.InstructionsAppend::content)
+                .anyMatch(content -> content.startsWith("목표 문장을 한 번 더 안내한다.") && content.endsWith(InstructionTemplates.SCOPE_CLOSE));
         assertThat(extension.output.cancel("nothing")).isTrue();
         assertThat(extension.output.sessionId()).isEqualTo(h.sessionId);
     }

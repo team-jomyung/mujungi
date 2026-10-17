@@ -1,18 +1,3 @@
-> 최신 정본: 아래 U10 갱신절(2026-10-17, HEAD eb34c68bf24e4520881b7ffebe1070564554dfc9). 이후 U14/U15/전체 분석 본문은 역사 자료이며, 이번에 검증한 범위는 timestamp의 analyzed 목록만이다.
-
-## U10 집중 갱신 — 실제 호출 의존
-
-- ScenarioService → ScenarioRepository, PracticeSessionContextPort, ScenarioRecordPort, PracticeAccountPort, PragmaticsKnowledge, TextAiGateway, clock, tx, limits.
-- PracticeStartService → 기존 practice.PracticeGoalRepository, PragmaticsKnowledge, 준비/상황 저장소, ScenarioService, StartActivityService. 새 core_saved_goal을 직접 읽지 않는다.
-- TextAiGateway → TextAiProvider, ForbiddenExpressionPolicy, 실행기, 시간/재시도 설정.
-- LunaTextAiProvider → CoreLunaClient → sanitizer/schemas/transport/eventlogger/clock. 기존 어댑터는 legacy 모드라 안쪽 재시도가 없다.
-- PinnedSavedGoalReader → GoalCandidateRepository, PracticeAccountPort, ConsentPolicyService, JDBC. U10은 제공 포트로 읽고 다른 단위 표를 임의 복제하지 않는다.
-- ChildKnowledgeService → 원장·접근정책·graph port·VariantPlanner. variantPlan은 skillContext 재조회, 조회는 budget 기반 Future다.
-
-LunaCallBudget는 총3시도와 기술1/내용1슬롯을 공유한다. 생성→검토→재생성→재검토 정상4호출에 그대로 적용하면 마지막 검토가 막힌다. U15 동작·시험을 바꾸지 않는 U10 예산 설계가 필요하다. 전체 무순환/최신의존 취약점을 이번 읽기 작업에서 재검증한 것은 아니다.
-
----
-
 > 현재 범위의 정본은 바로 아래 U14 갱신절이다. 그 뒤 원문은 보존 이력이며 재검증 범위는 timestamp에 한정한다.
 
 ## U14 집중 갱신 — 실제 의존
@@ -108,4 +93,50 @@ flowchart TD
 | DB 스키마 | 다음 번호(core V8 · realtime V5) · 제약 강화 시 `infra/migration-approvals.txt` |
 | 파일 추가 · 이동 | `backend/coverage-scope/*.txt` · `frontend/coverage-scope/*.json` · 유닛 시험 태그 |
 
+---
 
+## U11 집중 갱신 (261016-u11-judgment-turn, 2026-10-16 스캔 — main 병합 때 보존한 절)
+
+> main의 U14 · U15 갱신본을 바탕으로 두고, U11 작업 기록의 집중 스캔에서 갱신한 절만 아래에 보존했다. 줄 번호 · 커밋은 2026-10-16 `9bcc706` 기준이며 PR1(선 형식 정비) 이전 코드다.
+
+## 6. (2026-10-16 갱신) realtime-activity 안 패키지 의존 · 구조 제약
+
+```mermaid
+flowchart LR
+    S["session<br/>SessionExecutor · 확장점 포트"]
+    V["voice<br/>프레임 경로"]
+    GT["gate<br/>프레임 경로"]
+    DL["dialog<br/>상태 없는 판정기"]
+    CT["content<br/>판 리소스"]
+    LG["log<br/>대화 기록"]
+    PR["practice<br/>U5b 런타임"]
+    LU["luna<br/>Luna 호출부"]
+    MS["messaging<br/>Outbox · 삭제 참여자"]
+    RT["runtime · config"]
+    NEW["새 판정 패키지 후보<br/>JudgeClient · judgment_live"]
+    S --> V
+    S --> GT
+    S --> DL
+    S --> CT
+    S --> LG
+    S --> MS
+    RT --> S
+    PR -->|"포트 구현"| S
+    NEW -.->|"후보 의존"| LU
+    NEW -.->|"후보 의존"| CT
+    S -.->|"후보 의존"| NEW
+```
+
+텍스트 대안: 세션 실행기(`session`)가 공급자(`voice`) · 게이트(`gate`) · 대화 판정기(`dialog`) · 판 리소스(`content`) · 대화 기록(`log`) · 메시징(`messaging`)을 쓰고, 실행 배선(`runtime` · `config`)이 실행기를 만든다. 레거시 연습 런타임(`practice`)은 실행기의 확장점 포트를 구현한다. Luna 호출부(`luna`)는 지금 아무 패키지도 부르지 않는다. 점선은 U11이 만들 수 있는 새 판정 패키지의 후보 의존이며 설계 결정이 아니다.
+
+구조 제약(ArchUnit, 바꾸지 않음 — R-F2):
+
+| 규칙 | 위치 | U11 영향 |
+|---|---|---|
+| `luna`는 `voice` · 제브 · 로그 프레임워크 · Jackson 참조 금지 | `arch/LunaArchTest` L31 ~ L37 | 판정 조립 · 결과 해석은 `luna` 밖에 둔다 |
+| `gate` · `voice`는 프레임 경로 — JDBC · 저장소 · Outbox 참조 금지 | `arch/RealtimeArchTest` L174 ~ L180 | `judgment_live` 저장소 · `JudgeClient` 구현은 `gate` · `voice` 밖에 둔다 |
+| 시스템 시각 직접 읽기 금지(`NO_SYSTEM_TIME`) | `arch/RealtimeArchTest` | 판정 시각은 `MujoongClock` 주입 |
+| 운영 코드가 시험 코드 참조 금지(`NO_TEST_CODE_IN_PRODUCTION`) | `arch/RealtimeArchTest` | 판정 대역은 시험 소스에 |
+| 숫자 시간 리터럴 허용 목록(쓰이지 않는 항목도 실패) | `arch/TimeLiteralScanTest` | 응답 준비 대기 · 시한은 `timing().judgment()`에서만 |
+| 단일 인스턴스 가정 표시 | `arch/SingleInstanceMarkerTest` | 판정 상태가 메모리에만 있으면 표시 대상인지 확인 |
+| U8 판 리소스 경계 | `arch/U8LiveContentArchTest` | 판 리소스는 `content`를 거쳐 읽는다(본문 얕게 봄) |

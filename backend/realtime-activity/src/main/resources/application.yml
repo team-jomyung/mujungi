@@ -1,7 +1,7 @@
 # realtime-activity 기본 설정 (U1 3.5 Step 3)
 # - mujoong.* 키 값의 정본: reliability-design.md ## 3 · contracts/timing.md (BR8.11 · RD-24). 소유 앱이 realtime 또는 양 앱인 키만 둔다.
 # - 비밀은 환경 변수 이름으로만 받는다(SD-12): SPRING_DATASOURCE_PASSWORD(DB_REALTIME_PASSWORD를 렌더러가 매핑) ·
-#   INTERNAL_SERVICE_TOKEN · PROVIDER_API_KEY · MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET. 값은 어느 파일에도 없다.
+#   INTERNAL_SERVICE_TOKEN · OPENAI_API_KEY · MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET. 값은 어느 파일에도 없다.
 # - 주소 기본값은 Compose backend 망 이름(postgres · core, infra-spec D-12 · J109). 호스트에서 돌릴 때는
 #   SPRING_DATASOURCE_URL · MUJOONG_INTERNALHTTP_COREBASEURL 환경 변수로 바꾼다(J133).
 # - mujoong.provider.url은 이 파일에 두지 않는다. 실제 공급자 기본값은 application-demo.yml · application-prod.yml에만 있고,
@@ -122,6 +122,10 @@ mujoong:
       no-response-wait: 10s
       focus-max: 90s
       goal-active-limit: 10m
+    # U11(timing.md 14절, 설계 개정 A4 · A7): 값은 실호출 3회 관측 기준 임시값이고 Build and Test 실호출로 확정한다
+    provider:
+      input-transcript-quiet: 1500ms
+      new-speech-margin: 600ms
   outbox:
     poll-interval: 500ms
     batch-size: 20
@@ -198,9 +202,10 @@ mujoong:
     log-merge-window: 10s
     # OD-6 '앱 안 5초 표본'(CPU · 메모리 · 풀 · 적체 · 연결 상태 게이지 갱신) 주기(3.6 수정 J302, Core와 같은 키 · 값)
     system-sample-interval: 5s
-  # U9 Luna 호출부(contracts/ai-io.md 10.9). 키 env OPENAI_API_KEY가 있을 때만 RealtimeLunaClient가 켜진다(BR1.1, 값은 env에만).
+  # U9 Luna 호출부(contracts/ai-io.md 10.9). 키 env OPENAI_API_KEY가 있고 enabled가 true일 때만 RealtimeLunaClient가 켜진다(BR1.1 · U11 BR12.3, 값은 env에만).
   # 시간 값이 아니다: 시도 시한은 timing.judgment.live-budget(BR5.1). demo · prod는 https + api.openai.com만, test는 루프백만(BR1.4)
   luna:
+    enabled: false
     model: ${OPENAI_JUDGE_MODEL:gpt-6-luna}
     base-url: https://api.openai.com/v1
     max-response-bytes: 1000000

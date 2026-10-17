@@ -13,8 +13,8 @@ class PracticeSpeechTest {
     @Test void voiceRequestContainsOnlyQuotedSpeechAndRoleAndNoIdentifiers() {
         var speech = new PracticeSpeech(UUID.randomUUID(), UUID.randomUUID(), 3,
                 PracticePorts.OutputKind.SCENARIO, "친구", "놀이터야.\n내 차례야.");
-        var request = new ProviderRequestFactory().practiceInstruction(PracticeInstruction.forSpeech(speech));
-        assertThat(request.text()).contains("놀이터야.", "내 차례야.", "친구")
+        var request = new ProviderRequestFactory().practiceInstruction("mj-1", PracticeInstruction.forSpeech(speech));
+        assertThat(request.content()).contains("놀이터야.", "내 차례야.", "친구")
                 .doesNotContain(speech.correlationId().toString(), speech.scenarioId().toString(), "judgmentCriteria");
         assertThat(speech.toString()).doesNotContain("놀이터", "친구");
     }

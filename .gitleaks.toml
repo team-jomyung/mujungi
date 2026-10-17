@@ -29,3 +29,10 @@ condition = "AND"
 paths = ['''(^|/)aidlc/spaces/default/intents/261015-doc-sync-code-update/construction/u9-luna-clients/code-generation/code-summary\.md$''']
 regexTarget = "line"
 regexes = ['''AttrKey\.RESPONSE_MODEL, "gpt-6-luna-2026\.10"''']
+
+[[allowlists]]
+description = "비밀 아님: U11 realtime Luna 설정 시험이 가짜 키 상수(\"test-key-not-real-u9-rt\")와 스위치 속성 \"mujoong.luna.enabled=true\"를 한 줄에 나열한 것을 generic-api-key가 FAKE_KEY 뒤 값으로 오인. 커밋 82c83e2 이력의 두 줄(69 · 82행)이 대상"
+condition = "AND"
+paths = ['''(^|/)backend/realtime-activity/src/test/java/kr/mujoong/realtime/luna/RealtimeLunaConfigurationTest\.java$''']
+regexTarget = "line"
+regexes = ['''"OPENAI_API_KEY=" \+ RealtimeLunaTestFixtures\.FAKE_KEY, "mujoong\.luna\.enabled=true"''']

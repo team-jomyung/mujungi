@@ -205,9 +205,8 @@ for name in POSTGRES_PASSWORD DB_OWNER_PASSWORD DB_CORE_PASSWORD DB_REALTIME_PAS
   gen && aws ssm put-parameter --name "/mujoong/demo/$name" --type SecureString --value "file://$tmp" \
     --tags Key=Project,Value=mujoong Key=Environment,Value=demo >/dev/null && echo "put $name"
 done
-# 사람이 가진 값(입력이 화면에 보이지 않게): 공급자 키, (GHCR 패키지가 비공개면) 읽기 전용 토큰(read:packages, 만료 90일 이하)
-read -r -s -p 'PROVIDER_API_KEY: ' v && printf '%s' "$v" >"$tmp" && unset v && echo && \
-  aws ssm put-parameter --name /mujoong/demo/PROVIDER_API_KEY --type SecureString --value "file://$tmp" >/dev/null
+# 사람이 가진 값(입력이 화면에 보이지 않게): (GHCR 패키지가 비공개면) 읽기 전용 토큰(read:packages, 만료 90일 이하)
+# 공급자 키(GPT-Live 음성 중계 · Luna 판정 공용 OPENAI_API_KEY)는 이 블록에서 넣지 않는다 — 아래 'R-F15 확인' 기록을 남긴 뒤 그 항목의 명령으로만 넣는다
 read -r -s -p 'GHCR_PULL_TOKEN: ' v && printf '%s' "$v" >"$tmp" && unset v && echo && \
   aws ssm put-parameter --name /mujoong/demo/GHCR_PULL_TOKEN --type SecureString --value "file://$tmp" >/dev/null
 rm -f "$tmp"; unset tmp
@@ -235,16 +234,19 @@ aws ssm put-parameter --name /mujoong/demo/GHCR_PULL_USER --type String --value 
   바꾼 뒤에는 env를 다시 렌더하고 core-api · web을 재생성해야 반영된다.
 - GHCR 패키지를 공개로 두기로 정하면 `GHCR_PULL_TOKEN` · `GHCR_PULL_USER`를 만들지 않는다(배포가 로그인하지 않는다, J99).
 - `NEO4J_AUTH`는 Neo4j와 U15 core-api가 함께 사용한다. render-env는 같은 기존 파라미터를 각각 neo4j.env와 core-api.env로 전달한다. 값이 없으면 core-api의 그래프 기능은 기본 경로로 동작하며 과거 그래프 삭제는 RETRY로 남는다. 공개 Compose 보간값으로 넣지 않는다.
-- **(U9) `OPENAI_API_KEY`를 넣기 전 R-F15 확인 — 기록 없이는 넣지 않는다.** 키를 넣는 순간 core-api · realtime의 Luna 어댑터가 켜지고
-  실제 아동 대화 · 결과 자료가 공급자로 나갈 수 있다. 코드가 막지 않으므로(편차 U9-b) 이 확인이 유일한 방어선이다.
-  - [ ] 공급자 약관 · 데이터 사용 조건(학습 사용 · 보존 · 저장 끔 `store=false` 적용 범위)을 확인했다.
-  - [ ] 공급자의 개인정보 처리 조건(처리 위치 · 하위 처리자 · 삭제)을 확인했다.
-  - [ ] 아동 데이터의 외부 모델 전달이 보호자 동의 범위 안인지 확인했다(동의 문구 · 판).
-  - [ ] 아래 확인 기록 표에 한 줄을 남겼다(키 값 · 계정 정보는 적지 않는다, R-F3).
+- **(U9 · U11) `OPENAI_API_KEY`를 넣기 전 R-F15 확인 — 기록 없이는 넣지 않는다.** 확인 대상은 'Luna 판정(core · realtime) · GPT-Live 음성 중계'다.
+  키 하나(`OPENAI_API_KEY`)로 GPT-Live 음성 중계(아이 음성이 공급자로 나감, demo realtime은 이 키가 없으면 기동을 거부한다)와
+  Luna 판정(core-api는 키만으로, realtime은 키 + 스위치 `mujoong.luna.enabled=true`로 켜짐)이 모두 열리고, 실제 아동 대화 · 결과 자료가 공급자로
+  나갈 수 있다. 코드가 막지 않으므로(편차 U9-b) 이 확인이 유일한 방어선이다.
+  - [x] 공급자 약관 · 데이터 사용 조건(학습 사용 · 보존 · 저장 끔 `store=false` 적용 범위)을 확인했다.
+  - [x] 공급자의 개인정보 처리 조건(처리 위치 · 하위 처리자 · 삭제)을 확인했다.
+  - [x] 아동 데이터의 외부 모델 전달이 보호자 동의 범위 안인지 확인했다(동의 문구 · 판).
+  - [x] 확인 대상이 Luna 판정(core · realtime)과 GPT-Live 음성 중계 둘 다임을 기록에 적었다(U11 BR12.4).
+  - [x] 아래 확인 기록 표에 한 줄을 남겼다(키 값 · 계정 정보는 적지 않는다, R-F3).
 
   | 확인자 | 확인 날짜(UTC) | 확인한 약관 · 처리 조건 판(또는 문서 날짜) | 환경 | 비고 |
   |---|---|---|---|---|
-  | (아직 없음 — 첫 투입 전에 채운다) | | | demo | |
+  | 양성민 | 26.10.17 | 전체 | demo | |
 
   demo에 키를 넣는 날의 순서(cicd-pipeline 4절):
   0. 모델 이름을 기본값(`gpt-6-luna`)이 아닌 값으로 쓰려면 먼저 `OPENAI_ANALYSIS_MODEL` · `OPENAI_JUDGE_MODEL`을 `infra/compose.demo.yml` ·
@@ -252,11 +254,22 @@ aws ssm put-parameter --name /mujoong/demo/GHCR_PULL_USER --type String --value 
   1. 위 확인 기록 표에 한 줄을 남긴다. 기록이 없으면 넣지 않는다.
   2. 아래 명령으로 Parameter Store에 `OPENAI_API_KEY`를 넣고, 같은 SHA로 `DEPLOY`를 다시 실행한다(12절 회전 표와 같은 길: core-api · realtime이
      다시 만들어진다).
-  3. 기동 로그에서 `LUNA_STARTUP` `lunaState=ENABLED`를 확인한다(8.4).
-  - **롤백:** Parameter Store의 `OPENAI_API_KEY`를 비우고(빈 값 또는 삭제) 같은 SHA로 `DEPLOY`를 다시 실행한 뒤 `LUNA_STARTUP`
-    `lunaState=DISABLED_NO_KEY`를 확인한다. 어댑터가 꺼지면 지금과 같은 실패 경로라 데이터 변경 · 마이그레이션 되돌림이 없다. 재기동만으로는
-    컨테이너 환경이 갱신되지 않으므로 쓰지 않는다.
-- (선택, U8) Luna 키 `OPENAI_API_KEY`(core-api · realtime이 받음)와 제브 키 `JEV_API_KEY`(realtime만 받음). 넣지 않으면 렌더러가 빈 변수로 두고
+  3. 기동 로그에서 core-api의 `LUNA_STARTUP` `lunaState=ENABLED`를 확인한다(8.4). realtime은 스위치가 꺼져 있으면 키가 있어도
+     `lunaState=DISABLED_SWITCH_OFF`다.
+  4. realtime Luna를 켜려면 1번 확인 기록 뒤에 demo 설정의 `mujoong.luna.enabled`를 `true`로 바꾸고(기본 `false`) 배포한 다음 realtime의
+     `lunaState=ENABLED`를 확인한다(U11 계약 편차 (U11-c)). 확인 기록 없이는 바꾸지 않는다.
+  - **롤백:** realtime Luna는 `mujoong.luna.enabled`를 `false`로 되돌려 같은 SHA로 `DEPLOY`하면 꺼진다(`DISABLED_SWITCH_OFF`). 키를 비우는 길은
+    demo realtime이 기동을 거부하므로(GPT-Live 키 필수, U11 BR12.2) 쓰지 않는다. core-api Luna는 지금처럼 키만으로 켜져 키가 있는 동안 꺼지지
+    않는다. 어댑터가 꺼지면 지금과 같은 실패 경로라 데이터 변경 · 마이그레이션 되돌림이 없다. 재기동만으로는 컨테이너 환경이 갱신되지 않으므로
+    쓰지 않는다.
+  - **키 이름 바꾸기 순서(U11 BR12.4, `PROVIDER_API_KEY` → `OPENAI_API_KEY`):** 이 절차는 적어 두기만 하고 이번 작업은 Parameter Store · 배포를
+    바꾸지 않는다.
+    1. 키 통일 변경(PR1)을 배포하기 전에 `/mujoong/demo/OPENAI_API_KEY`에 GPT-Live 키가 들어 있는지 확인한다(없으면 위 R-F15 확인 뒤 넣는다).
+    2. PR1 이전 이미지는 demo에서 `PROVIDER_API_KEY`가 비면 기동을 거부한다. 롤백 대상(`deploy.log`의 마지막 `result=OK` SHA)이 PR1 이후 SHA뿐이게
+       될 때까지 `/mujoong/demo/PROVIDER_API_KEY`를 `OPENAI_API_KEY`와 같은 값으로 함께 둔다. 호스트의 `render-env`는 PR1 이후 옛 이름을 realtime.env에
+       쓰지 않으므로, PR1 이전 SHA로 되돌려야 하면 먼저 그 SHA의 `render-env`로 env를 렌더하는지 확인한다.
+    3. 롤백 대상이 PR1 이후 SHA뿐이게 된 뒤에 `aws ssm delete-parameter --name /mujoong/demo/PROVIDER_API_KEY`로 지운다.
+- (선택, U8) Luna 키 `OPENAI_API_KEY`(core-api · realtime이 받음, U11부터 demo realtime의 GPT-Live 키와 같은 이름)와 제브 키 `JEV_API_KEY`(realtime만 받음). 넣지 않으면 렌더러가 빈 변수로 두고
   앱은 실제 어댑터를 끈다. `OPENAI_API_KEY`는 바로 위 R-F15 확인 기록이 있을 때만 넣는다(`contracts/ai-io.md` 10.2 · 10.10).
 
   ```bash
@@ -496,7 +509,7 @@ E1 `sessionsActive` 0 → E2 정기 점검 → E3 `backup.log` 최근 성공(없
 
 ### 8.4 Luna 사건 줄 (U9)
 
-core-api · realtime은 기동 때 `LUNA_STARTUP` 한 줄(`lunaState` `ENABLED` · `DISABLED_NO_KEY`)을, Luna 공급자 시도마다 `LUNA_CALL` 한 줄
+core-api · realtime은 기동 때 `LUNA_STARTUP` 한 줄(`lunaState` `ENABLED` · `DISABLED_NO_KEY` · realtime만 `DISABLED_SWITCH_OFF`)을, Luna 공급자 시도마다 `LUNA_CALL` 한 줄
 (`lunaPurpose` · `lunaOutcome` · `model` · `responseModel` · `promptVersion` · `sentFields` · `latencyMs` · `attempt`)을 남긴다.
 본문 · 전사 · 이름 · 키는 없다. 속성 표는 `contracts/ai-io.md` 10.8이고 `log-hygiene-check` 허용 표에도 같은 목록이 있다.
 
@@ -524,6 +537,75 @@ cat core-api/build/luna-live/report.txt realtime-activity/build/luna-live/report
 - 보고서 한 줄 = 목적 · 결과 사유 · 응답 모델 · 지연(원문 없음). 키가 없으면 `outcome=SKIPPED_NO_KEY`이고 시험은 '건너뜀'이다(통과 아님).
 - 결과는 '실제 API · 합성 자료' 증거로만 적고, 기본 시험 · 끝-끝 결과(테스트 대역)와 섞지 않는다(R-M11).
 - 첫 실행에서는 목적마다 요청용 스키마 사본이 거절되지 않는지(`REQUEST_REJECTED` 아님)와 `temperature` 없이 받아들여지는지를 먼저 본다.
+
+### 8.6 Luna 응답 여부 · 지연 확인 `lunaReachTest` (U11, 개발 PC) [개발 PC]
+
+8.5는 운영 시한(`mujoong.timing.judgment.live-budget` 2초)에 묶여 `TIMEOUT`이면 Luna가 응답하는지 알 수 없다. 이 작업은 realtime 운영
+호출부를 그대로 쓰고 시도 시한만 넉넉히 줘서 합성 J6 판정 요청을 여러 번 보낸다(운영 설정은 바꾸지 않는다). 기본 `test` · `check` · CI ·
+`verify.sh`에는 들어가지 않는다(루트 `verifyLunaReachIsolation`). 합성 자료만 보내고(R-F15), 키는 그 PC의 env로만 넣는다(R-F3 · R-F13).
+
+```bash
+cd backend
+read -r -s -p 'OPENAI_API_KEY: ' OPENAI_API_KEY && export OPENAI_API_KEY && echo
+./gradlew :realtime-activity:lunaReachTest
+unset OPENAI_API_KEY
+cat realtime-activity/build/luna-reach/report.md
+```
+
+- 선택 env: `LUNA_REACH_TIMEOUT_SECONDS`(1 ~ 600, 기본 60) · `LUNA_REACH_COUNT`(1 ~ 20, 기본 2 — 공급자 사용량 한도 때문에 낮게 둔다) ·
+  `OPENAI_JUDGE_MODEL`(비면 운영 기본 모델). 비밀이 아니다.
+- 보고서 첫 줄은 `outcome=REACHED|NOT_REACHED|SKIPPED_NO_KEY`다. REACHED는 1회 이상 OK다. 표는 회차 · 사유 · 응답 모델 · 스키마 통과 ·
+  1 · 2순위 코드와 확률 · 지연 · 사용량(응답 `usage`의 토큰 숫자)이고, 요약은 성공 수 · 지연 중앙값 · 최대 · 2초 이하 비율 · 10초 이하 비율 ·
+  사용량 합계다. 사용량을 받지 못한 회차(TIMEOUT 등)는 '모름'이고 과금 여부를 단정하지 않는다. 원문 · 키 · 주소는 없다.
+- 운영 클라이언트는 응답 `usage`를 버리므로, 이 도구는 같은 운영 부품(정리 · 스키마 · 본문 조립 · 전송 · 응답 해석)을 같은 순서로 직접 부른다.
+  사유 분류가 운영과 같은지는 기본 시험(`LunaReachIsolationTest`, 루프백 대역)이 대조한다.
+- 금액은 계산하지 않는다. 단가는 OpenAI 결제 화면에서 확인한다(보고서는 사용량만 남긴다).
+- 결과는 '실제 API · 합성 자료' 증거로만 따로 적는다(R-M11). 키가 없으면 `SKIPPED_NO_KEY`이고 시험은 '건너뜀'이다(통과 아님).
+
+### 8.7 GPT-Live 격리 실호출 `gptLiveTest` (U11, 개발 PC) [개발 PC]
+
+U11 첫 작업(위험 R1)의 실호출 확인이다. 기본 `test` · `check` · CI · `verify.sh`에는 들어가지 않는다(루트 `verifyGptLiveIsolation`).
+합성 음성만 보내고(R-F15), 키는 그 PC의 env로만 넣는다(R-F3 · R-F13). 키를 넣기 전에 단계 4의 R-F15 확인 기록(확인 대상: Luna 판정 · GPT-Live 음성 중계)을
+남긴다. 운영 송수신 부품(세션 시작 팩토리 · 세션 · 해석기)으로 시도하고 한 실행이 연결을 한 번 연다. 이 도구는 **추가 전용 실험**이다: `response.create`는
+보내지 않고(클라이언트 위임 세션은 거절한다), `session.update`도 보내지 않는다(Responses 위임 전용). 지시 추가(`session.instructions.append`, 원시 JSON
+`event_id` · `delegation_id: null` · `content`)가 먹히는지만 본다. 흐름은 세션 시작 → P1 기준선(발화 하나, 자동 응답) → P2 끼어들기(첫 출력 조각 뒤 약
+300ms에 지시 #1) → P3 유휴 추가(출력이 없을 때 지시 #2만) → P4 지속성(평범한 발화 여러 번) → P6 한 번뿐 지시 → 종료이다. 각 단계는 출력과 전사가 모두
+`GPT_LIVE_QUIET_SECONDS`(기본 4초, 상한 30초) 조용해져야 끝나므로 늦게 도착하는 전사도 그 단계 창에 든다(실호출 약 2분 반, 줄이려면 아래 env).
+지시가 먹혔는지는 전사 원문을 남기지 않으려고 **표식 낱말**(P2 `나비`, P3 `두루미`, P6 `거북이`)로 본다: 도구가 출력 전사에 표식이 있는지를 메모리에서만
+확인해 예 · 아니오와 시간 · 개수만 보고서에 쓴다. 시간표는 세션 **오디오 시계**(누적 출력 바이트 / 48 = ms, 24kHz s16 모노)와 사건의 `start_ms` ·
+`end_ms`로 맞춘다.
+
+```bash
+cd backend
+read -r -s -p 'OPENAI_API_KEY: ' OPENAI_API_KEY && export OPENAI_API_KEY && echo
+./gradlew :realtime-activity:gptLiveTest
+unset OPENAI_API_KEY
+cat realtime-activity/build/gpt-live/report.md
+```
+
+- 선택 env(비밀 아님): `GPT_LIVE_RATE`(세션 시작에 싣는 입력 표본율, 기본 24000) ·
+  `GPT_LIVE_INPUT_PCM`(합성 말소리 파일 경로, WAV 또는 PCM16LE 모노 원시 — 말소리가 있어야 자동 응답이 온다) · `GPT_LIVE_INPUT_RATE`(원시 PCM의
+  표본율, 기본 24000) · `GPT_LIVE_QUIET_SECONDS`(단계 끝을 정하는 조용한 시간, 기본 4, 2 ~ 10) · `GPT_LIVE_PLAIN_TURNS`(P4 평범한 발화 횟수,
+  기본 2, 1 ~ 3) · `GPT_LIVE_ONE_SHOT`(P6 한 번뿐 지시 시험, 기본 켬, `0`이면 끔). 비용을 줄이려면 `GPT_LIVE_PLAIN_TURNS=1 GPT_LIVE_ONE_SHOT=0`.
+- 보고서 첫 줄은 `outcome=…`(① 입력 표본율 수락과 '지시 추가 수락'(지시를 보낸 뒤 오류 0건)이 모두 PASS일 때만 PASS), 다음 줄은 `rate=… phases=…`이다.
+  표는 항목 · 판정 · 관측이다. 새 행 읽는 법:
+  - **P2 시간표 귀속**: 확인 사건(`session.instructions.appended`)의 도착 시각(송신 뒤 ms · 오디오 시계 · 그 사이 받은 조각 수)과 자기 `start_ms` ·
+    `end_ms`, 표식 전사의 도착 시각과 `start_ms`, 두 사건 사이 조각 수, 조각 위치(송신 뒤 조각 목록에서 확인 도착 뒤 첫 조각 · 시계 ≥ 확인 `end_ms`
+    첫 조각 · 시계 ≥ 표식 `start_ms` 첫 조각).
+  - **P2 경계 규칙 R1 · R2 대 표식 기준**: 표식 전사의 `start_ms` 이후 조각을 새 응답(기준)으로 보고, R1(확인 도착 뒤 조각 = 새 응답)과 R2(시계 ≥ 확인
+    `end_ms` = 새 응답)가 낡은 조각을 새로 잘못 통과시킨 수와 새 조각을 잘못 버린 수를 센다. `start_ms`가 오디오 시계와 같은 시간축이라는 가정 위의
+    계산이므로 '확인 end_ms − 표식 start_ms'가 0에 가까운지도 함께 본다.
+  - **P3**: 말이 저절로 시작하는지(첫 조각 · 조각 수 · 음성 길이)와 표식 · 전사 글자 수를 `start_ms` 귀속과 도착 창으로 나란히 적고, 창이 닫힌 뒤 늦게
+    도착한 전사 조각 수를 센다.
+  - **P4 지속성**: 평범한 발화 n회 뒤 P3 표식이 있는지(전사 `start_ms`가 그 단계 음성 구간에 드는 조각만). P3에서 표식을 못 봤으면 판단 불가다.
+  - **P6 한 번뿐 지시**: 지시 직후 표식 말과, 다음 평범한 발화에 표식이 없는지.
+  - **전사 도착 지연**: 단계별로 전사 `end_ms`에서 도착 때 오디오 시계를 뺀 값(양수 = 전사가 음성보다 앞서 도착)과 `start_ms`가 단조인지, 오디오 시계
+    구간에 든 비율.
+  그 뒤에 지시 추가 수락(`client_event_id` 일치 · 확인 사건 모양) · `response.create` 미사용 · 종료 형식 · 오류 사건(가린 문장) · 지원 type 목록 ·
+  수신 사건 모양 · 사용량(`session.usage.updated` 마지막 값 · 세션 길이) 행이 있다. ②가 `NOT_OBSERVED`면 구현을 멈추고 사람과 다시 정한다(BR9.2).
+  전사 원문 · 음성 · 키는 담지 않는다(R-F14).
+- 금액은 계산하지 않는다. 단가는 OpenAI 결제 화면에서 확인한다(보고서는 사용량만 남긴다).
+- 결과는 '실제 API · 합성 자료' 증거로만 따로 적는다(R-M11). 키가 없으면 `SKIPPED_NO_KEY`이고 시험은 '건너뜀'이다(통과 아님).
 
 ## 9. 복구 시나리오 (infra-spec 4.5.3)
 
@@ -585,8 +667,7 @@ supercronic) · 배포 직전(D2) · 정지 직전(최근 1시간 성공이 없�
 |---|---|
 | `INTERNAL_SERVICE_TOKEN` | 새 값 입력 → 같은 SHA로 `DEPLOY`(두 앱이 함께 다시 만들어진다. 잠시 어긋나도 Outbox가 401을 재시도한다) |
 | `DB_CORE_PASSWORD` · `DB_REALTIME_PASSWORD` · `DB_BACKUP_PASSWORD` · `DB_OWNER_PASSWORD` | 슈퍼유저로 `ALTER ROLE`(아래) → 파라미터 갱신 → 같은 SHA로 `DEPLOY` |
-| `PROVIDER_API_KEY` | 공급자 콘솔에서 새 키 → 파라미터 갱신 → 같은 SHA로 `DEPLOY`(realtime만 다시 만들어진다) |
-| `OPENAI_API_KEY` | 공급자 콘솔에서 새 키 → 파라미터 갱신 → 같은 SHA로 `DEPLOY`(core-api · realtime이 다시 만들어진다) |
+| `OPENAI_API_KEY` | 공급자 콘솔에서 새 키 → 파라미터 갱신 → 같은 SHA로 `DEPLOY`(core-api · realtime이 다시 만들어진다. GPT-Live 음성 중계와 Luna 판정이 같은 키를 쓴다) |
 | `JEV_API_KEY` | 공급자 콘솔에서 새 키 → 파라미터 갱신 → 같은 SHA로 `DEPLOY`(realtime만 다시 만들어진다) |
 | `MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET` | 파라미터 갱신 → 같은 SHA로 `DEPLOY`(이후 ownerHash 값이 바뀐다) |
 | `GHCR_PULL_TOKEN` | 새 읽기 전용 토큰(만료 90일 이하) → 파라미터 갱신(배포 때만 쓰인다) |

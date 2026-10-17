@@ -45,7 +45,11 @@ public final class SessionTimers {
         /** U4b 마지막 기기 메시지 뒤 기술 일시정지(gap-display, BR6.1). */
         GAP_DISPLAY(false),
         /** U4b 종료 뒤 정산 창 상한(record-settle, BR8.1). */
-        RECORD_SETTLE(false);
+        RECORD_SETTLE(false),
+        /** U11 A3: 지시를 보낸 뒤 새 말이 시작하기를 기다리는 시한(response-ready, 지시 송신 시각부터). */
+        INSTRUCTION_WAIT(false),
+        /** U11 A7: 입력 전사 조각이 이만큼 오지 않으면 그 묶음을 확정 전사로 본다(input-transcript-quiet). */
+        INPUT_TRANSCRIPT_QUIET(true);
 
         private final boolean quietClock;
 

@@ -1,19 +1,3 @@
-> 최신 정본: 아래 U10 갱신절(2026-10-17, HEAD eb34c68bf24e4520881b7ffebe1070564554dfc9). 이후 U14/U15/전체 분석 본문은 역사 자료이며, 이번에 검증한 범위는 timestamp의 analyzed 목록만이다.
-
-## U10 현재 API·계약
-
-- POST /internal/practice/scenarios: sessionId, goalSelectionId, kind(ORIGINAL/NEW_SCENARIO), previousScenarioId를 받는다. 내부 인증 체인이 보호한다. ScenarioInternalController는 현재 Scenario 레코드를 그대로 반환한다.
-- practice-scenario.schema.json은 기존8필드가 필수이고 additionalProperties=true다. scriptVersion/scenes/selfReview/generation은 아직 없다. 새필드는 선택으로 추가해야 한다.
-- ai-scenario-output.schema.json은 scenes 배열과 BASE/VARIANT를 이미 정의한다. partnerRole은 생성 출력에 없고 Core의 고정 문장을 쓴다.
-- ai-scenario-review-output.schema.json은 verdict(APPROVE/REJECT/UNCERTAIN), reasons enum을 정의한다. 최종 J7 목록은 지시서의 후속 확정 대상이다.
-- SavedGoalReader.find(childId, selectionId)는 활성 선택만 반환한다. CANDIDATE에는 고정 candidateVersion·targetExpression·fourElements·skillRef, LEGACY_BEHAVIOR에는 legacyBehaviorKey/version이 있다. PinnedSavedGoalReader는 소유·동의를 검사한다.
-- ChildKnowledgeService.skillContext(guardian, child, seedId)는 Optional<SkillContext(seed,graphVersion)>; variantPlan은 context·실제 노출을 받아 한축 변형 계획을 돌려준다.
-- 현재 ScenarioService의 공급자 UNAVAILABLE/TIMEOUT은 SERVICE_NOT_READY다. U10 최종 생성실패 SCENARIO_GEN_FAILED 요구와 기존 U5a 단언의 호환 해석은 Requirements/Design에서 명시해야 하며 이 스캔은 오류 의미를 바꾸지 않았다.
-
-U12 계약 PR이 먼저 있으면 재사용한다는 지시는 유지한다. 이번 브랜치의 스키마에는 해당 선택 필드가 없음을 확인했다. 원격 PR 재고 확인은 지휘자의 별도 증거이며 이 스캔은 동료에게 메시지를 보내지 않았다.
-
----
-
 > 현재 범위의 정본은 바로 아래 U14 갱신절이다. 그 뒤 원문은 보존 이력이며 재검증 범위는 timestamp에 한정한다.
 
 ## U14 현재 API·계약 차이
@@ -126,4 +110,48 @@ ai-seed-output.schema.json은 skillName(1~80), invariantSentence(1~200), additio
 - springdoc OpenAPI: dev · test 프로필에서만 켜짐.
 - 프런트 `/healthz` route.
 
+---
 
+## U11 집중 갱신 (261016-u11-judgment-turn, 2026-10-16 스캔 — main 병합 때 보존한 절)
+
+> main의 U14 · U15 갱신본을 바탕으로 두고, U11 작업 기록의 집중 스캔에서 갱신한 절만 아래에 보존했다. 줄 번호 · 커밋은 2026-10-16 `9bcc706` 기준이며 PR1(선 형식 정비) 이전 코드다.
+
+## 6A. (2026-10-16 갱신) 외부 Luna 판정 API (나가는 HTTP, realtime-activity — U9)
+
+- 호출부: `kr.mujoong.realtime.luna.RealtimeLunaClient.call(LunaRequest)` → `CompletionStage<LunaResult>`. 던지지 않고 실패는 `LunaException(LunaFailureReason)`으로 예외 완료한다.
+- 표면: OpenAI Responses API `POST {base-url}/responses`(`mujoong.luna.base-url` 기본 `https://api.openai.com/v1`), 구조화 출력 `json_schema`, `store=false`. SDK 없이 JDK `HttpClient`(`LunaTransport`) + `JsonCodec`(편차 U9-a).
+- 목적: `LunaPurpose.JUDGMENT_LIVE` 하나(설정 `mujoong.luna.purpose.judgment-live`: `max-output-tokens` 4000 · `reasoning-effort` medium). 모델 `${OPENAI_JUDGE_MODEL:gpt-6-luna}`.
+- 시한: min(요청 마감, `mujoong.timing.judgment.live-budget` 2s). 재시도 없음(`attemptsUsed` 언제나 1). 호출자가 Future를 취소하면 HTTP 요청도 취소한다.
+- 요청: `LunaRequest(purpose, promptVersion, instructions, input(Map), aliases, deadline)`. `input`은 `ai-judgment-request.schema.json` 모양 — `judgmentPoint` · `optionSetVersion` · `options` · `childUtterance` · `criteria`(J1 · J4 · J6은 null) · `recentTurns`(≤ 3). 보내기 전 요청 스키마 검증 실패는 `FORBIDDEN_INPUT`(시도 0). 입력 정리 `LunaInputSanitizer`.
+- 출력: `ai-judgment-output.schema.json` — `first` · `second` 두 칸, 각 `{option: ^[A-Z][A-Z0-9_]*$, probability: 0~1}`. 스키마는 요청의 `options` 집합 · `first ≠ second` · 확률 합을 묶지 않는다(U11-R5).
+- 빈 조건: 환경 변수 `OPENAI_API_KEY`가 있을 때만 `LunaTransport` · `RealtimeLunaClient` 빈이 생긴다(`LunaConfiguration` L51). 없으면 빈 자체가 없다(U11-R6).
+- 허용 호스트: demo · prod는 https + `api.openai.com`만, test는 루프백만(`LunaHosts`, BR1.4).
+- 감사 로그 `LUNA_CALL` · `LUNA_STARTUP`(ai-io.md 10.8). 실호출 시험은 `./gradlew lunaLiveTest`(태그 `luna-live`)로 격리(편차 U9-c).
+
+## 10. (2026-10-16 갱신) realtime 앱 안 확장점 포트 (Java, U11 소유 · U12 구현)
+
+`kr.mujoong.realtime.session.PracticeSessionExtension` — 세션 실행기가 연습 흐름을 붙이는 앱 안 계약(C-DS3). 실행기 → 확장점 한 방향이며 확장점은 실행기를 부르지 않는다.
+
+| 구분 | 내용 |
+|---|---|
+| 시점(실행기 스레드에서 호출) | `onActive` · `onChildUtterance(Utterance)` · `onExtensionEvent(ExtensionEvent)` · `onSettle(EndContext)` · `practiceRecord()` + 기본 메서드 4개(`controlsOutput()` 등) |
+| `Utterance` | 전사 순번 · 시각 · 원문 · 불확실 여부 · 재생 중 여부 |
+| `ExtensionEvent.Kind` | `PLAYBACK_DONE` · `PLAYBACK_FACT` · `TIMER_FIRED` · `ASYNC_RESULT`(L88 ~ L93). U11 계약 요약이 말하는 `JUDGMENT_RESULT` · `JUDGMENT_ABSTAINED` · `HELD_OUTPUT_TRANSCRIPT` · `GUARDRAIL_BLOCKED`는 아직 없다 |
+| 출력 능력 `PracticeOutput` | `sessionId` · `playApproved(code)` · `instructProvider(text)` · `requestResponse()` · `cancelResponse()` · `holdOutput(bool)` · `schedule(name, delay)` · `cancel(name)` · `post(name, value)`(아무 스레드) · `speak(PracticeSpeech)`(`default false`) · `cancelSpeech(UUID)`(`default false`) |
+| 거절 규칙 | ACTIVE · 정산 전 · 살아 있는 확장점일 때만 받음(`practiceActive()`), 아니면 거짓 + 세션 사건 `PRACTICE_EXTENSION_FAILED{reason, capability}` |
+| 구현 | 운영: `NoOpPracticeSessionExtension`(무동작) · `practice.RuntimePracticeExtension`(U5b, `controlsOutput()=true`). 시험: `testing.RecordingPracticeExtension` |
+| 계약에 없는 능력 | `requestJudgment` · `announceRoleSwitch` · `setThinking`(U11 계약 요약) — `default` 메서드로 더하면 기존 구현을 고칠 필요가 없다 |
+
+## 11. (2026-10-16 갱신) 판정 · 시간 관련 계약 문서 지도
+
+| 문서 | 절 | U11 관련 내용 |
+|---|---|---|
+| `contracts/ai-io.md` | 3절 | 공급자 선 형식(J110 가정) |
+| `contracts/ai-io.md` | 10.1 ~ 10.7 | U8 스키마 9종 · 금지 필드 · 목적 → 호출 경로 → 재시도 분류 · 판 리소스와 세션 고정 · 원문 일치와 제브 생략 · 승인 발화 · 비밀 이름 |
+| `contracts/ai-io.md` | 10.8 ~ 10.10 | U9 감사 로그 · 설정 · 호출 방식 · 실패 사유 |
+| `contracts/schemas/ai-judgment-request.schema.json` · `ai-judgment-output.schema.json` | — | 판정 요청 · 출력 모양(출력은 선택지 집합을 묶지 않음) |
+| `contracts/schemas/practice-record-v2.schema.json` | — | 새 연습 흐름 기록 형식(`flowVersion` 필수) |
+| `contracts/timing.md` | 13절 | U8 새 키 7개: `judgment.live-budget`(2s) · `judgment.response-ready`(10s) · `guardrail.jev-budget`(800ms) · `conversation.no-response-wait`(10s) · `conversation.focus-max`(90s) · `conversation.goal-active-limit`(10m) · `knowledge.graph-budget`. 응답 준비 대기 초과 때 `D_HOLD` 되묻기를 말하지만 그 문구 정본은 코드 · 시드에 없다(U11-R8) |
+| `contracts/deviations.md` | U8 · U9 편차 표 | U8-a ~ U8-e, U9-a ~ U9-c |
+| `contracts/events.asyncapi.yaml` | `SessionRecordCaptured` 설명 | 형식 구분(위 5절) |
+| `contracts/device-ws.asyncapi.yaml` | `SESSION_STATE` | `STANDBY · LISTENING · THINKING · CLOSING` |

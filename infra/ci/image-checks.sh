@@ -116,7 +116,7 @@ short_err() { head -n 3 "$1" | cut -c1-240 | tr '\n' ' ' | sed 's/ $//'; }
 
 # 키 형식(값 모양) — 출력은 파일 이름 · 건수만. 비밀 스캔(a-secrets)이 이 파일을 키로 오인하지 않게 개인 키 머리글은 글자를 나눠 적는다
 readonly KEY_PATTERNS='AKIA[0-9A-Z]{16}|gh[pousr]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{50,}|(^|[^A-Za-z0-9_-])sk-[A-Za-z0-9_-]{20,}|-----BEGIN ([A-Z]+ )?PRIV''ATE KEY-----|xox[abprs]-[A-Za-z0-9-]{10,}|[a-z][a-z0-9+.-]*://[^/[:space:]:@"'\'']+:[^/[:space:]@"'\'']+@[A-Za-z0-9.-]+'
-readonly SECRET_NAME_PATTERN='POSTGRES_PASSWORD|DB_(OWNER|CORE|REALTIME|BACKUP)_PASSWORD|INTERNAL_SERVICE_TOKEN|PROVIDER_API_KEY|OPENAI_API_KEY|JEV_API_KEY|MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET|GOOGLE_OAUTH_CLIENT_SECRET|GHCR_PULL_TOKEN|NEO4J_AUTH|SPRING_DATASOURCE_PASSWORD'
+readonly SECRET_NAME_PATTERN='POSTGRES_PASSWORD|DB_(OWNER|CORE|REALTIME|BACKUP)_PASSWORD|INTERNAL_SERVICE_TOKEN|OPENAI_API_KEY|JEV_API_KEY|MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET|GOOGLE_OAUTH_CLIENT_SECRET|GHCR_PULL_TOKEN|NEO4J_AUTH|SPRING_DATASOURCE_PASSWORD'
 readonly PROXY_PATTERN='https?_proxy|HTTPS?_PROXY|NO_PROXY|ca-bundle|\.ccr|extra_ca|proxy_env'
 
 # copy_out <이미지> <경로> <대상 디렉터리> — 컨테이너를 실행하지 않고 파일을 꺼낸다
@@ -246,6 +246,10 @@ check4() {
   cp "$work/verify/env/compose.env" "$work/compose.env"
   bash "$ROOT/infra/bin/render-pgconf" --out "$work/verify/postgres/postgresql.conf" >/dev/null
   chmod 0755 "$work/verify" "$work/verify/postgres"
+  # demo 프로필은 GPT-Live 키가 필수다(U11 BR12.2). gen-env.sh는 키 자리값을 넣지 않으므로 더미 기동에만 실행 때 만든 무작위 값을 이 덮어쓰기
+  # 파일(임시 폴더, 실행 끝에 지움)로 준다. 접속하지 않고 어디에도 남기지 않는다(R-F3)
+  local dummy_key
+  dummy_key="$(openssl rand -hex 24)"
   # demo 프로필 · 실공급자 주소 형식(접속하지 않는다) · backup 켬. 이미지 이름은 --image 덮어쓰기를 반영한다
   cat >"$work/imgchk.yml" <<YAML
 services:
@@ -259,6 +263,7 @@ services:
     environment:
       SPRING_PROFILES_ACTIVE: demo
       MUJOONG_PROVIDER_URL: wss://api.openai.com/v1/live/sessions
+      OPENAI_API_KEY: $dummy_key
   migrate:
     image: $(ref migrate)
   fake-provider:
@@ -331,6 +336,16 @@ YAML
       fi
     done
   done
+  # demo realtime은 GPT-Live 키가 비면 기동을 거부한다(U11 BR12.2): 위 덮어쓰기의 더미 키를 빈 값으로 되돌려 확인한다
+  rc=0
+  MUJOONG_VERIFY_DIR="$work/verify" timeout 90 docker compose -p "$project" --env-file "$work/compose.env" \
+    -f "$ROOT/infra/compose.demo.yml" -f "$ROOT/infra/compose.ci.yml" -f "$work/imgchk.yml" \
+    run --rm --no-deps -e "OPENAI_API_KEY=" realtime >"$work/c4-guard.log" 2>&1 || rc=$?
+  if [ "$rc" -eq 0 ] || [ "$rc" -eq 124 ]; then
+    problems+=("realtime이 OPENAI_API_KEY 없는 demo 구성에서 기동을 거부하지 않았다(rc=$rc)")
+  elif ! grep -qF 'MUJOONG_STARTUP_REJECTED ' "$work/c4-guard.log"; then
+    problems+=("realtime OPENAI_API_KEY 없는 demo 구성이 기동 거부 줄 없이 끝났다(rc=$rc)")
+  fi
   dc4 down -v --remove-orphans >/dev/null 2>&1 || true
   if [ "${#problems[@]}" -gt 0 ]; then fail ④ "${problems[*]}"; else pass ④; fi
 }

@@ -215,7 +215,7 @@ class SessionExecutorTest {
         boolean accepted = h.mailbox.offerGeneral(new SessionMailbox.PlaybackMarkReceived(h.link.connectionId(),
                 new PlaybackMark(UUID.randomUUID(), PlaybackMark.Status.COMPLETED, null, h.clock.now(), null, null),
                 h.clock.now()));
-        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("r1", "늦은 말"));
+        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("늦은 말"));
 
         assertThat(accepted).isFalse();
         assertThat(h.drain()).isZero();
@@ -394,23 +394,20 @@ class SessionExecutorTest {
     }
 
     @Test
-    void onlyTheOutputDoneOfTheOpenResponseStartsTheAiRowsViewItemReadyTime() {
+    void theAiRowsViewItemReadyTimeStartsAtTheLastChunkOfTheSealedSegment() {
         h.activate();
         h.provider.last().emit(new ProviderEvent.InputTranscriptDelta("item-1", "공룡"));
-        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("r1", "공룡 좋아"));
-        h.provider.last().emit(new ProviderEvent.OutputAudioDelta("r1", new byte[4800]));
-        h.provider.last().emit(new ProviderEvent.OutputDone("r0"));
-        h.drain();
+        h.speak("공룡 좋아", 4800);
         h.advance(Duration.ofMillis(300));
-
-        h.provider.last().emit(new ProviderEvent.OutputDone("r1"));
+        // 마지막 조각(300ms) 뒤 조용 시간을 채워 봉인하고 통과한다
+        h.provider.last().emit(new ProviderEvent.OutputAudioDelta(new byte[4800]));
         h.drain();
-        h.advance(Duration.ofMillis(500));
+        h.advance(Duration.ofMillis(800));
 
         Timer ai = h.metrics.registry().find(RealtimeMetrics.VIEW_ITEM_READY).tag("speaker", "ai").timer();
         assertThat(ai.count()).isEqualTo(1);
-        assertThat(ai.totalTime(TimeUnit.MILLISECONDS)).as("r1의 끝(300ms) → 게이트 통과 커밋(800ms), 다른 응답의 끝은 시작점이 아니다")
-                .isEqualTo(500.0);
+        assertThat(ai.totalTime(TimeUnit.MILLISECONDS)).as("구간의 마지막 조각(300ms) → 게이트 통과 커밋(1100ms): 응답 끝 사건이 없어 공급자 출력 끝은 마지막 조각 시각이다")
+                .isEqualTo(800.0);
         assertThat(h.store.transcripts).filteredOn(row -> row.speaker() == TranscriptEntry.Speaker.AI)
                 .singleElement().satisfies(row -> assertThat(row.approvedForDisplay()).isTrue());
     }

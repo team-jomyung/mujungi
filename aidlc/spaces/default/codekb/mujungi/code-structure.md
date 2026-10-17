@@ -1,24 +1,3 @@
-> 최신 정본: 아래 U10 갱신절(2026-10-17, HEAD eb34c68bf24e4520881b7ffebe1070564554dfc9). 이후 U14/U15/전체 분석 본문은 역사 자료이며, 이번에 검증한 범위는 timestamp의 analyzed 목록만이다.
-
-## U10 집중 갱신 — 변경이 필요한 위치
-
-| 구분 | 현재 파일·책임 |
-|---|---|
-| 서비스/유스케이스 | practice/ScenarioService, practice/start/PracticeStartService: 선점·재생성·준비/발급 |
-| 저장소/모델 | ScenarioRepository, Scenario, GeneratedScenario, ScenarioPrompt: 기존 단일 대본 |
-| 경계/검사 | ScenarioContentPolicy, textai/ForbiddenExpressionPolicy, TextAiGateway |
-| 외부 어댑터/구성 | luna/adapter/LunaTextAiProvider, CoreLunaClient, LunaRequest/Purpose/CallBudget, ScenarioConfiguration |
-| 목표 읽기 | practicegoal/SavedGoalReader, PinnedSavedGoalReader, FourElements |
-| 그래프 읽기 | knowledge/ChildKnowledgeService, VariantPlanner, KnowledgeSeed |
-| 내부 HTTP | practice/web/ScenarioInternalController |
-| DB | core V4 기존 대본표·V9 목표 버전표 존재, V10 없음 |
-| 계약 | ai-scenario-output/review 스키마 존재, practice-scenario 새4필드 없음 |
-| 시험/범위 | 기존 ScenarioServiceTest(u5a), u9/u14/u15 경계시험 존재; u10.txt 없음 |
-
-FrozenGoal과 GoalSnapshot은 behaviorKey/version 기반이다. PreparedPracticePackageMapper는 기존 Scenario 8필드만 첫 대본 Map으로 옮긴다. 따라서 새 후보 입력과 scenes 전달은 이 준비 경로까지 추적해야 한다. 빌드 출력·의존·캐시와 AI-DLC 설치는 분석 대상에서 제외했다.
-
----
-
 > 현재 범위의 정본은 바로 아래 U14 갱신절이다. 그 뒤 원문은 보존 이력이며 재검증 범위는 timestamp에 한정한다.
 
 ## U14 집중 갱신 — 변경 표면
@@ -141,4 +120,22 @@ U15 ChildKnowledgeService, SeedGenerationService, StructureSignature는 구현�
 - **주석**: 한국어 Javadoc, 결정 ID(J · BR · U*-J · 편차) 인용.
 - **화면 문구**: 프런트 화면 문구는 `shared/copy` 모듈만(ESLint `react/jsx-no-literals`).
 
+---
 
+## U11 집중 갱신 (261016-u11-judgment-turn, 2026-10-16 스캔 — main 병합 때 보존한 절)
+
+> main의 U14 · U15 갱신본을 바탕으로 두고, U11 작업 기록의 집중 스캔에서 갱신한 절만 아래에 보존했다. 줄 번호 · 커밋은 2026-10-16 `9bcc706` 기준이며 PR1(선 형식 정비) 이전 코드다.
+
+## realtime 세션 실행기 내부 지도 (2026-10-16 집중 스캔)
+
+`session/SessionExecutor.java`(3,388줄) 중 U11이 닿는 구간. 줄 번호는 커밋 `9bcc706` 기준.
+
+| 구간 | 줄 | 내용 |
+|---|---|---|
+| 확장점 신호 · 출력 능력 | L1174 ~ L1556 | `practiceSignal`, `onPracticeEvent`(L1224, `ASYNC_RESULT` 등 처리), 기술 일시정지 중 `pausedPracticeEvents` 적재, 내부 클래스 `PracticeOutputPort`(L1403 ~), `practiceActive()` · `refusePractice` → `PRACTICE_EXTENSION_FAILED{reason, capability}` |
+| 공급자 사건 처리 | L1557 ~ L1760 | `refuseHeldResponse`(L1593), `outputHeld()`(L1600), `SpeechStopped`(L1642) → `thinking()`, `InputTranscriptDone`(L1660) → 참여 응답 · 확장점 · 종료 의도(L1676 ~ L1688), `beginOutput`(L1734 ~ L1743, 첫 조각에 `transcripts.aiStart`), `providerLost()`(L1758) |
+| 공급자 끊김 · 중단 | L1780 ~ | `abortProviderLost()` |
+| 종료 의도 | L1809 ~ L1905 | `judgeStopIntent`(`StopIntentJudge` 결과 STOP · CONFIRM · NONE 처리) |
+| 기술 일시정지 | L2046 ~ | `startPause` |
+| 생각 중 · 게이트 · 공급자 송신 | L2116 ~ L2375 | `thinking()`(L2135) · `listeningAgain()`(L2142), `sealAndGate`(L2165 ~ L2206), `toProvider`(L2324 ~ L2340) · `enqueuePracticeProvider`(L2342 ~ L2361) |
+| 정산 | L1113 | `finishSettle` → `SessionSettlement.capture` |

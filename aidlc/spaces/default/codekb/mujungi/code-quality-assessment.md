@@ -1,25 +1,3 @@
-> 최신 정본: 아래 U10 갱신절(2026-10-17, HEAD eb34c68bf24e4520881b7ffebe1070564554dfc9). 이후 U14/U15/전체 분석 본문은 역사 자료이며, 이번에 검증한 범위는 timestamp의 analyzed 목록만이다.
-
-## U10 집중 갱신 — 확인된 회귀·위험
-
-이번 단계는 읽기·분석만 했으며 시험을 실행하지 않았다. 이전 U14/U15 통과 수치를 U10 기준시험으로 재사용하지 않는다.
-
-기존 ScenarioServiceTest(u5a)는 동일요청 재사용, 2회 내용 실패 미발급, 중복 대본 재생성, 소유/세션 검사, 삭제 중 늦은 쓰기, lease 만료, 요청 선점 경쟁, 실제 노출 정산을 검증한다. UNAVAILABLE/TIMEOUT→SERVICE_NOT_READY 단언도 있다. 다른 유닛 단언을 수정하지 않고 U10 실패 의미와 연결 방식을 명확히 해야 한다.
-
-| 위험 | 코드 근거·후속 확인 |
-|---|---|
-| 새 목표 시작 미연결 | PracticeStartService:90의 기존선택조회, FrozenGoal 필수 behaviorKey/version, ScenarioService:67 정의고정 |
-| 첫 대본 선택필드 유실 | PreparedPracticePackageMapper:28은 기존8필드 Map만 복사 |
-| 중첩 재시도/보정 부족 | TextAiGateway의 기술루프, CoreLunaClient:128~132, LunaCallBudget:17의 최대3 |
-| 그래프 전체예산 | ChildKnowledgeService:167의 skillContext 재조회; 순차2회가 최대4초 소모 가능 |
-| 자체검토만 신뢰할 위험 | 현재 ScenarioContentPolicy는 관계·기회·트리거 문자열 관계만 검사; 새 장면·변형 보존 판정은 추가해야 함 |
-| 관심사 정책 미확정 | LunaInputSanitizer 금지키와 LunaTextAiProvider 입력제외; Functional Design 사람 질문 |
-| 실호출 증거 부족 | fake 시험은 실제15초 성능 증명이 아님; live는 별도 승인·합성자료 확인 후 구분 |
-
-명명·안전한 예외/메타 분리는 양호, 서비스의 여러 책임·압축서식과 레거시/새 계약 분기는 보통 수준이다. 전면 리팩터링은 범위 밖이다. U10 태그·coverage-scope/u10.txt 및 최소80% 줄 검증은 아직 없다. 모듈/다른유닛 회귀·계약 대조·전체 검증·GitHub CI는 후속 단계에서 수행한다.
-
----
-
 > 현재 범위의 정본은 바로 아래 U14 갱신절이다. 그 뒤 원문은 보존 이력이며 재검증 범위는 timestamp에 한정한다.
 
 ## U14 집중 갱신 — 확인 사실과 검증 계획
@@ -111,4 +89,34 @@
 
 시험 · CI · 계약 관리는 촘촘하다(시험 약 2천 개, 줄 80% 하한, 계약 시험, 불변식 검사). 약점은 (1) 외부 AI 운영 어댑터가 없고 음성 선 형식이 자체 정의라 실공급자 연결이 검증되지 않은 점, (2) 세션 실행기 집중과 압축 서식, (3) 시간 값 · 커버리지 범위 · 마이그레이션처럼 여러 곳을 함께 고쳐야 하는 규칙이다.
 
+---
 
+## U11 집중 갱신 (261016-u11-judgment-turn, 2026-10-16 스캔 — main 병합 때 보존한 절)
+
+> main의 U14 · U15 갱신본을 바탕으로 두고, U11 작업 기록의 집중 스캔에서 갱신한 절만 아래에 보존했다. 줄 번호 · 커밋은 2026-10-16 `9bcc706` 기준이며 PR1(선 형식 정비) 이전 코드다.
+
+## 6. (2026-10-16 갱신) U11 판정 턴 관점 위험 (U11-Rn)
+
+개발자 스캔(`aidlc/spaces/default/intents/261016-u11-judgment-turn/inception/reverse-engineering/developer-scan.md`)의 우려를 설계 담당이 코드로 다시 짚어 정리했다. 줄 번호는 커밋 `9bcc706` 기준. "다음 단계" 열은 결정이 아니라 어느 단계가 정해야 하는지만 적는다.
+
+| ID | 위험 | 증거 | 왜 문제인가 | 다음 단계 |
+|---|---|---|---|---|
+| U11-R1 | **GPT-Live 선 형식 불확실(중단 조건)** | `ProviderClient` 수신 9종에 `response.created` 류 없음, 응답 id는 첫 출력 조각으로만 앎(`ProviderResponseId`). 선 형식은 J110 가정(ai-io.md 3절) | '지시 뒤 응답만 통과'(C-DS15)를 공식 신호가 아니라 세대 번호(`bumpGeneration`) · 취소 목록(`cancelledResponses`) 가정에 둘 수밖에 없다. 실선 형식(FR12.2)에서 맞는지는 실호출로만 확인. GPT-Live용 격리 실호출 작업이 없다 | FR12.2 실호출 결과 전에는 선 형식을 바꾸지 않음(ADR-007). Functional Design에서 가정과 실호출 확인 항목을 분리 |
+| U11-R2 | **공급자 송신 순서 보장 없음** | `toProvider`(L2324 ~ L2340)가 출력권 없는 경로에서 송신마다 `launcher().launch`로 가상 스레드를 띄움(L2339). `ProviderClient.Session` 송신 잠금은 동시 쓰기만 막음. 순서 보장은 직렬 큐 `enqueuePracticeProvider`(L2342 ~ L2361)뿐이고 `controlsOutput()`일 때만 탐. `speak`(L1405 ~ L1428)는 한 작업 안에서 cancel → correct → create | `session.instructions.correct` 다음 `session.response.create`를 두 번의 `toProvider`로 보내면 공급자가 응답 생성을 먼저 받을 수 있다. `ManualLauncher`가 이 경쟁을 시험에서 드러내지 못한다 | Functional Design: 판정 턴 송신을 한 작업 안 연속 송신 또는 직렬 큐로. 시험은 순서를 단언하는 대역 필요 |
+| U11-R3 | **보류 출력 경로가 '취소 + 원문 기록'** | `outputHeld()`(L1600 ~ L1604)가 참이면 `refuseHeldResponse`(L1593)가 `session.response.cancel`로 취소하고 이후 조각(전사 포함)을 버림. 보류가 아니면 `beginOutput`(L1734 ~ L1743)이 첫 조각에서 무조건 `transcripts.aiStart`(L1740). 게이트 폐기도 `aiFinal(text, false, …)`로 `realtime_transcript`에 원문 저장(`TranscriptWriter` L112 ~ L122), 표시 · 스냅숏에서만 거름(`ResultSnapshotBuilder` L115) | 판정 턴 요구(FR5: 자동 응답 음성은 버리되 전사는 `judgment_live`에만, `HELD_OUTPUT_TRANSCRIPT` 사건, 대화 기록에 남기지 않음)를 담을 갈래가 없다. 기존 보류에 얹으면 전사를 잃고, 게이트 경로에 태우면 대화 기록에 남는다 | Functional Design: 보류 출력은 구간 버퍼 · 전사 기록기 **앞**에서 갈라 `judgment_live`로만 |
+| U11-R4 | **V5 추가 시 판 번호 단언** | `RealtimeSchemaIT` L46 ~ L56(표 목록) · L88 · L94(최신 판 "4"), `PracticeMigrationRegistrationTest` L22(`expectedVersion()` == "4"). `SchemaVersionCheck.expectedVersion()`은 classpath 최대 판을 스스로 계산 | `judgment_live`(realtime V5)를 더하면 앞 유닛 시험 단언이 깨진다. R-F2(기존 단언을 낮추지 않음)와의 관계를 사람이 정해야 한다. 앞 유닛 V4도 같은 방식으로 목록을 늘린 것으로 보임 | Requirements Analysis에서 질문: 단언 갱신(사실 반영)을 R-F2 위반으로 볼지 |
+| U11-R5 | **판정 출력 스키마 검증 빈틈** | `ai-judgment-output.schema.json`: `first` · `second` 각 `{option: ^[A-Z][A-Z0-9_]*$, probability: 0~1}`만 | 요청 `options` 밖 코드, `first.option == second.option`, 확률 합 1 초과가 스키마를 통과한다. ai-io 10.3 "선택지 밖 코드는 판정 보류" | Functional Design: `JudgeClient` 구현이 직접 걸러 보류로 바꿈(스키마 변경은 계약 변경 — R-M10) |
+| U11-R6 | **Luna 빈이 키 있을 때만** | `LunaConfiguration` L43 ~ L58 `@Conditional(LunaKeyPresentCondition)` — `LunaTransport` · `RealtimeLunaClient` 둘 다 | 시험 · 키 없는 demo에는 빈이 없어 `JudgeClient`가 주입 실패하거나 null 처리가 필요하다. R-F1(시험에서 실공급자 금지) · R-F15(확인 기록 전 아동 데이터 외부 전송 금지, 편차 U9-b)와 묶인다 | Functional Design: 빈 없을 때 '언제나 보류' 동작과 시험 대역을 정함 |
+| U11-R7 | **겹치는 판정기** | 자유대화 J1(참여) = `JoinTracker`(ACCEPT · REFUSE · TOPIC_REFUSAL · UNCLEAR), J6(종료 의도) = `StopIntentJudge`(STOP · CONFIRM · NONE). `judgeStopIntent`(L1809) 호출 순서가 출력권 여부에 따라 다름 — 출력권 확장은 확장점 전달 **앞**, 아니면 **뒤** `thinking()` 조건 안(L1676 ~ L1688) | 같은 질문을 규칙과 Luna가 따로 답하면 결과가 엇갈린다. 등록 종료 표현 → 판정 멈춤(FR3.5)을 지키려면 종료 판정이 판정 턴 시작보다 앞서야 한다 | Functional Design: 대체/보조(예: 규칙이 UNCLEAR · CONFIRM일 때만 Luna) 결정, 종료 판정 순서 고정 |
+| U11-R8 | **없는 설정 키 · 문구** | `mujoong.judgment.min-confidence` · `min-margin` 키 없음. `ConfigKeyContractTest`가 yml `mujoong.*` 키 집합 = 설정 레코드가 읽는 키 집합을 강제, `judgment` 묶음은 `TIMING_GOVERNED_GROUPS`(L73 ~ L75)에 없음. `contracts/timing.md` 13절의 응답 준비 대기 초과 `D_HOLD` 되묻기 문구가 `DialogInstructions`(`Correction` 열거 · `JOIN_FIRST_QUESTION`만)와 U8 승인 발화 시드(ai-io 10.6)에 없음. 다음 행동 지시 템플릿 · 프롬프트 지시문 · `promptVersion` 정본도 없음 | 새 키를 별도 설정 클래스로 두면 `ConfigKeyContractTest` 바인딩을 고쳐야 해 R-F2와 부딪힐 수 있다. `D_HOLD` 문구 정본이 없으면 대기 초과 동작을 구현할 수 없다 | 새 키는 `RealtimeProperties` 루트 레코드에 한 칸. `D_HOLD` · 지시 템플릿은 Requirements Analysis 질문(정본 개정이 필요하면 RP 표). 지시문에 판정 라벨 · 확률 · 기준을 넣지 않는 규칙(FR3.7)은 `PracticeInstruction` 같은 값 타입으로 강제 가능 |
+| U11-R9 | **ArchUnit 패키지 제약** | `LunaArchTest` L31 ~ L37(`luna`는 `voice` · 제브 · 로그 프레임워크 · Jackson 참조 금지), `RealtimeArchTest` L174 ~ L180(`gate` · `voice`는 JDBC · 저장소 · Outbox 참조 금지) | `JudgeClient` 구현이나 `judgment_live` 저장소를 `luna` · `gate` · `voice`에 두면 아키텍처 시험이 실패하고, 시험을 고치는 것은 R-F2 위반 | Functional Design: 새 판정 패키지(예: `kr.mujoong.realtime.judgment`)에 둠 |
+| U11-R10 | **`SessionExecutor` 파일 소유 · 충돌 면** | 3,388줄 · 상태 필드 약 70 · 메서드 약 130, 17번 커밋. U11 → U13 → U12가 차례로 고침(지시서 · project.md 교정). U13 제브 자리 = `sealAndGate`(L2165 ~ L2206) `inspect` 뒤 · `recheck` 앞 | 판정 턴 상태(차례 id · 보류 버퍼 · 응답 준비 시계 · 늦은 결과 거르기)를 이 클래스에 더 쌓으면 U13 · U12 병합 충돌과 리뷰 비용이 커진다 | Functional Design: 판정 턴 상태를 실행기 스레드 전용 협력 객체로 떼고, 실행기에는 호출 지점만 |
+| U11-R11 | '생각 중'이 보류 중엔 안 나감 | `thinking()`(L2135 ~ L2139)은 `!outputHeld()`일 때만 THINKING. `listeningAgain()`(L2142)은 게이트 폐기 · 대기 문구 경로에서 LISTENING으로 | 판정 턴 보류를 `outputHeld()`에 합치면 FR5 "보낼 응답이 없으면 생각 중 유지"와 부딪힌다 | Functional Design: 판정 턴 보류를 `outputHeld()`와 다른 조건으로, 또는 `setThinking` 능력으로 |
+| U11-R12 | 늦은 비동기 결과 거르기 틀 없음 | `RealtimeLunaClient.call`(L63)의 완료 콜백은 HTTP 클라이언트 스레드. 실행기 상태는 실행기 스레드만 바꿈. 편지함 경로(`PracticeOutput.post` → `putSafety` → `onPracticeEvent` L1224)는 있으나 비교 기준 '판정 차례 id'가 없음. 장애 경로 `providerLost()`(L1758) · `abortProviderLost()`(L1780) · `startPause`(L2046) | 판정 결과가 장애 취소 · 다음 차례 뒤에 도착하면 낡은 결과로 출력이 풀릴 수 있다(FR5 장애 취소) | Functional Design: 차례 id · 출력 세대로 늦은 결과를 버리고 장애 경로에서 판정 턴을 '장애 취소'로 기록 |
+| U11-R13 | 삭제 · 계약 열린 질문 | `RealtimeDeletionParticipant.order()`: 음성 100 → 연습 150 → 세션 200 → 메시징 900. `DeletionCompleted.counts` 포함 여부는 U8 contract-summary 4절 열린 질문(U11 · U13 · U15). 실행기는 DB를 기다리지 않는 관례(`AsyncRecorder`) | `judgment_live`가 세션 행에 외래 키를 걸면 200 앞에서 지워야 한다. 쓰기 경로의 비동기 · 재시도 정책도 미정 | Requirements Analysis: counts 포함 여부, Functional Design: 삭제 순서 · 비동기 쓰기 |
+
+추가로 지킬 사실(위험은 아님):
+
+- 확장점 포트는 더하기만으로 넓힐 수 있다 — `PracticeOutput`의 `default false` 선례(`speak` · `cancelSpeech`), `ExtensionEvent.Kind`를 다 훑는 `switch`가 운영 · 시험 코드에 없음(값 추가가 컴파일을 깨지 않음).
+- 레거시 `EvaluationProvider`(U5b)와 새 `JudgeClient`는 이름 · 역할이 겹치지만 별개로 둔다(지시서).
+- 스캔 범위에서 `Instant.now()` · `System.currentTimeMillis()` 직접 사용은 없다. 숫자 리터럴은 `SegmentBuffer.MAX_BYTES`(바이트) · `InputRelay.VOICE_ENERGY_THRESHOLD`(진폭) · `LunaTransport`의 `Retry-After` 해석 정도이고 허용 목록으로 관리된다.

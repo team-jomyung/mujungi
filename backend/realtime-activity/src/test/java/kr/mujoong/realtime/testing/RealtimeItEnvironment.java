@@ -66,7 +66,8 @@ public final class RealtimeItEnvironment implements AutoCloseable {
                 .requestSchema("internal-device-connection-report.schema.json")
                 .respond(StubResponse.json(200, "{}"));
         this.eventsRoute = core.route("POST", "/internal/events").respond(StubResponse.json(200, "{}"));
-        this.provider = FakeProviderWsServer.start();
+        // 옛 시험의 순서(아이 전사 확정 뒤 AI 말)를 흉내 낸다: 앱 시험 설정의 input-transcript-quiet(150ms)보다 길게 기다린다
+        this.provider = FakeProviderWsServer.start().childConfirmDelay(Duration.ofMillis(300));
         Map<String, String> args = new LinkedHashMap<>(RealtimeTestApp.defaults(postgres, core.baseUrl(),
                 providerOverride != null ? providerOverride : provider.uri(), internalToken));
         // 첫 요청의 스키마 검증 · JIT 지연으로 100ms verify 제한에 걸리지 않게 시험 묶음만 늘린다(I-3: verify < hello 유지)
@@ -165,6 +166,9 @@ public final class RealtimeItEnvironment implements AutoCloseable {
         childSays("join-" + sessionId, "응");
         awaitOrDump(sessionId, () -> sessionStatus(sessionId) == kr.mujoong.contract.status.SessionStatus.ACTIVE,
                 "ACTIVE");
+        // 설계 개정 A2: 참여 뒤 첫 응답은 지시 하나로 시작한다. 가짜 공급자가 그 지시를 받은 뒤의 말부터 응답으로 받는다(연습처럼 지시를 보내지
+        // 않는 세션은 잠깐 기다리고 넘어간다)
+        provider.await("session.instructions.append", 1, Duration.ofSeconds(3));
     }
 
     /**
@@ -212,10 +216,9 @@ public final class RealtimeItEnvironment implements AutoCloseable {
 
     /** 가짜 공급자로 아이 확정 전사 하나를 흘린다(조각 · 확정). */
     public void childSays(String itemId, String text) {
-        provider.emit(new FakeProviderWsServer.Event("session.input_transcript.delta", null, itemId, text, null, null,
-                null, null));
-        provider.emit(new FakeProviderWsServer.Event("session.input_transcript.done", null, itemId, null, text, null,
-                null, null));
+        // 공급자는 입력 전사 완료 사건을 주지 않는다(설계 개정 A7): 조각만 보내면 앱이 input-transcript-quiet 뒤 확정한다
+        long clock = provider.audioClockMs();
+        provider.emitInputTranscript(text, clock, clock);
     }
 
     /** 세션 행의 지금 상태(없으면 null). */

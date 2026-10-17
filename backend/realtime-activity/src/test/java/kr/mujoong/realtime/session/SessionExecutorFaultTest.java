@@ -39,7 +39,8 @@ class SessionExecutorFaultTest {
     /** 일반 편지함 상한만 4로 줄인 설정(나머지는 운영 기본값). */
     private static final SessionExecutor.Settings SMALL_MAILBOX = new SessionExecutor.Settings(Duration.ofSeconds(20),
             Duration.ofSeconds(30), Duration.ofSeconds(40), Duration.ofMillis(800), Duration.ofSeconds(20),
-            Duration.ofSeconds(1), 50, 4, 60, SessionHarness.LIFECYCLE);
+            Duration.ofSeconds(1), 50, 4, 60, SessionHarness.LIFECYCLE, Duration.ofMillis(1500),
+            Duration.ofMillis(600), Duration.ofSeconds(10));
     private static final Duration DEADLOCK_GUARD = Duration.ofSeconds(5);
 
     private final SessionHarness h = new SessionHarness();
@@ -215,6 +216,8 @@ class SessionExecutorFaultTest {
     @Test
     void aDisconnectCheckThatFindsALostClosingCommitFollowsTheClosingRulesInstead() {
         h.activate();
+        // activate가 끊김 확인 몫으로 시계를 앞당겼으니 기기의 마지막 메시지 시각을 지금으로 다시 잡는다(이 시험의 40초 경계는 그 시각부터다)
+        h.link.touch(h.clock.now());
         h.advance(Duration.ofMillis(39_500));
         Instant committedAt = h.clock.now();
         CompletableFuture<EndOutcome> stop = new CompletableFuture<>();
@@ -351,7 +354,7 @@ class SessionExecutorFaultTest {
         int capacity = harness.settings.mailboxCapacity();
         for (int i = harness.mailbox.generalSize(); i < capacity; i++) {
             assertThat(harness.mailbox.offerGeneral(new SessionMailbox.ProviderEventReceived(
-                    new ProviderEvent.SpeechStopped(), harness.clock.now(), harness.clock.monotonicNanos()))).isTrue();
+                    new ProviderEvent.UsageUpdated(0.0), harness.clock.now(), harness.clock.monotonicNanos()))).isTrue();
         }
         assertThat(harness.mailbox.generalSize()).isEqualTo(capacity);
     }

@@ -90,7 +90,7 @@ expect "bad-cap-add" 1 "invariant-11: web에 cap_add" -- "${inv[@]}" --compose "
 expect "bad-core-depends-realtime" 1 "invariant-12:" -- "${inv[@]}" --compose "$SAMPLES/bad-core-depends-realtime.yml"
 expect "bad-unreceived-secret(5)" 1 "invariant-5: web" -- "${inv[@]}" --compose "$SAMPLES/bad-unreceived-secret.yml"
 expect "bad-unreceived-secret(files)" 1 "FAIL secret-env-files" -- "${inv[@]}" --compose "$SAMPLES/bad-unreceived-secret.yml"
-expect "bad-inline-secret" 1 "environment:에 비밀 PROVIDER_API_KEY" -- "${inv[@]}" --compose "$SAMPLES/bad-inline-secret.yml"
+expect "bad-inline-secret" 1 "environment:에 비밀 OPENAI_API_KEY" -- "${inv[@]}" --compose "$SAMPLES/bad-inline-secret.yml"
 expect "bad-latest-tag" 1 "invariant-8:" -- "${inv[@]}" --compose "$SAMPLES/bad-latest-tag.yml"
 prof=(--only demo-profile --compose "$DEMO")
 expect "demo-profile-as-is" 0 "" -- "${prof[@]}"

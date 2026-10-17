@@ -13,6 +13,7 @@ import kr.mujoong.contract.ws.message.PlaybackMark;
 import kr.mujoong.contract.ws.message.SessionState;
 import kr.mujoong.contract.ws.message.View;
 import kr.mujoong.realtime.dialog.DialogInstructions;
+import kr.mujoong.realtime.dialog.InstructionTemplates;
 import kr.mujoong.realtime.testing.FakeDeviceLink;
 import kr.mujoong.realtime.voice.ProviderRequestFactory;
 import kr.mujoong.realtime.testing.SessionHarness;
@@ -42,12 +43,10 @@ class SessionExecutorReview2U3Test {
     void liftingTheStopIntentDoesNotLeaveTheDeviceThinking() {
         h.activate();
         done("i1", "그만할래");
-        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("r1", "그래 더 하자"));
-        h.provider.last().emit(new ProviderEvent.SpeechStopped());
+        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("그래 더 하자"));
         h.drain();
 
         done("i2", "아니 더 얘기하자");
-        h.provider.last().emit(new ProviderEvent.OutputDone("r1"));
         h.drain();
 
         assertThat(eventTypes()).doesNotContain(SessionExecutor.EVENT_CHILD_STOP_LIFTED);
@@ -83,6 +82,8 @@ class SessionExecutorReview2U3Test {
         h.activate();
         emitComplete("r1", "진단해 보면 이래");
         h.advance(Duration.ofMillis(800));
+        // 폐기 뒤 교정 지시(U11 W9)가 끊김을 확인하고 나간다
+        h.settleSend();
         // 첫 대기 문구가 20초 만기로 잊힌 뒤 둘째 대기 문구 — 둘 다 ACK가 없다
         h.advance(Duration.ofSeconds(21));
         h.link.touch(h.clock.now());
@@ -99,6 +100,7 @@ class SessionExecutorReview2U3Test {
 
         // 다시 보낸 재생의 끝이 추적을 지워 다음 폐기에 대기 문구가 나간다
         mark(fresh, fillers.get(1).playbackId(), PlaybackMark.Status.COMPLETED);
+        h.settleSend();
         emitComplete("r3", "진단 결과야");
         h.advance(Duration.ofMillis(800));
         assertThat(fresh.sent(PlayApprovedContent.class)).hasSize(2);
@@ -139,19 +141,19 @@ class SessionExecutorReview2U3Test {
     @Test
     void aDiscardedSegmentHoldingAForbiddenPatternGetsThatCategorysCorrectionWhateverTheDiscardReason() {
         h.activate();
-        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("r1", "진단 결과는 이래"));
+        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("진단 결과는 이래"));
         h.drain();
         h.advance(Duration.ofMillis(800));
-        h.provider.last().emit(new ProviderEvent.OutputAudioDelta("r1", new byte[4_800]));
-        h.provider.last().emit(new ProviderEvent.OutputDone("r1"));
+        h.provider.last().emit(new ProviderEvent.OutputAudioDelta(new byte[4_800]));
         h.drain();
         h.advance(Duration.ofMillis(800));
 
         assertThat(h.link.outputs()).isEmpty();
         h.launcher.runAll("provider-correct-");
-        assertThat(h.provider.last().requests(ProviderRequestFactory.InstructionsCorrect.class))
-                .extracting(ProviderRequestFactory.InstructionsCorrect::text)
-                .containsExactly(DialogInstructions.Correction.DIAGNOSIS.text());
+        assertThat(h.provider.last().requests(ProviderRequestFactory.InstructionsAppend.class))
+                .extracting(ProviderRequestFactory.InstructionsAppend::content)
+                .containsExactly(InstructionTemplates.ResponseStart.FIRST.content(),
+                        InstructionTemplates.correctionContent(DialogInstructions.Correction.DIAGNOSIS));
     }
 
     // ------------------------------------------------------------------ 보조
@@ -171,10 +173,7 @@ class SessionExecutorReview2U3Test {
     }
 
     private void emitComplete(String responseId, String text) {
-        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta(responseId, text));
-        h.provider.last().emit(new ProviderEvent.OutputAudioDelta(responseId, new byte[4_800]));
-        h.provider.last().emit(new ProviderEvent.OutputDone(responseId));
-        h.drain();
+        h.speak(text, 4_800);
     }
 
     private void done(String itemId, String transcript) {

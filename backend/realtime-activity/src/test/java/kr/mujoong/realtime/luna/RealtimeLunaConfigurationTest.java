@@ -65,7 +65,8 @@ class RealtimeLunaConfigurationTest {
         assertThat(startupState()).isEqualTo("DISABLED_NO_KEY");
         capture.clear();
 
-        runner("https://api.openai.com/v1").withPropertyValues("OPENAI_API_KEY=" + RealtimeLunaTestFixtures.FAKE_KEY)
+        runner("https://api.openai.com/v1")
+                .withPropertyValues("OPENAI_API_KEY=" + RealtimeLunaTestFixtures.FAKE_KEY, "mujoong.luna.enabled=true")
                 .run(context -> {
                     assertThat(context).hasNotFailed().hasSingleBean(RealtimeLunaClient.class).hasSingleBean(LunaTransport.class);
                     assertThat(context.getBean(LunaStartup.class).mode()).isEqualTo(LunaHosts.Mode.STRICT);
@@ -77,7 +78,8 @@ class RealtimeLunaConfigurationTest {
     @Test
     void closingTheContextClosesTheSharedHttpClient() {
         List<LunaTransport> seen = new java.util.ArrayList<>();
-        runner("https://api.openai.com/v1").withPropertyValues("OPENAI_API_KEY=" + RealtimeLunaTestFixtures.FAKE_KEY)
+        runner("https://api.openai.com/v1")
+                .withPropertyValues("OPENAI_API_KEY=" + RealtimeLunaTestFixtures.FAKE_KEY, "mujoong.luna.enabled=true")
                 .run(context -> {
                     LunaTransport transport = context.getBean(LunaTransport.class);
                     assertThat(transport.isClosed()).isFalse();

@@ -86,7 +86,8 @@ public record RealtimeProperties(
             RecorderTiming recorder,
             JudgmentTiming judgment,
             GuardrailTiming guardrail,
-            ConversationTiming conversation) {
+            ConversationTiming conversation,
+            ProviderTiming provider) {
         public Timing {
             required(session, "mujoong.timing.session");
             required(device, "mujoong.timing.device");
@@ -94,6 +95,20 @@ public record RealtimeProperties(
             required(judgment, "mujoong.timing.judgment");
             required(guardrail, "mujoong.timing.guardrail");
             required(conversation, "mujoong.timing.conversation");
+            required(provider, "mujoong.timing.provider");
+        }
+    }
+
+    /**
+     * U11(timing.md 14절 · 설계 개정 A4 · A7): 공급자 출력 세대와 입력 전사 묶음의 시간 값.
+     *
+     * @param inputTranscriptQuiet 입력 전사 조각이 이만큼 오지 않으면 그 묶음을 확정 전사로 본다(말 끝 · 전사 완료 사건이 없다, A7)
+     * @param newSpeechMargin 지시 뒤 새 말의 전사 시작 시각에 더하는 여유. 오디오 시계가 (새 말 시작 + 이 값)에 닿는 첫 음성 조각부터 받는다(A4)
+     */
+    public record ProviderTiming(Duration inputTranscriptQuiet, Duration newSpeechMargin) {
+        public ProviderTiming {
+            positive(inputTranscriptQuiet, "mujoong.timing.provider.input-transcript-quiet");
+            positive(newSpeechMargin, "mujoong.timing.provider.new-speech-margin");
         }
     }
 

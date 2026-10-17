@@ -227,7 +227,8 @@ class RealtimeStartupRecoveryIT {
     @Test
     void aStartupCheckRejectionStopsBeforeTheWebServerAndReadinessNeverComesUp() {
         Map<String, String> args = args(provider.uri());
-        args.put(RealtimeStartupChecks.PROVIDER_API_KEY, " ");
+        // U11 BR12.2: GPT-Live 키는 demo만 필수라 test 프로필 거부 시험은 내부 토큰 형식 위반으로 같은 거부 경로를 본다
+        args.put(RealtimeStartupChecks.INTERNAL_TOKEN, " ");
 
         assertThatThrownBy(() -> RealtimeTestApp.start(args)).hasRootCauseInstanceOf(
                 RealtimeStartupChecks.StartupRejectedException.class);

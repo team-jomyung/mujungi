@@ -26,8 +26,8 @@ import org.springframework.stereotype.Component;
  * 열거값만, 값 없음)을 쓰고 예외로 기동을 끝낸다(main 스레드 예외 → 종료 코드 1).
  *
  * <ol>
- *   <li>필수 비밀: {@value #INTERNAL_TOKEN}(base64url {@value #MIN_INTERNAL_TOKEN_CHARS}자 이상 = 256비트) · {@value #PROVIDER_API_KEY}
- *       (모든 프로필) · {@value #OWNER_HASH_SECRET}(demo · prod 필수, 값이 있으면 32바이트 이상, OD-4).
+ *   <li>필수 비밀: {@value #INTERNAL_TOKEN}(base64url {@value #MIN_INTERNAL_TOKEN_CHARS}자 이상 = 256비트) · {@value #OPENAI_API_KEY}
+ *       (demo 프로필만, U11 BR12.2 — 다른 프로필은 키 없이 가짜 공급자에 연결) · {@value #OWNER_HASH_SECRET}(demo · prod 필수, 값이 있으면 32바이트 이상, OD-4).
  *   <li>공급자 주소 {@code mujoong.provider.url}: 비면 거부(J141), demo · prod는 허용 호스트 목록 밖이면 거부(SD-25), test 프로필은 루프백
  *       호스트만(J141). 규칙은 {@link ProviderHosts} 한 곳이다.
  *   <li>시드 사전 로딩: 파일 없음 · 파싱 실패 · 중복 id · 빈 범주 · 패턴 문법 위반이면 거부(SD-18 · A5). 로딩한 사전은
@@ -43,8 +43,8 @@ public class RealtimeStartupChecks {
 
     /** 내부 토큰 환경 변수 이름(SD-8). */
     public static final String INTERNAL_TOKEN = "INTERNAL_SERVICE_TOKEN";
-    /** 공급자 키 환경 변수 이름(BR7.2). */
-    public static final String PROVIDER_API_KEY = "PROVIDER_API_KEY";
+    /** GPT-Live 공급자 키 환경 변수 이름(U11 BR12.1: Luna 판정 키와 하나로 통일). */
+    public static final String OPENAI_API_KEY = "OPENAI_API_KEY";
     /** ownerHash 비밀 환경 변수 이름(OD-4). */
     public static final String OWNER_HASH_SECRET = "MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET";
     /** 공급자 주소 설정 키(J109 · J141). */
@@ -56,6 +56,7 @@ public class RealtimeStartupChecks {
     static final String ERROR_KIND = "RealtimeStartupRejected";
 
     private static final Pattern BASE64URL = Pattern.compile("^[A-Za-z0-9_-]+$");
+    private static final String DEMO_PROFILE = "demo";
     private static final Set<String> PUBLIC_PROFILES = Set.of("demo", "prod");
 
     private final SeedDictionary dictionary;
@@ -66,7 +67,7 @@ public class RealtimeStartupChecks {
     public RealtimeStartupChecks(Environment environment, RealtimeProperties properties) {
         this(new Inputs(
                         environment.getProperty(INTERNAL_TOKEN),
-                        environment.getProperty(PROVIDER_API_KEY),
+                        environment.getProperty(OPENAI_API_KEY),
                         properties.observability().ownerHashSecret(),
                         properties.provider().url(),
                         List.of(environment.getActiveProfiles())),
@@ -130,8 +131,9 @@ public class RealtimeStartupChecks {
         if (!isValidInternalToken(inputs.internalToken())) {
             problems.add(INTERNAL_TOKEN);
         }
-        if (inputs.providerApiKey() == null || inputs.providerApiKey().isBlank()) {
-            problems.add(PROVIDER_API_KEY);
+        // U11 BR12.2: GPT-Live 키는 demo 프로필에서만 필수다(CI · 검증 · 로컬은 키 없이 가짜 공급자에 연결)
+        if (inputs.activeProfiles().contains(DEMO_PROFILE) && (inputs.openAiApiKey() == null || inputs.openAiApiKey().isBlank())) {
+            problems.add(OPENAI_API_KEY);
         }
         boolean publicEnvironment = Arrays.stream(profiles).anyMatch(PUBLIC_PROFILES::contains);
         String ownerSecret = inputs.ownerHashSecret();
@@ -161,7 +163,7 @@ public class RealtimeStartupChecks {
      * @param activeProfiles 활성 프로필
      */
     public record Inputs(
-            String internalToken, String providerApiKey, String ownerHashSecret, URI providerUrl,
+            String internalToken, String openAiApiKey, String ownerHashSecret, URI providerUrl,
             List<String> activeProfiles) {
 
         public Inputs {
