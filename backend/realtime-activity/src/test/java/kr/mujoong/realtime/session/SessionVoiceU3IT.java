@@ -67,7 +67,7 @@ class SessionVoiceU3IT {
     }
 
     @Test
-    void aBargeInCancelsTheResponseAtTheProviderAndAPatternDiscardSendsItsCorrection() {
+    void aBargeInDropsTheResponseByGenerationAndAPatternDiscardSendsItsCorrection() {
         start();
         DeviceSimulatorClient device = env.connectDevice();
         UUID sessionId = activate(device, false);
@@ -80,17 +80,17 @@ class SessionVoiceU3IT {
         device.playbackMark(sessionId, playbackId, PlaybackMark.Status.STOPPED, null,
                 PlaybackMark.StopCause.LOCAL_VOICE_ACTIVITY);
 
-        List<JsonNode> cancels = env.provider.await("session.response.cancel", 1, WAIT);
-        assertThat(cancels).singleElement()
-                .satisfies(cancel -> assertThat(cancel.get("responseId").asString()).isEqualTo("resp-1"));
+        // U11 BR3.4: 응답 취소 type은 공급자 지원 목록 밖이다 — 끼어들기는 서버 출력 세대로 버리고 공급자로는 보내지 않는다
+        assertThat(env.provider.received("session.response.cancel")).isEmpty();
         // 재생이 끝났으니 다시 '듣는 중'
         device.await(envelope -> envelope.payload() instanceof SessionState state && state.view() == View.LISTENING
                 && device.received(WsMessageType.SESSION_STATE).size() >= 3, WAIT);
 
+        pauseForTheGap();
         env.provider.emitTurn("item-2", "또 해 줘", "진단 결과는 이래", List.of(PCM));
         device.await(envelope -> envelope.payload() instanceof PlayApprovedContent play
                 && PlayApprovedContent.WAITING_FILLER.equals(play.contentCode()), WAIT);
-        List<JsonNode> corrections = env.provider.await("session.instructions.correct", 1, WAIT);
+        List<JsonNode> corrections = env.provider.await("session.instructions.append", 1, WAIT);
         assertThat(corrections).singleElement().satisfies(correction -> assertThat(correction.get("text").asString())
                 .isEqualTo(DialogInstructions.Correction.DIAGNOSIS.text()));
         assertThat(String.join("\n", env.provider.rawReceived())).doesNotContain("진단 결과는");
@@ -249,5 +249,15 @@ class SessionVoiceU3IT {
     private void awaitStatus(UUID sessionId, SessionStatus status) {
         awaitTrue(() -> env.app.bean(ActivitySessionRepository.class).find(sessionId)
                 .map(row -> row.status() == status).orElse(false), "세션 " + status);
+    }
+
+    /** 끼어들기로 올린 출력 세대의 꼬리가 끊겨 다음 응답을 받을 수 있을 때까지(이 클래스는 운영값 800ms) 잠깐 기다린다. */
+    private static void pauseForTheGap() {
+        try {
+            Thread.sleep(1_000);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new AssertionError("기다리는 중 중단됐다", e);
+        }
     }
 }

@@ -46,66 +46,73 @@ class SessionVoiceU3Test {
     // ------------------------------------------------------------------ 끼어들기 · 응답 취소 (U3-R5 · U3-J11)
 
     @Test
-    void aBargeInCancelsThePlayingAndTheOpenResponseAtTheProviderAndTheirLateChunksAreDropped() {
+    void aBargeInDropsThePlayingAndTheOpenResponsesByGenerationAndTheirLateChunksAreDropped() {
         h.activate();
         OutputBundle first = respond("r1", "공룡은 아주 오래전에 살았어", 48_000);
         mark(first.playbackId(), PlaybackMark.Status.STARTED, null);
         // 다음 응답을 만드는 중에 아이가 말을 시작한다
         h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("그리고 말이야"));
         h.drain();
+        int sent = h.provider.last().requests().size();
+        long outputGeneration = h.executor.outputGeneration();
 
         mark(first.playbackId(), PlaybackMark.Status.STOPPED, PlaybackMark.StopCause.LOCAL_VOICE_ACTIVITY);
 
-        // 실행기는 공급자 소켓 쓰기를 기다리지 않는다 — 보조 작업으로 띄운 취소 두 건
-        // U11 Step 5: 응답 취소 레코드가 없어졌다(공급자 지원 목록 밖) — Step 8에서 출력 세대 올림 단언으로 바꾼다 [CANCEL-ASSERT]
-        assertThat(h.launcher.runAll("provider-cancel-")).isEqualTo(2);
-        // U11 Step 5: 응답 취소 레코드가 없어졌다(공급자 지원 목록 밖) — Step 8에서 출력 세대 올림 단언으로 바꾼다 [CANCEL-ASSERT]
+        // U11 BR3.4: 공급자 응답 취소는 지원 목록 밖이다 — 끼어들기는 출력 세대를 올려 버리고 공급자로는 아무것도 보내지 않는다
+        assertThat(h.executor.outputGeneration()).isGreaterThan(outputGeneration);
+        assertThat(h.provider.last().requests()).hasSize(sent);
+        assertThat(h.launcher.names()).noneMatch(name -> name.startsWith("provider-"));
 
-        // 취소한 응답의 늦은 조각 · 끝 신호는 버린다(구간도 행도 다시 열지 않는다)
+        // 옛 응답의 늦은 조각은 버린다(구간도 행도 다시 열지 않는다)
         h.provider.last().emit(new ProviderEvent.OutputAudioDelta(new byte[4_800]));
         h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta(" 티라노는"));
-        // U11: 응답 끝 사건이 없다 — 봉인은 조각 사이 무음(조용 시간 경과)으로 한다(Step 8에서 다시 단언)
         h.drain();
         h.advance(Duration.ofSeconds(1));
         assertThat(h.link.outputs()).hasSize(1);
-        assertThat(h.launcher.names()).noneMatch(name -> name.startsWith("provider-correct-"));
+        assertThat(h.launcher.names()).noneMatch(name -> name.startsWith("provider-"));
 
-        // 새 응답은 막지 않는다
+        // 조각이 끊긴 뒤 시작한 새 응답은 막지 않는다
         respond("r3", "다시 이야기해 줄래", 4_800);
         assertThat(h.link.outputs()).hasSize(2);
         assertThat(h.executor.status()).isEqualTo(SessionStatus.ACTIVE);
     }
 
     @Test
-    void aBargeInWithNothingTrackedCancelsTheCurrentResponseWithoutAnId() {
+    void aBargeInWithNothingTrackedStillRaisesTheGenerationAndSendsNothing() {
         h.activate();
+        int sent = h.provider.last().requests().size();
+        long outputGeneration = h.executor.outputGeneration();
 
         mark(UUID.randomUUID(), PlaybackMark.Status.STOPPED, PlaybackMark.StopCause.LOCAL_VOICE_ACTIVITY);
-        h.launcher.runAll("provider-cancel-");
 
-        // U11 Step 5: 응답 취소 레코드가 없어졌다(공급자 지원 목록 밖) — Step 8에서 출력 세대 올림 단언으로 바꾼다 [CANCEL-ASSERT]
+        assertThat(h.executor.outputGeneration()).isGreaterThan(outputGeneration);
+        assertThat(h.provider.last().requests()).hasSize(sent);
+        assertThat(h.launcher.names()).noneMatch(name -> name.startsWith("provider-"));
+        // 끼어들기 직후 바로 온 조각은 버리고, 끊긴 뒤의 새 응답은 받는다
+        emitComplete("r1", "방금 말이야");
+        h.advance(Duration.ofMillis(800));
+        assertThat(h.link.outputs()).isEmpty();
+        respond("r2", "이어서 이야기할게", 4_800);
+        assertThat(h.link.outputs()).hasSize(1);
     }
 
     @Test
-    void aCancelThatCannotBeSentIsDroppedQuietlyAndLeavesTheSessionToTheReadersLossSignal() {
+    void aBargeInAfterTheProviderSocketClosedSendsNothingAndLeavesTheSessionToTheReadersLossSignal() {
         h.activate();
         OutputBundle bundle = respond("r1", "같이 세어 볼까", 4_800);
         mark(bundle.playbackId(), PlaybackMark.Status.STARTED, null);
-        mark(bundle.playbackId(), PlaybackMark.Status.STOPPED, PlaybackMark.StopCause.LOCAL_VOICE_ACTIVITY);
-        // 취소를 보내기 전에 공급자 소켓이 닫혔다(송신 예외) — 보조 작업은 조용히 끝나고 세션 판단은 리더의 끊김 알림이 한다
+        // 끼어들기 전에 공급자 소켓이 닫혔다 — 세대만 올리고 보낼 것이 없다. 세션 판단은 리더의 끊김 알림이 한다
         h.provider.last().close();
         int appErrors = h.logs.events(EventCode.APP_ERROR).size();
+        int sent = h.provider.last().requests().size();
 
-        assertThat(h.launcher.runAll("provider-cancel-")).isEqualTo(1);
+        mark(bundle.playbackId(), PlaybackMark.Status.STOPPED, PlaybackMark.StopCause.LOCAL_VOICE_ACTIVITY);
         h.drain();
 
-        // U11 Step 5: 응답 취소 레코드가 없어졌다(공급자 지원 목록 밖) — Step 8에서 출력 세대 올림 단언으로 바꾼다 [CANCEL-ASSERT]
+        assertThat(h.provider.last().requests()).hasSize(sent);
         assertThat(h.logs.events(EventCode.APP_ERROR)).hasSize(appErrors);
         assertThat(h.executor.status()).isEqualTo(SessionStatus.ACTIVE);
-
-        // 닫힌 공급자에는 보조 작업을 띄우지 않는다
-        mark(bundle.playbackId(), PlaybackMark.Status.STOPPED, PlaybackMark.StopCause.LOCAL_VOICE_ACTIVITY);
-        assertThat(h.launcher.runAll("provider-cancel-")).isZero();
+        assertThat(h.launcher.names()).noneMatch(name -> name.startsWith("provider-"));
     }
 
     // ------------------------------------------------------------------ 생각 중 · 듣는 중 (U3-J6)
@@ -155,16 +162,16 @@ class SessionVoiceU3Test {
         h.activate();
         emitComplete("r1", "진단 결과는 하늘색이야");
         h.advance(Duration.ofMillis(800));
-        // 같은 응답의 늦은 조각이 새 구간이 되어 다시 폐기돼도 그 응답의 교정은 한 번뿐이다
+        // 교정이 나가기 전에 같은 응답의 늦은 조각이 와도 세대가 올라 있어 버린다 — 다시 폐기되지 않으니 그 응답의 교정은 한 번뿐이다
         h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("늦은 조각"));
         h.provider.last().emit(new ProviderEvent.OutputAudioDelta(new byte[4_800]));
         h.drain();
-        h.advance(Duration.ofMillis(800));
+        h.settleSend();
         emitComplete("r2", "화가났군요 그렇지");
         h.advance(Duration.ofMillis(800));
+        h.settleSend();
 
         assertThat(h.link.outputs()).isEmpty();
-        assertThat(h.launcher.runAll("provider-correct-")).isEqualTo(2);
         List<ProviderRequestFactory.InstructionsAppend> corrections =
                 h.provider.last().requests(ProviderRequestFactory.InstructionsAppend.class);
         assertThat(corrections).extracting(ProviderRequestFactory.InstructionsAppend::text).containsExactly(
@@ -176,22 +183,21 @@ class SessionVoiceU3Test {
     }
 
     @Test
-    void anIncompleteResponseLeftByTheProviderAsksForAShortAnswerButOneCutByTheConversationDoesNot() {
+    void anIncompleteSegmentAsksForAShortAnswerButOneCutByTheConversationDoesNot() {
         h.activate();
-        // 공급자가 끝 신호 없이 멈췄다(800ms 조용) → 짧은 완결 답 요청
-        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("공룡은"));
+        // 전사 없이 음성만 오다 멈췄다(800ms 조용) → 짧은 완결 답 요청
         h.provider.last().emit(new ProviderEvent.OutputAudioDelta(new byte[4_800]));
         h.drain();
         h.advance(Duration.ofMillis(800));
-        // 아이가 다시 말해 확정한 미완 구간 · 다른 응답이 와서 확정한 미완 구간은 대화가 넘어갔으니 교정하지 않는다
+        h.settleSend();
+        // 아이가 다시 말해 끊김 전에 닫은 미완 구간은 대화가 넘어갔으니 교정하지 않는다
         h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("그러니까"));
-        h.provider.last().emit(new ProviderEvent.InputTranscriptDelta("i1", "잠깐만"));
-        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("다음은"));
         h.provider.last().emit(new ProviderEvent.OutputAudioDelta(new byte[4_800]));
-        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("새 이야기"));
+        h.provider.last().emit(new ProviderEvent.InputTranscriptDelta("i1", "잠깐만"));
         h.drain();
+        h.advance(Duration.ofMillis(800));
+        h.settleSend();
 
-        assertThat(h.launcher.runAll("provider-correct-")).isEqualTo(1);
         assertThat(h.provider.last().requests(ProviderRequestFactory.InstructionsAppend.class))
                 .extracting(ProviderRequestFactory.InstructionsAppend::text)
                 .containsExactly(DialogInstructions.Correction.INCOMPLETE.text());
@@ -203,16 +209,18 @@ class SessionVoiceU3Test {
         h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("아주 긴 이야기"));
         h.provider.last().emit(new ProviderEvent.OutputAudioDelta(new byte[SegmentBuffer.MAX_BYTES + 2]));
         h.drain();
-        assertThat(h.launcher.runAll("provider-correct-")).isEqualTo(1);
+        h.settleSend();
 
         CompletableFuture<EndOutcome> stop = new CompletableFuture<>();
         h.mailbox.putSafety(new SessionMailbox.EndRequested(UUID.randomUUID(), EndRequestReason.GUARDIAN_STOP, stop));
         h.drain();
         assertThat(stop).isCompletedWithValue(EndOutcome.CLOSING);
+        // 마무리가 앞 응답의 남은 조각을 버린 뒤 끊김이 확인되고 새로 시작한 응답
+        h.advance(Duration.ofMillis(800));
         emitComplete("r2", "치료가 필요해");
         h.advance(Duration.ofMillis(800));
 
-        assertThat(h.launcher.runAll("provider-correct-")).as("CLOSING에는 교정하지 않는다").isZero();
+        assertThat(h.launcher.runAll("provider-")).as("CLOSING에는 교정하지 않는다").isZero();
         assertThat(h.provider.last().requests(ProviderRequestFactory.InstructionsAppend.class))
                 .extracting(ProviderRequestFactory.InstructionsAppend::text)
                 .containsExactly(DialogInstructions.Correction.INCOMPLETE.text());
@@ -351,7 +359,7 @@ class SessionVoiceU3Test {
     // ------------------------------------------------------------------ 종료 의도 (U3-R12 · U3-J24)
 
     @Test
-    void aClearStopIntentCancelsTheResponseInProgressRecordsTheEventAndRefusesLaterResponses() {
+    void aClearStopIntentDropsTheResponseInProgressRecordsTheEventAndRefusesLaterResponses() {
         h.activate();
         respond("r1", "공룡은 멋져", 4_800);
         h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("그래 그럼"));
@@ -364,8 +372,8 @@ class SessionVoiceU3Test {
         assertThat(sessionEvents()).filteredOn(event -> event.getEventType().equals(SessionExecutor.EVENT_CHILD_STOP_INTENT))
                 .singleElement().satisfies(event -> assertThat(event.getPayloadJson()).isEqualTo("{\"basis\":\"SNAPSHOT\"}"));
         assertThat(h.executor.outputGeneration()).isGreaterThan(generation);
-        assertThat(h.launcher.runAll("provider-cancel-")).isEqualTo(1);
-        // U11 Step 5: 응답 취소 레코드가 없어졌다(공급자 지원 목록 밖) — Step 8에서 출력 세대 올림 단언으로 바꾼다 [CANCEL-ASSERT]
+        // U11 BR3.4: 공급자 응답 취소는 없다 — 종료 의도는 출력 세대를 올려 만들던 응답의 남은 조각을 버린다
+        assertThat(h.launcher.names()).noneMatch(name -> name.startsWith("provider-"));
         // U4b(FR11.3 · BR4.2): 종료 의도는 곧바로 CLOSING(CHILD_STOP) — '생각 중' 뒤 마무리 표시로 간다
         assertThat(views()).containsExactly(View.LISTENING, View.THINKING, View.CLOSING);
 
@@ -387,9 +395,11 @@ class SessionVoiceU3Test {
         h.activate();
         OutputBundle bundle = respond("r1", "같이 노래 부를까", 4_800);
         mark(bundle.playbackId(), PlaybackMark.Status.STARTED, null);
+        long generation = h.executor.outputGeneration();
         done("i1", "무중아 그만할래", 0.9);
         assertThat(sessionEvents()).noneMatch(event -> event.getEventType().startsWith("CHILD_STOP"));
-        assertThat(h.launcher.runAll("provider-cancel-")).isZero();
+        assertThat(h.executor.outputGeneration()).as("종료 의도가 아니니 출력을 멈추지 않는다").isEqualTo(generation);
+        assertThat(h.launcher.names()).noneMatch(name -> name.startsWith("provider-"));
         mark(bundle.playbackId(), PlaybackMark.Status.COMPLETED, null);
 
         done("i2", "쉬고 싶어", 0.9);
@@ -404,6 +414,8 @@ class SessionVoiceU3Test {
         // 대답 없이 확인 창이 끝나면 대화를 잇는다(종료를 확정하지 않는다)
         h.advanceAlive(Duration.ofSeconds(21));
         assertThat(h.executor.status()).isEqualTo(SessionStatus.ACTIVE);
+        // 확인 뒤 이어 가는 응답 요청이 끊김을 확인하고 나간 다음의 응답
+        h.settleSend();
         respond("r3", "그래 조금 쉬었다 할까", 4_800);
         assertThat(h.link.outputs()).hasSize(2);
     }
@@ -427,7 +439,6 @@ class SessionVoiceU3Test {
         int before = h.link.outputs().size();
         h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta(text));
         h.provider.last().emit(new ProviderEvent.OutputAudioDelta(new byte[bytes]));
-        // U11: 응답 끝 사건이 없다 — 봉인은 조각 사이 무음(조용 시간 경과)으로 한다(Step 8에서 다시 단언)
         h.drain();
         h.advance(Duration.ofMillis(800));
         assertThat(h.link.outputs()).hasSize(before + 1);
@@ -437,7 +448,6 @@ class SessionVoiceU3Test {
     private void emitComplete(String responseId, String text) {
         h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta(text));
         h.provider.last().emit(new ProviderEvent.OutputAudioDelta(new byte[4_800]));
-        // U11: 응답 끝 사건이 없다 — 봉인은 조각 사이 무음(조용 시간 경과)으로 한다(Step 8에서 다시 단언)
         h.drain();
     }
 

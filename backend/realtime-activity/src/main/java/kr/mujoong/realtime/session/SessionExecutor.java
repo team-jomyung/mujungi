@@ -394,6 +394,9 @@ public final class SessionExecutor {
     private final Map<Long, ProviderSendQueue.Job> sendJobs = BoundedCollections.map(MAX_TRACKED);
     /** 지난 편지함 처리 끝의 출력 보류 상태(true → false가 되면 세대를 올린다, BR11.13). */
     private boolean lastHeld;
+    /** 공급자 리더가 일반 편지함에 넣었고 실행기가 아직 처리하지 않은 출력 조각 수(끊김 만기가 쌓인 조각을 앞지르지 못하게 한다). */
+    private final java.util.concurrent.atomic.AtomicInteger pendingOutputChunks =
+            new java.util.concurrent.atomic.AtomicInteger();
     private final List<Object> pendingRetry = new ArrayList<>();
     private final LinkedHashMap<UUID, WsPayload> pendingCommands = new LinkedHashMap<>();
     private final Runnable onTerminated;
@@ -752,7 +755,14 @@ public final class SessionExecutor {
         startSent = true;
         timers.arm(Kind.DEVICE_ACK, services.settings().deviceAckTimeout());
         providerAttempt = services.connector().connect(plan.sessionId(), plan.childContext(), event -> {
-            putFromProvider(new ProviderEventReceived(event, services.clock().now(), services.clock().monotonicNanos()));
+            boolean output = isOutputChunk(event);
+            if (output) {
+                pendingOutputChunks.incrementAndGet();
+            }
+            if (!putFromProvider(new ProviderEventReceived(event, services.clock().now(), services.clock().monotonicNanos()))
+                    && output) {
+                pendingOutputChunks.decrementAndGet();
+            }
         }, new ProviderConnector.Callback() {
             @Override
             public void connected(ProviderSession session) {
@@ -766,6 +776,10 @@ public final class SessionExecutor {
                 putFromProvider(new ProviderFailed(reason));
             }
         });
+    }
+
+    private static boolean isOutputChunk(ProviderEvent event) {
+        return event instanceof ProviderEvent.OutputTranscriptDelta || event instanceof ProviderEvent.OutputAudioDelta;
     }
 
     private boolean putFromProvider(Message message) {
@@ -1623,6 +1637,9 @@ public final class SessionExecutor {
     }
 
     private void onProviderEvent(ProviderEventReceived received) {
+        if (isOutputChunk(received.event())) {
+            pendingOutputChunks.decrementAndGet();
+        }
         if (status.isTerminal()) {
             if (settling) {
                 onLateProviderEvent(received.event(), received.receivedAt());
@@ -1766,6 +1783,11 @@ public final class SessionExecutor {
      * 조건을 확인해 아직이면 다시 걸고 충족하면 끊김을 확인해 기다리는 송신에 허가를 낸다.
      */
     private void onOutputQuiet() {
+        if (pendingOutputChunks.get() > 0) {
+            // 이 만기는 안전 편지함으로 먼저 들어와 일반 편지함에 쌓인 출력 조각을 앞질렀다 — 그 조각이 같은 응답의 나머지일 수 있어 지금 끊김으로 보지
+            // 않는다(조각을 처리하면 끊김 시계를 다시 건다)
+            return;
+        }
         Instant now = services.clock().now();
         OutputGeneration.QuietResult result = outputGen.onQuiet(now);
         switch (result.verdict()) {
@@ -1898,6 +1920,10 @@ public final class SessionExecutor {
             return;
         }
         services.events().appError(EventLog.Component.VOICE_RELAY, "ProviderDisconnected", EventCode.Level.WARN);
+        // 응답 도중 오류면 열린 구간은 끝까지 오지 않은 응답이다: 응답 끝 사건이 없으니 완결로 볼 수 없어 불완전으로 닫아 폐기하고 대기 문구로 잇는다
+        if (inOutputRange() && segment.isOpen()) {
+            discard(segment.sealByGeneration(outputGeneration.get()), GateDecision.DiscardReason.GATE_EMPTY);
+        }
     }
 
     /** 공급자 연결 끊김({@code session.closed} · WSS 닫힘 · 전송 오류). */
@@ -2877,7 +2903,8 @@ public final class SessionExecutor {
                 requestId == null ? null : requestId.toString(), null, committedAt));
         // BR6.10 ① · BR4.5: 서버 쪽 출력 버퍼 취소 → STOP_OUTPUT + SESSION_STATE{CLOSING} → ② 마무리 문구 1회
         bumpGeneration();
-        timers.cancel(Kind.SEGMENT_QUIET);
+        // U11 BR3.4: 마무리는 출력을 멈추는 일이다 — 공급자 응답 취소 대신 출력 세대를 올려 만들던 응답의 남은 조각을 버린다
+        bumpOutput(OutputGeneration.BumpReason.STOP_INTENT, false);
         timers.cancel(Kind.DISCONNECT);
         timers.cancel(Kind.PLAYBACK_EXPIRY);
         timers.cancel(Kind.JOIN_WINDOW);

@@ -62,7 +62,6 @@ class SessionExecutorReview3U3Test {
     private void emitComplete(String responseId, String text) {
         h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta(text));
         h.provider.last().emit(new ProviderEvent.OutputAudioDelta(new byte[4_800]));
-        // U11: 응답 끝 사건이 없다 — 봉인은 조각 사이 무음(조용 시간 경과)으로 한다(Step 8에서 다시 단언)
         h.drain();
     }
 

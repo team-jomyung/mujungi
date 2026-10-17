@@ -268,7 +268,8 @@ class SessionExecutorReviewU3Test {
         h.drain();
         assertThat(h.link.deliver(cut, h.clock.now())).isZero();
 
-        // 연결이 닫혀 음성 레인에 들어가지 못한 묶음(OUTBOUND_FULL)
+        // 연결이 닫혀 음성 레인에 들어가지 못한 묶음(OUTBOUND_FULL). 끼어들기로 올린 세대의 꼬리가 끊긴 뒤 새로 시작한 응답이다
+        h.advance(Duration.ofMillis(800));
         OutputBundle refused = respond("r2", "티라노는 컸어", 4_800);
         h.link.setOpen(false);
         assertThat(h.link.sendOutput(refused)).isFalse();
@@ -304,6 +305,7 @@ class SessionExecutorReviewU3Test {
         h.activate();
         emitComplete("r1", "진단해 보면 이래");
         h.advance(Duration.ofMillis(800));
+        h.settleSend();
         PlayApprovedContent filler = h.link.sent(PlayApprovedContent.class).get(0);
         assertThat(filler.contentCode()).isEqualTo(PlayApprovedContent.WAITING_FILLER);
 
@@ -316,6 +318,7 @@ class SessionExecutorReviewU3Test {
         emitComplete("r2", "진단 결과야");
         h.advance(Duration.ofMillis(800));
         assertThat(fresh.sent(PlayApprovedContent.class)).hasSize(1);
+        h.settleSend();
 
         // 그 재생의 끝 표식이 추적을 지운다
         mark(fresh, filler.playbackId(), PlaybackMark.Status.COMPLETED);
@@ -367,7 +370,6 @@ class SessionExecutorReviewU3Test {
     private void emitComplete(String responseId, String text, int bytes) {
         h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta(text));
         h.provider.last().emit(new ProviderEvent.OutputAudioDelta(new byte[bytes]));
-        // U11: 응답 끝 사건이 없다 — 봉인은 조각 사이 무음(조용 시간 경과)으로 한다(Step 8에서 다시 단언)
         h.drain();
     }
 

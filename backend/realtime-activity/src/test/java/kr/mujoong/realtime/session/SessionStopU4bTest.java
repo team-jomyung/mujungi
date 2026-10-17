@@ -86,7 +86,7 @@ class SessionStopU4bTest {
         h.childSays("i-2", "티라노가 제일 커");
 
         assertThat(h.executor.status()).isEqualTo(SessionStatus.ACTIVE);
-        h.launcher.runAll("provider-create-");
+        h.settleSend();
         assertThat(h.provider.last().requests(ProviderRequestFactory.ResponseCreate.class)).hasSize(creates + 1);
         emitComplete("r-1", "티라노는 아주 컸어");
         h.advanceAlive(Duration.ofSeconds(1));
@@ -118,13 +118,12 @@ class SessionStopU4bTest {
         h.drain();
 
         h.childSays("i-1", "그만할래");
-        // U11: 응답 끝 사건이 없다 — 봉인은 조각 사이 무음(조용 시간 경과)으로 한다(Step 8에서 다시 단언)
         h.drain();
         h.advanceAlive(Duration.ofSeconds(1));
 
         assertThat(h.link.outputs()).isEmpty();
-        h.launcher.runAll("provider-cancel-");
-        // U11 Step 5: 응답 취소 레코드가 없어졌다(공급자 지원 목록 밖) — Step 8에서 출력 세대 올림 단언으로 바꾼다 [CANCEL-ASSERT]
+        // U11 BR3.4: 종료 확인 뒤 앞 응답은 공급자 응답 취소 대신 출력 세대를 올려 버린다 — 공급자로 나가는 것은 없다
+        assertThat(h.launcher.names()).noneMatch(name -> name.startsWith("provider-"));
     }
 
     @Test
@@ -145,7 +144,6 @@ class SessionStopU4bTest {
     private void emitComplete(String responseId, String text) {
         h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta(text));
         h.provider.last().emit(new ProviderEvent.OutputAudioDelta(new byte[4_800]));
-        // U11: 응답 끝 사건이 없다 — 봉인은 조각 사이 무음(조용 시간 경과)으로 한다(Step 8에서 다시 단언)
         h.drain();
     }
 

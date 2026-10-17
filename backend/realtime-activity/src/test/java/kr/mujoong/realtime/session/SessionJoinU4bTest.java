@@ -88,7 +88,9 @@ class SessionJoinU4bTest {
         ActivitySessionRow row = h.transitions.find(h.sessionId).orElseThrow();
         assertThat(row.startedAt()).isEqualTo(h.clock.now());
         assertThat(row.statusVersion()).as("PREPARING 1 → DEVICE_ACK → WAITING_CHILD → ACTIVE").isEqualTo(4);
-        h.launcher.runAll("provider-create-");
+        // 응답 요청은 출력 세대를 올리고 끊김을 확인한 뒤에 한 번 나간다(U11 W9)
+        assertThat(h.provider.last().requests(ProviderRequestFactory.ResponseCreate.class)).isEmpty();
+        h.settleSend();
         assertThat(h.provider.last().requests(ProviderRequestFactory.ResponseCreate.class)).hasSize(1);
         assertThat(h.recordings.opened()).as("원음 기록은 ACTIVE부터").hasSize(1);
         assertThat(h.store.transcripts).as("참여 대답은 저장하지 않는다(BR2.5)")
@@ -227,18 +229,17 @@ class SessionJoinU4bTest {
     }
 
     @Test
-    void providerResponsesBeforeJoiningAreCancelledAndNeverReachTheDevice() {
+    void providerResponsesBeforeJoiningAreDroppedAndNeverReachTheDevice() {
         withPrompts();
         toWaitingChild();
 
         h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("안녕!"));
         h.provider.last().emit(new ProviderEvent.OutputAudioDelta(new byte[480]));
-        // U11: 응답 끝 사건이 없다 — 봉인은 조각 사이 무음(조용 시간 경과)으로 한다(Step 8에서 다시 단언)
         h.drain();
         h.advanceAlive(Duration.ofSeconds(1));
-        h.launcher.runAll("provider-cancel-");
 
-        // U11 Step 5: 응답 취소 레코드가 없어졌다(공급자 지원 목록 밖) — Step 8에서 출력 세대 올림 단언으로 바꾼다 [CANCEL-ASSERT]
+        // U11 BR11.13: 참여 전 시작된 자동 응답은 공급자 응답 취소 대신 출력 보류가 조각마다 버린다(구간도 행도 열지 않는다)
+        assertThat(h.provider.last().requests(ProviderRequestFactory.ResponseCreate.class)).isEmpty();
         assertThat(h.link.outputs()).isEmpty();
         assertThat(h.store.transcripts).noneMatch(entry -> "안녕!".equals(entry.text()));
     }

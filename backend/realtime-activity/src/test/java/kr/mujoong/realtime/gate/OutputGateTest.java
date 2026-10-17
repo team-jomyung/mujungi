@@ -57,15 +57,32 @@ class OutputGateTest {
     }
 
     @Test
-    void childInputResumingConfirmsTheOpenSegmentAtOnce() {
+    void childInputResumingConfirmsTheOpenSegmentAtOnceWhenTheOutputHadAlreadyGoneQuiet() {
         h.activate();
         childSpeaks();
         output("r1", "같이 놀자");
+        // 조용 시간은 찼지만 만기 시계가 아직 편지함에 들어오기 전에 아이 입력이 재개됐다(끊김으로 봉인한 것과 같다)
+        h.clock.advance(Duration.ofMillis(800));
 
         h.provider.last().emit(new ProviderEvent.InputTranscriptDelta("item-2", "근데"));
         h.drain();
 
         assertThat(h.link.outputs()).hasSize(1);
+    }
+
+    @Test
+    void childInputResumingBeforeTheOutputWentQuietClosesTheSegmentAsIncompleteAndDiscardsIt() {
+        h.activate();
+        childSpeaks();
+        output("r1", "같이 놀자");
+
+        // 응답이 끝났는지 알 수 없다(응답 끝 사건이 없다) — 끊김 전에 닫은 구간은 불완전이라 폐기한다(U11 BR11.6)
+        h.provider.last().emit(new ProviderEvent.InputTranscriptDelta("item-2", "근데"));
+        h.drain();
+
+        assertThat(h.link.outputs()).isEmpty();
+        assertThat(h.metrics.count("mujoong.gate.discard", "reason", "gate_empty")).isEqualTo(1.0);
+        assertThat(aiRow().approvedForDisplay()).isFalse();
     }
 
     @Test
@@ -88,6 +105,8 @@ class OutputGateTest {
 
         // 금지 패턴: 앞 대체 문구가 아직 재생 중이면 이번 대체 문구는 건너뛴다(R3-19)
         h.provider.last().emit(new ProviderEvent.InputTranscriptDone("item-1", "응"));
+        // 앞 폐기의 교정 지시(U11 W9)가 끊김을 확인하고 나간 뒤에 다음 응답이 온다
+        h.settleSend();
         output("r2", "검사해 보니 비정상이에요");
         h.advance(Duration.ofMillis(800));
         assertThat(h.link.outputs()).isEmpty();
@@ -100,6 +119,7 @@ class OutputGateTest {
                         null),
                 h.clock.now()));
         h.drain();
+        h.settleSend();
         output("r3", "진단 결과는");
         h.advance(Duration.ofMillis(800));
         assertThat(h.link.sent(PlayApprovedContent.class)).hasSize(2);
@@ -161,7 +181,9 @@ class OutputGateTest {
         CompletableFuture<SessionMailbox.EndOutcome> stop = new CompletableFuture<>();
         h.mailbox.putSafety(new SessionMailbox.EndRequested(UUID.randomUUID(), EndRequestReason.GUARDIAN_STOP, stop));
         h.drain();
-        // CLOSING 뒤 도착한 공급자 출력도 게이트의 송신 직전 재확인에서 NOT_ACTIVE로 버려진다(NFR1.1)
+        // CLOSING 뒤 도착한 공급자 출력도 게이트의 송신 직전 재확인에서 NOT_ACTIVE로 버려진다(NFR1.1). 앞 응답이 끊긴 뒤 새로 시작한 응답이어야
+        // 첫 조각부터 담긴 완전한 구간이라 사전 검사를 지나 재확인까지 간다(마무리가 끊어 낸 앞 응답의 나머지는 사전 검사에서 불완전으로 버려진다)
+        h.advance(Duration.ofMillis(800));
         output("r2", "늦게 온 말");
         h.advance(Duration.ofMillis(800));
 
@@ -231,7 +253,6 @@ class OutputGateTest {
         h.provider.last().emit(new ProviderEvent.InputTranscriptDelta("item-2", "근데"));
         h.drain();
         h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("치료가 필요해요"));
-        // U11: 응답 끝 사건이 없다 — 봉인은 조각 사이 무음(조용 시간 경과)으로 한다(Step 8에서 다시 단언)
         h.drain();
         h.advance(Duration.ofMillis(800));
 
@@ -244,22 +265,23 @@ class OutputGateTest {
     }
 
     @Test
-    void aResponseCutByTheQuietTimeBeforeItsDoneSignalIsDiscardedInBothParts() {
+    void aPauseInsideAResponseLongerThanTheQuietTimeSplitsItAndEachPartIsGatedOnItsOwn() {
         h.activate();
         childSpeaks();
         h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("그건 아마 "));
         h.provider.last().emit(new ProviderEvent.OutputAudioDelta(AUDIO));
         h.drain();
-        // 공급자가 응답 중간에 800ms 멈추면 부분 전사로 봉인된다
+        // 공급자가 응답 중간에 800ms 멈추면 거기서 봉인한다(응답 끝 사건이 없어 쉼과 끝을 가를 수 없다, W7 ⑨ 위험)
         h.advance(Duration.ofMillis(800));
         output("r1", "치료가 필요해요");
         h.advance(Duration.ofMillis(800));
 
-        assertThat(h.link.outputs()).isEmpty();
-        // 나머지 구간은 응답의 첫 조각을 담지 않아 대응 근거가 없다(사전 검사 4단계 전에 3단계에서 폐기)
-        assertThat(h.metrics.count("mujoong.gate.discard", "reason", "gate_empty")).isEqualTo(2.0);
-        assertThat(h.metrics.count("mujoong.gate.discard", "reason", "gate_pattern")).isZero();
-        assertThat(aiRows()).allSatisfy(row -> assertThat(row.approvedForDisplay()).isFalse());
+        // 앞 덩어리는 따로 통과하고, 금지 패턴이 든 뒷 덩어리는 따로 사전 검사에서 폐기된다
+        assertThat(h.link.outputs()).hasSize(1);
+        assertThat(h.metrics.count("mujoong.gate.discard", "reason", "gate_pattern")).isEqualTo(1.0);
+        assertThat(h.metrics.count("mujoong.gate.discard", "reason", "gate_empty")).isZero();
+        assertThat(aiRows()).hasSize(2);
+        assertThat(aiRows().get(1).approvedForDisplay()).isFalse();
     }
 
     @Test
@@ -272,55 +294,55 @@ class OutputGateTest {
         // 실행기가 밀린 사이 남은 조각 · 응답 끝은 일반 편지함에 쌓이고, 조용 만기는 안전 편지함으로 먼저 들어간다
         h.provider.last().emit(new ProviderEvent.OutputAudioDelta(AUDIO));
         h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("치료가 필요해요"));
-        // U11: 응답 끝 사건이 없다 — 봉인은 조각 사이 무음(조용 시간 경과)으로 한다(Step 8에서 다시 단언)
         h.clock.advance(Duration.ofMillis(800));
         h.quiet.runDue();
         assertThat(h.mailbox.safetySize()).isEqualTo(1);
-        assertThat(h.mailbox.generalSize()).isEqualTo(3);
+        assertThat(h.mailbox.generalSize()).isEqualTo(2);
         h.drain();
         h.advance(Duration.ofMillis(800));
 
+        // 만기가 쌓인 조각을 앞질렀어도 끊김으로 보지 않는다 — 한 응답으로 모아 검사해 금지 패턴이 있는 나머지를 승인하지 않는다
         assertThat(h.link.outputs()).isEmpty();
-        assertThat(h.metrics.count("mujoong.gate.discard", "reason", "gate_empty")).isEqualTo(2.0);
+        assertThat(h.metrics.count("mujoong.gate.discard", "reason", "gate_pattern")).isEqualTo(1.0);
+        assertThat(h.metrics.count("mujoong.gate.discard", "reason", "gate_empty")).isZero();
         assertThat(aiRows()).allSatisfy(row -> assertThat(row.approvedForDisplay()).isFalse());
     }
 
     @Test
-    void fragmentsOfAnotherResponseAreNeverMixedIntoTheOpenSegment() {
+    void fragmentsSeparatedByAQuietGapAreSealedAndGatedAsSeparateSegments() {
         h.activate();
         childSpeaks();
-        // 응답 A의 전사와 응답 B의 음성이 800ms 안에 섞여 온다
+        // 응답 경계는 조각 사이 무음이다(응답 id · 응답 끝 사건 없음): 800ms 넘게 끊긴 두 덩어리는 따로 봉인해 따로 검사한다
         h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("안녕"));
         h.provider.last().emit(new ProviderEvent.OutputAudioDelta(AUDIO));
-        // U11: 응답 끝 사건이 없다 — 봉인은 조각 사이 무음(조용 시간 경과)으로 한다(Step 8에서 다시 단언)
-        // U11: 응답 끝 사건이 없다 — 봉인은 조각 사이 무음(조용 시간 경과)으로 한다(Step 8에서 다시 단언)
+        h.drain();
+        h.advance(Duration.ofMillis(800));
+        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("반가워"));
+        h.provider.last().emit(new ProviderEvent.OutputAudioDelta(AUDIO));
         h.drain();
         h.advance(Duration.ofMillis(800));
 
-        assertThat(h.link.outputs()).isEmpty();
-        assertThat(h.metrics.count("mujoong.gate.discard", "reason", "gate_empty")).isEqualTo(2.0);
-        assertThat(aiRows()).hasSize(2).allSatisfy(row -> assertThat(row.approvedForDisplay()).isFalse());
+        assertThat(h.link.outputs()).hasSize(2);
+        assertThat(h.metrics.count("mujoong.gate.discard", "reason", "gate_empty")).isZero();
+        assertThat(aiRows()).hasSize(2).allSatisfy(row -> assertThat(row.approvedForDisplay()).isTrue());
     }
 
     @Test
-    void aCompleteResponseIsGatedAloneWhenTheNextResponseStartsWithinTheQuietTime() {
+    void responsesThatStartWithinTheQuietTimeFormOneSegmentSoAForbiddenPartDiscardsTheWholeOfIt() {
         h.activate();
         childSpeaks();
         output("rA", "공룡을 좋아하는구나");
         h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("검사해 보니 비정상이에요"));
         h.provider.last().emit(new ProviderEvent.OutputAudioDelta(AUDIO));
-        // U11: 응답 끝 사건이 없다 — 봉인은 조각 사이 무음(조용 시간 경과)으로 한다(Step 8에서 다시 단언)
         h.drain();
         h.advance(Duration.ofMillis(800));
 
-        assertThat(h.link.outputs()).singleElement()
-                .satisfies(bundle -> assertThat(bundle.totalBytes()).isEqualTo(AUDIO.length * 2));
+        // 조각 사이가 끊기지 않으면 한 구간이다(경계를 가를 근거가 없다) — 금지 패턴이 든 구간 전체를 버린다(fail-closed)
+        assertThat(h.link.outputs()).isEmpty();
         assertThat(h.metrics.count("mujoong.gate.discard", "reason", "gate_pattern")).isEqualTo(1.0);
         List<TranscriptEntry> rows = aiRows();
-        assertThat(rows).hasSize(2);
-        assertThat(rows.get(0).text()).isEqualTo("공룡을 좋아하는구나");
-        assertThat(rows.get(0).approvedForDisplay()).isTrue();
-        assertThat(rows.get(1).approvedForDisplay()).isFalse();
+        assertThat(rows).hasSize(1);
+        assertThat(rows.get(0).approvedForDisplay()).isFalse();
     }
 
     @Test
@@ -337,14 +359,13 @@ class OutputGateTest {
     }
 
     @Test
-    void aWholeResponseWithItsDoneSignalPassesEvenWhenItsAudioCameFirst() {
+    void aWholeOutputSealedByQuietPassesEvenWhenItsAudioCameFirst() {
         h.activate();
         childSpeaks();
         h.provider.last().emit(new ProviderEvent.OutputAudioDelta(AUDIO));
         h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("그건 아마 "));
         h.provider.last().emit(new ProviderEvent.OutputAudioDelta(AUDIO));
         h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("공룡일 거야"));
-        // U11: 응답 끝 사건이 없다 — 봉인은 조각 사이 무음(조용 시간 경과)으로 한다(Step 8에서 다시 단언)
         h.drain();
         h.advance(Duration.ofMillis(800));
 
@@ -363,7 +384,6 @@ class OutputGateTest {
         h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta(text));
         h.provider.last().emit(new ProviderEvent.OutputAudioDelta(AUDIO));
         h.provider.last().emit(new ProviderEvent.OutputAudioDelta(AUDIO));
-        // U11: 응답 끝 사건이 없다 — 봉인은 조각 사이 무음(조용 시간 경과)으로 한다(Step 8에서 다시 단언)
         h.drain();
     }
 

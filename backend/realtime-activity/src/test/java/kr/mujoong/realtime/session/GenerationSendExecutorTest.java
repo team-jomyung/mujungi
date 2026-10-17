@@ -34,7 +34,7 @@ class GenerationSendExecutorTest {
 
     @Test
     void afterTheJoinTheFirstResponseRequestWaitsForAGapAndThenGoesOutOnce() {
-        h.activate();
+        h.activateUnsettled();
 
         assertThat(h.provider.last().requests(ProviderRequestFactory.ResponseCreate.class)).as("끊김 확인 전 송신 0건").isEmpty();
         assertThat(h.launcher.names()).anyMatch(name -> name.startsWith("provider-create-"));
@@ -148,7 +148,7 @@ class GenerationSendExecutorTest {
         h.activityType = ActivityType.PRACTICE;
         h.practiceJson = "{\"goals\":[{\"order\":1}]}";
         h.practice = extension.factory;
-        h.activate();
+        h.activateUnsettled();
         // 참여 직후 응답 요청 하나가 끊김을 기다리는 중이다
         assertThat(extension.output.instructProvider("목표 문장을 한 번 더 안내한다.")).isTrue();
         assertThat(extension.output.requestResponse()).isTrue();
@@ -173,7 +173,7 @@ class GenerationSendExecutorTest {
         h.activityType = ActivityType.PRACTICE;
         h.practiceJson = "{\"goals\":[{\"order\":1}]}";
         h.practice = extension.factory;
-        h.activate();
+        h.activateUnsettled();
         h.advance(QUIET);
         h.launcher.runAll("provider-create-");
         h.drain();
@@ -198,7 +198,7 @@ class GenerationSendExecutorTest {
 
     @Test
     void aChunkAfterThePermitButBeforeTheSendVoidsThePermitAndTheSendWaitsForANewGap() {
-        h.activate();
+        h.activateUnsettled();
         h.advance(QUIET);
         // 허가가 났지만 큐 작업이 돌기 전에 같은 응답의 꼬리 조각이 왔다
         emitOutput("꼬리", 4_800);
@@ -222,7 +222,7 @@ class GenerationSendExecutorTest {
         h.activityType = ActivityType.PRACTICE;
         h.practiceJson = "{\"goals\":[{\"order\":1}]}";
         h.practice = extension.factory;
-        h.activate();
+        h.activateUnsettled();
         // 자동 응답이 끊기지 않는다: 400ms마다 조각이 계속 와서 끊김을 못 본다
         for (int i = 0; i < 27; i++) {
             emitOutput("끝나지 않는 말" + i, 960);
@@ -261,7 +261,7 @@ class GenerationSendExecutorTest {
 
     @Test
     void sessionEndGivesUpTheWaitingSendSoTheQueueIsNeverHeld() {
-        h.activate();
+        h.activateUnsettled();
         java.util.concurrent.CompletableFuture<SessionMailbox.EndOutcome> stop = new java.util.concurrent.CompletableFuture<>();
         h.mailbox.putSafety(new SessionMailbox.EndRequested(UUID.randomUUID(),
                 kr.mujoong.contract.status.EndRequestReason.CORE_ABANDONED, stop));
@@ -277,7 +277,7 @@ class GenerationSendExecutorTest {
 
     /** 참여 뒤 첫 응답 요청이 끊김을 확인하고 나가게 한 다음 '보내는 중' 표시까지 처리한다. */
     private void settleFirstResponse() {
-        h.activate();
+        h.activateUnsettled();
         h.advance(QUIET);
         assertThat(h.launcher.runAll("provider-create-")).isEqualTo(1);
         h.drain();
@@ -286,7 +286,7 @@ class GenerationSendExecutorTest {
 
     /** 위와 같되 '보내는 중' 표시를 편지함에 둔 채 처리하지 않는다. */
     private void settleFirstResponseWithoutDraining() {
-        h.activate();
+        h.activateUnsettled();
         h.advance(QUIET);
         assertThat(h.launcher.runAll("provider-create-")).isEqualTo(1);
     }

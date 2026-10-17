@@ -214,7 +214,7 @@ class PracticeExtensionU4bTest {
         assertThat(extension.output.instructProvider("목표 문장을 한 번 더 안내한다.")).isTrue();
         assertThat(extension.output.instructProvider(" ")).isFalse();
         h.launcher.runAll("provider-");
-        // U11 Step 5: 응답 취소 레코드가 없어졌다(공급자 지원 목록 밖) — Step 8에서 출력 세대 올림 단언으로 바꾼다 [CANCEL-ASSERT]
+        assertThat(h.link.outputs()).as("출력을 막은 동안의 조각은 기기로 가지 않는다").isEmpty();
         assertThat(h.provider.last().requests(ProviderRequestFactory.InstructionsAppend.class))
                 .extracting(ProviderRequestFactory.InstructionsAppend::text).contains("목표 문장을 한 번 더 안내한다.");
         assertThat(extension.output.cancel("nothing")).isTrue();

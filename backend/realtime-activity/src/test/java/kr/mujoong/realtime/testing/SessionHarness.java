@@ -161,9 +161,25 @@ public final class SessionHarness {
      * 곧바로 열린다).
      */
     public void activate() {
+        activateUnsettled();
+        settleSend();
+    }
+
+    /** ACTIVE까지 가되 참여 뒤 첫 응답 요청(끊김을 기다리는 중)은 그대로 둔다(U11 W9 시험). */
+    public void activateUnsettled() {
         boot();
         ackAndReady();
         join();
+    }
+
+    /**
+     * 끊김을 기다리던 서버 송신(참여 뒤 첫 응답 요청 등, U11 W9)이 끊김을 확인하고 나가게 한다: 조용 시간만큼 시계를 앞당기고 직렬 송신 작업을
+     * 돌려 '보내는 중' 표시까지 처리한다. 응답 id 없는 공급자 조각은 이 뒤에 오는 것만 받는다.
+     */
+    public void settleSend() {
+        advance(settings.segmentQuiet());
+        launcher.runAll("provider-");
+        drain();
     }
 
     /** U4b: 참여 확인에 아이가 "응"이라고 답한다(공급자 입력 전사 확정). */

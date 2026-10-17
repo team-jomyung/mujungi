@@ -133,10 +133,11 @@ class SessionLifecycleIT {
         assertThat(device.received(WsMessageType.PLAY_APPROVED_CONTENT)).hasSize(1);
         assertThat(device.received(WsMessageType.CLOSE_TRANSPORT)).hasSize(1);
         assertThat(device.outputFrames()).isEqualTo(framesBefore);
-        // U4b(FR11.3 · BR3.1): 마무리 인사 말풍선 한 행이 더해져 AI 행은 셋(턴 · 마무리 인사 · 늦은 말)
+        // U4b(FR11.3 · BR3.1): 마무리 인사 말풍선 한 행이 더해져 AI 행은 둘(턴 · 마무리 인사). U11: 마무리가 올린 출력 세대가 CLOSING 직후 도착한 늦은
+        // 말을 구간으로 열기 전에 버리므로 늦은 말은 행으로도 남지 않는다(이전에는 게이트가 NOT_ACTIVE로 폐기한 미승인 행이 하나 더 있었다)
         awaitTrue(() -> transcripts(sessionId).stream().filter(t -> t.speaker()
-                == kr.mujoong.realtime.log.TranscriptEntry.Speaker.AI).count() == 3, "늦은 AI 행");
-        assertThat(transcripts(sessionId).get(transcripts(sessionId).size() - 1).approvedForDisplay()).isFalse();
+                == kr.mujoong.realtime.log.TranscriptEntry.Speaker.AI).count() == 2, "AI 행 둘");
+        assertThat(transcripts(sessionId)).noneMatch(t -> "늦은 말".equals(t.text()));
         assertThat(logs.lines()).noneMatch(line -> line.contains("나도 공룡 좋아해") || line.contains(env.deviceToken));
     }
 

@@ -47,7 +47,6 @@ class SessionExecutorReview2U3Test {
         h.drain();
 
         done("i2", "아니 더 얘기하자");
-        // U11: 응답 끝 사건이 없다 — 봉인은 조각 사이 무음(조용 시간 경과)으로 한다(Step 8에서 다시 단언)
         h.drain();
 
         assertThat(eventTypes()).doesNotContain(SessionExecutor.EVENT_CHILD_STOP_LIFTED);
@@ -83,6 +82,8 @@ class SessionExecutorReview2U3Test {
         h.activate();
         emitComplete("r1", "진단해 보면 이래");
         h.advance(Duration.ofMillis(800));
+        // 폐기 뒤 교정 지시(U11 W9)가 끊김을 확인하고 나간다
+        h.settleSend();
         // 첫 대기 문구가 20초 만기로 잊힌 뒤 둘째 대기 문구 — 둘 다 ACK가 없다
         h.advance(Duration.ofSeconds(21));
         h.link.touch(h.clock.now());
@@ -99,6 +100,7 @@ class SessionExecutorReview2U3Test {
 
         // 다시 보낸 재생의 끝이 추적을 지워 다음 폐기에 대기 문구가 나간다
         mark(fresh, fillers.get(1).playbackId(), PlaybackMark.Status.COMPLETED);
+        h.settleSend();
         emitComplete("r3", "진단 결과야");
         h.advance(Duration.ofMillis(800));
         assertThat(fresh.sent(PlayApprovedContent.class)).hasSize(2);
@@ -143,7 +145,6 @@ class SessionExecutorReview2U3Test {
         h.drain();
         h.advance(Duration.ofMillis(800));
         h.provider.last().emit(new ProviderEvent.OutputAudioDelta(new byte[4_800]));
-        // U11: 응답 끝 사건이 없다 — 봉인은 조각 사이 무음(조용 시간 경과)으로 한다(Step 8에서 다시 단언)
         h.drain();
         h.advance(Duration.ofMillis(800));
 
@@ -173,7 +174,6 @@ class SessionExecutorReview2U3Test {
     private void emitComplete(String responseId, String text) {
         h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta(text));
         h.provider.last().emit(new ProviderEvent.OutputAudioDelta(new byte[4_800]));
-        // U11: 응답 끝 사건이 없다 — 봉인은 조각 사이 무음(조용 시간 경과)으로 한다(Step 8에서 다시 단언)
         h.drain();
     }
 

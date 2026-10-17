@@ -165,6 +165,9 @@ public final class RealtimeItEnvironment implements AutoCloseable {
         childSays("join-" + sessionId, "응");
         awaitOrDump(sessionId, () -> sessionStatus(sessionId) == kr.mujoong.contract.status.SessionStatus.ACTIVE,
                 "ACTIVE");
+        // U11 W9: 참여 뒤 첫 응답 요청은 끊김을 확인한 뒤에 나간다. 가짜 공급자가 그 요청을 받은 뒤의 조각부터 응답으로 받는다(연습처럼
+        // 응답 요청을 하지 않는 세션은 잠깐 기다리고 넘어간다)
+        provider.await("response.create", 1, Duration.ofSeconds(3));
     }
 
     /**
