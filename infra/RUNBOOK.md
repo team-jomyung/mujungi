@@ -588,29 +588,6 @@ cat realtime-activity/build/gpt-live/report.md
 - 금액은 계산하지 않는다. 단가는 OpenAI 결제 화면에서 확인한다(보고서는 사용량만 남긴다).
 - 결과는 '실제 API · 합성 자료' 증거로만 따로 적는다(R-M11). 키가 없으면 `SKIPPED_NO_KEY`이고 시험은 '건너뜀'이다(통과 아님).
 
-### 8.7 GPT-Live 격리 실호출 `gptLiveTest` (U11, 개발 PC) [개발 PC]
-
-U11 첫 작업(위험 R1)의 실호출 확인이다. 기본 `test` · `check` · CI · `verify.sh`에는 들어가지 않는다(루트 `verifyGptLiveIsolation`).
-합성 음성만 보내고(R-F15), 키는 그 PC의 env로만 넣는다(R-F3 · R-F13). 키를 넣기 전에 단계 4의 R-F15 확인 기록(확인 대상: Luna 판정 · GPT-Live 음성 중계)을
-남긴다. 운영 송수신 부품(팩토리 · 세션 · 해석기) 하나로만 시도하고 한 실행이 연결을 한 번 연다(옛 키트 형식 비교 모드는 없앴다). 흐름은 세션 시작 →
-합성 말소리 여러 발화 → 고정 지시문 추가 두 번 → 응답 생성 → (선택) `session.update` → 종료이고, 결과는 설계 W7 확인 ① ~ ⑨를 항목마다 판정 · 관측으로 남긴다.
-
-```bash
-cd backend
-read -r -s -p 'OPENAI_API_KEY: ' OPENAI_API_KEY && export OPENAI_API_KEY && echo
-./gradlew :realtime-activity:gptLiveTest
-unset OPENAI_API_KEY
-cat realtime-activity/build/gpt-live/report.md
-```
-
-- 선택 env(비밀 아님): `GPT_LIVE_FORMATS`(`app` · `kit` 중 쉼표로, 기본 `app,kit`, `kit`만 주면 키트 형식 한 번만) ·
-  `GPT_LIVE_INPUT_PCM`(합성 말소리 파일 경로, WAV 또는 PCM16LE 모노 원시, 없으면 저장소 합성음 자리 파일) ·
-  `GPT_LIVE_INPUT_RATE`(원시 PCM의 표본율, 기본 24000, 키트 TTS 캐시는 16000).
-- 보고서 첫 줄은 `outcome=…`(앱 형식 ① · ② 기준, 돌리지 않았으면 `NOT_RUN`), 다음 줄은 `kitFormat=…`이다. 표는 항목 · 앱 형식 · 키트 형식이고
-  오류 사건(가린 문장) · 지원 type 목록 · 수신 사건 모양 · 사용량(`session.usage.updated` 마지막 값 · 세션 길이) 행이 있다.
-- 금액은 계산하지 않는다. 단가는 OpenAI 결제 화면에서 확인한다(보고서는 사용량만 남긴다).
-- 결과는 '실제 API · 합성 자료' 증거로만 따로 적는다(R-M11). 키가 없으면 `SKIPPED_NO_KEY`이고 시험은 '건너뜀'이다(통과 아님).
-
 ## 9. 복구 시나리오 (infra-spec 4.5.3)
 
 | 상황 | 감지 | 조치 |
