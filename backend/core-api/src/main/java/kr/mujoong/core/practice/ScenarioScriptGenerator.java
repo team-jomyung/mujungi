@@ -36,6 +36,7 @@ public final class ScenarioScriptGenerator {
         private static final long serialVersionUID=1L;
         boolean retryableDuplicate;
         ContentExhausted(){super(kr.mujoong.contract.error.ErrorCode.SCENARIO_GEN_FAILED);}
+        public boolean permanent(){return !retryableDuplicate;}
     }
     public Result generate(Input input,ScenarioDeadline deadline){
         var budget=new Budget();ScenarioScript.Scene preserved=null;String model=null;
@@ -49,11 +50,30 @@ public final class ScenarioScriptGenerator {
                 var generated=invoke(()->provider.generate(call(payload,current,deadline)),budget,deadline);
                 if(generated==null||generated.script()==null||!metadata(generated.model()))throw content();
                 model=generated.model();var script=generated.script();
-                var reviewed=review(script,current,budget,deadline);
+                Input reviewedInput=current;
+                boolean planMismatch=false;
+                if(current.graphContextUsed()&&current.rules().variants() instanceof ScenarioGraphContext.Session graph&&!script.scenes().isEmpty()){
+                    var plan=graph.plan(script.scenes().getFirst());
+                    if(plan.isPresent()){
+                        var actual=withPlan(current,plan.get());
+                        planMismatch=current.payload().containsKey("variantPlan")&&!current.payload().get("variantPlan").equals(actual.payload().get("variantPlan"));
+                        if(!planMismatch)reviewedInput=actual;
+                    }
+                }
+                var reviewed=review(script,reviewedInput,budget,deadline);
                 var result=validation.inspect(script,current.rules());
+                if(current.graphContextUsed()&&script.scenes().size()>1&&!current.payload().containsKey("variantPlan")&&result!=ScenarioScriptValidation.Result.INVALID_BASE)
+                    result=ScenarioScriptValidation.Result.INVALID_VARIANT;
+                if(planMismatch&&script.scenes().size()>1&&result!=ScenarioScriptValidation.Result.INVALID_BASE)
+                    result=ScenarioScriptValidation.Result.INVALID_VARIANT;
                 if(current.graphContextUsed()&&current.rules().variants() instanceof ScenarioGraphContext.Session graph&&graph.fallbackRequired()){
-                    if(correction==1)throw new ContentExhausted();
+                    if(correction==1)throw ScenarioDeadline.failed();
                     active=withoutGraph(current);preserved=null;continue;
+                }
+                if(correction==0&&reviewedInput.payload().containsKey("variantPlan")&&result!=ScenarioScriptValidation.Result.INVALID_BASE){
+                    active=reviewedInput;
+                    preserved=reviewed.review().approved()?script.scenes().getFirst():null;
+                    continue;
                 }
                 if(preserved!=null&&(script.scenes().isEmpty()||!preserved.equals(script.scenes().getFirst())))result=ScenarioScriptValidation.Result.INVALID_BASE;
                 if(result==ScenarioScriptValidation.Result.VALID&&reviewed.review().approved())
@@ -81,6 +101,15 @@ public final class ScenarioScriptGenerator {
         var payload=new LinkedHashMap<>(input.payload());payload.remove("structureContext");payload.remove("variantPlan");payload.put("baseOnly",true);
         var r=input.rules();
         return new Input(payload,input.aliases(),new ScenarioScriptValidation.Rules(r.relation(),r.opportunity(),r.targetExpression(),r.originalNames(),r.sourceText(),r.seen(),(a,b)->false),false,input.goalContextJson());
+    }
+    private Input withPlan(Input input,kr.mujoong.core.knowledge.VariantPlanner.Plan plan){
+        var projected=Map.<String,Object>of("grade",plan.grade(),"changedField",plan.changedField(),"context",plan.context(),
+                "signature",plan.signature(),"invariantSentence",plan.invariantSentence(),"preservationRule",plan.preservationRule(),
+                "misreadCost",plan.misreadCost(),"recoverable",plan.recoverable());
+        var clean=new kr.mujoong.core.luna.LunaInputSanitizer(kr.mujoong.contract.json.JsonCodec.shared()).sanitize(
+                Map.of("variantPlan",projected),input.aliases(),kr.mujoong.core.luna.LunaPurpose.SCENARIO_GENERATION).payload();
+        var payload=new LinkedHashMap<>(input.payload());payload.remove("baseOnly");payload.put("variantPlan",clean.get("variantPlan"));
+        return new Input(payload,input.aliases(),input.rules(),input.graphContextUsed(),input.goalContextJson());
     }
     private ScenarioScriptProvider.Call call(Map<String,Object> payload,Input input,ScenarioDeadline deadline){
         return new ScenarioScriptProvider.Call(payload,input.aliases(),deadline.callDeadline(timing.requestTimeout()));
@@ -114,7 +143,8 @@ public final class ScenarioScriptGenerator {
         deadline.check();var base=script.scenes().getFirst();
         var legacy=new GeneratedScenario(base.sceneDescription(),base.opportunitySentence(),input.rules().relation(),input.rules().opportunity(),model,"scenario-generation.v2");
         var scenes=script.scenes().stream().map(s->s.withPartnerRole(ScenarioContentPolicy.PARTNER_ROLE)).toList();
-        return new Result(legacy,new ScenarioRepository.Details("scenario-script.v1",scenes,new Scenario.Review("APPROVE",reviewModel,"scenario-review.v1"),new Scenario.Generation(model,"scenario-generation.v2",input.graphContextUsed(),budget.calls),input.goalContextJson()));
+        String version=input.graphContextUsed()&&input.rules().variants() instanceof ScenarioGraphContext.Session graph?graph.graphVersion():null;
+        return new Result(legacy,new ScenarioRepository.Details("scenario-script.v1",scenes,new Scenario.Review("APPROVE",reviewModel,"scenario-review.v1"),new Scenario.Generation(model,"scenario-generation.v2",input.graphContextUsed(),budget.calls,version),input.goalContextJson()));
     }
     private static boolean variantReason(String code){return java.util.Set.of("INVARIANT_MISMATCH","SKILL_MISMATCH","TRANSFER_MISMATCH","UNCHANGED_VARIANT").contains(code);}
     private static boolean metadata(String value){return value!=null&&value.matches("[A-Za-z0-9][A-Za-z0-9._:-]{0,79}");}

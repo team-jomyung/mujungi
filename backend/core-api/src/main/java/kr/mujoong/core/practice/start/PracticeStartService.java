@@ -122,7 +122,8 @@ public class PracticeStartService implements PracticeStart {
                 return new PreparedSnapshot(claim.sessionId(),claim.key(),claim.goals(),scene);
             }));
         } catch(CoreApiException failure) {
-            failed=failure.code()==ErrorCode.SCENARIO_GEN_FAILED;throw failure;
+            failed=failure.code()==ErrorCode.SCENARIO_GEN_FAILED&&
+                    (!(failure instanceof ScenarioService.GenerationFailure disposition)||disposition.permanent());throw failure;
         } finally {
             boolean finalFailed=failed;
             tx.executeWithoutResult(status->{accounts.lockForDeletion(guardian);preparations.release(claim,finalFailed,clock.now());});

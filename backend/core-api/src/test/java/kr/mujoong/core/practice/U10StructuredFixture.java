@@ -23,6 +23,11 @@ final class U10StructuredFixture implements AutoCloseable {
     U10StructuredFixture(){
         legacy.setUp();
         accounts=spy(new JdbcTestPracticeAccounts(legacy.db.jdbc()));
+        connectService();
+        when(provider.generate(any())).thenAnswer(c->generated("그림"));
+        when(provider.review(any())).thenReturn(U10ScenarioGenerationTest.approve());
+    }
+    void connectService(){
         legacy.service=new ScenarioService(legacy.repository,id->legacy.current.get(),id->legacy.exposures.get(),accounts,legacy.knowledge,legacy.ai,legacy.clock,legacy.db.tx(),new ScenarioConfiguration.ScenarioLimits(Duration.ofSeconds(15)));
         when(consent.check(any())).thenReturn(new kr.mujoong.core.consent.ConsentPolicyService.GateResult(true,kr.mujoong.core.consent.ConsentStatusRule.Status.GIVEN,null));
         legacy.service.connectConsent(consent);
@@ -32,8 +37,6 @@ final class U10StructuredFixture implements AutoCloseable {
         when(properties.timing().practice().scenarioHistoryTimeout()).thenReturn(Duration.ofMillis(500));
         legacy.service.connectStructured(transport,privacy,new LunaInputSanitizer(JsonCodec.shared()),graph,new ForbiddenExpressionPolicy(),
                 new TextAiProperties(Duration.ofSeconds(3),new TextAiProperties.Retry(1,Duration.ofMillis(250))),executor,properties,JsonCodec.shared());
-        when(provider.generate(any())).thenAnswer(c->generated("그림"));
-        when(provider.review(any())).thenReturn(U10ScenarioGenerationTest.approve());
     }
     ScenarioScriptProvider.Generated generated(String material){
         var s=new ScenarioScript.Scene("base","BASE",material+" 놀이 중. "+legacy.opportunity+" 이제 그만할래.","이제 그만할래.","친구가 쉬려 해.",List.of(),List.of(),"PEER","교실","놀이",null,null);

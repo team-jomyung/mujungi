@@ -17,7 +17,9 @@ public record Scenario(UUID scenarioId, String kind, String relationType, String
     }
     public Scenario { scenes = scenes == null ? null : List.copyOf(scenes); }
     public record Review(String verdict, String model, String promptVersion) {}
-    public record Generation(String model, String promptVersion, boolean graphContextUsed, int calls) {}
+    public record Generation(String model, String promptVersion, boolean graphContextUsed, int calls,String kgVersion) {
+        public Generation(String model,String promptVersion,boolean graphContextUsed,int calls){this(model,promptVersion,graphContextUsed,calls,null);}
+    }
     public record Validation(boolean goalIncluded, boolean triggerIncluded, boolean forbiddenFound) {}
     @Override public String toString() { return "Scenario[scenarioId=" + scenarioId + ", content=***]"; }
 }

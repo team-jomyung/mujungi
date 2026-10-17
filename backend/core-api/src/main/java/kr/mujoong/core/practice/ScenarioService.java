@@ -22,6 +22,13 @@ import org.springframework.transaction.support.TransactionTemplate;
 /** C10, AC4.2.1/9 and AC6.5.5/8. Generation never performs a Realtime state transition. */
 @Service
 public class ScenarioService {
+    /** 공개 오류 코드는 유지하고 준비 소유자에게 재요청 가능 여부만 전달한다. */
+    public static final class GenerationFailure extends CoreApiException {
+        private static final long serialVersionUID=1L;
+        private final boolean permanent;
+        GenerationFailure(boolean permanent){super(ErrorCode.SCENARIO_GEN_FAILED);this.permanent=permanent;}
+        public boolean permanent(){return permanent;}
+    }
     private final ScenarioRepository repository;
     private final PracticeSessionContextPort sessions;
     private final ScenarioRecordPort records;
@@ -144,14 +151,17 @@ public class ScenarioService {
                 catch(ScenarioScriptGenerator.ContentExhausted failure){validationFailed=!failure.retryableDuplicate;throw failure;}
                 budget.check();
                 try{return tx.execute(status->{
+                    repository.beginDeadline(budget);
                     authorize(context);
+                    repository.limitSql(budget);
                     SessionContext latest=source.get();
                     if(!latest.guardianId().equals(context.guardianId())||!latest.childId().equals(context.childId())||!goal(latest,request).equals(goal))
                         throw CoreApiException.of(ErrorCode.NOT_FOUND);
+                    repository.limitSql(budget);
                     if(!consent.check(context.guardianId()).ok())throw CoreApiException.of(ErrorCode.CONSENT_MISSING);
-                    budget.check();return repository.save(request.key(),claim.claimId(),latest,goal,request,generated.legacy(),clock.now(),generated.details());
+                    budget.check();return repository.save(request.key(),claim.claimId(),latest,goal,request,generated.legacy(),clock.now(),generated.details(),budget);
                 });}
-                catch(DuplicateKeyException duplicate){throw ScenarioDeadline.failed();}
+                catch(org.springframework.dao.DataAccessException database){throw ScenarioDeadline.failed();}
             }
             ScenarioPrompt prompt=new ScenarioPrompt(definition.displayName(),definition.behaviorDefinitionText(),opportunity,
                     definition.scenarioCondition(),relation,account.ageYears(),account.interests(),
@@ -179,6 +189,9 @@ public class ScenarioService {
             }
             validationFailed=!retryableMiss;
             throw CoreApiException.of(ErrorCode.SCENARIO_GEN_FAILED);
+        } catch(CoreApiException failure) {
+            if(structured!=null&&failure.code()==ErrorCode.SCENARIO_GEN_FAILED)throw new GenerationFailure(validationFailed);
+            throw failure;
         } finally {
             boolean failed=validationFailed;
             tx.executeWithoutResult(status -> repository.release(request.key(),claim.claimId(),failed,clock.now()));

@@ -136,7 +136,8 @@
       "target": "backend/core-api/src/main/java/kr/mujoong/core/practice/ScenarioService.java",
       "tests": [
         "backend/core-api/src/test/java/kr/mujoong/core/practice/U10ScenarioApiIT.java",
-        "backend/core-api/src/test/java/kr/mujoong/core/practice/U10ScenarioValidationTest.java"
+        "backend/core-api/src/test/java/kr/mujoong/core/practice/U10ScenarioValidationTest.java",
+        "backend/core-api/src/test/java/kr/mujoong/core/practice/U10FinalSaveDeadlineIT.java"
       ],
       "related": [
         "backend/core-api/src/main/java/kr/mujoong/core/practice/ScenarioScriptValidation.java"
@@ -211,7 +212,8 @@
       "target": "backend/core-api/src/main/java/kr/mujoong/core/practice/ScenarioGraphContext.java",
       "tests": [
         "backend/core-api/src/test/java/kr/mujoong/core/practice/U10ScenarioGraphTest.java",
-        "backend/core-api/src/test/java/kr/mujoong/core/practice/U10ScenarioGraphFallbackTest.java"
+        "backend/core-api/src/test/java/kr/mujoong/core/practice/U10ScenarioGraphFallbackTest.java",
+        "backend/core-api/src/test/java/kr/mujoong/core/practice/U10PlannedGenerationIT.java"
       ]
     },
     {
@@ -236,7 +238,8 @@
       "status": "OK",
       "target": "backend/core-api/src/main/java/kr/mujoong/core/practice/ScenarioGraphContext.java",
       "tests": [
-        "backend/core-api/src/test/java/kr/mujoong/core/practice/U10ScenarioVariantTest.java"
+        "backend/core-api/src/test/java/kr/mujoong/core/practice/U10ScenarioVariantTest.java",
+        "backend/core-api/src/test/java/kr/mujoong/core/practice/U10PlannedGenerationIT.java"
       ]
     },
     {
@@ -292,7 +295,8 @@
         "backend/core-api/src/test/java/kr/mujoong/core/practice/U10ScenarioGenerationTest.java",
         "backend/core-api/src/test/java/kr/mujoong/core/practice/U10ScenarioGraphTest.java",
         "backend/core-api/src/test/java/kr/mujoong/core/practice/U10ScenarioDeadlineTest.java",
-        "backend/core-api/src/test/java/kr/mujoong/core/practice/U10ScenarioGraphFallbackTest.java"
+        "backend/core-api/src/test/java/kr/mujoong/core/practice/U10ScenarioGraphFallbackTest.java",
+        "backend/core-api/src/test/java/kr/mujoong/core/practice/U10FinalSaveDeadlineIT.java"
       ],
       "related": [
         "backend/core-api/src/main/java/kr/mujoong/core/practice/ScenarioGraphContext.java"
@@ -574,7 +578,8 @@
       "status": "OK",
       "target": "backend/core-api/src/main/java/kr/mujoong/core/practice/ScenarioService.java",
       "tests": [
-        "backend/core-api/src/test/java/kr/mujoong/core/practice/U10ScenarioApiIT.java"
+        "backend/core-api/src/test/java/kr/mujoong/core/practice/U10ScenarioApiIT.java",
+        "backend/core-api/src/test/java/kr/mujoong/core/practice/U10PreparationRecoveryIT.java"
       ]
     },
     {
@@ -640,7 +645,8 @@
       "target": "backend/core-api/src/main/java/kr/mujoong/core/practice/StructuredScenarioFlow.java",
       "tests": [
         "backend/core-api/src/test/java/kr/mujoong/core/practice/U10ScenarioGraphTest.java",
-        "backend/core-api/src/test/java/kr/mujoong/core/practice/U10ScenarioGraphFallbackTest.java"
+        "backend/core-api/src/test/java/kr/mujoong/core/practice/U10ScenarioGraphFallbackTest.java",
+        "backend/core-api/src/test/java/kr/mujoong/core/practice/U10PlannedGenerationIT.java"
       ]
     },
     {
@@ -680,7 +686,8 @@
       "status": "OK",
       "target": "backend/core-api/src/main/java/kr/mujoong/core/practice/ScenarioScriptGenerator.java",
       "tests": [
-        "backend/core-api/src/test/java/kr/mujoong/core/practice/U10ScenarioDeadlineTest.java"
+        "backend/core-api/src/test/java/kr/mujoong/core/practice/U10ScenarioDeadlineTest.java",
+        "backend/core-api/src/test/java/kr/mujoong/core/practice/U10PreparationRecoveryIT.java"
       ]
     }
   ],

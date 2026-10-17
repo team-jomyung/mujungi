@@ -29,6 +29,7 @@ public final class ScenarioGraphContext {
         private final ScenarioDeadline deadline;
         private Duration remaining=budget;
         private boolean unavailable;
+        private final java.util.Map<VariantPlanner.Context,Optional<VariantPlanner.Plan>> plans=new java.util.HashMap<>();
         private final Optional<ChildKnowledgeService.SkillContext> context;
         private Session(UUID guardian,UUID child,String skill,List<VariantPlanner.Exposure> history,ScenarioDeadline deadline){
             this.guardian=guardian;this.child=child;this.skill=skill;this.history=List.copyOf(history);this.deadline=deadline;
@@ -36,6 +37,12 @@ public final class ScenarioGraphContext {
         }
         public Optional<ChildKnowledgeService.SkillContext> context(){return context;}
         public boolean fallbackRequired(){return unavailable;}
+        public String graphVersion(){return context.map(ChildKnowledgeService.SkillContext::graphVersion).orElse(null);}
+        public Optional<VariantPlanner.Plan> plan(Scene base){
+            if(context.isEmpty()||!validBase(base)||base.preservation()==null)return Optional.empty();
+            var source=coordinates(base);
+            return plans.computeIfAbsent(source,key->read(()->knowledge.variantPlan(guardian,child,skill,key,history)));
+        }
         @Override public boolean validBase(Scene base){
             if(context.isEmpty())return true;
             var p=base.preservation();var seed=context.get().seed();
@@ -55,8 +62,7 @@ public final class ScenarioGraphContext {
             if(!skill.equals(p.skillRef())||!skill.equals(v.skillRef())
                     ||!seed.invariantSentence().equals(p.invariantSentence())||!seed.invariantSentence().equals(v.invariantSentence())
                     ||!seed.preservationRule().equals(p.preservationRule())||!seed.preservationRule().equals(v.preservationRule()))return false;
-            var source=coordinates(base);
-            var plan=read(()->knowledge.variantPlan(guardian,child,skill,source,history));
+            var plan=plan(base);
             if(plan.isEmpty())return false;
             var expected=plan.get();
             return expected.signature().equals(seed.signature())&&expected.recoverable()&&"LOW".equals(expected.misreadCost())

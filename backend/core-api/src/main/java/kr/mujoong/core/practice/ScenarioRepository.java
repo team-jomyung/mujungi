@@ -141,12 +141,36 @@ public class ScenarioRepository {
     }
     public Scenario save(String key, UUID claim, SessionContext context, GoalSnapshot goal, ScenarioService.Request request,
                          GeneratedScenario output, Instant now, Details details) {
+        return save(key,claim,context,goal,request,output,now,details,null);
+    }
+    /** 이 트랜잭션에만 잔여 시간을 적용하고 커밋 직전에 새 시계로 검사한다. */
+    public void beginDeadline(ScenarioDeadline deadline){
+        limitSql(deadline);
+        org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(
+                new org.springframework.transaction.support.TransactionSynchronization(){
+                    @Override public void beforeCommit(boolean readOnly){deadline.check();}
+                });
+    }
+    public void limitSql(ScenarioDeadline deadline){
+        deadline.check();long millis=deadline.remaining().toMillis();
+        if(millis<=0)throw ScenarioDeadline.failed();
+        jdbc.queryForList("""
+                select set_config(name,(case when setting::bigint=0 then :millis
+                else least(setting::bigint,:millis) end)::text||'ms',true)
+                from pg_settings where name in ('statement_timeout','lock_timeout')
+                """,new MapSqlParameterSource("millis",millis),String.class);
+        deadline.check();
+    }
+    public Scenario save(String key, UUID claim, SessionContext context, GoalSnapshot goal, ScenarioService.Request request,
+                         GeneratedScenario output, Instant now, Details details,ScenarioDeadline deadline) {
+        if(deadline!=null)limitSql(deadline);
         var params = params(key,context,request,now).addValue("claim",claim);
         Integer owns = jdbc.queryForObject("""
                 select count(*) from core.core_scenario_request where request_key=:key and claim_id=:claim
                 and status='GENERATING' and lease_until > :now
                 """, params,Integer.class);
         if (owns == null || owns != 1) throw CoreApiException.of(ErrorCode.SERVICE_NOT_READY);
+        if(deadline!=null)limitSql(deadline);
         Scenario scenario = new Scenario(UUID.randomUUID(),request.kind(),output.relationType(),output.opportunityCondition(),
                 ScenarioContentPolicy.childText(output.scenarioText()),ScenarioContentPolicy.PARTNER_ROLE,output.triggerScript(),
                 new Scenario.Validation(true,true,false),details==null?null:details.scriptVersion(),
@@ -171,10 +195,12 @@ public class ScenarioRepository {
                 :scene,:role,:trigger,cast(:validation as jsonb),:fingerprint,'ISSUED',:model,:prompt,:now,
                 :scriptVersion,cast(:scenes as jsonb),cast(:review as jsonb),cast(:generation as jsonb),cast(:goalContext as jsonb))
                 """, params);
+        if(deadline!=null)limitSql(deadline);
         jdbc.update("""
                 update core.core_scenario_request set status='READY',result_scenario_id=:id,updated_at=:now
                 where request_key=:key and claim_id=:claim
                 """,params);
+        if(deadline!=null)deadline.check();
         return scenario;
     }
     public void release(String key, UUID claim, boolean failed, Instant now) {

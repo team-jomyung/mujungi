@@ -57,7 +57,7 @@ public final class StructuredScenarioFlow {
         knowledge.context().ifPresent(value->{var seed=value.seed();payload.put("structureContext",Map.of(
                 "skillRef",seed.seedId(),"signature",seed.signature(),"invariantSentence",seed.invariantSentence(),
                 "preservationRule",seed.preservationRule(),"relationship",seed.relationship(),"situation",seed.situation()));});
-        if(knowledge.context().isEmpty())payload.put("baseOnly",true);
+        payload.put("baseOnly",true); // 첫 BASE의 실제 좌표를 받은 뒤에만 변형 계획을 정한다.
         var clean=sanitizer.sanitize(payload,aliases.aliases(),LunaPurpose.SCENARIO_GENERATION).payload();
         String cleanOpportunity=(String)clean.get("opportunityCondition"),cleanRelation=(String)clean.get("relation");
         String sourceText=null;

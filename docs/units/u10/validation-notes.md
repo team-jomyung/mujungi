@@ -33,3 +33,5 @@ main48a132b8 대비 `backend/realtime-activity`와 `contracts/schemas/internal-s
 현 시험 실패 출력은 정확 개수 비교만 있어 child/ai 중 어느 파일이 없거나 추가됐는지는 확정할 수 없다. FileAudioRecorder는 화자 첫 chunk에 메타→파일을 만들고 별도 writer queue에서 쓰며 close를 순서대로 처리한다. 공급자 입력 수신은 이 쓰기/종료 완료의 확인은 아니다. 따라서 입력 장벽은 선행 입력 처리 확인으로 유지하지만 이것만으로 녹음 문제를 해결했다고 주장하지 않는다. RT 운영 코드·공용 fixture·단언·한도를 더 바꾸거나 반복해 녹색을 고르지 않았다. 전체 백엔드 합격은 미확인이다. 최신 U10 소스를 고정한 contract/Core/test-support 전체 검사로 검증 범위를 분리하며 RT 우려는 후속 검토에 남긴다.
 
 부모가 같은 소스·단언·10초 한도로 해당 실패 메서드 하나만 `JAVA_TOOL_OPTIONS=-Djunit.jupiter.tempdir.cleanup.mode.default=ON_SUCCESS`를 그 실행에 한정해 진단했다.27초 BUILD SUCCESSFUL/exit0이어서 실패 디렉터리는 보존되지 않았고 누락 파일 증거도 얻지 못했다. 이 단독 통과는 앞선 클래스/전체 실패를 해결하거나 전체 합격을 대체하지 않는다. 추가 RT 재실행은 하지 않았다.
+
+이후 부모가1차 수리 전 dd09baa 소스로 같은 ON_SUCCESS 옵션의 클래스4개 순서 진단을1회 실행해32초 모두 통과했다. 실패 디렉터리가 보존되지 않았고 수동 관찰의 일시적 child.pcm0/정리만으로 누락 화자를 확정하지 못했다. 과거 전체/클래스 실패는 그대로 남으며 이 진단도 전체 합격을 뜻하지 않는다. R-01~04 수리 담당은 RT를 수정하거나 중복 실행하지 않았다.
