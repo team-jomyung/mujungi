@@ -25,7 +25,7 @@ class PracticeMigrationIT {
             "realtime_practice_response", "realtime_practice_cue", "realtime_practice_evaluation");
 
     @Test
-    void upgradingFromV3PreservesTheExistingSessionAndAppliesOnlyV4() {
+    void upgradingFromV3PreservesTheExistingSessionAndAppliesV4AndTheLaterV5() {
         try (var db = MujoongPostgres.builder().migrate(false).start()) {
             db.flyway(MigrationSet.CORE).migrate();
             Flyway.configure().configuration(db.flyway(MigrationSet.REALTIME).getConfiguration())
@@ -42,11 +42,11 @@ class PracticeMigrationIT {
                     now, "{\"policyVersion\":\"1\",\"voiceAndText\":true,\"guardianView\":true,"
                             + "\"reportSharing\":false,\"rawAudio\":false}", now, now);
 
-            assertThat(db.flyway(MigrationSet.REALTIME).migrate().migrationsExecuted).isEqualTo(1);
+            assertThat(db.flyway(MigrationSet.REALTIME).migrate().migrationsExecuted).isEqualTo(2);
 
             assertThat(jdbc.queryForObject("select status from realtime.realtime_activity_session where id=?",
                     String.class, session)).isEqualTo("ACTIVE");
-            assertThat(new SchemaVersionCheck(jdbc).verify()).isEqualTo("4");
+            assertThat(new SchemaVersionCheck(jdbc).verify()).isEqualTo("5");
             assertThat(db.flyway(MigrationSet.REALTIME).migrate().migrationsExecuted).isZero();
         }
     }
