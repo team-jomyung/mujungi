@@ -16,7 +16,7 @@ resource "aws_ecs_task_definition" "web" {
 
   container_definitions = jsonencode([{
     name      = "web"
-    image     = "${local.ecr["web"]}:${local.image_tag}"
+    image     = "${local.ecr["web"]}:${local.web_image_tag}"
     essential = true
     memory    = 1024
 
@@ -69,7 +69,7 @@ resource "aws_ecs_task_definition" "nginx" {
 
   container_definitions = jsonencode([{
     name      = "nginx"
-    image     = "${local.ecr["nginx"]}:${local.image_tag}"
+    image     = "${local.ecr["nginx"]}:${local.nginx_image_tag}"
     essential = true
     memory    = 256
 
