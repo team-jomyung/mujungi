@@ -198,15 +198,11 @@ class GptLiveIsolationTest {
     }
 
     @Test
-    void theRateUtterancesAndUpdateEnvsAreValidatedBeforeAnyCall() throws IOException {
+    void theRateAndUpdateEnvsAreValidatedBeforeAnyCall() throws IOException {
         assertThat(GptLiveProbe.sessionRate(null)).isEqualTo(24_000);
         assertThat(GptLiveProbe.sessionRate(" 16000 ")).isEqualTo(16_000);
         assertThatThrownBy(() -> GptLiveProbe.sessionRate("abc")).isInstanceOf(IOException.class);
         assertThatThrownBy(() -> GptLiveProbe.sessionRate("96000")).isInstanceOf(IOException.class);
-        assertThat(GptLiveProbe.utteranceCount(null)).isEqualTo(GptLiveProbe.DEFAULT_UTTERANCES);
-        assertThat(GptLiveProbe.utteranceCount("5")).isEqualTo(5);
-        assertThatThrownBy(() -> GptLiveProbe.utteranceCount("0")).isInstanceOf(IOException.class);
-        assertThatThrownBy(() -> GptLiveProbe.utteranceCount("99")).isInstanceOf(IOException.class);
         GptLiveProbe probe = probe(Map.of());
         assertThat(probe.updateMessage(null)).isNull();
         assertThat(probe.updateMessage("{\"type\":\"session.update\",\"session\":{}}")).contains("session.update");
@@ -378,17 +374,82 @@ class GptLiveIsolationTest {
         GptLiveProbe.Result result = new GptLiveProbe.Result(GptLiveProbe.Outcome.FAIL, host, rows, 24_000);
         GptLiveProbe.InputAudio input = new GptLiveProbe.InputAudio("저장소 합성음 자리 파일", false, 24_000, new byte[48_000]);
 
-        String report = GptLiveProbe.renderReport(result, input, 3, "2026-10-17T00:00:00Z");
+        String report = GptLiveProbe.renderReport(result, input, "2026-10-17T00:00:00Z");
 
         List<String> lines = report.lines().toList();
-        assertThat(lines).contains("outcome=FAIL evidence=REAL_API_SYNTHETIC", "rate=24000 utterances=3", "| 항목 | 판정 · 관측 |",
+        assertThat(lines).contains("outcome=FAIL evidence=REAL_API_SYNTHETIC", "rate=24000 phases=P1,P2,P3,P4,P5", "| 항목 | 판정 · 관측 |",
                 "- " + GptLiveProbe.PRICE_NOTE);
         List<String> tableRows = lines.stream().filter(line -> line.startsWith("| ") && !line.startsWith("| 항목")).toList();
         assertThat(tableRows).hasSize(1 + GptLiveProbe.ITEMS.size())
                 .allSatisfy(line -> assertThat(line.split("\\|", -1)).hasSize(4));
         assertThat(tableRows.get(1)).contains("**INFO** · 관측 / 구분자");
-        assertThat(report).contains("1000ms").doesNotContain("USD", "$", "키트");
+        assertThat(report).contains("1000ms", "표식 낱말", "response.create는 보내지 않는다").doesNotContain("USD", "$", "키트");
         assertThat(GptLiveProbe.summary(result)).startsWith("GPT-Live 실호출 FAIL — ①=INFO");
         assertThat(GptLiveProbe.ITEMS).hasSize(17).startsWith("① 입력 표본율 수락(세션 시작 · 음성 송신 · 출력 수신)");
+    }
+
+    // ---- 추가 전용 실험(지시 추가 원시 메시지 · 표식 낱말) ----
+
+    @Test
+    void theAppendMessageIsRawJsonWithAnExplicitNullDelegationIdAndNeverAResponseCreate() {
+        GptLiveProbe probe = probe(Map.of());
+
+        String message = probe.appendMessage(GptLiveProbe.EVENT_ID_P2, GptLiveProbe.INSTRUCTION_P2);
+
+        Map<?, ?> parsed = JSON.read(message, Map.class);
+        assertThat(message).contains("\"delegation_id\":null");
+        assertThat(keys(parsed)).containsExactlyInAnyOrder("type", "event_id", "delegation_id", "content");
+        assertThat(parsed.get("type")).isEqualTo("session.instructions.append");
+        assertThat(parsed.get("event_id")).isEqualTo("gl-p2-append");
+        assertThat(parsed.get("delegation_id")).isNull();
+        assertThat(parsed.get("content")).isEqualTo(GptLiveProbe.INSTRUCTION_P2);
+        assertThat(message).doesNotContain("response.create");
+    }
+
+    @Test
+    void theFixedInstructionsAskForOneMarkerEachAndStayShort() {
+        assertThat(GptLiveProbe.INSTRUCTION_P2).contains(GptLiveProbe.MARKER_P2).doesNotContain(GptLiveProbe.MARKER_P3);
+        assertThat(GptLiveProbe.INSTRUCTION_P3).contains(GptLiveProbe.MARKER_P3).doesNotContain(GptLiveProbe.MARKER_P2);
+        assertThat(GptLiveProbe.MARKER_P2).isNotEqualTo(GptLiveProbe.MARKER_P3);
+        assertThat(GptLiveProbe.INSTRUCTION_P2.length()).as("500 토큰 안(글자 수로 넉넉히)").isLessThan(300);
+        assertThat(GptLiveProbe.INSTRUCTION_P3.length()).isLessThan(300);
+    }
+
+    @Test
+    void theTapFindsAMarkerInMemoryAndReportsOnlyBooleansCountsAndTimes() {
+        GptLiveProbe.Tap tap = new GptLiveProbe.Tap(JSON);
+        tap.record("{\"type\":\"session.output_transcript.delta\",\"delta\":\"안녕 하\",\"start_ms\":0,\"end_ms\":100,\"event_id\":\"a\"}");
+        long mark = System.nanoTime();
+        tap.record("{\"type\":\"session.output_transcript.delta\",\"delta\":\"세요 나\",\"start_ms\":100,\"end_ms\":200,\"event_id\":\"b\"}");
+        tap.record("{\"type\":\"session.output_transcript.delta\",\"delta\":{\"text\":\" 비야\"},\"event_id\":\"c\"}");
+        tap.record("{\"type\":\"session.input_transcript.delta\",\"delta\":\"나비\",\"event_id\":\"d\"}");
+        long end = System.nanoTime() + 1;
+
+        GptLiveProbe.MarkerHit hit = tap.findMarker("나비", 0L, end);
+        GptLiveProbe.MarkerHit none = tap.findMarker("두루미", 0L, end);
+        GptLiveProbe.MarkerHit later = tap.findMarker("나비", mark + 5_000_000_000L, mark + 6_000_000_000L);
+
+        assertThat(hit.found()).isTrue();
+        assertThat(hit.charsBefore()).as("공백을 뺀 '안녕하세요' 5자 뒤").isEqualTo(5);
+        assertThat(hit.windowChars()).isEqualTo(8);
+        assertThat(hit.foundAtNanos()).as("표식이 완성된 조각(세 번째)의 도착 시각").isGreaterThanOrEqualTo(mark);
+        assertThat(none.found()).isFalse();
+        assertThat(none.windowChars()).isEqualTo(8);
+        assertThat(later.found()).isFalse();
+        assertThat(tap.rawSnapshot()).as("원시 관측에는 전사 글이 없다").allSatisfy(frame -> assertThat(frame.shape()).doesNotContain("안녕"));
+    }
+
+    @Test
+    void anAppendedEventKeepsItsClientEventIdAndTheUnknownTypeListSkipsIt() {
+        GptLiveProbe.RawFrame ack = GptLiveProbe.parseRaw(JSON, 0,
+                "{\"type\":\"session.instructions.appended\",\"event_id\":\"srv-1\",\"client_event_id\":\"gl-p2-append\","
+                        + "\"instructions\":\"" + "ab ".repeat(13) + "a" + "\"}").at(10L);
+        GptLiveProbe.RawFrame boundary = GptLiveProbe.parseRaw(JSON, 1, "{\"type\":\"session.response.finished\"}").at(20L);
+
+        assertThat(ack.clientEventId()).isEqualTo("gl-p2-append");
+        assertThat(ack.instructionsLength()).isEqualTo(40);
+        assertThat(ack.shape()).isEqualTo("{type:string, event_id:string, client_event_id:string, instructions:string}");
+        assertThat(GptLiveProbe.unknownTypesIn(List.of(ack, boundary), 0L, 100L)).isEqualTo("{session.response.finished=1}");
+        assertThat(GptLiveProbe.unknownTypesIn(List.of(ack, boundary), 0L, 15L)).isEqualTo("없음");
     }
 }

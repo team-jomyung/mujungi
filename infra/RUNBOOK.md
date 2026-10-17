@@ -566,8 +566,13 @@ cat realtime-activity/build/luna-reach/report.md
 
 U11 첫 작업(위험 R1)의 실호출 확인이다. 기본 `test` · `check` · CI · `verify.sh`에는 들어가지 않는다(루트 `verifyGptLiveIsolation`).
 합성 음성만 보내고(R-F15), 키는 그 PC의 env로만 넣는다(R-F3 · R-F13). 키를 넣기 전에 단계 4의 R-F15 확인 기록(확인 대상: Luna 판정 · GPT-Live 음성 중계)을
-남긴다. 운영 송수신 부품(팩토리 · 세션 · 해석기) 하나로만 시도하고 한 실행이 연결을 한 번 연다(옛 키트 형식 비교 모드는 없앴다). 흐름은 세션 시작 →
-합성 말소리 여러 발화 → 고정 지시문 추가 두 번 → 응답 생성 → (선택) `session.update` → 종료이고, 결과는 설계 W7 확인 ① ~ ⑨를 항목마다 판정 · 관측으로 남긴다.
+남긴다. 운영 송수신 부품(세션 시작 팩토리 · 세션 · 해석기)으로 시도하고 한 실행이 연결을 한 번 연다(옛 키트 형식 비교 모드는 없앴다). 이번 실행은
+**추가 전용 실험**이다: `response.create`는 보내지 않고(클라이언트 위임 세션은 거절한다), 지시 추가(`session.instructions.append`, 원시 JSON
+`event_id` · `delegation_id: null` · `content`)가 먹히는지만 본다. 흐름은 세션 시작 → P1 기준선(발화 하나, 자동 응답) → P2 끼어들기(첫 출력 조각
+뒤 약 300ms에 지시 #1) → P3 유휴 추가(출력이 없을 때 지시 #2만) → P4 지속성(평범한 발화 하나, P3 지시가 남는가) → (선택) P5 `session.update` →
+종료이고, 단계 사이에는 응답이 끝난 뒤 2초 이상 조용한 틈을 둔다(실호출 약 2분). 지시가 먹혔는지는 전사 원문을 남기지 않으려고 **표식 낱말**(P2 `나비`,
+P3 `두루미`)로 본다: 지시문이 응답의 첫 낱말을 표식으로 시작하라고 시키고, 도구가 출력 전사에 표식이 있는지를 메모리에서만 확인해 예 · 아니오와 시간 ·
+개수만 보고서에 쓴다.
 
 ```bash
 cd backend
@@ -577,14 +582,18 @@ unset OPENAI_API_KEY
 cat realtime-activity/build/gpt-live/report.md
 ```
 
-- 선택 env(비밀 아님): `GPT_LIVE_RATE`(세션 시작에 싣는 입력 표본율, 기본 24000 — 24kHz 수락 확인, 거절되면 16000으로도 시도) ·
-  `GPT_LIVE_INPUT_PCM`(합성 말소리 파일 경로, WAV 또는 PCM16LE 모노 원시, 없으면 저장소 합성음 자리 파일) ·
-  `GPT_LIVE_INPUT_RATE`(원시 PCM의 표본율, 기본 24000, 키트 TTS 캐시는 16000) ·
-  `GPT_LIVE_UTTERANCES`(자동 응답을 관찰하려고 보내는 발화 수, 기본 3, 1 ~ 10 — 비용이 발화 수에 비례한다) ·
-  `GPT_LIVE_UPDATE_JSON`(자동 응답을 끄는 `session.update` 메시지 JSON, type이 `session.update`인 객체. 없으면 그 시험은 건너뛴다).
-- 보고서 첫 줄은 `outcome=…`(① 입력 표본율 수락과 ⑦ append + create 뒤 응답이 모두 PASS일 때만 PASS), 다음 줄은 `rate=… utterances=…`이다.
-  표는 항목 · 판정 · 관측이고 ① ~ ⑨ 뒤에 종료 형식 · 오류 사건(가린 문장) · 지원 type 목록 · 수신 사건 모양 · 사용량(`session.usage.updated` 마지막 값 ·
-  세션 길이) 행이 있다. ②(출력 전사 사건)가 `NOT_OBSERVED`면 구현을 멈추고 사람과 다시 정한다(BR9.2). 전사 원문 · 음성 · 키는 담지 않는다(R-F14).
+- 선택 env(비밀 아님): `GPT_LIVE_RATE`(세션 시작에 싣는 입력 표본율, 기본 24000, 거절되면 16000으로도 시도) ·
+  `GPT_LIVE_INPUT_PCM`(합성 말소리 파일 경로, WAV 또는 PCM16LE 모노 원시, 없으면 저장소 합성음 자리 파일 — 말소리가 있어야 자동 응답이 온다) ·
+  `GPT_LIVE_INPUT_RATE`(원시 PCM의 표본율, 기본 24000) ·
+  `GPT_LIVE_UPDATE_JSON`(자동 응답을 끄는 `session.update` 메시지 JSON, type이 `session.update`인 객체. 없으면 P5는 '시험 안 함'). 발화 수 env는
+  없앴다(발화는 P1 · P2 · P4(+ P5)로 고정).
+- 보고서 첫 줄은 `outcome=…`(① 입력 표본율 수락과 '지시 추가 수락'(지시를 보낸 뒤 오류 0건)이 모두 PASS일 때만 PASS), 다음 줄은 `rate=… phases=…`이다.
+  표는 항목 · 판정 · 관측이다. 행의 뜻: ② 사건 이름(입력 · 출력 전사, 말 끝, 위임, 응답 경계 후보) · P1 마지막 입력 프레임 → 첫 조각 지연 · 조각 수 ·
+  응답 안 최대 쉼 · P2 지시 뒤 조각 수와 마지막 낡은 조각까지 ms · 조각 사이 최대 쉼 · 표식 응답이 시작됐는가와 걸린 ms · 경계를 알리는 모르는 type ·
+  P3 말이 저절로 시작하는가(지연 · 조각 수 · 표식) · P4 P3 표식이 다음 응답에 남는가(유지 · 한 번뿐) · P5 자동 응답이 꺼지는가 · 지시 추가 수락
+  (오류 · `session.instructions.appended` 모양 · `client_event_id` 일치 · 지시문 길이) · `response.create` 미사용. 그 뒤에 종료 형식 · 오류 사건(가린 문장) ·
+  지원 type 목록 · 수신 사건 모양 · 사용량(`session.usage.updated` 마지막 값 · 세션 길이) 행이 있다. ②가 `NOT_OBSERVED`면 구현을 멈추고 사람과 다시
+  정한다(BR9.2). 전사 원문 · 음성 · 키는 담지 않는다(R-F14).
 - 금액은 계산하지 않는다. 단가는 OpenAI 결제 화면에서 확인한다(보고서는 사용량만 남긴다).
 - 결과는 '실제 API · 합성 자료' 증거로만 따로 적는다(R-M11). 키가 없으면 `SKIPPED_NO_KEY`이고 시험은 '건너뜀'이다(통과 아님).
 
