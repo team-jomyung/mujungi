@@ -74,6 +74,19 @@ public final class LunaInputSanitizer {
         return new SanitizedInput(cleaned, new ArrayList<>(cleaned.keySet()));
     }
 
+    /** U10 Q1-A: 두 상황 목적의 최상위 interests만 허용한다. 일반 API·중첩·다른 목적 금지는 그대로다. */
+    public SanitizedInput sanitize(Map<String,Object> input,Map<String,String> aliases,LunaPurpose purpose) {
+        var general=sanitize(input,aliases);
+        if(purpose!=LunaPurpose.SCENARIO_GENERATION&&purpose!=LunaPurpose.SCENARIO_REVIEW)return general;
+        if(!(input.get("interests") instanceof Collection<?> values))return general;
+        var strings=values.stream().filter(String.class::isInstance).map(String.class::cast)
+                .filter(s->!s.isBlank()&&s.length()<=80&&s.matches("[\\p{L}\\p{N} _-]+"))
+                .limit(10).toList();
+        var masked=sanitize(Map.of("values",strings),aliases).payload().get("values");
+        var clean=new LinkedHashMap<>(general.payload());clean.put("interests",masked);
+        return new SanitizedInput(clean,new ArrayList<>(clean.keySet()));
+    }
+
     /**
      * 별칭 표를 치환 순서로 정리한다(검토 R-01). 빈 이름 · null 값은 뺀다. 긴 이름이 먼저이고 길이가 같으면 사전순이라 호출자가 준 표의 순서와
      * 관계없이 결과가 같다. 이름끼리 포함 관계(예: '민수'와 '수')여도 긴 이름이 통째로 먼저 바뀐다.

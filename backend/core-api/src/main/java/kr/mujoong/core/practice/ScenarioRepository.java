@@ -35,7 +35,9 @@ public class ScenarioRepository {
     }
     public record Details(String scriptVersion, List<ScenarioScript.Scene> scenes, Scenario.Review review,
             Scenario.Generation generation, String goalContextJson) {}
-    public record ExposureText(String scenarioText, String triggerScript) {
+    public record ExposureText(String scenarioText, String triggerScript,String skillRef,
+            kr.mujoong.core.knowledge.VariantPlanner.Context graphContext) {
+        public ExposureText(String scenarioText,String triggerScript){this(scenarioText,triggerScript,null,null);}
         public ExposureText {
             if(scenarioText==null || scenarioText.isBlank() || scenarioText.length()>8000
                     || triggerScript==null || triggerScript.isBlank() || triggerScript.length()>2000)
@@ -109,17 +111,24 @@ public class ScenarioRepository {
             jdbc.queryForObject("select set_config('statement_timeout',:timeout,true)",
                     new MapSqlParameterSource("timeout",Math.max(1,timeout.toMillis())+"ms"),String.class);
             var rows=jdbc.query("""
-                    select scenario_text,trigger_script from core.core_scenario
+                    select scenario_text,trigger_script,scenes_json,goal_context_json from core.core_scenario
                     where guardian_id=:guardian and child_id=:child and status='EXPOSED'
                     and exposed_at is not null and exposed_at<=:started
                     order by exposed_at desc,id desc limit 3
                     """,new MapSqlParameterSource("guardian",guardian).addValue("child",child)
                     .addValue("started",ClockParams.timestamptz(startedAt)),
-                    (rs,n)->new ExposureText(rs.getString("scenario_text"),rs.getString("trigger_script")));
+                    (rs,n)->exposure(rs));
             if(rows.stream().mapToInt(r->r.scenarioText().length()+r.triggerScript().length()).sum()>30000)
                 throw CoreApiException.of(ErrorCode.SCENARIO_GEN_FAILED);
             return List.copyOf(rows);
         });
+    }
+    private ExposureText exposure(ResultSet rs)throws SQLException {
+        var scenes=readScenes(rs.getString("scenes_json"));
+        var goal=readOptional(rs.getString("goal_context_json"),GoalContext.class);
+        var base=scenes==null||scenes.isEmpty()?null:scenes.getFirst();
+        return new ExposureText(rs.getString("scenario_text"),rs.getString("trigger_script"),
+                goal==null?null:goal.skillRef(),base==null||base.preservation()==null?null:ScenarioGraphContext.coordinates(base));
     }
     public boolean seen(UUID child, String fingerprint) {
         return Boolean.TRUE.equals(jdbc.queryForObject("""

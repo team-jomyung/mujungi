@@ -24,12 +24,12 @@
 - [x] Step 10 — ScenarioScriptGenerator와 독립 서버 검사를 구현한다. 생성→별도 검토→검사→내용수정1→재검토, 기술재시도 전체1, BASE-only 검토1, 총 최대6이되 최초15초 잔여만 사용한다. 정각/늦은 결과/취소를 저장하지 않는다. (FR1,FR2,FR6,NFR1)
 - [x] Step 11 — 생성/검사 구현 뒤 U10ScenarioGenerationTest·U10ScenarioValidationTest·U10ScenarioDeadlineTest를 작성·실행한다. 정상·REJECT·UNCERTAIN·누락·스키마·APPROVE+서버거절·두 번 실패·중복·반려 대본 발급0·기술재시도·대기·취소를 검증한다. (BR1,BR2,BR6.2,BR8.1)
 - [x] Step 12 — 해당 층 통과 후 두 번째 커밋 feat(u10): 생성과 별도 검토 및 발급 검사 구현.
-- [ ] Step 13 — 목적별 관심사 허용 정리와 ScenarioPrivacyContextPort 운영 어댑터를 구현한다. ChildProfileService 소유 경계에서 이름을 얻어 생성·검토 모두에 비공개 별칭으로 적용한다. 조회 실패·소유 불일치·유효 이름 없음은 공급자 미호출이다. 다른 AI 목적의 interests 금지 유지, 원래 이름은 저장/로그/기본 출력 금지다. (FR7,설계 R-01)
-- [ ] Step 14 — 개인정보 경계 구현 뒤 U10ScenarioPrivacyTest·U10ScenarioPrivacyIT를 작성·실행한다. 관심사·목표·이력·지정 원본·검토 생성물 속 이름/연락처, 비공개·비로그·오류/다른 아이·다른 목적 금지 시험을 수행한다. (BR7,NFR6)
-- [ ] Step 15 — SavedGoalReader 기준으로 기존 행동/후보 typed 고정 맥락을 FrozenGoal·WeightedGoalOrder·GoalSnapshot 및 시작 준비에 연결한다. 후보는 candidate:<candidateRef> 운반 이름 공간과 별도 kind/version/context이며 임의 행동 매핑·카탈로그 행 추가가 없다. 과거 JSON/생성자는 기존 행동 기본값이다. (FR4)
-- [ ] Step 16 — 목표 연결 구현 뒤 U10FrozenGoalTest·U10SavedGoalStartIT를 작성·실행한다. 두 종류별 준비/순서/가중치/고정 버전/담기 해제/권한·동의·멱등/과거 JSON과 후보를 카탈로그 조회하지 않는 경계를 검증한다. (BR4,BR2.2)
-- [ ] Step 17 — U15 ChildKnowledgeService의 구조 맥락·variantPlan 합계2초와 기본 경로, 실제 노출 이력, 변형의 같은 기술·불변·보존·거리·변경1축 검사를 연결한다. 지원하지 않는 자유 맥락을 추측하지 않는다. (FR5,FR6,설계 R-02)
-- [ ] Step 18 — 연결 뒤 U10ScenarioGraphTest·U10ScenarioHistoryTest·U10ScenarioVariantTest를 작성·실행한다. 합계2초/전체15초 차감·장애/늦은 결과·graphContextUsed 진실성·최근 실제 노출 양쪽 요청 전달·변형 보정과 BASE-only 재검토를 확인한다. (BR1.3,BR5,BR6,NFR1)
+- [x] Step 13 — 목적별 관심사 허용 정리와 ScenarioPrivacyContextPort 운영 어댑터를 구현한다. ChildProfileService 소유 경계에서 이름을 얻어 생성·검토 모두에 비공개 별칭으로 적용한다. 조회 실패·소유 불일치·유효 이름 없음은 공급자 미호출이다. 다른 AI 목적의 interests 금지 유지, 원래 이름은 저장/로그/기본 출력 금지다. (FR7,설계 R-01)
+- [x] Step 14 — 개인정보 경계 구현 뒤 U10ScenarioPrivacyTest·U10ScenarioPrivacyIT를 작성·실행한다. 관심사·목표·이력·지정 원본·검토 생성물 속 이름/연락처, 비공개·비로그·오류/다른 아이·다른 목적 금지 시험을 수행한다. (BR7,NFR6)
+- [x] Step 15 — SavedGoalReader 기준으로 기존 행동/후보 typed 고정 맥락을 FrozenGoal·WeightedGoalOrder·GoalSnapshot 및 시작 준비에 연결한다. 후보는 candidate:<candidateRef> 운반 이름 공간과 별도 kind/version/context이며 임의 행동 매핑·카탈로그 행 추가가 없다. 과거 JSON/생성자는 기존 행동 기본값이다. (FR4)
+- [x] Step 16 — 목표 연결 구현 뒤 U10FrozenGoalTest·U10SavedGoalStartIT를 작성·실행한다. 두 종류별 준비/순서/가중치/고정 버전/담기 해제/권한·동의·멱등/과거 JSON과 후보를 카탈로그 조회하지 않는 경계를 검증한다. (BR4,BR2.2)
+- [x] Step 17 — U15 ChildKnowledgeService의 구조 맥락·variantPlan 합계2초와 기본 경로, 실제 노출 이력, 변형의 같은 기술·불변·보존·거리·변경1축 검사를 연결한다. 지원하지 않는 자유 맥락을 추측하지 않는다. (FR5,FR6,설계 R-02)
+- [x] Step 18 — 연결 뒤 U10ScenarioGraphTest·U10ScenarioHistoryTest·U10ScenarioVariantTest를 작성·실행한다. 합계2초/전체15초 차감·장애/늦은 결과·graphContextUsed 진실성·최근 실제 노출 양쪽 요청 전달·변형 보정과 BASE-only 재검토를 확인한다. (BR1.3,BR5,BR6,NFR1)
 - [ ] Step 19 — 해당 층 통과 후 세 번째 커밋 feat(u10): 담은 목표와 그래프 및 개인정보 입력 연결.
 - [ ] Step 20 — ScenarioService 실제 구성 경로와 PreparedPracticePackageMapper/내부 HTTP 응답을 연결한다. 새 실제 Luna 구성은 구조화 흐름을 사용하고 레거시 직접 어댑터 시험은 보존한다. 첫 BASE 필수8필드와 신규 선택 필드를 저장/재조회/첫 전달에 함께 전달한다. (FR3.1,FR3.2,FR4.1)
 - [ ] Step 21 — 응답 경계 구현 뒤 U10ScenarioApiIT·U10PracticePackageTest를 작성·실행한다. 현재 C8 JSON과 RT 수신 모양 대조, 후보 키 보존, 첫 대본/과거 행, 기존 U5b 경로·오류 호환·실제 구성 선택·삭제 경쟁을 검증한다. RT 운영 소스와 다른 유닛 단언은 변경하지 않는다. (BR3,BR4,NFR3)

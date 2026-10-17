@@ -85,7 +85,7 @@ public class CoreLunaClient {
         Objects.requireNonNull(budget, "budget").bindDeadline(request.deadline());
         SanitizedInput input;
         try {
-            input = sanitizer.sanitize(request.input(), request.aliases());
+            input = sanitizer.sanitize(request.input(), request.aliases(), request.purpose());
         } catch (LunaException rejected) {
             audit(request, List.of(), LunaFailureReason.FORBIDDEN_INPUT.name(), null, Duration.ZERO, 0);
             throw rejected;
