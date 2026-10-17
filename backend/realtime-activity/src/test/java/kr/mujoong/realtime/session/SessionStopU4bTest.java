@@ -81,13 +81,13 @@ class SessionStopU4bTest {
     void anotherReplyLiftsTheHoldAndHandsTheFloorBackOnce() {
         h.activate();
         h.launcher.runAll("provider-create-");
-        int creates = h.provider.last().requests(ProviderRequestFactory.ResponseCreate.class).size();
+        int creates = h.provider.last().requests(ProviderRequestFactory.InstructionsAppend.class).size();
         h.childSays("i-1", "쉬고 싶어");
         h.childSays("i-2", "티라노가 제일 커");
 
         assertThat(h.executor.status()).isEqualTo(SessionStatus.ACTIVE);
         h.settleSend();
-        assertThat(h.provider.last().requests(ProviderRequestFactory.ResponseCreate.class)).hasSize(creates + 1);
+        assertThat(h.provider.last().requests(ProviderRequestFactory.InstructionsAppend.class)).hasSize(creates + 1);
         emitComplete("r-1", "티라노는 아주 컸어");
         h.advanceAlive(Duration.ofSeconds(1));
         assertThat(h.link.outputs()).hasSize(1);
@@ -113,9 +113,7 @@ class SessionStopU4bTest {
     @Test
     void afterTheEndIsConfirmedAnEarlierResponseIsNeverPlayed() {
         h.activate();
-        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("공룡은 멋져"));
-        h.provider.last().emit(new ProviderEvent.OutputAudioDelta(new byte[4_800]));
-        h.drain();
+        h.speak("공룡은 멋져", 4_800);
 
         h.childSays("i-1", "그만할래");
         h.drain();
@@ -142,9 +140,7 @@ class SessionStopU4bTest {
     }
 
     private void emitComplete(String responseId, String text) {
-        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta(text));
-        h.provider.last().emit(new ProviderEvent.OutputAudioDelta(new byte[4_800]));
-        h.drain();
+        h.speak(text, 4_800);
     }
 
     private void mark(PlayApprovedContent play, PlaybackMark.Status status) {

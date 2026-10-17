@@ -218,7 +218,6 @@ class OutputGateTest {
         h.activate();
         h.link.timing(-120L, 40L);
         childSpeaks();
-        h.provider.last().emit(new ProviderEvent.SpeechStopped());
         h.provider.last().emit(new ProviderEvent.InputTranscriptDone("item-1", "공룡 좋아"));
         output("r1", "나도 공룡 좋아");
         h.advance(Duration.ofMillis(800));
@@ -234,7 +233,7 @@ class OutputGateTest {
         assertThat(turn).containsKeys("tSpeechEnd", "tProviderFirstOut", "tSegmentConfirmed", "tGatePass",
                 "tFirstFrameSent", "tDevicePlayStart", "tDevicePlayStartRecv", "tTranscriptFinal", "clockOffsetMs",
                 "rttMs", "providerResponseMs", "quietWaitMs");
-        assertThat(turn).containsEntry("tSpeechEndSource", "PROVIDER_EVENT").doesNotContainKey("unobservedReason");
+        assertThat(turn).containsEntry("tSpeechEndSource", "INPUT_TRANSCRIPT_FINAL").doesNotContainKey("unobservedReason");
         assertThat(h.logs.lines()).noneMatch(line -> line.contains("나도 공룡 좋아"));
     }
 

@@ -46,10 +46,10 @@ public final class SessionTimers {
         GAP_DISPLAY(false),
         /** U4b 종료 뒤 정산 창 상한(record-settle, BR8.1). */
         RECORD_SETTLE(false),
-        /** U11 BR11.7: 말 끝 + 자동 응답 시작 대기(auto-response-start) — 끊김 확인의 조건 ②. 구간 조용 시간과 같은 시계에서 돈다. */
-        AUTO_RESPONSE_START(true),
-        /** U11 W9: 서버 송신이 끊김을 기다리는 시간의 상한(판정 턴 밖 송신, response-ready). */
-        OUTPUT_GAP_WAIT(false);
+        /** U11 A3: 지시를 보낸 뒤 새 말이 시작하기를 기다리는 시한(response-ready, 지시 송신 시각부터). */
+        INSTRUCTION_WAIT(false),
+        /** U11 A7: 입력 전사 조각이 이만큼 오지 않으면 그 묶음을 확정 전사로 본다(input-transcript-quiet). */
+        INPUT_TRANSCRIPT_QUIET(true);
 
         private final boolean quietClock;
 

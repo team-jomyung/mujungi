@@ -119,7 +119,9 @@ class SessionLifecycleIT {
         assertThat(play.contentCode()).isEqualTo(PlayApprovedContent.CLOSING);
         // CLOSING 뒤 도착한 공급자 출력은 기기로 한 바이트도 가지 않는다(NFR1.1 · SD-17)
         int framesBefore = device.outputFrames();
-        env.provider.emitTurn("item-2", "응", "늦은 말", List.of(PCM));
+        // 아이 전사 뒤 확정을 기다리지 않고 곧바로 온 늦은 말(마무리가 올린 세대가 조용해지기 전)
+        env.childSays("item-2", "응");
+        env.provider.emitSpeech("늦은 말", List.of(PCM));
         device.playbackMark(sessionId, play.playbackId(), PlaybackMark.Status.COMPLETED);
         WsEnvelope close = device.await(WsMessageType.CLOSE_TRANSPORT, WAIT);
         assertThat(((CloseTransport) close.payload()).reason()).isEqualTo(CloseTransport.Reason.GUARDIAN_STOP);

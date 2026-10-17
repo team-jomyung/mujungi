@@ -5,22 +5,34 @@ import java.time.Instant;
 import java.util.Objects;
 
 /**
- * 출력 세대 (U11 FR12.5 · BR11.5 ~ BR11.7 · BR11.13 · BR3.4, 기능 설계 2.1). 응답 id를 대신해 공급자 출력 조각을 묶고 버린다.
+ * 출력 세대 (U11 FR12.5 · BR11.5 ~ BR11.7 · BR11.13 · BR3.4, 기능 설계 2.1, <b>설계 개정 A2 ~ A5</b>). 응답 id를 대신해 공급자 출력 조각을 묶고 버린다.
  *
- * <p>공급자 실호출에는 응답 id도 응답 취소 type도 없다(편차 (U11-a)). 그래서 서버가 세대 번호를 올려 "그 전의 조각"을 버리고, 조각이 한동안
- * 끊기면 앞 응답이 끝난 것으로 본다. 한 세션에 하나이고 번호는 올리기만 한다. <b>실행기 스레드에서만 바꾼다</b>(락 없음). 직렬 송신 작업(다른 스레드)은
- * 송신 직전 대조에 쓰는 {@link #published()}만 읽는다(불변 값을 통째로 바꿔 끼우는 {@code volatile}).
+ * <p>공급자 실호출에는 응답 id도 응답 취소 type도 응답 끝 사건도 없다(편차 (U11-a)). 그래서 서버가 세대 번호를 올려 "그 전의 조각"을 버린다. 한 세션에
+ * 하나이고 번호는 올리기만 한다. <b>실행기 스레드에서만 바꾼다</b>(락 없음). 시각은 호출자가 {@code MujoongClock}으로 읽어 넘긴다(R-F6). 시간
+ * 값은 생성자로 받는다({@code mujoong.gate.segment-quiet}, {@code mujoong.timing.provider.new-speech-margin}, R-F7).
  *
- * <p>단계: {@link Phase#RECEIVING}(조각을 구간으로 받는다) · {@link Phase#DISCARDING}(세대를 올린 뒤 끊김을 기다리며 조각을 버린다) ·
- * {@link Phase#GAP_CONFIRMED}(끊김을 확인했다 — 보낼 지시가 없으면 다음 조각부터 받고, 있으면 송신 처리 뒤 첫 조각부터 받는다).
- *
- * <p>끊김 확인(BR11.7)은 두 조건이 모두 참일 때만이다: ① 마지막 조각 시각과 세대를 올린 시각 중 늦은 쪽에서 {@code segment-quiet}가 지났다.
- * ② 아이 말 끝 이후 조각이 한 번이라도 왔거나(자동 응답이 이미 시작됐다), 아직 한 번도 오지 않았으면 말 끝 시각 +
- * {@code auto-response-start}가 지났다(자동 응답이 아직 시작 전인데 끊김으로 잘못 보는 일을 막는다).
- *
- * <p>시각은 호출자가 {@code MujoongClock}으로 읽어 넘긴다(R-F6). 시간 값 두 개는 생성자로 받는다({@code mujoong.timing.provider.*}, R-F7).
+ * <p>세대를 올리는 방법이 둘이다.
+ * <ul>
+ *   <li><b>지시를 보내며 올린다</b>({@link #bumpForInstruction}, 모든 서버 발화): 낡은 응답은 지시를 받아도 1.2 ~ 1.8초 더 이어지고 새 말이 쉼 없이
+ *       뒤따르므로(조각 사이 쉼으로는 경계를 못 가른다) <b>전사 시간선</b>으로 새 말의 시작을 정한다. 오디오 시계 = 이 세션에서 받은 출력 음성의 누적
+ *       바이트 / 48(ms). ① {@code session.instructions.appended}(우리가 실은 {@code event_id}와 {@code client_event_id} 일치)의 {@code end_ms}를
+ *       기록한다({@code ackEndMs}). ② 그 뒤 처음 오는 <b>출력 전사 조각 중 {@code start_ms >= ackEndMs}</b>인 것이 새 말의 시작이다
+ *       ({@code newStartMs}). 전사가 음성보다 앞서 도착하므로 그 조각부터의 전사는 받는다. ③ 오디오 시계(조각이 시작하는 위치)가
+ *       {@code newStartMs + new-speech-margin}에 닿는 첫 음성 조각부터 {@link Phase#RECEIVING}이다. 낡은 꼬리가 새는 것보다 첫 낱말이 잘리는 것이
+ *       낫다(fail-closed) — 잘려도 괜찮게 지시문이 짧은 맞장구로 시작하라고 시킨다. 확인 사건이 시한 안에 안 오면(ACK_MISSING) 가장 최근 지시를 보낼
+ *       때의 오디오 시계 이후 {@code start_ms}인 전사로 ②를 대신하고, 새 말 전사가 시한 안에 없으면(NEW_SPEECH_NOT_OBSERVED) 이 세대는 닫는다(아이는 아무
+ *       소리도 듣지 않는다 = 안전 쪽 실패).
+ *   <li><b>지시 없이 올린다</b>({@link #bump}: 끼어들기 · 종료 의도 · 연습 폐기 · 게이트 폐기 · 보류 해제): 낡은 응답은 끊기지 않고 자연 종료까지
+ *       이어진다. 마지막 조각 시각과 세대를 올린 시각 중 늦은 쪽에서 {@code segment-quiet}가 지나면 {@link Phase#GAP_CONFIRMED}이고 그 뒤 처음 오는
+ *       조각부터 {@link Phase#RECEIVING}이다.
+ * </ul>
+ * 출력 보류 중(참여 확인 · 종료 확인 질문 · 연습 보류)에는 단계와 관계없이 조각을 버린다(BR11.13). 받는 단계에서 조각이 {@code segment-quiet} 동안
+ * 오지 않으면 열린 구간을 '완전'으로 봉인한다(공급자 응답 끝 사건이 없다).
  */
 public final class OutputGeneration {
+
+    /** 24kHz s16 모노 출력 음성의 ms당 바이트. */
+    public static final long PCM_BYTES_PER_MILLISECOND = 48L;
 
     /** 출력 세대의 단계. */
     public enum Phase {
@@ -33,7 +45,7 @@ public final class OutputGeneration {
     public enum BumpReason {
         /** 판정 턴을 열었다(PR2). */
         JUDGMENT_TURN,
-        /** 서버가 지시 · 응답 요청을 보내려 한다(직렬 송신 경로, BR3.3). */
+        /** 서버가 지시(= 발화)를 보낸다(직렬 송신 경로, 설계 개정 A2). */
         SERVER_SEND,
         /** 아이가 끼어들었다. */
         BARGE_IN,
@@ -53,80 +65,82 @@ public final class OutputGeneration {
         ACCEPT,
         /** 출력 보류 중이라 버린다(BR11.13, 구간을 열지 않는다). */
         DISCARD_HELD,
-        /** 세대를 올린 뒤 아직 끊김 전이라 버린다. */
+        /** 세대를 올린 뒤 아직 새 말(또는 끊김) 전이라 버린다. */
         DISCARD
     }
 
     /**
      * 조각 처리 결과.
      *
-     * @param fromStart 이 조각이 앞 끊김 · 세대 올림 뒤 첫 조각인가(구간이 첫 조각부터 담겼는지, 완전 봉인의 조건)
-     * @param permitInvalidated 송신 대기 중에 조각이 와서 끊김 확인(허가)을 무효로 했는가
+     * @param fromStart 이 조각이 구간을 여는 첫 조각인가(구간이 첫 조각부터 담겼는지, 완전 봉인의 조건)
      */
-    public record ChunkResult(ChunkVerdict verdict, boolean fromStart, boolean permitInvalidated) {
+    public record ChunkResult(ChunkVerdict verdict, boolean fromStart) {
     }
 
     /** {@link #onQuiet}가 알리는 것. */
     public enum QuietVerdict {
         /** 받는 단계에서 조용했다 — 열린 구간이 있으면 '완전'으로 봉인한다. */
         SEAL_RECEIVING,
-        /** 아직 끊김 조건 ①(조용 시간)이 안 찼다 — {@code waitUntil}에 다시 확인한다. */
+        /** 아직 조용 시간이 안 찼다 — {@code waitUntil}에 다시 확인한다. */
         NOT_YET,
-        /** ①은 찼지만 자동 응답 시작 전일 수 있다 — {@code waitUntil}에 다시 확인한다(자동 응답 시작 대기). */
-        WAIT_AUTO_RESPONSE,
-        /** 끊김을 확인했다. 송신 대기가 있으면 {@code permitSeq}의 허가를 내준다. */
+        /** 끊김을 확인했다(지시 없이 올린 세대). 다음 조각부터 받는다. */
         GAP_CONFIRMED,
-        /** 할 일이 없다(끊김 확인 뒤, 이미 처리됨). */
+        /** 새 말 전사는 받았는데 음성이 여유 시각에 닿지 못한 채 조용해졌다 — 열린 구간(전사뿐)을 불완전으로 버린다. */
+        ABANDON_NO_AUDIO,
+        /** 할 일이 없다. */
         NONE
     }
 
-    /**
-     * 끊김 확인 결과.
-     *
-     * @param waitUntil 다시 확인할 시각({@code NOT_YET} · {@code WAIT_AUTO_RESPONSE}일 때)
-     * @param permitReady {@code GAP_CONFIRMED}이고 송신 대기가 있어 허가를 내줘야 하는가
-     */
-    public record QuietResult(QuietVerdict verdict, Instant waitUntil, boolean permitReady, long generation, long permitSeq) {
+    /** 끊김 확인 결과. */
+    public record QuietResult(QuietVerdict verdict, Instant waitUntil) {
     }
 
-    /** 송신 작업이 보내지 못하고 끝났을 때 실행기가 할 일. */
-    public enum AbortAction {
-        /** 세대가 바뀌었다 — 그 송신은 더 의미가 없다(새 송신이 있으면 그 작업이 다음 차례). */
-        STALE_GENERATION,
-        /** 같은 세대에서 허가만 무효가 됐다 — 다시 끊김을 기다려 새 허가를 낸다. */
-        RE_PERMIT
+    /** 지시 응답 시한({@code response-ready})이 지났을 때 알리는 것(사유 코드만 남긴다, R-F14). */
+    public enum InstructionTimeout {
+        /** 기다리는 지시가 없다. */
+        NONE,
+        /** 확인 사건이 안 왔다 — 가장 최근 지시 이후 전사로 새 말을 찾아 계속한다. */
+        ACK_MISSING,
+        /** 새 말 전사가 시한 안에 없다 — 이 세대는 닫는다. */
+        NEW_SPEECH_NOT_OBSERVED
     }
 
-    /** 다른 스레드가 읽는 현재 세대 · 허가 번호(송신 직전 대조용). */
-    public record Published(long generation, long permitSeq) {
+    private enum Mode {
+        GAP,
+        INSTRUCTION
     }
 
     private final Duration segmentQuiet;
-    private final Duration autoResponseStart;
+    private final long marginMs;
 
     private long generation;
     private Phase phase = Phase.RECEIVING;
+    private Mode mode = Mode.GAP;
     private Instant lastDeltaAt;
     private Instant bumpedAt;
-    private Instant speechEndAt;
-    private boolean deltaSinceSpeechEnd;
-    private long permitSeq;
-    private boolean pendingSend;
-    private boolean sendProcessed;
     private boolean boundary = true;
     private boolean corrected;
-    private volatile Published published = new Published(0L, 0L);
+    private long audioBytes;
+
+    // 지시 경로 상태(지시를 보내며 올린 세대에서만 쓴다)
+    private String pendingEventId;
+    private long sentClockMs;
+    private long ackEndMs = -1L;
+    private boolean ackMissing;
+    private long newStartMs = -1L;
+    private boolean transcriptOpen;
 
     /**
-     * @param segmentQuiet 조각이 이만큼 끊기면 끊김의 조건 ①(env {@code mujoong.timing.provider.segment-quiet})
-     * @param autoResponseStart 말 끝 뒤 자동 응답 시작을 기다리는 시간(env {@code mujoong.timing.provider.auto-response-start})
+     * @param segmentQuiet 조각이 이만큼 끊기면 끊김 · 구간 봉인(env {@code mujoong.gate.segment-quiet})
+     * @param newSpeechMargin 새 말 시작에 더하는 여유(env {@code mujoong.timing.provider.new-speech-margin})
      */
-    public OutputGeneration(Duration segmentQuiet, Duration autoResponseStart) {
+    public OutputGeneration(Duration segmentQuiet, Duration newSpeechMargin) {
         this.segmentQuiet = Objects.requireNonNull(segmentQuiet, "segmentQuiet");
-        this.autoResponseStart = Objects.requireNonNull(autoResponseStart, "autoResponseStart");
-        if (segmentQuiet.isNegative() || autoResponseStart.isNegative()) {
+        Objects.requireNonNull(newSpeechMargin, "newSpeechMargin");
+        if (segmentQuiet.isNegative() || newSpeechMargin.isNegative()) {
             throw new IllegalArgumentException("시간 값은 음수일 수 없다");
         }
+        this.marginMs = newSpeechMargin.toMillis();
     }
 
     /** 현재 세대 번호(0부터, 올리기만 한다). */
@@ -138,19 +152,9 @@ public final class OutputGeneration {
         return phase;
     }
 
-    /** 끊김을 확인할 때마다, 송신 대기 중 조각이 와서 허가를 무효로 할 때마다 오르는 세션 전체 번호. */
-    public long permitSeq() {
-        return permitSeq;
-    }
-
-    /** 현재 세대로 보내려는 지시 · 응답 요청이 끊김을 기다리고 있는가. */
-    public boolean pendingSend() {
-        return pendingSend;
-    }
-
-    /** '보내는 중' 표시({@code InstructionSent})를 처리했는가. */
-    public boolean sendProcessed() {
-        return sendProcessed;
+    /** 이 세션에서 받은 출력 음성의 누적 길이(ms, 보류 · 버린 조각도 센다). */
+    public long audioClockMs() {
+        return audioBytes / PCM_BYTES_PER_MILLISECOND;
     }
 
     /** 마지막 조각 시각(어느 단계 · 출력 범위 밖에서 버린 조각도 포함, 없으면 null). */
@@ -163,90 +167,172 @@ public final class OutputGeneration {
         return bumpedAt;
     }
 
-    /** 다른 스레드가 읽어도 되는 현재 세대 · 허가 번호. */
-    public Published published() {
-        return published;
+    /** 지시를 보내며 올린 세대가 새 말을 기다리는 중인가(확인 사건 또는 새 말 전사 전, 시한 만료로 닫기 전). */
+    public boolean awaitingNewSpeech() {
+        return mode == Mode.INSTRUCTION && phase == Phase.DISCARDING && newStartMs < 0;
     }
 
-    /** 아이 말이 끝났다(말 끝 사건 또는 전사 확정). 이 말에 대한 자동 응답 시작을 기다리는 기준 시각이 된다. */
-    public void onSpeechEnd(Instant at) {
-        Objects.requireNonNull(at, "at");
-        if (speechEndAt == null || deltaSinceSpeechEnd) {
-            speechEndAt = at;
-            deltaSinceSpeechEnd = false;
-        }
+    /** 확인 사건을 받았는가(지시 경로). */
+    public boolean ackReceived() {
+        return mode == Mode.INSTRUCTION && ackEndMs >= 0;
+    }
+
+    /** 새 말의 전사 시작 시각(ms, 아직 모르면 -1). */
+    public long newStartMs() {
+        return newStartMs;
+    }
+
+    /** 확인 사건의 end_ms(ms, 아직 모르면 -1). */
+    public long ackEndMs() {
+        return ackEndMs;
     }
 
     /**
-     * 출력 조각(음성 · 전사)이 왔다. 어느 단계 · 보류 여부와 관계없이 마지막 조각 시각을 갱신하고, 단계에 따라 받을지 버릴지 정한다(BR11.13).
+     * 출력 음성 조각이 왔다. 어느 단계 · 보류 여부와 관계없이 오디오 시계와 마지막 조각 시각을 갱신하고, 단계에 따라 받을지 버릴지 정한다.
      *
+     * @param bytes 이 조각의 PCM 바이트 수
      * @param held 지금 출력 보류 중인가(WAITING_CHILD · 종료 확인 진행 중 · 연습 보류)
      */
-    public ChunkResult onChunk(Instant at, boolean held) {
+    public ChunkResult onAudio(Instant at, int bytes, boolean held) {
         Objects.requireNonNull(at, "at");
+        long clockStartMs = audioClockMs();
+        audioBytes += Math.max(0, bytes);
         lastDeltaAt = at;
-        deltaSinceSpeechEnd = true;
-        boolean fromStart = boundary;
-        boundary = false;
         if (held) {
-            return new ChunkResult(ChunkVerdict.DISCARD_HELD, fromStart, false);
+            return new ChunkResult(ChunkVerdict.DISCARD_HELD, false);
         }
         switch (phase) {
             case RECEIVING:
-                return new ChunkResult(ChunkVerdict.ACCEPT, fromStart, false);
+                return new ChunkResult(ChunkVerdict.ACCEPT, takeBoundary());
             case DISCARDING:
-                return new ChunkResult(ChunkVerdict.DISCARD, fromStart, false);
-            case GAP_CONFIRMED:
-                if (pendingSend && !sendProcessed) {
-                    // 허가를 받았지만 송신 표시를 처리하기 전에 조각이 왔다 — 끊김이 아니었다. 허가를 무효로 하고 다시 기다린다
-                    permitSeq++;
-                    phase = Phase.DISCARDING;
-                    publish();
-                    return new ChunkResult(ChunkVerdict.DISCARD, fromStart, true);
+                if (mode == Mode.INSTRUCTION && newStartMs >= 0 && clockStartMs >= newStartMs + marginMs) {
+                    phase = Phase.RECEIVING;
+                    return new ChunkResult(ChunkVerdict.ACCEPT, takeBoundary());
                 }
+                return new ChunkResult(ChunkVerdict.DISCARD, false);
+            case GAP_CONFIRMED:
                 phase = Phase.RECEIVING;
-                pendingSend = false;
-                sendProcessed = false;
-                return new ChunkResult(ChunkVerdict.ACCEPT, fromStart, false);
+                boundary = true;
+                return new ChunkResult(ChunkVerdict.ACCEPT, takeBoundary());
             default:
                 throw new IllegalStateException("모르는 단계: " + phase);
         }
     }
 
     /**
-     * 세대를 올린다. 열린 구간을 '불완전'으로 봉인해 버리는 일과 기기 정지 명령은 호출자가 한다. 송신 대기가 없다(이미 대기 중이던 송신은 세대가
-     * 달라져 보내지 못한다).
+     * 출력 전사 조각이 왔다. 지시 경로에서는 확인 사건 뒤 처음 오는 {@code start_ms >= ackEndMs} 조각이 새 말의 시작이고, 그 조각부터의 전사는
+     * 음성이 아직 낡은 꼬리여도 받는다(전사가 음성보다 앞서 도착한다).
+     *
+     * @param startMs 전사 시간선의 시작(ms, 없으면 음수)
+     */
+    public ChunkResult onTranscript(Instant at, long startMs, boolean held) {
+        Objects.requireNonNull(at, "at");
+        lastDeltaAt = at;
+        if (mode == Mode.INSTRUCTION && phase == Phase.DISCARDING && newStartMs < 0 && startMs >= 0) {
+            if ((ackEndMs >= 0 && startMs >= ackEndMs) || (ackMissing && startMs >= sentClockMs)) {
+                newStartMs = startMs;
+                boundary = true;
+            }
+        }
+        if (held) {
+            return new ChunkResult(ChunkVerdict.DISCARD_HELD, false);
+        }
+        switch (phase) {
+            case RECEIVING:
+                return new ChunkResult(ChunkVerdict.ACCEPT, takeBoundary());
+            case DISCARDING:
+                if (mode == Mode.INSTRUCTION && newStartMs >= 0 && startMs >= newStartMs) {
+                    transcriptOpen = true;
+                    return new ChunkResult(ChunkVerdict.ACCEPT, takeBoundary());
+                }
+                return new ChunkResult(ChunkVerdict.DISCARD, false);
+            case GAP_CONFIRMED:
+                phase = Phase.RECEIVING;
+                boundary = true;
+                return new ChunkResult(ChunkVerdict.ACCEPT, takeBoundary());
+            default:
+                throw new IllegalStateException("모르는 단계: " + phase);
+        }
+    }
+
+    /**
+     * 지시 확인 사건({@code session.instructions.appended})을 받았다. 가장 최근에 보낸 지시의 {@code event_id}와 맞을 때만 받는다(낡은 지시의
+     * 확인 · 모르는 id는 무시).
+     *
+     * @return 받았는가
+     */
+    public boolean onAppended(String clientEventId, long endMs) {
+        if (mode != Mode.INSTRUCTION || pendingEventId == null || !pendingEventId.equals(clientEventId) || endMs < 0
+                || ackEndMs >= 0) {
+            return false;
+        }
+        ackEndMs = endMs;
+        return true;
+    }
+
+    /**
+     * 지시 응답 시한({@code response-ready})이 지났다.
+     *
+     * @return 확인 사건이 없으면 {@link InstructionTimeout#ACK_MISSING}(전사로 새 말을 찾아 계속, 한 번), 확인은 왔는데 새 말이 없거나 이미 한 번
+     *     ACK_MISSING을 알렸으면 {@link InstructionTimeout#NEW_SPEECH_NOT_OBSERVED}(이 세대는 닫는다)
+     */
+    public InstructionTimeout onInstructionTimeout() {
+        if (!awaitingNewSpeech()) {
+            return InstructionTimeout.NONE;
+        }
+        if (ackEndMs < 0 && !ackMissing) {
+            ackMissing = true;
+            return InstructionTimeout.ACK_MISSING;
+        }
+        // 이 세대는 닫는다: 아이는 이 지시의 응답을 듣지 않는다. 다만 이후 아이 말에 대한 자동 응답이 영영 막히지 않게 지시 없이 올린 세대처럼
+        // 조각이 끊기기를 기다린 뒤 다시 받는다
+        mode = Mode.GAP;
+        pendingEventId = null;
+        newStartMs = -1L;
+        transcriptOpen = false;
+        boundary = true;
+        return InstructionTimeout.NEW_SPEECH_NOT_OBSERVED;
+    }
+
+    /**
+     * 지시 없이 세대를 올린다(끼어들기 · 종료 의도 · 연습 폐기 · 게이트 폐기 · 보류 해제). 열린 구간을 '불완전'으로 봉인해 버리는 일과 기기 정지
+     * 명령은 호출자가 한다. 낡은 응답은 끊기지 않으므로 조각이 {@code segment-quiet} 동안 끊기기를 기다린다.
      *
      * @return 새 세대 번호
      */
     public long bump(Instant now, BumpReason reason) {
-        return doBump(now, reason, false);
+        return doBump(now, reason, Mode.GAP, null);
     }
 
     /**
-     * 서버가 지시 · 응답 요청을 보내려고 세대를 올린다(직렬 송신 경로, BR3.3). 끊김이 확인되면 허가를 내줘야 하는 송신 대기가 생긴다.
+     * 서버가 지시(= 발화)를 보내며 세대를 올린다(설계 개정 A2). 이 세대는 전사 시간선으로 새 말의 시작을 찾는다.
      *
+     * @param eventId 보내는 {@code append}의 {@code event_id}(확인 사건의 {@code client_event_id}와 맞춘다)
      * @return 새 세대 번호
      */
-    public long bumpForSend(Instant now, BumpReason reason) {
-        return doBump(now, reason, true);
+    public long bumpForInstruction(Instant now, BumpReason reason, String eventId) {
+        return doBump(now, reason, Mode.INSTRUCTION, Objects.requireNonNull(eventId, "eventId"));
     }
 
-    private long doBump(Instant now, BumpReason reason, boolean sendPending) {
+    private long doBump(Instant now, BumpReason reason, Mode newMode, String eventId) {
         Objects.requireNonNull(now, "now");
         Objects.requireNonNull(reason, "reason");
         generation++;
         phase = Phase.DISCARDING;
+        mode = newMode;
         bumpedAt = now;
-        sendProcessed = false;
-        pendingSend = sendPending;
         corrected = false;
         boundary = true;
-        publish();
+        pendingEventId = eventId;
+        sentClockMs = audioClockMs();
+        ackEndMs = -1L;
+        ackMissing = false;
+        newStartMs = -1L;
+        transcriptOpen = false;
         return generation;
     }
 
-    /** 말 끝 · 조각 시각을 바탕으로 끊김을 확인한다. SEGMENT_QUIET · AUTO_RESPONSE_START 시계가 만기될 때 부른다. */
+    /** 조각 시각을 바탕으로 조용함을 확인한다. SEGMENT_QUIET 시계가 만기될 때 부른다. */
     public QuietResult onQuiet(Instant now) {
         Objects.requireNonNull(now, "now");
         Instant effectiveLast = latest(lastDeltaAt, bumpedAt);
@@ -254,67 +340,36 @@ public final class OutputGeneration {
         switch (phase) {
             case RECEIVING:
                 if (!quiet) {
-                    return new QuietResult(QuietVerdict.NOT_YET, effectiveLast.plus(segmentQuiet), false, generation, permitSeq);
+                    return new QuietResult(QuietVerdict.NOT_YET, effectiveLast.plus(segmentQuiet));
                 }
                 boundary = true;
-                return new QuietResult(QuietVerdict.SEAL_RECEIVING, null, false, generation, permitSeq);
+                return new QuietResult(QuietVerdict.SEAL_RECEIVING, null);
             case DISCARDING:
-                if (!quiet) {
-                    return new QuietResult(QuietVerdict.NOT_YET, effectiveLast.plus(segmentQuiet), false, generation, permitSeq);
-                }
-                if (speechEndAt != null && !deltaSinceSpeechEnd) {
-                    Instant autoStart = speechEndAt.plus(autoResponseStart);
-                    if (now.isBefore(autoStart)) {
-                        return new QuietResult(QuietVerdict.WAIT_AUTO_RESPONSE, autoStart, false, generation, permitSeq);
+                if (mode == Mode.INSTRUCTION) {
+                    if (transcriptOpen) {
+                        if (!quiet) {
+                            return new QuietResult(QuietVerdict.NOT_YET, effectiveLast.plus(segmentQuiet));
+                        }
+                        // 전사는 받았는데 음성이 여유 시각에 닿기 전에 끝났다: 전사만 있는 구간은 완전하지 않다
+                        transcriptOpen = false;
+                        mode = Mode.GAP;
+                        boundary = true;
+                        // 같은 응답의 남은 음성이 뒤늦게 오면 새 구간으로 받지 않도록 지시 없이 올린 세대처럼 다시 끊김을 기다린다
+                        return new QuietResult(QuietVerdict.ABANDON_NO_AUDIO, null);
                     }
+                    return new QuietResult(QuietVerdict.NONE, null);
+                }
+                if (!quiet) {
+                    return new QuietResult(QuietVerdict.NOT_YET, effectiveLast.plus(segmentQuiet));
                 }
                 phase = Phase.GAP_CONFIRMED;
                 boundary = true;
-                permitSeq++;
-                publish();
-                return new QuietResult(QuietVerdict.GAP_CONFIRMED, null, pendingSend && !sendProcessed, generation, permitSeq);
+                return new QuietResult(QuietVerdict.GAP_CONFIRMED, null);
             case GAP_CONFIRMED:
-                return new QuietResult(QuietVerdict.NONE, null, false, generation, permitSeq);
+                return new QuietResult(QuietVerdict.NONE, null);
             default:
                 throw new IllegalStateException("모르는 단계: " + phase);
         }
-    }
-
-    /**
-     * 직렬 송신 작업이 '보내는 중' 표시를 일반 편지함에 넣었고 실행기가 그것을 꺼냈다. 세대가 다르면 받지 않는다. 허가 번호가 낡았어도(표시를
-     * 넣은 뒤 같은 세대에서 조각이 와서 허가를 무효로 했더라도) 송신은 이미 일어난 것이라 받는다 — 이미 버린 조각은 되살리지 않고 다음 조각부터
-     * 받는다(R-19).
-     *
-     * @return 이 세대의 표시를 받았는가
-     */
-    public boolean acceptInstructionSent(long sentGeneration, long sentPermitSeq) {
-        if (sentGeneration != generation) {
-            return false;
-        }
-        // 허가가 그대로 유효했든 낡았든 송신은 이미 일어난 것이라 같다: 표시 처리 뒤 첫 조각부터 지시 응답 구간이다(sentPermitSeq는 호출자가
-        // 낡은 허가였는지 로그 사유로 구분할 때 쓴다)
-        sendProcessed = true;
-        phase = Phase.GAP_CONFIRMED;
-        return true;
-    }
-
-    /** 직렬 송신 작업이 보내지 못하고 끝났다(대조 어긋남). */
-    public AbortAction onSendAborted(long abortedGeneration, long abortedPermitSeq) {
-        if (abortedGeneration != generation) {
-            return AbortAction.STALE_GENERATION;
-        }
-        return AbortAction.RE_PERMIT;
-    }
-
-    /**
-     * 끊김 대기 상한 만기 · 세션 종료 · 장애로 송신 대기를 거둔다. 호출자는 그 작업의 허가 칸을 '거부'로 채운다(큐를 영영 쥐지 않게, W9-4).
-     *
-     * @return 송신 대기가 있었는가
-     */
-    public boolean cancelPendingSend() {
-        boolean had = pendingSend && !sendProcessed;
-        pendingSend = false;
-        return had;
     }
 
     /** 이 세대의 교정 지시를 아직 안 보냈으면 보낸 것으로 적고 참(세대당 한 번, BR11.12 W8-6). */
@@ -326,8 +381,10 @@ public final class OutputGeneration {
         return true;
     }
 
-    private void publish() {
-        published = new Published(generation, permitSeq);
+    private boolean takeBoundary() {
+        boolean fromStart = boundary;
+        boundary = false;
+        return fromStart;
     }
 
     private static Instant latest(Instant a, Instant b) {

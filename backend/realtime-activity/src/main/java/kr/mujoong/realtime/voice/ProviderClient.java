@@ -177,12 +177,15 @@ public class ProviderClient implements ProviderPort, DisposableBean {
     }
 
     /**
-     * 받은 메시지 모양(필드는 type별로 일부만 쓴다, 실호출 관측 모양 U11-a). 출력 음성은 {@code delta}(base64)이고 응답 id는 없다. U3: 확정
-     * 전사의 선택 필드 confidence(편차 (aa)) — 숫자가 아닌 값이 와도 전사를 잃지 않게 타입을 고정하지 않고 받아 {@link #confidence(Object)}가
-     * 거른다. 입력 전사 · 말 끝 사건의 이름과 필드는 실호출로 확인되지 않았다(미확인, 기존 가정 이름).
+     * 받은 메시지 모양(필드는 type별로 일부만 쓴다, 실호출 관측 모양 U11-a). 출력 음성은 {@code delta}(base64)이고 응답 id는 없다. 전사 조각은
+     * {@code start_ms} · {@code end_ms} · {@code delta} · {@code event_id}, 지시 확인 사건은 {@code client_event_id} · {@code start_ms} ·
+     * {@code end_ms}를 싣는다. 입력 전사 완료 · 말 끝 · 응답 끝 사건과 전사 신뢰도는 오지 않는다(서버가 묶는다, 설계 개정 A7).
      */
-    record Inbound(String type, String itemId, String delta, String transcript, Object confidence,
-            SessionRef session, UsageBody usage, ErrorBody error) {
+    record Inbound(String type, String itemId, String delta,
+            SessionRef session, UsageBody usage, ErrorBody error,
+            @com.fasterxml.jackson.annotation.JsonProperty("client_event_id") String clientEventId,
+            @com.fasterxml.jackson.annotation.JsonProperty("start_ms") Long startMs,
+            @com.fasterxml.jackson.annotation.JsonProperty("end_ms") Long endMs) {
     }
 
     /** {@code session.started}의 {@code session} 객체에서 읽는 것: 공급자 세션 id. */
@@ -220,13 +223,14 @@ public class ProviderClient implements ProviderPort, DisposableBean {
             return switch (inbound.type()) {
                 case "session.started" -> new ProviderEvent.Started(
                         inbound.session() == null ? null : blankToNull(inbound.session().id()));
-                case "session.input_audio.speech_stopped" -> new ProviderEvent.SpeechStopped();
-                case "session.input_transcript.delta" ->
-                    new ProviderEvent.InputTranscriptDelta(inbound.itemId(), nullToEmpty(inbound.delta()));
-                case "session.input_transcript.done" -> new ProviderEvent.InputTranscriptDone(inbound.itemId(),
-                        nullToEmpty(inbound.transcript()), confidence(inbound.confidence()));
-                case "session.output_transcript.delta" ->
-                    new ProviderEvent.OutputTranscriptDelta(nullToEmpty(inbound.delta()));
+                case "session.input_transcript.delta" -> new ProviderEvent.InputTranscriptDelta(inbound.itemId(),
+                        nullToEmpty(inbound.delta()), millis(inbound.startMs()), millis(inbound.endMs()));
+                case "session.output_transcript.delta" -> new ProviderEvent.OutputTranscriptDelta(nullToEmpty(inbound.delta()),
+                        millis(inbound.startMs()), millis(inbound.endMs()));
+                case "session.instructions.appended" -> inbound.clientEventId() == null || inbound.clientEventId().isBlank()
+                        ? null
+                        : new ProviderEvent.InstructionsAppended(inbound.clientEventId(), millis(inbound.startMs()),
+                                millis(inbound.endMs()));
                 case "session.output_audio.delta" ->
                     new ProviderEvent.OutputAudioDelta(Base64.getDecoder().decode(nullToEmpty(inbound.delta())));
                 case "session.usage.updated" -> inbound.usage() == null || inbound.usage().seconds() == null
@@ -244,7 +248,14 @@ public class ProviderClient implements ProviderPort, DisposableBean {
         }
     }
 
-    /** 숫자가 아니거나 0 ~ 1 밖이면 없는 것으로 본다(U3-J17: 값이 없으면 불확실로 보지 않는다). */
+    private static long millis(Long value) {
+        return value == null || value < 0 ? -1L : value;
+    }
+
+    /**
+     * 숫자가 아니거나 0 ~ 1 밖이면 없는 것으로 본다(U3-J17: 값이 없으면 불확실로 보지 않는다). 공급자는 입력 전사 신뢰도를 보내지 않는다(설계 개정
+     * A7 — 서버가 만든 확정 전사는 신뢰도 null = 확실). 공급자가 나중에 주면 쓰는 변환 규칙으로만 남긴다.
+     */
     static Double confidence(Object value) {
         if (!(value instanceof Number number)) {
             return null;
@@ -292,11 +303,6 @@ public class ProviderClient implements ProviderPort, DisposableBean {
         @Override
         public void appendInstructions(ProviderRequestFactory.InstructionsAppend request)
                 throws ProviderUnavailableException {
-            send(json.write(Objects.requireNonNull(request, "request")));
-        }
-
-        @Override
-        public void createResponse(ProviderRequestFactory.ResponseCreate request) throws ProviderUnavailableException {
             send(json.write(Objects.requireNonNull(request, "request")));
         }
 

@@ -136,9 +136,7 @@ class PrivacyLogU4bTest {
         h.rawAudioConsent = true;
         h.activate();
         h.childSays("i-1", "티라노가 제일 커 벨로키랍토르");
-        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("응 정말 커 트리케라톱스"));
-        h.provider.last().emit(new ProviderEvent.OutputAudioDelta(new byte[4_800]));
-        h.drain();
+        h.speak("응 정말 커 트리케라톱스", 4_800);
         h.provider.last().emit(new ProviderEvent.InputTranscriptDelta("late", "마지막"));
         h.drain();
         CompletableFuture<SessionMailbox.EndOutcome> stop = new CompletableFuture<>();

@@ -18,6 +18,7 @@ import kr.mujoong.contract.ws.message.PlaybackMark;
 import kr.mujoong.contract.ws.message.SessionState;
 import kr.mujoong.contract.ws.message.View;
 import kr.mujoong.realtime.dialog.DialogInstructions;
+import kr.mujoong.realtime.dialog.InstructionTemplates;
 import kr.mujoong.realtime.gate.SegmentBuffer;
 import kr.mujoong.realtime.gateway.OutputBundle;
 import kr.mujoong.realtime.log.TranscriptEntry;
@@ -120,15 +121,14 @@ class SessionVoiceU3Test {
     @Test
     void theViewGoesThinkingWhenTheChildStopsAndBackToListeningWhenPlaybackEnds() {
         h.activate();
-        h.provider.last().emit(new ProviderEvent.SpeechStopped());
         h.provider.last().emit(new ProviderEvent.InputTranscriptDone("i1", "공룡 좋아", 0.9));
         h.drain();
         assertThat(views()).containsExactly(View.LISTENING, View.THINKING);
 
         OutputBundle bundle = respond("r1", "나도 공룡이 좋아", 4_800);
         mark(bundle.playbackId(), PlaybackMark.Status.STARTED, null);
-        // 재생 중에 들어온 말 끝 신호는 표시를 바꾸지 않는다
-        h.provider.last().emit(new ProviderEvent.SpeechStopped());
+        // 재생 중에 들어온 아이 전사 조각은 표시를 바꾸지 않는다(말 끝 사건은 이제 없다, 설계 개정 A7)
+        h.provider.last().emit(new ProviderEvent.InputTranscriptDelta("i2", "잠깐"));
         h.drain();
         assertThat(views()).containsExactly(View.LISTENING, View.THINKING);
 
@@ -141,7 +141,7 @@ class SessionVoiceU3Test {
     @Test
     void afterADiscardTheViewReturnsToListeningOnlyWhenTheWaitingFillerEnds() {
         h.activate();
-        h.provider.last().emit(new ProviderEvent.SpeechStopped());
+        h.provider.last().emit(new ProviderEvent.InputTranscriptDone("i1", "알려 줘", null));
         h.drain();
         emitComplete("r1", "진단해 보면 이래");
         h.advance(Duration.ofMillis(800));
@@ -163,9 +163,7 @@ class SessionVoiceU3Test {
         emitComplete("r1", "진단 결과는 하늘색이야");
         h.advance(Duration.ofMillis(800));
         // 교정이 나가기 전에 같은 응답의 늦은 조각이 와도 세대가 올라 있어 버린다 — 다시 폐기되지 않으니 그 응답의 교정은 한 번뿐이다
-        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("늦은 조각"));
-        h.provider.last().emit(new ProviderEvent.OutputAudioDelta(new byte[4_800]));
-        h.drain();
+        h.speak("늦은 조각", 4_800);
         h.settleSend();
         emitComplete("r2", "화가났군요 그렇지");
         h.advance(Duration.ofMillis(800));
@@ -174,11 +172,12 @@ class SessionVoiceU3Test {
         assertThat(h.link.outputs()).isEmpty();
         List<ProviderRequestFactory.InstructionsAppend> corrections =
                 h.provider.last().requests(ProviderRequestFactory.InstructionsAppend.class);
-        assertThat(corrections).extracting(ProviderRequestFactory.InstructionsAppend::text).containsExactly(
-                DialogInstructions.Correction.DIAGNOSIS.text(), DialogInstructions.Correction.EMOTION_CLAIM.text());
+        assertThat(corrections).extracting(ProviderRequestFactory.InstructionsAppend::content).containsExactly(
+                InstructionTemplates.ResponseStart.FIRST.content(),
+                InstructionTemplates.correctionContent(DialogInstructions.Correction.DIAGNOSIS), InstructionTemplates.correctionContent(DialogInstructions.Correction.EMOTION_CLAIM));
         assertThat(corrections).allSatisfy(correction -> {
             assertThat(correction.type()).isEqualTo(ProviderRequestFactory.TYPE_INSTRUCTIONS_APPEND);
-            assertThat(correction.text()).doesNotContain("하늘색", "화가났군요", "늦은 조각");
+            assertThat(correction.content()).doesNotContain("하늘색", "화가났군요", "늦은 조각");
         });
     }
 
@@ -191,24 +190,22 @@ class SessionVoiceU3Test {
         h.advance(Duration.ofMillis(800));
         h.settleSend();
         // 아이가 다시 말해 끊김 전에 닫은 미완 구간은 대화가 넘어갔으니 교정하지 않는다
-        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("그러니까"));
-        h.provider.last().emit(new ProviderEvent.OutputAudioDelta(new byte[4_800]));
+        h.speak("그러니까", 4_800);
         h.provider.last().emit(new ProviderEvent.InputTranscriptDelta("i1", "잠깐만"));
         h.drain();
         h.advance(Duration.ofMillis(800));
         h.settleSend();
 
         assertThat(h.provider.last().requests(ProviderRequestFactory.InstructionsAppend.class))
-                .extracting(ProviderRequestFactory.InstructionsAppend::text)
-                .containsExactly(DialogInstructions.Correction.INCOMPLETE.text());
+                .extracting(ProviderRequestFactory.InstructionsAppend::content)
+                .containsExactly(InstructionTemplates.ResponseStart.FIRST.content(),
+                        InstructionTemplates.correctionContent(DialogInstructions.Correction.INCOMPLETE));
     }
 
     @Test
     void anOversizedResponseAsksForAShorterAnswerAndNoCorrectionIsSentOutsideActive() {
         h.activate();
-        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("아주 긴 이야기"));
-        h.provider.last().emit(new ProviderEvent.OutputAudioDelta(new byte[SegmentBuffer.MAX_BYTES + 2]));
-        h.drain();
+        h.speak("아주 긴 이야기", SegmentBuffer.MAX_BYTES + 2);
         h.settleSend();
 
         CompletableFuture<EndOutcome> stop = new CompletableFuture<>();
@@ -222,8 +219,9 @@ class SessionVoiceU3Test {
 
         assertThat(h.launcher.runAll("provider-")).as("CLOSING에는 교정하지 않는다").isZero();
         assertThat(h.provider.last().requests(ProviderRequestFactory.InstructionsAppend.class))
-                .extracting(ProviderRequestFactory.InstructionsAppend::text)
-                .containsExactly(DialogInstructions.Correction.INCOMPLETE.text());
+                .extracting(ProviderRequestFactory.InstructionsAppend::content)
+                .containsExactly(InstructionTemplates.ResponseStart.FIRST.content(),
+                        InstructionTemplates.correctionContent(DialogInstructions.Correction.INCOMPLETE));
     }
 
     @Test
@@ -363,7 +361,7 @@ class SessionVoiceU3Test {
         h.activate();
         respond("r1", "공룡은 멋져", 4_800);
         h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("그래 그럼"));
-        h.provider.last().emit(new ProviderEvent.SpeechStopped());
+        h.provider.last().emit(new ProviderEvent.InputTranscriptDone("i0", "응 그래", null));
         h.drain();
         long generation = h.executor.outputGeneration();
 
@@ -437,18 +435,14 @@ class SessionVoiceU3Test {
     /** 응답 한 개를 끝까지 흘리고 조용 시간을 넘겨 게이트를 통과시킨다. 기기로 나간 묶음을 돌려준다. */
     private OutputBundle respond(String responseId, String text, int bytes) {
         int before = h.link.outputs().size();
-        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta(text));
-        h.provider.last().emit(new ProviderEvent.OutputAudioDelta(new byte[bytes]));
-        h.drain();
+        h.speak(text, bytes);
         h.advance(Duration.ofMillis(800));
         assertThat(h.link.outputs()).hasSize(before + 1);
         return h.link.outputs().get(before);
     }
 
     private void emitComplete(String responseId, String text) {
-        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta(text));
-        h.provider.last().emit(new ProviderEvent.OutputAudioDelta(new byte[4_800]));
-        h.drain();
+        h.speak(text, 4_800);
     }
 
     private void done(String itemId, String transcript, Double confidence) {

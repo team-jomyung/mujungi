@@ -397,9 +397,7 @@ class SessionExecutorTest {
     void theAiRowsViewItemReadyTimeStartsAtTheLastChunkOfTheSealedSegment() {
         h.activate();
         h.provider.last().emit(new ProviderEvent.InputTranscriptDelta("item-1", "공룡"));
-        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("공룡 좋아"));
-        h.provider.last().emit(new ProviderEvent.OutputAudioDelta(new byte[4800]));
-        h.drain();
+        h.speak("공룡 좋아", 4800);
         h.advance(Duration.ofMillis(300));
         // 마지막 조각(300ms) 뒤 조용 시간을 채워 봉인하고 통과한다
         h.provider.last().emit(new ProviderEvent.OutputAudioDelta(new byte[4800]));

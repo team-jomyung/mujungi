@@ -215,8 +215,7 @@ class RealtimeLogHygieneIT {
 
         // 아이 조각 → AI 출력 조각 · 음성 → 응답 끝 없이 공급자 오류(code에 표식)
         env.provider.emit(providerEvent("session.input_transcript.delta", "item-x", childPartial));
-        env.provider.emit(providerEvent("session.output_transcript.delta", null, aiPartial));
-        env.provider.emitAudio(new byte[4800]);
+        env.provider.emitSpeech(aiPartial, List.of(new byte[4800]));
         env.provider.emitError("server_error", providerCode, null);
 
         // 빈 수집으로 통과하지 않는다: 끊김 WARN 줄이 나왔고, 완결 안 된 구간은 폐기돼 대기 문구가 나갔다(출력 0바이트)

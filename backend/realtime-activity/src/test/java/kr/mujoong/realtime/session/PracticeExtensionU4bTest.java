@@ -17,6 +17,7 @@ import kr.mujoong.contract.ws.message.PlaybackMark;
 import kr.mujoong.contract.ws.message.StopOutput;
 import kr.mujoong.contract.ws.message.VoiceSessionClosed;
 import kr.mujoong.realtime.session.PracticeSessionExtension.ExtensionEvent;
+import kr.mujoong.realtime.dialog.InstructionTemplates;
 import kr.mujoong.realtime.session.PracticeSessionExtension.Signal;
 import kr.mujoong.realtime.testing.InMemoryTransitions;
 import kr.mujoong.realtime.testing.RecordingPracticeExtension;
@@ -216,7 +217,8 @@ class PracticeExtensionU4bTest {
         h.launcher.runAll("provider-");
         assertThat(h.link.outputs()).as("출력을 막은 동안의 조각은 기기로 가지 않는다").isEmpty();
         assertThat(h.provider.last().requests(ProviderRequestFactory.InstructionsAppend.class))
-                .extracting(ProviderRequestFactory.InstructionsAppend::text).contains("목표 문장을 한 번 더 안내한다.");
+                .extracting(ProviderRequestFactory.InstructionsAppend::content)
+                .anyMatch(content -> content.startsWith("목표 문장을 한 번 더 안내한다.") && content.endsWith(InstructionTemplates.SCOPE_CLOSE));
         assertThat(extension.output.cancel("nothing")).isTrue();
         assertThat(extension.output.sessionId()).isEqualTo(h.sessionId);
     }

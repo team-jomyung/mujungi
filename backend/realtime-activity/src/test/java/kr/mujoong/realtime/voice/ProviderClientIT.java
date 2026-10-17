@@ -67,14 +67,16 @@ class ProviderClientIT {
             server.emit(new FakeProviderWsServer.Event("unknown.type", null, null, null));
             awaitTrue(() -> events.stream().anyMatch(ProviderEvent.Error.class::isInstance), "error");
 
-            // 응답 끝 사건이 없다(실호출 미관측) — 음성은 delta로 오고 모르는 type은 이벤트가 되지 않는다
+            // 응답 끝 · 말 끝 · 입력 전사 완료 사건이 없다(실호출 미관측) — 음성은 delta로 오고 모르는 type은 이벤트가 되지 않는다
             assertThat(events).extracting(event -> event.getClass().getSimpleName()).containsExactly("Started",
-                    "InputTranscriptDelta", "SpeechStopped", "InputTranscriptDone", "OutputTranscriptDelta",
-                    "OutputAudioDelta", "UsageUpdated", "Error");
-            ProviderEvent.OutputAudioDelta audio = (ProviderEvent.OutputAudioDelta) events.get(5);
+                    "InputTranscriptDelta", "OutputTranscriptDelta", "OutputAudioDelta", "UsageUpdated", "Error");
+            ProviderEvent.OutputAudioDelta audio = (ProviderEvent.OutputAudioDelta) events.get(3);
             assertThat(audio.audio()).isEqualTo(out);
-            assertThat(((ProviderEvent.Error) events.get(7)).code()).isEqualTo("invalid_value");
-            assertThat(((ProviderEvent.InputTranscriptDone) events.get(3)).transcript()).isEqualTo("안녕");
+            assertThat(((ProviderEvent.Error) events.get(5)).code()).isEqualTo("invalid_value");
+            assertThat(((ProviderEvent.InputTranscriptDelta) events.get(1)).delta()).isEqualTo("안녕");
+            assertThat(((ProviderEvent.InputTranscriptDelta) events.get(1)).startMs()).isGreaterThanOrEqualTo(0L);
+            assertThat(((ProviderEvent.OutputTranscriptDelta) events.get(2)).endMs())
+                    .isGreaterThanOrEqualTo(((ProviderEvent.OutputTranscriptDelta) events.get(2)).startMs());
             assertThat(server.bearerHeaders()).containsExactly(true);
             assertThat(server.audioHashes()).hasSize(1);
             assertThat(Base64.getDecoder().decode(server.received("session.input_audio.append").get(0)

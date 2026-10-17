@@ -48,8 +48,7 @@ class FakeProviderWireIT {
             awaitTrue(() -> events.stream().filter(ProviderEvent.OutputAudioDelta.class::isInstance).count() == 2, "audio");
 
             assertThat(events).extracting(event -> event.getClass().getSimpleName()).containsExactly("Started",
-                    "InputTranscriptDelta", "SpeechStopped", "InputTranscriptDone", "OutputTranscriptDelta",
-                    "OutputAudioDelta", "OutputAudioDelta");
+                    "InputTranscriptDelta", "OutputTranscriptDelta", "OutputAudioDelta", "OutputAudioDelta");
             assertThat(((ProviderEvent.Started) events.get(0)).providerSessionId()).isEqualTo("fake-provider-session");
             session.close(factory.sessionClose());
             client.destroy();
@@ -77,8 +76,9 @@ class FakeProviderWireIT {
     }
 
     @Test
-    void everySupportedTypeIsAcceptedSilentlyAndTheOperationalFiveAreSupported() throws Exception {
+    void everySupportedTypeIsAcceptedAndTheOperationalFourAreSupported() throws Exception {
         assertThat(FakeProviderWsServer.SUPPORTED_TYPES).containsAll(ProviderRequestFactory.SENT_TYPES).hasSize(15);
+        assertThat(ProviderRequestFactory.SENT_TYPES).hasSize(4).doesNotContain("response.create");
         try (FakeProviderWsServer server = FakeProviderWsServer.start()) {
             ProviderClient client = new ProviderClient(server.uri(), TestSecrets.base64Url(24), JSON, Duration.ofSeconds(2));
             List<ProviderEvent> events = new CopyOnWriteArrayList<>();
@@ -87,14 +87,35 @@ class FakeProviderWireIT {
             session.start(factory.sessionStart(new ChildContext("하늘", 8, List.of())));
             awaitTrue(() -> events.stream().anyMatch(ProviderEvent.Started.class::isInstance), "started");
 
-            session.appendInstructions(factory.instructionsAppend(kr.mujoong.realtime.dialog.DialogInstructions.Correction.PRESSURE));
-            session.createResponse(factory.responseCreate());
-            server.await("response.create", 1, WAIT);
-            Thread.sleep(150);
+            session.appendInstructions(factory.instructionsAppend("mj-1", kr.mujoong.realtime.dialog.DialogInstructions.Correction.PRESSURE));
+            awaitTrue(() -> events.stream().anyMatch(ProviderEvent.InstructionsAppended.class::isInstance), "지시 확인 사건");
 
             assertThat(events).noneMatch(ProviderEvent.Error.class::isInstance);
             assertThat(server.received().stream().map(node -> node.get("type").asString()).toList())
-                    .containsExactly("session.start", "session.instructions.append", "response.create");
+                    .containsExactly("session.start", "session.instructions.append");
+            session.close();
+            client.destroy();
+        }
+    }
+
+    @Test
+    void aStrictProviderRefusesAnAppendWithoutDelegationIdAndAnyResponseCreate() throws Exception {
+        try (FakeProviderWsServer server = FakeProviderWsServer.start()) {
+            ProviderClient client = new ProviderClient(server.uri(), TestSecrets.base64Url(24), JSON, Duration.ofSeconds(2));
+            List<ProviderEvent> events = new CopyOnWriteArrayList<>();
+            ProviderPort.ProviderSession session = client.open(events::add, Duration.ofSeconds(2));
+            ProviderRequestFactory factory = new ProviderRequestFactory();
+            session.start(factory.sessionStart(new ChildContext("하늘", 8, List.of())));
+            awaitTrue(() -> events.stream().anyMatch(ProviderEvent.Started.class::isInstance), "started");
+
+            // 운영 팩토리는 이 모양을 만들지 못한다 — 가짜 서버가 실제처럼 엄격한지 보려고 type만 바꾼 입력 프레임 레코드로 보낸다(delegation_id 없음)
+            session.sendInputAudio(new ProviderRequestFactory.InputAudioAppend("session.instructions.append", "AAAA"));
+            session.sendInputAudio(new ProviderRequestFactory.InputAudioAppend("response.create", "AAAA"));
+
+            awaitTrue(() -> events.stream().filter(ProviderEvent.Error.class::isInstance).count() == 2, "오류 두 건");
+            assertThat(events.stream().filter(ProviderEvent.Error.class::isInstance).toList())
+                    .containsExactly(new ProviderEvent.Error("missing_required_parameter"), new ProviderEvent.Error("invalid_request"));
+            assertThat(events).noneMatch(ProviderEvent.InstructionsAppended.class::isInstance);
             session.close();
             client.destroy();
         }

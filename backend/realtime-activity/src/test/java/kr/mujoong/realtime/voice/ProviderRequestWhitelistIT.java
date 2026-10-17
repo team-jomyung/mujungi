@@ -58,10 +58,11 @@ class ProviderRequestWhitelistIT {
             "session.audio.format.rate");
     private static final Set<String> INPUT_AUDIO_KEYS = Set.of("type", "audio");
     private static final Set<String> SESSION_CLOSE_KEYS = Set.of("type");
-    /** U11: 지시 추가는 고정 문장만 싣는다(응답 취소는 없다 — 공급자 지원 목록 밖). */
-    private static final Set<String> INSTRUCTIONS_APPEND_KEYS = Set.of("type", "text");
-    /** 응답 생성 요청은 type뿐이다. */
-    private static final Set<String> RESPONSE_CREATE_KEYS = Set.of("type");
+    /**
+     * U11(설계 개정 A1): 지시 추가는 {@code type · event_id · delegation_id(null이어도 있다) · content}만 싣는다. 응답 생성 요청 · 응답 취소는 없다 —
+     * 공급자 지원 목록 밖이거나 client 위임 세션이 거절한다.
+     */
+    private static final Set<String> INSTRUCTIONS_APPEND_KEYS = Set.of("type", "event_id", "delegation_id", "content");
     private static final Set<String> FORBIDDEN_FIELDS = Set.of("judgmentCriteria", "knownContent", "question",
             "guardianId", "childId", "deviceId", "sessionId", "email", "consentSnapshot", "practice", "goals");
 
@@ -101,8 +102,6 @@ class ProviderRequestWhitelistIT {
                     case "session.input_audio.append" -> assertThat(INPUT_AUDIO_KEYS).containsAll(keys);
                     case "session.close" -> assertThat(SESSION_CLOSE_KEYS).containsAll(keys);
                     case "session.instructions.append" -> assertThat(INSTRUCTIONS_APPEND_KEYS).containsAll(keys);
-                    // 참여 확인 뒤 발언권 반환은 type만 싣는다
-                    case "response.create" -> assertThat(RESPONSE_CREATE_KEYS).containsAll(keys);
                     default -> throw new AssertionError("허용 밖 요청 type: " + type);
                 }
             }
@@ -130,12 +129,12 @@ class ProviderRequestWhitelistIT {
         assertThat(components(ProviderRequestFactory.AudioFormat.class)).containsExactly("type", "rate");
         assertThat(components(ProviderRequestFactory.InputAudioAppend.class)).containsExactly("type", "audio");
         assertThat(components(ProviderRequestFactory.SessionClose.class)).containsExactly("type");
-        assertThat(components(ProviderRequestFactory.InstructionsAppend.class)).containsExactly("type", "text");
-        assertThat(components(ProviderRequestFactory.ResponseCreate.class)).containsExactly("type");
+        assertThat(components(ProviderRequestFactory.InstructionsAppend.class))
+                .containsExactly("type", "eventId", "delegationId", "content");
         for (Class<?> type : List.of(ProviderRequestFactory.SessionStart.class, ProviderRequestFactory.SessionBody.class,
                 ProviderRequestFactory.AudioSpec.class, ProviderRequestFactory.AudioFormat.class,
                 ProviderRequestFactory.InputAudioAppend.class, ProviderRequestFactory.SessionClose.class,
-                ProviderRequestFactory.InstructionsAppend.class, ProviderRequestFactory.ResponseCreate.class)) {
+                ProviderRequestFactory.InstructionsAppend.class)) {
             for (RecordComponent component : type.getRecordComponents()) {
                 assertThat(Map.class.isAssignableFrom(component.getType())).as(component.getName()).isFalse();
                 assertThat(FORBIDDEN_FIELDS).doesNotContain(component.getName());
@@ -150,7 +149,8 @@ class ProviderRequestWhitelistIT {
                 .filter(method -> java.lang.reflect.Modifier.isPublic(method.getModifiers()))
                 .flatMap(method -> Arrays.stream(method.getParameterTypes())).map(Class::getSimpleName))
                 // U4b: 연습 확장점 지시문은 검사된 값 타입(PracticeInstruction)으로만 받는다(BR10.4)
-                .allMatch(name -> Set.of("ChildContext", "byte[]", "int", "Correction", "PracticeInstruction").contains(name));
+                .allMatch(name -> Set.of("ChildContext", "byte[]", "int", "Correction", "PracticeInstruction", "String", "ResponseStart")
+                        .contains(name));
     }
 
     @Test

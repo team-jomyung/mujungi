@@ -63,13 +63,13 @@ class SessionLifecycleU4bIT {
         awaitStatus(sessionId, SessionStatus.WAITING_CHILD);
         WsEnvelope intro = device.await(WsMessageType.PLAY_APPROVED_CONTENT, WAIT);
         assertThat(((PlayApprovedContent) intro.payload()).contentCode()).isEqualTo(SessionExecutor.INTRO_FREE_TALK);
-        assertThat(env.provider.received(ProviderRequestFactory.TYPE_RESPONSE_CREATE)).isEmpty();
+        assertThat(env.provider.received(ProviderRequestFactory.TYPE_INSTRUCTIONS_APPEND)).isEmpty();
         device.playbackMark(sessionId, ((PlayApprovedContent) intro.payload()).playbackId(),
                 PlaybackMark.Status.COMPLETED);
         env.childSays("join-1", "응");
 
         awaitStatus(sessionId, SessionStatus.ACTIVE);
-        assertThat(env.provider.await(ProviderRequestFactory.TYPE_RESPONSE_CREATE, 1, WAIT)).hasSize(1);
+        assertThat(env.provider.await(ProviderRequestFactory.TYPE_INSTRUCTIONS_APPEND, 1, WAIT)).hasSize(1);
         ActivitySessionRow row = sessions().find(sessionId).orElseThrow();
         assertThat(row.startedAt()).isNotNull();
         assertThat(row.statusVersion()).isEqualTo(4);

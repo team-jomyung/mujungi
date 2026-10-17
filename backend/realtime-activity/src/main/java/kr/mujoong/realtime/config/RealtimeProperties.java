@@ -100,12 +100,15 @@ public record RealtimeProperties(
     }
 
     /**
-     * U11(timing.md 14절 · BR11.7): 아이 말이 끝난 뒤 자동 응답이 시작되기를 기다리는 시간. 출력 세대의 끊김 확인이 '자동 응답이 아직 시작 전인데 끊김으로
-     * 잘못 보는 일'을 막는 데 쓴다. 값은 실호출 관측(말 끝 → 자동 응답 첫 조각 시간)으로 정한다.
+     * U11(timing.md 14절 · 설계 개정 A4 · A7): 공급자 출력 세대와 입력 전사 묶음의 시간 값.
+     *
+     * @param inputTranscriptQuiet 입력 전사 조각이 이만큼 오지 않으면 그 묶음을 확정 전사로 본다(말 끝 · 전사 완료 사건이 없다, A7)
+     * @param newSpeechMargin 지시 뒤 새 말의 전사 시작 시각에 더하는 여유. 오디오 시계가 (새 말 시작 + 이 값)에 닿는 첫 음성 조각부터 받는다(A4)
      */
-    public record ProviderTiming(Duration autoResponseStart) {
+    public record ProviderTiming(Duration inputTranscriptQuiet, Duration newSpeechMargin) {
         public ProviderTiming {
-            positive(autoResponseStart, "mujoong.timing.provider.auto-response-start");
+            positive(inputTranscriptQuiet, "mujoong.timing.provider.input-transcript-quiet");
+            positive(newSpeechMargin, "mujoong.timing.provider.new-speech-margin");
         }
     }
 

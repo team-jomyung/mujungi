@@ -284,9 +284,8 @@ class RealtimeArchTest {
             ProviderRequestFactory.AudioFormat.class.getName(),
             ProviderRequestFactory.InputAudioAppend.class.getName(),
             ProviderRequestFactory.SessionClose.class.getName(),
-            // U11: 지시 추가 · 응답 생성 요청(편차 (U11-a))도 공장만 만든다(응답 취소 · 지시 교정 레코드는 없어졌다)
-            ProviderRequestFactory.InstructionsAppend.class.getName(),
-            ProviderRequestFactory.ResponseCreate.class.getName());
+            // U11: 지시 추가(편차 (U11-a), 설계 개정 A1)도 공장만 만든다(응답 생성 요청 · 응답 취소 · 지시 교정 레코드는 없어졌다)
+            ProviderRequestFactory.InstructionsAppend.class.getName());
 
     static final ArchRule PROVIDER_REQUESTS_ONLY_FROM_THE_FACTORY = noClasses()
             .that().doNotHaveFullyQualifiedName(ProviderRequestFactory.class.getName())

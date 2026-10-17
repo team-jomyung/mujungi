@@ -34,11 +34,11 @@ public interface ProviderPort {
         /** {@code session.input_audio.append}. */
         void sendInputAudio(ProviderRequestFactory.InputAudioAppend request) throws ProviderUnavailableException;
 
-        /** {@code session.instructions.append}(게이트 폐기 뒤 고정 교정 문장 · 연습 지시문 · 판정 뒤 지시, U11 BR11.4). */
+        /**
+         * {@code session.instructions.append}. 서버의 모든 발화는 이 지시 하나로 시작한다(응답 요청 type이 없다, 설계 개정 A2): 참여 뒤 첫 응답 ·
+         * 이어 가기 · 연습 · 게이트 교정 · 판정 뒤 지시.
+         */
         void appendInstructions(ProviderRequestFactory.InstructionsAppend request) throws ProviderUnavailableException;
-
-        /** {@code response.create}(발언권 반환 · 지시 뒤 응답 요청, 편차 (U4b-a) → (U11-a)). */
-        void createResponse(ProviderRequestFactory.ResponseCreate request) throws ProviderUnavailableException;
 
         /** {@code session.close}를 보내고 연결을 닫는다. 두 번 불러도 된다. 예외를 던지지 않는다. */
         void close(ProviderRequestFactory.SessionClose request);
@@ -65,17 +65,24 @@ public interface ProviderPort {
         record Started(String providerSessionId) implements ProviderEvent {
         }
 
-        /** {@code session.input_audio.speech_stopped}(미확인 이름, tSpeechEnd 출처 PROVIDER_EVENT). */
-        record SpeechStopped() implements ProviderEvent {
-        }
+        /**
+         * {@code session.input_transcript.delta{start_ms, end_ms, delta, event_id}}(실호출 관측). 공급자는 입력 전사 항목 id도 완료 사건도 주지
+         * 않는다 — {@code itemId}는 없다(null). 서버가 조각을 묶어 확정 전사를 만든다(설계 개정 A7).
+         *
+         * @param startMs 전사 시간선의 시작(ms, 없으면 -1)
+         * @param endMs 전사 시간선의 끝(ms, 없으면 -1)
+         */
+        record InputTranscriptDelta(String itemId, String delta, long startMs, long endMs) implements ProviderEvent {
 
-        /** {@code session.input_transcript.delta}. */
-        record InputTranscriptDelta(String itemId, String delta) implements ProviderEvent {
+            public InputTranscriptDelta(String itemId, String delta) {
+                this(itemId, delta, -1L, -1L);
+            }
         }
 
         /**
-         * {@code session.input_transcript.done}. U3: 공급자가 주면 확정 전사의 신뢰도 {@code confidence}(0 ~ 1, 불확실 표시 근거, U3-J17).
-         * 범위 밖이거나 없으면 null이다.
+         * 서버가 입력 전사 조각을 묶어 만든 <b>확정 전사</b>(설계 개정 A7). 공급자는 이 사건을 보내지 않는다 — 실행기가
+         * {@code mujoong.timing.provider.input-transcript-quiet} 동안 조각이 없으면 이 레코드로 확정해 참여 확인 · 종료 의도 · 연습 흐름이 지금과
+         * 같은 입구로 받게 한다. 신뢰도는 오지 않으므로(null) 불확실이 아니다(확실로 본다, U3-J17).
          */
         record InputTranscriptDone(String itemId, String transcript, Double confidence) implements ProviderEvent {
 
@@ -85,13 +92,29 @@ public interface ProviderPort {
         }
 
         /**
-         * 출력 전사 조각. 응답 id가 없다(U11 BR11.3). 사건 이름은 실호출로 확인되지 않았다(미확인, 기존 {@code session.output_transcript.delta}를
-         * 임시로 쓰고 실호출 확인 단계에서 확정한다).
+         * {@code session.output_transcript.delta{start_ms, end_ms, delta, event_id}}(실호출 관측). 응답 id가 없다(U11 BR11.3). 전사는 음성보다
+         * 앞서 도착하고(0.2 ~ 2초) 시간은 전사 시간선이다 — 지시 뒤 새 말의 시작을 {@code startMs}로 정한다(설계 개정 A4).
+         *
+         * @param startMs 전사 시간선의 시작(ms, 없으면 -1)
+         * @param endMs 전사 시간선의 끝(ms, 없으면 -1)
          */
-        record OutputTranscriptDelta(String delta) implements ProviderEvent {
+        record OutputTranscriptDelta(String delta, long startMs, long endMs) implements ProviderEvent {
+
+            public OutputTranscriptDelta(String delta) {
+                this(delta, -1L, -1L);
+            }
         }
 
-        /** {@code session.output_audio.delta}(PCM16LE, 응답 id 없음 — 응답 경계는 출력 세대가 조각 사이 무음으로 본다). */
+        /**
+         * {@code session.instructions.appended{client_event_id, start_ms, end_ms, event_id}}(실호출 관측). "세션 시간선이 추가한 지시의 추정 끝에
+         * 닿을 때" 온다 — {@code endMs}가 지시 뒤 새 말이 시작할 수 있는 전사 시간선 위치의 하한이다(설계 개정 A4).
+         *
+         * @param clientEventId 우리가 {@code append}에 실은 {@code event_id}
+         */
+        record InstructionsAppended(String clientEventId, long startMs, long endMs) implements ProviderEvent {
+        }
+
+        /** {@code session.output_audio.delta}(PCM16LE 24kHz 모노, 응답 id · 시간 정보 없음 — 서버가 누적 바이트 / 48 = ms 오디오 시계를 센다). */
         record OutputAudioDelta(byte[] audio) implements ProviderEvent {
 
             public OutputAudioDelta {

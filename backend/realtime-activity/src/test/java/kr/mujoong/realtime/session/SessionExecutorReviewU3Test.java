@@ -368,9 +368,7 @@ class SessionExecutorReviewU3Test {
     }
 
     private void emitComplete(String responseId, String text, int bytes) {
-        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta(text));
-        h.provider.last().emit(new ProviderEvent.OutputAudioDelta(new byte[bytes]));
-        h.drain();
+        h.speak(text, bytes);
     }
 
     private void done(String itemId, String transcript) {

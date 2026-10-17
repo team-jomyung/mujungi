@@ -207,9 +207,7 @@ class SessionExecutorU3Test {
     @Test
     void aLocalVoiceStopMarkRecordsBargeInWithThePlayedPositionAndStopsTheRemainingFrames() {
         h.activate();
-        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("공룡은 아주 오래전에 살았어"));
-        h.provider.last().emit(new ProviderEvent.OutputAudioDelta(new byte[48_000]));
-        h.drain();
+        h.speak("공룡은 아주 오래전에 살았어", 48_000);
         h.advance(Duration.ofMillis(800));
         assertThat(h.link.outputs()).hasSize(1);
         OutputBundle bundle = h.link.outputs().get(0);

@@ -35,7 +35,7 @@ class GptLiveLoopbackTest {
     @Test
     void aMarkerObeyingProviderFillsTheTimelineRulesLagPersistenceAndOneShotRowsWithoutLeaks(@TempDir Path dir) throws Exception {
         String key = TestSecrets.base64Url(24);
-        try (FakeProviderWsServer server = FakeProviderWsServer.start()) {
+        try (FakeProviderWsServer server = FakeProviderWsServer.start().autoAck(false)) {
             GptLiveProbe.Result result = runProbe(dir, server, key, new Script(server, true, 2, true), Map.of());
 
             assertThat(result.outcome()).isEqualTo(GptLiveProbe.Outcome.PASS);
@@ -87,7 +87,7 @@ class GptLiveLoopbackTest {
     @Test
     void aProviderThatIgnoresTheInstructionsIsReportedAsNoMarkerAndJudgmentImpossible(@TempDir Path dir) throws Exception {
         String key = TestSecrets.base64Url(24);
-        try (FakeProviderWsServer server = FakeProviderWsServer.start()) {
+        try (FakeProviderWsServer server = FakeProviderWsServer.start().autoAck(false)) {
             GptLiveProbe.Result result = runProbe(dir, server, key, new Script(server, false, 1, false),
                     Map.of(GptLiveProbe.PLAIN_TURNS_ENV, "1", GptLiveProbe.ONE_SHOT_ENV, "0"));
 
@@ -109,7 +109,7 @@ class GptLiveLoopbackTest {
     @Test
     void anErrorAfterTheAppendFailsTheAcceptanceRowAndTheOutcome(@TempDir Path dir) throws Exception {
         String key = TestSecrets.base64Url(24);
-        try (FakeProviderWsServer server = FakeProviderWsServer.start()) {
+        try (FakeProviderWsServer server = FakeProviderWsServer.start().autoAck(false)) {
             Script script = new Script(server, false, 1, false);
             script.rejectAppends = true;
 

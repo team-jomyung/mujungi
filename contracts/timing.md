@@ -232,10 +232,11 @@ U8(계약 · 버전 리소스)이 더한 키다. 새 연습 흐름 키는 12절 
 | `mujoong.timing.conversation.goal-active-limit` | `10m` | realtime | 목표 하나의 진행 상한(U12) | FR4.5 |
 | `mujoong.timing.knowledge.graph-budget` | `2s` | core-api | 지식 그래프 조회 한 번의 상한. 넘기면 빈 응답(U15) | FR9.5 |
 
-## 14. U11 공급자 출력 세대
+## 14. U11 공급자 출력 세대 · 입력 전사 묶음
 
-U11(선 형식 정비)이 더한 키다. 공급자 실호출에는 응답 id도 응답 취소 type도 없어서(편차 (U11-a)), 서버가 출력 세대를 올려 앞 조각을 버리고 조각이 끊기는 것으로 응답 끝을 본다. 끊김 확인(`mujoong.gate.segment-quiet` 800ms, 4절)은 아이 말이 끝난 뒤 자동 응답이 아직 시작 전인 때를 끊김으로 잘못 보지 않도록 이 키를 함께 쓴다. 화면이 읽지 않는 서버 키라 `frontend/src/shared/timing/timing-defaults.json`에는 넣지 않는다 — R-M5의 '세 곳'은 이 표 · 소유 앱 `application.yml` · 설정 레코드(`RealtimeProperties.ProviderTiming`)다.
+U11(선 형식 정비)이 더한 키다. 공급자 실호출에는 응답 id도 응답 취소 type도 응답 끝 · 말 끝 · 입력 전사 완료 사건도 없다(편차 (U11-a)). 그래서 서버가 출력 세대를 올려 앞 조각을 버리고, 지시를 보낸 뒤 새 말의 시작은 지시 확인 사건의 `end_ms`와 출력 전사의 `start_ms`(전사 시간선)로 정하며, 아이 말은 입력 전사 조각을 묶어 일정 시간 조용하면 확정한다. 지시 없이 세대만 올린 경우의 끊김 확인은 기존 `mujoong.gate.segment-quiet` 800ms(4절)를 쓴다. 화면이 읽지 않는 서버 키라 `frontend/src/shared/timing/timing-defaults.json`에는 넣지 않는다 — R-M5의 '세 곳'은 이 표 · 소유 앱 `application.yml` · 설정 레코드(`RealtimeProperties.ProviderTiming`)다. 두 값은 실호출 3회 관측에 기댄 **임시값**이고 Build and Test 실호출로 확정한다.
 
 | 키 | 기본값 | 소유 앱 | 뜻 | 근거 |
 |---|---|---|---|---|
-| `mujoong.timing.provider.auto-response-start` | `800ms` | realtime | 아이 말 끝 이후 출력 조각이 한 번도 오지 않았을 때, 말 끝 시각 + 이 시간이 지나야 끊김으로 본다(자동 응답 시작 대기). 값은 실호출 관측(말 끝 → 자동 응답 첫 조각 시간) P95 + 여유로 정한다 — 관측 전 임시값은 `segment-quiet`와 같다 | BR11.7 · U11-a |
+| `mujoong.timing.provider.input-transcript-quiet` | `1500ms` | realtime | 입력 전사 조각(`session.input_transcript.delta`)이 이만큼 오지 않으면 그 묶음을 확정 전사로 본다. 전사가 음성보다 0.2 ~ 2초 앞서 도착하고 모델이 말 끝 전에 반응하므로 아이의 쉼보다 길게 잡는다. 아이가 길게 쉬면 한 발화가 둘로 나뉠 수 있다 | A7 · U11-a |
+| `mujoong.timing.provider.new-speech-margin` | `600ms` | realtime | 지시 뒤 새 말의 전사 `start_ms`에 더하는 여유. 오디오 시계(출력 바이트 / 48 ms)가 (새 말 시작 + 이 값)에 닿는 첫 음성 조각부터 받는다. 전사 시간선과 오디오 시계의 어긋남(단계마다 0.2 ~ 0.4초 늘어남)을 덮는다. 낡은 꼬리가 새는 것보다 첫 낱말이 잘리는 쪽을 택한다 | A4 · U11-a |

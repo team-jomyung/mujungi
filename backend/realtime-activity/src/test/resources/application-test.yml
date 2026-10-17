@@ -29,9 +29,10 @@ mujoong:
       silence-end: 2m
       stop-confirm-wait: 10s
       record-settle: 200ms
-    # U11: 말 끝 → 자동 응답 시작 대기. 통합 시험이 첫 응답 요청을 빨리 보게 줄인다(운영 800ms)
+    # U11: 입력 전사 묶음 확정 대기 · 새 말 여유. 통합 시험이 빨리 돌게 줄인다(운영 1500ms · 600ms)
     provider:
-      auto-response-start: 100ms
+      input-transcript-quiet: 150ms
+      new-speech-margin: 40ms
     device:
       disconnect: 4s
       # 끊김(4s)보다 짧아야 한다(기동 검증)

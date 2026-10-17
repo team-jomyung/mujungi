@@ -13,6 +13,7 @@ import kr.mujoong.contract.ws.message.PlaybackMark;
 import kr.mujoong.contract.ws.message.SessionState;
 import kr.mujoong.contract.ws.message.View;
 import kr.mujoong.realtime.dialog.DialogInstructions;
+import kr.mujoong.realtime.dialog.InstructionTemplates;
 import kr.mujoong.realtime.testing.FakeDeviceLink;
 import kr.mujoong.realtime.voice.ProviderRequestFactory;
 import kr.mujoong.realtime.testing.SessionHarness;
@@ -43,7 +44,6 @@ class SessionExecutorReview2U3Test {
         h.activate();
         done("i1", "그만할래");
         h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("그래 더 하자"));
-        h.provider.last().emit(new ProviderEvent.SpeechStopped());
         h.drain();
 
         done("i2", "아니 더 얘기하자");
@@ -151,8 +151,9 @@ class SessionExecutorReview2U3Test {
         assertThat(h.link.outputs()).isEmpty();
         h.launcher.runAll("provider-correct-");
         assertThat(h.provider.last().requests(ProviderRequestFactory.InstructionsAppend.class))
-                .extracting(ProviderRequestFactory.InstructionsAppend::text)
-                .containsExactly(DialogInstructions.Correction.DIAGNOSIS.text());
+                .extracting(ProviderRequestFactory.InstructionsAppend::content)
+                .containsExactly(InstructionTemplates.ResponseStart.FIRST.content(),
+                        InstructionTemplates.correctionContent(DialogInstructions.Correction.DIAGNOSIS));
     }
 
     // ------------------------------------------------------------------ 보조
@@ -172,9 +173,7 @@ class SessionExecutorReview2U3Test {
     }
 
     private void emitComplete(String responseId, String text) {
-        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta(text));
-        h.provider.last().emit(new ProviderEvent.OutputAudioDelta(new byte[4_800]));
-        h.drain();
+        h.speak(text, 4_800);
     }
 
     private void done(String itemId, String transcript) {
