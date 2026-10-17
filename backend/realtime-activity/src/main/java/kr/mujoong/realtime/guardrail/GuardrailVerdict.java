@@ -40,7 +40,10 @@ public record GuardrailVerdict(Decision decision, Failure failure, List<String> 
         TRANSPORT_ERROR,
         /** 응답이 JSON이 아니거나 필수 필드가 없다. */
         INVALID_JSON,
-        /** 응답의 정책 판이 요청의 판과 다르다. */
+        /**
+         * 응답의 정책 판이 요청의 판과 다르다. <b>사용 안 함:</b> 제브 공식 응답에는 정책 판이 없어 어댑터가 더 이상 만들지 않는다(선 형식 정정 FR2.4).
+         * 소비자 호환을 위해 열거값만 남긴다.
+         */
         POLICY_MISMATCH,
         /** REAL인데 어댑터가 없거나 키가 비었다(기동 점검을 통과했어도 실행 중 방어). */
         UNAVAILABLE,

@@ -30,8 +30,15 @@ public final class GuardrailStartupRules {
      * @param keyPresent {@value #API_KEY_ENV}가 비어 있지 않은가
      * @param baseUrl 설정된 제브 주소
      * @param model 설정된 모델 이름
+     * @param passThreshold 설정된 통과 문턱 문자열(키 {@value GuardrailProperties#PASS_THRESHOLD_KEY}). {@code null}이면 설정이 없는 것이라 기본값을 쓰므로
+     *     점검하지 않는다. 값이 있으면 {@code REAL}에서 {@code 0 < x <= 1}인 숫자여야 한다(FR3.3)
      */
-    public record Inputs(String mode, boolean keyPresent, String baseUrl, String model) {
+    public record Inputs(String mode, boolean keyPresent, String baseUrl, String model, String passThreshold) {
+
+        /** 문턱 설정이 없는 입력(문턱은 기본값을 쓴다). */
+        public Inputs(String mode, boolean keyPresent, String baseUrl, String model) {
+            this(mode, keyPresent, baseUrl, model, null);
+        }
 
         @Override
         public String toString() {
@@ -75,6 +82,20 @@ public final class GuardrailStartupRules {
         host.ifPresent(problem -> problems.add(GuardrailProperties.BASE_URL_KEY + "(" + problem + ")"));
         Optional<JevModels.Problem> model = JevModels.problem(inputs.model());
         model.ifPresent(problem -> problems.add(GuardrailProperties.MODEL_KEY + "(" + problem + ")"));
+        if (inputs.passThreshold() != null && !thresholdValid(inputs.passThreshold())) {
+            // 숫자가 아니거나 0 이하 · 1 초과 · NaN · 무한대. 값은 내지 않고 키 이름과 사유만 남긴다(R-F3)
+            problems.add(GuardrailProperties.PASS_THRESHOLD_KEY + "(INVALID)");
+        }
         return problems;
+    }
+
+    /** 문턱 문자열이 {@code 0 < x <= 1}인 숫자인가. */
+    private static boolean thresholdValid(String value) {
+        try {
+            return GuardrailProperties.validThreshold(Double.parseDouble(value.strip()));
+        } catch (NumberFormatException e) {
+            // 숫자가 아니다 — 값은 버리고 거짓으로 답한다
+            return false;
+        }
     }
 }

@@ -23,6 +23,11 @@ public final class JevModels {
     private JevModels() {
     }
 
+    /** 이름이 모델 이름 형식인가(이동 별칭 여부는 보지 않는다). 응답의 {@code model}을 보고서에 옮기기 전 위생 점검에 쓴다. */
+    static boolean wellFormed(String model) {
+        return model != null && FORMAT.matcher(model).matches();
+    }
+
     /** 문제가 없으면 빈 값. */
     public static Optional<Problem> problem(String model) {
         if (model == null || model.isBlank()) {

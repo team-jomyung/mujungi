@@ -17,7 +17,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.Set;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
@@ -28,7 +27,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Function;
 import java.util.function.Supplier;
-import java.util.regex.Pattern;
 import kr.mujoong.contract.json.JsonCodec;
 import kr.mujoong.contract.time.MujoongClock;
 
@@ -43,27 +41,65 @@ import kr.mujoong.contract.time.MujoongClock;
  *   <li>키는 호출 때마다 공급자({@code apiKey})에서 읽어 {@code Authorization} 머리에만 쓰고 필드 · 로그 · 본문 · 문자열 표현에 두지 않는다(BR2.8).
  *       이 클래스는 아무것도 기록하지 않는다 — 결과 기록은 호출자 몫이고 원문을 남기지 않는다(R-F14).
  *   <li>모든 실패는 예외가 아니라 {@link GuardrailVerdict.Decision#FAILED} 결과로 완료한다. 자동 {@code ALLOW}는 없다.
- *   <li>공급자 응답 모양에 의존하는 코드는 {@link #convert}뿐이다(BR2.6). 실호출이 가정과 다르면 이 변환과 그 시험만 고친다.
+ *   <li>공급자 응답 모양에 의존하는 코드는 {@link #convert}뿐이다(BR2.6).
  * </ul>
  *
- * <p><b>형식 가정(실제 제브 응답 형식은 아직 모른다):</b> 요청 본문은 {@code {model, systemPrompt, mode, candidateText, recentContext[],
- * policyVersion}}이고 {@value #CHECK_PATH}로 보낸다. 응답 본문은 정책 리소스의 시스템 지시가 요구하는 모양 그대로 최상위에
- * {@code decision · categories · policyFlags · reasonCode · reviewNeeded · policyVersion}을 가진 JSON 객체 하나다. 인증은 {@code Bearer}다.
- * 시험({@code JevGuardrailClientTest})이 이 가정을 못 박는다.
+ * <p><b>선 형식(제브 공식 문서, 선 형식 정정 FR1 · FR2):</b> {@code POST {기준 주소}}{@value #SYSTEMONE_PATH}, 인증 {@code Bearer}. 요청 본문은
+ * {@code {model, state, questions}}다 — {@code state}는 {@code {candidate, context[{speaker,text}]}}이고 {@code questions}는 질문 ID
+ * {@value #QUESTION_ID} 하나의 {@code {type: "choice", instructions, criteria{라벨 → 설명}}}이다(D2 · D3). 응답은
+ * {@code answers.guardrail.{choice, probabilities}}를 읽는다({@code confidence}는 읽지 않고 판정에 쓰지 않는다). 라벨은 7개 범주와 {@value
+ * JevQuestion#PASS}다. 판정(D1): {@code choice}가 {@code PASS}이고 {@code PASS} 확률이 문턱 이상이면서 다른 어느 라벨보다 엄격히 클 때만
+ * {@code ALLOW}, 동률이면 {@code REVIEW}(사유 {@code PASS_TIED}), 문턱 미만이면 {@code REVIEW}(사유 {@code PASS_BELOW_THRESHOLD}), 다른
+ * 라벨이 1순위면 {@code BLOCK}(사유 = 그 라벨)이다. 비 2xx는 오류 본문을 읽지 않고 모두 {@code TRANSPORT_ERROR}다. 응답에 정책 판이 없으므로
+ * {@code POLICY_MISMATCH}는 더 만들지 않는다. 실제 응답 · 오류 본문 · 고정 버전 모델 요청은 실호출({@code jevLiveTest})로만 확인된다.
  */
 public final class JevGuardrailClient implements GuardrailClient, AutoCloseable {
 
     /** 제브 키 환경 변수 이름. */
     public static final String API_KEY_ENV = GuardrailStartupRules.API_KEY_ENV;
-    /** 검사 요청 경로(형식 가정, 기준 주소 뒤에 붙인다). */
-    public static final String CHECK_PATH = "/v1/guardrail/check";
+    /** 제브 {@code systemone} 요청 경로(공식 문서, 기준 주소 뒤에 붙인다). */
+    public static final String SYSTEMONE_PATH = "/v1/systemone";
+    /** 요청 · 응답에서 우리 질문을 가리키는 질문 ID(코드 상수, D3). */
+    public static final String QUESTION_ID = "guardrail";
+    /** 질문 형식(이 어댑터는 {@code choice}만 쓴다). */
+    static final String QUESTION_TYPE = "choice";
     /** 응답 본문 바이트 상한(넘으면 TRANSPORT_ERROR). 시간 값이 아니다. */
     static final int MAX_RESPONSE_BYTES = 64 * 1024;
+    /**
+     * 확률 합 허용 오차(D7). 합이 1에서 이만큼 넘게 벗어나면 INVALID_JSON이다. <b>근거 없는 임시값이다 — 실호출 결과로 조정한다.</b> 시간 값이 아니다.
+     */
+    static final double PROBABILITY_SUM_TOLERANCE = 0.001;
+    /** 문턱 미만 REVIEW의 사유 코드. */
+    static final String REASON_BELOW_THRESHOLD = "PASS_BELOW_THRESHOLD";
+    /** PASS가 다른 라벨과 동률 1순위인 REVIEW의 사유 코드. */
+    static final String REASON_PASS_TIED = "PASS_TIED";
 
-    private static final Set<String> CATEGORIES = Set.of("DIAGNOSIS", "TREATMENT", "SCORE", "CAUSE", "GENERALIZATION", "EMOTION_CLAIM",
-            "PRESSURE");
-    private static final Set<String> DECISIONS = Set.of("ALLOW", "BLOCK", "REVIEW");
-    private static final Pattern FLAG = Pattern.compile("^[A-Z][A-Z0-9_]*$");
+    /**
+     * 한 번의 검사 관측(읽기 전용). {@code verdict}는 {@link #check}가 돌려주는 결과와 같다. {@code choice}(고른 라벨) · {@code passProbability}
+     * · {@code responseModel}은 응답을 읽은 경우에만 있고 실호출 도구({@code jevLiveTest}) 보고서에만 쓴다 — {@link GuardrailVerdict}나
+     * {@code guardrail_event}에는 넣지 않는다(Q2 답 A).
+     *
+     * @param verdict 판정(실패 포함)
+     * @param choice 응답이 고른 라벨(검증을 통과한 경우), 없으면 null
+     * @param passProbability {@code PASS} 라벨의 확률(검증을 통과한 경우), 없으면 null
+     * @param responseModel 응답의 {@code model}(모델 이름 형식일 때만), 없으면 null
+     */
+    public record Inspection(GuardrailVerdict verdict, String choice, Double passProbability, String responseModel) {
+
+        public Inspection {
+            Objects.requireNonNull(verdict, "verdict");
+        }
+
+        static Inspection of(GuardrailVerdict verdict) {
+            return new Inspection(verdict, null, null, null);
+        }
+
+        /** 문자열 표현에 값(확률 · 모델 이름)을 내지 않는다. */
+        @Override
+        public String toString() {
+            return "Inspection[decision=" + verdict.decision() + "]";
+        }
+    }
 
     private final HttpClient http;
     private final URI endpoint;
@@ -71,7 +107,8 @@ public final class JevGuardrailClient implements GuardrailClient, AutoCloseable 
     private final Optional<JevModels.Problem> modelProblem;
     private final String model;
     private final Supplier<String> apiKey;
-    private final Function<String, Optional<String>> systemPrompts;
+    private final Function<String, Optional<JevQuestion>> questions;
+    private final double passThreshold;
     private final Duration budget;
     private final MujoongClock clock;
     private final JsonCodec json;
@@ -80,15 +117,16 @@ public final class JevGuardrailClient implements GuardrailClient, AutoCloseable 
      * @param properties 모드 · 주소 · 모델 설정(모델 이름은 요청에 그대로 실린다, BR2.3)
      * @param hostMode 주소 규칙(기동 때와 같은 모드)
      * @param apiKey 호출 때마다 환경에서 읽는 키 공급자(값을 보관하지 않음)
-     * @param systemPrompts 정책 판 → 시스템 지시(세션에 고정된 정책 리소스). 없는 판이면 빈 값
+     * @param questions 정책 판 → 제브 {@code choice} 질문(검사 질문 + 라벨 설명, 세션에 고정된 정책 리소스). 없는 판이면 빈 값
      * @param budget 검사 시한 {@code mujoong.timing.guardrail.jev-budget}의 값
      */
     public JevGuardrailClient(GuardrailProperties properties, JevHosts.Mode hostMode, Supplier<String> apiKey,
-            Function<String, Optional<String>> systemPrompts, Duration budget, MujoongClock clock, JsonCodec json) {
+            Function<String, Optional<JevQuestion>> questions, Duration budget, MujoongClock clock, JsonCodec json) {
         Objects.requireNonNull(properties, "properties");
         this.hostMode = Objects.requireNonNull(hostMode, "hostMode");
         this.apiKey = Objects.requireNonNull(apiKey, "apiKey");
-        this.systemPrompts = Objects.requireNonNull(systemPrompts, "systemPrompts");
+        this.questions = Objects.requireNonNull(questions, "questions");
+        this.passThreshold = properties.passThreshold();
         this.budget = Objects.requireNonNull(budget, "budget");
         this.clock = Objects.requireNonNull(clock, "clock");
         this.json = Objects.requireNonNull(json, "json");
@@ -101,11 +139,11 @@ public final class JevGuardrailClient implements GuardrailClient, AutoCloseable 
                 .build();
     }
 
-    /** 기준 주소 뒤에 검사 경로를 붙인다. 주소 모양이 아니면 null(보내기 직전 확인이 거절한다). */
+    /** 기준 주소 뒤에 {@code systemone} 경로를 붙인다. 주소 모양이 아니면 null(보내기 직전 확인이 거절한다). */
     private static URI endpointOf(String baseUrl) {
         try {
             String base = baseUrl.strip();
-            return URI.create((base.endsWith("/") ? base.substring(0, base.length() - 1) : base) + CHECK_PATH);
+            return URI.create((base.endsWith("/") ? base.substring(0, base.length() - 1) : base) + SYSTEMONE_PATH);
         } catch (IllegalArgumentException e) {
             // 잘못된 주소 설정은 값을 남기지 않고 null로 표시한다. check가 TRANSPORT_ERROR로 막는다
             return null;
@@ -117,10 +155,11 @@ public final class JevGuardrailClient implements GuardrailClient, AutoCloseable 
         return GuardrailMode.REAL;
     }
 
-    /** 모델 · 주소 설정이 맞고 키가 비어 있지 않은가. 키는 읽기만 하고 보관하지 않는다. */
+    /** 모델 · 주소 · 문턱 설정이 맞고 키가 비어 있지 않은가. 키는 읽기만 하고 보관하지 않는다. */
     @Override
     public boolean available() {
-        return modelProblem.isEmpty() && endpoint != null && JevHosts.check(endpoint, hostMode).isEmpty() && keyPresent();
+        return modelProblem.isEmpty() && GuardrailProperties.validThreshold(passThreshold) && endpoint != null
+                && JevHosts.check(endpoint, hostMode).isEmpty() && keyPresent();
     }
 
     private boolean keyPresent() {
@@ -130,26 +169,47 @@ public final class JevGuardrailClient implements GuardrailClient, AutoCloseable 
 
     @Override
     public CompletionStage<GuardrailVerdict> check(GuardrailRequest request, Instant deadline) {
+        CompletableFuture<Inspection> inspection = inspectFuture(request, deadline);
+        CompletableFuture<GuardrailVerdict> verdict = inspection.thenApply(Inspection::verdict);
+        // 호출자가 결과 Future를 취소하면 진행 중인 검사(요청)도 끊는다
+        verdict.whenComplete((value, failure) -> {
+            if (verdict.isCancelled()) {
+                inspection.cancel(true);
+            }
+        });
+        return verdict;
+    }
+
+    /**
+     * 읽기 전용 검사 관측(선 형식 정정 FR5.2). {@link #check}와 같은 호출을 하고 같은 판정을 {@link Inspection#verdict}에 담되, 응답에서 읽은 고른
+     * 라벨 · {@code PASS} 확률 · 응답 모델을 함께 돌려준다. 실호출 도구({@code jevLiveTest}) 보고서용이며 운영 경로는 쓰지 않는다. 호출 한 번 ·
+     * 재시도 없음 · 모든 실패는 예외가 아니라 {@code FAILED} 판정이다.
+     */
+    public CompletionStage<Inspection> inspect(GuardrailRequest request, Instant deadline) {
+        return inspectFuture(request, deadline);
+    }
+
+    private CompletableFuture<Inspection> inspectFuture(GuardrailRequest request, Instant deadline) {
         Objects.requireNonNull(request, "request");
         Objects.requireNonNull(deadline, "deadline");
         try {
             return start(request, deadline);
         } catch (RuntimeException unexpected) {
             // 보내기 전 준비 중 예기치 못한 오류도 호출자에게 던지지 않고 막힘으로 끝낸다(fail-closed). 원인 메시지는 입력을 담을 수 있어 버린다
-            return CompletableFuture.completedFuture(fail(GuardrailVerdict.Failure.TRANSPORT_ERROR, request, 0L));
+            return done(fail(GuardrailVerdict.Failure.TRANSPORT_ERROR, request, 0L));
         }
     }
 
-    private CompletionStage<GuardrailVerdict> start(GuardrailRequest request, Instant deadline) {
-        if (modelProblem.isPresent()) {
+    private CompletableFuture<Inspection> start(GuardrailRequest request, Instant deadline) {
+        if (modelProblem.isPresent() || !GuardrailProperties.validThreshold(passThreshold)) {
             return done(fail(GuardrailVerdict.Failure.UNAVAILABLE, request, 0L));
         }
         String key = apiKey.get();
         if (key == null || key.isBlank()) {
             return done(fail(GuardrailVerdict.Failure.UNAVAILABLE, request, 0L));
         }
-        Optional<String> systemPrompt = systemPrompts.apply(request.policyVersion());
-        if (systemPrompt.isEmpty()) {
+        Optional<JevQuestion> question = questions.apply(request.policyVersion());
+        if (question.isEmpty()) {
             return done(fail(GuardrailVerdict.Failure.INVALID_REQUEST, request, 0L));
         }
         if (endpoint == null || JevHosts.check(endpoint, hostMode).isPresent()) {
@@ -160,7 +220,7 @@ public final class JevGuardrailClient implements GuardrailClient, AutoCloseable 
         if (limit.isNegative() || limit.isZero()) {
             return done(fail(GuardrailVerdict.Failure.TIMEOUT, request, 0L));
         }
-        String body = json.write(requestBody(request, systemPrompt.get()));
+        String body = json.write(requestBody(request, question.get()));
         HttpRequest httpRequest = HttpRequest.newBuilder(endpoint)
                 .timeout(limit)
                 .header("Content-Type", "application/json")
@@ -168,8 +228,11 @@ public final class JevGuardrailClient implements GuardrailClient, AutoCloseable 
                 .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8))
                 .build();
         long started = clock.monotonicNanos();
-        CompletableFuture<HttpResponse<byte[]>> sent = http.sendAsync(httpRequest, info -> new BoundedBodySubscriber(MAX_RESPONSE_BYTES));
-        CompletableFuture<GuardrailVerdict> result = sent
+        // 2xx만 본문을 모은다. 비 2xx의 오류 본문은 읽지 않고 버린다(FR2.4 · R-F14)
+        CompletableFuture<HttpResponse<byte[]>> sent = http.sendAsync(httpRequest,
+                info -> info.statusCode() >= 200 && info.statusCode() < 300 ? new BoundedBodySubscriber(MAX_RESPONSE_BYTES)
+                        : HttpResponse.BodySubscribers.replacing(new byte[0]));
+        CompletableFuture<Inspection> result = sent
                 .orTimeout(limit.toNanos(), TimeUnit.NANOSECONDS)
                 .handle((response, failure) -> {
                     long latencyMs = clock.elapsedSince(started).toMillis();
@@ -178,7 +241,7 @@ public final class JevGuardrailClient implements GuardrailClient, AutoCloseable 
                         sent.cancel(true);
                         return fail(classify(failure), request, latencyMs);
                     }
-                    return convert(response.statusCode(), new String(response.body(), StandardCharsets.UTF_8), request, latencyMs);
+                    return convert(response.statusCode(), new String(response.body(), StandardCharsets.UTF_8), request, question.get(), latencyMs);
                 });
         // 호출자가 결과 Future를 취소해도 진행 중인 요청을 끊는다
         result.whenComplete((value, failure) -> {
@@ -189,16 +252,20 @@ public final class JevGuardrailClient implements GuardrailClient, AutoCloseable 
         return result;
     }
 
-    private static CompletionStage<GuardrailVerdict> done(GuardrailVerdict verdict) {
-        return CompletableFuture.completedFuture(verdict);
+    private static CompletableFuture<Inspection> done(Inspection inspection) {
+        return CompletableFuture.completedFuture(inspection);
     }
 
-    private static GuardrailVerdict fail(GuardrailVerdict.Failure failure, GuardrailRequest request, long latencyMs) {
-        return GuardrailVerdict.failed(failure, request.policyVersion(), latencyMs);
+    private static Inspection fail(GuardrailVerdict.Failure failure, GuardrailRequest request, long latencyMs) {
+        return Inspection.of(GuardrailVerdict.failed(failure, request.policyVersion(), latencyMs));
     }
 
-    /** 공급자 요청 본문(형식 가정). 후보 문장 · 맥락은 데이터 필드의 값이고 시스템 지시에는 섞이지 않는다(BR2.5). */
-    private Map<String, Object> requestBody(GuardrailRequest request, String systemPrompt) {
+    /**
+     * 공급자 요청 본문(제브 공식 형식, D2 · D3): {@code {model, state{candidate, context[]}, questions{guardrail{type, instructions,
+     * criteria}}}}. 후보 문장 · 맥락은 {@code state}의 데이터 값이고 {@code questions}의 지시에는 섞이지 않는다(BR2.5). {@code mode}는 보내지 않는다
+     * (운영 호출은 자유 대화뿐이고 연습 모드 검사는 U12가 정한다).
+     */
+    private Map<String, Object> requestBody(GuardrailRequest request, JevQuestion question) {
         List<Map<String, Object>> context = new ArrayList<>();
         for (GuardrailRequest.ContextTurn turn : request.recentContext()) {
             Map<String, Object> item = new LinkedHashMap<>();
@@ -206,13 +273,19 @@ public final class JevGuardrailClient implements GuardrailClient, AutoCloseable 
             item.put("text", turn.text());
             context.add(item);
         }
+        Map<String, Object> state = new LinkedHashMap<>();
+        state.put("candidate", request.candidate());
+        state.put("context", context);
+        Map<String, Object> choice = new LinkedHashMap<>();
+        choice.put("type", QUESTION_TYPE);
+        choice.put("instructions", question.instructions());
+        choice.put("criteria", question.criteria());
+        Map<String, Object> askedQuestions = new LinkedHashMap<>();
+        askedQuestions.put(QUESTION_ID, choice);
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("model", model);
-        body.put("systemPrompt", systemPrompt);
-        body.put("mode", request.mode().name());
-        body.put("candidateText", request.candidate());
-        body.put("recentContext", context);
-        body.put("policyVersion", request.policyVersion());
+        body.put("state", state);
+        body.put("questions", askedQuestions);
         return body;
     }
 
@@ -229,11 +302,14 @@ public final class JevGuardrailClient implements GuardrailClient, AutoCloseable 
     }
 
     /**
-     * 공급자 응답 → 내부 형식, 이 파일에서 응답 모양을 읽는 유일한 곳(BR2.6). 2xx가 아니면 TRANSPORT_ERROR(리다이렉트 포함), JSON 객체가
-     * 아니거나 필수 필드 · 값이 스키마({@code guardrail-result.schema.json})와 다르면 INVALID_JSON, 응답의 정책 판이 요청의 판과 다르면
-     * POLICY_MISMATCH다. 판정 ALLOW인데 {@code reviewNeeded}가 참이면 모순이라 INVALID_JSON으로 막는다(fail-closed).
+     * 공급자 응답 → 내부 판정, 이 파일에서 응답 모양을 읽는 유일한 곳(BR2.6). 비 2xx(리다이렉트 포함)는 본문을 보지 않고 TRANSPORT_ERROR다. JSON 객체가
+     * 아니거나 {@code answers.guardrail}이 검증을 못 넘으면 INVALID_JSON이다: {@code type}이 {@code choice}, {@code choice}가 보낸 라벨 중 하나,
+     * {@code probabilities}가 보낸 라벨 전부(모르는 라벨 없음)에 대한 0 ~ 1의 유한한 숫자이고 합이 1에서 {@value #PROBABILITY_SUM_TOLERANCE} 이내,
+     * 그리고 {@code choice}의 확률이 최댓값(최댓값 집합 안)이어야 한다. 통과하면 D1 규칙으로 판정한다: PASS이고 문턱 이상이면서 다른 라벨보다 엄격히 크면
+     * ALLOW, PASS가 동률이면 REVIEW(PASS_TIED), 문턱 미만이면 REVIEW(PASS_BELOW_THRESHOLD), PASS가 아니면 BLOCK(사유 = 라벨, 동률이어도 BLOCK).
+     * 동률이면서 문턱 미만이면 PASS_TIED가 먼저다. 응답에 정책 판이 없으므로 {@code policyVersion}은 요청의 판이다(D8).
      */
-    GuardrailVerdict convert(int status, String body, GuardrailRequest request, long latencyMs) {
+    Inspection convert(int status, String body, GuardrailRequest request, JevQuestion question, long latencyMs) {
         if (status < 200 || status >= 300) {
             return fail(GuardrailVerdict.Failure.TRANSPORT_ERROR, request, latencyMs);
         }
@@ -244,49 +320,73 @@ public final class JevGuardrailClient implements GuardrailClient, AutoCloseable 
             // 공급자 본문이 JSON 객체가 아니다. 원인 메시지는 본문 일부를 담을 수 있어 버린다(R-F14)
             return fail(GuardrailVerdict.Failure.INVALID_JSON, request, latencyMs);
         }
-        if (root == null) {
+        if (root == null || !(root.get("answers") instanceof Map<?, ?> answers) || !(answers.get(QUESTION_ID) instanceof Map<?, ?> answer)
+                || !QUESTION_TYPE.equals(answer.get("type")) || !(answer.get("choice") instanceof String choice)
+                || !question.criteria().containsKey(choice)) {
             return fail(GuardrailVerdict.Failure.INVALID_JSON, request, latencyMs);
         }
-        Object decisionValue = root.get("decision");
-        Optional<List<String>> categories = stringList(root.get("categories"), true, CATEGORIES::contains);
-        Optional<List<String>> flags = stringList(root.get("policyFlags"), false, value -> FLAG.matcher(value).matches());
-        Object reasonValue = root.get("reasonCode");
-        Object versionValue = root.get("policyVersion");
-        Object reviewNeeded = root.get("reviewNeeded");
-        if (!(decisionValue instanceof String decision) || !DECISIONS.contains(decision)
-                || categories.isEmpty() || flags.isEmpty()
-                || !(reasonValue instanceof String reason) || !GuardrailEventRecord.REASON_CODE.matcher(reason).matches()
-                || !(versionValue instanceof String version) || version.isEmpty() || version.length() > GuardrailEventRecord.POLICY_VERSION_MAX
-                || (reviewNeeded != null && !(reviewNeeded instanceof Boolean))
-                || ("ALLOW".equals(decision) && Boolean.TRUE.equals(reviewNeeded))) {
+        Optional<Map<String, Double>> probabilities = probabilitiesOf(answer.get("probabilities"), question);
+        if (probabilities.isEmpty()) {
             return fail(GuardrailVerdict.Failure.INVALID_JSON, request, latencyMs);
         }
-        if (!version.equals(request.policyVersion())) {
-            return fail(GuardrailVerdict.Failure.POLICY_MISMATCH, request, latencyMs);
+        Map<String, Double> probability = probabilities.get();
+        double max = probability.values().stream().mapToDouble(Double::doubleValue).max().orElse(Double.NaN);
+        if (probability.get(choice) != max) {
+            // choice가 확률 최댓값 집합 밖이다(정확히 같음 비교, D1). 1순위를 믿을 수 없어 막는다
+            return fail(GuardrailVerdict.Failure.INVALID_JSON, request, latencyMs);
         }
-        return switch (decision) {
-            case "ALLOW" -> GuardrailVerdict.allow(reason, version, latencyMs, categories.get(), flags.get());
-            case "BLOCK" -> GuardrailVerdict.block(reason, version, latencyMs, categories.get(), flags.get());
-            default -> GuardrailVerdict.review(reason, version, latencyMs, categories.get(), flags.get());
-        };
+        String responseModel = root.get("model") instanceof String name && JevModels.wellFormed(name) ? name : null;
+        Double passProbability = probability.get(JevQuestion.PASS);
+        GuardrailVerdict verdict;
+        try {
+            verdict = decide(choice, probability, request, latencyMs);
+        } catch (IllegalArgumentException e) {
+            // 라벨이 사유 코드 형식이 아니면 판정을 만들 수 없다. 원인 메시지는 버리고 막는다(fail-closed)
+            return fail(GuardrailVerdict.Failure.INVALID_JSON, request, latencyMs);
+        }
+        return new Inspection(verdict, choice, passProbability, responseModel);
     }
 
-    /** 문자열 배열을 읽는다. 없으면 {@code required}가 거짓일 때 빈 목록, 모양이 틀리면 빈 값(Optional). */
-    private static Optional<List<String>> stringList(Object value, boolean required, java.util.function.Predicate<String> valid) {
-        if (value == null) {
-            return required ? Optional.empty() : Optional.of(List.of());
+    /** D1 판정 규칙(검증을 통과한 {@code choice} · 확률로만 부른다). 이 메서드는 {@code PASS}가 아닌 1순위를 항상 막는다. */
+    private GuardrailVerdict decide(String choice, Map<String, Double> probability, GuardrailRequest request, long latencyMs) {
+        String version = request.policyVersion();
+        if (!JevQuestion.PASS.equals(choice)) {
+            return GuardrailVerdict.block(choice, version, latencyMs, List.of(choice), List.of());
         }
-        if (!(value instanceof List<?> items)) {
+        double pass = probability.get(JevQuestion.PASS);
+        boolean tied = probability.entrySet().stream().anyMatch(entry -> !JevQuestion.PASS.equals(entry.getKey()) && entry.getValue() == pass);
+        if (tied) {
+            return GuardrailVerdict.review(REASON_PASS_TIED, version, latencyMs, List.of(), List.of());
+        }
+        if (pass >= passThreshold) {
+            return GuardrailVerdict.allow(JevQuestion.PASS, version, latencyMs, List.of(), List.of());
+        }
+        return GuardrailVerdict.review(REASON_BELOW_THRESHOLD, version, latencyMs, List.of(), List.of());
+    }
+
+    /**
+     * {@code probabilities}를 읽는다. 보낸 라벨 전부를 가진 숫자 맵이고 모르는 라벨이 없으며 값이 모두 0 ~ 1의 유한한 수이고 합이 1에서
+     * {@value #PROBABILITY_SUM_TOLERANCE} 이내일 때만 값이 있다.
+     */
+    private static Optional<Map<String, Double>> probabilitiesOf(Object value, JevQuestion question) {
+        if (!(value instanceof Map<?, ?> raw) || raw.size() != question.criteria().size()) {
             return Optional.empty();
         }
-        List<String> out = new ArrayList<>();
-        for (Object item : items) {
-            if (!(item instanceof String text) || !valid.test(text) || out.contains(text)) {
+        Map<String, Double> out = new LinkedHashMap<>();
+        double sum = 0;
+        for (String label : question.criteria().keySet()) {
+            // JSON 숫자만 받는다(문자열 · 불리언 · null 거부). NaN · 무한대는 JSON에 없지만 방어한다
+            if (!(raw.get(label) instanceof Number number)) {
                 return Optional.empty();
             }
-            out.add(text);
+            double p = number.doubleValue();
+            if (!Double.isFinite(p) || p < 0 || p > 1) {
+                return Optional.empty();
+            }
+            out.put(label, p);
+            sum += p;
         }
-        return Optional.of(out);
+        return Math.abs(sum - 1.0) > PROBABILITY_SUM_TOLERANCE ? Optional.empty() : Optional.of(out);
     }
 
     /** 앱 컨텍스트가 닫힐 때 {@link HttpClient}를 닫는다. */

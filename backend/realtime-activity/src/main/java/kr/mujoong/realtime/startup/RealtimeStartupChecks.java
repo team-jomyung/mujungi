@@ -85,7 +85,8 @@ public class RealtimeStartupChecks {
                                 environment.getProperty(GuardrailMode.KEY),
                                 hasText(environment.getProperty(JEV_API_KEY)),
                                 environment.getProperty(GuardrailProperties.BASE_URL_KEY),
-                                environment.getProperty(GuardrailProperties.MODEL_KEY))),
+                                environment.getProperty(GuardrailProperties.MODEL_KEY),
+                                environment.getProperty(GuardrailProperties.PASS_THRESHOLD_KEY))),
                 SeedDictionary::loadDefault, LiveContentResources::loadDefault);
     }
 

@@ -37,7 +37,7 @@ public class GuardrailConfiguration {
     }
 
     /**
-     * 모드별 제브 포트. {@code REAL}은 실제 어댑터({@link JevGuardrailClient})다 — 키는 호출 때마다 환경에서 읽고(BR2.8) 시스템 지시는 세션에
+     * 모드별 제브 포트. {@code REAL}은 실제 어댑터({@link JevGuardrailClient})다 — 키는 호출 때마다 환경에서 읽고(BR2.8) 검사 질문 · 선택지는 세션에
      * 고정된 정책 리소스에서 가져온다. {@code OFF}의 자리는 막힘으로 끝나는 비활성 구현이다 — 자동 ALLOW가 아니다(BR1.2).
      */
     @Bean
@@ -46,16 +46,20 @@ public class GuardrailConfiguration {
         return switch (startupChecks.guardrailMode()) {
             case STUB -> new StubGuardrailClient();
             case REAL -> new JevGuardrailClient(properties, JevHosts.modeFor(environment.getActiveProfiles()),
-                    () -> environment.getProperty(JevGuardrailClient.API_KEY_ENV), policyVersion -> systemPrompt(content, policyVersion),
+                    () -> environment.getProperty(JevGuardrailClient.API_KEY_ENV), policyVersion -> question(content, policyVersion),
                     realtime.timing().guardrail().jevBudget(), clock, json);
             case OFF -> new UnavailableGuardrailClient(GuardrailMode.OFF);
         };
     }
 
-    /** 정책 판 → 시스템 지시. 세션에 고정되는 판({@code guardrail/policy-v1.json})과 같은 판만 답한다. */
-    static Optional<String> systemPrompt(LiveContentRegistry content, String policyVersion) {
+    /**
+     * 정책 판 → 제브 {@code choice} 질문(검사 질문 + 라벨 8개 설명). 세션에 고정되는 판({@code guardrail/policy-v2.json})과 같은 판만 답한다
+     * (선 형식 정정 D3 · D4).
+     */
+    static Optional<JevQuestion> question(LiveContentRegistry content, String policyVersion) {
         var policy = content.resources().guardrail();
-        return policy.version().equals(policyVersion) ? Optional.of(policy.systemPrompt()) : Optional.empty();
+        return policy.version().equals(policyVersion) ? Optional.of(new JevQuestion(policy.instructions(), policy.criteria()))
+                : Optional.empty();
     }
 
     @Bean

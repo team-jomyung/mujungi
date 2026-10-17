@@ -30,6 +30,7 @@ backend/realtime-activity/src/main/java/kr/mujoong/realtime/guardrail/GuardrailV
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/guardrail/JevGuardrailClient.java
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/guardrail/JevHosts.java
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/guardrail/JevModels.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/guardrail/JevQuestion.java
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/guardrail/StubGuardrailClient.java
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/guardrail/UnavailableGuardrailClient.java
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/log/LatencyRecorder.java
