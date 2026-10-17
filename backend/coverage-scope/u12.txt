@@ -1,0 +1,26 @@
+# U12 커버리지 측정 범위 (새 연습 흐름, 작업 기록 261017-u12-practice-flow · J137)
+# -PcoverageScope=u12일 때 JaCoCo가 이 목록의 운영 소스(.java)만 잰다. 한 줄에 저장소 루트 기준 경로 하나.
+# 내용은 U12가 만든 realtime-activity 운영 Java 파일이다(설정 yml · SQL · 계약 문서 제외).
+# 이 목록은 구현 묶음마다 자란다. 지금은 묶음 A(V7 · 저장소 · 삭제 참여자 · 정산 복구 분기 · 설정 값 · 대본 읽기 · 시작 패키지 해석 · 다음 목표 대본 요청)의
+# 새 클래스만 들어 있고, 묶음 B ~ D(상태 기계 · 전이표 · 역할 정책 · 기록기 · 진행 매핑)의 새 클래스는 그 묶음에서 더한다.
+# 정직하게 적은 목록이다:
+#  - SessionExecutor(약 4,250줄, 앞 유닛 코드가 대부분)와 SessionInternalController · StartSessionHandler · PracticeSessionExtension은 U12가 호출 지점 · 한 필드만
+#    더한 앞 유닛 파일이라 뺀다(U13과 같은 이유: 목록에 넣으면 u12 태그 시험만으로 재는 이 범위가 파일 전체를 분모로 삼아 낮게 나온다).
+#    그 변경은 PracticeStartPathIT · PracticeStartBodyU12Test(u12 태그)가 실행하고, 파일 전체 커버리지는 모듈 전체 80%(태그 없는
+#    -Pmujoong.test.db=docker check)로 본다.
+#  - runtime/PracticeRecoveryRouter는 두 복구(새 흐름 · 레거시 U5b)를 잇는 한 곳이라 넣었다. 레거시 복구 자체(practice/ 패키지)는 목록에 없다.
+# test-support 가짜 공급자와 contract-model은 이 목록에 넣지 않는다(u9 · u11 · u13과 같은 이유: 모듈 전체 80%로 잰다).
+# 로컬 · 검토 근거다(CI가 막는 범위는 U5b · U7뿐, team.md Testing Posture).
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/practiceflow/GoalSpec.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/practiceflow/PracticeFlowDeletionParticipant.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/practiceflow/PracticeFlowRecordAssembler.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/practiceflow/PracticeFlowRecordRecovery.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/practiceflow/PracticeFlowRepository.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/practiceflow/PracticeFlowSettings.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/practiceflow/PracticeFlowTypes.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/practiceflow/PracticeScript.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/practiceflow/PracticeScriptException.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/practiceflow/PracticeScriptReader.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/practiceflow/PracticeScriptRequester.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/practiceflow/PracticeStartPackage.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/runtime/PracticeRecoveryRouter.java

@@ -61,7 +61,8 @@ public class StartSessionHandler {
             ChildContext childContext,
             List<StopExpressionItem> stopExpressions,
             Map<String, ApprovedContentItem> approvedContent,
-            Map<String, ApprovedSpeechItem> approvedSpeech) {
+            Map<String, ApprovedSpeechItem> approvedSpeech,
+            String practiceJson) {
 
         public StartCommand {
             Objects.requireNonNull(sessionId, "sessionId");
@@ -76,15 +77,24 @@ public class StartSessionHandler {
             approvedSpeech = approvedSpeech == null ? Map.of() : new LinkedHashMap<>(approvedSpeech);
         }
 
+        /** U8 ~ U11 모양(연습 조각 없음 — practice 원문을 싣지 않는다, U12 이전). */
+        public StartCommand(UUID sessionId, UUID idempotencyKey, UUID guardianId, UUID childId, UUID deviceId,
+                ActivityType activityType, ConsentSnapshot consentSnapshot, ChildContext childContext,
+                List<StopExpressionItem> stopExpressions, Map<String, ApprovedContentItem> approvedContent,
+                Map<String, ApprovedSpeechItem> approvedSpeech) {
+            this(sessionId, idempotencyKey, guardianId, childId, deviceId, activityType, consentSnapshot, childContext,
+                    stopExpressions, approvedContent, approvedSpeech, null);
+        }
+
         /** U1 ~ U5b 모양(approvedSpeech 없음 — 옛 패키지, U8 NFR6.1). */
         public StartCommand(UUID sessionId, UUID idempotencyKey, UUID guardianId, UUID childId, UUID deviceId,
                 ActivityType activityType, ConsentSnapshot consentSnapshot, ChildContext childContext,
                 List<StopExpressionItem> stopExpressions, Map<String, ApprovedContentItem> approvedContent) {
             this(sessionId, idempotencyKey, guardianId, childId, deviceId, activityType, consentSnapshot, childContext,
-                    stopExpressions, approvedContent, Map.of());
+                    stopExpressions, approvedContent, Map.of(), null);
         }
 
-        /** 아이 맥락 · 동의 · 문구 원문은 문자열 표현에 넣지 않는다(BR8.7). */
+        /** 아이 맥락 · 동의 · 문구 · 연습 조각 원문은 문자열 표현에 넣지 않는다(BR8.7). */
         @Override
         public String toString() {
             return "StartCommand[sessionId=" + sessionId + ", activityType=" + activityType + "]";
@@ -337,8 +347,19 @@ public class StartSessionHandler {
             approved.put(item.getKey(), new SessionExecutor.ApprovedItem(item.getKey(),
                     item.getValue().contentVersionId(), item.getValue().text()));
         }
+        // U12(BR1.2 · D7): 연습이면 practice 원문을 계획에 싣고, 음성 없는 승인 발화의 문장 지도(approvedContent와 겹친 code는 제외, pinContent와 같다)를 함께 싣는다
+        boolean practice = command.activityType() == ActivityType.PRACTICE;
+        Map<String, String> speech = new LinkedHashMap<>();
+        if (practice) {
+            for (Map.Entry<String, ApprovedSpeechItem> item : command.approvedSpeech().entrySet()) {
+                if (!command.approvedContent().containsKey(item.getKey())) {
+                    speech.put(item.getKey(), item.getValue().text());
+                }
+            }
+        }
         return new SessionExecutor.Plan(command.sessionId(), command.deviceId(), traceId, command.childContext(), audio,
                 approved.get(PlayApprovedContent.CLOSING), approved.get(PlayApprovedContent.WAITING_FILLER),
-                command.consentSnapshot().rawAudio(), stops, command.activityType(), approved, null, command.guardianId());
+                command.consentSnapshot().rawAudio(), stops, command.activityType(), approved,
+                practice ? command.practiceJson() : null, command.guardianId(), speech);
     }
 }

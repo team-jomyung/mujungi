@@ -337,7 +337,20 @@ public final class SessionExecutor {
             ActivityType activityType,
             Map<String, ApprovedItem> approved,
             String practiceJson,
-            UUID guardianId) {
+            UUID guardianId,
+            Map<String, String> approvedSpeech) {
+
+        /**
+         * U12 이전 모양(승인 발화 문장 지도 없음 — 연습 시작 패키지의 approvedSpeech를 확장에 싣지 않는다). 기존 호출처 · 시험은 이 모양을 그대로
+         * 쓴다.
+         */
+        public Plan(UUID sessionId, UUID deviceId, String traceId, ChildContext childContext,
+                List<StartSession.ApprovedAudio> approvedAudio, ApprovedItem closing, ApprovedItem waitingFiller,
+                boolean rawAudioConsent, List<String> stopExpressions, ActivityType activityType,
+                Map<String, ApprovedItem> approved, String practiceJson, UUID guardianId) {
+            this(sessionId, deviceId, traceId, childContext, approvedAudio, closing, waitingFiller, rawAudioConsent,
+                    stopExpressions, activityType, approved, practiceJson, guardianId, Map.of());
+        }
 
         /** U4b 모양(보호자 id 없음 — 판정 기록을 남기지 않는다). */
         public Plan(UUID sessionId, UUID deviceId, String traceId, ChildContext childContext,
@@ -345,7 +358,7 @@ public final class SessionExecutor {
                 boolean rawAudioConsent, List<String> stopExpressions, ActivityType activityType,
                 Map<String, ApprovedItem> approved, String practiceJson) {
             this(sessionId, deviceId, traceId, childContext, approvedAudio, closing, waitingFiller, rawAudioConsent,
-                    stopExpressions, activityType, approved, practiceJson, null);
+                    stopExpressions, activityType, approved, practiceJson, null, Map.of());
         }
 
         public Plan {
@@ -366,6 +379,7 @@ public final class SessionExecutor {
                 items.putIfAbsent(waitingFiller.contentCode(), waitingFiller);
             }
             approved = Map.copyOf(items);
+            approvedSpeech = approvedSpeech == null ? Map.of() : Map.copyOf(approvedSpeech);
         }
 
         /** U1 · U3 모양(자유대화, 승인 문구는 마무리 · 대기 문구뿐, 연습 조각 없음). */
@@ -373,7 +387,7 @@ public final class SessionExecutor {
                 List<StartSession.ApprovedAudio> approvedAudio, ApprovedItem closing, ApprovedItem waitingFiller,
                 boolean rawAudioConsent, List<String> stopExpressions) {
             this(sessionId, deviceId, traceId, childContext, approvedAudio, closing, waitingFiller, rawAudioConsent,
-                    stopExpressions, ActivityType.FREE_TALK, Map.of(), null, null);
+                    stopExpressions, ActivityType.FREE_TALK, Map.of(), null, null, Map.of());
         }
 
         /** 그 코드의 승인 문구(패키지에 없으면 빈 값). */
@@ -1166,7 +1180,8 @@ public final class SessionExecutor {
         // U4b BR10.1: PRACTICE면 확장점 'ACTIVE 진입'
         if (practice != null) {
             PracticeSessionExtension.PracticeContext context = new PracticeSessionExtension.PracticeContext(
-                    plan.sessionId(), plan.practiceJson(), plan.approved().keySet(), plan.rawAudioConsent(), now);
+                    plan.sessionId(), plan.practiceJson(), plan.approved().keySet(), plan.rawAudioConsent(), now,
+                    plan.approvedSpeech());
             practiceSignal(() -> practice.onActive(context, practiceOutput), true);
         }
     }

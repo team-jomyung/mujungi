@@ -78,8 +78,13 @@ class SessionInternalControllerU4bTest {
     }
 
     @Test
-    void practiceStaysClosedAtTheControllerUntilU5bOpensIt() {
-        assertBadRequest(body(ActivityType.PRACTICE, approvedWith(U4B_CODES), child("하늘", 8), stops()));
+    void practiceIsOpenedAtTheControllerByU12AndAnUnrecognizedActivityTypeStaysRejected() {
+        // U12(BR1.1): 연습 시작을 받는다(자세한 본문 · 조각 시험은 PracticeStartBodyU12Test · PracticeStartPathIT)
+        StartSessionHandler.StartCommand command = SessionInternalController.toCommand(
+                body(ActivityType.PRACTICE, approvedWith(U4B_CODES), child("하늘", 8), stops()));
+        assertThat(command.activityType()).isEqualTo(ActivityType.PRACTICE);
+        assertThat(command.practiceJson()).isNull();
+        assertBadRequest(body(ActivityType.UNRECOGNIZED, approvedWith(U4B_CODES), child("하늘", 8), stops()));
     }
 
     @Test

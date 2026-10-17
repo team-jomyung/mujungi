@@ -45,13 +45,22 @@ public interface PracticeSessionExtension {
      * @param approvedContentCodes 시작 패키지의 승인 문구 코드들({@link PracticeOutput#playApproved}에 쓸 수 있는 코드)
      * @param rawAudioConsent 동의 스냅숏의 원음 기록 동의
      * @param activeAt 활동 시작(ACTIVE 진입) 시각
+     * @param approvedSpeechTexts 시작 패키지 approvedSpeech의 승인 발화 문장 지도(code → text, U12 D7 · FR3.2). 음성 파일이 없는 승인 발화의 원문이며
+     *     {@link kr.mujoong.realtime.voice.PracticeSpeech}로 {@link PracticeOutput#speak}에 낼 때 쓴다. 문자열 표현에는 내지 않는다
      */
     record PracticeContext(UUID sessionId, String practiceJson, Set<String> approvedContentCodes,
-            boolean rawAudioConsent, Instant activeAt) {
+            boolean rawAudioConsent, Instant activeAt, java.util.Map<String, String> approvedSpeechTexts) {
 
         public PracticeContext {
             Objects.requireNonNull(sessionId, "sessionId");
             approvedContentCodes = approvedContentCodes == null ? Set.of() : Set.copyOf(approvedContentCodes);
+            approvedSpeechTexts = approvedSpeechTexts == null ? java.util.Map.of() : java.util.Map.copyOf(approvedSpeechTexts);
+        }
+
+        /** U12 이전 모양(승인 발화 문장 지도 없음). 기존 확장 · 시험이 그대로 쓴다. */
+        public PracticeContext(UUID sessionId, String practiceJson, Set<String> approvedContentCodes,
+                boolean rawAudioConsent, Instant activeAt) {
+            this(sessionId, practiceJson, approvedContentCodes, rawAudioConsent, activeAt, java.util.Map.of());
         }
 
         /** 연습 조각은 문자열 표현에 넣지 않는다. */
