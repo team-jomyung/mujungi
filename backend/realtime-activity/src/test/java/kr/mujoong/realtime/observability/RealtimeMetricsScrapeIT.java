@@ -79,7 +79,9 @@ class RealtimeMetricsScrapeIT {
 
     @BeforeEach
     void start() {
-        env = RealtimeItEnvironment.start();
+        // 시험 설정의 segment-quiet 50ms는 가짜 공급자가 음성보다 먼저 보내는 출력 전사와 첫 음성 사이 틈보다 짧다: CI처럼 CPU가 차면 음성 없는
+        // 구간이 먼저 봉인돼 GATE_EMPTY로 폐기되고 OUTPUT_BEGIN이 오지 않는다. SessionVoiceU3IT처럼 운영값 800ms로 둔다
+        env = RealtimeItEnvironment.start(Map.of("mujoong.gate.segment-quiet", "800ms"), null);
         // 앱 기동이 Logback 설정을 다시 읽으므로 수집기는 기동 뒤에 붙인다
         logs = LogCapture.attach();
     }
