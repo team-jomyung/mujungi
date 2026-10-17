@@ -1,0 +1,695 @@
+{
+  "stage": "code-generation",
+  "upstream_ids": [
+    "FR1",
+    "FR1.1",
+    "FR1.2",
+    "FR1.3",
+    "FR2",
+    "FR2.1",
+    "FR2.2",
+    "FR2.3",
+    "FR3",
+    "FR3.1",
+    "FR3.2",
+    "FR3.3",
+    "FR4",
+    "FR4.1",
+    "FR4.2",
+    "FR5",
+    "FR5.1",
+    "FR5.2",
+    "FR6",
+    "FR6.1",
+    "FR6.2",
+    "FR7",
+    "FR7.1",
+    "FR7.2",
+    "FR7.3",
+    "NFR1",
+    "NFR2",
+    "NFR3",
+    "NFR4",
+    "NFR5",
+    "NFR6",
+    "원 FR2.1",
+    "원 FR2.2",
+    "원 FR2.3",
+    "원 FR2.4",
+    "원 FR2.5",
+    "원 FR2.6",
+    "원 FR9.5",
+    "원 FR9.6",
+    "US3.1",
+    "AC3.1.1",
+    "AC3.1.2",
+    "AC3.1.3",
+    "AC3.1.4",
+    "AC3.1.5",
+    "AC3.1.6",
+    "AC3.1.7",
+    "AC3.1.8",
+    "AC3.1.9",
+    "AC3.1.10",
+    "AC3.2.1",
+    "AC3.2.2",
+    "AC3.2.3",
+    "AC3.2.4",
+    "AC4.6.2",
+    "AC4.6.4",
+    "AC4.6.5",
+    "BR1.1",
+    "BR1.2",
+    "BR1.3",
+    "BR2.1",
+    "BR2.2",
+    "BR2.3",
+    "BR3.1",
+    "BR3.2",
+    "BR3.3",
+    "BR4.1",
+    "BR4.2",
+    "BR5.1",
+    "BR5.2",
+    "BR6.1",
+    "BR6.2",
+    "BR7.1",
+    "BR7.2",
+    "BR8.1"
+  ],
+  "coverage": [
+    {
+      "id": "FR1",
+      "status": "N/A",
+      "target": "FR1.1~FR1.3 하위 행이 추적"
+    },
+    {
+      "id": "FR1.1",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/practice/ScenarioScriptGenerator.java",
+      "tests": [
+        "backend/core-api/src/test/java/kr/mujoong/core/practice/U10ScenarioGenerationTest.java"
+      ]
+    },
+    {
+      "id": "FR1.2",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/practice/ScenarioScriptValidation.java",
+      "tests": [
+        "backend/core-api/src/test/java/kr/mujoong/core/practice/U10ScenarioGenerationTest.java"
+      ]
+    },
+    {
+      "id": "FR1.3",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/practice/StructuredScenarioFlow.java",
+      "tests": [
+        "backend/core-api/src/test/java/kr/mujoong/core/practice/U10ScenarioHistoryTest.java"
+      ]
+    },
+    {
+      "id": "FR2",
+      "status": "N/A",
+      "target": "FR2.1~FR2.3 하위 행이 추적"
+    },
+    {
+      "id": "FR2.1",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/practice/ScenarioScriptValidation.java",
+      "tests": [
+        "backend/core-api/src/test/java/kr/mujoong/core/practice/U10ScenarioGenerationTest.java",
+        "backend/core-api/src/test/java/kr/mujoong/core/practice/U10ScenarioValidationTest.java"
+      ]
+    },
+    {
+      "id": "FR2.2",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/practice/ScenarioScriptGenerator.java",
+      "tests": [
+        "backend/core-api/src/test/java/kr/mujoong/core/practice/U10ScenarioGenerationTest.java",
+        "backend/core-api/src/test/java/kr/mujoong/core/practice/U10ScenarioDeadlineTest.java"
+      ]
+    },
+    {
+      "id": "FR2.3",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/practice/ScenarioService.java",
+      "tests": [
+        "backend/core-api/src/test/java/kr/mujoong/core/practice/U10ScenarioApiIT.java",
+        "backend/core-api/src/test/java/kr/mujoong/core/practice/U10ScenarioValidationTest.java",
+        "backend/core-api/src/test/java/kr/mujoong/core/practice/U10FinalSaveDeadlineIT.java"
+      ],
+      "related": [
+        "backend/core-api/src/main/java/kr/mujoong/core/practice/ScenarioScriptValidation.java"
+      ]
+    },
+    {
+      "id": "FR3",
+      "status": "N/A",
+      "target": "FR3.1~FR3.3 하위 행이 추적"
+    },
+    {
+      "id": "FR3.1",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/practice/start/PreparedPracticePackageMapper.java",
+      "tests": [
+        "backend/core-api/src/test/java/kr/mujoong/core/practice/start/U10PracticePackageTest.java"
+      ]
+    },
+    {
+      "id": "FR3.2",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/practice/start/PreparedPracticePackageMapper.java",
+      "tests": [
+        "backend/core-api/src/test/java/kr/mujoong/core/practice/start/U10PracticePackageTest.java",
+        "backend/core-api/src/test/java/kr/mujoong/core/practice/U10ScenarioContractTest.java"
+      ],
+      "related": [
+        "backend/core-api/src/main/java/kr/mujoong/core/practice/ScenarioScriptGenerator.java"
+      ]
+    },
+    {
+      "id": "FR3.3",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/practice/ScenarioRepository.java",
+      "tests": [
+        "backend/core-api/src/test/java/kr/mujoong/core/practice/U10ScenarioMigrationIT.java"
+      ]
+    },
+    {
+      "id": "FR4",
+      "status": "N/A",
+      "target": "FR4.1~FR4.2 하위 행이 추적"
+    },
+    {
+      "id": "FR4.1",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/practice/start/PracticeStartService.java",
+      "tests": [
+        "backend/core-api/src/test/java/kr/mujoong/core/practice/start/U10SavedGoalStartIT.java"
+      ]
+    },
+    {
+      "id": "FR4.2",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/practice/start/PracticeStartService.java",
+      "tests": [
+        "backend/core-api/src/test/java/kr/mujoong/core/practice/start/U10SavedGoalStartIT.java",
+        "backend/core-api/src/test/java/kr/mujoong/core/practice/start/U10FrozenGoalTest.java"
+      ],
+      "related": [
+        "backend/core-api/src/main/java/kr/mujoong/core/practice/GoalContext.java"
+      ]
+    },
+    {
+      "id": "FR5",
+      "status": "N/A",
+      "target": "FR5.1~FR5.2 하위 행이 추적"
+    },
+    {
+      "id": "FR5.1",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/practice/ScenarioGraphContext.java",
+      "tests": [
+        "backend/core-api/src/test/java/kr/mujoong/core/practice/U10ScenarioGraphTest.java",
+        "backend/core-api/src/test/java/kr/mujoong/core/practice/U10ScenarioGraphFallbackTest.java",
+        "backend/core-api/src/test/java/kr/mujoong/core/practice/U10PlannedGenerationIT.java"
+      ]
+    },
+    {
+      "id": "FR5.2",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/practice/ScenarioGraphContext.java",
+      "tests": [
+        "backend/core-api/src/test/java/kr/mujoong/core/practice/U10ScenarioGraphTest.java",
+        "backend/core-api/src/test/java/kr/mujoong/core/practice/U10ScenarioGraphFallbackTest.java"
+      ],
+      "related": [
+        "backend/core-api/src/main/java/kr/mujoong/core/practice/StructuredScenarioFlow.java"
+      ]
+    },
+    {
+      "id": "FR6",
+      "status": "N/A",
+      "target": "FR6.1~FR6.2 하위 행이 추적"
+    },
+    {
+      "id": "FR6.1",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/practice/ScenarioGraphContext.java",
+      "tests": [
+        "backend/core-api/src/test/java/kr/mujoong/core/practice/U10ScenarioVariantTest.java",
+        "backend/core-api/src/test/java/kr/mujoong/core/practice/U10PlannedGenerationIT.java"
+      ]
+    },
+    {
+      "id": "FR6.2",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/practice/ScenarioScriptGenerator.java",
+      "tests": [
+        "backend/core-api/src/test/java/kr/mujoong/core/practice/U10ScenarioGenerationTest.java",
+        "backend/core-api/src/test/java/kr/mujoong/core/practice/U10ScenarioVariantTest.java"
+      ],
+      "related": [
+        "backend/core-api/src/main/java/kr/mujoong/core/practice/ScenarioGraphContext.java"
+      ]
+    },
+    {
+      "id": "FR7",
+      "status": "N/A",
+      "target": "FR7.1~FR7.3 하위 행이 추적"
+    },
+    {
+      "id": "FR7.1",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/luna/LunaInputSanitizer.java",
+      "tests": [
+        "backend/core-api/src/test/java/kr/mujoong/core/practice/U10ScenarioPrivacyTest.java",
+        "backend/core-api/src/test/java/kr/mujoong/core/practice/U10ScenarioPrivacyIT.java"
+      ],
+      "related": [
+        "backend/core-api/src/main/java/kr/mujoong/core/practice/ScenarioPrivacyContextAdapter.java"
+      ]
+    },
+    {
+      "id": "FR7.2",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/practice/ScenarioPrivacyContextAdapter.java",
+      "tests": [
+        "backend/core-api/src/test/java/kr/mujoong/core/practice/U10ScenarioPrivacyIT.java"
+      ]
+    },
+    {
+      "id": "FR7.3",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/luna/LunaInputSanitizer.java",
+      "tests": [
+        "backend/core-api/src/test/java/kr/mujoong/core/practice/U10ScenarioPrivacyTest.java"
+      ]
+    },
+    {
+      "id": "NFR1",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/practice/ScenarioScriptGenerator.java",
+      "tests": [
+        "backend/core-api/src/test/java/kr/mujoong/core/practice/U10ScenarioGenerationTest.java",
+        "backend/core-api/src/test/java/kr/mujoong/core/practice/U10ScenarioGraphTest.java",
+        "backend/core-api/src/test/java/kr/mujoong/core/practice/U10ScenarioDeadlineTest.java",
+        "backend/core-api/src/test/java/kr/mujoong/core/practice/U10ScenarioGraphFallbackTest.java",
+        "backend/core-api/src/test/java/kr/mujoong/core/practice/U10FinalSaveDeadlineIT.java"
+      ],
+      "related": [
+        "backend/core-api/src/main/java/kr/mujoong/core/practice/ScenarioGraphContext.java"
+      ]
+    },
+    {
+      "id": "NFR2",
+      "status": "N/A",
+      "target": "functional-spec.md W7, docs/units/u10/design.md 검증 계획; 작업 방식은 별도 업무 규칙을 만들지 않음"
+    },
+    {
+      "id": "NFR3",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/practice/ScenarioService.java",
+      "tests": [
+        "backend/core-api/src/test/java/kr/mujoong/core/practice/U10ScenarioApiIT.java",
+        "backend/core-api/src/test/java/kr/mujoong/core/practice/U10SpringScenarioIT.java"
+      ]
+    },
+    {
+      "id": "NFR4",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/practice/ScenarioPrivacyContextAdapter.java",
+      "tests": [
+        "backend/core-api/src/test/java/kr/mujoong/core/practice/U10ScenarioPrivacyIT.java"
+      ]
+    },
+    {
+      "id": "NFR5",
+      "status": "N/A",
+      "target": "functional-spec.md W7의 대역/실호출/실기기 구분과 실측 준비 확인"
+    },
+    {
+      "id": "NFR6",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/practice/ScenarioPrivacyContextAdapter.java",
+      "tests": [
+        "backend/core-api/src/test/java/kr/mujoong/core/practice/U10ScenarioPrivacyIT.java"
+      ]
+    },
+    {
+      "id": "원 FR2.1",
+      "status": "N/A",
+      "target": "이 기록 FR1.1·FR2.1로 재묶어 추적"
+    },
+    {
+      "id": "원 FR2.2",
+      "status": "N/A",
+      "target": "이 기록 FR1.2·FR2.1로 재묶어 추적"
+    },
+    {
+      "id": "원 FR2.3",
+      "status": "N/A",
+      "target": "이 기록 FR2.2·FR2.3으로 재묶어 추적"
+    },
+    {
+      "id": "원 FR2.4",
+      "status": "N/A",
+      "target": "이 기록 FR3으로 재묶어 추적"
+    },
+    {
+      "id": "원 FR2.5",
+      "status": "N/A",
+      "target": "이 기록 NFR1·NFR5로 재묶어 추적"
+    },
+    {
+      "id": "원 FR2.6",
+      "status": "N/A",
+      "target": "이 기록 FR7.1로 재묶어 추적"
+    },
+    {
+      "id": "원 FR9.5",
+      "status": "N/A",
+      "target": "이 기록 FR5로 재묶어 추적"
+    },
+    {
+      "id": "원 FR9.6",
+      "status": "N/A",
+      "target": "이 기록 FR6으로 재묶어 추적"
+    },
+    {
+      "id": "US3.1",
+      "status": "N/A",
+      "target": "이 기록 FR1~FR3·FR7·NFR1로 재묶어 추적"
+    },
+    {
+      "id": "AC3.1.1",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/practice/ScenarioScriptGenerator.java",
+      "tests": [
+        "backend/core-api/src/test/java/kr/mujoong/core/practice/U10ScenarioGenerationTest.java"
+      ]
+    },
+    {
+      "id": "AC3.1.2",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/practice/ScenarioScriptValidation.java",
+      "tests": [
+        "backend/core-api/src/test/java/kr/mujoong/core/practice/U10ScenarioGenerationTest.java"
+      ]
+    },
+    {
+      "id": "AC3.1.3",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/practice/ScenarioScriptValidation.java",
+      "tests": [
+        "backend/core-api/src/test/java/kr/mujoong/core/practice/U10ScenarioValidationTest.java"
+      ]
+    },
+    {
+      "id": "AC3.1.4",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/practice/ScenarioScriptGenerator.java",
+      "tests": [
+        "backend/core-api/src/test/java/kr/mujoong/core/practice/U10ScenarioGenerationTest.java"
+      ]
+    },
+    {
+      "id": "AC3.1.5",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/practice/ScenarioService.java",
+      "tests": [
+        "backend/core-api/src/test/java/kr/mujoong/core/practice/U10ScenarioApiIT.java",
+        "backend/core-api/src/test/java/kr/mujoong/core/practice/U10ScenarioGraphTest.java",
+        "backend/core-api/src/test/java/kr/mujoong/core/practice/U10ScenarioDeadlineTest.java"
+      ],
+      "related": [
+        "backend/core-api/src/main/java/kr/mujoong/core/practice/ScenarioGraphContext.java",
+        "backend/core-api/src/main/java/kr/mujoong/core/practice/ScenarioScriptGenerator.java"
+      ]
+    },
+    {
+      "id": "AC3.1.6",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/practice/start/PreparedPracticePackageMapper.java",
+      "tests": [
+        "backend/core-api/src/test/java/kr/mujoong/core/practice/start/U10PracticePackageTest.java",
+        "backend/core-api/src/test/java/kr/mujoong/core/practice/U10ScenarioContractTest.java"
+      ],
+      "related": [
+        "backend/core-api/src/main/java/kr/mujoong/core/practice/ScenarioScriptGenerator.java"
+      ]
+    },
+    {
+      "id": "AC3.1.7",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/practice/ScenarioScriptGenerator.java",
+      "tests": [
+        "backend/core-api/src/test/java/kr/mujoong/core/practice/U10ScenarioGenerationTest.java",
+        "backend/core-api/src/test/java/kr/mujoong/core/practice/U10ScenarioPrivacyIT.java"
+      ],
+      "related": [
+        "backend/core-api/src/main/java/kr/mujoong/core/practice/ScenarioPrivacyContextAdapter.java"
+      ]
+    },
+    {
+      "id": "AC3.1.8",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/luna/LunaInputSanitizer.java",
+      "tests": [
+        "backend/core-api/src/test/java/kr/mujoong/core/practice/U10ScenarioPrivacyTest.java"
+      ]
+    },
+    {
+      "id": "AC3.1.9",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/practice/StructuredScenarioFlow.java",
+      "tests": [
+        "backend/core-api/src/test/java/kr/mujoong/core/practice/U10ScenarioHistoryTest.java",
+        "backend/core-api/src/test/java/kr/mujoong/core/practice/U10ScenarioValidationTest.java"
+      ],
+      "related": [
+        "backend/core-api/src/main/java/kr/mujoong/core/practice/ScenarioScriptValidation.java"
+      ]
+    },
+    {
+      "id": "AC3.1.10",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/practice/ScenarioPrivacyContextAdapter.java",
+      "tests": [
+        "backend/core-api/src/test/java/kr/mujoong/core/practice/U10ScenarioPrivacyIT.java"
+      ]
+    },
+    {
+      "id": "AC3.2.1",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/practice/ScenarioGraphContext.java",
+      "tests": [
+        "backend/core-api/src/test/java/kr/mujoong/core/practice/U10ScenarioGraphTest.java"
+      ]
+    },
+    {
+      "id": "AC3.2.2",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/practice/StructuredScenarioFlow.java",
+      "tests": [
+        "backend/core-api/src/test/java/kr/mujoong/core/practice/U10ScenarioGraphTest.java"
+      ]
+    },
+    {
+      "id": "AC3.2.3",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/practice/StructuredScenarioFlow.java",
+      "tests": [
+        "backend/core-api/src/test/java/kr/mujoong/core/practice/U10ScenarioGraphTest.java"
+      ]
+    },
+    {
+      "id": "AC3.2.4",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/practice/ScenarioGraphContext.java",
+      "tests": [
+        "backend/core-api/src/test/java/kr/mujoong/core/practice/U10ScenarioVariantTest.java",
+        "backend/core-api/src/test/java/kr/mujoong/core/practice/U10ScenarioGenerationTest.java",
+        "backend/core-api/src/test/java/kr/mujoong/core/practice/U10ScenarioGraphFallbackTest.java"
+      ],
+      "related": [
+        "backend/core-api/src/main/java/kr/mujoong/core/practice/ScenarioScriptGenerator.java"
+      ]
+    },
+    {
+      "id": "AC4.6.2",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/practice/start/PracticeStartService.java",
+      "tests": [
+        "backend/core-api/src/test/java/kr/mujoong/core/practice/start/U10SavedGoalStartIT.java"
+      ]
+    },
+    {
+      "id": "AC4.6.4",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/practice/GoalContext.java",
+      "tests": [
+        "backend/core-api/src/test/java/kr/mujoong/core/practice/start/U10FrozenGoalTest.java"
+      ]
+    },
+    {
+      "id": "AC4.6.5",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/practice/GoalContext.java",
+      "tests": [
+        "backend/core-api/src/test/java/kr/mujoong/core/practice/start/U10FrozenGoalTest.java"
+      ]
+    },
+    {
+      "id": "BR1.1",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/practice/ScenarioScriptGenerator.java",
+      "tests": [
+        "backend/core-api/src/test/java/kr/mujoong/core/practice/U10ScenarioGenerationTest.java"
+      ]
+    },
+    {
+      "id": "BR1.2",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/practice/ScenarioScriptValidation.java",
+      "tests": [
+        "backend/core-api/src/test/java/kr/mujoong/core/practice/U10ScenarioGenerationTest.java"
+      ]
+    },
+    {
+      "id": "BR1.3",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/practice/StructuredScenarioFlow.java",
+      "tests": [
+        "backend/core-api/src/test/java/kr/mujoong/core/practice/U10ScenarioHistoryTest.java"
+      ]
+    },
+    {
+      "id": "BR2.1",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/practice/ScenarioScriptGenerator.java",
+      "tests": [
+        "backend/core-api/src/test/java/kr/mujoong/core/practice/U10ScenarioGenerationTest.java"
+      ]
+    },
+    {
+      "id": "BR2.2",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/practice/ScenarioService.java",
+      "tests": [
+        "backend/core-api/src/test/java/kr/mujoong/core/practice/U10ScenarioApiIT.java",
+        "backend/core-api/src/test/java/kr/mujoong/core/practice/U10PreparationRecoveryIT.java"
+      ]
+    },
+    {
+      "id": "BR2.3",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/practice/ScenarioScriptValidation.java",
+      "tests": [
+        "backend/core-api/src/test/java/kr/mujoong/core/practice/U10ScenarioValidationTest.java"
+      ]
+    },
+    {
+      "id": "BR3.1",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/practice/start/PreparedPracticePackageMapper.java",
+      "tests": [
+        "backend/core-api/src/test/java/kr/mujoong/core/practice/start/U10PracticePackageTest.java"
+      ]
+    },
+    {
+      "id": "BR3.2",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/practice/ScenarioScriptGenerator.java",
+      "tests": [
+        "backend/core-api/src/test/java/kr/mujoong/core/practice/U10ScenarioContractTest.java"
+      ]
+    },
+    {
+      "id": "BR3.3",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/practice/ScenarioRepository.java",
+      "tests": [
+        "backend/core-api/src/test/java/kr/mujoong/core/practice/U10ScenarioMigrationIT.java"
+      ]
+    },
+    {
+      "id": "BR4.1",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/practice/start/PracticeStartService.java",
+      "tests": [
+        "backend/core-api/src/test/java/kr/mujoong/core/practice/start/U10SavedGoalStartIT.java"
+      ]
+    },
+    {
+      "id": "BR4.2",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/practice/GoalContext.java",
+      "tests": [
+        "backend/core-api/src/test/java/kr/mujoong/core/practice/start/U10FrozenGoalTest.java"
+      ]
+    },
+    {
+      "id": "BR5.1",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/practice/ScenarioGraphContext.java",
+      "tests": [
+        "backend/core-api/src/test/java/kr/mujoong/core/practice/U10ScenarioGraphTest.java",
+        "backend/core-api/src/test/java/kr/mujoong/core/practice/U10ScenarioGraphFallbackTest.java"
+      ]
+    },
+    {
+      "id": "BR5.2",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/practice/StructuredScenarioFlow.java",
+      "tests": [
+        "backend/core-api/src/test/java/kr/mujoong/core/practice/U10ScenarioGraphTest.java",
+        "backend/core-api/src/test/java/kr/mujoong/core/practice/U10ScenarioGraphFallbackTest.java",
+        "backend/core-api/src/test/java/kr/mujoong/core/practice/U10PlannedGenerationIT.java"
+      ]
+    },
+    {
+      "id": "BR6.1",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/practice/ScenarioGraphContext.java",
+      "tests": [
+        "backend/core-api/src/test/java/kr/mujoong/core/practice/U10ScenarioVariantTest.java"
+      ]
+    },
+    {
+      "id": "BR6.2",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/practice/ScenarioScriptGenerator.java",
+      "tests": [
+        "backend/core-api/src/test/java/kr/mujoong/core/practice/U10ScenarioGenerationTest.java"
+      ]
+    },
+    {
+      "id": "BR7.1",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/luna/LunaInputSanitizer.java",
+      "tests": [
+        "backend/core-api/src/test/java/kr/mujoong/core/practice/U10ScenarioPrivacyTest.java"
+      ]
+    },
+    {
+      "id": "BR7.2",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/practice/ScenarioPrivacyContextAdapter.java",
+      "tests": [
+        "backend/core-api/src/test/java/kr/mujoong/core/practice/U10ScenarioPrivacyIT.java"
+      ]
+    },
+    {
+      "id": "BR8.1",
+      "status": "OK",
+      "target": "backend/core-api/src/main/java/kr/mujoong/core/practice/ScenarioScriptGenerator.java",
+      "tests": [
+        "backend/core-api/src/test/java/kr/mujoong/core/practice/U10ScenarioDeadlineTest.java",
+        "backend/core-api/src/test/java/kr/mujoong/core/practice/U10PreparationRecoveryIT.java"
+      ]
+    }
+  ],
+  "reverse": []
+}

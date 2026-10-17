@@ -150,9 +150,12 @@ public record CoreProperties(
     }
 
     /** U5a C10 상황 생성 전체 예산(생성 · 재생성 · 기술 재시도 포함, 요청 선점 시한도 같다)(timing.md 9절 · U5a-J18). */
-    public record PracticeTiming(Duration scenarioRequestTimeout) {
+    public record PracticeTiming(Duration scenarioRequestTimeout,Duration scenarioHistoryTimeout) {
+        public PracticeTiming(Duration scenarioRequestTimeout) { this(scenarioRequestTimeout,scenarioRequestTimeout); }
+        @org.springframework.boot.context.properties.bind.ConstructorBinding
         public PracticeTiming {
             positive(scenarioRequestTimeout, "mujoong.timing.practice.scenario-request-timeout");
+            positive(scenarioHistoryTimeout, "mujoong.timing.practice.scenario-history-timeout");
         }
     }
 

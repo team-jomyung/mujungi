@@ -1,0 +1,1 @@
+"U10 상황 생성(u10-scenario-generation) 구현. 지시 docs/units/u10/brief.md를 정본으로 한다. 인셉션 산출물은 261015-doc-sync-code-update 기록의 것을 그대로 쓴다. 요약 확인과 계획 승인은 생략하고 순차 실행으로 개발 검증 push 및 PR CI 확인까지 진행한다. 배포와 병합은 제외한다."

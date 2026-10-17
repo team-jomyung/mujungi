@@ -7,7 +7,7 @@ import java.util.Optional;
 import java.util.Set;
 
 /**
- * 제브 공급자 주소 규칙 (U13 BR2.2 · Q4 답 A). 허용 호스트는 코드 상수라 설정으로 바꿀 수 없고, {@code contracts/ai-io.md} 10.11의 목록과 시험이
+ * 제브 공급자 주소 규칙 (U13 BR2.2 · Q4 답 A). 허용 호스트는 코드 상수라 설정으로 바꿀 수 없고, {@code contracts/ai-io.md} 10.12의 목록과 시험이
  * 대조한다(Luna {@code LunaHosts} 선례, 코드 공유 없음). 기동 확인과 보내기 직전 확인이 같은 {@link #check(URI, Mode)}를 쓴다.
  *
  * <ul>
@@ -20,7 +20,7 @@ import java.util.Set;
  */
 public final class JevHosts {
 
-    /** 허용 호스트(contracts/ai-io.md 10.11, 시험이 문서 값과 대조한다). 외부 공급자 호스트라 R-F3의 서비스 도메인이 아니다(요구사항 Q4 답 A). */
+    /** 허용 호스트(contracts/ai-io.md 10.12, 시험이 문서 값과 대조한다). 외부 공급자 호스트라 R-F3의 서비스 도메인이 아니다(요구사항 Q4 답 A). */
     public static final Set<String> ALLOWED_HOSTS = Set.of("api.typesafe.ai");
 
     private static final Set<String> PUBLIC_PROFILES = Set.of("demo", "prod");

@@ -113,7 +113,7 @@ class CoreSchemaIT {
                     "select version, type, success from flyway.core_schema_history order by installed_rank");
             assertThat(history).containsExactly(List.of("1", "SQL", true), List.of("2", "SQL", true),
                     List.of("3", "SQL", true), List.of("4", "SQL", true), List.of("5", "SQL", true),
-                    List.of("6", "SQL", true), List.of("7", "SQL", true), List.of("8", "SQL", true), List.of("9", "SQL", true));
+                    List.of("6", "SQL", true), List.of("7", "SQL", true), List.of("8", "SQL", true), List.of("9", "SQL", true), List.of("10", "SQL", true));
         }
     }
 
@@ -140,7 +140,7 @@ class CoreSchemaIT {
         "core_goal_recommendation, 11",
         "core_recommendation_evidence, 6",
         "core_practice_goal_selection, 13",
-        "core_scenario, 22",
+        "core_scenario, 27",
         "core_scenario_request, 13",
         "core_practice_preparation, 13",
     })

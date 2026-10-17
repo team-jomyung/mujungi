@@ -108,11 +108,11 @@ class CoreStartupSequenceIT {
             withHistoryChange(database,
                     "update flyway.core_schema_history set version = case version when '1' then '0.6' when '2' then '0.7'"
                             + " when '3' then '0.8' when '4' then '0.9' when '5' then '0.10'"
-                            + " when '6' then '0.11' when '7' then '0.12' when '8' then '0.13' when '9' then '0.14' else version end",
+                            + " when '6' then '0.11' when '7' then '0.12' when '8' then '0.13' when '9' then '0.14' when '10' then '0.15' else version end",
                     "update flyway.core_schema_history set version = case version when '0.6' then '1' when '0.7' then '2'"
                             + " when '0.8' then '3' when '0.9' then '4' when '0.10' then '5'"
-                            + " when '0.11' then '6' when '0.12' then '7' when '0.13' then '8' when '0.14' then '9' else version end",
-                    () -> assertRefusedAtS2(database, "버전 0.14 < 기대 " + SchemaVersionCheck.expectedVersion()));
+                            + " when '0.11' then '6' when '0.12' then '7' when '0.13' then '8' when '0.14' then '9' when '0.15' then '10' else version end",
+                    () -> assertRefusedAtS2(database, "버전 0.15 < 기대 " + SchemaVersionCheck.expectedVersion()));
 
             assertThat(capture.events(EventCode.STARTUP_RECOVERY)).as("S2에서 멈춰 복구(S3)는 돌지 않았다").isEmpty();
         }
@@ -137,16 +137,16 @@ class CoreStartupSequenceIT {
         withHistoryChange(database, """
                 insert into flyway.core_schema_history (installed_rank, version, description, type, script, checksum,
                                                         installed_by, installed_on, execution_time, success)
-                values (100, '10', 'newer app', 'SQL', 'V10__newer_app.sql', 0, 'mujoong_owner',
+                values (100, '11', 'newer app', 'SQL', 'V11__newer_app.sql', 0, 'mujoong_owner',
                         timestamp '2001-09-09 00:00:00', 0, true),
-                       (101, '11', 'failed', 'SQL', 'V11__failed.sql', 0, 'mujoong_owner',
+                       (101, '12', 'failed', 'SQL', 'V12__failed.sql', 0, 'mujoong_owner',
                         timestamp '2001-09-09 00:00:00', 0, false)
                 """, "delete from flyway.core_schema_history where installed_rank in (100, 101)",
                 () -> runner(database).run(context -> {
                     assertThat(context).hasNotFailed();
                     assertThat(context.getBean(ReadinessState.class).state()).isEqualTo(ReadinessState.State.READY);
                     assertThat(context.getBean(SchemaVersionCheck.class).verify()).as("성공한 최고 버전(실패한 11은 세지 않는다)")
-                            .isEqualTo("10");
+                            .isEqualTo("11");
                 }));
     }
 

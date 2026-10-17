@@ -37,6 +37,14 @@ public class PracticeStartService implements PracticeStart {
     private final MujoongClock clock;
     private final ScenarioLimits limits;
     private final PreparedPracticePackageMapper mapper=new PreparedPracticePackageMapper();
+    private kr.mujoong.core.practicegoal.SavedGoalReader savedGoals;
+    private kr.mujoong.core.practice.ScenarioPrivacyContextPort privacy;
+    private kr.mujoong.core.luna.LunaInputSanitizer sanitizer;
+    @org.springframework.beans.factory.annotation.Autowired
+    void connectSavedGoals(kr.mujoong.core.practicegoal.SavedGoalReader savedGoals,
+            kr.mujoong.core.practice.ScenarioPrivacyContextPort privacy,kr.mujoong.core.luna.LunaInputSanitizer sanitizer){
+        this.savedGoals=savedGoals;this.privacy=privacy;this.sanitizer=sanitizer;
+    }
 
     public PracticeStartService(PracticeAccountPort accounts, ConsentPolicyService consent, PracticeGoalRepository goals,
             PragmaticsKnowledge knowledge, PracticePreparationRepository preparations, ScenarioRepository scenarios,
@@ -87,6 +95,7 @@ public class PracticeStartService implements PracticeStart {
                 return preparations.reclaim(value,clock.now(),clock.now().plus(limits.requestTimeout()));
             }
             List<WeightedGoalOrder.Selection> selected=request.goalSelectionIds().stream().map(id->{
+                if(savedGoals!=null)return selection(guardian,account.childId(),id);
                 var selectedGoal=goals.find(guardian,id).filter(g->g.active()&&g.childId().equals(account.childId()))
                         .orElseThrow(()->CoreApiException.of(ErrorCode.NOT_FOUND));
                 kr.mujoong.core.knowledge.BehaviorDefinition definition;
@@ -105,7 +114,7 @@ public class PracticeStartService implements PracticeStart {
         try {
             var first=claim.goals().getFirst();
             Scenario scene=generation.generatePrepared(new ScenarioService.Request(claim.sessionId(),first.goalSelectionId(),"ORIGINAL",null),
-                    ()->preparationContext(claim));
+                    new ScenarioService.PreparedContext(claim.leaseUntil(),()->preparationContext(claim)));
             return Objects.requireNonNull(tx.execute(status->{
                 accounts.requireActive(guardian,true);
                 preparationContext(claim);
@@ -113,7 +122,8 @@ public class PracticeStartService implements PracticeStart {
                 return new PreparedSnapshot(claim.sessionId(),claim.key(),claim.goals(),scene);
             }));
         } catch(CoreApiException failure) {
-            failed=failure.code()==ErrorCode.SCENARIO_GEN_FAILED;throw failure;
+            failed=failure.code()==ErrorCode.SCENARIO_GEN_FAILED&&
+                    (!(failure instanceof ScenarioService.GenerationFailure disposition)||disposition.permanent());throw failure;
         } finally {
             boolean finalFailed=failed;
             tx.executeWithoutResult(status->{accounts.lockForDeletion(guardian);preparations.release(claim,finalFailed,clock.now());});
@@ -136,6 +146,25 @@ public class PracticeStartService implements PracticeStart {
     }
     public static PracticeSessionContextPort.SessionContext context(Preparation p, boolean active) {
         return new PracticeSessionContextPort.SessionContext(p.sessionId(),p.guardianId(),p.childId(),active,
-                p.goals().stream().map(g->new PracticeSessionContextPort.GoalSnapshot(g.goalSelectionId(),g.behaviorKey(),g.behaviorVersion(),"PEER")).toList());
+                p.goals().stream().map(g->new PracticeSessionContextPort.GoalSnapshot(g.goalSelectionId(),g.behaviorKey(),g.behaviorVersion(),
+                        g.goalContext().candidate()?g.goalContext().fourElements().partner():"PEER",g.goalContext())).toList());
+    }
+    private WeightedGoalOrder.Selection selection(UUID guardian,UUID child,UUID id){
+        var view=savedGoals.find(child,id).filter(v->v.childId().equals(child)&&v.selectionId().equals(id)).orElseThrow(()->CoreApiException.of(ErrorCode.NOT_FOUND));
+        var metadata=goals.preparationMetadata(guardian,child,id).orElseThrow(()->CoreApiException.of(ErrorCode.NOT_FOUND));
+        var original=kr.mujoong.core.practice.GoalContext.from(view);
+        var aliases=privacy.require(guardian,child).aliases();
+        var clean=sanitizer.sanitize(java.util.Map.of("name",metadata.displayName()),aliases,kr.mujoong.core.luna.LunaPurpose.SCENARIO_GENERATION).payload();
+        var context=original.mapContent(text->(String)sanitizer.sanitize(java.util.Map.of("text",text),aliases,kr.mujoong.core.luna.LunaPurpose.SCENARIO_GENERATION).payload().get("text"));
+        String criteria;
+        if(context.candidate())criteria=context.criteria();
+        else {
+            kr.mujoong.core.knowledge.BehaviorDefinition definition;
+            try{definition=knowledge.pinVersion(context.legacyBehaviorKey(),context.legacyBehaviorVersion());}
+            catch(IllegalArgumentException invalid){throw CoreApiException.of(ErrorCode.VALIDATION_FAILED);}
+            if(!"ACTIVE".equals(definition.status()))throw CoreApiException.of(ErrorCode.VALIDATION_FAILED);
+            criteria=definition.judgmentCriteria();
+        }
+        return new WeightedGoalOrder.Selection(guardian,child,id,(String)clean.get("name"),context.carrierKey(),context.carrierVersion(),criteria,Math.toIntExact(metadata.sortOrder()),metadata.favorite(),context);
     }
 }

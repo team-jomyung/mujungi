@@ -281,11 +281,11 @@ aws ssm put-parameter --name /mujoong/demo/GHCR_PULL_USER --type String --value 
 
 - **(U13) 제브 키 · 주소 · 모델은 demo 배포 전에 먼저 넣는다 — 셋 다 필수다.** demo realtime은 제브 모드 REAL(공개 프로필 기본값) + `JEV_API_KEY`
   + 허용 호스트 안의 `JEV_BASE_URL` + 고정 버전 `JEV_MODEL`이 아니면 기동을 거부한다(`MUJOONG_STARTUP_REJECTED`, 대역 · 비활성은 자동 통과와 같아 공개
-  프로필에서 허용하지 않는다, `contracts/ai-io.md` 10.11). 그래서 `render-env`도 셋 중 하나라도 없으면 env 파일을 바꾸지 않고 실패한다(D3 실패, 구 버전 유지).
+  프로필에서 허용하지 않는다, `contracts/ai-io.md` 10.12). 그래서 `render-env`도 셋 중 하나라도 없으면 env 파일을 바꾸지 않고 실패한다(D3 실패, 구 버전 유지).
   **순서: 아래 R-F15 확인 기록 → 세 파라미터 입력 → 그 뒤에 이 변경이 든 SHA를 배포.** 키 없는 demo에 이 변경을 먼저 배포하면 realtime이 기동을 거부하고
   배포가 실패한다(롤백은 6.4, 이전 SHA는 제브 설정 없이 뜬다). `JEV_API_KEY`는 비밀이라 `realtime.env`에만 가고(core-api · 다른 서비스 없음)
   `JEV_BASE_URL` · `JEV_MODEL`은 비밀이 아니지만 같은 길(Parameter Store → `render-env` → `realtime.env`)로 전달한다. 주소는 `https://`로 시작하고 호스트는
-  앱의 허용 목록(`contracts/ai-io.md` 10.11) 안이어야 하며, 모델은 `-latest` 같은 이동 별칭이 아닌 고정 버전 이름이어야 한다(`render-env`가 형식을, 앱이 호스트를 확인한다).
+  앱의 허용 목록(`contracts/ai-io.md` 10.12) 안이어야 하며, 모델은 `-latest` 같은 이동 별칭이 아닌 고정 버전 이름이어야 한다(`render-env`가 형식을, 앱이 호스트를 확인한다).
   - **제브 R-F15 확인 — 기록 없이는 키를 넣지 않는다.** 제브에는 아이 확정 전사 직전의 무중 발화 후보 문장과 익명 최근 맥락 3턴이 나간다. 코드가 막지
     않으므로 이 확인이 유일한 방어선이다. 아래 상자는 **아직 확인하지 않았다**(확인한 사람이 직접 표시한다).
     - [ ] 제브 공급자 약관 · 데이터 사용 조건(학습 사용 · 보존)을 확인했다.
@@ -638,7 +638,7 @@ cat realtime-activity/build/gpt-live/report.md
 
 제브를 실제로 부르는 유일한 시험이다. 기본 `test` · `check` · CI · `verify.sh`에는 들어가지 않는다(루트 `verifyJevLiveIsolation`이 check마다 그래프를
 확인하고, `JevLiveTaskIsolationTest`가 빌드 규칙을 못 박는다). 어댑터는 제브 공식 선 형식(`POST /v1/systemone`, 요청 `model · state · questions`, 응답
-`answers.guardrail.choice · probabilities`, `contracts/ai-io.md` 10.12)으로 부르지만 가짜 제브로만 확인했다 — 실제 제브가 이 요청을 받아들이고(특히
+`answers.guardrail.choice · probabilities`, `contracts/ai-io.md` 10.13)으로 부르지만 가짜 제브로만 확인했다 — 실제 제브가 이 요청을 받아들이고(특히
 고정 버전 `model` 이름) 이렇게 답하는지는 이 시험이 처음 확인하는 길이다. 합성 문장만 보내고(R-F15), 키는
 그 PC의 셸 env로만 넣는다(R-F3 · R-F13). **키를 넣기 전에 단계 4의 '제브 R-F15 확인' 기록을 먼저 남긴다.** 사용자에게 키 · 주소를 채팅에 붙여 넣으라고
 요청하지 않는다.
@@ -646,7 +646,7 @@ cat realtime-activity/build/gpt-live/report.md
 ```bash
 cd backend
 read -r -s -p 'JEV_API_KEY: ' JEV_API_KEY && export JEV_API_KEY && echo
-export JEV_BASE_URL='https://<허용 호스트>'     # 비밀 아님. 호스트는 contracts/ai-io.md 10.11의 허용 목록 안이어야 한다(운영과 같은 STRICT 규칙)
+export JEV_BASE_URL='https://<허용 호스트>'     # 비밀 아님. 호스트는 contracts/ai-io.md 10.12의 허용 목록 안이어야 한다(운영과 같은 STRICT 규칙)
 export JEV_MODEL='<고정 버전 모델 이름>'        # 비밀 아님. -latest 같은 이동 별칭은 어댑터가 거부한다
 export JEV_PASS_THRESHOLD='0.5'                # 선택. 비밀 아님. 통과 문턱(0 초과 1 이하), 비우면 application.yml 기본값 0.5(임시 시험값)
 ./gradlew :realtime-activity:jevLiveTest

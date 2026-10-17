@@ -192,9 +192,9 @@
 
 | 기호 | 내용 | 출처 | 제공 | 소비자 | 호환 분류 | 표시 위치 |
 |---|---|---|---|---|---|---|
-| (U13-a) | 제브 단계 모드 설정 키 `mujoong.guardrail.jev.mode`(`REAL` · `STUB` · `OFF`)와 주소 · 모델 키 `mujoong.guardrail.jev.base-url` · `mujoong.guardrail.jev.model`을 ai-io.md 10.11에 더한다. 키 하나가 모드를 정하고(비면 demo · prod = `REAL`, 그 밖 = `STUB`), demo · prod는 `REAL` + `JEV_API_KEY` + 허용 호스트 + 고정 모델이 아니면 기동을 거부한다. 제브 허용 호스트는 Luna와 같이 코드 상수이고 이 문서와 시험이 같은 목록을 대조한다 | U13 FR1.3 · FR2.1 · FR7.1 · BR1.3 · BR9.1 · Q1 답 A · Q4 답 A | Realtime `GuardrailProperties` · `RealtimeStartupChecks` | 운영 · 배포 | 새 키 | ai-io.md |
+| (U13-a) | 제브 단계 모드 설정 키 `mujoong.guardrail.jev.mode`(`REAL` · `STUB` · `OFF`)와 주소 · 모델 키 `mujoong.guardrail.jev.base-url` · `mujoong.guardrail.jev.model`을 ai-io.md 10.12에 더한다. 키 하나가 모드를 정하고(비면 demo · prod = `REAL`, 그 밖 = `STUB`), demo · prod는 `REAL` + `JEV_API_KEY` + 허용 호스트 + 고정 모델이 아니면 기동을 거부한다. 제브 허용 호스트는 Luna와 같이 코드 상수이고 이 문서와 시험이 같은 목록을 대조한다 | U13 FR1.3 · FR2.1 · FR7.1 · BR1.3 · BR9.1 · Q1 답 A · Q4 답 A | Realtime `GuardrailProperties` · `RealtimeStartupChecks` | 운영 · 배포 | 새 키 | ai-io.md |
 | (U13-b) | ai-io.md 10.3 재시도 분류 표에 제브 검사 행(재시도 없음, 시한 `mujoong.timing.guardrail.jev-budget` 800ms 초과도 막힘)을 더하고, 스키마 파일 `guardrail-request` · `guardrail-result`의 예시 정책 판 이름 `guardrail-v1`을 실제 이름 `jev-guardrail-v1`로 정정한다(필드 · 규칙은 그대로, 예시 값만) | U13 FR2.3 · BR2.1 · BR2.7 · 가정 14 | 계약 문서 · 스키마 예시 | Realtime 제브 어댑터 | 문서 정정 | ai-io.md |
-| (U13-c) | 제브 공급자 선 형식을 공식 문서에 맞춘다(`POST /v1/systemone`, 요청 `state` · `model` · `questions`, 응답 `answers.<질문 ID>`의 `choice` · `probabilities`). 내부 형식(`guardrail-request` · `guardrail-result`)은 그대로이고 어댑터가 둘 사이를 바꾼다. 정책 판을 `jev-guardrail-v2`(`guardrail/policy-v2.json`: 검사 질문 `instructions` + 라벨 8개 `criteria`)로 올리고, 통과 문턱 설정 키 `mujoong.guardrail.jev.pass-threshold`(`${JEV_PASS_THRESHOLD:0.5}`, 임시 시험값 — AI 성능 시험으로 확정)를 ai-io.md 10.11에 더한다. 판정 규칙은 ai-io.md 10.12다. 응답에 정책 판이 없어 `POLICY_MISMATCH`를 더 만들지 않는다(열거값은 호환을 위해 남김). 스키마 필드 · 범주 enum 7개는 바꾸지 않는다 | 선 형식 정정 FR1 ~ FR5 · D1 ~ D11 · 제브 공식 문서 | 계약 문서 · Realtime 제브 어댑터 · 정책 리소스 | 운영 · 배포 | 새 키 · 형식 정정 | ai-io.md |
+| (U13-c) | 제브 공급자 선 형식을 공식 문서에 맞춘다(`POST /v1/systemone`, 요청 `state` · `model` · `questions`, 응답 `answers.<질문 ID>`의 `choice` · `probabilities`). 내부 형식(`guardrail-request` · `guardrail-result`)은 그대로이고 어댑터가 둘 사이를 바꾼다. 정책 판을 `jev-guardrail-v2`(`guardrail/policy-v2.json`: 검사 질문 `instructions` + 라벨 8개 `criteria`)로 올리고, 통과 문턱 설정 키 `mujoong.guardrail.jev.pass-threshold`(`${JEV_PASS_THRESHOLD:0.5}`, 임시 시험값 — AI 성능 시험으로 확정)를 ai-io.md 10.12에 더한다. 판정 규칙은 ai-io.md 10.13다. 응답에 정책 판이 없어 `POLICY_MISMATCH`를 더 만들지 않는다(열거값은 호환을 위해 남김). 스키마 필드 · 범주 enum 7개는 바꾸지 않는다 | 선 형식 정정 FR1 ~ FR5 · D1 ~ D11 · 제브 공식 문서 | 계약 문서 · Realtime 제브 어댑터 · 정책 리소스 | 운영 · 배포 | 새 키 · 형식 정정 | ai-io.md |
 
 ## U14 편차
 
@@ -202,3 +202,11 @@
 |---|---|---|---|
 | (U14-a) | GOAL_CANDIDATES의 NONE 후보에 선택적 내부 structureSignature를 더한다. U15의 다섯 구조 값을 동일 후보 응답에서 받고 검증하며, 누락/잘못된 추상화/원문·이름 검증 실패는 NONE을 유지한다. 임의 상수 서명이나 추가 추상화 AI 호출을 만들지 않는다. 결과 커밋 후 candidate/version 멱등 키로 생성하고 새 불변 버전으로 게시한다. | 승인 U14 Functional Design D2·FR2.3, C-DS10, U15 StructureSignature | strict 스키마의 추가 출력 속성을 이전 소비자는 거절하므로 생산/소비를 같은 릴리스에서 갱신한다. 보호자 공개 속성이 아니다. |
 | (U14-b) | 새 결과의 장면 번호는 양의 가변 정수이며 timing을 제공한다. 생성 후보는 reasonText 대신 displayEvidence를 공개하고 recommendationId는 불변 후보 버전이다. legacy 후보/장면 응답은 기존 모양을 유지한다. 프런트 API 파서는 displayEvidence를 기존 화면 모델의 reasonText로 변환한다. | 승인 U14 D1·D3·D4·D6, FR3.1·FR4.1 | strict 응답 소비자는 새 속성과 후보의 대체 필드를 거절할 수 있으므로 schema·API 생산부·프런트 파서를 같은 릴리스로 갱신한다. 기존 27개 화면의 모델과 칩은 유지한다. |
+
+## U10 편차
+
+| 기호 | 내용 | 근거 | 호환 분류 |
+|---|---|---|---|
+| (U10-a) | C-DS1에 선택 scriptVersion/scenes/selfReview/generation을 추가한다. C8의 기존 behaviorKey/version은 기존 행동에 그대로 유지하고, 후보는 candidate:<candidateRef>와 고정 후보 버전을 운반 식별자로 사용하며 goalKind/candidateRef/candidateVersion/goalContext를 선택 확장한다. 후보를 기존 행동 정의로 매핑하거나 카탈로그 행을 만들지 않는다. 생성·판정의 정본은 고정 goalContext다. | 승인 U10 FR3·FR4, functional-spec W1/W6 | 기존 8필수 필드와 추가 필드 허용을 유지한다. 현재 RT는 운반 필드와 판정 기준을 저장한다. 신규 후보를 모르는 구버전 Core로 롤백하면 신규 후보의 생성은 지원되지 않을 수 있다. U12 소비·실기기는 별도 검증이다. |
+
+U10 검토 사유는 ANSWER_INCLUDED/EARLY_CUE/PRESSURE/AGE_MISMATCH/GOAL_MISMATCH/REPETITION/FORBIDDEN_CONTENT/INCOMPLETE_SCENE/INVARIANT_MISMATCH/SKILL_MISMATCH/TRANSFER_MISMATCH/UNCHANGED_VARIANT로 닫으며 APPROVE에는 빈 reasons만 허용한다. 생성 scenario-generation.v2, 검토 scenario-review.v1, 공개 대본 scenario-script.v1을 함께 사용한다.

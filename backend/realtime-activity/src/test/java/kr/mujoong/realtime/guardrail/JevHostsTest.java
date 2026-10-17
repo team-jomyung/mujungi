@@ -15,7 +15,7 @@ import org.junit.jupiter.api.Test;
 
 /**
  * 제브 주소 · 모델 규칙 시험 (U13 BR2.2 · BR2.3 · Q4 답 A). 프로필별 엄격도, 사용자 정보 · 질의 · 조각이 붙은 주소 거부, 루프백 판단, 허용 호스트 상수가
- * {@code contracts/ai-io.md} 10.11에 적힌 목록과 같음, 고정 모델 이름 규칙을 본다. 실제 공급자는 부르지 않는다(R-F1).
+ * {@code contracts/ai-io.md} 10.12에 적힌 목록과 같음, 고정 모델 이름 규칙을 본다. 실제 공급자는 부르지 않는다(R-F1).
  */
 @Tag("u13")
 class JevHostsTest {
@@ -90,7 +90,7 @@ class JevHostsTest {
         String aiIo = Files.readString(REPO_ROOT.resolve("contracts/ai-io.md"));
         Matcher line = Pattern.compile("^- 제브 허용 호스트: (.+)$", Pattern.MULTILINE).matcher(aiIo);
 
-        assertThat(line.find()).as("ai-io.md 10.11 제브 허용 호스트 줄").isTrue();
+        assertThat(line.find()).as("ai-io.md 10.12 제브 허용 호스트 줄").isTrue();
         Set<String> documented = Pattern.compile("`([^`]+)`").matcher(line.group(1)).results()
                 .map(match -> match.group(1)).collect(Collectors.toSet());
         assertThat(JevHosts.ALLOWED_HOSTS).isEqualTo(documented);

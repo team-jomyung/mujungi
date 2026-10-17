@@ -22,6 +22,13 @@ import org.springframework.transaction.support.TransactionTemplate;
 /** C10, AC4.2.1/9 and AC6.5.5/8. Generation never performs a Realtime state transition. */
 @Service
 public class ScenarioService {
+    /** 공개 오류 코드는 유지하고 준비 소유자에게 재요청 가능 여부만 전달한다. */
+    public static final class GenerationFailure extends CoreApiException {
+        private static final long serialVersionUID=1L;
+        private final boolean permanent;
+        GenerationFailure(boolean permanent){super(ErrorCode.SCENARIO_GEN_FAILED);this.permanent=permanent;}
+        public boolean permanent(){return permanent;}
+    }
     private final ScenarioRepository repository;
     private final PracticeSessionContextPort sessions;
     private final ScenarioRecordPort records;
@@ -31,6 +38,23 @@ public class ScenarioService {
     private final MujoongClock clock;
     private final TransactionTemplate tx;
     private final ScenarioLimits limits;
+    private StructuredScenarioFlow structured;
+    private kr.mujoong.core.consent.ConsentPolicyService consent;
+    @org.springframework.beans.factory.annotation.Autowired
+    void connectConsent(kr.mujoong.core.consent.ConsentPolicyService consent){this.consent=consent;}
+    @org.springframework.beans.factory.annotation.Autowired
+    void connectStructured(kr.mujoong.core.textai.TextAiProvider provider,ScenarioPrivacyContextPort privacy,
+            kr.mujoong.core.luna.LunaInputSanitizer sanitizer,kr.mujoong.core.knowledge.ChildKnowledgeService graph,
+            kr.mujoong.core.textai.ForbiddenExpressionPolicy forbidden,kr.mujoong.core.textai.TextAiProperties timing,
+            @org.springframework.beans.factory.annotation.Qualifier("textAiExecutor") java.util.concurrent.ExecutorService executor,
+            kr.mujoong.core.config.CoreProperties properties,JsonCodec json){
+        if(provider instanceof kr.mujoong.core.textai.ScenarioScriptProvider scripts){
+            structured=new StructuredScenarioFlow(new ScenarioScriptGenerator(scripts,new ScenarioScriptValidation(forbidden),timing,executor,
+                    kr.mujoong.core.luna.CoreLunaClient.SYSTEM_SLEEPER::sleep),privacy,sanitizer,
+                    new ScenarioGraphContext(graph,executor,clock,properties.timing().knowledge().graphBudget()),repository,executor,
+                    properties.timing().practice().scenarioHistoryTimeout(),json);
+        }
+    }
     public ScenarioService(ScenarioRepository repository, PracticeSessionContextPort sessions, ScenarioRecordPort records,
             PracticeAccountPort accounts, PragmaticsKnowledge knowledge, TextAiGateway ai, MujoongClock clock,
             TransactionTemplate tx, ScenarioLimits limits) {
@@ -82,11 +106,18 @@ public class ScenarioService {
     public Scenario generatePrepared(Request request, java.util.function.Supplier<SessionContext> preparation) {
         if (!"ORIGINAL".equals(request.kind()) || request.previousScenarioId()!=null)
             throw CoreApiException.of(ErrorCode.VALIDATION_FAILED);
-        return generate(request, preparation);
+        return preparation instanceof PreparedContext bounded?generate(request,preparation,bounded.leaseUntil()):generate(request, preparation);
+    }
+    public record PreparedContext(Instant leaseUntil,java.util.function.Supplier<SessionContext> source) implements java.util.function.Supplier<SessionContext>{
+        @Override public SessionContext get(){return source.get();}
     }
 
     private Scenario generate(Request request, java.util.function.Supplier<SessionContext> source) {
-        Instant deadline=clock.now().plus(limits.requestTimeout());
+        return generate(request,source,clock.now().plus(limits.requestTimeout()));
+    }
+    private Scenario generate(Request request, java.util.function.Supplier<SessionContext> source,Instant deadline) {
+        Instant started=clock.now();
+        var budget=new ScenarioDeadline(clock,deadline);
         SessionContext context=source.get();
         GoalSnapshot goal=goal(context,request);
         ScenarioRepository.Stored previous=request.previousScenarioId()==null ? null : repository.require(request.previousScenarioId());
@@ -99,12 +130,13 @@ public class ScenarioService {
         record Prepared(kr.mujoong.core.knowledge.BehaviorDefinition definition, ScenarioRepository.Claim claim) {}
         var prepared=tx.execute(status -> {
             authorize(context);
-            return new Prepared(pin(goal),repository.claim(request.key(),context,request,clock.now(),deadline));
+            if(structured!=null&&!consent.check(context.guardianId()).ok())throw CoreApiException.of(ErrorCode.CONSENT_MISSING);
+            return new Prepared(structured!=null&&goal.goalContext().candidate()?null:pin(goal),repository.claim(request.key(),context,request,clock.now(),deadline));
         });
         Objects.requireNonNull(prepared);
         var claim=prepared.claim();
         var definition=prepared.definition();
-        String opportunity=previous==null ? definition.opportunityCondition() : previous.scenario().opportunityCondition();
+        String opportunity=previous==null ? (definition==null?goal.goalContext().fourElements().situation():definition.opportunityCondition()) : previous.scenario().opportunityCondition();
         if (claim.replay()!=null) return claim.replay();
         // 요청 키를 FAILED로 굳히는 것은 두 번 모두 내용 검증에 실패했을 때뿐이다. 다른 요청과의 경합 · 이미 낸 상황과 같은 내용은
         // 다시 만들면 될 수 있으므로 키를 풀어 같은 키로 다시 요청할 수 있게 한다(U5a 리뷰 6)
@@ -113,6 +145,24 @@ public class ScenarioService {
         try {
             var account=accounts.requireActive(context.guardianId(),false);
             if (account.ageYears()==null) throw CoreApiException.of(ErrorCode.SERVICE_NOT_READY);
+            if(structured!=null){
+                ScenarioScriptGenerator.Result generated;
+                try{generated=structured.generate(context,goal,definition,previous,account,started,budget);}
+                catch(ScenarioScriptGenerator.ContentExhausted failure){validationFailed=!failure.retryableDuplicate;throw failure;}
+                budget.check();
+                try{return tx.execute(status->{
+                    repository.beginDeadline(budget);
+                    authorize(context);
+                    repository.limitSql(budget);
+                    SessionContext latest=source.get();
+                    if(!latest.guardianId().equals(context.guardianId())||!latest.childId().equals(context.childId())||!goal(latest,request).equals(goal))
+                        throw CoreApiException.of(ErrorCode.NOT_FOUND);
+                    repository.limitSql(budget);
+                    if(!consent.check(context.guardianId()).ok())throw CoreApiException.of(ErrorCode.CONSENT_MISSING);
+                    budget.check();return repository.save(request.key(),claim.claimId(),latest,goal,request,generated.legacy(),clock.now(),generated.details(),budget);
+                });}
+                catch(org.springframework.dao.DataAccessException database){throw ScenarioDeadline.failed();}
+            }
             ScenarioPrompt prompt=new ScenarioPrompt(definition.displayName(),definition.behaviorDefinitionText(),opportunity,
                     definition.scenarioCondition(),relation,account.ageYears(),account.interests(),
                     previous==null ? null : previous.scenario().scenarioText());
@@ -139,6 +189,9 @@ public class ScenarioService {
             }
             validationFailed=!retryableMiss;
             throw CoreApiException.of(ErrorCode.SCENARIO_GEN_FAILED);
+        } catch(CoreApiException failure) {
+            if(structured!=null&&failure.code()==ErrorCode.SCENARIO_GEN_FAILED)throw new GenerationFailure(validationFailed);
+            throw failure;
         } finally {
             boolean failed=validationFailed;
             tx.executeWithoutResult(status -> repository.release(request.key(),claim.claimId(),failed,clock.now()));

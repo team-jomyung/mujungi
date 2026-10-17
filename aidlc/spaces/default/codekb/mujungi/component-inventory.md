@@ -53,6 +53,34 @@
 
 > 현재 범위의 정본(U14 갱신절, 보존 이력)은 바로 아래다. 그 뒤 원문은 보존 이력이며 재검증 범위는 timestamp에 한정한다.
 
+> 최신 정본: 아래 U10 갱신절(2026-10-17, HEAD eb34c68bf24e4520881b7ffebe1070564554dfc9). 이후 U14/U15/전체 분석 본문은 역사 자료이며, 이번에 검증한 범위는 timestamp의 analyzed 목록만이다.
+
+## U10 현재 검증 구성 요소
+
+아래 제목들이 이번 analyzed.components 정본이다. 뒤의 과거 목록은 보존한 설명이며 현재 deep 검증을 뜻하지 않는다.
+
+### u10.scenario-orchestration
+ScenarioService, ScenarioRepository, ScenarioContentPolicy, Scenario, ScenarioConfiguration, ScenarioInternalController. 요청 선점·동일응답 재사용·중복 내용 방지·권한 재확인·발급을 소유한다.
+
+### u10.preparation-compatibility
+PracticeStartService, FrozenGoal, PreparedPracticePackageMapper, PracticeSessionContextPort. 기존 행동키 가정과 시작 패키지 첫 대본 전달이 새 목표·선택필드 연결 지점이다.
+
+### u10.luna-boundary
+LunaTextAiProvider, TextAiGateway, ScenarioPrompt, GeneratedScenario, ForbiddenExpressionPolicy, CoreLunaClient, LunaRequest, LunaPurpose, LunaCallBudget, LunaInputSanitizer. 이중 재시도·전체 마감·원문 비노출을 보존한다.
+
+### u10.saved-goal-context
+SavedGoalReader, PinnedSavedGoalReader, FourElements, practicegoal.PracticeGoalRepository. U14의 실제 CANDIDATE/LEGACY_BEHAVIOR 읽기 경계이며 ScenarioService에는 아직 미연결이다.
+
+### u10.graph-context
+ChildKnowledgeService, VariantPlanner, KnowledgeSeed, KnowledgeGraphLookup. 아동별 service와 공개 카탈로그 포트의 차이, 빈값 fallback과 조회 예산을 소유한다.
+
+### u10.contract-persistence
+Core V4/V9, ai-scenario-output/review, practice-scenario, internal-practice-scenario-request, core-api/build.gradle.kts. V10·선택응답·실행자원 스키마 단일정본 연결 지점이다.
+
+---
+
+> 현재 범위의 정본은 바로 아래 U14 갱신절이다. 그 뒤 원문은 보존 이력이며 재검증 범위는 timestamp에 한정한다.
+
 ## U14 현재 검증 구성 요소
 
 아래 제목만 이번 deep 구성 요소다. 과거 deep 표시는 이력이며 timestamp의 shallow로 강등했다.
@@ -265,3 +293,5 @@ core-api/contract-model 빌드, 버전 카탈로그, Java 규약, a-checks. U15 
 
 ### scripts
 - **[얕게]** `scripts/verify.sh` + `scripts/verify/*`(A 점검 · B 스택 · C 스켈레톤 턴), `cloud-setup.sh`.
+
+

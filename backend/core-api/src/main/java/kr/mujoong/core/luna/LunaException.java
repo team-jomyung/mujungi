@@ -11,14 +11,19 @@ public final class LunaException extends RuntimeException {
 
     private final LunaFailureReason reason;
     private final int attemptsUsed;
+    private final java.util.Optional<java.time.Duration> retryAfter;
 
     public LunaException(LunaFailureReason reason, int attemptsUsed) {
+        this(reason,attemptsUsed,java.util.Optional.empty());
+    }
+    public LunaException(LunaFailureReason reason,int attemptsUsed,java.util.Optional<java.time.Duration> retryAfter) {
         super("Luna failure: " + Objects.requireNonNull(reason, "reason").name(), null, false, false);
         if (attemptsUsed < 0 || attemptsUsed > 3) {
             throw new IllegalArgumentException("attemptsUsed는 0 ~ 3이다");
         }
         this.reason = reason;
         this.attemptsUsed = attemptsUsed;
+        this.retryAfter = java.util.Objects.requireNonNull(retryAfter);
     }
 
     /** 실패 사유. */
@@ -35,4 +40,5 @@ public final class LunaException extends RuntimeException {
     public int attemptsUsed() {
         return attemptsUsed;
     }
+    public java.util.Optional<java.time.Duration> retryAfter() { return retryAfter; }
 }

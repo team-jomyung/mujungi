@@ -73,7 +73,7 @@ OFF 모드에는 제브 단계가 없어 지표 값이 없다. 사용자 · 세�
 | 키 | 환경 변수 | 비고 |
 |---|---|---|
 | `mujoong.guardrail.jev.mode` | `JEV_MODE` | 비면 프로필 기본값(demo · prod = `REAL`, 그 밖 = `STUB`) |
-| `mujoong.guardrail.jev.base-url` | `JEV_BASE_URL` | 비밀 아님. 호스트는 코드 상수 허용 목록(`contracts/ai-io.md` 10.11) 안 |
+| `mujoong.guardrail.jev.base-url` | `JEV_BASE_URL` | 비밀 아님. 호스트는 코드 상수 허용 목록(`contracts/ai-io.md` 10.12) 안 |
 | `mujoong.guardrail.jev.model` | `JEV_MODEL` | 비밀 아님. 고정 버전, `-latest` 거부 |
 | `mujoong.guardrail.jev.pass-threshold` | `JEV_PASS_THRESHOLD` | 비밀 아님. 기본 0.5, `0 < x <= 1`. **임시 시험값** — AI 성능 시험으로 확정. 선 형식 정정에서 더함 |
 | (환경 변수만) | `JEV_API_KEY` | 비밀. 호출 때마다 읽고 보관하지 않음 |
@@ -113,6 +113,6 @@ OFF 모드에는 제브 단계가 없어 지표 값이 없다. 사용자 · 세�
 
 ## 9. 실제 제브에 대해 모르는 것
 
-- **선 형식(정정됨):** 처음 구현은 경로 `/v1/guardrail/check`와 본문 · 응답 필드를 가정했으나 제브 공식 문서와 달랐다. 선 형식 정정(작업 기록 `261017-jev-adapter-format`, `contracts/ai-io.md` 10.12, `(U13-c)`)으로 어댑터는 `POST /v1/systemone`에 `model · state · questions`를 보내고 `answers.guardrail.choice · probabilities`를 읽어 내부 판정으로 바꾼다(라벨 8개 = 7개 범주 + `PASS`, 정책 판 `jev-guardrail-v2` = `policy-v2.json`, `policy-v1.json`은 이력으로만 남김). 판정은 `PASS` 1순위 + 확률 ≥ 문턱(설정 키 `mujoong.guardrail.jev.pass-threshold`, **임시 시험값 0.5**)일 때만 `ALLOW`, 그 밖의 `PASS`는 `REVIEW`, 다른 라벨 1순위는 `BLOCK`이다. 앞 절의 `policyVersion` 응답 비교와 `POLICY_MISMATCH`는 응답에 정책 판이 없어 더 쓰지 않는다. 이 설계 문서의 앞 절들은 정정 전 설명을 그대로 두고 이 절이 정본이다.
+- **선 형식(정정됨):** 처음 구현은 경로 `/v1/guardrail/check`와 본문 · 응답 필드를 가정했으나 제브 공식 문서와 달랐다. 선 형식 정정(작업 기록 `261017-jev-adapter-format`, `contracts/ai-io.md` 10.13, `(U13-c)`)으로 어댑터는 `POST /v1/systemone`에 `model · state · questions`를 보내고 `answers.guardrail.choice · probabilities`를 읽어 내부 판정으로 바꾼다(라벨 8개 = 7개 범주 + `PASS`, 정책 판 `jev-guardrail-v2` = `policy-v2.json`, `policy-v1.json`은 이력으로만 남김). 판정은 `PASS` 1순위 + 확률 ≥ 문턱(설정 키 `mujoong.guardrail.jev.pass-threshold`, **임시 시험값 0.5**)일 때만 `ALLOW`, 그 밖의 `PASS`는 `REVIEW`, 다른 라벨 1순위는 `BLOCK`이다. 앞 절의 `policyVersion` 응답 비교와 `POLICY_MISMATCH`는 응답에 정책 판이 없어 더 쓰지 않는다. 이 설계 문서의 앞 절들은 정정 전 설명을 그대로 두고 이 절이 정본이다.
 - **실호출로 확인됨(2026-10-18, 사람이 `jevLiveTest`로 합성 표본 5개, `[실호출-합성]`, 결과는 `report.md` 4.1절):** 선 형식이 실제 제브에서 통한다. 요청 `model`에 고정 버전 이름(`jev-1.13.0`)이 받아들여진다(공식 예시는 `-latest`이고 우리 규칙은 거부하지만, 고정 버전은 거절되지 않았다). 응답 `model`도 같은 고정 버전이다. 지연은 165 ~ 324ms로 800ms 안에 5/5. 확률 합 허용 오차 0.001은 이 5개 응답에서 오검출이 없었다.
 - **열린 항목(실호출로만 확정, 아직 모름):** 오류 본문 모양, `confidence` 의미, 확률 합 허용 오차 0.001이 더 많은 응답에서도 맞는지, 문턱 0.5가 적절한지(표본 5개에 모호한 사례가 없었다. 모호한 합성 표본을 더해 `PASS` 확률 분포를 봐야 한다), 한국어 문안의 분류 품질(AC2.1.10 · AC2.1.16). `jevLiveTest`(`infra/RUNBOOK.md` 8.8)로 사람이 키를 넣고 확인한다.

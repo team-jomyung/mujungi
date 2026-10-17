@@ -58,7 +58,20 @@
           },
           "relation": { "type": "string", "minLength": 1, "maxLength": 200 },
           "place": { "type": "string", "minLength": 1, "maxLength": 200 },
-          "topic": { "type": "string", "minLength": 1, "maxLength": 200 }
+          "topic": { "type": "string", "minLength": 1, "maxLength": 200 },
+          "preservation": {
+            "type": "object", "additionalProperties": false,
+            "required": ["skillRef", "invariantSentence", "preservationRule", "transferDistance", "changedElement", "participants", "situation"],
+            "properties": {
+              "skillRef": {"type": "string", "minLength": 1, "maxLength": 200},
+              "invariantSentence": {"type": "string", "minLength": 1, "maxLength": 2000},
+              "preservationRule": {"type": "string", "minLength": 1, "maxLength": 2000},
+              "transferDistance": {"enum": ["SAME_CONTEXT", "NEAR"]},
+              "changedElement": {"enum": ["topic", "place", "participants", "relationship", "situation"]},
+              "participants": {"type": "string", "minLength": 1, "maxLength": 200},
+              "situation": {"type": "string", "minLength": 1, "maxLength": 2000}
+            }
+          }
         }
       }
     }

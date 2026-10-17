@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://mujoong.invalid/contracts/schemas/guardrail-request.schema.json",
   "title": "제브 가드레일 검사 요청(내부 형식)",
-  "description": "출력 게이트(U13)가 GuardrailClient로 넘기는 내부 최소 형식(계약 요약 C-DS8 · C §3.1). 공급자 실제 요청(제브 공식 형식 model · state · questions, ai-io.md 10.12)은 어댑터 안에서만 이 형식에서 바꾼다. 검사 대상은 GPT-Live가 새로 생성한 후보 발화뿐이고 Luna 생성물 · 결과 문장은 보내지 않는다(FR2.6 · FR7.7). 아동 · 보호자 · 세션 · 기기 식별자와 키는 속성으로 두지 않는다(NFR3.1). [U8 편차 (U8-a)] [U13 편차 (U13-c)]",
+  "description": "출력 게이트(U13)가 GuardrailClient로 넘기는 내부 최소 형식(계약 요약 C-DS8 · C §3.1). 공급자 실제 요청(제브 공식 형식 model · state · questions, ai-io.md 10.13)은 어댑터 안에서만 이 형식에서 바꾼다. 검사 대상은 GPT-Live가 새로 생성한 후보 발화뿐이고 Luna 생성물 · 결과 문장은 보내지 않는다(FR2.6 · FR7.7). 아동 · 보호자 · 세션 · 기기 식별자와 키는 속성으로 두지 않는다(NFR3.1). [U8 편차 (U8-a)] [U13 편차 (U13-c)]",
   "type": "object",
   "additionalProperties": false,
   "required": ["source", "mode", "candidate", "policyVersion"],

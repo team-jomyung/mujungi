@@ -2,9 +2,12 @@
 // 응답 id · 응답 끝 사건이 없고, 음성은 delta(base64)이며, 지원 목록 밖 type에는 error{invalid_value}로 답하고, 응답 경계는 조각 사이 무음임을 본다.
 // 실공급자 · 실제 키는 쓰지 않는다. 시험이 만든 무작위 값만 쓴다.
 import { randomBytes } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
-import { synthesizeInputPayload } from "../../lib/frameCodec.mjs";
+import { sha256Hex, synthesizeInputPayload } from "../../lib/frameCodec.mjs";
 import { startFakeProvider } from "../../fake-provider/server.mjs";
 import {
   ACK_LEAD_MS,
@@ -12,6 +15,7 @@ import {
   SUPPORTED_TYPES,
   buildTurn,
   missingDelegationIdError,
+  outputPcmFor,
   responseCreateRefused,
   unsupportedTypeError,
 } from "../../fake-provider/scenarios.mjs";
@@ -196,6 +200,15 @@ describe("가짜 공급자 — 실호출 관측 선 형식(U11-a)", () => {
       );
     }
     await waitUntil(() => provider.records.some((entry) => entry.ev === "turn-emitted"));
+    await waitUntil(() => {
+      const turn = provider.records.find((entry) => entry.ev === "turn");
+      const speech = client.received.find((entry) => entry.message.type === "session.output_transcript.delta");
+      if (!turn || !speech) return false;
+      const bytes = client.received
+        .filter((entry) => entry.message.type === "session.output_audio.delta")
+        .reduce((sum, entry) => sum + Buffer.from(entry.message.delta, "base64").length, 0);
+      return bytes >= turn.outputBytes + (speech.message.start_ms + FILLER_MS) * 48;
+    });
 
     const ack = client.received.find((entry) => entry.message.type === "session.instructions.appended").message;
     const order = types(client).filter((type) => type !== "session.started");
@@ -209,4 +222,52 @@ describe("가짜 공급자 — 실호출 관측 선 형식(U11-a)", () => {
     expect(audioBytes).toBeGreaterThan(turn.outputBytes);
     expect(audioBytes - turn.outputBytes).toBe((firstSpeech.start_ms - 0 + FILLER_MS) * 48);
   });
+
+  it("일반 지시 채움은 실제700ms 계약과 같고 서버 수신 경계 뒤에는 정확한 새 PCM만 남는다", async () => {
+    const root = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
+    const timing = readFileSync(resolve(root, "contracts/timing.md"), "utf8");
+    const config = readFileSync(
+      resolve(root, "backend/realtime-activity/src/main/resources/application.yml"), "utf8",
+    );
+    const contractRows = [...timing.matchAll(/^\| `mujoong\.timing\.provider\.new-speech-margin` \| `(\d+)ms` \|/gm)];
+    const configRows = [...config.matchAll(/^      new-speech-margin: (\d+)ms\r?$/gm)];
+    expect(contractRows).toHaveLength(1);
+    expect(configRows).toHaveLength(1);
+    const marginMs = Number(contractRows[0][1]);
+    expect(marginMs).toBe(700);
+    expect(Number(configRows[0][1])).toBe(marginMs);
+    expect(FILLER_MS).toBe(marginMs);
+    expect(FILLER_MS).toBe(700);
+
+    const pcm = outputPcmFor(1, "normal");
+    const prefix = Buffer.alloc((ACK_LEAD_MS + marginMs) * 48);
+    const expected = Buffer.concat([prefix, pcm]);
+    const built = buildTurn({ connection: 1, turn: 1, kind: "normal", pendingAckEndMs: ACK_LEAD_MS });
+    const builtAudio = Buffer.concat(built.steps
+      .filter((step) => step.message.type === "session.output_audio.delta")
+      .map((step) => Buffer.from(step.message.delta, "base64")));
+    expect(builtAudio.equals(expected)).toBe(true);
+
+    const provider = await start({ turns: ["normal"], chunkBytes: 4800 });
+    const client = await session(provider);
+    client.ws.send(JSON.stringify({ type: "session.instructions.append", event_id: "baseline", delegation_id: null, content: "고정 문장" }));
+    await waitUntil(() => types(client).includes("session.instructions.appended"));
+    for (let i = 0; i < 3; i += 1) {
+      client.ws.send(JSON.stringify({ type: "session.input_audio.append", audio: synthesizeInputPayload(i).toString("base64") }));
+    }
+    const receivedAudio = () => Buffer.concat(client.received
+      .filter((entry) => entry.message.type === "session.output_audio.delta")
+      .map((entry) => Buffer.from(entry.message.delta, "base64")));
+    await waitUntil(() => provider.records.some((entry) => entry.ev === "turn-emitted"));
+    await waitUntil(() => receivedAudio().length >= expected.length);
+    const received = receivedAudio();
+    expect(received.length).toBe(expected.length);
+    expect(received.equals(expected)).toBe(true);
+    const speech = client.received.find((entry) => entry.message.type === "session.output_transcript.delta").message;
+    const accepted = received.subarray((speech.start_ms + marginMs) * 48);
+    const turn = provider.records.find((entry) => entry.ev === "turn");
+    expect(accepted.length).toBe(turn.outputBytes);
+    expect(sha256Hex(accepted)).toBe(turn.outputSha256);
+  });
+
 });
