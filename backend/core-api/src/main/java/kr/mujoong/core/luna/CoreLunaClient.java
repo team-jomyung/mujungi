@@ -77,7 +77,12 @@ public class CoreLunaClient {
      * @throws LunaException 실패(사유 코드 · 쓴 시도 수만)
      */
     public LunaResult call(LunaRequest request) {
+        return call(request, new LunaCallBudget());
+    }
+
+    public LunaResult call(LunaRequest request, LunaCallBudget budget) {
         Objects.requireNonNull(request, "request");
+        Objects.requireNonNull(budget, "budget").bindDeadline(request.deadline());
         SanitizedInput input;
         try {
             input = sanitizer.sanitize(request.input(), request.aliases());
@@ -108,6 +113,7 @@ public class CoreLunaClient {
                 audit(request, input.sentFieldNames(), notSent.get().name(), null, Duration.ZERO, 0);
                 throw new LunaException(notSent.get(), attempts);
             }
+            if (!budget.takeAttempt()) throw new LunaException(LunaFailureReason.SCHEMA_INVALID, attempts);
             attempts++;
             long started = clock.monotonicNanos();
             Attempt attempt = attempt(body, limit, request, schema);
@@ -119,11 +125,11 @@ public class CoreLunaClient {
                         schemaRetryUsed);
             }
             Duration wait;
-            if (retries && attempt.failure.isTransient() && !technicalRetryUsed) {
+            if (retries && attempt.failure.isTransient() && !technicalRetryUsed && budget.takeTechnicalRetry()) {
                 technicalRetryUsed = true;
                 Duration backoff = timing.retry().backoff();
                 wait = attempt.retryAfter.filter(retryAfter -> retryAfter.compareTo(backoff) > 0).orElse(backoff);
-            } else if (retries && attempt.failure == LunaFailureReason.SCHEMA_INVALID && !schemaRetryUsed) {
+            } else if (retries && attempt.failure == LunaFailureReason.SCHEMA_INVALID && !schemaRetryUsed && budget.takeCorrection()) {
                 schemaRetryUsed = true;
                 wait = Duration.ZERO;
             } else {

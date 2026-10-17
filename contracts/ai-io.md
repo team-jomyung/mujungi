@@ -264,6 +264,8 @@ U8(계약 · 버전 리소스)이 정한 공통 규칙이다. Luna · 제브 구
 
 ### 10.1 스키마 파일
 
+U15 씨앗 v2는 GENERATED/DUPLICATE/NONE의 배타적 출력 분기를 사용한다. 필드·중복 원장·재시도 공유 규칙은 [지식 그래프 내부 계약](knowledge-graph.md)을 따른다. outcome 없는 기존 2필드 출력은 공통 호출부 호환용이며 U15 생성 성공으로 수락하지 않는다.
+
 | 파일(`contracts/schemas/`) | 목적 | 호출 경로(단위) |
 |---|---|---|
 | `ai-judgment-request.schema.json` | 진행 중 판정 요청(J1 ~ J6, 공급자로 보내는 최소 필드) | realtime 판정 턴(U11) · `JudgeClient`(U9) |

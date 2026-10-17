@@ -41,6 +41,12 @@ public class ChildProfileService {
     private final TransactionTemplate transactions;
     private final JsonCodec json;
     private final MujoongClock clock;
+    private java.util.function.BiConsumer<UUID, UUID> knowledgeInitializer = (guardian, child) -> {};
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void connectKnowledge(kr.mujoong.core.knowledge.ChildKnowledgeService knowledge) {
+        knowledgeInitializer = knowledge::requestInitialization;
+    }
 
     public ChildProfileService(
             ChildRepository children,
@@ -86,7 +92,7 @@ public class ChildProfileService {
         Objects.requireNonNull(guardianId, "guardianId");
         Objects.requireNonNull(input, "input");
         try {
-            return transactions.execute(status -> {
+            ChildView registered = transactions.execute(status -> {
                 guardianLock.lockActive(guardianId);
                 if (children.findByGuardianId(guardianId).isPresent()) {
                     throw CoreApiException.of(ErrorCode.CHILD_EXISTS);
@@ -96,6 +102,8 @@ public class ChildProfileService {
                 children.saveAndFlush(child);
                 return view(child);
             });
+            knowledgeInitializer.accept(guardianId, registered.childId());
+            return registered;
         } catch (DataIntegrityViolationException e) {
             // 같은 보호자의 동시 등록: guardian_id 유일 제약이 하나만 남긴다
             if (SqlErrors.isUniqueViolation(e)) {

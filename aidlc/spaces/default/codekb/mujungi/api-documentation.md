@@ -1,5 +1,15 @@
 # API 문서 (API Documentation)
 
+> 최신 확인: 2026-10-16, HEAD 7e30ee8, U15 집중 분석. 아래 최신 절이 U15 관련 과거 설명보다 우선한다. 이전 분석 본문은 이력으로 보존하며 이번 범위 밖의 검증 주장은 shallow로 낮췄다.
+
+## U15 포트 현황 및 계약 차이
+
+현재 KnowledgeGraphLookup은 findRelatedBehaviorKeys(String)만 제공하며 공개 카탈로그 전용이다. U15 공개 HTTP 엔드포인트는 발견하지 않았다. C-DS11의 seedSummaries, skillContext, variantPlan, writeGeneratedSeed, deleteChild 및 초기화는 추가 설계·구현 대상이다. 아동별 메서드는 명시적 childId와 소유 관계 검증을 필요로 한다.
+
+ai-seed-output.schema.json은 skillName(1~80), invariantSentence(1~200), additionalProperties=false다. 구조 서명·허용값 및 정본 A §6.4 길이 규칙은 추가 확인 대상이다. DeletionCompleted.Counts는 기존 realtime 삭제 항목 4개이며 U15 때문에 임의 확장하지 않는다.
+
+## 이전 분석 기록 — 2026-10-15, 현재 범위 밖은 재검증하지 않음
+
 > 기준: 커밋 `72d7034`, 2026-10-15 전체 재스캔. 계약 정본은 `contracts/`이며, 이 문서는 코드에 실제로 있는 표면을 요약한다. 계약 소유 · 깨는 변경 규칙은 `contracts/README.md`, 편차는 `contracts/deviations.md`(67행)에 있다.
 
 ## 1. 보호자 REST (core-api, 계약 `contracts/parent-api.yaml` 34경로)

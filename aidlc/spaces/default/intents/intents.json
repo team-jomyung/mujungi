@@ -45,5 +45,13 @@
     "scope": "classic",
     "status": "complete",
     "request": "e4d25f62"
+  },
+  {
+    "uuid": "01a1436c-6d85-7808-95c2-2e4e0f665ea0",
+    "slug": "u15-knowledge-graph",
+    "dirName": "261016-u15-knowledge-graph",
+    "scope": "refactor",
+    "status": "complete",
+    "request": "4aec855a"
   }
 ]

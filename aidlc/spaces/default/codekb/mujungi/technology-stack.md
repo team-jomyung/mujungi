@@ -1,5 +1,13 @@
 # 기술 스택 (Technology Stack)
 
+> 최신 확인: 2026-10-16, HEAD 7e30ee8, U15 집중 분석. 아래 최신 절이 U15 관련 과거 설명보다 우선한다. 이전 분석 본문은 이력으로 보존하며 이번 범위 밖의 검증 주장은 shallow로 낮췄다.
+
+## U15 검증 기술 스택
+
+이번 파일 검증: Java 21, Gradle wrapper 8.14.3, Spring Boot 4.1.1, JaCoCo 0.8.14, ArchUnit 1.5.1, JSON Schema validator 3.0.6. Jackson 3는 JsonCodec 경계를 사용한다. Neo4j Java 드라이버와 Neo4j Testcontainers 의존은 아직 없다. Compose의 Neo4j 5.26.31-community 표기는 부분 확인이며 실제 U15 서버 통합 검증은 미실행이다.
+
+## 이전 분석 기록 — 2026-10-15, 현재 범위 밖은 재검증하지 않음
+
 > 기준: 커밋 `72d7034`, 2026-10-15 전체 재스캔. 판 번호는 `backend/gradle/libs.versions.toml` · `frontend/package.json` · `tools/package.json` · Compose 이미지 태그 기준. 라이브러리가 어디서 왜 쓰이는지(의존 관계)는 [dependencies.md](dependencies.md)를 본다.
 
 ## 언어 · 런타임

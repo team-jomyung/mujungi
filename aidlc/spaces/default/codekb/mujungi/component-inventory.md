@@ -1,5 +1,28 @@
 # 구성 요소 목록 (Component Inventory)
 
+> 최신 확인: 2026-10-16, HEAD 7e30ee8, U15 집중 분석. 아래 최신 절이 U15 관련 과거 설명보다 우선한다. 이전 분석 본문은 이력으로 보존하며 이번 범위 밖의 검증 주장은 shallow로 낮췄다.
+
+## U15 현재 검증 구성 요소
+
+아래 구성 요소만 이번 집중 분석의 deep 구성 요소로 기록한다. 이후 과거 목록의 [깊게] 표시는 당시 분석 수준이며 이번 검증을 뜻하지 않는다.
+
+### u15.knowledge-boundary
+PragmaticsKnowledge, KnowledgeGraphLookup, JDBC 정의 저장소. PostgreSQL이 권위 원장, 공개 그래프 조회는 선택적이다. 아동별 구현은 없음.
+
+### u15.luna-boundary
+CoreLunaClient, LunaPurpose, LunaResult, LunaInputSanitizer, LunaConfiguration. 키 없는 환경에서 빈이 없으며 SEED_GENERATION은 REQUEST_BOUNDED. 기술/스키마 재시도와 추가 내용 재생성 예산을 공유해야 한다.
+
+### u15.deletion-boundary
+DeletionCommander, DeletionParticipant, ResultDeletionParticipant, GuardianWriteLock. 순서·멱등성·예외 재시도·쓰기 경쟁 경계.
+
+### u15.seed-contract
+두 필드의 JSON 스키마와 core-api 자원 복사 경로. 구조 서명 확장은 미결정.
+
+### u15.build-verification
+core-api/contract-model 빌드, 버전 카탈로그, Java 규약, a-checks. U15 태그/커버리지 파일 추가 필요.
+
+## 이전 분석 기록 — 2026-10-15, 현재 범위 밖은 재검증하지 않음
+
 > 기준: 커밋 `72d7034`, 2026-10-15 전체 재스캔. 아래 H3 제목이 구성 요소 이름이며, [reverse-engineering-timestamp.md](reverse-engineering-timestamp.md)의 `analyzed.components`는 이 제목과 글자 그대로 같다.
 > 표시: **[깊게]** = 이번 스캔에서 파일을 읽어 확인, **[얕게]** = 목록 · 매핑 · 크기만 확인.
 

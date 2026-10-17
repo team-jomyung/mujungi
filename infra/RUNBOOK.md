@@ -234,7 +234,7 @@ aws ssm put-parameter --name /mujoong/demo/GHCR_PULL_USER --type String --value 
   `core-api.env` · `web.env`에 같은 값을 쓴다. `GOOGLE_OAUTH_CLIENT_ID`도 두 파일에 같은 이름으로 들어가고 client secret은 `core-api.env`에만 간다.
   바꾼 뒤에는 env를 다시 렌더하고 core-api · web을 재생성해야 반영된다.
 - GHCR 패키지를 공개로 두기로 정하면 `GHCR_PULL_TOKEN` · `GHCR_PULL_USER`를 만들지 않는다(배포가 로그인하지 않는다, J99).
-- `NEO4J_AUTH`는 Neo4j를 켜는 유닛이 만든다.
+- `NEO4J_AUTH`는 Neo4j와 U15 core-api가 함께 사용한다. render-env는 같은 기존 파라미터를 각각 neo4j.env와 core-api.env로 전달한다. 값이 없으면 core-api의 그래프 기능은 기본 경로로 동작하며 과거 그래프 삭제는 RETRY로 남는다. 공개 Compose 보간값으로 넣지 않는다.
 - **(U9) `OPENAI_API_KEY`를 넣기 전 R-F15 확인 — 기록 없이는 넣지 않는다.** 키를 넣는 순간 core-api · realtime의 Luna 어댑터가 켜지고
   실제 아동 대화 · 결과 자료가 공급자로 나갈 수 있다. 코드가 막지 않으므로(편차 U9-b) 이 확인이 유일한 방어선이다.
   - [ ] 공급자 약관 · 데이터 사용 조건(학습 사용 · 보존 · 저장 끔 `store=false` 적용 범위)을 확인했다.
@@ -687,3 +687,5 @@ KEEP=1 bash scripts/verify.sh         # 끝에 스택만 남긴다(생성 비밀
 
 - `docker compose ... config`는 `--quiet`로만 쓴다. 병합 결과가 필요하면 `--format json`을 umask 077 임시 파일로만 받아 처리한 뒤 지운다.
 - 이 스택의 로그 · `report.txt`를 이슈에 옮길 때도 0절 규칙을 따른다(사건 코드 · traceId · 건수만).
+
+수동 demo 스택이 같은 PC에서 실행 중이라 네트워크 대역이 겹치면 수동 스택을 내리지 말고, 비어 있는 /24 대역 두 개를 검증에 지정한다. 예: `MUJOONG_VERIFY_EDGE_PREFIX=172.30.210 MUJOONG_VERIFY_BACKEND_PREFIX=172.30.220 bash scripts/verify.sh --mode compose`. 기존 Docker 망과 겹치지 않는지 먼저 확인한다. 검증용 고정 IP와 PostgreSQL 허용 대역은 함께 바뀌며 backend의 internal 격리와 localhost 게시 포트는 유지한다. 변수를 생략하면 기존 기본 대역을 쓴다.

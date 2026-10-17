@@ -1,5 +1,20 @@
 # 코드 구조 (Code Structure)
 
+> 최신 확인: 2026-10-16, HEAD 7e30ee8, U15 집중 분석. 아래 최신 절이 U15 관련 과거 설명보다 우선한다. 이전 분석 본문은 이력으로 보존하며 이번 범위 밖의 검증 주장은 shallow로 낮췄다.
+
+## U15 집중 분석 구조
+
+- core/knowledge: 모델, JDBC 저장소, 서비스, 공개 그래프 포트.
+- core/luna: 선택적 외부 호출, 입력 정리, 목적별 스키마, 제한 재시도.
+- core/common/deletion 및 account/DeletionCommander: 멱등 삭제 참가자와 재시도 지휘.
+- core/result/check/ForbiddenDictionary: 금지문구 검사. 리포트 안내문 예외를 씨앗에 그대로 사용하지 않는다.
+- contracts/schemas/ai-seed-output.schema.json: 현재 두 필드만 허용. core-api processResources가 복사하므로 별도 정본을 만들지 않는다.
+- core V7 및 afterMigrate: 기존 마이그레이션 경계. U15 V8은 아직 없다.
+
+정확한 검증 파일 목록은 시점 문서에 한정한다. 아래 전체 트리는 이전 스캔의 보존 자료다.
+
+## 이전 분석 기록 — 2026-10-15, 현재 범위 밖은 재검증하지 않음
+
 > 기준: 커밋 `72d7034`, 2026-10-15 전체 재스캔. 구성 요소별 책임은 [component-inventory.md](component-inventory.md), 빌드 의존은 [dependencies.md](dependencies.md)를 본다.
 
 ## 저장소 최상위

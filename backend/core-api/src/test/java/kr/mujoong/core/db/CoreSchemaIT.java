@@ -87,6 +87,8 @@ class CoreSchemaIT {
 
     /** U5b V7가 더하는 연습 시작 준비 표 1개. */
     static final List<String> U5B_TABLES = List.of("core_practice_preparation");
+    static final List<String> U15_TABLES = List.of("core_graph_version", "core_child_graph_state",
+            "core_seed_generation_operation", "generated_seed", "core_graph_deleted_source", "core_graph_deleted_child");
 
     @BeforeAll
     static void startDatabase() {
@@ -99,7 +101,7 @@ class CoreSchemaIT {
             List<List<Object>> tables = query(owner,
                     "select tablename, tableowner from pg_tables where schemaname = 'core' order by tablename");
             assertThat(tables.stream().map(row -> (String) row.get(0)).toList()).containsExactlyElementsOf(
-                    java.util.stream.Stream.of(CORE_TABLES, U5A_TABLES, U6_TABLES, U7_TABLES, U5B_TABLES)
+                    java.util.stream.Stream.of(CORE_TABLES, U5A_TABLES, U6_TABLES, U7_TABLES, U5B_TABLES, U15_TABLES)
                             .flatMap(List::stream).sorted().toList());
             // 편차 (x): 표 소유는 마이그레이션 역할, 앱 역할은 쓰는 역할일 뿐이다
             assertThat(tables).allSatisfy(row -> assertThat(row.get(1)).isEqualTo("mujoong_owner"));
@@ -110,7 +112,7 @@ class CoreSchemaIT {
                     "select version, type, success from flyway.core_schema_history order by installed_rank");
             assertThat(history).containsExactly(List.of("1", "SQL", true), List.of("2", "SQL", true),
                     List.of("3", "SQL", true), List.of("4", "SQL", true), List.of("5", "SQL", true),
-                    List.of("6", "SQL", true), List.of("7", "SQL", true));
+                    List.of("6", "SQL", true), List.of("7", "SQL", true), List.of("8", "SQL", true));
         }
     }
 

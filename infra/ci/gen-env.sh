@@ -133,7 +133,8 @@ write core-api.env \
   "GOOGLE_OAUTH_CLIENT_SECRET=" \
   "GOOGLE_OAUTH_REDIRECT_URI=$origin/parent/login/callback" \
   "MUJOONG_SECURITY_ALLOWED_ORIGIN=$origin" \
-  "OPENAI_API_KEY="
+  "OPENAI_API_KEY=" \
+  "NEO4J_AUTH="
 write realtime.env \
   "SPRING_DATASOURCE_PASSWORD=$realtime_password" \
   "INTERNAL_SERVICE_TOKEN=$internal_token" \

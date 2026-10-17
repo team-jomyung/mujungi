@@ -1,5 +1,35 @@
 # 아키텍처 (Architecture)
 
+> 최신 확인: 2026-10-16, HEAD 7e30ee8, U15 집중 분석. 아래 최신 절이 U15 관련 과거 설명보다 우선한다. 이전 분석 본문은 이력으로 보존하며 이번 범위 밖의 검증 주장은 shallow로 낮췄다.
+
+## U15 현재 구조와 확장 경계
+
+PragmaticsKnowledge는 KnowledgeJdbcRepository, MujoongClock, KnowledgeProperties, 선택적 KnowledgeGraphLookup에 의존한다. 공개 행동키 조회만 존재한다. 그래프를 켰는데 어댑터가 없으면 초기화에 실패하며 꺼짐에서는 호출하지 않는다. Neo4j 어댑터·메모리 대역은 아직 없다. CoreLunaClient는 실제 존재하며 OPENAI_API_KEY가 있을 때만 구성된다. 아래 과거 기록의 텍스트 AI 미연결 설명을 현재 Luna 구현에 적용하지 않는다.
+
+삭제는 DeletionCommander가 참가자를 순서대로 실행하고 예외를 재시도한다. 결과 삭제가 70이므로 제안된 graph 참가자 80 이전에 결과를 참조하는 restrictive FK가 삭제를 막지 않도록 설계해야 한다. 조회 실패의 빈 값과 삭제 실패의 재시도는 서로 다른 정책이다. 생성/삭제 경쟁은 GuardianWriteLock과 삭제 상태 재검증으로 해결할 설계 대상이다.
+
+## Interaction Diagrams
+
+```mermaid
+sequenceDiagram
+    participant Caller
+    participant Knowledge as PragmaticsKnowledge
+    participant DB as KnowledgeJdbcRepository
+    participant Graph as KnowledgeGraphLookup
+    Caller->>Knowledge: 행동 정의 / 관련 행동키 요청
+    Knowledge->>DB: 권위 정의 조회
+    DB-->>Knowledge: 정의와 버전
+    opt 그래프 활성화
+        Knowledge->>Graph: findRelatedBehaviorKeys
+        Graph-->>Knowledge: 공개 행동키
+    end
+    Knowledge-->>Caller: 기존 지식 응답
+```
+
+텍스트 대체: 호출자는 PragmaticsKnowledge를 사용한다. 정의는 PostgreSQL에서 조회하고 그래프가 활성화된 경우에만 선택적 공개 행동키 포트를 호출한다. 이 그림은 현재 동작이며 U15 아동별 생성·저장은 구현 전이다.
+
+## 이전 분석 기록 — 2026-10-15, 현재 범위 밖은 재검증하지 않음
+
 > 기준: 커밋 `72d7034`, 2026-10-15 전체 재스캔. 구성 요소 목록 · 책임은 [component-inventory.md](component-inventory.md), 엔드포인트 목록은 [api-documentation.md](api-documentation.md)가 정본이다. 이 문서는 구조 · 흐름 · 결정만 적는다.
 
 ## Architecture Analysis
