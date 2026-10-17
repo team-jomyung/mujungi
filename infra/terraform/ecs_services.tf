@@ -99,3 +99,37 @@ resource "aws_ecs_service" "nginx" {
 
   depends_on = [aws_ecs_service.web]
 }
+
+# ──────────── migrate (일회성 태스크 — 서비스 없음) ────────────
+resource "aws_ecs_task_definition" "migrate" {
+  family                   = "mujoong-migrate"
+  network_mode             = "bridge"
+  requires_compatibilities = ["EC2"]
+  execution_role_arn       = aws_iam_role.ecs_execution.arn
+
+  container_definitions = jsonencode([{
+    name      = "migrate"
+    image     = "${local.ecr["migrate"]}:${local.migrate_image_tag}"
+    essential = true
+    memory    = 1024
+
+    environment = [{
+      name  = "MUJOONG_MIGRATE_JDBC_URL"
+      value = "jdbc:postgresql://${aws_db_instance.main.address}:5432/${aws_db_instance.main.db_name}?sslmode=require"
+    }]
+
+    secrets = [{
+      name      = "DB_OWNER_PASSWORD"
+      valueFrom = "arn:aws:ssm:ap-northeast-2:${data.aws_caller_identity.current.account_id}:parameter/mujoong/db/DB_OWNER_PASSWORD"
+    }]
+
+    logConfiguration = {
+      logDriver = "awslogs"
+      options = {
+        awslogs-group         = aws_cloudwatch_log_group.app["migrate"].name
+        awslogs-region        = "ap-northeast-2"
+        awslogs-stream-prefix = "migrate"
+      }
+    }
+  }])
+}
