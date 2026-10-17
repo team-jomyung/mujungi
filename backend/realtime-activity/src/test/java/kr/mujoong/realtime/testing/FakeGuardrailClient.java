@@ -26,10 +26,21 @@ public final class FakeGuardrailClient implements GuardrailClient {
     private final List<Call> calls = new ArrayList<>();
     private boolean available = true;
     private RuntimeException throwOnCheck;
+    private final GuardrailMode mode;
+
+    /** 실제 모드(REAL 표시)의 대역. */
+    public FakeGuardrailClient() {
+        this(GuardrailMode.REAL);
+    }
+
+    /** 앱 문맥에 끼울 때는 앱의 모드(test 프로필 기본 STUB)와 같은 모드를 표시한다. */
+    public FakeGuardrailClient(GuardrailMode mode) {
+        this.mode = mode;
+    }
 
     @Override
     public GuardrailMode mode() {
-        return GuardrailMode.REAL;
+        return mode;
     }
 
     @Override
