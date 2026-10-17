@@ -202,6 +202,22 @@ public interface PracticeSessionExtension {
         /** U11 BR8.1: 역할 전환 안내의 자리(지금은 규칙만 있고 동작은 없다). */
         default boolean announceRoleSwitch(String toRole) { return false; }
 
+        /**
+         * U12 D6 · BR5.6: GPT-Live가 만드는 모든 역할 발화(친구 되묻기 · 재안내 · 코치 도움 · 생성형 알림 · 변형 제안)를 내는 단 하나의 능력.
+         * 실행부가 한 번에 ① 생성형 슬롯을 열고 ② 연습 출력 보류를 풀고 ③ 출력 세대를 올리고 ④ 지시를 {@code replayable=true}로 보내며(제브 첫
+         * 막힘 뒤 재지시가 같은 역할 지시문을 다시 보낸다) ⑤ 송신 실패 · 새 말 미시작이면 기존 실패 길로 알린다. 기본은 거짓(낼 수 없음)이고,
+         * 호출한 확장은 거짓을 '그 발화는 나가지 않았다'로 받아 연습을 멈추지 않고 이어 간다.
+         *
+         * <p>슬롯은 어떤 원인으로 닫혀도 확장에 종료 사실({@link PlaybackFact})을 정확히 한 번 보내고, 제브의 두 번째 막힘은
+         * {@link ExtensionEvent.Kind#GUARDRAIL_BLOCKED}로 알린다. 지시문은 서버가 만든 템플릿 문장이며 아이 발화 · 모델 출력 · 판정 라벨 · 확률 ·
+         * 판정 기준을 담지 않는다(BR3.7, R-F14).
+         *
+         * @param correlationId 이 발화의 식별자(종료 사실 · 막힘 사건이 같은 값으로 돌아온다)
+         * @param role 말하는 역할: {@code PEER} 또는 {@code COACH}(제브 모드 PRACTICE_PEER · PRACTICE_COACH로 대응)
+         * @param instructionText 역할 지시문 템플릿 문장(공급자 지시 길이 상한 안)
+         */
+        default boolean speakGenerated(UUID correlationId, String role, String instructionText) { return false; }
+
         /** U11 BR8.1: '생각 중' 표시를 유지하거나(true) 풀도록(false) 요청한다. ACTIVE에서만 받는다. */
         default boolean setThinking(boolean on) { return false; }
     }
@@ -218,6 +234,12 @@ public interface PracticeSessionExtension {
         }
         public PlaybackFact(kr.mujoong.realtime.voice.PracticeSpeech speech,
                 kr.mujoong.realtime.practice.PracticePorts.Playback status, String text) { this(speech, status, text, null); }
+        /** U12: 아직 끝나지 않은 시작 사실(STARTED). 종료 사실이 아니다. */
+        public boolean started() { return status == kr.mujoong.realtime.practice.PracticePorts.Playback.STARTED; }
+        /** U12: 끝까지 재생됐다(COMPLETED). 새 연습 흐름이 레거시 패키지 타입을 직접 보지 않게 하는 읽기 도우미다. */
+        public boolean played() { return status == kr.mujoong.realtime.practice.PracticePorts.Playback.COMPLETED; }
+        /** U12: 아이가 끼어들어 끊겼다(INTERRUPTED). */
+        public boolean interrupted() { return status == kr.mujoong.realtime.practice.PracticePorts.Playback.INTERRUPTED; }
         @Override public String toString() { return "PlaybackFact[status=" + status + "]"; }
     }
 

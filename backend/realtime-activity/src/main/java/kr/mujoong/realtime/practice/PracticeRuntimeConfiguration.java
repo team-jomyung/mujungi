@@ -1,6 +1,7 @@
 package kr.mujoong.realtime.practice;
 
 import java.io.IOException;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -10,6 +11,11 @@ import kr.mujoong.contract.time.MujoongClock;
 import kr.mujoong.contract.time.TimerDriver;
 import kr.mujoong.realtime.internalhttp.InternalHttpClient;
 import kr.mujoong.realtime.observability.EventLogger;
+import kr.mujoong.realtime.practiceflow.FlowRecorder;
+import kr.mujoong.realtime.practiceflow.PracticeConversation;
+import kr.mujoong.realtime.practiceflow.PracticeFlowRouter;
+import kr.mujoong.realtime.practiceflow.PracticeFlowSettings;
+import kr.mujoong.realtime.practiceflow.PracticeScriptRequester;
 import kr.mujoong.realtime.session.ActivitySessionRepository;
 import kr.mujoong.realtime.session.PracticeSessionExtension;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
@@ -56,11 +62,21 @@ public class PracticeRuntimeConfiguration {
     @Bean @ConditionalOnMissingBean(PracticeSessionExtension.Factory.class)
     PracticeSessionExtension.Factory practiceFactory(ActivitySessionRepository sessions, PracticeRepository repository,
             MujoongClock clock, Resources resources, PracticeProperties settings, PracticePorts.ScenarioPort scenarios,
-            EvaluationProvider evaluations, CueProvider cues, EventLogger events) {
-        return session -> new RuntimePracticeExtension(session, sessions.find(session).orElseThrow().guardianId(),
-                repository, clock, resources.clock, resources.timers, resources.calls, resources.finalizations,
-                settings, scenarios, evaluations, cues,
-                failure -> events.appError(EventLog.Component.SESSION_LIFECYCLE, failure));
+            EvaluationProvider evaluations, CueProvider cues, EventLogger events, InternalHttpClient client,
+            PracticeFlowSettings flowSettings) {
+        // U12 D1: Factory 시그니처는 그대로 두고 세션마다 얇은 라우터를 만든다. 라우터가 onActive에서 대본 scriptVersion을 보고 새 흐름 또는
+        // 이 레거시 확장 한쪽에 위임한다. 다음 목표 대본 요청의 제한 시간은 레거시와 같은 상황 생성 예산(scenarioBudget)을 쓴다(안쪽 재시도 없음)
+        PracticeScriptRequester flowScripts = new PracticeScriptRequester(client, resources.calls, settings.scenarioBudget());
+        return session -> {
+            UUID guardian = sessions.find(session).orElseThrow().guardianId();
+            RuntimePracticeExtension legacy = new RuntimePracticeExtension(session, guardian,
+                    repository, clock, resources.clock, resources.timers, resources.calls, resources.finalizations,
+                    settings, scenarios, evaluations, cues,
+                    failure -> events.appError(EventLog.Component.SESSION_LIFECYCLE, failure));
+            return new PracticeFlowRouter(legacy, () -> new PracticeConversation(session, guardian, clock, flowSettings,
+                    flowScripts, FlowRecorder.NONE,
+                    failure -> events.appError(EventLog.Component.SESSION_LIFECYCLE, failure)));
+        };
     }
     static final class Resources implements AutoCloseable {
         final EvaluationClock clock;

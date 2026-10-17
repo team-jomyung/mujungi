@@ -14,16 +14,19 @@ import kr.mujoong.realtime.config.RealtimeProperties;
  * @param noResponseWait 입력을 기다리는 단계에서 첫 재안내까지의 무응답 대기(AC1.9.1)
  * @param focusMax 집중 연습 상한(AC1.5.4)
  * @param goalActiveLimit 목표 하나의 ACTIVE 상한(FR4.5)
+ * @param slotGuard 슬롯 안전 시계 길이(§3.2 {@code slot-guard-<correlationId>}). 실행부 재생 만료({@code SessionExecutor.Settings.playbackExpiry})와
+ *     같은 설정 키 {@code mujoong.timing.device.output-queue-max}에서 읽는다
  * @param retryMax 장면당 다시 해 보기 최대 횟수
  * @param reexplainMax 장면당 상황 다시 설명 최대 횟수
  */
-public record PracticeFlowSettings(Duration noResponseWait, Duration focusMax, Duration goalActiveLimit, int retryMax,
-        int reexplainMax) {
+public record PracticeFlowSettings(Duration noResponseWait, Duration focusMax, Duration goalActiveLimit, Duration slotGuard,
+        int retryMax, int reexplainMax) {
 
     public PracticeFlowSettings {
         positive(noResponseWait, "mujoong.timing.conversation.no-response-wait");
         positive(focusMax, "mujoong.timing.conversation.focus-max");
         positive(goalActiveLimit, "mujoong.timing.conversation.goal-active-limit");
+        positive(slotGuard, "mujoong.timing.device.output-queue-max");
         if (retryMax < 0) {
             throw new IllegalArgumentException("설정 키는 0 이상이어야 한다: mujoong.practice-flow.retry-max");
         }
@@ -37,7 +40,8 @@ public record PracticeFlowSettings(Duration noResponseWait, Duration focusMax, D
         Objects.requireNonNull(properties, "properties");
         RealtimeProperties.ConversationTiming conversation = properties.timing().conversation();
         return new PracticeFlowSettings(conversation.noResponseWait(), conversation.focusMax(),
-                conversation.goalActiveLimit(), properties.practiceFlow().retryMax(),
+                conversation.goalActiveLimit(), properties.timing().device().outputQueueMax(),
+                properties.practiceFlow().retryMax(),
                 properties.practiceFlow().reexplainMax());
     }
 

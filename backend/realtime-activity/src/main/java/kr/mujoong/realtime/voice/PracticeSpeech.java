@@ -18,6 +18,14 @@ public record PracticeSpeech(UUID correlationId, UUID scenarioId, long generatio
             throw new IllegalArgumentException("연습 출력 형식 오류");
         }
     }
+    /**
+     * U12: 대본의 승인 문장(상황 · 기회 문장 · 상황 다시 설명) 승인 발화 만들기. 새 연습 흐름이 레거시 {@code practice} 패키지의
+     * {@link OutputKind}를 직접 가리키지 않게 하는 얇은 공장이다(BR10.2). 재생 증거 표지는 SCENARIO다.
+     */
+    public static PracticeSpeech scenario(UUID correlationId, UUID scenarioId, long generation, String partnerRole, String text) {
+        return new PracticeSpeech(correlationId, scenarioId, generation, OutputKind.SCENARIO, partnerRole, text);
+    }
+
     public boolean matches(String actual) {
         return sameWithoutAsciiWhitespace(text, actual);
     }

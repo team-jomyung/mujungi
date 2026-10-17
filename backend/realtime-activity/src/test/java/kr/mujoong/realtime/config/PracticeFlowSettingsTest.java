@@ -35,6 +35,7 @@ class PracticeFlowSettingsTest {
         assertThat(settings.noResponseWait()).isEqualTo(properties.timing().conversation().noResponseWait());
         assertThat(settings.focusMax()).isEqualTo(properties.timing().conversation().focusMax());
         assertThat(settings.goalActiveLimit()).isEqualTo(properties.timing().conversation().goalActiveLimit());
+        assertThat(settings.slotGuard()).as("슬롯 안전 시계는 실행부 재생 만료와 같은 키").isEqualTo(properties.timing().device().outputQueueMax());
         assertThat(settings.noResponseWait()).as("timing.md 13절 기본값").isEqualTo(Duration.ofSeconds(10));
         assertThat(settings.focusMax()).isEqualTo(Duration.ofSeconds(90));
         assertThat(settings.goalActiveLimit()).isEqualTo(Duration.ofMinutes(10));
@@ -63,16 +64,18 @@ class PracticeFlowSettingsTest {
     @Test
     void theSettingsObjectRejectsNonPositiveTimesAndNegativeCounts() {
         Duration ten = Duration.ofSeconds(10);
-        assertThatThrownBy(() -> new PracticeFlowSettings(Duration.ZERO, ten, ten, 2, 1))
+        assertThatThrownBy(() -> new PracticeFlowSettings(Duration.ZERO, ten, ten, ten, 2, 1))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("mujoong.timing.conversation.no-response-wait");
-        assertThatThrownBy(() -> new PracticeFlowSettings(ten, ten.negated(), ten, 2, 1))
+        assertThatThrownBy(() -> new PracticeFlowSettings(ten, ten.negated(), ten, ten, 2, 1))
                 .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("focus-max");
-        assertThatThrownBy(() -> new PracticeFlowSettings(ten, ten, null, 2, 1))
+        assertThatThrownBy(() -> new PracticeFlowSettings(ten, ten, null, ten, 2, 1))
                 .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("goal-active-limit");
-        assertThatThrownBy(() -> new PracticeFlowSettings(ten, ten, ten, -1, 1))
+        assertThatThrownBy(() -> new PracticeFlowSettings(ten, ten, ten, Duration.ZERO, 2, 1))
+                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("output-queue-max");
+        assertThatThrownBy(() -> new PracticeFlowSettings(ten, ten, ten, ten, -1, 1))
                 .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("retry-max");
-        assertThatThrownBy(() -> new PracticeFlowSettings(ten, ten, ten, 2, -1))
+        assertThatThrownBy(() -> new PracticeFlowSettings(ten, ten, ten, ten, 2, -1))
                 .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("reexplain-max");
     }
 
