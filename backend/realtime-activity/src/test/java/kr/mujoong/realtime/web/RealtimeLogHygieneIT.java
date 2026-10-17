@@ -370,7 +370,7 @@ class RealtimeLogHygieneIT {
                 HexFormat.of().formatHex(tokenHash), Base64.getUrlEncoder().withoutPadding().encodeToString(tokenHash),
                 CHILD_TEXT, AI_TEXT, FORBIDDEN_TEXT, MARKER,
                 Base64.getEncoder().encodeToString(markedPcm()).substring(0, 32)));
-        values.add(env.app.context().getEnvironment().getRequiredProperty(RealtimeStartupChecks.PROVIDER_API_KEY));
+        values.add(env.app.context().getEnvironment().getRequiredProperty(RealtimeStartupChecks.OPENAI_API_KEY));
         return values;
     }
 

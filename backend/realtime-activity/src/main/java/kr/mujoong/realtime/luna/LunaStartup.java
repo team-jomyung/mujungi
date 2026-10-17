@@ -10,7 +10,7 @@ import kr.mujoong.realtime.startup.RealtimeStartupChecks;
 import kr.mujoong.realtime.startup.StartupFailureLine;
 
 /**
- * Luna 기동 확인 — realtime (U9 W1 · BR1.3 · BR1.4). 키 유무와 관계없이 기동 때 한 번 돈다: {@code mujoong.luna.base-url}을 활성 프로필의
+ * Luna 기동 확인 — realtime (U9 W1 · BR1.3 · BR1.4). 키 · 스위치 유무와 관계없이 기동 때 한 번 돈다: {@code mujoong.luna.base-url}을 활성 프로필의
  * 주소 규칙으로 확인하고(어기면 {@code MUJOONG_STARTUP_REJECTED}로 기동 거부), {@code LUNA_STARTUP} 한 줄로 켜짐 · 꺼짐을 남긴다. 키가 없는 것은
  * 거부 사유가 아니다. 키 값은 남기지 않는다.
  */
@@ -24,8 +24,10 @@ public final class LunaStartup {
 
     /**
      * @param keyPresent env 키가 있는가({@link LunaKeyPresentCondition#isPresent})
+     * @param switchOn 스위치 {@code mujoong.luna.enabled}가 켜져 있는가(BR12.3)
      */
-    public LunaStartup(LunaProperties properties, boolean keyPresent, EventLogger events, String... activeProfiles) {
+    public LunaStartup(LunaProperties properties, boolean keyPresent, boolean switchOn, EventLogger events,
+            String... activeProfiles) {
         Objects.requireNonNull(properties, "properties");
         Objects.requireNonNull(events, "events");
         this.mode = LunaHosts.modeFor(activeProfiles);
@@ -35,9 +37,11 @@ public final class LunaStartup {
             StartupFailureLine.print(ERROR_KIND, reason);
             throw new RealtimeStartupChecks.StartupRejectedException(reason);
         }
-        this.enabled = keyPresent;
+        this.enabled = keyPresent && switchOn;
+        // 키가 없으면 스위치와 관계없이 DISABLED_NO_KEY, 키가 있고 스위치가 꺼졌으면 DISABLED_SWITCH_OFF(BR12.3)
+        String state = !keyPresent ? "DISABLED_NO_KEY" : switchOn ? "ENABLED" : "DISABLED_SWITCH_OFF";
         events.log(EventCode.LUNA_STARTUP, EventLog.Component.REALTIME_LUNA_CLIENT, null,
-                entry -> entry.attr(AttrKey.LUNA_STATE, keyPresent ? "ENABLED" : "DISABLED_NO_KEY"));
+                entry -> entry.attr(AttrKey.LUNA_STATE, state));
     }
 
     /** 주소 규칙 모드(보내기 직전 확인에도 같은 모드를 쓴다). */

@@ -51,7 +51,7 @@ import org.springframework.core.io.ClassPathResource;
 /**
  * GPT-Live 격리 실호출 확인 도구 (U11 FR9.1 · FR9.2 · BR9.1 · BR9.2 · 기능 설계 W7, U9-c와 같은 방식).
  *
- * <p>사람이 env {@code PROVIDER_API_KEY}를 넣고 {@code ./gradlew :realtime-activity:gptLiveTest}로만 부른다. 기본 test · check · CI ·
+ * <p>사람이 env {@code OPENAI_API_KEY}를 넣고 {@code ./gradlew :realtime-activity:gptLiveTest}로만 부른다. 기본 test · check · CI ·
  * verify.sh에서는 빠진다(build-logic 고정 제외 + 루트 {@code verifyGptLiveIsolation}). 키가 없으면 연결하지 않고
  * {@code SKIPPED_NO_KEY}를 보고하며 이것은 통과가 아니다.
  *
@@ -301,9 +301,9 @@ final class GptLiveProbe {
 
     /** 키가 없을 때의 결과(모든 항목 SKIPPED_NO_KEY, 통과 아님). */
     static Result skipped() {
-        Row host = new Row("공급자 주소 규칙", "실호출 안 함(env PROVIDER_API_KEY 없음)", Verdict.SKIPPED_NO_KEY);
-        return new Result(host, notRun(Mode.APP, "실호출 안 함(env PROVIDER_API_KEY 없음)", Outcome.SKIPPED_NO_KEY),
-                notRun(Mode.KIT, "실호출 안 함(env PROVIDER_API_KEY 없음)", Outcome.SKIPPED_NO_KEY));
+        Row host = new Row("공급자 주소 규칙", "실호출 안 함(env OPENAI_API_KEY 없음)", Verdict.SKIPPED_NO_KEY);
+        return new Result(host, notRun(Mode.APP, "실호출 안 함(env OPENAI_API_KEY 없음)", Outcome.SKIPPED_NO_KEY),
+                notRun(Mode.KIT, "실호출 안 함(env OPENAI_API_KEY 없음)", Outcome.SKIPPED_NO_KEY));
     }
 
     private static Attempt notRun(Mode mode, String why, Outcome outcome) {

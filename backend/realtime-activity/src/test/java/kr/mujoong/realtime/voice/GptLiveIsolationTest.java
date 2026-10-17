@@ -58,7 +58,7 @@ class GptLiveIsolationTest {
     void buildRulesKeepGptLiveOutOfDefaultTestAndCheck() throws IOException {
         String conventions = read("backend/build-logic/src/main/kotlin/mujoong.java-conventions.gradle.kts");
         assertThat(conventions).contains("val gptLiveTag = \"gpt-live\"", "excludeTags(gptLiveTag)",
-                "environment.remove(\"PROVIDER_API_KEY\")");
+                "environment.remove(\"OPENAI_API_KEY\")");
 
         String realtime = read("backend/realtime-activity/build.gradle.kts");
         assertThat(realtime).contains("tasks.register<Test>(\"gptLiveTest\")", "setIncludeTags(setOf(gptLiveTag))",
@@ -69,13 +69,13 @@ class GptLiveIsolationTest {
         String root = read("backend/build.gradle.kts");
         assertThat(root).contains("tasks.register(\"verifyGptLiveIsolation\")", "dependsOn(verifyGptLiveIsolation)",
                 "it.name == \"gptLiveTest\"", "gptLiveTag !in testOptions.excludeTags",
-                "test.environment.containsKey(\"PROVIDER_API_KEY\")", "liveOptions.includeTags != setOf(gptLiveTag)");
+                "test.environment.containsKey(\"OPENAI_API_KEY\")", "liveOptions.includeTags != setOf(gptLiveTag)");
     }
 
     @Test
     void defaultTestJvmDoesNotSeeTheProviderKey() {
         assumeTrue("true".equals(System.getProperty("mujoong.test.liveIsolated")), "Gradle 기본 test 작업 밖에서 돈다");
-        assertThat(System.getenv(ProviderClient.API_KEY)).as("기본 test JVM에는 PROVIDER_API_KEY가 없다").isNull();
+        assertThat(System.getenv(ProviderClient.API_KEY)).as("기본 test JVM에는 OPENAI_API_KEY가 없다").isNull();
     }
 
     @Test

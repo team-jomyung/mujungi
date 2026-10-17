@@ -48,14 +48,14 @@ tasks.bootJar {
 }
 
 // ---- GPT-Live 격리 실호출 (U11 FR9.1 · BR9.1 · 기능 설계 W7, lunaLiveTest와 같은 방식) ----
-// @Tag("gpt-live") 시험만 돈다. 사람이 env PROVIDER_API_KEY를 넣고 ./gradlew :realtime-activity:gptLiveTest로 직접 돌린다.
+// @Tag("gpt-live") 시험만 돈다. 사람이 env OPENAI_API_KEY를 넣고 ./gradlew :realtime-activity:gptLiveTest로 직접 돌린다.
 // 기본 test는 build-logic 규약이 gpt-live를 고정 제외하고 키를 지운다. 이 작업은 check · build에 물리지 않고,
 // 루트 verifyGptLiveIsolation(check가 의존)이 check 작업 그래프에 이 작업이 없음을 확인한다.
 val gptLiveTag = "gpt-live"
 val liveTestSourceSet = sourceSets["test"]
 tasks.register<Test>("gptLiveTest") {
     group = "verification"
-    description = "GPT-Live 격리 실호출(@Tag(\"gpt-live\"), 사람이 env PROVIDER_API_KEY를 넣고 돌림). 키가 없으면 SKIPPED_NO_KEY로 끝난다."
+    description = "GPT-Live 격리 실호출(@Tag(\"gpt-live\"), 사람이 env OPENAI_API_KEY를 넣고 돌림). 키가 없으면 SKIPPED_NO_KEY로 끝난다."
     testClassesDirs = liveTestSourceSet.output.classesDirs
     classpath = liveTestSourceSet.runtimeClasspath
     options {

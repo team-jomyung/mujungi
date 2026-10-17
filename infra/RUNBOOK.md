@@ -205,9 +205,10 @@ for name in POSTGRES_PASSWORD DB_OWNER_PASSWORD DB_CORE_PASSWORD DB_REALTIME_PAS
   gen && aws ssm put-parameter --name "/mujoong/demo/$name" --type SecureString --value "file://$tmp" \
     --tags Key=Project,Value=mujoong Key=Environment,Value=demo >/dev/null && echo "put $name"
 done
-# 사람이 가진 값(입력이 화면에 보이지 않게): 공급자 키, (GHCR 패키지가 비공개면) 읽기 전용 토큰(read:packages, 만료 90일 이하)
-read -r -s -p 'PROVIDER_API_KEY: ' v && printf '%s' "$v" >"$tmp" && unset v && echo && \
-  aws ssm put-parameter --name /mujoong/demo/PROVIDER_API_KEY --type SecureString --value "file://$tmp" >/dev/null
+# 사람이 가진 값(입력이 화면에 보이지 않게): 공급자 키(GPT-Live 음성 중계 · Luna 판정 공용 OPENAI_API_KEY, 아래 R-F15 확인 기록을 먼저 남긴다),
+# (GHCR 패키지가 비공개면) 읽기 전용 토큰(read:packages, 만료 90일 이하)
+read -r -s -p 'OPENAI_API_KEY: ' v && printf '%s' "$v" >"$tmp" && unset v && echo && \
+  aws ssm put-parameter --name /mujoong/demo/OPENAI_API_KEY --type SecureString --value "file://$tmp" >/dev/null
 read -r -s -p 'GHCR_PULL_TOKEN: ' v && printf '%s' "$v" >"$tmp" && unset v && echo && \
   aws ssm put-parameter --name /mujoong/demo/GHCR_PULL_TOKEN --type SecureString --value "file://$tmp" >/dev/null
 rm -f "$tmp"; unset tmp
@@ -235,11 +236,14 @@ aws ssm put-parameter --name /mujoong/demo/GHCR_PULL_USER --type String --value 
   바꾼 뒤에는 env를 다시 렌더하고 core-api · web을 재생성해야 반영된다.
 - GHCR 패키지를 공개로 두기로 정하면 `GHCR_PULL_TOKEN` · `GHCR_PULL_USER`를 만들지 않는다(배포가 로그인하지 않는다, J99).
 - `NEO4J_AUTH`는 Neo4j를 켜는 유닛이 만든다.
-- **(U9) `OPENAI_API_KEY`를 넣기 전 R-F15 확인 — 기록 없이는 넣지 않는다.** 키를 넣는 순간 core-api · realtime의 Luna 어댑터가 켜지고
-  실제 아동 대화 · 결과 자료가 공급자로 나갈 수 있다. 코드가 막지 않으므로(편차 U9-b) 이 확인이 유일한 방어선이다.
+- **(U9 · U11) `OPENAI_API_KEY`를 넣기 전 R-F15 확인 — 기록 없이는 넣지 않는다.** 확인 대상은 'Luna 판정(core · realtime) · GPT-Live 음성 중계'다.
+  키 하나(`OPENAI_API_KEY`)로 GPT-Live 음성 중계(아이 음성이 공급자로 나감, demo realtime은 이 키가 없으면 기동을 거부한다)와
+  Luna 판정(core-api는 키만으로, realtime은 키 + 스위치 `mujoong.luna.enabled=true`로 켜짐)이 모두 열리고, 실제 아동 대화 · 결과 자료가 공급자로
+  나갈 수 있다. 코드가 막지 않으므로(편차 U9-b) 이 확인이 유일한 방어선이다.
   - [ ] 공급자 약관 · 데이터 사용 조건(학습 사용 · 보존 · 저장 끔 `store=false` 적용 범위)을 확인했다.
   - [ ] 공급자의 개인정보 처리 조건(처리 위치 · 하위 처리자 · 삭제)을 확인했다.
   - [ ] 아동 데이터의 외부 모델 전달이 보호자 동의 범위 안인지 확인했다(동의 문구 · 판).
+  - [ ] 확인 대상이 Luna 판정(core · realtime)과 GPT-Live 음성 중계 둘 다임을 기록에 적었다(U11 BR12.4).
   - [ ] 아래 확인 기록 표에 한 줄을 남겼다(키 값 · 계정 정보는 적지 않는다, R-F3).
 
   | 확인자 | 확인 날짜(UTC) | 확인한 약관 · 처리 조건 판(또는 문서 날짜) | 환경 | 비고 |
@@ -252,11 +256,22 @@ aws ssm put-parameter --name /mujoong/demo/GHCR_PULL_USER --type String --value 
   1. 위 확인 기록 표에 한 줄을 남긴다. 기록이 없으면 넣지 않는다.
   2. 아래 명령으로 Parameter Store에 `OPENAI_API_KEY`를 넣고, 같은 SHA로 `DEPLOY`를 다시 실행한다(12절 회전 표와 같은 길: core-api · realtime이
      다시 만들어진다).
-  3. 기동 로그에서 `LUNA_STARTUP` `lunaState=ENABLED`를 확인한다(8.4).
-  - **롤백:** Parameter Store의 `OPENAI_API_KEY`를 비우고(빈 값 또는 삭제) 같은 SHA로 `DEPLOY`를 다시 실행한 뒤 `LUNA_STARTUP`
-    `lunaState=DISABLED_NO_KEY`를 확인한다. 어댑터가 꺼지면 지금과 같은 실패 경로라 데이터 변경 · 마이그레이션 되돌림이 없다. 재기동만으로는
-    컨테이너 환경이 갱신되지 않으므로 쓰지 않는다.
-- (선택, U8) Luna 키 `OPENAI_API_KEY`(core-api · realtime이 받음)와 제브 키 `JEV_API_KEY`(realtime만 받음). 넣지 않으면 렌더러가 빈 변수로 두고
+  3. 기동 로그에서 core-api의 `LUNA_STARTUP` `lunaState=ENABLED`를 확인한다(8.4). realtime은 스위치가 꺼져 있으면 키가 있어도
+     `lunaState=DISABLED_SWITCH_OFF`다.
+  4. realtime Luna를 켜려면 1번 확인 기록 뒤에 demo 설정의 `mujoong.luna.enabled`를 `true`로 바꾸고(기본 `false`) 배포한 다음 realtime의
+     `lunaState=ENABLED`를 확인한다(U11 계약 편차 (U11-c)). 확인 기록 없이는 바꾸지 않는다.
+  - **롤백:** realtime Luna는 `mujoong.luna.enabled`를 `false`로 되돌려 같은 SHA로 `DEPLOY`하면 꺼진다(`DISABLED_SWITCH_OFF`). 키를 비우는 길은
+    demo realtime이 기동을 거부하므로(GPT-Live 키 필수, U11 BR12.2) 쓰지 않는다. core-api Luna는 지금처럼 키만으로 켜져 키가 있는 동안 꺼지지
+    않는다. 어댑터가 꺼지면 지금과 같은 실패 경로라 데이터 변경 · 마이그레이션 되돌림이 없다. 재기동만으로는 컨테이너 환경이 갱신되지 않으므로
+    쓰지 않는다.
+  - **키 이름 바꾸기 순서(U11 BR12.4, `PROVIDER_API_KEY` → `OPENAI_API_KEY`):** 이 절차는 적어 두기만 하고 이번 작업은 Parameter Store · 배포를
+    바꾸지 않는다.
+    1. 키 통일 변경(PR1)을 배포하기 전에 `/mujoong/demo/OPENAI_API_KEY`에 GPT-Live 키가 들어 있는지 확인한다(없으면 위 R-F15 확인 뒤 넣는다).
+    2. PR1 이전 이미지는 demo에서 `PROVIDER_API_KEY`가 비면 기동을 거부한다. 롤백 대상(`deploy.log`의 마지막 `result=OK` SHA)이 PR1 이후 SHA뿐이게
+       될 때까지 `/mujoong/demo/PROVIDER_API_KEY`를 `OPENAI_API_KEY`와 같은 값으로 함께 둔다. 호스트의 `render-env`는 PR1 이후 옛 이름을 realtime.env에
+       쓰지 않으므로, PR1 이전 SHA로 되돌려야 하면 먼저 그 SHA의 `render-env`로 env를 렌더하는지 확인한다.
+    3. 롤백 대상이 PR1 이후 SHA뿐이게 된 뒤에 `aws ssm delete-parameter --name /mujoong/demo/PROVIDER_API_KEY`로 지운다.
+- (선택, U8) Luna 키 `OPENAI_API_KEY`(core-api · realtime이 받음, U11부터 demo realtime의 GPT-Live 키와 같은 이름)와 제브 키 `JEV_API_KEY`(realtime만 받음). 넣지 않으면 렌더러가 빈 변수로 두고
   앱은 실제 어댑터를 끈다. `OPENAI_API_KEY`는 바로 위 R-F15 확인 기록이 있을 때만 넣는다(`contracts/ai-io.md` 10.2 · 10.10).
 
   ```bash
@@ -496,7 +511,7 @@ E1 `sessionsActive` 0 → E2 정기 점검 → E3 `backup.log` 최근 성공(없
 
 ### 8.4 Luna 사건 줄 (U9)
 
-core-api · realtime은 기동 때 `LUNA_STARTUP` 한 줄(`lunaState` `ENABLED` · `DISABLED_NO_KEY`)을, Luna 공급자 시도마다 `LUNA_CALL` 한 줄
+core-api · realtime은 기동 때 `LUNA_STARTUP` 한 줄(`lunaState` `ENABLED` · `DISABLED_NO_KEY` · realtime만 `DISABLED_SWITCH_OFF`)을, Luna 공급자 시도마다 `LUNA_CALL` 한 줄
 (`lunaPurpose` · `lunaOutcome` · `model` · `responseModel` · `promptVersion` · `sentFields` · `latencyMs` · `attempt`)을 남긴다.
 본문 · 전사 · 이름 · 키는 없다. 속성 표는 `contracts/ai-io.md` 10.8이고 `log-hygiene-check` 허용 표에도 같은 목록이 있다.
 
@@ -556,9 +571,9 @@ U11 첫 작업(위험 R1)의 실호출 확인이다. 기본 `test` · `check` ·
 
 ```bash
 cd backend
-read -r -s -p 'PROVIDER_API_KEY: ' PROVIDER_API_KEY && export PROVIDER_API_KEY && echo
+read -r -s -p 'OPENAI_API_KEY: ' OPENAI_API_KEY && export OPENAI_API_KEY && echo
 ./gradlew :realtime-activity:gptLiveTest
-unset PROVIDER_API_KEY
+unset OPENAI_API_KEY
 cat realtime-activity/build/gpt-live/report.md
 ```
 
@@ -630,8 +645,7 @@ supercronic) · 배포 직전(D2) · 정지 직전(최근 1시간 성공이 없�
 |---|---|
 | `INTERNAL_SERVICE_TOKEN` | 새 값 입력 → 같은 SHA로 `DEPLOY`(두 앱이 함께 다시 만들어진다. 잠시 어긋나도 Outbox가 401을 재시도한다) |
 | `DB_CORE_PASSWORD` · `DB_REALTIME_PASSWORD` · `DB_BACKUP_PASSWORD` · `DB_OWNER_PASSWORD` | 슈퍼유저로 `ALTER ROLE`(아래) → 파라미터 갱신 → 같은 SHA로 `DEPLOY` |
-| `PROVIDER_API_KEY` | 공급자 콘솔에서 새 키 → 파라미터 갱신 → 같은 SHA로 `DEPLOY`(realtime만 다시 만들어진다) |
-| `OPENAI_API_KEY` | 공급자 콘솔에서 새 키 → 파라미터 갱신 → 같은 SHA로 `DEPLOY`(core-api · realtime이 다시 만들어진다) |
+| `OPENAI_API_KEY` | 공급자 콘솔에서 새 키 → 파라미터 갱신 → 같은 SHA로 `DEPLOY`(core-api · realtime이 다시 만들어진다. GPT-Live 음성 중계와 Luna 판정이 같은 키를 쓴다) |
 | `JEV_API_KEY` | 공급자 콘솔에서 새 키 → 파라미터 갱신 → 같은 SHA로 `DEPLOY`(realtime만 다시 만들어진다) |
 | `MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET` | 파라미터 갱신 → 같은 SHA로 `DEPLOY`(이후 ownerHash 값이 바뀐다) |
 | `GHCR_PULL_TOKEN` | 새 읽기 전용 토큰(만료 90일 이하) → 파라미터 갱신(배포 때만 쓰인다) |

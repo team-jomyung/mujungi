@@ -107,7 +107,7 @@ b1_assertions() {
   actual="$(jq -c --argjson secret "$names_json" '[.services | to_entries[] |
       {key, value: ([(.value.environment // {}) | keys[] | select(. as $k | $secret | index($k))] | sort)}] | from_entries' "$json")"
   # U8(SD3): OPENAI_API_KEY는 core-api · realtime, JEV_API_KEY는 realtime만(검증 스택에서는 빈 값)
-  expected='{"core-api":["GOOGLE_OAUTH_CLIENT_SECRET","INTERNAL_SERVICE_TOKEN","MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET","OPENAI_API_KEY","SPRING_DATASOURCE_PASSWORD"],"fake-provider":[],"migrate":["DB_OWNER_PASSWORD"],"nginx":[],"postgres":["DB_BACKUP_PASSWORD","DB_CORE_PASSWORD","DB_OWNER_PASSWORD","DB_REALTIME_PASSWORD","POSTGRES_PASSWORD"],"realtime":["INTERNAL_SERVICE_TOKEN","JEV_API_KEY","MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET","OPENAI_API_KEY","PROVIDER_API_KEY","SPRING_DATASOURCE_PASSWORD"],"web":[]}'
+  expected='{"core-api":["GOOGLE_OAUTH_CLIENT_SECRET","INTERNAL_SERVICE_TOKEN","MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET","OPENAI_API_KEY","SPRING_DATASOURCE_PASSWORD"],"fake-provider":[],"migrate":["DB_OWNER_PASSWORD"],"nginx":[],"postgres":["DB_BACKUP_PASSWORD","DB_CORE_PASSWORD","DB_OWNER_PASSWORD","DB_REALTIME_PASSWORD","POSTGRES_PASSWORD"],"realtime":["INTERNAL_SERVICE_TOKEN","JEV_API_KEY","MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET","OPENAI_API_KEY","SPRING_DATASOURCE_PASSWORD"],"web":[]}'
   if [ "$(jq -S -c . <<<"$actual")" = "$(jq -S -c . <<<"$expected")" ]; then
     pass B1.secrets "서비스별 비밀 변수 이름 = 인프라 명세 3.7 분배표(7개 서비스)"
   else

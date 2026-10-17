@@ -86,11 +86,11 @@ class LunaHostsTest {
         LunaProperties.Purposes purposes = new LunaProperties.Purposes(options);
         URI base = URI.create("https://api.openai.com/v1");
 
-        assertThat(new LunaProperties("", base, 10, purposes).model()).isEqualTo(LunaProperties.DEFAULT_MODEL);
-        assertThat(new LunaProperties("gpt-6-luna", base, 10, purposes).options(LunaPurpose.JUDGMENT_LIVE)).isSameAs(options);
-        assertThatThrownBy(() -> new LunaProperties("모델", base, 10, purposes)).isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> new LunaProperties("m", base, -1, purposes)).isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> new LunaProperties("m", base, 1, null)).isInstanceOf(NullPointerException.class);
+        assertThat(new LunaProperties("", base, 10, purposes, false).model()).isEqualTo(LunaProperties.DEFAULT_MODEL);
+        assertThat(new LunaProperties("gpt-6-luna", base, 10, purposes, false).options(LunaPurpose.JUDGMENT_LIVE)).isSameAs(options);
+        assertThatThrownBy(() -> new LunaProperties("모델", base, 10, purposes, false)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new LunaProperties("m", base, -1, purposes, false)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new LunaProperties("m", base, 1, null, false)).isInstanceOf(NullPointerException.class);
         assertThatThrownBy(() -> new LunaProperties.Purposes(null)).isInstanceOf(NullPointerException.class);
         assertThatThrownBy(() -> new LunaProperties.PurposeOptions(4000, null)).isInstanceOf(IllegalArgumentException.class);
         assertThat(LunaPurpose.JUDGMENT_LIVE.requestSchema()).isEqualTo("ai-judgment-request.schema.json");

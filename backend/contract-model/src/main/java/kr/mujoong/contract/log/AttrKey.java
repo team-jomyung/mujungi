@@ -123,7 +123,7 @@ public enum AttrKey {
     PROMPT_VERSION("promptVersion", ValueType.LABEL, null),
     SENT_FIELDS("sentFields", ValueType.NAME_LIST, null),
     LATENCY_MS("latencyMs", ValueType.NUMBER, null),
-    LUNA_STATE("lunaState", ValueType.ENUM, Set.of("ENABLED", "DISABLED_NO_KEY"));
+    LUNA_STATE("lunaState", ValueType.ENUM, Set.of("ENABLED", "DISABLED_NO_KEY", "DISABLED_SWITCH_OFF"));
 
     /** 값 형식(OD-1 표). */
     public enum ValueType {

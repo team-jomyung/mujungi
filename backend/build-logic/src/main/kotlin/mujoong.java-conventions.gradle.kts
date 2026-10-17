@@ -173,7 +173,7 @@ tasks.named<Test>("test") {
     }
     inputs.property("fixedExcludeTagsGptLive", gptLiveTag)
     // 기본 시험은 GPT-Live 키를 보지 않는다(R-F1 · R-F3). 개발 PC env에 키가 있어도 시험 JVM에는 넘기지 않는다
-    environment.remove("PROVIDER_API_KEY")
+    environment.remove("OPENAI_API_KEY")
     // 기본 test JVM이라는 표시(GptLiveIsolationTest가 이 JVM에서 키가 지워졌는지 본다)
     systemProperty("mujoong.test.liveIsolated", "true")
 }

@@ -39,7 +39,7 @@ public final class RealtimeTestApp implements AutoCloseable {
         args.put("spring.datasource.username", postgres.username(Role.REALTIME_APP));
         args.put("spring.datasource.password", postgres.password(Role.REALTIME_APP));
         args.put(RealtimeStartupChecks.INTERNAL_TOKEN, internalToken);
-        args.put(RealtimeStartupChecks.PROVIDER_API_KEY, TestSecrets.base64Url(24));
+        args.put(RealtimeStartupChecks.OPENAI_API_KEY, TestSecrets.base64Url(24));
         args.put("mujoong.internal-http.core-base-url", coreBaseUrl.toString());
         args.put("mujoong.provider.url", providerUrl.toString());
         return args;

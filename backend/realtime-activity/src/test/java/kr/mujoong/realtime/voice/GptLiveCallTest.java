@@ -8,7 +8,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 /**
- * GPT-Live 격리 실호출 시험 (U11 FR9.1 · FR9.2 · BR9.1 · BR9.2 · 기능 설계 W7). 사람이 env {@code PROVIDER_API_KEY}를 넣고
+ * GPT-Live 격리 실호출 시험 (U11 FR9.1 · FR9.2 · BR9.1 · BR9.2 · 기능 설계 W7). 사람이 env {@code OPENAI_API_KEY}를 넣고
  * {@code ./gradlew :realtime-activity:gptLiveTest}로만 돈다(기본 test는 {@code gpt-live}를 고정 제외). 키가 없으면 보고서에
  * {@code SKIPPED_NO_KEY}를 쓰고 이 시험은 건너뜀으로 끝난다(통과 아님).
  *
@@ -26,7 +26,7 @@ class GptLiveCallTest {
         System.out.println(GptLiveProbe.summary(result) + " (보고서 " + probe.report() + ")");
 
         assumeTrue(result.outcome() != GptLiveProbe.Outcome.SKIPPED_NO_KEY,
-                "SKIPPED_NO_KEY: env PROVIDER_API_KEY 없음(실호출 안 함, 통과 아님)");
+                "SKIPPED_NO_KEY: env OPENAI_API_KEY 없음(실호출 안 함, 통과 아님)");
         GptLiveProbe.Outcome judged = result.outcome() == GptLiveProbe.Outcome.NOT_RUN ? result.kitOutcome() : result.outcome();
         assertThat(judged).as("① · ② 실호출 결과(보고서 " + probe.report() + ")").isEqualTo(GptLiveProbe.Outcome.PASS);
     }

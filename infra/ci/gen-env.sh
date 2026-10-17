@@ -9,9 +9,9 @@
 #                 GOOGLE_OAUTH_CLIENT_ID · GOOGLE_OAUTH_CLIENT_SECRET(빈 값 — 검증 스택은 구글을 부르지 않는다)
 #                 GOOGLE_OAUTH_REDIRECT_URI(<origin>/parent/login/callback) MUJOONG_SECURITY_ALLOWED_ORIGIN
 #                 OPENAI_API_KEY(빈 값 — 검증 · CI는 실제 Luna를 부르지 않는다, R-F1 · U8 SD3)
-#   realtime.env  SPRING_DATASOURCE_PASSWORD(=realtime) INTERNAL_SERVICE_TOKEN PROVIDER_API_KEY(가짜 공급자용 자리값)
+#   realtime.env  SPRING_DATASOURCE_PASSWORD(=realtime) INTERNAL_SERVICE_TOKEN
 #                 MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET MUJOONG_SECURITY_ALLOWED_ORIGIN
-#                 OPENAI_API_KEY · JEV_API_KEY(빈 값 — 실제 Luna · 제브를 부르지 않는다)
+#                 OPENAI_API_KEY · JEV_API_KEY(빈 값 — 가짜 공급자는 키를 보지 않고, 실제 GPT-Live · Luna · 제브를 부르지 않는다. U11 BR12.2: 자리값 없음)
 #   web.env       GOOGLE_OAUTH_CLIENT_ID(빈 값) GOOGLE_OAUTH_REDIRECT_URI MUJOONG_SECURITY_ALLOWED_ORIGIN
 #                 (구글 이름은 Core · web이 같다 — infra/bin/render-env와 같은 분배, U2 리뷰 3)
 #   nginx.env     SERVICE_HOST MUJOONG_SECURITY_ALLOWED_ORIGIN
@@ -97,7 +97,6 @@ realtime_password="$(rand 24)"
 backup_password="$(rand 24)"
 internal_token="$(rand 32)"
 owner_hash_secret="$(rand 32)"
-provider_key="$(rand 32)"
 
 mkdir -p "$out"
 chmod 0700 "$out"
@@ -137,7 +136,6 @@ write core-api.env \
 write realtime.env \
   "SPRING_DATASOURCE_PASSWORD=$realtime_password" \
   "INTERNAL_SERVICE_TOKEN=$internal_token" \
-  "PROVIDER_API_KEY=$provider_key" \
   "MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET=$owner_hash_secret" \
   "MUJOONG_SECURITY_ALLOWED_ORIGIN=$origin" \
   "OPENAI_API_KEY=" \

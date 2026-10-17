@@ -83,12 +83,12 @@ export FAKE_AWS_CALLS="$work/aws-calls"
 declare -A P=(
   [POSTGRES_PASSWORD]="$(rand 24)" [DB_OWNER_PASSWORD]="$(rand 24)" [DB_CORE_PASSWORD]="$(rand 24)"
   [DB_REALTIME_PASSWORD]="$(rand 24)" [DB_BACKUP_PASSWORD]="$(rand 24)" [INTERNAL_SERVICE_TOKEN]="$(rand 32)"
-  [PROVIDER_API_KEY]="$(rand 32)" [MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET]="$(rand 32)"
+  [MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET]="$(rand 32)"
   [SERVICE_HOST]="svc.example.net" [MUJOONG_SECURITY_ALLOWED_ORIGIN]="https://svc.example.net"
   [ACME_CONTACT_EMAIL]="ops@example.net"
 )
 readonly SECRET_KEYS=(POSTGRES_PASSWORD DB_OWNER_PASSWORD DB_CORE_PASSWORD DB_REALTIME_PASSWORD DB_BACKUP_PASSWORD
-  INTERNAL_SERVICE_TOKEN PROVIDER_API_KEY MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET)
+  INTERNAL_SERVICE_TOKEN MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET)
 # write_params <파일> [이름=값 덮어쓰기 · -이름 빼기]...
 write_params() {
   local file="$1"
@@ -130,7 +130,7 @@ declare -A WANT=(
   [postgres.env]="DB_BACKUP_PASSWORD DB_CORE_PASSWORD DB_OWNER_PASSWORD DB_REALTIME_PASSWORD POSTGRES_PASSWORD"
   [migrate.env]="DB_OWNER_PASSWORD"
   [core-api.env]="GOOGLE_OAUTH_CLIENT_ID GOOGLE_OAUTH_CLIENT_SECRET GOOGLE_OAUTH_REDIRECT_URI INTERNAL_SERVICE_TOKEN MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET MUJOONG_SECURITY_ALLOWED_ORIGIN OPENAI_API_KEY SPRING_DATASOURCE_PASSWORD"
-  [realtime.env]="INTERNAL_SERVICE_TOKEN JEV_API_KEY MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET MUJOONG_SECURITY_ALLOWED_ORIGIN OPENAI_API_KEY PROVIDER_API_KEY SPRING_DATASOURCE_PASSWORD"
+  [realtime.env]="INTERNAL_SERVICE_TOKEN JEV_API_KEY MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET MUJOONG_SECURITY_ALLOWED_ORIGIN OPENAI_API_KEY SPRING_DATASOURCE_PASSWORD"
   [web.env]="GOOGLE_OAUTH_CLIENT_ID GOOGLE_OAUTH_REDIRECT_URI MUJOONG_SECURITY_ALLOWED_ORIGIN"
   [nginx.env]="MUJOONG_SECURITY_ALLOWED_ORIGIN SERVICE_HOST"
   [certbot.env]="ACME_CONTACT_EMAIL SERVICE_HOST"
@@ -241,7 +241,7 @@ expect_reject() {
     ok "$name"
   fi
 }
-write_params "$work/p-missing" -PROVIDER_API_KEY
+write_params "$work/p-missing" -MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET
 expect_reject "render-env-missing-required" 1 "$work/p-missing"
 write_params "$work/p-localhost" SERVICE_HOST=localhost MUJOONG_SECURITY_ALLOWED_ORIGIN=https://localhost
 expect_reject "render-env-rejects-localhost" 1 "$work/p-localhost"
@@ -250,7 +250,7 @@ expect_reject "render-env-rejects-invalid-tld" 1 "$work/p-invalid"
 write_params "$work/p-short" "INTERNAL_SERVICE_TOKEN=$(rand 15)"
 expect_reject "render-env-short-internal-token" 1 "$work/p-short"
 # shellcheck disable=SC2016  # 렌더에 위험한 글자($ · 공백)를 그대로 넣는다
-write_params "$work/p-unsafe" 'PROVIDER_API_KEY=abc def$HOME'
+write_params "$work/p-unsafe" 'DB_CORE_PASSWORD=abc def$HOME'
 expect_reject "render-env-unsafe-characters" 1 "$work/p-unsafe"
 write_params "$work/p-origin" MUJOONG_SECURITY_ALLOWED_ORIGIN=https://other.example.net
 expect_reject "render-env-origin-mismatch" 1 "$work/p-origin"

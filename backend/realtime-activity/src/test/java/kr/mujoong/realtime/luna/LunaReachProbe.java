@@ -327,7 +327,8 @@ final class LunaReachProbe {
         String tokens = property(sources, "mujoong.luna.purpose.judgment-live.max-output-tokens");
         String effort = property(sources, "mujoong.luna.purpose.judgment-live.reasoning-effort");
         return new LunaProperties(env.apply(MODEL_ENV), URI.create(baseUrl), Integer.parseInt(maxBytes),
-                new LunaProperties.Purposes(new LunaProperties.PurposeOptions(Integer.parseInt(tokens), effort)));
+                new LunaProperties.Purposes(new LunaProperties.PurposeOptions(Integer.parseInt(tokens), effort)),
+                false);
     }
 
     private static String property(List<PropertySource<?>> sources, String key) throws IOException {
