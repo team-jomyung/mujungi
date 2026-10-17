@@ -80,6 +80,9 @@ public class AsyncRecorder {
     private final Set<UUID> discarded = BoundedCollections.synchronizedSet(MAX_DISCARDED);
     // 진행 중 플러시가 끝났다는 신호(앱 종료 drain이 기다린다, 3.6 수정 J305). 잠금 순서는 이 잠금 → 칸 목록 모니터 하나뿐이다
     private final ReentrantLock flushEndedLock = new ReentrantLock();
+    /** 같은 틱 · 종료 정리에 얹혀 도는 곁 기록기(U11 판정 기록기). 등록 순서대로 부른다. */
+    private final List<Runnable> tickHooks = new java.util.concurrent.CopyOnWriteArrayList<>();
+    private final List<java.util.function.Consumer<Duration>> drainHooks = new java.util.concurrent.CopyOnWriteArrayList<>();
     private final Condition flushEnded = flushEndedLock.newCondition();
 
     @Autowired
@@ -232,8 +235,21 @@ public class AsyncRecorder {
         }
     }
 
+    /** 틱마다 함께 부를 곁 기록기의 틱을 등록한다(U11 판정 기록기: 자기 칸 목록을 따로 두고 이 틱에 얹혀 돈다). */
+    public void onTick(Runnable hook) {
+        tickHooks.add(Objects.requireNonNull(hook, "hook"));
+    }
+
+    /** 앱 종료 정리({@link #drain})에 함께 부를 곁 기록기의 정리를 등록한다(받은 기다림 상한을 그대로 준다). */
+    public void onDrain(java.util.function.Consumer<Duration> hook) {
+        drainHooks.add(Objects.requireNonNull(hook, "hook"));
+    }
+
     /** 틱: 비어 있지 않은 세션 목록과 기기 칸의 플러시를 띄운다(recorder-tick 주기 작업). */
     public void tick() {
+        for (Runnable hook : tickHooks) {
+            hook.run();
+        }
         for (Unit unit : units.values()) {
             signal(unit);
         }
@@ -269,6 +285,9 @@ public class AsyncRecorder {
      */
     public int drain(Duration wait) {
         long remaining = Math.max(0L, Objects.requireNonNull(wait, "wait").toNanos());
+        for (java.util.function.Consumer<Duration> hook : drainHooks) {
+            hook.accept(wait);
+        }
         for (Unit unit : units.values()) {
             remaining = runFlushInline(unit, remaining);
         }

@@ -77,6 +77,9 @@ public final class SessionHarness {
     public final LatencyRecorder latency = new LatencyRecorder(events, metrics, clock, 100, Duration.ofMinutes(10));
     public final AsyncRecorder recorder = new AsyncRecorder(store, TaskLauncher.inline(), latency, events, metrics, clock,
             200, 2);
+    /** U11: 판정 기록기(메모리 저장소 {@link MemoryStore#judgments}에 쓴다, 실행기 연결은 Step 20 · 21). */
+    public final kr.mujoong.realtime.judgment.JudgmentLiveRecorder judgmentRecorder =
+            new kr.mujoong.realtime.judgment.JudgmentLiveRecorder(store, TaskLauncher.inline(), events);
     public final List<UUID[]> unresponsive = new ArrayList<>();
     public final UUID sessionId = UUID.randomUUID();
     public final UUID guardianId = UUID.randomUUID();
@@ -268,13 +271,15 @@ public final class SessionHarness {
     }
 
     /** 메모리 기록기 저장소. */
-    public static final class MemoryStore implements AsyncRecorder.Store {
+    public static final class MemoryStore implements AsyncRecorder.Store, kr.mujoong.realtime.judgment.JudgmentLiveRecorder.Store {
 
         public final List<TranscriptEntry> transcripts = new ArrayList<>();
         public final List<SessionEvent> sessionEvents = new ArrayList<>();
         public final List<DeviceConnectionRepository.LastSeen> lastSeen = new ArrayList<>();
         public int failuresLeft;
         public int writes;
+        /** U11: 판정 기록(id = turnId, 같은 id는 덮어쓴다). */
+        public final List<kr.mujoong.realtime.judgment.JudgmentLiveRecord> judgments = new ArrayList<>();
 
         @Override
         public synchronized void write(UUID sessionId, List<TranscriptEntry> rows, List<SessionEvent> events) {
@@ -294,6 +299,16 @@ public final class SessionHarness {
                 }
             }
             sessionEvents.addAll(events);
+        }
+
+        @Override
+        public synchronized void write(kr.mujoong.realtime.judgment.JudgmentLiveRecord record) {
+            if (failuresLeft > 0) {
+                failuresLeft--;
+                throw new org.springframework.dao.TransientDataAccessResourceException("시험용 기록기 장애");
+            }
+            judgments.removeIf(old -> old.id().equals(record.id()));
+            judgments.add(record);
         }
 
         @Override
