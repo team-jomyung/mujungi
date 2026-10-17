@@ -16,6 +16,11 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "mujoong.guardrail.jev")
 public record GuardrailProperties(String mode, String baseUrl, String model) {
 
+    /** 주소 설정 키. */
+    public static final String BASE_URL_KEY = "mujoong.guardrail.jev.base-url";
+    /** 모델 설정 키. */
+    public static final String MODEL_KEY = "mujoong.guardrail.jev.model";
+
     public GuardrailProperties {
         mode = mode == null ? "" : mode;
         baseUrl = baseUrl == null ? "" : baseUrl;

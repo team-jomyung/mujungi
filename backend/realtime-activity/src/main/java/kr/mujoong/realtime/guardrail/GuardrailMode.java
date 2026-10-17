@@ -38,4 +38,9 @@ public enum GuardrailMode {
     public static GuardrailMode defaultFor(boolean publicProfile) {
         return publicProfile ? REAL : STUB;
     }
+
+    /** 설정값으로 모드를 고른다. 비었거나 모르는 값이면 프로필 기본값이다(모르는 값은 기동 점검이 따로 거부한다). */
+    public static GuardrailMode resolve(String configured, boolean publicProfile) {
+        return parse(configured).orElseGet(() -> defaultFor(publicProfile));
+    }
 }
