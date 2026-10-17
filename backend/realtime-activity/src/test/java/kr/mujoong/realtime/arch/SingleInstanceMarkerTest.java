@@ -40,6 +40,7 @@ import kr.mujoong.realtime.gateway.DeviceConnection;
 import kr.mujoong.realtime.gateway.DisconnectChecker;
 import kr.mujoong.realtime.gateway.SocketRegistry;
 import kr.mujoong.realtime.gateway.StatusReporter;
+import kr.mujoong.realtime.judgment.JudgmentLiveRecorder;
 import kr.mujoong.realtime.log.AsyncRecorder;
 import kr.mujoong.realtime.log.LatencyRecorder;
 import kr.mujoong.realtime.messaging.MessagingCleanupJob;
@@ -102,7 +103,7 @@ class SingleInstanceMarkerTest {
      *   <li>SI-7 정리 · 점검 작업(BR4.8 · BR5.11): 연결 점검 5초 · 상태 보고 10초 · 하루 1회 메시징 정리 · 30초 고아 세션 점검. '10분'
      *       등록 코드 정리는 Core 작업이다.
      *   <li>SI-9 공급자 연결(BR7.2): 세션마다 연결을 여는 클라이언트와 그 연결을 쥔 실행기.
-     *   <li>SI-10 기록기 칸(BR7.5): 세션별 미커밋 칸 목록.
+     *   <li>SI-10 기록기 칸(BR7.5): 세션별 미커밋 칸 목록. U11 판정 기록기({@code JudgmentLiveRecorder})도 같은 칸 모양의 메모리 대기열이다.
      *   <li>SI-12 12 조회의 '이미 내보낸 행 번호' 집합(NFR5.3): 첫 제공 줄 SESSION_ITEMS_SERVED와 그 집합은 Realtime 지연 기록기에 있다
      *       (Core는 items를 중계만 한다, J312 — Core 시험의 몫 밖 근거와 같다).
      *   <li>기동 복구(BR6.13 · R3-5)는 DB의 비종료 세션 · 연결 행 · 선점 행을 모두 자기 것으로 보고 정리하므로 SI-1 · SI-2 · SI-6에 함께
@@ -119,7 +120,7 @@ class SingleInstanceMarkerTest {
             "SI-7", Set.of(DisconnectChecker.class, StatusReporter.class, MessagingCleanupJob.class,
                     OrphanSessionChecker.class),
             "SI-9", Set.of(ProviderClient.class, SessionExecutor.class),
-            "SI-10", Set.of(AsyncRecorder.class),
+            "SI-10", Set.of(AsyncRecorder.class, JudgmentLiveRecorder.class),
             "SI-12", Set.of(LatencyRecorder.class));
 
     /**
