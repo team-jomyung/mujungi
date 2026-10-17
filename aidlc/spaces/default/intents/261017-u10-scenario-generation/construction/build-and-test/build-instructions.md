@@ -4,6 +4,8 @@
 
 승인된 code-generation의 계획·시험 지침·코드 요약과 Testing Contract를 따른다. 최초 제품 커밋은 `1e4db60`이며 새 main의 U11을 합친 검증 커밋은 `6cd526fe4279aebb4d5eff6a9b1703a4c8f2c54f`다. U10 운영 구현은 유지했다. 사용자는 R-05(RT 검증 위험)와 R-06(별도 준비 READY 마감 누락)을 위험으로 수용하고 다음 검증으로 진행하도록 승인했다. 이 승인은 시험 결과를 합격으로 바꾸지 않는다.
 
+승인된 도구 시험 수신 대기 보완 커밋은 `bd666d0b912f1a6db098eeaeaf3935cdde0c7938`다. 이번 재검증은 이 커밋의 깨끗한 사본에서 같은 전체 명령으로 실행한다. 기존 실패·Loop-back 1 기록은 보존한다.
+
 ## Prerequisites
 
 WSL Ubuntu, JDK 21, Node 22, Docker/Compose, Git, GNU date, shellcheck를 사용한다. 새 검증 사본은 `/home/pdypd/mujungi-u10-final-verify`이며 Windows 정본의 해당 브랜치에서 로컬 clone한다. 이 사본의 origin은 로컬 저장소이므로 여기서 push하지 않는다. 실제 키·사용자 환경 파일은 복사하거나 출력하지 않는다.
