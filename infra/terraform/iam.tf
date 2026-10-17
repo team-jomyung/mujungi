@@ -49,3 +49,19 @@ resource "aws_iam_role_policy_attachment" "ecs_execution" {
   role       = aws_iam_role.ecs_execution.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
+
+# 실행 역할: SSM의 DB 비밀번호 읽기 (컨테이너에 주입용)
+data "aws_iam_policy_document" "ecs_execution_ssm" {
+  statement {
+    actions = ["ssm:GetParameters"]
+    resources = [
+      "arn:aws:ssm:ap-northeast-2:${data.aws_caller_identity.current.account_id}:parameter/mujoong/*"
+    ]
+  }
+}
+
+resource "aws_iam_role_policy" "ecs_execution_ssm" {
+  name   = "${local.name}-ecs-execution-ssm"
+  role   = aws_iam_role.ecs_execution.id
+  policy = data.aws_iam_policy_document.ecs_execution_ssm.json
+}
