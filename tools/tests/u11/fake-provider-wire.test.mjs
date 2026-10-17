@@ -196,6 +196,15 @@ describe("가짜 공급자 — 실호출 관측 선 형식(U11-a)", () => {
       );
     }
     await waitUntil(() => provider.records.some((entry) => entry.ev === "turn-emitted"));
+    await waitUntil(() => {
+      const turn = provider.records.find((entry) => entry.ev === "turn");
+      const speech = client.received.find((entry) => entry.message.type === "session.output_transcript.delta");
+      if (!turn || !speech) return false;
+      const bytes = client.received
+        .filter((entry) => entry.message.type === "session.output_audio.delta")
+        .reduce((sum, entry) => sum + Buffer.from(entry.message.delta, "base64").length, 0);
+      return bytes >= turn.outputBytes + (speech.message.start_ms + FILLER_MS) * 48;
+    });
 
     const ack = client.received.find((entry) => entry.message.type === "session.instructions.appended").message;
     const order = types(client).filter((type) => type !== "session.started");

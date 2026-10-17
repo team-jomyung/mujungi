@@ -65,3 +65,13 @@ review-01의 R-01~04를 승인 범위에서 보완했다. 기존 요구·설계�
 `clean :contract-model:check :core-api:check :test-support:check -Pmujoong.test.db=docker --no-parallel --max-workers=1`은 **5분31초 BUILD SUCCESSFUL**이다. 계약322/Core1722/test-support31=총2075개, 실패0/오류0/기존 LOCAL 조건 skip3. 그 안의 U10은 **22클래스160개 실패0/오류0/skip0**다. 수리 신규 대조는 계획 입력5·실제 준비 실패분류5·DB마감7=17개다. 기존 운영 Java27파일 범위는 **1372/1418줄=96.7560%**, Core10067/10466=96.1877%, 계약1527/1551=98.4526%, test-support558/1305=42.7586%이며 기존 check/커버리지 관문을 유지했다.
 
 RT는 이 수리 검증에 포함하지 않았다. 과거 실패와 부모의 후속 클래스 진단 통과는 validation-notes.md에 함께 남았으며 RT 포함 전체합격은 미확인이다. R-01~04 수리의 독립 재검토·Build and Test·전체 verify.sh·push/PR/CI는 부모 담당의 다음 단계다. engine 소유 리뷰/감사·CodeKB·머신 manifest·기존 실행 비트·work 보조 자료는 이 수리 커밋에 섞지 않는다.
+
+## main U11 병합 뒤 한정 수신 대기 보완
+
+사용자는 docs/units/u10/tools-test-review.md의 제안에 대해 `Retry with fix — 수신 대기 보완 후 계속 (추천)`을 선택했다. 기존 U10 구현은 9d9b77d·12e59e8·8599948·dd09baa·1e4db60에 보존됐고, main 683c669는 6cd526f로 병합됐다. 앞선 계획25단계의 완료 표시는 이 커밋과 기존 실행 증거에서 복원했으며 계획 본문·Testing Contract는 바꾸지 않았다. 새 제품 요구사항·설계 변경이나 운영 코드 수정은 없다.
+
+수리 대상은 tools/tests/u11/fake-provider-wire.test.mjs의 마지막 사례 하나다. `turn-emitted`는 서버의 마지막 송신 예약 뒤에 기록되므로 클라이언트 수신 완료를 뜻하지 않는다. 그 대기 뒤에 전사와 turn 기록의 존재를 확인하고 누적 수신 음성이 `turn.outputBytes + (speech.message.start_ms + FILLER_MS) * 48` 이상일 때까지 기존 waitUntil로 기다리는9줄을 추가했다. 원래 전사/음성 순서·start_ms·정확한 바이트 수 단언과3000ms 제한은 그대로다. 과다 음성은 기존 정확 일치 단언이 계속 거절한다.
+
+검증은 소스 정본의 해당 파일만 `/home/pdypd/mujungi-u10-final-verify`의 clean 6cd526f 복사본에 반영한 뒤 Node22.23.3·Vitest4.1.11로 순차 실행했다. 해당 파일 명령 `node ./node_modules/vitest/vitest.mjs run tests/u11/fake-provider-wire.test.mjs`는 **1파일8건 전부 통과**, 실행기 표시912ms였다. 이어 `node ./node_modules/vitest/vitest.mjs run`은 **12파일131건 전부 통과**, 표시9.64초였다. 각각 한 번만 실행했고 실패0·skip0이다. 가짜 공급자만 사용했고 실제 API 호출·사용자 수동 스택 접근은 없다.
+
+앞선 전체 검증의 tools 1건 실패와 build-and-test/test-results.md의 Loop-back 1은 삭제하지 않는다. 위 두 통과는 한정 수리 검증이며 전체 verify.sh 성공을 대신하지 않는다. 수리 전 main 병합판의 백엔드3416건(실패0·기존LOCAL skip3), U10 160건·범위96.7560%, 프런트994건 통과는 이전 판의 증거로 구분한다. 수리 후 전체 검증·push·PR CI는 다음 검증 단계에서 실제 실행 결과로 확정한다. 기존 수용된 잔여 위험은 이번 한정 수리로 해결됐다고 표시하지 않는다.

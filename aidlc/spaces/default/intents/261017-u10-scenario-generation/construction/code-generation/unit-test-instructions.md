@@ -36,3 +36,13 @@ PG 시험은 Docker 모드로 V9 fixture→V10, 기존 앱 INSERT, 새 JSON 왕�
 
 main 기준 check는 tests3149/failures0/errors0/skipped3이며 skip은 기존 LOCAL PostgreSQL 조건 분기다. 이는 U10 구현 전 기준선이다. 구현 뒤 명령·결과·커버리지·편차는 code-summary와 docs/units/u10/report.md에 새 증거로 남긴다.
 
+## 승인된 도구 시험 수리의 한정 검증
+
+main U11 병합 뒤 발견한 수신 순서 경합은 사용자가 docs/units/u10/tools-test-review.md의 수신 대기 보완으로 한정 허용했다. tools/tests/u11/fake-provider-wire.test.mjs 마지막 사례에 수신 완료 조건만 추가하며 기존 단언·3000ms 제한·운영 코드는 유지한다. tools 디렉터리, Node22에서 다음 정확한 파일 명령을 실행한다.
+
+```sh
+node ./node_modules/vitest/vitest.mjs run tests/u11/fake-provider-wire.test.mjs
+```
+
+이 명령은 해당 파일8건만 실행한다. tools 전체 회귀131건과 전체 verify.sh는 별도의 통합 검증이며 위의 U10 태그 명령이나 커버리지 기준을 대신하지 않는다. 실제 공급자·키·자료를 사용하지 않는다. 기존 25단계의 구현·시험은 커밋과 실행 증거로 유지하며 이 수리 때문에 다시 구현하지 않는다.
+
