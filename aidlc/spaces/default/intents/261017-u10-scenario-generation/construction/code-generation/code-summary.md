@@ -87,3 +87,15 @@ RT는 이 수리 검증에 포함하지 않았다. 과거 실패와 부모의 �
 Node22.23.3·Vitest4.1.11의 ext4 검증 복사본에서 순차 실행했다. 초기 복사본의 CRLF shebang 때문에 Vitest가 server.mjs의 변환 코드를 읽지 못해0건 로딩 실패했으며, 상세 로더 진단도 같은 실패를 확인했다. Node --check는3파일 모두 정상으로 로직 문법 오류와 구분했다. 검증 복사본에서만 Git input 정규화와 인덱스 재물질화로 LF를 맞췄다. 정본/복사본의 LF 정규화 소스3파일은 전부 바이트 일치한다. 실패를 성공 건수에 합치지 않는다.
 
 그 뒤 정확한 wire 명령은 **1파일12건 통과**, 시험662ms·실행기884ms였고, 별도 전체 tools 회귀는 **12파일135건 통과**, 실행기9.60초였다. 실패0·skip0이며 기존8건에 기본 경로1건과 잘못된 선택 값3건을 더했다. 실제 API 호출은0이며 수동 스택에 접근하지 않았다. 이 증거는600ms 계약판의 한정/도구 검증이고, 전체 verify.sh·최신 main 통합·push·CI 성공을 선취하지 않는다.
+
+## 최종 main 통합판 —700ms 계약 유지
+
+위600ms 수리판은 `44c8fa328af75629fc07094771c9a4fd3121565e`에 보존했다. 이어 확인한 origin/main `6a785360678cd095e058bd056ee91dc4d563ccec`는 이미 시간 계약·realtime 설정을700ms로 변경하고 같은 FILLER_MS=700 자료로 C9를 맞춘 판이다. 최신 main은 `876eaafb60ccd657bd1c8ff238a7a616a8061835`로 작업 브랜치에 병합했다. 이 업스트림 운영 시간 변경은 U10의600ms 수리 성과로 기록하지 않는다.
+
+최종 scenarios.mjs와 server.mjs는 새 main의700ms 동작과 LF 정규화 바이트가 완전히 같다. 중복된600ms 기본값과 선택 옵션을 남기지 않았다. 그 옵션만 검사하던 신규3건도 제거했고 기존8건은 전부 유지했다. 최종 추가 회귀1건은 실제 contracts/timing.md·realtime application.yml의700ms와 FILLER_MS=700 및 기본 WS 음성의 정확한 길이/해시를 대조한다. 기존700ms 사례·수신 장벽·3000ms·정확 단언과 C9 단언은 유지한다. 현재 wire는9건이며600ms 판의12건과 구분한다.
+
+유일한 병합 충돌은 앞서 기대값 갱신을 한정 승인받은 공통 FlywayConfIT였다. Core V10의 이력10건과 새 main RT V5의 BASELINE 포함 이력6건을 함께 보존했다. 새 테이블 합계62와 다른 앱 이력 읽기 거절·멱등·검증 단언을 그대로 유지했다. 제품 동작·스키마를 새로 고친 것이 아니라 두 마이그레이션 사실을 합쳤다.
+
+검증 복사본의 본 수리가 소유한3파일 변경만 정리한 뒤 원본 커밋876eaaf로 fast-forward했다. 파일 복사 없이 Git의 LF 소스를 사용했다. 같은 Node22.23.3·Vitest4.1.11에서 wire **1파일9건 통과**(시험704ms, 실행기931ms), 이어 전체 tools **12파일133건 통과**(9.52초)했다.133건은 기존131+새 main의 시나리오1+이번 기본 음성 회귀1이다. 실패0·skip0이며 실제 API 호출0이다.
+
+추가로 JDK21·Docker PostgreSQL에서 `./gradlew :core-api:test --tests kr.mujoong.core.db.FlywayConfIT -Pmujoong.test.db=docker --no-parallel --max-workers=1`를 실행해 **5건 통과**, 실패0/오류0/skip0, BUILD SUCCESSFUL22초(클래스15.263초)를 확인했다. 이 한정 실행의 JaCoCo는 전체 모듈 커버리지 증거로 사용하지 않는다. 앞서 보존한 전체 보고서는 유지한다. 최종 통합판 전체 backend/frontend·verify.sh·독립 검토·push·PR CI는 다음 단계의 실제 결과를 기다린다. 수용된 R-05/R-06과 실호출·실기기 미측정은 그대로다.

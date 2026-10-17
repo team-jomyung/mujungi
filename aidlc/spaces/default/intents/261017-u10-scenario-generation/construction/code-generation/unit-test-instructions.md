@@ -52,3 +52,13 @@ docs/units/u10/c9-test-review.md의 승인 범위는 시험 지원3파일이다.
 
 검증 복사본의 CRLF shebang은 Vitest에서0건 로딩 실패를 낼 수 있다. Git input 정규화한 LF 소스와 정본의 LF 정규화 소스를 대조한다. 도구 전체 회귀와 전체 verify.sh는 여전히 별도의 통합 검증이며, 최신 main이 시간 계약을 변경했다면 그 통합판을 새 근거로 검증한다.600ms 판의 한정 통과를 다른 계약판의 통과로 표시하지 않는다.
 
+## 최종700ms main 통합판의 실행 기준
+
+main6a785360은 시간 계약·RT 설정을700ms로 변경하고 기존 FILLER_MS=700과 맞췄다. 최종 통합876eaaf에서는 scenarios/server의 중복600ms 기본값·선택 옵션을 제거해 main과 같게 두고 기존 wire8건과 추가 기본 음성/계약 대조1건을 유지한다. 위의 정확한 wire 명령은 최종판에서9건이다.600ms 수리판의12건과 혼동하지 않는다. 검증 복사본은 원본 소스 커밋을 fast-forward해 LF를 유지하며 `/home/pdypd/mujungi-u10-final-verify`를 사용한다.
+
+Core V10과 RT V5 이력 기대값을 합친 기존 공통 시험의 충돌 해결은 backend에서 다음 한정 명령으로 검증한다. 전체 모듈 커버리지·전체 backend·U10 태그 검증을 대체하지 않는다.
+
+```sh
+./gradlew :core-api:test --tests kr.mujoong.core.db.FlywayConfIT -Pmujoong.test.db=docker --no-parallel --max-workers=1
+```
+
