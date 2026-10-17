@@ -40,7 +40,7 @@
 - 이미지 점검 `infra/ci/image-checks.sh`, `infra/bin/infra-validate`, `bash infra/ci/test-infra-validate.sh`, `bash infra/ci/test-host-tools.sh`.
 - `construction/build-and-test/` 산출물 완성: 위 디렉터리에 초안 파일이 일부 있다. 필수는 `build-instructions.md` · `integration-test-instructions.md` · `build-and-test-summary.md`(Target Verification Matrix) · `test-results.md` · `cross-unit-traceability.md`(FR/NFR 전체 OK 확인, `code-generation/traceability.json` 87행 기준). 남은 `Pending` 판정은 없어야 한다.
 - **실호출 확인 `[실호출-합성]`(사람이 키를 환경에 둔 뒤에만, R-F13 · R-F15)**: `./gradlew :realtime-activity:gptLiveTest`. 키는 `~/.config/mujoong-live.env`(600) 같은 환경 파일로만 두고 채팅에 붙이지 않는다. 관측할 항목:
-  - 새 말 허용 여유 `mujoong.timing.provider.new-speech-margin`(잠정 600ms)
+  - 새 말 허용 여유 `mujoong.timing.provider.new-speech-margin`(잠정 700ms: 가짜 공급자 채움 음성(ack 뒤 700ms)에 맞춘 값이라 실호출로 다시 확인)
   - 아이 말 묶음 조용함 `mujoong.timing.provider.input-transcript-quiet`(잠정 1500ms)
   - 끼어들기 지시가 한 번만 지켜지는지(표본 1건뿐), 연습 발화(verbatim) 첫 600ms 잘림
   - Luna 판정 프롬프트(`judgment/prompt-v1.txt`) 품질과 4초 시한

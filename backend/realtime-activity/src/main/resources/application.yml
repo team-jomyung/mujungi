@@ -126,7 +126,7 @@ mujoong:
     # U11(timing.md 14절, 설계 개정 A4 · A7): 값은 실호출 3회 관측 기준 임시값이고 Build and Test 실호출로 확정한다
     provider:
       input-transcript-quiet: 1500ms
-      new-speech-margin: 600ms
+      new-speech-margin: 700ms
   outbox:
     poll-interval: 500ms
     batch-size: 20

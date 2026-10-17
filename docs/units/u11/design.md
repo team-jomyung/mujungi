@@ -43,7 +43,7 @@
 1. `append`를 큐에 넣는 순간 세대를 올리고 DISCARDING으로 둔다. 열린 구간은 불완전으로 버린다.
 2. `session.instructions.appended`(`client_event_id` 일치)가 오면 `ackEndMs = end_ms`.
 3. 그 뒤 처음 오는 출력 전사 조각 중 `start_ms ≥ ackEndMs`가 새 말의 시작(`newStartMs`).
-4. 오디오 시계(누적 바이트 ÷ 48 = ms)가 `newStartMs + new-speech-margin`(600ms)에 닿는 첫 음성 조각부터 RECEIVING. 낡은 꼬리가 새는 것보다 첫 낱말이 잘리는 쪽을 택한다(fail-closed).
+4. 오디오 시계(누적 바이트 ÷ 48 = ms)가 `newStartMs + new-speech-margin`(700ms)에 닿는 첫 음성 조각부터 RECEIVING. 낡은 꼬리가 새는 것보다 첫 낱말이 잘리는 쪽을 택한다(fail-closed).
 5. 확인 사건이 `response-ready`(10초) 안에 안 오면 사유 `ACK_MISSING`, 새 말 전사가 없으면 `NEW_SPEECH_NOT_OBSERVED`로 닫는다(아이에게는 아무 말도 들리지 않는다 = 안전 쪽 실패).
 
 ### 3.2 판정 턴 (`JudgmentTurn`)
@@ -115,7 +115,7 @@
 | `mujoong.timing.judgment.live-budget` | `4s` | 판정 한 번의 시한(편차 (U11-b), 2s에서 올림). 호출자 마감과 짧은 쪽 |
 | `mujoong.timing.judgment.response-ready` | `10s` | 말 끝(= 확정 전사) 뒤 응답 준비 시한이자 지시 단계 시한 |
 | `mujoong.timing.provider.input-transcript-quiet` | `1500ms` | 입력 전사 조각이 이만큼 안 오면 그 묶음을 확정 전사로 본다(임시값) |
-| `mujoong.timing.provider.new-speech-margin` | `600ms` | 지시 뒤 새 말의 전사 시작에 더하는 오디오 시계 여유(임시값) |
+| `mujoong.timing.provider.new-speech-margin` | `700ms` | 지시 뒤 새 말의 전사 시작에 더하는 오디오 시계 여유(임시값) |
 | `mujoong.gate.segment-quiet` | `800ms` | 구간 완전 · 지시 없이 올린 세대의 끊김 확인(PR1 이전부터) |
 
 시간 값은 `application.yml` · `contracts/timing.md` · 설정 레코드 세 곳에서 함께 바꾼다(R-M5). 없앤 키: `mujoong.timing.provider.auto-response-start`(개정 A5).
@@ -133,7 +133,7 @@
 | U11-D7 | 응답 id · `output.done` 대신 서버 세대와 800ms 끊김으로 구간을 봉인한다. 기기 첫 소리가 최대 800ms 늦어진다 | 공급자에 응답 경계 사건이 없다 |
 | U11-D8 | realtime Luna는 키 + 스위치, core는 키만 | Q6-B |
 | U11-D9 | (개정 A1 · A2) 송신 type은 넷뿐, `response.create` 없음. 모든 서버 발화는 `append` 하나. 끊김 허가 · 송신 직전 대조 · `SendAborted` · `InstructionSent` 표시를 없앴다 (D7의 송신 쪽 대기를 대체) | 실호출: `response.create`는 위임 세션 전용으로 거절, `append`는 말하는 중이어도 새 말을 시작 |
-| U11-D10 | (개정 A3 · A4) 지시 뒤 새 말은 확인 사건 `end_ms`와 전사 `start_ms`, 오디오 시계 + 여유 600ms로 정한다 | 실호출 3: 전사가 음성보다 0.2 ~ 2초 앞서 도착 |
+| U11-D10 | (개정 A3 · A4) 지시 뒤 새 말은 확인 사건 `end_ms`와 전사 `start_ms`, 오디오 시계 + 여유 700ms로 정한다 | 실호출 3: 전사가 음성보다 0.2 ~ 2초 앞서 도착 |
 | U11-D11 | (개정 A7 · A8) 말 끝 · 입력 전사 완료 사건이 없어 서버가 조각을 묶는다(`input-transcript-quiet`). 전사 신뢰도가 없어 uncertain은 항상 거짓, 10초 기준은 확정 전사 시각 | 실호출: 해당 사건 없음 |
 | U11-D12 | (개정 A5) `auto-response-start` 키와 "말 끝 이후 조각" 기준을 없앤다 | 모델은 아이 말이 끝나기 전에 응답을 시작 |
 | U11-D13 | (개정 A6 · A9) 모든 지시문이 스스로 범위를 닫고 짧은 맞장구로 시작한다. 24kHz는 수락돼 표본율 변환 편차를 만들지 않는다 | 추가 지시는 지울 수 없고 이후 응답에도 남는다 |
