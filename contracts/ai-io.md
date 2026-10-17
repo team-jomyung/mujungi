@@ -431,6 +431,7 @@ realtime 출력 게이트의 제브 단계(U13)가 읽는 설정이다. 시간 �
 | `mujoong.guardrail.jev.mode` | `${JEV_MODE:}` | realtime | 제브 단계 모드 `REAL` · `STUB` · `OFF`. 비면 프로필 기본값(demo · prod = `REAL`, 그 밖 = `STUB`). 세션 안에서 바뀌지 않는다 [U13 편차 (U13-a)] |
 | `mujoong.guardrail.jev.base-url` | `${JEV_BASE_URL:}` | realtime | 제브 주소. 호스트는 위 허용 호스트 안이어야 한다 |
 | `mujoong.guardrail.jev.model` | `${JEV_MODEL:}` | realtime | 고정 모델 버전. 요청의 모델 이름은 이 값과 같아야 한다 |
+| `mujoong.guardrail.jev.pass-threshold` | `${JEV_PASS_THRESHOLD:0.5}` | realtime | 통과 문턱, 허용 `0 < x <= 1`. `PASS`가 1순위이고 `PASS` 확률이 이 값 **이상**일 때만 자동 통과한다(10.12). 비밀이 아니다. **임시 시험값이다 — AI 성능 시험으로 확정한다.** `REAL`에서 범위 밖이거나 숫자가 아니면 기동을 거부한다 [U13 편차 (U13-c)] |
 
 기동 점검(모드 × 프로필 × 키): 공개 프로필(demo · prod)은 `REAL` + `JEV_API_KEY` + 허용 호스트 + 고정 모델이 아니면 기동을 거부하고(`STUB` · `OFF`도 거부), 그 밖(dev · test · 프로필 없음)은 `REAL` · `STUB` · `OFF`를 모두 허용하되 `REAL`이면 키가 있어야 한다. `STUB`은 제브 단계를 모두 지나며 1차 사전 통과를 대역 표시가 붙은 `ALLOW`(`reasonCode` `STUB_ALLOW`)로 돌려주고 `OFF`는 제브 단계를 건너뛴다. 둘로 시작하면 기동 로그에 한 줄이 남는다. 대역의 통과는 실제 검사 성공이 아니다(R-M11).
 

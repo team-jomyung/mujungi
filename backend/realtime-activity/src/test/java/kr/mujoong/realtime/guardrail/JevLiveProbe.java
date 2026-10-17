@@ -8,6 +8,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
@@ -19,7 +20,10 @@ import kr.mujoong.contract.time.SystemMujoongClock;
 import kr.mujoong.realtime.content.LiveContentResources;
 import org.springframework.boot.convert.DurationStyle;
 import org.springframework.boot.env.YamlPropertySourceLoader;
+import org.springframework.core.env.MapPropertySource;
+import org.springframework.core.env.MutablePropertySources;
 import org.springframework.core.env.PropertySource;
+import org.springframework.core.env.PropertySourcesPropertyResolver;
 import org.springframework.core.io.ClassPathResource;
 
 /**
@@ -39,6 +43,8 @@ final class JevLiveProbe {
     static final String REPORT_PROPERTY = "mujoong.jev.live.report";
     static final String CONFIG_RESOURCE = "application.yml";
     static final String BUDGET_KEY = "mujoong.timing.guardrail.jev-budget";
+    static final String THRESHOLD_ENV = "JEV_PASS_THRESHOLD";
+    static final String THRESHOLD_KEY = GuardrailProperties.PASS_THRESHOLD_KEY;
     /** 모든 보고서 첫 줄에 쓰는 증거 종류. */
     static final String EVIDENCE = "REAL_API_SYNTHETIC";
 
@@ -142,6 +148,34 @@ final class JevLiveProbe {
         throw new IOException(CONFIG_RESOURCE + "에 " + BUDGET_KEY + "가 없다");
     }
 
+    /**
+     * 운영 통과 문턱(application.yml의 {@code mujoong.guardrail.jev.pass-threshold}, env {@code JEV_PASS_THRESHOLD}가 있으면 그 값). 코드에 값을
+     * 적지 않는다. 임시 시험값이다(AI 성능 시험으로 확정).
+     */
+    static double operationalThreshold(Function<String, String> env) throws IOException {
+        MutablePropertySources sources = new MutablePropertySources();
+        String override = env.apply(THRESHOLD_ENV);
+        if (override != null && !override.isBlank()) {
+            sources.addLast(new MapPropertySource("env", Map.of(THRESHOLD_ENV, override.strip())));
+        }
+        for (PropertySource<?> source : new YamlPropertySourceLoader().load(CONFIG_RESOURCE, new ClassPathResource(CONFIG_RESOURCE))) {
+            sources.addLast(source);
+        }
+        String value = new PropertySourcesPropertyResolver(sources).getProperty(THRESHOLD_KEY);
+        if (value == null || value.isBlank()) {
+            throw new IOException(CONFIG_RESOURCE + "에 " + THRESHOLD_KEY + "가 없다");
+        }
+        try {
+            double threshold = Double.parseDouble(value.strip());
+            if (!GuardrailProperties.validThreshold(threshold)) {
+                throw new IOException(THRESHOLD_KEY + " 값이 허용 범위 밖이다");
+            }
+            return threshold;
+        } catch (NumberFormatException e) {
+            throw new IOException(THRESHOLD_KEY + " 값이 숫자가 아니다", e);
+        }
+    }
+
     Result run() throws IOException {
         String key = env.apply(GuardrailStartupRules.API_KEY_ENV);
         if (key == null || key.isBlank()) {
@@ -153,7 +187,7 @@ final class JevLiveProbe {
             return finish(new Result(Outcome.SKIPPED_NO_CONFIG, List.of(), 0, "-"));
         }
         Duration budget = operationalBudget();
-        GuardrailProperties properties = new GuardrailProperties("REAL", baseUrl.strip(), model.strip());
+        GuardrailProperties properties = new GuardrailProperties("REAL", baseUrl.strip(), model.strip(), operationalThreshold(env));
         String policyVersion = LiveContentResources.loadDefault().guardrail().version();
         GuardrailClient client = factory.create(properties, () -> env.apply(GuardrailStartupRules.API_KEY_ENV), budget, clock);
         List<Observation> observations = new ArrayList<>();

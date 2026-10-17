@@ -89,7 +89,9 @@ class ConfigKeyContractTest {
             // U13 BR1.3 · BR2.2: 제브 모드 · 주소 · 모델은 env로만 받는다(비밀 아님). 시험 값은 빈 값(프로필 기본값 규칙을 쓴다)
             "JEV_MODE", "",
             "JEV_BASE_URL", "",
-            "JEV_MODEL", "");
+            "JEV_MODEL", "",
+            // 선 형식 정정 D6: 통과 문턱도 env로 받는다(비밀 아님). 시험 값은 기본값과 같다
+            "JEV_PASS_THRESHOLD", "0.5");
 
     // ------------------------------------------------------------------ timing.md ↔ application.yml
 

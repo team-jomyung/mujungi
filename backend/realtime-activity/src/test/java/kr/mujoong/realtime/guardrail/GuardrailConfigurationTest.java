@@ -59,7 +59,7 @@ class GuardrailConfigurationTest {
     }
 
     private GuardrailClient client(GuardrailMode mode, MockEnvironment environment) {
-        return configuration.guardrailClient(checksWith(mode), new GuardrailProperties("", "https://" + JevHosts.ALLOWED_HOSTS.iterator().next(), "jev-model-1"),
+        return configuration.guardrailClient(checksWith(mode), new GuardrailProperties("", "https://" + JevHosts.ALLOWED_HOSTS.iterator().next(), "jev-model-1", 0.5),
                 environment, budget(Duration.ofMillis(800)), new LiveContentRegistry(LiveContentResources.loadDefault()), new MutableClock(),
                 JsonCodec.shared());
     }
