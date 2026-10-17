@@ -207,6 +207,13 @@ mujoong:
   judgment:
     min-confidence: 0.6
     min-margin: 0.15
+  # U13 제브 게이트(contracts/ai-io.md 10.11). 시간 값이 아니다: 검사 시한은 timing.guardrail.jev-budget(R-F7). 값은 모두 환경 변수로만 받고 저장소에는 이름만 둔다(R-F3).
+  # mode가 비면 프로필 기본값(demo · prod = REAL, 그 밖 = STUB). demo · prod는 REAL + 키 JEV_API_KEY + 허용 호스트 + 고정 모델이 아니면 기동을 거부한다(BR9.1)
+  guardrail:
+    jev:
+      mode: ${JEV_MODE:}
+      base-url: ${JEV_BASE_URL:}
+      model: ${JEV_MODEL:}
   # U9 Luna 호출부(contracts/ai-io.md 10.9). 키 env OPENAI_API_KEY가 있고 enabled가 true일 때만 RealtimeLunaClient가 켜진다(BR1.1 · U11 BR12.3, 값은 env에만).
   # 시간 값이 아니다: 시도 시한은 timing.judgment.live-budget(BR5.1). demo · prod는 https + api.openai.com만, test는 루프백만(BR1.4)
   luna:

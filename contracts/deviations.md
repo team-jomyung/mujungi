@@ -184,6 +184,17 @@
 | (U11-c) | GPT-Live 키 환경 변수를 Luna 판정 키 `OPENAI_API_KEY` 하나로 통일한다(옛 이름 `PROVIDER_API_KEY`는 비밀 이름 검사 목록 · 운영 코드 · 설정 · 시험에서 없애고, 롤백 가능한 동안 Parameter Store에 같은 값으로 함께 두는 절차만 `infra/RUNBOOK.md`에 남긴다). realtime은 이 키를 demo 프로필에서만 필수로 보고, 키가 비면 연결 요청에 `Authorization` 헤더를 싣지 않는다. realtime Luna는 키 있음 AND 스위치 `mujoong.luna.enabled`(기본 false)일 때만 켜지고 `LUNA_STARTUP lunaState`에 `DISABLED_SWITCH_OFF`를 더한다. core-api Luna는 지금처럼 키만으로 켜진다 | U11 FR13 · BR12.1 ~ BR12.5 · R-F15 · R-M9 | Realtime 기동 점검 · LunaConfiguration · 배포 비밀 목록 | 운영 · 배포 | 새 값 · 이름 변경 | ai-io.md |
 | (U11-d) | 끝-끝 검증 C12의 `LATENCY_TURN` 필수 키에서 `tTranscriptFinal`을 조건부로 바꾼다: 말 끝 출처 `tSpeechEndSource`가 `INPUT_TRANSCRIPT_FINAL`인 줄만 이 키를 요구한다. 새 선 형식에는 입력 말 끝 사건이 없어 입력 전사 확정을 조각 1500ms 조용으로 만들므로, 응답이 먼저 재생되는 턴(출처 `LAST_INPUT_FRAME`)의 줄에는 이 키가 없다. 사람 결정(2026-10-17, R-F2 예외). 실제 지연 지표는 바뀌지 않는다 | U11 FR12 · BR8 | `tools/skeleton-e2e/assertions.mjs` `missingLatencyAttrs` · `steps.mjs` C12 | 개발 · 검증 | 검증 완화 | ai-io.md |
 
+## U13 편차
+
+> U13(제브 게이트, 작업 기록 261017-u13-jev-guardrail)이 승인 계약 10절에 더하거나 바로잡은 곳이다. 번호 체계: **계약 편차는 `(U13-<글자>)`**,
+> 설계 편차는 `U13-D<n>`(`docs/units/u13/design.md`)이다. Markdown은 `[U13 편차 (U13-a)]`로 표시한다(`ContractFilesTest`의 한 · 두 글자 기호와 섞이지 않는다).
+> 모두 더하기만 안전하다 — 기존 스키마 필드 · 키의 이름과 뜻은 그대로다.
+
+| 기호 | 내용 | 출처 | 제공 | 소비자 | 호환 분류 | 표시 위치 |
+|---|---|---|---|---|---|---|
+| (U13-a) | 제브 단계 모드 설정 키 `mujoong.guardrail.jev.mode`(`REAL` · `STUB` · `OFF`)와 주소 · 모델 키 `mujoong.guardrail.jev.base-url` · `mujoong.guardrail.jev.model`을 ai-io.md 10.11에 더한다. 키 하나가 모드를 정하고(비면 demo · prod = `REAL`, 그 밖 = `STUB`), demo · prod는 `REAL` + `JEV_API_KEY` + 허용 호스트 + 고정 모델이 아니면 기동을 거부한다. 제브 허용 호스트는 Luna와 같이 코드 상수이고 이 문서와 시험이 같은 목록을 대조한다 | U13 FR1.3 · FR2.1 · FR7.1 · BR1.3 · BR9.1 · Q1 답 A · Q4 답 A | Realtime `GuardrailProperties` · `RealtimeStartupChecks` | 운영 · 배포 | 새 키 | ai-io.md |
+| (U13-b) | ai-io.md 10.3 재시도 분류 표에 제브 검사 행(재시도 없음, 시한 `mujoong.timing.guardrail.jev-budget` 800ms 초과도 막힘)을 더하고, 스키마 파일 `guardrail-request` · `guardrail-result`의 예시 정책 판 이름 `guardrail-v1`을 실제 이름 `jev-guardrail-v1`로 정정한다(필드 · 규칙은 그대로, 예시 값만) | U13 FR2.3 · BR2.1 · BR2.7 · 가정 14 | 계약 문서 · 스키마 예시 | Realtime 제브 어댑터 | 문서 정정 | ai-io.md |
+
 ## U14 편차
 
 | 기호 | 내용 | 근거 | 호환 분류 |

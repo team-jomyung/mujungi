@@ -47,7 +47,7 @@
       "mode": "PRACTICE_PEER",
       "candidate": "응, 같이 하자! 너 먼저 한 바퀴 돌아.",
       "recentContext": [ { "speaker": "CHILD", "text": "나도 자동차로 탑 한 바퀴 돌아도 돼?" } ],
-      "policyVersion": "guardrail-v1"
+      "policyVersion": "jev-guardrail-v1"
     }
   ]
 }

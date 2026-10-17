@@ -40,7 +40,7 @@
       "policyFlags": ["UNSUPPORTED_CHILD_TRAIT_CLAIM"],
       "reasonCode": "UNSUPPORTED_GENERALIZATION",
       "reviewNeeded": false,
-      "policyVersion": "guardrail-v1"
+      "policyVersion": "jev-guardrail-v1"
     }
   ]
 }

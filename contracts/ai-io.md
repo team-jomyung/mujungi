@@ -315,6 +315,7 @@ U15 씨앗 v2는 GENERATED/DUPLICATE/NONE의 배타적 출력 분기를 사용�
 | 목적 | 호출 경로(단위) | 분류 | 호출 안 재시도 · 실패 뒤 |
 |---|---|---|---|
 | 진행 중 판정 J1 ~ J6 | realtime 판정 턴(U11) | `NONE` | 재시도 없음. `mujoong.timing.judgment.live-budget`(4초) 초과 · 형식 오류 · 선택지 밖 코드는 판정 보류 |
+| 제브 검사(새 발화) | realtime 출력 게이트(U13) | `NONE` | 재시도 없음. `mujoong.timing.guardrail.jev-budget`(800ms) 초과(시간 초과는 막힘) · 전송 오류 · 잘못된 JSON · 정책 판 불일치도 막힘이고 자동 `ALLOW`는 없다. 막힘 뒤 같은 다음 행동 지시를 다시 하는 것은 게이트 단계의 일이다(호출 안 재시도가 아님) [U13 편차 (U13-b)] |
 | 상황 생성 | core 상황 생성 요청(U10) | `REQUEST_BOUNDED` | 일시 실패 기술 재시도 1회 + 내용 재생성 1회(스키마 불일치 포함), 7절 15초 예산 안. 실패는 `SCENARIO_GEN_FAILED` |
 | 자체 검토(J7) | core 상황 생성 요청(U10) | `REQUEST_BOUNDED` | 같은 15초 예산 |
 | 새 씨앗 | core 결과 작업 뒤 씨앗 생성(U15) | `REQUEST_BOUNDED` | 실패하면 `skill_ref=NONE` 유지 |
@@ -416,3 +417,21 @@ Luna 호출부(core-api · realtime-activity 각자)는 공급자 시도마다 `
 
 - **기존 인터페이스 어댑터:** core `TextAiProvider`(상황 생성 지시 `prompts/scenario/generation.v1.txt`, 판 `scenario-generation.v1`) · `ResultTextProvider`(`prompts/result/{task}.{판}.txt`)의 Luna 구현은 출력 스키마 파일 없이 `json_object`로 **언제나 시도 1회**만 부른다. 재시도는 바깥 `TextAiGateway`(기술 재시도)와 결과 작업이 이미 한다. 길이 · 판 정규식 · 금지 표현(`TextAiGateway`), `ResultAiSchema` · 참조 복원 · 인용 대조(`ResultTextGateway`), 1차 사전 · `classify`(`OutputChecker`)는 그대로 돈다. 새 스키마로 바꾸는 일은 U10 · U14가 한다.
 - **실호출 시험:** 사람이 env에 키를 넣고 돌리는 `./gradlew lunaLiveTest`(태그 `luna-live`)만 실공급자를 부른다. 기본 `test` · `check` · CI · `verify.sh`는 루프백 대역만 쓴다. 키가 없으면 `SKIPPED_NO_KEY`로 끝나고, 결과는 '실제 API · 합성 자료' 증거로 따로 보고한다 [U9 편차 (U9-c)].
+
+### 10.11 U13 제브 검사 설정 · 모드 · 주소
+
+realtime 출력 게이트의 제브 단계(U13)가 읽는 설정이다. 시간 값이 아니며 `timing.md`에 두지 않는다. 검사 시한은 기존 키 `mujoong.timing.guardrail.jev-budget`(800ms, timing.md 13절)이고 호출 안 재시도는 없다(10.3). 값은 모두 환경 변수로만 받고 저장소에는 이름만 둔다(R-F3). 키 값 `JEV_API_KEY`는 호출 때마다 환경에서 읽고 어디에도 쓰지 않는다(10.7).
+
+- 제브 허용 호스트: `api.typesafe.ai`
+- 주소 규칙: demo · prod · 프로필 없음 · 모르는 프로필은 `https` + 허용 호스트만(STRICT), dev는 그 규칙 또는 루프백(DEV), test는 루프백만(TEST). 사용자 정보 · 질의 · 조각이 붙은 주소는 모두 거부한다. 어기면 기동을 거부하고(demo · prod, REAL), 보내기 직전에도 같은 규칙으로 다시 확인한다. 리다이렉트를 따르지 않고 프록시를 쓰지 않는다.
+- 모델은 고정 버전이어야 하고 이동 별칭(`jev-latest` 등 `-latest`로 끝나는 이름)이면 demo · prod에서 기동을 거부한다.
+
+| 설정 키 | 기본값 | 앱 | 뜻 |
+|---|---|---|---|
+| `mujoong.guardrail.jev.mode` | `${JEV_MODE:}` | realtime | 제브 단계 모드 `REAL` · `STUB` · `OFF`. 비면 프로필 기본값(demo · prod = `REAL`, 그 밖 = `STUB`). 세션 안에서 바뀌지 않는다 [U13 편차 (U13-a)] |
+| `mujoong.guardrail.jev.base-url` | `${JEV_BASE_URL:}` | realtime | 제브 주소. 호스트는 위 허용 호스트 안이어야 한다 |
+| `mujoong.guardrail.jev.model` | `${JEV_MODEL:}` | realtime | 고정 모델 버전. 요청의 모델 이름은 이 값과 같아야 한다 |
+
+기동 점검(모드 × 프로필 × 키): 공개 프로필(demo · prod)은 `REAL` + `JEV_API_KEY` + 허용 호스트 + 고정 모델이 아니면 기동을 거부하고(`STUB` · `OFF`도 거부), 그 밖(dev · test · 프로필 없음)은 `REAL` · `STUB` · `OFF`를 모두 허용하되 `REAL`이면 키가 있어야 한다. `STUB`은 제브 단계를 모두 지나며 1차 사전 통과를 대역 표시가 붙은 `ALLOW`(`reasonCode` `STUB_ALLOW`)로 돌려주고 `OFF`는 제브 단계를 건너뛴다. 둘로 시작하면 기동 로그에 한 줄이 남는다. 대역의 통과는 실제 검사 성공이 아니다(R-M11).
+
+정책 판 이름은 `guardrail/policy-v1.json`의 `jev-guardrail-v1`이다. 스키마 파일(`guardrail-request` · `guardrail-result`)의 예시가 쓰던 `guardrail-v1`은 이 이름으로 정정했다 [U13 편차 (U13-b)].
