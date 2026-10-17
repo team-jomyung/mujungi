@@ -2,7 +2,7 @@
 
 > 계약 9절(C14, WBS 1.7.3) + U1이 정하는 공급자 연결 · 선 형식 · 시드 사전 형식 · 승인 음성 형식. 소유: U5(D), 공급자 선 형식은 U1(B).
 > 1 ~ 5절은 형식만 고정한다. 판정 기준 본문 · 프롬프트 · 금지 표현 사전 v1 · 대기 문구 본문은 D 담당 AI 입출력 계약 문서가 채운다(OQ4 · OQ14 · OQ15). 6절은 U6 분석 AI 작업의 입력 · 출력 · 지시 요점 · 검사 규칙까지 정한다.
-> 공급자 선 형식(2 · 3절)은 J110의 가정이고 11/2 실공급자 한 턴에서 어댑터만 고친다(V-2).
+> 공급자 선 형식(2 · 3절)은 U11이 실호출로 관측한 형식으로 바꿨다(편차 (U11-a), 옛 J110 가정은 3.3절). 메시지 · 필드마다 출처를 적고, 관측되지 않은 것은 '미확인'이다.
 
 ## 1. 계약 9절 형식 (그대로)
 
@@ -27,39 +27,53 @@
 |---|---|
 | 설정 키 | `mujoong.provider.url`(환경 변수 `MUJOONG_PROVIDER_URL`). 실제 공급자 기본값 `wss://api.openai.com/v1/live/sessions`(모델 `gpt-live-1`, BR7.2)은 realtime의 `application-demo.yml` · `application-prod.yml`에만 있고 `application.yml`에는 없다. 비어 있으면 기동 거부(S1b, J141) |
 | 허용 호스트 | 코드 상수(설정으로 바꿀 수 없음). demo · prod에서 목록 밖 호스트면 기동 거부. `test` 프로필은 루프백 호스트만 허용한다(J141). 검증 스택(compose.ci)은 `MUJOONG_PROVIDER_URL`을 가짜 공급자로 명시한다 |
-| 키 | 환경 변수 `PROVIDER_API_KEY`(realtime만 받음, 값은 어디에도 쓰지 않음). 연결 요청의 `Authorization: Bearer <키>` 헤더로만 보낸다. 기기 · 프런트 번들 · 응답 · 로그에 나가지 않는다(BR7.2 · BR8.7) |
+| 키 | 환경 변수 `OPENAI_API_KEY`(GPT-Live 음성 중계와 Luna 판정이 같은 이름, 값은 어디에도 쓰지 않음, 편차 (U11-c)). realtime은 이 키를 **demo 프로필에서만 필수**로 본다(비면 기동 거부). 다른 프로필(CI · 검증 · 로컬)은 키 없이 가짜 공급자에 연결하고 연결 요청에 `Authorization` 헤더를 싣지 않는다 — 가짜 공급자는 헤더를 보지 않는다. 키가 있으면 `Authorization: Bearer <키>` 헤더로만 보낸다. 기기 · 프런트 번들 · 응답 · 로그에 나가지 않는다(BR7.2 · BR8.7) |
 | 연결 | 세션마다 별도 WSS, 별도 가상 스레드가 연다(R3-1). 연결 시한 `mujoong.provider.connect-timeout`(10초, 20초 시한 이하). 실패 · 시한 초과는 FAILED(PROVIDER_UNAVAILABLE) |
-| 오디오 | 입출력 PCM16LE · 24kHz · 모노(J27). 기기 프레임 본문을 변환 없이 중계한다(J131 무변환 확인) |
-| 전송 최소화 | 공급자로 가는 요청은 `ProviderRequestFactory` 한 곳에서만 만들고 요청 레코드는 지시문 · childContext 세 필드(displayName · age · interests) · 음성 프레임만 갖는다. 08 입력 네 칸 · 보호자 · 아이 · 기기 · 세션 id · 이메일 · 동의 · 판정 기준은 보내지 않는다(SD-20 · NFR3.1 · NFR3.2) |
+| 오디오 | 입출력 PCM16LE · 모노(J27). 세션 시작 `audio.format{type: "audio/pcm", rate}`의 `rate`는 24000이다. 실호출에서 16kHz 수락은 확인했고 24kHz 수락은 **미확인**이다(실호출 확인 단계 W7 ①, 거절이면 `ProviderClient` 한 곳에서 24kHz ↔ 16kHz 변환). 기기 프레임 본문을 변환 없이 중계한다(J131 무변환 확인) |
+| 전송 최소화 | 공급자로 가는 요청은 `ProviderRequestFactory` 한 곳에서만 만들고 요청 레코드는 지시문 문장 · 음성 프레임뿐이다. 아이 정보(이름 · 나이 · 관심사)는 별도 필드 없이 지시문 문장 안에 따옴표로 묶은 데이터로만 들어간다. 08 입력 네 칸 · 보호자 · 아이 · 기기 · 세션 id · 이메일 · 동의 · 판정 기준은 보내지 않는다(SD-20 · NFR3.1 · NFR3.2) |
 | 로그 | 공급자로 가는 요청 본문 · 오는 이벤트 본문 · 전사를 로그에 쓰지 않는다(SD-15 · BR8.7) |
 
-## 3. 공급자 선 형식 (J110 가정 — SDK 없이 JDK `java.net.http.WebSocket`, 가짜 공급자도 같은 형식)
+## 3. 공급자 선 형식 (U11 실호출 관측 — 편차 (U11-a), SDK 없이 JDK `java.net.http.WebSocket`, 가짜 공급자도 같은 형식)
 
-텍스트 프레임 JSON 한 개 = 메시지 한 개, 공통 필드 `type`. 음성은 base64로 인코딩한 PCM16LE 바이트다. 모르는 type은 무시한다.
+텍스트 프레임 JSON 한 개 = 메시지 한 개, 공통 필드 `type`. 음성은 base64로 인코딩한 PCM16LE 바이트다. 모르는 type은 무시하고 개수만 센다(type 이름 · 본문은 남기지 않는다).
+출처 표시: **실호출** = U11 실호출 보고서(2026-10-16, 합성 음성 · 실제 API, `[실호출-합성]`)에서 관측 · 공급자 오류 문장에서 확인, **미확인** = 관측되지 않아 이름 · 필드를 가정한 것(실호출 확인 단계 W7에서 확정 후 이 표를 고친다), **ADR** = 설계 결정.
 
-| 방향 | type | 필드 | 쓰임 |
+공급자가 지원하는 클라이언트 메시지 type은 열다섯 개다(실호출 오류 문장): `session.start` · `session.update` · `session.close` · `session.input_audio.append` · `session.input_audio.mute` · `session.input_audio.unmute` · `session.instructions.append` · `session.thinking.append` · `session.commentary.append` · `session.output_audio.fixture.play` · `response.create` · `response.item.create` · `decision.create` · `decision.item.create` · `decision.item.delete`. 이 밖의 type을 보내면 공급자가 `error{type: invalid_request_error, code: invalid_value, param: type}`로 거절한다. 응답 취소(`session.response.cancel`)와 지시 교정(`session.instructions.correct`), `session.response.create`는 목록에 없다. 서버는 아래 다섯 type만 보낸다(`ProviderRequestFactory`가 이 다섯 레코드만 만든다).
+
+| 방향 | type | 필드 | 출처 · 쓰임 |
 |---|---|---|---|
-| 서버 → 공급자 | `session.start` | `model`(코드 상수) · `instructions`(서버 템플릿 지시문, childContext는 따옴표로 묶은 데이터로만) · `childContext{displayName, age, interests}` · `audio{input: "pcm16le/24000/1", output: "pcm16le/24000/1"}` | 연결 직후 한 번. 응답 `session.started`가 ACTIVE 전이 조건의 하나다(BR6.8) |
-| 서버 → 공급자 | `session.input_audio.append` | `audio`(base64, 기기 0x01 프레임 본문 960바이트 그대로) | ACTIVE 뒤 ~ CLOSE_TRANSPORT 전 기기 프레임을 순번 순으로(BR7.1 · R3-8). 그 밖의 프레임은 버린다. U4b: 참여 확인(WAITING_CHILD)부터 중계하고 원음 기록은 ACTIVE부터다(U4b-J2) [U4b 편차 (U4b-a)] |
-| 서버 → 공급자 | `session.close` | — | 종료 · FAILED 전이 뒤 공급자 세션 정리(BR6.10 ④) |
-| 서버 → 공급자 | `session.response.cancel` | `responseId`(선택 — 없으면 만들던 응답 전부) | 끼어들기(PLAYBACK_MARK STOPPED · LOCAL_VOICE_ACTIVITY)와 아이 종료 의도 판정 때 만들던 · 재생하던 응답을 취소한다. 공급자는 그 응답의 남은 조각을 보내지 않는다(U3-R5 · R12 · U3-J11 · J24) [편차 (aa)] |
-| 서버 → 공급자 | `session.instructions.correct` | `text`(서버 지시문) | 게이트 폐기(GATE_PATTERN · 미완 GATE_EMPTY · SEGMENT_OVERSIZE) 뒤에는 범주별 고정 템플릿으로 응답당 한 번 교정하고 전사 · 걸린 패턴 · 미승인 원문을 넣지 않는다(U3-R7 · U3-J12 · SD-17) [편차 (aa)]. U5b의 승인된 연습 발화는 같은 type을 쓰되 8절의 타입 있는 최소 데이터 경로로 만든다. |
-| 서버 → 공급자 | `session.response.create` | — | 자유대화는 참여 확인(WAITING_CHILD → ACTIVE) 뒤 첫 응답을 한 번 만든다. 참여 전에는 입력 중계만 열어 참여 대답 전사를 받는다(U4b-J3 · BR2.1). `controlsOutput()`인 U5b 연습은 일반 첫 응답을 요청하지 않고, 8절의 발화 지시를 보낸 뒤 해당 응답만 요청한다. 기존 `PracticeInstruction` 경로도 유지한다(BR10.4) [U4b 편차 (U4b-a)] |
-| 공급자 → 서버 | `session.started` | `providerSessionId`(선택) | 세션 시작 확인 |
-| 공급자 → 서버 | `session.input_audio.speech_stopped` | — | 아이 말 끝(tSpeechEnd 출처 PROVIDER_EVENT, OD-8) |
-| 공급자 → 서버 | `session.input_transcript.delta` | `itemId` · `delta` | 아이 전사 조립(PARTIAL, BR7.5) |
-| 공급자 → 서버 | `session.input_transcript.done` | `itemId` · `transcript` · `confidence`(선택, 0 ~ 1) | 아이 전사 확정(FINAL, tTranscriptFinal). `confidence`가 있고 `mujoong.transcript.uncertain-below-percent`(60)/100보다 낮으면 그 행을 review_needed(12 '불확실' 표시)로 적는다. 없으면 불확실로 보지 않는다(U3-R10 · U3-J17) [편차 (aa)] |
-| 공급자 → 서버 | `session.output_transcript.delta` | `responseId` · `delta` | AI 말 전사 조각. 게이트 구간 버퍼에만 쌓는다(BR7.3). 한 구간에는 한 응답의 조각만 담고 `responseId`가 없으면 버린다 [편차 (z)] |
-| 공급자 → 서버 | `session.output_audio.delta` | `responseId` · `audio`(base64) | AI 말 음성 조각. 구간이 확정 · 통과될 때까지 기기로 보내지 않는다(BR7.3 · BR7.4). 한 구간에는 한 응답의 조각만 담고 `responseId`가 없으면 버린다 [편차 (z)] |
-| 공급자 → 서버 | `session.output.done` | `responseId` | 응답 끝 알림 = 그 응답의 전사 완료 신호. 게이트는 그 응답의 첫 조각부터 이 신호까지를 모두 담은 구간만 통과시킬 수 있다 — 신호가 없으면 그 응답은 GATE_EMPTY로 폐기된다(SD-17 3단계 fail-closed). 보내는 쪽은 완결된 응답에만 보낸다. 구간 확정은 800ms 조용 · 아이 입력 재개 · 다른 응답의 조각 도착으로 한다(BR7.3) [편차 (z)] |
-| 공급자 → 서버 | `session.error` | `code` | `session.started` 전이면 PROVIDER_UNAVAILABLE |
-| 공급자 → 서버 | `session.closed` | — | 공급자가 세션을 닫음 |
+| 서버 → 공급자 | `session.start` | `session{model, instructions, audio{format{type: "audio/pcm", rate}}}` — `model`은 코드 상수, `instructions`는 서버 템플릿 지시문(아이 정보는 따옴표로 묶은 데이터로만) | 실호출(중첩 모양 · 16kHz 수락). 24kHz는 **미확인**. 연결 직후 한 번. 응답 `session.started`가 ACTIVE 전이 조건의 하나다(BR6.8) |
+| 서버 → 공급자 | `session.input_audio.append` | `audio`(base64, 기기 0x01 프레임 본문 960바이트 그대로) | 실호출. ACTIVE 뒤 ~ CLOSE_TRANSPORT 전 기기 프레임을 순번 순으로(BR7.1 · R3-8). 그 밖의 프레임은 버린다. 참여 확인(WAITING_CHILD)부터 중계하고 원음 기록은 ACTIVE부터다(U4b-J2) |
+| 서버 → 공급자 | `session.instructions.append` | `text`(서버 지시문) | 지원 목록 안(실호출). 본문 필드 이름 `text`는 **미확인**, 여러 번 보냈을 때 누적되는지도 **미확인**(W7 ⑥). 게이트 폐기 뒤 세대당 한 번 범주별 고정 교정 문장(U3-R7 · U3-J12 · SD-17), 연습 확장점의 승인된 발화 · 지시문(8절), 판정 뒤 다음 행동 지시(PR2)를 이 type 하나로 보낸다. 전사 · 걸린 패턴 · 미승인 원문은 넣지 않는다 |
+| 서버 → 공급자 | `response.create` | — | 지원 목록 안(실호출). 자유대화는 참여 확인(WAITING_CHILD → ACTIVE) 뒤 첫 응답을 한 번 만들고, 종료 확인 질문 뒤 이어 갈 때도 보낸다. `controlsOutput()`인 U5b 연습은 일반 첫 응답을 요청하지 않고 8절의 발화 지시를 보낸 뒤 해당 응답만 요청한다. 서버 송신은 모두 아래 '서버 송신 직렬 경로'를 지난다 |
+| 서버 → 공급자 | `session.close` | — | 종료 · FAILED 전이 뒤 공급자 세션 정리(BR6.10 ④). 응답 `session.closed`(실호출) |
+| 공급자 → 서버 | `session.started` | `session{id, ...}` | 실호출. `session.id`를 공급자 세션 id로 읽는다 |
+| 공급자 → 서버 | `session.output_audio.delta` | `delta`(base64). **응답 id 필드가 없다** | 실호출. AI 말 음성 조각. 게이트 구간 버퍼에만 쌓는다(BR7.3 · BR11.6). 구간이 확정 · 통과될 때까지 기기로 보내지 않는다(BR7.4) |
+| 공급자 → 서버 | `session.usage.updated` | `usage{seconds}` | 실호출. 누적 사용 초(해석기가 읽고 실호출 도구 보고서가 기록, 서버 지표에는 쓰지 않는다) |
+| 공급자 → 서버 | `error` | `error{type, code, message, param}` | 실호출. 앱은 `code`만 읽고 `message` 원문은 읽지도 남기지도 않는다(R-F14). `session.started` 전이면 PROVIDER_UNAVAILABLE |
+| 공급자 → 서버 | `session.closed` | `reason`(선택) | 실호출. 공급자가 세션을 닫음 |
+| 공급자 → 서버 | `session.output_transcript.delta` | `delta` | **미확인**(실호출은 무음 · 톤 입력이라 전사 사건이 오지 않았다). 임시 이름이다. AI 말 전사 조각. 게이트 구간 버퍼에만 쌓는다 |
+| 공급자 → 서버 | `session.input_transcript.delta` / `session.input_transcript.done` | `itemId` · `delta` / `itemId` · `transcript` · `confidence`(선택, 0 ~ 1) | **미확인**(임시 이름). 아이 전사 조립(PARTIAL, BR7.5) · 확정(FINAL, tTranscriptFinal). `confidence`가 있고 `mujoong.transcript.uncertain-below-percent`(60)/100보다 낮으면 그 행을 review_needed(12 '불확실' 표시)로 적는다. 없으면 불확실로 보지 않는다(U3-R10 · U3-J17) |
+| 공급자 → 서버 | `session.input_audio.speech_stopped` | — | **미확인**(임시 이름). 아이 말 끝(tSpeechEnd 출처 PROVIDER_EVENT, OD-8). 관측되지 않으면 지연 출처는 `INPUT_TRANSCRIPT_FINAL` · `LAST_INPUT_FRAME`이다 |
 
-가짜 공급자 시나리오(백엔드 시험 `FakeProviderWsServer` · C안 `tools/fake-provider/`): 정상(전사 · 출력 길이 지정) · 금지 패턴 응답 ·
-연결 거부 · `session.started` 없음 · 지연 · 연결 단계 무응답. 받은 입력 음성 바이트 수 · 해시와 보낸 출력 음성 해시를 기록한다(J131).
-U3: `session.response.cancel`을 받으면 그 응답의 남은 조각을 보내지 않고 받은 사실만 기록하며, `session.instructions.correct`는 본문 길이 · 해시만
-기록한다(원문 저장 없음). `--confidence` 옵션은 확정 전사에 `confidence` 값을 싣는다(기본은 싣지 않음).
-U4b: `session.response.create`는 받은 사실만 기록한다. 턴 종류 `join`은 참여 확인 대답("응") 전사만 보내고 AI 출력은 없다(`--turns join,normal,forbidden`) [U4b 편차 (U4b-a)].
+응답 끝(`session.output.done`)과 응답 경계를 알리는 사건은 **관측되지 않았다**(미확인, W7 ⑤). 그래서 응답 id 대신 서버가 **출력 세대**(`OutputGeneration`)로 조각을 묶고 버린다(편차 (U11-a)).
+
+- **출력 세대 · 끊김**: 세션마다 세대 번호를 올리기만 하고, 끼어들기 · 종료 의도 · 연습 폐기 · 게이트 교정 · 서버 송신 · 보류 해제 때 올린다. 올리면 앞 조각은 모두 버리고(기기 재생 중이면 지금처럼 기기 정지 명령), 조각이 한동안 끊기기를 기다린다. 끊김은 ① 마지막 조각 시각과 세대를 올린 시각 중 늦은 쪽에서 `mujoong.gate.segment-quiet`(800ms)가 지났고 ② 아이 말 끝 이후 조각이 한 번이라도 왔거나(자동 응답이 이미 시작됐다) 아직 한 번도 오지 않았으면 말 끝 + `mujoong.timing.provider.auto-response-start`(timing.md 14절)가 지났을 때다. 출력 보류 중(참여 확인 · 종료 확인 질문 · 연습 보류)에는 단계와 관계없이 조각을 버리고 마지막 조각 시각만 갱신한다.
+- **구간**: 구간은 첫 조각부터 끊김까지 모두 담아 끊겨서 봉인했을 때만 완전이다. 세대가 바뀌어 닫은 구간 · 첫 조각을 놓친 구간 · 상한(20초 분량)을 넘긴 구간 · 아이 입력이 끊김 전에 재개되어 닫은 구간은 불완전이라 게이트가 GATE_EMPTY로 폐기한다(SD-17 3단계 fail-closed). 응답 중간의 800ms 넘는 쉼은 응답 경계와 구별되지 않는다 — 두 구간으로 나뉘어 각각 검사한다(W7 ⑨ 위험).
+- **서버 송신 직렬 경로(BR3.3 · BR11.4)**: `response.create` · `session.instructions.append`를 보내는 모든 경로(참여 뒤 첫 응답 · 확인 뒤 이어 가기 · 연습 `requestResponse` · 연습 `speak` · 게이트 교정 · 판정 뒤 지시 · 되묻기)는 세션 직렬 큐 하나를 지난다. 세대를 올리고 → 끊김 허가를 받고 → 송신 직전 현재 세대 · 허가 번호를 대조하고 → `append`(있으면) → 다시 대조 → 일반 편지함에 '보내는 중' 표시를 넣고 → `response.create` 순서다. 표시가 `response.create`보다 먼저 넣히므로 응답의 첫 조각은 항상 표시 뒤에 처리된다. 끊김 대기 상한(`mujoong.timing.judgment.response-ready`, 10초)에 끊김을 못 보면 보내지 않고 사유 코드만 남긴다.
+- 응답 취소 type이 없으므로 끼어들기 · 종료 의도는 공급자로 아무것도 보내지 않는다. 공급자는 옛 응답의 남은 조각을 계속 보내고 서버가 세대로 버린다.
+
+### 3.2 가짜 공급자
+
+백엔드 시험 `FakeProviderWsServer` · 인메모리 `FakeProviderPort` · C안 `tools/fake-provider/` 셋은 위 관측 형식만 낸다: 중첩 `session.started{session{id}}`, 응답 id 없는 `delta` 음성, 응답 끝 사건 없음(응답 경계는 마지막 조각 뒤의 무음), 오류는 `error{error{type, code, param}}`. 지원 목록 밖 type을 받으면 `error{invalid_request_error, invalid_value, param type}`로 답한다. 실호출에서 관측되지 않은 사건(출력 전사 · 입력 전사 · 말 끝)은 임시 이름으로 낸다(미확인). 받은 입력 음성 바이트 수 · 해시와 보낸 출력 음성 해시를 기록하고(J131), `session.instructions.append`는 본문 길이 · 해시만 기록한다(원문 저장 없음). `Authorization` 헤더는 보지 않고 Bearer 형식인지만 기록한다 — 키가 비면 헤더가 없고 연결은 받는다. 시나리오: 정상 · 금지 패턴 응답 · 연결 거부 · `session.started` 없음 · 지연 · 연결 단계 무응답. `--confidence` 옵션은 확정 전사에 `confidence`를 싣는다(기본은 싣지 않음). 턴 종류 `join`은 참여 확인 대답("응") 전사만 보내고 AI 출력은 없다(`--turns join,normal,forbidden`). `response.create`는 받은 사실만 기록한다.
+
+### 3.3 대체된 옛 가정(편차 표 보존)
+
+U11 이전 가정은 아래 편차들로 계약에 들어 있었고 실호출 관측 형식이 대신한다(편차 (U11-a)). 편차 표의 옛 행은 지우지 않고 '(U11-a)로 대체'로 표시했다.
+
+- 옛 응답 id 필드와 `session.output.done`을 그 응답의 전사 완료 신호로 쓰던 규칙은 출력 세대와 끊김 봉인(위)으로 대체됐다 [편차 (z)].
+- 옛 `session.response.cancel`(끼어들기 · 종료 의도), `session.instructions.correct`(게이트 폐기 교정), 확정 전사의 선택 필드 `confidence`는 앞의 둘이 공급자 지원 목록 밖이라 서버 출력 세대와 `session.instructions.append`로 대체됐고, `confidence`는 위 표에서 미확인 임시 필드로 남는다 [편차 (aa)].
+- 옛 `session.response.create`(참여 확인 뒤 첫 응답)는 지원 목록의 `response.create`로 대체됐다 [U4b 편차 (U4b-a)].
 
 ## 4. 출력 게이트 시드 사전 형식 (SD-18 · A5 · J101)
 
@@ -246,7 +260,7 @@ C10 partnerRoleText는 모델에 받지 않고 Core의 고정 역할 지시로 �
 | 상황 발화 | Core가 검증한 상황의 `partnerRoleText`, `scenarioText + 줄바꿈 + triggerScript`를 사용한다. 도움 질문은 고정 문장 ‘도움을 받아 볼까?’다. 상황 발화에 정답 · 시범 · 도움을 덧붙이지 않는다. |
 | Cue 생성 입력 | `CueBrief{situationSummary, partnerUtterance, focus}`만 `CueProvider.generate`에 넘긴다. 현재 focus는 스스로 다음 말을 떠올리게 하는 고정 지시다. 판정 기준 · 정답 문장 · 보호자 원문 · 계정 식별자 필드는 없다. |
 | Cue 생성 출력 | 비동기 `Result{text, approved, containsAnswerSentence}`다. 현재 CUE 단계 · 동의 ACCEPTED · 같은 scenarioId/세대 · 아직 주지 않은 도움인지 확인하고, `approved=true`, `containsAnswerSentence=false`일 때만 발화로 보낸다. 오류 · 승인 실패 · 정답 포함은 재생 실패 경로로 간다. |
-| 공급자 송신 | 서버 내부 식별자는 보내지 않는다. `session.instructions.correct.text`에는 고정 지시와 JSON 데이터 `{partnerRole, speech}`만 추가한다. 기존 응답 취소 → 지시 전달 → `session.response.create`를 직렬로 보내며, 낡은 출력 세대나 ACTIVE 밖이면 요청을 버린다. |
+| 공급자 송신 | 서버 내부 식별자는 보내지 않는다. `session.instructions.append.text`에는 고정 지시와 JSON 데이터 `{partnerRole, speech}`만 추가한다. 응답 취소 없이 출력 세대를 올리고 끊김을 확인한 뒤 `session.instructions.append` → `response.create`를 서버 송신 직렬 경로(3절)로 보내며, 세대가 바뀌었거나 ACTIVE 밖이면 요청을 버린다. 끊김을 못 봤거나 송신이 실패하면 확장에 실패를 알린다. |
 | 공급자 출력 | 기존 OutputGate를 통과하고, 공백을 제거한 실제 전사가 승인된 `PracticeSpeech.text`와 정확히 같아야 기기로 보낸다. 전사/음성 누락 · 내용 불일치 · 게이트 거절 · 송신 실패를 성공으로 취급하지 않는다. 실제 playbackId를 서버 내부 발화와 연결한다. |
 | 기기 재생 증거 | PLAYBACK_MARK의 STARTED → STARTED, COMPLETED → COMPLETED, STOPPED → INTERRUPTED, FAILED → FAILED로 구분한다. PROGRESS는 단계 완료가 아니다. `PlaybackFact`는 발화의 상관 ID · 상황 ID · 세대와 서버 수신 시각을 보존한다. 누락 · 만료도 완료로 만들지 않는다. |
 
@@ -330,8 +344,8 @@ U8(계약 · 버전 리소스)이 정한 공통 규칙이다. Luna · 제브 구
 
 ### 10.7 비밀 이름
 
-- `OPENAI_API_KEY`(Luna): core-api · realtime-activity가 각자 받는다. `JEV_API_KEY`(제브): realtime-activity만 받는다. 둘 다 선택(OPTIONAL)이고, 비었거나 공백뿐이면 미설정으로 보고 실제 어댑터를 끈다(U9 · U13).
-- Neo4j는 기존 `NEO4J_AUTH`를 쓴다. GPT-Live의 `PROVIDER_API_KEY`는 FR12.2 전까지 그대로다. 7절의 core 예약 이름 `MUJOONG_TEXT_AI_API_KEY`는 쓰지 않는다(BR4.2). 값은 어디에도 쓰지 않고 이름만 둔다(R-F3).
+- `OPENAI_API_KEY`: core-api · realtime-activity가 각자 받는다. core-api에서는 Luna 판정 키이고, realtime에서는 Luna 판정 키이자 GPT-Live 음성 중계 키다(U11 키 통일, 편차 (U11-c)). `JEV_API_KEY`(제브): realtime-activity만 받는다. 둘 다 배포 파라미터로는 선택(OPTIONAL)이고, 비었거나 공백뿐이면 미설정으로 보고 실제 Luna 어댑터를 끈다(U9 · U13). realtime의 GPT-Live 음성 중계는 demo 프로필에서만 이 키가 필수다(2절).
+- Neo4j는 기존 `NEO4J_AUTH`를 쓴다. 7절의 core 예약 이름 `MUJOONG_TEXT_AI_API_KEY`는 쓰지 않는다(BR4.2). 값은 어디에도 쓰지 않고 이름만 둔다(R-F3).
 
 ### 10.8 U9 Luna 호출 감사 로그 (`LUNA_CALL` · `LUNA_STARTUP`)
 
@@ -344,7 +358,7 @@ Luna 호출부(core-api · realtime-activity 각자)는 공급자 시도마다 `
 | `LUNA_CALL` | `model` · `responseModel` · `promptVersion` | LABEL | `[A-Za-z0-9][A-Za-z0-9._-]{0,63}`. 요청 모델, 응답 모델(받았을 때), 보낸 프롬프트 판 |
 | `LUNA_CALL` | `sentFields` | NAME_LIST | 보낸 입력의 최상위 키 이름을 쉼표로 이은 값. 이름마다 `[A-Za-z][A-Za-z0-9_]{0,63}`, 최대 32개 |
 | `LUNA_CALL` | `latencyMs` · `attempt` | NUMBER | 시도 지연(밀리초), 시도 번호 1 ~ 3(미호출 실패는 0) |
-| `LUNA_STARTUP` | `lunaState` | ENUM | `ENABLED`(env `OPENAI_API_KEY` 있음) · `DISABLED_NO_KEY`(없음 · 공백) |
+| `LUNA_STARTUP` | `lunaState` | ENUM | `ENABLED`(env `OPENAI_API_KEY` 있음, realtime은 `mujoong.luna.enabled`도 true) · `DISABLED_NO_KEY`(없음 · 공백) · `DISABLED_SWITCH_OFF`(realtime만: 키는 있으나 `mujoong.luna.enabled`가 false, 편차 (U11-c)) |
 
 - 형식에 맞지 않는 LABEL · NAME_LIST 값은 조용히 버리지 않고 `UNKNOWN`으로 쓴다. `lunaOutcome`이 `OK`가 아니면 줄 수준은 WARN이다.
 - 줄의 `component`는 `core-api/LunaClient` 또는 `realtime/LunaClient`다.
@@ -353,12 +367,13 @@ Luna 호출부(core-api · realtime-activity 각자)는 공급자 시도마다 `
 
 - 허용 호스트: `api.openai.com`
 - 주소 규칙: demo · prod · 프로필 없음 · 모르는 프로필 · `lunaLiveTest`는 `https` + 허용 호스트만(STRICT), dev는 그 규칙 또는 루프백(DEV), test는 루프백만(TEST). 어기면 기동을 거부하고(`MUJOONG_STARTUP_REJECTED`), 보내기 직전에도 같은 규칙으로 다시 확인한다. 리다이렉트를 따르지 않고 프록시를 쓰지 않는다(U9 BR1.4 · SD3).
-- 실제 어댑터는 env `OPENAI_API_KEY`가 비어 있지 않고 공백뿐이 아닐 때만 켜진다(10.7 · U9 Q2-B). 아래 키는 시간 값이 아니며 `timing.md`에 두지 않는다. 시도 시한은 기존 키(core `mujoong.text-ai.request-timeout` · `mujoong.text-ai.result.request-timeout`, realtime `mujoong.timing.judgment.live-budget`)와 호출자 마감 중 짧은 쪽이다(U9 BR5.1).
+- 실제 어댑터는 env `OPENAI_API_KEY`가 비어 있지 않고 공백뿐이 아닐 때만 켜진다(10.7 · U9 Q2-B). **realtime은 여기에 스위치 `mujoong.luna.enabled`(기본 false)가 true일 때만** 켜진다 — 키만으로는 켜지지 않는다(U11 편차 (U11-c)). core-api는 지금처럼 키만으로 켜진다. 아래 키는 시간 값이 아니며 `timing.md`에 두지 않는다. 시도 시한은 기존 키(core `mujoong.text-ai.request-timeout` · `mujoong.text-ai.result.request-timeout`, realtime `mujoong.timing.judgment.live-budget`)와 호출자 마감 중 짧은 쪽이다(U9 BR5.1).
 
 | 설정 키 | 기본값 | 앱 | 뜻 |
 |---|---|---|---|
 | `mujoong.luna.model` | `${OPENAI_ANALYSIS_MODEL:gpt-6-luna}` | core-api | 요청 모델 이름. env가 비면 `gpt-6-luna` |
 | `mujoong.luna.model` | `${OPENAI_JUDGE_MODEL:gpt-6-luna}` | realtime | 같음 |
+| `mujoong.luna.enabled` | `false` | realtime | realtime Luna 스위치(시간 값 아님). 키가 있어도 false면 `RealtimeLunaClient`를 등록하지 않는다. demo에서 true로 바꾸기 전에 `infra/RUNBOOK.md` 단계 4의 R-F15 확인 기록을 남긴다 |
 | `mujoong.luna.base-url` | `https://api.openai.com/v1` | core-api · realtime | Responses API 기준 주소(`{base-url}/responses`). test 프로필은 루프백으로 덮어쓴다 |
 | `mujoong.luna.max-response-bytes` | `1000000` | core-api · realtime | 응답 본문 바이트 상한. 넘으면 `LENGTH_EXCEEDED` |
 | `mujoong.luna.purpose.<목적>.max-output-tokens` | `4000` | core-api · realtime | 요청 `max_output_tokens`. core 목적: `scenario-generation` · `scenario-review` · `seed-generation` · `result-text` · `goal-candidates` · `rejudgment`, realtime 목적: `judgment-live` |

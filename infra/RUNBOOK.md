@@ -205,10 +205,8 @@ for name in POSTGRES_PASSWORD DB_OWNER_PASSWORD DB_CORE_PASSWORD DB_REALTIME_PAS
   gen && aws ssm put-parameter --name "/mujoong/demo/$name" --type SecureString --value "file://$tmp" \
     --tags Key=Project,Value=mujoong Key=Environment,Value=demo >/dev/null && echo "put $name"
 done
-# 사람이 가진 값(입력이 화면에 보이지 않게): 공급자 키(GPT-Live 음성 중계 · Luna 판정 공용 OPENAI_API_KEY, 아래 R-F15 확인 기록을 먼저 남긴다),
-# (GHCR 패키지가 비공개면) 읽기 전용 토큰(read:packages, 만료 90일 이하)
-read -r -s -p 'OPENAI_API_KEY: ' v && printf '%s' "$v" >"$tmp" && unset v && echo && \
-  aws ssm put-parameter --name /mujoong/demo/OPENAI_API_KEY --type SecureString --value "file://$tmp" >/dev/null
+# 사람이 가진 값(입력이 화면에 보이지 않게): (GHCR 패키지가 비공개면) 읽기 전용 토큰(read:packages, 만료 90일 이하)
+# 공급자 키(GPT-Live 음성 중계 · Luna 판정 공용 OPENAI_API_KEY)는 이 블록에서 넣지 않는다 — 아래 'R-F15 확인' 기록을 남긴 뒤 그 항목의 명령으로만 넣는다
 read -r -s -p 'GHCR_PULL_TOKEN: ' v && printf '%s' "$v" >"$tmp" && unset v && echo && \
   aws ssm put-parameter --name /mujoong/demo/GHCR_PULL_TOKEN --type SecureString --value "file://$tmp" >/dev/null
 rm -f "$tmp"; unset tmp
