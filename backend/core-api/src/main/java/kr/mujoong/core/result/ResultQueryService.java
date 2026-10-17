@@ -13,13 +13,19 @@ import org.springframework.stereotype.Service;
 public class ResultQueryService {
     private final ActivityCopyRepository copies;private final ResultRecordReader records;private final SessionResultStateRepository states;
     private final ActivityResultRepository results;private final SceneJudgmentRepository scenes;private final CandidateRegistry candidates;
+    private kr.mujoong.core.practicegoal.GoalCandidateRepository generated;
+    private kr.mujoong.core.consent.ConsentPolicyService goalConsent;
+    @org.springframework.beans.factory.annotation.Autowired
+    void generatedGoals(kr.mujoong.core.practicegoal.GoalCandidateRepository repository,kr.mujoong.core.consent.ConsentPolicyService consent){generated=repository;goalConsent=consent;}
     public ResultQueryService(ActivityCopyRepository copies,ResultRecordReader records,SessionResultStateRepository states,ActivityResultRepository results,SceneJudgmentRepository scenes,CandidateRegistry candidates){this.copies=copies;this.records=records;this.states=states;this.results=results;this.scenes=scenes;this.candidates=candidates;}
     public record Status(String sessionStatus,boolean confirmed,String jobStatus){}
     public record Sentence(UUID goalSelectionId,String text){}
     public record Scene(int sceneNo,String exposureType,String sceneChip,String chipText,String notDoneReason){}
-    public record Goal(UUID goalSelectionId,String displayName,int order,List<Scene> scenes,Map<String,Object> help){}
+    public record TimedScene(int sceneNo,String exposureType,String sceneChip,String chipText,String notDoneReason,String timing){}
+    public record GeneratedCandidate(UUID recommendationId,String displayName,String displayEvidence,List<CandidateRegistry.Evidence> evidence,boolean selected,UUID goalSelectionId){}
+    public record Goal(UUID goalSelectionId,String displayName,int order,List<?> scenes,Map<String,Object> help){}
     public record Practice(List<Goal> goals){}
-    public record Result(String jobStatus,String resultLevel,List<Sentence> sentences,Practice practice,List<Map<String,Object>> tips,String noTipReason,List<CandidateRegistry.ResultCandidateView> candidates){@Override public String toString(){return "Result[jobStatus="+jobStatus+"]";}}
+    public record Result(String jobStatus,String resultLevel,List<Sentence> sentences,Practice practice,List<Map<String,Object>> tips,String noTipReason,List<?> candidates){@Override public String toString(){return "Result[jobStatus="+jobStatus+"]";}}
     public Status status(UUID guardian,UUID session){
         var copy=copies.findOwned(session,guardian).orElseThrow(()->CoreApiException.of(ErrorCode.NOT_FOUND));
         var head=states.find(session,guardian);if(head.isPresent())return new Status(copy.status().name(),copy.confirmed(),head.get().jobStatus());
@@ -36,12 +42,18 @@ public class ResultQueryService {
         if(record.isPresent()&&record.get().record().activityType().equals("PRACTICE")){
             var rows=scenes.find(stored.id());var helps=transcript(stored.helpJson());var goals=new ArrayList<Goal>();
             for(var goal:goals(practice(record.get().record().practiceJson()))){UUID id=uuid(goal.get("goalSelectionId"));if(id==null)continue;
-                var publicScenes=rows.stream().filter(s->s.goalSelectionId().equals(id)).map(s->new Scene(s.sceneNo(),s.exposureType(),s.sceneChip(),SceneChipMapper.text(s.sceneChip(),s.notDoneReason()),s.notDoneReason())).toList();
+                var publicScenes=rows.stream().filter(s->s.goalSelectionId().equals(id)).map(s->PracticeRecordV2.VERSION.equals(s.flowVersion())?(Object)new TimedScene(s.sceneNo(),s.exposureType(),s.sceneChip(),SceneChipMapper.text(s.sceneChip(),s.notDoneReason()),s.notDoneReason(),s.timing()):new Scene(s.sceneNo(),s.exposureType(),s.sceneChip(),SceneChipMapper.text(s.sceneChip(),s.notDoneReason()),s.notDoneReason())).toList();
                 var help=helps.stream().filter(h->id.toString().equals(h.get("goalSelectionId"))).findFirst().map(h->object(h.get("help"))).orElse(Map.of("count",0,"consent","NONE"));
-                goals.add(new Goal(id,text(goal,"displayName"),(int)number(goal,"order"),publicScenes,help));
+                String name=text(goal,"displayName");if(generated!=null&&PracticeRecordV2.VERSION.equals(goal.get("flowVersion")))name=generated.selection(guardian,id).filter(s->s.childId().equals(record.get().record().childId())).map(s->s.displayName()).orElse(name);
+                goals.add(new Goal(id,name,(int)number(goal,"order"),publicScenes,help));
             }
             practice=new Practice(goals);
         }
-        return new Result(status.jobStatus(),stored.level(),sentences,practice,transcript(stored.tipsJson()),stored.noTipReason(),candidates.viewForResult(session,guardian));
+        List<?> publicCandidates=candidates.viewForResult(session,guardian);
+        if(generated!=null&&record.isPresent()&&kr.mujoong.contract.json.JsonCodec.shared().read(stored.pendingCandidatesJson(),Object.class) instanceof Map<?,?>){
+            UUID child=record.get().record().childId();publicCandidates=goalConsent!=null&&!goalConsent.check(guardian).ok()?List.of():generated.candidates(child,session).stream().filter(v->generatedSource(v,stored.id())).map(v->{var selected=generated.activeSelection(child,v.candidateId());return new GeneratedCandidate(v.id(),v.content().displayName(),v.content().displayEvidence(),v.content().evidence().stream().map(e->new CandidateRegistry.Evidence(e.utteranceSeq(),"CHILD_RECALL")).toList(),selected.isPresent(),selected.map(s->s.id()).orElse(null));}).toList();
+        }
+        return new Result(status.jobStatus(),stored.level(),sentences,practice,transcript(stored.tipsJson()),stored.noTipReason(),publicCandidates);
     }
+    private boolean generatedSource(kr.mujoong.core.practicegoal.GoalCandidateRepository.Version version,UUID result){return generated.fromResult(version.candidateId(),result);}
 }

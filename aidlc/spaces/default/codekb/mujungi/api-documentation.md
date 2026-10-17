@@ -1,3 +1,17 @@
+> 현재 범위의 정본은 바로 아래 U14 갱신절이다. 그 뒤 원문은 보존 이력이며 재검증 범위는 timestamp에 한정한다.
+
+## U14 현재 API·계약 차이
+
+ResultQueryService.Scene은 sceneNo, exposureType, sceneChip, chipText, notDoneReason만 낸다. raw timing과 flowVersion은 현재 없다. session-result-response는 additionalProperties=false이고 sceneNo도 [1,2]로 닫혀 있으므로 선택 필드·enum 확장조차 엄격 소비자 영향을 분류해야 한다(contracts/README.md:30,50).
+
+기존 후보 DTO와 스키마는 reasonText를 공개하고 frontend/src/parent/api/results.ts:28은 text(c.reasonText)를 필수 파싱한다. 새 후보에서 내부 reasonText를 제거하면 이 파서도 함께 바꿔야 한다. 대안은 공개 displayEvidence를 추가하고 파서에서 기존 화면 모델의 reasonText로 옮기는 최소 어댑터다. 27 화면 소스는 유지할 수 있으나 계약의 필드 삭제·의미 변경 분류 및 legacy fallback 회귀가 필요하다. 원문 AI reasonText를 공개하는 해결은 C-DS12를 충족하지 않는다. 이 선택은 후속 설계 사항이다.
+
+U15 실제 API: seedSummaries(guardian,child), skillContext(guardian,child,seedId) → Optional<SkillContext(seed,graphVersion)>, generateSeed(Request) → Result(seedId,reason). Request에는 guardianId,childId,activityId,candidateRef,skillRef와 StructureSignature 5값이 필수다. 현재 goal 후보 계약의 fourElements만으로 이 5값이 제공되지는 않는다. 추론을 임의 상수로 채우지 말고 후보 생성 계약/프롬프트에서 안전한 내부 구조를 제공할지 설계한다.
+
+SavedGoalReader의 C-DS10은 U14 신규 제공 대상이며 구현 완료로 적지 않는다.
+
+---
+
 # API 문서 (API Documentation)
 
 > 최신 확인: 2026-10-16, HEAD 7e30ee8, U15 집중 분석. 아래 최신 절이 U15 관련 과거 설명보다 우선한다. 이전 분석 본문은 이력으로 보존하며 이번 범위 밖의 검증 주장은 shallow로 낮췄다.

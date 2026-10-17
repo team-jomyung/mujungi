@@ -19,7 +19,7 @@ import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
- * S2 이력 버전 확인 (RD-12 S2 · BR8.2 · J116): 앱이 들고 온 최고 버전(V8 → "8") 이상이면 통과, 미적용 · 낮은 버전(기준선 0만) · 읽기 실패는
+ * S2 이력 버전 확인 (RD-12 S2 · BR8.2 · J116): 앱이 들고 온 최고 버전(V9 → "9") 이상이면 통과, 미적용 · 낮은 버전(기준선 0만) · 읽기 실패는
  * 기동 거부이고 거부 줄에는 errorKind · 표 이름 · 버전 숫자만 있다. 버전 비교는 숫자 단위다.
  */
 @Tag("u1")
@@ -43,14 +43,14 @@ class SchemaVersionCheckTest {
 
     @Test
     void appliedVersionAtOrAboveTheBundledMigrationPasses() {
-        // 앱이 들고 온 최고 버전: V1(U1) · V2(U2) · V3(U4a) · V4(U5a) · V5(U6) · V6(U7) · V7(U5b) · V8(U15)
-        assertThat(SchemaVersionCheck.expectedVersion()).isEqualTo("8");
-        history(List.of("0", "1", "2", "3", "4", "5", "6", "7", "8"));
+        // 앱이 들고 온 최고 버전: V1(U1) · V2(U2) · V3(U4a) · V4(U5a) · V5(U6) · V6(U7) · V7(U5b) · V8(U15) · V9(U14)
+        assertThat(SchemaVersionCheck.expectedVersion()).isEqualTo("9");
+        history(List.of("0", "1", "2", "3", "4", "5", "6", "7", "8", "9"));
 
-        assertThat(check.verify()).isEqualTo("8");
-
-        history(List.of("1", "2", "3", "4", "5", "6", "7", "8", "9"));
         assertThat(check.verify()).isEqualTo("9");
+
+        history(List.of("1", "2", "3", "4", "5", "6", "7", "8", "9", "10"));
+        assertThat(check.verify()).isEqualTo("10");
         assertThat(stderr.toString(StandardCharsets.UTF_8)).isEmpty();
     }
 
@@ -68,7 +68,7 @@ class SchemaVersionCheckTest {
     void onlyTheBaselineRowIsRejectedAsBehind() {
         history(List.of("0"));
 
-        assertThatThrownBy(check::verify).isInstanceOf(IllegalStateException.class).hasMessageContaining("0 < 기대 8");
+        assertThatThrownBy(check::verify).isInstanceOf(IllegalStateException.class).hasMessageContaining("0 < 기대 9");
         assertThat(stderr.toString(StandardCharsets.UTF_8)).contains("SchemaVersionBehind");
     }
 
@@ -96,21 +96,26 @@ class SchemaVersionCheckTest {
         when(jdbc.queryForList(anyString(), eq(String.class))).thenAnswer(call -> {
             String sql = call.getArgument(0);
             assertThat(sql).contains(SchemaVersionCheck.HISTORY_TABLE).contains("success").contains("version is not null");
-            return List.of("1", "2", "3", "4", "5", "6", "7", "8");
+            return List.of("1", "2", "3", "4", "5", "6", "7", "8", "9");
         });
 
-        assertThat(check.verify()).isEqualTo("8");
+        assertThat(check.verify()).isEqualTo("9");
     }
 
     @Test
     void historyBeforeTheU5aMigrationCannotStartTheApplication() {
         history(List.of("1", "2", "3"));
         assertThatThrownBy(check::verify).isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("3 < 기대 8");
+                .hasMessageContaining("3 < 기대 9");
         assertThat(stderr.toString(StandardCharsets.UTF_8)).contains("SchemaVersionBehind");
     }
 
     private void history(List<String> versions) {
         when(jdbc.queryForList(anyString(), eq(String.class))).thenReturn(versions);
+    }
+    @Test
+    void historyAtThePreviousU15VersionIsStillBehind() {
+        history(List.of("1", "2", "3", "4", "5", "6", "7", "8"));
+        assertThatThrownBy(check::verify).isInstanceOf(IllegalStateException.class).hasMessageContaining("8 < 기대 9");
     }
 }

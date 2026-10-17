@@ -1,0 +1,16 @@
+{
+  "sourceRevision": "d5d4d4f375c3",
+  "sourceFingerprint": "sha256:54c2913128ff83b13386456a40a32c83bd69a872b6cec6f134ab00d9d465ec69",
+  "mode": "compose",
+  "result": "PASS",
+  "exitCode": 0,
+  "totalSeconds": 747,
+  "steps": {"A1": 544, "A2": 67, "A3": 12, "A4": 1, "F": 0, "B": 99, "C": 19, "P1": 2, "P2": 1, "P3": 0, "T": 0},
+  "backend": {"tests": 3149, "failures": 0, "errors": 0, "skipped": 3},
+  "frontend": {"files": 74, "tests": 994, "failures": 0, "linePercent": 98.55},
+  "tools": {"files": 11, "tests": 125, "failures": 0},
+  "security": {"worktreePatterns": "PASS", "secretIgnoreRules": "PASS", "schemaIsolation": "PASS", "logHygiene": "PASS", "secretValues": "PASS", "historyScan": "gitleaks absent locally; owned by PR CI secrets"},
+  "evidenceRoot": "/home/pdypd/mujungi-u14-verify/build/verify",
+  "limits": ["Fake AI provider and synthetic device only", "Not evidence of real-provider or real-device quality", "No deployment or merge", "U15 PR26 remains unmerged"],
+  "executionEnvironment": {"GRADLE_OPTS": "-Dorg.gradle.parallel=false -Dorg.gradle.workers.max=2", "edgePrefix": "172.30.210", "backendPrefix": "172.30.220"}
+}

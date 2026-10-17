@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://mujoong.invalid/contracts/schemas/session-result-response.schema.json",
   "title": "27 결과 · 생활 팁 · 목표 후보",
-  "description": "GET /api/sessions/{sessionId}/result 200(계약 3절 C5 · U6 BR8.1 · BR8.2). 장면 결과는 칩 5종으로만 낸다. 진행 중 판정 · 재판정 원값(value · timing · rationale) · 구조화 원본 · 08 원문 · 상황 본문 · 판정 기준 · 매칭 로그 · 등록 대기 후보는 칸이 없다(additionalProperties false). 현재 결과 버전이 없으면 jobStatus만 채우고 나머지는 빈 값이다. 생활 팁의 title은 선택 필드다(편차 (U6-i)). 자유대화 결과 문장은 응답에 있지만 27은 그리지 않는다(편차 (U6-l)).",
+  "description": "GET /api/sessions/{sessionId}/result 200. U14 새 연습 결과는 실제 timing과 가변 양수 sceneNo를 보존하고, 27 칩만 기존5종으로 접는다. value/rationale/live/differs/4요소/skillRef/배경/매칭로그/pending은 공개하지 않는다. 새 후보는 displayEvidence를 공개하고 내부 reasonText는 공개하지 않는다. 레거시 후보의 기존 reasonText 계약은 유지한다. strict 이전 소비자와 같은 릴리스에서 갱신한다(U14-b).",
   "type": "object",
   "additionalProperties": false,
   "required": ["jobStatus", "sentences", "tips", "candidates"],
@@ -68,11 +68,16 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["recommendationId", "displayName", "reasonText", "evidence", "selected"],
+        "required": ["recommendationId", "displayName", "evidence", "selected"],
+        "oneOf": [
+          { "required": ["reasonText"], "not": { "required": ["displayEvidence"] } },
+          { "required": ["displayEvidence"], "not": { "required": ["reasonText"] } }
+        ],
         "properties": {
           "recommendationId": { "$ref": "common.schema.json#/$defs/Uuid" },
           "displayName": { "type": "string", "minLength": 1 },
           "reasonText": { "type": "string" },
+          "displayEvidence": { "type": "string", "minLength": 1, "maxLength": 40 },
           "evidence": {
             "type": "array",
             "items": {
@@ -112,7 +117,8 @@
             "additionalProperties": false,
             "required": ["sceneNo", "exposureType", "sceneChip", "chipText"],
             "properties": {
-              "sceneNo": { "type": "integer", "enum": [1, 2] },
+              "sceneNo": { "type": "integer", "minimum": 1 },
+              "timing": { "type": ["string", "null"], "enum": ["IMMEDIATE", "AFTER_REASK", "AFTER_HELP", null] },
               "exposureType": { "type": "string", "enum": ["ORIGINAL", "NEW_SCENARIO"] },
               "sceneChip": {
                 "type": "string",

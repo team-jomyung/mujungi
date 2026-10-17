@@ -1,3 +1,15 @@
+> 현재 범위의 정본은 바로 아래 U14 갱신절이다. 그 뒤 원문은 보존 이력이며 재검증 범위는 timestamp에 한정한다.
+
+## U14 집중 갱신 — 실제 의존
+
+SessionResultHandler → ResultTextGateway, OutputChecker, CandidateScreen, CandidateRegistry, 결과/장면 저장소. CandidateRegistry → PracticeGoalRepository, PracticeAccountPort, CandidateEvidencePort, PragmaticsKnowledge. ReportAssembler → SceneChipMapper. U14 소유 이전 시 기존 import·서비스 생성자·시험 대역을 깨지 않게 경계를 제공해야 한다.
+
+U15 SeedGenerationService → ChildKnowledgeService + Optional<CoreLunaClient> + SeedContentValidator이며 기능 비활성·키 없음은 정상 NONE이다. 후보 확정 이후 별도 실패 경계에서 호출하고 결과 상태와 결합하지 않는다. 후보 참조·버전과 활동 id를 안정적으로 묶어 재처리 시 중복 생성되지 않아야 한다.
+
+GOAL_CANDIDATES/REJUDGMENT/RESULT_TEXT의 JOB_ATTEMPT 정책은 작업 수준에서 재시도한다. 안쪽 재시도를 더하지 않는다. 이전 전체 의존 목록은 이번에 전체 재확인한 것이 아니다.
+
+---
+
 # 의존 관계 (Dependencies)
 
 > 최신 확인: 2026-10-16, HEAD 7e30ee8, U15 집중 분석. 아래 최신 절이 U15 관련 과거 설명보다 우선한다. 이전 분석 본문은 이력으로 보존하며 이번 범위 밖의 검증 주장은 shallow로 낮췄다.

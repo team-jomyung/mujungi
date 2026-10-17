@@ -111,7 +111,8 @@ public record CoreProperties(
         public ResultTiming {
             positive(jobAttempts, "mujoong.timing.result.job-attempts");
             positiveList(jobRetryBackoff, "mujoong.timing.result.job-retry-backoff");
-            if (jobAttempts != 3 || jobRetryBackoff.size() != jobAttempts - 1) {
+            // Existing explicit U6 configurations remain readable; U14 production default is four total attempts.
+            if ((jobAttempts != 3 && jobAttempts != 4) || jobRetryBackoff.size() != jobAttempts - 1) {
                 throw invalid("mujoong.timing.result 시도 수와 재시도 간격이 계약과 다르다");
             }
             jobRetryBackoff = List.copyOf(jobRetryBackoff);

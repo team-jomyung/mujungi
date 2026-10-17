@@ -1,0 +1,36 @@
+{
+  "source": "d5d4d4f375c3",
+  "classes": 19,
+  "counts": {
+    "tests": 161,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "coverage": [
+    {
+      "type": "LINE",
+      "missed": "89",
+      "covered": "837"
+    }
+  ],
+  "linePercent": 90.39,
+  "scopeFiles": 26,
+  "tagCommandExit": 0,
+  "tagSeconds": 47,
+  "coverageCommandExit": 0,
+  "coverageSeconds": 2,
+  "coverageReusedSameTagTest": true,
+  "frontend": {
+    "tests": 8,
+    "failures": 0,
+    "skipped": 0,
+    "exitCode": 0
+  },
+  "migrations": "PASS rc0",
+  "notes": [
+    "Filtered tests overlap full backend; do not sum.",
+    "Full backend aggregate saved before this filtered command replaced core XML.",
+    "Production sources and assertions unchanged during Build and Test."
+  ]
+}

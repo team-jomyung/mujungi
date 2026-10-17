@@ -1,0 +1,146 @@
+{
+  "command": "./gradlew --init-script ../../u14-wsl-build.init.gradle :core-api:test :core-api:jacocoTestReport :core-api:jacocoTestCoverageVerification -PincludeTags=u14 -PcoverageScope=u14 -Pmujoong.test.db=docker",
+  "workingDirectory": "backend",
+  "baseCommit": "347de28",
+  "source": "original working tree, fourth layer uncommitted at execution",
+  "exitCode": 0,
+  "tests": 147,
+  "failures": 0,
+  "errors": 0,
+  "skipped": 0,
+  "lineCoverage": {
+    "covered": 812,
+    "missed": 100,
+    "total": 912,
+    "ratio": 0.8903508771929824
+  },
+  "suites": [
+    {
+      "name": "kr.mujoong.core.practice.U14LegacyCompatibilityIT",
+      "tests": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "kr.mujoong.core.practicegoal.CandidateSeedLinkTest",
+      "tests": 10,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "kr.mujoong.core.practicegoal.CandidateSeedReplayIT",
+      "tests": 8,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "kr.mujoong.core.practicegoal.CandidateVersionSelectionIT",
+      "tests": 8,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "kr.mujoong.core.practicegoal.GoalCandidateGatewayTest",
+      "tests": 8,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "kr.mujoong.core.practicegoal.GoalCandidateValidatorTest",
+      "tests": 10,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "kr.mujoong.core.practicegoal.PracticeGoalRepositoryIT",
+      "tests": 12,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "kr.mujoong.core.practicegoal.SavedGoalReaderTest",
+      "tests": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "kr.mujoong.core.practicegoal.U14DeletionIT",
+      "tests": 8,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "kr.mujoong.core.practicegoal.U14MigrationIT",
+      "tests": 9,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "kr.mujoong.core.report.U14MixedReportIT",
+      "tests": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "kr.mujoong.core.result.PracticeRecordV2Test",
+      "tests": 13,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "kr.mujoong.core.result.RejudgmentGatewayTest",
+      "tests": 10,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "kr.mujoong.core.result.U14ResultApiIT",
+      "tests": 7,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "kr.mujoong.core.result.U14ResultPipelineIT",
+      "tests": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "kr.mujoong.core.result.U14ResultRetryIT",
+      "tests": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "kr.mujoong.core.result.U14SceneProjectionTest",
+      "tests": 8,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "kr.mujoong.core.result.U14TimingContractTest",
+      "tests": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    }
+  ],
+  "reportPath": "/tmp/mujungi-u14-verification-build/core-api/build/reports/jacoco/test/jacocoTestReport.xml"
+}

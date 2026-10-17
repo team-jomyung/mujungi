@@ -169,3 +169,10 @@
 | (U9-a) | FR1.1의 `openai-java` SDK 대신 JDK `HttpClient` + `JsonCodec`으로 같은 Responses API(`POST /v1/responses`)를 직접 부른다. Jackson 2 · OkHttp · Kotlin 런타임을 들이지 않아 J139(Jackson은 `JsonCodec` 한 곳)와 바깥 호출 관례를 지키고 새 의존성 점검 대상이 없다 | Q1-A · J139 | core `CoreLunaClient` · realtime `RealtimeLunaClient` | U10 · U11 · U14 · U15 | 구현 방식 변경(외부 계약 같음) | ai-io.md 10.10 |
 | (U9-b) | R-F15(약관 · 보호자 동의 범위 확인 전 실제 아동 데이터 전송 금지)를 코드 스위치로 판정하지 않고 `infra/RUNBOOK.md` 단계 4의 확인 기록 표(확인자 · 날짜 · 약관 판 · 환경)로 지킨다. 키(`OPENAI_API_KEY`)가 있으면 실제 어댑터가 켜지므로 기록 없이 키를 넣지 않는 절차가 유일한 방어선이다 | Q2-B · BR1.7 · SD10 | 운영 절차(RUNBOOK) | demo 운영자 | 판정 방법 변경 | ai-io.md 10.2 · infra/RUNBOOK.md |
 | (U9-c) | 사람이 키를 넣고 직접 돌리는 실호출 시험 `./gradlew lunaLiveTest`(태그 `luna-live`)를 둔다. R-F1(시험 · CI · 검증에서 실공급자 금지)의 글자와 다르지만, 기본 `test` · `check` · CI · `verify.sh`에서 언제나 빠지고(빌드 규칙 고정 제외 + 루트 `verifyLunaLiveIsolation`), 합성 자료만 쓰며, 결과는 '실제 API · 합성 자료' 증거로 따로 보고한다. 키가 없으면 `SKIPPED_NO_KEY` | Q4 추가 요구 · BR9.2 · BR9.3 | `backend/build-logic` `mujoong.java-conventions` · 두 앱 `*LunaLiveTest` | 사람(개발 PC) | 새 선택 작업 | ai-io.md 10.10 |
+
+## U14 편차
+
+| 기호 | 내용 | 근거 | 호환 분류 |
+|---|---|---|---|
+| (U14-a) | GOAL_CANDIDATES의 NONE 후보에 선택적 내부 structureSignature를 더한다. U15의 다섯 구조 값을 동일 후보 응답에서 받고 검증하며, 누락/잘못된 추상화/원문·이름 검증 실패는 NONE을 유지한다. 임의 상수 서명이나 추가 추상화 AI 호출을 만들지 않는다. 결과 커밋 후 candidate/version 멱등 키로 생성하고 새 불변 버전으로 게시한다. | 승인 U14 Functional Design D2·FR2.3, C-DS10, U15 StructureSignature | strict 스키마의 추가 출력 속성을 이전 소비자는 거절하므로 생산/소비를 같은 릴리스에서 갱신한다. 보호자 공개 속성이 아니다. |
+| (U14-b) | 새 결과의 장면 번호는 양의 가변 정수이며 timing을 제공한다. 생성 후보는 reasonText 대신 displayEvidence를 공개하고 recommendationId는 불변 후보 버전이다. legacy 후보/장면 응답은 기존 모양을 유지한다. 프런트 API 파서는 displayEvidence를 기존 화면 모델의 reasonText로 변환한다. | 승인 U14 D1·D3·D4·D6, FR3.1·FR4.1 | strict 응답 소비자는 새 속성과 후보의 대체 필드를 거절할 수 있으므로 schema·API 생산부·프런트 파서를 같은 릴리스로 갱신한다. 기존 27개 화면의 모델과 칩은 유지한다. |

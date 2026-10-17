@@ -173,8 +173,8 @@ web의 loading-notice-delay는 MUJOONG_TIMING_PARENT_LOADINGNOTICEDELAY 환경 �
 
 | 키 | 기본값 | 소유 앱 | 뜻 | 근거 |
 |---|---|---|---|---|
-| `mujoong.timing.result.job-attempts` | `3` | core-api | 최초 포함 총 시도 수 | BR1.7 · U6-d |
-| `mujoong.timing.result.job-retry-backoff` | `[5s, 15s]` | core-api | 실패 뒤 다음 시도 간격 | BR1.7 |
+| `mujoong.timing.result.job-attempts` | `4` | core-api | 최초 1회 + 추가 최대 3회. realtime/web 비소유 키 | FR7.6 · U14 |
+| `mujoong.timing.result.job-retry-backoff` | `[5s, 15s, 30s]` | core-api | 실패 뒤 다음 시도 간격. realtime/web 비소유 키 | FR7.6 · U14 |
 | `mujoong.timing.result.job-tick` | `1s` | core-api | 실행기 주기 | FD-Q2 |
 | `mujoong.timing.result.attempt-timeout` | `30s` | core-api | 세션 결과 시도 시한 | FD-Q2 |
 | `mujoong.timing.result.reconcile-interval` | `5m` | core-api | 누락 · 후보 등록 · 리포트 정리 점검 | FD-Q2 |
