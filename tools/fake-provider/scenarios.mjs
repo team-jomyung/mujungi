@@ -59,6 +59,8 @@ export const TURN_SCRIPTS = Object.freeze({
 
 /** 지시에 대한 새 말 앞에 두는 낡은 꼬리 흉내 음성의 길이(realtime new-speech-margin 600ms보다 길다). */
 export const FILLER_MS = 700;
+/** 일반 통합 시나리오의 채움 길이. contracts/timing.md의 new-speech-margin과 맞춘다(C9 보완). */
+export const DEFAULT_INSTRUCTION_FILLER_MS = 600;
 /** 지시 확인 end_ms = 지시를 받은 때의 오디오 시계 + 이 값(추정 끝). */
 export const ACK_LEAD_MS = 300;
 /** 출력 음성 PCM16 24kHz 모노의 ms당 바이트. */
@@ -127,6 +129,7 @@ export function textSha256(text) {
  * 출력 음성 조각들. 입력 전사 완료 · 말 끝 · 응답 끝 사건은 없다. 구간 확정은 realtime이 마지막 출력 뒤 800ms 조용으로 한다(U11 BR11.6).
  * @param {number} [clockMs] 이 턴을 보내기 직전의 출력 오디오 시계(ms)
  * @param {number} [pendingAckEndMs] 아직 새 말이 쓰지 않은 지시 확인의 end_ms(없으면 -1) — 있으면 새 말은 그 뒤에서 시작한다
+ * @param {number} [instructionFillerMs] 새 말 앞 채움 길이(기본600ms,700ms 악조건은 명시한다)
  * @returns {{script: object, pcm: Buffer, itemId: string, audioMsAdded: number, usedAck: boolean, steps: Array<{delayMs: number, message: object}>}}
  */
 export function buildTurn({
@@ -138,6 +141,7 @@ export function buildTurn({
   chunkIntervalMs = DEFAULTS.chunkIntervalMs,
   clockMs = 0,
   pendingAckEndMs = -1,
+  instructionFillerMs = DEFAULT_INSTRUCTION_FILLER_MS,
 }) {
   const script = TURN_SCRIPTS[kind];
   if (!script) {
@@ -145,6 +149,9 @@ export function buildTurn({
   }
   if (!Number.isInteger(chunkBytes) || chunkBytes <= 0 || chunkBytes % SAMPLE_BYTES !== 0) {
     throw new RangeError("출력 조각 크기는 2바이트 배수 양수여야 한다");
+  }
+  if (!Number.isSafeInteger(instructionFillerMs) || instructionFillerMs < 0) {
+    throw new RangeError("지시 채움 길이는 0 이상 안전한 정수여야 한다");
   }
   // itemId는 기록용 식별자일 뿐 선 형식에는 싣지 않는다(공급자는 입력 전사 항목 id를 주지 않는다)
   const itemId = `item-${connection}-${turn}`;
@@ -168,7 +175,7 @@ export function buildTurn({
   const usedAck = pendingAckEndMs >= 0;
   const startMs = usedAck ? Math.max(clockMs, pendingAckEndMs) : clockMs;
   const outputMs = Math.round(pcm.length / PCM_BYTES_PER_MS);
-  const fillerMs = usedAck ? startMs - clockMs + FILLER_MS : 0;
+  const fillerMs = usedAck ? startMs - clockMs + instructionFillerMs : 0;
   const [ai1, ai2] = splitInTwo(script.aiText);
   const steps = [
     ...childSteps,
