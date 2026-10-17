@@ -41,10 +41,11 @@ class JevLiveTaskIsolationTest {
     }
 
     /** 표본마다 정해 둔 판정을 돌려주는 가짜 어댑터. 받은 요청의 후보 문장을 모아 보고서와 대조한다. */
-    private static final class FakeClient implements GuardrailClient {
+    private static final class FakeClient implements JevLiveProbe.Inspector {
 
         final List<String> candidates = new ArrayList<>();
         final List<String> keysSeen = new ArrayList<>();
+        final List<GuardrailProperties> propertiesSeen = new ArrayList<>();
         private final Supplier<String> key;
         private final boolean failSecond;
 
@@ -54,28 +55,23 @@ class JevLiveTaskIsolationTest {
         }
 
         @Override
-        public GuardrailMode mode() {
-            return GuardrailMode.REAL;
-        }
-
-        @Override
-        public boolean available() {
-            return true;
-        }
-
-        @Override
-        public java.util.concurrent.CompletionStage<GuardrailVerdict> check(GuardrailRequest request, java.time.Instant deadline) {
+        public java.util.concurrent.CompletionStage<JevGuardrailClient.Inspection> inspect(GuardrailRequest request,
+                java.time.Instant deadline) {
             candidates.add(request.candidate());
             keysSeen.add(key.get());
-            GuardrailVerdict verdict;
+            JevGuardrailClient.Inspection inspection;
             if (failSecond && candidates.size() == 2) {
-                verdict = GuardrailVerdict.failed(GuardrailVerdict.Failure.TIMEOUT, request.policyVersion(), 800);
+                inspection = new JevGuardrailClient.Inspection(
+                        GuardrailVerdict.failed(GuardrailVerdict.Failure.TIMEOUT, request.policyVersion(), 800), null, null, null);
             } else if (candidates.size() == 1) {
-                verdict = GuardrailVerdict.allow("OK", request.policyVersion(), 210, List.of(), List.of());
+                inspection = new JevGuardrailClient.Inspection(
+                        GuardrailVerdict.allow("PASS", request.policyVersion(), 210, List.of(), List.of()), "PASS", 0.8123, FAKE_MODEL);
             } else {
-                verdict = GuardrailVerdict.block("DIAGNOSIS_CLAIM", request.policyVersion(), 340, List.of("DIAGNOSIS"), List.of());
+                inspection = new JevGuardrailClient.Inspection(
+                        GuardrailVerdict.block("DIAGNOSIS", request.policyVersion(), 340, List.of("DIAGNOSIS"), List.of()),
+                        "DIAGNOSIS", 0.0456, FAKE_MODEL);
             }
-            return java.util.concurrent.CompletableFuture.completedFuture(verdict);
+            return java.util.concurrent.CompletableFuture.completedFuture(inspection);
         }
     }
 
@@ -143,6 +139,18 @@ class JevLiveTaskIsolationTest {
                 .anyMatch(s -> s.expect() == JevLiveProbe.Expect.NOT_ALLOW);
     }
 
+    @Test
+    void theOperationalThresholdIsTheTemporaryDefaultFromApplicationYmlAndAnEnvOverrideMustStayInRange() throws IOException {
+        assertThat(JevLiveProbe.operationalThreshold(Map.<String, String>of()::get)).as("application.yml 기본값(임시 시험값)").isEqualTo(0.5);
+        assertThat(JevLiveProbe.operationalThreshold(Map.of(JevLiveProbe.THRESHOLD_ENV, " 0.75 ")::get)).isEqualTo(0.75);
+        assertThat(JevLiveProbe.operationalThreshold(Map.of(JevLiveProbe.THRESHOLD_ENV, "  ")::get)).as("빈 값은 기본값").isEqualTo(0.5);
+        for (String bad : List.of("0", "1.5", "abc", "-1")) {
+            Map<String, String> env = Map.of(JevLiveProbe.THRESHOLD_ENV, bad);
+            org.assertj.core.api.Assertions.assertThatThrownBy(() -> JevLiveProbe.operationalThreshold(env::get))
+                    .isInstanceOf(IOException.class).hasMessageNotContaining("(" + bad + ")");
+        }
+    }
+
     // ---- 실행 · 보고서 ----
 
     @Test
@@ -151,6 +159,7 @@ class JevLiveTaskIsolationTest {
         JevLiveProbe.ClientFactory factory = (properties, key, budget, clock) -> {
             assertThat(properties.baseUrl()).isEqualTo(FAKE_URL);
             assertThat(properties.model()).isEqualTo(FAKE_MODEL);
+            assertThat(properties.passThreshold()).as("문턱은 application.yml의 기본값(임시 시험값)").isEqualTo(0.5);
             FakeClient client = new FakeClient(key, false);
             clients.add(client);
             return client;
@@ -167,8 +176,11 @@ class JevLiveTaskIsolationTest {
         assertThat(clients.getFirst().keysSeen).as("키는 호출 때마다 env에서 읽는다").containsOnly(FAKE_KEY);
         String written = Files.readString(report, StandardCharsets.UTF_8);
         assertThat(written).startsWith("outcome=REACHED evidence=REAL_API_SYNTHETIC")
-                .contains("| 표본 | 기대 | 판정 | 실패 종류 | 걸린 분류 | 사유 코드 | 지연 ms |", "| S1-benign-offer | ALLOW | ALLOW | - | - | OK | 210 |",
-                        "| S2-diagnosis | NOT_ALLOW | BLOCK | - | DIAGNOSIS | DIAGNOSIS_CLAIM | 340 |", "판정 받음: 5/5", "model=" + FAKE_MODEL)
+                .contains("통과 문턱=0.5000 (임시 시험값, AI 성능 시험으로 확정",
+                        "| 표본 | 기대 | 판정 | 실패 종류 | 고른 라벨 | PASS 확률 | 사유 코드 | 지연 ms |",
+                        "| S1-benign-offer | ALLOW | ALLOW | - | PASS | 0.8123 | PASS | 210 |",
+                        "| S2-diagnosis | NOT_ALLOW | BLOCK | - | DIAGNOSIS | 0.0456 | DIAGNOSIS | 340 |", "판정 받음: 5/5", "model=" + FAKE_MODEL,
+                        "응답 model=" + FAKE_MODEL)
                 .doesNotContain(FAKE_KEY, FAKE_URL, "jev-live.invalid");
         for (String candidate : clients.getFirst().candidates) {
             assertThat(written).as("후보 문장 원문은 보고서에 없다(R-F14)").doesNotContain(candidate);
@@ -187,7 +199,7 @@ class JevLiveTaskIsolationTest {
         assertThat(result.outcome()).isEqualTo(JevLiveProbe.Outcome.NOT_REACHED);
         String written = Files.readString(report, StandardCharsets.UTF_8);
         assertThat(written).startsWith("outcome=NOT_REACHED evidence=REAL_API_SYNTHETIC")
-                .contains("| S2-diagnosis | NOT_ALLOW | FAILED | TIMEOUT | - | TIMEOUT | 800 |", "판정 받음: 4/5");
+                .contains("| S2-diagnosis | NOT_ALLOW | FAILED | TIMEOUT | - | - | TIMEOUT | 800 |", "판정 받음: 4/5");
         assertThat(JevLiveProbe.oneLine(result)).isEqualTo("jevLive outcome=NOT_REACHED reached=4/5");
     }
 }

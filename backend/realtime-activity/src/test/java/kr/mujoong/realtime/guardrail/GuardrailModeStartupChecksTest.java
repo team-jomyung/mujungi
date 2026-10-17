@@ -153,6 +153,67 @@ class GuardrailModeStartupChecksTest {
                 .doesNotContain(secretLooking);
     }
 
+    // ------------------------------------------------------------------ 통과 문턱(선 형식 정정 FR3.3 · D6)
+
+    private List<String> thresholdProblems(String profile, String mode, String threshold) {
+        boolean pub = "demo".equals(profile) || "prod".equals(profile);
+        String url = "dev".equals(profile) || "test".equals(profile) ? LOOPBACK_URL : ALLOWED_URL;
+        return RealtimeStartupChecks.problems(new Inputs(token, providerKey, ownerSecret, pub ? WSS_PROVIDER : LOOPBACK_PROVIDER,
+                List.of(profile), new GuardrailStartupRules.Inputs(mode, true, url, MODEL, threshold)));
+    }
+
+    @Test
+    void realAcceptsAThresholdInsideZeroExclusiveToOneInclusiveAndTreatsAnAbsentOneAsTheDefault() {
+        for (String ok : List.of("0.5", "1", "1.0", "0.0001", " 0.75 ", "0.999999")) {
+            assertThat(thresholdProblems("demo", "REAL", ok)).as("demo " + ok).isEmpty();
+            assertThat(thresholdProblems("dev", "REAL", ok)).as("dev " + ok).isEmpty();
+        }
+        assertThat(thresholdProblems("demo", "REAL", null)).as("설정이 없으면 기본값을 쓰므로 점검하지 않는다").isEmpty();
+        assertThat(problems("demo", "REAL", true, ALLOWED_URL, MODEL)).as("문턱 칸이 없는 입력 모양").isEmpty();
+    }
+
+    @Test
+    void realRejectsAThresholdOutsideTheRangeOrNotANumberWithoutQuotingTheValue() {
+        for (String bad : List.of("0", "0.0", "-0.1", "1.01", "2", "abc", "", " ", "NaN", "Infinity", "-Infinity", "0,5", "5e1")) {
+            List<String> problems = thresholdProblems("demo", "REAL", bad);
+
+            assertThat(problems).as("값 [" + bad + "]").containsExactly(GuardrailProperties.PASS_THRESHOLD_KEY + "(INVALID)");
+            assertThat(String.join(",", problems)).as("값 미출력").doesNotContain("(" + bad + ")");
+        }
+    }
+
+    @Test
+    void theThresholdIsOnlyCheckedWhenTheRealAdapterWillRun() {
+        for (String mode : List.of("STUB", "OFF")) {
+            assertThat(thresholdProblems("dev", mode, "abc")).as("dev " + mode + "은 제브를 부르지 않는다").isEmpty();
+            assertThat(thresholdProblems("test", mode, "5")).as("test " + mode).isEmpty();
+        }
+        assertThat(thresholdProblems("prod", "STUB", "abc")).as("공개 프로필은 모드 문제만 말한다")
+                .containsExactly(GuardrailMode.KEY + "(PUBLIC_REQUIRES_REAL)");
+    }
+
+    @Test
+    void thePropertiesRecordKnowsTheSameRangeAndTheSpringConstructorReadsTheThresholdKey() {
+        assertThat(GuardrailProperties.validThreshold(0.5)).isTrue();
+        assertThat(GuardrailProperties.validThreshold(1.0)).isTrue();
+        assertThat(GuardrailProperties.validThreshold(Double.MIN_VALUE)).isTrue();
+        assertThat(GuardrailProperties.validThreshold(0.0)).isFalse();
+        assertThat(GuardrailProperties.validThreshold(-0.5)).isFalse();
+        assertThat(GuardrailProperties.validThreshold(1.0000001)).isFalse();
+        assertThat(GuardrailProperties.validThreshold(Double.NaN)).isFalse();
+        assertThat(GuardrailProperties.validThreshold(Double.POSITIVE_INFINITY)).isFalse();
+
+        MockEnvironment bad = baseEnvironment("demo")
+                .withProperty(GuardrailMode.KEY, "REAL")
+                .withProperty(RealtimeStartupChecks.JEV_API_KEY, TestSecrets.base64Url(24))
+                .withProperty(GuardrailProperties.BASE_URL_KEY, ALLOWED_URL)
+                .withProperty(GuardrailProperties.MODEL_KEY, MODEL)
+                .withProperty(GuardrailProperties.PASS_THRESHOLD_KEY, "1.5");
+        assertThatThrownBy(() -> new RealtimeStartupChecks(bad, properties(WSS_PROVIDER)))
+                .isInstanceOf(StartupRejectedException.class)
+                .hasMessageContaining(GuardrailProperties.PASS_THRESHOLD_KEY + "(INVALID)").hasMessageNotContaining("1.5");
+    }
+
     // ------------------------------------------------------------------ 기동 점검 생성자
 
     @Test

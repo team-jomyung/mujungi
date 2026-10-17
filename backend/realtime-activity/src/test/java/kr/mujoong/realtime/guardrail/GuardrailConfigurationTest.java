@@ -81,7 +81,7 @@ class GuardrailConfigurationTest {
     }
 
     @Test
-    void theRealAdapterReadsTheKeyFromTheEnvironmentAtCallTimeAndTheSystemPromptComesFromThePinnedPolicy() {
+    void theRealAdapterReadsTheKeyFromTheEnvironmentAtCallTimeAndTheQuestionComesFromThePinnedPolicy() {
         MockEnvironment environment = new MockEnvironment();
         GuardrailClient real = client(GuardrailMode.REAL, environment);
         assertThat(real.available()).isFalse();
@@ -89,9 +89,12 @@ class GuardrailConfigurationTest {
         assertThat(real.available()).as("보관하지 않고 호출 때마다 환경에서 읽는다").isTrue();
 
         LiveContentRegistry content = new LiveContentRegistry(LiveContentResources.loadDefault());
-        String version = content.resources().guardrail().version();
-        assertThat(GuardrailConfiguration.systemPrompt(content, version)).hasValue(content.resources().guardrail().systemPrompt());
-        assertThat(GuardrailConfiguration.systemPrompt(content, "other-version")).isEmpty();
+        var policy = content.resources().guardrail();
+        assertThat(GuardrailConfiguration.question(content, policy.version()))
+                .hasValue(new JevQuestion(policy.instructions(), policy.criteria()));
+        assertThat(GuardrailConfiguration.question(content, policy.version()).orElseThrow().labels())
+                .containsExactlyElementsOf(policy.criteria().keySet());
+        assertThat(GuardrailConfiguration.question(content, "other-version")).isEmpty();
     }
 
     @Test

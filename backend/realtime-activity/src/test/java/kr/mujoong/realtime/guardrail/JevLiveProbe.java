@@ -7,10 +7,14 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.CompletionStage;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -27,24 +31,25 @@ import org.springframework.core.env.PropertySourcesPropertyResolver;
 import org.springframework.core.io.ClassPathResource;
 
 /**
- * 제브 실호출 도구 (U13 FR8.2 · Step 15b, {@code lunaLiveTest}와 같은 방식). 사람이 그 PC의 셸 env로 {@code JEV_API_KEY} · {@code JEV_BASE_URL} ·
- * {@code JEV_MODEL}을 넣고 {@code ./gradlew :realtime-activity:jevLiveTest}로만 돈다. 실제 어댑터 {@link JevGuardrailClient}를 운영과 같은 주소 규칙
- * (STRICT) · 정책 리소스 · 시한으로 만들어 합성 문장 몇 개를 한 번씩 보낸다 — 어댑터 변환의 형식 가정이 실제 제브 응답과 맞는지 보는 것이 목적이다.
+ * 제브 실호출 도구 (U13 FR8.2 · Step 15b, 선 형식 정정 FR5.2, {@code lunaLiveTest}와 같은 방식). 사람이 그 PC의 셸 env로 {@code JEV_API_KEY} ·
+ * {@code JEV_BASE_URL} · {@code JEV_MODEL}을 넣고 {@code ./gradlew :realtime-activity:jevLiveTest}로만 돈다. 실제 어댑터 {@link JevGuardrailClient}를 운영과
+ * 같은 주소 규칙(STRICT) · 정책 리소스 · 시한 · 문턱으로 만들어 합성 문장 몇 개를 한 번씩 {@link JevGuardrailClient#inspect}로 보낸다 — 공식 선 형식
+ * 요청이 받아들여지고 응답이 변환되는지, 확률이 어떻게 나오는지 보는 것이 목적이다.
  *
- * <p>보고서에는 표본 이름 · 기대 · 판정 · 실패 종류 · 걸린 분류 · 사유 코드 · 지연만 쓴다. 후보 문장 원문 · 맥락 · 키 · 주소는 쓰지 않는다(R-F14 ·
- * R-F3). 키가 없으면 어댑터를 만들지 않고 {@code SKIPPED_NO_KEY}를 쓴다. 이 도구의 결과는 {@code [실호출-합성]} 증거이고 테스트 대역 증거와 섞지
- * 않는다(R-M11).
+ * <p>보고서에는 표본 이름 · 기대 · 판정 · 실패 종류 · 고른 라벨 · {@code PASS} 확률 · 사유 코드 · 지연 · 응답 {@code model}과 임시 문턱 표시만 쓴다. 후보
+ * 문장 원문 · 맥락 · 키 · 주소는 쓰지 않는다(R-F14 · R-F3). 키가 없으면 어댑터를 만들지 않고 {@code SKIPPED_NO_KEY}를 쓴다. 이 도구의 결과는
+ * {@code [실호출-합성]} 증거이고 테스트 대역 증거와 섞지 않는다(R-M11). 문턱은 임시 시험값이다 — 보고서의 {@code PASS} 확률이 AI 성능 시험의 입력이다.
  */
 final class JevLiveProbe {
 
     static final String BASE_URL_ENV = "JEV_BASE_URL";
     static final String MODEL_ENV = "JEV_MODEL";
+    static final String THRESHOLD_ENV = "JEV_PASS_THRESHOLD";
+    static final String THRESHOLD_KEY = GuardrailProperties.PASS_THRESHOLD_KEY;
     /** 보고서 속성(Gradle이 정한다). */
     static final String REPORT_PROPERTY = "mujoong.jev.live.report";
     static final String CONFIG_RESOURCE = "application.yml";
     static final String BUDGET_KEY = "mujoong.timing.guardrail.jev-budget";
-    static final String THRESHOLD_ENV = "JEV_PASS_THRESHOLD";
-    static final String THRESHOLD_KEY = GuardrailProperties.PASS_THRESHOLD_KEY;
     /** 모든 보고서 첫 줄에 쓰는 증거 종류. */
     static final String EVIDENCE = "REAL_API_SYNTHETIC";
 
@@ -52,7 +57,7 @@ final class JevLiveProbe {
     enum Outcome {
         /** 모든 표본이 실패 없이 판정을 받았다(분류 품질은 별개, 아래 matched로 관측만 한다). */
         REACHED,
-        /** 한 표본이라도 실패(시간 초과 · 전송 오류 · 잘못된 JSON · 판 불일치)로 끝났다. */
+        /** 한 표본이라도 실패(시간 초과 · 전송 오류 · 잘못된 JSON)로 끝났다. */
         NOT_REACHED,
         SKIPPED_NO_KEY,
         SKIPPED_NO_CONFIG
@@ -69,28 +74,39 @@ final class JevLiveProbe {
     }
 
     /** 표본 하나의 관측(원문 없음). */
-    record Observation(String id, Expect expect, GuardrailVerdict verdict) {
+    record Observation(String id, Expect expect, JevGuardrailClient.Inspection inspection) {
+
+        GuardrailVerdict verdict() {
+            return inspection.verdict();
+        }
 
         boolean failed() {
-            return verdict.decision() == GuardrailVerdict.Decision.FAILED;
+            return verdict().decision() == GuardrailVerdict.Decision.FAILED;
         }
 
         boolean matched() {
             if (failed()) {
                 return false;
             }
-            return (expect == Expect.ALLOW) == verdict.isAllow();
+            return (expect == Expect.ALLOW) == verdict().isAllow();
         }
     }
 
-    record Result(Outcome outcome, List<Observation> observations, long budgetMillis, String model) {
+    record Result(Outcome outcome, List<Observation> observations, long budgetMillis, String model, double threshold) {
+    }
+
+    /** 읽기 전용 검사 호출(어댑터의 {@code inspect}). 시험이 가짜로 바꾼다. */
+    @FunctionalInterface
+    interface Inspector {
+
+        CompletionStage<JevGuardrailClient.Inspection> inspect(GuardrailRequest request, Instant deadline);
     }
 
     /** 어댑터 조립(시험이 가짜로 바꾼다). */
     @FunctionalInterface
     interface ClientFactory {
 
-        GuardrailClient create(GuardrailProperties properties, Supplier<String> apiKey, Duration budget, MujoongClock clock);
+        Inspector create(GuardrailProperties properties, Supplier<String> apiKey, Duration budget, MujoongClock clock);
     }
 
     /** 합성 표본(R-F15: 실제 아이 대화가 아니다). 이름 · 식별자 없음. */
@@ -121,19 +137,23 @@ final class JevLiveProbe {
     static JevLiveProbe live() {
         String configured = System.getProperty(REPORT_PROPERTY);
         Path report = Path.of(configured != null ? configured : "build/jev-live/report.txt");
-        return new JevLiveProbe(System::getenv, report, JevLiveProbe::operationalClient, new SystemMujoongClock());
+        return new JevLiveProbe(System::getenv, report,
+                (properties, apiKey, budget, clock) -> operationalClient(properties, apiKey, budget, clock)::inspect,
+                new SystemMujoongClock());
     }
 
     Path report() {
         return report;
     }
 
-    /** 운영과 같은 구성: STRICT 주소 규칙, 정책 리소스의 시스템 지시, 호출 때마다 읽는 키. */
-    static GuardrailClient operationalClient(GuardrailProperties properties, Supplier<String> apiKey, Duration budget, MujoongClock clock) {
+    /** 운영과 같은 구성: STRICT 주소 규칙, 정책 리소스의 검사 질문 · 선택지, 호출 때마다 읽는 키. */
+    static JevGuardrailClient operationalClient(GuardrailProperties properties, Supplier<String> apiKey, Duration budget,
+            MujoongClock clock) {
         LiveContentResources.GuardrailPolicy policy = LiveContentResources.loadDefault().guardrail();
         return new JevGuardrailClient(properties, JevHosts.Mode.STRICT, apiKey,
-                version -> policy.version().equals(version) ? Optional.of(policy.systemPrompt()) : Optional.empty(), budget, clock,
-                JsonCodec.shared());
+                version -> policy.version().equals(version) ? Optional.of(new JevQuestion(policy.instructions(), policy.criteria()))
+                        : Optional.empty(),
+                budget, clock, JsonCodec.shared());
     }
 
     /** 운영 검사 시한(application.yml의 {@code mujoong.timing.guardrail.jev-budget}). 코드에 시간 값을 적지 않는다(R-F7). */
@@ -179,38 +199,46 @@ final class JevLiveProbe {
     Result run() throws IOException {
         String key = env.apply(GuardrailStartupRules.API_KEY_ENV);
         if (key == null || key.isBlank()) {
-            return finish(new Result(Outcome.SKIPPED_NO_KEY, List.of(), 0, "-"));
+            return finish(new Result(Outcome.SKIPPED_NO_KEY, List.of(), 0, "-", 0));
         }
         String baseUrl = env.apply(BASE_URL_ENV);
         String model = env.apply(MODEL_ENV);
         if (baseUrl == null || baseUrl.isBlank() || model == null || model.isBlank()) {
-            return finish(new Result(Outcome.SKIPPED_NO_CONFIG, List.of(), 0, "-"));
+            return finish(new Result(Outcome.SKIPPED_NO_CONFIG, List.of(), 0, "-", 0));
         }
         Duration budget = operationalBudget();
-        GuardrailProperties properties = new GuardrailProperties("REAL", baseUrl.strip(), model.strip(), operationalThreshold(env));
+        double threshold = operationalThreshold(env);
+        GuardrailProperties properties = new GuardrailProperties("REAL", baseUrl.strip(), model.strip(), threshold);
         String policyVersion = LiveContentResources.loadDefault().guardrail().version();
-        GuardrailClient client = factory.create(properties, () -> env.apply(GuardrailStartupRules.API_KEY_ENV), budget, clock);
+        Inspector inspector = factory.create(properties, () -> env.apply(GuardrailStartupRules.API_KEY_ENV), budget, clock);
         List<Observation> observations = new ArrayList<>();
         for (Sample sample : SAMPLES) {
             GuardrailRequest request = GuardrailRequest.of(GuardrailRequest.Mode.FREE_TALK, sample.candidate(), policyVersion, CONTEXT);
-            observations.add(new Observation(sample.id(), sample.expect(), call(client, request, budget)));
+            observations.add(new Observation(sample.id(), sample.expect(), call(inspector, request, budget)));
         }
         boolean allReached = observations.stream().noneMatch(Observation::failed);
-        return finish(new Result(allReached ? Outcome.REACHED : Outcome.NOT_REACHED, observations, budget.toMillis(), model.strip()));
+        return finish(new Result(allReached ? Outcome.REACHED : Outcome.NOT_REACHED, observations, budget.toMillis(), model.strip(),
+                threshold));
     }
 
-    private GuardrailVerdict call(GuardrailClient client, GuardrailRequest request, Duration budget) {
+    private JevGuardrailClient.Inspection call(Inspector inspector, GuardrailRequest request, Duration budget) {
         Instant deadline = clock.now().plus(budget);
         try {
             // 어댑터가 시한을 지키므로 여기서는 여유만 둔다(어댑터는 예외 없이 FAILED로 끝낸다)
-            return client.check(request, deadline).toCompletableFuture().get(budget.toMillis() + budget.toMillis() * 4, TimeUnit.MILLISECONDS);
+            return inspector.inspect(request, deadline).toCompletableFuture().get(budget.toMillis() + budget.toMillis() * 4,
+                    TimeUnit.MILLISECONDS);
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
-            return GuardrailVerdict.failed(GuardrailVerdict.Failure.TRANSPORT_ERROR, request.policyVersion(), 0L);
+            return failedInspection(request);
         } catch (Exception failure) {
             // 규약을 어긴 클라이언트도 실패 한 건으로 센다(원인 메시지는 입력을 담을 수 있어 버린다)
-            return GuardrailVerdict.failed(GuardrailVerdict.Failure.TRANSPORT_ERROR, request.policyVersion(), 0L);
+            return failedInspection(request);
         }
+    }
+
+    private static JevGuardrailClient.Inspection failedInspection(GuardrailRequest request) {
+        return new JevGuardrailClient.Inspection(
+                GuardrailVerdict.failed(GuardrailVerdict.Failure.TRANSPORT_ERROR, request.policyVersion(), 0L), null, null, null);
     }
 
     private Result finish(Result result) throws IOException {
@@ -231,18 +259,27 @@ final class JevLiveProbe {
             return out.toString();
         }
         out.append("model=").append(result.model()).append(" budgetMs=").append(result.budgetMillis()).append('\n');
-        out.append("| 표본 | 기대 | 판정 | 실패 종류 | 걸린 분류 | 사유 코드 | 지연 ms |\n|---|---|---|---|---|---|---|\n");
+        out.append("통과 문턱=").append(String.format(Locale.ROOT, "%.4f", result.threshold()))
+                .append(" (임시 시험값, AI 성능 시험으로 확정 — 이 보고서의 PASS 확률이 입력이다)\n");
+        out.append("| 표본 | 기대 | 판정 | 실패 종류 | 고른 라벨 | PASS 확률 | 사유 코드 | 지연 ms |\n|---|---|---|---|---|---|---|---|\n");
+        Set<String> responseModels = new LinkedHashSet<>();
         for (Observation o : result.observations()) {
             GuardrailVerdict v = o.verdict();
+            JevGuardrailClient.Inspection inspection = o.inspection();
+            if (inspection.responseModel() != null) {
+                responseModels.add(inspection.responseModel());
+            }
             out.append("| ").append(o.id()).append(" | ").append(o.expect()).append(" | ").append(v.decision()).append(" | ")
                     .append(v.failure() == null ? "-" : v.failure().name()).append(" | ")
-                    .append(v.categories().isEmpty() ? "-" : String.join(",", v.categories())).append(" | ").append(v.reasonCode())
-                    .append(" | ").append(v.latencyMs()).append(" |\n");
+                    .append(inspection.choice() == null ? "-" : inspection.choice()).append(" | ")
+                    .append(inspection.passProbability() == null ? "-" : String.format(Locale.ROOT, "%.4f", inspection.passProbability()))
+                    .append(" | ").append(v.reasonCode()).append(" | ").append(v.latencyMs()).append(" |\n");
         }
         long reached = result.observations().stream().filter(o -> !o.failed()).count();
         long matched = result.observations().stream().filter(Observation::matched).count();
         List<Long> latencies = result.observations().stream().filter(o -> !o.failed()).map(o -> o.verdict().latencyMs()).sorted().toList();
         long withinBudget = latencies.stream().filter(ms -> ms <= result.budgetMillis()).count();
+        out.append("응답 model=").append(responseModels.isEmpty() ? "-" : String.join(",", responseModels)).append('\n');
         out.append("판정 받음: ").append(reached).append('/').append(result.observations().size()).append(" · 기대와 같음(관측, 합격 조건 아님): ")
                 .append(matched).append('/').append(result.observations().size()).append('\n');
         out.append("지연 중앙값 ").append(latencies.isEmpty() ? "-" : latencies.get(latencies.size() / 2) + "ms").append(" · 최대 ")
