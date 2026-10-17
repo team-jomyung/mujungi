@@ -269,15 +269,42 @@ aws ssm put-parameter --name /mujoong/demo/GHCR_PULL_USER --type String --value 
        될 때까지 `/mujoong/demo/PROVIDER_API_KEY`를 `OPENAI_API_KEY`와 같은 값으로 함께 둔다. 호스트의 `render-env`는 PR1 이후 옛 이름을 realtime.env에
        쓰지 않으므로, PR1 이전 SHA로 되돌려야 하면 먼저 그 SHA의 `render-env`로 env를 렌더하는지 확인한다.
     3. 롤백 대상이 PR1 이후 SHA뿐이게 된 뒤에 `aws ssm delete-parameter --name /mujoong/demo/PROVIDER_API_KEY`로 지운다.
-- (선택, U8) Luna 키 `OPENAI_API_KEY`(core-api · realtime이 받음, U11부터 demo realtime의 GPT-Live 키와 같은 이름)와 제브 키 `JEV_API_KEY`(realtime만 받음). 넣지 않으면 렌더러가 빈 변수로 두고
+- (선택, U8) Luna 키 `OPENAI_API_KEY`(core-api · realtime이 받음, U11부터 demo realtime의 GPT-Live 키와 같은 이름). 넣지 않으면 렌더러가 빈 변수로 두고
   앱은 실제 어댑터를 끈다. `OPENAI_API_KEY`는 바로 위 R-F15 확인 기록이 있을 때만 넣는다(`contracts/ai-io.md` 10.2 · 10.10).
 
   ```bash
   umask 077; tmp="$(mktemp)"
   read -r -s -p 'OPENAI_API_KEY: ' v && printf '%s' "$v" >"$tmp" && unset v && echo && \
     aws ssm put-parameter --name /mujoong/demo/OPENAI_API_KEY --type SecureString --value "file://$tmp" >/dev/null
+  rm -f "$tmp"; unset tmp
+  ```
+
+- **(U13) 제브 키 · 주소 · 모델은 demo 배포 전에 먼저 넣는다 — 셋 다 필수다.** demo realtime은 제브 모드 REAL(공개 프로필 기본값) + `JEV_API_KEY`
+  + 허용 호스트 안의 `JEV_BASE_URL` + 고정 버전 `JEV_MODEL`이 아니면 기동을 거부한다(`MUJOONG_STARTUP_REJECTED`, 대역 · 비활성은 자동 통과와 같아 공개
+  프로필에서 허용하지 않는다, `contracts/ai-io.md` 10.12). 그래서 `render-env`도 셋 중 하나라도 없으면 env 파일을 바꾸지 않고 실패한다(D3 실패, 구 버전 유지).
+  **순서: 아래 R-F15 확인 기록 → 세 파라미터 입력 → 그 뒤에 이 변경이 든 SHA를 배포.** 키 없는 demo에 이 변경을 먼저 배포하면 realtime이 기동을 거부하고
+  배포가 실패한다(롤백은 6.4, 이전 SHA는 제브 설정 없이 뜬다). `JEV_API_KEY`는 비밀이라 `realtime.env`에만 가고(core-api · 다른 서비스 없음)
+  `JEV_BASE_URL` · `JEV_MODEL`은 비밀이 아니지만 같은 길(Parameter Store → `render-env` → `realtime.env`)로 전달한다. 주소는 `https://`로 시작하고 호스트는
+  앱의 허용 목록(`contracts/ai-io.md` 10.12) 안이어야 하며, 모델은 `-latest` 같은 이동 별칭이 아닌 고정 버전 이름이어야 한다(`render-env`가 형식을, 앱이 호스트를 확인한다).
+  - **제브 R-F15 확인 — 기록 없이는 키를 넣지 않는다.** 제브에는 아이 확정 전사 직전의 무중 발화 후보 문장과 익명 최근 맥락 3턴이 나간다. 코드가 막지
+    않으므로 이 확인이 유일한 방어선이다. 아래 상자는 **아직 확인하지 않았다**(확인한 사람이 직접 표시한다).
+    - [ ] 제브 공급자 약관 · 데이터 사용 조건(학습 사용 · 보존)을 확인했다.
+    - [ ] 공급자의 개인정보 처리 조건(처리 위치 · 하위 처리자 · 삭제)을 확인했다.
+    - [ ] 아동 데이터(후보 문장 · 익명 맥락)의 외부 전달이 보호자 동의 범위 안인지 확인했다.
+    - [ ] 아래 확인 기록 표에 한 줄을 남겼다(키 값 · 계정 정보는 적지 않는다, R-F3).
+
+    | 확인자 | 확인 날짜(UTC) | 확인한 약관 · 처리 조건 판(또는 문서 날짜) | 환경 | 비고 |
+    |---|---|---|---|---|
+    | (아직 없음) | | | | |
+
+  ```bash
+  umask 077; tmp="$(mktemp)"
   read -r -s -p 'JEV_API_KEY: ' v && printf '%s' "$v" >"$tmp" && unset v && echo && \
     aws ssm put-parameter --name /mujoong/demo/JEV_API_KEY --type SecureString --value "file://$tmp" >/dev/null
+  read -r -p 'JEV_BASE_URL(https://<허용 호스트>): ' v && printf '%s' "$v" >"$tmp" && unset v && \
+    aws ssm put-parameter --name /mujoong/demo/JEV_BASE_URL --type String --value "file://$tmp" >/dev/null
+  read -r -p 'JEV_MODEL(고정 버전 이름): ' v && printf '%s' "$v" >"$tmp" && unset v && \
+    aws ssm put-parameter --name /mujoong/demo/JEV_MODEL --type String --value "file://$tmp" >/dev/null
   rm -f "$tmp"; unset tmp
   ```
 
@@ -607,6 +634,38 @@ cat realtime-activity/build/gpt-live/report.md
 - 금액은 계산하지 않는다. 단가는 OpenAI 결제 화면에서 확인한다(보고서는 사용량만 남긴다).
 - 결과는 '실제 API · 합성 자료' 증거로만 따로 적는다(R-M11). 키가 없으면 `SKIPPED_NO_KEY`이고 시험은 '건너뜀'이다(통과 아님).
 
+### 8.8 제브 실호출 시험 `jevLiveTest` (U13, 개발 PC) [개발 PC]
+
+제브를 실제로 부르는 유일한 시험이다. 기본 `test` · `check` · CI · `verify.sh`에는 들어가지 않는다(루트 `verifyJevLiveIsolation`이 check마다 그래프를
+확인하고, `JevLiveTaskIsolationTest`가 빌드 규칙을 못 박는다). 어댑터는 제브 공식 선 형식(`POST /v1/systemone`, 요청 `model · state · questions`, 응답
+`answers.guardrail.choice · probabilities`, `contracts/ai-io.md` 10.13)으로 부르지만 가짜 제브로만 확인했다 — 실제 제브가 이 요청을 받아들이고(특히
+고정 버전 `model` 이름) 이렇게 답하는지는 이 시험이 처음 확인하는 길이다. 합성 문장만 보내고(R-F15), 키는
+그 PC의 셸 env로만 넣는다(R-F3 · R-F13). **키를 넣기 전에 단계 4의 '제브 R-F15 확인' 기록을 먼저 남긴다.** 사용자에게 키 · 주소를 채팅에 붙여 넣으라고
+요청하지 않는다.
+
+```bash
+cd backend
+read -r -s -p 'JEV_API_KEY: ' JEV_API_KEY && export JEV_API_KEY && echo
+export JEV_BASE_URL='https://<허용 호스트>'     # 비밀 아님. 호스트는 contracts/ai-io.md 10.12의 허용 목록 안이어야 한다(운영과 같은 STRICT 규칙)
+export JEV_MODEL='<고정 버전 모델 이름>'        # 비밀 아님. -latest 같은 이동 별칭은 어댑터가 거부한다
+export JEV_PASS_THRESHOLD='0.5'                # 선택. 비밀 아님. 통과 문턱(0 초과 1 이하), 비우면 application.yml 기본값 0.5(임시 시험값)
+./gradlew :realtime-activity:jevLiveTest
+unset JEV_API_KEY JEV_BASE_URL JEV_MODEL JEV_PASS_THRESHOLD
+cat realtime-activity/build/jev-live/report.txt
+```
+
+- 운영 어댑터(`JevGuardrailClient`)를 그대로 쓴다: 호출 1회 · 재시도 없음 · 검사 시한은 `application.yml`의 `mujoong.timing.guardrail.jev-budget`(0.8초) · 정책 리소스
+  `policy-v2.json`의 검사 질문 · 라벨 8개 설명 · 통과 문턱(`mujoong.guardrail.jev.pass-threshold`, 기본 0.5 **임시 시험값** — 설정 키 하나만 바꾼다) · 리다이렉트 없음.
+  합성 표본 5개(허용 기대 1 · 막힘 기대 4)를 읽기 전용 `inspect`로 한 번씩 보낸다.
+- 보고서 첫 줄은 `outcome=REACHED|NOT_REACHED|SKIPPED_NO_KEY|SKIPPED_NO_CONFIG evidence=…`다. REACHED는 모든 표본이 실패 없이 판정을 받은 것이다. 표는
+  표본 이름 · 기대 · 판정 · 실패 종류 · 고른 라벨 · `PASS` 확률 · 사유 코드 · 지연이고, 응답 `model`과 통과 문턱 표시(임시 시험값)가 따로 나온다. `PASS` 확률이
+  문턱(0.5)을 정하는 AI 성능 시험의 입력이다. 후보 문장 원문 · 맥락 · 키 · 주소는 쓰지 않는다(R-F14). '기대와 같음'은 분류 품질의 관측이지 합격 조건이 아니다.
+- `NOT_REACHED`의 실패 종류가 `INVALID_JSON`이면 응답 검증(`answers.guardrail`의 `choice` · `probabilities`)이 실제 응답과 다른 것이다 — 어댑터의 변환 한 곳(`convert`)과 `JevGuardrailClientTest`만 고친다.
+  `TRANSPORT_ERROR`가 모든 표본에서 나오면 요청이 거절된 것일 수 있다(오류 본문은 읽지 않으므로 상태 코드를 제브 콘솔·문서로 확인한다, 특히 `JEV_MODEL`이 요청에서 받아들여지는 이름인지). `TIMEOUT`이
+  이어지면 0.8초 시한이 공급자 지연보다 짧은 것이므로 그 값은 Build and Test의 실호출 관측으로 정한다(코드에 시간 값을 적지 않는다, R-F7).
+- 키 · 주소 · 모델이 하나라도 없으면 `SKIPPED_*`이고 시험은 '건너뜀'이다(통과 아님, 호출하지 않음).
+- 결과는 '실제 API · 합성 자료' 증거로만 따로 적고, 기본 시험 · 끝-끝 결과(테스트 대역)와 섞지 않는다(R-M11).
+
 ## 9. 복구 시나리오 (infra-spec 4.5.3)
 
 | 상황 | 감지 | 조치 |
@@ -668,7 +727,7 @@ supercronic) · 배포 직전(D2) · 정지 직전(최근 1시간 성공이 없�
 | `INTERNAL_SERVICE_TOKEN` | 새 값 입력 → 같은 SHA로 `DEPLOY`(두 앱이 함께 다시 만들어진다. 잠시 어긋나도 Outbox가 401을 재시도한다) |
 | `DB_CORE_PASSWORD` · `DB_REALTIME_PASSWORD` · `DB_BACKUP_PASSWORD` · `DB_OWNER_PASSWORD` | 슈퍼유저로 `ALTER ROLE`(아래) → 파라미터 갱신 → 같은 SHA로 `DEPLOY` |
 | `OPENAI_API_KEY` | 공급자 콘솔에서 새 키 → 파라미터 갱신 → 같은 SHA로 `DEPLOY`(core-api · realtime이 다시 만들어진다. GPT-Live 음성 중계와 Luna 판정이 같은 키를 쓴다) |
-| `JEV_API_KEY` | 공급자 콘솔에서 새 키 → 파라미터 갱신 → 같은 SHA로 `DEPLOY`(realtime만 다시 만들어진다) |
+| `JEV_API_KEY` | 공급자 콘솔에서 새 키 → 파라미터 갱신 → 같은 SHA로 `DEPLOY`(realtime만 다시 만들어진다. U13부터 demo 필수라 키를 비우는 길은 없다: 비우면 realtime이 기동을 거부한다) |
 | `MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET` | 파라미터 갱신 → 같은 SHA로 `DEPLOY`(이후 ownerHash 값이 바뀐다) |
 | `GHCR_PULL_TOKEN` | 새 읽기 전용 토큰(만료 90일 이하) → 파라미터 갱신(배포 때만 쓰인다) |
 

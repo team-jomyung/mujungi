@@ -187,7 +187,19 @@ public class LatencyRecorder {
     }
 
     /**
-     * 구간 확정(tSegmentConfirmed). providerResponseMs = 마지막 출력 − 첫 출력, quietWaitMs = 확정 − 마지막 출력(단조 읽기).
+     * 이 턴이 제브 검사를 거친다는 표시(U13 BR8.5 ⑤). 턴이 끝나 첫 소리 시각을 알면 같은 값을 {@code mujoong_guardrail_perceived_wait_seconds}에도
+     * 넣는다. 검사 모드 이름만 쥐고 전사 · 후보 문장은 쥐지 않는다.
+     */
+    public void guardrailChecked(UUID sessionId, String mode) {
+        withSession(sessionId, s -> {
+            if (s.turn != null) {
+                s.turn.guardrailMode = mode;
+            }
+        });
+    }
+
+    /**
+     * 구간 확정(tSegmentConfirmed).providerResponseMs = 마지막 출력 − 첫 출력, quietWaitMs = 확정 − 마지막 출력(단조 읽기).
      */
     public void segmentConfirmed(UUID sessionId, Instant at, long confirmedNanos, long firstOutNanos, long lastOutNanos) {
         withSession(sessionId, s -> {
@@ -388,6 +400,9 @@ public class LatencyRecorder {
         if (turn.devicePlayStart != null && turn.clockOffsetMs != null && turn.speechEnd != null) {
             Instant t3 = turn.devicePlayStart.minusMillis(turn.clockOffsetMs);
             metrics.turnFirstAudio(Duration.between(turn.speechEnd, t3));
+            if (turn.guardrailMode != null) {
+                metrics.guardrailPerceivedWait(turn.guardrailMode, Duration.between(turn.speechEnd, t3));
+            }
         }
     }
 
@@ -458,6 +473,8 @@ public class LatencyRecorder {
         private Long clockOffsetMs;
         private Long rttMs;
         private boolean discarded;
+        /** 제브 검사를 거친 턴이면 그 모드 이름(U13), 아니면 null. */
+        private String guardrailMode;
 
         Turn(int seq) {
             this.seq = seq;

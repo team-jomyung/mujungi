@@ -25,6 +25,7 @@ import java.util.TreeSet;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
+import kr.mujoong.realtime.guardrail.GuardrailProperties;
 import kr.mujoong.realtime.luna.LunaHosts;
 import kr.mujoong.realtime.luna.LunaProperties;
 import kr.mujoong.realtime.voice.ProviderHosts;
@@ -84,7 +85,13 @@ class ConfigKeyContractTest {
             "MUJOONG_SECURITY_ALLOWED_ORIGIN", "https://mujoong.invalid",
             "MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET", "",
             // U9 BR1.5: 판정 모델 이름은 env로만 받는다(비밀 아님). 시험 값은 기본 이름과 같다
-            "OPENAI_JUDGE_MODEL", "gpt-6-luna");
+            "OPENAI_JUDGE_MODEL", "gpt-6-luna",
+            // U13 BR1.3 · BR2.2: 제브 모드 · 주소 · 모델은 env로만 받는다(비밀 아님). 시험 값은 빈 값(프로필 기본값 규칙을 쓴다)
+            "JEV_MODE", "",
+            "JEV_BASE_URL", "",
+            "JEV_MODEL", "",
+            // 선 형식 정정 D6: 통과 문턱도 env로 받는다(비밀 아님). 시험 값은 기본값과 같다
+            "JEV_PASS_THRESHOLD", "0.5");
 
     // ------------------------------------------------------------------ timing.md ↔ application.yml
 
@@ -157,6 +164,8 @@ class ConfigKeyContractTest {
         Map<String, RecordComponent> leaves = new TreeMap<>(recordLeaves(RealtimeProperties.class, "mujoong"));
         // U9 SD12: Luna 호출 설정은 따로 묶는 레코드다
         leaves.putAll(recordLeaves(LunaProperties.class, "mujoong.luna"));
+        // U13 BR1.3: 제브 설정도 따로 묶는 레코드다
+        leaves.putAll(recordLeaves(GuardrailProperties.class, "mujoong.guardrail.jev"));
 
         assertThat(keyMismatches(yml.keySet(), leaves.keySet(), RECORD_KEYS_WITHOUT_DEFAULT))
                 .as("yml 키 ↔ 설정 레코드 키").isEmpty();
@@ -164,6 +173,7 @@ class ConfigKeyContractTest {
         RealtimeProperties bound = bind(base);
         Map<String, Object> boundValues = new TreeMap<>(recordValues(bound, "mujoong"));
         boundValues.putAll(recordValues(bindLuna(base), "mujoong.luna"));
+        boundValues.putAll(recordValues(bindGuardrail(base), "mujoong.guardrail.jev"));
         assertThat(valueMismatches(yml, leaves, boundValues, placeholderResolver(base)))
                 .as("yml 값과 레코드에 묶인 값").isEmpty();
         assertThat(bound.provider().url()).as("application.yml만으로는 공급자 주소가 비어 기동 점검(S1b)이 거부한다").isNull();
@@ -178,6 +188,7 @@ class ConfigKeyContractTest {
         Map<String, RecordComponent> leaves = new TreeMap<>(recordLeaves(RealtimeProperties.class, "mujoong"));
         // U9 BR1.4: test 프로필은 Luna 주소를 루프백으로 덮어쓴다(SD12 레코드)
         leaves.putAll(recordLeaves(LunaProperties.class, "mujoong.luna"));
+        leaves.putAll(recordLeaves(GuardrailProperties.class, "mujoong.guardrail.jev"));
 
         assertThat(overrides).as("시험 축소값(빈 대조 아님)").isNotEmpty();
         assertThat(overrides.keySet()).as("설정 레코드가 읽지 않는 시험 키(오타는 조용히 버려진다)")
@@ -473,6 +484,15 @@ class ConfigKeyContractTest {
                 new PropertySourcesPlaceholdersResolver(sources), ApplicationConversionService.getSharedInstance());
         return binder.bind("mujoong.luna", Bindable.of(LunaProperties.class))
                 .orElseThrow(() -> new IllegalStateException("mujoong.luna 설정을 묶지 못했다"));
+    }
+
+    /** {@code mujoong.guardrail.jev.*}를 제브 설정 레코드로 묶는다(U13 BR1.3). */
+    static GuardrailProperties bindGuardrail(Path... files) {
+        MutablePropertySources sources = sources(files);
+        Binder binder = new Binder(ConfigurationPropertySources.from(sources),
+                new PropertySourcesPlaceholdersResolver(sources), ApplicationConversionService.getSharedInstance());
+        return binder.bind("mujoong.guardrail.jev", Bindable.of(GuardrailProperties.class))
+                .orElseThrow(() -> new IllegalStateException("mujoong.guardrail.jev 설정을 묶지 못했다"));
     }
 
     static RealtimeProperties bind(Path... files) {

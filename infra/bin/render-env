@@ -8,7 +8,10 @@
 #      SERVICE_HOST는 공개 호스트 이름(localhost · *.invalid · IP 거부), 허용 origin은 https://<SERVICE_HOST>
 #      GOOGLE_OAUTH_CLIENT_ID(비밀 아님) · GOOGLE_OAUTH_CLIENT_SECRET은 선택이다: 둘 다 있거나 둘 다 없어야 하고, 없으면 빈 변수로 둔다
 #      (CD-11, 구글 로그인은 401로 끝난다). GHCR_PULL_TOKEN은 파일로 쓰지 않는다(J99).
-#      OPENAI_API_KEY(Luna) · JEV_API_KEY(제브)는 선택이다(U8 SD3). 없으면 빈 변수로 두고 앱이 실제 어댑터를 끈다.
+#      OPENAI_API_KEY(Luna)는 선택이다(U8 SD3). 없으면 빈 변수로 두고 앱이 실제 어댑터를 끈다.
+#      JEV_API_KEY(제브 비밀) · JEV_BASE_URL · JEV_MODEL(비밀 아님)은 demo에서 필수다(U13 BR9.1 · BR9.3): demo realtime은 제브 모드 REAL +
+#      키 + 허용 호스트의 주소 + 고정 버전 모델이 아니면 기동을 거부하므로(공개 프로필에서 대역 · 비활성은 자동 통과와 같다) 배포 전에 셋을
+#      Parameter Store에 먼저 넣어야 한다. 주소는 https여야 하고 모델 이름은 이동 별칭(-latest)이 아니어야 한다(호스트 허용 목록은 앱이 정본).
 #      GOOGLE_OAUTH_REDIRECT_URI는 파라미터가 아니라 허용 origin + /parent/login/callback으로 만든다(구글 콘솔에 같은 주소를 등록, U2 리뷰 3).
 #   3. 분배(infra-spec 3.7이 정본, 받지 않는 비밀은 넣지 않는다):
 #        postgres.env  POSTGRES_PASSWORD DB_OWNER_PASSWORD DB_CORE_PASSWORD DB_REALTIME_PASSWORD DB_BACKUP_PASSWORD
@@ -17,7 +20,7 @@
 #                      GOOGLE_OAUTH_CLIENT_ID GOOGLE_OAUTH_CLIENT_SECRET GOOGLE_OAUTH_REDIRECT_URI MUJOONG_SECURITY_ALLOWED_ORIGIN
 #                      OPENAI_API_KEY
 #        realtime.env  SPRING_DATASOURCE_PASSWORD(=DB_REALTIME_PASSWORD) INTERNAL_SERVICE_TOKEN
-#                      MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET MUJOONG_SECURITY_ALLOWED_ORIGIN OPENAI_API_KEY JEV_API_KEY
+#                      MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET MUJOONG_SECURITY_ALLOWED_ORIGIN OPENAI_API_KEY JEV_API_KEY JEV_BASE_URL JEV_MODEL
 #        web.env       GOOGLE_OAUTH_CLIENT_ID GOOGLE_OAUTH_REDIRECT_URI MUJOONG_SECURITY_ALLOWED_ORIGIN(비밀 없음 — client secret은 Core만)
 #        nginx.env     SERVICE_HOST MUJOONG_SECURITY_ALLOWED_ORIGIN
 #        certbot.env   SERVICE_HOST ACME_CONTACT_EMAIL
@@ -62,8 +65,8 @@ fi
 
 readonly REQUIRED=(POSTGRES_PASSWORD DB_OWNER_PASSWORD DB_CORE_PASSWORD DB_REALTIME_PASSWORD DB_BACKUP_PASSWORD
   INTERNAL_SERVICE_TOKEN MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET
-  SERVICE_HOST MUJOONG_SECURITY_ALLOWED_ORIGIN ACME_CONTACT_EMAIL)
-readonly OPTIONAL=(GOOGLE_OAUTH_CLIENT_ID GOOGLE_OAUTH_CLIENT_SECRET NEO4J_AUTH OPENAI_API_KEY JEV_API_KEY)
+  SERVICE_HOST MUJOONG_SECURITY_ALLOWED_ORIGIN ACME_CONTACT_EMAIL JEV_API_KEY JEV_BASE_URL JEV_MODEL)
+readonly OPTIONAL=(GOOGLE_OAUTH_CLIENT_ID GOOGLE_OAUTH_CLIENT_SECRET NEO4J_AUTH OPENAI_API_KEY)
 # 01 콜백 경로(frontend/src/app/parent/login/callback, Core mujoong.guardian.google.redirect-uri와 같아야 한다)
 readonly GOOGLE_CALLBACK_PATH=/parent/login/callback
 # 값 문자 집합: env 파일을 따옴표 없이 쓰고 docker run --env-file · Compose가 같은 값을 읽게 하려는 제한(공백 · 따옴표 · $ · # · \ 없음)
@@ -157,6 +160,15 @@ google_secret_set=0
 if [ "$google_id_set" -ne "$google_secret_set" ]; then
   problems+=("GOOGLE_OAUTH_CLIENT_ID · GOOGLE_OAUTH_CLIENT_SECRET(둘 다 있거나 둘 다 없어야 한다)")
 fi
+# U13 BR9.1: 제브 주소 · 모델 형식(호스트 허용 목록 · 고정 버전 규칙의 정본은 앱 기동 점검이다. 여기서는 배포 전에 눈에 띄는 오류만 거른다)
+jev_url="${param[JEV_BASE_URL]:-}"
+if [ -n "$jev_url" ] && [ "$allow_local" -eq 0 ] && ! [[ "$jev_url" =~ ^https://[A-Za-z0-9.-]+(/[A-Za-z0-9._~/-]*)?$ ]]; then
+  problems+=("JEV_BASE_URL(https 주소 형식이 아님)")
+fi
+jev_model="${param[JEV_MODEL]:-}"
+if [ -n "$jev_model" ] && { ! [[ "$jev_model" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$ ]] || [[ "${jev_model,,}" =~ (^|[-_.])latest$ ]]; }; then
+  problems+=("JEV_MODEL(고정 버전 이름이 아님: 형식 위반 또는 -latest 이동 별칭)")
+fi
 email="${param[ACME_CONTACT_EMAIL]:-}"
 if [ -n "$email" ] && ! [[ "$email" =~ ^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+$ ]]; then
   problems+=("ACME_CONTACT_EMAIL(형식)")
@@ -193,7 +205,8 @@ write_env core-api.env SPRING_DATASOURCE_PASSWORD=DB_CORE_PASSWORD INTERNAL_SERV
   OPENAI_API_KEY=OPENAI_API_KEY NEO4J_AUTH=NEO4J_AUTH
 write_env realtime.env SPRING_DATASOURCE_PASSWORD=DB_REALTIME_PASSWORD INTERNAL_SERVICE_TOKEN=INTERNAL_SERVICE_TOKEN \
   MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET=MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET \
-  MUJOONG_SECURITY_ALLOWED_ORIGIN=MUJOONG_SECURITY_ALLOWED_ORIGIN OPENAI_API_KEY=OPENAI_API_KEY JEV_API_KEY=JEV_API_KEY
+  MUJOONG_SECURITY_ALLOWED_ORIGIN=MUJOONG_SECURITY_ALLOWED_ORIGIN OPENAI_API_KEY=OPENAI_API_KEY JEV_API_KEY=JEV_API_KEY \
+  JEV_BASE_URL=JEV_BASE_URL JEV_MODEL=JEV_MODEL
 write_env web.env GOOGLE_OAUTH_CLIENT_ID=GOOGLE_OAUTH_CLIENT_ID GOOGLE_OAUTH_REDIRECT_URI=GOOGLE_OAUTH_REDIRECT_URI \
   MUJOONG_SECURITY_ALLOWED_ORIGIN=MUJOONG_SECURITY_ALLOWED_ORIGIN
 write_env nginx.env SERVICE_HOST=SERVICE_HOST MUJOONG_SECURITY_ALLOWED_ORIGIN=MUJOONG_SECURITY_ALLOWED_ORIGIN

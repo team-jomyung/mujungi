@@ -77,5 +77,21 @@
     "scope": "refactor",
     "status": "in-flight",
     "request": "8755eb02"
+  },
+  {
+    "uuid": "01a1499c-71fd-7513-a9de-e7fa28901bb7",
+    "slug": "u13-jev-guardrail",
+    "dirName": "261017-u13-jev-guardrail",
+    "scope": "refactor",
+    "status": "complete",
+    "request": "709b4429"
+  },
+  {
+    "uuid": "01a14a60-ad3e-7cba-b454-6253a4241d18",
+    "slug": "jev-adapter-format",
+    "dirName": "261017-jev-adapter-format",
+    "scope": "bugfix",
+    "status": "complete",
+    "request": "fc7a88a0"
   }
 ]

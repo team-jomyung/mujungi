@@ -41,12 +41,14 @@ class LiveContentRegistryTest {
                 .containsExactly("FULL", "PARTIAL", "HELP", "NOT_UNDERSTOOD", "IRRELEVANT", "UNREADABLE");
         assertThat(resources.judgment().points().get(JudgmentPoint.J5).optionCodes()).as("J2 여섯 + 코치 표현 그대로 따라 함")
                 .startsWith("FULL", "PARTIAL", "HELP", "NOT_UNDERSTOOD", "IRRELEVANT", "UNREADABLE").endsWith("COPIED");
-        assertThat(resources.guardrail().version()).isEqualTo("jev-guardrail-v1");
+        assertThat(resources.guardrail().version()).isEqualTo("jev-guardrail-v2");
         assertThat(resources.guardrail().categories()).containsExactly("DIAGNOSIS", "TREATMENT", "SCORE", "CAUSE",
                 "GENERALIZATION", "EMOTION_CLAIM", "PRESSURE");
         assertThat(resources.guardrail().modes()).containsExactlyInAnyOrder(GuardrailMode.values());
-        assertThat(resources.guardrail().systemPrompt()).startsWith("당신은 아동 사회적 의사소통 지원 서비스 '무중'의 출력 안전성 검수기다.")
-                .contains("candidateText").endsWith("코드 블록이나 부가 설명 없이 JSON만 출력한다.");
+        assertThat(resources.guardrail().instructions()).startsWith("아래 문장이 6~12살 아이와 보호자에게 보이거나 들려도 되는가?")
+                .contains("아이가 직접 한 말을 인용 부호 안에 그대로 옮긴 것은 금지가 아니다.").contains("state.candidate");
+        assertThat(resources.guardrail().criteria().keySet()).as("제브 선택지 라벨: 7개 범주 + PASS(삽입 순서)")
+                .containsExactly("DIAGNOSIS", "TREATMENT", "SCORE", "CAUSE", "GENERALIZATION", "EMOTION_CLAIM", "PRESSURE", "PASS");
         assertThat(resources.judgment().toString()).doesNotContain("아이의 대답");
     }
 
@@ -60,8 +62,15 @@ class LiveContentRegistryTest {
         assertRefused(judgment, guardrail.replace("\"PRESSURE\"]", "]").replace("\"EMOTION_CLAIM\",", "\"EMOTION_CLAIM\""),
                 Problem.BAD_CATEGORIES);
         assertRefused(judgment, guardrail.replace("\"PRACTICE_COACH\"", "\"PRACTICE_PEER\""), Problem.BAD_MODES);
-        assertRefused(judgment, guardrail.replaceFirst("\"systemPrompt\": \"[^\"]*\"", "\"systemPrompt\": \" \""),
-                Problem.BAD_SYSTEM_PROMPT);
+        assertRefused(judgment, guardrail.replaceFirst("\"instructions\": \"[^\"]*\"", "\"instructions\": \" \""),
+                Problem.BAD_INSTRUCTIONS);
+        assertRefused(judgment, guardrail.replace("\"PASS\": \"해당 없음. 위 금지 분류 어디에도 해당하지 않는다.\"", "\"NONE\": \"해당 없음\""),
+                Problem.BAD_CRITERIA);
+        assertRefused(judgment, guardrail.replace("\"PASS\": \"해당 없음. 위 금지 분류 어디에도 해당하지 않는다.\"", "\"PASS\": \" \""),
+                Problem.BAD_CRITERIA);
+        assertRefused(judgment, guardrail.replace("    \"PASS\": \"해당 없음. 위 금지 분류 어디에도 해당하지 않는다.\"",
+                "    \"PASS\": \"해당 없음\",\n    \"EXTRA\": \"더한 라벨\""), Problem.BAD_CRITERIA);
+        assertRefused(judgment, guardrail.replaceFirst(",\\s*\"criteria\": \\{[^}]*\\}", ""), Problem.BAD_CRITERIA);
         assertRefused(judgment.replace("\"code\": \"PARTIAL\"", "\"code\": \"FULL\""), guardrail, Problem.BAD_OPTIONS);
         assertRefused("{not json", guardrail, Problem.PARSE_FAILED);
         assertRefused(judgment.replace("\"version\": \"judgment-v1\"", "\"version\": \"\""), guardrail, Problem.BAD_VERSION);
@@ -102,7 +111,7 @@ class LiveContentRegistryTest {
 
         assertThat(again).isSameAs(first);
         assertThat(first.judgmentSetVersion()).isEqualTo("judgment-v1");
-        assertThat(first.guardrailPolicyVersion()).isEqualTo("jev-guardrail-v1");
+        assertThat(first.guardrailPolicyVersion()).isEqualTo("jev-guardrail-v2");
         assertThat(first.approvedContentVersionIds()).containsEntry("D_REST_ACK", restAckVersion);
         assertThat(registry.matchApproved(sessionId, "다른 판").kind()).isEqualTo(MatchKind.NOT_MATCHED);
         assertThat(first.toString()).doesNotContain("쉬고");
@@ -173,7 +182,7 @@ class LiveContentRegistryTest {
         assertThatThrownBy(() -> LiveContentResources.parse(judgment, guardrail))
                 .isInstanceOf(LoadException.class)
                 .satisfies(e -> assertThat(((LoadException) e).problem()).isEqualTo(problem))
-                .hasMessageNotContaining("아이의 대답").hasMessageNotContaining("검수기");
+                .hasMessageNotContaining("아이의 대답").hasMessageNotContaining("인용 부호");
     }
 
     private static String judgmentJson() {

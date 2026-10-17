@@ -11,7 +11,8 @@
 #                 OPENAI_API_KEY(빈 값 — 검증 · CI는 실제 Luna를 부르지 않는다, R-F1 · U8 SD3)
 #   realtime.env  SPRING_DATASOURCE_PASSWORD(=realtime) INTERNAL_SERVICE_TOKEN
 #                 MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET MUJOONG_SECURITY_ALLOWED_ORIGIN
-#                 OPENAI_API_KEY · JEV_API_KEY(빈 값 — 가짜 공급자는 키를 보지 않고, 실제 GPT-Live · Luna · 제브를 부르지 않는다. U11 BR12.2: 자리값 없음)
+#                 OPENAI_API_KEY · JEV_API_KEY(빈 값 — 가짜 공급자는 키를 보지 않고, 실제 GPT-Live · Luna · 제브를 부르지 않는다. U11 BR12.2: 자리값 없음.
+#                 U13: 검증 스택은 dev 프로필이라 제브 모드 기본값이 STUB(가짜 제브)이므로 JEV_BASE_URL · JEV_MODEL도 넣지 않는다. 이 둘은 demo 호스트 render-env 몫)
 #   web.env       GOOGLE_OAUTH_CLIENT_ID(빈 값) GOOGLE_OAUTH_REDIRECT_URI MUJOONG_SECURITY_ALLOWED_ORIGIN
 #                 (구글 이름은 Core · web이 같다 — infra/bin/render-env와 같은 분배, U2 리뷰 3)
 #   nginx.env     SERVICE_HOST MUJOONG_SECURITY_ALLOWED_ORIGIN

@@ -49,7 +49,7 @@ class U8RealtimeStartupChecksTest {
                 LiveContentResources::loadDefault);
 
         assertThat(checks.liveContent().judgment().version()).isEqualTo("judgment-v1");
-        assertThat(checks.liveContent().guardrail().version()).isEqualTo("jev-guardrail-v1");
+        assertThat(checks.liveContent().guardrail().version()).isEqualTo("jev-guardrail-v2");
         assertThat(new LiveContentConfiguration().liveContentRegistry(checks).resources()).isSameAs(checks.liveContent());
         assertThat(err.toString(StandardCharsets.UTF_8)).isEmpty();
     }
@@ -72,9 +72,9 @@ class U8RealtimeStartupChecksTest {
                 () -> LiveContentResources.parse(judgment, sixCategories)))
                 .isInstanceOf(StartupRejectedException.class)
                 .hasMessageContaining("BAD_CATEGORIES")
-                .hasMessageNotContaining("검수기");
+                .hasMessageNotContaining("인용 부호");
         String line = err.toString(StandardCharsets.UTF_8);
-        assertThat(line).contains("RealtimeStartupRejected").doesNotContain("검수기").doesNotContain("candidateText");
+        assertThat(line).contains("RealtimeStartupRejected").doesNotContain("인용 부호").doesNotContain("state.candidate");
     }
 
     @Test
@@ -121,11 +121,11 @@ class U8RealtimeStartupChecksTest {
         String judgment = resource(LiveContentResources.JUDGMENT_RESOURCE);
         String guardrail = resource(LiveContentResources.GUARDRAIL_RESOURCE);
         assertProblem(judgment, "{broken", LiveContentResources.Problem.PARSE_FAILED);
-        assertProblem(judgment, guardrail.replace("\"version\": \"jev-guardrail-v1\"", "\"version\": \" \""),
+        assertProblem(judgment, guardrail.replace("\"version\": \"jev-guardrail-v2\"", "\"version\": \" \""),
                 LiveContentResources.Problem.BAD_VERSION);
         assertProblem(judgment, guardrail.replaceFirst(",\\s*\"modes\": \\[[^\\]]*\\]", ""), LiveContentResources.Problem.BAD_MODES);
         assertProblem("{\"version\":\"judgment-v1\",\"source\":\"x\"}", guardrail, LiveContentResources.Problem.BAD_JUDGMENT_POINTS);
-        assertThat(LiveContentResources.parse(judgment, guardrail).guardrail().toString()).doesNotContain("검수기");
+        assertThat(LiveContentResources.parse(judgment, guardrail).guardrail().toString()).doesNotContain("인용 부호");
     }
 
     private static void assertProblem(String judgment, String guardrail, LiveContentResources.Problem problem) {

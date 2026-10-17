@@ -1,3 +1,27 @@
+> 현재 범위의 정본은 바로 아래 "제브 어댑터 선 형식 집중 갱신" 절이다(`backend/realtime-activity` · `contracts` · `docs/units/u13` 한정, 2026-10-18, HEAD `421e1ad`). 그 뒤 구현 전 U13 절 · U14 절 · U15 절 · 원문은 보존 이력이며 재검증 범위는 timestamp에 한정한다.
+
+## 제브 어댑터 선 형식 집중 갱신 — realtime 쪽 기술 사실 (261017-jev-adapter-format, 2026-10-18)
+
+- 제브 어댑터 `JevGuardrailClient`는 외부 SDK 없이 JDK `java.net.http.HttpClient`(리다이렉트 안 따름 · 프록시 없음)만 쓴다. 본문 수신은 상한 64KiB의 `BoundedBodySubscriber`, 시한은 `HttpRequest.timeout(limit)` + `.orTimeout(limit)`으로 본문 수신 끝까지 덮는다. JSON은 `kr.mujoong.contract.json.JsonCodec` 한 곳(Jackson, J139)이며 요청은 `json.write`, 응답은 `json.read(body, Map.class)`로 읽는다. 시계는 `MujoongClock`. 새 의존 라이브러리 없음.
+- 지표는 Micrometer(`RealtimeMetrics`의 `mujoong.guardrail.*`), 저장은 Spring JDBC로 `realtime.guardrail_event`(Flyway V6, `migrate` 컨테이너가 적용).
+- 설정 키: `mujoong.guardrail.jev.{mode, base-url, model}`(환경 변수 `JEV_MODE` · `JEV_BASE_URL` · `JEV_MODEL`, 값은 자리표시자뿐), 비밀 `JEV_API_KEY`는 호출마다 `environment.getProperty`로 읽는다. 시간 `mujoong.timing.guardrail.jev-budget = 800ms`. `application-demo.yml` · `-dev.yml` · `-prod.yml`에는 제브 키가 없다. 문턱 키는 없다.
+- 시험: JUnit 5 · AssertJ · Mockito · ArchUnit · Testcontainers PostgreSQL(`*IT`), 제브 어댑터 시험은 JDK `HttpServer` 루프백 `FakeJev`. 실호출 도구 `jevLiveTest`(태그 `jev-live`)는 기본 `test` · `check`에서 제외되고 기본 test JVM에는 `JEV_API_KEY`를 넘기지 않는다. 이번 스캔은 시험 · 빌드를 실행하지 않았고 버전 카탈로그도 새로 검증하지 않았다(아래 이전 기록의 버전은 shallow).
+- 제브 공식 형식은 JSON over HTTPS REST이며(api-documentation.md B) 현재 코드의 클라이언트 기술(JDK `HttpClient`)로 부를 수 있다는 점 외에 기술 스택 추가 요건은 확인하지 않았다.
+
+---
+
+## 구현 전 U13 기술 사실 (2026-10-17 — 이력)
+
+- Java 21 · Spring Boot 4.1 · Gradle 8.14, 가상 스레드(`spring.threads.virtual.enabled`), 멀티 모듈 `contract-model` · `core-api` · `realtime-activity` · `test-support`, 컨벤션 `mujoong.java-conventions`(`-Xlint:all,-processing,-serial,-this-escape,-try`, `-Werror` 없음, JaCoCo).
+- 외부 HTTP 호출은 JDK `java.net.http.HttpClient`(Luna 선례: 리다이렉트 · 프록시 없음, 호스트 재확인, 응답 바이트 상한, `orTimeout`). JSON은 `kr.mujoong.contract.json.JsonCodec` 한 곳(Jackson, J139)이며 제브도 같은 경계를 쓴다.
+- 저장은 Spring JDBC `NamedParameterJdbcTemplate`(저장소 55파일 대 JPA 7파일), Flyway는 앱이 읽기만 하고 `migrate` 컨테이너가 적용한다(`outOfOrder` 꺼짐). 시계는 `MujoongClock`, 지표는 Micrometer(`RealtimeMetrics`, 히스토그램 버킷은 `application.yml`의 `management.metrics.distribution.slo`).
+- 시험: JUnit 5 · AssertJ · Mockito · ArchUnit · Testcontainers PostgreSQL(`-Pmujoong.test.db=docker`, `@Tag("db")`). 이번 스캔은 실행하지 않았고 버전 카탈로그도 새로 검증하지 않았다.
+- 제브용 새 의존 라이브러리는 필요 없다. 새 설정 키 후보(스위치 `mujoong.guardrail.jev.enabled` 등)는 Luna의 `mujoong.luna.enabled` 이름 규칙을 따르되 아직 정해지지 않았다(설계 결정). (구현 뒤: 실제 키는 `mode` · `base-url` · `model` 세 개다.)
+
+---
+
+> 현재 범위의 정본(U14 갱신절, 보존 이력)은 바로 아래다. 그 뒤 원문은 보존 이력이며 재검증 범위는 timestamp에 한정한다.
+
 > 최신 정본: 아래 U10 갱신절(2026-10-17, HEAD eb34c68bf24e4520881b7ffebe1070564554dfc9). 이후 U14/U15/전체 분석 본문은 역사 자료이며, 이번에 검증한 범위는 timestamp의 analyzed 목록만이다.
 
 ## U10 집중 갱신 — 확인된 기술
@@ -115,6 +139,7 @@
 |---|---|---|
 | 음성 AI(`wss://api.openai.com/v1/live/sessions`) | 실시간 대화 | 연결 코드 있음, 선 형식 자체 정의(TD-2) |
 | 텍스트 AI | 상황 · 결과 · 리포트 문장 | 포트만, 운영 어댑터 없음(TD-1) |
+| 제브 안전 검사(`api.typesafe.ai`, 2026-10-18 보충) | 출력 게이트 외부 검사 | 어댑터 코드 있음, 선 형식은 가정(공식 형식과 다름), 실호출 증거 없음 |
 | Google OAuth | 보호자 로그인 | 구현됨 |
 | Web Push(VAPID) | 알림 | 구현됨 |
 | AWS(EC2 · SSM · GHCR) | demo 배포 | 워크플로 있음, 변수 미설정으로 배포 단계 건너뜀 |

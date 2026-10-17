@@ -86,9 +86,11 @@ declare -A P=(
   [MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET]="$(rand 32)"
   [SERVICE_HOST]="svc.example.net" [MUJOONG_SECURITY_ALLOWED_ORIGIN]="https://svc.example.net"
   [ACME_CONTACT_EMAIL]="ops@example.net"
+  # U13 BR9.1: demo는 제브 키 · 주소 · 모델이 필수다. 키는 실행 때 만든 무작위 값이고 주소는 예약 도메인(RFC 2606)이다(접속하지 않는다)
+  [JEV_API_KEY]="$(rand 32)" [JEV_BASE_URL]="https://jev.example.net" [JEV_MODEL]="jev-guardrail-test-1"
 )
 readonly SECRET_KEYS=(POSTGRES_PASSWORD DB_OWNER_PASSWORD DB_CORE_PASSWORD DB_REALTIME_PASSWORD DB_BACKUP_PASSWORD
-  INTERNAL_SERVICE_TOKEN MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET)
+  INTERNAL_SERVICE_TOKEN MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET JEV_API_KEY)
 # write_params <파일> [이름=값 덮어쓰기 · -이름 빼기]...
 write_params() {
   local file="$1"
@@ -130,7 +132,7 @@ declare -A WANT=(
   [postgres.env]="DB_BACKUP_PASSWORD DB_CORE_PASSWORD DB_OWNER_PASSWORD DB_REALTIME_PASSWORD POSTGRES_PASSWORD"
   [migrate.env]="DB_OWNER_PASSWORD"
   [core-api.env]="GOOGLE_OAUTH_CLIENT_ID GOOGLE_OAUTH_CLIENT_SECRET GOOGLE_OAUTH_REDIRECT_URI INTERNAL_SERVICE_TOKEN MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET MUJOONG_SECURITY_ALLOWED_ORIGIN NEO4J_AUTH OPENAI_API_KEY SPRING_DATASOURCE_PASSWORD"
-  [realtime.env]="INTERNAL_SERVICE_TOKEN JEV_API_KEY MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET MUJOONG_SECURITY_ALLOWED_ORIGIN OPENAI_API_KEY SPRING_DATASOURCE_PASSWORD"
+  [realtime.env]="INTERNAL_SERVICE_TOKEN JEV_API_KEY JEV_BASE_URL JEV_MODEL MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET MUJOONG_SECURITY_ALLOWED_ORIGIN OPENAI_API_KEY SPRING_DATASOURCE_PASSWORD"
   [web.env]="GOOGLE_OAUTH_CLIENT_ID GOOGLE_OAUTH_REDIRECT_URI MUJOONG_SECURITY_ALLOWED_ORIGIN"
   [nginx.env]="MUJOONG_SECURITY_ALLOWED_ORIGIN SERVICE_HOST"
   [certbot.env]="ACME_CONTACT_EMAIL SERVICE_HOST"
@@ -151,11 +153,15 @@ check_rendered() {
   done
   [ -e "$dir/neo4j.env" ] && problems+=("NEO4J_AUTH 파라미터가 없는데 neo4j.env가 생겼다")
   [ "$(value_of "$dir/core-api.env" GOOGLE_OAUTH_CLIENT_SECRET)" = "" ] || problems+=("GOOGLE_OAUTH_CLIENT_SECRET이 빈 변수가 아니다")
-  # U8(SD3): 선택 비밀 OPENAI_API_KEY · JEV_API_KEY는 파라미터가 없으면 빈 변수다(앱이 실제 어댑터를 끈다)
+  # U8(SD3): 선택 비밀 OPENAI_API_KEY는 파라미터가 없으면 빈 변수다(앱이 실제 어댑터를 끈다)
   for f in core-api.env realtime.env; do
     [ "$(value_of "$dir/$f" OPENAI_API_KEY)" = "" ] || problems+=("$f OPENAI_API_KEY가 빈 변수가 아니다")
   done
-  [ "$(value_of "$dir/realtime.env" JEV_API_KEY)" = "" ] || problems+=("realtime JEV_API_KEY가 빈 변수가 아니다")
+  # U13 BR9.1 · BR9.3: JEV_API_KEY · JEV_BASE_URL · JEV_MODEL은 demo 필수라 realtime.env에만 값이 들어간다
+  [ "$(value_of "$dir/realtime.env" JEV_API_KEY)" = "${P[JEV_API_KEY]}" ] || problems+=("realtime JEV_API_KEY 매핑")
+  [ "$(value_of "$dir/realtime.env" JEV_BASE_URL)" = "${P[JEV_BASE_URL]}" ] || problems+=("realtime JEV_BASE_URL 매핑")
+  [ "$(value_of "$dir/realtime.env" JEV_MODEL)" = "${P[JEV_MODEL]}" ] || problems+=("realtime JEV_MODEL 매핑")
+  grep -qE '^JEV_' "$dir/core-api.env" && problems+=("core-api.env에 JEV 변수가 있다")
   # U2 리뷰 3: Core와 web이 같은 이름을 받고 redirect는 허용 origin의 01 콜백 경로다(구글 콘솔에 같은 주소를 등록한다)
   for f in core-api.env web.env; do
     [ "$(value_of "$dir/$f" GOOGLE_OAUTH_CLIENT_ID)" = "" ] || problems+=("$f GOOGLE_OAUTH_CLIENT_ID가 빈 변수가 아니다")
@@ -216,7 +222,7 @@ else
   [ "$(value_of "$work/env-ai/realtime.env" JEV_API_KEY)" = "$jev_key" ] || ai_problems+=("realtime JEV_API_KEY")
   grep -q '^JEV_API_KEY=' "$work/env-ai/core-api.env" && ai_problems+=("core-api.env에 JEV_API_KEY가 있다")
   for f in web.env nginx.env certbot.env backup.env postgres.env migrate.env; do
-    grep -qE '^(OPENAI_API_KEY|JEV_API_KEY)=' "$work/env-ai/$f" && ai_problems+=("$f에 AI 키가 있다")
+    grep -qE '^(OPENAI_API_KEY|JEV_API_KEY|JEV_BASE_URL|JEV_MODEL)=' "$work/env-ai/$f" && ai_problems+=("$f에 AI 키 · 제브 설정이 있다")
   done
   grep -qF -- "$openai_key" "$work/render.out" && ai_problems+=("출력에 OPENAI_API_KEY 값")
   grep -qF -- "$jev_key" "$work/render.out" && ai_problems+=("출력에 JEV_API_KEY 값")
@@ -260,6 +266,17 @@ expect_reject "render-env-google-id-without-secret" 1 "$work/p-google-half"
 # shellcheck disable=SC2016  # 렌더에 위험한 글자($ · 공백)를 그대로 넣는다
 write_params "$work/p-ai-unsafe" 'JEV_API_KEY=abc def$HOME'
 expect_reject "render-env-u8-ai-key-unsafe-characters" 1 "$work/p-ai-unsafe"
+# U13 BR9.1: demo는 제브 키 · 주소 · 모델이 없으면 앱이 기동을 거부하므로 렌더 단계에서 먼저 거절한다
+write_params "$work/p-jev-nokey" -JEV_API_KEY
+expect_reject "render-env-u13-jev-key-missing" 1 "$work/p-jev-nokey"
+write_params "$work/p-jev-nourl" -JEV_BASE_URL
+expect_reject "render-env-u13-jev-base-url-missing" 1 "$work/p-jev-nourl"
+write_params "$work/p-jev-nomodel" -JEV_MODEL
+expect_reject "render-env-u13-jev-model-missing" 1 "$work/p-jev-nomodel"
+write_params "$work/p-jev-http" "JEV_BASE_URL=http://jev.example.net"
+expect_reject "render-env-u13-jev-base-url-not-https" 1 "$work/p-jev-http"
+write_params "$work/p-jev-latest" "JEV_MODEL=jev-latest"
+expect_reject "render-env-u13-jev-model-moving-alias" 1 "$work/p-jev-latest"
 FAKE_AWS_FAIL=1 expect_reject "render-env-aws-failure" 2 "$work/p-ok"
 # aws가 없는 PATH: render-env가 쓰는 도구만 링크한 디렉터리
 mkdir -p "$work/noaws"

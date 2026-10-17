@@ -4,6 +4,7 @@ import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -14,6 +15,9 @@ import kr.mujoong.contract.log.OwnerHasher;
 import kr.mujoong.realtime.config.RealtimeProperties;
 import kr.mujoong.realtime.content.LiveContentResources;
 import kr.mujoong.realtime.gate.SeedDictionary;
+import kr.mujoong.realtime.guardrail.GuardrailMode;
+import kr.mujoong.realtime.guardrail.GuardrailProperties;
+import kr.mujoong.realtime.guardrail.GuardrailStartupRules;
 import kr.mujoong.realtime.voice.ProviderHosts;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.env.Environment;
@@ -34,6 +38,9 @@ import org.springframework.stereotype.Component;
  *       {@link #dictionary()}로 출력 게이트와 S2b가 쓴다(읽기 전용 상수, 핫 리로드 없음).
  *   <li>U8 판 리소스 적재: 판정 선택지 판 · 가드레일 정책 판이 없거나 형식이 틀리면 거부(BR2.1 · SD5). 로딩한 판은
  *       {@link #liveContent()}로 세션 콘텐츠 계획({@code LiveContentRegistry})이 쓴다.
+ *   <li>U13 제브 규칙(BR9.1): 모드 × 프로필 × 키. 공개 프로필(demo · prod)은 REAL + {@value #JEV_API_KEY} + 허용 호스트 + 고정 모델이 아니면
+ *       거부하고, 그 밖은 REAL이면 같은 조건을 요구한다(STUB · OFF 허용). 규칙은 {@link GuardrailStartupRules} 한 곳이다. 이 점검 입력이 없는
+ *       기존 생성 경로(시험 대역 생성자)는 제브 점검을 하지 않는다. 정해진 모드는 {@link #guardrailMode()}다.
  * </ol>
  *
  * <p>Core에도 같은 비밀 규칙의 점검이 따로 있다(LC-11). 내부 토큰 형식 판정 {@link #isValidInternalToken}은 내부 HTTP 인증 장치도 쓴다.
@@ -47,6 +54,8 @@ public class RealtimeStartupChecks {
     public static final String OPENAI_API_KEY = "OPENAI_API_KEY";
     /** ownerHash 비밀 환경 변수 이름(OD-4). */
     public static final String OWNER_HASH_SECRET = "MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET";
+    /** 제브 키 환경 변수 이름(U13, R-M9 목록에 이미 있다). */
+    public static final String JEV_API_KEY = GuardrailStartupRules.API_KEY_ENV;
     /** 공급자 주소 설정 키(J109 · J141). */
     public static final String PROVIDER_URL_KEY = "mujoong.provider.url";
     /** 내부 토큰 최소 길이(base64url 43자 = 256비트, J124). */
@@ -61,6 +70,7 @@ public class RealtimeStartupChecks {
 
     private final SeedDictionary dictionary;
     private final LiveContentResources liveContent;
+    private final GuardrailMode guardrailMode;
 
     /** Spring 생성자: 환경 변수 · 설정 · classpath 사전 · 판 리소스로 점검한다. */
     @Autowired
@@ -70,8 +80,18 @@ public class RealtimeStartupChecks {
                         environment.getProperty(OPENAI_API_KEY),
                         properties.observability().ownerHashSecret(),
                         properties.provider().url(),
-                        List.of(environment.getActiveProfiles())),
+                        List.of(environment.getActiveProfiles()),
+                        new GuardrailStartupRules.Inputs(
+                                environment.getProperty(GuardrailMode.KEY),
+                                hasText(environment.getProperty(JEV_API_KEY)),
+                                environment.getProperty(GuardrailProperties.BASE_URL_KEY),
+                                environment.getProperty(GuardrailProperties.MODEL_KEY),
+                                environment.getProperty(GuardrailProperties.PASS_THRESHOLD_KEY))),
                 SeedDictionary::loadDefault, LiveContentResources::loadDefault);
+    }
+
+    private static boolean hasText(String value) {
+        return value != null && !value.isBlank();
     }
 
     /**
@@ -98,6 +118,9 @@ public class RealtimeStartupChecks {
         if (!problems.isEmpty()) {
             throw reject("기동 점검 S1b 거부(값 미출력): " + String.join(", ", problems));
         }
+        // 제브 점검 입력이 없는 기존 생성 경로는 '검사 없음'(OFF)과 같다(BR1.6). 정해진 모드는 점검을 통과한 값이다
+        this.guardrailMode = inputs.guardrail() == null ? GuardrailMode.OFF
+                : GuardrailStartupRules.modeOf(inputs.guardrail(), isPublicProfile(inputs.activeProfiles()));
         try {
             this.dictionary = Objects.requireNonNull(dictionaryLoader.get(), "dictionary");
         } catch (SeedDictionary.LoadException e) {
@@ -122,6 +145,16 @@ public class RealtimeStartupChecks {
         return liveContent;
     }
 
+    /** 점검을 통과해 정해진 제브 모드(U13, 기동 때 한 번 정해지고 세션 안에서 바뀌지 않는다). 제브 점검 입력이 없었으면 {@code OFF}. */
+    public GuardrailMode guardrailMode() {
+        return guardrailMode;
+    }
+
+    /** 공개 프로필(demo · prod)이 활성인가. 제브 모드 기본값과 강제 규칙의 기준이다. */
+    public static boolean isPublicProfile(Collection<String> activeProfiles) {
+        return activeProfiles.stream().anyMatch(PUBLIC_PROFILES::contains);
+    }
+
     /**
      * 문제가 있는 환경 변수 · 설정 키 이름 목록(값 없음). 비어 있으면 통과.
      */
@@ -144,6 +177,10 @@ public class RealtimeStartupChecks {
         }
         Optional<ProviderHosts.Problem> provider = ProviderHosts.check(inputs.providerUrl(), profiles);
         provider.ifPresent(problem -> problems.add(PROVIDER_URL_KEY + "(" + problem + ")"));
+        // U13 BR9.1: 모드 × 프로필 × 키 (제브 점검 입력이 없는 기존 생성 경로는 건너뛴다)
+        if (inputs.guardrail() != null) {
+            problems.addAll(GuardrailStartupRules.problems(inputs.guardrail(), publicEnvironment, profiles));
+        }
         return problems;
     }
 
@@ -161,13 +198,20 @@ public class RealtimeStartupChecks {
      * 점검 입력. 문자열 표현에 비밀 값을 내지 않는다.
      *
      * @param activeProfiles 활성 프로필
+     * @param guardrail 제브 점검 입력(U13). {@code null}이면 제브 점검을 하지 않는다(기존 생성 경로)
      */
     public record Inputs(
             String internalToken, String openAiApiKey, String ownerHashSecret, URI providerUrl,
-            List<String> activeProfiles) {
+            List<String> activeProfiles, GuardrailStartupRules.Inputs guardrail) {
 
         public Inputs {
             activeProfiles = activeProfiles == null ? List.of() : List.copyOf(activeProfiles);
+        }
+
+        /** 기존 생성 모양(U1 ~ U11): 제브 점검 입력이 없어 제브 규칙을 점검하지 않는다. */
+        public Inputs(String internalToken, String openAiApiKey, String ownerHashSecret, URI providerUrl,
+                List<String> activeProfiles) {
+            this(internalToken, openAiApiKey, ownerHashSecret, providerUrl, activeProfiles, null);
         }
 
         @Override

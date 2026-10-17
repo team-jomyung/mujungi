@@ -155,7 +155,8 @@ short_err() { head -n 3 "$1" | cut -c1-240 | tr '\n' ' ' | sed 's/ $//'; }
 readonly SECRET_NAMES='["POSTGRES_PASSWORD","DB_OWNER_PASSWORD","DB_CORE_PASSWORD","DB_REALTIME_PASSWORD","DB_BACKUP_PASSWORD",
   "INTERNAL_SERVICE_TOKEN","OPENAI_API_KEY","JEV_API_KEY","MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET",
   "GOOGLE_OAUTH_CLIENT_SECRET","NEO4J_AUTH","GHCR_PULL_TOKEN","SPRING_DATASOURCE_PASSWORD"]'
-# U8(SD3): OPENAI_API_KEY(Luna)는 core-api · realtime, JEV_API_KEY(제브)는 realtime만 받는다. 둘 다 선택이라 값이 없으면 빈 변수다
+# U8(SD3): OPENAI_API_KEY(Luna)는 core-api · realtime, JEV_API_KEY(제브)는 realtime만 받는다. Luna 키는 선택이라 값이 없으면 빈 변수다.
+# U13(BR9.1): 제브 키는 demo에서 필수다(render-env가 값을 요구하고 앱이 없으면 기동을 거부한다). 분배표는 이름만 본다
 readonly SECRET_TABLE='{
   "postgres": ["DB_BACKUP_PASSWORD","DB_CORE_PASSWORD","DB_OWNER_PASSWORD","DB_REALTIME_PASSWORD","POSTGRES_PASSWORD"],
   "migrate": ["DB_OWNER_PASSWORD"],

@@ -1,4 +1,91 @@
-> 현재 범위의 정본은 바로 아래 U14 갱신절이다. 그 뒤 원문은 보존 이력이며 재검증 범위는 timestamp에 한정한다.
+> 현재 범위의 정본은 바로 아래 "제브 어댑터 선 형식 집중 갱신" 절이다(`backend/realtime-activity` · `contracts` · `docs/units/u13` 한정, 2026-10-18, HEAD `421e1ad`). 그 뒤 구현 전 U13 절 · U14 절 · U15 절 · 원문은 보존 이력이며 재검증 범위는 timestamp에 한정한다.
+
+## 제브 어댑터 선 형식 집중 갱신 — 제브 단계의 의존 방향 (261017-jev-adapter-format, 2026-10-18)
+
+```mermaid
+flowchart LR
+    EX["session.SessionExecutor<br/>실행기 스레드"]
+    CO["session.GuardrailCoordinator<br/>검사 상태 기계"]
+    RF["guardrail.GuardrailRequestFactory<br/>내부 형식 요청"]
+    PT["guardrail.GuardrailClient<br/>포트"]
+    JC["guardrail.JevGuardrailClient<br/>선 형식 한 곳"]
+    ST["Stub 와 Unavailable<br/>대역 와 비활성"]
+    RC["guardrail.GuardrailEventRecorder<br/>와 Repository"]
+    PL["policy-v1.json<br/>content.LiveContentResources"]
+    OG["gate.OutputGate"]
+    LU["luna 패키지"]
+    CM["contract-model<br/>JsonCodec MujoongClock"]
+    JV["제브 HTTP<br/>api.typesafe.ai"]
+    EX --> OG
+    EX --> CO
+    CO --> RF
+    CO --> PT
+    CO --> RC
+    PT --> JC
+    PT --> ST
+    PL -.->|"systemPrompt 함수"| JC
+    JC --> CM
+    JC -->|"JDK HttpClient"| JV
+    LU -.->|"의존 금지 LunaArchTest"| PT
+```
+
+텍스트 대안: 실행기는 `OutputGate`(동기)와 검사 협력 객체 `GuardrailCoordinator`를 부르고, 협력 객체는 팩토리로 내부 형식 요청을 만든 뒤 포트 `GuardrailClient` 뒤의 구현(운영 `JevGuardrailClient`, 대역 `StubGuardrailClient`, 비활성 `UnavailableGuardrailClient`)을 비동기로 부르며 결과를 `GuardrailEventRecorder`로 기록한다. 어댑터는 `contract-model`의 `JsonCodec` · `MujoongClock`과 JDK `HttpClient`만 쓰고, 정책 리소스의 시스템 지시를 `GuardrailConfiguration`이 함수로 넘겨 받는다. `luna` 패키지는 `guardrail`에 의존할 수 없다(`LunaArchTest`).
+
+- 공급자 선 형식을 아는 코드는 `JevGuardrailClient` 한 파일이다(`requestBody` · `convert` · `CHECK_PATH`). 포트 · 협력 객체 · 기록기는 내부 형식(`GuardrailRequest` · `GuardrailVerdict`)에만 기댄다. 그래서 선 형식을 바꿔도 포트가 그대로이면 소비자 쪽은 닿지 않지만, 소비자가 요구하는 값(`reasonCode` · `policyVersion`)을 응답에서 채우는 방식은 어댑터 책임으로 묶여 있다(JEV-F2).
+- `GuardrailPackageArchTest`가 `guardrail` 패키지 의존 경계를 강제한다. `gate` · `voice`는 JDBC · 저장소 · Outbox를 참조할 수 없어(`RealtimeArchTest`) 기록 저장소 · 기록기는 `guardrail` 패키지에 있다. 제브 호출부는 `contract-model` 같은 공용 모듈에 두지 않고 realtime에 있다(R-F5 · 팀 학습).
+- 비밀 이름 `JEV_API_KEY` · 환경 변수 `JEV_MODE` · `JEV_BASE_URL` · `JEV_MODEL`: 비밀 이름 목록(R-M9: `README.md` · `log-hygiene-check` · `render-env` · `infra-validate` · `ci.yml` · `image-checks.sh` · `gen-env.sh` 등)에는 `JEV_API_KEY` · `JEV_BASE_URL`이 있고(`image-checks.sh:271` 자리값, `gen-env.sh`는 검증 스택 빈 값 — 얕게 확인), 새 비밀 이름은 이번에 확인한 범위에서 없다.
+- 마이그레이션: realtime V6(`V6__u13_jev_guardrail.sql`)이 사용됨. 다음 번호는 V7 이상이며 병합 순서는 번호 순서를 따른다(Flyway `outOfOrder` 꺼짐, R-M2).
+
+### 변경 연쇄 (선 형식 또는 설정 키를 바꿀 때 함께 보는 곳, 사실만)
+
+| 바꾸는 것 | 함께 닿는 곳 |
+|---|---|
+| 요청 본문 · 경로 | `JevGuardrailClient.requestBody/CHECK_PATH/endpointOf`, `JevGuardrailClientTest` 1 · 3 · 6(경로 참조 114 · 217줄), `JevLiveProbe`(어댑터 호출), `docs/units/u13/{brief,design,report}.md`의 경로 서술, 필요 시 `contracts/ai-io.md` · `deviations.md` |
+| 응답 읽기 · 변환 | `JevGuardrailClient.convert`, `JevGuardrailClientTest` 2 · 3 · 7 · 8, `guardrail-result.schema.json` 첫 예시(시험이 그대로 전송), `U8ContractSchemasTest` |
+| 분류 체계(7개 → 다른 개수) | `policy-v1.json` `categories` · `modes`, `LiveContentResources.GUARDRAIL_CATEGORY_COUNT`, `guardrail-result.schema.json` enum, `JevGuardrailClient.CATEGORIES`, `LiveContentRegistryTest` · `U8RealtimeStartupChecksTest` · `U8ContractSchemasTest` |
+| `GuardrailProperties` 키 추가(예: 문턱) | `GuardrailProperties` · `application.yml` · `ai-io.md` 10.11 · `deviations.md` U13 행 · `new GuardrailProperties(...)` 시험 호출부 5곳 · 어댑터 생성자 또는 `GuardrailConfiguration` 배선(`ConfigKeyContractTest`는 레코드와 yml이 맞으면 통과) |
+| 어댑터 `.orTimeout(...)` 줄 문자열 | `TimeLiteralScanTest` 허용 목록(91줄) |
+| `GuardrailVerdict`에 필드 추가 | 포트 소비자(`GuardrailCoordinator`) · `FakeGuardrailClient` · `StubGuardrailClientTest`(`GuardrailVerdict.block("SELF_HARM", ...)`처럼 임의 범주도 만든다) · `JevLiveProbe`(`v.categories()`) |
+| `guardrail_event` 칸 추가 | 새 마이그레이션(V7 이상), `GuardrailEventRecord` · `Recorder` · `Repository`, `GuardrailEventSchemaIT`/`GuardrailEventRepositoryIT`, 하드코딩 판 번호 단언, `infra/migration-approvals.txt`(제약 강화인 경우) |
+| 계약 문서 변경 | R-M10: 같은 작업에서 `contracts/`도 고치며 `ci-gate` 전 작업이 돈다 |
+
+---
+
+## 구현 전 U13 의존 방향 (2026-10-17 — 이력)
+
+> 구현 전에는 `guardrail` 패키지와 협력 객체가 후보였다. 현재 모양은 위 절이 우선한다. 아래의 "`LiveContentRegistry` 운영 호출자 없음 · `Services`에 없음"은 구현 전 사실이고, 구현 뒤에는 `ApprovedVerbatimPort`와 `guardrail.verbatimSource` 호출이 보인다(이번 스캔은 이름만 확인).
+
+```mermaid
+flowchart LR
+    EX["session.SessionExecutor<br/>실행기 스레드"]
+    CO["제브 협력 객체<br/>JudgmentCoordinator 모양"]
+    GC["guardrail.GuardrailClient<br/>포트"]
+    AD["제브 어댑터 · 대역"]
+    OG["gate.OutputGate<br/>동기 순수"]
+    LR["content.LiveContentRegistry"]
+    LU["luna 패키지"]
+    CM["contract-model"]
+    EX --> OG
+    EX --> CO
+    CO --> GC
+    GC --> AD
+    EX -.->|"Services 에 새로 연결 필요"| LR
+    LU -.->|"의존 금지 LunaArchTest"| GC
+    EX --> CM
+    AD --> CM
+```
+
+텍스트 대안: 실행기는 `OutputGate`(동기)와 제브 협력 객체를 부르고, 협력 객체는 포트 `GuardrailClient` 뒤의 어댑터 · 대역을 비동기로 부른다. `luna` 패키지는 `guardrail`에 의존할 수 없다(`LunaArchTest.LUNA_FORBIDDEN_DEPENDENCIES`). `LiveContentRegistry`는 운영 호출자가 없고 `SessionExecutor.Services`에 연결되어 있지 않다(G10).
+
+- `guardrail` → `luna` · `voice` · `judgment` 의존을 막는 규칙은 아직 없다. 의도적으로 막는 ArchUnit 규칙을 더하는 것을 검토한다(R-F2는 기존 규칙 약화 금지이지 추가 금지가 아니다). (구현 뒤 `GuardrailPackageArchTest`가 있으나 규칙 내용은 이번 스캔에서 읽지 않았다.)
+- 제브 호출부는 `contract-model` 같은 공용 모듈에 두지 않고 realtime에 둔다(R-F5 · 팀 학습). `gate` · `voice`는 JDBC · 저장소 · Outbox를 참조할 수 없고(`RealtimeArchTest`), `luna`는 `voice` · 로그 프레임워크 · Jackson을 참조할 수 없다. 그래서 기록 저장소 · 기록기는 `guardrail` 새 패키지에 둔다.
+- `RealtimeStartupChecks.Inputs` 레코드에 필드를 더하면 이 생성자를 쓰는 시험(`U8RealtimeStartupChecksTest` · `RealtimeStartupChecksTest` · `OpenAiKeyStartupChecksTest` 등)이 컴파일에 영향을 받는다. 오버로드 유지 패턴을 따른다.
+- 비밀 이름 `JEV_API_KEY`는 R-M9 목록(`README.md` · `log-hygiene-check` · `render-env`(OPTIONAL) · `infra-validate`(realtime만) · `ci.yml` · `image-checks.sh` · `gen-env.sh`(검증 스택은 빈 값) 등)에 이미 있다. 새 비밀 이름은 없다. demo 프로필에서 필수로 바꾸는 규칙이 검증 스택과 맞는지는 읽지 않았다(G4).
+- 마이그레이션 V6은 U12(V7)보다 먼저 병합되어야 한다(Flyway `outOfOrder` 꺼짐).
+
+---
+
+> 현재 범위의 정본(U14 갱신절, 보존 이력)은 바로 아래다. 그 뒤 원문은 보존 이력이며 재검증 범위는 timestamp에 한정한다.
 
 ## U14 집중 갱신 — 실제 의존
 
@@ -63,6 +150,7 @@ flowchart TD
 | 의존 | 사용 앱 | 접점 | 비고 |
 |---|---|---|---|
 | 음성 AI 공급자 | realtime-activity | `voice.ProviderClient`, 호스트 고정 `api.openai.com` | 선 형식 자체 정의(TD-2) |
+| 제브 안전 검사 (2026-10-18 보충) | realtime-activity | `guardrail.JevGuardrailClient`, 호스트 고정 `api.typesafe.ai` | 선 형식은 가정이며 공식 형식과 다름, 실호출 증거 없음(JEV-F11) |
 | 텍스트 AI | core-api | `textai.TextAiProvider`, `result.ResultTextProvider` | 운영 어댑터 없음(TD-1) |
 | 연습 판정 · 단서 공급자 | realtime-activity | `EvaluationProvider`, `CueProvider` | 기본 미연결(TD-1) |
 | Google OAuth | core-api | `identity.Google*` | |
@@ -75,7 +163,7 @@ flowchart TD
 |---|---|
 | contract-model | Jackson 3(직접 import는 `kr.mujoong.contract.json` 한 곳). Spring · JPA 없음 |
 | core-api | Spring Boot(webmvc · security · session-jdbc · data-jpa · jdbc · flyway · actuator · validation), PostgreSQL JDBC, Micrometer Prometheus, springdoc(dev · test), openhtmltopdf-pdfbox, push2u-core, HttpClient5 |
-| realtime-activity | Spring Boot(webmvc · websocket · data-jpa · jdbc · flyway · actuator · validation), PostgreSQL JDBC, Micrometer Prometheus, JDK WebSocket |
+| realtime-activity | Spring Boot(webmvc · websocket · data-jpa · jdbc · flyway · actuator · validation), PostgreSQL JDBC, Micrometer Prometheus, JDK WebSocket (제브 어댑터는 JDK `HttpClient`) |
 | test-support | Testcontainers PostgreSQL, Java-WebSocket, JUnit |
 | 백엔드 시험 공통 | JUnit 5 · AssertJ · Mockito · ArchUnit · json-schema-validator · JaCoCo |
 | frontend | Next.js · React · react-query, 시험 Vitest · Testing Library · jsdom, 린트 ESLint |
@@ -90,7 +178,7 @@ flowchart TD
 | `contracts/` 계약 | `contract-model` 타입 · `contracts/deviations.md` · 계약 시험(ContractFilesTest 등) · 프런트 `shared/protocol` 파서 |
 | 음성 공급자 선 형식 | `realtime/voice/*` · `tools/fake-provider/` · `backend/test-support/.../provider/` |
 | 시간 값 | 두 앱 `application.yml` · `contracts/timing.md` · `frontend/src/shared/timing/timing-defaults.json` |
-| DB 스키마 | 다음 번호(core V8 · realtime V5) · 제약 강화 시 `infra/migration-approvals.txt` |
+| DB 스키마 | 다음 번호(core V8 · realtime V5 — 2026-10-18 보충: realtime은 V7 이상) · 제약 강화 시 `infra/migration-approvals.txt` |
 | 파일 추가 · 이동 | `backend/coverage-scope/*.txt` · `frontend/coverage-scope/*.json` · 유닛 시험 태그 |
 
 ---

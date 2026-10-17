@@ -83,6 +83,9 @@ management:
         "[mujoong.relay.out]": 10ms,25ms,50ms,100ms,200ms,300ms,500ms,1s
         "[mujoong.turn.first.audio]": 500ms,1s,1500ms,2s,2500ms,3s,4s,6s,10s
         "[mujoong.view.item.ready]": 50ms,100ms,250ms,500ms,1s,1500ms,2s,5s
+        # U13(BR8.5): 제브 지연은 검사 상한 800ms(timing.guardrail.jev-budget)를 경계에 넣었고, 체감 대기는 turn.first.audio와 같은 칸이다
+        "[mujoong.guardrail.latency]": 100ms,200ms,300ms,500ms,800ms,1s
+        "[mujoong.guardrail.perceived.wait]": 500ms,1s,1500ms,2s,2500ms,3s,4s,6s,10s
 
 mujoong:
   timing:
@@ -207,6 +210,15 @@ mujoong:
   judgment:
     min-confidence: 0.6
     min-margin: 0.15
+  # U13 제브 게이트(contracts/ai-io.md 10.12). 시간 값이 아니다: 검사 시한은 timing.guardrail.jev-budget(R-F7). 값은 모두 환경 변수로만 받고 저장소에는 이름만 둔다(R-F3).
+  # mode가 비면 프로필 기본값(demo · prod = REAL, 그 밖 = STUB). demo · prod는 REAL + 키 JEV_API_KEY + 허용 호스트 + 고정 모델이 아니면 기동을 거부한다(BR9.1)
+  guardrail:
+    jev:
+      mode: ${JEV_MODE:}
+      base-url: ${JEV_BASE_URL:}
+      model: ${JEV_MODEL:}
+      # 통과 문턱(선 형식 정정 D6). PASS가 1순위이고 확률이 이 값 이상일 때만 자동 통과한다. 0 < x <= 1. 임시 시험값 — AI 성능 시험으로 확정한다
+      pass-threshold: ${JEV_PASS_THRESHOLD:0.5}
   # U9 Luna 호출부(contracts/ai-io.md 10.9). 키 env OPENAI_API_KEY가 있고 enabled가 true일 때만 RealtimeLunaClient가 켜진다(BR1.1 · U11 BR12.3, 값은 env에만).
   # 시간 값이 아니다: 시도 시한은 timing.judgment.live-budget(BR5.1). demo · prod는 https + api.openai.com만, test는 루프백만(BR1.4)
   luna:

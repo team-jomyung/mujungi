@@ -62,6 +62,25 @@ public final class InstructionTemplates {
         }
     }
 
+    /**
+     * 제브가 막은 뒤 서버 지시 없는 자유 응답을 한 번 다시 받는 지시 (U13 BR6.2). 방금 말은 쓰지 말라고만 하고 정책 내용 · 판정 사유 · 후보 문장은
+     * 담지 않는다(채울 값이 없고 {@link #content()}가 인자를 받지 않는다).
+     */
+    public enum Retry {
+        RETRY_FREE_TURN(INTERJECTION_LEAD + " 방금 한 말은 쓰지 말고, 같은 이야기 흐름에서 다른 말로 짧게 한 번만 이어 말한다. ");
+
+        private final String lead;
+
+        Retry(String lead) {
+            this.lead = lead;
+        }
+
+        /** 공급자에 보낼 문장(범위를 닫는 문장 포함). */
+        public String content() {
+            return scoped(lead);
+        }
+    }
+
     private InstructionTemplates() {
     }
 

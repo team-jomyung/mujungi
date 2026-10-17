@@ -56,7 +56,9 @@ public final class OutputGeneration {
         /** 게이트 폐기 뒤 교정 지시를 보낸다. */
         GATE_CORRECTION,
         /** 출력 보류가 풀렸다(BR11.13). */
-        HOLD_RELEASED
+        HOLD_RELEASED,
+        /** 제브가 막은 뒤 같은 다음 행동을 한 번 다시 지시한다(U13 BR6.2). */
+        GUARDRAIL_RETRY
     }
 
     /** 조각을 어떻게 다룰지. */

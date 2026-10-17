@@ -1,4 +1,78 @@
-> 현재 범위의 정본은 바로 아래 U14 갱신절이다. 그 뒤 원문은 보존 이력이며 재검증 범위는 timestamp에 한정한다.
+> 현재 범위의 정본은 바로 아래 "제브 어댑터 선 형식 집중 갱신" 절이다(`backend/realtime-activity` · `contracts` · `docs/units/u13` 한정, 2026-10-18, HEAD `421e1ad`). 그 뒤 구현 전 U13 절 · U14 절 · U15 절 · 원문은 보존 이력이며 재검증 범위는 timestamp에 한정한다.
+
+## 제브 어댑터 선 형식 집중 갱신 — 외부 호출과 내부 형식 (261017-jev-adapter-format, 2026-10-18)
+
+코드를 읽은 정적 사실이다. 실제 제브 API를 부른 증거는 없고(`jevLiveTest`는 키 없이 `SKIPPED_NO_KEY`까지만), 여기 적은 "현재 코드의 가정 형식"은 검증된 공급자 형식이 아니다(R-M11). 설계 결정은 하지 않는다.
+
+### A. 현재 코드의 제브 호출 (나가는 HTTP, 가정 형식)
+
+- 호출부: `kr.mujoong.realtime.guardrail.JevGuardrailClient`(포트 `GuardrailClient.check(GuardrailRequest, Instant deadline) → CompletionStage<GuardrailVerdict>`). 외부 SDK 없이 JDK `HttpClient`(리다이렉트 안 따름 · 프록시 없음) + `JsonCodec`(Jackson 한 곳, J139).
+- 주소: 설정 `mujoong.guardrail.jev.base-url`(환경 변수 `JEV_BASE_URL`)은 **기준 주소**이고 경로는 코드 상수 `CHECK_PATH = "/v1/guardrail/check"`(형식 가정)가 붙인다. `systemone`은 코드에 없다. 허용 호스트 `api.typesafe.ai` 하나(`JevHosts.ALLOWED_HOSTS`), 호스트 모드 STRICT(https + 허용 호스트) · DEV(STRICT 또는 루프백) · TEST(루프백만), 사용자 정보 · 질의 · 조각이 있는 주소 거부(ai-io.md 10.11). 생성자와 보내기 직전 두 번 확인한다.
+- 모델: 설정 `mujoong.guardrail.jev.model`(`JEV_MODEL`). `JevModels.problem`이 형식 `^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`를 확인하고 이동 별칭(`latest`로 끝나는 이름)을 거부한다. 고정 버전 모델을 제브가 받는지는 어디에도 확인이 없다.
+- 키: `JEV_API_KEY`(비밀)를 호출마다 `Supplier<String>`으로 읽어 `Authorization: Bearer <키>` 헤더에만 쓴다. 필드로 보관하지 않고 `toString()`은 `JevGuardrailClient[mode=REAL]`뿐이다(R-F3). 헤더는 그 밖에 `Content-Type: application/json`. `Accept`는 보내지 않는다.
+- 요청 본문(닫힌 키 6개, 가정): `{ model, systemPrompt, mode, candidateText, recentContext:[{speaker,text}], policyVersion }`. `systemPrompt`는 `guardrail/policy-v1.json`의 문자열 한 덩어리, `mode`는 `FREE_TALK | PRACTICE_PEER | PRACTICE_COACH`, `recentContext[].speaker`는 `CHILD | PARTNER | COACH | MUJOONG`. 공식 요청(아래 B)과 겹치는 키는 `model` 하나다.
+- 응답 읽기(`convert`, 가정): 상태 코드가 2xx가 아니면 본문을 읽지 않고 `TRANSPORT_ERROR`. 2xx이면 본문 전체를 JSON 객체로 읽어 `decision`(`ALLOW|BLOCK|REVIEW`) · `categories`(필수, 7개 이름 안, 중복 불가) · `policyFlags`(선택, `^[A-Z][A-Z0-9_]*$`) · `reasonCode`(필수 정규식) · `policyVersion`(필수 1 ~ 80자) · `reviewNeeded`(선택 boolean, `ALLOW`인데 true면 모순) 를 확인한다. 응답 `policyVersion`이 요청의 판과 다르면 `POLICY_MISMATCH`.
+- 시한 · 재시도 · 크기: 시한은 `min(마감까지 남은 시간, mujoong.timing.guardrail.jev-budget 800ms)`, 0 이하면 보내지 않고 `TIMEOUT`. 호출 한 번, 재시도 없음(BR2.1). 응답 본문 상한 64KiB(`MAX_RESPONSE_BYTES`) 초과 시 `TRANSPORT_ERROR`. 429 · 529 · 5xx · 3xx 모두 `TRANSPORT_ERROR` 한 가지이고 구분하지 않는다.
+- 오류 매핑(`GuardrailVerdict.Failure` 6종): `UNAVAILABLE`(모델 별칭 · 형식 오류, 키 없음) · `INVALID_REQUEST`(정책 판의 시스템 지시 없음, 요청을 만들 수 없음) · `TRANSPORT_ERROR`(주소 모양 · 허용 호스트 밖 · 비2xx · 64KiB 초과 · 전송 오류) · `TIMEOUT`(시한 초과 · 취소) · `INVALID_JSON`(본문이 객체 아님, 필수 필드 · 값 위반) · `POLICY_MISMATCH`.
+- 감사 · 기록: 어댑터는 아무것도 기록하지 않는다. 기록은 소비자 쪽(`GuardrailEventRecorder` → `realtime.guardrail_event`, V6)이 사유 코드 · 정책 판 · 지연만 남긴다(R-F14).
+
+### B. 제브 공식 형식 (공식 문서 기준, 코드 미반영)
+
+> 이 절의 내용은 개발자 스캔 문서나 코드에 없는 **외부 정본**이다. **공식 문서 기준이며 코드에 반영되지 않았다.** 출처: https://docs.typesafe.ai/introduction/quickstart , https://docs.typesafe.ai/api . 오류 본문 스키마는 문서에 없다.
+
+- 요청: `POST https://api.typesafe.ai/v1/systemone`, 인증 `Authorization: Bearer ...`.
+  - 본문 필드: `state` · `model` · `questions`.
+  - `questions`: 질문 ID → 질문 객체. 질문 `type`은 `choice | score | noul` 중 하나이고 `instructions`와 `criteria`를 가진다. `choice` 질문의 `criteria`는 **선택지 라벨 → 설명** 맵이며 선택지는 최대 255개다.
+- 응답: `model` · `answers` · `usage`.
+  - `answers`: 질문 ID별 답. `choice` 답은 `type` · `choice`(고른 라벨) · `probabilities`(선택지별 확률, 합 1) · `confidence`(0 ~ 1).
+  - `usage`: `input_tokens` · `output_tokens`.
+- 오류 상태: 400 · 401 · 413 · 415 · 422 · 429 · 529. 오류 본문 스키마는 문서에 없다.
+
+A와 B의 대응(사실만): 요청은 `model`만 겹치고, 응답에는 A가 읽는 `decision · categories · policyFlags · reasonCode · reviewNeeded · policyVersion`이 B에 없다. B에서 오는 `choice`와 `probabilities`를 받을 자리는 현재 `GuardrailVerdict` · `guardrail_event`에 없다.
+
+### C. 내부 형식 계약 (어댑터 안에서만 공급자 형식과 바뀐다)
+
+**요청 `contracts/schemas/guardrail-request.schema.json`**(닫힌 객체): 필수 `source`(상수 `GPT_LIVE_GENERATED`) · `mode` · `candidate`(1 ~ 4000자) · `policyVersion`(1 ~ 80자). 선택 `recentContext`(최대 3개, `speaker` enum 4 + `text` 1 ~ 2000자). 식별자 칸 없음(NFR3.1). 스키마 description이 "공급자 실제 요청은 어댑터 안에서만 이 형식에서 바꾼다"고 적는다. 예시 `policyVersion`은 `jev-guardrail-v1`(편차 `(U13-b)`로 정정됨).
+
+**결과 `contracts/schemas/guardrail-result.schema.json`**(닫힌 객체): 필수 `decision`(`ALLOW|BLOCK|REVIEW`) · `categories`(유일 배열, 최대 7, enum `DIAGNOSIS · TREATMENT · SCORE · CAUSE · GENERALIZATION · EMOTION_CLAIM · PRESSURE`) · `reasonCode`(`^[A-Z][A-Z0-9_]{0,79}$`) · `policyVersion`. 선택 `policyFlags` · `reviewNeeded`. description이 "어댑터가 공급자 응답을 바꿔 만드는 내부 형식"이라고 못 박는다. `FAILED`는 스키마에 없다. 이 스키마의 첫 `examples` 항목을 `JevGuardrailClientTest`가 공급자 응답으로 그대로 보낸다.
+
+**관련 계약 문서**: `ai-io.md` 10.1 ~ 10.5 · 10.11(설정 표 `mujoong.guardrail.jev.{mode,base-url,model}`, 호스트 규칙), `timing.md` 13절 `mujoong.timing.guardrail.jev-budget = 800ms`("넘기면 막힘, 자동 ALLOW 없음"), `deviations.md`의 `(U13-a)` `(U13-b)`. 문턱 설정 키는 어느 문서에도 없다.
+
+### D. 내부 포트 · 소비 경계
+
+- 포트 `GuardrailClient.check(...)` 하나. 구현 3종: `JevGuardrailClient`(REAL), `StubGuardrailClient`(대역, `STUB_ALLOW`), `UnavailableGuardrailClient`(비활성). 새 HTTP 엔드포인트는 없다.
+- 완료 결과의 입구는 `SessionMailbox.GuardrailArrived(requestId, verdict)`와 `GuardrailRetryNotHeard(retryId)` 두 메시지다.
+- 소비자가 읽는 `GuardrailVerdict` 필드: `decision` · `failure` · `reasonCode` · `latencyMs`(+ `eventDecision()`). `categories` · `policyFlags`는 main에서 읽는 곳이 없다.
+- 지표(`RealtimeMetrics`): `mujoong.guardrail.blocked{mode,decision=block|review|error}` · `mujoong.guardrail.timeout{mode}` · `mujoong.guardrail.latency{mode}` · `mujoong.guardrail.calls{mode,source}`. 지표 이름 표가 `contracts/`에 있는지는 이번 스캔에서 확인하지 못했다(구현 전 스캔의 G5 참조).
+- 연습 알림: `PracticeSessionExtension.GuardrailBlockedEvent(correlationId, mode, reasonCode, retried)` — 연습 모드 요청의 두 번째 막힘에서만. `mode == FREE_TALK`이면 생성자가 거부한다.
+- DB: `realtime.guardrail_event`(V6) 쓰기만(기록 레코드 `GuardrailEventRecord`의 필드 `id · guardianId · sessionId · mode · sourceKind · decision · reasonCode · policyVersion · latencyMs · createdAt`; 열 이름 중 `decision` · `reason_code` · `policy_version` · `latency_ms`는 V6에서 확인). `categories` · `policyFlags` · 확률 칸은 없다.
+
+---
+
+## 구현 전 U13 계약 지도 (2026-10-17, 이력 — 구현 전 스캔)
+
+> 아래 중 "브리프상 `POST …/v1/systemone`", "새 메시지가 필요하다", "`(U13-a)`부터 기록한다"는 구현 전 서술이다. 현재 코드는 위 A ~ D가 우선한다. `(U13-a)` `(U13-b)`는 이제 존재한다.
+
+**외부 공급자(제브)**: 브리프상 `POST …/v1/systemone`이며 주소 · 모델은 설정 기본값이다. 응답 형식은 아직 모른다(브리프 "첫 작업: 위험 확인"). 어댑터 한 곳에서 내부 형식으로 변환하고, 실호출은 사람 몫이다(R-F1 · R-F13 · R-F15).
+
+**요청 `contracts/schemas/guardrail-request.schema.json`**: 필수 `source`(상수 `GPT_LIVE_GENERATED`) · `mode`(`FREE_TALK` · `PRACTICE_PEER` · `PRACTICE_COACH`) · `candidate`(1~4000자) · `policyVersion`(1~80자). 선택 `recentContext`(최대 3개, `speaker` ∈ `CHILD · PARTNER · COACH · MUJOONG`, `text` 1~2000자). `additionalProperties: false`, 식별자 · 키 속성 없음.
+
+**결과 `guardrail-result.schema.json`**: 필수 `decision`(ALLOW · BLOCK · REVIEW) · `categories`(7개 enum, 중복 없음) · `reasonCode`(`^[A-Z][A-Z0-9_]{0,79}$`) · `policyVersion`. 선택 `policyFlags` · `reviewNeeded`. BLOCK · REVIEW · 시간 초과 · 연결 실패 · 잘못된 JSON · 정책 판 불일치는 송신하지 않고 실검사 모드에서 자동 ALLOW는 없다.
+
+**관련 계약 문서**
+- `ai-io.md` 10절: 10.1 스키마 표, 10.2 금지 필드와 R-F15(키를 넣기 전 RUNBOOK 단계 4 기록), 10.3 재시도 분류(제브 행 없음, G11), 10.4 판 리소스, 10.5 원문 일치 · 생략(ASCII 공백 제거 정규화만), 10.7 비밀 이름, 10.8 로그 표(`LUNA_CALL`만, 제브용 표 없음).
+- `timing.md` 13절: `mujoong.timing.guardrail.jev-budget = 800ms`("넘기면 막힘, 자동 ALLOW 없음"). 프런트 `timing-defaults.json`에는 넣지 않는다(편차 U8-c).
+- `deviations.md`: `(U8-a)` 스키마 9종, `(U8-c)` 시간 키 7개. 제브 실호출이 확정되면 `(U13-a)`부터 기록한다. `errors.md`에 제브 관련 새 HTTP 오류 code는 없다.
+- 판 불일치 주의(G12): 요청 스키마 예시의 `policyVersion: "guardrail-v1"`은 실제 판 `jev-guardrail-v1`과 다르다. 어댑터 변환 시험이 예시를 그대로 쓰면 판 불일치가 생긴다. (구현 뒤: `(U13-b)`로 예시가 `jev-guardrail-v1`로 정정되었다.)
+- 제브 요청 · 결과를 코드와 대조하는 시험은 realtime에 아직 없다(`LunaHostsTest`가 스키마 파일 존재만 한 줄 확인). 어댑터 변환 시험이 이 역할을 겸하게 된다. (구현 뒤: `JevGuardrailClientTest`가 이 역할을 한다.)
+
+**realtime 내부 경계**: 새 HTTP 엔드포인트는 필요 없다. 비동기 결과의 입구는 `SessionMailbox` 메시지(약 20종, `JudgmentArrived` · `JudgmentInstructionFailed` 등)이고 제브 결과용 새 메시지(예: `GuardrailArrived`)가 필요하다. 완료 콜백은 `mailbox.putSafety`만 부른다.
+
+**이벤트 계약**: 삭제 참여자를 더해도 `DeletionCompleted.Counts(sessions, transcripts, audioFiles, practiceRecords)`는 바꾸지 않는 것이 U11 선례이고 가장 작다(바꾸면 `events.asyncapi.yaml` · `event-payloads.schema.json` · core 소비자가 따라오며 R-M10).
+
+---
+
+> 현재 범위의 정본(U14 갱신절, 보존 이력)은 바로 아래다. 그 뒤 원문은 보존 이력이며 재검증 범위는 timestamp에 한정한다.
 
 ## U14 현재 API·계약 차이
 
@@ -136,7 +210,7 @@ ai-seed-output.schema.json은 skillName(1~80), invariantSentence(1~200), additio
 |---|---|
 | 시점(실행기 스레드에서 호출) | `onActive` · `onChildUtterance(Utterance)` · `onExtensionEvent(ExtensionEvent)` · `onSettle(EndContext)` · `practiceRecord()` + 기본 메서드 4개(`controlsOutput()` 등) |
 | `Utterance` | 전사 순번 · 시각 · 원문 · 불확실 여부 · 재생 중 여부 |
-| `ExtensionEvent.Kind` | `PLAYBACK_DONE` · `PLAYBACK_FACT` · `TIMER_FIRED` · `ASYNC_RESULT`(L88 ~ L93). U11 계약 요약이 말하는 `JUDGMENT_RESULT` · `JUDGMENT_ABSTAINED` · `HELD_OUTPUT_TRANSCRIPT` · `GUARDRAIL_BLOCKED`는 아직 없다 |
+| `ExtensionEvent.Kind` | `PLAYBACK_DONE` · `PLAYBACK_FACT` · `TIMER_FIRED` · `ASYNC_RESULT`(L88 ~ L93). U11 계약 요약이 말하는 `JUDGMENT_RESULT` · `JUDGMENT_ABSTAINED` · `HELD_OUTPUT_TRANSCRIPT` · `GUARDRAIL_BLOCKED`는 아직 없다 (2026-10-18 보충: U13 구현으로 `GUARDRAIL_BLOCKED`는 `SessionExecutor`가 `practiceBlocked`에서 쓰는 것이 보인다) |
 | 출력 능력 `PracticeOutput` | `sessionId` · `playApproved(code)` · `instructProvider(text)` · `requestResponse()` · `cancelResponse()` · `holdOutput(bool)` · `schedule(name, delay)` · `cancel(name)` · `post(name, value)`(아무 스레드) · `speak(PracticeSpeech)`(`default false`) · `cancelSpeech(UUID)`(`default false`) |
 | 거절 규칙 | ACTIVE · 정산 전 · 살아 있는 확장점일 때만 받음(`practiceActive()`), 아니면 거짓 + 세션 사건 `PRACTICE_EXTENSION_FAILED{reason, capability}` |
 | 구현 | 운영: `NoOpPracticeSessionExtension`(무동작) · `practice.RuntimePracticeExtension`(U5b, `controlsOutput()=true`). 시험: `testing.RecordingPracticeExtension` |
@@ -152,6 +226,6 @@ ai-seed-output.schema.json은 skillName(1~80), invariantSentence(1~200), additio
 | `contracts/schemas/ai-judgment-request.schema.json` · `ai-judgment-output.schema.json` | — | 판정 요청 · 출력 모양(출력은 선택지 집합을 묶지 않음) |
 | `contracts/schemas/practice-record-v2.schema.json` | — | 새 연습 흐름 기록 형식(`flowVersion` 필수) |
 | `contracts/timing.md` | 13절 | U8 새 키 7개: `judgment.live-budget`(2s) · `judgment.response-ready`(10s) · `guardrail.jev-budget`(800ms) · `conversation.no-response-wait`(10s) · `conversation.focus-max`(90s) · `conversation.goal-active-limit`(10m) · `knowledge.graph-budget`. 응답 준비 대기 초과 때 `D_HOLD` 되묻기를 말하지만 그 문구 정본은 코드 · 시드에 없다(U11-R8) |
-| `contracts/deviations.md` | U8 · U9 편차 표 | U8-a ~ U8-e, U9-a ~ U9-c |
+| `contracts/deviations.md` | U8 · U9 편차 표 | U8-a ~ U8-e, U9-a ~ U9-c (2026-10-18 보충: U13 편차 `(U13-a)` `(U13-b)` 추가됨) |
 | `contracts/events.asyncapi.yaml` | `SessionRecordCaptured` 설명 | 형식 구분(위 5절) |
 | `contracts/device-ws.asyncapi.yaml` | `SESSION_STATE` | `STANDBY · LISTENING · THINKING · CLOSING` |

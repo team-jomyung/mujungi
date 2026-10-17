@@ -43,8 +43,9 @@ import org.springframework.context.annotation.Configuration;
 @Tag("db")
 class RealtimeSchemaIT {
 
-    /** V1 일곱 표 + U3 V2 세 표 + U4b V3 한 표 + U5b V4 다섯 표 + U11 V5 한 표(pg_tables 이름 순). */
+    /** V1 일곱 표 + U3 V2 세 표 + U4b V3 한 표 + U5b V4 다섯 표 + U11 V5 한 표 + U13 V6 한 표(pg_tables 이름 순). */
     static final List<String> REALTIME_TABLES = List.of(
+            "guardrail_event",
             "realtime_activity_session",
             "realtime_audio_recording",
             "realtime_device_connection",
@@ -82,17 +83,18 @@ class RealtimeSchemaIT {
             assertThat(tables.stream().map(row -> (String) row.get(0)).toList()).containsExactlyElementsOf(REALTIME_TABLES);
             assertThat(tables).allSatisfy(row -> assertThat(row.get(1)).isEqualTo("mujoong_owner"));
 
-            // core 위치가 먼저 flyway 스키마를 썼으므로 realtime 이력은 버전 0 기준선 뒤 V1 · V2 · V3 · V4 · V5다(J116 보완)
+            // core 위치가 먼저 flyway 스키마를 썼으므로 realtime 이력은 버전 0 기준선 뒤 V1 · V2 · V3 · V4 · V5 · V6다(J116 보완)
             assertThat(query(owner,
                     "select version, type, success from flyway.realtime_schema_history order by installed_rank"))
                     .containsExactly(List.of("0", "BASELINE", true), List.of("1", "SQL", true), List.of("2", "SQL", true),
-                            List.of("3", "SQL", true), List.of("4", "SQL", true), List.of("5", "SQL", true));
+                            List.of("3", "SQL", true), List.of("4", "SQL", true), List.of("5", "SQL", true),
+                            List.of("6", "SQL", true));
         }
         try (Connection realtime = postgres.connect(Role.REALTIME_APP)) {
             // 기동 점검 S2가 읽는 최신 버전
             assertThat(single(realtime,
                     "select max(version) from flyway.realtime_schema_history where success and type = 'SQL'"))
-                    .isEqualTo("5");
+                    .isEqualTo("6");
         }
     }
 
@@ -103,7 +105,7 @@ class RealtimeSchemaIT {
             assertThat(single(owner, "select script from flyway.realtime_schema_history where version = '2'"))
                     .isEqualTo("V2__u3_voice_conversation.sql");
             assertThat(V2_TABLES).allSatisfy(table -> assertThat(REALTIME_TABLES).contains(table));
-            assertThat(RealtimeSchemaIT.REALTIME_TABLES).hasSize(17);
+            assertThat(RealtimeSchemaIT.REALTIME_TABLES).hasSize(18);
         }
         try (Connection realtime = postgres.connect(Role.REALTIME_APP)) {
             // 01-roles.sql 기본 권한(편차 (x)): realtime_app은 새 표에 DML을 받고 DDL은 못 한다

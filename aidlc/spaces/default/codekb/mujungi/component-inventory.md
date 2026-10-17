@@ -1,3 +1,58 @@
+> 현재 범위의 정본은 바로 아래 "제브 어댑터 선 형식 집중 갱신" 절이다(`backend/realtime-activity` · `contracts` · `docs/units/u13` 한정, 2026-10-18, HEAD `421e1ad`). 그 뒤 구현 전 U13 절 · U14 절 · U15 절 · 원문은 보존 이력이며 재검증 범위는 timestamp에 한정한다.
+
+## 제브 어댑터 선 형식 현재 검증 구성 요소 (261017-jev-adapter-format)
+
+아래 제목만 이번 집중 스캔의 deep 구성 요소다. 이전 U13(구현 전) · U14 · U15 deep 표시는 이력이며 timestamp의 shallow로 강등했다. 패키지 `kr.mujoong.realtime.guardrail`은 이제 존재한다(19개 파일, 약 2,500줄 안팎). 설계 결정은 하지 않고 사실만 적는다.
+
+### u13.jev-adapter-wire-format
+`guardrail/JevGuardrailClient.java`(366줄), `JevHosts` · `JevModels`. 제브 선 형식을 아는 코드 두 곳 중 하나다: 요청은 `requestBody`(닫힌 키 6개 `model · systemPrompt · mode · candidateText · recentContext · policyVersion`), 응답은 `convert`(최상위 `decision · categories · policyFlags · reasonCode · reviewNeeded · policyVersion`). 경로는 상수 `CHECK_PATH = "/v1/guardrail/check"`(형식 가정)이며 코드에 `/v1/systemone`은 없다. 호출 한 번 · 재시도 없음(BR2.1), 시한 `min(마감까지 남은 시간, jev-budget)`, JDK `HttpClient`(리다이렉트 안 따름 · 프록시 없음), 응답 본문 상한 64KiB, 호스트는 생성 때와 보내기 직전 두 번 확인(`ALLOWED_HOSTS = {api.typesafe.ai}`), 키는 호출마다 `Supplier<String>`로 읽어 `Authorization: Bearer` 헤더에만 쓴다.
+
+### u13.guardrail-request-factory
+`guardrail/GuardrailRequestFactory`(순수 함수 115줄) · `GuardrailRequest`(레코드, `source` 상수 `GPT_LIVE_GENERATED`, `Mode`, `Speaker`, `ContextTurn`). **계약 내부 형식**을 만들고 공급자 형식은 만들지 않는다: 아이 이름 치환(`"아이"`), 후보 1 ~ 4000자, 맥락 마지막 3턴 · 한 줄 2000자, 정책 판 1 ~ 80자. 질문 · 선택지 · 시스템 지시를 모른다. 호출 지점은 `GuardrailCoordinator.start` 한 곳(`new GuardrailRequestFactory()` 직접 생성).
+
+### u13.verdict-conversion-and-consumers
+`guardrail/GuardrailVerdict`(`Decision{ALLOW,BLOCK,REVIEW,FAILED}` · `Failure` 6종) · `GuardrailEventRecord` · `GuardrailEventRecorder` · `GuardrailEventRepository` · `GuardrailEventDeletionParticipant`와 소비자 `session/GuardrailCoordinator`(749줄) · `PracticeSessionExtension.GuardrailBlockedEvent` · `observability/RealtimeMetrics`의 `mujoong.guardrail.*`. 소비자가 실제로 읽는 값은 `decision` · `failure` · `reasonCode`(기록 · 연습 알림) · `latencyMs`다. `categories` · `policyFlags`는 main 코드에서 읽는 곳이 없고 `guardrail_event`에 칸도 없다. 기록 표는 `realtime.guardrail_event`(V6).
+
+### u13.policy-resource-and-contract-schemas
+`src/main/resources/guardrail/policy-v1.json`(판 `jev-guardrail-v1`: `version` · `source` · `systemPrompt` · `categories` 7개 · `modes` 3개), `content/LiveContentResources`의 `guardrail` 적재 · 검증(`GUARDRAIL_CATEGORY_COUNT`), `contracts/schemas/guardrail-request.schema.json` · `guardrail-result.schema.json`, `contracts/ai-io.md` 10.1 ~ 10.5 · 10.11, `contracts/deviations.md`의 `(U13-a)` `(U13-b)`, `contracts/timing.md` 13절 제브 행. 분류 체계가 7개(리소스 · 계약 스키마 · 어댑터 `CATEGORIES`)와 11개(AI 동작 명세 §10.2, `PASS` 포함) 두 벌이다.
+
+### u13.guardrail-config-and-live-probe
+`guardrail/GuardrailConfiguration` · `GuardrailProperties`(`mode` · `baseUrl` · `model` 세 칸) · `GuardrailMode` · `GuardrailStartupRules` · `GuardrailSupport`, `application.yml`의 `mujoong.guardrail.jev` · `mujoong.timing.guardrail`, 시험 쪽 `JevLiveProbe` · `JevLiveTest`(태그 `jev-live`) · `JevLiveTaskIsolationTest`와 `backend/build.gradle.kts`의 `jevLiveTest` 분리(얕게). 문턱 설정 키는 아직 없다.
+
+### u13.adapter-bound-tests
+`JevGuardrailClientTest`(445줄, 시나리오 11개 중 1 · 2 · 3 · 7 · 8번이 가정 형식에 강하게 묶임), `GuardrailRequestFactoryTest`(내부 형식만 봄), `GuardrailConfigurationTest`, `config/ConfigKeyContractTest`의 제브 대목, `arch/TimeLiteralScanTest`의 어댑터 `.orTimeout` 줄 허용 항목, `GuardrailPackageArchTest`, `testing/FakeGuardrailClient`, `content/LiveContentRegistryTest` · `startup/U8RealtimeStartupChecksTest`의 7개 범주 단언, `contract-model`의 `U8ContractSchemasTest`(얕게). 실호출 증거는 없다.
+
+---
+
+## 구현 전 U13 구성 요소 (2026-10-17, 이력 — 구현 전 코드 기준, 재검증하지 않음)
+
+아래 제목은 `analyzed.components`가 아니다. 구현으로 `kr.mujoong.realtime.guardrail` 패키지가 생겼으므로 "새 패키지는 아직 없다" 같은 문장은 더 이상 사실이 아니다.
+
+### (구현 전) u13.output-gate-sealing
+`gate/`(`OutputGate` · `GateDecision` · `SegmentBuffer` · `OutputGeneration` · `ApprovedPlayback` · `SeedDictionary`)와 `SessionExecutor`의 봉인 · 검사 · 송신 · 폐기 구간(`sealAndGate` ~2782, `send` ~2831, `discard` ~2866). 동기 · 순수 판정은 `OutputGate`, 흐름은 실행기에 있다. 제브 삽입 지점은 `inspect` 통과 + 연습 원문 일치 뒤, `recheck` 앞이다. 세대 번호가 둘(기기 프레임 `outputGeneration`, 공급자 출력 `outputGen`)이다.
+
+### (구현 전) u13.session-async-handoff
+`SessionExecutor` 편지함 규약, `JudgmentCoordinator`(`Env` · `postResult`) · `JudgmentSupport` · `SessionMailbox`. 완료 콜백은 `mailbox.putSafety`로 실행기 스레드에 돌려놓는다. `outputHeld()`(WAITING_CHILD · 종료 확인 · 판정 · 연습 보류 4조건)와 `thinking()`/`listeningAgain()`의 THINKING 유지 조건이 제브 대기와 상호작용한다.
+
+### (구현 전) u13.provider-port-precedent
+`judgment/`(`JudgeClient` · `UnavailableJudgeClient` · `LunaJudgeClient` · `JudgmentConfiguration`)와 `luna/`(`LunaConfiguration` · `LunaKeyPresentCondition` · `LunaTransport` · `LunaHosts`). 제브 포트 · 어댑터가 따를 모양.
+
+### (구현 전) u13.approved-text-bypass
+`content/`(`LiveContentRegistry.matchApproved` · `LiveContentResources`)와 `voice/PracticeSpeech`(`matches`). 일치 정규화는 ASCII 공백 제거뿐이다(시드 사전의 NFKC와 다름). 구현 전에는 운영 호출자 0개, `Services`에 없음이었다(구현 뒤 `ApprovedVerbatimPort`가 생겼다 — 이번 스캔은 이름만 확인).
+
+### (구현 전) u13.guardrail-persistence
+`judgment/JudgmentLiveRecorder` · `JudgmentLiveRepository` · `JudgmentLiveDeletionParticipant`, `log/TranscriptWriter` · `TranscriptRepository` · `AsyncRecorder`, `db/migration/realtime/V5`. 새 표 `guardrail_event`(realtime V6)의 선례와 전사 승인(`approved_for_display`) 경로. 삭제 참여자 순서 100 · 150 · (180) · 200 · 900.
+
+### (구현 전) u13.startup-observability
+`startup/`(`RealtimeStartupChecks` · `ProfileGuardEnvironmentPostProcessor` · `SchemaVersionCheck`), `runtime/RealtimeRuntimeConfig`, `observability/`(`RealtimeMetrics` · `EventLogger`), `config/RealtimeProperties`(guardrail 부분), `application*.yml`, `guardrail/policy-v1.json`.
+
+### (구현 전) u13.test-and-contract-surface
+시험 구조(`arch` · `testing` · `session/JudgmentExecutorSupport` · `db` · `observability`), `backend/test-support`(`MutableClock` · `ManualTimerDriver` · `LunaResponsesStub`), `backend/contract-model`(`EventLog.Component` · `AttrKey` 위치), `contracts/`(`ai-io.md` 10절 · `timing.md` 13절 · `deviations.md` · `guardrail-*.schema.json`), `backend/coverage-scope/u11.txt` 선례.
+
+---
+
+> 현재 범위의 정본(U14 갱신절, 보존 이력)은 바로 아래다. 그 뒤 원문은 보존 이력이며 재검증 범위는 timestamp에 한정한다.
+
 > 최신 정본: 아래 U10 갱신절(2026-10-17, HEAD eb34c68bf24e4520881b7ffebe1070564554dfc9). 이후 U14/U15/전체 분석 본문은 역사 자료이며, 이번에 검증한 범위는 timestamp의 analyzed 목록만이다.
 
 ## U10 현재 검증 구성 요소
@@ -96,7 +151,7 @@ core-api/contract-model 빌드, 버전 카탈로그, Java 규약, a-checks. U15 
 
 ### db-migrations
 - **[깊게]** `backend/core-api/src/main/resources/db/migration/core/`(V1~V7 + `afterMigrate.sql`), `backend/realtime-activity/src/main/resources/db/migration/realtime/`(V1~V4 + `afterMigrate.sql`).
-- 책임: 스키마 정본. 실행은 `infra/migrate` 이미지. 다음 번호 core V8 · realtime V5(TD-7).
+- 책임: 스키마 정본. 실행은 `infra/migrate` 이미지. 다음 번호 core V8 · realtime V5(TD-7). (2026-10-18 갱신: realtime V5는 U11, V6은 U13이 썼다. 다음 realtime 번호는 V7 이후이며 `team.md`의 문장은 낡았다.)
 
 ## 계약
 

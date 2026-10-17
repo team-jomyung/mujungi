@@ -15,7 +15,7 @@ U4b부터는 다시 AI-DLC를 쓴다. 담당자마다 자기 PC에서 유닛용 
 |---|---|---|---|---|---|---|
 | 공통 | 1 | U8 계약 · 버전 리소스 | **main 병합**(10/16, PR #21) | `unit/u8-contracts-catalog` → `unit/u9-luna-clients`에 포함 | 없음 | `R/construction/u8-contracts-catalog/` |
 | 공통 | 2 | U9 Luna 호출부 | **main 병합**(10/16, PR #21). main CI #60 skeleton 통과 | `unit/u9-luna-clients` | 없음 | `R/construction/u9-luna-clients/` |
-| realtime | 3 → 4 → 6 | U11 판정 턴 → U13 제브 게이트 → U12 새 연습 흐름 | U8 · U9 담당자가 이어 맡음. **U11 PR1(선 형식 · 키 통일) main 병합**(10/17, PR #28), **PR2(판정 턴) 진행 중**(`docs/units/u11/design.md` · `report.md`). U12는 U13 뒤 대역으로 일부, U10 병합 뒤 완료 | `unit/u11-judgment-turn` · `unit/u13-…` · `unit/u12-…` | realtime V5 · V6 · V7 | `u11/brief.md` · `u11/design.md` · `u11/report.md`(U13 · U12는 앞 볼트 뒤 작성) |
+| realtime | 3 → 4 → 6 | U11 판정 턴 → U13 제브 게이트 → U12 새 연습 흐름 | U8 · U9 담당자가 이어 맡음. **U11 PR1(선 형식 · 키 통일) main 병합**(10/17, PR #28), **PR2(판정 턴) main 병합**(PR #29). **U13 제브 게이트는 구현 완료 · 병합 대기**(`unit/u13-jev-guardrail`, 시험은 모두 테스트 대역, 제브 실호출은 사람 몫: `docs/units/u13/report.md`). U12는 U13 뒤 대역으로 일부, U10 병합 뒤 완료 | `unit/u11-judgment-turn` · `unit/u13-jev-guardrail` · `unit/u12-…` | realtime V5(U11) · V6(U13) · V7(U12) | `u11/brief.md` · `u11/design.md` · `u11/report.md` · `u13/brief.md` · `u13/design.md` · `u13/report.md`(U12는 앞 볼트 뒤 작성) |
 | core | 3 → 4 → 5 | U15 지식 그래프 → U14 목표 · 결과 → U10 상황 생성 | **팀원에게 넘김** | `unit/u15-knowledge-graph` · `unit/u14-goal-result` · `unit/u10-scenario-generation` | core V8 · V9 · V10 | `u15/brief.md` · `u14/brief.md` · `u10/brief.md` |
 
 - **시작 브랜치**: U8 · U9는 PR #21로 `main`에 합쳐졌다(`main` CI #60 skeleton 통과). 새 볼트는 최신 `main`에서 딴다.
@@ -23,7 +23,8 @@ U4b부터는 다시 AI-DLC를 쓴다. 담당자마다 자기 PC에서 유닛용 
 - **두 줄이 만나는 곳은 U12 ↔ U10 대본 계약(C-DS1)뿐이다.** U12 담당자가 `practice-scenario.schema.json` 선택 필드를 계약 PR로 먼저 넣고 대역으로 개발한다. U10은 그 계약을 쓰고, 고칠 곳이 있으면 두 담당자가 같은 날 함께 합친다. U12는 U10 병합 뒤 실제 대본으로 마무리한다.
 - **삭제 순서 상수**: 지금 60 · 70 · 90 · 100 · 150 · 200 · 250 · 300 · 900을 쓴다. U15 그래프 제안값은 80이다.
 - **이 PC가 WSL Ubuntu이고 `date`가 uutils이면** `%3N` 자릿수가 깨진다. 그래서 `infra/ci/test-host-tools.sh` turn-metrics 2건이 실패한다. GNU `date`(`gnudate`)를 PATH 앞에 두고 돈다. CI에는 영향이 없다.
-- 실호출(`./gradlew lunaLiveTest`)은 사람이 키를 넣고 합성 자료로만 한다. 넣기 전에 `infra/RUNBOOK.md` 단계 4의 R-F15 확인 기록을 먼저 남긴다(편차 (U9-b) · (U9-c)).
+- 실호출(`./gradlew lunaLiveTest`, 제브는 `:realtime-activity:jevLiveTest`)은 사람이 키를 넣고 합성 자료로만 한다. 넣기 전에 `infra/RUNBOOK.md` 단계 4의 R-F15 확인 기록을 먼저 남긴다(편차 (U9-b) · (U9-c), 제브는 RUNBOOK 8.8).
+- **demo 배포 전 인프라 정렬(U13부터):** demo realtime은 `JEV_API_KEY` · `JEV_BASE_URL` · `JEV_MODEL`이 없으면 기동을 거부한다. U13이 든 SHA를 배포하기 전에 Parameter Store `/mujoong/demo/`에 셋을 먼저 넣는다(RUNBOOK 단계 4).
 
 ## 현황
 
@@ -75,7 +76,7 @@ main CI는 U2 병합(10/12) 때부터 실패하고 있었다. 원인은 둘이�
 ## 규칙
 
 - 화면 설계 v1.5j가 최우선이다. 다만 27의 연습 기록 · 28의 만드는 중 문구 · 30 · R-PDF는 `refined-mockups/mockups.md` §1의 F3 ~ F6이 앞선다(10개 항목 리포트 · 기록용 재판정).
-- 마이그레이션 번호: core V2 = U2 · V3 = U4a · V4 = U5a · V5 = U6 · V6 = U7 · V7 = U5b 시작 준비(`core_practice_preparation`), realtime V2 = U3 · V3 = U4b · V4 = U5b.
+- 마이그레이션 번호: core V2 = U2 · V3 = U4a · V4 = U5a · V5 = U6 · V6 = U7 · V7 = U5b 시작 준비(`core_practice_preparation`), realtime V2 = U3 · V3 = U4b · V4 = U5b · V5 = U11 판정 기록 · V6 = U13 제브 검사 기록(다음 realtime 번호는 V7).
 - 각 작업자는 `docs/units/<유닛>/design.md` · `report.md`를 남기고, 리뷰를 거쳐 main에 합친다.
 
 ## U6 · U7 정본 (지시서를 쓸 때 읽을 곳)

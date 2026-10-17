@@ -1,0 +1,525 @@
+package kr.mujoong.realtime.session;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import java.time.Duration;
+import java.util.List;
+import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import kr.mujoong.contract.status.ActivityType;
+import kr.mujoong.contract.ws.message.PlayApprovedContent;
+import kr.mujoong.contract.ws.message.SessionState;
+import kr.mujoong.contract.ws.message.View;
+import kr.mujoong.realtime.dialog.InstructionTemplates;
+import kr.mujoong.realtime.guardrail.GuardrailEventRecord;
+import kr.mujoong.realtime.guardrail.GuardrailVerdict;
+import kr.mujoong.realtime.log.TranscriptEntry;
+import kr.mujoong.realtime.testing.FakeGuardrailClient;
+import kr.mujoong.realtime.testing.SessionHarness;
+import kr.mujoong.realtime.voice.ProviderPort.ProviderEvent;
+import kr.mujoong.realtime.voice.ProviderRequestFactory;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
+
+/**
+ * 제브 게이트의 실행기 연결 시험 (U13 W1 ~ W5, 호출 지점 ① ~ ⑧): 위치(inspect 뒤 · recheck 앞), 승인 시점, '생각 중' 유지, 연습 통제 중 호출 0,
+ * teardown 취소, 재지시 응답의 폐기 훅, begin 예외, 모드 OFF 불변. 제브 · 공급자는 모두 대역이다(실제 호출 없음, R-F1 · R-M11).
+ */
+@Tag("u13")
+class GuardrailExecutorTest {
+
+    private static final byte[] AUDIO = new byte[4800];
+    private static final String CLEAN = "공룡을 좋아하는구나";
+
+    private final SessionHarness h = new SessionHarness();
+    private final FakeGuardrailClient guard = h.useGuardrail();
+    private int childItems;
+
+    private GuardrailCoordinator coordinator() {
+        return h.executor.guardrail();
+    }
+
+    // ---- 위치 · 승인 시점 ----
+
+    @Test
+    void theCheckSitsAfterInspectAndBeforeRecheckSoNothingGoesOutUntilAnAllow() {
+        h.activate();
+        childSpeaks();
+
+        say(CLEAN);
+
+        assertThat(guard.count()).isEqualTo(1);
+        assertThat(h.link.outputs()).isEmpty();
+        assertThat(guard.last().request().candidate()).isEqualTo(CLEAN);
+        guard.allow();
+        h.drain();
+        assertThat(h.link.outputs()).hasSize(1);
+        assertThat(coordinator().state()).isEqualTo(GuardrailCoordinator.State.IDLE);
+    }
+
+    @Test
+    void aStructurallyBadOrForbiddenSegmentIsDiscardedByInspectBeforeTheCheckerIsEverCalled() {
+        h.activate();
+        childSpeaks();
+
+        say("검사해 보니 비정상이에요");
+
+        assertThat(guard.count()).isZero();
+        assertThat(h.link.outputs()).isEmpty();
+        assertThat(h.metrics.count("mujoong.gate.discard", "reason", "gate_pattern")).isEqualTo(1.0);
+    }
+
+    @Test
+    void theGuardianViewApprovalHappensOnlyAfterAnAllowAndABlockedRowStaysUnapproved() {
+        h.activate();
+        childSpeaks();
+        say(CLEAN);
+
+        TranscriptEntry waiting = onlyAiRow();
+        assertThat(waiting.assemblyStatus()).isEqualTo(TranscriptEntry.AssemblyStatus.PARTIAL);
+        assertThat(waiting.approvedForDisplay()).isFalse();
+
+        guard.allow();
+        h.drain();
+        TranscriptEntry approved = onlyAiRow();
+        assertThat(approved.assemblyStatus()).isEqualTo(TranscriptEntry.AssemblyStatus.FINAL);
+        assertThat(approved.approvedForDisplay()).isTrue();
+        assertThat(approved.text()).isEqualTo(CLEAN);
+    }
+
+    @Test
+    void aBlockedSegmentSendsZeroBytesLeavesAnUnapprovedFinalRowAndCountsTheDiscard() {
+        h.activate();
+        childSpeaks();
+        say(CLEAN);
+
+        guard.block();
+        h.drain();
+
+        assertThat(h.link.outputs()).isEmpty();
+        TranscriptEntry row = onlyAiRow();
+        assertThat(row.assemblyStatus()).isEqualTo(TranscriptEntry.AssemblyStatus.FINAL);
+        assertThat(row.approvedForDisplay()).isFalse();
+        assertThat(h.metrics.count("mujoong.gate.discard", "reason", "guardrail_block")).isEqualTo(1.0);
+        assertThat(records()).singleElement().satisfies(event -> {
+            assertThat(event.decision()).isEqualTo(GuardrailEventRecord.Decision.BLOCK);
+            assertThat(event.mode()).isEqualTo(kr.mujoong.realtime.guardrail.GuardrailMode.REAL);
+        });
+    }
+
+    // ---- 생각 중 유지 ----
+
+    @Test
+    void theDeviceKeepsThinkingWhileTheCheckIsPendingAndListensAgainOnlyAfterThePlaybackEnds() {
+        h.activate();
+        childFinal("공룡이 좋아");
+        long listeningBefore = views().stream().filter(view -> view == View.LISTENING).count();
+        say(CLEAN);
+
+        assertThat(coordinator().holdsThinking()).isTrue();
+        h.advanceAlive(Duration.ofMillis(500));
+        assertThat(views().stream().filter(view -> view == View.LISTENING).count()).isEqualTo(listeningBefore);
+
+        guard.allow();
+        h.drain();
+        assertThat(coordinator().holdsThinking()).isFalse();
+    }
+
+    // ---- 무효 ----
+
+    @Test
+    void aNewInputGroupOpenedAfterTheRequestVoidsALateAllowButATailPieceOfTheSameGroupDoesNot() {
+        h.activate();
+        childSpeaks();
+        say(CLEAN);
+        // 같은 묶음의 꼬리 조각: 새 말이 아니다
+        h.provider.last().emit(new ProviderEvent.InputTranscriptDelta("item-1", "를 좋아해"));
+        h.drain();
+        guard.allow();
+        h.drain();
+        assertThat(h.link.outputs()).hasSize(1);
+
+        // 새 묶음: 아이가 말을 새로 시작했다
+        h.provider.last().emit(new ProviderEvent.InputTranscriptDone("item-1", "공룡을 좋아해", null));
+        h.drain();
+        h.settleSend();
+        say("티라노는 정말 힘이 세지");
+        h.provider.last().emit(new ProviderEvent.InputTranscriptDelta("item-9", "근데"));
+        h.drain();
+        guard.allow();
+        h.drain();
+
+        assertThat(h.link.outputs()).hasSize(1);
+        assertThat(records()).extracting(GuardrailEventRecord::reasonCode).contains("CHILD_SPOKE");
+    }
+
+    @Test
+    void aSessionTearingDownCancelsTheRequestClosesTheHeldRowAndDropsTheLateResult() {
+        h.activate();
+        childSpeaks();
+        say(CLEAN);
+        CompletableFuture<GuardrailVerdict> future = guard.last().future();
+
+        h.mailbox.putSafety(new SessionMailbox.DeletionStop());
+        h.drain();
+
+        assertThat(h.removed).isTrue();
+        assertThat(future.isCancelled()).isTrue();
+        TranscriptEntry row = onlyAiRow();
+        assertThat(row.assemblyStatus()).isEqualTo(TranscriptEntry.AssemblyStatus.FINAL);
+        assertThat(row.approvedForDisplay()).isFalse();
+        assertThat(h.link.outputs()).isEmpty();
+    }
+
+    // ---- 연습 통제 · OFF ----
+
+    @Test
+    void whilePracticeControlsTheOutputTheOriginalTextPlaysThroughTheOldGateWithoutCallingTheChecker() {
+        SessionHarness practice = practiceHarness();
+        FakeGuardrailClient practiceGuard = practice.guard;
+        practice.activate();
+
+        practice.speak("내 차례야.", 4800);
+        practice.advance(Duration.ofMillis(801));
+
+        assertThat(practiceGuard.count()).isZero();
+        assertThat(practice.link.outputs()).hasSize(1);
+    }
+
+    @Test
+    void whilePracticeControlsTheOutputAChangedTextIsStillDiscardedAsAGatePatternWithoutCallingTheChecker() {
+        SessionHarness practice = practiceHarness();
+        FakeGuardrailClient practiceGuard = practice.guard;
+        practice.activate();
+
+        practice.speak("내 차례야. 이렇게 말해 봐.", 4800);
+        practice.advance(Duration.ofMillis(801));
+
+        assertThat(practiceGuard.count()).isZero();
+        assertThat(practice.link.outputs()).isEmpty();
+        assertThat(practice.metrics.count("mujoong.gate.discard", "reason", "gate_pattern")).isEqualTo(1.0);
+    }
+
+    private static SessionHarness practiceHarness() {
+        SessionHarness practice = new SessionHarness();
+        practice.useGuardrail();
+        Controlled extension = new Controlled();
+        practice.activityType = ActivityType.PRACTICE;
+        practice.practice = ignored -> extension;
+        return practice;
+    }
+
+    @Test
+    void withoutAGuardrailSupportTheFlowIsUnchangedAndNoCheckStateExists() {
+        SessionHarness plain = new SessionHarness();
+        plain.activate();
+        plain.provider.last().emit(new ProviderEvent.InputTranscriptDelta("item-1", "공룡"));
+        plain.drain();
+
+        plain.provider.last().emit(new ProviderEvent.OutputTranscriptDelta(CLEAN));
+        plain.provider.last().emit(new ProviderEvent.OutputAudioDelta(AUDIO));
+        plain.provider.last().emit(new ProviderEvent.OutputAudioDelta(AUDIO));
+        plain.drain();
+        plain.advance(Duration.ofMillis(801));
+
+        assertThat(plain.link.outputs()).hasSize(1);
+        assertThat(plain.executor.guardrail().enabled()).isFalse();
+        assertThat(plain.store.guardrails).isEmpty();
+    }
+
+    // ---- 재지시 ----
+
+    @Test
+    void theFirstBlockOfAServerPromptedAnswerReplaysThatPromptAndAFreeAnswerGetsTheFreeTurnTemplate() {
+        // 참여 뒤 첫 응답은 서버 지시(ResponseStart.FIRST)가 만든다 — 막히면 같은 지시를 다시 보낸다
+        h.activate();
+        say(CLEAN);
+        guard.block();
+        h.drain();
+        h.settleSend();
+
+        List<String> contents = appended();
+        assertThat(contents).hasSize(2);
+        assertThat(contents.get(1)).isEqualTo(contents.get(0));
+        assertThat(contents.get(1)).contains(InstructionTemplates.INTERJECTION_LEAD);
+        assertThat(coordinator().state()).isEqualTo(GuardrailCoordinator.State.RETRYING);
+
+        // 아이가 말한 뒤의 자유 응답은 기억한 지시가 없어 새 템플릿을 쓴다
+        guard.allow(guard.last());
+        h.provider.last().emit(new ProviderEvent.InputTranscriptDone("c-free", "공룡이 좋아", null));
+        h.drain();
+        assertThat(coordinator().retries()).isZero();
+    }
+
+    @Test
+    void aFreeAnswerBlockedOnceSendsTheRetryFreeTurnTemplateAndASecondBlockAbandonsWithTheFillerAndNoThirdInstruction() {
+        h.activate();
+        childFinal("공룡이 좋아");
+        h.settleSend();
+        say(CLEAN);
+        int before = appended().size();
+
+        guard.block();
+        h.drain();
+        h.settleSend();
+
+        List<String> contents = appended();
+        assertThat(contents).hasSize(before + 1);
+        assertThat(contents.getLast()).isEqualTo(InstructionTemplates.Retry.RETRY_FREE_TURN.content());
+        assertThat(contents.getLast()).doesNotContain(CLEAN);
+        assertThat(coordinator().state()).isEqualTo(GuardrailCoordinator.State.RETRYING);
+        assertThat(coordinator().holdsThinking()).isTrue();
+
+        say("다른 말로 이어 갈게");
+        assertThat(guard.count()).isEqualTo(2);
+        guard.block();
+        h.drain();
+        h.settleSend();
+
+        assertThat(appended()).hasSize(before + 1);
+        assertThat(coordinator().state()).isEqualTo(GuardrailCoordinator.State.IDLE);
+        assertThat(h.link.outputs()).isEmpty();
+        assertThat(h.link.sent(PlayApprovedContent.class)).extracting(PlayApprovedContent::contentCode)
+                .contains(PlayApprovedContent.WAITING_FILLER);
+    }
+
+    @Test
+    void aRetryWhoseNewSpeechNeverStartsAbandonsTheTurnAndReleasesThinking() {
+        h.activate();
+        childFinal("공룡이 좋아");
+        h.settleSend();
+        say(CLEAN);
+        guard.block();
+        h.drain();
+        assertThat(coordinator().state()).isEqualTo(GuardrailCoordinator.State.RETRYING);
+
+        // 새 말이 오지 않는다: 확인 사건 만기 두 번 뒤 NEW_SPEECH_NOT_OBSERVED
+        h.advanceAlive(Duration.ofSeconds(11));
+        h.advanceAlive(Duration.ofSeconds(11));
+
+        assertThat(coordinator().state()).isEqualTo(GuardrailCoordinator.State.IDLE);
+        assertThat(coordinator().holdsThinking()).isFalse();
+        assertThat(coordinator().retries()).isEqualTo(1);
+        assertThat(guard.count()).isEqualTo(1);
+    }
+
+    @Test
+    void anEmptyRetryWindowDoesNotAbandonEarly() {
+        h.activate();
+        childFinal("공룡이 좋아");
+        h.settleSend();
+        say(CLEAN);
+        guard.block();
+        h.drain();
+
+        // 응답이 아직 오지 않은 것은 폐기가 아니다: 시한 안에서는 RETRYING을 그대로 둔다
+        h.advanceAlive(Duration.ofSeconds(3));
+        h.provider.last().emit(new ProviderEvent.InputTranscriptDelta("item-x", "음"));
+        h.drain();
+
+        assertThat(coordinator().state()).isEqualTo(GuardrailCoordinator.State.RETRYING);
+    }
+
+    // ---- 재지시 응답이 begin 앞에서 폐기되는 길 (discard() 한 지점의 훅) ----
+
+    @Test
+    void aRetryResponseDiscardedByAForbiddenPatternLeavesRetryingAndNeverCallsTheCheckerAgain() {
+        RetryResponse retry = blockedOnce();
+
+        say("검사해 보니 비정상이에요");
+
+        retry.assertReleased();
+    }
+
+    @Test
+    void aRetryResponseDiscardedAsIncompleteBecauseItHasNoTranscriptLeavesRetrying() {
+        RetryResponse retry = blockedOnce();
+
+        h.provider.last().emit(new ProviderEvent.OutputAudioDelta(AUDIO));
+        h.drain();
+        h.advance(Duration.ofMillis(801));
+
+        retry.assertReleased();
+    }
+
+    @Test
+    void aRetryResponseThatNeverHasAudioIsAbandonedByTheQuietCheckAndLeavesRetrying() {
+        RetryResponse retry = blockedOnce();
+
+        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("소리 없는 말"));
+        h.drain();
+        h.advance(Duration.ofSeconds(2));
+        h.advance(Duration.ofSeconds(2));
+
+        retry.assertReleased();
+    }
+
+    @Test
+    void aProviderErrorDuringTheRetryResponseDiscardsTheOpenSegmentAndLeavesRetrying() {
+        RetryResponse retry = blockedOnce();
+        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta(CLEAN));
+        h.provider.last().emit(new ProviderEvent.OutputAudioDelta(AUDIO));
+        h.drain();
+
+        h.provider.last().emit(new ProviderEvent.Error("synthetic_provider_error"));
+        h.drain();
+
+        retry.assertReleased();
+    }
+
+    @Test
+    void anExceptionFromTheCheckerPortIsAFailClosedAbandonThatNeverStrandsTheDevice() {
+        h.activate();
+        childFinal("공룡이 좋아");
+        h.settleSend();
+        guard.throwOnCheck(new IllegalStateException("합성 어댑터 결함"));
+
+        say(CLEAN);
+
+        assertThat(h.link.outputs()).isEmpty();
+        assertThat(coordinator().state()).isEqualTo(GuardrailCoordinator.State.IDLE);
+        assertThat(coordinator().holdsThinking()).isFalse();
+        TranscriptEntry row = onlyAiRow();
+        assertThat(row.assemblyStatus()).isEqualTo(TranscriptEntry.AssemblyStatus.FINAL);
+        assertThat(row.approvedForDisplay()).isFalse();
+        assertThat(h.metrics.count("mujoong.gate.discard", "reason", "guardrail_error")).isEqualTo(1.0);
+    }
+
+    // ---- 대기열 · 지연 기록 ----
+
+    @Test
+    void aSecondSegmentSealedWhileTheFirstIsBeingCheckedWaitsAndIsCheckedAfterTheFirstIsSent() {
+        h.activate();
+        childFinal("공룡이 좋아");
+        h.settleSend();
+        say(CLEAN);
+        FakeGuardrailClient.Call first = guard.last();
+
+        say("티라노도 좋아하니");
+        assertThat(guard.count()).isEqualTo(1);
+        assertThat(coordinator().hasQueued()).isTrue();
+
+        guard.allow(first);
+        h.drain();
+
+        assertThat(h.link.outputs()).hasSize(1);
+        assertThat(guard.count()).isEqualTo(2);
+        guard.allow();
+        h.drain();
+        assertThat(h.link.outputs()).hasSize(2);
+        assertThat(aiRows()).allSatisfy(row -> assertThat(row.approvedForDisplay()).isTrue());
+    }
+
+    // ---- 도우미 ----
+
+    /** 자유 응답이 한 번 막혀 재지시를 보낸 직후의 상태(RETRYING). */
+    private RetryResponse blockedOnce() {
+        h.activate();
+        childFinal("공룡이 좋아");
+        h.settleSend();
+        say(CLEAN);
+        guard.block();
+        h.drain();
+        h.settleSend();
+        assertThat(coordinator().state()).isEqualTo(GuardrailCoordinator.State.RETRYING);
+        return new RetryResponse();
+    }
+
+    private final class RetryResponse {
+        void assertReleased() {
+            assertThat(coordinator().state()).isEqualTo(GuardrailCoordinator.State.IDLE);
+            assertThat(coordinator().holdsThinking()).isFalse();
+            assertThat(guard.count()).isEqualTo(1);
+            assertThat(h.link.outputs()).isEmpty();
+            // 훅은 마무리를 하지 않는다: 폐기의 기존 마무리가 대기 문구나 듣기 복귀를 맡는다(재지시는 더 없다)
+            assertThat(coordinator().retries()).isEqualTo(1);
+        }
+    }
+
+    private void childSpeaks() {
+        h.provider.last().emit(new ProviderEvent.InputTranscriptDelta("item-1", "공룡"));
+        h.drain();
+    }
+
+    private void childFinal(String text) {
+        h.childSays("child-" + (++childItems), text);
+    }
+
+    /** 공급자가 말하고(전사 + 음성 두 조각) 조용 시간을 지나 구간이 봉인되게 한다. */
+    private void say(String text) {
+        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta(text));
+        h.provider.last().emit(new ProviderEvent.OutputAudioDelta(AUDIO));
+        h.provider.last().emit(new ProviderEvent.OutputAudioDelta(AUDIO));
+        h.drain();
+        h.advance(Duration.ofMillis(801));
+    }
+
+    private List<View> views() {
+        return h.link.sent(SessionState.class).stream().map(SessionState::view).toList();
+    }
+
+    private List<String> appended() {
+        return h.provider.last().requests(ProviderRequestFactory.InstructionsAppend.class).stream()
+                .map(ProviderRequestFactory.InstructionsAppend::content).toList();
+    }
+
+    private List<GuardrailEventRecord> records() {
+        h.guardrailRecorder.tick();
+        return List.copyOf(h.store.guardrails);
+    }
+
+    private List<TranscriptEntry> aiRows() {
+        h.recorder.tick();
+        return h.store.transcripts.stream().filter(row -> row.speaker() == TranscriptEntry.Speaker.AI).toList();
+    }
+
+    private TranscriptEntry onlyAiRow() {
+        List<TranscriptEntry> rows = aiRows();
+        assertThat(rows).hasSize(1);
+        return rows.getFirst();
+    }
+
+    /** 출력을 쥔 최소 연습 확장점(원문 "내 차례야."만 읽는다). */
+    private static final class Controlled implements PracticeSessionExtension {
+        PracticeOutput out;
+        private final kr.mujoong.realtime.voice.PracticeSpeech speech = new kr.mujoong.realtime.voice.PracticeSpeech(
+                UUID.randomUUID(), UUID.randomUUID(), 1, kr.mujoong.realtime.practice.PracticePorts.OutputKind.SCENARIO, "친구",
+                "내 차례야.");
+
+        kr.mujoong.realtime.voice.PracticeSpeech speech() {
+            return speech;
+        }
+
+        @Override
+        public boolean controlsOutput() {
+            return true;
+        }
+
+        @Override
+        public Signal onActive(PracticeContext context, PracticeOutput output) {
+            out = output;
+            output.speak(speech);
+            return Signal.NONE;
+        }
+
+        @Override
+        public Signal onChildUtterance(Utterance utterance, PracticeOutput output) {
+            return Signal.NONE;
+        }
+
+        @Override
+        public Signal onExtensionEvent(ExtensionEvent event, PracticeOutput output) {
+            return Signal.NONE;
+        }
+
+        @Override
+        public void onSettle(EndContext end) {
+            // 정리할 것이 없다
+        }
+
+        @Override
+        public Object practiceRecord() {
+            return null;
+        }
+    }
+}

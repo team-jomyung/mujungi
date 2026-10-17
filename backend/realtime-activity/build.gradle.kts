@@ -117,3 +117,38 @@ tasks.register<Test>("lunaReachTest") {
     }
     shouldRunAfter(tasks.named("test"))
 }
+
+// ---- 제브 실호출 (U13 Step 15b, lunaReachTest · gptLiveTest와 같은 방식) ----
+// @Tag("jev-live") 시험만 돈다. 사람이 그 PC의 셸 env JEV_API_KEY · JEV_BASE_URL · JEV_MODEL을 넣고 ./gradlew :realtime-activity:jevLiveTest로
+// 직접 돌린다(키는 채팅 · 파일 · 저장소에 두지 않는다, R-F3 · R-F13). 기본 test는 build-logic 규약이 jev-live를 고정 제외하고 키를 지운다.
+// 이 작업은 check · build에 물리지 않고 루트 verifyJevLiveIsolation(check가 의존)이 확인한다.
+val jevLiveTag = "jev-live"
+tasks.register<Test>("jevLiveTest") {
+    group = "verification"
+    description = "제브 실호출(@Tag(\"jev-live\"), 사람이 env JEV_API_KEY · JEV_BASE_URL · JEV_MODEL을 넣고 돌림). 키가 없으면 SKIPPED_NO_KEY로 끝난다."
+    testClassesDirs = liveTestSourceSet.output.classesDirs
+    classpath = liveTestSourceSet.runtimeClasspath
+    options {
+        (this as JUnitPlatformOptions).setIncludeTags(setOf(jevLiveTag))
+    }
+    inputs.property("fixedIncludeTags", jevLiveTag)
+    // 결과 보고서(표본 이름 · 기대 · 판정 · 실패 종류 · 걸린 분류 · 사유 코드 · 지연만, 후보 문장 원문 · 키 · 주소 없음, R-F14)
+    val report = layout.buildDirectory.file("jev-live/report.txt")
+    outputs.file(report).withPropertyName("jevLiveReport")
+    systemProperty("mujoong.jev.live.report", report.get().asFile.absolutePath)
+    doFirst {
+        report.get().asFile.delete()
+    }
+    // 실호출은 매번 새로 돈다(캐시된 '통과'를 다시 보고하지 않음)
+    outputs.upToDateWhen { false }
+    // 공통 블록의 커버리지 보고(jacocoTestReport → test 의존)를 끈다: 실호출 작업이 기본 시험을 끌고 오지 않게
+    setFinalizedBy(emptyList<Any>())
+    extensions.configure<JacocoTaskExtension> {
+        isEnabled = false
+    }
+    testLogging {
+        events("passed", "failed", "skipped")
+        showStandardStreams = true
+    }
+    shouldRunAfter(tasks.named("test"))
+}

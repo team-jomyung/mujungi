@@ -197,3 +197,68 @@ gradle.taskGraph.whenReady {
         }
     }
 }
+
+// ---- 제브 실호출 시험 분리 확인 (U13 Step 15b) ----
+// lunaReachTest와 같은 네 가지를 단언한다: check · test 작업 그래프에 jevLiveTest 없음, realtime-activity에 jevLiveTest가 있고
+// 포함 목록 = jev-live, 모든 모듈의 기본 test 제외 목록에 jev-live 있음, 기본 test가 JEV_API_KEY를 시험 JVM에 넘기지 않음.
+val jevLiveTag = "jev-live"
+val jevLiveProblems = mutableListOf<String>()
+val jevLiveModules = mutableListOf<String>()
+
+val verifyJevLiveIsolation = tasks.register("verifyJevLiveIsolation") {
+    group = "verification"
+    description = "jevLiveTest가 check · 기본 test와 분리돼 있는지 확인한다(U13)."
+    doLast {
+        if (jevLiveProblems.isNotEmpty()) {
+            throw GradleException("제브 실호출 시험 분리 위반: ${jevLiveProblems.joinToString("; ")}")
+        }
+        logger.lifecycle(
+            "verifyJevLiveIsolation: 모듈 ${jevLiveModules.sorted()} — check · test 그래프에 jevLiveTest 없음, " +
+                "모든 test는 ${jevLiveTag} 제외 · JEV_API_KEY 없음, jevLiveTest는 ${jevLiveTag}만",
+        )
+    }
+}
+
+tasks.named("check") {
+    dependsOn(verifyJevLiveIsolation)
+}
+
+gradle.taskGraph.whenReady {
+    if (!hasTask(verifyJevLiveIsolation.get())) {
+        return@whenReady
+    }
+    val modules = subprojects.filter { it.tasks.findByName("jevLiveTest") != null }
+    jevLiveModules += modules.map { it.name }
+    if ("realtime-activity" !in jevLiveModules) {
+        jevLiveProblems += "realtime-activity에 jevLiveTest 작업이 없다"
+    }
+    val reachable = mutableSetOf<Task>()
+    val roots = listOf(tasks.getByName("check")) +
+        subprojects.mapNotNull { it.tasks.findByName("check") } +
+        subprojects.mapNotNull { it.tasks.findByName("test") }
+    val pending = ArrayDeque(roots)
+    while (pending.isNotEmpty()) {
+        val task = pending.removeFirst()
+        if (reachable.add(task)) {
+            pending.addAll(task.taskDependencies.getDependencies(task))
+        }
+    }
+    reachable.filter { it.name == "jevLiveTest" }.forEach { jevLiveProblems += "check · test 그래프에 ${it.path}가 있다" }
+    for (module in subprojects) {
+        val test = module.tasks.findByName("test") as? Test ?: continue
+        val testOptions = test.options as JUnitPlatformOptions
+        if (jevLiveTag !in testOptions.excludeTags) {
+            jevLiveProblems += "${test.path} 제외 목록에 ${jevLiveTag} 없음(${testOptions.excludeTags})"
+        }
+        if (test.environment.containsKey("JEV_API_KEY")) {
+            jevLiveProblems += "${test.path}가 JEV_API_KEY를 시험 JVM에 넘긴다"
+        }
+    }
+    for (module in modules) {
+        val live = module.tasks.getByName("jevLiveTest") as Test
+        val liveOptions = live.options as JUnitPlatformOptions
+        if (liveOptions.includeTags != setOf(jevLiveTag)) {
+            jevLiveProblems += "${live.path} 포함 목록이 ${jevLiveTag} 하나가 아님(${liveOptions.includeTags})"
+        }
+    }
+}

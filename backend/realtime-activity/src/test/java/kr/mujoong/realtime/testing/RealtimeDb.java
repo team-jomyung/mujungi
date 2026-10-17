@@ -33,6 +33,8 @@ public final class RealtimeDb implements AutoCloseable {
 
     /** 외래 키 순서(자식 → 부모)로 비울 표. */
     private static final List<String> TABLES = List.of(
+            // U13 V6: 제브 검사 기록도 세션 행을 가리키므로 먼저 비운다
+            "realtime.guardrail_event",
             // U11 V5: 판정 기록은 세션 행을 가리키므로 먼저 비운다
             "realtime.realtime_judgment_live",
             "realtime.realtime_practice_evaluation",
