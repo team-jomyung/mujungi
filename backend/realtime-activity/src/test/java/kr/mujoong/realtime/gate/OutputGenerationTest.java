@@ -92,7 +92,7 @@ class OutputGenerationTest {
     void withoutAChunkSinceTheChildsSpeechEndTheAutoResponseStartWaitApplies() {
         gen.onChunk(at(0), false);
         gen.onSpeechEnd(at(1000));
-        gen.bump(at(1010), BumpReason.SERVER_SEND);
+        gen.bumpForSend(at(1010), BumpReason.SERVER_SEND);
 
         QuietResult waiting = gen.onQuiet(at(1900));
         QuietResult confirmed = gen.onQuiet(at(2500));
@@ -107,7 +107,7 @@ class OutputGenerationTest {
     void aChunkAfterTheSpeechEndMeansTheAutoResponseAlreadyStartedSoQuietIsEnough() {
         gen.onSpeechEnd(at(1000));
         gen.onChunk(at(1200), false);
-        gen.bump(at(1300), BumpReason.SERVER_SEND);
+        gen.bumpForSend(at(1300), BumpReason.SERVER_SEND);
 
         QuietResult confirmed = gen.onQuiet(at(2100));
 
@@ -129,7 +129,7 @@ class OutputGenerationTest {
 
     @Test
     void aChunkBetweenThePermitAndTheSentMarkVoidsThePermitAndAWaitStartsOver() {
-        gen.bump(at(0), BumpReason.SERVER_SEND);
+        gen.bumpForSend(at(0), BumpReason.SERVER_SEND);
         QuietResult first = gen.onQuiet(at(800));
         assertThat(first.permitReady()).isTrue();
         long firstPermit = first.permitSeq();
@@ -150,7 +150,7 @@ class OutputGenerationTest {
 
     @Test
     void theSentMarkLetsTheNextChunkIntoTheInstructedResponseSegment() {
-        gen.bump(at(0), BumpReason.SERVER_SEND);
+        gen.bumpForSend(at(0), BumpReason.SERVER_SEND);
         QuietResult permit = gen.onQuiet(at(800));
 
         assertThat(gen.acceptInstructionSent(permit.generation(), permit.permitSeq())).isTrue();
@@ -165,7 +165,7 @@ class OutputGenerationTest {
 
     @Test
     void aStalePermitSentMarkIsStillAcceptedButDoesNotReviveDiscardedChunks() {
-        gen.bump(at(0), BumpReason.SERVER_SEND);
+        gen.bumpForSend(at(0), BumpReason.SERVER_SEND);
         QuietResult permit = gen.onQuiet(at(800));
         gen.onChunk(at(850), false);
 
@@ -177,7 +177,7 @@ class OutputGenerationTest {
 
     @Test
     void aSentMarkOfAnOlderGenerationIsIgnored() {
-        gen.bump(at(0), BumpReason.SERVER_SEND);
+        gen.bumpForSend(at(0), BumpReason.SERVER_SEND);
         QuietResult permit = gen.onQuiet(at(800));
         gen.bump(at(850), BumpReason.BARGE_IN);
 
@@ -188,7 +188,7 @@ class OutputGenerationTest {
 
     @Test
     void aSameGenerationAbortAsksForANewPermit() {
-        long generation = gen.bump(at(0), BumpReason.SERVER_SEND);
+        long generation = gen.bumpForSend(at(0), BumpReason.SERVER_SEND);
         gen.onQuiet(at(800));
         gen.onChunk(at(850), false);
 
@@ -198,7 +198,7 @@ class OutputGenerationTest {
 
     @Test
     void cancellingThePendingSendReportsWhetherOneWasWaiting() {
-        gen.bump(at(0), BumpReason.SERVER_SEND);
+        gen.bumpForSend(at(0), BumpReason.SERVER_SEND);
         assertThat(gen.pendingSend()).isTrue();
 
         assertThat(gen.cancelPendingSend()).isTrue();
@@ -208,7 +208,7 @@ class OutputGenerationTest {
 
     @Test
     void aBumpForAnotherReasonDropsTheWaitingFlagAndTheCorrectionIsOncePerGeneration() {
-        gen.bump(at(0), BumpReason.SERVER_SEND);
+        gen.bumpForSend(at(0), BumpReason.SERVER_SEND);
         gen.bump(at(10), BumpReason.BARGE_IN);
         assertThat(gen.pendingSend()).isFalse();
 

@@ -45,7 +45,11 @@ public final class SessionTimers {
         /** U4b 마지막 기기 메시지 뒤 기술 일시정지(gap-display, BR6.1). */
         GAP_DISPLAY(false),
         /** U4b 종료 뒤 정산 창 상한(record-settle, BR8.1). */
-        RECORD_SETTLE(false);
+        RECORD_SETTLE(false),
+        /** U11 BR11.7: 말 끝 + 자동 응답 시작 대기(auto-response-start) — 끊김 확인의 조건 ②. 구간 조용 시간과 같은 시계에서 돈다. */
+        AUTO_RESPONSE_START(true),
+        /** U11 W9: 서버 송신이 끊김을 기다리는 시간의 상한(판정 턴 밖 송신, response-ready). */
+        OUTPUT_GAP_WAIT(false);
 
         private final boolean quietClock;
 

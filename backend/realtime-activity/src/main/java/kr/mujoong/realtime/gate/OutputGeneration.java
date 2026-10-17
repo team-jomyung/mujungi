@@ -214,18 +214,32 @@ public final class OutputGeneration {
     }
 
     /**
-     * 세대를 올린다. 열린 구간을 '불완전'으로 봉인해 버리는 일과 기기 정지 명령은 호출자가 한다.
+     * 세대를 올린다. 열린 구간을 '불완전'으로 봉인해 버리는 일과 기기 정지 명령은 호출자가 한다. 송신 대기가 없다(이미 대기 중이던 송신은 세대가
+     * 달라져 보내지 못한다).
      *
      * @return 새 세대 번호
      */
     public long bump(Instant now, BumpReason reason) {
+        return doBump(now, reason, false);
+    }
+
+    /**
+     * 서버가 지시 · 응답 요청을 보내려고 세대를 올린다(직렬 송신 경로, BR3.3). 끊김이 확인되면 허가를 내줘야 하는 송신 대기가 생긴다.
+     *
+     * @return 새 세대 번호
+     */
+    public long bumpForSend(Instant now, BumpReason reason) {
+        return doBump(now, reason, true);
+    }
+
+    private long doBump(Instant now, BumpReason reason, boolean sendPending) {
         Objects.requireNonNull(now, "now");
         Objects.requireNonNull(reason, "reason");
         generation++;
         phase = Phase.DISCARDING;
         bumpedAt = now;
         sendProcessed = false;
-        pendingSend = reason == BumpReason.SERVER_SEND;
+        pendingSend = sendPending;
         corrected = false;
         boundary = true;
         publish();

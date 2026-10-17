@@ -146,6 +146,37 @@ public final class SessionMailbox {
             implements Message {
     }
 
+    /**
+     * U11 W9: 직렬 송신 작업이 '보내는 중' 표시를 일반 편지함에 넣었다 — {@code response.create}를 보내기 <b>전에</b> 넣으므로, 응답의 첫 조각은 항상
+     * 이 표시 뒤에 편지함에 들어온다(경주 없음, R-16). 판정 턴 밖 송신이면 {@code turnId}가 없다.
+     */
+    public record InstructionSent(UUID turnId, long generation, long permitSeq) implements Message {
+    }
+
+    /** U11 W9: 직렬 송신 작업이 보내지 못하고 끝났다(대조 어긋남 · 허가 거부 · 송신 실패). */
+    public record SendAborted(UUID turnId, long generation, long permitSeq, SendAbortReason reason) implements Message {
+
+        public SendAborted {
+            Objects.requireNonNull(reason, "reason");
+        }
+    }
+
+    /** 송신을 보내지 못한 까닭(사유 코드만 로그에 남긴다, R-F14). */
+    public enum SendAbortReason {
+        /** 같은 세대에서 허가 번호가 올랐다(허가 뒤 조각이 왔다) — 다시 끊김을 기다려 새 허가를 낸다. */
+        PERMIT_STALE,
+        /** 세대가 바뀌었다(끼어들기 · 종료 의도 · 새 송신). */
+        GENERATION_CHANGED,
+        /** 끊김 대기 상한이 지났다(자동 응답이 끊기지 않았다, OUTPUT_GAP_NOT_OBSERVED). */
+        GAP_TIMEOUT,
+        /** 세션이 끝나는 중이다. */
+        SESSION_END,
+        /** 공급자 장애 · 일시 정지. */
+        FAULT,
+        /** 공급자 송신 자체가 실패했다. */
+        SEND_FAILED
+    }
+
     /** 끝내기 · 정리 명령의 결과(J54 응답표 · J111). */
     public enum EndOutcome {
         /** 202 {status: CLOSING}. */
