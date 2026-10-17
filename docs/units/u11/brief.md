@@ -24,7 +24,7 @@ core 줄(U15 → U14 → U10)은 다른 담당자가 같은 시기에 진행한�
   - `JudgeClient` 포트: U9 `RealtimeLunaClient`(`JUDGMENT_LIVE`, 재시도 없음)를 쓴다. 기존 `EvaluationProvider`와는 별개다.
   - 판정 지점 · 선택지는 U8 판 리소스 `judgment/option-sets-v1.json`을 쓴다.
   - 1 · 2순위 확률로 보류를 정한다. 하한 · 차이는 설정값(`mujoong.judgment.min-confidence` · `min-margin`)이고 시간 값이 아니다.
-  - 2초(`timing.judgment.live-budget`) 초과 · 형식 오류는 재시도 없이 보류다. 보류를 교정 행동으로 바꾸지 않는다.
+  - 4초(`timing.judgment.live-budget`, 설계 편차 U11-b로 2초에서 늘림) 초과 · 형식 오류는 재시도 없이 보류다. 보류를 교정 행동으로 바꾸지 않는다.
   - 판정마다 `judgment_live`(realtime V5)를 남긴다.
   - 다음 행동 지시에는 판정 라벨 · 확률 · 기준을 넣지 않는다(FR3.7).
 - **종료 표현(FR3.5)**: 등록 종료 표현은 판정 없이 바로 처리한다. 판정 턴 중 종료 표현이 나오면 판정을 멈춘다.
@@ -62,7 +62,7 @@ core 줄(U15 → U14 → U10)은 다른 담당자가 같은 시기에 진행한�
 
 ## 정해 둔 값
 - 마이그레이션 realtime `V5__u11_judgment_turn.sql`(`judgment_live`). 더하기만 한다(R-M3).
-- 시간 키 `judgment.live-budget`(2s) · `judgment.response-ready`(10s)는 U8이 이미 더했다. 새 시간 키가 필요하면 R-M5 세 곳을 함께 고친다.
+- 시간 키 `judgment.live-budget`(4s, U11-b로 2s에서 늘림) · `judgment.response-ready`(10s)는 U8이 이미 더했다. 새 시간 키가 필요하면 R-M5 세 곳을 함께 고친다.
 - 판정 하한 · 차이 설정 키가 없으면 더하고 `ConfigKeyContractTest` 규칙을 지킨다.
 - 시험: 태그 `u11`, 범위 `backend/coverage-scope/u11.txt`, 범위 줄 80%. GPT-Live · Luna는 가짜 공급자만 쓴다(R-F1).
 - 기존 U4b · U5b 동작이 깨지지 않게 레거시 연습 경로는 떼지 않고 공존시킨다(ADR-001, 위험 R4). 기존 시험과 `verify.sh` 끝-끝을 단계마다 돌린다.

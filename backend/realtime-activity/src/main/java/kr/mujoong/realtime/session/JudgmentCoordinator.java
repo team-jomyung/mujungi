@@ -356,16 +356,22 @@ final class JudgmentCoordinator implements JudgmentTurn.Host {
         current = null;
         currentOpen = null;
         Handled handled = Handled.NOTHING;
+        boolean threw = true;
         try {
             if (open != null) {
                 handled = open.after().apply(closure);
             }
+            threw = false;
         } finally {
-            write(closure.turnId(), closure.point(), closure.trigger(), closure.inputTranscriptSeq(), true, closure.outcome(),
-                    handled.next(), closure.heldOutputTranscript());
-        }
-        if (handled.restoreView() && !closure.responseStarted()) {
-            env.restoreListening();
+            try {
+                write(closure.turnId(), closure.point(), closure.trigger(), closure.inputTranscriptSeq(), true, closure.outcome(),
+                        handled.next(), closure.heldOutputTranscript());
+            } finally {
+                // 갈래 처리가 예외를 던져도 '생각 중'에 머물지 않게 보기를 되돌린다(심사 R-04, BR3.6)
+                if ((threw || handled.restoreView()) && !closure.responseStarted()) {
+                    env.restoreListening();
+                }
+            }
         }
     }
 
@@ -386,7 +392,7 @@ final class JudgmentCoordinator implements JudgmentTurn.Host {
                 held == null || held.isEmpty() ? null : held, env.now()));
     }
 
-    /** 세션 정리: 진행 중 판정 요청을 취소하고 턴을 놓는다(기록 · 보기 복원 없음). */
+    /** 세션 정리: 열린 턴을 놓기만 한다(요청 취소 · 기록 · 보기 복원은 하지 않는다). */
     void shutdown() {
         current = null;
         currentOpen = null;
