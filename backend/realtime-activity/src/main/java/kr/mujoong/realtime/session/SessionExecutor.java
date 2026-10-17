@@ -39,6 +39,7 @@ import kr.mujoong.realtime.common.collect.BoundedCollections;
 import kr.mujoong.realtime.common.scaling.SingleInstanceAssumption;
 import kr.mujoong.realtime.config.RealtimeProperties;
 import kr.mujoong.realtime.dialog.DialogInstructions;
+import kr.mujoong.realtime.dialog.InstructionTemplates;
 import kr.mujoong.realtime.dialog.JoinTracker;
 import kr.mujoong.realtime.dialog.SilenceClock;
 import kr.mujoong.realtime.dialog.StopConfirmFlow;
@@ -48,6 +49,7 @@ import kr.mujoong.realtime.gate.ApprovedPlayback;
 import kr.mujoong.realtime.gate.ClosingSequence;
 import kr.mujoong.realtime.gate.GateDecision;
 import kr.mujoong.realtime.gate.OutputGate;
+import kr.mujoong.realtime.gate.OutputGeneration;
 import kr.mujoong.realtime.gate.SegmentBuffer;
 import kr.mujoong.realtime.gate.SeedDictionary;
 import kr.mujoong.realtime.gateway.DeviceLink;
@@ -86,7 +88,6 @@ import kr.mujoong.realtime.voice.ProviderPort.ProviderEvent;
 import kr.mujoong.realtime.voice.ProviderPort.ProviderSession;
 import kr.mujoong.realtime.voice.ProviderPort.ProviderUnavailableException;
 import kr.mujoong.realtime.voice.ProviderRequestFactory;
-import kr.mujoong.realtime.voice.ProviderResponseId;
 import org.springframework.dao.DataAccessException;
 import org.springframework.transaction.TransactionException;
 
@@ -111,7 +112,13 @@ import org.springframework.transaction.TransactionException;
         reason = "세션 상태 · 편지함 · 출력 세대와 세션당 공급자 연결을 이 프로세스의 실행기 하나가 쥐어 세션을 다른 인스턴스로 옮길 수 없다")
 public final class SessionExecutor {
 
-    /** 세션 공통 설정(RealtimeProperties에서 읽는다). */
+    /**
+     * 세션 공통 설정(RealtimeProperties에서 읽는다).
+     *
+     * @param inputTranscriptQuiet 입력 전사 조각이 이만큼 오지 않으면 그 묶음을 확정 전사로 본다({@code mujoong.timing.provider.input-transcript-quiet}, 설계 개정 A7)
+     * @param newSpeechMargin 지시 뒤 새 말의 전사 시작에 더하는 여유({@code mujoong.timing.provider.new-speech-margin}, 설계 개정 A4)
+     * @param instructionWait 지시를 보낸 뒤 새 말이 시작하기를 기다리는 시한({@code mujoong.timing.judgment.response-ready}, 지시 송신 시각부터, 설계 개정 A3)
+     */
     public record Settings(
             Duration deviceAckTimeout,
             Duration closingConfirm,
@@ -122,7 +129,10 @@ public final class SessionExecutor {
             int inputQueueFrames,
             int mailboxCapacity,
             int uncertainBelowPercent,
-            Lifecycle lifecycle) {
+            Lifecycle lifecycle,
+            Duration inputTranscriptQuiet,
+            Duration newSpeechMargin,
+            Duration instructionWait) {
 
         /**
          * U4b 세션 생애 시간 값(BR11.1 · contracts/timing.md, 모두 설정 키에서 온다).
@@ -158,6 +168,9 @@ public final class SessionExecutor {
 
         public Settings {
             Objects.requireNonNull(lifecycle, "lifecycle");
+            Objects.requireNonNull(inputTranscriptQuiet, "inputTranscriptQuiet");
+            Objects.requireNonNull(newSpeechMargin, "newSpeechMargin");
+            Objects.requireNonNull(instructionWait, "instructionWait");
             Objects.requireNonNull(deviceAckTimeout, "deviceAckTimeout");
             Objects.requireNonNull(closingConfirm, "closingConfirm");
             Objects.requireNonNull(disconnect, "disconnect");
@@ -178,7 +191,8 @@ public final class SessionExecutor {
                     properties.gate().segmentQuiet(), properties.timing().device().outputQueueMax(),
                     properties.session().timerTick(), properties.limits().sessionInputQueueFrames(),
                     properties.limits().sessionControlQueue(), properties.transcript().uncertainBelowPercent(),
-                    Lifecycle.from(properties));
+                    Lifecycle.from(properties), properties.timing().provider().inputTranscriptQuiet(),
+                    properties.timing().provider().newSpeechMargin(), properties.timing().judgment().responseReady());
         }
     }
 
@@ -367,6 +381,8 @@ public final class SessionExecutor {
     private final Plan plan;
     private final Services services;
     private final SessionMailbox mailbox;
+    /** 통과한 구간 없이 연달아 보낼 수 있는 게이트 교정 지시 수(안전 상한, 시간 값이 아니다). */
+    private static final int MAX_CORRECTIONS_IN_A_ROW = 2;
     private final SessionTimers timers;
     private final InputRelay relay;
     private final SegmentBuffer segment = new SegmentBuffer();
@@ -374,6 +390,25 @@ public final class SessionExecutor {
     private final ClosingSequence closing = new ClosingSequence();
     private final TranscriptWriter transcripts;
     private final AtomicLong outputGeneration = new AtomicLong();
+    /** U11 BR11.5 ~ BR11.7: 응답 id를 대신하는 공급자 출력 세대(실행기 스레드 전용). 위 {@code outputGeneration}(기기 프레임 세대)와 다른 번호다. */
+    private final OutputGeneration outputGen;
+    /** U11 W9: 공급자로 가는 모든 서버 송신(지시)이 지나는 세션 직렬 큐. 순서를 지키는 일만 한다(설계 개정 A2). */
+    private final ProviderSendQueue sendQueue;
+    /** 지시마다 올리는 번호(공급자가 확인 사건의 client_event_id로 되돌려 주는 event_id를 만든다). */
+    private long instructionSeq;
+    /** 가장 최근 지시가 새 말을 못 들려주고 시한이 지났을 때(NEW_SPEECH_NOT_OBSERVED) 부를 일(연습 발화는 확장에 실패를 알린다). */
+    private Runnable instructionNotHeard;
+    /** 게이트를 통과한 구간 없이 연달아 보낸 교정 지시 수(교정 지시가 곧 발화라 모델이 계속 어기면 끝없이 이어지는 것을 막는다). */
+    private int correctionsInARow;
+    /** 지난 편지함 처리 끝의 출력 보류 상태(true → false가 되면 세대를 올린다, BR11.13). */
+    private boolean lastHeld;
+    /** 공급자 리더가 일반 편지함에 넣었고 실행기가 아직 처리하지 않은 출력 조각 수(끊김 만기가 쌓인 조각을 앞지르지 못하게 한다). */
+    private final java.util.concurrent.atomic.AtomicInteger pendingOutputChunks =
+            new java.util.concurrent.atomic.AtomicInteger();
+    /** 설계 개정 A7: 입력 전사 조각을 묶는 중인 발화(공급자는 전사 완료 사건을 주지 않는다). */
+    private final StringBuilder inputGroup = new StringBuilder();
+    private String inputGroupId;
+    private long inputGroupSeq;
     private final List<Object> pendingRetry = new ArrayList<>();
     private final LinkedHashMap<UUID, WsPayload> pendingCommands = new LinkedHashMap<>();
     private final Runnable onTerminated;
@@ -386,12 +421,6 @@ public final class SessionExecutor {
     private DeviceState.Player lastPlayer;
     private UUID progressPlaybackId;
     private Long progressPlayedToMs;
-    /** U3-R5: 취소한 응답(늦게 오는 조각을 받지 않는다). */
-    private final Set<String> cancelledResponses = BoundedCollections.set(MAX_TRACKED);
-    /** U3-R7: 교정을 이미 보낸 응답(응답당 한 번). */
-    private final Set<String> correctedResponses = BoundedCollections.set(MAX_TRACKED);
-    /** 기기로 보낸 출력 묶음의 응답(끼어들기 때 그 응답을 취소한다). */
-    private final Map<UUID, String> playbackResponses = BoundedCollections.map(MAX_TRACKED);
     /** 기기가 STARTED를 알리고 아직 끝 표식이 없는 재생(생각 중 · 듣는 중 표시와 종료 의도 판정의 '재생 중'). */
     private final Set<UUID> devicePlaying = new HashSet<>();
     /** 종료 의도 판정기(세션 스냅숏의 종료 표현, U3-R12). */
@@ -452,8 +481,6 @@ public final class SessionExecutor {
     private final Map<UUID, String> practicePlaybacks = new HashMap<>();
     private volatile kr.mujoong.realtime.voice.PracticeSpeech pendingPracticeSpeech;
     private final Map<UUID, kr.mujoong.realtime.voice.PracticeSpeech> practiceAudio = new HashMap<>();
-    private final java.util.ArrayDeque<Runnable> practiceProviderQueue = new java.util.ArrayDeque<>();
-    private boolean practiceProviderRunning;
     private final java.util.ArrayDeque<PracticeSessionExtension.ExtensionEvent> pausedPracticeEvents = new java.util.ArrayDeque<>();
     private Instant practicePauseStartedAt;
     private record PracticePause(Instant from, Instant to) { }
@@ -481,6 +508,9 @@ public final class SessionExecutor {
         this.mailbox = Objects.requireNonNull(mailbox, "mailbox");
         this.onTerminated = Objects.requireNonNull(onTerminated, "onTerminated");
         this.timers = new SessionTimers(services.clocks(), mailbox::putSafety);
+        this.outputGen = new OutputGeneration(services.settings().segmentQuiet(), services.settings().newSpeechMargin());
+        this.sendQueue = new ProviderSendQueue(services.launcher(), plan.sessionId().toString(),
+                failure -> services.events().appError(EventLog.Component.VOICE_RELAY, failure));
         this.relay = new InputRelay(plan.sessionId(), services.settings().inputQueueFrames(), services.requests(),
                 services.clock(), services.metrics());
         this.transcripts = new TranscriptWriter(plan.sessionId(), 0, services.recorder(), services.latency());
@@ -571,7 +601,9 @@ public final class SessionExecutor {
         Thread previous = processing;
         processing = Thread.currentThread();
         try {
+            long generationBefore = outputGen.generation();
             handle(message);
+            watchHold(generationBefore);
             afterMessage();
         } catch (DataAccessException | TransactionException e) {
             services.events().appError(EventLog.Component.SESSION_LIFECYCLE, e);
@@ -733,7 +765,14 @@ public final class SessionExecutor {
         startSent = true;
         timers.arm(Kind.DEVICE_ACK, services.settings().deviceAckTimeout());
         providerAttempt = services.connector().connect(plan.sessionId(), plan.childContext(), event -> {
-            putFromProvider(new ProviderEventReceived(event, services.clock().now(), services.clock().monotonicNanos()));
+            boolean output = isOutputChunk(event);
+            if (output) {
+                pendingOutputChunks.incrementAndGet();
+            }
+            if (!putFromProvider(new ProviderEventReceived(event, services.clock().now(), services.clock().monotonicNanos()))
+                    && output) {
+                pendingOutputChunks.decrementAndGet();
+            }
         }, new ProviderConnector.Callback() {
             @Override
             public void connected(ProviderSession session) {
@@ -747,6 +786,10 @@ public final class SessionExecutor {
                 putFromProvider(new ProviderFailed(reason));
             }
         });
+    }
+
+    private static boolean isOutputChunk(ProviderEvent event) {
+        return event instanceof ProviderEvent.OutputTranscriptDelta || event instanceof ProviderEvent.OutputAudioDelta;
     }
 
     private boolean putFromProvider(Message message) {
@@ -847,7 +890,7 @@ public final class SessionExecutor {
             syncFromDb();
             return;
         }
-        status = SessionStatus.WAITING_CHILD;
+        changeStatus(SessionStatus.WAITING_CHILD, services.clock().now());
         enterWaitingChild();
     }
 
@@ -986,7 +1029,7 @@ public final class SessionExecutor {
             syncFromDb();
             return;
         }
-        status = SessionStatus.ACTIVE;
+        changeStatus(SessionStatus.ACTIVE, services.clock().now());
         putEvent(EVENT_JOIN_ACCEPTED, "{\"prompts\":" + (join == null ? 1 : join.prompts()) + "}", now);
         afterActiveWon();
     }
@@ -996,7 +1039,7 @@ public final class SessionExecutor {
         enterActive();
         Instant now = services.clock().now();
         resetSilence(now);
-        if (practice == null || !practice.controlsOutput()) requestResponse();
+        if (practice == null || !practice.controlsOutput()) requestResponse(InstructionTemplates.ResponseStart.FIRST);
         // U4b BR10.1: PRACTICE면 확장점 'ACTIVE 진입'
         if (practice != null) {
             PracticeSessionExtension.PracticeContext context = new PracticeSessionExtension.PracticeContext(
@@ -1021,7 +1064,7 @@ public final class SessionExecutor {
             syncFromDb();
             return;
         }
-        status = SessionStatus.DECLINED;
+        changeStatus(SessionStatus.DECLINED, services.clock().now());
         putEvent(EVENT_JOIN_DECLINED, "{\"prompts\":" + (join == null ? 1 : join.prompts()) + "}", now);
         startFarewell();
     }
@@ -1094,6 +1137,10 @@ public final class SessionExecutor {
             services.events().appError(EventLog.Component.SESSION_LIFECYCLE, e);
         }
         timers.cancelAll();
+        if (inputGroupId != null) {
+            // 묶던 입력 전사는 정산 창 안에서 이어지는 조각을 받아 조용해지면(또는 창이 끝나면) 확정한다
+            timers.arm(Kind.INPUT_TRANSCRIPT_QUIET, services.settings().inputTranscriptQuiet());
+        }
         relay.setAccepting(false);
         boolean alreadyClosed = providerSession == null || providerClosedSignal;
         closeProvider();
@@ -1122,6 +1169,7 @@ public final class SessionExecutor {
             }
         }
         timers.cancel(Kind.RECORD_SETTLE);
+        quietly(this::flushInputGroupInSettle);
         Instant cutoff = services.clock().now();
         quietly(() -> transcripts.closeAll(cutoff));
         quietly(() -> services.recorder().flushSession(plan.sessionId(), services.settings().timerTick()));
@@ -1405,28 +1453,16 @@ public final class SessionExecutor {
         @Override public boolean speak(kr.mujoong.realtime.voice.PracticeSpeech speech) {
             if (!practiceActive() || providerSession == null || !providerSession.isOpen()) return false;
             bumpGeneration();
-            timers.cancel(Kind.SEGMENT_QUIET);
-            if (segment.isOpen() && segment.responseId() != null) cancelledResponses.add(segment.responseId());
-            segment.reset();
             transcripts.aiFinal("", false, services.clock().now());
             pendingPracticeSpeech = speech;
             practiceHold = false;
-            ProviderRequestFactory.InstructionsCorrect request = services.requests().practiceInstruction(
-                    kr.mujoong.realtime.voice.PracticeInstruction.forSpeech(speech));
-            ProviderSession provider = providerSession;
-            long generation = outputGeneration.get();
-            enqueuePracticeProvider("provider-practice-speech-", () -> {
-                try {
-                    if (generation != outputGeneration.get() || status != SessionStatus.ACTIVE || !provider.isOpen()) return;
-                    provider.cancelResponse(services.requests().responseCancel(null));
-                    provider.correctInstructions(request);
-                    if (generation != outputGeneration.get() || status != SessionStatus.ACTIVE) return;
-                    provider.createResponse(services.requests().responseCreate());
-                } catch (Exception failure) {
-                    practiceOutput.post("u5b-voice-failed", speech);
-                }
-            });
-            return true;
+            // 설계 개정 A2: 승인된 발화 읽기 지시를 세대를 올리며 직렬 큐로 보낸다(응답 요청 type이 없어 지시가 발화를 시작한다). 새 말이 시한
+            // 안에 시작하지 않거나 송신이 실패하면 지금처럼 확장에 실패를 알린다
+            kr.mujoong.realtime.voice.PracticeInstruction instruction =
+                    kr.mujoong.realtime.voice.PracticeInstruction.forSpeech(speech);
+            return sendInstruction(OutputGeneration.BumpReason.SERVER_SEND, "provider-practice-speech-",
+                    id -> services.requests().practiceInstruction(id, instruction),
+                    () -> practiceOutput.post("u5b-voice-failed", speech));
         }
 
         @Override public boolean cancelSpeech(UUID correlationId) {
@@ -1485,9 +1521,9 @@ public final class SessionExecutor {
             } catch (RuntimeException e) {
                 return refusePractice("instructProvider", "INVALID");
             }
-            ProviderRequestFactory.InstructionsCorrect request = services.requests().practiceInstruction(instruction);
-            toProvider("provider-practice-", session -> session.correctInstructions(request));
-            return true;
+            // 설계 개정 A2: 추가한 지시는 곧 발화를 시작하므로 다른 서버 발화와 같이 세대를 올리고 직렬 큐로 보낸다
+            return sendInstruction(OutputGeneration.BumpReason.SERVER_SEND, "provider-practice-",
+                    id -> services.requests().practiceInstruction(id, instruction), null);
         }
 
         @Override
@@ -1495,7 +1531,7 @@ public final class SessionExecutor {
             if (!practiceActive()) {
                 return refusePractice("requestResponse", "NOT_ACTIVE");
             }
-            SessionExecutor.this.requestResponse();
+            SessionExecutor.this.requestResponse(InstructionTemplates.ResponseStart.CONTINUE);
             return true;
         }
 
@@ -1504,7 +1540,8 @@ public final class SessionExecutor {
             if (!practiceActive()) {
                 return refusePractice("cancelResponse", "NOT_ACTIVE");
             }
-            cancelResponses();
+            // U11 BR3.4: 공급자 응답 취소 대신 출력 세대를 올려 만들던 응답의 남은 조각을 버린다
+            bumpOutput(OutputGeneration.BumpReason.PRACTICE_DISCARD);
             return true;
         }
 
@@ -1561,11 +1598,13 @@ public final class SessionExecutor {
                 finishSettle();
             }
             case ProviderEvent.InputTranscriptDelta delta -> {
-                if (consentWithdrawnAt == null && startedBeforeEnd(delta.itemId(), at)) {
-                    transcripts.childDelta(delta.itemId(), delta.delta(), at);
+                String groupId = groupInputDelta(delta);
+                if (consentWithdrawnAt == null && startedBeforeEnd(groupId, at)) {
+                    transcripts.childDelta(groupId, delta.delta(), at);
                 }
             }
             case ProviderEvent.InputTranscriptDone done -> {
+                clearInputGroup();
                 if (consentWithdrawnAt == null && startedBeforeEnd(done.itemId(), at)) {
                     transcripts.childFinal(done.itemId(), done.transcript(), at, uncertain(done));
                 } else {
@@ -1583,17 +1622,14 @@ public final class SessionExecutor {
         return (startedAt != null ? startedAt : at).isBefore(sessionEndedAt);
     }
 
-    /** BR2.6: 발언권을 모델에 돌려줄 때 응답 생성 요청을 한 번 보낸다. */
-    private void requestResponse() {
-        ProviderRequestFactory.ResponseCreate request = services.requests().responseCreate();
-        toProvider("provider-create-", session -> session.createResponse(request));
-    }
-
-    /** BR2.6: 참여 전(그리고 확인 대기 동안) 시작된 공급자 응답은 취소하고 기기로 보내지 않는다(응답당 한 번). */
-    private void refuseHeldResponse(String responseId) {
-        if (outputHeld() && responseId != null && !responseId.isBlank() && !cancelledResponses.contains(responseId)) {
-            cancelResponses(responseId);
-        }
+    /**
+     * BR2.6: 발언권을 모델에 돌려줄 때(참여 뒤 첫 응답 · 확인 질문 뒤 이어 가기 · 연습 requestResponse) 지시 하나를 보낸다. 공급자에는 응답 요청
+     * type이 없어 지시가 곧 발화다(설계 개정 A2). 세대를 올리고 직렬 큐로 보낸다. 참여 전(그리고 확인 대기 동안) 시작된 자동 응답은 출력 보류가
+     * 버린다(BR11.13).
+     */
+    private void requestResponse(InstructionTemplates.ResponseStart start) {
+        sendInstruction(OutputGeneration.BumpReason.SERVER_SEND, "provider-respond-",
+                id -> services.requests().responseStart(id, start), null);
     }
 
     /** 공급자 출력을 받지 않는 때(참여 확인 중 · 종료 확인 질문 중 · 확장점이 막은 동안, BR2.6 · BR4.3 · BR10.4). */
@@ -1621,6 +1657,9 @@ public final class SessionExecutor {
     }
 
     private void onProviderEvent(ProviderEventReceived received) {
+        if (isOutputChunk(received.event())) {
+            pendingOutputChunks.decrementAndGet();
+        }
         if (status.isTerminal()) {
             if (settling) {
                 onLateProviderEvent(received.event(), received.receivedAt());
@@ -1639,105 +1678,274 @@ public final class SessionExecutor {
             }
             case ProviderEvent.Error ignored -> providerError();
             case ProviderEvent.Closed ignored -> providerLost();
-            case ProviderEvent.SpeechStopped ignored -> {
-                services.latency().speechEnd(plan.sessionId(), LatencyRecorder.SpeechEndSource.PROVIDER_EVENT, at);
-                thinking();
-            }
-            case ProviderEvent.InputTranscriptDelta delta -> {
-                if (consentWithdrawnAt != null || status == SessionStatus.WAITING_CHILD) {
-                    // BR1.7: 동의 철회 뒤 도착한 아이 전사는 저장하지 않는다(확정 때 센다). BR2.5: 참여 전 아이 전사도 저장하지 않는다
-                    return;
-                }
-                if (inRelayRange()) {
-                    services.latency().inputActivity(plan.sessionId());
-                    // BR7.3: 아이 입력 재개는 열린 구간을 확정한다(대화가 넘어갔으니 완결 요청 교정은 하지 않는다)
-                    if (segment.isOpen()) {
-                        sealAndGate(true);
-                    }
-                    transcripts.childDelta(delta.itemId(), delta.delta(), at);
-                }
-            }
+            case ProviderEvent.InputTranscriptDelta delta -> onInputTranscriptDelta(delta, at);
             case ProviderEvent.InputTranscriptDone done -> {
-                if (consentWithdrawnAt != null) {
-                    droppedAfterConsent++;
-                    return;
-                }
-                if (status == SessionStatus.WAITING_CHILD) {
-                    onJoinReply(done.transcript(), at);
-                    return;
-                }
-                if (inRelayRange()) {
-                    boolean uncertain = uncertain(done);
-                    java.util.OptionalInt seq = transcripts.childFinal(done.itemId(), done.transcript(), at, uncertain);
-                    // U4b BR5.1: 아이의 빈 아닌 확정 전사가 공백 시계를 0으로 한다(빈 전사는 리셋하지 않는다)
-                    if (status == SessionStatus.ACTIVE && done.transcript() != null && !done.transcript().isBlank()) {
-                        resetSilence(at);
-                    }
-                    boolean controlledPractice = practice != null && practice.controlsOutput();
-                    boolean stopHandled = controlledPractice && judgeStopIntent(done.transcript(), uncertain, at);
-                    if (!stopHandled && status == SessionStatus.ACTIVE && practice != null
-                            && !(controlledPractice && technicalPause != null)) {
-                        PracticeSessionExtension.Utterance utterance = new PracticeSessionExtension.Utterance(
-                                seq.orElse(0), at, done.transcript() == null ? "" : done.transcript(), uncertain,
-                                !devicePlaying.isEmpty());
-                        practiceSignal(() -> practice.onChildUtterance(utterance, practiceOutput), true);
-                    }
-                    // 2차 리뷰 2: 종료 의도를 푼 발화의 응답은 막힌 동안 이미 취소됐을 수 있다 — 끝 신호가 오지 않을 '생각 중'을 보내지 않는다
-                    if (!(controlledPractice ? stopHandled : judgeStopIntent(done.transcript(), uncertain, at))) {
-                        thinking();
-                    }
-                }
+                // 공급자는 이 사건을 보내지 않는다(설계 개정 A7). 대신 보내는 쪽(시험 대역)이 있으면 묶음을 그것으로 확정한 것으로 본다
+                clearInputGroup();
+                onConfirmedChildTranscript(done, at);
             }
-            case ProviderEvent.OutputTranscriptDelta delta -> {
-                refuseHeldResponse(delta.responseId());
-                if (inOutputRange() && !cancelledResponses.contains(delta.responseId())) {
-                    beginOutput(delta.responseId(), at);
-                    // J294: 음성처럼 구간에 들어간 조각만 조용 시계를 다시 건다(버린 조각은 열린 구간의 조용 시간을 늘리지 않는다)
-                    if (segment.addTranscript(delta.responseId(), delta.delta(), at, received.receivedNanos())
-                            == SegmentBuffer.Added.ADDED) {
-                        timers.arm(Kind.SEGMENT_QUIET, services.settings().segmentQuiet());
-                    }
-                }
+            case ProviderEvent.UsageUpdated ignored -> {
+                // 사용량 초는 파싱만 한다(실호출 도구 보고서가 기록). 지표 이름은 contracts 표에 없어 이 단위에서 더하지 않는다
             }
-            case ProviderEvent.OutputAudioDelta delta -> {
-                refuseHeldResponse(delta.responseId());
-                if (inOutputRange() && !cancelledResponses.contains(delta.responseId())) {
-                    beginOutput(delta.responseId(), at);
-                    SegmentBuffer.Added added =
-                            segment.addAudio(delta.responseId(), delta.audio(), at, received.receivedNanos());
-                    if (added == SegmentBuffer.Added.OVERSIZE) {
-                        timers.cancel(Kind.SEGMENT_QUIET);
-                        SegmentBuffer.Sealed oversized = segment.takeOversized();
-                        discard(oversized, GateDecision.DiscardReason.SEGMENT_OVERSIZE);
-                    } else if (added == SegmentBuffer.Added.ADDED) {
-                        timers.arm(Kind.SEGMENT_QUIET, services.settings().segmentQuiet());
-                    }
-                }
+            case ProviderEvent.InstructionsAppended appended -> outputGen.onAppended(appended.clientEventId(), appended.endMs());
+            case ProviderEvent.OutputTranscriptDelta delta ->
+                onOutputChunk(delta.delta(), delta.startMs(), null, at, received.receivedNanos());
+            case ProviderEvent.OutputAudioDelta delta ->
+                onOutputChunk(null, -1L, delta.audio(), at, received.receivedNanos());
+        }
+    }
+
+    /**
+     * 입력 전사 조각 하나(설계 개정 A7). 공급자는 전사 완료 · 말 끝 사건을 주지 않으므로 조각을 묶고, {@code input-transcript-quiet} 동안 조각이
+     * 없으면 {@link #onInputTranscriptQuiet}가 그 묶음을 확정 전사로 만든다. 조각의 저장 규칙(동의 철회 · 참여 전 · 출력 범위)은 그대로다.
+     */
+    private void onInputTranscriptDelta(ProviderEvent.InputTranscriptDelta delta, Instant at) {
+        groupInputDelta(delta);
+        if (consentWithdrawnAt != null || status == SessionStatus.WAITING_CHILD) {
+            // BR1.7: 동의 철회 뒤 도착한 아이 전사는 저장하지 않는다(확정 때 센다). BR2.5: 참여 전 아이 전사도 저장하지 않는다
+            return;
+        }
+        if (inRelayRange()) {
+            services.latency().inputActivity(plan.sessionId());
+            // BR7.3: 아이 입력 재개는 열린 구간을 확정한다(대화가 넘어갔으니 완결 요청 교정은 하지 않는다)
+            if (segment.isOpen()) {
+                sealAndGate(true);
             }
-            case ProviderEvent.OutputDone done -> {
-                // U3-R5: 취소한 응답의 끝 신호는 버린다
-                if (!cancelledResponses.contains(done.responseId())) {
-                    // J300: 열린 구간이 그 응답이면 output.done 처리 시각이 열린 AI 행의 tTranscriptFinal이다(view_item_ready{ai}의 시작)
-                    if (segment.isOpen() && segment.responseId().equals(done.responseId())) {
-                        transcripts.aiDone(at);
-                    }
-                    segment.responseDone(done.responseId());
-                }
+            transcripts.childDelta(inputGroupId, delta.delta(), at);
+        }
+    }
+
+    /** 조각을 현재 묶음에 더하고(없으면 묶음을 연다) 조용 시계를 다시 건다. 묶음 id를 돌려준다. */
+    private String groupInputDelta(ProviderEvent.InputTranscriptDelta delta) {
+        if (inputGroupId == null) {
+            inputGroupId = delta.itemId() != null ? delta.itemId() : "in-" + (++inputGroupSeq);
+            inputGroup.setLength(0);
+        }
+        inputGroup.append(delta.delta());
+        timers.arm(Kind.INPUT_TRANSCRIPT_QUIET, services.settings().inputTranscriptQuiet());
+        return inputGroupId;
+    }
+
+    private void clearInputGroup() {
+        timers.cancel(Kind.INPUT_TRANSCRIPT_QUIET);
+        inputGroupId = null;
+        inputGroup.setLength(0);
+    }
+
+    /** 입력 전사 묶음이 조용해졌다: 확정 전사를 지금 확정 전사 입구({@link ProviderEvent.InputTranscriptDone})와 같은 길로 흘린다. */
+    private void onInputTranscriptQuiet() {
+        String id = inputGroupId;
+        String text = inputGroup.toString();
+        clearInputGroup();
+        if (id == null || text.isBlank()) {
+            return;
+        }
+        ProviderEvent.InputTranscriptDone done = new ProviderEvent.InputTranscriptDone(id, text, null);
+        Instant at = services.clock().now();
+        if (status.isTerminal()) {
+            if (settling) {
+                onLateProviderEvent(done, at);
+            }
+            return;
+        }
+        onConfirmedChildTranscript(done, at);
+    }
+
+    /** 정산 창이 끝날 때 묶던 입력 전사가 있으면 정산 창 규칙으로 확정한다(발화 시작이 ended_at보다 이르면 저장). */
+    private void flushInputGroupInSettle() {
+        String id = inputGroupId;
+        String text = inputGroup.toString();
+        clearInputGroup();
+        if (id != null && !text.isBlank()) {
+            onLateProviderEvent(new ProviderEvent.InputTranscriptDone(id, text, null), services.clock().now());
+        }
+    }
+
+    /**
+     * 확정된 아이 전사 하나(참여 확인 · 종료 의도 · 연습 · 기록). 서버가 입력 전사 조각을 묶어 만든 것이다(설계 개정 A7). 전사 신뢰도는 오지 않으므로
+     * 불확실이 아니다.
+     */
+    private void onConfirmedChildTranscript(ProviderEvent.InputTranscriptDone done, Instant at) {
+        if (consentWithdrawnAt != null) {
+            droppedAfterConsent++;
+            return;
+        }
+        if (status == SessionStatus.WAITING_CHILD) {
+            onJoinReply(done.transcript(), at);
+            return;
+        }
+        if (inRelayRange()) {
+            boolean uncertain = uncertain(done);
+            java.util.OptionalInt seq = transcripts.childFinal(done.itemId(), done.transcript(), at, uncertain);
+            // U4b BR5.1: 아이의 빈 아닌 확정 전사가 공백 시계를 0으로 한다(빈 전사는 리셋하지 않는다)
+            if (status == SessionStatus.ACTIVE && done.transcript() != null && !done.transcript().isBlank()) {
+                resetSilence(at);
+            }
+            boolean controlledPractice = practice != null && practice.controlsOutput();
+            boolean stopHandled = controlledPractice && judgeStopIntent(done.transcript(), uncertain, at);
+            if (!stopHandled && status == SessionStatus.ACTIVE && practice != null
+                    && !(controlledPractice && technicalPause != null)) {
+                PracticeSessionExtension.Utterance utterance = new PracticeSessionExtension.Utterance(
+                        seq.orElse(0), at, done.transcript() == null ? "" : done.transcript(), uncertain,
+                        !devicePlaying.isEmpty());
+                practiceSignal(() -> practice.onChildUtterance(utterance, practiceOutput), true);
+            }
+            // 2차 리뷰 2: 종료 의도를 푼 발화의 응답은 막힌 동안 이미 취소됐을 수 있다 — 끝 신호가 오지 않을 '생각 중'을 보내지 않는다
+            if (!(controlledPractice ? stopHandled : judgeStopIntent(done.transcript(), uncertain, at))) {
+                thinking();
             }
         }
     }
 
     /**
-     * 출력 조각을 넣기 전: 열린 구간이 다른 응답의 것이면 그 자리에서 봉인해 게이트에 넣는다 — 한 구간은 한 응답이고 섞지 않는다(F1 · J286,
-     * 완결이 아닌 구간은 게이트 3단계가 GATE_EMPTY로 폐기한다). 응답의 첫 조각이면 t1을 찍고 AI 행 번호를 정해 확정 전 칸을 넣는다(PD-5 2.4).
+     * 출력 조각 하나(음성 또는 전사, U11 W8). 어느 단계 · 보류 여부와 관계없이 마지막 조각 시각을 갱신하고 구간 조용 시계를 다시 건다. 출력
+     * 세대가 받는 단계이고 보류가 아니면 구간에 넣는다 — 열린 구간이 없으면 이 조각부터 새 구간(첫 조각이면 t1을 찍고 AI 행 번호를 정해 확정 전
+     * 칸을 넣는다, PD-5 2.4). 버리는 조각은 구간을 열지 않는다. 지시를 보낸 세대의 새 말 판단(확인 사건 · 전사 시간선 · 오디오 시계 여유)은
+     * {@link OutputGeneration}이 한다(설계 개정 A4). 출력 범위 밖(ACTIVE · CLOSING 아님)에서 온 조각도 '본 조각'으로 센다(구간이 중간부터 시작하면
+     * 불완전이다).
+     *
+     * @param startMs 출력 전사 조각의 전사 시간선 시작(음성이면 -1)
      */
-    private void beginOutput(String responseId, Instant at) {
-        if (segment.holdsOtherThan(responseId)) {
-            sealAndGate(true);
+    private void onOutputChunk(String transcript, long startMs, byte[] audio, Instant at, long nanos) {
+        OutputGeneration.ChunkResult result = transcript != null
+                ? outputGen.onTranscript(at, startMs, outputHeld())
+                : outputGen.onAudio(at, audio.length, outputHeld());
+        // 버리는 조각도 조용 시계를 다시 건다(BR11.13): 조각이 계속 오는 동안은 끊김이 아니다
+        timers.arm(Kind.SEGMENT_QUIET, services.settings().segmentQuiet());
+        if (!outputGen.awaitingNewSpeech()) {
+            timers.cancel(Kind.INSTRUCTION_WAIT);
         }
-        if (!segment.isOpen() && segment.accepts(responseId)) {
+        if (result.verdict() != OutputGeneration.ChunkVerdict.ACCEPT || !inOutputRange()) {
+            return;
+        }
+        long gen = outputGen.generation();
+        if (!segment.isOpen()) {
+            instructionNotHeard = null;
             services.latency().providerFirstOut(plan.sessionId(), at);
             transcripts.aiStart(at);
+        }
+        if (transcript != null) {
+            segment.addTranscript(gen, result.fromStart(), transcript, at, nanos);
+            return;
+        }
+        SegmentBuffer.Added added = segment.addAudio(gen, result.fromStart(), audio, at, nanos);
+        if (added == SegmentBuffer.Added.OVERSIZE) {
+            SegmentBuffer.Sealed oversized = segment.takeOversized();
+            discard(oversized, GateDecision.DiscardReason.SEGMENT_OVERSIZE);
+        }
+    }
+
+    /**
+     * 지시 없이 출력 세대를 올린다(U11 BR11.5 ~ BR11.7: 끼어들기 · 종료 의도 · 연습 폐기 · 보류 해제). 열린 구간은 '불완전'으로 버리고(AI 행 FINAL ·
+     * false), 끊김을 기다리는 단계로 들어가며 조용 시계를 건다. 기기에서 재생 중인 음성을 멈추는 일은 호출자가 지금처럼 {@link #bumpGeneration}(기기
+     * 프레임 세대)로 한다.
+     *
+     * @return 새 출력 세대 번호
+     */
+    private long bumpOutput(OutputGeneration.BumpReason reason) {
+        Instant now = services.clock().now();
+        long generation = outputGen.bump(now, reason);
+        instructionNotHeard = null;
+        timers.cancel(Kind.INSTRUCTION_WAIT);
+        segment.reset();
+        transcripts.aiFinal("", false, now);
+        timers.arm(Kind.SEGMENT_QUIET, services.settings().segmentQuiet());
+        return generation;
+    }
+
+    /**
+     * 구간 조용 시계 만기(U11 BR11.7). 받는 단계에서는 열린 구간을 조용함으로 봉인해 게이트에 넣고, 지시 없이 올린 세대의 버리는 단계에서는 끊김을
+     * 확인한다. 지시를 보낸 세대에서 전사만 받고 음성이 여유 시각에 닿지 못한 채 끝났으면 그 구간을 불완전으로 버린다.
+     */
+    private void onOutputQuiet() {
+        if (pendingOutputChunks.get() > 0) {
+            // 이 만기는 안전 편지함으로 먼저 들어와 일반 편지함에 쌓인 출력 조각을 앞질렀다 — 그 조각이 같은 응답의 나머지일 수 있어 지금 끊김으로 보지
+            // 않는다(조각을 처리하면 조용 시계를 다시 건다)
+            return;
+        }
+        Instant now = services.clock().now();
+        OutputGeneration.QuietResult result = outputGen.onQuiet(now);
+        switch (result.verdict()) {
+            case SEAL_RECEIVING -> {
+                if (inOutputRange()) {
+                    sealAndGate(false);
+                }
+            }
+            case NOT_YET -> timers.arm(Kind.SEGMENT_QUIET, Duration.between(now, result.waitUntil()));
+            case ABANDON_NO_AUDIO -> {
+                if (inOutputRange() && segment.isOpen()) {
+                    discard(segment.sealByGeneration(outputGeneration.get()), GateDecision.DiscardReason.GATE_EMPTY);
+                }
+                timers.arm(Kind.SEGMENT_QUIET, services.settings().segmentQuiet());
+            }
+            case GAP_CONFIRMED, NONE -> {
+                // 끊김 확인(다음 조각부터 받는다) 또는 할 일 없음
+            }
+        }
+    }
+
+    /**
+     * 지시 응답 시한 만기(설계 개정 A3 · 4.6). 확인 사건이 안 왔으면 사유 {@code OutputAckMissing}을 남기고 시한을 한 번 더 걸어 전사로 새 말을
+     * 찾아 계속한다. 확인은 왔는데 새 말 전사가 시한 안에 없거나 두 번째 시한도 지났으면 사유 {@code OutputNewSpeechNotObserved}를 남기고 이 세대를
+     * 닫는다 — 아이는 아무 소리도 듣지 않는다(안전 쪽 실패). 연습 발화는 확장에 실패를 알린다.
+     */
+    private void onInstructionWaitExpired() {
+        switch (outputGen.onInstructionTimeout()) {
+            case ACK_MISSING -> {
+                services.events().appError(EventLog.Component.VOICE_RELAY, "OutputAckMissing", EventCode.Level.WARN);
+                timers.arm(Kind.INSTRUCTION_WAIT, services.settings().instructionWait());
+            }
+            case NEW_SPEECH_NOT_OBSERVED -> {
+                services.events().appError(EventLog.Component.VOICE_RELAY, "OutputNewSpeechNotObserved", EventCode.Level.WARN);
+                Runnable notHeard = instructionNotHeard;
+                instructionNotHeard = null;
+                timers.arm(Kind.SEGMENT_QUIET, services.settings().segmentQuiet());
+                if (notHeard != null) {
+                    notHeard.run();
+                }
+            }
+            case NONE -> {
+                // 이미 새 말이 시작했거나 다른 세대다
+            }
+        }
+    }
+
+    /**
+     * 서버 발화 하나를 보낸다(설계 개정 A2): 공급자에는 응답 요청 type이 없어 지시({@code session.instructions.append}) 하나가 곧 발화다. 출력
+     * 세대를 올려 낡은 조각을 바로 버리고(DISCARDING), 지시 응답 시한을 걸고, 직렬 큐로 보낸다. 공급자 연결이 없으면 보내지 않고 거짓.
+     *
+     * @param build 지시 id를 받아 보낼 지시를 만든다(확인 사건의 {@code client_event_id}와 맞춘다)
+     * @param onFailure 송신이 실패하거나 새 말이 시한 안에 시작하지 않았을 때 부를 일(없으면 null)
+     */
+    private boolean sendInstruction(OutputGeneration.BumpReason reason, String name,
+            java.util.function.Function<String, ProviderRequestFactory.InstructionsAppend> build, Runnable onFailure) {
+        ProviderSession session = providerSession;
+        if (session == null || !session.isOpen()) {
+            return false;
+        }
+        String eventId = "mj-" + (++instructionSeq);
+        ProviderRequestFactory.InstructionsAppend request = build.apply(eventId);
+        Instant now = services.clock().now();
+        outputGen.bumpForInstruction(now, reason, eventId);
+        segment.reset();
+        transcripts.aiFinal("", false, now);
+        timers.cancel(Kind.SEGMENT_QUIET);
+        timers.arm(Kind.INSTRUCTION_WAIT, services.settings().instructionWait());
+        instructionNotHeard = onFailure;
+        sendQueue.submit(new ProviderSendQueue.Job(name, session, request, onFailure));
+        return true;
+    }
+
+    /**
+     * 출력 보류가 풀렸으면(참 → 거짓) 세대를 올린다(BR11.13): 보류 중 시작된 자동 응답의 꼬리가 풀린 직후 기기로 가지 않게 한다. 이번 편지함
+     * 처리에서 이미 세대를 올렸으면(같은 풀림에서 서버 발화가 올렸다) 또 올리지 않는다.
+     */
+    private void watchHold(long generationBefore) {
+        boolean held = outputHeld();
+        boolean released = lastHeld && !held;
+        lastHeld = held;
+        if (released && outputGen.generation() == generationBefore && inOutputRange() && !terminated) {
+            bumpOutput(OutputGeneration.BumpReason.HOLD_RELEASED);
         }
     }
 
@@ -1752,6 +1960,10 @@ public final class SessionExecutor {
             return;
         }
         services.events().appError(EventLog.Component.VOICE_RELAY, "ProviderDisconnected", EventCode.Level.WARN);
+        // 응답 도중 오류면 열린 구간은 끝까지 오지 않은 응답이다: 응답 끝 사건이 없으니 완결로 볼 수 없어 불완전으로 닫아 폐기하고 대기 문구로 잇는다
+        if (inOutputRange() && segment.isOpen()) {
+            discard(segment.sealByGeneration(outputGeneration.get()), GateDecision.DiscardReason.GATE_EMPTY);
+        }
     }
 
     /** 공급자 연결 끊김({@code session.closed} · WSS 닫힘 · 전송 오류). */
@@ -1787,7 +1999,7 @@ public final class SessionExecutor {
             syncFromDb();
             return;
         }
-        status = SessionStatus.ABORTED;
+        changeStatus(SessionStatus.ABORTED, services.clock().now());
         closeProvider();
         bumpGeneration();
         DeviceLink current = link;
@@ -1857,7 +2069,7 @@ public final class SessionExecutor {
                 if (practice != null && practice.controlsOutput()) {
                     resumePracticeTimers(at);
                 } else {
-                    requestResponse();
+                    requestResponse(InstructionTemplates.ResponseStart.CONTINUE);
                 }
                 listeningAgain();
             }
@@ -2112,22 +2324,13 @@ public final class SessionExecutor {
         applyStopDecision(decision, "EXPIRED", services.clock().now());
     }
 
-    /** 종료 의도: 남은 프레임을 보내지 않고(세대 올림) 만들던 · 재생 중이던 응답을 공급자에서 취소하고 열린 구간을 버린다. */
+    /**
+     * 종료 의도: 남은 프레임을 보내지 않고(기기 프레임 세대 올림) 출력 세대를 올려 만들던 · 재생 중이던 응답의 남은 조각을 버리고 열린 구간을
+     * 버린다. 공급자에는 응답 취소 type이 없어 아무것도 보내지 않는다(U11 BR3.4 · 편차 (U11-a)).
+     */
     private void stopOutputForIntent(Instant at) {
         bumpGeneration();
-        timers.cancel(Kind.SEGMENT_QUIET);
-        Set<String> targets = new LinkedHashSet<>();
-        if (segment.isOpen() && segment.responseId() != null) {
-            targets.add(segment.responseId());
-        }
-        devicePlaying.forEach(playbackId -> {
-            String responseId = playbackResponses.get(playbackId);
-            if (responseId != null) {
-                targets.add(responseId);
-            }
-        });
-        cancelResponses(targets.toArray(String[]::new));
-        segment.reset();
+        bumpOutput(OutputGeneration.BumpReason.STOP_INTENT);
         transcripts.aiFinal("", false, at);
     }
 
@@ -2166,12 +2369,18 @@ public final class SessionExecutor {
         timers.cancel(Kind.SEGMENT_QUIET);
         Instant confirmedAt = services.clock().now();
         long confirmedNanos = services.clock().monotonicNanos();
-        SegmentBuffer.Sealed sealed = segment.seal(outputGeneration.get());
+        // 아이 입력 재개로 닫을 때는 조각이 이미 끊김 시간만큼 끊겨 있었어야 '완전'이다(응답이 이어지던 중이면 불완전, U11 BR11.6)
+        Instant lastOutAt = segment.lastOutAt();
+        boolean quietEnough = lastOutAt != null && !confirmedAt.isBefore(lastOutAt.plus(services.settings().segmentQuiet()));
+        SegmentBuffer.Sealed sealed = movedOn ? segment.sealEarly(outputGeneration.get(), quietEnough)
+                : segment.sealQuiet(outputGeneration.get());
         if (sealed == null) {
             return;
         }
         services.latency().segmentConfirmed(plan.sessionId(), confirmedAt, confirmedNanos, sealed.firstOutNanos(),
                 sealed.lastOutNanos());
+        // U11 W8-5: 공급자 출력 끝(tTranscriptFinal)은 구간의 마지막 조각 시각이다(봉인 시각이 아니라 800ms 대기가 지표에 섞이지 않는다)
+        transcripts.aiDone(sealed.lastOutAt());
         try {
             GateDecision inspected = services.gate().inspect(sealed);
             if (!inspected.passed()) {
@@ -2207,10 +2416,10 @@ public final class SessionExecutor {
 
     private void send(SegmentBuffer.Sealed sealed, DeviceLink target, DeviceLink.AudioReservation reservation) {
         Instant passAt = services.clock().now();
+        correctionsInARow = 0;
         UUID playbackId = UUID.randomUUID();
         services.latency().gatePassed(plan.sessionId(), playbackId, passAt);
         transcripts.aiFinal(sealed.transcript(), true, passAt);
-        playbackResponses.put(playbackId, sealed.responseId());
         var speech = pendingPracticeSpeech;
         if (speech != null) {
             pendingPracticeSpeech = null; practiceHold = true;
@@ -2246,7 +2455,7 @@ public final class SessionExecutor {
         transcripts.aiFinal(sealed == null ? "" : sealed.transcript(), false, services.clock().now());
         if (pendingPracticeSpeech != null) {
             var speech = pendingPracticeSpeech; pendingPracticeSpeech = null; practiceHold = true;
-            cancelResponses(sealed == null ? null : sealed.responseId());
+            bumpOutput(OutputGeneration.BumpReason.PRACTICE_DISCARD);
             practicePlayback(speech, kr.mujoong.realtime.practice.PracticePorts.Playback.FAILED);
             return;
         }
@@ -2270,7 +2479,7 @@ public final class SessionExecutor {
      * 문장, 범주를 모르거나 미완 · 너무 긴 응답이면 짧은 완결 요청). 폐기한 전사 · 걸린 패턴은 보내지 않는다.
      */
     private void correctAfterDiscard(SegmentBuffer.Sealed sealed, GateDecision.DiscardReason reason) {
-        if (status != SessionStatus.ACTIVE || sealed == null || sealed.responseId() == null) {
+        if (status != SessionStatus.ACTIVE || sealed == null) {
             return;
         }
         // 폐기 사유가 미완 · 너무 김이어도 버린 구간에 금지 패턴이 있으면 그 범주의 문장을 보낸다 — 교정은 응답당 한 번이라 전사만 든 구간이
@@ -2280,11 +2489,19 @@ public final class SessionExecutor {
                     .map(SessionExecutor::correctionFor).orElse(DialogInstructions.Correction.INCOMPLETE);
             default -> null;
         };
-        if (correction == null || !correctedResponses.add(sealed.responseId())) {
+        // 세대당 한 번(U11 W8-6): 구간이 속한 세대가 아직 현재이고 이 세대의 교정을 아직 안 보냈을 때만
+        if (correction == null || sealed.outputGen() != outputGen.generation() || !outputGen.claimCorrection()) {
             return;
         }
-        ProviderRequestFactory.InstructionsCorrect request = services.requests().instructionsCorrect(correction);
-        toProvider("provider-correct-", session -> session.correctInstructions(request));
+        // 교정 연쇄 방지(설계 개정 A2): 교정 지시는 곧 새 발화를 시작하므로, 통과한 구간 없이 연달아 두 번까지만 보낸다
+        if (correctionsInARow >= MAX_CORRECTIONS_IN_A_ROW) {
+            return;
+        }
+        DialogInstructions.Correction chosen = correction;
+        if (sendInstruction(OutputGeneration.BumpReason.GATE_CORRECTION, "provider-correct-",
+                id -> services.requests().instructionsAppend(id, chosen), null)) {
+            correctionsInARow++;
+        }
     }
 
     static DialogInstructions.Correction correctionFor(SeedDictionary.Category category) {
@@ -2297,71 +2514,6 @@ public final class SessionExecutor {
             case EMOTION_CLAIM -> DialogInstructions.Correction.EMOTION_CLAIM;
             case PRESSURE -> DialogInstructions.Correction.PRESSURE;
         };
-    }
-
-    /** 응답을 취소한다(끼어들기 · 종료 의도, U3-R5 · U3-J11). 늦게 오는 그 응답의 조각은 받지 않는다. id를 모르면 지금 응답을 멈춘다. */
-    private void cancelResponses(String... responseIds) {
-        Set<String> targets = new LinkedHashSet<>();
-        for (String id : responseIds) {
-            if (id != null && !id.isBlank()) {
-                targets.add(id);
-            }
-        }
-        if (targets.isEmpty()) {
-            ProviderRequestFactory.ResponseCancel request = services.requests().responseCancel(null);
-            toProvider("provider-cancel-", session -> session.cancelResponse(request));
-            return;
-        }
-        for (String id : targets) {
-            cancelledResponses.add(id);
-            ProviderRequestFactory.ResponseCancel request =
-                    services.requests().responseCancel(ProviderResponseId.of(id).orElse(null));
-            toProvider("provider-cancel-", session -> session.cancelResponse(request));
-        }
-    }
-
-    /** 공급자 송신 하나(보조 작업). 실행기 스레드는 공급자 소켓 쓰기를 기다리지 않는다. 끊김은 리더가 따로 알린다. */
-    private void toProvider(String name, ProviderCall call) {
-        ProviderSession session = providerSession;
-        if (session == null || !session.isOpen()) {
-            return;
-        }
-        Runnable work = () -> {
-            try {
-                call.send(session);
-            } catch (ProviderUnavailableException e) {
-                // 공급자 끊김은 리더의 Closed로 따로 온다
-            } catch (RuntimeException e) {
-                services.events().appError(EventLog.Component.VOICE_RELAY, e);
-            }
-        };
-        if (practice != null && practice.controlsOutput()) enqueuePracticeProvider(name, work);
-        else services.launcher().launch(name + plan.sessionId(), work);
-    }
-
-    private void enqueuePracticeProvider(String name, Runnable work) {
-        synchronized (practiceProviderQueue) {
-            practiceProviderQueue.addLast(work);
-            if (practiceProviderRunning) return;
-            practiceProviderRunning = true;
-        }
-        services.launcher().launch(name + plan.sessionId(), () -> {
-            while (true) {
-                Runnable next;
-                synchronized (practiceProviderQueue) {
-                    next = practiceProviderQueue.pollFirst();
-                    if (next == null) { practiceProviderRunning = false; return; }
-                }
-                try { next.run(); }
-                catch (RuntimeException failure) { services.events().appError(EventLog.Component.VOICE_RELAY, failure); }
-            }
-        });
-    }
-
-    /** 공급자 송신 한 번. */
-    @FunctionalInterface
-    private interface ProviderCall {
-        void send(ProviderSession session) throws ProviderUnavailableException;
     }
 
     private boolean inRelayRange() {
@@ -2459,17 +2611,13 @@ public final class SessionExecutor {
     }
 
     /**
-     * 끼어들기(U3-R5 · U3-J10 · AC6.2.12): 기기가 아이 음성으로 재생을 멈췄다. 남은 음성 프레임을 보내지 않고(세대 올림) 공급자 응답을 취소하고
-     * 열린 출력 구간은 버리며 재생 위치와 함께 BARGE_IN을 남긴다. '듣는 중' 복귀는 끝 표식 처리가 한다(U3-J6).
+     * 끼어들기(U3-R5 · U3-J10 · AC6.2.12): 기기가 아이 음성으로 재생을 멈췄다. 남은 음성 프레임을 보내지 않고(세대 올림) 출력 세대를 올려
+     * 공급자 응답의 남은 조각을 버리고(U11 BR3.4: 공급자 응답 취소 없음) 열린 출력 구간은 버리며 재생 위치와 함께 BARGE_IN을 남긴다. '듣는 중' 복귀는 끝 표식 처리가 한다(U3-J6).
      */
     private void onBargeIn(PlaybackMark mark, Instant at) {
         bumpGeneration();
-        timers.cancel(Kind.SEGMENT_QUIET);
-        String playing = playbackResponses.get(mark.playbackId());
-        String open = segment.isOpen() ? segment.responseId() : null;
-        // U3-R5 · U3-J11: 재생 중이던 응답과 만들던 응답을 공급자에서도 멈춘다(남은 조각은 받지 않는다)
-        cancelResponses(playing, open);
-        segment.reset();
+        // U11 BR3.4: 공급자 응답 취소 대신 출력 세대를 올려 재생 중이던 · 만들던 응답의 남은 조각을 버린다(열린 구간도 버린다)
+        bumpOutput(OutputGeneration.BumpReason.BARGE_IN);
         transcripts.aiFinal("", false, at);
         Long playedTo = mark.playedRange() != null ? mark.playedRange().toMs()
                 : mark.playbackId().equals(progressPlaybackId) ? progressPlayedToMs : null;
@@ -2671,7 +2819,7 @@ public final class SessionExecutor {
             syncFromDb();
             return;
         }
-        status = SessionStatus.ENDED;
+        changeStatus(SessionStatus.ENDED, services.clock().now());
         bumpGeneration();
         sendControl(new SessionState(View.STANDBY));
         afterTerminal();
@@ -2775,7 +2923,7 @@ public final class SessionExecutor {
             syncFromDb(requestId);
             return false;
         }
-        status = SessionStatus.CLOSING;
+        changeStatus(SessionStatus.CLOSING, services.clock().now());
         closingReason = row.get().endReason() != null ? row.get().endReason() : trigger.endReason();
         closingDetail = row.get().endDetail();
         enterClosing(now, requestId);
@@ -2801,7 +2949,8 @@ public final class SessionExecutor {
                 requestId == null ? null : requestId.toString(), null, committedAt));
         // BR6.10 ① · BR4.5: 서버 쪽 출력 버퍼 취소 → STOP_OUTPUT + SESSION_STATE{CLOSING} → ② 마무리 문구 1회
         bumpGeneration();
-        timers.cancel(Kind.SEGMENT_QUIET);
+        // U11 BR3.4: 마무리는 출력을 멈추는 일이다 — 공급자 응답 취소 대신 출력 세대를 올려 만들던 응답의 남은 조각을 버린다
+        bumpOutput(OutputGeneration.BumpReason.STOP_INTENT);
         timers.cancel(Kind.DISCONNECT);
         timers.cancel(Kind.PLAYBACK_EXPIRY);
         timers.cancel(Kind.JOIN_WINDOW);
@@ -2904,11 +3053,9 @@ public final class SessionExecutor {
                 }
             }
             case DISCONNECT -> onDisconnectCheck();
-            case SEGMENT_QUIET -> {
-                if (inOutputRange()) {
-                    sealAndGate(false);
-                }
-            }
+            case SEGMENT_QUIET -> onOutputQuiet();
+            case INSTRUCTION_WAIT -> onInstructionWaitExpired();
+            case INPUT_TRANSCRIPT_QUIET -> onInputTranscriptQuiet();
             case PLAYBACK_EXPIRY -> {
                 playback.clear();
                 if (status == SessionStatus.WAITING_CHILD && joinPromptPlaybackId != null) {
@@ -2975,7 +3122,7 @@ public final class SessionExecutor {
             syncFromDb();
             return;
         }
-        status = SessionStatus.FAILED;
+        changeStatus(SessionStatus.FAILED, services.clock().now());
         timeoutFired("DEVICE_ACK", threshold, elapsed);
         if (code == FailureCode.DEVICE_NO_ACK) {
             markUnresponsive();
@@ -3005,7 +3152,7 @@ public final class SessionExecutor {
             syncFromDb();
             return;
         }
-        status = SessionStatus.ENDED_UNCONFIRMED;
+        changeStatus(SessionStatus.ENDED_UNCONFIRMED, services.clock().now());
         // U4b BR6.4 · U4b-J14: CLOSING 진입부터 ended_at까지를 UNCONFIRMED 구간으로 남긴다
         quietly(() -> services.gaps().close(
                 services.gaps().open(plan.sessionId(), SessionGapRepository.Kind.UNCONFIRMED, closingAt), now));
@@ -3039,7 +3186,7 @@ public final class SessionExecutor {
             syncFromDb();
             return;
         }
-        status = SessionStatus.ABORTED;
+        changeStatus(SessionStatus.ABORTED, services.clock().now());
         closeProvider();
         timeoutFired("DISCONNECT", threshold, elapsed);
         afterTerminal();
@@ -3123,7 +3270,7 @@ public final class SessionExecutor {
         Optional<ActivitySessionRow> row = services.transitions().transition(plan.sessionId(), from, trigger.target(),
                 TransitionTable.changeFor(trigger, code, services.clock().now()), SessionTransitions.Origin.REALTIME,
                 plan.traceId());
-        row.ifPresent(value -> status = value.status());
+        row.ifPresent(value -> changeStatus(value.status(), services.clock().now()));
         return row;
     }
 
@@ -3136,7 +3283,7 @@ public final class SessionExecutor {
             syncFromDb();
             return;
         }
-        status = SessionStatus.FAILED;
+        changeStatus(SessionStatus.FAILED, services.clock().now());
         afterFailed();
     }
 
@@ -3150,7 +3297,7 @@ public final class SessionExecutor {
      * 철회는 사유가 CONSENT_WITHDRAWN이다.
      */
     private void afterFailed(CloseTransport.Reason reason) {
-        status = SessionStatus.FAILED;
+        changeStatus(SessionStatus.FAILED, services.clock().now());
         bumpGeneration();
         if (startSent && link != null && link.isOpen()) {
             sendControl(new CloseTransport(reason));
@@ -3177,7 +3324,7 @@ public final class SessionExecutor {
             return;
         }
         SessionStatus before = status;
-        status = row.get().status();
+        changeStatus(row.get().status(), services.clock().now());
         if (status.isTerminal()) {
             afterTerminal();
             return;
@@ -3304,6 +3451,14 @@ public final class SessionExecutor {
         }
     }
 
+    /**
+     * 세션 상태를 바꾸는 유일한 자리(U11 BR5.4, 첫 판 검토 R-15). 지금은 대입뿐이고 동작을 바꾸지 않는다 — 판정 턴이 {@code openedInStatus}를 벗어나는
+     * 모든 전이를 이 자리에서 잡는다(PR2).
+     */
+    private void changeStatus(SessionStatus next, Instant now) {
+        status = next;
+    }
+
     private void closeProvider() {
         providerClosing = true;
         ProviderConnector.Attempt attempt = providerAttempt;
@@ -3330,6 +3485,7 @@ public final class SessionExecutor {
         Instant now = services.clock().now();
         try {
             quietly(timers::cancelAll);
+            quietly(sendQueue::shutdown);
             quietly(this::cancelPracticeTimers);
             quietly(relay::stop);
             quietly(this::closeProvider);

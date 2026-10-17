@@ -109,3 +109,49 @@ ai-seed-output.schema.json은 skillName(1~80), invariantSentence(1~200), additio
 - Actuator: 관리 포트 9090(127.0.0.1), 헬스 · Prometheus 지표.
 - springdoc OpenAPI: dev · test 프로필에서만 켜짐.
 - 프런트 `/healthz` route.
+
+---
+
+## U11 집중 갱신 (261016-u11-judgment-turn, 2026-10-16 스캔 — main 병합 때 보존한 절)
+
+> main의 U14 · U15 갱신본을 바탕으로 두고, U11 작업 기록의 집중 스캔에서 갱신한 절만 아래에 보존했다. 줄 번호 · 커밋은 2026-10-16 `9bcc706` 기준이며 PR1(선 형식 정비) 이전 코드다.
+
+## 6A. (2026-10-16 갱신) 외부 Luna 판정 API (나가는 HTTP, realtime-activity — U9)
+
+- 호출부: `kr.mujoong.realtime.luna.RealtimeLunaClient.call(LunaRequest)` → `CompletionStage<LunaResult>`. 던지지 않고 실패는 `LunaException(LunaFailureReason)`으로 예외 완료한다.
+- 표면: OpenAI Responses API `POST {base-url}/responses`(`mujoong.luna.base-url` 기본 `https://api.openai.com/v1`), 구조화 출력 `json_schema`, `store=false`. SDK 없이 JDK `HttpClient`(`LunaTransport`) + `JsonCodec`(편차 U9-a).
+- 목적: `LunaPurpose.JUDGMENT_LIVE` 하나(설정 `mujoong.luna.purpose.judgment-live`: `max-output-tokens` 4000 · `reasoning-effort` medium). 모델 `${OPENAI_JUDGE_MODEL:gpt-6-luna}`.
+- 시한: min(요청 마감, `mujoong.timing.judgment.live-budget` 2s). 재시도 없음(`attemptsUsed` 언제나 1). 호출자가 Future를 취소하면 HTTP 요청도 취소한다.
+- 요청: `LunaRequest(purpose, promptVersion, instructions, input(Map), aliases, deadline)`. `input`은 `ai-judgment-request.schema.json` 모양 — `judgmentPoint` · `optionSetVersion` · `options` · `childUtterance` · `criteria`(J1 · J4 · J6은 null) · `recentTurns`(≤ 3). 보내기 전 요청 스키마 검증 실패는 `FORBIDDEN_INPUT`(시도 0). 입력 정리 `LunaInputSanitizer`.
+- 출력: `ai-judgment-output.schema.json` — `first` · `second` 두 칸, 각 `{option: ^[A-Z][A-Z0-9_]*$, probability: 0~1}`. 스키마는 요청의 `options` 집합 · `first ≠ second` · 확률 합을 묶지 않는다(U11-R5).
+- 빈 조건: 환경 변수 `OPENAI_API_KEY`가 있을 때만 `LunaTransport` · `RealtimeLunaClient` 빈이 생긴다(`LunaConfiguration` L51). 없으면 빈 자체가 없다(U11-R6).
+- 허용 호스트: demo · prod는 https + `api.openai.com`만, test는 루프백만(`LunaHosts`, BR1.4).
+- 감사 로그 `LUNA_CALL` · `LUNA_STARTUP`(ai-io.md 10.8). 실호출 시험은 `./gradlew lunaLiveTest`(태그 `luna-live`)로 격리(편차 U9-c).
+
+## 10. (2026-10-16 갱신) realtime 앱 안 확장점 포트 (Java, U11 소유 · U12 구현)
+
+`kr.mujoong.realtime.session.PracticeSessionExtension` — 세션 실행기가 연습 흐름을 붙이는 앱 안 계약(C-DS3). 실행기 → 확장점 한 방향이며 확장점은 실행기를 부르지 않는다.
+
+| 구분 | 내용 |
+|---|---|
+| 시점(실행기 스레드에서 호출) | `onActive` · `onChildUtterance(Utterance)` · `onExtensionEvent(ExtensionEvent)` · `onSettle(EndContext)` · `practiceRecord()` + 기본 메서드 4개(`controlsOutput()` 등) |
+| `Utterance` | 전사 순번 · 시각 · 원문 · 불확실 여부 · 재생 중 여부 |
+| `ExtensionEvent.Kind` | `PLAYBACK_DONE` · `PLAYBACK_FACT` · `TIMER_FIRED` · `ASYNC_RESULT`(L88 ~ L93). U11 계약 요약이 말하는 `JUDGMENT_RESULT` · `JUDGMENT_ABSTAINED` · `HELD_OUTPUT_TRANSCRIPT` · `GUARDRAIL_BLOCKED`는 아직 없다 |
+| 출력 능력 `PracticeOutput` | `sessionId` · `playApproved(code)` · `instructProvider(text)` · `requestResponse()` · `cancelResponse()` · `holdOutput(bool)` · `schedule(name, delay)` · `cancel(name)` · `post(name, value)`(아무 스레드) · `speak(PracticeSpeech)`(`default false`) · `cancelSpeech(UUID)`(`default false`) |
+| 거절 규칙 | ACTIVE · 정산 전 · 살아 있는 확장점일 때만 받음(`practiceActive()`), 아니면 거짓 + 세션 사건 `PRACTICE_EXTENSION_FAILED{reason, capability}` |
+| 구현 | 운영: `NoOpPracticeSessionExtension`(무동작) · `practice.RuntimePracticeExtension`(U5b, `controlsOutput()=true`). 시험: `testing.RecordingPracticeExtension` |
+| 계약에 없는 능력 | `requestJudgment` · `announceRoleSwitch` · `setThinking`(U11 계약 요약) — `default` 메서드로 더하면 기존 구현을 고칠 필요가 없다 |
+
+## 11. (2026-10-16 갱신) 판정 · 시간 관련 계약 문서 지도
+
+| 문서 | 절 | U11 관련 내용 |
+|---|---|---|
+| `contracts/ai-io.md` | 3절 | 공급자 선 형식(J110 가정) |
+| `contracts/ai-io.md` | 10.1 ~ 10.7 | U8 스키마 9종 · 금지 필드 · 목적 → 호출 경로 → 재시도 분류 · 판 리소스와 세션 고정 · 원문 일치와 제브 생략 · 승인 발화 · 비밀 이름 |
+| `contracts/ai-io.md` | 10.8 ~ 10.10 | U9 감사 로그 · 설정 · 호출 방식 · 실패 사유 |
+| `contracts/schemas/ai-judgment-request.schema.json` · `ai-judgment-output.schema.json` | — | 판정 요청 · 출력 모양(출력은 선택지 집합을 묶지 않음) |
+| `contracts/schemas/practice-record-v2.schema.json` | — | 새 연습 흐름 기록 형식(`flowVersion` 필수) |
+| `contracts/timing.md` | 13절 | U8 새 키 7개: `judgment.live-budget`(2s) · `judgment.response-ready`(10s) · `guardrail.jev-budget`(800ms) · `conversation.no-response-wait`(10s) · `conversation.focus-max`(90s) · `conversation.goal-active-limit`(10m) · `knowledge.graph-budget`. 응답 준비 대기 초과 때 `D_HOLD` 되묻기를 말하지만 그 문구 정본은 코드 · 시드에 없다(U11-R8) |
+| `contracts/deviations.md` | U8 · U9 편차 표 | U8-a ~ U8-e, U9-a ~ U9-c |
+| `contracts/events.asyncapi.yaml` | `SessionRecordCaptured` 설명 | 형식 구분(위 5절) |
+| `contracts/device-ws.asyncapi.yaml` | `SESSION_STATE` | `STANDBY · LISTENING · THINKING · CLOSING` |

@@ -240,7 +240,7 @@ class DeviceGatewayIT {
         env.join(sessionId);
         awaitTrue(() -> env.app.bean(ActivitySessionRepository.class).find(sessionId)
                 .map(row -> row.status() == SessionStatus.ACTIVE).orElse(false), "ACTIVE");
-        env.provider.emitTurn("item-1", "안녕", "resp-1", "안녕 반가워", List.of(new byte[4800]));
+        env.provider.emitTurn("item-1", "안녕", "안녕 반가워", List.of(new byte[4800]));
         WsEnvelope begin = device.await(WsMessageType.OUTPUT_BEGIN, WAIT);
         device.playbackMark(sessionId, ((OutputBegin) begin.payload()).playbackId(), PlaybackMark.Status.STARTED);
 

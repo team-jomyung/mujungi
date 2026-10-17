@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// 가짜 공급자 서버 (U1 3.5 Step 45 · J110 선 형식 · J129 · J131 · RD-5 · RD-23 · SD-20 · SD-25 · contracts/ai-io.md 3절)
+// 가짜 공급자 서버 (U1 3.5 Step 45 · J129 · J131 · RD-5 · RD-23 · SD-20 · SD-25 · U11 BR11.10 · contracts/ai-io.md 3절)
 //
 // realtime(VoiceRelay)이 `MUJOONG_PROVIDER_URL`로 붙는 대역 WS 서버다. 앱 이미지에 넣지 않고 dev · ci Compose 서비스와 host 모드
 // 프로세스로만 돈다(J129 · SD-25). 텍스트 프레임 JSON 한 개 = 메시지 한 개(공통 필드 type), 음성은 base64 PCM16LE 24kHz 모노다.
@@ -8,14 +8,18 @@
 // 받은 입력 음성 프레임마다 누적 바이트 수 · 누적 SHA-256, 턴마다 그 턴 입력의 SHA-256 · 보낸 출력 음성의 바이트 수 · SHA-256 ·
 // 문장 SHA-256, session.close · 연결 닫힘. 지시문 · 아이 문맥 값 · 전사 원문은 기록하지 않는다(SD-15). C안 시나리오는 이 기록 파일을
 // 따라 읽어 "가짜 공급자가 받은 입력 해시 = 시뮬레이터가 보낸 해시", "기기가 받은 0x02 해시 = 가짜 공급자가 보낸 출력 해시"를 단언한다.
-// U3(편차 (aa)): session.response.cancel이 오면 그 응답의 남은 출력 조각을 보내지 않고 기록하며(끼어들기 · 종료 의도), 
-// session.instructions.correct는 문장 SHA-256 · 길이만 기록한다. --confidence를 주면 아이 전사 확정에 confidence를 싣는다(U3-J17).
-// U4b(편차 (U4b-a)): session.response.create는 받은 사실만 기록하고, 턴 종류 join은 참여 확인 대답("응")만 보낸다(AI 출력 없음).
+// U11(편차 (U11-a), 설계 개정 A1 · A4 · A7): 실호출 3회로 관측한 형식만 말하고 공급자처럼 엄격하다 — 세션 시작은 중첩 session{model, instructions,
+// audio{format{type, rate}}}, 출력 음성은 session.output_audio.delta{delta}(응답 id · 응답 끝 사건 없음), 전사는 session.{input,output}_transcript.delta
+// {start_ms, end_ms, delta, event_id}(입력 전사 완료 · 말 끝 사건 없음, 출력 전사는 음성보다 앞서 도착), 오류는 error{error{type, code, param}}이다.
+// 지원 목록 밖 type에는 error{invalid_request_error, invalid_value, param type}, session.instructions.append에 delegation_id 키가 없으면
+// error{missing_required_parameter, param delegation_id}, response.create에는 error{"requires a session with Responses delegation"}로 답한다.
+// 올바른 session.instructions.append에는 확인 사건 session.instructions.appended{client_event_id, start_ms, end_ms}를 곧바로 돌려주고, 다음 턴의 새 말은
+// 확인 end_ms 뒤에서 시작한다(앞에 낡은 꼬리를 흉내 낸 채움 음성). 지시문은 문장 SHA-256 · 길이만 기록한다. 키(Authorization)는 보지 않고 Bearer 형식
+// 여부만 기록한다 — 키가 비면 헤더가 없고 연결은 받는다(BR12.2). 턴 종류 join은 참여 확인 대답("응")의 입력 전사 조각만 보낸다(AI 출력 없음).
 //
 // 쓰는 법
 //   node tools/fake-provider/server.mjs [--host 127.0.0.1] [--port 8090] [--scenario ok] [--turns normal,forbidden]
 //        [--frames-per-turn 25] [--started-delay-ms 1500] [--response-delay-ms 120] [--chunk-bytes 4800] [--chunk-interval-ms 20]
-//        [--confidence 0.4]
 //   --help 로 전체 설명. 종료 코드: 0 정상 종료(SIGTERM · SIGINT), 1 기동 실패, 2 인자 오류.
 import http from "node:http";
 import path from "node:path";
@@ -27,13 +31,19 @@ import {
   CONNECTION_SCENARIOS,
   DEFAULTS,
   TURN_KINDS,
+  SUPPORTED_TYPES,
+  ACK_LEAD_MS,
   buildTurn,
+  instructionsAppended,
+  missingDelegationIdError,
   parseList,
+  responseCreateRefused,
   scenarioForConnection,
   textSha256,
+  unsupportedTypeError,
 } from "./scenarios.mjs";
 
-export const USAGE = `가짜 공급자 서버 (J110 선 형식, 시험 전용)
+export const USAGE = `가짜 공급자 서버 (실호출 관측 선 형식, 시험 전용)
 
 쓰는 법: node tools/fake-provider/server.mjs [옵션]
 
@@ -48,7 +58,6 @@ export const USAGE = `가짜 공급자 서버 (J110 선 형식, 시험 전용)
   --response-delay-ms <ms>  아이 전사 확정 뒤 AI 출력까지 지연 (기본 ${DEFAULTS.responseDelayMs})
   --chunk-bytes <n>         출력 음성 조각 크기, 2바이트 배수 (기본 ${DEFAULTS.chunkBytes})
   --chunk-interval-ms <ms>  출력 음성 조각 간격 (기본 ${DEFAULTS.chunkIntervalMs})
-  --confidence <0~1>        아이 전사 확정(session.input_transcript.done)에 실을 신뢰도 (기본 없음, U3)
   --help                    이 설명
 
 기록: 표준 출력에 JSON 한 줄씩({"ev": ...}). 키 · 지시문 · 전사 원문은 쓰지 않는다.
@@ -68,7 +77,6 @@ export const USAGE = `가짜 공급자 서버 (J110 선 형식, 시험 전용)
  * @param {number} [options.responseDelayMs]
  * @param {number} [options.chunkBytes]
  * @param {number} [options.chunkIntervalMs]
- * @param {number | null} [options.confidence] 아이 전사 확정에 실을 신뢰도(0 ~ 1, 없으면 싣지 않는다, U3)
  * @param {(entry: object) => void} [options.onRecord] 기록 한 건(기본: 표준 출력 JSON 한 줄)
  */
 export async function startFakeProvider({
@@ -81,12 +89,8 @@ export async function startFakeProvider({
   responseDelayMs = DEFAULTS.responseDelayMs,
   chunkBytes = DEFAULTS.chunkBytes,
   chunkIntervalMs = DEFAULTS.chunkIntervalMs,
-  confidence = null,
   onRecord = (entry) => process.stdout.write(jsonLine(entry)),
 } = {}) {
-  if (confidence !== null && !(typeof confidence === "number" && confidence >= 0 && confidence <= 1)) {
-    throw new RangeError("confidence는 0 ~ 1이어야 한다");
-  }
   for (const scenario of scenarios) {
     if (!CONNECTION_SCENARIOS.includes(scenario)) {
       throw new RangeError(`모르는 연결 시나리오: ${scenario}`);
@@ -143,12 +147,7 @@ export async function startFakeProvider({
       socket.on("close", () => held.delete(socket));
       return;
     }
-    if (!bearer) {
-      // 키가 없는 연결은 받지 않는다(실공급자와 같은 모양, 키 값은 보지 않는다)
-      record({ ev: "unauthorized", conn, path: requestPath });
-      socket.end("HTTP/1.1 401 Unauthorized\r\nConnection: close\r\nContent-Length: 0\r\n\r\n");
-      return;
-    }
+    // U11 BR12.2: 키가 비면 Authorization 헤더가 없다. 가짜 공급자는 헤더를 보지 않고 연결을 받는다(Bearer 형식인지만 기록)
     wss.handleUpgrade(req, socket, head, (ws) => {
       record({ ev: "connect", conn, path: requestPath, bearer, scenario });
       attach(ws, conn, scenario);
@@ -173,10 +172,10 @@ export async function startFakeProvider({
       turnFrames: 0,
       turnIndex: 0,
       closed: false,
-      /** 지금 내보내는 응답 id(취소 요청에 id가 없을 때 대상, U3). */
-      currentResponseId: null,
-      /** 취소된 응답 id(U3-R5). */
-      cancelled: new Set(),
+      // 이 연결에서 보낸 출력 오디오의 누적 ms(세션 오디오 시계)와, 아직 새 말이 쓰지 않은 지시 확인의 end_ms
+      audioMs: 0,
+      pendingAckEndMs: -1,
+      ackSeq: 0,
     };
     const send = (message) => {
       if (!state.closed && ws.readyState === ws.OPEN) {
@@ -209,27 +208,13 @@ export async function startFakeProvider({
         case "session.input_audio.append":
           onInputAudio(message);
           break;
-        case "session.response.cancel": {
-          // 끼어들기 · 종료 의도(U3-R5 · U3-J11): 그 응답(없으면 지금 응답)의 남은 출력을 보내지 않는다
-          const target = typeof message.responseId === "string" ? message.responseId : state.currentResponseId;
-          if (target !== null) {
-            state.cancelled.add(target);
-          }
-          record({ ev: "session.response.cancel", conn, hasResponseId: typeof message.responseId === "string" });
+        case "session.instructions.append":
+          onInstructionsAppend(message);
           break;
-        }
-        case "session.instructions.correct":
-          // 고정 교정 문장(U3-J12): 원문은 남기지 않는다
-          record({
-            ev: "session.instructions.correct",
-            conn,
-            textSha256: typeof message.text === "string" ? textSha256(message.text) : null,
-            textLength: typeof message.text === "string" ? message.text.length : 0,
-          });
-          break;
-        case "session.response.create":
-          // U4b(편차 (U4b-a) · U4b-J3): 참여 확인 · 확인 질문 뒤 발언권 반환 — 받은 사실만 기록한다
-          record({ ev: "session.response.create", conn });
+        case "response.create":
+          // client 위임 세션은 거절한다(실호출 관측). 받은 사실만 기록한다
+          record({ ev: "response.create", conn });
+          send(responseCreateRefused());
           break;
         case "session.close":
           record({
@@ -241,7 +226,14 @@ export async function startFakeProvider({
           later(0, () => ws.close(1000));
           break;
         default:
-          record({ ev: "recv-unknown", conn, type: message.type.slice(0, 64) });
+          if (SUPPORTED_TYPES.includes(message.type)) {
+            // 지원 목록 안이지만 이 대역이 쓰지 않는 type: 조용히 받는다
+            record({ ev: "recv-ignored", conn, type: message.type });
+          } else {
+            // 지원 목록 밖(예: 응답 취소): 실공급자처럼 error 사건으로 답한다(type 이름은 기록에 64자까지만)
+            record({ ev: "recv-unsupported", conn, type: message.type.slice(0, 64) });
+            send(unsupportedTypeError());
+          }
       }
     });
 
@@ -258,24 +250,57 @@ export async function startFakeProvider({
     });
     ws.on("error", () => {});
 
+    function onInstructionsAppend(message) {
+      const hasDelegationId = Object.prototype.hasOwnProperty.call(message, "delegation_id");
+      const content = typeof message.content === "string" ? message.content : null;
+      // 지시문 원문은 남기지 않는다(문장 SHA-256 · 길이만)
+      record({
+        ev: "session.instructions.append",
+        conn,
+        keys: Object.keys(message).sort(),
+        delegationIdPresent: hasDelegationId,
+        delegationIdNull: hasDelegationId && message.delegation_id === null,
+        eventId: typeof message.event_id === "string" ? message.event_id.slice(0, 64) : null,
+        textSha256: content === null ? null : textSha256(content),
+        textLength: content === null ? 0 : content.length,
+      });
+      if (!hasDelegationId) {
+        send(missingDelegationIdError());
+        return;
+      }
+      if (content === null || content.trim() === "") {
+        send({ ...missingDelegationIdError(), error: { ...missingDelegationIdError().error, param: "content" } });
+        return;
+      }
+      state.ackSeq += 1;
+      const ackEnd = state.audioMs + ACK_LEAD_MS;
+      state.pendingAckEndMs = ackEnd;
+      send(
+        instructionsAppended(
+          typeof message.event_id === "string" ? message.event_id : "",
+          state.audioMs,
+          ackEnd,
+          `fake-a-${conn}-${state.ackSeq}`,
+        ),
+      );
+    }
+
     function onSessionStart(message) {
-      const childContext =
-        message.childContext && typeof message.childContext === "object"
-          ? message.childContext
-          : {};
-      // 지시문 · 아이 문맥 값은 기록하지 않는다(키 목록만, SD-20 허용 필드 대조용)
+      const body = message.session && typeof message.session === "object" ? message.session : {};
+      const format =
+        body.audio && typeof body.audio === "object" && body.audio.format && typeof body.audio.format === "object"
+          ? body.audio.format
+          : null;
+      // 지시문(아이 정보가 든 문장)은 기록하지 않는다(키 목록만, SD-20 허용 필드 대조용)
       record({
         ev: "session.start",
         conn,
         keys: Object.keys(message).sort(),
-        childContextKeys: Object.keys(childContext).sort(),
-        model: typeof message.model === "string" ? message.model.slice(0, 64) : null,
-        audio:
-          message.audio && typeof message.audio === "object"
-            ? { input: message.audio.input, output: message.audio.output }
-            : null,
+        sessionKeys: Object.keys(body).sort(),
+        model: typeof body.model === "string" ? body.model.slice(0, 64) : null,
+        audioFormat: format ? { type: format.type, rate: format.rate } : null,
       });
-      const started = { type: "session.started", providerSessionId: `fake-provider-${conn}` };
+      const started = { type: "session.started", session: { id: `fake-provider-${conn}` } };
       if (scenario === "ok") {
         state.started = true;
         send(started);
@@ -331,9 +356,13 @@ export async function startFakeProvider({
         responseDelayMs,
         chunkBytes,
         chunkIntervalMs,
-        confidence,
+        clockMs: state.audioMs,
+        pendingAckEndMs: state.pendingAckEndMs,
       });
-      state.currentResponseId = built.responseId;
+      state.audioMs += built.audioMsAdded;
+      if (built.usedAck) {
+        state.pendingAckEndMs = -1;
+      }
       record({
         ev: "turn",
         conn,
@@ -343,7 +372,6 @@ export async function startFakeProvider({
         inputBytes: state.turnHash.bytes,
         inputSha256: state.turnHash.hex(),
         itemId: built.itemId,
-        responseId: built.responseId,
         outputBytes: built.pcm.length,
         outputSha256: sha256Hex(built.pcm),
         childTextSha256: textSha256(built.script.childText),
@@ -361,12 +389,6 @@ export async function startFakeProvider({
       }
       const step = steps[index];
       const run = () => {
-        const responseId = step.message.responseId;
-        if (typeof responseId === "string" && state.cancelled.has(responseId)) {
-          // 취소된 응답: 남은 출력 조각 · 끝 신호를 보내지 않는다
-          record({ ev: "turn-cancelled", conn, turn, at: index });
-          return;
-        }
         if (!send(step.message)) {
           record({ ev: "turn-aborted", conn, turn, at: index });
           return;
@@ -469,15 +491,6 @@ export function parseArgs(argv) {
           throw new RangeError("--chunk-bytes는 2바이트 배수여야 한다");
         }
         options.chunkBytes = bytes;
-        break;
-      }
-      case "--confidence": {
-        const text = value();
-        const parsed = Number(text);
-        if (!/^(0(\.[0-9]+)?|1(\.0+)?)$/.test(text) || Number.isNaN(parsed)) {
-          throw new RangeError(`${arg} 값은 0 ~ 1이어야 한다`);
-        }
-        options.confidence = parsed;
         break;
       }
       case "--chunk-interval-ms":

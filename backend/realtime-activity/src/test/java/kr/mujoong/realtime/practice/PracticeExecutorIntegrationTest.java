@@ -54,9 +54,7 @@ class PracticeExecutorIntegrationTest {
         @Override public Object practiceRecord() { return Map.of("goals", List.of()); }
     }
     void audio(String text) {
-        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("practice-1", text));
-        h.provider.last().emit(new ProviderEvent.OutputAudioDelta("practice-1", new byte[4800]));
-        h.provider.last().emit(new ProviderEvent.OutputDone("practice-1")); h.drain();
+        h.speak(text, 4800);
         h.advance(Duration.ofMillis(800));
     }
     void mark(UUID id, PlaybackMark.Status status) {
@@ -65,10 +63,10 @@ class PracticeExecutorIntegrationTest {
     }
     @Test void controlledPracticeRequestsOneTypedResponseAndPublishesOnlyFourProgressFields() {
         h.activate(); h.launcher.runAll("provider-"); h.drain();
-        assertThat(h.provider.last().requests().stream().filter(ProviderRequestFactory.ResponseCreate.class::isInstance)).hasSize(1);
+        assertThat(h.provider.last().requests().stream().filter(ProviderRequestFactory.InstructionsAppend.class::isInstance)).hasSize(1);
         assertThat(h.executor.liveState().practice()).isEqualTo(new PracticeSessionExtension.Progress(1, 2, "차례", "SCENARIO_INTRO"));
         var requests = h.provider.last().requests();
-        assertThat(requests.stream().filter(ProviderRequestFactory.InstructionsCorrect.class::isInstance)).hasSize(1);
+        assertThat(requests.stream().filter(ProviderRequestFactory.InstructionsAppend.class::isInstance)).hasSize(1);
     }
     @Test void onlyMatchingActualPlaybackMarksAreDeliveredAndDuplicatesAreIgnored() {
         h.activate(); audio("내 차례야.");

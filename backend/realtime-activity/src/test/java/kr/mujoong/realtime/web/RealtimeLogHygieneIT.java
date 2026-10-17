@@ -214,11 +214,9 @@ class RealtimeLogHygieneIT {
         awaitStatus(env, sessionId, SessionStatus.ACTIVE);
 
         // 아이 조각 → AI 출력 조각 · 음성 → 응답 끝 없이 공급자 오류(code에 표식)
-        env.provider.emit(providerEvent("session.input_transcript.delta", "item-x", childPartial, null, null, null));
-        env.provider.emit(providerEvent("session.output_transcript.delta", null, aiPartial, "resp-x", null, null));
-        env.provider.emit(providerEvent("session.output_audio.delta", null, null, "resp-x",
-                Base64.getEncoder().encodeToString(new byte[4800]), null));
-        env.provider.emit(providerEvent("session.error", null, null, null, null, providerCode));
+        env.provider.emit(providerEvent("session.input_transcript.delta", "item-x", childPartial));
+        env.provider.emitSpeech(aiPartial, List.of(new byte[4800]));
+        env.provider.emitError("server_error", providerCode, null);
 
         // 빈 수집으로 통과하지 않는다: 끊김 WARN 줄이 나왔고, 완결 안 된 구간은 폐기돼 대기 문구가 나갔다(출력 0바이트)
         awaitTrue(() -> logs.events(EventCode.APP_ERROR).stream()
@@ -268,9 +266,8 @@ class RealtimeLogHygieneIT {
         assertNoMarkerInTables(env, marker);
     }
 
-    private static FakeProviderWsServer.Event providerEvent(String type, String itemId, String delta, String responseId,
-            String audio, String code) {
-        return new FakeProviderWsServer.Event(type, null, itemId, delta, null, responseId, audio, code);
+    private static FakeProviderWsServer.Event providerEvent(String type, String itemId, String delta) {
+        return new FakeProviderWsServer.Event(type, itemId, delta, null);
     }
 
     private static void assertNoneLeaked(String printed, List<String> values) {
@@ -309,11 +306,11 @@ class RealtimeLogHygieneIT {
         }
         awaitTrue(() -> env.provider.audioHashes().size() >= FRAMES, "입력 음성 중계");
 
-        env.provider.emitTurn("item-1", CHILD_TEXT, "resp-1", AI_TEXT, List.of(new byte[4800]));
+        env.provider.emitTurn("item-1", CHILD_TEXT, AI_TEXT, List.of(new byte[4800]));
         WsEnvelope begin = device.await(WsMessageType.OUTPUT_BEGIN, WAIT);
         device.await(WsMessageType.OUTPUT_END, WAIT);
         device.playbackMark(sessionId, ((OutputBegin) begin.payload()).playbackId(), PlaybackMark.Status.STARTED);
-        env.provider.emitTurn("item-2", "응", "resp-2", FORBIDDEN_TEXT, List.of(new byte[4800]));
+        env.provider.emitTurn("item-2", "응", FORBIDDEN_TEXT, List.of(new byte[4800]));
         device.await(envelope -> envelope.payload() instanceof PlayApprovedContent play
                 && PlayApprovedContent.WAITING_FILLER.equals(play.contentCode()), WAIT);
         awaitTrue(() -> api.get("/internal/sessions/" + sessionId + "/view?sinceSeq=0").json().get("items").size() >= 2,
@@ -370,7 +367,7 @@ class RealtimeLogHygieneIT {
                 HexFormat.of().formatHex(tokenHash), Base64.getUrlEncoder().withoutPadding().encodeToString(tokenHash),
                 CHILD_TEXT, AI_TEXT, FORBIDDEN_TEXT, MARKER,
                 Base64.getEncoder().encodeToString(markedPcm()).substring(0, 32)));
-        values.add(env.app.context().getEnvironment().getRequiredProperty(RealtimeStartupChecks.PROVIDER_API_KEY));
+        values.add(env.app.context().getEnvironment().getRequiredProperty(RealtimeStartupChecks.OPENAI_API_KEY));
         return values;
     }
 

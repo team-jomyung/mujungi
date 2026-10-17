@@ -83,7 +83,7 @@ class SessionLifecycleIT {
 
         // 한 턴: 아이 전사 → AI 출력(게이트 통과) → OUTPUT_BEGIN · 0x02 · OUTPUT_END
         device.heartbeat(30L);
-        env.provider.emitTurn("item-1", "공룡이 좋아", "resp-1", "나도 공룡 좋아해", List.of(PCM, PCM));
+        env.provider.emitTurn("item-1", "공룡이 좋아", "나도 공룡 좋아해", List.of(PCM, PCM));
         WsEnvelope begin = device.await(WsMessageType.OUTPUT_BEGIN, WAIT);
         device.await(WsMessageType.OUTPUT_END, WAIT);
         assertThat(((OutputBegin) begin.payload()).source()).isEqualTo(OutputBegin.Source.GPT_LIVE);
@@ -119,7 +119,9 @@ class SessionLifecycleIT {
         assertThat(play.contentCode()).isEqualTo(PlayApprovedContent.CLOSING);
         // CLOSING 뒤 도착한 공급자 출력은 기기로 한 바이트도 가지 않는다(NFR1.1 · SD-17)
         int framesBefore = device.outputFrames();
-        env.provider.emitTurn("item-2", "응", "resp-2", "늦은 말", List.of(PCM));
+        // 아이 전사 뒤 확정을 기다리지 않고 곧바로 온 늦은 말(마무리가 올린 세대가 조용해지기 전)
+        env.childSays("item-2", "응");
+        env.provider.emitSpeech("늦은 말", List.of(PCM));
         device.playbackMark(sessionId, play.playbackId(), PlaybackMark.Status.COMPLETED);
         WsEnvelope close = device.await(WsMessageType.CLOSE_TRANSPORT, WAIT);
         assertThat(((CloseTransport) close.payload()).reason()).isEqualTo(CloseTransport.Reason.GUARDIAN_STOP);
@@ -133,10 +135,11 @@ class SessionLifecycleIT {
         assertThat(device.received(WsMessageType.PLAY_APPROVED_CONTENT)).hasSize(1);
         assertThat(device.received(WsMessageType.CLOSE_TRANSPORT)).hasSize(1);
         assertThat(device.outputFrames()).isEqualTo(framesBefore);
-        // U4b(FR11.3 · BR3.1): 마무리 인사 말풍선 한 행이 더해져 AI 행은 셋(턴 · 마무리 인사 · 늦은 말)
+        // U4b(FR11.3 · BR3.1): 마무리 인사 말풍선 한 행이 더해져 AI 행은 둘(턴 · 마무리 인사). U11: 마무리가 올린 출력 세대가 CLOSING 직후 도착한 늦은
+        // 말을 구간으로 열기 전에 버리므로 늦은 말은 행으로도 남지 않는다(이전에는 게이트가 NOT_ACTIVE로 폐기한 미승인 행이 하나 더 있었다)
         awaitTrue(() -> transcripts(sessionId).stream().filter(t -> t.speaker()
-                == kr.mujoong.realtime.log.TranscriptEntry.Speaker.AI).count() == 3, "늦은 AI 행");
-        assertThat(transcripts(sessionId).get(transcripts(sessionId).size() - 1).approvedForDisplay()).isFalse();
+                == kr.mujoong.realtime.log.TranscriptEntry.Speaker.AI).count() == 2, "AI 행 둘");
+        assertThat(transcripts(sessionId)).noneMatch(t -> "늦은 말".equals(t.text()));
         assertThat(logs.lines()).noneMatch(line -> line.contains("나도 공룡 좋아해") || line.contains(env.deviceToken));
     }
 
@@ -145,7 +148,7 @@ class SessionLifecycleIT {
         DeviceSimulatorClient device = env.connectDevice();
         UUID sessionId = activate(device);
 
-        env.provider.emitTurn("item-1", "나 어때?", "resp-1", "검사해 보니 비정상이에요", List.of(PCM));
+        env.provider.emitTurn("item-1", "나 어때?", "검사해 보니 비정상이에요", List.of(PCM));
 
         WsEnvelope filler = device.await(WsMessageType.PLAY_APPROVED_CONTENT, WAIT);
         assertThat(((PlayApprovedContent) filler.payload()).contentCode()).isEqualTo(PlayApprovedContent.WAITING_FILLER);

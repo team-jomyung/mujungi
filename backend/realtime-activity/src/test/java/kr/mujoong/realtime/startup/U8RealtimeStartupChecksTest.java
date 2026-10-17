@@ -93,7 +93,7 @@ class U8RealtimeStartupChecksTest {
     void theSpringConstructorReadsTheEnvironmentAndLoadsTheVersionResources() {
         org.springframework.mock.env.MockEnvironment environment = new org.springframework.mock.env.MockEnvironment()
                 .withProperty(RealtimeStartupChecks.INTERNAL_TOKEN, TestSecrets.internalServiceToken())
-                .withProperty(RealtimeStartupChecks.PROVIDER_API_KEY, TestSecrets.base64Url(24));
+                .withProperty(RealtimeStartupChecks.OPENAI_API_KEY, TestSecrets.base64Url(24));
         environment.setActiveProfiles("test");
         kr.mujoong.realtime.config.RealtimeProperties properties = org.mockito.Mockito.mock(
                 kr.mujoong.realtime.config.RealtimeProperties.class, org.mockito.Mockito.RETURNS_DEEP_STUBS);

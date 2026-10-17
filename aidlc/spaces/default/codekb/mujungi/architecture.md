@@ -266,3 +266,101 @@ sequenceDiagram
 - 외부 호스트 고정: 음성 공급자 `api.openai.com`, 웹 푸시는 공개 DNS · 고정 HTTP 클라이언트(`PinnedPushHttpClient` · `PublicPushEndpointPolicy`).
 - 오류 응답에서 메시지 · 스택 숨김(`server.error.*`), 관리 포트 9090은 127.0.0.1 바인딩.
 - 아동 데이터 삭제는 삭제 참여자 패턴(양쪽 `*DeletionParticipant`)과 삭제 이벤트로 처리.
+
+---
+
+## U11 집중 갱신 (261016-u11-judgment-turn, 2026-10-16 스캔 — main 병합 때 보존한 절)
+
+> main의 U14 · U15 갱신본을 바탕으로 두고, U11 작업 기록의 집중 스캔에서 갱신한 절만 아래에 보존했다. 줄 번호 · 커밋은 2026-10-16 `9bcc706` 기준이며 PR1(선 형식 정비) 이전 코드다.
+
+#### 4) (2026-10-16 갱신) 아이 말 끝 → 공급자 응답 → 보류 또는 게이트 — 현재 코드
+
+판정 턴(U11)이 끼어들 자리를 보이려고 지금 실행기의 처리 순서를 그렸다. 줄 번호는 `SessionExecutor.java` 기준이다.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant D as 아이 기기
+    participant E as SessionExecutor 실행기 스레드
+    participant X as 확장점 PracticeSessionExtension
+    participant G as OutputGate
+    participant W as TranscriptWriter
+    participant V as 음성 공급자
+    V-->>E: session.input_audio.speech_stopped
+    E->>D: SESSION_STATE THINKING, outputHeld 거짓일 때만 L2135
+    V-->>E: session.input_transcript.done
+    alt 출력권 확장 controlsOutput 참
+        E->>E: judgeStopIntent 먼저 L1809
+        E->>X: onChildUtterance, 종료로 처리되지 않았을 때
+    else 출력권 없는 확장 또는 확장 없음
+        E->>X: onChildUtterance
+        E->>E: judgeStopIntent 그 뒤
+        E->>D: THINKING, 종료로 처리되지 않았을 때
+    end
+    V-->>E: session.output_transcript.delta 첫 조각에 responseId
+    alt outputHeld 참, WAITING_CHILD 또는 종료 확인 중 또는 holdOutput
+        E->>V: session.response.cancel, refuseHeldResponse L1593
+        E->>E: cancelledResponses 에 넣고 이후 조각 버림
+    else 보류 아님
+        E->>W: aiStart, beginOutput L1740
+        E->>G: sealAndGate 의 inspect 와 recheck L2165
+        G-->>E: 승인 또는 폐기
+        E->>W: aiFinal, 폐기도 원문을 realtime_transcript 에 씀
+        E->>D: OUTPUT_BEGIN, 승인 음성, OUTPUT_END
+    end
+```
+
+텍스트 대안: 공급자가 아이 말 끝(`speech_stopped`)을 알리면 실행기는 출력 보류 중이 아닐 때만 기기에 '생각 중'(THINKING)을 보낸다. 확정 전사가 오면, 출력권을 가진 확장(U5b 연습)일 때는 종료 의도 판정을 먼저 하고 종료가 아니면 확장점에 발화를 넘긴다. 출력권이 없을 때는 확장점에 먼저 넘기고 그 뒤 종료 의도를 판정한다. 공급자 응답의 첫 조각이 올 때 출력 보류 중(참여 확인 대기 · 종료 확인 질문 중 · 확장점 보류)이면 그 응답을 공급자에 취소 요청하고 이후 조각을 버린다. 보류가 아니면 전사 기록기에 AI 행을 열고, 문장 구간을 게이트에 넣어 승인분만 기기로 재생한다. 게이트가 폐기한 문장도 원문이 대화 기록 표에 남고 표시 · 스냅숏에서만 걸러진다. 판정 턴의 "보류 출력은 음성은 버리고 전사는 `judgment_live`에만 남긴다"를 담을 갈래가 지금은 없다(U11-R3).
+
+#### 5) (2026-10-16 갱신) 확장점 비동기 결과 · 공급자 송신 경로 — 현재 코드
+
+```mermaid
+flowchart LR
+    X["확장점<br/>PracticeSessionExtension 구현"]
+    PO["PracticeOutputPort<br/>실행기 내부 클래스 L1403"]
+    MB["SessionMailbox<br/>putSafety"]
+    E["SessionExecutor<br/>onPracticeEvent L1224"]
+    LU["RealtimeLunaClient.call<br/>HTTP 클라이언트 스레드에서 완료"]
+    TP["toProvider<br/>호출마다 가상 스레드 L2339"]
+    Q["enqueuePracticeProvider<br/>직렬 큐 L2342"]
+    V["음성 공급자 WS"]
+    X -->|"PracticeOutput 출력 능력"| PO
+    PO -->|"post 이름 · 값"| MB
+    MB --> E
+    E -->|"ExtensionEvent ASYNC_RESULT"| X
+    LU -.->|"아직 배선 없음"| MB
+    PO -->|"instructProvider · requestResponse"| TP
+    PO -->|"speak 는 한 작업 안에서 cancel · correct · create"| Q
+    TP -->|"controlsOutput 참이면"| Q
+    TP -->|"그 밖에는 순서 보장 없음"| V
+    Q -->|"등록 순서대로"| V
+```
+
+텍스트 대안: 확장점은 실행기를 직접 부르지 않고 실행기가 준 출력 능력(`PracticeOutput`)만 쓴다. 다른 스레드에서 끝난 작업 결과는 `post`로 편지함에 들어가고, 실행기가 꺼내 `ASYNC_RESULT` 사건으로 확장점에 돌려준다. Luna 호출부의 완료 콜백은 HTTP 클라이언트 스레드에서 돌기 때문에 같은 편지함 경로로 넘겨야 하지만 지금은 연결이 없다. 공급자 송신은 두 갈래다. 출력권을 가진 확장이면 모든 송신이 직렬 큐를 타서 등록 순서가 지켜진다. 그 밖에는 `toProvider`가 송신마다 가상 스레드를 따로 띄워 `instructions.correct` 다음 `response.create` 같은 순서가 보장되지 않는다(U11-R2).
+
+### U11 판정 턴 접점 (2026-10-16 집중 스캔)
+
+U11(판정 턴 기반, 정본 지시서 `docs/units/u11/brief.md`)이 고치거나 기댈 지점을 코드 사실로 모았다. 설계 판단은 Functional Design 몫이고, 여기서는 사실과 제약만 적는다.
+
+| 접점 | 지금 코드 | U11이 기댈 수 있는 것 | 제약 · 빈틈 |
+|---|---|---|---|
+| 확장점 포트(C-DS3) | `session.PracticeSessionExtension` — 시점 5개(`onActive` · `onChildUtterance` · `onExtensionEvent` · `onSettle` · `practiceRecord`), 출력 능력 `PracticeOutput` 10개(`speak` · `cancelSpeech`는 `default false`), `ExtensionEvent.Kind` 4개 | `default` 메서드로 능력을 더하는 선례, 열거 값을 다 훑는 `switch`가 없어 `Kind` 추가가 컴파일을 깨지 않음 | 포트는 U11 소유, U12는 구현만. 실행기 → 확장점 한 방향을 지켜야 함 |
+| 판정 호출(C-DS4) | `luna.RealtimeLunaClient.call(LunaRequest)` → `CompletionStage<LunaResult>`, 시한 = min(마감, `live-budget`), 재시도 없음, Future 취소 시 HTTP 취소 | 요청 스키마 검증 · 입력 정리(`LunaInputSanitizer`) · 감사 로그가 이미 있음 | 키 없으면 빈 없음(U11-R6). 출력 스키마가 선택지 집합을 묶지 않음(U11-R5). `JudgeClient` 포트 없음 |
+| 판 리소스 | `content.LiveContentRegistry.plan(sessionId)`의 `judgmentSetVersion`, `LiveContentResources.judgment()`(J1 ~ J6 선택지, 순서 고정) | 세션별 판 고정 | 프롬프트 지시문 · `promptVersion` 정본 없음 |
+| 출력 보류 | `outputHeld()`(L1600) = WAITING_CHILD · 종료 확인 중 · 확장점 `holdOutput`, 보류면 응답 **취소** | 세대 번호(`bumpGeneration`) · 취소 목록 선례 | 보류 출력 전사를 따로 남길 갈래 없음(U11-R3), '생각 중' 충돌(U11-R11) |
+| 게이트 단계 | `OutputGate` 상태 없음, `sealAndGate`(L2165 ~ L2206) `inspect` → (출력권 확장 원문 일치) → `recheck` | U13 제브 단계 자리 = `inspect` 뒤 · `recheck` 앞 | 같은 메서드를 U13이 고침(U11-R10) |
+| 응답 준비 시계 | `SessionTimers.Kind` 11종에 판정용 없음, 시간 값은 `timing().judgment().responseReady()`로 읽힘 | 말 끝 기준 시각 후보 `SpeechStopped`(L1642) · `InputTranscriptDone`(L1660) | 시계 종류 추가는 실행기 수정 |
+| 장애 취소 | `providerLost()`(L1758) · `abortProviderLost()`(L1780) · `startPause`(L2046) | 이 경로에 판정 턴 취소를 묶을 수 있음 | 늦은 결과 비교 기준(판정 차례 id) 없음(U11-R12) |
+| 종료 표현 | `judgeStopIntent`(L1809), 호출 순서가 출력권 여부에 따라 다름(L1676 ~ L1688) | 등록 표현 → 판정 멈춤 | J6 · `StopIntentJudge` 겹침(U11-R7) |
+| 기록 이벤트(C-DS2) | `RecordCaptureService` → `SessionRecordCaptured.record`는 `Map`, `record.practice` = `practiceRecord()` 그대로 | `flowVersion`은 `record.practice` 안 값이라 계약 타입 변경 불필요(편차 U8-d) | 채우는 일은 U12 |
+| 저장(V5 `judgment_live`) | V4 관례: `realtime.` 접두 · `id uuid` · `session_id` 외래 키 · `guardian_id` + 색인 · `data jsonb` + `CHECK` | 삭제 참여자 `order()` 틀 | 판 번호 단언 "4"(U11-R4), 삭제 순서 · `DeletionCompleted.counts` 열린 질문(U11-R13) |
+
+### U11 관점 위험 (2026-10-16 집중 스캔)
+
+상세 · 증거는 [code-quality-assessment.md](code-quality-assessment.md) 6절이 정본이다. 구조에 걸리는 것만 요약한다.
+
+- **U11-R1 선 형식 불확실(중단 조건)**: 응답 생성 확인 사건이 없어 '지시 뒤 응답만 통과'를 세대 번호 · 취소 목록 가정에 둔다. FR12.2 실호출 결과 전에는 선 형식을 바꾸지 않는다(ADR-007).
+- **U11-R2 송신 순서**: 출력권 없는 경로의 `toProvider`가 송신마다 스레드를 띄워 순서가 보장되지 않는다. 시험 장치 `ManualLauncher`는 이 경쟁을 드러내지 못한다.
+- **U11-R3 보류 출력 전사**: 보류 = 취소, 폐기 전사도 `realtime_transcript`에 원문 저장. 보류 출력은 구간 버퍼 · 전사 기록기 **앞**에서 갈라야 한다.
+- **U11-R9 패키지 제약**: `luna`는 `voice` · 로그 프레임워크 · Jackson을, `gate` · `voice`는 JDBC · 저장소 · Outbox를 참조할 수 없다 → `JudgeClient` 구현 · `judgment_live` 저장소는 새 패키지에 둔다.
+- **U11-R10 파일 소유**: `SessionExecutor`는 U13 · U12가 이어서 고친다.

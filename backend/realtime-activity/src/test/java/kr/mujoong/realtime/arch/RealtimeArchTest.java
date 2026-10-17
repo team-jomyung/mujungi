@@ -276,18 +276,16 @@ class RealtimeArchTest {
             .allowEmptyShould(false)
             .because("규칙 ⑥이 빈 대상을 보지 않게, 공급자 클라이언트가 실제로 JDK WebSocket을 쓰는지 확인한다");
 
-    /** 공급자 요청 레코드(SD-20: 지시문 · childContext 세 필드 · 음성 프레임뿐). */
+    /** 공급자 요청 레코드(SD-20: 지시문 · 음성 프레임뿐, 아이 정보는 지시문 문장 안에만). */
     static final Set<String> PROVIDER_REQUEST_TYPES = Set.of(
             ProviderRequestFactory.SessionStart.class.getName(),
-            ProviderRequestFactory.ChildContextData.class.getName(),
+            ProviderRequestFactory.SessionBody.class.getName(),
             ProviderRequestFactory.AudioSpec.class.getName(),
+            ProviderRequestFactory.AudioFormat.class.getName(),
             ProviderRequestFactory.InputAudioAppend.class.getName(),
             ProviderRequestFactory.SessionClose.class.getName(),
-            // U3: 응답 취소 · 지시 교정(편차 (aa))도 공장만 만든다
-            ProviderRequestFactory.ResponseCancel.class.getName(),
-            ProviderRequestFactory.InstructionsCorrect.class.getName(),
-            // U4b: 응답 생성 요청(편차 (U4b-a))도 공장만 만든다
-            ProviderRequestFactory.ResponseCreate.class.getName());
+            // U11: 지시 추가(편차 (U11-a), 설계 개정 A1)도 공장만 만든다(응답 생성 요청 · 응답 취소 · 지시 교정 레코드는 없어졌다)
+            ProviderRequestFactory.InstructionsAppend.class.getName());
 
     static final ArchRule PROVIDER_REQUESTS_ONLY_FROM_THE_FACTORY = noClasses()
             .that().doNotHaveFullyQualifiedName(ProviderRequestFactory.class.getName())

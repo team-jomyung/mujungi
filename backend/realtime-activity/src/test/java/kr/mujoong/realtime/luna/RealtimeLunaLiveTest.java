@@ -53,7 +53,7 @@ class RealtimeLunaLiveTest {
         MujoongClock clock = new SystemMujoongClock();
         JsonCodec json = JsonCodec.shared();
         LunaProperties properties = new LunaProperties(System.getenv("OPENAI_JUDGE_MODEL"), URI.create("https://api.openai.com/v1"),
-                1_000_000, new LunaProperties.Purposes(new LunaProperties.PurposeOptions(4000, "medium")));
+                1_000_000, new LunaProperties.Purposes(new LunaProperties.PurposeOptions(4000, "medium")), true);
         RealtimeLunaClient client = new RealtimeLunaClient(properties, Duration.ofSeconds(2), LunaSchemas.loadDefault(json),
                 new LunaInputSanitizer(json), new LunaTransport(properties.baseUrl(), LunaHosts.modeFor(),
                         () -> System.getenv(LunaTransport.API_KEY_ENV), properties.maxResponseBytes()),

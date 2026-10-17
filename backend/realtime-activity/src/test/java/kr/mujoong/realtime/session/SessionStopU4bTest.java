@@ -81,13 +81,13 @@ class SessionStopU4bTest {
     void anotherReplyLiftsTheHoldAndHandsTheFloorBackOnce() {
         h.activate();
         h.launcher.runAll("provider-create-");
-        int creates = h.provider.last().requests(ProviderRequestFactory.ResponseCreate.class).size();
+        int creates = h.provider.last().requests(ProviderRequestFactory.InstructionsAppend.class).size();
         h.childSays("i-1", "쉬고 싶어");
         h.childSays("i-2", "티라노가 제일 커");
 
         assertThat(h.executor.status()).isEqualTo(SessionStatus.ACTIVE);
-        h.launcher.runAll("provider-create-");
-        assertThat(h.provider.last().requests(ProviderRequestFactory.ResponseCreate.class)).hasSize(creates + 1);
+        h.settleSend();
+        assertThat(h.provider.last().requests(ProviderRequestFactory.InstructionsAppend.class)).hasSize(creates + 1);
         emitComplete("r-1", "티라노는 아주 컸어");
         h.advanceAlive(Duration.ofSeconds(1));
         assertThat(h.link.outputs()).hasSize(1);
@@ -113,19 +113,15 @@ class SessionStopU4bTest {
     @Test
     void afterTheEndIsConfirmedAnEarlierResponseIsNeverPlayed() {
         h.activate();
-        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("r-old", "공룡은 멋져"));
-        h.provider.last().emit(new ProviderEvent.OutputAudioDelta("r-old", new byte[4_800]));
-        h.drain();
+        h.speak("공룡은 멋져", 4_800);
 
         h.childSays("i-1", "그만할래");
-        h.provider.last().emit(new ProviderEvent.OutputDone("r-old"));
         h.drain();
         h.advanceAlive(Duration.ofSeconds(1));
 
         assertThat(h.link.outputs()).isEmpty();
-        h.launcher.runAll("provider-cancel-");
-        assertThat(h.provider.last().requests(ProviderRequestFactory.ResponseCancel.class))
-                .extracting(ProviderRequestFactory.ResponseCancel::responseId).contains("r-old");
+        // U11 BR3.4: 종료 확인 뒤 앞 응답은 공급자 응답 취소 대신 출력 세대를 올려 버린다 — 공급자로 나가는 것은 없다
+        assertThat(h.launcher.names()).noneMatch(name -> name.startsWith("provider-"));
     }
 
     @Test
@@ -144,10 +140,7 @@ class SessionStopU4bTest {
     }
 
     private void emitComplete(String responseId, String text) {
-        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta(responseId, text));
-        h.provider.last().emit(new ProviderEvent.OutputAudioDelta(responseId, new byte[4_800]));
-        h.provider.last().emit(new ProviderEvent.OutputDone(responseId));
-        h.drain();
+        h.speak(text, 4_800);
     }
 
     private void mark(PlayApprovedContent play, PlaybackMark.Status status) {

@@ -14,7 +14,7 @@ import org.springframework.core.env.Environment;
 
 /**
  * Realtime Luna 빈 (U9 W1 · BR1.1 ~ BR1.4 · SD11 · SD12). 언제나 설정 바인딩 · 스키마 적재(실패면 기동 거부) · 기동 확인을 하고, env
- * {@code OPENAI_API_KEY}가 있을 때만 {@link LunaTransport} · {@link RealtimeLunaClient}를 등록한다. {@code JudgeClient} 포트 · 구현은 U11
+ * {@code OPENAI_API_KEY}가 있고 스위치 {@code mujoong.luna.enabled}가 참일 때만 {@link LunaTransport} · {@link RealtimeLunaClient}를 등록한다. {@code JudgeClient} 포트 · 구현은 U11
  * 몫이라 여기에 없다.
  */
 @Configuration(proxyBeanMethods = false)
@@ -35,7 +35,8 @@ public class LunaConfiguration {
 
     @Bean
     LunaStartup lunaStartup(LunaProperties properties, Environment environment, EventLogger events) {
-        return new LunaStartup(properties, LunaKeyPresentCondition.isPresent(environment), events,
+        return new LunaStartup(properties, LunaKeyPresentCondition.isPresent(environment),
+                LunaKeyPresentCondition.isSwitchOn(environment), events,
                 environment.getActiveProfiles());
     }
 

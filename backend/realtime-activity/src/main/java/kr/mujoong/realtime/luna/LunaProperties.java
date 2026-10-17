@@ -14,9 +14,11 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * @param baseUrl Responses API 기준 주소({@code {baseUrl}/responses}). 프로필 규칙은 {@link LunaHosts}
  * @param maxResponseBytes 응답 본문 바이트 상한(넘으면 LENGTH_EXCEEDED, NFR3.10)
  * @param purpose 목적별 출력 한도 · 추론 강도
+ * @param enabled realtime Luna 스위치(U11 BR12.3, 기본 {@code false}). 시간 값이 아니라 R-M5 대상이 아니다. 키가 있어도 이 값이 false면 꺼진다
  */
 @ConfigurationProperties(prefix = "mujoong.luna")
-public record LunaProperties(String model, URI baseUrl, int maxResponseBytes, Purposes purpose) {
+public record LunaProperties(String model, URI baseUrl, int maxResponseBytes, Purposes purpose,
+        boolean enabled) {
 
     /** env 모델 이름이 비었을 때 쓰는 이름(BR1.5). */
     public static final String DEFAULT_MODEL = "gpt-6-luna";

@@ -178,7 +178,7 @@ class RealtimeMetricsScrapeIT {
             device.sendAudio(FRAME);
         }
         env.provider.await(ProviderRequestFactory.TYPE_INPUT_AUDIO_APPEND, 3, WAIT);
-        env.provider.emitTurn("item-1", "공룡이 좋아", "resp-1", "나도 공룡 좋아해", List.of(PCM, PCM));
+        env.provider.emitTurn("item-1", "공룡이 좋아", "나도 공룡 좋아해", List.of(PCM, PCM));
         WsEnvelope begin = device.await(WsMessageType.OUTPUT_BEGIN, WAIT);
         device.await(WsMessageType.OUTPUT_END, WAIT);
         device.playbackMark(sessionId, ((OutputBegin) begin.payload()).playbackId(), PlaybackMark.Status.STARTED);

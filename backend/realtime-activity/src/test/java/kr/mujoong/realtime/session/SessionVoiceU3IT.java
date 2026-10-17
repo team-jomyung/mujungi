@@ -22,6 +22,7 @@ import kr.mujoong.contract.ws.message.PlaybackMark;
 import kr.mujoong.contract.ws.message.SessionState;
 import kr.mujoong.contract.ws.message.View;
 import kr.mujoong.realtime.dialog.DialogInstructions;
+import kr.mujoong.realtime.dialog.InstructionTemplates;
 import kr.mujoong.realtime.log.TranscriptEntry;
 import kr.mujoong.realtime.log.TranscriptRepository;
 import kr.mujoong.realtime.recording.AudioRecordingRepository;
@@ -67,12 +68,12 @@ class SessionVoiceU3IT {
     }
 
     @Test
-    void aBargeInCancelsTheResponseAtTheProviderAndAPatternDiscardSendsItsCorrection() {
+    void aBargeInDropsTheResponseByGenerationAndAPatternDiscardSendsItsCorrection() {
         start();
         DeviceSimulatorClient device = env.connectDevice();
         UUID sessionId = activate(device, false);
 
-        env.provider.emitTurn("item-1", "공룡 이야기", "resp-1", "공룡은 아주 오래전에 살았어", List.of(PCM));
+        env.provider.emitTurn("item-1", "공룡 이야기", "공룡은 아주 오래전에 살았어", List.of(PCM));
         // U3-J6: 말 끝 신호에 '생각 중'
         device.await(envelope -> envelope.payload() instanceof SessionState state && state.view() == View.THINKING, WAIT);
         UUID playbackId = ((OutputBegin) device.await(WsMessageType.OUTPUT_BEGIN, WAIT).payload()).playbackId();
@@ -80,19 +81,23 @@ class SessionVoiceU3IT {
         device.playbackMark(sessionId, playbackId, PlaybackMark.Status.STOPPED, null,
                 PlaybackMark.StopCause.LOCAL_VOICE_ACTIVITY);
 
-        List<JsonNode> cancels = env.provider.await("session.response.cancel", 1, WAIT);
-        assertThat(cancels).singleElement()
-                .satisfies(cancel -> assertThat(cancel.get("responseId").asString()).isEqualTo("resp-1"));
+        // U11 BR3.4: 응답 취소 type은 공급자 지원 목록 밖이다 — 끼어들기는 서버 출력 세대로 버리고 공급자로는 보내지 않는다
+        assertThat(env.provider.received("session.response.cancel")).isEmpty();
         // 재생이 끝났으니 다시 '듣는 중'
         device.await(envelope -> envelope.payload() instanceof SessionState state && state.view() == View.LISTENING
                 && device.received(WsMessageType.SESSION_STATE).size() >= 3, WAIT);
 
-        env.provider.emitTurn("item-2", "또 해 줘", "resp-2", "진단 결과는 이래", List.of(PCM));
+        pauseForTheGap();
+        env.provider.emitTurn("item-2", "또 해 줘", "진단 결과는 이래", List.of(PCM));
         device.await(envelope -> envelope.payload() instanceof PlayApprovedContent play
                 && PlayApprovedContent.WAITING_FILLER.equals(play.contentCode()), WAIT);
-        List<JsonNode> corrections = env.provider.await("session.instructions.correct", 1, WAIT);
-        assertThat(corrections).singleElement().satisfies(correction -> assertThat(correction.get("text").asString())
-                .isEqualTo(DialogInstructions.Correction.DIAGNOSIS.text()));
+        // 설계 개정 A2: 첫 응답 지시(mj-1) 다음에 교정 지시 하나가 같은 큐로 나간다(교정도 발화를 시작하는 지시다)
+        List<JsonNode> instructions = env.provider.await("session.instructions.append", 2, WAIT);
+        assertThat(instructions).hasSize(2);
+        assertThat(instructions.get(0).get("content").asString()).isEqualTo(InstructionTemplates.ResponseStart.FIRST.content());
+        assertThat(instructions.get(1).get("content").asString())
+                .isEqualTo(InstructionTemplates.correctionContent(DialogInstructions.Correction.DIAGNOSIS));
+        assertThat(instructions).allSatisfy(append -> assertThat(append.get("delegation_id").isNull()).isTrue());
         assertThat(String.join("\n", env.provider.rawReceived())).doesNotContain("진단 결과는");
         assertThat(device.received(WsMessageType.OUTPUT_BEGIN)).hasSize(1);
         assertThat(session(sessionId).status()).isEqualTo(SessionStatus.ACTIVE);
@@ -118,21 +123,25 @@ class SessionVoiceU3IT {
     }
 
     @Test
-    void aLowConfidenceChildTranscriptIsStoredForReviewAndAConfidentOneIsNot() {
+    void childTranscriptsBuiltFromGroupedDeltasAreStoredAsCertainBecauseNoConfidenceArrives() {
         start();
         DeviceSimulatorClient device = env.connectDevice();
         UUID sessionId = activate(device, false);
 
-        env.provider.emit(done("item-1", "응", 0.3));
-        env.provider.emit(done("item-2", "공룡 좋아", 0.95));
-        env.provider.emit(done("item-3", "몰라", null));
+        // 공급자는 입력 전사 완료 사건도 신뢰도도 보내지 않는다(설계 개정 A7): 조각을 묶어 만든 확정 전사는 확실로 본다.
+        // 신뢰도가 낮은 전사의 검토 표시는 확정 전사 입구를 직접 부르는 실행기 단위 시험이 지킨다
+        env.childSays("item-1", "응");
+        pauseForTheGap();
+        env.childSays("item-2", "공룡 좋아");
+        pauseForTheGap();
+        env.childSays("item-3", "몰라");
 
         TranscriptRepository transcripts = env.app.bean(TranscriptRepository.class);
-        awaitTrue(() -> transcripts.findAll(sessionId).stream().filter(row -> row.speaker() == TranscriptEntry.Speaker.CHILD)
-                .count() == 3, "아이 전사 3행");
+        awaitTrue(() -> transcripts.findAll(sessionId).stream().filter(row -> row.speaker() == TranscriptEntry.Speaker.CHILD
+                && row.assemblyStatus() == TranscriptEntry.AssemblyStatus.FINAL).count() == 3, "아이 전사 3행");
         Map<String, Boolean> review = new LinkedHashMap<>();
         transcripts.findAll(sessionId).forEach(row -> review.put(row.text(), row.reviewNeeded()));
-        assertThat(review).containsExactly(Map.entry("응", true), Map.entry("공룡 좋아", false), Map.entry("몰라", false));
+        assertThat(review).containsExactly(Map.entry("응", false), Map.entry("공룡 좋아", false), Map.entry("몰라", false));
         assertThat(transcripts.findAll(sessionId)).allSatisfy(row ->
                 assertThat(row.assemblyStatus()).isEqualTo(TranscriptEntry.AssemblyStatus.FINAL));
     }
@@ -148,7 +157,7 @@ class SessionVoiceU3IT {
             device.sendAudio(frame);
         }
         env.provider.await("session.input_audio.append", 5, WAIT);
-        env.provider.emitTurn("item-1", "안녕", "resp-1", "반가워 하늘아", List.of(PCM));
+        env.provider.emitTurn("item-1", "안녕", "반가워 하늘아", List.of(PCM));
         device.await(WsMessageType.OUTPUT_BEGIN, WAIT);
         endConfirmed(device, consented);
 
@@ -231,17 +240,6 @@ class SessionVoiceU3IT {
         awaitStatus(sessionId, SessionStatus.ENDED);
     }
 
-    private static Map<String, Object> done(String itemId, String transcript, Double confidence) {
-        Map<String, Object> event = new LinkedHashMap<>();
-        event.put("type", "session.input_transcript.done");
-        event.put("itemId", itemId);
-        event.put("transcript", transcript);
-        if (confidence != null) {
-            event.put("confidence", confidence);
-        }
-        return event;
-    }
-
     private ActivitySessionRow session(UUID sessionId) {
         return env.app.bean(ActivitySessionRepository.class).find(sessionId).orElseThrow();
     }
@@ -249,5 +247,15 @@ class SessionVoiceU3IT {
     private void awaitStatus(UUID sessionId, SessionStatus status) {
         awaitTrue(() -> env.app.bean(ActivitySessionRepository.class).find(sessionId)
                 .map(row -> row.status() == status).orElse(false), "세션 " + status);
+    }
+
+    /** 끼어들기로 올린 출력 세대의 꼬리가 끊겨 다음 응답을 받을 수 있을 때까지(이 클래스는 운영값 800ms) 잠깐 기다린다. */
+    private static void pauseForTheGap() {
+        try {
+            Thread.sleep(1_000);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new AssertionError("기다리는 중 중단됐다", e);
+        }
     }
 }

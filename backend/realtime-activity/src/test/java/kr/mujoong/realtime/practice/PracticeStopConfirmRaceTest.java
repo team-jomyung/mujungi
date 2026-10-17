@@ -159,7 +159,7 @@ class PracticeStopConfirmRaceTest {
         }
         void assertNoFreeTalkResponse() {
             h.launcher.runAll("provider-"); h.drain();
-            assertThat(h.provider.last().requests(ProviderRequestFactory.ResponseCreate.class))
+            assertThat(h.provider.last().requests(ProviderRequestFactory.InstructionsAppend.class))
                     .as("연습은 확인 해제만으로 자유 응답을 새로 만들지 않는다").isEmpty();
         }
     }

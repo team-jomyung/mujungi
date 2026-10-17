@@ -1,5 +1,5 @@
-// 가짜 공급자 U3 추가분 시험 (편차 (aa) · U3-R5 · U3-J11 · U3-J12 · U3-J17 · contracts/ai-io.md 3절)
-// 응답 취소가 남은 출력을 멈추는지, 지시 교정은 원문 없이 해시만 기록하는지, --confidence가 아이 전사 확정에 실리는지 본다.
+// 가짜 공급자 U3 추가분 시험 (편차 (aa) → (U11-a) · U3-J12 · U3-J17 · contracts/ai-io.md 3절)
+// 응답 취소가 지원 목록 밖 type으로 거절되는지, 지시 추가는 원문 없이 해시만 기록하는지, --confidence가 아이 전사 확정에 실리는지 본다.
 import { randomBytes } from "node:crypto";
 import { afterEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
@@ -58,7 +58,7 @@ async function waitUntil(condition, timeoutMs = 3000) {
 async function startedSession(provider) {
   const client = connect(provider);
   await client.opened;
-  client.ws.send(JSON.stringify({ type: "session.start", model: "m", instructions: "i", childContext: {}, audio: {} }));
+  client.ws.send(JSON.stringify({ type: "session.start", session: { model: "m", instructions: "i", audio: { format: { type: "audio/pcm", rate: 24000 } } } }));
   await waitUntil(() => client.messages.some((message) => message.type === "session.started"));
   return client;
 }
@@ -69,70 +69,54 @@ function sendFrames(ws, count) {
   }
 }
 
-describe("가짜 공급자 — 응답 취소(U3-R5)", () => {
-  it("취소한 응답의 남은 출력 조각 · 끝 신호를 보내지 않고 기록한다", async () => {
+describe("가짜 공급자 — 응답 취소는 지원 목록 밖(U11 편차 (U11-a), 옛 U3-R5)", () => {
+  it("응답 취소 type에는 error{invalid_value}로 답하고 출력을 멈추지 않는다(끼어들기는 서버 출력 세대가 버린다)", async () => {
     const provider = await start({ turns: ["normal"], chunkBytes: 480, chunkIntervalMs: 20 });
     const client = await startedSession(provider);
     sendFrames(client.ws, 3);
     await waitUntil(() => client.messages.some((message) => message.type === "session.output_audio.delta"));
-    const responseId = client.messages.find((message) => message.type === "session.output_audio.delta").responseId;
 
-    client.ws.send(JSON.stringify({ type: "session.response.cancel", responseId }));
-    await waitUntil(() => provider.records.some((entry) => entry.ev === "turn-cancelled"));
-    const deltas = client.messages.filter((message) => message.type === "session.output_audio.delta").length;
-    await new Promise((resolve) => setTimeout(resolve, 150));
-
-    expect(client.messages.filter((message) => message.type === "session.output_audio.delta")).toHaveLength(deltas);
-    expect(client.messages.some((message) => message.type === "session.output.done")).toBe(false);
-    expect(provider.records.find((entry) => entry.ev === "session.response.cancel")).toMatchObject({ hasResponseId: true });
-  });
-
-  it("id 없는 취소는 지금 내보내는 응답을 멈춘다", async () => {
-    const provider = await start({ turns: ["normal"], chunkBytes: 480, chunkIntervalMs: 20 });
-    const client = await startedSession(provider);
-    sendFrames(client.ws, 3);
-    await waitUntil(() => client.messages.some((message) => message.type === "session.output_audio.delta"));
     client.ws.send(JSON.stringify({ type: "session.response.cancel" }));
-    await waitUntil(() => provider.records.some((entry) => entry.ev === "turn-cancelled"));
-    expect(provider.records.find((entry) => entry.ev === "session.response.cancel")).toMatchObject({ hasResponseId: false });
-    expect(client.messages.some((message) => message.type === "session.output.done")).toBe(false);
+    await waitUntil(() => client.messages.some((message) => message.type === "error"));
+    const turn = provider.records.find((entry) => entry.ev === "turn");
+    await waitUntil(
+      () =>
+        client.messages
+          .filter((message) => message.type === "session.output_audio.delta")
+          .reduce((sum, message) => sum + Buffer.from(message.delta, "base64").length, 0) === turn.outputBytes,
+    );
+
+    expect(client.messages.find((message) => message.type === "error").error).toMatchObject({
+      type: "invalid_request_error",
+      code: "invalid_value",
+      param: "type",
+    });
+    expect(provider.records.find((entry) => entry.ev === "recv-unsupported")).toMatchObject({ type: "session.response.cancel" });
+    expect(provider.records.some((entry) => entry.ev === "turn-cancelled")).toBe(false);
   });
 });
 
-describe("가짜 공급자 — 지시 교정 · 신뢰도(U3-J12 · U3-J17)", () => {
-  it("교정 문장은 해시 · 길이만 남기고 원문은 기록하지 않는다", async () => {
+describe("가짜 공급자 — 지시 교정(U3-J12, 설계 개정 A1 · A6)", () => {
+  it("교정 지시는 해시 · 길이만 남기고 원문은 기록하지 않는다", async () => {
     const records = [];
     const provider = await start({ onRecord: (entry) => records.push(JSON.stringify(entry)) });
     const client = await startedSession(provider);
     const text = "방금 응답은 아이에게 전하지 않았다. 한두 문장의 완결된 말로 짧게 다시 답한다.";
-    client.ws.send(JSON.stringify({ type: "session.instructions.correct", text }));
-    await waitUntil(() => provider.records.some((entry) => entry.ev === "session.instructions.correct"));
-    expect(provider.records.find((entry) => entry.ev === "session.instructions.correct")).toMatchObject({
+    client.ws.send(JSON.stringify({ type: "session.instructions.append", event_id: "e1", delegation_id: null, content: text }));
+    await waitUntil(() => provider.records.some((entry) => entry.ev === "session.instructions.append"));
+    expect(provider.records.find((entry) => entry.ev === "session.instructions.append")).toMatchObject({
       textSha256: textSha256(text),
       textLength: text.length,
+      delegationIdPresent: true,
+      delegationIdNull: true,
     });
     expect(records.join("\n")).not.toContain("완결된 말");
   });
 
-  it("--confidence를 주면 아이 전사 확정에 싣고, 주지 않으면 싣지 않는다", async () => {
-    const provider = await start({ turns: ["normal"], confidence: 0.4 });
-    const client = await startedSession(provider);
-    sendFrames(client.ws, 3);
-    await waitUntil(() => client.messages.some((message) => message.type === "session.input_transcript.done"));
-    expect(client.messages.find((message) => message.type === "session.input_transcript.done").confidence).toBe(0.4);
-
+  it("전사 신뢰도 인자는 없다 — 공급자는 입력 전사 완료 사건도 신뢰도도 보내지 않는다", async () => {
+    expect(() => parseArgs(["--confidence", "0.4"])).toThrow(RangeError);
     const plain = buildTurn({ connection: 1, turn: 1, kind: "normal" });
-    const done = plain.steps.find((step) => step.message.type === "session.input_transcript.done").message;
-    expect("confidence" in done).toBe(false);
-  });
-
-  it("신뢰도 인자는 0 ~ 1만 받는다", async () => {
-    expect(parseArgs(["--confidence", "0.4"]).confidence).toBe(0.4);
-    expect(parseArgs(["--confidence", "1"]).confidence).toBe(1);
-    expect(parseArgs(["--confidence", "0"]).confidence).toBe(0);
-    for (const wrong of ["1.5", "-0.1", "abc", ".5"]) {
-      expect(() => parseArgs(["--confidence", wrong]), wrong).toThrow(RangeError);
-    }
-    await expect(startFakeProvider({ port: 0, confidence: 2, onRecord: () => {} })).rejects.toThrow(RangeError);
+    expect(plain.steps.some((step) => step.message.type === "session.input_transcript.done")).toBe(false);
+    expect(plain.steps.some((step) => "confidence" in step.message)).toBe(false);
   });
 });

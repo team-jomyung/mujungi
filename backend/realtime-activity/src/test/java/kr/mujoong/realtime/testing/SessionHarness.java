@@ -41,7 +41,7 @@ public final class SessionHarness {
     /** 시험 설정: 운영 기본값을 그대로 쓴다(20초 · 30초 · 40초 · 800ms · 20초 · 1초 · 불확실 기준 60%). */
     public static final SessionExecutor.Settings SETTINGS = new SessionExecutor.Settings(Duration.ofSeconds(20),
             Duration.ofSeconds(30), Duration.ofSeconds(40), Duration.ofMillis(800), Duration.ofSeconds(20),
-            Duration.ofSeconds(1), 50, 1000, 60, LIFECYCLE);
+            Duration.ofSeconds(1), 50, 1000, 60, LIFECYCLE, Duration.ofMillis(1500), Duration.ofMillis(600), Duration.ofSeconds(10));
     /** U4b 참여 응답의 공급자 항목 id(참여 확인 대답 "응"). */
     public static final String JOIN_ITEM = "join-reply";
     /** 시험 세션의 종료 표현 스냅숏(기본 표현 + 추가 표현 하나). */
@@ -95,6 +95,7 @@ public final class SessionHarness {
 
     public SessionHarness(SessionExecutor.Settings settings) {
         this.settings = settings;
+        this.provider.newSpeechMargin(settings.newSpeechMargin());
         this.mailbox = new SessionMailbox(settings.mailboxCapacity());
         this.link = new FakeDeviceLink(deviceId, clock.now());
     }
@@ -161,9 +162,38 @@ public final class SessionHarness {
      * 곧바로 열린다).
      */
     public void activate() {
+        activateUnsettled();
+        settleSend();
+    }
+
+    /** ACTIVE까지 가되 참여 뒤 첫 응답 지시(직렬 큐 작업)는 아직 보내지 않은 채 둔다(U11 W9 시험). */
+    public void activateUnsettled() {
         boot();
         ackAndReady();
         join();
+    }
+
+    /**
+     * 직렬 큐에 쌓인 서버 지시(참여 뒤 첫 응답 등, 설계 개정 A2)를 공급자로 내보낸다. 확인 사건 · 새 말은 보내지 않는다 — 시험이 {@link #speak}로
+     * 공급자처럼 말하게 한다.
+     */
+    public void settleSend() {
+        launcher.runAll("provider-");
+        drain();
+    }
+
+    /**
+     * 공급자가 말한다(시간 없는 전사 + 음성). 확인 사건을 안 보낸 지시가 있으면 가짜 공급자 세션이 먼저 확인 사건 · 새 말 시작 · 낡은 꼬리 흉내
+     * 채움을 보내 실행기가 {@code audioBytes}만큼의 음성부터 받게 한다(설계 개정 A4). 보낸 뒤 편지함을 처리한다.
+     */
+    public void speak(String transcript, int audioBytes) {
+        if (transcript != null) {
+            provider.last().emit(new kr.mujoong.realtime.voice.ProviderPort.ProviderEvent.OutputTranscriptDelta(transcript));
+        }
+        if (audioBytes > 0) {
+            provider.last().emit(new kr.mujoong.realtime.voice.ProviderPort.ProviderEvent.OutputAudioDelta(new byte[audioBytes]));
+        }
+        drain();
     }
 
     /** U4b: 참여 확인에 아이가 "응"이라고 답한다(공급자 입력 전사 확정). */

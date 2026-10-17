@@ -119,3 +119,23 @@ U15 ChildKnowledgeService, SeedGenerationService, StructureSignature는 구현�
 - **전이 표**: `TransitionTable` · `SessionTransitions` · `TransitionService`로 상태 전이를 표로 관리.
 - **주석**: 한국어 Javadoc, 결정 ID(J · BR · U*-J · 편차) 인용.
 - **화면 문구**: 프런트 화면 문구는 `shared/copy` 모듈만(ESLint `react/jsx-no-literals`).
+
+---
+
+## U11 집중 갱신 (261016-u11-judgment-turn, 2026-10-16 스캔 — main 병합 때 보존한 절)
+
+> main의 U14 · U15 갱신본을 바탕으로 두고, U11 작업 기록의 집중 스캔에서 갱신한 절만 아래에 보존했다. 줄 번호 · 커밋은 2026-10-16 `9bcc706` 기준이며 PR1(선 형식 정비) 이전 코드다.
+
+## realtime 세션 실행기 내부 지도 (2026-10-16 집중 스캔)
+
+`session/SessionExecutor.java`(3,388줄) 중 U11이 닿는 구간. 줄 번호는 커밋 `9bcc706` 기준.
+
+| 구간 | 줄 | 내용 |
+|---|---|---|
+| 확장점 신호 · 출력 능력 | L1174 ~ L1556 | `practiceSignal`, `onPracticeEvent`(L1224, `ASYNC_RESULT` 등 처리), 기술 일시정지 중 `pausedPracticeEvents` 적재, 내부 클래스 `PracticeOutputPort`(L1403 ~), `practiceActive()` · `refusePractice` → `PRACTICE_EXTENSION_FAILED{reason, capability}` |
+| 공급자 사건 처리 | L1557 ~ L1760 | `refuseHeldResponse`(L1593), `outputHeld()`(L1600), `SpeechStopped`(L1642) → `thinking()`, `InputTranscriptDone`(L1660) → 참여 응답 · 확장점 · 종료 의도(L1676 ~ L1688), `beginOutput`(L1734 ~ L1743, 첫 조각에 `transcripts.aiStart`), `providerLost()`(L1758) |
+| 공급자 끊김 · 중단 | L1780 ~ | `abortProviderLost()` |
+| 종료 의도 | L1809 ~ L1905 | `judgeStopIntent`(`StopIntentJudge` 결과 STOP · CONFIRM · NONE 처리) |
+| 기술 일시정지 | L2046 ~ | `startPause` |
+| 생각 중 · 게이트 · 공급자 송신 | L2116 ~ L2375 | `thinking()`(L2135) · `listeningAgain()`(L2142), `sealAndGate`(L2165 ~ L2206), `toProvider`(L2324 ~ L2340) · `enqueuePracticeProvider`(L2342 ~ L2361) |
+| 정산 | L1113 | `finishSettle` → `SessionSettlement.capture` |

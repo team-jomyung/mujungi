@@ -60,14 +60,14 @@ class RealtimeStartupChecksTest {
     }
 
     @Test
-    void aMissingOrShortInternalTokenAndABlankProviderKeyAreRejectedByNameOnly() {
+    void aMissingOrShortInternalTokenAndABlankProviderKeyInDemoAreRejectedByNameOnly() {
         String shortToken = token.substring(0, RealtimeStartupChecks.MIN_INTERNAL_TOKEN_CHARS - 1);
 
         assertThatThrownBy(() -> check(new Inputs(null, providerKey, ownerSecret, LOOPBACK, List.of("test"))))
                 .isInstanceOf(StartupRejectedException.class).hasMessageContaining(RealtimeStartupChecks.INTERNAL_TOKEN);
-        assertThatThrownBy(() -> check(new Inputs(shortToken, " ", ownerSecret, LOOPBACK, List.of("test"))))
+        assertThatThrownBy(() -> check(new Inputs(shortToken, " ", ownerSecret, LOOPBACK, List.of("demo"))))
                 .hasMessageContaining(RealtimeStartupChecks.INTERNAL_TOKEN)
-                .hasMessageContaining(RealtimeStartupChecks.PROVIDER_API_KEY).hasMessageNotContaining(shortToken);
+                .hasMessageContaining(RealtimeStartupChecks.OPENAI_API_KEY).hasMessageNotContaining(shortToken);
         assertThat(RealtimeStartupChecks.isValidInternalToken(token + "+")).isFalse();
         String printed = err.toString(StandardCharsets.UTF_8);
         assertThat(printed).contains(StartupFailureLine.PREFIX).contains("RealtimeStartupRejected")
