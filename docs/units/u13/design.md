@@ -75,6 +75,7 @@ OFF 모드에는 제브 단계가 없어 지표 값이 없다. 사용자 · 세�
 | `mujoong.guardrail.jev.mode` | `JEV_MODE` | 비면 프로필 기본값(demo · prod = `REAL`, 그 밖 = `STUB`) |
 | `mujoong.guardrail.jev.base-url` | `JEV_BASE_URL` | 비밀 아님. 호스트는 코드 상수 허용 목록(`contracts/ai-io.md` 10.11) 안 |
 | `mujoong.guardrail.jev.model` | `JEV_MODEL` | 비밀 아님. 고정 버전, `-latest` 거부 |
+| `mujoong.guardrail.jev.pass-threshold` | `JEV_PASS_THRESHOLD` | 비밀 아님. 기본 0.5, `0 < x <= 1`. **임시 시험값** — AI 성능 시험으로 확정. 선 형식 정정에서 더함 |
 | (환경 변수만) | `JEV_API_KEY` | 비밀. 호출 때마다 읽고 보관하지 않음 |
 | `mujoong.timing.guardrail.jev-budget` | — | 800ms. 새 시간 키 없음(R-F7) |
 
@@ -112,5 +113,5 @@ OFF 모드에는 제브 단계가 없어 지표 값이 없다. 사용자 · 세�
 
 ## 9. 실제 제브에 대해 모르는 것
 
-- **요청 경로 `/v1/guardrail/check`와 본문 이름은 형식 가정이다.** 응답은 최상위에 `decision · categories · policyFlags · reasonCode · reviewNeeded · policyVersion`을 가진 JSON 객체 하나라고 가정했다. `JevGuardrailClientTest`가 이 가정을 못 박는다. 실호출이 다르면 `convert` 한 곳과 그 시험만 고친다.
-- 분류 이름 7개(`DIAGNOSIS` 등)와 분류 품질(AC2.1.10 · AC2.1.16)은 `jevLiveTest`(`infra/RUNBOOK.md` 8.8)로 사람이 키를 넣고 확인한다.
+- **선 형식(정정됨):** 처음 구현은 경로 `/v1/guardrail/check`와 본문 · 응답 필드를 가정했으나 제브 공식 문서와 달랐다. 선 형식 정정(작업 기록 `261017-jev-adapter-format`, `contracts/ai-io.md` 10.12, `(U13-c)`)으로 어댑터는 `POST /v1/systemone`에 `model · state · questions`를 보내고 `answers.guardrail.choice · probabilities`를 읽어 내부 판정으로 바꾼다(라벨 8개 = 7개 범주 + `PASS`, 정책 판 `jev-guardrail-v2` = `policy-v2.json`, `policy-v1.json`은 이력으로만 남김). 판정은 `PASS` 1순위 + 확률 ≥ 문턱(설정 키 `mujoong.guardrail.jev.pass-threshold`, **임시 시험값 0.5**)일 때만 `ALLOW`, 그 밖의 `PASS`는 `REVIEW`, 다른 라벨 1순위는 `BLOCK`이다. 앞 절의 `policyVersion` 응답 비교와 `POLICY_MISMATCH`는 응답에 정책 판이 없어 더 쓰지 않는다. 이 설계 문서의 앞 절들은 정정 전 설명을 그대로 두고 이 절이 정본이다.
+- 열린 항목(실호출로만 확정): 요청 `model`에 고정 버전이 받아들여지는지(공식 예시는 `-latest`, 우리 규칙은 거부), 오류 본문 모양, 확률 합 허용 오차(0.001 임시값), 문턱 0.5, 한국어 문안의 분류 품질(AC2.1.10 · AC2.1.16). `jevLiveTest`(`infra/RUNBOOK.md` 8.8)로 사람이 키를 넣고 확인한다.

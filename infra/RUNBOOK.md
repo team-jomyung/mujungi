@@ -637,8 +637,9 @@ cat realtime-activity/build/gpt-live/report.md
 ### 8.8 제브 실호출 시험 `jevLiveTest` (U13, 개발 PC) [개발 PC]
 
 제브를 실제로 부르는 유일한 시험이다. 기본 `test` · `check` · CI · `verify.sh`에는 들어가지 않는다(루트 `verifyJevLiveIsolation`이 check마다 그래프를
-확인하고, `JevLiveTaskIsolationTest`가 빌드 규칙을 못 박는다). 실제 제브 응답 형식은 아직 모르고(어댑터 변환은 형식 가정, `JevGuardrailClient`
-클래스 설명), 요청 경로 `/v1/guardrail/check` · 본문 이름도 가정이다 — 이 시험이 그 가정을 처음 확인하는 길이다. 합성 문장만 보내고(R-F15), 키는
+확인하고, `JevLiveTaskIsolationTest`가 빌드 규칙을 못 박는다). 어댑터는 제브 공식 선 형식(`POST /v1/systemone`, 요청 `model · state · questions`, 응답
+`answers.guardrail.choice · probabilities`, `contracts/ai-io.md` 10.12)으로 부르지만 가짜 제브로만 확인했다 — 실제 제브가 이 요청을 받아들이고(특히
+고정 버전 `model` 이름) 이렇게 답하는지는 이 시험이 처음 확인하는 길이다. 합성 문장만 보내고(R-F15), 키는
 그 PC의 셸 env로만 넣는다(R-F3 · R-F13). **키를 넣기 전에 단계 4의 '제브 R-F15 확인' 기록을 먼저 남긴다.** 사용자에게 키 · 주소를 채팅에 붙여 넣으라고
 요청하지 않는다.
 
@@ -647,17 +648,20 @@ cd backend
 read -r -s -p 'JEV_API_KEY: ' JEV_API_KEY && export JEV_API_KEY && echo
 export JEV_BASE_URL='https://<허용 호스트>'     # 비밀 아님. 호스트는 contracts/ai-io.md 10.11의 허용 목록 안이어야 한다(운영과 같은 STRICT 규칙)
 export JEV_MODEL='<고정 버전 모델 이름>'        # 비밀 아님. -latest 같은 이동 별칭은 어댑터가 거부한다
+export JEV_PASS_THRESHOLD='0.5'                # 선택. 비밀 아님. 통과 문턱(0 초과 1 이하), 비우면 application.yml 기본값 0.5(임시 시험값)
 ./gradlew :realtime-activity:jevLiveTest
-unset JEV_API_KEY JEV_BASE_URL JEV_MODEL
+unset JEV_API_KEY JEV_BASE_URL JEV_MODEL JEV_PASS_THRESHOLD
 cat realtime-activity/build/jev-live/report.txt
 ```
 
-- 운영 어댑터(`JevGuardrailClient`)를 그대로 쓴다: 호출 1회 · 재시도 없음 · 검사 시한은 `application.yml`의 `mujoong.timing.guardrail.jev-budget`(0.8초) · 정책 리소스의
-  시스템 지시 · 리다이렉트 없음. 합성 표본 5개(허용 기대 1 · 막힘 기대 4)를 한 번씩 보낸다.
+- 운영 어댑터(`JevGuardrailClient`)를 그대로 쓴다: 호출 1회 · 재시도 없음 · 검사 시한은 `application.yml`의 `mujoong.timing.guardrail.jev-budget`(0.8초) · 정책 리소스
+  `policy-v2.json`의 검사 질문 · 라벨 8개 설명 · 통과 문턱(`mujoong.guardrail.jev.pass-threshold`, 기본 0.5 **임시 시험값** — 설정 키 하나만 바꾼다) · 리다이렉트 없음.
+  합성 표본 5개(허용 기대 1 · 막힘 기대 4)를 읽기 전용 `inspect`로 한 번씩 보낸다.
 - 보고서 첫 줄은 `outcome=REACHED|NOT_REACHED|SKIPPED_NO_KEY|SKIPPED_NO_CONFIG evidence=…`다. REACHED는 모든 표본이 실패 없이 판정을 받은 것이다. 표는
-  표본 이름 · 기대 · 판정 · 실패 종류 · 걸린 분류 · 사유 코드 · 지연이다. 후보 문장 원문 · 맥락 · 키 · 주소는 쓰지 않는다(R-F14). '기대와 같음'은
-  분류 품질의 관측이지 합격 조건이 아니다.
-- `NOT_REACHED`의 실패 종류가 `INVALID_JSON`이면 응답 형식 가정이 틀린 것이다 — 어댑터의 변환 한 곳(`convert`)과 `JevGuardrailClientTest`만 고친다. `TIMEOUT`이
+  표본 이름 · 기대 · 판정 · 실패 종류 · 고른 라벨 · `PASS` 확률 · 사유 코드 · 지연이고, 응답 `model`과 통과 문턱 표시(임시 시험값)가 따로 나온다. `PASS` 확률이
+  문턱(0.5)을 정하는 AI 성능 시험의 입력이다. 후보 문장 원문 · 맥락 · 키 · 주소는 쓰지 않는다(R-F14). '기대와 같음'은 분류 품질의 관측이지 합격 조건이 아니다.
+- `NOT_REACHED`의 실패 종류가 `INVALID_JSON`이면 응답 검증(`answers.guardrail`의 `choice` · `probabilities`)이 실제 응답과 다른 것이다 — 어댑터의 변환 한 곳(`convert`)과 `JevGuardrailClientTest`만 고친다.
+  `TRANSPORT_ERROR`가 모든 표본에서 나오면 요청이 거절된 것일 수 있다(오류 본문은 읽지 않으므로 상태 코드를 제브 콘솔·문서로 확인한다, 특히 `JEV_MODEL`이 요청에서 받아들여지는 이름인지). `TIMEOUT`이
   이어지면 0.8초 시한이 공급자 지연보다 짧은 것이므로 그 값은 Build and Test의 실호출 관측으로 정한다(코드에 시간 값을 적지 않는다, R-F7).
 - 키 · 주소 · 모델이 하나라도 없으면 `SKIPPED_*`이고 시험은 '건너뜀'이다(통과 아님, 호출하지 않음).
 - 결과는 '실제 API · 합성 자료' 증거로만 따로 적고, 기본 시험 · 끝-끝 결과(테스트 대역)와 섞지 않는다(R-M11).

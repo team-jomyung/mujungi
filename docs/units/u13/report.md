@@ -33,7 +33,7 @@ U13 범위 줄 커버리지(`backend/coverage-scope/u13.txt` 운영 파일 31개
 
 ## 3. 검증하지 못한 것
 
-- **실제 제브**: 요청 경로 `/v1/guardrail/check`와 본문 이름은 **형식 가정**이고, 응답은 최상위에 `decision · categories · policyFlags · reasonCode · reviewNeeded · policyVersion`을 가진 JSON 객체라고 가정했다. `JevGuardrailClientTest`가 이 가정을 못 박을 뿐 실제 제브가 이렇게 답하는지는 모른다. 분류 이름 7개와 분류 품질(AC2.1.10 · AC2.1.16)도 모른다.
+- **실제 제브**: 선 형식은 제브 공식 문서(`POST /v1/systemone`, 요청 `model · state · questions`, 응답 `answers.guardrail.choice · probabilities`)에 맞춰 정정했다(선 형식 정정 기록 `261017-jev-adapter-format`, `contracts/ai-io.md` 10.12 `(U13-c)`). `JevGuardrailClientTest`는 가짜 제브로 이 형식을 못 박을 뿐(테스트 대역 증거) 실제 제브가 이렇게 받고 답하는지는 모른다. 요청 `model`에 고정 버전 이름이 받아들여지는지(공식 예시는 `-latest`), 오류 본문 모양, 확률 합 허용 오차(0.001 임시값), 통과 문턱(0.5 임시 시험값), 한국어 문안의 분류 품질(AC2.1.10 · AC2.1.16)도 실호출 전에는 모른다.
 - **실제 제브 지연**: 검사 상한 800ms가 공급자 지연보다 긴지 모른다. 짧으면 모든 검사가 `TIMEOUT` 막힘이 되어 아이가 '생각 중'에서 재지시를 받는다.
 - **실제 GPT-Live 위의 재지시**: 같은 다음 행동 지시 또는 `RETRY_FREE_TURN`을 보낸 뒤 새 말이 시한 안에 시작하는지.
 - **실제 아이 음성 · 실제 기기**: 체감 대기(말 끝 → 첫 소리)에 제브 대기가 얼마나 더해지는지.
@@ -52,7 +52,7 @@ unset JEV_API_KEY JEV_BASE_URL JEV_MODEL
 cat realtime-activity/build/jev-live/report.txt
 ```
 
-합성 표본 5개(허용 기대 1 · 막힘 기대 4)를 운영 어댑터로 한 번씩 보내고, 보고서에는 표본 이름 · 판정 · 실패 종류 · 걸린 분류 · 지연만 쓴다(후보 문장 원문 · 키 · 주소 없음, R-F14). 결과는 `[실호출-합성]`으로 따로 적는다. `INVALID_JSON`이 나오면 형식 가정이 틀린 것이므로 어댑터의 변환 한 곳(`convert`)과 그 시험만 고친다.
+합성 표본 5개(허용 기대 1 · 막힘 기대 4)를 운영 어댑터로 한 번씩 보내고, 보고서에는 표본 이름 · 판정 · 실패 종류 · 고른 라벨 · `PASS` 확률 · 사유 코드 · 지연 · 응답 `model`과 임시 문턱 표시만 쓴다(후보 문장 원문 · 키 · 주소 없음, R-F14). 결과는 `[실호출-합성]`으로 따로 적는다. `INVALID_JSON`이 나오면 응답 검증이 실제 응답과 다른 것이므로 어댑터의 변환 한 곳(`convert`)과 그 시험만 고친다.
 
 ## 5. 위험
 
@@ -67,7 +67,7 @@ cat realtime-activity/build/jev-live/report.txt
 
 1. `bash scripts/verify.sh`(PR 전 한 번, 합성 대화 증거).
 2. `bash infra/ci/image-checks.sh`(이미지 ④: demo 더미 기동 + 제브 키 없는 realtime이 기동 거부로 끝나는지).
-3. 제브 R-F15 확인 기록 → `jevLiveTest` 실호출 → 형식 가정 · 지연 · 분류 관측을 `[실호출-합성]` 증거로 따로 보고. 800ms 시한이 짧으면 `jev-budget`을 정한다(R-M5: `application.yml` · `contracts/timing.md` · 프런트 기본값 세 곳 동시 수정).
+3. 제브 R-F15 확인 기록 → `jevLiveTest` 실호출 → 선 형식 수용 · 확률 분포(문턱 0.5 임시값) · 지연 · 분류 관측을 `[실호출-합성]` 증거로 따로 보고. 800ms 시한이 짧으면 `jev-budget`을 정한다(R-M5: `application.yml` · `contracts/timing.md` · 프런트 기본값 세 곳 동시 수정).
 4. demo 배포 순서(5절).
 5. 체감 대기 지표 `mujoong.guardrail.perceived.wait`를 실호출 시험 중 관측.
 
