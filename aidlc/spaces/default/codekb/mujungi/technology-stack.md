@@ -1,3 +1,13 @@
+> 최신 정본: 아래 U10 갱신절(2026-10-17, HEAD eb34c68bf24e4520881b7ffebe1070564554dfc9). 이후 U14/U15/전체 분석 본문은 역사 자료이며, 이번에 검증한 범위는 timestamp의 analyzed 목록만이다.
+
+## U10 집중 갱신 — 확인된 기술
+
+현재 읽은 Core 소스는 Java record, Spring Service/Component/Repository, TransactionTemplate, NamedParameterJdbcTemplate, JDK Future/가상스레드, MujoongClock와 JsonCodec를 사용한다. core-api/build.gradle.kts는 contract-model을 운영 의존, test-support를 시험 의존으로 두며 JSON Schema validator는 실행 의존이다. processResources가 contracts/schemas의 ai-*.schema.json/common.schema.json을 luna/schemas로 복사한다.
+
+이번에 새로운 의존을 도입하지 않았다. 아래 버전 카탈로그·프런트·인프라 판 번호는 이전 관찰을 보존한 것으로 새로 검증한 값이 아니다. Neo4j·Luna 어댑터 부재라는 과거 진술을 현재 상태로 해석하지 않는다.
+
+---
+
 > 현재 범위의 정본은 바로 아래 U14 갱신절이다. 그 뒤 원문은 보존 이력이며 재검증 범위는 timestamp에 한정한다.
 
 ## U14 집중 갱신 — 기술 확인 수준
@@ -108,3 +118,5 @@
 | Google OAuth | 보호자 로그인 | 구현됨 |
 | Web Push(VAPID) | 알림 | 구현됨 |
 | AWS(EC2 · SSM · GHCR) | demo 배포 | 워크플로 있음, 변수 미설정으로 배포 단계 건너뜀 |
+
+

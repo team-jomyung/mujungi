@@ -44,13 +44,13 @@ class SchemaVersionCheckTest {
     @Test
     void appliedVersionAtOrAboveTheBundledMigrationPasses() {
         // 앱이 들고 온 최고 버전: V1(U1) · V2(U2) · V3(U4a) · V4(U5a) · V5(U6) · V6(U7) · V7(U5b) · V8(U15) · V9(U14)
-        assertThat(SchemaVersionCheck.expectedVersion()).isEqualTo("9");
-        history(List.of("0", "1", "2", "3", "4", "5", "6", "7", "8", "9"));
+        assertThat(SchemaVersionCheck.expectedVersion()).isEqualTo("10");
+        history(List.of("0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10"));
 
-        assertThat(check.verify()).isEqualTo("9");
-
-        history(List.of("1", "2", "3", "4", "5", "6", "7", "8", "9", "10"));
         assertThat(check.verify()).isEqualTo("10");
+
+        history(List.of("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11"));
+        assertThat(check.verify()).isEqualTo("11");
         assertThat(stderr.toString(StandardCharsets.UTF_8)).isEmpty();
     }
 
@@ -68,7 +68,7 @@ class SchemaVersionCheckTest {
     void onlyTheBaselineRowIsRejectedAsBehind() {
         history(List.of("0"));
 
-        assertThatThrownBy(check::verify).isInstanceOf(IllegalStateException.class).hasMessageContaining("0 < 기대 9");
+        assertThatThrownBy(check::verify).isInstanceOf(IllegalStateException.class).hasMessageContaining("0 < 기대 10");
         assertThat(stderr.toString(StandardCharsets.UTF_8)).contains("SchemaVersionBehind");
     }
 
@@ -96,17 +96,17 @@ class SchemaVersionCheckTest {
         when(jdbc.queryForList(anyString(), eq(String.class))).thenAnswer(call -> {
             String sql = call.getArgument(0);
             assertThat(sql).contains(SchemaVersionCheck.HISTORY_TABLE).contains("success").contains("version is not null");
-            return List.of("1", "2", "3", "4", "5", "6", "7", "8", "9");
+            return List.of("1", "2", "3", "4", "5", "6", "7", "8", "9", "10");
         });
 
-        assertThat(check.verify()).isEqualTo("9");
+        assertThat(check.verify()).isEqualTo("10");
     }
 
     @Test
     void historyBeforeTheU5aMigrationCannotStartTheApplication() {
         history(List.of("1", "2", "3"));
         assertThatThrownBy(check::verify).isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("3 < 기대 9");
+                .hasMessageContaining("3 < 기대 10");
         assertThat(stderr.toString(StandardCharsets.UTF_8)).contains("SchemaVersionBehind");
     }
 
@@ -116,6 +116,7 @@ class SchemaVersionCheckTest {
     @Test
     void historyAtThePreviousU15VersionIsStillBehind() {
         history(List.of("1", "2", "3", "4", "5", "6", "7", "8"));
-        assertThatThrownBy(check::verify).isInstanceOf(IllegalStateException.class).hasMessageContaining("8 < 기대 9");
+        assertThatThrownBy(check::verify).isInstanceOf(IllegalStateException.class).hasMessageContaining("8 < 기대 10");
     }
+    @Test void historyAtPreviousU14VersionIsStillBehind(){history(List.of("1","2","3","4","5","6","7","8","9"));assertThatThrownBy(check::verify).isInstanceOf(IllegalStateException.class).hasMessageContaining("9 < 기대 10");}
 }

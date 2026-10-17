@@ -19,11 +19,20 @@
           "AGE_MISMATCH",
           "GOAL_MISMATCH",
           "REPETITION",
-          "OTHER_APPROVED_REASON"
+          "FORBIDDEN_CONTENT",
+          "INCOMPLETE_SCENE",
+          "INVARIANT_MISMATCH",
+          "SKILL_MISMATCH",
+          "TRANSFER_MISMATCH",
+          "UNCHANGED_VARIANT"
         ]
       }
     }
   },
+  "anyOf": [
+    {"type":"object","additionalProperties":false,"required":["verdict","reasons"],"properties":{"verdict":{"enum":["APPROVE"]},"reasons":{"type":"array","maxItems":0,"items":{"type":"string"}}}},
+    {"type":"object","additionalProperties":false,"required":["verdict","reasons"],"properties":{"verdict":{"enum":["REJECT","UNCERTAIN"]},"reasons":{"type":"array","items":{"type":"string"}}}}
+  ],
   "examples": [
     { "verdict": "APPROVE", "reasons": [] },
     { "verdict": "REJECT", "reasons": ["ANSWER_INCLUDED", "EARLY_CUE"] }

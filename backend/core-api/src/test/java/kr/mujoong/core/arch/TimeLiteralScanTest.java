@@ -48,6 +48,8 @@ class TimeLiteralScanTest {
 
     /** 허용 목록. 시간 값이 아니거나(단위 표기 · 단위 변환 · 고정 풀 keepAlive) 계약 · 결정이 값을 고정한 상수뿐이다. */
     static final List<Allowed> ALLOWED = List.of(
+            new Allowed(CORE + "practice/ScenarioDeadline.java", "future.get(limit.toNanos(),TimeUnit.NANOSECONDS)",
+                    "U10 R-F7: 최초 scenario-request-timeout의 잔여와 호출 설정 Duration 중 작은 값을 단위 변환한다. 숫자 시한 허용 없음"),
             new Allowed(CORE + "knowledge/ChildKnowledgeService.java", "future.get(budget.toNanos(), TimeUnit.NANOSECONDS)",
                     "U15: knowledge.graph-budget 설정 Duration의 나노초 단위 변환이다. 신규 시간 상수 없음"),
             new Allowed(CORE + "result/JobRunnerLoop.java",

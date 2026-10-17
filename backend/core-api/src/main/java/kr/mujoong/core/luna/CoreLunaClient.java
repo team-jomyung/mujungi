@@ -85,12 +85,12 @@ public class CoreLunaClient {
         Objects.requireNonNull(budget, "budget").bindDeadline(request.deadline());
         SanitizedInput input;
         try {
-            input = sanitizer.sanitize(request.input(), request.aliases());
+            input = sanitizer.sanitize(request.input(), request.aliases(), request.purpose());
         } catch (LunaException rejected) {
             audit(request, List.of(), LunaFailureReason.FORBIDDEN_INPUT.name(), null, Duration.ZERO, 0);
             throw rejected;
         }
-        Optional<LunaSchemas.OutputSchemaPair> schema = request.outputMode() == LunaRequest.OutputMode.CONTRACT
+        Optional<LunaSchemas.OutputSchemaPair> schema = request.outputMode() != LunaRequest.OutputMode.LEGACY_JSON_OBJECT
                 ? schemas.pair(request.purpose()) : Optional.empty();
         String body = json.write(new ResponsesRequest(properties.model(), request.instructions(), json.write(input.payload()),
                 schema.orElse(null), request.purpose(), properties.options(request.purpose())).body());
@@ -133,7 +133,7 @@ public class CoreLunaClient {
                 schemaRetryUsed = true;
                 wait = Duration.ZERO;
             } else {
-                throw new LunaException(attempt.failure, attempts);
+                throw new LunaException(attempt.failure, attempts, attempt.retryAfter);
             }
             if (!worthRetrying(remaining(request.deadline()), wait)) {
                 throw new LunaException(attempt.failure, attempts);

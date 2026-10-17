@@ -25,9 +25,13 @@ public final class PreparedPracticePackageMapper {
         var goals = prepared.goals().stream().map(g -> new PracticeStart.Goal(g.goalSelectionId(), g.order(), g.displayName(),
                 g.behaviorKey(), g.behaviorVersion(), g.judgmentCriteriaSnapshot())).toList();
         var s = prepared.firstScenario();
-        Map<String, Object> scenario = Map.of("scenarioId", s.scenarioId(), "kind", s.kind(), "relationType", s.relationType(),
+        Map<String, Object> scenario = new LinkedHashMap<>(Map.of("scenarioId", s.scenarioId(), "kind", s.kind(), "relationType", s.relationType(),
                 "opportunityCondition", s.opportunityCondition(), "scenarioText", s.scenarioText(), "partnerRoleText", s.partnerRoleText(),
-                "triggerScript", s.triggerScript(), "validation", s.validation());
+                "triggerScript", s.triggerScript(), "validation", s.validation()));
+        if(s.scriptVersion()!=null)scenario.put("scriptVersion",s.scriptVersion());
+        if(s.scenes()!=null)scenario.put("scenes",s.scenes());
+        if(s.selfReview()!=null)scenario.put("selfReview",s.selfReview());
+        if(s.generation()!=null)scenario.put("generation",s.generation());
         return new PracticeStart.PracticePackage(goals, scenario);
     }
     /** top-level firstScenario를 기존 C8 첫 목표 아래로 명시 이동한다. 추첨 입력은 내보내지 않는다. */
@@ -38,6 +42,11 @@ public final class PreparedPracticePackageMapper {
             value.put("goalSelectionId", g.goalSelectionId()); value.put("order", g.order()); value.put("displayName", g.displayName());
             value.put("behaviorKey", g.behaviorKey()); value.put("behaviorVersion", g.behaviorVersion()); value.put("judgmentCriteria", g.judgmentCriteria());
             value.put("firstScenario", g.order() == 1 ? pack.firstScenario() : null);
+            var original=prepared.goals().get(g.order()-1).goalContext();
+            if(original.candidate()){
+                value.put("goalKind",original.kind());value.put("candidateRef",original.candidateRef());
+                value.put("candidateVersion",original.candidateVersion());value.put("goalContext",original);
+            }
             return java.util.Collections.unmodifiableMap(value);
         }).toList());
     }

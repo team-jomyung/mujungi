@@ -16,6 +16,17 @@ import org.springframework.stereotype.Repository;
 public class PracticeGoalRepository {
     private final NamedParameterJdbcTemplate jdbc;
     public PracticeGoalRepository(NamedParameterJdbcTemplate jdbc) { this.jdbc=jdbc; }
+    public record PreparationMetadata(String displayName,boolean favorite,long sortOrder) {}
+    /** U10: 두 목표 저장 종류의 표시·순위 읽기는 목표 소유 저장소에 둔다. */
+    public Optional<PreparationMetadata> preparationMetadata(UUID guardian,UUID child,UUID selection){
+        return jdbc.query("""
+                select display_name,is_favorite,sort_order from core.core_saved_goal
+                where guardian_id=:guardian and child_id=:child and id=:id and status='ACTIVE'
+                union all select display_name,is_favorite,sort_order from core.core_practice_goal_selection
+                where guardian_id=:guardian and child_id=:child and id=:id and status='ACTIVE'
+                """,Map.of("guardian",guardian,"child",child,"id",selection),
+                (r,n)->new PreparationMetadata(r.getString(1),r.getBoolean(2),r.getLong(3))).stream().findFirst();
+    }
     private static final String SELECT = """
         select s.*,r.source_session_id from core.core_practice_goal_selection s
         join core.core_goal_recommendation r on r.id=s.recommendation_id

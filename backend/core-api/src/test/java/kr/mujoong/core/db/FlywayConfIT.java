@@ -75,8 +75,8 @@ class FlywayConfIT {
 
             // 기준선 없이 두 번째 위치를 돌리면 "비어 있지 않은 flyway 스키마 + 이력 표 없음"으로 실패한다(report-g1-b 재현)
             MigrateResult coreResult = core.migrate();
-            // core 위치: V1(U1) · V2(U2) · V3(U4a) · V4(U5a) · V5(U6) · V6(U7) · V7(U5b) · V8(U15) · V9(U14)
-            assertThat(coreResult.migrationsExecuted).isEqualTo(9);
+            // core 위치: V1(U1) · V2(U2) · V3(U4a) · V4(U5a) · V5(U6) · V6(U7) · V7(U5b) · V8(U15) · V9(U14) · V10(U10)
+            assertThat(coreResult.migrationsExecuted).isEqualTo(10);
             Flyway realtimeWithoutBaseline =
                     flywayFromConf(postgres, MigrationSet.REALTIME, Map.of("flyway.baselineOnMigrate", "false"));
             assertThatThrownBy(realtimeWithoutBaseline::migrate)
@@ -94,7 +94,7 @@ class FlywayConfIT {
                         "select version, type, success from flyway.core_schema_history order by installed_rank"))
                         .containsExactly(List.of("1", "SQL", true), List.of("2", "SQL", true), List.of("3", "SQL", true),
                                 List.of("4", "SQL", true), List.of("5", "SQL", true), List.of("6", "SQL", true),
-                                List.of("7", "SQL", true), List.of("8", "SQL", true), List.of("9", "SQL", true));
+                                List.of("7", "SQL", true), List.of("8", "SQL", true), List.of("9", "SQL", true), List.of("10", "SQL", true));
                 assertThat(query(owner,
                         "select version, type, success from flyway.realtime_schema_history order by installed_rank"))
                         .containsExactly(List.of("0", "BASELINE", true), List.of("1", "SQL", true), List.of("2", "SQL", true),
@@ -108,9 +108,9 @@ class FlywayConfIT {
             // afterMigrate.sql: 앱 역할은 자기 이력 표만 읽는다
             try (Connection coreApp = postgres.connect(Role.CORE_APP);
                     Connection realtimeApp = postgres.connect(Role.REALTIME_APP)) {
-                // core V1 · V2(U2) · V3(U4a) · V4(U5a) · V5(U6) · V6(U7) · V7(U5b) · V8(U15) · V9(U14)
+                // core V1 · V2(U2) · V3(U4a) · V4(U5a) · V5(U6) · V6(U7) · V7(U5b) · V8(U15) · V9(U14) · V10(U10)
                 // realtime BASELINE · V1 · V2(U3) · V3(U4b) · V4(U5b) · V5(U11)
-                assertThat(single(coreApp, "select count(*) from flyway.core_schema_history")).isEqualTo(9L);
+                assertThat(single(coreApp, "select count(*) from flyway.core_schema_history")).isEqualTo(10L);
                 assertThat(single(realtimeApp, "select count(*) from flyway.realtime_schema_history")).isEqualTo(6L);
                 expectSqlStateAutoCommit("42501",
                         () -> query(coreApp, "select count(*) from flyway.realtime_schema_history"));

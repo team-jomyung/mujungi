@@ -11,6 +11,10 @@ import org.springframework.context.annotation.Configuration;
 /** C10 상황 생성의 포트 기본값과 시간 한도. 시간 값은 application.yml을 묶은 {@link CoreProperties}에서 읽는다(U5a 리뷰 5). */
 @Configuration(proxyBeanMethods = false)
 public class ScenarioConfiguration {
+    @Bean @ConditionalOnMissingBean(kr.mujoong.core.luna.LunaInputSanitizer.class)
+    kr.mujoong.core.luna.LunaInputSanitizer scenarioInputSanitizer(kr.mujoong.contract.json.JsonCodec json){
+        return new kr.mujoong.core.luna.LunaInputSanitizer(json);
+    }
     @Bean @ConditionalOnMissingBean(PracticeSessionContextPort.class)
     PracticeSessionContextPort practiceSessionContextPort(
             kr.mujoong.core.practice.start.PracticePreparationRepository preparations,
