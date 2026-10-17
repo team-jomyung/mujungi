@@ -339,6 +339,6 @@ public class StartSessionHandler {
         }
         return new SessionExecutor.Plan(command.sessionId(), command.deviceId(), traceId, command.childContext(), audio,
                 approved.get(PlayApprovedContent.CLOSING), approved.get(PlayApprovedContent.WAITING_FILLER),
-                command.consentSnapshot().rawAudio(), stops, command.activityType(), approved, null);
+                command.consentSnapshot().rawAudio(), stops, command.activityType(), approved, null, command.guardianId());
     }
 }

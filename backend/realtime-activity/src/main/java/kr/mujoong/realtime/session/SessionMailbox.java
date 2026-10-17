@@ -117,6 +117,26 @@ public final class SessionMailbox {
     public record PracticeTimerFired(String name, long generation) implements Message {
     }
 
+    /**
+     * U11 BR1.8: 판정 결과(Luna 완료 콜백 스레드가 일반 편지함에 넣는다). 안전 편지함을 쓰지 않아 앞서 도착한 출력 조각보다 먼저 처리되지 않는다.
+     * 차례 id가 다르거나 턴이 닫혔으면 실행기가 버린다(BR5.2).
+     */
+    public record JudgmentArrived(UUID turnId, kr.mujoong.realtime.judgment.JudgeOutcome outcome) implements Message {
+
+        public JudgmentArrived {
+            Objects.requireNonNull(turnId, "turnId");
+            Objects.requireNonNull(outcome, "outcome");
+        }
+    }
+
+    /** U11 설계 개정 A4: 판정 뒤 지시의 새 말이 시한 안에 시작하지 않았거나 송신이 실패했다(큐 스레드에서도 넣는다). */
+    public record JudgmentInstructionFailed(UUID turnId) implements Message {
+
+        public JudgmentInstructionFailed {
+            Objects.requireNonNull(turnId, "turnId");
+        }
+    }
+
     /** START_SESSION ACK. */
     public record DeviceAck(UUID connectionId, UUID ackOf, Instant receivedAt) implements Message {
     }

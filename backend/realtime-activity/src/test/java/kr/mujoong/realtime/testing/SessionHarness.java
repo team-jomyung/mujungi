@@ -91,6 +91,18 @@ public final class SessionHarness {
     public FakeDeviceLink link;
     public SessionExecutor executor;
     public boolean removed;
+    /** U11: 판정 장치(create 전에 {@link #useJudge()}로 바꾼다). 기본은 공급자 없음 — 판정 턴을 열지 않는다. */
+    public kr.mujoong.realtime.session.JudgmentSupport judgment = kr.mujoong.realtime.session.JudgmentSupport.NONE;
+    /** U11: {@link #useJudge()} 뒤의 시험용 판정기. */
+    public FakeJudgeClient judge;
+
+    /** 시험용 판정기를 쓴다(create 전에 부른다): 공급자 있음, 기록은 {@link MemoryStore#judgments}로 간다. */
+    public FakeJudgeClient useJudge() {
+        judge = new FakeJudgeClient();
+        judgment = new kr.mujoong.realtime.session.JudgmentSupport(judge, judgmentRecorder, Duration.ofSeconds(4), "prompt-v1",
+                kr.mujoong.realtime.content.LiveContentResources.loadDefault().judgment());
+        return judge;
+    }
 
     public SessionHarness() {
         this(SETTINGS);
@@ -112,7 +124,7 @@ public final class SessionHarness {
                 new ProviderConnector(provider, new ProviderRequestFactory(), Duration.ofSeconds(10), launcher, "test"),
                 new ProviderRequestFactory(), new OutputGate(SeedDictionary.loadDefault()), recorder, latency,
                 new TimerClocks(safety, quiet), launcher, events, metrics, clock, settings, gaps, recordings, settlement,
-                practice);
+                practice, judgment);
         List<StartSession.ApprovedAudio> audio = new ArrayList<>(List.of(
                 new StartSession.ApprovedAudio("CLOSING", closingVersion, "/media/approved/closing.wav"),
                 new StartSession.ApprovedAudio("WAITING_FILLER", fillerVersion, "/media/approved/filler.wav")));
@@ -127,7 +139,7 @@ public final class SessionHarness {
                 new ChildContext("하늘", 8, List.of("공룡")), audio,
                 new SessionExecutor.ApprovedItem("CLOSING", closingVersion),
                 new SessionExecutor.ApprovedItem("WAITING_FILLER", fillerVersion), rawAudioConsent, STOP_EXPRESSIONS,
-                activityType, approved, practiceJson);
+                activityType, approved, practiceJson, guardianId);
         executor = new SessionExecutor(plan, services, mailbox, () -> removed = true);
         return executor;
     }

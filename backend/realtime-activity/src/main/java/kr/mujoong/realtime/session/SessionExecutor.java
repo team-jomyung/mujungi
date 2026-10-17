@@ -45,6 +45,13 @@ import kr.mujoong.realtime.dialog.SilenceClock;
 import kr.mujoong.realtime.dialog.StopConfirmFlow;
 import kr.mujoong.realtime.dialog.StopIntentJudge;
 import kr.mujoong.contract.event.payload.SessionStateChanged;
+import kr.mujoong.realtime.judgment.JudgeOutcome;
+import kr.mujoong.realtime.judgment.JudgmentOutcomeKind;
+import kr.mujoong.realtime.judgment.JudgmentOwner;
+import kr.mujoong.realtime.judgment.JudgmentPoint;
+import kr.mujoong.realtime.judgment.JudgmentTrigger;
+import kr.mujoong.realtime.judgment.JudgmentTurn;
+import kr.mujoong.realtime.judgment.NextAction;
 import kr.mujoong.realtime.gate.ApprovedPlayback;
 import kr.mujoong.realtime.gate.ClosingSequence;
 import kr.mujoong.realtime.gate.GateDecision;
@@ -215,7 +222,19 @@ public final class SessionExecutor {
             SessionGapPort gaps,
             AudioRecordings recordings,
             SessionSettlement settlement,
-            PracticeSessionExtension.Factory practice) {
+            PracticeSessionExtension.Factory practice,
+            JudgmentSupport judgment) {
+
+        /** 판정 장치 없음(U11 전 모양, 판정 턴을 열지 않는다). */
+        public Services(SessionTransitions transitions, Function<UUID, Optional<? extends DeviceLink>> deviceLinks,
+                DeviceStatusPort deviceStatus, ProviderConnector connector, ProviderRequestFactory requests,
+                OutputGate gate, AsyncRecorder recorder, LatencyRecorder latency, TimerClocks clocks,
+                TaskLauncher launcher, EventLogger events, RealtimeMetrics metrics, MujoongClock clock, Settings settings,
+                SessionGapPort gaps, AudioRecordings recordings, SessionSettlement settlement,
+                PracticeSessionExtension.Factory practice) {
+            this(transitions, deviceLinks, deviceStatus, connector, requests, gate, recorder, latency, clocks, launcher,
+                    events, metrics, clock, settings, gaps, recordings, settlement, practice, JudgmentSupport.NONE);
+        }
 
         /** U1 · U3 모양(정산 없음 — 종료 상태로 가면 정산 창 없이 곧바로 정리한다, 연습 확장점은 무동작). */
         public Services(SessionTransitions transitions, Function<UUID, Optional<? extends DeviceLink>> deviceLinks,
@@ -240,6 +259,7 @@ public final class SessionExecutor {
         public Services {
             Objects.requireNonNull(settlement, "settlement");
             Objects.requireNonNull(practice, "practice");
+            Objects.requireNonNull(judgment, "judgment");
             Objects.requireNonNull(transitions, "transitions");
             Objects.requireNonNull(deviceLinks, "deviceLinks");
             Objects.requireNonNull(deviceStatus, "deviceStatus");
@@ -300,7 +320,17 @@ public final class SessionExecutor {
             List<String> stopExpressions,
             ActivityType activityType,
             Map<String, ApprovedItem> approved,
-            String practiceJson) {
+            String practiceJson,
+            UUID guardianId) {
+
+        /** U4b 모양(보호자 id 없음 — 판정 기록을 남기지 않는다). */
+        public Plan(UUID sessionId, UUID deviceId, String traceId, ChildContext childContext,
+                List<StartSession.ApprovedAudio> approvedAudio, ApprovedItem closing, ApprovedItem waitingFiller,
+                boolean rawAudioConsent, List<String> stopExpressions, ActivityType activityType,
+                Map<String, ApprovedItem> approved, String practiceJson) {
+            this(sessionId, deviceId, traceId, childContext, approvedAudio, closing, waitingFiller, rawAudioConsent,
+                    stopExpressions, activityType, approved, practiceJson, null);
+        }
 
         public Plan {
             Objects.requireNonNull(sessionId, "sessionId");
@@ -327,7 +357,7 @@ public final class SessionExecutor {
                 List<StartSession.ApprovedAudio> approvedAudio, ApprovedItem closing, ApprovedItem waitingFiller,
                 boolean rawAudioConsent, List<String> stopExpressions) {
             this(sessionId, deviceId, traceId, childContext, approvedAudio, closing, waitingFiller, rawAudioConsent,
-                    stopExpressions, ActivityType.FREE_TALK, Map.of(), null);
+                    stopExpressions, ActivityType.FREE_TALK, Map.of(), null, null);
         }
 
         /** 그 코드의 승인 문구(패키지에 없으면 빈 값). */
@@ -423,6 +453,14 @@ public final class SessionExecutor {
     private Long progressPlayedToMs;
     /** 기기가 STARTED를 알리고 아직 끝 표식이 없는 재생(생각 중 · 듣는 중 표시와 종료 의도 판정의 '재생 중'). */
     private final Set<UUID> devicePlaying = new HashSet<>();
+    /** U11 판정 턴 협력 객체(열린 턴 · 최근 전사 · 기록, 실행기 스레드 전용). */
+    private final JudgmentCoordinator judgment;
+    /** U11 W2: 지금 처리 중인 아이 확정 전사의 대화 기록 순번(판정 요청 · 기록용, 원문 아님). */
+    private int currentTranscriptSeq;
+    /** U11 R-14: 새 전사가 J6를 대체할 때 그 전사의 종료 의도 판정(CONFIRM이면 연습 시계를 풀지 않는다). */
+    private StopIntentJudge.Verdict supersedeVerdict;
+    /** U11 BR8.1: 확장이 요청한 '생각 중' 유지(닫힐 때 듣는 중으로 되돌리지 않는다). */
+    private boolean practiceThinking;
     /** 종료 의도 판정기(세션 스냅숏의 종료 표현, U3-R12). */
     private final StopIntentJudge stopJudge;
     /** U4b 종료 확인 질문 흐름(BR4.3 · BR4.4). 확인 중이면 공급자 출력을 막는다. */
@@ -515,6 +553,7 @@ public final class SessionExecutor {
                 services.clock(), services.metrics());
         this.transcripts = new TranscriptWriter(plan.sessionId(), 0, services.recorder(), services.latency());
         this.stopJudge = new StopIntentJudge(plan.stopExpressions());
+        this.judgment = new JudgmentCoordinator(services.judgment(), plan, services.settings().instructionWait(), new JudgmentEnv());
         Settings.Lifecycle lifecycle = services.settings().lifecycle();
         this.stopConfirm = new StopConfirmFlow(lifecycle.stopConfirmWait());
         this.silence = new SilenceClock(lifecycle.silenceWarning(), lifecycle.silenceEnd());
@@ -705,7 +744,10 @@ public final class SessionExecutor {
             case TimerFired fired -> onTimer(fired);
             case EndRequested request -> onEndRequested(request);
             case ConnectionLost lost -> onConnectionLost(lost);
+            case SessionMailbox.JudgmentArrived arrived -> judgment.onArrived(arrived);
+            case SessionMailbox.JudgmentInstructionFailed failed -> judgment.onInstructionFailed(failed);
             case ServerShutdown shutdown -> {
+                judgment.onExit();
                 // 앱 종료 T3: 공급자 연결을 닫고 기록기를 비운다. 세션 행은 다음 기동 S3a가 닫는다(BR6.13).
                 // 끝나면(실패해도) 정상 종료에 알린다 — T4(폴러 정지)는 공급자 닫기 뒤에 시작한다(RD-13 순서, J304)
                 try {
@@ -976,6 +1018,11 @@ public final class SessionExecutor {
         if (status != SessionStatus.WAITING_CHILD || join == null || join.isFinished()) {
             return;
         }
+        if (judgment.openPoint() == JudgmentPoint.J1) {
+            // U11 W1 6: J1이 열린 동안의 창 만기는 표시만 하고 턴이 닫힌 뒤 tick을 부른다
+            judgment.deferJoinTick();
+            return;
+        }
         JoinTracker.Action action = join.tick(services.clock().now());
         if (action == JoinTracker.Action.NONE) {
             armJoinWindow();
@@ -992,8 +1039,56 @@ public final class SessionExecutor {
         if (join == null || join.isFinished()) {
             return;
         }
+        // U11 BR5.3: J1이 열린 동안 새 확정 전사가 오면 이전 J1을 SUPERSEDED로 닫고 새 전사를 처음부터 다시 처리한다
+        judgment.onTranscript(false);
         JoinTracker.Reply reply = JoinTracker.classify(transcript);
+        if (reply == JoinTracker.Reply.UNCLEAR && openJoinJudgment(transcript, at)) {
+            return;
+        }
         applyJoinAction(join.reply(reply, at), reply, at);
+    }
+
+    // ------------------------------------------------------------------ U11 판정 턴 (W1 · W2 · W4)
+
+    /**
+     * W1: 불명확한 참여 대답은 아직 {@code join.reply}에 넣지 않고 J1을 연다. 열 수 없으면(공급자 없음 · 판독 불가) 기록 한 건만 남기고 지금 흐름으로
+     * 간다.
+     */
+    private boolean openJoinJudgment(String transcript, Instant at) {
+        JudgmentCoordinator.Readiness ready = judgment.preflight(transcript);
+        if (ready != JudgmentCoordinator.Readiness.READY) {
+            judgment.recordSkipped(ready, JudgmentPoint.J1, JudgmentTrigger.JOIN_UNCLEAR, 0, NextAction.REPROMPT_JOIN);
+            return false;
+        }
+        judgment.open(new JudgmentCoordinator.Open(JudgmentPoint.J1, JudgmentTrigger.JOIN_UNCLEAR, JudgmentOwner.EXECUTOR, 0,
+                transcript, at, null, List.of(), (turn, outcome) -> JudgmentTurn.Decision.close(),
+                closure -> afterJoinJudgment(closure, at)));
+        return true;
+    }
+
+    /** J1 결과 → {@link JoinTracker} 답 하나(원래 확정 시각으로 한 번만 넣는다, W1 4). 휴식 · 불명확 · 보류는 모두 불명확이다(U11-D6). */
+    private JudgmentCoordinator.Handled afterJoinJudgment(JudgmentTurn.Closure closure, Instant at) {
+        JudgmentOutcomeKind kind = closure.outcome().kind();
+        if (kind != JudgmentOutcomeKind.CONFIRMED && kind != JudgmentOutcomeKind.ABSTAINED) {
+            return JudgmentCoordinator.Handled.NOTHING;
+        }
+        JoinTracker.Reply reply = JoinTracker.Reply.UNCLEAR;
+        NextAction next = NextAction.REPROMPT_JOIN;
+        if (kind == JudgmentOutcomeKind.CONFIRMED && "PARTICIPATE".equals(closure.outcome().firstOption())) {
+            reply = JoinTracker.Reply.ACCEPT;
+            next = NextAction.START_JOIN;
+        } else if (kind == JudgmentOutcomeKind.CONFIRMED && "DECLINE".equals(closure.outcome().firstOption())) {
+            reply = JoinTracker.Reply.REFUSE;
+            next = NextAction.DECLINE_JOIN;
+        }
+        if (status == SessionStatus.WAITING_CHILD && join != null && !join.isFinished()) {
+            applyJoinAction(join.reply(reply, at), reply, at);
+        }
+        if (closure.joinTickDeferred() && status == SessionStatus.WAITING_CHILD && join != null && !join.isFinished()
+                && technicalPause == null) {
+            onJoinWindow();
+        }
+        return new JudgmentCoordinator.Handled(next, false);
     }
 
     private void applyJoinAction(JoinTracker.Action action, JoinTracker.Reply reply, Instant at) {
@@ -1382,7 +1477,8 @@ public final class SessionExecutor {
     }
 
     private boolean practiceProgressPaused() {
-        return technicalPause != null || (practice != null && practice.controlsOutput() && stopConfirm.isActive());
+        return technicalPause != null || (practice != null && practice.controlsOutput()
+                && (stopConfirm.isActive() || judgment.openPoint() == JudgmentPoint.J6));
     }
 
     private void interruptPracticeSpeech(Instant now) {
@@ -1432,6 +1528,146 @@ public final class SessionExecutor {
         }
         while (!pausedPracticeEvents.isEmpty()) {
             mailbox.putSafety(new SessionMailbox.PracticeEvent(pausedPracticeEvents.removeFirst()));
+        }
+    }
+
+    /**
+     * W4: 확장이 요청한 판정(J2 ~ J5). 거절 조건은 열린 턴 · 지점 밖 · 최근 확정 전사 4개 밖 · 기준 모양 틀림 · 공급자 없음이다(ACTIVE가 아니면
+     * 호출 앞에서 PRACTICE_EXTENSION_FAILED로 거절한다). 다음 행동은 확장이 정하므로 실행부는 지시를 내지 않는다(BR8.2).
+     */
+    private boolean requestExtensionJudgment(JudgmentPoint point, long transcriptSeq, UUID correlationId,
+            Map<String, Object> criteria) {
+        if (!practiceActive()) {
+            return refusePractice("requestJudgment", "NOT_ACTIVE");
+        }
+        if (point == null || correlationId == null || point == JudgmentPoint.J1 || point == JudgmentPoint.J6
+                || transcriptSeq < 0 || transcriptSeq > Integer.MAX_VALUE) {
+            return false;
+        }
+        JudgmentCoordinator.Recent target = judgment.findRecent(transcriptSeq);
+        if (target == null) {
+            return false;
+        }
+        kr.mujoong.realtime.judgment.JudgeRequest.Criteria shaped = null;
+        if (point == JudgmentPoint.J2 || point == JudgmentPoint.J3 || point == JudgmentPoint.J5) {
+            try {
+                shaped = new kr.mujoong.realtime.judgment.JudgeRequest.Criteria(
+                        (String) (criteria == null ? null : criteria.get("coreFunction")),
+                        (String) (criteria == null ? null : criteria.get("judgmentCriteria")));
+            } catch (RuntimeException invalid) {
+                return false;
+            }
+        }
+        JudgmentCoordinator.Readiness ready = judgment.preflight(target.text());
+        if (ready != JudgmentCoordinator.Readiness.READY) {
+            judgment.recordSkipped(ready, point, JudgmentTrigger.EXTENSION_REQUEST, target.seq(), NextAction.DELEGATED_TO_EXTENSION);
+            return false;
+        }
+        judgment.open(new JudgmentCoordinator.Open(point, JudgmentTrigger.EXTENSION_REQUEST, JudgmentOwner.EXTENSION, target.seq(),
+                target.text(), target.at(), shaped, judgment.recentBefore(target.seq()),
+                (turn, outcome) -> JudgmentTurn.Decision.close(), closure -> afterExtensionJudgment(closure, correlationId)));
+        return true;
+    }
+
+    /** 확장 소유 판정이 닫혔다: 결과(확률 없음) 또는 보류 · 장애 사건, 모은 출력 전사가 있으면 그 사건도 확장에 보낸다(BR8.3). */
+    private JudgmentCoordinator.Handled afterExtensionJudgment(JudgmentTurn.Closure closure, UUID correlationId) {
+        JudgeOutcome outcome = closure.outcome();
+        PracticeSessionExtension.ExtensionEvent.Kind kind;
+        Map<String, Object> value = new LinkedHashMap<>();
+        value.put("point", closure.point().name());
+        switch (outcome.kind()) {
+            case CONFIRMED -> {
+                kind = PracticeSessionExtension.ExtensionEvent.Kind.JUDGMENT_RESULT;
+                value.put("firstOption", outcome.firstOption());
+                value.put("secondOption", outcome.secondOption());
+            }
+            case ABSTAINED -> {
+                kind = PracticeSessionExtension.ExtensionEvent.Kind.JUDGMENT_ABSTAINED;
+                value.put("abstainReason", outcome.abstainReason().name());
+            }
+            case FAULT_CANCELLED -> {
+                kind = PracticeSessionExtension.ExtensionEvent.Kind.JUDGMENT_ABSTAINED;
+                value.put("abstainReason", "FAULT");
+            }
+            default -> {
+                return JudgmentCoordinator.Handled.NOTHING;
+            }
+        }
+        mailbox.putSafety(new SessionMailbox.PracticeEvent(
+                new PracticeSessionExtension.ExtensionEvent(kind, "judgment", correlationId, value)));
+        if (!closure.heldOutputTranscript().isEmpty()) {
+            mailbox.putSafety(new SessionMailbox.PracticeEvent(new PracticeSessionExtension.ExtensionEvent(
+                    PracticeSessionExtension.ExtensionEvent.Kind.HELD_OUTPUT_TRANSCRIPT, "judgment", correlationId,
+                    Map.of("text", closure.heldOutputTranscript()))));
+        }
+        return new JudgmentCoordinator.Handled(NextAction.DELEGATED_TO_EXTENSION, true);
+    }
+
+    /** 판정 협력 객체가 실행기에 닿는 자리(U11). */
+    private final class JudgmentEnv implements JudgmentCoordinator.Env {
+
+        @Override
+        public SessionStatus status() {
+            return status;
+        }
+
+        @Override
+        public Instant now() {
+            return services.clock().now();
+        }
+
+        @Override
+        public void bumpForJudgment() {
+            bumpOutput(OutputGeneration.BumpReason.JUDGMENT_TURN);
+        }
+
+        @Override
+        public void showThinking() {
+            if (view == View.LISTENING && devicePlaying.isEmpty()) {
+                sendControl(new SessionState(View.THINKING));
+            }
+        }
+
+        @Override
+        public void restoreListening() {
+            if (status == SessionStatus.ACTIVE && !segment.isOpen() && !transcripts.hasOpenAi()) {
+                listeningAgain();
+            }
+        }
+
+        @Override
+        public boolean sendInstruction(UUID turnId, InstructionTemplates.NextAction action) {
+            return SessionExecutor.this.sendInstruction(OutputGeneration.BumpReason.SERVER_SEND, "provider-judgment-",
+                    id -> services.requests().instructionsAppend(id, action.content()),
+                    () -> mailbox.putSafety(new SessionMailbox.JudgmentInstructionFailed(turnId)));
+        }
+
+        @Override
+        public void armTimer(JudgmentTurn.TimerKind kind, Duration delay) {
+            timers.arm(timerKind(kind), delay);
+        }
+
+        @Override
+        public void cancelTimer(JudgmentTurn.TimerKind kind) {
+            timers.cancel(timerKind(kind));
+        }
+
+        @Override
+        public boolean postFromProvider(SessionMailbox.Message message) {
+            return SessionExecutor.this.putFromProvider(message);
+        }
+
+        @Override
+        public void lateDropped(String reasonCode) {
+            services.events().appError(EventLog.Component.SESSION_LIFECYCLE, reasonCode, EventCode.Level.INFO);
+        }
+
+        private Kind timerKind(JudgmentTurn.TimerKind kind) {
+            return switch (kind) {
+                case LIVE -> Kind.JUDGMENT_LIVE;
+                case READY -> Kind.JUDGMENT_READY;
+                case INSTRUCTION -> Kind.JUDGMENT_INSTRUCTION;
+            };
         }
     }
 
@@ -1579,6 +1815,36 @@ public final class SessionExecutor {
         }
 
         @Override
+        public boolean requestJudgment(JudgmentPoint point, long transcriptSeq, UUID correlationId, Map<String, Object> criteria) {
+            return requestExtensionJudgment(point, transcriptSeq, correlationId, criteria);
+        }
+
+        @Override
+        public boolean announceRoleSwitch(String toRole) {
+            if (!practiceActive()) {
+                return refusePractice("announceRoleSwitch", "NOT_ACTIVE");
+            }
+            // 자리와 거절 규칙만 있다(동작은 이 단위 밖). 받지 않는다
+            return false;
+        }
+
+        @Override
+        public boolean setThinking(boolean on) {
+            if (!practiceActive()) {
+                return refusePractice("setThinking", "NOT_ACTIVE");
+            }
+            practiceThinking = on;
+            if (on) {
+                if (view == View.LISTENING && devicePlaying.isEmpty()) {
+                    sendControl(new SessionState(View.THINKING));
+                }
+            } else if (!judgment.isOpen()) {
+                listeningAgain();
+            }
+            return true;
+        }
+
+        @Override
         public boolean post(String name, Object value) {
             if (name == null || name.isBlank()) {
                 return false;
@@ -1634,7 +1900,7 @@ public final class SessionExecutor {
 
     /** 공급자 출력을 받지 않는 때(참여 확인 중 · 종료 확인 질문 중 · 확장점이 막은 동안, BR2.6 · BR4.3 · BR10.4). */
     private boolean outputHeld() {
-        return status == SessionStatus.WAITING_CHILD || stopConfirm.isActive()
+        return status == SessionStatus.WAITING_CHILD || stopConfirm.isActive() || judgment.holdsOutput()
                 || (practiceHold && status == SessionStatus.ACTIVE);
     }
 
@@ -1687,7 +1953,11 @@ public final class SessionExecutor {
             case ProviderEvent.UsageUpdated ignored -> {
                 // 사용량 초는 파싱만 한다(실호출 도구 보고서가 기록). 지표 이름은 contracts 표에 없어 이 단위에서 더하지 않는다
             }
-            case ProviderEvent.InstructionsAppended appended -> outputGen.onAppended(appended.clientEventId(), appended.endMs());
+            case ProviderEvent.InstructionsAppended appended -> {
+                if (outputGen.onAppended(appended.clientEventId(), appended.endMs())) {
+                    judgment.onInstructionAcked();
+                }
+            }
             case ProviderEvent.OutputTranscriptDelta delta ->
                 onOutputChunk(delta.delta(), delta.startMs(), null, at, received.receivedNanos());
             case ProviderEvent.OutputAudioDelta delta ->
@@ -1781,6 +2051,21 @@ public final class SessionExecutor {
             if (status == SessionStatus.ACTIVE && done.transcript() != null && !done.transcript().isBlank()) {
                 resetSilence(at);
             }
+            currentTranscriptSeq = seq.orElse(0);
+            if (status == SessionStatus.ACTIVE) {
+                judgment.remember(currentTranscriptSeq, done.transcript(), at);
+                if (judgment.isOpen()) {
+                    // U11 BR5.3 · 설계 검토 R-04: 판정 중(지시 단계 포함) 새 확정 전사 — 종료 표현이면 STOPPED, 아니면 SUPERSEDED로 닫고 이 전사를
+                    // 아래 지금 흐름으로 처음부터 다시 처리한다(확장 소유 판정 단계는 턴을 그대로 두고 확장에 전달한다)
+                    StopIntentJudge.Verdict verdict = stopJudge.judge(done.transcript(), !devicePlaying.isEmpty()).verdict();
+                    supersedeVerdict = verdict;
+                    try {
+                        judgment.onTranscript(verdict == StopIntentJudge.Verdict.STOP);
+                    } finally {
+                        supersedeVerdict = null;
+                    }
+                }
+            }
             boolean controlledPractice = practice != null && practice.controlsOutput();
             boolean stopHandled = controlledPractice && judgeStopIntent(done.transcript(), uncertain, at);
             if (!stopHandled && status == SessionStatus.ACTIVE && practice != null
@@ -1814,6 +2099,17 @@ public final class SessionExecutor {
         timers.arm(Kind.SEGMENT_QUIET, services.settings().segmentQuiet());
         if (!outputGen.awaitingNewSpeech()) {
             timers.cancel(Kind.INSTRUCTION_WAIT);
+        }
+        if (judgment.isOpen()) {
+            // U11 BR3.1: 판정 턴 중 음성은 버리고 전사 조각만 모은다(구간 · 대화 기록 · 보호자 중계에 넣지 않는다)
+            if (result.verdict() != OutputGeneration.ChunkVerdict.ACCEPT) {
+                if (transcript != null) {
+                    judgment.holdTranscript(transcript);
+                }
+                return;
+            }
+            // 지시 단계에서 받는 첫 조각 = 지시에 따른 새 말의 시작(설계 개정 A4): 턴은 닫히고 이 조각부터 지시 응답이다
+            judgment.onNewSpeechStarted();
         }
         if (result.verdict() != OutputGeneration.ChunkVerdict.ACCEPT || !inOutputRange()) {
             return;
@@ -1979,6 +2275,7 @@ public final class SessionExecutor {
         }
         // PD 2.1-C의 WARN 한 줄은 그대로 남긴다
         services.events().appError(EventLog.Component.VOICE_RELAY, "ProviderDisconnected", EventCode.Level.WARN);
+        judgment.onFault();
         if (Trigger.DISCONNECT.accepts(status)) {
             abortProviderLost();
         }
@@ -1990,6 +2287,7 @@ public final class SessionExecutor {
      * 바로 끝내고 end_detail에 PROVIDER_LOST를 적는다. 연결이 살아 있으면 CLOSE_TRANSPORT(DISCONNECT) + STANDBY.
      */
     private void abortProviderLost() {
+        judgment.onFault();
         Instant now = services.clock().now();
         Optional<ActivitySessionRow> row = services.transitions().transition(plan.sessionId(), status,
                 SessionStatus.ABORTED, TransitionTable.changeFor(Trigger.DISCONNECT, null, now)
@@ -2027,13 +2325,120 @@ public final class SessionExecutor {
             applyStopDecision(stopConfirm.onReply(transcript, stop, at), "REPLY", at);
             return true;
         }
-        StopIntentJudge.Judgment judgment = stopJudge.judge(transcript, !devicePlaying.isEmpty());
-        StopConfirmFlow.Decision decision = stopConfirm.onJudgment(judgment.verdict());
+        StopIntentJudge.Judgment stopJudgment = stopJudge.judge(transcript, !devicePlaying.isEmpty());
+        if (stopJudgment.verdict() == StopIntentJudge.Verdict.CONFIRM && openStopJudgment(transcript, at)) {
+            return true;
+        }
+        StopConfirmFlow.Decision decision = stopConfirm.onJudgment(stopJudgment.verdict());
         if (decision == StopConfirmFlow.Decision.CLOSE) {
-            putEvent(EVENT_CHILD_STOP_INTENT, "{\"basis\":\"" + judgment.basis().name() + "\"}", at);
+            putEvent(EVENT_CHILD_STOP_INTENT, "{\"basis\":\"" + stopJudgment.basis().name() + "\"}", at);
         }
         applyStopDecision(decision, null, at);
         return decision != StopConfirmFlow.Decision.NONE;
+    }
+
+    /**
+     * W2: 불명확한 종료 표현(CONFIRM)은 확인 질문을 바로 하지 않고 J6를 연다. 출력권 연습의 시계를 멈추고 연습 발화를 끊고 출력을 정리하는 것은 지금
+     * 확인 질문 앞 단계와 같고, {@code stopConfirm.onJudgment}는 부르지 않는다. 열 수 없으면(공급자 없음 · 이미 열린 턴) 기록만 남기고 지금 흐름이다.
+     *
+     * @return J6를 열었으면 참(이번 전사를 종료 의도 흐름이 맡았다)
+     */
+    private boolean openStopJudgment(String transcript, Instant at) {
+        JudgmentCoordinator.Readiness ready = judgment.preflight(transcript);
+        if (ready != JudgmentCoordinator.Readiness.READY) {
+            judgment.recordSkipped(ready, JudgmentPoint.J6, JudgmentTrigger.STOP_CONFIRM_CANDIDATE, currentTranscriptSeq,
+                    NextAction.ASK_STOP_CONFIRM);
+            return false;
+        }
+        boolean controlled = practice != null && practice.controlsOutput();
+        if (controlled) {
+            pausePracticeTimers(at);
+            interruptPracticeSpeech(at);
+        }
+        stopOutputForIntent(at);
+        int seq = currentTranscriptSeq;
+        judgment.open(new JudgmentCoordinator.Open(JudgmentPoint.J6, JudgmentTrigger.STOP_CONFIRM_CANDIDATE, JudgmentOwner.EXECUTOR,
+                seq, transcript, at, null, judgment.recentBefore(seq), this::decideStopJudgment,
+                closure -> afterStopJudgment(closure, transcript, seq, at)));
+        return true;
+    }
+
+    /** J6 결과 → 지시 여부. 휴식(REST)만 ACTIVE에서 지시 하나를 낸다(BR6.4): 출력권 연습은 받아 주기만, 그 밖은 받아 주고 이어 가기. */
+    private JudgmentTurn.Decision decideStopJudgment(JudgmentTurn turn, JudgeOutcome outcome) {
+        if (outcome.kind() == JudgmentOutcomeKind.CONFIRMED && "REST".equals(outcome.firstOption()) && status == SessionStatus.ACTIVE) {
+            boolean controlled = practice != null && practice.controlsOutput();
+            return JudgmentTurn.Decision.instruct(controlled ? InstructionTemplates.NextAction.REST_ACK_ONLY
+                    : InstructionTemplates.NextAction.REST_ACK_AND_RETURN);
+        }
+        return JudgmentTurn.Decision.close();
+    }
+
+    /** J6가 닫힌 뒤 결과표(W2 4)대로 한다. */
+    private JudgmentCoordinator.Handled afterStopJudgment(JudgmentTurn.Closure closure, String utterance, int seq, Instant at) {
+        Instant now = services.clock().now();
+        boolean controlled = practice != null && practice.controlsOutput();
+        JudgeOutcome outcome = closure.outcome();
+        switch (outcome.kind()) {
+            case SUPERSEDED -> {
+                // R-14: 새 전사가 다시 CONFIRM이면 연습 시계 멈춤을 유지하고(새 J6가 이어 받는다), 아니면 재개한다
+                if (supersedeVerdict != StopIntentJudge.Verdict.CONFIRM) {
+                    resumePracticeTimers(now);
+                }
+                return JudgmentCoordinator.Handled.NOTHING;
+            }
+            case STOPPED, SESSION_EXITED -> {
+                return JudgmentCoordinator.Handled.NOTHING;
+            }
+            case FAULT_CANCELLED -> {
+                resumePracticeTimers(now);
+                handToPractice(utterance, seq, at);
+                return new JudgmentCoordinator.Handled(NextAction.NONE, true);
+            }
+            default -> {
+                // CONFIRMED · ABSTAINED: 아래 결과표
+            }
+        }
+        String first = outcome.kind() == JudgmentOutcomeKind.CONFIRMED ? outcome.firstOption() : null;
+        if ("END_CLEAR".equals(first)) {
+            putEvent(EVENT_CHILD_STOP_INTENT, "{\"basis\":\"" + StopIntentJudge.Basis.LUNA_J6.name() + "\"}", now);
+            stopOutputForIntent(now);
+            beginClosing(Trigger.CHILD_STOP_CONFIRMED, null);
+            return new JudgmentCoordinator.Handled(NextAction.CLOSE, false);
+        }
+        if ("REST".equals(first)) {
+            resumePracticeTimers(now);
+            if (controlled && status == SessionStatus.ACTIVE) {
+                mailbox.putSafety(new SessionMailbox.PracticeEvent(new PracticeSessionExtension.ExtensionEvent(
+                        PracticeSessionExtension.ExtensionEvent.Kind.REST_REQUESTED, "judgment", null, null)));
+            }
+            NextAction next = closure.instruction() == null ? NextAction.NONE
+                    : controlled ? NextAction.REST_ACK_ONLY : NextAction.REST_ACK_AND_RETURN;
+            return new JudgmentCoordinator.Handled(next, true);
+        }
+        if ("NOT_END".equals(first)) {
+            if (controlled) {
+                resumePracticeTimers(now);
+                handToPractice(utterance, seq, at);
+            } else if (status == SessionStatus.ACTIVE) {
+                requestResponse(InstructionTemplates.ResponseStart.CONTINUE);
+            }
+            return new JudgmentCoordinator.Handled(NextAction.RESUME, true);
+        }
+        // UNCLEAR · 보류(모든 사유): 지금의 확인 질문 흐름
+        if (status == SessionStatus.ACTIVE) {
+            applyStopDecision(stopConfirm.onJudgment(StopIntentJudge.Verdict.CONFIRM), null, now);
+        }
+        return new JudgmentCoordinator.Handled(NextAction.ASK_STOP_CONFIRM, false);
+    }
+
+    /** R-13: 판정 때문에 연습에 못 넘긴 확정 전사를 출력권 연습에 넘긴다. */
+    private void handToPractice(String utterance, int seq, Instant at) {
+        if (practice == null || !practice.controlsOutput() || status != SessionStatus.ACTIVE) {
+            return;
+        }
+        PracticeSessionExtension.Utterance held = new PracticeSessionExtension.Utterance(seq, at, utterance, false,
+                !devicePlaying.isEmpty());
+        practiceSignal(() -> practice.onChildUtterance(held, practiceOutput), true);
     }
 
     /**
@@ -2264,6 +2669,7 @@ public final class SessionExecutor {
         pauseStartedAt = now;
         timers.cancel(Kind.JOIN_WINDOW);
         timers.cancel(Kind.STOP_CONFIRM);
+        judgment.onFault();
         pausePracticeTimers(now);
         if (practice != null && practice.controlsOutput()) {
             interruptPracticeSpeech(now);
@@ -2343,6 +2749,10 @@ public final class SessionExecutor {
 
     /** U3-J6: 재생이 모두 끝났거나 보낼 응답이 없다 — 생각 중 · 재생 뒤면 '듣는 중'으로 돌아간다. */
     private void listeningAgain() {
+        if (judgment.isOpen() || practiceThinking) {
+            // U11 BR3.6: 열린 판정 턴(또는 확장이 요청한 생각 중 유지) 동안은 듣는 중으로 되돌리지 않는다
+            return;
+        }
         if (status == SessionStatus.ACTIVE && view != View.LISTENING && devicePlaying.isEmpty()
                 && !playback.isPlaying()) {
             sendControl(new SessionState(View.LISTENING));
@@ -3056,6 +3466,9 @@ public final class SessionExecutor {
             case SEGMENT_QUIET -> onOutputQuiet();
             case INSTRUCTION_WAIT -> onInstructionWaitExpired();
             case INPUT_TRANSCRIPT_QUIET -> onInputTranscriptQuiet();
+            case JUDGMENT_LIVE -> judgment.onTimer(JudgmentTurn.TimerKind.LIVE);
+            case JUDGMENT_READY -> judgment.onTimer(JudgmentTurn.TimerKind.READY);
+            case JUDGMENT_INSTRUCTION -> judgment.onTimer(JudgmentTurn.TimerKind.INSTRUCTION);
             case PLAYBACK_EXPIRY -> {
                 playback.clear();
                 if (status == SessionStatus.WAITING_CHILD && joinPromptPlaybackId != null) {
@@ -3083,6 +3496,7 @@ public final class SessionExecutor {
      */
     private void onDeletionStop(SessionMailbox.DeletionStop stop) {
         try {
+            judgment.onExit();
             relay.tap(null);
             relay.setAccepting(false);
             DeviceLink current = link;
@@ -3457,6 +3871,7 @@ public final class SessionExecutor {
      */
     private void changeStatus(SessionStatus next, Instant now) {
         status = next;
+        judgment.onStatus(next);
     }
 
     private void closeProvider() {
@@ -3487,6 +3902,7 @@ public final class SessionExecutor {
             quietly(timers::cancelAll);
             quietly(sendQueue::shutdown);
             quietly(this::cancelPracticeTimers);
+            quietly(judgment::shutdown);
             quietly(relay::stop);
             quietly(this::closeProvider);
             quietly(() -> {
