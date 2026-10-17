@@ -167,6 +167,19 @@ export const LATENCY_TURN_KEYS = Object.freeze([
   "quietWaitMs",
 ]);
 
+/**
+ * LATENCY_TURN 한 줄에서 빠진 키(U11 편차: 사람 결정 2026-10-17). 입력 전사 확정은 조각을 1500ms 조용으로 묶어 만들기 때문에
+ * 응답이 먼저 재생되는 턴의 줄에는 tTranscriptFinal이 없다. 말 끝 출처가 INPUT_TRANSCRIPT_FINAL인 줄만 이 키를 요구한다.
+ */
+export function missingLatencyAttrs(entry) {
+  const attrs = entry && typeof entry.attrs === "object" && entry.attrs !== null ? entry.attrs : {};
+  const required =
+    attrs.tSpeechEndSource === "INPUT_TRANSCRIPT_FINAL"
+      ? LATENCY_TURN_KEYS
+      : LATENCY_TURN_KEYS.filter((key) => key !== "tTranscriptFinal");
+  return missingAttrs(entry, required);
+}
+
 /** SESSION_ITEMS_SERVED에 있어야 하는 키(J143 · NFR5.3). */
 export const ITEMS_SERVED_KEYS = Object.freeze(["tViewItemReady", "tViewItemFirstServed"]);
 
