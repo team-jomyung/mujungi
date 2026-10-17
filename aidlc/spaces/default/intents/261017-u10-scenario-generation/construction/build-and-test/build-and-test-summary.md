@@ -6,7 +6,7 @@
 
 ## Readiness
 
-최신 검증 커밋은 main U11과 수신 대기 보완을 포함한 `bd666d0`, 사본은 `/home/pdypd/mujungi-u10-final-verify`다. 전체 명령은755초에 FAIL: backend3416건·frontend994건·tools131건과 이미지/Compose는 통과했지만 C9의 음성 바이트 비교33600/28800에서 실패했다. 이전 연결 중단·절전/Neo4j 실패·수신 대기 수리 이력도 보존했다. 전체 검증/배포 준비 완료 판정은 하지 않으며 push·PR·CI는 C9 시험 지원 보완 판단 뒤 진행한다. U10 main 병합·배포·U12 실제 소비·실기기는 범위 밖이다.
+검증 대상은 `7125ee009525c314226ec181f61c4d87efe2f187`이며, 검증된 main6a785를 통합한700ms 계약판이다. 2026-10-17T13:56:40Z부터 깨끗한 검증 사본에서 실행한 전체 명령은767초 RESULT PASS rc0이다. 지정된 네 한정 명령도 각각1회 통과했다. push·PR CI는 아직 미확정이다. 이전 bd666d0의755초 C9 실패와 연결 중단·절전 이력 및 Loop-back1·2는 test-results.md에 보존한다. 명령 통과와 별개로 R-06은 Not Met, 실호출은 Unverified여서 모든 품질 목표 충족을 주장하지 않는다. main 병합·배포·실기기는 범위 밖이다.
 
 ## Test inventory
 
@@ -16,19 +16,19 @@
 
 | Target ID | Source | Expected | Actual | Evidence | Owning Stage | Verdict |
 |---|---|---|---|---|---|---|
-| T-BUILD | Testing Contract / 빌드, NFR2 | JAR·frontend 빌드 및 전체 명령 성공 | JAR/Next 빌드 PASS, 전체 C9 실패 | test-results.md / report.txt | Build and Test | Not Met |
-| T-REGRESSION | NFR2 / 기존 전체 회귀 | 기존 단위·통합·계약·ArchUnit 성공, 원 단언 유지 | backend3416·frontend994·tools131 PASS | A1/A2/A3.log | Build and Test | Met |
-| T-U10 | Testing Contract / Standard | u10 시험 0건 아님, 핵심 경계와 실패 대조 성공 | 22클래스160건, 실패/오류/skip0 | JUnit XML 및 test-results.md | Build and Test | Met |
-| T-MODULE-COV | team Testing Posture | Core·RT·계약·frontend 모듈 줄80% 이상 | 96.1781/93.4345/98.4526/98.55% | 보존된 전체 JaCoCo XML / frontend coverage | Build and Test | Met |
-| T-U10-COV | NFR2 | 실제 운영27파일 범위 줄80%, 누락/빈 범위 실패 | 1372/1418줄=96.7560%, 누락0 | coverage-scope/u10.txt / JaCoCo | Build and Test | Met |
+| T-BUILD | Testing Contract / 빌드, NFR2 | JAR·frontend 빌드 및 전체 명령 성공 | JAR2개 시험 클래스0·frontend build·전체 rc0 | test-results.md / 7125ee0 전체 실행 | Build and Test | Met |
+| T-REGRESSION | NFR2 / 기존 전체 회귀 | 기존 단위·통합·계약·ArchUnit 성공, 원 단언 유지 | backend3546건 실패0/기존 skip3·frontend994건·tools133건 | test-results.md / 전체 XML·A1~A3 로그 | Build and Test | Met |
+| T-U10 | Testing Contract / Standard | u10 시험 0건 아님, 핵심 경계와 실패 대조 성공 | 22클래스160건·실패/오류/skip0 | test-results.md / 전체 XML 및 한정 실행 | Build and Test | Met |
+| T-MODULE-COV | team Testing Posture | Core·RT·계약·frontend 모듈 줄80% 이상 | Core96.1877%·RT93.3393%·계약98.4526%·frontend98.55% | test-results.md / 보존된 전체 JaCoCo·A2 로그 | Build and Test | Met |
+| T-U10-COV | NFR2 | 실제 운영27파일 범위 줄80%, 누락/빈 범위 실패 | 27파일1372/1418줄=96.7560%, 누락0 | test-results.md / 전체 JaCoCo·u10.txt 대조 | Build and Test | Met |
 | T-DEADLINE | NFR1, FR2.3 | 최초15초 마감을 첫 전달까지 유지, 늦은 성공0 | 별도 준비 READY 경계 R-06 미수리, 기존 위험 수용 | review-02.md / test-results.md | Build and Test | Not Met |
-| T-GRAPH-BUDGET | FR5.2, NFR1 | 그래프 합계2초·장애 기본 경로·진실한 graphContextUsed | 관련 U10 자동 대조 통과 | U10Deadline/Graph/PlannedGeneration 시험 | Build and Test | Met |
-| T-RETRY | NFR1, FR2.2 | 기술1·내용1·최대6호출을 최초 잔여 안에서만 수행 | 관련 생성·복구 대조 통과 | U10 시험 XML | Build and Test | Met |
-| T-COMPAT | FR3·FR4, NFR4 | V10 더하기만·과거 자료/쓰기·기존 C8/C10 필수 값 유지 | PG/계약/첫 패키지 대조 통과 | U10Repository/Preparation/PlannedGeneration XML | Build and Test | Met |
-| T-PRIVACY | FR7, NFR3·NFR6 | 공급자 최소 입력·권한/동의/삭제 재확인·민감 로그0 | U10·A4/B의 거절 대조 PASS, P1/P2/P3 미실행 | U10 XML / A4/B 출력 / test-results.md | Build and Test | Unverified |
-| T-E2E | team Walking Skeleton | 전체 verify.sh의 A/B/C/P1/P2/P3/T 성공 | A/B PASS, C1~C8 PASS·C9 FAIL, 이후 미실행 | report.txt RESULT FAIL | Build and Test | Not Met |
-| T-INFRA | R-M2~5, team Testing Posture | Compose·마이그레이션·프로필·이미지/관문 검사 성공 | 정적8건·음성대조46건·B 이미지5종/Compose PASS, CI 이미지 검사 미실행 | infra-validate / test-infra-validate / B.log | Build and Test | Unverified |
-| T-CI | 지시서 / 완료 조건, R-M1 | 최종 PR 커밋의 필수 ci-gate 성공 | C9 수리 판단 대기, push/PR 미실행 | test-results.md | Build and Test | Unverified |
+| T-GRAPH-BUDGET | FR5.2, NFR1 | 그래프 합계2초·장애 기본 경로·진실한 graphContextUsed | 실제 BASE 입력·예산/장애/BASE-only 대조 통과 | test-results.md / U10 전체 및 한정 XML | Build and Test | Met |
+| T-RETRY | NFR1, FR2.2 | 기술1·내용1·최대6호출을 최초 잔여 안에서만 수행 | 생성/검토 공유 예산·재시도/취소 대조 통과, READY 경계는 T-DEADLINE 별도 | test-results.md / U10 전체 및 한정 XML | Build and Test | Met |
+| T-COMPAT | FR3·FR4, NFR4 | V10 더하기만·과거 자료/쓰기·기존 C8/C10 필수 값 유지 | V10·구버전 쓰기·대본 DB/첫 전달 대조 및 FlywayConfIT5건 통과 | test-results.md / 전체·한정 XML | Build and Test | Met |
+| T-PRIVACY | FR7, NFR3·NFR6 | 공급자 최소 입력·권한/동의/삭제 재확인·민감 로그0 | U10 대조·A4·P1/P2/P3 통과 | test-results.md / 전체 XML·보안 로그 | Build and Test | Met |
+| T-E2E | team Walking Skeleton | 전체 verify.sh의 A/B/C/P1/P2/P3/T 성공 | A1~A4/F/B/C1~C12/P1/P2/P3/T 통과767초 | test-results.md / 전체 report.txt | Build and Test | Met |
+| T-INFRA | R-M2~5, team Testing Posture | Compose·마이그레이션·프로필·이미지/관문 검사 성공 | 전체 B/P1~P3와 정적8건·실패 대조46건 통과 | test-results.md / 전체 로그 및 인프라 출력 | Build and Test | Met |
+| T-CI | 지시서 / 완료 조건, R-M1 | 최종 PR 커밋의 필수 ci-gate 성공 | 아직 push·PR 미실행 | test-results.md / 13:56:40Z 실행 | Build and Test | Unverified |
 | T-EVIDENCE | NFR5 | 자동 대역/실호출/실기기 증거를 분리, 미측정 공개 | 대역/실호출/실기기 구분과 중단/실패 이력 보존 | test-results.md / performance-test-instructions.md | Build and Test | Met |
 | T-LIVE-LATENCY | 원 FR2.5, 지시서 실호출 관측 | 준비 확인 후 합성 실호출15초 관측 | 실제 공급자 호출 미실행 | performance-test-instructions.md | 별도 준비 확인 필요 / 예정된 후속 검증 단계 없음 | Unverified |
 
