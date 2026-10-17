@@ -2367,6 +2367,10 @@ public final class SessionExecutor {
     private JudgmentTurn.Decision decideStopJudgment(JudgmentTurn turn, JudgeOutcome outcome) {
         if (outcome.kind() == JudgmentOutcomeKind.CONFIRMED && "REST".equals(outcome.firstOption()) && status == SessionStatus.ACTIVE) {
             boolean controlled = practice != null && practice.controlsOutput();
+            if (controlled) {
+                // J6가 연습 발화를 끊으며 건 출력 막음을 풀어야 받아 주는 말이 들린다(이후 막을지는 REST_REQUESTED를 받은 확장이 정한다)
+                practiceHold = false;
+            }
             return JudgmentTurn.Decision.instruct(controlled ? InstructionTemplates.NextAction.REST_ACK_ONLY
                     : InstructionTemplates.NextAction.REST_ACK_AND_RETURN);
         }
