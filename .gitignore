@@ -109,3 +109,5 @@ node_modules/
 .next/
 coverage/
 *.tsbuildinfo
+# VS Code Java(Eclipse JDT) 빌드 산출물
+backend/**/bin/

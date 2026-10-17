@@ -23,24 +23,43 @@ SET log_statement = 'none';
 \getenv realtime_password DB_REALTIME_PASSWORD
 \getenv backup_password DB_BACKUP_PASSWORD
 
--- ---------------------------------------------------------------------------
--- 역할 4개 (모두 NOSUPERUSER · NOCREATEDB · NOCREATEROLE · NOREPLICATION · NOBYPASSRLS)
--- 연결 한도: owner 4 · core_app 12 · realtime_app 12 · backup 2 (infra-spec 2.5, 풀 10 + 기동 가드 1 + 여유 1)
--- ---------------------------------------------------------------------------
-SELECT format('%s ROLE mujoong_owner WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS CONNECTION LIMIT 4 PASSWORD %L',
+-- 스크립트 맨 앞에서 한 번 판단
+SELECT rolsuper AS mujoong_is_superuser FROM pg_roles WHERE rolname = current_user \gset
+
+-- 역할 생성(CREATE)은 모든 속성을 명시한다. 재실행(ALTER)에서 SUPERUSER·REPLICATION·BYPASSRLS 속성은
+-- 슈퍼유저만 지정할 수 있으므로(PG16) 비슈퍼유저 실행 시에는 생략한다(생성 시 이미 NO로 설정됨).
+SELECT format('%s ROLE mujoong_owner WITH LOGIN %s NOCREATEDB NOCREATEROLE CONNECTION LIMIT 4 PASSWORD %L',
               CASE WHEN EXISTS (SELECT FROM pg_roles WHERE rolname = 'mujoong_owner') THEN 'ALTER' ELSE 'CREATE' END,
+              CASE WHEN NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'mujoong_owner') OR :'mujoong_is_superuser'::boolean
+                   THEN 'NOSUPERUSER NOREPLICATION NOBYPASSRLS' ELSE '' END,
               :'owner_password')
 \gexec
-SELECT format('%s ROLE core_app WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS CONNECTION LIMIT 12 PASSWORD %L',
+
+-- 비슈퍼유저(RDS) 실행 시: mujoong_owner 소유 스키마를 만들려면 해당 역할로 전환(SET ROLE)할 수 있어야 한다.
+-- PG16부터 역할 생성자에게 SET 권한이 자동 부여되지 않으므로 직접 부여한다.
+\if :mujoong_is_superuser
+\else
+GRANT mujoong_owner TO CURRENT_USER WITH SET TRUE, INHERIT TRUE;
+\endif
+
+SELECT format('%s ROLE core_app WITH LOGIN %s NOCREATEDB NOCREATEROLE CONNECTION LIMIT 12 PASSWORD %L',
               CASE WHEN EXISTS (SELECT FROM pg_roles WHERE rolname = 'core_app') THEN 'ALTER' ELSE 'CREATE' END,
+              CASE WHEN NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'core_app') OR :'mujoong_is_superuser'::boolean
+                   THEN 'NOSUPERUSER NOREPLICATION NOBYPASSRLS' ELSE '' END,
               :'core_password')
 \gexec
-SELECT format('%s ROLE realtime_app WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS CONNECTION LIMIT 12 PASSWORD %L',
+
+SELECT format('%s ROLE realtime_app WITH LOGIN %s NOCREATEDB NOCREATEROLE CONNECTION LIMIT 12 PASSWORD %L',
               CASE WHEN EXISTS (SELECT FROM pg_roles WHERE rolname = 'realtime_app') THEN 'ALTER' ELSE 'CREATE' END,
+              CASE WHEN NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'realtime_app') OR :'mujoong_is_superuser'::boolean
+                   THEN 'NOSUPERUSER NOREPLICATION NOBYPASSRLS' ELSE '' END,
               :'realtime_password')
 \gexec
-SELECT format('%s ROLE mujoong_backup WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS CONNECTION LIMIT 2 PASSWORD %L',
+
+SELECT format('%s ROLE mujoong_backup WITH LOGIN %s NOCREATEDB NOCREATEROLE CONNECTION LIMIT 2 PASSWORD %L',
               CASE WHEN EXISTS (SELECT FROM pg_roles WHERE rolname = 'mujoong_backup') THEN 'ALTER' ELSE 'CREATE' END,
+              CASE WHEN NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'mujoong_backup') OR :'mujoong_is_superuser'::boolean
+                   THEN 'NOSUPERUSER NOREPLICATION NOBYPASSRLS' ELSE '' END,
               :'backup_password')
 \gexec
 
@@ -59,8 +78,13 @@ SELECT 'CREATE DATABASE mujoong' WHERE NOT EXISTS (SELECT FROM pg_database WHERE
 \gexec
 REVOKE ALL ON DATABASE mujoong FROM PUBLIC;
 GRANT CONNECT ON DATABASE mujoong TO mujoong_owner, core_app, realtime_app, mujoong_backup;
--- 데이터 등급 표지: 시연 데이터는 합성(synthetic). 없거나 모르는 값이면 앱 · 백업이 real로 본다(fail-closed, J124 · SD-24)
+-- 데이터 등급 표지: 사용자 정의 설정을 DB 단위로 저장하는 것은 슈퍼유저 전용(PG15+).
+-- RDS 등 비슈퍼유저 실행 시에는 건너뛴다 → 앱 측 표지 필요 (docs/infra/troubleshooting.md 2.2, 8.2)
+\if :mujoong_is_superuser
 ALTER DATABASE mujoong SET mujoong_db.data_class = 'synthetic';
+\else
+\echo '01-roles.sql: 비슈퍼유저 실행 — mujoong_db.data_class DB 설정을 건너뛴다'
+\endif
 ALTER DATABASE mujoong SET timezone = 'UTC';
 
 \connect mujoong
