@@ -1,3 +1,13 @@
+> 현재 범위의 정본은 바로 아래 U14 갱신절이다. 그 뒤 원문은 보존 이력이며 재검증 범위는 timestamp에 한정한다.
+
+## U14 집중 갱신 — 기술 확인 수준
+
+이번 서비스 소스는 Java record·Spring Service/Repository·NamedParameterJdbcTemplate·TransactionTemplate·JsonCodec를 사용한다. 데이터는 PostgreSQL SQL 마이그레이션이며 U15 Neo4j/메모리 어댑터 파일이 존재한다. 아래 U15 드라이버/어댑터 미존재 설명은 구현 전 이력이다. 이번에는 버전 카탈로그·패키지 lock을 새로 검증하지 않았으므로 아래 판 번호는 shallow인 이전 관찰이다.
+
+새 도구나 의존을 추가한 스캔이 아니다. 현재 시험 체계는 확인한 시험 소스의 JUnit·Mockito/AssertJ 및 태그 기반이며 전체 빌드·CI 구성은 과거 기록을 유지한다.
+
+---
+
 # 기술 스택 (Technology Stack)
 
 > 최신 확인: 2026-10-16, HEAD 7e30ee8, U15 집중 분석. 아래 최신 절이 U15 관련 과거 설명보다 우선한다. 이전 분석 본문은 이력으로 보존하며 이번 범위 밖의 검증 주장은 shallow로 낮췄다.

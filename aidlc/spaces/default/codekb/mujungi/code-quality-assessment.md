@@ -1,3 +1,17 @@
+> 현재 범위의 정본은 바로 아래 U14 갱신절이다. 그 뒤 원문은 보존 이력이며 재검증 범위는 timestamp에 한정한다.
+
+## U14 집중 갱신 — 확인 사실과 검증 계획
+
+이번 스캔은 읽기만 했고 시험·커버리지를 실행하지 않았다. U15의 이전 보고/CI 수치는 이번 U14 검증 결과로 재사용하지 않는다. result/practice 시험 목록과 SceneChipMapperTest·JobRunnerTest를 확인했다. u14.txt는 아직 없고 u6/u15 범위 목록은 있다. 새 시험은 u14 태그·LINE 80% 범위를 추가하고 타 유닛 단언·하한을 낮추지 않는다.
+
+주요 회귀: 기존 행동 목표 읽기, 후보 버전 고정·동시 선택·삭제, 새 목표 근거 검증, invalid skillRef 거절 및 NONE 처리, seed 생성 장애 후 결과 DONE 유지, 기존 U5b와 새 flowVersion 혼합 리포트, 3개 이상 실제 장면, AFTER_REASK 저장/API/report와 27 칩 분리, 4번째 시도 및 5/15/30초 backoff, 삭제 중 늦은 쓰기 차단. fake 공급자만 사용한다.
+
+중요 발견: V5의 attempt_count뿐 아니라 core_result_job_attempt.attempt_no도 1..3 제약이다. 4회 시도에서 두 제약을 함께 검토해야 한다. V4의 후보·선택은 행동 키/버전 NOT NULL과 복합 FK이므로 새 후보용 저장 구조를 호환 확장해야 한다. migration-approvals.txt는 실제 사람이 확인한 문장 해시·이름·날짜를 요구한다. 승인자의 이름을 만들어 적지 않는다.
+
+품질: 책임 명명·출력 검증·잠금 경계는 양호하나 SessionResultHandler/ResultAiSchema/ReportAssembler의 압축된 로직은 보통 수준이며 버전 분기로 복잡도가 늘어날 위험이 있다. U15가 구현되었으므로 아래 TD-3의 어댑터 부재와 U15 미구현 서술은 더 이상 현재 사실이 아니다.
+
+---
+
 # 코드 품질 평가 (Code Quality Assessment)
 
 > 최신 확인: 2026-10-16, HEAD 7e30ee8, U15 집중 분석. 아래 최신 절이 U15 관련 과거 설명보다 우선한다. 이전 분석 본문은 이력으로 보존하며 이번 범위 밖의 검증 주장은 shallow로 낮췄다.

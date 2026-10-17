@@ -1,3 +1,32 @@
+> 현재 범위의 정본은 바로 아래 U14 갱신절이다. 그 뒤 원문은 보존 이력이며 재검증 범위는 timestamp에 한정한다.
+
+## U14 Architecture Analysis — 현재 흐름
+
+후보의 실제 저장 책임은 core.practice.CandidateRegistry → PracticeGoalRepository, 검증은 core.result.CandidateScreen에 나뉜다. SessionResultHandler는 외부 AI를 트랜잭션 밖에서 부르고 JobContext.commit으로 결과를 확정한 뒤 후보를 등록한다. JobRunner는 보호자 → 작업 → 리포트 잠금, 시도 번호·lease 재확인, 영속 pending_candidates 복구를 보존한다.
+
+ReportAssembler는 SceneChipMapper.text를 그대로 사용해 표시와 집계 의미가 결합되어 있다. U14에서는 저장 시점·27 투영·리포트 문구의 경계를 나눌 필요가 있다. U15 ChildKnowledgeService 조회는 소유자·동의·삭제 상태를 검사하고 불가 시 빈 목록을 돌려준다. 생성 실패는 NONE이며 결과 확정을 되돌리면 안 된다.
+
+## Interaction Diagrams — U14 변경 전 경계
+
+```mermaid
+sequenceDiagram
+    participant Job as JobRunner
+    participant Handler as SessionResultHandler
+    participant AI as ResultTextGateway
+    participant DB as 결과 저장소
+    participant Goal as CandidateRegistry
+    Job->>Handler: 결과 시도
+    Handler->>AI: 구조화 및 문장·후보·재판정
+    AI-->>Handler: 출력
+    Handler->>DB: 잠금 재확인 후 결과 확정
+    Handler->>Goal: 커밋 뒤 후보 등록
+    Goal->>DB: 정의 버전 고정 및 후보 저장
+```
+
+텍스트 대체: AI 호출 뒤 결과를 확정하고 후보 등록은 커밋 뒤 수행한다. 현재는 행동 정의 기반 후보이며 U14의 자유 생성 후보·씨앗 연결은 아직 없다. 아래 기존 U15 미구현 설명은 과거 자료다.
+
+---
+
 # 아키텍처 (Architecture)
 
 > 최신 확인: 2026-10-16, HEAD 7e30ee8, U15 집중 분석. 아래 최신 절이 U15 관련 과거 설명보다 우선한다. 이전 분석 본문은 이력으로 보존하며 이번 범위 밖의 검증 주장은 shallow로 낮췄다.

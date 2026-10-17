@@ -1,3 +1,15 @@
+> 현재 범위의 정본은 바로 아래 U14 갱신절이다. 그 뒤 원문은 보존 이력이며 재검증 범위는 timestamp에 한정한다.
+
+## U14 집중 갱신 — 변경 표면
+
+운영 서비스·저장소는 core.practice / core.result, 보고 투영은 core.report.ReportAssembler다. core V4에 후보·선택의 행동 정의 FK가 있으며 V5에 결과 시도·장면 제약이 있다. V8 파일은 U15로 이미 존재하므로 U14는 V9를 새로 추가한다. 적용된 V4/V5를 편집하지 않는다.
+
+U15 ChildKnowledgeService, SeedGenerationService, StructureSignature는 구현되어 있고 별도 ChildKnowledgeGraphPort 및 Neo4j/메모리 어댑터 파일이 존재한다. 이번에는 서비스 통합 경계만 깊게 읽었으며 Cypher·전체 그래프 내부는 재검증하지 않았다. U14는 SavedGoalReader를 제공해야 한다(현 practice/result 선언 검색에서 미발견).
+
+정확한 deep 파일은 timestamp에 제한한다. 나머지 기존 구조 설명은 보존한 과거 관찰이다.
+
+---
+
 # 코드 구조 (Code Structure)
 
 > 최신 확인: 2026-10-16, HEAD 7e30ee8, U15 집중 분석. 아래 최신 절이 U15 관련 과거 설명보다 우선한다. 이전 분석 본문은 이력으로 보존하며 이번 범위 밖의 검증 주장은 shallow로 낮췄다.

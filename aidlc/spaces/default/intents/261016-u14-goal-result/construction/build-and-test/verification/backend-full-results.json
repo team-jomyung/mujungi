@@ -1,0 +1,99 @@
+{
+  "source": "d5d4d4f",
+  "mode": "compose",
+  "backend": "A1 PASS rc0 544s",
+  "testBackend": "auto; Docker available; LOCAL alternatives skipped",
+  "modules": [
+    {
+      "module": "core-api",
+      "counts": {
+        "tests": 1561,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "coverage": [
+        {
+          "type": "LINE",
+          "missed": "389",
+          "covered": "9622"
+        }
+      ],
+      "linePercent": 96.11
+    },
+    {
+      "module": "realtime-activity",
+      "counts": {
+        "tests": 1235,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "coverage": [
+        {
+          "type": "LINE",
+          "missed": "732",
+          "covered": "10256"
+        }
+      ],
+      "linePercent": 93.34
+    },
+    {
+      "module": "contract-model",
+      "counts": {
+        "tests": 322,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "coverage": [
+        {
+          "type": "LINE",
+          "missed": "24",
+          "covered": "1527"
+        }
+      ],
+      "linePercent": 98.45
+    },
+    {
+      "module": "test-support",
+      "counts": {
+        "tests": 31,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 3
+      },
+      "coverage": [
+        {
+          "type": "LINE",
+          "missed": "747",
+          "covered": "558"
+        }
+      ],
+      "linePercent": 42.76
+    }
+  ],
+  "priorAttempt": {
+    "total": 3141,
+    "failures": 2,
+    "skipped": 3,
+    "rc": 1,
+    "totalSeconds": 384
+  },
+  "isolatedRetry": {
+    "neo4j": 9,
+    "realtimeDeletion": 4,
+    "failures": 0,
+    "skipped": 0,
+    "seconds": 58,
+    "rc": 0
+  },
+  "executionEnvironment": {
+    "GRADLE_OPTS": "-Dorg.gradle.parallel=false -Dorg.gradle.workers.max=2"
+  },
+  "notes": [
+    "Whole compose is still running; A1 success alone does not mean end-to-end PASS.",
+    "Module totals include U14 tests; never add filtered retry totals.",
+    "No test assertions, thresholds or timeout values changed."
+  ]
+}

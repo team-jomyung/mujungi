@@ -1,3 +1,26 @@
+> 현재 범위의 정본은 바로 아래 U14 갱신절이다. 그 뒤 원문은 보존 이력이며 재검증 범위는 timestamp에 한정한다.
+
+## U14 현재 검증 구성 요소
+
+아래 제목만 이번 deep 구성 요소다. 과거 deep 표시는 이력이며 timestamp의 shallow로 강등했다.
+
+### u14.practice-goal
+CandidateRegistry, PracticeGoalRepository, PracticeDeletionParticipant. 후보/선택 소유·행동 버전 고정·근거 저장·보호자 잠금. PracticeGoal 경계 재정리와 SavedGoalReader 추가 필요.
+
+### u14.result-pipeline
+SessionResultHandler, ResultAiSchema, ResultData, JobRunner, ResultQueryService, SceneJudgmentRepository, SceneChipMapper, CandidateScreen, ResultDeletionParticipant. 두 장면·행동 목록 가정과 pending 후보 복구·잠금 경계를 소유한다.
+
+### u14.report-projection
+ReportAssembler. 저장된 sceneChip 문구를 재사용해 AFTER_REASK의 별도 의미를 보존하지 못한다.
+
+### u14.knowledge-integration
+ChildKnowledgeService, SeedGenerationService, StructureSignature. U15의 실제 서비스이며 비활성/미동의/삭제·조회 실패와 생성 NONE 경계를 보존한다.
+
+### u14.contract-compatibility
+엄격 후보/재판정/practice-v2/결과 스키마, frontend 결과 파서, V4/V5 기존 제약, migration 승인 목록. DB·API·파서 변경을 한 묶음으로 검증해야 한다.
+
+---
+
 # 구성 요소 목록 (Component Inventory)
 
 > 최신 확인: 2026-10-16, HEAD 7e30ee8, U15 집중 분석. 아래 최신 절이 U15 관련 과거 설명보다 우선한다. 이전 분석 본문은 이력으로 보존하며 이번 범위 밖의 검증 주장은 shallow로 낮췄다.

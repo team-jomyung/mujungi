@@ -45,7 +45,7 @@ V9의 실제 사람 승인은 migration-review.md와 infra/migration-approvals.t
 
 ## 남은 일
 
-Code Generation의 네 번째 커밋 후 부모가 독립 검토, 전체 compose verify.sh, authorized branch push·PR CI를 이어간다. U15 PR 병합과 U14 병합/배포는 이 개발자가 수행하지 않았다. U10/U11/U12의 상황 생성·진행 판정은 C-DS10/U8 포트 소비 범위로 남는다.
+U15 PR26 선행 병합이 필요하며 U14 병합/배포는 수행하지 않는다. U10/U11/U12의 상황 생성·진행 판정은 C-DS10/U8 포트 소비 범위로 남는다. 수정 소스의 전체 로컬 검증은 아래와 같이 완료했고 branch push·PR CI를 이어간다.
 
 ## 1차 독립 검토 보완
 
@@ -54,3 +54,24 @@ R-01~R-03의 운영 경계를 보완했다. 빈 현대 후보도 이전 후보�
 수정 후 관련 회귀214개 PASS, U14 태그19클래스161개 PASS(실패/오류/skip0),26파일 범위 줄837/926=90.39%다. 첫 보완 시험의 실제 기록 fixture FK1개 실패도 보존했고 올바른 부모 활동 fixture를 넣은 재실행은 통과했다. 추적성58행/대상 존재와 범위26개 전수 일치를 확인했다.
 
 이 결과는 c096283의 전수 backend3135개와 frontend994개 증거를 대체하지 않는다. 프런트/RT 소스는 보완에서 불변이며 새 전체검사를 실행했다고 표시하지 않았다. 수정 커밋의 전체 backend/compose/PR CI는 부모가 후속 Build and Test에서 검증한다. 자세한 명령과 구분된 집계는 Code Generation 요약 및 verification/review-repair-results.json에 있다.
+
+## d5d4d4f 전체 통합 검증
+
+2차 독립 검토는 기존3건 모두 해결·신규 지적0으로 완료했다. 실제 사용자 구현 완료 승인 후 ext4 검증 복사본을 d5d4d4f375c3로 고정해 전체 scripts/verify.sh --mode compose를 실행했다. 최종 rc0/747초, 모든 A/B/C/P1/P2/P3/T가 PASS다.
+
+| 증거 종류 | 결과 |
+|---|---|
+| 테스트 대역 + 실제 DB, 전체 backend | 3149개 실패·오류0, Docker 미선택 LOCAL3skip |
+| 모듈 전체 줄 | core96.11% · RT93.34% · contract98.45%, 기존80% PASS |
+| frontend 전체 대역 | 74파일994개 PASS, 줄98.55%, eslint/Next build PASS |
+| tools | 11파일125개 PASS |
+| 합성 기기 + 가짜 AI + 실제 Compose | migrate/seed/기동과 자유대화 한 턴 C1~C12 PASS |
+| 격리·보안·불변 | 스키마 권한42501, 로그/비밀값 유출0, 작업 트리 불변 PASS |
+| 최종 U14 태그·범위 | 19클래스161개 실패/오류/skip0, 837/926줄=90.39% |
+| migration | 승인8해시로 infra 검사 PASS, V8→V9 호환9시험 포함 |
+| 실제 AI·실제 기기 | 실행하지 않음 |
+| PR CI | push 뒤 확인 중 |
+
+첫 전체 compose는 기존 RT 삭제 시험의 PT10S와 U15 Neo4j 초기화 오류로 A1 rc1/384초였다. 해당 클래스는 원 단언·기한으로 각각4개/9개 모두 PASS했다. 모듈 동시 실행만 제한한 GRADLE_OPTS로 전체 clean 검증을 다시 실행해 위3149개와 끝-끝을 통과했다. 제품 소스·시험 단언·하한·기한은 수정하지 않았다. 실패를 없었던 것으로 합산하지 않고 construction/build-and-test/test-results.md에 구분했다. 로컬 gitleaks 이력 도구는 없으므로 이력 검사는 CI secrets에서 별도로 확인한다.
+
+전체 집계는 활성 U14 기록 construction/build-and-test/verification/의 backend-full-results.json·compose-results.json·u14-final-results.json에 보존했다. 전체 XML을 수집한 뒤 U14 태그 필터를 실행했으므로 둘의 수와 커버리지를 서로 바꾸지 않았다. FR/NFR17개 추적 누락0이며 전체 추적58행의 대상 존재도 확인했다.
