@@ -35,8 +35,7 @@ public final class StructuredScenarioFlow {
         var original=goal.goalContext();
         Map<String,Object> payload=new LinkedHashMap<>();
         payload.put("ageYears",account.ageYears());payload.put("interests",account.interests());
-        var internal=sanitizer.sanitize(Map.of("goal",original),aliases.aliases(),LunaPurpose.SCENARIO_GENERATION).payload();
-        var cleanGoal=json.read(json.write(internal.get("goal")),GoalContext.class);
+        var cleanGoal=original.mapContent(text->(String)sanitizer.sanitize(Map.of("text",text),aliases.aliases(),LunaPurpose.SCENARIO_GENERATION).payload().get("text"));
         Map<String,Object> semanticGoal=new LinkedHashMap<>();
         semanticGoal.put("kind",cleanGoal.kind());semanticGoal.put("skillRef",cleanGoal.skillRef());
         if(cleanGoal.candidate()){
@@ -58,12 +57,15 @@ public final class StructuredScenarioFlow {
         knowledge.context().ifPresent(value->{var seed=value.seed();payload.put("structureContext",Map.of(
                 "skillRef",seed.seedId(),"signature",seed.signature(),"invariantSentence",seed.invariantSentence(),
                 "preservationRule",seed.preservationRule(),"relationship",seed.relationship(),"situation",seed.situation()));});
+        if(knowledge.context().isEmpty())payload.put("baseOnly",true);
         var clean=sanitizer.sanitize(payload,aliases.aliases(),LunaPurpose.SCENARIO_GENERATION).payload();
         String cleanOpportunity=(String)clean.get("opportunityCondition"),cleanRelation=(String)clean.get("relation");
         String sourceText=null;
         if(previous!=null)sourceText=(String)((Map<?,?>)clean.get("sourceScenario")).get("scenarioText");
+        var duplicate=new java.util.concurrent.atomic.AtomicBoolean();
         var rules=new ScenarioScriptValidation.Rules(cleanRelation,cleanOpportunity,cleanGoal.targetExpression(),aliases.originalNames(),
-                sourceText,fingerprint->repository.seen(session.childId(),fingerprint),knowledge);
-        return generator.generate(new ScenarioScriptGenerator.Input(clean,aliases.aliases(),rules,knowledge.context().isPresent(),json.write(cleanGoal)),deadline);
+                sourceText,fingerprint->{boolean seen=repository.seen(session.childId(),fingerprint);if(seen)duplicate.set(true);return seen;},knowledge);
+        try{return generator.generate(new ScenarioScriptGenerator.Input(clean,aliases.aliases(),rules,knowledge.context().isPresent(),json.write(cleanGoal)),deadline);}
+        catch(ScenarioScriptGenerator.ContentExhausted exhausted){exhausted.retryableDuplicate=duplicate.get();throw exhausted;}
     }
 }

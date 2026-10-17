@@ -21,11 +21,11 @@ public final class WeightedGoalOrder {
         Objects.requireNonNull(guardianId); Objects.requireNonNull(childId); Objects.requireNonNull(random);
         if (selections.isEmpty()) throw new IllegalArgumentException("선택 목표 필요");
         var ordered = selections.stream().sorted(selectionOrder()).toList();
-        var ids = new HashSet<UUID>(); var sorts = new HashSet<Integer>();
+        var ids = new HashSet<UUID>(); var sorts = new HashSet<SavedRank>();
         for (var s : ordered) {
             if (!guardianId.equals(s.guardianId()) || !childId.equals(s.childId()) || s.goalSelectionId() == null
                     || !ids.add(s.goalSelectionId())) throw new IllegalArgumentException("목표 소유/중복 오류");
-            if (!sorts.add(s.savedSortOrder())&&ordered.stream().anyMatch(other->other!=s&&other.savedSortOrder()==s.savedSortOrder()&&other.goalContext().kind()==s.goalContext().kind()))throw new IllegalArgumentException("같은 종류 저장 순위 중복");
+            if (!sorts.add(new SavedRank(s.goalContext().kind(),s.savedSortOrder())))throw new IllegalArgumentException("I5: 같은 종류 저장 순위 중복");
         }
         var remaining = new ArrayList<Integer>();
         for (int rank = 0; rank < ordered.size(); rank++) remaining.add(rank);
@@ -55,16 +55,18 @@ public final class WeightedGoalOrder {
     public List<FrozenGoal> validate(List<FrozenGoal> stored) {
         if (stored.isEmpty()) throw new IllegalArgumentException("준비 원본 필요");
         var ids = new HashSet<UUID>(); var ranks = new HashSet<Integer>(); var orders = new HashSet<Integer>();
+        var sorts = new HashSet<SavedRank>();
         var sorted = stored.stream().sorted(frozenOrder()).toList();
         for (int i = 0; i < sorted.size(); i++) {
             var g = sorted.get(i);
             if (g.selectedCount() != stored.size() || !ids.add(g.goalSelectionId()) || !ranks.add(g.selectionRank())
                     || !orders.add(g.order()) || g.selectionRank() != i + 1
-                    || (i > 0 && sorted.get(i - 1).savedSortOrder() == g.savedSortOrder()&&sorted.get(i-1).goalContext().kind()==g.goalContext().kind()))
+                    || !sorts.add(new SavedRank(g.goalContext().kind(),g.savedSortOrder())))
                 throw new IllegalArgumentException("준비 원본 순열 불일치");
         }
         return stored.stream().sorted(Comparator.comparingInt(FrozenGoal::order)).toList();
     }
-    private static Comparator<Selection> selectionOrder(){return Comparator.comparingInt(Selection::savedSortOrder).thenComparing(s->s.goalContext().kind()).thenComparing(Selection::goalSelectionId);}
-    private static Comparator<FrozenGoal> frozenOrder(){return Comparator.comparingInt(FrozenGoal::savedSortOrder).thenComparing(s->s.goalContext().kind()).thenComparing(FrozenGoal::goalSelectionId);}
+    private record SavedRank(kr.mujoong.core.practicegoal.SavedGoalReader.SavedGoalView.Kind kind,int sort){}
+    private static Comparator<Selection> selectionOrder(){return Comparator.comparingInt(Selection::savedSortOrder).thenComparing(Selection::goalSelectionId);}
+    private static Comparator<FrozenGoal> frozenOrder(){return Comparator.comparingInt(FrozenGoal::savedSortOrder).thenComparing(FrozenGoal::goalSelectionId);}
 }

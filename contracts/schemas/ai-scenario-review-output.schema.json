@@ -29,7 +29,10 @@
       }
     }
   },
-  "allOf": [{"if": {"properties": {"verdict": {"const": "APPROVE"}}}, "then": {"properties": {"reasons": {"maxItems": 0}}}}],
+  "anyOf": [
+    {"type":"object","additionalProperties":false,"required":["verdict","reasons"],"properties":{"verdict":{"enum":["APPROVE"]},"reasons":{"type":"array","maxItems":0,"items":{"type":"string"}}}},
+    {"type":"object","additionalProperties":false,"required":["verdict","reasons"],"properties":{"verdict":{"enum":["REJECT","UNCERTAIN"]},"reasons":{"type":"array","items":{"type":"string"}}}}
+  ],
   "examples": [
     { "verdict": "APPROVE", "reasons": [] },
     { "verdict": "REJECT", "reasons": ["ANSWER_INCLUDED", "EARLY_CUE"] }

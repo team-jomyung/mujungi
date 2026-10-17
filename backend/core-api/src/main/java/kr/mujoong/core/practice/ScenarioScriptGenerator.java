@@ -32,21 +32,32 @@ public final class ScenarioScriptGenerator {
         this.provider=provider;this.validation=validation;this.timing=timing;this.executor=executor;this.sleeper=sleeper;
     }
     private static final class Budget{int calls;boolean technical;}
+    public static final class ContentExhausted extends kr.mujoong.core.common.error.CoreApiException {
+        private static final long serialVersionUID=1L;
+        boolean retryableDuplicate;
+        ContentExhausted(){super(kr.mujoong.contract.error.ErrorCode.SCENARIO_GEN_FAILED);}
+    }
     public Result generate(Input input,ScenarioDeadline deadline){
         var budget=new Budget();ScenarioScript.Scene preserved=null;String model=null;
+        Input active=input;
         for(int correction=0;correction<=1;correction++){
+            final Input current=active;
             try {
-                Map<String,Object> payload=new LinkedHashMap<>(input.payload());
+                Map<String,Object> payload=new LinkedHashMap<>(current.payload());
                 if(correction>0)payload.put("correction",true);
                 if(preserved!=null)payload.put("baseToPreserve",preserved);
-                var generated=invoke(()->provider.generate(call(payload,input,deadline)),budget,deadline);
+                var generated=invoke(()->provider.generate(call(payload,current,deadline)),budget,deadline);
                 if(generated==null||generated.script()==null||!metadata(generated.model()))throw content();
                 model=generated.model();var script=generated.script();
-                var reviewed=review(script,input,budget,deadline);
-                var result=validation.inspect(script,input.rules());
+                var reviewed=review(script,current,budget,deadline);
+                var result=validation.inspect(script,current.rules());
+                if(current.graphContextUsed()&&current.rules().variants() instanceof ScenarioGraphContext.Session graph&&graph.fallbackRequired()){
+                    if(correction==1)throw new ContentExhausted();
+                    active=withoutGraph(current);preserved=null;continue;
+                }
                 if(preserved!=null&&(script.scenes().isEmpty()||!preserved.equals(script.scenes().getFirst())))result=ScenarioScriptValidation.Result.INVALID_BASE;
                 if(result==ScenarioScriptValidation.Result.VALID&&reviewed.review().approved())
-                    return approved(script,model,reviewed.model(),input,budget,deadline);
+                    return approved(script,model,reviewed.model(),current,budget,deadline);
                 boolean variantOnly=result==ScenarioScriptValidation.Result.INVALID_VARIANT
                         ||(!reviewed.review().reasons().isEmpty()&&reviewed.review().reasons().stream().allMatch(ScenarioScriptGenerator::variantReason));
                 preserved=variantOnly&&result!=ScenarioScriptValidation.Result.INVALID_BASE&&!script.scenes().isEmpty()
@@ -56,11 +67,20 @@ public final class ScenarioScriptGenerator {
             }
         }
         if(preserved!=null&&model!=null){
-            var reduced=new ScenarioScript(List.of(preserved));var review=review(reduced,input,budget,deadline);
-            if(review.review().approved()&&validation.inspect(reduced,input.rules())==ScenarioScriptValidation.Result.VALID)
-                return approved(reduced,model,review.model(),input,budget,deadline);
+            try {
+                var reduced=new ScenarioScript(List.of(preserved));var review=review(reduced,active,budget,deadline);
+                if(review.review().approved()&&validation.inspect(reduced,active.rules())==ScenarioScriptValidation.Result.VALID)
+                    return approved(reduced,model,review.model(),active,budget,deadline);
+            }catch(ScenarioScriptProvider.Failure failure){
+                if(failure.kind()!=ScenarioScriptProvider.Failure.Kind.CONTENT)throw ScenarioDeadline.failed();
+            }
         }
-        throw ScenarioDeadline.failed();
+        throw new ContentExhausted();
+    }
+    private Input withoutGraph(Input input){
+        var payload=new LinkedHashMap<>(input.payload());payload.remove("structureContext");payload.remove("variantPlan");payload.put("baseOnly",true);
+        var r=input.rules();
+        return new Input(payload,input.aliases(),new ScenarioScriptValidation.Rules(r.relation(),r.opportunity(),r.targetExpression(),r.originalNames(),r.sourceText(),r.seen(),(a,b)->false),false,input.goalContextJson());
     }
     private ScenarioScriptProvider.Call call(Map<String,Object> payload,Input input,ScenarioDeadline deadline){
         return new ScenarioScriptProvider.Call(payload,input.aliases(),deadline.callDeadline(timing.requestTimeout()));

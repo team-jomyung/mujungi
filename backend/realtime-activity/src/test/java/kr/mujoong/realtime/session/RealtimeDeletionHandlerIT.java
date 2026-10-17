@@ -76,6 +76,7 @@ class RealtimeDeletionHandlerIT {
         DeviceSimulatorClient device = env.connectDevice();
         UUID sessionId = activate(device, true);
         device.sendAudio(new byte[960]);
+        awaitTrue(() -> !env.provider.audioHashes().isEmpty(), "아이 오디오 공급자 수신");
         env.provider.emitTurn("item-1", "공룡이 좋아", "resp-1", "나도 공룡 좋아해", List.of(new byte[4800]));
         device.await(WsMessageType.OUTPUT_END, WAIT);
         endConfirmed(device, sessionId);
@@ -160,6 +161,7 @@ class RealtimeDeletionHandlerIT {
         DeviceSimulatorClient device = env.connectDevice();
         UUID sessionId = activate(device, true);
         device.sendAudio(new byte[960]);
+        awaitTrue(() -> !env.provider.audioHashes().isEmpty(), "아이 오디오 공급자 수신");
         env.provider.emitTurn("item-1", "공룡이 좋아", "resp-1", "나도 공룡 좋아해", List.of(new byte[4800]));
         device.await(WsMessageType.OUTPUT_END, WAIT);
         endConfirmed(device, sessionId);

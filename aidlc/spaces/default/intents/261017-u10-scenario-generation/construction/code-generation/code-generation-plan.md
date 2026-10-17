@@ -30,13 +30,13 @@
 - [x] Step 16 — 목표 연결 구현 뒤 U10FrozenGoalTest·U10SavedGoalStartIT를 작성·실행한다. 두 종류별 준비/순서/가중치/고정 버전/담기 해제/권한·동의·멱등/과거 JSON과 후보를 카탈로그 조회하지 않는 경계를 검증한다. (BR4,BR2.2)
 - [x] Step 17 — U15 ChildKnowledgeService의 구조 맥락·variantPlan 합계2초와 기본 경로, 실제 노출 이력, 변형의 같은 기술·불변·보존·거리·변경1축 검사를 연결한다. 지원하지 않는 자유 맥락을 추측하지 않는다. (FR5,FR6,설계 R-02)
 - [x] Step 18 — 연결 뒤 U10ScenarioGraphTest·U10ScenarioHistoryTest·U10ScenarioVariantTest를 작성·실행한다. 합계2초/전체15초 차감·장애/늦은 결과·graphContextUsed 진실성·최근 실제 노출 양쪽 요청 전달·변형 보정과 BASE-only 재검토를 확인한다. (BR1.3,BR5,BR6,NFR1)
-- [ ] Step 19 — 해당 층 통과 후 세 번째 커밋 feat(u10): 담은 목표와 그래프 및 개인정보 입력 연결.
-- [ ] Step 20 — ScenarioService 실제 구성 경로와 PreparedPracticePackageMapper/내부 HTTP 응답을 연결한다. 새 실제 Luna 구성은 구조화 흐름을 사용하고 레거시 직접 어댑터 시험은 보존한다. 첫 BASE 필수8필드와 신규 선택 필드를 저장/재조회/첫 전달에 함께 전달한다. (FR3.1,FR3.2,FR4.1)
-- [ ] Step 21 — 응답 경계 구현 뒤 U10ScenarioApiIT·U10PracticePackageTest를 작성·실행한다. 현재 C8 JSON과 RT 수신 모양 대조, 후보 키 보존, 첫 대본/과거 행, 기존 U5b 경로·오류 호환·실제 구성 선택·삭제 경쟁을 검증한다. RT 운영 소스와 다른 유닛 단언은 변경하지 않는다. (BR3,BR4,NFR3)
-- [ ] Step 22 — U10 태그 전체와 필요한 기존 회귀를 실행한다. backend/coverage-scope/u10.txt에 실제 U10 변경 운영 클래스를 빠짐없이 적고 새 파일/빈 범위 실패 정책을 지켜 줄80% 이상을 증명한다. 부족하면 시험을 보완한다. (NFR2)
-- [ ] Step 23 — 네 번째 커밋 feat(u10): 첫 대본 전달과 기존 응답 호환 완성. 커밋 전에 명시적 파일 범위·비밀·실행 비트·기존 변경 분리를 확인한다.
-- [ ] Step 24 — code-summary.md와 traceability.json을 작성한다. 현재 FR/NFR·원 AC·BR을 실제 구현/시험 경로로 연결하며 결과는 실제 실행한 근거만 기록한다. docs/units/u10/report.md에 자동 대역 결과와 미측정 실호출·실기기 한계, 편차·남은 일을 분리한다. (NFR4,NFR5)
-- [ ] Step 25 — 코드 생성 종료 전 변경된 백엔드 전체 clean check를 Docker PG로 실행한다. 전체 verify.sh/보안·인프라·이미지·CI는 Build and Test에서 수행하며 여기서 완료를 선취하지 않는다. 실패를 skip/약화로 숨기지 않는다. (NFR2,NFR6)
+- [x] Step 19 — 해당 층 통과 후 세 번째 커밋 feat(u10): 담은 목표와 그래프 및 개인정보 입력 연결.
+- [x] Step 20 — ScenarioService 실제 구성 경로와 PreparedPracticePackageMapper/내부 HTTP 응답을 연결한다. 새 실제 Luna 구성은 구조화 흐름을 사용하고 레거시 직접 어댑터 시험은 보존한다. 첫 BASE 필수8필드와 신규 선택 필드를 저장/재조회/첫 전달에 함께 전달한다. (FR3.1,FR3.2,FR4.1)
+- [x] Step 21 — 응답 경계 구현 뒤 U10ScenarioApiIT·U10PracticePackageTest를 작성·실행한다. 현재 C8 JSON과 RT 수신 모양 대조, 후보 키 보존, 첫 대본/과거 행, 기존 U5b 경로·오류 호환·실제 구성 선택·삭제 경쟁을 검증한다. RT 운영 소스와 다른 유닛 단언은 변경하지 않는다. (BR3,BR4,NFR3)
+- [x] Step 22 — U10 태그 전체와 필요한 기존 회귀를 실행한다. backend/coverage-scope/u10.txt에 실제 U10 변경 운영 클래스를 빠짐없이 적고 새 파일/빈 범위 실패 정책을 지켜 줄80% 이상을 증명한다. 부족하면 시험을 보완한다. (NFR2)
+- [x] Step 23 — 네 번째 커밋 feat(u10): 첫 대본 전달과 기존 응답 호환 완성. 커밋 전에 명시적 파일 범위·비밀·실행 비트·기존 변경 분리를 확인한다.
+- [x] Step 24 — code-summary.md와 traceability.json을 작성한다. 현재 FR/NFR·원 AC·BR을 실제 구현/시험 경로로 연결하며 결과는 실제 실행한 근거만 기록한다. docs/units/u10/report.md에 자동 대역 결과와 미측정 실호출·실기기 한계, 편차·남은 일을 분리한다. (NFR4,NFR5)
+- [x] Step 25 — 코드 생성 종료 전 변경된 백엔드 전체 clean check를 Docker PG로 실행한다. 전체 verify.sh/보안·인프라·이미지·CI는 Build and Test에서 수행하며 여기서 완료를 선취하지 않는다. 실패를 skip/약화로 숨기지 않는다. (NFR2,NFR6)
 
 ## Execution boundaries
 

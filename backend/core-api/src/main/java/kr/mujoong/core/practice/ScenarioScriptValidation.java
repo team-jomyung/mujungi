@@ -11,7 +11,10 @@ import kr.mujoong.core.textai.ScenarioScript.Scene;
 /** BR2: 별도 검토의 APPROVE와 독립적인 결정적 검사. 의미 품질을 보증한다고 주장하지 않는다. */
 public final class ScenarioScriptValidation {
     public enum Result { VALID, INVALID_BASE, INVALID_VARIANT }
-    @FunctionalInterface public interface VariantCheck {boolean valid(Scene base,Scene variant);}
+    @FunctionalInterface public interface VariantCheck {
+        boolean valid(Scene base,Scene variant);
+        default boolean validBase(Scene base){return true;}
+    }
     public record Rules(String relation,String opportunity,String targetExpression,Set<String> originalNames,
             String sourceText,Predicate<String> seen,VariantCheck variants) {
         public Rules {originalNames=Set.copyOf(originalNames);}
@@ -26,7 +29,7 @@ public final class ScenarioScriptValidation {
             return Result.INVALID_BASE;
         var keys=new HashSet<String>();
         if(scenes.stream().anyMatch(s->s.sceneKey()==null||!s.sceneKey().matches("[A-Za-z0-9_-]{1,40}")||!keys.add(s.sceneKey())))return Result.INVALID_BASE;
-        if(!safe(base,rules)||!rules.relation().equals(base.relation())
+        if(!safe(base,rules)||!rules.variants().validBase(base)||!rules.relation().equals(base.relation())
                 ||!contains(base.sceneDescription(),rules.opportunity())
                 ||!contains(base.sceneDescription(),base.opportunitySentence())
                 ||rules.seen().test(ScenarioContentPolicy.fingerprint(base.sceneDescription()))

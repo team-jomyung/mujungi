@@ -29,4 +29,17 @@ class U10SavedGoalStartIT {
     @Test void savedLegacyUsesActualPinnedDefinition(){when(reader.find(child,goal)).thenReturn(Optional.of(new SavedGoalReader.SavedGoalView(goal,child,SavedGoalReader.SavedGoalView.Kind.LEGACY_BEHAVIOR,null,null,null,null,null,"ACCEPT_STOP",1)));var result=service.prepare(guardian,request());assertThat(result.goals().getFirst().goalContext().kind()).isEqualTo(SavedGoalReader.SavedGoalView.Kind.LEGACY_BEHAVIOR);verify(knowledge).pinVersion("ACCEPT_STOP",1);}
     @Test void readyPreparationKeepsOldVersionAfterSelectionChange(){var first=service.prepare(guardian,request());when(reader.find(child,goal)).thenReturn(Optional.empty());assertThat(service.prepare(guardian,request())).isEqualTo(first);verify(reader).find(child,goal);}
     @Test void profileFailurePreventsFirstScenario(){when(privacy.require(guardian,child)).thenThrow(new IllegalStateException("synthetic unavailable"));assertThatThrownBy(()->service.prepare(guardian,request())).isInstanceOf(IllegalStateException.class);verifyNoInteractions(generation);}
+    @Test void aliasInsideCandidateReferenceCannotChangeOpaqueIdentity(){
+        when(privacy.require(guardian,child)).thenReturn(new ScenarioPrivacyContextPort.Context("abc"));
+        when(reader.find(child,goal)).thenReturn(Optional.of(new SavedGoalReader.SavedGoalView(goal,child,SavedGoalReader.SavedGoalView.Kind.CANDIDATE,"abc-fixed",2,"abc 쉬자",new FourElements("abc 친구가 쉬려 해","또래","멈추기","abc 쉬자"),"NONE",null,null)));
+        var result=service.prepare(guardian,request()).goals().getFirst();
+        assertThat(result.behaviorKey()).isEqualTo("candidate:abc-fixed");assertThat(result.goalContext().candidateRef()).isEqualTo("abc-fixed");
+        assertThat(result.goalContext().targetExpression()).isEqualTo("아이 쉬자");
+    }
+    @Test void aliasInsideLegacyKeyDoesNotChangePinnedDefinitionLookup(){
+        when(privacy.require(guardian,child)).thenReturn(new ScenarioPrivacyContextPort.Context("ACCEPT"));
+        when(reader.find(child,goal)).thenReturn(Optional.of(new SavedGoalReader.SavedGoalView(goal,child,SavedGoalReader.SavedGoalView.Kind.LEGACY_BEHAVIOR,null,null,null,null,null,"ACCEPT_STOP",1)));
+        var result=service.prepare(guardian,request()).goals().getFirst();
+        assertThat(result.behaviorKey()).isEqualTo("ACCEPT_STOP");verify(knowledge).pinVersion("ACCEPT_STOP",1);
+    }
 }

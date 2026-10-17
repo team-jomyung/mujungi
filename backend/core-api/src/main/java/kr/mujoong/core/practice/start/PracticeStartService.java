@@ -153,9 +153,8 @@ public class PracticeStartService implements PracticeStart {
         var metadata=goals.preparationMetadata(guardian,child,id).orElseThrow(()->CoreApiException.of(ErrorCode.NOT_FOUND));
         var original=kr.mujoong.core.practice.GoalContext.from(view);
         var aliases=privacy.require(guardian,child).aliases();
-        var json=kr.mujoong.contract.json.JsonCodec.shared();
-        var clean=sanitizer.sanitize(java.util.Map.of("goal",original,"name",metadata.displayName()),aliases,kr.mujoong.core.luna.LunaPurpose.SCENARIO_GENERATION).payload();
-        var context=json.read(json.write(clean.get("goal")),kr.mujoong.core.practice.GoalContext.class);
+        var clean=sanitizer.sanitize(java.util.Map.of("name",metadata.displayName()),aliases,kr.mujoong.core.luna.LunaPurpose.SCENARIO_GENERATION).payload();
+        var context=original.mapContent(text->(String)sanitizer.sanitize(java.util.Map.of("text",text),aliases,kr.mujoong.core.luna.LunaPurpose.SCENARIO_GENERATION).payload().get("text"));
         String criteria;
         if(context.candidate())criteria=context.criteria();
         else {

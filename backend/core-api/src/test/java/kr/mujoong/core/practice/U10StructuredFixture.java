@@ -18,8 +18,14 @@ final class U10StructuredFixture implements AutoCloseable {
     final ScenarioScriptProvider provider=(ScenarioScriptProvider)transport;
     final ScenarioPrivacyContextPort privacy=mock(ScenarioPrivacyContextPort.class);
     final ChildKnowledgeService graph=mock(ChildKnowledgeService.class);
+    final kr.mujoong.core.consent.ConsentPolicyService consent=mock(kr.mujoong.core.consent.ConsentPolicyService.class);
+    JdbcTestPracticeAccounts accounts;
     U10StructuredFixture(){
         legacy.setUp();
+        accounts=spy(new JdbcTestPracticeAccounts(legacy.db.jdbc()));
+        legacy.service=new ScenarioService(legacy.repository,id->legacy.current.get(),id->legacy.exposures.get(),accounts,legacy.knowledge,legacy.ai,legacy.clock,legacy.db.tx(),new ScenarioConfiguration.ScenarioLimits(Duration.ofSeconds(15)));
+        when(consent.check(any())).thenReturn(new kr.mujoong.core.consent.ConsentPolicyService.GateResult(true,kr.mujoong.core.consent.ConsentStatusRule.Status.GIVEN,null));
+        legacy.service.connectConsent(consent);
         when(privacy.require(legacy.guardian,legacy.child)).thenReturn(new ScenarioPrivacyContextPort.Context("합성아이"));
         var properties=mock(CoreProperties.class,RETURNS_DEEP_STUBS);
         when(properties.timing().knowledge().graphBudget()).thenReturn(Duration.ofSeconds(2));

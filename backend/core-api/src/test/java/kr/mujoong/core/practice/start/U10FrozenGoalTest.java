@@ -21,4 +21,16 @@ class U10FrozenGoalTest {
     @Test void carrierMismatchAndMissingCandidateContextFail(){assertThatThrownBy(()->new FrozenGoal(UUID.randomUUID(),"목표","ACCEPT_STOP",1,"기준",1,1,1,false,1,1,1,candidate())).isInstanceOf(IllegalArgumentException.class);assertThatThrownBy(()->new GoalContext(Kind.CANDIDATE,"x",1,"표현",null,"NONE",null,null)).isInstanceOf(IllegalArgumentException.class);}
     @Test void candidateSnapshotsRoundTripAndAreRedacted(){var frozen=new WeightedGoalOrder().freeze(g,c,List.of(selection(candidate(),1,false)),new Random());var decoded=List.of(JsonCodec.shared().read(JsonCodec.shared().write(frozen),FrozenGoal[].class));assertThat(decoded).isEqualTo(frozen);assertThat(decoded.getFirst().toString()).doesNotContain("잠깐 쉬자");assertThat(candidate().toString()).doesNotContain("잠깐 쉬자");}
     @Test void reuseDoesNotReplacePinnedContextOrReorder(){var frozen=new WeightedGoalOrder().freeze(g,c,List.of(selection(candidate(),1,false)),new Random());assertThat(new WeightedGoalOrder().reuse(frozen,Set.of(frozen.getFirst().goalSelectionId()))).isEqualTo(frozen);}
+    @Test void crossKindTieUsesSelectionIdAndRejectsSeparatedSameKindRanks(){
+        var a=new WeightedGoalOrder.Selection(g,c,new UUID(0,1),"목표","ACCEPT_STOP",1,"기준",1,false);
+        var context=candidate();
+        var b=new WeightedGoalOrder.Selection(g,c,new UUID(0,2),"목표",context.carrierKey(),2,context.criteria(),1,false,context);
+        var order=new WeightedGoalOrder();var frozen=order.freeze(g,c,List.of(b,a),new Random(1));
+        assertThat(order.validate(frozen).stream().sorted(Comparator.comparingInt(FrozenGoal::selectionRank)).map(FrozenGoal::goalSelectionId)).containsExactly(a.goalSelectionId(),b.goalSelectionId());
+        var duplicate=new FrozenGoal(new UUID(0,3),"목표","ACCEPT_STOP",1,"기준",1,3,3,false,1,1,3);
+        var corrupted=new ArrayList<FrozenGoal>();
+        for(var x:frozen)corrupted.add(new FrozenGoal(x.goalSelectionId(),x.displayName(),x.behaviorKey(),x.behaviorVersion(),x.judgmentCriteriaSnapshot(),1,x.selectionRank(),3,false,1,4-x.selectionRank(),x.order(),x.goalContext()));
+        corrupted.add(duplicate);
+        assertThatThrownBy(()->order.validate(corrupted)).isInstanceOf(IllegalArgumentException.class);
+    }
 }

@@ -28,17 +28,25 @@ public final class ScenarioGraphContext {
         private final List<VariantPlanner.Exposure> history;
         private final ScenarioDeadline deadline;
         private Duration remaining=budget;
+        private boolean unavailable;
         private final Optional<ChildKnowledgeService.SkillContext> context;
         private Session(UUID guardian,UUID child,String skill,List<VariantPlanner.Exposure> history,ScenarioDeadline deadline){
             this.guardian=guardian;this.child=child;this.skill=skill;this.history=List.copyOf(history);this.deadline=deadline;
             context=skill==null||"NONE".equals(skill)?Optional.empty():read(()->knowledge.skillContext(guardian,child,skill));
         }
         public Optional<ChildKnowledgeService.SkillContext> context(){return context;}
+        public boolean fallbackRequired(){return unavailable;}
+        @Override public boolean validBase(Scene base){
+            if(context.isEmpty())return true;
+            var p=base.preservation();var seed=context.get().seed();
+            return p!=null&&skill.equals(p.skillRef())&&seed.invariantSentence().equals(p.invariantSentence())
+                    &&seed.preservationRule().equals(p.preservationRule());
+        }
         private <T>Optional<T> read(java.util.concurrent.Callable<Optional<T>> operation){
-            if(remaining.isNegative()||remaining.isZero())return Optional.empty();
+            if(remaining.isNegative()||remaining.isZero()){unavailable=true;return Optional.empty();}
             long start=clock.monotonicNanos();
-            try{var result=deadline.call(executor,remaining,operation);return clock.elapsedSince(start).compareTo(remaining)>=0?Optional.empty():result;}
-            catch(RuntimeException unavailable){deadline.check();return Optional.empty();}
+            try{var result=deadline.call(executor,remaining,operation);if(clock.elapsedSince(start).compareTo(remaining)>=0||result.isEmpty()){unavailable=true;return Optional.empty();}return result;}
+            catch(RuntimeException failure){deadline.check();unavailable=true;return Optional.empty();}
             finally{remaining=remaining.minus(clock.elapsedSince(start));}
         }
         @Override public boolean valid(Scene base,Scene variant){

@@ -26,4 +26,6 @@ import org.junit.jupiter.api.*;
     @Test void validContextRetainsVersion(){assertThat(open().context().orElseThrow().graphVersion()).isEqualTo("v1");}
     @Test void outerDeadlineStillFailsInsteadOfStartingAI(){when(service.skillContext(any(),any(),any())).thenAnswer(c->{clock.advance(Duration.ofSeconds(15));return Optional.empty();});assertThatThrownBy(this::open).isInstanceOf(kr.mujoong.core.common.error.CoreApiException.class);}
     @Test void absentPreservationNeverInventsContext(){var session=open();assertThat(session.valid(U10ScenarioGenerationTest.base(),U10ScenarioGenerationTest.base())).isFalse();verify(service,never()).variantPlan(any(),any(),any(),any(),any());}
+    @Test void graphBaseWithoutPreservationIsInvalid(){assertThat(open().validBase(U10ScenarioGenerationTest.base())).isFalse();}
+    @Test void absentGraphDoesNotRequireInventedPreservation(){when(service.skillContext(any(),any(),any())).thenReturn(Optional.empty());assertThat(open().validBase(U10ScenarioGenerationTest.base())).isTrue();}
 }

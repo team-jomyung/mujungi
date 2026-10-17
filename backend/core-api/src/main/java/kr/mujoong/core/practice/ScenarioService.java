@@ -32,6 +32,9 @@ public class ScenarioService {
     private final TransactionTemplate tx;
     private final ScenarioLimits limits;
     private StructuredScenarioFlow structured;
+    private kr.mujoong.core.consent.ConsentPolicyService consent;
+    @org.springframework.beans.factory.annotation.Autowired
+    void connectConsent(kr.mujoong.core.consent.ConsentPolicyService consent){this.consent=consent;}
     @org.springframework.beans.factory.annotation.Autowired
     void connectStructured(kr.mujoong.core.textai.TextAiProvider provider,ScenarioPrivacyContextPort privacy,
             kr.mujoong.core.luna.LunaInputSanitizer sanitizer,kr.mujoong.core.knowledge.ChildKnowledgeService graph,
@@ -40,7 +43,7 @@ public class ScenarioService {
             kr.mujoong.core.config.CoreProperties properties,JsonCodec json){
         if(provider instanceof kr.mujoong.core.textai.ScenarioScriptProvider scripts){
             structured=new StructuredScenarioFlow(new ScenarioScriptGenerator(scripts,new ScenarioScriptValidation(forbidden),timing,executor,
-                    duration->Thread.sleep(duration)),privacy,sanitizer,
+                    kr.mujoong.core.luna.CoreLunaClient.SYSTEM_SLEEPER::sleep),privacy,sanitizer,
                     new ScenarioGraphContext(graph,executor,clock,properties.timing().knowledge().graphBudget()),repository,executor,
                     properties.timing().practice().scenarioHistoryTimeout(),json);
         }
@@ -120,6 +123,7 @@ public class ScenarioService {
         record Prepared(kr.mujoong.core.knowledge.BehaviorDefinition definition, ScenarioRepository.Claim claim) {}
         var prepared=tx.execute(status -> {
             authorize(context);
+            if(structured!=null&&!consent.check(context.guardianId()).ok())throw CoreApiException.of(ErrorCode.CONSENT_MISSING);
             return new Prepared(structured!=null&&goal.goalContext().candidate()?null:pin(goal),repository.claim(request.key(),context,request,clock.now(),deadline));
         });
         Objects.requireNonNull(prepared);
@@ -135,12 +139,18 @@ public class ScenarioService {
             var account=accounts.requireActive(context.guardianId(),false);
             if (account.ageYears()==null) throw CoreApiException.of(ErrorCode.SERVICE_NOT_READY);
             if(structured!=null){
-                var generated=structured.generate(context,goal,definition,previous,account,started,budget);
-                SessionContext latest=source.get();
-                if(!latest.guardianId().equals(context.guardianId())||!latest.childId().equals(context.childId())||!goal(latest,request).equals(goal))
-                    throw CoreApiException.of(ErrorCode.NOT_FOUND);
+                ScenarioScriptGenerator.Result generated;
+                try{generated=structured.generate(context,goal,definition,previous,account,started,budget);}
+                catch(ScenarioScriptGenerator.ContentExhausted failure){validationFailed=!failure.retryableDuplicate;throw failure;}
                 budget.check();
-                try{return tx.execute(status->{authorize(latest);budget.check();return repository.save(request.key(),claim.claimId(),latest,goal,request,generated.legacy(),clock.now(),generated.details());});}
+                try{return tx.execute(status->{
+                    authorize(context);
+                    SessionContext latest=source.get();
+                    if(!latest.guardianId().equals(context.guardianId())||!latest.childId().equals(context.childId())||!goal(latest,request).equals(goal))
+                        throw CoreApiException.of(ErrorCode.NOT_FOUND);
+                    if(!consent.check(context.guardianId()).ok())throw CoreApiException.of(ErrorCode.CONSENT_MISSING);
+                    budget.check();return repository.save(request.key(),claim.claimId(),latest,goal,request,generated.legacy(),clock.now(),generated.details());
+                });}
                 catch(DuplicateKeyException duplicate){throw ScenarioDeadline.failed();}
             }
             ScenarioPrompt prompt=new ScenarioPrompt(definition.displayName(),definition.behaviorDefinitionText(),opportunity,
