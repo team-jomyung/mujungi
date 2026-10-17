@@ -1,4 +1,85 @@
-> 현재 범위의 정본은 바로 아래 U14 갱신절이다. 그 뒤 원문은 보존 이력이며 재검증 범위는 timestamp에 한정한다.
+> 현재 범위의 정본은 바로 아래 "제브 어댑터 선 형식 집중 갱신" 절이다(`backend/realtime-activity` · `contracts` · `docs/units/u13` 한정, 2026-10-18, HEAD `421e1ad`). 그 뒤 구현 전 U13 절 · U14 절 · U15 절 · 원문은 보존 이력이며 재검증 범위는 timestamp에 한정한다.
+
+## 제브 어댑터 선 형식 집중 갱신 — 패키지 · 파일 구조 (261017-jev-adapter-format, 2026-10-18)
+
+### `kr.mujoong.realtime.guardrail` (신설됨, 19개 파일)
+
+| 파일 | 줄 | 역할 |
+|---|---|---|
+| `GuardrailClient` | 25 | 포트: `check(GuardrailRequest, Instant) → CompletionStage<GuardrailVerdict>` |
+| `JevGuardrailClient` | 366 | 실제 어댑터(REAL). `requestBody` · `convert` · `classify` · `endpointOf`, 상수 `CHECK_PATH` · `MAX_RESPONSE_BYTES` · `CATEGORIES`, 내부 `BoundedBodySubscriber` |
+| `StubGuardrailClient` | 32 | 대역(`STUB_ALLOW`) |
+| `UnavailableGuardrailClient` | 43 | 비활성(모드 OFF 등) |
+| `GuardrailRequestFactory` | 115 | 순수 함수: 내부 형식 요청 구성(이름 치환 · 길이 · 3턴) |
+| `GuardrailRequest` | 94 | 내부 형식 레코드(`source` · `mode` · `candidate` · `policyVersion` · `recentContext`), `Mode` · `Speaker` · `ContextTurn` |
+| `GuardrailVerdict` | 111 | 결과 레코드, `Decision` 4종 · `Failure` 6종, `allow/block/review/stubAllow/failed` 팩토리 |
+| `GuardrailEventRecord` | 73 | 기록 레코드 + `Decision`(ALLOW/BLOCK/REVIEW/TIMEOUT/ERROR/VOIDED/QUEUE_FULL) + `REASON_CODE` 정규식 |
+| `GuardrailEventRecorder` | 275 | 비동기 기록기 |
+| `GuardrailEventRepository` | 96 | JDBC 저장소 |
+| `GuardrailEventDeletionParticipant` | 74 | 삭제 참여자 |
+| `GuardrailConfiguration` | 84 | 모드별 클라이언트 빈 선택, `systemPrompt(content, version)` 배선 |
+| `GuardrailProperties` | 29 | `@ConfigurationProperties("mujoong.guardrail.jev")` — `mode` · `baseUrl` · `model` |
+| `GuardrailMode` | 46 | 모드(`OFF` 포함) 열거와 설정 키 |
+| `GuardrailStartupRules` | 80 | 모드 × 프로필 × 키 × 주소 × 모델 기동 점검 |
+| `GuardrailSupport` | 83 | 세션에 고정되는 묶음(클라이언트 · 모드 · 정책 판 · 예산 · 안전 시한), `DISABLED` 기본값 |
+| `JevHosts` | 116 | 호스트 허용 규칙(`ALLOWED_HOSTS`, 모드 STRICT/DEV/TEST) |
+| `JevModels` | 40 | 모델 이름 형식 · 이동 별칭 점검 |
+| `ApprovedVerbatimPort` | 30 | 승인 원문 일치 좁은 포트(이름만 확인) |
+
+### 소비 쪽
+
+- `session/GuardrailCoordinator.java`(749줄): 검사 상태 기계. 내부 `State{IDLE,CHECKING,RETRYING}` · `VoidCause`(6종) · `Ticket` · `Queued` · `Env`(실행기 접점) · `ReplayableInstruction`. 주요 메서드 `begin` · `start`(437줄 근처가 팩토리 호출) · `resolve` · `voidCause` · `voided` · `allowed` · `blocked` · `onArrived` · `onRetryNotHeard` · `onCheckTimerFired` · `enqueue` · `settleQueue`.
+- `session/SessionMailbox`: 메시지 `GuardrailArrived(requestId, verdict)` · `GuardrailRetryNotHeard(retryId)`.
+- `session/SessionExecutor.java`(4,254줄): 연결 지점 — `GuardrailEnv` 내부 클래스(1703줄 근처), `sealAndGate` 안의 `guardrail.begin` 호출(3010 ~ 3025줄 근처), `guardrail.holdsThinking()`(2950줄 근처), `GUARDRAIL_CHECK` 타이머(3763줄), `quietly(guardrail::onExit)`(4199줄). 이전 크기 3,964줄에서 늘었다.
+- `session/PracticeSessionExtension.GuardrailBlockedEvent`, `content/LiveContentResources`(guardrail 정책 적재), `observability/RealtimeMetrics`(`mujoong.guardrail.*`).
+
+### 자원 · 계약 · 시험
+
+- 자원: `src/main/resources/guardrail/policy-v1.json`, `application.yml`(`mujoong.guardrail.jev` 213 ~ 219줄 근처, `mujoong.timing.guardrail`), `db/migration/realtime/V1 ~ V6`(V6 = `V6__u13_jev_guardrail.sql`; 다음 번호는 V7 이상).
+- 커버리지 범위 파일: `backend/coverage-scope/u13.txt`가 이제 존재한다(내용은 읽지 않음).
+- 시험 `src/test/java/kr/mujoong/realtime/guardrail/`: `JevGuardrailClientTest` · `GuardrailRequestFactoryTest` · `GuardrailConfigurationTest` · `GuardrailEventRecorderTest` · `GuardrailEventRepositoryIT` · `GuardrailModeStartupChecksTest` · `GuardrailPackageArchTest` · `GuardrailArchViolationSample` · `GuardrailFixtures` · `JevHostsTest` · `StubGuardrailClientTest` · `JevLiveProbe` · `JevLiveTest` · `JevLiveTaskIsolationTest`. 연결 시험은 `session/Guardrail*Test` · `GuardrailTurnIT`, 대역은 `testing/FakeGuardrailClient`.
+- 계약: `contracts/ai-io.md` 10.1 ~ 10.5 · 10.11, `contracts/deviations.md`의 `(U13-a)` `(U13-b)`, `contracts/schemas/guardrail-{request,result}.schema.json`, `contracts/timing.md` 13절. 문서: `docs/units/u13/{brief,design,report}.md`.
+- 빌드: `backend/build.gradle.kts`의 `verifyJevLiveIsolation` · `jevLiveTest`(얕게).
+
+### 공급자 선 형식과 코드 위치의 대응
+
+| 선 형식 요소 | 코드 위치 |
+|---|---|
+| 경로 | `JevGuardrailClient.CHECK_PATH`(59줄) → `endpointOf`(108줄) |
+| 요청 본문 키 6개 | `JevGuardrailClient.requestBody` |
+| 응답 최상위 키 6개 · 정책 판 비교 | `JevGuardrailClient.convert` |
+| 시스템 지시 문자열 | `guardrail/policy-v1.json` `systemPrompt` → `GuardrailConfiguration.systemPrompt` → 어댑터 `systemPrompts` 함수 |
+| 분류 이름 목록 7개 | `policy-v1.json` · `JevGuardrailClient.CATEGORIES` · `guardrail-result.schema.json` enum |
+| 내부 형식 요청 | `GuardrailRequestFactory` → `GuardrailRequest` (공급자 형식 아님) |
+
+---
+
+## 구현 전 U13 구조 (2026-10-17, main `6a78536` 코드 — 이력)
+
+> 아래 중 "(신설 후보) `kr.mujoong.realtime.guardrail` — 아직 없음", "`u13.txt`는 없다", "`SessionExecutor`(3,964줄)", "다음은 `V6__u13_jev_guardrail.sql`"은 구현 전 서술이다. 현재는 위 절이 우선한다.
+
+### realtime-activity 패키지와 U13 접점
+
+| 패키지 | 내용 | U13 접점 |
+|---|---|---|
+| `kr.mujoong.realtime.gate` | `OutputGate`(동기 · 순수, `inspect`/`recheck`) · `GateDecision` · `SegmentBuffer`(불변 `Sealed`) · `OutputGeneration` · `ApprovedPlayback` · `SeedDictionary` | `OutputGate`는 그대로 두고 둘 사이를 실행기가 잇는다. `Sealed` 인스턴스를 검사표에 쥔다 |
+| `kr.mujoong.realtime.session` | `SessionExecutor`(3,964줄) · `SessionMailbox`(메시지 약 20종) · `JudgmentCoordinator`(`Env` + `postResult`) · `JudgmentSupport` · `PracticeSessionExtension` | 삽입 지점 `sealAndGate`(~2782). 협력 객체 + 새 편지함 메시지가 선례 |
+| `kr.mujoong.realtime.judgment` | `JudgeClient` · `UnavailableJudgeClient` · `LunaJudgeClient` · `JudgmentConfiguration` · `JudgmentLiveRecorder/Repository/DeletionParticipant` | 제브가 따를 포트 · 기록기 선례. 타입이 이 패키지에 고정이라 재사용이 아니라 복제 |
+| `kr.mujoong.realtime.luna` | `LunaConfiguration` · `LunaKeyPresentCondition` · `LunaTransport` · `LunaHosts` | 제브와 섞이지 않게 `LunaArchTest`가 `..guardrail..` 의존을 막음 |
+| `kr.mujoong.realtime.content` | `LiveContentRegistry`(`matchApproved`) · `LiveContentResources` | 승인 원문 일치. 구현 전에는 운영 호출자 0개, `Services`에 없음 |
+| `kr.mujoong.realtime.log` · `observability` | `TranscriptWriter/Repository` · `AsyncRecorder` · `RealtimeMetrics` · `EventLogger` | 보호자 승인 판정 `approved_for_display`, 지표 · 사건 입구 |
+| `kr.mujoong.realtime.startup` · `runtime` | `RealtimeStartupChecks` · `ProfileGuardEnvironmentPostProcessor` · `SchemaVersionCheck` · `RealtimeRuntimeConfig` | `JEV_API_KEY` 기동 점검 자리, `sessionServices` 조립 |
+| (신설 후보) `kr.mujoong.realtime.guardrail` | 구현 전에는 아직 없음 | `GuardrailClient` · 어댑터 · 대역 · 기록기 · 저장소 · 삭제 참여자 |
+
+- 자원: `src/main/resources/{application*.yml, guardrail/policy-v1.json, db/migration/realtime/V1..V5}`. 마지막은 `V5__u11_judgment_turn.sql`이고 다음은 `V6__u13_jev_guardrail.sql`이다(`team.md`의 "realtime V5" 문장은 낡음).
+- 커버리지 범위 파일: `backend/coverage-scope/`에 u1 u11 u14 u15 u2 u3 u4a u4b u5a u5b-core u5b u6 u7 u8 u9가 있고 `u13.txt`는 없다. u11.txt가 `SessionExecutor`를 목록에 넣지 않고 사유를 적은 선례를 따른다.
+- 시험 구조: `src/test/java/kr/mujoong/realtime/{arch, testing, session, gate, judgment, db, practice, observability, ...}`. `testing/SessionHarness` · `FakeJudgeClient`(약속을 시험이 손으로 푸는 대역의 모범) · `session/JudgmentExecutorSupport`. `backend/test-support`는 `MutableClock` · `ManualTimerDriver` · `FakeProviderWsServer` · `LunaResponsesStub`.
+- `contract-model`: `EventLog.Component.OUTPUT_GATE` 존재, 제브 전용 사건 · 속성 키는 없음(최소안: 사유 코드 문자열만 사용).
+- `contracts/`: `ai-io.md` 10절, `timing.md` 13절, `deviations.md`(U8-a · U8-c), `schemas/guardrail-{request,result}.schema.json`. 제브 로그 표 · 지표 이름 표는 없다.
+
+---
+
+> 현재 범위의 정본(U14 갱신절, 보존 이력)은 바로 아래다. 그 뒤 원문은 보존 이력이며 재검증 범위는 timestamp에 한정한다.
 
 ## U14 집중 갱신 — 변경 표면
 
@@ -102,7 +183,7 @@ U15 ChildKnowledgeService, SeedGenerationService, StructureSignature는 구현�
 ## 자원 파일
 
 - core: `application{,-dev,-demo,-prod,-load-test}.yml`, `db/migration/core/V1~V7 + afterMigrate.sql`, `prompts/result/*.v1.txt`, `forbidden/result-v1.json`, `textai/u5a-forbidden-patterns.txt`, `report/`(폰트 등), `logback-spring.xml`.
-- realtime: `application{,-dev,-demo,-prod}.yml`, `db/migration/realtime/V1~V4 + afterMigrate.sql`, `gate/`(시드 사전), `practice/u5b-*.yml`, `logback-spring.xml`.
+- realtime: `application{,-dev,-demo,-prod}.yml`, `db/migration/realtime/V1~V4 + afterMigrate.sql`, `gate/`(시드 사전), `practice/u5b-*.yml`, `logback-spring.xml`. (2026-10-18 보충: realtime 마이그레이션은 V6까지, `guardrail/policy-v1.json` 자원 추가.)
 
 ## 프런트엔드 구조
 
@@ -128,7 +209,7 @@ U15 ChildKnowledgeService, SeedGenerationService, StructureSignature는 구현�
 
 ## realtime 세션 실행기 내부 지도 (2026-10-16 집중 스캔)
 
-`session/SessionExecutor.java`(3,388줄) 중 U11이 닿는 구간. 줄 번호는 커밋 `9bcc706` 기준.
+`session/SessionExecutor.java`(당시 3,388줄) 중 U11이 닿는 구간. 줄 번호는 커밋 `9bcc706` 기준(현재 파일은 4,254줄이라 줄 번호가 달라졌다).
 
 | 구간 | 줄 | 내용 |
 |---|---|---|
