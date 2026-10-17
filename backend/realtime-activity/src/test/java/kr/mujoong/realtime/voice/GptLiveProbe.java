@@ -62,10 +62,11 @@ import org.springframework.core.io.ClassPathResource;
  * 표식으로 시작하라"고 시키고, 도구가 출력 전사에 표식이 있는지를 메모리에서만 확인해 예 · 아니오와 개수 · 시간만 남긴다.
  * <ul>
  *   <li>P1 기준선: 발화 하나, 자동 응답의 첫 조각 지연 · 조각 수 · 응답 안 최대 쉼.
- *   <li>P2 끼어들기: 발화를 보내고 첫 출력 조각 뒤 약 300ms에 지시 #1을 보낸다 — 이후 조각(낡은 꼬리) · 쉼 · 표식 응답 시작 여부 · 경계 사건.
- *   <li>P3 유휴 추가: 출력이 없을 때 지시 #2만 보낸다 — 말이 저절로 시작하는가.
- *   <li>P4 지속성: 평범한 발화를 보내 다음 자동 응답에 P3 표식이 남는가(지시가 누적 · 유지되는가, 한 번뿐인가).
- *   <li>P5(선택, env {@value #UPDATE_JSON_ENV}): 사람이 준 {@code session.update}로 자동 응답이 꺼지는가.
+ *   <li>P2 끼어들기: 발화를 보내고 첫 출력 조각 뒤 약 300ms에 지시 #1 — 세션 오디오 시계(누적 출력 바이트 / 48 = ms)로 확인 사건 · 표식 전사 ·
+ *       조각의 위치를 맞춰 낡은 꼬리와 새 응답의 경계 규칙 R1(확인 사건 도착 뒤 조각) · R2(시계 &gt;= 확인 사건 end_ms)를 표식 기준과 견준다.
+ *   <li>P3 유휴 추가: 출력이 없을 때 지시 #2만 — 출력과 전사가 모두 조용해진 뒤({@value #QUIET_ENV}, 기본 4초, 상한 30초)에야 창을 닫는다.
+ *   <li>P4 지속성: 평범한 발화를 {@value #PLAIN_TURNS_ENV}번(기본 2) 사이에 조용한 틈을 두고 — 전사의 {@code start_ms}로 귀속해 P3 표식이 남는지.
+ *   <li>P6 한 번뿐 지시(env {@value #ONE_SHOT_ENV}, 기본 켬): "이번 한 번만" 지시 뒤 평범한 발화에 표식이 없는지.
  * </ul>
  * 사람이 이 결과로 계속 · 중단을 정한다(BR9.2).
  *
@@ -85,8 +86,12 @@ final class GptLiveProbe {
     static final String INPUT_RATE_ENV = "GPT_LIVE_INPUT_RATE";
     /** 세션 시작에 싣는 입력 표본율 env 이름(비밀 아님, 기본 24000 — 24kHz 수락 확인 W7 ①). */
     static final String RATE_ENV = "GPT_LIVE_RATE";
-    /** 자동 응답을 끄는 {@code session.update} 메시지 JSON env 이름(비밀 아님, 없으면 이 시험은 건너뛴다 — 필드 모양을 모른다, W7 ⑨). */
-    static final String UPDATE_JSON_ENV = "GPT_LIVE_UPDATE_JSON";
+    /** 단계 끝을 정하는 조용한 시간(초) env 이름(비밀 아님, 기본 4, 2 ~ 10). */
+    static final String QUIET_ENV = "GPT_LIVE_QUIET_SECONDS";
+    /** 지속성 시험의 평범한 발화 횟수 env 이름(비밀 아님, 기본 2, 1 ~ 3). */
+    static final String PLAIN_TURNS_ENV = "GPT_LIVE_PLAIN_TURNS";
+    /** 한 번뿐 지시 시험을 켜는지 env 이름(비밀 아님, 기본 켬, 0 / false / off면 끔). */
+    static final String ONE_SHOT_ENV = "GPT_LIVE_ONE_SHOT";
     /** 보고서 머리 문장(금액을 계산하지 않는다). */
     static final String PRICE_NOTE = "단가는 OpenAI 결제 화면에서 확인한다(이 보고서는 사용량만 남긴다).";
     /** 보고서 경로 시스템 속성(gptLiveTest 작업이 build/gpt-live/report.md로 넣는다). */
@@ -113,6 +118,12 @@ final class GptLiveProbe {
     /** P3 지시 #2(고정 문장). 말을 시작할 때마다 표식으로 시작하게 시켜서 P4에서 유지 여부를 본다. */
     static final String INSTRUCTION_P3 =
             "이제부터 네가 말을 시작할 때마다 맨 처음 낱말을 반드시 '" + MARKER_P3 + "'로 시작해. 이 규칙은 앞으로 계속 지켜.";
+    /** P6(한 번뿐) 표식 낱말. */
+    static final String MARKER_P6 = "거북이";
+    /** P6 지시(고정 문장): 이번 한 번만 표식으로 시작하고 이후에는 평소처럼. */
+    static final String INSTRUCTION_P6 =
+            "이번 한 번만 네가 하는 말의 맨 처음 낱말을 '" + MARKER_P6 + "'로 시작해. 그 다음부터는 '" + MARKER_P6 + "'로 시작하지 말고 평소처럼 말해.";
+    static final String EVENT_ID_P6 = "gl-p6-append";
     /** 지시 추가 메시지의 사건 id(공급자가 되돌려 주는 client_event_id와 맞춰 본다). */
     static final String EVENT_ID_P2 = "gl-p2-append";
     static final String EVENT_ID_P3 = "gl-p3-append";
@@ -130,12 +141,17 @@ final class GptLiveProbe {
             Duration closeWait, Duration poll, int trailingSilenceFrames, Duration interruptDelay) {
 
         /**
-         * 실호출 기본: 20ms 간격 · 시작 확인 10초 · 응답이 끝난 뒤 2초 조용(단계 사이 틈) · 출력이 없으면 6초 · 한 단계 20초 · 닫힘 5초 · 첫 출력 조각 뒤
+         * 실호출 기본: 20ms 간격 · 시작 확인 10초 · 출력과 전사가 4초 조용해지면 단계 끝(단계 사이 틈) · 출력이 없으면 6초 · 한 단계 30초 · 닫힘 5초 · 첫 출력 조각 뒤
          * 300ms에 끼어들기 지시.
          */
-        static final Timing REAL = new Timing(Duration.ofMillis(20), Duration.ofSeconds(10), Duration.ofSeconds(2),
-                Duration.ofSeconds(6), Duration.ofSeconds(20), Duration.ofSeconds(5), Duration.ofMillis(100),
+        static final Timing REAL = new Timing(Duration.ofMillis(20), Duration.ofSeconds(10), Duration.ofSeconds(4),
+                Duration.ofSeconds(6), Duration.ofSeconds(30), Duration.ofSeconds(5), Duration.ofMillis(100),
                 TRAILING_SILENCE_FRAMES, Duration.ofMillis(300));
+
+        /** 조용한 시간만 바꾼 사본. */
+        Timing withSettleQuiet(Duration quiet) {
+            return new Timing(framePace, startedWait, quiet, noOutputQuiet, phaseWait, closeWait, poll, trailingSilenceFrames, interruptDelay);
+        }
     }
 
     /** 앱 해석기({@link ProviderClient#parse})가 아는 type. */
@@ -254,7 +270,8 @@ final class GptLiveProbe {
             return skipped;
         }
         int rate = sessionRate(env.apply(RATE_ENV));
-        String updateJson = updateMessage(env.apply(UPDATE_JSON_ENV));
+        Duration quiet = quietSeconds(env.apply(QUIET_ENV));
+        Plan plan = new Plan(plainTurns(env.apply(PLAIN_TURNS_ENV)), oneShot(env.apply(ONE_SHOT_ENV)));
         URI url = providerUrl();
         Optional<ProviderHosts.Problem> problem = ProviderHosts.check(url, "demo");
         if (problem.isPresent()) {
@@ -266,7 +283,9 @@ final class GptLiveProbe {
         }
         Row host = new Row("공급자 주소 규칙", "demo 프로필 주소가 ProviderHosts demo 규칙(wss · 허용 호스트) 통과", Verdict.PASS);
         InputAudio input = loadInput();
-        Result result = attempt(host, url, key, input, rate, updateJson);
+        GptLiveProbe configured = quiet == null ? this
+                : new GptLiveProbe(env, repoRoot, report, opener, timing.withSettleQuiet(quiet));
+        Result result = configured.attempt(host, url, key, input, rate, plan);
         writeReport(result, input);
         return result;
     }
@@ -287,31 +306,57 @@ final class GptLiveProbe {
         }
     }
 
-    /** {@code session.update} 메시지 env(JSON 객체이고 type이 {@code session.update}여야 한다). 없으면 null. */
-    String updateMessage(String value) throws IOException {
+    /** 실행 계획: 지속성 시험의 평범한 발화 횟수와 한 번뿐 지시 시험 여부. */
+    record Plan(int plainTurns, boolean oneShot) {
+    }
+
+    /** 조용한 시간 env(초). 없으면 null(시간 묶음 기본값). */
+    static Duration quietSeconds(String value) throws IOException {
         if (value == null || value.isBlank()) {
             return null;
         }
-        Map<?, ?> parsed;
         try {
-            parsed = json.read(value.strip(), Map.class);
-        } catch (RuntimeException e) {
-            throw new IOException(UPDATE_JSON_ENV + "가 JSON 객체가 아니다", e);
+            int seconds = Integer.parseInt(value.strip());
+            if (seconds < 2 || seconds > 10) {
+                throw new IOException(QUIET_ENV + "는 2 ~ 10이다");
+            }
+            return Duration.ofSeconds(seconds);
+        } catch (NumberFormatException e) {
+            throw new IOException(QUIET_ENV + "가 정수가 아니다", e);
         }
-        if (parsed == null || !"session.update".equals(parsed.get("type"))) {
-            throw new IOException(UPDATE_JSON_ENV + "의 type은 session.update여야 한다");
+    }
+
+    /** 평범한 발화 횟수 env(기본 2, 1 ~ 3). */
+    static int plainTurns(String value) throws IOException {
+        if (value == null || value.isBlank()) {
+            return 2;
         }
-        return value.strip();
+        try {
+            int count = Integer.parseInt(value.strip());
+            if (count < 1 || count > 3) {
+                throw new IOException(PLAIN_TURNS_ENV + "는 1 ~ 3이다");
+            }
+            return count;
+        } catch (NumberFormatException e) {
+            throw new IOException(PLAIN_TURNS_ENV + "가 정수가 아니다", e);
+        }
+    }
+
+    /** 한 번뿐 지시 시험 여부 env(기본 켬). */
+    static boolean oneShot(String value) {
+        return value == null || value.isBlank() || !Set.of("0", "false", "off", "no").contains(value.strip().toLowerCase(Locale.ROOT));
     }
 
     /** 지시 추가 수락 행의 위치(outcome 기준). */
-    static final int ACCEPT_ROW = 7;
+    static final int ACCEPT_ROW = 9;
 
     /** 보고서 행 순서. */
     static final List<String> ITEMS = List.of("① 입력 표본율 수락(세션 시작 · 음성 송신 · 출력 수신)",
             "② 사건 이름(입력 전사 · 출력 전사 · 말 끝 · 위임 · 응답 경계 후보)", "P1 기준선: 자동 응답(첫 조각 지연 · 조각 수 · 응답 안 쉼)",
-            "P2 끼어들기: 응답 도중 지시 추가", "P3 유휴 추가: 출력이 없을 때 지시 추가", "P4 지속성: 다음 자동 응답에 지시가 남는가",
-            "P5 session.update로 자동 응답 끄기", "지시 추가 수락(오류 · appended 사건 모양 · client_event_id · 지시문 길이)",
+            "P2 끼어들기: 시간표 귀속(확인 사건 · 표식 전사 · 조각 위치)", "P2 경계 규칙 R1 · R2 대 표식 기준",
+            "P3 유휴 추가: 출력 · 전사가 조용해진 뒤 본 결과", "P4 지속성: 평범한 발화 뒤 P3 표식(start_ms 귀속)",
+            "P6 한 번뿐 지시: 다음 평범한 발화에 표식이 없는가", "전사 도착 지연(전사 end_ms 대 오디오 시계, 단계별)",
+            "지시 추가 수락(오류 · appended 사건 모양 · client_event_id · 지시문 길이)",
             "response.create 미사용 · 지원 목록 밖 type 오류", "종료 형식(session.close → session.closed)", "오류 사건(error)",
             "지원 type 목록(오류 문장에서)", "수신 사건 모양(type별 첫 사건, 키 · 값 타입)", "연결 끊김 · 끊기기 전 마지막 사건",
             "앱 해석기(ProviderClient.Reader) 이해", "참고: 앱이 모르는 type", "사용량(session.usage.updated 마지막 값 · 세션 길이)");
@@ -534,22 +579,37 @@ final class GptLiveProbe {
 
     /** 받은 원시 메시지에서 뽑은 것: type 이름 · 응답 id · 키 이름 · 출력 음성 바이트 수 · 오류 필드(값 원문 없음). */
     record RawFrame(int seq, String type, String responseId, List<String> keys, int audioBytes, ErrorInfo error, String shape,
-            String usage, long atNanos, int instructionsLength, String clientEventId) {
+            String usage, long atNanos, int instructionsLength, String clientEventId, long clockMs, long startMs, long endMs) {
 
         RawFrame(int seq, String type, String responseId, List<String> keys) {
-            this(seq, type, responseId, keys, 0, null, "-", null, 0L, -1, null);
+            this(seq, type, responseId, keys, 0, null, "-", null, 0L, -1, null, 0L, -1L, -1L);
         }
 
         RawFrame(int seq, String type, String responseId, List<String> keys, int audioBytes, ErrorInfo error, String shape,
                 String usage) {
-            this(seq, type, responseId, keys, audioBytes, error, shape, usage, 0L, -1, null);
+            this(seq, type, responseId, keys, audioBytes, error, shape, usage, 0L, -1, null, 0L, -1L, -1L);
         }
 
         /** 받은 시각(단조 나노초)을 붙인 사본. */
         RawFrame at(long nanos) {
-            return new RawFrame(seq, type, responseId, keys, audioBytes, error, shape, usage, nanos, instructionsLength, clientEventId);
+            return new RawFrame(seq, type, responseId, keys, audioBytes, error, shape, usage, nanos, instructionsLength, clientEventId,
+                    clockMs, startMs, endMs);
+        }
+
+        /** 세션 오디오 시계(이 사건까지 받은 출력 음성의 누적 ms)를 붙인 사본. */
+        RawFrame withClock(long clock) {
+            return new RawFrame(seq, type, responseId, keys, audioBytes, error, shape, usage, atNanos, instructionsLength, clientEventId,
+                    clock, startMs, endMs);
+        }
+
+        /** 이 조각(출력 음성)이 시계에서 시작한 위치 ms. */
+        long clockStartMs() {
+            return clockMs - audioBytes / BYTES_PER_MS;
         }
     }
+
+    /** 24kHz s16 모노 출력 음성의 ms당 바이트(24000 x 2 / 1000). */
+    static final long BYTES_PER_MS = 48L;
 
     /** 사용량을 담는 사건 type(마지막 값을 보고서에 쓴다). */
     static final String USAGE_TYPE = "session.usage.updated";
@@ -675,7 +735,10 @@ final class GptLiveProbe {
         int instructionsLength = fields.get("session") instanceof Map<?, ?> session && session.get("instructions") instanceof String text
                 ? text.length() : fields.get("instructions") instanceof String top ? top.length() : -1;
         String clientEventId = fields.get("client_event_id") instanceof String id ? safe(id) : null;
-        return new RawFrame(seq, type, responseId, keys, audioBytes, error, shapeOf(fields, 0), usage, 0L, instructionsLength, clientEventId);
+        long startMs = fields.get("start_ms") instanceof Number n ? n.longValue() : -1L;
+        long endMs = fields.get("end_ms") instanceof Number n ? n.longValue() : -1L;
+        return new RawFrame(seq, type, responseId, keys, audioBytes, error, shapeOf(fields, 0), usage, 0L, instructionsLength, clientEventId,
+                0L, startMs, endMs);
     }
 
     private static String responseIdOf(Map<?, ?> fields) {
@@ -773,6 +836,7 @@ final class GptLiveProbe {
         private final List<RawFrame> raw = new ArrayList<>();
         /** 출력 전사 조각 글(메모리에서 표식 낱말 확인에만 쓰고 보고서 · 원시 관측에는 넣지 않는다, R-F14). */
         private final List<TextAt> outputText = new ArrayList<>();
+        private long audioBytesTotal;
         private final StringBuilder text = new StringBuilder();
         private volatile Integer closeCode;
         private volatile String socketError;
@@ -822,15 +886,19 @@ final class GptLiveProbe {
         }
 
         void record(String message) {
-            RawFrame frame = parseRaw(json, rawCount(), message).at(System.nanoTime());
-            if (isOutputTranscript(frame.type())) {
-                String piece = transcriptPiece(json, message);
-                if (!piece.isEmpty()) {
-                    synchronized (outputText) {
-                        outputText.add(new TextAt(frame.atNanos(), piece));
+            RawFrame parsed = parseRaw(json, rawCount(), message).at(System.nanoTime());
+            synchronized (outputText) {
+                audioBytesTotal += parsed.audioBytes();
+                RawFrame frame = parsed.withClock(audioBytesTotal / BYTES_PER_MS);
+                parsed = frame;
+                if (isOutputTranscript(frame.type())) {
+                    String piece = transcriptPiece(json, message);
+                    if (!piece.isEmpty()) {
+                        outputText.add(new TextAt(frame.atNanos(), piece, frame.startMs(), frame.endMs(), frame.clockMs()));
                     }
                 }
             }
+            RawFrame frame = parsed;
             if (frame.type().equals("session.started") && startedNanos == 0) {
                 startedNanos = System.nanoTime();
             } else if (frame.type().equals("session.closed") && closedNanos == 0) {
@@ -867,31 +935,27 @@ final class GptLiveProbe {
          * 도착 시각 · 표식 앞 글자 수 · 구간 글자 수만 돌려준다.
          */
         MarkerHit findMarker(String marker, long fromNanos, long toNanos) {
-            StringBuilder window = new StringBuilder();
-            List<long[]> ends = new ArrayList<>();
+            return GptLiveProbe.findMarker(pieces(), marker, piece -> piece.atNanos() >= fromNanos && piece.atNanos() < toNanos);
+        }
+
+        /** 지금까지 받은 출력 전사 조각(글은 메모리에서만 쓴다). */
+        List<TextAt> pieces() {
             synchronized (outputText) {
-                for (TextAt piece : outputText) {
-                    if (piece.atNanos() < fromNanos || piece.atNanos() >= toNanos) {
-                        continue;
+                return List.copyOf(outputText);
+            }
+        }
+
+        /** 마지막 출력 활동(출력 음성 또는 전사 사건)을 받은 시각(없으면 0). 사용량 같은 주기 사건은 세지 않는다. */
+        long lastActivityNanos() {
+            synchronized (raw) {
+                for (int i = raw.size() - 1; i >= 0; i--) {
+                    String type = raw.get(i).type();
+                    if (OUTPUT_AUDIO_TYPES.contains(type) || type.contains("transcript")) {
+                        return raw.get(i).atNanos();
                     }
-                    piece.text().codePoints().filter(cp -> !Character.isWhitespace(cp)).forEach(window::appendCodePoint);
-                    ends.add(new long[] {window.length(), piece.atNanos()});
                 }
+                return 0L;
             }
-            String target = marker.replaceAll("\\s+", "");
-            int index = window.indexOf(target);
-            if (index < 0) {
-                return new MarkerHit(false, 0L, -1, window.length());
-            }
-            long need = index + target.length();
-            long at = 0L;
-            for (long[] end : ends) {
-                if (end[0] >= need) {
-                    at = end[1];
-                    break;
-                }
-            }
-            return new MarkerHit(true, at, index, window.length());
         }
 
         /** 이 시각 뒤 처음 받은 출력 음성 조각 시각(없으면 0). */
@@ -963,7 +1027,7 @@ final class GptLiveProbe {
     }
 
     /** 출력 전사 조각 하나(받은 시각 · 글). */
-    record TextAt(long atNanos, String text) {
+    record TextAt(long atNanos, String text, long startMs, long endMs, long clockMs) {
     }
 
     /**
@@ -974,7 +1038,36 @@ final class GptLiveProbe {
      * @param charsBefore 표식 앞의 전사 글자 수(공백 제외, 0이면 구간 전사가 표식으로 시작, 없으면 -1)
      * @param windowChars 구간 전사의 글자 수(공백 제외)
      */
-    record MarkerHit(boolean found, long foundAtNanos, int charsBefore, int windowChars) {
+    record MarkerHit(boolean found, long foundAtNanos, int charsBefore, int windowChars, long markerStartMs) {
+    }
+
+    /**
+     * 조건에 맞는 전사 조각들(도착 순서)에서 표식 낱말을 찾는다(공백 무시, 글은 돌려주지 않는다). {@code markerStartMs}는 표식 첫 글자가 든 조각의
+     * {@code start_ms}(없으면 -1)다.
+     */
+    static MarkerHit findMarker(List<TextAt> pieces, String marker, java.util.function.Predicate<TextAt> in) {
+        StringBuilder window = new StringBuilder();
+        List<TextAt> owner = new ArrayList<>();
+        for (TextAt piece : pieces) {
+            if (!in.test(piece)) {
+                continue;
+            }
+            piece.text().codePoints().filter(cp -> !Character.isWhitespace(cp)).forEach(cp -> {
+                int before = window.length();
+                window.appendCodePoint(cp);
+                for (int i = before; i < window.length(); i++) {
+                    owner.add(piece);
+                }
+            });
+        }
+        String target = marker.replaceAll("\\s+", "");
+        int index = window.indexOf(target);
+        if (index < 0) {
+            return new MarkerHit(false, 0L, -1, window.length(), -1L);
+        }
+        TextAt first = owner.get(index);
+        TextAt last = owner.get(index + target.length() - 1);
+        return new MarkerHit(true, last.atNanos(), index, window.length(), first.startMs());
     }
 
     /** 출력 전사 사건 하나의 글 조각({@code delta}가 문자열이거나 {@code {text}} 객체). 없으면 빈 문자열. */
@@ -1005,10 +1098,6 @@ final class GptLiveProbe {
             String sendFailure) {
     }
 
-    /** {@code session.update} 시험 관측(env가 있을 때만). */
-    record UpdateTrial(String sendFailure, long sentNanos, long endNanos) {
-    }
-
     /** 지시 추가 한 번의 관측(P2 · P3). */
     static final class AppendTrial {
 
@@ -1021,7 +1110,6 @@ final class GptLiveProbe {
         /** P3: 보내기 직전 조용했던 시간 ms(받은 사건이 없으면 -1). */
         long idleMillis = -1;
         long endNanos;
-        MarkerHit marker;
 
         AppendTrial(String eventId, String content) {
             this.eventId = eventId;
@@ -1045,14 +1133,16 @@ final class GptLiveProbe {
         final List<Utterance> utterances = new ArrayList<>();
         Utterance p1;
         Utterance p2;
-        Utterance p4;
-        Utterance p5;
+        /** P4 평범한 발화들(순서대로). */
+        final List<Utterance> plain = new ArrayList<>();
+        /** P6 한 번뿐 지시 뒤의 평범한 발화(시험하지 않았으면 null). */
+        Utterance p6;
         AppendTrial a1;
         AppendTrial a2;
-        MarkerHit p4MarkerP3;
-        MarkerHit p4MarkerP2;
-        UpdateTrial update;
-        String updateEnv;
+        AppendTrial a3;
+        boolean oneShotPlanned;
+        /** 출력 전사 조각(글은 메모리에서 표식 확인에만 쓰고 보고서에는 넣지 않는다). */
+        List<TextAt> pieces = List.of();
         boolean closedEarly;
         String closeFailure;
         long closeMillis;
@@ -1071,7 +1161,7 @@ final class GptLiveProbe {
         /** 처음 보낸 지시 추가 시각(없으면 0). */
         long firstAppendNanos() {
             long first = 0L;
-            for (AppendTrial trial : new AppendTrial[] {a1, a2}) {
+            for (AppendTrial trial : new AppendTrial[] {a1, a2, a3}) {
                 if (trial != null && trial.sentNanos != 0 && (first == 0L || trial.sentNanos < first)) {
                     first = trial.sentNanos;
                 }
@@ -1082,7 +1172,7 @@ final class GptLiveProbe {
         /** 지시 추가를 실제로 보낸 사건 id들. */
         List<String> sentEventIds() {
             List<String> ids = new ArrayList<>();
-            for (AppendTrial trial : new AppendTrial[] {a1, a2}) {
+            for (AppendTrial trial : new AppendTrial[] {a1, a2, a3}) {
                 if (trial != null && trial.sent()) {
                     ids.add(trial.eventId);
                 }
@@ -1092,7 +1182,7 @@ final class GptLiveProbe {
     }
 
     /** 연결 → 시작 → P1 ~ P4(+ P5) → 종료를 관측한다. */
-    Result attempt(Row host, URI url, String key, InputAudio input, int rate, String updateJson) {
+    Result attempt(Row host, URI url, String key, InputAudio input, int rate, Plan plan) {
         Tap tap = new Tap(json);
         long openStart = System.nanoTime();
         Link link;
@@ -1103,7 +1193,7 @@ final class GptLiveProbe {
                     ITEMS.indexOf(item) == 0 || ITEMS.indexOf(item) == ACCEPT_ROW ? Verdict.FAIL : Verdict.NOT_OBSERVED)).toList(), rate);
         }
         try {
-            Obs obs = observe(link, tap, input, rate, updateJson, openStart);
+            Obs obs = observe(link, tap, input, rate, plan, openStart);
             List<Row> rows = buildRows(obs);
             boolean one = rows.get(0).verdict() == Verdict.PASS;
             boolean accepted = rows.get(ACCEPT_ROW).verdict() == Verdict.PASS;
@@ -1162,11 +1252,12 @@ final class GptLiveProbe {
         return started && obs.startFailure == null && !tap.closed();
     }
 
-    private Obs observe(Link link, Tap tap, InputAudio input, int rate, String updateJson, long openStart) {
+    private Obs observe(Link link, Tap tap, InputAudio input, int rate, Plan plan, long openStart) {
         ProviderSession session = link.session();
         Obs obs = new Obs();
         obs.rate = rate;
         obs.input = input;
+        obs.oneShotPlanned = plan.oneShot();
         obs.connectedMillis = millisSince(openStart);
 
         // A. 세션 시작(표본율 지정)
@@ -1202,47 +1293,45 @@ final class GptLiveProbe {
             }, () -> a1.sentNanos == 0 ? 0L : a1.sentNanos + timing.noOutputQuiet().toNanos());
             obs.utterances.add(obs.p2);
             a1.endNanos = System.nanoTime();
-            if (a1.sent()) {
-                a1.marker = tap.findMarker(MARKER_P2, a1.sentNanos, a1.endNanos);
-            }
         }
 
         // P3 유휴 추가: 출력이 없을 때(앞 단계가 조용해진 뒤) 지시 #2만 보낸다
         if (live(tap, started, obs)) {
             AppendTrial a2 = new AppendTrial(EVENT_ID_P3, INSTRUCTION_P3);
             obs.a2 = a2;
-            long lastFrame = tap.lastFrameNanos();
+            long lastFrame = tap.lastActivityNanos();
             a2.idleMillis = lastFrame == 0 ? -1 : millisSince(lastFrame);
             sendAppend(link, a2);
             if (a2.failure == null) {
                 settle(tap, a2.sentNanos, () -> { }, () -> 0L);
             }
             a2.endNanos = System.nanoTime();
-            if (a2.sent()) {
-                a2.marker = tap.findMarker(MARKER_P3, a2.sentNanos, a2.endNanos);
-            }
         }
 
-        // P4 지속성: 평범한 발화 → 다음 자동 응답에 P3 표식이 남는가
-        if (live(tap, started, obs)) {
-            obs.p4 = speak(session, tap, frames, voiced, rate, start -> { }, () -> 0L);
-            obs.utterances.add(obs.p4);
-            obs.p4MarkerP3 = tap.findMarker(MARKER_P3, obs.p4.startNanos(), obs.p4.endNanos());
-            obs.p4MarkerP2 = tap.findMarker(MARKER_P2, obs.p4.startNanos(), obs.p4.endNanos());
+        // P4 지속성: 평범한 발화를 조용한 틈을 두고 여러 번 → 전사 start_ms로 P3 표식이 남는지(귀속은 보고서 계산에서)
+        for (int turn = 0; turn < plan.plainTurns() && live(tap, started, obs); turn++) {
+            Utterance plain = speak(session, tap, frames, voiced, rate, start -> { }, () -> 0L);
+            obs.plain.add(plain);
+            obs.utterances.add(plain);
         }
 
-        // P5 (선택) 자동 응답 끄기 시험: 사람이 준 session.update를 보내고 발화 하나를 더 보낸다
-        if (updateJson != null && live(tap, started, obs)) {
-            obs.updateEnv = "있음";
-            long sent = System.nanoTime();
-            String failure = send(() -> sendText(link, updateJson));
-            if (failure == null) {
-                sleep(timing.settleQuiet().dividedBy(2));
-                obs.p5 = speak(session, tap, frames, voiced, rate, start -> { }, () -> 0L);
-                obs.utterances.add(obs.p5);
+        // P6 한 번뿐 지시: 출력이 없을 때 지시를 보내고(저절로 표식 말을 하는지), 조용해진 뒤 평범한 발화 하나
+        if (plan.oneShot() && live(tap, started, obs)) {
+            AppendTrial a3 = new AppendTrial(EVENT_ID_P6, INSTRUCTION_P6);
+            obs.a3 = a3;
+            long lastFrame = tap.lastActivityNanos();
+            a3.idleMillis = lastFrame == 0 ? -1 : millisSince(lastFrame);
+            sendAppend(link, a3);
+            if (a3.failure == null) {
+                settle(tap, a3.sentNanos, () -> { }, () -> 0L);
             }
-            obs.update = new UpdateTrial(failure, sent, System.nanoTime());
+            a3.endNanos = System.nanoTime();
+            if (live(tap, started, obs)) {
+                obs.p6 = speak(session, tap, frames, voiced, rate, start -> { }, () -> 0L);
+                obs.utterances.add(obs.p6);
+            }
         }
+        obs.pieces = tap.pieces();
 
         // 종료 형식
         long closeStart = System.nanoTime();
@@ -1312,7 +1401,7 @@ final class GptLiveProbe {
     }
 
     /**
-     * 출력이 끝나기를 기다린다: 이 시각 뒤 출력 음성 조각이 온 적이 있으면 마지막 사건 뒤 {@code settleQuiet}(2초)가 지날 때까지, 출력이 한 번도 안 오면
+     * 출력이 끝나기를 기다린다: 이 시각 뒤 출력 음성 · 전사 사건이 온 적이 있으면 마지막 그런 사건 뒤 {@code settleQuiet}(기본 4초)가 지날 때까지, 출력이 한 번도 안 오면
      * {@code noOutputQuiet}가 지날 때까지(둘 다 {@code phaseWait} 상한, 연결이 닫히면 끝). {@code floor} 시각 전에는 끝내지 않는다.
      */
     private void settle(Tap tap, long sinceNanos, Runnable tick, java.util.function.LongSupplier floor) {
@@ -1321,10 +1410,10 @@ final class GptLiveProbe {
         while (System.nanoTime() < deadline && !tap.closed()) {
             tick.run();
             long now = System.nanoTime();
-            long lastAudio = tap.lastAudioNanos();
-            boolean heard = lastAudio >= sinceNanos;
+            long lastActivity = tap.lastActivityNanos();
+            boolean heard = lastActivity >= sinceNanos;
             boolean floorPassed = now >= floor.getAsLong();
-            if (floorPassed && heard && now - Math.max(lastAudio, tap.lastFrameNanos()) >= timing.settleQuiet().toNanos()) {
+            if (floorPassed && heard && now - lastActivity >= timing.settleQuiet().toNanos()) {
                 return;
             }
             if (floorPassed && !heard && now - begin >= timing.noOutputQuiet().toNanos()) {
@@ -1436,7 +1525,128 @@ final class GptLiveProbe {
                 + " · 표식 앞 전사 " + hit.charsBefore() + "자" + (hit.charsBefore() == 0 ? " = 구간 전사가 표식으로 시작" : "") + ")";
     }
 
-    /** 보고서 행 열일곱 개({@link #ITEMS} 순서). 판정 · 관측만 담고 전사 · 음성 · 키는 담지 않는다. */
+    /** 출력 음성 조각 하나의 위치(도착 시각 · 세션 오디오 시계에서 차지한 ms 구간). */
+    record Chunk(long atNanos, long clockStartMs, long clockEndMs) {
+    }
+
+    static List<Chunk> chunksIn(List<RawFrame> raw, long fromNanos, long toNanos) {
+        return raw.stream().filter(frame -> OUTPUT_AUDIO_TYPES.contains(frame.type()) && frame.audioBytes() > 0
+                && frame.atNanos() >= fromNanos && frame.atNanos() < toNanos)
+                .map(frame -> new Chunk(frame.atNanos(), frame.clockStartMs(), frame.clockMs())).toList();
+    }
+
+    /** 단계 창: 도착 시각 범위와 그 안 출력 음성이 오디오 시계에서 차지한 구간(음성이 없으면 -1). */
+    record Win(String name, long startNanos, long endNanos, long clockFirstMs, long clockLastMs) {
+
+        boolean hasAudio() {
+            return clockFirstMs >= 0;
+        }
+    }
+
+    static Win winOf(List<RawFrame> raw, String name, long startNanos, long endNanos) {
+        List<Chunk> chunks = chunksIn(raw, startNanos, endNanos + 1);
+        return new Win(name, startNanos, endNanos, chunks.isEmpty() ? -1 : chunks.getFirst().clockStartMs(),
+                chunks.isEmpty() ? -1 : chunks.getLast().clockEndMs());
+    }
+
+    /** 실행에서 시험한 단계 창들(P1, P2, P3, P4#n, P6a, P6b). */
+    static List<Win> windows(Obs obs) {
+        List<RawFrame> raw = obs.raw;
+        List<Win> wins = new ArrayList<>();
+        if (obs.p1 != null) {
+            wins.add(winOf(raw, "P1", obs.p1.startNanos(), obs.p1.endNanos()));
+        }
+        if (obs.p2 != null) {
+            wins.add(winOf(raw, "P2", obs.p2.startNanos(), obs.p2.endNanos()));
+        }
+        if (obs.a2 != null && obs.a2.sentNanos != 0) {
+            wins.add(winOf(raw, "P3", obs.a2.sentNanos, obs.a2.endNanos));
+        }
+        for (int i = 0; i < obs.plain.size(); i++) {
+            wins.add(winOf(raw, "P4#" + (i + 1), obs.plain.get(i).startNanos(), obs.plain.get(i).endNanos()));
+        }
+        if (obs.a3 != null && obs.a3.sentNanos != 0) {
+            wins.add(winOf(raw, "P6a", obs.a3.sentNanos, obs.a3.endNanos));
+        }
+        if (obs.p6 != null) {
+            wins.add(winOf(raw, "P6b", obs.p6.startNanos(), obs.p6.endNanos()));
+        }
+        return wins;
+    }
+
+    /**
+     * 전사 조각을 {@code start_ms}로 단계에 귀속한다: 단계 창 안의 출력 음성이 오디오 시계에서 차지한 구간에 start_ms가 들면 그 단계의 것이다(전사가
+     * 늦게 도착해도 같은 단계). 어느 구간에도 들지 않으면 "?"(귀속 못 함). 도착 순서를 지킨다.
+     */
+    static Map<String, List<TextAt>> byStart(List<TextAt> pieces, List<Win> wins) {
+        Map<String, List<TextAt>> map = new LinkedHashMap<>();
+        wins.forEach(win -> map.put(win.name(), new ArrayList<>()));
+        map.put("?", new ArrayList<>());
+        for (TextAt piece : pieces) {
+            String owner = "?";
+            if (piece.startMs() >= 0) {
+                for (Win win : wins) {
+                    if (win.hasAudio() && piece.startMs() >= win.clockFirstMs() && piece.startMs() < win.clockLastMs()) {
+                        owner = win.name();
+                        break;
+                    }
+                }
+            }
+            map.get(owner).add(piece);
+        }
+        return map;
+    }
+
+    private static RawFrame ackFor(List<RawFrame> raw, String eventId) {
+        return raw.stream().filter(frame -> frame.type().contains(APPENDED_MARK) && !frame.type().equals("session.instructions.append")
+                && eventId.equals(frame.clientEventId())).findFirst().orElse(null);
+    }
+
+    private static String markerBrief(MarkerHit hit) {
+        if (hit == null) {
+            return "확인 못 함";
+        }
+        return hit.found() ? "예(표식 앞 전사 " + hit.charsBefore() + "자" + (hit.charsBefore() == 0 ? " · 표식으로 시작" : "") + ")"
+                : "아니오(전사 " + hit.windowChars() + "자)";
+    }
+
+    private static MarkerHit arrivalHit(Obs obs, String marker, long fromNanos, long toNanos) {
+        return findMarker(obs.pieces, marker, piece -> piece.atNanos() >= fromNanos && piece.atNanos() <= toNanos);
+    }
+
+    private static int firstIndex(List<Chunk> chunks, java.util.function.Predicate<Chunk> match) {
+        for (int i = 0; i < chunks.size(); i++) {
+            if (match.test(chunks.get(i))) {
+                return i;
+            }
+        }
+        return chunks.size();
+    }
+
+    /** 단계별 전사 도착 지연: 전사 end_ms에서 그 조각이 도착한 때의 오디오 시계를 뺀 값(양수면 전사가 음성보다 앞서 도착). */
+    static String lagText(Obs obs, List<Win> wins, Map<String, List<TextAt>> attributed) {
+        List<String> parts = new ArrayList<>();
+        for (Win win : wins) {
+            List<Long> lags = obs.pieces.stream().filter(p -> p.endMs() >= 0 && p.atNanos() >= win.startNanos() && p.atNanos() <= win.endNanos())
+                    .map(p -> p.endMs() - p.clockMs()).sorted().toList();
+            parts.add(win.name() + (lags.isEmpty() ? " 전사 없음" : " n=" + lags.size() + " 최소 " + lags.getFirst() + " 중앙 "
+                    + lags.get(lags.size() / 2) + " 최대 " + lags.getLast()));
+        }
+        long total = obs.pieces.size();
+        long unattributed = attributed.getOrDefault("?", List.of()).size();
+        boolean monotonic = true;
+        long previous = Long.MIN_VALUE;
+        for (TextAt piece : obs.pieces) {
+            if (piece.startMs() >= 0) {
+                monotonic &= piece.startMs() >= previous;
+                previous = piece.startMs();
+            }
+        }
+        return String.join(" · ", parts) + " (ms, 전사 end_ms − 도착 때 오디오 시계, 양수 = 전사가 음성보다 앞) · 전사 조각 " + total
+                + "개 중 start_ms가 오디오 시계 구간에 든 것 " + (total - unattributed) + "개 · start_ms 도착 순서 단조 " + (monotonic ? "예" : "아니오");
+    }
+
+    /** 보고서 행 열아홉 개({@link #ITEMS} 순서). 판정 · 관측만 담고 전사 · 음성 · 키는 담지 않는다. */
     static List<Row> buildRows(Obs obs) {
         List<RawFrame> raw = obs.raw;
         List<Row> rows = new ArrayList<>();
@@ -1446,7 +1656,6 @@ final class GptLiveProbe {
         long audioBytes = raw.stream().filter(frame -> OUTPUT_AUDIO_TYPES.contains(frame.type())).mapToLong(RawFrame::audioBytes).sum();
         long unsupportedTypeErrors = errors.stream().filter(error -> "type".equals(error.param())).count();
         long firstAppend = obs.firstAppendNanos();
-        // 지시 추가 전(세션 시작 · 입력 · P1)에 온 오류와 그 뒤 오류를 가른다
         List<ErrorInfo> beforeAppend = raw.stream().filter(frame -> frame.error() != null && (firstAppend == 0 || frame.atNanos() < firstAppend))
                 .map(RawFrame::error).toList();
         List<ErrorInfo> afterAppend = firstAppend == 0 ? List.of()
@@ -1454,6 +1663,8 @@ final class GptLiveProbe {
         int totalFrames = obs.utterances.stream().mapToInt(Utterance::totalFrames).sum();
         int sentFrames = obs.utterances.stream().mapToInt(Utterance::sentFrames).sum();
         boolean sendsOk = !obs.utterances.isEmpty() && obs.utterances.stream().allMatch(u -> u.sendFailure() == null);
+        List<Win> wins = windows(obs);
+        Map<String, List<TextAt>> attributed = byStart(obs.pieces, wins);
 
         // ① 표본율 수락
         boolean one = started && obs.startFailure == null && sendsOk && audioBytes > 0 && beforeAppend.isEmpty();
@@ -1507,96 +1718,170 @@ final class GptLiveProbe {
             }
         }
 
-        // P2 끼어들기
+        // P2 시간표 귀속 · 경계 규칙
         AppendTrial a1 = obs.a1;
         if (obs.p2 == null || a1 == null) {
-            rows.add(new Row(ITEMS.get(3), "시험하지 못함(앞 단계 응답이 없었거나 세션이 시작되지 않음)", Verdict.NOT_OBSERVED));
+            String why = "시험하지 못함(앞 단계 응답이 없었거나 세션이 시작되지 않음)";
+            rows.add(new Row(ITEMS.get(3), why, Verdict.NOT_OBSERVED));
+            rows.add(new Row(ITEMS.get(4), why, Verdict.NOT_OBSERVED));
         } else if (a1.failure != null) {
             rows.add(new Row(ITEMS.get(3), "지시 #1 송신 실패(" + a1.failure + ")", Verdict.FAIL));
+            rows.add(new Row(ITEMS.get(4), "지시 #1을 보내지 못해 비교 불가", Verdict.NOT_OBSERVED));
         } else if (a1.sentNanos == 0) {
             rows.add(new Row(ITEMS.get(3), "발화 뒤 출력 조각이 오지 않아 지시 #1을 보내지 못함", Verdict.NOT_OBSERVED));
+            rows.add(new Row(ITEMS.get(4), "지시 #1을 보내지 못해 비교 불가", Verdict.NOT_OBSERVED));
         } else {
             long sent = a1.sentNanos;
-            long end = a1.endNanos + 1;
-            List<Long> after = audioTimes(raw, sent, end);
-            MarkerHit hit = a1.marker;
-            String stale;
-            if (hit != null && hit.found() && hit.foundAtNanos() != 0) {
-                List<Long> old = after.stream().filter(at -> at < hit.foundAtNanos()).toList();
-                stale = "표식 전사 도착 전 조각(낡은 꼬리 추정) " + old.size() + "개"
-                        + (old.isEmpty() ? "" : " · 마지막 낡은 조각 +" + millisBetween(sent, old.getLast()) + "ms");
+            long end = obs.p2.endNanos() + 1;
+            RawFrame ack = ackFor(raw, EVENT_ID_P2);
+            List<Chunk> chunks = chunksIn(raw, sent, end);
+            MarkerHit hit = findMarker(obs.pieces, MARKER_P2, piece -> piece.atNanos() >= sent && piece.atNanos() < end);
+            long clockAtSend = raw.stream().filter(frame -> frame.atNanos() <= sent).mapToLong(RawFrame::clockMs).max().orElse(0L);
+            StringBuilder text = new StringBuilder("지시 #1은 첫 출력 조각 뒤 " + a1.afterFirstChunkMillis + "ms에 송신(그때 오디오 시계 " + clockAtSend
+                    + "ms) · 송신 뒤 조각 " + chunks.size() + "개");
+            final long ackEnd = ack == null ? -1L : ack.endMs();
+            if (ack == null) {
+                text.append(" · 확인 사건 없음");
             } else {
-                stale = "표식 응답이 없어 낡은 꼬리와 새 응답을 가르지 못함";
+                long ackStart = ack.startMs();
+                text.append(" · 확인 사건: 도착 +").append(millisBetween(sent, ack.atNanos())).append("ms · 오디오 시계 ").append(ack.clockMs())
+                        .append("ms · start_ms=").append(ackStart).append(" end_ms=").append(ackEnd).append(" · 송신~도착 사이 조각 ")
+                        .append(chunks.stream().filter(c -> c.atNanos() < ack.atNanos()).count()).append("개");
             }
-            rows.add(new Row(ITEMS.get(3), "지시 #1은 첫 출력 조각 뒤 " + a1.afterFirstChunkMillis + "ms에 송신 · 송신 뒤 출력 조각 " + after.size()
-                    + "개" + (after.isEmpty() ? "" : "(첫 조각 +" + millisBetween(sent, after.getFirst()) + "ms · 마지막 조각 +"
-                            + millisBetween(sent, after.getLast()) + "ms · 조각 사이 최대 쉼 " + maxGapMillis(after) + "ms)")
-                    + " · 표식 낱말 응답 시작 " + markerText(hit, sent) + " · " + stale + " · 경계를 알리는 모르는 type "
-                    + unknownTypesIn(raw, sent, end), Verdict.INFO));
+            if (hit.found()) {
+                text.append(" · 표식 전사: 도착 +").append(millisBetween(sent, hit.foundAtNanos())).append("ms · start_ms=").append(hit.markerStartMs())
+                        .append(" · 표식 앞 전사 ").append(hit.charsBefore()).append("자");
+                if (ack != null) {
+                    text.append(" · 확인 도착~표식 전사 도착 사이 조각 ")
+                            .append(chunks.stream().filter(c -> c.atNanos() >= ack.atNanos() && c.atNanos() < hit.foundAtNanos()).count()).append("개");
+                }
+            } else {
+                text.append(" · 표식 응답 시작 아니오(전사 ").append(hit.windowChars()).append("자)");
+            }
+            int idxAck = ack == null ? chunks.size() : firstIndex(chunks, c -> c.atNanos() >= ack.atNanos());
+            int idxEnd = ackEnd < 0 ? chunks.size() : firstIndex(chunks, c -> c.clockStartMs() >= ackEnd);
+            int idxTruth = hit.found() && hit.markerStartMs() >= 0 ? firstIndex(chunks, c -> c.clockStartMs() >= hit.markerStartMs()) : chunks.size();
+            text.append(" · 조각 위치(0부터, 전체 ").append(chunks.size()).append("): 확인 도착 뒤 첫 조각 ").append(idxAck)
+                    .append(" · 시계 ≥ 확인 end_ms 첫 조각 ").append(idxEnd).append(" · 시계 ≥ 표식 start_ms 첫 조각 ").append(idxTruth)
+                    .append(" · 송신 뒤 조각 사이 최대 쉼 ").append(maxGapMillis(chunks.stream().map(Chunk::atNanos).toList())).append("ms")
+                    .append(" · 경계를 알리는 모르는 type ").append(unknownTypesIn(raw, sent, end));
+            rows.add(new Row(ITEMS.get(3), text.toString(), Verdict.INFO));
+            if (ack == null || !hit.found() || hit.markerStartMs() < 0 || ackEnd < 0) {
+                rows.add(new Row(ITEMS.get(4), "비교하지 못함 — " + (ack == null ? "확인 사건 없음" : !hit.found() ? "표식 응답이 없어 기준을 못 잡음"
+                        : "start_ms / end_ms 값이 없음"), Verdict.NOT_OBSERVED));
+            } else {
+                long cut = hit.markerStartMs();
+                long staleTruth = chunks.stream().filter(c -> c.clockStartMs() < cut).count();
+                long r1Leak = chunks.stream().filter(c -> c.clockStartMs() < cut && c.atNanos() >= ack.atNanos()).count();
+                long r1Drop = chunks.stream().filter(c -> c.clockStartMs() >= cut && c.atNanos() < ack.atNanos()).count();
+                long endCut = ackEnd;
+                long r2Leak = chunks.stream().filter(c -> c.clockStartMs() < cut && c.clockStartMs() >= endCut).count();
+                long r2Drop = chunks.stream().filter(c -> c.clockStartMs() >= cut && c.clockStartMs() < endCut).count();
+                rows.add(new Row(ITEMS.get(4), "기준(시계 ≥ 표식 start_ms " + cut + "이면 새 응답): 낡은 조각 " + staleTruth + "개 · 새 조각 "
+                        + (chunks.size() - staleTruth) + "개 | R1(확인 도착 뒤 조각 = 새 응답): 낡은 조각 통과 " + r1Leak + "개 · 새 조각 잘못 버림 "
+                        + r1Drop + "개 | R2(시계 ≥ 확인 end_ms " + endCut + " = 새 응답): 낡은 조각 통과 " + r2Leak + "개 · 새 조각 잘못 버림 "
+                        + r2Drop + "개 | 확인 end_ms − 표식 start_ms = " + (endCut - cut) + "ms · 확인 도착 때 시계 − 표식 start_ms = "
+                        + (ack.clockMs() - cut) + "ms (start_ms가 오디오 시계와 같은 시간축이라는 가정 위의 계산)", Verdict.INFO));
+            }
         }
 
-        // P3 유휴 추가
+        // P3 유휴 추가(조용해진 뒤 창)
         AppendTrial a2 = obs.a2;
         if (a2 == null) {
-            rows.add(new Row(ITEMS.get(4), "시험하지 못함(세션이 시작되지 않음)", Verdict.NOT_OBSERVED));
+            rows.add(new Row(ITEMS.get(5), "시험하지 못함(세션이 시작되지 않음)", Verdict.NOT_OBSERVED));
         } else if (a2.failure != null) {
-            rows.add(new Row(ITEMS.get(4), "지시 #2 송신 실패(" + a2.failure + ")", Verdict.FAIL));
+            rows.add(new Row(ITEMS.get(5), "지시 #2 송신 실패(" + a2.failure + ")", Verdict.FAIL));
         } else {
-            List<Long> after = audioTimes(raw, a2.sentNanos, a2.endNanos + 1);
-            rows.add(new Row(ITEMS.get(4), "송신 직전 조용했던 시간 " + (a2.idleMillis < 0 ? "모름" : a2.idleMillis + "ms") + " · 말이 저절로 시작 "
-                    + (after.isEmpty() ? "아니오(조각 0개)" : "예(첫 조각 +" + millisBetween(a2.sentNanos, after.getFirst()) + "ms · 조각 " + after.size()
-                            + "개 · 조각 사이 최대 쉼 " + maxGapMillis(after) + "ms)")
-                    + " · 표식 낱말 " + markerText(a2.marker, a2.sentNanos) + " · 모르는 type " + unknownTypesIn(raw, a2.sentNanos, a2.endNanos + 1),
+            long endNanos = a2.endNanos;
+            List<Chunk> chunks = chunksIn(raw, a2.sentNanos, endNanos + 1);
+            MarkerHit byArrival = arrivalHit(obs, MARKER_P3, a2.sentNanos, endNanos);
+            MarkerHit byStart = findMarker(attributed.getOrDefault("P3", List.of()), MARKER_P3, piece -> true);
+            long late = attributed.getOrDefault("P3", List.of()).stream().filter(piece -> piece.atNanos() > endNanos).count();
+            rows.add(new Row(ITEMS.get(5), "송신 직전 조용했던 시간 " + (a2.idleMillis < 0 ? "모름" : a2.idleMillis + "ms") + " · 말이 저절로 시작 "
+                    + (chunks.isEmpty() ? "아니오(조각 0개)" : "예(첫 조각 +" + millisBetween(a2.sentNanos, chunks.getFirst().atNanos()) + "ms · 조각 "
+                            + chunks.size() + "개 · 음성 길이 " + (chunks.getLast().clockEndMs() - chunks.getFirst().clockStartMs()) + "ms)")
+                    + " · P3 표식 start_ms 귀속 " + markerBrief(byStart) + " / 도착 창 " + markerBrief(byArrival)
+                    + " · 전사 글자 수 start_ms 귀속 " + byStart.windowChars() + " / 도착 창 " + byArrival.windowChars()
+                    + " · 창이 닫힌 뒤 늦게 도착한 P3 전사 조각 " + late + "개 · 모르는 type " + unknownTypesIn(raw, a2.sentNanos, endNanos + 1),
                     Verdict.INFO));
         }
 
-        // P4 지속성
-        Utterance p4 = obs.p4;
-        if (p4 == null) {
-            rows.add(new Row(ITEMS.get(5), "시험하지 못함(세션이 시작되지 않았거나 앞에서 끊김)", Verdict.NOT_OBSERVED));
+        // P4 지속성(start_ms 귀속)
+        if (obs.plain.isEmpty()) {
+            rows.add(new Row(ITEMS.get(6), "시험하지 못함(세션이 시작되지 않았거나 앞에서 끊김)", Verdict.NOT_OBSERVED));
         } else {
-            List<Long> times = audioTimes(raw, p4.startNanos(), p4.endNanos() + 1);
-            boolean persists = obs.p4MarkerP3 != null && obs.p4MarkerP3.found();
-            rows.add(new Row(ITEMS.get(5), "평범한 발화 뒤 자동 응답 조각 " + times.size() + "개 · P3 표식 " + markerText(obs.p4MarkerP3, p4.startNanos())
-                    + " · P2 표식 " + markerText(obs.p4MarkerP2, p4.startNanos()) + " → "
-                    + (times.isEmpty() ? "응답이 없어 판단 불가" : persists ? "지시가 다음 응답에도 남는다(유지 · 누적)"
-                            : "지시가 남지 않았다(한 번뿐이거나 효과 없음 — P3 표식이 '아니오'였으면 효과 자체를 못 본 것)"),
-                    times.isEmpty() ? Verdict.NOT_OBSERVED : Verdict.INFO));
+            MarkerHit p3Hit = findMarker(attributed.getOrDefault("P3", List.of()), MARKER_P3, piece -> true);
+            List<String> parts = new ArrayList<>();
+            List<String> verdicts = new ArrayList<>();
+            boolean anyAudio = false;
+            for (int i = 0; i < obs.plain.size(); i++) {
+                String name = "P4#" + (i + 1);
+                Utterance plain = obs.plain.get(i);
+                int chunkCount = chunksIn(raw, plain.startNanos(), plain.endNanos() + 1).size();
+                anyAudio |= chunkCount > 0;
+                MarkerHit hit3 = findMarker(attributed.getOrDefault(name, List.of()), MARKER_P3, piece -> true);
+                MarkerHit hit3Arrival = arrivalHit(obs, MARKER_P3, plain.startNanos(), plain.endNanos());
+                MarkerHit hit2 = findMarker(attributed.getOrDefault(name, List.of()), MARKER_P2, piece -> true);
+                parts.add("평범한 발화 " + (i + 1) + "회 뒤: 조각 " + chunkCount + "개 · P3 표식 start_ms 귀속 " + markerBrief(hit3) + " / 도착 창 "
+                        + markerBrief(hit3Arrival) + " · P2 표식 " + markerBrief(hit2));
+                verdicts.add(chunkCount == 0 ? "응답 없음" : hit3.found() ? "예" : "아니오");
+            }
+            String conclusion = !p3Hit.found() ? "P3에서 표식을 못 봐서 유지 여부는 판단 불가"
+                    : "P3 표식 유지: " + String.join(" / ", java.util.stream.IntStream.range(0, verdicts.size())
+                            .mapToObj(i -> (i + 1) + "회 뒤 " + verdicts.get(i)).toList());
+            rows.add(new Row(ITEMS.get(6), String.join(" | ", parts) + " → " + conclusion, anyAudio ? Verdict.INFO : Verdict.NOT_OBSERVED));
         }
 
-        // P5 session.update
-        if (obs.updateEnv == null) {
-            rows.add(new Row(ITEMS.get(6), "시험 안 함(env " + UPDATE_JSON_ENV + " 없음 — 메시지 필드 모양을 모른다, 지원 목록에는 session.update가 있다)",
-                    Verdict.INFO));
-        } else if (obs.update == null || obs.update.sendFailure() != null) {
-            rows.add(new Row(ITEMS.get(6), "session.update 송신 실패(" + (obs.update == null ? "없음" : obs.update.sendFailure()) + ")", Verdict.FAIL));
+        // P6 한 번뿐 지시
+        if (!obs.oneShotPlanned) {
+            rows.add(new Row(ITEMS.get(7), "시험 안 함(env " + ONE_SHOT_ENV + "로 껐다)", Verdict.INFO));
+        } else if (obs.a3 == null || obs.a3.sentNanos == 0 || obs.a3.failure != null) {
+            rows.add(new Row(ITEMS.get(7), obs.a3 != null && obs.a3.failure != null ? "지시 송신 실패(" + obs.a3.failure + ")"
+                    : "시험하지 못함(앞에서 끊김)", obs.a3 != null && obs.a3.failure != null ? Verdict.FAIL : Verdict.NOT_OBSERVED));
         } else {
-            long afterUpdate = obs.p5 == null ? 0 : audioTimes(raw, obs.p5.startNanos(), obs.p5.endNanos() + 1).size();
-            rows.add(new Row(ITEMS.get(6), "session.update 송신 뒤 발화 하나의 자동 응답 음성 조각 " + afterUpdate + "개 — "
-                    + (afterUpdate == 0 ? "자동 응답이 꺼졌을 수 있다(사람이 확인)" : "자동 응답이 꺼지지 않았다"), Verdict.INFO));
+            AppendTrial a3 = obs.a3;
+            List<Chunk> speech = chunksIn(raw, a3.sentNanos, a3.endNanos + 1);
+            MarkerHit self = findMarker(attributed.getOrDefault("P6a", List.of()), MARKER_P6, piece -> true);
+            MarkerHit selfArrival = arrivalHit(obs, MARKER_P6, a3.sentNanos, a3.endNanos);
+            MarkerHit nextHit = findMarker(attributed.getOrDefault("P6b", List.of()), MARKER_P6, piece -> true);
+            MarkerHit nextArrival = obs.p6 == null ? null : arrivalHit(obs, MARKER_P6, obs.p6.startNanos(), obs.p6.endNanos());
+            MarkerHit nextP3 = findMarker(attributed.getOrDefault("P6b", List.of()), MARKER_P3, piece -> true);
+            int nextChunks = obs.p6 == null ? 0 : chunksIn(raw, obs.p6.startNanos(), obs.p6.endNanos() + 1).size();
+            String conclusion = !self.found() ? "지시 직후 표식 말을 못 봐서 한 번뿐인지 판단 불가"
+                    : nextChunks == 0 ? "다음 평범한 발화에 응답이 없어 판단 불가"
+                    : nextHit.found() ? "한 번뿐이라 했는데 다음 평범한 발화에도 표식이 남았다" : "한 번뿐 지시가 지켜졌다(다음 평범한 발화에 표식 없음)";
+            rows.add(new Row(ITEMS.get(7), "지시 직후 말이 저절로 시작 " + (speech.isEmpty() ? "아니오(조각 0개)" : "예(조각 " + speech.size() + "개)")
+                    + " · P6 표식 start_ms 귀속 " + markerBrief(self) + " / 도착 창 " + markerBrief(selfArrival)
+                    + " · 다음 평범한 발화: 조각 " + nextChunks + "개 · P6 표식 start_ms 귀속 " + markerBrief(nextHit) + " / 도착 창 "
+                    + markerBrief(nextArrival) + " · 그 발화의 P3 표식 " + markerBrief(nextP3) + " → " + conclusion, Verdict.INFO));
         }
+
+        // 전사 도착 지연
+        rows.add(new Row(ITEMS.get(8), obs.pieces.isEmpty() ? "출력 전사 조각이 없다" : lagText(obs, wins, attributed),
+                obs.pieces.isEmpty() ? Verdict.NOT_OBSERVED : Verdict.INFO));
 
         // 지시 추가 수락
         List<RawFrame> acks = framesOfType(raw, type -> type.contains(APPENDED_MARK) && !type.equals("session.instructions.append"));
         List<String> sentIds = obs.sentEventIds();
         long matched = acks.stream().filter(frame -> frame.clientEventId() != null && sentIds.contains(frame.clientEventId())).count();
         List<Integer> lengths = raw.stream().filter(frame -> frame.instructionsLength() >= 0).map(RawFrame::instructionsLength).toList();
-        String failure = obs.a1 != null && obs.a1.failure != null ? obs.a1.failure : obs.a2 != null ? obs.a2.failure : null;
+        String failure = java.util.stream.Stream.of(obs.a1, obs.a2, obs.a3).filter(java.util.Objects::nonNull)
+                .map(trial -> trial.failure).filter(java.util.Objects::nonNull).findFirst().orElse(null);
         boolean accepted = !sentIds.isEmpty() && failure == null && afterAppend.isEmpty();
         rows.add(new Row(ITEMS.get(ACCEPT_ROW), "지시 추가 " + sentIds.size() + "번 송신" + (failure == null ? "" : "(송신 실패 " + failure + ")")
                 + " · 보낸 뒤 오류 " + afterAppend.size() + "건" + (afterAppend.isEmpty() ? "" : " " + describeErrors(afterAppend))
                 + " · 확인 사건 " + acks.size() + "건" + (acks.isEmpty() ? "" : " " + typeSummary(acks))
                 + " · client_event_id가 보낸 event_id와 일치 " + matched + "/" + sentIds.size()
                 + " · 확인 사건 모양 " + describeShapes(acks)
-                + " · 지시문 길이를 싣는 사건 " + (lengths.isEmpty() ? "없음(누적 여부는 P4 표식으로만 본다)" : lengths + " (늘어나면 누적, 그대로면 교체)"),
+                + " · 지시문 길이를 싣는 사건 " + (lengths.isEmpty() ? "없음(누적 여부는 표식으로만 본다)" : lengths + " (늘어나면 누적, 그대로면 교체)"),
                 accepted ? Verdict.PASS : sentIds.isEmpty() && failure == null ? Verdict.NOT_OBSERVED : Verdict.FAIL));
 
         // response.create 미사용
-        rows.add(new Row(ITEMS.get(8), "response.create 송신 0건(이 도구는 보내지 않는다 — 클라이언트 위임 세션은 거절한다고 앞 실행에서 관측됨) · 지원 목록 밖 type 오류 "
+        rows.add(new Row(ITEMS.get(10), "response.create 송신 0건(이 도구는 보내지 않는다 — 클라이언트 위임 세션은 거절한다고 앞 실행에서 관측됨) · 지원 목록 밖 type 오류 "
                 + unsupportedTypeErrors + "건", unsupportedTypeErrors == 0 ? Verdict.PASS : Verdict.FAIL));
 
         // 종료 형식
-        rows.add(new Row(ITEMS.get(9), obs.closedEarly
+        rows.add(new Row(ITEMS.get(11), obs.closedEarly
                 ? "확인 전에 연결이 먼저 닫힘(아래 '연결 끊김' 참고)"
                 : "session.close 송신" + (obs.closeFailure == null ? "" : " 실패(" + obs.closeFailure + ")") + " → session.closed 메시지 "
                         + (obs.closedMessage ? "있음" : "없음") + " · " + (obs.closeMillis >= 0 && obs.closedMessage
@@ -1604,21 +1889,21 @@ final class GptLiveProbe {
                 !obs.closedEarly && obs.closeFailure == null && obs.closedMessage ? Verdict.PASS : Verdict.NOT_OBSERVED));
 
         // 오류 사건
-        rows.add(new Row(ITEMS.get(10), errors.isEmpty() ? "없음" : errors.size() + "건 — " + describeErrors(errors),
+        rows.add(new Row(ITEMS.get(12), errors.isEmpty() ? "없음" : errors.size() + "건 — " + describeErrors(errors),
                 errors.isEmpty() ? Verdict.INFO : Verdict.FAIL));
 
         // 지원 type 목록(오류 문장에서, 200자 자르기 · 가림 전 원문 기준)
-        rows.add(new Row(ITEMS.get(11), describeTypeLists(errors), Verdict.INFO));
+        rows.add(new Row(ITEMS.get(13), describeTypeLists(errors), Verdict.INFO));
 
         // 수신 사건 모양
-        rows.add(new Row(ITEMS.get(12), describeShapes(raw), Verdict.INFO));
+        rows.add(new Row(ITEMS.get(14), describeShapes(raw), Verdict.INFO));
 
         // 연결 끊김 · 마지막 사건
-        rows.add(new Row(ITEMS.get(13), describeClose(obs.closeCode, obs.socketError, obs.lastTypeBeforeClose, obs.closedEarly,
+        rows.add(new Row(ITEMS.get(15), describeClose(obs.closeCode, obs.socketError, obs.lastTypeBeforeClose, obs.closedEarly,
                 obs.closedMessage), Verdict.INFO));
 
         // 앱 해석기 이해
-        rows.add(new Row(ITEMS.get(14), "session.started " + obs.interpretedStarted + "건 · 출력 음성 " + obs.interpretedAudio + "조각("
+        rows.add(new Row(ITEMS.get(16), "session.started " + obs.interpretedStarted + "건 · 출력 음성 " + obs.interpretedAudio + "조각("
                 + obs.interpretedAudioBytes + "바이트) · session.usage.updated " + obs.interpretedUsage + "건 · error "
                 + obs.interpretedErrors + "건 (원시 출력 음성 " + audioBytes + "바이트)", Verdict.INFO));
 
@@ -1626,10 +1911,10 @@ final class GptLiveProbe {
         Map<String, Integer> unknown = new TreeMap<>();
         raw.stream().filter(frame -> !KNOWN_TYPES.contains(frame.type()) && !frame.type().equals(CLOSED_MARK))
                 .forEach(frame -> unknown.merge(frame.type(), 1, Integer::sum));
-        rows.add(new Row(ITEMS.get(15), unknown.isEmpty() ? "없음" : unknown.toString(), Verdict.INFO));
+        rows.add(new Row(ITEMS.get(17), unknown.isEmpty() ? "없음" : unknown.toString(), Verdict.INFO));
 
         // 사용량
-        rows.add(new Row(ITEMS.get(16), describeUsage(raw, obs.sessionMillis), Verdict.INFO));
+        rows.add(new Row(ITEMS.get(18), describeUsage(raw, obs.sessionMillis), Verdict.INFO));
         return rows;
     }
 
@@ -1765,13 +2050,13 @@ final class GptLiveProbe {
         return value.replace("|", "/").replace("\n", " ");
     }
 
-    /** 보고서 머리의 실행 단계 표시: 건너뛴 보고서는 '-', 아니면 P1 ~ P4(+ 시험했으면 P5). */
+    /** 보고서 머리의 실행 단계 표시: 건너뛴 보고서는 '-', 아니면 P1 ~ P4(+ 시험했으면 P6). */
     private static String phasesOf(Result result, boolean skipped) {
         if (skipped) {
             return "-";
         }
-        boolean p5 = result.rows().size() > 6 && !result.rows().get(6).observation().startsWith("시험 안 함");
-        return p5 ? "P1,P2,P3,P4,P5" : "P1,P2,P3,P4";
+        boolean p6 = result.rows().size() > 7 && !result.rows().get(7).observation().startsWith("시험 안 함");
+        return p6 ? "P1,P2,P3,P4,P6" : "P1,P2,P3,P4";
     }
 
     /** 사람이 읽는 한 줄 요약(원문 없음). */
