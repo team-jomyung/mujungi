@@ -224,7 +224,7 @@ U8(계약 · 버전 리소스)이 더한 키다. 새 연습 흐름 키는 12절 
 
 | 키 | 기본값 | 소유 앱 | 뜻 | 근거 |
 |---|---|---|---|---|
-| `mujoong.timing.judgment.live-budget` | `2s` | realtime | 진행 중 판정(J1 ~ J6) Luna 호출 한 번의 상한. 넘기면 재시도 없이 판정 보류(U11) | FR3.4 |
+| `mujoong.timing.judgment.live-budget` | `4s` | realtime | 진행 중 판정(J1 ~ J6) Luna 호출 한 번의 상한. 판정 턴을 연 시각부터 정확히 4.000초에 닿으면 재시도 없이 판정 보류(U11, 2s → 4s: 사람 결정 2026-10-16, 편차 (U11-b)) | FR3.4 · U11-b |
 | `mujoong.timing.judgment.response-ready` | `10s` | realtime | 아이 말이 끝난 뒤 이 시간 안에 응답이 준비되지 않으면 보류 되묻기(`D_HOLD`, U11) | FR5.3 |
 | `mujoong.timing.guardrail.jev-budget` | `800ms` | realtime | 제브 가드레일 검사 한 번의 상한. 넘기면 막힘(자동 ALLOW 없음, U13) | FR6.2 |
 | `mujoong.timing.conversation.no-response-wait` | `10s` | realtime | 새 연습 흐름의 무응답 재안내 대기(U12) | AC1.9.1 |

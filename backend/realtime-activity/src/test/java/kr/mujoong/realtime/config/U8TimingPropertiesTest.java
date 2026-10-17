@@ -26,7 +26,7 @@ class U8TimingPropertiesTest {
     void applicationYmlBindsTheSixU8RealtimeTimingDefaults() {
         RealtimeProperties.Timing timing = ConfigKeyContractTest.bind(APPLICATION_YML).timing();
 
-        assertThat(timing.judgment().liveBudget()).isEqualTo(Duration.parse("PT2S"));
+        assertThat(timing.judgment().liveBudget()).isEqualTo(Duration.parse("PT4S"));
         assertThat(timing.judgment().responseReady()).isEqualTo(Duration.parse("PT10S"));
         assertThat(timing.guardrail().jevBudget()).isEqualTo(Duration.parse("PT0.8S"));
         assertThat(timing.conversation().noResponseWait()).isEqualTo(Duration.parse("PT10S"));

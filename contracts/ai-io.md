@@ -314,7 +314,7 @@ U15 씨앗 v2는 GENERATED/DUPLICATE/NONE의 배타적 출력 분기를 사용�
 
 | 목적 | 호출 경로(단위) | 분류 | 호출 안 재시도 · 실패 뒤 |
 |---|---|---|---|
-| 진행 중 판정 J1 ~ J6 | realtime 판정 턴(U11) | `NONE` | 재시도 없음. `mujoong.timing.judgment.live-budget`(2초) 초과 · 형식 오류 · 선택지 밖 코드는 판정 보류 |
+| 진행 중 판정 J1 ~ J6 | realtime 판정 턴(U11) | `NONE` | 재시도 없음. `mujoong.timing.judgment.live-budget`(4초) 초과 · 형식 오류 · 선택지 밖 코드는 판정 보류 |
 | 상황 생성 | core 상황 생성 요청(U10) | `REQUEST_BOUNDED` | 일시 실패 기술 재시도 1회 + 내용 재생성 1회(스키마 불일치 포함), 7절 15초 예산 안. 실패는 `SCENARIO_GEN_FAILED` |
 | 자체 검토(J7) | core 상황 생성 요청(U10) | `REQUEST_BOUNDED` | 같은 15초 예산 |
 | 새 씨앗 | core 결과 작업 뒤 씨앗 생성(U15) | `REQUEST_BOUNDED` | 실패하면 `skill_ref=NONE` 유지 |

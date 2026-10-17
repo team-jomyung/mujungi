@@ -258,7 +258,7 @@ class LunaReachIsolationTest {
         assertThat(summary.ok()).isEqualTo(4);
         assertThat(summary.medianMillis()).isEqualTo((1800 + 2500) / 2);
         assertThat(summary.maxMillis()).isEqualTo(12_000);
-        assertThat(summary.withinBudget()).isEqualTo(2);
+        assertThat(summary.withinBudget()).isEqualTo(3);
         assertThat(summary.withinTenSeconds()).isEqualTo(3);
         assertThat(LunaReachProbe.percent(2, 5)).isEqualTo("40% (2/5)");
         assertThat(LunaReachProbe.summarize(List.of()).medianMillis()).isNull();
@@ -280,6 +280,6 @@ class LunaReachIsolationTest {
                 .allSatisfy(line -> assertThat(line.split("\\|", -1)).as("8칸(사용량 포함)").hasSize(10));
         assertThat(report).contains("| 2 | SCHEMA_INVALID | - | 불통과 |", "| 60000 | 모름 |", "성공(OK): 0/2", "중앙값 - · 최대 -",
                 "사용량 합계(받은 회차): - · 모름 2회", LunaReachProbe.PRICE_NOTE,
-                "2초 이하(live-budget 안, 전체 회차 기준): 0% (0/2)", "시도 시한: 60초");
+                "4초 이하(live-budget 안, 전체 회차 기준): 0% (0/2)", "시도 시한: 60초");
     }
 }
