@@ -1,0 +1,69 @@
+# 화면 번호 ↔ 파일 경로 대응표
+
+화면 설계 v1.5j의 화면 번호로 프런트 파일을 찾는 표다. 구조 · 이름 리팩토링(작업 기록 `261018-structure-refactor`)은 화면 파일 이름에서 번호 접미(`Login01.tsx` 등)를 없애고 기능 폴더로 옮긴다. 번호는 이 표에서 찾는다.
+
+- **상태: 예정.** 지금(리팩토링 시작 전) 파일 경로와 이동 뒤 경로를 함께 적는다. 리팩토링 단계 1(Step 5 ~ 7)에서 파일이 실제로 옮겨지고, 마무리(Step 25)에서 이 표를 실제 결과로 다시 확인한다.
+- 경로는 모두 `frontend/src/` 아래다. 이동 뒤 보호자 경로는 `parent/features/<기능>/`, 기기 경로는 `device/features/<기능>/`이다.
+- 라우트(`src/app/...`)는 바뀌지 않는다. 주소 `/parent/...`는 그대로이고 `page.tsx`의 import만 바뀐다.
+- "화면 훅"은 리팩토링 단계 2(Step 9 ~ 10)에서 요청 · 오류 분기 · 이동(`router.*`)을 옮겨 담는 `use<기능>Screen` 훅이다. 훅이 없는 화면은 "—"로 적었다.
+
+## 1. 보호자 화면 (`parent/screens` 17개)
+
+| 화면 설계 번호 | 화면 | 라우트 | 지금 경로 (`parent/…`) | 이동 뒤 경로 (`parent/features/…`) | 화면 훅 |
+|---|---|---|---|---|---|
+| 01 | 보호자 로그인 | `/parent/login` | `screens/Login01.tsx` | `login/LoginScreen.tsx` | — |
+| 01 (구글 콜백) | 구글 콜백 교환 | `/parent/login/callback` | `screens/LoginCallback.tsx` | `login/LoginCallbackScreen.tsx` | — |
+| (번호 없음) | 시험 로그인(dev 프로필만) | `/parent/dev-login` | `screens/DevLogin.tsx` | `login/DevLoginScreen.tsx` | — |
+| 02 | 기록 · 동의 안내 + 약관 시트 | `/parent/consent` | `screens/Consent02.tsx` | `consent/ConsentScreen.tsx` | `consent/useConsentScreen` |
+| 03 | 아이 정보 | `/parent/child` | `screens/Child03.tsx` | `child/ChildScreen.tsx` | `child/useChildScreen` |
+| SET-01 | 종료 표현 설정 | `/parent/child/stop-expressions` | `screens/StopExpressions01.tsx` | `child/StopExpressionsScreen.tsx` | `child/useStopExpressionsScreen` |
+| 04 | 홈 | `/parent` | `screens/Home04.tsx` | `home/HomeScreen.tsx` | `home/useHomeScreen` |
+| 05 | 우리 집 기기 | `/parent/device` | `screens/Device05.tsx` | `device/DeviceScreen.tsx` | `device/useDeviceScreen` |
+| 05a | 기기 등록 | `/parent/device/register` | `screens/Register05a.tsx` | `device/DeviceRegisterScreen.tsx` | `device/useDeviceRegisterScreen` |
+| 08 | 자유대화 준비 | `/parent/free` | `screens/Free08.tsx` | `free/FreeTalkScreen.tsx` | `free/useFreeTalkScreen` |
+| 12 | 진행(최소) + 끝내기 | `/parent/sessions/[sessionId]` | `screens/Live12.tsx` | `live/LiveScreen.tsx` | `live/useLiveScreen` |
+| 17 | 활동 끝 | `/parent/sessions/[sessionId]/done` | `screens/Done17.tsx` | `done/DoneScreen.tsx` | `done/useDoneScreen` |
+| 18 | 연습 | `/parent/practice` | `screens/Practice18.tsx` | `practice/PracticeScreen.tsx` | — |
+| 26 | 기록 목록 | `/parent/records` | `screens/Records26.tsx` | `records/RecordsScreen.tsx` | — |
+| 27 | 기록 상세 | `/parent/records/[sessionId]` | `screens/RecordDetail27.tsx` | `records/RecordDetailScreen.tsx` | — |
+| 28 | 리포트 기간 선택 | `/parent/reports/new` | `screens/ReportRange28.tsx` | `reports/ReportRangeScreen.tsx` | — |
+| 30 | 리포트 | `/parent/reports/[reportId]` | `screens/Report30.tsx` | `reports/ReportScreen.tsx` | — |
+
+- 화면 훅 이름은 설계 3절의 `use<기능>Screen`을 따른다. 대상은 지정 화면 9개(Live · Home · Done · Device · DeviceRegister · Child · StopExpressions · Consent · FreeTalk)이고, 나머지 화면의 훅 분리는 이번 범위가 아니다.
+- 함께 옮기는 화면 곁 파일: 홈 `activity/homeActivity` → `home/presentation.ts`, 진행 `activity/livePresentation` · `hooks/useLivePolling` → `live/presentation.ts` · `live/useLivePolling`, 활동 끝 `activity/donePresentation` · `hooks/useResultStatusPolling` → `done/presentation.ts` · `done/` 폴링 훅, 자유대화 `activity/freeFailure` → `free/failure.ts`, 리포트 `hooks/useReportPolling` → `reports/` 폴링 훅, 연습 `practice/*` → `practice/` 아래(`api.ts` · `copy.ts` 하나씩으로 합침).
+
+## 2. 기기 화면 (`device/components` 3개)
+
+| 화면 설계 번호 | 화면 | 지금 경로 (`device/…`) | 이동 뒤 경로 (`device/features/…`) |
+|---|---|---|---|
+| D0 | 처음 켜기 | `components/D0View.tsx` | `first-boot/FirstBootView.tsx` |
+| T19 | 상태 화면 | `components/T19View.tsx` | `status/StatusView.tsx` |
+| (번호 없음) | `?debug=1` 상태 로그 | `components/DebugLog.tsx` | `debug/DebugLog.tsx` |
+
+- 기기의 인프라 폴더(`audio` · `ws` · `mic` · `power` · `runtime` · `machine` · `api`)와 `DeviceApp.tsx`는 옮기지 않는다.
+
+## 3. 공통 코드의 위치 (화면이 아닌 것)
+
+| 지금 (`parent/…`) | 이동 뒤 (`parent/common/…`) |
+|---|---|
+| `api/{apiClient,csrf,types}.ts` | `api/` |
+| `api/account.ts`의 로그인 · 계정 부분 | `api/account.ts` (동의는 `features/consent/api.ts`, 자녀 · 정지 표현은 `features/child/api.ts`) |
+| `api/activity.ts` · `api/results.ts` | `api/activity.ts` · `api/results.ts` |
+| `api/queries.ts`의 공통 부분 | `api/queries.ts` (화면 전용 함수는 각 기능 `api.ts`로) |
+| `api/push.ts` | `push/api.ts` |
+| `api/reports.ts` | `features/reports/api.ts` |
+| `hooks/useBackGuard.ts` | `hooks/useBackGuard.ts` |
+| `push/*` | `push/` |
+| `navigation.ts` · `oauth.ts` · `ParentProviders.tsx` | `common/` 바로 아래 |
+| `parent/{parent,account,activity,result}.css` | `styles/` (기능별로 나누지 않음) |
+| `components/{BottomTabBar,BottomSheet,ConfirmDialog,LiveRegion,MonthCalendar,TranscriptList}.tsx` | `components/` |
+| 한 기능만 쓰는 컴포넌트(`ChipGroup` `TextArea200` → free, `CodeInput` → device, `DeviceCard` `SettingsSheet` `PushSettingsRow` → home, `EndReasonCard` `SceneChip` → records, `NoticeDialog` `StatusLine` → live) | 각 기능 폴더 |
+
+- 컴포넌트 목적지는 현재 import 그래프로 정한 초안이다. 이동 전 단계(Step 6)에서 한 번 더 확인하고, 실제 결과를 마무리(Step 25)에서 이 표에 반영한다.
+
+## 4. 번호로 찾는 방법
+
+1. 화면 설계 v1.5j에서 화면 번호를 확인한다(예: 12 진행).
+2. 이 표 1절에서 번호 행을 찾아 "이동 뒤 경로"를 연다(예: `parent/features/live/LiveScreen.tsx`).
+3. 그 화면의 요청 · 오류 · 이동 로직은 같은 폴더의 `use<기능>Screen` 훅과 `api.ts`에 있다.
+4. 예전 문서(`docs/units/**`)가 `Live12` 같은 옛 이름을 적고 있으면 이 표의 "지금 경로" 열로 읽는다. 이력 문서는 고치지 않는다.

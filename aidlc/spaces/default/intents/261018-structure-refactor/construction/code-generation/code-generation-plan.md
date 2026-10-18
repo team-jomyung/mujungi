@@ -86,10 +86,10 @@
 
 ### 단계 0 — 안전망 (설계 단계 0)
 
-- [ ] **Step 1. 시험 실행기 확인 · `main` 기준선** — `unit-test-instructions.md`의 명령이 실제로 도는지 확인하고, 원격 `main` 570a625 위에서 `gradlew check`와 `verify.sh`를 한 번 돌려 시작 전 결과를 `construction/code-generation/baseline.md`에 기록한다(`main` CI `skeleton` 실패 이력이 있어 변경과 섞이지 않게 한다). (BR5.1 · 설계 0.6)
-- [ ] **Step 2. 실행기 7구간 특성화 시험 확인 · 보강** — 메시지 수신 · 참여 확인 · 판정 · 연습 확장점 · 게이트 · 끝내기 · 시계 7구간마다 현재 동작을 고정하는 기존 시험을 찾아 구간 ↔ 시험 대응표(`baseline.md`)를 만든다. 고정 시험이 없는 구간에만 현재 동작을 고정하는 시험을 더한다(새 시험은 이것뿐). 시험은 `SessionHarness`를 쓰고 가짜 공급자만 쓴다. 검증: 새 시험 포함 `:realtime-activity:test --tests "kr.mujoong.realtime.session.*"` 통과. (BR5.3 · FR1.1 · 편차 FD-D5)
-- [ ] **Step 3. `SessionExecutor` 필드 소유자 표** — 머리 1~619줄과 끝의 "전이 보조" 4080~4361줄의 필드 · 내부 타입 목록을 만들고 각 필드의 소유자(`SessionContext` / `EndingFlow` / `SessionClocks` / `IdleClock` / `JoinFlow` / 남는 실행기)를 정해 `baseline.md`에 적는다. 표가 끝나면 설계서 `functional-spec.md` 5절 AC-4의 "3.5 뒤 줄 수 상한"에 숫자를 적는다(설계 0.2의 종료 조건; 이 파일은 설계 산출물이므로 숫자 기입은 계획 승인 때 사람에게 알리고 같은 커밋 기록에 남긴다). (BR3.2 · FR4.4)
-- [ ] **Step 4. 참조 점검표 · 화면 대응표 · 기준선** — (a) 코드 스캔 표를 단계별 체크리스트 `reference-checklist.md`로 옮긴다(이름으로 읽는 자원 4개, 이동 대상을 import하는 프런트 시험 47개 포함). (b) `docs/screen-map.md`를 만든다(화면 설계 v1.5j 번호 → 새 파일 경로). (c) AC-1 ~ AC-9의 시작 전 값, 지정 화면 9개의 요청 · 이동 · 오류 호출 수, 건드릴 파일의 결정 ID 주석 수를 `baseline.md`에 기록한다. 검증: 문서 변경뿐이라 비밀 스캔(`bash scripts/verify/a-secrets.sh`)만. (BR4.1 · BR1.6 · BR5.4 · FR1.2 · FR1.3)
+- [x] **Step 1. 시험 실행기 확인 · `main` 기준선** — `unit-test-instructions.md`의 명령이 실제로 도는지 확인하고, 원격 `main` 570a625 위에서 `gradlew check`와 `verify.sh`를 한 번 돌려 시작 전 결과를 `construction/code-generation/baseline.md`에 기록한다(`main` CI `skeleton` 실패 이력이 있어 변경과 섞이지 않게 한다). (BR5.1 · 설계 0.6)
+- [x] **Step 2. 실행기 7구간 특성화 시험 확인 · 보강** — 메시지 수신 · 참여 확인 · 판정 · 연습 확장점 · 게이트 · 끝내기 · 시계 7구간마다 현재 동작을 고정하는 기존 시험을 찾아 구간 ↔ 시험 대응표(`baseline.md`)를 만든다. 고정 시험이 없는 구간에만 현재 동작을 고정하는 시험을 더한다(새 시험은 이것뿐). 시험은 `SessionHarness`를 쓰고 가짜 공급자만 쓴다. 검증: 새 시험 포함 `:realtime-activity:test --tests "kr.mujoong.realtime.session.*"` 통과. (BR5.3 · FR1.1 · 편차 FD-D5)
+- [x] **Step 3. `SessionExecutor` 필드 소유자 표** — 머리 1~619줄과 끝의 "전이 보조" 4080~4361줄의 필드 · 내부 타입 목록을 만들고 각 필드의 소유자(`SessionContext` / `EndingFlow` / `SessionClocks` / `IdleClock` / `JoinFlow` / 남는 실행기)를 정해 `baseline.md`에 적는다. 표가 끝나면 설계서 `functional-spec.md` 5절 AC-4의 "3.5 뒤 줄 수 상한"에 숫자를 적는다(설계 0.2의 종료 조건; 이 파일은 설계 산출물이므로 숫자 기입은 계획 승인 때 사람에게 알리고 같은 커밋 기록에 남긴다). (BR3.2 · FR4.4)
+- [x] **Step 4. 참조 점검표 · 화면 대응표 · 기준선** — (a) 코드 스캔 표를 단계별 체크리스트 `reference-checklist.md`로 옮긴다(이름으로 읽는 자원 4개, 이동 대상을 import하는 프런트 시험 47개 포함). (b) `docs/screen-map.md`를 만든다(화면 설계 v1.5j 번호 → 새 파일 경로). (c) AC-1 ~ AC-9의 시작 전 값, 지정 화면 9개의 요청 · 이동 · 오류 호출 수, 건드릴 파일의 결정 ID 주석 수를 `baseline.md`에 기록한다. 검증: 문서 변경뿐이라 비밀 스캔(`bash scripts/verify/a-secrets.sh`)만. (BR4.1 · BR1.6 · BR5.4 · FR1.2 · FR1.3)
 
 ### 단계 1 — 프런트 이름 · 폴더 (이동만)
 
