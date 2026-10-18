@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import type { PracticeProgress, ProgressIssue } from "./practiceProgress";
+import type { PracticeProgress, ProgressIssue } from "../../common/api/practiceProgress";
 import { U5B_COPY } from "./copy";
 
 export function PracticeHeader({ progress, issue = null, primary = false, children }: {

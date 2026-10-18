@@ -2,7 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 import { presentDone } from "@/parent/features/done/presentation";
 import { freeFailedRoute, startFailureReason } from "@/parent/features/free/failure";
 import { activeTabTarget, liveActivityCard } from "@/parent/features/home/presentation";
-import { buildTimeline, gapText, isStartFailure, liveOutcome, showsPauseLine, silentMinutes } from "@/parent/features/live/presentation";
+import { buildTimeline, gapText } from "@/parent/common/components/transcriptTimeline";
+import { isStartFailure, liveOutcome, showsPauseLine, silentMinutes } from "@/parent/features/live/presentation";
 import {
   fetchCurrentSession,
   isInProgressStatus,

@@ -1,7 +1,7 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, expect, it } from "vitest";
 import { PracticeHeader } from "@/parent/features/practice/PracticeHeader";
-import { parsePracticeProgress, PracticeProgressTracker } from "@/parent/features/practice/practiceProgress";
+import { parsePracticeProgress, PracticeProgressTracker } from "@/parent/common/api/practiceProgress";
 import { U5B_COPY } from "@/parent/features/practice/copy";
 
 afterEach(cleanup);

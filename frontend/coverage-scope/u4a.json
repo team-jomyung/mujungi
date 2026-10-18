@@ -6,6 +6,7 @@
     "frontend/src/parent/features/free/failure.ts",
     "frontend/src/parent/features/home/presentation.ts",
     "frontend/src/parent/features/live/presentation.ts",
+    "frontend/src/parent/common/components/transcriptTimeline.ts",
     "frontend/src/parent/common/api/activity.ts",
     "frontend/src/parent/features/live/NoticeDialog.tsx",
     "frontend/src/shared/copy/activity.ts"

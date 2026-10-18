@@ -5,7 +5,7 @@
     "frontend/src/parent/features/practice/copy.ts",
     "frontend/src/parent/features/practice/practiceStart.ts",
     "frontend/src/parent/features/practice/PracticeStartAction.tsx",
-    "frontend/src/parent/features/practice/practiceProgress.ts",
+    "frontend/src/parent/common/api/practiceProgress.ts",
     "frontend/src/parent/features/practice/PracticeHeader.tsx"
   ]
 }

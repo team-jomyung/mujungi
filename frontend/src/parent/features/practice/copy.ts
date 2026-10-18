@@ -1,6 +1,6 @@
 import { attachParticle } from "@/shared/copy/particle";
 import type { GoalSelection } from "./api";
-import type { PracticeStage } from "./practiceProgress";
+import type { PracticeStage } from "../../common/api/practiceProgress";
 
 // 연습 화면(S-18)·진행(S-12) 문구를 한 파일에 둔다. PRACTICE_*는 목표 목록(U5a), U5B_COPY는 시작 · 진행(U5b)이다.
 
