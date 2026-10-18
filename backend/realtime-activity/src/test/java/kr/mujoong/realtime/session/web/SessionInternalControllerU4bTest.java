@@ -21,6 +21,7 @@ import kr.mujoong.contract.event.payload.SessionStateChanged;
 import kr.mujoong.contract.json.JsonCodec;
 import kr.mujoong.contract.status.ActivityType;
 import kr.mujoong.contract.status.EndRequestReason;
+import kr.mujoong.realtime.config.RealtimeLimitsProperties;
 import kr.mujoong.realtime.config.RealtimeProperties;
 import kr.mujoong.realtime.dialog.SilenceClock;
 import kr.mujoong.realtime.session.ActivitySessionRow;
@@ -190,7 +191,7 @@ class SessionInternalControllerU4bTest {
 
     private SessionInternalController controller() {
         RealtimeProperties properties = mock(RealtimeProperties.class);
-        RealtimeProperties.Limits limits = mock(RealtimeProperties.Limits.class);
+        RealtimeLimitsProperties limits = mock(RealtimeLimitsProperties.class);
         when(properties.limits()).thenReturn(limits);
         when(limits.internalEventBodyMax()).thenReturn(DataSize.ofKilobytes(64));
         return new SessionInternalController(starts, ends, views, JsonCodec.shared(), properties);

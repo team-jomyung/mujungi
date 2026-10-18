@@ -34,6 +34,7 @@ import kr.mujoong.contract.ws.message.View;
 import kr.mujoong.realtime.common.collect.BoundedCollections;
 import kr.mujoong.realtime.common.scaling.SingleInstanceAssumption;
 import kr.mujoong.realtime.config.RealtimeProperties;
+import kr.mujoong.realtime.config.RealtimeTimingProperties;
 import kr.mujoong.realtime.dialog.DialogInstructions;
 import kr.mujoong.realtime.dialog.InstructionTemplates;
 import kr.mujoong.realtime.dialog.JoinTracker;
@@ -163,7 +164,7 @@ public final class SessionExecutor {
             }
 
             public static Lifecycle from(RealtimeProperties properties) {
-                RealtimeProperties.SessionTiming session = properties.timing().session();
+                RealtimeTimingProperties.SessionTiming session =properties.timing().session();
                 return new Lifecycle(session.joinWait(), session.joinWaitAfterReprompt(), session.silenceWarning(),
                         session.silenceEnd(), session.stopConfirmWait(), session.recordSettle(),
                         properties.timing().device().gapDisplay());

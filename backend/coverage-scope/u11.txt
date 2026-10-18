@@ -6,6 +6,25 @@
 # U11이 고친 contract-model 로그 계약 파일(AttrKey)과 test-support 가짜 공급자는 이 목록에 넣지 않는다(u9.txt와 같은 이유: 모듈 전체 80%로 잰다).
 # 로컬 · 검토 근거다(CI가 막는 범위는 U5b · U7뿐, team.md Testing Posture).
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/config/RealtimeProperties.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/config/RealtimeCleanupProperties.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/config/RealtimeDeviceProperties.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/config/RealtimeGateProperties.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/config/RealtimeHealthProperties.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/config/RealtimeInboxProperties.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/config/RealtimeInternalHttpProperties.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/config/RealtimeJudgmentProperties.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/config/RealtimeLimitsProperties.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/config/RealtimeMetricsProperties.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/config/RealtimeObservabilityProperties.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/config/RealtimeOutboxProperties.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/config/RealtimePracticeFlowProperties.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/config/RealtimeProviderProperties.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/config/RealtimeRecordingProperties.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/config/RealtimeRetentionProperties.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/config/RealtimeSecurityProperties.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/config/RealtimeSessionProperties.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/config/RealtimeTimingProperties.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/config/RealtimeTranscriptProperties.java
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/dialog/InstructionTemplates.java
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/dialog/StopIntentJudge.java
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/gate/OutputGate.java

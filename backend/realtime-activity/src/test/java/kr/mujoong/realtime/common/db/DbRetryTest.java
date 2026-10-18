@@ -11,6 +11,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import kr.mujoong.realtime.common.db.DbRetry.Idempotency;
+import kr.mujoong.realtime.config.RealtimeLimitsProperties;
 import kr.mujoong.realtime.config.RealtimeProperties;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Tag;
@@ -133,7 +134,7 @@ class DbRetryTest {
     @Test
     void theApplicationBeanTakesItsRetryCountFromTheLimitsSetting() {
         RealtimeProperties properties = mock(RealtimeProperties.class);
-        when(properties.limits()).thenReturn(new RealtimeProperties.Limits(DataSize.ofKilobytes(8),
+        when(properties.limits()).thenReturn(new RealtimeLimitsProperties(DataSize.ofKilobytes(8),
                 DataSize.ofMegabytes(2), 50, 1000, 100, 200, 2, 3, Duration.ofSeconds(2), Duration.ofSeconds(10), 1, 1000));
         DbRetry retry = new DbRetry(properties);
         AtomicInteger attempts = new AtomicInteger();

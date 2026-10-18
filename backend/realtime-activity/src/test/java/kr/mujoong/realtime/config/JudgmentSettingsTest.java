@@ -10,7 +10,6 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import kr.mujoong.realtime.config.RealtimeProperties.Judgment;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -38,18 +37,18 @@ class JudgmentSettingsTest {
     @ParameterizedTest
     @ValueSource(doubles = {-0.01, 1.01, Double.NaN, 2.0})
     void valuesOutsideZeroToOneAreRejectedWithTheKeyName(double value) {
-        assertThatThrownBy(() -> new Judgment(value, 0.15)).isInstanceOf(IllegalArgumentException.class)
+        assertThatThrownBy(() -> new RealtimeJudgmentProperties(value, 0.15)).isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("mujoong.judgment.min-confidence");
-        assertThatThrownBy(() -> new Judgment(0.6, value)).isInstanceOf(IllegalArgumentException.class)
+        assertThatThrownBy(() -> new RealtimeJudgmentProperties(0.6, value)).isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("mujoong.judgment.min-margin");
     }
 
     @Test
     void theBoundariesZeroAndOneAreAllowedAndAMissingValueIsRejected() {
-        assertThat(new Judgment(0.0, 1.0)).isEqualTo(new Judgment(0.0, 1.0));
-        assertThatThrownBy(() -> new Judgment(null, 0.15)).isInstanceOf(IllegalArgumentException.class)
+        assertThat(new RealtimeJudgmentProperties(0.0, 1.0)).isEqualTo(new RealtimeJudgmentProperties(0.0, 1.0));
+        assertThatThrownBy(() -> new RealtimeJudgmentProperties(null, 0.15)).isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("mujoong.judgment.min-confidence");
-        assertThatThrownBy(() -> new Judgment(0.6, null)).isInstanceOf(IllegalArgumentException.class)
+        assertThatThrownBy(() -> new RealtimeJudgmentProperties(0.6, null)).isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("mujoong.judgment.min-margin");
     }
 

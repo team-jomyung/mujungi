@@ -20,6 +20,7 @@ import kr.mujoong.contract.event.payload.SessionStateChanged;
 import kr.mujoong.contract.json.JsonCodec;
 import kr.mujoong.contract.status.ActivityType;
 import kr.mujoong.contract.status.SessionStatus;
+import kr.mujoong.realtime.config.RealtimeLimitsProperties;
 import kr.mujoong.realtime.config.RealtimeProperties;
 import kr.mujoong.realtime.gateway.DeviceConnectionRepository;
 import kr.mujoong.realtime.log.TranscriptRepository;
@@ -273,7 +274,7 @@ class RealtimeDataAccessWiringIT {
         @Bean
         RealtimeProperties realtimeProperties(Environment environment) {
             RealtimeProperties properties = mock(RealtimeProperties.class);
-            when(properties.limits()).thenReturn(new RealtimeProperties.Limits(DataSize.ofKilobytes(8),
+            when(properties.limits()).thenReturn(new RealtimeLimitsProperties(DataSize.ofKilobytes(8),
                     DataSize.ofMegabytes(2), 50, 1000, 100, 200, 2, 3, Duration.ofSeconds(2), Duration.ofSeconds(10),
                     environment.getRequiredProperty("mujoong.limits.db-retry-attempts", Integer.class), 1000));
             return properties;

@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 import java.nio.charset.StandardCharsets;
 import kr.mujoong.contract.json.JsonCodec;
 import kr.mujoong.contract.status.SessionStatus;
+import kr.mujoong.realtime.config.RealtimeLimitsProperties;
 import kr.mujoong.realtime.config.RealtimeProperties;
 import kr.mujoong.realtime.session.EndRequestHandler;
 import kr.mujoong.realtime.session.SessionViewQuery;
@@ -68,7 +69,7 @@ class U8SessionStartEndpointTest {
 
     private SessionInternalController controller() {
         RealtimeProperties properties = mock(RealtimeProperties.class);
-        RealtimeProperties.Limits limits = mock(RealtimeProperties.Limits.class);
+        RealtimeLimitsProperties limits = mock(RealtimeLimitsProperties.class);
         when(properties.limits()).thenReturn(limits);
         when(limits.internalEventBodyMax()).thenReturn(DataSize.ofKilobytes(64));
         return new SessionInternalController(starts, mock(EndRequestHandler.class), mock(SessionViewQuery.class), JsonCodec.shared(),

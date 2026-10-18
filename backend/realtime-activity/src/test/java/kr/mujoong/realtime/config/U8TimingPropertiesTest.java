@@ -5,14 +5,14 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.nio.file.Path;
 import java.time.Duration;
-import kr.mujoong.realtime.config.RealtimeProperties.ConversationTiming;
-import kr.mujoong.realtime.config.RealtimeProperties.GuardrailTiming;
-import kr.mujoong.realtime.config.RealtimeProperties.JudgmentTiming;
+import kr.mujoong.realtime.config.RealtimeTimingProperties.ConversationTiming;
+import kr.mujoong.realtime.config.RealtimeTimingProperties.GuardrailTiming;
+import kr.mujoong.realtime.config.RealtimeTimingProperties.JudgmentTiming;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 /**
- * U8 시간 키 바인딩(timing.md 13절 · BR3.1 · functional-spec 8.2). application.yml의 새 키 여섯이 {@link RealtimeProperties.Timing}의
+ * U8 시간 키 바인딩(timing.md 13절 · BR3.1 · functional-spec 8.2). application.yml의 새 키 여섯이 {@link RealtimeTimingProperties}의
  * 판정 · 가드레일 · 새 연습 흐름 묶음에 계약 기본값으로 묶이고, 0 · 빈 값은 기동을 거부하는지 본다. 키 이름 · 기본값의 timing.md 대조는
  * {@link ConfigKeyContractTest}가 계속 맡는다.
  */
@@ -24,7 +24,7 @@ class U8TimingPropertiesTest {
 
     @Test
     void applicationYmlBindsTheSixU8RealtimeTimingDefaults() {
-        RealtimeProperties.Timing timing = ConfigKeyContractTest.bind(APPLICATION_YML).timing();
+        RealtimeTimingProperties timing =ConfigKeyContractTest.bind(APPLICATION_YML).timing();
 
         assertThat(timing.judgment().liveBudget()).isEqualTo(Duration.parse("PT4S"));
         assertThat(timing.judgment().responseReady()).isEqualTo(Duration.parse("PT10S"));
@@ -51,15 +51,15 @@ class U8TimingPropertiesTest {
 
     @Test
     void timingTreeRequiresTheThreeU8Groups() {
-        RealtimeProperties.Timing bound = ConfigKeyContractTest.bind(APPLICATION_YML).timing();
+        RealtimeTimingProperties bound =ConfigKeyContractTest.bind(APPLICATION_YML).timing();
 
-        assertThatThrownBy(() -> new RealtimeProperties.Timing(bound.session(), bound.device(), bound.recorder(),
+        assertThatThrownBy(() -> new RealtimeTimingProperties(bound.session(), bound.device(), bound.recorder(),
                 null, bound.guardrail(), bound.conversation(), bound.provider()))
                 .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("mujoong.timing.judgment");
-        assertThatThrownBy(() -> new RealtimeProperties.Timing(bound.session(), bound.device(), bound.recorder(),
+        assertThatThrownBy(() -> new RealtimeTimingProperties(bound.session(), bound.device(), bound.recorder(),
                 bound.judgment(), bound.guardrail(), null, bound.provider()))
                 .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("mujoong.timing.conversation");
-        assertThatThrownBy(() -> new RealtimeProperties.Timing(bound.session(), bound.device(), bound.recorder(),
+        assertThatThrownBy(() -> new RealtimeTimingProperties(bound.session(), bound.device(), bound.recorder(),
                 bound.judgment(), bound.guardrail(), bound.conversation(), null))
                 .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("mujoong.timing.provider");
     }

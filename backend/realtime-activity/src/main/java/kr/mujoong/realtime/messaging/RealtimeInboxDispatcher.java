@@ -19,6 +19,7 @@ import kr.mujoong.contract.log.EventCode;
 import kr.mujoong.contract.log.EventLog;
 import kr.mujoong.contract.time.MujoongClock;
 import kr.mujoong.contract.trace.TraceIds;
+import kr.mujoong.realtime.config.RealtimeInboxProperties;
 import kr.mujoong.realtime.config.RealtimeProperties;
 import kr.mujoong.realtime.observability.EventLogger;
 import kr.mujoong.realtime.observability.RealtimeMetrics;
@@ -82,7 +83,7 @@ public class RealtimeInboxDispatcher implements DisposableBean {
             EventLogger events,
             RealtimeMetrics metrics,
             MujoongClock clock,
-            RealtimeProperties.Inbox config) {
+            RealtimeInboxProperties config) {
         this.inbox = Objects.requireNonNull(inbox, "inbox");
         for (InboxHandler handler : Objects.requireNonNull(handlers, "handlers")) {
             if (this.handlers.put(handler.eventType(), handler) != null) {

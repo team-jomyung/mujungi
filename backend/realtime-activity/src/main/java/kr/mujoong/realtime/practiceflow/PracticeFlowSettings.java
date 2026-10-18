@@ -3,6 +3,7 @@ package kr.mujoong.realtime.practiceflow;
 import java.time.Duration;
 import java.util.Objects;
 import kr.mujoong.realtime.config.RealtimeProperties;
+import kr.mujoong.realtime.config.RealtimeTimingProperties;
 
 /**
  * 새 연습 흐름이 읽는 설정 값 객체 (U12 FR7.1 · BR9.1 · BR9.2).
@@ -38,7 +39,7 @@ public record PracticeFlowSettings(Duration noResponseWait, Duration focusMax, D
     /** 운영 설정 트리에서 읽는다. */
     public static PracticeFlowSettings from(RealtimeProperties properties) {
         Objects.requireNonNull(properties, "properties");
-        RealtimeProperties.ConversationTiming conversation = properties.timing().conversation();
+        RealtimeTimingProperties.ConversationTiming conversation = properties.timing().conversation();
         return new PracticeFlowSettings(conversation.noResponseWait(), conversation.focusMax(),
                 conversation.goalActiveLimit(), properties.timing().device().outputQueueMax(),
                 properties.practiceFlow().retryMax(),

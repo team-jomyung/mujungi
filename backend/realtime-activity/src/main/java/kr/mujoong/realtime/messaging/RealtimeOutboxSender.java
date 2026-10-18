@@ -15,6 +15,7 @@ import kr.mujoong.contract.log.EventLog;
 import kr.mujoong.contract.time.MujoongClock;
 import kr.mujoong.contract.trace.TraceIds;
 import kr.mujoong.realtime.common.scaling.SingleInstanceAssumption;
+import kr.mujoong.realtime.config.RealtimeOutboxProperties;
 import kr.mujoong.realtime.config.RealtimeProperties;
 import kr.mujoong.realtime.health.ReadinessState;
 import kr.mujoong.realtime.internalhttp.InternalHttpClient;
@@ -95,7 +96,7 @@ public class RealtimeOutboxSender {
             BooleanSupplier ready,
             EventLogger events,
             MujoongClock clock,
-            RealtimeProperties.Outbox config,
+            RealtimeOutboxProperties config,
             Duration publishTimeout) {
         this.outbox = Objects.requireNonNull(outbox, "outbox");
         this.http = Objects.requireNonNull(http, "http");
