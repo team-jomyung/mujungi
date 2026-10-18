@@ -123,15 +123,15 @@ docker compose -p mujoong-live logs -f realtime   # 로그 (비밀 · 전사 없
 cd backend && ./gradlew --no-daemon :contract-model:test :core-api:test :realtime-activity:test :test-support:test -PincludeTags=u1
 cd backend && ./gradlew --no-daemon :contract-model:test :core-api:test :realtime-activity:test \
   :contract-model:jacocoTestCoverageVerification :core-api:jacocoTestCoverageVerification \
-  :realtime-activity:jacocoTestCoverageVerification -PincludeTags=u1 -PcoverageScope=u1
-cd frontend && npm ci && MUJOONG_COVERAGE_SCOPE=u1 npx --no-install vitest run tests --coverage
+  :realtime-activity:jacocoTestCoverageVerification -PincludeTags=u1 -PcoverageScope=skeleton
+cd frontend && npm ci && MUJOONG_COVERAGE_SCOPE=skeleton npx --no-install vitest run tests --coverage
 cd tools && npm ci && npx --no-install vitest run tests
 ```
 
 - PostgreSQL이 필요한 시험(`@Tag("db")`)은 Docker(Testcontainers)나 호스트 PostgreSQL 16(`/usr/lib/postgresql/16/bin`)으로 돈다.
   `-Pmujoong.test.db=auto|docker|local`로 고르고 기본은 auto다(J132). root로 local을 쓰면 저장소 경로를 `postgres` 사용자가 지나갈 수 있어야 한다.
-- 줄 커버리지 하한은 80%(백엔드 모듈별 JaCoCo · 프런트 `src/**` Vitest)이고 낮추지 않는다. `-PcoverageScope=u1` ·
-  `MUJOONG_COVERAGE_SCOPE=u1`은 U1이 만든 파일(`backend/coverage-scope/u1.txt` · `frontend/coverage-scope/u1.json`)만 잰다(J137).
+- 줄 커버리지 하한은 80%(백엔드 모듈별 JaCoCo · 프런트 `src/**` Vitest)이고 낮추지 않는다. `-PcoverageScope=skeleton` ·
+  `MUJOONG_COVERAGE_SCOPE=skeleton`은 U1이 만든 파일(`backend/coverage-scope/skeleton.txt` · `frontend/coverage-scope/skeleton.json`)만 잰다(J137).
 
 ### 검증 명령(C안)
 

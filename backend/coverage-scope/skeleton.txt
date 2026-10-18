@@ -1,9 +1,9 @@
 # U1 커버리지 측정 범위 (U1 3.5 Step 5 자리 · Step 53 채움 · J137)
-# -PcoverageScope=u1일 때 JaCoCo가 이 목록의 운영 소스(.java)만 잰다. 한 줄에 저장소 루트 기준 경로 하나.
+# -PcoverageScope=skeleton일 때 JaCoCo가 이 목록의 운영 소스(.java)만 잰다. 한 줄에 저장소 루트 기준 경로 하나.
 # 내용은 U1 source-manifest.json(aidlc/spaces/default/intents/261008-mujoong-service/construction/u1-walking-skeleton/
 # code-generation/)의 backend/*/src/main/java/**/*.java 전부다(Step 53이 대조, 빠짐 0). 자원(yml · sql · json · xml)과
 # build-logic은 클래스가 없어 재지 않는다. test-support 줄은 하한 대상이 아니라 판정에 쓰이지 않는다(J107).
-# 뒤 유닛은 이 파일을 고치지 않고 자기 목록(coverage-scope/u<n>.txt)을 만든다. 모듈별 줄 수:
+# 뒤 유닛은 이 파일을 고치지 않고 자기 목록(coverage-scope/<기능 이름>.txt)을 만든다. 모듈별 줄 수:
 #   contract-model 55
 #   core-api 103 (U4a: activity/ConsentGate.java를 지워 계약 8절 ConsentGate 포트로 바꿔 한 줄 뺐다 — 없는 파일은 목록에 둘 수 없다)
 #   realtime-activity 112

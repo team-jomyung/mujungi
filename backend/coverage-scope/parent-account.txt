@@ -1,8 +1,8 @@
 # U2 커버리지 측정 범위 (docs/units/u2/design.md 7절 · U1 J137과 같은 형식)
-# -PcoverageScope=u2일 때 JaCoCo가 이 목록의 운영 소스(.java)만 잰다. 한 줄에 저장소 루트 기준 경로 하나.
+# -PcoverageScope=parent-account일 때 JaCoCo가 이 목록의 운영 소스(.java)만 잰다. 한 줄에 저장소 루트 기준 경로 하나.
 # 내용은 U2가 새로 만든 backend/core-api/src/main/java 파일 전부다. U2가 고친 U1 파일(ConsentGate · ApprovedContentCatalog · ActivityCopyRepository ·
 # CoreProperties · SecurityConfig · Consent · Child · ConsentRepository · RealtimeSessionClient · DeletionParticipant · 참가자 @Order ·
-# ErrorCode)은 U1 목록(u1.txt)에 있어 U1 범위로 잰다. 모듈별 줄 수:
+# ErrorCode)은 U1 목록(skeleton.txt)에 있어 U1 범위로 잰다. 모듈별 줄 수:
 #   core-api 29
 backend/core-api/src/main/java/kr/mujoong/core/account/AccountDeletionScheduler.java
 backend/core-api/src/main/java/kr/mujoong/core/account/AccountDeletionService.java
