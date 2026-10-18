@@ -1,5 +1,6 @@
 import { attachParticle } from "@/shared/copy/particle";
 import type { GoalSelection } from "./api";
+import type { PracticeStage } from "./practiceProgress";
 
 // 연습 화면(S-18)·진행(S-12) 문구를 한 파일에 둔다. PRACTICE_*는 목표 목록(U5a), U5B_COPY는 시작 · 진행(U5b)이다.
 
@@ -77,5 +78,5 @@ export const U5B_COPY = {
     CUE: "도움 받는 중",
     AFTER_CUE_RESPONSE: "다시 말해 보는 중",
     NEW_SCENARIO_RESPONSE: "새 상황",
-  },
+  } satisfies Readonly<Record<PracticeStage, string>>,
 } as const;
