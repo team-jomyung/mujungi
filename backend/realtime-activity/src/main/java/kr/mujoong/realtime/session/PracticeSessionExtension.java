@@ -107,7 +107,7 @@ public interface PracticeSessionExtension {
             HELD_OUTPUT_TRANSCRIPT,
             /**
              * U11 BR8.3 자리 · U13 BR6.5 정의: 연습 모드 제브 검사가 재지시 뒤에도 막혔다(값 {@link GuardrailBlockedEvent}, 전사 없음). 운영에서
-             * 연습 모드 검사를 시작해 이 사건을 만드는 것은 U12다 — 지금 운영 연습 경로는 제브를 부르지 않으므로 보내지 않는다.
+             * 연습 모드 검사를 시작해 이 사건을 만드는 것은 U12다 — 열린 생성형 슬롯({@link PracticeOutput#speakGenerated})의 발화가 제브(연습 모드)의 두 번째 막힘을 만날 때만 보낸다.
              */
             GUARDRAIL_BLOCKED,
             /** U11 BR6.4: 아이가 쉬고 싶다는 뜻을 밝혔다(출력권 연습에만 알린다). */

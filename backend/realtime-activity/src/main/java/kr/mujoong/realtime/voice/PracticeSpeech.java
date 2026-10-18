@@ -4,9 +4,21 @@ import java.util.Objects;
 import java.util.UUID;
 import kr.mujoong.realtime.practice.PracticePorts.OutputKind;
 
-/** 승인된 연습 발화. 상관 식별자는 서버 안에만 남긴다. */
+/**
+ * 승인된 연습 발화. 상관 식별자는 서버 안에만 남긴다.
+ *
+ * <p>{@code generated}가 참이면 GPT-Live가 그 자리에서 만드는 역할 발화의 슬롯이다(U12 D6 · 기능 설계 3.5). 이때 {@code partnerRole}은
+ * {@code PEER}/{@code COACH}, {@code text}는 서버가 만든 지시문 템플릿 문장이며(아이 발화 · 모델 출력 원문이 아니다) 원문 일치로 제브를 건너뛸 수
+ * 없다({@link #matches}는 언제나 거짓).
+ */
 public record PracticeSpeech(UUID correlationId, UUID scenarioId, long generation,
-        OutputKind kind, String partnerRole, String text) {
+        OutputKind kind, String partnerRole, String text, boolean generated) {
+
+    /** U12 이전 모양(승인 발화). 기존 호출처 · 시험이 그대로 쓴다. */
+    public PracticeSpeech(UUID correlationId, UUID scenarioId, long generation, OutputKind kind, String partnerRole, String text) {
+        this(correlationId, scenarioId, generation, kind, partnerRole, text, false);
+    }
+
     public PracticeSpeech {
         Objects.requireNonNull(correlationId); Objects.requireNonNull(scenarioId); Objects.requireNonNull(kind);
         validate(partnerRole, 200); validate(text, 10201);
@@ -26,8 +38,19 @@ public record PracticeSpeech(UUID correlationId, UUID scenarioId, long generatio
         return new PracticeSpeech(correlationId, scenarioId, generation, OutputKind.SCENARIO, partnerRole, text);
     }
 
+    /**
+     * U12 D6: 생성형 역할 발화 슬롯 만들기. 표지 종류는 코치 발화면 CUE, 친구 발화면 SCENARIO다(재생 증거 표지로만 쓰이고 제브 요청 · 기록에
+     * 영향을 주지 않는다).
+     */
+    public static PracticeSpeech generatedSlot(UUID correlationId, UUID scenarioId, long generation, String role, String instructionText) {
+        if (!"PEER".equals(role) && !"COACH".equals(role)) throw new IllegalArgumentException("연습 출력 형식 오류");
+        return new PracticeSpeech(correlationId, scenarioId, generation,
+                "COACH".equals(role) ? OutputKind.CUE : OutputKind.SCENARIO, role, instructionText, true);
+    }
+
+    /** 생성형 슬롯은 원문 일치로 제브를 건너뛸 수 없다(항상 거짓). */
     public boolean matches(String actual) {
-        return sameWithoutAsciiWhitespace(text, actual);
+        return !generated && sameWithoutAsciiWhitespace(text, actual);
     }
 
     /**
