@@ -1,15 +1,9 @@
 "use client";
 
-import { useQueryClient } from "@tanstack/react-query";
-import { useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
-import { accountQueryKeys, saveStopExpressions, useStopExpressionsQuery } from "../../common/api/account";
-import { ApiError } from "../../common/api/apiClient";
-import { useApiClient, useHomeQuery } from "../../common/api/queries";
-import { PARENT_ROUTES, goToLogin, isUnauthenticated } from "../../common/navigation";
+import { useStopExpressionsScreen } from "./useStopExpressionsScreen";
 import { ACCOUNT_COPY, ACCOUNT_PROPOSED_COPY, ACCOUNT_TEMP_COPY, quoted, stopSectionTitle } from "@/shared/copy/account";
-import { COPY, PROPOSED_COPY, TEMP_COPY } from "@/shared/copy/ko";
-import { useToast } from "@/shared/toast/ToastProvider";
+import { COPY, TEMP_COPY } from "@/shared/copy/ko";
 
 // SET-01 종료 표현 설정 (U2 · US2.3 · AC2.3.1 ~ AC2.3.6 · AC2.3.8 · mockups S-SET1 · 9-11 · R9 · U2-J11)
 // 기본 표현 '무중아 그만할래'는 파란 고정 카드이고 삭제 · 수정 단추가 없다(색만이 아니라 구조로도 구분). 추가 표현 카드를 누르면 같은 화면
@@ -18,6 +12,7 @@ import { useToast } from "@/shared/toast/ToastProvider";
 // 2 ~ 20자 · 중복(공백 · 대소문자 무시, 기본 표현 포함) · 5개를 어기면 칸 아래 오류 글과 「저장」 꺼짐. 실패는 실패로 알린다.
 // 규칙은 서버 StopExpressionRules와 글자 하나까지 같다(리뷰 8): 공백 = 유니코드 White_Space 속성, 글자 수 = NFC 뒤 코드 포인트.
 // 입력 칸에 maxLength를 두지 않는다(UTF-16 단위라 이모지 20개를 못 친다) — 넘으면 오류 글로 알린다.
+// 요청 · 오류 분기 · 이동은 useStopExpressionsScreen 훅이 맡고, 이 화면은 편집 목록 · 입력 칸 · 검증 · 그리기를 맡는다(BR2.1).
 
 export const STOP_MIN_LENGTH = 2;
 export const STOP_MAX_LENGTH = 20;
@@ -65,37 +60,14 @@ interface Draft {
 }
 
 export function StopExpressionsScreen() {
-  const router = useRouter();
-  const toast = useToast();
-  const queryClient = useQueryClient();
-  const api = useApiClient();
-  const stops = useStopExpressionsQuery();
-  const home = useHomeQuery();
+  const { loaded, childName, saving, leave, save: persist } = useStopExpressionsScreen();
   const [items, setItems] = useState<string[] | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
-  const [saving, setSaving] = useState(false);
   const inputId = useId();
   const errorId = useId();
   const inputRef = useRef<HTMLInputElement | null>(null);
-  const { error, refetch } = stops;
 
   // 화면 목록 = 손대기 전에는 서버 목록, 손댄 뒤에는 저장 전 편집 목록
-  const loaded = stops.data;
-
-  useEffect(() => {
-    if (error === null) {
-      return;
-    }
-    if (isUnauthenticated(error)) {
-      goToLogin(router, toast);
-      return;
-    }
-    if (error instanceof ApiError && error.code === "CHILD_NOT_REGISTERED") {
-      router.replace(PARENT_ROUTES.child);
-      return;
-    }
-    toast.show({ message: TEMP_COPY.networkError, kind: "error", action: { label: PROPOSED_COPY.retry, onPress: () => void refetch() } });
-  }, [error, refetch, router, toast]);
 
   // 입력 칸이 열리거나 다른 표현으로 바뀌면 그 칸에 초점(입력 중에는 다시 옮기지 않는다)
   const draftKey = draft === null ? null : (draft.index ?? -1);
@@ -107,7 +79,6 @@ export function StopExpressionsScreen() {
 
   const list = items ?? loaded?.items.map((item) => item.text) ?? [];
   const ready = loaded !== undefined;
-  const childName = home.data?.child?.displayName ?? null;
   const title = childName === null ? ACCOUNT_COPY.device.stopSettings : stopSectionTitle(childName);
   const canSave = ready && draft === null && !saving;
 
@@ -135,26 +106,11 @@ export function StopExpressionsScreen() {
     }
   };
 
-  const leave = () => router.push(PARENT_ROUTES.device);
-
-  const save = async () => {
+  const save = () => {
     if (!canSave) {
       return;
     }
-    setSaving(true);
-    try {
-      await saveStopExpressions(api, list);
-      await queryClient.invalidateQueries({ queryKey: accountQueryKeys.stopExpressions });
-      leave();
-    } catch (failure) {
-      if (isUnauthenticated(failure)) {
-        goToLogin(router, toast);
-        return;
-      }
-      toast.show({ message: ACCOUNT_PROPOSED_COPY.stopSaveFailed, kind: "error" });
-    } finally {
-      setSaving(false);
-    }
+    persist(list);
   };
 
   return (
@@ -245,7 +201,7 @@ export function StopExpressionsScreen() {
             data-testid="stop-save"
             disabled={!canSave}
             aria-busy={saving}
-            onClick={() => void save()}
+            onClick={save}
           >
             {ACCOUNT_COPY.stopExpressions.save}
           </button>

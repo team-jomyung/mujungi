@@ -1,23 +1,17 @@
 "use client";
 
-import { useQueryClient } from "@tanstack/react-query";
-import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
-import { CONSENT_TYPES, fetchMe, logout, saveConsents, usePolicyQuery, type ConsentType, type PolicyItem } from "../../common/api/account";
-import { ApiError } from "../../common/api/apiClient";
-import { useApiClient } from "../../common/api/queries";
+import { useState } from "react";
+import { CONSENT_TYPES, useConsentScreen, type ConsentType, type PolicyItem } from "./useConsentScreen";
 import { BottomSheet } from "../../common/components/BottomSheet";
 import { ConfirmDialog } from "../../common/components/ConfirmDialog";
-import { useBackGuard } from "../../common/hooks/useBackGuard";
-import { PARENT_ROUTES, goToLogin, isUnauthenticated } from "../../common/navigation";
-import { ACCOUNT_COPY, ACCOUNT_PROPOSED_COPY, ACCOUNT_TEMP_COPY } from "@/shared/copy/account";
-import { COPY, PROPOSED_COPY, TEMP_COPY } from "@/shared/copy/ko";
-import { useToast } from "@/shared/toast/ToastProvider";
+import { ACCOUNT_COPY } from "@/shared/copy/account";
+import { COPY, TEMP_COPY } from "@/shared/copy/ko";
 
 // 02 기록 · 동의 안내 + 02-1 약관 시트 + P5 동의 전 나가기 (U2 · US1.2 · AC1.2.1 ~ AC1.2.9 · mockups S-02 · S-02-1 · P-05 · R6 · R7)
 // 네 항목을 모두 체크해야 「동의하고 계속」이 켜진다. 「자세히 보기 ›」는 그 항목의 약관(생성형 AI 안내 포함)을 바텀 시트로 보이고
 // 「확인」 · 바깥 · Escape로 닫혀 보던 자리로 돌아온다. 「←」는 P5(기본 초점 「계속 동의하기」, 「로그아웃」 → 01).
 // 저장하면 아이가 없으면 03(처음 등록), 있으면(재동의) 04로 간다. 동의를 바꾸거나 거두는 단추는 없다.
+// 요청 · 오류 분기 · 이동은 useConsentScreen 훅이 맡고, 이 화면은 약관 시트 열림과 그리기를 맡는다(BR2.1).
 
 const ITEM_LABEL: Readonly<Record<ConsentType, string>> = {
   VOICE_AND_TEXT: ACCOUNT_COPY.consent.voiceAndText,
@@ -34,84 +28,8 @@ const TEST_ID: Readonly<Record<ConsentType, string>> = {
 };
 
 export function ConsentScreen() {
-  const router = useRouter();
-  const toast = useToast();
-  const api = useApiClient();
-  const queryClient = useQueryClient();
-  const policy = usePolicyQuery();
-  const [checked, setChecked] = useState<ReadonlySet<ConsentType>>(new Set());
+  const { policy, checked, allChecked, loaded, saving, leaving, toggle, openLeaveDialog, closeLeaveDialog, agree, leave } = useConsentScreen();
   const [openItem, setOpenItem] = useState<PolicyItem | null>(null);
-  const [leaving, setLeaving] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const { error, refetch } = policy;
-
-  // 기기 뒤로가기도 「←」와 같이 P5를 연다(AC1.2.5). 02를 떠날 때는 가드 칸을 되돌린 뒤 이동한다(리뷰 5)
-  const guard = useBackGuard(true, () => setLeaving(true));
-
-  useEffect(() => {
-    if (error === null) {
-      return;
-    }
-    if (isUnauthenticated(error)) {
-      guard.leave(() => goToLogin(router, toast));
-      return;
-    }
-    toast.show({ message: TEMP_COPY.networkError, kind: "error", action: { label: PROPOSED_COPY.retry, onPress: () => void refetch() } });
-  }, [error, guard, refetch, router, toast]);
-
-  const allChecked = CONSENT_TYPES.every((type) => checked.has(type));
-  const loaded = policy.data !== undefined;
-
-  const toggle = (type: ConsentType) => {
-    setChecked((previous) => {
-      const next = new Set(previous);
-      if (next.has(type)) {
-        next.delete(type);
-      } else {
-        next.add(type);
-      }
-      return next;
-    });
-  };
-
-  const agree = async () => {
-    if (!allChecked || policy.data === undefined || saving) {
-      return;
-    }
-    setSaving(true);
-    try {
-      await saveConsents(api, policy.data.policyVersion);
-      const me = await fetchMe(api).catch(() => null);
-      queryClient.clear();
-      guard.leave(() => router.replace(me !== null && me.childRegistered ? PARENT_ROUTES.home : PARENT_ROUTES.child));
-    } catch (failure) {
-      if (isUnauthenticated(failure)) {
-        guard.leave(() => goToLogin(router, toast));
-        return;
-      }
-      if (failure instanceof ApiError && failure.status === 400) {
-        // 그 사이 약관 버전이 바뀌었다(편차 (U2-f)): 새 약관을 다시 읽고 다시 동의받는다
-        setChecked(new Set());
-        void refetch();
-      }
-      toast.show({ message: ACCOUNT_PROPOSED_COPY.consentSaveFailed, kind: "error" });
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const leave = async () => {
-    try {
-      await logout(api);
-    } catch (failure) {
-      if (!isUnauthenticated(failure)) {
-        toast.show({ message: ACCOUNT_TEMP_COPY.logoutFailed, kind: "error" });
-        return;
-      }
-    }
-    queryClient.clear();
-    guard.leave(() => router.replace(PARENT_ROUTES.login));
-  };
 
   return (
     <div className="mj-screen" data-testid="consent-screen">
@@ -121,7 +39,7 @@ export function ConsentScreen() {
           className="mj-header__back"
           aria-label={TEMP_COPY.back}
           data-testid="consent-back"
-          onClick={() => setLeaving(true)}
+          onClick={openLeaveDialog}
         >
           {COPY.register.backArrow}
         </button>
@@ -130,7 +48,7 @@ export function ConsentScreen() {
       <main className="mj-screen__body">
         <ul className="mj-consent-list">
           {CONSENT_TYPES.map((type) => {
-            const item = policy.data?.items.find((candidate) => candidate.type === type) ?? null;
+            const item = policy?.items.find((candidate) => candidate.type === type) ?? null;
             const inputId = `consent-${TEST_ID[type]}`;
             return (
               <li key={type} className="mj-consent-row">
@@ -166,7 +84,7 @@ export function ConsentScreen() {
           data-testid="consent-agree"
           disabled={!allChecked || !loaded || saving}
           aria-busy={saving}
-          onClick={() => void agree()}
+          onClick={agree}
         >
           {ACCOUNT_COPY.consent.agree}
         </button>
@@ -202,8 +120,8 @@ export function ConsentScreen() {
         body={ACCOUNT_COPY.leaveConsent.body}
         confirmLabel={ACCOUNT_COPY.leaveConsent.logout}
         cancelLabel={ACCOUNT_COPY.leaveConsent.keep}
-        onConfirm={() => void leave()}
-        onCancel={() => setLeaving(false)}
+        onConfirm={leave}
+        onCancel={closeLeaveDialog}
         testIdPrefix="p5"
       />
     </div>

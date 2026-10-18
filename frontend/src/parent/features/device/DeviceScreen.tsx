@@ -1,13 +1,8 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useEffect } from "react";
-import { useStopExpressionsQuery } from "../../common/api/account";
-import { ApiError } from "../../common/api/apiClient";
-import { useHomeQuery } from "../../common/api/queries";
 import type { DeviceView } from "../../common/api/types";
-import { BottomTabBar, type TabKey } from "../../common/components/BottomTabBar";
-import { PARENT_ROUTES, goToLogin, isUnauthenticated, lockToastMessage, routeForTab } from "../../common/navigation";
+import { BottomTabBar } from "../../common/components/BottomTabBar";
+import { useDeviceScreen } from "./useDeviceScreen";
 import {
   ACCOUNT_COPY,
   ACCOUNT_PROPOSED_COPY,
@@ -21,15 +16,14 @@ import {
   stopSectionTitle,
   stopSummary,
 } from "@/shared/copy/account";
-import { COPY, PROPOSED_COPY, TEMP_COPY, lastCheckedLine, unresponsiveLastLine } from "@/shared/copy/ko";
+import { COPY, TEMP_COPY, lastCheckedLine, unresponsiveLastLine } from "@/shared/copy/ko";
 import { formatHhmm } from "@/shared/copy/timeText";
-import { useToast } from "@/shared/toast/ToastProvider";
 
 // 05 우리 집 기기 — 등록 줄 + 네트워크 줄 + 판정 카드 + 종료 표현 구역 (U2 · US2.1 · AC2.1.1 ~ AC2.1.9 · AC2.1.12 ~ AC2.1.14 ·
 // mockups S-05 · 9-8 · interaction-spec 3.3 · 4절 05)
 // 진입 때 GET /api/home 1회(04와 같은 DeviceView · 아이 이름, U1 합산 응답)와 종료 표현 1회. 두 줄 · 판정은 색 점 + 상태명 + 사유를 함께
 // 쓴다(색만이 아님). 판정 값은 U1 · U3가 보고한 값을 그대로 보인다. 하단 탭은 04와 같은 잠김 규칙이고 잠기면 이유 토스트만 보인다.
-// 기기 검색 · 페어링 · 해제 · '다시 등록' 단추는 없다(OQ12, report.md).
+// 기기 검색 · 페어링 · 해제 · '다시 등록' 단추는 없다(OQ12, report.md). 요청 · 오류 분기 · 이동은 useDeviceScreen 훅이 맡는다(BR2.1).
 
 type Tone = "stable" | "unstable" | "disconnected" | "unresponsive" | "unknown" | "none";
 
@@ -126,34 +120,10 @@ const TONE_ICON: Readonly<Record<Tone, string>> = {
 };
 
 export function DeviceScreen() {
-  const router = useRouter();
-  const toast = useToast();
-  const home = useHomeQuery();
-  const stops = useStopExpressionsQuery();
-  const { error, errorUpdatedAt, refetch } = home;
-
-  useEffect(() => {
-    if (error === null) {
-      return;
-    }
-    if (isUnauthenticated(error)) {
-      goToLogin(router, toast);
-      return;
-    }
-    toast.show({ message: TEMP_COPY.networkError, kind: "error", action: { label: PROPOSED_COPY.retry, onPress: () => void refetch() } });
-  }, [error, errorUpdatedAt, refetch, router, toast]);
-
-  const data = home.data;
+  const { data, lockMessage, childName, stopItems, noChild, handleNavigate, onLockedPress, goToHome, goToRegister, goToStopExpressions } =
+    useDeviceScreen();
   const view = data === undefined ? null : presentDeviceScreen(data.device);
-  const lockMessage = data === undefined ? TEMP_COPY.lockToastStatusUnknown : data.lock.locked ? lockToastMessage(data.lock.reasonCode) : null;
   const lastChecked = data === undefined ? null : hhmm(data.device.network.lastReportedAt ?? data.device.network.lastSeenAt);
-  const childName = data?.child?.displayName ?? null;
-  const stopItems = stops.data?.items ?? [];
-  const noChild = stops.error instanceof ApiError && stops.error.code === "CHILD_NOT_REGISTERED";
-
-  const handleNavigate = (tab: TabKey) => {
-    router.push(routeForTab(tab));
-  };
 
   return (
     <div className="mj-screen" data-testid="device-screen">
@@ -163,7 +133,7 @@ export function DeviceScreen() {
           className="mj-header__back"
           aria-label={TEMP_COPY.back}
           data-testid="device-back"
-          onClick={() => router.push(PARENT_ROUTES.home)}
+          onClick={goToHome}
         >
           {COPY.register.backArrow}
         </button>
@@ -203,7 +173,7 @@ export function DeviceScreen() {
                   type="button"
                   className="mj-button mj-button--primary"
                   data-testid="device-register"
-                  onClick={() => router.push(PARENT_ROUTES.register)}
+                  onClick={goToRegister}
                 >
                   {ACCOUNT_COPY.device.register}
                 </button>
@@ -226,14 +196,14 @@ export function DeviceScreen() {
               type="button"
               className="mj-link-button"
               data-testid="device-stop-settings"
-              onClick={() => router.push(PARENT_ROUTES.stopExpressions)}
+              onClick={goToStopExpressions}
             >
               {ACCOUNT_COPY.device.stopSettings}
             </button>
           </section>
         ) : null}
       </main>
-      <BottomTabBar active="home" lockMessage={lockMessage} onNavigate={handleNavigate} onLockedPress={(message) => toast.show({ message })} />
+      <BottomTabBar active="home" lockMessage={lockMessage} onNavigate={handleNavigate} onLockedPress={onLockedPress} />
     </div>
   );
 }

@@ -1,18 +1,12 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useRef, useState } from "react";
-import { startFailureReason } from "./failure";
-import { ApiError } from "../../common/api/apiClient";
-import { startFreeTalk, useApiClient } from "../../common/api/queries";
+import { useState } from "react";
 import type { FreeTalkContext, SituationType, SourceType } from "../../common/api/types";
-import { BottomTabBar, type TabKey } from "../../common/components/BottomTabBar";
+import { BottomTabBar } from "../../common/components/BottomTabBar";
 import { ChipGroup, type ChipOption } from "./ChipGroup";
 import { TextArea200 } from "./TextArea200";
-import { PARENT_ROUTES, goToLogin, routeForTab } from "../../common/navigation";
-import { COPY, PROPOSED_COPY, TEMP_COPY } from "@/shared/copy/ko";
-import { messageForErrorCode } from "@/shared/errors/codeToCopy";
-import { useToast } from "@/shared/toast/ToastProvider";
+import { useFreeTalkScreen } from "./useFreeTalkScreen";
+import { COPY } from "@/shared/copy/ko";
 
 // 08 자유대화 준비 (U1 3.5 Step 40 · BR6.1 · BR6.2 · BR6.4 · AC3.1.1 · AC3.1.3 · AC3.1.4 · AC3.1.6 · AC3.1.8 · mockups 9-12 · J118 · J120)
 // 네 칸은 모두 선택(비워도 시작), 서술 칸 200자에서 막힘, 칩은 단일 선택. 전송 중 「자유대화 시작」이 꺼진다.
@@ -35,27 +29,6 @@ const SOURCE_OPTIONS: readonly ChipOption<SourceType>[] = [
   { value: "HEARD_FROM_CHILD", label: COPY.free.sourceHeardFromChild },
 ];
 
-/** 거절 code → 사유 문구(mockups 9-12 · J118). 화면 사유가 없는 code는 null(토스트로 알린다). */
-function rejectReasonFor(code: string): string | null {
-  switch (code) {
-    case "SESSION_IN_PROGRESS":
-      return PROPOSED_COPY.free.rejectSessionInProgress;
-    case "DEVICE_NOT_STABLE":
-      return PROPOSED_COPY.free.rejectDeviceNotStable;
-    case "CONSENT_MISSING":
-      return PROPOSED_COPY.free.rejectConsentMissing;
-    case "REALTIME_UNAVAILABLE":
-      return TEMP_COPY.freeRealtimeUnavailable;
-    default:
-      return null;
-  }
-}
-
-interface PendingStart {
-  readonly key: string;
-  readonly bodyJson: string;
-}
-
 export interface FreeTalkScreenProps {
   /** 12에서 FAILED로 돌아왔는지(사유 카드 한 종류, J120). */
   readonly returnedFailed: boolean;
@@ -64,24 +37,11 @@ export interface FreeTalkScreenProps {
 }
 
 export function FreeTalkScreen({ returnedFailed, failureCode = null }: FreeTalkScreenProps) {
-  const router = useRouter();
-  const toast = useToast();
-  const api = useApiClient();
+  const { submitting, reason, formRef, submit, handleNavigate, onLockedPress } = useFreeTalkScreen(returnedFailed, failureCode);
   const [knownContent, setKnownContent] = useState("");
   const [situation, setSituation] = useState<SituationType | null>(null);
   const [source, setSource] = useState<SourceType | null>(null);
   const [question, setQuestion] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [reason, setReason] = useState<string | null>(returnedFailed ? startFailureReason(failureCode) : null);
-  const pendingRef = useRef<PendingStart | null>(null);
-  const formRef = useRef<HTMLFormElement>(null);
-  // 요청 중 표시. submitting 상태는 다시 그린 뒤에야 바뀌므로 두 번째 요청은 이 값으로 막는다(BR6.4 · J362).
-  const inFlightRef = useRef(false);
-
-  /** 토스트 「다시 시도」: 지금 화면의 입력으로 폼을 다시 제출한다(화면을 떠났으면 아무것도 하지 않는다, J362). */
-  const resubmit = () => {
-    formRef.current?.requestSubmit();
-  };
 
   const buildContext = (): FreeTalkContext | undefined => {
     const context: { -readonly [K in keyof FreeTalkContext]: FreeTalkContext[K] } = {};
@@ -100,60 +60,6 @@ export function FreeTalkScreen({ returnedFailed, failureCode = null }: FreeTalkS
     return Object.keys(context).length > 0 ? context : undefined;
   };
 
-  const submit = async () => {
-    if (inFlightRef.current) {
-      return;
-    }
-    inFlightRef.current = true;
-    const context = buildContext();
-    const bodyJson = JSON.stringify(context ?? null);
-    const pending = pendingRef.current;
-    const key = pending !== null && pending.bodyJson === bodyJson ? pending.key : crypto.randomUUID();
-    pendingRef.current = { key, bodyJson };
-    setSubmitting(true);
-    setReason(null);
-    try {
-      const result = await startFreeTalk(api, context === undefined ? { idempotencyKey: key } : { idempotencyKey: key, context });
-      pendingRef.current = null;
-      router.push(PARENT_ROUTES.session(result.sessionId));
-    } catch (error) {
-      if (!(error instanceof ApiError)) {
-        pendingRef.current = null;
-        toast.show({ message: TEMP_COPY.networkError, kind: "error" });
-        return;
-      }
-      if (error.isUnauthenticated) {
-        pendingRef.current = null;
-        goToLogin(router, toast);
-        return;
-      }
-      const sameKeyRetry = error.isDeliveryUnknown || (error.status === 403 && error.code === "CSRF_TOKEN_INVALID");
-      if (!sameKeyRetry) {
-        // 행이 남지 않은 거절 · 로컬 FAILED 재생은 새 시도로 본다(새 키, BR6.2).
-        pendingRef.current = null;
-      }
-      const rejectReason = error.kind === "http" ? rejectReasonFor(error.code) : null;
-      if (rejectReason !== null) {
-        setReason(rejectReason);
-        return;
-      }
-      toast.show({
-        message: error.kind === "http" ? messageForErrorCode(error.code) : TEMP_COPY.networkError,
-        kind: "error",
-        action: { label: PROPOSED_COPY.retry, onPress: resubmit },
-      });
-    } finally {
-      inFlightRef.current = false;
-      setSubmitting(false);
-    }
-  };
-
-  const handleNavigate = (tab: TabKey) => {
-    if (tab !== "free") {
-      router.push(routeForTab(tab));
-    }
-  };
-
   return (
     <div className="mj-screen" data-testid="free-screen">
       <header className="mj-header">
@@ -167,7 +73,7 @@ export function FreeTalkScreen({ returnedFailed, failureCode = null }: FreeTalkS
           data-testid="free-form"
           onSubmit={(event) => {
             event.preventDefault();
-            void submit();
+            submit(buildContext());
           }}
         >
           <TextArea200
@@ -216,7 +122,7 @@ export function FreeTalkScreen({ returnedFailed, failureCode = null }: FreeTalkS
           </button>
         </form>
       </main>
-      <BottomTabBar active="free" lockMessage={null} onNavigate={handleNavigate} onLockedPress={(message) => toast.show({ message })} />
+      <BottomTabBar active="free" lockMessage={null} onNavigate={handleNavigate} onLockedPress={onLockedPress} />
     </div>
   );
 }
