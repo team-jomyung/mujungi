@@ -41,6 +41,7 @@ backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/JudgmentCoor
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/JudgmentSupport.java
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/PracticeSessionExtension.java
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/ProviderSendQueue.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/EndingFlow.java
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/SessionContext.java
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/SessionExecutor.java
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/SessionMailbox.java

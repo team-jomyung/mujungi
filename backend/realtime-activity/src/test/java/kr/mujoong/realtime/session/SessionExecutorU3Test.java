@@ -74,7 +74,7 @@ class SessionExecutorU3Test {
         // 입력 프레임은 새 연결의 것만 받는다
         assertThat(h.executor.offerAudio(fresh.connectionId(), 1, new byte[960], 0)).isTrue();
         assertThat(h.executor.offerAudio(old.connectionId(), 2, new byte[960], 0)).isFalse();
-        assertThat(events()).filteredOn(event -> event.getEventType().equals(SessionExecutor.EVENT_LINK_REPLACED))
+        assertThat(events()).filteredOn(event -> event.getEventType().equals(EndingFlow.EVENT_LINK_REPLACED))
                 .singleElement().satisfies(event -> assertThat(event.getPayloadJson()).isEqualTo("{\"resumed\":true}"));
     }
 
@@ -103,7 +103,7 @@ class SessionExecutorU3Test {
 
         assertThat(h.executor.status()).isEqualTo(SessionStatus.ACTIVE);
         assertThat(h.transitions.applied()).hasSize(transitions);
-        assertThat(events()).filteredOn(event -> event.getEventType().equals(SessionExecutor.EVENT_LINK_REPLACED))
+        assertThat(events()).filteredOn(event -> event.getEventType().equals(EndingFlow.EVENT_LINK_REPLACED))
                 .singleElement().satisfies(event -> assertThat(event.getPayloadJson()).isEqualTo("{\"resumed\":false}"));
     }
 
@@ -199,8 +199,8 @@ class SessionExecutorU3Test {
 
         assertThat(events()).filteredOn(event -> event.getEventType().startsWith("DEVICE_"))
                 .extracting(SessionEvent::getEventType)
-                .containsExactly(SessionExecutor.EVENT_MIC_LOST, SessionExecutor.EVENT_MIC_OK,
-                        SessionExecutor.EVENT_PLAYER_ERROR);
+                .containsExactly(EndingFlow.EVENT_MIC_LOST, EndingFlow.EVENT_MIC_OK,
+                        EndingFlow.EVENT_PLAYER_ERROR);
         assertThat(h.executor.status()).isEqualTo(SessionStatus.ACTIVE);
     }
 
@@ -226,7 +226,7 @@ class SessionExecutorU3Test {
         assertThat(h.executor.outputGeneration()).isGreaterThan(generation);
         assertThat(bundle.stillCurrent().getAsBoolean()).isFalse();
         assertThat(h.link.clearAudioCalls()).isGreaterThan(cleared);
-        assertThat(events()).filteredOn(event -> event.getEventType().equals(SessionExecutor.EVENT_BARGE_IN))
+        assertThat(events()).filteredOn(event -> event.getEventType().equals(EndingFlow.EVENT_BARGE_IN))
                 .singleElement().satisfies(event -> assertThat(event.getPayloadJson())
                         .isEqualTo("{\"playbackId\":\"" + bundle.playbackId() + "\",\"playedToMs\":1200}"));
         assertThat(h.executor.status()).isEqualTo(SessionStatus.ACTIVE);
@@ -247,7 +247,7 @@ class SessionExecutorU3Test {
                         PlaybackMark.StopCause.STOP_OUTPUT, null), h.clock.now()));
         h.drain();
 
-        assertThat(events()).filteredOn(event -> event.getEventType().equals(SessionExecutor.EVENT_BARGE_IN))
+        assertThat(events()).filteredOn(event -> event.getEventType().equals(EndingFlow.EVENT_BARGE_IN))
                 .singleElement().satisfies(event -> assertThat(event.getPayloadJson())
                         .isEqualTo("{\"playbackId\":\"" + playbackId + "\",\"playedToMs\":350}"));
     }

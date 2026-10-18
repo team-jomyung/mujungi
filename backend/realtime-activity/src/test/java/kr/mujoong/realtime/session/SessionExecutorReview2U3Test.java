@@ -113,7 +113,7 @@ class SessionExecutorReview2U3Test {
         FakeDeviceLink taken = new FakeDeviceLink(h.deviceId, h.clock.now());
         taken.bindSession(UUID.randomUUID());
 
-        SessionExecutor.standDown(taken, h.sessionId, SessionStatus.ABORTED, true);
+        EndingFlow.standDown(taken, h.sessionId, SessionStatus.ABORTED, true);
 
         assertThat(taken.sent()).isEmpty();
     }

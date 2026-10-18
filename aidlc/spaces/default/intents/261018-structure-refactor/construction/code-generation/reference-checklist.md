@@ -47,7 +47,8 @@
 - [x] **`backend/coverage-scope/*.txt`** — Step 12: `u1` · `u3` · `u4b` · `u11`에 `SessionContext.java`를 `SessionExecutor.java` 바로 앞 줄에 더했다. `u12` · `u13`은 `SessionExecutor`를 의도적으로 뺀 목록이라 `SessionContext`도 넣지 않았다(Step 13 이후 협력 객체도 같은 기준으로 정한다): `SessionExecutor`가 든 범위 파일 6개 — `u1` · `u3` · `u4b` · `u11` · `u12` · `u13`. `SessionExecutor`는 남으므로 경로 변경은 없지만, 새 협력 객체 파일을 해당 범위에 넣을지는 Step 12에서 정한다(대상 집합을 줄이면 하한을 낮추는 것이 된다, BR5.5). CI가 막는 범위는 `u5b` · `u5b-core` · `u7`이고 `SessionExecutor`는 그 안에 없다.
 - [ ] **문서 문구**: `contracts/deviations.md` 52줄의 `SessionExecutor` 문구 1곳(클래스 이름이 안 바뀌므로 변경 없음, 책임 이동 설명만 확인). `docs/units/{u3,u4b,u5b,u11,u12,u13}/*` 13개 파일의 `SessionExecutor` 언급은 이력 문서라 고치지 않는다(FD-D4).
 - [ ] **외부에서 `SessionExecutor.X`로 읽는 이름**: 공개 내부 타입 `Settings`(운영 2 · 시험 4) · `Services`(운영 3 · 시험 3) · `Plan`(운영 3 · 시험 3) · `ApprovedItem`(1 · 1) · `LiveState`(운영 2 · 시험 2) · 승인 문구 코드 상수 6개(운영 1 ~ 3 · 시험 5 ~ 13), 패키지 전용 `EVENT_*` 상수(시험 1 ~ 6파일 · 운영 0). 소유자를 바꾸는 상수 · 타입은 이 참조를 같은 커밋에서 고친다.
-- [ ] 확인 명령: `sg docker -c 'cd backend && ./gradlew :realtime-activity:clean :realtime-activity:check -Pmujoong.test.db=docker'`, 시험 수 1862건 유지.
+- Step 13 결과: `SingleInstanceMarkerTest`는 `EndingFlow`가 세션 상태를 `SessionContext`에서 받고 직접 쥐는 것은 마지막 마이크 · 플레이어 값 등 작은 값뿐이라(`JudgmentCoordinator` · `GuardrailCoordinator`와 같은 기준) 표식을 달지 않았다. `TimeLiteralScanTest` 허용 목록은 `SessionExecutor` 항목이 없고 `EndingFlow`에 숫자 시간 값이 없어 변경이 없다. 범위 파일은 `u1` `u3` `u4b` `u11`에 `EndingFlow.java`를 `SessionContext.java` 앞 줄로 더했다(`u12` `u13` 제외). 이름 참조는 `ConnectionHandover` 1곳과 시험 3파일(`standDown` 4곳, `EVENT_*` 5개 상수)을 `EndingFlow`로 고쳤다. ArchUnit 규칙은 비지 않고 통과했다.
+- [x] 확인 명령: `sg docker -c 'cd backend && ./gradlew :realtime-activity:clean :realtime-activity:check -Pmujoong.test.db=docker'`, 시험 수 1862건 유지 — Step 13 결과 1862건 실패 0.
 
 ### Step 18 ~ 19 — 설정 레코드 · `practice` → `practicelegacy`
 

@@ -160,18 +160,18 @@ class SessionExecutorReviewU3Test {
     @Test
     void theStandDownHelperSendsCloseTransportOnlyToAResumedDeviceAndMapsTheEndingToAReason() {
         FakeDeviceLink resumed = new FakeDeviceLink(h.deviceId, h.clock.now());
-        SessionExecutor.standDown(resumed, h.sessionId, SessionStatus.ABORTED, true);
+        EndingFlow.standDown(resumed, h.sessionId, SessionStatus.ABORTED, true);
         assertThat(resumed.sent(CloseTransport.class)).extracting(CloseTransport::reason)
                 .containsExactly(CloseTransport.Reason.DISCONNECT);
 
         FakeDeviceLink ended = new FakeDeviceLink(h.deviceId, h.clock.now());
-        SessionExecutor.standDown(ended, h.sessionId, SessionStatus.ENDED_UNCONFIRMED, true);
+        EndingFlow.standDown(ended, h.sessionId, SessionStatus.ENDED_UNCONFIRMED, true);
         assertThat(ended.sent(CloseTransport.class)).extracting(CloseTransport::reason)
                 .containsExactly(CloseTransport.Reason.ENDED);
 
         FakeDeviceLink closed = new FakeDeviceLink(h.deviceId, h.clock.now());
         closed.setOpen(false);
-        SessionExecutor.standDown(closed, h.sessionId, SessionStatus.FAILED, true);
+        EndingFlow.standDown(closed, h.sessionId, SessionStatus.FAILED, true);
         assertThat(closed.sent()).isEmpty();
     }
 

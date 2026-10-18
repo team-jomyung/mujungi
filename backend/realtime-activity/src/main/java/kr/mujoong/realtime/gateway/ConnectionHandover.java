@@ -10,6 +10,7 @@ import kr.mujoong.contract.ws.CloseCode;
 import kr.mujoong.contract.ws.message.HelloOk;
 import kr.mujoong.realtime.config.RealtimeProperties;
 import kr.mujoong.realtime.observability.EventLogger;
+import kr.mujoong.realtime.session.EndingFlow;
 import kr.mujoong.realtime.session.SessionExecutor;
 import kr.mujoong.realtime.session.SessionMailbox;
 import kr.mujoong.realtime.session.SessionRegistry;
@@ -83,7 +84,7 @@ public class ConnectionHandover {
             SessionExecutor executor = live.get();
             if (!executor.mailbox().putSafety(new SessionMailbox.LinkReplaced(connection, info.resumed(), clock.now()))) {
                 // 리뷰 반영 4: HELLO_OK.session을 실은 사이 실행기가 끝나 편지함이 닫혔다 — 기기가 듣는 중에 멈추지 않게 대기로 돌려보낸다
-                SessionExecutor.standDown(connection, executor.sessionId(), executor.status(), info.resumed());
+                EndingFlow.standDown(connection, executor.sessionId(), executor.status(), info.resumed());
             }
         }
         return true;
