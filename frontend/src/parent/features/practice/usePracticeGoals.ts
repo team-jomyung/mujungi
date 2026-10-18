@@ -6,7 +6,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ApiError } from "../../common/api/apiClient";
 import { useApiClient } from "../../common/api/queries";
 import { goToLogin } from "../../common/navigation";
-import { deleteGoal, fetchGoalSelections, goalSelectionQueryKey, restoreGoal, sortGoals, updateGoalFavorite, type GoalSelection } from "./api";
+import { deleteGoal, fetchGoalSelections, goalSelectionQueryKey, restoreGoal, sortGoals, updateGoalFavorite, type GoalSelection } from "../../common/api/practice";
 import { PRACTICE_COPY, PRACTICE_TEMP_COPY } from "./copy";
 import { PROPOSED_COPY } from "@/shared/copy/ko";
 import { useToast } from "@/shared/toast/ToastProvider";

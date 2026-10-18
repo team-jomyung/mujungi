@@ -4,7 +4,8 @@
   "files": [
     "frontend/src/app/parent/practice/page.tsx",
     "frontend/src/parent/features/practice/PracticeScreen.tsx",
-    "frontend/src/parent/features/practice/api.ts",
+    "frontend/src/parent/common/api/practice.ts",
+    "frontend/src/parent/features/practice/startPort.ts",
     "frontend/src/parent/features/practice/copy.ts",
     "frontend/src/parent/features/practice/usePracticeGoals.ts",
     "frontend/src/parent/common/api/apiClient.ts",

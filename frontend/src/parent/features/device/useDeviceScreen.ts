@@ -2,9 +2,9 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
-import { useStopExpressionsQuery } from "../child/api";
+import { useStopExpressionsQuery } from "../../common/api/child";
 import { ApiError } from "../../common/api/apiClient";
-import { useHomeQuery } from "../home/api";
+import { useHomeQuery } from "../../common/api/home";
 import type { TabKey } from "../../common/components/BottomTabBar";
 import { PARENT_ROUTES, goToLogin, isUnauthenticated, lockToastMessage, routeForTab } from "../../common/navigation";
 import { PROPOSED_COPY, TEMP_COPY } from "@/shared/copy/ko";

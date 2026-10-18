@@ -9,7 +9,7 @@ import {
   registerChild,
   saveStopExpressions,
   updateChild,
-} from "@/parent/features/child/api";
+} from "@/parent/common/api/child";
 import { createApiClient, type FetchLike } from "@/parent/common/api/apiClient";
 import { ResponseShapeError } from "@/parent/common/api/types";
 import { routeAfterLogin } from "@/parent/features/login/LoginCallbackScreen";

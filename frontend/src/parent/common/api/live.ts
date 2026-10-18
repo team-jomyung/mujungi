@@ -1,6 +1,6 @@
 "use client";
 
-import type { ApiClient } from "../../common/api/apiClient";
+import type { ApiClient } from "./apiClient";
 import {
   parseEndResult,
   parseLiveView,
@@ -8,7 +8,7 @@ import {
   type Bubble,
   type EndResult,
   type LiveView,
-} from "../../common/api/types";
+} from "./types";
 
 // 12 진행 · 17 활동 끝의 세션 조회 · 끝내기 요청 (U1 3.5 Step 39 · BR6.9 · BR6.15 · RD-21). 서버 호출과 응답 합치기만 한다(BR2.3).
 

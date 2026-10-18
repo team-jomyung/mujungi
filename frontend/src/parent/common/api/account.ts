@@ -6,7 +6,7 @@ import { useApiClient } from "./queries";
 import { ResponseShapeError } from "./types";
 
 // U2 보호자 계정(로그인 · 계정) REST 형식 · 읽기 · 요청 · 조회 훅 (docs/units/u2/design.md 4절 · contracts/parent-api.yaml U2 경로 · me-response 스키마)
-// 동의(약관 · 동의 저장)는 features/consent/api.ts, 아이 · 종료 표현은 features/child/api.ts로 나뉘었다(단계 2, 3.a).
+// 동의(약관 · 동의 저장)는 features/consent/api.ts, 아이 · 종료 표현은 common/api/child.ts로 나뉘었다(단계 2, 3.a).
 // 받는 쪽 규칙(계약 10절): 모르는 필드는 무시하고 모르는 enum은 'UNKNOWN'으로 읽는다. 필수 필드가 없으면 ResponseShapeError.
 
 /** Me의 필드 형식이라 동의 기능이 아니라 여기에 둔다(공통 → 기능 import를 만들지 않는다). */

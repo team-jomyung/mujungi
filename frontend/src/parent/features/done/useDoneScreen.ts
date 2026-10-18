@@ -7,7 +7,7 @@ import { freeFailedRoute } from "../free/failure";
 import { isStartFailure } from "../live/presentation";
 import { ApiError } from "../../common/api/apiClient";
 import { queryKeys, useApiClient } from "../../common/api/queries";
-import { fetchHome } from "../home/api";
+import { fetchHome } from "../../common/api/home";
 import { isTerminalStatus, type SessionStatus } from "../../common/api/types";
 import type { TabKey } from "../../common/components/BottomTabBar";
 import { useLivePolling } from "../live/useLivePolling";

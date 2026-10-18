@@ -1,10 +1,10 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import type { ApiClient } from "../../common/api/apiClient";
-import { accountQueryKeys, asObject, ignoreBody, requiredString } from "../../common/api/account";
-import { useApiClient } from "../../common/api/queries";
-import { ResponseShapeError } from "../../common/api/types";
+import type { ApiClient } from "./apiClient";
+import { accountQueryKeys, asObject, ignoreBody, requiredString } from "./account";
+import { useApiClient } from "./queries";
+import { ResponseShapeError } from "./types";
 
 // 03 아이 정보 · SET-01 종료 표현의 읽기 · 요청 (docs/units/u2/design.md 4절 · contracts/parent-api.yaml U2 경로)
 // 받는 쪽 규칙(계약 10절): 모르는 필드는 무시한다. 필수 필드가 없으면 ResponseShapeError.

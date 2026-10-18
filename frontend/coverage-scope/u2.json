@@ -10,7 +10,7 @@
     "frontend/src/app/parent/login/page.tsx",
     "frontend/src/parent/common/api/account.ts",
     "frontend/src/parent/features/consent/api.ts",
-    "frontend/src/parent/features/child/api.ts",
+    "frontend/src/parent/common/api/child.ts",
     "frontend/src/parent/common/components/BottomSheet.tsx",
     "frontend/src/parent/features/home/SettingsSheet.tsx",
     "frontend/src/parent/common/hooks/useBackGuard.ts",

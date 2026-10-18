@@ -1,7 +1,7 @@
 import { renderHook } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { createParentQueryClient, useApiClient } from "@/parent/common/api/queries";
-import { mergeBubbles, mergeLiveView } from "@/parent/features/live/api";
+import { mergeBubbles, mergeLiveView } from "@/parent/common/api/live";
 import {
   ResponseShapeError,
   isTerminalStatus,

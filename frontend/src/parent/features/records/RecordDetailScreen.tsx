@@ -11,7 +11,7 @@ import { SceneChip } from "./SceneChip";
 import { LiveRegion } from "../../common/components/LiveRegion";
 import { TranscriptList } from "../../common/components/TranscriptList";
 import { dateLabel, seoulDate } from "../../common/components/MonthCalendar";
-import { selectGoal, deleteGoal } from "../practice/api";
+import { selectGoal, deleteGoal } from "../../common/api/practice";
 import { PARENT_ROUTES, goToLogin, isUnauthenticated } from "../../common/navigation";
 import { formatHhmm, minutesBetween } from "@/shared/copy/timeText";
 import { RESULT_TEMP_COPY as C, recordTimeLine } from "@/shared/copy/result";

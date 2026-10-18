@@ -4,8 +4,8 @@ import { ApiError, createApiClient, type FetchLike } from "@/parent/common/api/a
 import { createCsrfStore } from "@/parent/common/api/csrf";
 import { registerDevice } from "@/parent/features/device/api";
 import { startFreeTalk } from "@/parent/features/free/api";
-import { fetchHome } from "@/parent/features/home/api";
-import { endSession } from "@/parent/features/live/api";
+import { fetchHome } from "@/parent/common/api/home";
+import { endSession } from "@/parent/common/api/live";
 import { devLogin } from "@/parent/features/login/api";
 import { ResponseShapeError, type CsrfToken } from "@/parent/common/api/types";
 import { SESSION_ID, TRACE_ID, deferred, errorResponse, homeBody, jsonResponse, makeCsrfToken } from "../support/fixtures";

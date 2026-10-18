@@ -1,9 +1,9 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import type { ApiClient } from "../../common/api/apiClient";
-import { queryKeys, useApiClient } from "../../common/api/queries";
-import { parseHome, type HomeView } from "../../common/api/types";
+import type { ApiClient } from "./apiClient";
+import { queryKeys, useApiClient } from "./queries";
+import { parseHome, type HomeView } from "./types";
 
 // 04 홈 조회 요청 (U1 3.5 Step 39 · PD-12 · 계약 3절). 서버 호출만 한다(BR2.3).
 
