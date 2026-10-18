@@ -50,7 +50,7 @@
     "frontend/src/parent/features/live/StatusLine.tsx",
     "frontend/src/parent/features/free/TextArea200.tsx",
     "frontend/src/parent/common/components/TranscriptList.tsx",
-    "frontend/src/parent/features/live/useLivePolling.ts",
+    "frontend/src/parent/common/hooks/useLivePolling.ts",
     "frontend/src/parent/common/navigation.ts",
     "frontend/src/parent/features/login/DevLoginScreen.tsx",
     "frontend/src/parent/features/done/DoneScreen.tsx",

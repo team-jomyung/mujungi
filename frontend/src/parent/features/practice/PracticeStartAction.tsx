@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { PRACTICE_COPY, U5B_COPY } from "./copy";
+import { U5B_COPY } from "../../common/copy/practice";
+import { PRACTICE_COPY } from "./copy";
 import { PracticeStartCoordinator, ownedSelection, type StartOutcome, type StartPort } from "./practiceStart";
 
 /** 18 시작 동작. 미확인 결과의 재시도는 화면 목록이 바뀌어도 처음 요청을 그대로 사용한다. */

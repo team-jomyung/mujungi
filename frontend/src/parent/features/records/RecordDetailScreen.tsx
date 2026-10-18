@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { ApiError } from "../../common/api/apiClient";
 import { useApiClient } from "../../common/api/queries";
 import { fetchRecord, fetchResult, resultKey, resultStatusKey, retryResult } from "../../common/api/results";
-import { useResultStatusPolling } from "../done/useResultStatusPolling";
+import { useResultStatusPolling } from "../../common/hooks/useResultStatusPolling";
 import { EndReasonCard } from "./EndReasonCard";
 import { SceneChip } from "./SceneChip";
 import { LiveRegion } from "../../common/components/LiveRegion";

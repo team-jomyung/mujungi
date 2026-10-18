@@ -4,9 +4,10 @@
     "frontend/src/parent/common/api/practice.ts",
     "frontend/src/parent/features/practice/startPort.ts",
     "frontend/src/parent/features/practice/copy.ts",
+    "frontend/src/parent/common/copy/practice.ts",
     "frontend/src/parent/features/practice/practiceStart.ts",
     "frontend/src/parent/features/practice/PracticeStartAction.tsx",
     "frontend/src/parent/common/api/practiceProgress.ts",
-    "frontend/src/parent/features/practice/PracticeHeader.tsx"
+    "frontend/src/parent/common/components/PracticeHeader.tsx"
   ]
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { showsPauseLine, silentMinutes } from "./presentation";
+import { showsPauseLine, silentMinutes } from "../../common/activity/livePresentation";
 import type { LiveView } from "../../common/api/types";
 import { BottomTabBar } from "../../common/components/BottomTabBar";
 import { ConfirmDialog } from "../../common/components/ConfirmDialog";
@@ -8,8 +8,8 @@ import { NoticeDialog } from "./NoticeDialog";
 import { StatusLine } from "./StatusLine";
 import { TranscriptList } from "../../common/components/TranscriptList";
 import { useLiveScreen } from "./useLiveScreen";
-import { PracticeHeader } from "../practice/PracticeHeader";
-import { U5B_COPY } from "../practice/copy";
+import { PracticeHeader } from "../../common/components/PracticeHeader";
+import { U5B_COPY } from "../../common/copy/practice";
 import {
   COPY,
   PROPOSED_COPY,

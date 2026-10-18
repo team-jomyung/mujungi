@@ -3,15 +3,15 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { freeFailedRoute } from "../free/failure";
-import { liveOutcome } from "./presentation";
+import { freeFailedRoute } from "../../common/activity/failure";
+import { liveOutcome } from "../../common/activity/livePresentation";
 import { ApiError } from "../../common/api/apiClient";
 import { queryKeys, useApiClient } from "../../common/api/queries";
 import { fetchHome } from "../../common/api/home";
 import { endSession, fetchLiveView, mergeLiveView } from "../../common/api/live";
 import { isTerminalStatus, type LiveView, type SessionStatus } from "../../common/api/types";
 import type { TabKey } from "../../common/components/BottomTabBar";
-import { useLivePolling } from "./useLivePolling";
+import { useLivePolling } from "../../common/hooks/useLivePolling";
 import { PARENT_ROUTES, goToLogin, isUnauthenticated, routeForTab } from "../../common/navigation";
 import { PROPOSED_COPY, TEMP_COPY } from "@/shared/copy/ko";
 import { messageForErrorCode } from "@/shared/errors/codeToCopy";

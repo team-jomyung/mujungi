@@ -1,4 +1,4 @@
-import { isTerminalStatus, type LiveView } from "../../common/api/types";
+import { isTerminalStatus, type LiveView } from "../api/types";
 
 // 12 진행 표시 판단 (U4a · AC3.2.8 · AC3.2.10 · AC3.4.1 · AC3.5.1 · AC3.6.9 · U4a-J12 · J16 · J19)
 // 화면이 아니라 값만 정한다: 받은 상태에 따른 다음 동작, 공백 경고 분, 말풍선과 끊김 · 미확인 구간을 시간 순으로 섞은 흐름.

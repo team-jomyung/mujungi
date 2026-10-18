@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
-import { startFailureReason } from "./failure";
+import { startFailureReason } from "../../common/activity/failure";
 import { ApiError } from "../../common/api/apiClient";
 import { useApiClient } from "../../common/api/queries";
 import { startFreeTalk } from "./api";

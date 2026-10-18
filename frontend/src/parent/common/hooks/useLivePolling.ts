@@ -2,10 +2,10 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useState } from "react";
-import { ApiError } from "../../common/api/apiClient";
-import { queryKeys, useApiClient } from "../../common/api/queries";
-import { fetchLiveView, mergeLiveView } from "../../common/api/live";
-import type { LiveView, SessionStatus } from "../../common/api/types";
+import { ApiError } from "../api/apiClient";
+import { queryKeys, useApiClient } from "../api/queries";
+import { fetchLiveView, mergeLiveView } from "../api/live";
+import type { LiveView, SessionStatus } from "../api/types";
 import { useTiming } from "@/shared/timing/TimingProvider";
 
 // 12 진행 폴링 (U1 3.5 Step 40 · PD-12 표 2.9-A · BR6.15 · interaction-spec 1절 '폴링')

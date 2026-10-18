@@ -7,6 +7,7 @@
     "frontend/src/parent/common/api/practice.ts",
     "frontend/src/parent/features/practice/startPort.ts",
     "frontend/src/parent/features/practice/copy.ts",
+    "frontend/src/parent/common/copy/practice.ts",
     "frontend/src/parent/features/practice/usePracticeGoals.ts",
     "frontend/src/parent/common/api/apiClient.ts",
     "frontend/src/shared/timing/timing.ts",

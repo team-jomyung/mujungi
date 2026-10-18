@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
-import { startFailureReason } from "../free/failure";
+import { startFailureReason } from "../../common/activity/failure";
 import { useApiClient } from "../../common/api/queries";
 import { BottomTabBar, type TabKey } from "../../common/components/BottomTabBar";
 import { PARENT_ROUTES, goToLogin, routeForTab } from "../../common/navigation";

@@ -14,7 +14,7 @@
     "frontend/src/parent/common/components/MonthCalendar.tsx",
     "frontend/src/parent/features/records/SceneChip.tsx",
     "frontend/src/parent/features/reports/useReportPolling.ts",
-    "frontend/src/parent/features/done/useResultStatusPolling.ts",
+    "frontend/src/parent/common/hooks/useResultStatusPolling.ts",
     "frontend/src/parent/common/navigation.ts",
     "frontend/src/parent/features/done/DoneScreen.tsx",
     "frontend/src/parent/features/done/useDoneScreen.ts",
