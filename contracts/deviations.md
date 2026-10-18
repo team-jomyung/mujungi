@@ -210,3 +210,14 @@
 | (U10-a) | C-DS1에 선택 scriptVersion/scenes/selfReview/generation을 추가한다. C8의 기존 behaviorKey/version은 기존 행동에 그대로 유지하고, 후보는 candidate:<candidateRef>와 고정 후보 버전을 운반 식별자로 사용하며 goalKind/candidateRef/candidateVersion/goalContext를 선택 확장한다. 후보를 기존 행동 정의로 매핑하거나 카탈로그 행을 만들지 않는다. 생성·판정의 정본은 고정 goalContext다. | 승인 U10 FR3·FR4, functional-spec W1/W6 | 기존 8필수 필드와 추가 필드 허용을 유지한다. 현재 RT는 운반 필드와 판정 기준을 저장한다. 신규 후보를 모르는 구버전 Core로 롤백하면 신규 후보의 생성은 지원되지 않을 수 있다. U12 소비·실기기는 별도 검증이다. |
 
 U10 검토 사유는 ANSWER_INCLUDED/EARLY_CUE/PRESSURE/AGE_MISMATCH/GOAL_MISMATCH/REPETITION/FORBIDDEN_CONTENT/INCOMPLETE_SCENE/INVARIANT_MISMATCH/SKILL_MISMATCH/TRANSFER_MISMATCH/UNCHANGED_VARIANT로 닫으며 APPROVE에는 빈 reasons만 허용한다. 생성 scenario-generation.v2, 검토 scenario-review.v1, 공개 대본 scenario-script.v1을 함께 사용한다.
+
+## U12 편차
+
+> U12(새 연습 흐름, 작업 기록 261017-u12-practice-flow)가 승인 요구사항 · 계약에 더하거나 바로잡은 곳이다. 번호 체계: **설계 편차는 `U12-D<n>`**(`docs/units/u12/design.md`), 계약 문서에 더한 키는 `(U12-a)`다. Markdown은 `[U12 편차 (U12-a)]`로 표시한다(`ContractFilesTest`의 한 · 두 글자 기호와 섞이지 않는다). 스키마 · 이벤트 모양(`practice-record-v2` 포함)은 바꾸지 않았다.
+
+| 기호 | 내용 | 근거 | 호환 분류 |
+|---|---|---|---|
+| (U12-a) | 새 연습 흐름의 횟수 한도 설정 키 `mujoong.practice-flow.retry-max`(기본 2)와 `mujoong.practice-flow.reexplain-max`(기본 1)를 ai-io.md 10.14에 더한다. 시간 값이 아니라 timing.md에 두지 않으며 비밀이 아니다. 시간 한도는 U8이 만든 `mujoong.timing.conversation.*`를 그대로 읽는다 | U12 FR7.1 · BR9.2 · R-M10 | 새 키 · 이전 앱은 이 키를 읽지 않는다. 기본값이 있어 설정을 안 넣어도 기동한다 |
+| U12-D1 | 정본 AC1.1.2(시작 전 휴식 요청에 `D_REST_ACK_START` 재생)를 받아 주는 말 없이 재안내하는 U11-D6 동작 그대로 둔다. 참여 확인 전의 응답은 계약(U4b-a)상 들리지 않는다. 실행부 소유이고 U12는 바꾸지 않는다 | U12 Q1(A) · 승인 요구사항 AC1.1.2 | 코드 · 계약 변화 없음(정본 문장 개정 제안만) |
+| U12-D2 | 정본 AC1.5.5의 '도움 내용' 기록을 도움 종류 · 예시 여부 · 동의 응답 · 시각 · 내용 **길이**로 좁힌다. 도움 발화 원문 · 아이 전사 · 대본 문장은 표 · 이벤트 · 로그 · 지표에 쓰지 않는다. V7 표에 원문 칸이 없다 | R-F14 · RA 검토 R-02 · BR7.1 | 새 표(expand 전용). `practice-record-v2` facts는 계약 15종 그대로 |
+| U12-D3 | 변형 제안에 대한 아이의 동의(AC1.5.4)는 새 판정 지점을 만들지 않고 J4(수락 · 거절 · 불명확)를 재사용해 읽는다. J4 질문 문구는 '도와줘도 되는지'라서 분류 품질은 `[실호출-합성]` 확인 대상이다. 판정 계약 · 선택지 판은 바꾸지 않는다 | D8 · BR6.1 | 계약 변화 없음 |

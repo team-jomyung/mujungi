@@ -45,7 +45,7 @@ realtime 줄의 **마지막 볼트(B8)**다. realtime 줄은 U11 → U13 → **U
 - 실호출(GPT-Live · 제브 위의 실제 동작)과 실제 기기 확인(FR12): 사람 몫이다. 한국어 되묻기 품질 · 코치 표현의 자연스러움 · 아이가 역할 전환을 알아듣는지는 `[실호출-합성]` · `[실기기]` 확인표에서 따로 본다.
 
 ## 정본
-- 요구사항 FR4.1 ~ FR4.8 · FR7.3 · NFR, 스토리 US1.1 ~ US1.6 · US1.9(AC 31개, 모두 `[자동-대역]`): `aidlc/spaces/default/intents/261015-doc-sync-code-update/inception/requirements-analysis/requirements.md` · `inception/user-stories/stories.md`
+- 요구사항 FR4.1 ~ FR4.8 · FR7.3 · NFR, 스토리 US1.1 ~ US1.6 · US1.9(AC 29개, 모두 `[자동-대역]`): `aidlc/spaces/default/intents/261015-doc-sync-code-update/inception/requirements-analysis/requirements.md` · `inception/user-stories/stories.md`
 - ADR-001(레거시는 읽기용으로 남김) · ADR-004 · ADR-005(상태 기계는 확장점 출력으로만) · ADR-007: `inception/domain-design/decisions.md`, 컴포넌트 `PracticeConversation`: `components.md`
 - 계약 C-DS1(대본) · C-DS2 · 기록 캡처 이벤트 · C-DS9: `inception/contract-design/contract-summary.md`, 편차 `contracts/deviations.md`(U8-d · U10-a · U11 · U13)
 - 볼트 계획 B8 · 순서 근거: `inception/delivery-planning/bolt-plan.md` · `risk-and-sequencing-rationale.md`
