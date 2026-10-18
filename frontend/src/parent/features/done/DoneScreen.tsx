@@ -1,23 +1,12 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
-import { useRouter } from "next/navigation";
-import { useEffect } from "react";
 import { presentDone } from "./presentation";
-import { freeFailedRoute } from "../free/failure";
-import { isStartFailure } from "../live/presentation";
-import { ApiError } from "../../common/api/apiClient";
-import { fetchHome, queryKeys, useApiClient } from "../../common/api/queries";
-import { isTerminalStatus, type LiveView, type SessionStatus } from "../../common/api/types";
-import { BottomTabBar, type TabKey } from "../../common/components/BottomTabBar";
-import { useLivePolling } from "../live/useLivePolling";
-import { useResultStatusPolling } from "./useResultStatusPolling";
+import type { LiveView } from "../../common/api/types";
+import { BottomTabBar } from "../../common/components/BottomTabBar";
+import { useDoneScreen } from "./useDoneScreen";
 import { RESULT_TEMP_COPY as RESULT_COPY } from "@/shared/copy/result";
-import { PARENT_ROUTES, goToLogin, isUnauthenticated, routeForTab } from "../../common/navigation";
-import { COPY, PROPOSED_COPY, TEMP_COPY, doneTimeRangeLine } from "@/shared/copy/ko";
+import { COPY, PROPOSED_COPY, doneTimeRangeLine } from "@/shared/copy/ko";
 import { formatHhmm, minutesBetween } from "@/shared/copy/timeText";
-import { messageForErrorCode } from "@/shared/errors/codeToCopy";
-import { useToast } from "@/shared/toast/ToastProvider";
 
 // 17 활동 끝 (U1 3.5 Step 40 · BR6.10 · BR6.12 ③ ④ · BR6.15 · AC3.3.3 ~ AC3.3.7 · J120 · mockups 9-19, U4a · AC3.4.3 · AC3.6.1 ·
 // AC3.6.9 · AC3.6.10 · U4a-J13 ~ J16)
@@ -26,10 +15,7 @@ import { useToast } from "@/shared/toast/ToastProvider";
 //   서버 재시작 FAILED), activity/donePresentation.ts) + '기록을 정리하고 있어요'(정리 끝 · 실패는 U6) + 종료 확인 미확인 줄(AC3.4.3).
 // - 시간 줄 'hh:mm ~ hh:mm · n분', 「홈으로」. 「오늘 기록 보기」는 정리 상태(U6)와 27이 생길 때까지 감춘다(J120 · U4a-J14).
 // - 시작 실패 FAILED면 08 사유 카드(J120). 종료 상태를 받을 때까지 같은 주기로 다시 읽는다. 마무리 중엔 자유대화 · 연습 탭이 잠긴다.
-
-function keepPollingOnDone(status: SessionStatus): boolean {
-  return !isTerminalStatus(status);
-}
+// 폴링 · 오류 분기 · 이동은 useDoneScreen 훅이 맡는다(BR2.1, 단계 2).
 
 function timeRangeFor(view: LiveView | undefined): string | null {
   const from = formatHhmm(view?.startedAt);
@@ -44,52 +30,9 @@ export interface DoneScreenProps {
 }
 
 export function DoneScreen({ sessionId }: DoneScreenProps) {
-  const router = useRouter();
-  const toast = useToast();
-  const api = useApiClient();
-  const polling = useLivePolling(sessionId, { keepPolling: keepPollingOnDone });
-  // 아이 이름(아이가 끝냄 사유)은 04에서 받아 둔 홈 응답을 쓴다(17은 따로 부르지 않는다).
-  const homeCache = useQuery({ queryKey: queryKeys.home, queryFn: ({ signal }) => fetchHome(api, signal), enabled: false });
-  const childName = homeCache.data?.child?.displayName ?? null;
-  const { view, error, failureStreak, refetch } = polling;
-  const status = view?.status;
-  const startFailed = view !== undefined && isStartFailure(view);
-  const resultPolling = useResultStatusPolling(sessionId, status !== undefined && isTerminalStatus(status) && !startFailed);
-  const jobStatus = resultPolling.data?.jobStatus;
-  const failureCode = view?.failureCode ?? null;
-
-  useEffect(() => {
-    if (startFailed) {
-      router.replace(freeFailedRoute(failureCode));
-    }
-  }, [router, startFailed, failureCode]);
-
-  useEffect(() => {
-    if (isUnauthenticated(error)) {
-      goToLogin(router, toast);
-    } else if (error instanceof ApiError && error.status === 404) {
-      toast.show({ message: messageForErrorCode("NOT_FOUND"), kind: "error" });
-      router.replace(PARENT_ROUTES.home);
-    }
-  }, [error, router, toast]);
-
-  // 읽기 실패는 토스트 + 「다시 시도」(PD-12 표 2.9-A 17행). 폴링은 종료 상태를 받을 때까지 계속한다.
-  useEffect(() => {
-    if (failureStreak === 1 && !isUnauthenticated(error) && !(error instanceof ApiError && error.status === 404)) {
-      toast.show({
-        message: TEMP_COPY.networkError,
-        kind: "error",
-        action: { label: PROPOSED_COPY.retry, onPress: refetch },
-      });
-    }
-  }, [error, failureStreak, refetch, toast]);
-
+  const { view, status, childName, jobStatus, handleNavigate, onLockedPress, goToRecordDetail, goToHome } = useDoneScreen(sessionId);
   const presentation = presentDone(view, childName);
   const timeRange = timeRangeFor(view);
-
-  const handleNavigate = (tab: TabKey) => {
-    router.push(routeForTab(tab));
-  };
 
   return (
     <div className="mj-screen" data-testid="done-view" data-state={presentation.closing ? "CLOSING" : (status ?? "LOADING")}>
@@ -121,9 +64,9 @@ export function DoneScreen({ sessionId }: DoneScreenProps) {
             {jobStatus === "DONE" ? RESULT_COPY.done : jobStatus === "FAILED" ? RESULT_COPY.failed : RESULT_COPY.cleaning}
           </p>
         ) : null}
-        {jobStatus === "DONE" ? <button type="button" className="mj-button mj-button--block" data-testid="done-view-record" onClick={() => router.push(PARENT_ROUTES.recordDetail(sessionId))}>{RESULT_COPY.viewRecord}</button> : null}
-        {jobStatus === "FAILED" ? <button type="button" className="mj-button mj-button--block" data-testid="done-retry-in-record" onClick={() => router.push(PARENT_ROUTES.recordDetail(sessionId))}>{RESULT_COPY.retryInRecord}</button> : null}
-        <button type="button" className="mj-button mj-button--primary mj-button--block" data-testid="done-home" onClick={() => router.push(PARENT_ROUTES.home)}>
+        {jobStatus === "DONE" ? <button type="button" className="mj-button mj-button--block" data-testid="done-view-record" onClick={goToRecordDetail}>{RESULT_COPY.viewRecord}</button> : null}
+        {jobStatus === "FAILED" ? <button type="button" className="mj-button mj-button--block" data-testid="done-retry-in-record" onClick={goToRecordDetail}>{RESULT_COPY.retryInRecord}</button> : null}
+        <button type="button" className="mj-button mj-button--primary mj-button--block" data-testid="done-home" onClick={goToHome}>
           {COPY.done.home}
         </button>
       </main>
@@ -131,7 +74,7 @@ export function DoneScreen({ sessionId }: DoneScreenProps) {
         active="free"
         lockMessage={presentation.closing ? PROPOSED_COPY.closingTabToast : null}
         onNavigate={handleNavigate}
-        onLockedPress={(message) => toast.show({ message })}
+        onLockedPress={onLockedPress}
       />
     </div>
   );
