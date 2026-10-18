@@ -2,12 +2,12 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
-import { useStopExpressionsQuery } from "../api/account";
-import { ApiError } from "../api/apiClient";
-import { useHomeQuery } from "../api/queries";
-import type { DeviceView } from "../api/types";
-import { BottomTabBar, type TabKey } from "../components/BottomTabBar";
-import { PARENT_ROUTES, goToLogin, isUnauthenticated, lockToastMessage, routeForTab } from "../navigation";
+import { useStopExpressionsQuery } from "../../api/account";
+import { ApiError } from "../../api/apiClient";
+import { useHomeQuery } from "../../api/queries";
+import type { DeviceView } from "../../api/types";
+import { BottomTabBar, type TabKey } from "../../components/BottomTabBar";
+import { PARENT_ROUTES, goToLogin, isUnauthenticated, lockToastMessage, routeForTab } from "../../navigation";
 import {
   ACCOUNT_COPY,
   ACCOUNT_PROPOSED_COPY,
@@ -47,7 +47,7 @@ function hhmm(iso: string | null): string | null {
 }
 
 /** DeviceView → 05 표시 값(AC2.1.1 ~ AC2.1.6). */
-export function presentDevice05(device: DeviceView): DevicePresentation {
+export function presentDeviceScreen(device: DeviceView): DevicePresentation {
   const { registration, network } = device;
   if (registration.status === "NONE" || network.state === "NONE") {
     return {
@@ -125,7 +125,7 @@ const TONE_ICON: Readonly<Record<Tone, string>> = {
   none: "–",
 };
 
-export function Device05() {
+export function DeviceScreen() {
   const router = useRouter();
   const toast = useToast();
   const home = useHomeQuery();
@@ -144,7 +144,7 @@ export function Device05() {
   }, [error, errorUpdatedAt, refetch, router, toast]);
 
   const data = home.data;
-  const view = data === undefined ? null : presentDevice05(data.device);
+  const view = data === undefined ? null : presentDeviceScreen(data.device);
   const lockMessage = data === undefined ? TEMP_COPY.lockToastStatusUnknown : data.lock.locked ? lockToastMessage(data.lock.reasonCode) : null;
   const lastChecked = data === undefined ? null : hhmm(data.device.network.lastReportedAt ?? data.device.network.lastSeenAt);
   const childName = data?.child?.displayName ?? null;

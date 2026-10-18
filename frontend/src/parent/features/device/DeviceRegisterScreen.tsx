@@ -3,10 +3,10 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useId, useRef, useState } from "react";
-import { ApiError } from "../api/apiClient";
-import { queryKeys, registerDevice, useApiClient } from "../api/queries";
-import { CodeInput, emptyCodeCells, isCodeComplete } from "../components/CodeInput";
-import { PARENT_ROUTES, goToLogin } from "../navigation";
+import { ApiError } from "../../api/apiClient";
+import { queryKeys, registerDevice, useApiClient } from "../../api/queries";
+import { CodeInput, emptyCodeCells, isCodeComplete } from "../../components/CodeInput";
+import { PARENT_ROUTES, goToLogin } from "../../navigation";
 import { COPY, PROPOSED_COPY, TEMP_COPY } from "@/shared/copy/ko";
 import { messageForErrorCode } from "@/shared/errors/codeToCopy";
 import { useToast } from "@/shared/toast/ToastProvider";
@@ -33,7 +33,7 @@ function errorCardFor(error: ApiError): string | null {
   }
 }
 
-export function Register05a() {
+export function DeviceRegisterScreen() {
   const router = useRouter();
   const toast = useToast();
   const api = useApiClient();

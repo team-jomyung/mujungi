@@ -13,12 +13,12 @@
     "frontend/src/parent/components/SettingsSheet.tsx",
     "frontend/src/parent/hooks/useBackGuard.ts",
     "frontend/src/parent/oauth.ts",
-    "frontend/src/parent/screens/Child03.tsx",
-    "frontend/src/parent/screens/Consent02.tsx",
-    "frontend/src/parent/screens/Device05.tsx",
-    "frontend/src/parent/screens/Login01.tsx",
-    "frontend/src/parent/screens/LoginCallback.tsx",
-    "frontend/src/parent/screens/StopExpressions01.tsx",
+    "frontend/src/parent/features/child/ChildScreen.tsx",
+    "frontend/src/parent/features/consent/ConsentScreen.tsx",
+    "frontend/src/parent/features/device/DeviceScreen.tsx",
+    "frontend/src/parent/features/login/LoginScreen.tsx",
+    "frontend/src/parent/features/login/LoginCallbackScreen.tsx",
+    "frontend/src/parent/features/child/StopExpressionsScreen.tsx",
     "frontend/src/shared/copy/account.ts"
   ]
 }

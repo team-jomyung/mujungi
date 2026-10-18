@@ -3,20 +3,20 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { freeFailedRoute } from "../activity/freeFailure";
-import { liveOutcome, showsPauseLine, silentMinutes } from "../activity/livePresentation";
-import { ApiError } from "../api/apiClient";
-import { endSession, fetchHome, fetchLiveView, mergeLiveView, queryKeys, useApiClient } from "../api/queries";
-import { isTerminalStatus, type LiveView, type SessionStatus } from "../api/types";
-import { BottomTabBar, type TabKey } from "../components/BottomTabBar";
-import { ConfirmDialog } from "../components/ConfirmDialog";
-import { NoticeDialog } from "../components/NoticeDialog";
-import { StatusLine } from "../components/StatusLine";
-import { TranscriptList } from "../components/TranscriptList";
-import { useLivePolling } from "../hooks/useLivePolling";
-import { PARENT_ROUTES, goToLogin, isUnauthenticated, routeForTab } from "../navigation";
-import { PracticeHeader } from "../practice/PracticeHeader";
-import { U5B_COPY } from "../practice/u5bCopy";
+import { freeFailedRoute } from "../../activity/freeFailure";
+import { liveOutcome, showsPauseLine, silentMinutes } from "../../activity/livePresentation";
+import { ApiError } from "../../api/apiClient";
+import { endSession, fetchHome, fetchLiveView, mergeLiveView, queryKeys, useApiClient } from "../../api/queries";
+import { isTerminalStatus, type LiveView, type SessionStatus } from "../../api/types";
+import { BottomTabBar, type TabKey } from "../../components/BottomTabBar";
+import { ConfirmDialog } from "../../components/ConfirmDialog";
+import { NoticeDialog } from "../../components/NoticeDialog";
+import { StatusLine } from "../../components/StatusLine";
+import { TranscriptList } from "../../components/TranscriptList";
+import { useLivePolling } from "../../hooks/useLivePolling";
+import { PARENT_ROUTES, goToLogin, isUnauthenticated, routeForTab } from "../../navigation";
+import { PracticeHeader } from "../../practice/PracticeHeader";
+import { U5B_COPY } from "../../practice/u5bCopy";
 import {
   COPY,
   PROPOSED_COPY,
@@ -72,11 +72,11 @@ function elapsedLineFor(view: LiveView | undefined): string | null {
   return start === null || ordinal === null ? null : liveElapsedLine(start, ordinal);
 }
 
-export interface Live12Props {
+export interface LiveScreenProps {
   readonly sessionId: string;
 }
 
-export function Live12({ sessionId }: Live12Props) {
+export function LiveScreen({ sessionId }: LiveScreenProps) {
   const router = useRouter();
   const toast = useToast();
   const api = useApiClient();

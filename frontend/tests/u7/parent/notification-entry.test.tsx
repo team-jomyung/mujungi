@@ -1,6 +1,6 @@
 import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { Home04 } from "@/parent/screens/Home04";
+import { HomeScreen } from "@/parent/features/home/HomeScreen";
 import { SESSION_ID, errorResponse, homeBody, jsonResponse, liveViewBody } from "../../u1/support/fixtures";
 import { meBody } from "../../u2/support/accountFixtures";
 import { renderParent, type RequestHandler } from "../../u1/support/parentHarness";
@@ -9,7 +9,7 @@ import { resetRouter, router } from "../../u1/support/nextNavigation";
 vi.mock("next/navigation", async () => (await import("../../u1/support/nextNavigation")).nextNavigationMock);
 
 function renderEntry(session: RequestHandler, options: { me?: ReturnType<typeof meBody>; home?: ReturnType<typeof homeBody> } = {}) {
-  return renderParent(<Home04 />, { handler: (path, init) => {
+  return renderParent(<HomeScreen />, { handler: (path, init) => {
     if (path === "/api/home") return jsonResponse(200, options.home ?? homeBody("STABLE"));
     if (path === "/api/me") return jsonResponse(200, options.me ?? meBody());
     return session(path, init);
@@ -90,7 +90,7 @@ describe("U7 알림 sessionId 재조회", () => {
   ])("캐시 %s 대신 새 %s 조회가 끝난 뒤 이동한다", async (cached, current, suffix, oldSuffix) => {
     let resolveSession!: (value: Response) => void;
     const response = new Promise<Response>((resolve) => { resolveSession = resolve; });
-    const harness = renderParent(<Home04 />, {
+    const harness = renderParent(<HomeScreen />, {
       prepare: (client) => client.setQueryData(["notification-entry", SESSION_ID], liveViewBody(cached)),
       handler: (path) => path === "/api/home" ? jsonResponse(200, homeBody("STABLE"))
         : path === "/api/me" ? jsonResponse(200, meBody()) : response,
@@ -103,7 +103,7 @@ describe("U7 알림 sessionId 재조회", () => {
   });
 
   it("캐시가 있어도 새 조회가 실패하면 이동하지 않고 미확인으로 남긴다", async () => {
-    renderParent(<Home04 />, {
+    renderParent(<HomeScreen />, {
       prepare: (client) => client.setQueryData(["notification-entry", SESSION_ID], liveViewBody("ACTIVE")),
       handler: (path) => path === "/api/home" ? jsonResponse(200, homeBody("STABLE"))
         : path === "/api/me" ? jsonResponse(200, meBody()) : errorResponse(500, "INTERNAL_ERROR"),
@@ -113,7 +113,7 @@ describe("U7 알림 sessionId 재조회", () => {
   });
 
   it("계정 확인 401은 세션을 조회하지 않고 로그인으로 보낸다", async () => {
-    const harness = renderParent(<Home04 />, { handler: (path) => path === "/api/home"
+    const harness = renderParent(<HomeScreen />, { handler: (path) => path === "/api/home"
       ? jsonResponse(200, homeBody("STABLE")) : errorResponse(401, "UNAUTHENTICATED") });
     await waitFor(() => expect(router.replace).toHaveBeenCalledWith("/parent/login"));
     expect(harness.requests("/api/sessions/" + SESSION_ID)).toHaveLength(0);

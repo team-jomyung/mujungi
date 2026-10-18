@@ -3,10 +3,10 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
-import { accountQueryKeys, saveStopExpressions, useStopExpressionsQuery } from "../api/account";
-import { ApiError } from "../api/apiClient";
-import { useApiClient, useHomeQuery } from "../api/queries";
-import { PARENT_ROUTES, goToLogin, isUnauthenticated } from "../navigation";
+import { accountQueryKeys, saveStopExpressions, useStopExpressionsQuery } from "../../api/account";
+import { ApiError } from "../../api/apiClient";
+import { useApiClient, useHomeQuery } from "../../api/queries";
+import { PARENT_ROUTES, goToLogin, isUnauthenticated } from "../../navigation";
 import { ACCOUNT_COPY, ACCOUNT_PROPOSED_COPY, ACCOUNT_TEMP_COPY, quoted, stopSectionTitle } from "@/shared/copy/account";
 import { COPY, PROPOSED_COPY, TEMP_COPY } from "@/shared/copy/ko";
 import { useToast } from "@/shared/toast/ToastProvider";
@@ -64,7 +64,7 @@ interface Draft {
   readonly error: string | null;
 }
 
-export function StopExpressions01() {
+export function StopExpressionsScreen() {
   const router = useRouter();
   const toast = useToast();
   const queryClient = useQueryClient();

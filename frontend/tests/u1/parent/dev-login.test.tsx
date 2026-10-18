@@ -1,6 +1,6 @@
 import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { DevLogin } from "@/parent/screens/DevLogin";
+import { DevLoginScreen } from "@/parent/features/login/DevLoginScreen";
 import { deferred, errorResponse, homeBody, jsonResponse } from "../support/fixtures";
 import { resetRouter, router } from "../support/nextNavigation";
 import { renderParent } from "../support/parentHarness";
@@ -19,7 +19,7 @@ beforeEach(() => {
 
 describe("시험 로그인(AC1.1.7)", () => {
   it("누르면 CSRF 없이 POST /api/dev/login → 세션이 바뀌어 CSRF를 다시 받고 조회 캐시를 버린 뒤 04로 간다", async () => {
-    const harness = renderParent(<DevLogin />, { handler: () => jsonResponse(200, GUARDIAN) });
+    const harness = renderParent(<DevLoginScreen />, { handler: () => jsonResponse(200, GUARDIAN) });
     harness.queryClient.setQueryData(["home"], homeBody("STABLE"));
     await waitFor(() => expect(harness.requests("/api/session/csrf")).toHaveLength(1));
     fireEvent.click(screen.getByTestId("dev-login-submit"));
@@ -34,7 +34,7 @@ describe("시험 로그인(AC1.1.7)", () => {
 
   it("입력란 없이 단추 하나이고 요청 중에는 꺼져 두 번 보내지 않는다", async () => {
     const pending = deferred<Response>();
-    const harness = renderParent(<DevLogin />, { handler: () => pending.promise });
+    const harness = renderParent(<DevLoginScreen />, { handler: () => pending.promise });
     expect(screen.queryAllByRole("textbox")).toHaveLength(0);
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("시험 로그인");
     fireEvent.click(screen.getByTestId("dev-login-submit"));
@@ -48,7 +48,7 @@ describe("시험 로그인(AC1.1.7)", () => {
 
 describe("시험 로그인 — 거절", () => {
   it("서버가 404(시험 로그인 꺼짐)면 '시험 로그인을 쓸 수 없어요'를 보이고 이동하지 않는다", async () => {
-    renderParent(<DevLogin />, { handler: () => errorResponse(404, "NOT_FOUND") });
+    renderParent(<DevLoginScreen />, { handler: () => errorResponse(404, "NOT_FOUND") });
     fireEvent.click(screen.getByTestId("dev-login-submit"));
     const error = await screen.findByTestId("dev-login-error");
     expect(error).toHaveTextContent("시험 로그인을 쓸 수 없어요");
@@ -59,7 +59,7 @@ describe("시험 로그인 — 거절", () => {
 
   it("그 밖의 오류는 code 문장, 망 오류는 일반 문장이다", async () => {
     let calls = 0;
-    renderParent(<DevLogin />, {
+    renderParent(<DevLoginScreen />, {
       handler: () => {
         calls += 1;
         if (calls === 1) {
@@ -77,7 +77,7 @@ describe("시험 로그인 — 거절", () => {
   it("오류 뒤 다시 누르면 앞 오류 문구를 지우고, 성공하면 04로 간다", async () => {
     let calls = 0;
     const second = deferred<Response>();
-    const harness = renderParent(<DevLogin />, {
+    const harness = renderParent(<DevLoginScreen />, {
       handler: () => {
         calls += 1;
         return calls === 1 ? errorResponse(503, "SERVICE_NOT_READY") : second.promise;
@@ -95,7 +95,7 @@ describe("시험 로그인 — 거절", () => {
 
   it("로그인 직후 CSRF 다시 받기가 실패해도 04로 간다(SD-6 단계 1, 다음 변경 요청 앞에서 다시 받음)", async () => {
     let csrfCalls = 0;
-    const harness = renderParent(<DevLogin />, {
+    const harness = renderParent(<DevLoginScreen />, {
       handler: () => jsonResponse(200, GUARDIAN),
       csrfHandler: () => {
         csrfCalls += 1;

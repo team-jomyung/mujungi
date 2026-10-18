@@ -2,15 +2,15 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { previewReport, createReport } from "../api/reports";
-import { useApiClient } from "../api/queries";
-import { useReportPolling } from "../hooks/useReportPolling";
-import { MonthCalendar, addDays, seoulDate, shortDate, validDate } from "../components/MonthCalendar";
-import { LiveRegion } from "../components/LiveRegion";
-import { PARENT_ROUTES } from "../navigation";
+import { previewReport, createReport } from "../../api/reports";
+import { useApiClient } from "../../api/queries";
+import { useReportPolling } from "../../hooks/useReportPolling";
+import { MonthCalendar, addDays, seoulDate, shortDate, validDate } from "../../components/MonthCalendar";
+import { LiveRegion } from "../../components/LiveRegion";
+import { PARENT_ROUTES } from "../../navigation";
 import { RESULT_TEMP_COPY as C } from "@/shared/copy/result";
 type Mode = "RANGE" | "GENERATING" | "FAILED";
-export function ReportRange28() {
+export function ReportRangeScreen() {
   const api = useApiClient(), router = useRouter(), params = useSearchParams(), today = seoulDate();
   const initialFrom = params.get("from"), initialTo = params.get("to");
   const [range, setRange] = useState(() => { const restored = validDate(initialFrom) && validDate(initialTo) && initialFrom <= initialTo && initialTo <= today; return { from: restored ? initialFrom : addDays(today, -13), to: restored ? initialTo : today }; });

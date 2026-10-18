@@ -2,14 +2,14 @@
 import { useQuery } from "@tanstack/react-query";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
-import { fetchRecordDays, fetchRecords } from "../api/results";
-import { useApiClient } from "../api/queries";
-import { BottomTabBar } from "../components/BottomTabBar";
-import { MonthCalendar, dateLabel, seoulDate, validDate } from "../components/MonthCalendar";
-import { PARENT_ROUTES, routeForTab } from "../navigation";
+import { fetchRecordDays, fetchRecords } from "../../api/results";
+import { useApiClient } from "../../api/queries";
+import { BottomTabBar } from "../../components/BottomTabBar";
+import { MonthCalendar, dateLabel, seoulDate, validDate } from "../../components/MonthCalendar";
+import { PARENT_ROUTES, routeForTab } from "../../navigation";
 import { formatHhmm, minutesBetween } from "@/shared/copy/timeText";
 import { RESULT_TEMP_COPY as C, durationLabel } from "@/shared/copy/result";
-export function Records26() {
+export function RecordsScreen() {
   const router = useRouter(), params = useSearchParams(), api = useApiClient(), today = seoulDate();
   const initial = params.get("date"); const [selected, setSelected] = useState(validDate(initial) && initial <= today ? initial : today); const [month, setMonth] = useState(selected.slice(0, 7));
   const days = useQuery({ queryKey: ["record-days", month], queryFn: ({ signal }) => fetchRecordDays(api, month, signal) });

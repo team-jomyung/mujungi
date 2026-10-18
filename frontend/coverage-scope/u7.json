@@ -6,7 +6,7 @@
     "frontend/src/parent/push/useNotificationEntry.ts",
     "frontend/src/parent/components/PushSettingsRow.tsx",
     "frontend/src/parent/components/SettingsSheet.tsx",
-    "frontend/src/parent/screens/Home04.tsx",
+    "frontend/src/parent/features/home/HomeScreen.tsx",
     "frontend/src/app/parent/push-worker/route.ts",
     "frontend/src/shared/copy/ko.ts",
     "frontend/src/shared/errors/codeToCopy.ts"

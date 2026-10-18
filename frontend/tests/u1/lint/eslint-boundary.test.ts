@@ -22,7 +22,7 @@ beforeAll(() => {
 describe("영역 경계(PD-15 · NFR11.1)", () => {
   it.each([
     ["src/parent/__sample__.tsx", 'import { DeviceApp } from "@/device/DeviceApp";\nexport const sample = DeviceApp;\n'],
-    ["src/parent/screens/__sample__.tsx", 'import { connectWsClient } from "../../device/ws/wsClient";\nexport const sample = connectWsClient;\n'],
+    ["src/parent/features/home/__sample__.tsx", 'import { connectWsClient } from "../../../device/ws/wsClient";\nexport const sample = connectWsClient;\n'],
     ["src/app/parent/__sample__.tsx", 'import DevicePage from "@/app/device/page";\nexport const sample = DevicePage;\n'],
   ])("보호자 영역(%s)이 기기 영역을 import하면 lint가 실패한다", async (filePath, code) => {
     const rules = await rulesFor(filePath, code);
@@ -32,7 +32,7 @@ describe("영역 경계(PD-15 · NFR11.1)", () => {
 
   it.each([
     ["src/device/__sample__.ts", 'import { createApiClient } from "@/parent/api/apiClient";\nexport const sample = createApiClient;\n'],
-    ["src/app/device/__sample__.tsx", 'import { Home04 } from "../../parent/screens/Home04";\nexport const sample = Home04;\n'],
+    ["src/app/device/__sample__.tsx", 'import { HomeScreen } from "../../parent/features/home/HomeScreen";\nexport const sample = HomeScreen;\n'],
   ])("기기 영역(%s)이 보호자 영역을 import하면 lint가 실패한다", async (filePath, code) => {
     const rules = await rulesFor(filePath, code);
     expect(rules).toContain("no-restricted-imports");

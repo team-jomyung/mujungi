@@ -3,7 +3,7 @@
   "unit": "u5a",
   "files": [
     "frontend/src/app/parent/practice/page.tsx",
-    "frontend/src/parent/screens/Practice18.tsx",
+    "frontend/src/parent/features/practice/PracticeScreen.tsx",
     "frontend/src/parent/practice/api.ts",
     "frontend/src/parent/practice/copy.ts",
     "frontend/src/parent/practice/usePracticeGoals.ts",

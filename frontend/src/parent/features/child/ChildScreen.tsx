@@ -3,12 +3,12 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useState } from "react";
-import { accountQueryKeys, registerChild, updateChild, useChildQuery, type Child } from "../api/account";
-import { ApiError } from "../api/apiClient";
-import { queryKeys, useApiClient, useHomeQuery } from "../api/queries";
-import type { DeviceView } from "../api/types";
-import { useBackGuard } from "../hooks/useBackGuard";
-import { PARENT_ROUTES, goToLogin, isUnauthenticated } from "../navigation";
+import { accountQueryKeys, registerChild, updateChild, useChildQuery, type Child } from "../../api/account";
+import { ApiError } from "../../api/apiClient";
+import { queryKeys, useApiClient, useHomeQuery } from "../../api/queries";
+import type { DeviceView } from "../../api/types";
+import { useBackGuard } from "../../hooks/useBackGuard";
+import { PARENT_ROUTES, goToLogin, isUnauthenticated } from "../../navigation";
 import {
   ACCOUNT_COPY,
   ACCOUNT_PROPOSED_COPY,
@@ -83,7 +83,7 @@ function valuesOf(child: Child | null): FormValues {
     : { name: child.displayName, age: String(child.age), interests: child.interests.join(", ") };
 }
 
-export function Child03() {
+export function ChildScreen() {
   const router = useRouter();
   const toast = useToast();
   const api = useApiClient();

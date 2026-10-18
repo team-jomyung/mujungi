@@ -1,7 +1,7 @@
 import { onlineManager } from "@tanstack/react-query";
 import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { Done17 } from "@/parent/screens/Done17";
+import { DoneScreen } from "@/parent/features/done/DoneScreen";
 import { SESSION_ID, errorResponse, jsonResponse, liveViewBody } from "../support/fixtures";
 import { resetRouter, router } from "../support/nextNavigation";
 import { renderParent, type ParentHarness } from "../support/parentHarness";
@@ -17,7 +17,7 @@ const ENDED_AT = "2026-10-15T01:21:00Z"; // 10:21
 
 function renderDone(read: (index: number) => Response | Promise<Response>): ParentHarness {
   let index = 0;
-  return renderParent(<Done17 sessionId={SESSION_ID} />, {
+  return renderParent(<DoneScreen sessionId={SESSION_ID} />, {
     timing: { parentPollIntervalMs: POLL_MS },
     handler: () => {
       index += 1;
@@ -107,7 +107,7 @@ describe("17 — 종료 사유 3종(AC3.3.6 · AC3.3.7 · C.S-17.58 · C.S-17.71
   });
 
   it("정리 끝(DONE)에서 「오늘 기록 보기」를 보이고 「홈으로」는 04로 간다(U6)", async () => {
-    renderParent(<Done17 sessionId={SESSION_ID} />, { handler: path => jsonResponse(200, path.endsWith("/result/status") ? { jobStatus: "DONE", sessionStatus: "ENDED", confirmed: true } : liveViewBody("ENDED", { endReason: "GUARDIAN_STOP", endedAt: ENDED_AT })) });
+    renderParent(<DoneScreen sessionId={SESSION_ID} />, { handler: path => jsonResponse(200, path.endsWith("/result/status") ? { jobStatus: "DONE", sessionStatus: "ENDED", confirmed: true } : liveViewBody("ENDED", { endReason: "GUARDIAN_STOP", endedAt: ENDED_AT })) });
     await screen.findByText("보호자가 끝냈어요");
     expect(await screen.findByTestId("done-view-record")).toHaveTextContent("오늘 기록 보기");
     fireEvent.click(screen.getByTestId("done-home"));

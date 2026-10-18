@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { PARENT_ROUTES } from "../navigation";
+import { PARENT_ROUTES } from "../../navigation";
 import { ACCOUNT_COPY, ACCOUNT_PROPOSED_COPY, ACCOUNT_TEMP_COPY } from "@/shared/copy/account";
 import { useToast } from "@/shared/toast/ToastProvider";
 
@@ -10,7 +10,7 @@ import { useToast } from "@/shared/toast/ToastProvider";
 // 같은 origin의 /parent/login/google(서버가 OAuth state 쿠키를 두고 구글로 보냄)로 이동한다. 돌아와 실패했으면 ?failed=1로 토스트,
 // 계정 삭제 처리 중이면 ?deleting=1로 안내 카드만 보인다.
 
-export interface Login01Props {
+export interface LoginScreenProps {
   readonly failed?: boolean;
   readonly deleting?: boolean;
   /** 시험 대역용(기본 window.location.assign). */
@@ -21,7 +21,7 @@ function assign(href: string): void {
   window.location.assign(href);
 }
 
-export function Login01({ failed = false, deleting = false, navigate = assign }: Login01Props) {
+export function LoginScreen({ failed = false, deleting = false, navigate = assign }: LoginScreenProps) {
   const toast = useToast();
   const [busy, setBusy] = useState(false);
   const shownRef = useRef(false);

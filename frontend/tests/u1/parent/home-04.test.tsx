@@ -1,7 +1,7 @@
 import { onlineManager } from "@tanstack/react-query";
 import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { Home04 } from "@/parent/screens/Home04";
+import { HomeScreen } from "@/parent/features/home/HomeScreen";
 import { errorResponse, homeBody, jsonResponse, type NetworkState } from "../support/fixtures";
 import { resetRouter, router } from "../support/nextNavigation";
 import { renderParent } from "../support/parentHarness";
@@ -13,7 +13,7 @@ vi.mock("next/navigation", async () => (await import("../support/nextNavigation"
 // 잠긴 탭은 aria-disabled + 이유 토스트(mockups 9-6) 뒤 05(U1 스텁 → 04). 진입 때 1회 조회.
 
 function renderHome(body: Record<string, unknown>) {
-  return renderParent(<Home04 />, { handler: () => jsonResponse(200, body) });
+  return renderParent(<HomeScreen />, { handler: () => jsonResponse(200, body) });
 }
 
 beforeEach(() => {
@@ -118,7 +118,7 @@ describe("04 하단 탭 — 잠금(BR4.5 · J57 · AC1.4.9 · AC1.4.11 · AC1.4.
   });
 
   it("홈을 아직 못 읽었으면 판정을 모르므로 잠근다(닫힌 쪽) · 자리 카드를 보인다", async () => {
-    renderParent(<Home04 />, { handler: () => new Promise<Response>(() => undefined) });
+    renderParent(<HomeScreen />, { handler: () => new Promise<Response>(() => undefined) });
     expect(screen.getByTestId("home-device-loading")).toHaveAttribute("aria-busy", "true");
     expect(screen.getByTestId("tab-free")).toHaveAttribute("aria-disabled", "true");
     fireEvent.click(screen.getByTestId("tab-practice"));
@@ -136,7 +136,7 @@ describe("04 조회(PD-12)", () => {
 
   it("실패하면 토스트 + 「다시 시도」이고 다시 시도하면 다시 읽는다", async () => {
     let calls = 0;
-    renderParent(<Home04 />, {
+    renderParent(<HomeScreen />, {
       handler: (path) => {
         // U2: 04는 앱 시작 점검으로 /api/me도 읽는다 — 홈 조회 횟수만 센다
         if (path !== "/api/home") {
@@ -153,7 +153,7 @@ describe("04 조회(PD-12)", () => {
   });
 
   it("401이면 안내 토스트 뒤 01로 보낸다(AC1.1.9, U2가 01을 만들어 시험 로그인 대신)", async () => {
-    renderParent(<Home04 />, { handler: () => errorResponse(401, "UNAUTHENTICATED") });
+    renderParent(<HomeScreen />, { handler: () => errorResponse(401, "UNAUTHENTICATED") });
     await waitFor(() => expect(router.replace).toHaveBeenCalledWith("/parent/login"));
     expect(screen.getByTestId("toast")).toHaveTextContent("로그인이 필요해요.");
     expect(router.replace).not.toHaveBeenCalledWith("/parent/dev-login");
@@ -163,7 +163,7 @@ describe("04 조회(PD-12)", () => {
     // 같은 앱 안에서 이미 offline 사건을 받은 상태(보호자 영역의 QueryClient는 화면 이동 뒤에도 같다).
     onlineManager.setOnline(false);
     let online = false;
-    const harness = renderParent(<Home04 />, {
+    const harness = renderParent(<HomeScreen />, {
       handler: () => {
         if (!online) {
           throw new TypeError("Failed to fetch");

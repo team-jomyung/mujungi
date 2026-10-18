@@ -2,12 +2,12 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { useState } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { BottomSheet } from "@/parent/components/BottomSheet";
-import { Child03 } from "@/parent/screens/Child03";
-import { Consent02 } from "@/parent/screens/Consent02";
-import { Device05 } from "@/parent/screens/Device05";
-import { Home04 } from "@/parent/screens/Home04";
-import { Login01 } from "@/parent/screens/Login01";
-import { StopExpressions01 } from "@/parent/screens/StopExpressions01";
+import { ChildScreen } from "@/parent/features/child/ChildScreen";
+import { ConsentScreen } from "@/parent/features/consent/ConsentScreen";
+import { DeviceScreen } from "@/parent/features/device/DeviceScreen";
+import { HomeScreen } from "@/parent/features/home/HomeScreen";
+import { LoginScreen } from "@/parent/features/login/LoginScreen";
+import { StopExpressionsScreen } from "@/parent/features/child/StopExpressionsScreen";
 import {
   ACCOUNT_COPY,
   ACCOUNT_PROPOSED_COPY,
@@ -74,11 +74,11 @@ beforeEach(() => {
 
 describe("data-testid 규칙 — U2 화면", () => {
   it("01 · 02(+02-1 · P5) · 03(보기 · 수정) · 04(+SET0 · P7) · 05 · SET-01(입력 칸)", async () => {
-    const login = renderParent(<Login01 navigate={vi.fn()} />, { handler: allOk });
+    const login = renderParent(<LoginScreen navigate={vi.fn()} />, { handler: allOk });
     expectTestIdRule();
     login.view.unmount();
 
-    const consent = renderParent(<Consent02 />, { handler: allOk });
+    const consent = renderParent(<ConsentScreen />, { handler: allOk });
     await waitFor(() => expect(screen.getByTestId("consent-detail-voice")).toBeEnabled());
     fireEvent.click(screen.getByTestId("consent-detail-voice"));
     expectTestIdRule();
@@ -87,12 +87,12 @@ describe("data-testid 규칙 — U2 화면", () => {
     expectTestIdRule();
     consent.view.unmount();
 
-    const child = renderParent(<Child03 />, { handler: allOk });
+    const child = renderParent(<ChildScreen />, { handler: allOk });
     fireEvent.click(await screen.findByTestId("child-edit"));
     expectTestIdRule();
     child.view.unmount();
 
-    const home = renderParent(<Home04 />, { handler: allOk });
+    const home = renderParent(<HomeScreen />, { handler: allOk });
     await screen.findByTestId("home-child-card");
     expectTestIdRule();
     fireEvent.click(screen.getByTestId("home-settings"));
@@ -101,12 +101,12 @@ describe("data-testid 규칙 — U2 화면", () => {
     expectTestIdRule();
     home.view.unmount();
 
-    const device = renderParent(<Device05 />, { handler: allOk });
+    const device = renderParent(<DeviceScreen />, { handler: allOk });
     await screen.findByTestId("device-stop-summary");
     expectTestIdRule();
     device.view.unmount();
 
-    renderParent(<StopExpressions01 />, { handler: allOk });
+    renderParent(<StopExpressionsScreen />, { handler: allOk });
     fireEvent.click(await screen.findByTestId("stop-item-edit-1"));
     expectTestIdRule();
   });

@@ -1,6 +1,6 @@
 import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { Home04 } from "@/parent/screens/Home04";
+import { HomeScreen } from "@/parent/features/home/HomeScreen";
 import { errorResponse, homeBody, jsonResponse, type NetworkState } from "../../u1/support/fixtures";
 import { resetRouter, router } from "../../u1/support/nextNavigation";
 import { renderParent, type RequestHandler } from "../../u1/support/parentHarness";
@@ -39,7 +39,7 @@ beforeEach(() => {
 
 describe("04 아이 구역(AC1.4.1)", () => {
   it("'아이' · '하늘 · 8세' · 「수정」 → 03", async () => {
-    renderParent(<Home04 />, { handler: handler("STABLE") });
+    renderParent(<HomeScreen />, { handler: handler("STABLE") });
     const card = await screen.findByTestId("home-child-card");
     expect(card).toHaveTextContent("아이");
     expect(card).toHaveTextContent("하늘 · 8세");
@@ -48,7 +48,7 @@ describe("04 아이 구역(AC1.4.1)", () => {
   });
 
   it("아이가 없으면 아이 구역을 그리지 않는다", async () => {
-    renderParent(<Home04 />, { handler: handler("STABLE", { "GET /api/home": () => jsonResponse(200, homeBody("STABLE", { childName: null })) }) });
+    renderParent(<HomeScreen />, { handler: handler("STABLE", { "GET /api/home": () => jsonResponse(200, homeBody("STABLE", { childName: null })) }) });
     await screen.findByTestId("home-device-card");
     expect(screen.queryByTestId("home-child-card")).toBeNull();
   });
@@ -63,7 +63,7 @@ describe("04 지금 활동 구역(틀, AC1.4.6 · AC1.4.14 · J18)", () => {
     ["UNRESPONSIVE", "지금은 시작할 수 없어요", "기기가 응답하지 않아요. 기기를 다시 켜 보세요."],
     ["UNKNOWN", "지금은 시작할 수 없어요", "기기 상태를 확인할 수 없어 시작할 수 없어요"],
   ])("기기 %s → '%s' + 사유", async (state, status, reason) => {
-    renderParent(<Home04 />, { handler: handler(state) });
+    renderParent(<HomeScreen />, { handler: handler(state) });
     const card = await screen.findByTestId("home-activity-card");
     expect(card).toHaveTextContent("지금 활동");
     expect(screen.getByTestId("home-activity-status")).toHaveTextContent(status);
@@ -81,13 +81,13 @@ describe("04 앱 시작 점검(U2-J9 · AC1.1.5 · AC1.2.7 · AC1.6.4 · U2-J8 �
     [{ consentStatus: "OUTDATED", childRegistered: false }, "/parent/consent"],
     [{ deletionStatus: "IN_PROGRESS" }, "/parent/login?deleting=1"],
   ])("Me %j이면 %s", async (options, route) => {
-    renderParent(<Home04 />, { handler: handler("STABLE", { "GET /api/me": () => jsonResponse(200, meBody(options)) }) });
+    renderParent(<HomeScreen />, { handler: handler("STABLE", { "GET /api/me": () => jsonResponse(200, meBody(options)) }) });
     await waitFor(() => expect(router.replace).toHaveBeenCalledWith(route));
     expect(router.replace).toHaveBeenCalledTimes(1);
   });
 
   it("처음 한 번을 마쳤으면 머문다", async () => {
-    const harness = renderParent(<Home04 />, { handler: handler("STABLE") });
+    const harness = renderParent(<HomeScreen />, { handler: handler("STABLE") });
     await screen.findByTestId("home-child-card");
     await waitFor(() => expect(harness.requests("/api/me")).toHaveLength(1));
     await new Promise((resolve) => setTimeout(resolve, 20));
@@ -97,7 +97,7 @@ describe("04 앱 시작 점검(U2-J9 · AC1.1.5 · AC1.2.7 · AC1.6.4 · U2-J8 �
 
 describe("SET0 설정 시트(AC1.4.12 · AC1.5.1 ~ AC1.5.4)", () => {
   async function openSettings(overrides: Partial<Record<string, RequestHandler>> = {}) {
-    const harness = renderParent(<Home04 />, { handler: handler("STABLE", overrides) });
+    const harness = renderParent(<HomeScreen />, { handler: handler("STABLE", overrides) });
     await screen.findByTestId("home-child-card");
     fireEvent.click(screen.getByTestId("home-settings"));
     return harness;
@@ -146,7 +146,7 @@ describe("SET0 설정 시트(AC1.4.12 · AC1.5.1 ~ AC1.5.4)", () => {
 
 describe("P7 계정 삭제 확인(AC1.6.1 · AC1.6.2 · AC1.6.9)", () => {
   async function openP7(overrides: Partial<Record<string, RequestHandler>> = {}) {
-    const harness = renderParent(<Home04 />, { handler: handler("STABLE", overrides) });
+    const harness = renderParent(<HomeScreen />, { handler: handler("STABLE", overrides) });
     await screen.findByTestId("home-child-card");
     fireEvent.click(screen.getByTestId("home-settings"));
     fireEvent.click(screen.getByTestId("settings-delete"));

@@ -2,20 +2,20 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { activeTabTarget, liveActivityCard } from "../activity/homeActivity";
-import { useMeQuery } from "../api/account";
-import { useHomeQuery } from "../api/queries";
-import type { LockReasonCode } from "../api/types";
-import { BottomTabBar, type TabKey } from "../components/BottomTabBar";
-import { DeviceCard } from "../components/DeviceCard";
-import { SettingsSheet } from "../components/SettingsSheet";
-import { PARENT_ROUTES, goToLogin, isUnauthenticated, lockToastMessage, routeForTab } from "../navigation";
+import { activeTabTarget, liveActivityCard } from "../../activity/homeActivity";
+import { useMeQuery } from "../../api/account";
+import { useHomeQuery } from "../../api/queries";
+import type { LockReasonCode } from "../../api/types";
+import { BottomTabBar, type TabKey } from "../../components/BottomTabBar";
+import { DeviceCard } from "../../components/DeviceCard";
+import { SettingsSheet } from "../../components/SettingsSheet";
+import { PARENT_ROUTES, goToLogin, isUnauthenticated, lockToastMessage, routeForTab } from "../../navigation";
 import { ACCOUNT_COPY, ACCOUNT_PROPOSED_COPY, ACCOUNT_TEMP_COPY, childNameAgeLine } from "@/shared/copy/account";
 import { ACTIVITY_COPY, ACTIVITY_PROPOSED_COPY, lastCheckedText } from "@/shared/copy/activity";
 import { PROPOSED_COPY, TEMP_COPY, homeTitle } from "@/shared/copy/ko";
 import { formatHhmm } from "@/shared/copy/timeText";
 import { useToast } from "@/shared/toast/ToastProvider";
-import { useNotificationEntry } from "../push/useNotificationEntry";
+import { useNotificationEntry } from "../../push/useNotificationEntry";
 
 // 04 홈 — 아이 · 대화 기기 · 지금 활동 세 구역 + 「⚙」 설정 (U1 3.5 Step 40 · BR4.5 · BR4.6 · BR2.9 · J57 · PD-12 · PD-14,
 // U2 · US1.4 · US1.5 · AC1.4.1 ~ AC1.4.6 · AC1.4.11 · AC1.4.12 · AC1.4.14 · AC1.4.15 · U2-J9 · U2-J15)
@@ -41,7 +41,7 @@ function lockedReason(reason: LockReasonCode | null): string {
   }
 }
 
-export function Home04() {
+export function HomeScreen() {
   const router = useRouter();
   const toast = useToast();
   const home = useHomeQuery();

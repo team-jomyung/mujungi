@@ -1,11 +1,11 @@
 import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { beforeEach, afterEach, expect, it, vi } from "vitest";
-import { Records26 } from "@/parent/screens/Records26";
+import { RecordsScreen } from "@/parent/features/records/RecordsScreen";
 import { renderParent, jsonResponse, navigation, clock, SESSION_ID, router, resetRouter } from "./support";
 vi.mock("next/navigation", async () => ({ ...(await import("../../u1/support/nextNavigation")).nextNavigationMock, useSearchParams: () => navigation.search }));
 beforeEach(() => { clock(); resetRouter(); }); afterEach(() => vi.useRealTimers());
 const item = (extra = {}) => ({ sessionId: SESSION_ID, activityType: "FREE_TALK", startedAt: "2026-10-15T01:00:00Z", endedAt: "2026-10-15T01:03:00Z", finalStatus: "ENDED", linkable: true, goalCount: 0, interrupted: false, ...extra });
-function render(items = [item()], days = [{ date: "2026-10-15", count: 1 }]) { return renderParent(<Records26 />, { handler: path => jsonResponse(200, path.includes("month=") ? { days } : { items }) }); }
+function render(items = [item()], days = [{ date: "2026-10-15", count: 1 }]) { return renderParent(<RecordsScreen />, { handler: path => jsonResponse(200, path.includes("month=") ? { days } : { items }) }); }
 it("자유대화 시간과 분을 표시하고 상세로 간다", async () => { render(); const row = await screen.findByTestId(`records-item-${SESSION_ID}`); expect(row).toHaveTextContent("10:00 자유대화 · 3분"); fireEvent.click(row); expect(router.push).toHaveBeenCalledWith(`/parent/records/${SESSION_ID}`); });
 it("연습 목표 수와 중단을 표시한다", async () => { render([item({ activityType: "PRACTICE", goalCount: 2, interrupted: true })]); expect(await screen.findByTestId(`records-item-${SESSION_ID}`)).toHaveTextContent("연습 · 목표 2개 · 3분 · 중간에 끊김"); });
 it("재시작 FAILED는 중간에 끊김이다", async () => { render([item({ finalStatus: "FAILED" })]); expect(await screen.findByTestId(`records-item-${SESSION_ID}`)).toHaveTextContent("중간에 끊김"); });

@@ -1,7 +1,7 @@
 import { fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { Free08 } from "@/parent/screens/Free08";
+import { FreeTalkScreen } from "@/parent/features/free/FreeTalkScreen";
 import { SESSION_ID, deferred, errorResponse, jsonResponse } from "../support/fixtures";
 import { resetRouter, router } from "../support/nextNavigation";
 import { renderParent, type ParentHarness, type RequestHandler } from "../support/parentHarness";
@@ -15,7 +15,7 @@ vi.mock("next/navigation", async () => (await import("../support/nextNavigation"
 const ACCEPTED = () => jsonResponse(202, { sessionId: SESSION_ID, status: "REQUESTED" });
 
 function setup(handler: RequestHandler, returnedFailed = false): ParentHarness {
-  return renderParent(<Free08 returnedFailed={returnedFailed} />, { handler });
+  return renderParent(<FreeTalkScreen returnedFailed={returnedFailed} />, { handler });
 }
 
 function startBodies(harness: ParentHarness): Array<{ idempotencyKey: string; context?: Record<string, unknown> }> {

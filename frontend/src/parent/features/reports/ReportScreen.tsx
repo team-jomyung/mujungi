@@ -2,16 +2,16 @@
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { discardReport, fetchReport, fetchReportPdf, reportKey, saveReport } from "../api/reports";
-import { useApiClient } from "../api/queries";
-import { shortDate, seoulDate } from "../components/MonthCalendar";
-import { LiveRegion } from "../components/LiveRegion";
-import { PARENT_ROUTES } from "../navigation";
+import { discardReport, fetchReport, fetchReportPdf, reportKey, saveReport } from "../../api/reports";
+import { useApiClient } from "../../api/queries";
+import { shortDate, seoulDate } from "../../components/MonthCalendar";
+import { LiveRegion } from "../../components/LiveRegion";
+import { PARENT_ROUTES } from "../../navigation";
 import { formatHhmm } from "@/shared/copy/timeText";
 import { RESULT_TEMP_COPY as C, reportSummary, periodLine, activityCountLine, citationCountLine, sectionTitle } from "@/shared/copy/result";
 import { useTiming } from "@/shared/timing/TimingProvider";
 import { useToast } from "@/shared/toast/ToastProvider";
-export function Report30({ reportId }: { reportId: string }) {
+export function ReportScreen({ reportId }: { reportId: string }) {
   const api = useApiClient(), router = useRouter(), timing = useTiming(), toast = useToast(); const [sheet, setSheet] = useState(false), [savedHere, setSavedHere] = useState(false), [busy, setBusy] = useState(false);
   const blob = useRef<Blob | null>(null), pending = useRef<Promise<Blob> | null>(null), urls = useRef<string[]>([]), action = useRef(false);
   const query = useQuery({ queryKey: reportKey(reportId), queryFn: ({ signal }) => fetchReport(api, reportId, signal), retry: false }), report = query.data;

@@ -6,14 +6,14 @@ import { TimingConfigError } from "@/shared/timing/timing";
 import { useToast } from "@/shared/toast/ToastProvider";
 import { DeviceApp } from "@/device/DeviceApp";
 import { PCM_CAPTURE_PROCESSOR_NAME } from "@/device/audio/pcm-capture.worklet";
-import { DevLogin } from "@/parent/screens/DevLogin";
-import { Done17 } from "@/parent/screens/Done17";
-import { Free08 } from "@/parent/screens/Free08";
-import { Home04 } from "@/parent/screens/Home04";
-import { Live12 } from "@/parent/screens/Live12";
-import { Register05a } from "@/parent/screens/Register05a";
-import { Practice18 } from "@/parent/screens/Practice18";
-import { Records26 } from "@/parent/screens/Records26";
+import { DevLoginScreen } from "@/parent/features/login/DevLoginScreen";
+import { DoneScreen } from "@/parent/features/done/DoneScreen";
+import { FreeTalkScreen } from "@/parent/features/free/FreeTalkScreen";
+import { HomeScreen } from "@/parent/features/home/HomeScreen";
+import { LiveScreen } from "@/parent/features/live/LiveScreen";
+import { DeviceRegisterScreen } from "@/parent/features/device/DeviceRegisterScreen";
+import { PracticeScreen } from "@/parent/features/practice/PracticeScreen";
+import { RecordsScreen } from "@/parent/features/records/RecordsScreen";
 import RootLayout, { metadata as rootMetadata, viewport } from "@/app/layout";
 import { GET as healthz, dynamic as healthzDynamic } from "@/app/healthz/route";
 import { GET as workletRoute, dynamic as workletDynamic } from "@/app/device/pcm-capture-worklet/route";
@@ -21,7 +21,7 @@ import DevicePage from "@/app/device/page";
 import ParentLayout from "@/app/parent/layout";
 import ParentHomePage from "@/app/parent/page";
 import ParentDevicePage from "@/app/parent/device/page";
-import { Device05 } from "@/parent/screens/Device05";
+import { DeviceScreen } from "@/parent/features/device/DeviceScreen";
 import ParentRegisterPage from "@/app/parent/device/register/page";
 import ParentFreePage from "@/app/parent/free/page";
 import ParentDevLoginPage from "@/app/parent/dev-login/page";
@@ -91,11 +91,11 @@ describe("라우트 처리기", () => {
 
 describe("스텁 라우트 → /parent(J57 · J119)", () => {
   it("/parent/records는 U6의 실제 26 화면을 연결한다", () => {
-    expect(elementOf(elementOf(ParentRecordsPage()).props.children).type).toBe(Records26);
+    expect(elementOf(elementOf(ParentRecordsPage()).props.children).type).toBe(RecordsScreen);
   });
 
   it("/parent/device는 U2가 스텁 대신 05 화면을 그린다(J57 대체)", () => {
-    expect(elementOf(ParentDevicePage()).type).toBe(Device05);
+    expect(elementOf(ParentDevicePage()).type).toBe(DeviceScreen);
   });
 });
 
@@ -103,7 +103,7 @@ describe("/parent/dev-login — MUJOONG_DEVLOGIN_ENABLED가 정확히 true일 �
   it("환경 변수가 true면 시험 로그인 화면을 낸다", async () => {
     vi.stubEnv("MUJOONG_DEVLOGIN_ENABLED", "true");
     const element = elementOf(await ParentDevLoginPage());
-    expect(element.type).toBe(DevLogin);
+    expect(element.type).toBe(DevLoginScreen);
     expect(connectionMock).toHaveBeenCalledTimes(1);
   });
 
@@ -115,16 +115,16 @@ describe("/parent/dev-login — MUJOONG_DEVLOGIN_ENABLED가 정확히 true일 �
 
 describe("화면 라우트", () => {
   it("/parent/practice는 U5a의 실제 18 화면을 연결한다", async () => {
-    expect(elementOf(await ParentPracticePage()).type).toBe(Practice18);
+    expect(elementOf(await ParentPracticePage()).type).toBe(PracticeScreen);
   });
   it("/parent · /parent/device/register는 04 · 05a를 그린다", () => {
-    expect(elementOf(ParentHomePage()).type).toBe(Home04);
-    expect(elementOf(ParentRegisterPage()).type).toBe(Register05a);
+    expect(elementOf(ParentHomePage()).type).toBe(HomeScreen);
+    expect(elementOf(ParentRegisterPage()).type).toBe(DeviceRegisterScreen);
   });
 
   it("/parent/free?failed=1이면 08이 사유 카드로 시작하고 그 밖에는 빈 화면이다(J120)", async () => {
     const failed = elementOf(await ParentFreePage({ searchParams: Promise.resolve({ failed: "1" }) }));
-    expect(failed.type).toBe(Free08);
+    expect(failed.type).toBe(FreeTalkScreen);
     expect(failed.props.returnedFailed).toBe(true);
     const plain = elementOf(await ParentFreePage({ searchParams: Promise.resolve({}) }));
     expect(plain.props.returnedFailed).toBe(false);
@@ -134,10 +134,10 @@ describe("화면 라우트", () => {
 
   it("/parent/sessions/[id] · /done은 UUID일 때만 12 · 17을 그린다", async () => {
     const live = elementOf(await ParentLivePage({ params: Promise.resolve({ sessionId: SESSION_ID }) }));
-    expect(live.type).toBe(Live12);
+    expect(live.type).toBe(LiveScreen);
     expect(live.props.sessionId).toBe(SESSION_ID);
     const done = elementOf(await ParentDonePage({ params: Promise.resolve({ sessionId: SESSION_ID }) }));
-    expect(done.type).toBe(Done17);
+    expect(done.type).toBe(DoneScreen);
     expect(done.props.sessionId).toBe(SESSION_ID);
   });
 

@@ -8,11 +8,11 @@ import ParentConsentPage from "@/app/parent/consent/page";
 import ParentChildPage from "@/app/parent/child/page";
 import ParentStopExpressionsPage from "@/app/parent/child/stop-expressions/page";
 import { authorizeUrl, newState, readGoogleConfig, singleParam, stateMatches } from "@/parent/oauth";
-import { Child03 } from "@/parent/screens/Child03";
-import { Consent02 } from "@/parent/screens/Consent02";
-import { Login01 } from "@/parent/screens/Login01";
-import { LoginCallback } from "@/parent/screens/LoginCallback";
-import { StopExpressions01 } from "@/parent/screens/StopExpressions01";
+import { ChildScreen } from "@/parent/features/child/ChildScreen";
+import { ConsentScreen } from "@/parent/features/consent/ConsentScreen";
+import { LoginScreen } from "@/parent/features/login/LoginScreen";
+import { LoginCallbackScreen } from "@/parent/features/login/LoginCallbackScreen";
+import { StopExpressionsScreen } from "@/parent/features/child/StopExpressionsScreen";
 
 // U2 라우트 · 구글 OAuth 시작 · 콜백 state 시험 (U2 · J21 · U2-J1 · U2-J4)
 // 라우트 처리기 · 서버 컴포넌트를 직접 부른다. redirect는 next/navigation이 던지는 신호(digest)로 확인하고,
@@ -135,7 +135,7 @@ describe("/parent/login/callback", () => {
     vi.stubEnv("GOOGLE_OAUTH_REDIRECT_URI", REDIRECT_URI);
     cookieJar.value = "state-1";
     const element = elementOf(await call({ code: "code-1", state: "state-1" }));
-    expect(element.type).toBe(LoginCallback);
+    expect(element.type).toBe(LoginCallbackScreen);
     expect(element.props).toEqual({ code: "code-1", redirectUri: REDIRECT_URI });
     expect(connectionMock).toHaveBeenCalledTimes(1);
   });
@@ -162,15 +162,15 @@ describe("/parent/login/callback", () => {
 describe("U2 화면 라우트", () => {
   it("01은 ?failed=1 · ?deleting=1을 화면에 넘긴다", async () => {
     const plain = elementOf(await ParentLoginPage({ searchParams: Promise.resolve({}) }));
-    expect(plain.type).toBe(Login01);
+    expect(plain.type).toBe(LoginScreen);
     expect(plain.props).toMatchObject({ failed: false, deleting: false });
     const failed = elementOf(await ParentLoginPage({ searchParams: Promise.resolve({ failed: "1", deleting: "1" }) }));
     expect(failed.props).toMatchObject({ failed: true, deleting: true });
   });
 
   it("02 · 03 · SET-01을 그린다", () => {
-    expect(elementOf(ParentConsentPage()).type).toBe(Consent02);
-    expect(elementOf(ParentChildPage()).type).toBe(Child03);
-    expect(elementOf(ParentStopExpressionsPage()).type).toBe(StopExpressions01);
+    expect(elementOf(ParentConsentPage()).type).toBe(ConsentScreen);
+    expect(elementOf(ParentChildPage()).type).toBe(ChildScreen);
+    expect(elementOf(ParentStopExpressionsPage()).type).toBe(StopExpressionsScreen);
   });
 });

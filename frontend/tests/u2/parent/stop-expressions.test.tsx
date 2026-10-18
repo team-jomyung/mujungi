@@ -1,6 +1,6 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { normalizeExpression, StopExpressions01, validateExpression } from "@/parent/screens/StopExpressions01";
+import { normalizeExpression, StopExpressionsScreen, validateExpression } from "@/parent/features/child/StopExpressionsScreen";
 import { errorResponse, homeBody, jsonResponse } from "../../u1/support/fixtures";
 import { resetRouter, router } from "../../u1/support/nextNavigation";
 import { renderParent, type RequestHandler } from "../../u1/support/parentHarness";
@@ -31,7 +31,7 @@ function handler(texts: readonly string[], overrides: Partial<Record<string, Req
 }
 
 async function renderStops(texts: readonly string[] = ["이제 그만"], overrides: Partial<Record<string, RequestHandler>> = {}) {
-  const harness = renderParent(<StopExpressions01 />, { handler: handler(texts, overrides) });
+  const harness = renderParent(<StopExpressionsScreen />, { handler: handler(texts, overrides) });
   await waitFor(() => expect(screen.getByTestId("stop-list")).toHaveAttribute("aria-busy", "false"));
   return harness;
 }
@@ -144,19 +144,19 @@ describe("SET-01 저장 · 취소(AC2.3.4 · AC2.3.6)", () => {
 
 describe("SET-01 조회 실패", () => {
   it("아이가 없으면 03, 401이면 01, 그 밖은 토스트 + 「다시 시도」다", async () => {
-    const first = renderParent(<StopExpressions01 />, {
+    const first = renderParent(<StopExpressionsScreen />, {
       handler: handler([], { "GET /api/child/stop-expressions": () => errorResponse(404, "CHILD_NOT_REGISTERED") }),
     });
     await waitFor(() => expect(router.replace).toHaveBeenCalledWith("/parent/child"));
     first.view.unmount();
     resetRouter();
 
-    const second = renderParent(<StopExpressions01 />, { handler: () => errorResponse(401, "UNAUTHENTICATED") });
+    const second = renderParent(<StopExpressionsScreen />, { handler: () => errorResponse(401, "UNAUTHENTICATED") });
     await waitFor(() => expect(router.replace).toHaveBeenCalledWith("/parent/login"));
     second.view.unmount();
 
     let calls = 0;
-    renderParent(<StopExpressions01 />, {
+    renderParent(<StopExpressionsScreen />, {
       handler: handler(["이제 그만"], {
         "GET /api/child/stop-expressions": () => {
           calls += 1;

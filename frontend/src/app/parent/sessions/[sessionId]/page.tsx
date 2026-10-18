@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { Live12 } from "@/parent/screens/Live12";
+import { LiveScreen } from "@/parent/features/live/LiveScreen";
 
 // /parent/sessions/[sessionId] — 12 진행 + P1 끝내기(U1 3.5 Step 40 · BR6.9 · BR6.15).
 // sessionId는 UUID 형식일 때만 받는다(그 밖은 404, 서버로 보내지 않는다).
@@ -14,5 +14,5 @@ export default async function ParentLivePage({ params }: LivePageProps) {
   if (!UUID_PATTERN.test(sessionId)) {
     notFound();
   }
-  return <Live12 sessionId={sessionId} />;
+  return <LiveScreen sessionId={sessionId} />;
 }

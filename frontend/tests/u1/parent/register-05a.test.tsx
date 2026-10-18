@@ -1,7 +1,7 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { Register05a } from "@/parent/screens/Register05a";
+import { DeviceRegisterScreen } from "@/parent/features/device/DeviceRegisterScreen";
 import { deferred, errorResponse, jsonResponse } from "../support/fixtures";
 import { resetRouter, router } from "../support/nextNavigation";
 import { renderParent, type RequestHandler } from "../support/parentHarness";
@@ -26,7 +26,7 @@ function codeValue(): string {
 }
 
 function setup(handler: RequestHandler) {
-  return renderParent(<Register05a />, { handler });
+  return renderParent(<DeviceRegisterScreen />, { handler });
 }
 
 beforeEach(() => {

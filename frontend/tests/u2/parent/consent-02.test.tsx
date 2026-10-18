@@ -1,6 +1,6 @@
 import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { Consent02 } from "@/parent/screens/Consent02";
+import { ConsentScreen } from "@/parent/features/consent/ConsentScreen";
 import { errorResponse, jsonResponse } from "../../u1/support/fixtures";
 import { resetRouter, router } from "../../u1/support/nextNavigation";
 import { renderParent, type RequestHandler } from "../../u1/support/parentHarness";
@@ -34,7 +34,7 @@ function handler(overrides: Partial<Record<string, RequestHandler>> = {}): Reque
 }
 
 async function renderConsent(overrides: Partial<Record<string, RequestHandler>> = {}) {
-  const harness = renderParent(<Consent02 />, { handler: handler(overrides) });
+  const harness = renderParent(<ConsentScreen />, { handler: handler(overrides) });
   await waitFor(() => expect(screen.getByTestId("consent-check-voice")).toBeEnabled());
   return harness;
 }
@@ -128,7 +128,7 @@ describe("02 — 네 항목 모두 필수(AC1.2.1 · AC1.2.4)", () => {
 
   it("약관을 못 읽으면 토스트 + 「다시 시도」, 401이면 01이다", async () => {
     let calls = 0;
-    renderParent(<Consent02 />, {
+    renderParent(<ConsentScreen />, {
       handler: handler({
         "GET /api/policies/current": () => {
           calls += 1;
@@ -142,7 +142,7 @@ describe("02 — 네 항목 모두 필수(AC1.2.1 · AC1.2.4)", () => {
     await waitFor(() => expect(screen.getByTestId("consent-check-voice")).toBeEnabled());
 
     resetRouter();
-    renderParent(<Consent02 />, { handler: () => errorResponse(401, "UNAUTHENTICATED") });
+    renderParent(<ConsentScreen />, { handler: () => errorResponse(401, "UNAUTHENTICATED") });
     await waitFor(() => expect(router.replace).toHaveBeenCalledWith("/parent/login"));
   });
 });

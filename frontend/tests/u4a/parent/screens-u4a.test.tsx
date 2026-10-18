@@ -2,10 +2,10 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { parseHome } from "@/parent/api/types";
 import { NoticeDialog } from "@/parent/components/NoticeDialog";
-import { Done17 } from "@/parent/screens/Done17";
-import { Free08 } from "@/parent/screens/Free08";
-import { Home04 } from "@/parent/screens/Home04";
-import { Live12 } from "@/parent/screens/Live12";
+import { DoneScreen } from "@/parent/features/done/DoneScreen";
+import { FreeTalkScreen } from "@/parent/features/free/FreeTalkScreen";
+import { HomeScreen } from "@/parent/features/home/HomeScreen";
+import { LiveScreen } from "@/parent/features/live/LiveScreen";
 import { SESSION_ID, bubble, errorResponse, homeBody, jsonResponse, liveViewBody } from "../../u1/support/fixtures";
 import { resetRouter, router } from "../../u1/support/nextNavigation";
 import { renderParent, type RequestHandler } from "../../u1/support/parentHarness";
@@ -30,7 +30,7 @@ function liveHandler(body: Record<string, unknown>, extra: Record<string, Reques
 }
 
 function renderLive(body: Record<string, unknown>, extra: Record<string, RequestHandler> = {}) {
-  return renderParent(<Live12 sessionId={SESSION_ID} />, {
+  return renderParent(<LiveScreen sessionId={SESSION_ID} />, {
     timing: { parentPollIntervalMs: POLL_MS },
     handler: liveHandler(body, extra),
     prepare: (queryClient) => queryClient.setQueryData(["home"], parseHome(homeBody("STABLE"))),
@@ -83,7 +83,7 @@ describe("12 — 끊김 · 복구 중 · 공백 경고 · 오프라인(AC3.2.8 �
 
   it("응답 없음으로 폴링이 실패하면 오프라인 줄과 마지막으로 받은 시각", async () => {
     let fail = false;
-    renderParent(<Live12 sessionId={SESSION_ID} />, {
+    renderParent(<LiveScreen sessionId={SESSION_ID} />, {
       timing: { parentPollIntervalMs: POLL_MS },
       handler: () => {
         if (fail) {
@@ -139,7 +139,7 @@ describe("12 — 끝내기 · P2 · P3 · 실패(AC3.3.8 · AC3.4.1 · AC3.5.1 �
 
 describe("17 — 사유 표 · 정리 중 · 미확인 줄(AC3.6.9 · AC3.4.3 · AC3.6.10)", () => {
   function renderDone(body: Record<string, unknown>, resultStatus: () => string = () => "REQUESTED") {
-    return renderParent(<Done17 sessionId={SESSION_ID} />, {
+    return renderParent(<DoneScreen sessionId={SESSION_ID} />, {
       timing: { parentPollIntervalMs: POLL_MS },
       handler: path => jsonResponse(200, path.endsWith("/result/status") ? { jobStatus: resultStatus(), sessionStatus: body.status, confirmed: body.confirmed } : body),
       prepare: (queryClient) => queryClient.setQueryData(["home"], parseHome(homeBody("STABLE"))),
@@ -198,7 +198,7 @@ describe("04 — 지금 활동(AC1.4.7 · AC1.4.8 · AC1.4.10 · AC1.4.13)", () 
   const active = { sessionId: SESSION_ID, activityType: "FREE_TALK", status: "ACTIVE", confirmed: false, requestedAt: "2026-10-15T00:59:58Z", startedAt: "2026-10-15T01:00:00Z" };
 
   it("진행 중이면 '{아이} · 자유대화 n분째' · 'hh:mm 시작' · 「진행 화면 보기 ›」 → 12, 탭도 12", async () => {
-    renderParent(<Home04 />, { handler: homeHandler(active) });
+    renderParent(<HomeScreen />, { handler: homeHandler(active) });
     const card = await screen.findByTestId("home-activity-card");
     expect(card).toHaveAttribute("data-state", "live");
     expect(screen.getByTestId("home-activity-status")).toHaveTextContent(/^하늘 · 자유대화 \d+분째$/);
@@ -214,7 +214,7 @@ describe("04 — 지금 활동(AC1.4.7 · AC1.4.8 · AC1.4.10 · AC1.4.13)", () 
   });
 
   it("CLOSING이면 '종료 처리 중' → 17", async () => {
-    renderParent(<Home04 />, { handler: homeHandler({ ...active, status: "CLOSING", endReason: "GUARDIAN_STOP" }) });
+    renderParent(<HomeScreen />, { handler: homeHandler({ ...active, status: "CLOSING", endReason: "GUARDIAN_STOP" }) });
     expect(await screen.findByTestId("home-activity-status")).toHaveTextContent("하늘 · 자유대화 종료 처리 중");
     fireEvent.click(screen.getByTestId("home-activity-open"));
     expect(router.push).toHaveBeenLastCalledWith(`/parent/sessions/${SESSION_ID}/done`);
@@ -222,7 +222,7 @@ describe("04 — 지금 활동(AC1.4.7 · AC1.4.8 · AC1.4.10 · AC1.4.13)", () 
 
   it("조회 실패면 미확인 칸 · 「다시 확인」만 보이고, 다시 확인이 성공하면 실제 상태로", async () => {
     let fail = true;
-    renderParent(<Home04 />, {
+    renderParent(<HomeScreen />, {
       handler: homeHandler(active, { "GET /api/home": () => (fail ? errorResponse(500, "INTERNAL_ERROR") : jsonResponse(200, { ...homeBody("STABLE"), currentSession: active })) }),
     });
     const card = await screen.findByTestId("home-activity-card");
@@ -238,7 +238,7 @@ describe("04 — 지금 활동(AC1.4.7 · AC1.4.8 · AC1.4.10 · AC1.4.13)", () 
 
 describe("08 · P 팝업", () => {
   it("12에서 돌아온 공급자 실패는 그 사유 문구", () => {
-    renderParent(<Free08 returnedFailed failureCode="PROVIDER_UNAVAILABLE" />, { handler: () => jsonResponse(202, { sessionId: SESSION_ID }) });
+    renderParent(<FreeTalkScreen returnedFailed failureCode="PROVIDER_UNAVAILABLE" />, { handler: () => jsonResponse(202, { sessionId: SESSION_ID }) });
     expect(screen.getByTestId("free-reason")).toHaveTextContent("지금은 시작하지 못했어요. 잠시 뒤 다시 시도해 주세요.");
   });
 

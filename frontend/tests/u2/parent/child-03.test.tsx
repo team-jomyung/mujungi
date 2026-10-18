@@ -1,6 +1,6 @@
 import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { Child03, interestsWithinLimit, parseAge, parseInterests } from "@/parent/screens/Child03";
+import { ChildScreen, interestsWithinLimit, parseAge, parseInterests } from "@/parent/features/child/ChildScreen";
 import { errorResponse, homeBody, jsonResponse, type NetworkState } from "../../u1/support/fixtures";
 import { resetRouter, router } from "../../u1/support/nextNavigation";
 import { renderParent, type RequestHandler } from "../../u1/support/parentHarness";
@@ -44,7 +44,7 @@ beforeEach(() => {
 
 describe("03 처음 등록(AC1.3.1 · AC1.3.2 · AC1.3.5 · AC1.3.8)", () => {
   it("제목 · 세 칸 · 「확인」이 있고 뒤로 단추가 없으며 기기 뒤로가기도 아무 일 없다", async () => {
-    renderParent(<Child03 />, { handler: handler(notRegistered) });
+    renderParent(<ChildScreen />, { handler: handler(notRegistered) });
     expect(await screen.findByRole("heading", { name: "아이 정보를 알려 주세요" })).toBeInTheDocument();
     expect(screen.getByLabelText("이름 또는 별명")).toBeInTheDocument();
     expect(screen.getByLabelText("나이")).toBeInTheDocument();
@@ -57,7 +57,7 @@ describe("03 처음 등록(AC1.3.1 · AC1.3.2 · AC1.3.5 · AC1.3.8)", () => {
   });
 
   it("이름이 비면 「확인」이 꺼지고 나이가 6 ~ 12 밖이면 칸 아래 글이 붙는다(색만이 아님)", async () => {
-    renderParent(<Child03 />, { handler: handler(notRegistered) });
+    renderParent(<ChildScreen />, { handler: handler(notRegistered) });
     await screen.findByTestId("child-form");
     expect(screen.getByTestId("child-confirm")).toBeDisabled();
     type("child-name", "하늘");
@@ -75,7 +75,7 @@ describe("03 처음 등록(AC1.3.1 · AC1.3.2 · AC1.3.5 · AC1.3.8)", () => {
   });
 
   it("관심사는 쉼표로 5개 · 하나에 10자를 넘는 입력을 막는다", async () => {
-    renderParent(<Child03 />, { handler: handler(notRegistered) });
+    renderParent(<ChildScreen />, { handler: handler(notRegistered) });
     await screen.findByTestId("child-form");
     type("child-interests", "공룡, 그림, 블록, 노래, 축구");
     type("child-interests", "공룡, 그림, 블록, 노래, 축구, 수영");
@@ -85,7 +85,7 @@ describe("03 처음 등록(AC1.3.1 · AC1.3.2 · AC1.3.5 · AC1.3.8)", () => {
   });
 
   it("「확인」이면 다듬은 값으로 등록하고 04로 간다(AC1.3.1)", async () => {
-    const harness = renderParent(<Child03 />, { handler: handler(notRegistered) });
+    const harness = renderParent(<ChildScreen />, { handler: handler(notRegistered) });
     await screen.findByTestId("child-form");
     type("child-name", " 하늘 ");
     type("child-age", "8");
@@ -98,7 +98,7 @@ describe("03 처음 등록(AC1.3.1 · AC1.3.2 · AC1.3.5 · AC1.3.8)", () => {
   });
 
   it("저장이 실패하면 토스트이고 입력은 그대로다(AC1.3.6 · 9-2)", async () => {
-    renderParent(<Child03 />, { handler: handler({ ...notRegistered, "POST /api/child": () => errorResponse(500, "INTERNAL_ERROR") }) });
+    renderParent(<ChildScreen />, { handler: handler({ ...notRegistered, "POST /api/child": () => errorResponse(500, "INTERNAL_ERROR") }) });
     await screen.findByTestId("child-form");
     type("child-name", "하늘");
     type("child-age", "8");
@@ -111,7 +111,7 @@ describe("03 처음 등록(AC1.3.1 · AC1.3.2 · AC1.3.5 · AC1.3.8)", () => {
 
 describe("03 보기 · 수정(AC1.3.3 · AC1.3.4 · AC1.3.7 · AC1.3.9 · AC1.3.10)", () => {
   it("카드에 이름 · 'n세 · 관심사' · 기기 상태 줄 · 「정보 수정」이 보이고 선택 · 추가 · 삭제 단추는 없다", async () => {
-    renderParent(<Child03 />, { handler: handler() });
+    renderParent(<ChildScreen />, { handler: handler() });
     expect(await screen.findByTestId("child-card-name")).toHaveTextContent("하늘");
     expect(screen.getByTestId("child-card")).toHaveTextContent("8세 · 공룡, 그림");
     expect(await screen.findByTestId("child-card-device")).toHaveTextContent("기기 · 안정");
@@ -126,12 +126,12 @@ describe("03 보기 · 수정(AC1.3.3 · AC1.3.4 · AC1.3.7 · AC1.3.9 · AC1.3.
     ["NONE", "기기 · 등록 안 됨"],
     ["UNKNOWN", "기기 · 기기 상태 확인 불가"],
   ])("기기 %s이면 '%s'(9-3)", async (state, line) => {
-    renderParent(<Child03 />, { handler: handler({}, state) });
+    renderParent(<ChildScreen />, { handler: handler({}, state) });
     expect(await screen.findByTestId("child-card-device")).toHaveTextContent(line);
   });
 
   it("「정보 수정」 → 바꾸고 「확인」이면 같은 아이를 고쳐 보기로 돌아온다", async () => {
-    const harness = renderParent(<Child03 />, { handler: handler() });
+    const harness = renderParent(<ChildScreen />, { handler: handler() });
     fireEvent.click(await screen.findByTestId("child-edit"));
     expect(screen.getByTestId("child-name")).toHaveValue("하늘");
     expect(screen.getByTestId("child-age")).toHaveValue("8");
@@ -149,7 +149,7 @@ describe("03 보기 · 수정(AC1.3.3 · AC1.3.4 · AC1.3.7 · AC1.3.9 · AC1.3.
   });
 
   it("「취소」는 원래 내용으로 돌아오고 「←」는 04로 간다", async () => {
-    renderParent(<Child03 />, { handler: handler() });
+    renderParent(<ChildScreen />, { handler: handler() });
     fireEvent.click(await screen.findByTestId("child-edit"));
     type("child-name", "바다");
     fireEvent.click(screen.getByTestId("child-cancel"));
@@ -161,20 +161,20 @@ describe("03 보기 · 수정(AC1.3.3 · AC1.3.4 · AC1.3.7 · AC1.3.9 · AC1.3.
   });
 
   it("수정 저장 실패는 토스트이고 수정 상태가 남는다 · 401이면 01이다", async () => {
-    renderParent(<Child03 />, { handler: handler({ "PATCH /api/child": () => errorResponse(500, "INTERNAL_ERROR") }) });
+    renderParent(<ChildScreen />, { handler: handler({ "PATCH /api/child": () => errorResponse(500, "INTERNAL_ERROR") }) });
     fireEvent.click(await screen.findByTestId("child-edit"));
     fireEvent.click(screen.getByTestId("child-confirm"));
     expect(await screen.findByTestId("toast")).toHaveTextContent("저장하지 못했어요. 이전 값이 그대로예요.");
     expect(screen.getByTestId("child-screen")).toHaveAttribute("data-mode", "edit");
 
     resetRouter();
-    renderParent(<Child03 />, { handler: () => errorResponse(401, "UNAUTHENTICATED") });
+    renderParent(<ChildScreen />, { handler: () => errorResponse(401, "UNAUTHENTICATED") });
     await waitFor(() => expect(router.replace).toHaveBeenCalledWith("/parent/login"));
   });
 
   it("다른 조회 실패는 토스트 + 「다시 시도」다", async () => {
     let calls = 0;
-    renderParent(<Child03 />, {
+    renderParent(<ChildScreen />, {
       handler: handler({
         "GET /api/child": () => {
           calls += 1;

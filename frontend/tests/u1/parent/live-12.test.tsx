@@ -3,7 +3,7 @@ import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { parseHome, parseLiveView } from "@/parent/api/types";
 import { TranscriptList } from "@/parent/components/TranscriptList";
-import { Live12 } from "@/parent/screens/Live12";
+import { LiveScreen } from "@/parent/features/live/LiveScreen";
 import { SESSION_ID, bubble, deferred, errorResponse, homeBody, jsonResponse, liveViewBody } from "../support/fixtures";
 import { resetRouter, router } from "../support/nextNavigation";
 import { renderParent, type ParentHarness, type RenderParentOptions } from "../support/parentHarness";
@@ -20,7 +20,7 @@ const LIVE_PATH = /^\/api\/sessions\/[^/]+\?sinceSeq=\d+$/;
 
 function renderLive(handler: (sinceSeq: number, index: number) => Response | Promise<Response>, options: Partial<RenderParentOptions> = {}) {
   let index = 0;
-  return renderParent(<Live12 sessionId={SESSION_ID} />, {
+  return renderParent(<LiveScreen sessionId={SESSION_ID} />, {
     timing: { parentPollIntervalMs: POLL_MS },
     ...options,
     handler: (path, init) => {

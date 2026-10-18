@@ -2,22 +2,22 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { ApiError } from "../api/apiClient";
-import { useApiClient } from "../api/queries";
-import { fetchRecord, fetchResult, resultKey, resultStatusKey, retryResult } from "../api/results";
-import { useResultStatusPolling } from "../hooks/useResultStatusPolling";
-import { EndReasonCard } from "../components/EndReasonCard";
-import { SceneChip } from "../components/SceneChip";
-import { LiveRegion } from "../components/LiveRegion";
-import { TranscriptList } from "../components/TranscriptList";
-import { dateLabel, seoulDate } from "../components/MonthCalendar";
-import { selectGoal, deleteGoal } from "../practice/api";
-import { PARENT_ROUTES, goToLogin, isUnauthenticated } from "../navigation";
+import { ApiError } from "../../api/apiClient";
+import { useApiClient } from "../../api/queries";
+import { fetchRecord, fetchResult, resultKey, resultStatusKey, retryResult } from "../../api/results";
+import { useResultStatusPolling } from "../../hooks/useResultStatusPolling";
+import { EndReasonCard } from "../../components/EndReasonCard";
+import { SceneChip } from "../../components/SceneChip";
+import { LiveRegion } from "../../components/LiveRegion";
+import { TranscriptList } from "../../components/TranscriptList";
+import { dateLabel, seoulDate } from "../../components/MonthCalendar";
+import { selectGoal, deleteGoal } from "../../practice/api";
+import { PARENT_ROUTES, goToLogin, isUnauthenticated } from "../../navigation";
 import { formatHhmm, minutesBetween } from "@/shared/copy/timeText";
 import { RESULT_TEMP_COPY as C, recordTimeLine } from "@/shared/copy/result";
 import { messageForErrorCode } from "@/shared/errors/codeToCopy";
 import { useToast } from "@/shared/toast/ToastProvider";
-export function RecordDetail27({ sessionId }: { sessionId: string }) {
+export function RecordDetailScreen({ sessionId }: { sessionId: string }) {
   const router = useRouter(), api = useApiClient(), client = useQueryClient(), toast = useToast(); const [tab, setTab] = useState("transcript"), [busy, setBusy] = useState(false); const action = useRef(false);
   const status = useResultStatusPolling(sessionId), job = status.data?.jobStatus;
   const record = useQuery({ queryKey: ["record", sessionId], queryFn: ({ signal }) => fetchRecord(api, sessionId, signal), retry: false });

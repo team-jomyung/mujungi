@@ -3,12 +3,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { D0View } from "@/device/components/D0View";
 import { DebugLog } from "@/device/components/DebugLog";
 import { T19View, type T19Display } from "@/device/components/T19View";
-import { DevLogin } from "@/parent/screens/DevLogin";
-import { Done17 } from "@/parent/screens/Done17";
-import { Free08 } from "@/parent/screens/Free08";
-import { Home04 } from "@/parent/screens/Home04";
-import { Live12 } from "@/parent/screens/Live12";
-import { Register05a } from "@/parent/screens/Register05a";
+import { DevLoginScreen } from "@/parent/features/login/DevLoginScreen";
+import { DoneScreen } from "@/parent/features/done/DoneScreen";
+import { FreeTalkScreen } from "@/parent/features/free/FreeTalkScreen";
+import { HomeScreen } from "@/parent/features/home/HomeScreen";
+import { LiveScreen } from "@/parent/features/live/LiveScreen";
+import { DeviceRegisterScreen } from "@/parent/features/device/DeviceRegisterScreen";
 import { SESSION_ID, bubble, errorResponse, homeBody, jsonResponse, liveViewBody } from "../support/fixtures";
 import { resetRouter } from "../support/nextNavigation";
 import { renderParent } from "../support/parentHarness";
@@ -86,12 +86,12 @@ describe("기기 화면", () => {
 
 describe("보호자 화면", () => {
   it("04(시작 가능 · 기기 없음)와 잠긴 탭 토스트", async () => {
-    const first = renderParent(<Home04 />, { handler: () => jsonResponse(200, homeBody("STABLE")) });
+    const first = renderParent(<HomeScreen />, { handler: () => jsonResponse(200, homeBody("STABLE")) });
     await screen.findByTestId("home-device-card");
     expect(screen.getByTestId("home-device-status")).toBeInTheDocument();
     expectRuleHolds();
     first.view.unmount();
-    renderParent(<Home04 />, { handler: () => jsonResponse(200, homeBody("NONE")) });
+    renderParent(<HomeScreen />, { handler: () => jsonResponse(200, homeBody("NONE")) });
     await screen.findByTestId("home-device-register");
     fireEvent.click(screen.getByTestId("tab-free"));
     await screen.findByTestId("toast");
@@ -99,13 +99,13 @@ describe("보호자 화면", () => {
   });
 
   it("04 오류 토스트의 「다시 시도」", async () => {
-    renderParent(<Home04 />, { handler: () => errorResponse(500, "INTERNAL_ERROR") });
+    renderParent(<HomeScreen />, { handler: () => errorResponse(500, "INTERNAL_ERROR") });
     await screen.findByTestId("toast-action");
     expectRuleHolds();
   });
 
   it("05a(빨간 카드 포함)", async () => {
-    renderParent(<Register05a />, { handler: () => errorResponse(404, "CODE_NOT_FOUND") });
+    renderParent(<DeviceRegisterScreen />, { handler: () => errorResponse(404, "CODE_NOT_FOUND") });
     for (let index = 0; index < 8; index += 1) {
       fireEvent.change(screen.getByTestId(`code-cell-${index}`), { target: { value: "7F3K92QD"[index] } });
     }
@@ -115,14 +115,14 @@ describe("보호자 화면", () => {
   });
 
   it("08(칩 · 서술 칸 · 사유 카드 포함)", async () => {
-    renderParent(<Free08 returnedFailed />, { handler: () => jsonResponse(202, { sessionId: SESSION_ID }) });
+    renderParent(<FreeTalkScreen returnedFailed />, { handler: () => jsonResponse(202, { sessionId: SESSION_ID }) });
     expect(screen.getByTestId("free-reason")).toBeInTheDocument();
     expect(screen.getAllByRole("radio")).toHaveLength(7);
     expectRuleHolds();
   });
 
   it("12 진행(말풍선 · stale 줄) + P1 대화상자", async () => {
-    renderParent(<Live12 sessionId={SESSION_ID} />, {
+    renderParent(<LiveScreen sessionId={SESSION_ID} />, {
       timing: { parentPollIntervalMs: 10_000 },
       handler: () =>
         jsonResponse(200, liveViewBody("ACTIVE", { stale: true, items: [bubble({ seq: 1, speaker: "CHILD", text: "공룡" })], nextSeq: 1 })),
@@ -135,7 +135,7 @@ describe("보호자 화면", () => {
   });
 
   it("17 종료와 시험 로그인", async () => {
-    const done = renderParent(<Done17 sessionId={SESSION_ID} />, {
+    const done = renderParent(<DoneScreen sessionId={SESSION_ID} />, {
       timing: { parentPollIntervalMs: 10_000 },
       handler: () => jsonResponse(200, liveViewBody("ENDED", { endReason: "GUARDIAN_STOP", endedAt: "2026-10-15T01:21:00Z" })),
     });
@@ -143,7 +143,7 @@ describe("보호자 화면", () => {
     expect(screen.getByTestId("done-home")).toBeInTheDocument();
     expectRuleHolds();
     done.view.unmount();
-    renderParent(<DevLogin />, { handler: () => errorResponse(404, "NOT_FOUND") });
+    renderParent(<DevLoginScreen />, { handler: () => errorResponse(404, "NOT_FOUND") });
     fireEvent.click(screen.getByTestId("dev-login-submit"));
     await screen.findByTestId("dev-login-error");
     expectRuleHolds();
@@ -159,7 +159,7 @@ describe("계획이 정한 후보 이름(flows 시트 3.4)", () => {
     expect(screen.getByTestId("t19-on")).toBeInTheDocument();
     expect(screen.getByTestId("t19-off")).toBeInTheDocument();
     const names = ["code-cell-0", "code-cell-7", "register-submit"];
-    renderParent(<Register05a />, { handler: () => errorResponse(500, "INTERNAL_ERROR") });
+    renderParent(<DeviceRegisterScreen />, { handler: () => errorResponse(500, "INTERNAL_ERROR") });
     for (const name of names) {
       expect(screen.getByTestId(name)).toBeInTheDocument();
     }

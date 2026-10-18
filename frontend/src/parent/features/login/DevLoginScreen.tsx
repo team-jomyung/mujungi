@@ -3,9 +3,9 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { ApiError } from "../api/apiClient";
-import { devLogin, useApiClient } from "../api/queries";
-import { PARENT_ROUTES } from "../navigation";
+import { ApiError } from "../../api/apiClient";
+import { devLogin, useApiClient } from "../../api/queries";
+import { PARENT_ROUTES } from "../../navigation";
 import { TEMP_COPY } from "@/shared/copy/ko";
 import { messageForErrorCode } from "@/shared/errors/codeToCopy";
 
@@ -14,7 +14,7 @@ import { messageForErrorCode } from "@/shared/errors/codeToCopy";
 // 세션 쿠키를 열 뿐이고 아이디 · 비밀번호 입력란이 없다. 성공하면 CSRF 토큰을 다시 받고 04로 간다. 서버가 404면(꺼짐) 안내만 한다.
 // U1에서 401을 받은 화면이 여기로 온다(01 구글 로그인은 U2).
 
-export function DevLogin() {
+export function DevLoginScreen() {
   const router = useRouter();
   const api = useApiClient();
   const queryClient = useQueryClient();

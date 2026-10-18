@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ConfirmDialog } from "@/parent/components/ConfirmDialog";
-import { Live12 } from "@/parent/screens/Live12";
+import { LiveScreen } from "@/parent/features/live/LiveScreen";
 import { SESSION_ID, deferred, errorResponse, jsonResponse, liveViewBody } from "../support/fixtures";
 import { resetRouter, router } from "../support/nextNavigation";
 import { renderParent, type ParentHarness } from "../support/parentHarness";
@@ -108,7 +108,7 @@ describe("Live12 P1 — 끝내기 요청(BR6.9)", () => {
 
   function renderActive(end: EndScript, afterEnd: string = "ACTIVE"): ParentHarness {
     let ends = 0;
-    return renderParent(<Live12 sessionId={SESSION_ID} />, {
+    return renderParent(<LiveScreen sessionId={SESSION_ID} />, {
       timing: { parentPollIntervalMs: 40 },
       handler: (path, init) => {
         if (path.endsWith("/end")) {
@@ -220,7 +220,7 @@ describe("Live12 P1 — 끝내기 요청(BR6.9)", () => {
   it("409 뒤 아직 시작 중(PREPARING)이면 12에 머물며 토스트만 보이고 다음 시도는 새 requestId다(J111 · (w))", async () => {
     let preparingOnce = false;
     let ends = 0;
-    const harness = renderParent(<Live12 sessionId={SESSION_ID} />, {
+    const harness = renderParent(<LiveScreen sessionId={SESSION_ID} />, {
       timing: { parentPollIntervalMs: 40 },
       handler: (path) => {
         if (path.endsWith("/end")) {
@@ -249,7 +249,7 @@ describe("Live12 P1 — 끝내기 요청(BR6.9)", () => {
 
   it("409 뒤 다시 읽기마저 실패하면 보내지 못했다고 알린다", async () => {
     let failRead = false;
-    renderParent(<Live12 sessionId={SESSION_ID} />, {
+    renderParent(<LiveScreen sessionId={SESSION_ID} />, {
       timing: { parentPollIntervalMs: 10_000 },
       handler: (path) => {
         if (path.endsWith("/end")) {

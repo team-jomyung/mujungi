@@ -2,14 +2,14 @@
 
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
-import { startFailureReason } from "../activity/freeFailure";
-import { ApiError } from "../api/apiClient";
-import { startFreeTalk, useApiClient } from "../api/queries";
-import type { FreeTalkContext, SituationType, SourceType } from "../api/types";
-import { BottomTabBar, type TabKey } from "../components/BottomTabBar";
-import { ChipGroup, type ChipOption } from "../components/ChipGroup";
-import { TextArea200 } from "../components/TextArea200";
-import { PARENT_ROUTES, goToLogin, routeForTab } from "../navigation";
+import { startFailureReason } from "../../activity/freeFailure";
+import { ApiError } from "../../api/apiClient";
+import { startFreeTalk, useApiClient } from "../../api/queries";
+import type { FreeTalkContext, SituationType, SourceType } from "../../api/types";
+import { BottomTabBar, type TabKey } from "../../components/BottomTabBar";
+import { ChipGroup, type ChipOption } from "../../components/ChipGroup";
+import { TextArea200 } from "../../components/TextArea200";
+import { PARENT_ROUTES, goToLogin, routeForTab } from "../../navigation";
 import { COPY, PROPOSED_COPY, TEMP_COPY } from "@/shared/copy/ko";
 import { messageForErrorCode } from "@/shared/errors/codeToCopy";
 import { useToast } from "@/shared/toast/ToastProvider";
@@ -56,14 +56,14 @@ interface PendingStart {
   readonly bodyJson: string;
 }
 
-export interface Free08Props {
+export interface FreeTalkScreenProps {
   /** 12에서 FAILED로 돌아왔는지(사유 카드 한 종류, J120). */
   readonly returnedFailed: boolean;
   /** 돌아온 FAILED의 실패 코드(U4a-J16, 없으면 DEVICE_NO_ACK 문구). */
   readonly failureCode?: string | null;
 }
 
-export function Free08({ returnedFailed, failureCode = null }: Free08Props) {
+export function FreeTalkScreen({ returnedFailed, failureCode = null }: FreeTalkScreenProps) {
   const router = useRouter();
   const toast = useToast();
   const api = useApiClient();

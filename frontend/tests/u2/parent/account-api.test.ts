@@ -19,7 +19,7 @@ import {
 } from "@/parent/api/account";
 import { createApiClient, type FetchLike } from "@/parent/api/apiClient";
 import { ResponseShapeError } from "@/parent/api/types";
-import { routeAfterLogin } from "@/parent/screens/LoginCallback";
+import { routeAfterLogin } from "@/parent/features/login/LoginCallbackScreen";
 import { errorResponse, jsonResponse } from "../../u1/support/fixtures";
 import { childBody, jsonBody, meBody, noContent, policyBody, stopBody } from "../support/accountFixtures";
 

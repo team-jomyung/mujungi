@@ -2,7 +2,7 @@ import { act, cleanup, fireEvent, screen, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import ParentPracticePage from "@/app/parent/practice/page";
-import { Practice18 } from "@/parent/screens/Practice18";
+import { PracticeScreen } from "@/parent/features/practice/PracticeScreen";
 import { useToast } from "@/shared/toast/ToastProvider";
 import { deferred, errorResponse, jsonResponse } from "../u1/support/fixtures";
 import { resetRouter, router } from "../u1/support/nextNavigation";
@@ -25,7 +25,7 @@ function ReplaceToast() {
 }
 
 function setup(handler: RequestHandler = () => jsonResponse(200, { items: GOALS })) {
-  return renderParent(<><Practice18 /><ReplaceToast /></>, { handler, timing: { toastDurationMs: 40, toastActionMinMs: UNDO_MS } });
+  return renderParent(<><PracticeScreen /><ReplaceToast /></>, { handler, timing: { toastDurationMs: 40, toastActionMinMs: UNDO_MS } });
 }
 
 beforeEach(() => { vi.useFakeTimers(); resetRouter(); });
@@ -33,7 +33,7 @@ afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks(); });
 
 describe("18 — list, selection and scope", () => {
   it("connects the actual route, enables explicit U5b start and never starts on selection", async () => {
-    expect((await ParentPracticePage()).type).toBe(Practice18);
+    expect((await ParentPracticePage()).type).toBe(PracticeScreen);
     const harness = setup();
     await advance();
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("이번에 살펴볼 목표");
@@ -100,7 +100,7 @@ describe("18 — read and favorite failures", () => {
   it("uses the configured slow-read boundary, retries, and ignores the late cancelled read", async () => {
     const first = deferred<Response>();
     let reads = 0;
-    const harness = renderParent(<Practice18 />, {
+    const harness = renderParent(<PracticeScreen />, {
       handler: () => ++reads === 1 ? first.promise : jsonResponse(200, { items: [goal()] }),
       timing: { parentLoadingNoticeDelayMs: 50, toastDurationMs: 40, toastActionMinMs: UNDO_MS },
     });
@@ -117,7 +117,7 @@ describe("18 — read and favorite failures", () => {
 
   it("clears its slow-read toast when the read eventually succeeds", async () => {
     const response = deferred<Response>();
-    renderParent(<Practice18 />, { handler: () => response.promise, timing: { parentLoadingNoticeDelayMs: 30 } });
+    renderParent(<PracticeScreen />, { handler: () => response.promise, timing: { parentLoadingNoticeDelayMs: 30 } });
     await advance(31);
     expect(screen.getByTestId("toast")).toHaveTextContent("연결이 원활하지 않아요");
     response.resolve(jsonResponse(200, { items: [goal()] })); await advance();

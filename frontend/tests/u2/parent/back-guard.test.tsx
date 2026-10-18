@@ -2,8 +2,8 @@ import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { StrictMode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useBackGuard } from "@/parent/hooks/useBackGuard";
-import { Child03 } from "@/parent/screens/Child03";
-import { Consent02 } from "@/parent/screens/Consent02";
+import { ChildScreen } from "@/parent/features/child/ChildScreen";
+import { ConsentScreen } from "@/parent/features/consent/ConsentScreen";
 import { ACCOUNT_COPY } from "@/shared/copy/account";
 import { errorResponse, homeBody, jsonResponse } from "../../u1/support/fixtures";
 import { resetRouter, router } from "../../u1/support/nextNavigation";
@@ -132,7 +132,7 @@ describe("02 · 03을 마치면 가드 칸이 없다", () => {
     router.replace.mockImplementation(() => {
       seen.push(isGuardEntry());
     });
-    renderParent(<Consent02 />, {
+    renderParent(<ConsentScreen />, {
       handler: routeAware({
         "GET /api/policies/current": () => jsonResponse(200, policyBody()),
         "PUT /api/consents": () => noContent(),
@@ -156,7 +156,7 @@ describe("02 · 03을 마치면 가드 칸이 없다", () => {
     router.replace.mockImplementation(() => {
       seen.push(isGuardEntry());
     });
-    renderParent(<Child03 />, {
+    renderParent(<ChildScreen />, {
       handler: routeAware({
         "GET /api/child": () => errorResponse(404, "CHILD_NOT_REGISTERED"),
         "POST /api/child": () => jsonResponse(201, childBody()),

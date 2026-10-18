@@ -2,9 +2,9 @@ import { act, cleanup, fireEvent, screen, within } from "@testing-library/react"
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { parseHome, parseLiveView } from "@/parent/api/types";
 import { mergeLiveView } from "@/parent/api/queries";
-import { Practice18 } from "@/parent/screens/Practice18";
+import { PracticeScreen } from "@/parent/features/practice/PracticeScreen";
 import ParentPracticePage from "@/app/parent/practice/page";
-import { Live12 } from "@/parent/screens/Live12";
+import { LiveScreen } from "@/parent/features/live/LiveScreen";
 import { SESSION_ID, OTHER_SESSION_ID, deferred, errorResponse, homeBody, jsonResponse, liveViewBody } from "../u1/support/fixtures";
 import { resetRouter, router } from "../u1/support/nextNavigation";
 import { renderParent, type RequestHandler } from "../u1/support/parentHarness";
@@ -17,10 +17,10 @@ const check = () => screen.getByRole("checkbox", { name: "선택 — 친구에�
 const start = () => screen.getByTestId("practice-start");
 async function advance(ms = 1) { await act(async () => { await vi.advanceTimersByTimeAsync(ms); }); }
 function setupStart(handler: RequestHandler) {
-  return renderParent(<Practice18 />, { handler: (path, init) => path === PATH ? jsonResponse(200, { items: GOALS }) : handler(path, init) });
+  return renderParent(<PracticeScreen />, { handler: (path, init) => path === PATH ? jsonResponse(200, { items: GOALS }) : handler(path, init) });
 }
 function setupLive(handler: RequestHandler) {
-  return renderParent(<Live12 sessionId={SESSION_ID} />, {
+  return renderParent(<LiveScreen sessionId={SESSION_ID} />, {
     handler, timing: { parentPollIntervalMs: 40 },
     prepare: (client) => client.setQueryData(["home"], parseHome(homeBody("STABLE"))),
   });

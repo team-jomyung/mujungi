@@ -3,17 +3,17 @@
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
-import { presentDone } from "../activity/donePresentation";
-import { freeFailedRoute } from "../activity/freeFailure";
-import { isStartFailure } from "../activity/livePresentation";
-import { ApiError } from "../api/apiClient";
-import { fetchHome, queryKeys, useApiClient } from "../api/queries";
-import { isTerminalStatus, type LiveView, type SessionStatus } from "../api/types";
-import { BottomTabBar, type TabKey } from "../components/BottomTabBar";
-import { useLivePolling } from "../hooks/useLivePolling";
-import { useResultStatusPolling } from "../hooks/useResultStatusPolling";
+import { presentDone } from "../../activity/donePresentation";
+import { freeFailedRoute } from "../../activity/freeFailure";
+import { isStartFailure } from "../../activity/livePresentation";
+import { ApiError } from "../../api/apiClient";
+import { fetchHome, queryKeys, useApiClient } from "../../api/queries";
+import { isTerminalStatus, type LiveView, type SessionStatus } from "../../api/types";
+import { BottomTabBar, type TabKey } from "../../components/BottomTabBar";
+import { useLivePolling } from "../../hooks/useLivePolling";
+import { useResultStatusPolling } from "../../hooks/useResultStatusPolling";
 import { RESULT_TEMP_COPY as RESULT_COPY } from "@/shared/copy/result";
-import { PARENT_ROUTES, goToLogin, isUnauthenticated, routeForTab } from "../navigation";
+import { PARENT_ROUTES, goToLogin, isUnauthenticated, routeForTab } from "../../navigation";
 import { COPY, PROPOSED_COPY, TEMP_COPY, doneTimeRangeLine } from "@/shared/copy/ko";
 import { formatHhmm, minutesBetween } from "@/shared/copy/timeText";
 import { messageForErrorCode } from "@/shared/errors/codeToCopy";
@@ -39,11 +39,11 @@ function timeRangeFor(view: LiveView | undefined): string | null {
   return from === null || to === null || minutes === null ? null : doneTimeRangeLine(from, to, minutes);
 }
 
-export interface Done17Props {
+export interface DoneScreenProps {
   readonly sessionId: string;
 }
 
-export function Done17({ sessionId }: Done17Props) {
+export function DoneScreen({ sessionId }: DoneScreenProps) {
   const router = useRouter();
   const toast = useToast();
   const api = useApiClient();
