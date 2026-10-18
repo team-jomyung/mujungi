@@ -2,7 +2,7 @@ import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, expect, it } from "vitest";
 import { PracticeHeader } from "@/parent/features/practice/PracticeHeader";
 import { parsePracticeProgress, PracticeProgressTracker } from "@/parent/features/practice/practiceProgress";
-import { U5B_COPY } from "@/parent/features/practice/u5bCopy";
+import { U5B_COPY } from "@/parent/features/practice/copy";
 
 afterEach(cleanup);
 const valid = { goalIndex: 1, goalCount: 3, goalName: "차례", stage: "FIRST_RESPONSE" };

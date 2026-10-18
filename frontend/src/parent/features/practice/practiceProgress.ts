@@ -1,4 +1,4 @@
-import { U5B_COPY } from "./u5bCopy";
+import { U5B_COPY } from "./copy";
 
 export type PracticeStage = keyof typeof U5B_COPY.stages;
 export type PracticeProgress = Readonly<{ goalIndex: number; goalCount: number; goalName: string; stage: PracticeStage }>;

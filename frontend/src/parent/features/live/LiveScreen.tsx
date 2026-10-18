@@ -9,7 +9,7 @@ import { StatusLine } from "./StatusLine";
 import { TranscriptList } from "../../common/components/TranscriptList";
 import { useLiveScreen } from "./useLiveScreen";
 import { PracticeHeader } from "../practice/PracticeHeader";
-import { U5B_COPY } from "../practice/u5bCopy";
+import { U5B_COPY } from "../practice/copy";
 import {
   COPY,
   PROPOSED_COPY,
