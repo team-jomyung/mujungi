@@ -108,7 +108,7 @@
 
 ### 단계 3 — Realtime 실행기 분리
 
-- [ ] **Step 12. `SessionContext` 도입 (3.0)** — Step 3의 표대로 공유 필드와 접근자만 `SessionContext`로 옮긴다(로직 변경 없음). 한 커밋. 검증: `:realtime-activity:clean :realtime-activity:check`, Step 2의 특성화 시험, `SingleInstanceMarkerTest`, `TimeLiteralScanTest`, ArchUnit. (BR3.1 · BR3.2 · FR4.1)
+- [x] **Step 12. `SessionContext` 도입 (3.0)** — Step 3의 표대로 공유 필드와 접근자만 `SessionContext`로 옮긴다(로직 변경 없음). 한 커밋. 검증: `:realtime-activity:clean :realtime-activity:check`, Step 2의 특성화 시험, `SingleInstanceMarkerTest`, `TimeLiteralScanTest`, ArchUnit. (BR3.1 · BR3.2 · FR4.1)
 - [ ] **Step 13. `EndingFlow` 추출 (3.1)** — "기기 표식 · 끝내기" 구역(3335~3838, 504줄)을 추출하고 `SessionExecutor` 호출 지점을 치환한다. `REALTIME_SHARE`(SI-2 · SI-9) · `TimeLiteralScanTest` 허용 목록 · ArchUnit · 범위 파일 · 문서 참조를 **같은 커밋**에서 고친다. 검증: 단계 12와 같음 + `verify.sh`. (BR1.1 · BR3.4 · BR4.1 · FR4.2 · FR4.7)
 - [ ] **Step 14. `SessionClocks` 추출 (3.2)** — "시계" 구역(3839~4022, 184줄). 시각은 `MujoongClock` 주입, 숫자 시간 값 금지. 검증: 같음. (BR3.6 · FR4.2)
 - [ ] **Step 15. `IdleClock` 추출 (3.3)** — "공백 시계 · 기술 일시정지 · 진행 조회" 구역(2809~3060, 252줄). 검증: 같음. (FR4.2)

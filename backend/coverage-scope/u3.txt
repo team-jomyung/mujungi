@@ -17,6 +17,7 @@ backend/realtime-activity/src/main/java/kr/mujoong/realtime/gateway/HeartbeatHan
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/gateway/WsFrameGuard.java
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/log/SessionGapWriter.java
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/observability/RealtimeMetrics.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/SessionContext.java
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/SessionExecutor.java
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/SessionGapPort.java
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/SessionMailbox.java

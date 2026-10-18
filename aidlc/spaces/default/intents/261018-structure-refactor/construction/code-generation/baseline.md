@@ -159,6 +159,14 @@
 | `settling` · `sessionEndedAt` | 정산 · 연습 | 정산 | |
 | `START_PHASE` 상수 | 메시지 · 연습 · 끝내기 · 시계 | — | |
 
+> **Step 12 결과(2026-10-18)**: 위 표의 필드 전부를 코드로 다시 확인한 결과 표와 같았고(이름 · 타입 · 읽고 쓰는 구역 모두 일치) 전부 `SessionContext`로 옮겼다. 표에서 달라진 점은 없다.
+> - 불변 참조(`plan` `services` `mailbox` `timers` `relay` `segment` `playback` `closing` `transcripts` `outputGeneration` `outputGen` `sendQueue` `pendingCommands` `devicePlaying` `stopConfirm`)는 `SessionContext`가 만들어 쥐고 실행기는 `ctx.xxx()`로 읽는다. 생성 순서는 같은 순수 생성자들이라 동작에 영향이 없다.
+> - 가변 상태(`status` `view` `terminated` `link` `openGapId` `joinPromptPlaybackId` `stopConfirmPlaybackId` `closingReason` `closingDetail` `closingAt` `consentWithdrawnAt` `recording` `startOpId` `startAttemptAt` `startSent` `ackReceived` `deviceReady` `deviceUnavailable` `providerStarted` `providerSessionId` `providerSession` `providerAttempt` `providerClosing` `providerClosedSignal` `settling` `sessionEndedAt`)는 getter와 setter 쌍으로 옮겼다. `status` `view` `terminated`는 `volatile`을 그대로 두었다.
+> - `START_PHASE`는 `SessionContext`의 패키지 전용 상수가 되었고 실행기는 정적 import로 쓴다.
+> - 실행기에 남긴 것: `onTerminated` `thread` `processing`(volatile) `live` 등 ⑤ 표의 필드 전부, `MAX_PENDING_COMMANDS`(전이 보조 `remember`가 쓰므로 3.4 단계 때 함께 옮긴다), 공개 타입 `Settings` `Services` `Plan` `ApprovedItem` `LiveState`와 `EVENT_*` 상수. ② ~ ④의 `EndingFlow` `IdleClock` `JoinFlow` 몫 필드(`lastMic` `silence` `technicalPause` `join` 등)도 해당 협력 객체를 추출하는 Step까지 남는다.
+> - 3.4 표의 전이 보조 메서드(`transition` `syncFromDb` `sendControl` `changeStatus` 등)는 로직 이동이 아니라 필드 이동 단계라 이번에 옮기지 않았다(Step 17에서 배정).
+> - `SessionExecutor` 줄 수: 4,361 → 4,298.
+
 **② `EndingFlow`(끝내기 3335~3838)가 받을 것**: `lastMic` · `lastPlayer` · `progressPlaybackId` · `progressPlayedToMs`(읽기 · 쓰기 모두 끝내기 구역뿐), 상수 `EVENT_LINK_REPLACED` · `EVENT_BARGE_IN` · `EVENT_MIC_LOST` · `EVENT_MIC_OK` · `EVENT_PLAYER_ERROR`(끝내기 구역에서만 사용, 외부 참조는 시험 1파일).
 
 **③ `IdleClock`(공백 시계 2809~3060)이 받을 것**: `silence`(SilenceClock) · `technicalPause` · `pauseStartedAt` · `live`(AtomicReference) · `liveState()` · `LiveState` 레코드, 상수 `EVENT_SILENCE_WARNED` · `EVENT_SILENCE_RESET` · `EVENT_TECHNICAL_PAUSE_STARTED` · `EVENT_TECHNICAL_PAUSE_ENDED`(공백 구역에서만 사용). `technicalPause`는 참여 · 판정 · 연습 · 끝내기도 읽으므로 접근자가 필요하다.

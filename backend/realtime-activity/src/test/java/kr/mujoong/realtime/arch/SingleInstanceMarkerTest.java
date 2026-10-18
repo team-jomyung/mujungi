@@ -49,6 +49,7 @@ import kr.mujoong.realtime.messaging.RealtimeInboxRepoller;
 import kr.mujoong.realtime.messaging.RealtimeOutboxSender;
 import kr.mujoong.realtime.runtime.TimerClocks;
 import kr.mujoong.realtime.session.OrphanSessionChecker;
+import kr.mujoong.realtime.session.SessionContext;
 import kr.mujoong.realtime.session.SessionExecutor;
 import kr.mujoong.realtime.session.SessionRegistry;
 import kr.mujoong.realtime.session.SessionTimers;
@@ -113,14 +114,14 @@ class SingleInstanceMarkerTest {
      */
     static final Map<String, Set<Class<?>>> REALTIME_SHARE = Map.of(
             "SI-1", Set.of(SocketRegistry.class, DeviceConnection.class, RealtimeStartupSequence.class),
-            "SI-2", Set.of(SessionRegistry.class, SessionExecutor.class, OrphanSessionChecker.class,
+            "SI-2", Set.of(SessionRegistry.class, SessionExecutor.class, SessionContext.class, OrphanSessionChecker.class,
                     RealtimeStartupSequence.class),
             "SI-3", Set.of(SessionTimers.class, TimerClocks.class),
             "SI-4", Set.of(TombstoneMap.class),
             "SI-6", Set.of(RealtimeOutboxSender.class, RealtimeInboxRepoller.class, RealtimeStartupSequence.class),
             "SI-7", Set.of(DisconnectChecker.class, StatusReporter.class, MessagingCleanupJob.class,
                     OrphanSessionChecker.class),
-            "SI-9", Set.of(ProviderClient.class, SessionExecutor.class),
+            "SI-9", Set.of(ProviderClient.class, SessionExecutor.class, SessionContext.class),
             "SI-10", Set.of(AsyncRecorder.class, JudgmentLiveRecorder.class, GuardrailEventRecorder.class),
             "SI-12", Set.of(LatencyRecorder.class));
 
