@@ -1,9 +1,10 @@
 # U12 커버리지 측정 범위 (새 연습 흐름, 작업 기록 261017-u12-practice-flow · J137)
 # -PcoverageScope=u12일 때 JaCoCo가 이 목록의 운영 소스(.java)만 잰다. 한 줄에 저장소 루트 기준 경로 하나.
 # 내용은 U12가 만든 realtime-activity 운영 Java 파일이다(설정 yml · SQL · 계약 문서 제외).
-# 이 목록은 구현 묶음마다 자란다. 지금은 묶음 A(V7 · 저장소 · 삭제 참여자 · 정산 복구 분기 · 설정 값 · 대본 읽기 · 시작 패키지 해석 · 다음 목표 대본 요청)와
-# 묶음 B(전이표 · 흐름 상태 · 상태 기계 · 라우터 · 역할 정책 · 지시문 · 기록 포트 · 설정 빈)의 새 클래스가 들어 있고,
-# 묶음 C ~ D(기록기 · 진행 매핑 등)의 새 클래스는 그 묶음에서 더한다.
+# 이 목록은 구현 묶음마다 자랐다. 묶음 A(V7 · 저장소 · 삭제 참여자 · 정산 복구 분기 · 설정 값 · 대본 읽기 · 시작 패키지 해석 · 다음 목표 대본 요청),
+# 묶음 B(전이표 · 흐름 상태 · 상태 기계 · 라우터 · 역할 정책 · 지시문 · 기록 포트 · 설정 빈), 묶음 D(운영 기록기 PracticeFlowRecorder)의 새 클래스가 들어 있다.
+# 묶음 C(생성형 슬롯 · 제브 연결)는 새 파일 없이 SessionExecutor · GuardrailCoordinator · PracticeSpeech의 호출 지점만 더했다(아래 이유로 목록 밖).
+# 진행 단계 6값 접기(progress)는 PracticeConversation 안에 있어 따로 새 클래스가 없다.
 # 정직하게 적은 목록이다:
 #  - SessionExecutor(약 4,250줄, 앞 유닛 코드가 대부분)와 SessionInternalController · StartSessionHandler · PracticeSessionExtension은 U12가 호출 지점 · 한 필드만
 #    더한 앞 유닛 파일이라 뺀다(U13과 같은 이유: 목록에 넣으면 u12 태그 시험만으로 재는 이 범위가 파일 전체를 분모로 삼아 낮게 나온다).
@@ -24,6 +25,7 @@ backend/realtime-activity/src/main/java/kr/mujoong/realtime/practiceflow/RolePol
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/practiceflow/PracticeFlowDeletionParticipant.java
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/practiceflow/PracticeFlowRecordAssembler.java
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/practiceflow/PracticeFlowRecordRecovery.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/practiceflow/PracticeFlowRecorder.java
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/practiceflow/PracticeFlowRepository.java
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/practiceflow/PracticeFlowSettings.java
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/practiceflow/PracticeFlowTypes.java

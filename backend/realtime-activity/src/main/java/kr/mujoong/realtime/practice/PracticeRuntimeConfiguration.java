@@ -11,8 +11,9 @@ import kr.mujoong.contract.time.MujoongClock;
 import kr.mujoong.contract.time.TimerDriver;
 import kr.mujoong.realtime.internalhttp.InternalHttpClient;
 import kr.mujoong.realtime.observability.EventLogger;
-import kr.mujoong.realtime.practiceflow.FlowRecorder;
 import kr.mujoong.realtime.practiceflow.PracticeConversation;
+import kr.mujoong.realtime.practiceflow.PracticeFlowRecorder;
+import kr.mujoong.realtime.practiceflow.PracticeFlowRepository;
 import kr.mujoong.realtime.practiceflow.PracticeFlowRouter;
 import kr.mujoong.realtime.practiceflow.PracticeFlowSettings;
 import kr.mujoong.realtime.practiceflow.PracticeScriptRequester;
@@ -63,7 +64,7 @@ public class PracticeRuntimeConfiguration {
     PracticeSessionExtension.Factory practiceFactory(ActivitySessionRepository sessions, PracticeRepository repository,
             MujoongClock clock, Resources resources, PracticeProperties settings, PracticePorts.ScenarioPort scenarios,
             EvaluationProvider evaluations, CueProvider cues, EventLogger events, InternalHttpClient client,
-            PracticeFlowSettings flowSettings) {
+            PracticeFlowSettings flowSettings, PracticeFlowRepository flowRepository, PlatformTransactionManager manager) {
         // U12 D1: Factory 시그니처는 그대로 두고 세션마다 얇은 라우터를 만든다. 라우터가 onActive에서 대본 scriptVersion을 보고 새 흐름 또는
         // 이 레거시 확장 한쪽에 위임한다. 다음 목표 대본 요청의 제한 시간은 레거시와 같은 상황 생성 예산(scenarioBudget)을 쓴다(안쪽 재시도 없음)
         PracticeScriptRequester flowScripts = new PracticeScriptRequester(client, resources.calls, settings.scenarioBudget());
@@ -74,7 +75,7 @@ public class PracticeRuntimeConfiguration {
                     settings, scenarios, evaluations, cues,
                     failure -> events.appError(EventLog.Component.SESSION_LIFECYCLE, failure));
             return new PracticeFlowRouter(legacy, () -> new PracticeConversation(session, guardian, clock, flowSettings,
-                    flowScripts, FlowRecorder.NONE,
+                    flowScripts, new PracticeFlowRecorder(flowRepository, new TransactionTemplate(manager)),
                     failure -> events.appError(EventLog.Component.SESSION_LIFECYCLE, failure)));
         };
     }
