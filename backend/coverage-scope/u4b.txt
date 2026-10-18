@@ -14,6 +14,7 @@ backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/TransitionSe
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/gate/ClosingSequence.java
 # L3 참여 확인
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/EndingFlow.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/SessionClocks.java
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/SessionContext.java
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/SessionExecutor.java
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/StartSessionHandler.java

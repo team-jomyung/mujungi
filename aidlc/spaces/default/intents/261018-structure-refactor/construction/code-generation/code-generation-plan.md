@@ -110,7 +110,7 @@
 
 - [x] **Step 12. `SessionContext` 도입 (3.0)** — Step 3의 표대로 공유 필드와 접근자만 `SessionContext`로 옮긴다(로직 변경 없음). 한 커밋. 검증: `:realtime-activity:clean :realtime-activity:check`, Step 2의 특성화 시험, `SingleInstanceMarkerTest`, `TimeLiteralScanTest`, ArchUnit. (BR3.1 · BR3.2 · FR4.1)
 - [x] **Step 13. `EndingFlow` 추출 (3.1)** — "기기 표식 · 끝내기" 구역(3335~3838, 504줄)을 추출하고 `SessionExecutor` 호출 지점을 치환한다. `REALTIME_SHARE`(SI-2 · SI-9) · `TimeLiteralScanTest` 허용 목록 · ArchUnit · 범위 파일 · 문서 참조를 **같은 커밋**에서 고친다. 검증: 단계 12와 같음 + `verify.sh`. (BR1.1 · BR3.4 · BR4.1 · FR4.2 · FR4.7)
-- [ ] **Step 14. `SessionClocks` 추출 (3.2)** — "시계" 구역(3839~4022, 184줄). 시각은 `MujoongClock` 주입, 숫자 시간 값 금지. 검증: 같음. (BR3.6 · FR4.2)
+- [x] **Step 14. `SessionClocks` 추출 (3.2)** — "시계" 구역(3839~4022, 184줄). 시각은 `MujoongClock` 주입, 숫자 시간 값 금지. 검증: 같음. (BR3.6 · FR4.2)
 - [ ] **Step 15. `IdleClock` 추출 (3.3)** — "공백 시계 · 기술 일시정지 · 진행 조회" 구역(2809~3060, 252줄). 검증: 같음. (FR4.2)
 - [ ] **Step 16. `JoinFlow` 추출 · 판정 턴 흡수 (3.4)** — "참여 확인"(1017~1094, 78줄)을 `JoinFlow`로, "U11 판정 턴"(1095~1354, 260줄)을 기존 `JudgmentCoordinator`로 흡수한다. 검증: 같음. 이 단계 뒤 AC-4: `SessionExecutor` 3,100줄 이하, 분리한 구역 표식 0개. (BR3.3 · FR4.2 · FR4.3)
 - [ ] **Step 17. 정리 (3.5) · 게이트 경계 (3.6) · 연습 확장점 판단 (3.7)** — Step 3 표대로 남은 머리 · 전이 보조를 `SessionContext` 또는 협력 객체로 배정하고 AC-4의 3.5 상한을 확인한다. 게이트는 `GuardrailCoordinator`와의 경계를 설계서에 적고 옮길 범위를 사람에게 묻는다. **연습 확장점 구역(약 1,454줄)은 이 단계에서 나눌지 사람에게 묻고 정해진 뒤에만 한다**(BR3.5). 검증: 같음 + `verify.sh`, 단계 3 확인. (FR4.4 · FR4.5 · FR4.6)

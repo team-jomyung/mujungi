@@ -454,6 +454,8 @@ public final class SessionExecutor {
 
     /** 기기 표식 · 끝내기 구역 협력 객체(실행기 스레드 전용). */
     private final EndingFlow ending;
+    /** 시계 구역 협력 객체(실행기 스레드 전용). */
+    private final SessionClocks clocks;
     /** U11 판정 턴 협력 객체(열린 턴 · 최근 전사 · 기록, 실행기 스레드 전용). */
     private final JudgmentCoordinator judgment;
     /** U13 제브 게이트 협력 객체(검사 상태 · 검사표 · 대기열 · 턴 재지시, 실행기 스레드 전용, NFR8). 여기에는 호출 지점과 아래 카운터만 둔다. */
@@ -521,6 +523,7 @@ public final class SessionExecutor {
                 ctx.services().settings().instructionWait(), new JudgmentEnv());
         this.guardrail = new GuardrailCoordinator(ctx.services().guardrail(), ctx.plan(), new GuardrailEnv());
         this.ending = new EndingFlow(ctx, new EndingEnv());
+        this.clocks = new SessionClocks(ctx, new ClocksEnv());
         Settings.Lifecycle lifecycle = ctx.services().settings().lifecycle();
         this.silence = new SilenceClock(lifecycle.silenceWarning(), lifecycle.silenceEnd());
         // U4b BR10.1: 연습 확장점은 PRACTICE 세션에서만 부른다(자유대화는 부르지 않는다)
@@ -712,7 +715,7 @@ public final class SessionExecutor {
     private void handle(Message message) {
         switch (message) {
             case Bootstrap ignored -> onBootstrap();
-            case TimerFired fired -> onTimer(fired);
+            case TimerFired fired -> clocks.onTimer(fired);
             case EndRequested request -> ending.onEndRequested(request);
             case ConnectionLost lost -> ending.onConnectionLost(lost);
             case SessionMailbox.JudgmentArrived arrived -> judgment.onArrived(arrived);
@@ -730,11 +733,11 @@ public final class SessionExecutor {
                     shutdown.handled().complete(null);
                 }
             }
-            case SessionMailbox.DeletionStop stop -> onDeletionStop(stop);
+            case SessionMailbox.DeletionStop stop -> clocks.onDeletionStop(stop);
             case SessionMailbox.PracticeEvent event -> onPracticeEvent(event.event());
             case SessionMailbox.PracticeTimerFired fired -> onPracticeTimer(fired);
             case SessionMailbox.DeviceTakenOver ignored -> {
-                if (farewellPending()) {
+                if (clocks.farewellPending()) {
                     finishFarewell(false);
                 }
             }
@@ -918,7 +921,7 @@ public final class SessionExecutor {
         ctx.relay().setAccepting(true);
         ctx.relay().start(ctx.services().launcher());
         sendControl(new SessionState(View.LISTENING));
-        armDisconnect();
+        clocks.armDisconnect();
         join = new JoinTracker(lifecycle().joinWait(), lifecycle().joinWaitAfterReprompt());
         putEvent(EVENT_JOIN_PROMPTED, "{\"prompts\":1}", ctx.services().clock().now());
         playJoinPrompt(ctx.plan().activityType() == ActivityType.PRACTICE ? INTRO_PRACTICE : INTRO_FREE_TALK);
@@ -940,7 +943,7 @@ public final class SessionExecutor {
         if (ctx.view() != View.LISTENING) {
             sendControl(new SessionState(View.LISTENING));
         }
-        armDisconnect();
+        clocks.armDisconnect();
     }
 
     // ------------------------------------------------------------------ 참여 확인(U4b L3)
@@ -1770,7 +1773,7 @@ public final class SessionExecutor {
 
         @Override
         public void armDisconnect() {
-            SessionExecutor.this.armDisconnect();
+            clocks.armDisconnect();
         }
 
         @Override
@@ -1801,7 +1804,7 @@ public final class SessionExecutor {
 
         @Override
         public boolean farewellPending() {
-            return SessionExecutor.this.farewellPending();
+            return clocks.farewellPending();
         }
 
         @Override
@@ -1817,6 +1820,155 @@ public final class SessionExecutor {
         @Override
         public SessionStateChanged.TechnicalPause technicalPause() {
             return technicalPause;
+        }
+    }
+
+    /** 시계 구역 협력 객체가 실행기에 남은 로직으로 되돌아오는 자리. */
+    private final class ClocksEnv implements SessionClocks.Env {
+
+        @Override
+        public boolean deviceStillOurs() {
+            return SessionExecutor.this.deviceStillOurs();
+        }
+
+        @Override
+        public ClosingSequence.Device closingDevice() {
+            return SessionExecutor.this.closingDevice();
+        }
+
+        @Override
+        public void finishFarewell(boolean deviceStillOurs) {
+            SessionExecutor.this.finishFarewell(deviceStillOurs);
+        }
+
+        @Override
+        public void onOutputQuiet() {
+            SessionExecutor.this.onOutputQuiet();
+        }
+
+        @Override
+        public void onInstructionWaitExpired() {
+            SessionExecutor.this.onInstructionWaitExpired();
+        }
+
+        @Override
+        public void onInputTranscriptQuiet() {
+            SessionExecutor.this.onInputTranscriptQuiet();
+        }
+
+        @Override
+        public void onJudgmentTimer(JudgmentTurn.TimerKind kind) {
+            judgment.onTimer(kind);
+        }
+
+        @Override
+        public void onJudgmentExit() {
+            judgment.onExit();
+        }
+
+        @Override
+        public void onGuardrailCheckTimer() {
+            guardrail.onCheckTimerFired();
+        }
+
+        @Override
+        public void onJoinPromptPlayed(Instant at) {
+            SessionExecutor.this.onJoinPromptPlayed(at);
+        }
+
+        @Override
+        public void onStopConfirmPlayed(Instant at) {
+            SessionExecutor.this.onStopConfirmPlayed(at);
+        }
+
+        @Override
+        public void redeliver() {
+            SessionExecutor.this.redeliver();
+        }
+
+        @Override
+        public void onJoinWindow() {
+            SessionExecutor.this.onJoinWindow();
+        }
+
+        @Override
+        public void onStopConfirmWindow() {
+            SessionExecutor.this.onStopConfirmWindow();
+        }
+
+        @Override
+        public void onSilenceTimer() {
+            SessionExecutor.this.onSilenceTimer();
+        }
+
+        @Override
+        public void onGapDisplayCheck() {
+            SessionExecutor.this.onGapDisplayCheck();
+        }
+
+        @Override
+        public void armGapDisplay() {
+            SessionExecutor.this.armGapDisplay();
+        }
+
+        @Override
+        public void finishSettle() {
+            SessionExecutor.this.finishSettle();
+        }
+
+        @Override
+        public void markUnresponsive() {
+            SessionExecutor.this.markUnresponsive();
+        }
+
+        @Override
+        public void afterFailed() {
+            SessionExecutor.this.afterFailed();
+        }
+
+        @Override
+        public void afterTerminal() {
+            SessionExecutor.this.afterTerminal();
+        }
+
+        @Override
+        public void syncFromDb() {
+            SessionExecutor.this.syncFromDb();
+        }
+
+        @Override
+        public void changeStatus(SessionStatus next, Instant now) {
+            SessionExecutor.this.changeStatus(next, now);
+        }
+
+        @Override
+        public void closeProvider() {
+            SessionExecutor.this.closeProvider();
+        }
+
+        @Override
+        public void quietly(Runnable step) {
+            SessionExecutor.this.quietly(step);
+        }
+
+        @Override
+        public void bumpGeneration() {
+            SessionExecutor.this.bumpGeneration();
+        }
+
+        @Override
+        public boolean sendControl(WsPayload payload) {
+            return SessionExecutor.this.sendControl(payload);
+        }
+
+        @Override
+        public SessionTransitions.Extras transitionExtras() {
+            return ending.transitionExtras();
+        }
+
+        @Override
+        public void teardown() {
+            SessionExecutor.this.teardown();
         }
     }
 
@@ -3436,190 +3588,6 @@ public final class SessionExecutor {
         return ctx.status() == SessionStatus.ACTIVE || ctx.status() == SessionStatus.CLOSING;
     }
 
-    // ------------------------------------------------------------------ 시계
-
-    private void onTimer(TimerFired fired) {
-        if (!ctx.timers().consume(fired)) {
-            return;
-        }
-        runTimer(fired.kind());
-    }
-
-    private void runTimer(Kind kind) {
-        switch (kind) {
-            case DEVICE_ACK -> onStartTimeout();
-            case CLOSING_CONFIRM -> {
-                if (farewellPending()) {
-                    // U4b BR4.7: DECLINED 인사 상한 — CLOSE_TRANSPORT를 바로 보내고 정리
-                    boolean ours = deviceStillOurs();
-                    if (ours) {
-                        ctx.closing().closeNow(closingDevice());
-                    }
-                    finishFarewell(ours);
-                } else {
-                    onClosingTimeout();
-                }
-            }
-            case DISCONNECT -> onDisconnectCheck();
-            case SEGMENT_QUIET -> onOutputQuiet();
-            case INSTRUCTION_WAIT -> onInstructionWaitExpired();
-            case INPUT_TRANSCRIPT_QUIET -> onInputTranscriptQuiet();
-            case JUDGMENT_LIVE -> judgment.onTimer(JudgmentTurn.TimerKind.LIVE);
-            case JUDGMENT_READY -> judgment.onTimer(JudgmentTurn.TimerKind.READY);
-            case JUDGMENT_INSTRUCTION -> judgment.onTimer(JudgmentTurn.TimerKind.INSTRUCTION);
-            case GUARDRAIL_CHECK -> guardrail.onCheckTimerFired();
-            case PLAYBACK_EXPIRY -> {
-                ctx.playback().clear();
-                if (ctx.status() == SessionStatus.WAITING_CHILD && ctx.joinPromptPlaybackId() != null) {
-                    // 끝 표식이 오지 않은 참여 안내는 출력 상한에서 끝난 것으로 본다(창이 영영 열리지 않는 일을 막는다)
-                    ctx.joinPromptPlaybackId(null);
-                    onJoinPromptPlayed(ctx.services().clock().now());
-                }
-                if (ctx.status() == SessionStatus.ACTIVE && ctx.stopConfirmPlaybackId() != null) {
-                    ctx.stopConfirmPlaybackId(null);
-                    onStopConfirmPlayed(ctx.services().clock().now());
-                }
-            }
-            case REDELIVER -> redeliver();
-            case JOIN_WINDOW -> onJoinWindow();
-            case STOP_CONFIRM -> onStopConfirmWindow();
-            case SILENCE -> onSilenceTimer();
-            case GAP_DISPLAY -> onGapDisplayCheck();
-            case RECORD_SETTLE -> finishSettle();
-        }
-    }
-
-    /**
-     * U4b 계정 삭제 강제 정지(BR9.1 · U4b-J19): DB 전이 · 사건 · 스냅숏을 만들지 않는다. 원음 기록을 떼고(정리가 파일을 닫는다) 연결이 살아 있고
-     * START_SESSION을 보냈으면 CLOSE_TRANSPORT(CONSENT_WITHDRAWN) + STANDBY를 보낸 뒤 정리한다(정산 창도 건너뛴다).
-     */
-    private void onDeletionStop(SessionMailbox.DeletionStop stop) {
-        try {
-            judgment.onExit();
-            ctx.relay().tap(null);
-            ctx.relay().setAccepting(false);
-            DeviceLink current = ctx.link();
-            if (ctx.startSent() && current != null && current.isOpen() && deviceStillOurs()) {
-                bumpGeneration();
-                sendControl(new CloseTransport(CloseTransport.Reason.CONSENT_WITHDRAWN));
-                sendControl(new SessionState(View.STANDBY));
-            }
-            teardown();
-        } finally {
-            stop.stopped().complete(null);
-        }
-    }
-
-    /** U4b: DECLINED 인사 순서가 아직 끝나지 않았는가. */
-    private boolean farewellPending() {
-        return ctx.status() == SessionStatus.DECLINED && ctx.closing().step() == ClosingSequence.Step.AWAITING_CLOSING_MARK;
-    }
-
-    /** BR6.12 ②: 송신 시도 시각부터 20초. ACK · READY 빠짐 → DEVICE_NO_ACK + UNRESPONSIVE, 아니면 PROVIDER_UNAVAILABLE(J59 (h)). */
-    private void onStartTimeout() {
-        if (!START_PHASE.contains(ctx.status())) {
-            return;
-        }
-        Duration threshold = ctx.services().settings().deviceAckTimeout();
-        Duration elapsed = Duration.between(ctx.startAttemptAt(), ctx.services().clock().now());
-        if (elapsed.compareTo(threshold) < 0) {
-            ctx.timers().arm(Kind.DEVICE_ACK, threshold.minus(elapsed));
-            return;
-        }
-        FailureCode code = TransitionTable.startTimeoutCode(ctx.ackReceived(), ctx.deviceReady());
-        ActivitySessionRepository.MultiOriginTransition result = ctx.services().transitions().transitionFromAny(
-                ctx.plan().sessionId(), Trigger.START_TIMEOUT.origins(), SessionStatus.FAILED,
-                read -> TransitionTable.changeFor(Trigger.START_TIMEOUT, code, ctx.services().clock().now()),
-                SessionTransitions.Origin.REALTIME, ctx.plan().traceId());
-        if (!result.transitioned()) {
-            syncFromDb();
-            return;
-        }
-        changeStatus(SessionStatus.FAILED, ctx.services().clock().now());
-        timeoutFired("DEVICE_ACK", threshold, elapsed);
-        if (code == FailureCode.DEVICE_NO_ACK) {
-            markUnresponsive();
-        }
-        afterFailed();
-    }
-
-    /** BR6.12 ③: CLOSING 진입부터 30초. ENDED_UNCONFIRMED + UNRESPONSIVE. */
-    private void onClosingTimeout() {
-        if (ctx.status() != SessionStatus.CLOSING) {
-            return;
-        }
-        Duration threshold = ctx.services().settings().closingConfirm();
-        Duration elapsed = Duration.between(ctx.closingAt(), ctx.services().clock().now());
-        if (elapsed.compareTo(threshold) < 0) {
-            ctx.timers().arm(Kind.CLOSING_CONFIRM, threshold.minus(elapsed));
-            return;
-        }
-        Instant now = ctx.services().clock().now();
-        closeProvider();
-        // U4b BR1.4: UNCONFIRMED로 덮고 처음 사유(와 세부)를 end_detail에 둔다
-        Optional<ActivitySessionRow> row = ctx.services().transitions().transition(ctx.plan().sessionId(), SessionStatus.CLOSING,
-                SessionStatus.ENDED_UNCONFIRMED,
-                TransitionTable.closingTimeoutChange(ctx.closingReason(), ctx.closingDetail(), now).withProviderClosedAt(now),
-                SessionTransitions.Origin.REALTIME, ctx.plan().traceId());
-        if (row.isEmpty()) {
-            syncFromDb();
-            return;
-        }
-        changeStatus(SessionStatus.ENDED_UNCONFIRMED, ctx.services().clock().now());
-        // U4b BR6.4 · U4b-J14: CLOSING 진입부터 ended_at까지를 UNCONFIRMED 구간으로 남긴다
-        quietly(() -> ctx.services().gaps().close(
-                ctx.services().gaps().open(ctx.plan().sessionId(), SessionGapRepository.Kind.UNCONFIRMED, ctx.closingAt()), now));
-        timeoutFired("CLOSING_CONFIRM", threshold, elapsed);
-        markUnresponsive();
-        bumpGeneration();
-        sendControl(new SessionState(View.STANDBY));
-        afterTerminal();
-    }
-
-    /** BR6.12 ④: 묶인 연결의 마지막 기기 메시지부터 40초. 메시지마다 다시 걸지 않고 만기 때 남은 시간으로 다시 건다. */
-    private void onDisconnectCheck() {
-        // U4b BR6.3: WAITING_CHILD까지 넓혔다. CLOSING에는 끊김 전이가 없다
-        if (!Trigger.DISCONNECT.accepts(ctx.status())) {
-            return;
-        }
-        Duration threshold = ctx.services().settings().disconnect();
-        Instant last = ctx.link() == null ? ctx.startAttemptAt() : ctx.link().lastMessageAt();
-        Duration elapsed = Duration.between(last, ctx.services().clock().now());
-        if (elapsed.compareTo(threshold) < 0) {
-            ctx.timers().arm(Kind.DISCONNECT, threshold.minus(elapsed));
-            return;
-        }
-        Instant now = ctx.services().clock().now();
-        Optional<ActivitySessionRow> row = ctx.services().transitions().transition(ctx.plan().sessionId(), ctx.status(),
-                SessionStatus.ABORTED, TransitionTable.changeFor(Trigger.DISCONNECT, null, now).withProviderClosedAt(now),
-                SessionTransitions.Origin.REALTIME, ctx.plan().traceId(), ending.transitionExtras());
-        if (row.isEmpty()) {
-            // J292: 진 끊김 시계는 공급자를 닫지 않는다 — 행이 CLOSING이면 CLOSING이 끊김보다 우선하고(BR6.12 ③) 공급자는
-            // VOICE_SESSION_CLOSED · 30초 시한까지 열어 둔다(BR6.10 ④)
-            syncFromDb();
-            return;
-        }
-        changeStatus(SessionStatus.ABORTED, ctx.services().clock().now());
-        closeProvider();
-        timeoutFired("DISCONNECT", threshold, elapsed);
-        afterTerminal();
-    }
-
-    private void armDisconnect() {
-        Duration threshold = ctx.services().settings().disconnect();
-        Instant last = ctx.link() == null ? ctx.services().clock().now() : ctx.link().lastMessageAt();
-        Duration elapsed = Duration.between(last, ctx.services().clock().now());
-        ctx.timers().arm(Kind.DISCONNECT, elapsed.isNegative() ? threshold : threshold.minus(elapsed));
-        armGapDisplay();
-    }
-
-    private void timeoutFired(String type, Duration threshold, Duration elapsed) {
-        ctx.services().metrics().timeoutFired(type);
-        ctx.services().events().log(EventCode.TIMEOUT_FIRED, EventLog.Component.SESSION_LIFECYCLE, ctx.plan().sessionId(),
-                ctx.plan().traceId(), entry -> entry.attr(AttrKey.TYPE, type).attr(AttrKey.THRESHOLD_MS, threshold.toMillis())
-                        .attr(AttrKey.ELAPSED_MS, Math.max(0L, elapsed.toMillis())));
-    }
-
     // ------------------------------------------------------------------ 재전달 · 최상위 예외
 
     private void scheduleRetry(Message message) {
@@ -3640,7 +3608,7 @@ public final class SessionExecutor {
             }
             try {
                 if (item instanceof Kind kind) {
-                    runTimer(kind);
+                    clocks.runTimer(kind);
                 } else {
                     handle((Message) item);
                 }
