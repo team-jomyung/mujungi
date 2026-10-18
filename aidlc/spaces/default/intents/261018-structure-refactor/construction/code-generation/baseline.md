@@ -277,6 +277,12 @@
 - 화면별(`parent/screens`, 줄): `Free08` 11 · `Live12` 7 · `Home04` 6 · `Done17` 4 · `Register05a` 4 · `Child03` 1 · `Consent02` 1 · `DevLogin` 1 · `Login01` 1 · `LoginCallback` 1 · `StopExpressions01` 1, 나머지 0.
 - AC-7은 단계 6에서 **건드린 파일만** 기준선과 비교한다. 단계 6이 시작될 때 건드린 파일 목록에 이 정규식을 다시 돌려 기준선(위 값을 파일별로 나눈 값)과 대조한다.
 
+## 4.3 사람이 승인한 결정 (2026-10-18, Step 1 ~ 4 보고에 대한 답)
+
+- **AC-4 상한**: 3.5 뒤 `SessionExecutor`는 **2,800줄 이하**(3.5절 제안 그대로 수용). 설계 `functional-spec.md` 5절 AC-4의 해당 칸은 설계 문서를 직접 고치지 않고 이 결정을 단계 3의 판정 기준으로 쓴다. 연습 확장점(1,454줄)과 게이트(274줄)가 실행기에 남는 한 약 2,719줄 밑으로는 내려가지 않는다.
+- **"판정 턴" 구역 나머지 194줄의 목적지**(2.1절): 참여 수락 · 거절(`acceptJoin` `declineJoin` 등)은 **`JoinFlow`**, 마무리 인사(`startFarewell` 등)와 종료 뒤 정산(`afterTerminal` `finishSettle` 등)은 **`EndingFlow`**로 보낸다. 실제 판정(J1) 66줄만 `JudgmentCoordinator`로 흡수한다. 실행기에서 빠지는 줄 수는 같다.
+- **Step 5 ~ 8(프런트 이동) 시작을 승인**했다.
+
 ## 5. 이 문서가 다른 Step에 넘기는 것
 
 - Step 5 ~ 8: `reference-checklist.md`의 프런트 시험 목록(실측 50파일)과 `src/app` import 20곳.
