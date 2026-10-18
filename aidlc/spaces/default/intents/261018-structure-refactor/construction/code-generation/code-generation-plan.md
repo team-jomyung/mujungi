@@ -101,10 +101,10 @@
 
 ### 단계 2 — 프런트 화면 흐름 훅 분리
 
-- [ ] **Step 9. 훅 분리 — `Live` · `Home` · `Done`** — `useLiveScreen` · `useHomeScreen` · `useDoneScreen`으로 요청 · 오류 분기 · 폴링 · `router.*`를 옮긴다. 화면 컴포넌트는 값과 핸들러만 쓴다. 오류 문구는 `codeToCopy`만. 검증: 이전에 있던 화면 시험(`live-12.test` · `home-04.test` · `done-17.test` 등) 무변경 통과, AC-3(`*Screen.tsx`에서 `router.` · `useRouter` · `catch` · `await` 0건). (BR2.1 · BR2.2 · FR3.1)
-- [ ] **Step 10. 훅 분리 — `Device` · `DeviceRegister` · `Child` · `StopExpressions` · `Consent` · `Free`** — 같은 방식. 검증: 해당 화면 시험 무변경 통과, AC-3. (BR2.1 · FR3.1)
-- [ ] **Step 11. 요청 · 문구 위치 정리** — `account.ts`를 설계 3.a 표대로 분할(`common/api/account` 로그인 · 계정, `features/consent/api` 동의, `features/child/api` 자녀 · 정지 표현), `queries.ts`의 기능별 함수를 `features/{home,device,free,live,login}/api.ts`로 분리하고 공통만 `common/api/queries.ts`에 남긴다. 연습 `api.ts` + `startApi.ts`를 `features/practice/api.ts` 하나로, `copy.ts` + `u5bCopy.ts`를 `features/practice/copy.ts` 하나로 합친다. 검증: 프런트 전체, 범위 `u5b`(3개 파일 32개 시험) · `u7`(6개 파일 89개 시험) 시험 수 동일, `verify.sh`. (BR2.3 · BR1.4 · FR3.2 · FR3.3 · 편차 FD-D6)
-- [ ] **단계 2 확인** — 프런트 전체 + `verify.sh` 통과, `main` 따라잡기, 커밋 묶음 완료.
+- [x] **Step 9. 훅 분리 — `Live` · `Home` · `Done`** — `useLiveScreen` · `useHomeScreen` · `useDoneScreen`으로 요청 · 오류 분기 · 폴링 · `router.*`를 옮긴다. 화면 컴포넌트는 값과 핸들러만 쓴다. 오류 문구는 `codeToCopy`만. 검증: 이전에 있던 화면 시험(`live-12.test` · `home-04.test` · `done-17.test` 등) 무변경 통과, AC-3(`*Screen.tsx`에서 `router.` · `useRouter` · `catch` · `await` 0건). (BR2.1 · BR2.2 · FR3.1)
+- [x] **Step 10. 훅 분리 — `Device` · `DeviceRegister` · `Child` · `StopExpressions` · `Consent` · `Free`** — 같은 방식. 검증: 해당 화면 시험 무변경 통과, AC-3. (BR2.1 · FR3.1)
+- [x] **Step 11. 요청 · 문구 위치 정리** — `account.ts`를 설계 3.a 표대로 분할(`common/api/account` 로그인 · 계정, `features/consent/api` 동의, `features/child/api` 자녀 · 정지 표현), `queries.ts`의 기능별 함수를 `features/{home,device,free,live,login}/api.ts`로 분리하고 공통만 `common/api/queries.ts`에 남긴다. 연습 `api.ts` + `startApi.ts`를 `features/practice/api.ts` 하나로, `copy.ts` + `u5bCopy.ts`를 `features/practice/copy.ts` 하나로 합친다. 검증: 프런트 전체, 범위 `u5b`(3개 파일 32개 시험) · `u7`(6개 파일 89개 시험) 시험 수 동일, `verify.sh`. (BR2.3 · BR1.4 · FR3.2 · FR3.3 · 편차 FD-D6)
+- [x] **단계 2 확인** — 프런트 전체 + `verify.sh` 통과, `main` 따라잡기, 커밋 묶음 완료.
 
 ### 단계 3 — Realtime 실행기 분리
 
