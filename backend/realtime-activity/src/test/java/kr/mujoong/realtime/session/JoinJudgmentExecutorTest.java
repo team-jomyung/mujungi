@@ -32,7 +32,7 @@ class JoinJudgmentExecutorTest {
         assertThat(t.judge.last().request().point()).isEqualTo(JudgmentPoint.J1);
         assertThat(t.h.executor.status()).isEqualTo(SessionStatus.WAITING_CHILD);
         assertThat(t.views()).as("참여 확인 중 판정 턴은 보기를 바꾸지 않는다").hasSize(viewsBefore);
-        assertThat(t.events(SessionExecutor.EVENT_JOIN_RE_PROMPTED)).as("결과 전에는 join.reply를 부르지 않는다").isEmpty();
+        assertThat(t.events(JoinFlow.EVENT_JOIN_RE_PROMPTED)).as("결과 전에는 join.reply를 부르지 않는다").isEmpty();
     }
 
     @Test
@@ -55,7 +55,7 @@ class JoinJudgmentExecutorTest {
         t.h.drain();
 
         assertThat(t.h.executor.status()).isEqualTo(SessionStatus.ACTIVE);
-        assertThat(t.events(SessionExecutor.EVENT_JOIN_ACCEPTED)).hasSize(1);
+        assertThat(t.events(JoinFlow.EVENT_JOIN_ACCEPTED)).hasSize(1);
         JudgmentLiveRecord record = t.onlyRecord();
         assertThat(record.trigger()).isEqualTo(JudgmentTrigger.JOIN_UNCLEAR);
         assertThat(record.nextAction()).isEqualTo(NextAction.START_JOIN);
@@ -69,7 +69,7 @@ class JoinJudgmentExecutorTest {
         t.h.childSays("j-1", JudgmentExecutorSupport.UNCLEAR_JOIN);
         t.judge.confirm("DECLINE", 0.9, "UNCLEAR", 0.05);
         t.h.drain();
-        assertThat(t.events(SessionExecutor.EVENT_JOIN_ALTERNATIVE_OFFERED)).hasSize(1);
+        assertThat(t.events(JoinFlow.EVENT_JOIN_ALTERNATIVE_OFFERED)).hasSize(1);
         assertThat(t.records().getLast().nextAction()).isEqualTo(NextAction.DECLINE_JOIN);
 
         JudgmentExecutorSupport second = new JudgmentExecutorSupport();
@@ -77,7 +77,7 @@ class JoinJudgmentExecutorTest {
         second.h.childSays("j-1", JudgmentExecutorSupport.UNCLEAR_JOIN);
         second.judge.confirm("REST", 0.9, "UNCLEAR", 0.05);
         second.h.drain();
-        assertThat(second.events(SessionExecutor.EVENT_JOIN_RE_PROMPTED)).singleElement()
+        assertThat(second.events(JoinFlow.EVENT_JOIN_RE_PROMPTED)).singleElement()
                 .satisfies(event -> assertThat(event.getPayloadJson()).contains("UNCLEAR"));
         assertThat(second.onlyRecord().nextAction()).isEqualTo(NextAction.REPROMPT_JOIN);
         assertThat(second.appendedContents()).as("휴식에 받아 주는 말을 만들지 않는다(U11-D6)").isEmpty();
@@ -87,7 +87,7 @@ class JoinJudgmentExecutorTest {
         third.h.childSays("j-1", JudgmentExecutorSupport.UNCLEAR_JOIN);
         third.judge.abstain(AbstainReason.LOW_MARGIN);
         third.h.drain();
-        assertThat(third.events(SessionExecutor.EVENT_JOIN_RE_PROMPTED)).hasSize(1);
+        assertThat(third.events(JoinFlow.EVENT_JOIN_RE_PROMPTED)).hasSize(1);
         assertThat(third.onlyRecord().outcome()).isEqualTo(JudgmentOutcomeKind.ABSTAINED);
     }
 
@@ -101,7 +101,7 @@ class JoinJudgmentExecutorTest {
         t.judge.confirm("UNCLEAR", 0.9, "REST", 0.05);
         t.h.drain();
 
-        assertThat(t.events(SessionExecutor.EVENT_JOIN_RE_PROMPTED)).as("재안내는 한 번만 센다").hasSize(1);
+        assertThat(t.events(JoinFlow.EVENT_JOIN_RE_PROMPTED)).as("재안내는 한 번만 센다").hasSize(1);
         assertThat(t.judge.calls()).hasSize(2);
         assertThat(t.h.executor.status()).isEqualTo(SessionStatus.WAITING_CHILD);
     }
@@ -113,16 +113,16 @@ class JoinJudgmentExecutorTest {
         t.h.childSays("j-1", JudgmentExecutorSupport.UNCLEAR_JOIN);
 
         t.h.advanceAlive(Duration.ofMillis(300));
-        assertThat(t.events(SessionExecutor.EVENT_JOIN_RE_PROMPTED)).as("창 만기는 J1 중 미뤄진다").isEmpty();
+        assertThat(t.events(JoinFlow.EVENT_JOIN_RE_PROMPTED)).as("창 만기는 J1 중 미뤄진다").isEmpty();
         assertThat(t.h.executor.status()).isEqualTo(SessionStatus.WAITING_CHILD);
 
         t.judge.confirm("UNCLEAR", 0.9, "REST", 0.05);
         t.h.drain();
 
-        assertThat(t.events(SessionExecutor.EVENT_JOIN_RE_PROMPTED)).singleElement().satisfies(event -> {
+        assertThat(t.events(JoinFlow.EVENT_JOIN_RE_PROMPTED)).singleElement().satisfies(event -> {
             assertThat(event.getPayloadJson()).as("원래 전사 시각(창 안)으로 넣었으므로 무응답이 아니다").contains("\"cause\":\"UNCLEAR\"");
         });
-        assertThat(t.events(SessionExecutor.EVENT_JOIN_DECLINED)).isEmpty();
+        assertThat(t.events(JoinFlow.EVENT_JOIN_DECLINED)).isEmpty();
     }
 
     @Test
@@ -151,13 +151,13 @@ class JoinJudgmentExecutorTest {
         JudgmentLiveRecord record = t.onlyRecord();
         assertThat(record.turnOpened()).isFalse();
         assertThat(record.abstainReason()).isEqualTo(AbstainReason.UNREADABLE_INPUT);
-        assertThat(t.events(SessionExecutor.EVENT_JOIN_RE_PROMPTED)).hasSize(1);
+        assertThat(t.events(JoinFlow.EVENT_JOIN_RE_PROMPTED)).hasSize(1);
 
         JudgmentExecutorSupport none = new JudgmentExecutorSupport();
         none.judge.available(false);
         none.waiting();
         none.h.childSays("j-1", JudgmentExecutorSupport.UNCLEAR_JOIN);
         assertThat(none.onlyRecord().abstainReason()).isEqualTo(AbstainReason.NO_PROVIDER);
-        assertThat(none.events(SessionExecutor.EVENT_JOIN_RE_PROMPTED)).hasSize(1);
+        assertThat(none.events(JoinFlow.EVENT_JOIN_RE_PROMPTED)).hasSize(1);
     }
 }

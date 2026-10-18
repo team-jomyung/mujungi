@@ -127,9 +127,9 @@ class TechnicalPauseU4bTest {
         assertThat(h.executor.liveState().technicalPause()).isNull();
 
         h.advanceAlive(Duration.ofSeconds(8));
-        assertThat(events(SessionExecutor.EVENT_JOIN_RE_PROMPTED)).as("멈춘 시간은 창에 세지 않는다").isEmpty();
+        assertThat(events(JoinFlow.EVENT_JOIN_RE_PROMPTED)).as("멈춘 시간은 창에 세지 않는다").isEmpty();
         h.advanceAlive(Duration.ofSeconds(3));
-        assertThat(events(SessionExecutor.EVENT_JOIN_RE_PROMPTED)).hasSize(1);
+        assertThat(events(JoinFlow.EVENT_JOIN_RE_PROMPTED)).hasSize(1);
     }
 
     @Test

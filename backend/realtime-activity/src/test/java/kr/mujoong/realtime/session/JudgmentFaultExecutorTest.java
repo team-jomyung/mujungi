@@ -88,7 +88,7 @@ class JudgmentFaultExecutorTest {
         t.h.advance(Duration.ofSeconds(3));
 
         assertThat(t.onlyRecord().outcome()).isEqualTo(JudgmentOutcomeKind.FAULT_CANCELLED);
-        assertThat(t.events(SessionExecutor.EVENT_JOIN_RE_PROMPTED)).as("결과를 쓰지 않는다").isEmpty();
+        assertThat(t.events(JoinFlow.EVENT_JOIN_RE_PROMPTED)).as("결과를 쓰지 않는다").isEmpty();
         t.h.link.touch(t.h.clock.now());
         t.h.advance(t.h.settings.timerTick());
         assertThat(t.h.executor.timers().isArmed(SessionTimers.Kind.JOIN_WINDOW)).isTrue();

@@ -4,6 +4,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import kr.mujoong.contract.log.AttrKey;
@@ -87,8 +88,6 @@ public final class EndingFlow {
 
         void afterFailed(CloseTransport.Reason reason);
 
-        void afterTerminal();
-
         void listeningAgain();
 
         void approvedBubble(SessionExecutor.ApprovedItem item, Instant at);
@@ -110,11 +109,20 @@ public final class EndingFlow {
 
         Map<UUID, String> practicePlaybacks();
 
-        boolean farewellPending();
-
-        void finishFarewell(boolean deviceStillOurs);
-
         void guardrailTurnBoundary();
+
+        void teardown();
+
+        /** 묶던 입력 전사 조각이 열려 있는가. */
+        boolean inputGroupOpen();
+
+        void flushInputGroupInSettle();
+
+        /** 연습 확장점이 출력을 쥐고 있으면 정산을 미룰 남은 시간, 아니면 0이다. */
+        Duration practiceSettlementDelay();
+
+        /** 연습 확장점의 정산 시점을 한 번 부르고 practice 값을 받는다(확장점이 없거나 예외가 났으면 null). */
+        Object practiceRecordForSettle(Instant cutoff);
     }
 
     private final SessionContext ctx;
@@ -133,7 +141,7 @@ public final class EndingFlow {
     }
 
     void onPlaybackMark(PlaybackMarkReceived received) {
-        if ((ctx.status().isTerminal() && !env.farewellPending()) || !env.fromBoundConnection(received.connectionId())) {
+        if ((ctx.status().isTerminal() && !farewellPending()) || !env.fromBoundConnection(received.connectionId())) {
             return;
         }
         idle.deviceHeard();
@@ -154,7 +162,7 @@ public final class EndingFlow {
         if (ctx.status() == SessionStatus.DECLINED) {
             // U4b BR4.7: DECLINED 마무리 인사의 끝 표식 → CLOSE_TRANSPORT(DECLINED) → 정리
             if (ctx.closing().onPlaybackMark(env.closingDevice(), mark.playbackId(), mark.status())) {
-                env.finishFarewell(true);
+                finishFarewell(true);
             }
             return;
         }
@@ -428,7 +436,7 @@ public final class EndingFlow {
         env.changeStatus(SessionStatus.ENDED, ctx.services().clock().now());
         env.bumpGeneration();
         env.sendControl(new SessionState(View.STANDBY));
-        env.afterTerminal();
+        afterTerminal();
     }
 
     void onEndRequested(EndRequested request) {
@@ -633,5 +641,120 @@ public final class EndingFlow {
         if (Trigger.DISCONNECT.accepts(ctx.status())) {
             idle.startPause(idle.lastDeviceMessageAt(), now);
         }
+    }
+
+    /** DECLINED 마무리 인사(BR4.7 · U4b-J8): 출력 · 입력을 멈추고 CLOSING 문구 1회 → 그 끝 표식 뒤 CLOSE_TRANSPORT(DECLINED). */
+    void startFarewell() {
+        env.bumpGeneration();
+        ctx.timers().cancel(Kind.SEGMENT_QUIET);
+        ctx.timers().cancel(Kind.DISCONNECT);
+        ctx.timers().cancel(Kind.PLAYBACK_EXPIRY);
+        ctx.segment().reset();
+        ctx.relay().setAccepting(false);
+        ctx.joinPromptPlaybackId(null);
+        boolean closedNow = ctx.closing().beginFarewell(env.closingDevice(),
+                ctx.plan().closing() == null ? null : ctx.plan().closing().contentVersionId(), ctx.playback(), UUID::randomUUID);
+        if (closedNow) {
+            finishFarewell(true);
+            return;
+        }
+        ctx.timers().arm(Kind.CLOSING_CONFIRM, ctx.services().settings().closingConfirm());
+    }
+
+    /**
+     * DECLINED 인사 순서를 끝낸다(CLOSE_TRANSPORT를 보냈거나 상한을 넘김 · 같은 기기의 새 세션). 그 뒤 정리한다(정산은 인사 순서보다 앞서지 않는다,
+     * BR4.7).
+     *
+     * @param deviceStillOurs 기기가 아직 이 세션에 묶여 있는가(아니면 기기 명령을 보내지 않는다)
+     */
+    void finishFarewell(boolean deviceStillOurs) {
+        ctx.timers().cancel(Kind.CLOSING_CONFIRM);
+        Instant now = ctx.services().clock().now();
+        if (deviceStillOurs) {
+            env.annotateQuietly(SessionStatus.DECLINED, SessionChange.none().withTransportClosedAt(now));
+            env.sendControl(new SessionState(View.STANDBY));
+        }
+        afterTerminal();
+    }
+
+    /** 이 세션이 아직 기기 연결을 쥐고 있는가(같은 기기에 새 세션이 묶였으면 거짓, BR4.7). */
+    boolean deviceStillOurs() {
+        DeviceLink current = ctx.link();
+        if (current == null || !current.isOpen()) {
+            return false;
+        }
+        UUID bound = current.boundSessionId();
+        return bound == null || bound.equals(ctx.plan().sessionId());
+    }
+
+    /** U4b: DECLINED 인사 순서가 아직 끝나지 않았는가. */
+    boolean farewellPending() {
+        return ctx.status() == SessionStatus.DECLINED && ctx.closing().step() == ClosingSequence.Step.AWAITING_CLOSING_MARK;
+    }
+
+    /**
+     * 종료 상태로 간 뒤의 뒷일(U4b BR8.1 · WF7): ① 공급자를 닫고 provider_closed_at ② 정산 창(공급자 연결이 닫혔다는 알림 또는 record-settle) —
+     * 그 동안 온 아이 확정 전사는 발화 시작이 ended_at보다 이르면 저장한다(BR8.6) ③ ~ ⑦ {@link #finishSettle}. 정산 입구가 없으면(실행기 단위 시험
+     * 기본값) 곧바로 정리한다. 세션당 한 번이다.
+     */
+    void afterTerminal() {
+        if (ctx.terminated() || ctx.settling()) {
+            return;
+        }
+        env.stopPracticeProgress();
+        if (!ctx.services().settlement().enabled()) {
+            env.teardown();
+            return;
+        }
+        ctx.settling(true);
+        Instant now = ctx.services().clock().now();
+        ctx.sessionEndedAt(now);
+        try {
+            ctx.sessionEndedAt(ctx.services().transitions().find(ctx.plan().sessionId()).map(ActivitySessionRow::endedAt)
+                    .filter(Objects::nonNull).orElse(now));
+        } catch (RuntimeException e) {
+            ctx.services().events().appError(EventLog.Component.SESSION_LIFECYCLE, e);
+        }
+        ctx.timers().cancelAll();
+        if (env.inputGroupOpen()) {
+            // 묶던 입력 전사는 정산 창 안에서 이어지는 조각을 받아 조용해지면(또는 창이 끝나면) 확정한다
+            ctx.timers().arm(Kind.INPUT_TRANSCRIPT_QUIET, ctx.services().settings().inputTranscriptQuiet());
+        }
+        ctx.relay().setAccepting(false);
+        boolean alreadyClosed = ctx.providerSession() == null || ctx.providerClosedSignal();
+        env.closeProvider();
+        SessionStatus ended = ctx.status();
+        env.annotateQuietly(ended, SessionChange.none().withProviderClosedAt(now));
+        if (alreadyClosed) {
+            finishSettle();
+            return;
+        }
+        ctx.timers().arm(Kind.RECORD_SETTLE, ctx.services().settings().lifecycle().recordSettle());
+    }
+
+    /**
+     * 정산 창이 끝났다(BR8.1 ③ ~ ⑦): 확장점 정산 시점 · 전사 기록기 비우기 · practice 값 · 스냅숏 + SessionRecordCaptured 한 트랜잭션. 쓰기가 실패하면
+     * 앱 오류 한 줄을 남기고 정리한다(재무장이 다시 쓴다). 이 뒤에 온 사건은 무시한다(BR8.7).
+     */
+    void finishSettle() {
+        if (!ctx.settling() || ctx.terminated()) {
+            return;
+        }
+        Duration remaining = env.practiceSettlementDelay();
+        if (remaining.isPositive()) {
+            ctx.timers().arm(Kind.RECORD_SETTLE, remaining);
+            return;
+        }
+        ctx.timers().cancel(Kind.RECORD_SETTLE);
+        env.quietly(env::flushInputGroupInSettle);
+        Instant cutoff = ctx.services().clock().now();
+        env.quietly(() -> ctx.transcripts().closeAll(cutoff));
+        env.quietly(() -> ctx.services().recorder().flushSession(ctx.plan().sessionId(), ctx.services().settings().timerTick()));
+        try {
+            ctx.services().settlement().capture(ctx.plan().sessionId(), env.practiceRecordForSettle(cutoff), cutoff);
+        } catch (RuntimeException e) {
+            ctx.services().events().appError(EventLog.Component.SESSION_LIFECYCLE, e);
+        }
+        env.teardown();
     }
 }

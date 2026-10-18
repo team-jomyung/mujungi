@@ -70,7 +70,7 @@ class SessionJoinU4bTest {
             assertThat(row.assemblyStatus()).isEqualTo(TranscriptEntry.AssemblyStatus.FINAL);
         });
         assertThat(h.executor.timers().isArmed(SessionTimers.Kind.JOIN_WINDOW)).as("창은 재생 완료부터").isFalse();
-        assertThat(events(SessionExecutor.EVENT_JOIN_PROMPTED)).hasSize(1);
+        assertThat(events(JoinFlow.EVENT_JOIN_PROMPTED)).hasSize(1);
     }
 
     @Test
@@ -95,7 +95,7 @@ class SessionJoinU4bTest {
         assertThat(h.recordings.opened()).as("원음 기록은 ACTIVE부터").hasSize(1);
         assertThat(h.store.transcripts).as("참여 대답은 저장하지 않는다(BR2.5)")
                 .noneMatch(entry -> entry.speaker() == TranscriptEntry.Speaker.CHILD);
-        assertThat(events(SessionExecutor.EVENT_JOIN_ACCEPTED)).singleElement()
+        assertThat(events(JoinFlow.EVENT_JOIN_ACCEPTED)).singleElement()
                 .satisfies(event -> assertThat(event.getPayloadJson()).isEqualTo("{\"prompts\":1}"));
     }
 
@@ -143,7 +143,7 @@ class SessionJoinU4bTest {
         h.childSays("i-1", "싫어");
         assertThat(plays()).extracting(PlayApprovedContent::contentCode).last()
                 .isEqualTo(SessionExecutor.DECLINE_ALTERNATIVE);
-        assertThat(events(SessionExecutor.EVENT_JOIN_ALTERNATIVE_OFFERED)).singleElement()
+        assertThat(events(JoinFlow.EVENT_JOIN_ALTERNATIVE_OFFERED)).singleElement()
                 .satisfies(event -> assertThat(event.getPayloadJson()).contains("REFUSE").doesNotContain("싫어"));
 
         mark(plays().getLast(), PlaybackMark.Status.COMPLETED);

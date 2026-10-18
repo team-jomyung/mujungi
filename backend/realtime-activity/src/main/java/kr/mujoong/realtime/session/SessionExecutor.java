@@ -407,11 +407,6 @@ public final class SessionExecutor {
     /** 리뷰 반영 3: 종료 의도 뒤 아이가 종료가 아닌 말로 대화를 이어 가 출력 막힘을 풀었다(오판 복구). */
     static final String EVENT_CHILD_STOP_LIFTED = "CHILD_STOP_LIFTED";
     /** U4b 세션 사건 종류(payload는 코드 · 횟수 · 분류 이름 · 시각뿐, BR12.1 · entities SessionEvent). */
-    static final String EVENT_JOIN_PROMPTED = "JOIN_PROMPTED";
-    static final String EVENT_JOIN_RE_PROMPTED = "JOIN_RE_PROMPTED";
-    static final String EVENT_JOIN_ALTERNATIVE_OFFERED = "JOIN_ALTERNATIVE_OFFERED";
-    static final String EVENT_JOIN_ACCEPTED = "JOIN_ACCEPTED";
-    static final String EVENT_JOIN_DECLINED = "JOIN_DECLINED";
     static final String EVENT_APPROVED_CONTENT_MISSING = "APPROVED_CONTENT_MISSING";
     static final String EVENT_STOP_CONFIRM_ASKED = "STOP_CONFIRM_ASKED";
     static final String EVENT_STOP_CONFIRM_RESOLVED = "STOP_CONFIRM_RESOLVED";
@@ -448,6 +443,8 @@ public final class SessionExecutor {
 
     /** 기기 표식 · 끝내기 구역 협력 객체(실행기 스레드 전용). */
     private final EndingFlow ending;
+    /** 참여 확인 구역 협력 객체(참여 판단 상태를 쥔다, 실행기 스레드 전용). */
+    private final JoinFlow joinFlow;
     /** 시계 구역 협력 객체(실행기 스레드 전용). */
     private final SessionClocks clocks;
     /** 공백 시계 · 기술 일시정지 · 진행 조회 협력 객체(진행 조회 값만 다른 스레드가 읽는다). */
@@ -471,8 +468,6 @@ public final class SessionExecutor {
     private Thread thread;
     /** U4b BR1.7: 동의 철회 뒤 버린 아이 확정 전사 수(사건 payload는 건수만, BR12.1). */
     private int droppedAfterConsent;
-    /** U4b 참여 판단(WAITING_CHILD에 들어갈 때 만든다, BR2.2 ~ BR2.4). */
-    private JoinTracker join;
     /** U4b 연습 확장점(PRACTICE 세션만, 예외가 나면 null로 두고 자유대화처럼 잇는다, BR10.1). */
     private PracticeSessionExtension practice;
     /** U4b BR10.1: 확장점 예외가 났다(정산 시점을 건너뛰고 practice는 null). */
@@ -511,7 +506,8 @@ public final class SessionExecutor {
         this.guardrail = new GuardrailCoordinator(ctx.services().guardrail(), ctx.plan(), new GuardrailEnv());
         this.idle = new IdleClock(ctx, new IdleEnv());
         this.ending = new EndingFlow(ctx, idle, new EndingEnv());
-        this.clocks = new SessionClocks(ctx, idle, new ClocksEnv());
+        this.joinFlow = new JoinFlow(ctx, idle, judgment, ending, new JoinEnv());
+        this.clocks = new SessionClocks(ctx, idle, ending, new ClocksEnv());
         // U4b BR10.1: 연습 확장점은 PRACTICE 세션에서만 부른다(자유대화는 부르지 않는다)
         this.practice = ctx.plan().activityType() == ActivityType.PRACTICE
                 ? Objects.requireNonNull(ctx.services().practice().create(ctx.plan().sessionId()), "practice extension")
@@ -711,8 +707,8 @@ public final class SessionExecutor {
             case SessionMailbox.PracticeEvent event -> onPracticeEvent(event.event());
             case SessionMailbox.PracticeTimerFired fired -> onPracticeTimer(fired);
             case SessionMailbox.DeviceTakenOver ignored -> {
-                if (clocks.farewellPending()) {
-                    finishFarewell(false);
+                if (ending.farewellPending()) {
+                    ending.finishFarewell(false);
                 }
             }
             case DeviceAck ack -> onDeviceAck(ack);
@@ -748,7 +744,7 @@ public final class SessionExecutor {
             Optional<ActivitySessionRow> failed = transition(SessionStatus.PREPARING, Trigger.START_SEND_FAILED, null);
             if (failed.isPresent()) {
                 markUnresponsive();
-                afterTerminal();
+                ending.afterTerminal();
             } else {
                 syncFromDb();
             }
@@ -896,9 +892,7 @@ public final class SessionExecutor {
         ctx.relay().start(ctx.services().launcher());
         sendControl(new SessionState(View.LISTENING));
         clocks.armDisconnect();
-        join = new JoinTracker(lifecycle().joinWait(), lifecycle().joinWaitAfterReprompt());
-        putEvent(EVENT_JOIN_PROMPTED, "{\"prompts\":1}", ctx.services().clock().now());
-        playJoinPrompt(ctx.plan().activityType() == ActivityType.PRACTICE ? INTRO_PRACTICE : INTRO_FREE_TALK);
+        joinFlow.begin();
     }
 
     /** ACTIVE 진입의 승자 몫(BR6.8 · BR7.1 · BR6.12 ④ · U4b BR2.6 · BR5.1): ② 시계 해제 · 원음 기록 시작 · LISTENING · 끊김 시계. */
@@ -920,165 +914,6 @@ public final class SessionExecutor {
         clocks.armDisconnect();
     }
 
-    // ------------------------------------------------------------------ 참여 확인(U4b L3)
-
-    /**
-     * 참여 안내 하나를 재생한다(BR2.1 · BR3.1 · BR3.3). 보낸 순간 말풍선 행을 남기고 그 끝 표식이 창을 연다. 패키지에 없으면 재생만 건너뛰고
-     * APPROVED_CONTENT_MISSING을 코드별 1회 남긴 뒤 곧바로 재생이 끝난 것으로 본다(시계 · 횟수는 그대로). 보내지 못해도 끝난 것으로 본다.
-     */
-    private void playJoinPrompt(String contentCode) {
-        Instant now = ctx.services().clock().now();
-        Optional<ApprovedItem> item = ctx.plan().approvedItem(contentCode);
-        if (item.isEmpty()) {
-            reportMissing(contentCode, now);
-        } else {
-            UUID playbackId = UUID.randomUUID();
-            if (sendControl(new PlayApprovedContent(playbackId, contentCode, item.get().contentVersionId()))) {
-                ctx.joinPromptPlaybackId(playbackId);
-                ctx.playback().started(playbackId, contentCode);
-                ctx.timers().arm(Kind.PLAYBACK_EXPIRY, ctx.services().settings().playbackExpiry());
-                approvedBubble(item.get(), now);
-                return;
-            }
-        }
-        ctx.joinPromptPlaybackId(null);
-        onJoinPromptPlayed(now);
-    }
-
-    /** 참여 안내 재생이 끝났다(서버가 끝 표식을 받은 시각, BR2.2): 창을 연다. */
-    private void onJoinPromptPlayed(Instant at) {
-        if (ctx.status() != SessionStatus.WAITING_CHILD || join == null || join.isFinished()) {
-            return;
-        }
-        join.promptPlayed(at);
-        armJoinWindow();
-    }
-
-    private void armJoinWindow() {
-        Instant end = join == null ? null : join.windowEnd();
-        if (end == null || idle.technicalPause() != null) {
-            return;
-        }
-        Duration left = Duration.between(ctx.services().clock().now(), end);
-        ctx.timers().arm(Kind.JOIN_WINDOW, left.isNegative() ? Duration.ZERO : left);
-    }
-
-    /** 참여 창 시계 만기: 결정표의 무응답 칸(BR2.4). 창이 밀렸으면(일시정지) 남은 시간으로 다시 건다. */
-    private void onJoinWindow() {
-        if (ctx.status() != SessionStatus.WAITING_CHILD || join == null || join.isFinished()) {
-            return;
-        }
-        if (judgment.openPoint() == JudgmentPoint.J1) {
-            // U11 W1 6: J1이 열린 동안의 창 만기는 표시만 하고 턴이 닫힌 뒤 tick을 부른다
-            judgment.deferJoinTick();
-            return;
-        }
-        JoinTracker.Action action = join.tick(ctx.services().clock().now());
-        if (action == JoinTracker.Action.NONE) {
-            armJoinWindow();
-            return;
-        }
-        applyJoinAction(action, null, ctx.services().clock().now());
-    }
-
-    /**
-     * WAITING_CHILD의 아이 확정 전사(BR2.3 · BR2.5): 저장하지 않고 분류에만 쓴다. 안내를 재생하는 중의 대답도 곧바로 분류한다(R-11 · 5354a32
-     * JoinTracker 동작).
-     */
-    private void onJoinReply(String transcript, Instant at) {
-        if (join == null || join.isFinished()) {
-            return;
-        }
-        // U11 BR5.3: J1이 열린 동안 새 확정 전사가 오면 이전 J1을 SUPERSEDED로 닫고 새 전사를 처음부터 다시 처리한다
-        judgment.onTranscript(false);
-        JoinTracker.Reply reply = JoinTracker.classify(transcript);
-        if (reply == JoinTracker.Reply.UNCLEAR && openJoinJudgment(transcript, at)) {
-            return;
-        }
-        applyJoinAction(join.reply(reply, at), reply, at);
-    }
-
-    // ------------------------------------------------------------------ U11 판정 턴 (W1 · W2 · W4)
-
-    /**
-     * W1: 불명확한 참여 대답은 아직 {@code join.reply}에 넣지 않고 J1을 연다. 열 수 없으면(공급자 없음 · 판독 불가) 기록 한 건만 남기고 지금 흐름으로
-     * 간다.
-     */
-    private boolean openJoinJudgment(String transcript, Instant at) {
-        JudgmentCoordinator.Readiness ready = judgment.preflight(transcript);
-        if (ready != JudgmentCoordinator.Readiness.READY) {
-            judgment.recordSkipped(ready, JudgmentPoint.J1, JudgmentTrigger.JOIN_UNCLEAR, 0, NextAction.REPROMPT_JOIN);
-            return false;
-        }
-        judgment.open(new JudgmentCoordinator.Open(JudgmentPoint.J1, JudgmentTrigger.JOIN_UNCLEAR, JudgmentOwner.EXECUTOR, 0,
-                transcript, at, null, List.of(), (turn, outcome) -> JudgmentTurn.Decision.close(),
-                closure -> afterJoinJudgment(closure, at)));
-        return true;
-    }
-
-    /** J1 결과 → {@link JoinTracker} 답 하나(원래 확정 시각으로 한 번만 넣는다, W1 4). 휴식 · 불명확 · 보류는 모두 불명확이다(U11-D6). */
-    private JudgmentCoordinator.Handled afterJoinJudgment(JudgmentTurn.Closure closure, Instant at) {
-        JudgmentOutcomeKind kind = closure.outcome().kind();
-        if (kind != JudgmentOutcomeKind.CONFIRMED && kind != JudgmentOutcomeKind.ABSTAINED) {
-            return JudgmentCoordinator.Handled.NOTHING;
-        }
-        JoinTracker.Reply reply = JoinTracker.Reply.UNCLEAR;
-        NextAction next = NextAction.REPROMPT_JOIN;
-        if (kind == JudgmentOutcomeKind.CONFIRMED && "PARTICIPATE".equals(closure.outcome().firstOption())) {
-            reply = JoinTracker.Reply.ACCEPT;
-            next = NextAction.START_JOIN;
-        } else if (kind == JudgmentOutcomeKind.CONFIRMED && "DECLINE".equals(closure.outcome().firstOption())) {
-            reply = JoinTracker.Reply.REFUSE;
-            next = NextAction.DECLINE_JOIN;
-        }
-        if (ctx.status() == SessionStatus.WAITING_CHILD && join != null && !join.isFinished()) {
-            applyJoinAction(join.reply(reply, at), reply, at);
-        }
-        if (closure.joinTickDeferred() && ctx.status() == SessionStatus.WAITING_CHILD && join != null && !join.isFinished()
-                && idle.technicalPause() == null) {
-            onJoinWindow();
-        }
-        return new JudgmentCoordinator.Handled(next, false);
-    }
-
-    private void applyJoinAction(JoinTracker.Action action, JoinTracker.Reply reply, Instant at) {
-        switch (action) {
-            case START -> acceptJoin();
-            case REPROMPT, CLARIFY -> {
-                ctx.timers().cancel(Kind.JOIN_WINDOW);
-                putEvent(EVENT_JOIN_RE_PROMPTED, "{\"prompts\":" + join.prompts() + ",\"cause\":\""
-                        + (action == JoinTracker.Action.REPROMPT ? "NO_REPLY" : "UNCLEAR") + "\"}", at);
-                playJoinPrompt(RE_PROMPT);
-            }
-            case OFFER_ALTERNATIVE -> {
-                ctx.timers().cancel(Kind.JOIN_WINDOW);
-                putEvent(EVENT_JOIN_ALTERNATIVE_OFFERED, "{\"prompts\":" + join.prompts() + ",\"reply\":\""
-                        + (reply == null ? "NONE" : reply.name()) + "\"}", at);
-                playJoinPrompt(DECLINE_ALTERNATIVE);
-            }
-            case DECLINE -> declineJoin();
-            case NONE -> {
-                // 안내 없이 같은 창을 계속 기다린다(재안내를 이미 쓴 불명확 대답)
-            }
-        }
-    }
-
-    /** 참여 수락 → ACTIVE(BR2.4 · BR2.6): started_at, 원음 기록 시작, 응답 생성 요청 1회. */
-    private void acceptJoin() {
-        ctx.timers().cancel(Kind.JOIN_WINDOW);
-        Instant now = ctx.services().clock().now();
-        Optional<ActivitySessionRow> row = ctx.services().transitions().transition(ctx.plan().sessionId(),
-                SessionStatus.WAITING_CHILD, SessionStatus.ACTIVE, SessionChange.none().withStartedAt(now),
-                SessionTransitions.Origin.REALTIME, ctx.plan().traceId());
-        if (row.isEmpty()) {
-            syncFromDb();
-            return;
-        }
-        changeStatus(SessionStatus.ACTIVE, ctx.services().clock().now());
-        putEvent(EVENT_JOIN_ACCEPTED, "{\"prompts\":" + (join == null ? 1 : join.prompts()) + "}", now);
-        afterActiveWon();
-    }
-
     /** ACTIVE 전이 승자의 뒷일: 진입 몫과 발언권 반환(응답 생성 요청 1회, BR2.6). */
     private void afterActiveWon() {
         enterActive();
@@ -1092,139 +927,6 @@ public final class SessionExecutor {
                     ctx.plan().approvedSpeech());
             practiceSignal(() -> practice.onActive(context, practiceOutput), true);
         }
-    }
-
-    /**
-     * 참여 거절 → DECLINED(BR2.4 · BR3.2 · BR4.7): 기록기의 대기 칸을 버린 뒤 전이 트랜잭션에서 그 세션의 전사 행을 지우고, 마무리 인사를 closing-confirm
-     * 상한 안에서 돌린다(말풍선 행 없음).
-     */
-    private void declineJoin() {
-        ctx.timers().cancel(Kind.JOIN_WINDOW);
-        ctx.services().recorder().discardTranscripts(ctx.plan().sessionId(), ctx.services().settings().timerTick());
-        Instant now = ctx.services().clock().now();
-        Optional<ActivitySessionRow> row = ctx.services().transitions().transition(ctx.plan().sessionId(),
-                SessionStatus.WAITING_CHILD, SessionStatus.DECLINED,
-                TransitionTable.changeFor(Trigger.JOIN_DECLINED, null, now), SessionTransitions.Origin.REALTIME,
-                ctx.plan().traceId(), new SessionTransitions.Extras(null, true));
-        if (row.isEmpty()) {
-            syncFromDb();
-            return;
-        }
-        changeStatus(SessionStatus.DECLINED, ctx.services().clock().now());
-        putEvent(EVENT_JOIN_DECLINED, "{\"prompts\":" + (join == null ? 1 : join.prompts()) + "}", now);
-        startFarewell();
-    }
-
-    /** DECLINED 마무리 인사(BR4.7 · U4b-J8): 출력 · 입력을 멈추고 CLOSING 문구 1회 → 그 끝 표식 뒤 CLOSE_TRANSPORT(DECLINED). */
-    private void startFarewell() {
-        bumpGeneration();
-        ctx.timers().cancel(Kind.SEGMENT_QUIET);
-        ctx.timers().cancel(Kind.DISCONNECT);
-        ctx.timers().cancel(Kind.PLAYBACK_EXPIRY);
-        ctx.segment().reset();
-        ctx.relay().setAccepting(false);
-        ctx.joinPromptPlaybackId(null);
-        boolean closedNow = ctx.closing().beginFarewell(closingDevice(),
-                ctx.plan().closing() == null ? null : ctx.plan().closing().contentVersionId(), ctx.playback(), UUID::randomUUID);
-        if (closedNow) {
-            finishFarewell(true);
-            return;
-        }
-        ctx.timers().arm(Kind.CLOSING_CONFIRM, ctx.services().settings().closingConfirm());
-    }
-
-    /**
-     * DECLINED 인사 순서를 끝낸다(CLOSE_TRANSPORT를 보냈거나 상한을 넘김 · 같은 기기의 새 세션). 그 뒤 정리한다(정산은 인사 순서보다 앞서지 않는다,
-     * BR4.7).
-     *
-     * @param deviceStillOurs 기기가 아직 이 세션에 묶여 있는가(아니면 기기 명령을 보내지 않는다)
-     */
-    private void finishFarewell(boolean deviceStillOurs) {
-        ctx.timers().cancel(Kind.CLOSING_CONFIRM);
-        Instant now = ctx.services().clock().now();
-        if (deviceStillOurs) {
-            annotateQuietly(SessionStatus.DECLINED, SessionChange.none().withTransportClosedAt(now));
-            sendControl(new SessionState(View.STANDBY));
-        }
-        afterTerminal();
-    }
-
-    /** 이 세션이 아직 기기 연결을 쥐고 있는가(같은 기기에 새 세션이 묶였으면 거짓, BR4.7). */
-    private boolean deviceStillOurs() {
-        DeviceLink current = ctx.link();
-        if (current == null || !current.isOpen()) {
-            return false;
-        }
-        UUID bound = current.boundSessionId();
-        return bound == null || bound.equals(ctx.plan().sessionId());
-    }
-
-    /**
-     * 종료 상태로 간 뒤의 뒷일(U4b BR8.1 · WF7): ① 공급자를 닫고 provider_closed_at ② 정산 창(공급자 연결이 닫혔다는 알림 또는 record-settle) —
-     * 그 동안 온 아이 확정 전사는 발화 시작이 ended_at보다 이르면 저장한다(BR8.6) ③ ~ ⑦ {@link #finishSettle}. 정산 입구가 없으면(실행기 단위 시험
-     * 기본값) 곧바로 정리한다. 세션당 한 번이다.
-     */
-    private void afterTerminal() {
-        if (ctx.terminated() || ctx.settling()) {
-            return;
-        }
-        stopPracticeProgress();
-        if (!ctx.services().settlement().enabled()) {
-            teardown();
-            return;
-        }
-        ctx.settling(true);
-        Instant now = ctx.services().clock().now();
-        ctx.sessionEndedAt(now);
-        try {
-            ctx.sessionEndedAt(ctx.services().transitions().find(ctx.plan().sessionId()).map(ActivitySessionRow::endedAt)
-                    .filter(Objects::nonNull).orElse(now));
-        } catch (RuntimeException e) {
-            ctx.services().events().appError(EventLog.Component.SESSION_LIFECYCLE, e);
-        }
-        ctx.timers().cancelAll();
-        if (inputGroupId != null) {
-            // 묶던 입력 전사는 정산 창 안에서 이어지는 조각을 받아 조용해지면(또는 창이 끝나면) 확정한다
-            ctx.timers().arm(Kind.INPUT_TRANSCRIPT_QUIET, ctx.services().settings().inputTranscriptQuiet());
-        }
-        ctx.relay().setAccepting(false);
-        boolean alreadyClosed = ctx.providerSession() == null || ctx.providerClosedSignal();
-        closeProvider();
-        SessionStatus ended = ctx.status();
-        annotateQuietly(ended, SessionChange.none().withProviderClosedAt(now));
-        if (alreadyClosed) {
-            finishSettle();
-            return;
-        }
-        ctx.timers().arm(Kind.RECORD_SETTLE, lifecycle().recordSettle());
-    }
-
-    /**
-     * 정산 창이 끝났다(BR8.1 ③ ~ ⑦): 확장점 정산 시점 · 전사 기록기 비우기 · practice 값 · 스냅숏 + SessionRecordCaptured 한 트랜잭션. 쓰기가 실패하면
-     * 앱 오류 한 줄을 남기고 정리한다(재무장이 다시 쓴다). 이 뒤에 온 사건은 무시한다(BR8.7).
-     */
-    private void finishSettle() {
-        if (!ctx.settling() || ctx.terminated()) {
-            return;
-        }
-        if (practice != null && practice.controlsOutput()) {
-            Duration remaining = practice.settlementDelay(ctx.services().clock().now());
-            if (remaining.isPositive()) {
-                ctx.timers().arm(Kind.RECORD_SETTLE, remaining);
-                return;
-            }
-        }
-        ctx.timers().cancel(Kind.RECORD_SETTLE);
-        quietly(this::flushInputGroupInSettle);
-        Instant cutoff = ctx.services().clock().now();
-        quietly(() -> ctx.transcripts().closeAll(cutoff));
-        quietly(() -> ctx.services().recorder().flushSession(ctx.plan().sessionId(), ctx.services().settings().timerTick()));
-        try {
-            ctx.services().settlement().capture(ctx.plan().sessionId(), practiceRecordForSettle(cutoff), cutoff);
-        } catch (RuntimeException e) {
-            ctx.services().events().appError(EventLog.Component.SESSION_LIFECYCLE, e);
-        }
-        teardown();
     }
 
     /**
@@ -1341,7 +1043,7 @@ public final class SessionExecutor {
                 practiceEventsInSettle++;
             }
             practiceSignal(() -> current.onExtensionEvent(event, practiceOutput), false);
-            if (ctx.settling() && current.controlsOutput()) finishSettle();
+            if (ctx.settling() && current.controlsOutput()) ending.finishSettle();
         }
     }
 
@@ -1613,12 +1315,61 @@ public final class SessionExecutor {
             ctx.services().events().appError(EventLog.Component.SESSION_LIFECYCLE, reasonCode, EventCode.Level.INFO);
         }
 
+        @Override
+        public void applyJoinReply(JoinTracker.Reply reply, Instant at) {
+            joinFlow.applyJoinReply(reply, at);
+        }
+
+        @Override
+        public void runDeferredJoinTick() {
+            joinFlow.runDeferredJoinTick();
+        }
+
         private Kind timerKind(JudgmentTurn.TimerKind kind) {
             return switch (kind) {
                 case LIVE -> Kind.JUDGMENT_LIVE;
                 case READY -> Kind.JUDGMENT_READY;
                 case INSTRUCTION -> Kind.JUDGMENT_INSTRUCTION;
             };
+        }
+    }
+
+    /** 참여 확인 협력 객체가 실행기에 남은 로직으로 되돌아오는 자리. */
+    private final class JoinEnv implements JoinFlow.Env {
+
+        @Override
+        public void putEvent(String type, String payloadJson, Instant at) {
+            SessionExecutor.this.putEvent(type, payloadJson, at);
+        }
+
+        @Override
+        public boolean sendControl(WsPayload payload) {
+            return SessionExecutor.this.sendControl(payload);
+        }
+
+        @Override
+        public void reportMissing(String contentCode, Instant at) {
+            SessionExecutor.this.reportMissing(contentCode, at);
+        }
+
+        @Override
+        public void approvedBubble(ApprovedItem item, Instant at) {
+            SessionExecutor.this.approvedBubble(item, at);
+        }
+
+        @Override
+        public void changeStatus(SessionStatus next, Instant now) {
+            SessionExecutor.this.changeStatus(next, now);
+        }
+
+        @Override
+        public void syncFromDb() {
+            SessionExecutor.this.syncFromDb();
+        }
+
+        @Override
+        public void afterActiveWon() {
+            SessionExecutor.this.afterActiveWon();
         }
     }
 
@@ -1701,11 +1452,6 @@ public final class SessionExecutor {
         }
 
         @Override
-        public void afterTerminal() {
-            SessionExecutor.this.afterTerminal();
-        }
-
-        @Override
         public void listeningAgain() {
             SessionExecutor.this.listeningAgain();
         }
@@ -1717,7 +1463,7 @@ public final class SessionExecutor {
 
         @Override
         public void onJoinPromptPlayed(Instant at) {
-            SessionExecutor.this.onJoinPromptPlayed(at);
+            joinFlow.onJoinPromptPlayed(at);
         }
 
         @Override
@@ -1757,18 +1503,36 @@ public final class SessionExecutor {
         }
 
         @Override
-        public boolean farewellPending() {
-            return clocks.farewellPending();
-        }
-
-        @Override
-        public void finishFarewell(boolean deviceStillOurs) {
-            SessionExecutor.this.finishFarewell(deviceStillOurs);
-        }
-
-        @Override
         public void guardrailTurnBoundary() {
             guardrail.onTurnBoundary();
+        }
+
+        @Override
+        public void teardown() {
+            SessionExecutor.this.teardown();
+        }
+
+        @Override
+        public boolean inputGroupOpen() {
+            return inputGroupId != null;
+        }
+
+        @Override
+        public void flushInputGroupInSettle() {
+            SessionExecutor.this.flushInputGroupInSettle();
+        }
+
+        @Override
+        public Duration practiceSettlementDelay() {
+            if (practice != null && practice.controlsOutput()) {
+                return practice.settlementDelay(ctx.services().clock().now());
+            }
+            return Duration.ZERO;
+        }
+
+        @Override
+        public Object practiceRecordForSettle(Instant cutoff) {
+            return SessionExecutor.this.practiceRecordForSettle(cutoff);
         }
     }
 
@@ -1837,13 +1601,12 @@ public final class SessionExecutor {
 
         @Override
         public boolean hasJoin() {
-            return join != null;
+            return joinFlow.hasJoin();
         }
 
         @Override
         public void resumeJoinWindow(Duration paused) {
-            join.shift(paused);
-            armJoinWindow();
+            joinFlow.resumeJoinWindow(paused);
         }
 
         @Override
@@ -1856,18 +1619,8 @@ public final class SessionExecutor {
     private final class ClocksEnv implements SessionClocks.Env {
 
         @Override
-        public boolean deviceStillOurs() {
-            return SessionExecutor.this.deviceStillOurs();
-        }
-
-        @Override
         public ClosingSequence.Device closingDevice() {
             return SessionExecutor.this.closingDevice();
-        }
-
-        @Override
-        public void finishFarewell(boolean deviceStillOurs) {
-            SessionExecutor.this.finishFarewell(deviceStillOurs);
         }
 
         @Override
@@ -1902,7 +1655,7 @@ public final class SessionExecutor {
 
         @Override
         public void onJoinPromptPlayed(Instant at) {
-            SessionExecutor.this.onJoinPromptPlayed(at);
+            joinFlow.onJoinPromptPlayed(at);
         }
 
         @Override
@@ -1917,17 +1670,12 @@ public final class SessionExecutor {
 
         @Override
         public void onJoinWindow() {
-            SessionExecutor.this.onJoinWindow();
+            joinFlow.onJoinWindow();
         }
 
         @Override
         public void onStopConfirmWindow() {
             SessionExecutor.this.onStopConfirmWindow();
-        }
-
-        @Override
-        public void finishSettle() {
-            SessionExecutor.this.finishSettle();
         }
 
         @Override
@@ -1938,11 +1686,6 @@ public final class SessionExecutor {
         @Override
         public void afterFailed() {
             SessionExecutor.this.afterFailed();
-        }
-
-        @Override
-        public void afterTerminal() {
-            SessionExecutor.this.afterTerminal();
         }
 
         @Override
@@ -2398,7 +2141,7 @@ public final class SessionExecutor {
         switch (event) {
             case ProviderEvent.Closed ignored -> {
                 ctx.providerClosedSignal(true);
-                finishSettle();
+                ending.finishSettle();
             }
             case ProviderEvent.InputTranscriptDelta delta -> {
                 String groupId = groupInputDelta(delta);
@@ -2579,7 +2322,7 @@ public final class SessionExecutor {
             return;
         }
         if (ctx.status() == SessionStatus.WAITING_CHILD) {
-            onJoinReply(done.transcript(), at);
+            joinFlow.onJoinReply(done.transcript(), at);
             return;
         }
         if (inRelayRange()) {
@@ -2859,7 +2602,7 @@ public final class SessionExecutor {
             sendControl(new CloseTransport(CloseTransport.Reason.DISCONNECT));
             sendControl(new SessionState(View.STANDBY));
         }
-        afterTerminal();
+        ending.afterTerminal();
     }
 
     /**
@@ -3501,7 +3244,7 @@ public final class SessionExecutor {
             sendControl(new CloseTransport(reason));
             sendControl(new SessionState(View.STANDBY));
         }
-        afterTerminal();
+        ending.afterTerminal();
     }
 
     /** 진 전이 뒤 DB의 지금 상태로 맞춘다. 종료 상태면 정리한다. */
@@ -3524,7 +3267,7 @@ public final class SessionExecutor {
         SessionStatus before = ctx.status();
         changeStatus(row.get().status(), ctx.services().clock().now());
         if (ctx.status().isTerminal()) {
-            afterTerminal();
+            ending.afterTerminal();
             return;
         }
         if (ctx.status() != before) {

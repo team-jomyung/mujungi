@@ -31,11 +31,7 @@ final class SessionClocks {
 
     /** 시계 구역이 실행기에 남은 로직으로 되돌려 부르는 자리. 모두 실행기 스레드에서 불린다. */
     interface Env {
-        boolean deviceStillOurs();
-
         ClosingSequence.Device closingDevice();
-
-        void finishFarewell(boolean deviceStillOurs);
 
         void onOutputQuiet();
 
@@ -59,13 +55,9 @@ final class SessionClocks {
 
         void onStopConfirmWindow();
 
-        void finishSettle();
-
         void markUnresponsive();
 
         void afterFailed();
-
-        void afterTerminal();
 
         void syncFromDb();
 
@@ -86,11 +78,13 @@ final class SessionClocks {
 
     private final SessionContext ctx;
     private final IdleClock idle;
+    private final EndingFlow ending;
     private final Env env;
 
-    SessionClocks(SessionContext ctx, IdleClock idle, Env env) {
+    SessionClocks(SessionContext ctx, IdleClock idle, EndingFlow ending, Env env) {
         this.ctx = ctx;
         this.idle = idle;
+        this.ending = ending;
         this.env = env;
     }
 
@@ -105,13 +99,13 @@ final class SessionClocks {
         switch (kind) {
             case DEVICE_ACK -> onStartTimeout();
             case CLOSING_CONFIRM -> {
-                if (farewellPending()) {
+                if (ending.farewellPending()) {
                     // U4b BR4.7: DECLINED 인사 상한 — CLOSE_TRANSPORT를 바로 보내고 정리
-                    boolean ours = env.deviceStillOurs();
+                    boolean ours = ending.deviceStillOurs();
                     if (ours) {
                         ctx.closing().closeNow(env.closingDevice());
                     }
-                    env.finishFarewell(ours);
+                    ending.finishFarewell(ours);
                 } else {
                     onClosingTimeout();
                 }
@@ -141,7 +135,7 @@ final class SessionClocks {
             case STOP_CONFIRM -> env.onStopConfirmWindow();
             case SILENCE -> idle.onSilenceTimer();
             case GAP_DISPLAY -> idle.onGapDisplayCheck();
-            case RECORD_SETTLE -> env.finishSettle();
+            case RECORD_SETTLE -> ending.finishSettle();
         }
     }
 
@@ -155,7 +149,7 @@ final class SessionClocks {
             ctx.relay().tap(null);
             ctx.relay().setAccepting(false);
             DeviceLink current = ctx.link();
-            if (ctx.startSent() && current != null && current.isOpen() && env.deviceStillOurs()) {
+            if (ctx.startSent() && current != null && current.isOpen() && ending.deviceStillOurs()) {
                 env.bumpGeneration();
                 env.sendControl(new CloseTransport(CloseTransport.Reason.CONSENT_WITHDRAWN));
                 env.sendControl(new SessionState(View.STANDBY));
@@ -164,11 +158,6 @@ final class SessionClocks {
         } finally {
             stop.stopped().complete(null);
         }
-    }
-
-    /** U4b: DECLINED 인사 순서가 아직 끝나지 않았는가. */
-    boolean farewellPending() {
-        return ctx.status() == SessionStatus.DECLINED && ctx.closing().step() == ClosingSequence.Step.AWAITING_CLOSING_MARK;
     }
 
     /** BR6.12 ②: 송신 시도 시각부터 20초. ACK · READY 빠짐 → DEVICE_NO_ACK + UNRESPONSIVE, 아니면 PROVIDER_UNAVAILABLE(J59 (h)). */
@@ -229,7 +218,7 @@ final class SessionClocks {
         env.markUnresponsive();
         env.bumpGeneration();
         env.sendControl(new SessionState(View.STANDBY));
-        env.afterTerminal();
+        ending.afterTerminal();
     }
 
     /** BR6.12 ④: 묶인 연결의 마지막 기기 메시지부터 40초. 메시지마다 다시 걸지 않고 만기 때 남은 시간으로 다시 건다. */
@@ -258,7 +247,7 @@ final class SessionClocks {
         env.changeStatus(SessionStatus.ABORTED, ctx.services().clock().now());
         env.closeProvider();
         timeoutFired("DISCONNECT", threshold, elapsed);
-        env.afterTerminal();
+        ending.afterTerminal();
     }
 
     void armDisconnect() {

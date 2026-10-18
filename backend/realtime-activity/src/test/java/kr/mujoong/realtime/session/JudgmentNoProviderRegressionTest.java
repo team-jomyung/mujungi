@@ -74,7 +74,7 @@ class JudgmentNoProviderRegressionTest {
 
         assertThat(observe(withUnavailableJudge(), J1_UNCLEAR)).isEqualTo(before);
         assertThat(observe(withUnavailablePort(), J1_UNCLEAR)).isEqualTo(before);
-        assertThat(before.events()).contains(SessionExecutor.EVENT_JOIN_RE_PROMPTED, SessionExecutor.EVENT_JOIN_ACCEPTED);
+        assertThat(before.events()).contains(JoinFlow.EVENT_JOIN_RE_PROMPTED, JoinFlow.EVENT_JOIN_ACCEPTED);
     }
 
     @Test

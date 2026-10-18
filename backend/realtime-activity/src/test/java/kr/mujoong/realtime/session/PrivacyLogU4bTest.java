@@ -79,7 +79,7 @@ class PrivacyLogU4bTest {
         assertNoSecrets("모르겠는데 프테라노돈", "프테라노돈", "브라키오", "스테고사우루스", INTRO, RE_PROMPT_TEXT,
                 ALTERNATIVE_TEXT);
         assertThat(sessionEvents()).extracting(SessionEvent::getEventType)
-                .contains(SessionExecutor.EVENT_JOIN_PROMPTED, SessionExecutor.EVENT_JOIN_ACCEPTED);
+                .contains(JoinFlow.EVENT_JOIN_PROMPTED, JoinFlow.EVENT_JOIN_ACCEPTED);
     }
 
     @Test
@@ -96,7 +96,7 @@ class PrivacyLogU4bTest {
         assertThat(h.transitions.status(h.sessionId)).isEqualTo(SessionStatus.DECLINED);
         assertNoSecrets("안키로사우루스", "파키케팔로");
         assertThat(sessionEvents()).extracting(SessionEvent::getEventType)
-                .contains(SessionExecutor.EVENT_JOIN_DECLINED);
+                .contains(JoinFlow.EVENT_JOIN_DECLINED);
     }
 
     @Test
