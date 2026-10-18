@@ -93,6 +93,12 @@
 ### Step 24 — 주석 정리 (조건부)
 - [ ] 건드린 파일 목록에 AC-7 정규식을 다시 돌려 `baseline.md` 4.2의 시작 전 값(2,463줄 · 3,743 출현)과 대조.
 
+### Step 11e — 기능끼리 import 정리 (계획 외 추가, 사람 승인)
+- [x] 두 기능 이상이 쓰는 파일 10건을 `parent/common/`(`api/` `activity/` `hooks/` `components/` `copy/`)로 옮기고 import(시험 포함)를 같은 커밋에서 고쳤다. 목록과 새 위치는 `cross-feature-imports.md`.
+- [x] 범위 파일 `u1` `u2` `u4a` `u5a` `u5b` `u6`의 경로를 고쳤다(대상 집합 의미 유지, BR4.2). 잘라낸 `startPort.ts` · `common/copy/practice.ts`는 원래 그 파일이 들어 있던 `u5a` · `u5b`에 함께 넣었다.
+- [x] `eslint.config.mjs`에 기능 ↔ 기능 import 금지(`import/no-restricted-paths` 구역 + 기능별 `no-restricted-imports` 패턴, 상대 경로 · `@/` 둘 다)를 더했다. 임시 위반 파일 2개(상대 경로 · `@/`)가 두 규칙에서 모두 오류를 내는 것을 확인하고 지웠다.
+- [x] 확인: `features/` 안에서 다른 기능을 import하는 줄 0건.
+
 ## 3. Flyway · 문서 (바꾸지 않는 것)
 
 - Flyway 파일명(`V<번호>__u…`)은 바꾸지 않는다(R-M2, BR4.3).
