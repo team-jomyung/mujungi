@@ -3,9 +3,11 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { accountQueryKeys, saveStopExpressions, useStopExpressionsQuery } from "../../common/api/account";
+import { accountQueryKeys } from "../../common/api/account";
+import { saveStopExpressions, useStopExpressionsQuery } from "./api";
 import { ApiError } from "../../common/api/apiClient";
-import { useApiClient, useHomeQuery } from "../../common/api/queries";
+import { useApiClient } from "../../common/api/queries";
+import { useHomeQuery } from "../home/api";
 import { PARENT_ROUTES, goToLogin, isUnauthenticated } from "../../common/navigation";
 import { ACCOUNT_PROPOSED_COPY } from "@/shared/copy/account";
 import { PROPOSED_COPY, TEMP_COPY } from "@/shared/copy/ko";

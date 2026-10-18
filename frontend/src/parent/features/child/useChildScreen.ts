@@ -3,9 +3,11 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { accountQueryKeys, registerChild, updateChild, useChildQuery, type Child, type ChildInput } from "../../common/api/account";
+import { accountQueryKeys } from "../../common/api/account";
+import { registerChild, updateChild, useChildQuery, type Child, type ChildInput } from "./api";
 import { ApiError } from "../../common/api/apiClient";
-import { queryKeys, useApiClient, useHomeQuery } from "../../common/api/queries";
+import { queryKeys, useApiClient } from "../../common/api/queries";
+import { useHomeQuery } from "../home/api";
 import { useBackGuard } from "../../common/hooks/useBackGuard";
 import { PARENT_ROUTES, goToLogin, isUnauthenticated } from "../../common/navigation";
 import { ACCOUNT_PROPOSED_COPY } from "@/shared/copy/account";

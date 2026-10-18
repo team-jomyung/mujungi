@@ -9,16 +9,22 @@
     "frontend/src/app/parent/login/google/route.ts",
     "frontend/src/app/parent/login/page.tsx",
     "frontend/src/parent/common/api/account.ts",
+    "frontend/src/parent/features/consent/api.ts",
+    "frontend/src/parent/features/child/api.ts",
     "frontend/src/parent/common/components/BottomSheet.tsx",
     "frontend/src/parent/features/home/SettingsSheet.tsx",
     "frontend/src/parent/common/hooks/useBackGuard.ts",
     "frontend/src/parent/common/oauth.ts",
     "frontend/src/parent/features/child/ChildScreen.tsx",
+    "frontend/src/parent/features/child/useChildScreen.ts",
     "frontend/src/parent/features/consent/ConsentScreen.tsx",
+    "frontend/src/parent/features/consent/useConsentScreen.ts",
     "frontend/src/parent/features/device/DeviceScreen.tsx",
+    "frontend/src/parent/features/device/useDeviceScreen.ts",
     "frontend/src/parent/features/login/LoginScreen.tsx",
     "frontend/src/parent/features/login/LoginCallbackScreen.tsx",
     "frontend/src/parent/features/child/StopExpressionsScreen.tsx",
+    "frontend/src/parent/features/child/useStopExpressionsScreen.ts",
     "frontend/src/shared/copy/account.ts"
   ]
 }

@@ -17,6 +17,7 @@
     "frontend/src/parent/features/done/useResultStatusPolling.ts",
     "frontend/src/parent/common/navigation.ts",
     "frontend/src/parent/features/done/DoneScreen.tsx",
+    "frontend/src/parent/features/done/useDoneScreen.ts",
     "frontend/src/parent/features/records/RecordDetailScreen.tsx",
     "frontend/src/parent/features/records/RecordsScreen.tsx",
     "frontend/src/parent/features/reports/ReportScreen.tsx",

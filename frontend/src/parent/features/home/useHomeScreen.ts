@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { activeTabTarget, liveActivityCard } from "./presentation";
 import { useMeQuery } from "../../common/api/account";
-import { useHomeQuery } from "../../common/api/queries";
+import { useHomeQuery } from "./api";
 import type { TabKey } from "../../common/components/BottomTabBar";
 import { PARENT_ROUTES, goToLogin, isUnauthenticated, lockToastMessage, routeForTab } from "../../common/navigation";
 import { PROPOSED_COPY, TEMP_COPY } from "@/shared/copy/ko";

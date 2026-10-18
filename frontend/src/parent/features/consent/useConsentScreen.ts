@@ -3,7 +3,8 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { CONSENT_TYPES, fetchMe, logout, saveConsents, usePolicyQuery, type ConsentType, type PolicyItem } from "../../common/api/account";
+import { fetchMe, logout } from "../../common/api/account";
+import { CONSENT_TYPES, saveConsents, usePolicyQuery, type ConsentType, type PolicyItem } from "./api";
 import { ApiError } from "../../common/api/apiClient";
 import { useApiClient } from "../../common/api/queries";
 import { useBackGuard } from "../../common/hooks/useBackGuard";

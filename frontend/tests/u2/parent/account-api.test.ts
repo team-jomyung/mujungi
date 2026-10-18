@@ -1,22 +1,15 @@
 import { describe, expect, it, vi } from "vitest";
+import { fetchMe, loginWithGoogle, logout, parseMe, requestAccountDeletion } from "@/parent/common/api/account";
+import { CONSENT_TYPES, fetchPolicy, parsePolicy, saveConsents } from "@/parent/features/consent/api";
 import {
-  CONSENT_TYPES,
   fetchChild,
-  fetchMe,
-  fetchPolicy,
   fetchStopExpressions,
-  loginWithGoogle,
-  logout,
   parseChild,
-  parseMe,
-  parsePolicy,
   parseStopExpressions,
   registerChild,
-  requestAccountDeletion,
-  saveConsents,
   saveStopExpressions,
   updateChild,
-} from "@/parent/common/api/account";
+} from "@/parent/features/child/api";
 import { createApiClient, type FetchLike } from "@/parent/common/api/apiClient";
 import { ResponseShapeError } from "@/parent/common/api/types";
 import { routeAfterLogin } from "@/parent/features/login/LoginCallbackScreen";

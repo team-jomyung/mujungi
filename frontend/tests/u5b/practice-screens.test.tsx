@@ -1,7 +1,7 @@
 import { act, cleanup, fireEvent, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { parseHome, parseLiveView } from "@/parent/common/api/types";
-import { mergeLiveView } from "@/parent/common/api/queries";
+import { mergeLiveView } from "@/parent/features/live/api";
 import { PracticeScreen } from "@/parent/features/practice/PracticeScreen";
 import ParentPracticePage from "@/app/parent/practice/page";
 import { LiveScreen } from "@/parent/features/live/LiveScreen";

@@ -3,7 +3,8 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useState } from "react";
 import { ApiError } from "../../common/api/apiClient";
-import { fetchLiveView, mergeLiveView, queryKeys, useApiClient } from "../../common/api/queries";
+import { queryKeys, useApiClient } from "../../common/api/queries";
+import { fetchLiveView, mergeLiveView } from "./api";
 import type { LiveView, SessionStatus } from "../../common/api/types";
 import { useTiming } from "@/shared/timing/TimingProvider";
 
