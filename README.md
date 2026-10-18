@@ -72,6 +72,48 @@ docker compose --env-file build/dev/env/compose.env -f infra/compose.dev.yml up 
   기동을 거부한다(SD-14 · A2).
 - 실공급자 주소(`MUJOONG_PROVIDER_URL`)는 dev에 기본값이 없다. 로컬에서는 가짜 공급자 `node tools/fake-provider/server.mjs`(8090)를 쓴다.
 
+### 실키 전체 기동(팀원 수동 시험)
+
+실제 OpenAI(GPT-Live · Luna)와 제브 키로 전체 스택을 내 PC에 띄워 브라우저에서 직접 시험한다. **개발자 PC 로컬 전용**이며, 시험 · CI · `verify.sh`는 계속 가짜 공급자만 쓴다. 자세한 설명과 문제 해결 · 시험 기록은 [`docs/live-run.md`](docs/live-run.md).
+
+**준비물**: Docker(Compose v2.24.4 이상, 이 저장소의 `sg docker` 환경이면 `sg docker -c '…'`로 감싼다), `openssl`, OpenAI API 키, 제브 API 키. `--local` 방식은 JDK 21 · Node 22도 필요하다.
+
+**1) API 키 넣기** — 키는 저장소 밖 `~/.config/mujoong/live.env`(권한 0600)에만 저장되어 git에 올라가지 않는다.
+
+```bash
+bash scripts/live/keys.sh          # OPENAI_API_KEY · JEV_API_KEY는 화면에 보이지 않게 입력
+bash scripts/live/keys.sh --show   # 값은 숨기고 설정됨 / 비어 있음만 확인
+```
+
+- 제브 주소 · 모델은 기본값(`https://api.typesafe.ai`, `jev-1.13.0`)이 채워져 있어 Enter로 넘기면 된다. 제브 키를 비우면 제브는 가짜 대역으로 돈다.
+- 키를 채팅 · 이슈 · PR · 커밋에 붙여 넣지 않는다. 저장 위치가 저장소 안이면 스크립트가 거절한다.
+- 제브 단독 확인(스택 없이): `bash scripts/live/jev-probe.sh`.
+
+**2) Docker로 기동**
+
+```bash
+bash scripts/live/up.sh --tag <40자 커밋 SHA>   # main 병합 때 CI가 GHCR에 올린 이미지를 당겨 쓴다 (코드 빌드 불필요)
+bash scripts/live/up.sh --local                  # 내 작업 트리에서 이미지를 빌드해 쓴다 (병합 전 코드 시험, 첫 실행은 몇 분)
+```
+
+- `--tag`가 당기는 이미지는 `ghcr.io/team-jomyung/mujoong-{core-api,realtime,web,migrate}:<SHA>`이다. 패키지가 비공개이면 한 번 `docker login ghcr.io -u <GitHub 사용자>`(읽기 권한 토큰)를 한다.
+- 끝나면 접속 주소가 출력된다. 포트는 기본 9443(`--port`로 변경)이고 `127.0.0.1`에만 열린다.
+
+**3) 브라우저에서 시험** — 자체 서명 인증서라 경고가 나온다. "계속"을 누르거나 `build/live/certs/ca.crt`를 신뢰 목록에 넣는다.
+
+- 보호자: `https://localhost:9443/parent/dev-login`(시험 로그인) · 기기: `https://localhost:9443/device`(마이크 허용 필요).
+- 아이 음성 대신 합성 · 팀원 음성만 쓴다. 제브 연결 전 R-F15 확인 기록(`infra/RUNBOOK.md` 단계 4)을 먼저 남긴다.
+
+**4) 끄기 · 보기**
+
+```bash
+bash scripts/live/down.sh            # 내리기 (DB 유지)
+bash scripts/live/down.sh --purge    # DB와 생성 비밀(build/live/)까지 삭제 — 키 파일은 지우지 않는다
+docker compose -p mujoong-live logs -f realtime   # 로그 (비밀 · 전사 없음)
+```
+
+이 스택은 프로젝트 이름 `mujoong-live`와 별도 망 대역을 쓰므로 `mujoong-manual` · `mujoong-verify`와 같이 떠 있어도 겹치지 않는다.
+
 ### 유닛 시험 명령(U1)
 
 정확한 목록은 `aidlc/spaces/default/intents/261008-mujoong-service/construction/u1-walking-skeleton/code-generation/unit-test-instructions.md`가
