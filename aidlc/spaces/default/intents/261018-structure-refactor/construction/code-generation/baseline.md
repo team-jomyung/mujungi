@@ -217,6 +217,8 @@
 
 `SessionContext`가 받는 전이 보조는 약 151줄, `EndingFlow`가 받는 것은 약 125줄, 남는 것은 `toString`과 닫는 괄호 약 5줄이다.
 
+> **Step 17 결과(2026-10-18)**: 3.4 표를 코드와 맞췄다. 표와 다른 점: ① `changeStatus` `closingDevice` `closeProvider` `teardown`은 `judgment.onStatus` · `guardrail.onExit` · 종료 콜백에 닿아 `SessionContext`가 아니라 `EndingFlow`로 갔다(`EndingFlow`가 `JudgmentCoordinator` `GuardrailCoordinator` `onTerminated`를 생성자로 받는다). ② `syncFromDb` 둘은 `EndingFlow`로 갔고, 실행기에 남은 `adopt`(WAITING_CHILD · ACTIVE 진입 로직을 부른다)는 `EndingFlow.Env.adopt` 한 항목으로 되부른다. ③ `transition` `multiOriginFail` `afterFailed`도 `changeStatus`가 `EndingFlow`에 있어 `EndingFlow`로 갔다. `SessionContext`가 받은 것은 `sendControl` `remember` `putEvent` `bumpGeneration` `fromBoundConnection` `markUnresponsive` `annotateQuietly` `unbind` `quietly`와 `MAX_PENDING_COMMANDS`다. `SessionExecutor` 3,489 → 3,090줄(3.4 뒤 상한 3,100 달성, 3.5 뒤 상한 2,800 미달 290줄), `*Env` 구현 6개 617 → 467줄, Env 항목 32개 삭제 · 2개 추가. 미달 분석은 `gate-boundary.md` 5절.
+
 ### 3.5 AC-4 "3.5 뒤 줄 수 상한" 숫자 제안 (설계 문서는 고치지 않는다)
 
 `functional-spec.md` 5절 AC-4의 3.5 뒤 상한 칸에 쓸 숫자 제안이다. 설계 문서는 이 단계에서 직접 고치지 않았다.
