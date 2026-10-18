@@ -186,7 +186,7 @@ gate_eslint() {
     return
   fi
   rc="$(cd "$ROOT/frontend" &&
-    printf 'import { ParentProviders } from "@/parent/ParentProviders";\n\nexport const gateNegativeSample = ParentProviders;\n' |
+    printf 'import { ParentProviders } from "@/parent/common/ParentProviders";\n\nexport const gateNegativeSample = ParentProviders;\n' |
     run_rc "$work/e1.log" npx --no-install eslint --stdin --stdin-filename src/device/gate-negative-sample.ts)"
   if [ "$rc" = 1 ] && grep -qE 'no-restricted-imports|import/no-restricted-paths' "$work/e1.log"; then
     pass eslint "경계 안 파일 통과 · 기기 → 보호자 import 거부(NFR11.1)"
