@@ -42,7 +42,8 @@ import org.springframework.web.bind.annotation.RestController;
  *
  * <ul>
  *   <li>{@code POST /internal/sessions}: 202 {status} · 409 SESSION_IN_PROGRESS · 409 SESSION_NOT_ACTIVE(묘비 (v)) · 423
- *       DEVICE_NOT_CONNECTED(BR6.6). U1 자유대화만 받는다(activityType PRACTICE는 U5가 더한다, 400).
+ *       DEVICE_NOT_CONNECTED(BR6.6). 자유대화와 연습(PRACTICE + 선택 본문 {@code practice}, U12 BR1.1)을 받는다. 연습의 practice가 계약 모양이
+ *       아니면 400.
  *   <li>{@code POST /internal/sessions/{id}/end}: J54 · U4b 응답표(BR1.5 · BR1.6 · BR1.9, 편차 (U4b-b)) — 202 {status: CLOSING} · 202 {} ·
  *       409 SESSION_NOT_ACTIVE((w) 포함). 사유는 GUARDIAN_STOP · CONSENT_WITHDRAWN · CORE_ABANDONED이고 그 밖은 400. 실행기가 제한 시간 안에
  *       답하지 않으면 503(오류 처리기).
@@ -61,14 +62,23 @@ public class SessionInternalController {
     record StartBody(UUID sessionId, UUID idempotencyKey, UUID guardianId, UUID childId, UUID deviceId,
             ActivityType activityType, ConsentBody consentSnapshot, ChildBody childContext,
             List<StopBody> stopExpressions, Map<String, ApprovedBody> approvedContent,
-            Map<String, SpeechBody> approvedSpeech) {
+            Map<String, SpeechBody> approvedSpeech, Map<String, Object> practice) {
+
+        /** U8 ~ U11 모양(practice 조각 없음). */
+        StartBody(UUID sessionId, UUID idempotencyKey, UUID guardianId, UUID childId, UUID deviceId,
+                ActivityType activityType, ConsentBody consentSnapshot, ChildBody childContext,
+                List<StopBody> stopExpressions, Map<String, ApprovedBody> approvedContent,
+                Map<String, SpeechBody> approvedSpeech) {
+            this(sessionId, idempotencyKey, guardianId, childId, deviceId, activityType, consentSnapshot, childContext,
+                    stopExpressions, approvedContent, approvedSpeech, null);
+        }
 
         /** U1 ~ U5b 모양(approvedSpeech 없음). */
         StartBody(UUID sessionId, UUID idempotencyKey, UUID guardianId, UUID childId, UUID deviceId,
                 ActivityType activityType, ConsentBody consentSnapshot, ChildBody childContext,
                 List<StopBody> stopExpressions, Map<String, ApprovedBody> approvedContent) {
             this(sessionId, idempotencyKey, guardianId, childId, deviceId, activityType, consentSnapshot, childContext,
-                    stopExpressions, approvedContent, null);
+                    stopExpressions, approvedContent, null, null);
         }
     }
 
@@ -160,12 +170,40 @@ public class SessionInternalController {
         InternalBody.required(body.guardianId(), "guardianId");
         InternalBody.required(body.childId(), "childId");
         InternalBody.required(body.deviceId(), "deviceId");
-        // U1 Realtime은 자유대화만 실행한다(연습 프로토콜은 U5)
-        InternalBody.check(body.activityType() == ActivityType.FREE_TALK, "activityType");
+        // U12(BR1.1): 자유대화와 연습을 받는다. 계약 열거의 알 수 없는 값(UNRECOGNIZED)은 거절한다
+        InternalBody.check(body.activityType() == ActivityType.FREE_TALK || body.activityType() == ActivityType.PRACTICE,
+                "activityType");
         return new StartSessionHandler.StartCommand(body.sessionId(), body.idempotencyKey(), body.guardianId(),
                 body.childId(), body.deviceId(), body.activityType(), consent(body.consentSnapshot()),
                 child(body.childContext()), stops(body.stopExpressions()), approved(body.approvedContent()),
-                speech(body.approvedSpeech()));
+                speech(body.approvedSpeech()), practice(body.activityType(), body.practice()));
+    }
+
+    /**
+     * 선택 속성 practice(U12 · BR1.1 · BR1.2). 연습일 때만 읽고 자유대화는 있어도 버린다(null). 계약 모양(goals는 배열, 목표는 객체, goalSelectionId는
+     * UUID 문자열, firstScenario는 객체 또는 null)이 아니면 400이다. 통과한 값은 원문 그대로(JSON 문자열) 실행 계획에 실려 확장의 시작 맥락까지 간다.
+     * 없으면(null) 확장이 '대본 없음'으로 처리한다(BR1.2). 내용은 로그 · 오류 메시지에 쓰지 않는다.
+     */
+    private static String practice(ActivityType type, Map<String, Object> practice) {
+        if (type != ActivityType.PRACTICE || practice == null) {
+            return null;
+        }
+        Object goals = practice.get("goals");
+        InternalBody.check(goals == null || goals instanceof List<?>, "practice.goals");
+        if (goals instanceof List<?> list) {
+            for (Object goal : list) {
+                InternalBody.check(goal instanceof Map<?, ?>, "practice.goals[]");
+                Map<?, ?> fields = (Map<?, ?>) goal;
+                Object id = fields.get("goalSelectionId");
+                InternalBody.check(id == null || id instanceof String, "practice.goals[].goalSelectionId");
+                if (id instanceof String text) {
+                    InternalBody.uuid(text, ErrorCode.VALIDATION_FAILED);
+                }
+                Object first = fields.get("firstScenario");
+                InternalBody.check(first == null || first instanceof Map<?, ?>, "practice.goals[].firstScenario");
+            }
+        }
+        return JsonCodec.shared().write(practice);
     }
 
     /**

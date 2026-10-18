@@ -47,7 +47,8 @@ public record RealtimeProperties(
         Security security,
         Metrics metrics,
         Observability observability,
-        Judgment judgment) {
+        Judgment judgment,
+        PracticeFlow practiceFlow) {
 
     public RealtimeProperties {
         required(timing, "mujoong.timing");
@@ -68,6 +69,7 @@ public record RealtimeProperties(
         required(metrics, "mujoong.metrics");
         required(observability, "mujoong.observability");
         required(judgment, "mujoong.judgment");
+        required(practiceFlow, "mujoong.practice-flow");
 
         if (internalHttp.verifyTokenTimeout().compareTo(timing.device().helloTimeout()) >= 0) {
             throw invalid("불변식 I-3: mujoong.internal-http.verify-token-timeout는 "
@@ -364,6 +366,18 @@ public record RealtimeProperties(
         public Judgment {
             unitInterval(minConfidence, "mujoong.judgment.min-confidence");
             unitInterval(minMargin, "mujoong.judgment.min-margin");
+        }
+    }
+
+    /**
+     * U12 새 연습 흐름의 횟수 한도(BR9.2, 시간 값이 아니라 timing.md에 두지 않고 {@code contracts/ai-io.md} 10.14 표가 정본이다).
+     * {@code retryMax}는 장면당 '다시 해 보기' 최대 횟수(기본 2, AC1.5.4), {@code reexplainMax}는 장면당 상황 다시 설명 최대 횟수(기본 1,
+     * AC1.3.x)다. 0은 '하지 않음'이라 허용한다. 시간 한도는 {@code timing.conversation.*}가 맡는다.
+     */
+    public record PracticeFlow(Integer retryMax, Integer reexplainMax) {
+        public PracticeFlow {
+            nonNegative(retryMax, "mujoong.practice-flow.retry-max");
+            nonNegative(reexplainMax, "mujoong.practice-flow.reexplain-max");
         }
     }
 

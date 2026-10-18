@@ -210,6 +210,10 @@ mujoong:
   judgment:
     min-confidence: 0.6
     min-margin: 0.15
+  # U12 새 연습 흐름 횟수 한도(BR9.2, contracts/ai-io.md 10.14). 시간 값이 아니다: 시간 한도는 timing.conversation.*(no-response-wait · focus-max · goal-active-limit)
+  practice-flow:
+    retry-max: 2
+    reexplain-max: 1
   # U13 제브 게이트(contracts/ai-io.md 10.12). 시간 값이 아니다: 검사 시한은 timing.guardrail.jev-budget(R-F7). 값은 모두 환경 변수로만 받고 저장소에는 이름만 둔다(R-F3).
   # mode가 비면 프로필 기본값(demo · prod = REAL, 그 밖 = STUB). demo · prod는 REAL + 키 JEV_API_KEY + 허용 호스트 + 고정 모델이 아니면 기동을 거부한다(BR9.1)
   guardrail:

@@ -337,7 +337,20 @@ public final class SessionExecutor {
             ActivityType activityType,
             Map<String, ApprovedItem> approved,
             String practiceJson,
-            UUID guardianId) {
+            UUID guardianId,
+            Map<String, String> approvedSpeech) {
+
+        /**
+         * U12 이전 모양(승인 발화 문장 지도 없음 — 연습 시작 패키지의 approvedSpeech를 확장에 싣지 않는다). 기존 호출처 · 시험은 이 모양을 그대로
+         * 쓴다.
+         */
+        public Plan(UUID sessionId, UUID deviceId, String traceId, ChildContext childContext,
+                List<StartSession.ApprovedAudio> approvedAudio, ApprovedItem closing, ApprovedItem waitingFiller,
+                boolean rawAudioConsent, List<String> stopExpressions, ActivityType activityType,
+                Map<String, ApprovedItem> approved, String practiceJson, UUID guardianId) {
+            this(sessionId, deviceId, traceId, childContext, approvedAudio, closing, waitingFiller, rawAudioConsent,
+                    stopExpressions, activityType, approved, practiceJson, guardianId, Map.of());
+        }
 
         /** U4b 모양(보호자 id 없음 — 판정 기록을 남기지 않는다). */
         public Plan(UUID sessionId, UUID deviceId, String traceId, ChildContext childContext,
@@ -345,7 +358,7 @@ public final class SessionExecutor {
                 boolean rawAudioConsent, List<String> stopExpressions, ActivityType activityType,
                 Map<String, ApprovedItem> approved, String practiceJson) {
             this(sessionId, deviceId, traceId, childContext, approvedAudio, closing, waitingFiller, rawAudioConsent,
-                    stopExpressions, activityType, approved, practiceJson, null);
+                    stopExpressions, activityType, approved, practiceJson, null, Map.of());
         }
 
         public Plan {
@@ -366,6 +379,7 @@ public final class SessionExecutor {
                 items.putIfAbsent(waitingFiller.contentCode(), waitingFiller);
             }
             approved = Map.copyOf(items);
+            approvedSpeech = approvedSpeech == null ? Map.of() : Map.copyOf(approvedSpeech);
         }
 
         /** U1 · U3 모양(자유대화, 승인 문구는 마무리 · 대기 문구뿐, 연습 조각 없음). */
@@ -373,7 +387,7 @@ public final class SessionExecutor {
                 List<StartSession.ApprovedAudio> approvedAudio, ApprovedItem closing, ApprovedItem waitingFiller,
                 boolean rawAudioConsent, List<String> stopExpressions) {
             this(sessionId, deviceId, traceId, childContext, approvedAudio, closing, waitingFiller, rawAudioConsent,
-                    stopExpressions, ActivityType.FREE_TALK, Map.of(), null, null);
+                    stopExpressions, ActivityType.FREE_TALK, Map.of(), null, null, Map.of());
         }
 
         /** 그 코드의 승인 문구(패키지에 없으면 빈 값). */
@@ -429,6 +443,8 @@ public final class SessionExecutor {
     private final SessionMailbox mailbox;
     /** 통과한 구간 없이 연달아 보낼 수 있는 게이트 교정 지시 수(안전 상한, 시간 값이 아니다). */
     private static final int MAX_CORRECTIONS_IN_A_ROW = 2;
+    /** U12: 실행부가 만드는 역할 발화 슬롯 · 알림 발화의 재생 증거 표지용 장면 식별자(대본 장면을 모르므로 고정 값, 제브 요청 · 기록에 쓰이지 않는다). */
+    private static final UUID NOTICE_SCENARIO_ID = new UUID(0L, 0L);
     private final SessionTimers timers;
     private final InputRelay relay;
     private final SegmentBuffer segment = new SegmentBuffer();
@@ -1166,7 +1182,8 @@ public final class SessionExecutor {
         // U4b BR10.1: PRACTICE면 확장점 'ACTIVE 진입'
         if (practice != null) {
             PracticeSessionExtension.PracticeContext context = new PracticeSessionExtension.PracticeContext(
-                    plan.sessionId(), plan.practiceJson(), plan.approved().keySet(), plan.rawAudioConsent(), now);
+                    plan.sessionId(), plan.practiceJson(), plan.approved().keySet(), plan.rawAudioConsent(), now,
+                    plan.approvedSpeech());
             practiceSignal(() -> practice.onActive(context, practiceOutput), true);
         }
     }
@@ -1781,7 +1798,15 @@ public final class SessionExecutor {
 
         @Override
         public void finishAbandoned() {
+            // U12 BR5.6: 재지시가 소리로 이어지지 않으면 열린 생성형 슬롯을 실패로 한 번 닫는다
+            closeGeneratedSlot(null, kr.mujoong.realtime.practice.PracticePorts.Playback.FAILED);
             finishDiscard();
+        }
+
+        @Override
+        public void practiceVoided(UUID practiceSpeechId) {
+            // U12 BR5.6: 무효로 닫힌 검사의 생성형 슬롯이 아직 열려 있으면 INTERRUPTED로 한 번 닫는다
+            closeGeneratedSlot(practiceSpeechId, kr.mujoong.realtime.practice.PracticePorts.Playback.INTERRUPTED);
         }
 
         @Override
@@ -1830,7 +1855,7 @@ public final class SessionExecutor {
 
         @Override
         public void practiceBlocked(PracticeSessionExtension.GuardrailBlockedEvent event) {
-            // 연습 확장점 알림(BR6.5): 안전 편지함을 거쳐 실행기 스레드에서 전달한다. 운영에서 연습 모드 검사를 시작하는 것은 U12다
+            // 연습 확장점 알림(BR6.5): 안전 편지함을 거쳐 실행기 스레드에서 전달한다. 운영에서 연습 모드 검사를 시작하는 것은 U12의 생성형 슬롯(speakGenerated)이다
             mailbox.putSafety(new SessionMailbox.PracticeEvent(new PracticeSessionExtension.ExtensionEvent(
                     PracticeSessionExtension.ExtensionEvent.Kind.GUARDRAIL_BLOCKED, "guardrail-blocked",
                     event.correlationId(), event)));
@@ -1845,6 +1870,27 @@ public final class SessionExecutor {
         public void appError(RuntimeException error) {
             services.events().appError(EventLog.Component.OUTPUT_GATE, error);
         }
+    }
+
+    /**
+     * U12 BR5.6: 열린 생성형 슬롯(PracticeSpeech.generated)을 닫고 종료 사실을 확장에 한 번 보낸다. 슬롯이 없거나 생성형이 아니거나 식별자가
+     * 다르면 아무것도 하지 않는다(승인 발화 슬롯의 기존 길은 건드리지 않는다).
+     *
+     * @param correlationId 닫을 슬롯의 식별자(null이면 지금 열린 생성형 슬롯)
+     */
+    private void closeGeneratedSlot(UUID correlationId, kr.mujoong.realtime.practice.PracticePorts.Playback fact) {
+        var slot = pendingPracticeSpeech;
+        if (slot == null || !slot.generated() || (correlationId != null && !slot.correlationId().equals(correlationId))) {
+            return;
+        }
+        pendingPracticeSpeech = null;
+        practiceHold = true;
+        practicePlayback(slot, fact);
+    }
+
+    /** U12 BR5.6: 열린 생성형 슬롯의 역할에 맞는 제브 연습 모드. */
+    private static GuardrailRequest.Mode practiceGuardrailMode(kr.mujoong.realtime.voice.PracticeSpeech slot) {
+        return "COACH".equals(slot.partnerRole()) ? GuardrailRequest.Mode.PRACTICE_COACH : GuardrailRequest.Mode.PRACTICE_PEER;
     }
 
     /** 출력 능력 거절(R-10 · BR10.4): ACTIVE가 아니거나 능력 밖 요청이면 남기고 거짓. */
@@ -2000,8 +2046,53 @@ public final class SessionExecutor {
             if (!practiceActive()) {
                 return refusePractice("announceRoleSwitch", "NOT_ACTIVE");
             }
-            // 자리와 거절 규칙만 있다(동작은 이 단위 밖). 받지 않는다
-            return false;
+            // U12 BR5.4: 시작 패키지 approvedSpeech의 승인 문장을 기존 승인 발화 재생(speak) 길로 낸다(원문 일치라 제브 호출 없음). 승인 문장이
+            // 없으면 거짓이고 호출한 확장이 생성형 알림으로 낸다
+            String code = "COACH".equals(toRole) ? "COACH_SWITCH" : "PEER".equals(toRole) ? "PEER_RETURN" : null;
+            String sentence = code == null ? null : plan.approvedSpeech().get(code);
+            if (sentence == null) {
+                return false;
+            }
+            try {
+                return speak(kr.mujoong.realtime.voice.PracticeSpeech.scenario(UUID.randomUUID(), NOTICE_SCENARIO_ID,
+                        outputGen.generation(), "COACH".equals(toRole) ? "코치" : "친구", sentence));
+            } catch (IllegalArgumentException invalid) {
+                return false;
+            }
+        }
+
+        @Override
+        public boolean speakGenerated(UUID correlationId, String role, String instructionText) {
+            if (!practiceActive()) {
+                return refusePractice("speakGenerated", "NOT_ACTIVE");
+            }
+            if (providerSession == null || !providerSession.isOpen()) {
+                return false;
+            }
+            kr.mujoong.realtime.voice.PracticeSpeech slot;
+            kr.mujoong.realtime.voice.PracticeInstruction instruction;
+            try {
+                slot = kr.mujoong.realtime.voice.PracticeSpeech.generatedSlot(correlationId, NOTICE_SCENARIO_ID,
+                        outputGen.generation(), role, instructionText);
+                instruction = new kr.mujoong.realtime.voice.PracticeInstruction(instructionText);
+            } catch (RuntimeException e) {
+                return refusePractice("speakGenerated", "INVALID");
+            }
+            // 한 발화마다 재지시 수를 새로 센다(앞 발화가 재지시를 썼어도 이 발화는 한 번 다시 검사받는다)
+            guardrail.onTurnBoundary();
+            bumpGeneration();
+            transcripts.aiFinal("", false, services.clock().now());
+            pendingPracticeSpeech = slot;
+            practiceHold = false;
+            // 제브 첫 막힘 뒤 재지시가 같은 역할 지시문을 다시 보내도록 replayable로 보낸다. 새 말 미시작 · 송신 실패는 기존 실패 길이다
+            boolean sent = sendInstruction(OutputGeneration.BumpReason.SERVER_SEND, "provider-practice-generated-",
+                    id -> services.requests().practiceInstruction(id, instruction),
+                    () -> practiceOutput.post("u5b-voice-failed", slot), true);
+            if (!sent) {
+                pendingPracticeSpeech = null;
+                practiceHold = true;
+            }
+            return sent;
         }
 
         @Override
@@ -3002,6 +3093,22 @@ public final class SessionExecutor {
                 return;
             }
             boolean practiceControlled = practice != null && practice.controlsOutput();
+            var generatedSlot = practiceControlled && pendingPracticeSpeech != null && pendingPracticeSpeech.generated()
+                    ? pendingPracticeSpeech : null;
+            if (generatedSlot != null) {
+                // U12 BR5.6(기능 설계 3.5): 열린 생성형 슬롯의 새 발화는 제브(연습 모드)가 ALLOW한 것만 재생된다. 제브가 꺼져 있거나 시작이
+                // 실패하면 폐기한다(fail-closed). 원문 일치로 제브를 건너뛸 수 없다
+                if (!guardrail.enabled() || status != SessionStatus.ACTIVE) {
+                    discard(sealed, GateDecision.DiscardReason.GATE_PATTERN, false);
+                    return;
+                }
+                try {
+                    guardrail.begin(sealed, practiceGuardrailMode(generatedSlot), generatedSlot.correlationId());
+                } catch (RuntimeException e) {
+                    guardrail.onBeginFailed(sealed, e);
+                }
+                return;
+            }
             if (practiceControlled
                     && (pendingPracticeSpeech == null || !pendingPracticeSpeech.matches(sealed.transcript()))) {
                 discard(sealed, GateDecision.DiscardReason.GATE_PATTERN, false);

@@ -225,7 +225,10 @@ class RealtimeInternalApiIT {
         String valid = body(sessionId);
 
         assertValidationFailed(startRaw(valid.replace("\"age\":8", "\"age\":13")));
-        assertValidationFailed(startRaw(valid.replace("\"FREE_TALK\"", "\"PRACTICE\"")));
+        // U12(BR1.1): 연습(PRACTICE)은 이제 받는다(202는 PracticeStartPathIT). 알 수 없는 활동 종류와 계약 모양이 아닌 practice 조각은 그대로 400이다
+        assertValidationFailed(startRaw(valid.replace("\"FREE_TALK\"", "\"WEBINAR\"")));
+        assertValidationFailed(startRaw(valid.replace("\"FREE_TALK\"", "\"PRACTICE\"").replace("\"practice\":null",
+                "\"practice\":{\"goals\":\"not-a-list\"}")));
         assertValidationFailed(startRaw(valid.replace("/media/approved/closing-v1.wav", "https://evil.invalid/x.wav")));
         assertValidationFailed(startRaw(valid.replace("\"WAITING_FILLER\":", "\"OTHER_CONTENT\":")));
         assertValidationFailed(startRaw(valid.replace("[{\"text\":\"무중아 그만할래\",\"isDefault\":true}]", "[]")));

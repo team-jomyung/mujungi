@@ -126,6 +126,30 @@ class RealtimeDeletionParticipantOrderTest {
                 .isEqualTo(new DeletionCompleted.Counts(4, 7, 2, 5));
     }
 
+    /** U12 BR7.4: 새 연습 흐름 참가자(순서 190)는 제브 185와 세션 200 사이에서 불리고 그 건수는 DeletionCompleted.Counts에 들어가지 않는다. */
+    @Test
+    void aPracticeFlowParticipantAtOrder190RunsBetweenGuardrailAndSessionAndItsCountsAreNotReported() {
+        RealtimeDeletionParticipant guardrail = participant(185, Map.of("guardrail_event", 6));
+        RealtimeDeletionParticipant practiceFlow = participant(190,
+                Map.of("realtime_practice_help", 3, "realtime_practice_scene_run", 2));
+        DeletionRequestedHandler handler = handler(List.of(lastMessaging, session, practiceFlow, guardrail, voice, practice),
+                Duration.ofSeconds(1));
+        stubSessions(List.of());
+
+        handler.handle(row(), NOW);
+
+        assertThat(handler.participants()).extracting(RealtimeDeletionParticipant::order)
+                .containsExactly(100, 150, 185, 190, 200, 900);
+        InOrder order = inOrder(guardrail, practiceFlow, session);
+        order.verify(guardrail).deleteByGuardian(GUARDIAN, REQUEST);
+        order.verify(practiceFlow).deleteByGuardian(GUARDIAN, REQUEST);
+        order.verify(session).deleteByGuardian(GUARDIAN, REQUEST);
+        ArgumentCaptor<DeletionCompleted> completed = ArgumentCaptor.forClass(DeletionCompleted.class);
+        verify(outbox).write(completed.capture(), eq(GUARDIAN), eq(NOW), any());
+        assertThat(completed.getValue().counts()).as("190의 건수는 건수에 더해지지 않는다(default 가지, Counts 모양 불변)")
+                .isEqualTo(new DeletionCompleted.Counts(4, 7, 2, 5));
+    }
+
     @Test
     void withoutAPracticeParticipantItIsSkippedAndCountsZero() {
         DeletionRequestedHandler handler = handler(List.of(voice, session, lastMessaging), Duration.ofSeconds(1));

@@ -72,6 +72,8 @@ public final class SessionHarness {
     public kr.mujoong.contract.status.ActivityType activityType = kr.mujoong.contract.status.ActivityType.FREE_TALK;
     /** U4b: 마무리 · 대기 문구 밖의 승인 문구(코드 → 원문, create 전에 넣는다). 없으면 그 재생은 건너뛴다(BR3.3). */
     public final java.util.Map<String, String> extraApproved = new java.util.LinkedHashMap<>();
+    /** U12: 시작 패키지 approvedSpeech의 승인 발화 문장 지도(코드 → 원문, create 전에 넣는다). 확장의 역할 전환 알림이 쓴다. */
+    public final java.util.Map<String, String> approvedSpeech = new java.util.LinkedHashMap<>();
     /** U4b: 승인 문구 코드 → 버전(extraApproved로 만든 것). */
     public final java.util.Map<String, UUID> approvedVersions = new java.util.LinkedHashMap<>();
     public final LatencyRecorder latency = new LatencyRecorder(events, metrics, clock, 100, Duration.ofMinutes(10));
@@ -154,7 +156,7 @@ public final class SessionHarness {
                 new ChildContext("하늘", 8, List.of("공룡")), audio,
                 new SessionExecutor.ApprovedItem("CLOSING", closingVersion),
                 new SessionExecutor.ApprovedItem("WAITING_FILLER", fillerVersion), rawAudioConsent, STOP_EXPRESSIONS,
-                activityType, approved, practiceJson, guardianId);
+                activityType, approved, practiceJson, guardianId, approvedSpeech);
         executor = new SessionExecutor(plan, services, mailbox, () -> removed = true);
         return executor;
     }

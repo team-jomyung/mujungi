@@ -167,6 +167,13 @@ final class GuardrailCoordinator {
         default void practiceBlocked(PracticeSessionExtension.GuardrailBlockedEvent event) {
         }
 
+        /**
+         * U12 BR5.6: 연습 발화 검사표가 무효로 닫혔다(끼어들기 · 보류 · 세대 변경 등). 그 연습 발화 슬롯이 아직 열려 있으면 실행부가 닫고 확장에
+         * 종료 사실을 한 번 보낸다. 연습 발화가 아니면 {@code practiceSpeechId}는 null이다.
+         */
+        default void practiceVoided(UUID practiceSpeechId) {
+        }
+
         void appError(String reasonCode, EventCode.Level level);
 
         void appError(RuntimeException error);
@@ -554,6 +561,9 @@ final class GuardrailCoordinator {
         } else {
             // 낡은 구간의 막힘은 막힘대로 남기되 재지시는 하지 않는다(상태가 이미 바뀌었다)
             record(current.requestId(), verdict.eventDecision(), verdict.reasonCode(), verdict.latencyMs());
+        }
+        if (current.practiceSpeechId() != null) {
+            env.practiceVoided(current.practiceSpeechId());
         }
         env.discardSilent(current.sealed(), current.held(), null);
         discardQueue();

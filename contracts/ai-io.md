@@ -473,3 +473,12 @@ realtime 출력 게이트의 제브 단계(U13)가 읽는 설정이다. 시간 �
 **오류 매핑:** 비 2xx(400 · 401 · 413 · 415 · 422 · 429 · 529 포함, 리다이렉트도)는 오류 본문을 읽지 않고 모두 `TRANSPORT_ERROR`이며 재시도하지 않는다(429 · 529의 백오프 권고도 따르지 않는다 — 시간 초과 = 막힘). 시간 초과는 `TIMEOUT`, 허용 밖 호스트 · 주소 오류는 `TRANSPORT_ERROR`, 빈 키 · 모델 규칙 · 문턱 범위 위반은 `UNAVAILABLE`(보내기 전 거절)이다. `POLICY_MISMATCH`는 응답에 정책 판이 없어 더 만들지 않는다(열거값은 호환을 위해 남김).
 
 **열린 항목(실호출로만 확정):** 요청 `model`에 고정 버전 이름이 받아들여지는지(공식 예시 요청은 `-latest` 이동 별칭을 쓰고 우리 규칙은 그것을 거부한다), 오류 본문 모양, `confidence`의 뜻, 한국어 문안의 분류 품질, 지연, 확률 합 허용 오차, 문턱 0.5. 키를 넣기 전 R-F15 확인 기록(RUNBOOK 단계 4)이 먼저다.
+
+### 10.14 U12 새 연습 흐름 횟수 한도
+
+realtime 새 연습 흐름(U12)이 읽는 설정이다. 시간 값이 아니며 `timing.md`에 두지 않는다. 시간 한도(무응답 재안내 10초 · 집중 90초 · 목표 ACTIVE 10분)는 기존 키 `mujoong.timing.conversation.no-response-wait` · `focus-max` · `goal-active-limit`(timing.md 13절)이 맡고, 이 표는 횟수만 정한다. 비밀이 아니고 환경 변수가 없다.
+
+| 설정 키 | 기본값 | 앱 | 뜻 |
+|---|---|---|---|
+| `mujoong.practice-flow.retry-max` | `2` | realtime | 장면 하나에서 코치와 함께 '다시 해 보기'를 할 수 있는 최대 횟수(AC1.5.4). 0 이상 정수, 0은 하지 않음 |
+| `mujoong.practice-flow.reexplain-max` | `1` | realtime | 장면 하나에서 상황을 다시 설명하는 최대 횟수(AC1.3.x, OPPORTUNITY와 RETRY가 공유). 0 이상 정수, 0은 하지 않음 |
