@@ -1,4 +1,4 @@
-import { isTerminalStatus, type LiveView } from "../api/types";
+import { isTerminalStatus, type LiveView } from "../../common/api/types";
 import { ACTIVITY_COPY, ACTIVITY_TEMP_COPY, childStopDetail, childStopTitle } from "@/shared/copy/activity";
 import { COPY, PROPOSED_COPY, abortedBody, guardianStopDetail } from "@/shared/copy/ko";
 import { formatHhmm } from "@/shared/copy/timeText";

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { PARENT_ROUTES } from "../../navigation";
+import { PARENT_ROUTES } from "../../common/navigation";
 import { ACCOUNT_COPY, ACCOUNT_PROPOSED_COPY, ACCOUNT_TEMP_COPY } from "@/shared/copy/account";
 import { useToast } from "@/shared/toast/ToastProvider";
 

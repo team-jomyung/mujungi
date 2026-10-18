@@ -2,11 +2,11 @@
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { discardReport, fetchReport, fetchReportPdf, reportKey, saveReport } from "../../api/reports";
-import { useApiClient } from "../../api/queries";
-import { shortDate, seoulDate } from "../../components/MonthCalendar";
-import { LiveRegion } from "../../components/LiveRegion";
-import { PARENT_ROUTES } from "../../navigation";
+import { discardReport, fetchReport, fetchReportPdf, reportKey, saveReport } from "./api";
+import { useApiClient } from "../../common/api/queries";
+import { shortDate, seoulDate } from "../../common/components/MonthCalendar";
+import { LiveRegion } from "../../common/components/LiveRegion";
+import { PARENT_ROUTES } from "../../common/navigation";
 import { formatHhmm } from "@/shared/copy/timeText";
 import { RESULT_TEMP_COPY as C, reportSummary, periodLine, activityCountLine, citationCountLine, sectionTitle } from "@/shared/copy/result";
 import { useTiming } from "@/shared/timing/TimingProvider";

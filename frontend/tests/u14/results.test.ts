@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseResult } from "../../src/parent/api/results";
+import { parseResult } from "../../src/parent/common/api/results";
 
 function response() { return { jobStatus: "DONE", resultLevel: "FULL", sentences: [], practice: null as null | { goals: object[] }, tips: [], candidates: [{ recommendationId: "version-handle", displayName: "물어보기", displayEvidence: "합성 놀이 장면", evidence: [], selected: false, goalSelectionId: null }] as Record<string, unknown>[] }; }
 

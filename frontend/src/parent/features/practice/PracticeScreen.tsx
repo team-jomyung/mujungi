@@ -3,18 +3,18 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
-import { startFailureReason } from "../../activity/freeFailure";
-import { useApiClient } from "../../api/queries";
-import { BottomTabBar, type TabKey } from "../../components/BottomTabBar";
-import { PARENT_ROUTES, goToLogin, routeForTab } from "../../navigation";
-import type { GoalSelection } from "../../practice/api";
-import { PRACTICE_COPY, PRACTICE_TEMP_COPY, goalMeta } from "../../practice/copy";
-import { usePracticeGoals } from "../../practice/usePracticeGoals";
-import { PracticeStartAction } from "../../practice/PracticeStartAction";
-import { practiceStartPort } from "../../practice/startApi";
+import { startFailureReason } from "../free/failure";
+import { useApiClient } from "../../common/api/queries";
+import { BottomTabBar, type TabKey } from "../../common/components/BottomTabBar";
+import { PARENT_ROUTES, goToLogin, routeForTab } from "../../common/navigation";
+import type { GoalSelection } from "./api";
+import { PRACTICE_COPY, PRACTICE_TEMP_COPY, goalMeta } from "./copy";
+import { usePracticeGoals } from "./usePracticeGoals";
+import { PracticeStartAction } from "./PracticeStartAction";
+import { practiceStartPort } from "./startApi";
 import { PROPOSED_COPY } from "@/shared/copy/ko";
 import { useToast } from "@/shared/toast/ToastProvider";
-import "../../practice/practice.css";
+import "./practice.css";
 
 /** AC4.1.1/2/5–11/13. 추첨 순서는 Core가 고정하고 화면은 선택 ID만 전달한다. */
 export function PracticeScreen({ returnedFailed = false, failureCode = null }: { returnedFailed?: boolean; failureCode?: string | null }) {

@@ -2,12 +2,12 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { previewReport, createReport } from "../../api/reports";
-import { useApiClient } from "../../api/queries";
-import { useReportPolling } from "../../hooks/useReportPolling";
-import { MonthCalendar, addDays, seoulDate, shortDate, validDate } from "../../components/MonthCalendar";
-import { LiveRegion } from "../../components/LiveRegion";
-import { PARENT_ROUTES } from "../../navigation";
+import { previewReport, createReport } from "./api";
+import { useApiClient } from "../../common/api/queries";
+import { useReportPolling } from "./useReportPolling";
+import { MonthCalendar, addDays, seoulDate, shortDate, validDate } from "../../common/components/MonthCalendar";
+import { LiveRegion } from "../../common/components/LiveRegion";
+import { PARENT_ROUTES } from "../../common/navigation";
 import { RESULT_TEMP_COPY as C } from "@/shared/copy/result";
 type Mode = "RANGE" | "GENERATING" | "FAILED";
 export function ReportRangeScreen() {

@@ -1,5 +1,5 @@
-import type { ApiClient } from "./apiClient";
-import { ResponseShapeError } from "./types";
+import type { ApiClient } from "../api/apiClient";
+import { ResponseShapeError } from "../api/types";
 
 // U7 C6 · U7-a/U7-J3: 세션 GET, 쓰기 CSRF, 현재 브라우저 endpoint만 해제한다.
 export interface PushConfig {

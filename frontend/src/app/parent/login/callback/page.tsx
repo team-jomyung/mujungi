@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
-import { OAUTH_STATE_COOKIE, readGoogleConfig, singleParam, stateMatches } from "@/parent/oauth";
+import { OAUTH_STATE_COOKIE, readGoogleConfig, singleParam, stateMatches } from "@/parent/common/oauth";
 import { LoginCallbackScreen } from "@/parent/features/login/LoginCallbackScreen";
 
 // /parent/login/callback — 구글이 돌려보낸 자리 (U2 · US1.1 · AC1.1.4 · U2-J4)

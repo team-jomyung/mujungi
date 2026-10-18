@@ -2,11 +2,11 @@
 
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
-import { ApiError } from "../api/apiClient";
-import { deletePushSubscription, fetchPushConfig, putPushSubscription, type PushConfig } from "../api/push";
-import { useApiClient } from "../api/queries";
-import { goToLogin, isUnauthenticated } from "../navigation";
-import { browserPush, type BrowserSubscription } from "../push/browserPush";
+import { ApiError } from "../../common/api/apiClient";
+import { deletePushSubscription, fetchPushConfig, putPushSubscription, type PushConfig } from "../../common/push/api";
+import { useApiClient } from "../../common/api/queries";
+import { goToLogin, isUnauthenticated } from "../../common/navigation";
+import { browserPush, type BrowserSubscription } from "../../common/push/browserPush";
 import { PROPOSED_COPY, PUSH_TEMP_COPY, TEMP_COPY } from "@/shared/copy/ko";
 import { useTiming } from "@/shared/timing/TimingProvider";
 import { useToast } from "@/shared/toast/ToastProvider";

@@ -4,7 +4,7 @@
 // U4a: 04 currentSession · 12 덧붙임(gaps · technicalPause · silenceWarning)은 api/activity.ts가 읽는다.
 
 import { parseLiveExtras, parseSessionSummary, type ActivityKind, type LiveExtras, type SessionSummary } from "./activity";
-import { parsePracticeProgress, type PracticeProgress, type ProgressIssue } from "../practice/practiceProgress";
+import { parsePracticeProgress, type PracticeProgress, type ProgressIssue } from "../../features/practice/practiceProgress";
 
 /** 08 서술 칸 상한(activity-free-request.schema.json maxLength). */
 export const FREE_TEXT_MAX_LENGTH = 200;

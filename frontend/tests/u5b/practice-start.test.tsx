@@ -1,8 +1,8 @@
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, it, vi } from "vitest";
-import { PracticeStartCoordinator, ownedSelection, type StartResult } from "@/parent/practice/practiceStart";
-import { PracticeStartAction } from "@/parent/practice/PracticeStartAction";
+import { PracticeStartCoordinator, ownedSelection, type StartResult } from "@/parent/features/practice/practiceStart";
+import { PracticeStartAction } from "@/parent/features/practice/PracticeStartAction";
 
 afterEach(cleanup);
 function deferred<T>() { let resolve!: (value: T) => void; const promise = new Promise<T>((r) => { resolve = r; }); return { resolve, promise }; }

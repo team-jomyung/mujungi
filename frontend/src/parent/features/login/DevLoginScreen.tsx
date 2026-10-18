@@ -3,9 +3,9 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { ApiError } from "../../api/apiClient";
-import { devLogin, useApiClient } from "../../api/queries";
-import { PARENT_ROUTES } from "../../navigation";
+import { ApiError } from "../../common/api/apiClient";
+import { devLogin, useApiClient } from "../../common/api/queries";
+import { PARENT_ROUTES } from "../../common/navigation";
 import { TEMP_COPY } from "@/shared/copy/ko";
 import { messageForErrorCode } from "@/shared/errors/codeToCopy";
 

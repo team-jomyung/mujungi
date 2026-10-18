@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
-import { presentDone } from "@/parent/activity/donePresentation";
-import { freeFailedRoute, startFailureReason } from "@/parent/activity/freeFailure";
-import { activeTabTarget, liveActivityCard } from "@/parent/activity/homeActivity";
-import { buildTimeline, gapText, isStartFailure, liveOutcome, showsPauseLine, silentMinutes } from "@/parent/activity/livePresentation";
+import { presentDone } from "@/parent/features/done/presentation";
+import { freeFailedRoute, startFailureReason } from "@/parent/features/free/failure";
+import { activeTabTarget, liveActivityCard } from "@/parent/features/home/presentation";
+import { buildTimeline, gapText, isStartFailure, liveOutcome, showsPauseLine, silentMinutes } from "@/parent/features/live/presentation";
 import {
   fetchCurrentSession,
   isInProgressStatus,
@@ -10,9 +10,9 @@ import {
   parseLiveExtras,
   parseSessionSummary,
   type SessionSummary,
-} from "@/parent/api/activity";
-import type { ApiClient } from "@/parent/api/apiClient";
-import { parseHome, parseLiveView, type Bubble, type LiveView } from "@/parent/api/types";
+} from "@/parent/common/api/activity";
+import type { ApiClient } from "@/parent/common/api/apiClient";
+import { parseHome, parseLiveView, type Bubble, type LiveView } from "@/parent/common/api/types";
 import { childStopDetail, childStopTitle, homeActivityLine, homeClosingLine, lastCheckedText, offlineLine } from "@/shared/copy/activity";
 import { SESSION_ID, homeBody, liveViewBody } from "../../u1/support/fixtures";
 

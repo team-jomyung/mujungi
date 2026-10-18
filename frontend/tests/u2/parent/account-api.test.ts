@@ -16,9 +16,9 @@ import {
   saveConsents,
   saveStopExpressions,
   updateChild,
-} from "@/parent/api/account";
-import { createApiClient, type FetchLike } from "@/parent/api/apiClient";
-import { ResponseShapeError } from "@/parent/api/types";
+} from "@/parent/common/api/account";
+import { createApiClient, type FetchLike } from "@/parent/common/api/apiClient";
+import { ResponseShapeError } from "@/parent/common/api/types";
 import { routeAfterLogin } from "@/parent/features/login/LoginCallbackScreen";
 import { errorResponse, jsonResponse } from "../../u1/support/fixtures";
 import { childBody, jsonBody, meBody, noContent, policyBody, stopBody } from "../support/accountFixtures";

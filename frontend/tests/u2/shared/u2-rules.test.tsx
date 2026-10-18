@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { useState } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { BottomSheet } from "@/parent/components/BottomSheet";
+import { BottomSheet } from "@/parent/common/components/BottomSheet";
 import { ChildScreen } from "@/parent/features/child/ChildScreen";
 import { ConsentScreen } from "@/parent/features/consent/ConsentScreen";
 import { DeviceScreen } from "@/parent/features/device/DeviceScreen";

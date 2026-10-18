@@ -1,7 +1,7 @@
 import { expect, it, vi } from "vitest";
 import ParentRecordPage from "@/app/parent/records/[sessionId]/page";
 import ParentReportPage from "@/app/parent/reports/[reportId]/page";
-import { PARENT_ROUTES, routeForTab } from "@/parent/navigation";
+import { PARENT_ROUTES, routeForTab } from "@/parent/common/navigation";
 import { defaultTiming, resolveTiming, TimingConfigError } from "@/shared/timing/timing";
 import { REPORT_ID, SESSION_ID } from "./support";
 

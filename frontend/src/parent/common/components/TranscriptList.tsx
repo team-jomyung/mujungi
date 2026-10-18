@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { speakerPrefix } from "@/shared/copy/ko";
-import { buildTimeline, gapText } from "../activity/livePresentation";
+import { buildTimeline, gapText } from "../../features/live/presentation";
 import type { LiveGap } from "../api/activity";
 import type { Bubble } from "../api/types";
 

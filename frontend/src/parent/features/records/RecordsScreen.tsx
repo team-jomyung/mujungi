@@ -2,11 +2,11 @@
 import { useQuery } from "@tanstack/react-query";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
-import { fetchRecordDays, fetchRecords } from "../../api/results";
-import { useApiClient } from "../../api/queries";
-import { BottomTabBar } from "../../components/BottomTabBar";
-import { MonthCalendar, dateLabel, seoulDate, validDate } from "../../components/MonthCalendar";
-import { PARENT_ROUTES, routeForTab } from "../../navigation";
+import { fetchRecordDays, fetchRecords } from "../../common/api/results";
+import { useApiClient } from "../../common/api/queries";
+import { BottomTabBar } from "../../common/components/BottomTabBar";
+import { MonthCalendar, dateLabel, seoulDate, validDate } from "../../common/components/MonthCalendar";
+import { PARENT_ROUTES, routeForTab } from "../../common/navigation";
 import { formatHhmm, minutesBetween } from "@/shared/copy/timeText";
 import { RESULT_TEMP_COPY as C, durationLabel } from "@/shared/copy/result";
 export function RecordsScreen() {

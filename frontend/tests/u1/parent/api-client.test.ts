@@ -1,9 +1,9 @@
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ApiError, createApiClient, type FetchLike } from "@/parent/api/apiClient";
-import { createCsrfStore } from "@/parent/api/csrf";
-import { devLogin, endSession, fetchHome, registerDevice, startFreeTalk } from "@/parent/api/queries";
-import { ResponseShapeError, type CsrfToken } from "@/parent/api/types";
+import { ApiError, createApiClient, type FetchLike } from "@/parent/common/api/apiClient";
+import { createCsrfStore } from "@/parent/common/api/csrf";
+import { devLogin, endSession, fetchHome, registerDevice, startFreeTalk } from "@/parent/common/api/queries";
+import { ResponseShapeError, type CsrfToken } from "@/parent/common/api/types";
 import { SESSION_ID, TRACE_ID, deferred, errorResponse, homeBody, jsonResponse, makeCsrfToken } from "../support/fixtures";
 import { codeOf, frontendRoot, relative, sourceFiles } from "../support/sourceScan";
 

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { browserPush } from "@/parent/push/browserPush";
+import { browserPush } from "@/parent/common/push/browserPush";
 
 const bytes = Uint8Array.from({ length: 65 }, (_, index) => index === 0 ? 4 : index);
 const publicKey = btoa(String.fromCharCode(...bytes)).replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");

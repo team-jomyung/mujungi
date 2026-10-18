@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { describe, expect, it } from "vitest";
-import { CodeInput, emptyCodeCells, isCodeComplete, normalizeCodeText } from "@/parent/components/CodeInput";
+import { CodeInput, emptyCodeCells, isCodeComplete, normalizeCodeText } from "@/parent/features/device/CodeInput";
 
 // 05a 코드 입력 8칸 시험 (U1 3.5 Step 42 · BR2.8 · BR1.1 · 편차 (d) · AC2.2.1 · interaction-spec 3.7 · 접근성 O2 · U3)
 // 자동 대문자, 넣으면 다음 칸, 빈 칸에서 지우면 앞 칸, 8자 붙여넣기, 8칸 미만이면 「등록」 꺼짐, 칸마다 'n번째 글자'.

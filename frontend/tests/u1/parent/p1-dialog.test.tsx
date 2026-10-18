@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { ConfirmDialog } from "@/parent/components/ConfirmDialog";
+import { ConfirmDialog } from "@/parent/common/components/ConfirmDialog";
 import { LiveScreen } from "@/parent/features/live/LiveScreen";
 import { SESSION_ID, deferred, errorResponse, jsonResponse, liveViewBody } from "../support/fixtures";
 import { resetRouter, router } from "../support/nextNavigation";

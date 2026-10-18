@@ -3,9 +3,9 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef } from "react";
-import { loginWithGoogle, type Me } from "../../api/account";
-import { useApiClient } from "../../api/queries";
-import { PARENT_ROUTES } from "../../navigation";
+import { loginWithGoogle, type Me } from "../../common/api/account";
+import { useApiClient } from "../../common/api/queries";
+import { PARENT_ROUTES } from "../../common/navigation";
 import { ACCOUNT_COPY, ACCOUNT_TEMP_COPY } from "@/shared/copy/account";
 
 // 01 구글 콜백 교환 (U2 · US1.1 · AC1.1.1 ~ AC1.1.4 · AC1.6.4 · R3 · U2-J4)

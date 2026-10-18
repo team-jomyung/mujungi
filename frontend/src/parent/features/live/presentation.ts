@@ -1,5 +1,5 @@
-import type { LiveGap } from "../api/activity";
-import { isTerminalStatus, type Bubble, type LiveView } from "../api/types";
+import type { LiveGap } from "../../common/api/activity";
+import { isTerminalStatus, type Bubble, type LiveView } from "../../common/api/types";
 import { gapLine, unconfirmedGapLine, ACTIVITY_PROPOSED_COPY } from "@/shared/copy/activity";
 import { formatHhmm } from "@/shared/copy/timeText";
 

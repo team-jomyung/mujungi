@@ -3,10 +3,10 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useId, useRef, useState } from "react";
-import { ApiError } from "../../api/apiClient";
-import { queryKeys, registerDevice, useApiClient } from "../../api/queries";
-import { CodeInput, emptyCodeCells, isCodeComplete } from "../../components/CodeInput";
-import { PARENT_ROUTES, goToLogin } from "../../navigation";
+import { ApiError } from "../../common/api/apiClient";
+import { queryKeys, registerDevice, useApiClient } from "../../common/api/queries";
+import { CodeInput, emptyCodeCells, isCodeComplete } from "./CodeInput";
+import { PARENT_ROUTES, goToLogin } from "../../common/navigation";
 import { COPY, PROPOSED_COPY, TEMP_COPY } from "@/shared/copy/ko";
 import { messageForErrorCode } from "@/shared/errors/codeToCopy";
 import { useToast } from "@/shared/toast/ToastProvider";

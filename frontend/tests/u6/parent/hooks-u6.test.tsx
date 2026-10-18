@@ -1,7 +1,7 @@
 import { act, cleanup, screen } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { useResultStatusPolling } from "@/parent/hooks/useResultStatusPolling";
-import { useReportPolling } from "@/parent/hooks/useReportPolling";
+import { useResultStatusPolling } from "@/parent/features/done/useResultStatusPolling";
+import { useReportPolling } from "@/parent/features/reports/useReportPolling";
 import { renderParent, jsonResponse, status, report, SESSION_ID, REPORT_ID } from "./support";
 function ResultProbe({ enabled = true }: { enabled?: boolean }) { const result = useResultStatusPolling(SESSION_ID, enabled); return <p>{result.data?.jobStatus ?? "읽는 중"}</p>; }
 function ReportProbe({ startedAt }: { startedAt: number }) { const result = useReportPolling(REPORT_ID, startedAt); return <p>{result.expired ? "시한 끝" : result.data?.status ?? "읽는 중"}</p>; }

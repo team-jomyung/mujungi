@@ -1,5 +1,5 @@
-import { ApiError, type ApiClient } from "./apiClient";
-import { count, nullableText, object, rows, text } from "./results";
+import { ApiError, type ApiClient } from "../../common/api/apiClient";
+import { count, nullableText, object, rows, text } from "../../common/api/results";
 import { normalizeErrorCode } from "@/shared/errors/codeToCopy";
 export interface PreviewActivity { sessionId: string; date: string; activityType: string; startedAt: string | null }
 export interface ReportPreview { firstRecordDate: string | null; activities: PreviewActivity[] }

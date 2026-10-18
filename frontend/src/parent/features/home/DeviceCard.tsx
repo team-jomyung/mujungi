@@ -1,6 +1,6 @@
 import { COPY, PROPOSED_COPY, lastCheckedLine, unresponsiveLastLine } from "@/shared/copy/ko";
 import { formatHhmm } from "@/shared/copy/timeText";
-import type { DeviceView } from "../api/types";
+import type { DeviceView } from "../../common/api/types";
 
 // 04 대화 기기 구역 (U1 3.5 Step 39 · BR4.6 · BR2.9 · AC1.4.2 ~ AC1.4.5 · AC1.4.15 · interaction-spec 3.2 · mockups S-04)
 // 안정 · 불안정 · 끊김 · 응답 없음 · 확인 불가 · 기기 없음 여섯 상태를 색 점 + 아이콘 + 상태명 + 사유로 함께 보인다

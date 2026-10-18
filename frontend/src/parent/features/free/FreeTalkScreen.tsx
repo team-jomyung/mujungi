@@ -2,14 +2,14 @@
 
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
-import { startFailureReason } from "../../activity/freeFailure";
-import { ApiError } from "../../api/apiClient";
-import { startFreeTalk, useApiClient } from "../../api/queries";
-import type { FreeTalkContext, SituationType, SourceType } from "../../api/types";
-import { BottomTabBar, type TabKey } from "../../components/BottomTabBar";
-import { ChipGroup, type ChipOption } from "../../components/ChipGroup";
-import { TextArea200 } from "../../components/TextArea200";
-import { PARENT_ROUTES, goToLogin, routeForTab } from "../../navigation";
+import { startFailureReason } from "./failure";
+import { ApiError } from "../../common/api/apiClient";
+import { startFreeTalk, useApiClient } from "../../common/api/queries";
+import type { FreeTalkContext, SituationType, SourceType } from "../../common/api/types";
+import { BottomTabBar, type TabKey } from "../../common/components/BottomTabBar";
+import { ChipGroup, type ChipOption } from "./ChipGroup";
+import { TextArea200 } from "./TextArea200";
+import { PARENT_ROUTES, goToLogin, routeForTab } from "../../common/navigation";
 import { COPY, PROPOSED_COPY, TEMP_COPY } from "@/shared/copy/ko";
 import { messageForErrorCode } from "@/shared/errors/codeToCopy";
 import { useToast } from "@/shared/toast/ToastProvider";

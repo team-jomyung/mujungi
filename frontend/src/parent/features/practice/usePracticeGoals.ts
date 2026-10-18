@@ -3,9 +3,9 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ApiError } from "../api/apiClient";
-import { useApiClient } from "../api/queries";
-import { goToLogin } from "../navigation";
+import { ApiError } from "../../common/api/apiClient";
+import { useApiClient } from "../../common/api/queries";
+import { goToLogin } from "../../common/navigation";
 import { deleteGoal, fetchGoalSelections, goalSelectionQueryKey, restoreGoal, sortGoals, updateGoalFavorite, type GoalSelection } from "./api";
 import { PRACTICE_COPY, PRACTICE_TEMP_COPY } from "./copy";
 import { PROPOSED_COPY } from "@/shared/copy/ko";

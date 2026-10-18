@@ -1,6 +1,6 @@
 import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { SettingsSheet } from "@/parent/components/SettingsSheet";
+import { SettingsSheet } from "@/parent/features/home/SettingsSheet";
 import { errorResponse, jsonResponse } from "../../u1/support/fixtures";
 import { renderParent, type RequestHandler } from "../../u1/support/parentHarness";
 import { resetRouter, router } from "../../u1/support/nextNavigation";
@@ -8,7 +8,7 @@ import { resetRouter, router } from "../../u1/support/nextNavigation";
 const browser = vi.hoisted(() => ({
   supported: vi.fn(), permission: vi.fn(), requestPermission: vi.fn(), getSubscription: vi.fn(), subscribe: vi.fn(),
 }));
-vi.mock("@/parent/push/browserPush", () => ({ browserPush: browser }));
+vi.mock("@/parent/common/push/browserPush", () => ({ browserPush: browser }));
 vi.mock("next/navigation", async () => (await import("../../u1/support/nextNavigation")).nextNavigationMock);
 
 const endpoint = "https://push.example.test/subscription/current-device";

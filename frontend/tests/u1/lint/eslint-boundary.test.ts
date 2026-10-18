@@ -31,7 +31,7 @@ describe("영역 경계(PD-15 · NFR11.1)", () => {
   }, TIMEOUT_MS);
 
   it.each([
-    ["src/device/__sample__.ts", 'import { createApiClient } from "@/parent/api/apiClient";\nexport const sample = createApiClient;\n'],
+    ["src/device/__sample__.ts", 'import { createApiClient } from "@/parent/common/api/apiClient";\nexport const sample = createApiClient;\n'],
     ["src/app/device/__sample__.tsx", 'import { HomeScreen } from "../../parent/features/home/HomeScreen";\nexport const sample = HomeScreen;\n'],
   ])("기기 영역(%s)이 보호자 영역을 import하면 lint가 실패한다", async (filePath, code) => {
     const rules = await rulesFor(filePath, code);
@@ -40,7 +40,7 @@ describe("영역 경계(PD-15 · NFR11.1)", () => {
   }, TIMEOUT_MS);
 
   it.each([
-    ["src/shared/__sample__.ts", 'import { PARENT_ROUTES } from "@/parent/navigation";\nexport const sample = PARENT_ROUTES;\n'],
+    ["src/shared/__sample__.ts", 'import { PARENT_ROUTES } from "@/parent/common/navigation";\nexport const sample = PARENT_ROUTES;\n'],
     ["src/shared/__sample2__.ts", 'import { deviceReducer } from "@/device/machine/deviceMachine";\nexport const sample = deviceReducer;\n'],
   ])("공용 계층(%s)이 두 영역을 import하면 lint가 실패한다", async (filePath, code) => {
     const rules = await rulesFor(filePath, code);
@@ -76,9 +76,9 @@ describe("보안 · 기기 규칙(SD-11 · NFR10.4 · PD-16)", () => {
     expect(await rulesFor("src/device/mic/micPermission.ts", code)).toContain("no-restricted-syntax");
     expect(await rulesFor("src/shared/__sample__.ts", code)).toContain("no-restricted-syntax");
     expect(await rulesFor("src/parent/__sample__.ts", code)).toContain("no-restricted-syntax");
-    expect(await rulesFor("src/parent/push/browserPush.ts", code)).toEqual([]);
+    expect(await rulesFor("src/parent/common/push/browserPush.ts", code)).toEqual([]);
     const mic = "export function sample() { return navigator.mediaDevices.getUserMedia({ audio: true }); }";
-    expect(await rulesFor("src/parent/push/browserPush.ts", mic)).toContain("no-restricted-syntax");
+    expect(await rulesFor("src/parent/common/push/browserPush.ts", mic)).toContain("no-restricted-syntax");
   }, TIMEOUT_MS);
 
   it("화면 글을 JSX에 직접 쓰면 오류다(문구는 copy 모듈에서만, react/jsx-no-literals)", async () => {

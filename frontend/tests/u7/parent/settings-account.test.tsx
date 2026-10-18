@@ -1,13 +1,13 @@
 import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { SettingsSheet } from "@/parent/components/SettingsSheet";
+import { SettingsSheet } from "@/parent/features/home/SettingsSheet";
 import { ACCOUNT_TEMP_COPY } from "@/shared/copy/account";
 import { errorResponse, jsonResponse } from "../../u1/support/fixtures";
 import { renderParent } from "../../u1/support/parentHarness";
 import { resetRouter, router } from "../../u1/support/nextNavigation";
 
 vi.mock("next/navigation", async () => (await import("../../u1/support/nextNavigation")).nextNavigationMock);
-vi.mock("@/parent/push/browserPush", () => ({ browserPush: {
+vi.mock("@/parent/common/push/browserPush", () => ({ browserPush: {
   supported: () => true, permission: () => "default", getSubscription: async () => null,
 } }));
 

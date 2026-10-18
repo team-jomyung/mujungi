@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ApiError, createApiClient } from "@/parent/api/apiClient";
-import { ResponseShapeError } from "@/parent/api/types";
-import { deleteGoal, fetchGoalSelections, parseDeleteResult, parseGoalSelection, parseGoalSelections, restoreGoal, selectGoal, sortGoals, updateGoalFavorite } from "@/parent/practice/api";
-import { goalMeta } from "@/parent/practice/copy";
+import { ApiError, createApiClient } from "@/parent/common/api/apiClient";
+import { ResponseShapeError } from "@/parent/common/api/types";
+import { deleteGoal, fetchGoalSelections, parseDeleteResult, parseGoalSelection, parseGoalSelections, restoreGoal, selectGoal, sortGoals, updateGoalFavorite } from "@/parent/features/practice/api";
+import { goalMeta } from "@/parent/features/practice/copy";
 import { defaultTiming, resolveTiming } from "@/shared/timing/timing";
 import { messageForErrorCode, normalizeErrorCode } from "@/shared/errors/codeToCopy";
 import { errorResponse, jsonResponse } from "../u1/support/fixtures";

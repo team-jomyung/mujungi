@@ -6,7 +6,7 @@ import {
   authorizeUrl,
   newState,
   readGoogleConfig,
-} from "@/parent/oauth";
+} from "@/parent/common/oauth";
 
 // GET /parent/login/google — 01 「구글로 시작」 (U2 · US1.1 · J21 · U2-J4)
 // 새 state를 HttpOnly 쿠키(Secure · SameSite=Lax · Path=/parent/login · 10분)에 두고 구글 인가 화면으로 보낸다.

@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { parseHome } from "@/parent/api/types";
-import { NoticeDialog } from "@/parent/components/NoticeDialog";
+import { parseHome } from "@/parent/common/api/types";
+import { NoticeDialog } from "@/parent/features/live/NoticeDialog";
 import { DoneScreen } from "@/parent/features/done/DoneScreen";
 import { FreeTalkScreen } from "@/parent/features/free/FreeTalkScreen";
 import { HomeScreen } from "@/parent/features/home/HomeScreen";

@@ -2,7 +2,7 @@
 
 import { useRef, type ChangeEvent, type ClipboardEvent, type KeyboardEvent } from "react";
 import { COPY, TEMP_COPY, codeCellLabel } from "@/shared/copy/ko";
-import { REGISTRATION_CODE_LENGTH } from "../api/types";
+import { REGISTRATION_CODE_LENGTH } from "../../common/api/types";
 
 // 05a 코드 입력 8칸 (U1 3.5 Step 39 · BR2.8 · BR1.1 · AC2.2.1 · interaction-spec 3.7 · 접근성 O2 · U3)
 // OTP식: 자동 대문자, 넣으면 다음 칸으로, 빈 칸에서 지우면 앞 칸으로, 8자 붙여넣기. 공백 · 하이픈 · 가운뎃점은 지운다(BR1.1 정규화).

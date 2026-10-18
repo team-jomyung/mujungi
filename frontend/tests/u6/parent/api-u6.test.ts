@@ -1,8 +1,8 @@
 import { afterEach, expect, it, vi } from "vitest";
-import { createApiClient } from "@/parent/api/apiClient";
-import { parseResult, parseResultStatus, object, rows, text, nullableText, count, fetchRecord, fetchResult, fetchResultStatus, retryResult, fetchRecordDays, fetchRecords } from "@/parent/api/results";
-import { fetchReportPdf, fetchReport, previewReport, createReport, saveReport, discardReport } from "@/parent/api/reports";
-import { addDays, seoulDate, validDate, shiftMonth } from "@/parent/components/MonthCalendar";
+import { createApiClient } from "@/parent/common/api/apiClient";
+import { parseResult, parseResultStatus, object, rows, text, nullableText, count, fetchRecord, fetchResult, fetchResultStatus, retryResult, fetchRecordDays, fetchRecords } from "@/parent/common/api/results";
+import { fetchReportPdf, fetchReport, previewReport, createReport, saveReport, discardReport } from "@/parent/features/reports/api";
+import { addDays, seoulDate, validDate, shiftMonth } from "@/parent/common/components/MonthCalendar";
 import { RESULT_TEMP_COPY } from "@/shared/copy/result";
 import { result, status, record, report, preview, SESSION_ID, REPORT_ID, jsonResponse } from "./support";
 afterEach(() => vi.unstubAllGlobals());

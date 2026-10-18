@@ -1,5 +1,5 @@
-import { ApiError, type ApiClient } from "../api/apiClient";
-import { parseStartResult } from "../api/types";
+import { ApiError, type ApiClient } from "../../common/api/apiClient";
+import { parseStartResult } from "../../common/api/types";
 import type { StartPort } from "./practiceStart";
 
 /** 10초 응답 시한은 15초 준비 실패의 증거가 아니다. 준비 중/응답 불명은 조정자가 같은 요청으로 확인한다. */

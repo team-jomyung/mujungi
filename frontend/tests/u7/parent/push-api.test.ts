@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { createApiClient, ApiError } from "@/parent/api/apiClient";
-import { fetchPushConfig, putPushSubscription, deletePushSubscription } from "@/parent/api/push";
+import { createApiClient, ApiError } from "@/parent/common/api/apiClient";
+import { fetchPushConfig, putPushSubscription, deletePushSubscription } from "@/parent/common/push/api";
 import { jsonResponse } from "../../u1/support/fixtures";
 
 const endpoint = "https://push.example.test/subscription/test";

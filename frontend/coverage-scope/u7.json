@@ -1,11 +1,11 @@
 {
   "files": [
-    "frontend/src/parent/api/push.ts",
-    "frontend/src/parent/push/browserPush.ts",
-    "frontend/src/parent/push/pushWorker.ts",
-    "frontend/src/parent/push/useNotificationEntry.ts",
-    "frontend/src/parent/components/PushSettingsRow.tsx",
-    "frontend/src/parent/components/SettingsSheet.tsx",
+    "frontend/src/parent/common/push/api.ts",
+    "frontend/src/parent/common/push/browserPush.ts",
+    "frontend/src/parent/common/push/pushWorker.ts",
+    "frontend/src/parent/common/push/useNotificationEntry.ts",
+    "frontend/src/parent/features/home/PushSettingsRow.tsx",
+    "frontend/src/parent/features/home/SettingsSheet.tsx",
     "frontend/src/parent/features/home/HomeScreen.tsx",
     "frontend/src/app/parent/push-worker/route.ts",
     "frontend/src/shared/copy/ko.ts",

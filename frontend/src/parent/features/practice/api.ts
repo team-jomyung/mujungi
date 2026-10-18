@@ -1,5 +1,5 @@
-import type { ApiClient } from "../api/apiClient";
-import { ResponseShapeError } from "../api/types";
+import type { ApiClient } from "../../common/api/apiClient";
+import { ResponseShapeError } from "../../common/api/types";
 
 /** C4 parent DTO: no scenario, evaluation or transcript fields. */
 export interface GoalSelection {

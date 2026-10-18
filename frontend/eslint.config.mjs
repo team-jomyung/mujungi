@@ -93,7 +93,7 @@ export default defineConfig([
     },
   },
   {
-    files: ["src/parent/push/browserPush.ts"],
+    files: ["src/parent/common/push/browserPush.ts"],
     rules: {
       "no-restricted-syntax": [
         "error",

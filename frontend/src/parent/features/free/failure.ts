@@ -1,4 +1,4 @@
-import { PARENT_ROUTES } from "../navigation";
+import { PARENT_ROUTES } from "../../common/navigation";
 import { ACTIVITY_PROPOSED_COPY } from "@/shared/copy/activity";
 import { PROPOSED_COPY, TEMP_COPY } from "@/shared/copy/ko";
 

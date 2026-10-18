@@ -13,17 +13,17 @@ import { codeOf, frontendRoot, relative, sourceFiles } from "../support/sourceSc
 describe("서비스 워커 · PWA 정적 검사", () => {
   it("U7 보호자 전용 등록 모듈 밖에는 serviceWorker 사용 · register 호출이 없다", () => {
     const offenders = sourceFiles(path.join(frontendRoot, "src"))
-      .filter((file) => relative(file) !== "src/parent/push/browserPush.ts")
+      .filter((file) => relative(file) !== "src/parent/common/push/browserPush.ts")
       .filter((file) => /serviceWorker|\.register\s*\(\s*["'`][^"'`]*sw[^"'`]*\.js/.test(codeOf(file)))
       .map(relative);
     expect(offenders).toEqual([]);
   });
 
   it("U7의 좁은 예외는 부모 scope만 등록하고 fetch·캐시·PWA를 만들지 않는다", () => {
-    const registration = codeOf(path.join(frontendRoot, "src/parent/push/browserPush.ts"));
+    const registration = codeOf(path.join(frontendRoot, "src/parent/common/push/browserPush.ts"));
     expect(registration).toContain('const WORKER_SCOPE = "/parent/"');
     expect(registration).toContain('const WORKER_PATH = "/parent/push-worker"');
-    const worker = codeOf(path.join(frontendRoot, "src/parent/push/pushWorker.ts"));
+    const worker = codeOf(path.join(frontendRoot, "src/parent/common/push/pushWorker.ts"));
     expect(worker).not.toMatch(/addEventListener\(["']fetch|caches\.|CacheStorage|importScripts|workbox/i);
   });
 

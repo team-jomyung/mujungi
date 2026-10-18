@@ -7,7 +7,7 @@ import ParentLoginPage from "@/app/parent/login/page";
 import ParentConsentPage from "@/app/parent/consent/page";
 import ParentChildPage from "@/app/parent/child/page";
 import ParentStopExpressionsPage from "@/app/parent/child/stop-expressions/page";
-import { authorizeUrl, newState, readGoogleConfig, singleParam, stateMatches } from "@/parent/oauth";
+import { authorizeUrl, newState, readGoogleConfig, singleParam, stateMatches } from "@/parent/common/oauth";
 import { ChildScreen } from "@/parent/features/child/ChildScreen";
 import { ConsentScreen } from "@/parent/features/consent/ConsentScreen";
 import { LoginScreen } from "@/parent/features/login/LoginScreen";

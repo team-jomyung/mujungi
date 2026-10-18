@@ -1,8 +1,8 @@
 import { onlineManager } from "@tanstack/react-query";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { parseHome, parseLiveView } from "@/parent/api/types";
-import { TranscriptList } from "@/parent/components/TranscriptList";
+import { parseHome, parseLiveView } from "@/parent/common/api/types";
+import { TranscriptList } from "@/parent/common/components/TranscriptList";
 import { LiveScreen } from "@/parent/features/live/LiveScreen";
 import { SESSION_ID, bubble, deferred, errorResponse, homeBody, jsonResponse, liveViewBody } from "../support/fixtures";
 import { resetRouter, router } from "../support/nextNavigation";

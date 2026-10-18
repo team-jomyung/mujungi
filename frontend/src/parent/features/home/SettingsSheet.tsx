@@ -3,11 +3,11 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { logout, requestAccountDeletion } from "../api/account";
-import { useApiClient } from "../api/queries";
-import { PARENT_ROUTES, isUnauthenticated } from "../navigation";
-import { BottomSheet } from "./BottomSheet";
-import { ConfirmDialog } from "./ConfirmDialog";
+import { logout, requestAccountDeletion } from "../../common/api/account";
+import { useApiClient } from "../../common/api/queries";
+import { PARENT_ROUTES, isUnauthenticated } from "../../common/navigation";
+import { BottomSheet } from "../../common/components/BottomSheet";
+import { ConfirmDialog } from "../../common/components/ConfirmDialog";
 import { PushSettingsRow } from "./PushSettingsRow";
 import { ACCOUNT_COPY, ACCOUNT_TEMP_COPY, deleteDialogBody } from "@/shared/copy/account";
 import { useToast } from "@/shared/toast/ToastProvider";

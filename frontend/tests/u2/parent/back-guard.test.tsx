@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { StrictMode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { useBackGuard } from "@/parent/hooks/useBackGuard";
+import { useBackGuard } from "@/parent/common/hooks/useBackGuard";
 import { ChildScreen } from "@/parent/features/child/ChildScreen";
 import { ConsentScreen } from "@/parent/features/consent/ConsentScreen";
 import { ACCOUNT_COPY } from "@/shared/copy/account";

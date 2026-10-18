@@ -1,8 +1,8 @@
 "use client";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { fetchReport, reportKey } from "../api/reports";
-import { useApiClient } from "../api/queries";
+import { fetchReport, reportKey } from "./api";
+import { useApiClient } from "../../common/api/queries";
 import { useTiming } from "@/shared/timing/TimingProvider";
 /** BR11.8: 화면을 떠나거나 취소하면 요청·시한 타이머를 해제한다. */
 export function useReportPolling(reportId: string | null, startedAt: number | null) {

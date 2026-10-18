@@ -1,6 +1,6 @@
 import { renderHook } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { createParentQueryClient, mergeBubbles, mergeLiveView, useApiClient } from "@/parent/api/queries";
+import { createParentQueryClient, mergeBubbles, mergeLiveView, useApiClient } from "@/parent/common/api/queries";
 import {
   ResponseShapeError,
   isTerminalStatus,
@@ -12,7 +12,7 @@ import {
   parseRegisterResult,
   parseStartResult,
   type Bubble,
-} from "@/parent/api/types";
+} from "@/parent/common/api/types";
 import { OTHER_SESSION_ID, SESSION_ID, bubble, homeBody, liveViewBody } from "../support/fixtures";
 
 // 보호자 REST 응답 읽기 시험 (U1 3.5 Step 42 · 계약 3절 · 10절 · BR4.6 · BR6.15 · J23 · J120)

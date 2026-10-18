@@ -2,12 +2,12 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
-import { useStopExpressionsQuery } from "../../api/account";
-import { ApiError } from "../../api/apiClient";
-import { useHomeQuery } from "../../api/queries";
-import type { DeviceView } from "../../api/types";
-import { BottomTabBar, type TabKey } from "../../components/BottomTabBar";
-import { PARENT_ROUTES, goToLogin, isUnauthenticated, lockToastMessage, routeForTab } from "../../navigation";
+import { useStopExpressionsQuery } from "../../common/api/account";
+import { ApiError } from "../../common/api/apiClient";
+import { useHomeQuery } from "../../common/api/queries";
+import type { DeviceView } from "../../common/api/types";
+import { BottomTabBar, type TabKey } from "../../common/components/BottomTabBar";
+import { PARENT_ROUTES, goToLogin, isUnauthenticated, lockToastMessage, routeForTab } from "../../common/navigation";
 import {
   ACCOUNT_COPY,
   ACCOUNT_PROPOSED_COPY,

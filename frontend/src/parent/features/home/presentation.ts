@@ -1,5 +1,5 @@
-import { isInProgressStatus, type SessionSummary } from "../api/activity";
-import { PARENT_ROUTES } from "../navigation";
+import { isInProgressStatus, type SessionSummary } from "../../common/api/activity";
+import { PARENT_ROUTES } from "../../common/navigation";
 import { homeActivityLine, homeClosingLine, startedAtLine } from "@/shared/copy/activity";
 import { PROPOSED_COPY } from "@/shared/copy/ko";
 import { elapsedMinuteOrdinal, formatHhmm } from "@/shared/copy/timeText";

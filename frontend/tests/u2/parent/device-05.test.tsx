@@ -1,7 +1,7 @@
 import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { presentDeviceScreen, DeviceScreen } from "@/parent/features/device/DeviceScreen";
-import { parseDeviceView } from "@/parent/api/types";
+import { parseDeviceView } from "@/parent/common/api/types";
 import { errorResponse, homeBody, jsonResponse, type NetworkState } from "../../u1/support/fixtures";
 import { resetRouter, router } from "../../u1/support/nextNavigation";
 import { renderParent, type RequestHandler } from "../../u1/support/parentHarness";

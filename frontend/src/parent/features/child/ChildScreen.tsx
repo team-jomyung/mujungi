@@ -3,12 +3,12 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useState } from "react";
-import { accountQueryKeys, registerChild, updateChild, useChildQuery, type Child } from "../../api/account";
-import { ApiError } from "../../api/apiClient";
-import { queryKeys, useApiClient, useHomeQuery } from "../../api/queries";
-import type { DeviceView } from "../../api/types";
-import { useBackGuard } from "../../hooks/useBackGuard";
-import { PARENT_ROUTES, goToLogin, isUnauthenticated } from "../../navigation";
+import { accountQueryKeys, registerChild, updateChild, useChildQuery, type Child } from "../../common/api/account";
+import { ApiError } from "../../common/api/apiClient";
+import { queryKeys, useApiClient, useHomeQuery } from "../../common/api/queries";
+import type { DeviceView } from "../../common/api/types";
+import { useBackGuard } from "../../common/hooks/useBackGuard";
+import { PARENT_ROUTES, goToLogin, isUnauthenticated } from "../../common/navigation";
 import {
   ACCOUNT_COPY,
   ACCOUNT_PROPOSED_COPY,
