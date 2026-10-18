@@ -5,7 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.net.URI;
 import java.time.Duration;
-import kr.mujoong.core.config.CoreProperties;
+import kr.mujoong.core.config.CoreGuardianProperties;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -42,7 +42,7 @@ class GoogleSettingsTest {
     @ValueSource(strings = {"https://oauth2.example.invalid/token", "http://127.0.0.1:41234/token",
             "http://localhost:41234/token", "http://[::1]:41234/token"})
     void httpsOrALoopbackTestAddressIsAccepted(String uri) {
-        CoreProperties.Google google = google(URI.create(uri), URI.create(uri.replace("/token", "/certs")));
+        CoreGuardianProperties.Google google =google(URI.create(uri), URI.create(uri.replace("/token", "/certs")));
 
         assertThat(google.tokenUri()).isEqualTo(URI.create(uri));
         assertThat(google.jwksUri().getPath()).isEqualTo("/certs");
@@ -51,12 +51,12 @@ class GoogleSettingsTest {
 
     @Test
     void theStringFormStillHidesTheSecret() {
-        assertThat(new CoreProperties.Google("id", "secret-value", "https://mujoong.invalid/cb",
+        assertThat(new CoreGuardianProperties.Google("id", "secret-value", "https://mujoong.invalid/cb",
                 URI.create("https://oauth2.example.invalid/token"), URI.create("https://keys.example.invalid/certs"), TIMEOUT)
                 .toString()).doesNotContain("secret-value").contains("<redacted>", "jwksUri=");
     }
 
-    private static CoreProperties.Google google(URI tokenUri, URI jwksUri) {
-        return new CoreProperties.Google("id", "secret", "https://mujoong.invalid/cb", tokenUri, jwksUri, TIMEOUT);
+    private static CoreGuardianProperties.Google google(URI tokenUri, URI jwksUri) {
+        return new CoreGuardianProperties.Google("id", "secret", "https://mujoong.invalid/cb", tokenUri, jwksUri, TIMEOUT);
     }
 }

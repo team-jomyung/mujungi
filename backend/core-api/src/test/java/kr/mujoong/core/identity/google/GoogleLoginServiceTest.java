@@ -25,7 +25,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import kr.mujoong.contract.json.JsonCodec;
-import kr.mujoong.core.config.CoreProperties;
+import kr.mujoong.core.config.CoreGuardianProperties;
 import kr.mujoong.core.identity.Guardian;
 import kr.mujoong.core.identity.GuardianRepository;
 import kr.mujoong.core.identity.SocialAccountRepository;
@@ -54,7 +54,7 @@ class GoogleLoginServiceTest {
 
     private GoogleLoginService service(String clientId, String secret, String redirect) {
         return new GoogleLoginService(
-                new CoreProperties.Google(clientId, secret, redirect, TOKEN_URI, JWKS_URI, Duration.ofSeconds(1)),
+                new CoreGuardianProperties.Google(clientId, secret, redirect, TOKEN_URI, JWKS_URI, Duration.ofSeconds(1)),
                 tokens, new GoogleKeyCache(keys, Duration.ofMinutes(1), Duration.ofHours(1)),
                 new GoogleIdTokenReader(JsonCodec.shared()), social,
                 guardians,
@@ -68,9 +68,9 @@ class GoogleLoginServiceTest {
         assertThat(outcome.failure()).isEqualTo(Failure.NOT_CONFIGURED);
         assertThat(outcome.loggedIn()).isEmpty();
         verifyNoInteractions(tokens, keys);
-        assertThat(new CoreProperties.Google(null, null, null, TOKEN_URI, JWKS_URI, Duration.ofSeconds(1)).toString())
+        assertThat(new CoreGuardianProperties.Google(null, null, null, TOKEN_URI, JWKS_URI, Duration.ofSeconds(1)).toString())
                 .contains("<empty>").doesNotContain("null");
-        assertThat(new CoreProperties.Google("id", "secret-value", REDIRECT, TOKEN_URI, JWKS_URI, Duration.ofSeconds(1))
+        assertThat(new CoreGuardianProperties.Google("id", "secret-value", REDIRECT, TOKEN_URI, JWKS_URI, Duration.ofSeconds(1))
                 .toString()).doesNotContain("secret-value").contains("<redacted>");
     }
 
@@ -178,7 +178,7 @@ class GoogleLoginServiceTest {
     void aNoCacheKeySetIsFetchedOnlyOncePerLogin() {
         // 3차 리뷰 3: max-age 0 응답이면 예전에는 교환 전 · 서명 확인 때 두 번 받았다. 교환 전에 확보한 열쇠에 kid가 있으면 그대로 쓴다
         GoogleLoginService service = new GoogleLoginService(
-                new CoreProperties.Google("client", "secret", REDIRECT, TOKEN_URI, JWKS_URI, Duration.ofSeconds(1)),
+                new CoreGuardianProperties.Google("client", "secret", REDIRECT, TOKEN_URI, JWKS_URI, Duration.ofSeconds(1)),
                 tokens, new GoogleKeyCache(keys, Duration.ofNanos(1), Duration.ofHours(1)),
                 new GoogleIdTokenReader(JsonCodec.shared()), social, guardians, mock(PlatformTransactionManager.class), clock);
         UUID guardianId = UUID.randomUUID();

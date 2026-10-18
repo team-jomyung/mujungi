@@ -8,6 +8,7 @@ import java.util.Optional;
 import java.util.UUID;
 import kr.mujoong.contract.json.JsonCodec;
 import kr.mujoong.contract.time.MujoongClock;
+import kr.mujoong.core.config.CoreGuardianProperties;
 import kr.mujoong.core.config.CoreProperties;
 import kr.mujoong.core.identity.Guardian;
 import kr.mujoong.core.identity.GuardianRepository;
@@ -35,7 +36,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 @Component
 public class GoogleLoginService {
 
-    private final CoreProperties.Google google;
+    private final CoreGuardianProperties.Google google;
     private final GoogleTokenClient tokenClient;
     private final GoogleKeyCache keyCache;
     private final GoogleIdTokenReader idTokens;
@@ -62,7 +63,7 @@ public class GoogleLoginService {
     }
 
     GoogleLoginService(
-            CoreProperties.Google google,
+            CoreGuardianProperties.Google google,
             GoogleTokenClient tokenClient,
             GoogleKeyCache keyCache,
             GoogleIdTokenReader idTokens,

@@ -7,6 +7,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import kr.mujoong.core.config.CoreObservabilityProperties;
 import kr.mujoong.core.config.CoreProperties;
 import kr.mujoong.core.config.CorePropertiesConfig;
 import kr.mujoong.testsupport.secret.TestSecrets;
@@ -98,7 +99,7 @@ class CorePropertiesValidationTest {
         MockEnvironment environment = new MockEnvironment();
         environment.setActiveProfiles("prod");
         environment.setProperty(RequiredSecretsCheck.INTERNAL_TOKEN, "tiny");
-        CoreProperties.Observability observability = new CoreProperties.Observability(shortSecret, Duration.ofSeconds(60),
+        CoreObservabilityProperties observability = new CoreObservabilityProperties(shortSecret, Duration.ofSeconds(60),
                 Duration.ofSeconds(10), Duration.ofSeconds(5));
         CoreProperties properties = org.mockito.Mockito.mock(CoreProperties.class);
         org.mockito.Mockito.when(properties.observability()).thenReturn(observability);

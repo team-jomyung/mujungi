@@ -16,6 +16,7 @@ import kr.mujoong.contract.log.EventLog;
 import kr.mujoong.contract.time.MujoongClock;
 import kr.mujoong.contract.trace.TraceIds;
 import kr.mujoong.core.common.scaling.SingleInstanceAssumption;
+import kr.mujoong.core.config.CoreOutboxProperties;
 import kr.mujoong.core.config.CoreProperties;
 import kr.mujoong.core.health.ReadinessState;
 import kr.mujoong.core.internalhttp.InternalHttpClient;
@@ -87,7 +88,7 @@ public class CoreOutboxSender {
             BooleanSupplier ready,
             EventLogger events,
             MujoongClock clock,
-            CoreProperties.Outbox config,
+            CoreOutboxProperties config,
             Duration publishTimeout) {
         this.outbox = Objects.requireNonNull(outbox, "outbox");
         this.http = Objects.requireNonNull(http, "http");

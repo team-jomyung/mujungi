@@ -13,6 +13,7 @@ import java.util.Optional;
 import java.util.UUID;
 import kr.mujoong.contract.json.JsonCodec;
 import kr.mujoong.core.config.CoreProperties;
+import kr.mujoong.core.config.CoreSecurityProperties;
 import kr.mujoong.core.identity.GuardianSessions;
 import kr.mujoong.core.identity.google.GoogleLoginService;
 import kr.mujoong.core.identity.google.GoogleLoginService.Failure;
@@ -94,7 +95,7 @@ class AuthControllerTest {
 
     private static CoreProperties properties() {
         CoreProperties properties = mock(CoreProperties.class);
-        when(properties.security()).thenReturn(new CoreProperties.Security(Duration.ofDays(30), ORIGIN, 60));
+        when(properties.security()).thenReturn(new CoreSecurityProperties(Duration.ofDays(30), ORIGIN, 60));
         return properties;
     }
 }

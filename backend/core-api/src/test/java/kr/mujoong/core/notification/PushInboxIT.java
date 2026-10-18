@@ -22,6 +22,7 @@ import kr.mujoong.core.activity.ActivityCopyRepository.ActivityCopy;
 import kr.mujoong.core.activity.ActivityCopyRepository.NewActivity;
 import kr.mujoong.core.activity.RealtimeSessionClient;
 import kr.mujoong.core.common.db.DbTestSupport;
+import kr.mujoong.core.config.CoreInboxProperties;
 import kr.mujoong.core.config.CoreProperties;
 import kr.mujoong.core.identity.GuardianWriteLock;
 import kr.mujoong.core.messaging.CoreInboxDispatcher;
@@ -188,7 +189,7 @@ class PushInboxIT {
 
     private CoreInboxDispatcher dispatcher(PushEventRepository repository) {
         var handler = new SessionStateChangedHandler(activities, realtime, json, new PushEventRecorder(guardians, repository));
-        var config = new CoreProperties.Inbox(Duration.ofSeconds(1), List.of(Duration.ofSeconds(1)), 1,
+        var config = new CoreInboxProperties(Duration.ofSeconds(1), List.of(Duration.ofSeconds(1)), 1,
                 Duration.ofSeconds(5), 1, 10);
         var current = new CoreInboxDispatcher(inbox, List.of(handler), transactions, mock(EventLogger.class),
                 mock(CoreMetrics.class), clock, config);

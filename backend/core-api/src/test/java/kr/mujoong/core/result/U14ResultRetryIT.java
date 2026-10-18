@@ -5,6 +5,7 @@ import java.time.*;
 import java.util.*;
 import kr.mujoong.core.common.db.DbTestSupport;
 import kr.mujoong.core.config.CoreProperties;
+import kr.mujoong.core.config.CoreTimingProperties;
 import kr.mujoong.core.identity.GuardianWriteLock;
 import kr.mujoong.core.observability.EventLogger;
 import kr.mujoong.core.report.*;
@@ -15,7 +16,7 @@ import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 class U14ResultRetryIT {
     DbTestSupport db;UUID guardian,child,session;ResultJobRepository jobs;SessionResultStateRepository states;JobRunner runner;MutableClock clock=new MutableClock();int calls;
     @BeforeEach void setup(){db=DbTestSupport.coreApp();guardian=db.insertGuardian("ACTIVE");child=db.insertChild(guardian);session=UUID.randomUUID();jobs=new ResultJobRepository(db.jdbc());states=new SessionResultStateRepository(db.jdbc());states.insert(session,guardian,child,"FREE_TALK",true,clock.now());var properties=mock(CoreProperties.class,RETURNS_DEEP_STUBS);when(properties.timing().result()).thenReturn(timing());runner=new JobRunner(jobs,new ReportJobStateAdapter(new ReportRepository(db.jdbc())),new GuardianWriteLock(db.jdbc()),clock,properties,new DataSourceTransactionManager(db.dataSource()),List.of(),mock(EventLogger.class));}
-    static CoreProperties.ResultTiming timing(){return new CoreProperties.ResultTiming(4,List.of(Duration.ofSeconds(5),Duration.ofSeconds(15),Duration.ofSeconds(30)),Duration.ofMillis(10),Duration.ofSeconds(30),Duration.ofMinutes(5),Duration.ofHours(1));}
+    static CoreTimingProperties.ResultTiming timing(){return new CoreTimingProperties.ResultTiming(4,List.of(Duration.ofSeconds(5),Duration.ofSeconds(15),Duration.ofSeconds(30)),Duration.ofMillis(10),Duration.ofSeconds(30),Duration.ofMinutes(5),Duration.ofHours(1));}
     @AfterEach void close(){db.close();}
     ResultJob submit(){var j=jobs.submit("SESSION_RESULT",session,guardian,session.toString(),"RECONCILE",null,clock.now());states.attach(session,j.id(),1,clock.now());return j;}
     void failing(String code){runner.register(new JobHandler(){public String jobType(){return "SESSION_RESULT";}public Outcome handle(JobContext context){calls++;return Outcome.failed(code,true);}});}

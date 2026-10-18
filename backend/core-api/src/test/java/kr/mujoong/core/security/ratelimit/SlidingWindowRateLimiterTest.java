@@ -18,6 +18,7 @@ import kr.mujoong.contract.time.MujoongClock;
 import kr.mujoong.core.common.error.CoreApiException;
 import kr.mujoong.core.config.CoreProperties;
 import kr.mujoong.core.config.CorePropertiesConfig;
+import kr.mujoong.core.config.CoreTimingProperties;
 import kr.mujoong.core.device.BootstrapService;
 import kr.mujoong.core.device.CodeGenerator;
 import kr.mujoong.core.device.DeviceJdbcRepository;
@@ -189,13 +190,13 @@ class SlidingWindowRateLimiterTest {
         runner.withPropertyValues("spring.profiles.active=dev,load-test",
                         "MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET=" + TestSecrets.ownerHashSecret())
                 .run(context -> {
-                    CoreProperties.RateLimit limit = context.getBean(CoreProperties.class).timing().bootstrap().rateLimit();
+                    CoreTimingProperties.RateLimit limit =context.getBean(CoreProperties.class).timing().bootstrap().rateLimit();
                     assertThat(limit.max()).isEqualTo(600);
                     assertThat(limit.window()).isEqualTo(Duration.ofHours(1));
                     assertThat(context.getBean(CoreProperties.class).loadTest().enabled()).isTrue();
                 });
         runner.withPropertyValues("spring.profiles.active=dev").run(context -> {
-            CoreProperties.RateLimit limit = context.getBean(CoreProperties.class).timing().bootstrap().rateLimit();
+            CoreTimingProperties.RateLimit limit =context.getBean(CoreProperties.class).timing().bootstrap().rateLimit();
             assertThat(limit.max()).isEqualTo(20);
             assertThat(context.getBean(CoreProperties.class).loadTest().enabled()).isFalse();
         });

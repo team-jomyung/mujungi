@@ -27,8 +27,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import kr.mujoong.contract.event.EventType;
 import kr.mujoong.contract.json.JsonCodec;
 import kr.mujoong.contract.trace.TraceIds;
+import kr.mujoong.core.config.CoreOutboxProperties;
+import kr.mujoong.core.config.CoreOutboxProperties.ControlEventPolicy;
 import kr.mujoong.core.config.CoreProperties;
-import kr.mujoong.core.config.CoreProperties.Outbox.ControlEventPolicy;
 import kr.mujoong.core.internalhttp.InternalHttpClient;
 import kr.mujoong.core.internalhttp.InternalHttpClient.CallException;
 import kr.mujoong.core.internalhttp.InternalHttpClient.Outcome;
@@ -62,7 +63,7 @@ class CoreOutboxSenderTest {
     private final AtomicBoolean ready = new AtomicBoolean(true);
 
     private CoreOutboxSender sender(int batchSize) {
-        CoreProperties.Outbox config = new CoreProperties.Outbox(Duration.ofMillis(500), batchSize, TABLE, 20,
+        CoreOutboxProperties config = new CoreOutboxProperties(Duration.ofMillis(500), batchSize, TABLE, 20,
                 Duration.ofSeconds(30), ControlEventPolicy.REARM_ON_START);
         return new CoreOutboxSender(outbox, http, JsonCodec.shared(), ready::get, events.logger(), clock, config,
                 Duration.ofSeconds(3));

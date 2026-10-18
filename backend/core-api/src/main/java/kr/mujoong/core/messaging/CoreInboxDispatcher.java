@@ -19,6 +19,7 @@ import kr.mujoong.contract.log.EventCode;
 import kr.mujoong.contract.log.EventLog;
 import kr.mujoong.contract.time.MujoongClock;
 import kr.mujoong.contract.trace.TraceIds;
+import kr.mujoong.core.config.CoreInboxProperties;
 import kr.mujoong.core.config.CoreProperties;
 import kr.mujoong.core.messaging.CoreInboxRepository.InboxEvent;
 import kr.mujoong.core.messaging.handler.InboxHandler;
@@ -85,7 +86,7 @@ public class CoreInboxDispatcher implements DisposableBean {
             EventLogger events,
             CoreMetrics metrics,
             MujoongClock clock,
-            CoreProperties.Inbox config) {
+            CoreInboxProperties config) {
         this.inbox = Objects.requireNonNull(inbox, "inbox");
         for (InboxHandler handler : Objects.requireNonNull(handlers, "handlers")) {
             if (handlers.stream().filter(h -> h.eventType() == handler.eventType()).count() > 1) {

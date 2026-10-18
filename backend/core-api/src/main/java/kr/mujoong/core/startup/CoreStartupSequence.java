@@ -14,6 +14,7 @@ import kr.mujoong.contract.log.EventLog;
 import kr.mujoong.contract.time.MujoongClock;
 import kr.mujoong.core.activity.PreparingTimeoutChecker;
 import kr.mujoong.core.common.scaling.SingleInstanceAssumption;
+import kr.mujoong.core.config.CoreOutboxProperties;
 import kr.mujoong.core.config.CoreProperties;
 import kr.mujoong.core.device.DeviceExpiryCleanupJob;
 import kr.mujoong.core.health.DbHealthChecker;
@@ -154,7 +155,7 @@ public class CoreStartupSequence implements SmartLifecycle {
     }
 
     private synchronized void startSchedulers() {
-        CoreProperties.Outbox outboxConfig = properties.outbox();
+        CoreOutboxProperties outboxConfig = properties.outbox();
         ScheduledExecutorService outboxSender = scheduler("outbox-sender");
         fixedDelay(outboxSender, outboxConfig.pollInterval(), EventLog.Component.CORE_MESSAGING, sender::runCycle);
 

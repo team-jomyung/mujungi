@@ -4,6 +4,7 @@ import java.util.Objects;
 import kr.mujoong.contract.log.EventLog;
 import kr.mujoong.contract.time.MujoongClock;
 import kr.mujoong.core.config.CoreProperties;
+import kr.mujoong.core.config.CoreTimingProperties;
 import kr.mujoong.core.observability.CoreMetrics;
 import kr.mujoong.core.observability.EventLogger;
 import org.springframework.context.annotation.Bean;
@@ -53,8 +54,8 @@ public class RateLimiterConfig {
         /** 설정 값으로 두 한도기를 만든다. */
         public static RateLimiters create(
                 CoreProperties properties, MujoongClock clock, SlidingWindowRateLimiter.Listener listener) {
-            CoreProperties.RateLimit bootstrap = properties.timing().bootstrap().rateLimit();
-            CoreProperties.RateLimit failures = properties.timing().device().registerFailureLimit();
+            CoreTimingProperties.RateLimit bootstrap = properties.timing().bootstrap().rateLimit();
+            CoreTimingProperties.RateLimit failures =properties.timing().device().registerFailureLimit();
             int maxKeys = properties.limits().rateCounterMaxKeys();
             return new RateLimiters(
                     new SlidingWindowRateLimiter(SlidingWindowRateLimiter.Limiter.BOOTSTRAP_IP, bootstrap.max(),
