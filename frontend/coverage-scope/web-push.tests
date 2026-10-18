@@ -1,0 +1,6 @@
+tests/parent/common/push/browser-push.test.ts
+tests/parent/common/push/push-api.test.ts
+tests/parent/common/push/push-worker.test.ts
+tests/parent/features/home/notification-entry.test.tsx
+tests/parent/features/home/push-settings.test.tsx
+tests/parent/features/home/settings-account.test.tsx

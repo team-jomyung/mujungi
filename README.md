@@ -124,8 +124,8 @@ cd backend && ./gradlew --no-daemon :contract-model:test :core-api:test :realtim
 cd backend && ./gradlew --no-daemon :contract-model:test :core-api:test :realtime-activity:test \
   :contract-model:jacocoTestCoverageVerification :core-api:jacocoTestCoverageVerification \
   :realtime-activity:jacocoTestCoverageVerification -PincludeTags=u1 -PcoverageScope=u1
-cd frontend && npm ci && MUJOONG_COVERAGE_SCOPE=u1 npx --no-install vitest run tests/u1 --coverage
-cd tools && npm ci && npx --no-install vitest run tests/u1
+cd frontend && npm ci && MUJOONG_COVERAGE_SCOPE=u1 npx --no-install vitest run tests --coverage
+cd tools && npm ci && npx --no-install vitest run tests
 ```
 
 - PostgreSQL이 필요한 시험(`@Tag("db")`)은 Docker(Testcontainers)나 호스트 PostgreSQL 16(`/usr/lib/postgresql/16/bin`)으로 돈다.
