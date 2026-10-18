@@ -483,7 +483,7 @@ class GuardrailExecutorTest {
     private static final class Controlled implements PracticeSessionExtension {
         PracticeOutput out;
         private final kr.mujoong.realtime.voice.PracticeSpeech speech = new kr.mujoong.realtime.voice.PracticeSpeech(
-                UUID.randomUUID(), UUID.randomUUID(), 1, kr.mujoong.realtime.practice.PracticePorts.OutputKind.SCENARIO, "친구",
+                UUID.randomUUID(), UUID.randomUUID(), 1, kr.mujoong.realtime.practicelegacy.PracticePorts.OutputKind.SCENARIO, "친구",
                 "내 차례야.");
 
         kr.mujoong.realtime.voice.PracticeSpeech speech() {

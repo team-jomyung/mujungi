@@ -223,23 +223,23 @@ public interface PracticeSessionExtension {
     }
 
     record PlaybackFact(kr.mujoong.realtime.voice.PracticeSpeech speech,
-            kr.mujoong.realtime.practice.PracticePorts.Playback status, String text, Instant receivedAt, Duration pausedFor) {
+            kr.mujoong.realtime.practicelegacy.PracticePorts.Playback status, String text, Instant receivedAt, Duration pausedFor) {
         public PlaybackFact {
             Objects.requireNonNull(pausedFor, "pausedFor");
             if (pausedFor.isNegative()) throw new IllegalArgumentException("negative playback pause");
         }
         public PlaybackFact(kr.mujoong.realtime.voice.PracticeSpeech speech,
-                kr.mujoong.realtime.practice.PracticePorts.Playback status, String text, Instant receivedAt) {
+                kr.mujoong.realtime.practicelegacy.PracticePorts.Playback status, String text, Instant receivedAt) {
             this(speech, status, text, receivedAt, Duration.ZERO);
         }
         public PlaybackFact(kr.mujoong.realtime.voice.PracticeSpeech speech,
-                kr.mujoong.realtime.practice.PracticePorts.Playback status, String text) { this(speech, status, text, null); }
+                kr.mujoong.realtime.practicelegacy.PracticePorts.Playback status, String text) { this(speech, status, text, null); }
         /** U12: 아직 끝나지 않은 시작 사실(STARTED). 종료 사실이 아니다. */
-        public boolean started() { return status == kr.mujoong.realtime.practice.PracticePorts.Playback.STARTED; }
+        public boolean started() { return status == kr.mujoong.realtime.practicelegacy.PracticePorts.Playback.STARTED; }
         /** U12: 끝까지 재생됐다(COMPLETED). 새 연습 흐름이 레거시 패키지 타입을 직접 보지 않게 하는 읽기 도우미다. */
-        public boolean played() { return status == kr.mujoong.realtime.practice.PracticePorts.Playback.COMPLETED; }
+        public boolean played() { return status == kr.mujoong.realtime.practicelegacy.PracticePorts.Playback.COMPLETED; }
         /** U12: 아이가 끼어들어 끊겼다(INTERRUPTED). */
-        public boolean interrupted() { return status == kr.mujoong.realtime.practice.PracticePorts.Playback.INTERRUPTED; }
+        public boolean interrupted() { return status == kr.mujoong.realtime.practicelegacy.PracticePorts.Playback.INTERRUPTED; }
         @Override public String toString() { return "PlaybackFact[status=" + status + "]"; }
     }
 

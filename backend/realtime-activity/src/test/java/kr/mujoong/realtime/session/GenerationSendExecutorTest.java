@@ -298,7 +298,7 @@ class GenerationSendExecutorTest {
         h.practice = extension.factory;
         h.activate();
         kr.mujoong.realtime.voice.PracticeSpeech speech = new kr.mujoong.realtime.voice.PracticeSpeech(UUID.randomUUID(),
-                UUID.randomUUID(), 1, kr.mujoong.realtime.practice.PracticePorts.OutputKind.SCENARIO, "친구",
+                UUID.randomUUID(), 1, kr.mujoong.realtime.practicelegacy.PracticePorts.OutputKind.SCENARIO, "친구",
                 "방금 말을 다시 들려줄게");
         int before = h.provider.last().requests(InstructionsAppend.class).size();
 

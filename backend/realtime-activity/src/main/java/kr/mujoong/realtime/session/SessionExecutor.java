@@ -1017,7 +1017,7 @@ public final class SessionExecutor {
         if (event.name().equals("u5b-voice-failed") && event.value() instanceof kr.mujoong.realtime.voice.PracticeSpeech speech) {
             if (speech.equals(pendingPracticeSpeech)) {
                 pendingPracticeSpeech = null; practiceHold = true;
-                practicePlayback(speech, kr.mujoong.realtime.practice.PracticePorts.Playback.FAILED);
+                practicePlayback(speech, kr.mujoong.realtime.practicelegacy.PracticePorts.Playback.FAILED);
             }
             return;
         }
@@ -1055,12 +1055,12 @@ public final class SessionExecutor {
     }
 
     private void practicePlayback(kr.mujoong.realtime.voice.PracticeSpeech speech,
-            kr.mujoong.realtime.practice.PracticePorts.Playback fact) {
+            kr.mujoong.realtime.practicelegacy.PracticePorts.Playback fact) {
         practicePlayback(speech, fact, ctx.services().clock().now());
     }
 
     private void practicePlayback(kr.mujoong.realtime.voice.PracticeSpeech speech,
-            kr.mujoong.realtime.practice.PracticePorts.Playback fact, Instant receivedAt) {
+            kr.mujoong.realtime.practicelegacy.PracticePorts.Playback fact, Instant receivedAt) {
         ctx.mailbox().putSafety(new SessionMailbox.PracticeEvent(new PracticeSessionExtension.ExtensionEvent(
                 PracticeSessionExtension.ExtensionEvent.Kind.PLAYBACK_FACT, "u5b-playback", speech.correlationId(),
                 new PracticeSessionExtension.PlaybackFact(speech, fact, speech.text(), receivedAt))));
@@ -1087,7 +1087,7 @@ public final class SessionExecutor {
         if (fired.name().startsWith("u5b-audio-")) {
             UUID playbackId = UUID.fromString(fired.name().substring("u5b-audio-".length()));
             var speech = practiceAudio.remove(playbackId);
-            if (speech != null) practicePlayback(speech, kr.mujoong.realtime.practice.PracticePorts.Playback.FAILED);
+            if (speech != null) practicePlayback(speech, kr.mujoong.realtime.practicelegacy.PracticePorts.Playback.FAILED);
             return;
         }
         onPracticeEvent(new PracticeSessionExtension.ExtensionEvent(
@@ -1139,7 +1139,7 @@ public final class SessionExecutor {
         for (UUID playbackId : List.copyOf(practiceAudio.keySet())) cancelPracticeTimer("u5b-audio-" + playbackId);
         practiceAudio.clear();
         interrupted.forEach(speech -> practicePlayback(speech,
-                kr.mujoong.realtime.practice.PracticePorts.Playback.INTERRUPTED, now));
+                kr.mujoong.realtime.practicelegacy.PracticePorts.Playback.INTERRUPTED, now));
     }
 
     /** 기술 일시정지와 종료 확인 동안 남은 반응 시간을 보존한다. */
@@ -1399,7 +1399,7 @@ public final class SessionExecutor {
 
         @Override
         public void practicePlayback(kr.mujoong.realtime.voice.PracticeSpeech speech,
-                kr.mujoong.realtime.practice.PracticePorts.Playback fact, Instant receivedAt) {
+                kr.mujoong.realtime.practicelegacy.PracticePorts.Playback fact, Instant receivedAt) {
             SessionExecutor.this.practicePlayback(speech, fact, receivedAt);
         }
 
@@ -1658,14 +1658,14 @@ public final class SessionExecutor {
         @Override
         public void finishAbandoned() {
             // U12 BR5.6: 재지시가 소리로 이어지지 않으면 열린 생성형 슬롯을 실패로 한 번 닫는다
-            closeGeneratedSlot(null, kr.mujoong.realtime.practice.PracticePorts.Playback.FAILED);
+            closeGeneratedSlot(null, kr.mujoong.realtime.practicelegacy.PracticePorts.Playback.FAILED);
             finishDiscard();
         }
 
         @Override
         public void practiceVoided(UUID practiceSpeechId) {
             // U12 BR5.6: 무효로 닫힌 검사의 생성형 슬롯이 아직 열려 있으면 INTERRUPTED로 한 번 닫는다
-            closeGeneratedSlot(practiceSpeechId, kr.mujoong.realtime.practice.PracticePorts.Playback.INTERRUPTED);
+            closeGeneratedSlot(practiceSpeechId, kr.mujoong.realtime.practicelegacy.PracticePorts.Playback.INTERRUPTED);
         }
 
         @Override
@@ -1737,7 +1737,7 @@ public final class SessionExecutor {
      *
      * @param correlationId 닫을 슬롯의 식별자(null이면 지금 열린 생성형 슬롯)
      */
-    private void closeGeneratedSlot(UUID correlationId, kr.mujoong.realtime.practice.PracticePorts.Playback fact) {
+    private void closeGeneratedSlot(UUID correlationId, kr.mujoong.realtime.practicelegacy.PracticePorts.Playback fact) {
         var slot = pendingPracticeSpeech;
         if (slot == null || !slot.generated() || (correlationId != null && !slot.correlationId().equals(correlationId))) {
             return;
@@ -2866,7 +2866,7 @@ public final class SessionExecutor {
             ctx.services().metrics().gateDiscard(GateDecision.DiscardReason.OUTBOUND_FULL.name());
             if (speech != null) {
                 practiceAudio.remove(playbackId); cancelPracticeTimer("u5b-audio-" + playbackId);
-                practicePlayback(speech, kr.mujoong.realtime.practice.PracticePorts.Playback.FAILED);
+                practicePlayback(speech, kr.mujoong.realtime.practicelegacy.PracticePorts.Playback.FAILED);
             }
         }
     }
@@ -2894,7 +2894,7 @@ public final class SessionExecutor {
         if (pendingPracticeSpeech != null) {
             var speech = pendingPracticeSpeech; pendingPracticeSpeech = null; practiceHold = true;
             bumpOutput(OutputGeneration.BumpReason.PRACTICE_DISCARD);
-            practicePlayback(speech, kr.mujoong.realtime.practice.PracticePorts.Playback.FAILED);
+            practicePlayback(speech, kr.mujoong.realtime.practicelegacy.PracticePorts.Playback.FAILED);
             return;
         }
         if (correct) {

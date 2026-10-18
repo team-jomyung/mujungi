@@ -17,7 +17,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 /**
- * 새 연습 흐름 구조 경계 (U12 BR10.2 · NFR6 · BR3.7 · R-F5 · R-F8). 새 패키지({@code practiceflow})는 레거시 {@code practice}를 참조하지 않고,
+ * 새 연습 흐름 구조 경계 (U12 BR10.2 · NFR6 · BR3.7 · R-F5 · R-F8). 새 패키지({@code practiceflow})는 레거시 {@code practicelegacy}를 참조하지 않고,
  * 실행부와는 확장점 인터페이스({@code PracticeSessionExtension}) 능력으로만 닿으며, 금지된 출력 능력(자유 지시 · 응답 요청 · 승인 문구 재생 ·
  * 응답 취소)을 부르지 않고, 판정 라벨 · 확률을 나르는 판정 클래스에 기대지 않는다. 반대 방향으로 실행부({@code session})는 새 패키지를 모른다
  * (실행부는 호출 지점만 더한다). 규칙이 실제로 위반을 잡는지는 위반 표본으로 확인한다.
@@ -41,9 +41,9 @@ class PracticeFlowArchTest {
 
     static final ArchRule NO_LEGACY_PRACTICE = noClasses()
             .that().resideInAPackage("..practiceflow..")
-            .should().dependOnClassesThat(resideInAPackage("kr.mujoong.realtime.practice.."))
+            .should().dependOnClassesThat(resideInAPackage("kr.mujoong.realtime.practicelegacy.."))
             .allowEmptyShould(false)
-            .because("새 흐름은 레거시 practice 패키지를 import하지 않는다(BR10.2)");
+            .because("새 흐름은 레거시 practicelegacy 패키지를 import하지 않는다(BR10.2)");
 
     static final ArchRule NO_EXECUTION_INTERNALS = noClasses()
             .that().resideInAPackage("..practiceflow..")

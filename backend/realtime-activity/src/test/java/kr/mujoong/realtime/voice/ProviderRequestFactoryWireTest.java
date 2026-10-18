@@ -135,7 +135,7 @@ class ProviderRequestFactoryWireTest {
         }
         contents.add(factory.practiceInstruction("e", new PracticeInstruction("하나 둘")).content());
         contents.add(factory.practiceInstruction("e", PracticeInstruction.forSpeech(new PracticeSpeech(java.util.UUID.randomUUID(),
-                java.util.UUID.randomUUID(), 1L, kr.mujoong.realtime.practice.PracticePorts.OutputKind.SCENARIO,
+                java.util.UUID.randomUUID(), 1L, kr.mujoong.realtime.practicelegacy.PracticePorts.OutputKind.SCENARIO,
                 "친구", "안녕"))).content());
 
         assertThat(contents).allSatisfy(content -> {

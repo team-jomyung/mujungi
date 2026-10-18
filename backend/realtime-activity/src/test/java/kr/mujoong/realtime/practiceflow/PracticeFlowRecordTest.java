@@ -10,7 +10,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import kr.mujoong.contract.json.JsonCodec;
-import kr.mujoong.realtime.practice.PracticePorts.Playback;
+import kr.mujoong.realtime.practicelegacy.PracticePorts.Playback;
 import kr.mujoong.realtime.practiceflow.PracticeFlowTestKit.Harness;
 import kr.mujoong.realtime.practiceflow.PracticeFlowTypes.Fact;
 import kr.mujoong.realtime.practiceflow.PracticeFlowTypes.HelpRecord;

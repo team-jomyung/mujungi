@@ -83,7 +83,7 @@ public final class EndingFlow {
         void cancelPracticeTimers();
 
         void practicePlayback(kr.mujoong.realtime.voice.PracticeSpeech speech,
-                kr.mujoong.realtime.practice.PracticePorts.Playback fact, Instant receivedAt);
+                kr.mujoong.realtime.practicelegacy.PracticePorts.Playback fact, Instant receivedAt);
 
         Map<UUID, kr.mujoong.realtime.voice.PracticeSpeech> practiceAudio();
 
@@ -134,10 +134,10 @@ public final class EndingFlow {
         var speech = env.practiceAudio().get(mark.playbackId());
         if (speech != null && mark.status() != PlaybackMark.Status.PROGRESS) {
             var fact = switch (mark.status()) {
-                case STARTED -> kr.mujoong.realtime.practice.PracticePorts.Playback.STARTED;
-                case COMPLETED -> kr.mujoong.realtime.practice.PracticePorts.Playback.COMPLETED;
-                case STOPPED -> kr.mujoong.realtime.practice.PracticePorts.Playback.INTERRUPTED;
-                default -> kr.mujoong.realtime.practice.PracticePorts.Playback.FAILED;
+                case STARTED -> kr.mujoong.realtime.practicelegacy.PracticePorts.Playback.STARTED;
+                case COMPLETED -> kr.mujoong.realtime.practicelegacy.PracticePorts.Playback.COMPLETED;
+                case STOPPED -> kr.mujoong.realtime.practicelegacy.PracticePorts.Playback.INTERRUPTED;
+                default -> kr.mujoong.realtime.practicelegacy.PracticePorts.Playback.FAILED;
             };
             if (mark.status() != PlaybackMark.Status.STARTED) {
                 env.practiceAudio().remove(mark.playbackId()); env.cancelPracticeTimer("u5b-audio-" + mark.playbackId());

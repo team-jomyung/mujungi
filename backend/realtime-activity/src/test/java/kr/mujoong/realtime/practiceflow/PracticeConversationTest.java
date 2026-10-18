@@ -16,7 +16,7 @@ import java.util.UUID;
 import kr.mujoong.contract.json.JsonCodec;
 import kr.mujoong.realtime.internalhttp.InternalHttpClient;
 import kr.mujoong.realtime.judgment.JudgmentPoint;
-import kr.mujoong.realtime.practice.PracticePorts.Playback;
+import kr.mujoong.realtime.practicelegacy.PracticePorts.Playback;
 import kr.mujoong.realtime.practiceflow.PracticeFlowTestKit.Harness;
 import kr.mujoong.realtime.practiceflow.PracticeFlowTestKit.Slot;
 import kr.mujoong.realtime.practiceflow.PracticeFlowTypes.FactKind;

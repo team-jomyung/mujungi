@@ -2,7 +2,7 @@ package kr.mujoong.realtime.voice;
 
 import java.util.Objects;
 import java.util.UUID;
-import kr.mujoong.realtime.practice.PracticePorts.OutputKind;
+import kr.mujoong.realtime.practicelegacy.PracticePorts.OutputKind;
 
 /**
  * 승인된 연습 발화. 상관 식별자는 서버 안에만 남긴다.

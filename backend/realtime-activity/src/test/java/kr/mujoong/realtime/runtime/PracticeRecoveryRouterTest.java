@@ -9,7 +9,7 @@ import static org.mockito.Mockito.when;
 
 import java.util.Optional;
 import java.util.UUID;
-import kr.mujoong.realtime.practice.JdbcPracticeRecordRecovery;
+import kr.mujoong.realtime.practicelegacy.JdbcPracticeRecordRecovery;
 import kr.mujoong.realtime.practiceflow.PracticeFlowRecordRecovery;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;

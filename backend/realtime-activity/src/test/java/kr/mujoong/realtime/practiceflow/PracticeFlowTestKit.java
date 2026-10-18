@@ -11,7 +11,7 @@ import java.util.Map;
 import java.util.UUID;
 import kr.mujoong.realtime.internalhttp.InternalHttpClient;
 import kr.mujoong.realtime.judgment.JudgmentPoint;
-import kr.mujoong.realtime.practice.PracticePorts.Playback;
+import kr.mujoong.realtime.practicelegacy.PracticePorts.Playback;
 import kr.mujoong.realtime.practiceflow.PracticeFlowTypes.FactKind;
 import kr.mujoong.realtime.practiceflow.PracticeFlowTypes.HelpRecord;
 import kr.mujoong.realtime.practiceflow.PracticeFlowTypes.LiveTiming;

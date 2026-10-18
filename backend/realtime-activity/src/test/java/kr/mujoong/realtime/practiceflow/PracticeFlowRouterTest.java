@@ -18,7 +18,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
-import kr.mujoong.realtime.practice.PracticePorts.Playback;
+import kr.mujoong.realtime.practicelegacy.PracticePorts.Playback;
 import kr.mujoong.realtime.practiceflow.PracticeFlowTestKit.Harness;
 import kr.mujoong.realtime.session.PracticeSessionExtension;
 import kr.mujoong.realtime.session.PracticeSessionExtension.ExtensionEvent;

@@ -10,7 +10,7 @@ import java.util.UUID;
 import kr.mujoong.contract.status.ActivityType;
 import kr.mujoong.contract.ws.message.PlaybackMark;
 import kr.mujoong.realtime.guardrail.GuardrailRequest;
-import kr.mujoong.realtime.practice.PracticePorts;
+import kr.mujoong.realtime.practicelegacy.PracticePorts;
 import kr.mujoong.realtime.testing.FakeGuardrailClient;
 import kr.mujoong.realtime.testing.SessionHarness;
 import kr.mujoong.realtime.voice.PracticeSpeech;

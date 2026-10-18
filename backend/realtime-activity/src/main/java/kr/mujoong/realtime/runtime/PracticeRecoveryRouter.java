@@ -2,7 +2,7 @@ package kr.mujoong.realtime.runtime;
 
 import java.util.Objects;
 import java.util.UUID;
-import kr.mujoong.realtime.practice.JdbcPracticeRecordRecovery;
+import kr.mujoong.realtime.practicelegacy.JdbcPracticeRecordRecovery;
 import kr.mujoong.realtime.practiceflow.PracticeFlowRecordRecovery;
 import kr.mujoong.realtime.session.PracticeRecordRecovery;
 import org.springframework.context.annotation.Primary;

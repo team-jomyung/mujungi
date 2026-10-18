@@ -13,7 +13,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import kr.mujoong.realtime.internalhttp.InternalHttpClient;
-import kr.mujoong.realtime.practice.PracticePorts.Playback;
+import kr.mujoong.realtime.practicelegacy.PracticePorts.Playback;
 import kr.mujoong.realtime.practiceflow.PracticeFlowTestKit.Harness;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
