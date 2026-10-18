@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { T19View, type T19Display } from "@/device/components/T19View";
+import { StatusView, type StatusDisplay } from "@/device/features/status/StatusView";
 import { flush, registeredDeviceApi, renderDeviceApp } from "../support/deviceHarness";
 import { runtimeControl } from "../support/runtimeMock";
 
@@ -12,14 +12,14 @@ vi.mock("@/device/mic/micPermission", async () => (await import("../support/runt
 
 const INTERACTIVE = "button, a[href], input, select, textarea, [role='button'], [tabindex]:not([tabindex='-1'])";
 
-function renderView(display: T19Display, label: string | null = null) {
+function renderView(display: StatusDisplay, label: string | null = null) {
   const onTurnOn = vi.fn();
   const onTurnOff = vi.fn();
-  const view = render(<T19View display={display} label={label} onTurnOn={onTurnOn} onTurnOff={onTurnOff} />);
+  const view = render(<StatusView display={display} label={label} onTurnOn={onTurnOn} onTurnOff={onTurnOff} />);
   return { ...view, onTurnOn, onTurnOff };
 }
 
-describe("T19View", () => {
+describe("StatusView", () => {
   it("꺼짐은 「켜기」 하나만 있고 누르면 켜기를 부른다(AC6.2.1)", () => {
     const { onTurnOn, container } = renderView("off");
     expect(screen.getByTestId("t19-view")).toHaveAttribute("data-state", "off");

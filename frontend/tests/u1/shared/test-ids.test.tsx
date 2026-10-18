@@ -1,8 +1,8 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { D0View } from "@/device/components/D0View";
-import { DebugLog } from "@/device/components/DebugLog";
-import { T19View, type T19Display } from "@/device/components/T19View";
+import { FirstBootView } from "@/device/features/first-boot/FirstBootView";
+import { DebugLog } from "@/device/features/debug/DebugLog";
+import { StatusView, type StatusDisplay } from "@/device/features/status/StatusView";
 import { DevLoginScreen } from "@/parent/features/login/DevLoginScreen";
 import { DoneScreen } from "@/parent/features/done/DoneScreen";
 import { FreeTalkScreen } from "@/parent/features/free/FreeTalkScreen";
@@ -58,15 +58,15 @@ beforeEach(() => {
 
 describe("기기 화면", () => {
   it.each(["d0-checking", "d0-code", "d0-registered"] as const)("D0 %s에는 상호작용 요소가 하나도 없다(BR9.2)", (display) => {
-    const { container } = render(<D0View display={display} code="7F3K92QD" />);
+    const { container } = render(<FirstBootView display={display} code="7F3K92QD" />);
     expect(container.querySelectorAll(INTERACTIVE)).toHaveLength(0);
     expect(badTestIds()).toEqual([]);
   });
 
-  it.each<T19Display>(["off", "mic-request", "mic-denied", "connecting", "standby", "listening", "speaking", "closing", "reconnecting"])(
+  it.each<StatusDisplay>(["off", "mic-request", "mic-denied", "connecting", "standby", "listening", "speaking", "closing", "reconnecting"])(
     "T19 %s의 상호작용 요소는 모두 data-testid가 있다",
     (display) => {
-      render(<T19View display={display} label="대기" onTurnOn={() => undefined} onTurnOff={() => undefined} />);
+      render(<StatusView display={display} label="대기" onTurnOn={() => undefined} onTurnOff={() => undefined} />);
       expectRuleHolds();
       expect(screen.queryByTestId("t19-on") ?? screen.queryByTestId("t19-off")).not.toBeNull();
     },
@@ -75,7 +75,7 @@ describe("기기 화면", () => {
   it("D0 코드 · 상태 로그에도 규칙이 지켜진다", () => {
     render(
       <>
-        <D0View display="d0-code" code="7F3K92QD" />
+        <FirstBootView display="d0-code" code="7F3K92QD" />
         <DebugLog trail={["d0-checking", "d0-code"]} />
       </>,
     );
@@ -152,10 +152,10 @@ describe("보호자 화면", () => {
 
 describe("계획이 정한 후보 이름(flows 시트 3.4)", () => {
   it("핵심 data-testid가 실제 화면에 있다", async () => {
-    render(<D0View display="d0-code" code="7F3K92QD" />);
+    render(<FirstBootView display="d0-code" code="7F3K92QD" />);
     expect(screen.getByTestId("d0-code")).toBeInTheDocument();
-    render(<T19View display="off" label={null} onTurnOn={() => undefined} onTurnOff={() => undefined} />);
-    render(<T19View display="standby" label="대기" onTurnOn={() => undefined} onTurnOff={() => undefined} />);
+    render(<StatusView display="off" label={null} onTurnOn={() => undefined} onTurnOff={() => undefined} />);
+    render(<StatusView display="standby" label="대기" onTurnOn={() => undefined} onTurnOff={() => undefined} />);
     expect(screen.getByTestId("t19-on")).toBeInTheDocument();
     expect(screen.getByTestId("t19-off")).toBeInTheDocument();
     const names = ["code-cell-0", "code-cell-7", "register-submit"];

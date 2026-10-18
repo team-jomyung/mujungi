@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { T19View } from "@/device/components/T19View";
+import { StatusView } from "@/device/features/status/StatusView";
 import { deviceReducer, displayStateOf, initialDeviceState, pendingEffect, reconnectDelayMs, type DeviceEvent, type DeviceState } from "@/device/machine/deviceMachine";
 import { DEVICE_ID } from "../../u1/support/fixtures";
 import { advance, flush, registeredDeviceApi, renderDeviceApp } from "../../u1/support/deviceHarness";
@@ -111,14 +111,14 @@ describe("DeviceApp — '연결 끊김'과 늘어나는 재접속 간격(U3-R16 
   });
 });
 
-describe("T19View — 보조 줄", () => {
+describe("StatusView — 보조 줄", () => {
   it("보조 줄은 켜짐 쪽 화면에서만 그리고 없으면 그리지 않는다", () => {
     const handlers = { onTurnOn: vi.fn(), onTurnOff: vi.fn() };
-    const { rerender } = render(<T19View display="reconnecting" label="연결 끊김" subLabel="다시 연결하고 있어요" {...handlers} />);
+    const { rerender } = render(<StatusView display="reconnecting" label="연결 끊김" subLabel="다시 연결하고 있어요" {...handlers} />);
     expect(screen.getByTestId("t19-sublabel")).toHaveTextContent("다시 연결하고 있어요");
-    rerender(<T19View display="off" label={null} subLabel="다시 연결하고 있어요" {...handlers} />);
+    rerender(<StatusView display="off" label={null} subLabel="다시 연결하고 있어요" {...handlers} />);
     expect(screen.queryByTestId("t19-sublabel")).toBeNull();
-    rerender(<T19View display="standby" label="대기" {...handlers} />);
+    rerender(<StatusView display="standby" label="대기" {...handlers} />);
     expect(screen.queryByTestId("t19-sublabel")).toBeNull();
   });
 });

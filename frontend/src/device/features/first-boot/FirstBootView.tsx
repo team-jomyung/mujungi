@@ -4,14 +4,14 @@ import { COPY, PROPOSED_COPY, formatRegistrationCode } from "@/shared/copy/ko";
 // 안내 + 4 · 4로 나눈 큰 코드, 등록되면 「등록되었어요」. 코드를 아직 받지 못한 동안만 '연결을 확인하는 중'을 보인다.
 // 클릭 요소가 없다(BR9.2).
 
-export type D0Display = "d0-checking" | "d0-code" | "d0-registered";
+export type FirstBootDisplay = "d0-checking" | "d0-code" | "d0-registered";
 
-export interface D0ViewProps {
-  readonly display: D0Display;
+export interface FirstBootViewProps {
+  readonly display: FirstBootDisplay;
   readonly code: string | null;
 }
 
-export function D0View({ display, code }: D0ViewProps) {
+export function FirstBootView({ display, code }: FirstBootViewProps) {
   return (
     <section className="mj-d0" data-testid="d0-view" data-state={display}>
       <p className="mj-d0__brand">{COPY.brand}</p>

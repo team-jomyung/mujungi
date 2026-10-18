@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { D0View } from "@/device/components/D0View";
+import { FirstBootView } from "@/device/features/first-boot/FirstBootView";
 import { DEVICE_ID } from "../support/fixtures";
 import { advance, flush, renderDeviceApp, scriptedDeviceApi } from "../support/deviceHarness";
 
@@ -10,9 +10,9 @@ import { advance, flush, renderDeviceApp, scriptedDeviceApi } from "../support/d
 const INTERACTIVE = "button, a[href], input, select, textarea, [role='button'], [tabindex]:not([tabindex='-1'])";
 const ISSUED = { kind: "issued", code: "7F3K92QD", expiresAt: "2026-10-16T01:00:00Z" } as const;
 
-describe("D0View", () => {
+describe("FirstBootView", () => {
   it("코드는 안내와 함께 4 · 4로 크게 보인다(AC6.1.1 · C.D-00.30.2 ~ 3)", () => {
-    render(<D0View display="d0-code" code="7F3K92QD" />);
+    render(<FirstBootView display="d0-code" code="7F3K92QD" />);
     expect(screen.getByTestId("d0-view")).toHaveAttribute("data-state", "d0-code");
     expect(screen.getByText("보호자 앱에서 이 코드를 넣어 주세요")).toBeInTheDocument();
     expect(screen.getByTestId("d0-code")).toHaveTextContent("7F3K · 92QD");
@@ -20,7 +20,7 @@ describe("D0View", () => {
   });
 
   it("코드를 받기 전에는 '연결을 확인하는 중'만 보이고 기술 문구가 없다(BR9.4)", () => {
-    render(<D0View display="d0-checking" code={null} />);
+    render(<FirstBootView display="d0-checking" code={null} />);
     expect(screen.getByTestId("d0-checking")).toHaveTextContent("연결을 확인하는 중");
     expect(screen.getByTestId("d0-checking")).toHaveAttribute("role", "status");
     expect(screen.queryByTestId("d0-code")).toBeNull();
@@ -28,19 +28,19 @@ describe("D0View", () => {
   });
 
   it("등록되면 「등록되었어요」를 알리고 코드를 내린다", () => {
-    render(<D0View display="d0-registered" code="7F3K92QD" />);
+    render(<FirstBootView display="d0-registered" code="7F3K92QD" />);
     expect(screen.getByTestId("d0-registered")).toHaveTextContent("등록되었어요");
     expect(screen.getByTestId("d0-registered")).toHaveAttribute("role", "status");
     expect(screen.queryByTestId("d0-code")).toBeNull();
   });
 
   it("코드 상태인데 코드 값이 없으면 확인 중 문구로 대신한다", () => {
-    render(<D0View display="d0-code" code={null} />);
+    render(<FirstBootView display="d0-code" code={null} />);
     expect(screen.getByTestId("d0-checking")).toBeInTheDocument();
   });
 
   it.each(["d0-checking", "d0-code", "d0-registered"] as const)("%s 화면에는 클릭 요소가 하나도 없다(BR9.2)", (display) => {
-    const { container } = render(<D0View display={display} code="7F3K92QD" />);
+    const { container } = render(<FirstBootView display={display} code="7F3K92QD" />);
     expect(container.querySelectorAll(INTERACTIVE)).toHaveLength(0);
   });
 });

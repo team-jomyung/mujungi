@@ -9,7 +9,7 @@
     "frontend/src/device/ws/wsClient.ts",
     "frontend/src/device/machine/deviceMachine.ts",
     "frontend/src/device/DeviceApp.tsx",
-    "frontend/src/device/components/T19View.tsx",
+    "frontend/src/device/features/status/StatusView.tsx",
     "frontend/src/device/runtime/deviceRuntime.ts",
     "frontend/src/device/power/wakeLock.ts",
     "frontend/src/shared/protocol/messages.ts",

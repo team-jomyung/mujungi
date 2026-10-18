@@ -3,9 +3,9 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { createDeviceApi, type DeviceApi } from "./api/deviceApi";
 import { createAudioContextInGesture } from "./audio/audioContext";
-import { D0View, type D0Display } from "./components/D0View";
-import { DebugLog } from "./components/DebugLog";
-import { T19View, type T19Display } from "./components/T19View";
+import { DebugLog } from "./features/debug/DebugLog";
+import { FirstBootView, type FirstBootDisplay } from "./features/first-boot/FirstBootView";
+import { StatusView, type StatusDisplay } from "./features/status/StatusView";
 import {
   deviceReducer,
   displayStateOf,
@@ -245,10 +245,10 @@ export function DeviceApp({ debug, api: injectedApi }: DeviceAppProps) {
   return (
     <main className="mj-device" data-testid="device-app">
       {state.screen === "d0" ? (
-        <D0View display={display as D0Display} code={state.code?.code ?? null} />
+        <FirstBootView display={display as FirstBootDisplay} code={state.code?.code ?? null} />
       ) : (
-        <T19View
-          display={display as T19Display}
+        <StatusView
+          display={display as StatusDisplay}
           label={t19Label(state)}
           subLabel={display === "reconnecting" ? PROPOSED_COPY.device.t19Reconnecting : null}
           onTurnOn={handleTurnOn}
