@@ -2,7 +2,8 @@
 
 화면 설계 v1.5j의 화면 번호로 프런트 파일을 찾는 표다. 구조 · 이름 리팩토링(작업 기록 `261018-structure-refactor`)은 화면 파일 이름에서 번호 접미(`Login01.tsx` 등)를 없애고 기능 폴더로 옮긴다. 번호는 이 표에서 찾는다.
 
-- **상태: 예정.** 지금(리팩토링 시작 전) 파일 경로와 이동 뒤 경로를 함께 적는다. 리팩토링 단계 1(Step 5 ~ 7)에서 파일이 실제로 옮겨지고, 마무리(Step 25)에서 이 표를 실제 결과로 다시 확인한다.
+- **상태: 단계 1 반영(화면 파일 이동 끝).** "지금 경로"는 이동 전 경로, "이동 뒤 경로"는 실제 경로다. 화면 훅(단계 2)과 `api.ts` · `copy.ts` 통합(Step 11)은 아직 안 했다. 마무리(Step 25)에서 이 표를 실제 결과로 다시 확인한다.
+- 단계 1 실제 결과 메모: 화면 파일 17개 · 기기 3개는 표대로 옮겼다. 화면 export 이름도 번호를 지웠다(`Login01` -> `LoginScreen` 등, `presentDevice05` -> `presentDeviceScreen`, `D0View` -> `FirstBootView`, `T19View` -> `StatusView`).
 - 경로는 모두 `frontend/src/` 아래다. 이동 뒤 보호자 경로는 `parent/features/<기능>/`, 기기 경로는 `device/features/<기능>/`이다.
 - 라우트(`src/app/...`)는 바뀌지 않는다. 주소 `/parent/...`는 그대로이고 `page.tsx`의 import만 바뀐다.
 - "화면 훅"은 리팩토링 단계 2(Step 9 ~ 10)에서 요청 · 오류 분기 · 이동(`router.*`)을 옮겨 담는 `use<기능>Screen` 훅이다. 훅이 없는 화면은 "—"로 적었다.
@@ -59,7 +60,7 @@
 | `components/{BottomTabBar,BottomSheet,ConfirmDialog,LiveRegion,MonthCalendar,TranscriptList}.tsx` | `components/` |
 | 한 기능만 쓰는 컴포넌트(`ChipGroup` `TextArea200` → free, `CodeInput` → device, `DeviceCard` `SettingsSheet` `PushSettingsRow` → home, `EndReasonCard` `SceneChip` → records, `NoticeDialog` `StatusLine` → live) | 각 기능 폴더 |
 
-- 컴포넌트 목적지는 현재 import 그래프로 정한 초안이다. 이동 전 단계(Step 6)에서 한 번 더 확인하고, 실제 결과를 마무리(Step 25)에서 이 표에 반영한다.
+- 컴포넌트 목적지는 Step 6에서 import 그래프를 다시 확인했고 위 표와 차이가 없었다(16개 모두 표대로 이동). 마무리(Step 25)에서 한 번 더 대조한다.
 
 ## 4. 번호로 찾는 방법
 
