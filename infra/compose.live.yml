@@ -1,0 +1,63 @@
+# 무중 실키 기동 스택 덧붙임 — compose.demo.yml + compose.ci.yml 위에 세 번째로 얹는다 (팀원 수동 전체 기동 시험용)
+#
+# 검증 스택(compose.ci.yml)과 같은 이미지 · 망 · 컨테이너 정책에서 바꾸는 것은 아래뿐이다. verify.sh는 이 파일을 쓰지 않으며 가짜 공급자만 쓴다(R-F1).
+#   - 공급자: 가짜 공급자(fake-provider)를 끄고 realtime을 실제 GPT-Live 주소로 보낸다. 주소는 demo 프로필 기본값과 같다(application-demo.yml).
+#   - 키 · 제브 값: 저장소 밖 파일(MUJOONG_LIVE_ENV_FILE, 기본 ~/.config/mujoong/live.env, 0600)을 env_file로 얹는다.
+#     이 파일 이름과 위치만 여기에 있고 값은 어디에도 없다(R-F3 · R-F13). 만드는 법: bash scripts/live/keys.sh
+#   - Luna 판정: MUJOONG_LUNA_ENABLED=true(키가 있을 때만 호출부가 켜진다).
+#   - 이미지: pull_policy missing — 로컬에 있으면 쓰고 없으면 레지스트리(GHCR)에서 당긴다(검증 스택은 never).
+#   - 포트: nginx를 127.0.0.1:${MUJOONG_LIVE_PORT:-9443}에만 게시한다(검증 스택 8443 · 수동 스택과 겹치지 않게). 망 대역도 검증 스택과 분리한다.
+# 앱 프로필은 dev + 시험 로그인(MUJOONG_DEVLOGIN_ENABLED)이다. 이 스택은 개발자 PC 로컬 전용이며 인터넷에 열지 않는다.
+#
+# 쓰는 법은 scripts/live/up.sh가 정본이다(env · 인증서 · nginx · migrate · 시드 · 기동을 한꺼번에 한다). 직접 부를 때:
+#   docker compose -p mujoong-live --env-file build/live/env/compose.env -f infra/compose.demo.yml -f infra/compose.ci.yml -f infra/compose.live.yml config --quiet
+
+services:
+  nginx:
+    ports: !override
+      - "127.0.0.1:${MUJOONG_LIVE_PORT:-9443}:443"
+
+  web:
+    pull_policy: missing
+
+  migrate:
+    pull_policy: missing
+
+  core-api:
+    pull_policy: missing
+    env_file:
+      - ${MUJOONG_LIVE_ENV_FILE:?MUJOONG_LIVE_ENV_FILE이 필요하다(scripts/live/up.sh가 채운다)}
+    environment:
+      # 망 대역을 바꿨으므로 신뢰 프록시(nginx 고정 IP) 정규식도 같은 대역으로 맞춘다(up.sh가 채운다)
+      SERVER_TOMCAT_REMOTEIP_INTERNALPROXIES: ${MUJOONG_LIVE_PROXY_REGEX:?MUJOONG_LIVE_PROXY_REGEX가 필요하다(scripts/live/up.sh가 채운다)}
+
+  realtime:
+    pull_policy: missing
+    env_file:
+      - ${MUJOONG_LIVE_ENV_FILE:?MUJOONG_LIVE_ENV_FILE이 필요하다(scripts/live/up.sh가 채운다)}
+    environment:
+      SERVER_TOMCAT_REMOTEIP_INTERNALPROXIES: ${MUJOONG_LIVE_PROXY_REGEX:?MUJOONG_LIVE_PROXY_REGEX가 필요하다(scripts/live/up.sh가 채운다)}
+      # 가짜 공급자 주소를 실제 공급자 주소로 바꾼다(허용 호스트 목록은 코드 상수, 목록 밖이면 기동 점검이 거부한다)
+      MUJOONG_PROVIDER_URL: wss://api.openai.com/v1/live/sessions
+      MUJOONG_LUNA_ENABLED: "true"
+    # 검증 스택의 fake-provider 의존을 걷어 낸다(demo 기본 의존만 남긴다)
+    depends_on: !override
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+        required: false
+
+  fake-provider:
+    profiles: [live-disabled]
+    pull_policy: never
+
+networks:
+  edge:
+    ipam:
+      config: !override
+        - subnet: ${MUJOONG_VERIFY_EDGE_PREFIX:-172.30.40}.0/24
+  backend:
+    ipam:
+      config: !override
+        - subnet: ${MUJOONG_VERIFY_BACKEND_PREFIX:-172.30.50}.0/24
