@@ -6,7 +6,6 @@ import java.util.Optional;
 import java.util.UUID;
 import kr.mujoong.contract.event.payload.SessionStateChanged;
 import kr.mujoong.contract.status.SessionStatus;
-import kr.mujoong.contract.ws.WsPayload;
 import kr.mujoong.contract.ws.message.PlayApprovedContent;
 import kr.mujoong.realtime.dialog.SilenceClock;
 import kr.mujoong.realtime.gateway.DeviceLink;
@@ -42,13 +41,9 @@ public final class IdleClock {
 
     /** 공백 시계 구역이 실행기에 남은 로직으로 되돌려 부르는 자리. 모두 실행기 스레드에서 불린다. */
     interface Env {
-        void putEvent(String type, String payloadJson, Instant at);
-
         void reportMissing(String contentCode, Instant at);
 
         void approvedBubble(SessionExecutor.ApprovedItem item, Instant at);
-
-        boolean sendControl(WsPayload payload);
 
         boolean beginClosing(Trigger trigger, UUID requestId);
 
@@ -160,7 +155,7 @@ public final class IdleClock {
 
     /** BR5.3 · U4b-J11: 공백 경고를 켜고 패키지에 있으면 SILENCE_WARNING을 한 번 재생한다(재생은 시계를 리셋하지 않는다). */
     private void onSilenceWarning(Instant now) {
-        env.putEvent(EVENT_SILENCE_WARNED, "{\"silentMs\":" + silence.accumulated(now).toMillis() + "}", now);
+        ctx.putEvent(EVENT_SILENCE_WARNED, "{\"silentMs\":" + silence.accumulated(now).toMillis() + "}", now);
         Optional<SessionExecutor.ApprovedItem> item = ctx.plan().approvedItem(SessionExecutor.SILENCE_WARNING);
         if (item.isEmpty()) {
             env.reportMissing(SessionExecutor.SILENCE_WARNING, now);
@@ -170,7 +165,7 @@ public final class IdleClock {
             return;
         }
         UUID playbackId = UUID.randomUUID();
-        if (env.sendControl(new PlayApprovedContent(playbackId, SessionExecutor.SILENCE_WARNING, item.get().contentVersionId()))) {
+        if (ctx.sendControl(new PlayApprovedContent(playbackId, SessionExecutor.SILENCE_WARNING, item.get().contentVersionId()))) {
             ctx.playback().started(playbackId, SessionExecutor.SILENCE_WARNING);
             ctx.timers().arm(Kind.PLAYBACK_EXPIRY, ctx.services().settings().playbackExpiry());
             env.approvedBubble(item.get(), now);
@@ -182,7 +177,7 @@ public final class IdleClock {
         boolean wasWarned = silence.isWarned();
         silence.reset(at);
         if (wasWarned) {
-            env.putEvent(EVENT_SILENCE_RESET, null, at);
+            ctx.putEvent(EVENT_SILENCE_RESET, null, at);
         }
     }
 
@@ -261,7 +256,7 @@ public final class IdleClock {
         if (ctx.openGapId() == null) {
             ctx.openGapId(ctx.services().gaps().open(ctx.plan().sessionId(), SessionGapRepository.Kind.DISCONNECT, gapFrom));
         }
-        env.putEvent(EVENT_TECHNICAL_PAUSE_STARTED, "{\"kind\":\"DEVICE\"}", now);
+        ctx.putEvent(EVENT_TECHNICAL_PAUSE_STARTED, "{\"kind\":\"DEVICE\"}", now);
         ctx.timers().arm(Kind.GAP_DISPLAY, ctx.services().settings().timerTick());
     }
 
@@ -280,7 +275,7 @@ public final class IdleClock {
             ctx.services().gaps().close(ctx.openGapId(), now);
             ctx.openGapId(null);
         }
-        env.putEvent(EVENT_TECHNICAL_PAUSE_ENDED, "{\"pausedMs\":" + paused.toMillis() + "}", now);
+        ctx.putEvent(EVENT_TECHNICAL_PAUSE_ENDED, "{\"pausedMs\":" + paused.toMillis() + "}", now);
         if (ctx.status() == SessionStatus.WAITING_CHILD && env.hasJoin()) {
             env.resumeJoinWindow(paused);
         }

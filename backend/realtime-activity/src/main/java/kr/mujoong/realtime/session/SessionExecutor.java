@@ -23,7 +23,6 @@ import kr.mujoong.contract.status.EndRequestReason;
 import kr.mujoong.contract.status.FailureCode;
 import kr.mujoong.contract.status.SessionStatus;
 import kr.mujoong.contract.time.MujoongClock;
-import kr.mujoong.contract.ws.WsPayload;
 import kr.mujoong.contract.ws.message.CloseTransport;
 import kr.mujoong.contract.ws.message.DeviceState;
 import kr.mujoong.contract.ws.message.OutputBegin;
@@ -31,7 +30,6 @@ import kr.mujoong.contract.ws.message.PlayApprovedContent;
 import kr.mujoong.contract.ws.message.PlaybackMark;
 import kr.mujoong.contract.ws.message.SessionState;
 import kr.mujoong.contract.ws.message.StartSession;
-import kr.mujoong.contract.ws.message.StopOutput;
 import kr.mujoong.contract.ws.message.View;
 import kr.mujoong.realtime.common.collect.BoundedCollections;
 import kr.mujoong.realtime.common.scaling.SingleInstanceAssumption;
@@ -398,8 +396,6 @@ public final class SessionExecutor {
         }
     }
 
-    /** ACK를 기다리는 opId 명령의 상한(U3-J7). 넘치면 가장 오래된 것부터 잊는다. */
-    static final int MAX_PENDING_COMMANDS = 16;
     /** U3-R12: 아이의 명확한 종료 의도(payload는 근거만, 원문 없음). CLOSING(CHILD_STOP) 전이는 U4. */
     static final String EVENT_CHILD_STOP_INTENT = "CHILD_STOP_INTENT";
     /** U3-R12: 종료일 수 있으나 불명확(확인 질문 재생은 U4). */
@@ -439,7 +435,6 @@ public final class SessionExecutor {
     private String inputGroupId;
     private long inputGroupSeq;
     private final List<Object> pendingRetry = new ArrayList<>();
-    private final Runnable onTerminated;
 
     /** 기기 표식 · 끝내기 구역 협력 객체(실행기 스레드 전용). */
     private final EndingFlow ending;
@@ -499,13 +494,13 @@ public final class SessionExecutor {
     public SessionExecutor(Plan initialPlan, Services initialServices, SessionMailbox initialMailbox,
             Runnable onTerminated) {
         this.ctx = new SessionContext(initialPlan, initialServices, initialMailbox);
-        this.onTerminated = Objects.requireNonNull(onTerminated, "onTerminated");
+        Objects.requireNonNull(onTerminated, "onTerminated");
         this.stopJudge = new StopIntentJudge(ctx.plan().stopExpressions());
         this.judgment = new JudgmentCoordinator(ctx.services().judgment(), ctx.plan(),
                 ctx.services().settings().instructionWait(), new JudgmentEnv());
         this.guardrail = new GuardrailCoordinator(ctx.services().guardrail(), ctx.plan(), new GuardrailEnv());
         this.idle = new IdleClock(ctx, new IdleEnv());
-        this.ending = new EndingFlow(ctx, idle, new EndingEnv());
+        this.ending = new EndingFlow(ctx, idle, judgment, guardrail, onTerminated, new EndingEnv());
         this.joinFlow = new JoinFlow(ctx, idle, judgment, ending, new JoinEnv());
         this.clocks = new SessionClocks(ctx, idle, ending, new ClocksEnv());
         // U4b BR10.1: 연습 확장점은 PRACTICE 세션에서만 부른다(자유대화는 부르지 않는다)
@@ -545,7 +540,7 @@ public final class SessionExecutor {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             if (!ctx.terminated()) {
-                teardown();
+                ending.teardown();
             }
         } finally {
             processing = null;
@@ -697,7 +692,7 @@ public final class SessionExecutor {
                 // 앱 종료 T3: 공급자 연결을 닫고 기록기를 비운다. 세션 행은 다음 기동 S3a가 닫는다(BR6.13).
                 // 끝나면(실패해도) 정상 종료에 알린다 — T4(폴러 정지)는 공급자 닫기 뒤에 시작한다(RD-13 순서, J304)
                 try {
-                    closeProvider();
+                    ending.closeProvider();
                     ctx.services().recorder().finish(ctx.plan().sessionId());
                 } finally {
                     shutdown.handled().complete(null);
@@ -736,17 +731,17 @@ public final class SessionExecutor {
             StartSession startSession = new StartSession(ctx.plan().approvedAudio());
             sent = ctx.link().sendControl(startSession, ctx.startOpId(), ctx.plan().sessionId());
             if (sent) {
-                remember(ctx.startOpId(), startSession);
+                ctx.remember(ctx.startOpId(), startSession);
             }
         }
         if (!sent) {
             // BR6.6 ⑤: 같은 처리 안에서 PREPARING → FAILED(DEVICE_NO_ACK) + UNRESPONSIVE
-            Optional<ActivitySessionRow> failed = transition(SessionStatus.PREPARING, Trigger.START_SEND_FAILED, null);
+            Optional<ActivitySessionRow> failed = ending.transition(SessionStatus.PREPARING, Trigger.START_SEND_FAILED, null);
             if (failed.isPresent()) {
-                markUnresponsive();
+                ctx.markUnresponsive();
                 ending.afterTerminal();
             } else {
-                syncFromDb();
+                ending.syncFromDb();
             }
             return;
         }
@@ -796,7 +791,7 @@ public final class SessionExecutor {
     }
 
     private void onDeviceAck(DeviceAck ack) {
-        if (!fromBoundConnection(ack.connectionId())) {
+        if (!ctx.fromBoundConnection(ack.connectionId())) {
             return;
         }
         // U3-J7: ACK가 온 명령은 연결이 바뀌어도 다시 보내지 않는다
@@ -806,9 +801,9 @@ public final class SessionExecutor {
         if (!Objects.equals(ack.ackOf(), ctx.startOpId()) || ctx.status() != SessionStatus.PREPARING) {
             return;
         }
-        Optional<ActivitySessionRow> row = transition(SessionStatus.PREPARING, Trigger.DEVICE_ACK, null);
+        Optional<ActivitySessionRow> row = ending.transition(SessionStatus.PREPARING, Trigger.DEVICE_ACK, null);
         if (row.isEmpty()) {
-            syncFromDb();
+            ending.syncFromDb();
             return;
         }
         ctx.ackReceived(true);
@@ -820,7 +815,7 @@ public final class SessionExecutor {
     }
 
     private void onDeviceReady(DeviceReadyReceived ready) {
-        if (!fromBoundConnection(ready.connectionId()) || !START_PHASE.contains(ctx.status())) {
+        if (!ctx.fromBoundConnection(ready.connectionId()) || !START_PHASE.contains(ctx.status())) {
             return;
         }
         if (!ready.ready().isReady()) {
@@ -836,11 +831,11 @@ public final class SessionExecutor {
 
     private void failDeviceUnavailable() {
         // BR6.8: DEVICE_READY가 사용 불가를 알리면 20초를 기다리지 않고 즉시 FAILED(DEVICE_NO_ACK), UNRESPONSIVE는 쓰지 않는다(J55)
-        Optional<ActivitySessionRow> row = transition(SessionStatus.DEVICE_ACK, Trigger.DEVICE_UNAVAILABLE, null);
+        Optional<ActivitySessionRow> row = ending.transition(SessionStatus.DEVICE_ACK, Trigger.DEVICE_UNAVAILABLE, null);
         if (row.isPresent()) {
-            afterFailed();
+            ending.afterFailed();
         } else {
-            syncFromDb();
+            ending.syncFromDb();
         }
     }
 
@@ -857,7 +852,7 @@ public final class SessionExecutor {
         if (!START_PHASE.contains(ctx.status())) {
             return;
         }
-        multiOriginFail(Trigger.PROVIDER_FAILED, FailureCode.PROVIDER_UNAVAILABLE, SessionTransitions.Origin.REALTIME);
+        ending.multiOriginFail(Trigger.PROVIDER_FAILED, FailureCode.PROVIDER_UNAVAILABLE, SessionTransitions.Origin.REALTIME);
     }
 
     /**
@@ -875,10 +870,10 @@ public final class SessionExecutor {
         Optional<ActivitySessionRow> row = ctx.services().transitions().transition(ctx.plan().sessionId(), SessionStatus.DEVICE_ACK,
                 SessionStatus.WAITING_CHILD, change, SessionTransitions.Origin.REALTIME, ctx.plan().traceId());
         if (row.isEmpty()) {
-            syncFromDb();
+            ending.syncFromDb();
             return;
         }
-        changeStatus(SessionStatus.WAITING_CHILD, ctx.services().clock().now());
+        ending.changeStatus(SessionStatus.WAITING_CHILD, ctx.services().clock().now());
         enterWaitingChild();
     }
 
@@ -890,7 +885,7 @@ public final class SessionExecutor {
         ctx.relay().attach(ctx.providerSession());
         ctx.relay().setAccepting(true);
         ctx.relay().start(ctx.services().launcher());
-        sendControl(new SessionState(View.LISTENING));
+        ctx.sendControl(new SessionState(View.LISTENING));
         clocks.armDisconnect();
         joinFlow.begin();
     }
@@ -909,7 +904,7 @@ public final class SessionExecutor {
         ctx.relay().setAccepting(true);
         ctx.relay().start(ctx.services().launcher());
         if (ctx.view() != View.LISTENING) {
-            sendControl(new SessionState(View.LISTENING));
+            ctx.sendControl(new SessionState(View.LISTENING));
         }
         clocks.armDisconnect();
     }
@@ -981,7 +976,7 @@ public final class SessionExecutor {
             return;
         }
         if (ctx.status() != SessionStatus.ACTIVE) {
-            putEvent(EVENT_PRACTICE_EXTENSION_FAILED, "{\"reason\":\"SIGNAL_NOT_ACTIVE\",\"signal\":\"" + signal.name()
+            ctx.putEvent(EVENT_PRACTICE_EXTENSION_FAILED, "{\"reason\":\"SIGNAL_NOT_ACTIVE\",\"signal\":\"" + signal.name()
                     + "\"}", ctx.services().clock().now());
             return;
         }
@@ -995,14 +990,14 @@ public final class SessionExecutor {
 
     /** 확장점 예외(BR10.1): 남기고 확장점을 끈다 — 그 세션은 자유대화처럼 잇고 정산 시점은 건너뛰며 practice는 null이다. */
     private void practiceFailure(String reason, RuntimeException cause) {
-        putEvent(EVENT_PRACTICE_EXTENSION_FAILED, "{\"reason\":\"" + reason + "\"}", ctx.services().clock().now());
+        ctx.putEvent(EVENT_PRACTICE_EXTENSION_FAILED, "{\"reason\":\"" + reason + "\"}", ctx.services().clock().now());
         ctx.services().events().appError(EventLog.Component.SESSION_LIFECYCLE, cause);
         if (practice != null && practice.controlsOutput()) {
             stopPracticeProgress();
             practiceHold = true;
             cancelPracticeTimers();
             if (ctx.status() == SessionStatus.ACTIVE) {
-                multiOriginFail(Trigger.SERVER_RESTART, FailureCode.SERVER_RESTART, SessionTransitions.Origin.REALTIME);
+                ending.multiOriginFail(Trigger.SERVER_RESTART, FailureCode.SERVER_RESTART, SessionTransitions.Origin.REALTIME);
             }
             return;
         }
@@ -1277,7 +1272,7 @@ public final class SessionExecutor {
         @Override
         public void showThinking() {
             if (ctx.view() == View.LISTENING && ctx.devicePlaying().isEmpty()) {
-                sendControl(new SessionState(View.THINKING));
+                ctx.sendControl(new SessionState(View.THINKING));
             }
         }
 
@@ -1338,16 +1333,6 @@ public final class SessionExecutor {
     private final class JoinEnv implements JoinFlow.Env {
 
         @Override
-        public void putEvent(String type, String payloadJson, Instant at) {
-            SessionExecutor.this.putEvent(type, payloadJson, at);
-        }
-
-        @Override
-        public boolean sendControl(WsPayload payload) {
-            return SessionExecutor.this.sendControl(payload);
-        }
-
-        @Override
         public void reportMissing(String contentCode, Instant at) {
             SessionExecutor.this.reportMissing(contentCode, at);
         }
@@ -1355,16 +1340,6 @@ public final class SessionExecutor {
         @Override
         public void approvedBubble(ApprovedItem item, Instant at) {
             SessionExecutor.this.approvedBubble(item, at);
-        }
-
-        @Override
-        public void changeStatus(SessionStatus next, Instant now) {
-            SessionExecutor.this.changeStatus(next, now);
-        }
-
-        @Override
-        public void syncFromDb() {
-            SessionExecutor.this.syncFromDb();
         }
 
         @Override
@@ -1377,78 +1352,13 @@ public final class SessionExecutor {
     private final class EndingEnv implements EndingFlow.Env {
 
         @Override
-        public void putEvent(String type, String payloadJson, Instant at) {
-            SessionExecutor.this.putEvent(type, payloadJson, at);
-        }
-
-        @Override
-        public void bumpGeneration() {
-            SessionExecutor.this.bumpGeneration();
-        }
-
-        @Override
         public long bumpOutput(OutputGeneration.BumpReason reason) {
             return SessionExecutor.this.bumpOutput(reason);
         }
 
         @Override
-        public boolean fromBoundConnection(UUID connectionId) {
-            return SessionExecutor.this.fromBoundConnection(connectionId);
-        }
-
-        @Override
-        public ClosingSequence.Device closingDevice() {
-            return SessionExecutor.this.closingDevice();
-        }
-
-        @Override
-        public void syncFromDb() {
-            SessionExecutor.this.syncFromDb();
-        }
-
-        @Override
-        public void syncFromDb(UUID endRequestId) {
-            SessionExecutor.this.syncFromDb(endRequestId);
-        }
-
-        @Override
-        public boolean sendControl(WsPayload payload) {
-            return SessionExecutor.this.sendControl(payload);
-        }
-
-        @Override
-        public void changeStatus(SessionStatus next, Instant now) {
-            SessionExecutor.this.changeStatus(next, now);
-        }
-
-        @Override
-        public void annotateQuietly(SessionStatus expected, SessionChange change) {
-            SessionExecutor.this.annotateQuietly(expected, change);
-        }
-
-        @Override
-        public void unbind(DeviceLink target) {
-            SessionExecutor.this.unbind(target);
-        }
-
-        @Override
-        public void quietly(Runnable step) {
-            SessionExecutor.this.quietly(step);
-        }
-
-        @Override
-        public void closeProvider() {
-            SessionExecutor.this.closeProvider();
-        }
-
-        @Override
-        public void multiOriginFail(Trigger trigger, FailureCode code, SessionTransitions.Origin origin) {
-            SessionExecutor.this.multiOriginFail(trigger, code, origin);
-        }
-
-        @Override
-        public void afterFailed(CloseTransport.Reason reason) {
-            SessionExecutor.this.afterFailed(reason);
+        public void adopt(ActivitySessionRow row, UUID endRequestId) {
+            SessionExecutor.this.adopt(row, endRequestId);
         }
 
         @Override
@@ -1503,13 +1413,13 @@ public final class SessionExecutor {
         }
 
         @Override
-        public void guardrailTurnBoundary() {
-            guardrail.onTurnBoundary();
+        public void cancelPracticeTimers() {
+            SessionExecutor.this.cancelPracticeTimers();
         }
 
         @Override
-        public void teardown() {
-            SessionExecutor.this.teardown();
+        public void guardrailTurnBoundary() {
+            guardrail.onTurnBoundary();
         }
 
         @Override
@@ -1540,11 +1450,6 @@ public final class SessionExecutor {
     private final class IdleEnv implements IdleClock.Env {
 
         @Override
-        public void putEvent(String type, String payloadJson, Instant at) {
-            SessionExecutor.this.putEvent(type, payloadJson, at);
-        }
-
-        @Override
         public void reportMissing(String contentCode, Instant at) {
             SessionExecutor.this.reportMissing(contentCode, at);
         }
@@ -1552,11 +1457,6 @@ public final class SessionExecutor {
         @Override
         public void approvedBubble(ApprovedItem item, Instant at) {
             SessionExecutor.this.approvedBubble(item, at);
-        }
-
-        @Override
-        public boolean sendControl(WsPayload payload) {
-            return SessionExecutor.this.sendControl(payload);
         }
 
         @Override
@@ -1619,11 +1519,6 @@ public final class SessionExecutor {
     private final class ClocksEnv implements SessionClocks.Env {
 
         @Override
-        public ClosingSequence.Device closingDevice() {
-            return SessionExecutor.this.closingDevice();
-        }
-
-        @Override
         public void onOutputQuiet() {
             SessionExecutor.this.onOutputQuiet();
         }
@@ -1676,56 +1571,6 @@ public final class SessionExecutor {
         @Override
         public void onStopConfirmWindow() {
             SessionExecutor.this.onStopConfirmWindow();
-        }
-
-        @Override
-        public void markUnresponsive() {
-            SessionExecutor.this.markUnresponsive();
-        }
-
-        @Override
-        public void afterFailed() {
-            SessionExecutor.this.afterFailed();
-        }
-
-        @Override
-        public void syncFromDb() {
-            SessionExecutor.this.syncFromDb();
-        }
-
-        @Override
-        public void changeStatus(SessionStatus next, Instant now) {
-            SessionExecutor.this.changeStatus(next, now);
-        }
-
-        @Override
-        public void closeProvider() {
-            SessionExecutor.this.closeProvider();
-        }
-
-        @Override
-        public void quietly(Runnable step) {
-            SessionExecutor.this.quietly(step);
-        }
-
-        @Override
-        public void bumpGeneration() {
-            SessionExecutor.this.bumpGeneration();
-        }
-
-        @Override
-        public boolean sendControl(WsPayload payload) {
-            return SessionExecutor.this.sendControl(payload);
-        }
-
-        @Override
-        public SessionTransitions.Extras transitionExtras() {
-            return ending.transitionExtras();
-        }
-
-        @Override
-        public void teardown() {
-            SessionExecutor.this.teardown();
         }
     }
 
@@ -1908,7 +1753,7 @@ public final class SessionExecutor {
 
     /** 출력 능력 거절(R-10 · BR10.4): ACTIVE가 아니거나 능력 밖 요청이면 남기고 거짓. */
     private boolean refusePractice(String capability, String reason) {
-        putEvent(EVENT_PRACTICE_EXTENSION_FAILED, "{\"reason\":\"" + reason + "\",\"capability\":\"" + capability
+        ctx.putEvent(EVENT_PRACTICE_EXTENSION_FAILED, "{\"reason\":\"" + reason + "\",\"capability\":\"" + capability
                 + "\"}", ctx.services().clock().now());
         return false;
     }
@@ -1923,7 +1768,7 @@ public final class SessionExecutor {
 
         @Override public boolean speak(kr.mujoong.realtime.voice.PracticeSpeech speech) {
             if (!practiceActive() || ctx.providerSession() == null || !ctx.providerSession().isOpen()) return false;
-            bumpGeneration();
+            ctx.bumpGeneration();
             ctx.transcripts().aiFinal("", false, ctx.services().clock().now());
             pendingPracticeSpeech = speech;
             practiceHold = false;
@@ -1971,7 +1816,7 @@ public final class SessionExecutor {
                         playbackId, null)));
                 return true;
             }
-            if (!sendControl(new PlayApprovedContent(playbackId, contentCode, item.get().contentVersionId()))) {
+            if (!ctx.sendControl(new PlayApprovedContent(playbackId, contentCode, item.get().contentVersionId()))) {
                 return refusePractice("playApproved", "SEND_FAILED");
             }
             practicePlaybacks.put(playbackId, contentCode);
@@ -2093,7 +1938,7 @@ public final class SessionExecutor {
             }
             // 한 발화마다 재지시 수를 새로 센다(앞 발화가 재지시를 썼어도 이 발화는 한 번 다시 검사받는다)
             guardrail.onTurnBoundary();
-            bumpGeneration();
+            ctx.bumpGeneration();
             ctx.transcripts().aiFinal("", false, ctx.services().clock().now());
             pendingPracticeSpeech = slot;
             practiceHold = false;
@@ -2116,7 +1961,7 @@ public final class SessionExecutor {
             practiceThinking = on;
             if (on) {
                 if (ctx.view() == View.LISTENING && ctx.devicePlaying().isEmpty()) {
-                    sendControl(new SessionState(View.THINKING));
+                    ctx.sendControl(new SessionState(View.THINKING));
                 }
             } else if (!judgment.isOpen()) {
                 listeningAgain();
@@ -2187,7 +2032,7 @@ public final class SessionExecutor {
     /** BR3.3: 빠진 승인 문구는 세션당 코드별 1회만 남긴다(payload는 코드만). */
     private void reportMissing(String contentCode, Instant at) {
         if (missingReported.add(contentCode)) {
-            putEvent(EVENT_APPROVED_CONTENT_MISSING, "{\"code\":\"" + contentCode + "\"}", at);
+            ctx.putEvent(EVENT_APPROVED_CONTENT_MISSING, "{\"code\":\"" + contentCode + "\"}", at);
         }
     }
 
@@ -2419,7 +2264,7 @@ public final class SessionExecutor {
 
     /**
      * 지시 없이 출력 세대를 올린다(U11 BR11.5 ~ BR11.7: 끼어들기 · 종료 의도 · 연습 폐기 · 보류 해제). 열린 구간은 '불완전'으로 버리고(AI 행 FINAL ·
-     * false), 끊김을 기다리는 단계로 들어가며 조용 시계를 건다. 기기에서 재생 중인 음성을 멈추는 일은 호출자가 지금처럼 {@link #bumpGeneration}(기기
+     * false), 끊김을 기다리는 단계로 들어가며 조용 시계를 건다. 기기에서 재생 중인 음성을 멈추는 일은 호출자가 지금처럼 {@link SessionContext#bumpGeneration}(기기
      * 프레임 세대)로 한다.
      *
      * @return 새 출력 세대 번호
@@ -2549,7 +2394,7 @@ public final class SessionExecutor {
      */
     private void providerError() {
         if (START_PHASE.contains(ctx.status())) {
-            multiOriginFail(Trigger.PROVIDER_FAILED, FailureCode.PROVIDER_UNAVAILABLE, SessionTransitions.Origin.REALTIME);
+            ending.multiOriginFail(Trigger.PROVIDER_FAILED, FailureCode.PROVIDER_UNAVAILABLE, SessionTransitions.Origin.REALTIME);
             return;
         }
         ctx.services().events().appError(EventLog.Component.VOICE_RELAY, "ProviderDisconnected", EventCode.Level.WARN);
@@ -2567,7 +2412,7 @@ public final class SessionExecutor {
             return;
         }
         if (START_PHASE.contains(ctx.status())) {
-            multiOriginFail(Trigger.PROVIDER_FAILED, FailureCode.PROVIDER_UNAVAILABLE, SessionTransitions.Origin.REALTIME);
+            ending.multiOriginFail(Trigger.PROVIDER_FAILED, FailureCode.PROVIDER_UNAVAILABLE, SessionTransitions.Origin.REALTIME);
             return;
         }
         // PD 2.1-C의 WARN 한 줄은 그대로 남긴다
@@ -2591,16 +2436,16 @@ public final class SessionExecutor {
                         .withEndDetail(END_DETAIL_PROVIDER_LOST).withProviderClosedAt(now),
                 SessionTransitions.Origin.REALTIME, ctx.plan().traceId(), ending.transitionExtras());
         if (row.isEmpty()) {
-            syncFromDb();
+            ending.syncFromDb();
             return;
         }
-        changeStatus(SessionStatus.ABORTED, ctx.services().clock().now());
-        closeProvider();
-        bumpGeneration();
+        ending.changeStatus(SessionStatus.ABORTED, ctx.services().clock().now());
+        ending.closeProvider();
+        ctx.bumpGeneration();
         DeviceLink current = ctx.link();
         if (current != null && current.isOpen()) {
-            sendControl(new CloseTransport(CloseTransport.Reason.DISCONNECT));
-            sendControl(new SessionState(View.STANDBY));
+            ctx.sendControl(new CloseTransport(CloseTransport.Reason.DISCONNECT));
+            ctx.sendControl(new SessionState(View.STANDBY));
         }
         ending.afterTerminal();
     }
@@ -2628,7 +2473,7 @@ public final class SessionExecutor {
         }
         StopConfirmFlow.Decision decision = ctx.stopConfirm().onJudgment(stopJudgment.verdict());
         if (decision == StopConfirmFlow.Decision.CLOSE) {
-            putEvent(EVENT_CHILD_STOP_INTENT, "{\"basis\":\"" + stopJudgment.basis().name() + "\"}", at);
+            ctx.putEvent(EVENT_CHILD_STOP_INTENT, "{\"basis\":\"" + stopJudgment.basis().name() + "\"}", at);
         }
         applyStopDecision(decision, null, at);
         return decision != StopConfirmFlow.Decision.NONE;
@@ -2701,7 +2546,7 @@ public final class SessionExecutor {
         }
         String first = outcome.kind() == JudgmentOutcomeKind.CONFIRMED ? outcome.firstOption() : null;
         if ("END_CLEAR".equals(first)) {
-            putEvent(EVENT_CHILD_STOP_INTENT, "{\"basis\":\"" + StopIntentJudge.Basis.LUNA_J6.name() + "\"}", now);
+            ctx.putEvent(EVENT_CHILD_STOP_INTENT, "{\"basis\":\"" + StopIntentJudge.Basis.LUNA_J6.name() + "\"}", now);
             stopOutputForIntent(now);
             ending.beginClosing(Trigger.CHILD_STOP_CONFIRMED, null);
             return new JudgmentCoordinator.Handled(NextAction.CLOSE, false);
@@ -2753,7 +2598,7 @@ public final class SessionExecutor {
                 ctx.timers().cancel(Kind.STOP_CONFIRM);
                 ctx.stopConfirmPlaybackId(null);
                 if (cause != null) {
-                    putEvent(EVENT_STOP_CONFIRM_RESOLVED, "{\"result\":\"STOP\",\"cause\":\"" + cause + "\"}", at);
+                    ctx.putEvent(EVENT_STOP_CONFIRM_RESOLVED, "{\"result\":\"STOP\",\"cause\":\"" + cause + "\"}", at);
                 }
                 stopOutputForIntent(at);
                 ending.beginClosing(Trigger.CHILD_STOP_CONFIRMED, null);
@@ -2764,13 +2609,13 @@ public final class SessionExecutor {
                     interruptPracticeSpeech(at);
                 }
                 stopOutputForIntent(at);
-                putEvent(EVENT_STOP_CONFIRM_ASKED, null, at);
+                ctx.putEvent(EVENT_STOP_CONFIRM_ASKED, null, at);
                 playStopConfirm();
             }
             case RESUME -> {
                 ctx.timers().cancel(Kind.STOP_CONFIRM);
                 ctx.stopConfirmPlaybackId(null);
-                putEvent(EVENT_STOP_CONFIRM_RESOLVED,
+                ctx.putEvent(EVENT_STOP_CONFIRM_RESOLVED,
                         "{\"result\":\"CONTINUE\",\"cause\":\"" + (cause == null ? "REPLY" : cause) + "\"}", at);
                 if (practice != null && practice.controlsOutput()) {
                     resumePracticeTimers(at);
@@ -2793,7 +2638,7 @@ public final class SessionExecutor {
             reportMissing(STOP_CONFIRM, now);
         } else {
             UUID playbackId = UUID.randomUUID();
-            if (sendControl(new PlayApprovedContent(playbackId, STOP_CONFIRM, item.get().contentVersionId()))) {
+            if (ctx.sendControl(new PlayApprovedContent(playbackId, STOP_CONFIRM, item.get().contentVersionId()))) {
                 ctx.stopConfirmPlaybackId(playbackId);
                 ctx.playback().started(playbackId, STOP_CONFIRM);
                 ctx.timers().arm(Kind.PLAYBACK_EXPIRY, ctx.services().settings().playbackExpiry());
@@ -2839,7 +2684,7 @@ public final class SessionExecutor {
      * 버린다. 공급자에는 응답 취소 type이 없어 아무것도 보내지 않는다(U11 BR3.4 · 편차 (U11-a)).
      */
     private void stopOutputForIntent(Instant at) {
-        bumpGeneration();
+        ctx.bumpGeneration();
         bumpOutput(OutputGeneration.BumpReason.STOP_INTENT);
         guardrail.onTurnBoundary();
         ctx.transcripts().aiFinal("", false, at);
@@ -2848,7 +2693,7 @@ public final class SessionExecutor {
     /** U3-J6: 아이 말이 끝났다(말 끝 · 전사 확정) — 듣는 중이고 재생이 없으면 '생각 중'. */
     private void thinking() {
         if (ctx.status() == SessionStatus.ACTIVE && ctx.view() == View.LISTENING && ctx.devicePlaying().isEmpty() && !outputHeld()) {
-            sendControl(new SessionState(View.THINKING));
+            ctx.sendControl(new SessionState(View.THINKING));
         }
     }
 
@@ -2861,7 +2706,7 @@ public final class SessionExecutor {
         }
         if (ctx.status() == SessionStatus.ACTIVE && ctx.view() != View.LISTENING && ctx.devicePlaying().isEmpty()
                 && !ctx.playback().isPlaying()) {
-            sendControl(new SessionState(View.LISTENING));
+            ctx.sendControl(new SessionState(View.LISTENING));
         }
     }
 
@@ -3090,7 +2935,7 @@ public final class SessionExecutor {
             return;
         }
         UUID playbackId = UUID.randomUUID();
-        if (sendControl(new PlayApprovedContent(playbackId, PlayApprovedContent.WAITING_FILLER,
+        if (ctx.sendControl(new PlayApprovedContent(playbackId, PlayApprovedContent.WAITING_FILLER,
                 ctx.plan().waitingFiller().contentVersionId()))) {
             ctx.playback().started(playbackId, PlayApprovedContent.WAITING_FILLER);
             ctx.timers().arm(Kind.PLAYBACK_EXPIRY, ctx.services().settings().playbackExpiry());
@@ -3195,85 +3040,17 @@ public final class SessionExecutor {
                         read -> TransitionTable.changeFor(Trigger.SERVER_RESTART, null, ctx.services().clock().now()),
                         SessionTransitions.Origin.REALTIME, ctx.plan().traceId());
                 if (result.transitioned()) {
-                    afterFailed();
+                    ending.afterFailed();
                 }
             }
         } catch (RuntimeException e) {
             ctx.services().events().appError(EventLog.Component.SESSION_LIFECYCLE, e);
         } finally {
-            teardown();
+            ending.teardown();
         }
     }
 
-    // ------------------------------------------------------------------ 전이 보조
-
-    private Optional<ActivitySessionRow> transition(SessionStatus from, Trigger trigger, FailureCode code) {
-        Optional<ActivitySessionRow> row = ctx.services().transitions().transition(ctx.plan().sessionId(), from, trigger.target(),
-                TransitionTable.changeFor(trigger, code, ctx.services().clock().now()), SessionTransitions.Origin.REALTIME,
-                ctx.plan().traceId());
-        row.ifPresent(value -> changeStatus(value.status(), ctx.services().clock().now()));
-        return row;
-    }
-
-    /** 출발 상태가 둘 이상인 → FAILED(FOR UPDATE로 읽은 상태). 이기면 CLOSE_TRANSPORT(FAILED) 규칙과 정리를 한다. */
-    private void multiOriginFail(Trigger trigger, FailureCode code, SessionTransitions.Origin origin) {
-        ActivitySessionRepository.MultiOriginTransition result = ctx.services().transitions().transitionFromAny(
-                ctx.plan().sessionId(), trigger.origins(), SessionStatus.FAILED,
-                read -> TransitionTable.changeFor(trigger, code, ctx.services().clock().now()), origin, ctx.plan().traceId());
-        if (!result.transitioned()) {
-            syncFromDb();
-            return;
-        }
-        changeStatus(SessionStatus.FAILED, ctx.services().clock().now());
-        afterFailed();
-    }
-
-    /** BR6.8: FAILED로 갈 때 START_SESSION이 나갔고 연결이 살아 있으면 CLOSE_TRANSPORT(FAILED) + SESSION_STATE{STANDBY}. */
-    private void afterFailed() {
-        afterFailed(CloseTransport.Reason.FAILED);
-    }
-
-    /**
-     * BR6.8 · U4b BR1.5: FAILED로 갈 때 START_SESSION이 나갔고 연결이 살아 있으면 CLOSE_TRANSPORT(사유) + SESSION_STATE{STANDBY}. 시작 단계 동의
-     * 철회는 사유가 CONSENT_WITHDRAWN이다.
-     */
-    private void afterFailed(CloseTransport.Reason reason) {
-        changeStatus(SessionStatus.FAILED, ctx.services().clock().now());
-        bumpGeneration();
-        if (ctx.startSent() && ctx.link() != null && ctx.link().isOpen()) {
-            sendControl(new CloseTransport(reason));
-            sendControl(new SessionState(View.STANDBY));
-        }
-        ending.afterTerminal();
-    }
-
-    /** 진 전이 뒤 DB의 지금 상태로 맞춘다. 종료 상태면 정리한다. */
-    private void syncFromDb() {
-        syncFromDb(null);
-    }
-
-    /**
-     * 진 전이 뒤 DB의 지금 상태로 맞춘다. 종료 상태면 정리하고, 메모리와 다른 비종료 상태를 받아들였으면 그 상태의 시한 · 부수 효과를 한
-     * 번 건다(F5 · J291).
-     *
-     * @param endRequestId CLOSING을 받아들일 때 END_REQUESTED에 남길 끝내기 요청 id(끝내기 처리 중이 아니면 null, J293)
-     */
-    private void syncFromDb(UUID endRequestId) {
-        Optional<ActivitySessionRow> row = ctx.services().transitions().find(ctx.plan().sessionId());
-        if (row.isEmpty()) {
-            teardown();
-            return;
-        }
-        SessionStatus before = ctx.status();
-        changeStatus(row.get().status(), ctx.services().clock().now());
-        if (ctx.status().isTerminal()) {
-            ending.afterTerminal();
-            return;
-        }
-        if (ctx.status() != before) {
-            adopt(row.get(), endRequestId);
-        }
-    }
+    // ------------------------------------------------------------------ 진 전이 뒤 상태 채택
 
     /**
      * F5 · J291: 살아 있는 실행기의 세션 행은 이 실행기만 전이한다(고아 점검 · 기동 정리는 실행기 없는 세션만 다룬다). 그래서 DB가 메모리보다
@@ -3303,182 +3080,6 @@ public final class SessionExecutor {
             default -> {
                 // PREPARING으로 되돌아가는 일은 없다(종료 상태는 위에서 정리했다)
             }
-        }
-    }
-
-    private void annotateQuietly(SessionStatus expected, SessionChange change) {
-        try {
-            ctx.services().transitions().annotate(ctx.plan().sessionId(), expected, change);
-        } catch (RuntimeException e) {
-            ctx.services().events().appError(EventLog.Component.SESSION_LIFECYCLE, e);
-        }
-    }
-
-    private void markUnresponsive() {
-        DeviceLink current = ctx.link();
-        if (current != null) {
-            ctx.services().deviceStatus().markUnresponsive(ctx.plan().deviceId(), current.connectionId());
-        }
-    }
-
-    private boolean fromBoundConnection(UUID connectionId) {
-        DeviceLink current = ctx.link();
-        return current != null && current.connectionId().equals(connectionId);
-    }
-
-    private boolean sendControl(WsPayload payload) {
-        if (payload instanceof SessionState state) {
-            // U3-J23: 연결이 없어도 표시 상태는 기억한다(다음 HELLO_OK.session.view)
-            ctx.view(state.view());
-        }
-        DeviceLink current = ctx.link();
-        if (current == null || !current.isOpen()) {
-            return false;
-        }
-        if (payload instanceof StopOutput) {
-            bumpGeneration();
-        }
-        UUID opId = null;
-        if (payload.messageType().isOpIdRequired()) {
-            opId = UUID.randomUUID();
-            remember(opId, payload);
-        }
-        return current.sendControl(payload, opId, ctx.plan().sessionId());
-    }
-
-    /** ACK를 기다리는 명령으로 둔다(U3-J7, 상한을 넘으면 가장 오래된 것부터 잊는다). */
-    private void remember(UUID opId, WsPayload payload) {
-        if (ctx.pendingCommands().size() >= MAX_PENDING_COMMANDS) {
-            UUID eldest = ctx.pendingCommands().keySet().iterator().next();
-            ctx.pendingCommands().remove(eldest);
-        }
-        ctx.pendingCommands().put(opId, payload);
-    }
-
-    /** U3 세션 이벤트 한 줄(payload는 식별자 · 숫자 · 불리언뿐, 전사 · 원음 없음). */
-    private void putEvent(String type, String payloadJson, Instant at) {
-        ctx.services().recorder().putEvent(new SessionEvent(UUID.randomUUID(), ctx.plan().sessionId(), type, null, payloadJson, at));
-    }
-
-    private ClosingSequence.Device closingDevice() {
-        return new ClosingSequence.Device() {
-            @Override
-            public boolean stopOutput(StopOutput.Reason reason) {
-                return sendControl(new StopOutput(reason));
-            }
-
-            @Override
-            public boolean sessionState(View view) {
-                return sendControl(new SessionState(view));
-            }
-
-            @Override
-            public boolean playApproved(UUID playbackId, String contentCode, UUID contentVersionId) {
-                return sendControl(new PlayApprovedContent(playbackId, contentCode, contentVersionId));
-            }
-
-            @Override
-            public boolean closeTransport(CloseTransport.Reason reason) {
-                return sendControl(new CloseTransport(reason));
-            }
-        };
-    }
-
-    private void bumpGeneration() {
-        ctx.outputGeneration().incrementAndGet();
-        DeviceLink current = ctx.link();
-        if (current != null) {
-            current.clearAudio();
-        }
-    }
-
-    /**
-     * 세션 상태를 바꾸는 유일한 자리(U11 BR5.4, 첫 판 검토 R-15). 지금은 대입뿐이고 동작을 바꾸지 않는다 — 판정 턴이 {@code openedInStatus}를 벗어나는
-     * 모든 전이를 이 자리에서 잡는다(PR2).
-     */
-    private void changeStatus(SessionStatus next, Instant now) {
-        ctx.status(next);
-        judgment.onStatus(next);
-    }
-
-    private void closeProvider() {
-        ctx.providerClosing(true);
-        ProviderConnector.Attempt attempt = ctx.providerAttempt();
-        if (attempt != null) {
-            attempt.cancel();
-        }
-        ProviderSession session = ctx.providerSession();
-        if (session != null && session.isOpen()) {
-            session.close(ctx.services().requests().sessionClose());
-        }
-    }
-
-    /**
-     * 종료 정리(PD-1 생명주기 3): 입력 수락 끝 · 공급자 정리 · 구간 버림 · 열린 행 닫기 · 기록기 마지막 플러시 · 원음 기록 닫기 · 레지스트리 제거.
-     * 리뷰 반영 7: 단계마다 예외를 따로 받아(앱 오류 한 줄) 앞 단계가 실패해도 뒤 단계 — 특히 원음 파일 핸들과 메타의 ended_at — 를 마친다.
-     * 리뷰 반영 4: 처리하지 못하고 남은 연결 교체(LinkReplaced)는 그 새 연결을 대기로 돌려보낸다.
-     */
-    private void teardown() {
-        if (ctx.terminated()) {
-            return;
-        }
-        ctx.terminated(true);
-        ctx.outputGeneration().incrementAndGet();
-        Instant now = ctx.services().clock().now();
-        try {
-            quietly(ctx.timers()::cancelAll);
-            quietly(ctx.sendQueue()::shutdown);
-            quietly(this::cancelPracticeTimers);
-            quietly(judgment::shutdown);
-            // U13 호출 지점 ④: 진행 중인 제브 요청을 취소한다(보관 행은 아래 closeAll이 닫는다, BR4.5)
-            quietly(guardrail::onExit);
-            quietly(ctx.relay()::stop);
-            quietly(this::closeProvider);
-            quietly(() -> {
-                ProviderSession session = ctx.providerSession();
-                if (session != null) {
-                    session.close();
-                }
-            });
-            quietly(ctx.segment()::reset);
-            quietly(ctx.playback()::clear);
-            quietly(() -> ctx.transcripts().closeAll(now));
-            quietly(() -> ctx.services().latency().sessionEnded(ctx.plan().sessionId()));
-            quietly(() -> ctx.services().recorder().finish(ctx.plan().sessionId()));
-            quietly(() -> unbind(ctx.link()));
-            ctx.pendingCommands().clear();
-            quietly(() -> {
-                if (ctx.recording() != null) {
-                    ctx.recording().close(now);
-                }
-            });
-        } finally {
-            for (Message left : ctx.mailbox().closeAndRelease()) {
-                if (left instanceof LinkReplaced replaced) {
-                    quietly(() -> EndingFlow.standDown(replaced.link(), ctx.plan().sessionId(), ctx.status(), replaced.resumed()));
-                }
-            }
-            onTerminated.run();
-        }
-    }
-
-    /**
-     * 이 세션이 묶은 연결이면 묶음을 푼다. 같은 기기의 새 세션이 이미 그 연결을 묶었으면 건드리지 않는다 — 풀면 새 세션의 입력 프레임 경로가
-     * 끊긴다(2차 리뷰 5 · 9 조사 중 찾음). 확인과 풀기는 연결의 비교 후 풀기 한 번이다(3차 리뷰 4: 확인한 뒤 풀면 그 사이 새 세션이 묶은 것을
-     * 지운다).
-     */
-    private void unbind(DeviceLink target) {
-        if (target != null) {
-            target.unbindSessionIf(ctx.plan().sessionId());
-        }
-    }
-
-    /** 정리 단계 하나: 예외는 앱 오류 한 줄로 남기고 다음 단계로 간다. */
-    private void quietly(Runnable step) {
-        try {
-            step.run();
-        } catch (RuntimeException e) {
-            ctx.services().events().appError(EventLog.Component.SESSION_LIFECYCLE, e);
         }
     }
 

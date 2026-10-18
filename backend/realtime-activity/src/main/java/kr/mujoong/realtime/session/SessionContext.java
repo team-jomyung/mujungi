@@ -12,6 +12,8 @@ import kr.mujoong.contract.log.EventLog;
 import kr.mujoong.contract.status.EndReason;
 import kr.mujoong.contract.status.SessionStatus;
 import kr.mujoong.contract.ws.WsPayload;
+import kr.mujoong.contract.ws.message.SessionState;
+import kr.mujoong.contract.ws.message.StopOutput;
 import kr.mujoong.contract.ws.message.View;
 import kr.mujoong.realtime.common.scaling.SingleInstanceAssumption;
 import kr.mujoong.realtime.dialog.StopConfirmFlow;
@@ -29,7 +31,8 @@ import kr.mujoong.realtime.log.TranscriptWriter;
 /**
  * 세션 하나의 실행기 구역들이 함께 읽고 쓰는 상태를 한곳에 모은 값 상자다.
  *
- * <p>데이터와 접근자만 가진다. 상태를 바꾸는 규칙은 구역(실행기와 그 협력 객체)이 가지며, 여기에는 로직이 없다. 세션 하나는 실행기 스레드
+ * <p>데이터와 접근자, 그리고 이 상자의 상태만 쓰는 기기 명령 송신 · 사건 기록 보조를 가진다. 상태를 바꾸는 규칙은 구역(실행기와 그
+ * 협력 객체)이 가진다. 세션 하나는 실행기 스레드
  * 하나가 처리하므로(편지함 모델) 새 잠금을 만들지 않는다. 다른 스레드(조회 · 연결 쪽)가 읽는 {@code status} {@code view}
  * {@code terminated}만 {@code volatile}이다.
  */
@@ -391,5 +394,92 @@ public final class SessionContext {
 
     void sessionEndedAt(Instant sessionEndedAt) {
         this.sessionEndedAt = sessionEndedAt;
+    }
+
+    // ---- 기기 연결 · 명령 송신 · 사건 기록(이 상자의 상태만 쓰는 보조)
+
+    /** ACK를 기다리는 opId 명령의 상한(U3-J7). 넘치면 가장 오래된 것부터 잊는다. */
+    static final int MAX_PENDING_COMMANDS = 16;
+
+    boolean fromBoundConnection(UUID connectionId) {
+        DeviceLink current = link;
+        return current != null && current.connectionId().equals(connectionId);
+    }
+
+    void markUnresponsive() {
+        DeviceLink current = link;
+        if (current != null) {
+            services.deviceStatus().markUnresponsive(plan.deviceId(), current.connectionId());
+        }
+    }
+
+    boolean sendControl(WsPayload payload) {
+        if (payload instanceof SessionState state) {
+            // U3-J23: 연결이 없어도 표시 상태는 기억한다(다음 HELLO_OK.session.view)
+            view(state.view());
+        }
+        DeviceLink current = link;
+        if (current == null || !current.isOpen()) {
+            return false;
+        }
+        if (payload instanceof StopOutput) {
+            bumpGeneration();
+        }
+        UUID opId = null;
+        if (payload.messageType().isOpIdRequired()) {
+            opId = UUID.randomUUID();
+            remember(opId, payload);
+        }
+        return current.sendControl(payload, opId, plan.sessionId());
+    }
+
+    /** ACK를 기다리는 명령으로 둔다(U3-J7, 상한을 넘으면 가장 오래된 것부터 잊는다). */
+    void remember(UUID opId, WsPayload payload) {
+        if (pendingCommands.size() >= MAX_PENDING_COMMANDS) {
+            UUID eldest = pendingCommands.keySet().iterator().next();
+            pendingCommands.remove(eldest);
+        }
+        pendingCommands.put(opId, payload);
+    }
+
+    /** U3 세션 이벤트 한 줄(payload는 식별자 · 숫자 · 불리언뿐, 전사 · 원음 없음). */
+    void putEvent(String type, String payloadJson, Instant at) {
+        services.recorder().putEvent(new SessionEvent(UUID.randomUUID(), plan.sessionId(), type, null, payloadJson, at));
+    }
+
+    void bumpGeneration() {
+        outputGeneration.incrementAndGet();
+        DeviceLink current = link;
+        if (current != null) {
+            current.clearAudio();
+        }
+    }
+
+    void annotateQuietly(SessionStatus expected, SessionChange change) {
+        try {
+            services.transitions().annotate(plan.sessionId(), expected, change);
+        } catch (RuntimeException e) {
+            services.events().appError(EventLog.Component.SESSION_LIFECYCLE, e);
+        }
+    }
+
+    /**
+     * 이 세션이 묶은 연결이면 묶음을 푼다. 같은 기기의 새 세션이 이미 그 연결을 묶었으면 건드리지 않는다 — 풀면 새 세션의 입력 프레임 경로가
+     * 끊긴다(2차 리뷰 5 · 9 조사 중 찾음). 확인과 풀기는 연결의 비교 후 풀기 한 번이다(3차 리뷰 4: 확인한 뒤 풀면 그 사이 새 세션이 묶은 것을
+     * 지운다).
+     */
+    void unbind(DeviceLink target) {
+        if (target != null) {
+            target.unbindSessionIf(plan.sessionId());
+        }
+    }
+
+    /** 정리 단계 하나: 예외는 앱 오류 한 줄로 남기고 다음 단계로 간다. */
+    void quietly(Runnable step) {
+        try {
+            step.run();
+        } catch (RuntimeException e) {
+            services.events().appError(EventLog.Component.SESSION_LIFECYCLE, e);
+        }
     }
 }

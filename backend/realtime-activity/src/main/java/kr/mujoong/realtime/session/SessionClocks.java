@@ -8,11 +8,9 @@ import kr.mujoong.contract.log.EventCode;
 import kr.mujoong.contract.log.EventLog;
 import kr.mujoong.contract.status.FailureCode;
 import kr.mujoong.contract.status.SessionStatus;
-import kr.mujoong.contract.ws.WsPayload;
 import kr.mujoong.contract.ws.message.CloseTransport;
 import kr.mujoong.contract.ws.message.SessionState;
 import kr.mujoong.contract.ws.message.View;
-import kr.mujoong.realtime.gate.ClosingSequence;
 import kr.mujoong.realtime.gateway.DeviceLink;
 import kr.mujoong.realtime.judgment.JudgmentTurn;
 import kr.mujoong.realtime.log.SessionGapRepository;
@@ -31,8 +29,6 @@ final class SessionClocks {
 
     /** 시계 구역이 실행기에 남은 로직으로 되돌려 부르는 자리. 모두 실행기 스레드에서 불린다. */
     interface Env {
-        ClosingSequence.Device closingDevice();
-
         void onOutputQuiet();
 
         void onInstructionWaitExpired();
@@ -54,26 +50,6 @@ final class SessionClocks {
         void onJoinWindow();
 
         void onStopConfirmWindow();
-
-        void markUnresponsive();
-
-        void afterFailed();
-
-        void syncFromDb();
-
-        void changeStatus(SessionStatus next, Instant now);
-
-        void closeProvider();
-
-        void quietly(Runnable step);
-
-        void bumpGeneration();
-
-        boolean sendControl(WsPayload payload);
-
-        SessionTransitions.Extras transitionExtras();
-
-        void teardown();
     }
 
     private final SessionContext ctx;
@@ -103,7 +79,7 @@ final class SessionClocks {
                     // U4b BR4.7: DECLINED 인사 상한 — CLOSE_TRANSPORT를 바로 보내고 정리
                     boolean ours = ending.deviceStillOurs();
                     if (ours) {
-                        ctx.closing().closeNow(env.closingDevice());
+                        ctx.closing().closeNow(ending.closingDevice());
                     }
                     ending.finishFarewell(ours);
                 } else {
@@ -150,11 +126,11 @@ final class SessionClocks {
             ctx.relay().setAccepting(false);
             DeviceLink current = ctx.link();
             if (ctx.startSent() && current != null && current.isOpen() && ending.deviceStillOurs()) {
-                env.bumpGeneration();
-                env.sendControl(new CloseTransport(CloseTransport.Reason.CONSENT_WITHDRAWN));
-                env.sendControl(new SessionState(View.STANDBY));
+                ctx.bumpGeneration();
+                ctx.sendControl(new CloseTransport(CloseTransport.Reason.CONSENT_WITHDRAWN));
+                ctx.sendControl(new SessionState(View.STANDBY));
             }
-            env.teardown();
+            ending.teardown();
         } finally {
             stop.stopped().complete(null);
         }
@@ -177,15 +153,15 @@ final class SessionClocks {
                 read -> TransitionTable.changeFor(Trigger.START_TIMEOUT, code, ctx.services().clock().now()),
                 SessionTransitions.Origin.REALTIME, ctx.plan().traceId());
         if (!result.transitioned()) {
-            env.syncFromDb();
+            ending.syncFromDb();
             return;
         }
-        env.changeStatus(SessionStatus.FAILED, ctx.services().clock().now());
+        ending.changeStatus(SessionStatus.FAILED, ctx.services().clock().now());
         timeoutFired("DEVICE_ACK", threshold, elapsed);
         if (code == FailureCode.DEVICE_NO_ACK) {
-            env.markUnresponsive();
+            ctx.markUnresponsive();
         }
-        env.afterFailed();
+        ending.afterFailed();
     }
 
     /** BR6.12 ③: CLOSING 진입부터 30초. ENDED_UNCONFIRMED + UNRESPONSIVE. */
@@ -200,24 +176,24 @@ final class SessionClocks {
             return;
         }
         Instant now = ctx.services().clock().now();
-        env.closeProvider();
+        ending.closeProvider();
         // U4b BR1.4: UNCONFIRMED로 덮고 처음 사유(와 세부)를 end_detail에 둔다
         Optional<ActivitySessionRow> row = ctx.services().transitions().transition(ctx.plan().sessionId(), SessionStatus.CLOSING,
                 SessionStatus.ENDED_UNCONFIRMED,
                 TransitionTable.closingTimeoutChange(ctx.closingReason(), ctx.closingDetail(), now).withProviderClosedAt(now),
                 SessionTransitions.Origin.REALTIME, ctx.plan().traceId());
         if (row.isEmpty()) {
-            env.syncFromDb();
+            ending.syncFromDb();
             return;
         }
-        env.changeStatus(SessionStatus.ENDED_UNCONFIRMED, ctx.services().clock().now());
+        ending.changeStatus(SessionStatus.ENDED_UNCONFIRMED, ctx.services().clock().now());
         // U4b BR6.4 · U4b-J14: CLOSING 진입부터 ended_at까지를 UNCONFIRMED 구간으로 남긴다
-        env.quietly(() -> ctx.services().gaps().close(
+        ctx.quietly(() -> ctx.services().gaps().close(
                 ctx.services().gaps().open(ctx.plan().sessionId(), SessionGapRepository.Kind.UNCONFIRMED, ctx.closingAt()), now));
         timeoutFired("CLOSING_CONFIRM", threshold, elapsed);
-        env.markUnresponsive();
-        env.bumpGeneration();
-        env.sendControl(new SessionState(View.STANDBY));
+        ctx.markUnresponsive();
+        ctx.bumpGeneration();
+        ctx.sendControl(new SessionState(View.STANDBY));
         ending.afterTerminal();
     }
 
@@ -237,15 +213,15 @@ final class SessionClocks {
         Instant now = ctx.services().clock().now();
         Optional<ActivitySessionRow> row = ctx.services().transitions().transition(ctx.plan().sessionId(), ctx.status(),
                 SessionStatus.ABORTED, TransitionTable.changeFor(Trigger.DISCONNECT, null, now).withProviderClosedAt(now),
-                SessionTransitions.Origin.REALTIME, ctx.plan().traceId(), env.transitionExtras());
+                SessionTransitions.Origin.REALTIME, ctx.plan().traceId(), ending.transitionExtras());
         if (row.isEmpty()) {
             // J292: 진 끊김 시계는 공급자를 닫지 않는다 — 행이 CLOSING이면 CLOSING이 끊김보다 우선하고(BR6.12 ③) 공급자는
             // VOICE_SESSION_CLOSED · 30초 시한까지 열어 둔다(BR6.10 ④)
-            env.syncFromDb();
+            ending.syncFromDb();
             return;
         }
-        env.changeStatus(SessionStatus.ABORTED, ctx.services().clock().now());
-        env.closeProvider();
+        ending.changeStatus(SessionStatus.ABORTED, ctx.services().clock().now());
+        ending.closeProvider();
         timeoutFired("DISCONNECT", threshold, elapsed);
         ending.afterTerminal();
     }

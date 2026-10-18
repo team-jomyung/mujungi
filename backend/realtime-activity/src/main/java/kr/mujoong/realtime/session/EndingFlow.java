@@ -28,11 +28,14 @@ import kr.mujoong.realtime.gate.OutputGeneration;
 import kr.mujoong.realtime.gateway.DeviceLink;
 import kr.mujoong.realtime.log.SessionGapRepository;
 import kr.mujoong.realtime.recording.AudioRecordings;
+import kr.mujoong.realtime.voice.ProviderConnector;
+import kr.mujoong.realtime.voice.ProviderPort.ProviderSession;
 import kr.mujoong.realtime.session.SessionMailbox.ConnectionLost;
 import kr.mujoong.realtime.session.SessionMailbox.DeviceStateReceived;
 import kr.mujoong.realtime.session.SessionMailbox.EndOutcome;
 import kr.mujoong.realtime.session.SessionMailbox.EndRequested;
 import kr.mujoong.realtime.session.SessionMailbox.LinkReplaced;
+import kr.mujoong.realtime.session.SessionMailbox.Message;
 import kr.mujoong.realtime.session.SessionMailbox.PlaybackMarkReceived;
 import kr.mujoong.realtime.session.SessionMailbox.VoiceClosed;
 import kr.mujoong.realtime.session.SessionTimers.Kind;
@@ -45,7 +48,7 @@ import static kr.mujoong.realtime.session.SessionContext.START_PHASE;
  * CLOSING 진입, 공급자 닫힘 뒤 ENDED 전이를 처리한다.
  *
  * <p>세션 실행기 스레드에서만 불리므로 잠금이 없다. 공유 상태는 {@link SessionContext}로 읽고 쓰고, 실행기에 남은 로직(전이 보조 · 정산 · 시계 ·
- * 연습 확장점)은 {@link Env}로 되돌려 부른다.
+ * 연습 확장점)은 {@link Env}로 되돌려 부른다. 상태 전이 보조(전이 · DB 맞춤 · 실패 뒤처리 · 종료 정리)도 여기에 있다.
  */
 public final class EndingFlow {
 
@@ -58,35 +61,10 @@ public final class EndingFlow {
 
     /** 끝내기 구역이 실행기에 남은 로직으로 되돌려 부르는 자리. 모두 실행기 스레드에서 불린다. */
     interface Env {
-        void putEvent(String type, String payloadJson, Instant at);
-
-        void bumpGeneration();
-
         long bumpOutput(OutputGeneration.BumpReason reason);
 
-        boolean fromBoundConnection(UUID connectionId);
-
-        ClosingSequence.Device closingDevice();
-
-        void syncFromDb();
-
-        void syncFromDb(UUID endRequestId);
-
-        boolean sendControl(WsPayload payload);
-
-        void changeStatus(SessionStatus next, Instant now);
-
-        void annotateQuietly(SessionStatus expected, SessionChange change);
-
-        void unbind(DeviceLink target);
-
-        void quietly(Runnable step);
-
-        void closeProvider();
-
-        void multiOriginFail(Trigger trigger, FailureCode code, SessionTransitions.Origin origin);
-
-        void afterFailed(CloseTransport.Reason reason);
+        /** DB가 메모리보다 앞선 비종료 상태를 받아들였을 때 그 상태의 시한 · 부수 효과를 한 번 건다. */
+        void adopt(ActivitySessionRow row, UUID endRequestId);
 
         void listeningAgain();
 
@@ -102,6 +80,8 @@ public final class EndingFlow {
 
         void cancelPracticeTimer(String name);
 
+        void cancelPracticeTimers();
+
         void practicePlayback(kr.mujoong.realtime.voice.PracticeSpeech speech,
                 kr.mujoong.realtime.practice.PracticePorts.Playback fact, Instant receivedAt);
 
@@ -110,8 +90,6 @@ public final class EndingFlow {
         Map<UUID, String> practicePlaybacks();
 
         void guardrailTurnBoundary();
-
-        void teardown();
 
         /** 묶던 입력 전사 조각이 열려 있는가. */
         boolean inputGroupOpen();
@@ -127,6 +105,9 @@ public final class EndingFlow {
 
     private final SessionContext ctx;
     private final IdleClock idle;
+    private final JudgmentCoordinator judgment;
+    private final GuardrailCoordinator guardrail;
+    private final Runnable onTerminated;
     private final Env env;
 
     private DeviceState.Mic lastMic;
@@ -134,14 +115,18 @@ public final class EndingFlow {
     private UUID progressPlaybackId;
     private Long progressPlayedToMs;
 
-    EndingFlow(SessionContext ctx, IdleClock idle, Env env) {
+    EndingFlow(SessionContext ctx, IdleClock idle, JudgmentCoordinator judgment, GuardrailCoordinator guardrail,
+            Runnable onTerminated, Env env) {
         this.ctx = ctx;
         this.idle = idle;
+        this.judgment = judgment;
+        this.guardrail = guardrail;
+        this.onTerminated = onTerminated;
         this.env = env;
     }
 
     void onPlaybackMark(PlaybackMarkReceived received) {
-        if ((ctx.status().isTerminal() && !farewellPending()) || !env.fromBoundConnection(received.connectionId())) {
+        if ((ctx.status().isTerminal() && !farewellPending()) || !ctx.fromBoundConnection(received.connectionId())) {
             return;
         }
         idle.deviceHeard();
@@ -161,7 +146,7 @@ public final class EndingFlow {
         }
         if (ctx.status() == SessionStatus.DECLINED) {
             // U4b BR4.7: DECLINED 마무리 인사의 끝 표식 → CLOSE_TRANSPORT(DECLINED) → 정리
-            if (ctx.closing().onPlaybackMark(env.closingDevice(), mark.playbackId(), mark.status())) {
+            if (ctx.closing().onPlaybackMark(closingDevice(), mark.playbackId(), mark.status())) {
                 finishFarewell(true);
             }
             return;
@@ -206,11 +191,11 @@ public final class EndingFlow {
                     ctx.stopConfirmPlaybackId(null);
                     env.onStopConfirmPlayed(received.serverRecvAt());
                 }
-                if (ctx.status() == SessionStatus.CLOSING && ctx.closing().onPlaybackMark(env.closingDevice(), mark.playbackId(),
+                if (ctx.status() == SessionStatus.CLOSING && ctx.closing().onPlaybackMark(closingDevice(), mark.playbackId(),
                         mark.status())) {
                     // R3-8: CLOSE_TRANSPORT 송신까지만 입력을 중계한다
                     ctx.relay().setAccepting(false);
-                    env.annotateQuietly(SessionStatus.CLOSING,
+                    ctx.annotateQuietly(SessionStatus.CLOSING,
                             SessionChange.none().withTransportClosedAt(ctx.services().clock().now()));
                 }
                 ctx.devicePlaying().remove(mark.playbackId());
@@ -228,35 +213,35 @@ public final class EndingFlow {
      * 공급자 응답의 남은 조각을 버리고(U11 BR3.4: 공급자 응답 취소 없음) 열린 출력 구간은 버리며 재생 위치와 함께 BARGE_IN을 남긴다. '듣는 중' 복귀는 끝 표식 처리가 한다(U3-J6).
      */
     private void onBargeIn(PlaybackMark mark, Instant at) {
-        env.bumpGeneration();
+        ctx.bumpGeneration();
         // U11 BR3.4: 공급자 응답 취소 대신 출력 세대를 올려 재생 중이던 · 만들던 응답의 남은 조각을 버린다(열린 구간도 버린다)
         env.bumpOutput(OutputGeneration.BumpReason.BARGE_IN);
         env.guardrailTurnBoundary();
         ctx.transcripts().aiFinal("", false, at);
         Long playedTo = mark.playedRange() != null ? mark.playedRange().toMs()
                 : mark.playbackId().equals(progressPlaybackId) ? progressPlayedToMs : null;
-        env.putEvent(EVENT_BARGE_IN, "{\"playbackId\":\"" + mark.playbackId() + "\""
+        ctx.putEvent(EVENT_BARGE_IN, "{\"playbackId\":\"" + mark.playbackId() + "\""
                 + (playedTo == null ? "" : ",\"playedToMs\":" + playedTo) + "}", at);
     }
 
     /** U3-J9: 묶인 기기의 마이크 끊김 · 복구와 플레이어 오류를 세션 이벤트로 남긴다(바뀔 때 한 번). */
     void onDeviceState(DeviceStateReceived received) {
-        if (ctx.status().isTerminal() || !env.fromBoundConnection(received.connectionId())) {
+        if (ctx.status().isTerminal() || !ctx.fromBoundConnection(received.connectionId())) {
             return;
         }
         idle.deviceHeard();
         DeviceState state = received.state();
         if (state.mic() != null && state.mic() != DeviceState.Mic.UNRECOGNIZED && state.mic() != lastMic) {
             if (state.mic() == DeviceState.Mic.LOST) {
-                env.putEvent(EVENT_MIC_LOST, null, received.receivedAt());
+                ctx.putEvent(EVENT_MIC_LOST, null, received.receivedAt());
             } else if (lastMic == DeviceState.Mic.LOST) {
-                env.putEvent(EVENT_MIC_OK, null, received.receivedAt());
+                ctx.putEvent(EVENT_MIC_OK, null, received.receivedAt());
             }
             lastMic = state.mic();
         }
         if (state.player() != null && state.player() != DeviceState.Player.UNRECOGNIZED && state.player() != lastPlayer) {
             if (state.player() == DeviceState.Player.ERROR) {
-                env.putEvent(EVENT_PLAYER_ERROR, null, received.receivedAt());
+                ctx.putEvent(EVENT_PLAYER_ERROR, null, received.receivedAt());
             }
             lastPlayer = state.player();
         }
@@ -280,11 +265,11 @@ public final class EndingFlow {
         if (previous != null && previous.connectionId().equals(next.connectionId())) {
             return;
         }
-        env.unbind(previous);
+        ctx.unbind(previous);
         ctx.link(next);
         next.bindSession(ctx.plan().sessionId());
         // SD-17: 연결 교체는 세대를 올린다(옛 묶음의 남은 프레임이 새 연결로 가지 않게)
-        env.bumpGeneration();
+        ctx.bumpGeneration();
         ctx.playback().clear();
         ctx.devicePlaying().clear();
         ctx.timers().cancel(Kind.PLAYBACK_EXPIRY);
@@ -304,7 +289,7 @@ public final class EndingFlow {
             ctx.stopConfirmPlaybackId(null);
             env.onStopConfirmPlayed(now);
         }
-        env.putEvent(EVENT_LINK_REPLACED, "{\"resumed\":" + replaced.resumed() + "}", now);
+        ctx.putEvent(EVENT_LINK_REPLACED, "{\"resumed\":" + replaced.resumed() + "}", now);
         if (START_PHASE.contains(ctx.status())) {
             // 시작 단계: 기기가 이어가기를 안 했거나 START_SESSION의 ACK가 아직 없으면 같은 opId로 다시 보낸다(기기는 같은 opId를 다시 실행하지
             // 않고 ACK만 한다, U3-J8)
@@ -321,7 +306,7 @@ public final class EndingFlow {
             // U3-J5: 기기가 세션을 모른다(새로 켠 페이지) — 같은 승인 음성으로 START_SESSION부터. 늦은 DEVICE_READY는 무시된다
             next.sendControl(new StartSession(ctx.plan().approvedAudio()), ctx.startOpId(), ctx.plan().sessionId());
         }
-        env.sendControl(new SessionState(ctx.view()));
+        ctx.sendControl(new SessionState(ctx.view()));
         keepOnlyLatestPendingPlayback();
         for (Map.Entry<UUID, WsPayload> pending : List.copyOf(ctx.pendingCommands().entrySet())) {
             WsPayload payload = pending.getValue();
@@ -367,10 +352,10 @@ public final class EndingFlow {
     private void closeForUnknownDevice(Instant now) {
         ctx.pendingCommands().values().removeIf(payload -> payload instanceof PlayApprovedContent
                 || payload instanceof CloseTransport || payload instanceof StartSession);
-        env.sendControl(new SessionState(View.CLOSING));
-        if (ctx.closing().closeNow(env.closingDevice())) {
+        ctx.sendControl(new SessionState(View.CLOSING));
+        if (ctx.closing().closeNow(closingDevice())) {
             ctx.relay().setAccepting(false);
-            env.annotateQuietly(SessionStatus.CLOSING, SessionChange.none().withTransportClosedAt(now));
+            ctx.annotateQuietly(SessionStatus.CLOSING, SessionChange.none().withTransportClosedAt(now));
         }
     }
 
@@ -420,22 +405,22 @@ public final class EndingFlow {
     }
 
     void onVoiceClosed(VoiceClosed closed) {
-        if (ctx.status() != SessionStatus.CLOSING || !env.fromBoundConnection(closed.connectionId())) {
+        if (ctx.status() != SessionStatus.CLOSING || !ctx.fromBoundConnection(closed.connectionId())) {
             return;
         }
         Instant now = ctx.services().clock().now();
-        env.closeProvider();
+        closeProvider();
         SessionChange change = TransitionTable.changeFor(Trigger.VOICE_CLOSED, null, now).withProviderClosedAt(now)
                 .withOutputStoppedAt(closed.closed().outputStoppedAt());
         Optional<ActivitySessionRow> row = ctx.services().transitions().transition(ctx.plan().sessionId(), SessionStatus.CLOSING,
                 SessionStatus.ENDED, change, SessionTransitions.Origin.REALTIME, ctx.plan().traceId());
         if (row.isEmpty()) {
-            env.syncFromDb();
+            syncFromDb();
             return;
         }
-        env.changeStatus(SessionStatus.ENDED, ctx.services().clock().now());
-        env.bumpGeneration();
-        env.sendControl(new SessionState(View.STANDBY));
+        changeStatus(SessionStatus.ENDED, ctx.services().clock().now());
+        ctx.bumpGeneration();
+        ctx.sendControl(new SessionState(View.STANDBY));
         afterTerminal();
     }
 
@@ -494,10 +479,10 @@ public final class EndingFlow {
                         .withTerminationRequestedAt(ctx.services().clock().now()),
                 SessionTransitions.Origin.REALTIME, ctx.plan().traceId());
         if (!result.transitioned()) {
-            env.syncFromDb();
+            syncFromDb();
             return;
         }
-        env.afterFailed(CloseTransport.Reason.CONSENT_WITHDRAWN);
+        afterFailed(CloseTransport.Reason.CONSENT_WITHDRAWN);
     }
 
     /**
@@ -513,7 +498,7 @@ public final class EndingFlow {
         AudioRecordings.Session open = ctx.recording();
         ctx.recording(null);
         if (open != null) {
-            env.quietly(() -> open.close(ctx.consentWithdrawnAt()));
+            ctx.quietly(() -> open.close(ctx.consentWithdrawnAt()));
         }
         ctx.transcripts().discardOpenChildren(ctx.consentWithdrawnAt());
     }
@@ -534,10 +519,10 @@ public final class EndingFlow {
                         .withOutputStoppedAt(now),
                 SessionTransitions.Origin.REALTIME, ctx.plan().traceId(), transitionExtras());
         if (row.isEmpty()) {
-            env.syncFromDb(requestId);
+            syncFromDb(requestId);
             return false;
         }
-        env.changeStatus(SessionStatus.CLOSING, ctx.services().clock().now());
+        changeStatus(SessionStatus.CLOSING, ctx.services().clock().now());
         ctx.closingReason(row.get().endReason() != null ? row.get().endReason() : trigger.endReason());
         ctx.closingDetail(row.get().endDetail());
         enterClosing(now, requestId);
@@ -562,7 +547,7 @@ public final class EndingFlow {
         ctx.services().recorder().putEvent(new SessionEvent(UUID.randomUUID(), ctx.plan().sessionId(), "END_REQUESTED",
                 requestId == null ? null : requestId.toString(), null, committedAt));
         // BR6.10 ① · BR4.5: 서버 쪽 출력 버퍼 취소 → STOP_OUTPUT + SESSION_STATE{CLOSING} → ② 마무리 문구 1회
-        env.bumpGeneration();
+        ctx.bumpGeneration();
         // U11 BR3.4: 마무리는 출력을 멈추는 일이다 — 공급자 응답 취소 대신 출력 세대를 올려 만들던 응답의 남은 조각을 버린다
         env.bumpOutput(OutputGeneration.BumpReason.STOP_INTENT);
         ctx.timers().cancel(Kind.DISCONNECT);
@@ -576,7 +561,7 @@ public final class EndingFlow {
         ctx.stopConfirmPlaybackId(null);
         ctx.segment().reset();
         ctx.transcripts().aiFinal("", false, now);
-        ctx.closing().begin(env.closingDevice(), ctx.plan().closing() == null ? null : ctx.plan().closing().contentVersionId(),
+        ctx.closing().begin(closingDevice(), ctx.plan().closing() == null ? null : ctx.plan().closing().contentVersionId(),
                 ctx.playback(), UUID::randomUUID, stopReasonFor(ctx.closingReason()),
                 closeReasonForClosing(ctx.closingReason()));
         // U4b BR3.1: 마무리 인사도 보낸 순간 말풍선 행
@@ -619,16 +604,16 @@ public final class EndingFlow {
         if (ctx.status() == SessionStatus.CLOSING || ctx.status().isTerminal()) {
             return EndOutcome.ACCEPTED_EMPTY;
         }
-        env.multiOriginFail(Trigger.CORE_ABANDONED, null, SessionTransitions.Origin.CORE_ABANDONED);
+        multiOriginFail(Trigger.CORE_ABANDONED, null, SessionTransitions.Origin.CORE_ABANDONED);
         return EndOutcome.ACCEPTED_EMPTY;
     }
 
     void onConnectionLost(ConnectionLost lost) {
-        if (!env.fromBoundConnection(lost.connectionId())) {
+        if (!ctx.fromBoundConnection(lost.connectionId())) {
             return;
         }
         // SD-17: 연결 교체 · 끊김마다 세대를 올린다. 세션 전이는 ④ 시계(ACTIVE) · ② · ③ 시한이 정한다
-        env.bumpGeneration();
+        ctx.bumpGeneration();
         ctx.playback().clear();
         ctx.devicePlaying().clear();
         ctx.timers().cancel(Kind.PLAYBACK_EXPIRY);
@@ -645,14 +630,14 @@ public final class EndingFlow {
 
     /** DECLINED 마무리 인사(BR4.7 · U4b-J8): 출력 · 입력을 멈추고 CLOSING 문구 1회 → 그 끝 표식 뒤 CLOSE_TRANSPORT(DECLINED). */
     void startFarewell() {
-        env.bumpGeneration();
+        ctx.bumpGeneration();
         ctx.timers().cancel(Kind.SEGMENT_QUIET);
         ctx.timers().cancel(Kind.DISCONNECT);
         ctx.timers().cancel(Kind.PLAYBACK_EXPIRY);
         ctx.segment().reset();
         ctx.relay().setAccepting(false);
         ctx.joinPromptPlaybackId(null);
-        boolean closedNow = ctx.closing().beginFarewell(env.closingDevice(),
+        boolean closedNow = ctx.closing().beginFarewell(closingDevice(),
                 ctx.plan().closing() == null ? null : ctx.plan().closing().contentVersionId(), ctx.playback(), UUID::randomUUID);
         if (closedNow) {
             finishFarewell(true);
@@ -671,8 +656,8 @@ public final class EndingFlow {
         ctx.timers().cancel(Kind.CLOSING_CONFIRM);
         Instant now = ctx.services().clock().now();
         if (deviceStillOurs) {
-            env.annotateQuietly(SessionStatus.DECLINED, SessionChange.none().withTransportClosedAt(now));
-            env.sendControl(new SessionState(View.STANDBY));
+            ctx.annotateQuietly(SessionStatus.DECLINED, SessionChange.none().withTransportClosedAt(now));
+            ctx.sendControl(new SessionState(View.STANDBY));
         }
         afterTerminal();
     }
@@ -703,7 +688,7 @@ public final class EndingFlow {
         }
         env.stopPracticeProgress();
         if (!ctx.services().settlement().enabled()) {
-            env.teardown();
+            teardown();
             return;
         }
         ctx.settling(true);
@@ -722,9 +707,9 @@ public final class EndingFlow {
         }
         ctx.relay().setAccepting(false);
         boolean alreadyClosed = ctx.providerSession() == null || ctx.providerClosedSignal();
-        env.closeProvider();
+        closeProvider();
         SessionStatus ended = ctx.status();
-        env.annotateQuietly(ended, SessionChange.none().withProviderClosedAt(now));
+        ctx.annotateQuietly(ended, SessionChange.none().withProviderClosedAt(now));
         if (alreadyClosed) {
             finishSettle();
             return;
@@ -746,15 +731,179 @@ public final class EndingFlow {
             return;
         }
         ctx.timers().cancel(Kind.RECORD_SETTLE);
-        env.quietly(env::flushInputGroupInSettle);
+        ctx.quietly(env::flushInputGroupInSettle);
         Instant cutoff = ctx.services().clock().now();
-        env.quietly(() -> ctx.transcripts().closeAll(cutoff));
-        env.quietly(() -> ctx.services().recorder().flushSession(ctx.plan().sessionId(), ctx.services().settings().timerTick()));
+        ctx.quietly(() -> ctx.transcripts().closeAll(cutoff));
+        ctx.quietly(() -> ctx.services().recorder().flushSession(ctx.plan().sessionId(), ctx.services().settings().timerTick()));
         try {
             ctx.services().settlement().capture(ctx.plan().sessionId(), env.practiceRecordForSettle(cutoff), cutoff);
         } catch (RuntimeException e) {
             ctx.services().events().appError(EventLog.Component.SESSION_LIFECYCLE, e);
         }
-        env.teardown();
+        teardown();
+    }
+
+    // ---- 전이 보조
+
+    Optional<ActivitySessionRow> transition(SessionStatus from, Trigger trigger, FailureCode code) {
+        Optional<ActivitySessionRow> row = ctx.services().transitions().transition(ctx.plan().sessionId(), from, trigger.target(),
+                TransitionTable.changeFor(trigger, code, ctx.services().clock().now()), SessionTransitions.Origin.REALTIME,
+                ctx.plan().traceId());
+        row.ifPresent(value -> changeStatus(value.status(), ctx.services().clock().now()));
+        return row;
+    }
+
+    /** 출발 상태가 둘 이상인 → FAILED(FOR UPDATE로 읽은 상태). 이기면 CLOSE_TRANSPORT(FAILED) 규칙과 정리를 한다. */
+    void multiOriginFail(Trigger trigger, FailureCode code, SessionTransitions.Origin origin) {
+        ActivitySessionRepository.MultiOriginTransition result = ctx.services().transitions().transitionFromAny(
+                ctx.plan().sessionId(), trigger.origins(), SessionStatus.FAILED,
+                read -> TransitionTable.changeFor(trigger, code, ctx.services().clock().now()), origin, ctx.plan().traceId());
+        if (!result.transitioned()) {
+            syncFromDb();
+            return;
+        }
+        changeStatus(SessionStatus.FAILED, ctx.services().clock().now());
+        afterFailed();
+    }
+
+    /** BR6.8: FAILED로 갈 때 START_SESSION이 나갔고 연결이 살아 있으면 CLOSE_TRANSPORT(FAILED) + SESSION_STATE{STANDBY}. */
+    void afterFailed() {
+        afterFailed(CloseTransport.Reason.FAILED);
+    }
+
+    /**
+     * BR6.8 · U4b BR1.5: FAILED로 갈 때 START_SESSION이 나갔고 연결이 살아 있으면 CLOSE_TRANSPORT(사유) + SESSION_STATE{STANDBY}. 시작 단계 동의
+     * 철회는 사유가 CONSENT_WITHDRAWN이다.
+     */
+    void afterFailed(CloseTransport.Reason reason) {
+        changeStatus(SessionStatus.FAILED, ctx.services().clock().now());
+        ctx.bumpGeneration();
+        if (ctx.startSent() && ctx.link() != null && ctx.link().isOpen()) {
+            ctx.sendControl(new CloseTransport(reason));
+            ctx.sendControl(new SessionState(View.STANDBY));
+        }
+        afterTerminal();
+    }
+
+    /** 진 전이 뒤 DB의 지금 상태로 맞춘다. 종료 상태면 정리한다. */
+    void syncFromDb() {
+        syncFromDb(null);
+    }
+
+    /**
+     * 진 전이 뒤 DB의 지금 상태로 맞춘다. 종료 상태면 정리하고, 메모리와 다른 비종료 상태를 받아들였으면 그 상태의 시한 · 부수 효과를 한
+     * 번 건다(F5 · J291).
+     *
+     * @param endRequestId CLOSING을 받아들일 때 END_REQUESTED에 남길 끝내기 요청 id(끝내기 처리 중이 아니면 null, J293)
+     */
+    void syncFromDb(UUID endRequestId) {
+        Optional<ActivitySessionRow> row = ctx.services().transitions().find(ctx.plan().sessionId());
+        if (row.isEmpty()) {
+            teardown();
+            return;
+        }
+        SessionStatus before = ctx.status();
+        changeStatus(row.get().status(), ctx.services().clock().now());
+        if (ctx.status().isTerminal()) {
+            afterTerminal();
+            return;
+        }
+        if (ctx.status() != before) {
+            env.adopt(row.get(), endRequestId);
+        }
+    }
+
+    ClosingSequence.Device closingDevice() {
+        return new ClosingSequence.Device() {
+            @Override
+            public boolean stopOutput(StopOutput.Reason reason) {
+                return ctx.sendControl(new StopOutput(reason));
+            }
+
+            @Override
+            public boolean sessionState(View view) {
+                return ctx.sendControl(new SessionState(view));
+            }
+
+            @Override
+            public boolean playApproved(UUID playbackId, String contentCode, UUID contentVersionId) {
+                return ctx.sendControl(new PlayApprovedContent(playbackId, contentCode, contentVersionId));
+            }
+
+            @Override
+            public boolean closeTransport(CloseTransport.Reason reason) {
+                return ctx.sendControl(new CloseTransport(reason));
+            }
+        };
+    }
+
+    /**
+     * 세션 상태를 바꾸는 유일한 자리(U11 BR5.4, 첫 판 검토 R-15). 지금은 대입뿐이고 동작을 바꾸지 않는다 — 판정 턴이 {@code openedInStatus}를 벗어나는
+     * 모든 전이를 이 자리에서 잡는다(PR2).
+     */
+    void changeStatus(SessionStatus next, Instant now) {
+        ctx.status(next);
+        judgment.onStatus(next);
+    }
+
+    void closeProvider() {
+        ctx.providerClosing(true);
+        ProviderConnector.Attempt attempt = ctx.providerAttempt();
+        if (attempt != null) {
+            attempt.cancel();
+        }
+        ProviderSession session = ctx.providerSession();
+        if (session != null && session.isOpen()) {
+            session.close(ctx.services().requests().sessionClose());
+        }
+    }
+
+    /**
+     * 종료 정리(PD-1 생명주기 3): 입력 수락 끝 · 공급자 정리 · 구간 버림 · 열린 행 닫기 · 기록기 마지막 플러시 · 원음 기록 닫기 · 레지스트리 제거.
+     * 리뷰 반영 7: 단계마다 예외를 따로 받아(앱 오류 한 줄) 앞 단계가 실패해도 뒤 단계 — 특히 원음 파일 핸들과 메타의 ended_at — 를 마친다.
+     * 리뷰 반영 4: 처리하지 못하고 남은 연결 교체(LinkReplaced)는 그 새 연결을 대기로 돌려보낸다.
+     */
+    void teardown() {
+        if (ctx.terminated()) {
+            return;
+        }
+        ctx.terminated(true);
+        ctx.outputGeneration().incrementAndGet();
+        Instant now = ctx.services().clock().now();
+        try {
+            ctx.quietly(ctx.timers()::cancelAll);
+            ctx.quietly(ctx.sendQueue()::shutdown);
+            ctx.quietly(env::cancelPracticeTimers);
+            ctx.quietly(judgment::shutdown);
+            // U13 호출 지점 ④: 진행 중인 제브 요청을 취소한다(보관 행은 아래 closeAll이 닫는다, BR4.5)
+            ctx.quietly(guardrail::onExit);
+            ctx.quietly(ctx.relay()::stop);
+            ctx.quietly(this::closeProvider);
+            ctx.quietly(() -> {
+                ProviderSession session = ctx.providerSession();
+                if (session != null) {
+                    session.close();
+                }
+            });
+            ctx.quietly(ctx.segment()::reset);
+            ctx.quietly(ctx.playback()::clear);
+            ctx.quietly(() -> ctx.transcripts().closeAll(now));
+            ctx.quietly(() -> ctx.services().latency().sessionEnded(ctx.plan().sessionId()));
+            ctx.quietly(() -> ctx.services().recorder().finish(ctx.plan().sessionId()));
+            ctx.quietly(() -> ctx.unbind(ctx.link()));
+            ctx.pendingCommands().clear();
+            ctx.quietly(() -> {
+                if (ctx.recording() != null) {
+                    ctx.recording().close(now);
+                }
+            });
+        } finally {
+            for (Message left : ctx.mailbox().closeAndRelease()) {
+                if (left instanceof LinkReplaced replaced) {
+                    ctx.quietly(() -> standDown(replaced.link(), ctx.plan().sessionId(), ctx.status(), replaced.resumed()));
+                }
+            }
+            onTerminated.run();
+        }
     }
 }

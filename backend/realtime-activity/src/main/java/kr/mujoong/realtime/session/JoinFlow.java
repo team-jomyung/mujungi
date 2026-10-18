@@ -6,7 +6,6 @@ import java.util.Optional;
 import java.util.UUID;
 import kr.mujoong.contract.status.ActivityType;
 import kr.mujoong.contract.status.SessionStatus;
-import kr.mujoong.contract.ws.WsPayload;
 import kr.mujoong.contract.ws.message.PlayApprovedContent;
 import kr.mujoong.realtime.dialog.JoinTracker;
 import kr.mujoong.realtime.judgment.JudgmentPoint;
@@ -36,17 +35,9 @@ final class JoinFlow {
 
     /** 참여 확인 구역이 실행기에 남은 로직으로 되돌려 부르는 자리. 모두 실행기 스레드에서 불린다. */
     interface Env {
-        void putEvent(String type, String payloadJson, Instant at);
-
-        boolean sendControl(WsPayload payload);
-
         void reportMissing(String contentCode, Instant at);
 
         void approvedBubble(SessionExecutor.ApprovedItem item, Instant at);
-
-        void changeStatus(SessionStatus next, Instant now);
-
-        void syncFromDb();
 
         /** ACTIVE 전이 승자의 뒷일: 진입 몫과 발언권 반환(응답 생성 요청 1회, BR2.6). */
         void afterActiveWon();
@@ -77,7 +68,7 @@ final class JoinFlow {
     /** WAITING_CHILD 진입 몫의 끝: 참여 판단을 만들고 시작 안내(안내 1번째)를 재생한다. */
     void begin() {
         join = new JoinTracker(lifecycle().joinWait(), lifecycle().joinWaitAfterReprompt());
-        env.putEvent(EVENT_JOIN_PROMPTED, "{\"prompts\":1}", ctx.services().clock().now());
+        ctx.putEvent(EVENT_JOIN_PROMPTED, "{\"prompts\":1}", ctx.services().clock().now());
         playJoinPrompt(ctx.plan().activityType() == ActivityType.PRACTICE ? INTRO_PRACTICE : INTRO_FREE_TALK);
     }
 
@@ -98,7 +89,7 @@ final class JoinFlow {
             env.reportMissing(contentCode, now);
         } else {
             UUID playbackId = UUID.randomUUID();
-            if (env.sendControl(new PlayApprovedContent(playbackId, contentCode, item.get().contentVersionId()))) {
+            if (ctx.sendControl(new PlayApprovedContent(playbackId, contentCode, item.get().contentVersionId()))) {
                 ctx.joinPromptPlaybackId(playbackId);
                 ctx.playback().started(playbackId, contentCode);
                 ctx.timers().arm(Kind.PLAYBACK_EXPIRY, ctx.services().settings().playbackExpiry());
@@ -183,13 +174,13 @@ final class JoinFlow {
             case START -> acceptJoin();
             case REPROMPT, CLARIFY -> {
                 ctx.timers().cancel(Kind.JOIN_WINDOW);
-                env.putEvent(EVENT_JOIN_RE_PROMPTED, "{\"prompts\":" + join.prompts() + ",\"cause\":\""
+                ctx.putEvent(EVENT_JOIN_RE_PROMPTED, "{\"prompts\":" + join.prompts() + ",\"cause\":\""
                         + (action == JoinTracker.Action.REPROMPT ? "NO_REPLY" : "UNCLEAR") + "\"}", at);
                 playJoinPrompt(RE_PROMPT);
             }
             case OFFER_ALTERNATIVE -> {
                 ctx.timers().cancel(Kind.JOIN_WINDOW);
-                env.putEvent(EVENT_JOIN_ALTERNATIVE_OFFERED, "{\"prompts\":" + join.prompts() + ",\"reply\":\""
+                ctx.putEvent(EVENT_JOIN_ALTERNATIVE_OFFERED, "{\"prompts\":" + join.prompts() + ",\"reply\":\""
                         + (reply == null ? "NONE" : reply.name()) + "\"}", at);
                 playJoinPrompt(DECLINE_ALTERNATIVE);
             }
@@ -208,11 +199,11 @@ final class JoinFlow {
                 SessionStatus.WAITING_CHILD, SessionStatus.ACTIVE, SessionChange.none().withStartedAt(now),
                 SessionTransitions.Origin.REALTIME, ctx.plan().traceId());
         if (row.isEmpty()) {
-            env.syncFromDb();
+            ending.syncFromDb();
             return;
         }
-        env.changeStatus(SessionStatus.ACTIVE, ctx.services().clock().now());
-        env.putEvent(EVENT_JOIN_ACCEPTED, "{\"prompts\":" + (join == null ? 1 : join.prompts()) + "}", now);
+        ending.changeStatus(SessionStatus.ACTIVE, ctx.services().clock().now());
+        ctx.putEvent(EVENT_JOIN_ACCEPTED, "{\"prompts\":" + (join == null ? 1 : join.prompts()) + "}", now);
         env.afterActiveWon();
     }
 
@@ -229,11 +220,11 @@ final class JoinFlow {
                 TransitionTable.changeFor(Trigger.JOIN_DECLINED, null, now), SessionTransitions.Origin.REALTIME,
                 ctx.plan().traceId(), new SessionTransitions.Extras(null, true));
         if (row.isEmpty()) {
-            env.syncFromDb();
+            ending.syncFromDb();
             return;
         }
-        env.changeStatus(SessionStatus.DECLINED, ctx.services().clock().now());
-        env.putEvent(EVENT_JOIN_DECLINED, "{\"prompts\":" + (join == null ? 1 : join.prompts()) + "}", now);
+        ending.changeStatus(SessionStatus.DECLINED, ctx.services().clock().now());
+        ctx.putEvent(EVENT_JOIN_DECLINED, "{\"prompts\":" + (join == null ? 1 : join.prompts()) + "}", now);
         ending.startFarewell();
     }
 
