@@ -322,7 +322,7 @@ public class SessionInternalController {
         return out;
     }
 
-    private static Map<String, Object> technicalPause(kr.mujoong.realtime.session.SessionExecutor.LiveState live) {
+    private static Map<String, Object> technicalPause(kr.mujoong.realtime.session.IdleClock.LiveState live) {
         if (live == null || live.technicalPause() == null) {
             return null;
         }
@@ -332,7 +332,7 @@ public class SessionInternalController {
         return pause;
     }
 
-    private static Map<String, Object> silenceWarning(kr.mujoong.realtime.session.SessionExecutor.LiveState live) {
+    private static Map<String, Object> silenceWarning(kr.mujoong.realtime.session.IdleClock.LiveState live) {
         if (live == null || live.silenceWarning() == null) {
             return null;
         }

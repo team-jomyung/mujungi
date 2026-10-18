@@ -49,20 +49,20 @@ public class SessionViewQuery {
      * 실행기 없는 세션은 둘 다 null이다(U4b BR7.1).
      */
     public record View(ActivitySessionRow session, Instant serverTime, List<Item> items, int nextSeq,
-            List<SessionGapRepository.SessionGapRow> gaps, SessionExecutor.LiveState live) {
+            List<SessionGapRepository.SessionGapRow> gaps, IdleClock.LiveState live) {
 
         public View {
             Objects.requireNonNull(session, "session");
             Objects.requireNonNull(serverTime, "serverTime");
             items = List.copyOf(items);
             gaps = gaps == null ? List.of() : List.copyOf(gaps);
-            live = live == null || session.status().isTerminal() ? SessionExecutor.LiveState.NONE : live;
+            live = live == null || session.status().isTerminal() ? IdleClock.LiveState.NONE : live;
         }
 
         /** U3 모양(살아 있는 값 없음). */
         public View(ActivitySessionRow session, Instant serverTime, List<Item> items, int nextSeq,
                 List<SessionGapRepository.SessionGapRow> gaps) {
-            this(session, serverTime, items, nextSeq, gaps, SessionExecutor.LiveState.NONE);
+            this(session, serverTime, items, nextSeq, gaps, IdleClock.LiveState.NONE);
         }
     }
 
@@ -109,8 +109,8 @@ public class SessionViewQuery {
             latency.itemsServed(sessionId, served, now);
         }
         // U4b BR7.1: 실행기가 바꿔 쓴 불변 값을 읽기만 한다(종료 세션은 View가 null로 둔다)
-        SessionExecutor.LiveState live = registry.executor(sessionId).map(SessionExecutor::liveState)
-                .orElse(SessionExecutor.LiveState.NONE);
+        IdleClock.LiveState live = registry.executor(sessionId).map(SessionExecutor::liveState)
+                .orElse(IdleClock.LiveState.NONE);
         return Optional.of(new View(row.get(), now, items, nextSeq, gaps.findBySession(sessionId), live));
     }
 

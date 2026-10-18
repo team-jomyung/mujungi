@@ -39,10 +39,8 @@ import kr.mujoong.realtime.config.RealtimeProperties;
 import kr.mujoong.realtime.dialog.DialogInstructions;
 import kr.mujoong.realtime.dialog.InstructionTemplates;
 import kr.mujoong.realtime.dialog.JoinTracker;
-import kr.mujoong.realtime.dialog.SilenceClock;
 import kr.mujoong.realtime.dialog.StopConfirmFlow;
 import kr.mujoong.realtime.dialog.StopIntentJudge;
-import kr.mujoong.contract.event.payload.SessionStateChanged;
 import kr.mujoong.realtime.judgment.JudgeOutcome;
 import kr.mujoong.realtime.judgment.JudgmentOutcomeKind;
 import kr.mujoong.realtime.judgment.JudgmentOwner;
@@ -417,10 +415,6 @@ public final class SessionExecutor {
     static final String EVENT_APPROVED_CONTENT_MISSING = "APPROVED_CONTENT_MISSING";
     static final String EVENT_STOP_CONFIRM_ASKED = "STOP_CONFIRM_ASKED";
     static final String EVENT_STOP_CONFIRM_RESOLVED = "STOP_CONFIRM_RESOLVED";
-    static final String EVENT_SILENCE_WARNED = "SILENCE_WARNED";
-    static final String EVENT_SILENCE_RESET = "SILENCE_RESET";
-    static final String EVENT_TECHNICAL_PAUSE_STARTED = "TECHNICAL_PAUSE_STARTED";
-    static final String EVENT_TECHNICAL_PAUSE_ENDED = "TECHNICAL_PAUSE_ENDED";
     static final String EVENT_PRACTICE_EXTENSION_FAILED = "PRACTICE_EXTENSION_FAILED";
     /** U3-J13: ACTIVE 중 공급자 끊김의 end_detail. */
     static final String END_DETAIL_PROVIDER_LOST = "PROVIDER_LOST";
@@ -456,6 +450,8 @@ public final class SessionExecutor {
     private final EndingFlow ending;
     /** 시계 구역 협력 객체(실행기 스레드 전용). */
     private final SessionClocks clocks;
+    /** 공백 시계 · 기술 일시정지 · 진행 조회 협력 객체(진행 조회 값만 다른 스레드가 읽는다). */
+    private final IdleClock idle;
     /** U11 판정 턴 협력 객체(열린 턴 · 최근 전사 · 기록, 실행기 스레드 전용). */
     private final JudgmentCoordinator judgment;
     /** U13 제브 게이트 협력 객체(검사 상태 · 검사표 · 대기열 · 턴 재지시, 실행기 스레드 전용, NFR8). 여기에는 호출 지점과 아래 카운터만 둔다. */
@@ -470,15 +466,6 @@ public final class SessionExecutor {
     private boolean practiceThinking;
     /** 종료 의도 판정기(세션 스냅숏의 종료 표현, U3-R12). */
     private final StopIntentJudge stopJudge;
-    /** U4b 공백 시계(ACTIVE에서만, BR5.1 ~ BR5.4). */
-    private final SilenceClock silence;
-    /** U4b 켜진 기술 일시정지(없으면 null, BR6.1 · BR6.2). */
-    private SessionStateChanged.TechnicalPause technicalPause;
-    /** U4b 기술 일시정지를 켠 서버 시각(창 · 시계를 멈춘 시간 계산). */
-    private Instant pauseStartedAt;
-    /** U4b 진행 조회가 읽는 살아 있는 값(실행기 스레드만 바꿔 쓴다, BR7.1). */
-    private final java.util.concurrent.atomic.AtomicReference<LiveState> live =
-            new java.util.concurrent.atomic.AtomicReference<>(LiveState.NONE);
     /** 지금 편지함 메시지를 처리하는 스레드(실행 스레드 또는 시험의 step 호출 스레드). 공급자 리스너가 이 스레드면 기다리지 않는다(J289). */
     private volatile Thread processing;
     private Thread thread;
@@ -522,31 +509,18 @@ public final class SessionExecutor {
         this.judgment = new JudgmentCoordinator(ctx.services().judgment(), ctx.plan(),
                 ctx.services().settings().instructionWait(), new JudgmentEnv());
         this.guardrail = new GuardrailCoordinator(ctx.services().guardrail(), ctx.plan(), new GuardrailEnv());
-        this.ending = new EndingFlow(ctx, new EndingEnv());
-        this.clocks = new SessionClocks(ctx, new ClocksEnv());
-        Settings.Lifecycle lifecycle = ctx.services().settings().lifecycle();
-        this.silence = new SilenceClock(lifecycle.silenceWarning(), lifecycle.silenceEnd());
+        this.idle = new IdleClock(ctx, new IdleEnv());
+        this.ending = new EndingFlow(ctx, idle, new EndingEnv());
+        this.clocks = new SessionClocks(ctx, idle, new ClocksEnv());
         // U4b BR10.1: 연습 확장점은 PRACTICE 세션에서만 부른다(자유대화는 부르지 않는다)
         this.practice = ctx.plan().activityType() == ActivityType.PRACTICE
                 ? Objects.requireNonNull(ctx.services().practice().create(ctx.plan().sessionId()), "practice extension")
                 : null;
     }
 
-    /**
-     * 진행 조회가 읽는 살아 있는 값(U4b BR7.1 · WF10): 기술 일시정지 · 공백 경고. 실행기 스레드가 바뀔 때마다 불변 값 하나로 바꿔 쓰고 조회는 읽기만
-     * 한다. 종료 세션은 둘 다 null이다.
-     */
-    public record LiveState(SessionStateChanged.TechnicalPause technicalPause, SilenceClock.Warning silenceWarning,
-            PracticeSessionExtension.Progress practice) {
-
-        public LiveState(SessionStateChanged.TechnicalPause pause, SilenceClock.Warning warning) { this(pause, warning, null); }
-
-        static final LiveState NONE = new LiveState(null, null);
-    }
-
     /** 진행 조회 값(다른 스레드에서 읽는다). */
-    public LiveState liveState() {
-        return ctx.status().isTerminal() ? LiveState.NONE : live.get();
+    public IdleClock.LiveState liveState() {
+        return idle.liveState();
     }
 
     // ------------------------------------------------------------------ 실행
@@ -612,7 +586,7 @@ public final class SessionExecutor {
             long generationBefore = ctx.outputGen().generation();
             handle(message);
             watchHold(generationBefore);
-            afterMessage();
+            idle.afterMessage();
         } catch (DataAccessException | TransactionException e) {
             ctx.services().events().appError(EventLog.Component.SESSION_LIFECYCLE, e);
             scheduleRetry(message);
@@ -982,7 +956,7 @@ public final class SessionExecutor {
 
     private void armJoinWindow() {
         Instant end = join == null ? null : join.windowEnd();
-        if (end == null || technicalPause != null) {
+        if (end == null || idle.technicalPause() != null) {
             return;
         }
         Duration left = Duration.between(ctx.services().clock().now(), end);
@@ -1061,7 +1035,7 @@ public final class SessionExecutor {
             applyJoinAction(join.reply(reply, at), reply, at);
         }
         if (closure.joinTickDeferred() && ctx.status() == SessionStatus.WAITING_CHILD && join != null && !join.isFinished()
-                && technicalPause == null) {
+                && idle.technicalPause() == null) {
             onJoinWindow();
         }
         return new JudgmentCoordinator.Handled(next, false);
@@ -1109,7 +1083,7 @@ public final class SessionExecutor {
     private void afterActiveWon() {
         enterActive();
         Instant now = ctx.services().clock().now();
-        resetSilence(now);
+        idle.resetSilence(now);
         if (practice == null || !practice.controlsOutput()) requestResponse(InstructionTemplates.ResponseStart.FIRST);
         // U4b BR10.1: PRACTICE면 확장점 'ACTIVE 진입'
         if (practice != null) {
@@ -1296,7 +1270,7 @@ public final class SessionExecutor {
         PracticeSessionExtension.Signal signal;
         try {
             signal = call.get();
-            publishLive(ctx.services().clock().now());
+            idle.publishLive(ctx.services().clock().now());
         } catch (RuntimeException e) {
             practiceFailure("EXCEPTION", e);
             return;
@@ -1454,7 +1428,7 @@ public final class SessionExecutor {
     }
 
     private boolean practiceProgressPaused() {
-        return technicalPause != null || (practice != null && practice.controlsOutput()
+        return idle.technicalPause() != null || (practice != null && practice.controlsOutput()
                 && (ctx.stopConfirm().isActive() || judgment.openPoint() == JudgmentPoint.J6));
     }
 
@@ -1732,11 +1706,6 @@ public final class SessionExecutor {
         }
 
         @Override
-        public void deviceHeard() {
-            SessionExecutor.this.deviceHeard();
-        }
-
-        @Override
         public void listeningAgain() {
             SessionExecutor.this.listeningAgain();
         }
@@ -1754,21 +1723,6 @@ public final class SessionExecutor {
         @Override
         public void onStopConfirmPlayed(Instant at) {
             SessionExecutor.this.onStopConfirmPlayed(at);
-        }
-
-        @Override
-        public void endPause(Instant now) {
-            SessionExecutor.this.endPause(now);
-        }
-
-        @Override
-        public void startPause(Instant since, Instant gapFrom) {
-            SessionExecutor.this.startPause(since, gapFrom);
-        }
-
-        @Override
-        public Instant lastDeviceMessageAt() {
-            return SessionExecutor.this.lastDeviceMessageAt();
         }
 
         @Override
@@ -1816,10 +1770,85 @@ public final class SessionExecutor {
         public void guardrailTurnBoundary() {
             guardrail.onTurnBoundary();
         }
+    }
+
+    /** 공백 시계 · 기술 일시정지 협력 객체가 실행기에 남은 로직으로 되돌아오는 자리. */
+    private final class IdleEnv implements IdleClock.Env {
 
         @Override
-        public SessionStateChanged.TechnicalPause technicalPause() {
-            return technicalPause;
+        public void putEvent(String type, String payloadJson, Instant at) {
+            SessionExecutor.this.putEvent(type, payloadJson, at);
+        }
+
+        @Override
+        public void reportMissing(String contentCode, Instant at) {
+            SessionExecutor.this.reportMissing(contentCode, at);
+        }
+
+        @Override
+        public void approvedBubble(ApprovedItem item, Instant at) {
+            SessionExecutor.this.approvedBubble(item, at);
+        }
+
+        @Override
+        public boolean sendControl(WsPayload payload) {
+            return SessionExecutor.this.sendControl(payload);
+        }
+
+        @Override
+        public boolean beginClosing(Trigger trigger, UUID requestId) {
+            return ending.beginClosing(trigger, requestId);
+        }
+
+        @Override
+        public PracticeSessionExtension.Progress practiceProgress() {
+            return practice == null ? null : practice.progress();
+        }
+
+        @Override
+        public boolean practiceControlsOutput() {
+            return practice != null && practice.controlsOutput();
+        }
+
+        @Override
+        public void judgmentOnFault() {
+            judgment.onFault();
+        }
+
+        @Override
+        public void pausePracticeTimers(Instant now) {
+            SessionExecutor.this.pausePracticeTimers(now);
+        }
+
+        @Override
+        public void resumePracticeTimers(Instant now) {
+            SessionExecutor.this.resumePracticeTimers(now);
+        }
+
+        @Override
+        public void interruptPracticeSpeech(Instant now) {
+            SessionExecutor.this.interruptPracticeSpeech(now);
+        }
+
+        @Override
+        public void stopOutputForIntent(Instant at) {
+            SessionExecutor.this.stopOutputForIntent(at);
+        }
+
+        @Override
+        public boolean hasJoin() {
+            return join != null;
+        }
+
+        @Override
+        public void resumeJoinWindow(Duration paused) {
+            join.shift(paused);
+            armJoinWindow();
+        }
+
+        @Override
+        public void armStopConfirm() {
+            SessionExecutor.this.armStopConfirm();
         }
     }
 
@@ -1894,21 +1923,6 @@ public final class SessionExecutor {
         @Override
         public void onStopConfirmWindow() {
             SessionExecutor.this.onStopConfirmWindow();
-        }
-
-        @Override
-        public void onSilenceTimer() {
-            SessionExecutor.this.onSilenceTimer();
-        }
-
-        @Override
-        public void onGapDisplayCheck() {
-            SessionExecutor.this.onGapDisplayCheck();
-        }
-
-        @Override
-        public void armGapDisplay() {
-            SessionExecutor.this.armGapDisplay();
         }
 
         @Override
@@ -2573,7 +2587,7 @@ public final class SessionExecutor {
             java.util.OptionalInt seq = ctx.transcripts().childFinal(done.itemId(), done.transcript(), at, uncertain);
             // U4b BR5.1: 아이의 빈 아닌 확정 전사가 공백 시계를 0으로 한다(빈 전사는 리셋하지 않는다)
             if (ctx.status() == SessionStatus.ACTIVE && done.transcript() != null && !done.transcript().isBlank()) {
-                resetSilence(at);
+                idle.resetSilence(at);
             }
             currentTranscriptSeq = seq.orElse(0);
             // U13 호출 지점 ③: 아이 확정 전사 = 새 턴(재지시 수를 0으로, 마지막 서버 지시를 지운다)
@@ -2595,7 +2609,7 @@ public final class SessionExecutor {
             boolean controlledPractice = practice != null && practice.controlsOutput();
             boolean stopHandled = controlledPractice && judgeStopIntent(done.transcript(), uncertain, at);
             if (!stopHandled && ctx.status() == SessionStatus.ACTIVE && practice != null
-                    && !(controlledPractice && technicalPause != null)) {
+                    && !(controlledPractice && idle.technicalPause() != null)) {
                 PracticeSessionExtension.Utterance utterance = new PracticeSessionExtension.Utterance(
                         seq.orElse(0), at, done.transcript() == null ? "" : done.transcript(), uncertain,
                         !ctx.devicePlaying().isEmpty());
@@ -3055,211 +3069,14 @@ public final class SessionExecutor {
 
     private void armStopConfirm() {
         Instant end = ctx.stopConfirm().windowEnd();
-        if (end == null || technicalPause != null) {
+        if (end == null || idle.technicalPause() != null) {
             return;
         }
         Duration left = Duration.between(ctx.services().clock().now(), end);
         ctx.timers().arm(Kind.STOP_CONFIRM, left.isNegative() ? Duration.ZERO : left);
     }
 
-    // ------------------------------------------------------------------ 공백 시계 · 기술 일시정지 · 진행 조회(U4b L4)
-
-    /**
-     * 메시지 하나를 처리한 뒤(BR5.2 · BR7.1): 공백 시계의 멈춤 조건을 다시 보고 다음 판정 시각에 시계를 다시 걸며, 진행 조회 값을 바꿔 쓴다. 상태
-     * 변화는 모두 메시지 처리 안에서만 일어나므로 메시지 경계에서 보면 충분하다.
-     */
-    private void afterMessage() {
-        if (ctx.terminated()) {
-            live.set(LiveState.NONE);
-            return;
-        }
-        Instant now = ctx.services().clock().now();
-        if (ctx.status() == SessionStatus.ACTIVE) {
-            silence.setPaused(silencePaused(), now);
-            armSilence(now);
-        } else if (ctx.timers().isArmed(Kind.SILENCE)) {
-            ctx.timers().cancel(Kind.SILENCE);
-        }
-        publishLive(now);
-    }
-
-    /** BR5.2 멈춤 조건: 기기 재생 중 · 서버 출력 대기(열린 구간 · 게이트 대기 · 대기 문구) · 기술 일시정지 · 확인 질문 대기. */
-    private boolean silencePaused() {
-        return !ctx.devicePlaying().isEmpty() || ctx.playback().isPlaying() || ctx.segment().isOpen() || ctx.transcripts().hasOpenAi()
-                || technicalPause != null || ctx.stopConfirm().isActive();
-    }
-
-    private void armSilence(Instant now) {
-        Instant deadline = silence.nextDeadline(now);
-        if (deadline == null) {
-            if (ctx.timers().isArmed(Kind.SILENCE)) {
-                ctx.timers().cancel(Kind.SILENCE);
-            }
-            return;
-        }
-        if (ctx.timers().isArmed(Kind.SILENCE) && deadline.equals(ctx.timers().deadline(Kind.SILENCE))) {
-            return;
-        }
-        Duration left = Duration.between(now, deadline);
-        ctx.timers().arm(Kind.SILENCE, left.isNegative() ? Duration.ZERO : left);
-    }
-
-    /** 공백 시계 만기: 누적 4분이면 경고 1회, 6분이면 CLOSING(SILENCE)(BR5.3 · BR5.4). */
-    private void onSilenceTimer() {
-        if (ctx.status() != SessionStatus.ACTIVE) {
-            return;
-        }
-        Instant now = ctx.services().clock().now();
-        switch (silence.tick(now)) {
-            case WARN -> onSilenceWarning(now);
-            case END -> ending.beginClosing(Trigger.SILENCE_TIMEOUT, null);
-            case NONE -> {
-                // 멈췄다 이어진 만큼 늦게 다시 건다(afterMessage)
-            }
-        }
-    }
-
-    /** BR5.3 · U4b-J11: 공백 경고를 켜고 패키지에 있으면 SILENCE_WARNING을 한 번 재생한다(재생은 시계를 리셋하지 않는다). */
-    private void onSilenceWarning(Instant now) {
-        putEvent(EVENT_SILENCE_WARNED, "{\"silentMs\":" + silence.accumulated(now).toMillis() + "}", now);
-        Optional<ApprovedItem> item = ctx.plan().approvedItem(SILENCE_WARNING);
-        if (item.isEmpty()) {
-            reportMissing(SILENCE_WARNING, now);
-            return;
-        }
-        if (ctx.playback().isPlaying()) {
-            return;
-        }
-        UUID playbackId = UUID.randomUUID();
-        if (sendControl(new PlayApprovedContent(playbackId, SILENCE_WARNING, item.get().contentVersionId()))) {
-            ctx.playback().started(playbackId, SILENCE_WARNING);
-            ctx.timers().arm(Kind.PLAYBACK_EXPIRY, ctx.services().settings().playbackExpiry());
-            approvedBubble(item.get(), now);
-        }
-    }
-
-    /** BR5.1: ACTIVE 진입 · 아이의 빈 아닌 확정 전사가 공백을 0으로 한다. 경고를 껐으면 SILENCE_RESET을 남긴다. */
-    private void resetSilence(Instant at) {
-        boolean wasWarned = silence.isWarned();
-        silence.reset(at);
-        if (wasWarned) {
-            putEvent(EVENT_SILENCE_RESET, null, at);
-        }
-    }
-
-    /** 진행 조회 값을 바꿔 쓴다(BR7.1). 공백 경고는 ACTIVE에서만 있다. */
-    private void publishLive(Instant now) {
-        SilenceClock.Warning warning = ctx.status() == SessionStatus.ACTIVE ? silence.warning(now) : null;
-        PracticeSessionExtension.Progress progress = practice == null ? null : practice.progress();
-        live.set(technicalPause == null && warning == null && progress == null ? LiveState.NONE
-                : new LiveState(technicalPause, warning, progress));
-    }
-
-    /** 이 세션의 끊김 시계 기준(묶인 연결의 마지막 기기 메시지 수신 시각, U4b-R7). */
-    private Instant lastDeviceMessageAt() {
-        DeviceLink current = ctx.link();
-        return current == null ? ctx.startAttemptAt() : current.lastMessageAt();
-    }
-
-    /** BR6.1: 마지막 기기 메시지 뒤 gap-display에 기술 일시정지를 켜는 시계(WAITING_CHILD · ACTIVE). */
-    private void armGapDisplay() {
-        if (!Trigger.DISCONNECT.accepts(ctx.status()) || technicalPause != null) {
-            return;
-        }
-        Duration threshold = lifecycle().gapDisplay();
-        Duration elapsed = Duration.between(lastDeviceMessageAt(), ctx.services().clock().now());
-        ctx.timers().arm(Kind.GAP_DISPLAY, elapsed.isNegative() ? threshold : threshold.minus(elapsed));
-    }
-
-    /**
-     * 점선 시계 만기(BR6.1 · BR6.2). 일시정지 중이면 회복을 본다 — HEARTBEAT는 편지함을 거치지 않으므로 timer-tick마다 마지막 메시지 시각을 본다.
-     */
-    private void onGapDisplayCheck() {
-        Instant now = ctx.services().clock().now();
-        if (technicalPause != null) {
-            DeviceLink current = ctx.link();
-            if (current != null && current.isOpen() && current.lastMessageAt().isAfter(technicalPause.since())) {
-                endPause(now);
-            } else {
-                ctx.timers().arm(Kind.GAP_DISPLAY, ctx.services().settings().timerTick());
-            }
-            return;
-        }
-        if (!Trigger.DISCONNECT.accepts(ctx.status())) {
-            return;
-        }
-        Instant last = lastDeviceMessageAt();
-        Duration threshold = lifecycle().gapDisplay();
-        Duration elapsed = Duration.between(last, now);
-        if (elapsed.compareTo(threshold) < 0) {
-            ctx.timers().arm(Kind.GAP_DISPLAY, threshold.minus(elapsed));
-            return;
-        }
-        startPause(last, last);
-    }
-
-    /**
-     * 기술 일시정지를 켠다(BR6.1 · U4b-J13): technicalPause{DEVICE, since}, 끊김 구간(U3와 같은 행), 참여 창 · 확인 질문 창 · 공백 시계 멈춤.
-     *
-     * @param since 마지막 기기 메시지 시각
-     * @param gapFrom 끊김 구간을 새로 열 때의 시작 시각
-     */
-    private void startPause(Instant since, Instant gapFrom) {
-        if (technicalPause != null || !Trigger.DISCONNECT.accepts(ctx.status())) {
-            return;
-        }
-        Instant now = ctx.services().clock().now();
-        technicalPause = new SessionStateChanged.TechnicalPause(SessionStateChanged.TechnicalPause.Kind.DEVICE, since);
-        pauseStartedAt = now;
-        ctx.timers().cancel(Kind.JOIN_WINDOW);
-        ctx.timers().cancel(Kind.STOP_CONFIRM);
-        judgment.onFault();
-        pausePracticeTimers(now);
-        if (practice != null && practice.controlsOutput()) {
-            interruptPracticeSpeech(now);
-            stopOutputForIntent(now);
-        }
-        if (ctx.openGapId() == null) {
-            ctx.openGapId(ctx.services().gaps().open(ctx.plan().sessionId(), SessionGapRepository.Kind.DISCONNECT, gapFrom));
-        }
-        putEvent(EVENT_TECHNICAL_PAUSE_STARTED, "{\"kind\":\"DEVICE\"}", now);
-        ctx.timers().arm(Kind.GAP_DISPLAY, ctx.services().settings().timerTick());
-    }
-
-    /** 기기 메시지가 다시 왔거나 다시 묶였다(BR6.2): 구간을 닫고 일시정지를 끈 뒤 멈췄던 창을 남은 시간부터 잇는다. */
-    private void endPause(Instant now) {
-        if (technicalPause == null) {
-            return;
-        }
-        Duration paused = pauseStartedAt == null ? Duration.ZERO : Duration.between(pauseStartedAt, now);
-        technicalPause = null;
-        pauseStartedAt = null;
-        if (paused.isNegative()) {
-            paused = Duration.ZERO;
-        }
-        if (ctx.openGapId() != null) {
-            ctx.services().gaps().close(ctx.openGapId(), now);
-            ctx.openGapId(null);
-        }
-        putEvent(EVENT_TECHNICAL_PAUSE_ENDED, "{\"pausedMs\":" + paused.toMillis() + "}", now);
-        if (ctx.status() == SessionStatus.WAITING_CHILD && join != null) {
-            join.shift(paused);
-            armJoinWindow();
-        }
-        if (ctx.stopConfirm().isActive()) {
-            ctx.stopConfirm().shift(paused);
-            armStopConfirm();
-        }
-        resumePracticeTimers(now);
-        armGapDisplay();
-    }
-
-    /** 묶인 연결에서 기기 메시지가 왔다(BR6.2). */
-    private void deviceHeard() {
-        if (technicalPause != null) {
-            endPause(ctx.services().clock().now());
-        }
-    }
+    // ------------------------------------------------------------------ 확인 질문 창 만기 · 출력 보조
 
     /** 확인 질문 창 시계 만기(BR4.4): 대답이 없으면 대화를 잇는다. */
     private void onStopConfirmWindow() {

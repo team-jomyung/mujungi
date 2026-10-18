@@ -123,7 +123,7 @@ class PrivacyLogU4bTest {
 
         assertNoSecrets(WARNING_TEXT, "디플로도쿠스");
         assertThat(sessionEvents()).extracting(SessionEvent::getEventType)
-                .contains(SessionExecutor.EVENT_SILENCE_WARNED, SessionExecutor.EVENT_SILENCE_RESET);
+                .contains(IdleClock.EVENT_SILENCE_WARNED, IdleClock.EVENT_SILENCE_RESET);
     }
 
     @Test

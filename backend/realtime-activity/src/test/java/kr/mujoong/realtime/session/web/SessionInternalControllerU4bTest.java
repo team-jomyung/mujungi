@@ -25,7 +25,7 @@ import kr.mujoong.realtime.config.RealtimeProperties;
 import kr.mujoong.realtime.dialog.SilenceClock;
 import kr.mujoong.realtime.session.ActivitySessionRow;
 import kr.mujoong.realtime.session.EndRequestHandler;
-import kr.mujoong.realtime.session.SessionExecutor;
+import kr.mujoong.realtime.session.IdleClock;
 import kr.mujoong.realtime.session.SessionMailbox.EndOutcome;
 import kr.mujoong.realtime.session.SessionViewQuery;
 import kr.mujoong.realtime.session.StartSessionHandler;
@@ -162,7 +162,7 @@ class SessionInternalControllerU4bTest {
         MutableClock clock = new MutableClock(T0);
         ActivitySessionRow row = new InMemoryTransitions(clock).seed(UUID.randomUUID(), UUID.randomUUID(),
                 UUID.randomUUID());
-        SessionExecutor.LiveState live = new SessionExecutor.LiveState(
+        IdleClock.LiveState live = new IdleClock.LiveState(
                 new SessionStateChanged.TechnicalPause(SessionStateChanged.TechnicalPause.Kind.DEVICE, T0),
                 new SilenceClock.Warning(T0.minusSeconds(240), T0.plusSeconds(120)));
         when(views.view(eq(row.id()), anyInt()))

@@ -45,7 +45,7 @@ class TechnicalPauseU4bTest {
             assertThat(gap.kind()).isEqualTo(SessionGapRepository.Kind.DISCONNECT);
             assertThat(gap.startedAt()).isEqualTo(last);
         });
-        assertThat(events(SessionExecutor.EVENT_TECHNICAL_PAUSE_STARTED)).hasSize(1);
+        assertThat(events(IdleClock.EVENT_TECHNICAL_PAUSE_STARTED)).hasSize(1);
     }
 
     @Test
@@ -60,7 +60,7 @@ class TechnicalPauseU4bTest {
 
         assertThat(h.executor.liveState().technicalPause()).isNull();
         assertThat(h.gaps.closed()).hasSize(1);
-        assertThat(events(SessionExecutor.EVENT_TECHNICAL_PAUSE_ENDED)).hasSize(1);
+        assertThat(events(IdleClock.EVENT_TECHNICAL_PAUSE_ENDED)).hasSize(1);
         assertThat(h.executor.status()).isEqualTo(SessionStatus.ACTIVE);
     }
 
@@ -153,7 +153,7 @@ class TechnicalPauseU4bTest {
         h.link.touch(h.clock.now());
         h.advance(Duration.ofSeconds(41));
 
-        assertThat(h.executor.liveState()).isEqualTo(new SessionExecutor.LiveState(null, null));
+        assertThat(h.executor.liveState()).isEqualTo(new IdleClock.LiveState(null, null));
     }
 
     private List<SessionEvent> events(String type) {

@@ -6,7 +6,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-import kr.mujoong.contract.event.payload.SessionStateChanged;
 import kr.mujoong.contract.log.AttrKey;
 import kr.mujoong.contract.log.EventCode;
 import kr.mujoong.contract.log.EventLog;
@@ -90,8 +89,6 @@ public final class EndingFlow {
 
         void afterTerminal();
 
-        void deviceHeard();
-
         void listeningAgain();
 
         void approvedBubble(SessionExecutor.ApprovedItem item, Instant at);
@@ -99,12 +96,6 @@ public final class EndingFlow {
         void onJoinPromptPlayed(Instant at);
 
         void onStopConfirmPlayed(Instant at);
-
-        void endPause(Instant now);
-
-        void startPause(Instant since, Instant gapFrom);
-
-        Instant lastDeviceMessageAt();
 
         void armDisconnect();
 
@@ -124,11 +115,10 @@ public final class EndingFlow {
         void finishFarewell(boolean deviceStillOurs);
 
         void guardrailTurnBoundary();
-
-        SessionStateChanged.TechnicalPause technicalPause();
     }
 
     private final SessionContext ctx;
+    private final IdleClock idle;
     private final Env env;
 
     private DeviceState.Mic lastMic;
@@ -136,8 +126,9 @@ public final class EndingFlow {
     private UUID progressPlaybackId;
     private Long progressPlayedToMs;
 
-    EndingFlow(SessionContext ctx, Env env) {
+    EndingFlow(SessionContext ctx, IdleClock idle, Env env) {
         this.ctx = ctx;
+        this.idle = idle;
         this.env = env;
     }
 
@@ -145,7 +136,7 @@ public final class EndingFlow {
         if ((ctx.status().isTerminal() && !env.farewellPending()) || !env.fromBoundConnection(received.connectionId())) {
             return;
         }
-        env.deviceHeard();
+        idle.deviceHeard();
         PlaybackMark mark = received.mark();
         var speech = env.practiceAudio().get(mark.playbackId());
         if (speech != null && mark.status() != PlaybackMark.Status.PROGRESS) {
@@ -245,7 +236,7 @@ public final class EndingFlow {
         if (ctx.status().isTerminal() || !env.fromBoundConnection(received.connectionId())) {
             return;
         }
-        env.deviceHeard();
+        idle.deviceHeard();
         DeviceState state = received.state();
         if (state.mic() != null && state.mic() != DeviceState.Mic.UNRECOGNIZED && state.mic() != lastMic) {
             if (state.mic() == DeviceState.Mic.LOST) {
@@ -291,7 +282,7 @@ public final class EndingFlow {
         ctx.timers().cancel(Kind.PLAYBACK_EXPIRY);
         Instant now = ctx.services().clock().now();
         // U4b BR6.2: 다시 묶이면 일시정지를 끄고 구간을 닫는다
-        env.endPause(now);
+        idle.endPause(now);
         if (ctx.openGapId() != null) {
             ctx.services().gaps().close(ctx.openGapId(), now);
             ctx.openGapId(null);
@@ -547,7 +538,7 @@ public final class EndingFlow {
 
     /** 전이와 함께 쓸 값: 전이 시점에 켜진 기술 일시정지(BR7.2). */
     SessionTransitions.Extras transitionExtras() {
-        return SessionTransitions.Extras.pause(env.technicalPause());
+        return SessionTransitions.Extras.pause(idle.technicalPause());
     }
 
     /**
@@ -640,7 +631,7 @@ public final class EndingFlow {
             ctx.openGapId(ctx.services().gaps().open(ctx.plan().sessionId(), SessionGapRepository.Kind.DISCONNECT, now));
         }
         if (Trigger.DISCONNECT.accepts(ctx.status())) {
-            env.startPause(env.lastDeviceMessageAt(), now);
+            idle.startPause(idle.lastDeviceMessageAt(), now);
         }
     }
 }

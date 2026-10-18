@@ -51,7 +51,7 @@ class SessionSilenceU4bTest {
         assertThat(row.endReason()).isEqualTo(EndReason.SILENCE);
         assertThat(h.link.sent(StopOutput.class)).extracting(StopOutput::reason)
                 .containsExactly(StopOutput.Reason.SILENCE);
-        assertThat(events(SessionExecutor.EVENT_SILENCE_WARNED)).hasSize(1);
+        assertThat(events(IdleClock.EVENT_SILENCE_WARNED)).hasSize(1);
     }
 
     @Test
@@ -65,7 +65,7 @@ class SessionSilenceU4bTest {
         h.childSays("i-1", "공룡 좋아");
 
         assertThat(h.executor.liveState().silenceWarning()).isNull();
-        assertThat(events(SessionExecutor.EVENT_SILENCE_RESET)).hasSize(1);
+        assertThat(events(IdleClock.EVENT_SILENCE_RESET)).hasSize(1);
         h.advanceAlive(Duration.ofSeconds(200));
         assertThat(h.executor.status()).isEqualTo(SessionStatus.ACTIVE);
     }

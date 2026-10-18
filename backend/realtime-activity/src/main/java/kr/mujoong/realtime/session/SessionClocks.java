@@ -59,12 +59,6 @@ final class SessionClocks {
 
         void onStopConfirmWindow();
 
-        void onSilenceTimer();
-
-        void onGapDisplayCheck();
-
-        void armGapDisplay();
-
         void finishSettle();
 
         void markUnresponsive();
@@ -91,10 +85,12 @@ final class SessionClocks {
     }
 
     private final SessionContext ctx;
+    private final IdleClock idle;
     private final Env env;
 
-    SessionClocks(SessionContext ctx, Env env) {
+    SessionClocks(SessionContext ctx, IdleClock idle, Env env) {
         this.ctx = ctx;
+        this.idle = idle;
         this.env = env;
     }
 
@@ -143,8 +139,8 @@ final class SessionClocks {
             case REDELIVER -> env.redeliver();
             case JOIN_WINDOW -> env.onJoinWindow();
             case STOP_CONFIRM -> env.onStopConfirmWindow();
-            case SILENCE -> env.onSilenceTimer();
-            case GAP_DISPLAY -> env.onGapDisplayCheck();
+            case SILENCE -> idle.onSilenceTimer();
+            case GAP_DISPLAY -> idle.onGapDisplayCheck();
             case RECORD_SETTLE -> env.finishSettle();
         }
     }
@@ -270,7 +266,7 @@ final class SessionClocks {
         Instant last = ctx.link() == null ? ctx.services().clock().now() : ctx.link().lastMessageAt();
         Duration elapsed = Duration.between(last, ctx.services().clock().now());
         ctx.timers().arm(Kind.DISCONNECT, elapsed.isNegative() ? threshold : threshold.minus(elapsed));
-        env.armGapDisplay();
+        idle.armGapDisplay();
     }
 
     private void timeoutFired(String type, Duration threshold, Duration elapsed) {
