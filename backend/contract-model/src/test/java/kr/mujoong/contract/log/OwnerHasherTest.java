@@ -14,7 +14,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 /** ownerHash = HMAC-SHA-256(비밀, 소유 id)의 16진 앞 12자(OD-4 · NFR9.15 · J124). 비밀은 실행마다 만든다. */
-@Tag("u1")
+@Tag("skeleton")
 class OwnerHasherTest {
 
     private static String randomSecret() {

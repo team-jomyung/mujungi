@@ -8,7 +8,7 @@ import kr.mujoong.core.practice.PracticeAccountPort;
 import org.junit.jupiter.api.*;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 
-@Tag("u14")
+@Tag("goal-result")
 class SavedGoalReaderTest {
     UUID guardian=UUID.randomUUID(),child=UUID.randomUUID(),id=UUID.randomUUID();
     GoalCandidateRepository goals=mock(GoalCandidateRepository.class);PracticeAccountPort accounts=mock(PracticeAccountPort.class);

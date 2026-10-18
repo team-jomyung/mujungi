@@ -24,7 +24,7 @@ import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
  * <p>계정 삭제가 접수된 시드 보호자에게 시험 로그인이 세션을 열면 삭제 지휘의 세션 정리와 엇갈려 세션 행이 남고, DevSeedRunner가 같은 id로
  * 보호자를 다시 만들면 그 세션이 되살아난다. 삭제 접수 상태면 403 ACCOUNT_DELETION_IN_PROGRESS이고 세션을 만들지 않는다.
  */
-@Tag("u2")
+@Tag("parent-account")
 @Tag("db")
 class DevLoginDeletionIT {
 

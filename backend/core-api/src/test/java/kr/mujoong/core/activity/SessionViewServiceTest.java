@@ -35,7 +35,7 @@ import org.junit.jupiter.api.Test;
  * 12 진행 조회 (BR6.15 · RD-6 · NFR4.3 · BR8.5 · OD-5): Realtime 응답 중계 · 실패 때 사본 + 빈 items + 요청 sinceSeq · 폴백 카운터 ·
  * observedAt 기준 30초 stale(조회 한 번 실패만으로는 아님) · 종료 세션 stale 아님 · 남의 세션 404 · 음수 sinceSeq 400.
  */
-@Tag("u1")
+@Tag("skeleton")
 class SessionViewServiceTest {
 
     private static final Instant REQUESTED_AT = Instant.parse("2001-05-01T09:00:00Z");

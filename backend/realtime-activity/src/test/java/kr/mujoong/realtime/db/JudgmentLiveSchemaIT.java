@@ -25,7 +25,7 @@ import org.junit.jupiter.api.Test;
  * Realtime V5 진행용 판정 기록 표 통합 시험 (U11 FR2.1 · FR2.2 · BR2.1 · BR2.3 · BR2.5). 표 · 열 · 값 검사 제약 · 외래 키 · guardian 색인 ·
  * 앱 역할 DML 권한을 확인한다. 시험마다 되돌린다.
  */
-@Tag("u11")
+@Tag("judgment-turn")
 @Tag("db")
 class JudgmentLiveSchemaIT {
 

@@ -20,7 +20,7 @@ import org.junit.jupiter.api.Test;
  * <p>증명: BR6.5 · NFR3.1(아이 맥락은 세 필드뿐, 문자열 표현에 값 없음) · entities ActivitySession(동의 스냅샷 다섯 값 · 정책 버전 길이 ·
  * 키 길이) · BR6.8(실패 코드는 end_detail, confirmed는 ENDED · ENDED_UNCONFIRMED만) · SessionChange의 null = 기존 값 유지.
  */
-@Tag("u1")
+@Tag("skeleton")
 class SessionValueTypesTest {
 
     private static final Instant T0 = Instant.parse("2026-10-15T09:00:00Z");

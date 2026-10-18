@@ -17,7 +17,7 @@ import org.junit.jupiter.api.Test;
  * {@code LunaArchTest}가 이미 지키며, 이 패키지가 생겨 그 규칙이 비로소 의미를 갖는다. 새 규칙이라 기존 구조 시험은 건드리지 않는다
  * ({@code allowEmptyShould(false)}로 빈 가져오기에 통과하지 않는다).
  */
-@Tag("u13")
+@Tag("jev-guardrail")
 class GuardrailPackageArchTest {
 
     private static final JavaClasses PRODUCTION = new ClassFileImporter()

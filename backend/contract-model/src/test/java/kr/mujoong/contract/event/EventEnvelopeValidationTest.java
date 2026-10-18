@@ -30,7 +30,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 /** 영속 이벤트 봉투 검사(BR5.4 · BR5.9 · 편차 (p) · OD-7 · 계약 6절). */
-@Tag("u1")
+@Tag("skeleton")
 class EventEnvelopeValidationTest {
 
     private static final JsonCodec CODEC = JsonCodec.shared();

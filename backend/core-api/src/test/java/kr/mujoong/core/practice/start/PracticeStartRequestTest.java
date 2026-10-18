@@ -7,7 +7,7 @@ import kr.mujoong.core.common.error.CoreApiException;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
-@Tag("u5b")
+@Tag("practice-legacy")
 class PracticeStartRequestTest {
     @Test void reorderingTheSameSelectionDoesNotChangeIdempotencyIdentity() {
         UUID key = UUID.randomUUID(), a = UUID.randomUUID(), b = UUID.randomUUID();

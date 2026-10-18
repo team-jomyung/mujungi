@@ -11,7 +11,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
 
-@Tag("u7")
+@Tag("web-push")
 class PushDeliveryLedgerTest {
     @Test
     void partialSuccessSurvivesSerializationAndOnlyPendingRecipientAdvances() {

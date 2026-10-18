@@ -20,7 +20,7 @@ import org.junit.jupiter.api.Test;
 /**
  * 판 리소스 적재와 세션 콘텐츠 계획 · 원문 일치 (U8 functional-spec 7절 · 8.3 · BR1.4 · BR2.1 ~ BR2.3 · NFR2.1 ~ NFR2.4 · NFR3.6 · SD5 · SD6).
  */
-@Tag("u8")
+@Tag("live-content")
 class LiveContentRegistryTest {
 
     private static final String REST_ACK = "잠깐 쉬고 싶구나. 천천히 해도 괜찮아.";

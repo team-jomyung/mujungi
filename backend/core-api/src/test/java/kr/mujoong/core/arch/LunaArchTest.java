@@ -22,7 +22,7 @@ import org.junit.jupiter.api.Test;
  *
  * <p>규칙마다 위반 표본(시험 소스의 {@code kr.mujoong.core.luna} 패키지 표본)을 실제로 잡는지 자기 시험을 둔다.
  */
-@Tag("u9")
+@Tag("luna")
 class LunaArchTest {
 
     private static final JavaClasses PRODUCTION = new ClassFileImporter()

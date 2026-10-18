@@ -10,7 +10,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 /** GPT-Live 키 {@code OPENAI_API_KEY}는 demo 프로필에서만 필수다(U11 BR12.2). 키 값은 실행 때 만든 가짜 문자열이다(R-F3). */
-@Tag("u11")
+@Tag("judgment-turn")
 class OpenAiKeyStartupChecksTest {
 
     private static final URI LOOPBACK = URI.create("ws://127.0.0.1:9/fake-provider");

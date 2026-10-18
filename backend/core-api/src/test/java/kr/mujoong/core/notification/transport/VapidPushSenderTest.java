@@ -39,7 +39,7 @@ import javax.crypto.Mac;
 import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 
-@Tag("u7")
+@Tag("web-push")
 class VapidPushSenderTest {
     private final JsonCodec json = JsonCodec.shared();
     private final PushTestKeys vapid = new PushTestKeys();

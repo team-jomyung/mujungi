@@ -22,7 +22,7 @@ import org.junit.jupiter.api.Test;
  * 응답 취소)을 부르지 않고, 판정 라벨 · 확률을 나르는 판정 클래스에 기대지 않는다. 반대 방향으로 실행부({@code session})는 새 패키지를 모른다
  * (실행부는 호출 지점만 더한다). 규칙이 실제로 위반을 잡는지는 위반 표본으로 확인한다.
  */
-@Tag("u12")
+@Tag("practice-flow")
 class PracticeFlowArchTest {
 
     private static final JavaClasses PRODUCTION = new ClassFileImporter()

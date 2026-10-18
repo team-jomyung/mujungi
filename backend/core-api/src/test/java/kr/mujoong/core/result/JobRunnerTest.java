@@ -10,7 +10,7 @@ import kr.mujoong.testsupport.time.MutableClock;
 import org.junit.jupiter.api.*;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.SimpleTransactionStatus;
-@Tag("u6")
+@Tag("result-report")
 class JobRunnerTest {
     ResultJobRepository jobs;ReportJobState reports;GuardianWriteLock guardians;MutableClock clock;
     JobRunner runner;PlatformTransactionManager transactions;CoreProperties props;

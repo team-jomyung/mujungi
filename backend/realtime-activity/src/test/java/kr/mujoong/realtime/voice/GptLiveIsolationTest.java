@@ -28,7 +28,7 @@ import org.junit.jupiter.api.io.TempDir;
  * 빌드 규칙이 제자리에 있는지, 기본 test JVM에 키가 없는지, 키가 없으면 연결 없이 SKIPPED_NO_KEY인지, 합성 입력 · 주소 규칙, 오류 사건 기록
  * (가림), 키트 형식 메시지 모양, 두 열 보고서 형식을 본다.
  */
-@Tag("u11")
+@Tag("judgment-turn")
 class GptLiveIsolationTest {
 
     private static final Path REPO_ROOT =

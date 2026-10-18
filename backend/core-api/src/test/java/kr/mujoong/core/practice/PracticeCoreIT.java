@@ -18,7 +18,7 @@ import kr.mujoong.core.textai.ForbiddenExpressionPolicy;
 import kr.mujoong.testsupport.time.MutableClock;
 import org.junit.jupiter.api.*;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
-@Tag("u5a") @Tag("db")
+@Tag("practice-core") @Tag("db")
 class PracticeCoreIT {
     private DbTestSupport db;
     private MutableClock clock;

@@ -64,7 +64,7 @@ import org.springframework.transaction.support.TransactionTemplate;
  * 기존 인터페이스 어댑터 경계 (U9 FR1.3 · BR3.4 · BR7.2 · BR8.1 · BR8.2 · AC2.4.2 · AC2.4.3 · NFR6.1). 루프백 대역 → CoreLunaClient →
  * 어댑터 → 기존 게이트웨이 · 검사기가 그대로 도는지 본다. 공급자는 대역, 키는 가짜 문자열, 입력은 합성 값이다(R-F1 · R-F3).
  */
-@Tag("u9")
+@Tag("luna")
 class LunaAdapterBoundaryTest {
 
     private static final JsonCodec JSON = JsonCodec.shared();

@@ -35,7 +35,7 @@ import org.junit.jupiter.api.io.TempDir;
  * <p>작업 그래프 자체(check · test → lunaReachTest 의존 없음)는 루트 {@code verifyLunaReachIsolation}이 check마다 확인한다. 이 시험은 빌드
  * 규칙 · 키 제거 · 키 없음 SKIPPED · env 파싱 · 요청 모양(스키마 통과 · 아이 이름 없음) · 요약 계산 · 보고서 형식을 본다.
  */
-@Tag("u11")
+@Tag("judgment-turn")
 class LunaReachIsolationTest {
 
     private static final Path REPO_ROOT =

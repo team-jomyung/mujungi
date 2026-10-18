@@ -31,14 +31,14 @@ import kr.mujoong.core.identity.GuardianRepository;
 import kr.mujoong.core.identity.SocialAccountRepository;
 import kr.mujoong.core.identity.google.GoogleLoginService.Failure;
 import kr.mujoong.core.identity.google.GoogleLoginService.Outcome;
-import kr.mujoong.core.support.U2Fixtures;
+import kr.mujoong.core.support.ParentAccountFixtures;
 import kr.mujoong.testsupport.time.MutableClock;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.transaction.PlatformTransactionManager;
 
 /** 구글 로그인 분기(U2 · R1 · R2 · R12 · U2-J1): 설정 없음 · 형식 · redirect · 교환 · 토큰 실패와 기존 · 삭제 중 보호자. */
-@Tag("u2")
+@Tag("parent-account")
 class GoogleLoginServiceTest {
 
     private static final Instant NOW = Instant.parse("2026-10-15T00:00:00Z");
@@ -142,8 +142,8 @@ class GoogleLoginServiceTest {
         assertThat(service.login("code", REDIRECT).failure()).as("max-age가 지나면 다시 받는다").isNull();
         verify(keys, times(2)).fetch();
 
-        KeyPair rotated = U2Fixtures.newKeyPair();
-        when(tokens.exchange(any())).thenAnswer(call -> Optional.of(U2Fixtures.sign("{\"alg\":\"RS256\",\"kid\":\"k2\"}",
+        KeyPair rotated = ParentAccountFixtures.newKeyPair();
+        when(tokens.exchange(any())).thenAnswer(call -> Optional.of(ParentAccountFixtures.sign("{\"alg\":\"RS256\",\"kid\":\"k2\"}",
                 GoogleIdTokenReaderTest.claims("accounts.google.com", "client", clock.now().plusSeconds(60), "sub-1"),
                 rotated.getPrivate())));
         when(keys.fetch()).thenReturn(Optional.of(keySet(Map.of("k2", rotated.getPublic()), Duration.ofMinutes(10))));

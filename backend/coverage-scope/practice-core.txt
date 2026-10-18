@@ -22,7 +22,7 @@ backend/core-api/src/main/java/kr/mujoong/core/practice/ScenarioContentPolicy.ja
 backend/core-api/src/main/java/kr/mujoong/core/practice/ScenarioRecordPort.java
 backend/core-api/src/main/java/kr/mujoong/core/practice/ScenarioRepository.java
 backend/core-api/src/main/java/kr/mujoong/core/practice/ScenarioService.java
-backend/core-api/src/main/java/kr/mujoong/core/practice/U2PracticeAccountAdapter.java
+backend/core-api/src/main/java/kr/mujoong/core/practice/PracticeAccountAdapter.java
 backend/core-api/src/main/java/kr/mujoong/core/practice/web/GoalSelectionController.java
 backend/core-api/src/main/java/kr/mujoong/core/practice/web/ScenarioInternalController.java
 backend/core-api/src/main/java/kr/mujoong/core/textai/ForbiddenExpressionPolicy.java

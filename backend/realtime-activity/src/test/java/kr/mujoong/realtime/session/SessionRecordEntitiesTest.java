@@ -13,7 +13,7 @@ import org.junit.jupiter.api.Test;
  * 근거: entities.md SessionStopExpression · SessionEvent · BR6.5 · BR6.9 · NFR12.3(payload는 문자열 표현에 없음). 3.6 수정(BT-TC-10)에서
  * 길이 상한의 포함 경계(V1 열 varchar(100)과 같은 100자)와 id 없는 JPA 인스턴스의 같음 규칙을 더했다.
  */
-@Tag("u1")
+@Tag("skeleton")
 class SessionRecordEntitiesTest {
 
     private static final Instant T0 = Instant.parse("2026-10-15T09:00:00Z");

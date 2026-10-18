@@ -32,7 +32,7 @@ import org.springframework.session.web.http.DefaultCookieSerializer;
  * <p>속성은 문자열 그대로 비교한다(Expires만 시각이라 형식 · 값 범위로 본다). 지우는 쿠키는 발급 때와 같은 Path · 속성에 Max-Age=0이다. 세션
  * 쿠키 수명은 서버 유휴 만료(30일)를 넘지 않는다. 세션 ID 교체는 실제 로그인 흐름이 필요해 {@code GuardianApiIT}가 본다.
  */
-@Tag("u1")
+@Tag("skeleton")
 class CookieAttributesTest {
 
     private static final Duration CODE_TTL = Duration.ofHours(24);

@@ -19,7 +19,7 @@ import org.springframework.context.annotation.Primary;
  * 연습 정산 복구 분기 시험 (U12 BR7.4 · BR10.1). 새 흐름 장면이 있으면 그 값을, 없으면 레거시 복구를 부르고, 레거시의 실패는 그대로 올라오며
  * 정산 서비스가 하나만 받도록 {@code @Primary}인지 본다. 협력 객체는 대역이다.
  */
-@Tag("u12")
+@Tag("practice-flow")
 class PracticeRecoveryRouterTest {
 
     private final PracticeFlowRecordRecovery flow = mock(PracticeFlowRecordRecovery.class);

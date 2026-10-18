@@ -15,7 +15,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 /** 나가는 길 하나 (U9 SD3 · NFR3.6 · NFR3.9 · NFR3.10). 공급자는 루프백 대역뿐이다(R-F1). */
-@Tag("u9")
+@Tag("luna")
 class LunaTransportTest {
 
     private static final String BODY = "{\"model\":\"gpt-6-luna\",\"instructions\":\"i\",\"input\":\"{}\",\"store\":false}";

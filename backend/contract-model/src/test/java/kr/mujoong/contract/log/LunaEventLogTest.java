@@ -17,7 +17,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 /** U9 Luna 사건 로그 계약(SD6 · BR6.1 · BR6.2 · NFR1.2 · NFR3.5 · NFR4.1): 새 값 형식 LABEL · NAME_LIST와 두 사건의 허용 표. */
-@Tag("u9")
+@Tag("luna")
 class LunaEventLogTest {
 
     private static final Instant NOW = Instant.parse("2026-10-16T09:00:00Z");

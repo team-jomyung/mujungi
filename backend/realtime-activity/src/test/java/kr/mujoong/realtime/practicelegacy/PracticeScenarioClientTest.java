@@ -11,7 +11,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
-@Tag("u5b")
+@Tag("practice-legacy")
 class PracticeScenarioClientTest {
     @Test void sendsOnlyC10FieldsAndChecksValidationBeforeAcceptingScene() throws Exception {
         var http = mock(InternalHttpClient.class);

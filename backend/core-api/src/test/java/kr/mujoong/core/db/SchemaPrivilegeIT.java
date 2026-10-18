@@ -28,7 +28,7 @@ import org.junit.jupiter.api.Test;
  * public 사용 불가, 자기 이력 표만 SELECT, 백업은 읽기만, 기본 권한) · SD-24(앱의 data_class 변경 거부) · 편차 (x) · J116 ·
  * J135(pg_hba 한 대역 + reject, 대역 밖 출발지 28000).
  */
-@Tag("u1")
+@Tag("skeleton")
 @Tag("db")
 class SchemaPrivilegeIT {
 

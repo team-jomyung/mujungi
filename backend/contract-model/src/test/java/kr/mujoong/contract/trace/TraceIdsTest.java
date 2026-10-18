@@ -11,7 +11,7 @@ import org.junit.jupiter.params.provider.NullAndEmptySource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 /** traceId 형식 · 생성(OD-7 · NFR5.7 · SD-4 F1). */
-@Tag("u1")
+@Tag("skeleton")
 class TraceIdsTest {
 
     @Test

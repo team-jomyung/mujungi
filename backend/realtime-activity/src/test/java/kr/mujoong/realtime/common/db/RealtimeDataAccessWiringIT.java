@@ -73,7 +73,7 @@ import org.springframework.util.unit.DataSize;
  * 앞 저장소들의 쓰기까지 함께 되돌리고 예외 번역 프록시를 지나도 SQLSTATE를 잃지 않는다 · 저장소 프록시는 트랜잭션을 스스로 열지 않아
  * MANDATORY 쓰기가 트랜잭션 밖에서 실패한다.
  */
-@Tag("u1")
+@Tag("skeleton")
 @Tag("db")
 class RealtimeDataAccessWiringIT {
 

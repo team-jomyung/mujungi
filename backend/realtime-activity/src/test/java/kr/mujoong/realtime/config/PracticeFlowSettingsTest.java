@@ -16,7 +16,7 @@ import org.junit.jupiter.api.Test;
  * 새 연습 흐름 설정 시험 (U12 FR7.1 · BR9.1 · BR9.2). 횟수 키 두 개의 기본값(2 · 1)이 application.yml · 설정 레코드 · {@code contracts/ai-io.md}
  * 10.14 표에서 같고, 시간 값은 {@code timing.conversation.*}에서만 읽히며, 음수 · 빠진 값은 키 이름과 함께 거부되는지 본다.
  */
-@Tag("u12")
+@Tag("practice-flow")
 class PracticeFlowSettingsTest {
 
     private static final Path REPO = Path.of(System.getProperty("mujoong.repo.root", "..")).toAbsolutePath().normalize();

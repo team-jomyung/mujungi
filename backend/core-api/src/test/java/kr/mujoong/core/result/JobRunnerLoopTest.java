@@ -5,7 +5,7 @@ import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.*;
 import org.junit.jupiter.api.*;
-@Tag("u6")
+@Tag("result-report")
 class JobRunnerLoopTest {
     @Test void slowSessionDoesNotStarveReport()throws Exception{
         var runner=mock(JobRunner.class);var session=job("SESSION_RESULT");var report=job("REPORT");

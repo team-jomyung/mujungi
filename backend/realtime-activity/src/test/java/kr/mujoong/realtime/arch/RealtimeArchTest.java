@@ -69,7 +69,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
  * <p>규칙마다 위반 표본(이 시험 소스의 중첩 클래스)을 실제로 잡는지 자기 시험을 둔다. 표본은 시험 소스 집합이라 운영 가져오기
  * ({@code DO_NOT_INCLUDE_TESTS})에 들어가지 않는다.
  */
-@Tag("u1")
+@Tag("skeleton")
 class RealtimeArchTest {
 
     private static final JavaClasses PRODUCTION = new ClassFileImporter()

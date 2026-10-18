@@ -1,6 +1,6 @@
 {
   "$comment": "U5a 신규/변경 운영 TypeScript 전체. 기존 U1 범위와 80% 하한은 유지한다.",
-  "unit": "u5a",
+  "unit": "practice-core",
   "files": [
     "frontend/src/app/parent/practice/page.tsx",
     "frontend/src/parent/features/practice/PracticeScreen.tsx",

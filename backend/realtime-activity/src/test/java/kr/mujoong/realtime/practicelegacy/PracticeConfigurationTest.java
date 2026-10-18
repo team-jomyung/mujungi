@@ -11,10 +11,10 @@ import org.springframework.boot.context.properties.bind.Binder;
 import org.springframework.boot.context.properties.source.MapConfigurationPropertySource;
 import org.springframework.core.io.ClassPathResource;
 
-@Tag("u5b")
+@Tag("practice-legacy")
 class PracticeConfigurationTest {
     PracticeProperties bind(String key, String value) {
-        var yaml = new YamlPropertiesFactoryBean(); yaml.setResources(new ClassPathResource("practice/u5b-independent.yml"));
+        var yaml = new YamlPropertiesFactoryBean(); yaml.setResources(new ClassPathResource("practice/practice-legacy-independent.yml"));
         var values = new HashMap<String, Object>(); yaml.getObject().forEach((k, v) -> values.put(k.toString(), v));
         if (key != null) values.put("mujoong.timing.practice." + key, value);
         return new Binder(new MapConfigurationPropertySource(values)).bind("mujoong.timing.practice", Bindable.of(PracticeProperties.class)).get();

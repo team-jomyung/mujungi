@@ -6,7 +6,7 @@ import java.util.*;
 import kr.mujoong.core.common.db.DbTestSupport;
 import org.junit.jupiter.api.*;
 
-@Tag("u14") @Tag("db")
+@Tag("goal-result") @Tag("db")
 class PracticeGoalRepositoryIT {
     DbTestSupport db;GoalCandidateRepository goals;UUID guardian,child,session;Instant now=DbTestSupport.EPOCH;
     @BeforeEach void setup(){db=DbTestSupport.coreApp();goals=new GoalCandidateRepository(db.jdbc());guardian=db.insertGuardian("ACTIVE");child=db.insertChild(guardian);session=UUID.randomUUID();}

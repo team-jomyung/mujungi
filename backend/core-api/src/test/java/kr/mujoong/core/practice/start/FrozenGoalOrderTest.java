@@ -8,7 +8,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
-@Tag("u5b")
+@Tag("practice-legacy")
 class FrozenGoalOrderTest {
     static final UUID GUARDIAN = UUID.randomUUID(), CHILD = UUID.randomUUID();
     static WeightedGoalOrder.Selection selection(int sort, boolean favorite) {

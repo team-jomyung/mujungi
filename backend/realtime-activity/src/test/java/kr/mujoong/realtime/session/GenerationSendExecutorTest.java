@@ -26,7 +26,7 @@ import org.junit.jupiter.api.Test;
  * 발화가 모두 지시({@code append}) 하나로 시작해 한 직렬 큐를 지나고 새 말의 시작이 확인 사건 · 전사 시간선 · 오디오 시계 여유로 정해지는지 본다.
  * 공급자는 가짜 대역이고 시각은 수동 시계다(R-F1). 오디오 조각 4,800바이트 = 100ms, 시계 여유 600ms.
  */
-@Tag("u11")
+@Tag("judgment-turn")
 class GenerationSendExecutorTest {
 
     private static final Duration QUIET = Duration.ofMillis(800);

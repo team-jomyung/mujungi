@@ -26,7 +26,7 @@ import org.springframework.core.env.StandardEnvironment;
  * Core 프로필 조합 가드 (SD-14 표 1 ~ 13 · A2 · A6 · NFR9.11 · BR8.3). 표 데이터는 {@link ProfileGuardRules#TABLE}(두 앱 공통)이고 실제
  * {@link StandardEnvironment}에 프로필 · 스위치를 넣어 후처리기를 돌린다. 거부 줄에는 프로필 · 키 이름만 있고 값은 없다.
  */
-@Tag("u1")
+@Tag("skeleton")
 class ProfileGuardEnvironmentPostProcessorTest {
 
     private final ProfileGuardEnvironmentPostProcessor processor = new ProfileGuardEnvironmentPostProcessor();

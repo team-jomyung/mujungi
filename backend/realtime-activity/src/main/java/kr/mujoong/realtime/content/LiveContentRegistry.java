@@ -25,7 +25,7 @@ import kr.mujoong.realtime.voice.PracticeSpeech;
  * </ul>
  *
  * <p>계획은 세션 id를 키로 하는 동시성 맵 하나에만 두고 DB · 파일 · 캐시에 쓰지 않는다. 이 컴포넌트는 로그를 쓰지 않고, 판 번호와 결과 종류만
- * 반환값으로 낸다(NFR3.6 · SD4 — ArchUnit {@code U8LiveContentArchTest}가 로그 의존 0을 강제한다). 판정 · 검사 기록 행에 판 번호를 쓰는 일은
+ * 반환값으로 낸다(NFR3.6 · SD4 — ArchUnit {@code LiveContentArchTest}가 로그 의존 0을 강제한다). 판정 · 검사 기록 행에 판 번호를 쓰는 일은
  * 받는 단위(U11 · U13)가 한다.
  */
 public final class LiveContentRegistry {

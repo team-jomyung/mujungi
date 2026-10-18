@@ -39,7 +39,7 @@ import org.springframework.context.annotation.Configuration;
  * E2 · E4 · E5) · A3 trace_id · J115 · PD-8(fillfactor 90 · 진행 중 세션 부분 유일 색인 둘) · J116(core 다음 적용이라 버전 0 기준선 +
  * V1 + V2) · Step 11 JPA 엔터티 validate.
  */
-@Tag("u1")
+@Tag("skeleton")
 @Tag("db")
 class RealtimeSchemaIT {
 
@@ -150,7 +150,7 @@ class RealtimeSchemaIT {
      * 외래 키는 세션 행을 지키며(RESTRICT), (session_id, snapshot_version) 유일 · 판 · 상태 · 사유 · 해시 형식 · 본문 형식 CHECK가 있다.
      */
     @Test
-    @Tag("u4b")
+    @Tag("session-runtime")
     void v3AddsTheResultSnapshotTableAndTheGuardianIndexOnly() throws SQLException {
         try (Connection owner = postgres.connect(Role.OWNER)) {
             assertThat(single(owner, "select script from flyway.realtime_schema_history where version = '3'"))

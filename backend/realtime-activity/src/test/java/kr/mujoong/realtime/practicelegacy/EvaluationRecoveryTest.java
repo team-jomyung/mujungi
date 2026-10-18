@@ -15,7 +15,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
-@Tag("u5b")
+@Tag("practice-legacy")
 class EvaluationRecoveryTest {
     private final PracticeRepository repository = mock(PracticeRepository.class);
     private final MutableClock clock = new MutableClock(PracticeModelTest.T);

@@ -23,7 +23,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 /** 종료 확인과 기기 일시정지가 연습 단계의 같은 남은 시간을 함께 보호한다. */
-@Tag("u5b")
+@Tag("practice-legacy")
 class PracticeStopConfirmRaceTest {
     private static final String RESPONSE_WAIT = "first-response-wait";
     private static final String ASYNC_READY = "scene-ready";

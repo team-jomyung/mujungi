@@ -25,7 +25,7 @@ import org.junit.jupiter.api.io.TempDir;
  * 파일에 못 박혀 있는지, 기본 test JVM에 제브 키가 없는지, 키가 없으면 어댑터를 만들지 않는지, 보고서에 후보 문장 원문 · 키 · 주소가 없는지를 본다.
  * 합격은 테스트 대역 증거다(R-M11).
  */
-@Tag("u13")
+@Tag("jev-guardrail")
 class JevLiveTaskIsolationTest {
 
     private static final Path REPO_ROOT = Path.of(System.getProperty("mujoong.repo.root", "../..")).toAbsolutePath().normalize();

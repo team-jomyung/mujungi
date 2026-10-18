@@ -17,7 +17,7 @@ import org.junit.jupiter.api.Test;
  * PR2 이전 흐름(판정 장치 없는 {@link JudgmentSupport#NONE})과 같다. 키 없음 · 스위치 꺼짐은 둘 다 {@code available() = false}인 보류 판정기로
  * 같은 모양이다(빈 선택은 {@code JudgmentConfigurationTest}). 증거 종류: 테스트 대역.
  */
-@Tag("u11")
+@Tag("judgment-turn")
 class JudgmentNoProviderRegressionTest {
 
     /** 한 시나리오의 관측: 보기 순서 · 세션 사건 종류 순서 · 재생 문구 코드 · 공급자 지시 수. */

@@ -49,7 +49,7 @@ import org.slf4j.MDC;
  * Outbox 발송 결정 · 대기표 · 재무장 조건 (BR5.2 · BR5.3 · RD-8 · RD-10 · A1 · OD-7 · J124). 409/400 즉시 FAILED, 401 재시도, 21번째 실패
  * FAILED, 재무장 대상 · 제외 조건, RETRY_FOREVER 기동 실패.
  */
-@Tag("u1")
+@Tag("skeleton")
 class CoreOutboxSenderTest {
 
     private static final Instant NOW = Instant.parse("2001-03-01T07:00:00Z");

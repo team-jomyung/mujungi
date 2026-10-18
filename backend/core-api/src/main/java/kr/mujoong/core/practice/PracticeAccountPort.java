@@ -4,7 +4,7 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * 연습(U5a)이 보호자 · 아이 계정을 읽는 소비자 포트. 구현은 U2 부품을 쓰는 {@link U2PracticeAccountAdapter} 하나다(U5a 리뷰 A · 3).
+ * 연습(U5a)이 보호자 · 아이 계정을 읽는 소비자 포트. 구현은 U2 부품을 쓰는 {@link PracticeAccountAdapter} 하나다(U5a 리뷰 A · 3).
  *
  * <p>잠그는 호출(lock = true · {@link #lockForDeletion})은 부르는 쪽 트랜잭션 안에서만 쓰고, 잠금은 그 트랜잭션이 끝날 때 풀린다. 보호자 행 잠금은
  * 늘 트랜잭션의 첫 잠금이다(U2 락 순서 원칙).

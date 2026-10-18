@@ -17,7 +17,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 /** 동의 상태 판정(U2 · R6 · FR1.2 · 편차 (U2-g) · U2-J8 · U2-J10). */
-@Tag("u2")
+@Tag("parent-account")
 class ConsentStatusRuleTest {
 
     private static final Instant T0 = Instant.parse("2026-10-15T00:00:00Z");

@@ -1,6 +1,6 @@
 {
   "$comment": "U1 커버리지 측정 범위(Step 6 자리 · Step 53 채움 · J137). MUJOONG_COVERAGE_SCOPE=skeleton일 때 Vitest가 files의 파일만 잰다. 항목은 저장소 루트 기준 경로이고 U1 source-manifest.json의 frontend/src/**/*.{ts,tsx} 전부다(Step 53이 대조, 빠짐 0). CSS · JSON 자원은 재지 않는다. 뒤 유닛은 이 파일을 고치지 않고 자기 목록(coverage-scope/u<n>.json)을 만든다.",
-  "unit": "u1",
+  "unit": "skeleton",
   "files": [
     "frontend/src/app/device/page.tsx",
     "frontend/src/app/device/pcm-capture-worklet/route.ts",

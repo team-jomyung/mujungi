@@ -19,7 +19,7 @@ import org.junit.jupiter.params.provider.ValueSource;
  * 판정 설정과 4초 시한 시험 (U11 FR1.3 · FR1.4 · NFR1 · BR1.3 · BR1.4, 편차 (U11-b)). 기본값 0.6 · 0.15, 0 ~ 1 밖은 키 이름과 함께 기동 거부,
  * 시한 키 {@code mujoong.timing.judgment.live-budget} = 4s가 application.yml · 설정 레코드 바인딩 · timing.md 13절 세 곳에서 같다(R-M5).
  */
-@Tag("u11")
+@Tag("judgment-turn")
 class JudgmentSettingsTest {
 
     private static final Path REPO = Path.of(System.getProperty("mujoong.repo.root", "..")).toAbsolutePath().normalize();

@@ -115,7 +115,7 @@ mujoong:
     recorder:
       flush-interval: 200ms
     # U8(timing.md 13절): 진행 중 판정 Luna 한 번 상한 · 응답 준비 대기(U11), 제브 검사 상한(U13), 새 연습 흐름(U12).
-    # 새 연습 흐름 키는 U5b의 timing.practice(practice/u5b-runtime.yml)와 섞지 않으려고 conversation 아래에 둔다
+    # 새 연습 흐름 키는 U5b의 timing.practice(practice/practice-legacy-runtime.yml)와 섞지 않으려고 conversation 아래에 둔다
     judgment:
       # U11: 2s → 4s(사람 결정 2026-10-16, 편차 (U11-b)). 실호출 Luna 지연 2.6 · 2.9초를 담는다. contracts/timing.md 13절 · 설정 레코드와 같은 값
       live-budget: 4s

@@ -24,7 +24,7 @@ import org.springframework.boot.test.context.runner.ApplicationContextRunner;
  * realtime Luna 켜짐 조건 = 키 있음 AND 스위치 {@code mujoong.luna.enabled} (U11 BR12.3 · 계약 편차 U11-c). 키 × 스위치 네 경우의
  * {@code lunaState}와 빈 등록을 본다. 키는 가짜 문자열만 쓴다(R-F3).
  */
-@Tag("u11")
+@Tag("judgment-turn")
 class LunaActivationTest {
 
     private final MutableClock clock = new MutableClock();

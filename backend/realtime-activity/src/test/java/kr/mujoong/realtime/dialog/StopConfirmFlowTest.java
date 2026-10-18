@@ -16,7 +16,7 @@ import org.junit.jupiter.api.Test;
  *
  * <p>네 경로(STOP → 곧바로 종료, CONFIRM → 확정, CONFIRM → 무응답, CONFIRM → 다른 말)와 19 · 21초 경계, 일시정지 동안 창 멈춤을 본다.
  */
-@Tag("u4b")
+@Tag("session-runtime")
 class StopConfirmFlowTest {
 
     private static final Instant T0 = Instant.parse("2026-10-13T09:00:00Z");

@@ -12,7 +12,7 @@ import org.junit.jupiter.api.Test;
  * 판정 패키지 경계 (U11 Step 17). {@code luna} · {@code gate} · {@code voice}는 판정 패키지를 모르고, 판정 패키지는 세션 실행기 · 기기 게이트웨이 ·
  * 출력 게이트 · 공급자 음성 계층에 기대지 않는다(실행기가 판정 협력 객체를 부르고 그 반대는 없다). 새 규칙이라 기존 구조 시험은 건드리지 않는다.
  */
-@Tag("u11")
+@Tag("judgment-turn")
 class JudgmentPackageArchTest {
 
     private static final JavaClasses PRODUCTION = new ClassFileImporter()

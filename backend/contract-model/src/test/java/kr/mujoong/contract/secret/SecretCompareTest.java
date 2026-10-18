@@ -10,7 +10,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 /** 비밀 비교 · 해시(SD-8 · BR1.5 · BR3.3 · NFR9.4). 비교할 값은 실행마다 만든다. */
-@Tag("u1")
+@Tag("skeleton")
 class SecretCompareTest {
 
     private static final SecureRandom RANDOM = new SecureRandom();

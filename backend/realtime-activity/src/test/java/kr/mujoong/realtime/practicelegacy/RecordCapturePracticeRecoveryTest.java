@@ -28,7 +28,7 @@ import org.mockito.ArgumentCaptor;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.SimpleTransactionStatus;
 
-@Tag("u5b")
+@Tag("practice-legacy")
 class RecordCapturePracticeRecoveryTest {
     private final ActivitySessionRepository sessions = mock(ActivitySessionRepository.class);
     private final ActivitySessionRow session = mock(ActivitySessionRow.class);

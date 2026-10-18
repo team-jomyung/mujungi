@@ -28,7 +28,7 @@ import org.junit.jupiter.api.Test;
  * 제브 계측 (U13 BR8.5): 출처별 호출 수 · 지연 히스토그램 · 차단 수 · 시간 초과 수 · 체감 대기 다섯 항목이 {@code mujoong.guardrail.*}로 나가고, 대역(STUB)
  * 지표가 실검사(REAL)와 태그로 구분된다. 제브 · 공급자는 모두 대역이다(실제 호출 없음, R-F1 · R-M11).
  */
-@Tag("u13")
+@Tag("jev-guardrail")
 class GuardrailMetricsTest {
 
     private static final byte[] AUDIO = new byte[4800];

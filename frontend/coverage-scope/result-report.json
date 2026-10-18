@@ -1,6 +1,6 @@
 {
   "$comment": "U6 신규 및 변경 운영 TypeScript 전체. 하한 80%, 제외 없음.",
-  "unit": "u6",
+  "unit": "result-report",
   "files": [
     "frontend/src/app/parent/layout.tsx",
     "frontend/src/app/parent/records/[sessionId]/page.tsx",

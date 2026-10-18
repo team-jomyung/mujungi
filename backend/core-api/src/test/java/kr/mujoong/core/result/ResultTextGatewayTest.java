@@ -7,7 +7,7 @@ import kr.mujoong.contract.json.JsonCodec;
 import kr.mujoong.core.textai.TextAiProperties;
 import kr.mujoong.testsupport.time.MutableClock;
 import org.junit.jupiter.api.*;
-@Tag("u6")
+@Tag("result-report")
 class ResultTextGatewayTest {
     ExecutorService executor;MutableClock clock;FakeResultTextProvider provider;
     @BeforeEach void setup(){executor=Executors.newVirtualThreadPerTaskExecutor();clock=new MutableClock();provider=new FakeResultTextProvider();}

@@ -8,7 +8,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 /** 출력 게이트 검사가 세대 열쇠 구간(끊김 봉인 = 완전)을 다루는 방식 (U11 BR11.6). 시드 사전은 운영 파일을 그대로 쓴다. */
-@Tag("u11")
+@Tag("judgment-turn")
 class OutputGateGenerationTest {
 
     private final OutputGate gate = new OutputGate(SeedDictionary.loadDefault());

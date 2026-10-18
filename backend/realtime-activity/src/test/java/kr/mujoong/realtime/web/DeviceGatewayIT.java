@@ -57,7 +57,7 @@ import org.springframework.transaction.support.TransactionTemplate;
  * 운영 값이다: verify-token 1초 · HELLO 5초 · 끊김 40초. 5초 · 40초 시한은 실제로 기다리지 않고 수동 시계({@link ManualTime})를 앞당긴다
  * (NFR6.2). verify-token 1초 제한만 실제 HTTP 지연으로 넘긴다.
  */
-@Tag("u1")
+@Tag("skeleton")
 @Tag("db")
 class DeviceGatewayIT {
 

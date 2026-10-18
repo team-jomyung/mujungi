@@ -72,7 +72,7 @@ import org.springframework.jdbc.datasource.DelegatingDataSource;
  * 폐기된다 · READY 뒤 거절한 기기 메시지(모르는 type · payload 위반 · 길이 위반 0x01)의 내용이 ERROR 응답 · 로그 · DB에 되돌아오지 않는다
  * (ERROR · 4400 판정 자체는 DeviceGatewayIT가 보고 여기서는 내용이 새지 않는지를 본다, J318).
  */
-@Tag("u1")
+@Tag("skeleton")
 @Tag("db")
 class RealtimeLogHygieneIT {
 

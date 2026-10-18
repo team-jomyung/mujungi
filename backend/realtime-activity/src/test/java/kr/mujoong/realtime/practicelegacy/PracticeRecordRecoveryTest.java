@@ -14,7 +14,7 @@ import kr.mujoong.testsupport.time.MutableClock;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
-@Tag("u5b")
+@Tag("practice-legacy")
 class PracticeRecordRecoveryTest {
     private final PracticeRepository repository = mock(PracticeRepository.class);
     private final MutableClock clock = new MutableClock(PracticeModelTest.T);

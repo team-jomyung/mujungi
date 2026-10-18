@@ -28,7 +28,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 
 /** Core Luna 빈 조건 · 기동 확인 (U9 BR1.1 ~ BR1.4 · SD11 · AC2.3.3 · NFR2.2). 키는 가짜 문자열만 쓴다(R-F3). */
-@Tag("u9")
+@Tag("luna")
 class LunaConfigurationTest {
 
     private final MutableClock clock = new MutableClock();

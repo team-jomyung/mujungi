@@ -46,7 +46,7 @@ import org.springframework.jdbc.datasource.DataSourceTransactionManager;
  * <p>증명: 보호자 G의 전사 원문 비우기 · 원음 파일 · 세션 디렉터리 삭제와 메타 표시 · 끊김 구간 · 끊김 사건 · 연결 원장 삭제, 다른 보호자 H의 행 ·
  * 파일은 그대로, 다시 불러도 같은 결과(0건), 지우지 못한 파일은 표시하지 않고 예외로 알린 뒤 다음 호출이 마저 지움.
  */
-@Tag("u3")
+@Tag("voice-session")
 @Tag("db")
 class RealtimeVoiceDeletionParticipantIT {
 

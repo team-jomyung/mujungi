@@ -34,7 +34,7 @@ import org.junit.jupiter.api.Test;
  * 분기 뒤 모든 시점이 고른 쪽으로 위임된다. 레거시 확장이 무엇을 부르든 실패하도록 만든 대역(레거시 평가 · 단서 포트가 실패를 돌려주는 상황)
  * 위에서도 새 흐름이 끝까지 가는지 본다.
  */
-@Tag("u12")
+@Tag("practice-flow")
 class PracticeFlowRouterTest {
 
     private static final UUID GOAL = UUID.fromString("00000000-0000-4000-8000-000000000001");

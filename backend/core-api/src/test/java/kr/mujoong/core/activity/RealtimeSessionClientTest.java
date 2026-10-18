@@ -40,7 +40,7 @@ import org.junit.jupiter.api.Test;
  * Core → Realtime 호출 규칙 (RD-14 · NFR4.12 · R3-2 · J74 · BR6.6 · BR6.7 · BR6.9 · BR6.15). 호출별 제한 · 시간 초과만 1회 재시도 · 차단기
  * 열림 · 반열림(가변 Clock) · 409/423 성공 계수 · 열림 중에도 끝내기 · 조회 시도.
  */
-@Tag("u1")
+@Tag("skeleton")
 class RealtimeSessionClientTest {
 
     private static final Instant NOW = Instant.parse("2001-03-01T04:00:00Z");

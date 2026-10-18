@@ -48,7 +48,7 @@ import tools.jackson.databind.JsonNode;
  * 코드 포인트)으로 자르고 나이는 6 ~ 12로 묶는다 · 아이 맥락 값은 따옴표 · 역슬래시 · 제어 문자로 지시문의 따옴표 밖으로 나갈 수 없다 · 입력
  * 음성은 정확히 960바이트 프레임만 무변환으로 나간다.
  */
-@Tag("u1")
+@Tag("skeleton")
 @Tag("db")
 class ProviderRequestWhitelistIT {
 

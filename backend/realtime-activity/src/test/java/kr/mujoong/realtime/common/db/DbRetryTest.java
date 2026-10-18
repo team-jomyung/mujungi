@@ -30,7 +30,7 @@ import org.springframework.util.unit.DataSize;
  * <p>증명: 40P01 · 40001 · 55P03만 멱등 연산에서 재시도 · 비멱등은 즉시 실패 · 상한(2회) 뒤 마지막 오류와 앞 오류(suppressed) ·
  * 지터 0 ~ 50ms · 바깥 트랜잭션이 열려 있으면 재시도하지 않음 · 대기 중 인터럽트 보존.
  */
-@Tag("u1")
+@Tag("skeleton")
 class DbRetryTest {
 
     private final List<Duration> sleeps = new ArrayList<>();

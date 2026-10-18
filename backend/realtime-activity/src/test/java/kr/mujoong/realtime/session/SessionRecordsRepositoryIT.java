@@ -23,7 +23,7 @@ import org.springframework.dao.DataIntegrityViolationException;
  * <p>증명: BR6.6 ④(세션 행 · 기본 종료 표현을 한 트랜잭션에서 쓰고 함께 되돌려짐) · BR6.5(기본 표현 '무중아 그만할래' is_default 한 행) ·
  * BR6.9(끝내기 requestId를 op_id에) · PD-5(기록 행은 배치로 추가만) · 외래 키 RESTRICT(세션 없는 기록 거부).
  */
-@Tag("u1")
+@Tag("skeleton")
 @Tag("db")
 class SessionRecordsRepositoryIT {
 

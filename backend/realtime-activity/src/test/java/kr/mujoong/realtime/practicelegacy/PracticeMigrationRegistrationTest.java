@@ -14,7 +14,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.jdbc.core.JdbcTemplate;
 
-@Tag("u5b")
+@Tag("practice-legacy")
 class PracticeMigrationRegistrationTest {
     @Test
     void migrationIsVisibleToTheDeploymentAndStartupCheck() {

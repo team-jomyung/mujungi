@@ -25,7 +25,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.core.annotation.Order;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 
-@Tag("u7")
+@Tag("web-push")
 @Tag("db")
 class PushSubscriptionIT {
     private DbTestSupport db;

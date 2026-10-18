@@ -2,7 +2,7 @@
 --
 -- 실행: 001 · 002 · 003 뒤에 같은 자격(mujoong_owner)으로 한 번. 몇 번 실행해도 결과가 같다(멱등).
 --   psql -X -v ON_ERROR_STOP=1 --single-transaction -f infra/seed/004-u8-reference.sql
--- 트랜잭션 제어 · psql 메타 명령을 두지 않는다(JDBC로도 한 트랜잭션에 적용, SeedU8ReferenceSqlIT).
+-- 트랜잭션 제어 · psql 메타 명령을 두지 않는다(JDBC로도 한 트랜잭션에 적용, SeedLiveContentReferenceSqlIT).
 --
 -- 내용(합성 참조 데이터, 개인정보 없음)
 --   - content_type 새 값 APPROVED_SPEECH: 음성 파일 없이 GPT-Live 지시 + 공백 제거 완전 일치로 재생하는 승인 발화(audio_path NULL).

@@ -35,7 +35,7 @@ import org.springframework.jdbc.datasource.DataSourceTransactionManager;
  * 그 창을 넓히려고 사본 갱신이 레지스트리에서 연결을 찾는 순간을 걸어 두고(탐침 레지스트리), 그 순간 다른 연결로 읽은 원장과 사본을 나란히
  * 본다. 원장이 새 상태를 보여 주는 어떤 순간에도 사본이 뒤처져 있으면 안 된다.
  */
-@Tag("u1")
+@Tag("skeleton")
 @Tag("db")
 class ConnectionStateWriterIT {
 

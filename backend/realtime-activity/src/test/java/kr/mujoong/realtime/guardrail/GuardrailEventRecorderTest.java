@@ -30,7 +30,7 @@ import org.springframework.dao.TransientDataAccessResourceException;
  * 제브 검사 기록 비동기 기록기 단위 시험 (U13 BR8.2 · NFR8). 일시 실패는 다음 틱 재시도 · 제약 위반과 차단된 보호자는 버림 · 칸에 넣는 쪽은 DB를
  * 기다리지 않음 · 같은 id 덮어쓰기. 저장소는 대역이다(실제 제브 · 실제 DB 아님).
  */
-@Tag("u13")
+@Tag("jev-guardrail")
 class GuardrailEventRecorderTest {
 
     private final MutableClock clock = new MutableClock();

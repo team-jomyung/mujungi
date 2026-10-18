@@ -8,7 +8,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
-@Tag("u5b")
+@Tag("practice-legacy")
 @Tag("db")
 class PracticeProtocolTest {
     @Test void previousGoalTimerCannotCloseNextGoalsTwentySecondOpportunity() {

@@ -16,7 +16,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
 /** 오류 code 표(BR8.6 · 계약 2절 · 편차 (a)(b)(c)(e)(n)(o) · SD-11). */
-@Tag("u1")
+@Tag("skeleton")
 class ErrorCodeTest {
 
     /** BR8.6 code → HTTP 표(contracts/errors.md 코드 표와 같다). */
@@ -112,7 +112,7 @@ class ErrorCodeTest {
     }
 
     @Test
-    @Tag("u5a")
+    @Tag("practice-core")
     void accountDeletionErrorServesGuardianAndInternalWithoutChangingGuardianResponse() {
         assertThat(ErrorCode.ACCOUNT_DELETION_IN_PROGRESS.audiences()).containsExactlyInAnyOrder(
                 ErrorCode.Audience.GUARDIAN, ErrorCode.Audience.INTERNAL);

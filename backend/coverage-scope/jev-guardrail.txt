@@ -2,12 +2,12 @@
 # -PcoverageScope=jev-guardrail일 때 JaCoCo가 이 목록의 운영 소스(.java)만 잰다. 한 줄에 저장소 루트 기준 경로 하나.
 # 내용은 U13이 만들거나 고친 realtime-activity 운영 Java 파일이다(main 병합 전 기준 6a78536과의 차이, 설정 yml · SQL · 계약 문서 제외).
 # 정직하게 적은 목록이다:
-#  - SessionExecutor(약 3,400줄, 앞 유닛 코드가 대부분)는 호출 지점 몇 군데만 U13이 더했다. 목록에 넣으면 u13 태그 시험만으로 재는 이 범위가
-#    실행기 전체를 분모로 삼아 낮게 나오므로 뺀다. 그 호출 지점은 GuardrailExecutorTest · GuardrailTurnIT(u13 태그)가 실행하며, 실행기 전체
+#  - SessionExecutor(약 3,400줄, 앞 유닛 코드가 대부분)는 호출 지점 몇 군데만 U13이 더했다. 목록에 넣으면 jev-guardrail 태그 시험만으로 재는 이 범위가
+#    실행기 전체를 분모로 삼아 낮게 나오므로 뺀다. 그 호출 지점은 GuardrailExecutorTest · GuardrailTurnIT(jev-guardrail 태그)가 실행하며, 실행기 전체
 #    커버리지는 모듈 전체 80%(태그 없는 -Pmujoong.test.db=docker check)로 본다.
 #  - 아래 공통 파일(TranscriptWriter · RealtimeMetrics · LatencyRecorder · SessionMailbox · SessionTimers · PracticeSessionExtension ·
 #    RealtimeStartupChecks · RealtimeRuntimeConfig · InstructionTemplates · GateDecision · OutputGeneration)은 U13이 줄을 더하거나 고친 파일이라
-#    넣었지만 앞 유닛 코드가 섞여 있다. u13 태그 시험이 그 앞 유닛 줄을 모두 지나지는 않는다.
+#    넣었지만 앞 유닛 코드가 섞여 있다. jev-guardrail 태그 시험이 그 앞 유닛 줄을 모두 지나지는 않는다.
 # test-support 가짜 공급자와 contract-model은 이 목록에 넣지 않는다(u9 · u11과 같은 이유: 모듈 전체 80%로 잰다).
 # 로컬 · 검토 근거다(CI가 막는 범위는 U5b · U7뿐, team.md Testing Posture).
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/dialog/InstructionTemplates.java

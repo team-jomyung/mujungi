@@ -39,7 +39,7 @@ import org.springframework.transaction.IllegalTransactionStateException;
  * status_version · row_version 증가 · 종료 상태는 되돌아가지 않음 · 출발 상태가 둘 이상인 FAILED 전이는 FOR UPDATE로 읽은 상태로
  * 실패 코드를 정함) · BR6.13(재시작 정리 SERVER_RESTART) · BR6.3(Realtime 2차 방어 조회) · RD-22(잠금은 트랜잭션 안에서만).
  */
-@Tag("u1")
+@Tag("skeleton")
 @Tag("db")
 class ActivitySessionRepositoryIT {
 

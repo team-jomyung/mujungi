@@ -11,7 +11,7 @@ import kr.mujoong.core.web.support.WebFixtures;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
-@Tag("u5a")
+@Tag("practice-core")
 class ScenarioInternalControllerTest {
     final ScenarioService service=mock(ScenarioService.class);
     final ScenarioInternalController controller=new ScenarioInternalController(service,JsonCodec.shared());

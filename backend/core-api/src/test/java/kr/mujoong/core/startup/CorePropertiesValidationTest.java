@@ -22,7 +22,7 @@ import org.springframework.mock.env.MockEnvironment;
  * 있다. 필수 비밀이 없거나 짧으면 값을 출력하지 않고 기동을 거부한다. I-3 · I-10은 Realtime 키(verify-token · hello · provider ·
  * device-ack)라 Realtime 시험(Step 29)이 본다.
  */
-@Tag("u1")
+@Tag("skeleton")
 class CorePropertiesValidationTest {
 
     private final ApplicationContextRunner runner = new ApplicationContextRunner()

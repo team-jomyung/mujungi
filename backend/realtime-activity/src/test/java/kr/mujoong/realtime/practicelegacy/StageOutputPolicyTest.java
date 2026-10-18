@@ -7,7 +7,7 @@ import kr.mujoong.contract.json.JsonCodec;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
-@Tag("u5b")
+@Tag("practice-legacy")
 class StageOutputPolicyTest {
     final UUID scene = UUID.randomUUID();
     final CueBrief brief = new CueBrief("블록 놀이", "나도 쌓아 볼래", "상대에게 차례 표현");

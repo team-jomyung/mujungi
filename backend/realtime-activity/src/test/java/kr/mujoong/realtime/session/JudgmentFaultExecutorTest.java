@@ -19,7 +19,7 @@ import org.junit.jupiter.api.Test;
  * 판정 장애 · 세션 이탈 회복 (U11 W6 · BR5.1 ~ BR5.4). 공급자 끊김 · 오류 · 기술적 일시 정지 · 상태 이탈 · 늦은 결과. 공급자와 판정기는 가짜, 값은
  * 합성이다(R-F1 · R-F3).
  */
-@Tag("u11")
+@Tag("judgment-turn")
 class JudgmentFaultExecutorTest {
 
     private final JudgmentExecutorSupport t = new JudgmentExecutorSupport();

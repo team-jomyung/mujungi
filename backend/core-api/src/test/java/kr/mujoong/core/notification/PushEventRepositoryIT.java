@@ -25,7 +25,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 
-@Tag("u7")
+@Tag("web-push")
 @Tag("db")
 class PushEventRepositoryIT {
     private final JsonCodec json = JsonCodec.shared();

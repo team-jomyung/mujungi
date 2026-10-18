@@ -13,7 +13,7 @@ import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.transaction.*;
 import org.springframework.transaction.support.SimpleTransactionStatus;
 
-@Tag("u14")
+@Tag("goal-result")
 class CandidateSeedLinkTest {
     UUID guardian=UUID.randomUUID(),child=UUID.randomUUID(),session=UUID.randomUUID(),result=UUID.randomUUID();
     GoalCandidateRepository repository=mock(GoalCandidateRepository.class);PracticeAccountPort accounts=mock(PracticeAccountPort.class);

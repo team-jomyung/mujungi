@@ -64,7 +64,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
  * 복구 순서는 S3c → S3d → S3f, 복구 줄(S3e) 실패는 기동을 막지 않으며, 정지는 DRAINING → 스케줄러 정지 → 병합 로그 순이고 두 번 불러도
  * 같다. phase는 정지가 가장 먼저, 기동 순서가 웹 서버(MAX − 2048)보다 먼저다.
  */
-@Tag("u1")
+@Tag("skeleton")
 class CoreStartupSequenceTest {
 
     private static final CoreProperties PROPERTIES = testProperties();

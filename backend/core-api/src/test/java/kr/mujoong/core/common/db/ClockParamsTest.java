@@ -26,7 +26,7 @@ import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
  * {@code timestamptz}로, NULL 인자는 SQL 형을 함께 넘긴다. 열 읽기는 NULL과 실제 0을 가르고 어느 오프셋 표기든 같은 순간으로 읽는다(3.6
  * 수정 분량, JDBC {@link ResultSet} 대역 — J344).
  */
-@Tag("u1")
+@Tag("skeleton")
 class ClockParamsTest {
 
     private static final Instant T = Instant.parse("2001-03-01T09:30:15.123Z");

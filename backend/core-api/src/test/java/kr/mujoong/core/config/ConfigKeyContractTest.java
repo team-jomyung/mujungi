@@ -59,7 +59,7 @@ import org.springframework.core.io.FileSystemResource;
  *       {@code mujoong.load-test.*} 키가 없다. SD-14 · A2: 어느 프로필 파일도 시험 로그인을 켜지 않는다.
  * </ul>
  */
-@Tag("u1")
+@Tag("skeleton")
 class ConfigKeyContractTest {
 
     /** timing.md '소유 앱' 열에서 이 앱을 가리키는 이름. */
@@ -558,7 +558,7 @@ class ConfigKeyContractTest {
 
     /** U5a 키는 application.yml 한 곳에 있고 타입 있는 설정 레코드로 그대로 묶인다(U5a 리뷰 5 · timing.md 9절). */
     @Test
-    @Tag("u5a")
+    @Tag("practice-core")
     void u5aKeysLiveInApplicationYmlAndBindToTypedRecords() {
         Path base = MAIN_RESOURCES.resolve("application.yml");
         try (Stream<Path> files = Files.list(MAIN_RESOURCES)) {

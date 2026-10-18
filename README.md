@@ -120,10 +120,10 @@ docker compose -p mujoong-live logs -f realtime   # 로그 (비밀 · 전사 없
 정본이다. 자주 쓰는 것만 옮긴다(각 줄을 저장소 루트에서 따로 실행한다).
 
 ```bash
-cd backend && ./gradlew --no-daemon :contract-model:test :core-api:test :realtime-activity:test :test-support:test -PincludeTags=u1
+cd backend && ./gradlew --no-daemon :contract-model:test :core-api:test :realtime-activity:test :test-support:test -PincludeTags=skeleton
 cd backend && ./gradlew --no-daemon :contract-model:test :core-api:test :realtime-activity:test \
   :contract-model:jacocoTestCoverageVerification :core-api:jacocoTestCoverageVerification \
-  :realtime-activity:jacocoTestCoverageVerification -PincludeTags=u1 -PcoverageScope=skeleton
+  :realtime-activity:jacocoTestCoverageVerification -PincludeTags=skeleton -PcoverageScope=skeleton
 cd frontend && npm ci && MUJOONG_COVERAGE_SCOPE=skeleton npx --no-install vitest run tests --coverage
 cd tools && npm ci && npx --no-install vitest run tests
 ```

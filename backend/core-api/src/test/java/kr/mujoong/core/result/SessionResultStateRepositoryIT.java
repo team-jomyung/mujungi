@@ -4,7 +4,7 @@ import java.time.Instant;
 import java.util.UUID;
 import kr.mujoong.core.common.db.DbTestSupport;
 import org.junit.jupiter.api.*;
-@Tag("u6") @Tag("db")
+@Tag("result-report") @Tag("db")
 class SessionResultStateRepositoryIT {
     DbTestSupport db;SessionResultStateRepository states;ActivityResultRepository results;ResultJobRepository jobs;
     Instant now=Instant.parse("2026-10-14T00:00:00Z");UUID s=UUID.randomUUID(),g=UUID.randomUUID(),c=UUID.randomUUID();

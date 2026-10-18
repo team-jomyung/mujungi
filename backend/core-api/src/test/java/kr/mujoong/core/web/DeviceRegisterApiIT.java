@@ -35,7 +35,7 @@ import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
  * <p>화면 동작(AC2.2.1 · 2.2.4 · 2.2.8 칸 · 단추)은 프런트 시험 몫이고 여기서는 그 화면이 기대는 서버 응답을 본다. 실패 한도(보호자당 10분
  * 10회)가 시험끼리 섞이지 않게 시험마다 새 보호자를 쓴다.
  */
-@Tag("u1")
+@Tag("skeleton")
 @Tag("db")
 class DeviceRegisterApiIT {
 

@@ -21,7 +21,7 @@ import org.junit.jupiter.api.Test;
  * {@code record.practice} 조립기 시험 (U12 BR7.2). 필수 4필드 · 선택 필드 · 사실 순서 · 라벨 · 확률 · 원문 없음, 그리고 결과가 비어 있어도
  * {@code practice-record-v2} 스키마를 지키는지 본다. DB 없음 · AI 없음(테스트 대역 증거).
  */
-@Tag("u12")
+@Tag("practice-flow")
 class PracticeFlowRecordAssemblerTest {
 
     private static final Instant T0 = Instant.parse("2026-10-18T09:00:00Z");

@@ -36,7 +36,7 @@ import org.springframework.session.jdbc.JdbcIndexedSessionRepository;
  * 직전은 읽히고 지난 세션은 읽을 때 지워진다), 쓰기는 save 때 한 번이고(ON_SAVE) 바꾼 속성만 쓴다(ON_SET_ATTRIBUTE — 같은 세션의 겹친
  * 요청이 읽기만 한 속성을 낡은 값으로 덮지 않는다).
  */
-@Tag("u1")
+@Tag("skeleton")
 @Tag("db")
 class SessionJdbcConfigIT {
 

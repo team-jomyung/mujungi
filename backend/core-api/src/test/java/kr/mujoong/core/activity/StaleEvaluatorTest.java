@@ -17,7 +17,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 /** 30초 확인 불가 판정 · 조회 1회 실패는 stale 아님 · 래치 1회 (RD-6 · NFR4.3 · BR6.15 · OD-10). */
-@Tag("u1")
+@Tag("skeleton")
 class StaleEvaluatorTest {
 
     private static final Instant NOW = Instant.parse("2001-03-01T03:00:00Z");

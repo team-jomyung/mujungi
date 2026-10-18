@@ -24,7 +24,7 @@ import org.junit.jupiter.api.Test;
  * <p>해시는 계약 정의(키 정렬 · 공백 없는 JSON의 UTF-8 sha256)대로 손으로 만든 정규화 문자열을 코드 밖({@code printf | sha256sum})에서 구한 골든
  * 값과 비교한다. null 값(practice · 열린 구간 to)은 키를 남기고 JSON null로 쓴다.
  */
-@Tag("u4b")
+@Tag("session-runtime")
 class ResultSnapshotBuilderTest {
 
     private static final JsonCodec JSON = JsonCodec.shared();

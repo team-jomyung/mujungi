@@ -20,7 +20,7 @@ import org.junit.jupiter.api.Test;
  * 세션 시계 구역의 다른 시험이 비껴가는 가지를 지금 동작 그대로 고정한다: 시한보다 일찍 온 만기의 지연 재무장(시작 확인 · 닫기 확인),
  * 판정 준비 만기의 전달, 재생 상한 만기의 종료 확인 재생 처리. 공급자와 판정기는 가짜, 시각은 수동 시계다.
  */
-@Tag("u1")
+@Tag("skeleton")
 class SessionClocksCharacterizationTest {
 
     private static final Duration TICK = Duration.ofMillis(1);

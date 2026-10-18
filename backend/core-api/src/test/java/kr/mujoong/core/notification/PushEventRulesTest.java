@@ -14,7 +14,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
-@Tag("u7")
+@Tag("web-push")
 class PushEventRulesTest {
     private static final UUID SESSION = UUID.randomUUID();
     private static final Instant NOW = Instant.parse("2026-10-14T01:00:00Z");

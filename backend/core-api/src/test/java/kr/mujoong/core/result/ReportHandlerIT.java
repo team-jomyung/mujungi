@@ -16,7 +16,7 @@ import kr.mujoong.core.result.check.*;
 import kr.mujoong.testsupport.time.MutableClock;
 import org.junit.jupiter.api.*;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
-@Tag("u6") @Tag("db") class ReportHandlerIT {
+@Tag("result-report") @Tag("db") class ReportHandlerIT {
     DbTestSupport db;MutableClock clock;ExecutorService executor;FakeResultTextProvider provider;ResultJobRepository jobs;ReportRepository reports;
     SessionResultStateRepository states;ActivityResultRepository results;StructuredExperienceRepository structures;ResultRecordReader reader;JobRunner runner;
     kr.mujoong.core.consent.ConsentPolicyService consent;

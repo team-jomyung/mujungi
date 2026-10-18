@@ -28,7 +28,7 @@ import org.junit.jupiter.api.TestMethodOrder;
  * 3.6 수정 분량: DB가 멈춘 동안 readiness만 503이고 liveness는 200이다(프로세스는 살아 있어 재시작 대상이 아니다, RD-16 앱별 liveness ·
  * readiness), DB가 없는 한 점검은 READY로 되돌리지 못한다.
  */
-@Tag("u1")
+@Tag("skeleton")
 @Tag("db")
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class HealthAndReadinessIT {

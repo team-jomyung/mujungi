@@ -14,7 +14,7 @@ import org.junit.jupiter.api.Test;
  * 키가 비면 연결 요청에 {@code Authorization} 헤더를 싣지 않는다(U11 BR12.2). 키 값은 실행 때 만든 가짜 문자열이고 가짜 공급자만 부른다
  * (R-F1 · R-F3).
  */
-@Tag("u11")
+@Tag("judgment-turn")
 class ProviderAuthHeaderTest {
 
     private static final JsonCodec JSON = JsonCodec.shared();

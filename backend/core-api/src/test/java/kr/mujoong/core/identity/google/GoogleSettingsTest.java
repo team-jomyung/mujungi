@@ -15,7 +15,7 @@ import org.junit.jupiter.params.provider.ValueSource;
  * 구글 토큰 엔드포인트 주소 규칙(U2 · 리뷰 1 · R1): 서명 확인 열쇠와 토큰을 받는 주소는 https만, 평문 http는 루프백 시험 주소만 받는다.
  * 설정 실수로 평문 · 남의 호스트에서 토큰을 받으면 기동을 거부한다.
  */
-@Tag("u2")
+@Tag("parent-account")
 class GoogleSettingsTest {
 
     private static final Duration TIMEOUT = Duration.ofSeconds(1);

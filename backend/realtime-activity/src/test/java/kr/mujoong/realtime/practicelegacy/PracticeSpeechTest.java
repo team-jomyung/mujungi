@@ -8,7 +8,7 @@ import kr.mujoong.realtime.voice.ProviderRequestFactory;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
-@Tag("u5b")
+@Tag("practice-legacy")
 class PracticeSpeechTest {
     @Test void voiceRequestContainsOnlyQuotedSpeechAndRoleAndNoIdentifiers() {
         var speech = new PracticeSpeech(UUID.randomUUID(), UUID.randomUUID(), 3,

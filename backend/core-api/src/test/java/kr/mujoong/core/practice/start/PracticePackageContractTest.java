@@ -9,7 +9,7 @@ import kr.mujoong.contract.json.JsonCodec;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
-@Tag("u5b")
+@Tag("practice-legacy")
 class PracticePackageContractTest {
     final PreparedPracticePackageMapper mapper = new PreparedPracticePackageMapper();
     static PreparedPracticePackageMapper.PreparedSnapshot prepared() {

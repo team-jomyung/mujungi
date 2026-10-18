@@ -18,7 +18,7 @@ import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 
-@Tag("u5b")
+@Tag("practice-legacy")
 @Tag("db")
 class PracticeMigrationIT {
     private static final List<String> TABLES = List.of("realtime_session_goal", "realtime_practice_attempt",

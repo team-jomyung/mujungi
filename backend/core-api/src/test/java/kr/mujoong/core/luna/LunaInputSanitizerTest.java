@@ -12,7 +12,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 /** 보내기 전 입력 정리 (U9 BR2.1 ~ BR2.4 · SD1 · NFR3.1 · NFR3.2). 입력은 합성 값뿐이다. */
-@Tag("u9")
+@Tag("luna")
 class LunaInputSanitizerTest {
 
     private final LunaInputSanitizer sanitizer = new LunaInputSanitizer(JsonCodec.shared());

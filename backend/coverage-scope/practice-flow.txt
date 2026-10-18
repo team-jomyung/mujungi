@@ -7,8 +7,8 @@
 # 진행 단계 6값 접기(progress)는 PracticeConversation 안에 있어 따로 새 클래스가 없다.
 # 정직하게 적은 목록이다:
 #  - SessionExecutor(약 4,250줄, 앞 유닛 코드가 대부분)와 SessionInternalController · StartSessionHandler · PracticeSessionExtension은 U12가 호출 지점 · 한 필드만
-#    더한 앞 유닛 파일이라 뺀다(U13과 같은 이유: 목록에 넣으면 u12 태그 시험만으로 재는 이 범위가 파일 전체를 분모로 삼아 낮게 나온다).
-#    그 변경은 PracticeStartPathIT · PracticeStartBodyU12Test(u12 태그)가 실행하고, 파일 전체 커버리지는 모듈 전체 80%(태그 없는
+#    더한 앞 유닛 파일이라 뺀다(U13과 같은 이유: 목록에 넣으면 practice-flow 태그 시험만으로 재는 이 범위가 파일 전체를 분모로 삼아 낮게 나온다).
+#    그 변경은 PracticeStartPathIT · PracticeStartBodyTest(practice-flow 태그)가 실행하고, 파일 전체 커버리지는 모듈 전체 80%(태그 없는
 #    -Pmujoong.test.db=docker check)로 본다.
 #  - runtime/PracticeRecoveryRouter는 두 복구(새 흐름 · 레거시 U5b)를 잇는 한 곳이라 넣었다. 레거시 복구 자체(practice/ 패키지)는 목록에 없다.
 # test-support 가짜 공급자와 contract-model은 이 목록에 넣지 않는다(u9 · u11 · u13과 같은 이유: 모듈 전체 80%로 잰다).

@@ -43,7 +43,7 @@ public class PracticeRuntimeConfiguration {
     PracticeProperties practiceProperties(ConfigurableEnvironment environment) throws IOException {
         var sources = new MutablePropertySources();
         environment.getPropertySources().forEach(sources::addLast);
-        for (var source : new YamlPropertySourceLoader().load("u5b-runtime", new ClassPathResource("practice/u5b-runtime.yml"))) {
+        for (var source : new YamlPropertySourceLoader().load("practice-legacy-runtime", new ClassPathResource("practice/practice-legacy-runtime.yml"))) {
             sources.addLast(source);
         }
         return new Binder(ConfigurationPropertySources.from(sources)).bind("mujoong.timing.practice", Bindable.of(PracticeProperties.class)).get();

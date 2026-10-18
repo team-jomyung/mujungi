@@ -137,8 +137,8 @@ jobs:
           retention-days: 14
           if-no-files-found: ignore
 
-  u5b-scope:
-    name: u5b-scope
+  practice-legacy-scope:
+    name: practice-legacy-scope
     needs: changes
     if: needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-24.04
@@ -152,18 +152,18 @@ jobs:
           distribution: temurin
           java-version: "21"
           cache: gradle
-      - name: Realtime U5b DB 포함 · 범위 줄 80%
+      - name: Realtime 연습 레거시 DB 포함 · 범위 줄 80%
         working-directory: backend
-        run: ./gradlew --no-daemon :realtime-activity:test :realtime-activity:jacocoTestCoverageVerification -PincludeTags=u5b -PcoverageScope=practice-legacy -Pmujoong.test.db=docker
-      - name: Core U5b DB 포함 · 범위 줄 80%
+        run: ./gradlew --no-daemon :realtime-activity:test :realtime-activity:jacocoTestCoverageVerification -PincludeTags=practice-legacy -PcoverageScope=practice-legacy -Pmujoong.test.db=docker
+      - name: Core 연습 레거시 DB 포함 · 범위 줄 80%
         if: ${{ !cancelled() }}
         working-directory: backend
-        run: ./gradlew --no-daemon :core-api:test :core-api:jacocoTestCoverageVerification -PincludeTags=u5b -PcoverageScope=practice-legacy-core -Pmujoong.test.db=docker
-      - name: U5b 시험 · 커버리지 보고서
+        run: ./gradlew --no-daemon :core-api:test :core-api:jacocoTestCoverageVerification -PincludeTags=practice-legacy -PcoverageScope=practice-legacy-core -Pmujoong.test.db=docker
+      - name: 연습 레거시 시험 · 커버리지 보고서
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: u5b-reports
+          name: practice-legacy-reports
           path: |
             backend/*/build/reports/tests/
             backend/*/build/reports/jacoco/
@@ -171,15 +171,15 @@ jobs:
           retention-days: 14
           if-no-files-found: ignore
 
-      - name: U7 태그 시험 · 전용 범위 줄 커버리지 80%
+      - name: 웹 푸시 태그 시험 · 전용 범위 줄 커버리지 80%
         if: success() && hashFiles('backend/coverage-scope/web-push.txt') != ''
         working-directory: backend
-        run: ./gradlew --no-daemon :core-api:test :core-api:jacocoTestCoverageVerification -PincludeTags=u7 -PcoverageScope=web-push -Pmujoong.test.db=docker
-      - name: U7 백엔드 검증 보고서
+        run: ./gradlew --no-daemon :core-api:test :core-api:jacocoTestCoverageVerification -PincludeTags=web-push -PcoverageScope=web-push -Pmujoong.test.db=docker
+      - name: 웹 푸시 백엔드 검증 보고서
         if: always() && hashFiles('backend/coverage-scope/web-push.txt') != ''
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: backend-u7-reports
+          name: backend-web-push-reports
           path: |
             backend/core-api/build/reports/tests/
             backend/core-api/build/reports/jacoco/
@@ -239,7 +239,7 @@ jobs:
       - name: Vitest + 줄 커버리지 80%
         run: npx --no-install vitest run tests --coverage
       - run: npx --no-install next build
-      - name: U5b 프런트 범위 줄 80%
+      - name: 연습 레거시 프런트 범위 줄 80%
         env:
           MUJOONG_COVERAGE_SCOPE: practice-legacy
         run: npx --no-install vitest run $(cat coverage-scope/practice-legacy.tests) --coverage
@@ -261,16 +261,16 @@ jobs:
           retention-days: 14
           if-no-files-found: ignore
 
-      - name: U7 프런트 시험 · 전용 범위 줄 커버리지 80%
+      - name: 웹 푸시 프런트 시험 · 전용 범위 줄 커버리지 80%
         if: success() && hashFiles('frontend/coverage-scope/web-push.json') != ''
         env:
           MUJOONG_COVERAGE_SCOPE: web-push
         run: npx --no-install vitest run $(cat coverage-scope/web-push.tests) --coverage
-      - name: U7 프런트 검증 보고서
+      - name: 웹 푸시 프런트 검증 보고서
         if: always() && hashFiles('frontend/coverage-scope/web-push.json') != ''
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: frontend-u7-coverage
+          name: frontend-web-push-coverage
           path: frontend/coverage/
           retention-days: 14
           if-no-files-found: ignore
@@ -514,7 +514,7 @@ jobs:
   ci-gate:
     name: ci-gate
     if: always()
-    needs: [changes, backend, u5b-scope, backend-deps, frontend, frontend-deps, tools, secrets, infra-validate, images, skeleton]
+    needs: [changes, backend, practice-legacy-scope, backend-deps, frontend, frontend-deps, tools, secrets, infra-validate, images, skeleton]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:

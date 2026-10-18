@@ -7,7 +7,7 @@ import java.time.Duration;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
-@Tag("u5b")
+@Tag("practice-legacy")
 @Tag("db")
 class HelpConsentPolicyTest {
     @Test void silenceAtTwentyRecordsNoResponseAndAsksWithoutEvaluation() {

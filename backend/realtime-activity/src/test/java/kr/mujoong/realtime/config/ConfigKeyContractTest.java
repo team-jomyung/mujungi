@@ -60,7 +60,7 @@ import org.springframework.core.io.FileSystemResource;
  *       허용 목록을 지난다. 시험 프로필 주소는 루프백이다. Core 전용 스위치(시험 로그인 · 부하 시험 · 발급 한도)는 Realtime 파일에 없다.
  * </ul>
  */
-@Tag("u1")
+@Tag("skeleton")
 class ConfigKeyContractTest {
 
     /** timing.md '소유 앱' 열에서 이 앱을 가리키는 이름. */

@@ -36,7 +36,7 @@ import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
  * (운영 로그인과 같은 SecurityContext 모양). Realtime은 계약 대역이고 진행 조회는 기본 404(폴백)이다.
  * 시험마다 앱과 시계를 새로 만들고, 앱 종료로 타이머를 마친 뒤 행을 지워 앞 시험의 자동 취소가 다음 시험에 섞이지 않게 한다.
  */
-@Tag("u1")
+@Tag("skeleton")
 @Tag("db")
 class GuardianApiIT {
 

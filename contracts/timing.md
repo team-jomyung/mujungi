@@ -199,7 +199,7 @@ web의 loading-notice-delay는 MUJOONG_TIMING_PARENT_LOADINGNOTICEDELAY 환경 �
 
 ## 12. U5b 연습 런타임
 
-2절의 U5 이름 공간은 아래 별도 타입 `PracticeProperties`가 사용한다. 기본 파일은 `backend/realtime-activity/src/main/resources/practice/u5b-runtime.yml`이며 환경 설정이 우선한다. 기존 U1 `RealtimeProperties`/application.yml의 키 집합을 바꾸지 않고 U5b 설정 시험으로 별도 대조한다. 실제 운영 소유는 Realtime의 연습 모듈이다.
+2절의 U5 이름 공간은 아래 별도 타입 `PracticeProperties`가 사용한다. 기본 파일은 `backend/realtime-activity/src/main/resources/practice/practice-legacy-runtime.yml`이며 환경 설정이 우선한다. 기존 U1 `RealtimeProperties`/application.yml의 키 집합을 바꾸지 않고 U5b 설정 시험으로 별도 대조한다. 실제 운영 소유는 Realtime의 연습 모듈이다.
 
 | 설정 키 | U5b 기본 | 시작·끝 |
 |---|---|---|
@@ -221,7 +221,7 @@ web의 loading-notice-delay는 MUJOONG_TIMING_PARENT_LOADINGNOTICEDELAY 환경 �
 
 ## 13. U8 새 연습 흐름 · 판정 · 가드레일 · 그래프
 
-U8(계약 · 버전 리소스)이 더한 키다. 새 연습 흐름 키는 12절 U5b의 `mujoong.timing.practice`(`practice/u5b-runtime.yml` 바인딩)와 섞이지 않게 `mujoong.timing.conversation` 아래에 둔다. Realtime 키는 `RealtimeProperties.timing`의 `judgment` · `guardrail` · `conversation` 묶음, Core 키는 `CoreProperties.timing.knowledge`가 읽는다. 화면이 읽지 않는 서버 키라 `frontend/src/shared/timing/timing-defaults.json`에는 넣지 않는다 — 서버 키에서 R-M5의 '세 곳'은 이 표 · 소유 앱 `application.yml` · 설정 레코드다(BR3.1) [U8 편차 (U8-c)]. 결과 재시도 횟수 · 간격은 10절 키가 정본이고 새 키를 만들지 않는다(BR3.2).
+U8(계약 · 버전 리소스)이 더한 키다. 새 연습 흐름 키는 12절 U5b의 `mujoong.timing.practice`(`practice/practice-legacy-runtime.yml` 바인딩)와 섞이지 않게 `mujoong.timing.conversation` 아래에 둔다. Realtime 키는 `RealtimeProperties.timing`의 `judgment` · `guardrail` · `conversation` 묶음, Core 키는 `CoreProperties.timing.knowledge`가 읽는다. 화면이 읽지 않는 서버 키라 `frontend/src/shared/timing/timing-defaults.json`에는 넣지 않는다 — 서버 키에서 R-M5의 '세 곳'은 이 표 · 소유 앱 `application.yml` · 설정 레코드다(BR3.1) [U8 편차 (U8-c)]. 결과 재시도 횟수 · 간격은 10절 키가 정본이고 새 키를 만들지 않는다(BR3.2).
 
 | 키 | 기본값 | 소유 앱 | 뜻 | 근거 |
 |---|---|---|---|---|

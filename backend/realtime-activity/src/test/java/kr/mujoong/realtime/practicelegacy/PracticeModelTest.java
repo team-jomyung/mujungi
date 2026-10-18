@@ -8,7 +8,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
-@Tag("u5b")
+@Tag("practice-legacy")
 class PracticeModelTest {
     static final Instant T = Instant.parse("2026-10-14T00:00:00Z");
     static EvaluationWork work() {

@@ -63,7 +63,7 @@ import org.springframework.transaction.PlatformTransactionManager;
  * 시작 정책 (BR6.1 ⓪ ~ ③ · BR6.2 재생 · BR6.4 · BR6.6 번역 · BR6.7 · AC3.1.1 · AC3.1.3 · AC3.1.6). BR6.1 ② 계정 잠김 방지: REQUESTED가 아닌
  * 막는 사본은 view로 한 번 대조한다.
  */
-@Tag("u1")
+@Tag("skeleton")
 class StartActivityPolicyTest {
 
     private static final Instant NOW = Instant.parse("2001-03-01T05:00:00Z");

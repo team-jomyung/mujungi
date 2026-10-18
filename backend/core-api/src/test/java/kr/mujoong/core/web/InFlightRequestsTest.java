@@ -13,7 +13,7 @@ import org.junit.jupiter.api.Test;
 /**
  * 정상 종료 T6이 기다리는 진행 중 요청 수 (U1 3.6 수정 · RD-13 · R3-13 · J321). 기다림은 실제 시간이지만 짧은 한도(수백 ms)만 쓴다.
  */
-@Tag("u1")
+@Tag("skeleton")
 class InFlightRequestsTest {
 
     private static final Duration SHORT = Duration.ofMillis(150);

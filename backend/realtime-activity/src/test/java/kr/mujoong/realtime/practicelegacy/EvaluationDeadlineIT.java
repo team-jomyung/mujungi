@@ -9,7 +9,7 @@ import java.util.ArrayList;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
-@Tag("u5b")
+@Tag("practice-legacy")
 @Tag("db")
 class EvaluationDeadlineIT {
     @Test void clockRollbackCannotMakeExpiredProviderResponseValidAgain() {

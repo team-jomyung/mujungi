@@ -15,7 +15,7 @@ import org.junit.jupiter.api.Test;
  * <p>한 구간에 한 세대만 담는지, 첫 조각부터 끊김까지를 모두 담아 끊겨서 봉인한 구간만 완결(전사-음성 대응 근거)인지, 상한 초과 조각을 다음
  * 끊김까지 어떻게 버리는지 본다.
  */
-@Tag("u1")
+@Tag("skeleton")
 class SegmentBufferTest {
 
     private static final Instant AT = Instant.parse("2026-10-15T00:00:00Z");

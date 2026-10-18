@@ -31,7 +31,7 @@ import org.junit.jupiter.params.provider.MethodSource;
  * <p>경계 −1틱(1ms) · +1틱을 수동 타이머 구동기로 확인한다. 같은 시험을 운영 값(20 · 30 · 40초)과 시험 프로필처럼 줄인 값(2 · 3 · 4초)
  * 두 방식으로 돌린다. ④는 기기 메시지마다 다시 걸지 않고 만기 때 남은 시간으로 다시 건다. CLOSING 중에는 ④가 무동작이고 ③이 우선한다.
  */
-@Tag("u1")
+@Tag("skeleton")
 class SessionTimersTest {
 
     private static final Duration TICK = Duration.ofMillis(1);

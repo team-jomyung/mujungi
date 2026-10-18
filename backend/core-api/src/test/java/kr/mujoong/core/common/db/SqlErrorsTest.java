@@ -15,7 +15,7 @@ import org.springframework.dao.DuplicateKeyException;
 /**
  * {@link SqlErrors} 단위 시험(U1 3.5 Step 17 · RD-22). 원인 사슬에서 SQLSTATE · 위반 제약 이름을 꺼내는지 본다.
  */
-@Tag("u1")
+@Tag("skeleton")
 class SqlErrorsTest {
 
     @ParameterizedTest

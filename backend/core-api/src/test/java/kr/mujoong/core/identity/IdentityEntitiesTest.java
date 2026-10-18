@@ -12,7 +12,7 @@ import org.junit.jupiter.api.Test;
  * Step 10 엔터티 단위 시험(DB 없음): Guardian · Child · Consent의 생성 규칙과 값 동일성. DB 대조와 왕복은 {@code CoreSchemaIT}.
  * 근거: entities.md Guardian · Child · Consent · BR6.1 ①(동의 유효) · BR8.7(문자열 표현에 개인정보 없음).
  */
-@Tag("u1")
+@Tag("skeleton")
 class IdentityEntitiesTest {
 
     private static final Instant T0 = Instant.parse("2026-10-15T09:00:00Z");

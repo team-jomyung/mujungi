@@ -11,7 +11,7 @@ import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 /** 등록 코드 정규화 · 알파벳 · 표시 (BR1.1 · 편차 (d) · BR2.7 · 3.3 로그 위생). */
-@Tag("u1")
+@Tag("skeleton")
 class RegistrationCodeTest {
 
     @Test

@@ -16,7 +16,7 @@ import org.junit.jupiter.api.Test;
 /**
  * 판정 턴 실행기 연결 2 — 참여 확인 J1 (U11 W1 · BR6.x · BR7.1, 설계 편차 U11-D6). 공급자와 판정기는 가짜, 값은 합성이다(R-F1 · R-F3).
  */
-@Tag("u11")
+@Tag("judgment-turn")
 class JoinJudgmentExecutorTest {
 
     private final JudgmentExecutorSupport t = new JudgmentExecutorSupport();

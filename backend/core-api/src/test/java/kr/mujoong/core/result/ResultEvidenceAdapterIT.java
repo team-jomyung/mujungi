@@ -6,7 +6,7 @@ import java.util.*;
 import kr.mujoong.core.practice.CandidateEvidencePort;
 import kr.mujoong.core.record.*;
 import org.junit.jupiter.api.*;
-@Tag("u6")
+@Tag("result-report")
 class ResultEvidenceAdapterIT {
     ResultRecordReader reader=mock(ResultRecordReader.class);ResultEvidenceAdapter adapter=new ResultEvidenceAdapter(reader);UUID child=UUID.randomUUID(),session=UUID.randomUUID();
     @BeforeEach void setup(){when(reader.findForChild(session,child)).thenReturn(Optional.of(new ActivityRecordRepository.StoredRecord(session,UUID.randomUUID(),child,"FREE_TALK","ENDED","CHILD_STOP",true,Instant.EPOCH,Instant.EPOCH,Instant.EPOCH,Instant.EPOCH,Instant.EPOCH,"[{\"seq\":1,\"speaker\":\"CHILD\",\"text\":\"같이 놀자\"},{\"seq\":2,\"speaker\":\"AI\",\"text\":\"좋아\"}]","[]",null,"hash",Instant.EPOCH)));}

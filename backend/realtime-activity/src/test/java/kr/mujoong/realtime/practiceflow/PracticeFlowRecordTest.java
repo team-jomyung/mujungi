@@ -24,7 +24,7 @@ import org.junit.jupiter.api.Test;
  * 타입에 문자열 원문 칸이 없으며, 도입 재생이 성공하지 못한 장면에는 행이 없다. 가짜 출력 · 가짜 판정 · 메모리 기록기 위의 합성 대화이고 실제 AI ·
  * 실제 기기가 아니다(테스트 대역 증거).
  */
-@Tag("u12")
+@Tag("practice-flow")
 class PracticeFlowRecordTest {
 
     private static final String MARKER_ONE = "표식하나QZ71";

@@ -8,7 +8,7 @@ import org.junit.jupiter.api.Test;
 import java.net.InetAddress;
 import java.util.List;
 
-@Tag("u7")
+@Tag("web-push")
 class PublicPushEndpointPolicyTest {
     @Test
     void rejectsUnsafeUriShapesWithoutEchoingCapability() {

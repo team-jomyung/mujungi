@@ -18,7 +18,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 /** 02-1 약관 본문 읽기(U2 · R7 · AC1.2.2 · AC1.2.9 · 편차 (U2-c)): 네 항목 · 생성형 AI 안내 절 위치 · 형식 오류는 닫힌 쪽. */
-@Tag("u2")
+@Tag("parent-account")
 class PolicyTermsReaderTest {
 
     private final ApprovedContentCatalog catalog = mock(ApprovedContentCatalog.class);

@@ -21,7 +21,7 @@ import org.junit.jupiter.api.Test;
 import tools.jackson.databind.JsonNode;
 
 /** 공급자 요청 팩토리의 실호출 관측 선 형식 (U11 FR12.1 · BR11.1 · BR11.2 · 편차 (U11-a), 설계 개정 A1 · A6). 키 · 식별자는 쓰지 않는다. */
-@Tag("u11")
+@Tag("judgment-turn")
 class ProviderRequestFactoryWireTest {
 
     private static final JsonCodec JSON = JsonCodec.shared();

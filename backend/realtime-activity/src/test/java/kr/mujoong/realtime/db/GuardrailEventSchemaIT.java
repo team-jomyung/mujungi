@@ -25,7 +25,7 @@ import org.junit.jupiter.api.Test;
  * Realtime V6 제브 검사 기록 표 통합 시험 (U13 FR6.1 · BR8.1 · BR8.2). 표 · 열(전사 원문 칸 없음) · 값 검사 제약 · 외래 키 · guardian 색인 ·
  * 앱 역할 DML 권한을 확인한다. 시험마다 되돌린다. 증거 종류: 실제 DB(Testcontainers), 제브는 부르지 않는다.
  */
-@Tag("u13")
+@Tag("jev-guardrail")
 @Tag("db")
 class GuardrailEventSchemaIT {
 

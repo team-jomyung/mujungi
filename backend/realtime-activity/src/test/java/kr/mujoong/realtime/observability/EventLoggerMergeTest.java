@@ -23,7 +23,7 @@ import org.junit.jupiter.api.Test;
  * <p>3.6 수정(BT-TC-10)에서 병합 창 경계를 더했다: 반복이 없던 창은 repeat 줄을 남기지 않는다 · 창은 병합 창 길이(운영 기본 10초)
  * 정각에 닫힌다(한 틱 전은 같은 창) · 호출마다 달라지는 값(durationMs · attempt)은 병합 키가 아니고 INTERNAL_HTTP 성공 줄은 병합하지 않는다.
  */
-@Tag("u1")
+@Tag("skeleton")
 class EventLoggerMergeTest {
 
     private final MutableClock clock = new MutableClock();

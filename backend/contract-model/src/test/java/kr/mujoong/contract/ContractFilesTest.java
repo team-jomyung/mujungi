@@ -49,7 +49,7 @@ import tools.jackson.dataformat.yaml.YAMLMapper;
  * 스키마로 검사하고, 모든 $ref가 풀리는지, 스펙의 예시가 가리키는 스키마를 통과하는지, (a) ~ (z) 편차 표시가 있는지, errors.md 표와
  * {@link ErrorCode}가 같은지 본다. 스펙 예시는 Java 계약 모델({@link JsonCodec})로도 읽혀야 한다(두 정본이 어긋나지 않게).
  */
-@Tag("u1")
+@Tag("skeleton")
 class ContractFilesTest {
 
     private static final String ID_PREFIX = "https://mujoong.invalid/contracts/schemas/";

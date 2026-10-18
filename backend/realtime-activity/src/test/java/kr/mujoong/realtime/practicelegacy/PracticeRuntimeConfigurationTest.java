@@ -9,7 +9,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.core.env.MapPropertySource;
 import org.springframework.core.env.StandardEnvironment;
 
-@Tag("u5b")
+@Tag("practice-legacy")
 class PracticeRuntimeConfigurationTest {
     @Test void runtimeDefaultsAreBoundAndTheCommitReserveIsExplicit() throws Exception {
         var config = new PracticeRuntimeConfiguration();

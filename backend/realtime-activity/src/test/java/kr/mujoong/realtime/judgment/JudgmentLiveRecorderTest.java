@@ -28,7 +28,7 @@ import org.springframework.dao.TransientDataAccessResourceException;
  * 판정 기록 비동기 기록기 단위 시험 (U11 BR2.1 · BR2.5 · NFR8). 일시 실패는 다음 틱 재시도 · 제약 위반과 차단된 보호자는 버림 · 칸에 넣는 쪽은
  * DB를 기다리지 않음 · 같은 id 덮어쓰기. 저장소는 대역이다.
  */
-@Tag("u11")
+@Tag("judgment-turn")
 class JudgmentLiveRecorderTest {
 
     private final MutableClock clock = new MutableClock();

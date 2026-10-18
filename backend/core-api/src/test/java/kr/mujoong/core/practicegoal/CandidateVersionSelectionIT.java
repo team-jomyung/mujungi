@@ -11,7 +11,7 @@ import kr.mujoong.testsupport.time.MutableClock;
 import org.junit.jupiter.api.*;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 
-@Tag("u14") @Tag("db")
+@Tag("goal-result") @Tag("db")
 class CandidateVersionSelectionIT {
     DbTestSupport db;GoalCandidateRepository repository;GeneratedGoalService service;ConsentPolicyService consent;
     CandidateSeedReplayIT fixture;

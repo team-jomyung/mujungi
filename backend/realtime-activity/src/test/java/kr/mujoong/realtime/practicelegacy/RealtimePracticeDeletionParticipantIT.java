@@ -12,7 +12,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 
-@Tag("u5b")
+@Tag("practice-legacy")
 @Tag("db")
 class RealtimePracticeDeletionParticipantIT {
     private RealtimePracticeDeletionParticipant participant() {

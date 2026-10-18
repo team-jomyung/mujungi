@@ -16,7 +16,7 @@ import kr.mujoong.testsupport.time.ManualTimerDriver;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
-@Tag("u5b")
+@Tag("practice-legacy")
 class RuntimePracticeExtensionTest {
     static class Fixture implements PracticeOutput {
         final UUID session = UUID.randomUUID(), guardian = UUID.randomUUID();

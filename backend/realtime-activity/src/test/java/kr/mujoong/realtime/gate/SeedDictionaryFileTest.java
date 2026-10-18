@@ -32,7 +32,7 @@ import org.junit.jupiter.api.Test;
  * 달라진다) · 키가 문서 모양 그대로다(코덱이 모르는 키를 조용히 무시하므로 '끄기' 같은 키나 오타 키가 효과 없이 남지 않게 한다). appliesTo는
  * 계약(contracts/ai-io.md 1절)의 네 값을 받고 그 밖의 값만 문제로 본다(3.6 수정 J365).
  */
-@Tag("u1")
+@Tag("skeleton")
 class SeedDictionaryFileTest {
 
     /** 계약 9절 금지 표현 범주 7개. */

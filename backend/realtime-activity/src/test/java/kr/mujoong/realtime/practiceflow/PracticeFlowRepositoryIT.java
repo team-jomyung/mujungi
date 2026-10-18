@@ -44,7 +44,7 @@ import org.springframework.transaction.IllegalTransactionStateException;
  * 도움 기록, 트랜잭션 강제, 보호자 기준 삭제(세션 삭제보다 먼저 · 다시 불러도 같다 · 다른 보호자 유지), 복구 조립이 {@code practice-record-v2}
  * 스키마를 지키는지를 실제 DB로 본다. 원문 칸이 없다는 것은 {@code PracticeFlowSchemaIT}가 본다. 증거: 실제 DB(Testcontainers), AI는 부르지 않는다.
  */
-@Tag("u12")
+@Tag("practice-flow")
 @Tag("db")
 class PracticeFlowRepositoryIT {
 

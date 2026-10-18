@@ -13,7 +13,7 @@ import kr.mujoong.core.result.*;
 import kr.mujoong.testsupport.time.MutableClock;
 import org.junit.jupiter.api.*;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
-@Tag("u14") @Tag("db")
+@Tag("goal-result") @Tag("db")
 class CandidateSeedReplayIT {
     DbTestSupport db;GoalCandidateRepository goals;CandidateSeedDelivery delivery;ConsentPolicyService consent;SeedGenerationService seeds;
     UUID guardian,child,session,job,result;ActivityResultRepository results;MutableClock clock=new MutableClock();

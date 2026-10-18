@@ -22,7 +22,7 @@ import org.junit.jupiter.api.Test;
  * Core 사건 기록기 (OD-1 ~ OD-4 · OD-13 · SD-15 · NFR9.15). 반복 병합(INTERNAL_HTTP 실패 100건 → 첫 줄 + repeat 한 줄), 성공 줄은 병합하지
  * 않음, 보안 사건 분당 상한(지표는 실제 건수), 허용 밖 키(STRICT 예외 · LENIENT APP_ERROR), ownerHash 비밀 규칙.
  */
-@Tag("u1")
+@Tag("skeleton")
 class EventLoggerTest {
 
     private static final Instant NOW = Instant.parse("2001-09-01T00:00:10Z");

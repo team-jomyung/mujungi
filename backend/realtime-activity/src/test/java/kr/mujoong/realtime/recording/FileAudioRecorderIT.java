@@ -48,7 +48,7 @@ import org.junit.jupiter.api.io.TempDir;
  * <p>증명: 동의된 세션의 두 화자 파일(소유자만 읽는 권한) · 메타 행(메타가 파일보다 먼저) · 바이트 수와 끝 시각, 세션 상한 · 대기열 넘침의 버림과
  * 지표, 메타 실패 · 파일 실패가 그 세션 기록만 멈춤, 기록 디렉터리 밖 경로 거부, 앱 종료 때 남은 조각 쓰기와 파일 닫기.
  */
-@Tag("u3")
+@Tag("voice-session")
 @Tag("db")
 class FileAudioRecorderIT {
 

@@ -15,7 +15,7 @@ import kr.mujoong.testsupport.time.MutableClock;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
-@Tag("u5b")
+@Tag("practice-legacy")
 class PracticePlaybackTimingTest {
     static final Instant T = PracticeModelTest.T;
 

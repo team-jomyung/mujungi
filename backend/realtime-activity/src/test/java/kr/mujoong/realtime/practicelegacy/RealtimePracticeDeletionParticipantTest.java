@@ -15,7 +15,7 @@ import org.springframework.core.type.filter.AssignableTypeFilter;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.transaction.PlatformTransactionManager;
 
-@Tag("u5b")
+@Tag("practice-legacy")
 class RealtimePracticeDeletionParticipantTest {
     private final NamedParameterJdbcTemplate jdbc = mock(NamedParameterJdbcTemplate.class);
     private final PlatformTransactionManager transactions = mock(PlatformTransactionManager.class);
