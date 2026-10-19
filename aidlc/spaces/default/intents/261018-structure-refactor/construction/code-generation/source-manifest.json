@@ -21,6 +21,11 @@
     { "path": "infra/compose.live.yml" },
     { "path": "infra/ci/test-gate-negatives.sh" },
     { "path": ".github/workflows/ci.yml" },
-    { "path": ".gitignore" }
+    { "path": ".gitignore" },
+    { "path": "README.md" },
+    { "path": "contracts/goal-result-compatibility.md" },
+    { "path": "contracts/ports.md" },
+    { "path": "contracts/timing.md" },
+    { "path": "contracts/u14-compatibility.md" }
   ]
 }
