@@ -87,6 +87,8 @@ tasks.withType<Test>().configureEach {
     }
     // 시각은 UTC(NFR6.4 · BR8.10). DB 시험 백엔드는 auto · docker · local(J132)
     jvmArgs("-Duser.timezone=UTC", "-Dfile.encoding=UTF-8")
+    // 통합 시험이 앱을 여러 번 띄우므로 Gradle 시험 JVM 기본 힙(512MB)으로는 모자라 RealtimeLogHygieneIT가 OutOfMemoryError로 실패했다
+    maxHeapSize = "1g"
     systemProperty("mujoong.test.db", testDbBackend.get())
     systemProperty("mujoong.repo.root", repositoryRoot.absolutePath)
     // 시험이 읽는 저장소 파일(계약 정본 · DB 초기화 · 시드)이 바뀌면 다시 돈다
