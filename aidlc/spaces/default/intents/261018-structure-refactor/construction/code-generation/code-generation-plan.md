@@ -132,11 +132,11 @@
 
 ### 단계 6 — 주석 정리 (조건부)
 
-- [ ] **Step 24. `team.md` 규칙 학습 요청 · 주석 정리** — 병합 직전에 `team.md` 규칙 4개(화면 번호 접미 · `tests/<유닛>/`과 유닛 태그 · 주석 ID 인용 · 범위 파일 이름)를 학습 절차(§13)로 올려 사람이 승인하게 한다(직접 편집 금지, BR6.3). 승인되면 이 기록이 건드린 파일의 주석을 "무엇을 왜"만 남기고 결정 ID는 한 줄 문서 링크로 줄인다(BR6.1 · BR6.4). 거절되면 단계를 건너뛰고 `code-summary.md`에 이유를 적는다(BR6.2). 검증: 시험 · 린트 통과, AC-7(승인된 경우). (FR7.1 · FR7.2)
+- [x] **Step 24. `team.md` 규칙 학습 요청 · 주석 정리** — 병합 직전에 `team.md` 규칙 4개(화면 번호 접미 · `tests/<유닛>/`과 유닛 태그 · 주석 ID 인용 · 범위 파일 이름)를 학습 절차(§13)로 올려 사람이 승인하게 한다(직접 편집 금지, BR6.3). 승인되면 이 기록이 건드린 파일의 주석을 "무엇을 왜"만 남기고 결정 ID는 한 줄 문서 링크로 줄인다(BR6.1 · BR6.4). 거절되면 단계를 건너뛰고 `code-summary.md`에 이유를 적는다(BR6.2). 검증: 시험 · 린트 통과, AC-7(승인된 경우). (FR7.1 · FR7.2)
 
 ### 마무리
 
-- [ ] **Step 25. 환경 · 문서 · 추적성** — `docs/screen-map.md` 최종본, `docs/refactor-structure-before-after.md`의 "이후" 구조를 실제 결과로 갱신, `docs/`에 CI 작업 이름 변경 기록, 비밀 스캔(`bash scripts/verify/a-secrets.sh`) 통과 확인, `code-summary.md` · `traceability.json` · `source-manifest.json`(이 기록이 만들거나 바꾸거나 지운 모든 응용 소스 경로, 이동은 옛 경로 삭제 + 새 경로) 작성. 전체 `bash scripts/verify.sh`는 Build and Test에서 한 번 더 돈다. (FR8.1 · FR8.2 · NFR8 · NFR9)
+- [x] **Step 25. 환경 · 문서 · 추적성** — `docs/screen-map.md` 최종본, `docs/refactor-structure-before-after.md`의 "이후" 구조를 실제 결과로 갱신, `docs/`에 CI 작업 이름 변경 기록, 비밀 스캔(`bash scripts/verify/a-secrets.sh`) 통과 확인, `code-summary.md` · `traceability.json` · `source-manifest.json`(이 기록이 만들거나 바꾸거나 지운 모든 응용 소스 경로, 이동은 옛 경로 삭제 + 새 경로) 작성. 전체 `bash scripts/verify.sh`는 Build and Test에서 한 번 더 돈다. (FR8.1 · FR8.2 · NFR8 · NFR9)
 
 ## 단계 ↔ 요구사항 · 설계 추적
 
