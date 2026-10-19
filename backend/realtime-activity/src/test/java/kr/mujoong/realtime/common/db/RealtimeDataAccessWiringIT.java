@@ -20,6 +20,7 @@ import kr.mujoong.contract.event.payload.SessionStateChanged;
 import kr.mujoong.contract.json.JsonCodec;
 import kr.mujoong.contract.status.ActivityType;
 import kr.mujoong.contract.status.SessionStatus;
+import kr.mujoong.realtime.config.RealtimeLimitsProperties;
 import kr.mujoong.realtime.config.RealtimeProperties;
 import kr.mujoong.realtime.gateway.DeviceConnectionRepository;
 import kr.mujoong.realtime.log.TranscriptRepository;
@@ -72,7 +73,7 @@ import org.springframework.util.unit.DataSize;
  * 앞 저장소들의 쓰기까지 함께 되돌리고 예외 번역 프록시를 지나도 SQLSTATE를 잃지 않는다 · 저장소 프록시는 트랜잭션을 스스로 열지 않아
  * MANDATORY 쓰기가 트랜잭션 밖에서 실패한다.
  */
-@Tag("u1")
+@Tag("skeleton")
 @Tag("db")
 class RealtimeDataAccessWiringIT {
 
@@ -273,7 +274,7 @@ class RealtimeDataAccessWiringIT {
         @Bean
         RealtimeProperties realtimeProperties(Environment environment) {
             RealtimeProperties properties = mock(RealtimeProperties.class);
-            when(properties.limits()).thenReturn(new RealtimeProperties.Limits(DataSize.ofKilobytes(8),
+            when(properties.limits()).thenReturn(new RealtimeLimitsProperties(DataSize.ofKilobytes(8),
                     DataSize.ofMegabytes(2), 50, 1000, 100, 200, 2, 3, Duration.ofSeconds(2), Duration.ofSeconds(10),
                     environment.getRequiredProperty("mujoong.limits.db-retry-attempts", Integer.class), 1000));
             return properties;

@@ -40,7 +40,7 @@ import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
  * <p>제브는 시험이 손으로 푸는 대역이다(앱 문맥에 {@code @Primary} 포트로 끼움). 실제 제브 · 실제 공급자 · 실제 기기를 부르지 않는다 — 이 시험의 합격은
  * 테스트 대역 증거일 뿐 실제 검사 성공이 아니다(R-F1 · R-M11).
  */
-@Tag("u13")
+@Tag("jev-guardrail")
 @Tag("db")
 class GuardrailTurnIT {
 

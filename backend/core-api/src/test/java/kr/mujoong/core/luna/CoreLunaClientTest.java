@@ -24,7 +24,7 @@ import org.junit.jupiter.api.Test;
  * Core 공통 호출 (U9 BR1.6 · BR1.8 · BR2.5 · BR3.1 ~ BR3.6 · BR4.1 ~ BR4.4 · BR5.1 · BR6.1 · BR6.2 · NFR1.1 ~ NFR1.3 · NFR2.1 ·
  * NFR3.3 · NFR3.5). 공급자는 루프백 대역, 입력은 합성 값, 키는 가짜 문자열이다(R-F1 · R-F3). 증거 종류: 테스트 대역(R-M11).
  */
-@Tag("u9")
+@Tag("luna")
 class CoreLunaClientTest {
 
     private static final String CHILD_NAME = "하늘이";

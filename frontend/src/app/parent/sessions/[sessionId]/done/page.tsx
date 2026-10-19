@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
-import { Done17 } from "@/parent/screens/Done17";
+import { DoneScreen } from "@/parent/features/done/DoneScreen";
 
-// /parent/sessions/[sessionId]/done — 17 활동 끝(U1 3.5 Step 40 · BR6.10 · BR6.15 · J120).
+// /parent/sessions/[sessionId]/done — 17 활동 끝(U1 3.5 Step 40).
 const UUID_PATTERN = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 
 interface DonePageProps {
@@ -13,5 +13,5 @@ export default async function ParentDonePage({ params }: DonePageProps) {
   if (!UUID_PATTERN.test(sessionId)) {
     notFound();
   }
-  return <Done17 sessionId={sessionId} />;
+  return <DoneScreen sessionId={sessionId} />;
 }

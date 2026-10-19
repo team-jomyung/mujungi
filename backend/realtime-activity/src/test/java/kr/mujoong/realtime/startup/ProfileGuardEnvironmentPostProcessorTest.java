@@ -27,7 +27,7 @@ import org.springframework.core.env.StandardEnvironment;
  * {@link ProfileGuardRules#TABLE}로 Core 시험과 같은 데이터 원천이다 — 두 앱이 같은 조합을 거부한다. 실제 {@link StandardEnvironment}에
  * 프로필 · 스위치를 넣어 Realtime 후처리기를 돌린다. 거부 줄에는 프로필 · 키 이름만 있고 값은 없다.
  */
-@Tag("u1")
+@Tag("skeleton")
 class ProfileGuardEnvironmentPostProcessorTest {
 
     private final ProfileGuardEnvironmentPostProcessor processor = new ProfileGuardEnvironmentPostProcessor();

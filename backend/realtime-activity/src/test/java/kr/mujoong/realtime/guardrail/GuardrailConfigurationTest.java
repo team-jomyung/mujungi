@@ -28,7 +28,7 @@ import org.springframework.mock.env.MockEnvironment;
  * 제브 게이트 빈 조립 시험 (U13 BR1.3 ~ BR1.6 · BR9.2). 기동 점검이 정한 모드로 포트 구현과 장치 묶음이 만들어지고, 비실검사(STUB · OFF)로 시작하면 기동
  * 로그에 사유 코드 한 줄이 남으며 REAL이면 남기지 않는다. 이 파일의 성공은 테스트 대역 증거다.
  */
-@Tag("u13")
+@Tag("jev-guardrail")
 class GuardrailConfigurationTest {
 
     private final LogCapture logs = LogCapture.detached();

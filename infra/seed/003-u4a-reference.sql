@@ -2,14 +2,14 @@
 --
 -- 실행: 001-reference.sql · 002-u2-reference.sql 뒤에 같은 자격(mujoong_owner)으로 한 번. 몇 번 실행해도 결과가 같다(멱등).
 --   psql -X -v ON_ERROR_STOP=1 --single-transaction -f infra/seed/003-u4a-reference.sql
--- 트랜잭션 제어 · psql 메타 명령을 두지 않는다(JDBC로도 한 트랜잭션에 적용, SeedU4aReferenceSqlIT).
+-- 트랜잭션 제어 · psql 메타 명령을 두지 않는다(JDBC로도 한 트랜잭션에 적용, SeedActivitySessionReferenceSqlIT).
 --
 -- 내용(합성 참조 데이터, 개인정보 없음)
 --   - 002가 DRAFT · 음성 없음으로 만든 세션 문구 중 참여 확인 · 확인 질문 · 공백 안내에 쓰는 6종의 승인 버전 v2(APPROVED, 음성 있음):
 --     INTRO_FREE_TALK · INTRO_PRACTICE · RE_PROMPT · DECLINE_ALTERNATIVE · SILENCE_WARNING · STOP_CONFIRM. 시작 패키지가 이 문구를
 --     싣지 않으면 Realtime(U4b)은 참여 확인 · 공백 안내를 소리 없이 시계만 돌린다(U4b-R15).
 --   - 문구는 승인 카탈로그 규칙(버전은 바꾸지 않고 다음 번호 행 · 음성 파일 이름 형식 · 계약 text 200자 이하)과 NFR2 시드 금지 표현
---     사전 검사를 통과한다(SeedU4aReferenceSqlIT). 시작 안내는 AC6.3.1 순서(AI와 대화한다는 사실 · 오늘 활동 · 기록과 보호자 열람 ·
+--     사전 검사를 통과한다(SeedActivitySessionReferenceSqlIT). 시작 안내는 AC6.3.1 순서(AI와 대화한다는 사실 · 오늘 활동 · 기록과 보호자 열람 ·
 --     "무중아 그만할래")를 지킨 뒤 화면 설계 C.S-12.11.4의 질문으로 묻는다. 대안 제안은 AC6.3.4대로 다른 선택지를 한 번 묻고 재촉하지
 --     않는다. 나머지 셋은 002 v1 글 그대로다.
 --   - 음성은 tools/seed/gen-session-wav.mjs가 만든 합성음 자리다(J102와 같은 임시). 실제 녹음 · 사람 승인은 D 담당이고, 그때 v3 행을

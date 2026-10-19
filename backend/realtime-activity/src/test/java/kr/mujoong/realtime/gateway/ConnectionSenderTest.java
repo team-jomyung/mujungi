@@ -27,7 +27,7 @@ import org.junit.jupiter.api.Test;
  * 끝나야 할 때 끝난다. 레인 깊이({@code mujoong_queue_depth}의 output_control · output_audio)는 기다리는 제어 메시지 수와 기다리는 · 보내는
  * 중인 묶음 수다.
  */
-@Tag("u1")
+@Tag("skeleton")
 class ConnectionSenderTest {
 
     private static final Duration WAIT = Duration.ofSeconds(10);

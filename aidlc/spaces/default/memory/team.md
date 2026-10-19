@@ -57,6 +57,10 @@
 - 결과 보고는 테스트 대역 · 합성 대화 · 실제 API · 실제 기기 성공을 따로 적고, 대역 성공을 실공급자 성공으로 표시하지 않는다(`discovered-rules.md` R-M11, Q10-A).
 - 이번 작업 기록의 시험 전략은 Standard다(컴포넌트당 5 ~ 8개 + 핵심 경계 통합 시험).
 
+- 프런트 · tools 시험은 소스 구조 폴더(`tests/parent/features/…` · `tests/shared/…`)에 두고, 백엔드 시험 태그는 유닛 번호 대신 기능 이름(`practice-legacy` · `web-push` · `skeleton` 등)을 쓴다. 앞의 `tests/<유닛>/`과 `@Tag("u1")` ~ `@Tag("u7")` 규칙을 대체한다. (learned 2026-10-19) <!-- cid:261018-structure-refactor:code-generation:a432bd7909595cbb209f549434d0d3846f7f7a0e8beb8d49b185e9c47f6d0f1d -->
+
+- 커버리지 범위 파일은 유닛 번호 대신 기능 이름으로 짓는다(`backend/coverage-scope/<기능>.txt` · `frontend/coverage-scope/<기능>.json`과 시험 목록 `<기능>.tests`). 앞의 유닛 이름 범위 파일 규칙을 대체한다. (learned 2026-10-19) <!-- cid:261018-structure-refactor:code-generation:098665fc1a2767bd9d8e8451bf76fbbcdc4818372abf5efbd1ae2c842d6babe1 -->
+
 ## Guard Policy
 
 <!-- Affirmed by the team. Mode: strict, relaxed, or off. Strict here holds for every intent and cannot be changed from chat. A section under the retired Change Control heading, written by an earlier release, is still read. -->
@@ -100,6 +104,10 @@
   - 넓은 catch는 ① `events.appError` 후 계속(근거 주석 동반) ② 고정 code 결과로 번역 ③ 의미 있는 예외로 다시 던짐 중 하나로 쓰고, 주석 없이 삼키지 않는다.
   - 시각은 `kr.mujoong.contract.time.MujoongClock` 주입으로만 읽고, 시간 값은 `mujoong.timing.*` 설정 키에서만 읽는다.
 - **[확인 필요]** 새 저장소 코드를 JDBC(JdbcClient/JdbcTemplate)로 쓰는 것을 관례로 둘지(실제 55파일 대 JPA 7파일), 화면 번호가 바뀌거나 화면이 나뉠 때 파일 · 시험 이름을 같이 바꿀지는 인터뷰에서 묻지 않았다.
+- 프런트 화면 파일은 화면 설계 번호 접미 없이 `<기능>Screen.tsx`로 이름 짓고 `parent/features/<기능>/` · `device/features/<기능>/`에 둔다. 화면 번호는 `docs/screen-map.md`에서 찾는다. 앞의 "화면 파일 이름 끝에 화면 설계 번호를 붙인다"(`Login01.tsx` 등)를 대체한다. (learned 2026-10-19) <!-- cid:261018-structure-refactor:code-generation:6e0a4e4816383adc83ce9b2ba298dcbfdc2669a24d1d2bc6cc1fb8ea885f09dc -->
+
+- 코드 주석은 "무엇을 왜"만 쓰고, 결정 ID(J · BR · U*-J · 편차)는 필요할 때 한 줄 문서 링크로 가리킨다. 앞의 "코드 주석은 결정 ID를 인용한다"를 대체한다. (learned 2026-10-19) <!-- cid:261018-structure-refactor:code-generation:79e0fd466d4479a5a00526ede28fc6a4b2bc9da9b7b35008a479977e8cb08149 -->
+
 ## Forbidden
 
 <!-- Team-specific forbidden patterns -->

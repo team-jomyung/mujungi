@@ -4,13 +4,14 @@ import java.util.Objects;
 import kr.mujoong.contract.log.EventLog;
 import kr.mujoong.contract.time.MujoongClock;
 import kr.mujoong.core.config.CoreProperties;
+import kr.mujoong.core.config.CoreTimingProperties;
 import kr.mujoong.core.observability.CoreMetrics;
 import kr.mujoong.core.observability.EventLogger;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 /**
- * 한도기 두 개의 설정 (U1 3.5 Step 19 · SD-10 · BR1.6 · BR2.6 · A6).
+ * 한도기 두 개의 설정 (U1 3.5 Step 19).
  *
  * <p>값은 설정 키에서만 읽는다: bootstrap 발급 {@code mujoong.timing.bootstrap.rate-limit}(20 · 1시간, 상향 600 · 1시간은
  * {@code application-load-test.yml}에만), 등록 실패 {@code mujoong.timing.device.register-failure-limit}(10 · 10분), 키 상한
@@ -53,8 +54,8 @@ public class RateLimiterConfig {
         /** 설정 값으로 두 한도기를 만든다. */
         public static RateLimiters create(
                 CoreProperties properties, MujoongClock clock, SlidingWindowRateLimiter.Listener listener) {
-            CoreProperties.RateLimit bootstrap = properties.timing().bootstrap().rateLimit();
-            CoreProperties.RateLimit failures = properties.timing().device().registerFailureLimit();
+            CoreTimingProperties.RateLimit bootstrap = properties.timing().bootstrap().rateLimit();
+            CoreTimingProperties.RateLimit failures =properties.timing().device().registerFailureLimit();
             int maxKeys = properties.limits().rateCounterMaxKeys();
             return new RateLimiters(
                     new SlidingWindowRateLimiter(SlidingWindowRateLimiter.Limiter.BOOTSTRAP_IP, bootstrap.max(),

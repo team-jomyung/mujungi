@@ -20,7 +20,7 @@ import org.junit.jupiter.api.Test;
  * Outbox 방향 규칙을 모든 이벤트 종류와 모르는 종류에(RealtimeMessagingRepositoryIT가 본 두 종류 밖, J318) · payload_hash 64자 소문자
  * 16진수의 양쪽 경계 · last_error 길이와 HTTP 범위의 포함 경계.
  */
-@Tag("u1")
+@Tag("skeleton")
 class MessagingValueTypesTest {
 
     private static final Instant T0 = Instant.parse("2026-10-15T09:00:00Z");

@@ -1,0 +1,75 @@
+# U11 커버리지 측정 범위 (판정 턴 기반, 작업 기록 261016-u11-judgment-turn · J137)
+# -PcoverageScope=judgment-turn일 때 JaCoCo가 이 목록의 운영 소스(.java)만 잰다. 한 줄에 저장소 루트 기준 경로 하나.
+# 내용은 U11이 PR1(선 형식 정비 · 키 통일)과 PR2(판정 턴)에서 만들거나 고친 realtime-activity 운영 Java 파일 전부다(main 병합 전 기준
+# 683c669^1과의 차이). 정직하게 적은 목록이다: 실행기(SessionExecutor)와 설정 · 게이트 · 음성 파일은 앞 유닛 코드가 대부분이라 judgment-turn 태그
+# 시험만으로 재면 줄이 낮게 나온다 — 태그 없이 모듈 전체 시험으로 재거나(로컬 근거) 그 사정을 보고서에 적는다.
+# U11이 고친 contract-model 로그 계약 파일(AttrKey)과 test-support 가짜 공급자는 이 목록에 넣지 않는다(luna.txt와 같은 이유: 모듈 전체 80%로 잰다).
+# 로컬 · 검토 근거다(CI가 막는 범위는 U5b · U7뿐, team.md Testing Posture).
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/config/RealtimeProperties.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/config/RealtimeCleanupProperties.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/config/RealtimeDeviceProperties.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/config/RealtimeGateProperties.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/config/RealtimeHealthProperties.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/config/RealtimeInboxProperties.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/config/RealtimeInternalHttpProperties.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/config/RealtimeJudgmentProperties.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/config/RealtimeLimitsProperties.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/config/RealtimeMetricsProperties.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/config/RealtimeObservabilityProperties.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/config/RealtimeOutboxProperties.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/config/RealtimePracticeFlowProperties.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/config/RealtimeProviderProperties.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/config/RealtimeRecordingProperties.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/config/RealtimeRetentionProperties.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/config/RealtimeSecurityProperties.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/config/RealtimeSessionProperties.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/config/RealtimeTimingProperties.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/config/RealtimeTranscriptProperties.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/dialog/InstructionTemplates.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/dialog/StopIntentJudge.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/gate/OutputGate.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/gate/OutputGeneration.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/gate/SegmentBuffer.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/judgment/AbstainReason.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/judgment/JudgeClient.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/judgment/JudgeOutcome.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/judgment/JudgeOutcomeValidator.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/judgment/JudgeRequest.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/judgment/JudgmentConfiguration.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/judgment/JudgmentLiveDeletionParticipant.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/judgment/JudgmentLiveRecord.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/judgment/JudgmentLiveRecorder.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/judgment/JudgmentLiveRepository.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/judgment/JudgmentOutcomeKind.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/judgment/JudgmentOwner.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/judgment/JudgmentPoint.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/judgment/JudgmentPrompt.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/judgment/JudgmentTrigger.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/judgment/JudgmentTurn.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/judgment/LunaJudgeClient.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/judgment/NextAction.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/judgment/TurnStatus.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/judgment/UnavailableJudgeClient.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/log/AsyncRecorder.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/luna/LunaConfiguration.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/luna/LunaKeyPresentCondition.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/luna/LunaProperties.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/luna/LunaStartup.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/runtime/RealtimeRuntimeConfig.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/JudgmentCoordinator.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/JudgmentSupport.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/PracticeSessionExtension.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/ProviderSendQueue.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/EndingFlow.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/SessionClocks.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/IdleClock.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/JoinFlow.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/SessionContext.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/SessionExecutor.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/SessionMailbox.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/SessionTimers.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/StartSessionHandler.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/startup/RealtimeStartupChecks.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/voice/ProviderClient.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/voice/ProviderPort.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/voice/ProviderRequestFactory.java

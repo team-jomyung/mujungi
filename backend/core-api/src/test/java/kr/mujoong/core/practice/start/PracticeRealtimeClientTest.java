@@ -20,7 +20,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
-@Tag("u5b")
+@Tag("practice-legacy")
 class PracticeRealtimeClientTest {
     final InternalHttpClient http=mock(InternalHttpClient.class);
     final RealtimeSessionClient client=new RealtimeSessionClient(http,

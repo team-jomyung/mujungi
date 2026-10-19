@@ -39,7 +39,7 @@ import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
  * 조합으로 띄운다. 3.6 수정 분량: 거절된 본문(JSON 아님 · 봉투 위반 · 모르는 enum · 형식 위반 코드 · 길이 초과 서술)에 넣은 표지가 오류 봉투 ·
  * 출력 줄 어디에도 되울리지 않는다(SD-11 · BR5.13: 본문 · payload는 로그 · 예외 메시지에 넣지 않는다).
  */
-@Tag("u1")
+@Tag("skeleton")
 @Tag("db")
 class CoreLogHygieneIT {
 

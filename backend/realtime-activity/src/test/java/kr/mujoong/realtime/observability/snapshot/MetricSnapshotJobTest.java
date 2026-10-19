@@ -45,7 +45,7 @@ import org.springframework.dao.DataAccessResourceFailureException;
  * 실제 시간을 기다리지 않는다. 한 줄은 Realtime 몫 숫자 키만이고(사건 코드의 허용 키 안), 게이지 값은 시점 값 · 카운터는 직전 줄 이후 증가분 ·
  * 최댓값은 구간 최댓값이다.
  */
-@Tag("u1")
+@Tag("skeleton")
 class MetricSnapshotJobTest {
 
     private static final Duration INTERVAL = Duration.ofSeconds(60);

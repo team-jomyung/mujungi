@@ -10,7 +10,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 /** 공급자 해석기가 실호출로 관측한 수신 형식을 앱 이벤트로 바꾸는지 (U11 FR12.2 · BR11.3 · 편차 (U11-a)). */
-@Tag("u11")
+@Tag("judgment-turn")
 class ProviderReaderWireTest {
 
     private static final JsonCodec JSON = JsonCodec.shared();

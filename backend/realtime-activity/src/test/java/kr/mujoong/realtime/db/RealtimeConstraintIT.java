@@ -36,7 +36,7 @@ import org.junit.jupiter.params.provider.ValueSource;
  * UPDATE 승자 하나) · 스냅샷 CHECK(entities ActivitySession) · BR7.5(transcript (session_id, sequence_no) 유일과 PARTIAL → FINAL
  * 덮어쓰기) · BR5.6(Inbox RECEIVED는 next_attempt_at 필수) · BR5.11 · A3(trace_id) · 연결 상태 값(E2).
  */
-@Tag("u1")
+@Tag("skeleton")
 @Tag("db")
 class RealtimeConstraintIT {
 

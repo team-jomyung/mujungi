@@ -29,7 +29,7 @@ import org.junit.jupiter.api.Test;
  * <p>800ms 조용 경계(799 · 801ms) · 아이 입력 재개 확정 · GATE_EMPTY · GATE_PATTERN · 송신 직전 재확인 순서 · 대체 문구 겹침 규칙 ·
  * 폐기 행 FINAL · false · 출력 세대(취소 뒤 늦은 송신 0, 프레임 중간 세대 변경) · fail-closed · tGatePass 유무를 본다.
  */
-@Tag("u1")
+@Tag("skeleton")
 class OutputGateTest {
 
     private static final byte[] AUDIO = new byte[4800];

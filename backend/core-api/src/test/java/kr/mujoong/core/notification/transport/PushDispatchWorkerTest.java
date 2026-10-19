@@ -17,7 +17,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
-@Tag("u7")
+@Tag("web-push")
 class PushDispatchWorkerTest {
     private final PushDispatchRepository repository = mock(PushDispatchRepository.class);
     private final PushDeliverySender sender = mock(PushDeliverySender.class);

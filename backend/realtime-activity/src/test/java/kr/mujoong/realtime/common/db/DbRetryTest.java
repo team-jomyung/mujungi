@@ -11,6 +11,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import kr.mujoong.realtime.common.db.DbRetry.Idempotency;
+import kr.mujoong.realtime.config.RealtimeLimitsProperties;
 import kr.mujoong.realtime.config.RealtimeProperties;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Tag;
@@ -29,7 +30,7 @@ import org.springframework.util.unit.DataSize;
  * <p>증명: 40P01 · 40001 · 55P03만 멱등 연산에서 재시도 · 비멱등은 즉시 실패 · 상한(2회) 뒤 마지막 오류와 앞 오류(suppressed) ·
  * 지터 0 ~ 50ms · 바깥 트랜잭션이 열려 있으면 재시도하지 않음 · 대기 중 인터럽트 보존.
  */
-@Tag("u1")
+@Tag("skeleton")
 class DbRetryTest {
 
     private final List<Duration> sleeps = new ArrayList<>();
@@ -133,7 +134,7 @@ class DbRetryTest {
     @Test
     void theApplicationBeanTakesItsRetryCountFromTheLimitsSetting() {
         RealtimeProperties properties = mock(RealtimeProperties.class);
-        when(properties.limits()).thenReturn(new RealtimeProperties.Limits(DataSize.ofKilobytes(8),
+        when(properties.limits()).thenReturn(new RealtimeLimitsProperties(DataSize.ofKilobytes(8),
                 DataSize.ofMegabytes(2), 50, 1000, 100, 200, 2, 3, Duration.ofSeconds(2), Duration.ofSeconds(10), 1, 1000));
         DbRetry retry = new DbRetry(properties);
         AtomicInteger attempts = new AtomicInteger();

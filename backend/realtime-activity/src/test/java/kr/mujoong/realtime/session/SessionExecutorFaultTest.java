@@ -33,7 +33,7 @@ import org.junit.jupiter.api.Test;
  * CLOSE_TRANSPORT(FAILED) · STANDBY를 보내는지(F4), 커밋은 됐는데 응답을 잃은 전이를 다시 읽어 받아들일 때 그 상태의 시한 · 부수 효과를
  * 한 번만 거는지(F5)를 실제 스레드 없이 본다.
  */
-@Tag("u1")
+@Tag("skeleton")
 class SessionExecutorFaultTest {
 
     /** 일반 편지함 상한만 4로 줄인 설정(나머지는 운영 기본값). */

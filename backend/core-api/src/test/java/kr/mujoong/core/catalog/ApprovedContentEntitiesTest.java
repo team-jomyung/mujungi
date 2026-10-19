@@ -14,7 +14,7 @@ import org.junit.jupiter.params.provider.ValueSource;
  * Step 10 엔터티 단위 시험(DB 없음): ApprovedContent · ApprovedContentVersion. DB 대조와 왕복은 {@code CoreSchemaIT}.
  * 근거: entities.md ApprovedContent(Version) · E7(audio_path는 /media/approved/ 아래 파일 이름) · 계약 ApprovedAudioUrl · J114.
  */
-@Tag("u1")
+@Tag("skeleton")
 class ApprovedContentEntitiesTest {
 
     private static final Instant T0 = Instant.parse("2026-10-15T09:00:00Z");

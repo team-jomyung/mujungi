@@ -5,7 +5,7 @@ import java.util.*;
 import kr.mujoong.core.knowledge.SupportLibrary;
 import kr.mujoong.core.result.check.ForbiddenDictionary;
 import org.junit.jupiter.api.*;
-@Tag("u6")
+@Tag("result-report")
 class TipMatcherTest {
     SupportLibrary library=mock(SupportLibrary.class);TipMatcher matcher=new TipMatcher(library,new ForbiddenDictionary());
     @Test void keepsApprovedTextUnchanged(){var tip=new SupportLibrary.Tip(UUID.randomUUID(),"기다리기","말이 끝나면","잠시 기다려 주세요","아이 반응에 따라 달라요");when(library.approvedByBehaviorKeys(Set.of("key"))).thenReturn(List.of(tip));assertThat(matcher.match(Set.of("key")).tips()).containsExactly(tip);}

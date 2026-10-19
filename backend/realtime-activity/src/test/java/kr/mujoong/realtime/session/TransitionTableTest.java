@@ -19,7 +19,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 /**
  * U1 세션 전이 표 시험 (U1 3.5 Step 29 · BR6.8 · BR6.12 · BR6.13 · J59 (h) · J126).
  */
-@Tag("u1")
+@Tag("skeleton")
 class TransitionTableTest {
 
     private static final Instant AT = Instant.parse("2026-10-15T09:00:00Z");

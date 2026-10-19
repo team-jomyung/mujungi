@@ -18,6 +18,7 @@ import kr.mujoong.contract.time.MujoongClock;
 import kr.mujoong.core.common.error.CoreApiException;
 import kr.mujoong.core.config.CoreProperties;
 import kr.mujoong.core.config.CorePropertiesConfig;
+import kr.mujoong.core.config.CoreTimingProperties;
 import kr.mujoong.core.device.BootstrapService;
 import kr.mujoong.core.device.CodeGenerator;
 import kr.mujoong.core.device.DeviceJdbcRepository;
@@ -37,7 +38,7 @@ import org.springframework.boot.test.context.runner.ApplicationContextRunner;
  * 슬라이딩 창 한도기 (BR1.6 · BR2.6 · 편차 (k) · A6 · SD-10). bootstrap 20회 · 1시간(21번째 거절), 같은 쿠키 재요청 미계수, IPv6 /64 묶음,
  * 키 상한 LRU 밀어내기, 내부 오류는 통과(fail-open) + 알림, 등록 실패 10회 · 10분, load-test 상향 600 · 1시간은 dev+load-test 바인딩에서만.
  */
-@Tag("u1")
+@Tag("skeleton")
 class SlidingWindowRateLimiterTest {
 
     private static final Instant START = Instant.parse("2001-03-01T00:00:00Z");
@@ -189,13 +190,13 @@ class SlidingWindowRateLimiterTest {
         runner.withPropertyValues("spring.profiles.active=dev,load-test",
                         "MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET=" + TestSecrets.ownerHashSecret())
                 .run(context -> {
-                    CoreProperties.RateLimit limit = context.getBean(CoreProperties.class).timing().bootstrap().rateLimit();
+                    CoreTimingProperties.RateLimit limit =context.getBean(CoreProperties.class).timing().bootstrap().rateLimit();
                     assertThat(limit.max()).isEqualTo(600);
                     assertThat(limit.window()).isEqualTo(Duration.ofHours(1));
                     assertThat(context.getBean(CoreProperties.class).loadTest().enabled()).isTrue();
                 });
         runner.withPropertyValues("spring.profiles.active=dev").run(context -> {
-            CoreProperties.RateLimit limit = context.getBean(CoreProperties.class).timing().bootstrap().rateLimit();
+            CoreTimingProperties.RateLimit limit =context.getBean(CoreProperties.class).timing().bootstrap().rateLimit();
             assertThat(limit.max()).isEqualTo(20);
             assertThat(context.getBean(CoreProperties.class).loadTest().enabled()).isFalse();
         });

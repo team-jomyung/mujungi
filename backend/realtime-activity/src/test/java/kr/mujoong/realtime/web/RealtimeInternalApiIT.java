@@ -48,7 +48,7 @@ import tools.jackson.databind.JsonNode;
  * 검사한다. 이 묶음은 시한이 시험 중에 발동하지 않게 기기 응답 · 종료 확인 · 끊김 시한을 운영 값으로 두고, DB 점검 주기를 길게 둬 준비 상태를
  * 시험이 직접 바꾼다(Retry-After = 점검 주기 초, J124).
  */
-@Tag("u1")
+@Tag("skeleton")
 @Tag("db")
 class RealtimeInternalApiIT {
 
@@ -207,7 +207,7 @@ class RealtimeInternalApiIT {
     void endRejectsUnknownReasonsAndMalformedRequestsWith400() {
         UUID sessionId = dbOnlySession(SessionStatus.ACTIVE);
 
-        // U4b(FR1.4): CONSENT_WITHDRAWN은 응답표에 들어왔다(EndRequestU4bTest · SessionLifecycleU4bIT). 계약 열거의 알 수 없는 값으로 거절을 본다
+        // U4b(FR1.4): CONSENT_WITHDRAWN은 응답표에 들어왔다(EndRequestTest · SessionLifecycleSessionRuntimeIT). 계약 열거의 알 수 없는 값으로 거절을 본다
         assertValidationFailed(end(sessionId, "UNRECOGNIZED"));
         assertValidationFailed(end(sessionId, "SOMETHING_ELSE"));
         assertValidationFailed(api.post(SESSIONS + "/" + sessionId + "/end", "{\"reason\":\"GUARDIAN_STOP\"}"));

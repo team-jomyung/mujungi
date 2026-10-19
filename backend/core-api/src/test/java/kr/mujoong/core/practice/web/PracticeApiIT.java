@@ -15,7 +15,7 @@ import kr.mujoong.core.web.support.WebFixtures;
 import kr.mujoong.testsupport.http.ContractStubServer;
 import kr.mujoong.testsupport.secret.TestSecrets;
 import org.junit.jupiter.api.*;
-@Tag("u5a") @Tag("db")
+@Tag("practice-core") @Tag("db")
 class PracticeApiIT {
     private static DbTestSupport db;
     private static CoreWebApp app;

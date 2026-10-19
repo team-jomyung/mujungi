@@ -20,7 +20,7 @@ import org.junit.jupiter.api.Test;
  * 승인 문구 카탈로그 한 조회 경로(U2 · 2차 리뷰 6): 세션 패키지 문구(CLOSING · WAITING_FILLER)는 {@code latestApproved}와 같은 버전이고 음성이
  * 있을 때만 나온다. 약관처럼 음성 없는 문구는 {@code latestApproved} · {@code pin}에만 나온다.
  */
-@Tag("u2")
+@Tag("parent-account")
 class ApprovedContentCatalogTest {
 
     private static final Instant NOW = Instant.parse("2026-10-15T00:00:00Z");

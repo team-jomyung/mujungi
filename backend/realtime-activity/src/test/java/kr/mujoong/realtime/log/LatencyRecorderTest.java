@@ -27,7 +27,7 @@ import org.junit.jupiter.api.Test;
  * <p>LATENCY_TURN 시각 키 8종 + SESSION_ITEMS_SERVED 2종, tSpeechEndSource 우선순위, HEARTBEAT 봉투 sentAt으로 계산한 clockOffsetMs가
  * 주입한 오프셋 ± rttMs/2 안, 오프셋이 없으면 CLOCK_OFFSET_MISSING, 프레임 단위 로그 0줄을 본다.
  */
-@Tag("u1")
+@Tag("skeleton")
 class LatencyRecorderTest {
 
     private final MutableClock clock = new MutableClock();

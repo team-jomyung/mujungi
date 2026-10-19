@@ -24,7 +24,7 @@ import org.junit.jupiter.api.Test;
  * 한다(낡은 허용 금지). 주석은 보지 않는다. 3.6 1차의 허용 밖 4건(기록기 5ms 되풀이 · 송신기 · 입력 중계의 1초 재확인 · 운영 소스 안 시험용
  * 기록기의 10초)은 상수 자체를 없앴다(J305 · J306 · J308).
  */
-@Tag("u1")
+@Tag("skeleton")
 class TimeLiteralScanTest {
 
     private static final Path REPO_ROOT =

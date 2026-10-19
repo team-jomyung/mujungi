@@ -23,7 +23,7 @@ import kr.mujoong.core.consent.ConsentPolicyService;
 import kr.mujoong.core.consent.ConsentPolicyService.GateResult;
 import kr.mujoong.core.consent.PolicyTermsReader;
 import kr.mujoong.core.support.BusinessFixtures;
-import kr.mujoong.core.support.U2Fixtures;
+import kr.mujoong.core.support.ParentAccountFixtures;
 import kr.mujoong.core.web.support.CoreWebApp;
 import kr.mujoong.core.web.support.CoreWebApp.Call;
 import kr.mujoong.core.web.support.CoreWebApp.Result;
@@ -49,7 +49,7 @@ import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
  * <p>증명: AC1.1.1 ~ AC1.1.4 · AC1.1.7(구글만) · AC1.1.8(남의 자원 없음) · AC1.2.2 · AC1.2.4 · AC1.2.9 · AC1.3.1 ~ AC1.3.9 · AC1.5.2 ·
  * AC2.3.4 ~ AC2.3.6 · R1 ~ R9 · 편차 (U2-a) ~ (U2-i). 모든 응답을 parent-api.yaml 연산 계약(상태 · 스키마 · x-error-codes)과 대조한다.
  */
-@Tag("u2")
+@Tag("parent-account")
 @Tag("db")
 class GuardianAccountApiIT {
 
@@ -67,18 +67,18 @@ class GuardianAccountApiIT {
     static void start() {
         db = DbTestSupport.coreApp();
         BusinessFixtures.applyReferenceSeed(db.postgres());
-        U2Fixtures.applyU2Seed(db.postgres());
+        ParentAccountFixtures.applyU2Seed(db.postgres());
         fixtures = new BusinessFixtures(db);
         contracts = OpenApiContracts.load();
         String token = TestSecrets.internalServiceToken();
         realtime = WebFixtures.realtime(token);
-        google = U2Fixtures.googleTokenEndpoint();
+        google = ParentAccountFixtures.googleTokenEndpoint();
         app = CoreWebApp.builder(db.postgres()).internalToken(token).realtime(realtime.baseUrl())
-                .property("mujoong.guardian.google.client-id", U2Fixtures.CLIENT_ID)
-                .property("mujoong.guardian.google.client-secret", U2Fixtures.clientSecret())
-                .property("mujoong.guardian.google.redirect-uri", U2Fixtures.REDIRECT_URI)
-                .property("mujoong.guardian.google.token-uri", google.baseUrl() + U2Fixtures.TOKEN_PATH)
-                .property("mujoong.guardian.google.jwks-uri", google.baseUrl() + U2Fixtures.JWKS_PATH)
+                .property("mujoong.guardian.google.client-id", ParentAccountFixtures.CLIENT_ID)
+                .property("mujoong.guardian.google.client-secret", ParentAccountFixtures.clientSecret())
+                .property("mujoong.guardian.google.redirect-uri", ParentAccountFixtures.REDIRECT_URI)
+                .property("mujoong.guardian.google.token-uri", google.baseUrl() + ParentAccountFixtures.TOKEN_PATH)
+                .property("mujoong.guardian.google.jwks-uri", google.baseUrl() + ParentAccountFixtures.JWKS_PATH)
                 .property("mujoong.timing.account.deletion-tick", "1h")
                 .start();
     }
@@ -110,11 +110,11 @@ class GuardianAccountApiIT {
     @Test
     void firstGoogleLoginCreatesAGuardianAndASessionAndTheSameAccountComesBackAsTheSameGuardian() {
         String subject = "sub-" + UUID.randomUUID();
-        U2Fixtures.issueFor(google, subject, app.clock().now());
+        ParentAccountFixtures.issueFor(google, subject, app.clock().now());
         google.clearRequests();
 
         Result first = send("POST /api/auth/google", app.post("/api/auth/google").header("Origin", CoreWebApp.ALLOWED_ORIGIN)
-                .json(U2Fixtures.loginBody("code-1")));
+                .json(ParentAccountFixtures.loginBody("code-1")));
 
         assertThat(first.status()).isEqualTo(200);
         UUID guardianId = track(first);
@@ -124,12 +124,12 @@ class GuardianAccountApiIT {
         assertThat(cookie.has("HttpOnly")).isTrue();
         assertThat(cookie.attribute("SameSite")).isEqualTo("Lax");
         // 서버가 code를 교환했다(브라우저는 토큰을 보지 않는다)
-        RecordedRequest exchange = google.requests("POST", U2Fixtures.TOKEN_PATH).get(0);
+        RecordedRequest exchange = google.requests("POST", ParentAccountFixtures.TOKEN_PATH).get(0);
         assertThat(exchange.body()).contains("grant_type=authorization_code", "code=code-1", "client_id=", "redirect_uri=");
         assertThat(first.body()).doesNotContain(subject, "id_token");
 
         Result again = send("POST /api/auth/google", app.post("/api/auth/google").session(cookie.value())
-                .json(U2Fixtures.loginBody("code-2")));
+                .json(ParentAccountFixtures.loginBody("code-2")));
         assertThat(UUID.fromString(String.valueOf(again.json().get("guardianId")))).isEqualTo(guardianId);
         String renewed = again.setCookie("MUJOONG_SESSION").orElseThrow().value();
         assertThat(CoreWebApp.sessionId(renewed)).as("로그인 때 세션 ID를 바꾼다").isNotEqualTo(CoreWebApp.sessionId(cookie.value()));
@@ -141,24 +141,24 @@ class GuardianAccountApiIT {
     @Test
     void everyGoogleLoginFailureIs401WithoutACookieAndWithoutAGuardian() {
         String subject = "sub-" + UUID.randomUUID();
-        U2Fixtures.issueFor(google, subject, app.clock().now());
+        ParentAccountFixtures.issueFor(google, subject, app.clock().now());
         google.clearRequests();
         List<Result> failures = List.of(
-                send("POST /api/auth/google", app.post("/api/auth/google").json("{\"redirectUri\":\"" + U2Fixtures.REDIRECT_URI + "\"}")),
+                send("POST /api/auth/google", app.post("/api/auth/google").json("{\"redirectUri\":\"" + ParentAccountFixtures.REDIRECT_URI + "\"}")),
                 send("POST /api/auth/google", app.post("/api/auth/google").json("not json")),
                 send("POST /api/auth/google", app.post("/api/auth/google")
                         .json("{\"code\":\"c\",\"redirectUri\":\"https://evil.invalid/cb\"}")),
                 send("POST /api/auth/google", app.post("/api/auth/google").header("Origin", "https://evil.invalid")
-                        .json(U2Fixtures.loginBody("c"))));
-        assertThat(google.requests("POST", U2Fixtures.TOKEN_PATH)).as("형식 · redirect · Origin 실패는 구글을 부르지 않는다").isEmpty();
+                        .json(ParentAccountFixtures.loginBody("c"))));
+        assertThat(google.requests("POST", ParentAccountFixtures.TOKEN_PATH)).as("형식 · redirect · Origin 실패는 구글을 부르지 않는다").isEmpty();
 
-        google.route("POST", U2Fixtures.TOKEN_PATH).respond(StubResponse.json(400, "{\"error\":\"invalid_grant\"}"));
-        Result rejectedByGoogle = send("POST /api/auth/google", app.post("/api/auth/google").json(U2Fixtures.loginBody("c")));
-        google.route("POST", U2Fixtures.TOKEN_PATH).respond(StubResponse.json(200,
-                "{\"id_token\":\"" + U2Fixtures.idToken("someone-else", subject, app.clock().now().plusSeconds(60)) + "\"}"));
-        Result wrongAudience = send("POST /api/auth/google", app.post("/api/auth/google").json(U2Fixtures.loginBody("c")));
-        google.route("POST", U2Fixtures.TOKEN_PATH).respond(StubResponse.json(200, "{\"access_token\":\"x\"}"));
-        Result noIdToken = send("POST /api/auth/google", app.post("/api/auth/google").json(U2Fixtures.loginBody("c")));
+        google.route("POST", ParentAccountFixtures.TOKEN_PATH).respond(StubResponse.json(400, "{\"error\":\"invalid_grant\"}"));
+        Result rejectedByGoogle = send("POST /api/auth/google", app.post("/api/auth/google").json(ParentAccountFixtures.loginBody("c")));
+        google.route("POST", ParentAccountFixtures.TOKEN_PATH).respond(StubResponse.json(200,
+                "{\"id_token\":\"" + ParentAccountFixtures.idToken("someone-else", subject, app.clock().now().plusSeconds(60)) + "\"}"));
+        Result wrongAudience = send("POST /api/auth/google", app.post("/api/auth/google").json(ParentAccountFixtures.loginBody("c")));
+        google.route("POST", ParentAccountFixtures.TOKEN_PATH).respond(StubResponse.json(200, "{\"access_token\":\"x\"}"));
+        Result noIdToken = send("POST /api/auth/google", app.post("/api/auth/google").json(ParentAccountFixtures.loginBody("c")));
 
         List<Result> all = new ArrayList<>(failures);
         all.addAll(List.of(rejectedByGoogle, wrongAudience, noIdToken));
@@ -175,14 +175,14 @@ class GuardianAccountApiIT {
         // 리뷰 1: 토큰 응답이 바뀌어도(설정 실수 · 중간자) 서명 없는 id_token으로는 세션을 얻을 수 없다
         String subject = "sub-" + UUID.randomUUID();
         String claims = Base64.getUrlEncoder().withoutPadding().encodeToString(JsonCodec.shared().write(Map.of(
-                "iss", "https://accounts.google.com", "aud", U2Fixtures.CLIENT_ID,
+                "iss", "https://accounts.google.com", "aud", ParentAccountFixtures.CLIENT_ID,
                 "exp", app.clock().now().plusSeconds(300).getEpochSecond(), "sub", subject)).getBytes(StandardCharsets.UTF_8));
         for (String header : List.of("{\"alg\":\"RS256\",\"typ\":\"JWT\"}", "{\"alg\":\"none\"}")) {
             String token = Base64.getUrlEncoder().withoutPadding().encodeToString(header.getBytes(StandardCharsets.UTF_8))
                     + "." + claims + ".c2ln";
-            google.route("POST", U2Fixtures.TOKEN_PATH).respond(StubResponse.json(200, "{\"id_token\":\"" + token + "\"}"));
+            google.route("POST", ParentAccountFixtures.TOKEN_PATH).respond(StubResponse.json(200, "{\"id_token\":\"" + token + "\"}"));
 
-            Result forged = send("POST /api/auth/google", app.post("/api/auth/google").json(U2Fixtures.loginBody("c")));
+            Result forged = send("POST /api/auth/google", app.post("/api/auth/google").json(ParentAccountFixtures.loginBody("c")));
 
             assertThat(forged.status()).as(header).isEqualTo(401);
             assertThat(forged.code()).isEqualTo("GOOGLE_AUTH_FAILED");
@@ -199,13 +199,13 @@ class GuardianAccountApiIT {
             send("POST /api/auth/google", app.post("/api/auth/google").json("not json"));
             send("POST /api/auth/google", app.post("/api/auth/google")
                     .json("{\"code\":\"secret-code\",\"redirectUri\":\"https://evil.invalid/cb\"}"));
-            google.route("POST", U2Fixtures.TOKEN_PATH).respond(StubResponse.json(400, "{\"error\":\"invalid_grant\"}"));
-            send("POST /api/auth/google", app.post("/api/auth/google").json(U2Fixtures.loginBody("secret-code")));
-            google.route("POST", U2Fixtures.TOKEN_PATH).respond(StubResponse.json(200,
-                    "{\"id_token\":\"" + U2Fixtures.idToken("someone-else", subject, app.clock().now().plusSeconds(60)) + "\"}"));
-            send("POST /api/auth/google", app.post("/api/auth/google").json(U2Fixtures.loginBody("secret-code")));
+            google.route("POST", ParentAccountFixtures.TOKEN_PATH).respond(StubResponse.json(400, "{\"error\":\"invalid_grant\"}"));
+            send("POST /api/auth/google", app.post("/api/auth/google").json(ParentAccountFixtures.loginBody("secret-code")));
+            google.route("POST", ParentAccountFixtures.TOKEN_PATH).respond(StubResponse.json(200,
+                    "{\"id_token\":\"" + ParentAccountFixtures.idToken("someone-else", subject, app.clock().now().plusSeconds(60)) + "\"}"));
+            send("POST /api/auth/google", app.post("/api/auth/google").json(ParentAccountFixtures.loginBody("secret-code")));
             send("POST /api/auth/google", app.post("/api/auth/google").header("Origin", "https://evil.invalid")
-                    .json(U2Fixtures.loginBody("secret-code")));
+                    .json(ParentAccountFixtures.loginBody("secret-code")));
 
             assertThat(logs.events(EventCode.SECURITY_AUTH_FAILED)).extracting(event -> LogCapture.attrs(event).get("kind"))
                     .contains("GOOGLE_BAD_REQUEST", "GOOGLE_REDIRECT_MISMATCH", "GOOGLE_EXCHANGE_FAILED", "GOOGLE_TOKEN_INVALID")

@@ -5,7 +5,7 @@ import java.util.*;
 import kr.mujoong.core.common.db.DbTestSupport;
 import kr.mujoong.core.result.ResultJobRepository;
 import org.junit.jupiter.api.*;
-@Tag("u6") @Tag("db")
+@Tag("result-report") @Tag("db")
 class ReportRepositoryIT {
     DbTestSupport db;ReportRepository reports;Instant now=Instant.parse("2026-10-14T00:00:00Z");UUID g=UUID.randomUUID(),c=UUID.randomUUID(),s=UUID.randomUUID();
     @BeforeEach void open(){db=DbTestSupport.coreApp();reports=new ReportRepository(db.jdbc());}

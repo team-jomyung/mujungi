@@ -28,7 +28,7 @@ import org.springframework.dao.DataIntegrityViolationException;
  * <p>증명: 세션 · 화자당 행 하나(유일 제약) · 파일 열기(0바이트 · 끝 없음) → 닫기(바이트 · 끝 시각, 한 번만) · 세션 외래 키 · 보호자 기준
  * 살아 있는 메타 목록과 삭제 표시의 멱등성(삭제 참가자 K6 · AC6.4.7).
  */
-@Tag("u3")
+@Tag("voice-session")
 @Tag("db")
 class AudioRecordingRepositoryIT {
 

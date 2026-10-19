@@ -19,7 +19,7 @@ import org.springframework.mock.web.MockHttpServletResponse;
  * REST · 12 조회 서버 처리 시간 계수 (U1 3.6 수정 · OD-6 restTotal · restLe300Ms · viewTotal · viewLe500Ms · NFR5.5 · J324). 처리 시간은
  * 가변 Clock을 체인 안에서 앞당겨 만든다(실제 시간 대기 없음).
  */
-@Tag("u1")
+@Tag("skeleton")
 class RestTimingFilterTest {
 
     private final MutableClock clock = new MutableClock();

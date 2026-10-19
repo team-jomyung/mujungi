@@ -11,7 +11,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 /** NFR12: 미리 데운 PDFBox 캐시가 결함을 가리지 않게 매번 새 JVM에서 검사한다. */
-@Tag("u6")
+@Tag("result-report")
 class ReportPdfColdStartTest {
     @Test
     void firstRenderWritesNeitherFontCacheNorTemporaryPdf(@TempDir Path scratch) throws Exception {

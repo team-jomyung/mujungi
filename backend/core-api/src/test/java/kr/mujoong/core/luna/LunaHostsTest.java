@@ -19,7 +19,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 /** Core Luna 주소 규칙 · 설정 레코드 · 실행 자원 스키마 복사 (U9 BR1.4 · BR1.5 · SD3 · SD12 · NFR3.4 · Q3-A). */
-@Tag("u9")
+@Tag("luna")
 class LunaHostsTest {
 
     private static final Path REPO_ROOT =

@@ -9,7 +9,7 @@ import kr.mujoong.core.report.ReportRepository;
 import kr.mujoong.testsupport.time.MutableClock;
 import org.junit.jupiter.api.*;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
-@Tag("u6") @Tag("db")
+@Tag("result-report") @Tag("db")
 class JobRunnerIT {
     DbTestSupport db;ResultJobRepository jobs;ReportRepository reports;JobRunner runner;MutableClock clock;
     @BeforeEach void setup(){db=DbTestSupport.coreApp();jobs=new ResultJobRepository(db.jdbc());reports=new ReportRepository(db.jdbc());clock=new MutableClock();runner=new JobRunner(jobs,new kr.mujoong.core.report.ReportJobStateAdapter(reports),new GuardianWriteLock(db.jdbc()),clock,JobRunnerTest.properties(),new DataSourceTransactionManager(db.dataSource()),List.of(),org.mockito.Mockito.mock(kr.mujoong.core.observability.EventLogger.class));}

@@ -12,7 +12,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import kr.mujoong.realtime.voice.PracticeSpeech;
 
 /**
- * 세션 콘텐츠 계획 · 원문 일치 확인 (U8 functional-spec W1 · W2 · 8.3 · BR1.3 · BR1.4 · BR2.2 · BR2.3 · NFR2.1 ~ NFR2.4 · NFR3.6 · SD4 · SD6).
+ * 세션 콘텐츠 계획 · 원문 일치 확인 (U8 functional-spec W1 · W2 · 8.3 · SD4 · SD6).
  *
  * <ul>
  *   <li><b>고정</b>({@link #pin}): 세션 시작 패키지를 받을 때 판정 선택지 판 · 가드레일 정책 판 번호와 패키지의 승인 문구 판(approvedContent ·
@@ -25,7 +25,7 @@ import kr.mujoong.realtime.voice.PracticeSpeech;
  * </ul>
  *
  * <p>계획은 세션 id를 키로 하는 동시성 맵 하나에만 두고 DB · 파일 · 캐시에 쓰지 않는다. 이 컴포넌트는 로그를 쓰지 않고, 판 번호와 결과 종류만
- * 반환값으로 낸다(NFR3.6 · SD4 — ArchUnit {@code U8LiveContentArchTest}가 로그 의존 0을 강제한다). 판정 · 검사 기록 행에 판 번호를 쓰는 일은
+ * 반환값으로 낸다(SD4 — ArchUnit {@code LiveContentArchTest}가 로그 의존 0을 강제한다). 판정 · 검사 기록 행에 판 번호를 쓰는 일은
  * 받는 단위(U11 · U13)가 한다.
  */
 public final class LiveContentRegistry {
@@ -64,7 +64,7 @@ public final class LiveContentRegistry {
             return new MatchResult(MatchKind.MATCHED, source, version);
         }
 
-        /** 제브 검사를 생략할 근거가 되는가(MATCHED만, NFR2.2). */
+        /** 제브 검사를 생략할 근거가 되는가(MATCHED만). */
         public boolean allowsGuardrailSkip() {
             return kind == MatchKind.MATCHED;
         }
@@ -180,7 +180,7 @@ public final class LiveContentRegistry {
     }
 
     /**
-     * 대본 문장을 등록한다(BR2.3). 계획이 없는 세션(고정 전 · 놓은 뒤)이면 등록하지 않고 거짓이다.
+     * 대본 문장을 등록한다. 계획이 없는 세션(고정 전 · 놓은 뒤)이면 등록하지 않고 거짓이다.
      *
      * @param sentences 문장 키(장면 · 기회 문장 · 다시 설명 · 집중 요점 · 표현 예시) → 원문
      */
@@ -191,7 +191,7 @@ public final class LiveContentRegistry {
     }
 
     /**
-     * 출력 전사가 고정한 승인 발화 또는 등록된 대본 문장과 원문 일치하는지 본다(BR1.4 · SD6). 정규화는 ASCII 공백 제거뿐이다
+     * 출력 전사가 고정한 승인 발화 또는 등록된 대본 문장과 원문 일치하는지 본다(SD6). 정규화는 ASCII 공백 제거뿐이다
      * ({@link PracticeSpeech#sameWithoutAsciiWhitespace}). 입력 전사는 저장 · 기록하지 않는다.
      */
     public MatchResult matchApproved(UUID sessionId, String outputText) {

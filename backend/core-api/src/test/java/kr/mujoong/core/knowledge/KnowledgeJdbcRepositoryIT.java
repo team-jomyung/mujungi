@@ -7,7 +7,7 @@ import kr.mujoong.core.common.db.DbTestSupport;
 import org.junit.jupiter.api.*;
 import org.springframework.dao.DataAccessException;
 
-@Tag("u5a")
+@Tag("practice-core")
 @Tag("db")
 class KnowledgeJdbcRepositoryIT {
     private DbTestSupport db;

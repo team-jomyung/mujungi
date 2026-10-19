@@ -29,7 +29,7 @@ import org.junit.jupiter.params.provider.ValueSource;
  * <p>U4a: 빌더는 계약 8절 포트 값(ChildContext · ConsentGate 스냅숏 · 고정한 승인 문구)으로 조립한다. 부르는 모양만 바꿨고 단언은 U1
  * 그대로다(문자열 매개변수 검사는 정책 버전이 스냅숏 안으로 들어가 '0개'로 좁혔다). 종료 표현 스냅숏 · 추가 문구는 {@code SessionPackageU4aTest}.
  */
-@Tag("u1")
+@Tag("skeleton")
 class SessionPackageBuilderTest {
 
     private static final ApprovedItem CLOSING = new ApprovedItem(UUID.randomUUID(), "오늘 이야기 즐거웠어.",

@@ -10,7 +10,7 @@ import java.util.UUID;
 import kr.mujoong.contract.status.ActivityType;
 import kr.mujoong.contract.ws.message.PlaybackMark;
 import kr.mujoong.realtime.guardrail.GuardrailRequest;
-import kr.mujoong.realtime.practice.PracticePorts;
+import kr.mujoong.realtime.practicelegacy.PracticePorts;
 import kr.mujoong.realtime.testing.FakeGuardrailClient;
 import kr.mujoong.realtime.testing.SessionHarness;
 import kr.mujoong.realtime.voice.PracticeSpeech;
@@ -25,7 +25,7 @@ import org.junit.jupiter.api.Test;
  * 시험이 손으로 푸는 대역이다(실제 호출 없음, R-F1). 이 시험의 성공은 테스트 대역 · 합성 대화의 성공이며 실제 공급자 · 실제 기기 성공이 아니다
  * (R-M11).
  */
-@Tag("u12")
+@Tag("practice-flow")
 class PracticeGeneratedSpeechTest {
 
     private static final String INSTRUCTION = "친구로서 방금 말을 한 번 더 물어보세요";

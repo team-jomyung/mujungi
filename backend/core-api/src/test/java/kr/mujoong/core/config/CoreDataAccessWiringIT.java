@@ -44,7 +44,7 @@ import org.springframework.transaction.support.TransactionTemplate;
  * 한 연결을 함께 쓴다(서비스 한 곳이 경계, RD-22). 3.6 수정 분량: 트랜잭션 뒤쪽 쓰기가 실패하면 앞의 JPA · JDBC 쓰기가 함께 되돌려진다,
  * 풀이 바닥나면 application.yml {@code connection-timeout}(2초) 뒤 실패하고 무한히 기다리지 않는다(NFR7.6 · PT-05).
  */
-@Tag("u1")
+@Tag("skeleton")
 @Tag("db")
 class CoreDataAccessWiringIT {
 

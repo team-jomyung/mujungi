@@ -3,8 +3,8 @@ import static org.assertj.core.api.Assertions.*;
 import java.util.*;
 import kr.mujoong.core.web.support.WebFixtures;
 import org.junit.jupiter.api.*;
-@Tag("u6") @Tag("db")
-class ResultApiIT extends U6WebTestSupport {
+@Tag("result-report") @Tag("db")
+class ResultApiIT extends WebTestSupport {
     @Test void statusWithoutHeadUsesEndedCopy(){var f=family();UUID session=copy(f,"ENDED",null);var user=WebFixtures.guardianFor(app,f.guardianId());var response=checked("GET /api/sessions/{sessionId}/result/status",app.get("/api/sessions/"+session+"/result/status").session(user.session()));assertThat(response.status()).isEqualTo(200);assertThat(response.json()).containsEntry("jobStatus","REQUESTED");}
     @Test void localFailedWithoutRecordHasNone(){var f=family();UUID session=copy(f,"FAILED","INTERNAL");var user=WebFixtures.guardianFor(app,f.guardianId());assertThat(app.get("/api/sessions/"+session+"/result/status").session(user.session()).send().json()).containsEntry("jobStatus","NONE");}
     @Test void declinedRecordHasNone(){var f=family();UUID session=copy(f,"DECLINED",null);record(f,session,"DECLINED",0);var user=WebFixtures.guardianFor(app,f.guardianId());assertThat(app.get("/api/sessions/"+session+"/result/status").session(user.session()).send().json()).containsEntry("jobStatus","NONE");}

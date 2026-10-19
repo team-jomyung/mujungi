@@ -39,7 +39,7 @@ import org.junit.jupiter.api.Test;
  * <p>실제 DB · test 프로필 앱 · 기기 시뮬레이터(JDK WebSocket) · 가짜 공급자 WS 서버로 시작부터 끝까지 돈다. 시한은 test 프로필의 줄인
  * 값(ACK 2초 · 종료 확인 3초 · 끊김 4초)이다.
  */
-@Tag("u1")
+@Tag("skeleton")
 @Tag("db")
 class SessionLifecycleIT {
 

@@ -62,7 +62,7 @@ import org.springframework.transaction.support.TransactionTemplate;
  * 대역(봉투를 contracts/schemas로 검사)으로 발송 · 수신 · 처리 · 재무장 · 시작 복구를 본다. 시험 프로필 대기표는 Outbox 10 · 20 · 40 · 80 ·
  * 160 · 300ms, Inbox 10 · 20 · 40 · 80 · 160ms다.
  */
-@Tag("u1")
+@Tag("skeleton")
 @Tag("db")
 class CoreMessagingFlowIT {
 

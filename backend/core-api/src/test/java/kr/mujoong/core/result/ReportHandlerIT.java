@@ -16,7 +16,7 @@ import kr.mujoong.core.result.check.*;
 import kr.mujoong.testsupport.time.MutableClock;
 import org.junit.jupiter.api.*;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
-@Tag("u6") @Tag("db") class ReportHandlerIT {
+@Tag("result-report") @Tag("db") class ReportHandlerIT {
     DbTestSupport db;MutableClock clock;ExecutorService executor;FakeResultTextProvider provider;ResultJobRepository jobs;ReportRepository reports;
     SessionResultStateRepository states;ActivityResultRepository results;StructuredExperienceRepository structures;ResultRecordReader reader;JobRunner runner;
     kr.mujoong.core.consent.ConsentPolicyService consent;
@@ -73,7 +73,7 @@ import org.springframework.jdbc.datasource.DataSourceTransactionManager;
         when(reader.reportRecords(guardian,child)).thenReturn(List.of(record));
         var children=mock(kr.mujoong.core.child.ChildProfileService.class);
         when(children.childContext(guardian)).thenReturn(Optional.of(new kr.mujoong.core.child.ChildProfileService.ChildContext(child,"민수",7,List.of(),List.of())));
-        var properties=JobRunnerTest.properties();when(properties.timing().report()).thenReturn(new kr.mujoong.core.config.CoreProperties.ReportTiming(Duration.ofSeconds(60),Duration.ofHours(24)));
+        var properties=JobRunnerTest.properties();when(properties.timing().report()).thenReturn(new kr.mujoong.core.config.CoreTimingProperties.ReportTiming(Duration.ofSeconds(60),Duration.ofHours(24)));
         var service=new ReportService(reports,reader,children,states,jobs,new GuardianWriteLock(db.jdbc()),clock,properties,JsonCodec.shared(),tm);
         LocalDate today=clock.now().atZone(ReportService.ZONE).toLocalDate();
         var created=service.create(guardian,today,today,List.of(session),UUID.randomUUID().toString());

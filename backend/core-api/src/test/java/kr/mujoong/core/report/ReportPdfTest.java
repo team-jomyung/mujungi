@@ -9,7 +9,7 @@ import kr.mujoong.core.report.pdf.ReportPdfRenderer;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.text.PDFTextStripper;
 import org.junit.jupiter.api.*;
-@Tag("u6") class ReportPdfTest {
+@Tag("result-report") class ReportPdfTest {
     EventLogger events=mock(EventLogger.class);ReportPdfRenderer renderer=new ReportPdfRenderer(events);
     ReportRepository.Report report(String name){var r=ReportTestData.report();return new ReportRepository.Report(r.id(),r.guardianId(),r.childId(),r.idempotencyKey(),r.requestHash(),"READY",r.periodFrom(),r.periodTo(),20,1,"PARTIAL",r.jobId(),name,7,r.createdAt(),r.createdAt(),null,null);}
     List<ReportRepository.Section> sections(){List<ReportRepository.Section> result=new ArrayList<>();for(int no=1;no<=10;no++)result.add(new ReportRepository.Section(no,ReportAssembler.TITLES.get(no-1),no==10?ReportAssembler.LIMITATION:"함께 블록을 쌓았어요.",false,false,List.of(new ReportRepository.Citation(UUID.randomUUID(),1L,"같이 블록 쌓자",ReportTestData.NOW,"CHILD_RECALL"))));return result;}

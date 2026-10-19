@@ -37,7 +37,7 @@ import org.springframework.dao.DataIntegrityViolationException;
  * 값에서 조립되어 {@code practice-record-v2} 스키마를 지키며, 표 쓰기가 실패해도 정산 값은 메모리에서 비지 않는지를 실제 DB로 본다. 증거: 실제
  * DB(Testcontainers), AI는 부르지 않는다.
  */
-@Tag("u12")
+@Tag("practice-flow")
 @Tag("db")
 class PracticeFlowRecorderIT {
 

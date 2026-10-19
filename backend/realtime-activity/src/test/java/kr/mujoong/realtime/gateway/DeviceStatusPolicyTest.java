@@ -15,7 +15,7 @@ import org.junit.jupiter.params.provider.EnumSource;
 /**
  * 기기 연결 원장 상태 규칙 시험 (U1 3.5 Step 29 · BR4.7 · BR4.8 · J55 · AC2.1.10 · AC2.1.11).
  */
-@Tag("u1")
+@Tag("skeleton")
 class DeviceStatusPolicyTest {
 
     @ParameterizedTest(name = "code={0} server={1} ready={2} -> {3}")

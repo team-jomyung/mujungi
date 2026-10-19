@@ -18,7 +18,7 @@ import org.junit.jupiter.api.Test;
  * 다음 행동 지시 템플릿과 판정 지시문 (U11 FR3.3 · FR4.2 · FR6.4 · BR3.5 · BR4.2 · BR6.4, 설계 개정 A4.5 · A6). 세 지시문에는 판정 라벨 · 확률
  * · 아이 원문이 들어갈 길이 없다.
  */
-@Tag("u11")
+@Tag("judgment-turn")
 class JudgmentInstructionsTest {
 
     private static final LiveContentResources.JudgmentOptionSet OPTION_SET = LiveContentResources.loadDefault().judgment();

@@ -38,7 +38,7 @@ import org.junit.jupiter.api.Test;
  * BR6.6 · BR6.7 · BR6.12 ①(로컬 FAILED는 REQUESTED · 버전 0일 때만), BR6.1 ②(대조로 닫을 때 버전 유지), BR6.12 ① 후보 조회 경계,
  * BR8.5(남의 세션은 없는 것과 같다).
  */
-@Tag("u1")
+@Tag("skeleton")
 @Tag("db")
 class ActivityCopyRepositoryIT {
 

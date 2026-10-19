@@ -15,7 +15,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.NullAndEmptySource;
 import org.junit.jupiter.params.provider.ValueSource;
 
-@Tag("u7")
+@Tag("web-push")
 class PushSubscriptionValidationTest {
     @Test
     void acceptsFreshP256ReceiverKeysAndDoesNotDependOnVapidConfiguration() {

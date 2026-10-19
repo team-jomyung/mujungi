@@ -1,7 +1,7 @@
 package kr.mujoong.core.result.check;
 import static org.assertj.core.api.Assertions.*;
 import org.junit.jupiter.api.*;
-@Tag("u6")
+@Tag("result-report")
 class NumberGuardTest {
     @Test void allowsClock(){assertThat(NumberGuard.allowed("10:32에 말했어요")).isTrue();}
     @Test void allowsSceneNumber(){assertThat(NumberGuard.allowed("장면 2에서 말했어요")).isTrue();}

@@ -26,7 +26,7 @@ import org.junit.jupiter.api.Test;
  * Realtime V7 새 연습 흐름 표 통합 시험 (U12 FR4.1 · BR7.1 · BR7.3 · BR7.4 · 편차 U12-D2). 표 · 열(원문 칸 없음) · 값 검사 제약 · 외래 키 · 색인 ·
  * 앱 역할 DML 권한, 그리고 V4 레거시 표 다섯 개가 그대로인지 확인한다. 시험마다 되돌린다. 증거 종류: 실제 DB(Testcontainers), AI는 부르지 않는다.
  */
-@Tag("u12")
+@Tag("practice-flow")
 @Tag("db")
 class PracticeFlowSchemaIT {
 

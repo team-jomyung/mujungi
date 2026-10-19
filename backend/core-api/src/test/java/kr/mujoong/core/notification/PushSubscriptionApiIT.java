@@ -20,7 +20,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
-@Tag("u7")
+@Tag("web-push")
 @Tag("db")
 class PushSubscriptionApiIT {
     private static final String PATH = "/api/push-subscription";

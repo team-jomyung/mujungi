@@ -5,8 +5,8 @@ import java.util.Objects;
 import java.util.UUID;
 import kr.mujoong.realtime.common.db.ClockParams;
 import kr.mujoong.realtime.common.db.Transactions;
+import kr.mujoong.realtime.config.RealtimeOutboxProperties.ControlEventPolicy;
 import kr.mujoong.realtime.config.RealtimeProperties;
-import kr.mujoong.realtime.config.RealtimeProperties.Outbox.ControlEventPolicy;
 import kr.mujoong.realtime.startup.StartupFailureLine;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
@@ -14,13 +14,13 @@ import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Component;
 
 /**
- * FAILED 제어 이벤트 재무장 함수 (U1 3.5 Step 26 · A1 · RD-10 · SD-21 · BR5.14 · J124 · LC-11).
+ * FAILED 제어 이벤트 재무장 함수 (U1 3.5 Step 26 · LC-11).
  *
  * <p>조건 표(RD-10)는 {@link RealtimeOutboxRepository#REARM_EVENT_TYPES} · {@link RealtimeOutboxRepository#REARM_EXCLUDED_ERRORS}
  * 한 곳이다: 자기 Outbox의 FAILED 행 중 Realtime → Core 제어 이벤트(DeletionCompleted · SessionRecordCaptured)이고 last_error가
  * EVENT_CONFLICT · INVALID_ENVELOPE · ACCOUNT_DELETED가 아니며 payload를 아직 비우지 않은 행을 PENDING · retry_count 0 · available_at =
  * now로 되돌린다(last_error는 둔다). 시작 복구 S3d({@link #rearmOnStart})와 계정 삭제 참가자({@link #rearmForGuardian}: FAILED 제어
- * 이벤트를 지우지 않고 되살림)가 같은 조건을 쓴다. 정책 {@code RETRY_FOREVER}는 보류 옵션이라 빈 생성 단계에서 기동을 거부한다(J124).
+ * 이벤트를 지우지 않고 되살림)가 같은 조건을 쓴다. 정책 {@code RETRY_FOREVER}는 보류 옵션이라 빈 생성 단계에서 기동을 거부한다.
  */
 @Component
 public class ControlEventRearm {
@@ -46,7 +46,7 @@ public class ControlEventRearm {
     }
 
     /**
-     * 정책 확인. {@code REARM_ON_START}만 지원한다(J124: {@code RETRY_FOREVER}는 보류 옵션 → 기동 실패, 거부 줄에는 키 이름만).
+     * 정책 확인. {@code REARM_ON_START}만 지원한다({@code RETRY_FOREVER}는 보류 옵션 → 기동 실패, 거부 줄에는 키 이름만).
      */
     public static void requireSupported(ControlEventPolicy policy) {
         if (policy != ControlEventPolicy.REARM_ON_START) {
@@ -61,7 +61,7 @@ public class ControlEventRearm {
         return outbox.rearmControlEvents(Objects.requireNonNull(now, "now"));
     }
 
-    /** BR5.14: 한 보호자의 FAILED 제어 이벤트를 같은 조건으로 되살린다(삭제 참가자가 지우기 전에, 같은 트랜잭션에서 부른다). */
+    /** 한 보호자의 FAILED 제어 이벤트를 같은 조건으로 되살린다(삭제 참가자가 지우기 전에, 같은 트랜잭션에서 부른다). */
     public int rearmForGuardian(UUID guardianId, Instant now) {
         Transactions.requireActive("ControlEventRearm.rearmForGuardian");
         MapSqlParameterSource params = ClockParams.at(Objects.requireNonNull(now, "now"));

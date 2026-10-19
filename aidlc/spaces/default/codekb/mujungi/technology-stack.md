@@ -1,147 +1,40 @@
-> 현재 범위의 정본은 바로 아래 "제브 어댑터 선 형식 집중 갱신" 절이다(`backend/realtime-activity` · `contracts` · `docs/units/u13` 한정, 2026-10-18, HEAD `421e1ad`). 그 뒤 구현 전 U13 절 · U14 절 · U15 절 · 원문은 보존 이력이며 재검증 범위는 timestamp에 한정한다.
+# Technology Stack
 
-## 제브 어댑터 선 형식 집중 갱신 — realtime 쪽 기술 사실 (261017-jev-adapter-format, 2026-10-18)
-
-- 제브 어댑터 `JevGuardrailClient`는 외부 SDK 없이 JDK `java.net.http.HttpClient`(리다이렉트 안 따름 · 프록시 없음)만 쓴다. 본문 수신은 상한 64KiB의 `BoundedBodySubscriber`, 시한은 `HttpRequest.timeout(limit)` + `.orTimeout(limit)`으로 본문 수신 끝까지 덮는다. JSON은 `kr.mujoong.contract.json.JsonCodec` 한 곳(Jackson, J139)이며 요청은 `json.write`, 응답은 `json.read(body, Map.class)`로 읽는다. 시계는 `MujoongClock`. 새 의존 라이브러리 없음.
-- 지표는 Micrometer(`RealtimeMetrics`의 `mujoong.guardrail.*`), 저장은 Spring JDBC로 `realtime.guardrail_event`(Flyway V6, `migrate` 컨테이너가 적용).
-- 설정 키: `mujoong.guardrail.jev.{mode, base-url, model}`(환경 변수 `JEV_MODE` · `JEV_BASE_URL` · `JEV_MODEL`, 값은 자리표시자뿐), 비밀 `JEV_API_KEY`는 호출마다 `environment.getProperty`로 읽는다. 시간 `mujoong.timing.guardrail.jev-budget = 800ms`. `application-demo.yml` · `-dev.yml` · `-prod.yml`에는 제브 키가 없다. 문턱 키는 없다.
-- 시험: JUnit 5 · AssertJ · Mockito · ArchUnit · Testcontainers PostgreSQL(`*IT`), 제브 어댑터 시험은 JDK `HttpServer` 루프백 `FakeJev`. 실호출 도구 `jevLiveTest`(태그 `jev-live`)는 기본 `test` · `check`에서 제외되고 기본 test JVM에는 `JEV_API_KEY`를 넘기지 않는다. 이번 스캔은 시험 · 빌드를 실행하지 않았고 버전 카탈로그도 새로 검증하지 않았다(아래 이전 기록의 버전은 shallow).
-- 제브 공식 형식은 JSON over HTTPS REST이며(api-documentation.md B) 현재 코드의 클라이언트 기술(JDK `HttpClient`)로 부를 수 있다는 점 외에 기술 스택 추가 요건은 확인하지 않았다.
-
----
-
-## 구현 전 U13 기술 사실 (2026-10-17 — 이력)
-
-- Java 21 · Spring Boot 4.1 · Gradle 8.14, 가상 스레드(`spring.threads.virtual.enabled`), 멀티 모듈 `contract-model` · `core-api` · `realtime-activity` · `test-support`, 컨벤션 `mujoong.java-conventions`(`-Xlint:all,-processing,-serial,-this-escape,-try`, `-Werror` 없음, JaCoCo).
-- 외부 HTTP 호출은 JDK `java.net.http.HttpClient`(Luna 선례: 리다이렉트 · 프록시 없음, 호스트 재확인, 응답 바이트 상한, `orTimeout`). JSON은 `kr.mujoong.contract.json.JsonCodec` 한 곳(Jackson, J139)이며 제브도 같은 경계를 쓴다.
-- 저장은 Spring JDBC `NamedParameterJdbcTemplate`(저장소 55파일 대 JPA 7파일), Flyway는 앱이 읽기만 하고 `migrate` 컨테이너가 적용한다(`outOfOrder` 꺼짐). 시계는 `MujoongClock`, 지표는 Micrometer(`RealtimeMetrics`, 히스토그램 버킷은 `application.yml`의 `management.metrics.distribution.slo`).
-- 시험: JUnit 5 · AssertJ · Mockito · ArchUnit · Testcontainers PostgreSQL(`-Pmujoong.test.db=docker`, `@Tag("db")`). 이번 스캔은 실행하지 않았고 버전 카탈로그도 새로 검증하지 않았다.
-- 제브용 새 의존 라이브러리는 필요 없다. 새 설정 키 후보(스위치 `mujoong.guardrail.jev.enabled` 등)는 Luna의 `mujoong.luna.enabled` 이름 규칙을 따르되 아직 정해지지 않았다(설계 결정). (구현 뒤: 실제 키는 `mode` · `base-url` · `model` 세 개다.)
-
----
-
-> 현재 범위의 정본(U14 갱신절, 보존 이력)은 바로 아래다. 그 뒤 원문은 보존 이력이며 재검증 범위는 timestamp에 한정한다.
-
-> 최신 정본: 아래 U10 갱신절(2026-10-17, HEAD eb34c68bf24e4520881b7ffebe1070564554dfc9). 이후 U14/U15/전체 분석 본문은 역사 자료이며, 이번에 검증한 범위는 timestamp의 analyzed 목록만이다.
-
-## U10 집중 갱신 — 확인된 기술
-
-현재 읽은 Core 소스는 Java record, Spring Service/Component/Repository, TransactionTemplate, NamedParameterJdbcTemplate, JDK Future/가상스레드, MujoongClock와 JsonCodec를 사용한다. core-api/build.gradle.kts는 contract-model을 운영 의존, test-support를 시험 의존으로 두며 JSON Schema validator는 실행 의존이다. processResources가 contracts/schemas의 ai-*.schema.json/common.schema.json을 luna/schemas로 복사한다.
-
-이번에 새로운 의존을 도입하지 않았다. 아래 버전 카탈로그·프런트·인프라 판 번호는 이전 관찰을 보존한 것으로 새로 검증한 값이 아니다. Neo4j·Luna 어댑터 부재라는 과거 진술을 현재 상태로 해석하지 않는다.
-
----
-
-> 현재 범위의 정본은 바로 아래 U14 갱신절이다. 그 뒤 원문은 보존 이력이며 재검증 범위는 timestamp에 한정한다.
-
-## U14 집중 갱신 — 기술 확인 수준
-
-이번 서비스 소스는 Java record·Spring Service/Repository·NamedParameterJdbcTemplate·TransactionTemplate·JsonCodec를 사용한다. 데이터는 PostgreSQL SQL 마이그레이션이며 U15 Neo4j/메모리 어댑터 파일이 존재한다. 아래 U15 드라이버/어댑터 미존재 설명은 구현 전 이력이다. 이번에는 버전 카탈로그·패키지 lock을 새로 검증하지 않았으므로 아래 판 번호는 shallow인 이전 관찰이다.
-
-새 도구나 의존을 추가한 스캔이 아니다. 현재 시험 체계는 확인한 시험 소스의 JUnit·Mockito/AssertJ 및 태그 기반이며 전체 빌드·CI 구성은 과거 기록을 유지한다.
-
----
-
-# 기술 스택 (Technology Stack)
-
-> 최신 확인: 2026-10-16, HEAD 7e30ee8, U15 집중 분석. 아래 최신 절이 U15 관련 과거 설명보다 우선한다. 이전 분석 본문은 이력으로 보존하며 이번 범위 밖의 검증 주장은 shallow로 낮췄다.
-
-## U15 검증 기술 스택
-
-이번 파일 검증: Java 21, Gradle wrapper 8.14.3, Spring Boot 4.1.1, JaCoCo 0.8.14, ArchUnit 1.5.1, JSON Schema validator 3.0.6. Jackson 3는 JsonCodec 경계를 사용한다. Neo4j Java 드라이버와 Neo4j Testcontainers 의존은 아직 없다. Compose의 Neo4j 5.26.31-community 표기는 부분 확인이며 실제 U15 서버 통합 검증은 미실행이다.
-
-## 이전 분석 기록 — 2026-10-15, 현재 범위 밖은 재검증하지 않음
-
-> 기준: 커밋 `72d7034`, 2026-10-15 전체 재스캔. 판 번호는 `backend/gradle/libs.versions.toml` · `frontend/package.json` · `tools/package.json` · Compose 이미지 태그 기준. 라이브러리가 어디서 왜 쓰이는지(의존 관계)는 [dependencies.md](dependencies.md)를 본다.
+> 기준: 커밋 570a625. 버전은 `backend/gradle/libs.versions.toml`, `frontend/package.json` 등에서 확인한 핸드오프 값이다. 모듈 간 의존 방향은 `dependencies.md`.
 
 ## 언어 · 런타임
 
-| 항목 | 판 | 비고 |
-|---|---|---|
-| Java | 21 | 툴체인 · `options.release=21`, 가상 스레드 켬(`spring.threads.virtual`) |
-| Kotlin DSL | Gradle 내장 | `build-logic` 규약 플러그인 |
-| TypeScript | 5.9.3 | 프런트 |
-| JavaScript(ESM) | Node 22(`.nvmrc`) | tools |
-| Bash | — | infra · scripts |
-| Python | 3 | `ci/security-gate.py` |
-| SQL | PostgreSQL 16 | Flyway 마이그레이션 |
-
-## 빌드
-
-| 도구 | 판 |
+| 항목 | 버전 · 비고 |
 |---|---|
-| Gradle | 8.14.3(wrapper), 버전 카탈로그, 포함 빌드 |
-| npm | Node 22, `frontend` · `tools` 각각 package-lock |
-| Docker | 이미지 6종(core-api · realtime-activity · frontend · migrate · backup · bundle) + 가짜 공급자 |
+| Java | 21 |
+| Kotlin DSL | Gradle 빌드 스크립트(`build-logic`) |
+| TypeScript | 5.9.3 |
+| JavaScript | `tools`(Node ESM) |
+| Node | >=22 <23 |
+| Python | `ci/security-gate.py` |
+| Bash | `scripts/`, `infra/` |
 
-## 백엔드 프레임워크 · 라이브러리
+## 백엔드
 
-| 이름 | 판 |
+| 항목 | 버전 · 용도 |
 |---|---|
-| Spring Boot | 4.1.1 (webmvc · websocket(realtime) · security + session-jdbc(core) · data-jpa · jdbc · flyway · actuator · validation) |
-| Jackson 3 (`tools.jackson`) | BOM 3.1.7(보안 상향) |
-| Jackson 2 | BOM 2.22.3(보안 상향, 전이) |
-| Tomcat embed | 11.0.26(보안 제약 상향) |
-| Flyway | Boot BOM |
-| PostgreSQL JDBC | Boot BOM |
-| Micrometer Prometheus | Boot BOM |
-| springdoc-openapi | 3.1.1 (dev · test만) |
-| openhtmltopdf-pdfbox | 1.0.10 |
-| push2u-core | 0.3.0 |
-| Apache HttpClient5 | Boot BOM |
-| JDK `java.net.http.WebSocket` | JDK 21 (공급자 연결, SDK 없음) |
-
-## 백엔드 시험
-
-| 이름 | 판 |
-|---|---|
-| JUnit 5 · AssertJ · Mockito · Spring Boot Test | Boot BOM |
-| Testcontainers PostgreSQL | Boot BOM |
+| Spring Boot | 4.1.1 — webmvc · websocket · security · session-jdbc · data-jpa · jdbc · flyway · actuator · validation |
+| Gradle | 8.14 (멀티 프로젝트 + `build-logic`) |
+| Jackson 3 (`tools.jackson`) | 3.1.7 BOM — JSON은 한 곳 규칙(J139). Jackson 2 BOM 2.22.3은 보안 패치 덮어쓰기 |
+| Flyway | core V1~V10, realtime V1~V7 (다음은 V11 · V8) |
 | ArchUnit | 1.5.1 |
-| networknt json-schema-validator | 3.0.6 |
-| Java-WebSocket | 1.6.0 (가짜 공급자 WS 서버) |
 | JaCoCo | 0.8.14 |
+| json-schema-validator | 3.0.6 |
+| Java-WebSocket | 1.6.0 |
+| springdoc | 3.1.1 (dev · test) |
+| push2u | 0.3.0 |
+| PostgreSQL | Testcontainers 시험(`-Pmujoong.test.db=docker`) |
 
-## 프런트엔드
+## 프런트
 
-| 이름 | 판 |
-|---|---|
-| Next.js | 16.4.0 (App Router, standalone) |
-| React / React DOM | 19.3.0 |
-| @tanstack/react-query | 5.104.0 |
-| Vitest / @vitest/coverage-v8 | 4.1.11 |
-| @testing-library/react · dom · user-event · jest-dom | 16.3.3 · 10.4.2 · 14.6.7 · 6.10.0 |
-| jsdom | 29.1.1 |
-| ESLint / eslint-config-next | 9.39.5 / 16.4.0 |
+Next.js 16.4.0 · React 19.3.0 · @tanstack/react-query 5.104.0 · Vitest 4.1.11(v8 커버리지) · Testing Library · jsdom 29 · ESLint 9.39.5.
 
-## tools
+## 시험 · 배포
 
-| 이름 | 판 |
-|---|---|
-| ws | 8.21.3 |
-| Vitest | 4.1.11 |
-
-## 인프라 · 운영
-
-| 이름 | 판 |
-|---|---|
-| PostgreSQL 서버 | 16.15 |
-| Nginx | 1.30.5-alpine |
-| certbot | v5.8.0 |
-| neo4j | 5.26.31-community (Compose 프로필 knowledge, 앱 어댑터 없음) |
-| Docker Compose | dev · ci · demo 파일 |
-| GitHub Actions | 액션 커밋 SHA 고정, OIDC → AWS SSM |
-| Trivy · npm audit · gitleaks · shellcheck | CI 보안 · 정적 점검 |
-
-## 외부 서비스
-
-| 서비스 | 용도 | 상태 |
-|---|---|---|
-| 음성 AI(`wss://api.openai.com/v1/live/sessions`) | 실시간 대화 | 연결 코드 있음, 선 형식 자체 정의(TD-2) |
-| 텍스트 AI | 상황 · 결과 · 리포트 문장 | 포트만, 운영 어댑터 없음(TD-1) |
-| 제브 안전 검사(`api.typesafe.ai`, 2026-10-18 보충) | 출력 게이트 외부 검사 | 어댑터 코드 있음, 선 형식은 가정(공식 형식과 다름), 실호출 증거 없음 |
-| Google OAuth | 보호자 로그인 | 구현됨 |
-| Web Push(VAPID) | 알림 | 구현됨 |
-| AWS(EC2 · SSM · GHCR) | demo 배포 | 워크플로 있음, 변수 미설정으로 배포 단계 건너뜀 |
-
-
+- 시험: JUnit 5 · AssertJ · Mockito · ArchUnit · Spring Boot Test · Testcontainers / Vitest + Testing Library / Vitest(tools). 상세 수치는 `code-quality-assessment.md`.
+- 배포: Docker Compose, Nginx, GitHub Actions(`ci.yml`, `deploy.yml`), GHCR 이미지 6종, demo는 EC2 1대(ap-northeast-2).

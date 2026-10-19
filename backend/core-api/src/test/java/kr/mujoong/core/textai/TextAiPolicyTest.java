@@ -8,7 +8,7 @@ import kr.mujoong.core.knowledge.KnowledgeProperties;
 import org.junit.jupiter.api.*;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 
-@Tag("u5a")
+@Tag("practice-core")
 class TextAiPolicyTest {
     private final ForbiddenExpressionPolicy policy = new ForbiddenExpressionPolicy();
 

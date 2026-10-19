@@ -30,7 +30,7 @@ import org.junit.jupiter.api.Test;
  * 제브 요청 구성 시험 (U13 FR2.2 · BR2.4 · BR2.5 · BR2.7). 이름 치환 · 식별자 필드 없음 · 맥락 3턴 이하 · 지시문이 데이터 필드에만 · 길이 상한 · 정책 판
  * 이름을 본다. 만든 요청이 계약 스키마 {@code guardrail-request.schema.json}을 통과하는지도 같은 파일로 대조한다. 합성 문장만 쓴다(R-F3 · R-F14).
  */
-@Tag("u13")
+@Tag("jev-guardrail")
 class GuardrailRequestFactoryTest {
 
     private static final String POLICY = "jev-guardrail-v1";

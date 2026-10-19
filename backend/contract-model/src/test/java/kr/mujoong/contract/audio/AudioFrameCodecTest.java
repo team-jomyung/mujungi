@@ -14,7 +14,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 /** 기기 WSS 바이너리 음성 프레임(J27 · BR7.1 · 편차 (s)): 1바이트 종류 + uint32 빅엔디언 순번 + PCM16LE. */
-@Tag("u1")
+@Tag("skeleton")
 class AudioFrameCodecTest {
 
     @Test

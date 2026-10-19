@@ -38,7 +38,7 @@ import org.springframework.context.annotation.Configuration;
  * trace_id 열 · J115(timestamptz · jsonb · uuid, DB 시각 기본값 없음) · PD-8(fillfactor 90 · 부분 유일 색인) · J116(이력 표) ·
  * Step 10 JPA 엔터티 validate.
  */
-@Tag("u1")
+@Tag("skeleton")
 @Tag("db")
 class CoreSchemaIT {
 

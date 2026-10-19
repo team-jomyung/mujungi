@@ -23,7 +23,7 @@ import org.springframework.transaction.support.TransactionTemplate;
  * 코드의 버전이 섞이지 않는다, APPROVED가 하나도 없으면 최고 버전도 없다, 같은 (종류, 버전) · 같은 코드는 DB 유일 키가 막아 '최고 버전'이
  * 하나로 정해진다(SQ-19).
  */
-@Tag("u1")
+@Tag("skeleton")
 @Tag("db")
 class ApprovedContentRepositoryIT {
 

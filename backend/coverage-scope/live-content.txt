@@ -1,0 +1,54 @@
+# U8 커버리지 측정 범위 (계약 · 버전 리소스, 작업 기록 261015-doc-sync-code-update · J137)
+# -PcoverageScope=live-content일 때 JaCoCo가 이 목록의 운영 소스(.java)만 잰다. 한 줄에 저장소 루트 기준 경로 하나.
+# 내용은 U8 code-generation source-manifest.json의 backend/*/src/main/java/**/*.java 전부다(U8이 만들거나 고친 운영 Java 파일).
+# contract-model 운영 소스는 고치지 않았다(계약 파일 · 시험만) — 이 모듈은 범위 측정에서 뺀다(빈 목록이면 측정이 실패한다).
+backend/core-api/src/main/java/kr/mujoong/core/activity/ApprovedContentCatalog.java
+backend/core-api/src/main/java/kr/mujoong/core/activity/RealtimeSessionClient.java
+backend/core-api/src/main/java/kr/mujoong/core/activity/StartActivityService.java
+backend/core-api/src/main/java/kr/mujoong/core/catalog/ApprovedContent.java
+backend/core-api/src/main/java/kr/mujoong/core/config/CoreProperties.java
+backend/core-api/src/main/java/kr/mujoong/core/config/CoreBootstrapProperties.java
+backend/core-api/src/main/java/kr/mujoong/core/config/CoreCleanupProperties.java
+backend/core-api/src/main/java/kr/mujoong/core/config/CoreDevLoginProperties.java
+backend/core-api/src/main/java/kr/mujoong/core/config/CoreGuardianProperties.java
+backend/core-api/src/main/java/kr/mujoong/core/config/CoreHealthProperties.java
+backend/core-api/src/main/java/kr/mujoong/core/config/CoreInboxProperties.java
+backend/core-api/src/main/java/kr/mujoong/core/config/CoreInternalHttpProperties.java
+backend/core-api/src/main/java/kr/mujoong/core/config/CoreLimitsProperties.java
+backend/core-api/src/main/java/kr/mujoong/core/config/CoreLoadTestProperties.java
+backend/core-api/src/main/java/kr/mujoong/core/config/CoreMetricsProperties.java
+backend/core-api/src/main/java/kr/mujoong/core/config/CoreObservabilityProperties.java
+backend/core-api/src/main/java/kr/mujoong/core/config/CoreOutboxProperties.java
+backend/core-api/src/main/java/kr/mujoong/core/config/CoreRetentionProperties.java
+backend/core-api/src/main/java/kr/mujoong/core/config/CoreSecurityProperties.java
+backend/core-api/src/main/java/kr/mujoong/core/config/CoreSessionProperties.java
+backend/core-api/src/main/java/kr/mujoong/core/config/CoreTimingProperties.java
+backend/core-api/src/main/java/kr/mujoong/core/identity/DevSeedRunner.java
+backend/core-api/src/main/java/kr/mujoong/core/identity/SeedIds.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/config/RealtimeProperties.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/config/RealtimeCleanupProperties.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/config/RealtimeDeviceProperties.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/config/RealtimeGateProperties.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/config/RealtimeHealthProperties.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/config/RealtimeInboxProperties.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/config/RealtimeInternalHttpProperties.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/config/RealtimeJudgmentProperties.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/config/RealtimeLimitsProperties.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/config/RealtimeMetricsProperties.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/config/RealtimeObservabilityProperties.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/config/RealtimeOutboxProperties.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/config/RealtimePracticeFlowProperties.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/config/RealtimeProviderProperties.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/config/RealtimeRecordingProperties.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/config/RealtimeRetentionProperties.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/config/RealtimeSecurityProperties.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/config/RealtimeSessionProperties.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/config/RealtimeTimingProperties.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/config/RealtimeTranscriptProperties.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/content/LiveContentRegistry.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/content/LiveContentResources.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/StartSessionHandler.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/web/SessionInternalController.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/startup/LiveContentConfiguration.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/startup/RealtimeStartupChecks.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/voice/PracticeSpeech.java

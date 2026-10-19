@@ -19,7 +19,7 @@ import org.junit.jupiter.api.Test;
  * 판정 장애 · 세션 이탈 회복 (U11 W6 · BR5.1 ~ BR5.4). 공급자 끊김 · 오류 · 기술적 일시 정지 · 상태 이탈 · 늦은 결과. 공급자와 판정기는 가짜, 값은
  * 합성이다(R-F1 · R-F3).
  */
-@Tag("u11")
+@Tag("judgment-turn")
 class JudgmentFaultExecutorTest {
 
     private final JudgmentExecutorSupport t = new JudgmentExecutorSupport();
@@ -88,7 +88,7 @@ class JudgmentFaultExecutorTest {
         t.h.advance(Duration.ofSeconds(3));
 
         assertThat(t.onlyRecord().outcome()).isEqualTo(JudgmentOutcomeKind.FAULT_CANCELLED);
-        assertThat(t.events(SessionExecutor.EVENT_JOIN_RE_PROMPTED)).as("결과를 쓰지 않는다").isEmpty();
+        assertThat(t.events(JoinFlow.EVENT_JOIN_RE_PROMPTED)).as("결과를 쓰지 않는다").isEmpty();
         t.h.link.touch(t.h.clock.now());
         t.h.advance(t.h.settings.timerTick());
         assertThat(t.h.executor.timers().isArmed(SessionTimers.Kind.JOIN_WINDOW)).isTrue();

@@ -32,7 +32,7 @@ import org.springframework.boot.test.context.runner.ApplicationContextRunner;
  * 돌지 않는다. 앱보다 앞선 이력(다음 배포가 올린 버전)은 통과하고 실패한 행은 세지 않는다. 이력 표를 바꾸는 이 세 시험은 공용 인스턴스가 아닌
  * 별도 인스턴스를 쓰고 바꾼 것을 시험마다 되돌린다.
  */
-@Tag("u1")
+@Tag("skeleton")
 @Tag("db")
 class CoreStartupSequenceIT {
 

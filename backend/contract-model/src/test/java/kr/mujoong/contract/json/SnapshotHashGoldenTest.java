@@ -16,7 +16,7 @@ import org.junit.jupiter.api.Test;
  * 코드 밖(계약 정의대로 손으로 만든 정규화 문자열과 그 해시)에 고정한다. null 값의 처리(키를 남길지 뺄지)는 U4b가 계약 6절에 적을 때 이
  * 시험에 골든 값을 하나 더한다.
  */
-@Tag("u4a")
+@Tag("activity-session")
 class SnapshotHashGoldenTest {
 
     private static final JsonCodec CODEC = JsonCodec.shared();
@@ -55,7 +55,7 @@ class SnapshotHashGoldenTest {
      * {@code "to":null}. DECLINED · ACTIVE 전 종료처럼 빈 기록도 다섯 키를 모두 둔다.
      */
     @Test
-    @Tag("u4b")
+    @Tag("session-runtime")
     void nullValuesKeepTheirKeysAsJsonNullInTheHash() {
         Map<String, Object> gap = new LinkedHashMap<>();
         gap.put("from", "2026-10-14T16:12:00Z");

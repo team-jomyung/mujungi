@@ -29,7 +29,7 @@ import org.springframework.transaction.support.TransactionTemplate;
  * <p>증명: 새 연결마다 lock_timeout · statement_timeout이 설정 값으로 걸린다, 락 대기 초과는 실제 55P03이고 재시도 대상이다, 멱등 연산은
  * 락이 풀린 뒤 재시도로 성공한다, 문장 시간 초과(57014)는 재시도하지 않는다, 설정 키가 없거나 0이면 기동이 실패한다.
  */
-@Tag("u1")
+@Tag("skeleton")
 @Tag("db")
 class DbSessionLimitsIT {
 

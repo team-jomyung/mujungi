@@ -13,6 +13,7 @@ import java.util.Optional;
 import java.util.UUID;
 import kr.mujoong.contract.json.JsonCodec;
 import kr.mujoong.core.config.CoreProperties;
+import kr.mujoong.core.config.CoreSecurityProperties;
 import kr.mujoong.core.identity.GuardianSessions;
 import kr.mujoong.core.identity.google.GoogleLoginService;
 import kr.mujoong.core.identity.google.GoogleLoginService.Failure;
@@ -33,7 +34,7 @@ import org.springframework.mock.web.MockHttpServletResponse;
  * <p>경합: 로그인이 '삭제 접수 아님'을 읽은 뒤 세션을 열기 전에 다른 기기의 계정 삭제가 커밋되면, 세션을 연 뒤 다시 읽은 Me가 '삭제 처리 중'이다.
  * 이때 연 세션을 곧바로 닫고 '삭제 처리 중'만 답해야 한다(접수의 closeAll보다 늦게 생긴 세션이 살아남지 않게).
  */
-@Tag("u2")
+@Tag("parent-account")
 class AuthControllerTest {
 
     private static final String ORIGIN = "https://mujoong.invalid";
@@ -94,7 +95,7 @@ class AuthControllerTest {
 
     private static CoreProperties properties() {
         CoreProperties properties = mock(CoreProperties.class);
-        when(properties.security()).thenReturn(new CoreProperties.Security(Duration.ofDays(30), ORIGIN, 60));
+        when(properties.security()).thenReturn(new CoreSecurityProperties(Duration.ofDays(30), ORIGIN, 60));
         return properties;
     }
 }

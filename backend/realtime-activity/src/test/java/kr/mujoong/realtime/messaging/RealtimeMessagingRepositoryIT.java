@@ -46,7 +46,7 @@ import org.springframework.transaction.IllegalTransactionStateException;
  * next_attempt_at = received_at, 중복은 0행, 충돌 기록) · BR5.7(선점 경주 승자 하나) · BR5.8(재호출 · DEAD retry_count 유지) ·
  * BR5.9(IGNORED) · BR5.12(시작 때 당김) · A3(trace_id 저장) · A4(guardian_id 채움) · BR5.13(last_error 형식).
  */
-@Tag("u1")
+@Tag("skeleton")
 @Tag("db")
 class RealtimeMessagingRepositoryIT {
 

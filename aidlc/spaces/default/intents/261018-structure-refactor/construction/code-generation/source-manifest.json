@@ -1,0 +1,26 @@
+{
+  "stage": "code-generation",
+  "version": 1,
+  "writes": [
+    { "path": "backend/realtime-activity/" },
+    { "path": "backend/core-api/" },
+    { "path": "backend/contract-model/" },
+    { "path": "backend/test-support/" },
+    { "path": "backend/coverage-scope/" },
+    { "path": "frontend/src/" },
+    { "path": "frontend/tests/" },
+    { "path": "frontend/coverage-scope/" },
+    { "path": "frontend/vitest.config.ts" },
+    { "path": "frontend/eslint.config.mjs" },
+    { "path": "tools/tests/" },
+    { "path": "tools/vitest.config.mjs" },
+    { "path": "scripts/live/" },
+    { "path": "scripts/verify/a-checks.sh" },
+    { "path": "infra/seed/003-u4a-reference.sql" },
+    { "path": "infra/seed/004-u8-reference.sql" },
+    { "path": "infra/compose.live.yml" },
+    { "path": "infra/ci/test-gate-negatives.sh" },
+    { "path": ".github/workflows/ci.yml" },
+    { "path": ".gitignore" }
+  ]
+}

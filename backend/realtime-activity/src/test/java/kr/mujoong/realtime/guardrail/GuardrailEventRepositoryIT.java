@@ -40,7 +40,7 @@ import org.springframework.transaction.IllegalTransactionStateException;
  * 제브 검사 기록 저장소 · 기록기 · 삭제 참가자 통합 시험 (U13 FR6 · BR8.1 ~ BR8.3, realtime V6). 쓰기와 같은 id 덮어쓰기, 트랜잭션 강제, 외래 키
  * 위반 폐기, 보호자 기준 삭제(세션 삭제보다 먼저, 삭제 뒤 0건, 늦은 기록 차단)를 실제 DB로 본다. 제브는 부르지 않는다(테스트 대역 증거).
  */
-@Tag("u13")
+@Tag("jev-guardrail")
 @Tag("db")
 class GuardrailEventRepositoryIT {
 

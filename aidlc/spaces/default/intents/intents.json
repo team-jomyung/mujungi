@@ -101,5 +101,13 @@
     "scope": "refactor",
     "status": "complete",
     "request": "ea32744b"
+  },
+  {
+    "uuid": "01a14d75-8d6a-7d3c-abdb-e47380f334c2",
+    "slug": "structure-refactor",
+    "dirName": "261018-structure-refactor",
+    "scope": "refactor",
+    "status": "complete",
+    "request": "de7f555a"
   }
 ]

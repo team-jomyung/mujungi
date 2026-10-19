@@ -2,10 +2,10 @@ package kr.mujoong.core.report;
 import static org.assertj.core.api.Assertions.*;
 import java.time.*;
 import java.util.*;
-import kr.mujoong.core.result.U6WebTestSupport;
+import kr.mujoong.core.result.WebTestSupport;
 import kr.mujoong.core.common.error.CoreApiException;
 import org.junit.jupiter.api.*;
-@Tag("u6") @Tag("db") class ReportServiceIT extends U6WebTestSupport {
+@Tag("result-report") @Tag("db") class ReportServiceIT extends WebTestSupport {
     ReportService service(){return app.bean(ReportService.class);}LocalDate today(){return app.clock().now().atZone(ReportService.ZONE).toLocalDate();}
     @Test void previewUsesListedDateAndIncludesRestartFailure(){var f=family();var session=copy(f,"FAILED","SERVER_RESTART");record(f,session,"FAILED",1);var declined=copy(f,"DECLINED",null);record(f,declined,"DECLINED",0);var preview=service().preview(f.guardianId(),today(),today());assertThat(preview.firstRecordDate()).isEqualTo(today());assertThat(preview.activities()).hasSize(1);assertThat(preview.activities().getFirst().sessionId()).isEqualTo(session);assertThat(preview.activities().getFirst().startedAt()).isNull();}
     @Test void sameKeyReturnsFirstReportAndDifferentBodyConflicts(){var f=family();var session=copy(f,"ENDED",null);record(f,session,"ENDED",3);String key=UUID.randomUUID().toString();var first=service().create(f.guardianId(),today(),today(),List.of(session),key);assertThat(service().create(f.guardianId(),today(),today(),List.of(session),key)).isEqualTo(first);assertThatThrownBy(()->service().create(f.guardianId(),today().minusDays(1),today(),List.of(session),key)).isInstanceOf(CoreApiException.class);}

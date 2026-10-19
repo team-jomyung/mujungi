@@ -28,7 +28,7 @@ import org.springframework.test.util.ReflectionTestUtils;
  * <p>시험 로그인이 '삭제 접수 아님'을 읽은 뒤 · 세션을 열기 전에 삭제 접수가 커밋되면 예전에는 세션이 만들어졌다. 세션을 연 뒤 다시 읽어 그 사이
  * 접수됐으면 연 세션을 닫고 403 ACCOUNT_DELETION_IN_PROGRESS여야 한다.
  */
-@Tag("u2")
+@Tag("parent-account")
 class DevLoginRaceTest {
 
     private static final Instant NOW = Instant.parse("2026-10-15T00:00:00Z");

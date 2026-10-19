@@ -25,20 +25,20 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import kr.mujoong.contract.json.JsonCodec;
-import kr.mujoong.core.config.CoreProperties;
+import kr.mujoong.core.config.CoreGuardianProperties;
 import kr.mujoong.core.identity.Guardian;
 import kr.mujoong.core.identity.GuardianRepository;
 import kr.mujoong.core.identity.SocialAccountRepository;
 import kr.mujoong.core.identity.google.GoogleLoginService.Failure;
 import kr.mujoong.core.identity.google.GoogleLoginService.Outcome;
-import kr.mujoong.core.support.U2Fixtures;
+import kr.mujoong.core.support.ParentAccountFixtures;
 import kr.mujoong.testsupport.time.MutableClock;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.transaction.PlatformTransactionManager;
 
 /** 구글 로그인 분기(U2 · R1 · R2 · R12 · U2-J1): 설정 없음 · 형식 · redirect · 교환 · 토큰 실패와 기존 · 삭제 중 보호자. */
-@Tag("u2")
+@Tag("parent-account")
 class GoogleLoginServiceTest {
 
     private static final Instant NOW = Instant.parse("2026-10-15T00:00:00Z");
@@ -54,7 +54,7 @@ class GoogleLoginServiceTest {
 
     private GoogleLoginService service(String clientId, String secret, String redirect) {
         return new GoogleLoginService(
-                new CoreProperties.Google(clientId, secret, redirect, TOKEN_URI, JWKS_URI, Duration.ofSeconds(1)),
+                new CoreGuardianProperties.Google(clientId, secret, redirect, TOKEN_URI, JWKS_URI, Duration.ofSeconds(1)),
                 tokens, new GoogleKeyCache(keys, Duration.ofMinutes(1), Duration.ofHours(1)),
                 new GoogleIdTokenReader(JsonCodec.shared()), social,
                 guardians,
@@ -68,9 +68,9 @@ class GoogleLoginServiceTest {
         assertThat(outcome.failure()).isEqualTo(Failure.NOT_CONFIGURED);
         assertThat(outcome.loggedIn()).isEmpty();
         verifyNoInteractions(tokens, keys);
-        assertThat(new CoreProperties.Google(null, null, null, TOKEN_URI, JWKS_URI, Duration.ofSeconds(1)).toString())
+        assertThat(new CoreGuardianProperties.Google(null, null, null, TOKEN_URI, JWKS_URI, Duration.ofSeconds(1)).toString())
                 .contains("<empty>").doesNotContain("null");
-        assertThat(new CoreProperties.Google("id", "secret-value", REDIRECT, TOKEN_URI, JWKS_URI, Duration.ofSeconds(1))
+        assertThat(new CoreGuardianProperties.Google("id", "secret-value", REDIRECT, TOKEN_URI, JWKS_URI, Duration.ofSeconds(1))
                 .toString()).doesNotContain("secret-value").contains("<redacted>");
     }
 
@@ -142,8 +142,8 @@ class GoogleLoginServiceTest {
         assertThat(service.login("code", REDIRECT).failure()).as("max-age가 지나면 다시 받는다").isNull();
         verify(keys, times(2)).fetch();
 
-        KeyPair rotated = U2Fixtures.newKeyPair();
-        when(tokens.exchange(any())).thenAnswer(call -> Optional.of(U2Fixtures.sign("{\"alg\":\"RS256\",\"kid\":\"k2\"}",
+        KeyPair rotated = ParentAccountFixtures.newKeyPair();
+        when(tokens.exchange(any())).thenAnswer(call -> Optional.of(ParentAccountFixtures.sign("{\"alg\":\"RS256\",\"kid\":\"k2\"}",
                 GoogleIdTokenReaderTest.claims("accounts.google.com", "client", clock.now().plusSeconds(60), "sub-1"),
                 rotated.getPrivate())));
         when(keys.fetch()).thenReturn(Optional.of(keySet(Map.of("k2", rotated.getPublic()), Duration.ofMinutes(10))));
@@ -178,7 +178,7 @@ class GoogleLoginServiceTest {
     void aNoCacheKeySetIsFetchedOnlyOncePerLogin() {
         // 3차 리뷰 3: max-age 0 응답이면 예전에는 교환 전 · 서명 확인 때 두 번 받았다. 교환 전에 확보한 열쇠에 kid가 있으면 그대로 쓴다
         GoogleLoginService service = new GoogleLoginService(
-                new CoreProperties.Google("client", "secret", REDIRECT, TOKEN_URI, JWKS_URI, Duration.ofSeconds(1)),
+                new CoreGuardianProperties.Google("client", "secret", REDIRECT, TOKEN_URI, JWKS_URI, Duration.ofSeconds(1)),
                 tokens, new GoogleKeyCache(keys, Duration.ofNanos(1), Duration.ofHours(1)),
                 new GoogleIdTokenReader(JsonCodec.shared()), social, guardians, mock(PlatformTransactionManager.class), clock);
         UUID guardianId = UUID.randomUUID();

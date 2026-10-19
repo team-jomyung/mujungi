@@ -21,7 +21,7 @@ import org.springframework.beans.factory.support.DefaultListableBeanFactory;
  * 풀 연결 획득 대기 측정 (U1 3.6 수정 · NFR7.6 · OD-5 · OD-6 · J323). 기준(시험 10ms)을 넘은 빌림만 세고, 획득 시간 초과도 넘은 것으로 센다.
  * Hikari 추적기 자리에 품은 Micrometer 추적기가 {@code hikaricp_*}를 그대로 내는지, 이미 추적기가 있는 DataSource는 건드리지 않는지 본다.
  */
-@Tag("u1")
+@Tag("skeleton")
 class DbPoolWaitMonitorTest {
 
     private static final Duration WARN = Duration.ofMillis(10);

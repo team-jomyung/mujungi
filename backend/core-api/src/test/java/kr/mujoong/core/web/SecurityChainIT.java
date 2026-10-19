@@ -34,7 +34,7 @@ import org.junit.jupiter.api.Test;
  * 준비 상태가 아니면 인증보다 먼저 503이다. 시험 로그인(CSRF 면제 1번)을 보려고 dev + 스위치 켬 조합으로 띄운다(SD-14 조합 13).
  * 구글 교환(면제 2번)은 U2 경로라 U1에는 없다.
  */
-@Tag("u1")
+@Tag("skeleton")
 @Tag("db")
 class SecurityChainIT {
 

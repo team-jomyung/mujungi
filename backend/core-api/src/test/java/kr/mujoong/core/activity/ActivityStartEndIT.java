@@ -44,7 +44,7 @@ import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
  * RD-14 · NFR4.12). 실제 DB(core_app)와 계약 대역 Realtime(요청을 contracts/schemas로 검사)으로 돈다. 시험 프로필 시한: 시작 300ms ·
  * 끝내기 200ms · 조회 100ms · 차단기 열림 500ms.
  */
-@Tag("u1")
+@Tag("skeleton")
 @Tag("db")
 class ActivityStartEndIT {
 

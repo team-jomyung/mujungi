@@ -25,7 +25,7 @@ import org.junit.jupiter.api.Test;
  * <p>설계 표 2.5의 Realtime 몫 이름이 사건이 없어도 있고(종류 · 라벨 값이 표대로), 각 지표가 원천 값으로 실제로 움직이며, 라벨에 id ·
  * 전사 같은 값이 없는지 본다. Prometheus 이름은 실제 Prometheus 레지스트리로 확인한다.
  */
-@Tag("u1")
+@Tag("skeleton")
 class RealtimeMetricsTest {
 
     private final RealtimeMetrics metrics = RealtimeMetrics.inMemory();

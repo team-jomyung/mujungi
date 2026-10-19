@@ -1,0 +1,42 @@
+# U9 커버리지 측정 범위 (Luna 호출부, 작업 기록 261015-doc-sync-code-update · J137)
+# -PcoverageScope=luna일 때 JaCoCo가 이 목록의 운영 소스(.java)만 잰다. 한 줄에 저장소 루트 기준 경로 하나.
+# 내용은 U9 code-generation source-manifest.json의 backend/*/src/main/java/**/*.java 전부다(U9가 만들거나 고친 운영 Java 파일).
+# 단, U9가 고친 contract-model 로그 계약 파일(EventCode · AttrKey · EventLog · StructuredLogFormatter)은 이 목록에 넣지 않는다:
+# 파일 대부분이 U1 코드라 luna 태그 시험만으로 재면 U1 줄이 미달로 잡힌다. 그 파일들은 contract-model 모듈 전체 줄 80%(CI)로 잰다.
+# 로컬 · 검토 근거다(CI가 막는 범위는 U5b · U7뿐, team.md Testing Posture).
+backend/core-api/src/main/java/kr/mujoong/core/luna/CoreLunaClient.java
+backend/core-api/src/main/java/kr/mujoong/core/luna/LunaConfiguration.java
+backend/core-api/src/main/java/kr/mujoong/core/luna/LunaException.java
+backend/core-api/src/main/java/kr/mujoong/core/luna/LunaFailureReason.java
+backend/core-api/src/main/java/kr/mujoong/core/luna/LunaHosts.java
+backend/core-api/src/main/java/kr/mujoong/core/luna/LunaInputSanitizer.java
+backend/core-api/src/main/java/kr/mujoong/core/luna/LunaKeyAbsentCondition.java
+backend/core-api/src/main/java/kr/mujoong/core/luna/LunaKeyPresentCondition.java
+backend/core-api/src/main/java/kr/mujoong/core/luna/LunaProperties.java
+backend/core-api/src/main/java/kr/mujoong/core/luna/LunaPurpose.java
+backend/core-api/src/main/java/kr/mujoong/core/luna/LunaRequest.java
+backend/core-api/src/main/java/kr/mujoong/core/luna/LunaResult.java
+backend/core-api/src/main/java/kr/mujoong/core/luna/LunaSchemas.java
+backend/core-api/src/main/java/kr/mujoong/core/luna/LunaStartup.java
+backend/core-api/src/main/java/kr/mujoong/core/luna/LunaTransport.java
+backend/core-api/src/main/java/kr/mujoong/core/luna/SanitizedInput.java
+backend/core-api/src/main/java/kr/mujoong/core/luna/adapter/LunaAdapterConfiguration.java
+backend/core-api/src/main/java/kr/mujoong/core/luna/adapter/LunaResultTextProvider.java
+backend/core-api/src/main/java/kr/mujoong/core/luna/adapter/LunaTextAiProvider.java
+backend/core-api/src/main/java/kr/mujoong/core/result/ResultTextConfiguration.java
+backend/core-api/src/main/java/kr/mujoong/core/textai/TextAiConfiguration.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/luna/LunaConfiguration.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/luna/LunaException.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/luna/LunaFailureReason.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/luna/LunaHosts.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/luna/LunaInputSanitizer.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/luna/LunaKeyPresentCondition.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/luna/LunaProperties.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/luna/LunaPurpose.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/luna/LunaRequest.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/luna/LunaResult.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/luna/LunaSchemas.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/luna/LunaStartup.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/luna/LunaTransport.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/luna/RealtimeLunaClient.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/luna/SanitizedInput.java

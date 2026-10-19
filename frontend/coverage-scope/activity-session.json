@@ -1,0 +1,14 @@
+{
+  "$comment": "U4a 커버리지 측정 범위(docs/units/u4a/design.md 7절 · U1 J137 · U2와 같은 형식). MUJOONG_COVERAGE_SCOPE=activity-session일 때 Vitest가 files의 파일만 잰다. 항목은 저장소 루트 기준 경로이고 U4a가 새로 만든 frontend/src/**/*.{ts,tsx} 전부다. U4a가 고친 U1 파일(Live12 · Done17 · Home04 · Free08 · TranscriptList · types · app/parent/free/page · app/parent/layout)은 U1 목록(u1.json)으로 잰다. CSS는 재지 않는다.",
+  "unit": "activity-session",
+  "files": [
+    "frontend/src/parent/features/done/presentation.ts",
+    "frontend/src/parent/common/activity/failure.ts",
+    "frontend/src/parent/features/home/presentation.ts",
+    "frontend/src/parent/common/activity/livePresentation.ts",
+    "frontend/src/parent/common/components/transcriptTimeline.ts",
+    "frontend/src/parent/common/api/activity.ts",
+    "frontend/src/parent/features/live/NoticeDialog.tsx",
+    "frontend/src/shared/copy/activity.ts"
+  ]
+}

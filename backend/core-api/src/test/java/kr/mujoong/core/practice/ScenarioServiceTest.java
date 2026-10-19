@@ -21,7 +21,7 @@ import kr.mujoong.testsupport.time.MutableClock;
 import org.junit.jupiter.api.*;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 
-@Tag("u5a")
+@Tag("practice-core")
 class ScenarioServiceTest {
     DbTestSupport db;
     MutableClock clock;

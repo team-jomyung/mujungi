@@ -22,7 +22,7 @@ import org.junit.jupiter.api.Test;
  * ChronoUnit)과 이름 붙은 숫자 시간 상수({@code *_MILLIS = 50} 등)를 더해 Core가 jar에 담는 운영 소스(core-api · contract-model)를 훑는다. 걸린
  * 줄은 아래 허용 목록(파일 · 줄 조각 · 근거)에 있어야 하고, 허용 목록의 줄은 실제로 있어야 한다(낡은 허용 금지). 주석은 보지 않는다.
  */
-@Tag("u1")
+@Tag("skeleton")
 class TimeLiteralScanTest {
 
     private static final Path REPO_ROOT =

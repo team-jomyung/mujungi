@@ -46,7 +46,7 @@ import org.junit.jupiter.api.Test;
  * 가짜이다(R-F1). 이 시험의 성공은 테스트 대역 · 합성 대화의 성공이며 실제 API · 실제 기기 성공이 아니다(R-M11). 기기 시뮬레이터 · {@code verify.sh}
  * 단계 확장은 하지 않고 후속 과제다.
  */
-@Tag("u12")
+@Tag("practice-flow")
 @Tag("db")
 class PracticeFlowIT {
 

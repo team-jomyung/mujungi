@@ -9,7 +9,7 @@ import kr.mujoong.core.record.*;
 import kr.mujoong.testsupport.time.MutableClock;
 import org.junit.jupiter.api.*;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
-@Tag("u6") @Tag("db")
+@Tag("result-report") @Tag("db")
 class ResultIntakeIT {
     DbTestSupport db;UUID guardian,child,session;MutableClock clock;ResultRecordReader reader;ResultIntake intake;SessionResultStateRepository states;ResultJobRepository jobs;
     kr.mujoong.core.observability.EventLogger events;

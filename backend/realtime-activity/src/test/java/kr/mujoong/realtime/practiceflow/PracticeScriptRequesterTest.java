@@ -23,7 +23,7 @@ import org.mockito.ArgumentCaptor;
  * 다음 목표 대본 비동기 요청 시험 (U12 FR1.3 · BR1.3). 내부 호출의 경로 · 본문(kind ORIGINAL, previousScenarioId 없음) · 시도 1회 · 소유 id,
  * 성공 응답의 대본 검사, 실패(연결 · 비 2xx · 모양 오류 · kind 불일치)가 사유 코드 예외로 완료되는지 본다. core는 부르지 않는 대역이다(테스트 대역 증거).
  */
-@Tag("u12")
+@Tag("practice-flow")
 class PracticeScriptRequesterTest {
 
     private static final Duration BUDGET = Duration.ofSeconds(7);

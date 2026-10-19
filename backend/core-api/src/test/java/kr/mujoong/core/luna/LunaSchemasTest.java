@@ -17,7 +17,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 /** 출력 스키마 짝 (U9 BR4.2 · BR4.5 · SD2 · SD4 · Q3-A · 검토 R-02). */
-@Tag("u9")
+@Tag("luna")
 class LunaSchemasTest {
 
     private static final JsonCodec JSON = JsonCodec.shared();

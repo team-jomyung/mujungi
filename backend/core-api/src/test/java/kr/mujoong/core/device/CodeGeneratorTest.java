@@ -14,7 +14,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 /** 코드 추첨 · 충돌 재추첨 · 5회 실패 503 (BR1.2 · 편차 (c)). */
-@Tag("u1")
+@Tag("skeleton")
 class CodeGeneratorTest {
 
     @Test

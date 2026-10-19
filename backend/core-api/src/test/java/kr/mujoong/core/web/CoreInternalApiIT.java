@@ -36,7 +36,7 @@ import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
  *
  * <p>체인 C-INT: {@code X-Internal-Token}이 정확히 하나이고 맞아야 하며, 통과해도 보호자 · 기기 권한은 생기지 않는다. 본문 한도는 2MB다.
  */
-@Tag("u1")
+@Tag("skeleton")
 @Tag("db")
 class CoreInternalApiIT {
 

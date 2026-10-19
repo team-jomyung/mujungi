@@ -44,7 +44,7 @@ import org.springframework.dao.DataIntegrityViolationException;
  * 무시), BR3.1 · BR3.2 · BR3.3(claim 회전 · 첫 연결로 닫힘), BR3.4(토큰 확인 한 질의), BR1.2(코드 충돌은 트랜잭션을 깨지 않음),
  * BR1.4(만료 경계 · 정리 배치 · 7일 지난 EXPIRED 삭제 · 직전 행 유지), BR2.10 · J58(해제 · 삭제 · 외래 키 RESTRICT), A4 대체 출처.
  */
-@Tag("u1")
+@Tag("skeleton")
 @Tag("db")
 class DeviceJdbcRepositoryIT {
 

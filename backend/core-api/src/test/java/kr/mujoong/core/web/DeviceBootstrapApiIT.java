@@ -40,7 +40,7 @@ import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
  * (1시간 20회)를 서로 나눠 쓰지 않게 한다. 신뢰 프록시가 아닌 출발지의 {@code X-Forwarded-For}를 무시하는지는 기본 설정(아무 프록시도 믿지 않음)의
  * 두 번째 앱으로 본다. 코드 추첨 충돌 (c)는 시험 전용 @Primary 추첨기에 정한 코드를 강제해 만든다.
  */
-@Tag("u1")
+@Tag("skeleton")
 @Tag("db")
 class DeviceBootstrapApiIT {
 

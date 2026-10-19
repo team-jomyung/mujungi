@@ -9,7 +9,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
-@Tag("u6")
+@Tag("result-report")
 class HelpSummarizerTest {
     @Test void noConsentOrHelpHasNoSummaryEvidence() {
         assertThat(HelpSummarizer.summarize(Map.of("cues",List.of())))

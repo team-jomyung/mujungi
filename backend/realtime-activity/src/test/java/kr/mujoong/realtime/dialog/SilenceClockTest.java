@@ -14,7 +14,7 @@ import org.junit.jupiter.api.Test;
  *
  * <p>3:59 · 4:01 · 5:59 · 6:01 경계, 멈춤(재생 · 출력 대기 · 일시정지 · 확인 질문을 하나의 멈춤 신호로 받는다) 동안 세지 않음, 리셋 규칙을 본다.
  */
-@Tag("u4b")
+@Tag("session-runtime")
 class SilenceClockTest {
 
     private static final Instant T0 = Instant.parse("2026-10-13T09:00:00Z");

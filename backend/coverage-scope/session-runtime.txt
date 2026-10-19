@@ -1,0 +1,76 @@
+# U4b 커버리지 측정 범위 (docs/units/u4b/design.md 9절 · brief.md · J137 규칙)
+# -PcoverageScope=session-runtime일 때 JaCoCo가 이 목록의 운영 소스(.java)만 잰다. 한 줄에 저장소 루트 기준 경로 하나.
+# 내용은 U4b가 새로 만들거나 되살린 realtime-activity 운영 소스와 U4b가 뜻을 바꾼 U1 · U3 소스다(층마다 더한다).
+# U1 · U3 목록(skeleton.txt · voice-session.txt)은 고치지 않는다. 자원(yml · sql)은 클래스가 없어 재지 않는다.
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/dialog/JoinTracker.java
+# L1 스키마 · 설정
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/ResultInputSnapshotRepository.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/config/RealtimeProperties.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/config/RealtimeCleanupProperties.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/config/RealtimeDeviceProperties.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/config/RealtimeGateProperties.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/config/RealtimeHealthProperties.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/config/RealtimeInboxProperties.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/config/RealtimeInternalHttpProperties.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/config/RealtimeJudgmentProperties.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/config/RealtimeLimitsProperties.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/config/RealtimeMetricsProperties.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/config/RealtimeObservabilityProperties.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/config/RealtimeOutboxProperties.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/config/RealtimePracticeFlowProperties.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/config/RealtimeProviderProperties.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/config/RealtimeRecordingProperties.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/config/RealtimeRetentionProperties.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/config/RealtimeSecurityProperties.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/config/RealtimeSessionProperties.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/config/RealtimeTimingProperties.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/config/RealtimeTranscriptProperties.java
+# L2 전이표 · 끝내기
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/TransitionTable.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/EndRequestHandler.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/SessionStateEmitter.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/TransitionService.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/gate/ClosingSequence.java
+# L3 참여 확인
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/EndingFlow.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/SessionClocks.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/IdleClock.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/JoinFlow.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/SessionContext.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/SessionExecutor.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/StartSessionHandler.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/voice/ProviderRequestFactory.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/voice/PracticeInstruction.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/log/TranscriptWriter.java
+# L4 종료 의도 · 공백 · 끊김 · 진행 조회
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/dialog/StopConfirmFlow.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/dialog/SilenceClock.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/SessionTimers.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/SessionViewQuery.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/web/SessionInternalController.java
+# L5 정산 · 결과 스냅숏
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/ResultSnapshotBuilder.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/RecordCaptureService.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/SessionSettlement.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/OrphanSessionChecker.java
+# 연습 확장점
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/PracticeSessionExtension.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/NoOpPracticeSessionExtension.java
+# L6 계정 삭제
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/DeletionRequestedHandler.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/RealtimeSessionDeletionParticipant.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/log/RealtimeVoiceDeletionParticipant.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/messaging/RealtimeMessagingDeletionParticipant.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/messaging/RealtimeOutboxSender.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/messaging/RealtimeDeletionParticipant.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/messaging/OutboxPublishedListener.java
+# 층마다 고친 U1 · U3 운영 소스(Step 24: 새 · 바뀐 운영 파일 모두)
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/dialog/DialogInstructions.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/log/AsyncRecorder.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/log/TranscriptRepository.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/runtime/RealtimeRuntimeConfig.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/SessionChange.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/SessionMailbox.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/SessionTransitions.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/voice/ProviderClient.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/voice/ProviderPort.java

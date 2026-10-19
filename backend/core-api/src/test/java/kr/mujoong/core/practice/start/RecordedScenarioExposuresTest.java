@@ -10,7 +10,7 @@ import kr.mujoong.core.practice.ScenarioRecordPort.Exposure;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
-@Tag("u5b")
+@Tag("practice-legacy")
 class RecordedScenarioExposuresTest {
     final JsonCodec json=JsonCodec.shared();
     @Test void onlyActualScenarioExposureIsReadAndCueTimesCannotSubstituteForIt() {

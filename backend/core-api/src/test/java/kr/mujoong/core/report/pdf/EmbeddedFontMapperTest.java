@@ -6,7 +6,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
-@Tag("u6")
+@Tag("result-report")
 class EmbeddedFontMapperTest {
     @BeforeEach void install() { EmbeddedFontMapper.install(); }
     @Test void installsOnce() {

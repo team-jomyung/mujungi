@@ -37,7 +37,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 /** 기기 WSS 제어 봉투(계약 4.2 · J27 · J123 · 편차 (s)): seq · opId 4종 한정 · sessionId · ACK.ackOf · 4400 대 ERROR 갈림. */
-@Tag("u1")
+@Tag("skeleton")
 class WsEnvelopeCodecTest {
 
     private static final JsonCodec CODEC = JsonCodec.shared();

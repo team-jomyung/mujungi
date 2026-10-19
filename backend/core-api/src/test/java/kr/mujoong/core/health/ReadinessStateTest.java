@@ -22,7 +22,7 @@ import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 /** 준비 상태와 DB 점검 (RD-16 · OD-11 · 편차 (n) · J124): NOT_READY 3회 · 성공 1회 복귀 · DRAINING 고정 · Retry-After. */
-@Tag("u1")
+@Tag("skeleton")
 class ReadinessStateTest {
 
     private final List<Object> published = new ArrayList<>();

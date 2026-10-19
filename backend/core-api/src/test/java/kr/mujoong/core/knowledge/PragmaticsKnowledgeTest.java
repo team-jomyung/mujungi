@@ -8,7 +8,7 @@ import java.util.UUID;
 import kr.mujoong.testsupport.time.MutableClock;
 import org.junit.jupiter.api.*;
 
-@Tag("u5a")
+@Tag("practice-core")
 class PragmaticsKnowledgeTest {
     private final KnowledgeJdbcRepository repository = mock(KnowledgeJdbcRepository.class);
     private final MutableClock clock = new MutableClock();

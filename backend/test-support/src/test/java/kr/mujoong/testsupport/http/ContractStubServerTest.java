@@ -24,7 +24,7 @@ import org.junit.jupiter.api.Test;
  * 계약 대역 서버 자기 시험 (U1 3.5 Step 28 · RD-23 · J129). 스키마 위반 요청 거부 · 스크립트 순서대로 응답 · 받은 본문 기록 · 토큰 확인 ·
  * 지연 응답을 본다.
  */
-@Tag("u1")
+@Tag("skeleton")
 class ContractStubServerTest {
 
     private static final String END_PATH = "/internal/sessions/{sessionId}/end";

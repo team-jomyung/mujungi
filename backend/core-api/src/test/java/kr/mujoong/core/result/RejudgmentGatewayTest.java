@@ -7,7 +7,7 @@ import kr.mujoong.contract.json.JsonCodec;
 import kr.mujoong.core.luna.*;
 import kr.mujoong.core.practicegoal.PinnedSavedGoalReader;
 import org.junit.jupiter.api.*;
-@Tag("u14")
+@Tag("goal-result")
 class RejudgmentGatewayTest {
     UUID goal=UUID.randomUUID(),run=UUID.randomUUID();
     PracticeRecordV2.Scene input(String live){return new PracticeRecordV2.Scene(run,goal,null,"BASE",Instant.EPOCH,live,List.of(),null,1);}

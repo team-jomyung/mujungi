@@ -1,0 +1,18 @@
+{
+  "$comment": "U3 커버리지 측정 범위(docs/units/u3/brief-cloud.md · design.md 7절 · J137 규칙). MUJOONG_COVERAGE_SCOPE=voice-session일 때 Vitest가 files의 파일만 잰다(tests/device의 음성 대화 시험으로). 항목은 저장소 루트 기준 경로이고 U3가 새로 만든 기기 웹 소스와 U3가 뜻을 더한 U1 소스(재접속 · 이어가기 · 끼어들기 · 재생 진행 · 상태 보고 · 시간 키 · 문구)다. u1.json은 고치지 않는다. CSS · JSON 자원은 재지 않는다. 문구 상수 두 줄만 더한 shared/copy/ko.ts는 논리가 없어 재지 않는다(그 파일의 함수는 보호자 화면 몫이고 u1 범위가 잰다).",
+  "unit": "voice-session",
+  "files": [
+    "frontend/src/device/audio/bargeIn.ts",
+    "frontend/src/device/runtime/deviceStateReporter.ts",
+    "frontend/src/device/audio/player.ts",
+    "frontend/src/device/ws/deviceSession.ts",
+    "frontend/src/device/ws/wsClient.ts",
+    "frontend/src/device/machine/deviceMachine.ts",
+    "frontend/src/device/DeviceApp.tsx",
+    "frontend/src/device/features/status/StatusView.tsx",
+    "frontend/src/device/runtime/deviceRuntime.ts",
+    "frontend/src/device/power/wakeLock.ts",
+    "frontend/src/shared/protocol/messages.ts",
+    "frontend/src/shared/timing/timing.ts"
+  ]
+}

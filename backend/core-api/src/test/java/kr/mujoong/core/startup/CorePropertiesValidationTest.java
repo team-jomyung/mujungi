@@ -7,6 +7,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import kr.mujoong.core.config.CoreObservabilityProperties;
 import kr.mujoong.core.config.CoreProperties;
 import kr.mujoong.core.config.CorePropertiesConfig;
 import kr.mujoong.testsupport.secret.TestSecrets;
@@ -21,7 +22,7 @@ import org.springframework.mock.env.MockEnvironment;
  * 있다. 필수 비밀이 없거나 짧으면 값을 출력하지 않고 기동을 거부한다. I-3 · I-10은 Realtime 키(verify-token · hello · provider ·
  * device-ack)라 Realtime 시험(Step 29)이 본다.
  */
-@Tag("u1")
+@Tag("skeleton")
 class CorePropertiesValidationTest {
 
     private final ApplicationContextRunner runner = new ApplicationContextRunner()
@@ -98,7 +99,7 @@ class CorePropertiesValidationTest {
         MockEnvironment environment = new MockEnvironment();
         environment.setActiveProfiles("prod");
         environment.setProperty(RequiredSecretsCheck.INTERNAL_TOKEN, "tiny");
-        CoreProperties.Observability observability = new CoreProperties.Observability(shortSecret, Duration.ofSeconds(60),
+        CoreObservabilityProperties observability = new CoreObservabilityProperties(shortSecret, Duration.ofSeconds(60),
                 Duration.ofSeconds(10), Duration.ofSeconds(5));
         CoreProperties properties = org.mockito.Mockito.mock(CoreProperties.class);
         org.mockito.Mockito.when(properties.observability()).thenReturn(observability);

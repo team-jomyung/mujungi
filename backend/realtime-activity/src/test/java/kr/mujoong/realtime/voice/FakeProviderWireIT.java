@@ -18,7 +18,7 @@ import tools.jackson.databind.JsonNode;
  * 가짜 공급자 WS 서버가 실호출 관측 형식(응답 id · 응답 끝 사건 없음, {@code delta} 음성, 지원 목록 밖 type 오류)을 내는지 운영 클라이언트로
  * 확인한다 (U11 FR12.3 · BR11.10). 실제 공급자를 부르지 않는다(R-F1).
  */
-@Tag("u11")
+@Tag("judgment-turn")
 class FakeProviderWireIT {
 
     private static final JsonCodec JSON = JsonCodec.shared();

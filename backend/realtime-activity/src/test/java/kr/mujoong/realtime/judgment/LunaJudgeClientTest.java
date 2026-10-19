@@ -36,7 +36,7 @@ import org.junit.jupiter.api.Test;
  * Luna 판정 구현 (U11 BR1.1 · BR1.4 · BR1.7 · BR4.3). 공급자는 루프백 대역, 키는 가짜 문자열, 입력은 합성 값이다(R-F1 · R-F3). 증거 종류:
  * 테스트 대역(R-M11) — 실제 공급자 성공이 아니다.
  */
-@Tag("u11")
+@Tag("judgment-turn")
 class LunaJudgeClientTest {
 
     private static final JsonCodec JSON = JsonCodec.shared();

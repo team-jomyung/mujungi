@@ -41,7 +41,7 @@ import org.springframework.jdbc.core.namedparam.SqlParameterSource;
  * <p>참가자는 순서 값(음성 100 → 연습 150 → 세션 200 → 메시징 900)으로 불리고, 처리기가 그 건수를 DeletionCompleted.counts로 모으며, 이미 쓴 요청은
  * 다시 쓰지 않고, 정지 상한을 넘기면 예외로 재시도에 맡기며, 발행 뒤 메시징 참가자를 한 번 더 부르는지 본다.
  */
-@Tag("u4b")
+@Tag("session-runtime")
 class RealtimeDeletionParticipantOrderTest {
 
     private static final UUID GUARDIAN = UUID.randomUUID();

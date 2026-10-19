@@ -22,7 +22,7 @@ import org.junit.jupiter.api.io.TempDir;
  * 지시 추가 확인 사건(start_ms · end_ms · client_event_id), 끼어들기 때 이어지는 낡은 꼬리, 표식 낱말 응답, 음성보다 앞서거나 늦게 도착하는 전사, 지시가
  * 유지되는 평범한 발화, 한 번뿐 지시. 이 시험은 도구의 보고서 형식 · 관측 계산을 확인할 뿐 실호출 성공을 뜻하지 않는다(R-M11: 테스트 대역 증거).
  */
-@Tag("u11")
+@Tag("judgment-turn")
 class GptLiveLoopbackTest {
 
     private static final GptLiveProbe.Timing FAST = new GptLiveProbe.Timing(Duration.ofMillis(1), Duration.ofSeconds(3),

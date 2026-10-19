@@ -18,7 +18,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 
 /** 프로필 조합 가드(SD-14 표 1 ~ 13 · A2 · A6 · NFR9.11 · BR8.3). 두 앱 가드가 같은 표를 쓰는지는 Step 27 · 29가 본다. */
-@Tag("u1")
+@Tag("skeleton")
 class ProfileGuardRulesTest {
 
     static Stream<Combination> table() {

@@ -8,7 +8,7 @@ import kr.mujoong.core.identity.GuardianWriteLock;
 import kr.mujoong.core.report.ReportRepository;
 import org.junit.jupiter.api.*;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
-@Tag("u6") @Tag("db")
+@Tag("result-report") @Tag("db")
 class ResultDeletionIT {
     DbTestSupport db;ResultDeletionParticipant deletion;ResultJobRepository jobs;Instant now=Instant.parse("2026-10-15T00:00:00Z");
     @BeforeEach void setup(){db=DbTestSupport.coreApp();jobs=new ResultJobRepository(db.jdbc());deletion=new ResultDeletionParticipant(db.jdbc(),new GuardianWriteLock(db.jdbc()),new DataSourceTransactionManager(db.dataSource()));}

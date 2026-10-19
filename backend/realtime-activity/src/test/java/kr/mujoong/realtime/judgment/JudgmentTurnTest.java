@@ -26,7 +26,7 @@ import org.junit.jupiter.api.Test;
  * 판정 턴 협력 객체 (U11 functional-spec 2.2, 설계 개정 A2 · A4 · A8, 설계 검토 R-04 · R-15). 실행기 없이 가짜 Host와 손으로 푸는 판정 약속으로
  * 사건 하나하나를 확인한다. 합성 값만 쓴다.
  */
-@Tag("u11")
+@Tag("judgment-turn")
 class JudgmentTurnTest {
 
     private static final Instant T0 = Instant.parse("2026-10-17T09:00:00Z");

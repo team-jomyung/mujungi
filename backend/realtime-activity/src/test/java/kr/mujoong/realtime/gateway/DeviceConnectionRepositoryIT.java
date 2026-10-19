@@ -32,7 +32,7 @@ import org.springframework.transaction.IllegalTransactionStateException;
  * 덮지 않음 · UNRESPONSIVE는 명령 시한에만) · J55(같은 연결의 HEARTBEAT로 CONNECTED 복귀) · J125(last_seen_at은 HEARTBEAT 때) ·
  * BR3.8(해제는 device_id만 조건, 멱등) · BR6.13(재시작 때 CONNECTED · UNSTABLE → DISCONNECTED, cid 비움) · PD-5(last_seen 배치).
  */
-@Tag("u1")
+@Tag("skeleton")
 @Tag("db")
 class DeviceConnectionRepositoryIT {
 

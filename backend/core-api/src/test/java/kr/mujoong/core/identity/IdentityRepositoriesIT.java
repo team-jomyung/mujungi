@@ -25,7 +25,7 @@ import org.springframework.transaction.support.TransactionTemplate;
  * 끝 시각은 배타다, consent_version이 같으면 효력 시작이 늦은 행이 현재 상태다, 보호자당 아이 둘째 행은 DB 유일 키가 막는다(findByGuardianId가
  * 하나만 돌려줄 수 있는 근거).
  */
-@Tag("u1")
+@Tag("skeleton")
 @Tag("db")
 class IdentityRepositoriesIT {
 

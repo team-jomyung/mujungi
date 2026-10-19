@@ -9,7 +9,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 /** 가변 Clock 자기 시험(RD-2 · RD-23 · J107). */
-@Tag("u1")
+@Tag("skeleton")
 class MutableClockTest {
 
     @Test

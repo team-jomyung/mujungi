@@ -1,0 +1,3 @@
+tests/parent/common/practice-progress.test.tsx
+tests/parent/features/practice/practice-screens.test.tsx
+tests/parent/features/practice/practice-start.test.tsx

@@ -14,7 +14,7 @@ import org.junit.jupiter.params.provider.CsvSource;
 /**
  * 판정 결과 검증 (U11 BR1.3 · BR1.5). 시험 벡터는 functional-spec 5절 그대로다. 합성 값만 쓴다.
  */
-@Tag("u11")
+@Tag("judgment-turn")
 class JudgeOutcomeValidatorTest {
 
     private static final List<String> OPTIONS = List.of("FULL", "PARTIAL", "HELP", "UNREADABLE");

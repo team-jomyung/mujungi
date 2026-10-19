@@ -22,6 +22,7 @@ import kr.mujoong.core.activity.ActivityCopyRepository.ActivityCopy;
 import kr.mujoong.core.activity.ActivityCopyRepository.NewActivity;
 import kr.mujoong.core.activity.RealtimeSessionClient;
 import kr.mujoong.core.common.db.DbTestSupport;
+import kr.mujoong.core.config.CoreInboxProperties;
 import kr.mujoong.core.config.CoreProperties;
 import kr.mujoong.core.identity.GuardianWriteLock;
 import kr.mujoong.core.messaging.CoreInboxDispatcher;
@@ -40,7 +41,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 
 /** 실제 Inbox 상태·사본·발송 요청을 한 트랜잭션으로 검증한다. 외부 호출과 스케줄러는 실행하지 않는다. */
-@Tag("u7")
+@Tag("web-push")
 @Tag("db")
 class PushInboxIT {
     private final JsonCodec json = JsonCodec.shared();
@@ -188,7 +189,7 @@ class PushInboxIT {
 
     private CoreInboxDispatcher dispatcher(PushEventRepository repository) {
         var handler = new SessionStateChangedHandler(activities, realtime, json, new PushEventRecorder(guardians, repository));
-        var config = new CoreProperties.Inbox(Duration.ofSeconds(1), List.of(Duration.ofSeconds(1)), 1,
+        var config = new CoreInboxProperties(Duration.ofSeconds(1), List.of(Duration.ofSeconds(1)), 1,
                 Duration.ofSeconds(5), 1, 10);
         var current = new CoreInboxDispatcher(inbox, List.of(handler), transactions, mock(EventLogger.class),
                 mock(CoreMetrics.class), clock, config);

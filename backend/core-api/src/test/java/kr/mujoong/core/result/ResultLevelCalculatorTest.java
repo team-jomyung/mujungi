@@ -4,7 +4,7 @@ import java.time.Instant;
 import java.util.*;
 import kr.mujoong.core.record.ActivityRecordRepository.StoredRecord;
 import org.junit.jupiter.api.*;
-@Tag("u6")
+@Tag("result-report")
 class ResultLevelCalculatorTest {
     static StoredRecord record(String type,String status,String end,boolean confirmed){return new StoredRecord(UUID.randomUUID(),UUID.randomUUID(),UUID.randomUUID(),type,status,end,confirmed,Instant.EPOCH,Instant.EPOCH.plusSeconds(180),Instant.EPOCH,Instant.EPOCH,Instant.EPOCH.plusSeconds(180),"[]","[]",null,"hash",Instant.EPOCH);}
     static Map<String,Object> utterance(String text,boolean uncertain){return Map.of("speaker","CHILD","text",text,"uncertain",uncertain);}

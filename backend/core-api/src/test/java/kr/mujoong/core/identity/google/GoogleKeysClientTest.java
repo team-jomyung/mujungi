@@ -13,7 +13,7 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import kr.mujoong.contract.json.JsonCodec;
-import kr.mujoong.core.support.U2Fixtures;
+import kr.mujoong.core.support.ParentAccountFixtures;
 import kr.mujoong.testsupport.http.ContractStubServer;
 import kr.mujoong.testsupport.http.ContractStubServer.StubResponse;
 import org.junit.jupiter.api.AfterEach;
@@ -21,7 +21,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 /** 구글 서명 열쇠(JWKS) 읽기(U2 · 리뷰 1 · U2-J2): RSA 서명 열쇠만 kid별로, 실패 · 빈 목록은 빈 값. 가짜 엔드포인트(루프백 무작위 포트). */
-@Tag("u2")
+@Tag("parent-account")
 class GoogleKeysClientTest {
 
     private final ContractStubServer google = ContractStubServer.start();
@@ -33,8 +33,8 @@ class GoogleKeysClientTest {
 
     @Test
     void rsaSigningKeysAreReadByKid() {
-        PublicKey key = U2Fixtures.newKeyPair().getPublic();
-        Map<String, Object> rsa = jwk(U2Fixtures.jwks("k1", key));
+        PublicKey key = ParentAccountFixtures.newKeyPair().getPublic();
+        Map<String, Object> rsa = jwk(ParentAccountFixtures.jwks("k1", key));
         String document = JsonCodec.shared().write(Map.of("keys", List.of(rsa,
                 Map.of("kty", "EC", "kid", "ec", "crv", "P-256", "x", "AA", "y", "AA"),
                 with(rsa, "kid", "enc", "use", "enc"),
@@ -55,7 +55,7 @@ class GoogleKeysClientTest {
     @Test
     void cacheControlMaxAgeIsReadFromTheResponse() throws IOException {
         // 2차 리뷰 4: 구글 certs 응답의 max-age만큼 캐시한다(대역은 루프백 무작위 포트)
-        String document = U2Fixtures.jwks("k1", U2Fixtures.newKeyPair().getPublic());
+        String document = ParentAccountFixtures.jwks("k1", ParentAccountFixtures.newKeyPair().getPublic());
         HttpServer server = HttpServer.create(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0);
         server.createContext("/certs", exchange -> {
             byte[] body = document.getBytes(StandardCharsets.UTF_8);

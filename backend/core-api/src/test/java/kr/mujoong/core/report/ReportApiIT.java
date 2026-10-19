@@ -2,10 +2,10 @@ package kr.mujoong.core.report;
 import static org.assertj.core.api.Assertions.*;
 import java.util.*;
 import kr.mujoong.contract.json.JsonCodec;
-import kr.mujoong.core.result.U6WebTestSupport;
+import kr.mujoong.core.result.WebTestSupport;
 import kr.mujoong.core.web.support.WebFixtures;
 import org.junit.jupiter.api.*;
-@Tag("u6") @Tag("db") class ReportApiIT extends U6WebTestSupport {
+@Tag("result-report") @Tag("db") class ReportApiIT extends WebTestSupport {
     UUID create(UUID guardian,UUID session){var today=app.clock().now().atZone(ReportService.ZONE).toLocalDate();return app.bean(ReportService.class).create(guardian,today,today,List.of(session),UUID.randomUUID().toString()).reportId();}
     @Test void previewAndCreateConformToSchemas(){var f=family();var session=copy(f,"ENDED",null);record(f,session,"ENDED",3);var user=WebFixtures.guardianFor(app,f.guardianId());String date=app.clock().now().atZone(ReportService.ZONE).toLocalDate().toString();assertThat(checked("GET /api/reports/preview",app.get("/api/reports/preview?from="+date+"&to="+date).session(user.session())).status()).isEqualTo(200);var body=Map.of("from",date,"to",date,"sessionIds",List.of(session),"idempotencyKey",UUID.randomUUID().toString());assertThat(checked("POST /api/reports",app.post("/api/reports").session(user.session()).csrf(user.csrf()).json(JsonCodec.shared().write(body))).status()).isEqualTo(202);}
     @Test void generatingSectionsAreEmptyAndReadySectionsHavePublicShape(){var f=family();var session=copy(f,"ENDED",null);record(f,session,"ENDED",3);var id=create(f.guardianId(),session);var user=WebFixtures.guardianFor(app,f.guardianId());assertThat(checked("GET /api/reports/{reportId}",app.get("/api/reports/"+id).session(user.session())).json().get("sections")).isEqualTo(List.of());db.jdbc().update("update core.core_report set status='READY' where id=:id",Map.of("id",id));var response=checked("GET /api/reports/{reportId}",app.get("/api/reports/"+id).session(user.session()));assertThat(response.status()).isEqualTo(200);assertThat(response.body()).doesNotContain("requestHash","guardianId","jobId","templated","interests");}

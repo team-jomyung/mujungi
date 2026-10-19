@@ -9,7 +9,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 /** 상한 집합 · 지도 시험(2차 리뷰 8): 넣은 순서를 지키고 상한을 넘으면 가장 먼저 넣은 것부터 잊는다. */
-@Tag("u3")
+@Tag("voice-session")
 class BoundedCollectionsTest {
 
     @Test

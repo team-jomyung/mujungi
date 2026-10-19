@@ -22,7 +22,7 @@ import org.junit.jupiter.params.provider.ValueSource;
  * <p>대상: 두 앱의 마이그레이션 SQL(운영 · 시험 위치), {@code infra/seed/} 참조 시드, 두 앱 운영 Java 소스의 문자열 리터럴(질의 문자열).
  * Java 주석 · 코드(예: {@code clock.now()})는 질의가 아니므로 리터럴만 본다. 파일은 읽기만 한다(컴파일 의존 없음).
  */
-@Tag("u1")
+@Tag("skeleton")
 class NoSqlNowTest {
 
     /** PostgreSQL이 현재 시각을 만드는 함수 · 키워드. */

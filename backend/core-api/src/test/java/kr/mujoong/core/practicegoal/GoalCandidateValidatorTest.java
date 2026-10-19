@@ -3,7 +3,7 @@ import static org.assertj.core.api.Assertions.*;
 import java.util.*;
 import kr.mujoong.core.result.check.ForbiddenDictionary;
 import org.junit.jupiter.api.*;
-@Tag("u14")
+@Tag("goal-result")
 class GoalCandidateValidatorTest {
     GoalCandidateValidator validator=new GoalCandidateValidator(new ForbiddenDictionary());
     Map<String,Object> draft(){return new LinkedHashMap<>(Map.of("displayName","물어보기","displayEvidence","합성 놀이 장면","targetExpression","함께 해도 되는지 묻기","fourElements",Map.of("situation","친구와 놀이","partner","친구","intent","놀이 참여","expression","함께 해도 돼?"),"skillRef","NONE","reasonText","함께 놀이한 장면이에요.","evidence",List.of(Map.of("utteranceSeq",1,"quote","같이 할래"))));}
