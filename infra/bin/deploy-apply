@@ -261,6 +261,12 @@ if [ "$mode" = DEPLOY ]; then
   fi
 fi
 
+# Graph startup is a prerequisite even though application recreation uses --no-deps.
+mkdir -p "$MUJOONG_DATA_DIR/neo4j/data" "$MUJOONG_DATA_DIR/neo4j/logs"
+chown 7474:7474 "$MUJOONG_DATA_DIR/neo4j/data" "$MUJOONG_DATA_DIR/neo4j/logs"
+mj up -d --no-deps neo4j >>"$step_log" 2>&1 || fail "neo4j 기동 실패"
+mujoong_wait_healthy neo4j 180 || fail "neo4j가 준비되지 않았다"
+
 # ---- D5 realtime · core-api 병렬 재생성 ---------------------------------------------------------------
 set_step D5
 : >"$work/restarts.before"

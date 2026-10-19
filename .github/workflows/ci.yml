@@ -313,6 +313,8 @@ jobs:
         run: bash infra/ci/test-infra-validate.sh
       - name: 호스트 도구 시험(render-env · D3 프로필 · check-since-last · log-hygiene-check)
         run: bash infra/ci/test-host-tools.sh
+      - name: Neo4j default runtime and secret isolation
+        run: bash infra/ci/test-neo4j-runtime.sh
 
   images:
     name: images

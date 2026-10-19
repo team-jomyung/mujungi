@@ -28,8 +28,12 @@ services:
     env_file:
       - ${MUJOONG_LIVE_ENV_FILE:?MUJOONG_LIVE_ENV_FILE이 필요하다(scripts/live/up.sh가 채운다)}
     environment:
+      MUJOONG_KNOWLEDGE_NEO4J_ENABLED: "true"
       # 망 대역을 바꿨으므로 신뢰 프록시(nginx 고정 IP) 정규식도 같은 대역으로 맞춘다(up.sh가 채운다)
       SERVER_TOMCAT_REMOTEIP_INTERNALPROXIES: ${MUJOONG_LIVE_PROXY_REGEX:?MUJOONG_LIVE_PROXY_REGEX가 필요하다(scripts/live/up.sh가 채운다)}
+    depends_on:
+      neo4j:
+        condition: service_healthy
 
   realtime:
     pull_policy: missing
@@ -47,6 +51,9 @@ services:
       migrate:
         condition: service_completed_successfully
         required: false
+
+  neo4j:
+    profiles: !reset []
 
   fake-provider:
     profiles: [live-disabled]

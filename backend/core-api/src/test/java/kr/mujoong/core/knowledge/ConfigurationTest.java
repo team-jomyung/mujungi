@@ -25,23 +25,24 @@ class ConfigurationTest {
     @Test void packagedOriginalLoadsFourteenSeeds() throws Exception {
         assertThat(config.knowledgeSeedCatalog().seeds()).hasSize(14);
     }
-    @Test void keylessEnabledFlagStillUsesUnavailableGraph() {
-        assertThat(config.childKnowledgeGraph(new KnowledgeProperties(true), core(), new MockEnvironment()))
-                .isInstanceOf(MemoryChildKnowledgeGraph.class);
+    @Test void enabledGraphRefusesMissingCredentialsWithoutLeakingAValue() {
+        assertThatThrownBy(() -> config.childKnowledgeGraph(new KnowledgeProperties(true), core(), new MockEnvironment()))
+                .isInstanceOf(IllegalStateException.class).hasMessage("Neo4j enabled but NEO4J_AUTH is missing");
     }
     @Test void disabledFlagNeverConstructsRemoteGraph() {
         assertThat(config.childKnowledgeGraph(new KnowledgeProperties(false), core(), new MockEnvironment().withProperty("NEO4J_AUTH", "neo4j/test-only")))
                 .isInstanceOf(MemoryChildKnowledgeGraph.class);
     }
-    @Test void configuredGraphUsesRemoteAdapterWithoutConnectingAtStartup() {
-        assertThat(config.childKnowledgeGraph(new KnowledgeProperties(true, "http://127.0.0.1:1"), core(),
-                new MockEnvironment().withProperty("NEO4J_AUTH", "neo4j/test-only"))).isInstanceOf(Neo4jChildKnowledgeGraph.class);
+    @Test void enabledGraphRefusesUnreachableDatabaseDuringStartup() {
+        assertThatThrownBy(() -> config.childKnowledgeGraph(new KnowledgeProperties(true, "http://127.0.0.1:1"), core(),
+                new MockEnvironment().withProperty("NEO4J_AUTH", "neo4j/test-only")))
+                .isInstanceOf(IllegalStateException.class).hasMessageNotContaining("test-only");
     }
     @Test void keylessServiceAndSeedProviderStartWithoutExternalCall() throws Exception {
         var graph = mock(ChildKnowledgeGraphPort.class);
         try (var service = config.childKnowledgeService(mock(KnowledgeLedgerRepository.class), mock(KnowledgeAccessPolicy.class),
                 graph, mock(PlatformTransactionManager.class), new MutableClock(), GraphModelTest.catalog(),
-                new KnowledgeProperties(true), core(), new MockEnvironment())) {
+                new KnowledgeProperties(false), core(), new MockEnvironment())) {
             assertThat(service.enabled()).isFalse();
             assertThat(service.seedSummaries(UUID.randomUUID(), UUID.randomUUID())).isEmpty();
             var timing = new TextAiProperties(Duration.ofSeconds(2), new TextAiProperties.Retry(1, Duration.ofMillis(20)),

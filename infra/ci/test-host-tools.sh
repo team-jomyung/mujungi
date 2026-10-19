@@ -88,9 +88,10 @@ declare -A P=(
   [ACME_CONTACT_EMAIL]="ops@example.net"
   # U13 BR9.1: demo는 제브 키 · 주소 · 모델이 필수다. 키는 실행 때 만든 무작위 값이고 주소는 예약 도메인(RFC 2606)이다(접속하지 않는다)
   [JEV_API_KEY]="$(rand 32)" [JEV_BASE_URL]="https://jev.example.net" [JEV_MODEL]="jev-guardrail-test-1"
+  [NEO4J_AUTH]="neo4j/$(rand 24)"
 )
 readonly SECRET_KEYS=(POSTGRES_PASSWORD DB_OWNER_PASSWORD DB_CORE_PASSWORD DB_REALTIME_PASSWORD DB_BACKUP_PASSWORD
-  INTERNAL_SERVICE_TOKEN MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET JEV_API_KEY)
+  INTERNAL_SERVICE_TOKEN MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET JEV_API_KEY NEO4J_AUTH)
 # write_params <파일> [이름=값 덮어쓰기 · -이름 빼기]...
 write_params() {
   local file="$1"
@@ -131,6 +132,7 @@ tree_sum() { (cd "$1" && find . -type f -print0 | sort -z | xargs -0 sha256sum) 
 declare -A WANT=(
   [postgres.env]="DB_BACKUP_PASSWORD DB_CORE_PASSWORD DB_OWNER_PASSWORD DB_REALTIME_PASSWORD POSTGRES_PASSWORD"
   [migrate.env]="DB_OWNER_PASSWORD"
+  [neo4j.env]="NEO4J_AUTH"
   [core-api.env]="GOOGLE_OAUTH_CLIENT_ID GOOGLE_OAUTH_CLIENT_SECRET GOOGLE_OAUTH_REDIRECT_URI INTERNAL_SERVICE_TOKEN MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET MUJOONG_SECURITY_ALLOWED_ORIGIN NEO4J_AUTH OPENAI_API_KEY SPRING_DATASOURCE_PASSWORD"
   [realtime.env]="INTERNAL_SERVICE_TOKEN JEV_API_KEY JEV_BASE_URL JEV_MODEL MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET MUJOONG_SECURITY_ALLOWED_ORIGIN OPENAI_API_KEY SPRING_DATASOURCE_PASSWORD"
   [web.env]="GOOGLE_OAUTH_CLIENT_ID GOOGLE_OAUTH_REDIRECT_URI MUJOONG_SECURITY_ALLOWED_ORIGIN"
@@ -151,7 +153,8 @@ check_rendered() {
     got="$(cut -d= -f1 "$dir/$f" | sort | paste -sd' ' -)"
     [ "$got" = "${WANT[$f]}" ] || problems+=("$f 변수 [$got] ≠ [${WANT[$f]}]")
   done
-  [ -e "$dir/neo4j.env" ] && problems+=("NEO4J_AUTH 파라미터가 없는데 neo4j.env가 생겼다")
+  [ "$(value_of "$dir/neo4j.env" NEO4J_AUTH)" = "${P[NEO4J_AUTH]}" ] || problems+=("neo4j credential mapping")
+  [ "$(value_of "$dir/core-api.env" NEO4J_AUTH)" = "${P[NEO4J_AUTH]}" ] || problems+=("core graph credential mapping")
   [ "$(value_of "$dir/core-api.env" GOOGLE_OAUTH_CLIENT_SECRET)" = "" ] || problems+=("GOOGLE_OAUTH_CLIENT_SECRET이 빈 변수가 아니다")
   # U8(SD3): 선택 비밀 OPENAI_API_KEY는 파라미터가 없으면 빈 변수다(앱이 실제 어댑터를 끈다)
   for f in core-api.env realtime.env; do
@@ -249,6 +252,8 @@ expect_reject() {
 }
 write_params "$work/p-missing" -MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET
 expect_reject "render-env-missing-required" 1 "$work/p-missing"
+write_params "$work/p-graph-missing" -NEO4J_AUTH
+expect_reject "render-env-neo4j-auth-missing" 1 "$work/p-graph-missing"
 write_params "$work/p-localhost" SERVICE_HOST=localhost MUJOONG_SECURITY_ALLOWED_ORIGIN=https://localhost
 expect_reject "render-env-rejects-localhost" 1 "$work/p-localhost"
 write_params "$work/p-invalid" SERVICE_HOST=svc.mujoong.invalid MUJOONG_SECURITY_ALLOWED_ORIGIN=https://svc.mujoong.invalid

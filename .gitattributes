@@ -5,3 +5,9 @@ infra/bin/* text eol=lf
 infra/bin/lib/* text eol=lf
 *.bash text eol=lf
 *.sql  text eol=lf
+# Shell tooling reads image names from YAML; CRLF must not become part of a tag.
+*.yml text eol=lf
+*.yaml text eol=lf
+infra/host/entry/* text eol=lf
+**/Dockerfile* text eol=lf
+**/.dockerignore text eol=lf

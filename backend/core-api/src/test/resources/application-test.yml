@@ -23,6 +23,9 @@ springdoc:
     enabled: true
 
 mujoong:
+  knowledge:
+    neo4j:
+      enabled: false
   timing:
     result:
       job-attempts: 3

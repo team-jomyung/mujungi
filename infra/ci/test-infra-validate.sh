@@ -122,7 +122,7 @@ expect "bad-dev-public-port" 1 "127.0.0.1이 아닌 주소" -- "${dev[@]}" --com
 bash "$ROOT/infra/ci/gen-env.sh" --out "$work/d3/env" >/dev/null
 printf 'MUJOONG_REGISTRY=ghcr.io/example\nMUJOONG_TAG=0123456789abcdef0123456789abcdef01234567\n' >"$work/d3/release.env"
 expect "d3-env-dir" 0 "" -- --only compose-invariants,secret-env-files --env-dir "$work/d3/env" \
-  --release-env "$work/d3/release.env" --mem-limit-bytes 5700000000
+  --release-env "$work/d3/release.env" --mem-limit-bytes 8000000000
 expect "d3-memtotal-too-small" 1 "invariant-3:" -- --only compose-invariants --env-dir "$work/d3/env" \
   --release-env "$work/d3/release.env" --mem-limit-bytes 4000000000
 # env 파일 안의 비밀(값이 든 렌더 결과)은 environment: 위반이 아니다 — Compose v2.38이 env 파일을 펼쳐도 같다(J346)
@@ -137,11 +137,11 @@ expect "d3-env-file-profile-line" 1 "realtime env 파일에 demo가 아닌 SPRIN
 cp -a "$work/d3/env" "$work/d3/env-jev-core"
 printf 'JEV_API_KEY=\n' >>"$work/d3/env-jev-core/core-api.env"
 expect "u8-jev-key-leaks-to-core-api" 1 "invariant-5: core-api 비밀 이름" -- --only compose-invariants \
-  --env-dir "$work/d3/env-jev-core" --release-env "$work/d3/release.env" --mem-limit-bytes 5700000000
+  --env-dir "$work/d3/env-jev-core" --release-env "$work/d3/release.env" --mem-limit-bytes 8000000000
 cp -a "$work/d3/env" "$work/d3/env-no-openai"
 grep -v '^OPENAI_API_KEY=' "$work/d3/env/realtime.env" >"$work/d3/env-no-openai/realtime.env"
 expect "u8-openai-key-missing-in-realtime" 1 "invariant-5: realtime 비밀 이름" -- --only compose-invariants \
-  --env-dir "$work/d3/env-no-openai" --release-env "$work/d3/release.env" --mem-limit-bytes 5700000000
+  --env-dir "$work/d3/env-no-openai" --release-env "$work/d3/release.env" --mem-limit-bytes 8000000000
 cat >"$work/inline-jev.yml" <<'YAML'
 services:
   realtime:

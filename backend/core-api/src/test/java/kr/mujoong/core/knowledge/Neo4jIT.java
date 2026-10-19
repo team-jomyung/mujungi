@@ -30,6 +30,16 @@ class Neo4jIT {
                 "neo4j/" + PASSWORD, Duration.ofSeconds(2));
     }
     @AfterAll static void stop() { NEO4J.stop(); }
+    @Test void configuredStartupAuthenticatesAndPreparesSchema() {
+        var core = org.mockito.Mockito.mock(kr.mujoong.core.config.CoreProperties.class, org.mockito.Mockito.RETURNS_DEEP_STUBS);
+        org.mockito.Mockito.when(core.timing().knowledge().graphBudget()).thenReturn(Duration.ofSeconds(2));
+        var properties = new KnowledgeProperties(true, "http://"+NEO4J.getHost()+":"+NEO4J.getMappedPort(7474));
+        var env = new org.springframework.mock.env.MockEnvironment().withProperty("NEO4J_AUTH","neo4j/"+PASSWORD);
+        assertThat(new KnowledgeConfiguration().childKnowledgeGraph(properties,core,env)).isInstanceOf(Neo4jChildKnowledgeGraph.class);
+        assertThatThrownBy(()->new KnowledgeConfiguration().childKnowledgeGraph(properties,core,
+                new org.springframework.mock.env.MockEnvironment().withProperty("NEO4J_AUTH","neo4j/wrong-password")))
+                .isInstanceOf(IllegalStateException.class);
+    }
     @Test void commitsBaseAndIsolatesChildren() {
         UUID child = UUID.randomUUID();
         String tx = graph.begin();

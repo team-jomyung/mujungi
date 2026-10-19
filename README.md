@@ -52,6 +52,10 @@ exec powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "C:
 
 ### 로컬 기동(dev)
 
+Neo4j는 전체 실행에서 기본 활성화되어 있다. [Neo4j 실행·검증 안내](docs/neo4j-runtime.md)를 먼저 확인한다.
+호스트에서 실행하는 Core에는 생성된 `NEO4J_AUTH`와 `MUJOONG_KNOWLEDGE_NEO4J_ENDPOINT=http://127.0.0.1:7474`를 전달한다.
+CI와 그래프를 사용하지 않는 자동 시험만 명시적으로 비활성화한다.
+
 앱 셋은 IDE나 호스트 프로세스로 돌리고, DB만 Compose로 띄운다. 비밀 값은 실행 때 `build/dev/env/`에 생기고 저장소에는 없다(J127).
 
 ```bash

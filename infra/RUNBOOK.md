@@ -34,9 +34,9 @@
 
 ### 2.1 구성
 
-- EC2 `mujoong-demo` 1대(서울 `ap-northeast-2`, `t3.large`, Ubuntu 24.04), 보안 그룹 인바운드 80 · 443만, Session Manager만.
-- Compose 프로젝트 `mujoong`(`compose.demo.yml`), 상시 컨테이너 7개: `nginx` · `web` · `core-api` · `realtime` · `postgres` · `certbot` ·
-  `backup`. 일회성 `migrate`(프로필 `migrate`), 꺼진 `neo4j`(프로필 `knowledge`).
+- EC2 `mujoong-demo` 1대(서울 `ap-northeast-2`, `t3.xlarge`, Ubuntu 24.04), 보안 그룹 인바운드 80 · 443만, Session Manager만.
+- Compose 프로젝트 `mujoong`(`compose.demo.yml`), 상시 컨테이너 8개: `nginx` · `web` · `core-api` · `realtime` · `postgres` · `certbot` ·
+  `backup` · `neo4j`. 일회성 `migrate`(프로필 `migrate`).
 - 망 둘: `edge` 172.30.10.0/24(nginx .10 · web .11 · core-api .12 · realtime .13), `backend` 172.30.20.0/24(internal).
   호스트에 게시하는 포트는 nginx 80 · 443뿐이고 관리 포트 9090은 컨테이너 루프백에만 있다.
 - 배포는 CI(GitHub Actions) → OIDC 역할 `mujoong-gha-deploy` → SSM 문서 `mujoong-deploy` → 호스트 `/opt/mujoong/bin/deploy.sh`다.
@@ -77,7 +77,7 @@
 
 | 리소스 | 이름 · 식별 | 핵심 설정 |
 |---|---|---|
-| EC2 인스턴스 | `mujoong-demo` | `t3.large` · Ubuntu Server 24.04 LTS 공식 AMI · 기본 VPC 퍼블릭 서브넷 · 인스턴스 프로필 `mujoong-demo-ec2` · IMDSv2 필수(응답 홉 1) · 종료 보호 · CPU 크레딧 `unlimited` · 키 쌍 없음 |
+| EC2 인스턴스 | `mujoong-demo` | `t3.xlarge` · Ubuntu Server 24.04 LTS 공식 AMI · 기본 VPC 퍼블릭 서브넷 · 인스턴스 프로필 `mujoong-demo-ec2` · IMDSv2 필수(응답 홉 1) · 종료 보호 · CPU 크레딧 `unlimited` · 키 쌍 없음 |
 | EBS 루트 | `mujoong-demo-root` | gp3 30 GB · 암호화 · 종료 시 삭제 |
 | EBS 데이터 | `mujoong-demo-data` | gp3 50 GB · 암호화 · 종료 시 삭제 안 함 · 같은 AZ · `/var/lib/mujoong` |
 | EBS 백업 | `mujoong-demo-backup` | gp3 10 GB · 암호화 · 종료 시 삭제 안 함 · 같은 AZ · `/var/lib/mujoong-backup` |
@@ -127,7 +127,7 @@ aws ssm create-document --name mujoong-deploy --document-type Command --document
   --content file://ssm-mujoong-deploy.yml --tags Key=Project,Value=mujoong Key=Environment,Value=demo
 ```
 
-인스턴스는 콘솔에서 만든다: AMI Ubuntu Server 24.04 LTS(공식), `t3.large`, 키 쌍 **없음**, 보안 그룹 `mujoong-demo-sg`, 인스턴스 프로필
+인스턴스는 콘솔에서 만든다: AMI Ubuntu Server 24.04 LTS(공식), `t3.xlarge`, 키 쌍 **없음**, 보안 그룹 `mujoong-demo-sg`, 인스턴스 프로필
 `mujoong-demo-ec2`, 메타데이터 IMDSv2 필수 · 홉 1, 종료 보호 켬, 크레딧 `unlimited`, 루트 gp3 30 GB 암호화 + 추가 볼륨 두 개(데이터 50 GB ·
 백업 10 GB, 암호화, 종료 시 삭제 끔), 태그 4개. 이어서 Elastic IP를 할당해 연결한다.
 
@@ -233,7 +233,7 @@ aws ssm put-parameter --name /mujoong/demo/GHCR_PULL_USER --type String --value 
   `core-api.env` · `web.env`에 같은 값을 쓴다. `GOOGLE_OAUTH_CLIENT_ID`도 두 파일에 같은 이름으로 들어가고 client secret은 `core-api.env`에만 간다.
   바꾼 뒤에는 env를 다시 렌더하고 core-api · web을 재생성해야 반영된다.
 - GHCR 패키지를 공개로 두기로 정하면 `GHCR_PULL_TOKEN` · `GHCR_PULL_USER`를 만들지 않는다(배포가 로그인하지 않는다, J99).
-- `NEO4J_AUTH`는 Neo4j와 U15 core-api가 함께 사용한다. render-env는 같은 기존 파라미터를 각각 neo4j.env와 core-api.env로 전달한다. 값이 없으면 core-api의 그래프 기능은 기본 경로로 동작하며 과거 그래프 삭제는 RETRY로 남는다. 공개 Compose 보간값으로 넣지 않는다.
+- `NEO4J_AUTH`는 Neo4j와 U15 core-api가 함께 사용한다. render-env는 같은 기존 파라미터를 각각 neo4j.env와 core-api.env로 전달한다. 필수 파라미터이며 누락되면 렌더·기동을 거절한다. Neo4j 인증·초기 연결을 확인한 뒤 Core를 실행한다. 공개 Compose 보간값으로 넣지 않는다.
 - **(U9 · U11) `OPENAI_API_KEY`를 넣기 전 R-F15 확인 — 기록 없이는 넣지 않는다.** 확인 대상은 'Luna 판정(core · realtime) · GPT-Live 음성 중계'다.
   키 하나(`OPENAI_API_KEY`)로 GPT-Live 음성 중계(아이 음성이 공급자로 나감, demo realtime은 이 키가 없으면 기동을 거부한다)와
   Luna 판정(core-api는 키만으로, realtime은 키 + 스위치 `mujoong.luna.enabled=true`로 켜짐)이 모두 열리고, 실제 아동 대화 · 결과 자료가 공급자로
@@ -743,7 +743,7 @@ mj exec postgres sh -c 'PGPASSWORD="$POSTGRES_PASSWORD" psql -h "$(hostname -i |
 | 단계 | 작업 | 확인 |
 |---|---|---|
 | 0 | [GitHub] `AUTO_DEPLOY=false` | 변수 값 |
-| 1 | 상시 컨테이너 로그를 archive로 보존(`docker logs --timestamps <id> \| gzip > /var/log/mujoong/archive/<UTC>-<서비스>-measure.log.gz`, 7개) → `systemctl stop mujoong-compose`(정지 직전 백업 · `POWER_STOP` 자동) → `mj --measurement-window down`(**`-v` 금지**, 망 제거로 'Pool overlaps' 방지) | 컨테이너 0, demo 망 없음 |
+| 1 | 상시 컨테이너 로그를 archive로 보존(`docker logs --timestamps <id> \| gzip > /var/log/mujoong/archive/<UTC>-<서비스>-measure.log.gz`, 8개) → `systemctl stop mujoong-compose`(정지 직전 백업 · `POWER_STOP` 자동) → `mj --measurement-window down`(**`-v` 금지**, 망 제거로 'Pool overlaps' 방지) | 컨테이너 0, demo 망 없음 |
 | 2 | **계정 관리자가** 보안 그룹 80 · 443 원본을 시험 PC /32로 좁힌다 | 규칙 대조 |
 | 3 | `compose.loadtest.yml`로 `mujoong-lt` 기동(같은 SHA, 프로필 dev + load-test, 데이터 `/var/lib/mujoong/loadtest/`) | readiness 200 둘 |
 | 4 | 시드 도구로 30쌍 입력, 토큰 원문은 `/var/lib/mujoong/loadtest/tokens/`(root 600)에만 | 행 수 |

@@ -17,7 +17,7 @@ import org.springframework.core.env.Environment;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.transaction.PlatformTransactionManager;
 
-/** BR6: 기본 꺼짐과 키 없는 기동을 유지한다. */
+/** Full service startup requires an authenticated graph; isolated tests opt out explicitly. */
 @Configuration(proxyBeanMethods = false)
 @org.springframework.boot.context.properties.EnableConfigurationProperties(SeedGenerationProperties.class)
 public class KnowledgeConfiguration {
@@ -28,9 +28,13 @@ public class KnowledgeConfiguration {
     }
     @Bean ChildKnowledgeGraphPort childKnowledgeGraph(KnowledgeProperties properties, CoreProperties core, Environment environment) {
         String auth = environment.getProperty("NEO4J_AUTH", "");
-        if (!properties.enabled() || auth.isBlank()) return new MemoryChildKnowledgeGraph();
-        return new Neo4jChildKnowledgeGraph(URI.create(properties.endpoint()),
+        if (!properties.enabled()) return new MemoryChildKnowledgeGraph();
+        if (auth.isBlank()) throw new IllegalStateException("Neo4j enabled but NEO4J_AUTH is missing");
+        var graph = new Neo4jChildKnowledgeGraph(URI.create(properties.endpoint()),
                 auth, core.timing().knowledge().graphBudget());
+        // A healthy process without a usable graph must not advertise full service readiness.
+        graph.prepareSchema();
+        return graph;
     }
     @Bean
     @org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean(KnowledgeGraphLookup.class)

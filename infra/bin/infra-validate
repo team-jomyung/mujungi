@@ -33,7 +33,7 @@
 #   --env-dir          이미 렌더된 서비스별 env 파일 디렉터리(배포 D3: /opt/mujoong/env). 없으면 infra/ci/gen-env.sh로
 #                      임시 디렉터리에 시험 값을 만든다(저장소에서만)
 #   --release-env      Compose 보간용 비밀 아닌 값 파일(배포 D3: <릴리스>/release.env)
-#   --mem-limit-bytes  메모리 한도 합계 상한(배포 D3은 호스트 MemTotal의 70%). 기본 5.3GiB(실측 전 저장소 값, 단언 3)
+#   --mem-limit-bytes  메모리 한도 합계 상한(배포 D3은 호스트 MemTotal의 70%). 기본 7GiB(전체 스택 6.575GiB, 호스트 70% 검사는 유지)
 #   --allow-contract   contract PR(라벨 allow-contract + 리뷰 승인)에서만 migrations 금지 문장을 허용한다
 #   --migration-approvals  사람이 승인한 금지 문장 목록(기본: 저장소의 infra/migration-approvals.txt). 한 줄에
 #                      `<위치>/<파일> <문장 번호> <문장 해시 12자> | 승인: <사람> <날짜> | 사유: <이전 앱이 깨지지 않는 근거>`.
@@ -60,7 +60,7 @@ compose_files=()
 kind=demo
 env_dir=""
 release_env=""
-mem_limit_bytes=$((53 * 1024 * 1024 * 1024 / 10))
+mem_limit_bytes=$((7 * 1024 * 1024 * 1024))
 nginx_src="$INFRA_DIR/nginx"
 migration_dirs=()
 allow_contract=0
@@ -316,13 +316,13 @@ def err($n; $msg): "invariant-\($n): \($msg)";
   [ "core-api", "realtime" | . as $n | ($svc[$n].stop_grace_period | secs) as $g
     | select($g != 40) | err(2; "\($n) stop_grace_period가 40초가 아니다(\($g))") ],
 
-  # 3 메모리 한도: 모든 서비스 mem_limit = memswap_limit, 상시 합계 5.075GiB · 상한 이하
+  # 3 메모리 한도: 모든 서비스 mem_limit = memswap_limit, 상시 합계 6.575GiB · 상한 이하
   [ $all[] | select(.value.mem_limit == null) | err(3; "\(.key)에 mem_limit이 없다") ],
   [ $all[] | select(.value.mem_limit != null and ((.value.memswap_limit | bytes) != (.value.mem_limit | bytes)))
     | err(3; "\(.key) memswap_limit이 mem_limit과 다르다(스왑 허용)") ],
   ( [ $on[] | .value.mem_limit | bytes // 0 ] | add // 0 ) as $sum
-  | (5.075 * 1073741824) as $expect
-  | (if (($sum - $expect) | if . < 0 then -. else . end) > 1048576 then [ err(3; "상시 서비스 한도 합계 \($sum)B가 5.075GiB가 아니다") ] else [] end)
+  | (6.575 * 1073741824) as $expect
+  | (if (($sum - $expect) | if . < 0 then -. else . end) > 1048576 then [ err(3; "상시 서비스 한도 합계 \($sum)B가 6.575GiB가 아니다") ] else [] end)
     + (if $sum > $memmax then [ err(3; "상시 서비스 한도 합계 \($sum)B가 상한 \($memmax)B를 넘는다") ] else [] end),
 
   # 4 상시 서비스: unless-stopped + 헬스체크, migrate는 no
@@ -396,11 +396,11 @@ def err($n; $msg): "invariant-\($n): \($msg)";
   # 9 서비스당 컨테이너 1개
   [ $all[] | select(((.value.scale // 1) != 1) or ((.value.deploy.replicas // 1) != 1)) | err(9; "\(.key)가 2개 이상으로 늘어난다") ],
 
-  # 10 프로필: neo4j는 knowledge, migrate는 migrate, 상시 서비스 7개
-  [ if ($svc.neo4j.profiles // []) != ["knowledge"] then err(10; "neo4j가 프로필 knowledge에만 속하지 않는다") else empty end ],
+  # 10 프로필: Neo4j 기본 포함, migrate만 선택, 상시 서비스 8개
+  [ if ($svc.neo4j.profiles // []) != [] then err(10; "전체 서비스에서 neo4j가 기본 활성화되지 않았다") else empty end ],
   [ if ($svc.migrate.profiles // []) != ["migrate"] then err(10; "migrate가 프로필 migrate에만 속하지 않는다") else empty end ],
   [ ($on | map(.key) | sort) as $k
-    | if $k != ["backup","certbot","core-api","nginx","postgres","realtime","web"] then err(10; "상시 서비스가 7개 표와 다르다(\($k | join(",")))") else empty end ],
+    | if $k != ["backup","certbot","core-api","neo4j","nginx","postgres","realtime","web"] then err(10; "상시 서비스가 8개 표와 다르다(\($k | join(",")))") else empty end ],
 
   # 11 컨테이너 권한: cap_drop ALL(nginx만 4개 추가) · read_only · no-new-privileges · tmpfs size= · 비루트 · core 0
   [ $all[] | .key as $n | .value as $v
@@ -422,9 +422,10 @@ def err($n; $msg): "invariant-\($n): \($msg)";
   [ "postgres", "backup" | . as $n | select($svc[$n] != null) | select(($svc[$n].user // "") != "999:999")
     | err(11; "\($n)가 user 999:999로 실행되지 않는다") ],
 
-  # 12 core-api depends_on = postgres(healthy) + migrate(완료, required false)
+  # 12 core-api depends_on = postgres·neo4j(healthy) + migrate(완료, required false)
   ( $svc["core-api"].depends_on // {} ) as $d
-  | (if ($d | keys) != ["migrate", "postgres"] then [ err(12; "core-api depends_on이 postgres · migrate가 아니다(\($d | keys | join(",")))") ] else [] end)
+  | (if ($d | keys) != ["migrate", "neo4j", "postgres"] then [ err(12; "core-api depends_on이 postgres · neo4j · migrate가 아니다(\($d | keys | join(",")))") ] else [] end)
+    + (if ($d.neo4j.condition // "") != "service_healthy" then [ err(12; "core-api의 neo4j 의존이 service_healthy가 아니다") ] else [] end)
     + (if ($d.postgres.condition // "") != "service_healthy" then [ err(12; "core-api의 postgres 의존이 service_healthy가 아니다") ] else [] end)
     + (if ($d.migrate.condition // "") != "service_completed_successfully" or ($d.migrate.required != false)
        then [ err(12; "core-api의 migrate 의존이 완료 조건 · required false가 아니다") ] else [] end),

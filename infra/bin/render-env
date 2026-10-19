@@ -25,7 +25,7 @@
 #        nginx.env     SERVICE_HOST MUJOONG_SECURITY_ALLOWED_ORIGIN
 #        certbot.env   SERVICE_HOST ACME_CONTACT_EMAIL
 #        backup.env    DB_BACKUP_PASSWORD BACKUP_RETENTION_DAYS(=7)
-#        neo4j.env     NEO4J_AUTH(파라미터가 있을 때만, 켠 뒤)
+#        neo4j.env     NEO4J_AUTH(필수, Core와 같은 값)
 #   4. 쓰기: umask 077 임시 디렉터리에서 모두 만든 뒤 출력 디렉터리(0700) 안의 파일을 하나씩 원자적으로 바꾼다(0600).
 #      검증이 하나라도 실패하면 아무 파일도 바꾸지 않는다(구 버전 유지, D3 실패).
 #
@@ -65,8 +65,8 @@ fi
 
 readonly REQUIRED=(POSTGRES_PASSWORD DB_OWNER_PASSWORD DB_CORE_PASSWORD DB_REALTIME_PASSWORD DB_BACKUP_PASSWORD
   INTERNAL_SERVICE_TOKEN MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET
-  SERVICE_HOST MUJOONG_SECURITY_ALLOWED_ORIGIN ACME_CONTACT_EMAIL JEV_API_KEY JEV_BASE_URL JEV_MODEL)
-readonly OPTIONAL=(GOOGLE_OAUTH_CLIENT_ID GOOGLE_OAUTH_CLIENT_SECRET NEO4J_AUTH OPENAI_API_KEY)
+  SERVICE_HOST MUJOONG_SECURITY_ALLOWED_ORIGIN ACME_CONTACT_EMAIL JEV_API_KEY JEV_BASE_URL JEV_MODEL NEO4J_AUTH)
+readonly OPTIONAL=(GOOGLE_OAUTH_CLIENT_ID GOOGLE_OAUTH_CLIENT_SECRET OPENAI_API_KEY)
 # 01 콜백 경로(frontend/src/app/parent/login/callback, Core mujoong.guardian.google.redirect-uri와 같아야 한다)
 readonly GOOGLE_CALLBACK_PATH=/parent/login/callback
 # 값 문자 집합: env 파일을 따옴표 없이 쓰고 docker run --env-file · Compose가 같은 값을 읽게 하려는 제한(공백 · 따옴표 · $ · # · \ 없음)
