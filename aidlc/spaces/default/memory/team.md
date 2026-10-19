@@ -61,6 +61,8 @@
 
 - 커버리지 범위 파일은 유닛 번호 대신 기능 이름으로 짓는다(`backend/coverage-scope/<기능>.txt` · `frontend/coverage-scope/<기능>.json`과 시험 목록 `<기능>.tests`). 앞의 유닛 이름 범위 파일 규칙을 대체한다. (learned 2026-10-19) <!-- cid:261018-structure-refactor:code-generation:098665fc1a2767bd9d8e8451bf76fbbcdc4818372abf5efbd1ae2c842d6babe1 -->
 
+- CI가 실제로 막는 커버리지 범위는 프런트의 `practice-legacy` · `web-push`뿐이다(`ci.yml`의 프런트 범위 단계). 백엔드 범위 파일(`backend/coverage-scope/*.txt`)은 로컬 · 검토 근거이며 `main`의 CI 경량화(JIRA-249) 뒤 CI 단계가 없다. 앞의 "CI가 실제로 막는 범위는 U5b · U7뿐"(백엔드 `u5b` · `u5b-core` · `u7`)을 대체한다. (learned 2026-10-19) <!-- cid:261018-structure-refactor:build-and-test:785d6e181cf556394ec87ff413be7d22caf29276e1eaa009185a48e3a034bf10 -->
+
 ## Guard Policy
 
 <!-- Affirmed by the team. Mode: strict, relaxed, or off. Strict here holds for every intent and cannot be changed from chat. A section under the retired Change Control heading, written by an earlier release, is still read. -->
