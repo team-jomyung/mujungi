@@ -13,8 +13,8 @@ import { ACCOUNT_PROPOSED_COPY, ACCOUNT_TEMP_COPY } from "@/shared/copy/account"
 import { PROPOSED_COPY, TEMP_COPY } from "@/shared/copy/ko";
 import { useToast } from "@/shared/toast/ToastProvider";
 
-// 02 기록 · 동의 안내 화면의 요청(약관 조회 · 동의 저장 · 로그아웃) · 오류 분기 · 화면 이동을 맡는 흐름 훅(BR2.1).
-// 동작 규칙은 ConsentScreen에 있던 그대로다(BR1.1).
+// 02 기록 · 동의 안내 화면의 요청(약관 조회 · 동의 저장 · 로그아웃) · 오류 분기 · 화면 이동을 맡는 흐름 훅.
+// 동작 규칙은 ConsentScreen에 있던 그대로다.
 
 export { CONSENT_TYPES };
 export type { ConsentType, PolicyItem };
@@ -75,7 +75,7 @@ export function useConsentScreen() {
         return;
       }
       if (failure instanceof ApiError && failure.status === 400) {
-        // 그 사이 약관 버전이 바뀌었다(편차 (U2-f)): 새 약관을 다시 읽고 다시 동의받는다
+        // 그 사이 약관 버전이 바뀌었다(편차): 새 약관을 다시 읽고 다시 동의받는다
         setChecked(new Set());
         void refetch();
       }

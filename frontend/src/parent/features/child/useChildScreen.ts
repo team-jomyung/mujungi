@@ -14,8 +14,8 @@ import { ACCOUNT_PROPOSED_COPY } from "@/shared/copy/account";
 import { PROPOSED_COPY, TEMP_COPY } from "@/shared/copy/ko";
 import { useToast } from "@/shared/toast/ToastProvider";
 
-// 03 아이 정보 화면의 요청(조회 · 등록 · 수정) · 오류 분기 · 화면 이동을 맡는 흐름 훅(BR2.1).
-// 입력 칸 값과 검증은 화면에 두고, 훅은 검증을 마친 입력을 받아 저장한다. 동작 규칙은 ChildScreen에 있던 그대로다(BR1.1).
+// 03 아이 정보 화면의 요청(조회 · 등록 · 수정) · 오류 분기 · 화면 이동을 맡는 흐름 훅.
+// 입력 칸 값과 검증은 화면에 두고, 훅은 검증을 마친 입력을 받아 저장한다. 동작 규칙은 ChildScreen에 있던 그대로다.
 
 export type { Child, ChildInput };
 

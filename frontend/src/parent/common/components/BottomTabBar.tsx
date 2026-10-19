@@ -1,6 +1,6 @@
 import { COPY } from "@/shared/copy/ko";
 
-// 하단 탭 바 (U1 3.5 Step 39 · interaction-spec 3.1 · BR4.5 · AC1.4.9 · AC1.4.11 · AC1.4.15 · 접근성 O7)
+// 하단 탭 바 (U1 3.5 Step 39 · interaction-spec 3.1 · 접근성 O7)
 // 홈 · 자유대화 · 연습 · 기록 네 탭. 잠금 사유가 있으면 자유대화 · 연습 탭은 흐리게 + aria-disabled이지만 초점은 받고,
 // 누르면 화면이 이유 토스트를 보인다(disabled를 쓰지 않는다). 어디로 갈지는 화면이 정한다(04 잠금 → 05 스텁, 12 → 그대로 등).
 

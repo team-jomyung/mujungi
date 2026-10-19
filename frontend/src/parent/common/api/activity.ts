@@ -1,7 +1,7 @@
 import type { ApiClient } from "./apiClient";
 import type { EndReason, SessionStatus } from "./types";
 
-// U4a 활동 세션 응답 읽기 (docs/units/u4a/design.md 4절 · 계약 3절 SessionSummary · LiveView · 편차 (U4a-a))
+// U4a 활동 세션 응답 읽기 (docs/units/u4a/design.md 4절 · 계약 3절 SessionSummary · LiveView · 편차)
 // - 04 지금 활동: GET /api/home의 currentSession · GET /api/sessions/current({session}) — 진행 중(REQUESTED ~ CLOSING) 요약 또는 null
 // - 12 덧붙임: LiveView의 gaps · technicalPause · silenceWarning(서버가 계약 모양으로 거른 값. 모르는 값은 버린다)
 // 이 모듈은 types.ts의 형식만 가져오고(형식 가져오기는 실행 때 사라진다) types.ts가 이 모듈의 읽기 함수를 부른다.
@@ -150,7 +150,7 @@ export function parseSessionSummary(value: unknown): SessionSummary | null {
   };
 }
 
-/** GET /api/sessions/current 본문 {session}(편차 (U4a-a)). */
+/** GET /api/sessions/current 본문 {session}(편차). */
 export function parseCurrentSession(value: unknown): SessionSummary | null {
   return isObject(value) ? parseSessionSummary(value.session) : null;
 }

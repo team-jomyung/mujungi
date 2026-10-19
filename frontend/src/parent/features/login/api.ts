@@ -3,9 +3,9 @@
 import type { ApiClient } from "../../common/api/apiClient";
 import { parseDevLogin, type DevLoginResult } from "../../common/api/types";
 
-// 01 시험 로그인 요청 (U1 3.5 Step 39 · J119). 서버 호출만 한다(BR2.3).
+// 01 시험 로그인 요청 (U1 3.5 Step 39). 서버 호출만 한다.
 
-/** POST /api/dev/login — 시험 로그인(CSRF 면제, dev 프로필 + enabled에서만 200, J119). 성공하면 세션이 바뀌어 CSRF를 다시 받는다. */
+/** POST /api/dev/login — 시험 로그인(CSRF 면제, dev 프로필 + enabled에서만 200). 성공하면 세션이 바뀌어 CSRF를 다시 받는다. */
 export async function devLogin(api: ApiClient): Promise<DevLoginResult> {
   const result = await api.request({ method: "POST", path: "/api/dev/login", parse: parseDevLogin, csrf: false });
   api.csrf.clear();

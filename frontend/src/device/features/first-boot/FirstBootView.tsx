@@ -1,8 +1,8 @@
 import { COPY, PROPOSED_COPY, formatRegistrationCode } from "@/shared/copy/ko";
 
-// D0 처음 켜기 (U1 3.5 Step 38 · BR9.2 · BR9.4 · AC6.1.1 · AC6.1.2 · AC6.1.5 · C.D-00.30)
+// D0 처음 켜기 (U1 3.5 Step 38)
 // 안내 + 4 · 4로 나눈 큰 코드, 등록되면 「등록되었어요」. 코드를 아직 받지 못한 동안만 '연결을 확인하는 중'을 보인다.
-// 클릭 요소가 없다(BR9.2).
+// 클릭 요소가 없다.
 
 export type FirstBootDisplay = "d0-checking" | "d0-code" | "d0-registered";
 

@@ -5,7 +5,7 @@ import { ACCOUNT_TEMP_COPY } from "@/shared/copy/account";
 import { PROPOSED_COPY, TEMP_COPY } from "@/shared/copy/ko";
 import type { ToastApi } from "@/shared/toast/ToastProvider";
 
-// 보호자 화면 경로 · 탭 이동 · 공통 판단 (U1 3.5 Step 40 · J119 · J57 · BR4.5 · AC1.1.9, U2가 01 ~ 03 · 05 · SET-01을 더함)
+// 보호자 화면 경로 · 탭 이동 · 공통 판단 (U2가 01 ~ 03 · 05 · SET-01을 더함)
 // 라우트: /parent(04) · /parent/login(01) · /parent/login/callback(01 교환) · /parent/consent(02) · /parent/child(03)
 //         /parent/child/stop-expressions(SET-01) · /parent/device(05) · /parent/device/register(05a) · /parent/free(08)
 //         /parent/sessions/[id](12 + P1) · /parent/sessions/[id]/done(17) · /parent/dev-login(시험 로그인)
@@ -60,7 +60,7 @@ export function routeForTab(tab: TabKey): string {
   }
 }
 
-/** 잠긴 탭을 눌렀을 때의 이유 토스트(mockups 9-6, 확인 불가는 J118 임시 문구). */
+/** 잠긴 탭을 눌렀을 때의 이유 토스트(mockups 9-6, 확인 불가는 임시 문구). */
 export function lockToastMessage(reason: LockReasonCode | null): string {
   switch (reason) {
     case "NO_DEVICE":

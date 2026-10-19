@@ -24,10 +24,10 @@ import { COPY, PROPOSED_COPY } from "@/shared/copy/ko";
 import type { Timing } from "@/shared/timing/timing";
 import { useTiming } from "@/shared/timing/TimingProvider";
 
-// /device 아이 기기 웹 (U1 3.5 Step 38 · BR9.1 ~ BR9.7 · PD-13 · PD-14 · PD-16 · NFR10.4)
+// /device 아이 기기 웹 (U1 3.5 Step 38)
 // 상태 기계(deviceMachine)를 useReducer로 돌리고, 상태가 바라는 부수 효과(요청 · 대기 · 접속)를 여기서 한다.
 // 마이크 · 오디오 · WSS 코드는 「켜기」 클릭 뒤 동적 import로 적재하고(꺼짐 화면에서는 미리 받기만), getUserMedia는
-// 클릭 핸들러가 부른 micPermission.ts에서만 부른다(클릭 전 0건, PD-16). 쿠키 · 토큰은 JS가 보지 않는다(BR9.1).
+// 클릭 핸들러가 부른 micPermission.ts에서만 부른다(클릭 전 0건, PD-16). 쿠키 · 토큰은 JS가 보지 않는다.
 
 type EffectKey = `request:${string}` | `delay:${DelayKind}` | "connect" | "none";
 
@@ -49,7 +49,7 @@ function delayMs(delay: DelayKind, timing: Timing, reconnectAttempt: number): nu
     case "registeredDisplay":
       return timing.deviceWebRegisteredDisplayMs;
     case "reconnect":
-      // 한 번 연결됐던 기기: 1 · 2 · 4초, 그 뒤 5초(U3-R16)
+      // 한 번 연결됐던 기기: 1 · 2 · 4초, 그 뒤 5초
       return reconnectDelayMs(reconnectAttempt, timing.deviceReconnectBackoffMs, timing.deviceWebRetryIntervalMs);
     default:
       return timing.deviceWebRetryIntervalMs;
@@ -72,9 +72,9 @@ async function runRequest(api: DeviceApi, step: string, stepId: number): Promise
 }
 
 /**
- * T19 라벨. 켜짐에는 view 라벨, 한 번 연결됐던 기기의 재접속 주기(대기 · 접속 시도)에는 '연결 끊김'(화면 설계 C.D-19.31.7, U3-J19 —
+ * T19 라벨. 켜짐에는 view 라벨, 한 번 연결됐던 기기의 재접속 주기(대기 · 접속 시도)에는 '연결 끊김'(화면 설계 —
  * U1 J360의 마지막 view 라벨을 바꿈), 처음 연결 중과 「켜기」 뒤 한 번도 연결되지 않은 기기의 재접속 주기에는 마지막 화면('연결 중')대로
- * 비운다(BR9.4 · J367).
+ * 비운다.
  */
 function t19Label(state: DeviceState): string | null {
   if (state.screen !== "t19" || !showsViewLabel(state)) {
@@ -197,7 +197,7 @@ export function DeviceApp({ debug, api: injectedApi }: DeviceAppProps) {
       return;
     }
     turnOnBusyRef.current = true;
-    // 사용자 동작 안에서 AudioContext를 만들고 재개한다(J121 · 자동 재생 정책).
+    // 사용자 동작 안에서 AudioContext를 만들고 재개한다(자동 재생 정책).
     const audioContext = createAudioContextInGesture();
     void audioContext?.resume().catch(() => undefined);
     dispatch({ type: "TURN_ON" });

@@ -7,7 +7,7 @@ import static kr.mujoong.core.config.CoreProperties.positive;
 import java.time.Duration;
 import org.springframework.util.unit.DataSize;
 
-/** BR1.6 · (r) · BR3.9 · RD-22 한도. */
+/** (r) · 한도. */
 public record CoreLimitsProperties(
         Integer rateCounterMaxKeys,
         DataSize restBodyMax,

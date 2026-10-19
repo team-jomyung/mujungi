@@ -7,7 +7,7 @@ import static kr.mujoong.core.config.CoreProperties.positive;
 import java.net.URI;
 import java.time.Duration;
 
-/** RD-14 · NFR4.12 Core → Realtime 호출 제한과 session_start 차단기(R3-2 · J74). 주소 키는 J109. */
+/** Core → Realtime 호출 제한과 session_start 차단기. 주소 키는 . */
 public record CoreInternalHttpProperties(
         URI realtimeBaseUrl,
         Duration connectTimeout,

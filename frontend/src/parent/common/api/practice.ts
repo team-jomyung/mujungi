@@ -1,7 +1,7 @@
 import type { ApiClient } from "./apiClient";
 import { ResponseShapeError } from "./types";
 
-// 연습 목표 선택 요청(U5a)을 둔다(FD-D6, BR2.3). 서버 호출과 응답 변환만 한다. 연습 시작 요청은 features/practice/startPort.ts에 있다.
+// 연습 목표 선택 요청(U5a)을 둔다. 서버 호출과 응답 변환만 한다. 연습 시작 요청은 features/practice/startPort.ts에 있다.
 
 /** C4 parent DTO: no scenario, evaluation or transcript fields. */
 export interface GoalSelection {

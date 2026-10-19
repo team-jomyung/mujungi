@@ -21,7 +21,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * 구글 로그인 (U2 GuardianIdentity · FR1.1 · AC1.1.1 ~ AC1.1.4 · AC1.6.4 · AC1.6.5 · R1 · R2 · R12 · U2-J1 · U2-J2).
+ * 구글 로그인 (U2 GuardianIdentity).
  *
  * <ol>
  *   <li>구글 설정(client id · secret · redirect uri)이 없거나 요청 redirectUri가 설정과 다르면 실패.
@@ -31,7 +31,7 @@ import org.springframework.transaction.support.TransactionTemplate;
  *       진 쪽은 이긴 쪽 보호자를 다시 읽는다). 삭제가 끝나 연결 행이 지워진 구글 계정은 새 보호자가 된다(AC1.6.5).
  * </ol>
  *
- * <p>결과는 보호자 id와 삭제 접수 여부다. 세션은 호출자(컨트롤러)가 삭제 접수가 아닐 때만 연다(U2-J5).
+ * <p>결과는 보호자 id와 삭제 접수 여부다. 세션은 호출자(컨트롤러)가 삭제 접수가 아닐 때만 연다.
  */
 @Component
 public class GoogleLoginService {

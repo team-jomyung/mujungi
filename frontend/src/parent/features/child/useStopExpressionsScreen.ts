@@ -13,8 +13,8 @@ import { ACCOUNT_PROPOSED_COPY } from "@/shared/copy/account";
 import { PROPOSED_COPY, TEMP_COPY } from "@/shared/copy/ko";
 import { useToast } from "@/shared/toast/ToastProvider";
 
-// SET-01 종료 표현 설정 화면의 요청(조회 · 통째 저장) · 오류 분기 · 화면 이동을 맡는 흐름 훅(BR2.1).
-// 편집 목록 · 입력 칸 · 검증은 화면에 두고, 훅은 저장할 목록을 받아 저장한다. 동작 규칙은 StopExpressionsScreen에 있던 그대로다(BR1.1).
+// SET-01 종료 표현 설정 화면의 요청(조회 · 통째 저장) · 오류 분기 · 화면 이동을 맡는 흐름 훅.
+// 편집 목록 · 입력 칸 · 검증은 화면에 두고, 훅은 저장할 목록을 받아 저장한다. 동작 규칙은 StopExpressionsScreen에 있던 그대로다.
 
 export function useStopExpressionsScreen() {
   const router = useRouter();

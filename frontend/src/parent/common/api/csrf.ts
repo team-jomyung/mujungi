@@ -1,6 +1,6 @@
 import type { CsrfToken } from "./types";
 
-// CSRF 토큰 보관 (U1 3.5 Step 39 · SD-6 · BR8.8 · 편차 (u) · security-design 2.5)
+// CSRF 토큰 보관 (U1 3.5 Step 39 · 편차 (u) · security-design 2.5)
 // 토큰은 GET /api/session/csrf로 받아 JS 메모리에만 둔다(localStorage · sessionStorage · 쿠키에 두지 않는다).
 // 앱 시작 · 로그인 직후에 받고, 변경 요청 전에 없으면 그 앞에서 한 번 받는다. 403 CSRF_TOKEN_INVALID면 apiClient가
 // refresh()로 한 번만 다시 받는다. 토큰 값은 로그에 쓰지 않는다.

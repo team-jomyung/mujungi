@@ -13,10 +13,10 @@ import { PROPOSED_COPY, TEMP_COPY } from "@/shared/copy/ko";
 import { messageForErrorCode } from "@/shared/errors/codeToCopy";
 import { useToast } from "@/shared/toast/ToastProvider";
 
-// 08 자유대화 준비 화면의 시작 요청 · 거절 사유 · 오류 분기 · 화면 이동을 맡는 흐름 훅(BR2.1).
-// 입력 칸 값과 본문(context) 조립은 화면에 두고, 훅은 만든 본문을 받아 보낸다. 동작 규칙은 FreeTalkScreen에 있던 그대로다(BR1.1).
+// 08 자유대화 준비 화면의 시작 요청 · 거절 사유 · 오류 분기 · 화면 이동을 맡는 흐름 훅.
+// 입력 칸 값과 본문(context) 조립은 화면에 두고, 훅은 만든 본문을 받아 보낸다. 동작 규칙은 FreeTalkScreen에 있던 그대로다.
 
-/** 거절 code → 사유 문구(mockups 9-12 · J118). 화면 사유가 없는 code는 null(토스트로 알린다). */
+/** 거절 code → 사유 문구(mockups 9-12). 화면 사유가 없는 code는 null(토스트로 알린다). */
 function rejectReasonFor(code: string): string | null {
   switch (code) {
     case "SESSION_IN_PROGRESS":
@@ -45,10 +45,10 @@ export function useFreeTalkScreen(returnedFailed: boolean, failureCode: string |
   const [reason, setReason] = useState<string | null>(returnedFailed ? startFailureReason(failureCode) : null);
   const pendingRef = useRef<PendingStart | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
-  // 요청 중 표시. submitting 상태는 다시 그린 뒤에야 바뀌므로 두 번째 요청은 이 값으로 막는다(BR6.4 · J362).
+  // 요청 중 표시. submitting 상태는 다시 그린 뒤에야 바뀌므로 두 번째 요청은 이 값으로 막는다.
   const inFlightRef = useRef(false);
 
-  /** 토스트 「다시 시도」: 지금 화면의 입력으로 폼을 다시 제출한다(화면을 떠났으면 아무것도 하지 않는다, J362). */
+  /** 토스트 「다시 시도」: 지금 화면의 입력으로 폼을 다시 제출한다(화면을 떠났으면 아무것도 하지 않는다). */
   const resubmit = () => {
     formRef.current?.requestSubmit();
   };
@@ -81,7 +81,7 @@ export function useFreeTalkScreen(returnedFailed: boolean, failureCode: string |
       }
       const sameKeyRetry = error.isDeliveryUnknown || (error.status === 403 && error.code === "CSRF_TOKEN_INVALID");
       if (!sameKeyRetry) {
-        // 행이 남지 않은 거절 · 로컬 FAILED 재생은 새 시도로 본다(새 키, BR6.2).
+        // 행이 남지 않은 거절 · 로컬 FAILED 재생은 새 시도로 본다(새 키).
         pendingRef.current = null;
       }
       const rejectReason = error.kind === "http" ? rejectReasonFor(error.code) : null;

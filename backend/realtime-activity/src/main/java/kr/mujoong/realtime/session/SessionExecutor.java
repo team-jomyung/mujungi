@@ -97,21 +97,20 @@ import org.springframework.transaction.TransactionException;
 import static kr.mujoong.realtime.session.SessionContext.START_PHASE;
 
 /**
- * 세션 하나의 직렬 실행기 (U1 3.5 Step 23 · PD-1 · PD-3 · BR6.6 ~ 6.12 · BR7.1 ~ 7.5 · SD-17 · RD-1 · RD-3 · R3-1 · R3-6 · R3-8 ·
- * R3-19 · J54 · J126).
+ * 세션 하나의 직렬 실행기.
  *
  * <p>세션 상태 · 시계 · 구간 버퍼 · 게이트 판정은 이 실행기 한 스레드만 바꾼다(세션 안 잠금 없음). 반복마다 안전 편지함을 먼저 비운다. 전이는
  * {@link SessionTransitions}의 짧은 트랜잭션이고 조건부 UPDATE의 승자만 부수 효과(기기 명령 · 시계)를 낸다. 시계 만기는 세대가 맞을 때만,
  * 경과를 다시 재서(지연 재무장) 판정한다. 전이가 DB 장애로 실패하면 그 메시지를 {@code mujoong.session.timer-tick} 뒤 다시 처리하고,
- * 다시 처리에서 커밋은 됐는데 응답을 잃은 전이를 DB에서 받아들이면 그 상태의 시한 · 부수 효과를 한 번 건다(J291). 그 밖의 예외가 반복
- * 최상위까지 오면 APP_ERROR 한 줄을 남기고 FAILED(SERVER_RESTART)를 시도해 이기면 BR6.8 기기 명령을 낸 뒤 정리한다(J126 · J290). 출력
+ * 다시 처리에서 커밋은 됐는데 응답을 잃은 전이를 DB에서 받아들이면 그 상태의 시한 · 부수 효과를 한 번 건다. 그 밖의 예외가 반복
+ * 최상위까지 오면 APP_ERROR 한 줄을 남기고 FAILED(SERVER_RESTART)를 시도해 이기면 기기 명령을 낸 뒤 정리한다. 출력
  * 세대 번호는 STOP_OUTPUT · CLOSING 진입 · 종료 전이 · Core 취소 · 연결 교체 · 끊김마다 오르고, 봉인한 구간과 송신 프레임마다
- * 비교한다(SD-17). 실행기 스레드는 공급자 쪽 생산자로서 자기 편지함을 기다리지 않는다(J289).
+ * 비교한다(SD-17). 실행기 스레드는 공급자 쪽 생산자로서 자기 편지함을 기다리지 않는다.
  *
  * <p>U3(docs/units/u3/design.md 4 · 5절): 같은 기기의 새 연결이 HELLO_OK를 받으면 {@link LinkReplaced}로 세션을 다시 묶고(끊김 구간 닫기 ·
- * SESSION_STATE 재송신 · ACK를 못 받은 opId 명령 재전달, 이어가기가 아니면 START_SESSION부터, U3-J4 · J5 · J7), 묶인 연결이 끊기면 끊김 구간을
- * 연다(U3-J18). T19 표시 상태 {@link #view()}를 기억해 HELLO_OK.session에 싣고(U3-J23), DEVICE_STATE의 마이크 끊김 · 플레이어 오류와
- * PLAYBACK_MARK(STOPPED · LOCAL_VOICE_ACTIVITY) 끼어들기를 세션 이벤트로 남긴다(U3-J9 · J10). 세션 전이 표는 U1 그대로다(U3-J1).
+ * SESSION_STATE 재송신 · ACK를 못 받은 opId 명령 재전달, 이어가기가 아니면 START_SESSION부터), 묶인 연결이 끊기면 끊김 구간을
+ * 연다. T19 표시 상태 {@link #view}를 기억해 HELLO_OK.session에 싣고, DEVICE_STATE의 마이크 끊김 · 플레이어 오류와
+ * PLAYBACK_MARK(STOPPED · LOCAL_VOICE_ACTIVITY) 끼어들기를 세션 이벤트로 남긴다. 세션 전이 표는 U1 그대로다.
  */
 @SingleInstanceAssumption(si = {"SI-2", "SI-9"},
         reason = "세션 상태 · 편지함 · 출력 세대와 세션당 공급자 연결을 이 프로세스의 실행기 하나가 쥐어 세션을 다른 인스턴스로 옮길 수 없다")
@@ -140,7 +139,7 @@ public final class SessionExecutor {
             Duration instructionWait) {
 
         /**
-         * U4b 세션 생애 시간 값(BR11.1 · contracts/timing.md, 모두 설정 키에서 온다).
+         * U4b 세션 생애 시간 값(contracts/timing.md, 모두 설정 키에서 온다).
          *
          * @param joinWait 처음 시작 안내 뒤 참여 창(join-wait)
          * @param joinWaitAfterReprompt 재안내 · 되묻기 · 대안 뒤 참여 창(join-wait-after-reprompt)
@@ -292,7 +291,7 @@ public final class SessionExecutor {
     }
 
     /**
-     * 고정한 승인 문구 하나(contentCode · 버전 · 원문). 원문은 승인 문구 말풍선 행(U4b BR3.1)에 쓰고 로그 · 문자열 표현에 넣지 않는다. 원문을 모르면
+     * 고정한 승인 문구 하나(contentCode · 버전 · 원문). 원문은 승인 문구 말풍선 행에 쓰고 로그 · 문자열 표현에 넣지 않는다. 원문을 모르면
      * null이고 그때는 말풍선 행을 남기지 않는다.
      */
     public record ApprovedItem(String contentCode, UUID contentVersionId, String text) {
@@ -307,7 +306,7 @@ public final class SessionExecutor {
         }
     }
 
-    /** U4b 승인 문구 코드(시작 패키지 approvedContent의 선택 키, U4b-R2 · U4b-R4 · U4b-R6 · 설계 8절). */
+    /** U4b 승인 문구 코드(시작 패키지 approvedContent의 선택 키, 설계 8절). */
     public static final String INTRO_FREE_TALK = "INTRO_FREE_TALK";
     public static final String INTRO_PRACTICE = "INTRO_PRACTICE";
     public static final String RE_PROMPT = "RE_PROMPT";
@@ -316,8 +315,8 @@ public final class SessionExecutor {
     public static final String SILENCE_WARNING = "SILENCE_WARNING";
 
     /**
-     * 시작 명령이 고정한 세션 패키지 중 실행기가 쓰는 부분. U3: 원음 기록 동의(consentSnapshot.rawAudio, U3-R9)와 세션의 종료 표현 스냅숏
-     * (종료 의도 판정, U3-R12). U4b: 활동 종류(시작 안내 선택 · 연습 확장점), 승인 문구 전체(선택 코드 포함, 원문은 말풍선용),
+     * 시작 명령이 고정한 세션 패키지 중 실행기가 쓰는 부분. U3: 원음 기록 동의(consentSnapshot.rawAudio)와 세션의 종료 표현 스냅숏
+     * (종료 의도 판정). U4b: 활동 종류(시작 안내 선택 · 연습 확장점), 승인 문구 전체(선택 코드 포함, 원문은 말풍선용),
      * 시작 패키지의 연습 조각(JSON 원문, 확장점에만 넘긴다 · 없으면 null).
      */
     public record Plan(
@@ -397,18 +396,18 @@ public final class SessionExecutor {
         }
     }
 
-    /** U3-R12: 아이의 명확한 종료 의도(payload는 근거만, 원문 없음). CLOSING(CHILD_STOP) 전이는 U4. */
+    /** 아이의 명확한 종료 의도(payload는 근거만, 원문 없음). CLOSING(CHILD_STOP) 전이는 U4. */
     static final String EVENT_CHILD_STOP_INTENT = "CHILD_STOP_INTENT";
-    /** U3-R12: 종료일 수 있으나 불명확(확인 질문 재생은 U4). */
+    /** 종료일 수 있으나 불명확(확인 질문 재생은 U4). */
     static final String EVENT_CHILD_STOP_UNCLEAR = "CHILD_STOP_UNCLEAR";
     /** 리뷰 반영 3: 종료 의도 뒤 아이가 종료가 아닌 말로 대화를 이어 가 출력 막힘을 풀었다(오판 복구). */
     static final String EVENT_CHILD_STOP_LIFTED = "CHILD_STOP_LIFTED";
-    /** U4b 세션 사건 종류(payload는 코드 · 횟수 · 분류 이름 · 시각뿐, BR12.1 · entities SessionEvent). */
+    /** U4b 세션 사건 종류(payload는 코드 · 횟수 · 분류 이름 · 시각뿐, entities SessionEvent). */
     static final String EVENT_APPROVED_CONTENT_MISSING = "APPROVED_CONTENT_MISSING";
     static final String EVENT_STOP_CONFIRM_ASKED = "STOP_CONFIRM_ASKED";
     static final String EVENT_STOP_CONFIRM_RESOLVED = "STOP_CONFIRM_RESOLVED";
     static final String EVENT_PRACTICE_EXTENSION_FAILED = "PRACTICE_EXTENSION_FAILED";
-    /** U3-J13: ACTIVE 중 공급자 끊김의 end_detail. */
+    /** ACTIVE 중 공급자 끊김의 end_detail. */
     static final String END_DETAIL_PROVIDER_LOST = "PROVIDER_LOST";
     /** 취소 · 교정 · 재생 위치를 기억하는 응답 · 재생 수의 상한(오래된 것부터 잊는다). */
     static final int MAX_TRACKED = 32;
@@ -426,7 +425,7 @@ public final class SessionExecutor {
     private Runnable instructionNotHeard;
     /** 게이트를 통과한 구간 없이 연달아 보낸 교정 지시 수(교정 지시가 곧 발화라 모델이 계속 어기면 끝없이 이어지는 것을 막는다). */
     private int correctionsInARow;
-    /** 지난 편지함 처리 끝의 출력 보류 상태(true → false가 되면 세대를 올린다, BR11.13). */
+    /** 지난 편지함 처리 끝의 출력 보류 상태(true → false가 되면 세대를 올린다). */
     private boolean lastHeld;
     /** 공급자 리더가 일반 편지함에 넣었고 실행기가 아직 처리하지 않은 출력 조각 수(끊김 만기가 쌓인 조각을 앞지르지 못하게 한다). */
     private final java.util.concurrent.atomic.AtomicInteger pendingOutputChunks =
@@ -447,33 +446,33 @@ public final class SessionExecutor {
     private final IdleClock idle;
     /** U11 판정 턴 협력 객체(열린 턴 · 최근 전사 · 기록, 실행기 스레드 전용). */
     private final JudgmentCoordinator judgment;
-    /** U13 제브 게이트 협력 객체(검사 상태 · 검사표 · 대기열 · 턴 재지시, 실행기 스레드 전용, NFR8). 여기에는 호출 지점과 아래 카운터만 둔다. */
+    /** U13 제브 게이트 협력 객체(검사 상태 · 검사표 · 대기열 · 턴 재지시, 실행기 스레드 전용). 여기에는 호출 지점과 아래 카운터만 둔다. */
     private final GuardrailCoordinator guardrail;
-    /** U13 BR4.4: 입력 묶음을 처음 연 횟수(단조 증가). 검사 요청 뒤 늘었으면 아이가 새로 말을 시작한 것이다(같은 묶음의 꼬리 조각은 세지 않는다). */
+    /** 입력 묶음을 처음 연 횟수(단조 증가). 검사 요청 뒤 늘었으면 아이가 새로 말을 시작한 것이다(같은 묶음의 꼬리 조각은 세지 않는다). */
     private long inputGroupOpens;
     /** U11 W2: 지금 처리 중인 아이 확정 전사의 대화 기록 순번(판정 요청 · 기록용, 원문 아님). */
     private int currentTranscriptSeq;
-    /** U11 R-14: 새 전사가 J6를 대체할 때 그 전사의 종료 의도 판정(CONFIRM이면 연습 시계를 풀지 않는다). */
+    /** 새 전사가 J6를 대체할 때 그 전사의 종료 의도 판정(CONFIRM이면 연습 시계를 풀지 않는다). */
     private StopIntentJudge.Verdict supersedeVerdict;
-    /** U11 BR8.1: 확장이 요청한 '생각 중' 유지(닫힐 때 듣는 중으로 되돌리지 않는다). */
+    /** 확장이 요청한 '생각 중' 유지(닫힐 때 듣는 중으로 되돌리지 않는다). */
     private boolean practiceThinking;
-    /** 종료 의도 판정기(세션 스냅숏의 종료 표현, U3-R12). */
+    /** 종료 의도 판정기(세션 스냅숏의 종료 표현). */
     private final StopIntentJudge stopJudge;
-    /** 지금 편지함 메시지를 처리하는 스레드(실행 스레드 또는 시험의 step 호출 스레드). 공급자 리스너가 이 스레드면 기다리지 않는다(J289). */
+    /** 지금 편지함 메시지를 처리하는 스레드(실행 스레드 또는 시험의 step 호출 스레드). 공급자 리스너가 이 스레드면 기다리지 않는다. */
     private volatile Thread processing;
     private Thread thread;
-    /** U4b BR1.7: 동의 철회 뒤 버린 아이 확정 전사 수(사건 payload는 건수만, BR12.1). */
+    /** 동의 철회 뒤 버린 아이 확정 전사 수(사건 payload는 건수만). */
     private int droppedAfterConsent;
-    /** U4b 연습 확장점(PRACTICE 세션만, 예외가 나면 null로 두고 자유대화처럼 잇는다, BR10.1). */
+    /** U4b 연습 확장점(PRACTICE 세션만, 예외가 나면 null로 두고 자유대화처럼 잇는다). */
     private PracticeSessionExtension practice;
-    /** U4b BR10.1: 확장점 예외가 났다(정산 시점을 건너뛰고 practice는 null). */
+    /** 확장점 예외가 났다(정산 시점을 건너뛰고 practice는 null). */
     private boolean practiceFailed;
-    /** U4b BR10.4: 확장점이 공급자 출력을 막았다. */
+    /** 확장점이 공급자 출력을 막았다. */
     private boolean practiceHold;
-    /** U4b BR10.4: 확장점 시계(이름 → 예약). 기술 일시정지 동안 남은 시간만 들고 멈춘다. */
+    /** 확장점 시계(이름 → 예약). 기술 일시정지 동안 남은 시간만 들고 멈춘다. */
     private final Map<String, PracticeTimer> practiceTimers = new HashMap<>();
     private long practiceTimerGeneration;
-    /** U4b BR10.4: 확장점이 요청한 재생(playbackId → 승인 문구 코드). 끝 표식이 PLAYBACK_DONE이 된다. */
+    /** 확장점이 요청한 재생(playbackId → 승인 문구 코드). 끝 표식이 PLAYBACK_DONE이 된다. */
     private final Map<UUID, String> practicePlaybacks = new HashMap<>();
     private volatile kr.mujoong.realtime.voice.PracticeSpeech pendingPracticeSpeech;
     private final Map<UUID, kr.mujoong.realtime.voice.PracticeSpeech> practiceAudio = new HashMap<>();
@@ -481,12 +480,12 @@ public final class SessionExecutor {
     private Instant practicePauseStartedAt;
     private record PracticePause(Instant from, Instant to) { }
     private final java.util.ArrayList<PracticePause> practicePauses = new java.util.ArrayList<>();
-    /** U4b BR10.6: 정산 창 안에 확장점에 전달한 사건 수. */
+    /** 정산 창 안에 확장점에 전달한 사건 수. */
     private int practiceEventsInSettle;
     private final PracticeSessionExtension.PracticeOutput practiceOutput = new PracticeOutputPort();
-    /** U4b BR8.6: 정산 창에서 버린 늦은 아이 전사 수. */
+    /** 정산 창에서 버린 늦은 아이 전사 수. */
     private int droppedLate;
-    /** U4b BR3.3: 빠진 승인 문구를 이미 남긴 코드(세션당 코드별 1회). */
+    /** 빠진 승인 문구를 이미 남긴 코드(세션당 코드별 1회). */
     private final Set<String> missingReported = new HashSet<>();
 
     /**
@@ -504,7 +503,7 @@ public final class SessionExecutor {
         this.ending = new EndingFlow(ctx, idle, judgment, guardrail, onTerminated, new EndingEnv());
         this.joinFlow = new JoinFlow(ctx, idle, judgment, ending, new JoinEnv());
         this.clocks = new SessionClocks(ctx, idle, ending, new ClocksEnv());
-        // U4b BR10.1: 연습 확장점은 PRACTICE 세션에서만 부른다(자유대화는 부르지 않는다)
+        // 연습 확장점은 PRACTICE 세션에서만 부른다(자유대화는 부르지 않는다)
         this.practice = ctx.plan().activityType() == ActivityType.PRACTICE
                 ? Objects.requireNonNull(ctx.services().practice().create(ctx.plan().sessionId()), "practice extension")
                 : null;
@@ -567,7 +566,7 @@ public final class SessionExecutor {
         return count;
     }
 
-    /** 한 메시지를 처리한다. 최상위 예외 규약(R3-6 · J126)이 여기 있다. */
+    /** 한 메시지를 처리한다. 최상위 예외 규약이 여기 있다. */
     void process(Message message) {
         if (ctx.terminated()) {
             return;
@@ -601,7 +600,7 @@ public final class SessionExecutor {
         return ctx.plan().sessionId();
     }
 
-    /** 이 세션의 기기(인계가 살아 있는 실행기를 찾는 열쇠, U3-J4). */
+    /** 이 세션의 기기(인계가 살아 있는 실행기를 찾는 열쇠). */
     public UUID deviceId() {
         return ctx.plan().deviceId();
     }
@@ -611,7 +610,7 @@ public final class SessionExecutor {
         return ctx.status();
     }
 
-    /** 마지막으로 기기에 알린 T19 표시 상태(HELLO_OK.session.view, U3-J23). SESSION_STATE를 보낼 때마다 바뀐다. */
+    /** 마지막으로 기기에 알린 T19 표시 상태(HELLO_OK.session.view). SESSION_STATE를 보낼 때마다 바뀐다. */
     public View view() {
         return ctx.view();
     }
@@ -690,8 +689,8 @@ public final class SessionExecutor {
             case SessionMailbox.GuardrailRetryNotHeard notHeard -> guardrail.onRetryNotHeard(notHeard);
             case ServerShutdown shutdown -> {
                 judgment.onExit();
-                // 앱 종료 T3: 공급자 연결을 닫고 기록기를 비운다. 세션 행은 다음 기동 S3a가 닫는다(BR6.13).
-                // 끝나면(실패해도) 정상 종료에 알린다 — T4(폴러 정지)는 공급자 닫기 뒤에 시작한다(RD-13 순서, J304)
+                // 앱 종료 T3: 공급자 연결을 닫고 기록기를 비운다. 세션 행은 다음 기동 S3a가 닫는다.
+                // 끝나면(실패해도) 정상 종료에 알린다 — T4(폴러 정지)는 공급자 닫기 뒤에 시작한다(RD-13 순서)
                 try {
                     ending.closeProvider();
                     ctx.services().recorder().finish(ctx.plan().sessionId());
@@ -736,7 +735,7 @@ public final class SessionExecutor {
             }
         }
         if (!sent) {
-            // BR6.6 ⑤: 같은 처리 안에서 PREPARING → FAILED(DEVICE_NO_ACK) + UNRESPONSIVE
+            // ⑤: 같은 처리 안에서 PREPARING → FAILED(DEVICE_NO_ACK) + UNRESPONSIVE
             Optional<ActivitySessionRow> failed = ending.transition(SessionStatus.PREPARING, Trigger.START_SEND_FAILED, null);
             if (failed.isPresent()) {
                 ctx.markUnresponsive();
@@ -778,7 +777,7 @@ public final class SessionExecutor {
 
     private boolean putFromProvider(Message message) {
         if (Thread.currentThread() == processing) {
-            // F2 · J289: 공급자 닫기(closeProvider · 정리)는 리스너의 Closed를 닫기를 부른 스레드에서 바로 부른다. 그 스레드가 이
+            // F2 · 공급자 닫기(closeProvider · 정리)는 리스너의 Closed를 닫기를 부른 스레드에서 바로 부른다. 그 스레드가 이
             // 편지함을 비우는 실행기 자신이면 자리가 날 때까지 기다리지 않는다 — 비울 쪽이 없어 교착한다. 가득 찼으면 버린다(스스로 닫은
             // 공급자의 끊김 알림이라 잃어도 상태가 어긋나지 않는다)
             return ctx.mailbox().offerGeneral(message);
@@ -795,7 +794,7 @@ public final class SessionExecutor {
         if (!ctx.fromBoundConnection(ack.connectionId())) {
             return;
         }
-        // U3-J7: ACK가 온 명령은 연결이 바뀌어도 다시 보내지 않는다
+        // ACK가 온 명령은 연결이 바뀌어도 다시 보내지 않는다
         if (ack.ackOf() != null) {
             ctx.pendingCommands().remove(ack.ackOf());
         }
@@ -831,7 +830,7 @@ public final class SessionExecutor {
     }
 
     private void failDeviceUnavailable() {
-        // BR6.8: DEVICE_READY가 사용 불가를 알리면 20초를 기다리지 않고 즉시 FAILED(DEVICE_NO_ACK), UNRESPONSIVE는 쓰지 않는다(J55)
+        // DEVICE_READY가 사용 불가를 알리면 20초를 기다리지 않고 즉시 FAILED(DEVICE_NO_ACK), UNRESPONSIVE는 쓰지 않는다
         Optional<ActivitySessionRow> row = ending.transition(SessionStatus.DEVICE_ACK, Trigger.DEVICE_UNAVAILABLE, null);
         if (row.isPresent()) {
             ending.afterFailed();
@@ -857,7 +856,7 @@ public final class SessionExecutor {
     }
 
     /**
-     * U4b(BR2.1 · FR1.1): ACK · DEVICE_READY(OK) · 공급자 session.started가 모두 오면 ACTIVE가 아니라 WAITING_CHILD(참여 확인)로 간다.
+     * U4b: ACK · DEVICE_READY(OK) · 공급자 session.started가 모두 오면 ACTIVE가 아니라 WAITING_CHILD(참여 확인)로 간다.
      */
     private void tryActivate() {
         if (ctx.status() != SessionStatus.DEVICE_ACK || !ctx.deviceReady() || !ctx.providerStarted()) {
@@ -879,7 +878,7 @@ public final class SessionExecutor {
     }
 
     /**
-     * WAITING_CHILD 진입의 승자 몫(BR2.1 · U4b-J2): ② 시계 해제 · 입력 중계 시작(원음 기록 없음) · LISTENING · 끊김 시계 · 시작 안내(안내 1번째).
+     * WAITING_CHILD 진입의 승자 몫: ② 시계 해제 · 입력 중계 시작(원음 기록 없음) · LISTENING · 끊김 시계 · 시작 안내(안내 1번째).
      */
     private void enterWaitingChild() {
         ctx.timers().cancel(Kind.DEVICE_ACK);
@@ -891,13 +890,13 @@ public final class SessionExecutor {
         joinFlow.begin();
     }
 
-    /** ACTIVE 진입의 승자 몫(BR6.8 · BR7.1 · BR6.12 ④ · U4b BR2.6 · BR5.1): ② 시계 해제 · 원음 기록 시작 · LISTENING · 끊김 시계. */
+    /** ACTIVE 진입의 승자 몫(④): ② 시계 해제 · 원음 기록 시작 · LISTENING · 끊김 시계. */
     private void enterActive() {
         ctx.timers().cancel(Kind.DEVICE_ACK);
         ctx.timers().cancel(Kind.JOIN_WINDOW);
         ctx.joinPromptPlaybackId(null);
         ctx.relay().attach(ctx.providerSession());
-        // U3-R9 · U4b-J2: 동의된 세션만, ACTIVE부터 원음 기록을 연다(참여 확인 전 아이 소리는 남기지 않는다)
+        // 동의된 세션만, ACTIVE부터 원음 기록을 연다(참여 확인 전 아이 소리는 남기지 않는다)
         if (ctx.plan().rawAudioConsent() && ctx.recording() == null && ctx.consentWithdrawnAt() == null) {
             ctx.recording(ctx.services().recordings().open(ctx.plan().sessionId()));
             ctx.relay().tap(ctx.recording()::child);
@@ -910,13 +909,13 @@ public final class SessionExecutor {
         clocks.armDisconnect();
     }
 
-    /** ACTIVE 전이 승자의 뒷일: 진입 몫과 발언권 반환(응답 생성 요청 1회, BR2.6). */
+    /** ACTIVE 전이 승자의 뒷일: 진입 몫과 발언권 반환(응답 생성 요청 1회). */
     private void afterActiveWon() {
         enterActive();
         Instant now = ctx.services().clock().now();
         idle.resetSilence(now);
         if (practice == null || !practice.controlsOutput()) requestResponse(InstructionTemplates.ResponseStart.FIRST);
-        // U4b BR10.1: PRACTICE면 확장점 'ACTIVE 진입'
+        // PRACTICE면 확장점 'ACTIVE 진입'
         if (practice != null) {
             PracticeSessionExtension.PracticeContext context = new PracticeSessionExtension.PracticeContext(
                     ctx.plan().sessionId(), ctx.plan().practiceJson(), ctx.plan().approved().keySet(), ctx.plan().rawAudioConsent(), now,
@@ -926,7 +925,7 @@ public final class SessionExecutor {
     }
 
     /**
-     * 연습 확장점의 정산 시점과 practice 값(BR10.6 · BR8.3): 정산 창이 끝난 뒤 정산 시점을 한 번 부르고 practice 값을 받는다. 확장점이 없거나 예외가
+     * 연습 확장점의 정산 시점과 practice 값: 정산 창이 끝난 뒤 정산 시점을 한 번 부르고 practice 값을 받는다. 확장점이 없거나 예외가
      * 났으면 null이다.
      */
     private Object practiceRecordForSettle(Instant cutoff) {
@@ -956,12 +955,12 @@ public final class SessionExecutor {
         }
     }
 
-    // ------------------------------------------------------------------ 연습 확장점(U4b BR10.1 ~ BR10.6)
+    // ------------------------------------------------------------------ 연습 확장점
 
     /**
-     * 확장점 시점 하나를 부르고 돌려받은 신호를 처리한다(BR10.3). 예외는 PRACTICE_EXTENSION_FAILED에 남기고 자유대화처럼 잇는다(BR10.1).
+     * 확장점 시점 하나를 부르고 돌려받은 신호를 처리한다. 예외는 PRACTICE_EXTENSION_FAILED에 남기고 자유대화처럼 잇는다.
      *
-     * @param signalsAllowed 신호를 처리하는가(CLOSING · 정산 창의 사건은 전달하되 신호를 무시한다, BR10.6 · R-10)
+     * @param signalsAllowed 신호를 처리하는가(CLOSING · 정산 창의 사건은 전달하되 신호를 무시한다)
      */
     private void practiceSignal(java.util.function.Supplier<PracticeSessionExtension.Signal> call,
             boolean signalsAllowed) {
@@ -989,7 +988,7 @@ public final class SessionExecutor {
         // NEXT_GOAL은 계속한다(다음 목표 진행은 확장점이 출력 능력으로 한다)
     }
 
-    /** 확장점 예외(BR10.1): 남기고 확장점을 끈다 — 그 세션은 자유대화처럼 잇고 정산 시점은 건너뛰며 practice는 null이다. */
+    /** 확장점 예외: 남기고 확장점을 끈다 — 그 세션은 자유대화처럼 잇고 정산 시점은 건너뛰며 practice는 null이다. */
     private void practiceFailure(String reason, RuntimeException cause) {
         ctx.putEvent(EVENT_PRACTICE_EXTENSION_FAILED, "{\"reason\":\"" + reason + "\"}", ctx.services().clock().now());
         ctx.services().events().appError(EventLog.Component.SESSION_LIFECYCLE, cause);
@@ -1010,8 +1009,8 @@ public final class SessionExecutor {
     }
 
     /**
-     * 확장점 사건 전달(BR10.5 · BR10.6 · R-10): ACTIVE면 전달하고 신호를 처리한다. CLOSING · 정산 창이면 전달하되 신호는 무시한다(정산 창 사건 수를
-     * 센다). 정산 뒤 · 그 밖 상태는 무시한다(BR8.7).
+     * 확장점 사건 전달: ACTIVE면 전달하고 신호를 처리한다. CLOSING · 정산 창이면 전달하되 신호는 무시한다(정산 창 사건 수를
+     * 센다). 정산 뒤 · 그 밖 상태는 무시한다.
      */
     private void onPracticeEvent(PracticeSessionExtension.ExtensionEvent event) {
         if (event.name().equals("u5b-voice-failed") && event.value() instanceof kr.mujoong.realtime.voice.PracticeSpeech speech) {
@@ -1181,8 +1180,8 @@ public final class SessionExecutor {
     }
 
     /**
-     * W4: 확장이 요청한 판정(J2 ~ J5). 거절 조건은 열린 턴 · 지점 밖 · 최근 확정 전사 4개 밖 · 기준 모양 틀림 · 공급자 없음이다(ACTIVE가 아니면
-     * 호출 앞에서 PRACTICE_EXTENSION_FAILED로 거절한다). 다음 행동은 확장이 정하므로 실행부는 지시를 내지 않는다(BR8.2).
+     * W4: 확장이 요청한 판정. 거절 조건은 열린 턴 · 지점 밖 · 최근 확정 전사 4개 밖 · 기준 모양 틀림 · 공급자 없음이다(ACTIVE가 아니면
+     * 호출 앞에서 PRACTICE_EXTENSION_FAILED로 거절한다). 다음 행동은 확장이 정하므로 실행부는 지시를 내지 않는다.
      */
     private boolean requestExtensionJudgment(JudgmentPoint point, long transcriptSeq, UUID correlationId,
             Map<String, Object> criteria) {
@@ -1218,7 +1217,7 @@ public final class SessionExecutor {
         return true;
     }
 
-    /** 확장 소유 판정이 닫혔다: 결과(확률 없음) 또는 보류 · 장애 사건, 모은 출력 전사가 있으면 그 사건도 확장에 보낸다(BR8.3). */
+    /** 확장 소유 판정이 닫혔다: 결과(확률 없음) 또는 보류 · 장애 사건, 모은 출력 전사가 있으면 그 사건도 확장에 보낸다. */
     private JudgmentCoordinator.Handled afterExtensionJudgment(JudgmentTurn.Closure closure, UUID correlationId) {
         JudgeOutcome outcome = closure.outcome();
         PracticeSessionExtension.ExtensionEvent.Kind kind;
@@ -1657,14 +1656,14 @@ public final class SessionExecutor {
 
         @Override
         public void finishAbandoned() {
-            // U12 BR5.6: 재지시가 소리로 이어지지 않으면 열린 생성형 슬롯을 실패로 한 번 닫는다
+            // 재지시가 소리로 이어지지 않으면 열린 생성형 슬롯을 실패로 한 번 닫는다
             closeGeneratedSlot(null, kr.mujoong.realtime.practicelegacy.PracticePorts.Playback.FAILED);
             finishDiscard();
         }
 
         @Override
         public void practiceVoided(UUID practiceSpeechId) {
-            // U12 BR5.6: 무효로 닫힌 검사의 생성형 슬롯이 아직 열려 있으면 INTERRUPTED로 한 번 닫는다
+            // 무효로 닫힌 검사의 생성형 슬롯이 아직 열려 있으면 INTERRUPTED로 한 번 닫는다
             closeGeneratedSlot(practiceSpeechId, kr.mujoong.realtime.practicelegacy.PracticePorts.Playback.INTERRUPTED);
         }
 
@@ -1714,7 +1713,7 @@ public final class SessionExecutor {
 
         @Override
         public void practiceBlocked(PracticeSessionExtension.GuardrailBlockedEvent event) {
-            // 연습 확장점 알림(BR6.5): 안전 편지함을 거쳐 실행기 스레드에서 전달한다. 운영에서 연습 모드 검사를 시작하는 것은 U12의 생성형 슬롯(speakGenerated)이다
+            // 연습 확장점 알림: 안전 편지함을 거쳐 실행기 스레드에서 전달한다. 운영에서 연습 모드 검사를 시작하는 것은 U12의 생성형 슬롯(speakGenerated)이다
             ctx.mailbox().putSafety(new SessionMailbox.PracticeEvent(new PracticeSessionExtension.ExtensionEvent(
                     PracticeSessionExtension.ExtensionEvent.Kind.GUARDRAIL_BLOCKED, "guardrail-blocked",
                     event.correlationId(), event)));
@@ -1732,7 +1731,7 @@ public final class SessionExecutor {
     }
 
     /**
-     * U12 BR5.6: 열린 생성형 슬롯(PracticeSpeech.generated)을 닫고 종료 사실을 확장에 한 번 보낸다. 슬롯이 없거나 생성형이 아니거나 식별자가
+     * 열린 생성형 슬롯(PracticeSpeech.generated)을 닫고 종료 사실을 확장에 한 번 보낸다. 슬롯이 없거나 생성형이 아니거나 식별자가
      * 다르면 아무것도 하지 않는다(승인 발화 슬롯의 기존 길은 건드리지 않는다).
      *
      * @param correlationId 닫을 슬롯의 식별자(null이면 지금 열린 생성형 슬롯)
@@ -1747,12 +1746,12 @@ public final class SessionExecutor {
         practicePlayback(slot, fact);
     }
 
-    /** U12 BR5.6: 열린 생성형 슬롯의 역할에 맞는 제브 연습 모드. */
+    /** 열린 생성형 슬롯의 역할에 맞는 제브 연습 모드. */
     private static GuardrailRequest.Mode practiceGuardrailMode(kr.mujoong.realtime.voice.PracticeSpeech slot) {
         return "COACH".equals(slot.partnerRole()) ? GuardrailRequest.Mode.PRACTICE_COACH : GuardrailRequest.Mode.PRACTICE_PEER;
     }
 
-    /** 출력 능력 거절(R-10 · BR10.4): ACTIVE가 아니거나 능력 밖 요청이면 남기고 거짓. */
+    /** 출력 능력 거절: ACTIVE가 아니거나 능력 밖 요청이면 남기고 거짓. */
     private boolean refusePractice(String capability, String reason) {
         ctx.putEvent(EVENT_PRACTICE_EXTENSION_FAILED, "{\"reason\":\"" + reason + "\",\"capability\":\"" + capability
                 + "\"}", ctx.services().clock().now());
@@ -1764,7 +1763,7 @@ public final class SessionExecutor {
         return ctx.status() == SessionStatus.ACTIVE && !ctx.settling() && !ctx.terminated() && practice != null;
     }
 
-    /** 실행기가 확장점에 주는 출력 능력(BR10.4). post 밖의 능력은 실행기 스레드에서만 부른다. */
+    /** 실행기가 확장점에 주는 출력 능력. post 밖의 능력은 실행기 스레드에서만 부른다. */
     private final class PracticeOutputPort implements PracticeSessionExtension.PracticeOutput {
 
         @Override public boolean speak(kr.mujoong.realtime.voice.PracticeSpeech speech) {
@@ -1810,7 +1809,7 @@ public final class SessionExecutor {
             Optional<ApprovedItem> item = contentCode == null ? Optional.empty() : ctx.plan().approvedItem(contentCode);
             UUID playbackId = UUID.randomUUID();
             if (item.isEmpty()) {
-                // BR3.3: 패키지에 없으면 재생만 건너뛰고 곧바로 끝난 것으로 본다
+                // 패키지에 없으면 재생만 건너뛰고 곧바로 끝난 것으로 본다
                 reportMissing(String.valueOf(contentCode), now);
                 ctx.mailbox().putSafety(new SessionMailbox.PracticeEvent(new PracticeSessionExtension.ExtensionEvent(
                         PracticeSessionExtension.ExtensionEvent.Kind.PLAYBACK_DONE, String.valueOf(contentCode),
@@ -1857,7 +1856,7 @@ public final class SessionExecutor {
             if (!practiceActive()) {
                 return refusePractice("cancelResponse", "NOT_ACTIVE");
             }
-            // U11 BR3.4: 공급자 응답 취소 대신 출력 세대를 올려 만들던 응답의 남은 조각을 버린다
+            // 공급자 응답 취소 대신 출력 세대를 올려 만들던 응답의 남은 조각을 버린다
             bumpOutput(OutputGeneration.BumpReason.PRACTICE_DISCARD);
             return true;
         }
@@ -1905,7 +1904,7 @@ public final class SessionExecutor {
             if (!practiceActive()) {
                 return refusePractice("announceRoleSwitch", "NOT_ACTIVE");
             }
-            // U12 BR5.4: 시작 패키지 approvedSpeech의 승인 문장을 기존 승인 발화 재생(speak) 길로 낸다(원문 일치라 제브 호출 없음). 승인 문장이
+            // 시작 패키지 approvedSpeech의 승인 문장을 기존 승인 발화 재생(speak) 길로 낸다(원문 일치라 제브 호출 없음). 승인 문장이
             // 없으면 거짓이고 호출한 확장이 생성형 알림으로 낸다
             String code = "COACH".equals(toRole) ? "COACH_SWITCH" : "PEER".equals(toRole) ? "PEER_RETURN" : null;
             String sentence = code == null ? null : ctx.plan().approvedSpeech().get(code);
@@ -1981,7 +1980,7 @@ public final class SessionExecutor {
     }
 
     /**
-     * 정산 창 안 공급자 사건(BR8.6 · FR7.2): 연결 닫힘 알림이면 창을 닫고, 아이 확정 전사는 발화 시작이 ended_at보다 이르면 저장하고 아니면 버린다.
+     * 정산 창 안 공급자 사건: 연결 닫힘 알림이면 창을 닫고, 아이 확정 전사는 발화 시작이 ended_at보다 이르면 저장하고 아니면 버린다.
      */
     private void onLateProviderEvent(ProviderEvent event, Instant at) {
         switch (event) {
@@ -2015,29 +2014,29 @@ public final class SessionExecutor {
     }
 
     /**
-     * BR2.6: 발언권을 모델에 돌려줄 때(참여 뒤 첫 응답 · 확인 질문 뒤 이어 가기 · 연습 requestResponse) 지시 하나를 보낸다. 공급자에는 응답 요청
+     * 발언권을 모델에 돌려줄 때(참여 뒤 첫 응답 · 확인 질문 뒤 이어 가기 · 연습 requestResponse) 지시 하나를 보낸다. 공급자에는 응답 요청
      * type이 없어 지시가 곧 발화다(설계 개정 A2). 세대를 올리고 직렬 큐로 보낸다. 참여 전(그리고 확인 대기 동안) 시작된 자동 응답은 출력 보류가
-     * 버린다(BR11.13).
+     * 버린다.
      */
     private void requestResponse(InstructionTemplates.ResponseStart start) {
         sendInstruction(OutputGeneration.BumpReason.SERVER_SEND, "provider-respond-",
                 id -> ctx.services().requests().responseStart(id, start), null, true);
     }
 
-    /** 공급자 출력을 받지 않는 때(참여 확인 중 · 종료 확인 질문 중 · 확장점이 막은 동안, BR2.6 · BR4.3 · BR10.4). */
+    /** 공급자 출력을 받지 않는 때(참여 확인 중 · 종료 확인 질문 중 · 확장점이 막은 동안). */
     private boolean outputHeld() {
         return ctx.status() == SessionStatus.WAITING_CHILD || ctx.stopConfirm().isActive() || judgment.holdsOutput()
                 || (practiceHold && ctx.status() == SessionStatus.ACTIVE);
     }
 
-    /** BR3.3: 빠진 승인 문구는 세션당 코드별 1회만 남긴다(payload는 코드만). */
+    /** 빠진 승인 문구는 세션당 코드별 1회만 남긴다(payload는 코드만). */
     private void reportMissing(String contentCode, Instant at) {
         if (missingReported.add(contentCode)) {
             ctx.putEvent(EVENT_APPROVED_CONTENT_MISSING, "{\"code\":\"" + contentCode + "\"}", at);
         }
     }
 
-    /** BR3.1: 보낸 승인 문구의 AI 말풍선 행(원문을 모르면 남기지 않는다). */
+    /** 보낸 승인 문구의 AI 말풍선 행(원문을 모르면 남기지 않는다). */
     private void approvedBubble(ApprovedItem item, Instant at) {
         if (item.text() != null && !item.text().isBlank()) {
             ctx.transcripts().approvedLine(item.text(), at);
@@ -2098,12 +2097,12 @@ public final class SessionExecutor {
     private void onInputTranscriptDelta(ProviderEvent.InputTranscriptDelta delta, Instant at) {
         groupInputDelta(delta);
         if (ctx.consentWithdrawnAt() != null ||ctx.status() == SessionStatus.WAITING_CHILD) {
-            // BR1.7: 동의 철회 뒤 도착한 아이 전사는 저장하지 않는다(확정 때 센다). BR2.5: 참여 전 아이 전사도 저장하지 않는다
+            // 동의 철회 뒤 도착한 아이 전사는 저장하지 않는다(확정 때 센다). 참여 전 아이 전사도 저장하지 않는다
             return;
         }
         if (inRelayRange()) {
             ctx.services().latency().inputActivity(ctx.plan().sessionId());
-            // BR7.3: 아이 입력 재개는 열린 구간을 확정한다(대화가 넘어갔으니 완결 요청 교정은 하지 않는다)
+            // 아이 입력 재개는 열린 구간을 확정한다(대화가 넘어갔으니 완결 요청 교정은 하지 않는다)
             if (ctx.segment().isOpen()) {
                 sealAndGate(true);
             }
@@ -2174,7 +2173,7 @@ public final class SessionExecutor {
         if (inRelayRange()) {
             boolean uncertain = uncertain(done);
             java.util.OptionalInt seq = ctx.transcripts().childFinal(done.itemId(), done.transcript(), at, uncertain);
-            // U4b BR5.1: 아이의 빈 아닌 확정 전사가 공백 시계를 0으로 한다(빈 전사는 리셋하지 않는다)
+            // 아이의 빈 아닌 확정 전사가 공백 시계를 0으로 한다(빈 전사는 리셋하지 않는다)
             if (ctx.status() == SessionStatus.ACTIVE && done.transcript() != null && !done.transcript().isBlank()) {
                 idle.resetSilence(at);
             }
@@ -2184,7 +2183,7 @@ public final class SessionExecutor {
             if (ctx.status() == SessionStatus.ACTIVE) {
                 judgment.remember(currentTranscriptSeq, done.transcript(), at);
                 if (judgment.isOpen()) {
-                    // U11 BR5.3 · 설계 검토 R-04: 판정 중(지시 단계 포함) 새 확정 전사 — 종료 표현이면 STOPPED, 아니면 SUPERSEDED로 닫고 이 전사를
+                    // 설계 검토 판정 중(지시 단계 포함) 새 확정 전사 — 종료 표현이면 STOPPED, 아니면 SUPERSEDED로 닫고 이 전사를
                     // 아래 지금 흐름으로 처음부터 다시 처리한다(확장 소유 판정 단계는 턴을 그대로 두고 확장에 전달한다)
                     StopIntentJudge.Verdict verdict = stopJudge.judge(done.transcript(), !ctx.devicePlaying().isEmpty()).verdict();
                     supersedeVerdict = verdict;
@@ -2224,13 +2223,13 @@ public final class SessionExecutor {
         OutputGeneration.ChunkResult result = transcript != null
                 ? ctx.outputGen().onTranscript(at, startMs, outputHeld())
                 : ctx.outputGen().onAudio(at, audio.length, outputHeld());
-        // 버리는 조각도 조용 시계를 다시 건다(BR11.13): 조각이 계속 오는 동안은 끊김이 아니다
+        // 버리는 조각도 조용 시계를 다시 건다: 조각이 계속 오는 동안은 끊김이 아니다
         ctx.timers().arm(Kind.SEGMENT_QUIET, ctx.services().settings().segmentQuiet());
         if (!ctx.outputGen().awaitingNewSpeech()) {
             ctx.timers().cancel(Kind.INSTRUCTION_WAIT);
         }
         if (judgment.isOpen()) {
-            // U11 BR3.1: 판정 턴 중 음성은 버리고 전사 조각만 모은다(구간 · 대화 기록 · 보호자 중계에 넣지 않는다)
+            // 판정 턴 중 음성은 버리고 전사 조각만 모은다(구간 · 대화 기록 · 보호자 중계에 넣지 않는다)
             if (result.verdict() != OutputGeneration.ChunkVerdict.ACCEPT) {
                 if (transcript != null) {
                     judgment.holdTranscript(transcript);
@@ -2247,7 +2246,7 @@ public final class SessionExecutor {
         if (!ctx.segment().isOpen()) {
             instructionNotHeard = null;
             if (!guardrail.isChecking()) {
-                // U13 BR5.6: 앞 구간의 제브 검사 중에 시작한 구간의 첫 조각은 앞 턴의 지연 기록을 덮지 않는다
+                // 앞 구간의 제브 검사 중에 시작한 구간의 첫 조각은 앞 턴의 지연 기록을 덮지 않는다
                 ctx.services().latency().providerFirstOut(ctx.plan().sessionId(), at);
             }
             ctx.transcripts().aiStart(at);
@@ -2264,7 +2263,7 @@ public final class SessionExecutor {
     }
 
     /**
-     * 지시 없이 출력 세대를 올린다(U11 BR11.5 ~ BR11.7: 끼어들기 · 종료 의도 · 연습 폐기 · 보류 해제). 열린 구간은 '불완전'으로 버리고(AI 행 FINAL ·
+     * 지시 없이 출력 세대를 올린다(끼어들기 · 종료 의도 · 연습 폐기 · 보류 해제). 열린 구간은 '불완전'으로 버리고(AI 행 FINAL ·
      * false), 끊김을 기다리는 단계로 들어가며 조용 시계를 건다. 기기에서 재생 중인 음성을 멈추는 일은 호출자가 지금처럼 {@link SessionContext#bumpGeneration}(기기
      * 프레임 세대)로 한다.
      *
@@ -2282,7 +2281,7 @@ public final class SessionExecutor {
     }
 
     /**
-     * 구간 조용 시계 만기(U11 BR11.7). 받는 단계에서는 열린 구간을 조용함으로 봉인해 게이트에 넣고, 지시 없이 올린 세대의 버리는 단계에서는 끊김을
+     * 구간 조용 시계 만기. 받는 단계에서는 열린 구간을 조용함으로 봉인해 게이트에 넣고, 지시 없이 올린 세대의 버리는 단계에서는 끊김을
      * 확인한다. 지시를 보낸 세대에서 전사만 받고 음성이 여유 시각에 닿지 못한 채 끝났으면 그 구간을 불완전으로 버린다.
      */
     private void onOutputQuiet() {
@@ -2376,7 +2375,7 @@ public final class SessionExecutor {
     }
 
     /**
-     * 출력 보류가 풀렸으면(참 → 거짓) 세대를 올린다(BR11.13): 보류 중 시작된 자동 응답의 꼬리가 풀린 직후 기기로 가지 않게 한다. 이번 편지함
+     * 출력 보류가 풀렸으면(참 → 거짓) 세대를 올린다: 보류 중 시작된 자동 응답의 꼬리가 풀린 직후 기기로 가지 않게 한다. 이번 편지함
      * 처리에서 이미 세대를 올렸으면(같은 풀림에서 서버 발화가 올렸다) 또 올리지 않는다.
      */
     private void watchHold(long generationBefore) {
@@ -2391,7 +2390,7 @@ public final class SessionExecutor {
     /**
      * 공급자 {@code session.error}. 시작 전이면 PROVIDER_UNAVAILABLE(contracts/ai-io.md 3절, U1 그대로). 시작 뒤에는 연결이 살아 있을 수
      * 있어 세션을 끝내지 않는다 — PD 2.1-C의 WARN 한 줄만 남기고, 완결되지 않은 구간은 게이트가 폐기해 대기 문구로 잇는다(U1 그대로).
-     * 연결이 실제로 끊기면 뒤따르는 끊김 알림이 {@link #providerLost()}로 끝낸다(U3-R8).
+     * 연결이 실제로 끊기면 뒤따르는 끊김 알림이 {@link #providerLost}로 끝낸다.
      */
     private void providerError() {
         if (START_PHASE.contains(ctx.status())) {
@@ -2426,7 +2425,7 @@ public final class SessionExecutor {
     }
 
     /**
-     * U3-R8 · U3-J13 · AC6.6.3 · B18: ACTIVE 중 공급자가 끊기면 음성 모델 없이 대화를 이을 수 없어 기존 전이 ACTIVE → ABORTED(DISCONNECT)로
+     * B18: ACTIVE 중 공급자가 끊기면 음성 모델 없이 대화를 이을 수 없어 기존 전이 ACTIVE → ABORTED(DISCONNECT)로
      * 바로 끝내고 end_detail에 PROVIDER_LOST를 적는다. 연결이 살아 있으면 CLOSE_TRANSPORT(DISCONNECT) + STANDBY.
      */
     private void abortProviderLost() {
@@ -2452,7 +2451,7 @@ public final class SessionExecutor {
     }
 
     /**
-     * U3-R12 · U4b(FR3.1 · BR4.1 ~ BR4.4 · FD-Q3): ACTIVE의 확정 아이 전사로 종료 의도를 판정한다(기기 재생 중 전사는 판정기가 NONE으로 본다).
+     * U4b: ACTIVE의 확정 아이 전사로 종료 의도를 판정한다(기기 재생 중 전사는 판정기가 NONE으로 본다).
      * STOP이면 곧바로 CLOSING(CHILD_STOP)이다. CONFIRM이면 확인 질문(STOP_CONFIRM)을 재생하고 공급자 출력을 막은 뒤, 재생 완료부터
      * stop-confirm-wait 안의 첫 확정 전사가 STOP이거나 참여 분류 ACCEPT면 CHILD_STOP으로 확정하고, 그 밖이거나 창이 끝나면 막은 것을 풀고 응답 생성
      * 요청을 한 번 보낸다. U3의 '막고 ACTIVE 유지 → 적극적 계속이면 해제'(CHILD_STOP_LIFTED) 경로는 없앴다.
@@ -2506,7 +2505,7 @@ public final class SessionExecutor {
         return true;
     }
 
-    /** J6 결과 → 지시 여부. 휴식(REST)만 ACTIVE에서 지시 하나를 낸다(BR6.4): 출력권 연습은 받아 주기만, 그 밖은 받아 주고 이어 가기. */
+    /** 결과 → 지시 여부. 휴식(REST)만 ACTIVE에서 지시 하나를 낸다: 출력권 연습은 받아 주기만, 그 밖은 받아 주고 이어 가기. */
     private JudgmentTurn.Decision decideStopJudgment(JudgmentTurn turn, JudgeOutcome outcome) {
         if (outcome.kind() == JudgmentOutcomeKind.CONFIRMED && "REST".equals(outcome.firstOption()) && ctx.status() == SessionStatus.ACTIVE) {
             boolean controlled = practice != null && practice.controlsOutput();
@@ -2527,7 +2526,7 @@ public final class SessionExecutor {
         JudgeOutcome outcome = closure.outcome();
         switch (outcome.kind()) {
             case SUPERSEDED -> {
-                // R-14: 새 전사가 다시 CONFIRM이면 연습 시계 멈춤을 유지하고(새 J6가 이어 받는다), 아니면 재개한다
+                // 새 전사가 다시 CONFIRM이면 연습 시계 멈춤을 유지하고(새 J6가 이어 받는다), 아니면 재개한다
                 if (supersedeVerdict != StopIntentJudge.Verdict.CONFIRM) {
                     resumePracticeTimers(now);
                 }
@@ -2578,7 +2577,7 @@ public final class SessionExecutor {
         return new JudgmentCoordinator.Handled(NextAction.ASK_STOP_CONFIRM, false);
     }
 
-    /** R-13: 판정 때문에 연습에 못 넘긴 확정 전사를 출력권 연습에 넘긴다. */
+    /** 판정 때문에 연습에 못 넘긴 확정 전사를 출력권 연습에 넘긴다. */
     private void handToPractice(String utterance, int seq, Instant at) {
         if (practice == null || !practice.controlsOutput() || ctx.status() != SessionStatus.ACTIVE) {
             return;
@@ -2631,7 +2630,7 @@ public final class SessionExecutor {
         }
     }
 
-    /** 확인 질문 재생(BR4.3 · BR3.1 · BR3.3): 보낸 순간 말풍선, 끝 표식이 창을 연다. 패키지에 없으면 곧바로 창을 연다. */
+    /** 확인 질문 재생: 보낸 순간 말풍선, 끝 표식이 창을 연다. 패키지에 없으면 곧바로 창을 연다. */
     private void playStopConfirm() {
         Instant now = ctx.services().clock().now();
         Optional<ApprovedItem> item = ctx.plan().approvedItem(STOP_CONFIRM);
@@ -2667,7 +2666,7 @@ public final class SessionExecutor {
 
     // ------------------------------------------------------------------ 확인 질문 창 만기 · 출력 보조
 
-    /** 확인 질문 창 시계 만기(BR4.4): 대답이 없으면 대화를 잇는다. */
+    /** 확인 질문 창 시계 만기: 대답이 없으면 대화를 잇는다. */
     private void onStopConfirmWindow() {
         if (ctx.status() != SessionStatus.ACTIVE || !ctx.stopConfirm().isActive()) {
             return;
@@ -2682,7 +2681,7 @@ public final class SessionExecutor {
 
     /**
      * 종료 의도: 남은 프레임을 보내지 않고(기기 프레임 세대 올림) 출력 세대를 올려 만들던 · 재생 중이던 응답의 남은 조각을 버리고 열린 구간을
-     * 버린다. 공급자에는 응답 취소 type이 없어 아무것도 보내지 않는다(U11 BR3.4 · 편차 (U11-a)).
+     * 버린다. 공급자에는 응답 취소 type이 없어 아무것도 보내지 않는다(편차).
      */
     private void stopOutputForIntent(Instant at) {
         ctx.bumpGeneration();
@@ -2691,18 +2690,18 @@ public final class SessionExecutor {
         ctx.transcripts().aiFinal("", false, at);
     }
 
-    /** U3-J6: 아이 말이 끝났다(말 끝 · 전사 확정) — 듣는 중이고 재생이 없으면 '생각 중'. */
+    /** 아이 말이 끝났다(말 끝 · 전사 확정) — 듣는 중이고 재생이 없으면 '생각 중'. */
     private void thinking() {
         if (ctx.status() == SessionStatus.ACTIVE && ctx.view() == View.LISTENING && ctx.devicePlaying().isEmpty() && !outputHeld()) {
             ctx.sendControl(new SessionState(View.THINKING));
         }
     }
 
-    /** U3-J6: 재생이 모두 끝났거나 보낼 응답이 없다 — 생각 중 · 재생 뒤면 '듣는 중'으로 돌아간다. */
+    /** 재생이 모두 끝났거나 보낼 응답이 없다 — 생각 중 · 재생 뒤면 '듣는 중'으로 돌아간다. */
     private void listeningAgain() {
         if (judgment.isOpen() || practiceThinking || guardrail.holdsThinking()) {
-            // U11 BR3.6: 열린 판정 턴(또는 확장이 요청한 생각 중 유지) 동안은 듣는 중으로 되돌리지 않는다.
-            // U13 BR3.4: 제브 검사 · 재지시 응답을 기다리는 동안도 같다
+            // 열린 판정 턴(또는 확장이 요청한 생각 중 유지) 동안은 듣는 중으로 되돌리지 않는다.
+            // 제브 검사 · 재지시 응답을 기다리는 동안도 같다
             return;
         }
         if (ctx.status() == SessionStatus.ACTIVE && ctx.view() != View.LISTENING && ctx.devicePlaying().isEmpty()
@@ -2711,7 +2710,7 @@ public final class SessionExecutor {
         }
     }
 
-    /** U3-R10 · U3-J17: 확정 전사가 비었거나 공급자 신뢰도가 기준 미만이면 불확실. 신뢰도가 없으면 불확실로 보지 않는다. */
+    /** 확정 전사가 비었거나 공급자 신뢰도가 기준 미만이면 불확실. 신뢰도가 없으면 불확실로 보지 않는다. */
     private boolean uncertain(ProviderEvent.InputTranscriptDone done) {
         if (done.transcript() == null || done.transcript().isBlank()) {
             return true;
@@ -2725,13 +2724,13 @@ public final class SessionExecutor {
     /**
      * 구간 확정(조용 시간 만기 · 아이 입력 재개) → 검사 → 송신 직전 재확인 → 송신 또는 폐기(PD-3 표 2.3-C).
      *
-     * @param movedOn 아이 입력 재개 · 다른 응답 도착으로 확정했는가(대화가 이미 넘어가 완결 요청 교정을 보내지 않는다, U3-R7)
+     * @param movedOn 아이 입력 재개 · 다른 응답 도착으로 확정했는가(대화가 이미 넘어가 완결 요청 교정을 보내지 않는다)
      */
     private void sealAndGate(boolean movedOn) {
         ctx.timers().cancel(Kind.SEGMENT_QUIET);
         Instant confirmedAt = ctx.services().clock().now();
         long confirmedNanos = ctx.services().clock().monotonicNanos();
-        // 아이 입력 재개로 닫을 때는 조각이 이미 끊김 시간만큼 끊겨 있었어야 '완전'이다(응답이 이어지던 중이면 불완전, U11 BR11.6)
+        // 아이 입력 재개로 닫을 때는 조각이 이미 끊김 시간만큼 끊겨 있었어야 '완전'이다(응답이 이어지던 중이면 불완전)
         Instant lastOutAt = ctx.segment().lastOutAt();
         boolean quietEnough = lastOutAt != null && !confirmedAt.isBefore(lastOutAt.plus(ctx.services().settings().segmentQuiet()));
         SegmentBuffer.Sealed sealed = movedOn ? ctx.segment().sealEarly(ctx.outputGeneration().get(), quietEnough)
@@ -2740,7 +2739,7 @@ public final class SessionExecutor {
             return;
         }
         if (!guardrail.isChecking()) {
-            // U13 BR5.6: 앞 구간의 제브 검사 중에 봉인된 구간은 앞 턴의 구간 확정 시각 · 지연 기록을 덮지 않는다
+            // 앞 구간의 제브 검사 중에 봉인된 구간은 앞 턴의 구간 확정 시각 · 지연 기록을 덮지 않는다
             ctx.services().latency().segmentConfirmed(ctx.plan().sessionId(), confirmedAt, confirmedNanos, sealed.firstOutNanos(),
                     sealed.lastOutNanos());
         }
@@ -2758,7 +2757,7 @@ public final class SessionExecutor {
             var generatedSlot = practiceControlled && pendingPracticeSpeech != null && pendingPracticeSpeech.generated()
                     ? pendingPracticeSpeech : null;
             if (generatedSlot != null) {
-                // U12 BR5.6(기능 설계 3.5): 열린 생성형 슬롯의 새 발화는 제브(연습 모드)가 ALLOW한 것만 재생된다. 제브가 꺼져 있거나 시작이
+                // (기능 설계 3.5): 열린 생성형 슬롯의 새 발화는 제브(연습 모드)가 ALLOW한 것만 재생된다. 제브가 꺼져 있거나 시작이
                 // 실패하면 폐기한다(fail-closed). 원문 일치로 제브를 건너뛸 수 없다
                 if (!guardrail.enabled() || ctx.status() != SessionStatus.ACTIVE) {
                     discard(sealed, GateDecision.DiscardReason.GATE_PATTERN, false);
@@ -2777,16 +2776,16 @@ public final class SessionExecutor {
                 return;
             }
             if (practiceControlled && guardrail.enabled()) {
-                // U13 분류 ①(BR7.1): 연습이 출력을 쥐고 승인 발화와 원문이 같으면 제브를 부르지 않고 기존 게이트 검사만 거친 재생이다
+                // U13 분류 ①: 연습이 출력을 쥐고 승인 발화와 원문이 같으면 제브를 부르지 않고 기존 게이트 검사만 거친 재생이다
                 guardrail.onVerbatimSkipped(GuardrailCoordinator.SOURCE_PRACTICE_SPEECH, sealed.transcript());
             } else if (!practiceControlled && guardrail.enabled() && ctx.status() == SessionStatus.ACTIVE) {
-                // U13 분류 ②(BR7.1): 레지스트리가 승인 원문 · 등록 대본과 원문 일치(MATCHED)로 확인한 출력도 제브를 건너뛴다. UNKNOWN ·
-                // NOT_MATCHED(일치를 확인할 수 없음)는 새 발화로 검사한다(BR7.2)
+                // U13 분류 ②: 레지스트리가 승인 원문 · 등록 대본과 원문 일치(MATCHED)로 확인한 출력도 제브를 건너뛴다. UNKNOWN ·
+                // NOT_MATCHED(일치를 확인할 수 없음)는 새 발화로 검사한다
                 Optional<String> verbatim = guardrail.verbatimSource(sealed.transcript());
                 if (verbatim.isPresent()) {
                     guardrail.onVerbatimSkipped(verbatim.get(), sealed.transcript());
                 } else {
-                    // U13 호출 지점 ①(BR3.1): GPT-Live가 그 자리에서 만든 새 발화는 제브가 ALLOW한 것만 recheck → send로 간다. 결과는
+                    // U13 호출 지점 ①: GPT-Live가 그 자리에서 만든 새 발화는 제브가 ALLOW한 것만 recheck → send로 간다. 결과는
                     // GuardrailArrived로 돌아와 이어진다 — 여기서는 기다리지 않는다
                     try {
                         guardrail.begin(sealed, GuardrailRequest.Mode.FREE_TALK, null);
@@ -2808,10 +2807,10 @@ public final class SessionExecutor {
 
     /**
      * 송신 직전 재확인(NOT_ACTIVE · RECORDER_DEGRADED · 출력 레인 예약)을 하고 통과하면 보낸다. 제브 단계가 있으면 유효한 ALLOW가 온 뒤에 불린다
-     * (U13 BR3.2 — 출력 레인 예약도 그때 한다. 예약에 실패하면 막힘 흐름이 아니라 지금과 같은 폐기다).
+     * (— 출력 레인 예약도 그때 한다. 예약에 실패하면 막힘 흐름이 아니라 지금과 같은 폐기다).
      *
      * @param held 제브 검사를 기다리며 보관한 AI 행(없으면 null — 열린 AI 행을 닫는다)
-     * @param ownsLatency 지연 기록의 턴이 이 구간의 것인가(대기열에서 꺼낸 구간은 앞 턴의 기록을 덮지 않는다, BR5.6)
+     * @param ownsLatency 지연 기록의 턴이 이 구간의 것인가(대기열에서 꺼낸 구간은 앞 턴의 기록을 덮지 않는다)
      * @return 기기로 보냈으면 참, recheck에서 폐기했으면 거짓
      */
     private boolean recheckAndSend(SegmentBuffer.Sealed sealed, TranscriptWriter.Held held, boolean ownsLatency) {
@@ -2841,7 +2840,7 @@ public final class SessionExecutor {
         if (ownsLatency) {
             ctx.services().latency().gatePassed(ctx.plan().sessionId(), playbackId, passAt);
         }
-        // 보호자 화면 승인(aiFinal true)은 유효한 ALLOW 뒤 기기로 보내는 시점이다(U13 BR8.4). 보관 행이면 그 손잡이로 닫아 새로 열린 행을 건드리지 않는다
+        // 보호자 화면 승인(aiFinal true)은 유효한 ALLOW 뒤 기기로 보내는 시점이다. 보관 행이면 그 손잡이로 닫아 새로 열린 행을 건드리지 않는다
         if (held != null) {
             ctx.transcripts().aiFinal(held, sealed.transcript(), true, passAt);
         } else {
@@ -2854,7 +2853,7 @@ public final class SessionExecutor {
             schedulePracticeTimer("u5b-audio-" + playbackId, ctx.services().settings().playbackExpiry());
         }
         long generation = sealed.generation();
-        // U3-R9 · 리뷰 반영 6: 기기로 실제 보낸 AI 음성 프레임만 기록한다(송신기가 소켓에 쓴 직후 넘긴다). 음성 레인에 못 들어간 묶음 ·
+        // 리뷰 반영 6: 기기로 실제 보낸 AI 음성 프레임만 기록한다(송신기가 소켓에 쓴 직후 넘긴다). 음성 레인에 못 들어간 묶음 ·
         // 세대가 올라 잘린 나머지 프레임은 기록하지 않는다
         AudioRecordings.Session aiRecording = ctx.recording();
         OutputBundle bundle = new OutputBundle(ctx.plan().sessionId(), playbackId, OutputBegin.Source.GPT_LIVE,
@@ -2871,7 +2870,7 @@ public final class SessionExecutor {
         }
     }
 
-    /** 폐기: AI 행 FINAL · false(BR6.15), 그다음 대체 문구 판정(겹침 규칙 R3-19). 교정은 사유에 따라(U3-R7). */
+    /** 폐기: AI 행 FINAL · false, 그다음 대체 문구 판정(겹침 규칙 R3-19). 교정은 사유에 따라. */
     private void discard(SegmentBuffer.Sealed sealed, GateDecision.DiscardReason reason) {
         discard(sealed, reason, true);
     }
@@ -2882,12 +2881,12 @@ public final class SessionExecutor {
 
     /**
      * @param held 제브 검사를 기다리며 보관한 AI 행(없으면 null — 열린 AI 행을 닫는다)
-     * @param ownsLatency 지연 기록의 턴이 이 구간의 것인가(U13 BR5.6)
+     * @param ownsLatency 지연 기록의 턴이 이 구간의 것인가
      */
     private void discard(SegmentBuffer.Sealed sealed, GateDecision.DiscardReason reason, boolean correct,
             TranscriptWriter.Held held, boolean ownsLatency) {
         if (!isGuardrailReason(reason)) {
-            // U13 훅(BR6.6): 재지시 응답이 제브에 닿기 전에 어떤 길로든 폐기되면 협력 객체는 RETRYING에서 IDLE로 돌아온다. 마무리는 아래가 한다
+            // U13 훅: 재지시 응답이 제브에 닿기 전에 어떤 길로든 폐기되면 협력 객체는 RETRYING에서 IDLE로 돌아온다. 마무리는 아래가 한다
             guardrail.onDiscardedBeforeCheck();
         }
         recordDiscard(sealed, held, reason, ownsLatency);
@@ -2944,7 +2943,7 @@ public final class SessionExecutor {
     }
 
     /**
-     * U3-R7 · U3-J12: ACTIVE에서 GATE_PATTERN · GATE_EMPTY · SEGMENT_OVERSIZE로 폐기했으면 응답당 한 번 고정 교정 문장을 보낸다(걸린 범주의
+     * ACTIVE에서 GATE_PATTERN · GATE_EMPTY · SEGMENT_OVERSIZE로 폐기했으면 응답당 한 번 고정 교정 문장을 보낸다(걸린 범주의
      * 문장, 범주를 모르거나 미완 · 너무 긴 응답이면 짧은 완결 요청). 폐기한 전사 · 걸린 패턴은 보내지 않는다.
      */
     private void correctAfterDiscard(SegmentBuffer.Sealed sealed, GateDecision.DiscardReason reason) {
@@ -3029,8 +3028,8 @@ public final class SessionExecutor {
     }
 
     /**
-     * R3-6 · J126: 최상위 예외 → FAILED(SERVER_RESTART) 시도 → 정리. 전이가 실패하면 고아 세션 점검이 닫는다. 전이를 이기면 BR6.8대로
-     * START_SESSION이 나갔고 연결이 살아 있을 때 CLOSE_TRANSPORT(FAILED) + STANDBY를 보낸다(F4 · J290). '재시작 제외'는 보낼 연결이 없는
+     * 최상위 예외 → FAILED(SERVER_RESTART) 시도 → 정리. 전이가 실패하면 고아 세션 점검이 닫는다. 전이를 이기면
+     * START_SESSION이 나갔고 연결이 살아 있을 때 CLOSE_TRANSPORT(FAILED) + STANDBY를 보낸다(F4). '재시작 제외'는 보낼 연결이 없는
      * 기동 정리(S3a) 경우이고, 실행기 예외는 연결이 살아 있을 수 있다. 전이를 이기지 못하면(승자 하나) 기기 명령 없이 정리한다.
      */
     private void failFromTopLevel() {
@@ -3054,7 +3053,7 @@ public final class SessionExecutor {
     // ------------------------------------------------------------------ 진 전이 뒤 상태 채택
 
     /**
-     * F5 · J291: 살아 있는 실행기의 세션 행은 이 실행기만 전이한다(고아 점검 · 기동 정리는 실행기 없는 세션만 다룬다). 그래서 DB가 메모리보다
+     * F5 · 살아 있는 실행기의 세션 행은 이 실행기만 전이한다(고아 점검 · 기동 정리는 실행기 없는 세션만 다룬다). 그래서 DB가 메모리보다
      * 앞선 비종료 상태면 커밋은 됐는데 응답을 잃은 이 실행기의 전이이고, 그 승자 몫은 아직 실행되지 않았다. 상태가 바뀔 때 한 번만 부르므로
      * 중복 실행이 없다.
      */

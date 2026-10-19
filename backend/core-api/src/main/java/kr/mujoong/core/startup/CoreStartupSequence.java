@@ -32,26 +32,26 @@ import org.springframework.context.SmartLifecycle;
 import org.springframework.stereotype.Component;
 
 /**
- * Core 앱 안 기동 순서 S2 ~ S4 · S6 (U1 3.5 Step 21 · RD-12 · BR5.12 · A1 · R3-5 · J124).
+ * Core 앱 안 기동 순서 S2 ~ S4 · S6 (U1 3.5 Step 21).
  *
  * <p>웹 서버 시작 단계(phase {@code Integer.MAX_VALUE - 2048})보다 먼저 도는 SmartLifecycle이라 HTTP 수신(S5)이 열리기 전에 끝난다.
  * S1(설정 바인딩 · 프로필 가드 · 필수 비밀)은 그보다 앞의 환경 후처리기와 빈 생성 단계가 맡는다.
  *
  * <ol>
  *   <li>S2: 이력 버전 확인({@link SchemaVersionCheck}). JPA validate는 빈 생성 때 끝났다.
- *   <li>S3c: Inbox RECEIVED 전부의 next_attempt_at을 now로 당긴다(retry_count 유지, BR5.12).
+ * <li>S3c: Inbox RECEIVED 전부의 next_attempt_at을 now로 당긴다(retry_count 유지).
  *   <li>S3d: FAILED 제어 이벤트 재무장(A1).
  *   <li>S3f: 크래시로 남은 Outbox 선점 · 재시도 대기를 걷는다(R3-5).
  *   <li>S3e: STARTUP_RECOVERY 한 줄(실패해도 기동은 계속).
  *   <li>S4: outbox-sender · inbox-repoll · maintenance · metric-sample 스케줄러를 고정 지연으로 시작한다(처리 풀은 디스패처가 가진다).
  *       METRIC_SNAPSHOT 표본은 {@code mujoong.observability.system-sample-interval}마다 표본 전용 metric-sample이 돌린다(OD-6, 3.6 수정
- *       J326 · J368 — DB 읽기에 막혀도 maintenance의 DB 점검자 주기가 밀리지 않게).
+ * — DB 읽기에 막혀도 maintenance의 DB 점검자 주기가 밀리지 않게).
  *   <li>S6: 준비 상태 READY.
  * </ol>
  *
  * <p>S2 ~ S4 실패는 예외로 기동을 끝낸다(종료 코드 1). 정지는 {@link DrainingLifecycle}이 먼저 부르고 이 빈의 stop이 한 번 더 확인한다.
  *
- * <p>S3c · S3f는 앱당 컨테이너 1개라 다른 폴러가 선점 중인 행이 없다는 전제로 선점을 모두 걷는다(reliability-design S3f, SI-6 표식 J337).
+ * <p>S3c · S3f는 앱당 컨테이너 1개라 다른 폴러가 선점 중인 행이 없다는 전제로 선점을 모두 걷는다(reliability-design S3f, SI-6 표식).
  */
 @Component
 @SingleInstanceAssumption(si = "SI-6",
@@ -175,7 +175,7 @@ public class CoreStartupSequence implements SmartLifecycle {
         fixedDelay(maintenance, properties.observability().logMergeWindow(), EventLog.Component.CORE_MAINTENANCE,
                 events::flushMerged);
 
-        // 표본은 DB를 읽어 DB 정지 때 막히므로 maintenance(DB 점검자 · PREPARING 점검)와 다른 스레드다(3.6 수정 J368)
+        // 표본은 DB를 읽어 DB 정지 때 막히므로 maintenance(DB 점검자 · PREPARING 점검)와 다른 스레드다(3.6 수정)
         ScheduledExecutorService metricSample = scheduler("metric-sample");
         fixedDelay(metricSample, properties.observability().systemSampleInterval(), EventLog.Component.CORE_MAINTENANCE,
                 metricSnapshotJob::tick);
@@ -207,7 +207,7 @@ public class CoreStartupSequence implements SmartLifecycle {
 
     /**
      * T4: 스케줄러를 멈춘다. 발송기는 진행 중 한 건을 마치고 남은 선점을 되돌린다. 진행 중 작업(처리기 포함)은 모두 합쳐 발행 제한 + 문장
-     * 제한(13초) 안에서 기다린다 — 실행기마다 따로 기다리면 합이 30초 유예를 넘을 수 있다(3.6 수정 J321). 멱등이다.
+     * 제한(13초) 안에서 기다린다 — 실행기마다 따로 기다리면 합이 30초 유예를 넘을 수 있다(3.6 수정). 멱등이다.
      */
     public void stopSchedulers() {
         sender.requestStop();

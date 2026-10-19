@@ -8,7 +8,7 @@ import { useApiClient } from "../../common/api/queries";
 import { PARENT_ROUTES } from "../../common/navigation";
 import { ACCOUNT_COPY, ACCOUNT_TEMP_COPY } from "@/shared/copy/account";
 
-// 01 구글 콜백 교환 (U2 · US1.1 · AC1.1.1 ~ AC1.1.4 · AC1.6.4 · R3 · U2-J4)
+// 01 구글 콜백 교환 (U2)
 // 서버 컴포넌트(page.tsx)가 OAuth state 쿠키를 확인한 뒤에만 이 화면을 그린다. 화면은 인가 코드를 Core에 한 번 보내고
 // (POST /api/auth/google, 브라우저는 토큰을 보지 않는다) 응답 Me로 고른다: 삭제 처리 중 → 01 안내, 동의 아님 → 02,
 // 아이 없음 → 03, 둘 다 → 04. 실패면 01(?failed=1). 앞 사용자의 조회 결과는 버린다.

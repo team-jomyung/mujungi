@@ -1,6 +1,6 @@
 "use client";
 import { RESULT_TEMP_COPY as C, monthLabel } from "@/shared/copy/result";
-/** BR11.3·11.7: 날짜 계산은 서울 날짜 문자열과 UTC 달력 연산으로 일관되게 처리한다. */
+/** ·11.7: 날짜 계산은 서울 날짜 문자열과 UTC 달력 연산으로 일관되게 처리한다. */
 export function seoulDate(instant: Date | string = new Date()): string { const parts = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date(instant)); const value = (type: string) => parts.find(p => p.type === type)?.value; return `${value("year")}-${value("month")}-${value("day")}`; }
 export function addDays(date: string, amount: number): string { const d = new Date(`${date}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + amount); return d.toISOString().slice(0, 10); }
 export function shiftMonth(month: string, amount: number): string { const d = new Date(`${month}-01T00:00:00Z`); d.setUTCMonth(d.getUTCMonth() + amount); return d.toISOString().slice(0, 7); }

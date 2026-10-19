@@ -2,7 +2,7 @@ import { COPY, PROPOSED_COPY, lastCheckedLine, unresponsiveLastLine } from "@/sh
 import { formatHhmm } from "@/shared/copy/timeText";
 import type { DeviceView } from "../../common/api/types";
 
-// 04 대화 기기 구역 (U1 3.5 Step 39 · BR4.6 · BR2.9 · AC1.4.2 ~ AC1.4.5 · AC1.4.15 · interaction-spec 3.2 · mockups S-04)
+// 04 대화 기기 구역 (U1 3.5 Step 39 · interaction-spec 3.2 · mockups S-04)
 // 안정 · 불안정 · 끊김 · 응답 없음 · 확인 불가 · 기기 없음 여섯 상태를 색 점 + 아이콘 + 상태명 + 사유로 함께 보인다
 // (색만으로 구분하지 않음). 「기기 등록」은 등록이 없을 때만, 「기기 상태 보기 ›」는 등록된 기기면 어느 상태든 보인다.
 
@@ -29,7 +29,7 @@ function lastChecked(iso: string | null): string | null {
   return hhmm === null ? null : lastCheckedLine(hhmm);
 }
 
-/** DeviceView → 표시 값(BR4.6 표). */
+/** DeviceView → 표시 값(표). */
 export function presentDevice(device: DeviceView): DevicePresentation {
   const { network, registration } = device;
   if (registration.status === "NONE" || network.state === "NONE") {

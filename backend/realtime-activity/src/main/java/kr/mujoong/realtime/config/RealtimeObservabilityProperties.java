@@ -10,7 +10,7 @@ import java.time.Duration;
  * OD-4 ownerHash 비밀 · OD-8 지연 로그 표본률 · OD-6 지표 스냅샷 · OD-3 반복 병합. 문자열 표현에 비밀 값을
  * 내지 않는다.
  *
- * <p>{@code systemSampleInterval}(3.6 수정 J302, Core J326과 같은 키)은 OD-6의 '앱 안 5초 표본'(CPU 평균 · 메모리 최댓값 · 풀 사용 ·
+ * <p>{@code systemSampleInterval}(Core와 같은 키)은 '앱 안 5초 표본'(CPU 평균 · 메모리 최댓값 · 풀 사용 ·
  * 적체 · 연결 상태 게이지 갱신) 주기다. 스냅샷 주기보다 길면 구간에 표본이 없을 수 있어 기동을 거부한다.
  */
 public record RealtimeObservabilityProperties(

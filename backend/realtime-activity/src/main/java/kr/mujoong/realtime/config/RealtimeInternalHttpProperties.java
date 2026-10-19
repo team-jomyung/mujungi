@@ -6,7 +6,7 @@ import static kr.mujoong.realtime.config.RealtimeProperties.positive;
 import java.net.URI;
 import java.time.Duration;
 
-/** RD-14 Realtime → Core 호출 제한과 상태 보고 라운드 건너뛰기(R3-2). 주소 키는 J109. */
+/** RD-14 Realtime → Core 호출 제한과 상태 보고 라운드 건너뛰기(R3-2). 주소 키는 . */
 public record RealtimeInternalHttpProperties(
         URI coreBaseUrl,
         Duration connectTimeout,

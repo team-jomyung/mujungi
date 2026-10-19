@@ -2,7 +2,7 @@
 
 import { useEffect, useId, useRef, type KeyboardEvent } from "react";
 
-// 확인 팝업 (U1 3.5 Step 39 · interaction-spec 3.6 · 접근성 O4 · U4 · P1 끝내기 BR6.9 · AC3.3.1 · AC3.3.2)
+// 확인 팝업 (U1 3.5 Step 39 · interaction-spec 3.6 · 접근성 O4 · U4 · P1 끝내기)
 // role=alertdialog + aria-modal, 열리면 안전한 쪽(「아니오」)에 초점, Tab은 팝업 안에서만 돈다, Escape로 닫힘(P1),
 // 닫히면 열었던 단추로 초점을 돌려준다.
 

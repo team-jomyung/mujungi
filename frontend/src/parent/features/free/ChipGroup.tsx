@@ -2,7 +2,7 @@
 
 import { useId } from "react";
 
-// 단일 선택 칩 (U1 3.5 Step 39 · interaction-spec 3.8 · 가정 C3 · BR6.4 · AC3.1.1)
+// 단일 선택 칩 (U1 3.5 Step 39 · interaction-spec 3.8 · 가정 C3)
 // 08 '관련 상황' · '정보 출처'. 네이티브 라디오(role=radiogroup)라 화살표 키로 옮겨 가고, 고른 칩을 다시 누르면 선택을 지운다
 // (네 칸 모두 선택 사항). 선택은 색 + 체크 표시로 보인다.
 

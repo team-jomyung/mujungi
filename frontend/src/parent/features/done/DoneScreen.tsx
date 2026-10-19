@@ -8,14 +8,14 @@ import { RESULT_TEMP_COPY as RESULT_COPY } from "@/shared/copy/result";
 import { COPY, PROPOSED_COPY, doneTimeRangeLine } from "@/shared/copy/ko";
 import { formatHhmm, minutesBetween } from "@/shared/copy/timeText";
 
-// 17 활동 끝 (U1 3.5 Step 40 · BR6.10 · BR6.12 ③ ④ · BR6.15 · AC3.3.3 ~ AC3.3.7 · J120 · mockups 9-19, U4a · AC3.4.3 · AC3.6.1 ·
-// AC3.6.9 · AC3.6.10 · U4a-J13 ~ J16)
+// 17 활동 끝 (U1 3.5 Step 40 · ③ ④ · mockups 9-19, U4a · AC3.4.3 · AC3.6.1 ·
+// )
 // - 마무리 중(CLOSING 등 종료 전): '오늘 자유대화를 마무리하고 있어요' + '무중이 마무리 인사를 하고 있어요' + '기기가 멈추면 기록을 정리해요.'
 // - 종료: '오늘 자유대화가 끝났어요' + 사유 카드(AC3.6.9 표 — 보호자 끝냄 · 아이가 끝냄 · 자동 종료 · 연결 끊김 · 기기 응답 없이(UNCONFIRMED ·
 //   서버 재시작 FAILED), activity/donePresentation.ts) + '기록을 정리하고 있어요'(정리 끝 · 실패는 U6) + 종료 확인 미확인 줄(AC3.4.3).
-// - 시간 줄 'hh:mm ~ hh:mm · n분', 「홈으로」. 「오늘 기록 보기」는 정리 상태(U6)와 27이 생길 때까지 감춘다(J120 · U4a-J14).
-// - 시작 실패 FAILED면 08 사유 카드(J120). 종료 상태를 받을 때까지 같은 주기로 다시 읽는다. 마무리 중엔 자유대화 · 연습 탭이 잠긴다.
-// 폴링 · 오류 분기 · 이동은 useDoneScreen 훅이 맡는다(BR2.1, 단계 2).
+// - 시간 줄 'hh:mm ~ hh:mm · n분', 「홈으로」. 「오늘 기록 보기」는 정리 상태(U6)와 27이 생길 때까지 감춘다.
+// - 시작 실패 FAILED면 08 사유 카드. 종료 상태를 받을 때까지 같은 주기로 다시 읽는다. 마무리 중엔 자유대화 · 연습 탭이 잠긴다.
+// 폴링 · 오류 분기 · 이동은 useDoneScreen 훅이 맡는다(단계 2).
 
 function timeRangeFor(view: LiveView | undefined): string | null {
   const from = formatHhmm(view?.startedAt);

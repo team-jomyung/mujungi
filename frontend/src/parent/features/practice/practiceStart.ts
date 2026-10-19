@@ -8,7 +8,7 @@ export function ownedSelection(selected: readonly string[], owned: readonly stri
   return [...new Set(selected)].filter((id) => available.has(id)).sort();
 }
 
-/** 미확인 요청은 같은 키·선택을 보존하고 확정 거절 뒤 명시 재시도만 새 키를 쓴다(U5b-I5). */
+/** 미확인 요청은 같은 키·선택을 보존하고 확정 거절 뒤 명시 재시도만 새 키를 쓴다. */
 export class PracticeStartCoordinator {
   private request: StartRequest | null = null;
   private running: Promise<StartOutcome> | null = null;

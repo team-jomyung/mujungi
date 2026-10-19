@@ -8,7 +8,7 @@ import { ResponseShapeError } from "../../common/api/types";
 
 // 02 동의 안내의 약관 읽기 · 동의 저장 요청 (docs/units/u2/design.md 4절 · contracts/parent-api.yaml U2 경로)
 // 받는 쪽 규칙(계약 10절): 모르는 필드는 무시하고 모르는 enum은 건너뛴다. 필수 필드가 없으면 ResponseShapeError.
-// 서버 호출만 한다(BR2.3). 이동 · 문구 선택 · 상태 보관은 useConsentScreen이 한다.
+// 서버 호출만 한다. 이동 · 문구 선택 · 상태 보관은 useConsentScreen이 한다.
 
 export type ConsentType = "VOICE_AND_TEXT" | "GUARDIAN_VIEW" | "REPORT_SHARING" | "RAW_AUDIO";
 

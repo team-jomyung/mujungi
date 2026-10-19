@@ -1,7 +1,7 @@
 import type { RecordDetail } from "../../common/api/results";
 import { formatHhmm } from "@/shared/copy/timeText";
 import { RESULT_TEMP_COPY as C, endReasonLine, gapLine } from "@/shared/copy/result";
-/** BR11.5·BR14.2: 수신 공백을 아이의 침묵·거부로 해석하지 않는다. */
+/** 수신 공백을 아이의 침묵·거부로 해석하지 않는다. */
 export function EndReasonCard({ record }: { record: RecordDetail }) {
   const { session, gaps, recordScope, endConfirmed } = record;
   const technical = gaps.length > 0 || !endConfirmed || ["ABORTED", "FAILED", "ENDED_UNCONFIRMED"].includes(session.status);

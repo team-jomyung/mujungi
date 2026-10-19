@@ -10,7 +10,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.util.unit.DataSize;
 
 /**
- * Core 앱이 읽는 {@code mujoong.*} 설정 트리 (U1 3.5 Step 3 · RD-24 · BR8.11 · NFR6.1).
+ * Core 앱이 읽는 {@code mujoong.*} 설정 트리 (U1 3.5 Step 3).
  *
  * <p>값의 정본은 reliability-design.md {@code ## 3}과 {@code contracts/timing.md}이고, 값은
  * {@code application*.yml}에만 둔다. 코드에는 기본값이 없어 키가 빠지면 기동이 실패한다. 비밀은 이 트리의
@@ -20,7 +20,7 @@ import org.springframework.util.unit.DataSize;
  * <p>기동 검증(RD-24): 모든 시간 · 건수 값이 양수, {@code security.session-cookie-max-age ≤
  * timing.login.session-idle}, 불변식 I-6 {@code timing.core.device-status-stale ≥
  * timing.device.status-report-interval × 3}, 허용 origin 형식. 오류 메시지에는 키 이름만 쓴다.
- * DB 풀 상한(I-7 · NFR7.6)은 {@link CorePropertiesConfig}가 확인한다.
+ * DB 풀 상한(I-7)은 {@link CorePropertiesConfig}가 확인한다.
  *
  * <p>묶음마다 타입은 {@code Core<묶음>Properties} 파일로 나눠 이 패키지에 둔다. 이 파일에는 루트 레코드와 묶음들이 함께 쓰는 검증
  * 도우미만 남긴다.

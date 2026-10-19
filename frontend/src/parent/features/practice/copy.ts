@@ -19,7 +19,7 @@ export const PRACTICE_COPY = {
   start: (n: number) => `선택한 ${n}개로 연습 시작`,
 } as const;
 
-/** U5a-J2/J4: no invented count or enabled start while integrations are absent. */
+/** no invented count or enabled start while integrations are absent. */
 export const PRACTICE_TEMP_COPY = {
   startUnavailable: "연습 시작 기능을 준비하고 있어요.",
   loading: "목표를 불러오고 있어요.",

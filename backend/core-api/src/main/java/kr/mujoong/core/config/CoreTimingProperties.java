@@ -44,7 +44,7 @@ public record CoreTimingProperties(
         required(push, "mujoong.timing.push");
     }
 
-    /** U6 BR1 · BR2: 작업 재시도 · 실행 · 누락 판정의 시간 계약. */
+    /** 작업 재시도 · 실행 · 누락 판정의 시간 계약. */
     public record ResultTiming(Integer jobAttempts, List<Duration> jobRetryBackoff, Duration jobTick,
             Duration attemptTimeout, Duration reconcileInterval, Duration undecidedLimit) {
         public ResultTiming {
@@ -62,7 +62,7 @@ public record CoreTimingProperties(
         }
     }
 
-    /** U6 BR9.4 · BR10.4: 리포트 절대 마감과 미저장 보존. */
+    /** 리포트 절대 마감과 미저장 보존. */
     public record ReportTiming(Duration readyTarget, Duration unsavedRetention) {
         public ReportTiming {
             positive(readyTarget, "mujoong.timing.report.ready-target");
@@ -81,14 +81,14 @@ public record CoreTimingProperties(
         }
     }
 
-    /** U8(timing.md 13절 · BR3.1): 지식 그래프 조회 한 번의 상한(FR9.5). 넘기면 빈 응답이다. U15가 읽는다. */
+    /** U8(timing.md 13절): 지식 그래프 조회 한 번의 상한. 넘기면 빈 응답이다. U15가 읽는다. */
     public record KnowledgeTiming(Duration graphBudget) {
         public KnowledgeTiming {
             positive(graphBudget, "mujoong.timing.knowledge.graph-budget");
         }
     }
 
-    /** U5a C10 상황 생성 전체 예산(생성 · 재생성 · 기술 재시도 포함, 요청 선점 시한도 같다)(timing.md 9절 · U5a-J18). */
+    /** U5a C10 상황 생성 전체 예산(생성 · 재생성 · 기술 재시도 포함, 요청 선점 시한도 같다)(timing.md 9절). */
     public record PracticeTiming(Duration scenarioRequestTimeout,Duration scenarioHistoryTimeout) {
         public PracticeTiming(Duration scenarioRequestTimeout) { this(scenarioRequestTimeout,scenarioRequestTimeout); }
         @org.springframework.boot.context.properties.bind.ConstructorBinding
@@ -98,7 +98,7 @@ public record CoreTimingProperties(
         }
     }
 
-    /** U5a 목표 삭제 뒤 서버가 복구를 받아 주는 시한(C4 · timing.md 9절 · U5a-J3). */
+    /** U5a 목표 삭제 뒤 서버가 복구를 받아 주는 시한(C4 · timing.md 9절). */
     public record GoalTiming(Duration restoreWindow) {
         public GoalTiming {
             positive(restoreWindow, "mujoong.timing.goal.restore-window");
@@ -123,21 +123,21 @@ public record CoreTimingProperties(
         }
     }
 
-    /** BR6.12 ① PREPARING 10초 점검. */
+    /** ① PREPARING 10초 점검. */
     public record SessionTiming(Duration preparingTimeout) {
         public SessionTiming {
             positive(preparingTimeout, "mujoong.timing.session.preparing-timeout");
         }
     }
 
-    /** BR4.3 · RD-6 사본 신선도 기준. */
+    /** 사본 신선도 기준. */
     public record CoreTiming(Duration deviceStatusStale) {
         public CoreTiming {
             positive(deviceStatusStale, "mujoong.timing.core.device-status-stale");
         }
     }
 
-    /** BR1.4 코드 TTL(bootstrap 쿠키 Max-Age도 이 값) · BR1.6 IP 발급 한도. */
+    /** 코드 TTL(bootstrap 쿠키 Max-Age도 이 값) · IP 발급 한도. */
     public record BootstrapTiming(Duration codeTtl, RateLimit rateLimit) {
         public BootstrapTiming {
             positive(codeTtl, "mujoong.timing.bootstrap.code-ttl");
@@ -147,7 +147,7 @@ public record CoreTimingProperties(
     }
 
     /**
-     * BR2.6 등록 실패 한도 · BR3.1 기기 쿠키 수명. {@code statusReportInterval}은 Realtime이 소유하는
+     * 등록 실패 한도 · 기기 쿠키 수명. {@code statusReportInterval}은 Realtime이 소유하는
      * 계약 7절 값이고 Core는 I-6 기동 검증에만 읽는다.
      */
     public record DeviceTiming(RateLimit registerFailureLimit, Duration cookieMaxAge, Duration statusReportInterval) {
@@ -159,14 +159,14 @@ public record CoreTimingProperties(
         }
     }
 
-    /** NFR9.2 보호자 세션 유휴 만료. */
+    /** 보호자 세션 유휴 만료. */
     public record LoginTiming(Duration sessionIdle) {
         public LoginTiming {
             positive(sessionIdle, "mujoong.timing.login.session-idle");
         }
     }
 
-    /** PD-7 승인 문구 · 정책 버전 캐시(7절 밖 시간 키, J80). */
+    /** PD-7 승인 문구 · 정책 버전 캐시(7절 밖 시간 키). */
     public record CacheTiming(Duration approvedContentTtl, Duration policyVersionTtl) {
         public CacheTiming {
             positive(approvedContentTtl, "mujoong.timing.cache.approved-content-ttl");

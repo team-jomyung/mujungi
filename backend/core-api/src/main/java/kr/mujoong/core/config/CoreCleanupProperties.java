@@ -4,7 +4,7 @@ import static kr.mujoong.core.config.CoreProperties.positive;
 
 import java.time.Duration;
 
-/** BR5.11 · BR1.4 정리 작업. */
+/** 정리 작업. */
 public record CoreCleanupProperties(
         Duration messagingInterval,
         Duration deviceExpiryInterval,

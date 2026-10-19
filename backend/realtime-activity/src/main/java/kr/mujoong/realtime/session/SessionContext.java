@@ -398,7 +398,7 @@ public final class SessionContext {
 
     // ---- 기기 연결 · 명령 송신 · 사건 기록(이 상자의 상태만 쓰는 보조)
 
-    /** ACK를 기다리는 opId 명령의 상한(U3-J7). 넘치면 가장 오래된 것부터 잊는다. */
+    /** ACK를 기다리는 opId 명령의 상한. 넘치면 가장 오래된 것부터 잊는다. */
     static final int MAX_PENDING_COMMANDS = 16;
 
     boolean fromBoundConnection(UUID connectionId) {
@@ -415,7 +415,7 @@ public final class SessionContext {
 
     boolean sendControl(WsPayload payload) {
         if (payload instanceof SessionState state) {
-            // U3-J23: 연결이 없어도 표시 상태는 기억한다(다음 HELLO_OK.session.view)
+            // 연결이 없어도 표시 상태는 기억한다(다음 HELLO_OK.session.view)
             view(state.view());
         }
         DeviceLink current = link;
@@ -433,7 +433,7 @@ public final class SessionContext {
         return current.sendControl(payload, opId, plan.sessionId());
     }
 
-    /** ACK를 기다리는 명령으로 둔다(U3-J7, 상한을 넘으면 가장 오래된 것부터 잊는다). */
+    /** ACK를 기다리는 명령으로 둔다(상한을 넘으면 가장 오래된 것부터 잊는다). */
     void remember(UUID opId, WsPayload payload) {
         if (pendingCommands.size() >= MAX_PENDING_COMMANDS) {
             UUID eldest = pendingCommands.keySet().iterator().next();

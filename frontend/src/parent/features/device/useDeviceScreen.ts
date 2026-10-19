@@ -10,8 +10,8 @@ import { PARENT_ROUTES, goToLogin, isUnauthenticated, lockToastMessage, routeFor
 import { PROPOSED_COPY, TEMP_COPY } from "@/shared/copy/ko";
 import { useToast } from "@/shared/toast/ToastProvider";
 
-// 05 우리 집 기기 화면의 요청(GET /api/home · 종료 표현) · 오류 분기 · 화면 이동을 맡는 흐름 훅(BR2.1).
-// 동작 규칙은 DeviceScreen에 있던 그대로다(BR1.1).
+// 05 우리 집 기기 화면의 요청(GET /api/home · 종료 표현) · 오류 분기 · 화면 이동을 맡는 흐름 훅.
+// 동작 규칙은 DeviceScreen에 있던 그대로다.
 
 export function useDeviceScreen() {
   const router = useRouter();

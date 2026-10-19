@@ -8,7 +8,7 @@ import { ResponseShapeError } from "./types";
 
 // 03 아이 정보 · SET-01 종료 표현의 읽기 · 요청 (docs/units/u2/design.md 4절 · contracts/parent-api.yaml U2 경로)
 // 받는 쪽 규칙(계약 10절): 모르는 필드는 무시한다. 필수 필드가 없으면 ResponseShapeError.
-// 서버 호출만 한다(BR2.3). 이동 · 문구 선택 · 상태 보관은 useChildScreen · useStopExpressionsScreen이 한다.
+// 서버 호출만 한다. 이동 · 문구 선택 · 상태 보관은 useChildScreen · useStopExpressionsScreen이 한다.
 
 export interface Child {
   readonly childId: string;

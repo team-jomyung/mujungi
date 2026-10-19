@@ -18,13 +18,13 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 /**
- * HELLO_OK 인계 (U1 3.5 Step 24 · BR3.7 · BR4.8 ① · SCD-2 · R3-7 · 편차 (l) · SD-17).
+ * HELLO_OK 인계 (U1 3.5 Step 24 · ① · SCD-2 · R3-7 · 편차 (l) · SD-17).
  *
  * <p>순서는 ① 연결 원장 행을 {@code FOR UPDATE}로 잠그고 새 connection_id · CONNECTED · DeviceStatusChanged를 한 트랜잭션에 커밋 → ② 소켓
  * 레지스트리를 새 연결로 교체 → ③ 옛 소켓이 살아 있으면 4001 REPLACED로 닫고 옛 연결에 묶인 세션에 연결 끊김을 알린다(출력 세대 올림) →
  * ④ READY로 바꾼 뒤 HELLO_OK를 보낸다. ①이 실패하면 새 연결만 1011로 닫고 옛 연결 · 레지스트리는 건드리지 않는다(SCD-2).
  *
- * <p>U3(U3-J4 · U3-J5 · U3-J23): 이 기기의 살아 있는 세션 실행기가 있으면 HELLO_OK.session에 {@code sessionId · view · resumed}(기기가 HELLO
+ * <p>U3: 이 기기의 살아 있는 세션 실행기가 있으면 HELLO_OK.session에 {@code sessionId · view · resumed}(기기가 HELLO
  * resume으로 그 세션을 요청했는가)를 싣고, HELLO_OK 뒤에 실행기 안전 편지함에 {@link SessionMailbox.LinkReplaced}를 넣어 실행기가 새 연결에
  * 세션을 다시 묶게 한다(끊김 구간 닫기 · 상태 재송신 · 미확인 명령 재전달은 실행기 몫). 제어 레인은 선입선출이라 HELLO_OK가 늘 먼저 나간다. 살아
  * 있는 세션이 없으면 session은 null이다(기기는 대기 화면으로).

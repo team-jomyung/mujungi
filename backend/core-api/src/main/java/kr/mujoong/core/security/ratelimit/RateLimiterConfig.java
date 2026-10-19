@@ -11,7 +11,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 /**
- * 한도기 두 개의 설정 (U1 3.5 Step 19 · SD-10 · BR1.6 · BR2.6 · A6).
+ * 한도기 두 개의 설정 (U1 3.5 Step 19).
  *
  * <p>값은 설정 키에서만 읽는다: bootstrap 발급 {@code mujoong.timing.bootstrap.rate-limit}(20 · 1시간, 상향 600 · 1시간은
  * {@code application-load-test.yml}에만), 등록 실패 {@code mujoong.timing.device.register-failure-limit}(10 · 10분), 키 상한

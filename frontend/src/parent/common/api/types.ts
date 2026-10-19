@@ -1,4 +1,4 @@
-// 보호자 웹이 쓰는 Core REST 응답 형식과 읽기 함수 (U1 3.5 Step 39 · 계약 3절 · contracts/schemas · BR4.6 · BR6.15)
+// 보호자 웹이 쓰는 Core REST 응답 형식과 읽기 함수 (U1 3.5 Step 39 · 계약 3절 · contracts/schemas)
 // 받는 쪽 규칙(계약 10절): 모르는 필드는 무시하고 모르는 enum 값은 'UNKNOWN'으로 읽어 오류로 끊지 않는다.
 // 필수 필드가 없거나 형식이 틀리면 ResponseShapeError(화면은 일반 오류로 처리한다).
 // U4a: 04 currentSession · 12 덧붙임(gaps · technicalPause · silenceWarning)은 api/activity.ts가 읽는다.
@@ -9,7 +9,7 @@ import { parsePracticeProgress, type PracticeProgress, type ProgressIssue } from
 /** 08 서술 칸 상한(activity-free-request.schema.json maxLength). */
 export const FREE_TEXT_MAX_LENGTH = 200;
 
-/** 등록 코드 칸 수(BR1.1). */
+/** 등록 코드 칸 수. */
 export const REGISTRATION_CODE_LENGTH = 8;
 
 export class ResponseShapeError extends Error {

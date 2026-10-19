@@ -28,7 +28,7 @@ public final class IdleClock {
     static final String EVENT_TECHNICAL_PAUSE_ENDED = "TECHNICAL_PAUSE_ENDED";
 
     /**
-     * 진행 조회가 읽는 살아 있는 값(U4b BR7.1 · WF10): 기술 일시정지 · 공백 경고. 실행기 스레드가 바뀔 때마다 불변 값 하나로 바꿔 쓰고 조회는 읽기만
+     * 진행 조회가 읽는 살아 있는 값(WF10): 기술 일시정지 · 공백 경고. 실행기 스레드가 바뀔 때마다 불변 값 하나로 바꿔 쓰고 조회는 읽기만
      * 한다. 종료 세션은 둘 다 null이다.
      */
     public record LiveState(SessionStateChanged.TechnicalPause technicalPause, SilenceClock.Warning silenceWarning,
@@ -71,13 +71,13 @@ public final class IdleClock {
     private final SessionContext ctx;
     private final Env env;
 
-    /** U4b 공백 시계(ACTIVE에서만, BR5.1 ~ BR5.4). */
+    /** U4b 공백 시계(ACTIVE에서만). */
     private final SilenceClock silence;
-    /** U4b 켜진 기술 일시정지(없으면 null, BR6.1 · BR6.2). */
+    /** U4b 켜진 기술 일시정지(없으면 null). */
     private SessionStateChanged.TechnicalPause technicalPause;
     /** U4b 기술 일시정지를 켠 서버 시각(창 · 시계를 멈춘 시간 계산). */
     private Instant pauseStartedAt;
-    /** U4b 진행 조회가 읽는 살아 있는 값(실행기 스레드만 바꿔 쓴다, BR7.1). */
+    /** U4b 진행 조회가 읽는 살아 있는 값(실행기 스레드만 바꿔 쓴다). */
     private final java.util.concurrent.atomic.AtomicReference<LiveState> live =
             new java.util.concurrent.atomic.AtomicReference<>(LiveState.NONE);
 
@@ -99,7 +99,7 @@ public final class IdleClock {
     }
 
     /**
-     * 메시지 하나를 처리한 뒤(BR5.2 · BR7.1): 공백 시계의 멈춤 조건을 다시 보고 다음 판정 시각에 시계를 다시 걸며, 진행 조회 값을 바꿔 쓴다. 상태
+     * 메시지 하나를 처리한 뒤: 공백 시계의 멈춤 조건을 다시 보고 다음 판정 시각에 시계를 다시 걸며, 진행 조회 값을 바꿔 쓴다. 상태
      * 변화는 모두 메시지 처리 안에서만 일어나므로 메시지 경계에서 보면 충분하다.
      */
     void afterMessage() {
@@ -117,7 +117,7 @@ public final class IdleClock {
         publishLive(now);
     }
 
-    /** BR5.2 멈춤 조건: 기기 재생 중 · 서버 출력 대기(열린 구간 · 게이트 대기 · 대기 문구) · 기술 일시정지 · 확인 질문 대기. */
+    /** 멈춤 조건: 기기 재생 중 · 서버 출력 대기(열린 구간 · 게이트 대기 · 대기 문구) · 기술 일시정지 · 확인 질문 대기. */
     private boolean silencePaused() {
         return !ctx.devicePlaying().isEmpty() || ctx.playback().isPlaying() || ctx.segment().isOpen() || ctx.transcripts().hasOpenAi()
                 || technicalPause != null || ctx.stopConfirm().isActive();
@@ -138,7 +138,7 @@ public final class IdleClock {
         ctx.timers().arm(Kind.SILENCE, left.isNegative() ? Duration.ZERO : left);
     }
 
-    /** 공백 시계 만기: 누적 4분이면 경고 1회, 6분이면 CLOSING(SILENCE)(BR5.3 · BR5.4). */
+    /** 공백 시계 만기: 누적 4분이면 경고 1회, 6분이면 CLOSING(SILENCE). */
     void onSilenceTimer() {
         if (ctx.status() != SessionStatus.ACTIVE) {
             return;
@@ -153,7 +153,7 @@ public final class IdleClock {
         }
     }
 
-    /** BR5.3 · U4b-J11: 공백 경고를 켜고 패키지에 있으면 SILENCE_WARNING을 한 번 재생한다(재생은 시계를 리셋하지 않는다). */
+    /** 공백 경고를 켜고 패키지에 있으면 SILENCE_WARNING을 한 번 재생한다(재생은 시계를 리셋하지 않는다). */
     private void onSilenceWarning(Instant now) {
         ctx.putEvent(EVENT_SILENCE_WARNED, "{\"silentMs\":" + silence.accumulated(now).toMillis() + "}", now);
         Optional<SessionExecutor.ApprovedItem> item = ctx.plan().approvedItem(SessionExecutor.SILENCE_WARNING);
@@ -172,7 +172,7 @@ public final class IdleClock {
         }
     }
 
-    /** BR5.1: ACTIVE 진입 · 아이의 빈 아닌 확정 전사가 공백을 0으로 한다. 경고를 껐으면 SILENCE_RESET을 남긴다. */
+    /** ACTIVE 진입 · 아이의 빈 아닌 확정 전사가 공백을 0으로 한다. 경고를 껐으면 SILENCE_RESET을 남긴다. */
     void resetSilence(Instant at) {
         boolean wasWarned = silence.isWarned();
         silence.reset(at);
@@ -181,7 +181,7 @@ public final class IdleClock {
         }
     }
 
-    /** 진행 조회 값을 바꿔 쓴다(BR7.1). 공백 경고는 ACTIVE에서만 있다. */
+    /** 진행 조회 값을 바꿔 쓴다. 공백 경고는 ACTIVE에서만 있다. */
     void publishLive(Instant now) {
         SilenceClock.Warning warning = ctx.status() == SessionStatus.ACTIVE ? silence.warning(now) : null;
         PracticeSessionExtension.Progress progress = env.practiceProgress();
@@ -189,13 +189,13 @@ public final class IdleClock {
                 : new LiveState(technicalPause, warning, progress));
     }
 
-    /** 이 세션의 끊김 시계 기준(묶인 연결의 마지막 기기 메시지 수신 시각, U4b-R7). */
+    /** 이 세션의 끊김 시계 기준(묶인 연결의 마지막 기기 메시지 수신 시각). */
     Instant lastDeviceMessageAt() {
         DeviceLink current = ctx.link();
         return current == null ? ctx.startAttemptAt() : current.lastMessageAt();
     }
 
-    /** BR6.1: 마지막 기기 메시지 뒤 gap-display에 기술 일시정지를 켜는 시계(WAITING_CHILD · ACTIVE). */
+    /** 마지막 기기 메시지 뒤 gap-display에 기술 일시정지를 켜는 시계(WAITING_CHILD · ACTIVE). */
     void armGapDisplay() {
         if (!Trigger.DISCONNECT.accepts(ctx.status()) || technicalPause != null) {
             return;
@@ -206,7 +206,7 @@ public final class IdleClock {
     }
 
     /**
-     * 점선 시계 만기(BR6.1 · BR6.2). 일시정지 중이면 회복을 본다 — HEARTBEAT는 편지함을 거치지 않으므로 timer-tick마다 마지막 메시지 시각을 본다.
+     * 점선 시계 만기. 일시정지 중이면 회복을 본다 — HEARTBEAT는 편지함을 거치지 않으므로 timer-tick마다 마지막 메시지 시각을 본다.
      */
     void onGapDisplayCheck() {
         Instant now = ctx.services().clock().now();
@@ -233,7 +233,7 @@ public final class IdleClock {
     }
 
     /**
-     * 기술 일시정지를 켠다(BR6.1 · U4b-J13): technicalPause{DEVICE, since}, 끊김 구간(U3와 같은 행), 참여 창 · 확인 질문 창 · 공백 시계 멈춤.
+     * 기술 일시정지를 켠다: technicalPause{DEVICE, since}, 끊김 구간(U3와 같은 행), 참여 창 · 확인 질문 창 · 공백 시계 멈춤.
      *
      * @param since 마지막 기기 메시지 시각
      * @param gapFrom 끊김 구간을 새로 열 때의 시작 시각
@@ -260,7 +260,7 @@ public final class IdleClock {
         ctx.timers().arm(Kind.GAP_DISPLAY, ctx.services().settings().timerTick());
     }
 
-    /** 기기 메시지가 다시 왔거나 다시 묶였다(BR6.2): 구간을 닫고 일시정지를 끈 뒤 멈췄던 창을 남은 시간부터 잇는다. */
+    /** 기기 메시지가 다시 왔거나 다시 묶였다: 구간을 닫고 일시정지를 끈 뒤 멈췄던 창을 남은 시간부터 잇는다. */
     void endPause(Instant now) {
         if (technicalPause == null) {
             return;
@@ -287,7 +287,7 @@ public final class IdleClock {
         armGapDisplay();
     }
 
-    /** 묶인 연결에서 기기 메시지가 왔다(BR6.2). */
+    /** 묶인 연결에서 기기 메시지가 왔다. */
     void deviceHeard() {
         if (technicalPause != null) {
             endPause(ctx.services().clock().now());

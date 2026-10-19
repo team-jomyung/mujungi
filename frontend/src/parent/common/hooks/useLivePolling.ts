@@ -8,12 +8,12 @@ import { fetchLiveView, mergeLiveView } from "../api/live";
 import type { LiveView, SessionStatus } from "../api/types";
 import { useTiming } from "@/shared/timing/TimingProvider";
 
-// 12 진행 폴링 (U1 3.5 Step 40 · PD-12 표 2.9-A · BR6.15 · interaction-spec 1절 '폴링')
+// 12 진행 폴링 (U1 3.5 Step 40 · PD-12 표 2.9-A · interaction-spec 1절 '폴링')
 // - mujoong.timing.parent.poll-interval(2초)마다 GET /api/sessions/{id}?sinceSeq=n. 진행 중 요청이 있으면 다음 간격은 합류한다
 //   (TanStack Query가 같은 키의 진행 중 요청을 다시 쓴다).
 // - 탭이 숨으면 멈추고(refetchIntervalInBackground false) 보이면 즉시 1회 부른 뒤 다시 돈다(visibilitychange 재조회).
 // - 실패해도 마지막 데이터를 두고 폴링을 이어 가며, 연속 실패 횟수를 화면에 넘긴다(3회면 토스트 + 「다시 시도」).
-// - 말풍선은 seq로 합치고(확정 전 조각은 같은 seq로 다시 온다, J23), sinceSeq는 앞 응답의 nextSeq다.
+// - 말풍선은 seq로 합치고(확정 전 조각은 같은 seq로 다시 온다), sinceSeq는 앞 응답의 nextSeq다.
 // - keepPolling이 false인 상태(종료 · 화면 이동 대상)를 받거나 401이면 멈춘다.
 
 export interface LivePollingOptions {

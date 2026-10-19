@@ -32,7 +32,7 @@ public record PracticeSpeech(UUID correlationId, UUID scenarioId, long generatio
     }
     /**
      * U12: 대본의 승인 문장(상황 · 기회 문장 · 상황 다시 설명) 승인 발화 만들기. 새 연습 흐름이 레거시 {@code practice} 패키지의
-     * {@link OutputKind}를 직접 가리키지 않게 하는 얇은 공장이다(BR10.2). 재생 증거 표지는 SCENARIO다.
+     * {@link OutputKind}를 직접 가리키지 않게 하는 얇은 공장이다. 재생 증거 표지는 SCENARIO다.
      */
     public static PracticeSpeech scenario(UUID correlationId, UUID scenarioId, long generation, String partnerRole, String text) {
         return new PracticeSpeech(correlationId, scenarioId, generation, OutputKind.SCENARIO, partnerRole, text);
@@ -54,7 +54,7 @@ public record PracticeSpeech(UUID correlationId, UUID scenarioId, long generatio
     }
 
     /**
-     * 승인 원문과 실제 전사가 공백만 빼고 정확히 같은가(U5b 규칙, U8 LiveContentRegistry도 같은 규칙을 쓴다 — NFR2.1 · SD6). 정규식
+     * 승인 원문과 실제 전사가 공백만 빼고 정확히 같은가(U5b 규칙, U8 LiveContentRegistry도 같은 규칙을 쓴다 — SD6). 정규식
      * {@code \s}는 ASCII 공백(space · \t · \n · \x0B · \f · \r)만이라 NBSP · 전각 공백 · 제로폭 문자가 끼면 다르다(안전 쪽).
      */
     public static boolean sameWithoutAsciiWhitespace(String approved, String actual) {

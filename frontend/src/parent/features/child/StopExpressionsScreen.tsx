@@ -5,14 +5,14 @@ import { useStopExpressionsScreen } from "./useStopExpressionsScreen";
 import { ACCOUNT_COPY, ACCOUNT_PROPOSED_COPY, ACCOUNT_TEMP_COPY, quoted, stopSectionTitle } from "@/shared/copy/account";
 import { COPY, TEMP_COPY } from "@/shared/copy/ko";
 
-// SET-01 종료 표현 설정 (U2 · US2.3 · AC2.3.1 ~ AC2.3.6 · AC2.3.8 · mockups S-SET1 · 9-11 · R9 · U2-J11)
+// SET-01 종료 표현 설정 (U2 · US2.3 · AC2.3.1 ~ AC2.3.6 · AC2.3.8 · mockups S-SET1 · 9-11)
 // 기본 표현 '무중아 그만할래'는 파란 고정 카드이고 삭제 · 수정 단추가 없다(색만이 아니라 구조로도 구분). 추가 표현 카드를 누르면 같은 화면
 // 입력 칸이 수정 상태가 되고, 「+ 표현 추가」는 빈 입력 칸을 연다(5개면 꺼짐). 칸의 「확인」은 목록에만 반영하고(저장 전),
 // 「삭제」는 목록에서 뺀다. 「저장」이면 통째 저장 후 05, 화면 「취소」 · 「←」는 변경을 버리고 05.
 // 2 ~ 20자 · 중복(공백 · 대소문자 무시, 기본 표현 포함) · 5개를 어기면 칸 아래 오류 글과 「저장」 꺼짐. 실패는 실패로 알린다.
 // 규칙은 서버 StopExpressionRules와 글자 하나까지 같다(리뷰 8): 공백 = 유니코드 White_Space 속성, 글자 수 = NFC 뒤 코드 포인트.
 // 입력 칸에 maxLength를 두지 않는다(UTF-16 단위라 이모지 20개를 못 친다) — 넘으면 오류 글로 알린다.
-// 요청 · 오류 분기 · 이동은 useStopExpressionsScreen 훅이 맡고, 이 화면은 편집 목록 · 입력 칸 · 검증 · 그리기를 맡는다(BR2.1).
+// 요청 · 오류 분기 · 이동은 useStopExpressionsScreen 훅이 맡고, 이 화면은 편집 목록 · 입력 칸 · 검증 · 그리기를 맡는다.
 
 export const STOP_MIN_LENGTH = 2;
 export const STOP_MAX_LENGTH = 20;

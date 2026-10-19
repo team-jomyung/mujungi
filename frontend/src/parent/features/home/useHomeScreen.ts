@@ -12,8 +12,8 @@ import { formatHhmm } from "@/shared/copy/timeText";
 import { useToast } from "@/shared/toast/ToastProvider";
 import { useNotificationEntry } from "../../common/push/useNotificationEntry";
 
-// 04 홈 화면의 요청 · 앱 시작 점검 · 오류 분기 · 화면 이동을 맡는 흐름 훅(BR2.1).
-// 동작 규칙(GET /api/home 1회 · GET /api/me 점검 U2-J9 · 401 → 01 · 잠긴 탭 이유 토스트)은 HomeScreen에 있던 그대로다(BR1.1).
+// 04 홈 화면의 요청 · 앱 시작 점검 · 오류 분기 · 화면 이동을 맡는 흐름 훅.
+// 동작 규칙(GET /api/home 1회 · GET /api/me 점검 401 → 01 · 잠긴 탭 이유 토스트)은 HomeScreen에 있던 그대로다.
 
 export function useHomeScreen() {
   const router = useRouter();
@@ -43,8 +43,8 @@ export function useHomeScreen() {
     });
   }, [error, errorUpdatedAt, refetch, router, toast]);
 
-  // 앱 시작 점검(U2-J9 · AC1.1.5 · AC1.2.7): 처음 한 번을 마치지 않았으면 01부터. 약관이 바뀐 보호자(OUTDATED)는 이미 한 번을
-  // 마쳤으므로 02 재동의로 보낸다(U2-J8 · 편차 (U2-g) · 리뷰 6, 로그인 직후 분기 routeAfterLogin과 같다)
+  // 앱 시작 점검: 처음 한 번을 마치지 않았으면 01부터. 약관이 바뀐 보호자(OUTDATED)는 이미 한 번을
+  // 마쳤으므로 02 재동의로 보낸다(편차 · 리뷰 6, 로그인 직후 분기 routeAfterLogin과 같다)
   const meData = me.data;
   useEffect(() => {
     if (notification.active && isUnauthenticated(me.error)) goToLogin(router, toast);
@@ -76,7 +76,7 @@ export function useHomeScreen() {
           ? lockToastMessage(data.lock.reasonCode)
           : null;
   const childName = data?.child?.displayName ?? null;
-  // 지금 활동 칸(U4a · AC1.4.7 · AC1.4.13). 'n분째'는 화면 시계로 센다(U4a-J5)
+  // 지금 활동 칸(U4a · AC1.4.7 · AC1.4.13). 'n분째'는 화면 시계로 센다
   const liveCard = liveActivityCard(currentSession, childName, new Date().toISOString());
 
   const handleNavigate = (tab: TabKey) => {

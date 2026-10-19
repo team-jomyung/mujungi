@@ -1,6 +1,6 @@
 import { randomBytes, timingSafeEqual } from "node:crypto";
 
-// 구글 OAuth 시작 · 콜백 도우미 — 서버 전용(라우트 처리기 · 서버 컴포넌트만 import) (U2 · J21 · R1 · U2-J1 · U2-J4)
+// 구글 OAuth 시작 · 콜백 도우미 — 서버 전용(라우트 처리기 · 서버 컴포넌트만 import) (U2)
 // state는 HttpOnly 쿠키에만 두고(보호자 JS 저장소를 쓰지 않는다, SD-6) 콜백에서 같은지 본다(로그인 CSRF 방지).
 // 구글 값은 기동 환경 변수 이름만 쓴다(값은 저장소에 없다). 비어 있으면 로그인은 01 실패 토스트로 끝난다.
 
@@ -33,7 +33,7 @@ export function newState(): string {
   return randomBytes(32).toString("base64url");
 }
 
-/** 구글 인가 주소(scope openid만 — 식별은 sub, 이메일을 받지 않는다 U2-J3). */
+/** 구글 인가 주소(scope openid만 — 식별은 sub, 이메일을 받지 않는다). */
 export function authorizeUrl(config: GoogleOAuthConfig, state: string): string {
   const url = new URL(GOOGLE_AUTHORIZE_URL);
   url.searchParams.set("response_type", "code");

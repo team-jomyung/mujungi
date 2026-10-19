@@ -6,7 +6,7 @@ import static kr.mujoong.realtime.config.RealtimeProperties.positive;
 import java.time.Duration;
 import org.springframework.util.unit.DataSize;
 
-/** NFR9.9 · BR3.9 · PD-2 ~ PD-5 · RD-22 한도. U3: 원음 기록 대기열 프레임 수(넘치면 버리고 센다, U3-J15). */
+/** 한도. U3: 원음 기록 대기열 프레임 수(넘치면 버리고 센다). */
 public record RealtimeLimitsProperties(
         DataSize wsTextFrameMax,
         DataSize internalEventBodyMax,

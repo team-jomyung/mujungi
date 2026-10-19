@@ -14,7 +14,7 @@ import { useTiming } from "@/shared/timing/TimingProvider";
 
 interface PendingDeletion { readonly goal: GoalSelection; toastId?: number }
 
-/** Screen18 owns unsent deletion. The shared focus-aware toast is the only undo clock (J3/J11). */
+/** Screen18 owns unsent deletion. The shared focus-aware toast is the only undo clock. */
 export function usePracticeGoals() {
   const api = useApiClient();
   const client = useQueryClient();

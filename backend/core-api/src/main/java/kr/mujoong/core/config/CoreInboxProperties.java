@@ -6,7 +6,7 @@ import static kr.mujoong.core.config.CoreProperties.positiveList;
 import java.time.Duration;
 import java.util.List;
 
-/** RD-9 · BR5.5 ~ BR5.8 Inbox 처리. */
+/** Inbox 처리. */
 public record CoreInboxProperties(
         Duration pollInterval,
         List<Duration> retryBackoff,

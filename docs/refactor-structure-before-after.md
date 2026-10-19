@@ -1,7 +1,7 @@
 # 리팩토링 전·후 폴더 · 파일 구조 (팀 논의용)
 
 > 작성 2026-10-18 · 기준 원격 `main` 570a625 · 작업 기록 `aidlc/spaces/default/intents/261018-structure-refactor/` · 브랜치 `claude/refactor-structure`
-> 이 문서는 **설계안**이다. 코드는 아직 바꾸지 않았다. 아래 "팀이 정할 것"이 정해지면 AI-DLC Functional Design 문서(대상 구조 · 이동 규칙 · 단계 순서)로 확정한다.
+> 이 문서는 처음에 **설계안**으로 썼고, 구조 리팩토링 Code Generation 마무리(Step 25)에서 "이후" 구조를 실제 결과로 갱신했다. 설계안과 달라진 점은 각 "이후" 절 끝의 "실제 결과"에 적었다.
 > 배경 문서: 제안서 [`refactor-structure-proposal.md`](refactor-structure-proposal.md), 요구사항 `…/inception/requirements-analysis/requirements.md`, 코드 스캔 `aidlc/spaces/default/codekb/mujungi/code-structure.md`.
 
 ## 1. 한눈에
@@ -42,7 +42,7 @@ src/
 └─ shared/                   copy errors protocol security styles timing toast
 ```
 
-### 이후 (After, 설계안)
+### 이후 (After, 실제 결과)
 
 ```
 src/
@@ -51,21 +51,27 @@ src/
 │  ├─ features/
 │  │  ├─ login/      LoginScreen · LoginCallbackScreen · DevLoginScreen · api.ts
 │  │  ├─ consent/    ConsentScreen · useConsentScreen · api.ts
-│  │  ├─ child/      ChildScreen · StopExpressionsScreen · use…Screen · api.ts
-│  │  ├─ home/       HomeScreen · useHomeScreen · presentation.ts
-│  │  ├─ device/     DeviceScreen · DeviceRegisterScreen · use…Screen · CodeInput
-│  │  ├─ free/       FreeTalkScreen · useFreeTalkScreen · failure.ts
-│  │  ├─ live/       LiveScreen · useLiveScreen · useLivePolling · presentation.ts
-│  │  ├─ done/       DoneScreen · useDoneScreen · useResultStatusPolling · presentation.ts
-│  │  ├─ practice/   PracticeScreen · PracticeHeader · PracticeStartAction · api.ts(startApi 통합)
-│  │  │              copy.ts(copy + u5bCopy 통합) · usePracticeGoals · practiceProgress …
-│  │  ├─ records/    RecordsScreen · RecordDetailScreen · use…Screen · api.ts
+│  │  ├─ child/      ChildScreen · StopExpressionsScreen · use…Screen
+│  │  ├─ home/       HomeScreen · useHomeScreen · presentation.ts · DeviceCard · SettingsSheet …
+│  │  ├─ device/     DeviceScreen · DeviceRegisterScreen · use…Screen · CodeInput · api.ts
+│  │  ├─ free/       FreeTalkScreen · useFreeTalkScreen · ChipGroup · TextArea200 · api.ts
+│  │  ├─ live/       LiveScreen · useLiveScreen · NoticeDialog · StatusLine
+│  │  ├─ done/       DoneScreen · useDoneScreen · presentation.ts
+│  │  ├─ practice/   PracticeScreen · PracticeStartAction · copy.ts(copy + u5bCopy 통합)
+│  │  │              usePracticeGoals · practiceStart · startPort
+│  │  ├─ records/    RecordsScreen · RecordDetailScreen · EndReasonCard · SceneChip
 │  │  └─ reports/    ReportScreen · ReportRangeScreen · useReportPolling · api.ts
-│  └─ common/        보호자 전용 공통
-│     ├─ api/        apiClient · csrf · queries · types
-│     ├─ components/ 여러 기능이 쓰는 것만 (BottomSheet, StatusLine …)
-│     ├─ hooks/      useBackGuard
-│     └─ push/ navigation.ts oauth.ts ParentProviders.tsx
+│  └─ common/        보호자 전용 공통 (둘 이상의 기능이 쓰는 것)
+│     ├─ api/        apiClient · csrf · types · account · queries · activity · results
+│     │              child · home · live · practice(연습 요청 통합) · practiceProgress
+│     ├─ activity/   failure · livePresentation
+│     ├─ components/ BottomSheet BottomTabBar ConfirmDialog LiveRegion MonthCalendar
+│     │              PracticeHeader TranscriptList transcriptTimeline
+│     ├─ copy/       practice
+│     ├─ hooks/      useBackGuard · useLivePolling · useResultStatusPolling
+│     ├─ push/       api · browserPush · pushWorker · useNotificationEntry
+│     ├─ styles/     account activity parent result (css)
+│     └─ navigation.ts oauth.ts ParentProviders.tsx
 ├─ device/
 │  ├─ features/
 │  │  ├─ first-boot/ FirstBootView   (옛 D0View)
@@ -74,6 +80,8 @@ src/
 │  └─ audio ws mic power runtime machine api  DeviceApp.tsx   그대로
 └─ shared/           그대로 (copy errors protocol security styles timing toast)
 ```
+
+**실제 결과(프런트):** 위 구조대로 옮겼다. 설계안과 다른 점은 둘이다. ① 둘 이상의 기능이 쓰는 파일은 계획 밖으로 `common/` 아래에 모았다(`cross-feature-imports.md` 참조). ② 연습 요청 `api.ts` + `startApi.ts`는 공통 `common/api/practice.ts` 하나로 합쳤고(시작 포트만 `features/practice/startPort.ts`), `copy.ts` + `u5bCopy.ts`는 `features/practice/copy.ts`와 `common/copy/practice.ts`로 나눴다(공통 `PracticeHeader`가 쓰는 문구만 공통). 화면 번호 ↔ 새 파일은 `docs/screen-map.md`에 있다.
 
 ### 화면 번호 → 새 이름 대응 (초안)
 
@@ -121,7 +129,7 @@ practice/      옛 연습 (U5b 레거시, 29파일)       practiceflow/  새 연
 config/        RealtimeProperties.java (570줄, 중첩 record 약 25개)
 ```
 
-### 이후 (After, 설계안)
+### 이후 (After, 실제 결과)
 
 ```
 session/   SessionExecutor.java      사건을 받아 순서대로 분배 + 재전달 · 최상위 예외만
@@ -139,6 +147,8 @@ config/          설정 레코드를 기능별 파일로 분리 (설정 키 · �
 ```
 
 나누는 순서: 끝내기 → 시계 → 공백 시계 → 참여 확인 · 판정 흡수. 협력 객체는 모두 실행기 스레드에서만 호출한다.
+
+**실제 결과(realtime):** `SessionExecutor`는 4,361줄에서 3,091줄이 되었다(합격 기준 AC-4: 3,100줄 이하). 분리한 협력 객체의 줄 수는 `SessionContext` 485 · `EndingFlow` 909 · `SessionClocks` 243 · `IdleClock` 296 · `JoinFlow` 234 · `JudgmentCoordinator` 445이다(설계 추정치보다 큰 것은 호출 지점 접근자와 주석이 더해졌기 때문이다). 설정 레코드는 `config/Realtime<기능>Properties.java` 20개로 나눴고 설정 키와 바인딩 prefix는 그대로다. 옛 `practice/`는 `practicelegacy/`가 되었다. 연습 확장점 구역과 게이트는 실행기에 남겼다(BR3.3 · BR3.5, `gate-boundary.md`).
 
 ## 5. 이름이 묶인 곳 (이동한 커밋에서 같이 고침)
 
@@ -198,7 +208,6 @@ flowchart LR
 
 | 단계 | 상태 |
 |---|---|
-| Reverse Engineering | 완료(승인). 코드 지식 베이스 9개 문서 게시 |
-| Requirements Analysis | 완료(승인). 자문 검토가 Major 6건 · Minor 4건을 남김(승인 때 감수) |
-| Functional Design | 질문 Q1 ~ Q5와 가정에 답함. 이 문서의 구조 확인 대기 중 (설계 문서는 아직 만들지 않음) |
-| Code Generation · Build and Test | 대기 |
+| Reverse Engineering · Requirements Analysis · Functional Design | 완료(승인) |
+| Code Generation | Step 1 ~ 23(단계 0 ~ 5) 구현 · 검증 완료. Step 24(주석 정리)는 `team.md` 규칙 학습 승인에 달려 있다. Step 25(문서 · 추적성) 마무리 |
+| Build and Test | 대기(전체 `bash scripts/verify.sh`) |

@@ -17,8 +17,8 @@ import { PROPOSED_COPY, TEMP_COPY } from "@/shared/copy/ko";
 import { messageForErrorCode } from "@/shared/errors/codeToCopy";
 import { useToast } from "@/shared/toast/ToastProvider";
 
-// 17 활동 끝 화면의 폴링 · 오류 분기 · 화면 이동을 맡는 흐름 훅(BR2.1).
-// 동작 규칙(종료 상태를 받을 때까지 폴링 · 시작 실패 08 · 401 · 404 · 읽기 실패 토스트)은 DoneScreen에 있던 그대로다(BR1.1).
+// 17 활동 끝 화면의 폴링 · 오류 분기 · 화면 이동을 맡는 흐름 훅.
+// 동작 규칙(종료 상태를 받을 때까지 폴링 · 시작 실패 08 · 401 · 404 · 읽기 실패 토스트)은 DoneScreen에 있던 그대로다.
 
 function keepPollingOnDone(status: SessionStatus): boolean {
   return !isTerminalStatus(status);

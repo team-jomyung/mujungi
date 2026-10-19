@@ -17,8 +17,8 @@ import { PROPOSED_COPY, TEMP_COPY } from "@/shared/copy/ko";
 import { messageForErrorCode } from "@/shared/errors/codeToCopy";
 import { useToast } from "@/shared/toast/ToastProvider";
 
-// 12 진행 화면의 요청 · 폴링 · 오류 분기 · 화면 이동을 맡는 흐름 훅(BR2.1). 화면은 값과 핸들러만 쓴다.
-// 동작 규칙(2초 폴링 · 401 · 404 · P1 끝내기 · 같은 requestId 재시도)은 LiveScreen에 있던 그대로다(BR1.1).
+// 12 진행 화면의 요청 · 폴링 · 오류 분기 · 화면 이동을 맡는 흐름 훅. 화면은 값과 핸들러만 쓴다.
+// 동작 규칙(2초 폴링 · 401 · 404 · P1 끝내기 · 같은 requestId 재시도)은 LiveScreen에 있던 그대로다.
 
 /** 연속 실패가 이 횟수가 되면 토스트를 보인다(PD-12). */
 const POLL_FAILURE_TOAST_THRESHOLD = 3;
@@ -44,7 +44,7 @@ export function useLiveScreen(sessionId: string) {
   const status = view?.status;
   const { error, failureStreak, refetch } = polling;
 
-  // 상태에 따른 화면 이동(functional-spec 4절 표 · J120, U4a: 연결 끊김 종료는 P2 → 17, 무응답은 P3 → 04, 서버 재시작 FAILED는 17 — U4a-J12 · J16).
+  // 상태에 따른 화면 이동(functional-spec 4절 표 · , U4a: 연결 끊김 종료는 P2 → 17, 무응답은 P3 → 04, 서버 재시작 FAILED는 17 —).
   const outcome = view === undefined ? null : liveOutcome(view);
   const outcomeKind = outcome?.kind;
   const failedCode = outcome?.kind === "startFailed" ? outcome.failureCode : null;
@@ -92,7 +92,7 @@ export function useLiveScreen(sessionId: string) {
     if (ending) {
       return;
     }
-    // 같은 P1 안의 재시도는 같은 requestId(BR6.9 · RD-21).
+    // 같은 P1 안의 재시도는 같은 requestId.
     const requestId = requestIdRef.current ?? crypto.randomUUID();
     requestIdRef.current = requestId;
     setEnding(true);
@@ -135,7 +135,7 @@ export function useLiveScreen(sessionId: string) {
     }
   };
 
-  // 앱만 오프라인: 마지막 폴링이 응답 없음으로 실패(U4a-J17 · AC3.2.12). 마지막으로 받은 시각을 보인다
+  // 앱만 오프라인: 마지막 폴링이 응답 없음으로 실패. 마지막으로 받은 시각을 보인다
   const offline = error instanceof ApiError && error.isDeliveryUnknown && failureStreak > 0;
   // 종료 가능 상태는 WAITING_CHILD · ACTIVE(AC3.3.8 · C.S-12.11.5 참여 기다리는 중 그림의 「이야기 끝내기」 · U4b 3.2 표)
   const canEnd = (status === "ACTIVE" || status === "WAITING_CHILD") && !ending;

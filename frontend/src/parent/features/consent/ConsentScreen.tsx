@@ -11,7 +11,7 @@ import { COPY, TEMP_COPY } from "@/shared/copy/ko";
 // 네 항목을 모두 체크해야 「동의하고 계속」이 켜진다. 「자세히 보기 ›」는 그 항목의 약관(생성형 AI 안내 포함)을 바텀 시트로 보이고
 // 「확인」 · 바깥 · Escape로 닫혀 보던 자리로 돌아온다. 「←」는 P5(기본 초점 「계속 동의하기」, 「로그아웃」 → 01).
 // 저장하면 아이가 없으면 03(처음 등록), 있으면(재동의) 04로 간다. 동의를 바꾸거나 거두는 단추는 없다.
-// 요청 · 오류 분기 · 이동은 useConsentScreen 훅이 맡고, 이 화면은 약관 시트 열림과 그리기를 맡는다(BR2.1).
+// 요청 · 오류 분기 · 이동은 useConsentScreen 훅이 맡고, 이 화면은 약관 시트 열림과 그리기를 맡는다.
 
 const ITEM_LABEL: Readonly<Record<ConsentType, string>> = {
   VOICE_AND_TEXT: ACCOUNT_COPY.consent.voiceAndText,

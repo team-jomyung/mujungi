@@ -2,9 +2,9 @@
 
 화면 설계 v1.5j의 화면 번호로 프런트 파일을 찾는 표다. 구조 · 이름 리팩토링(작업 기록 `261018-structure-refactor`)은 화면 파일 이름에서 번호 접미(`Login01.tsx` 등)를 없애고 기능 폴더로 옮긴다. 번호는 이 표에서 찾는다.
 
-- **상태: 단계 2 반영 + 기능끼리 import 정리(화면 훅 분리 · 요청 · 문구 위치 정리 끝).** "지금 경로"는 이동 전 경로, "이동 뒤 경로"는 실제 경로다. 화면 훅 9개는 만들었고, `account.ts` · `queries.ts`는 기능별 `api.ts`로 나눴으며, 연습 `api.ts` · `copy.ts`는 하나씩으로 합쳤다. 마무리(Step 25)에서 이 표를 실제 결과로 다시 확인한다.
+- **상태: 최종본(Step 25 확인).** "지금 경로"는 이동 전 경로, "이동 뒤 경로"는 실제 경로다. 화면 훅 9개는 만들었고, `account.ts` · `queries.ts`는 기능별 `api.ts`로 나눴으며, 연습 `api.ts` · `copy.ts`는 하나씩으로 합쳤다. Step 25에서 이 표를 실제 파일과 다시 대조했다.
 - 기능끼리 import 정리(계획 외 추가, Step 11e): 둘 이상의 기능이 쓰는 파일은 `common/` 아래로 옮겼다. 아래 "단계 2 실제 결과 메모"와 1절의 "함께 옮기는 화면 곁 파일"에서 `features/{home,child,live}/api.ts` · `live/presentation.ts` · `live/useLivePolling` · `done/` 폴링 훅 · `free/failure.ts` · `practice/PracticeHeader`는 3절 끝의 표에 적은 새 위치에 있다. 옮긴 목록은 작업 기록 `construction/code-generation/cross-feature-imports.md`에 있다.
-- 단계 2 실제 결과 메모: 훅 9개는 화면 곁 같은 폴더의 `use<기능>Screen.ts`다. 요청 함수는 `features/{consent,child,home,device,free,live,login}/api.ts`와 `common/api/{account,queries}.ts`(로그인 · 계정 · 공통 질의 설정만)에 있다. 연습 진행 파싱(`practiceProgress`)은 공통 코드가 쓰므로 `common/api/practiceProgress.ts`로, 말풍선 흐름 계산(`buildTimeline` · `gapText`)은 `common/components/transcriptTimeline.ts`로 옮겼다.
+- 단계 2 실제 결과 메모: 훅 9개는 화면 곁 같은 폴더의 `use<기능>Screen.ts`다. 요청 함수는 한 기능만 쓰면 `features/{consent,device,free,login,reports}/api.ts`에, 둘 이상이 쓰면 `common/api/{child,home,live,practice,…}.ts`(기능 끼리 import 정리, Step 11e)에 있고 `common/api/{account,queries}.ts`는 로그인 · 계정 · 공통 질의 설정만 가진다. 연습 진행 파싱(`practiceProgress`)은 공통 코드가 쓰므로 `common/api/practiceProgress.ts`로, 말풍선 흐름 계산(`buildTimeline` · `gapText`)은 `common/components/transcriptTimeline.ts`로 옮겼다.
 - 단계 1 실제 결과 메모: 화면 파일 17개 · 기기 3개는 표대로 옮겼다. 화면 export 이름도 번호를 지웠다(`Login01` -> `LoginScreen` 등, `presentDevice05` -> `presentDeviceScreen`, `D0View` -> `FirstBootView`, `T19View` -> `StatusView`).
 - 경로는 모두 `frontend/src/` 아래다. 이동 뒤 보호자 경로는 `parent/features/<기능>/`, 기기 경로는 `device/features/<기능>/`이다.
 - 라우트(`src/app/...`)는 바뀌지 않는다. 주소 `/parent/...`는 그대로이고 `page.tsx`의 import만 바뀐다.

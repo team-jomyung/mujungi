@@ -76,7 +76,7 @@ final class SessionClocks {
             case DEVICE_ACK -> onStartTimeout();
             case CLOSING_CONFIRM -> {
                 if (ending.farewellPending()) {
-                    // U4b BR4.7: DECLINED 인사 상한 — CLOSE_TRANSPORT를 바로 보내고 정리
+                    // DECLINED 인사 상한 — CLOSE_TRANSPORT를 바로 보내고 정리
                     boolean ours = ending.deviceStillOurs();
                     if (ours) {
                         ctx.closing().closeNow(ending.closingDevice());
@@ -116,7 +116,7 @@ final class SessionClocks {
     }
 
     /**
-     * U4b 계정 삭제 강제 정지(BR9.1 · U4b-J19): DB 전이 · 사건 · 스냅숏을 만들지 않는다. 원음 기록을 떼고(정리가 파일을 닫는다) 연결이 살아 있고
+     * U4b 계정 삭제 강제 정지: DB 전이 · 사건 · 스냅숏을 만들지 않는다. 원음 기록을 떼고(정리가 파일을 닫는다) 연결이 살아 있고
      * START_SESSION을 보냈으면 CLOSE_TRANSPORT(CONSENT_WITHDRAWN) + STANDBY를 보낸 뒤 정리한다(정산 창도 건너뛴다).
      */
     void onDeletionStop(SessionMailbox.DeletionStop stop) {
@@ -136,7 +136,7 @@ final class SessionClocks {
         }
     }
 
-    /** BR6.12 ②: 송신 시도 시각부터 20초. ACK · READY 빠짐 → DEVICE_NO_ACK + UNRESPONSIVE, 아니면 PROVIDER_UNAVAILABLE(J59 (h)). */
+    /** ②: 송신 시도 시각부터 20초. ACK · READY 빠짐 → DEVICE_NO_ACK + UNRESPONSIVE, 아니면 PROVIDER_UNAVAILABLE((h)). */
     private void onStartTimeout() {
         if (!START_PHASE.contains(ctx.status())) {
             return;
@@ -164,7 +164,7 @@ final class SessionClocks {
         ending.afterFailed();
     }
 
-    /** BR6.12 ③: CLOSING 진입부터 30초. ENDED_UNCONFIRMED + UNRESPONSIVE. */
+    /** ③: CLOSING 진입부터 30초. ENDED_UNCONFIRMED + UNRESPONSIVE. */
     private void onClosingTimeout() {
         if (ctx.status() != SessionStatus.CLOSING) {
             return;
@@ -177,7 +177,7 @@ final class SessionClocks {
         }
         Instant now = ctx.services().clock().now();
         ending.closeProvider();
-        // U4b BR1.4: UNCONFIRMED로 덮고 처음 사유(와 세부)를 end_detail에 둔다
+        // UNCONFIRMED로 덮고 처음 사유(와 세부)를 end_detail에 둔다
         Optional<ActivitySessionRow> row = ctx.services().transitions().transition(ctx.plan().sessionId(), SessionStatus.CLOSING,
                 SessionStatus.ENDED_UNCONFIRMED,
                 TransitionTable.closingTimeoutChange(ctx.closingReason(), ctx.closingDetail(), now).withProviderClosedAt(now),
@@ -187,7 +187,7 @@ final class SessionClocks {
             return;
         }
         ending.changeStatus(SessionStatus.ENDED_UNCONFIRMED, ctx.services().clock().now());
-        // U4b BR6.4 · U4b-J14: CLOSING 진입부터 ended_at까지를 UNCONFIRMED 구간으로 남긴다
+        // CLOSING 진입부터 ended_at까지를 UNCONFIRMED 구간으로 남긴다
         ctx.quietly(() -> ctx.services().gaps().close(
                 ctx.services().gaps().open(ctx.plan().sessionId(), SessionGapRepository.Kind.UNCONFIRMED, ctx.closingAt()), now));
         timeoutFired("CLOSING_CONFIRM", threshold, elapsed);
@@ -197,9 +197,9 @@ final class SessionClocks {
         ending.afterTerminal();
     }
 
-    /** BR6.12 ④: 묶인 연결의 마지막 기기 메시지부터 40초. 메시지마다 다시 걸지 않고 만기 때 남은 시간으로 다시 건다. */
+    /** ④: 묶인 연결의 마지막 기기 메시지부터 40초. 메시지마다 다시 걸지 않고 만기 때 남은 시간으로 다시 건다. */
     private void onDisconnectCheck() {
-        // U4b BR6.3: WAITING_CHILD까지 넓혔다. CLOSING에는 끊김 전이가 없다
+        // WAITING_CHILD까지 넓혔다. CLOSING에는 끊김 전이가 없다
         if (!Trigger.DISCONNECT.accepts(ctx.status())) {
             return;
         }
@@ -215,8 +215,8 @@ final class SessionClocks {
                 SessionStatus.ABORTED, TransitionTable.changeFor(Trigger.DISCONNECT, null, now).withProviderClosedAt(now),
                 SessionTransitions.Origin.REALTIME, ctx.plan().traceId(), ending.transitionExtras());
         if (row.isEmpty()) {
-            // J292: 진 끊김 시계는 공급자를 닫지 않는다 — 행이 CLOSING이면 CLOSING이 끊김보다 우선하고(BR6.12 ③) 공급자는
-            // VOICE_SESSION_CLOSED · 30초 시한까지 열어 둔다(BR6.10 ④)
+            // 진 끊김 시계는 공급자를 닫지 않는다 — 행이 CLOSING이면 CLOSING이 끊김보다 우선하고(③) 공급자는
+            // VOICE_SESSION_CLOSED · 30초 시한까지 열어 둔다(④)
             ending.syncFromDb();
             return;
         }

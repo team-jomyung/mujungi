@@ -10,13 +10,13 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.util.unit.DataSize;
 
 /**
- * Realtime 앱이 읽는 {@code mujoong.*} 설정 트리 (U1 3.5 Step 3 · RD-24 · BR8.11 · NFR6.1).
+ * Realtime 앱이 읽는 {@code mujoong.*} 설정 트리 (U1 3.5 Step 3).
  *
  * <p>값의 정본은 reliability-design.md {@code ## 3}과 {@code contracts/timing.md}이고, 값은
  * {@code application*.yml}에만 둔다. 코드에는 기본값이 없어 키가 빠지면 기동이 실패한다. Core와 같은 이름의
  * 묶음(outbox · inbox 등)도 앱마다 따로 둔다(LC-11: Boot 설정은 공유하지 않음).
  *
- * <p>{@code provider.url}은 {@code application.yml}에 없고 demo · prod 프로필 파일에만 있다(J141). 비었을 때
+ * <p>{@code provider.url}은 {@code application.yml}에 없고 demo · prod 프로필 파일에만 있다. 비었을 때
  * 기동 거부 · 허용 호스트 검사 · test 프로필 루프백 검사는 기동 점검(S1b)이 맡는다.
  *
  * <p>기동 검증(RD-24): 모든 시간 · 건수 값이 양수, 불변식 I-3 {@code internal-http.verify-token-timeout <
@@ -25,8 +25,8 @@ import org.springframework.util.unit.DataSize;
  *
  * <p>U3(음성 대화, docs/units/u3/design.md 4절)가 더한 키: 불안정 판정 {@code timing.device.unstable-rtt} ·
  * {@code timing.device.unstable-disconnect-window} · {@code device.unstable-disconnect-count}(계약 7절 "5분 안 2회"를 창 · 횟수로
- * 나눔, U3-J3), 원음 기록 {@code recording.*}(U3-J14 · U3-J15), 원음 대기열 {@code limits.recording-queue-frames}, 불확실 전사 기준
- * {@code transcript.uncertain-below-percent}(U3-J17). 더하기만 했고 U1 키의 이름 · 뜻은 그대로다.
+ * 나눔), 원음 기록 {@code recording.*}, 원음 대기열 {@code limits.recording-queue-frames}, 불확실 전사 기준
+ * {@code transcript.uncertain-below-percent}. 더하기만 했고 U1 키의 이름 · 뜻은 그대로다.
  *
  * <p>묶음마다 타입은 {@code Realtime<묶음>Properties} 파일로 나눠 이 패키지에 둔다. 이 파일에는 루트 레코드와 묶음들이 함께 쓰는 검증
  * 도우미만 남긴다.

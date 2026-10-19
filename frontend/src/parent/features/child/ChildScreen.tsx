@@ -12,12 +12,12 @@ import {
 } from "@/shared/copy/account";
 import { COPY, PROPOSED_COPY, TEMP_COPY } from "@/shared/copy/ko";
 
-// 03 아이 정보 — 처음 등록 · 보기 · 수정 한 화면 (U2 · US1.3 · AC1.3.1 ~ AC1.3.10 · mockups S-03 · 9-2 · 9-3 · R8 · U2-J14)
+// 03 아이 정보 — 처음 등록 · 보기 · 수정 한 화면 (U2 · US1.3 · AC1.3.1 ~ AC1.3.10 · mockups S-03 · 9-2 · 9-3)
 // 아이가 없으면(404 CHILD_NOT_REGISTERED) 처음 등록(뒤로 없음, 기기 뒤로가기도 아무 일 없음) → 「확인」이면 04.
 // 있으면 보기(이름 · 'n세 · 관심사' · 기기 상태 줄 · 「정보 수정」) → 수정 중(카드 안 입력 + 「취소」 · 「확인」) → 저장되면 보기.
 // 이름이 비면 「확인」 꺼짐, 나이가 6 ~ 12 밖이면 칸 아래 글(색만이 아님), 관심사는 쉼표로 5개 · 하나에 10자를 넘는 입력을 막는다.
 // 저장 실패는 토스트이고 입력은 그대로다. 아이 선택 · 추가 · 삭제 단추는 없다.
-// 요청 · 오류 분기 · 이동은 useChildScreen 훅이 맡고, 이 화면은 입력 칸 값 · 검증 · 그리기를 맡는다(BR2.1).
+// 요청 · 오류 분기 · 이동은 useChildScreen 훅이 맡고, 이 화면은 입력 칸 값 · 검증 · 그리기를 맡는다.
 
 export const NAME_MAX_LENGTH = 10;
 export const AGE_MIN = 6;

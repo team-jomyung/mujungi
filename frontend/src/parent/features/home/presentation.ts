@@ -4,7 +4,7 @@ import { homeActivityLine, homeClosingLine, startedAtLine } from "@/shared/copy/
 import { PROPOSED_COPY } from "@/shared/copy/ko";
 import { elapsedMinuteOrdinal, formatHhmm } from "@/shared/copy/timeText";
 
-// 04 지금 활동 칸 판단 (U4a · AC1.4.7 · AC1.4.10 · AC1.4.13 · B1 · U4a-J5)
+// 04 지금 활동 칸 판단 (U4a · AC1.4.7 · AC1.4.10 · AC1.4.13 · B1)
 // REQUESTED ~ ACTIVE → 진행 중(→ 12), CLOSING → 종료 처리 중(→ 17), 종료 · 없음 → 없음(U2 틀). 경과 'n분째'는 화면 시계로 센다.
 
 export interface LiveActivityCard {

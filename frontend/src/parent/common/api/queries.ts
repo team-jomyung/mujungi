@@ -4,11 +4,11 @@ import { QueryClient } from "@tanstack/react-query";
 import { createContext, useContext } from "react";
 import type { ApiClient } from "./apiClient";
 
-// 보호자 웹 TanStack Query 설정과 API 클라이언트 문맥 (U1 3.5 Step 39 · PD-12 · 계약 3절 · J119 · J361)
+// 보호자 웹 TanStack Query 설정과 API 클라이언트 문맥 (U1 3.5 Step 39 · PD-12 · 계약 3절)
 // 기능별 요청 함수는 각 기능의 api.ts(features/{home,device,free,live,login})로 나뉘었다(단계 2, 3.a). 여기에는 모든 화면이 쓰는 것만 남는다.
 // 진입 때 1회 조회가 기본이다(포커스 복귀 · 재연결 재조회 끔, 자동 재시도 없음). 12의 2초 폴링은 features/live/useLivePolling.ts가 한다.
-// 브라우저의 온라인 표시와 상관없이 요청을 보내고 실패를 화면이 알린다(networkMode always, J361). 기본값 'online'이면 offline
-// 사건 뒤 요청이 멈춘 채(paused) 실패로 세지 않아 토스트 · 「다시 시도」가 뜨지 않는다(PD-12 · NFR4.16). 온라인으로 돌아오면
+// 브라우저의 온라인 표시와 상관없이 요청을 보내고 실패를 화면이 알린다(networkMode always). 기본값 'online'이면 offline
+// 사건 뒤 요청이 멈춘 채(paused) 실패로 세지 않아 토스트 · 「다시 시도」가 뜨지 않는다. 온라인으로 돌아오면
 // 12 · 17은 이어지는 폴링이, 04는 「다시 시도」가 다시 읽는다.
 
 export const queryKeys = {

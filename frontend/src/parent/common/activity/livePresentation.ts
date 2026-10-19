@@ -1,6 +1,6 @@
 import { isTerminalStatus, type LiveView } from "../api/types";
 
-// 12 진행 표시 판단 (U4a · AC3.2.8 · AC3.2.10 · AC3.4.1 · AC3.5.1 · AC3.6.9 · U4a-J12 · J16 · J19)
+// 12 진행 표시 판단 (U4a)
 // 화면이 아니라 값만 정한다: 받은 상태에 따른 다음 동작, 공백 경고 분, 말풍선과 끊김 · 미확인 구간을 시간 순으로 섞은 흐름.
 
 const MS_PER_MINUTE = 60_000;
@@ -30,7 +30,7 @@ export function isStartFailure(view: Pick<LiveView, "status" | "failureCode" | "
 
 /**
  * 상태 → 할 일: 진행 중이면 머문다, CLOSING · 종료는 17, 연결 끊김 종료는 P2 → 17, 무응답(DECLINED)은 P3 → 04, 시작 실패 FAILED는 08 사유
- * (진행 중 서버 재시작 FAILED는 17 '기기 응답 없이 끝냈어요', AC3.6.9 · U4a-J16).
+ * (진행 중 서버 재시작 FAILED는 17 '기기 응답 없이 끝냈어요').
  */
 export function liveOutcome(view: Pick<LiveView, "status" | "endReason" | "failureCode" | "startedAt">): LiveOutcome {
   const { status } = view;

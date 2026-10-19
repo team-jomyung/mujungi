@@ -4,8 +4,8 @@ import { useRef, type ChangeEvent, type ClipboardEvent, type KeyboardEvent } fro
 import { COPY, TEMP_COPY, codeCellLabel } from "@/shared/copy/ko";
 import { REGISTRATION_CODE_LENGTH } from "../../common/api/types";
 
-// 05a 코드 입력 8칸 (U1 3.5 Step 39 · BR2.8 · BR1.1 · AC2.2.1 · interaction-spec 3.7 · 접근성 O2 · U3)
-// OTP식: 자동 대문자, 넣으면 다음 칸으로, 빈 칸에서 지우면 앞 칸으로, 8자 붙여넣기. 공백 · 하이픈 · 가운뎃점은 지운다(BR1.1 정규화).
+// 05a 코드 입력 8칸 (U1 3.5 Step 39 · interaction-spec 3.7 · 접근성 O2 · U3)
+// OTP식: 자동 대문자, 넣으면 다음 칸으로, 빈 칸에서 지우면 앞 칸으로, 8자 붙여넣기. 공백 · 하이픈 · 가운뎃점은 지운다(정규화).
 // 영숫자만 받고 발급 알파벳 밖 글자(0 · 1 · I · L · O)도 그대로 받는다(서버가 404 CODE_NOT_FOUND, 편차 (d)).
 // 칸마다 'n번째 글자' 이름, 묶음은 role=group + 안내 문장 연결, 칸 44px 이상, 4 · 4로 묶어 보인다.
 

@@ -8,13 +8,13 @@ import { TextArea200 } from "./TextArea200";
 import { useFreeTalkScreen } from "./useFreeTalkScreen";
 import { COPY } from "@/shared/copy/ko";
 
-// 08 자유대화 준비 (U1 3.5 Step 40 · BR6.1 · BR6.2 · BR6.4 · AC3.1.1 · AC3.1.3 · AC3.1.4 · AC3.1.6 · AC3.1.8 · mockups 9-12 · J118 · J120)
+// 08 자유대화 준비 (U1 3.5 Step 40 · mockups 9-12)
 // 네 칸은 모두 선택(비워도 시작), 서술 칸 200자에서 막힘, 칩은 단일 선택. 전송 중 「자유대화 시작」이 꺼진다.
-// 202 → 12. 거절은 사유 문구 하나(mockups 9-12)를 보이고 08에 머문다. 12에서 FAILED로 돌아오면 사유 카드 한 종류(J120).
+// 202 → 12. 거절은 사유 문구 하나(mockups 9-12)를 보이고 08에 머문다. 12에서 FAILED로 돌아오면 사유 카드 한 종류.
 // idempotencyKey 재사용(표 2.9-C): 응답 없음 · 시간 초과 · 403 CSRF는 같은 키(같은 본문일 때), 그 밖의 거절 · 로컬 FAILED 재생 뒤에는 새 키.
-// 토스트 「다시 시도」는 실패한 렌더의 클로저가 아니라 지금 화면의 폼을 다시 제출한다. 보이는 입력으로 보내고(고쳤으면 새 키, J232)
-// 「자유대화 시작」 요청이 진행 중이면 막힌다(BR6.4 · J362).
-// 입력 원문은 시작 요청 본문으로만 가고 화면 밖 저장소에 두지 않는다(NFR3.1).
+// 토스트 「다시 시도」는 실패한 렌더의 클로저가 아니라 지금 화면의 폼을 다시 제출한다. 보이는 입력으로 보내고(고쳤으면 새 키)
+// 「자유대화 시작」 요청이 진행 중이면 막힌다.
+// 입력 원문은 시작 요청 본문으로만 가고 화면 밖 저장소에 두지 않는다.
 
 const SITUATION_OPTIONS: readonly ChipOption<SituationType>[] = [
   { value: "FRIEND", label: COPY.free.situationFriend },
@@ -30,9 +30,9 @@ const SOURCE_OPTIONS: readonly ChipOption<SourceType>[] = [
 ];
 
 export interface FreeTalkScreenProps {
-  /** 12에서 FAILED로 돌아왔는지(사유 카드 한 종류, J120). */
+  /** 12에서 FAILED로 돌아왔는지(사유 카드 한 종류). */
   readonly returnedFailed: boolean;
-  /** 돌아온 FAILED의 실패 코드(U4a-J16, 없으면 DEVICE_NO_ACK 문구). */
+  /** 돌아온 FAILED의 실패 코드(없으면 DEVICE_NO_ACK 문구). */
   readonly failureCode?: string | null;
 }
 

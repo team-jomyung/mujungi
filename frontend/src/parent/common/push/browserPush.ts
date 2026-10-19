@@ -1,4 +1,4 @@
-// U7-J9: 브라우저 서비스 워커 접근은 보호자 전용 이 모듈에서만 허용한다.
+// 브라우저 서비스 워커 접근은 보호자 전용 이 모듈에서만 허용한다.
 // /parent는 /parent/ scope 밖이다. 전역 ready 대신 반환 registration의 활성화를 기다린다.
 export type BrowserSubscription = Pick<PushSubscription, "endpoint" | "toJSON" | "unsubscribe">;
 

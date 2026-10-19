@@ -6,7 +6,7 @@ import kr.mujoong.realtime.config.RealtimeProperties;
 import kr.mujoong.realtime.config.RealtimeTimingProperties;
 
 /**
- * 새 연습 흐름이 읽는 설정 값 객체 (U12 FR7.1 · BR9.1 · BR9.2).
+ * 새 연습 흐름이 읽는 설정 값 객체.
  *
  * <p>시간 값은 {@code mujoong.timing.conversation.*}에서만 읽고(R-F7, 코드에 숫자 시간 값 없음), 횟수 한도는 새 키
  * {@code mujoong.practice-flow.*}에서 읽는다. 이 객체는 시계를 걸지 않는다 — 시계는 상태 기계(묶음 B)가 확장점 능력
@@ -14,7 +14,7 @@ import kr.mujoong.realtime.config.RealtimeTimingProperties;
  *
  * @param noResponseWait 입력을 기다리는 단계에서 첫 재안내까지의 무응답 대기(AC1.9.1)
  * @param focusMax 집중 연습 상한(AC1.5.4)
- * @param goalActiveLimit 목표 하나의 ACTIVE 상한(FR4.5)
+ * @param goalActiveLimit 목표 하나의 ACTIVE 상한
  * @param slotGuard 슬롯 안전 시계 길이(§3.2 {@code slot-guard-<correlationId>}). 실행부 재생 만료({@code SessionExecutor.Settings.playbackExpiry})와
  *     같은 설정 키 {@code mujoong.timing.device.output-queue-max}에서 읽는다
  * @param retryMax 장면당 다시 해 보기 최대 횟수

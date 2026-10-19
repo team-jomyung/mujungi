@@ -3,7 +3,7 @@ import { ACTIVITY_COPY, ACTIVITY_TEMP_COPY, childStopDetail, childStopTitle } fr
 import { COPY, PROPOSED_COPY, abortedBody, guardianStopDetail } from "@/shared/copy/ko";
 import { formatHhmm } from "@/shared/copy/timeText";
 
-// 17 활동 끝 표시 판단 (U4a · AC3.3.3 · AC3.4.3 · AC3.6.1 · AC3.6.9 · AC3.6.10 · U4a-J13 ~ J16)
+// 17 활동 끝 표시 판단 (U4a)
 // 종료 사유 → 사유 카드 표(AC3.6.9)를 여기 한 곳에 둔다. 정리 끝 · 정리 실패는 결과 작업 상태(U6)라 종료 상태면 늘 '정리 중'이다.
 // DECLINED · CONSENT_WITHDRAWN은 17로 오지 않는다(12가 P3 → 04, 계정 삭제는 01). 그래도 들어오면 U1처럼 제목만 보인다.
 

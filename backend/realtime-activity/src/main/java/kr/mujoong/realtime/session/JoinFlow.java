@@ -26,7 +26,7 @@ import static kr.mujoong.realtime.session.SessionExecutor.RE_PROMPT;
  */
 final class JoinFlow {
 
-    /** U4b 세션 사건 종류(payload는 코드 · 횟수 · 분류 이름 · 시각뿐, BR12.1 · entities SessionEvent). */
+    /** U4b 세션 사건 종류(payload는 코드 · 횟수 · 분류 이름 · 시각뿐, entities SessionEvent). */
     static final String EVENT_JOIN_PROMPTED = "JOIN_PROMPTED";
     static final String EVENT_JOIN_RE_PROMPTED = "JOIN_RE_PROMPTED";
     static final String EVENT_JOIN_ALTERNATIVE_OFFERED = "JOIN_ALTERNATIVE_OFFERED";
@@ -39,7 +39,7 @@ final class JoinFlow {
 
         void approvedBubble(SessionExecutor.ApprovedItem item, Instant at);
 
-        /** ACTIVE 전이 승자의 뒷일: 진입 몫과 발언권 반환(응답 생성 요청 1회, BR2.6). */
+        /** ACTIVE 전이 승자의 뒷일: 진입 몫과 발언권 반환(응답 생성 요청 1회). */
         void afterActiveWon();
     }
 
@@ -49,7 +49,7 @@ final class JoinFlow {
     private final EndingFlow ending;
     private final Env env;
 
-    /** U4b 참여 판단(WAITING_CHILD에 들어갈 때 만든다, BR2.2 ~ BR2.4). */
+    /** U4b 참여 판단(WAITING_CHILD에 들어갈 때 만든다). */
     private JoinTracker join;
 
     JoinFlow(SessionContext ctx, IdleClock idle, JudgmentCoordinator judgment, EndingFlow ending, Env env) {
@@ -79,7 +79,7 @@ final class JoinFlow {
     }
 
     /**
-     * 참여 안내 하나를 재생한다(BR2.1 · BR3.1 · BR3.3). 보낸 순간 말풍선 행을 남기고 그 끝 표식이 창을 연다. 패키지에 없으면 재생만 건너뛰고
+     * 참여 안내 하나를 재생한다. 보낸 순간 말풍선 행을 남기고 그 끝 표식이 창을 연다. 패키지에 없으면 재생만 건너뛰고
      * APPROVED_CONTENT_MISSING을 코드별 1회 남긴 뒤 곧바로 재생이 끝난 것으로 본다(시계 · 횟수는 그대로). 보내지 못해도 끝난 것으로 본다.
      */
     private void playJoinPrompt(String contentCode) {
@@ -101,7 +101,7 @@ final class JoinFlow {
         onJoinPromptPlayed(now);
     }
 
-    /** 참여 안내 재생이 끝났다(서버가 끝 표식을 받은 시각, BR2.2): 창을 연다. */
+    /** 참여 안내 재생이 끝났다(서버가 끝 표식을 받은 시각): 창을 연다. */
     void onJoinPromptPlayed(Instant at) {
         if (ctx.status() != SessionStatus.WAITING_CHILD || join == null || join.isFinished()) {
             return;
@@ -119,7 +119,7 @@ final class JoinFlow {
         ctx.timers().arm(Kind.JOIN_WINDOW, left.isNegative() ? Duration.ZERO : left);
     }
 
-    /** 참여 창 시계 만기: 결정표의 무응답 칸(BR2.4). 창이 밀렸으면(일시정지) 남은 시간으로 다시 건다. */
+    /** 참여 창 시계 만기: 결정표의 무응답 칸. 창이 밀렸으면(일시정지) 남은 시간으로 다시 건다. */
     void onJoinWindow() {
         if (ctx.status() != SessionStatus.WAITING_CHILD || join == null || join.isFinished()) {
             return;
@@ -138,14 +138,14 @@ final class JoinFlow {
     }
 
     /**
-     * WAITING_CHILD의 아이 확정 전사(BR2.3 · BR2.5): 저장하지 않고 분류에만 쓴다. 안내를 재생하는 중의 대답도 곧바로 분류한다(R-11 · 5354a32
+     * WAITING_CHILD의 아이 확정 전사: 저장하지 않고 분류에만 쓴다. 안내를 재생하는 중의 대답도 곧바로 분류한다(5354a32
      * JoinTracker 동작).
      */
     void onJoinReply(String transcript, Instant at) {
         if (join == null || join.isFinished()) {
             return;
         }
-        // U11 BR5.3: J1이 열린 동안 새 확정 전사가 오면 이전 J1을 SUPERSEDED로 닫고 새 전사를 처음부터 다시 처리한다
+        // J1이 열린 동안 새 확정 전사가 오면 이전 J1을 SUPERSEDED로 닫고 새 전사를 처음부터 다시 처리한다
         judgment.onTranscript(false);
         JoinTracker.Reply reply = JoinTracker.classify(transcript);
         if (reply == JoinTracker.Reply.UNCLEAR && judgment.openJoinJudgment(transcript, at)) {
@@ -154,7 +154,7 @@ final class JoinFlow {
         applyJoinAction(join.reply(reply, at), reply, at);
     }
 
-    /** J1 결과를 참여 대답 하나로 넣는다(참여 대기 중이 아니면 아무것도 하지 않는다). */
+    /** 결과를 참여 대답 하나로 넣는다(참여 대기 중이 아니면 아무것도 하지 않는다). */
     void applyJoinReply(JoinTracker.Reply reply, Instant at) {
         if (ctx.status() == SessionStatus.WAITING_CHILD && join != null && !join.isFinished()) {
             applyJoinAction(join.reply(reply, at), reply, at);
@@ -191,7 +191,7 @@ final class JoinFlow {
         }
     }
 
-    /** 참여 수락 → ACTIVE(BR2.4 · BR2.6): started_at, 원음 기록 시작, 응답 생성 요청 1회. */
+    /** 참여 수락 → ACTIVE: started_at, 원음 기록 시작, 응답 생성 요청 1회. */
     private void acceptJoin() {
         ctx.timers().cancel(Kind.JOIN_WINDOW);
         Instant now = ctx.services().clock().now();
@@ -208,7 +208,7 @@ final class JoinFlow {
     }
 
     /**
-     * 참여 거절 → DECLINED(BR2.4 · BR3.2 · BR4.7): 기록기의 대기 칸을 버린 뒤 전이 트랜잭션에서 그 세션의 전사 행을 지우고, 마무리 인사를 closing-confirm
+     * 참여 거절 → DECLINED: 기록기의 대기 칸을 버린 뒤 전이 트랜잭션에서 그 세션의 전사 행을 지우고, 마무리 인사를 closing-confirm
      * 상한 안에서 돌린다(말풍선 행 없음).
      */
     private void declineJoin() {

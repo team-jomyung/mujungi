@@ -28,16 +28,16 @@ import kr.mujoong.realtime.judgment.NextAction;
 import kr.mujoong.realtime.judgment.TurnStatus;
 
 /**
- * 세션 실행기의 판정 턴 협력 객체 (U11 W1 ~ W6, BR1.8 · BR2.1 · BR3.1 · BR5.x). 세션마다 하나이고 실행기 스레드만 쓴다({@link #postResult}만
+ * 세션 실행기의 판정 턴 협력 객체 (.x). 세션마다 하나이고 실행기 스레드만 쓴다({@link #postResult}만
  * 완료 콜백 스레드에서 불린다). 열린 턴 하나와 그 턴의 지점별 분기(결과 처리 · 닫힘 뒤 일)를 쥐고, 턴이 부르는 {@link JudgmentTurn.Host}를 구현해 실행기의
  * 출력 세대 · 시계 · 지시 송신 · 보기에 {@link Env}로만 닿는다. 닫힐 때마다 판정 기록 한 건을 비동기로 남긴다. 전사 · 지시문 본문은 로그에 쓰지 않는다
- * (R-F14). 공급자가 없으면 턴을 열지 않고 지금 흐름이 돈다(BR1.6): 기록 한 건(NO_PROVIDER)만 남는다.
+ * (R-F14). 공급자가 없으면 턴을 열지 않고 지금 흐름이 돈다: 기록 한 건(NO_PROVIDER)만 남는다.
  */
 final class JudgmentCoordinator implements JudgmentTurn.Host {
 
     /** 최근 아이 확정 전사 보관 수(판정 요청의 직전 대화와 확장 요청의 순번 확인에 쓴다, W4). */
     static final int RECENT_LIMIT = 4;
-    /** 아이 이름 대신 공급자에 보내는 말(BR1.7). */
+    /** 아이 이름 대신 공급자에 보내는 말. */
     static final String CHILD_ALIAS = "아이";
 
     /** 실행기가 구현하는 바깥 세계. 모두 실행기 스레드에서 불린다({@code postFromProvider}만 어느 스레드에서나). */
@@ -67,7 +67,7 @@ final class JudgmentCoordinator implements JudgmentTurn.Host {
         /** 낡은 결과 · 전사를 버렸다(사유 코드 {@code JUDGMENT_LATE_DROPPED}, 개수만). */
         void lateDropped(String reasonCode);
 
-        /** J1 결과를 참여 확인의 대답 하나로 넣는다(참여 대기 중이 아니면 아무것도 하지 않는다). */
+        /** 결과를 참여 확인의 대답 하나로 넣는다(참여 대기 중이 아니면 아무것도 하지 않는다). */
         void applyJoinReply(JoinTracker.Reply reply, Instant at);
 
         /** J1이 열린 동안 미뤄 둔 참여 창 만기를 처리한다(참여 대기 중이고 기술 일시정지가 아닐 때만). */
@@ -136,7 +136,7 @@ final class JudgmentCoordinator implements JudgmentTurn.Host {
         return current != null && current.isOpen();
     }
 
-    /** 판정 단계라 공급자 출력을 모두 버리고 전사만 모으는 중인가(BR3.1). 지시 단계에서는 새 말을 받아야 하므로 아니다. */
+    /** 판정 단계라 공급자 출력을 모두 버리고 전사만 모으는 중인가. 지시 단계에서는 새 말을 받아야 하므로 아니다. */
     boolean holdsOutput() {
         return current != null && current.state() == JudgmentTurn.State.AWAITING_RESULT;
     }
@@ -203,7 +203,7 @@ final class JudgmentCoordinator implements JudgmentTurn.Host {
         return Readiness.READY;
     }
 
-    /** 열 수 없었던 까닭이 공급자 없음 · 판독 불가면 턴 없이 기록 한 건을 남긴다(BR1.6 · BR4.3). */
+    /** 열 수 없었던 까닭이 공급자 없음 · 판독 불가면 턴 없이 기록 한 건을 남긴다. */
     void recordSkipped(Readiness why, JudgmentPoint point, JudgmentTrigger trigger, int transcriptSeq, NextAction next) {
         AbstainReason reason;
         if (why == Readiness.NO_PROVIDER) {
@@ -252,7 +252,7 @@ final class JudgmentCoordinator implements JudgmentTurn.Host {
         return true;
     }
 
-    /** J1 결과 → {@link JoinTracker} 답 하나(원래 확정 시각으로 한 번만 넣는다, W1 4). 휴식 · 불명확 · 보류는 모두 불명확이다(U11-D6). */
+    /** 결과 → {@link JoinTracker} 답 하나(원래 확정 시각으로 한 번만 넣는다, W1 4). 휴식 · 불명확 · 보류는 모두 불명확이다. */
     private Handled afterJoinJudgment(JudgmentTurn.Closure closure, Instant at) {
         JudgmentOutcomeKind kind = closure.outcome().kind();
         if (kind != JudgmentOutcomeKind.CONFIRMED && kind != JudgmentOutcomeKind.ABSTAINED) {
@@ -342,7 +342,7 @@ final class JudgmentCoordinator implements JudgmentTurn.Host {
         }
     }
 
-    /** 세션 상태가 바뀌었다(R-15). 턴을 연 상태가 아니면 SESSION_EXITED로 닫는다. */
+    /** 세션 상태가 바뀌었다. 턴을 연 상태가 아니면 SESSION_EXITED로 닫는다. */
     void onStatus(SessionStatus next) {
         if (current == null) {
             return;
@@ -412,7 +412,7 @@ final class JudgmentCoordinator implements JudgmentTurn.Host {
                 write(closure.turnId(), closure.point(), closure.trigger(), closure.inputTranscriptSeq(), true, closure.outcome(),
                         handled.next(), closure.heldOutputTranscript());
             } finally {
-                // 갈래 처리가 예외를 던져도 '생각 중'에 머물지 않게 보기를 되돌린다(심사 R-04, BR3.6)
+                // 갈래 처리가 예외를 던져도 '생각 중'에 머물지 않게 보기를 되돌린다(심사)
                 if ((threw || handled.restoreView()) && !closure.responseStarted()) {
                     env.restoreListening();
                 }
@@ -420,7 +420,7 @@ final class JudgmentCoordinator implements JudgmentTurn.Host {
         }
     }
 
-    // ---- 기록 (BR2.1) ----
+    // ---- 기록 ----
 
     private void write(UUID id, JudgmentPoint point, JudgmentTrigger trigger, int seq, boolean opened, JudgeOutcome outcome,
             NextAction next, String held) {

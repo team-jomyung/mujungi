@@ -10,9 +10,9 @@ import {
   type LiveView,
 } from "./types";
 
-// 12 진행 · 17 활동 끝의 세션 조회 · 끝내기 요청 (U1 3.5 Step 39 · BR6.9 · BR6.15 · RD-21). 서버 호출과 응답 합치기만 한다(BR2.3).
+// 12 진행 · 17 활동 끝의 세션 조회 · 끝내기 요청 (U1 3.5 Step 39). 서버 호출과 응답 합치기만 한다.
 
-/** GET /api/sessions/{id}?sinceSeq=n — 12 진행 · 17 상태(BR6.15). */
+/** GET /api/sessions/{id}?sinceSeq=n — 12 진행 · 17 상태. */
 export function fetchLiveView(api: ApiClient, sessionId: string, sinceSeq: number, signal?: AbortSignal): Promise<LiveView> {
   const path = `/api/sessions/${encodeURIComponent(sessionId)}?sinceSeq=${sinceSeq}`;
   return api.request({ method: "GET", path, parse: (body) => {
@@ -22,13 +22,13 @@ export function fetchLiveView(api: ApiClient, sessionId: string, sinceSeq: numbe
   }, csrf: false, signal });
 }
 
-/** POST /api/sessions/{id}/end — P1 끝내기(재시도는 같은 requestId, BR6.9 · RD-21). */
+/** POST /api/sessions/{id}/end — P1 끝내기(재시도는 같은 requestId). */
 export function endSession(api: ApiClient, sessionId: string, requestId: string): Promise<EndResult> {
   const path = `/api/sessions/${encodeURIComponent(sessionId)}/end`;
   return api.request({ method: "POST", path, body: { requestId }, parse: parseEndResult, csrf: true });
 }
 
-/** 말풍선을 seq로 합친다(같은 seq는 새 값으로 덮어쓴다, 확정 전 조각 J23 · J120). */
+/** 말풍선을 seq로 합친다(같은 seq는 새 값으로 덮어쓴다, 확정 전 조각). */
 export function mergeBubbles(previous: readonly Bubble[], incoming: readonly Bubble[]): Bubble[] {
   if (incoming.length === 0) {
     return [...previous];

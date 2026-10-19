@@ -2,7 +2,7 @@ import { COPY, PUSH_COPY } from "@/shared/copy/ko";
 
 // U7 · C6 · US1.7: Next 정적 JS 라우트가 이 코드를 그대로 낸다(AudioWorklet과 같은 방식).
 // 문구는 ko.ts 한 곳에서 온다. 별도 전역 VM 시험이 실제 JS의 모든 사건 경로를 실행한다.
-// tag는 세션+유형: payload에 사건 키를 더하지 않고 같은 유형의 최신 표시로 합친다(U7-J11 보강).
+// tag는 세션+유형: payload에 사건 키를 더하지 않고 같은 유형의 최신 표시로 합친다(보강).
 export const PUSH_WORKER_SOURCE = '"use strict";\nconst copy = ' + JSON.stringify({ brand: COPY.brand, ...PUSH_COPY }) + ";\n" + `
 function readPayload(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;

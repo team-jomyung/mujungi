@@ -8,7 +8,7 @@ import kr.mujoong.core.identity.GuardianWriteLock;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
-/** BR1.1~BR1.12: 상태 전이와 결과 확정의 유일한 업무 경계. */
+/** 상태 전이와 결과 확정의 유일한 업무 경계. */
 @Service
 public class JobRunner {
     private static final Set<String> RETRYABLE=Set.of("PROVIDER_UNAVAILABLE","PROVIDER_ERROR","TIMEOUT","SCHEMA_INVALID","INTERNAL");

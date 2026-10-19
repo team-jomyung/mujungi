@@ -7,14 +7,14 @@ import static kr.mujoong.core.config.CoreProperties.secureUrl;
 import java.net.URI;
 import java.time.Duration;
 
-/** U2 보호자 계정 설정(구글 OAuth, U2-J1). */
+/** U2 보호자 계정 설정(구글 OAuth). */
 public record CoreGuardianProperties(Google google) {
     public CoreGuardianProperties {
         required(google, "mujoong.guardian.google");
     }
 
     /**
-     * 구글 OAuth 클라이언트(U2-J1 · U2-J2). client-id · client-secret · redirect-uri는 환경 변수 {@code GOOGLE_OAUTH_CLIENT_ID} ·
+     * 구글 OAuth 클라이언트. client-id · client-secret · redirect-uri는 환경 변수 {@code GOOGLE_OAUTH_CLIENT_ID} ·
      * {@code GOOGLE_OAUTH_CLIENT_SECRET} · {@code GOOGLE_OAUTH_REDIRECT_URI}에서만 채우고 비어 있어도 기동은 막지 않는다(로그인이 401).
      * 토큰 엔드포인트와 서명 열쇠(JWKS) 주소는 https만 받고 평문 http는 루프백 시험 주소만 받는다 — 어긋나면 기동을 거부한다.
      * 문자열 표현에 비밀 값을 내지 않는다.

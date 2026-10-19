@@ -4,7 +4,7 @@ import { useId } from "react";
 import { counterText } from "@/shared/copy/ko";
 import { FREE_TEXT_MAX_LENGTH } from "../../common/api/types";
 
-// 서술형 입력 (U1 3.5 Step 39 · interaction-spec 3.9 · BR6.4 · AC3.1.3 · 접근성 U2)
+// 서술형 입력 (U1 3.5 Step 39 · interaction-spec 3.9 · 접근성 U2)
 // 보이는 라벨(<label for>), 200자에서 입력이 막힘(maxLength), 글자 수 'n/200'은 aria-live polite로 알린다.
 // 예시 글은 placeholder로만 쓰고 라벨을 대신하지 않는다.
 

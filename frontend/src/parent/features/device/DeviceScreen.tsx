@@ -23,7 +23,7 @@ import { formatHhmm } from "@/shared/copy/timeText";
 // mockups S-05 · 9-8 · interaction-spec 3.3 · 4절 05)
 // 진입 때 GET /api/home 1회(04와 같은 DeviceView · 아이 이름, U1 합산 응답)와 종료 표현 1회. 두 줄 · 판정은 색 점 + 상태명 + 사유를 함께
 // 쓴다(색만이 아님). 판정 값은 U1 · U3가 보고한 값을 그대로 보인다. 하단 탭은 04와 같은 잠김 규칙이고 잠기면 이유 토스트만 보인다.
-// 기기 검색 · 페어링 · 해제 · '다시 등록' 단추는 없다(OQ12, report.md). 요청 · 오류 분기 · 이동은 useDeviceScreen 훅이 맡는다(BR2.1).
+// 기기 검색 · 페어링 · 해제 · '다시 등록' 단추는 없다(OQ12, report.md). 요청 · 오류 분기 · 이동은 useDeviceScreen 훅이 맡는다.
 
 type Tone = "stable" | "unstable" | "disconnected" | "unresponsive" | "unknown" | "none";
 

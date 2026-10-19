@@ -10,7 +10,7 @@ import { PARENT_ROUTES } from "../../common/navigation";
 import { TEMP_COPY } from "@/shared/copy/ko";
 import { messageForErrorCode } from "@/shared/errors/codeToCopy";
 
-// 시험 로그인 (U1 3.5 Step 40 · BR8.4 · J119 · SD-14 · AC1.1.7 · AC1.1.9)
+// 시험 로그인 (U1 3.5 Step 40)
 // dev 프로필 + MUJOONG_DEVLOGIN_ENABLED=true일 때만 라우트가 열린다(page.tsx가 그 밖에는 notFound). 시드 보호자의
 // 세션 쿠키를 열 뿐이고 아이디 · 비밀번호 입력란이 없다. 성공하면 CSRF 토큰을 다시 받고 04로 간다. 서버가 404면(꺼짐) 안내만 한다.
 // U1에서 401을 받은 화면이 여기로 온다(01 구글 로그인은 U2).

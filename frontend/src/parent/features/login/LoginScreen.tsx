@@ -5,7 +5,7 @@ import { PARENT_ROUTES } from "../../common/navigation";
 import { ACCOUNT_COPY, ACCOUNT_PROPOSED_COPY, ACCOUNT_TEMP_COPY } from "@/shared/copy/account";
 import { useToast } from "@/shared/toast/ToastProvider";
 
-// 01 보호자 로그인 (U2 · US1.1 · AC1.1.4 · AC1.1.7 · AC1.1.10 · AC1.6.4 · mockups S-01 · 9-1 · 9-7 · U2-J4)
+// 01 보호자 로그인 (U2 · US1.1 · AC1.1.4 · AC1.1.7 · AC1.1.10 · AC1.6.4 · mockups S-01 · 9-1 · 9-7)
 // 로고 · 부제 · 「구글로 시작」 하나뿐이다(구글 외 로그인 · 회원가입 · 비밀번호 칸 없음). 누르면 인증 중(단추 잠김)이 되고
 // 같은 origin의 /parent/login/google(서버가 OAuth state 쿠키를 두고 구글로 보냄)로 이동한다. 돌아와 실패했으면 ?failed=1로 토스트,
 // 계정 삭제 처리 중이면 ?deleting=1로 안내 카드만 보인다.

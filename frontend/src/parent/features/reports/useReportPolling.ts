@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { fetchReport, reportKey } from "./api";
 import { useApiClient } from "../../common/api/queries";
 import { useTiming } from "@/shared/timing/TimingProvider";
-/** BR11.8: 화면을 떠나거나 취소하면 요청·시한 타이머를 해제한다. */
+/** 화면을 떠나거나 취소하면 요청·시한 타이머를 해제한다. */
 export function useReportPolling(reportId: string | null, startedAt: number | null) {
   const api = useApiClient(), timing = useTiming(); const [expiredRequest, setExpiredRequest] = useState<string | null>(null);
   const expired = reportId !== null && expiredRequest === `${reportId}:${startedAt}`;

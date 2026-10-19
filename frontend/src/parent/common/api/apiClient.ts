@@ -2,7 +2,7 @@ import { createCsrfStore, type CsrfStore } from "./csrf";
 import { parseCsrfToken, ResponseShapeError, type CsrfToken } from "./types";
 import { normalizeErrorCode, type ErrorCodeOrUnknown } from "@/shared/errors/codeToCopy";
 
-// 보호자 웹 REST 클라이언트 (U1 3.5 Step 39 · SD-6 · BR8.6 · BR8.8 · PD-12 · RD-21 · 계약 2 · 3절)
+// 보호자 웹 REST 클라이언트 (U1 3.5 Step 39 · 계약 2 · 3절)
 //
 // - 같은 origin의 /api/*를 부른다. 세션 쿠키(MUJOONG_SESSION)는 브라우저가 싣고 JS는 보지 않는다. CORS가 없다.
 // - 요청마다 mujoong.timing.parent.request-timeout(10초)이 지나면 끊고 'timeout' 오류로 알린다(RD-21: 끝내기 '전송하지 못함').
