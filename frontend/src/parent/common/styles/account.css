@@ -7,21 +7,42 @@
 .mj-login__body {
   display: flex;
   flex-direction: column;
-  justify-content: center;
-  gap: calc(var(--space-unit) * 4);
-  min-height: 70vh;
+  justify-content: flex-start;
+  gap: 12px;
+  min-height: 100dvh;
+  padding: 18px 18px calc(18px + env(safe-area-inset-bottom, 0px));
   text-align: center;
 }
 
 .mj-login__brand {
-  margin: 0;
+  margin: clamp(100px, 34dvh, 300px) 0 0;
   font-size: 2rem;
   color: var(--color-brand-primary);
+  font-weight: 800;
+  letter-spacing: -0.04em;
 }
 
 .mj-login__subtitle {
   margin: 0;
+  padding: 12px;
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-card);
+  background: var(--color-surface-card);
+  color: var(--color-text-primary);
+  text-align: left;
+  font-weight: 700;
+}
+
+.mj-login { padding-bottom: 0; }
+.mj-login__body > .mj-button { margin-top: auto; }
+.mj-login__notice {
+  margin: 0;
+  padding: 12px;
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-card);
+  background: var(--color-surface-card);
   color: var(--color-text-secondary);
+  font-size: 0.875rem;
 }
 
 /* 머리 오른쪽 단추(04 「⚙」) */
@@ -57,8 +78,9 @@
   max-width: 480px;
   max-height: 85vh;
   overflow-y: auto;
-  padding: calc(var(--space-unit) * 4);
-  border-radius: var(--radius-card) var(--radius-card) 0 0;
+  padding: 14px 18px calc(22px + env(safe-area-inset-bottom, 0px));
+  border-radius: 22px 22px 0 0;
+  box-shadow: 0 -6px 24px rgb(0 0 0 / 18%);
   background-color: var(--color-surface-base);
   animation: mj-sheet-in 200ms ease-out;
 }
@@ -83,6 +105,16 @@
   align-items: center;
   gap: calc(var(--space-unit) * 2);
   margin-bottom: calc(var(--space-unit) * 3);
+}
+
+.mj-sheet::before {
+  content: "";
+  display: block;
+  width: 40px;
+  height: 4px;
+  margin: 0 auto 14px;
+  border-radius: 999px;
+  background: var(--color-border-input);
 }
 
 .mj-sheet__title {
@@ -133,6 +165,8 @@
 .mj-consent-row__check {
   width: 24px;
   height: 24px;
+  flex-shrink: 0;
+  accent-color: var(--color-brand-primary);
 }
 
 .mj-consent-row__label {
@@ -172,8 +206,10 @@
   width: 100%;
   min-height: var(--touch-target-min);
   padding: 0 calc(var(--space-unit) * 3);
-  border: 1px solid var(--color-border-default);
-  border-radius: 8px;
+  border: 1px solid var(--color-border-input);
+  border-radius: 10px;
+  background: var(--color-surface-card);
+  color: var(--color-text-primary);
   font-size: var(--font-size-body);
   box-sizing: border-box;
 }
@@ -259,14 +295,17 @@
 
 .mj-verdict-card[data-state="stable"] {
   border-left-color: var(--color-status-stable);
+  background: var(--color-surface-success);
 }
 
 .mj-verdict-card[data-state="unstable"] {
   border-left-color: var(--color-status-unstable);
+  background: var(--color-surface-warning);
 }
 
 .mj-verdict-card[data-state="disconnected"] {
   border-left-color: var(--color-status-disconnected);
+  background: var(--color-surface-danger);
 }
 
 .mj-verdict-card__title {

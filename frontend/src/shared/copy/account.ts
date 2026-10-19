@@ -12,6 +12,7 @@ export const ACCOUNT_COPY = {
     brand: "무중", // C.S-01.0.1
     subtitle: "아이의 이야기를 함께 살펴봐요", // C.S-01.0.2
     google: "구글로 시작", // C.S-01.0.3
+    aiNotice: "생성형 AI를 사용하는 서비스예요.", // 화면 설계 최종안 v1.5 · S-01 하단 안내
   },
   consent: {
     title: "시작 전에 확인해 주세요", // C.S-02.1.1

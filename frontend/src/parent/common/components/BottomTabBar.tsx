@@ -45,6 +45,7 @@ export function BottomTabBar({ active, lockMessage, onNavigate, onLockedPress }:
                 onNavigate(tab.key);
               }}
             >
+              <span className={`mj-tabbar__icon mj-tabbar__icon--${tab.key}`} aria-hidden="true" />
               {tab.label}
             </button>
           );

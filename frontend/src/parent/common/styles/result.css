@@ -1,8 +1,19 @@
 /* U6: 달력은 충분한 누름 영역과 문자 선택 표시를 함께 둔다. */
 .mj-calendar-heading { display: flex; align-items: center; justify-content: space-between; }
-.mj-calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 2px; text-align: center; }
+.mj-calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 3px; text-align: center; }
 .mj-calendar-day { border: 1px solid transparent; border-radius: 8px; background: transparent; }
-.mj-calendar-day[aria-pressed="true"] { border: 2px solid currentColor; background: #e7efe6; font-weight: bold; }
+.mj-calendar-day[aria-pressed="true"] { border: 2px solid var(--color-brand-primary); background: var(--color-brand-primary); color: var(--color-surface-base); font-weight: 800; }
 .mj-calendar-day:disabled { color: #777; cursor: not-allowed; }
+.mj-calendar-day { padding: 0; font: inherit; color: var(--color-text-primary); cursor: pointer; }
+.mj-calendar-day--range[aria-pressed="true"] { border-color: transparent; background: var(--color-fixed-expression); color: var(--color-brand-primary); }
+.mj-calendar-day--edge[aria-pressed="true"] { border-color: var(--color-brand-primary); background: var(--color-brand-primary); color: var(--color-surface-base); }
+.mj-calendar-heading button { min-width: var(--touch-target-min); }
+.mj-calendar-heading h2 { font-size: 1.125rem; }
+.mj-calendar-grid { padding-block: 8px; }
+/* 320px 화면에서도 날짜 7개의 44px 터치 영역을 보존한다. */
+@media (max-width: 360px) { .mj-calendar-grid { margin-inline: -14px; gap: 0; } }
+.mj-segmented { display: flex; flex-wrap: wrap; gap: 3px; padding: 3px; border-radius: 10px; background: #e8ebf2; }
+.mj-parent .mj-segmented > button { flex: 1 1 0; min-width: 0; padding: 8px 4px; border: 0; border-radius: 8px; background: transparent; overflow-wrap: anywhere; }
+.mj-parent .mj-segmented > button:is([aria-selected="true"], [aria-pressed="true"]) { background: var(--color-surface-card); box-shadow: 0 1px 2px rgb(0 0 0 / 6%); font-weight: 800; }
 .mj-report-text { white-space: pre-wrap; overflow-wrap: anywhere; }
-.mj-chip { display: inline-block; padding: 6px 10px; border: 1px solid currentColor; border-radius: 12px; margin: 4px; }
+.mj-scene-chip { display: inline-block; padding: 6px 10px; border: 1px solid var(--color-border-selected); border-radius: 999px; margin: 4px; background: var(--color-fixed-expression); color: var(--color-brand-primary); font-size: 0.875rem; }
