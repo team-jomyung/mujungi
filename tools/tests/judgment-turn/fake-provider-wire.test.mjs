@@ -122,8 +122,13 @@ describe("가짜 공급자 — 실호출 관측 선 형식(U11-a)", () => {
     }
     const turnEnd = () => provider.records.some((entry) => entry.ev === "turn-emitted");
     await waitUntil(turnEnd);
-    const count = client.received.length;
-    await new Promise((resolve) => setTimeout(resolve, 150));
+    // turn-emitted는 공급자가 보낸 시점이라 느린 러너에서는 마지막 조각이 아직 클라이언트에 닿기 전일 수 있다.
+    // 수신 수를 세는 순간 고정하면 그 사이 도착한 조각이 "뒤따른 사건"으로 잡히므로, 150ms 동안 새 수신이 없을 때까지 기다린다.
+    let count;
+    do {
+      count = client.received.length;
+      await new Promise((resolve) => setTimeout(resolve, 150));
+    } while (client.received.length !== count);
 
     expect(client.received).toHaveLength(count);
     expect(client.received.at(-1).message.type).toBe("session.output_audio.delta");
