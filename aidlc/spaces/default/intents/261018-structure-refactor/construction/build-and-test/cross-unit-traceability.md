@@ -28,4 +28,4 @@
 ## 이 확인이 보증하지 않는 것
 
 - 추적표는 "그 ID를 구현하거나 검증하는 파일이 있다"까지만 본다. 동작 증거는 `test-results.md`를 따른다.
-- 합격 기준 AC-9(첫 CI 실행)은 추적표가 아니라 `build-and-test-summary.md`의 목표 표에서 `Unverified`다.
+- 합격 기준 AC-9(첫 CI 실행)은 추적표가 아니라 `build-and-test-summary.md`의 목표 표에서 다룬다(작성 당시 `Unverified`, 병합 뒤 CI에서 확인되어 `Met`).
