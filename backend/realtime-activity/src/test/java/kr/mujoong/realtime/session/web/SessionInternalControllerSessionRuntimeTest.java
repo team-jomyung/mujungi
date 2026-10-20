@@ -111,7 +111,8 @@ class SessionInternalControllerSessionRuntimeTest {
 
     @Test
     void childContextConsentAndStopExpressionsFollowTheSchemaBounds() {
-        assertBadRequest(body(ActivityType.FREE_TALK, approvedWith(List.of()), child("하늘", 13), stops()));
+        assertThat(SessionInternalController.toCommand(body(ActivityType.FREE_TALK, approvedWith(U4B_CODES), child("하늘", 13), stops())).childContext().age()).isEqualTo(13);
+        assertBadRequest(body(ActivityType.FREE_TALK, approvedWith(List.of()), child("하늘", 5), stops()));
         assertBadRequest(body(ActivityType.FREE_TALK, approvedWith(List.of()), child(" ", 8), stops()));
         assertBadRequest(body(ActivityType.FREE_TALK, approvedWith(List.of()), child("하늘", 8), List.of()));
         assertBadRequest(body(ActivityType.FREE_TALK, approvedWith(List.of()), child("하늘", 8),
