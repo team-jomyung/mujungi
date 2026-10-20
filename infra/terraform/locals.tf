@@ -8,4 +8,5 @@ locals {
   origin_domain     = "mujoong.duckdns.org"
   backend_image_tag = "3d8d4cd-10171120"
   ssm_prefix        = "arn:aws:ssm:ap-northeast-2:${data.aws_caller_identity.current.account_id}:parameter/mujoong"
+  gha_repo_sub      = "repo:team-jomyung@341322885/mujungi@1415195348"
 }

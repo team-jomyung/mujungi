@@ -35,8 +35,8 @@ data "aws_iam_policy_document" "gha_assume" {
       test     = "StringEquals"
       variable = "token.actions.githubusercontent.com:sub"
       values = [
-        "repo:${local.github_repo}:ref:refs/heads/main",
-        "repo:${local.github_repo}:environment:demo",
+        "${local.gha_repo_sub}:ref:refs/heads/main",
+        "${local.gha_repo_sub}:environment:demo",
       ]
     }
   }
