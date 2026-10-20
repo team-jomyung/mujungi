@@ -35,19 +35,19 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Realtime 세션 내부 API (U1 3.5 Step 33 · 계약 5절 C8 · BR6.5 ~ BR6.7 · BR6.9 · BR6.15 · J54 · J111 · 편차 (f)(v)(w)).
+ * Realtime 세션 내부 API (U1 3.5 Step 33 · 계약 5절 C8 · 편차 (f)(v)(w)).
  *
  * <p>C-INT 체인(내부 토큰 · 준비 상태는 필터 몫) 뒤에서만 닿는다. 본문은 2MB 이하 JSON이고 계약 스키마의 필수 · 범위 규칙을 여기서 검사한다
  * (모르는 필드는 무시, 계약 10절). 실패는 400 VALIDATION_FAILED, 응답 본문은 계약 JSON이다.
  *
  * <ul>
  *   <li>{@code POST /internal/sessions}: 202 {status} · 409 SESSION_IN_PROGRESS · 409 SESSION_NOT_ACTIVE(묘비 (v)) · 423
- *       DEVICE_NOT_CONNECTED(BR6.6). 자유대화와 연습(PRACTICE + 선택 본문 {@code practice}, U12 BR1.1)을 받는다. 연습의 practice가 계약 모양이
+ * DEVICE_NOT_CONNECTED. 자유대화와 연습(PRACTICE + 선택 본문 {@code practice})을 받는다. 연습의 practice가 계약 모양이
  *       아니면 400.
- *   <li>{@code POST /internal/sessions/{id}/end}: J54 · U4b 응답표(BR1.5 · BR1.6 · BR1.9, 편차 (U4b-b)) — 202 {status: CLOSING} · 202 {} ·
+ * <li>{@code POST /internal/sessions/{id}/end}: U4b 응답표(편차) — 202 {status: CLOSING} · 202 {} ·
  *       409 SESSION_NOT_ACTIVE((w) 포함). 사유는 GUARDIAN_STOP · CONSENT_WITHDRAWN · CORE_ABANDONED이고 그 밖은 400. 실행기가 제한 시간 안에
  *       답하지 않으면 503(오류 처리기).
- *   <li>{@code GET /internal/sessions/{id}/view?sinceSeq}: LiveView(내부) · 모르는 세션 404 NOT_FOUND(BR6.15).
+ * <li>{@code GET /internal/sessions/{id}/view?sinceSeq}: LiveView(내부) · 모르는 세션 404 NOT_FOUND.
  * </ul>
  */
 @RestController
@@ -82,7 +82,7 @@ public class SessionInternalController {
         }
     }
 
-    /** 음성 없는 승인 발화 한 칸(선택 속성 approvedSpeech 값, U8 편차 U8-b). */
+    /** 음성 없는 승인 발화 한 칸(선택 속성 approvedSpeech 값, U8 편차). */
     record SpeechBody(UUID contentVersionId, String text) {
     }
 
@@ -170,7 +170,7 @@ public class SessionInternalController {
         InternalBody.required(body.guardianId(), "guardianId");
         InternalBody.required(body.childId(), "childId");
         InternalBody.required(body.deviceId(), "deviceId");
-        // U12(BR1.1): 자유대화와 연습을 받는다. 계약 열거의 알 수 없는 값(UNRECOGNIZED)은 거절한다
+        // U12: 자유대화와 연습을 받는다. 계약 열거의 알 수 없는 값(UNRECOGNIZED)은 거절한다
         InternalBody.check(body.activityType() == ActivityType.FREE_TALK || body.activityType() == ActivityType.PRACTICE,
                 "activityType");
         return new StartSessionHandler.StartCommand(body.sessionId(), body.idempotencyKey(), body.guardianId(),
@@ -180,9 +180,9 @@ public class SessionInternalController {
     }
 
     /**
-     * 선택 속성 practice(U12 · BR1.1 · BR1.2). 연습일 때만 읽고 자유대화는 있어도 버린다(null). 계약 모양(goals는 배열, 목표는 객체, goalSelectionId는
+     * 선택 속성 practice(U12). 연습일 때만 읽고 자유대화는 있어도 버린다(null). 계약 모양(goals는 배열, 목표는 객체, goalSelectionId는
      * UUID 문자열, firstScenario는 객체 또는 null)이 아니면 400이다. 통과한 값은 원문 그대로(JSON 문자열) 실행 계획에 실려 확장의 시작 맥락까지 간다.
-     * 없으면(null) 확장이 '대본 없음'으로 처리한다(BR1.2). 내용은 로그 · 오류 메시지에 쓰지 않는다.
+     * 없으면(null) 확장이 '대본 없음'으로 처리한다. 내용은 로그 · 오류 메시지에 쓰지 않는다.
      */
     private static String practice(ActivityType type, Map<String, Object> practice) {
         if (type != ActivityType.PRACTICE || practice == null) {
@@ -207,7 +207,7 @@ public class SessionInternalController {
     }
 
     /**
-     * 선택 속성 approvedSpeech(U8 · BR1.2 · NFR6.1). 없으면 빈 것으로 본다. 있으면 계약 스키마의 code 형식 · contentVersionId · text(1 ~ 200자)를
+     * 선택 속성 approvedSpeech(U8). 없으면 빈 것으로 본다. 있으면 계약 스키마의 code 형식 · contentVersionId · text(1 ~ 200자)를
      * approvedContent와 같은 방식으로 검사한다. approvedContent와 code가 겹치는 처리는 시작 처리기가 한다(겹친 쪽을 버리고 APP_ERROR 한 줄).
      */
     private static Map<String, StartSessionHandler.ApprovedSpeechItem> speech(Map<String, SpeechBody> body) {
@@ -292,7 +292,7 @@ public class SessionInternalController {
         out.put("endedAt", session.endedAt());
         out.put("statusVersion", session.statusVersion());
         out.put("serverTime", view.serverTime());
-        // U4b BR7.1 · FR6.1: 살아 있는 실행기의 값(종료 세션은 null)
+        // 살아 있는 실행기의 값(종료 세션은 null)
         out.put("technicalPause", technicalPause(view.live()));
         out.put("silenceWarning", silenceWarning(view.live()));
         out.put("practice", view.live().practice());
@@ -322,7 +322,7 @@ public class SessionInternalController {
         return out;
     }
 
-    private static Map<String, Object> technicalPause(kr.mujoong.realtime.session.SessionExecutor.LiveState live) {
+    private static Map<String, Object> technicalPause(kr.mujoong.realtime.session.IdleClock.LiveState live) {
         if (live == null || live.technicalPause() == null) {
             return null;
         }
@@ -332,7 +332,7 @@ public class SessionInternalController {
         return pause;
     }
 
-    private static Map<String, Object> silenceWarning(kr.mujoong.realtime.session.SessionExecutor.LiveState live) {
+    private static Map<String, Object> silenceWarning(kr.mujoong.realtime.session.IdleClock.LiveState live) {
         if (live == null || live.silenceWarning() == null) {
             return null;
         }

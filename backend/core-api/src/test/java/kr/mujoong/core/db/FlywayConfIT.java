@@ -40,7 +40,7 @@ import org.junit.jupiter.params.provider.EnumSource;
  * 3.6 수정 분량: 설정 파일이 검증을 끄지 않아 적용된 파일을 고치거나 낮은 버전을 늦게 끼우면 migrate가 아무것도 하기 전에 거부한다(배포 때
  * 이미 적용된 스키마와 저장소가 어긋나는 것을 막는다). 두 시험은 공용 인스턴스에 검증만 하고 이력 표를 바꾸지 않는다.
  */
-@Tag("u1")
+@Tag("skeleton")
 @Tag("db")
 class FlywayConfIT {
 

@@ -2,7 +2,7 @@ package kr.mujoong.core.report;
 import static org.assertj.core.api.Assertions.*;
 import java.util.*;
 import org.junit.jupiter.api.*;
-@Tag("u6") class ReportAssemblerTest {
+@Tag("result-report") class ReportAssemblerTest {
     ReportAssembler assembler=new ReportAssembler();UUID goal=UUID.randomUUID();
     @Test void overviewCountsTypesAndRecordedDuration(){var sections=assembler.assemble(ReportTestData.report(),List.of(ReportTestData.input(1,"FREE_TALK",3,"DONE","FULL"),ReportTestData.practice(2,"DONE","FULL",goal,List.of())));assertThat(sections.get(1).text()).contains("자유대화 1회","연습 1회","총 4분");}
     @Test void sceneSectionsContainOnlyChips(){var sections=assembler.assemble(ReportTestData.report(),List.of(ReportTestData.practice(1,"DONE","FULL",goal,List.of())));assertThat(sections.get(3).text()).contains("장면 1","부탁하기").doesNotContain("functional","none","비공개 근거");}

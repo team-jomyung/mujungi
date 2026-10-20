@@ -42,7 +42,7 @@ import org.springframework.transaction.IllegalTransactionStateException;
  * BR5.11(payload {} · purged_at · 7일 정리), BR5.12 · S3c · S3f(당김 · 선점 해제), BR5.14 · A1 · SD-21(삭제 참가자 · FAILED 제어 이벤트
  * 재무장), A3(trace_id 저장), A4(Outbox guardian_id 필수 · NULL 0).
  */
-@Tag("u1")
+@Tag("skeleton")
 @Tag("db")
 class CoreMessagingRepositoryIT {
 

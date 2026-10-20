@@ -9,7 +9,7 @@ import kr.mujoong.core.luna.*;
 import kr.mujoong.core.result.check.*;
 import org.junit.jupiter.api.*;
 import org.mockito.ArgumentCaptor;
-@Tag("u14")
+@Tag("goal-result")
 class GoalCandidateGatewayTest {
     CoreLunaClient luna=mock(CoreLunaClient.class);ChildKnowledgeService knowledge=mock(ChildKnowledgeService.class);OutputChecker checker=mock(OutputChecker.class);
     GoalCandidateGateway gateway;UUID guardian=UUID.randomUUID(),child=UUID.randomUUID();Instant deadline=Instant.parse("2030-01-01T00:00:00Z");

@@ -21,7 +21,7 @@ import org.junit.jupiter.api.Test;
  * 승인 원문 생략 (U13 BR7.1 ~ BR7.5): 승인 발화 · 등록 대본과 원문이 같은 출력은 제브를 부르지 않고(호출 0) 검사 기록 한 행만 남기며, 한 단어라도 바뀐
  * 출력 · 일치를 확인할 수 없는(UNKNOWN) 출력은 새 발화로 검사한다(호출 1). 제브 · 공급자는 모두 대역이다(실제 호출 없음, R-F1 · R-M11).
  */
-@Tag("u13")
+@Tag("jev-guardrail")
 class GuardrailApprovedSkipTest {
 
     private static final byte[] AUDIO = new byte[4800];

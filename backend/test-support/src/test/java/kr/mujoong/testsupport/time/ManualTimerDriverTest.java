@@ -13,7 +13,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 /** 수동 타이머 구동기 자기 시험(RD-2 · RD-23 · NFR6.2 · J107). NFR6.2 경계 시험이 모두 이 구동기에 기댄다. */
-@Tag("u1")
+@Tag("skeleton")
 class ManualTimerDriverTest {
 
     private MutableClock clock;

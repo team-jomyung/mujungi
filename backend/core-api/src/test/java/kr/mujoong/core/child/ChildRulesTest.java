@@ -15,7 +15,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 /** 03 아이 입력 · SET-01 종료 표현 규칙(U2 · AC1.3.5 · AC1.3.8 · AC2.3.5 · AC2.3.6 · R8 · R9 · U2-J11). */
-@Tag("u2")
+@Tag("parent-account")
 class ChildRulesTest {
 
     @Test

@@ -24,7 +24,7 @@ import org.junit.jupiter.api.Test;
  * 판정 턴 실행기 연결 1 (U11 W3 · W5 · W6, BR3.1 ~ BR3.6 · BR4.1 · BR4.5 · BR5.x): 열린 동안 출력 · 기록, 생각 중 유지 · 복원, 지시 순서, 지시를 못 들은
  * 경우, 상태 이탈. 공급자와 판정기는 가짜, 값은 합성이다(R-F1 · R-F3). 증거 종류: 테스트 대역.
  */
-@Tag("u11")
+@Tag("judgment-turn")
 class JudgmentTurnExecutorTest {
 
     private final JudgmentExecutorSupport t = new JudgmentExecutorSupport();

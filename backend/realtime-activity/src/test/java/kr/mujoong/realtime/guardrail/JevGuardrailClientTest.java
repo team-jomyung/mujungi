@@ -36,7 +36,7 @@ import org.junit.jupiter.api.Test;
  * 응답은 {@code answers.guardrail.choice · probabilities}다. 판정 경계(문턱 직전 · 정확히 · 직후, 동률, 1순위가 PASS 아님)와 모든 비정상 응답 ·
  * 오류 상태를 본다. 이 파일의 성공은 테스트 대역(가짜 제브) 증거이고 실제 제브 응답 · 지연 · 분류 품질의 증거가 아니다(R-M11).
  */
-@Tag("u13")
+@Tag("jev-guardrail")
 class JevGuardrailClientTest {
 
     private static final String FAKE_KEY = "fake-jev-key-not-real-u13";

@@ -73,7 +73,7 @@ frontend() {
   (cd frontend && npm ci --no-audit --no-fund)
   log "frontend: eslint"
   (cd frontend && npx --no-install eslint .)
-  # U3-J22: 유닛별 시험 폴더(tests/u1 · tests/u3 …)를 모두 돌린다(커버리지 80% 하한은 그대로)
+  # U3-J22: 소스 구조 폴더(tests/parent · tests/device · tests/shared · tests/lint)의 시험을 모두 돌린다(커버리지 80% 하한은 그대로)
   log "frontend: vitest run tests --coverage"
   (cd frontend && npx --no-install vitest run tests --coverage)
   log "frontend: next build"

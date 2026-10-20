@@ -27,7 +27,7 @@ import org.springframework.transaction.IllegalTransactionStateException;
  * 판정 기록 저장소 · 기록기 · 삭제 참가자 통합 시험 (U11 FR2 · BR2.1 · BR2.4 · BR2.5, realtime V5). 쓰기와 같은 id 덮어쓰기, 트랜잭션 강제, 외래 키
  * 위반 폐기, 보호자 기준 삭제(세션 삭제보다 먼저, 삭제 뒤 0건, 늦은 기록 차단)를 실제 DB로 본다.
  */
-@Tag("u11")
+@Tag("judgment-turn")
 @Tag("db")
 class JudgmentLiveRepositoryIT {
 

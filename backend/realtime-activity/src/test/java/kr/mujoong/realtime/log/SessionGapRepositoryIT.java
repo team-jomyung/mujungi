@@ -28,7 +28,7 @@ import org.springframework.dao.DataIntegrityViolationException;
  * <p>증명: DISCONNECT 구간은 끊긴 시각에 열리고 다시 붙은 시각에 한 번만 닫힌다(멱등) · 시작보다 이른 끝은 거부 · 세션 외래 키 ·
  * 12 조회(gaps)는 시작 순 · 삭제 참가자의 세션 단위 삭제(U3-J16).
  */
-@Tag("u3")
+@Tag("voice-session")
 @Tag("db")
 class SessionGapRepositoryIT {
 

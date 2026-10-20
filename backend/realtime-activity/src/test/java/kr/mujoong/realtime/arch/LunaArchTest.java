@@ -21,7 +21,7 @@ import org.junit.jupiter.api.Test;
  *   <li>{@code ..luna..}는 {@code System.out} · {@code System.err}에 직접 쓰지 않는다.
  * </ul>
  */
-@Tag("u9")
+@Tag("luna")
 class LunaArchTest {
 
     private static final JavaClasses PRODUCTION = new ClassFileImporter()

@@ -44,7 +44,7 @@ import org.springframework.transaction.support.TransactionTemplate;
  * FAILED 제어 이벤트는 지우지 않고 재무장, guardian_id NULL 0건. 3.6 수정 분량: 지울 것이 없는 보호자는 두 참가자 모두 0건이고
  * DeviceReleased를 쓰지 않으며, 보호자가 아직 없는 등록 대기(UNREGISTERED) 코드 행은 건드리지 않는다(7일 정리 작업 몫).
  */
-@Tag("u1")
+@Tag("skeleton")
 @Tag("db")
 class DeletionParticipantsCoreIT {
 

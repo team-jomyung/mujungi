@@ -2,7 +2,7 @@ package kr.mujoong.core.result.check;
 import static org.assertj.core.api.Assertions.*;
 import java.util.List;
 import org.junit.jupiter.api.*;
-@Tag("u6")
+@Tag("result-report")
 class QuoteMatcherTest {
     @Test void trimsOnlyEnds(){assertThat(QuoteMatcher.matches("  함께 가자  ","함께 가자")).isTrue();}
     @Test void whitespaceInsideMustMatch(){assertThat(QuoteMatcher.matches("함께  가자","함께 가자")).isFalse();}

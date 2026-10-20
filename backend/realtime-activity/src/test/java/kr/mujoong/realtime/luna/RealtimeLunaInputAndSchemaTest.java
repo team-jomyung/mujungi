@@ -12,7 +12,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 /** Realtime 입력 정리 · 스키마 짝 · 요청 스키마 (U9 BR2.1 ~ BR2.4 · BR4.2 · BR4.5 · SD1 · SD2 · NFR3.1). 합성 값만 쓴다. */
-@Tag("u9")
+@Tag("luna")
 class RealtimeLunaInputAndSchemaTest {
 
     private static final JsonCodec JSON = JsonCodec.shared();

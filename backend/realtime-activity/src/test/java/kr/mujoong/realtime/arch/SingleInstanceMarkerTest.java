@@ -49,6 +49,7 @@ import kr.mujoong.realtime.messaging.RealtimeInboxRepoller;
 import kr.mujoong.realtime.messaging.RealtimeOutboxSender;
 import kr.mujoong.realtime.runtime.TimerClocks;
 import kr.mujoong.realtime.session.OrphanSessionChecker;
+import kr.mujoong.realtime.session.SessionContext;
 import kr.mujoong.realtime.session.SessionExecutor;
 import kr.mujoong.realtime.session.SessionRegistry;
 import kr.mujoong.realtime.session.SessionTimers;
@@ -76,7 +77,7 @@ import org.junit.jupiter.api.Test;
  * <p>규칙마다 위반 표본(이 시험 소스의 중첩 클래스)을 실제로 잡는지 자기 시험을 둔다. 표본은 시험 소스 집합이라 운영 가져오기
  * ({@code DO_NOT_INCLUDE_TESTS})에 들어가지 않는다.
  */
-@Tag("u1")
+@Tag("skeleton")
 class SingleInstanceMarkerTest {
 
     private static final JavaClasses PRODUCTION = new ClassFileImporter()
@@ -113,14 +114,14 @@ class SingleInstanceMarkerTest {
      */
     static final Map<String, Set<Class<?>>> REALTIME_SHARE = Map.of(
             "SI-1", Set.of(SocketRegistry.class, DeviceConnection.class, RealtimeStartupSequence.class),
-            "SI-2", Set.of(SessionRegistry.class, SessionExecutor.class, OrphanSessionChecker.class,
+            "SI-2", Set.of(SessionRegistry.class, SessionExecutor.class, SessionContext.class, OrphanSessionChecker.class,
                     RealtimeStartupSequence.class),
             "SI-3", Set.of(SessionTimers.class, TimerClocks.class),
             "SI-4", Set.of(TombstoneMap.class),
             "SI-6", Set.of(RealtimeOutboxSender.class, RealtimeInboxRepoller.class, RealtimeStartupSequence.class),
             "SI-7", Set.of(DisconnectChecker.class, StatusReporter.class, MessagingCleanupJob.class,
                     OrphanSessionChecker.class),
-            "SI-9", Set.of(ProviderClient.class, SessionExecutor.class),
+            "SI-9", Set.of(ProviderClient.class, SessionExecutor.class, SessionContext.class),
             "SI-10", Set.of(AsyncRecorder.class, JudgmentLiveRecorder.class, GuardrailEventRecorder.class),
             "SI-12", Set.of(LatencyRecorder.class));
 

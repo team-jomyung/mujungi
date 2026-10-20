@@ -8,7 +8,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
-import kr.mujoong.realtime.config.RealtimeProperties.PracticeFlow;
 import kr.mujoong.realtime.practiceflow.PracticeFlowSettings;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -17,7 +16,7 @@ import org.junit.jupiter.api.Test;
  * 새 연습 흐름 설정 시험 (U12 FR7.1 · BR9.1 · BR9.2). 횟수 키 두 개의 기본값(2 · 1)이 application.yml · 설정 레코드 · {@code contracts/ai-io.md}
  * 10.14 표에서 같고, 시간 값은 {@code timing.conversation.*}에서만 읽히며, 음수 · 빠진 값은 키 이름과 함께 거부되는지 본다.
  */
-@Tag("u12")
+@Tag("practice-flow")
 class PracticeFlowSettingsTest {
 
     private static final Path REPO = Path.of(System.getProperty("mujoong.repo.root", "..")).toAbsolutePath().normalize();
@@ -47,18 +46,18 @@ class PracticeFlowSettingsTest {
 
         assertThat(doc).contains("| `mujoong.practice-flow.retry-max` | `2` | realtime |");
         assertThat(doc).contains("| `mujoong.practice-flow.reexplain-max` | `1` | realtime |");
-        PracticeFlow bound = ConfigKeyContractTest.bind(APPLICATION_YML).practiceFlow();
-        assertThat(bound).isEqualTo(new PracticeFlow(2, 1));
+        RealtimePracticeFlowProperties bound =ConfigKeyContractTest.bind(APPLICATION_YML).practiceFlow();
+        assertThat(bound).isEqualTo(new RealtimePracticeFlowProperties(2, 1));
     }
 
     @Test
     void negativeOrMissingCountsAreRejectedWithTheKeyName() {
-        assertThatThrownBy(() -> new PracticeFlow(-1, 1)).isInstanceOf(IllegalArgumentException.class)
+        assertThatThrownBy(() -> new RealtimePracticeFlowProperties(-1, 1)).isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("mujoong.practice-flow.retry-max");
-        assertThatThrownBy(() -> new PracticeFlow(2, -1)).isInstanceOf(IllegalArgumentException.class)
+        assertThatThrownBy(() -> new RealtimePracticeFlowProperties(2, -1)).isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("mujoong.practice-flow.reexplain-max");
-        assertThatThrownBy(() -> new PracticeFlow(null, 1)).isInstanceOf(IllegalArgumentException.class);
-        assertThat(new PracticeFlow(0, 0)).as("0은 하지 않음이라 허용한다").isEqualTo(new PracticeFlow(0, 0));
+        assertThatThrownBy(() -> new RealtimePracticeFlowProperties(null, 1)).isInstanceOf(IllegalArgumentException.class);
+        assertThat(new RealtimePracticeFlowProperties(0, 0)).as("0은 하지 않음이라 허용한다").isEqualTo(new RealtimePracticeFlowProperties(0, 0));
     }
 
     @Test

@@ -8,7 +8,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import kr.mujoong.contract.json.JsonCodec;
-import kr.mujoong.core.support.U2Fixtures;
+import kr.mujoong.core.support.ParentAccountFixtures;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
@@ -16,12 +16,12 @@ import org.junit.jupiter.api.Test;
  * 구글 id_token 확인(U2 · R1 · U2-J2 · 리뷰 1): 구글 JWKS 열쇠로 RS256 서명을 먼저 확인하고 iss · aud · exp · sub를 본다. 열쇠는 실행마다 만든
  * 시험 열쇠다.
  */
-@Tag("u2")
+@Tag("parent-account")
 class GoogleIdTokenReaderTest {
 
     static final String CLIENT_ID = "test-client.apps.invalid";
     static final Instant NOW = Instant.parse("2026-10-15T00:00:00Z");
-    static final KeyPair GOOGLE = U2Fixtures.newKeyPair();
+    static final KeyPair GOOGLE = ParentAccountFixtures.newKeyPair();
     static final Map<String, PublicKey> KEYS = Map.of("k1", GOOGLE.getPublic());
 
     private final GoogleIdTokenReader reader = new GoogleIdTokenReader(JsonCodec.shared());
@@ -43,17 +43,17 @@ class GoogleIdTokenReaderTest {
         String[] parts = signed.split("\\.");
 
         assertThat(reader.read(parts[0] + "." + parts[1] + ".c2ln", KEYS, CLIENT_ID, NOW)).as("서명 자리표시자").isEmpty();
-        assertThat(reader.read(U2Fixtures.b64("{\"alg\":\"none\",\"kid\":\"k1\"}") + "." + parts[1] + "." + parts[2], KEYS,
+        assertThat(reader.read(ParentAccountFixtures.b64("{\"alg\":\"none\",\"kid\":\"k1\"}") + "." + parts[1] + "." + parts[2], KEYS,
                 CLIENT_ID, NOW)).as("alg none").isEmpty();
-        assertThat(reader.read(U2Fixtures.sign("{\"alg\":\"HS256\",\"kid\":\"k1\"}", good, GOOGLE.getPrivate()), KEYS, CLIENT_ID,
+        assertThat(reader.read(ParentAccountFixtures.sign("{\"alg\":\"HS256\",\"kid\":\"k1\"}", good, GOOGLE.getPrivate()), KEYS, CLIENT_ID,
                 NOW)).as("RS256이 아님").isEmpty();
-        assertThat(reader.read(U2Fixtures.sign("{\"alg\":\"RS256\"}", good, GOOGLE.getPrivate()), KEYS, CLIENT_ID, NOW))
+        assertThat(reader.read(ParentAccountFixtures.sign("{\"alg\":\"RS256\"}", good, GOOGLE.getPrivate()), KEYS, CLIENT_ID, NOW))
                 .as("kid 없음").isEmpty();
-        assertThat(reader.read(U2Fixtures.sign("{\"alg\":\"RS256\",\"kid\":\"k2\"}", good, GOOGLE.getPrivate()), KEYS,
+        assertThat(reader.read(ParentAccountFixtures.sign("{\"alg\":\"RS256\",\"kid\":\"k2\"}", good, GOOGLE.getPrivate()), KEYS,
                 CLIENT_ID, NOW)).as("모르는 kid").isEmpty();
-        assertThat(reader.read(U2Fixtures.sign("{\"alg\":\"RS256\",\"kid\":\"k1\"}", good, U2Fixtures.newKeyPair().getPrivate()),
+        assertThat(reader.read(ParentAccountFixtures.sign("{\"alg\":\"RS256\",\"kid\":\"k1\"}", good, ParentAccountFixtures.newKeyPair().getPrivate()),
                 KEYS, CLIENT_ID, NOW)).as("다른 열쇠로 서명").isEmpty();
-        String tampered = parts[0] + "." + U2Fixtures.b64(JsonCodec.shared().write(
+        String tampered = parts[0] + "." + ParentAccountFixtures.b64(JsonCodec.shared().write(
                 claims("accounts.google.com", CLIENT_ID, NOW.plusSeconds(60), "someone-else"))) + "." + parts[2];
         assertThat(reader.read(tampered, KEYS, CLIENT_ID, NOW)).as("내용을 바꾼 토큰").isEmpty();
         assertThat(reader.read(parts[0] + "." + parts[1] + ".%%%", KEYS, CLIENT_ID, NOW)).as("서명 형식 오류").isEmpty();
@@ -86,7 +86,7 @@ class GoogleIdTokenReaderTest {
         assertThat(reader.read("a.b", KEYS, CLIENT_ID, NOW)).isEmpty();
         assertThat(reader.read("a..c", KEYS, CLIENT_ID, NOW)).isEmpty();
         assertThat(reader.read("%%%.b.c", KEYS, CLIENT_ID, NOW)).isEmpty();
-        assertThat(reader.read(U2Fixtures.b64("not json") + ".b.c", KEYS, CLIENT_ID, NOW)).isEmpty();
+        assertThat(reader.read(ParentAccountFixtures.b64("not json") + ".b.c", KEYS, CLIENT_ID, NOW)).isEmpty();
         assertThat(reader.read(good, KEYS, " ", NOW)).isEmpty();
         assertThat(reader.read(good, KEYS, CLIENT_ID, null)).isEmpty();
     }
@@ -97,6 +97,6 @@ class GoogleIdTokenReaderTest {
 
     /** 시험 열쇠(kid k1)로 서명한 토큰. */
     static String token(Map<String, Object> claims) {
-        return U2Fixtures.sign("{\"alg\":\"RS256\",\"kid\":\"k1\",\"typ\":\"JWT\"}", claims, GOOGLE.getPrivate());
+        return ParentAccountFixtures.sign("{\"alg\":\"RS256\",\"kid\":\"k1\",\"typ\":\"JWT\"}", claims, GOOGLE.getPrivate());
     }
 }

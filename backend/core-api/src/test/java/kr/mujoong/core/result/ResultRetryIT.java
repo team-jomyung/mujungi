@@ -11,7 +11,7 @@ import kr.mujoong.core.identity.GuardianWriteLock;
 import kr.mujoong.testsupport.time.MutableClock;
 import org.junit.jupiter.api.*;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
-@Tag("u6") @Tag("db")
+@Tag("result-report") @Tag("db")
 class ResultRetryIT {
     DbTestSupport db;ResultJobRepository jobs;SessionResultStateRepository states;ActivityResultRepository results;ResultRetryService retry;MutableClock clock;UUID guardian,child,session;
     ConsentPolicyService consent;

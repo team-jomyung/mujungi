@@ -32,7 +32,7 @@ import tools.jackson.databind.JsonNode;
  * <p>DeviceStatusChanged가 행 guardian_id와 payload guardianId를 함께 싣고 Core 대역까지 가는지, Core 응답별 Outbox 상태, DeviceReleased
  * 수신 → 4401 + OFFLINE, 같은 이벤트 중복 수신, Realtime 메시징 삭제 참가자의 멱등을 실제 앱 · DB로 본다.
  */
-@Tag("u1")
+@Tag("skeleton")
 @Tag("db")
 class RealtimeMessagingIT {
 

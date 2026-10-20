@@ -40,7 +40,7 @@ import org.junit.jupiter.params.provider.ValueSource;
  * RELEASED · REGISTERED 검사 · AC3.1.8 · BR6.2 · BR6.3(활동 유일) · local_failed 검사(BR6.6 · BR6.7 · BR6.12 ①) ·
  * trace_id 형식(A3 · OD-7) · BR5.6 · BR5.11 · BR2.10 · J58(외래 키 RESTRICT 23503).
  */
-@Tag("u1")
+@Tag("skeleton")
 @Tag("db")
 class CoreConstraintIT {
 

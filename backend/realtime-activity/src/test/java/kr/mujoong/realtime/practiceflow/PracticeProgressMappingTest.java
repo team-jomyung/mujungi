@@ -13,7 +13,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import kr.mujoong.realtime.internalhttp.InternalHttpClient;
-import kr.mujoong.realtime.practice.PracticePorts.Playback;
+import kr.mujoong.realtime.practicelegacy.PracticePorts.Playback;
 import kr.mujoong.realtime.practiceflow.PracticeFlowTestKit.Harness;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -23,7 +23,7 @@ import org.junit.jupiter.api.Test;
  * HELP_OFFER · CUE · AFTER_CUE_RESPONSE · NEW_SCENARIO_RESPONSE)으로만 접혀 나가고, 접기는 표시에만 있어 기록 값은 새 단계를 사실대로 둔다.
  * 가짜 출력 · 가짜 판정 위의 합성 대화이다(테스트 대역 증거).
  */
-@Tag("u12")
+@Tag("practice-flow")
 class PracticeProgressMappingTest {
 
     private static final Set<String> SIX = Set.of("SCENARIO_INTRO", "FIRST_RESPONSE", "HELP_OFFER", "CUE", "AFTER_CUE_RESPONSE",

@@ -47,7 +47,7 @@ import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
  * 판정)을 실제 DB에서만 보이는 동작으로 바꿨다 — 실제 교착은 운영 락 대기 상한보다 먼저 40P01로 끊기고 진 쪽이 재시도로 성립한다 · 상한 안에
  * 풀린 잠금은 기다렸다 첫 시도에 성립한다.
  */
-@Tag("u1")
+@Tag("skeleton")
 @Tag("db")
 class DbSessionLimitsIT {
 

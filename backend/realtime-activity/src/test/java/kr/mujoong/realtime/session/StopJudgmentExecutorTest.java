@@ -21,7 +21,7 @@ import org.junit.jupiter.api.Test;
 /**
  * 판정 턴 실행기 연결 2 — 종료 의도 J6 (U11 W2 · BR6.x · BR7.x, 첫 판 검토 R-13 · R-14). 공급자와 판정기는 가짜, 값은 합성이다(R-F1 · R-F3).
  */
-@Tag("u11")
+@Tag("judgment-turn")
 class StopJudgmentExecutorTest {
 
     private final JudgmentExecutorSupport t = new JudgmentExecutorSupport();

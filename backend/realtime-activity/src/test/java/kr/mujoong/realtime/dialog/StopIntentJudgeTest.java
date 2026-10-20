@@ -19,7 +19,7 @@ import org.junit.jupiter.params.provider.CsvSource;
  * 문장 · 이중 부정 · 입말 인용)을 더한 28건에서 오인식(종료 아님 → STOP) 0, 미인식(종료 → STOP 아님) 1 이하를 확인하고, 규칙별 경계를 따로
  * 본다. 세션 스냅숏은 기본 표현 "무중아 그만할래"와 보호자 추가 표현 "이제 끝"이다.
  */
-@Tag("u3")
+@Tag("voice-session")
 class StopIntentJudgeTest {
 
     private static final List<String> SNAPSHOT = List.of("무중아 그만할래", "이제 끝");

@@ -66,7 +66,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
  * (리뷰: 같은 스레드면 DB 정지 때 표본마다 약 6초씩 점검이 밀렸다). 실제 스레드로 돌리고 시간 키는 test 프로필 값(DB 점검 200ms · 표본
  * 500ms)이다.
  */
-@Tag("u1")
+@Tag("skeleton")
 class RealtimeStartupSequenceTest {
 
     private static final RealtimeProperties PROPERTIES = testProperties();

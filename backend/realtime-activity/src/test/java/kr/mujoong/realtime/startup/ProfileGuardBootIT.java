@@ -29,7 +29,7 @@ import org.springframework.context.ConfigurableApplicationContext;
  * 거부 조합은 환경 준비 단계(문맥 · 웹 서버 생성 전)에서 끝나고(스위치는 운영의 환경 변수처럼 설정 파일보다 우선하는 명령줄 인자로 준다), 표준 오류에는 충돌한 프로필 · 키 이름만 있고 값(비밀 · 스위치 값)은 없다.
  * 웹 서버를 띄우지 않았다는 것은 무작위로 준 포트에 아무도 듣지 않는 것으로 확인한다.
  */
-@Tag("u1")
+@Tag("skeleton")
 class ProfileGuardBootIT {
 
     static Stream<Combination> rejected() {

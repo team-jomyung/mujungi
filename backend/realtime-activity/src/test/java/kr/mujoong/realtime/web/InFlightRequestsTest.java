@@ -14,7 +14,7 @@ import org.junit.jupiter.api.Test;
  * 처리 중 요청 수 (U1 3.6 수정 · RD-13 T6 · R3-13 · J304). 정상 종료 T6이 받아들인 요청이 끝날 때까지만 기다리고, 기다릴 요청이 없으면 바로
  * 돌아오며, 한도가 지나면 포기하는지 본다.
  */
-@Tag("u1")
+@Tag("skeleton")
 class InFlightRequestsTest {
 
     private static final Duration WAIT = Duration.ofSeconds(10);

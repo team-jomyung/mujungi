@@ -23,7 +23,7 @@ import org.junit.jupiter.api.Test;
  * 확장 능력 판정 요청 (U11 W4 · BR8.1 ~ BR8.4). 연습 확장점 대역이 {@code requestJudgment}를 부르고 결과 사건을 받는다. 판정기는 가짜, 값은 합성이다
  * (R-F1 · R-F3).
  */
-@Tag("u11")
+@Tag("judgment-turn")
 class JudgmentExtensionPortTest {
 
     private final JudgmentExecutorSupport t = new JudgmentExecutorSupport();

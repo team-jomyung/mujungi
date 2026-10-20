@@ -8,19 +8,19 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import kr.mujoong.contract.event.EventType;
+import kr.mujoong.core.config.CoreOutboxProperties.ControlEventPolicy;
 import kr.mujoong.core.config.CoreProperties;
-import kr.mujoong.core.config.CoreProperties.Outbox.ControlEventPolicy;
 import kr.mujoong.core.startup.StartupFailureLine;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 /**
- * FAILED 제어 이벤트 재무장 함수 (U1 3.5 Step 20 · A1 · RD-10 · SD-21 · BR5.14 · J124).
+ * FAILED 제어 이벤트 재무장 함수 (U1 3.5 Step 20).
  *
  * <p>조건 표(RD-10)를 이 한 곳에 둔다: 자기 Outbox의 FAILED 행 중 제어 이벤트(Core는 DeviceReleased · DeletionRequested)이고
  * last_error가 EVENT_CONFLICT · INVALID_ENVELOPE · ACCOUNT_DELETED가 아니며 payload를 아직 비우지 않은 행을 PENDING · retry_count 0 ·
- * available_at = now로 되돌린다(last_error는 둔다). 시작 복구 S3d와 계정 삭제 참가자(BR5.14: FAILED 제어 이벤트를 지우지 않고 되살림)가
- * 같은 함수를 부른다. 정책 {@code RETRY_FOREVER}는 보류 옵션이라 빈 생성 단계에서 기동을 거부한다(J124).
+ * available_at = now로 되돌린다(last_error는 둔다). 시작 복구 S3d와 계정 삭제 참가자(FAILED 제어 이벤트를 지우지 않고 되살림)가
+ * 같은 함수를 부른다. 정책 {@code RETRY_FOREVER}는 보류 옵션이라 빈 생성 단계에서 기동을 거부한다.
  */
 @Component
 public class ControlEventRearm {
@@ -47,7 +47,7 @@ public class ControlEventRearm {
     }
 
     /**
-     * 정책 확인. {@code REARM_ON_START}만 지원한다(J124: {@code RETRY_FOREVER}는 보류 옵션 → 기동 실패, 거부 줄에는 키 이름만).
+     * 정책 확인. {@code REARM_ON_START}만 지원한다({@code RETRY_FOREVER}는 보류 옵션 → 기동 실패, 거부 줄에는 키 이름만).
      */
     public static void requireSupported(ControlEventPolicy policy) {
         if (policy != ControlEventPolicy.REARM_ON_START) {
@@ -63,7 +63,7 @@ public class ControlEventRearm {
                 Objects.requireNonNull(now, "now"));
     }
 
-    /** BR5.14: 한 보호자의 FAILED 제어 이벤트를 같은 조건으로 되살린다(삭제 참가자가 지우기 전에 부른다). */
+    /** 한 보호자의 FAILED 제어 이벤트를 같은 조건으로 되살린다(삭제 참가자가 지우기 전에 부른다). */
     public int rearmForGuardian(UUID guardianId, Instant now) {
         return outbox.rearmFailedControlEventsForGuardian(Objects.requireNonNull(guardianId, "guardianId"),
                 EnumSet.copyOf(CORE_CONTROL_EVENT_TYPES), EXCLUDED_LAST_ERRORS, Objects.requireNonNull(now, "now"));

@@ -28,7 +28,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.SimpleTransactionStatus;
 
-@Tag("u7")
+@Tag("web-push")
 class PushStaleScannerTest {
     private final PushEventRepository events = mock(PushEventRepository.class);
     private final ActivityCopyRepository activities = mock(ActivityCopyRepository.class);

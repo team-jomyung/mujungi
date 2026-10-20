@@ -38,7 +38,7 @@ import kr.mujoong.core.identity.SocialAccountRepository;
 import kr.mujoong.core.messaging.CoreOutboxWriter;
 import kr.mujoong.core.observability.EventLogger;
 import kr.mujoong.core.support.BusinessFixtures;
-import kr.mujoong.core.support.U2Fixtures;
+import kr.mujoong.core.support.ParentAccountFixtures;
 import kr.mujoong.core.web.support.CoreWebApp;
 import kr.mujoong.core.web.support.CoreWebApp.Call;
 import kr.mujoong.core.web.support.CoreWebApp.Result;
@@ -66,7 +66,7 @@ import org.springframework.transaction.PlatformTransactionManager;
  * DeletionRequested) → DeletionCompleted 수신 → 마무리(보호자 · 연결 · 세션 삭제, DONE)까지 본다. 지휘 주기는 1시간으로 두어 배경 실행이 끼지 않게
  * 하고 시험이 {@link DeletionCommander#process}를 직접 부르며 가변 Clock을 앞당긴다.
  */
-@Tag("u2")
+@Tag("parent-account")
 @Tag("db")
 class AccountDeletionIT {
 
@@ -87,18 +87,18 @@ class AccountDeletionIT {
     static void start() {
         db = DbTestSupport.coreApp();
         BusinessFixtures.applyReferenceSeed(db.postgres());
-        U2Fixtures.applyU2Seed(db.postgres());
+        ParentAccountFixtures.applyU2Seed(db.postgres());
         fixtures = new BusinessFixtures(db);
         contracts = OpenApiContracts.load();
         String token = TestSecrets.internalServiceToken();
         realtime = WebFixtures.realtime(token);
-        google = U2Fixtures.googleTokenEndpoint();
+        google = ParentAccountFixtures.googleTokenEndpoint();
         app = CoreWebApp.builder(db.postgres()).internalToken(token).realtime(realtime.baseUrl())
-                .property("mujoong.guardian.google.client-id", U2Fixtures.CLIENT_ID)
-                .property("mujoong.guardian.google.client-secret", U2Fixtures.clientSecret())
-                .property("mujoong.guardian.google.redirect-uri", U2Fixtures.REDIRECT_URI)
-                .property("mujoong.guardian.google.token-uri", google.baseUrl() + U2Fixtures.TOKEN_PATH)
-                .property("mujoong.guardian.google.jwks-uri", google.baseUrl() + U2Fixtures.JWKS_PATH)
+                .property("mujoong.guardian.google.client-id", ParentAccountFixtures.CLIENT_ID)
+                .property("mujoong.guardian.google.client-secret", ParentAccountFixtures.clientSecret())
+                .property("mujoong.guardian.google.redirect-uri", ParentAccountFixtures.REDIRECT_URI)
+                .property("mujoong.guardian.google.token-uri", google.baseUrl() + ParentAccountFixtures.TOKEN_PATH)
+                .property("mujoong.guardian.google.jwks-uri", google.baseUrl() + ParentAccountFixtures.JWKS_PATH)
                 .property("mujoong.timing.account.deletion-tick", "1h")
                 .property("mujoong.timing.account.deletion-session-wait", "2h")
                 // 시험이 가짜 시계를 몇 시간씩 앞당긴다. 앱 안의 U1 PREPARING 점검(실제 1초마다)이 그 시계로 시험의 REQUESTED 사본을 닫고
@@ -272,8 +272,8 @@ class AccountDeletionIT {
     @Test
     void theCommanderDeletesCoreDataAsksRealtimeAndFinishesAfterDeletionCompleted() {
         String subject = "sub-" + UUID.randomUUID();
-        U2Fixtures.issueFor(google, subject, app.clock().now());
-        Result login = send("POST /api/auth/google", app.post("/api/auth/google").json(U2Fixtures.loginBody("c")));
+        ParentAccountFixtures.issueFor(google, subject, app.clock().now());
+        Result login = send("POST /api/auth/google", app.post("/api/auth/google").json(ParentAccountFixtures.loginBody("c")));
         UUID guardianId = UUID.fromString(String.valueOf(login.json().get("guardianId")));
         db.trackGuardian(guardianId);
         sessionsOf.add(guardianId);
@@ -314,8 +314,8 @@ class AccountDeletionIT {
         assertThat(commander.process(requestId)).as("DeletionCompleted 전에는 기다린다").isEqualTo(Step.WAITING);
 
         // 삭제 처리 중 같은 구글 계정 로그인: 쿠키 없이 '삭제 처리 중'만(AC1.6.4)
-        U2Fixtures.issueFor(google, subject, app.clock().now());
-        Result whileDeleting = send("POST /api/auth/google", app.post("/api/auth/google").json(U2Fixtures.loginBody("c2")));
+        ParentAccountFixtures.issueFor(google, subject, app.clock().now());
+        Result whileDeleting = send("POST /api/auth/google", app.post("/api/auth/google").json(ParentAccountFixtures.loginBody("c2")));
         assertThat(whileDeleting.json()).containsEntry("deletionStatus", "IN_PROGRESS").containsEntry("guardianId",
                 guardianId.toString());
         assertThat(whileDeleting.headerValues("Set-Cookie")).isEmpty();
@@ -334,8 +334,8 @@ class AccountDeletionIT {
         assertThat(commander.process(requestId)).as("완료된 요청은 다시 집지 않는다").isEqualTo(Step.SKIPPED);
 
         // 완료 뒤 같은 구글 계정은 새 보호자로 02부터(AC1.6.5)
-        U2Fixtures.issueFor(google, subject, app.clock().now());
-        Result fresh = send("POST /api/auth/google", app.post("/api/auth/google").json(U2Fixtures.loginBody("c3")));
+        ParentAccountFixtures.issueFor(google, subject, app.clock().now());
+        Result fresh = send("POST /api/auth/google", app.post("/api/auth/google").json(ParentAccountFixtures.loginBody("c3")));
         UUID freshId = UUID.fromString(String.valueOf(fresh.json().get("guardianId")));
         db.trackGuardian(freshId);
         sessionsOf.add(freshId);

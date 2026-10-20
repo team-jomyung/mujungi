@@ -17,7 +17,7 @@ import org.junit.jupiter.api.Test;
  * <p>3.6 수정(BT-TC-10)에서 더한 셋: 실제 대기를 상한 있는 래치 대기로 재고(J138 — 운영 구동기 시험만 실제 시간을 쓴다), 운영 Clock이
  * 물려받는 경과 규칙(인터페이스 기본 메서드)의 경계 — 0 아래 자르기의 한 틱 양쪽과 단조 값 넘침 — 를 값을 고정한 읽기로 본다(3.6 수정 J317).
  */
-@Tag("u1")
+@Tag("skeleton")
 class SystemMujoongClockTest {
 
     /** 실제 대기 길이(수십 ms, J138). */

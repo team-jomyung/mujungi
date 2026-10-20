@@ -38,7 +38,7 @@ import org.junit.jupiter.api.Test;
  * Realtime 판정 호출 (U9 BR1.6 · BR1.8 · BR2.4 · BR2.5 · BR3.1 · BR4.1 ~ BR4.4 · BR5.1 · BR6.1 · BR6.2 · NFR1.1 · NFR2.1 · NFR3.3 ·
  * NFR3.5 · NFR4.1). 공급자는 루프백 대역, 키는 가짜 문자열, 입력은 합성 값이다(R-F1 · R-F3). 증거 종류: 테스트 대역(R-M11).
  */
-@Tag("u9")
+@Tag("luna")
 class RealtimeLunaClientTest {
 
     private static final String MODEL = "gpt-6-luna";

@@ -10,7 +10,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import kr.mujoong.testsupport.time.MutableClock;
 import org.junit.jupiter.api.*;
 
-@Tag("u5a")
+@Tag("practice-core")
 class TextAiGatewayTest {
     private final MutableClock clock = new MutableClock();
     private final ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();

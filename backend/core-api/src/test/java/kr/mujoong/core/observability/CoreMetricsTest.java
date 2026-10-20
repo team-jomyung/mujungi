@@ -13,7 +13,7 @@ import org.junit.jupiter.api.Test;
  * 이름 · 라벨 그대로 나오는지(호스트 수집기 {@code infra/bin/host-collect.sh}가 읽는 이름), 사건이 없어도 0으로 보이는지, 값이 실제로 움직이는지
  * 본다.
  */
-@Tag("u1")
+@Tag("skeleton")
 class CoreMetricsTest {
 
     private final PrometheusMeterRegistry registry = new PrometheusMeterRegistry(PrometheusConfig.DEFAULT);

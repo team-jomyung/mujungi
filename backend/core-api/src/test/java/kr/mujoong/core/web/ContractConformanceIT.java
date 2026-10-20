@@ -43,7 +43,7 @@ import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandl
  * 원문이 없는지, Core가 Realtime에 보낸 요청이 계약 스키마에 맞는지도 함께 본다. 3.6 수정 분량: 대조기 자신이 문서에 없는 상태 · code · 본문을
  * 실제로 잡는지(빈 대조로 통과하지 않음), 공개 연산 셋을 뺀 모든 Core 연산이 인증 없는 호출에 그 연산 문서의 401 code로 답하는지 본다.
  */
-@Tag("u1")
+@Tag("skeleton")
 @Tag("db")
 class ContractConformanceIT {
 

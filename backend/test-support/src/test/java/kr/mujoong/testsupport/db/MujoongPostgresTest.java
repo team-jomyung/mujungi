@@ -24,7 +24,7 @@ import org.junit.jupiter.params.provider.EnumSource;
  * DB 시험 백엔드 자기 시험(J132 · J135 · J116 · SD-13). 두 백엔드가 같은 {@code infra/postgres/} 스크립트로 같은 DB를 만드는지 본다.
  * 쓸 수 없는 백엔드는 건너뛴다(가정 실패, 사유를 남긴다). 권한 · 제약의 전체 확인은 Step 14 시험이 한다.
  */
-@Tag("u1")
+@Tag("skeleton")
 @Tag("db")
 class MujoongPostgresTest {
 

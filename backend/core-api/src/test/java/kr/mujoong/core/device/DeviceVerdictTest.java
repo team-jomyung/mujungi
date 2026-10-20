@@ -28,7 +28,7 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 /** 기기 판정 7행 · 30초 경계 · canStart · 교체 허용 · DeviceView 노출 범위 (BR4.3 · BR4.4 · BR4.6 · BR2.4 · AC2.1.1 ~ 2.1.6). */
-@Tag("u1")
+@Tag("skeleton")
 class DeviceVerdictTest {
 
     private static final Duration STALE = Duration.ofSeconds(30);

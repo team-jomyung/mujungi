@@ -23,7 +23,7 @@ import org.junit.jupiter.params.provider.ValueSource;
  * <p>7범주 매개변수화 · 빈 범주 · 중복 id 거부, 항목마다 원형 · 조사 결합 · 띄어쓰기 변형 문장이 걸리는지, 금지어 없는 일상 문장이 통과하는지,
  * 정규화(NFKC · 제로폭 · 구두점 · 대소문자)와 {@code #} 숫자 자리표시, 정규식 메타 문자 · 공백을 담은 패턴의 로딩 거부를 본다.
  */
-@Tag("u1")
+@Tag("skeleton")
 class SeedDictionaryTest {
 
     private static final SeedDictionary DEFAULT = SeedDictionary.loadDefault();

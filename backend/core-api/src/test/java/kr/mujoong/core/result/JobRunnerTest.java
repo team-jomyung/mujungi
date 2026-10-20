@@ -4,17 +4,18 @@ import static org.mockito.Mockito.*;
 import java.time.*;
 import java.util.*;
 import kr.mujoong.core.config.CoreProperties;
+import kr.mujoong.core.config.CoreTimingProperties;
 import kr.mujoong.core.identity.GuardianWriteLock;
 import kr.mujoong.testsupport.time.MutableClock;
 import org.junit.jupiter.api.*;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.SimpleTransactionStatus;
-@Tag("u6")
+@Tag("result-report")
 class JobRunnerTest {
     ResultJobRepository jobs;ReportJobState reports;GuardianWriteLock guardians;MutableClock clock;
     JobRunner runner;PlatformTransactionManager transactions;CoreProperties props;
     @BeforeEach void setup(){jobs=mock(ResultJobRepository.class);reports=mock(ReportJobState.class);guardians=mock(GuardianWriteLock.class);when(guardians.statusForShare(any())).thenReturn(Optional.of("ACTIVE"));clock=new MutableClock();props=properties();transactions=mock(PlatformTransactionManager.class);when(transactions.getTransaction(any())).thenAnswer(i->new SimpleTransactionStatus());runner=new JobRunner(jobs,reports,guardians,clock,props,transactions,List.of(),mock(kr.mujoong.core.observability.EventLogger.class));}
-    static CoreProperties properties(){var p=mock(CoreProperties.class,RETURNS_DEEP_STUBS);when(p.timing().result()).thenReturn(new CoreProperties.ResultTiming(3,List.of(Duration.ofSeconds(5),Duration.ofSeconds(15)),Duration.ofMillis(10),Duration.ofSeconds(30),Duration.ofMinutes(5),Duration.ofHours(1)));return p;}
+    static CoreProperties properties(){var p=mock(CoreProperties.class,RETURNS_DEEP_STUBS);when(p.timing().result()).thenReturn(new CoreTimingProperties.ResultTiming(3,List.of(Duration.ofSeconds(5),Duration.ofSeconds(15)),Duration.ofMillis(10),Duration.ofSeconds(30),Duration.ofMinutes(5),Duration.ofHours(1)));return p;}
     ResultJob job(int attempt){return new ResultJob(UUID.randomUUID(),"SESSION_RESULT",UUID.randomUUID(),UUID.randomUUID(),"key","RUNNING",attempt,clock.now(),clock.now().plusSeconds(30),null,null);}
     void handler(Outcome outcome){runner.register(new JobHandler(){public String jobType(){return "SESSION_RESULT";}public Outcome handle(JobContext c){return outcome;}});}
     @Test void firstFailureWaitsFiveSeconds(){var j=job(1);handler(Outcome.failed("PROVIDER_ERROR",true));runner.execute(j);verify(jobs).transition(j,"REQUESTED","PROVIDER_ERROR",clock.now().plusSeconds(5),clock.now(),"FAILED");}

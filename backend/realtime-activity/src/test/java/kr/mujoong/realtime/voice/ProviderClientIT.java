@@ -40,7 +40,7 @@ import org.junit.jupiter.api.Test;
  * <p>실제 JDK WebSocket 클라이언트와 가짜 공급자 WS 서버로 선 형식(J110)을 주고받고, 거부 · 연결 단계 무응답이 PROVIDER_UNAVAILABLE 한
  * 번으로 끝나는지, 연결이 걸려 있는 동안에도 Core 취소가 2초 안에 처리되는지 본다.
  */
-@Tag("u1")
+@Tag("skeleton")
 @Tag("db")
 class ProviderClientIT {
 

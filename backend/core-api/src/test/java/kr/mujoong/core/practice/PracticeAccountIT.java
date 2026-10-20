@@ -19,7 +19,7 @@ import kr.mujoong.core.common.db.DbTestSupport;
 import kr.mujoong.core.common.deletion.DeletionParticipant;
 import kr.mujoong.core.common.error.CoreApiException;
 import kr.mujoong.core.support.BusinessFixtures;
-import kr.mujoong.core.support.U2Fixtures;
+import kr.mujoong.core.support.ParentAccountFixtures;
 import kr.mujoong.core.web.support.CoreWebApp;
 import kr.mujoong.core.web.support.CoreWebApp.Result;
 import kr.mujoong.core.web.support.OpenApiContracts;
@@ -39,11 +39,11 @@ import org.springframework.transaction.support.TransactionTemplate;
 /**
  * 연습 계정 포트의 운영 구현과 계정 삭제 순서 통합 시험(U5a 리뷰 A · B · 3 · 4).
  *
- * <p>실제 앱에서 {@link U2PracticeAccountAdapter}(U2 GuardianWriteLock · ChildProfileService)가 쓰이는지, 아이 없는 보호자의 18 목록이 빈
+ * <p>실제 앱에서 {@link PracticeAccountAdapter}(U2 GuardianWriteLock · ChildProfileService)가 쓰이는지, 아이 없는 보호자의 18 목록이 빈
  * 상태인지, 그리고 목표 선택 · 상황이 있는 보호자의 계정 삭제가 아이 단계에서 외래 키에 막히지 않고 DeletionCompleted 뒤 완료되는지 본다. 지휘
  * 주기는 1시간으로 두어 배경 실행이 끼지 않게 하고 시험이 {@link DeletionCommander#process}를 직접 부른다.
  */
-@Tag("u5a")
+@Tag("practice-core")
 @Tag("db")
 class PracticeAccountIT {
 
@@ -61,7 +61,7 @@ class PracticeAccountIT {
     static void start() {
         db = DbTestSupport.coreApp();
         BusinessFixtures.applyReferenceSeed(db.postgres());
-        U2Fixtures.applyU2Seed(db.postgres());
+        ParentAccountFixtures.applyU2Seed(db.postgres());
         contracts = OpenApiContracts.load();
         String token = TestSecrets.internalServiceToken();
         realtime = WebFixtures.realtime(token);
@@ -96,7 +96,7 @@ class PracticeAccountIT {
     @Test
     void theAppWiresTheU2AdapterAndItReadsGuardianAndChildThroughU2() {
         PracticeAccountPort accounts = app.bean(PracticeAccountPort.class);
-        assertThat(accounts).isInstanceOf(U2PracticeAccountAdapter.class);
+        assertThat(accounts).isInstanceOf(PracticeAccountAdapter.class);
 
         UUID guardian = db.insertGuardian("ACTIVE");
         UUID child = db.insertChild(guardian);

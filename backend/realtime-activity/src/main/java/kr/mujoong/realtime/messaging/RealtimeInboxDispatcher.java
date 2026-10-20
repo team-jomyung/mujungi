@@ -19,6 +19,7 @@ import kr.mujoong.contract.log.EventCode;
 import kr.mujoong.contract.log.EventLog;
 import kr.mujoong.contract.time.MujoongClock;
 import kr.mujoong.contract.trace.TraceIds;
+import kr.mujoong.realtime.config.RealtimeInboxProperties;
 import kr.mujoong.realtime.config.RealtimeProperties;
 import kr.mujoong.realtime.observability.EventLogger;
 import kr.mujoong.realtime.observability.RealtimeMetrics;
@@ -30,13 +31,13 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * Realtime Inbox 디스패처 (U1 3.5 Step 26 · BR5.7 · BR5.8 · BR5.11 · RD-9 · ADR-010 · OD-7 · LC-11).
+ * Realtime Inbox 디스패처 (U1 3.5 Step 26 · ADR-010 · OD-7 · LC-11).
  *
  * <p>두 입구(수신 직후 제출 · 재호출 폴러)가 같은 문 {@link #process}로 들어온다. 문은 선점 UPDATE(next_attempt_at = now + claim-lease,
  * 조건 RECEIVED이고 도래)이고 갱신 행 수가 1인 호출만 처리기를 부른다. 처리기는 트랜잭션 안에서 업무 변경을 하고 같은 트랜잭션이
  * PROCESSED(payload 비움)를 쓴다. 뒷일(소켓 닫기)은 커밋 뒤 트랜잭션 밖에서 하고 성공하면 짧은 문장으로 PROCESSED를 쓴다.
  *
- * <p>실패(BR5.8): retry_count + 1, next_attempt_at = now + 대기표(1 · 2 · 4 · 8 · 16초). retry_count가 이미 max-retries(5)인 행의
+ * <p>실패: retry_count + 1, next_attempt_at = now + 대기표(1 · 2 · 4 · 8 · 16초). retry_count가 이미 max-retries(5)인 행의
  * 6번째 실패는 DEAD(retry_count 5 유지, last_error는 예외 종류만, 경고 한 줄). 처리 풀은 {@code mujoong.inbox.handler-threads}개 ·
  * 대기열 {@code batch-size}칸이고 가득 차면 제출을 건너뛴다(호출자 실행 금지 — 폴러가 다시 집는다). MDC traceId는 행의 trace_id다.
  */
@@ -82,7 +83,7 @@ public class RealtimeInboxDispatcher implements DisposableBean {
             EventLogger events,
             RealtimeMetrics metrics,
             MujoongClock clock,
-            RealtimeProperties.Inbox config) {
+            RealtimeInboxProperties config) {
         this.inbox = Objects.requireNonNull(inbox, "inbox");
         for (InboxHandler handler : Objects.requireNonNull(handlers, "handlers")) {
             if (this.handlers.put(handler.eventType(), handler) != null) {
@@ -97,7 +98,7 @@ public class RealtimeInboxDispatcher implements DisposableBean {
         this.maxRetries = config.maxRetries();
         this.claimLease = config.claimLease();
         AtomicInteger threadNumber = new AtomicInteger();
-        // keepAlive 0은 시간 값이 아니다: core = max인 고정 풀이라 유휴 스레드를 줄이지 않고 이 값은 쓰이지 않는다(J307, Core J327과 같은
+        // keepAlive 0은 시간 값이 아니다: core = max인 고정 풀이라 유휴 스레드를 줄이지 않고 이 값은 쓰이지 않는다(Core와 같은
         // 근거 · 시간 상수 검사 허용 목록)
         this.pool = new ThreadPoolExecutor(config.handlerThreads(), config.handlerThreads(), 0L, TimeUnit.MILLISECONDS,
                 new ArrayBlockingQueue<>(config.batchSize()),
@@ -109,7 +110,7 @@ public class RealtimeInboxDispatcher implements DisposableBean {
                 new ThreadPoolExecutor.AbortPolicy());
     }
 
-    /** 이 종류의 처리기가 등록돼 있는가(BR5.9). */
+    /** 이 종류의 처리기가 등록돼 있는가. */
     public boolean hasHandler(EventType type) {
         return handlers.containsKey(type);
     }

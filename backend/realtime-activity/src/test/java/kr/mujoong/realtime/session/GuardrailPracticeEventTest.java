@@ -26,7 +26,7 @@ import org.junit.jupiter.api.Test;
  * 사건 값 하나가 전달된다. 운영에서 연습 모드 검사를 시작하는 것은 U12라서 여기서는 시험이 연습 모드를 대역으로 주입한다. 제브는 시험이 손으로 푸는
  * 대역이다(실제 호출 없음, R-F1 · R-M11).
  */
-@Tag("u13")
+@Tag("jev-guardrail")
 class GuardrailPracticeEventTest {
 
     private final SessionHarness h = new SessionHarness();

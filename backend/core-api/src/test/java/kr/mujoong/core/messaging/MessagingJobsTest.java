@@ -24,7 +24,7 @@ import org.junit.jupiter.api.Test;
  * 메시징 주기 작업 (BR5.7 · BR5.8 · BR5.11 · BR5.12 · RD-9): 재호출 폴러는 준비 완료일 때만 도래 행을 제출하고 풀이 거절하면 그
  * 사이클을 멈춘다. 보존 정리는 Outbox FAILED · Inbox DEAD를 7일 기준으로 배치가 가득 찬 동안 되풀이해 비우고 비운 수를 돌려준다.
  */
-@Tag("u1")
+@Tag("skeleton")
 class MessagingJobsTest {
 
     private static final Duration RETENTION = Duration.ofDays(7);

@@ -27,7 +27,7 @@ import org.junit.jupiter.params.provider.ValueSource;
  * <p>필수 비밀 · 공급자 주소 · 사전 로딩 거부와 데이터 등급 대조를 본다. 거부는 예외(기동 실패 → 프로세스 종료 코드 1)이고 거부 줄에는 키
  * 이름만 있고 값은 없다. 비밀 값은 실행 때 만든다.
  */
-@Tag("u1")
+@Tag("skeleton")
 class RealtimeStartupChecksTest {
 
     private static final URI LOOPBACK = URI.create("ws://127.0.0.1:9/fake-provider");

@@ -59,7 +59,7 @@ import org.springframework.core.io.FileSystemResource;
  *       {@code mujoong.load-test.*} 키가 없다. SD-14 · A2: 어느 프로필 파일도 시험 로그인을 켜지 않는다.
  * </ul>
  */
-@Tag("u1")
+@Tag("skeleton")
 class ConfigKeyContractTest {
 
     /** timing.md '소유 앱' 열에서 이 앱을 가리키는 이름. */
@@ -175,6 +175,7 @@ class ConfigKeyContractTest {
         // U9 BR1.4: test 프로필은 Luna 주소를 루프백으로 덮어쓴다(SD12 레코드)
         leaves.putAll(recordLeaves(LunaProperties.class, "mujoong.luna"));
 
+        leaves.putAll(recordLeaves(KnowledgeProperties.class, "mujoong.knowledge.neo4j"));
         assertThat(overrides).as("시험 축소값(빈 대조 아님)").isNotEmpty();
         assertThat(overrides.keySet()).as("설정 레코드가 읽지 않는 시험 키(오타는 조용히 버려진다)")
                 .allMatch(leaves::containsKey);
@@ -183,6 +184,8 @@ class ConfigKeyContractTest {
         Map<String, Object> boundValues = new TreeMap<>(recordValues(bound, "mujoong"));
         LunaProperties luna = bindRecord(LunaProperties.class, "mujoong.luna", base, testYml);
         boundValues.putAll(recordValues(luna, "mujoong.luna"));
+        boundValues.putAll(recordValues(bindRecord(KnowledgeProperties.class, "mujoong.knowledge.neo4j", base, testYml),
+                "mujoong.knowledge.neo4j"));
         assertThat(valueMismatches(overrides, leaves, boundValues, placeholderResolver(base, testYml)))
                 .as("시험 값이 레코드에 그대로 묶임").isEmpty();
         assertThat(LunaHosts.check(luna.baseUrl(), LunaHosts.Mode.TEST)).as("test 프로필 Luna 주소는 루프백(BR1.4)").isEmpty();
@@ -558,7 +561,7 @@ class ConfigKeyContractTest {
 
     /** U5a 키는 application.yml 한 곳에 있고 타입 있는 설정 레코드로 그대로 묶인다(U5a 리뷰 5 · timing.md 9절). */
     @Test
-    @Tag("u5a")
+    @Tag("practice-core")
     void u5aKeysLiveInApplicationYmlAndBindToTypedRecords() {
         Path base = MAIN_RESOURCES.resolve("application.yml");
         try (Stream<Path> files = Files.list(MAIN_RESOURCES)) {
@@ -572,7 +575,9 @@ class ConfigKeyContractTest {
         assertThat(ai.requestTimeout()).isEqualTo(Duration.ofSeconds(3));
         assertThat(ai.retry().maxRetries()).isEqualTo(1);
         assertThat(ai.retry().backoff()).isEqualTo(Duration.ofMillis(250));
-        assertThat(bindRecord(KnowledgeProperties.class, "mujoong.knowledge.neo4j", base).enabled()).isFalse();
+        assertThat(bindRecord(KnowledgeProperties.class, "mujoong.knowledge.neo4j", base).enabled()).isTrue();
+        assertThat(bindRecord(KnowledgeProperties.class, "mujoong.knowledge.neo4j", base,
+                TEST_RESOURCES.resolve("application-test.yml")).enabled()).isFalse();
         CoreProperties bound = bind(base);
         assertThat(bound.timing().practice().scenarioRequestTimeout()).isEqualTo(Duration.ofSeconds(15));
         assertThat(bound.timing().goal().restoreWindow()).isEqualTo(Duration.ofSeconds(5));

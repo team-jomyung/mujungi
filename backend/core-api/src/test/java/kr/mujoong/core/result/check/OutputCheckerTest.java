@@ -5,7 +5,7 @@ import java.time.Instant;
 import java.util.*;
 import kr.mujoong.core.result.ResultTextGateway;
 import org.junit.jupiter.api.*;
-@Tag("u6")
+@Tag("result-report")
 class OutputCheckerTest {
     ResultTextGateway gateway=mock(ResultTextGateway.class);OutputChecker checker=new OutputChecker(new ForbiddenDictionary(),gateway);Instant deadline=Instant.parse("2026-10-15T00:00:30Z");
     OutputChecker.Draft draft(String id,String text){return new OutputChecker.Draft(id,text,List.of("함께 놀자"),"자료 부족");}

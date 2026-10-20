@@ -61,8 +61,15 @@ services:
     env_file: !override
       - ${MUJOONG_VERIFY_DIR:-../build/verify}/env/core-api.env
     environment:
+      MUJOONG_KNOWLEDGE_NEO4J_ENABLED: "false"
       SPRING_PROFILES_ACTIVE: dev
       MUJOONG_DEVLOGIN_ENABLED: "true"
+    depends_on: !override
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+        required: false
 
   realtime:
     networks:
@@ -107,6 +114,16 @@ services:
     env_file: !override
       - ${MUJOONG_VERIFY_DIR:-../build/verify}/env/backup.env
 
+  neo4j:
+    # Opt in only for graph integration tests; ordinary CI explicitly disables it.
+    profiles: [knowledge]
+    env_file: !override
+      - ${MUJOONG_VERIFY_DIR:-../build/verify}/env/neo4j.env
+    volumes: !override
+      - verify-neo4j-data:/data
+      - verify-neo4j-logs:/logs
+      - verify-neo4j-conf:/var/lib/neo4j/conf
+
   fake-provider:
     image: ${MUJOONG_REGISTRY:?MUJOONG_REGISTRY가 필요하다}/mujoong-fake-provider:${MUJOONG_TAG:?MUJOONG_TAG가 필요하다}
     pull_policy: never
@@ -150,5 +167,8 @@ networks:
         - subnet: ${MUJOONG_VERIFY_BACKEND_PREFIX:-172.30.20}.0/24
 
 volumes:
+  verify-neo4j-data: {}
+  verify-neo4j-logs: {}
+  verify-neo4j-conf: {}
   verify-pgdata: {}
   verify-certbot-www: {}

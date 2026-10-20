@@ -2,7 +2,7 @@ package kr.mujoong.core.result;
 import static org.assertj.core.api.Assertions.*;
 import java.util.*;
 import org.junit.jupiter.api.*;
-@Tag("u14")
+@Tag("goal-result")
 class PracticeRecordV2Test {
     UUID goal=UUID.randomUUID();
     Map<String,Object> scene(){return new LinkedHashMap<>(Map.of("sceneRunId",UUID.randomUUID().toString(),"goalRef",goal.toString(),"sceneKind","BASE","startedAt","2026-10-16T00:00:00Z"));}

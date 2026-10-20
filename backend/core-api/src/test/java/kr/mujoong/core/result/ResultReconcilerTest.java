@@ -11,7 +11,7 @@ import kr.mujoong.testsupport.time.MutableClock;
 import org.junit.jupiter.api.*;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.SimpleTransactionStatus;
-@Tag("u6")
+@Tag("result-report")
 class ResultReconcilerTest {
     @Test void failedCandidateRegistrationIsRetriedWithoutChangingDone(){
         var reader=mock(ResultRecordReader.class);var intake=mock(ResultIntake.class);var results=mock(ActivityResultRepository.class);var jobs=mock(ResultJobRepository.class);var states=mock(SessionResultStateRepository.class);var candidates=mock(CandidateRegistry.class);var retention=mock(ReportRetention.class);var events=mock(EventLogger.class);var tm=mock(PlatformTransactionManager.class);when(tm.getTransaction(any())).thenReturn(new SimpleTransactionStatus());var clock=new MutableClock();UUID id=UUID.randomUUID(),session=UUID.randomUUID(),job=UUID.randomUUID(),guardian=UUID.randomUUID(),child=UUID.randomUUID();

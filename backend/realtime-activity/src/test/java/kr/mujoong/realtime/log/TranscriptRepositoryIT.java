@@ -30,7 +30,7 @@ import org.springframework.transaction.IllegalTransactionStateException;
  * 조각 · 늦은 승인이 바꾸지 못함) · PD-5(배치는 한 트랜잭션, 되돌리면 하나도 남지 않음, 다시 보내도 같은 결과) · BR6.15(12에는 아이
  * 전사와 승인된 확정 AI 말만, nextSeq용 가장 작은 확정 전 번호) · NFR1.1(확정 전 AI 말은 승인될 수 없음).
  */
-@Tag("u1")
+@Tag("skeleton")
 @Tag("db")
 class TranscriptRepositoryIT {
 

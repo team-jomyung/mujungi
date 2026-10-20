@@ -30,7 +30,7 @@ import org.junit.jupiter.params.provider.EnumSource;
  * 제브 게이트 협력 객체 시험 (U13 BR3.x ~ BR6.x): 실행기 없이 가짜 {@link GuardrailCoordinator.Env}로 검사 상태 기계(IDLE · CHECKING ·
  * RETRYING), 검사표 무효 여덟 경우, 대기열 1칸, 턴당 재지시 1회, 폐기 훅을 확인한다. 제브는 시험이 손으로 푸는 대역이다(실제 제브 아님, R-F1 · R-M11).
  */
-@Tag("u13")
+@Tag("jev-guardrail")
 class GuardrailCoordinatorTest {
 
     private static final String POLICY = FakeGuardrailClient.POLICY;

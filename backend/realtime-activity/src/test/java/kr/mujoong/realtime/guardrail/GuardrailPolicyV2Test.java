@@ -22,7 +22,7 @@ import org.junit.jupiter.api.Test;
  * (7개 범주 + {@code PASS}), 검사 질문의 직접 인용 예외 문장과 맥락 규칙, 설명이 비어 있지 않음, 이력 판 {@code policy-v1.json}을 코드가 읽지 않음을
  * 확인한다. 이 파일의 성공은 테스트 대역(리소스 파일) 증거이고 제브 실호출 증거가 아니다(R-M11).
  */
-@Tag("u13")
+@Tag("jev-guardrail")
 class GuardrailPolicyV2Test {
 
     private static final List<String> CATEGORIES = List.of("DIAGNOSIS", "TREATMENT", "SCORE", "CAUSE", "GENERALIZATION", "EMOTION_CLAIM",

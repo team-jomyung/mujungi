@@ -25,9 +25,9 @@
 : "${MUJOONG_PROJECT:=mujoong}"
 export MUJOONG_OPT MUJOONG_LOG_DIR MUJOONG_DATA_DIR MUJOONG_BACKUP_VOLUME MUJOONG_AUDIO_DIR MUJOONG_ENV_DIR MUJOONG_PROJECT
 
-# 상시 컨테이너 7개(monitoring 3절 · infra-spec C-1). migrate는 일회성, neo4j는 프로필 knowledge(꺼짐)
+# 상시 컨테이너 8개. Neo4j 포함, migrate만 일회성
 # shellcheck disable=SC2034  # source하는 스크립트가 쓴다
-MUJOONG_ALWAYS_ON=(nginx web core-api realtime postgres certbot backup)
+MUJOONG_ALWAYS_ON=(nginx web core-api realtime postgres certbot backup neo4j)
 
 mujoong_now_iso() { date -u +%Y-%m-%dT%H:%M:%SZ; }
 mujoong_epoch() { date -u +%s; }

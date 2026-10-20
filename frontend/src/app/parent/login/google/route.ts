@@ -6,9 +6,9 @@ import {
   authorizeUrl,
   newState,
   readGoogleConfig,
-} from "@/parent/oauth";
+} from "@/parent/common/oauth";
 
-// GET /parent/login/google — 01 「구글로 시작」 (U2 · US1.1 · J21 · U2-J4)
+// GET /parent/login/google — 01 「구글로 시작」 (U2)
 // 새 state를 HttpOnly 쿠키(Secure · SameSite=Lax · Path=/parent/login · 10분)에 두고 구글 인가 화면으로 보낸다.
 // 구글 설정 환경 변수가 없으면 01로 돌려보내 실패 토스트를 보인다. 요청마다 기동 환경 변수를 읽는다(빌드 때 굽지 않음).
 

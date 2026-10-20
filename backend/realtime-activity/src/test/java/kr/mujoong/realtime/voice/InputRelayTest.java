@@ -20,7 +20,7 @@ import org.junit.jupiter.api.Test;
  * <p>수락 구간 밖 프레임은 버리고, 순번 순서대로 무변환으로 공급자에 보내며, 50프레임이 넘으면 가장 오래된 것을 버린다. 프레임은 대기열에만
  * 잠깐 있고 보낸 뒤 남지 않는다(원음 미저장).
  */
-@Tag("u1")
+@Tag("skeleton")
 class InputRelayTest {
 
     private final MutableClock clock = new MutableClock();

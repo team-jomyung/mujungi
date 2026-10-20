@@ -15,7 +15,7 @@ import org.junit.jupiter.api.Test;
  * 검사 안전 타이머 (U13 BR3.4 보강): 포트 규약을 어겨 결과가 검사 상한의 두 배가 되도록 오지 않는 클라이언트가 협력 객체를 검사 중에 영영 가두지
  * 못한다. 정상 결과가 오면 타이머는 꺼지고, 늦게 도착하는 결과는 버려진다. 제브는 시험이 손으로 푸는 대역이다(R-F1 · R-M11).
  */
-@Tag("u13")
+@Tag("jev-guardrail")
 class GuardrailSafetyTimerTest {
 
     private static final byte[] AUDIO = new byte[4800];

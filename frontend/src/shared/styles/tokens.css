@@ -1,21 +1,39 @@
 /*
  * 무중 디자인 토큰 (U1 3.5 Step 4 · design-system-mapping.md 2절)
- * 값은 임시다(가정 C1, 화면 설계 PDF 값으로 바꿀 때 접근성 대비 C9를 다시 잰다 · OQ8).
+ * 화면 설계 최종안 v1.5의 phone 테마. 축소 모형의 글자·터치 크기는 실제 앱에 복사하지 않는다.
  * /parent · /device가 같은 CSS 변수를 쓴다. 상태 색은 점 · 배경 · 테두리에만 쓰고 글은 text 색을 쓴다(AC1.4.15).
  */
+/* Pretendard v1.3.9, SIL OFL 1.1. 외부 CDN 요청 없이 기존 font-src 'self' 유지. */
+@font-face {
+  font-family: "Pretendard Variable";
+  font-weight: 45 920;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/pretendard/PretendardVariable.woff2") format("woff2");
+}
+
 :root {
-  --color-brand-primary: #3b6fd4;
-  --color-text-primary: #1f2430;
-  --color-text-secondary: #5b6270;
+  --color-brand-primary: #2f5bea;
+  --color-text-primary: #1b1f2a;
+  /* 설계서 #6b7385보다 진하게: 밝은 회색 배경에서도 일반 본문 대비 유지. */
+  --color-text-secondary: #626b7d;
   --color-surface-base: #ffffff;
-  --color-surface-card: #f4f6fa;
-  --color-border-default: #cbd1dc;
-  --color-status-stable: #2e9e5b;
-  --color-status-unstable: #d9a400;
-  --color-status-disconnected: #d64545;
+  --color-surface-page: #f3f5f9;
+  --color-surface-card: #ffffff;
+  --color-border-default: #e3e7ef;
+  --color-border-input: #8792a8;
+  --color-border-selected: #c9d6ff;
+  --color-status-stable: #2f8f5b;
+  --color-status-unstable: #d99a1e;
+  --color-status-disconnected: #d9482b;
   --color-status-unresponsive: #8a909c;
   --color-action-danger: #c23030;
-  --color-fixed-expression: #dce8fb;
+  --color-fixed-expression: #e9f0ff;
+  --color-surface-success: #e8f6ee;
+  --color-surface-warning: #fff6e3;
+  --color-surface-danger: #fdeeea;
+  --color-surface-purple: #efeefc;
+  --color-star: #f2b01e;
   --space-unit: 4px;
   --radius-card: 12px;
 
@@ -29,7 +47,7 @@
   --touch-target-min: 44px;
   --touch-target-device-min: 72px;
 
-  --font-family-base: system-ui, -apple-system, "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic",
+  --font-family-base: "Pretendard Variable", Pretendard, system-ui, -apple-system, "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic",
     sans-serif;
 }
 
@@ -37,8 +55,13 @@ html {
   font-family: var(--font-family-base);
   font-size: var(--font-size-body);
   color: var(--color-text-primary);
-  background-color: var(--color-surface-base);
+  background-color: var(--color-surface-page);
+  line-height: 1.5;
 }
+
+*, *::before, *::after { box-sizing: border-box; }
+
+button, input, textarea, select { font-family: inherit; }
 
 body {
   margin: 0;

@@ -197,6 +197,8 @@ resource "aws_ecs_task_definition" "core_api" {
       { name = "SPRING_PROFILES_ACTIVE", value = "demo" },
       { name = "SPRING_DATASOURCE_URL", value = local.jdbc_url },
       { name = "SPRING_DATASOURCE_USERNAME", value = "core_app" },
+      { name = "MUJOONG_KNOWLEDGE_NEO4J_ENABLED", value = "true" },
+      { name = "MUJOONG_KNOWLEDGE_NEO4J_ENDPOINT", value = "http://172.17.0.1:7474" },
       { name = "MUJOONG_SECURITY_ALLOWED_ORIGIN", value = local.cloudfront_origin },
       { name = "MUJOONG_INTERNALHTTP_REALTIMEBASEURL", value = "http://172.17.0.1:8081" },
       { name = "SERVER_TOMCAT_REMOTEIP_INTERNALPROXIES", value = "^172\\.17\\.0\\.1$" }
@@ -205,6 +207,7 @@ resource "aws_ecs_task_definition" "core_api" {
     # 비밀값 — SSM에서 실행 순간 주입
     secrets = [
       { name = "SPRING_DATASOURCE_PASSWORD", valueFrom = "${local.ssm_prefix}/db/DB_CORE_PASSWORD" },
+      { name = "NEO4J_AUTH", valueFrom = "${local.ssm_prefix}/app/NEO4J_AUTH" },
       { name = "INTERNAL_SERVICE_TOKEN", valueFrom = "${local.ssm_prefix}/app/INTERNAL_SERVICE_TOKEN" },
       { name = "MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET", valueFrom = "${local.ssm_prefix}/app/MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET" }
     ]
@@ -221,6 +224,7 @@ resource "aws_ecs_task_definition" "core_api" {
 }
 
 resource "aws_ecs_service" "core_api" {
+  depends_on      = [aws_ecs_service.neo4j]
   name            = "mujoong-core-api"
   cluster         = aws_ecs_cluster.main.id
   task_definition = aws_ecs_task_definition.core_api.arn

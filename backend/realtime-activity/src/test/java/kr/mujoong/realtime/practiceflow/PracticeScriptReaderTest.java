@@ -19,7 +19,7 @@ import org.junit.jupiter.params.provider.ValueSource;
  * U10 대본 읽기 · 시작 패키지 practice 조각 해석 시험 (U12 FR1.3 · BR1.3 · BR1.4). 필수 6필드, 선택 필드 누락의 빈 값 정규화, scriptVersion 없음(새
  * 흐름 아님), 거절 사유가 문장을 담지 않는지, 목표 순서 · 첫 대본 거절 처리를 본다. 서버 · DB 없음(테스트 대역 증거).
  */
-@Tag("u12")
+@Tag("practice-flow")
 class PracticeScriptReaderTest {
 
     private static final UUID SCENARIO = UUID.randomUUID();

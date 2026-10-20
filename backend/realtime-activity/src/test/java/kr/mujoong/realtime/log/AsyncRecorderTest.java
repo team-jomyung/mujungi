@@ -27,7 +27,7 @@ import org.junit.jupiter.api.Test;
  * <p>칸 200행에서 새 행을 받지 않고 지연 상태가 되며 100행 아래로 줄면 풀린다. FINAL은 즉시 플러시, 확정 전 조각은 제자리 덮어쓰기(칸 수
  * 불변)로 틱을 기다린다. 커밋이 실패하면 칸을 되돌려 다음 틱에 다시 쓴다. 기기 last_seen은 기기당 마지막 값만 쓴다.
  */
-@Tag("u1")
+@Tag("skeleton")
 class AsyncRecorderTest {
 
     private final MutableClock clock = new MutableClock();

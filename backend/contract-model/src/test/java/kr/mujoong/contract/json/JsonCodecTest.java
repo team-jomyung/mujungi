@@ -28,7 +28,7 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 /** 계약 JSON 규칙(계약 10절 · BR5.9 · BR8.10 · BR5.5): 모르는 필드 무시 · 모르는 enum '알 수 없음' · ISO 8601 UTC · 정규화. */
-@Tag("u1")
+@Tag("skeleton")
 class JsonCodecTest {
 
     private static final JsonCodec CODEC = JsonCodec.shared();

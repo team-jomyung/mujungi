@@ -23,7 +23,7 @@ import org.springframework.dao.DataIntegrityViolationException;
  * <p>증명: U3-R1(창 안 끊김 횟수가 불안정 판정의 원천 — 창 경계는 세지 않음) · U3-J2(닫힘은 코드와 함께, 무음은 코드 없이) · V2 CHECK
  * (닫기 코드 범위) · 삭제 참가자 · 정리 작업의 삭제 범위.
  */
-@Tag("u3")
+@Tag("voice-session")
 @Tag("db")
 class DeviceDisconnectRepositoryIT {
 

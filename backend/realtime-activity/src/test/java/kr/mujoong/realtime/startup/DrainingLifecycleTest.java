@@ -53,7 +53,7 @@ import org.springframework.beans.factory.support.DefaultListableBeanFactory;
  * 부르고, 모든 단계가 한 마감(timeout-per-shutdown-phase) 안에서 남은 시간만 쓰며, 막힌 단계는 사유 한 줄을 남기고 넘어가는지 본다. 실제
  * 앱의 커넥터 동작은 {@code GracefulDrainIT}가 본다.
  */
-@Tag("u1")
+@Tag("skeleton")
 class DrainingLifecycleTest {
 
     private static final Duration GRACE = Duration.ofSeconds(2);

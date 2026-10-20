@@ -16,6 +16,7 @@ import kr.mujoong.contract.log.EventLog;
 import kr.mujoong.contract.time.MujoongClock;
 import kr.mujoong.contract.trace.TraceIds;
 import kr.mujoong.core.common.scaling.SingleInstanceAssumption;
+import kr.mujoong.core.config.CoreOutboxProperties;
 import kr.mujoong.core.config.CoreProperties;
 import kr.mujoong.core.health.ReadinessState;
 import kr.mujoong.core.internalhttp.InternalHttpClient;
@@ -28,14 +29,14 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 /**
- * Core Outbox 발송기 (U1 3.5 Step 20 · BR5.2 · BR5.3 · BR5.11 · RD-8 · OD-7 · NFR4.5).
+ * Core Outbox 발송기 (U1 3.5 Step 20).
  *
  * <p>{@code outbox-sender} 전용 스레드 하나가 {@code mujoong.outbox.poll-interval}마다 {@link #runCycle}을 부른다. 한 사이클:
  * 준비 완료이고 정지 요청이 없을 때만, PENDING이고 available_at이 지난 행을 {@code batch-size}건 SKIP LOCKED로 선점(available_at =
  * now + claim-lease, 커밋)한 뒤 한 건씩 직렬로 Realtime {@code POST /internal/events}에 보낸다(DB 트랜잭션을 쥐지 않음, 제한
  * {@code event-publish-timeout}). 봉투는 행의 열에서 다시 만들고 X-Trace-Id는 행의 trace_id다(OD-7: 재시도 뒤에도 같은 traceId).
  *
- * <p>결과(BR5.3): 200 → PUBLISHED(payload 비움). 409 → FAILED(EVENT_CONFLICT) · 400 → FAILED(INVALID_ENVELOPE), 즉시 · 경고. 그 밖(401 ·
+ * <p>결과: 200 → PUBLISHED(payload 비움). 409 → FAILED(EVENT_CONFLICT) · 400 → FAILED(INVALID_ENVELOPE), 즉시 · 경고. 그 밖(401 ·
  * 시간 초과 · 연결 실패 · 나머지 4xx · 5xx) → retry_count + 1, available_at = now + 대기표(1 · 2 · 4 · 8 · 16 · 30초, 마지막 값 반복).
  * retry_count가 이미 max-retries(20)인 행이 또 실패하면 FAILED(retry_count 20 유지). 가득 찬 배치면 쉬지 않고 한 번 더 고른다. 정지
  * 요청이 오면 아직 보내지 않은 선점 행의 available_at을 now로 되돌리고 멈춘다.
@@ -45,7 +46,7 @@ import org.springframework.stereotype.Component;
         reason = "두 인스턴스의 발송 폴러가 같은 PENDING 행을 보낼 수 있다(SKIP LOCKED 선점이 줄이지만 수신 쪽 멱등이 흡수할 중복 전송이 남는다)")
 public class CoreOutboxSender {
 
-    /** 발송 결정(BR5.3 표). */
+    /** 발송 결정(표). */
     public enum Decision {
         PUBLISHED,
         FAILED_IMMEDIATE,
@@ -87,7 +88,7 @@ public class CoreOutboxSender {
             BooleanSupplier ready,
             EventLogger events,
             MujoongClock clock,
-            CoreProperties.Outbox config,
+            CoreOutboxProperties config,
             Duration publishTimeout) {
         this.outbox = Objects.requireNonNull(outbox, "outbox");
         this.http = Objects.requireNonNull(http, "http");
@@ -140,7 +141,7 @@ public class CoreOutboxSender {
     }
 
     /**
-     * 실패 순번(1부터)의 대기 시간. 표 길이를 넘으면 마지막 값을 되풀이한다(BR5.3 · RD-8 재시도 표).
+     * 실패 순번(1부터)의 대기 시간. 표 길이를 넘으면 마지막 값을 되풀이한다(재시도 표).
      */
     public static Duration backoff(List<Duration> table, int failureNumber) {
         if (table.isEmpty() || failureNumber < 1) {
@@ -150,7 +151,7 @@ public class CoreOutboxSender {
     }
 
     /**
-     * 응답(없으면 null)과 지금 retry_count로 결정한다(BR5.3).
+     * 응답(없으면 null)과 지금 retry_count로 결정한다.
      */
     public static Decision decide(Integer status, int retryCount, int maxRetries) {
         if (status != null && status >= 200 && status < 300) {
@@ -228,7 +229,7 @@ public class CoreOutboxSender {
         });
     }
 
-    /** last_error: 409 · 400은 상대가 답한 계약 코드, 그 밖은 상태 코드만(BR5.13). */
+    /** last_error: 409 · 400은 상대가 답한 계약 코드, 그 밖은 상태 코드만. */
     static String lastErrorFor(int status) {
         return switch (status) {
             case 409 -> "EVENT_CONFLICT";

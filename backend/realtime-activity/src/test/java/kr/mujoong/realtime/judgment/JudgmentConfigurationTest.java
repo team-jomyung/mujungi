@@ -22,7 +22,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 
 /** 판정 포트 빈 선택 (U11 BR1.6 · U11-c): 키와 스위치가 모두 있을 때만 Luna 구현, 아니면 보류 구현. 키는 가짜 문자열만 쓴다(R-F3). */
-@Tag("u11")
+@Tag("judgment-turn")
 class JudgmentConfigurationTest {
 
     private final MutableClock clock = new MutableClock();

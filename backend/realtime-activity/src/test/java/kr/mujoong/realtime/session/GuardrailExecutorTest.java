@@ -25,7 +25,7 @@ import org.junit.jupiter.api.Test;
  * 제브 게이트의 실행기 연결 시험 (U13 W1 ~ W5, 호출 지점 ① ~ ⑧): 위치(inspect 뒤 · recheck 앞), 승인 시점, '생각 중' 유지, 연습 통제 중 호출 0,
  * teardown 취소, 재지시 응답의 폐기 훅, begin 예외, 모드 OFF 불변. 제브 · 공급자는 모두 대역이다(실제 호출 없음, R-F1 · R-M11).
  */
-@Tag("u13")
+@Tag("jev-guardrail")
 class GuardrailExecutorTest {
 
     private static final byte[] AUDIO = new byte[4800];
@@ -483,7 +483,7 @@ class GuardrailExecutorTest {
     private static final class Controlled implements PracticeSessionExtension {
         PracticeOutput out;
         private final kr.mujoong.realtime.voice.PracticeSpeech speech = new kr.mujoong.realtime.voice.PracticeSpeech(
-                UUID.randomUUID(), UUID.randomUUID(), 1, kr.mujoong.realtime.practice.PracticePorts.OutputKind.SCENARIO, "친구",
+                UUID.randomUUID(), UUID.randomUUID(), 1, kr.mujoong.realtime.practicelegacy.PracticePorts.OutputKind.SCENARIO, "친구",
                 "내 차례야.");
 
         kr.mujoong.realtime.voice.PracticeSpeech speech() {

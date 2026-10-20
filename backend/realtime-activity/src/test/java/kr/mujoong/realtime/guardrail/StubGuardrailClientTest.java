@@ -22,7 +22,7 @@ import org.junit.jupiter.api.Test;
  * 돌려주고, 어댑터가 없는 REAL은 자동 ALLOW가 아니라 막힘(UNAVAILABLE)으로 끝나며, 장치를 넣지 않는 기본값은 '검사 없음'(OFF)이다. 이 파일의 성공은
  * 테스트 대역 증거이고 실제 검사 성공이 아니다(R-M11).
  */
-@Tag("u13")
+@Tag("jev-guardrail")
 class StubGuardrailClientTest {
 
     private static final GuardrailRequest REQUEST = GuardrailRequest.of(GuardrailRequest.Mode.FREE_TALK, "합성 후보 문장", POLICY, List.of());

@@ -36,7 +36,7 @@ import org.springframework.web.servlet.NoHandlerFoundException;
  * {@code ErrorEnvelopeAndLimitsIT}가 본다. 3.6 수정 분량: 없는 경로 · 메서드는 허용 메서드를 드러내지 않는 404이고 앱 오류로 세지 않는다,
  * 본문 한도 초과는 원인 사슬 깊이와 상관없이 400이며 자기 자신을 원인으로 돌려주는 예외에서도 멈추지 않고 500이 된다.
  */
-@Tag("u1")
+@Tag("skeleton")
 class WebErrorMappingTest {
 
     private final MutableClock clock = new MutableClock();

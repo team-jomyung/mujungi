@@ -33,7 +33,7 @@ import org.junit.jupiter.api.Test;
  * 다른 id로 먼저 들어온 같은 content_code에도 실패하지 않음, 앱 역할 realtime_app으로는 적용할 수 없음(BR8.1). 3.6 수정 분량: 시드를 다시
  * 적용해도 운영자가 나중에 승인한 버전 · 은퇴 처리를 되돌리지 않는다(ON CONFLICT DO NOTHING — 배포마다 다시 돌려도 안전).
  */
-@Tag("u1")
+@Tag("skeleton")
 @Tag("db")
 class SeedReferenceSqlIT {
 

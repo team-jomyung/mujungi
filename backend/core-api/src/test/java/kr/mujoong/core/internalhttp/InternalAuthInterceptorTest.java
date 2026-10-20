@@ -19,7 +19,7 @@ import org.slf4j.MDC;
  * 내부 호출 인증 헤더 (BR3.9 · SD-8 · OD-7 · J124): 나가는 요청에 토큰 · traceId 두 헤더(MDC가 형식에 맞으면 그 값, 아니면 새 값),
  * 들어오는 헤더는 정확히 한 개 · 상수 시간 일치일 때만 참, 토큰 하한(base64url 43자) 미달은 이름만 담은 거부, 문자열 표현에 토큰 없음.
  */
-@Tag("u1")
+@Tag("skeleton")
 class InternalAuthInterceptorTest {
 
     private final String token = TestSecrets.internalServiceToken();

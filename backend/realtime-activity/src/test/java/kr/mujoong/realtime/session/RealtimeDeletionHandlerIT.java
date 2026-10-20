@@ -44,7 +44,7 @@ import tools.jackson.databind.JsonNode;
  * <p>실제 DB · 원음 디렉터리 · 기기 시뮬레이터 · 가짜 공급자로 DeletionRequested를 Inbox에 넣어, 진행 세션이 있을 때와 없을 때 그 보호자의 Realtime 행 ·
  * 원음 파일이 0건이 되고, DeletionCompleted{counts}가 한 번 나가며, 재시도 · 파일 삭제 실패 · 늦은 사건이 결과를 바꾸지 않는지 본다.
  */
-@Tag("u4b")
+@Tag("session-runtime")
 @Tag("db")
 class RealtimeDeletionHandlerIT {
 

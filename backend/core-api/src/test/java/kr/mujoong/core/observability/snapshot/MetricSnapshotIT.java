@@ -47,7 +47,7 @@ import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
  * 스냅샷 줄 값을 실제로 바꾸는지 본다. 넣는 Outbox 행은 available_at을 먼 미래로 두어 이 앱의 발송기가 집지 않게 한다. 시각은 앱의 가변 Clock
  * 이다(스냅샷 주기 = 시험 값 1초를 앞당긴다).
  */
-@Tag("u1")
+@Tag("skeleton")
 @Tag("db")
 class MetricSnapshotIT {
 

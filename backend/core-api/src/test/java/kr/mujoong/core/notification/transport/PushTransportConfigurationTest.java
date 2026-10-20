@@ -16,7 +16,7 @@ import org.springframework.mock.env.MockEnvironment;
 import java.time.Duration;
 import java.util.UUID;
 
-@Tag("u7")
+@Tag("web-push")
 class PushTransportConfigurationTest {
     @Test
     void absentSecretsCreateDisabledSenderAndPublicResponseHasExplicitNull() {

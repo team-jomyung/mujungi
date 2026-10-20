@@ -13,7 +13,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 
 /**
  * 스프링 없이 서비스를 시험할 때 쓰는 계정 포트(JDBC). 보호자 행 잠금은 실제 U2 {@link GuardianWriteLock}에 맡긴다. 운영 구현
- * {@link U2PracticeAccountAdapter}는 앱 문맥 시험(PracticeAccountIT)이 본다.
+ * {@link PracticeAccountAdapter}는 앱 문맥 시험(PracticeAccountIT)이 본다.
  */
 public final class JdbcTestPracticeAccounts implements PracticeAccountPort {
 

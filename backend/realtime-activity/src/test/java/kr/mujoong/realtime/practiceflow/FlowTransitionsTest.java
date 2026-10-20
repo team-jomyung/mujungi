@@ -30,7 +30,7 @@ import org.junit.jupiter.params.provider.EnumSource;
  * 진행 중 판정 시점을 단언하고, J2 6 · J3 4 · J4 3 · J5 7 선택지 코드가 전부 한 행씩 있는지 본다. 한도(재시도 2회 · 상황 다시 설명 1회)는 횟수와 시계
  * 만료 표지로만 판단한다(시각 경계 9초/10초 · 90초 · 목표 10분은 수동 시계로 {@code PracticeConversationTest}가 본다).
  */
-@Tag("u12")
+@Tag("practice-flow")
 class FlowTransitionsTest {
 
     private static final Instant T0 = Instant.parse("2026-10-18T09:00:00Z");

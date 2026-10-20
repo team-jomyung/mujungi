@@ -14,7 +14,7 @@ public class ForbiddenExpressionPolicy {
     private final List<String> patterns;
     public ForbiddenExpressionPolicy() {
         try {
-            String source = new ClassPathResource("textai/u5a-forbidden-patterns.txt")
+            String source = new ClassPathResource("textai/practice-core-forbidden-patterns.txt")
                     .getContentAsString(StandardCharsets.UTF_8);
             patterns = source.lines().map(String::strip).filter(line -> !line.isEmpty() && !line.startsWith("//"))
                     .map(ForbiddenExpressionPolicy::normalize).toList();

@@ -29,7 +29,7 @@ import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 
 /** 사건 로그 한 줄 형식(OD-1 · OD-2 · OD-3 · OD-4 · NFR9.15 · BR8.7). */
-@Tag("u1")
+@Tag("skeleton")
 class StructuredLogFormatTest {
 
     private static final Instant NOW = Instant.parse("2026-10-15T09:00:00.123456Z");

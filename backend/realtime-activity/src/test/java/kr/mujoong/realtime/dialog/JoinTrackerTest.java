@@ -19,8 +19,8 @@ import org.junit.jupiter.params.provider.CsvSource;
  * <p>무응답 창 경계(19초 응답 → 시작 / 21초 → 재안내, 2차 19초 → 시작 / 21초 → DECLINED), 거부 → 대안 1회 → 재거부 → DECLINED, 주제 거부,
  * 불명확 발화 = 되묻기(재안내 1회에 포함), 안내 최대 3번을 시각을 인자로 넣어 확인한다.
  */
-@Tag("u3")
-@Tag("u4b")
+@Tag("voice-session")
+@Tag("session-runtime")
 class JoinTrackerTest {
 
     private static final Duration WINDOW = Duration.ofSeconds(20);

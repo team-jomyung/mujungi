@@ -5,7 +5,7 @@ import java.util.Map;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
-@Tag("u6")
+@Tag("result-report")
 class NotDoneReasonMapperTest {
     kr.mujoong.core.observability.EventLogger events=mock(kr.mujoong.core.observability.EventLogger.class);NotDoneReasonMapper mapper=new NotDoneReasonMapper(events);
     @Test void notReached(){assertThat(mapper.map(Map.of("status","NOT_REACHED"),Map.of())).isEqualTo("ACTIVITY_ENDED");}

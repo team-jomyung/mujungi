@@ -26,9 +26,9 @@ U14는 결과 작업 뒤 생성 요청과 후보 skill_ref 연결을 맡는다. 
 
 ## 구성과 호환
 
-기존 mujoong.knowledge.neo4j.enabled 기본 false와 mujoong.timing.knowledge.graph-budget 2s를 유지한다. 생성 독립 스위치 mujoong.knowledge.seed-generation.enabled 기본 true는 그래프 조회와 독립적이며 false이면 생성 호출/쓰기를 금지한다. 실제 AI 키 없는 기동과 가짜 공급자 검증을 지원한다. 새 비밀 이름은 추가하지 않는다.
+mujoong.knowledge.neo4j.enabled 기본값은 true다. 활성화된 Core는 기존 NEO4J_AUTH와 인증된 Neo4j 초기 연결이 준비되지 않으면 기동을 거절한다. CI·비그래프 자동 시험은 false를 명시하며 그래프 조회 예산 2s는 유지한다. 생성 독립 스위치 mujoong.knowledge.seed-generation.enabled 기본 true는 그래프 조회와 독립적이며 false이면 생성 호출/쓰기를 금지한다. 실제 AI 키 없는 기동과 가짜 공급자 검증을 지원한다. 새 비밀 이름은 추가하지 않는다. 실행·배포 준비는 docs/neo4j-runtime.md를 따른다.
 
-Neo4j HTTP 주소는 `mujoong.knowledge.neo4j.endpoint`(기본 `http://neo4j:7474`)이며 기존 `NEO4J_AUTH`를 core-api와 Neo4j 각각의 비밀 환경 파일로 전달한다. 인증값이 없으면 원격 그래프를 구성하지 않으며 조회·생성은 기본 경로로 돌아간다. 과거 그래프 이력이 있으면 인증값 누락 상태에서 삭제를 성공으로 처리하지 않는다.
+Neo4j HTTP 주소는 `mujoong.knowledge.neo4j.endpoint`(기본 `http://neo4j:7474`)이며 기존 `NEO4J_AUTH`를 core-api와 Neo4j 각각의 비밀 환경 파일로 전달한다. 인증값 누락·연결 실패는 활성화된 앱의 기동 실패다. 명시적 비활성 시험에서도 과거 그래프 이력이 있으면 삭제를 성공으로 처리하지 않는다.
 
 기존 최소 ai-seed-output 스키마를 받는 공통 Luna 호출 경로는 호환 분기로 유지한다. U15는 v2 업무 검사를 별도로 적용한다.
 

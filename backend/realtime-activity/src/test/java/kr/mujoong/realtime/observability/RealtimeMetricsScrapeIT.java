@@ -66,7 +66,7 @@ import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
  * 버킷이 있고, 본 포트는 지표를 내지 않으며, 한 턴 · 연결 원장 · Outbox · Inbox 행 · 풀 대기가 게이지 · 카운터 · 히스토그램 ·
  * METRIC_SNAPSHOT 값을 실제로 바꾸는지 본다. 시험마다 앱을 새로 띄운다(값이 0에서 시작).
  */
-@Tag("u1")
+@Tag("skeleton")
 @Tag("db")
 class RealtimeMetricsScrapeIT {
 

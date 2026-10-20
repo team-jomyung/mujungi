@@ -2,7 +2,7 @@ package kr.mujoong.core.result.check;
 import static org.assertj.core.api.Assertions.*;
 import java.util.List;
 import org.junit.jupiter.api.*;
-@Tag("u6")
+@Tag("result-report")
 class ForbiddenDictionaryTest {
     ForbiddenDictionary dictionary=new ForbiddenDictionary();
     @Test void catchesEveryCategory(){for(String text:List.of("진단이 필요","치료가 필요","점수는 높음","핵심 원인","학교에서도 그래요","성격이 소심해요","반드시 하세요"))assertThat(dictionary.allowed(text)).as(text).isFalse();}

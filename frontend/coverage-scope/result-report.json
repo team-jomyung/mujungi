@@ -1,0 +1,30 @@
+{
+  "$comment": "U6 신규 및 변경 운영 TypeScript 전체. 하한 80%, 제외 없음.",
+  "unit": "result-report",
+  "files": [
+    "frontend/src/app/parent/layout.tsx",
+    "frontend/src/app/parent/records/[sessionId]/page.tsx",
+    "frontend/src/app/parent/records/page.tsx",
+    "frontend/src/app/parent/reports/[reportId]/page.tsx",
+    "frontend/src/app/parent/reports/new/page.tsx",
+    "frontend/src/parent/features/reports/api.ts",
+    "frontend/src/parent/common/api/results.ts",
+    "frontend/src/parent/features/records/EndReasonCard.tsx",
+    "frontend/src/parent/common/components/LiveRegion.tsx",
+    "frontend/src/parent/common/components/MonthCalendar.tsx",
+    "frontend/src/parent/features/records/SceneChip.tsx",
+    "frontend/src/parent/features/reports/useReportPolling.ts",
+    "frontend/src/parent/common/hooks/useResultStatusPolling.ts",
+    "frontend/src/parent/common/navigation.ts",
+    "frontend/src/parent/features/done/DoneScreen.tsx",
+    "frontend/src/parent/features/done/useDoneScreen.ts",
+    "frontend/src/parent/features/records/RecordDetailScreen.tsx",
+    "frontend/src/parent/features/records/RecordsScreen.tsx",
+    "frontend/src/parent/features/reports/ReportScreen.tsx",
+    "frontend/src/parent/features/reports/ReportRangeScreen.tsx",
+    "frontend/src/shared/copy/ko.ts",
+    "frontend/src/shared/copy/result.ts",
+    "frontend/src/shared/errors/codeToCopy.ts",
+    "frontend/src/shared/timing/timing.ts"
+  ]
+}

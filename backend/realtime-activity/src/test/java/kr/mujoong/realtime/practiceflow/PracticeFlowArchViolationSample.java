@@ -1,6 +1,6 @@
 package kr.mujoong.realtime.practiceflow;
 
-import kr.mujoong.realtime.practice.PracticePorts;
+import kr.mujoong.realtime.practicelegacy.PracticePorts;
 import kr.mujoong.realtime.session.PracticeSessionExtension.PracticeOutput;
 import kr.mujoong.realtime.session.SessionExecutor;
 

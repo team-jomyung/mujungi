@@ -69,7 +69,7 @@ import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
  * 먼저라 남은 세션 · 연결 행을 건드리지 않고 기동을 끝낸다. 등급은 공용 DB를 바꾸지 않고 앱 연결의 세션 설정(접속 options)으로 'real'을
  * 보이게 한다(3.6 수정 J316).
  */
-@Tag("u1")
+@Tag("skeleton")
 @Tag("db")
 class RealtimeStartupRecoveryIT {
 

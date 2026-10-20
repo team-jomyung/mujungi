@@ -39,7 +39,7 @@ import org.junit.jupiter.api.Test;
  * 종료 뒤 늦은 메시지 폐기와 시작 · 끝내기 경로를 실제 스레드 없이 확인한다. 3.6 수정: 앱 종료 T3 처리 알림(J304)과 AI 행 준비 시간의
  * 시작점(J300).
  */
-@Tag("u1")
+@Tag("skeleton")
 class SessionExecutorTest {
 
     private final SessionHarness h = new SessionHarness();

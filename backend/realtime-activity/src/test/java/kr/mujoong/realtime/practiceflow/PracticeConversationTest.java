@@ -16,7 +16,7 @@ import java.util.UUID;
 import kr.mujoong.contract.json.JsonCodec;
 import kr.mujoong.realtime.internalhttp.InternalHttpClient;
 import kr.mujoong.realtime.judgment.JudgmentPoint;
-import kr.mujoong.realtime.practice.PracticePorts.Playback;
+import kr.mujoong.realtime.practicelegacy.PracticePorts.Playback;
 import kr.mujoong.realtime.practiceflow.PracticeFlowTestKit.Harness;
 import kr.mujoong.realtime.practiceflow.PracticeFlowTestKit.Slot;
 import kr.mujoong.realtime.practiceflow.PracticeFlowTypes.FactKind;
@@ -39,7 +39,7 @@ import org.junit.jupiter.params.provider.EnumSource;
  * 시점(onActive · onChildUtterance · onExtensionEvent)만으로 장면을 끝까지 움직인다(테스트 대역 · 합성 대화 증거이고 실제 AI · 실제 기기가
  * 아니다). 표 행 자체는 {@code FlowTransitionsTest}가 보고 여기서는 시계 경계 · 출력 능력 호출 · 중복 사건 · 실패 이어 가기 · 지시문 위생을 본다.
  */
-@Tag("u12")
+@Tag("practice-flow")
 class PracticeConversationTest {
 
     private static final UUID GOAL = UUID.fromString("00000000-0000-4000-8000-000000000001");

@@ -3,11 +3,12 @@ import java.time.Instant;
 import java.util.*;
 import kr.mujoong.contract.time.MujoongClock;
 import kr.mujoong.core.config.CoreProperties;
+import kr.mujoong.core.config.CoreTimingProperties;
 import kr.mujoong.core.identity.GuardianWriteLock;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
-/** BR1.1~BR1.12: 상태 전이와 결과 확정의 유일한 업무 경계. */
+/** 상태 전이와 결과 확정의 유일한 업무 경계. */
 @Service
 public class JobRunner {
     private static final Set<String> RETRYABLE=Set.of("PROVIDER_UNAVAILABLE","PROVIDER_ERROR","TIMEOUT","SCHEMA_INVALID","INTERNAL");
@@ -16,7 +17,7 @@ public class JobRunner {
     private final ReportJobState reports;
     private final GuardianWriteLock guardians;
     private final MujoongClock clock;
-    private final CoreProperties.ResultTiming timing;
+    private final CoreTimingProperties.ResultTiming timing;
     private final TransactionTemplate tx;
     private final kr.mujoong.core.observability.EventLogger events;
     public JobRunner(ResultJobRepository jobs,ReportJobState reports,GuardianWriteLock guardians,MujoongClock clock,

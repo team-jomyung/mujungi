@@ -26,7 +26,7 @@ import org.springframework.mock.env.MockEnvironment;
  * 제브 기동 점검 시험 (U13 FR7.1 · BR9.1 · BR9.2 · BR2.2 · BR2.3 · W6 표). 모드 × 프로필 × 키 표의 모든 칸, 허용 호스트 · 고정 모델 규칙, 모르는 모드값, 거부
  * 문구에 값이 없음, 기존 생성 경로는 점검하지 않음을 본다. 키 · 주소 값은 실행 때 만든 합성 값이다(R-F3). 이 파일의 성공은 테스트 대역 증거다.
  */
-@Tag("u13")
+@Tag("jev-guardrail")
 class GuardrailModeStartupChecksTest {
 
     private static final URI WSS_PROVIDER = URI.create("wss://api.openai.com/v1/live/sessions");

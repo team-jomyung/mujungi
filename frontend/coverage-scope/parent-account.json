@@ -1,0 +1,30 @@
+{
+  "$comment": "U2 커버리지 측정 범위(docs/units/u2/design.md 7절 · U1 J137과 같은 형식). MUJOONG_COVERAGE_SCOPE=parent-account일 때 Vitest가 files의 파일만 잰다. 항목은 저장소 루트 기준 경로이고 U2가 새로 만든 frontend/src/**/*.{ts,tsx} 전부다. U2가 고친 U1 파일(Home04 · Register05a · Free08 · Live12 · Done17 · navigation · apiClient · ConfirmDialog · device/page · parent/layout · codeToCopy · ko)은 U1 목록(u1.json)으로 잰다. CSS는 재지 않는다.",
+  "unit": "parent-account",
+  "files": [
+    "frontend/src/app/parent/child/page.tsx",
+    "frontend/src/app/parent/child/stop-expressions/page.tsx",
+    "frontend/src/app/parent/consent/page.tsx",
+    "frontend/src/app/parent/login/callback/page.tsx",
+    "frontend/src/app/parent/login/google/route.ts",
+    "frontend/src/app/parent/login/page.tsx",
+    "frontend/src/parent/common/api/account.ts",
+    "frontend/src/parent/features/consent/api.ts",
+    "frontend/src/parent/common/api/child.ts",
+    "frontend/src/parent/common/components/BottomSheet.tsx",
+    "frontend/src/parent/features/home/SettingsSheet.tsx",
+    "frontend/src/parent/common/hooks/useBackGuard.ts",
+    "frontend/src/parent/common/oauth.ts",
+    "frontend/src/parent/features/child/ChildScreen.tsx",
+    "frontend/src/parent/features/child/useChildScreen.ts",
+    "frontend/src/parent/features/consent/ConsentScreen.tsx",
+    "frontend/src/parent/features/consent/useConsentScreen.ts",
+    "frontend/src/parent/features/device/DeviceScreen.tsx",
+    "frontend/src/parent/features/device/useDeviceScreen.ts",
+    "frontend/src/parent/features/login/LoginScreen.tsx",
+    "frontend/src/parent/features/login/LoginCallbackScreen.tsx",
+    "frontend/src/parent/features/child/StopExpressionsScreen.tsx",
+    "frontend/src/parent/features/child/useStopExpressionsScreen.ts",
+    "frontend/src/shared/copy/account.ts"
+  ]
+}

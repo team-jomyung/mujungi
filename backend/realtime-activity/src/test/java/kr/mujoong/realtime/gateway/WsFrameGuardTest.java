@@ -30,7 +30,7 @@ import org.junit.jupiter.params.provider.EnumSource;
  * <p>텍스트 8KB · 0x01 965B 경계, 0x02 수신 거부, HELLO 형식 4400, READY 뒤 모르는 type은 ERROR이고 연결 유지, 두 번째 HELLO는 ERROR 없이
  * 무시, DEVICE_STATE · PLAYBACK_MARK(PROGRESS)는 처리할 봉투로 받는다(U3-J9 · U3-J10, U1은 무시했다), sentAt만 빠진 봉투는 받되 표시한다.
  */
-@Tag("u1")
+@Tag("skeleton")
 class WsFrameGuardTest {
 
     private static final JsonCodec JSON = JsonCodec.shared();

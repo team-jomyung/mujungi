@@ -75,12 +75,32 @@ fi
 case "$out" in /*) ;; *) out="$PWD/$out" ;; esac
 
 readonly SERVICE_FILES=(postgres migrate core-api realtime web nginx backup certbot compose)
+# Upgrade an existing nine-file environment without rotating any DB credentials.
+ensure_graph_env() {
+  local auth graph_auth
+  auth="$(sed -n 's/^NEO4J_AUTH=//p' "$out/core-api.env")"
+  graph_auth="$(sed -n 's/^NEO4J_AUTH=//p' "$out/neo4j.env" 2>/dev/null || true)"
+  if [ -n "$auth" ] && [ -n "$graph_auth" ] && [ "$auth" != "$graph_auth" ]; then
+    echo 'gen-env: Core and Neo4j credentials differ; refusing to overwrite' >&2
+    exit 1
+  fi
+  auth="${auth:-${graph_auth:-neo4j/$(head -c 24 /dev/urandom | base64 -w0 | tr '+/' '-_' | tr -d '=')}}"
+  [[ "$auth" =~ ^[A-Za-z0-9._-]+/[A-Za-z0-9._=-]+$ ]] || { echo 'gen-env: invalid Neo4j credential format' >&2; exit 1; }
+  if grep -q '^NEO4J_AUTH=' "$out/core-api.env"; then
+    sed -i "s|^NEO4J_AUTH=.*|NEO4J_AUTH=$auth|" "$out/core-api.env"
+  else
+    printf 'NEO4J_AUTH=%s\n' "$auth" >>"$out/core-api.env"
+  fi
+  printf 'NEO4J_AUTH=%s\n' "$auth" >"$out/neo4j.env"
+  chmod 0600 "$out/core-api.env" "$out/neo4j.env"
+}
 if [ "$keep_existing" -eq 1 ]; then
   all=1
   for f in "${SERVICE_FILES[@]}"; do
     [ -s "$out/$f.env" ] || all=0
   done
   if [ "$all" -eq 1 ]; then
+    ensure_graph_env
     echo "gen-env: $out 의 env 파일을 그대로 둔다(--keep-existing)"
     exit 0
   fi
@@ -159,3 +179,4 @@ write compose.env \
   "MUJOONG_REGISTRY=$registry" \
   "MUJOONG_TAG=$tag" \
   "MUJOONG_ENV_DIR=$out"
+ensure_graph_env

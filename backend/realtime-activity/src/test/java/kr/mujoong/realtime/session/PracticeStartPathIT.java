@@ -30,7 +30,7 @@ import org.springframework.context.ConfigurableApplicationContext;
  * {@code practiceJson}에, 승인 발화 문장 지도가 {@code approvedSpeechTexts}에 닿는지 본다. 확장은 호출을 기록하는 대역이다. 이 시험의 합격은 테스트
  * 대역 증거이고 실제 AI · 실제 기기 성공이 아니다(R-F1 · R-M11).
  */
-@Tag("u12")
+@Tag("practice-flow")
 @Tag("db")
 class PracticeStartPathIT {
 

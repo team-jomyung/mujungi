@@ -263,7 +263,7 @@ mujoong:
   # 화용 지식 그래프 읽기(Neo4j). 켜려면 KnowledgeGraphLookup 어댑터 빈이 있어야 한다(U5a)
   knowledge:
     neo4j:
-      enabled: false
+      enabled: true
       endpoint: http://neo4j:7474
     seed-generation:
       enabled: true

@@ -16,7 +16,7 @@ import org.springframework.mock.env.MockEnvironment;
  * Realtime DB 연결 상한 단위 시험(U1 3.5 Step 18 · RD-22). DB 없이 Hikari 설정에 걸리는 초기화 문장을 본다. 실제 연결의 값과 락 대기
  * 초과 → 재시도는 {@code DbSessionLimitsIT}가 본다.
  */
-@Tag("u1")
+@Tag("skeleton")
 class DbSessionLimitsTest {
 
     @Test

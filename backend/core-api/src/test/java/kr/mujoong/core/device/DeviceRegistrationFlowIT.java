@@ -36,7 +36,7 @@ import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
  * 기기 등록 흐름 (U1 3.5 Step 28 · AC2.2.1 ~ AC2.2.8 · BR1.x · BR2.1 ~ BR2.7 · BR3.1 ~ BR3.5 · J46 · A4). D0 코드 → 05a 등록 → claim →
  * 토큰 확인, 코드 오류 분기, 교체(옛 기기 RELEASED + DeviceReleased REREGISTERED), 연결 중 기기 409, 삭제 접수와 동시 등록, 만료 정리.
  */
-@Tag("u1")
+@Tag("skeleton")
 @Tag("db")
 class DeviceRegistrationFlowIT {
 

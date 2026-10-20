@@ -13,7 +13,7 @@ import org.junit.jupiter.api.Test;
  * AI 행 보관 손잡이 시험 (U13 BR5.5): 제브 검사를 기다리는 구간의 행은 열린 행에서 분리되어 PARTIAL로 남고, 결과에 따라 한 번에 닫힌다. 보관 행은
  * 새 구간의 행과 섞이지 않고 종료 때 FINAL · 승인 거짓으로 닫힌다.
  */
-@Tag("u13")
+@Tag("jev-guardrail")
 class TranscriptWriterHoldTest {
 
     private final SessionHarness h = new SessionHarness();

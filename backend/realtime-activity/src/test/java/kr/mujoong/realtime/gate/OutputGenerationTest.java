@@ -19,7 +19,7 @@ import org.junit.jupiter.api.Test;
  * 출력 세대 협력 객체 시험 (U11 FR12.5 · BR11.5 ~ BR11.7 · BR11.13, 설계 개정 A2 ~ A5). 시각은 시험이 정하는 값이고 시간 값은 생성자로 준다.
  * 오디오 조각 하나는 960바이트 = 20ms다.
  */
-@Tag("u11")
+@Tag("judgment-turn")
 class OutputGenerationTest {
 
     private static final Instant T0 = Instant.parse("2026-10-17T00:00:00Z");

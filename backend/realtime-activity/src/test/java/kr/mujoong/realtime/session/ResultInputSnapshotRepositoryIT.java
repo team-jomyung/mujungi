@@ -28,7 +28,7 @@ import org.springframework.transaction.IllegalTransactionStateException;
  * <p>증명: 세션당 한 판만 쓰고 두 번째 쓰기는 false(멱등) · 쓰기는 트랜잭션 안에서만 · 세션 외래 키(RESTRICT, 스냅숏을 먼저 지워야 세션을
  * 지운다) · 해시 형식 · 판 · 종료 상태 CHECK · 세션 단위 삭제.
  */
-@Tag("u4b")
+@Tag("session-runtime")
 @Tag("db")
 class ResultInputSnapshotRepositoryIT {
 

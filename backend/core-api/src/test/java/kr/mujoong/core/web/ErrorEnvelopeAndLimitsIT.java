@@ -31,7 +31,7 @@ import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
  * <p>모든 오류는 {@code {code, message, traceId}} 셋뿐이고 traceId는 응답 헤더 {@code X-Trace-Id}와 같다. 클라이언트가 보낸 traceId는 형식이
  * 맞고 하나일 때만 이어 쓴다. {@code /api/**} 본문은 64KB(65,536바이트)까지이고 넘으면 길이 선언 여부와 상관없이 413이 아니라 400 봉투다.
  */
-@Tag("u1")
+@Tag("skeleton")
 @Tag("db")
 class ErrorEnvelopeAndLimitsIT {
 

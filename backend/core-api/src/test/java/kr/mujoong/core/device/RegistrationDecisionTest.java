@@ -41,7 +41,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.InOrder;
 
 /** 등록 분기 ① ② ③ · 같은 보호자 재생 (m) · 교체 판정 7종 · 교체 순서 (BR2.1 ~ BR2.6 · J46 · A4 · AC2.2.x). */
-@Tag("u1")
+@Tag("skeleton")
 class RegistrationDecisionTest {
 
     private static final Instant NOW = Instant.parse("2001-03-01T02:00:00Z");

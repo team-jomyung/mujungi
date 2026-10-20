@@ -23,7 +23,7 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
 
-@Tag("u5b") @Tag("db")
+@Tag("practice-legacy") @Tag("db")
 class PracticeStartApiIT {
     DbTestSupport db; CoreWebApp app; ContractStubServer realtime;
     BusinessFixtures.Family family; WebFixtures.Guardian guardian; UUID goal; TextAiGateway ai;

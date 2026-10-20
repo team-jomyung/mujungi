@@ -74,7 +74,12 @@ public final class Neo4jChildKnowledgeGraph implements ChildKnowledgeGraphPort {
             throw new IllegalArgumentException("Catalog version conflict");
         }
         statement(tx, "MATCH (s:U15Seed {childId:$child,origin:'POC'}) DETACH DELETE s", Map.of("child", child.toString()));
-        for (KnowledgeSeed seed : catalog.seeds()) write(tx, child, seed);
+        // One round trip for the base catalog keeps cold initialization inside its existing budget.
+        var seeds = catalog.seeds().stream().map(seed -> Map.of("id", seed.seedId(),
+                "origin", seed.origin().name(), "enabled", seed.enabled(), "payload", json.write(seed))).toList();
+        statement(tx, "UNWIND $seeds AS item MERGE (s:U15Seed {childId:$child,seedId:item.id}) "
+                + "SET s.origin=item.origin,s.enabled=item.enabled,s.payload=item.payload",
+                Map.of("child", child.toString(), "seeds", seeds));
     }
 
     @Override public void writeGeneratedSeed(String tx, UUID child, KnowledgeSeed seed) {

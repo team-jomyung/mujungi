@@ -4,6 +4,8 @@
 *
 !.next/standalone
 !.next/static
+!public/fonts/pretendard/PretendardVariable.woff2
+!public/fonts/pretendard/LICENSE.txt
 .next/standalone/.env*
 .next/standalone/**/.env*
 .next/standalone/.next/cache

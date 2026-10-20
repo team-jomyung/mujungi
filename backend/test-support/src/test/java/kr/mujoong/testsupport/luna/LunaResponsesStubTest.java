@@ -14,7 +14,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 /** Responses API 루프백 대역 자기 시험 (U9 Step 8 · BR9.1 · 검토 R-02 요청 검사 모드). */
-@Tag("u9")
+@Tag("luna")
 class LunaResponsesStubTest {
 
     private final HttpClient client = HttpClient.newHttpClient();

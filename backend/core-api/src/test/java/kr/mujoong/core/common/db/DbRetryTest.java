@@ -25,7 +25,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
  * <p>증명: 멱등 연산만 재시도(40P01 · 40001 · 55P03), 비멱등은 즉시 실패, 재시도 2회 상한, 그 밖의 SQLSTATE · 비 DB 오류는 재시도 없음,
  * 열린 트랜잭션 안에서는 재시도하지 않음, 지터 0 ~ 50ms, 대기 중 인터럽트.
  */
-@Tag("u1")
+@Tag("skeleton")
 class DbRetryTest {
 
     private final List<Duration> sleeps = new ArrayList<>();

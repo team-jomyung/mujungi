@@ -45,7 +45,7 @@ import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
  * 멈추기 전에 닫힌다. 붙잡은 요청이 끝나야 커넥터가 닫히고, 끝나지 않으면 유예({@code spring.lifecycle.timeout-per-shutdown-phase}, 시험
  * 2초) 뒤 포기한다.
  */
-@Tag("u1")
+@Tag("skeleton")
 @Tag("db")
 class GracefulDrainIT {
 

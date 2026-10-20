@@ -9,7 +9,7 @@ import kr.mujoong.contract.status.EndReason;
 import kr.mujoong.contract.status.SessionStatus;
 
 /**
- * 연습 경로 확장점 (U4b · FR9.1 · BR10.1 ~ BR10.6 · R-10). U5b는 타입 있는 출력과 재생 증거로 ACTIVE 안의 연습 단계를 진행한다.
+ * 연습 경로 확장점 (U4b). U5b는 타입 있는 출력과 재생 증거로 ACTIVE 안의 연습 단계를 진행한다.
  *
  * <p>PRACTICE 세션에서만, 실행기 스레드에서 부른다(세션당 직렬). 세션마다 {@link Factory}가 한 개를 만든다. 들어오는 시점은 다섯 개다.
  *
@@ -23,12 +23,12 @@ import kr.mujoong.contract.status.SessionStatus;
  *
  * <p>상태를 바꾸려면 {@link Signal}을 돌려준다: NEXT_GOAL은 계속, LAST_GOAL은 CLOSING(CHILD_STOP, end_detail PRACTICE_COMPLETED). 출력은
  * {@link PracticeOutput}의 능력으로만 낸다 — 상태 전이 · DB 쓰기 · 기기 원시 명령은 능력에 없다. ACTIVE가 아닐 때(CLOSING · 정산 창 · 종료)의
- * 출력 능력 호출은 거절되고 PRACTICE_EXTENSION_FAILED{reason: NOT_ACTIVE}로 남는다(R-10). CLOSING · 정산 창 안의 확장점 사건은 전달되지만 신호는
+ * 출력 능력 호출은 거절되고 PRACTICE_EXTENSION_FAILED{reason: NOT_ACTIVE}로 남는다. CLOSING · 정산 창 안의 확장점 사건은 전달되지만 신호는
  * 무시한다. 출력권을 가진 확장의 예외는 기록을 보존하며 종료하고, 기존 확장의 예외는 이전 자유대화 경로를 유지한다.
  */
 public interface PracticeSessionExtension {
 
-    /** 목표 끝 신호(BR10.3). */
+    /** 목표 끝 신호. */
     enum Signal {
         /** 처리 안 함. */
         NONE,
@@ -45,7 +45,7 @@ public interface PracticeSessionExtension {
      * @param approvedContentCodes 시작 패키지의 승인 문구 코드들({@link PracticeOutput#playApproved}에 쓸 수 있는 코드)
      * @param rawAudioConsent 동의 스냅숏의 원음 기록 동의
      * @param activeAt 활동 시작(ACTIVE 진입) 시각
-     * @param approvedSpeechTexts 시작 패키지 approvedSpeech의 승인 발화 문장 지도(code → text, U12 D7 · FR3.2). 음성 파일이 없는 승인 발화의 원문이며
+     * @param approvedSpeechTexts 시작 패키지 approvedSpeech의 승인 발화 문장 지도(code → text, U12 D7). 음성 파일이 없는 승인 발화의 원문이며
      *     {@link kr.mujoong.realtime.voice.PracticeSpeech}로 {@link PracticeOutput#speak}에 낼 때 쓴다. 문자열 표현에는 내지 않는다
      */
     record PracticeContext(UUID sessionId, String practiceJson, Set<String> approvedContentCodes,
@@ -77,7 +77,7 @@ public interface PracticeSessionExtension {
      */
     record Utterance(int seq, Instant confirmedAt, String text, boolean uncertain, boolean devicePlaying) {
 
-        /** 전사 원문은 문자열 표현에 넣지 않는다(BR12.1). */
+        /** 전사 원문은 문자열 표현에 넣지 않는다. */
         @Override
         public String toString() {
             return "Utterance[seq=" + seq + ", uncertain=" + uncertain + "]";
@@ -85,7 +85,7 @@ public interface PracticeSessionExtension {
     }
 
     /**
-     * 확장점 사건(BR10.5).
+     * 확장점 사건.
      *
      * @param name 확장점이 붙인 이름(재생은 승인 문구 코드, 시계는 예약 이름, 비동기 결과는 post 이름)
      * @param correlationId 재생이면 playbackId(그 밖은 null)
@@ -99,18 +99,18 @@ public interface PracticeSessionExtension {
             PLAYBACK_FACT,
             TIMER_FIRED,
             ASYNC_RESULT,
-            /** U11 BR8.3: 판정 결과(이름 {@code judgment}, 값 {@code {point, firstOption, secondOption}} — 확률 없음). */
+            /** 판정 결과(이름 {@code judgment}, 값 {@code {point, firstOption, secondOption}} — 확률 없음). */
             JUDGMENT_RESULT,
-            /** U11 BR8.3: 판정 보류 · 장애(값 {@code {point, abstainReason}}, 장애는 사유 FAULT). */
+            /** 판정 보류 · 장애(값 {@code {point, abstainReason}}, 장애는 사유 FAULT). */
             JUDGMENT_ABSTAINED,
-            /** U11 BR8.3: 판정 중 모은 출력 전사(값 {@code {text}}, 비어 있으면 보내지 않는다). */
+            /** 판정 중 모은 출력 전사(값 {@code {text}}, 비어 있으면 보내지 않는다). */
             HELD_OUTPUT_TRANSCRIPT,
             /**
-             * U11 BR8.3 자리 · U13 BR6.5 정의: 연습 모드 제브 검사가 재지시 뒤에도 막혔다(값 {@link GuardrailBlockedEvent}, 전사 없음). 운영에서
+             * 자리 · 정의: 연습 모드 제브 검사가 재지시 뒤에도 막혔다(값 {@link GuardrailBlockedEvent}, 전사 없음). 운영에서
              * 연습 모드 검사를 시작해 이 사건을 만드는 것은 U12다 — 열린 생성형 슬롯({@link PracticeOutput#speakGenerated})의 발화가 제브(연습 모드)의 두 번째 막힘을 만날 때만 보낸다.
              */
             GUARDRAIL_BLOCKED,
-            /** U11 BR6.4: 아이가 쉬고 싶다는 뜻을 밝혔다(출력권 연습에만 알린다). */
+            /** 아이가 쉬고 싶다는 뜻을 밝혔다(출력권 연습에만 알린다). */
             REST_REQUESTED
         }
 
@@ -126,7 +126,7 @@ public interface PracticeSessionExtension {
     }
 
     /**
-     * 연습 모드 제브 검사가 재지시 뒤에도 막혔다는 알림 값(U13 BR6.5, {@link ExtensionEvent.Kind#GUARDRAIL_BLOCKED}의 값). 전사 원문 · 후보 문장은
+     * 연습 모드 제브 검사가 재지시 뒤에도 막혔다는 알림 값({@link ExtensionEvent.Kind#GUARDRAIL_BLOCKED}의 값). 전사 원문 · 후보 문장은
      * 담지 않는다(R-F14).
      *
      * @param correlationId 연습 발화 correlationId(검사를 시작한 연습 발화)
@@ -156,8 +156,8 @@ public interface PracticeSessionExtension {
     }
 
     /**
-     * 실행기가 확장점에 주는 출력 능력(BR10.4). ACTIVE일 때만 받고, 아니면 거짓을 돌려주며 PRACTICE_EXTENSION_FAILED{reason: NOT_ACTIVE}로
-     * 남긴다(R-10). {@link #post}만 어느 스레드에서나 부를 수 있고, 나머지는 확장점 시점 안(실행기 스레드)에서만 부른다.
+     * 실행기가 확장점에 주는 출력 능력. ACTIVE일 때만 받고, 아니면 거짓을 돌려주며 PRACTICE_EXTENSION_FAILED{reason: NOT_ACTIVE}로
+     * 남긴다. {@link #post}만 어느 스레드에서나 부를 수 있고, 나머지는 확장점 시점 안(실행기 스레드)에서만 부른다.
      */
     interface PracticeOutput {
 
@@ -193,24 +193,24 @@ public interface PracticeSessionExtension {
         default boolean cancelSpeech(UUID correlationId) { return false; }
 
         /**
-         * U11 BR8.1: 아이 확정 전사 하나에 대한 진행 중 판정(J2 ~ J5)을 요청한다. 거절(ACTIVE 아님 · 열린 턴 있음 · 지점 밖 · 최근 전사 4개 밖 ·
+         * 아이 확정 전사 하나에 대한 진행 중 판정을 요청한다. 거절(ACTIVE 아님 · 열린 턴 있음 · 지점 밖 · 최근 전사 4개 밖 ·
          * 공급자 없음)이면 거짓이다. 결과는 JUDGMENT_RESULT · JUDGMENT_ABSTAINED 사건으로 온다.
          */
         default boolean requestJudgment(kr.mujoong.realtime.judgment.JudgmentPoint point, long transcriptSeq, UUID correlationId,
                 java.util.Map<String, Object> criteria) { return false; }
 
-        /** U11 BR8.1: 역할 전환 안내의 자리(지금은 규칙만 있고 동작은 없다). */
+        /** 역할 전환 안내의 자리(지금은 규칙만 있고 동작은 없다). */
         default boolean announceRoleSwitch(String toRole) { return false; }
 
         /**
-         * U12 D6 · BR5.6: GPT-Live가 만드는 모든 역할 발화(친구 되묻기 · 재안내 · 코치 도움 · 생성형 알림 · 변형 제안)를 내는 단 하나의 능력.
+         * U12 D6 · GPT-Live가 만드는 모든 역할 발화(친구 되묻기 · 재안내 · 코치 도움 · 생성형 알림 · 변형 제안)를 내는 단 하나의 능력.
          * 실행부가 한 번에 ① 생성형 슬롯을 열고 ② 연습 출력 보류를 풀고 ③ 출력 세대를 올리고 ④ 지시를 {@code replayable=true}로 보내며(제브 첫
          * 막힘 뒤 재지시가 같은 역할 지시문을 다시 보낸다) ⑤ 송신 실패 · 새 말 미시작이면 기존 실패 길로 알린다. 기본은 거짓(낼 수 없음)이고,
          * 호출한 확장은 거짓을 '그 발화는 나가지 않았다'로 받아 연습을 멈추지 않고 이어 간다.
          *
          * <p>슬롯은 어떤 원인으로 닫혀도 확장에 종료 사실({@link PlaybackFact})을 정확히 한 번 보내고, 제브의 두 번째 막힘은
          * {@link ExtensionEvent.Kind#GUARDRAIL_BLOCKED}로 알린다. 지시문은 서버가 만든 템플릿 문장이며 아이 발화 · 모델 출력 · 판정 라벨 · 확률 ·
-         * 판정 기준을 담지 않는다(BR3.7, R-F14).
+         * 판정 기준을 담지 않는다(R-F14).
          *
          * @param correlationId 이 발화의 식별자(종료 사실 · 막힘 사건이 같은 값으로 돌아온다)
          * @param role 말하는 역할: {@code PEER} 또는 {@code COACH}(제브 모드 PRACTICE_PEER · PRACTICE_COACH로 대응)
@@ -218,28 +218,28 @@ public interface PracticeSessionExtension {
          */
         default boolean speakGenerated(UUID correlationId, String role, String instructionText) { return false; }
 
-        /** U11 BR8.1: '생각 중' 표시를 유지하거나(true) 풀도록(false) 요청한다. ACTIVE에서만 받는다. */
+        /** '생각 중' 표시를 유지하거나(true) 풀도록(false) 요청한다. ACTIVE에서만 받는다. */
         default boolean setThinking(boolean on) { return false; }
     }
 
     record PlaybackFact(kr.mujoong.realtime.voice.PracticeSpeech speech,
-            kr.mujoong.realtime.practice.PracticePorts.Playback status, String text, Instant receivedAt, Duration pausedFor) {
+            kr.mujoong.realtime.practicelegacy.PracticePorts.Playback status, String text, Instant receivedAt, Duration pausedFor) {
         public PlaybackFact {
             Objects.requireNonNull(pausedFor, "pausedFor");
             if (pausedFor.isNegative()) throw new IllegalArgumentException("negative playback pause");
         }
         public PlaybackFact(kr.mujoong.realtime.voice.PracticeSpeech speech,
-                kr.mujoong.realtime.practice.PracticePorts.Playback status, String text, Instant receivedAt) {
+                kr.mujoong.realtime.practicelegacy.PracticePorts.Playback status, String text, Instant receivedAt) {
             this(speech, status, text, receivedAt, Duration.ZERO);
         }
         public PlaybackFact(kr.mujoong.realtime.voice.PracticeSpeech speech,
-                kr.mujoong.realtime.practice.PracticePorts.Playback status, String text) { this(speech, status, text, null); }
+                kr.mujoong.realtime.practicelegacy.PracticePorts.Playback status, String text) { this(speech, status, text, null); }
         /** U12: 아직 끝나지 않은 시작 사실(STARTED). 종료 사실이 아니다. */
-        public boolean started() { return status == kr.mujoong.realtime.practice.PracticePorts.Playback.STARTED; }
+        public boolean started() { return status == kr.mujoong.realtime.practicelegacy.PracticePorts.Playback.STARTED; }
         /** U12: 끝까지 재생됐다(COMPLETED). 새 연습 흐름이 레거시 패키지 타입을 직접 보지 않게 하는 읽기 도우미다. */
-        public boolean played() { return status == kr.mujoong.realtime.practice.PracticePorts.Playback.COMPLETED; }
+        public boolean played() { return status == kr.mujoong.realtime.practicelegacy.PracticePorts.Playback.COMPLETED; }
         /** U12: 아이가 끼어들어 끊겼다(INTERRUPTED). */
-        public boolean interrupted() { return status == kr.mujoong.realtime.practice.PracticePorts.Playback.INTERRUPTED; }
+        public boolean interrupted() { return status == kr.mujoong.realtime.practicelegacy.PracticePorts.Playback.INTERRUPTED; }
         @Override public String toString() { return "PlaybackFact[status=" + status + "]"; }
     }
 

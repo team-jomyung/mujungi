@@ -19,7 +19,7 @@ import org.junit.jupiter.api.Test;
  * 운영 타이머 구동기(RD-2 · RD-1 · NFR7.3 · J138). 수십 ms 시한을 실제 시계로 걸고 상한 있는 래치 대기로만 확인한다(Thread.sleep 없음).
  * 상한 5초는 실패를 빨리 드러내기 위한 것이고 정상 경로는 수십 ms 안에 끝난다.
  */
-@Tag("u1")
+@Tag("skeleton")
 class DelayQueueTimerDriverTest {
 
     private static final long LATCH_LIMIT_SECONDS = 5;

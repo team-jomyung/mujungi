@@ -16,7 +16,7 @@ import kr.mujoong.core.common.db.DbTestSupport;
 import kr.mujoong.core.support.BusinessFixtures;
 import kr.mujoong.core.support.BusinessFixtures.Family;
 import kr.mujoong.core.support.CoreBusinessContext;
-import kr.mujoong.core.support.U8Fixtures;
+import kr.mujoong.core.support.LiveContentFixtures;
 import kr.mujoong.testsupport.db.MujoongPostgres;
 import kr.mujoong.testsupport.http.ContractStubServer;
 import kr.mujoong.testsupport.http.ContractStubServer.RecordedRequest;
@@ -37,7 +37,7 @@ import tools.jackson.databind.JsonNode;
  * childContext 세 필드뿐, 08 입력 원문 표식 0건. 3.6 수정 분량(J343): 아이 행을 계약 경계(이름 1 · 10자, 나이 6 · 12, 관심 10개 · 20자,
  * 공백 · 빈 항목 제외)로 바꿔도 패키지가 스키마에 맞고, 계약 밖 값이면 사본 · Realtime 호출 없이 시작이 멈춘다.
  */
-@Tag("u1")
+@Tag("skeleton")
 @Tag("db")
 class SessionPackageIT {
 
@@ -58,7 +58,7 @@ class SessionPackageIT {
         postgres = MujoongPostgres.sharedOrAbort();
         BusinessFixtures.applyReferenceSeed(postgres);
         // U8(편차 U8-b): dev 시드를 쓰는 다른 시험이 공용 DB에 승인 발화 행을 남기므로 시험 순서와 무관하게 늘 있게 둔다(넣기 전용)
-        U8Fixtures.insertApprovedSpeech(postgres);
+        LiveContentFixtures.insertApprovedSpeech(postgres);
     }
 
     @BeforeEach
