@@ -1,19 +1,17 @@
-# 무중 demo 배포 — 재사용 워크플로(main 병합 자동) + 수동 실행(배포 · 롤백)
-# (U1 3.5 Step 50 · cicd-pipeline.md 2.2.1 S4 · S5 · S6 · 2.5.2 · 2.5.3 · 2.6.2 S5b · 2.8 · 2.11 · 2.12 · CD-3 · CD-4 · CD-6 · CD-10 · J92 · J98 · J104)
+# 무중 demo 배포 — ECS(EC2 · bridge) · main 병합 자동 + 수동 실행(DEPLOY · ROLLBACK)
 #
-# 소유자: A 계정 · 클라우드 담당(J104). 실명 · 계정은 쓰지 않는다.
+# 흐름: OIDC(mujoong-gha-deploy) → 최신 태스크 정의에서 image만 SHA로 교체 → ECS 서비스 갱신
+#   DEPLOY  : migrate(종료 코드 0 필수) → core-api · realtime → web → nginx
+#   ROLLBACK: migrate 생략, 앱 이미지만 되돌림(설정 · DB 스키마는 복원 안 함)
 #
-# 부르는 곳: ci.yml의 deploy 작업(main 병합 뒤 ci-gate 통과, automatic=true) · Actions 화면의 수동 실행(workflow_dispatch: sha 비우면
-# main 최신, mode DEPLOY · ROLLBACK, reason 한 줄). 경로는 하나다: OIDC 역할 → SSM 문서 mujoong-deploy → 호스트 /opt/mujoong/bin/deploy.sh.
-# 건너뜀(실패 아님, 작업 요약에 대상 SHA를 남긴다):
-#   - 저장소 변수 SERVICE_HOST가 비어 있음(도메인 미정, J98)
-#   - 자동 실행인데 저장소 변수 AUTO_DEPLOY가 false(동결: 시연 · 11/2 측정 창 · 롤백 중, cicd 2.12). 수동 실행은 동결과 무관하다
-#   - D0: 인스턴스가 running이 아니거나 SSM이 1분 간격 최대 5분 동안 Online이 아님(서버 정지, CD-10 · cicd 2.11)
-# 배포 뒤 S5b: 러너(호스트 밖)에서 공개 도메인으로 3종 호출(health · /device · WSS 101)과 인증서 만료 20일 이상을 확인한다.
-# 실패는 배포 실패 표시이고 자동 롤백은 없다(CD-6). 롤백은 mode=ROLLBACK, sha=<deploy.log의 마지막 result=OK sha>로 수동 실행한다.
-# 동시성: 배포 그룹 하나, 진행 중 배포를 취소하지 않고 대기열에는 최신 하나만 남는다(cicd 2.12).
-# 권한: 기본 contents: read, id-token: write는 배포 작업만. 저장소 변수(비밀 아님): AWS_REGION · AWS_DEPLOY_ROLE_ARN · DEMO_INSTANCE_ID ·
-# SERVICE_HOST · AUTO_DEPLOY. Actions 비밀은 쓰지 않는다(OIDC). 입력값은 env로만 넘기고 스크립트에 직접 끼워 넣지 않는다.
+# 전제: 태스크 정의 뼈대는 Terraform, image는 이 워크플로가 관리한다. 등록은 Terraform · 이 워크플로만 하고,
+#       Terraform 변경이 끝난 뒤 배포한다(동시 변경 시 설정 누락).
+# 복구: 자동 롤백은 서비스별(회로 차단기)뿐이다. 중간 실패 시 요약의 서비스별 상태를 보고 수동 복구한다.
+#       ECR은 최근 5개만 보관 → 롤백 가능한 SHA도 그 범위.
+# 건너뜀: SERVICE_HOST 비어 있음 · 자동 실행인데 AUTO_DEPLOY=false · ECS 인스턴스 미연결(서버 정지)
+# 확인(S5b): /healthz · /parent → 200, /api/health → 200 + status=UP
+#       ⚠️ WSS · 인증서 확인 없음 — 음성 경로 정상을 뜻하지 않는다(시연 전 probe-three로 복원)
+# 저장소 변수(비밀 아님): AWS_REGION · AWS_DEPLOY_ROLE_ARN · SERVICE_HOST · AUTO_DEPLOY
 
 name: deploy
 
@@ -47,7 +45,7 @@ on:
         required: false
         default: ""
       mode:
-        description: DEPLOY(일반) 또는 ROLLBACK(백업 D2 · migrate D4 건너뜀)
+        description: DEPLOY(일반) 또는 ROLLBACK(migrate 건너뜀, 이미지만 되돌림)
         type: choice
         options: [DEPLOY, ROLLBACK]
         default: DEPLOY
@@ -59,6 +57,9 @@ on:
 permissions:
   contents: read
 
+env:
+  ECS_CLUSTER: mujungi-cluster
+
 jobs:
   plan:
     name: plan
@@ -68,7 +69,6 @@ jobs:
       skip: ${{ steps.plan.outputs.skip }}
       sha: ${{ steps.plan.outputs.sha }}
       mode: ${{ steps.plan.outputs.mode }}
-      comment: ${{ steps.plan.outputs.comment }}
     steps:
       - id: plan
         name: 입력 검증 · 건너뜀 판단
@@ -80,7 +80,6 @@ jobs:
           SERVICE_HOST: ${{ vars.SERVICE_HOST }}
           AUTO_DEPLOY: ${{ vars.AUTO_DEPLOY }}
           ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
-          INSTANCE_ID: ${{ vars.DEMO_INSTANCE_ID }}
           REGION: ${{ vars.AWS_REGION }}
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
@@ -92,7 +91,7 @@ jobs:
           sha="$IN_SHA"
           if [ -z "$sha" ]; then
             if [ "$mode" = ROLLBACK ]; then
-              echo "::error::ROLLBACK은 sha가 필요하다(deploy.log의 마지막 result=OK sha)"
+              echo "::error::ROLLBACK은 sha가 필요하다(마지막으로 정상 배포된 커밋 SHA)"
               exit 1
             fi
             sha="$(gh api "repos/$REPO/commits/main" --jq .sha)"
@@ -101,27 +100,23 @@ jobs:
             echo "::error::sha는 40자 소문자 16진수다"
             exit 1
           fi
-          # SSM 명령 주석(100자 이하, 제어 문자 없음). 사유는 비밀 · 개인정보가 아니어야 한다
           reason="$(printf '%s' "${IN_REASON:-}" | tr -d '\000-\037\177' | tr -s ' ')"
-          comment="mujoong ${mode} ${sha:0:7} ${reason}"
-          comment="${comment:0:100}"   # 문자 단위(러너 로캘 UTF-8). SSM 주석은 100자 이하
           skip=false
           why=""
           if [ -z "$SERVICE_HOST" ]; then
             skip=true
-            why="저장소 변수 SERVICE_HOST가 비어 있다(도메인 미정, J98)"
+            why="저장소 변수 SERVICE_HOST(CloudFront 도메인)가 비어 있다"
           elif [ "$AUTOMATIC" = true ] && [ "${AUTO_DEPLOY,,}" = false ]; then
             skip=true
-            why="AUTO_DEPLOY=false(동결, cicd 2.12) — 필요하면 수동 실행"
+            why="AUTO_DEPLOY=false(동결) — 필요하면 수동 실행"
           fi
           if [ "$skip" = false ]; then
             problems=()
             [[ "$ROLE_ARN" =~ ^arn:aws:iam::[0-9]{12}:role/mujoong-gha-deploy$ ]] || problems+=(AWS_DEPLOY_ROLE_ARN)
-            [[ "$INSTANCE_ID" =~ ^i-[0-9a-f]{8,17}$ ]] || problems+=(DEMO_INSTANCE_ID)
             [[ "$REGION" =~ ^[a-z]{2}(-[a-z]+)+-[0-9]$ ]] || problems+=(AWS_REGION)
             [[ "$SERVICE_HOST" =~ ^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$ ]] || problems+=(SERVICE_HOST)
             if [ "${#problems[@]}" -gt 0 ]; then
-              echo "::error::저장소 변수가 없거나 형식이 틀렸다: ${problems[*]}(RUNBOOK 16절)"
+              echo "::error::저장소 변수가 없거나 형식이 틀렸다: ${problems[*]}"
               exit 1
             fi
           fi
@@ -129,12 +124,11 @@ jobs:
             echo "skip=$skip"
             echo "sha=$sha"
             echo "mode=$mode"
-            echo "comment=$comment"
           } >>"$GITHUB_OUTPUT"
           if [ "$skip" = true ]; then
             summary "배포 건너뜀: $why — 대상 SHA ${sha} (mode ${mode})"
           else
-            summary "배포 대상: SHA ${sha} · mode ${mode}"
+            summary "배포 대상: SHA ${sha} · mode ${mode} · 사유: ${reason:-없음}"
           fi
 
   deploy:
@@ -142,7 +136,7 @@ jobs:
     needs: plan
     if: needs.plan.outputs.skip != 'true'
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 45
     environment:
       name: demo
     permissions:
@@ -154,15 +148,9 @@ jobs:
     env:
       SHA: ${{ needs.plan.outputs.sha }}
       MODE: ${{ needs.plan.outputs.mode }}
-      COMMENT: ${{ needs.plan.outputs.comment }}
-      INSTANCE_ID: ${{ vars.DEMO_INSTANCE_ID }}
       SERVICE_HOST: ${{ vars.SERVICE_HOST }}
       AWS_REGION: ${{ vars.AWS_REGION }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-          sparse-checkout: infra/bin
       - name: OIDC로 배포 역할 맡기(장기 키 없음, 1시간 이하)
         uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
         with:
@@ -170,74 +158,201 @@ jobs:
           role-session-name: mujoong-deploy-${{ github.run_id }}
           role-duration-seconds: 3600
           aws-region: ${{ vars.AWS_REGION }}
+
       - id: d0
-        name: D0 서버 · SSM 온라인 확인(1분 간격 최대 5분)
+        name: D0 ECS 컨테이너 인스턴스 연결 확인
         run: |
           set -euo pipefail
-          online=false
-          for attempt in 1 2 3 4 5 6; do
-            state="$(aws ec2 describe-instance-status --instance-ids "$INSTANCE_ID" --include-all-instances \
-              --query 'InstanceStatuses[0].InstanceState.Name' --output text 2>/dev/null || echo unknown)"
-            ping="$(aws ssm describe-instance-information --filters "Key=InstanceIds,Values=$INSTANCE_ID" \
-              --query 'InstanceInformationList[0].PingStatus' --output text 2>/dev/null || echo unknown)"
-            echo "확인 $attempt: 인스턴스 $state · SSM $ping"
-            if [ "$state" = running ] && [ "$ping" = Online ]; then
-              online=true
-              break
-            fi
-            # 정지 · 정지 중이면 기다리지 않는다(서버는 필요할 때만 켠다, J95)
-            if [ "$state" = stopped ] || [ "$state" = stopping ]; then
-              break
-            fi
-            if [ "$attempt" -lt 6 ]; then sleep 60; fi
-          done
-          echo "online=$online" >>"$GITHUB_OUTPUT"
-          if [ "$online" != true ]; then
-            echo "서버 정지 또는 SSM 오프라인 — 배포 건너뜀. 켠 뒤 수동 배포 필요: SHA ${SHA} (mode ${MODE})" | tee -a "$GITHUB_STEP_SUMMARY"
+          arns="$(aws ecs list-container-instances --cluster "$ECS_CLUSTER" --status ACTIVE \
+            --query 'containerInstanceArns' --output text)"
+          connected=0
+          if [ -n "$arns" ] && [ "$arns" != None ]; then
+            # shellcheck disable=SC2086
+            connected="$(aws ecs describe-container-instances --cluster "$ECS_CLUSTER" --container-instances $arns \
+              --query 'length(containerInstances[?agentConnected])' --output text)"
           fi
-      - name: SSM 배포(mujoong-deploy → /opt/mujoong/bin/deploy.sh)
+          echo "연결된 컨테이너 인스턴스: $connected"
+          if [ "$connected" -gt 0 ]; then
+            echo "online=true" >>"$GITHUB_OUTPUT"
+          else
+            echo "online=false" >>"$GITHUB_OUTPUT"
+            echo "서버 정지(ECS 인스턴스 미연결) — 배포 건너뜀. RDS → EC2 순으로 켠 뒤 수동 배포: SHA ${SHA} (mode ${MODE})" \
+              | tee -a "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: 배포할 이미지가 ECR에 있는지 확인
         if: steps.d0.outputs.online == 'true'
         run: |
           set -euo pipefail
-          params="$(jq -cn --arg sha "$SHA" --arg mode "$MODE" '{sha: [$sha], mode: [$mode]}')"
-          command_id="$(aws ssm send-command --document-name mujoong-deploy --instance-ids "$INSTANCE_ID" \
-            --parameters "$params" --comment "$COMMENT" --timeout-seconds 600 --query Command.CommandId --output text)"
-          echo "SSM 명령 id: $command_id"
-          status=Pending
-          deadline=$(( $(date +%s) + 1080 ))
-          while [ "$(date +%s)" -lt "$deadline" ]; do
-            sleep 10
-            status="$(aws ssm get-command-invocation --command-id "$command_id" --instance-id "$INSTANCE_ID" \
-              --query Status --output text 2>/dev/null || echo Pending)"
-            case "$status" in
-              Pending | InProgress | Delayed) continue ;;
-              *) break ;;
-            esac
+          # ROLLBACK은 migrate를 실행하지 않으므로 migrate 이미지를 요구하지 않는다
+          names=(core-api realtime web nginx)
+          if [ "$MODE" = DEPLOY ]; then
+            names+=(migrate)
+          fi
+          missing=()
+          errors=()
+          for name in "${names[@]}"; do
+            if err="$(aws ecr describe-images --repository-name "mujoong-$name" --image-ids "imageTag=$SHA" 2>&1 >/dev/null)"; then
+              continue
+            fi
+            if grep -q ImageNotFoundException <<<"$err"; then
+              missing+=("mujoong-$name")
+            else
+              # 권한 부족 · 레포 없음 등은 "이미지 없음"과 구분해 남긴다
+              errors+=("mujoong-$name: $(head -n 1 <<<"$err")")
+            fi
           done
-          # 호스트 스크립트는 값(비밀)을 출력하지 않는다. 마지막 줄이 DEPLOY_END 한 줄이다(상세는 호스트 deploy-<배포 id>.log)
-          aws ssm get-command-invocation --command-id "$command_id" --instance-id "$INSTANCE_ID" \
-            --query StandardOutputContent --output text | tail -n 20 || true
-          aws ssm get-command-invocation --command-id "$command_id" --instance-id "$INSTANCE_ID" \
-            --query StandardErrorContent --output text | tail -n 20 || true
-          echo "SSM 상태: $status" | tee -a "$GITHUB_STEP_SUMMARY"
-          if [ "$status" != Success ]; then
-            echo "::error::배포 실패(SSM $status). 자동 롤백은 없다 — RUNBOOK 6.4"
+          if [ "${#errors[@]}" -gt 0 ]; then
+            printf '::error::ECR 조회 오류(권한 · 레포 확인): %s\n' "${errors[@]}"
+          fi
+          if [ "${#missing[@]}" -gt 0 ]; then
+            echo "::error::ECR에 SHA ${SHA} 이미지가 없다: ${missing[*]} (ci.yml images 결과 · 최근 5개 보관 범위 확인)"
+          fi
+          if [ "${#errors[@]}" -gt 0 ] || [ "${#missing[@]}" -gt 0 ]; then
             exit 1
           fi
-      - name: S5b 공개 도메인 3종 호출 · 인증서 만료 20일 이상(호스트 밖 관점)
+
+      - name: ECS 배포(migrate → backend → web → nginx)
         if: steps.d0.outputs.online == 'true'
         run: |
           set -euo pipefail
-          bash infra/bin/probe-three --host "$SERVICE_HOST" --count 1 --timeout 10
-          end="$(openssl s_client -connect "$SERVICE_HOST:443" -servername "$SERVICE_HOST" -verify_return_error </dev/null 2>/dev/null \
-            | openssl x509 -noout -enddate 2>/dev/null | cut -d= -f2 || true)"
-          if [ -z "$end" ]; then
-            echo "::error::서빙 인증서를 읽지 못했다(TLS 검증 실패 또는 접속 불가)"
-            exit 1
+          shopt -s inherit_errexit
+          summary() { echo "$1" | tee -a "$GITHUB_STEP_SUMMARY"; }
+          registry="$(aws sts get-caller-identity --query Account --output text).dkr.ecr.${AWS_REGION}.amazonaws.com"
+
+          # family의 최신 ACTIVE 리비전에서 대상 컨테이너의 image만 바꿔 새 리비전을 등록하고 ARN을 출력한다.
+          # 대상 컨테이너가 정확히 1개가 아니면 등록하지 않고 실패한다(이름 불일치로 옛 이미지가 그대로 등록되는 것 방지).
+          register() {
+            local family="$1" container="$2" image="$3"
+            local raw="$RUNNER_TEMP/td-$1.raw.json" file="$RUNNER_TEMP/td-$1.json"
+            aws ecs describe-task-definition --task-definition "$family" --query taskDefinition --output json >"$raw" || return 1
+            jq -e --arg c "$container" --arg img "$image" '
+              if ([.containerDefinitions[] | select(.name == $c)] | length) != 1 then
+                error("대상 컨테이너가 정확히 1개가 아니다: " + $c)
+              else
+                .containerDefinitions |= map(if .name == $c then .image = $img else . end)
+                | del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities,
+                      .registeredAt, .registeredBy, .deregisteredAt)
+              end' "$raw" >"$file" || return 1
+            aws ecs register-task-definition --cli-input-json "file://$file" \
+              --query taskDefinition.taskDefinitionArn --output text || return 1
+          }
+
+          deploy() {
+            aws ecs update-service --cluster "$ECS_CLUSTER" --service "$1" --task-definition "$2" >/dev/null
+          }
+
+          # 서비스가 "이번에 등록한 리비전"으로 COMPLETED 되고 실행 수가 원하는 수와 같은지 확인한다.
+          # 회로 차단기가 이전 리비전으로 되돌린 경우(그쪽은 정상이어도) 이번 배포는 실패로 본다.
+          verify_service() {
+            local service="$1" td="$2" waited=true info primary state running desired
+            aws ecs wait services-stable --cluster "$ECS_CLUSTER" --services "$service" || waited=false
+            info="$(aws ecs describe-services --cluster "$ECS_CLUSTER" --services "$service" --output json)"
+            primary="$(jq -r '.services[0].deployments[] | select(.status == "PRIMARY") | .taskDefinition' <<<"$info")"
+            state="$(jq -r '.services[0].deployments[] | select(.status == "PRIMARY") | .rolloutState' <<<"$info")"
+            running="$(jq -r '.services[0].runningCount' <<<"$info")"
+            desired="$(jq -r '.services[0].desiredCount' <<<"$info")"
+            summary "$service: rollout=$state running=$running/$desired 안정화대기=$waited 리비전=${primary##*/}"
+            if [ "$primary" != "$td" ] || [ "$state" != COMPLETED ] || [ "$running" != "$desired" ]; then
+              echo "::error::$service 배포 실패 — 이전 리비전으로 되돌려졌거나 안정화되지 않았다(로그: /ecs/$service)"
+              return 1
+            fi
+          }
+
+          # 1. migrate(DEPLOY만) — 종료 코드 0이어야 앱을 배포한다
+          if [ "$MODE" = DEPLOY ]; then
+            migrate_td="$(register mujoong-migrate migrate "$registry/mujoong-migrate:$SHA")" \
+              || { echo "::error::mujoong-migrate 태스크 정의 등록 실패(컨테이너 이름 · 권한 확인)"; exit 1; }
+            run="$(aws ecs run-task --cluster "$ECS_CLUSTER" --task-definition "$migrate_td" --launch-type EC2 \
+              --started-by "gha-${GITHUB_RUN_ID}" --output json)"
+            task="$(jq -r '.tasks[0].taskArn // empty' <<<"$run")"
+            if [ -z "$task" ]; then
+              echo "::error::migrate 태스크를 시작하지 못했다: $(jq -c '.failures' <<<"$run")"
+              exit 1
+            fi
+            waited=true
+            aws ecs wait tasks-stopped --cluster "$ECS_CLUSTER" --tasks "$task" || waited=false
+            desc="$(aws ecs describe-tasks --cluster "$ECS_CLUSTER" --tasks "$task" --output json)"
+            last="$(jq -r '.tasks[0].lastStatus' <<<"$desc")"
+            stopped_reason="$(jq -r '.tasks[0].stoppedReason // ""' <<<"$desc")"
+            code="$(jq -r '.tasks[0].containers[] | select(.name == "migrate") | (.exitCode // "없음")' <<<"$desc")"
+            container_reason="$(jq -r '.tasks[0].containers[] | select(.name == "migrate") | (.reason // "")' <<<"$desc")"
+            summary "migrate: 상태=$last 종료코드=$code 대기완료=$waited ${stopped_reason:+중지사유=$stopped_reason} ${container_reason:+컨테이너=$container_reason}"
+            if [ "$last" != STOPPED ]; then
+              # 마이그레이션 도중 강제 중단은 하지 않는다(스키마 반쯤 적용 방지). 사람이 상태를 확인한다.
+              echo "::error::migrate가 대기 시간 안에 끝나지 않았다(상태 $last). 태스크는 중단하지 않았다 — 확인 필요: $task"
+              exit 1
+            fi
+            if [ "$code" != 0 ]; then
+              echo "::error::migrate 실패 — 앱 배포를 중단한다"
+              aws logs tail /ecs/mujoong-migrate --since 15m 2>/dev/null | tail -n 40 || true
+              exit 1
+            fi
+          else
+            summary "ROLLBACK — migrate 건너뜀(이미지만 되돌림, 설정 · 스키마는 유지)"
           fi
-          days=$(( ( $(date -u -d "$end" +%s) - $(date -u +%s) ) / 86400 ))
-          echo "인증서 남은 일수: $days" | tee -a "$GITHUB_STEP_SUMMARY"
-          if [ "$days" -lt 20 ]; then
-            echo "::error::인증서 만료가 20일 안이다(RUNBOOK 9절 인증서)"
+
+          # 2. backend(같은 SHA 묶음)
+          core_td="$(register mujoong-core-api core-api "$registry/mujoong-core-api:$SHA")" \
+            || { echo "::error::mujoong-core-api 태스크 정의 등록 실패"; exit 1; }
+          realtime_td="$(register mujoong-realtime realtime "$registry/mujoong-realtime:$SHA")" \
+            || { echo "::error::mujoong-realtime 태스크 정의 등록 실패"; exit 1; }
+          deploy mujoong-core-api "$core_td"
+          deploy mujoong-realtime "$realtime_td"
+          verify_service mujoong-core-api "$core_td"
+          verify_service mujoong-realtime "$realtime_td"
+
+          # 3. web → nginx
+          web_td="$(register mujoong-web web "$registry/mujoong-web:$SHA")" \
+            || { echo "::error::mujoong-web 태스크 정의 등록 실패"; exit 1; }
+          deploy mujoong-web "$web_td"
+          verify_service mujoong-web "$web_td"
+
+          nginx_td="$(register mujoong-nginx nginx "$registry/mujoong-nginx:$SHA")" \
+            || { echo "::error::mujoong-nginx 태스크 정의 등록 실패"; exit 1; }
+          deploy mujoong-nginx "$nginx_td"
+          verify_service mujoong-nginx "$nginx_td"
+
+          summary "배포 완료: SHA ${SHA} (mode ${MODE})"
+
+      - name: S5b 공개 주소 확인(/healthz · /parent · /api/health)
+        if: steps.d0.outputs.online == 'true'
+        run: |
+          set -euo pipefail
+          # curl 성공 여부와 HTTP 코드를 분리한다(연결 실패 시 코드가 000000처럼 합쳐지는 것 방지)
+          fetch() {
+            local out
+            if out="$(curl -sS --connect-timeout 5 --max-time 10 -w '\n%{http_code}' "https://$SERVICE_HOST$1")"; then
+              CODE="${out##*$'\n'}"
+              BODY="${out%$'\n'*}"
+              [[ "$CODE" =~ ^[1-5][0-9]{2}$ ]] || CODE=000
+            else
+              CODE=000
+              BODY=""
+            fi
+          }
+          # $1 경로, $2 판정(ok: 200 / up: 200 + JSON status=UP). CloudFront 전파를 고려해 10초 간격 6회 시도
+          check() {
+            local path="$1" kind="$2" pass=false
+            for attempt in 1 2 3 4 5 6; do
+              fetch "$path"
+              if [ "$CODE" = 200 ]; then
+                if [ "$kind" = ok ] || jq -e '.status == "UP"' >/dev/null 2>&1 <<<"$BODY"; then
+                  pass=true
+                  break
+                fi
+              fi
+              sleep 10
+            done
+            echo "$path → $CODE $([ "$pass" = true ] && echo 통과 || echo 실패)" | tee -a "$GITHUB_STEP_SUMMARY"
+            [ "$pass" = true ]
+          }
+          failed=0
+          check /healthz ok || failed=1
+          check /parent ok || failed=1
+          check /api/health up || failed=1
+          echo "참고: WSS(/ws/device) · 인증서 확인은 아직 없다 — 음성 대화 경로 정상을 뜻하지 않는다" | tee -a "$GITHUB_STEP_SUMMARY"
+          if [ "$failed" -ne 0 ]; then
+            echo "::error::공개 주소 확인 실패(CloudFront → nginx → web · core 경로 점검)"
             exit 1
           fi

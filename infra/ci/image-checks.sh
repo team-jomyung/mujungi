@@ -221,7 +221,7 @@ PY
   # 취약점은 종료 코드 3, Trivy 자체 오류(이미지를 못 읽음 · DB 실패 등)는 1이다. 둘 다 FAIL이지만 사유를 나눠 적는다(J353:
   # 3.6에서 실행기 /tmp 읽기 전용 오류를 '취약점'으로 잘못 셌다). 판정 인자(심각도 · --ignore-unfixed · 예외 목록)는 그대로다
   local rc
-  for name in core-api realtime web migrate backup; do
+  for name in core-api realtime web migrate backup nginx; do
     rc=0
     trivy image --quiet --severity HIGH,CRITICAL --ignore-unfixed --exit-code 3 --ignorefile "$ignore" \
       "$(ref "$name")" >"$work/trivy-$name.log" 2>&1 || rc=$?

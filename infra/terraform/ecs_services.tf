@@ -52,6 +52,21 @@ resource "aws_ecs_service" "web" {
   # 단일 EC2 + 고정 포트 → 기존 태스크 내리고 새로 올림
   deployment_minimum_healthy_percent = 0
   deployment_maximum_percent         = 100
+
+  # 서비스의 실제 배포 버전(태스크 정의 리비전)은 CD(deploy.yml)가 관리한다.
+  # Terraform이 CD의 변경을 되돌리지 않도록 이 속성만 무시한다.
+  lifecycle {
+    ignore_changes = [task_definition]
+  }
+
+  # ECS가 새 배포를 실패로 판정하면(태스크 기동 실패 · 반복 종료 등),
+  # 이전 COMPLETED 배포가 있는 경우 이 서비스만 롤백한다.
+  # 컨테이너 healthCheck가 없으므로 "실행 중이지만 앱이 비정상(예: 503)"은 감지하지 못한다.
+  # 공개 주소 검사 실패 · DB · 서비스 묶음 롤백은 별도(deploy.yml ROLLBACK 수동 실행).
+  deployment_circuit_breaker {
+    enable   = true
+    rollback = true
+  }
 }
 
 # ──────────── nginx ────────────
@@ -105,6 +120,21 @@ resource "aws_ecs_service" "nginx" {
 
   deployment_minimum_healthy_percent = 0
   deployment_maximum_percent         = 100
+
+  # 서비스의 실제 배포 버전(태스크 정의 리비전)은 CD(deploy.yml)가 관리한다.
+  # Terraform이 CD의 변경을 되돌리지 않도록 이 속성만 무시한다.
+  lifecycle {
+    ignore_changes = [task_definition]
+  }
+
+  # ECS가 새 배포를 실패로 판정하면(태스크 기동 실패 · 반복 종료 등),
+  # 이전 COMPLETED 배포가 있는 경우 이 서비스만 롤백한다.
+  # 컨테이너 healthCheck가 없으므로 "실행 중이지만 앱이 비정상(예: 503)"은 감지하지 못한다.
+  # 공개 주소 검사 실패 · DB · 서비스 묶음 롤백은 별도(deploy.yml ROLLBACK 수동 실행).
+  deployment_circuit_breaker {
+    enable   = true
+    rollback = true
+  }
 
   depends_on = [aws_ecs_service.web]
 }
@@ -203,6 +233,21 @@ resource "aws_ecs_service" "core_api" {
 
   deployment_minimum_healthy_percent = 0
   deployment_maximum_percent         = 100
+
+  # 서비스의 실제 배포 버전(태스크 정의 리비전)은 CD(deploy.yml)가 관리한다.
+  # Terraform이 CD의 변경을 되돌리지 않도록 이 속성만 무시한다.
+  lifecycle {
+    ignore_changes = [task_definition]
+  }
+
+  # ECS가 새 배포를 실패로 판정하면(태스크 기동 실패 · 반복 종료 등),
+  # 이전 COMPLETED 배포가 있는 경우 이 서비스만 롤백한다.
+  # 컨테이너 healthCheck가 없으므로 "실행 중이지만 앱이 비정상(예: 503)"은 감지하지 못한다.
+  # 공개 주소 검사 실패 · DB · 서비스 묶음 롤백은 별도(deploy.yml ROLLBACK 수동 실행).
+  deployment_circuit_breaker {
+    enable   = true
+    rollback = true
+  }
 }
 
 # ──────────── realtime (Spring Boot) ────────────
@@ -260,4 +305,19 @@ resource "aws_ecs_service" "realtime" {
 
   deployment_minimum_healthy_percent = 0
   deployment_maximum_percent         = 100
+
+  # 서비스의 실제 배포 버전(태스크 정의 리비전)은 CD(deploy.yml)가 관리한다.
+  # Terraform이 CD의 변경을 되돌리지 않도록 이 속성만 무시한다.
+  lifecycle {
+    ignore_changes = [task_definition]
+  }
+
+  # ECS가 새 배포를 실패로 판정하면(태스크 기동 실패 · 반복 종료 등),
+  # 이전 COMPLETED 배포가 있는 경우 이 서비스만 롤백한다.
+  # 컨테이너 healthCheck가 없으므로 "실행 중이지만 앱이 비정상(예: 503)"은 감지하지 못한다.
+  # 공개 주소 검사 실패 · DB · 서비스 묶음 롤백은 별도(deploy.yml ROLLBACK 수동 실행).
+  deployment_circuit_breaker {
+    enable   = true
+    rollback = true
+  }
 }

@@ -10,6 +10,7 @@
 #   backup    ← postgres:16.15 + supercronic(고정 소스를 고정 Go로 빌드, J352) (infra/backup/Dockerfile, 맥락 infra/backup/)
 #   infra     ← infra/ 번들 목록 + 렌더한 release.env                   (infra/bundle/Dockerfile, 맥락 infra/)
 #   fake-provider ← tools/(시험 전용, --no-test-images면 빼고, 앱 이미지 6종과 섞지 않는다) (tools/fake-provider/Dockerfile)
+#   nginx     ← infra/nginx-ecs/default.conf + infra/nginx/snippets      (infra/nginx-ecs/Dockerfile, 맥락 infra/)
 #
 # 라벨(모든 이미지): org.opencontainers.image.revision=<git HEAD 40자>, kr.mujoong.source-fingerprint=<infra/ci/source-fingerprint.sh 값>.
 # 지문은 빌드 앞뒤로 두 번 계산해 같을 때만 성공한다(빌드 중 소스가 바뀌면 라벨이 거짓이 되므로 실패, J134 (가)).
@@ -24,7 +25,7 @@
 # 쓰는 법: bash infra/ci/build-images.sh [--registry <레지스트리>] [--tag <태그>] [--only <이름,...>] [--no-test-images]
 #                                        [--extra-ca <파일>] [--log-dir <디렉터리>] [--fingerprint sha256:<64자>]
 #   기본값: --registry mujoong.local, --tag verify(infra/ci/gen-env.sh의 compose.env와 같다), --log-dir build/verify/logs/images
-#   --only        core-api,realtime,web,migrate,backup,infra,fake-provider 중 일부만(쉼표 목록)
+#   --only        core-api,realtime,web,migrate,backup,infra,nginx,fake-provider 중 일부만(쉼표 목록)
 #   --fingerprint 부르는 쪽이 미리 계산한 지문(scripts/verify.sh 시작 지문). 주면 지금 지문과 같아야 한다
 # 표준 출력: 이미지마다 한 줄(이름 · 태그 · 걸린 초). docker build 출력은 로그 디렉터리의 <이름>.log에만 쓴다.
 # 종료 코드: 0 성공, 1 빌드 실패 · 지문 불일치 · 낡은 산출물, 2 전제 누락(docker · 산출물 · git), 64 인자 오류
@@ -33,7 +34,7 @@ set -Eeuo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 readonly ROOT
-readonly ALL_IMAGES=(core-api realtime web migrate backup infra fake-provider)
+readonly ALL_IMAGES=(core-api realtime web migrate backup infra nginx fake-provider)
 
 usage() {
   sed -n '2,31p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
@@ -201,6 +202,7 @@ image_ref() {
     backup) echo "$registry/mujoong-backup:$tag" ;;
     infra) echo "$registry/mujoong-infra:$tag" ;;
     fake-provider) echo "$registry/mujoong-fake-provider:$tag" ;;
+    nginx) echo "$registry/mujoong-nginx:$tag" ;;
   esac
 }
 
@@ -223,6 +225,7 @@ build_one() {
     backup) args=(-f infra/backup/Dockerfile infra/backup) ;;
     infra) args=(-f infra/bundle/Dockerfile --build-context "release=$work/release" infra) ;;
     fake-provider) args=(-f tools/fake-provider/Dockerfile tools) ;;
+    nginx) args=(-f infra/nginx-ecs/Dockerfile infra) ;;
   esac
   started="$(date +%s)"
   if ! (cd "$ROOT" && DOCKER_BUILDKIT=1 docker build "${common[@]}" "${args[@]}") >"$log" 2>&1; then
