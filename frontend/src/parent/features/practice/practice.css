@@ -7,9 +7,11 @@
 .mj-practice__select input { flex-shrink: 0; accent-color: var(--color-brand-primary); }
 .mj-practice__text { min-width: 0; overflow-wrap: anywhere; }
 .mj-practice__name { display: block; font-weight: 600; }
-.mj-practice__meta { display: block; margin-top: var(--space-unit); font-size: 0.75rem; color: var(--color-text-secondary); }
+.mj-practice__meta { display: block; margin-top: var(--space-unit); font-size: 0.875rem; color: var(--color-text-secondary); }
 .mj-practice__icon { flex: 0 0 var(--touch-target-min); min-width: var(--touch-target-min); min-height: var(--touch-target-min); padding: 0; border: 0; border-radius: var(--radius-card); color: var(--color-text-primary); background: transparent; font: inherit; font-size: 1.375rem; cursor: pointer; }
 .mj-practice__icon:disabled { opacity: 0.5; cursor: default; }
+.mj-practice__icon[aria-pressed="true"] { color: #8a5a00; background: var(--color-surface-warning); }
+.mj-practice__goal[data-selected="true"] { background: var(--color-fixed-expression); }
 .mj-practice__empty h2 { font-size: 1.125rem; margin-top: 0; }
 .mj-practice__empty h3 { font-size: 1rem; margin-top: calc(var(--space-unit) * 6); }
 .mj-practice__steps { padding-inline-start: 1.5rem; line-height: 1.7; }

@@ -8,7 +8,54 @@
   min-height: 100vh;
   min-height: 100dvh;
   margin: 0 auto;
-  background-color: var(--color-surface-base);
+  background-color: var(--color-surface-page);
+}
+
+/* 로컬 시연용 폰 프레임. 실제 모바일·작은 창은 기존 전체 화면을 유지한다.
+ * transform으로 전체 앱을 축소하지 않아 글자·터치 영역·고정 레이어를 보존한다.
+ * 프레임은 환경 설정으로만 켜며 운영 기본값에는 영향을 주지 않는다. */
+@media screen and (min-width: 560px) and (min-height: 640px) {
+  .mj-parent[data-phone-preview="true"] {
+    --phone-screen-height: calc(100dvh - 48px);
+    max-width: 496px;
+    height: calc(100dvh - 32px);
+    min-height: 0;
+    margin: 16px auto;
+    border: 8px solid #20232b;
+    border-radius: 40px;
+    box-shadow: 0 18px 48px rgb(27 31 42 / 18%), 0 0 0 1px #555b68;
+    overflow-y: auto;
+    /* 고정 레이어도 둥근 화면 밖으로 나오지 않게 자른다. */
+    clip-path: inset(0 round 40px);
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-border-default) transparent;
+  }
+
+  .mj-parent[data-phone-preview="true"] .mj-screen {
+    min-height: var(--phone-screen-height);
+  }
+
+  .mj-parent[data-phone-preview="true"] .mj-login__body {
+    min-height: var(--phone-screen-height);
+  }
+
+  .mj-parent[data-phone-preview="true"] .mj-tabbar {
+    bottom: 24px;
+  }
+
+  .mj-parent[data-phone-preview="true"] .mj-dialog-backdrop,
+  .mj-parent[data-phone-preview="true"] .mj-sheet-backdrop {
+    top: 24px;
+    bottom: 24px;
+    max-width: 480px;
+    margin-inline: auto;
+  }
+
+  .mj-parent[data-phone-preview="true"] .mj-toast-viewport {
+    bottom: calc(96px + env(safe-area-inset-bottom, 0px));
+    max-width: 480px;
+    margin-inline: auto;
+  }
 }
 
 .mj-screen {
@@ -16,15 +63,32 @@
   flex-direction: column;
   min-height: 100vh;
   min-height: 100dvh;
-  padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px));
+  padding-bottom: calc(76px + env(safe-area-inset-bottom, 0px));
 }
 
 .mj-header {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: calc(var(--space-unit) * 2);
-  padding: calc(var(--space-unit) * 5) calc(var(--space-unit) * 4) calc(var(--space-unit) * 3);
+  padding: 24px 18px 16px;
 }
+
+.mj-header > h1 { margin: 0; font-size: 1.25rem; font-weight: 800; }
+.mj-header > p { flex-basis: 100%; margin: 0; color: var(--color-text-secondary); }
+.mj-parent button:not([class]) {
+  min-height: var(--touch-target-min);
+  padding: 8px 12px;
+  border: 1px solid var(--color-border-default);
+  border-radius: 10px;
+  background: var(--color-surface-card);
+  color: var(--color-text-primary);
+  font: inherit;
+  cursor: pointer;
+}
+.mj-parent button:disabled { cursor: default; }
+.mj-parent button:not([class]):disabled { opacity: 0.45; }
+.mj-parent button.mj-card { font: inherit; text-align: left; cursor: pointer; }
 
 .mj-header--stacked {
   flex-direction: column;
@@ -35,7 +99,7 @@
 .mj-header__title {
   margin: 0;
   font-size: 1.25rem;
-  font-weight: 700;
+  font-weight: 800;
 }
 
 .mj-header__eyebrow,
@@ -65,7 +129,9 @@
   display: flex;
   flex-direction: column;
   gap: calc(var(--space-unit) * 4);
-  padding: 0 calc(var(--space-unit) * 4) calc(var(--space-unit) * 6);
+  padding: 0 18px 24px;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .mj-screen__body--live {
@@ -92,7 +158,8 @@
 
 /* ───── 카드 ───── */
 .mj-card {
-  padding: calc(var(--space-unit) * 4);
+  padding: 16px;
+  border: 1px solid var(--color-border-default);
   border-radius: var(--radius-card);
   background-color: var(--color-surface-card);
 }
@@ -100,8 +167,8 @@
 .mj-card__heading {
   margin: 0 0 calc(var(--space-unit) * 2);
   font-size: 0.875rem;
-  font-weight: 700;
-  color: var(--color-text-secondary);
+  font-weight: 800;
+  color: var(--color-text-primary);
 }
 
 .mj-card--placeholder {
@@ -167,12 +234,18 @@
 
 /* ───── 단추 ───── */
 .mj-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
   min-height: var(--touch-target-min);
-  padding: 0 calc(var(--space-unit) * 5);
+  padding: 10px 20px;
   border-radius: 10px;
   border: 1px solid transparent;
   font: inherit;
-  font-weight: 700;
+  font-weight: 800;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
   cursor: pointer;
 }
 
@@ -188,8 +261,8 @@
 
 .mj-button--secondary {
   background-color: var(--color-surface-base);
-  color: var(--color-text-primary);
-  border-color: var(--color-border-default);
+  color: var(--color-brand-primary);
+  border-color: var(--color-border-selected);
 }
 
 .mj-button--danger {
@@ -215,11 +288,12 @@
 
 .mj-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: calc(var(--space-unit) * 2);
 }
 
 .mj-actions .mj-button {
-  flex: 1;
+  flex: 1 1 120px;
 }
 
 /* ───── 하단 탭 ───── */
@@ -229,6 +303,8 @@
   right: 0;
   bottom: 0;
   z-index: 10;
+  max-width: 480px;
+  margin-inline: auto;
   padding-bottom: env(safe-area-inset-bottom, 0px);
   border-top: 1px solid var(--color-border-default);
   background-color: var(--color-surface-base);
@@ -237,11 +313,18 @@
 .mj-tabbar__list {
   display: flex;
   max-width: 480px;
-  height: 56px;
+  min-height: 76px;
   margin: 0 auto;
 }
 
 .mj-tabbar__tab {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 0;
+  padding: 8px 2px 10px;
   flex: 1;
   min-height: var(--touch-target-min);
   border: none;
@@ -256,6 +339,23 @@
   color: var(--color-brand-primary);
   font-weight: 700;
 }
+
+/* 설계서의 단순한 사각 탭 아이콘. 접근 가능한 이름은 기존 문자 라벨이 제공한다. */
+.mj-tabbar__icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  border: 1.5px solid currentColor;
+  border-radius: 5px;
+}
+
+.mj-tabbar__tab--active .mj-tabbar__icon {
+  background: var(--color-fixed-expression);
+}
+
+.mj-tabbar__icon--free { border-bottom-left-radius: 1px; }
+.mj-tabbar__icon--practice { border-radius: 50%; }
+.mj-tabbar__icon--records { border-radius: 3px; border-top-width: 4px; }
 
 .mj-tabbar__tab--locked {
   opacity: 0.45;
@@ -276,7 +376,8 @@
 .mj-dialog {
   width: min(400px, 100%);
   padding: calc(var(--space-unit) * 6) calc(var(--space-unit) * 5) calc(var(--space-unit) * 5);
-  border-radius: var(--radius-card);
+  border-radius: 16px;
+  box-shadow: 0 10px 30px rgb(0 0 0 / 25%);
   background-color: var(--color-surface-base);
 }
 
@@ -314,10 +415,13 @@
   display: flex;
   align-items: center;
   gap: calc(var(--space-unit) * 2);
+  width: 100%;
 }
 
 .mj-code-input__half {
   display: flex;
+  flex: 1;
+  min-width: 0;
   gap: var(--space-unit);
 }
 
@@ -326,11 +430,12 @@
 }
 
 .mj-code-cell {
-  width: 44px;
+  width: 100%;
+  min-width: 0;
   height: 52px;
   padding: 0;
-  border: 1px solid var(--color-border-default);
-  border-radius: 8px;
+  border: 1px solid var(--color-border-input);
+  border-radius: 10px;
   background-color: var(--color-surface-base);
   font: inherit;
   font-size: 1.25rem;
@@ -343,13 +448,20 @@
   border-color: var(--color-action-danger);
 }
 
+@media (max-width: 440px) {
+  .mj-code-input { flex-direction: column; align-items: stretch; }
+  .mj-code-input__half { flex: none; justify-content: center; gap: 8px; }
+  .mj-code-cell { width: 52px; min-width: 44px; }
+  .mj-code-input__separator { display: none; }
+}
+
 .mj-error-card,
 .mj-reason-card {
   margin: 0;
   padding: calc(var(--space-unit) * 3) calc(var(--space-unit) * 4);
   border-radius: var(--radius-card);
   border: 1px solid var(--color-action-danger);
-  background-color: #fdecec;
+  background-color: var(--color-surface-danger);
   color: var(--color-text-primary);
 }
 
@@ -387,8 +499,10 @@
   box-sizing: border-box;
   min-height: 88px;
   padding: calc(var(--space-unit) * 3);
-  border: 1px solid var(--color-border-default);
-  border-radius: 8px;
+  border: 1px solid var(--color-border-input);
+  border-radius: 10px;
+  background-color: var(--color-surface-card);
+  color: var(--color-text-primary);
   font: inherit;
   resize: vertical;
 }
@@ -413,7 +527,7 @@
   gap: var(--space-unit);
   min-height: var(--touch-target-min);
   padding: 0 calc(var(--space-unit) * 4);
-  border: 1px solid var(--color-border-default);
+  border: 1px solid var(--color-border-input);
   border-radius: 22px;
   background-color: var(--color-surface-base);
   cursor: pointer;
@@ -422,6 +536,7 @@
 .mj-chip--checked {
   border-color: var(--color-brand-primary);
   background-color: var(--color-fixed-expression);
+  color: var(--color-brand-primary);
   font-weight: 700;
 }
 
@@ -455,16 +570,22 @@
   max-width: 80%;
   padding: calc(var(--space-unit) * 2) calc(var(--space-unit) * 3);
   border-radius: 14px;
+  border: 1px solid var(--color-border-default);
+  overflow-wrap: anywhere;
 }
 
 .mj-bubble--ai {
   align-self: flex-start;
   background-color: var(--color-surface-card);
+  border-bottom-left-radius: 4px;
 }
 
 .mj-bubble--child {
   align-self: flex-end;
-  background-color: var(--color-fixed-expression);
+  background-color: var(--color-brand-primary);
+  color: var(--color-surface-base);
+  border-color: var(--color-brand-primary);
+  border-bottom-right-radius: 4px;
 }
 
 .mj-status-line {

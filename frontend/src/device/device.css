@@ -185,12 +185,12 @@
 }
 
 .mj-character[data-expression="listening"] {
-  background-color: #dff3e6;
+  background-color: var(--color-surface-success);
 }
 
 .mj-character[data-expression="thinking"],
 .mj-character[data-expression="mic-denied"] {
-  background-color: #fbf0cf;
+  background-color: var(--color-surface-warning);
 }
 
 .mj-character[data-expression="speaking"] .mj-character__mouth {

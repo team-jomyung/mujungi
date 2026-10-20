@@ -27,6 +27,7 @@
   margin: 0;
   padding: calc(var(--space-unit) * 3) calc(var(--space-unit) * 4);
   border-left: 4px solid var(--color-status-unstable);
+  background: var(--color-surface-warning);
 }
 
 .mj-warn-card__title {
@@ -49,6 +50,7 @@
 /* ───── 04 지금 활동 ───── */
 .mj-activity-card[data-state="live"] {
   border-left: 4px solid var(--color-status-stable);
+  background: var(--color-surface-success);
 }
 
 .mj-activity-card[data-state="closing"] {

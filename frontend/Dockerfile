@@ -23,6 +23,9 @@ FROM ${NODE_IMAGE} AS bundle
 WORKDIR /bundle
 COPY .next/standalone/ ./
 COPY .next/static/ ./.next/static/
+# public은 standalone에 자동 포함되지 않는다. 글꼴과 라이선스만 명시적으로 포함한다.
+COPY public/fonts/pretendard/PretendardVariable.woff2 ./public/fonts/pretendard/PretendardVariable.woff2
+COPY public/fonts/pretendard/LICENSE.txt ./public/fonts/pretendard/LICENSE.txt
 # 빌드 캐시 · 소스맵이 standalone에 섞여 들어왔으면 버린다(실행에 필요 없음)
 RUN rm -rf ./.next/cache \
  && find . -name '*.map' -type f -delete
