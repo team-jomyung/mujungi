@@ -52,6 +52,8 @@ exec powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "C:
 
 ### 로컬 기동(dev)
 
+보호자 웹은 큰 화면에서 4px 스마트폰 테두리를 기본 표시한다. 별도 설정은 필요 없으며, 숨기려면 웹 서버 기동 환경에 `MUJOONG_PHONE_PREVIEW=false`를 주고 재시작한다. 모바일·작은 창에서는 기존 전체 화면을 유지한다. [화면 디자인·프레임 안내](docs/ui/screen-spec-v1.5.md)를 참고한다.
+
 Neo4j는 전체 실행에서 기본 활성화되어 있다. [Neo4j 실행·검증 안내](docs/neo4j-runtime.md)를 먼저 확인한다.
 호스트에서 실행하는 Core에는 생성된 `NEO4J_AUTH`와 `MUJOONG_KNOWLEDGE_NEO4J_ENDPOINT=http://127.0.0.1:7474`를 전달한다.
 CI와 그래프를 사용하지 않는 자동 시험만 명시적으로 비활성화한다.

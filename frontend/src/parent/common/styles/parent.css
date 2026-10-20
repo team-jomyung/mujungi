@@ -11,9 +11,9 @@
   background-color: var(--color-surface-page);
 }
 
-/* 로컬 시연용 폰 프레임. 실제 모바일·작은 창은 기존 전체 화면을 유지한다.
+/* 기본 데스크톱 폰 프레임. 실제 모바일·작은 창은 기존 전체 화면을 유지한다.
  * transform으로 전체 앱을 축소하지 않아 글자·터치 영역·고정 레이어를 보존한다.
- * 프레임은 환경 설정으로만 켜며 운영 기본값에는 영향을 주지 않는다. */
+ * MUJOONG_PHONE_PREVIEW=false를 명시하면 프레임을 숨긴다. */
 @media screen and (min-width: 560px) and (min-height: 640px) {
   .mj-parent[data-phone-preview="true"] {
     --phone-screen-height: calc(100dvh - 40px);

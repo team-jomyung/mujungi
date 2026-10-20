@@ -14,7 +14,7 @@ export const metadata: Metadata = {
 
 export default function ParentLayout({ children }: Readonly<{ children: ReactNode }>) {
   return (
-    <div className="mj-parent" data-phone-preview={process.env.MUJOONG_PHONE_PREVIEW === "true" ? "true" : undefined}>
+    <div className="mj-parent" data-phone-preview={process.env.MUJOONG_PHONE_PREVIEW !== "false" ? "true" : undefined}>
       <ParentProviders>{children}</ParentProviders>
     </div>
   );
