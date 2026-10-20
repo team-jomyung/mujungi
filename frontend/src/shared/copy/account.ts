@@ -205,3 +205,12 @@ export function stopSummary(texts: readonly string[]): string {
   const head = `${ACCOUNT_TEMP_COPY.stopSummaryPrefix}${texts.length}${ACCOUNT_TEMP_COPY.stopSummaryCountSuffix}`;
   return [head, ...texts.map(quoted)].join(ACCOUNT_TEMP_COPY.separator);
 }
+
+export const BIRTHDATE_COPY = {
+  label: "생년월일", year: "년도", month: "월", day: "일",
+  hint: "등록일 기준 만 6세 이상~만 13세 미만으로 등록할 수 있어요.",
+  editHint: "생년월일 수정은 최초 등록일의 만 나이로 확인해요. 등록 후 나이가 늘어나도 계속 이용할 수 있어요.",
+  invalid: "등록일 기준 만 6세 이상~만 13세 미만인 생년월일을 선택해 주세요.",
+} as const;
+export const currentAgeLine = (age: number) => `현재 만 ${age}세`;
+export const birthDateLine = (date: string) => `생년월일 · ${date}`;

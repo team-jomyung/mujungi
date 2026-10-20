@@ -37,11 +37,13 @@ public class ChildController {
     private final GuardianRepository guardians;
     private final ChildProfileService children;
     private final JsonCodec json;
+    private final kr.mujoong.contract.time.MujoongClock clock;
 
-    public ChildController(GuardianRepository guardians, ChildProfileService children, JsonCodec json) {
+    public ChildController(GuardianRepository guardians, ChildProfileService children, JsonCodec json, kr.mujoong.contract.time.MujoongClock clock) {
         this.guardians = Objects.requireNonNull(guardians, "guardians");
         this.children = Objects.requireNonNull(children, "children");
         this.json = Objects.requireNonNull(json, "json");
+        this.clock = clock;
     }
 
     @GetMapping("/api/child")
@@ -54,7 +56,7 @@ public class ChildController {
             @AuthenticationPrincipal GuardianPrincipal guardian, @RequestBody(required = false) String body) {
         UUID guardianId = GuardianPrincipal.requireActive(guardian, guardians);
         ChildRequest request = ApiResponses.readJson(json, body, ChildRequest.class, ErrorCode.VALIDATION_FAILED);
-        ChildInput.Valid input = ChildInput.forCreate(request.displayName(), request.age(), request.interests());
+        ChildInput.Valid input = ChildInput.forCreate(request.displayName(), request.birthDate(), request.interests(), clock.now().atZone(kr.mujoong.core.child.BirthDateRules.ZONE).toLocalDate());
         return ApiResponses.json(201, children.register(guardianId, input));
     }
 
@@ -63,7 +65,7 @@ public class ChildController {
             @AuthenticationPrincipal GuardianPrincipal guardian, @RequestBody(required = false) String body) {
         UUID guardianId = GuardianPrincipal.requireActive(guardian, guardians);
         ChildRequest request = ApiResponses.readJson(json, body, ChildRequest.class, ErrorCode.VALIDATION_FAILED);
-        return ApiResponses.json(200, children.update(guardianId, request.displayName(), request.age(), request.interests()));
+        return ApiResponses.json(200, children.update(guardianId, request.displayName(), request.birthDate(), request.interests()));
     }
 
     @GetMapping("/api/child/stop-expressions")
@@ -93,7 +95,7 @@ public class ChildController {
     }
 
     /** 03 입력(child-request.schema.json). 이름 · 관심사는 문자열 표현에 내지 않는다. */
-    public record ChildRequest(String displayName, Integer age, List<String> interests) {
+    public record ChildRequest(String displayName, String birthDate, List<String> interests) {
 
         @Override
         public String toString() {

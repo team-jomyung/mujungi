@@ -60,11 +60,13 @@ export function policyBody(policyVersion = "1.0"): Record<string, unknown> {
 }
 
 /** GET · POST · PATCH /api/child(child-response.schema.json). */
-export function childBody(overrides: Partial<{ displayName: string; age: number; interests: string[] }> = {}): Record<string, unknown> {
+export function childBody(overrides: Partial<{ displayName: string; age: number; birthDate: string | null; registeredOn: string; interests: string[] }> = {}): Record<string, unknown> {
   return {
     childId: CHILD_ID,
     displayName: overrides.displayName ?? "하늘",
     age: overrides.age ?? 8,
+    birthDate: overrides.birthDate === undefined ? "2018-10-15" : overrides.birthDate,
+    registeredOn: overrides.registeredOn ?? "2026-10-15",
     interests: overrides.interests ?? ["공룡", "그림"],
   };
 }

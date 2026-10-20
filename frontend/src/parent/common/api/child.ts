@@ -14,6 +14,8 @@ export interface Child {
   readonly childId: string;
   readonly displayName: string;
   readonly age: number;
+  readonly birthDate: string | null;
+  readonly registeredOn: string;
   readonly interests: readonly string[];
 }
 
@@ -30,7 +32,7 @@ export interface StopExpressions {
 
 export interface ChildInput {
   readonly displayName: string;
-  readonly age: number;
+  readonly birthDate: string;
   readonly interests: readonly string[];
 }
 
@@ -48,6 +50,8 @@ export function parseChild(value: unknown): Child {
     childId: requiredString(root, "childId"),
     displayName: requiredString(root, "displayName"),
     age,
+    birthDate: typeof root.birthDate === "string" ? root.birthDate : null,
+    registeredOn: requiredString(root, "registeredOn"),
     interests: stringList(root.interests),
   };
 }

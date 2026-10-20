@@ -2,6 +2,45 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://mujoong.invalid/contracts/schemas/child-response.schema.json",
   "title": "아이 정보",
-  "description": "GET /api/child 200 · POST /api/child 201 · PATCH /api/child 200(계약 3절 Child · AC1.3.8 · U2). 모양은 홈 응답의 child와 같다. 계정당 한 명이고 수정해도 childId는 바뀌지 않는다(AC1.3.9).",
-  "$ref": "home-response.schema.json#/$defs/Child"
+  "description": "아이 프로필. age는 한국 날짜 기준 실제 만 나이이며 등록 후 13세 이상도 허용한다. birthDate 없는 기존 시드는 null/생략 가능. registeredOn은 수정 불가능한 최초 등록일이다.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "childId",
+    "displayName",
+    "age",
+    "interests",
+    "registeredOn"
+  ],
+  "properties": {
+    "childId": {
+      "$ref": "common.schema.json#/$defs/Uuid"
+    },
+    "displayName": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 10
+    },
+    "age": {
+      "type": "integer",
+      "minimum": 6
+    },
+    "interests": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "birthDate": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date"
+    },
+    "registeredOn": {
+      "type": "string",
+      "format": "date"
+    }
+  }
 }

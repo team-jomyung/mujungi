@@ -49,7 +49,6 @@ public class ProviderRequestFactory {
     static final int MAX_INTERESTS = 10;
     static final int MAX_INTEREST_LENGTH = 20;
     static final int MIN_AGE = 6;
-    static final int MAX_AGE = 12;
 
     /** {@code session.start}: 중첩 {@code session{model, instructions, audio{format{type, rate}}}}. */
     public record SessionStart(String type, SessionBody session) {
@@ -115,7 +114,7 @@ public class ProviderRequestFactory {
         }
         ChildContextData data = new ChildContextData(
                 limit(context.displayName(), MAX_DISPLAY_NAME),
-                context.age() == null ? null : Math.max(MIN_AGE, Math.min(MAX_AGE, context.age())),
+                context.age() == null ? null : Math.max(MIN_AGE, context.age()),
                 limitInterests(context.interests()));
         return new SessionStart(TYPE_SESSION_START,
                 new SessionBody(MODEL, instructions(data), new AudioSpec(new AudioFormat(AUDIO_TYPE, rate))));

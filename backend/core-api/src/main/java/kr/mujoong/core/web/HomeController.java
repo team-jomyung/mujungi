@@ -34,18 +34,20 @@ public class HomeController {
     private final DeviceViewAssembler deviceView;
     private final CurrentSessionService currentSessions;
     private final JsonCodec json;
+    private final kr.mujoong.contract.time.MujoongClock clock;
 
     public HomeController(
             GuardianRepository guardians,
             ChildRepository children,
             DeviceViewAssembler deviceView,
             CurrentSessionService currentSessions,
-            JsonCodec json) {
+            JsonCodec json, kr.mujoong.contract.time.MujoongClock clock) {
         this.guardians = Objects.requireNonNull(guardians, "guardians");
         this.children = Objects.requireNonNull(children, "children");
         this.deviceView = Objects.requireNonNull(deviceView, "deviceView");
         this.currentSessions = Objects.requireNonNull(currentSessions, "currentSessions");
         this.json = Objects.requireNonNull(json, "json");
+        this.clock = clock;
     }
 
     @GetMapping("/api/home")
@@ -63,7 +65,7 @@ public class HomeController {
 
     private ChildBody child(Child child) {
         String[] interests = child.getInterestsJson() == null ? new String[0] : json.read(child.getInterestsJson(), String[].class);
-        return new ChildBody(child.getId(), child.getDisplayName(), child.getAge(), List.of(interests));
+        return new ChildBody(child.getId(), child.getDisplayName(), child.getBirthDate() == null ? child.getAge() : kr.mujoong.core.child.BirthDateRules.ageOn(child.getBirthDate(), clock.now().atZone(kr.mujoong.core.child.BirthDateRules.ZONE).toLocalDate()), List.of(interests));
     }
 
     /** 200 본문. currentSession은 진행 중(REQUESTED ~ CLOSING) 세션 요약 또는 null(U4a · AC1.4.13). */

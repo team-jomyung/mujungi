@@ -366,3 +366,9 @@
   display: flex;
   gap: calc(var(--space-unit) * 2);
 }
+
+/* 생년월일: 모바일에서도 세 칸이 같은 줄 안에서 줄어든다. */
+.mj-birth-field { border: 0; padding: 0; min-width: 0; }
+.mj-birth-selects { display: grid; grid-template-columns: 1.3fr 1fr 1fr; gap: 8px; }
+.mj-birth-selects > label { min-width: 0; }
+.mj-birth-selects select { width: 100%; min-width: 0; }

@@ -80,7 +80,7 @@ class SessionPackageBuilderTest {
     }
 
     @ParameterizedTest
-    @ValueSource(ints = {5, 13})
+    @ValueSource(ints = {5, -1})
     void ageOutsideTheContractRangeIsRejectedWithoutTheValue(int age) {
         ChildContext child = child("하늘", age, List.of());
 

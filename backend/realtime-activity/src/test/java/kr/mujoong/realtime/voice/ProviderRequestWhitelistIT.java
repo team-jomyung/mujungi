@@ -182,7 +182,7 @@ class ProviderRequestWhitelistIT {
     }
 
     @Test
-    void childContextIsCutToTheContractLimitsAndTheAgeIsClampedBeforeItLeaves() {
+    void childContextIsCutToContractLimitsAndActualAgeIsPreserved() {
         ProviderRequestFactory factory = new ProviderRequestFactory();
         String ten = "가나다라마바사아자차";
         List<String> interests = new ArrayList<>(List.of("  ", "가".repeat(ProviderRequestFactory.MAX_INTEREST_LENGTH + 1)));
@@ -195,7 +195,7 @@ class ProviderRequestWhitelistIT {
         // 아이 정보는 지시문 문장 안에만 있다(선 형식 필드 없음)
         String instructions = start.session().instructions();
         assertThat(instructions).contains("이름: \"" + ten + "\"").doesNotContain(ten + "카");
-        assertThat(instructions).contains("나이: \"" + ProviderRequestFactory.MAX_AGE + "\"");
+        assertThat(instructions).contains("나이: \"" + 13 + "\"");
         // 빈 관심사는 빼고 10개에서 멈춘다. 21자 관심사는 20자로 자른다
         assertThat(instructions).contains("\"" + "가".repeat(ProviderRequestFactory.MAX_INTEREST_LENGTH) + "\"", "\"관심1\"")
                 .doesNotContain("가".repeat(ProviderRequestFactory.MAX_INTEREST_LENGTH + 1), "관심10", "관심11");
