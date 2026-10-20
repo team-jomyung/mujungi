@@ -61,7 +61,7 @@ class SessionRecordIT {
         start(Map.of());
         DeviceSimulatorClient device = env.connectDevice();
         UUID sessionId = activate(device);
-        env.provider.emitTurn("item-1", "공룡이 좋아", "나도 공룡 좋아해", List.of(new byte[4800]));
+        env.provider.emitTurn("item-1", "공룡이 좋아", "나도 공룡 좋아해", List.of(kr.mujoong.realtime.testing.RealtimeItEnvironment.audiblePcm(4800)));
         device.await(WsMessageType.OUTPUT_END, WAIT);
         awaitTrue(() -> transcriptCount(sessionId) >= 2, "대화 행");
 

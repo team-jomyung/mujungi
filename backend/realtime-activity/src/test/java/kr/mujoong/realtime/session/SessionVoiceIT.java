@@ -52,7 +52,7 @@ class SessionVoiceIT {
      * 넉넉히 둔다(통과하는 실행은 메시지가 오는 즉시 돌아온다).
      */
     private static final Duration WAIT = Duration.ofSeconds(30);
-    private static final byte[] PCM = new byte[48_000];
+    private static final byte[] PCM = kr.mujoong.realtime.testing.RealtimeItEnvironment.audiblePcm(48_000);
     private static final String TRACE = "0123456789abcdef0123456789abcdef";
 
     @TempDir

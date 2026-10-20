@@ -32,6 +32,17 @@ import org.springframework.context.ConfigurableApplicationContext;
  */
 public final class RealtimeItEnvironment implements AutoCloseable {
 
+    /** A deterministic PCM tone for tests that expect speech output; all-zero PCM is transport silence. */
+    public static byte[] audiblePcm(int bytes) {
+        byte[] pcm = new byte[bytes];
+        for (int i = 0; i + 1 < bytes; i += 2) {
+            short sample = (short) (2000 * Math.sin(2 * Math.PI * (i / 2) / 60));
+            pcm[i] = (byte) sample;
+            pcm[i + 1] = (byte) (sample >>> 8);
+        }
+        return pcm;
+    }
+
     /** test 프로필의 허용 Origin(application-test.yml). */
     public static final String ORIGIN = "https://mujoong.invalid";
     public static final Duration WAIT = Duration.ofSeconds(10);

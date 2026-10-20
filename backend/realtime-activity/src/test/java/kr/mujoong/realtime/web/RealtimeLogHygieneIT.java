@@ -215,7 +215,7 @@ class RealtimeLogHygieneIT {
 
         // 아이 조각 → AI 출력 조각 · 음성 → 응답 끝 없이 공급자 오류(code에 표식)
         env.provider.emit(providerEvent("session.input_transcript.delta", "item-x", childPartial));
-        env.provider.emitSpeech(aiPartial, List.of(new byte[4800]));
+        env.provider.emitSpeech(aiPartial, List.of(kr.mujoong.realtime.testing.RealtimeItEnvironment.audiblePcm(4800)));
         env.provider.emitError("server_error", providerCode, null);
 
         // 빈 수집으로 통과하지 않는다: 끊김 WARN 줄이 나왔고, 완결 안 된 구간은 폐기돼 대기 문구가 나갔다(출력 0바이트)
@@ -306,11 +306,11 @@ class RealtimeLogHygieneIT {
         }
         awaitTrue(() -> env.provider.audioHashes().size() >= FRAMES, "입력 음성 중계");
 
-        env.provider.emitTurn("item-1", CHILD_TEXT, AI_TEXT, List.of(new byte[4800]));
+        env.provider.emitTurn("item-1", CHILD_TEXT, AI_TEXT, List.of(kr.mujoong.realtime.testing.RealtimeItEnvironment.audiblePcm(4800)));
         WsEnvelope begin = device.await(WsMessageType.OUTPUT_BEGIN, WAIT);
         device.await(WsMessageType.OUTPUT_END, WAIT);
         device.playbackMark(sessionId, ((OutputBegin) begin.payload()).playbackId(), PlaybackMark.Status.STARTED);
-        env.provider.emitTurn("item-2", "응", FORBIDDEN_TEXT, List.of(new byte[4800]));
+        env.provider.emitTurn("item-2", "응", FORBIDDEN_TEXT, List.of(kr.mujoong.realtime.testing.RealtimeItEnvironment.audiblePcm(4800)));
         device.await(envelope -> envelope.payload() instanceof PlayApprovedContent play
                 && PlayApprovedContent.WAITING_FILLER.equals(play.contentCode()), WAIT);
         awaitTrue(() -> api.get("/internal/sessions/" + sessionId + "/view?sinceSeq=0").json().get("items").size() >= 2,

@@ -71,6 +71,7 @@ public final class SegmentBuffer {
     private final StringBuilder transcript = new StringBuilder();
     private final List<byte[]> chunks = new ArrayList<>();
     private int bytes;
+    private int pendingSilenceBytes;
     private Instant firstOutAt;
     private long firstOutNanos;
     private Instant lastOutAt;
@@ -122,18 +123,29 @@ public final class SegmentBuffer {
             return refused;
         }
         join(gen, fromStart, at, nanos);
-        if ((long) bytes + audio.length > maxBytes) {
+        if ((long) bytes + pendingSilenceBytes + audio.length > maxBytes) {
             oversized = snapshot(-1L, true, false);
             droppedOutputGen = gen;
             dropping = true;
             clear();
             return Added.OVERSIZE;
         }
+        if (pendingSilenceBytes > 0) {
+            chunks.add(new byte[pendingSilenceBytes]);
+            bytes += pendingSilenceBytes;
+            pendingSilenceBytes = 0;
+        }
         chunks.add(audio.clone());
         bytes += audio.length;
         lastOutAt = at;
         lastOutNanos = nanos;
         return Added.ADDED;
+    }
+
+    /** Preserve internal pauses only if speech resumes; trailing transport silence is never a new segment. */
+    public void addSilence(int length) {
+        if (length <= 0 || length % 2 != 0) throw new IllegalArgumentException("Invalid PCM silence length");
+        if (open) pendingSilenceBytes = (int) Math.min((long) maxBytes + 1, (long) pendingSilenceBytes + length);
     }
 
     /** 출력 전사 조각. */
@@ -237,6 +249,7 @@ public final class SegmentBuffer {
         transcript.setLength(0);
         chunks.clear();
         bytes = 0;
+        pendingSilenceBytes = 0;
         firstOutAt = null;
         firstOutNanos = 0L;
         lastOutAt = null;

@@ -18,6 +18,33 @@ import org.junit.jupiter.api.Test;
 @Tag("skeleton")
 class SegmentBufferTest {
 
+    @Test
+    void silencePreservesInternalPausesButNeverOpensOrOverflowsAnIdleSegment() {
+        SegmentBuffer segment = new SegmentBuffer(12);
+        segment.addSilence(4800);
+        assertThat(segment.isOpen()).isFalse();
+        Instant now = Instant.parse("2026-10-20T00:00:00Z");
+        segment.addTranscript(1, true, "반가워", now, 0);
+        segment.addAudio(1, false, new byte[] {1, 0}, now, 0);
+        segment.addSilence(4);
+        segment.addAudio(1, false, new byte[] {2, 0}, now, 0);
+        for (int i = 0; i < 250; i++) segment.addSilence(4800);
+        var sealed = segment.sealQuiet(1);
+        assertThat(sealed.complete()).isTrue();
+        assertThat(sealed.totalBytes()).isEqualTo(8);
+        assertThat(sealed.chunks()).containsExactly(new byte[] {1, 0}, new byte[4], new byte[] {2, 0});
+    }
+
+    @Test
+    void anInternalPauseStillCountsTowardsTheUnchangedAudioSizeLimit() {
+        SegmentBuffer segment = new SegmentBuffer(4);
+        Instant now = Instant.parse("2026-10-20T00:00:00Z");
+        segment.addAudio(1, true, new byte[] {1, 0}, now, 0);
+        segment.addSilence(4);
+        assertThat(segment.addAudio(1, false, new byte[] {2, 0}, now, 0)).isEqualTo(Added.OVERSIZE);
+        assertThat(segment.takeOversized().complete()).isFalse();
+    }
+
     private static final Instant AT = Instant.parse("2026-10-15T00:00:00Z");
 
     private final SegmentBuffer buffer = new SegmentBuffer();

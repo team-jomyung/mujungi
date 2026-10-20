@@ -269,7 +269,7 @@ class RealtimeInternalApiIT {
         device.deviceReady(sessionId, true, true);
         env.join(sessionId);
         awaitStatus(sessionId, SessionStatus.ACTIVE);
-        env.provider.emitTurn("item-1", "공룡이 좋아", "나도 공룡 좋아해", List.of(new byte[4800]));
+        env.provider.emitTurn("item-1", "공룡이 좋아", "나도 공룡 좋아해", List.of(kr.mujoong.realtime.testing.RealtimeItEnvironment.audiblePcm(4800)));
         awaitTrue(() -> transcripts().findAll(sessionId).size() == 2
                 && transcripts().findAll(sessionId).stream().allMatch(row -> row.isFinal()), "전사 두 행 FINAL");
 

@@ -231,8 +231,7 @@ public class ProviderClient implements ProviderPort, DisposableBean {
                         ? null
                         : new ProviderEvent.InstructionsAppended(inbound.clientEventId(), millis(inbound.startMs()),
                                 millis(inbound.endMs()));
-                case "session.output_audio.delta" ->
-                    new ProviderEvent.OutputAudioDelta(Base64.getDecoder().decode(nullToEmpty(inbound.delta())));
+                case "session.output_audio.delta" -> outputAudio(Base64.getDecoder().decode(nullToEmpty(inbound.delta())));
                 case "session.usage.updated" -> inbound.usage() == null || inbound.usage().seconds() == null
                         || inbound.usage().seconds() < 0 ? null : new ProviderEvent.UsageUpdated(inbound.usage().seconds());
                 case "error" -> new ProviderEvent.Error(
@@ -246,6 +245,16 @@ public class ProviderClient implements ProviderPort, DisposableBean {
         } catch (IllegalArgumentException e) {
             return null;
         }
+    }
+
+    private static ProviderEvent outputAudio(byte[] audio) {
+        // Only digital silence is classified here. Quiet speech is never removed by an energy threshold.
+        if (audio.length > 0 && audio.length % 2 == 0) {
+            boolean silent = true;
+            for (byte sample : audio) if (sample != 0) { silent = false; break; }
+            if (silent) return new ProviderEvent.OutputSilenceDelta(audio.length);
+        }
+        return new ProviderEvent.OutputAudioDelta(audio);
     }
 
     private static long millis(Long value) {
