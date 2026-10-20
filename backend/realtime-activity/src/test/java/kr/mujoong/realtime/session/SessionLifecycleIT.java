@@ -43,7 +43,7 @@ import org.junit.jupiter.api.Test;
 @Tag("db")
 class SessionLifecycleIT {
 
-    private static final byte[] PCM = new byte[4800];
+    private static final byte[] PCM = kr.mujoong.realtime.testing.RealtimeItEnvironment.audiblePcm(4800);
 
     private RealtimeItEnvironment env;
     private LogCapture logs;

@@ -29,6 +29,16 @@ class OutputGenerationTest {
 
     private final OutputGeneration gen = new OutputGeneration(QUIET, MARGIN);
 
+    @Test
+    void continuousSilenceAdvancesTheTimelineWithoutPostponingTheSpeechBoundary() {
+        audio(0);
+        for (int i = 0; i < 250; i++) gen.onSilentAudio(4800);
+        assertThat(gen.audioClockMs()).isEqualTo(25020);
+        assertThat(gen.lastDeltaAt()).isEqualTo(at(0));
+        assertThat(gen.onQuiet(at(800)).verdict()).isEqualTo(QuietVerdict.SEAL_RECEIVING);
+        assertThat(audio(900).fromStart()).isTrue();
+    }
+
     private static Instant at(long ms) {
         return T0.plusMillis(ms);
     }

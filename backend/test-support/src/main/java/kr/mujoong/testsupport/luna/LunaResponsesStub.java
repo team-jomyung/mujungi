@@ -229,9 +229,23 @@ public final class LunaResponsesStub implements AutoCloseable {
             if (!Boolean.FALSE.equals(request.get("store"))) {
                 problems.add("store: false가 아니다");
             }
-            for (String required : List.of("model", "instructions", "input")) {
+            for (String required : List.of("model", "instructions")) {
                 if (!(request.get(required) instanceof String text) || text.isBlank()) {
                     problems.add(required + ": 문자열이 아니다");
+                }
+            }
+            Object input = request.get("input");
+            if (!(input instanceof String value && !value.isBlank())) {
+                if (!(input instanceof List<?> messages) || messages.isEmpty()) {
+                    problems.add("input: 문자열 또는 메시지 배열이 아니다");
+                } else {
+                    for (Object message : messages) {
+                        if (!(message instanceof Map<?, ?> item)
+                                || !List.of("developer", "user").contains(item.get("role"))
+                                || !(item.get("content") instanceof String content) || content.isBlank()) {
+                            problems.add("input: 잘못된 메시지");
+                        }
+                    }
                 }
             }
             if (request.get("text") instanceof Map<?, ?> text && text.get("format") instanceof Map<?, ?> format

@@ -44,7 +44,7 @@ import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 @Tag("db")
 class GuardrailTurnIT {
 
-    private static final byte[] PCM = new byte[4800];
+    private static final byte[] PCM = kr.mujoong.realtime.testing.RealtimeItEnvironment.audiblePcm(4800);
     private static final String CLEAN = "나도 공룡 좋아해";
 
     private final FakeGuardrailClient guard = new FakeGuardrailClient(GuardrailMode.STUB);

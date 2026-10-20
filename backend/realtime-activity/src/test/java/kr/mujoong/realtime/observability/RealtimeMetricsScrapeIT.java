@@ -70,7 +70,7 @@ import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 @Tag("db")
 class RealtimeMetricsScrapeIT {
 
-    private static final byte[] PCM = new byte[4800];
+    private static final byte[] PCM = kr.mujoong.realtime.testing.RealtimeItEnvironment.audiblePcm(4800);
     private static final byte[] FRAME = new byte[960];
     private static final HttpClient HTTP = HttpClient.newBuilder().proxy(HttpClient.Builder.NO_PROXY).build();
 

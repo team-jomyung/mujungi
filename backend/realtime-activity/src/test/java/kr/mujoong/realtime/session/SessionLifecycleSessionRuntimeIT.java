@@ -81,7 +81,7 @@ class SessionLifecycleSessionRuntimeIT {
             assertThat(bubble.approvedForDisplay()).isTrue();
         });
 
-        env.provider.emitTurn("item-1", "공룡이 좋아", "나도 공룡 좋아해", List.of(new byte[4800]));
+        env.provider.emitTurn("item-1", "공룡이 좋아", "나도 공룡 좋아해", List.of(kr.mujoong.realtime.testing.RealtimeItEnvironment.audiblePcm(4800)));
         device.await(WsMessageType.OUTPUT_END, WAIT);
         awaitTrue(() -> transcripts(sessionId).size() == 3, "아이 · AI 행");
     }

@@ -1078,6 +1078,23 @@ paths:
         "500": { $ref: "#/components/responses/InternalError" }
         "503": { $ref: "#/components/responses/ServiceNotReady" }
   /reports:
+    get:
+      operationId: listSavedReports
+      x-unit: U6
+      summary: 본인의 저장한 상담용 리포트 목록 (저장일 내림차순, 페이지당 20개)
+      parameters:
+        - { name: page, in: query, schema: { type: integer, minimum: 0, maximum: 100000, default: 0 } }
+      responses:
+        "200":
+          description: 저장 완료 리포트만 반환 (본문·인용·아이 정보 제외)
+          content:
+            application/json:
+              schema: { $ref: "schemas/report-list-response.schema.json" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/CsrfOrDeletion" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/ServiceNotReady" }
     post:
       operationId: createReport
       x-unit: U6

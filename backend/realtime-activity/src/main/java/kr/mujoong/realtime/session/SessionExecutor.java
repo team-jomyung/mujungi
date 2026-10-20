@@ -2087,6 +2087,12 @@ public final class SessionExecutor {
                 onOutputChunk(delta.delta(), delta.startMs(), null, at, received.receivedNanos());
             case ProviderEvent.OutputAudioDelta delta ->
                 onOutputChunk(null, -1L, delta.audio(), at, received.receivedNanos());
+            case ProviderEvent.OutputSilenceDelta silence -> {
+                ctx.outputGen().onSilentAudio(silence.bytes());
+                if (!outputHeld() && inOutputRange() && ctx.outputGen().phase() == OutputGeneration.Phase.RECEIVING) {
+                    ctx.segment().addSilence(silence.bytes());
+                }
+            }
         }
     }
 

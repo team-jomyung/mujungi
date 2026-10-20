@@ -132,7 +132,7 @@ class LunaAdapterBoundaryTest {
         assertThat(generated.promptVersion()).isEqualTo(LunaTextAiProvider.PROMPT_VERSION);
         Map<String, Object> body = stub.requests().getFirst().json();
         assertThat(body.get("text")).as("기존 경로는 json_object(BR4.2)").isEqualTo(Map.of("format", Map.of("type", "json_object")));
-        assertThat((String) body.get("input")).contains("그만하자는 말 받아들이기").doesNotContain("공룡", "interests");
+        assertThat(legacyData(body)).contains("그만하자는 말 받아들이기").doesNotContain("공룡", "interests");
         assertThat((String) body.get("instructions")).contains("JSON 객체 하나만 출력한다");
         assertThat(stub.requests().getFirst().violations()).isEmpty();
     }
@@ -305,7 +305,15 @@ class LunaAdapterBoundaryTest {
 
         assertThat(checked).containsEntry("t1", "아이가 블록을 건넸어요.").containsEntry("t2", "대체 문장 2")
                 .containsEntry("t3", "대체 문장 3");
-        assertThat((String) stub.requests().getFirst().json().get("input")).contains("t1", "t2").doesNotContain("t3");
+        assertThat(legacyData(stub.requests().getFirst().json())).contains("t1", "t2").doesNotContain("t3");
+    }
+
+    @SuppressWarnings("unchecked")
+    private static String legacyData(Map<String, Object> body) {
+        List<Map<String, String>> messages = (List<Map<String, String>>) body.get("input");
+        assertThat(messages).hasSize(2);
+        assertThat(messages.get(1)).containsEntry("role", "user");
+        return messages.get(1).get("content");
     }
 
     private LunaResponsesStub restart() {

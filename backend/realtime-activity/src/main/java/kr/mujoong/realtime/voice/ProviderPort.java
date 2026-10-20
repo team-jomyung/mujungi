@@ -114,6 +114,13 @@ public interface ProviderPort {
         record InstructionsAppended(String clientEventId, long startMs, long endMs) implements ProviderEvent {
         }
 
+        /** All-zero PCM from the continuous provider stream. It advances the audio clock, not speech activity. */
+        record OutputSilenceDelta(int bytes) implements ProviderEvent {
+            public OutputSilenceDelta {
+                if (bytes <= 0 || bytes % 2 != 0) throw new IllegalArgumentException("Invalid PCM silence length");
+            }
+        }
+
         /** {@code session.output_audio.delta}(PCM16LE 24kHz 모노, 응답 id · 시간 정보 없음 — 서버가 누적 바이트 / 48 = ms 오디오 시계를 센다). */
         record OutputAudioDelta(byte[] audio) implements ProviderEvent {
 

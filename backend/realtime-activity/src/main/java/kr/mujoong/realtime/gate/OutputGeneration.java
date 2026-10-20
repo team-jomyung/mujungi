@@ -159,6 +159,12 @@ public final class OutputGeneration {
         return audioBytes / PCM_BYTES_PER_MILLISECOND;
     }
 
+    /** Continuous digital silence belongs to the provider timeline but must not postpone a speech boundary. */
+    public void onSilentAudio(int bytes) {
+        if (bytes <= 0 || bytes % 2 != 0) throw new IllegalArgumentException("Invalid PCM silence length");
+        audioBytes += bytes;
+    }
+
     /** 마지막 조각 시각(어느 단계 · 출력 범위 밖에서 버린 조각도 포함, 없으면 null). */
     public Instant lastDeltaAt() {
         return lastDeltaAt;

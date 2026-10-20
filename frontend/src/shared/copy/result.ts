@@ -21,3 +21,16 @@ export const periodLine = (from: string, to: string) => `기간 · ${from} ~ ${t
 export const activityCountLine = (count: number) => `활동 · ${count}개`;
 export const citationCountLine = (count: number) => `항목 · 10개 (인용 ${count}개 포함)`;
 export const sectionTitle = (number: number, title: string) => `${number}. ${title}`;
+
+/** 저장한 상담용 리포트 목록·재다운로드 문구. */
+export const SAVED_REPORT_COPY = {
+  title: "저장한 상담용 리포트", loading: "리포트를 불러오고 있어요.",
+  failed: "리포트 목록을 불러오지 못했어요.", retry: "다시 시도",
+  empty: "아직 저장한 리포트가 없어요. 리포트를 만든 뒤 PDF 저장을 눌러 주세요.",
+  emptyPage: "이 페이지에 저장한 리포트가 없어요.",
+  open: "리포트 다시 보기 · PDF 다운로드", download: "PDF 다시 다운로드",
+  pages: "리포트 목록 페이지", previous: "이전", next: "다음",
+} as const;
+export const savedReportPeriod = (from: string, to: string) => `${from} ~ ${to}`;
+export const savedReportSummary = (count: number, date: string) => `활동 ${count}개 · 저장일 ${date}`;
+export const savedReportPage = (page: number) => `${page}페이지`;

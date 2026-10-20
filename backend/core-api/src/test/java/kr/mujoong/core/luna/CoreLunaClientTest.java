@@ -288,10 +288,18 @@ class CoreLunaClientTest {
         stub.respond(Reply.ok(MODEL, "{\"scenarioText\":\"s\"}"));
 
         LunaResult result = client.call(LunaRequest.legacy(LunaPurpose.SCENARIO_GENERATION, "scenario-generation.v1", "JSON",
-                input(), Map.of(), clock.now().plusSeconds(10)));
+                input(), Map.of(CHILD_NAME, "아이"), clock.now().plusSeconds(10)));
 
         assertThat(result.outputJson()).isEqualTo("{\"scenarioText\":\"s\"}");
         assertThat(stub.requests().getFirst().json().get("text")).isEqualTo(Map.of("format", Map.of("type", "json_object")));
+        @SuppressWarnings("unchecked")
+        List<Map<String, String>> messages = (List<Map<String, String>>) stub.requests().getFirst().json().get("input");
+        assertThat(messages).hasSize(2);
+        assertThat(messages.getFirst()).containsExactlyInAnyOrderEntriesOf(
+                Map.of("role", "developer", "content", "Return a valid JSON object."));
+        assertThat(messages.get(1)).containsEntry("role", "user");
+        assertThat(messages.get(1).get("content")).startsWith("{").doesNotContain("Return a valid JSON", CHILD_NAME);
+        assertThat(stub.requests().getFirst().violations()).isEmpty();
         assertThat(LogCapture.attrs(lunaCalls().getFirst())).doesNotContainKey("responseModel");
         stub.respond(Reply.ok(MODEL, "[1,2]"));
         assertThat(failure(LunaRequest.legacy(LunaPurpose.SCENARIO_GENERATION, "v1", "JSON", input(), Map.of(),

@@ -14,3 +14,12 @@ it("saved 실패도 확인 화면을 유지한다", async () => { render("READY"
 it("저장 전 뒤로는 버림 뒤 범위를 복원한다", async () => { const h = render(); await screen.findByTestId("report-save"); fireEvent.click(screen.getByRole("button", { name: "뒤로" })); await waitFor(() => expect(router.push).toHaveBeenCalledWith("/parent/reports/new?from=2026-10-01&to=2026-10-15")); expect(h.requests(/discard$/)).toHaveLength(1); });
 it("나중에는 버림 실패여도 기록으로 간다", async () => { render("READY", true); fireEvent.click(await screen.findByTestId("report-later")); await waitFor(() => expect(router.push).toHaveBeenCalledWith("/parent/records")); });
 it("SAVED 새로고침 뒤 PDF를 다시 받아 공유하고 파일을 연다", async () => { Object.defineProperty(navigator, "canShare", { configurable: true, value: vi.fn(() => true) }); const share = vi.fn().mockResolvedValue(undefined); Object.defineProperty(navigator, "share", { configurable: true, value: share }); const tab = { opener: {}, location: { href: "" }, close: vi.fn() }; vi.spyOn(window, "open").mockReturnValue(tab as unknown as Window); const h = render("SAVED"); fireEvent.click(await screen.findByTestId("report-share")); await waitFor(() => expect(share).toHaveBeenCalledWith({ files: [expect.any(File)] })); fireEvent.click(screen.getByTestId("report-open")); await waitFor(() => expect(tab.location.href).toBe("blob:test")); fireEvent.click(screen.getByRole("button", { name: "뒤로" })); expect(router.push).toHaveBeenCalledWith("/parent/records"); expect(h.requests(/discard$/)).toHaveLength(0); });
+
+it("저장한 리포트의 PDF를 다시 내려받아도 저장·생성 요청을 반복하지 않는다", async () => {
+  const h = render("SAVED");
+  fireEvent.click(await screen.findByTestId("report-download-again"));
+  await waitFor(() => expect(HTMLAnchorElement.prototype.click).toHaveBeenCalled());
+  expect(h.requests(/saved$/)).toHaveLength(0);
+  expect(h.requests(/discard$/)).toHaveLength(0);
+  expect(fetch).toHaveBeenCalledWith(`/api/reports/${REPORT_ID}/pdf`, expect.objectContaining({ cache: "no-store" }));
+});

@@ -274,7 +274,11 @@ public class CoreLunaClient {
             Map<String, Object> body = new LinkedHashMap<>();
             body.put("model", model);
             body.put("instructions", instructions);
-            body.put("input", input);
+            // JSON mode validates the input messages, not just the separate instructions field.
+            // Keep the fixed formatting instruction separate from the sanitized user data.
+            body.put("input", schema == null ? List.of(
+                    Map.of("role", "developer", "content", "Return a valid JSON object."),
+                    Map.of("role", "user", "content", input)) : input);
             body.put("text", Map.of("format", format));
             body.put("max_output_tokens", options.maxOutputTokens());
             body.put("reasoning", Map.of("effort", options.reasoningEffort()));

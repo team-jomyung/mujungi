@@ -20,6 +20,17 @@ class ProviderReaderWireTest {
     }
 
     @Test
+    void continuousDigitalSilenceIsSeparateFromEvenTheQuietestSpeech() {
+        assertThat(parse("{\"type\":\"session.output_audio.delta\",\"delta\":\"AAAAAA==\"}"))
+                .isEqualTo(new ProviderEvent.OutputSilenceDelta(4));
+        assertThat(parse("{\"type\":\"session.output_audio.delta\",\"delta\":\"AQAAAA==\"}"))
+                .isInstanceOf(ProviderEvent.OutputAudioDelta.class);
+        // An odd PCM length remains invalid audio for the existing gate; it is not accepted as silence.
+        assertThat(parse("{\"type\":\"session.output_audio.delta\",\"delta\":\"AA==\"}"))
+                .isInstanceOf(ProviderEvent.OutputAudioDelta.class);
+    }
+
+    @Test
     void outputAudioIsReadFromDeltaWithNoResponseId() {
         byte[] pcm = {1, 2, 3, 4, 5, 6};
         String message = "{\"type\":\"session.output_audio.delta\",\"delta\":\"" + Base64.getEncoder().encodeToString(pcm) + "\"}";

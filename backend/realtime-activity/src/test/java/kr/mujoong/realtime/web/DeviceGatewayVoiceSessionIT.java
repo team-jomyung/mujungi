@@ -61,7 +61,7 @@ class DeviceGatewayVoiceSessionIT {
             "mujoong.timing.device.disconnect", "40s");
     private static final String EVENTS = "/internal/events";
     private static final String REPORT = "/internal/devices/{deviceId}/connection";
-    private static final byte[] PCM = new byte[48_000];
+    private static final byte[] PCM = kr.mujoong.realtime.testing.RealtimeItEnvironment.audiblePcm(48_000);
 
     private RealtimeItEnvironment env;
     private LogCapture logs;
