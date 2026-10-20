@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mujoong.invalid/contracts/schemas/report-list-response.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "items",
+    "hasMore"
+  ],
+  "properties": {
+    "hasMore": {
+      "type": "boolean"
+    },
+    "items": {
+      "type": "array",
+      "maxItems": 20,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "reportId",
+          "periodFrom",
+          "periodTo",
+          "activityCount",
+          "savedAt"
+        ],
+        "properties": {
+          "reportId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "periodFrom": {
+            "type": "string",
+            "format": "date"
+          },
+          "periodTo": {
+            "type": "string",
+            "format": "date"
+          },
+          "activityCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "savedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      }
+    }
+  }
+}

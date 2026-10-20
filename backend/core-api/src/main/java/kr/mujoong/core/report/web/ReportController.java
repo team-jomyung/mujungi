@@ -21,6 +21,14 @@ import org.springframework.web.bind.annotation.*;
 public class ReportController {
     private final ReportService service;private final ReportRepository reports;private final ReportPdfRenderer pdf;private final GuardianRepository guardians;
     public ReportController(ReportService service,ReportRepository reports,ReportPdfRenderer pdf,GuardianRepository guardians){this.service=service;this.reports=reports;this.pdf=pdf;this.guardians=guardians;}
+    public record SavedItem(UUID reportId,LocalDate periodFrom,LocalDate periodTo,int activityCount,Instant savedAt){}
+    public record SavedPage(List<SavedItem> items,boolean hasMore){}
+    @GetMapping public ResponseEntity<SavedPage> list(@AuthenticationPrincipal GuardianPrincipal principal,@RequestParam(defaultValue="0") int page){
+        UUID guardian=owner(principal);
+        if(page<0||page>100000)throw invalid();
+        var found=reports.savedPage(guardian,page*20,21);
+        return ApiResponses.json(200,new SavedPage(found.stream().limit(20).map(r->new SavedItem(r.id(),r.periodFrom(),r.periodTo(),r.activityCount(),r.savedAt())).toList(),found.size()>20));
+    }
     @GetMapping("/preview") public ResponseEntity<ReportService.Preview> preview(@AuthenticationPrincipal GuardianPrincipal principal,@RequestParam String from,@RequestParam String to){return ApiResponses.json(200,service.preview(owner(principal),date(from),date(to)));}
     public record CreateBody(String from,String to,List<String> sessionIds,String idempotencyKey){}
     @PostMapping public ResponseEntity<ReportService.Created> create(@AuthenticationPrincipal GuardianPrincipal principal,@RequestBody CreateBody body){UUID owner=owner(principal);if(body.sessionIds()==null)throw invalid();var sessions=body.sessionIds().stream().map(s->ApiResponses.uuid(s).orElseThrow(ReportController::invalid)).toList();return ApiResponses.json(202,service.create(owner,date(body.from()),date(body.to()),sessions,body.idempotencyKey()));}

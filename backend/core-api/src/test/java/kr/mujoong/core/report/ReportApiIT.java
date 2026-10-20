@@ -14,4 +14,31 @@ import org.junit.jupiter.api.*;
     @Test void discardReturns204WithTombstone(){var f=family();var session=copy(f,"ENDED",null);record(f,session,"ENDED",3);var id=create(f.guardianId(),session);var user=WebFixtures.guardianFor(app,f.guardianId());assertThat(checked("POST /api/reports/{reportId}/discard",app.post("/api/reports/"+id+"/discard").session(user.session()).csrf(user.csrf()).json("{}")).status()).isEqualTo(204);assertThat(checked("GET /api/reports/{reportId}",app.get("/api/reports/"+id).session(user.session())).json()).containsEntry("status","DISCARDED");}
     @Test void ownerAndDeletionGuardsApply(){var f=family();var session=copy(f,"ENDED",null);record(f,session,"ENDED",3);var id=create(f.guardianId(),session);var other=WebFixtures.guardianFor(app,family().guardianId());assertThat(app.get("/api/reports/"+id).session(other.session()).send().status()).isEqualTo(404);var user=WebFixtures.guardianFor(app,f.guardianId());db.jdbc().update("update core.core_guardian set status='DELETION_REQUESTED' where id=:id",Map.of("id",f.guardianId()));assertThat(app.get("/api/reports/"+id).session(user.session()).send().status()).isEqualTo(403);}
     @Test void writesRequireCsrfAndDatesAreValidated(){var f=family();var user=WebFixtures.guardianFor(app,f.guardianId());assertThat(app.post("/api/reports").session(user.session()).json("{}").send().status()).isEqualTo(403);assertThat(app.get("/api/reports/preview?from=no&to=no").session(user.session()).send().status()).isEqualTo(400);}
+    @SuppressWarnings("unchecked")
+    @Test void savedListIsOwnedPagedAndDoesNotExposeContent(){
+        var f=family();var session=copy(f,"ENDED",null);record(f,session,"ENDED",3);
+        var user=WebFixtures.guardianFor(app,f.guardianId());var other=WebFixtures.guardianFor(app,family().guardianId());
+        UUID newest=null;
+        for(int i=0;i<22;i++){
+            var id=create(f.guardianId(),session);
+            if(i<21){db.jdbc().update("update core.core_report set status='SAVED',saved_at=created_at + (:seconds * interval '1 second') where id=:id",Map.of("id",id,"seconds",i));newest=id;}
+        }
+        var first=checked("GET /api/reports",app.get("/api/reports?page=0").session(user.session()));
+        assertThat(first.status()).isEqualTo(200);
+        var rows=(List<Map<String,Object>>)first.json().get("items");
+        assertThat(rows).hasSize(20);assertThat(rows.getFirst()).containsEntry("reportId",newest.toString());
+        assertThat(first.json()).containsEntry("hasMore",true);
+        var pdf=app.get("/api/reports/"+newest+"/pdf").session(user.session()).send();
+        assertThat(pdf.status()).isEqualTo(200);assertThat(pdf.headers().get("content-type")).contains("application/pdf");
+        assertThat(app.get("/api/reports/"+newest+"/pdf").session(other.session()).send().status()).isEqualTo(404);
+        assertThat(app.bean(ReportRepository.class).find(newest).orElseThrow().status()).isEqualTo("SAVED");
+        assertThat(first.body()).doesNotContain("guardianId","childId","childDisplayName","text","quote","requestHash");
+        var second=app.get("/api/reports?page=1").session(user.session()).send();
+        assertThat((List<?>)second.json().get("items")).hasSize(1);assertThat(second.json()).containsEntry("hasMore",false);
+        assertThat((List<?>)app.get("/api/reports").session(other.session()).send().json().get("items")).isEmpty();
+        assertThat(app.get("/api/reports").send().status()).isEqualTo(401);
+        for(String page:List.of("-1","100001","no"))assertThat(app.get("/api/reports?page="+page).session(user.session()).send().status()).isEqualTo(400);
+        db.jdbc().update("update core.core_guardian set status='DELETION_REQUESTED' where id=:id",Map.of("id",f.guardianId()));
+        assertThat(app.get("/api/reports").session(user.session()).send().status()).isEqualTo(403);
+    }
 }

@@ -9,6 +9,7 @@ import { MonthCalendar, dateLabel, seoulDate, validDate } from "../../common/com
 import { PARENT_ROUTES, routeForTab } from "../../common/navigation";
 import { formatHhmm, minutesBetween } from "@/shared/copy/timeText";
 import { RESULT_TEMP_COPY as C, durationLabel } from "@/shared/copy/result";
+import { SavedReports } from "../../common/components/SavedReports";
 export function RecordsScreen() {
   const router = useRouter(), params = useSearchParams(), api = useApiClient(), today = seoulDate();
   const initial = params.get("date"); const [selected, setSelected] = useState(validDate(initial) && initial <= today ? initial : today); const [month, setMonth] = useState(selected.slice(0, 7));
@@ -19,5 +20,6 @@ export function RecordsScreen() {
     {days.isError || items.isError ? <p role="alert">{C.recordReadFailed} <button onClick={() => { void days.refetch(); void items.refetch(); }}>{C.retry}</button></p> : null}
     {items.data?.length === 0 ? <p data-testid="records-empty-day">{C.emptyDay}</p> : null}{days.data?.length === 0 && items.data?.length === 0 ? <p data-testid="records-empty">{C.emptyRecords}</p> : null}
     {items.data?.map(item => { const kind = item.activityType === "PRACTICE" ? "연습" : "자유대화"; const time = formatHhmm(item.startedAt) ?? "시각 미확인"; if (!item.linkable || item.finalStatus === "DECLINED") return <p key={item.sessionId} data-testid={`records-item-declined-${item.sessionId}`} aria-disabled="true">{time}　{kind}{C.declinedSuffix}</p>; return <button type="button" className="mj-card mj-button--block" key={item.sessionId} data-testid={`records-item-${item.sessionId}`} onClick={() => router.push(PARENT_ROUTES.recordDetail(item.sessionId))}>{time}　{kind}{item.activityType === "PRACTICE" ? ` · 목표 ${item.goalCount}개` : ""}{durationLabel(minutesBetween(item.startedAt, item.endedAt) ?? 0)}{item.interrupted || item.finalStatus === "FAILED" ? " · 중간에 끊김" : ""}</button>; })}
+    <SavedReports />
   </main><BottomTabBar active="records" lockMessage={null} onLockedPress={() => {}} onNavigate={tab => router.push(routeForTab(tab))} /></div>;
 }

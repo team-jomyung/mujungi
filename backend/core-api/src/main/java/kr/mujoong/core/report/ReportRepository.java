@@ -30,6 +30,8 @@ public class ReportRepository {
         @Override public String toString(){return "Section[sectionNo="+sectionNo+"]";}
     }
     public Optional<Report> find(UUID id){return query("where id=:id",Map.of("id",id)).stream().findFirst();}
+    /** 저장 완료한 본인 리포트만 안정적인 순서로 나눈다. */
+    public List<Report> savedPage(UUID guardian,int offset,int limit){return query("where guardian_id=:guardian and status='SAVED' order by saved_at desc,id desc limit :limit offset :offset",Map.of("guardian",guardian,"limit",limit,"offset",offset));}
     public Optional<Report> findOwned(UUID id,UUID guardian){return query("where id=:id and guardian_id=:guardian",Map.of("id",id,"guardian",guardian)).stream().findFirst();}
     public Optional<Report> lock(UUID id){return query("where id=:id for update",Map.of("id",id)).stream().findFirst();}
     public Optional<Report> byKey(UUID guardian,String key){return query("where guardian_id=:guardian and idempotency_key=:key",Map.of("guardian",guardian,"key",key)).stream().findFirst();}
