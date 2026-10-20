@@ -1,12 +1,3 @@
-locals {
-  ecr               = { for k, r in aws_ecr_repository.app : k => r.repository_url }
-  jdbc_url          = "jdbc:postgresql://${aws_db_instance.main.address}:5432/${aws_db_instance.main.db_name}?sslmode=require"
-  cloudfront_origin = "https://${aws_cloudfront_distribution.main.domain_name}"
-  # demo 전용: 접속 시 데이터 등급 표지 (RDS는 DB 단위 커스텀 설정 불가 → 세션 단위로 우회)
-  # ⚠️ 실제 아동 데이터 DB에는 절대 사용 금지
-  jdbc_url_demo = "${local.jdbc_url}&options=-c%20mujoong_db.data_class=synthetic"
-}
-
 # ──────────── web (Next.js) ────────────
 resource "aws_ecs_task_definition" "web" {
   family                   = "mujoong-web"
@@ -18,7 +9,7 @@ resource "aws_ecs_task_definition" "web" {
     name      = "web"
     image     = "${local.ecr["web"]}:${local.web_image_tag}"
     essential = true
-    memory    = 1024
+    memory    = 512
 
     portMappings = [{
       containerPort = 3000
@@ -28,7 +19,10 @@ resource "aws_ecs_task_definition" "web" {
 
     environment = [
       { name = "PORT", value = "3000" },
-      { name = "HOSTNAME", value = "0.0.0.0" }
+      { name = "HOSTNAME", value = "0.0.0.0" },
+      { name = "MUJOONG_SECURITY_ALLOWED_ORIGIN", value = local.cloudfront_origin },
+      { name = "GOOGLE_OAUTH_CLIENT_ID", value = local.google_oauth_client_id },
+      { name = "GOOGLE_OAUTH_REDIRECT_URI", value = local.google_oauth_redirect_uri }
     ]
 
     logConfiguration = {
@@ -86,7 +80,7 @@ resource "aws_ecs_task_definition" "nginx" {
     name      = "nginx"
     image     = "${local.ecr["nginx"]}:${local.nginx_image_tag}"
     essential = true
-    memory    = 256
+    memory    = 128
 
     portMappings = [{
       containerPort = 443
@@ -150,7 +144,7 @@ resource "aws_ecs_task_definition" "migrate" {
     name      = "migrate"
     image     = "${local.ecr["migrate"]}:${local.backend_image_tag}"
     essential = true
-    memory    = 1024
+    memory    = 512
 
     environment = [{
       name  = "MUJOONG_MIGRATE_JDBC_URL"
@@ -184,7 +178,7 @@ resource "aws_ecs_task_definition" "core_api" {
     name      = "core-api"
     image     = "${local.ecr["core-api"]}:${local.backend_image_tag}"
     essential = true
-    memory    = 1536
+    memory    = 1640
 
     portMappings = [{
       containerPort = 8080
@@ -201,7 +195,10 @@ resource "aws_ecs_task_definition" "core_api" {
       { name = "MUJOONG_KNOWLEDGE_NEO4J_ENDPOINT", value = "http://172.17.0.1:7474" },
       { name = "MUJOONG_SECURITY_ALLOWED_ORIGIN", value = local.cloudfront_origin },
       { name = "MUJOONG_INTERNALHTTP_REALTIMEBASEURL", value = "http://172.17.0.1:8081" },
-      { name = "SERVER_TOMCAT_REMOTEIP_INTERNALPROXIES", value = "^172\\.17\\.0\\.1$" }
+      { name = "SERVER_TOMCAT_REMOTEIP_INTERNALPROXIES", value = "^172\\.17\\.0\\.1$" },
+      { name = "GOOGLE_OAUTH_CLIENT_ID", value = local.google_oauth_client_id },
+      { name = "GOOGLE_OAUTH_REDIRECT_URI", value = local.google_oauth_redirect_uri },
+      { name = "JAVA_TOOL_OPTIONS", value = local.java_tool_options }
     ]
 
     # 비밀값 — SSM에서 실행 순간 주입
@@ -209,7 +206,9 @@ resource "aws_ecs_task_definition" "core_api" {
       { name = "SPRING_DATASOURCE_PASSWORD", valueFrom = "${local.ssm_prefix}/db/DB_CORE_PASSWORD" },
       { name = "NEO4J_AUTH", valueFrom = "${local.ssm_prefix}/app/NEO4J_AUTH" },
       { name = "INTERNAL_SERVICE_TOKEN", valueFrom = "${local.ssm_prefix}/app/INTERNAL_SERVICE_TOKEN" },
-      { name = "MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET", valueFrom = "${local.ssm_prefix}/app/MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET" }
+      { name = "MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET", valueFrom = "${local.ssm_prefix}/app/MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET" },
+      { name = "GOOGLE_OAUTH_CLIENT_SECRET", valueFrom = "${local.ssm_prefix}/app/GOOGLE_OAUTH_CLIENT_SECRET" },
+      { name = "OPENAI_API_KEY", valueFrom = "${local.ssm_prefix}/app/OPENAI_API_KEY" }
     ]
 
     logConfiguration = {
@@ -261,7 +260,7 @@ resource "aws_ecs_task_definition" "realtime" {
     name      = "realtime"
     image     = "${local.ecr["realtime"]}:${local.backend_image_tag}"
     essential = true
-    memory    = 1536
+    memory    = 1640
 
     portMappings = [{
       containerPort = 8081
@@ -275,14 +274,19 @@ resource "aws_ecs_task_definition" "realtime" {
       { name = "SPRING_DATASOURCE_USERNAME", value = "realtime_app" },
       { name = "MUJOONG_INTERNALHTTP_COREBASEURL", value = "http://172.17.0.1:8080" },
       { name = "MUJOONG_SECURITY_ALLOWED_ORIGIN", value = local.cloudfront_origin },
-      { name = "SERVER_TOMCAT_REMOTEIP_INTERNALPROXIES", value = "^172\\.17\\.0\\.1$" }
+      { name = "SERVER_TOMCAT_REMOTEIP_INTERNALPROXIES", value = "^172\\.17\\.0\\.1$" },
+      { name = "JEV_BASE_URL", value = local.jev_base_url },
+      { name = "JEV_MODEL", value = local.jev_model },
+      { name = "JAVA_TOOL_OPTIONS", value = local.java_tool_options }
     ]
 
+    # PROVIDER_API_KEY 제거: 앱은 OPENAI_API_KEY를 읽는다 (SSM 파라미터 삭제는 배포 성공 후)
     secrets = [
       { name = "SPRING_DATASOURCE_PASSWORD", valueFrom = "${local.ssm_prefix}/db/DB_REALTIME_PASSWORD" },
       { name = "INTERNAL_SERVICE_TOKEN", valueFrom = "${local.ssm_prefix}/app/INTERNAL_SERVICE_TOKEN" },
       { name = "MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET", valueFrom = "${local.ssm_prefix}/app/MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET" },
-      { name = "PROVIDER_API_KEY", valueFrom = "${local.ssm_prefix}/app/PROVIDER_API_KEY" }
+      { name = "OPENAI_API_KEY", valueFrom = "${local.ssm_prefix}/app/OPENAI_API_KEY" },
+      { name = "JEV_API_KEY", valueFrom = "${local.ssm_prefix}/app/JEV_API_KEY" }
     ]
 
     logConfiguration = {
