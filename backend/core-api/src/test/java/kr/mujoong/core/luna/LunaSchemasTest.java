@@ -120,6 +120,34 @@ class LunaSchemasTest {
     }
 
     @Test
+    void everyRequestCopyRootIsAPlainObjectTheProviderAccepts() {
+        LunaSchemas schemas = LunaSchemas.loadDefault(JSON);
+
+        for (LunaPurpose purpose : LunaPurpose.values()) {
+            if (purpose.outputSchema() == null) {
+                continue;
+            }
+            Map<String, Object> root = schemas.pair(purpose).orElseThrow().requestSchema();
+            assertThat(root.get("type")).as(purpose + " 맨 위 type").isEqualTo("object");
+            assertThat(root).as(purpose + " 맨 위 combinator · 상수(공급자가 invalid_json_schema로 거절)")
+                    .doesNotContainKeys("anyOf", "oneOf", "allOf", "enum", "const", "not");
+        }
+    }
+
+    @Test
+    void reviewContractStillHoldsTheRootRuleTheRequestCopyDrops() {
+        LunaSchemas schemas = LunaSchemas.loadDefault(JSON);
+        String review = JSON.write(schemas.pair(LunaPurpose.SCENARIO_REVIEW).orElseThrow().requestSchema());
+
+        assertThat(review).as("사본은 verdict · reasons만 남는다").contains("\"verdict\"", "\"reasons\"").doesNotContain("anyOf");
+        assertThat(schemas.isValidOutput(LunaPurpose.SCENARIO_REVIEW, "{\"verdict\":\"APPROVE\",\"reasons\":[]}")).isTrue();
+        assertThat(schemas.isValidOutput(LunaPurpose.SCENARIO_REVIEW, "{\"verdict\":\"REJECT\",\"reasons\":[\"EARLY_CUE\"]}"))
+                .isTrue();
+        assertThat(schemas.isValidOutput(LunaPurpose.SCENARIO_REVIEW, "{\"verdict\":\"APPROVE\",\"reasons\":[\"EARLY_CUE\"]}"))
+                .as("사유가 붙은 APPROVE는 원본의 맨 위 anyOf가 막는다").isFalse();
+    }
+
+    @Test
     void jsonObjectCheckForTheLegacyPathAcceptsOnlyObjects() {
         LunaSchemas schemas = LunaSchemas.loadDefault(JSON);
 

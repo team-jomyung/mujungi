@@ -2,17 +2,29 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://mujoong.invalid/contracts/schemas/child-request.schema.json",
   "title": "아이 정보 입력",
-  "description": "POST /api/child(처음 등록, 세 필드 필수) · PATCH /api/child(바꿀 필드만) 본문(AC1.3.5 · AC1.3.8 · U2). 서버는 앞뒤 공백을 뺀 뒤 검증한다: 이름 1 ~ 10자, 나이 6 ~ 12 정수, 관심사 0 ~ 5개 · 각 1 ~ 10자 · 중복 없음. 어긋나면 400 VALIDATION_FAILED. 서버는 모르는 필드를 무시한다.",
+  "description": "POST는 displayName과 birthDate 필수. PATCH는 바꿀 필드만. 생년월일은 최초 등록일 기준 만 6세 이상~만 13세 미만. 평년의 2/29 생일은 3/1로 계산. 등록 후 나이 증가로 이용을 막지 않는다.",
   "type": "object",
   "additionalProperties": false,
   "properties": {
-    "displayName": { "type": "string", "minLength": 1, "maxLength": 10 },
-    "age": { "type": "integer", "minimum": 6, "maximum": 12 },
+    "displayName": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 10
+    },
     "interests": {
       "type": "array",
       "maxItems": 5,
       "uniqueItems": true,
-      "items": { "type": "string", "minLength": 1, "maxLength": 10 }
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 10
+      }
+    },
+    "birthDate": {
+      "type": "string",
+      "format": "date",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
     }
   }
 }

@@ -46,6 +46,11 @@ class ProviderRequestFactoryWireTest {
         return keys;
     }
 
+    @Test void continuingTeenKeepsActualAgeButContentStaysAtTwelve() {
+        String instructions = wire(factory.sessionStart(new ChildContext("하늘", 13, List.of("공룡")))).get("session").get("instructions").asString();
+        assertThat(instructions).contains("나이: \"13\"", "생성 기준 나이: \"12\"", "진단", "치료");
+    }
+
     @Test
     void sessionStartIsNestedWithExactlyTheObservedKeys() {
         JsonNode start = wire(factory.sessionStart(new ChildContext("하늘", 8, List.of("공룡"))));

@@ -164,7 +164,9 @@ describe("02 · 03을 마치면 가드 칸이 없다", () => {
       }),
     });
     fireEvent.change(await screen.findByTestId("child-name"), { target: { value: "하늘" } });
-    fireEvent.change(screen.getByTestId("child-age"), { target: { value: "8" } });
+    fireEvent.change(screen.getByTestId("child-birth-year"), { target: { value: "2018" } });
+    fireEvent.change(screen.getByTestId("child-birth-month"), { target: { value: "10" } });
+    fireEvent.change(screen.getByTestId("child-birth-day"), { target: { value: "15" } });
     expect(isGuardEntry()).toBe(true);
 
     fireEvent.click(screen.getByTestId("child-confirm"));

@@ -49,7 +49,7 @@ public class PracticeAccountAdapter implements PracticeAccountPort {
     public AccountContext requireActive(UUID guardianId, boolean lock) {
         checkActive(guardianId, lock);
         ChildView child = childProfiles.find(guardianId).orElseThrow(() -> CoreApiException.of(ErrorCode.NOT_FOUND));
-        Integer age = child.age() > 0 ? child.age() : null;
+        Integer age = child.age() > 0 ? Math.min(child.age(), 12) : null;
         return new AccountContext(guardianId, child.childId(), age, child.interests());
     }
 

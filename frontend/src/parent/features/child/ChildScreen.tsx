@@ -1,6 +1,9 @@
 "use client";
 
 import { useId, useState } from "react";
+import { ageOnDate, birthDateOf, birthYears, daysInMonth } from "../../common/birthDate";
+import { seoulDate } from "../../common/components/MonthCalendar";
+import { BIRTHDATE_COPY as B, currentAgeLine, birthDateLine } from "@/shared/copy/account";
 import type { DeviceView } from "../../common/api/types";
 import { useChildScreen, type Child } from "./useChildScreen";
 import {
@@ -27,7 +30,9 @@ export const INTEREST_MAX_LENGTH = 10;
 
 interface FormValues {
   readonly name: string;
-  readonly age: string;
+  readonly year: string;
+  readonly month: string;
+  readonly day: string;
   readonly interests: string;
 }
 
@@ -47,15 +52,6 @@ export function interestsWithinLimit(text: string): boolean {
   return filled.length <= INTERESTS_MAX && items.every((item) => [...item].length <= INTEREST_MAX_LENGTH);
 }
 
-/** 나이 글 → 정수(6 ~ 12가 아니면 null). */
-export function parseAge(text: string): number | null {
-  if (!/^\d{1,2}$/.test(text.trim())) {
-    return null;
-  }
-  const age = Number(text.trim());
-  return age >= AGE_MIN && age <= AGE_MAX ? age : null;
-}
-
 function deviceStateName(device: DeviceView): string {
   if (device.registration.status === "NONE" || device.network.state === "NONE") {
     return ACCOUNT_PROPOSED_COPY.deviceLine.NONE;
@@ -73,8 +69,8 @@ function deviceStateName(device: DeviceView): string {
 
 function valuesOf(child: Child | null): FormValues {
   return child === null
-    ? { name: "", age: "", interests: "" }
-    : { name: child.displayName, age: String(child.age), interests: child.interests.join(", ") };
+    ? { name: "", year: "", month: "", day: "", interests: "" }
+    : { name: child.displayName, year: child.birthDate?.slice(0, 4) ?? "", month: child.birthDate ? String(Number(child.birthDate.slice(5, 7))) : "", day: child.birthDate ? String(Number(child.birthDate.slice(8, 10))) : "", interests: child.interests.join(", ") };
 }
 
 export function ChildScreen() {
@@ -86,10 +82,19 @@ export function ChildScreen() {
   const interestsId = useId();
   const interestsHintId = useId();
 
-  const age = parseAge(values.age);
-  const ageInvalid = values.age.trim().length > 0 && age === null;
+  const today = seoulDate();
+  const referenceDate = mode === "edit" && child ? child.registeredOn : today;
+  const birthDate = birthDateOf(values.year, values.month, values.day);
+  const age = birthDate ? ageOnDate(birthDate, referenceDate) : null;
+  const ageInvalid = age !== null && (age < 6 || age >= 13);
+  const currentAge = birthDate ? ageOnDate(birthDate, today) : null;
+  const changeDatePart = (key: "year" | "month" | "day", value: string) => {
+    const next = { ...values, [key]: value };
+    if (key !== "day" && next.day && Number(next.day) > daysInMonth(Number(next.year), Number(next.month))) next.day = "";
+    setValues(next);
+  };
   const nameValid = values.name.trim().length > 0 && [...values.name.trim()].length <= NAME_MAX_LENGTH;
-  const canConfirm = nameValid && age !== null && !saving;
+  const canConfirm = nameValid && birthDate !== null && !ageInvalid && !saving;
 
   const startEdit = () => {
     setValues(valuesOf(child));
@@ -97,10 +102,10 @@ export function ChildScreen() {
   };
 
   const confirm = () => {
-    if (!canConfirm || age === null) {
+    if (!canConfirm || birthDate === null) {
       return;
     }
-    save({ displayName: values.name.trim(), age, interests: parseInterests(values.interests) });
+    save({ displayName: values.name.trim(), birthDate, interests: parseInterests(values.interests) });
   };
 
   const form = (
@@ -127,27 +132,23 @@ export function ChildScreen() {
           onChange={(event) => setValues({ ...values, name: event.target.value })}
         />
       </div>
-      <div className="mj-field">
-        <label className="mj-field__label" htmlFor={ageId}>
-          {ACCOUNT_COPY.child.ageLabel}
-        </label>
-        <input
-          id={ageId}
-          className={`mj-input${ageInvalid ? " mj-input--invalid" : ""}`}
-          data-testid="child-age"
-          inputMode="numeric"
-          maxLength={2}
-          value={values.age}
-          aria-invalid={ageInvalid}
-          aria-describedby={ageInvalid ? ageErrorId : undefined}
-          onChange={(event) => setValues({ ...values, age: event.target.value.replace(/\D/g, "") })}
-        />
-        {ageInvalid ? (
-          <p className="mj-field__error" id={ageErrorId} role="alert" data-testid="child-age-error">
-            {ACCOUNT_PROPOSED_COPY.ageError}
-          </p>
-        ) : null}
-      </div>
+      <fieldset className="mj-field mj-birth-field" aria-describedby={ageInvalid ? ageErrorId : `${ageId}-hint`}>
+        <legend className="mj-field__label">{B.label}</legend>
+        <div className="mj-birth-selects">
+          <label><span className="mj-field__label">{B.year}</span><select className="mj-input" aria-label={B.year} data-testid="child-birth-year" value={values.year} aria-invalid={ageInvalid} onChange={event => changeDatePart("year", event.target.value)}>
+            <option value="">{B.year}</option>{birthYears(referenceDate).map(year => <option key={year} value={year}>{year}</option>)}
+          </select></label>
+          <label><span className="mj-field__label">{B.month}</span><select className="mj-input" aria-label={B.month} data-testid="child-birth-month" value={values.month} aria-invalid={ageInvalid} onChange={event => changeDatePart("month", event.target.value)}>
+            <option value="">{B.month}</option>{Array.from({ length: 12 }, (_, i) => i + 1).map(month => <option key={month} value={month}>{month}</option>)}
+          </select></label>
+          <label><span className="mj-field__label">{B.day}</span><select className="mj-input" aria-label={B.day} data-testid="child-birth-day" value={values.day} disabled={!values.year || !values.month} aria-invalid={ageInvalid} onChange={event => changeDatePart("day", event.target.value)}>
+            <option value="">{B.day}</option>{Array.from({ length: values.year && values.month ? daysInMonth(Number(values.year), Number(values.month)) : 0 }, (_, i) => i + 1).map(day => <option key={day} value={day}>{day}</option>)}
+          </select></label>
+        </div>
+        <p className="mj-field__hint" id={`${ageId}-hint`}>{mode === "edit" ? B.editHint : B.hint}</p>
+        {currentAge !== null ? <p data-testid="child-current-age">{currentAgeLine(currentAge)}</p> : null}
+        {ageInvalid ? <p className="mj-field__error" id={ageErrorId} role="alert" data-testid="child-birth-error">{B.invalid}</p> : null}
+      </fieldset>
       <div className="mj-field">
         <label className="mj-field__label" htmlFor={interestsId}>
           {ACCOUNT_COPY.child.interestsLabel}
@@ -220,6 +221,7 @@ export function ChildScreen() {
             <h2 className="mj-child-card__name" data-testid="child-card-name">
               {child.displayName}
             </h2>
+            {child.birthDate ? <p>{birthDateLine(child.birthDate)}</p> : null}
             <p className="mj-child-card__line">{childAgeInterestsLine(child.age, child.interests)}</p>
             {homeDevice !== undefined ? (
               <p className="mj-child-card__device" data-testid="child-card-device">

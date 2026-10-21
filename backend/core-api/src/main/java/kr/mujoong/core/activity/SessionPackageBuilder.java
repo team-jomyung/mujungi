@@ -36,7 +36,6 @@ public class SessionPackageBuilder {
     static final int DISPLAY_NAME_MAX = 10;
     /** childContext.age 범위(계약 스키마). */
     static final int AGE_MIN = 6;
-    static final int AGE_MAX = 12;
     /** interests 항목 수 · 길이 상한(계약 스키마). */
     static final int INTERESTS_MAX = 10;
     static final int INTEREST_LENGTH_MAX = 20;
@@ -84,8 +83,8 @@ public class SessionPackageBuilder {
         if (displayName == null || displayName.isBlank() || displayName.length() > DISPLAY_NAME_MAX) {
             throw new IllegalStateException("childContext.displayName이 계약 형식에 맞지 않는다");
         }
-        if (age < AGE_MIN || age > AGE_MAX) {
-            throw new IllegalStateException("childContext.age가 계약 범위(6 ~ 12) 밖이다");
+        if (age < AGE_MIN) {
+            throw new IllegalStateException("childContext.age가 계약 범위(6세 이상) 밖이다");
         }
         List<String> interests = child.interests().stream()
                 .map(String::strip)

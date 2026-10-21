@@ -178,6 +178,19 @@ class SessionPackageIT {
     }
 
     @Test
+    void continuingChildOverTwelveKeepsActualAgeInTheSessionPackage() {
+        Family family = fixtures.family(clock.now().minusSeconds(60));
+        fixtures.registeredDevice(family.guardianId(), ConnectionState.CONNECTED, clock.now(), clock.now());
+        updateChild(family.childId(), "하늘", 13, "[]");
+        CoreBusinessContext.runner(postgres, clock, realtime.baseUrl(), token).run(context -> {
+            context.getBean(StartActivityService.class).start(family.guardianId(), new StartRequest(UUID.randomUUID(), null));
+            RecordedRequest request = realtime.requests("POST", START).get(0);
+            assertThat(request.schemaErrors()).isEmpty();
+            assertThat(request.json().path("childContext").path("age").asInt()).isEqualTo(13);
+        });
+    }
+
+    @Test
     void childAtTheLowerContractLimitsWithoutInterestsSendsAnEmptyList() {
         Family family = fixtures.family(clock.now().minusSeconds(60));
         fixtures.registeredDevice(family.guardianId(), ConnectionState.CONNECTED, clock.now(), clock.now());
@@ -202,7 +215,7 @@ class SessionPackageIT {
         fixtures.registeredDevice(family.guardianId(), ConnectionState.CONNECTED, clock.now(), clock.now());
         String elevenInterests = "[" + "\"공룡\", ".repeat(10) + "\"그림\"]";
         List<Object[]> outside = List.of(
-                new Object[] {"하늘", 13, "[\"공룡\"]"},
+                new Object[] {"하늘", -1, "[\"공룡\"]"},
                 new Object[] {"가나다라마바사아자차카", 8, "[\"공룡\"]"},
                 new Object[] {"하늘", 8, elevenInterests},
                 new Object[] {"하늘", 8, "[\"" + "가".repeat(21) + "\"]"});

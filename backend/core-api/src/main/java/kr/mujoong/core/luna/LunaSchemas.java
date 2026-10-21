@@ -29,7 +29,8 @@ import kr.mujoong.contract.json.JsonCodec;
  * <ul>
  *   <li>검증용 원본: 계약 스키마 전체(JSON Schema 2020-12, format 단언 켬). 응답은 언제나 이것으로 검증한다.
  *   <li>요청용 사본: 공급자 구조화 출력이 받는 키워드({@link #REQUEST_KEYWORDS})만 남긴 사본. 다른 파일을 가리키는 {@code $ref}는 그 정의를
- *       끼워 넣는다(공급자는 바깥 파일을 읽지 못한다).
+ *       끼워 넣는다(공급자는 바깥 파일을 읽지 못한다). 맨 위의 {@code anyOf} · {@code enum} · {@code const}는 공급자가 요청째 거절하므로
+ *       사본에서 뺀다(그 제약은 검증용 원본이 지킨다).
  *   <li>strict 판정: 사본의 모든 객체가 {@code additionalProperties: false}이고 모든 속성이 required일 때만 true.
  * </ul>
  *
@@ -45,6 +46,8 @@ public final class LunaSchemas {
     public static final Set<String> REQUEST_KEYWORDS = Set.of(
             "type", "properties", "required", "additionalProperties", "items", "enum", "const", "anyOf", "$defs", "$ref",
             "description");
+    /** 요청용 사본의 맨 위에서는 빼는 키워드. 공급자 구조화 출력은 맨 위가 combinator · 상수인 스키마를 받지 않는다. */
+    static final Set<String> ROOT_ONLY_IN_CONTRACT = Set.of("anyOf", "enum", "const");
 
     static final String ID_PREFIX = "https://mujoong.invalid/contracts/schemas/";
 
@@ -84,6 +87,8 @@ public final class LunaSchemas {
             }
             Map<String, Object> document = readDocument(json, reader, file);
             Map<String, Object> requestSchema = requestNode(document, json, reader, file);
+            // 공급자는 맨 위에 anyOf · enum · const가 있는 스키마를 요청째 거절한다. 그 제약은 응답을 검증할 때 원본으로 지킨다
+            ROOT_ONLY_IN_CONTRACT.forEach(requestSchema::remove);
             Schema contract;
             try {
                 contract = registry.getSchema(SchemaLocation.of(ID_PREFIX + file));
