@@ -17,6 +17,10 @@ public final class WeightedGoalOrder {
         public Selection{if(goalContext==null)goalContext=kr.mujoong.core.practice.GoalContext.legacy(behaviorKey,behaviorVersion);}
         @Override public String toString() { return "Selection[id=" + goalSelectionId + "]"; }
     }
+    /** java.base만 제공하는 서버 JRE에서도 공급자 검색 없이 동작한다. */
+    public List<FrozenGoal> freeze(UUID guardianId, UUID childId, List<Selection> selections) {
+        return freeze(guardianId, childId, selections, new java.util.Random());
+    }
     public List<FrozenGoal> freeze(UUID guardianId, UUID childId, List<Selection> selections, RandomGenerator random) {
         Objects.requireNonNull(guardianId); Objects.requireNonNull(childId); Objects.requireNonNull(random);
         if (selections.isEmpty()) throw new IllegalArgumentException("선택 목표 필요");
