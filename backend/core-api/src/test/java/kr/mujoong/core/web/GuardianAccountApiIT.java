@@ -238,8 +238,8 @@ class GuardianAccountApiIT {
 
         List<ThrowingCallable> writes = List.of(
                 () -> consents.give(guardian.id(), "1.0", four),
-                () -> profiles.register(guardian.id(), new ChildInput.Valid("하늘", 8, List.of())),
-                () -> profiles.update(withChild.id(), null, 9, null),
+                () -> profiles.register(guardian.id(), new ChildInput.Valid("하늘", java.time.LocalDate.of(2018,10,15), List.of())),
+                () -> profiles.update(withChild.id(), null, "2017-10-15", null),
                 () -> profiles.replaceStopExpressions(withChild.id(), List.of("끝낼래")));
         for (ThrowingCallable write : writes) {
             assertThatThrownBy(write).isInstanceOfSatisfying(CoreApiException.class,
@@ -307,7 +307,7 @@ class GuardianAccountApiIT {
         assertThat(send("PUT /api/consents", app.put("/api/consents").session(guardian.session()).csrf(guardian.csrf())
                 .json(consentBody("1.0", true))).status()).isEqualTo(204);
         assertThat(send("POST /api/child", app.post("/api/child").session(guardian.session()).csrf(guardian.csrf())
-                .json("{\"displayName\":\"하늘\",\"age\":8,\"interests\":[\"공룡\"]}")).status()).isEqualTo(201);
+                .json("{\"displayName\":\"하늘\",\"birthDate\":\"2018-10-15\",\"interests\":[\"공룡\"]}")).status()).isEqualTo(201);
         fixtures.registeredDevice(guardian.id(), ConnectionState.CONNECTED, app.clock().now(), app.clock().now());
 
         Result started = send("POST /api/activities/free", app.post("/api/activities/free").session(guardian.session())
@@ -324,24 +324,24 @@ class GuardianAccountApiIT {
         trackSession(guardian.id());
         assertThat(send("GET /api/child", app.get("/api/child").session(guardian.session())).code())
                 .isEqualTo("CHILD_NOT_REGISTERED");
-        for (String body : List.of("{\"displayName\":\"\",\"age\":8}", "{\"displayName\":\"하늘\",\"age\":13}",
-                "{\"displayName\":\"하늘\",\"age\":8,\"interests\":[\"a\",\"b\",\"c\",\"d\",\"e\",\"f\"]}",
-                "{\"displayName\":\"가나다라마바사아자차카\",\"age\":8}", "{\"age\":8}", "x")) {
+        for (String body : List.of("{\"displayName\":\"\",\"birthDate\":\"2018-10-15\"}", "{\"displayName\":\"하늘\",\"birthDate\":\"2013-10-15\"}",
+                "{\"displayName\":\"하늘\",\"birthDate\":\"2018-10-15\",\"interests\":[\"a\",\"b\",\"c\",\"d\",\"e\",\"f\"]}",
+                "{\"displayName\":\"가나다라마바사아자차카\",\"birthDate\":\"2018-10-15\"}", "{\"birthDate\":\"2018-10-15\"}", "x")) {
             assertThat(send("POST /api/child", app.post("/api/child").session(guardian.session()).csrf(guardian.csrf())
                     .json(body)).status()).as(body).isEqualTo(400);
         }
 
         Result created = send("POST /api/child", app.post("/api/child").session(guardian.session()).csrf(guardian.csrf())
-                .json("{\"displayName\":\" 하늘 \",\"age\":8,\"interests\":[\"공룡\",\"블록 놀이\"]}"));
+                .json("{\"displayName\":\" 하늘 \",\"birthDate\":\"2018-10-15\",\"interests\":[\"공룡\",\"블록 놀이\"]}"));
         assertThat(created.status()).isEqualTo(201);
         assertThat(created.json()).containsEntry("displayName", "하늘").containsEntry("age", 8)
                 .containsEntry("interests", List.of("공룡", "블록 놀이"));
         String childId = String.valueOf(created.json().get("childId"));
         assertThat(send("POST /api/child", app.post("/api/child").session(guardian.session()).csrf(guardian.csrf())
-                .json("{\"displayName\":\"바다\",\"age\":9}")).code()).isEqualTo("CHILD_EXISTS");
+                .json("{\"displayName\":\"바다\",\"birthDate\":\"2017-10-15\"}")).code()).isEqualTo("CHILD_EXISTS");
 
         Result edited = send("PATCH /api/child", app.call("PATCH", "/api/child").session(guardian.session())
-                .csrf(guardian.csrf()).json("{\"age\":9}"));
+                .csrf(guardian.csrf()).json("{\"birthDate\":\"2017-10-15\"}"));
         assertThat(edited.json()).containsEntry("childId", childId).containsEntry("age", 9).containsEntry("displayName", "하늘");
         assertThat(send("PATCH /api/child", app.call("PATCH", "/api/child").session(guardian.session()).csrf(guardian.csrf())
                 .json("{}")).status()).isEqualTo(400);
@@ -358,7 +358,32 @@ class GuardianAccountApiIT {
         assertThat(othersView.code()).isEqualTo("CHILD_NOT_REGISTERED");
         assertThat(othersView.body()).doesNotContain(childId, "하늘");
         assertThat(send("PATCH /api/child", app.call("PATCH", "/api/child").session(other.session()).csrf(other.csrf())
-                .json("{\"age\":10}")).code()).isEqualTo("CHILD_NOT_REGISTERED");
+                .json("{\"birthDate\":\"2016-10-15\"}")).code()).isEqualTo("CHILD_NOT_REGISTERED");
+    }
+
+    @Test
+    void birthdayKeepsAccessAndCorrectionsUseOriginalRegistrationDate() {
+        var original = app.clock().now();
+        try {
+            Guardian owner = WebFixtures.guardian(app, db);
+            trackSession(owner.id());
+            Result created = send("POST /api/child", app.post("/api/child").session(owner.session()).csrf(owner.csrf())
+                    .json("{\"displayName\":\"하늘\",\"birthDate\":\"2013-10-16\",\"interests\":[\"공룡\"]}"));
+            assertThat(created.status()).isEqualTo(201);
+            assertThat(created.json()).containsEntry("age", 12).containsEntry("birthDate", "2013-10-16")
+                    .containsEntry("registeredOn", "2026-10-15");
+            app.clock().setInstant(original.plus(java.time.Duration.ofDays(1)));
+            Guardian renewed = WebFixtures.guardianFor(app, owner.id());
+            assertThat(send("GET /api/child", app.get("/api/child").session(renewed.session())).json()).containsEntry("age", 13);
+            assertThat(app.bean(ChildProfileService.class).childContext(owner.id()).orElseThrow().age()).isEqualTo(13);
+            assertThat(app.bean(kr.mujoong.core.practice.PracticeAccountAdapter.class).requireActive(owner.id(), false).ageYears()).isEqualTo(12);
+            Result edited = send("PATCH /api/child", app.call("PATCH", "/api/child").session(renewed.session()).csrf(renewed.csrf())
+                    .json("{\"displayName\":\"바다\",\"birthDate\":\"2013-10-16\"}"));
+            assertThat(edited.status()).isEqualTo(200);
+            assertThat(edited.json()).containsEntry("age", 13).containsEntry("registeredOn", "2026-10-15");
+            assertThat(send("PATCH /api/child", app.call("PATCH", "/api/child").session(renewed.session()).csrf(renewed.csrf())
+                    .json("{\"birthDate\":\"2013-10-15\"}")).status()).isEqualTo(400);
+        } finally { app.clock().setInstant(original); }
     }
 
     // ------------------------------------------------------------------ SET-01 종료 표현
@@ -436,7 +461,7 @@ class GuardianAccountApiIT {
         send("PUT /api/consents", app.put("/api/consents").session(guardian.session()).csrf(guardian.csrf())
                 .json(consentBody("1.0", true)));
         send("POST /api/child", app.post("/api/child").session(guardian.session()).csrf(guardian.csrf())
-                .json("{\"displayName\":\"하늘\",\"age\":8,\"interests\":[\"공룡\"]}"));
+                .json("{\"displayName\":\"하늘\",\"birthDate\":\"2018-10-15\",\"interests\":[\"공룡\"]}"));
         put(guardian, "{\"items\":[{\"text\":\"끝낼래\"}]}");
 
         GateResult open = consentPolicy.check(guardian.id());

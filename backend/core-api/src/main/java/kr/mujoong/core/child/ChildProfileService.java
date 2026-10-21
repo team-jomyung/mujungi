@@ -1,5 +1,6 @@
 package kr.mujoong.core.child;
 
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -64,7 +65,7 @@ public class ChildProfileService {
     }
 
     /** 아이 정보(응답 모양 child-response.schema.json). */
-    public record ChildView(UUID childId, String displayName, int age, List<String> interests) {
+    public record ChildView(UUID childId, String displayName, int age, List<String> interests, LocalDate birthDate, LocalDate registeredOn) {
 
         public ChildView {
             interests = List.copyOf(interests);
@@ -97,8 +98,12 @@ public class ChildProfileService {
                 if (children.findByGuardianId(guardianId).isPresent()) {
                     throw CoreApiException.of(ErrorCode.CHILD_EXISTS);
                 }
-                Child child = new Child(UUID.randomUUID(), guardianId, input.displayName(), input.age(),
-                        json.write(input.interests()), clock.now());
+                var now = clock.now();
+                var registeredOn = now.atZone(BirthDateRules.ZONE).toLocalDate();
+                BirthDateRules.requireEligible(input.birthDate(), registeredOn);
+                Child child = new Child(UUID.randomUUID(), guardianId, input.displayName(), BirthDateRules.ageOn(input.birthDate(), registeredOn),
+                        json.write(input.interests()), now);
+                child.setBirthDate(input.birthDate());
                 children.saveAndFlush(child);
                 return view(child);
             });
@@ -114,15 +119,16 @@ public class ChildProfileService {
     }
 
     /** 03 수정(온 값만). */
-    public ChildView update(UUID guardianId, String displayName, Integer age, List<String> interests) {
+    public ChildView update(UUID guardianId, String displayName, String birthDate, List<String> interests) {
         Objects.requireNonNull(guardianId, "guardianId");
         return transactions.execute(status -> {
             guardianLock.lockActive(guardianId);
             Child child = activeChild(guardianId).orElseThrow(() -> CoreApiException.of(ErrorCode.CHILD_NOT_REGISTERED));
             ChildView current = view(child);
-            Valid next = ChildInput.forUpdate(new Valid(current.displayName(), current.age(), current.interests()),
-                    displayName, age, interests);
-            child.update(next.displayName(), next.age(), json.write(next.interests()), clock.now());
+            Valid next = ChildInput.forUpdate(new Valid(current.displayName(), current.birthDate(), current.interests()),
+                    displayName, birthDate, interests, child.getCreatedAt().atZone(BirthDateRules.ZONE).toLocalDate());
+            child.setBirthDate(next.birthDate());
+            child.update(next.displayName(), next.birthDate() == null ? child.getAge() : BirthDateRules.ageOn(next.birthDate(), clock.now().atZone(BirthDateRules.ZONE).toLocalDate()), json.write(next.interests()), clock.now());
             children.saveAndFlush(child);
             return view(child);
         });
@@ -192,7 +198,7 @@ public class ChildProfileService {
     private ChildView view(Child child) {
         String[] interests = child.getInterestsJson() == null ? new String[0] : json.read(child.getInterestsJson(), String[].class);
         // 저장 값에 null 칸이 있어도(U1 시드 · 손으로 넣은 행) 조회가 깨지지 않게 뺀다(U4a — 세션 시작이 이 포트를 쓴다)
-        return new ChildView(child.getId(), child.getDisplayName(), child.getAge() == null ? 0 : child.getAge(),
-                Arrays.stream(interests).filter(Objects::nonNull).toList());
+        return new ChildView(child.getId(), child.getDisplayName(), child.getBirthDate() == null ? (child.getAge() == null ? 0 : child.getAge()) : BirthDateRules.ageOn(child.getBirthDate(), clock.now().atZone(BirthDateRules.ZONE).toLocalDate()),
+                Arrays.stream(interests).filter(Objects::nonNull).toList(), child.getBirthDate(), child.getCreatedAt().atZone(BirthDateRules.ZONE).toLocalDate());
     }
 }

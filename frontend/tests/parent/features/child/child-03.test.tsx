@@ -1,6 +1,6 @@
 import { act, fireEvent, screen, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { ChildScreen, interestsWithinLimit, parseAge, parseInterests } from "@/parent/features/child/ChildScreen";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { ChildScreen, interestsWithinLimit, parseInterests } from "@/parent/features/child/ChildScreen";
 import { errorResponse, homeBody, jsonResponse, type NetworkState } from "../../../support/fixtures";
 import { resetRouter, router } from "../../../support/nextNavigation";
 import { renderParent, type RequestHandler } from "../../../support/parentHarness";
@@ -38,7 +38,15 @@ function type(testId: string, value: string) {
   fireEvent.change(screen.getByTestId(testId), { target: { value } });
 }
 
+function chooseBirthDate(date: string) {
+  const [year, month, day] = date.split("-");
+  type("child-birth-year", year);
+  type("child-birth-month", String(Number(month)));
+  type("child-birth-day", String(Number(day)));
+}
+afterEach(() => vi.useRealTimers());
 beforeEach(() => {
+  vi.setSystemTime(new Date("2026-10-20T00:00:00Z"));
   resetRouter();
 });
 
@@ -47,7 +55,7 @@ describe("03 처음 등록(AC1.3.1 · AC1.3.2 · AC1.3.5 · AC1.3.8)", () => {
     renderParent(<ChildScreen />, { handler: handler(notRegistered) });
     expect(await screen.findByRole("heading", { name: "아이 정보를 알려 주세요" })).toBeInTheDocument();
     expect(screen.getByLabelText("이름 또는 별명")).toBeInTheDocument();
-    expect(screen.getByLabelText("나이")).toBeInTheDocument();
+    expect(screen.getByLabelText("년도")).toBeInTheDocument();
     expect(screen.getByLabelText("관심사 (예: 공룡, 블록 놀이)")).toBeInTheDocument();
     expect(screen.queryByTestId("child-back")).toBeNull();
     act(() => window.dispatchEvent(new PopStateEvent("popstate")));
@@ -61,17 +69,29 @@ describe("03 처음 등록(AC1.3.1 · AC1.3.2 · AC1.3.5 · AC1.3.8)", () => {
     await screen.findByTestId("child-form");
     expect(screen.getByTestId("child-confirm")).toBeDisabled();
     type("child-name", "하늘");
-    type("child-age", "13");
-    expect(screen.getByTestId("child-age-error")).toHaveTextContent("나이는 6~12 사이로 넣어 주세요");
-    expect(screen.getByTestId("child-age")).toHaveAttribute("aria-invalid", "true");
+    chooseBirthDate("2013-10-20");
+    expect(screen.getByTestId("child-birth-error")).toHaveTextContent("등록일 기준");
+    expect(screen.getByTestId("child-birth-year")).toHaveAttribute("aria-invalid", "true");
     expect(screen.getByTestId("child-confirm")).toBeDisabled();
-    type("child-age", "8살");
-    expect(screen.getByTestId("child-age")).toHaveValue("8");
-    expect(screen.queryByTestId("child-age-error")).toBeNull();
+    chooseBirthDate("2018-10-15");
+    expect(screen.queryByTestId("child-birth-error")).toBeNull();
     expect(screen.getByTestId("child-confirm")).toBeEnabled();
     type("child-name", "   ");
     expect(screen.getByTestId("child-confirm")).toBeDisabled();
     expect(screen.getByTestId("child-name")).toHaveAttribute("maxLength", "10");
+  });
+
+  it("윤년의 29일을 고른 뒤 평년이나 4월로 바꾸면 없는 날짜는 지워진다", async () => {
+    renderParent(<ChildScreen />, { handler: handler(notRegistered) });
+    await screen.findByTestId("child-form");
+    chooseBirthDate("2016-02-29");
+    expect(screen.getByTestId("child-birth-day")).toHaveValue("29");
+    type("child-birth-year", "2017");
+    expect(screen.getByTestId("child-birth-day")).toHaveValue("");
+    chooseBirthDate("2018-03-31");
+    type("child-birth-month", "4");
+    expect(screen.getByTestId("child-birth-day")).toHaveValue("");
+    expect(screen.getByTestId("child-confirm")).toBeDisabled();
   });
 
   it("관심사는 쉼표로 5개 · 하나에 10자를 넘는 입력을 막는다", async () => {
@@ -88,12 +108,12 @@ describe("03 처음 등록(AC1.3.1 · AC1.3.2 · AC1.3.5 · AC1.3.8)", () => {
     const harness = renderParent(<ChildScreen />, { handler: handler(notRegistered) });
     await screen.findByTestId("child-form");
     type("child-name", " 하늘 ");
-    type("child-age", "8");
+    chooseBirthDate("2018-10-15");
     type("child-interests", "공룡, 블록 놀이, 공룡, ");
     fireEvent.click(screen.getByTestId("child-confirm"));
     await waitFor(() => expect(router.replace).toHaveBeenCalledWith("/parent"));
     const posted = harness.requests("/api/child").find((request) => request.method === "POST");
-    expect(posted?.body).toEqual({ displayName: "하늘", age: 8, interests: ["공룡", "블록 놀이"] });
+    expect(posted?.body).toEqual({ displayName: "하늘", birthDate: "2018-10-15", interests: ["공룡", "블록 놀이"] });
     expect(posted?.headers["x-csrf-token"]).toBe(harness.csrfToken);
   });
 
@@ -101,7 +121,7 @@ describe("03 처음 등록(AC1.3.1 · AC1.3.2 · AC1.3.5 · AC1.3.8)", () => {
     renderParent(<ChildScreen />, { handler: handler({ ...notRegistered, "POST /api/child": () => errorResponse(500, "INTERNAL_ERROR") }) });
     await screen.findByTestId("child-form");
     type("child-name", "하늘");
-    type("child-age", "8");
+    chooseBirthDate("2018-10-15");
     fireEvent.click(screen.getByTestId("child-confirm"));
     expect(await screen.findByTestId("toast")).toHaveTextContent("저장하지 못했어요. 이전 값이 그대로예요.");
     expect(screen.getByTestId("child-name")).toHaveValue("하늘");
@@ -134,18 +154,29 @@ describe("03 보기 · 수정(AC1.3.3 · AC1.3.4 · AC1.3.7 · AC1.3.9 · AC1.3.
     const harness = renderParent(<ChildScreen />, { handler: handler() });
     fireEvent.click(await screen.findByTestId("child-edit"));
     expect(screen.getByTestId("child-name")).toHaveValue("하늘");
-    expect(screen.getByTestId("child-age")).toHaveValue("8");
+    expect(screen.getByTestId("child-birth-year")).toHaveValue("2018");
     expect(screen.getByTestId("child-interests")).toHaveValue("공룡, 그림");
-    type("child-age", "9");
+    chooseBirthDate("2017-10-15");
     type("child-interests", "공룡");
     fireEvent.click(screen.getByTestId("child-confirm"));
     await waitFor(() => expect(screen.getByTestId("child-screen")).toHaveAttribute("data-mode", "view"));
     expect(screen.getByTestId("child-card")).toHaveTextContent("9세 · 공룡");
     expect(harness.requests("/api/child").find((request) => request.method === "PATCH")?.body).toEqual({
       displayName: "하늘",
-      age: 9,
+      birthDate: "2017-10-15",
       interests: ["공룡"],
     });
+  });
+
+  it("13세가 된 기존 이용자의 수정은 최초 등록일 기준으로 허용한다", async () => {
+    renderParent(<ChildScreen />, { handler: handler({ "GET /api/child": () => jsonResponse(200, childBody({ age: 13, birthDate: "2013-10-20", registeredOn: "2025-10-20" })) }) });
+    fireEvent.click(await screen.findByTestId("child-edit"));
+    expect(screen.getByTestId("child-current-age")).toHaveTextContent("13");
+    expect(screen.getByTestId("child-confirm")).toBeEnabled();
+    expect(screen.queryByTestId("child-birth-error")).toBeNull();
+    chooseBirthDate("2012-10-20");
+    expect(screen.getByTestId("child-confirm")).toBeDisabled();
+    expect(screen.getByTestId("child-birth-error")).toBeInTheDocument();
   });
 
   it("「취소」는 원래 내용으로 돌아오고 「←」는 04로 간다", async () => {
@@ -194,10 +225,5 @@ describe("03 입력 도우미", () => {
     expect(interestsWithinLimit("a, b, c, d, e")).toBe(true);
     expect(interestsWithinLimit("a, b, c, d, e, f")).toBe(false);
     expect(interestsWithinLimit("가나다라마바사아자차")).toBe(true);
-    expect(parseAge("6")).toBe(6);
-    expect(parseAge("12")).toBe(12);
-    expect(parseAge("5")).toBeNull();
-    expect(parseAge("")).toBeNull();
-    expect(parseAge("1e1")).toBeNull();
   });
 });

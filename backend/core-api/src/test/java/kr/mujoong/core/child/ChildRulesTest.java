@@ -3,6 +3,7 @@ package kr.mujoong.core.child;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.time.LocalDate;
 import java.util.Arrays;
 import java.util.List;
 import kr.mujoong.contract.error.ErrorCode;
@@ -17,49 +18,68 @@ import org.junit.jupiter.params.provider.ValueSource;
 /** 03 아이 입력 · SET-01 종료 표현 규칙(U2 · AC1.3.5 · AC1.3.8 · AC2.3.5 · AC2.3.6 · R8 · R9 · U2-J11). */
 @Tag("parent-account")
 class ChildRulesTest {
+    private static final LocalDate REF = LocalDate.of(2026, 10, 20);
+    private static Valid create(String name, Integer age, List<String> interests) {
+        return ChildInput.forCreate(name, age == null ? null : REF.minusYears(age).toString(), interests, REF);
+    }
+
 
     @Test
     void createTrimsAndAcceptsTheBoundaries() {
-        Valid valid = ChildInput.forCreate("  하늘  ", 6, List.of(" 공룡 ", "블록 놀이"));
+        Valid valid = create("  하늘  ", 6, List.of(" 공룡 ", "블록 놀이"));
 
         assertThat(valid.displayName()).isEqualTo("하늘");
-        assertThat(valid.age()).isEqualTo(6);
+        assertThat(BirthDateRules.ageOn(valid.birthDate(), REF)).isEqualTo(6);
         assertThat(valid.interests()).containsExactly("공룡", "블록 놀이");
-        assertThat(ChildInput.forCreate("가".repeat(10), 12, null).interests()).isEmpty();
+        assertThat(create("가".repeat(10), 12, null).interests()).isEmpty();
         assertThat(valid.toString()).doesNotContain("하늘", "공룡");
     }
 
     @ParameterizedTest
     @ValueSource(ints = {5, 13, -1})
     void ageOutsideSixToTwelveIsRejected(int age) {
-        expectInvalid(() -> ChildInput.forCreate("하늘", age, List.of()));
+        expectInvalid(() -> create("하늘", age, List.of()));
     }
 
     @Test
     void nameMustBeOneToTenCharactersAfterTrimming() {
-        expectInvalid(() -> ChildInput.forCreate("   ", 8, List.of()));
-        expectInvalid(() -> ChildInput.forCreate(null, 8, List.of()));
-        expectInvalid(() -> ChildInput.forCreate("가".repeat(11), 8, List.of()));
-        expectInvalid(() -> ChildInput.forCreate("하늘", null, List.of()));
+        expectInvalid(() -> create("   ", 8, List.of()));
+        expectInvalid(() -> create(null, 8, List.of()));
+        expectInvalid(() -> create("가".repeat(11), 8, List.of()));
+        expectInvalid(() -> create("하늘", null, List.of()));
     }
 
     @Test
     void interestsAreAtMostFiveDistinctAndTenCharactersEach() {
-        expectInvalid(() -> ChildInput.forCreate("하늘", 8, List.of("a", "b", "c", "d", "e", "f")));
-        expectInvalid(() -> ChildInput.forCreate("하늘", 8, List.of("공룡", " 공룡")));
-        expectInvalid(() -> ChildInput.forCreate("하늘", 8, List.of("가".repeat(11))));
-        expectInvalid(() -> ChildInput.forCreate("하늘", 8, Arrays.asList("공룡", null)));
-        assertThat(ChildInput.forCreate("하늘", 8, List.of("a", "b", "c", "d", "e")).interests()).hasSize(5);
+        expectInvalid(() -> create("하늘", 8, List.of("a", "b", "c", "d", "e", "f")));
+        expectInvalid(() -> create("하늘", 8, List.of("공룡", " 공룡")));
+        expectInvalid(() -> create("하늘", 8, List.of("가".repeat(11))));
+        expectInvalid(() -> create("하늘", 8, Arrays.asList("공룡", null)));
+        assertThat(create("하늘", 8, List.of("a", "b", "c", "d", "e")).interests()).hasSize(5);
     }
 
     @Test
     void updateKeepsTheFieldsThatWereNotSentAndRejectsAnEmptyPatch() {
-        Valid current = new Valid("하늘", 8, List.of("공룡"));
+        Valid current = new Valid("하늘", REF.minusYears(8), List.of("공룡"));
+        assertThat(ChildInput.forUpdate(current, null, "2017-10-20", null, REF))
+                .isEqualTo(new Valid("하늘", REF.minusYears(9), List.of("공룡")));
+        assertThat(ChildInput.forUpdate(current, "바다", null, List.of(), REF))
+                .isEqualTo(new Valid("바다", REF.minusYears(8), List.of()));
+        expectInvalid(() -> ChildInput.forUpdate(current, null, null, null, REF));
+        expectInvalid(() -> ChildInput.forUpdate(current, null, "2013-10-20", null, REF));
+    }
 
-        assertThat(ChildInput.forUpdate(current, null, 9, null)).isEqualTo(new Valid("하늘", 9, List.of("공룡")));
-        assertThat(ChildInput.forUpdate(current, "바다", null, List.of())).isEqualTo(new Valid("바다", 8, List.of()));
-        expectInvalid(() -> ChildInput.forUpdate(current, null, null, null));
-        expectInvalid(() -> ChildInput.forUpdate(current, null, 13, null));
+    @Test void exactBirthdayBoundariesAndLeapDayAreValidated() {
+        BirthDateRules.requireEligible(LocalDate.parse("2013-10-21"), REF);
+        BirthDateRules.requireEligible(LocalDate.parse("2020-10-20"), REF);
+        expectInvalid(() -> BirthDateRules.requireEligible(LocalDate.parse("2013-10-20"), REF));
+        expectInvalid(() -> BirthDateRules.requireEligible(LocalDate.parse("2020-10-21"), REF));
+        expectInvalid(() -> BirthDateRules.parse("2019-02-29"));
+        expectInvalid(() -> BirthDateRules.parse("1900-02-29"));
+        expectInvalid(() -> BirthDateRules.parse("2020-2-01"));
+        assertThat(BirthDateRules.parse("2000-02-29")).isEqualTo(LocalDate.of(2000,2,29));
+        assertThat(BirthDateRules.ageOn(LocalDate.of(2012,2,29), LocalDate.of(2025,2,28))).isEqualTo(12);
+        assertThat(BirthDateRules.ageOn(LocalDate.of(2012,2,29), LocalDate.of(2025,3,1))).isEqualTo(13);
     }
 
     @Test

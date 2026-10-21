@@ -282,7 +282,7 @@ class AccountDeletionIT {
         send("PUT /api/consents", app.put("/api/consents").session(session).csrf(csrf)
                 .json(consentBody()));
         send("POST /api/child", app.post("/api/child").session(session).csrf(csrf)
-                .json("{\"displayName\":\"하늘\",\"age\":8,\"interests\":[\"공룡\"]}"));
+                .json("{\"displayName\":\"하늘\",\"birthDate\":\"2018-10-15\",\"interests\":[\"공룡\"]}"));
         send("PUT /api/child/stop-expressions", app.put("/api/child/stop-expressions").session(session).csrf(csrf)
                 .json("{\"items\":[{\"text\":\"이제 그만\"}]}"));
         UUID device = fixtures.registeredDevice(guardianId, ConnectionState.CONNECTED, app.clock().now(), app.clock().now());

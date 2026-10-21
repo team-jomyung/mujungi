@@ -5,27 +5,46 @@
   "description": "GET /api/home 200(계약 3절 · J119). U1 모양: child = 시드 아이(아이가 없으면 null), device = DeviceView, currentSession = null(U4가 채움), lock = {locked: !canStart, reasonCode}.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["child", "device", "currentSession", "lock"],
+  "required": [
+    "child",
+    "device",
+    "currentSession",
+    "lock"
+  ],
   "properties": {
     "child": {
       "anyOf": [
-        { "$ref": "#/$defs/Child" },
-        { "type": "null" }
+        {
+          "$ref": "#/$defs/Child"
+        },
+        {
+          "type": "null"
+        }
       ]
     },
-    "device": { "$ref": "device-view.schema.json" },
+    "device": {
+      "$ref": "device-view.schema.json"
+    },
     "currentSession": {
       "anyOf": [
-        { "$ref": "live-view.schema.json#/$defs/SessionSummary" },
-        { "type": "null" }
+        {
+          "$ref": "live-view.schema.json#/$defs/SessionSummary"
+        },
+        {
+          "type": "null"
+        }
       ]
     },
     "lock": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["locked"],
+      "required": [
+        "locked"
+      ],
       "properties": {
-        "locked": { "type": "boolean" },
+        "locked": {
+          "type": "boolean"
+        },
         "reasonCode": {
           "anyOf": [
             {
@@ -38,7 +57,9 @@
                 "DEVICE_STATUS_UNKNOWN"
               ]
             },
-            { "type": "null" }
+            {
+              "type": "null"
+            }
           ]
         }
       }
@@ -48,12 +69,31 @@
     "Child": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["childId", "displayName", "age", "interests"],
+      "required": [
+        "childId",
+        "displayName",
+        "age",
+        "interests"
+      ],
       "properties": {
-        "childId": { "$ref": "common.schema.json#/$defs/Uuid" },
-        "displayName": { "type": "string", "minLength": 1, "maxLength": 10 },
-        "age": { "type": "integer", "minimum": 6, "maximum": 12 },
-        "interests": { "type": "array", "items": { "type": "string" } }
+        "childId": {
+          "$ref": "common.schema.json#/$defs/Uuid"
+        },
+        "displayName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 10
+        },
+        "age": {
+          "type": "integer",
+          "minimum": 6
+        },
+        "interests": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
       }
     }
   }

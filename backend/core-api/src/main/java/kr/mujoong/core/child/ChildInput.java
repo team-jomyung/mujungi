@@ -1,6 +1,7 @@
 package kr.mujoong.core.child;
 
 import java.text.Normalizer;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -29,31 +30,22 @@ public final class ChildInput {
     }
 
     /** 검증을 마친 아이 정보. */
-    public record Valid(String displayName, int age, List<String> interests) {
-
-        public Valid {
-            interests = List.copyOf(interests);
-        }
-
-        /** 이름 · 관심사는 문자열 표현에 내지 않는다. */
-        @Override
-        public String toString() {
-            return "Valid[age=" + age + ", interests=" + interests.size() + "]";
-        }
+    public record Valid(String displayName, LocalDate birthDate, List<String> interests) {
+        public Valid { interests = List.copyOf(interests); }
+        @Override public String toString() { return "Valid[redacted]"; }
     }
 
-    /** 처음 등록: 세 값 모두 필요하다(관심사는 빈 목록 허용). */
-    public static Valid forCreate(String displayName, Integer age, List<String> interests) {
-        return new Valid(name(displayName), age(age), interests == null ? List.of() : interests(interests));
+    public static Valid forCreate(String displayName, String birthDate, List<String> interests, LocalDate registeredOn) {
+        LocalDate birth = BirthDateRules.parse(birthDate);
+        BirthDateRules.requireEligible(birth, registeredOn);
+        return new Valid(name(displayName), birth, interests == null ? List.of() : interests(interests));
     }
 
-    /** 수정: 온 값만 바꾸고 나머지는 지금 값을 쓴다. 바꿀 값이 하나도 없으면 400. */
-    public static Valid forUpdate(Valid current, String displayName, Integer age, List<String> interests) {
-        if (displayName == null && age == null && interests == null) {
-            throw invalid();
-        }
-        return new Valid(displayName == null ? current.displayName() : name(displayName),
-                age == null ? current.age() : age(age),
+    public static Valid forUpdate(Valid current, String displayName, String birthDate, List<String> interests, LocalDate registeredOn) {
+        if (displayName == null && birthDate == null && interests == null) throw invalid();
+        LocalDate birth = birthDate == null ? current.birthDate() : BirthDateRules.parse(birthDate);
+        if (birthDate != null) BirthDateRules.requireEligible(birth, registeredOn);
+        return new Valid(displayName == null ? current.displayName() : name(displayName), birth,
                 interests == null ? current.interests() : interests(interests));
     }
 
@@ -63,13 +55,6 @@ public final class ChildInput {
             throw invalid();
         }
         return name;
-    }
-
-    static int age(Integer value) {
-        if (value == null || value < AGE_MIN || value > AGE_MAX) {
-            throw invalid();
-        }
-        return value;
     }
 
     static List<String> interests(List<String> values) {

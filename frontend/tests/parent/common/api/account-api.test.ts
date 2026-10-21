@@ -65,7 +65,7 @@ describe("읽기(계약 10절: 모르는 값은 UNKNOWN, 필수 누락은 형식
   });
 
   it("아이 · 종료 표현을 읽는다(순서는 sortOrder)", () => {
-    expect(parseChild(childBody())).toEqual({ childId: expect.any(String), displayName: "하늘", age: 8, interests: ["공룡", "그림"] });
+    expect(parseChild(childBody())).toEqual({ childId: expect.any(String), displayName: "하늘", age: 8, birthDate: "2018-10-15", registeredOn: "2026-10-15", interests: ["공룡", "그림"] });
     expect(() => parseChild({ ...childBody(), age: "8" })).toThrow(ResponseShapeError);
     expect(parseChild({ ...childBody(), interests: ["a", 1] }).interests).toEqual(["a"]);
     const body = stopBody(["이제 그만", "끝낼래"]);
@@ -108,8 +108,8 @@ describe("요청(경로 · 메서드 · CSRF · 본문)", () => {
     });
 
     await saveConsents(api, "1.0");
-    await registerChild(api, { displayName: "하늘", age: 8, interests: ["공룡"] });
-    await updateChild(api, { displayName: "하늘", age: 9, interests: [] });
+    await registerChild(api, { displayName: "하늘", birthDate: "2018-10-15", interests: ["공룡"] });
+    await updateChild(api, { displayName: "하늘", birthDate: "2017-10-15", interests: [] });
     await saveStopExpressions(api, ["이제 그만"]);
     expect(await requestAccountDeletion(api)).toBe("00000000-0000-4000-8000-000000000050");
     await api.csrf.ensure();
