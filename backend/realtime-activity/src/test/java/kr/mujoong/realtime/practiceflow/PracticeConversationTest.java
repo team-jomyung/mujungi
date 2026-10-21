@@ -230,6 +230,45 @@ class PracticeConversationTest {
     // ---- 재시도 한도 · 코치 예시 ----
 
     @Test
+    void generationTimeDoesNotConsumeTheDevicePlaybackGuard() {
+        Harness h = minimal();
+        h.activate();
+        UUID intro = h.out.lastSlot().correlationId();
+        h.advance(Duration.ofSeconds(12));
+        h.end(Playback.STARTED);
+        assertThat(h.advance(Duration.ofSeconds(8))).isEqualTo(Signal.NONE);
+        assertThat(h.event(ExtensionEvent.Kind.TIMER_FIRED, "slot-guard-" + intro, null, null)).isEqualTo(Signal.NONE);
+        assertThat(h.advance(Duration.ofSeconds(6))).isEqualTo(Signal.NONE);
+        assertThat(h.out.cancelledSpeech).isEmpty();
+        h.played();
+        assertThat(h.recorder.list()).hasSize(1);
+        assertThat(h.ext.state().phase()).isEqualTo(FlowState.Phase.OPPORTUNITY);
+    }
+
+    @Test
+    void duplicatePlaybackStartsCannotKeepAnUnfinishedIntroAlive() {
+        Harness h = minimal();
+        h.activate();
+        h.advance(Duration.ofSeconds(12));
+        h.end(Playback.STARTED);
+        h.advance(Duration.ofSeconds(10));
+        h.end(Playback.STARTED);
+        assertThat(h.advance(Duration.ofSeconds(10))).isEqualTo(Signal.OUTPUT_FAILED);
+        assertThat(h.recorder.list()).isEmpty();
+        assertThat(h.out.cancelledSpeech).hasSize(1);
+    }
+
+    @Test
+    void anUnknownPlaybackStartDoesNotExtendTheGenerationGuard() {
+        Harness h = minimal();
+        h.activate();
+        h.advance(Duration.ofSeconds(12));
+        h.slotEvent(UUID.randomUUID(), Playback.STARTED, null, "unrelated");
+        assertThat(h.advance(Duration.ofSeconds(8))).isEqualTo(Signal.OUTPUT_FAILED);
+        assertThat(h.recorder.list()).isEmpty();
+    }
+
+    @Test
     void twoRetriesAreAllowedAndTheThirdPartialClosesAsFocusLimitWithTheExampleOnlyInTheSecondCoachRound() {
         Harness h = full();
         h.toOpportunity();

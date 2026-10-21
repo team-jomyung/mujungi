@@ -102,6 +102,7 @@ public final class PracticeConversation implements PracticeSessionExtension {
     private UUID sceneRunId;
     private boolean sceneRowCreated;
     private UUID openSlot;
+    private boolean openSlotPlaying;
     private boolean awaitingNotice;
     private boolean inputReady;
     private Utterance earlyUtterance;
@@ -466,10 +467,16 @@ public final class PracticeConversation implements PracticeSessionExtension {
     // ---- 슬롯 · 재생 사건 ----
 
     private void onPlayback(PlaybackFact fact, UUID eventCorrelation) {
+        UUID correlation = fact.speech() != null ? fact.speech().correlationId() : eventCorrelation;
         if (fact.started()) {
+            if (correlation != null && correlation.equals(openSlot) && !openSlotPlaying) {
+                // Generation and actual playback each have a bounded guard. Duplicate STARTED marks cannot extend it.
+                output.cancel(slotGuardName());
+                openSlotPlaying = true;
+                output.schedule(slotGuardName(), settings.slotGuard());
+            }
             return;
         }
-        UUID correlation = fact.speech() != null ? fact.speech().correlationId() : eventCorrelation;
         SlotEnd end = fact.played() ? SlotEnd.PLAYED : fact.interrupted() ? SlotEnd.INTERRUPTED : SlotEnd.FAILED;
         handleSlotEnd(correlation, end);
     }
@@ -486,8 +493,9 @@ public final class PracticeConversation implements PracticeSessionExtension {
         }
         state.markHandled(correlation);
         if (mine) {
-            output.cancel(TIMER_SLOT_GUARD + correlation);
+            output.cancel(slotGuardName());
             openSlot = null;
+            openSlotPlaying = false;
         } else {
             output.cancel(TIMER_NOTICE_GUARD);
             awaitingNotice = false;
@@ -525,7 +533,7 @@ public final class PracticeConversation implements PracticeSessionExtension {
                 }
             }
             default -> {
-                if (name.startsWith(TIMER_SLOT_GUARD) && openSlot != null && name.equals(TIMER_SLOT_GUARD + openSlot)) {
+                if (name.startsWith(TIMER_SLOT_GUARD) && openSlot != null && name.equals(slotGuardName())) {
                     // 종료 사건이 끝내 오지 않았다: 실패로 본다(안전망). 늦게 닿는 사건은 처리 완료로 무시한다
                     UUID stuck = openSlot;
                     output.cancelSpeech(stuck);
@@ -779,18 +787,24 @@ public final class PracticeConversation implements PracticeSessionExtension {
 
     private void openSlot(UUID correlation) {
         openSlot = correlation;
+        openSlotPlaying = false;
         inputReady = false;
-        output.schedule(TIMER_SLOT_GUARD + correlation, settings.slotGuard());
+        output.schedule(slotGuardName(), settings.slotGuard());
+    }
+
+    private String slotGuardName() {
+        return TIMER_SLOT_GUARD + openSlot + (openSlotPlaying ? "-playing" : "");
     }
 
     /** 확장이 스스로 슬롯을 닫는다(한도 만료 · 단계 변경): 취소 즉시 처리 완료로 두어 늦게 닿는 사건을 무시한다. */
     private void cancelOpenSlot() {
         if (openSlot != null) {
             UUID slot = openSlot;
+            output.cancel(slotGuardName());
             openSlot = null;
+            openSlotPlaying = false;
             state.markHandled(slot);
             output.cancelSpeech(slot);
-            output.cancel(TIMER_SLOT_GUARD + slot);
         }
         if (awaitingNotice) {
             awaitingNotice = false;
