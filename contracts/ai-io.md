@@ -42,7 +42,7 @@
 
 | 방향 | type | 필드 | 출처 · 쓰임 |
 |---|---|---|---|
-| 서버 → 공급자 | `session.start` | `session{model, instructions, audio{format{type: "audio/pcm", rate: 24000}}}` — `model`은 코드 상수, `instructions`는 서버 템플릿 지시문(아이 정보는 따옴표로 묶은 데이터로만) | 실호출(중첩 모양 · 24kHz 수락). 연결 직후 한 번. 응답 `session.started`가 ACTIVE 전이 조건의 하나다(BR6.8) |
+| 서버 → 공급자 | `session.start` | `session{model, instructions, audio{format{type: "audio/pcm", rate: 24000}}}` — `model`은 코드 상수, `instructions`는 서버 템플릿 지시문(공통 역할 문장 + 아이 정보는 따옴표로 묶은 데이터로만 + 세션 계획의 활동 종류별 본문 판 `live-prompts/{free-talk,practice}.v<n>.txt`. 쓴 판 이름과 본문 sha256은 세션 사건 `LIVE_INSTRUCTIONS`로만 남고 본문은 남기지 않는다 [U11 편차 (U11-e)]) | 실호출(중첩 모양 · 24kHz 수락). 연결 직후 한 번. 응답 `session.started`가 ACTIVE 전이 조건의 하나다(BR6.8) |
 | 서버 → 공급자 | `session.input_audio.append` | `audio`(base64, 기기 0x01 프레임 본문 960바이트 그대로) | 실호출. ACTIVE 뒤 ~ CLOSE_TRANSPORT 전 기기 프레임을 순번 순으로(BR7.1 · R3-8). 그 밖의 프레임은 버린다. 참여 확인(WAITING_CHILD)부터 중계하고 원음 기록은 ACTIVE부터다(U4b-J2) |
 | 서버 → 공급자 | `session.instructions.append` | `event_id`(서버 발급, 확인 사건의 `client_event_id`로 돌아온다) · `delegation_id`(**항상 있어야 한다, 값은 `null`**) · `content`(지시문, 500토큰 이하) | 실호출. `delegation_id` 키가 없으면 공급자가 `error{missing_required_parameter, param delegation_id}`로 거절한다 — 이 프로젝트 JSON 코덱이 null 필드를 쓰지 않으므로 이 속성만 항상 쓰게 한다. 옛 본문 필드 `text`는 없다. **서버의 모든 발화는 이 지시 하나로 시작한다**(참여 뒤 첫 응답 · 확인 뒤 이어 가기 · 연습 발화 · 연습 `requestResponse` · 게이트 교정 · 판정 뒤 지시, 아래 '서버 발화'). 전사 · 걸린 패턴 · 미승인 원문은 넣지 않는다 |
 | 서버 → 공급자 | `session.close` | — | 종료 · FAILED 전이 뒤 공급자 세션 정리(BR6.10 ④). 응답 `session.closed`(실호출) |
@@ -330,6 +330,7 @@ U15 씨앗 v2는 GENERATED/DUPLICATE/NONE의 배타적 출력 분기를 사용�
 
 - 판정 질문 · 선택지(J1 ~ J6, A §7.3 · B §5.2)는 realtime `judgment/option-sets-v1.json`, 제브 검사 질문 · 라벨 8개 설명(7개 범주 + `PASS`) · 7개 범주 · 모드(C §3.1 · §3.2, AI 동작 명세 §10.2)는 `guardrail/policy-v2.json`에 둔다(U8의 `policy-v1.json`은 이력으로 남기고 코드가 읽지 않는다) [U13 편차 (U13-c)]. J7은 core 상황 생성 자체 검토 프롬프트(U10)라 realtime 판에 넣지 않는다.
 - realtime은 기동 때 두 파일을 읽어 검증하고, 파일이 없거나 형식이 틀리면 기동을 거부한다(BR2.1 · 4절 시드 사전과 같은 방식).
+- GPT-Live 세션 지시문의 활동 본문은 realtime `live-prompts/free-talk.v1.txt`(판 `live-free-talk.v1`) · `live-prompts/practice.v1.txt`(판 `live-practice.v1`)다. 기동 때 읽고, 파일이 없거나 비었거나 임시 상한(4000자)을 넘거나 자리 표시자(`{ }`)가 있으면 기동을 거부한다. 판을 올릴 때는 새 파일을 만들고 `LiveSessionInstructions`의 판 상수 한 줄만 바꾼다. 세션마다 공급자 연결 직후 `LIVE_INSTRUCTIONS{kind, version, sha256}` 사건 하나를 남긴다 [U11 편차 (U11-e)].
 - 세션을 받을 때 두 판의 번호와 패키지의 승인 문구 판(`approvedContent` · `approvedSpeech`)을 세션 계획에 고정하고, 세션 정산이 끝나면 놓는다. 판정 · 검사 기록 행은 고정된 판 번호를 함께 남긴다(BR2.2, 기록은 U11 · U13).
 
 ### 10.5 원문 일치와 제브 생략

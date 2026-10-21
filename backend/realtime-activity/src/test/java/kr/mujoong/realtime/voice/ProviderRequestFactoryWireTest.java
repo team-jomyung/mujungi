@@ -12,6 +12,7 @@ import java.util.Map;
 import java.util.Set;
 import kr.mujoong.contract.audio.AudioFrameCodec;
 import kr.mujoong.contract.json.JsonCodec;
+import kr.mujoong.contract.status.ActivityType;
 import kr.mujoong.realtime.dialog.DialogInstructions;
 import kr.mujoong.realtime.dialog.InstructionTemplates;
 import kr.mujoong.realtime.session.ChildContext;
@@ -164,5 +165,31 @@ class ProviderRequestFactoryWireTest {
         assertThatThrownBy(() -> factory.inputAudio(new byte[AudioFrameCodec.INPUT_PAYLOAD_BYTES - 1]))
                 .isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> factory.inputAudio(null)).isInstanceOf(NullPointerException.class);
+    }
+
+    @Test
+    void freeTalkInstructionsStayByteForByteTheSameAndPracticeDropsTheFirstQuestion() {
+        ChildContext child = new ChildContext("하늘", 8, List.of("공룡"));
+        String role = DialogInstructions.role("하늘", 8, List.of("공룡"));
+
+        String free = factory.sessionStart(child).session().instructions();
+        String practice = factory.sessionStart(child, ActivityType.PRACTICE).session().instructions();
+
+        assertThat(free).isEqualTo(role + " 참여가 확인되면 관심사나 일상 질문 하나로 시작한다.");
+        assertThat(factory.sessionStart(child, ActivityType.FREE_TALK).session().instructions()).isEqualTo(free);
+        assertThat(factory.sessionStart(child, 16_000).session().instructions()).isEqualTo(free);
+        assertThat(practice).startsWith(role + " ").isNotEqualTo(free).doesNotContain("관심사나 일상 질문")
+                .endsWith(factory.liveInstructions().of(ActivityType.PRACTICE).text());
+    }
+
+    @Test
+    void bothActivityKindsSendExactlyTheSameObservedKeys() {
+        ChildContext child = new ChildContext("하늘", 8, List.of());
+
+        assertThat(keys(wire(factory.sessionStart(child, ActivityType.PRACTICE)), ""))
+                .isEqualTo(keys(wire(factory.sessionStart(child, ActivityType.FREE_TALK)), ""));
+        assertThat(wire(factory.sessionStart(child, ActivityType.PRACTICE, 16_000)).get("session").get("audio").get("format")
+                .get("rate").asInt()).isEqualTo(16_000);
+        assertThatThrownBy(() -> factory.sessionStart(child, ActivityType.UNRECOGNIZED)).isInstanceOf(IllegalArgumentException.class);
     }
 }

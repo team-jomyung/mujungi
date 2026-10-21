@@ -66,3 +66,4 @@ backend/realtime-activity/src/main/java/kr/mujoong/realtime/voice/ProviderRespon
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/dialog/StopIntentJudge.java
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/log/RealtimeVoiceDeletionParticipant.java
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/common/collect/BoundedCollections.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/dialog/LiveSessionInstructions.java
