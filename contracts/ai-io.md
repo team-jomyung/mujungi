@@ -499,7 +499,8 @@ core 상황 생성(U10)이 내는 대본(`practice-scenario.schema.json`의 `scr
 2. **도입 · 기회 문장 재생** [U12 편차 (U12-c)]
    - core 규칙은 그대로다: BASE `sceneDescription`은 기회 조건과 `opportunitySentence`를 정규화 비교(7절, `ScenarioContentPolicy.normalize`)로 포함한다. 레거시 `scenarioText` · `triggerScript` · 지문 · 검증 표시가 이 규칙에 기댄다.
    - realtime 도입은 `sceneDescription` 원문을 자르지 않고 그대로 승인 발화로 재생한다. 승인 발화에는 core가 발급한 문장 원문만 들어가므로 10.5의 원문 일치 · 제브 생략 규칙은 넓어지지 않는다(승인 원문의 일부는 승인 발화가 아니다).
-   - 설명이 기회 문장을 담고(같은 문자 부류의 정규화 비교) 도입이 끝까지 재생(PLAYED)됐으면, 도입 직후 OPPORTUNITY 진입에서 기회 문장을 다시 재생하지 않고 곧바로 아이 말을 기다린다. 도입이 끊겼거나 설명에 기회 문장이 없으면 기회 문장을 따로 재생한다.
+   - 설명이 기회 문장으로 끝나고(같은 문자 부류의 정규화 비교, 설명의 마지막 낱말들이 기회 문장과 같음) 도입이 끝까지 재생(PLAYED)됐으면, 도입 직후 OPPORTUNITY 진입에서 기회 문장을 다시 재생하지 않고 곧바로 아이 말을 기다린다. 이 규칙은 BASE · VARIANT에 같이 쓴다. core는 포함만 강제하고 위치 · 낱말 경계는 보지 않으므로, 기회 문장이 설명 가운데 있거나 간접 인용으로만 나오거나 다른 낱말 안에 들어 있으면 따로 재생한다. 도입이 끊겼거나 설명이 기회 문장으로 끝나지 않을 때도 따로 재생한다.
+   - 기회 문장으로 끝나는 도입이 재생되는 동안 확정된 아이 전사는 마지막 하나만 두었다가 도입이 끝까지 재생되면 OPPORTUNITY(J2) 입력으로 판정한다. 도입이 끊기거나 실패하면 그 전사는 버리고 기회 문장을 다시 재생한다.
    - 무응답 재안내와 상황 다시 설명 뒤의 OPPORTUNITY 재진입은 기회 문장을 재생한다. 친구 · 코치 지시문의 '상황:'에는 설명 전체를 그대로 둔다.
 3. **record.practice v2 → core 노출 정산** [U12 편차 (U12-d)]
    - core는 `flowVersion=practice-conversation-v1` 기록의 `scenes[].scenarioRef` · `startedAt`을 노출로 읽는다(`RecordedScenarioExposures`). 장면을 시작한 대본이 아이에게 보인 대본이다.
