@@ -1090,7 +1090,7 @@ class PracticeConversationTest {
 
     @Test
     void thePeerRuleSurvivesTheInstructionLengthLimitWithLongestFields() {
-        String longDescription = "놀".repeat(400) + STOP;
+        String longDescription = "놀".repeat(400) + " " + STOP;
         Harness h = new Harness(packageJson(GOAL, sceneScript(SCENARIO, longDescription, STOP, "가".repeat(20))), APPROVED);
         h.activate();
         h.played();
