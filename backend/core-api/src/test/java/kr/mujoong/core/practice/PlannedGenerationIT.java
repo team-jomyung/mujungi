@@ -135,11 +135,14 @@ import org.junit.jupiter.api.*;
                 e->assertThat(e.code()).isEqualTo(kr.mujoong.contract.error.ErrorCode.SCENARIO_GEN_FAILED));
         verify(f.provider,times(2)).generate(any());
     }
+    /** 계획 대역을 덮어쓰지 않는다: 기본 대역이 부르는 실제 VariantPlanner의 어휘 검사가 '블록 놀이'를 거절해야 이 결과가 나온다. */
     @Test void baseOutsideVocabularyFallsBackToGraphFreeBase(){
-        freeKoreanGoal();answerLikeV3(relational(scene(new VariantPlanner.Context("블록 놀이","교실","아이와 친구","FRIEND_CLOSE","FRIEND_PRIVATE"),null,"base","BASE")));
-        doAnswer(c->Optional.empty()).when(f.graph).variantPlan(any(),any(),any(),any(),any());
+        var outside=new VariantPlanner.Context("블록 놀이","교실","아이와 친구","FRIEND_CLOSE","FRIEND_PRIVATE");
+        freeKoreanGoal();answerLikeV3(relational(scene(outside,null,"base","BASE")));
         var result=f.legacy.service.generate(f.legacy.original());
         assertThat(result.scenes()).hasSize(1);assertThat(result.generation().graphContextUsed()).isFalse();assertThat(result.generation().calls()).isEqualTo(4);
+        verify(f.graph).variantPlan(any(),any(),any(),eq(outside),any());
+        assertThat(new VariantPlanner().plan(graphFixture.seed,outside,List.of())).isEmpty();
     }
     /** 목표 상대(scene.relation)는 Luna가 쓴 자유 한국어 그대로 두고, 관계 좌표만 열거값으로 둔다. */
     ScenarioScript.Scene relational(ScenarioScript.Scene s){

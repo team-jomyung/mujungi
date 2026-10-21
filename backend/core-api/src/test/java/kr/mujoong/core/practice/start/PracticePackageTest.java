@@ -19,6 +19,21 @@ import org.junit.jupiter.api.*;
     @Test void oldRowsDoNotInventOptionalFields(){assertThat(mapper.map(snapshot(false,false)).firstScenario()).doesNotContainKeys("scriptVersion","scenes","selfReview","generation");}
     @Test void candidateCarrierAndTypedContextReachC8(){var c8=mapper.c8(snapshot(true,true));var first=(Map<?,?>)((List<?>)c8.get("goals")).getFirst();assertThat(first.get("behaviorKey")).isEqualTo("candidate:synthetic-candidate");assertThat(first.get("candidateVersion")).isEqualTo(2);assertThat(first.get("goalContext")).isEqualTo(FrozenGoalTest.candidate());assertThat(first.get("firstScenario")).isNotNull();}
     @Test void scenarioPayloadMatchesCurrentWireSchema(){String body=JsonCodec.shared().write(mapper.map(snapshot(true,true)).firstScenario());assertThat(WebFixtures.schemaErrors("practice-scenario.schema.json",body)).isEmpty();}
+    /** 그래프 경로 v3 대본(관계 좌표가 열거값인 preservation, kgVersion 있음)도 첫 패키지에 그대로 실려 공개 대본 계약을 통과한다. */
+    @Test void v3GraphScriptReachesInitialPackageAndMatchesWireSchema(){
+        var preservation=new ScenarioScript.Preservation("seed:S1","친구가 멈추려 한다","의도를 유지한다","SAME_CONTEXT","topic","아이와 친구","SCHOOL_GROUP","CLASSMATE");
+        var base=new ScenarioScript.Scene("base","BASE","상황","말","설명",List.of(),List.of(),"같은 반 친구","교실","놀이",preservation,"역할");
+        var variant=new ScenarioScript.Scene("variant","VARIANT","새 상황","말","설명",List.of(),List.of(),"같은 반 친구","교실","그림",preservation,"역할");
+        var v3=new Scenario(UUID.randomUUID(),"ORIGINAL","같은 반 친구","기회","상황","역할","말",new Scenario.Validation(true,true,false),"scenario-script.v1",
+                List.of(base,variant),new Scenario.Review("APPROVE","fake","scenario-review.v1"),
+                new Scenario.Generation("fake",kr.mujoong.core.textai.ScenarioScriptProvider.GENERATION_PROMPT_VERSION,true,4,"graph-v7"));
+        String body=JsonCodec.shared().write(mapper.map(new PreparedPracticePackageMapper.PreparedSnapshot(session,key,List.of(frozen(true)),v3)).firstScenario());
+        Map<?,?> wire=JsonCodec.shared().read(body,Map.class);
+        @SuppressWarnings("unchecked") var generation=(Map<String,Object>)wire.get("generation");
+        assertThat(generation).containsEntry("promptVersion","scenario-generation.v3").containsEntry("kgVersion","graph-v7");
+        assertThat((List<?>)wire.get("scenes")).hasSize(2);
+        assertThat(WebFixtures.schemaErrors("practice-scenario.schema.json",body)).isEmpty();
+    }
     @Test void oldBehaviorWireValuesStayUnchanged(){var first=(Map<?,?>)((List<?>)mapper.c8(snapshot(false,false)).get("goals")).getFirst();assertThat(first.get("behaviorKey")).isEqualTo("ACCEPT_STOP");assertThat(first.get("behaviorVersion")).isEqualTo(1);assertThat(first.containsKey("candidateRef")).isFalse();}
     @Test void reuseCannotChangeSessionOrSelection(){var source=snapshot(true,true);assertThat(mapper.reuse(source,session,key,Set.of(goal))).isSameAs(source);assertThatThrownBy(()->mapper.reuse(source,UUID.randomUUID(),key,Set.of(goal))).isInstanceOf(IllegalArgumentException.class);}
     @Test void fullC8EnvelopeAcceptsCandidateAndOptionalScript(){var body=new LinkedHashMap<String,Object>();body.put("sessionId",session);body.put("idempotencyKey",key);body.put("guardianId",UUID.randomUUID());body.put("childId",UUID.randomUUID());body.put("deviceId",UUID.randomUUID());body.put("activityType","PRACTICE");body.put("consentSnapshot",Map.of("policyVersion","1.0","voiceAndText",true,"guardianView",true,"reportSharing",true,"rawAudio",true));body.put("childContext",Map.of("displayName","아이","age",8,"interests",List.of()));body.put("stopExpressions",List.of(Map.of("text","무중아 그만할래","isDefault",true)));body.put("approvedContent",Map.of("CLOSING",Map.of("contentVersionId",UUID.randomUUID(),"text","안녕","audioUrl","/media/approved/closing.wav"),"WAITING_FILLER",Map.of("contentVersionId",UUID.randomUUID(),"text","음","audioUrl","/media/approved/wait.wav")));body.put("practice",mapper.c8(snapshot(true,true)));assertThat(WebFixtures.schemaErrors("internal-session-start-request.schema.json",JsonCodec.shared().write(body))).isEmpty();}
