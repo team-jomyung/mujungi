@@ -58,7 +58,7 @@ class PracticeLinkContractTest {
         assertThat(pack.firstScenario().variantScene().orElseThrow().partnerRole()).isEqualTo("같은 반 친구");
         Scene base = pack.firstScenario().baseScene();
         assertThat(SceneIntro.carriesOpportunity(base.sceneDescription(), base.opportunitySentence()))
-                .as("core 규칙: BASE 설명이 기회 문장을 담는다").isTrue();
+                .as("고정 자료의 BASE 설명은 기회 문장으로 끝난다(재생 생략 경로를 지난다)").isTrue();
     }
 
     @Test
@@ -89,6 +89,19 @@ class PracticeLinkContractTest {
         assertThat(reask.generated()).isTrue();
         assertThat(reask.role()).isEqualTo("PEER");
         assertThat(reask.text()).contains("너는 아이의 친한 친구 역할이다", "아이 대신 대답하지 않는다", "정답이나 모범 문장을 먼저 말하지 말고");
+
+        // 진행이 남긴 장면 행이 core 정산이 읽는 칸(scenarioRef · sceneKind · goalRef · startedAt)을 고정 자료 2의 첫 장면과 같게 싣는다
+        SceneRunRecord row = h.recorder.only();
+        assertThat(h.recorder.list()).hasSize(1);
+        assertThat(row.scenarioRef()).as("고정 자료 1 firstScenario.scenarioId").isEqualTo(SCENARIO_ONE);
+        assertThat(row.goalRef()).isEqualTo(GOAL_ONE);
+        assertThat(row.sceneKind()).isEqualTo(SceneKind.BASE);
+        JsonNode recorded = TREE.readTree(JsonCodec.shared().write(h.recorder.practiceRecord())).path("scenes").get(0);
+        JsonNode shared = TREE.readTree(fixture("practice-record-v2.json")).path("scenes").get(0);
+        for (String field : List.of("scenarioRef", "sceneKind", "goalRef")) {
+            assertThat(recorded.path(field)).as(field).isEqualTo(shared.path(field));
+        }
+        assertThat(recorded.path("startedAt").asString()).as("정산이 읽는 시작 시각").isNotBlank();
     }
 
     @Test
