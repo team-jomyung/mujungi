@@ -330,6 +330,8 @@ public final class PracticeConversation implements PracticeSessionExtension {
         startGoal(state.goalIndex() + 1);
     }
 
+    private boolean outputFailed;
+
     private void closing(boolean byRequest) {
         output.cancel(TIMER_GOAL_LIMIT);
         output.cancel(TIMER_FOCUS_MAX);
@@ -340,7 +342,7 @@ public final class PracticeConversation implements PracticeSessionExtension {
             // 종료 · 휴식 판정은 실행부(J6) 소유다. 확장은 말을 멈추고 출력을 막은 채 실행부의 결정을 기다린다(신호를 내지 않는다)
             output.holdOutput(true);
         } else {
-            pendingSignal = Signal.LAST_GOAL;
+            pendingSignal = outputFailed ? Signal.OUTPUT_FAILED : Signal.LAST_GOAL;
         }
     }
 
@@ -492,6 +494,9 @@ public final class PracticeConversation implements PracticeSessionExtension {
             return;
         }
         state.markHandled(correlation);
+        if (end == SlotEnd.FAILED || end == SlotEnd.BLOCKED) {
+            outputFailed = true;
+        }
         if (mine) {
             output.cancel(slotGuardName());
             openSlot = null;

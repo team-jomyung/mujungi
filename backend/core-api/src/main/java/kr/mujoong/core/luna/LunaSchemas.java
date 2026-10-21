@@ -108,6 +108,21 @@ public final class LunaSchemas {
         return Optional.ofNullable(pairs.get(purpose));
     }
 
+    /** A request-only subset: optional graph metadata cannot turn into null or an invented graph. */
+    @SuppressWarnings("unchecked")
+    public Optional<OutputSchemaPair> pair(LunaPurpose purpose, Map<String, Object> input) {
+        var original = pair(purpose);
+        if (purpose != LunaPurpose.SCENARIO_GENERATION || original.isEmpty()) return original;
+        Map<String, Object> copy = json.read(json.write(original.get().requestSchema()), Map.class);
+        var root = (Map<String, Object>) copy.get("properties");
+        var scenes = (Map<String, Object>) root.get("scenes");
+        var scene = (Map<String, Object>) scenes.get("items");
+        var fields = (Map<String, Object>) scene.get("properties");
+        if (!input.containsKey("structureContext")) fields.remove("preservation");
+        scene.put("required", new ArrayList<>(fields.keySet()));
+        return Optional.of(new OutputSchemaPair(original.get().file(), copy, isStrict(copy)));
+    }
+
     /**
      * 출력 텍스트가 목적의 원본 계약 스키마를 통과하는가(BR4.2). JSON이 아니어도 거짓이다.
      *

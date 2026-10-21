@@ -32,6 +32,21 @@ class ScenarioGenerationTest {
     @Test void normalNeedsSeparateReviewAndServerRole(){var result=run();verify(provider).generate(any());verify(provider).review(any());assertThat(result.details().generation().calls()).isEqualTo(2);assertThat(result.details().review().verdict()).isEqualTo("APPROVE");assertThat(result.details().scenes().getFirst().partnerRole()).isEqualTo(ScenarioContentPolicy.PARTNER_ROLE);}
     @Test void rejectionUsesOneContentCorrectionThenSeparateReview(){when(provider.review(any())).thenReturn(reject("AGE_MISMATCH"),approve());assertThat(run().details().generation().calls()).isEqualTo(4);verify(provider,times(2)).generate(any());verify(provider,times(2)).review(any());}
     @Test void twiceRejectedNeverReturnsIssuableScript(){when(provider.review(any())).thenReturn(reject("REPETITION"));assertThatThrownBy(this::run).isInstanceOf(kr.mujoong.core.common.error.CoreApiException.class);verify(provider,times(2)).generate(any());verify(provider,times(2)).review(any());}
+    @Test void correctionReceivesTheRejectionReasonWithoutAcceptingTheRejectedScript(){
+        when(provider.review(any())).thenReturn(reject("REPETITION"),approve());
+        run();var calls=ArgumentCaptor.forClass(ScenarioScriptProvider.Call.class);
+        verify(provider,times(2)).generate(calls.capture());
+        assertThat(calls.getAllValues().getFirst().input()).doesNotContainKey("correctionReasons");
+        assertThat(calls.getAllValues().getLast().input()).containsEntry("correctionReasons",List.of("REPETITION"));
+    }
+    @Test void missingQuotedOpportunityProvidesSpecificCorrectionAndStillNeedsAValidReplacement(){
+        var scene=base();var indirect=new ScenarioScript.Scene(scene.sceneKey(),scene.sceneKind(),"블록 놀이 중이야. "+OPPORTUNITY,
+                scene.opportunitySentence(),scene.reexplanation(),scene.focusPoints(),scene.expressionExamples(),scene.relation(),scene.place(),scene.topic(),null,null);
+        when(provider.generate(any())).thenReturn(generated(indirect),generated(scene));
+        assertThat(run().details().generation().calls()).isEqualTo(4);
+        var calls=ArgumentCaptor.forClass(ScenarioScriptProvider.Call.class);verify(provider,times(2)).generate(calls.capture());
+        assertThat(calls.getAllValues().getLast().input().get("correctionReasons")).isEqualTo(List.of("INVALID_BASE","OPPORTUNITY_NOT_COPIED"));
+    }
     @Test void uncertainIsNotApproval(){when(provider.review(any())).thenReturn(new ScenarioScriptProvider.Reviewed(new ScenarioReview("UNCERTAIN",List.of()),"fake"));assertThatThrownBy(this::run).isInstanceOf(kr.mujoong.core.common.error.CoreApiException.class);verify(provider,times(2)).generate(any());}
     @Test void schemaFailureUsesContentNotTechnicalRetry(){when(provider.generate(any())).thenThrow(failure(ScenarioScriptProvider.Failure.Kind.CONTENT)).thenReturn(generated(base()));assertThat(run().details().generation().calls()).isEqualTo(3);verify(provider,times(2)).generate(any());verify(provider).review(any());}
     @Test void oneTechnicalRetryIsSharedBetweenGenerationAndReview(){when(provider.generate(any())).thenThrow(failure(ScenarioScriptProvider.Failure.Kind.TRANSIENT)).thenReturn(generated(base()));assertThat(run().details().generation().calls()).isEqualTo(3);assertThat(clock.elapsedSince(0)).isGreaterThanOrEqualTo(Duration.ZERO);}

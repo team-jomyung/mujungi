@@ -40,12 +40,12 @@ public final class ScenarioScriptGenerator {
     }
     public Result generate(Input input,ScenarioDeadline deadline){
         var budget=new Budget();ScenarioScript.Scene preserved=null;String model=null;
-        Input active=input;
+        Input active=input;List<String> correctionReasons=List.of();
         for(int correction=0;correction<=1;correction++){
             final Input current=active;
             try {
                 Map<String,Object> payload=new LinkedHashMap<>(current.payload());
-                if(correction>0)payload.put("correction",true);
+                if(correction>0){payload.put("correction",true);payload.put("correctionReasons",correctionReasons);}
                 if(preserved!=null)payload.put("baseToPreserve",preserved);
                 var generationStartedWith=deadline.remaining();
                 var generated=invoke(()->provider.generate(call(payload,current,deadline)),budget,deadline);
@@ -89,12 +89,24 @@ public final class ScenarioScriptGenerator {
                 if(preserved!=null&&(script.scenes().isEmpty()||!preserved.equals(script.scenes().getFirst())))result=ScenarioScriptValidation.Result.INVALID_BASE;
                 if(result==ScenarioScriptValidation.Result.VALID&&reviewed.review().approved())
                     return approved(script,model,reviewed.model(),current,budget,deadline);
+                correctionReasons=new java.util.ArrayList<>(reviewed.review().reasons());
+                if(result!=ScenarioScriptValidation.Result.VALID)correctionReasons.add(result.name());
+                if(!script.scenes().isEmpty()&&script.scenes().getFirst().sceneDescription()!=null){
+                    var base=script.scenes().getFirst();
+                    String description=ScenarioContentPolicy.normalize(base.sceneDescription());
+                    if(base.opportunitySentence()!=null&&!description.contains(ScenarioContentPolicy.normalize(base.opportunitySentence())))
+                        correctionReasons.add("OPPORTUNITY_NOT_COPIED");
+                    if(!description.contains(ScenarioContentPolicy.normalize(current.rules().opportunity())))
+                        correctionReasons.add("CONDITION_NOT_COPIED");
+                    if(!java.util.Objects.equals(base.relation(),current.rules().relation()))correctionReasons.add("RELATION_MISMATCH");
+                }
                 boolean variantOnly=result==ScenarioScriptValidation.Result.INVALID_VARIANT
                         ||(!reviewed.review().reasons().isEmpty()&&reviewed.review().reasons().stream().allMatch(ScenarioScriptGenerator::variantReason));
                 preserved=variantOnly&&result!=ScenarioScriptValidation.Result.INVALID_BASE&&!script.scenes().isEmpty()
                         ?script.scenes().getFirst():null;
             }catch(ScenarioScriptProvider.Failure failure){
                 if(failure.kind()!=ScenarioScriptProvider.Failure.Kind.CONTENT)throw ScenarioDeadline.failed();
+                correctionReasons=List.of("INVALID_OUTPUT_FORMAT");
             }
         }
         if(preserved!=null&&model!=null){

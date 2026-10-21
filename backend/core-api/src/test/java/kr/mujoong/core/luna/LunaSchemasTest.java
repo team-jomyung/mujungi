@@ -22,6 +22,26 @@ class LunaSchemasTest {
 
     private static final JsonCodec JSON = JsonCodec.shared();
 
+    @Test
+    @SuppressWarnings("unchecked")
+    void scenarioRequestIsStrictWithGraphMetadataOnlyWhenTheRequestHasGraphContext() {
+        var schemas = LunaSchemas.loadDefault(JSON);
+        String original = JSON.write(schemas.pair(LunaPurpose.SCENARIO_GENERATION).orElseThrow().requestSchema());
+        for (boolean graph : List.of(false, true)) {
+            var pair = schemas.pair(LunaPurpose.SCENARIO_GENERATION, graph ? Map.of("structureContext", Map.of("skillRef", "S1")) : Map.of()).orElseThrow();
+            assertThat(pair.strict()).isTrue();
+            var root = (Map<String, Object>) pair.requestSchema().get("properties");
+            var scenes = (Map<String, Object>) root.get("scenes");
+            var item = (Map<String, Object>) scenes.get("items");
+            var fields = (Map<String, Object>) item.get("properties");
+            assertThat(fields.containsKey("preservation")).isEqualTo(graph);
+            assertThat((List<String>) item.get("required")).containsAll(fields.keySet());
+        }
+        assertThat(JSON.write(schemas.pair(LunaPurpose.SCENARIO_GENERATION).orElseThrow().requestSchema())).isEqualTo(original);
+        assertThat(schemas.isValidOutput(LunaPurpose.SCENARIO_GENERATION, LunaTestFixtures.example("ai-scenario-output.schema.json"))).isTrue();
+        assertThat(schemas.isValidOutput(LunaPurpose.SCENARIO_GENERATION, "{\"scenes\":[]}")).isFalse();
+    }
+
     private static String contractFile(String name) {
         try {
             Path file = LunaTestFixtures.REPO_ROOT.resolve("contracts/schemas/" + name);

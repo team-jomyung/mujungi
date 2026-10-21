@@ -92,7 +92,7 @@ public class CoreLunaClient {
         }
         Optional<LunaSchemas.OutputSchemaPair> schema = request.outputMode() == LunaRequest.OutputMode.REPORT_JSON_SCHEMA_SINGLE_CALL
                 ? Optional.of(ReportResponseSchema.pair()) : request.outputMode() != LunaRequest.OutputMode.LEGACY_JSON_OBJECT
-                ? schemas.pair(request.purpose()) : Optional.empty();
+                ? schemas.pair(request.purpose(), input.payload()) : Optional.empty();
         String body = json.write(new ResponsesRequest(properties.model(), request.instructions(), json.write(input.payload()),
                 schema.orElse(null), request.purpose(), properties.options(request.purpose())).body());
         boolean retries = request.outputMode() == LunaRequest.OutputMode.CONTRACT

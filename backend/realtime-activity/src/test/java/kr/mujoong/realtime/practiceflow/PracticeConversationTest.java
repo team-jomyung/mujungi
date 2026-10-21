@@ -95,6 +95,18 @@ class PracticeConversationTest {
         assertThat(h.recorder.rows).isEmpty();
     }
 
+    @Test
+    void failedReexplanationIsSavedAsPlaybackFailureAndCannotCompleteThePractice() {
+        Harness h = minimal();
+        h.toOpportunity();
+        h.child("무슨 말인지 모르겠어");
+        h.result("J2", "NOT_UNDERSTOOD");
+        assertThat(h.ext.state().sub()).isEqualTo(FlowState.Sub.REEXPLAIN);
+        assertThat(h.end(Playback.FAILED)).isEqualTo(Signal.OUTPUT_FAILED);
+        assertThat(h.recorder.factKinds(h.recorder.only())).contains(FactKind.PLAYBACK_FAILED);
+        assertThat(h.recorder.only().endedAt()).isNotNull();
+    }
+
     // ---- AC1.2.3: 되묻기로 해결 ----
 
     @Test
@@ -480,7 +492,7 @@ class PracticeConversationTest {
                         "BLOCK", true));
         Signal late = h.slotEvent(reask.correlationId(), Playback.FAILED, null, reask.text());
 
-        assertThat(end).isEqualTo(Signal.LAST_GOAL);
+        assertThat(end).isEqualTo(Signal.OUTPUT_FAILED);
         assertThat(late).isEqualTo(Signal.NONE);
         SceneRunRecord row = h.recorder.only();
         assertThat(h.recorder.factKinds(row)).containsExactly(FactKind.VARIANT_SKIPPED);
@@ -489,7 +501,7 @@ class PracticeConversationTest {
     }
 
     @Test
-    void aGeneratedUtteranceTheOutputCannotMakeFailsItsSlotAndThePracticeContinues() {
+    void aGeneratedUtteranceTheOutputCannotMakeIsNotReportedAsPracticeCompleted() {
         Harness h = minimal();
         h.out.generatedResult = false;
         h.toOpportunity();
@@ -497,7 +509,7 @@ class PracticeConversationTest {
 
         Signal end = h.result("J2", "PARTIAL");
 
-        assertThat(end).isEqualTo(Signal.LAST_GOAL);
+        assertThat(end).isEqualTo(Signal.OUTPUT_FAILED);
         SceneRunRecord row = h.recorder.only();
         assertThat(h.recorder.factKinds(row)).containsExactly(FactKind.PLAYBACK_FAILED, FactKind.VARIANT_SKIPPED);
         assertThat(h.failures).isEmpty();
@@ -526,7 +538,7 @@ class PracticeConversationTest {
         h.result("J2", "HELP");
         Signal end = h.announcedNotice(status);
 
-        assertThat(end).isEqualTo(Signal.LAST_GOAL);
+        assertThat(end).isEqualTo(status == Playback.FAILED ? Signal.OUTPUT_FAILED : Signal.LAST_GOAL);
         assertThat(h.out.generatedSlots()).as("코치 발화 없음").isEmpty();
         assertThat(h.recorder.helps).as("역할 전환 기록 없음").isEmpty();
         assertThat(h.ext.state().role()).isEqualTo(PracticeFlowTypes.FlowRole.PEER);
@@ -566,7 +578,7 @@ class PracticeConversationTest {
                 new GuardrailBlockedEvent(notice.correlationId(), kr.mujoong.realtime.guardrail.GuardrailRequest.Mode.PRACTICE_COACH,
                         "BLOCK", true));
 
-        assertThat(end).isEqualTo(Signal.LAST_GOAL);
+        assertThat(end).isEqualTo(Signal.OUTPUT_FAILED);
         assertThat(h.ext.state().role()).isEqualTo(PracticeFlowTypes.FlowRole.PEER);
         assertThat(h.out.generatedSlots()).hasSize(1);
     }
