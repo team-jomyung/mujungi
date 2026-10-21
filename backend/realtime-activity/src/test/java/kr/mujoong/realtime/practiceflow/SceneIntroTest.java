@@ -55,6 +55,12 @@ class SceneIntroTest {
     }
 
     @Test
+    void aDescriptionShorterThanTheSentenceDoesNotCarryIt() {
+        assertThat(SceneIntro.carriesOpportunity("그만할래.", OPPORTUNITY)).as("기회 문장의 끝부분만 있다").isFalse();
+        assertThat(SceneIntro.carriesOpportunity("…", OPPORTUNITY)).as("낱말이 없다").isFalse();
+    }
+
+    @Test
     void aDescriptionThatIsOnlyTheOpportunitySentenceCarriesItSoItIsHeardOnce() {
         assertThat(SceneIntro.carriesOpportunity(OPPORTUNITY, OPPORTUNITY)).isTrue();
     }
