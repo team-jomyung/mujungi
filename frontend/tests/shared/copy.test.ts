@@ -9,6 +9,8 @@ import {
   abortedBody,
   codeCellLabel,
   counterText,
+  donePracticeHeader,
+  donePracticeTimeRangeLine,
   doneTimeRangeLine,
   formatRegistrationCode,
   guardianStopDetail,
@@ -61,6 +63,17 @@ describe("ko — 자리를 채우는 문구", () => {
     expect(guardianStopDetail("10:52")).toBe("「이야기 끝내기」 · 10:52");
     expect(abortedBody("10:34")).toBe("10:34 기기 연결이 끊겨 다시 잇지 못했어요. 끊기기 전까지의 기록은 남아요.");
     expect(abortedBody(null)).toBe("기기 연결이 끊겨 다시 잇지 못했어요. 끊기기 전까지의 기록은 남아요.");
+  });
+
+  it("17 연습 머리 · 시간 줄은 '목표 N개'를 붙이고, 목표 수를 모르면 뺀다(C.S-17.21.1 · C.S-17.21.3 · C.S-17.58.3)", () => {
+    expect(donePracticeHeader(2)).toBe("연습 · 목표 2개");
+    expect(donePracticeHeader(1)).toBe("연습 · 목표 1개");
+    expect(donePracticeHeader(null)).toBe("연습");
+    expect(donePracticeTimeRangeLine("10:40", "10:52", 2)).toBe("10:40 ~ 10:52 · 목표 2개");
+    expect(donePracticeTimeRangeLine("10:40", "10:55", 3)).toBe("10:40 ~ 10:55 · 목표 3개");
+    expect(donePracticeTimeRangeLine("10:40", "10:52", null)).toBe("10:40 ~ 10:52");
+    expect(COPY.done.practiceEndedTitle).toBe("오늘 연습이 끝났어요");
+    expect(PROPOSED_COPY.done.practiceClosingTitle).toBe("오늘 연습을 마무리하고 있어요");
   });
 
   it("보조기기 이름 · 글자 수 표기를 만든다(interaction-spec 3.7 · 3.9 · 3.10)", () => {

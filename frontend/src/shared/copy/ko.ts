@@ -93,6 +93,8 @@ export const COPY = {
     abortedTitle: "연결이 끊겨 끝났어요", // C.S-17.71.4
     abortedBodySuffix: " 기기 연결이 끊겨 다시 잇지 못했어요. 끊기기 전까지의 기록은 남아요.", // C.S-17.71.5 '10:34 …'
     home: "홈으로", // C.S-17.16.6
+    practiceHeader: "연습", // C.S-17.21.1 · C.S-17.58.1 '연습 · 목표 2개'의 앞
+    practiceEndedTitle: "오늘 연습이 끝났어요", // C.S-17.21.2 · C.S-17.58.2
   },
 } as const;
 
@@ -141,6 +143,10 @@ export const PROPOSED_COPY = {
   endSendFailed: "끝내기 요청을 보내지 못했어요. 인터넷을 확인해 주세요.", // mockups 9-18
   done: {
     guardianStopTitle: "보호자가 끝냈어요", // mockups 9-19
+    // 연습 마무리 중 제목은 문구표에 없다(C.S-17.73.x는 자유대화뿐). 지시서 작업 묶음 3 (e) 제안, 도연 승인 전.
+    practiceClosingTitle: "오늘 연습을 마무리하고 있어요",
+    // 종료 뒤 목표 수를 모를 때 머리는 '목표 N개' 없이 '연습'만 보인다(같은 제안, docs/done-screen-practice.md A2).
+    practiceHeaderWithoutGoals: COPY.done.practiceHeader,
   },
   retry: "다시 시도", // interaction-spec 1절 오류 「다시 시도」
 } as const;
@@ -304,6 +310,24 @@ export function speakerPrefix(speaker: "AI" | "CHILD", childName: string | null)
 /** '10:31 ~ 10:52 · 21분'(C.S-17.16.3). */
 export function doneTimeRangeLine(fromHhmm: string, toHhmm: string, minutes: number): string {
   return `${fromHhmm} ~ ${toHhmm} · ${minutes}분`;
+}
+
+/** '목표 2개'(C.S-17.21.1 · C.S-17.21.3 · C.S-17.58.1 · C.S-17.58.3의 뒤). */
+function goalCountText(goalCount: number): string {
+  return `목표 ${goalCount}개`;
+}
+
+/** '연습 · 목표 2개'(C.S-17.21.1 · C.S-17.58.1). 목표 수를 모르면 '연습'만(제안). */
+export function donePracticeHeader(goalCount: number | null): string {
+  return goalCount === null
+    ? PROPOSED_COPY.done.practiceHeaderWithoutGoals
+    : `${COPY.done.practiceHeader} · ${goalCountText(goalCount)}`;
+}
+
+/** '10:40 ~ 10:52 · 목표 2개'(C.S-17.21.3 · C.S-17.58.3). 목표 수를 모르면 '10:40 ~ 10:52'만(제안). */
+export function donePracticeTimeRangeLine(fromHhmm: string, toHhmm: string, goalCount: number | null): string {
+  const range = `${fromHhmm} ~ ${toHhmm}`;
+  return goalCount === null ? range : `${range} · ${goalCountText(goalCount)}`;
 }
 
 /** '「이야기 끝내기」 · 10:52'(mockups 9-19). */
