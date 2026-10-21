@@ -54,6 +54,18 @@ class StopConfirmFlowTest {
     }
 
     @Test
+    void theConfirmationSharesTheJoinClassifierSoAQuestionBackResumesAndAShortYesVariantCloses() {
+        // 참여 관문 안정화 (1): 확인 질문의 '예'도 참여 분류기를 쓴다 — 짧은 긍정 변형어는 끝, 되묻는 "응?"은 이어 간다
+        flow.onJudgment(Verdict.CONFIRM);
+        flow.promptPlayed(T0);
+        assertThat(flow.onReply("응?", false, T0.plusSeconds(2))).isEqualTo(Decision.RESUME);
+
+        flow.onJudgment(Verdict.CONFIRM);
+        flow.promptPlayed(T0);
+        assertThat(flow.onReply("네네", false, T0.plusSeconds(2))).isEqualTo(Decision.CLOSE);
+    }
+
+    @Test
     void noReplyUntil21SecondsResumesAndNineteenStillWaits() {
         flow.onJudgment(Verdict.CONFIRM);
         flow.promptPlayed(T0);

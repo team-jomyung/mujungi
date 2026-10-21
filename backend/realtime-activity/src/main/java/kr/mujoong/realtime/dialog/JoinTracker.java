@@ -1,9 +1,12 @@
 package kr.mujoong.realtime.dialog;
 
+import java.text.Normalizer;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
+import java.util.regex.Pattern;
 
 /**
  * 참여 판단 추적기 (U3 L4 · components DialogPolicy · U3-R13 · B17 · AC6.3.3 ~ 6.3.8 · AC3.5.1).
@@ -22,6 +25,10 @@ import java.util.Objects;
  *   <li>불명확 발화: 무응답이 아니며 참여 질문을 되묻는다 — 재안내 1회에 포함한다(AC6.3.8). 재안내를 이미 썼으면 안내 없이 창을 이어 간다.
  *   <li>안내는 처음 질문을 포함해 최대 3번(처음 · 재안내 · 대안, B17 · AC6.3.7).
  * </ul>
+ *
+ * <p>대답 분류({@link #classify})는 거부를 먼저 보고, 짧은 긍정은 낱말 단위로 본다: 문장 전체가 짧은 긍정이거나 첫 낱말이 짧은 긍정이면 뒤에 다른 말이
+ * 붙어도("응, 들려" · "네네 좋아요") 참여다. 첫 낱말에 물음표가 있으면("응?" · "네? 뭐라고요?") 되묻는 말이라 짧은 긍정 규칙을 쓰지 않는다
+ * (docs/join-gate-stabilization.md (1)).
  */
 public final class JoinTracker {
 
@@ -72,9 +79,17 @@ public final class JoinTracker {
             "아니", "아뇨", "노노", "안돼", "그만", "못하겠", "안할거", "안좋", "별로");
     private static final List<String> TOPIC_WORDS = List.of("이거말고", "그거말고", "얘기말고", "이야기말고", "말고다른",
             "다른거", "다른얘기", "다른이야기", "딴거", "딴얘기", "다른주제");
-    /** 짧은 대답 하나로 된 참여(뒤에 '요'가 붙어도 된다). */
-    private static final List<String> ACCEPT_EXACT = List.of("응", "응응", "웅", "어", "엉", "네", "넹", "예", "ㅇㅇ",
+    /** 짧은 대답 하나로 된 참여(뒤에 '요'가 붙어도 된다). 전사와 같은 정규화를 거친 값으로 비교한다('ㅇㅇ'은 NFKC에서 바뀐다). */
+    private static final List<String> ACCEPT_EXACT = normalized("응", "응응", "웅", "어", "엉", "네", "넹", "예", "ㅇㅇ",
             "그래", "그럼", "오케이", "ok", "okay", "yes", "당연하지", "물론이지");
+    /**
+     * 문장의 첫 낱말이면 뒤에 다른 말이 붙어도 참여로 보는 짧은 긍정('요'가 붙어도 된다). '어' · '엉'은 말머리 군말로 자주 쓰여 넣지 않는다 — 문장 전체가
+     * 그 한 낱말일 때만 {@link #ACCEPT_EXACT}로 참여다.
+     */
+    private static final List<String> ACCEPT_FIRST_WORD = normalized("응", "응응", "웅", "웅웅", "으응", "네", "네네", "넹", "넵",
+            "예", "ㅇㅇ", "그래", "좋아", "오케이", "ok", "yes", "알았어", "알겠어");
+    /** 응 · 웅 · 네 · 넹 · 예가 되풀이된 첫 낱말("응응응" · "네네네요"). */
+    private static final Pattern REPEATED_YES = Pattern.compile("^(응|웅|네|넹|예)+요?$");
     /** 들어 있으면 참여로 보는 말(거부 · 주제 거부를 먼저 본 뒤). */
     private static final List<String> ACCEPT_CUES = List.of("할래", "하자", "좋아", "좋지", "해볼래", "해보자", "할게",
             "재밌겠", "이야기해", "얘기해");
@@ -182,7 +197,11 @@ public final class JoinTracker {
         return finish(Phase.DECLINED, Action.DECLINE);
     }
 
-    /** 확정 전사를 응답으로 분류한다(주제 거부 → 거부 → 참여 → 불명확 순, 정규화는 종료 판정기와 같다). 빈 전사는 불명확이다. */
+    /**
+     * 확정 전사를 응답으로 분류한다. 순서는 주제 거부 → 거부 → 짧은 긍정(문장 전체 또는 첫 낱말) → 참여 단서 → 불명확이고, 정규화는 종료 판정기와
+     * 같다. 거부 표현이 함께 있으면 짧은 긍정보다 거부가 앞선다("응 싫어"는 거부). 첫 낱말에 물음표가 있으면 짧은 긍정 규칙은 건너뛰고 단서만 본다. 빈
+     * 전사는 불명확이다.
+     */
     public static Reply classify(String transcript) {
         String text = StopIntentJudge.normalize(transcript);
         if (text.isEmpty()) {
@@ -198,8 +217,12 @@ public final class JoinTracker {
                 return Reply.REFUSE;
             }
         }
-        for (String word : ACCEPT_EXACT) {
-            if (text.equals(word) || text.equals(word + "요")) {
+        if (!questioned(transcript)) {
+            if (isOneOf(text, ACCEPT_EXACT)) {
+                return Reply.ACCEPT;
+            }
+            List<String> words = StopIntentJudge.tokens(transcript);
+            if (!words.isEmpty() && (isOneOf(words.getFirst(), ACCEPT_FIRST_WORD) || REPEATED_YES.matcher(words.getFirst()).matches())) {
                 return Reply.ACCEPT;
             }
         }
@@ -209,6 +232,30 @@ public final class JoinTracker {
             }
         }
         return Reply.UNCLEAR;
+    }
+
+    /** 그 낱말이 목록의 하나이거나 그 뒤에 '요'가 붙은 꼴인가. */
+    private static boolean isOneOf(String word, List<String> list) {
+        for (String candidate : list) {
+            if (word.equals(candidate) || word.equals(candidate + "요")) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** 원문 첫 낱말(앞뒤 공백 제외)에 물음표('?' · 전각 '？')가 있는가. 되묻는 "응?"을 짧은 긍정으로 보지 않으려고 쓴다. */
+    private static boolean questioned(String transcript) {
+        String stripped = transcript.strip();
+        int end = 0;
+        while (end < stripped.length() && !Character.isWhitespace(stripped.charAt(end))) {
+            end++;
+        }
+        return Normalizer.normalize(stripped.substring(0, end), Normalizer.Form.NFKC).indexOf('?') >= 0;
+    }
+
+    private static List<String> normalized(String... words) {
+        return Arrays.stream(words).map(StopIntentJudge::normalize).toList();
     }
 
     /** 정규화(종료 판정기와 같다) 뒤 글자 수. 진단 로그에 쓴다(원문 대신 모양만 남긴다). */

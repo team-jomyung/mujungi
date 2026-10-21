@@ -148,7 +148,35 @@ class JoinTrackerTest {
         "공룡 얘기 말고, TOPIC_REFUSAL",
         "음, UNCLEAR",
         "어디야, UNCLEAR",
-        "'', UNCLEAR"
+        "'', UNCLEAR",
+        // 참여 관문 안정화 (1): 완료 조건 세 문장
+        "응 좋아, ACCEPT",
+        "어 할래, ACCEPT",
+        // 짧은 긍정의 변형어와 첫 낱말 규칙
+        "'응, 들려', ACCEPT",
+        "으응, ACCEPT",
+        "네네, ACCEPT",
+        "넵, ACCEPT",
+        "웅웅, ACCEPT",
+        "응응응, ACCEPT",
+        "알았어, ACCEPT",
+        "그래요, ACCEPT",
+        "ㅇㅇ, ACCEPT",
+        "'네네, 좋아요', ACCEPT",
+        "알겠어요 들려요, ACCEPT",
+        // 거부 · 주제 거부가 짧은 긍정보다 앞선다
+        "응 싫어, REFUSE",
+        "아니, REFUSE",
+        "'응, 그만할래', REFUSE",
+        "응 근데 이거 말고, TOPIC_REFUSAL",
+        // 되묻기 · 군말 · 인사 · 들리는지 확인은 불명확
+        "응?, UNCLEAR",
+        "네? 뭐라고요?, UNCLEAR",
+        "어 근데 뭐해, UNCLEAR",
+        "'어, 잠깐만', UNCLEAR",
+        "네가 해, UNCLEAR",
+        "안녕, UNCLEAR",
+        "내 말이 들리니?, UNCLEAR"
     })
     void repliesAreClassifiedTopicRefusalFirstThenRefusalThenAcceptElseUnclear(String text, Reply expected) {
         assertThat(JoinTracker.classify(text)).isEqualTo(expected);

@@ -201,6 +201,19 @@ class SessionJoinTest {
         assertThat(h.transitions.status(h.sessionId)).isEqualTo(SessionStatus.DECLINED);
     }
 
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"응", "응 좋아", "어 할래", "응, 들려", "네네"})
+    void theShortYesRepliesOfTheJoinGateStartTheActivityWithoutAJudgment(String reply) {
+        withPrompts();
+        toWaitingChild();
+        mark(plays().getFirst(), PlaybackMark.Status.COMPLETED);
+
+        h.childSays("i-1", reply);
+
+        assertThat(h.executor.status()).as("참여 관문 안정화 (1) 완료 조건 · 변형어").isEqualTo(SessionStatus.ACTIVE);
+        assertThat(events(JoinFlow.EVENT_JOIN_RE_PROMPTED)).isEmpty();
+    }
+
     @Test
     void aReplyWhileTheIntroIsStillPlayingIsHandledAtOnce() {
         withPrompts();
