@@ -137,6 +137,12 @@ PR은 둘로 나눈다.
   PARTICIPATE로 ACTIVE · CONFIRMED 기록 하나), `anUnclearResultReopensJ1WithTheHeldReply…`(두 번째 요청의 CHILD 문맥 · `JOIN_RE_PROMPTED` 1건 · 로그
   순서), `aWindowExpiryDeferredByTheFirstJ1SurvivesTheReopenWithTheHeldReply`(미룬 만기가 다시 연 J1 뒤에 돌아 DECLINED). 기존
   `theRepromptIsCountedOnlyOnceAcrossTwoUnclearAnswers` · `aWindowExpiryDuringAnOpenJ1IsDeferred…` · `aNewReplyWhileJ1IsOpenSupersedesIt…`은 그대로 통과한다.
+  리뷰 반영으로 SUPERSEDED 경로 시험 둘을 더했다: `aWindowExpiryDeferredByAJ1ThatAClearLateReplySupersedesStillEndsTheWait`(재안내 뒤 창 끝 1초 전에 J1을
+  열고 창이 찬 뒤 시작한 "이거 말고"가 J1을 대체 → SUPERSEDED 기록 · DECLINED · 대안 없음), `aClearReplyStartedBeforeTheWindowEndSupersedesJ1AndTheWindowClockRunsAgainAfterTheAlternative`
+  (창 끝 전에 시작한 "이거 말고"가 말하는 동안 창이 찬 뒤 J1을 대체 → 대안 1회 · WAITING_CHILD 유지, 대안 재생 뒤 21초 무응답 → DECLINED).
+  SUPERSEDED 뒤 미룬 만기(`windowTickPending`)는 지금 상태 기계에서는 늘 아무 일도 하지 않는다. 분명한 대답은 참여 판단을 반드시 창 밖으로 옮기기 때문이다
+  (START · 대안 · DECLINED, 또는 만기 먼저). 그래서 두 시험은 끝-끝 결과(멈추지 않음 · 두 번 처리하지 않음)를 고정하고, `windowTickPending`을 지워도 통과한다.
+  지시서 "어느 경로에서도 잃지 않는다"를 코드에 드러내려고 남긴 방어 길이다(JOIN-GATE-A22).
 - **문서**: 계약 변경 없음.
 
 ### (4) 창 만료 경계 (PR-B, (a) · (b)만)
@@ -275,6 +281,7 @@ PR은 둘로 나눈다.
 | JOIN-GATE-A19 | J1 합성 탐침의 COACH 글은 시드 파일(`infra/seed/003-u4a-reference.sql`)의 INTRO_FREE_TALK v2 글을 읽어 쓴다. 보고서에는 문장 대신 번호를 적는다 | 승인 문구를 코드에 다시 적지 않는다 · R-F14 |
 | JOIN-GATE-A20 | 에코 기준 8자는 정규화 뒤 코드 포인트 수다 | 분류기와 같은 기준 |
 | JOIN-GATE-A21 | `join-echo-tail`은 임시 1s이고 경계(끝 + 정확히 1s에 시작한 말)는 에코 의심에 넣는다. 키는 계약 7절 밖이라 `timing.md` 3절에 두었다 | 안내 끝 몇 글자의 에코는 첫 조각이 끝 표식보다 늦게 올 수 있다. 너무 길면 바로 따라 말하는 반향어가 버려진다. 실키로 확정(7절 8번) |
+| JOIN-GATE-A22 | J1을 SUPERSEDED로 닫은 분명한 대답 뒤의 미룬 만기 처리(`windowTickPending`)는 남겼다. 지금은 관찰되는 효과가 없다(위 (3) 시험 설명) | 참여 판단에 만기 뒤 ACCEPT 먼저((4)(c)) 같은 변경이 들어와도 만기를 잃지 않게 한다 |
 
 ## 6. 원 담당자와 맞출 것
 

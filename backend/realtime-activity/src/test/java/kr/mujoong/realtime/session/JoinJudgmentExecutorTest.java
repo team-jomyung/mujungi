@@ -227,6 +227,62 @@ class JoinJudgmentExecutorTest {
         assertThat(t.events(JoinFlow.EVENT_JOIN_RE_PROMPTED)).hasSize(1);
     }
 
+    @Test
+    void aWindowExpiryDeferredByAJ1ThatAClearLateReplySupersedesStillEndsTheWait() {
+        repromptedThenJ1OpenedJustBeforeTheWindowEnd();
+        t.advance(Duration.ofMillis(1_500));
+        assertThat(t.h.executor.status()).as("창 만기는 J1 중 미뤄진다").isEqualTo(SessionStatus.WAITING_CHILD);
+
+        // 창 끝 뒤에 시작한 분명한 대답이 J1을 대체한다
+        t.h.childSays("j-2", "이거 말고");
+
+        assertThat(t.records().getLast().outcome()).isEqualTo(JudgmentOutcomeKind.SUPERSEDED);
+        assertThat(t.h.transitions.status(t.h.sessionId)).as("미룬 만기가 처리돼 WAITING_CHILD에 멈추지 않는다")
+                .isEqualTo(SessionStatus.DECLINED);
+        assertThat(t.events(JoinFlow.EVENT_JOIN_ALTERNATIVE_OFFERED)).as("만기 뒤에 시작한 대답은 만기가 먼저").isEmpty();
+        assertThat(t.events(JoinFlow.EVENT_JOIN_RE_PROMPTED)).as("재안내는 되묻기 한 번뿐").hasSize(1);
+    }
+
+    @Test
+    void aClearReplyStartedBeforeTheWindowEndSupersedesJ1AndTheWindowClockRunsAgainAfterTheAlternative() {
+        repromptedThenJ1OpenedJustBeforeTheWindowEnd();
+        t.advance(Duration.ofMillis(500));
+        // 창 끝 전에 말을 시작하고, 말하는 동안 창이 찬다(J1이 열려 있어 만기는 미뤄진다)
+        t.h.provider.last().emit(new kr.mujoong.realtime.voice.ProviderPort.ProviderEvent.InputTranscriptDelta(null, "이거 "));
+        t.h.drain();
+        t.advance(Duration.ofMillis(800));
+        t.h.provider.last().emit(new kr.mujoong.realtime.voice.ProviderPort.ProviderEvent.InputTranscriptDelta(null, "말고"));
+        t.h.drain();
+        t.advance(t.h.settings.inputTranscriptQuiet());
+
+        assertThat(t.records().getLast().outcome()).isEqualTo(JudgmentOutcomeKind.SUPERSEDED);
+        assertThat(t.events(JoinFlow.EVENT_JOIN_ALTERNATIVE_OFFERED)).as("창 안의 주제 거부").hasSize(1);
+        assertThat(t.h.transitions.status(t.h.sessionId)).as("미룬 만기가 대안 뒤에 거절로 번지지 않는다")
+                .isEqualTo(SessionStatus.WAITING_CHILD);
+
+        t.mark(t.h.link.sent(kr.mujoong.contract.ws.message.PlayApprovedContent.class).getLast(),
+                kr.mujoong.contract.ws.message.PlaybackMark.Status.COMPLETED);
+        t.advance(Duration.ofSeconds(21));
+
+        assertThat(t.h.transitions.status(t.h.sessionId)).as("대안 뒤 창 시계가 다시 걸려 무응답이 거절로 끝난다")
+                .isEqualTo(SessionStatus.DECLINED);
+        assertThat(t.events(JoinFlow.EVENT_JOIN_RE_PROMPTED)).hasSize(1);
+    }
+
+    /** 되묻기(재안내)를 먼저 쓰고, 그 창 끝 1초 전에 불명확한 대답으로 J1을 연 상태로 간다. */
+    private void repromptedThenJ1OpenedJustBeforeTheWindowEnd() {
+        t.waiting();
+        t.h.childSays("j-0", JudgmentExecutorSupport.UNCLEAR_JOIN);
+        t.judge.confirm("UNCLEAR", 0.9, "REST", 0.05);
+        t.h.drain();
+        t.mark(t.h.link.sent(kr.mujoong.contract.ws.message.PlayApprovedContent.class).getLast(),
+                kr.mujoong.contract.ws.message.PlaybackMark.Status.COMPLETED);
+        t.advance(Duration.ofSeconds(19));
+        t.h.childSays("j-1", "음 그게");
+        assertThat(t.judge.calls()).hasSize(2);
+        assertThat(t.events(JoinFlow.EVENT_JOIN_RE_PROMPTED)).hasSize(1);
+    }
+
     // ------------------------------------------------------------------ 참여 관문 안정화 (5): 직전 안내 문장 문맥
 
     @Test
