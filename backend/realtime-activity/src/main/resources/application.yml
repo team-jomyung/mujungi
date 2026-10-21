@@ -95,6 +95,8 @@ mujoong:
       # U4b: 참여 창(처음 · 안내 뒤) · 공백 경고 · 공백 종료(계약 7절), 종료 확인 질문 창 · 정산 창(7절 밖)
       join-wait: 20s
       join-wait-after-reprompt: 20s
+      # 참여 관문 안정화 (6): 임시값. 참여 안내 재생이 끝난 뒤 이 안에 열린 입력 묶음까지 에코 의심을 본다(실키로 확정, contracts/timing.md 3절)
+      join-echo-tail: 1s
       silence-warning: 4m
       silence-end: 6m
       stop-confirm-wait: 20s

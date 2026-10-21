@@ -341,6 +341,73 @@ class SessionJoinTest {
     }
 
     @Test
+    void anEchoThatStartedWhileThePromptPlayedIsDroppedEvenWhenConfirmedLate() {
+        withPrompts();
+        toWaitingChild();
+        mark(plays().getFirst(), PlaybackMark.Status.STARTED);
+        h.provider.last().emit(new ProviderEvent.InputTranscriptDelta(null, "오늘 나랑 "));
+        h.drain();
+        mark(plays().getFirst(), PlaybackMark.Status.COMPLETED);
+        java.time.Instant ended = h.clock.now();
+        h.advanceAlive(Duration.ofMillis(800));
+        h.provider.last().emit(new ProviderEvent.InputTranscriptDelta(null, "이야기할래"));
+        h.drain();
+
+        h.advanceAlive(h.settings.inputTranscriptQuiet());
+
+        assertThat(h.clock.now()).as("확정은 재생 끝 + 꼬리 뒤").isAfter(ended.plus(SessionHarness.LIFECYCLE.joinEchoTail()));
+        assertThat(h.executor.status()).as("말은 재생 중에 시작했다").isEqualTo(SessionStatus.WAITING_CHILD);
+        assertThat(h.logs.events(kr.mujoong.contract.log.EventCode.JOIN_REPLY)).singleElement()
+                .satisfies(line -> assertThat(kr.mujoong.testsupport.log.LogCapture.attrs(line))
+                        .containsEntry("joinReply", "ECHO_SUSPECT").containsEntry("devicePlaying", true));
+    }
+
+    @Test
+    void anEchoStartedWithinTheTailAfterThePromptEndedIsStillDropped() {
+        withPrompts();
+        toWaitingChild();
+        mark(plays().getFirst(), PlaybackMark.Status.COMPLETED);
+        h.advanceAlive(SessionHarness.LIFECYCLE.joinEchoTail());
+
+        h.childSays("i-1", "오늘 나랑 이야기할래");
+
+        assertThat(h.executor.status()).as("꼬리 끝(같은 시각 포함)까지는 에코 의심").isEqualTo(SessionStatus.WAITING_CHILD);
+        assertThat(h.logs.events(kr.mujoong.contract.log.EventCode.JOIN_REPLY)).singleElement()
+                .satisfies(line -> assertThat(kr.mujoong.testsupport.log.LogCapture.attrs(line))
+                        .containsEntry("joinReply", "ECHO_SUSPECT").containsEntry("devicePlaying", false));
+    }
+
+    @Test
+    void aChildRepeatingTheIntroQuestionAfterTheTailIsAReply() {
+        // 반향어: 재생이 끝나고 꼬리가 지난 뒤 안내 질문을 따라 말하면 대답이다(리뷰 지적, JOIN-GATE-A16)
+        withPrompts();
+        toWaitingChild();
+        mark(plays().getFirst(), PlaybackMark.Status.COMPLETED);
+        h.advanceAlive(SessionHarness.LIFECYCLE.joinEchoTail().plusSeconds(1));
+
+        h.childSays("i-1", "오늘 나랑 이야기할래");
+
+        assertThat(h.executor.status()).isEqualTo(SessionStatus.ACTIVE);
+        assertThat(h.logs.events(kr.mujoong.contract.log.EventCode.JOIN_REPLY)).singleElement()
+                .satisfies(line -> assertThat(kr.mujoong.testsupport.log.LogCapture.attrs(line))
+                        .containsEntry("joinReply", "ACCEPT").containsEntry("joinAction", "START"));
+    }
+
+    @Test
+    void onlyTheLastSentPromptIsComparedForAnEcho() {
+        withPrompts();
+        toWaitingChild();
+        mark(plays().getFirst(), PlaybackMark.Status.COMPLETED);
+        h.advanceAlive(Duration.ofSeconds(21));
+        assertThat(plays()).extracting(PlayApprovedContent::contentCode).last().isEqualTo(SessionExecutor.RE_PROMPT);
+        mark(plays().getLast(), PlaybackMark.Status.STARTED);
+
+        h.childSays("i-1", "오늘 나랑 이야기할래");
+
+        assertThat(h.executor.status()).as("재안내 재생 중에 앞 INTRO 글을 따라 말한 것은 대답이다").isEqualTo(SessionStatus.ACTIVE);
+    }
+
+    @Test
     void aShortYesWhileTheIntroPlaysIsNeverTakenForAnEcho() {
         withPrompts();
         toWaitingChild();

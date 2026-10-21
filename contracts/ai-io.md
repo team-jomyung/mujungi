@@ -493,7 +493,7 @@ realtime 새 연습 흐름(U12)이 읽는 설정이다. 시간 값이 아니며 
 
 | 사건 | 속성 | 값 형식 | 값 |
 |---|---|---|---|
-| `JOIN_REPLY` | `joinReply` | ENUM | `ACCEPT` · `REFUSE` · `TOPIC_REFUSAL` · `UNCLEAR` · `ECHO_SUSPECT`(이 세션에서 재생한 참여 안내 글의 에코로 보고 버림) |
+| `JOIN_REPLY` | `joinReply` | ENUM | `ACCEPT` · `REFUSE` · `TOPIC_REFUSAL` · `UNCLEAR` · `ECHO_SUSPECT`(마지막으로 보낸 참여 안내의 재생 중 · 끝 뒤 `join-echo-tail` 안에 시작된 말이 그 안내 글의 에코로 보여 버림 [JG 편차 (JG-e)]) |
 | `JOIN_REPLY` | `joinAction` | ENUM | `NONE` · `START` · `REPROMPT` · `CLARIFY` · `OFFER_ALTERNATIVE` · `DECLINE`(참여 판단의 할 일) · `J1_OPENED`(J1을 열었다) · `J1_HELD`(J1이 열린 동안 온 불명확한 대답을 대기 칸에 두었다) |
 | `JOIN_REPLY` | `prompts` | NUMBER | 처리 뒤 안내 횟수(처음 질문 포함, 최대 3) |
 | `JOIN_REPLY` | `textLen` · `wordCount` | NUMBER | 정규화(NFKC · 소문자 · 한글 · 영문 · 숫자만) 뒤 글자 수, 공백으로 나눈 낱말 수 |

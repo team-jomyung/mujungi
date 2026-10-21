@@ -4,7 +4,6 @@ import java.text.Normalizer;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
 import java.util.regex.Pattern;
@@ -278,20 +277,21 @@ public final class JoinTracker {
     }
 
     /**
-     * 확정 전사가 재생한 안내 글의 에코로 보이는가: 정규화(종료 판정기와 같다) 뒤 {@link #ECHO_MIN_CHARS}자 이상이고, 같은 방식으로 정규화한 안내 글
-     * 하나의 부분 문자열이다. 기기 스피커 소리가 마이크로 다시 들어와 전사되면 안내 글의 "아니라" · "그만" · "하기 싫으면 안 해도"가 거부로 분류되는 것을 막는다.
+     * 확정 전사가 안내 글의 에코로 보이는가: 정규화(종료 판정기와 같다) 뒤 {@link #ECHO_MIN_CHARS}자 이상이고, 같은 방식으로 정규화한 안내 글의
+     * 부분 문자열이다. 기기 스피커 소리가 마이크로 다시 들어와 전사되면 안내 글의 "아니라" · "그만" · "하기 싫으면 안 해도"가 거부로 분류되는 것을 막는다.
+     * 언제의 전사를 볼지(재생 중 · 끝난 직후)는 부르는 쪽이 정한다.
+     *
+     * @param promptText 대조할 안내 글 하나(없으면 null)
      */
-    public static boolean echoOf(String transcript, Collection<String> promptTexts) {
+    public static boolean echoOf(String transcript, String promptText) {
+        if (promptText == null) {
+            return false;
+        }
         String text = StopIntentJudge.normalize(transcript);
         if (text.codePointCount(0, text.length()) < ECHO_MIN_CHARS) {
             return false;
         }
-        for (String prompt : promptTexts) {
-            if (prompt != null && StopIntentJudge.normalize(prompt).contains(text)) {
-                return true;
-            }
-        }
-        return false;
+        return StopIntentJudge.normalize(promptText).contains(text);
     }
 
     /** 정규화(종료 판정기와 같다) 뒤 글자 수. 진단 로그에 쓴다(원문 대신 모양만 남긴다). */

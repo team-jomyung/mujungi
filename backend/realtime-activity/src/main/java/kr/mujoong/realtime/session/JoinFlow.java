@@ -73,8 +73,12 @@ final class JoinFlow {
     private boolean speechTickPending;
     /** 마지막으로 기기에 보낸 참여 안내의 승인 글(J1 요청의 COACH 줄, 로그에 쓰지 않는다). 글을 모르면 null. */
     private String lastPromptText;
-    /** 이 세션에서 기기에 보낸 참여 안내의 승인 글(최대 3개, 에코 의심 대조에만 쓴다). */
-    private final List<String> playedPromptTexts = new ArrayList<>();
+    /** 에코 의심 대조에 쓰는 안내 글: 마지막 참여 안내를 기기에 보냈으면 그 승인 글, 보내지 못했으면(패키지에 없음 · 송신 실패) null. */
+    private String echoPromptText;
+    /** 그 안내를 기기에 보낸 시각. */
+    private Instant promptSentAt;
+    /** 그 안내의 끝 표식을 서버가 받은 시각(재생 중이면 null). */
+    private Instant promptEndedAt;
 
     /** 진단 로그(contracts/ai-io.md 10.15)에 남기는 확정 전사 하나의 모양. 원문은 담지 않는다. */
     private record ReplyMeta(int textLen, int wordCount, InputTranscriptGroup.Shape shape, boolean lateForWindow) {
@@ -132,9 +136,9 @@ final class JoinFlow {
             UUID playbackId = UUID.randomUUID();
             if (ctx.sendControl(new PlayApprovedContent(playbackId, contentCode, item.get().contentVersionId()))) {
                 lastPromptText = item.get().text();
-                if (lastPromptText != null && !lastPromptText.isBlank()) {
-                    playedPromptTexts.add(lastPromptText);
-                }
+                echoPromptText = lastPromptText == null || lastPromptText.isBlank() ? null : lastPromptText;
+                promptSentAt = now;
+                promptEndedAt = null;
                 ctx.joinPromptPlaybackId(playbackId);
                 ctx.playback().started(playbackId, contentCode);
                 ctx.timers().arm(Kind.PLAYBACK_EXPIRY, ctx.services().settings().playbackExpiry());
@@ -142,12 +146,15 @@ final class JoinFlow {
                 return;
             }
         }
+        // 아무것도 재생하지 않았으니 에코로 버릴 말도 없다
+        echoPromptText = null;
         ctx.joinPromptPlaybackId(null);
         onJoinPromptPlayed(now);
     }
 
     /** 참여 안내 재생이 끝났다(서버가 끝 표식을 받은 시각): 창을 연다. */
     void onJoinPromptPlayed(Instant at) {
+        promptEndedAt = at;
         if (ctx.status() != SessionStatus.WAITING_CHILD || join == null || join.isFinished()) {
             return;
         }
@@ -192,8 +199,8 @@ final class JoinFlow {
      * JoinTracker 동작). 처리마다 진단 로그 한 줄을 남긴다(원문 없음).
      *
      * <p>J1이 열린 동안 온 대답이 불명확하면 J1을 닫지 않고 대기 칸에 둔다(판정 결과를 버리지 않는다). 참여 · 거절 · 주제 거부처럼 분명하면 J1을
-     * SUPERSEDED로 닫고 새 대답을 처음부터 처리한다(docs/join-gate-stabilization.md (3)). 이 세션에서 재생한 참여 안내 글의 에코로 보이는 전사
-     * ({@link JoinTracker#echoOf})는 분류도 J1도 하지 않고 버린다((6)).
+     * SUPERSEDED로 닫고 새 대답을 처음부터 처리한다(docs/join-gate-stabilization.md (3)). 에코 의심 전사({@link #echoSuspect})는 분류도 J1도
+     * 하지 않고 버린다((6)).
      *
      * @param confirmedAt 확정 전사 시각
      * @param shape 이 전사로 묶인 입력 전사 조각의 모양
@@ -205,7 +212,7 @@ final class JoinFlow {
         // 대답 시각은 말을 시작한 때(그 묶음의 첫 조각을 서버가 받은 시각)다: 창 끝 직전에 시작한 말은 확정이 창 뒤여도 창 안의 대답이다
         Instant at = shape != null ? shape.openedAt() : confirmedAt;
         ReplyMeta meta = meta(transcript, at, shape);
-        if (JoinTracker.echoOf(transcript, playedPromptTexts)) {
+        if (echoSuspect(transcript, at)) {
             // 재생한 안내 글이 마이크로 다시 들어와 전사된 것으로 본다: 분류 · J1 없이 버리고 열린 J1도 그대로 둔다
             logReply("ECHO_SUSPECT", JoinTracker.Action.NONE.name(), meta);
             return;
@@ -228,6 +235,22 @@ final class JoinFlow {
             windowTickPending = false;
             runDeferredJoinTick();
         }
+    }
+
+    /**
+     * 에코 의심인가: 마지막으로 보낸 참여 안내를 보낸 뒤부터 그 끝 표식 뒤 꼬리({@code join-echo-tail}) 안에 말이 시작됐고, 그 안내 글의 에코로 보인다
+     * ({@link JoinTracker#echoOf}). 재생 중에 시작해 늦게 확정된 전사도 걸린다. 꼬리가 지난 뒤 아이가 안내 질문을 따라 말하면(반향어) 대답으로 본다.
+     *
+     * @param startedAt 대답 시각(말을 시작한 때)
+     */
+    private boolean echoSuspect(String transcript, Instant startedAt) {
+        if (echoPromptText == null || promptSentAt == null || startedAt.isBefore(promptSentAt)) {
+            return false;
+        }
+        if (promptEndedAt != null && startedAt.isAfter(promptEndedAt.plus(lifecycle().joinEchoTail()))) {
+            return false;
+        }
+        return JoinTracker.echoOf(transcript, echoPromptText);
     }
 
     /**

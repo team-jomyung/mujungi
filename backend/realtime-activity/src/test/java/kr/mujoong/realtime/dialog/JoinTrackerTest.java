@@ -202,14 +202,14 @@ class JoinTrackerTest {
     }
 
     @Test
-    void anEchoNeedsEightNormalizedCharactersThatAppearInsideAPlayedPrompt() {
-        java.util.List<String> prompts = java.util.List.of("괜찮아. 그럼 오늘 있었던 일 하나만 이야기해 볼래? 하기 싫으면 안 해도 돼.");
+    void anEchoNeedsEightNormalizedCharactersThatAppearInsideThePrompt() {
+        String prompt = "괜찮아. 그럼 오늘 있었던 일 하나만 이야기해 볼래? 하기 싫으면 안 해도 돼.";
 
-        assertThat(JoinTracker.echoOf("하기 싫으면 안 해도 돼", prompts)).isTrue();
-        assertThat(JoinTracker.echoOf("하기 싫으면, 안 해도!", prompts)).as("문장부호 · 공백은 정규화로 지운다").isTrue();
-        assertThat(JoinTracker.echoOf("안 해도 돼", prompts)).as("8자 미만").isFalse();
-        assertThat(JoinTracker.echoOf("이야기해 볼래 공룡 얘기", prompts)).as("안내 글에 없는 말이 섞였다").isFalse();
-        assertThat(JoinTracker.echoOf("하기 싫으면 안 해도 돼", java.util.List.of())).isFalse();
+        assertThat(JoinTracker.echoOf("하기 싫으면 안 해도 돼", prompt)).isTrue();
+        assertThat(JoinTracker.echoOf("하기 싫으면, 안 해도!", prompt)).as("문장부호 · 공백은 정규화로 지운다").isTrue();
+        assertThat(JoinTracker.echoOf("안 해도 돼", prompt)).as("8자 미만").isFalse();
+        assertThat(JoinTracker.echoOf("이야기해 볼래 공룡 얘기", prompt)).as("안내 글에 없는 말이 섞였다").isFalse();
+        assertThat(JoinTracker.echoOf("하기 싫으면 안 해도 돼", null)).as("대조할 안내 글이 없다").isFalse();
         assertThat(JoinTracker.ECHO_MIN_CHARS).isEqualTo(8);
     }
 

@@ -74,13 +74,14 @@ public record RealtimeTimingProperties(
     /**
      * ② 기기 응답 20초((h) PROVIDER_UNAVAILABLE에도) · ③ 마무리 확인 30초. U4b: 참여 창 처음 20초 · 안내 뒤 20초
      * 공백 경고 4분 · 종료 6분, 종료 확인 질문 창 20초(계약 7절 밖), 정산 창 2초(
-     * 계약 7절 밖). 공백 경고는 공백 종료보다 짧아야 한다.
+     * 계약 7절 밖). 공백 경고는 공백 종료보다 짧아야 한다. 참여 관문 안정화: 참여 안내 재생 끝 뒤 에코 의심 꼬리 1초(계약 7절 밖, 임시값).
      */
     public record SessionTiming(
             Duration deviceAckTimeout,
             Duration closingConfirm,
             Duration joinWait,
             Duration joinWaitAfterReprompt,
+            Duration joinEchoTail,
             Duration silenceWarning,
             Duration silenceEnd,
             Duration stopConfirmWait,
@@ -91,6 +92,7 @@ public record RealtimeTimingProperties(
             positive(closingConfirm, "mujoong.timing.session.closing-confirm");
             positive(joinWait, "mujoong.timing.session.join-wait");
             positive(joinWaitAfterReprompt, "mujoong.timing.session.join-wait-after-reprompt");
+            positive(joinEchoTail, "mujoong.timing.session.join-echo-tail");
             positive(silenceWarning, "mujoong.timing.session.silence-warning");
             positive(silenceEnd, "mujoong.timing.session.silence-end");
             positive(stopConfirmWait, "mujoong.timing.session.stop-confirm-wait");

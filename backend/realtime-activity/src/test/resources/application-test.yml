@@ -25,6 +25,8 @@ mujoong:
       # U4b-J26: U1 · U3 통합 시험이 우연히 닿지 않게 넉넉히 둔다. U4b 통합 시험만 시험 클래스 속성으로 짧게 덮어쓴다
       join-wait: 10s
       join-wait-after-reprompt: 10s
+      # 에코 꼬리는 줄이지 않는다(대기 시간이 아니라 에코 의심을 보는 범위다)
+      join-echo-tail: 1s
       silence-warning: 1m
       silence-end: 2m
       stop-confirm-wait: 10s

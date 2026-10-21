@@ -144,18 +144,21 @@ public final class SessionExecutor {
          *
          * @param joinWait 처음 시작 안내 뒤 참여 창(join-wait)
          * @param joinWaitAfterReprompt 재안내 · 되묻기 · 대안 뒤 참여 창(join-wait-after-reprompt)
+         * @param joinEchoTail 참여 안내 재생이 끝난 뒤에도 에코 의심을 보는 꼬리(join-echo-tail, 참여 관문 안정화 (6))
          * @param silenceWarning 공백 경고 누적(silence-warning)
          * @param silenceEnd 공백 종료 누적(silence-end)
          * @param stopConfirmWait 종료 확인 질문 창(stop-confirm-wait)
          * @param recordSettle 종료 뒤 정산 창 상한(record-settle)
          * @param gapDisplay 마지막 기기 메시지 뒤 기술 일시정지(device.gap-display)
          */
-        public record Lifecycle(Duration joinWait, Duration joinWaitAfterReprompt, Duration silenceWarning,
-                Duration silenceEnd, Duration stopConfirmWait, Duration recordSettle, Duration gapDisplay) {
+        public record Lifecycle(Duration joinWait, Duration joinWaitAfterReprompt, Duration joinEchoTail,
+                Duration silenceWarning, Duration silenceEnd, Duration stopConfirmWait, Duration recordSettle,
+                Duration gapDisplay) {
 
             public Lifecycle {
                 Objects.requireNonNull(joinWait, "joinWait");
                 Objects.requireNonNull(joinWaitAfterReprompt, "joinWaitAfterReprompt");
+                Objects.requireNonNull(joinEchoTail, "joinEchoTail");
                 Objects.requireNonNull(silenceWarning, "silenceWarning");
                 Objects.requireNonNull(silenceEnd, "silenceEnd");
                 Objects.requireNonNull(stopConfirmWait, "stopConfirmWait");
@@ -165,8 +168,8 @@ public final class SessionExecutor {
 
             public static Lifecycle from(RealtimeProperties properties) {
                 RealtimeTimingProperties.SessionTiming session =properties.timing().session();
-                return new Lifecycle(session.joinWait(), session.joinWaitAfterReprompt(), session.silenceWarning(),
-                        session.silenceEnd(), session.stopConfirmWait(), session.recordSettle(),
+                return new Lifecycle(session.joinWait(), session.joinWaitAfterReprompt(), session.joinEchoTail(),
+                        session.silenceWarning(), session.silenceEnd(), session.stopConfirmWait(), session.recordSettle(),
                         properties.timing().device().gapDisplay());
             }
         }

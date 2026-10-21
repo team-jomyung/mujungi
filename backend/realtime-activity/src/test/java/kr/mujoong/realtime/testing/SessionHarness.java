@@ -34,9 +34,9 @@ import kr.mujoong.testsupport.time.MutableClock;
  */
 public final class SessionHarness {
 
-    /** U4b 생애 시간 값: 운영 기본값(참여 20초 · 20초, 공백 4분 · 6분, 확인 질문 20초, 정산 2초, 점선 10초). */
+    /** U4b 생애 시간 값: 운영 기본값(참여 20초 · 20초, 에코 꼬리 1초, 공백 4분 · 6분, 확인 질문 20초, 정산 2초, 점선 10초). */
     public static final SessionExecutor.Settings.Lifecycle LIFECYCLE = new SessionExecutor.Settings.Lifecycle(
-            Duration.ofSeconds(20), Duration.ofSeconds(20), Duration.ofMinutes(4), Duration.ofMinutes(6),
+            Duration.ofSeconds(20), Duration.ofSeconds(20), Duration.ofSeconds(1), Duration.ofMinutes(4), Duration.ofMinutes(6),
             Duration.ofSeconds(20), Duration.ofSeconds(2), Duration.ofSeconds(10));
     /** 시험 설정: 운영 기본값을 그대로 쓴다(20초 · 30초 · 40초 · 800ms · 20초 · 1초 · 불확실 기준 60% · 발화 간격 700ms). */
     public static final SessionExecutor.Settings SETTINGS = new SessionExecutor.Settings(Duration.ofSeconds(20),
