@@ -2122,7 +2122,11 @@ public final class SessionExecutor {
         if (inRelayRange()) {
             ctx.services().latency().inputActivity(ctx.plan().sessionId());
             // 아이 입력 재개는 열린 구간을 확정한다(대화가 넘어갔으니 완결 요청 교정은 하지 않는다)
-            if (ctx.segment().isOpen()) {
+            // 승인 대본은 전부 받은 뒤 원문 일치를 검사한다. 수집 중의 입력 전사만으로
+            // 앞 조각을 봉인하면 정상 대본도 불완전/불일치로 폐기돼 연습이 종료된다.
+            // 입력 기록·종료 의도 처리는 계속하며, 실제 재생 중 끼어들기와 생성형 슬롯은 기존 규칙이다.
+            boolean collectingApprovedPractice = pendingPracticeSpeech != null && !pendingPracticeSpeech.generated();
+            if (ctx.segment().isOpen() && !collectingApprovedPractice) {
                 sealAndGate(true);
             }
             ctx.transcripts().childDelta(inputGroupId, delta.delta(), at);
