@@ -87,6 +87,12 @@ class ProviderRequestWhitelistIT {
             // 그 사이 프레임이 NOT_ACCEPTING으로 버려질 수 있다(3.6 재시험 1차 실패 원인, U3 L6 — RealtimeMetricsScrapeIT와 같은 대기)
             device.await(envelope -> envelope.payload() instanceof SessionState state && state.view() == View.LISTENING,
                     WAIT);
+            env.provider.await("session.instructions.append", 1, WAIT);
+            assertThat(env.provider.received().stream()
+                    .filter(m -> "session.instructions.append".equals(m.get("type").asString()))
+                    .map(m -> m.get("content").asString()).toList())
+                    .anySatisfy(content -> assertThat(content).contains("블록 놀이에 대해 이야기해 줄래?")
+                            .doesNotContain("관심사나 일상 질문"));
             byte[] pcm = new byte[960];
             for (int i = 0; i < 3; i++) {
                 pcm[0] = (byte) i;

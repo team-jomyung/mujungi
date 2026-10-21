@@ -121,7 +121,8 @@ public class ProviderRequestFactory {
                 context.age() == null ? null : Math.max(MIN_AGE, context.age()),
                 limitInterests(context.interests()));
         return new SessionStart(TYPE_SESSION_START,
-                new SessionBody(MODEL, instructions(data) + DialogInstructions.conversationGuide(guide), new AudioSpec(new AudioFormat(AUDIO_TYPE, rate))));
+                new SessionBody(MODEL, guide == null ? instructions(data) : DialogInstructions.role(data.displayName(), data.age(), data.interests())
+                        + DialogInstructions.conversationGuide(guide), new AudioSpec(new AudioFormat(AUDIO_TYPE, rate))));
     }
 
     /** 입력 음성 한 프레임. 본문은 변환하지 않는다(J131 무변환). */
@@ -151,6 +152,14 @@ public class ProviderRequestFactory {
     /** 발언권을 모델에 돌려주는 지시(참여 뒤 첫 응답 · 확인 질문 뒤 이어 가기 · 연습 requestResponse). 응답 요청 type이 없어 지시가 응답을 시작한다. */
     public InstructionsAppend responseStart(String eventId, InstructionTemplates.ResponseStart start) {
         return instructionsAppend(eventId, Objects.requireNonNull(start, "start").content());
+    }
+
+    /** 참여 확인 직후에도 동일한 주제 지시를 사용해 일반 첫 질문 지시와 충돌하지 않게 한다. */
+    public InstructionsAppend responseStart(String eventId, InstructionTemplates.ResponseStart start,
+            kr.mujoong.contract.context.ConversationGuide guide) {
+        if (start != InstructionTemplates.ResponseStart.FIRST || guide == null) return responseStart(eventId, start);
+        return instructionsAppend(eventId, InstructionTemplates.scoped(InstructionTemplates.INTERJECTION_LEAD
+                + DialogInstructions.conversationGuide(guide)));
     }
 
     /** 서버 템플릿 지시문(문장은 DialogPolicy의 역할 지시문, U3-R14). 아이 문맥 값은 따옴표 안 데이터로만 들어간다. */

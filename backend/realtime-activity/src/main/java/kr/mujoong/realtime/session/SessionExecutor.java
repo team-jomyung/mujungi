@@ -2027,7 +2027,9 @@ public final class SessionExecutor {
      */
     private void requestResponse(InstructionTemplates.ResponseStart start) {
         sendInstruction(OutputGeneration.BumpReason.SERVER_SEND, "provider-respond-",
-                id -> ctx.services().requests().responseStart(id, start), null, true);
+                id -> start == InstructionTemplates.ResponseStart.FIRST && ctx.plan().conversationGuide() != null
+                        ? ctx.services().requests().responseStart(id, start, ctx.plan().conversationGuide())
+                        : ctx.services().requests().responseStart(id, start), null, true);
     }
 
     /** 공급자 출력을 받지 않는 때(참여 확인 중 · 종료 확인 질문 중 · 확장점이 막은 동안). */

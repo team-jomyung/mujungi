@@ -45,6 +45,22 @@ class ProviderRequestFactoryWireTest {
         return keys;
     }
 
+    @Test
+    void guardianTopicHasPriorityAtSessionStartAndAfterParticipationOnly() {
+        var guide = new kr.mujoong.contract.context.ConversationGuide(
+                List.of(kr.mujoong.contract.context.ConversationGuide.Topic.BLOCKS),
+                kr.mujoong.contract.context.ConversationGuide.SourceType.HEARD_FROM_CHILD);
+        String initial = factory.sessionStart(new ChildContext("아이", 8, List.of("공룡")), 24_000, guide).session().instructions();
+        String first = factory.responseStart("e", InstructionTemplates.ResponseStart.FIRST, guide).content();
+        assertThat(initial).contains("블록 놀이에 대해 이야기해 줄래?").doesNotContain(DialogInstructions.JOIN_FIRST_QUESTION);
+        assertThat(first).contains("블록 놀이에 대해 이야기해 줄래?", "답을 유도하거나", "원하지 않으면 주제를 바꾸고")
+                .doesNotContain("관심사나 일상 질문").endsWith(InstructionTemplates.SCOPE_CLOSE);
+        assertThat(factory.responseStart("e", InstructionTemplates.ResponseStart.CONTINUE, guide))
+                .isEqualTo(factory.responseStart("e", InstructionTemplates.ResponseStart.CONTINUE));
+        assertThat(factory.responseStart("e", InstructionTemplates.ResponseStart.FIRST, null))
+                .isEqualTo(factory.responseStart("e", InstructionTemplates.ResponseStart.FIRST));
+    }
+
     @Test void guardianGuideUsesFixedNeutralQuestionsAndDoesNotBecomeAProviderField() {
         var guide=new kr.mujoong.contract.context.ConversationGuide(List.of(kr.mujoong.contract.context.ConversationGuide.Topic.BLOCKS),kr.mujoong.contract.context.ConversationGuide.SourceType.HEARD_FROM_CHILD);
         var request=wire(factory.sessionStart(new ChildContext("하늘",8,List.of()),24000,guide));
