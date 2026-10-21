@@ -47,4 +47,23 @@ class GoalCandidateGatewayTest {
         var draft=new GoalCandidateValidatorTest().draft();when(luna.call(any(LunaRequest.class))).thenReturn(new LunaResult(JsonCodec.shared().write(Map.of("candidates",List.of(draft))),"fake","goal-candidates.v1",Duration.ZERO,1,false));
         assertThat(run(Map.of("transcript",List.of(Map.of("seq",1,"speaker","CHILD","text","같이 할래","uncertain",true))))).isEmpty();
     }
+
+    @Test void quotedFutureExpressionKeepsGroundedCandidateWithoutInventingChildEvidence(){
+        var draft=new GoalCandidateValidatorTest().draft();draft.put("targetExpression","다음 연습에서 “함께 해도 돼?” 하고 물어보기");
+        var classifier=mock(kr.mujoong.core.result.ResultTextGateway.class);
+        when(classifier.call(eq("classify"),anyMap(),anyMap(),eq(deadline),any(Runnable.class))).thenAnswer(i->{
+            Map<String,Object> input=i.getArgument(1);var rows=(List<Map<String,Object>>)input.get("sentences");
+            assertThat(rows).hasSize(4);assertThat(rows.stream().filter(r->"PRACTICE_PROPOSAL".equals(r.get("textUse"))).map(r->r.get("id")).toList()).containsExactly("goal-target-0");
+            return Map.of("results",rows.stream().map(r->Map.of("id",r.get("id"),"violation",false)).toList());
+        });
+        var realChecker=new OutputChecker(new ForbiddenDictionary(),classifier);
+        var subject=new GoalCandidateGateway(Optional.of(luna),knowledge,new GoalCandidateValidator(new ForbiddenDictionary()),realChecker);
+        when(luna.call(any(LunaRequest.class))).thenReturn(new LunaResult(JsonCodec.shared().write(Map.of("candidates",List.of(draft))),"fake","goal-candidates.v1",Duration.ZERO,1,false));
+        var result=subject.generate(guardian,child,Map.of("transcript",List.of(Map.of("seq",1,"speaker","CHILD","text","같이 할래"))),Map.of(),deadline,()->{});
+        assertThat(result).singleElement().satisfies(c->{assertThat(c.targetExpression()).contains("함께 해도 돼?");assertThat(c.evidence()).singleElement().extracting(GoalCandidateRepository.Evidence::quote).isEqualTo("같이 할래");});
+        draft.put("evidence",List.of(Map.of("utteranceSeq",1,"quote","함께 해도 돼?")));
+        when(luna.call(any(LunaRequest.class))).thenReturn(new LunaResult(JsonCodec.shared().write(Map.of("candidates",List.of(draft))),"fake","goal-candidates.v1",Duration.ZERO,1,false));
+        assertThat(subject.generate(guardian,child,Map.of("transcript",List.of(Map.of("seq",1,"speaker","CHILD","text","같이 할래"))),Map.of(),deadline,()->{})).isEmpty();
+        verify(classifier,times(1)).call(eq("classify"),anyMap(),anyMap(),eq(deadline),any(Runnable.class));
+    }
 }

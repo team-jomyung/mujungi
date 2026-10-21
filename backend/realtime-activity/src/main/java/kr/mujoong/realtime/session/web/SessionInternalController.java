@@ -294,6 +294,8 @@ public class SessionInternalController {
         out.put("activityType", session.activityType());
         out.put("status", session.status());
         out.put("endReason", session.endReason());
+        out.put("endDetail", java.util.Set.of("PRACTICE_COMPLETED", "PRACTICE_OUTPUT_FAILED").contains(
+                session.endDetail() == null ? "" : session.endDetail()) ? session.endDetail() : null);
         out.put("failureCode", session.failureCode());
         out.put("confirmed", Boolean.TRUE.equals(session.confirmed()));
         out.put("requestedAt", session.createdAt());

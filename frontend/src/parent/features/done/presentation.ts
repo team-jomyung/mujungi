@@ -35,6 +35,16 @@ function reasonFor(view: LiveView, childName: string | null): Reason {
   if (view.status === "ABORTED") {
     return { title: COPY.done.abortedTitle, body: abortedBody(endedHhmm) };
   }
+  if (view.activityType === "PRACTICE" && view.endDetail === "PRACTICE_OUTPUT_FAILED") {
+    return { title: "연습 음성을 재생하지 못했어요", body: "연습이 완료된 것은 아니에요. 기기 연결을 확인하고 다시 시작해 주세요." };
+  }
+  if (view.activityType === "PRACTICE" && view.endDetail === "PRACTICE_COMPLETED") {
+    return { title: "이번 연습을 마쳤어요", body: null };
+  }
+  // 구버전 응답/조회 대체 경로는 연습 완료와 아이 중단을 구분할 수 없다. 발화를 추정하지 않는다.
+  if (view.activityType === "PRACTICE" && view.endReason === "CHILD_STOP") {
+    return { title: "연습이 종료됐어요", body: null };
+  }
   switch (view.endReason) {
     case "GUARDIAN_STOP":
       return { title: PROPOSED_COPY.done.guardianStopTitle, body: endedHhmm === null ? null : guardianStopDetail(endedHhmm) };
@@ -52,7 +62,7 @@ function reasonFor(view: LiveView, childName: string | null): Reason {
 export function presentDone(view: LiveView | undefined, childName: string | null): DonePresentation {
   if (view === undefined || !isTerminalStatus(view.status)) {
     return {
-      title: COPY.done.closingTitle,
+      title: view?.activityType === "PRACTICE" ? "연습을 마무리하고 있어요" : COPY.done.closingTitle,
       reasonTitle: COPY.done.closingBody,
       reasonBody: COPY.done.closingNote,
       closing: true,
@@ -62,7 +72,7 @@ export function presentDone(view: LiveView | undefined, childName: string | null
   }
   const reason = reasonFor(view, childName);
   return {
-    title: COPY.done.endedTitle,
+    title: view.activityType === "PRACTICE" ? "연습이 종료됐어요" : COPY.done.endedTitle,
     reasonTitle: reason.title,
     reasonBody: reason.body,
     closing: false,

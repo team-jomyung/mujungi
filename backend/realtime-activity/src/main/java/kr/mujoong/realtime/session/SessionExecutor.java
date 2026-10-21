@@ -992,6 +992,10 @@ public final class SessionExecutor {
             stopOutputForIntent(ctx.services().clock().now());
             ending.beginClosing(Trigger.PRACTICE_COMPLETED, null);
         }
+        if (signal == PracticeSessionExtension.Signal.OUTPUT_FAILED) {
+            stopOutputForIntent(ctx.services().clock().now());
+            ending.beginClosing(Trigger.PRACTICE_OUTPUT_FAILED, null);
+        }
         // NEXT_GOAL은 계속한다(다음 목표 진행은 확장점이 출력 능력으로 한다)
     }
 
