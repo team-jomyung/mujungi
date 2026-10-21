@@ -77,12 +77,19 @@ PR은 둘로 나눈다.
   - 목록 항목도 전사와 같은 정규화(NFKC)를 거친 값으로 비교한다. 지금까지 'ㅇㅇ'(호환 자모)은 NFKC가 첫소리 자모로 바꿔 한 번도 맞지 않았다.
 - **고른 방안과 까닭**: 지시서 권장안 그대로다. 정확 일치만 보던 탓에 "응, 들려" · "으응" · "네네"가 UNCLEAR → J1(demo는 Luna가 꺼져 곧 재안내)로 갔다.
   낱말 단위로 보면 "네가 해"의 '네가'처럼 짧은 긍정으로 시작하는 다른 낱말은 걸리지 않는다. 단서 목록은 새로 더하지 않았다("할게요"처럼 이미 걸린다).
-- **함께 바뀌는 곳**: 종료 확인 질문(`StopConfirmFlow.onReply`)도 같은 분류기의 ACCEPT를 '끝내자'로 본다. 그래서 확인 질문에 "네네"는 이제 끝,
-  "응?"은 이어 가기다(JOIN-GATE-A9, 성민 확인 필요).
-- **바꾼 파일**: `dialog/JoinTracker.java`(분류 · javadoc), `dialog/StopIntentJudge.java`(`tokens` 패키지 공개, (0)에서).
+- **종료 확인 질문은 첫 낱말 규칙을 쓰지 않는다**: 종료 확인 질문(`StopConfirmFlow.onReply`, "그만할까?")은 같은 분류기의 ACCEPT를 '끝내자'로 본다.
+  첫 낱말 규칙을 그대로 쓰면 "응, 근데 더 하고 싶어" · "네 아직 안 끝났어요"가 ACTIVE 세션을 CHILD_STOP으로 끝낸다(리뷰 지적, 지시서 범위 밖 회귀).
+  그래서 확인 질문은 첫 낱말 규칙만 뺀 `JoinTracker.classifyWhole`(주제 거부 → 거부 → 문장 전체 짧은 긍정 → 단서 → 불명확)을 쓴다. main과 달라지는 것은
+  둘뿐이다: 되묻는 "응?"은 이제 이어 가기(물음표 규칙, 끝내는 쪽으로는 바뀌지 않는다), 'ㅇㅇ'은 정규화 결함을 고쳐 끝(A8). "네네" · "응, 들려"는
+  main처럼 이어 가기다(JG-D5 · JOIN-GATE-A9, 성민 확인 필요).
+- **바꾼 파일**: `dialog/JoinTracker.java`(분류 · `classifyWhole` · javadoc), `dialog/StopConfirmFlow.java`(`classifyWhole`을 쓴다),
+  `dialog/StopIntentJudge.java`(`tokens` 패키지 공개, (0)에서).
 - **시험**: `JoinTrackerTest` 분류 표에 24행(완료 조건 세 문장 · 변형어 · 거부 우선 · 되묻기 · 군말 · 인사), `SessionJoinTest`
   `theShortYesRepliesOfTheJoinGateStartTheActivityWithoutAJudgment`(실행기에서 "응" · "응 좋아" · "어 할래" · "응, 들려" · "네네" → ACTIVE),
-  `StopConfirmFlowTest` `theConfirmationSharesTheJoinClassifier…`. 기존 행 · AC6.3.x 경계 시험은 그대로 통과한다.
+  `StopConfirmFlowTest` `theConfirmationReplyIsClassifiedWithoutTheFirstWordRule`(8행: "응, 근데 더 하고 싶어" · "네 아직 안 끝났어요" · "네네" ·
+  "응, 들려" · "응?" → RESUME, "응" · "그래요" · "ㅇㅇ" → CLOSE), `JoinTrackerTest` `theWholeReplyClassifierForTheStopQuestionHasNoFirstWordRule`(12행),
+  `SessionStopTest` `aYesFollowedByWantingToGoOnDoesNotEndTheSession`(실행기에서 확인 질문 뒤 "응, 근데 더 하고 싶어" → ACTIVE 유지 · `CONTINUE`).
+  기존 행 · AC6.3.x 경계 시험은 그대로 통과한다.
 - **문서**: 계약 변경 없음.
 
 ### (2) 입력 전사 묶음을 전사 시간선 간격으로도 나누기 (PR-A)
@@ -224,7 +231,7 @@ PR은 둘로 나눈다.
 | JG-D2 | U11 W1: J1 결과를 닫힘 뒤 일 안에서 바로 `join.reply`에 넣음 | 판정 기록 · `JUDGMENT_TURN` · 보기 복원이 끝난 뒤(`onClosed` 끝) 넣는다. 다시 연 J1도 그 뒤에 연다 | (3), 끝-끝 결과는 같다 |
 | JG-D3 | U4b-J33: 안내 재생 중 대답도 곧바로 분류 | 8자 이상이고 재생한 안내 글의 부분 문자열인 전사는 분류하지 않는다(짧은 대답은 그대로 곧바로 분류) | (6) |
 | JG-D4 | U4b BR2.2 · 창 경계: 대답 시각 = 확정 시각, 만기는 시계대로 | 대답 시각 = 첫 조각 수신 시각, 말하는 중 만기는 확정 뒤로 미룸(만기 뒤에 시작한 대답은 그대로 만기 먼저) | (4) (a) · (b), 계약 (JG-c) |
-| JG-D5 | U4b 종료 확인(BR4.4): 확인 질문의 '예'는 참여 분류기의 ACCEPT | 분류기가 넓어져 "네네" · "응 좋아" 같은 대답도 끝, "응?"은 이어 가기 | (1)의 부수 효과 |
+| JG-D5 | U4b 종료 확인(BR4.4): 확인 질문의 '예'는 참여 분류기의 ACCEPT | 첫 낱말 규칙을 뺀 `classifyWhole`의 ACCEPT. main과 다른 것은 "응?" · "네?"(되묻기) → 이어 가기, 'ㅇㅇ' → 끝 둘뿐이다 | (1), 리뷰 지적으로 좁힘 |
 
 ## 5. 가정 목록
 
@@ -240,7 +247,7 @@ PR은 둘로 나눈다.
 | JOIN-GATE-A6 | `JUDGMENT_TURN`은 판정 기록기 유무와 관계없이 남긴다(기록 행은 지금처럼 기록기 · 보호자 id가 있을 때만) | 로그만으로 진단 |
 | JOIN-GATE-A7 | 물음표 규칙은 첫 낱말이 물음표로 "끝나면"이 아니라 물음표가 "있으면"이다 | "응?뭐라고"처럼 띄어 쓰지 않은 전사도 되묻기로 본다 |
 | JOIN-GATE-A8 | 짧은 긍정 목록 항목도 전사와 같은 NFKC 정규화를 거쳐 비교한다 | 'ㅇㅇ'(호환 자모)이 한 번도 맞지 않던 기존 결함 |
-| JOIN-GATE-A9 | 종료 확인 질문(`StopConfirmFlow`)도 같은 분류기를 쓰므로 (1)이 그쪽 대답 분류도 넓힌다. 분류기를 둘로 나누지 않고 그대로 두었다 | 설계가 한 분류기를 쓰게 했다. 성민 확인(6절) |
+| JOIN-GATE-A9 | 종료 확인 질문(`StopConfirmFlow`)은 첫 낱말 규칙을 뺀 `JoinTracker.classifyWhole`을 쓴다. 물음표 규칙과 목록 정규화(A8)는 함께 쓴다 | 첫 낱말 규칙은 참여 관문용이고, 확인 질문에서는 "응, 근데 더 하고 싶어"로 세션이 끝난다(리뷰 지적). 물음표 규칙은 끝내는 쪽으로는 바꾸지 않는다. 성민 확인(6절) |
 | JOIN-GATE-A10 | `input-utterance-gap`은 임시 700ms이고 경계(정확히 700ms)는 나눈다. 시험 프로필도 700ms다(대기 시간이 아니라 나눔 기준이라 줄이지 않는다) | 실측 전 지시서 값 |
 | JOIN-GATE-A11 | 대답 시각 = 묶음의 첫 조각을 서버가 받은 시각. 시험 대역의 완료 사건만 온 전사는 받은 시각. J1 `READY`(10초) 시계는 지금처럼 확정 시각 기준 | 설계 개정 A8을 바꾸지 않는다 |
 | JOIN-GATE-A12 | (4)(c) 만기 뒤 ACCEPT를 먼저 START로 보기는 하지 않았다 | 경계 시험 기대값을 바꾸므로 합의 필요(지시서 9절) |
@@ -271,7 +278,8 @@ PR은 둘로 나눈다.
 
 이번 작업에서 더 생긴 확인 거리:
 
-- 종료 확인 질문의 대답 분류도 넓어진다(JG-D5 · A9). 그대로 둘지, 종료 확인용 분류를 따로 둘지.
+- 종료 확인 질문은 첫 낱말 규칙 없는 `classifyWhole`을 쓴다(JG-D5 · A9). main과 다른 두 가지("응?" → 이어 가기, 'ㅇㅇ' → 끝)를 받아들일지,
+  확인 질문도 첫 낱말 규칙을 쓰고 싶은지(그러면 "응, 근데 더 하고 싶어" 같은 반대 뜻을 따로 걸러야 한다).
 - J1 결과를 판정 기록 뒤에 넣는 순서(JG-D2)와 대기 칸 체인(A14)이 U11 W1 의도와 맞는지.
 - 연습 세션(U12, INTRO_PRACTICE)도 같은 참여 관문 · prompt-v2를 쓴다. 태그 재시험(`practice-flow` 포함)은 통과했지만 연습 쪽 실키는 보지 않았다.
 
@@ -368,7 +376,7 @@ PR은 둘로 나눈다.
 
 - `input-utterance-gap` 700ms가 실공급자 전사 시간선에서 맞는지(너무 짧으면 한 발화가 나뉘어 앞 조각이 UNCLEAR → 되묻기가 된다). 실키 `maxGapMs`로 확정한다.
 - 물음표 규칙 · 첫 낱말 규칙이 GPT-Live 실전사 모양(띄어쓰기 · 문장부호 · 영어 전사)에서 맞는지. `JOIN_REPLY`의 `textLen` · `wordCount`로 간접 확인한다.
-- 종료 확인 대답 분류가 함께 넓어진 것(JG-D5)을 원 담당자가 받아들일지.
+- 종료 확인 대답 분류의 main과 다른 두 가지(JG-D5: "응?" → 이어 가기, 'ㅇㅇ' → 끝)를 원 담당자가 받아들일지.
 - (4)(c) 만기 뒤 ACCEPT 처리는 결정이 남았다(지금은 재안내 먼저).
 - 안내 음성 v3(사람 목소리) 뒤 에코 위험 재확인, 8자 기준이 맞는지.
 - demo(ECS)에서는 Luna가 꺼져 (3) · (5)가 돌지 않는다.

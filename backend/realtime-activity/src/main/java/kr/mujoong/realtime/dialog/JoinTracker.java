@@ -29,7 +29,7 @@ import java.util.regex.Pattern;
  *
  * <p>대답 분류({@link #classify})는 거부를 먼저 보고, 짧은 긍정은 낱말 단위로 본다: 문장 전체가 짧은 긍정이거나 첫 낱말이 짧은 긍정이면 뒤에 다른 말이
  * 붙어도("응, 들려" · "네네 좋아요") 참여다. 첫 낱말에 물음표가 있으면("응?" · "네? 뭐라고요?") 되묻는 말이라 짧은 긍정 규칙을 쓰지 않는다
- * (docs/join-gate-stabilization.md (1)).
+ * (docs/join-gate-stabilization.md (1)). 종료 확인 질문의 대답은 첫 낱말 규칙 없이 {@link #classifyWhole}로 본다.
  */
 public final class JoinTracker {
 
@@ -209,6 +209,19 @@ public final class JoinTracker {
      * 전사는 불명확이다.
      */
     public static Reply classify(String transcript) {
+        return classify(transcript, true);
+    }
+
+    /**
+     * 종료 확인 질문("그만할까?")의 대답 분류: {@link #classify}와 같되 첫 낱말 규칙을 쓰지 않는다 — 짧은 긍정은 문장 전체가 그 한 낱말일 때만
+     * 참여(= 끝내자)다. 참여 관문에서 넓힌 첫 낱말 규칙이 "응, 근데 더 하고 싶어"처럼 반대 뜻이 붙은 대답으로 ACTIVE 세션을 끝내지 않게 한다. 물음표
+     * 규칙은 같아 되묻는 "응?"도 끝이 아니다(docs/join-gate-stabilization.md (1) · JOIN-GATE-A9).
+     */
+    public static Reply classifyWhole(String transcript) {
+        return classify(transcript, false);
+    }
+
+    private static Reply classify(String transcript, boolean firstWordRule) {
         String text = StopIntentJudge.normalize(transcript);
         if (text.isEmpty()) {
             return Reply.UNCLEAR;
@@ -227,7 +240,7 @@ public final class JoinTracker {
             if (isOneOf(text, ACCEPT_EXACT)) {
                 return Reply.ACCEPT;
             }
-            List<String> words = StopIntentJudge.tokens(transcript);
+            List<String> words = firstWordRule ? StopIntentJudge.tokens(transcript) : List.of();
             if (!words.isEmpty() && (isOneOf(words.getFirst(), ACCEPT_FIRST_WORD) || REPEATED_YES.matcher(words.getFirst()).matches())) {
                 return Reply.ACCEPT;
             }

@@ -182,6 +182,25 @@ class JoinTrackerTest {
         assertThat(JoinTracker.classify(text)).isEqualTo(expected);
     }
 
+    @ParameterizedTest
+    @CsvSource({
+        "응, ACCEPT",
+        "그래요, ACCEPT",
+        "ㅇㅇ, ACCEPT",
+        "어 할래, ACCEPT",
+        "'응, 근데 더 하고 싶어', UNCLEAR",
+        "네 아직 안 끝났어요, UNCLEAR",
+        "네네, UNCLEAR",
+        "'응, 들려', UNCLEAR",
+        "응?, UNCLEAR",
+        "응 싫어, REFUSE",
+        "응 근데 이거 말고, TOPIC_REFUSAL",
+        "'', UNCLEAR"
+    })
+    void theWholeReplyClassifierForTheStopQuestionHasNoFirstWordRule(String text, Reply expected) {
+        assertThat(JoinTracker.classifyWhole(text)).isEqualTo(expected);
+    }
+
     @Test
     void anEchoNeedsEightNormalizedCharactersThatAppearInsideAPlayedPrompt() {
         java.util.List<String> prompts = java.util.List.of("괜찮아. 그럼 오늘 있었던 일 하나만 이야기해 볼래? 하기 싫으면 안 해도 돼.");

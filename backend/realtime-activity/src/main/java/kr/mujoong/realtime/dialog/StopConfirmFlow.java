@@ -13,8 +13,9 @@ import java.util.Objects;
  *   <li>판정 STOP: 곧바로 {@link Decision#CLOSE}(CLOSING(CHILD_STOP)). 출력만 막고 ACTIVE를 유지하는 U3 경로는 없다(FD-Q3).
  *   <li>판정 CONFIRM: {@link Decision#ASK} — 확인 질문(STOP_CONFIRM)을 재생하고 공급자 출력을 막는다. 재생 완료를 서버가 받은 시각부터
  *       {@code stop-confirm-wait} 창이 열린다.
- *   <li>확인 중 첫 확정 전사: STOP이거나 참여 분류 ACCEPT면 {@link Decision#CLOSE}, 그 밖이면 {@link Decision#RESUME}(차단 해제 + 응답 생성
- *       요청 1회). 창이 끝나도(창 끝 시각 포함) RESUME이다(무응답만으로 종료를 확정하지 않는다, AC6.3.7).
+ *   <li>확인 중 첫 확정 전사: STOP이거나 첫 낱말 규칙 없는 참여 분류({@link JoinTracker#classifyWhole})가 ACCEPT면 {@link Decision#CLOSE},
+ *       그 밖이면 {@link Decision#RESUME}(차단 해제 + 응답 생성 요청 1회). 창이 끝나도(창 끝 시각 포함) RESUME이다(무응답만으로 종료를 확정하지
+ *       않는다, AC6.3.7).
  * </ul>
  */
 public final class StopConfirmFlow {
@@ -96,7 +97,8 @@ public final class StopConfirmFlow {
         if (expired(at)) {
             return finish(Decision.RESUME);
         }
-        boolean accept = JoinTracker.classify(transcript) == JoinTracker.Reply.ACCEPT;
+        // 참여 관문의 첫 낱말 규칙은 쓰지 않는다: "응, 근데 더 하고 싶어"는 끝내자는 대답이 아니다
+        boolean accept = JoinTracker.classifyWhole(transcript) == JoinTracker.Reply.ACCEPT;
         return finish(stopVerdict || accept ? Decision.CLOSE : Decision.RESUME);
     }
 

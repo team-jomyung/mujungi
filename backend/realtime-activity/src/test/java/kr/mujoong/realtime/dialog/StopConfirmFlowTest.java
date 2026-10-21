@@ -10,6 +10,8 @@ import kr.mujoong.realtime.dialog.StopConfirmFlow.Phase;
 import kr.mujoong.realtime.dialog.StopIntentJudge.Verdict;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 /**
  * 종료 확인 질문 흐름 시험 (U4b L4 · FR3.1 · BR4.2 ~ BR4.4 · U4b-J6 · FD-Q3).
@@ -53,16 +55,25 @@ class StopConfirmFlowTest {
         assertThat(flow.phase()).isEqualTo(Phase.IDLE);
     }
 
-    @Test
-    void theConfirmationSharesTheJoinClassifierSoAQuestionBackResumesAndAShortYesVariantCloses() {
-        // 참여 관문 안정화 (1): 확인 질문의 '예'도 참여 분류기를 쓴다 — 짧은 긍정 변형어는 끝, 되묻는 "응?"은 이어 간다
+    @ParameterizedTest
+    @CsvSource({
+        "응, CLOSE",
+        "그래요, CLOSE",
+        "ㅇㅇ, CLOSE",
+        // 참여 관문 안정화 (1)의 첫 낱말 규칙은 확인 질문에 쓰지 않는다: 짧은 긍정 뒤에 다른 말이 붙으면 끝이 아니다
+        "'응, 근데 더 하고 싶어', RESUME",
+        "네 아직 안 끝났어요, RESUME",
+        "네네, RESUME",
+        "'응, 들려', RESUME",
+        // 되묻는 말은 끝이 아니다(물음표 규칙)
+        "응?, RESUME"
+    })
+    void theConfirmationReplyIsClassifiedWithoutTheFirstWordRule(String reply, Decision expected) {
         flow.onJudgment(Verdict.CONFIRM);
         flow.promptPlayed(T0);
-        assertThat(flow.onReply("응?", false, T0.plusSeconds(2))).isEqualTo(Decision.RESUME);
 
-        flow.onJudgment(Verdict.CONFIRM);
-        flow.promptPlayed(T0);
-        assertThat(flow.onReply("네네", false, T0.plusSeconds(2))).isEqualTo(Decision.CLOSE);
+        assertThat(flow.onReply(reply, false, T0.plusSeconds(2))).isEqualTo(expected);
+        assertThat(flow.isActive()).isFalse();
     }
 
     @Test

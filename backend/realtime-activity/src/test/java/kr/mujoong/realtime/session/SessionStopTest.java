@@ -78,6 +78,22 @@ class SessionStopTest {
     }
 
     @Test
+    void aYesFollowedByWantingToGoOnDoesNotEndTheSession() {
+        // 참여 관문 안정화 (1)의 첫 낱말 규칙은 확인 질문에 쓰지 않는다(JOIN-GATE-A9)
+        h.extraApproved.put(SessionExecutor.STOP_CONFIRM, QUESTION);
+        h.activate();
+        h.childSays("i-1", "쉬고 싶어");
+        mark(h.link.sent(PlayApprovedContent.class).getLast(), PlaybackMark.Status.COMPLETED);
+
+        h.childSays("i-2", "응, 근데 더 하고 싶어");
+
+        assertThat(h.executor.status()).isEqualTo(SessionStatus.ACTIVE);
+        assertThat(h.transitions.find(h.sessionId).orElseThrow().endReason()).isNull();
+        assertThat(events(SessionExecutor.EVENT_STOP_CONFIRM_RESOLVED)).singleElement()
+                .satisfies(event -> assertThat(event.getPayloadJson()).contains("CONTINUE"));
+    }
+
+    @Test
     void anotherReplyLiftsTheHoldAndHandsTheFloorBackOnce() {
         h.activate();
         h.launcher.runAll("provider-create-");
