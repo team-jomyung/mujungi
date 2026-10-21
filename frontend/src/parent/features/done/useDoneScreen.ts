@@ -2,13 +2,13 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
-import { useEffect } from "react";
-import { freeFailedRoute } from "../../common/activity/failure";
+import { useEffect, useState } from "react";
+import { freeFailedRoute, practiceFailedRoute } from "../../common/activity/failure";
 import { isStartFailure } from "../../common/activity/livePresentation";
 import { ApiError } from "../../common/api/apiClient";
 import { queryKeys, useApiClient } from "../../common/api/queries";
 import { fetchHome } from "../../common/api/home";
-import { isTerminalStatus, type SessionStatus } from "../../common/api/types";
+import { isTerminalStatus, type LiveView, type SessionStatus } from "../../common/api/types";
 import type { TabKey } from "../../common/components/BottomTabBar";
 import { useLivePolling } from "../../common/hooks/useLivePolling";
 import { useResultStatusPolling } from "../../common/hooks/useResultStatusPolling";
@@ -18,10 +18,23 @@ import { messageForErrorCode } from "@/shared/errors/codeToCopy";
 import { useToast } from "@/shared/toast/ToastProvider";
 
 // 17 활동 끝 화면의 폴링 · 오류 분기 · 화면 이동을 맡는 흐름 훅.
-// 동작 규칙(종료 상태를 받을 때까지 폴링 · 시작 실패 08 · 401 · 404 · 읽기 실패 토스트)은 DoneScreen에 있던 그대로다.
+// 동작 규칙(종료 상태를 받을 때까지 폴링 · 시작 실패 08(연습은 18) · 401 · 404 · 읽기 실패 토스트)은 DoneScreen에 있던 그대로다.
 
 function keepPollingOnDone(status: SessionStatus): boolean {
   return !isTerminalStatus(status);
+}
+
+/**
+ * 연습 목표 수(C.S-17.21.1 · C.S-17.21.3). 종료된 세션의 진행 조회에는 practice가 오지 않는다(realtime은 실행기가 끝나면
+ * 비우고 core 사본 응답에는 없다). 그래서 12에서 이어받은 조회 값이나 마무리 중에 받은 값 가운데 마지막 것을 기억해 쓴다.
+ */
+function useGoalCount(sessionId: string, view: LiveView | undefined): number | null {
+  const seen = view?.practice?.goalCount ?? null;
+  const [kept, setKept] = useState<{ readonly sessionId: string; readonly goalCount: number } | null>(null);
+  if (seen !== null && (kept?.sessionId !== sessionId || kept.goalCount !== seen)) {
+    setKept({ sessionId, goalCount: seen });
+  }
+  return seen ?? (kept?.sessionId === sessionId ? kept.goalCount : null);
 }
 
 export function useDoneScreen(sessionId: string) {
@@ -38,12 +51,14 @@ export function useDoneScreen(sessionId: string) {
   const resultPolling = useResultStatusPolling(sessionId, status !== undefined && isTerminalStatus(status) && !startFailed);
   const jobStatus = resultPolling.data?.jobStatus;
   const failureCode = view?.failureCode ?? null;
+  const isPractice = view?.activityType === "PRACTICE";
+  const goalCount = useGoalCount(sessionId, view);
 
   useEffect(() => {
     if (startFailed) {
-      router.replace(freeFailedRoute(failureCode));
+      router.replace(isPractice ? practiceFailedRoute(failureCode) : freeFailedRoute(failureCode));
     }
-  }, [router, startFailed, failureCode]);
+  }, [router, startFailed, failureCode, isPractice]);
 
   useEffect(() => {
     if (isUnauthenticated(error)) {
@@ -73,6 +88,7 @@ export function useDoneScreen(sessionId: string) {
     view,
     status,
     childName,
+    goalCount,
     jobStatus,
     handleNavigate,
     onLockedPress: (message: string) => toast.show({ message }),

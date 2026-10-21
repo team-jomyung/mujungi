@@ -11,6 +11,7 @@ vi.mock("next/navigation", async () => (await import("../../../support/nextNavig
 // 17 활동 끝 시험 (U1 3.5 Step 42 · BR6.10 · BR6.15 · AC3.3.4 ~ AC3.3.7 · J120 · mockups 9-19 · C.S-17)
 // 마무리 중 → (같은 주기로 다시 읽어) 종료 카드, 종료 사유 3종 문구, 시간 줄 'hh:mm ~ hh:mm · n분', 「홈으로」,
 // 「오늘 기록 보기」는 감춤(U6), FAILED는 08 사유 카드, 마무리 중엔 자유대화 · 연습 탭이 잠긴다.
+// 연습이면 머리 · 제목 · 시간 줄 · 활성 탭이 C.S-17.21.x이고 시작 실패는 18로 간다(docs/done-screen-practice.md).
 
 const POLL_MS = 40;
 const ENDED_AT = "2026-10-15T01:21:00Z"; // 10:21
@@ -158,5 +159,105 @@ describe("17 — 실패 · 이동", () => {
     renderDone(() => errorResponse(404, "NOT_FOUND"));
     await waitFor(() => expect(router.replace).toHaveBeenCalledWith("/parent"));
     expect(screen.getByTestId("toast")).toHaveTextContent("찾을 수 없어요.");
+  });
+});
+
+describe("17 — 연습 변형(C.S-17.21.x · C.S-17.58.1 ~ 5)", () => {
+  const PRACTICE_STARTED_AT = "2026-10-15T01:40:00Z"; // 10:40
+  const PRACTICE_ENDED_AT = "2026-10-15T01:52:00Z"; // 10:52
+  const progress = { goalIndex: 2, goalCount: 2, goalName: "목표 이름", stage: "NEW_SCENARIO_RESPONSE" };
+
+  function practiceBody(status: string, extra: Record<string, unknown> = {}): Record<string, unknown> {
+    return liveViewBody(status, { activityType: "PRACTICE", startedAt: PRACTICE_STARTED_AT, ...extra });
+  }
+
+  /** 머리 · 제목 · 시간 줄만 본다(탭 이름 '자유대화'는 설계에 있다). */
+  function expectNoFreeTalkInHeader() {
+    for (const id of ["done-header", "done-title", "done-time"]) {
+      expect(screen.getByTestId(id)).not.toHaveTextContent("자유대화");
+    }
+  }
+
+  it("마무리 중에 받은 목표 수를 종료 뒤에도 써서 '연습 · 목표 2개' · '오늘 연습이 끝났어요' · '10:40 ~ 10:52 · 목표 2개'를 보인다", async () => {
+    renderDone((index) =>
+      jsonResponse(
+        200,
+        index <= 2
+          ? practiceBody("CLOSING", { practice: progress, serverTime: "2026-10-15T01:51:30Z", statusVersion: 5 })
+          // 종료된 세션의 진행 조회에는 practice가 오지 않는다(realtime 종료 · core 사본 응답).
+          : practiceBody("ENDED", { endReason: "GUARDIAN_STOP", confirmed: true, endedAt: PRACTICE_ENDED_AT, statusVersion: 6 }),
+      ),
+    );
+    expect(await screen.findByText("오늘 연습을 마무리하고 있어요")).toBeInTheDocument();
+    expect(screen.getByTestId("done-header")).toHaveTextContent("연습 · 목표 2개");
+    expect(screen.getByTestId("done-reason")).toHaveTextContent("무중이 마무리 인사를 하고 있어요");
+    expect(screen.getByTestId("tab-practice")).toHaveAttribute("aria-selected", "true");
+    await waitFor(() => expect(screen.getByTestId("done-title")).toHaveTextContent("오늘 연습이 끝났어요"));
+    expect(screen.getByTestId("done-header")).toHaveTextContent("연습 · 목표 2개");
+    expect(screen.getByTestId("done-time")).toHaveTextContent("10:40 ~ 10:52 · 목표 2개");
+    expect(screen.getByTestId("done-reason")).toHaveTextContent("보호자가 끝냈어요");
+    expectNoFreeTalkInHeader();
+    expect(screen.getByTestId("tab-practice")).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByTestId("tab-free")).toHaveAttribute("aria-selected", "false");
+    // 정리 중 · 끝에는 탭이 열린다(S-17 분기: 자유대화 · 연습 → 08 · 18).
+    fireEvent.click(screen.getByTestId("tab-practice"));
+    expect(router.push).toHaveBeenLastCalledWith("/parent/practice");
+  });
+
+  it("연습 마무리 중에도 자유대화 · 연습 탭은 잠겨 '끝나는 중이에요' 토스트를 보인다", async () => {
+    renderDone(() => jsonResponse(200, practiceBody("CLOSING", { practice: progress })));
+    await screen.findByText("오늘 연습을 마무리하고 있어요");
+    expect(screen.getByTestId("tab-free")).toHaveAttribute("aria-disabled", "true");
+    expect(screen.getByTestId("tab-practice")).toHaveAttribute("aria-disabled", "true");
+    fireEvent.click(screen.getByTestId("tab-practice"));
+    expect(screen.getByTestId("toast")).toHaveTextContent("끝나는 중이에요");
+    expect(router.push).not.toHaveBeenCalled();
+  });
+
+  it("기기 응답 없이 끝낸 연습은 C.S-17.58.1 ~ 5다", async () => {
+    renderDone((index) =>
+      jsonResponse(
+        200,
+        index <= 1
+          ? practiceBody("CLOSING", { practice: progress, statusVersion: 5 })
+          : practiceBody("ENDED_UNCONFIRMED", { endReason: "UNCONFIRMED", endedAt: "2026-10-15T01:55:00Z", statusVersion: 6 }),
+      ),
+    );
+    await screen.findByText("기기 응답 없이 끝냈어요");
+    expect(screen.getByTestId("done-header")).toHaveTextContent("연습 · 목표 2개");
+    expect(screen.getByTestId("done-title")).toHaveTextContent("오늘 연습이 끝났어요");
+    expect(screen.getByTestId("done-time")).toHaveTextContent("10:40 ~ 10:55 · 목표 2개");
+    expect(screen.getByTestId("done-reason")).toHaveTextContent(
+      "기기가 30초 동안 멈춤을 알리지 않아 끝낸 것으로 처리했어요. 다음 시작 전에 기기 상태를 다시 확인해요.",
+    );
+    expectNoFreeTalkInHeader();
+  });
+
+  it("목표 수를 한 번도 받지 못했으면(종료 뒤 처음 들어옴) 머리는 '연습', 시간 줄은 'hh:mm ~ hh:mm'만이다", async () => {
+    renderDone(() => jsonResponse(200, practiceBody("ENDED", { endReason: "CHILD_STOP", confirmed: true, endedAt: PRACTICE_ENDED_AT })));
+    await waitFor(() => expect(screen.getByTestId("done-title")).toHaveTextContent("오늘 연습이 끝났어요"));
+    expect(screen.getByTestId("done-header").textContent).toBe("연습");
+    expect(screen.getByTestId("done-time").textContent).toBe("10:40 ~ 10:52");
+    expect(screen.getByTestId("done-reason")).toHaveTextContent("아이가 끝내자고 했어요");
+    expect(screen.getByTestId("tab-practice")).toHaveAttribute("aria-selected", "true");
+  });
+
+  it("연습 시작 실패는 12와 같이 18로 사유를 싣고 가고, 사유 코드가 없으면 기본 사유다", async () => {
+    const first = renderDone(() => jsonResponse(200, practiceBody("FAILED", { failureCode: "SCENARIO_GEN_FAILED", startedAt: null })));
+    await waitFor(() => expect(router.replace).toHaveBeenCalledWith("/parent/practice?failed=1&reason=SCENARIO_GEN_FAILED"));
+    first.view.unmount();
+    resetRouter();
+    renderDone(() => jsonResponse(200, practiceBody("FAILED", { failureCode: null, startedAt: null })));
+    await waitFor(() => expect(router.replace).toHaveBeenCalledWith("/parent/practice?failed=1&reason=DEVICE_NO_ACK"));
+    expect(router.replace).not.toHaveBeenCalledWith(expect.stringContaining("/parent/free"));
+  });
+
+  it("자유대화 17은 머리 '자유대화' · 'n분' 시간 줄 · 자유대화 탭 그대로다", async () => {
+    renderDone(() => jsonResponse(200, liveViewBody("ENDED", { endReason: "GUARDIAN_STOP", confirmed: true, endedAt: ENDED_AT })));
+    await waitFor(() => expect(screen.getByTestId("done-title")).toHaveTextContent("오늘 자유대화가 끝났어요"));
+    expect(screen.getByTestId("done-header").textContent).toBe("자유대화");
+    expect(screen.getByTestId("done-time")).toHaveTextContent("10:00 ~ 10:21 · 21분");
+    expect(screen.getByTestId("tab-free")).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByTestId("tab-practice")).toHaveAttribute("aria-selected", "false");
   });
 });

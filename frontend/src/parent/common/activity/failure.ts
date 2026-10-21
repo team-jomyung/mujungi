@@ -25,3 +25,8 @@ export function freeFailedRoute(failureCode: string | null): string {
   const base = PARENT_ROUTES.freeFailed;
   return failureCode !== null && DISTINCT_REASON_CODES.includes(failureCode) ? `${base}&reason=${failureCode}` : base;
 }
+
+/** 18로 돌아가는 경로('?failed=1&reason=코드', 코드가 없으면 기본 사유 DEVICE_NO_ACK). 12와 17이 같이 쓴다. */
+export function practiceFailedRoute(failureCode: string | null): string {
+  return `${PARENT_ROUTES.practice}?failed=1&reason=${encodeURIComponent(failureCode ?? "DEVICE_NO_ACK")}`;
+}

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { presentDone } from "@/parent/features/done/presentation";
-import { freeFailedRoute, startFailureReason } from "@/parent/common/activity/failure";
+import { freeFailedRoute, practiceFailedRoute, startFailureReason } from "@/parent/common/activity/failure";
 import { activeTabTarget, liveActivityCard } from "@/parent/features/home/presentation";
 import { buildTimeline, gapText } from "@/parent/common/components/transcriptTimeline";
 import { isStartFailure, liveOutcome, showsPauseLine, silentMinutes } from "@/parent/common/activity/livePresentation";
@@ -190,6 +190,12 @@ describe("08 시작 실패 사유(AC3.1.9 · AC3.2.4 · AC3.2.5 · U4a-J16)", ()
     expect(freeFailedRoute("DEVICE_NO_ACK")).toBe("/parent/free?failed=1");
     expect(freeFailedRoute("PROVIDER_UNAVAILABLE")).toBe("/parent/free?failed=1&reason=PROVIDER_UNAVAILABLE");
     expect(freeFailedRoute("<script>")).toBe("/parent/free?failed=1");
+  });
+
+  it("연습 시작 실패는 18로 가며 사유 코드를 늘 싣고(없으면 DEVICE_NO_ACK) 경로에 쓸 수 없는 글자는 부호화한다", () => {
+    expect(practiceFailedRoute("SCENARIO_GEN_FAILED")).toBe("/parent/practice?failed=1&reason=SCENARIO_GEN_FAILED");
+    expect(practiceFailedRoute(null)).toBe("/parent/practice?failed=1&reason=DEVICE_NO_ACK");
+    expect(practiceFailedRoute("a&b")).toBe("/parent/practice?failed=1&reason=a%26b");
   });
 });
 

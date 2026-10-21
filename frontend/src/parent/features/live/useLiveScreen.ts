@@ -3,7 +3,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { freeFailedRoute } from "../../common/activity/failure";
+import { freeFailedRoute, practiceFailedRoute } from "../../common/activity/failure";
 import { liveOutcome } from "../../common/activity/livePresentation";
 import { ApiError } from "../../common/api/apiClient";
 import { queryKeys, useApiClient } from "../../common/api/queries";
@@ -51,7 +51,7 @@ export function useLiveScreen(sessionId: string) {
   const isPractice = view?.activityType === "PRACTICE";
   useEffect(() => {
     if (outcomeKind === "startFailed") {
-      router.replace(isPractice ? `${PARENT_ROUTES.practice}?failed=1&reason=${encodeURIComponent(failedCode ?? "DEVICE_NO_ACK")}` : freeFailedRoute(failedCode));
+      router.replace(isPractice ? practiceFailedRoute(failedCode) : freeFailedRoute(failedCode));
     } else if (outcomeKind === "done") {
       router.replace(PARENT_ROUTES.sessionDone(sessionId));
     }
