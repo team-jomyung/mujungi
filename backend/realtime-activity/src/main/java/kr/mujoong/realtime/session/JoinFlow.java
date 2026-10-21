@@ -4,6 +4,9 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
+import kr.mujoong.contract.log.AttrKey;
+import kr.mujoong.contract.log.EventCode;
+import kr.mujoong.contract.log.EventLog;
 import kr.mujoong.contract.status.ActivityType;
 import kr.mujoong.contract.status.SessionStatus;
 import kr.mujoong.contract.ws.message.PlayApprovedContent;
@@ -51,6 +54,12 @@ final class JoinFlow {
 
     /** U4b 참여 판단(WAITING_CHILD에 들어갈 때 만든다). */
     private JoinTracker join;
+    /** J1으로 보낸 대답의 모양(결과를 참여 대답으로 넣을 때 진단 로그에 쓴다, 원문 없음). */
+    private ReplyMeta judgedMeta;
+
+    /** 진단 로그(contracts/ai-io.md 10.15)에 남기는 확정 전사 하나의 모양. 원문은 담지 않는다. */
+    private record ReplyMeta(int textLen, int wordCount, InputTranscriptGroup.Shape shape, boolean lateForWindow) {
+    }
 
     JoinFlow(SessionContext ctx, IdleClock idle, JudgmentCoordinator judgment, EndingFlow ending, Env env) {
         this.ctx = ctx;
@@ -139,25 +148,36 @@ final class JoinFlow {
 
     /**
      * WAITING_CHILD의 아이 확정 전사: 저장하지 않고 분류에만 쓴다. 안내를 재생하는 중의 대답도 곧바로 분류한다(5354a32
-     * JoinTracker 동작).
+     * JoinTracker 동작). 처리마다 진단 로그 한 줄을 남긴다(원문 없음).
+     *
+     * @param shape 이 전사로 묶인 입력 전사 조각의 모양
      */
-    void onJoinReply(String transcript, Instant at) {
+    void onJoinReply(String transcript, Instant at, InputTranscriptGroup.Shape shape) {
         if (join == null || join.isFinished()) {
             return;
         }
+        ReplyMeta meta = meta(transcript, at, shape);
         // J1이 열린 동안 새 확정 전사가 오면 이전 J1을 SUPERSEDED로 닫고 새 전사를 처음부터 다시 처리한다
         judgment.onTranscript(false);
         JoinTracker.Reply reply = JoinTracker.classify(transcript);
         if (reply == JoinTracker.Reply.UNCLEAR && judgment.openJoinJudgment(transcript, at)) {
+            judgedMeta = meta;
+            logReply(reply.name(), "J1_OPENED", meta);
             return;
         }
-        applyJoinAction(join.reply(reply, at), reply, at);
+        JoinTracker.Action action = join.reply(reply, at);
+        logReply(reply.name(), action.name(), meta);
+        applyJoinAction(action, reply, at);
     }
 
     /** 결과를 참여 대답 하나로 넣는다(참여 대기 중이 아니면 아무것도 하지 않는다). */
     void applyJoinReply(JoinTracker.Reply reply, Instant at) {
         if (ctx.status() == SessionStatus.WAITING_CHILD && join != null && !join.isFinished()) {
-            applyJoinAction(join.reply(reply, at), reply, at);
+            ReplyMeta meta = judgedMeta != null ? judgedMeta : new ReplyMeta(0, 0, null, lateAt(at));
+            judgedMeta = null;
+            JoinTracker.Action action = join.reply(reply, at);
+            logReply(reply.name(), action.name(), meta);
+            applyJoinAction(action, reply, at);
         }
     }
 
@@ -230,5 +250,31 @@ final class JoinFlow {
 
     private SessionExecutor.Settings.Lifecycle lifecycle() {
         return ctx.services().settings().lifecycle();
+    }
+
+    private ReplyMeta meta(String transcript, Instant at, InputTranscriptGroup.Shape shape) {
+        return new ReplyMeta(JoinTracker.normalizedLength(transcript), JoinTracker.wordCount(transcript), shape, lateAt(at));
+    }
+
+    /** 그 시각의 대답이 참여 창 끝과 같거나 늦은가(창이 없으면 거짓). */
+    private boolean lateAt(Instant at) {
+        Instant end = join == null ? null : join.windowEnd();
+        return end != null && !at.isBefore(end);
+    }
+
+    /** 진단 로그 JOIN_REPLY 한 줄(contracts/ai-io.md 10.15). 분류 · 할 일 코드와 전사의 모양만 남긴다(R-F14). */
+    private void logReply(String reply, String action, ReplyMeta meta) {
+        InputTranscriptGroup.Shape shape = meta.shape();
+        ctx.services().events().log(EventCode.JOIN_REPLY, EventLog.Component.SESSION_LIFECYCLE, ctx.plan().sessionId(),
+                ctx.plan().traceId(), entry -> entry
+                        .attr(AttrKey.JOIN_REPLY_KIND, reply)
+                        .attr(AttrKey.JOIN_ACTION, action)
+                        .attr(AttrKey.PROMPTS, join == null ? 1 : join.prompts())
+                        .attr(AttrKey.TEXT_LEN, meta.textLen())
+                        .attr(AttrKey.WORD_COUNT, meta.wordCount())
+                        .attr(AttrKey.DELTA_COUNT, shape == null ? 0 : shape.deltaCount())
+                        .attr(AttrKey.MAX_GAP_MS, shape == null ? InputTranscriptGroup.NO_GAP : shape.maxGapMs())
+                        .attr(AttrKey.DEVICE_PLAYING, shape == null ? !ctx.devicePlaying().isEmpty() : shape.playingAtOpen())
+                        .attr(AttrKey.LATE_FOR_WINDOW, meta.lateForWindow()));
     }
 }

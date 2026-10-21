@@ -48,6 +48,58 @@ Docker 권한이 필요한 PC에서는 `sg docker -c 'bash scripts/live/up.sh --
 - 이 스택은 프로젝트 이름 `mujoong-live`와 별도 망 대역(172.30.40·50)을 쓴다. `mujoong-manual` · `mujoong-verify`와 같이 떠 있어도 겹치지 않는다. `down.sh`는 `mujoong-live` 라벨의 자원만 지운다.
 - 다시 올릴 때는 같은 명령을 다시 실행한다. DB는 볼륨에 남고 시드는 멱등이다.
 
+### 참여 확인(WAITING_CHILD → ACTIVE)이 안 될 때 진단
+
+결과 코드만 본다. 전사 원문 · 안내 글 · 확률 · 키는 화면 · 파일 · 채팅에 옮기지 않는다(R-F3 · R-F14). 속성의 뜻은 `contracts/ai-io.md` 10.15와 `docs/join-gate-stabilization.md`에 있다.
+
+1. 로그(컨테이너가 살아 있을 때만 남는다. `down.sh`가 컨테이너를 지우면 함께 사라진다):
+
+   ```bash
+   docker compose -p mujoong-live logs realtime | grep -E '"event":"(SESSION_TRANSITION|JOIN_REPLY|JUDGMENT_TURN|LUNA_CALL|LATENCY_TURN)"'
+   ```
+
+   - `JOIN_REPLY`: 확정 전사 하나마다 `joinReply`(분류) · `joinAction`(할 일) · 글자 수 · 낱말 수 · 조각 수 · 최대 간격 · 재생 중 · 창 늦음.
+   - `JUDGMENT_TURN`: J1이 닫힐 때마다 결과 코드 · 1순위 코드 · 닫힌 까닭 · 다음 행동 · 지연.
+2. DB(볼륨이 남아 있을 때만. 진단을 마치기 전에는 `down.sh --purge`를 쓰지 않는다). 스택이 떠 있어야 망 `mujoong-live_backend`가 있다. 스택을 다시 올리면 realtime이 실제 키로 뜨므로, 올리기 전에 `infra/RUNBOOK.md`의 R-F15 확인 기록이 있는지 먼저 본다. psql은 `scripts/live/up.sh`의 `owner_psql`과 같은 방식으로 열고, 비밀 값은 env 파일에서 컨테이너로만 넘긴다. 조회문 파일은 저장소 밖 임시 폴더에 둔다.
+
+   ```bash
+   pg_image="$(grep -E '^\s+image:\s*postgres:' infra/compose.demo.yml | head -n 1 | sed -E 's/^\s+image:\s*//')"
+   docker run --rm -i --network mujoong-live_backend --cap-drop ALL --security-opt no-new-privileges:true \
+     --env-file build/live/env/migrate.env --entrypoint sh "$pg_image" -c \
+     'PGPASSWORD="$DB_OWNER_PASSWORD" exec psql -X -h postgres -U mujoong_owner -d mujoong' < "$TMPDIR_OUTSIDE_REPO/diag.sql"
+   ```
+
+   `diag.sql`은 아래 결과 코드 열만 읽는다(`held_output_transcript` · `end_detail` · `child_context_json` · 확률 열은 읽지 않는다).
+
+   ```sql
+   -- 1) 그날 세션
+   select id, activity_type, status, end_reason, created_at, started_at, ended_at
+     from realtime.realtime_activity_session
+    where created_at >= timestamptz '2026-10-18 00:00+09' and created_at < timestamptz '2026-10-19 00:00+09'
+    order by created_at;
+   -- 2) 그 세션의 판정 기록(결과 코드 열만)
+   select created_at, judgment_point, trigger_kind, prompt_version, outcome, abstain_reason,
+          turn_opened, first_option, second_option, next_action, latency_millis
+     from realtime.realtime_judgment_live where session_id = '<세션 id>' order by created_at;
+   -- 3) 참여 확인 사건(payload는 횟수와 원인 코드뿐)
+   select created_at, event_type, payload_json from realtime.realtime_session_event
+    where session_id = '<세션 id>' and (event_type like 'JOIN\_%' or event_type = 'APPROVED_CONTENT_MISSING')
+    order by created_at;
+   ```
+
+3. 읽는 법:
+
+   | 보이는 것 | 뜻 |
+   |---|---|
+   | `JOIN_REPLY`의 `joinReply`가 `UNCLEAR`이고 `wordCount` 2 이상, `deltaCount`가 여럿 | 앞말 · 잡음과 짧은 대답이 한 전사로 묶였다(발화 간격 분할 `input-utterance-gap` 확인) |
+   | `outcome=SUPERSEDED`이고 `latency_millis`가 판정 지연(약 2000)보다 작다 | 결과가 오기 전에 다음 전사가 J1을 닫았다 |
+   | `ABSTAINED` + `LOW_CONFIDENCE` · `LOW_MARGIN` | 보류 기준에 걸렸다 |
+   | `CONFIRMED` + `UNCLEAR` · `UNREADABLE` | 참여 답이 아니었거나, 섞인 전사였거나, 짧은 답을 읽지 못했다 |
+   | `CONFIRMED` + `PARTICIPATE` + `START_JOIN`인데 ACTIVE가 아니다 | 창 만기 경계에 걸렸거나 전이에 실패했다 |
+   | 사람은 거절하지 않았는데 `JOIN_ALTERNATIVE_OFFERED`의 reply가 `REFUSE`다 | 에코나 잡음이 거부로 분류됐다(`JOIN_REPLY`의 `devicePlaying` 확인) |
+   | 사람은 말했는데 `JOIN_RE_PROMPTED`의 cause가 `NO_REPLY`다, 또는 `JOIN_REPLY`의 `lateForWindow`가 참 | 창 만기 경계에 걸렸다 |
+   | `JUDGMENT_TURN`의 `abstainReason`이 `NO_PROVIDER` | realtime Luna가 꺼져 있다(demo 프로필 기본값). 불명확한 대답은 곧 재안내가 된다 |
+
 ## 4. 무엇이 실제이고 무엇이 아닌가
 
 - 실제: GPT-Live 음성 중계, Luna 판정, (제브 키를 넣었다면) 제브 검사. realtime 컨테이너는 `api.openai.com` · 제브 호스트로 나가는 길이 열려 있다(기동 확인 때 TLS 연결 확인). 시험 로그인은 로컬 전용 우회이며 Google 로그인은 쓰지 않는다.
@@ -79,6 +131,8 @@ Docker 권한이 필요한 PC에서는 `sg docker -c 'bash scripts/live/up.sh --
 **추후 확인할 것** (조원 논의 후)
 
 1. 판정(J1) 결과가 `PARTICIPATE`로 오지 않은 이유: 전사 내용 · 판정 프롬프트(`judgment/prompt-v1.txt`) · 선택지 · 모델 응답. 로그에는 판정 결과 값이 없으므로 진단용으로 남길 수 있는 항목(결과 코드만)을 정해야 한다.
+   - 2026-10-21 `claude/join-gate`: 진단 로그 `JOIN_REPLY` · `JUDGMENT_TURN`(결과 코드 · 전사 모양만, `contracts/ai-io.md` 10.15)을 더했다. 확인 절차는 3절 "참여 확인이 안 될 때 진단"이다.
+   - 10/18 판정 기록 조회 결과(코드만): 미조회(사람 몫, 10/18 스택의 DB 볼륨이 남아 있는 PC에서 3절 SQL로 확인한다).
 2. "응" 한 단어 입력이 참여로 처리돼 `ACTIVE`로 넘어가는지, 넘어간 뒤 무중이의 GPT-Live 음성이 나오는지.
 3. 안내음을 사람 말 음성으로 바꾸는 방법(승인 녹음 v3, 또는 시험용 로컬 음성).
 4. 기기 화면의 "듣는 중" 표시가 실제 입력 수신과 일치하는지 확인할 수 있는 표시.

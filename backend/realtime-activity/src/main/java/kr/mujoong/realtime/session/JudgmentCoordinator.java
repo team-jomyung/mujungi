@@ -72,6 +72,14 @@ final class JudgmentCoordinator implements JudgmentTurn.Host {
 
         /** J1이 열린 동안 미뤄 둔 참여 창 만기를 처리한다(참여 대기 중이고 기술 일시정지가 아닐 때만). */
         void runDeferredJoinTick();
+
+        /**
+         * 판정 턴 하나가 닫히거나 열지 못했다: 진단 로그 JUDGMENT_TURN 한 줄(contracts/ai-io.md 10.15). 결과 코드만 남기고 확률 · 전사는
+         * 남기지 않는다.
+         *
+         * @param reason 닫힌 까닭(턴을 열지 못했으면 null)
+         */
+        void logJudgmentTurn(JudgmentPoint point, JudgeOutcome outcome, JudgmentTurn.CloseReason reason, NextAction next);
     }
 
     /** 턴을 열 수 있는 상태인가. */
@@ -214,7 +222,7 @@ final class JudgmentCoordinator implements JudgmentTurn.Host {
             return;
         }
         write(UUID.randomUUID(), point, trigger, transcriptSeq, false,
-                JudgeOutcome.abstained(reason, Duration.ZERO, null, support.promptVersion()), next, null);
+                JudgeOutcome.abstained(reason, Duration.ZERO, null, support.promptVersion()), next, null, null);
     }
 
     /** 턴을 연다({@link #preflight}가 READY일 때). */
@@ -410,7 +418,7 @@ final class JudgmentCoordinator implements JudgmentTurn.Host {
         } finally {
             try {
                 write(closure.turnId(), closure.point(), closure.trigger(), closure.inputTranscriptSeq(), true, closure.outcome(),
-                        handled.next(), closure.heldOutputTranscript());
+                        handled.next(), closure.heldOutputTranscript(), closure.reason());
             } finally {
                 // 갈래 처리가 예외를 던져도 '생각 중'에 머물지 않게 보기를 되돌린다(심사)
                 if ((threw || handled.restoreView()) && !closure.responseStarted()) {
@@ -423,7 +431,8 @@ final class JudgmentCoordinator implements JudgmentTurn.Host {
     // ---- 기록 ----
 
     private void write(UUID id, JudgmentPoint point, JudgmentTrigger trigger, int seq, boolean opened, JudgeOutcome outcome,
-            NextAction next, String held) {
+            NextAction next, String held, JudgmentTurn.CloseReason reason) {
+        env.logJudgmentTurn(point, outcome, reason, next);
         JudgmentLiveRecorder recorder = support.recorder();
         if (recorder == null || plan.guardianId() == null) {
             return;

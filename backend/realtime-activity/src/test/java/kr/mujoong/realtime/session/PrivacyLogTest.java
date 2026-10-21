@@ -80,6 +80,11 @@ class PrivacyLogTest {
                 ALTERNATIVE_TEXT);
         assertThat(sessionEvents()).extracting(SessionEvent::getEventType)
                 .contains(JoinFlow.EVENT_JOIN_PROMPTED, JoinFlow.EVENT_JOIN_ACCEPTED);
+        // 진단 로그(ai-io.md 10.15): 대답마다 JOIN_REPLY 한 줄, 열지 못한 J1 한 줄이 나오고 원문은 위 검사가 막는다
+        assertThat(h.logs.events(kr.mujoong.contract.log.EventCode.JOIN_REPLY)).extracting(LogCapture::attrs)
+                .extracting(attrs -> attrs.get("joinReply"))
+                .containsExactly("UNCLEAR", "TOPIC_REFUSAL", "ACCEPT");
+        assertThat(h.logs.events(kr.mujoong.contract.log.EventCode.JUDGMENT_TURN)).hasSize(1);
     }
 
     @Test
@@ -95,6 +100,9 @@ class PrivacyLogTest {
 
         assertThat(h.transitions.status(h.sessionId)).isEqualTo(SessionStatus.DECLINED);
         assertNoSecrets("안키로사우루스", "파키케팔로");
+        assertThat(h.logs.events(kr.mujoong.contract.log.EventCode.JOIN_REPLY)).extracting(LogCapture::attrs)
+                .extracting(attrs -> attrs.get("joinAction"))
+                .containsExactly("OFFER_ALTERNATIVE", "DECLINE");
         assertThat(sessionEvents()).extracting(SessionEvent::getEventType)
                 .contains(JoinFlow.EVENT_JOIN_DECLINED);
     }

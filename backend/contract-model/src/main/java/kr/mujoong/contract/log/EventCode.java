@@ -1,11 +1,15 @@
 package kr.mujoong.contract.log;
 
+import static kr.mujoong.contract.log.AttrKey.ABSTAIN_REASON;
 import static kr.mujoong.contract.log.AttrKey.ATTEMPT;
 import static kr.mujoong.contract.log.AttrKey.BREAKER_OPEN_SEC;
 import static kr.mujoong.contract.log.AttrKey.CHANNEL;
 import static kr.mujoong.contract.log.AttrKey.CLOCK_OFFSET_MS;
 import static kr.mujoong.contract.log.AttrKey.CLOSE_CODE;
+import static kr.mujoong.contract.log.AttrKey.CLOSE_REASON;
 import static kr.mujoong.contract.log.AttrKey.CONFIRMED;
+import static kr.mujoong.contract.log.AttrKey.DELTA_COUNT;
+import static kr.mujoong.contract.log.AttrKey.DEVICE_PLAYING;
 import static kr.mujoong.contract.log.AttrKey.DIRECTION;
 import static kr.mujoong.contract.log.AttrKey.DROPPED;
 import static kr.mujoong.contract.log.AttrKey.DURATION_MS;
@@ -15,16 +19,24 @@ import static kr.mujoong.contract.log.AttrKey.ERROR_KIND;
 import static kr.mujoong.contract.log.AttrKey.EVENT_ID;
 import static kr.mujoong.contract.log.AttrKey.EVENT_TYPE;
 import static kr.mujoong.contract.log.AttrKey.FAILURE_CODE;
+import static kr.mujoong.contract.log.AttrKey.FIRST_OPTION;
 import static kr.mujoong.contract.log.AttrKey.FROM;
 import static kr.mujoong.contract.log.AttrKey.HEAP_USED_PCT;
 import static kr.mujoong.contract.log.AttrKey.INBOX_DEAD;
+import static kr.mujoong.contract.log.AttrKey.JOIN_ACTION;
+import static kr.mujoong.contract.log.AttrKey.JOIN_REPLY_KIND;
+import static kr.mujoong.contract.log.AttrKey.JUDGMENT_OUTCOME;
+import static kr.mujoong.contract.log.AttrKey.JUDGMENT_POINT;
 import static kr.mujoong.contract.log.AttrKey.KIND;
 import static kr.mujoong.contract.log.AttrKey.LATENCY_MS;
+import static kr.mujoong.contract.log.AttrKey.LATE_FOR_WINDOW;
 import static kr.mujoong.contract.log.AttrKey.LIMITER;
 import static kr.mujoong.contract.log.AttrKey.LUNA_OUTCOME;
 import static kr.mujoong.contract.log.AttrKey.LUNA_PURPOSE;
 import static kr.mujoong.contract.log.AttrKey.LUNA_STATE;
+import static kr.mujoong.contract.log.AttrKey.MAX_GAP_MS;
 import static kr.mujoong.contract.log.AttrKey.MODEL;
+import static kr.mujoong.contract.log.AttrKey.NEXT_ACTION;
 import static kr.mujoong.contract.log.AttrKey.OPEN_CONNECTIONS;
 import static kr.mujoong.contract.log.AttrKey.ORIGIN;
 import static kr.mujoong.contract.log.AttrKey.OUTBOX_FAILED;
@@ -36,6 +48,7 @@ import static kr.mujoong.contract.log.AttrKey.POOL_ACTIVE;
 import static kr.mujoong.contract.log.AttrKey.POOL_WAIT_EXCEEDED;
 import static kr.mujoong.contract.log.AttrKey.POOL_WAIT_MAX_MS;
 import static kr.mujoong.contract.log.AttrKey.PROFILE;
+import static kr.mujoong.contract.log.AttrKey.PROMPTS;
 import static kr.mujoong.contract.log.AttrKey.PROMPT_VERSION;
 import static kr.mujoong.contract.log.AttrKey.PROVIDER_RESPONSE_MS;
 import static kr.mujoong.contract.log.AttrKey.QUEUE;
@@ -63,6 +76,7 @@ import static kr.mujoong.contract.log.AttrKey.STOP_CAUSE;
 import static kr.mujoong.contract.log.AttrKey.SYS_CPU_AVG_PCT;
 import static kr.mujoong.contract.log.AttrKey.SYS_MEM_MAX_PCT;
 import static kr.mujoong.contract.log.AttrKey.TARGET;
+import static kr.mujoong.contract.log.AttrKey.TEXT_LEN;
 import static kr.mujoong.contract.log.AttrKey.THRESHOLD_MS;
 import static kr.mujoong.contract.log.AttrKey.TO;
 import static kr.mujoong.contract.log.AttrKey.TURN_SEQ;
@@ -84,15 +98,17 @@ import static kr.mujoong.contract.log.AttrKey.UNOBSERVED_REASON;
 import static kr.mujoong.contract.log.AttrKey.VIEW_FALLBACK;
 import static kr.mujoong.contract.log.AttrKey.VIEW_LE_500_MS;
 import static kr.mujoong.contract.log.AttrKey.VIEW_TOTAL;
+import static kr.mujoong.contract.log.AttrKey.WORD_COUNT;
 
 import java.util.EnumSet;
 import java.util.Map;
 import java.util.Set;
 
 /**
- * 사건 코드 19종(OD-2: 요구 문서 15종 + APP_ERROR · QUEUE_PRESSURE, U9 SD6: LUNA_CALL · LUNA_STARTUP). 코드마다 기본 수준 · 허용 attrs
- * 키 · 병합 대상 여부를 정한다. 허용 표에 없는 키는 쓸 수 없다({@link EventLog}가 막는다). LUNA_CALL은 시도마다 한 줄이어야 해서(BR6.1)
- * 병합하지 않는다.
+ * 사건 코드 21종(OD-2: 요구 문서 15종 + APP_ERROR · QUEUE_PRESSURE, U9 SD6: LUNA_CALL · LUNA_STARTUP, 참여 관문 진단: JOIN_REPLY ·
+ * JUDGMENT_TURN). 코드마다 기본 수준 · 허용 attrs 키 · 병합 대상 여부를 정한다. 허용 표에 없는 키는 쓸 수 없다({@link EventLog}가 막는다).
+ * LUNA_CALL은 시도마다 한 줄이어야 해서(BR6.1) 병합하지 않는다. JOIN_REPLY · JUDGMENT_TURN도 대답 · 판정 턴마다 한 줄이라 병합하지 않는다
+ * (contracts/ai-io.md 10.15).
  */
 public enum EventCode {
     SESSION_TRANSITION(Level.INFO, false, false,
@@ -125,7 +141,11 @@ public enum EventCode {
     QUEUE_PRESSURE(Level.WARN, false, false, EnumSet.of(QUEUE, DROPPED, REPEAT)),
     LUNA_CALL(Level.INFO, false, false, EnumSet.of(
             LUNA_PURPOSE, LUNA_OUTCOME, MODEL, RESPONSE_MODEL, PROMPT_VERSION, SENT_FIELDS, LATENCY_MS, ATTEMPT)),
-    LUNA_STARTUP(Level.INFO, false, false, EnumSet.of(LUNA_STATE));
+    LUNA_STARTUP(Level.INFO, false, false, EnumSet.of(LUNA_STATE)),
+    JOIN_REPLY(Level.INFO, false, false, EnumSet.of(
+            JOIN_REPLY_KIND, JOIN_ACTION, PROMPTS, TEXT_LEN, WORD_COUNT, DELTA_COUNT, MAX_GAP_MS, DEVICE_PLAYING, LATE_FOR_WINDOW)),
+    JUDGMENT_TURN(Level.INFO, false, false, EnumSet.of(
+            JUDGMENT_POINT, JUDGMENT_OUTCOME, ABSTAIN_REASON, FIRST_OPTION, CLOSE_REASON, NEXT_ACTION, LATENCY_MS, PROMPT_VERSION));
 
     /** 로그 수준(OD-1). demo는 INFO 이상만 출력한다. */
     public enum Level {

@@ -491,9 +491,9 @@ for m in re.finditer(r"([A-Z_]+)\(Level\.\w+,\s*(?:true|false),\s*(?:true|false)
 print("\n".join(sorted(rows)))
 PY
   bash "$LHC" --print-allowlist >"$work/allow.script"
-  # U9 SD6: LUNA_CALL · LUNA_STARTUP을 더해 19종이다(정본 EventCode.java와 같은 커밋에서 고친다, R-M10)
-  if [ "$(wc -l <"$work/allow.java")" -eq 19 ] && diff -q "$work/allow.java" "$work/allow.script" >/dev/null; then
-    ok "log-hygiene-allowlist-matches-java(19종)"
+  # U9 SD6: LUNA_CALL · LUNA_STARTUP, 참여 관문 진단: JOIN_REPLY · JUDGMENT_TURN을 더해 21종이다(정본 EventCode.java와 같은 커밋에서 고친다, R-M10)
+  if [ "$(wc -l <"$work/allow.java")" -eq 21 ] && diff -q "$work/allow.java" "$work/allow.script" >/dev/null; then
+    ok "log-hygiene-allowlist-matches-java(21종)"
   else
     not_ok "log-hygiene-allowlist-matches-java" "$(diff "$work/allow.java" "$work/allow.script" | head -n 4 | paste -sd' ' -)"
   fi
@@ -518,6 +518,26 @@ if [ "$luna_clean" = 'CHECK attrs violations=0' ] && [ "$luna_dirty" = 'CHECK at
   ok "log-hygiene-luna-events(U9 SD6: LUNA_STARTUP · LUNA_CALL 허용 속성)"
 else
   not_ok "log-hygiene-luna-events" "깨끗한 줄 [$luna_clean] · 허용 밖 속성 [$luna_dirty]"
+fi
+
+# 참여 관문 진단(ai-io.md 10.15): JOIN_REPLY · JUDGMENT_TURN 두 줄(허용 속성만)은 attrs 위반 0, 허용 밖 속성(transcript)을 단 JOIN_REPLY는 위반 1
+r="$work/h-join"
+make_root "$r"
+{
+  app_line $((now_s - 500)) INFO JOIN_REPLY \
+    '{"joinReply":"ACCEPT","joinAction":"START","prompts":1,"textLen":1,"wordCount":1,"deltaCount":2,"maxGapMs":-1,"devicePlaying":false,"lateForWindow":false}'
+  app_line $((now_s - 400)) INFO JUDGMENT_TURN \
+    '{"judgmentPoint":"J1","judgmentOutcome":"CONFIRMED","firstOption":"PARTICIPATE","closeReason":"RESULT_HANDLED","nextAction":"START_JOIN","latencyMs":1900,"promptVersion":"prompt-v2"}'
+} >>"$r/c/realtime.log"
+run_tool "$r" "$LHC" --since "$since_iso"
+join_clean="$(grep '^CHECK attrs ' "$work/tool.out" || true)"
+app_line $((now_s - 300)) INFO JOIN_REPLY '{"joinReply":"UNCLEAR","joinAction":"J1_OPENED","transcript":"x"}' >>"$r/c/realtime.log"
+run_tool "$r" "$LHC" --since "$since_iso"
+join_dirty="$(grep '^CHECK attrs ' "$work/tool.out" || true)"
+if [ "$join_clean" = 'CHECK attrs violations=0' ] && [ "$join_dirty" = 'CHECK attrs violations=1' ]; then
+  ok "log-hygiene-join-gate-events(JOIN_REPLY · JUDGMENT_TURN 허용 속성)"
+else
+  not_ok "log-hygiene-join-gate-events" "깨끗한 줄 [$join_clean] · 허용 밖 속성 [$join_dirty]"
 fi
 
 # ---- turn-metrics(MO-4 · NFR5.4 · OD-8, J348): 한 턴 로그만으로 NFR5.1 · 5.2 · 5.3 계산 · 표본 규칙 · 미관측 사유 ---------------------

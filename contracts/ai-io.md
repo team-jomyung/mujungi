@@ -482,3 +482,28 @@ realtime 새 연습 흐름(U12)이 읽는 설정이다. 시간 값이 아니며 
 |---|---|---|---|
 | `mujoong.practice-flow.retry-max` | `2` | realtime | 장면 하나에서 코치와 함께 '다시 해 보기'를 할 수 있는 최대 횟수(AC1.5.4). 0 이상 정수, 0은 하지 않음 |
 | `mujoong.practice-flow.reexplain-max` | `1` | realtime | 장면 하나에서 상황을 다시 설명하는 최대 횟수(AC1.3.x, OPPORTUNITY와 RETRY가 공유). 0 이상 정수, 0은 하지 않음 |
+
+### 10.15 참여 관문 진단 로그 (`JOIN_REPLY` · `JUDGMENT_TURN`)
+
+참여 확인(WAITING_CHILD)에서 아이 대답이 ACTIVE로 가지 못했을 때 로그만 보고 원인을 가르려고 남기는 두 사건이다 [JG 편차 (JG-b)]. 둘 다 INFO이고 병합하지 않으며 보안 사건이 아니다. 줄의 `component`는 `realtime/SessionLifecycle`이다. 전사 · 안내 글 · 확률 · AI 요청 · 응답 원문은 어떤 속성에도 담지 않는다(R-F14). 확률은 판정 기록 표(`realtime.realtime_judgment_live`)에만 있다. 정본은 `kr.mujoong.contract.log.EventCode` · `AttrKey`이고 `infra/bin/log-hygiene-check` 허용 표와 대조한다(`infra/ci/test-host-tools.sh`).
+
+- `JOIN_REPLY`: 참여 확인 중 확정 전사 하나를 처리할 때 한 줄. J1으로 간 대답은 J1 결과를 참여 대답으로 넣을 때 한 줄을 더 남긴다(그때 `joinReply`는 결과를 바꾼 값이다).
+- `JUDGMENT_TURN`: 판정 턴(J1 ~ J6)이 닫히거나, 공급자 없음 · 판독 불가로 열지 못했을 때 한 줄(판정 기록 행과 같은 때).
+
+| 사건 | 속성 | 값 형식 | 값 |
+|---|---|---|---|
+| `JOIN_REPLY` | `joinReply` | ENUM | `ACCEPT` · `REFUSE` · `TOPIC_REFUSAL` · `UNCLEAR` · `ECHO_SUSPECT`(이 세션에서 재생한 참여 안내 글의 에코로 보고 버림) |
+| `JOIN_REPLY` | `joinAction` | ENUM | `NONE` · `START` · `REPROMPT` · `CLARIFY` · `OFFER_ALTERNATIVE` · `DECLINE`(참여 판단의 할 일) · `J1_OPENED`(J1을 열었다) · `J1_HELD`(J1이 열린 동안 온 불명확한 대답을 대기 칸에 두었다) |
+| `JOIN_REPLY` | `prompts` | NUMBER | 처리 뒤 안내 횟수(처음 질문 포함, 최대 3) |
+| `JOIN_REPLY` | `textLen` · `wordCount` | NUMBER | 정규화(NFKC · 소문자 · 한글 · 영문 · 숫자만) 뒤 글자 수, 공백으로 나눈 낱말 수 |
+| `JOIN_REPLY` | `deltaCount` · `maxGapMs` | NUMBER | 이 확정 전사로 묶인 입력 전사 조각 수, 조각 사이 최대 간격(`start_ms` − 앞 조각 `end_ms`, 0 이상). 간격을 잴 수 없으면 `-1` |
+| `JOIN_REPLY` | `devicePlaying` · `lateForWindow` | BOOLEAN | 아이가 말을 시작할 때 기기가 재생 중이었는가, 대답 시각이 참여 창 끝과 같거나 늦었는가 |
+| `JUDGMENT_TURN` | `judgmentPoint` | ENUM | `J1` ~ `J6` |
+| `JUDGMENT_TURN` | `judgmentOutcome` | ENUM | `CONFIRMED` · `ABSTAINED` · `FAULT_CANCELLED` · `STOPPED` · `SUPERSEDED` · `SESSION_EXITED` |
+| `JUDGMENT_TURN` | `abstainReason` | ENUM | `LOW_CONFIDENCE` · `LOW_MARGIN` · `TIMEOUT` · `PROVIDER_ERROR` · `SCHEMA_INVALID` · `OPTION_OUT_OF_SET` · `DUPLICATE_OPTION` · `PROBABILITY_OUT_OF_RANGE` · `NO_PROVIDER` · `UNREADABLE_INPUT` · `RESPONSE_NOT_READY`(보류일 때만) |
+| `JUDGMENT_TURN` | `firstOption` | LABEL | 1순위 선택지 코드(`CONFIRMED`일 때만) |
+| `JUDGMENT_TURN` | `closeReason` | ENUM | `ACK_MISSING` · `NEW_SPEECH_NOT_OBSERVED` · `INSTRUCTION_NOT_SENT` · `RESULT_HANDLED` · `INSTRUCTION_STARTED` · `STOPPED` · `SUPERSEDED` · `FAULT` · `SESSION_EXITED` · `HANDLER_ERROR`(턴을 열지 못한 줄에는 없다) |
+| `JUDGMENT_TURN` | `nextAction` | ENUM | `NONE` · `START_JOIN` · `DECLINE_JOIN` · `REPROMPT_JOIN` · `CLOSE` · `ASK_STOP_CONFIRM` · `RESUME` · `HOLD_REASK` · `REST_ACK_AND_RETURN` · `REST_ACK_ONLY` · `DELEGATED_TO_EXTENSION` |
+| `JUDGMENT_TURN` | `latencyMs` · `promptVersion` | NUMBER · LABEL | 판정 지연(밀리초), 판정 지시문 판 |
+
+- 확인 순서는 `docs/live-run.md` 3절(진단 절차)에 있다. 값 뜻은 `docs/join-gate-stabilization.md`가 설명한다.

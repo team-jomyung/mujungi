@@ -89,13 +89,15 @@ class StructuredLogFormatTest {
     }
 
     @Test
-    void thereAreExactly19EventCodesAndNoFreeTextAttrKeys() {
-        // U9 SD6: 로그 계약 변경(LUNA_CALL · LUNA_STARTUP)과 같은 커밋에서 정본 목록을 늘린다(R-M10). 정확 일치 단언은 그대로다
+    void thereAreExactly21EventCodesAndNoFreeTextAttrKeys() {
+        // U9 SD6 · 참여 관문 진단: 로그 계약 변경(LUNA_CALL · LUNA_STARTUP, JOIN_REPLY · JUDGMENT_TURN)과 같은 커밋에서 정본 목록을 늘린다(R-M10).
+        // 정확 일치 단언은 그대로다
         assertThat(Arrays.stream(EventCode.values()).map(Enum::name)).containsExactly(
                 "SESSION_TRANSITION", "TIMEOUT_FIRED", "LATENCY_TURN", "SESSION_ITEMS_SERVED", "PLAYBACK_MARK_STOPPED",
                 "DEVICE_CONNECTION", "INTERNAL_HTTP", "EVENT_DELIVERY", "STARTUP_RECOVERY", "METRIC_SNAPSHOT",
                 "SECURITY_AUTH_FAILED", "SECURITY_RATE_LIMITED", "SECURITY_ORIGIN_DENIED", "SECURITY_DEV_LOGIN_BLOCKED",
-                "SECURITY_INTERNAL_TOKEN_FAILED", "APP_ERROR", "QUEUE_PRESSURE", "LUNA_CALL", "LUNA_STARTUP");
+                "SECURITY_INTERNAL_TOKEN_FAILED", "APP_ERROR", "QUEUE_PRESSURE", "LUNA_CALL", "LUNA_STARTUP", "JOIN_REPLY",
+                "JUDGMENT_TURN");
         Set<String> keyNames = Arrays.stream(AttrKey.values()).map(AttrKey::key).collect(Collectors.toSet());
         assertThat(keyNames).doesNotContain(
                 "message", "text", "transcript", "audio", "token", "cookie", "code", "email", "password", "secret", "input",
@@ -129,6 +131,10 @@ class StructuredLogFormatTest {
         assertThat(table.get(EventCode.QUEUE_PRESSURE)).containsExactlyInAnyOrder("queue", "dropped", "repeat");
         assertThat(table.get(EventCode.LATENCY_TURN)).hasSize(17).contains("tSpeechEnd", "clockOffsetMs", "unobservedReason");
         assertThat(table.get(EventCode.METRIC_SNAPSHOT)).hasSize(18).contains("outboxPending", "breakerOpenSec");
+        assertThat(table.get(EventCode.JOIN_REPLY)).containsExactlyInAnyOrder("joinReply", "joinAction", "prompts", "textLen",
+                "wordCount", "deltaCount", "maxGapMs", "devicePlaying", "lateForWindow");
+        assertThat(table.get(EventCode.JUDGMENT_TURN)).containsExactlyInAnyOrder("judgmentPoint", "judgmentOutcome",
+                "abstainReason", "firstOption", "closeReason", "nextAction", "latencyMs", "promptVersion");
         assertThat(Arrays.stream(EventCode.values()).filter(EventCode::isSecurityEvent)).hasSize(5);
         assertThat(Arrays.stream(EventCode.values()).filter(EventCode::isMergeable)).containsExactlyInAnyOrder(
                 EventCode.INTERNAL_HTTP, EventCode.SECURITY_AUTH_FAILED, EventCode.SECURITY_RATE_LIMITED,

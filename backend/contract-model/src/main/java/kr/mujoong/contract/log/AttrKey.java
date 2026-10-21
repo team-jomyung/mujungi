@@ -123,7 +123,31 @@ public enum AttrKey {
     PROMPT_VERSION("promptVersion", ValueType.LABEL, null),
     SENT_FIELDS("sentFields", ValueType.NAME_LIST, null),
     LATENCY_MS("latencyMs", ValueType.NUMBER, null),
-    LUNA_STATE("lunaState", ValueType.ENUM, Set.of("ENABLED", "DISABLED_NO_KEY", "DISABLED_SWITCH_OFF"));
+    LUNA_STATE("lunaState", ValueType.ENUM, Set.of("ENABLED", "DISABLED_NO_KEY", "DISABLED_SWITCH_OFF")),
+    // JOIN_REPLY · JUDGMENT_TURN (참여 관문 진단, contracts/ai-io.md 10.15). 전사 · 안내 글 · 확률은 담지 않고 코드 · 개수 · 시간만 담는다
+    JOIN_REPLY_KIND("joinReply", ValueType.ENUM, Set.of("ACCEPT", "REFUSE", "TOPIC_REFUSAL", "UNCLEAR", "ECHO_SUSPECT")),
+    JOIN_ACTION("joinAction", ValueType.ENUM, Set.of(
+            "NONE", "START", "REPROMPT", "CLARIFY", "OFFER_ALTERNATIVE", "DECLINE", "J1_OPENED", "J1_HELD")),
+    PROMPTS("prompts", ValueType.NUMBER, null),
+    TEXT_LEN("textLen", ValueType.NUMBER, null),
+    WORD_COUNT("wordCount", ValueType.NUMBER, null),
+    DELTA_COUNT("deltaCount", ValueType.NUMBER, null),
+    MAX_GAP_MS("maxGapMs", ValueType.NUMBER, null),
+    DEVICE_PLAYING("devicePlaying", ValueType.BOOLEAN, null),
+    LATE_FOR_WINDOW("lateForWindow", ValueType.BOOLEAN, null),
+    JUDGMENT_POINT("judgmentPoint", ValueType.ENUM, Set.of("J1", "J2", "J3", "J4", "J5", "J6")),
+    JUDGMENT_OUTCOME("judgmentOutcome", ValueType.ENUM, Set.of(
+            "CONFIRMED", "ABSTAINED", "FAULT_CANCELLED", "STOPPED", "SUPERSEDED", "SESSION_EXITED")),
+    ABSTAIN_REASON("abstainReason", ValueType.ENUM, Set.of(
+            "LOW_CONFIDENCE", "LOW_MARGIN", "TIMEOUT", "PROVIDER_ERROR", "SCHEMA_INVALID", "OPTION_OUT_OF_SET", "DUPLICATE_OPTION",
+            "PROBABILITY_OUT_OF_RANGE", "NO_PROVIDER", "UNREADABLE_INPUT", "RESPONSE_NOT_READY")),
+    FIRST_OPTION("firstOption", ValueType.LABEL, null),
+    CLOSE_REASON("closeReason", ValueType.ENUM, Set.of(
+            "ACK_MISSING", "NEW_SPEECH_NOT_OBSERVED", "INSTRUCTION_NOT_SENT", "RESULT_HANDLED", "INSTRUCTION_STARTED", "STOPPED",
+            "SUPERSEDED", "FAULT", "SESSION_EXITED", "HANDLER_ERROR")),
+    NEXT_ACTION("nextAction", ValueType.ENUM, Set.of(
+            "NONE", "START_JOIN", "DECLINE_JOIN", "REPROMPT_JOIN", "CLOSE", "ASK_STOP_CONFIRM", "RESUME", "HOLD_REASK",
+            "REST_ACK_AND_RETURN", "REST_ACK_ONLY", "DELEGATED_TO_EXTENSION"));
 
     /** 값 형식(OD-1 표). */
     public enum ValueType {

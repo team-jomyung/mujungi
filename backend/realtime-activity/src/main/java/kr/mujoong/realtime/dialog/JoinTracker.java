@@ -211,6 +211,17 @@ public final class JoinTracker {
         return Reply.UNCLEAR;
     }
 
+    /** 정규화(종료 판정기와 같다) 뒤 글자 수. 진단 로그에 쓴다(원문 대신 모양만 남긴다). */
+    public static int normalizedLength(String transcript) {
+        String text = StopIntentJudge.normalize(transcript);
+        return text.codePointCount(0, text.length());
+    }
+
+    /** 공백으로 나눈 낱말 수(정규화해 빈 낱말은 뺀다). 진단 로그에 쓴다. */
+    public static int wordCount(String transcript) {
+        return transcript == null ? 0 : StopIntentJudge.tokens(transcript).size();
+    }
+
     public Phase phase() {
         return phase;
     }

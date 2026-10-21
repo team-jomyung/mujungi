@@ -3,6 +3,9 @@ package kr.mujoong.realtime.session;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.Duration;
+import java.util.List;
+import java.util.Map;
+import kr.mujoong.contract.log.EventCode;
 import kr.mujoong.contract.status.SessionStatus;
 import kr.mujoong.realtime.judgment.AbstainReason;
 import kr.mujoong.realtime.judgment.JudgmentLiveRecord;
@@ -10,6 +13,7 @@ import kr.mujoong.realtime.judgment.JudgmentOutcomeKind;
 import kr.mujoong.realtime.judgment.JudgmentPoint;
 import kr.mujoong.realtime.judgment.JudgmentTrigger;
 import kr.mujoong.realtime.judgment.NextAction;
+import kr.mujoong.testsupport.log.LogCapture;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
@@ -139,6 +143,45 @@ class JoinJudgmentExecutorTest {
         t.judge.confirm("DECLINE", 0.9, "REST", 0.05);
         t.h.drain();
         assertThat(t.records()).as("늦은 결과는 버린다").hasSize(1);
+    }
+
+    @Test
+    void eachClosedOrSkippedJ1LeavesOneJudgmentTurnLineWithCodesOnly() {
+        t.waiting();
+        t.h.childSays("j-1", JudgmentExecutorSupport.UNCLEAR_JOIN);
+        t.judge.confirm("PARTICIPATE", 0.9, "UNCLEAR", 0.05);
+        t.h.drain();
+        assertThat(turnLines(t)).singleElement().satisfies(line -> assertThat(line)
+                .containsEntry("judgmentPoint", "J1").containsEntry("judgmentOutcome", "CONFIRMED")
+                .containsEntry("firstOption", "PARTICIPATE").containsEntry("closeReason", "RESULT_HANDLED")
+                .containsEntry("nextAction", "START_JOIN").containsEntry("promptVersion", "prompt-v1")
+                .containsEntry("latencyMs", 900).doesNotContainKey("abstainReason"));
+        assertThat(t.h.logs.events(EventCode.JOIN_REPLY)).extracting(LogCapture::attrs)
+                .extracting(attrs -> attrs.get("joinReply") + "/" + attrs.get("joinAction"))
+                .containsExactly("UNCLEAR/J1_OPENED", "ACCEPT/START");
+
+        JudgmentExecutorSupport superseded = new JudgmentExecutorSupport();
+        superseded.waiting();
+        superseded.h.childSays("j-1", JudgmentExecutorSupport.UNCLEAR_JOIN);
+        superseded.h.childSays("j-2", "응");
+        assertThat(turnLines(superseded)).singleElement().satisfies(line -> assertThat(line)
+                .containsEntry("judgmentOutcome", "SUPERSEDED").containsEntry("closeReason", "SUPERSEDED")
+                .containsEntry("nextAction", "NONE").doesNotContainKey("firstOption"));
+
+        JudgmentExecutorSupport none = new JudgmentExecutorSupport();
+        none.judge.available(false);
+        none.waiting();
+        none.h.childSays("j-1", JudgmentExecutorSupport.UNCLEAR_JOIN);
+        assertThat(turnLines(none)).singleElement().satisfies(line -> assertThat(line)
+                .containsEntry("judgmentOutcome", "ABSTAINED").containsEntry("abstainReason", "NO_PROVIDER")
+                .containsEntry("nextAction", "REPROMPT_JOIN").doesNotContainKey("closeReason"));
+        for (JudgmentExecutorSupport each : List.of(t, superseded, none)) {
+            assertThat(each.h.logs.lines()).noneMatch(line -> line.contains(JudgmentExecutorSupport.UNCLEAR_JOIN));
+        }
+    }
+
+    private static List<Map<String, Object>> turnLines(JudgmentExecutorSupport support) {
+        return support.h.logs.events(EventCode.JUDGMENT_TURN).stream().map(LogCapture::attrs).toList();
     }
 
     @Test

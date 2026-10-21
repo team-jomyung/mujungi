@@ -333,8 +333,8 @@ public final class StopIntentJudge {
         return false;
     }
 
-    /** 공백으로 나눈 낱말마다 정규화한 값(빈 낱말은 뺀다). */
-    private static List<String> tokens(String transcript) {
+    /** 공백으로 나눈 낱말마다 정규화한 값(빈 낱말은 뺀다). 참여 판단({@link JoinTracker})도 같은 낱말 단위를 쓴다. */
+    static List<String> tokens(String transcript) {
         List<String> words = new ArrayList<>();
         for (String word : transcript.strip().split("\\s+")) {
             String normalized = normalize(word);

@@ -431,9 +431,7 @@ public final class SessionExecutor {
     private final java.util.concurrent.atomic.AtomicInteger pendingOutputChunks =
             new java.util.concurrent.atomic.AtomicInteger();
     /** 설계 개정 A7: 입력 전사 조각을 묶는 중인 발화(공급자는 전사 완료 사건을 주지 않는다). */
-    private final StringBuilder inputGroup = new StringBuilder();
-    private String inputGroupId;
-    private long inputGroupSeq;
+    private final InputTranscriptGroup inputGroup = new InputTranscriptGroup();
     private final List<Object> pendingRetry = new ArrayList<>();
 
     /** 기기 표식 · 끝내기 구역 협력 객체(실행기 스레드 전용). */
@@ -448,8 +446,6 @@ public final class SessionExecutor {
     private final JudgmentCoordinator judgment;
     /** U13 제브 게이트 협력 객체(검사 상태 · 검사표 · 대기열 · 턴 재지시, 실행기 스레드 전용). 여기에는 호출 지점과 아래 카운터만 둔다. */
     private final GuardrailCoordinator guardrail;
-    /** 입력 묶음을 처음 연 횟수(단조 증가). 검사 요청 뒤 늘었으면 아이가 새로 말을 시작한 것이다(같은 묶음의 꼬리 조각은 세지 않는다). */
-    private long inputGroupOpens;
     /** U11 W2: 지금 처리 중인 아이 확정 전사의 대화 기록 순번(판정 요청 · 기록용, 원문 아님). */
     private int currentTranscriptSeq;
     /** 새 전사가 J6를 대체할 때 그 전사의 종료 의도 판정(CONFIRM이면 연습 시계를 풀지 않는다). */
@@ -1320,6 +1316,21 @@ public final class SessionExecutor {
             joinFlow.runDeferredJoinTick();
         }
 
+        @Override
+        public void logJudgmentTurn(JudgmentPoint point, JudgeOutcome outcome, JudgmentTurn.CloseReason reason, NextAction next) {
+            boolean confirmed = outcome.kind() == JudgmentOutcomeKind.CONFIRMED;
+            ctx.services().events().log(EventCode.JUDGMENT_TURN, EventLog.Component.SESSION_LIFECYCLE, ctx.plan().sessionId(),
+                    ctx.plan().traceId(), entry -> entry
+                            .attr(AttrKey.JUDGMENT_POINT, point)
+                            .attr(AttrKey.JUDGMENT_OUTCOME, outcome.kind())
+                            .attr(AttrKey.ABSTAIN_REASON, outcome.abstainReason())
+                            .attr(AttrKey.FIRST_OPTION, confirmed ? outcome.firstOption() : null)
+                            .attr(AttrKey.CLOSE_REASON, reason)
+                            .attr(AttrKey.NEXT_ACTION, next)
+                            .attr(AttrKey.LATENCY_MS, outcome.latency().toMillis())
+                            .attr(AttrKey.PROMPT_VERSION, outcome.promptVersion()));
+        }
+
         private Kind timerKind(JudgmentTurn.TimerKind kind) {
             return switch (kind) {
                 case LIVE -> Kind.JUDGMENT_LIVE;
@@ -1424,7 +1435,7 @@ public final class SessionExecutor {
 
         @Override
         public boolean inputGroupOpen() {
-            return inputGroupId != null;
+            return inputGroup.isOpen();
         }
 
         @Override
@@ -1615,7 +1626,8 @@ public final class SessionExecutor {
 
         @Override
         public long inputGroupOpenCount() {
-            return inputGroupOpens;
+            // 입력 묶음을 처음 연 횟수(단조 증가). 검사 요청 뒤 늘었으면 아이가 새로 말을 시작한 것이다(같은 묶음의 꼬리 조각은 세지 않는다)
+            return inputGroup.opens();
         }
 
         @Override
@@ -1989,7 +2001,7 @@ public final class SessionExecutor {
                 ending.finishSettle();
             }
             case ProviderEvent.InputTranscriptDelta delta -> {
-                String groupId = groupInputDelta(delta);
+                String groupId = groupInputDelta(delta, at);
                 if (ctx.consentWithdrawnAt() == null && startedBeforeEnd(groupId, at)) {
                     ctx.transcripts().childDelta(groupId, delta.delta(), at);
                 }
@@ -2072,8 +2084,10 @@ public final class SessionExecutor {
             case ProviderEvent.InputTranscriptDelta delta -> onInputTranscriptDelta(delta, at);
             case ProviderEvent.InputTranscriptDone done -> {
                 // 공급자는 이 사건을 보내지 않는다(설계 개정 A7). 대신 보내는 쪽(시험 대역)이 있으면 묶음을 그것으로 확정한 것으로 본다
+                InputTranscriptGroup.Shape shape = inputGroup.shape();
                 clearInputGroup();
-                onConfirmedChildTranscript(done, at);
+                onConfirmedChildTranscript(done, at,
+                        shape != null ? shape : InputTranscriptGroup.Shape.single(at, !ctx.devicePlaying().isEmpty()));
             }
             case ProviderEvent.UsageUpdated ignored -> {
                 // 사용량 초는 파싱만 한다(실호출 도구 보고서가 기록). 지표 이름은 contracts 표에 없어 이 단위에서 더하지 않는다
@@ -2101,7 +2115,7 @@ public final class SessionExecutor {
      * 없으면 {@link #onInputTranscriptQuiet}가 그 묶음을 확정 전사로 만든다. 조각의 저장 규칙(동의 철회 · 참여 전 · 출력 범위)은 그대로다.
      */
     private void onInputTranscriptDelta(ProviderEvent.InputTranscriptDelta delta, Instant at) {
-        groupInputDelta(delta);
+        groupInputDelta(delta, at);
         if (ctx.consentWithdrawnAt() != null ||ctx.status() == SessionStatus.WAITING_CHILD) {
             // 동의 철회 뒤 도착한 아이 전사는 저장하지 않는다(확정 때 센다). 참여 전 아이 전사도 저장하지 않는다
             return;
@@ -2112,37 +2126,30 @@ public final class SessionExecutor {
             if (ctx.segment().isOpen()) {
                 sealAndGate(true);
             }
-            ctx.transcripts().childDelta(inputGroupId, delta.delta(), at);
+            ctx.transcripts().childDelta(inputGroup.id(), delta.delta(), at);
         }
     }
 
     /** 조각을 현재 묶음에 더하고(없으면 묶음을 연다) 조용 시계를 다시 건다. 묶음 id를 돌려준다. */
-    private String groupInputDelta(ProviderEvent.InputTranscriptDelta delta) {
-        if (inputGroupId == null) {
-            inputGroupOpens++;
-            inputGroupId = delta.itemId() != null ? delta.itemId() : "in-" + (++inputGroupSeq);
-            inputGroup.setLength(0);
-        }
-        inputGroup.append(delta.delta());
+    private String groupInputDelta(ProviderEvent.InputTranscriptDelta delta, Instant at) {
+        String id = inputGroup.add(delta, at, !ctx.devicePlaying().isEmpty());
         ctx.timers().arm(Kind.INPUT_TRANSCRIPT_QUIET, ctx.services().settings().inputTranscriptQuiet());
-        return inputGroupId;
+        return id;
     }
 
     private void clearInputGroup() {
         ctx.timers().cancel(Kind.INPUT_TRANSCRIPT_QUIET);
-        inputGroupId = null;
-        inputGroup.setLength(0);
+        inputGroup.clear();
     }
 
     /** 입력 전사 묶음이 조용해졌다: 확정 전사를 지금 확정 전사 입구({@link ProviderEvent.InputTranscriptDone})와 같은 길로 흘린다. */
     private void onInputTranscriptQuiet() {
-        String id = inputGroupId;
-        String text = inputGroup.toString();
-        clearInputGroup();
-        if (id == null || text.isBlank()) {
+        ctx.timers().cancel(Kind.INPUT_TRANSCRIPT_QUIET);
+        InputTranscriptGroup.Closed closed = inputGroup.close();
+        if (closed == null || closed.text().isBlank()) {
             return;
         }
-        ProviderEvent.InputTranscriptDone done = new ProviderEvent.InputTranscriptDone(id, text, null);
+        ProviderEvent.InputTranscriptDone done = new ProviderEvent.InputTranscriptDone(closed.id(), closed.text(), null);
         Instant at = ctx.services().clock().now();
         if (ctx.status().isTerminal()) {
             if (ctx.settling()) {
@@ -2150,16 +2157,16 @@ public final class SessionExecutor {
             }
             return;
         }
-        onConfirmedChildTranscript(done, at);
+        onConfirmedChildTranscript(done, at, closed.shape());
     }
 
     /** 정산 창이 끝날 때 묶던 입력 전사가 있으면 정산 창 규칙으로 확정한다(발화 시작이 ended_at보다 이르면 저장). */
     private void flushInputGroupInSettle() {
-        String id = inputGroupId;
-        String text = inputGroup.toString();
-        clearInputGroup();
-        if (id != null && !text.isBlank()) {
-            onLateProviderEvent(new ProviderEvent.InputTranscriptDone(id, text, null), ctx.services().clock().now());
+        ctx.timers().cancel(Kind.INPUT_TRANSCRIPT_QUIET);
+        InputTranscriptGroup.Closed closed = inputGroup.close();
+        if (closed != null && !closed.text().isBlank()) {
+            onLateProviderEvent(new ProviderEvent.InputTranscriptDone(closed.id(), closed.text(), null),
+                    ctx.services().clock().now());
         }
     }
 
@@ -2167,13 +2174,13 @@ public final class SessionExecutor {
      * 확정된 아이 전사 하나(참여 확인 · 종료 의도 · 연습 · 기록). 서버가 입력 전사 조각을 묶어 만든 것이다(설계 개정 A7). 전사 신뢰도는 오지 않으므로
      * 불확실이 아니다.
      */
-    private void onConfirmedChildTranscript(ProviderEvent.InputTranscriptDone done, Instant at) {
+    private void onConfirmedChildTranscript(ProviderEvent.InputTranscriptDone done, Instant at, InputTranscriptGroup.Shape shape) {
         if (ctx.consentWithdrawnAt() != null) {
             droppedAfterConsent++;
             return;
         }
         if (ctx.status() == SessionStatus.WAITING_CHILD) {
-            joinFlow.onJoinReply(done.transcript(), at);
+            joinFlow.onJoinReply(done.transcript(), at, shape);
             return;
         }
         if (inRelayRange()) {

@@ -547,6 +547,9 @@ mj logs --no-log-prefix --since 1h core-api realtime 2>/dev/null | grep -E '"eve
 - 키를 넣지 않은 지금은 `LUNA_STARTUP` `DISABLED_NO_KEY`만 보이고 `LUNA_CALL`은 없다(어댑터 꺼짐 = 기존 실패 경로).
 - `lunaOutcome`이 `OK`가 아닌 줄은 WARN이다. `AUTH_FAILED`가 이어지면 키를 확인하고(12절 회전), `RATE_LIMITED` · `SERVER_ERROR`가
   이어지면 공급자 상태를 본다. 호출자마다 실패 경로(판정 보류 · 결과 작업 재시도 · `SCENARIO_GEN_FAILED`)가 따로 있다.
+- 참여 확인(WAITING_CHILD)이 ACTIVE로 가지 못하면 realtime의 `JOIN_REPLY`(대답 분류 · 할 일 · 전사 모양) · `JUDGMENT_TURN`(판정 결과 코드) 줄을 본다
+  (`grep -E '"event":"(SESSION_TRANSITION|JOIN_REPLY|JUDGMENT_TURN|LUNA_CALL)"'`). 원문 · 확률은 없다. 속성 표는 `contracts/ai-io.md` 10.15이고 읽는 법은
+  `docs/join-gate-stabilization.md`에 있다.
 
 ### 8.5 Luna 실호출 시험 `lunaLiveTest` (U9, 개발 PC) [개발 PC]
 
