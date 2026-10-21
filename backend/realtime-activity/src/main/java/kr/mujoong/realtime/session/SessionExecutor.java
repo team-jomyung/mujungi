@@ -2795,6 +2795,18 @@ public final class SessionExecutor {
             }
             if (practiceControlled
                     && (pendingPracticeSpeech == null || !pendingPracticeSpeech.matches(sealed.transcript()))) {
+                if (pendingPracticeSpeech != null && !pendingPracticeSpeech.generated()) {
+                    var rejectedSpeech = pendingPracticeSpeech;
+                    guardrail.onDiscardedBeforeCheck();
+                    recordDiscard(sealed, null, GateDecision.DiscardReason.GATE_PATTERN, true);
+                    pendingPracticeSpeech = null;
+                    practiceHold = true;
+                    bumpOutput(OutputGeneration.BumpReason.PRACTICE_DISCARD);
+                    ctx.mailbox().putSafety(new SessionMailbox.PracticeEvent(new PracticeSessionExtension.ExtensionEvent(
+                            PracticeSessionExtension.ExtensionEvent.Kind.ASYNC_RESULT, "approved-text-mismatch",
+                            rejectedSpeech.correlationId(), rejectedSpeech)));
+                    return;
+                }
                 discard(sealed, GateDecision.DiscardReason.GATE_PATTERN, false);
                 return;
             }

@@ -103,6 +103,7 @@ public final class PracticeConversation implements PracticeSessionExtension {
     private boolean sceneRowCreated;
     private UUID openSlot;
     private boolean openSlotPlaying;
+    private boolean approvedReadingRetried;
     private boolean awaitingNotice;
     private boolean inputReady;
     private Utterance earlyUtterance;
@@ -198,6 +199,8 @@ public final class PracticeConversation implements PracticeSessionExtension {
             case ASYNC_RESULT -> {
                 if (ASYNC_SCRIPT.equals(event.name()) && event.value() instanceof ScriptResult result) {
                     onScript(result);
+                } else if ("approved-text-mismatch".equals(event.name()) && event.value() instanceof PracticeSpeech speech) {
+                    onApprovedTextMismatch(speech);
                 }
             }
             case JUDGMENT_RESULT -> onJudgmentResult(event);
@@ -763,6 +766,23 @@ public final class PracticeConversation implements PracticeSessionExtension {
     }
 
     private void speakApproved(String text) {
+        approvedReadingRetried = false;
+        submitApproved(text);
+    }
+
+    private void onApprovedTextMismatch(PracticeSpeech speech) {
+        if (speech.generated() || !speech.correlationId().equals(openSlot) || openSlotPlaying) return;
+        if (approvedReadingRetried) {
+            handleSlotEnd(speech.correlationId(), SlotEnd.FAILED);
+            return;
+        }
+        // No mismatched audio was delivered. One fresh slot gets one bounded attempt at the SAME approved text.
+        cancelOpenSlot();
+        approvedReadingRetried = true;
+        submitApproved(speech.text());
+    }
+
+    private void submitApproved(String text) {
         UUID correlation = UUID.randomUUID();
         openSlot(correlation);
         PracticeSpeech speech = null;

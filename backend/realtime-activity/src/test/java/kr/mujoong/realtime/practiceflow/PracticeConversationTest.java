@@ -107,6 +107,49 @@ class PracticeConversationTest {
         assertThat(h.recorder.only().endedAt()).isNotNull();
     }
 
+    @Test
+    void aTextMismatchRetriesOnlyTheSameApprovedBodyOnceAndRejectsLateMismatchEvents() {
+        Harness h = minimal();h.activate();Slot first=h.out.lastSlot();
+        assertThat(h.event(ExtensionEvent.Kind.ASYNC_RESULT,"approved-text-mismatch",first.correlationId(),first.speech())).isEqualTo(Signal.NONE);
+        Slot retry=h.out.lastSlot();
+        assertThat(retry.correlationId()).isNotEqualTo(first.correlationId());
+        assertThat(retry.text()).isEqualTo(first.text());
+        assertThat(retry.generated()).isFalse();
+        int slots=h.out.slots.size();
+        h.event(ExtensionEvent.Kind.ASYNC_RESULT,"approved-text-mismatch",first.correlationId(),first.speech());
+        assertThat(h.out.slots).hasSize(slots);
+        assertThat(h.event(ExtensionEvent.Kind.ASYNC_RESULT,"approved-text-mismatch",retry.correlationId(),retry.speech())).isEqualTo(Signal.OUTPUT_FAILED);
+        assertThat(h.out.slots).hasSize(slots);
+        assertThat(h.recorder.rows).isEmpty();
+    }
+
+    @Test
+    void anExactRetryMayPlayAndContinueWithoutMarkingThePracticeAsFailed() {
+        Harness h=minimal();h.activate();Slot first=h.out.lastSlot();
+        h.event(ExtensionEvent.Kind.ASYNC_RESULT,"approved-text-mismatch",first.correlationId(),first.speech());
+        h.played();h.played();h.child("파란 블록 하나 줘");
+        assertThat(h.result("J2","FULL")).isEqualTo(Signal.LAST_GOAL);
+        assertThat(h.recorder.factKinds(h.recorder.only())).doesNotContain(FactKind.PLAYBACK_FAILED);
+    }
+
+    @Test
+    void aRetryWithoutOutputStillTimesOutAndDoesNotRetryForever() {
+        Harness h=minimal();h.activate();Slot first=h.out.lastSlot();
+        h.event(ExtensionEvent.Kind.ASYNC_RESULT,"approved-text-mismatch",first.correlationId(),first.speech());
+        int slots=h.out.slots.size();
+        assertThat(h.advance(Duration.ofSeconds(20))).isEqualTo(Signal.OUTPUT_FAILED);
+        assertThat(h.out.slots).hasSize(slots);
+    }
+
+    @Test
+    void generatedRoleSpeechCannotUseTheApprovedReadingRetryPath() {
+        Harness h=minimal();h.toOpportunity();h.child("그거 줘");h.result("J2","PARTIAL");
+        Slot generated=h.out.lastSlot();int count=h.out.slots.size();
+        assertThat(generated.generated()).isTrue();
+        assertThat(h.event(ExtensionEvent.Kind.ASYNC_RESULT,"approved-text-mismatch",generated.correlationId(),generated.speech())).isEqualTo(Signal.NONE);
+        assertThat(h.out.slots).hasSize(count);
+    }
+
     // ---- AC1.2.3: 되묻기로 해결 ----
 
     @Test

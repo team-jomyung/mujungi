@@ -242,7 +242,13 @@ class PracticeGeneratedSpeechTest {
         h.speak(" 들고 있어. 다른 말을 덧붙였어.",4800);
         h.advance(Duration.ofMillis(801));
         assertThat(h.link.outputs()).isEmpty();
-        assertThat(extension.endFacts(slot)).containsExactly(PracticePorts.Playback.FAILED);
+        assertThat(extension.endFacts(slot)).isEmpty();
+        assertThat(extension.mismatches).singleElement().satisfies(event -> {
+            assertThat(event.kind()).isEqualTo(PracticeSessionExtension.ExtensionEvent.Kind.ASYNC_RESULT);
+            assertThat(event.correlationId()).isEqualTo(slot);
+            assertThat(((PracticeSpeech)event.value()).text()).isEqualTo("친구가 공을 들고 있어.");
+        });
+        assertThat(guard.count()).isZero();
     }
 
     @Test
@@ -254,6 +260,16 @@ class PracticeGeneratedSpeechTest {
         h.childSays("stop","무중아 그만할래");
         assertThat(h.executor.status()).isEqualTo(kr.mujoong.contract.status.SessionStatus.CLOSING);
         assertThat(h.link.outputs()).isEmpty();
+    }
+
+    @Test
+    void aForbiddenPatternIsNotReclassifiedAsARetryableReadingMismatch() {
+        start(true);UUID slot=UUID.randomUUID();
+        extension.out.speak(PracticeSpeech.scenario(slot,UUID.randomUUID(),1,"PEER","친구가 공을 들고 있어."));
+        h.settleSend();say("검사해 보니 비정상이에요");
+        assertThat(h.link.outputs()).isEmpty();
+        assertThat(extension.mismatches).isEmpty();
+        assertThat(extension.endFacts(slot)).containsExactly(PracticePorts.Playback.FAILED);
     }
 
     private void mark(UUID id, PlaybackMark.Status status) {
@@ -272,6 +288,7 @@ class PracticeGeneratedSpeechTest {
         PracticeOutput out;
         final List<PlaybackFact> facts = new ArrayList<>();
         final List<GuardrailBlockedEvent> blocked = new ArrayList<>();
+        final List<ExtensionEvent> mismatches = new ArrayList<>();
 
         List<PracticePorts.Playback> endFacts(UUID correlationId) {
             return facts.stream().filter(fact -> !fact.started())
@@ -296,6 +313,7 @@ class PracticeGeneratedSpeechTest {
 
         @Override
         public Signal onExtensionEvent(ExtensionEvent event, PracticeOutput output) {
+            if ("approved-text-mismatch".equals(event.name())) mismatches.add(event);
             if (event.value() instanceof PlaybackFact fact) {
                 facts.add(fact);
             }
