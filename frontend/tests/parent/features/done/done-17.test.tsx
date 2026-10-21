@@ -1,6 +1,8 @@
 import { onlineManager } from "@tanstack/react-query";
 import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { queryKeys } from "@/parent/common/api/queries";
+import { parseLiveView } from "@/parent/common/api/types";
 import { DoneScreen } from "@/parent/features/done/DoneScreen";
 import { SESSION_ID, errorResponse, jsonResponse, liveViewBody } from "../../../support/fixtures";
 import { resetRouter, router } from "../../../support/nextNavigation";
@@ -16,7 +18,10 @@ vi.mock("next/navigation", async () => (await import("../../../support/nextNavig
 const POLL_MS = 40;
 const ENDED_AT = "2026-10-15T01:21:00Z"; // 10:21
 
-function renderDone(read: (index: number) => Response | Promise<Response>): ParentHarness {
+function renderDone(
+  read: (index: number) => Response | Promise<Response>,
+  prepare?: (queryClient: ParentHarness["queryClient"]) => void,
+): ParentHarness {
   let index = 0;
   return renderParent(<DoneScreen sessionId={SESSION_ID} />, {
     timing: { parentPollIntervalMs: POLL_MS },
@@ -24,6 +29,7 @@ function renderDone(read: (index: number) => Response | Promise<Response>): Pare
       index += 1;
       return read(index);
     },
+    prepare,
   });
 }
 
@@ -212,6 +218,27 @@ describe("17 — 연습 변형(C.S-17.21.x · C.S-17.58.1 ~ 5)", () => {
     fireEvent.click(screen.getByTestId("tab-practice"));
     expect(screen.getByTestId("toast")).toHaveTextContent("끝나는 중이에요");
     expect(router.push).not.toHaveBeenCalled();
+  });
+
+  // 12는 2초마다 읽으므로 마무리가 그 사이에 끝나면 CLOSING을 못 보고 종료를 받아 바로 17로 온다.
+  // 실행 중 · 마무리 중 서버 재시작 FAILED(SERVER_RESTART)도 12에서 바로 17로 온다. 둘 다 종료 응답에는 practice가 없다.
+  it.each([
+    ["종료(ENDED)", { status: "ENDED", extra: { endReason: "GUARDIAN_STOP", confirmed: true }, reason: "보호자가 끝냈어요" }],
+    ["실행 중 서버 재시작(FAILED)", { status: "FAILED", extra: { failureCode: "SERVER_RESTART" }, reason: "기기 응답 없이 끝냈어요" }],
+  ] as const)("12가 캐시에 남긴 목표 수를 17이 마무리 중 없이 바로 받은 %s에도 쓴다", async (_label, { status, extra, reason }) => {
+    renderDone(
+      () => jsonResponse(200, practiceBody(status, { ...extra, endedAt: PRACTICE_ENDED_AT, statusVersion: 6 })),
+      // 12가 마지막으로 받아 둔 진행 중 응답(같은 조회 캐시 queryKeys.session).
+      (queryClient) => queryClient.setQueryData(queryKeys.session(SESSION_ID),
+        parseLiveView(practiceBody("ACTIVE", { practice: progress, statusVersion: 4 }))),
+    );
+    await waitFor(() => expect(screen.getByTestId("done-title")).toHaveTextContent("오늘 연습이 끝났어요"));
+    expect(screen.getByTestId("done-view")).toHaveAttribute("data-state", status);
+    expect(screen.getByTestId("done-header")).toHaveTextContent("연습 · 목표 2개");
+    expect(screen.getByTestId("done-time")).toHaveTextContent("10:40 ~ 10:52 · 목표 2개");
+    expect(screen.getByTestId("done-reason")).toHaveTextContent(reason);
+    expectNoFreeTalkInHeader();
+    expect(router.replace).not.toHaveBeenCalled();
   });
 
   it("기기 응답 없이 끝낸 연습은 C.S-17.58.1 ~ 5다", async () => {

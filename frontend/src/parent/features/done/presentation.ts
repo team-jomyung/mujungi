@@ -81,7 +81,7 @@ function timeLineFor(view: LiveView | undefined, practice: boolean, goalCount: n
 }
 
 /**
- * @param goalCount 이 연습의 목표 수. 종료 뒤 진행 조회에는 목표 수가 오지 않아 화면이 앞서 본 값을 넘긴다. 모르면 null.
+ * @param goalCount 이 연습의 목표 수. 종료 뒤 진행 조회에는 목표 수가 오지 않아 조회 캐시에 남은 앞 값(mergeLiveView)을 넘긴다. 모르면 null.
  */
 export function presentDone(view: LiveView | undefined, childName: string | null, goalCount: number | null = null): DonePresentation {
   const practice = view?.activityType === "PRACTICE";

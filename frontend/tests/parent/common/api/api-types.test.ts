@@ -147,6 +147,26 @@ describe("말풍선 합치기(J23 · J120)", () => {
     expect(mergeLiveView(first, other)).toBe(other);
   });
 
+  it("연습 진행 값은 마무리 · 종료 응답에서 비면 앞 값을 남기고, 새 값이 오거나 자유대화면 새 응답을 따른다", () => {
+    const progress = { goalIndex: 2, goalCount: 2, goalName: "목표 이름", stage: "NEW_SCENARIO_RESPONSE" };
+    const practice = (status: string, extra: Record<string, unknown> = {}) =>
+      parseLiveView(liveViewBody(status, { activityType: "PRACTICE", statusVersion: 4, ...extra }));
+    const active = practice("ACTIVE", { practice: progress });
+    for (const status of ["CLOSING", "ENDED", "ENDED_UNCONFIRMED", "ABORTED", "FAILED"]) {
+      const merged = mergeLiveView(active, practice(status, { statusVersion: 5 }));
+      expect(merged.status).toBe(status);
+      expect(merged.practice?.goalCount).toBe(2);
+    }
+    // 마무리 중에 새 진행 값이 오면 그 값을 쓴다.
+    const closing = mergeLiveView(active, practice("CLOSING", { practice: { ...progress, goalCount: 3, goalIndex: 3 }, statusVersion: 5 }));
+    expect(closing.practice?.goalCount).toBe(3);
+    // 진행 중 · 시작 전 단계에서는 이 규칙이 없다(진행 중 null은 invalid로 따로 남긴다).
+    expect(mergeLiveView(active, practice("WAITING_CHILD", { statusVersion: 5 })).practice).toBeNull();
+    // 자유대화 응답은 앞 연습 값을 이어 받지 않는다.
+    const freeTalk = parseLiveView(liveViewBody("ENDED", { activityType: "FREE_TALK", statusVersion: 5 }));
+    expect(mergeLiveView(active, freeTalk).practice).toBeNull();
+  });
+
   it("API 클라이언트 문맥 밖에서 부르면 숫자를 지어내지 않고 멈춘다", () => {
     const spy = vi.spyOn(console, "error").mockImplementation(() => undefined);
     expect(() => renderHook(() => useApiClient())).toThrow(/ApiClientContext/);

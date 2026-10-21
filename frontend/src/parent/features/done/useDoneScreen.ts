@@ -2,13 +2,13 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { freeFailedRoute, practiceFailedRoute } from "../../common/activity/failure";
 import { isStartFailure } from "../../common/activity/livePresentation";
 import { ApiError } from "../../common/api/apiClient";
 import { queryKeys, useApiClient } from "../../common/api/queries";
 import { fetchHome } from "../../common/api/home";
-import { isTerminalStatus, type LiveView, type SessionStatus } from "../../common/api/types";
+import { isTerminalStatus, type SessionStatus } from "../../common/api/types";
 import type { TabKey } from "../../common/components/BottomTabBar";
 import { useLivePolling } from "../../common/hooks/useLivePolling";
 import { useResultStatusPolling } from "../../common/hooks/useResultStatusPolling";
@@ -22,19 +22,6 @@ import { useToast } from "@/shared/toast/ToastProvider";
 
 function keepPollingOnDone(status: SessionStatus): boolean {
   return !isTerminalStatus(status);
-}
-
-/**
- * 연습 목표 수(C.S-17.21.1 · C.S-17.21.3). 종료된 세션의 진행 조회에는 practice가 오지 않는다(realtime은 실행기가 끝나면
- * 비우고 core 사본 응답에는 없다). 그래서 12에서 이어받은 조회 값이나 마무리 중에 받은 값 가운데 마지막 것을 기억해 쓴다.
- */
-function useGoalCount(sessionId: string, view: LiveView | undefined): number | null {
-  const seen = view?.practice?.goalCount ?? null;
-  const [kept, setKept] = useState<{ readonly sessionId: string; readonly goalCount: number } | null>(null);
-  if (seen !== null && (kept?.sessionId !== sessionId || kept.goalCount !== seen)) {
-    setKept({ sessionId, goalCount: seen });
-  }
-  return seen ?? (kept?.sessionId === sessionId ? kept.goalCount : null);
 }
 
 export function useDoneScreen(sessionId: string) {
@@ -52,7 +39,9 @@ export function useDoneScreen(sessionId: string) {
   const jobStatus = resultPolling.data?.jobStatus;
   const failureCode = view?.failureCode ?? null;
   const isPractice = view?.activityType === "PRACTICE";
-  const goalCount = useGoalCount(sessionId, view);
+  // 연습 목표 수(C.S-17.21.1 · C.S-17.21.3). 마무리 · 종료 응답에는 진행 값이 비어 오지만, 조회 캐시를 합칠 때
+  // 12 · 17이 앞서 받은 값을 남긴다(mergeLiveView). 캐시에 한 번도 없었으면 null이다.
+  const goalCount = view?.practice?.goalCount ?? null;
 
   useEffect(() => {
     if (startFailed) {

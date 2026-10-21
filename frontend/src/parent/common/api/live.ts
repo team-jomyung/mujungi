@@ -2,6 +2,7 @@
 
 import type { ApiClient } from "./apiClient";
 import {
+  isTerminalStatus,
   parseEndResult,
   parseLiveView,
   ResponseShapeError,
@@ -43,6 +44,21 @@ export function mergeBubbles(previous: readonly Bubble[], incoming: readonly Bub
   return [...bySeq.values()].sort((left, right) => left.seq - right.seq);
 }
 
+/**
+ * 연습 진행 값을 앞 응답 것으로 남길지. 진행 중에 잘못 온 값(invalid)이면 남긴다.
+ * 마무리 · 종료 응답에는 진행 값이 비어 온다(realtime 실행기가 끝나면 비우고 core 사본 응답에는 없다).
+ * 이때도 남겨야 12가 받은 목표 수를 17이 이어 쓴다(12는 마무리 · 종료를 받으면 바로 17로 가므로 12 표시는 그대로다).
+ */
+function keepsPreviousPractice(next: LiveView): boolean {
+  if (next.activityType !== "PRACTICE") {
+    return false;
+  }
+  if (next.practiceIssue === "invalid") {
+    return true;
+  }
+  return next.practice === null && (next.status === "CLOSING" || isTerminalStatus(next.status));
+}
+
 /** 폴링 응답을 앞 응답과 합친다: 상태는 새 응답, 말풍선은 seq로 합침, nextSeq는 새 응답 값. */
 export function mergeLiveView(previous: LiveView | undefined, next: LiveView): LiveView {
   if (previous === undefined || previous.sessionId !== next.sessionId) {
@@ -50,5 +66,5 @@ export function mergeLiveView(previous: LiveView | undefined, next: LiveView): L
   }
   if ((previous.activityType === "PRACTICE" || next.activityType === "PRACTICE") && next.statusVersion < previous.statusVersion) return previous;
   return { ...next, items: mergeBubbles(previous.items, next.items),
-    practice: next.activityType === "PRACTICE" && next.practiceIssue === "invalid" ? previous.practice : next.practice };
+    practice: keepsPreviousPractice(next) ? previous.practice : next.practice };
 }
