@@ -88,13 +88,15 @@ class SessionPackageIT {
             RecordedRequest request = realtime.requests("POST", START).get(0);
             assertThat(request.schemaErrors()).isEmpty();
             assertThat(request.body()).doesNotContain(KNOWN_MARKER).doesNotContain(QUESTION_MARKER)
-                    .doesNotContain("FRIEND").doesNotContain("HEARD_FROM_CHILD").doesNotContain("@")
+                    .doesNotContain("knownContent").doesNotContain("question").doesNotContain("@")
                     .doesNotContainIgnoringCase("email");
             JsonNode body = request.json();
+            assertThat(body.path("conversationGuide").path("sourceType").asString()).isEqualTo("HEARD_FROM_CHILD");
+            assertThat(body.path("conversationGuide").path("topics").get(0).asString()).isEqualTo("FRIEND");
             // U8(편차 U8-b): 계약 필드에 선택 속성 approvedSpeech가 더해졌다. 자유대화는 허용 목록의 두 code만 싣는다
             assertThat(fieldNames(body)).containsExactlyInAnyOrder("sessionId", "idempotencyKey", "guardianId", "childId",
                     "deviceId", "activityType", "consentSnapshot", "childContext", "stopExpressions", "approvedContent",
-                    "approvedSpeech");
+                    "approvedSpeech", "conversationGuide");
             assertThat(fieldNames(body.path("approvedSpeech"))).containsExactly("D_REST_ACK_START", "D_REST_ACK");
             assertThat(body.path("sessionId").asString()).isEqualTo(started.sessionId().toString());
             assertThat(body.path("idempotencyKey").asString()).isEqualTo(key.toString());

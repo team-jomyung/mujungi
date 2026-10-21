@@ -1,5 +1,6 @@
 package kr.mujoong.realtime.session;
 
+import kr.mujoong.contract.context.ConversationGuide;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -333,7 +334,13 @@ public final class SessionExecutor {
             Map<String, ApprovedItem> approved,
             String practiceJson,
             UUID guardianId,
-            Map<String, String> approvedSpeech) {
+            Map<String, String> approvedSpeech, ConversationGuide conversationGuide) {
+        public Plan(UUID sessionId, UUID deviceId, String traceId, ChildContext childContext,
+                List<StartSession.ApprovedAudio> approvedAudio, ApprovedItem closing, ApprovedItem waitingFiller,
+                boolean rawAudioConsent, List<String> stopExpressions, ActivityType activityType,
+                Map<String, ApprovedItem> approved, String practiceJson, UUID guardianId, Map<String,String> approvedSpeech) {
+            this(sessionId,deviceId,traceId,childContext,approvedAudio,closing,waitingFiller,rawAudioConsent,stopExpressions,activityType,approved,practiceJson,guardianId,approvedSpeech,null);
+        }
 
         /**
          * U12 이전 모양(승인 발화 문장 지도 없음 — 연습 시작 패키지의 approvedSpeech를 확장에 싣지 않는다). 기존 호출처 · 시험은 이 모양을 그대로
@@ -747,7 +754,7 @@ public final class SessionExecutor {
         }
         ctx.startSent(true);
         ctx.timers().arm(Kind.DEVICE_ACK, ctx.services().settings().deviceAckTimeout());
-        ctx.providerAttempt(ctx.services().connector().connect(ctx.plan().sessionId(), ctx.plan().childContext(), event -> {
+        ctx.providerAttempt(connectProvider(ctx.plan().sessionId(), ctx.plan().childContext(), event -> {
             boolean output = isOutputChunk(event);
             if (output) {
                 pendingOutputChunks.incrementAndGet();
@@ -3093,4 +3100,10 @@ public final class SessionExecutor {
     public String toString() {
         return "SessionExecutor[sessionId=" + ctx.plan().sessionId() + ", status=" + ctx.status() + "]";
     }
+    private ProviderConnector.Attempt connectProvider(UUID session, ChildContext child,
+            kr.mujoong.realtime.voice.ProviderPort.Listener listener, ProviderConnector.Callback callback) {
+        if (ctx.plan().conversationGuide() == null) return ctx.services().connector().connect(session, child, listener, callback);
+        return ctx.services().connector().connect(session, child, ctx.plan().conversationGuide(), listener, callback);
+    }
+
 }

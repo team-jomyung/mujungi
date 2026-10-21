@@ -482,3 +482,10 @@ realtime 새 연습 흐름(U12)이 읽는 설정이다. 시간 값이 아니며 
 |---|---|---|---|
 | `mujoong.practice-flow.retry-max` | `2` | realtime | 장면 하나에서 코치와 함께 '다시 해 보기'를 할 수 있는 최대 횟수(AC1.5.4). 0 이상 정수, 0은 하지 않음 |
 | `mujoong.practice-flow.reexplain-max` | `1` | realtime | 장면 하나에서 상황을 다시 설명하는 최대 횟수(AC1.3.x, OPPORTUNITY와 RETRY가 공유). 0 이상 정수, 0은 하지 않음 |
+
+
+## 자유대화 전 보호자 입력 참고
+
+보호자의 입력 원문을 Live 지시문에 넣지 않는다. Core가 고정 키워드와 상황 구분에서 추출한 `conversationGuide.topics`(열거형 1~3개)와 `sourceType`(SEEN, HEARD_FROM_CHILD, UNSPECIFIED)만 자유대화 시작 내부 요청에 선택적으로 포함한다. 이름·연락처·사건 주장·임의 지시문을 담을 문자열 필드는 없다. 아이 기본 정보의 기존 childContext(이름·나이·관심사)는 유지한다.
+
+Realtime은 고정된 중립 질문으로 바꾸며 보호자의 주장을 아이가 말한 사실로 간주하지 않는다. 출처를 아이에게 노출하거나 답을 유도하지 않는다. 지원하지 않는 주제는 일상 질문으로 대체한다. 연습대화에는 이 guide를 전달하지 않는다. 대화 후 구조화는 개인정보를 정리한 원래 보호자 입력과 실제 아이 발화를 각각 사용하고, 출처와 발화 근거를 구분한다. 새 optional 필드 수신을 지원하는 Realtime을 Core보다 먼저 적용한다.

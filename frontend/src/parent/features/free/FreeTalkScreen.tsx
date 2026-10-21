@@ -76,6 +76,7 @@ export function FreeTalkScreen({ returnedFailed, failureCode = null }: FreeTalkS
             submit(buildContext());
           }}
         >
+          <p className="mj-field__hint" data-testid="free-context-usage">{COPY.free.contextUsage}</p>
           <TextArea200
             label={COPY.free.knownContentLabel}
             value={knownContent}

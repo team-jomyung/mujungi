@@ -108,6 +108,10 @@ public class ProviderRequestFactory {
 
     /** 세션 시작 요청(표본율 지정, 실호출 도구가 16kHz 같은 값을 시험한다). */
     public SessionStart sessionStart(ChildContext context, int rate) {
+        return sessionStart(context, rate, null);
+    }
+
+    public SessionStart sessionStart(ChildContext context, int rate, kr.mujoong.contract.context.ConversationGuide guide) {
         Objects.requireNonNull(context, "context");
         if (rate <= 0) {
             throw new IllegalArgumentException("표본율은 0보다 커야 한다");
@@ -117,7 +121,7 @@ public class ProviderRequestFactory {
                 context.age() == null ? null : Math.max(MIN_AGE, context.age()),
                 limitInterests(context.interests()));
         return new SessionStart(TYPE_SESSION_START,
-                new SessionBody(MODEL, instructions(data), new AudioSpec(new AudioFormat(AUDIO_TYPE, rate))));
+                new SessionBody(MODEL, instructions(data) + DialogInstructions.conversationGuide(guide), new AudioSpec(new AudioFormat(AUDIO_TYPE, rate))));
     }
 
     /** 입력 음성 한 프레임. 본문은 변환하지 않는다(J131 무변환). */

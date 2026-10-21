@@ -16,7 +16,7 @@ import org.springframework.stereotype.Repository;
 /**
  * 08 자유대화 배경 {@code core.core_activity_context} 데이터 접근 (U4a ActivityCoordinator · AC3.1.2 · AC3.1.7 · NFR3 · U4a-J1).
  *
- * <p>배경은 결과 구조화(U6)의 입력일 뿐이다. 이 저장소는 세션 패키지 · Realtime 호출 · 보호자 응답 경로에서 쓰이지 않는다(구조 시험).
+ * <p>원문은 결과 구조화(U6)에서만 읽는다. 대화 전 참고에는 시작 요청에서 유도한 원문 없는 주제 코드만 쓰며 이 저장소의 원문을 Realtime에 보내지 않는다.
  * 네 칸이 모두 비면 행을 쓰지 않는다. 트랜잭션은 호출자가 연다(시작 서비스가 사본 행과 한 트랜잭션에 쓴다).
  */
 @Repository

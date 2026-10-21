@@ -1,5 +1,6 @@
 package kr.mujoong.realtime.session;
 
+import kr.mujoong.contract.context.ConversationGuide;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -62,7 +63,13 @@ public class StartSessionHandler {
             List<StopExpressionItem> stopExpressions,
             Map<String, ApprovedContentItem> approvedContent,
             Map<String, ApprovedSpeechItem> approvedSpeech,
-            String practiceJson) {
+            String practiceJson, ConversationGuide conversationGuide) {
+        public StartCommand(UUID sessionId, UUID idempotencyKey, UUID guardianId, UUID childId, UUID deviceId,
+                ActivityType activityType, ConsentSnapshot consentSnapshot, ChildContext childContext,
+                List<StopExpressionItem> stopExpressions, Map<String, ApprovedContentItem> approvedContent,
+                Map<String, ApprovedSpeechItem> approvedSpeech, String practiceJson) {
+            this(sessionId,idempotencyKey,guardianId,childId,deviceId,activityType,consentSnapshot,childContext,stopExpressions,approvedContent,approvedSpeech,practiceJson,null);
+        }
 
         public StartCommand {
             Objects.requireNonNull(sessionId, "sessionId");
@@ -360,6 +367,6 @@ public class StartSessionHandler {
         return new SessionExecutor.Plan(command.sessionId(), command.deviceId(), traceId, command.childContext(), audio,
                 approved.get(PlayApprovedContent.CLOSING), approved.get(PlayApprovedContent.WAITING_FILLER),
                 command.consentSnapshot().rawAudio(), stops, command.activityType(), approved,
-                practice ? command.practiceJson() : null, command.guardianId(), speech);
+                practice ? command.practiceJson() : null, command.guardianId(), speech, practice ? null : command.conversationGuide());
     }
 }

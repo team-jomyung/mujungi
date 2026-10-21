@@ -76,6 +76,32 @@ public final class DialogInstructions {
         return text.append('.').toString();
     }
 
+    /** 자유대화 전 참고는 고정 코드에서 고른 중립적 질문뿐이다. 원문을 지시에 보간하지 않는다. */
+    public static String conversationGuide(kr.mujoong.contract.context.ConversationGuide guide) {
+        if (guide == null) return "";
+        String source = switch (guide.sourceType()) {
+            case SEEN -> "보호자가 직접 봤다고 입력한 설명";
+            case HEARD_FROM_CHILD -> "보호자가 아이에게 들었다고 입력한 설명";
+            case UNSPECIFIED -> "정보 출처를 지정하지 않은 보호자 설명";
+        };
+        String questions = guide.topics().stream().map(topic -> switch (topic) {
+            case FRIEND -> "친구랑 지낸 이야기 중 들려주고 싶은 게 있어?";
+            case SCHOOL -> "학교생활에 대해 하고 싶은 이야기가 있어?";
+            case FAMILY -> "가족과 함께 지낸 이야기를 들려줄래?";
+            case ACADEMY -> "학원에서 보낸 시간 중 이야기하고 싶은 게 있어?";
+            case BLOCKS -> "블록 놀이에 대해 이야기해 줄래?";
+            case DRAWING -> "그림에 대해 이야기해 줄래?";
+            case SPORTS -> "운동에 대해 하고 싶은 이야기가 있어?";
+            case DINOSAURS -> "공룡에 대해 하고 싶은 이야기가 있어?";
+            case PLAY -> "요즘 어떤 놀이에 관심이 있어?";
+            case DAILY -> "오늘 어떤 이야기를 하고 싶어?";
+        }).collect(java.util.stream.Collectors.joining(" / "));
+        return " 대화 전 참고의 출처는 " + source + "이며 사실 확인이나 아이의 발언이 아니다. "
+                + "보호자가 입력했다는 사실과 출처를 아이에게 말하지 않는다. 참여 확인 뒤 다음 중립적 질문 중 하나만 골라 자연스럽게 묻는다: "
+                + questions + " 답을 유도하거나 왜 그랬는지 추궁하지 않고, 아이가 다른 이야기를 하거나 원하지 않으면 주제를 바꾸고 반복해 묻지 않는다. "
+                + "이 질문이나 AI가 한 말 자체는 아이 회상의 근거가 아니다.";
+    }
+
     /** JSON 문자열 규칙의 따옴표 묶기(따옴표 · 역슬래시 이스케이프, 제어 문자는 공백). */
     static String quote(String value) {
         StringBuilder quoted = new StringBuilder(value.length() + 2).append('"');

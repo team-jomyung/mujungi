@@ -138,6 +138,7 @@ class ActivityApiIT {
         assertThat(sent.get(0).schemaErrors()).as("패키지가 계약 스키마 안").isEmpty();
         String body = sent.get(0).body();
         assertThat(body).as("08 배경은 패키지에 없다(AC3.1.7)").doesNotContain(KNOWN).doesNotContain(QUESTION);
+        assertThat(sent.get(0).json().path("conversationGuide").path("sourceType").asString()).isEqualTo("SEEN");
         JsonNode stops = sent.get(0).json().path("stopExpressions");
         assertThat(stops.size()).as("기본 + 추가 표현 스냅숏(AC2.3.7)").isEqualTo(3);
         assertThat(stops.get(0).path("text").asString()).isEqualTo("무중아 그만할래");

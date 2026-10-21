@@ -56,7 +56,10 @@ public class SessionResultHandler implements JobHandler {
         Map<String,Object> common=new LinkedHashMap<>();common.put("transcript",transcript);common.put("endReason",r.endReason());
         if(!insufficient){
             if(free){var structureInput=new LinkedHashMap<>(common);structureInput.putAll(input.background());
-                experience=verifiedExperience(ai.call("structure",structureInput,input.aliases(),job.deadline(),()->requireAiAccess(job)),quotes);
+                var structuredOutput=ai.call("structure",structureInput,input.aliases(),job.deadline(),()->requireAiAccess(job));
+                var safeBackground=new kr.mujoong.core.luna.LunaInputSanitizer(json).sanitize(input.background(),input.aliases()).payload();
+                var safeTranscript=objects(new kr.mujoong.core.luna.LunaInputSanitizer(json).sanitize(Map.of("transcript",transcript),input.aliases()).payload().get("transcript"));
+                experience=ExperienceSourceVerifier.verify(structuredOutput,safeTranscript,safeBackground);
             }else{
                 if(PracticeRecordV2.present(practice)){
                     if(rejudgment==null)throw new ResultAiException("PROVIDER_UNAVAILABLE");
@@ -119,11 +122,6 @@ public class SessionResultHandler implements JobHandler {
         if(r.activityType().equals("FREE_TALK"))contexts.findBySession(r.sessionId()).ifPresent(c->{background.put("knownContent",c.knownContent());background.put("situationType",c.situationType());background.put("sourceType",c.sourceType());background.put("question",c.question());});
         Map<String,String> aliases=new LinkedHashMap<>();children.findByGuardianId(job.guardianId()).ifPresent(c->{if(c.getDisplayName()!=null&&!c.getDisplayName().isBlank())aliases.put(c.getDisplayName(),"아이");});
         return new Input(r,transcript(r.transcriptJson()),practice(r.practiceJson()),background,aliases,consent.check(job.guardianId()).snapshot().voiceAndText());
-    }
-    private Map<String,Object> verifiedExperience(Map<String,Object> output,Map<Long,String> quotes){
-        Map<String,Object> result=new LinkedHashMap<>();result.put("characters",objects(output.get("characters")).stream().filter(c->!"CHILD_RECALL".equals(c.get("source"))||quotes.containsKey(number(c,"utteranceSeq"))).toList());
-        for(String key:List.of("situation","partnerUtterance","childResponse","explanation")){var field=object(output.get(key));boolean valid=!field.isEmpty()&&(!"CHILD_RECALL".equals(field.get("source"))||(quotes.containsKey(number(field,"utteranceSeq"))&&QuoteMatcher.allVerified(text(field,"text"),List.of(quotes.get(number(field,"utteranceSeq"))))));result.put(key,valid?field:null);}
-        return result;
     }
     private List<Map<String,Object>> judgmentGoals(Map<String,Object> practice,UUID guardian,UUID session){
         return goals(practice).stream().map(goal->{var copy=new LinkedHashMap<>(goal);try{var d=definitions.get(text(goal,"behaviorKey"),(int)number(goal,"behaviorVersion"));copy.put("coreFunction",d.behaviorDefinitionText());copy.put("judgmentCriteria",d.judgmentCriteria());}catch(IllegalArgumentException missing){/* BR12.2: 고정 정의가 없으면 정의 없이 재판정한다. */}

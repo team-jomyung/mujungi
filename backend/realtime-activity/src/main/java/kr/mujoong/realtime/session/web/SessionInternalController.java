@@ -1,6 +1,7 @@
 package kr.mujoong.realtime.session.web;
 
 import jakarta.servlet.http.HttpServletRequest;
+import kr.mujoong.contract.context.ConversationGuide;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -62,7 +63,14 @@ public class SessionInternalController {
     record StartBody(UUID sessionId, UUID idempotencyKey, UUID guardianId, UUID childId, UUID deviceId,
             ActivityType activityType, ConsentBody consentSnapshot, ChildBody childContext,
             List<StopBody> stopExpressions, Map<String, ApprovedBody> approvedContent,
-            Map<String, SpeechBody> approvedSpeech, Map<String, Object> practice) {
+            Map<String, SpeechBody> approvedSpeech, Map<String, Object> practice, ConversationGuide conversationGuide) {
+        StartBody(UUID sessionId, UUID idempotencyKey, UUID guardianId, UUID childId, UUID deviceId,
+                ActivityType activityType, ConsentBody consentSnapshot, ChildBody childContext,
+                List<StopBody> stopExpressions, Map<String, ApprovedBody> approvedContent,
+                Map<String, SpeechBody> approvedSpeech, Map<String, Object> practice) {
+            this(sessionId,idempotencyKey,guardianId,childId,deviceId,activityType,consentSnapshot,childContext,stopExpressions,approvedContent,approvedSpeech,practice,null);
+        }
+
 
         /** U8 ~ U11 모양(practice 조각 없음). */
         StartBody(UUID sessionId, UUID idempotencyKey, UUID guardianId, UUID childId, UUID deviceId,
@@ -165,6 +173,7 @@ public class SessionInternalController {
 
     /** 본문을 시작 명령으로 바꾼다(스키마의 필수 · 범위 규칙). */
     static StartSessionHandler.StartCommand toCommand(StartBody body) {
+        InternalBody.check(body.conversationGuide() == null || body.activityType() == ActivityType.FREE_TALK, "conversationGuide");
         InternalBody.required(body.sessionId(), "sessionId");
         InternalBody.required(body.idempotencyKey(), "idempotencyKey");
         InternalBody.required(body.guardianId(), "guardianId");
@@ -176,7 +185,7 @@ public class SessionInternalController {
         return new StartSessionHandler.StartCommand(body.sessionId(), body.idempotencyKey(), body.guardianId(),
                 body.childId(), body.deviceId(), body.activityType(), consent(body.consentSnapshot()),
                 child(body.childContext()), stops(body.stopExpressions()), approved(body.approvedContent()),
-                speech(body.approvedSpeech()), practice(body.activityType(), body.practice()));
+                speech(body.approvedSpeech()), practice(body.activityType(), body.practice()), body.conversationGuide());
     }
 
     /**

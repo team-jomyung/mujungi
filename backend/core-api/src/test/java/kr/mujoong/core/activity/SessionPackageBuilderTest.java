@@ -121,7 +121,7 @@ class SessionPackageBuilderTest {
         assertThat(Arrays.stream(parameters).filter(String.class::equals).count()).isZero();
         assertThat(Arrays.stream(SessionPackage.class.getRecordComponents()).map(c -> c.getName()))
                 .containsExactly("sessionId", "idempotencyKey", "guardianId", "childId", "deviceId", "activityType",
-                        "consentSnapshot", "childContext", "stopExpressions", "approvedContent");
+                        "consentSnapshot", "childContext", "stopExpressions", "approvedContent", "conversationGuide");
     }
 
     @Test
