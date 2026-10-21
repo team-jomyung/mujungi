@@ -23,8 +23,8 @@
 | `mujoong.timing.session.preparing-timeout` | `10s` | core-api | Core가 REQUESTED 사본을 만든 시각 → PREPARING 이벤트가 없으면 로컬 FAILED + CORE_ABANDONED 취소 | BR6.12 ① · B5 |
 | `mujoong.timing.session.device-ack-timeout` | `20s` | realtime | START_SESSION 송신을 시도한 시각 → ACK · DEVICE_READY(OK) · 공급자 `session.started`가 모두 확인돼 ACTIVE가 되지 않으면 FAILED. ACK 또는 DEVICE_READY가 빠졌으면 DEVICE_NO_ACK, 둘은 왔는데 `session.started`가 없으면 PROVIDER_UNAVAILABLE [편차 (h)] | BR6.12 ② · NFR6 · B7 · J59(h) |
 | `mujoong.timing.session.closing-confirm` | `30s` | realtime | CLOSING 전이를 이긴 커밋 시각 → VOICE_SESSION_CLOSED가 없으면 ENDED_UNCONFIRMED. 끊김보다 우선. U4b: DECLINED 뒤 마무리 인사 대기 상한으로도 쓴다 | BR6.12 ③ · B11 · U4b-J8 |
-| `mujoong.timing.session.join-wait` | `20s` | realtime | 시작 안내(참여 질문) 재생 완료 보고를 서버가 받은 시각 → 응답 없으면 재안내(U4b). 기술 일시정지 동안 멈춘다 | 계약 7절 · U4b-J4 · U4b-J5 |
-| `mujoong.timing.session.join-wait-after-reprompt` | `20s` | realtime | 재안내 · 되묻기 · 대안 재생 완료 보고 수신 → 응답 없으면 재안내(아직 안 썼으면) 또는 DECLINED(U4b) | 계약 7절 · U4b-J4 |
+| `mujoong.timing.session.join-wait` | `20s` | realtime | 시작 안내(참여 질문) 재생 완료 보고를 서버가 받은 시각 → 응답 없으면 재안내(U4b). 기술 일시정지 동안 멈춘다. 응답 시각 = 그 대답의 첫 입력 전사 조각 수신 시각이고, 조각이 오는 동안(입력 묶음이 열린 동안)은 무응답으로 세지 않는다 [JG 편차 (JG-c)] | 계약 7절 · U4b-J4 · U4b-J5 |
+| `mujoong.timing.session.join-wait-after-reprompt` | `20s` | realtime | 재안내 · 되묻기 · 대안 재생 완료 보고 수신 → 응답 없으면 재안내(아직 안 썼으면) 또는 DECLINED(U4b). 응답 시각 · 말하는 중의 해석은 `join-wait`와 같다 [JG 편차 (JG-c)] | 계약 7절 · U4b-J4 |
 | `mujoong.timing.session.silence-warning` | `4m` | realtime | ACTIVE 공백 누적(기기 재생 · 서버 출력 대기 · 기술 일시정지 · 확인 질문 대기 동안 멈춤) → 12 경고 + SILENCE_WARNING 1회(U4b) | 계약 7절 · U4b-R6 · U4b-J10 · U4b-J11 |
 | `mujoong.timing.session.silence-end` | `6m` | realtime | 같은 공백 누적 → CLOSING(SILENCE)(U4b) | 계약 7절 · U4b-R6 · B9 |
 | `mujoong.timing.device.gap-display` | `10s` | realtime | WAITING_CHILD · ACTIVE에서 마지막 기기 메시지 → 기술 일시정지(technicalPause) · 끊김 구간(DISCONNECT) 시작, 12 점선(U4b) | 계약 7절 · U4b-R7 · U4b-J13 |

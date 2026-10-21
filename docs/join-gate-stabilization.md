@@ -116,6 +116,26 @@ PR은 둘로 나눈다.
   `theRepromptIsCountedOnlyOnceAcrossTwoUnclearAnswers` · `aWindowExpiryDuringAnOpenJ1IsDeferred…` · `aNewReplyWhileJ1IsOpenSupersedesIt…`은 그대로 통과한다.
 - **문서**: 계약 변경 없음.
 
+### (4) 창 만료 경계 (PR-B, (a) · (b)만)
+
+- **바꾼 동작**:
+  - **(a)** 참여 대답 시각을 그 묶음의 **첫 조각을 서버가 받은 시각**(말을 시작한 때)으로 바꿨다. 지금까지는 마지막 조각 뒤 1500ms에 조용 시계가 울린
+    시각이라, 창 끝 직전에 말해도 늦은 대답이 됐다. J1 결과도 이 시각으로 넣는다(W1 4). J1의 10초 시계(`READY`)는 그대로 확정 시각 기준이다
+    (설계 개정 A8). 시험 대역의 완료 사건만 온 전사는 받은 시각 그대로다.
+  - **(b)** 입력 묶음이 열린 동안(아이가 말하는 중) `JOIN_WINDOW`가 울리면 tick을 미루고, 묶음이 확정 · 처리된 뒤(또는 빈 전사로 버려진 뒤) 부른다.
+    J1이 열린 동안의 미룸과 같은 방식이고 둘이 겹치면 J1 쪽이 먼저다. 조각이 왔으면 "무응답(전사 없음)"이 아니므로 AC6.3.3과 맞다. 발화 간격으로
+    묶음을 나눌 때는 아이가 이어 말하는 중이라 미룬 tick을 부르지 않는다.
+  - **(c)는 하지 않았다.** 만기 뒤에 시작한 ACCEPT는 지금처럼 만기(재안내)가 먼저이고 재안내 재생 중 START가 된다(`JoinTrackerTest` :62-69 기대값 그대로).
+    경계 시험을 바꾸는 결정이라 성민 합의 때만 한다(지시서 (4)(c) · 9절).
+- **고른 방안과 까닭**: 지시서 권장 (a) · (b). (a)만으로는 창 끝 직전에 시작한 말의 확정 전에 창 시계가 먼저 울려 재안내가 나가므로 (b)가 함께 있어야 한다.
+- **바꾼 파일**: `session/JoinFlow.java`(대답 시각 · `speechTickPending` · `onInputSettled` · `Env.childSpeaking`), `session/SessionExecutor.java`
+  (`confirmInputGroup`으로 나누고 조용 시계 · 완료 사건 뒤 `onInputSettled`).
+- **시험**(`SessionJoinTest`): 창 끝 0.5초 전 첫 조각 · 확정은 창 끝 뒤 → START · `JOIN_RE_PROMPTED` 없음, 창 끝 0.5초 뒤 첫 조각 → 재안내(`NO_REPLY`)가
+  먼저, 말하는 중 창 만기 → 확정 전까지 `RE_PROMPT` 재생 없음, 빈 묶음으로 끝난 말 → 미룬 만기가 재안내. 기존 경계 시험(`SessionJoinTest`의 19 · 21초 ·
+  `JoinTrackerTest` :31-69)은 그대로 통과한다.
+- **문서**: 값은 그대로이고 해석만 분명해져 `contracts/timing.md` 1절 `join-wait` · `join-wait-after-reprompt` 뜻 열에 한 구절을 더하고(R-M10),
+  `contracts/deviations.md`에 (JG-c)를 더했다.
+
 (다음 항목은 작성 중)
 
 ## 4. 설계 편차

@@ -50,6 +50,9 @@ final class JoinFlow {
 
         /** ACTIVE 전이 승자의 뒷일: 진입 몫과 발언권 반환(응답 생성 요청 1회). */
         void afterActiveWon();
+
+        /** 아이 말의 입력 전사 조각을 묶는 중인가(말을 시작했고 아직 확정 전사가 되지 않았다). */
+        boolean childSpeaking();
     }
 
     private final SessionContext ctx;
@@ -66,6 +69,8 @@ final class JoinFlow {
     private PendingReply held;
     /** J1을 SUPERSEDED로 닫은 새 대답을 처리한 뒤 부를, 그 J1이 미뤄 둔 참여 창 만기. */
     private boolean windowTickPending;
+    /** 아이가 말하는 중(입력 묶음이 열린 동안)에 울려 미룬 참여 창 만기. 묶음이 확정 · 처리된 뒤 부른다. */
+    private boolean speechTickPending;
 
     /** 진단 로그(contracts/ai-io.md 10.15)에 남기는 확정 전사 하나의 모양. 원문은 담지 않는다. */
     private record ReplyMeta(int textLen, int wordCount, InputTranscriptGroup.Shape shape, boolean lateForWindow) {
@@ -161,6 +166,11 @@ final class JoinFlow {
             judgment.deferJoinTick();
             return;
         }
+        if (env.childSpeaking()) {
+            // 조각이 오는 중이면 무응답이 아니다(AC6.3.3): 그 대답이 확정 · 처리된 뒤 tick을 부른다
+            speechTickPending = true;
+            return;
+        }
         JoinTracker.Action action = join.tick(ctx.services().clock().now());
         if (action == JoinTracker.Action.NONE) {
             armJoinWindow();
@@ -183,7 +193,8 @@ final class JoinFlow {
         if (join == null || join.isFinished()) {
             return;
         }
-        Instant at = confirmedAt;
+        // 대답 시각은 말을 시작한 때(그 묶음의 첫 조각을 서버가 받은 시각)다: 창 끝 직전에 시작한 말은 확정이 창 뒤여도 창 안의 대답이다
+        Instant at = shape != null ? shape.openedAt() : confirmedAt;
         ReplyMeta meta = meta(transcript, at, shape);
         JoinTracker.Reply reply = JoinTracker.classify(transcript);
         if (reply == JoinTracker.Reply.UNCLEAR && judgment.openPoint() == JudgmentPoint.J1) {
@@ -283,6 +294,14 @@ final class JoinFlow {
             applyJoinAction(action, reply, judged.at());
         }
         if (tick) {
+            runDeferredJoinTick();
+        }
+    }
+
+    /** 입력 묶음이 확정 · 처리됐다(또는 빈 묶음으로 버려졌다): 아이가 말하는 동안 미룬 참여 창 만기가 있으면 지금 처리한다. */
+    void onInputSettled() {
+        if (speechTickPending) {
+            speechTickPending = false;
             runDeferredJoinTick();
         }
     }

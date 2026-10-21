@@ -1350,6 +1350,11 @@ public final class SessionExecutor {
         public void afterActiveWon() {
             SessionExecutor.this.afterActiveWon();
         }
+
+        @Override
+        public boolean childSpeaking() {
+            return inputGroup.isOpen();
+        }
     }
 
     /** 기기 표식 · 끝내기 협력 객체가 실행기에 남은 로직으로 되돌아오는 자리. */
@@ -2081,6 +2086,7 @@ public final class SessionExecutor {
                 clearInputGroup();
                 onConfirmedChildTranscript(done, at,
                         shape != null ? shape : InputTranscriptGroup.Shape.single(at, !ctx.devicePlaying().isEmpty()));
+                joinFlow.onInputSettled();
             }
             case ProviderEvent.UsageUpdated ignored -> {
                 // 사용량 초는 파싱만 한다(실호출 도구 보고서가 기록). 지표 이름은 contracts 표에 없어 이 단위에서 더하지 않는다
@@ -2133,7 +2139,8 @@ public final class SessionExecutor {
      */
     private String groupInputDelta(ProviderEvent.InputTranscriptDelta delta, Instant at) {
         if (inputGroup.startsNewUtterance(delta, ctx.services().settings().inputUtteranceGap())) {
-            onInputTranscriptQuiet();
+            // 아이는 이어서 말하는 중이다(새 묶음이 곧 열린다) — 말하는 중에 미룬 참여 창 만기는 아직 부르지 않는다
+            confirmInputGroup();
             if (ctx.status().isTerminal() && !ctx.settling()) {
                 return null;
             }
@@ -2148,8 +2155,14 @@ public final class SessionExecutor {
         inputGroup.clear();
     }
 
-    /** 입력 전사 묶음이 조용해졌다: 확정 전사를 지금 확정 전사 입구({@link ProviderEvent.InputTranscriptDone})와 같은 길로 흘린다. */
+    /** 입력 전사 묶음이 조용해졌다: 묶음을 확정한 뒤, 아이가 말하는 동안 미룬 참여 창 만기가 있으면 처리한다. */
     private void onInputTranscriptQuiet() {
+        confirmInputGroup();
+        joinFlow.onInputSettled();
+    }
+
+    /** 열린 묶음을 확정 전사로 만들어 지금 확정 전사 입구({@link ProviderEvent.InputTranscriptDone})와 같은 길로 흘린다. */
+    private void confirmInputGroup() {
         ctx.timers().cancel(Kind.INPUT_TRANSCRIPT_QUIET);
         InputTranscriptGroup.Closed closed = inputGroup.close();
         if (closed == null || closed.text().isBlank()) {

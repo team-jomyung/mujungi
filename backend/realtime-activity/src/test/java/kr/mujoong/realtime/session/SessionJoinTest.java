@@ -214,6 +214,84 @@ class SessionJoinTest {
         assertThat(events(JoinFlow.EVENT_JOIN_RE_PROMPTED)).isEmpty();
     }
 
+    // ------------------------------------------------------------------ 참여 관문 안정화 (4): 창 끝 경계와 말하는 중
+
+    @Test
+    void aReplyStartedHalfASecondBeforeTheWindowEndStartsEvenThoughItIsConfirmedAfterIt() {
+        withPrompts();
+        toWaitingChild();
+        mark(plays().getFirst(), PlaybackMark.Status.COMPLETED);
+        h.advanceAlive(Duration.ofMillis(19_500));
+
+        h.provider.last().emit(new ProviderEvent.InputTranscriptDelta(null, "응"));
+        h.drain();
+        h.advanceAlive(h.settings.inputTranscriptQuiet());
+
+        assertThat(h.executor.status()).as("대답 시각 = 첫 조각 수신 시각(창 안)").isEqualTo(SessionStatus.ACTIVE);
+        assertThat(events(JoinFlow.EVENT_JOIN_RE_PROMPTED)).isEmpty();
+        assertThat(plays()).extracting(PlayApprovedContent::contentCode).containsExactly(SessionExecutor.INTRO_FREE_TALK);
+    }
+
+    @Test
+    void aReplyStartedHalfASecondAfterTheWindowEndStillGetsTheRepromptFirst() {
+        withPrompts();
+        toWaitingChild();
+        mark(plays().getFirst(), PlaybackMark.Status.COMPLETED);
+        h.advanceAlive(Duration.ofMillis(20_500));
+        assertThat(plays()).extracting(PlayApprovedContent::contentCode).last().isEqualTo(SessionExecutor.RE_PROMPT);
+
+        h.provider.last().emit(new ProviderEvent.InputTranscriptDelta(null, "응"));
+        h.drain();
+        h.advanceAlive(h.settings.inputTranscriptQuiet());
+
+        assertThat(events(JoinFlow.EVENT_JOIN_RE_PROMPTED)).singleElement()
+                .satisfies(event -> assertThat(event.getPayloadJson()).contains("\"cause\":\"NO_REPLY\""));
+        assertThat(h.executor.status()).as("재안내 재생 중의 대답도 받는다").isEqualTo(SessionStatus.ACTIVE);
+    }
+
+    @Test
+    void theWindowExpiringWhileTheChildIsSpeakingSendsNoRepromptUntilTheReplyIsHandled() {
+        withPrompts();
+        toWaitingChild();
+        mark(plays().getFirst(), PlaybackMark.Status.COMPLETED);
+        java.time.Instant windowEnd = h.clock.now().plusSeconds(20);
+        h.advanceAlive(Duration.ofSeconds(19));
+        h.provider.last().emit(new ProviderEvent.InputTranscriptDelta(null, "음 "));
+        h.drain();
+        h.advanceAlive(Duration.ofMillis(800));
+        h.provider.last().emit(new ProviderEvent.InputTranscriptDelta(null, "그러니까 "));
+        h.drain();
+        h.advanceAlive(Duration.ofMillis(800));
+        h.provider.last().emit(new ProviderEvent.InputTranscriptDelta(null, "할래"));
+        h.drain();
+        h.advanceAlive(Duration.ofMillis(600));
+
+        assertThat(h.clock.now()).as("창 끝(20초)을 지났다").isAfter(windowEnd);
+        assertThat(plays()).as("말하는 중에는 재안내가 나가지 않는다").extracting(PlayApprovedContent::contentCode)
+                .containsExactly(SessionExecutor.INTRO_FREE_TALK);
+        h.advanceAlive(h.settings.inputTranscriptQuiet());
+
+        assertThat(h.executor.status()).isEqualTo(SessionStatus.ACTIVE);
+        assertThat(events(JoinFlow.EVENT_JOIN_RE_PROMPTED)).isEmpty();
+    }
+
+    @Test
+    void aBlankGroupAfterTheWindowExpiredWhileSpeakingStillRunsTheDeferredExpiry() {
+        withPrompts();
+        toWaitingChild();
+        mark(plays().getFirst(), PlaybackMark.Status.COMPLETED);
+        h.advanceAlive(Duration.ofMillis(19_800));
+        h.provider.last().emit(new ProviderEvent.InputTranscriptDelta(null, " "));
+        h.drain();
+        h.advanceAlive(Duration.ofMillis(500));
+        assertThat(plays()).hasSize(1);
+
+        h.advanceAlive(h.settings.inputTranscriptQuiet());
+
+        assertThat(plays()).as("빈 전사로 끝난 말은 대답이 아니다 — 미룬 만기가 재안내한다").extracting(PlayApprovedContent::contentCode)
+                .containsExactly(SessionExecutor.INTRO_FREE_TALK, SessionExecutor.RE_PROMPT);
+    }
+
     @Test
     void aReplyWhileTheIntroIsStillPlayingIsHandledAtOnce() {
         withPrompts();
