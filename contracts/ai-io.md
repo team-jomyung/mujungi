@@ -257,6 +257,8 @@ Core는 고정 기회 조건과 트리거가 본문에 포함되는지 및 관�
 
 C10 partnerRoleText는 모델에 받지 않고 Core의 고정 역할 지시로 만든다(상대 역할만 수행, 아이의 답 대신 말하기/평가 금지, U5a-J22). 그래서 Gateway 검사와 공급자 출력에도 이 칸이 없다.
 
+새 흐름 대본의 `scenes[].partnerRole`은 지시가 아니라 짧은 역할 이름이다(예: 친한 친구). 레거시 `partnerRoleText`만 고정 역할 지시로 남는다(10.15) [U12 편차 (U12-b)].
+
 일시 실패에 한한 기술 재시도 1회(3초/호출, 250ms 간격)와 내용 재생성 1회는 모두 C10 전체 15초 안에서 수행한다. UTC/단조시계 남은 예산의 작은 쪽을 사용하며 실행 Future를 제한 시간에 취소한다. 취소를 무시하는 실제 공급자는 별도 통신 시한과 취소를 반드시 구현해야 한다. 생성된 상황은 내부 C10 응답에만 있고 보호자 목록에는 상황/판정/AI 원문이 없다.
 
 ## 8. U5b 연습 발화 · Cue · 재생 증거
@@ -482,3 +484,30 @@ realtime 새 연습 흐름(U12)이 읽는 설정이다. 시간 값이 아니며 
 |---|---|---|---|
 | `mujoong.practice-flow.retry-max` | `2` | realtime | 장면 하나에서 코치와 함께 '다시 해 보기'를 할 수 있는 최대 횟수(AC1.5.4). 0 이상 정수, 0은 하지 않음 |
 | `mujoong.practice-flow.reexplain-max` | `1` | realtime | 장면 하나에서 상황을 다시 설명하는 최대 횟수(AC1.3.x, OPPORTUNITY와 RETRY가 공유). 0 이상 정수, 0은 하지 않음 |
+
+### 10.15 U10 ↔ U12 대본 · 기록 연결 규칙
+
+core 상황 생성(U10)이 내는 대본(`practice-scenario.schema.json`의 `scriptVersion=scenario-script.v1` · `scenes[]`)과 realtime 새 연습 흐름(U12)이 내는 기록(`practice-record-v2.schema.json`)을 두 앱이 같은 뜻으로 읽는 규칙이다. 판 · 모양은 바꾸지 않고 뜻을 정한다.
+
+1. **`scenes[].partnerRole` = 짧은 역할 이름** [U12 편차 (U12-b)]
+   - 지시문이 아니다. 모델은 이 칸을 내지 않고(`ai-scenario-output.schema.json`), core가 발급할 때 장면 `relation`에서 만든다(`ScenarioContentPolicy.partnerRoleName`).
+   - 관계 코드: `PEER` · `FRIEND_CASUAL` → 친구, `FRIEND_CLOSE` → 친한 친구, `CLASSMATE` → 같은 반 친구, `CLUB_PEER` → 동아리 친구, `CLUB_SENIOR` → 동아리 선배, `CLUB_JUNIOR` → 동아리 후배, `TEAMMATE` → 같은 팀 친구, `TEACHER` → 선생님, `FAMILY` → 가족, 그 밖의 대문자 코드 → 친구.
+   - 후보 목표의 자유 문구(상대): 앞뒤 공백을 지우고 연속 공백을 한 칸으로 줄인 뒤 20자(코드 포인트) 이하이고 `.?!。` · 제어 문자가 없으면 그대로, 아니면 친구.
+   - 상한은 20자(코드 포인트, 스키마 `maxLength: 20`), 대체값은 친구다.
+   - 금지 규칙(정답 · 모범 문장을 먼저 말하지 않기, 고쳐 주거나 평가하지 않기, 아이 대신 대답하지 않기)은 realtime 친구 지시문의 고정 문장이 맡는다.
+   - realtime은 이 값을 "너는 아이의 {이름} 역할이다"와 승인 발화의 말하는 사람 표시에 쓰고, 비었거나 상한을 넘거나 문장부호 · 제어 문자가 있는 값(배포 전에 저장된 옛 지시문 값)은 친구로 바꿔 쓴다(`RolePolicy.peerName`). 대본 값 자체는 고치지 않는다.
+2. **도입 · 기회 문장 재생** [U12 편차 (U12-c)]
+   - core 규칙은 그대로다: BASE `sceneDescription`은 기회 조건과 `opportunitySentence`를 정규화 비교(7절, `ScenarioContentPolicy.normalize`)로 포함한다. 레거시 `scenarioText` · `triggerScript` · 지문 · 검증 표시가 이 규칙에 기댄다.
+   - realtime 도입은 `sceneDescription` 원문을 자르지 않고 그대로 승인 발화로 재생한다. 승인 발화에는 core가 발급한 문장 원문만 들어가므로 10.5의 원문 일치 · 제브 생략 규칙은 넓어지지 않는다(승인 원문의 일부는 승인 발화가 아니다).
+   - 설명이 기회 문장을 담고(같은 문자 부류의 정규화 비교) 도입이 끝까지 재생(PLAYED)됐으면, 도입 직후 OPPORTUNITY 진입에서 기회 문장을 다시 재생하지 않고 곧바로 아이 말을 기다린다. 도입이 끊겼거나 설명에 기회 문장이 없으면 기회 문장을 따로 재생한다.
+   - 무응답 재안내와 상황 다시 설명 뒤의 OPPORTUNITY 재진입은 기회 문장을 재생한다. 친구 · 코치 지시문의 '상황:'에는 설명 전체를 그대로 둔다.
+3. **record.practice v2 → core 노출 정산** [U12 편차 (U12-d)]
+   - core는 `flowVersion=practice-conversation-v1` 기록의 `scenes[].scenarioRef` · `startedAt`을 노출로 읽는다(`RecordedScenarioExposures`). 장면을 시작한 대본이 아이에게 보인 대본이다.
+   - 같은 `scenarioRef`(BASE와 VARIANT가 같은 대본)는 가장 이른 `startedAt` 하나로 정산한다. `scenarioRef`나 `startedAt`이 없는 장면은 건너뛴다.
+   - 모르는 `flowVersion` · 틀린 모양(장면 목록이 배열이 아님 · 식별자나 시각이 형식에 안 맞음)은 정산하지 않고 실패로 남긴다(정산 완료로 표시하지 않는다).
+   - 정산 주기(`runOnce`)가 미정산 준비를 다시 정산하므로 이전 기록도 배포 뒤 다음 주기에 정산된다. 마이그레이션은 없다.
+4. **공유 고정 자료와 교차 시험**
+   - `contracts/fixtures/practice-start-package.json`: core가 생성 → 발급 → 시작 패키지 조립으로 낸 `practice` 조각(후보 목표 + 기존 행동 목표, BASE · VARIANT 대본).
+   - `contracts/fixtures/practice-record-v2.json`: realtime 기록 조립기(`PracticeFlowRecordAssembler`) 출력.
+   - 시험: contract-model `ContractSchemasTest`(두 자료가 각 스키마를 통과), core `PracticeLinkContractTest`(core 출력이 자료 1과 트리로 같음 · 자료 2를 정산이 읽음), realtime `PracticeLinkContractTest`(자료 1로 한 장면 진행 · 조립기 출력이 자료 2와 트리로 같음), core `PracticeStartApiIT`(자료 2 모양으로 실제 DB 정산). 한쪽 모양이 바뀌면 세 모듈 시험이 함께 깨진다.
+   - 자료는 합성 문장과 `00000000-0000-4000-8000-…` 식별자만 쓴다.

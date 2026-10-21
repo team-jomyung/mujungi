@@ -215,6 +215,29 @@ class ContractSchemasTest {
         assertThat(schema("practice-record-v2.schema.json").validate(withRawLabel)).as("확률 원값은 싣지 않는다").isNotEmpty();
     }
 
+    // ------------------------------------------------------------------ 공유 고정 자료(core ↔ realtime 교차 계약, ai-io.md 10.15)
+
+    @Test
+    void theSharedStartPackageFixtureCarriesAFirstScenarioThatPassesThePracticeScenarioSchema() {
+        JsonNode pack = JSON.readTree(read(contracts.resolve("fixtures/practice-start-package.json")));
+        JsonNode first = pack.path("goals").get(0).path("firstScenario");
+
+        assertThat(schema("practice-scenario.schema.json").validate(first)).isEmpty();
+        assertThat(first.path("scriptVersion").asString()).isEqualTo("scenario-script.v1");
+        assertThat(first.path("scenes").size()).isEqualTo(2);
+        assertThat(first.path("scenes").get(0).path("sceneKind").asString()).isEqualTo("BASE");
+        assertThat(first.path("scenes").get(1).path("sceneKind").asString()).isEqualTo("VARIANT");
+        assertThat(pack.path("goals").get(1).path("firstScenario").isNull()).as("둘째 목표는 대본을 나중에 받는다").isTrue();
+    }
+
+    @Test
+    void theSharedRecordFixturePassesThePracticeRecordV2Schema() {
+        JsonNode record = JSON.readTree(read(contracts.resolve("fixtures/practice-record-v2.json")));
+
+        assertThat(schema("practice-record-v2.schema.json").validate(record)).isEmpty();
+        assertThat(record.path("scenes").size()).isEqualTo(3);
+    }
+
     @Test
     void outputSchemasRejectBrokenModelAnswers() {
         assertThat(schema("ai-judgment-output.schema.json").validate(JSON.readTree(

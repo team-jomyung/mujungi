@@ -1,0 +1,99 @@
+{
+  "goals": [
+    {
+      "goalSelectionId": "00000000-0000-4000-8000-000000000a01",
+      "order": 1,
+      "displayName": "그만하자는 말 받아들이기",
+      "behaviorKey": "candidate:accept-stop",
+      "behaviorVersion": 1,
+      "judgmentCriteria": "상황: 블록 놀이를 하다가 친구가 그만하자고 할 때 / 상대: 친한 친구 / 의도: 친구의 뜻을 받아들인다 / 표현: 그래, 잠깐 쉬자",
+      "firstScenario": {
+        "scenarioId": "00000000-0000-4000-8000-000000000c01",
+        "kind": "ORIGINAL",
+        "relationType": "친한 친구",
+        "opportunityCondition": "친구가 그만하자고 해.",
+        "scenarioText": "지금부터는 상상 속 상황이야. 블록 놀이 중이야. 친구가 그만하자고 해. 이제 그만할래.",
+        "partnerRoleText": "제시된 상황의 상대 역할을 맡아. 아이의 답을 대신 말하거나 평가하지 마.",
+        "triggerScript": "이제 그만할래.",
+        "validation": {
+          "goalIncluded": true,
+          "triggerIncluded": true,
+          "forbiddenFound": false
+        },
+        "scriptVersion": "scenario-script.v1",
+        "scenes": [
+          {
+            "sceneKey": "base-1",
+            "sceneKind": "BASE",
+            "sceneDescription": "블록 놀이 중이야. 친구가 그만하자고 해. 이제 그만할래.",
+            "opportunitySentence": "이제 그만할래.",
+            "reexplanation": "친구는 블록 놀이를 그만하고 쉬고 싶대.",
+            "focusPoints": [
+              "친구가 한 말을 떠올려 보기"
+            ],
+            "expressionExamples": [
+              "그래, 잠깐 쉬자"
+            ],
+            "relation": "친한 친구",
+            "place": "교실",
+            "topic": "블록 놀이",
+            "partnerRole": "친한 친구"
+          },
+          {
+            "sceneKey": "variant-1",
+            "sceneKind": "VARIANT",
+            "sceneDescription": "운동장에서 공놀이 중이야. 같은 반 친구가 그만하자고 해. 이제 그만할래.",
+            "opportunitySentence": "이제 그만할래.",
+            "reexplanation": "같은 반 친구는 공놀이를 그만하고 쉬고 싶대.",
+            "focusPoints": [
+              "친구가 한 말을 떠올려 보기"
+            ],
+            "expressionExamples": [
+              "그래, 잠깐 쉬자"
+            ],
+            "relation": "CLASSMATE",
+            "place": "운동장",
+            "topic": "공놀이",
+            "partnerRole": "같은 반 친구"
+          }
+        ],
+        "selfReview": {
+          "verdict": "APPROVE",
+          "model": "fake-review",
+          "promptVersion": "scenario-review.v1"
+        },
+        "generation": {
+          "model": "fake-model",
+          "promptVersion": "scenario-generation.v2",
+          "graphContextUsed": false,
+          "calls": 2
+        }
+      },
+      "goalKind": "CANDIDATE",
+      "candidateRef": "accept-stop",
+      "candidateVersion": 1,
+      "goalContext": {
+        "kind": "CANDIDATE",
+        "candidateRef": "accept-stop",
+        "candidateVersion": 1,
+        "targetExpression": "그래, 잠깐 쉬자",
+        "fourElements": {
+          "situation": "블록 놀이를 하다가 친구가 그만하자고 할 때",
+          "partner": "친한 친구",
+          "intent": "친구의 뜻을 받아들인다",
+          "expression": "그래, 잠깐 쉬자"
+        },
+        "skillRef": "NONE"
+      }
+    },
+    {
+      "goalSelectionId": "00000000-0000-4000-8000-000000000a02",
+      "order": 2,
+      "displayName": "차례 말하기",
+      "behaviorKey": "TAKE_TURN",
+      "behaviorVersion": 1,
+      "judgmentCriteria": "자기 차례를 말로 요청한다",
+      "firstScenario": null
+    }
+  ]
+}

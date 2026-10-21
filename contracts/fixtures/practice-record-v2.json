@@ -1,0 +1,32 @@
+{
+  "flowVersion": "practice-conversation-v1",
+  "scenes": [
+    {
+      "sceneRunId": "00000000-0000-4000-8000-000000000b01",
+      "goalRef": "00000000-0000-4000-8000-000000000a01",
+      "scenarioRef": "00000000-0000-4000-8000-000000000c01",
+      "sceneKind": "BASE",
+      "startedAt": "2026-10-20T01:00:05Z",
+      "liveOutcome": { "timing": "AFTER_REASK" },
+      "facts": ["REASK_RESOLVED"]
+    },
+    {
+      "sceneRunId": "00000000-0000-4000-8000-000000000b02",
+      "goalRef": "00000000-0000-4000-8000-000000000a01",
+      "scenarioRef": "00000000-0000-4000-8000-000000000c01",
+      "sceneKind": "VARIANT",
+      "startedAt": "2026-10-20T01:02:10Z",
+      "liveOutcome": { "timing": "IMMEDIATE" },
+      "facts": ["VARIANT_PLAYED"]
+    },
+    {
+      "sceneRunId": "00000000-0000-4000-8000-000000000b03",
+      "goalRef": "00000000-0000-4000-8000-000000000a02",
+      "scenarioRef": "00000000-0000-4000-8000-000000000c02",
+      "sceneKind": "BASE",
+      "startedAt": "2026-10-20T01:05:00Z",
+      "facts": [],
+      "variantSkipReason": "NO_VARIANT"
+    }
+  ]
+}
