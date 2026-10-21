@@ -51,12 +51,10 @@ public final class StructuredScenarioFlow {
         payload.put("opportunityCondition",opportunity);payload.put("relation",relation);
         payload.put("history",history.stream().map(e->Map.of("scenarioText",e.scenarioText(),"triggerScript",e.triggerScript())).toList());
         if(previous!=null)payload.put("sourceScenario",Map.of("scenarioText",previous.scenario().scenarioText(),"triggerScript",previous.scenario().triggerScript()));
-        var exposures=history.stream().filter(e->e.skillRef()!=null&&e.graphContext()!=null)
+        var exposures=history.stream().filter(e->e.skillRef()!=null&&ScenarioGraphContext.complete(e.graphContext()))
                 .map(e->new VariantPlanner.Exposure(e.skillRef(),e.graphContext())).toList();
         var knowledge=graph.open(session.guardianId(),session.childId(),original.skillRef(),exposures,deadline);
-        knowledge.context().ifPresent(value->{var seed=value.seed();payload.put("structureContext",Map.of(
-                "skillRef",seed.seedId(),"signature",seed.signature(),"invariantSentence",seed.invariantSentence(),
-                "preservationRule",seed.preservationRule(),"relationship",seed.relationship(),"situation",seed.situation()));});
+        knowledge.context().ifPresent(value->payload.put("structureContext",structureContext(value.seed())));
         payload.put("baseOnly",true); // 첫 BASE의 실제 좌표를 받은 뒤에만 변형 계획을 정한다.
         var clean=sanitizer.sanitize(payload,aliases.aliases(),LunaPurpose.SCENARIO_GENERATION).payload();
         String cleanOpportunity=(String)clean.get("opportunityCondition"),cleanRelation=(String)clean.get("relation");
@@ -68,4 +66,22 @@ public final class StructuredScenarioFlow {
         try{return generator.generate(new ScenarioScriptGenerator.Input(clean,aliases.aliases(),rules,knowledge.context().isPresent(),json.write(cleanGoal)),deadline);}
         catch(ScenarioScriptGenerator.ContentExhausted exhausted){exhausted.retryableDuplicate=duplicate.get();throw exhausted;}
     }
+
+    /**
+     * 씨앗의 고정값과 좌표 허용 어휘. 변형 계획은 BASE 좌표가 이 어휘 안에 글자 그대로 있을 때만 나오므로 모델에 목록을 준다.
+     * 목록은 계획기 상수를 정렬해 넣는다(Set 순회 순서는 실행마다 다를 수 있어 입력이 흔들리지 않게).
+     */
+    static Map<String,Object> structureContext(kr.mujoong.core.knowledge.KnowledgeSeed seed){
+        Map<String,Object> context=new LinkedHashMap<>();
+        context.put("skillRef",seed.seedId());context.put("signature",seed.signature());
+        context.put("invariantSentence",seed.invariantSentence());context.put("preservationRule",seed.preservationRule());
+        context.put("relationship",seed.relationship());context.put("situation",seed.situation());
+        context.put("allowedTopics",sorted(VariantPlanner.TOPICS));
+        context.put("allowedPlaces",sorted(VariantPlanner.PLACES));
+        context.put("allowedParticipants",sorted(VariantPlanner.PARTICIPANTS));
+        context.put("allowedRelationships",sorted(kr.mujoong.core.knowledge.KnowledgeSeed.RELATIONSHIPS));
+        context.put("allowedSituations",sorted(kr.mujoong.core.knowledge.KnowledgeSeed.SITUATIONS));
+        return context;
+    }
+    private static List<String> sorted(java.util.Set<String> values){return values.stream().sorted().toList();}
 }

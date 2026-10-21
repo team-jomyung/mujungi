@@ -30,6 +30,23 @@ class ScenarioRepositoryIT {
         var saved=save("새 상황",details);var loaded=repo.require(saved.scenarioId());assertThat(loaded.scenario()).isEqualTo(saved);assertThat(loaded.goalContextJson()).contains("CANDIDATE");
         assertThat(saved.partnerRoleText()).isEqualTo(ScenarioContentPolicy.PARTNER_ROLE);
     }
+    /** v3 그래프 경로 대본: 목표 상대(relation)는 자유 한국어, 관계 좌표는 preservation.relationship 열거값으로 저장 · 노출 이력에 남는다. */
+    @Test void v3GraphScriptRoundTripsAndExposesItsEnumeratedRelationshipCoordinate(){
+        var base=ScenarioContractTest.graphBase("아이와 친구","CLASSMATE");
+        var details=new ScenarioRepository.Details("scenario-script.v1",List.of(base.withPartnerRole(ScenarioContentPolicy.PARTNER_ROLE)),new Scenario.Review("APPROVE","fake","scenario-review.v1"),
+                new Scenario.Generation("fake",kr.mujoong.core.textai.ScenarioScriptProvider.GENERATION_PROMPT_VERSION,true,4,"graph-v7"),
+                JsonCodec.shared().write(new GoalContext(kr.mujoong.core.practicegoal.SavedGoalReader.SavedGoalView.Kind.CANDIDATE,"synthetic-candidate",2,"잠깐 쉬자",
+                        new kr.mujoong.core.practicegoal.FourElements("기회","같은 반 친구","멈추기","잠깐 쉬자"),"seed:S1",null,null)));
+        var saved=save("그래프 상황",details);var loaded=repo.require(saved.scenarioId());
+        assertThat(loaded.scenario()).isEqualTo(saved);
+        assertThat(loaded.scenario().generation().promptVersion()).isEqualTo("scenario-generation.v3");
+        assertThat(loaded.scenario().scenes().getFirst().relation()).isEqualTo("같은 반 친구");
+        expose(saved);
+        assertThat(history()).singleElement().satisfies(e->{
+            assertThat(e.skillRef()).isEqualTo("seed:S1");
+            assertThat(e.graphContext()).isEqualTo(new kr.mujoong.core.knowledge.VariantPlanner.Context("놀이","교실","아이와 친구","CLASSMATE","SCHOOL_GROUP"));
+        });
+    }
     @Test void legacySaveStillHasAbsentExtensions(){var value=save("기존 상황",null);assertThat(repo.require(value.scenarioId()).scenario()).isEqualTo(value);assertThat(value.scenes()).isNull();}
     @Test void issuedIsNotExposureAndEmptyHistoryIsLegitimate(){save("아직 발급만",null);assertThat(history()).isEmpty();}
     @Test void exposedOldSessionsAreComparedAndFutureIsExcluded(){var old=save("과거 노출",null);expose(old);var future=save("미래 노출",null);repo.expose(future.scenarioId(),UUID.randomUUID(),DbTestSupport.EPOCH.plusSeconds(1));assertThat(history()).extracting(ScenarioRepository.ExposureText::scenarioText).containsExactly(old.scenarioText());}

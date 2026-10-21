@@ -4,6 +4,7 @@ import java.time.Duration;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
+import kr.mujoong.contract.status.ActivityType;
 import kr.mujoong.realtime.config.RealtimeProperties;
 import kr.mujoong.realtime.runtime.TaskLauncher;
 import kr.mujoong.realtime.session.ChildContext;
@@ -84,27 +85,33 @@ public class ProviderConnector {
         this.activeProfiles = activeProfiles.clone();
     }
 
-    /** 연결 스레드를 띄운다. */
+    /** 자유대화 세션의 연결 스레드를 띄운다. */
     public Attempt connect(UUID sessionId, ChildContext childContext, Listener listener, Callback callback) {
+        return connect(sessionId, childContext, ActivityType.FREE_TALK, listener, callback);
+    }
+
+    /** 연결 스레드를 띄운다. 세션 지시문은 활동 종류의 본문으로 만든다. */
+    public Attempt connect(UUID sessionId, ChildContext childContext, ActivityType activity, Listener listener, Callback callback) {
         Objects.requireNonNull(sessionId, "sessionId");
         Objects.requireNonNull(childContext, "childContext");
+        Objects.requireNonNull(activity, "activity");
         Objects.requireNonNull(listener, "listener");
         Objects.requireNonNull(callback, "callback");
         Attempt attempt = new Attempt();
         attempt.thread = launcher.launch("provider-connect-" + sessionId,
-                () -> run(attempt, childContext, listener, callback));
+                () -> run(attempt, childContext, activity, listener, callback));
         if (attempt.isCancelled() && attempt.thread != null) {
             attempt.thread.interrupt();
         }
         return attempt;
     }
 
-    private void run(Attempt attempt, ChildContext childContext, Listener listener, Callback callback) {
+    private void run(Attempt attempt, ChildContext childContext, ActivityType activity, Listener listener, Callback callback) {
         if (!ProviderHosts.isConnectable(port.endpoint(), activeProfiles)) {
             callback.failed(ProviderUnavailableException.Reason.HOST_NOT_ALLOWED);
             return;
         }
-        ProviderRequestFactory.SessionStart request = factory.sessionStart(childContext);
+        ProviderRequestFactory.SessionStart request = factory.sessionStart(childContext, activity);
         ProviderSession session = null;
         try {
             session = port.open(listener, connectTimeout);

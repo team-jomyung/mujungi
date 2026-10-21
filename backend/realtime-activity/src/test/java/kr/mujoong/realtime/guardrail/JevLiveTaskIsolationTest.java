@@ -32,6 +32,7 @@ class JevLiveTaskIsolationTest {
     private static final String FAKE_KEY = "fake-jev-live-key-not-real";
     private static final String FAKE_URL = "https://jev-live.invalid/base";
     private static final String FAKE_MODEL = "jev-live-model-1";
+    private static final int SAMPLES = JevLiveProbe.SAMPLES.size();
     private static final JevLiveProbe.ClientFactory NEVER = (properties, key, budget, clock) -> {
         throw new AssertionError("키가 없으면 어댑터를 만들지 않는다");
     };
@@ -44,6 +45,7 @@ class JevLiveTaskIsolationTest {
     private static final class FakeClient implements JevLiveProbe.Inspector {
 
         final List<String> candidates = new ArrayList<>();
+        final List<GuardrailRequest> requests = new ArrayList<>();
         final List<String> keysSeen = new ArrayList<>();
         final List<GuardrailProperties> propertiesSeen = new ArrayList<>();
         private final Supplier<String> key;
@@ -58,6 +60,7 @@ class JevLiveTaskIsolationTest {
         public java.util.concurrent.CompletionStage<JevGuardrailClient.Inspection> inspect(GuardrailRequest request,
                 java.time.Instant deadline) {
             candidates.add(request.candidate());
+            requests.add(request);
             keysSeen.add(key.get());
             JevGuardrailClient.Inspection inspection;
             if (failSecond && candidates.size() == 2) {
@@ -140,6 +143,25 @@ class JevLiveTaskIsolationTest {
     }
 
     @Test
+    void theSamplesCoverEveryGuardrailModeAndEachPracticeModeHasAllowBlockAndBorderlineCases() {
+        assertThat(JevLiveProbe.SAMPLES).extracting(JevLiveProbe.Sample::mode).containsAll(List.of(GuardrailRequest.Mode.values()));
+        assertThat(JevLiveProbe.SAMPLES).extracting(JevLiveProbe.Sample::id).doesNotHaveDuplicates();
+        for (GuardrailRequest.Mode mode : List.of(GuardrailRequest.Mode.PRACTICE_PEER, GuardrailRequest.Mode.PRACTICE_COACH)) {
+            List<JevLiveProbe.Sample> practice = JevLiveProbe.SAMPLES.stream().filter(s -> s.mode() == mode).toList();
+            assertThat(practice).as(mode + " 표본").hasSizeGreaterThanOrEqualTo(4)
+                    .anyMatch(s -> s.expect() == JevLiveProbe.Expect.ALLOW)
+                    .anyMatch(s -> s.expect() == JevLiveProbe.Expect.NOT_ALLOW)
+                    .anyMatch(s -> s.expect() == JevLiveProbe.Expect.BORDERLINE);
+            assertThat(practice).as(mode + " 맥락은 연습 대화(아이 말 뒤 친구 되물음)").allSatisfy(s -> assertThat(s.context())
+                    .extracting(GuardrailRequest.ContextTurn::speaker).contains(GuardrailRequest.Speaker.CHILD, GuardrailRequest.Speaker.PARTNER)
+                    .hasSizeLessThanOrEqualTo(GuardrailRequest.CONTEXT_MAX_TURNS));
+        }
+        // 기존 자유대화 표본 다섯은 그대로 둔다(10/18 실호출과 비교할 수 있게)
+        assertThat(JevLiveProbe.SAMPLES.stream().filter(s -> s.id().startsWith("S")).map(JevLiveProbe.Sample::mode))
+                .hasSize(5).containsOnly(GuardrailRequest.Mode.FREE_TALK);
+    }
+
+    @Test
     void theOperationalThresholdIsTheTemporaryDefaultFromApplicationYmlAndAnEnvOverrideMustStayInRange() throws IOException {
         assertThat(JevLiveProbe.operationalThreshold(Map.<String, String>of()::get)).as("application.yml 기본값(임시 시험값)").isEqualTo(0.5);
         assertThat(JevLiveProbe.operationalThreshold(Map.of(JevLiveProbe.THRESHOLD_ENV, " 0.75 ")::get)).isEqualTo(0.75);
@@ -173,14 +195,20 @@ class JevLiveTaskIsolationTest {
         assertThat(result.outcome()).isEqualTo(JevLiveProbe.Outcome.REACHED);
         assertThat(clients).hasSize(1);
         assertThat(clients.getFirst().candidates).hasSameSizeAs(JevLiveProbe.SAMPLES).doesNotHaveDuplicates();
+        assertThat(clients.getFirst().requests).extracting(GuardrailRequest::mode)
+                .as("표본마다 운영과 같은 검사 모드로 보낸다").isEqualTo(JevLiveProbe.SAMPLES.stream().map(JevLiveProbe.Sample::mode).toList());
+        assertThat(clients.getFirst().requests).extracting(GuardrailRequest::recentContext)
+                .isEqualTo(JevLiveProbe.SAMPLES.stream().map(JevLiveProbe.Sample::context).toList());
         assertThat(clients.getFirst().keysSeen).as("키는 호출 때마다 env에서 읽는다").containsOnly(FAKE_KEY);
         String written = Files.readString(report, StandardCharsets.UTF_8);
         assertThat(written).startsWith("outcome=REACHED evidence=REAL_API_SYNTHETIC")
                 .contains("통과 문턱=0.5000 (임시 시험값, AI 성능 시험으로 확정",
-                        "| 표본 | 기대 | 판정 | 실패 종류 | 고른 라벨 | PASS 확률 | 사유 코드 | 지연 ms |",
-                        "| S1-benign-offer | ALLOW | ALLOW | - | PASS | 0.8123 | PASS | 210 |",
-                        "| S2-diagnosis | NOT_ALLOW | BLOCK | - | DIAGNOSIS | 0.0456 | DIAGNOSIS | 340 |", "판정 받음: 5/5", "model=" + FAKE_MODEL,
-                        "응답 model=" + FAKE_MODEL)
+                        "| 표본 | 모드 | 기대 | 판정 | 실패 종류 | 고른 라벨 | PASS 확률 | 사유 코드 | 지연 ms |",
+                        "| S1-benign-offer | FREE_TALK | ALLOW | ALLOW | - | PASS | 0.8123 | PASS | 210 |",
+                        "| S2-diagnosis | FREE_TALK | NOT_ALLOW | BLOCK | - | DIAGNOSIS | 0.0456 | DIAGNOSIS | 340 |",
+                        "| P1-peer-reask | PRACTICE_PEER | ALLOW | BLOCK | - | DIAGNOSIS | 0.0456 | DIAGNOSIS | 340 |",
+                        "판정 받음: " + SAMPLES + "/" + SAMPLES, "model=" + FAKE_MODEL, "응답 model=" + FAKE_MODEL,
+                        "| 모드 | 기대 | 표본 | 최솟값 | 최댓값 |", "| 문턱 | 모드 | 허용 기대인데 막힘 | 차단 기대인데 통과 |")
                 .doesNotContain(FAKE_KEY, FAKE_URL, "jev-live.invalid");
         for (String candidate : clients.getFirst().candidates) {
             assertThat(written).as("후보 문장 원문은 보고서에 없다(R-F14)").doesNotContain(candidate);
@@ -199,7 +227,57 @@ class JevLiveTaskIsolationTest {
         assertThat(result.outcome()).isEqualTo(JevLiveProbe.Outcome.NOT_REACHED);
         String written = Files.readString(report, StandardCharsets.UTF_8);
         assertThat(written).startsWith("outcome=NOT_REACHED evidence=REAL_API_SYNTHETIC")
-                .contains("| S2-diagnosis | NOT_ALLOW | FAILED | TIMEOUT | - | - | TIMEOUT | 800 |", "판정 받음: 4/5");
-        assertThat(JevLiveProbe.oneLine(result)).isEqualTo("jevLive outcome=NOT_REACHED reached=4/5");
+                .contains("| S2-diagnosis | FREE_TALK | NOT_ALLOW | FAILED | TIMEOUT | - | - | TIMEOUT | 800 |",
+                        "판정 받음: " + (SAMPLES - 1) + "/" + SAMPLES);
+        assertThat(JevLiveProbe.oneLine(result)).isEqualTo("jevLive outcome=NOT_REACHED reached=" + (SAMPLES - 1) + "/" + SAMPLES);
+    }
+
+    /** 표본 기대별로 PASS 확률을 정해 둔 가짜 어댑터(늘 PASS가 1순위). 문턱별 다시 계산을 확인한다. */
+    private static JevLiveProbe.Inspector passingWith(Map<JevLiveProbe.Expect, Double> byExpect) {
+        Map<String, JevLiveProbe.Expect> expects = new java.util.HashMap<>();
+        JevLiveProbe.SAMPLES.forEach(sample -> expects.put(sample.candidate(), sample.expect()));
+        return (request, deadline) -> {
+            double pass = byExpect.get(expects.get(request.candidate()));
+            GuardrailVerdict verdict = pass >= 0.5 ? GuardrailVerdict.allow("PASS", request.policyVersion(), 100, List.of(), List.of())
+                    : GuardrailVerdict.review(JevGuardrailClient.REASON_BELOW_THRESHOLD, request.policyVersion(), 100, List.of(), List.of());
+            return java.util.concurrent.CompletableFuture.completedFuture(new JevGuardrailClient.Inspection(verdict, "PASS", pass, FAKE_MODEL));
+        };
+    }
+
+    private static long count(JevLiveProbe.Expect expect, GuardrailRequest.Mode mode) {
+        return JevLiveProbe.SAMPLES.stream().filter(s -> s.expect() == expect && s.mode() == mode).count();
+    }
+
+    @Test
+    void theReportRecomputesMisjudgementsAtEachCandidateThresholdFromTheSameAnswers(@TempDir Path dir) throws IOException {
+        Map<String, String> env = Map.of(GuardrailStartupRules.API_KEY_ENV, FAKE_KEY, JevLiveProbe.BASE_URL_ENV, FAKE_URL,
+                JevLiveProbe.MODEL_ENV, FAKE_MODEL);
+        Map<JevLiveProbe.Expect, Double> probabilities = Map.of(JevLiveProbe.Expect.ALLOW, 0.55, JevLiveProbe.Expect.NOT_ALLOW, 0.45,
+                JevLiveProbe.Expect.BORDERLINE, 0.5);
+        Path report = dir.resolve("report.txt");
+
+        JevLiveProbe.Result result = new JevLiveProbe(env::get, report, (p, key, b, c) -> passingWith(probabilities), new MutableClock()).run();
+
+        assertThat(result.outcome()).isEqualTo(JevLiveProbe.Outcome.REACHED);
+        String written = Files.readString(report, StandardCharsets.UTF_8);
+        GuardrailRequest.Mode peer = GuardrailRequest.Mode.PRACTICE_PEER;
+        GuardrailRequest.Mode coach = GuardrailRequest.Mode.PRACTICE_COACH;
+        // 0.4: 차단 기대(0.45)가 통과한다. 0.5: 둘 다 맞다. 0.6: 허용 기대(0.55)가 막힌다. 경계 사례(0.5)는 세지 않는다
+        assertThat(written).contains(
+                "| 0.4000 | PRACTICE_PEER | 0 | " + count(JevLiveProbe.Expect.NOT_ALLOW, peer) + " |",
+                "| 0.5000 | PRACTICE_PEER | 0 | 0 |",
+                "| 0.6000 | PRACTICE_PEER | " + count(JevLiveProbe.Expect.ALLOW, peer) + " | 0 |",
+                "| 0.4000 | PRACTICE_COACH | 0 | " + count(JevLiveProbe.Expect.NOT_ALLOW, coach) + " |",
+                "| 0.6000 | PRACTICE_COACH | " + count(JevLiveProbe.Expect.ALLOW, coach) + " | 0 |",
+                "| PRACTICE_PEER | BORDERLINE | " + count(JevLiveProbe.Expect.BORDERLINE, peer) + "/" + count(JevLiveProbe.Expect.BORDERLINE, peer)
+                        + " | 0.5000 | 0.5000 |",
+                "| PRACTICE_COACH | ALLOW | " + count(JevLiveProbe.Expect.ALLOW, coach) + "/" + count(JevLiveProbe.Expect.ALLOW, coach)
+                        + " | 0.5500 | 0.5500 |");
+        long decided = JevLiveProbe.SAMPLES.stream().filter(s -> s.expect() != JevLiveProbe.Expect.BORDERLINE).count();
+        assertThat(written).contains("기대와 같음(관측, 합격 조건 아님): " + decided + "/" + decided + " (경계 사례 제외)");
+        for (JevLiveProbe.Sample sample : JevLiveProbe.SAMPLES) {
+            assertThat(written).as("후보 문장 · 맥락 원문은 보고서에 없다(R-F14)").doesNotContain(sample.candidate());
+            sample.context().forEach(turn -> assertThat(written).doesNotContain(turn.text()));
+        }
     }
 }

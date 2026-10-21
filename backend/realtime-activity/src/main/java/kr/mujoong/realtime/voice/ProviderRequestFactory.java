@@ -7,8 +7,10 @@ import java.util.Base64;
 import java.util.List;
 import java.util.Objects;
 import kr.mujoong.contract.audio.AudioFrameCodec;
+import kr.mujoong.contract.status.ActivityType;
 import kr.mujoong.realtime.dialog.DialogInstructions;
 import kr.mujoong.realtime.dialog.InstructionTemplates;
+import kr.mujoong.realtime.dialog.LiveSessionInstructions;
 import kr.mujoong.realtime.session.ChildContext;
 import org.springframework.stereotype.Component;
 
@@ -102,14 +104,36 @@ public class ProviderRequestFactory {
         }
     }
 
+    private final LiveSessionInstructions live;
+
+    /** 실행 자원의 활동별 세션 지시문으로 만든다(자원이 틀리면 빈 생성에서 기동을 거부한다). */
+    public ProviderRequestFactory() {
+        this(LiveSessionInstructions.loadDefault());
+    }
+
+    public ProviderRequestFactory(LiveSessionInstructions live) {
+        this.live = Objects.requireNonNull(live, "live");
+    }
+
     /** 세션 시작 요청(기본 표본율). childContext만 받는다(세션 패키지 전체 · 08 문맥을 인자로 받지 않는다). */
     public SessionStart sessionStart(ChildContext context) {
         return sessionStart(context, AUDIO_RATE);
     }
 
-    /** 세션 시작 요청(표본율 지정, 실호출 도구가 16kHz 같은 값을 시험한다). */
+    /** 활동 종류별 세션 시작 요청(기본 표본율). 연결부({@link ProviderConnector})만 부른다. */
+    SessionStart sessionStart(ChildContext context, ActivityType activity) {
+        return sessionStart(context, activity, AUDIO_RATE);
+    }
+
+    /** 자유대화 세션 시작 요청(표본율 지정, 실호출 도구가 16kHz 같은 값을 시험한다). */
     public SessionStart sessionStart(ChildContext context, int rate) {
+        return sessionStart(context, ActivityType.FREE_TALK, rate);
+    }
+
+    /** 세션 시작 요청(활동 종류 · 표본율 지정). */
+    SessionStart sessionStart(ChildContext context, ActivityType activity, int rate) {
         Objects.requireNonNull(context, "context");
+        LiveSessionInstructions.Body body = live.of(activity);
         if (rate <= 0) {
             throw new IllegalArgumentException("표본율은 0보다 커야 한다");
         }
@@ -118,7 +142,7 @@ public class ProviderRequestFactory {
                 context.age() == null ? null : Math.max(MIN_AGE, Math.min(MAX_AGE, context.age())),
                 limitInterests(context.interests()));
         return new SessionStart(TYPE_SESSION_START,
-                new SessionBody(MODEL, instructions(data), new AudioSpec(new AudioFormat(AUDIO_TYPE, rate))));
+                new SessionBody(MODEL, instructions(data, body), new AudioSpec(new AudioFormat(AUDIO_TYPE, rate))));
     }
 
     /** 입력 음성 한 프레임. 본문은 변환하지 않는다(J131 무변환). */
@@ -150,11 +174,17 @@ public class ProviderRequestFactory {
         return instructionsAppend(eventId, Objects.requireNonNull(start, "start").content());
     }
 
-    /** 서버 템플릿 지시문(문장은 DialogPolicy의 역할 지시문, U3-R14). 아이 문맥 값은 따옴표 안 데이터로만 들어간다. */
-    static String instructions(ChildContextData data) {
-        // U4b(BR2.7): 역할 지시문 끝에 참여 확인 뒤 첫 질문 문장을 더한다
-        return DialogInstructions.role(data.displayName(), data.age(), data.interests()) + " "
-                + DialogInstructions.JOIN_FIRST_QUESTION;
+    /** 세션 시작에 쓰는 활동별 본문 묶음(세션 사건에 판 · 해시를 남기는 데 쓴다. 본문은 이 공장만 지시문에 넣는다). */
+    public LiveSessionInstructions liveInstructions() {
+        return live;
+    }
+
+    /**
+     * 서버 템플릿 지시문: 공통 역할 문장(아이 문맥 값은 따옴표 안 데이터로만) 뒤에 활동 본문을 붙인다. 자유대화 본문은 참여 확인 뒤 첫 질문
+     * 문장이고, 연습 본문은 그 문장 없이 역할놀이 규칙만 둔다(장면과 질문은 연습 흐름의 지시로 온다).
+     */
+    static String instructions(ChildContextData data, LiveSessionInstructions.Body body) {
+        return DialogInstructions.role(data.displayName(), data.age(), data.interests()) + " " + body.text();
     }
 
     /**

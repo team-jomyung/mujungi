@@ -9,7 +9,7 @@ import kr.mujoong.realtime.voice.ProviderPort;
 import kr.mujoong.realtime.voice.ProviderRequestFactory;
 
 /**
- * 시험용 공급자 입구(realtime {@link ProviderPort} 구현이라 이 앱의 src/test에 둔다). 연결 거부 · started 없음 · 정상을 고르고, 열린
+ * 시험용 공급자 입구(realtime {@link ProviderPort} 구현이라 이 앱의 src/test에 둔다). 연결 거부 · started 없음 · 시작 전송 실패 · 정상을 고르고, 열린
  * 세션으로 공급자 이벤트를 흘려 넣으며 받은 요청을 기록한다. {@link #signalClosedOnClose}를 켜면 세션 닫기가 실제
  * {@code ProviderClient}처럼 닫기를 부른 스레드에서 리스너에 Closed를 한 번 알린다(리뷰 F2 시험).
  */
@@ -22,7 +22,9 @@ public final class FakeProviderPort implements ProviderPort {
         /** 연결 거부. */
         REFUSE,
         /** 열리지만 session.started를 보내지 않는다. */
-        NO_STARTED
+        NO_STARTED,
+        /** 열리지만 session.start 전송이 실패한다(연결 뒤 시작 전송 실패). */
+        START_FAILS
     }
 
     private final URI endpoint;
@@ -111,7 +113,10 @@ public final class FakeProviderPort implements ProviderPort {
         }
 
         @Override
-        public void start(ProviderRequestFactory.SessionStart request) {
+        public void start(ProviderRequestFactory.SessionStart request) throws ProviderUnavailableException {
+            if (mode == Mode.START_FAILS) {
+                throw new ProviderUnavailableException(ProviderUnavailableException.Reason.CLOSED);
+            }
             record(request);
             if (mode == Mode.OK) {
                 listener.onEvent(new ProviderEvent.Started("prov-session-1"));

@@ -123,6 +123,6 @@ class GraphWorkflowIT {
   }
   static ScenarioScript.Scene scene(String key,String kind,VariantPlanner.Context c,KnowledgeSeed seed,VariantPlanner.Plan plan){
     return new ScenarioScript.Scene(key,kind,c.topic()+" 중 "+c.place()+"에서 친구가 놀이를 준비한다. 친구가 손짓한다.","친구가 손짓한다.","함께할 준비를 해.",List.of(),List.of(),c.relationship(),c.place(),c.topic(),
-      new ScenarioScript.Preservation(seed.seedId(),seed.invariantSentence(),seed.preservationRule(),plan.grade(),plan.changedField(),c.participants(),c.situation()),null);
+      new ScenarioScript.Preservation(seed.seedId(),seed.invariantSentence(),seed.preservationRule(),plan.grade(),plan.changedField(),c.participants(),c.situation(),c.relationship()),null);
   }
 }

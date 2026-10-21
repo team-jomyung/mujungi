@@ -70,7 +70,16 @@ public final class ScenarioGraphContext {
                     &&expected.context().equals(coordinates(variant));
         }
     }
+    /**
+     * 변형 계획 좌표. 관계는 장면의 {@code relation}(목표 상대, 자유 문자열)이 아니라 {@code preservation.relationship}(열거값)에서 읽는다.
+     * 두 값을 한 필드로 쓰면 자유 한국어 상대가 관계 열거값에 없어 계획이 나오지 않는다.
+     */
     static VariantPlanner.Context coordinates(Scene scene){
-        return new VariantPlanner.Context(scene.topic(),scene.place(),scene.preservation().participants(),scene.relation(),scene.preservation().situation());
+        var p=scene.preservation();
+        return new VariantPlanner.Context(scene.topic(),scene.place(),p.participants(),p.relationship(),p.situation());
+    }
+    /** 다섯 좌표가 모두 있는가. 관계 좌표가 없던 옛 노출 행은 계획 입력에서 뺀다(빈 좌표로 횟수를 세지 않는다). */
+    static boolean complete(VariantPlanner.Context c){
+        return c!=null&&c.topic()!=null&&c.place()!=null&&c.participants()!=null&&c.relationship()!=null&&c.situation()!=null;
     }
 }
