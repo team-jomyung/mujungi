@@ -75,7 +75,7 @@ public final class StructuredScenarioFlow {
     static String graphRelation(String relation,String seedRelationship){
         if(seedRelationship==null||kr.mujoong.core.knowledge.KnowledgeSeed.RELATIONSHIPS.contains(relation))return relation;
         boolean equivalent=switch(relation){
-            case "친구" -> java.util.Set.of("FRIEND_CLOSE","FRIEND_CASUAL").contains(seedRelationship);
+            case "친구", "같이 놀 친구" -> java.util.Set.of("FRIEND_CLOSE","FRIEND_CASUAL").contains(seedRelationship);
             case "친한 친구" -> "FRIEND_CLOSE".equals(seedRelationship);
             case "반 친구", "같은 반 친구" -> "CLASSMATE".equals(seedRelationship);
             case "선생님", "교사" -> "TEACHER".equals(seedRelationship);

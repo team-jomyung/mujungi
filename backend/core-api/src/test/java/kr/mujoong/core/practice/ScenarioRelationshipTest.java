@@ -16,9 +16,11 @@ class ScenarioRelationshipTest {
     @Test void readableFriendGoalUsesTheEquivalentGraphCoordinate(){
         assertThat(StructuredScenarioFlow.graphRelation("친구","FRIEND_CLOSE")).isEqualTo("FRIEND_CLOSE");
         assertThat(StructuredScenarioFlow.graphRelation("친구","FRIEND_CASUAL")).isEqualTo("FRIEND_CASUAL");
+        assertThat(StructuredScenarioFlow.graphRelation("같이 놀 친구","FRIEND_CASUAL")).isEqualTo("FRIEND_CASUAL");
     }
     @Test void graphCannotReplaceTheGoalWithADifferentPartner(){
         assertThat(StructuredScenarioFlow.graphRelation("친구","TEACHER")).isEqualTo("친구");
+        assertThat(StructuredScenarioFlow.graphRelation("같이 놀 친구","TEACHER")).isEqualTo("같이 놀 친구");
         assertThat(StructuredScenarioFlow.graphRelation("선생님","FRIEND_CLOSE")).isEqualTo("선생님");
         assertThat(StructuredScenarioFlow.graphRelation("CLASSMATE","FRIEND_CLOSE")).isEqualTo("CLASSMATE");
         assertThat(StructuredScenarioFlow.graphRelation("친한 친구","FRIEND_CASUAL")).isEqualTo("친한 친구");
@@ -26,6 +28,7 @@ class ScenarioRelationshipTest {
     }
     @Test void withoutGraphTheOriginalRelationshipIsPreserved(){
         assertThat(StructuredScenarioFlow.graphRelation("친구",null)).isEqualTo("친구");
+        assertThat(StructuredScenarioFlow.graphRelation("같이 놀 친구",null)).isEqualTo("같이 놀 친구");
     }
     @Test void providerPayloadAndValidationUseTheSameCodeWithoutChangingSavedGoal(){
         var f=new ScenarioGraphTest();f.setup();
