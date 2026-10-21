@@ -417,6 +417,64 @@ class GenerationSendExecutorTest {
     }
 
     @Test
+    void aGapOnTheTranscriptTimelineSplitsAQuestionFromTheShortYesWhileWaitingForTheChild() {
+        h.boot();
+        h.ackAndReady();
+
+        // 참여 관문 안정화 (2): 1500ms 조용 시간 안에 이어졌어도 전사 시간선의 쉼(800ms ≥ 700ms)이 두 말을 나눈다
+        h.provider.last().emit(new ProviderEvent.InputTranscriptDelta(null, "내 말이 들리니?", 0, 1200));
+        h.drain();
+        h.advance(Duration.ofMillis(300));
+        h.provider.last().emit(new ProviderEvent.InputTranscriptDelta(null, "응", 2000, 2300));
+        h.drain();
+        assertThat(h.executor.status()).as("뒤의 '응'은 아직 묶는 중").isEqualTo(SessionStatus.WAITING_CHILD);
+        h.advance(h.settings.inputTranscriptQuiet());
+
+        assertThat(h.executor.status()).isEqualTo(SessionStatus.ACTIVE);
+        h.recorder.tick();
+        assertThat(h.store.sessionEvents).filteredOn(event -> event.getEventType().equals(JoinFlow.EVENT_JOIN_RE_PROMPTED))
+                .as("앞 전사가 불명확으로 되묻기 한 번").singleElement()
+                .satisfies(event -> assertThat(event.getPayloadJson()).contains("\"cause\":\"UNCLEAR\""));
+        assertThat(h.logs.events(EventCode.JOIN_REPLY)).extracting(LogCapture::attrs)
+                .extracting(attrs -> attrs.get("joinReply") + "/" + attrs.get("joinAction"))
+                .containsExactly("UNCLEAR/CLARIFY", "ACCEPT/START");
+    }
+
+    @Test
+    void aGapOnTheTimelineSplitsTwoActiveUtterancesBeforeTheQuietTime() {
+        h.activate();
+
+        h.provider.last().emit(new ProviderEvent.InputTranscriptDelta(null, "하나", 0, 400));
+        h.drain();
+        h.advance(Duration.ofMillis(200));
+        h.provider.last().emit(new ProviderEvent.InputTranscriptDelta(null, "둘", 1500, 1800));
+        h.drain();
+        assertThat(childFinals()).as("간격(1100ms)이 앞 발화를 곧바로 확정한다").containsExactly("하나");
+        h.advance(h.settings.inputTranscriptQuiet());
+
+        assertThat(childFinals()).containsExactly("하나", "둘");
+    }
+
+    @Test
+    void piecesWithTheSameStartAndEndOrAShortGapStayOneTranscript() {
+        h.activate();
+
+        // 가짜 공급자 모양: 두 조각에 같은 start_ms = end_ms
+        h.provider.last().emit(new ProviderEvent.InputTranscriptDelta(null, "공룡이", 1000, 1000));
+        h.provider.last().emit(new ProviderEvent.InputTranscriptDelta(null, " 좋아", 1000, 1000));
+        h.drain();
+        h.advance(h.settings.inputTranscriptQuiet());
+        // 발화 간격보다 1ms 짧은 쉼
+        long gap = h.settings.inputUtteranceGap().toMillis();
+        h.provider.last().emit(new ProviderEvent.InputTranscriptDelta(null, "나는", 5000, 5300));
+        h.provider.last().emit(new ProviderEvent.InputTranscriptDelta(null, " 티라노", 5300 + gap - 1, 6000 + gap));
+        h.drain();
+        h.advance(h.settings.inputTranscriptQuiet());
+
+        assertThat(childFinals()).containsExactly("공룡이 좋아", "나는 티라노");
+    }
+
+    @Test
     void aStopIntentSpokenAsDeltasIsJudgedFromTheGroupedTranscript() {
         h.activate();
 

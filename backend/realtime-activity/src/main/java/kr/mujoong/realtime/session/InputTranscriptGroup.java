@@ -1,5 +1,6 @@
 package kr.mujoong.realtime.session;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Objects;
 import kr.mujoong.realtime.voice.ProviderPort.ProviderEvent;
@@ -65,6 +66,16 @@ final class InputTranscriptGroup {
     /** 묶음을 처음 연 횟수(단조 증가). */
     long opens() {
         return opens;
+    }
+
+    /**
+     * 열린 묶음이 있고, 새 조각의 전사 시간선 시작이 앞 조각 끝에서 {@code gap} 이상 떨어졌는가. 어느 한쪽 시간이 없으면(-1) 거짓이다 — 가짜
+     * 공급자처럼 조각마다 같은 {@code start_ms = end_ms}를 보내면 나뉘지 않는다.
+     */
+    boolean startsNewUtterance(ProviderEvent.InputTranscriptDelta delta, Duration gap) {
+        Objects.requireNonNull(delta, "delta");
+        Objects.requireNonNull(gap, "gap");
+        return id != null && lastEndMs >= 0 && delta.startMs() >= 0 && delta.startMs() - lastEndMs >= gap.toMillis();
     }
 
     /**

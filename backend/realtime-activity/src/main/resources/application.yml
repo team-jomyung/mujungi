@@ -130,6 +130,8 @@ mujoong:
     provider:
       input-transcript-quiet: 1500ms
       new-speech-margin: 700ms
+      # 참여 관문 안정화 (2): 임시값. 조각 시간선의 쉼이 이만큼이면 앞 발화를 먼저 확정한다(실측으로 확정, contracts/timing.md 14절)
+      input-utterance-gap: 700ms
   outbox:
     poll-interval: 500ms
     batch-size: 20

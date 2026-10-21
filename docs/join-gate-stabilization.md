@@ -69,6 +69,29 @@ PR은 둘로 나눈다.
   `StopConfirmFlowTest` `theConfirmationSharesTheJoinClassifier…`. 기존 행 · AC6.3.x 경계 시험은 그대로 통과한다.
 - **문서**: 계약 변경 없음.
 
+### (2) 입력 전사 묶음을 전사 시간선 간격으로도 나누기 (PR-A)
+
+- **바꾼 동작**: 새 시간 키 `mujoong.timing.provider.input-utterance-gap`(임시 `700ms`). 묶음이 열려 있고 새 조각의 `start_ms`와 앞 조각의 `end_ms`가
+  모두 0 이상이며 `start_ms − 앞 end_ms ≥ gap`이면,
+  1. 열린 묶음을 조용 시계(`input-transcript-quiet`)가 울린 것과 같은 길(`onInputTranscriptQuiet`)로 먼저 확정하고,
+  2. 새 조각으로 새 묶음을 연다.
+  - 한쪽 시간이 -1이면 지금처럼 묶는다. 가짜 공급자 두 곳(`tools/fake-provider/scenarios.mjs` · `FakeProviderWsServer`)은 조각마다 같은
+    `start_ms = end_ms`를 보내 나뉘지 않으므로 `verify.sh` · 통합 시험 동작은 그대로다.
+  - 앞 발화의 확정이 상태를 바꿀 수 있어(WAITING_CHILD → ACTIVE) `onInputTranscriptDelta` · 정산 창의 `onLateProviderEvent`는 묶은 뒤의 상태 ·
+    묶음 id를 읽는다. 앞 발화로 세션이 끝나 정산 창도 아니면 새 조각은 버린다.
+- **고른 방안과 까닭**: 지시서 권장안 그대로다. 1500ms 조용 시계만 쓰면 "내 말이 들리니?" 뒤 1초 쉬고 말한 "응"이 한 전사로 합쳐져 UNCLEAR가 된다
+  (지시서 1.3 후보 2). 공급자 조각에는 항목 id가 없지만 전사 시간선은 있으므로 그것으로 나눈다. 700ms는 실측 전 임시값이다(JOIN-GATE-A10).
+  묶음을 연 서버 시각 · 조각 수 · 최대 간격 · 재생 중은 (0)에서 이미 `InputTranscriptGroup`이 쥔다.
+- **바꾼 파일**: `config/RealtimeTimingProperties.java`(`ProviderTiming` 셋째 값 · 양수 검사), `session/SessionExecutor.java`(`Settings.inputUtteranceGap` ·
+  `from()` · `groupInputDelta`), `session/InputTranscriptGroup.java`(`startsNewUtterance`), `application.yml` · `application-test.yml`(같은 700ms —
+  나눔 기준이라 시험에서 줄이지 않는다), 시험 쪽 `Settings` 생성 셋(`SessionHarness` · `SessionTimersTest` · `SessionExecutorFaultTest`).
+- **시험**: `GenerationSendExecutorTest` A7 절에 셋 — 참여 확인 중 "내 말이 들리니?"(0 ~ 1200) → 300ms 뒤 "응"(2000 ~ 2300) → ACTIVE이고
+  `JOIN_RE_PROMPTED`(UNCLEAR) 1건 · `JOIN_REPLY` `UNCLEAR/CLARIFY` → `ACCEPT/START`, ACTIVE에서 "하나"(0 ~ 400) · "둘"(1500 ~ 1800)이 조용 시간
+  전에 나뉨, 같은 `start_ms = end_ms` · 699ms 쉼은 한 전사. `InputTranscriptGroupTest`에 경계 699/700ms · -1 사례. 인자 2개 조각을 쓰는 기존
+  시험은 그대로 통과한다. 연습 흐름 태그 재시험(`-PincludeTags=practice-flow,session-runtime,voice-session,judgment-turn`) 961건 통과.
+- **문서 · 설정(R-M5 · R-M10, 같은 커밋)**: `contracts/timing.md` 14절 새 행과 머리말, `contracts/ai-io.md` 3절 입력 전사 묶음 문단,
+  `contracts/deviations.md` (JG-a). 화면이 읽지 않는 서버 키라 `timing-defaults.json`에는 넣지 않는다. `ConfigKeyContractTest` · `TimeLiteralScanTest` 통과.
+
 (다음 항목은 작성 중)
 
 ## 4. 설계 편차

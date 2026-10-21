@@ -122,6 +122,7 @@ public final class SessionExecutor {
      * @param inputTranscriptQuiet 입력 전사 조각이 이만큼 오지 않으면 그 묶음을 확정 전사로 본다({@code mujoong.timing.provider.input-transcript-quiet}, 설계 개정 A7)
      * @param newSpeechMargin 지시 뒤 새 말의 전사 시작에 더하는 여유({@code mujoong.timing.provider.new-speech-margin}, 설계 개정 A4)
      * @param instructionWait 지시를 보낸 뒤 새 말이 시작하기를 기다리는 시한({@code mujoong.timing.judgment.response-ready}, 지시 송신 시각부터, 설계 개정 A3)
+     * @param inputUtteranceGap 조각 시간선에서 앞 조각 끝과 새 조각 시작이 이만큼 떨어지면 앞 묶음을 먼저 확정한다({@code mujoong.timing.provider.input-utterance-gap})
      */
     public record Settings(
             Duration deviceAckTimeout,
@@ -136,7 +137,8 @@ public final class SessionExecutor {
             Lifecycle lifecycle,
             Duration inputTranscriptQuiet,
             Duration newSpeechMargin,
-            Duration instructionWait) {
+            Duration instructionWait,
+            Duration inputUtteranceGap) {
 
         /**
          * U4b 세션 생애 시간 값(contracts/timing.md, 모두 설정 키에서 온다).
@@ -175,6 +177,7 @@ public final class SessionExecutor {
             Objects.requireNonNull(inputTranscriptQuiet, "inputTranscriptQuiet");
             Objects.requireNonNull(newSpeechMargin, "newSpeechMargin");
             Objects.requireNonNull(instructionWait, "instructionWait");
+            Objects.requireNonNull(inputUtteranceGap, "inputUtteranceGap");
             Objects.requireNonNull(deviceAckTimeout, "deviceAckTimeout");
             Objects.requireNonNull(closingConfirm, "closingConfirm");
             Objects.requireNonNull(disconnect, "disconnect");
@@ -196,7 +199,8 @@ public final class SessionExecutor {
                     properties.session().timerTick(), properties.limits().sessionInputQueueFrames(),
                     properties.limits().sessionControlQueue(), properties.transcript().uncertainBelowPercent(),
                     Lifecycle.from(properties), properties.timing().provider().inputTranscriptQuiet(),
-                    properties.timing().provider().newSpeechMargin(), properties.timing().judgment().responseReady());
+                    properties.timing().provider().newSpeechMargin(), properties.timing().judgment().responseReady(),
+                    properties.timing().provider().inputUtteranceGap());
         }
     }
 
@@ -2002,7 +2006,7 @@ public final class SessionExecutor {
             }
             case ProviderEvent.InputTranscriptDelta delta -> {
                 String groupId = groupInputDelta(delta, at);
-                if (ctx.consentWithdrawnAt() == null && startedBeforeEnd(groupId, at)) {
+                if (groupId != null && ctx.consentWithdrawnAt() == null && startedBeforeEnd(groupId, at)) {
                     ctx.transcripts().childDelta(groupId, delta.delta(), at);
                 }
             }
@@ -2115,8 +2119,11 @@ public final class SessionExecutor {
      * 없으면 {@link #onInputTranscriptQuiet}가 그 묶음을 확정 전사로 만든다. 조각의 저장 규칙(동의 철회 · 참여 전 · 출력 범위)은 그대로다.
      */
     private void onInputTranscriptDelta(ProviderEvent.InputTranscriptDelta delta, Instant at) {
-        groupInputDelta(delta, at);
-        if (ctx.consentWithdrawnAt() != null ||ctx.status() == SessionStatus.WAITING_CHILD) {
+        // 묶음을 나누며 앞 발화를 확정하면 상태가 바뀔 수 있다(WAITING_CHILD → ACTIVE) — 아래는 그 뒤의 상태 · 묶음 id를 읽는다
+        if (groupInputDelta(delta, at) == null) {
+            return;
+        }
+        if (ctx.consentWithdrawnAt() != null || ctx.status() == SessionStatus.WAITING_CHILD) {
             // 동의 철회 뒤 도착한 아이 전사는 저장하지 않는다(확정 때 센다). 참여 전 아이 전사도 저장하지 않는다
             return;
         }
@@ -2130,8 +2137,18 @@ public final class SessionExecutor {
         }
     }
 
-    /** 조각을 현재 묶음에 더하고(없으면 묶음을 연다) 조용 시계를 다시 건다. 묶음 id를 돌려준다. */
+    /**
+     * 조각을 현재 묶음에 더하고(없으면 묶음을 연다) 조용 시계를 다시 건다. 묶음 id를 돌려준다. 조각 시간선에서 앞 조각 끝과 이 조각 시작이
+     * {@code input-utterance-gap} 이상 떨어졌으면 열린 묶음을 조용 시계와 같은 길로 먼저 확정하고 이 조각으로 새 묶음을 연다(시간선이 없으면 지금처럼
+     * 조용 시계로만 나눈다). 앞 발화의 확정으로 세션이 끝나 더 받지 않으면 조각을 버리고 null을 돌려준다.
+     */
     private String groupInputDelta(ProviderEvent.InputTranscriptDelta delta, Instant at) {
+        if (inputGroup.startsNewUtterance(delta, ctx.services().settings().inputUtteranceGap())) {
+            onInputTranscriptQuiet();
+            if (ctx.status().isTerminal() && !ctx.settling()) {
+                return null;
+            }
+        }
         String id = inputGroup.add(delta, at, !ctx.devicePlaying().isEmpty());
         ctx.timers().arm(Kind.INPUT_TRANSCRIPT_QUIET, ctx.services().settings().inputTranscriptQuiet());
         return id;

@@ -230,4 +230,5 @@ U10 검토 사유는 ANSWER_INCLUDED/EARLY_CUE/PRESSURE/AGE_MISMATCH/GOAL_MISMAT
 
 | 기호 | 내용 | 출처 | 제공 | 소비자 | 호환 분류 | 표시 위치 |
 |---|---|---|---|---|---|---|
+| (JG-a) | 새 시간 키 `mujoong.timing.provider.input-utterance-gap`(임시 `700ms`)을 더한다. 입력 전사 조각의 전사 시간선에서 앞 조각 `end_ms`와 새 조각 `start_ms`가 이 값 이상 떨어지면 열린 묶음을 `input-transcript-quiet`를 기다리지 않고 먼저 확정한다. 한쪽 시간이 -1이면 지금처럼 묶는다(가짜 공급자는 같은 `start_ms = end_ms`라 나뉘지 않는다). 화면이 읽지 않는 서버 키라 `timing-defaults.json`에는 넣지 않는다 | 10/18 실키 "내 말이 들리니?" → "응"이 1500ms 안에 이어져 한 전사로 합쳐졌을 가능성(지시서 1.3 후보 2) | Realtime `SessionExecutor` · `InputTranscriptGroup` · `RealtimeTimingProperties.ProviderTiming` | 운영 | 새 키 | timing.md 14절 · ai-io.md 3절 |
 | (JG-b) | 로그 사건 두 개 `JOIN_REPLY`(참여 확인 중 확정 전사 처리 한 줄) · `JUDGMENT_TURN`(판정 턴 닫힘 · 건너뜀 한 줄)과 그 속성을 더한다(사건 코드 19 → 21종). 결과 코드 · 개수 · 시간만 담고 전사 · 안내 글 · 확률은 담지 않는다. 정본은 `EventCode` · `AttrKey`, `log-hygiene-check` 허용 표와 `test-host-tools.sh`가 같은 커밋에서 따라간다 | 10/18 실키에서 J1 결과 값이 로그에 없어 원인을 정하지 못함(`docs/live-run.md` 5절) | Realtime `JoinFlow` · `JudgmentCoordinator` | 운영 · 진단 | 새 사건 | ai-io.md 10.15 |

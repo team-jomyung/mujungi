@@ -68,6 +68,21 @@ class InputTranscriptGroupTest {
     }
 
     @Test
+    void aNewUtteranceStartsOnlyWhenBothTimelinesShowAGapOfAtLeastTheThreshold() {
+        java.time.Duration gap = java.time.Duration.ofMillis(700);
+        assertThat(group.startsNewUtterance(new InputTranscriptDelta(null, "가", 0, 100), gap)).as("열린 묶음이 없다").isFalse();
+        group.add(new InputTranscriptDelta(null, "가", 0, 1200), T0, false);
+
+        assertThat(group.startsNewUtterance(new InputTranscriptDelta(null, "나", 1899, 2000), gap)).as("699ms").isFalse();
+        assertThat(group.startsNewUtterance(new InputTranscriptDelta(null, "나", 1900, 2000), gap)).as("경계 700ms").isTrue();
+        assertThat(group.startsNewUtterance(new InputTranscriptDelta(null, "나"), gap)).as("새 조각 시간 없음(-1)").isFalse();
+
+        group.clear();
+        group.add(new InputTranscriptDelta(null, "다"), T0, false);
+        assertThat(group.startsNewUtterance(new InputTranscriptDelta(null, "라", 5000, 5100), gap)).as("앞 조각 시간 없음").isFalse();
+    }
+
+    @Test
     void theStringFormsNeverCarryTheTranscript() {
         group.add(new InputTranscriptDelta(null, "프테라노돈"), T0, false);
 
