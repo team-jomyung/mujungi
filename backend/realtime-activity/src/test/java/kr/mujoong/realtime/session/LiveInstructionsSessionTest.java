@@ -5,12 +5,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.util.List;
 import kr.mujoong.contract.status.ActivityType;
 import kr.mujoong.realtime.dialog.LiveSessionInstructions;
+import kr.mujoong.realtime.testing.FakeProviderPort;
 import kr.mujoong.realtime.testing.SessionHarness;
 import kr.mujoong.realtime.voice.ProviderRequestFactory;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
-/** 세션 계획의 활동 종류가 공급자 세션 지시문을 고르고, 쓴 판 · 해시만 세션 사건으로 남는다(가짜 공급자). */
+/** 세션 계획의 활동 종류가 공급자 세션 지시문을 고르고, 공급자가 받아들인(session.started) 판 · 해시만 세션 사건으로 남는다(가짜 공급자). */
 @Tag("voice-session")
 class LiveInstructionsSessionTest {
 
@@ -59,10 +60,34 @@ class LiveInstructionsSessionTest {
     void aProviderThatNeverConnectsLeavesNoInstructionsEvent() {
         SessionHarness h = new SessionHarness();
         h.activityType = ActivityType.PRACTICE;
-        h.provider.mode(kr.mujoong.realtime.testing.FakeProviderPort.Mode.REFUSE);
+        h.provider.mode(FakeProviderPort.Mode.REFUSE);
 
         h.boot();
 
+        assertThat(liveEvents(h)).isEmpty();
+    }
+
+    @Test
+    void aConnectedProviderWhoseSessionStartSendFailsLeavesNoInstructionsEvent() {
+        SessionHarness h = new SessionHarness();
+        h.activityType = ActivityType.PRACTICE;
+        h.provider.mode(FakeProviderPort.Mode.START_FAILS);
+
+        h.boot();
+
+        assertThat(h.provider.openedCount()).isEqualTo(1);
+        assertThat(liveEvents(h)).isEmpty();
+    }
+
+    @Test
+    void aSentSessionStartWithoutSessionStartedLeavesNoInstructionsEvent() {
+        SessionHarness h = new SessionHarness();
+        h.activityType = ActivityType.PRACTICE;
+        h.provider.mode(FakeProviderPort.Mode.NO_STARTED);
+
+        h.boot();
+
+        assertThat(h.provider.last().requests(ProviderRequestFactory.SessionStart.class)).hasSize(1);
         assertThat(liveEvents(h)).isEmpty();
     }
 }

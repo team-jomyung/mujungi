@@ -407,7 +407,7 @@ public final class SessionExecutor {
     static final String EVENT_STOP_CONFIRM_ASKED = "STOP_CONFIRM_ASKED";
     static final String EVENT_STOP_CONFIRM_RESOLVED = "STOP_CONFIRM_RESOLVED";
     static final String EVENT_PRACTICE_EXTENSION_FAILED = "PRACTICE_EXTENSION_FAILED";
-    /** 공급자 세션 시작에 쓴 활동 본문(payload는 활동 종류 · 판 이름 · sha256뿐, 본문 · 아이 정보 없음). */
+    /** 공급자가 session.started로 받아들인 세션 지시문의 활동 본문(payload는 활동 종류 · 판 이름 · sha256뿐, 본문 · 아이 정보 없음). */
     static final String EVENT_LIVE_INSTRUCTIONS = "LIVE_INSTRUCTIONS";
     /** ACTIVE 중 공급자 끊김의 end_detail. */
     static final String END_DETAIL_PROVIDER_LOST = "PROVIDER_LOST";
@@ -848,10 +848,16 @@ public final class SessionExecutor {
         }
         ctx.providerSession(connected.session());
         ctx.relay().attach(ctx.providerSession());
-        // 연결 직후 연결 스레드가 session.start를 보낸다. 어떤 판으로 대화했는지만 남긴다
+    }
+
+    /**
+     * 공급자가 session.started로 시작을 받아들였을 때 그 지시문의 활동 본문 판 · 해시만 남긴다. 연결은 됐지만 session.start 전송이
+     * 실패하거나 응답이 없으면 그 판으로 대화한 적이 없으므로 남기지 않는다.
+     */
+    private void recordLiveInstructions(Instant at) {
         var live = ctx.services().requests().liveInstructions().of(ctx.plan().activityType());
         ctx.putEvent(EVENT_LIVE_INSTRUCTIONS, "{\"kind\":\"" + live.kind().name() + "\",\"version\":\"" + live.version()
-                + "\",\"sha256\":\"" + live.sha256() + "\"}", ctx.services().clock().now());
+                + "\",\"sha256\":\"" + live.sha256() + "\"}", at);
     }
 
     private void onProviderFailed(ProviderFailed failed) {
@@ -2068,6 +2074,9 @@ public final class SessionExecutor {
         switch (event) {
             case ProviderEvent.Started started -> {
                 if (START_PHASE.contains(ctx.status())) {
+                    if (!ctx.providerStarted()) {
+                        recordLiveInstructions(at);
+                    }
                     ctx.providerStarted(true);
                     ctx.providerSessionId(started.providerSessionId());
                     tryActivate();
