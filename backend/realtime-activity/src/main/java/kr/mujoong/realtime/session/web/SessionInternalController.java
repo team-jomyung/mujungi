@@ -238,7 +238,7 @@ public class SessionInternalController {
         InternalBody.required(body, "childContext");
         String displayName = InternalBody.text(body.displayName(), "childContext.displayName", 1, 10);
         InternalBody.check(!displayName.isBlank(), "childContext.displayName");
-        int age = InternalBody.range(body.age(), "childContext.age", 6, 12);
+        int age = InternalBody.range(body.age(), "childContext.age", 6, Integer.MAX_VALUE);
         List<String> interests = InternalBody.required(body.interests(), "childContext.interests");
         InternalBody.check(interests.size() <= 10, "childContext.interests");
         for (String interest : interests) {

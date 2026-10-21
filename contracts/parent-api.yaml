@@ -631,7 +631,7 @@ paths:
           content:
             application/json:
               schema: { $ref: "schemas/child-response.schema.json" }
-              example: { childId: 00000000-0000-4000-8000-000000000002, displayName: 하늘, age: 8, interests: [공룡, 그림] }
+              example: { childId: 00000000-0000-4000-8000-000000000002, displayName: 하늘, age: 8, birthDate: "2018-10-15", registeredOn: "2026-10-15", interests: [공룡, 그림] }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/AccountDeletion" }
         "404": { $ref: "#/components/responses/ChildNotRegistered" }
@@ -649,14 +649,14 @@ paths:
         content:
           application/json:
             schema: { $ref: "schemas/child-request.schema.json" }
-            example: { displayName: 하늘, age: 8, interests: [공룡, 그림] }
+            example: { displayName: 하늘, birthDate: "2018-10-15", interests: [공룡, 그림] }
       responses:
         "201":
           description: 등록
           content:
             application/json:
               schema: { $ref: "schemas/child-response.schema.json" }
-              example: { childId: 00000000-0000-4000-8000-000000000002, displayName: 하늘, age: 8, interests: [공룡, 그림] }
+              example: { childId: 00000000-0000-4000-8000-000000000002, displayName: 하늘, age: 8, birthDate: "2018-10-15", registeredOn: "2026-10-15", interests: [공룡, 그림] }
         "400": { $ref: "#/components/responses/ValidationFailed" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/CsrfOrDeletion" }
@@ -681,14 +681,14 @@ paths:
         content:
           application/json:
             schema: { $ref: "schemas/child-request.schema.json" }
-            example: { age: 9 }
+            example: { birthDate: "2017-10-15" }
       responses:
         "200":
           description: 수정
           content:
             application/json:
               schema: { $ref: "schemas/child-response.schema.json" }
-              example: { childId: 00000000-0000-4000-8000-000000000002, displayName: 하늘, age: 9, interests: [공룡, 그림] }
+              example: { childId: 00000000-0000-4000-8000-000000000002, displayName: 하늘, age: 9, birthDate: "2017-10-15", registeredOn: "2026-10-15", interests: [공룡, 그림] }
         "400": { $ref: "#/components/responses/ValidationFailed" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/CsrfOrDeletion" }

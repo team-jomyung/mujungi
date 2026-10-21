@@ -42,7 +42,7 @@
       "required": ["displayName", "age", "interests"],
       "properties": {
         "displayName": { "type": "string", "minLength": 1, "maxLength": 10 },
-        "age": { "type": "integer", "minimum": 6, "maximum": 12 },
+        "age": { "type": "integer", "minimum": 6 },
         "interests": {
           "type": "array",
           "maxItems": 10,

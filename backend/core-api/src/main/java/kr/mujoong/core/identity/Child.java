@@ -5,6 +5,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.Objects;
 import java.util.UUID;
 import org.hibernate.annotations.JdbcTypeCode;
@@ -33,6 +34,12 @@ public class Child {
 
     @Column(name = "display_name", nullable = false, length = 100)
     private String displayName;
+
+    @Column(name = "birth_date")
+    private LocalDate birthDate;
+
+    public LocalDate getBirthDate() { return birthDate; }
+    public void setBirthDate(LocalDate value) { this.birthDate = value; }
 
     @Column(name = "age")
     private Integer age;
