@@ -198,6 +198,8 @@
 | 리뷰 반영(`692b6c2`): `./gradlew :core-api:test --tests "…PlannedGenerationIT" --tests "…start.PracticePackageTest" --tests "…ScenarioRepositoryIT" --tests "…ScenarioContractTest" -Pmujoong.test.db=docker` | 42건 통과(11 · 9 · 11 · 11). 확인용으로 `VariantPlanner`의 topic 어휘 조건을 잠시 빼고 돌리면 `baseOutsideVocabularyFallsBackToGraphFreeBase`가 "Expected size: 1 but was: 2"로 실패했다(되돌림, 커밋에 없음) |
 | 리뷰 반영(`c49856b`): `./gradlew :realtime-activity:test --tests "kr.mujoong.realtime.session.LiveInstructionsSessionTest" -Pmujoong.test.db=docker` | 5건 통과. 옮기기 전 `SessionExecutor`로 돌리면 새 두 건(시작 전송 실패 · `session.started` 없음)이 실패했다 |
 | 리뷰 반영 뒤 넓은 회귀: `./gradlew :realtime-activity:test -Pmujoong.test.db=docker` | **1887건 통과, 실패 0, 건너뜀 0**(5분 9초) |
+| 최종 전체 검사(`920eb73`): `./gradlew --no-daemon clean check verifyBootJarHasNoTestClasses -Pmujoong.test.db=docker --continue` | core-api 1736건 중 2건 실패, 나머지 모듈 통과. 실패는 둘 다 Neo4j 시험이다(`GraphWorkflowIT` 2초 예산 기준선, `Neo4jIT.concurrentCommitAndTerminationCannotResurrectAfterCleanup` "Graph operation unresolved"). 이 브랜치는 `knowledge` 코드를 바꾸지 않았다. 같은 컨테이너에서 다른 작업 트리의 Gradle · Neo4j 컨테이너가 함께 돌던 때였다 |
+| `Neo4jIT`만 다시: `./gradlew --no-daemon :core-api:test --tests "kr.mujoong.core.knowledge.Neo4jIT" -Pmujoong.test.db=docker` | 통과(부하 아래 시간 문제로 본다) |
 
 실호출: 하지 않음. `jevLiveTest` · `lunaLiveTest` · `gptLiveTest`는 돌리지 않았다(R-F1 · R-F15, 사람 몫).
 
