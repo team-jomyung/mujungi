@@ -114,6 +114,61 @@ class PracticeStartApiIT {
         db.inTx(s->{app.context().publishEvent(new ActivityRecorded(session,guardian.id(),family.childId(),"PRACTICE","ENDED",now));return null;});
         assertThat(app.bean(ScenarioRepository.class).require(p.firstScenarioId()).status()).isEqualTo("EXPOSED");
     }
+    /** 새 연습 흐름 기록(practice-record-v2, 공유 고정 자료 모양)의 장면 시작으로 실제 DB 정산을 한다. */
+    @Test
+    void newFlowRecordReconcilesEachIssuedScenarioOnceAtItsEarliestSceneStart() throws Exception {
+        UUID session = started(UUID.randomUUID());
+        var p = app.bean(PracticePreparationRepository.class).findSession(session).orElseThrow();
+        // 장면 3의 대본: 세션을 ACTIVE로 바꾼 뒤 같은 세션에서 내부 경로로 실제 발급한 둘째 대본
+        app.bean(ActivityCopyRepository.class).applyStateChange(new ActivityCopyRepository.StateChange(session, SessionStatus.ACTIVE, 2,
+                null, null, false, app.clock().now()), app.clock().now());
+        String request = json.write(Map.of("sessionId", session, "goalSelectionId", goal, "kind", "NEW_SCENARIO",
+                "previousScenarioId", p.firstScenarioId()));
+        var generated = app.post("/internal/practice/scenarios").internalToken().json(request).send();
+        assertThat(generated.status()).as(generated.body()).isEqualTo(200);
+        UUID second = UUID.fromString((String) generated.json().get("scenarioId"));
+
+        Instant now = app.clock().now();
+        Instant base = now.minusSeconds(300);
+        Instant variant = now.minusSeconds(170);
+        Instant next = now.minusSeconds(5);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> record = json.read(RecordedScenarioExposuresTest.sharedRecordFixture(), Map.class);
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> scenes = (List<Map<String, Object>>) record.get("scenes");
+        // 고정 자료의 c01(BASE · VARIANT)은 첫 대본, c02는 둘째 대본으로 바꾼다. 시각은 지금 이전이어야 정산된다
+        scenes.get(0).putAll(Map.of("scenarioRef", p.firstScenarioId().toString(), "startedAt", base.toString()));
+        scenes.get(1).putAll(Map.of("scenarioRef", p.firstScenarioId().toString(), "startedAt", variant.toString()));
+        scenes.get(2).putAll(Map.of("scenarioRef", second.toString(), "startedAt", next.toString()));
+        String practice = json.write(record);
+        assertThat(WebFixtures.schemaErrors("practice-record-v2.schema.json", practice)).isEmpty();
+        db.inTx(s -> {
+            app.bean(ActivityRecordRepository.class).insertIfAbsent(new ActivityRecordRepository.NewRecord(session, guardian.id(),
+                    family.childId(), "PRACTICE", "ENDED", "CHILD_STOP", true, now, now, now, now, now, "[]", "[]", practice, "[]", "{}",
+                    UUID.randomUUID(), 1, "sha256:" + json.sha256OfCanonical(practice)), now);
+            return null;
+        });
+
+        var reconciler = app.bean(PracticeExposureReconciler.class);
+        try (var output = AppOutputCapture.attach()) {
+            reconciler.runOnce();
+            assertThat(db.jdbc().queryForObject("select exposure_reconciled_at is not null from core.core_practice_preparation "
+                    + "where session_id=:id", Map.of("id", session), Boolean.class)).as("첫 주기에 정산된다").isTrue();
+            reconciler.runOnce();
+            assertThat(output.lines()).noneMatch(line -> line.contains("PracticeExposureReconciliationFailed"));
+        }
+
+        var scenarios = app.bean(ScenarioRepository.class);
+        assertThat(scenarios.require(p.firstScenarioId()).status()).isEqualTo("EXPOSED");
+        assertThat(scenarios.require(second).status()).isEqualTo("EXPOSED");
+        String exposedAt = "select exposed_at from core.core_scenario where id=:id";
+        assertThat(db.jdbc().queryForObject(exposedAt, Map.of("id", p.firstScenarioId()), java.time.OffsetDateTime.class).toInstant())
+                .as("같은 대본은 가장 이른 장면 시작 시각").isEqualTo(base);
+        assertThat(db.jdbc().queryForObject(exposedAt, Map.of("id", second), java.time.OffsetDateTime.class).toInstant()).isEqualTo(next);
+        var recent = scenarios.recentExposed(guardian.id(), family.childId(), app.clock().now(), java.time.Duration.ofSeconds(5));
+        assertThat(recent).extracting(ScenarioRepository.ExposureText::scenarioText).containsExactlyInAnyOrder(
+                scenarios.require(p.firstScenarioId()).scenario().scenarioText(), scenarios.require(second).scenario().scenarioText());
+    }
     @Test void deletionRemovesPreparationAndLateGenerationCannotRecreateIt() {
         doAnswer(c->{
             db.jdbc().update("update core.core_guardian set status='DELETION_REQUESTED' where id=:id",Map.of("id",guardian.id()));

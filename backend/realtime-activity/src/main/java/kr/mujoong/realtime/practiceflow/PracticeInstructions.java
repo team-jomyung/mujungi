@@ -9,7 +9,9 @@ import kr.mujoong.realtime.practiceflow.PracticeScript.Scene;
  * <ul>
  *   <li>판정 라벨 · 선택지 코드 · 확률 · 판정 기준 문자열은 어디에도 넣지 않는다(BR3.7, NFR1). 이 클래스는 판정 값을 받는 자리조차 없다.
  *   <li>아이 발화 · 모델 출력 원문은 섞지 않는다(자리가 없다). 들어가는 대본 조각은 승인된 대본의 상황 · 단서 · 표현 예시뿐이다.
- *   <li>친구 지시문은 정답 · 모범 문장을 미리 말하지 말라고 막고, 코치 지시문은 표현 예시를 동의 뒤에만 허용한다({@link RolePolicy}).
+ *   <li>친구 지시문은 정답 · 모범 문장을 미리 말하지 말고 아이 대신 대답하지 말라고 막고, 코치 지시문은 표현 예시를 동의 뒤에만 허용한다
+ *       ({@link RolePolicy}).
+ *   <li>친구 역할 이름은 대본 partnerRole을 {@link RolePolicy#peerName}으로 거른 짧은 이름이다. 금지 규칙은 이 템플릿이 맡는다.
  *   <li>공급자 지시 길이 상한({@value #MAX_LENGTH}자) 안에 맞춘다.
  * </ul>
  */
@@ -20,7 +22,8 @@ final class PracticeInstructions {
 
     private static final int FIELD_MAX = 80;
 
-    private static final String PEER_RULE = "정답이나 모범 문장을 먼저 말하지 말고, 아이의 말을 고쳐 주거나 평가하지 않는다. 한두 문장으로 말한다.";
+    private static final String PEER_RULE = "정답이나 모범 문장을 먼저 말하지 말고, 아이의 말을 고쳐 주거나 평가하지 않는다. 한두 문장으로 말한다. "
+            + "아이 대신 대답하지 않는다.";
     private static final String COACH_RULE = "아이를 평가하거나 꾸짖지 않고 한두 문장으로 따뜻하게 말한다.";
 
     private PracticeInstructions() {
@@ -28,21 +31,21 @@ final class PracticeInstructions {
 
     /** 친구 되묻기(OPPORTUNITY 뒤 부분적으로만 전해졌을 때). */
     static String peerReask(Scene scene, boolean again) {
-        return fit("너는 아이의 " + field(scene.partnerRole()) + " 역할이다. 상황: " + field(scene.sceneDescription())
+        return fit("너는 아이의 " + RolePolicy.peerName(scene.partnerRole()) + " 역할이다. 상황: " + field(scene.sceneDescription())
                 + (again ? " 같은 질문을 같은 말투로 한 번 더 천천히 물어본다." : " 방금 아이의 대답에서 빠진 부분이 있어 자연스럽게 한 번만 되묻는다.")
                 + " " + PEER_RULE);
     }
 
     /** 도움 제안(강제 아님). */
     static String peerHelpOffer(Scene scene, boolean again) {
-        return fit("너는 아이의 " + field(scene.partnerRole()) + " 역할이다. 상황: " + field(scene.sceneDescription())
+        return fit("너는 아이의 " + RolePolicy.peerName(scene.partnerRole()) + " 역할이다. 상황: " + field(scene.sceneDescription())
                 + (again ? " 도와줘도 되는지 같은 말로 한 번 더 부드럽게 묻는다." : " 아이가 어려워 보이면 도와줘도 되는지 부드럽게 묻는다.")
                 + " 싫다고 하면 그대로 받아들인다. " + PEER_RULE);
     }
 
     /** 변형 제안(같은 연습을 새 상황으로 해 볼지). */
     static String peerVariantOffer(Scene scene, boolean again) {
-        return fit("너는 아이의 " + field(scene.partnerRole()) + " 역할이다. 방금 연습을 잘 마쳤다고 짧게 말하고, "
+        return fit("너는 아이의 " + RolePolicy.peerName(scene.partnerRole()) + " 역할이다. 방금 연습을 잘 마쳤다고 짧게 말하고, "
                 + (again ? "새 상황으로 한 번 더 해 볼지 같은 말로 다시 묻는다." : "비슷한 새 상황으로 한 번 더 해 볼지 가볍게 묻는다.")
                 + " 하기 싫다고 하면 그대로 받아들인다. " + PEER_RULE);
     }
@@ -77,7 +80,7 @@ final class PracticeInstructions {
             return fit("친구 목소리에서 아이를 돕는 코치 목소리로 바뀐다고 한 문장으로 알린다. 곧 도와주겠다고만 말하고 예시나 정답은 말하지 않는다. "
                     + COACH_RULE);
         }
-        return fit("다시 아이의 " + field(scene.partnerRole()) + " 목소리로 돌아왔다고 한 문장으로 알린다. 새 질문이나 정답은 말하지 않는다. "
+        return fit("다시 아이의 " + RolePolicy.peerName(scene.partnerRole()) + " 목소리로 돌아왔다고 한 문장으로 알린다. 새 질문이나 정답은 말하지 않는다. "
                 + PEER_RULE);
     }
 

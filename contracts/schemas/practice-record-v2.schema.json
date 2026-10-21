@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://mujoong.invalid/contracts/schemas/practice-record-v2.schema.json",
   "title": "기록 캡처 이벤트 record.practice — 새 연습 흐름 형식",
-  "description": "SessionRecordCaptured.record.practice의 새 흐름 모양(계약 요약 C-DS2 · FR7.5 · BR6.1). flowVersion이 있으면 이 형식이고, 없으면 U5b 형식으로 읽는다. 형식 구분에 snapshotVersion을 쓰지 않고 그 뜻(세션당 한 판)은 바꾸지 않는다(NFR6.2). 진행 중 판정 라벨 · 확률 원값은 싣지 않는다(FR3.6 · FR3.7). 받는 쪽(U14)은 모르는 facts 값을 무시한다. [U8 편차 (U8-d)]",
+  "description": "SessionRecordCaptured.record.practice의 새 흐름 모양(계약 요약 C-DS2 · FR7.5 · BR6.1). flowVersion이 있으면 이 형식이고, 없으면 U5b 형식으로 읽는다. 형식 구분에 snapshotVersion을 쓰지 않고 그 뜻(세션당 한 판)은 바꾸지 않는다(NFR6.2). 진행 중 판정 라벨 · 확률 원값은 싣지 않는다(FR3.6 · FR3.7). 받는 쪽(U14)은 모르는 facts 값을 무시한다. [U8 편차 (U8-d)] core 노출 정산은 scenes[].scenarioRef · startedAt을 읽는다: 같은 scenarioRef는 가장 이른 startedAt 하나로 정산하고, scenarioRef나 startedAt이 없는 장면은 건너뛰며, 모르는 flowVersion은 정산하지 않는다. [U12 편차 (U12-d)]",
   "type": "object",
   "additionalProperties": false,
   "required": ["flowVersion", "scenes"],

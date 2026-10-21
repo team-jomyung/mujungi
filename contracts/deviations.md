@@ -213,11 +213,14 @@ U10 검토 사유는 ANSWER_INCLUDED/EARLY_CUE/PRESSURE/AGE_MISMATCH/GOAL_MISMAT
 
 ## U12 편차
 
-> U12(새 연습 흐름, 작업 기록 261017-u12-practice-flow)가 승인 요구사항 · 계약에 더하거나 바로잡은 곳이다. 번호 체계: **설계 편차는 `U12-D<n>`**(`docs/units/u12/design.md`), 계약 문서에 더한 키는 `(U12-a)`다. Markdown은 `[U12 편차 (U12-a)]`로 표시한다(`ContractFilesTest`의 한 · 두 글자 기호와 섞이지 않는다). 스키마 · 이벤트 모양(`practice-record-v2` 포함)은 바꾸지 않았다.
+> U12(새 연습 흐름, 작업 기록 261017-u12-practice-flow)가 승인 요구사항 · 계약에 더하거나 바로잡은 곳이다. 번호 체계: **설계 편차는 `U12-D<n>`**(`docs/units/u12/design.md`), 계약 문서에 더한 키는 `(U12-a)`다. Markdown은 `[U12 편차 (U12-a)]`로 표시한다(`ContractFilesTest`의 한 · 두 글자 기호와 섞이지 않는다). 이벤트 모양과 `practice-record-v2` 모양은 바꾸지 않았다. (U12-b) ~ (U12-d)는 `practice-scenario.schema.json` 장면 칸의 설명과 `partnerRole` 제약(`maxLength: 20`), `practice-record-v2.schema.json` 설명을 더했다.
 
 | 기호 | 내용 | 근거 | 호환 분류 |
 |---|---|---|---|
 | (U12-a) | 새 연습 흐름의 횟수 한도 설정 키 `mujoong.practice-flow.retry-max`(기본 2)와 `mujoong.practice-flow.reexplain-max`(기본 1)를 ai-io.md 10.14에 더한다. 시간 값이 아니라 timing.md에 두지 않으며 비밀이 아니다. 시간 한도는 U8이 만든 `mujoong.timing.conversation.*`를 그대로 읽는다 | U12 FR7.1 · BR9.2 · R-M10 | 새 키 · 이전 앱은 이 키를 읽지 않는다. 기본값이 있어 설정을 안 넣어도 기동한다 |
+| (U12-b) | `practice-scenario` `scenes[].partnerRole`의 뜻을 '짧은 역할 이름'(20자 이하, 대체값 친구)으로 정정한다. core는 장면 `relation`에서 이름을 만들고(라벨 표 ai-io.md 10.15), 금지 규칙은 realtime 친구 지시문 고정 문장이 맡는다. realtime은 옛 지시문 값을 친구로 바꿔 쓴다. 레거시 `partnerRoleText`는 고정 지시 그대로다 | 연결부 결함 (b) · ai-io.md 10.15 · `docs/practice-link-seams.md` | 의미 변경(깨는 변경), 두 앱 같은 날 병합. 스키마에 `maxLength: 20` 추가. realtime 방어로 병합 순서가 바뀌어도 동작하지만, core만 먼저 배포되면 realtime이 들어올 때까지 친구 지시문에서 '아이 대신 대답하지 않기' 금지 문장이 빠진다(옛 realtime `PEER_RULE`에는 없고 core 지시문 값으로만 들어갔다). 한 PR로 올리거나 realtime을 core보다 먼저 병합 · 배포한다 |
+| (U12-c) | 장면 설명은 기회 문장을 포함하고(core 규칙 유지) realtime 도입은 설명 원문을 그대로 재생한다. 설명이 기회 문장으로 끝나고(낱말 경계 일치) 끝까지 재생됐으면 OPPORTUNITY 진입에서 기회 문장을 다시 재생하지 않고, 도입 재생 중에 온 아이 대답은 도입이 끝나면 J2로 판정한다. 승인 원문의 일부를 승인 발화로 내지 않는다 | 연결부 결함 (c) · ai-io.md 10.5 · 10.15 | 해석 명시. 대본 모양 · 원문 일치 규칙 무변경 |
+| (U12-d) | core 노출 정산이 `practice-record-v2`의 `scenes[].scenarioRef` · `startedAt`을 읽는다(같은 대본은 가장 이른 시각, 없는 장면은 건너뜀, 모르는 판은 정산 안 함) | 연결부 결함 (a) · ai-io.md 10.15 | 해석 명시, 모양 무변경. 마이그레이션 없음(다음 정산 주기가 백필) |
 | U12-D1 | 정본 AC1.1.2(시작 전 휴식 요청에 `D_REST_ACK_START` 재생)를 받아 주는 말 없이 재안내하는 U11-D6 동작 그대로 둔다. 참여 확인 전의 응답은 계약(U4b-a)상 들리지 않는다. 실행부 소유이고 U12는 바꾸지 않는다 | U12 Q1(A) · 승인 요구사항 AC1.1.2 | 코드 · 계약 변화 없음(정본 문장 개정 제안만) |
 | U12-D2 | 정본 AC1.5.5의 '도움 내용' 기록을 도움 종류 · 예시 여부 · 동의 응답 · 시각 · 내용 **길이**로 좁힌다. 도움 발화 원문 · 아이 전사 · 대본 문장은 표 · 이벤트 · 로그 · 지표에 쓰지 않는다. V7 표에 원문 칸이 없다 | R-F14 · RA 검토 R-02 · BR7.1 | 새 표(expand 전용). `practice-record-v2` facts는 계약 15종 그대로 |
 | U12-D3 | 변형 제안에 대한 아이의 동의(AC1.5.4)는 새 판정 지점을 만들지 않고 J4(수락 · 거절 · 불명확)를 재사용해 읽는다. J4 질문 문구는 '도와줘도 되는지'라서 분류 품질은 `[실호출-합성]` 확인 대상이다. 판정 계약 · 선택지 판은 바꾸지 않는다 | D8 · BR6.1 | 계약 변화 없음 |

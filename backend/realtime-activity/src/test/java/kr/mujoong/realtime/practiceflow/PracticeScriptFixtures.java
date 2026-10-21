@@ -1,6 +1,10 @@
 package kr.mujoong.realtime.practiceflow;
 
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import kr.mujoong.contract.json.JsonCodec;
 
 /** 대본 · 시작 패키지 JSON 시험 자료(가짜 값, 한국어 문장은 시험용이다). */
 final class PracticeScriptFixtures {
@@ -33,6 +37,22 @@ final class PracticeScriptFixtures {
                 + "\"generation\":{\"model\":\"fake-model\",\"promptVersion\":\"scenario-generation.v2\",\"graphContextUsed\":true,"
                 + "\"calls\":3,\"kgVersion\":\"kg-1\"},"
                 + "\"validation\":{\"goalIncluded\":true,\"triggerIncluded\":true,\"forbiddenFound\":false}}";
+    }
+
+    /**
+     * BASE 장면 하나짜리 대본. 설명 · 기회 문장 · 역할 이름을 바꿔 core 규칙(설명이 기회 문장을 포함)이나 옛 지시문 값을 흉내 낸다.
+     */
+    static String sceneScript(UUID scenarioId, String sceneDescription, String opportunitySentence, String partnerRole) {
+        Map<String, Object> scene = new LinkedHashMap<>();
+        scene.put("sceneKey", "base-1");
+        scene.put("sceneKind", "BASE");
+        scene.put("sceneDescription", sceneDescription);
+        scene.put("opportunitySentence", opportunitySentence);
+        scene.put("reexplanation", "친구는 빨간 상자와 파란 상자를 들고 있어.");
+        scene.put("partnerRole", partnerRole);
+        return JsonCodec.shared().write(Map.of("scenarioId", scenarioId.toString(), "kind", "ORIGINAL",
+                "scriptVersion", "scenario-script.v1", "scenes", List.of(scene),
+                "validation", Map.of("goalIncluded", true, "triggerIncluded", true, "forbiddenFound", false)));
     }
 
     /** 목표 하나 짜리 시작 패키지 practice 조각(첫 목표에 firstScenario). */
