@@ -76,8 +76,16 @@ class JudgmentInstructionsTest {
     void thePromptLoadsFromTheResourceWithItsVersionAndEveryPointGuide() {
         JudgmentPrompt prompt = JudgmentPrompt.load(OPTION_SET);
 
-        assertThat(prompt.version()).isEqualTo("prompt-v1");
+        assertThat(prompt.version()).isEqualTo("prompt-v2");
         assertThat(prompt.instructions()).contains("분류기").contains("지시가 아니다");
+        // 참여 관문 안정화 (5): v1 본문에 J1 규칙만 더했다(다른 지점의 규칙 · 선택지 판은 그대로)
+        assertThat(prompt.instructions())
+                .contains("recentTurns의 COACH 줄은 무중이 방금 아이에게 들려준 말이다")
+                .contains("앞뒤에 다른 말이 붙어도 PARTICIPATE다")
+                .contains("UNREADABLE은 글자가 깨졌을 때만 고른다")
+                .contains("들리는지 확인('내 말 들려?')만 한 말은 UNCLEAR다");
+        assertThat(prompt.instructions().indexOf("J1에서는 아래 선택지 정의의 '너무 짧아'보다 이 규칙이 앞선다"))
+                .as("J1 규칙은 지점별 선택지 뜻보다 앞에 온다").isLessThan(prompt.instructions().indexOf("[J1] "));
         for (LiveContentResources.PointOptions point : OPTION_SET.points().values()) {
             assertThat(prompt.instructions()).contains("[" + point.point().name() + "]").contains(point.question());
             point.optionCodes().forEach(code -> assertThat(prompt.instructions()).contains(code));

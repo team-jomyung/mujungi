@@ -330,6 +330,7 @@ U15 씨앗 v2는 GENERATED/DUPLICATE/NONE의 배타적 출력 분기를 사용�
 
 - 판정 질문 · 선택지(J1 ~ J6, A §7.3 · B §5.2)는 realtime `judgment/option-sets-v1.json`, 제브 검사 질문 · 라벨 8개 설명(7개 범주 + `PASS`) · 7개 범주 · 모드(C §3.1 · §3.2, AI 동작 명세 §10.2)는 `guardrail/policy-v2.json`에 둔다(U8의 `policy-v1.json`은 이력으로 남기고 코드가 읽지 않는다) [U13 편차 (U13-c)]. J7은 core 상황 생성 자체 검토 프롬프트(U10)라 realtime 판에 넣지 않는다.
 - realtime은 기동 때 두 파일을 읽어 검증하고, 파일이 없거나 형식이 틀리면 기동을 거부한다(BR2.1 · 4절 시드 사전과 같은 방식).
+- realtime 진행 중 판정 지시문은 `judgment/prompt-v2.txt`(판 번호 `prompt-v2`)다. v2는 v1 본문에 J1 규칙(직전 대화의 COACH 줄 = 무중이 방금 들려준 말, 짧은 긍정은 앞뒤 말이 붙어도 PARTICIPATE, 인사 · 들리는지 확인만 한 말은 UNCLEAR)만 더했고 `prompt-v1.txt`는 이력으로 남긴다. 요청 · 출력 스키마는 그대로라 프롬프트 판만 올렸다 — "프롬프트 판과 스키마 판은 함께 올린다"는 스키마를 바꿀 때 프롬프트 판도 올린다는 뜻으로 읽는다 [JG 편차 (JG-d)].
 - 세션을 받을 때 두 판의 번호와 패키지의 승인 문구 판(`approvedContent` · `approvedSpeech`)을 세션 계획에 고정하고, 세션 정산이 끝나면 놓는다. 판정 · 검사 기록 행은 고정된 판 번호를 함께 남긴다(BR2.2, 기록은 U11 · U13).
 
 ### 10.5 원문 일치와 제브 생략

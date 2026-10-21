@@ -227,6 +227,34 @@ class JoinJudgmentExecutorTest {
         assertThat(t.events(JoinFlow.EVENT_JOIN_RE_PROMPTED)).hasSize(1);
     }
 
+    // ------------------------------------------------------------------ 참여 관문 안정화 (5): 직전 안내 문장 문맥
+
+    @Test
+    void theJ1RequestCarriesTheLastPlayedJoinPromptAsTheCoachLine() {
+        JudgmentExecutorSupport withIntro = new JudgmentExecutorSupport();
+        withIntro.h.extraApproved.put(SessionExecutor.INTRO_FREE_TALK, "안녕, 무중이야. 오늘 나랑 이야기할래?");
+        withIntro.waiting();
+        withIntro.h.childSays("j-1", JudgmentExecutorSupport.UNCLEAR_JOIN);
+
+        assertThat(withIntro.judge.last().request().recentTurns()).singleElement().satisfies(turn -> {
+            assertThat(turn.speaker()).isEqualTo(kr.mujoong.realtime.judgment.JudgeRequest.Speaker.COACH);
+            assertThat(turn.text()).isEqualTo("안녕, 무중이야. 오늘 나랑 이야기할래?");
+        });
+        withIntro.judge.confirm("UNCLEAR", 0.9, "REST", 0.05);
+        withIntro.h.drain();
+        withIntro.mark(withIntro.h.link.sent(kr.mujoong.contract.ws.message.PlayApprovedContent.class).getLast(),
+                kr.mujoong.contract.ws.message.PlaybackMark.Status.COMPLETED);
+        withIntro.h.childSays("j-2", "모르겠는데");
+
+        assertThat(withIntro.judge.last().request().recentTurns()).as("재안내 뒤에는 재안내 글")
+                .extracting(kr.mujoong.realtime.judgment.JudgeRequest.RecentTurn::text).containsExactly("같이 이야기해 볼까?");
+        assertThat(withIntro.h.logs.lines()).noneMatch(line -> line.contains("같이 이야기해") || line.contains("무중이야"));
+
+        t.waiting();
+        t.h.childSays("j-1", JudgmentExecutorSupport.UNCLEAR_JOIN);
+        assertThat(t.judge.last().request().recentTurns()).as("승인 글이 없으면 COACH 줄도 없다").isEmpty();
+    }
+
     @Test
     void eachClosedOrSkippedJ1LeavesOneJudgmentTurnLineWithCodesOnly() {
         t.waiting();

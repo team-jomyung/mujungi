@@ -71,6 +71,8 @@ final class JoinFlow {
     private boolean windowTickPending;
     /** 아이가 말하는 중(입력 묶음이 열린 동안)에 울려 미룬 참여 창 만기. 묶음이 확정 · 처리된 뒤 부른다. */
     private boolean speechTickPending;
+    /** 마지막으로 기기에 보낸 참여 안내의 승인 글(J1 요청의 COACH 줄, 로그에 쓰지 않는다). 글을 모르면 null. */
+    private String lastPromptText;
 
     /** 진단 로그(contracts/ai-io.md 10.15)에 남기는 확정 전사 하나의 모양. 원문은 담지 않는다. */
     private record ReplyMeta(int textLen, int wordCount, InputTranscriptGroup.Shape shape, boolean lateForWindow) {
@@ -127,6 +129,7 @@ final class JoinFlow {
         } else {
             UUID playbackId = UUID.randomUUID();
             if (ctx.sendControl(new PlayApprovedContent(playbackId, contentCode, item.get().contentVersionId()))) {
+                lastPromptText = item.get().text();
                 ctx.joinPromptPlaybackId(playbackId);
                 ctx.playback().started(playbackId, contentCode);
                 ctx.timers().arm(Kind.PLAYBACK_EXPIRY, ctx.services().settings().playbackExpiry());
@@ -217,11 +220,15 @@ final class JoinFlow {
     }
 
     /**
-     * 불명확한 대답으로 J1을 연다. 앞서 판정한 불명확 대답(대기 칸으로 다시 여는 경우)이 있으면 직전 대화에 CHILD 줄로 넣는다. 열 수 없으면(공급자
+     * 불명확한 대답으로 J1을 연다. 직전 대화에는 마지막으로 보낸 참여 안내 글을 COACH 줄로(prompt-v2 J1 규칙: 그 말 끝의 참여 질문에 대한 대답인지
+     * 판단), 앞서 판정한 불명확 대답(대기 칸으로 다시 여는 경우)을 CHILD 줄로 넣는다(최대 2줄). 승인 글을 모르면 COACH 줄은 없다. 열 수 없으면(공급자
      * 없음 · 판독 불가) 거짓이고 부르는 쪽이 지금 흐름으로 간다.
      */
     private boolean openJoinJudgment(PendingReply reply, String previousChild) {
         List<JudgeRequest.RecentTurn> recent = new ArrayList<>();
+        if (lastPromptText != null && !lastPromptText.isBlank()) {
+            recent.add(new JudgeRequest.RecentTurn(JudgeRequest.Speaker.COACH, clip(lastPromptText)));
+        }
         if (previousChild != null && !previousChild.isBlank()) {
             recent.add(new JudgeRequest.RecentTurn(JudgeRequest.Speaker.CHILD, clip(previousChild)));
         }

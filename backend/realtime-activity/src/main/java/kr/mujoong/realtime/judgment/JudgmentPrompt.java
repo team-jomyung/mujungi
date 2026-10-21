@@ -15,10 +15,13 @@ import kr.mujoong.realtime.content.LiveContentResources;
  */
 public record JudgmentPrompt(String version, String instructions) {
 
-    /** 지시 본문 자원. 판 번호는 파일 이름의 {@code prompt-v1}이다. */
-    public static final String RESOURCE = "judgment/prompt-v1.txt";
+    /**
+     * 지시 본문 자원. 판 번호는 파일 이름의 {@code prompt-v2}다. v2는 v1 본문에 J1 규칙(COACH 줄 = 무중이 방금 들려준 말, 짧은 긍정은
+     * PARTICIPATE, 인사 · 들리는지 확인은 UNCLEAR)만 더했다. {@code prompt-v1.txt}는 이력으로 남기고 코드가 읽지 않는다.
+     */
+    public static final String RESOURCE = "judgment/prompt-v2.txt";
     /** 지금 판 번호. */
-    public static final String DEFAULT_VERSION = "prompt-v1";
+    public static final String DEFAULT_VERSION = "prompt-v2";
 
     private static final Pattern VERSION = Pattern.compile("^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$");
 

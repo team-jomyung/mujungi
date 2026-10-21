@@ -146,6 +146,25 @@ class RealtimeLunaInputAndSchemaTest {
     }
 
     @Test
+    void aJoinJudgmentWithTheCoachPromptAndAnEarlierChildLinePassesTheRequestSchema() {
+        // 참여 관문 안정화 (5): J1 요청의 COACH 줄(승인 안내 글) + CHILD 줄(앞 전사)이 입력 정리와 요청 스키마를 통과한다(합성 값)
+        LunaSchemas schemas = LunaSchemas.loadDefault(JSON);
+        kr.mujoong.realtime.judgment.JudgeRequest request = new kr.mujoong.realtime.judgment.JudgeRequest(
+                kr.mujoong.realtime.judgment.JudgmentPoint.J1, "judgment-v1",
+                List.of("PARTICIPATE", "REST", "DECLINE", "UNCLEAR", "UNREADABLE"), "응 들려",
+                List.of(new kr.mujoong.realtime.judgment.JudgeRequest.RecentTurn(kr.mujoong.realtime.judgment.JudgeRequest.Speaker.COACH,
+                                "안녕, 무중이야. 나는 사람이 아니라 AI야. 그만하고 싶으면 \"무중아 그만할래\"라고 말해 줘. 오늘 나랑 이야기할래?"),
+                        new kr.mujoong.realtime.judgment.JudgeRequest.RecentTurn(kr.mujoong.realtime.judgment.JudgeRequest.Speaker.CHILD,
+                                "내 말이 들리니?")),
+                null, Map.of("하늘", "아이"), false, java.time.Instant.parse("2026-10-21T09:00:04Z"));
+
+        SanitizedInput sanitized = sanitizer.sanitize(request.toLunaInput(), request.aliases());
+
+        assertThat(schemas.isValidRequest(LunaPurpose.JUDGMENT_LIVE, JSON.write(sanitized.payload()))).isTrue();
+        assertThat(JSON.write(sanitized.payload())).contains("\"speaker\":\"COACH\"").contains("\"speaker\":\"CHILD\"");
+    }
+
+    @Test
     void missingOrBrokenSchemaFilesRefuseToLoad() {
         Function<String, String> noOutput = name -> name.equals("ai-judgment-output.schema.json") ? null
                 : RealtimeLunaTestFixtures.contractFile(name);

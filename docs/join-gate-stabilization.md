@@ -136,6 +136,36 @@ PR은 둘로 나눈다.
 - **문서**: 값은 그대로이고 해석만 분명해져 `contracts/timing.md` 1절 `join-wait` · `join-wait-after-reprompt` 뜻 열에 한 구절을 더하고(R-M10),
   `contracts/deviations.md`에 (JG-c)를 더했다.
 
+### (5) J1 프롬프트 판 올리기: 직전 안내 문장 문맥과 짧은 긍정 규칙 (PR-B)
+
+- **바꾼 동작**:
+  - 판정 지시문을 `judgment/prompt-v2.txt`(판 번호 `prompt-v2`)로 올렸다. v1 본문의 마지막 줄("아래는 지점별 질문과 …") 앞에 J1에만 한정한 문장 넷을 더했다.
+    1. "recentTurns의 COACH 줄은 무중이 방금 아이에게 들려준 말이다. J1에서는 아이 말이 그 말 끝의 참여 질문에 대한 대답인지로 판단한다."
+    2. "J1에서 '응' · '네' · '어' · '그래' · '좋아' · '할래'처럼 짧게 긍정하면 앞뒤에 다른 말이 붙어도 PARTICIPATE다. 단, 하기 싫다 · 쉬고 싶다는 뜻이 함께 있으면 DECLINE이나 REST를 고른다."
+    3. "J1에서는 아래 선택지 정의의 '너무 짧아'보다 이 규칙이 앞선다. 짧다는 이유만으로 UNREADABLE이나 UNCLEAR를 고르지 않는다. UNREADABLE은 글자가 깨졌을 때만 고른다."
+    4. "J1에서 인사('안녕')나 들리는지 확인('내 말 들려?')만 한 말은 UNCLEAR다."
+  - `JudgmentPrompt.RESOURCE` · `DEFAULT_VERSION`을 v2로 바꿨고 `prompt-v1.txt`는 이력으로 남긴다(`policy-v1.json`과 같은 방식). `JudgmentSupport.NONE`의
+    `"prompt-v1"` 글자는 `JudgmentPrompt.DEFAULT_VERSION`으로 맞췄다. 다른 시험 안의 `"prompt-v1"`은 대역 자료라 그대로다.
+  - J1 요청의 `recentTurns`에 **마지막으로 기기에 보낸 참여 안내의 승인 글**(`ctx.plan().approvedItem(code).text()`)을 COACH 줄로 넣는다. (3)의 다시 판정이면
+    앞 전사를 CHILD 줄로 그 뒤에 둔다(최대 2줄, 상한 3줄 안). 글이 null · 빈 값이면 넣지 않는다. 패키지에 없어 재생을 건너뛴 안내는 아이가 듣지 못했으므로
+    COACH 줄을 바꾸지 않는다(JOIN-GATE-A15).
+- **고른 방안과 까닭**: 지시서 권장안 그대로다. 10/18에 J1이 4번 모두 참여가 아니었던 원인 후보 5(문맥 없음 · v1의 "자신이 없으면 낮게" · J1 UNREADABLE
+  "너무 짧아")를 직접 줄인다. 새 화자 MUJOONG을 만드는 것은 스키마 · `JudgeRequest.Speaker` · ai-io 10.1을 고치는 계약 변경이라 하지 않았고, 이미 스키마에
+  있는 COACH를 쓴다.
+  - **판 규칙과의 관계**: `contracts/ai-io.md` 10절 머리말의 "프롬프트 판(`promptVersion`)과 스키마 판은 함께 올린다"는 스키마를 바꿀 때 프롬프트 판도
+    올린다는 뜻으로 읽었다. 이번에는 요청 · 출력 스키마 파일(판 번호 칸이 없다)을 바꾸지 않았으므로 프롬프트 판만 올렸다(JG-d, 10.4에 한 줄).
+  - 선택지 판 `judgment-v1`과 보류 기준 0.6/0.15는 바꾸지 않았다. 같은 지시문을 J2 ~ J6과 연습(INTRO_PRACTICE)도 쓰므로 더한 규칙은 모두 "J1에서"로 시작한다.
+- **바꾼 파일**: `resources/judgment/prompt-v2.txt`(새), `judgment/JudgmentPrompt.java`, `session/JudgmentSupport.java`, `session/JoinFlow.java`(`lastPromptText` · COACH 줄).
+- **시험**: `JudgmentInstructionsTest`(`prompt-v2` · J1 규칙 문장 · 지점별 뜻보다 앞), `JudgmentConfigurationTest`(`prompt-v2`), `JoinJudgmentExecutorTest`
+  `theJ1RequestCarriesTheLastPlayedJoinPromptAsTheCoachLine`(첫 J1은 INTRO 글, 재안내 뒤에는 RE_PROMPT 글, 승인 글이 없으면 COACH 줄 없음, 로그에 글 없음),
+  `RealtimeLunaInputAndSchemaTest` `aJoinJudgmentWithTheCoachPromptAndAnEarlierChildLinePassesTheRequestSchema`(입력 정리 + 요청 스키마 통과).
+- **실호출 탐침(선택, 사람이 돌린다)**: `luna/JoinJudgmentReachTest`(`@Tag("luna-reach")`). 운영 `JudgmentPrompt.load` · `LunaJudgeClient` ·
+  `RealtimeLunaClient`로 합성 J1 일곱 문장(PARTICIPATE 기대: "응" · "응 들려" · "음 그래 볼까" · "어 할래", UNCLEAR 기대: "안녕" · "내 말이 들리니?",
+  DECLINE 기대: "싫어")을 판정하고, COACH 줄은 시드의 INTRO_FREE_TALK v2 글이다. 보고서 `realtime-activity/build/luna-reach/j1-report.md`에는 번호 · 기대 ·
+  결과 코드 · 보류 사유 · 1 · 2순위 코드 · 지연만 남긴다. 기본 `test` · `check`에 들어가지 않는다(`verifyLunaReachIsolation` 통과). 이 컨테이너에서는 키 없이
+  `lunaReachTest`를 돌려 두 탐침 모두 **건너뜀**(실호출 없음)을 확인했다. 실호출 결과는 아직 없다(7절 · 사람이 할 일).
+- **문서**: `contracts/ai-io.md` 10.4 한 줄, `contracts/deviations.md` (JG-d).
+
 (다음 항목은 작성 중)
 
 ## 4. 설계 편차
