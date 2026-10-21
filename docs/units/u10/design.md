@@ -38,7 +38,7 @@ U15 → U14는 main에 순서대로 병합했고 각각 main CI의 skeleton·ci-
 
 ## 4. 응답·스키마·프롬프트
 
-`practice-scenario.schema.json`은 기존 8필수 필드와 additionalProperties=true를 유지한다. 선택 `scriptVersion`, `scenes`, `selfReview`, `generation`을 더한다. 첫 BASE의 설명·기회 문장이 기존 scenarioText/triggerScript의 원본이고, 기존 기회 조건과 관계는 고정 목표 맥락에서 서버가 만든다. 가상 장면 고지도 기존 정책을 유지한다. partnerRoleText 및 장면 partnerRole은 서버의 고정 지시다.
+`practice-scenario.schema.json`은 기존 8필수 필드와 additionalProperties=true를 유지한다. 선택 `scriptVersion`, `scenes`, `selfReview`, `generation`을 더한다. 첫 BASE의 설명·기회 문장이 기존 scenarioText/triggerScript의 원본이고, 기존 기회 조건과 관계는 고정 목표 맥락에서 서버가 만든다. 가상 장면 고지도 기존 정책을 유지한다. 레거시 partnerRoleText는 서버의 고정 지시다. 장면 partnerRole은 지시가 아니라 서버가 장면 relation에서 만든 짧은 역할 이름(20자 이하, 대체값 친구)이고, 금지 규칙은 realtime 고정 지시가 맡는다(contracts/ai-io.md 10.15, 편차 U12-b).
 
 기존 생성 스키마는 장면 필드를 유지하며 구조 보존의 비발화용 선택 필드만 확장한다. `focusPoints`·`expressionExamples` 누락은 빈 배열로 정규화하고 모든 실제 발화 영역에 기존 크기·금지 검사와 역할별 정답 규칙을 적용한다. 새 대본은 첫 BASE·정확히 한 BASE·유일한 sceneKey를 서버가 검사한다.
 
