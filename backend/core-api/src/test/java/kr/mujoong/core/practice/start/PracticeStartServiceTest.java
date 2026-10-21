@@ -22,6 +22,7 @@ import org.junit.jupiter.api.*;
 import org.springframework.transaction.support.TransactionTemplate;
 
 @Tag("practice-legacy")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class PracticeStartServiceTest {
     final UUID guardian=UUID.randomUUID(), child=UUID.randomUUID(), goal=UUID.randomUUID(), key=UUID.randomUUID();
     final MutableClock clock=new MutableClock(java.time.Instant.parse("2026-10-14T00:00:00Z"));

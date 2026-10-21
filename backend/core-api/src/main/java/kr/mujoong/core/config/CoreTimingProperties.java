@@ -81,10 +81,11 @@ public record CoreTimingProperties(
         }
     }
 
-    /** U8(timing.md 13절): 지식 그래프 조회 한 번의 상한. 넘기면 빈 응답이다. U15가 읽는다. */
-    public record KnowledgeTiming(Duration graphBudget) {
+    /** 지식 그래프 일반 업무 상한과 서버 시작 준비의 별도 전체 마감(timing.md 13절). */
+    public record KnowledgeTiming(Duration graphBudget, Duration graphInitializationBudget) {
         public KnowledgeTiming {
             positive(graphBudget, "mujoong.timing.knowledge.graph-budget");
+            positive(graphInitializationBudget, "mujoong.timing.knowledge.graph-initialization-budget");
         }
     }
 

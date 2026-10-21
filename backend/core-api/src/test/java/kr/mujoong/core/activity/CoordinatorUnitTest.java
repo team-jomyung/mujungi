@@ -46,6 +46,7 @@ import org.springframework.transaction.PlatformTransactionManager;
  * (R3), 진행 보기 덧붙임 거르기(R4 · {@link LiveExtras}).
  */
 @Tag("activity-session")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class CoordinatorUnitTest {
 
     private static final Instant NOW = Instant.parse("2026-10-15T00:00:00Z");

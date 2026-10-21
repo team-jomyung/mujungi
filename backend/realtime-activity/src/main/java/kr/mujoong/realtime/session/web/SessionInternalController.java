@@ -280,7 +280,7 @@ public class SessionInternalController {
     /** 내부 LiveView 선 형식(internal-session-view.schema.json). U1이 채우지 않는 칸은 null · 빈 배열이고 gaps는 U3가 채운다. */
     static Map<String, Object> wire(SessionViewQuery.View view) {
         ActivitySessionRow session = view.session();
-        Map<String, Object> out = new LinkedHashMap<>();
+        Map<String, Object> out = new ViewWire();
         out.put("sessionId", session.id());
         out.put("activityType", session.activityType());
         out.put("status", session.status());
@@ -296,6 +296,7 @@ public class SessionInternalController {
         out.put("technicalPause", technicalPause(view.live()));
         out.put("silenceWarning", silenceWarning(view.live()));
         out.put("practice", view.live().practice());
+        out.put("guardrail", view.guardrail());
         List<Map<String, Object>> gaps = new ArrayList<>();
         for (kr.mujoong.realtime.log.SessionGapRepository.SessionGapRow gap : view.gaps()) {
             Map<String, Object> item = new LinkedHashMap<>();
@@ -320,6 +321,12 @@ public class SessionInternalController {
         out.put("items", items);
         out.put("nextSeq", view.nextSeq());
         return out;
+    }
+
+    @com.fasterxml.jackson.annotation.JsonInclude(value = com.fasterxml.jackson.annotation.JsonInclude.Include.ALWAYS,
+            content = com.fasterxml.jackson.annotation.JsonInclude.Include.ALWAYS)
+    private static final class ViewWire extends LinkedHashMap<String, Object> {
+        private static final long serialVersionUID = 1L;
     }
 
     private static Map<String, Object> technicalPause(kr.mujoong.realtime.session.IdleClock.LiveState live) {

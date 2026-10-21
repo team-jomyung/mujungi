@@ -7,6 +7,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import kr.mujoong.realtime.config.RealtimeProperties;
 import kr.mujoong.realtime.runtime.TaskLauncher;
 import kr.mujoong.realtime.session.ChildContext;
+import kr.mujoong.realtime.dialog.PolicyBundle;
 import kr.mujoong.realtime.voice.ProviderPort.Listener;
 import kr.mujoong.realtime.voice.ProviderPort.ProviderSession;
 import kr.mujoong.realtime.voice.ProviderPort.ProviderUnavailableException;
@@ -86,25 +87,31 @@ public class ProviderConnector {
 
     /** 연결 스레드를 띄운다. */
     public Attempt connect(UUID sessionId, ChildContext childContext, Listener listener, Callback callback) {
+        return connect(sessionId, childContext, listener, callback, null);
+    }
+
+    public Attempt connect(UUID sessionId, ChildContext childContext, Listener listener, Callback callback,
+            PolicyBundle policy) {
         Objects.requireNonNull(sessionId, "sessionId");
         Objects.requireNonNull(childContext, "childContext");
         Objects.requireNonNull(listener, "listener");
         Objects.requireNonNull(callback, "callback");
         Attempt attempt = new Attempt();
         attempt.thread = launcher.launch("provider-connect-" + sessionId,
-                () -> run(attempt, childContext, listener, callback));
+                () -> run(attempt, childContext, listener, callback, policy));
         if (attempt.isCancelled() && attempt.thread != null) {
             attempt.thread.interrupt();
         }
         return attempt;
     }
 
-    private void run(Attempt attempt, ChildContext childContext, Listener listener, Callback callback) {
+    private void run(Attempt attempt, ChildContext childContext, Listener listener, Callback callback, PolicyBundle policy) {
         if (!ProviderHosts.isConnectable(port.endpoint(), activeProfiles)) {
             callback.failed(ProviderUnavailableException.Reason.HOST_NOT_ALLOWED);
             return;
         }
-        ProviderRequestFactory.SessionStart request = factory.sessionStart(childContext);
+        ProviderRequestFactory.SessionStart request = policy == null ? factory.sessionStart(childContext)
+                : factory.sessionStart(childContext, policy);
         ProviderSession session = null;
         try {
             session = port.open(listener, connectTimeout);

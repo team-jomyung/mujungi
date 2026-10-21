@@ -109,6 +109,8 @@ final class GuardrailCoordinator {
 
         /** 출력 보류(WAITING_CHILD · 종료 확인 · 판정 턴 · 연습 보류) 중인가. */
         boolean outputHeld();
+        default kr.mujoong.realtime.gate.OutputAuthority outputAuthority() { return null; }
+        default String servicePolicyVersion() { return "practice"; }
 
         /** 입력 묶음을 처음 연 횟수(단조 증가, BR4.4). */
         long inputGroupOpenCount();
@@ -182,7 +184,8 @@ final class GuardrailCoordinator {
     /** 검사표(BR4.1): 요청 한 건의 유효 조건. 같은 {@link SegmentBuffer.Sealed}를 쥐어 전사와 소리가 한 구간이라는 구조를 지킨다. */
     private record Ticket(UUID requestId, SegmentBuffer.Sealed sealed, long deviceGeneration, long providerGeneration,
             UUID connectionId, long inputGroupOpens, UUID practiceSpeechId, TranscriptWriter.Held held,
-            GuardrailRequest.Mode mode, boolean fromQueue) {
+            GuardrailRequest.Mode mode, boolean fromQueue, UUID sessionId, String servicePolicyVersion,
+            String jevPolicyVersion, String bodySha256, kr.mujoong.realtime.gate.OutputAuthority authority) {
 
         @Override
         public String toString() {
@@ -438,7 +441,10 @@ final class GuardrailCoordinator {
     private void start(SegmentBuffer.Sealed sealed, GuardrailRequest.Mode mode, UUID practiceSpeechId,
             TranscriptWriter.Held held, boolean fromQueue) {
         Ticket created = new Ticket(UUID.randomUUID(), sealed, env.deviceGeneration(), env.providerGeneration(),
-                env.connectionId(), env.inputGroupOpenCount(), practiceSpeechId, held, mode, fromQueue);
+                env.connectionId(), env.inputGroupOpenCount(), practiceSpeechId, held, mode, fromQueue,
+                plan.sessionId(), env.servicePolicyVersion(), support.policyVersion(),
+                NoticeAssetCatalog.sha256(sealed.transcript().getBytes(java.nio.charset.StandardCharsets.UTF_8)),
+                env.outputAuthority());
         ticket = created;
         state = State.CHECKING;
         Optional<GuardrailRequest> request = factory.create(mode, sealed.transcript(), List.copyOf(context),
@@ -530,6 +536,11 @@ final class GuardrailCoordinator {
 
     /** 검사표 유효 조건 다섯(BR4.2)을 확인해 첫 어긋남을 돌려준다(없으면 null). */
     private VoidCause voidCause(Ticket current) {
+        if (current.authority() != env.outputAuthority()
+                || !current.sessionId().equals(plan.sessionId()) || !current.jevPolicyVersion().equals(support.policyVersion())
+                || !current.servicePolicyVersion().equals(env.servicePolicyVersion())
+                || !current.bodySha256().equals(NoticeAssetCatalog.sha256(
+                        current.sealed().transcript().getBytes(java.nio.charset.StandardCharsets.UTF_8)))) return VoidCause.GENERATION_CHANGED;
         if (env.terminated() || env.status() != SessionStatus.ACTIVE) {
             return VoidCause.SESSION_ENDED;
         }

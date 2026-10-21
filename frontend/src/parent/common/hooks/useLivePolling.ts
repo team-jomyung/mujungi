@@ -1,10 +1,10 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import { ApiError } from "../api/apiClient";
 import { queryKeys, useApiClient } from "../api/queries";
-import { fetchLiveView, mergeLiveView } from "../api/live";
+import { hasCurrentLiveFacts, leaveLiveSession, liveConnectionRevision, readCurrentLiveView, subscribeLiveConnection } from "../api/liveUpdates";
 import type { LiveView, SessionStatus } from "../api/types";
 import { useTiming } from "@/shared/timing/TimingProvider";
 
@@ -22,6 +22,7 @@ export interface LivePollingOptions {
 }
 
 export interface LivePolling {
+  readonly trusted: boolean;
   readonly view: LiveView | undefined;
   readonly error: unknown;
   /** 연속 실패 횟수(성공하면 0). */
@@ -30,7 +31,7 @@ export interface LivePolling {
 }
 
 function isStopError(error: unknown): boolean {
-  return error instanceof ApiError && (error.status === 401 || error.status === 404);
+  return error instanceof ApiError && (error.status === 401 || error.status === 403 || error.status === 404);
 }
 
 export function useLivePolling(sessionId: string, options: LivePollingOptions): LivePolling {
@@ -40,15 +41,18 @@ export function useLivePolling(sessionId: string, options: LivePollingOptions): 
   const [failureStreak, setFailureStreak] = useState(0);
   const { keepPolling } = options;
   const queryKey = queryKeys.session(sessionId);
+  const subscribeConnection = useCallback((listener: () => void) => subscribeLiveConnection(api, listener), [api]);
+  const connectionSnapshot = useCallback(() => liveConnectionRevision(api), [api]);
+  useSyncExternalStore(subscribeConnection, connectionSnapshot, () => 0);
+  useEffect(() => () => leaveLiveSession(api, sessionId), [api, sessionId]);
 
   const query = useQuery({
     queryKey,
     queryFn: async ({ signal }) => {
-      const previous = queryClient.getQueryData<LiveView>(queryKey);
       try {
-        const view = await fetchLiveView(api, sessionId, previous?.nextSeq ?? 0, signal);
+        const view = await readCurrentLiveView(api, queryClient, sessionId, signal);
         setFailureStreak(0);
-        return mergeLiveView(previous, view);
+        return view;
       } catch (error) {
         if (!(error instanceof ApiError && error.kind === "aborted")) {
           setFailureStreak((count) => count + 1);
@@ -78,5 +82,5 @@ export function useLivePolling(sessionId: string, options: LivePollingOptions): 
   const refetchView = useCallback(() => {
     void refetch();
   }, [refetch]);
-  return { view: query.data, error: query.error, failureStreak, refetch: refetchView };
+  return { view: query.data, trusted: query.error === null && hasCurrentLiveFacts(api, query.data), error: query.error, failureStreak, refetch: refetchView };
 }

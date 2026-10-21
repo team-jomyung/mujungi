@@ -25,6 +25,7 @@ import org.junit.jupiter.api.Test;
  * 경우, 상태 이탈. 공급자와 판정기는 가짜, 값은 합성이다(R-F1 · R-F3). 증거 종류: 테스트 대역.
  */
 @Tag("judgment-turn")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class JudgmentTurnExecutorTest {
 
     private final JudgmentExecutorSupport t = new JudgmentExecutorSupport();
@@ -76,15 +77,15 @@ class JudgmentTurnExecutorTest {
 
         assertThat(t.appendedContents()).hasSize(before + 1);
         String sent = t.appendedContents().getLast();
-        assertThat(sent).isEqualTo(InstructionTemplates.NextAction.REST_ACK_AND_RETURN.content())
-                .startsWith(InstructionTemplates.INTERJECTION_LEAD).endsWith(InstructionTemplates.SCOPE_CLOSE);
+        assertThat(sent).isEqualTo(InstructionTemplates.NextAction.REST_ACK_ONLY.content(kr.mujoong.contract.status.ActivityType.FREE_TALK))
+                .doesNotContain(InstructionTemplates.INTERJECTION_LEAD).endsWith(InstructionTemplates.SCOPE_CLOSE);
         assertThat(t.records()).as("지시를 보낸 동안은 턴이 열려 있다").isEmpty();
 
         t.h.speak("좋아, 잠깐 쉬자", 4_800);
         t.advance(Duration.ofSeconds(1));
 
         JudgmentLiveRecord record = t.onlyRecord();
-        assertThat(record.nextAction()).isEqualTo(NextAction.REST_ACK_AND_RETURN);
+        assertThat(record.nextAction()).isEqualTo(NextAction.REST_ACK_ONLY);
         assertThat(record.firstOption()).isEqualTo("REST");
         assertThat(t.h.link.outputs()).as("지시 응답은 평소 경로로 기기에 간다").isNotEmpty();
     }

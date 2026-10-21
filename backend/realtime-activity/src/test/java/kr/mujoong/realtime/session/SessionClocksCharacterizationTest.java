@@ -21,6 +21,7 @@ import org.junit.jupiter.api.Test;
  * 판정 준비 만기의 전달, 재생 상한 만기의 종료 확인 재생 처리. 공급자와 판정기는 가짜, 시각은 수동 시계다.
  */
 @Tag("skeleton")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class SessionClocksCharacterizationTest {
 
     private static final Duration TICK = Duration.ofMillis(1);
@@ -90,11 +91,11 @@ class SessionClocksCharacterizationTest {
     }
 
     @Test
-    void aPlaybackExpiryWhileTheStopQuestionIsPlayingOpensTheConfirmWindowAsIfItHadEnded() {
+    void aPlaybackExpiryWhileTheStopQuestionIsPlayingReturnsToListeningWithoutOpeningAWindow() {
         SessionHarness h = new SessionHarness();
         h.extraApproved.put(SessionExecutor.STOP_CONFIRM, "이야기를 그만할까?");
         h.activate();
-        h.childSays("i-1", "쉬고 싶어");
+        h.childSays("i-1", "그만");
         assertThat(h.executor.timers().isArmed(Kind.PLAYBACK_EXPIRY)).isTrue();
         assertThat(h.executor.timers().isArmed(Kind.STOP_CONFIRM)).as("창은 재생 완료부터").isFalse();
 
@@ -104,7 +105,7 @@ class SessionClocksCharacterizationTest {
 
         assertThat(h.executor.status()).isEqualTo(SessionStatus.ACTIVE);
         assertThat(h.executor.timers().isArmed(Kind.PLAYBACK_EXPIRY)).isFalse();
-        assertThat(h.executor.timers().isArmed(Kind.STOP_CONFIRM)).isTrue();
+        assertThat(h.executor.timers().isArmed(Kind.STOP_CONFIRM)).isFalse();
     }
 
     private static long currentGeneration(SessionHarness h, Kind kind) {

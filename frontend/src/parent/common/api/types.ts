@@ -5,6 +5,7 @@
 
 import { parseLiveExtras, parseSessionSummary, type ActivityKind, type LiveExtras, type SessionSummary } from "./activity";
 import { parsePracticeProgress, type PracticeProgress, type ProgressIssue } from "./practiceProgress";
+import { parseGuardrailPresentation, type GuardrailPresentation } from "./guardrailPresentation";
 
 /** 08 서술 칸 상한(activity-free-request.schema.json maxLength). */
 export const FREE_TEXT_MAX_LENGTH = 200;
@@ -99,6 +100,7 @@ export interface Bubble {
 }
 
 export interface LiveView {
+  readonly guardrail?: GuardrailPresentation | null;
   readonly sessionId: string;
   readonly activityType: ActivityKind;
   readonly practice: PracticeProgress | null;
@@ -315,7 +317,7 @@ function parseBubble(value: unknown): Bubble | null {
     speaker,
     text: item.text,
     final: item.final === true,
-    uncertain: item.uncertain === true,
+    uncertain: item.uncertain !== false,
     startedAt: typeof item.startedAt === "string" ? item.startedAt : "",
     endedAt: optionalString(item, "endedAt"),
   };
@@ -330,6 +332,7 @@ export function parseLiveView(value: unknown): LiveView {
   const practice = activityType === "PRACTICE" ? parsePracticeProgress(root.practice) : null;
   return {
     sessionId: requiredString(root, "sessionId"),
+    guardrail: parseGuardrailPresentation(root.guardrail),
     activityType,
     practice,
     practiceIssue: activityType === "PRACTICE" && root.status === "ACTIVE" && practice === null ? "invalid" : null,

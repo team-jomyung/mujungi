@@ -27,6 +27,7 @@ import org.junit.jupiter.api.Test;
  * 공급자는 가짜 대역이고 시각은 수동 시계다(R-F1). 오디오 조각 4,800바이트 = 100ms, 시계 여유 600ms.
  */
 @Tag("judgment-turn")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class GenerationSendExecutorTest {
 
     private static final Duration QUIET = Duration.ofMillis(800);
@@ -50,7 +51,7 @@ class GenerationSendExecutorTest {
             assertThat(append.type()).isEqualTo("session.instructions.append");
             assertThat(append.eventId()).isEqualTo("mj-1");
             assertThat(append.delegationId()).isNull();
-            assertThat(append.content()).isEqualTo(InstructionTemplates.ResponseStart.FIRST.content());
+            assertThat(append.content()).isEqualTo(InstructionTemplates.ResponseStart.FIRST.content(h.activityType));
         });
     }
 
@@ -283,9 +284,9 @@ class GenerationSendExecutorTest {
 
         List<InstructionsAppend> sent = h.provider.last().requests(InstructionsAppend.class);
         assertThat(sent).extracting(InstructionsAppend::content).containsExactly(
-                InstructionTemplates.ResponseStart.FIRST.content(),
+                InstructionTemplates.ResponseStart.FIRST.content(h.activityType),
                 "목표 문장을 한 번 더 안내한다. " + InstructionTemplates.SCOPE_CLOSE,
-                InstructionTemplates.ResponseStart.CONTINUE.content());
+                InstructionTemplates.ResponseStart.CONTINUE.content(h.activityType));
         assertThat(sent).extracting(InstructionsAppend::eventId).containsExactly("mj-1", "mj-2", "mj-3");
         assertThat(sent).allSatisfy(append -> assertThat(append.delegationId()).isNull());
     }
@@ -339,7 +340,7 @@ class GenerationSendExecutorTest {
         h.drain();
         List<InstructionsAppend> afterFirst = h.provider.last().requests(InstructionsAppend.class);
         assertThat(afterFirst).hasSize(2);
-        assertThat(afterFirst.get(1).content()).isEqualTo(InstructionTemplates.correctionContent(DialogInstructions.Correction.DIAGNOSIS));
+        assertThat(afterFirst.get(1).content()).isEqualTo(InstructionTemplates.correctionContent(DialogInstructions.Correction.DIAGNOSIS, h.activityType));
 
         // 교정 지시에 대한 새 말도 금지 표현이다 — 폐기하고 한 번 더 교정한다
         h.speak("치료가 필요해요", 4_800);
@@ -407,8 +408,9 @@ class GenerationSendExecutorTest {
         h.boot();
         h.ackAndReady();
         assertThat(h.executor.status()).isEqualTo(SessionStatus.WAITING_CHILD);
+        h.completeNotice();
 
-        h.provider.last().emit(new ProviderEvent.InputTranscriptDelta(null, "응"));
+        h.provider.last().emit(new ProviderEvent.InputTranscriptDelta(null, "응", 1, 1));
         h.drain();
         assertThat(h.executor.status()).isEqualTo(SessionStatus.WAITING_CHILD);
         h.advance(h.settings.inputTranscriptQuiet());

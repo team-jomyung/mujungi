@@ -7,47 +7,115 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import kr.mujoong.contract.json.JsonCodec;
+import kr.mujoong.contract.time.MujoongClock;
 
 /** BR2·BR5: Neo4j 5 명시적 HTTP 트랜잭션. 재전송/자동 커밋은 사용하지 않는다. */
 public final class Neo4jChildKnowledgeGraph implements ChildKnowledgeGraphPort {
+    private static final String BASE_VERSION = "MERGE (v:U15GraphVersion {version:$version}) ON CREATE SET v.digest=$digest RETURN v.digest";
+    private static final String REPLACE_BASE = "MATCH (v:U15GraphVersion {version:$version,digest:$digest}) "
+            + "WITH v MATCH (s:U15Seed {childId:$child,origin:'POC'}) DETACH DELETE s";
+    private static final String LOAD_BASE = "MATCH (v:U15GraphVersion {version:$version,digest:$digest}) "
+            + "WITH v UNWIND $seeds AS item MERGE (s:U15Seed {childId:$child,seedId:item.id}) "
+            + "SET s.origin=item.origin,s.enabled=item.enabled,s.payload=item.payload";
     private final URI transactions;
     private final String authorization;
     private final Duration budget;
+    private final Duration initializationBudget;
+    private final MujoongClock clock;
     private final HttpClient client;
     private final JsonCodec json = JsonCodec.shared();
     private volatile boolean schemaReady;
 
     @Override public synchronized void prepareSchema() {
         if (schemaReady) return;
-        String tx = begin();
+        var deadline = new InitializationDeadline(clock, clock.now().plus(initializationBudget));
+        String tx = null;
         try {
-            statement(tx, "CREATE CONSTRAINT u15_version_unique IF NOT EXISTS FOR (v:U15GraphVersion) REQUIRE v.version IS UNIQUE", Map.of());
-            statement(tx, "CREATE CONSTRAINT u15_child_seed_unique IF NOT EXISTS FOR (s:U15Seed) REQUIRE (s.childId,s.seedId) IS UNIQUE", Map.of());
-            commit(tx);
+            tx = begin(deadline.remaining());
+            initializationStatement(tx, "CREATE CONSTRAINT u15_version_unique IF NOT EXISTS FOR (v:U15GraphVersion) REQUIRE v.version IS UNIQUE", Map.of(), deadline);
+            initializationStatement(tx, "CREATE CONSTRAINT u15_child_seed_unique IF NOT EXISTS FOR (s:U15Seed) REQUIRE (s.childId,s.seedId) IS UNIQUE", Map.of(), deadline);
+            request("POST", uri(tx, "/commit"), List.of(), false, deadline.remaining());
+            tx = null;
+            tx = begin(deadline.remaining());
+            prepareReplacementPlan(tx, deadline);
+            request("DELETE", uri(tx, ""), List.of(), true, deadline.remaining());
+            tx = null;
+            deadline.remaining();
             schemaReady = true;
-        } finally {
-            terminate(tx);
+        } catch (RuntimeException failure) {
+            if (tx != null) cleanUpInitialization(tx, failure);
+            throw failure;
         }
     }
 
-    public Neo4jChildKnowledgeGraph(URI endpoint, String auth, Duration budget) {
+    private void prepareReplacementPlan(String tx, InitializationDeadline deadline) {
+        // 운영 시작 경로에서 계획만 준비한다. EXPLAIN은 합성 파라미터를 실행하거나 사용자 데이터를 쓰지 않는다.
+        // 준비 실패는 그대로 전파하며, 성공 전에 schemaReady를 열거나 자동 재시도하지 않는다.
+        var parameters = Map.of("version", "__schema_preparation__", "digest", "0".repeat(64),
+                "child", "00000000-0000-0000-0000-000000000000", "seeds",
+                List.of(Map.of("id", "__schema_preparation__", "origin", "POC", "enabled", true, "payload", "{}")));
+        initializationStatement(tx, "EXPLAIN " + BASE_VERSION, parameters, deadline);
+        initializationStatement(tx, "EXPLAIN " + REPLACE_BASE, parameters, deadline);
+        initializationStatement(tx, "EXPLAIN " + LOAD_BASE, parameters, deadline);
+    }
+
+    private void initializationStatement(String tx, String cypher, Map<String, ?> parameters,
+            InitializationDeadline deadline) {
+        request("POST", uri(tx, ""), List.of(Map.of("statement", cypher, "parameters", parameters)),
+                false, deadline.remaining());
+    }
+
+    private void cleanUpInitialization(String tx, RuntimeException failure) {
+        // 중단 플래그는 유한 정리 요청 동안만 해제하고 반드시 복구한다. 정리 실패가 원래 시작 실패를 덮지 않는다.
+        boolean interrupted = Thread.interrupted();
+        var cleanup = new InitializationDeadline(clock, clock.now().plus(budget));
+        try {
+            request("DELETE", uri(tx, ""), List.of(), true, cleanup.remaining());
+        } catch (RuntimeException cleanupFailure) {
+            failure.addSuppressed(cleanupFailure);
+        } finally {
+            if (interrupted) Thread.currentThread().interrupt();
+        }
+    }
+
+    private record InitializationDeadline(MujoongClock source, Instant expiresAt) {
+        private Duration remaining() {
+            Duration remaining = Duration.between(source.now(), expiresAt);
+            if (remaining.isZero() || remaining.isNegative()) {
+                throw new IllegalStateException("Graph initialization deadline expired");
+            }
+            return remaining;
+        }
+    }
+
+    public Neo4jChildKnowledgeGraph(URI endpoint, String auth, Duration budget,
+            Duration initializationBudget, MujoongClock clock) {
         if (!List.of("http", "https").contains(endpoint.getScheme()) || endpoint.getUserInfo() != null
-                || endpoint.getHost() == null || auth == null || !auth.contains("/") || budget.isZero() || budget.isNegative()) {
+                || endpoint.getHost() == null || auth == null || !auth.contains("/") || budget == null
+                || budget.isZero() || budget.isNegative() || initializationBudget == null
+                || initializationBudget.isZero() || initializationBudget.isNegative() || clock == null) {
             throw new IllegalArgumentException("Invalid graph connection");
         }
         transactions = endpoint.resolve("/db/neo4j/tx");
         authorization = "Basic " + Base64.getEncoder().encodeToString(auth.replaceFirst("/", ":").getBytes(StandardCharsets.UTF_8));
         this.budget = budget;
+        this.initializationBudget = initializationBudget;
+        this.clock = clock;
         client = HttpClient.newBuilder().connectTimeout(budget).followRedirects(HttpClient.Redirect.NEVER).build();
     }
 
     @Override public String begin() {
-        Map<?, ?> reply = request("POST", transactions, List.of(), false);
+        return begin(budget);
+    }
+
+    private String begin(Duration timeout) {
+        Map<?, ?> reply = request("POST", transactions, List.of(), false, timeout);
         String commit = String.valueOf(reply.get("commit"));
         URI uri = URI.create(commit);
         String[] parts = uri.getPath().split("/");
@@ -68,18 +136,18 @@ public final class Neo4jChildKnowledgeGraph implements ChildKnowledgeGraphPort {
     }
 
     @Override public void replaceBase(String tx, UUID child, SeedCatalog catalog) {
-        var rows = statement(tx, "MERGE (v:U15GraphVersion {version:$version}) ON CREATE SET v.digest=$digest RETURN v.digest",
-                Map.of("version", catalog.version(), "digest", catalog.digest()));
+        var seeds = catalog.seeds().stream().map(seed -> Map.of("id", seed.seedId(),
+                "origin", seed.origin().name(), "enabled", seed.enabled(), "payload", json.write(seed))).toList();
+        var parameters = Map.of("version", catalog.version(), "digest", catalog.digest(), "child", child.toString(), "seeds", seeds);
+        // 기존 2초 예산 안에서 단순한 세 문장을 한 HTTP 요청으로 실행한다. 명시적 트랜잭션은 유지한다.
+        // 두 쓰기 모두 digest를 확인하므로 충돌 뒤 호출자가 커밋해도 기존 씨앗은 바뀌지 않는다.
+        var rows = rows(request("POST", uri(tx, ""), List.of(
+                Map.of("statement", BASE_VERSION, "parameters", parameters),
+                Map.of("statement", REPLACE_BASE, "parameters", parameters),
+                Map.of("statement", LOAD_BASE, "parameters", parameters)), false));
         if (rows.isEmpty() || !catalog.digest().equals(rows.get(0).get(0))) {
             throw new IllegalArgumentException("Catalog version conflict");
         }
-        statement(tx, "MATCH (s:U15Seed {childId:$child,origin:'POC'}) DETACH DELETE s", Map.of("child", child.toString()));
-        // One round trip for the base catalog keeps cold initialization inside its existing budget.
-        var seeds = catalog.seeds().stream().map(seed -> Map.of("id", seed.seedId(),
-                "origin", seed.origin().name(), "enabled", seed.enabled(), "payload", json.write(seed))).toList();
-        statement(tx, "UNWIND $seeds AS item MERGE (s:U15Seed {childId:$child,seedId:item.id}) "
-                + "SET s.origin=item.origin,s.enabled=item.enabled,s.payload=item.payload",
-                Map.of("child", child.toString(), "seeds", seeds));
     }
 
     @Override public void writeGeneratedSeed(String tx, UUID child, KnowledgeSeed seed) {
@@ -109,9 +177,12 @@ public final class Neo4jChildKnowledgeGraph implements ChildKnowledgeGraphPort {
         return true;
     }
 
-    @SuppressWarnings("unchecked")
     private List<List<Object>> statement(String tx, String cypher, Map<String, ?> parameters) {
-        Map<?, ?> reply = request("POST", uri(tx, ""), List.of(Map.of("statement", cypher, "parameters", parameters)), false);
+        return rows(request("POST", uri(tx, ""), List.of(Map.of("statement", cypher, "parameters", parameters)), false));
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<List<Object>> rows(Map<?, ?> reply) {
         List<?> results = (List<?>) reply.get("results");
         if (results == null || results.isEmpty()) return List.of();
         List<?> data = (List<?>) ((Map<?, ?>) results.get(0)).get("data");
@@ -128,7 +199,11 @@ public final class Neo4jChildKnowledgeGraph implements ChildKnowledgeGraphPort {
     }
 
     private Map<?, ?> request(String method, URI uri, List<?> statements, boolean allowClosed) {
-        var builder = HttpRequest.newBuilder(uri).timeout(budget).header("Authorization", authorization)
+        return request(method, uri, statements, allowClosed, budget);
+    }
+
+    private Map<?, ?> request(String method, URI uri, List<?> statements, boolean allowClosed, Duration timeout) {
+        var builder = HttpRequest.newBuilder(uri).timeout(timeout).header("Authorization", authorization)
                 .header("Content-Type", "application/json");
         builder.method(method, method.equals("DELETE") ? HttpRequest.BodyPublishers.noBody()
                 : HttpRequest.BodyPublishers.ofString(json.write(Map.of("statements", statements))));

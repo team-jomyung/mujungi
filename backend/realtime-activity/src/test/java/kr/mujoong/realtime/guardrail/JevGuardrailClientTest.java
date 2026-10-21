@@ -37,6 +37,7 @@ import org.junit.jupiter.api.Test;
  * 오류 상태를 본다. 이 파일의 성공은 테스트 대역(가짜 제브) 증거이고 실제 제브 응답 · 지연 · 분류 품질의 증거가 아니다(R-M11).
  */
 @Tag("jev-guardrail")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class JevGuardrailClientTest {
 
     private static final String FAKE_KEY = "fake-jev-key-not-real-u13";

@@ -16,6 +16,7 @@ import org.junit.jupiter.api.Test;
 
 /** 내부 LiveView 선 형식의 U3 몫: 끊김 구간 {@code gaps}(계약 live-view Gap: from · to · kind, AC3.2.10(b) · U3-J18). */
 @Tag("voice-session")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class SessionInternalControllerVoiceSessionTest {
 
     private static final Instant T0 = Instant.parse("2026-10-15T09:00:00Z");

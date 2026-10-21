@@ -165,6 +165,12 @@ public final class FakeDeviceLink implements DeviceLink {
         return List.copyOf(sent);
     }
 
+    /** 실제 전달 준비 단계를 관측한 뒤 그 playback ID만 다음 행위의 관측과 분리한다. */
+    public synchronized void checkpointApproved(java.util.Set<UUID> playbackIds) {
+        sent.removeIf(value -> value.payload() instanceof kr.mujoong.contract.ws.message.PlayApprovedContent play
+                && playbackIds.contains(play.playbackId()));
+    }
+
     /** 보낸 제어 메시지 중 그 종류만. */
     public synchronized <T extends WsPayload> List<T> sent(Class<T> type) {
         return sent.stream().map(Sent::payload).filter(type::isInstance).map(type::cast).toList();

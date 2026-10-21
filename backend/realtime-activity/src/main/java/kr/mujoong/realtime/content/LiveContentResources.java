@@ -25,7 +25,7 @@ import kr.mujoong.contract.json.JsonCodec;
 public final class LiveContentResources {
 
     /** 판정 선택지 판(classpath). */
-    public static final String JUDGMENT_RESOURCE = "judgment/option-sets-v1.json";
+    public static final String JUDGMENT_RESOURCE = "judgment/option-sets-service-v1.json";
     /**
      * 가드레일 정책 판(classpath). 선 형식 정정(D4 · D5)으로 새 판 {@code policy-v2.json}을 읽는다. {@code policy-v1.json}은 이력으로 자원에 남기고 코드가
      * 읽지 않는다.

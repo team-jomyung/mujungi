@@ -7,6 +7,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import kr.mujoong.contract.time.MujoongClock;
+import kr.mujoong.contract.guardrail.GuardrailPresentation;
 import kr.mujoong.realtime.log.LatencyRecorder;
 import kr.mujoong.realtime.log.SessionGapRepository;
 import kr.mujoong.realtime.log.TranscriptEntry.Speaker;
@@ -49,7 +50,7 @@ public class SessionViewQuery {
      * 실행기 없는 세션은 둘 다 null이다.
      */
     public record View(ActivitySessionRow session, Instant serverTime, List<Item> items, int nextSeq,
-            List<SessionGapRepository.SessionGapRow> gaps, IdleClock.LiveState live) {
+            List<SessionGapRepository.SessionGapRow> gaps, IdleClock.LiveState live, GuardrailPresentation guardrail) {
 
         public View {
             Objects.requireNonNull(session, "session");
@@ -57,6 +58,11 @@ public class SessionViewQuery {
             items = List.copyOf(items);
             gaps = gaps == null ? List.of() : List.copyOf(gaps);
             live = live == null || session.status().isTerminal() ? IdleClock.LiveState.NONE : live;
+        }
+
+        public View(ActivitySessionRow session, Instant serverTime, List<Item> items, int nextSeq,
+                List<SessionGapRepository.SessionGapRow> gaps, IdleClock.LiveState live) {
+            this(session, serverTime, items, nextSeq, gaps, live, null);
         }
 
         /** U3 모양(살아 있는 값 없음). */
@@ -72,15 +78,24 @@ public class SessionViewQuery {
     private final LatencyRecorder latency;
     private final MujoongClock clock;
     private final SessionRegistry registry;
+    private final SessionGuardrailFactsRepository facts;
 
     public SessionViewQuery(ActivitySessionRepository sessions, TranscriptRepository transcripts,
             SessionGapRepository gaps, LatencyRecorder latency, MujoongClock clock, SessionRegistry registry) {
+        this(sessions, transcripts, gaps, latency, clock, registry, null);
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public SessionViewQuery(ActivitySessionRepository sessions, TranscriptRepository transcripts,
+            SessionGapRepository gaps, LatencyRecorder latency, MujoongClock clock, SessionRegistry registry,
+            SessionGuardrailFactsRepository facts) {
         this.sessions = Objects.requireNonNull(sessions, "sessions");
         this.transcripts = Objects.requireNonNull(transcripts, "transcripts");
         this.gaps = Objects.requireNonNull(gaps, "gaps");
         this.latency = Objects.requireNonNull(latency, "latency");
         this.clock = Objects.requireNonNull(clock, "clock");
         this.registry = Objects.requireNonNull(registry, "registry");
+        this.facts = facts;
     }
 
     /**
@@ -111,7 +126,34 @@ public class SessionViewQuery {
         // 실행기가 바꿔 쓴 불변 값을 읽기만 한다(종료 세션은 View가 null로 둔다)
         IdleClock.LiveState live = registry.executor(sessionId).map(SessionExecutor::liveState)
                 .orElse(IdleClock.LiveState.NONE);
-        return Optional.of(new View(row.get(), now, items, nextSeq, gaps.findBySession(sessionId), live));
+        return Optional.of(new View(row.get(), now, items, nextSeq, gaps.findBySession(sessionId), live,
+                presentation(row.get(), now)));
+    }
+
+    private GuardrailPresentation presentation(ActivitySessionRow row, Instant now) {
+        if (facts == null || row.activityType() != kr.mujoong.contract.status.ActivityType.FREE_TALK) return null;
+        SessionGuardrailFacts stored;
+        try { stored = facts.latest(row.id()).orElse(null); }
+        catch (IllegalStateException invalid) { return null; }
+        if (stored == null || stored.statusVersion() != row.statusVersion()) return null;
+        var actor = registry.executor(row.id()).map(SessionExecutor::guardrailProjection).orElse(null);
+        return presentation(row, stored, actor, now,
+                stored.confirmedStopBubbleSeq() != null && transcripts.isVisibleFinalChild(row.id(), stored.confirmedStopBubbleSeq()));
+    }
+
+    static GuardrailPresentation presentation(ActivitySessionRow row, SessionGuardrailFacts stored,
+            GuardrailProjection actor, Instant now, boolean visibleStop) {
+        if (stored == null || !stored.sessionId().equals(row.id()) || stored.statusVersion() != row.statusVersion()) return null;
+        var goodbye = GuardrailPresentation.Goodbye.valueOf(stored.goodbye().name());
+        boolean dynamic = goodbye == GuardrailPresentation.Goodbye.PLAYING || goodbye == GuardrailPresentation.Goodbye.PENDING;
+        boolean current = actor != null && actor.facts() != null && actor.facts().equals(stored)
+                && actor.status() == row.status() && !row.status().isTerminal() && actor.connectionId() != null
+                && actor.goodbyeDeadline() != null && now.isBefore(actor.goodbyeDeadline());
+        if (dynamic && !current) goodbye = GuardrailPresentation.Goodbye.UNKNOWN;
+        Integer stop = row.endReason() == kr.mujoong.contract.status.EndReason.CHILD_STOP && visibleStop
+                ? stored.confirmedStopBubbleSeq() : null;
+        return new GuardrailPresentation(1, GuardrailPresentation.Notice.valueOf(stored.notice().name()),
+                GuardrailPresentation.Participation.valueOf(stored.participation().name()), goodbye, stop);
     }
 
     /** nextSeq 규칙. */

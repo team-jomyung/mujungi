@@ -24,6 +24,7 @@ import org.junit.jupiter.api.Test;
  * 이전 응답이 재생되지 않음을 본다.
  */
 @Tag("session-runtime")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class SessionStopTest {
 
     private static final String QUESTION = "이야기를 그만할까?";
@@ -55,7 +56,7 @@ class SessionStopTest {
     void anUnclearIntentAsksTheQuestionHoldsTheOutputAndAYesConfirmsTheEnd() {
         h.extraApproved.put(SessionExecutor.STOP_CONFIRM, QUESTION);
         h.activate();
-        h.childSays("i-1", "쉬고 싶어");
+        h.childSays("i-1", "그만");
 
         assertThat(h.executor.status()).isEqualTo(SessionStatus.ACTIVE);
         PlayApprovedContent question = h.link.sent(PlayApprovedContent.class).getLast();
@@ -78,12 +79,13 @@ class SessionStopTest {
     }
 
     @Test
-    void anotherReplyLiftsTheHoldAndHandsTheFloorBackOnce() {
+    void aClearNoAfterTheDeliveredQuestionLiftsTheHoldAndHandsTheFloorBackOnce() {
         h.activate();
         h.launcher.runAll("provider-create-");
         int creates = h.provider.last().requests(ProviderRequestFactory.InstructionsAppend.class).size();
-        h.childSays("i-1", "쉬고 싶어");
-        h.childSays("i-2", "티라노가 제일 커");
+        h.childSays("i-1", "그만");
+        mark(h.link.sent(PlayApprovedContent.class).getLast(), PlaybackMark.Status.COMPLETED);
+        h.childSays("i-2", "아니");
 
         assertThat(h.executor.status()).isEqualTo(SessionStatus.ACTIVE);
         h.settleSend();
@@ -98,7 +100,8 @@ class SessionStopTest {
     @Test
     void noAnswerWithin20SecondsContinuesAndNineteenStillHolds() {
         h.activate();
-        h.childSays("i-1", "쉬고 싶어");
+        h.childSays("i-1", "그만");
+        mark(h.link.sent(PlayApprovedContent.class).getLast(), PlaybackMark.Status.COMPLETED);
 
         h.advanceAlive(Duration.ofSeconds(19));
         assertThat(h.executor.timers().isArmed(SessionTimers.Kind.STOP_CONFIRM)).isTrue();

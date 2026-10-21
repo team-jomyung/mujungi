@@ -111,7 +111,8 @@ public class SessionViewService {
                 LiveExtras.silenceWarning(view.silenceWarning()),
                 LiveExtras.practice(view.practice()),
                 items,
-                nextSeq);
+                nextSeq,
+                LiveExtras.guardrail(view.guardrail()));
     }
 
     private LiveView fromCopy(ActivityCopy copy, long sinceSeq, Instant now) {
@@ -201,7 +202,18 @@ public class SessionViewService {
             LiveExtras.SilenceWarning silenceWarning,
             LiveExtras.Practice practice,
             List<Map<String, Object>> items,
-            long nextSeq) {
+            long nextSeq,
+            @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.ALWAYS)
+            kr.mujoong.contract.guardrail.GuardrailPresentation guardrail) {
+
+        public LiveView(UUID sessionId, ActivityType activityType, SessionStatus status, EndReason endReason,
+                FailureCode failureCode, boolean confirmed, Instant requestedAt, Instant startedAt, Instant endedAt,
+                long statusVersion, Instant serverTime, Instant observedAt, boolean stale, List<LiveExtras.Gap> gaps,
+                LiveExtras.TechnicalPause technicalPause, LiveExtras.SilenceWarning silenceWarning,
+                LiveExtras.Practice practice, List<Map<String, Object>> items, long nextSeq) {
+            this(sessionId, activityType, status, endReason, failureCode, confirmed, requestedAt, startedAt, endedAt,
+                    statusVersion, serverTime, observedAt, stale, gaps, technicalPause, silenceWarning, practice, items, nextSeq, null);
+        }
 
         public LiveView {
             gaps = List.copyOf(gaps);

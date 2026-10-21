@@ -1,5 +1,7 @@
 package kr.mujoong.realtime.session;
 
+import kr.mujoong.contract.ws.message.PlayApprovedContent;
+
 import static kr.mujoong.realtime.testing.RealtimeItEnvironment.WAIT;
 import static kr.mujoong.realtime.testing.RealtimeItEnvironment.awaitTrue;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -42,6 +44,7 @@ import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
  */
 @Tag("jev-guardrail")
 @Tag("db")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class GuardrailTurnIT {
 
     private static final byte[] PCM = kr.mujoong.realtime.testing.RealtimeItEnvironment.audiblePcm(4800);
@@ -51,6 +54,7 @@ class GuardrailTurnIT {
     private RealtimeItEnvironment env;
     private DeviceSimulatorClient device;
     private UUID sessionId;
+    private int approvedNoticeSeq;
 
     @BeforeEach
     void start() {
@@ -58,6 +62,16 @@ class GuardrailTurnIT {
         env = RealtimeItEnvironment.startWith(Map.of("mujoong.gate.segment-quiet", "800ms"), withFake(guard));
         device = env.connectDevice();
         sessionId = activate();
+        assertThat(device.received(WsMessageType.PLAY_APPROVED_CONTENT)).anySatisfy(envelope -> {
+            var play = (PlayApprovedContent) envelope.payload();
+            assertThat(play.contentCode()).isEqualTo(SessionExecutor.INTRO_FREE_TALK);
+            assertThat(play.contentVersionId()).isEqualTo(ServiceGuardrailFixtures.INTRO);
+        });
+        awaitTrue(() -> env.app.bean(TranscriptRepository.class).findAll(sessionId).size() == 1, "승인 안내 준비 행");
+        var prelude = env.app.bean(TranscriptRepository.class).findAll(sessionId).getFirst();
+        assertThat(prelude.text()).isEqualTo(ServiceGuardrailFixtures.TEXT);
+        assertThat(prelude.approvedForDisplay()).isTrue();
+        approvedNoticeSeq = prelude.sequenceNo();
     }
 
     @AfterEach
@@ -176,13 +190,13 @@ class GuardrailTurnIT {
     }
 
     private List<TranscriptRow> aiRows() {
-        return env.app.bean(TranscriptRepository.class).findAll(sessionId).stream()
+        return env.app.bean(TranscriptRepository.class).findAll(sessionId).stream().filter(row -> row.sequenceNo() > approvedNoticeSeq)
                 .filter(row -> row.speaker() == TranscriptEntry.Speaker.AI).toList();
     }
 
     /** 보호자 화면 12 · 27이 읽는 행(아이 행 + 승인된 FINAL AI 행) 중 AI 행. */
     private List<TranscriptRow> visibleAiRows() {
-        return env.app.bean(TranscriptRepository.class).findVisibleAfter(sessionId, 0).stream()
+        return env.app.bean(TranscriptRepository.class).findVisibleAfter(sessionId, approvedNoticeSeq).stream()
                 .filter(row -> row.speaker() == TranscriptEntry.Speaker.AI).toList();
     }
 

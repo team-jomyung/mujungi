@@ -45,6 +45,8 @@ final class SessionClocks {
 
         void onStopConfirmPlayed(Instant at);
 
+        void onStopConfirmFailed();
+
         void redeliver();
 
         void onJoinWindow();
@@ -96,6 +98,7 @@ final class SessionClocks {
             case GUARDRAIL_CHECK -> env.onGuardrailCheckTimer();
             case PLAYBACK_EXPIRY -> {
                 ctx.playback().clear();
+                if (ctx.status() == SessionStatus.CLOSING) ending.clearDynamicGoodbye();
                 if (ctx.status() == SessionStatus.WAITING_CHILD && ctx.joinPromptPlaybackId() != null) {
                     // 끝 표식이 오지 않은 참여 안내는 출력 상한에서 끝난 것으로 본다(창이 영영 열리지 않는 일을 막는다)
                     ctx.joinPromptPlaybackId(null);
@@ -103,7 +106,8 @@ final class SessionClocks {
                 }
                 if (ctx.status() == SessionStatus.ACTIVE && ctx.stopConfirmPlaybackId() != null) {
                     ctx.stopConfirmPlaybackId(null);
-                    env.onStopConfirmPlayed(ctx.services().clock().now());
+                    if (ctx.plan().activityType() == kr.mujoong.contract.status.ActivityType.FREE_TALK) env.onStopConfirmFailed();
+                    else env.onStopConfirmPlayed(ctx.services().clock().now());
                 }
             }
             case REDELIVER -> env.redeliver();
@@ -178,10 +182,8 @@ final class SessionClocks {
         Instant now = ctx.services().clock().now();
         ending.closeProvider();
         // UNCONFIRMED로 덮고 처음 사유(와 세부)를 end_detail에 둔다
-        Optional<ActivitySessionRow> row = ctx.services().transitions().transition(ctx.plan().sessionId(), SessionStatus.CLOSING,
-                SessionStatus.ENDED_UNCONFIRMED,
-                TransitionTable.closingTimeoutChange(ctx.closingReason(), ctx.closingDetail(), now).withProviderClosedAt(now),
-                SessionTransitions.Origin.REALTIME, ctx.plan().traceId());
+        Optional<ActivitySessionRow> row = ending.finishClosing(SessionStatus.ENDED_UNCONFIRMED,
+                TransitionTable.closingTimeoutChange(ctx.closingReason(), ctx.closingDetail(), now).withProviderClosedAt(now));
         if (row.isEmpty()) {
             ending.syncFromDb();
             return;

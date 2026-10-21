@@ -1,4 +1,5 @@
 import { isTerminalStatus, type LiveView } from "../api/types";
+import { ACTIVITY_COPY } from "@/shared/copy/activity";
 
 // 12 진행 표시 판단 (U4a)
 // 화면이 아니라 값만 정한다: 받은 상태에 따른 다음 동작, 공백 경고 분, 말풍선과 끊김 · 미확인 구간을 시간 순으로 섞은 흐름.
@@ -47,6 +48,14 @@ export function liveOutcome(view: Pick<LiveView, "status" | "endReason" | "failu
     return { kind: "done" };
   }
   return { kind: "stay" };
+}
+
+/** DECLINED의 사유는 같은 응답의 자유대화 사실로만 선택한다. */
+export function nonParticipationTitle(view: LiveView | undefined): string {
+  const reason = view?.activityType === "FREE_TALK" ? view.guardrail?.participation : null;
+  if (reason === "REFUSED") return ACTIVITY_COPY.nonParticipation.refused;
+  if (reason === "NO_RESPONSE") return ACTIVITY_COPY.noResponse.title;
+  return ACTIVITY_COPY.nonParticipation.unknown;
 }
 
 /** 공백 경고의 'n분째'(경고가 없거나 시각을 모르면 null). 4분 경계에서 4다. */

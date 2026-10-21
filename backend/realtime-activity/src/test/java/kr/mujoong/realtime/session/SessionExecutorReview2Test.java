@@ -32,6 +32,7 @@ import org.junit.jupiter.api.Test;
  * </ul>
  */
 @Tag("voice-session")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class SessionExecutorReview2Test {
 
     private final SessionHarness h = new SessionHarness();
@@ -152,8 +153,8 @@ class SessionExecutorReview2Test {
         h.launcher.runAll("provider-correct-");
         assertThat(h.provider.last().requests(ProviderRequestFactory.InstructionsAppend.class))
                 .extracting(ProviderRequestFactory.InstructionsAppend::content)
-                .containsExactly(InstructionTemplates.ResponseStart.FIRST.content(),
-                        InstructionTemplates.correctionContent(DialogInstructions.Correction.DIAGNOSIS));
+                .containsExactly(InstructionTemplates.ResponseStart.FIRST.content(h.activityType),
+                        InstructionTemplates.correctionContent(DialogInstructions.Correction.DIAGNOSIS, h.activityType));
     }
 
     // ------------------------------------------------------------------ 보조

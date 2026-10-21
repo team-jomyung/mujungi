@@ -29,6 +29,7 @@ import org.junit.jupiter.api.io.TempDir;
  * (가림), 키트 형식 메시지 모양, 두 열 보고서 형식을 본다.
  */
 @Tag("judgment-turn")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class GptLiveIsolationTest {
 
     private static final Path REPO_ROOT =

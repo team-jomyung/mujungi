@@ -20,6 +20,7 @@ import org.junit.jupiter.params.provider.CsvSource;
  * 본다. 세션 스냅숏은 기본 표현 "무중아 그만할래"와 보호자 추가 표현 "이제 끝"이다.
  */
 @Tag("voice-session")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class StopIntentJudgeTest {
 
     private static final List<String> SNAPSHOT = List.of("무중아 그만할래", "이제 끝");

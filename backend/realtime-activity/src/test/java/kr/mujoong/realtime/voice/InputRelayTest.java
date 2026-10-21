@@ -21,6 +21,7 @@ import org.junit.jupiter.api.Test;
  * 잠깐 있고 보낸 뒤 남지 않는다(원음 미저장).
  */
 @Tag("skeleton")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class InputRelayTest {
 
     private final MutableClock clock = new MutableClock();

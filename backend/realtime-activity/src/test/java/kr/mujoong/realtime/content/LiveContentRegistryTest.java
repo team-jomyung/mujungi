@@ -21,6 +21,7 @@ import org.junit.jupiter.api.Test;
  * 판 리소스 적재와 세션 콘텐츠 계획 · 원문 일치 (U8 functional-spec 7절 · 8.3 · BR1.4 · BR2.1 ~ BR2.3 · NFR2.1 ~ NFR2.4 · NFR3.6 · SD5 · SD6).
  */
 @Tag("live-content")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class LiveContentRegistryTest {
 
     private static final String REST_ACK = "잠깐 쉬고 싶구나. 천천히 해도 괜찮아.";
@@ -35,7 +36,7 @@ class LiveContentRegistryTest {
 
     @Test
     void theShippedResourcesLoadWithJ1ToJ6SevenCategoriesAndThreeModes() {
-        assertThat(resources.judgment().version()).isEqualTo("judgment-v1");
+        assertThat(resources.judgment().version()).isEqualTo("judgment-service-v1");
         assertThat(resources.judgment().points().keySet()).containsExactly(JudgmentPoint.values());
         assertThat(resources.judgment().points().get(JudgmentPoint.J2).optionCodes())
                 .containsExactly("FULL", "PARTIAL", "HELP", "NOT_UNDERSTOOD", "IRRELEVANT", "UNREADABLE");
@@ -73,7 +74,7 @@ class LiveContentRegistryTest {
         assertRefused(judgment, guardrail.replaceFirst(",\\s*\"criteria\": \\{[^}]*\\}", ""), Problem.BAD_CRITERIA);
         assertRefused(judgment.replace("\"code\": \"PARTIAL\"", "\"code\": \"FULL\""), guardrail, Problem.BAD_OPTIONS);
         assertRefused("{not json", guardrail, Problem.PARSE_FAILED);
-        assertRefused(judgment.replace("\"version\": \"judgment-v1\"", "\"version\": \"\""), guardrail, Problem.BAD_VERSION);
+        assertRefused(judgment.replace("\"version\": \"judgment-service-v1\"", "\"version\": \"\""), guardrail, Problem.BAD_VERSION);
     }
 
     @Test
@@ -110,7 +111,7 @@ class LiveContentRegistryTest {
                 Map.of("D_REST_ACK", new SpeechText(UUID.randomUUID(), "다른 판")));
 
         assertThat(again).isSameAs(first);
-        assertThat(first.judgmentSetVersion()).isEqualTo("judgment-v1");
+        assertThat(first.judgmentSetVersion()).isEqualTo("judgment-service-v1");
         assertThat(first.guardrailPolicyVersion()).isEqualTo("jev-guardrail-v2");
         assertThat(first.approvedContentVersionIds()).containsEntry("D_REST_ACK", restAckVersion);
         assertThat(registry.matchApproved(sessionId, "다른 판").kind()).isEqualTo(MatchKind.NOT_MATCHED);
@@ -159,7 +160,7 @@ class LiveContentRegistryTest {
         assertThat(result.version()).isEqualTo("script-1");
         assertThat(registry.plan(sessionId)).get().extracting(SessionContentPlan::scriptVersion).isEqualTo("script-1");
         assertThat(registry.plan(sessionId).get().judgmentSetVersion()).as("대본 등록은 판 번호를 바꾸지 않는다")
-                .isEqualTo("judgment-v1");
+                .isEqualTo("judgment-service-v1");
     }
 
     @Test

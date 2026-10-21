@@ -68,6 +68,7 @@ import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
  */
 @Tag("skeleton")
 @Tag("db")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class RealtimeMetricsScrapeIT {
 
     private static final byte[] PCM = kr.mujoong.realtime.testing.RealtimeItEnvironment.audiblePcm(4800);

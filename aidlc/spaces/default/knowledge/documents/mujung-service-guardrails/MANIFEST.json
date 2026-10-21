@@ -1,0 +1,37 @@
+{
+  "version": "service-0.1",
+  "created_date": "2026-10-16",
+  "status": "NOT_DEPLOYED",
+  "input_sources": [
+    {
+      "path": "/Users/leo/Downloads/무중 ai 대화 테스트/무중 서비스 베이스 파일/무중_화면설계_최종안_v1.5_준하.html",
+      "sha256": "d0db4ccbc57d9d493be89f1eda4c247aefa376c6dd406e1500790f065a7923cd"
+    },
+    {
+      "path": "/Users/leo/Downloads/mujung-test/data/instructions/v03_full.txt",
+      "sha256": "3c313918992af09a3cb26aa1d7c2e6eeb09841a56c6c6016f950b9be02522857"
+    }
+  ],
+  "files": {
+    "SERVICE_GUARDRAILS.html": {
+      "bytes": 33859,
+      "sha256": "4e570b70bfa1ffed2055c4068ae84ff436d578a5fdb112ec9af6ed66cee0b1a7"
+    },
+    "START_HERE.txt": {
+      "bytes": 2148,
+      "sha256": "89a83cb04d2580ddb92996664bb559d0a19d6494a7fa55d3c2844842988856f4"
+    },
+    "VERIFICATION.json": {
+      "bytes": 592,
+      "sha256": "8245fcbde021426077fef0db4fc9de8cf7bc1c623bf938c3ba73a0aef63ec42c"
+    },
+    "live_service_instructions.txt": {
+      "bytes": 10391,
+      "sha256": "1d92f114af7b48cefd86ed3df03feea30cdecc6ac546b128c236427f3d7fe5b7"
+    },
+    "service_contract.json": {
+      "bytes": 10380,
+      "sha256": "ccd88cc15973ab7bebb47b1a77fd14060e9b623e1ea50064242c728edf0de515"
+    }
+  }
+}

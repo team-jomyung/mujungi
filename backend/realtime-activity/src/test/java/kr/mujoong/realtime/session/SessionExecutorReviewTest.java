@@ -39,6 +39,7 @@ import org.junit.jupiter.api.Test;
  * </ul>
  */
 @Tag("voice-session")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class SessionExecutorReviewTest {
 
     private static final byte[] FRAME = new byte[960];

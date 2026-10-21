@@ -18,6 +18,7 @@ import org.junit.jupiter.api.Test;
  * 같은 모양이다(빈 선택은 {@code JudgmentConfigurationTest}). 증거 종류: 테스트 대역.
  */
 @Tag("judgment-turn")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class JudgmentNoProviderRegressionTest {
 
     /** 한 시나리오의 관측: 보기 순서 · 세션 사건 종류 순서 · 재생 문구 코드 · 공급자 지시 수. */
@@ -27,7 +28,6 @@ class JudgmentNoProviderRegressionTest {
     private static SessionHarness base() {
         SessionHarness h = new SessionHarness();
         h.extraApproved.put(SessionExecutor.STOP_CONFIRM, "이야기를 그만할까?");
-        h.extraApproved.put(SessionExecutor.RE_PROMPT, "같이 이야기해 볼까?");
         return h;
     }
 
@@ -58,7 +58,9 @@ class JudgmentNoProviderRegressionTest {
     private static final Consumer<SessionHarness> J1_UNCLEAR = h -> {
         h.boot();
         h.ackAndReady();
+        h.completeNotice();
         h.childSays("j-1", JudgmentExecutorSupport.UNCLEAR_JOIN);
+        h.completeNotice();
         h.childSays("j-2", "응");
     };
 
@@ -91,6 +93,11 @@ class JudgmentNoProviderRegressionTest {
         Consumer<SessionHarness> script = h -> {
             h.activate();
             h.childSays("i-1", JudgmentExecutorSupport.UNCLEAR_STOP);
+            var play = h.link.sent(PlayApprovedContent.class).getLast();
+            h.mailbox.putSafety(new SessionMailbox.PlaybackMarkReceived(h.link.connectionId(),
+                    new kr.mujoong.contract.ws.message.PlaybackMark(play.playbackId(),
+                            kr.mujoong.contract.ws.message.PlaybackMark.Status.COMPLETED, null, h.clock.now(), null, null), h.clock.now()));
+            h.drain();
             h.childSays("i-2", "응");
         };
         Observed before = observe(base(), script);

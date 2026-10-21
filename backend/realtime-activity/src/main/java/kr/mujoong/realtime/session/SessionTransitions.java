@@ -30,7 +30,12 @@ public interface SessionTransitions {
      * @param technicalPause 전이 시점에 켜진 기술 일시정지(없으면 null, SessionStateChanged.technicalPause · BR7.2)
      * @param eraseTranscripts 같은 트랜잭션에서 그 세션의 전사 행을 지운다(DECLINED, BR3.2)
      */
-    record Extras(SessionStateChanged.TechnicalPause technicalPause, boolean eraseTranscripts) {
+    record Extras(SessionStateChanged.TechnicalPause technicalPause, boolean eraseTranscripts,
+            SessionGuardrailFacts guardrailFacts) {
+
+        public Extras(SessionStateChanged.TechnicalPause technicalPause, boolean eraseTranscripts) {
+            this(technicalPause, eraseTranscripts, null);
+        }
 
         private static final Extras NONE = new Extras(null, false);
 
@@ -64,4 +69,9 @@ public interface SessionTransitions {
 
     /** 지금 행. */
     Optional<ActivitySessionRow> find(UUID sessionId);
+
+    /** 같은 상태의 확정 사실도 세션 행 잠금과 예상 버전 아래에서만 저장한다. */
+    default Optional<SessionGuardrailFacts> recordGuardrailFacts(SessionGuardrailFacts facts, int expectedStatusVersion) {
+        throw new UnsupportedOperationException("확정 사실 저장을 지원하지 않는다");
+    }
 }

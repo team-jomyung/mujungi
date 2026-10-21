@@ -12,6 +12,7 @@ import kr.mujoong.core.textai.GeneratedScenario;
 import org.junit.jupiter.api.*;
 
 @Tag("scenario-generation") @Tag("db")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class ScenarioRepositoryIT {
     DbTestSupport db; ScenarioRepository repo; UUID g,c;
     final Duration timeout=Duration.ofMillis(500);

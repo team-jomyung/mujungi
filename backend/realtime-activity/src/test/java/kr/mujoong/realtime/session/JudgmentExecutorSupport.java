@@ -15,7 +15,7 @@ import kr.mujoong.realtime.voice.ProviderRequestFactory;
 final class JudgmentExecutorSupport {
 
     /** 종료 의도가 불명확해 J6가 열리는 합성 전사. */
-    static final String UNCLEAR_STOP = "쉬고 싶어";
+    static final String UNCLEAR_STOP = "그만";
     /** 참여 확인에서 불명확해 J1이 열리는 합성 전사. */
     static final String UNCLEAR_JOIN = "음 글쎄";
 
@@ -24,7 +24,6 @@ final class JudgmentExecutorSupport {
 
     JudgmentExecutorSupport() {
         h.extraApproved.put(SessionExecutor.STOP_CONFIRM, "이야기를 그만할까?");
-        h.extraApproved.put(SessionExecutor.RE_PROMPT, "같이 이야기해 볼까?");
         h.extraApproved.put(SessionExecutor.DECLINE_ALTERNATIVE, "그럼 다른 이야기를 해 볼까?");
     }
 
@@ -32,6 +31,7 @@ final class JudgmentExecutorSupport {
     void waiting() {
         h.boot();
         h.ackAndReady();
+        h.completeNotice();
     }
 
     /** J6를 연다(ACTIVE 자유대화). */

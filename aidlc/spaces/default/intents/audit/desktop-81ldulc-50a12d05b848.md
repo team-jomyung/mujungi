@@ -314,3 +314,45 @@
 **Intent**: 01a13e5c-0ac9-786b-8d26-8e248e3c22b1
 
 ---
+
+## Document Indexed
+**Timestamp**: 2026-10-20T06:55:46Z
+**Event**: DOCUMENT_INDEXED
+**Space**: default
+**Document**: 01a15818-3d3a-736f-abb0-a451fb39f3b0
+**Source**: documents/무중_서비스용_가드레일_20261016.zip
+**Digest**: 94c982939b5637ea1729a447932d2be7db7c6a5ae55db4c1146002a75e46e270
+
+---
+
+## Document Updated
+**Timestamp**: 2026-10-20T06:59:24Z
+**Event**: DOCUMENT_UPDATED
+**Space**: default
+**Document**: 01a15818-3d3a-736f-abb0-a451fb39f3b0
+**Change**: associate
+**Intent**: 01a1581a-0b79-77f8-81bb-a6a145bb2cf3
+
+---
+
+## Document Indexed
+**Timestamp**: 2026-10-20T07:20:44Z
+**Event**: DOCUMENT_INDEXED
+**Space**: default
+**Document**: 01a1582f-1b1e-759a-9907-fe6b66fda3e5
+**Source**: documents/mujung-service-guardrails/live_service_instructions.txt
+**Digest**: 1d92f114af7b48cefd86ed3df03feea30cdecc6ac546b128c236427f3d7fe5b7
+**Intents**: ["01a1581a-0b79-77f8-81bb-a6a145bb2cf3"]
+
+---
+
+## Document Indexed
+**Timestamp**: 2026-10-20T07:20:45Z
+**Event**: DOCUMENT_INDEXED
+**Space**: default
+**Document**: 01a1582f-1f01-747a-8e54-d408d585906d
+**Source**: documents/mujung-service-guardrails/service_contract.json
+**Digest**: ccd88cc15973ab7bebb47b1a77fd14060e9b623e1ea50064242c728edf0de515
+**Intents**: ["01a1581a-0b79-77f8-81bb-a6a145bb2cf3"]
+
+---

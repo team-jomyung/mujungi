@@ -50,6 +50,7 @@ import tools.jackson.databind.JsonNode;
  */
 @Tag("skeleton")
 @Tag("db")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class ProviderRequestWhitelistIT {
 
     /** U11(편차 (U11-a)): 중첩 session{model, instructions, audio{format{type, rate}}}. 아이 정보는 지시문 문장 안에만 있다. */
@@ -149,8 +150,20 @@ class ProviderRequestWhitelistIT {
                 .filter(method -> java.lang.reflect.Modifier.isPublic(method.getModifiers()))
                 .flatMap(method -> Arrays.stream(method.getParameterTypes())).map(Class::getSimpleName))
                 // U4b: 연습 확장점 지시문은 검사된 값 타입(PracticeInstruction)으로만 받는다(BR10.4)
-                .allMatch(name -> Set.of("ChildContext", "byte[]", "int", "Correction", "PracticeInstruction", "String", "ResponseStart")
+                .allMatch(name -> Set.of("ChildContext", "byte[]", "int", "Correction", "PracticeInstruction", "String", "ResponseStart",
+                                "ActivityType", "PolicyBundle")
                         .contains(name));
+        // U16 internal mode/pinned-policy inputs are allowed only at these exact assembly boundaries.
+        // The serialized record and actual wire whitelist above remain unchanged.
+        assertThat(Arrays.stream(ProviderRequestFactory.class.getDeclaredMethods())
+                .filter(method -> java.lang.reflect.Modifier.isPublic(method.getModifiers()))
+                .filter(method -> Arrays.stream(method.getParameterTypes()).anyMatch(type ->
+                        type == kr.mujoong.contract.status.ActivityType.class
+                        || type == kr.mujoong.realtime.dialog.PolicyBundle.class))
+                .map(method -> method.getName() + "(" + Arrays.stream(method.getParameterTypes())
+                        .map(Class::getSimpleName).collect(java.util.stream.Collectors.joining(",")) + ")"))
+                .containsExactlyInAnyOrder("servicePolicy(ActivityType)", "sessionStart(ChildContext,PolicyBundle)",
+                        "responseStart(String,ResponseStart,ActivityType)", "instructionsAppend(String,Correction,ActivityType)");
     }
 
     @Test

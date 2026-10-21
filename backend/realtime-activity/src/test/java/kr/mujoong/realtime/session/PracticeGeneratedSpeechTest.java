@@ -26,6 +26,7 @@ import org.junit.jupiter.api.Test;
  * (R-M11).
  */
 @Tag("practice-flow")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class PracticeGeneratedSpeechTest {
 
     private static final String INSTRUCTION = "친구로서 방금 말을 한 번 더 물어보세요";

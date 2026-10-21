@@ -48,6 +48,7 @@ import org.springframework.jdbc.datasource.DataSourceTransactionManager;
  */
 @Tag("voice-session")
 @Tag("db")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class RealtimeVoiceDeletionParticipantIT {
 
     private static final Instant T0 = Instant.parse("2026-10-15T09:00:00Z");

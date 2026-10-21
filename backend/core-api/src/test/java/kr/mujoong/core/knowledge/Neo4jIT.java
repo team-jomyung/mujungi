@@ -13,7 +13,7 @@ import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.utility.DockerImageName;
 
-@Tag("knowledge-graph") @Tag("db")
+@Tag("knowledge-graph") @Tag("db") @Tag("service-guardrail")
 class Neo4jIT {
     private static final String PASSWORD = UUID.randomUUID().toString();
     private static final GenericContainer<?> NEO4J = new GenericContainer<>(DockerImageName.parse("neo4j:5.26.31-community"))
@@ -27,18 +27,31 @@ class Neo4jIT {
     }
     private static Neo4jChildKnowledgeGraph connection() {
         return new Neo4jChildKnowledgeGraph(URI.create("http://" + NEO4J.getHost() + ":" + NEO4J.getMappedPort(7474)),
-                "neo4j/" + PASSWORD, Duration.ofSeconds(2));
+                "neo4j/" + PASSWORD, Duration.ofSeconds(2), Duration.ofSeconds(10),
+                new kr.mujoong.contract.time.SystemMujoongClock());
     }
     @AfterAll static void stop() { NEO4J.stop(); }
     @Test void configuredStartupAuthenticatesAndPreparesSchema() {
         var core = org.mockito.Mockito.mock(kr.mujoong.core.config.CoreProperties.class, org.mockito.Mockito.RETURNS_DEEP_STUBS);
         org.mockito.Mockito.when(core.timing().knowledge().graphBudget()).thenReturn(Duration.ofSeconds(2));
+        org.mockito.Mockito.when(core.timing().knowledge().graphInitializationBudget()).thenReturn(Duration.ofSeconds(10));
         var properties = new KnowledgeProperties(true, "http://"+NEO4J.getHost()+":"+NEO4J.getMappedPort(7474));
         var env = new org.springframework.mock.env.MockEnvironment().withProperty("NEO4J_AUTH","neo4j/"+PASSWORD);
-        assertThat(new KnowledgeConfiguration().childKnowledgeGraph(properties,core,env)).isInstanceOf(Neo4jChildKnowledgeGraph.class);
+        var clock = new kr.mujoong.contract.time.SystemMujoongClock();
+        assertThat(new KnowledgeConfiguration().childKnowledgeGraph(properties,core,env,clock)).isInstanceOf(Neo4jChildKnowledgeGraph.class);
         assertThatThrownBy(()->new KnowledgeConfiguration().childKnowledgeGraph(properties,core,
-                new org.springframework.mock.env.MockEnvironment().withProperty("NEO4J_AUTH","neo4j/wrong-password")))
+                new org.springframework.mock.env.MockEnvironment().withProperty("NEO4J_AUTH","neo4j/wrong-password"),clock))
                 .isInstanceOf(IllegalStateException.class);
+    }
+    @Test void schemaPreparationDoesNotCreateSyntheticChildOrPinSyntheticVersion() {
+        assertThat(graph.seeds(new UUID(0, 0))).isEmpty();
+        String tx = graph.begin();
+        try {
+            graph.replaceBase(tx, UUID.randomUUID(), new SeedCatalog("__schema_preparation__", "a".repeat(64), List.of()));
+        } finally {
+            graph.terminate(tx);
+        }
+        assertThat(graph.seeds(new UUID(0, 0))).isEmpty();
     }
     @Test void commitsBaseAndIsolatesChildren() {
         UUID child = UUID.randomUUID();
@@ -51,6 +64,7 @@ class Neo4jIT {
     @Test void rollbackRemovesUncommittedWrites() {
         UUID child = UUID.randomUUID();
         String tx = graph.begin();
+        graph.replaceBase(tx, child, GraphModelTest.catalog());
         graph.writeGeneratedSeed(tx, child, GraphModelTest.seed("seed:G0001", KnowledgeSeed.Origin.GENERATED));
         assertThat(graph.terminate(tx)).isTrue();
         assertThat(graph.seeds(child)).isEmpty();
@@ -83,6 +97,13 @@ class Neo4jIT {
         assertThatThrownBy(() -> graph.replaceBase(conflict, child, new SeedCatalog("v1", "b".repeat(64), GraphModelTest.catalog().seeds())))
                 .isInstanceOf(IllegalArgumentException.class);
         graph.terminate(conflict);
+        String committedConflict = graph.begin();
+        assertThatThrownBy(() -> graph.replaceBase(committedConflict, child,
+                new SeedCatalog("v1", "b".repeat(64), List.of(GraphModelTest.seed("seed:S99", KnowledgeSeed.Origin.POC)))))
+                .isInstanceOf(IllegalArgumentException.class);
+        graph.commit(committedConflict);
+        assertThat(graph.seeds(child)).extracting(KnowledgeSeed::seedId)
+                .containsExactly("seed:G0001", "seed:S1");
     }
     @Test void deleteIdsPreservesOthers() {
         UUID child = UUID.randomUUID();

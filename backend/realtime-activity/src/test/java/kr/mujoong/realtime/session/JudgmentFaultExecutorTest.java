@@ -20,6 +20,7 @@ import org.junit.jupiter.api.Test;
  * 합성이다(R-F1 · R-F3).
  */
 @Tag("judgment-turn")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class JudgmentFaultExecutorTest {
 
     private final JudgmentExecutorSupport t = new JudgmentExecutorSupport();

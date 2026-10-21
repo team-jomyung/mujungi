@@ -23,6 +23,7 @@ import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 
 /** 판정 포트 빈 선택 (U11 BR1.6 · U11-c): 키와 스위치가 모두 있을 때만 Luna 구현, 아니면 보류 구현. 키는 가짜 문자열만 쓴다(R-F3). */
 @Tag("judgment-turn")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class JudgmentConfigurationTest {
 
     private final MutableClock clock = new MutableClock();
@@ -52,7 +53,7 @@ class JudgmentConfigurationTest {
             JudgeClient client = context.getBean(JudgeClient.class);
             assertThat(client).isInstanceOf(UnavailableJudgeClient.class);
             assertThat(client.available()).isFalse();
-            assertThat(context.getBean(JudgmentPrompt.class).version()).isEqualTo("prompt-v1");
+            assertThat(context.getBean(JudgmentPrompt.class).version()).isEqualTo("prompt-service-v1");
         });
     }
 

@@ -111,3 +111,29 @@
 | `contracts/deviations.md` | 52행 `SessionExecutor` 문구 1곳 | 문서 문구만. 오류 코드 · 설정 키 · 시간 값 계약은 이름과 무관 |
 | `docs/` | `frontend/src` · `backend/.../src/main` 경로 문서 18개, 화면 파일 이름 문서 3개, `SessionExecutor` 문서 `docs/units/{u3,u4b,u5b,u11,u12,u13}/*` 15개 안팎 | 이력 문서라 함께 고칠지는 별도 결정 |
 | Flyway 파일명 | `V7__u5b_...` 등 | 바꾸지 않는다(R-M2) |
+
+## 집중 조사 보강 — 현재 음성 진단 경로
+
+앞 표의 줄 수·이름은 이전 커밋의 역사적 정보다. 이번에 확인한 경로:
+- 기기: device/audio/{capture,resample,player,audioContext}.ts, device/runtime/deviceRuntime.ts, device/ws/deviceSession.ts, device/mic/micPermission.ts, device/api/deviceApi.ts.
+- 보호자: parent/features/live/useLiveScreen.ts, parent/common/hooks/useLivePolling.ts, parent/common/api/live.ts, parent/common/components/TranscriptList.tsx. 자유대화 시작은 parent/features/free/{api,useFreeTalkScreen}.ts.
+- 서버: session/SessionExecutor의 전사·출력·게이트 구역, JoinFlow, dialog/JoinTracker, gate/{OutputGate,SegmentBuffer}, voice/ProviderClient, log/LatencyRecorder, session/SessionViewQuery.
+- 도구: device-simulator/simulator.mjs와 seed 생성기 두 개. GptLiveProbe는 시험 소스의 격리 공급자 실험 도구다.
+
+파일 전체 깊이를 보장하지 않는 항목: SessionExecutor는 1970~2265 및 2700~2940의 핵심 경로, GptLiveProbe는 설정·입력·직접 연결 구역을 집중 분석했다. 도구 skeleton-e2e/steps.mjs는 인증·등록·참여·표시 단언을 참고했지만 전체 분석 범위에 넣지 않았다.
+
+## 집중 조사 보강 — 261020-service-guardrail-replac
+
+기준: 2026-10-20, 커밋 2e3d7b0. 이전 절은 이전 의도의 기록으로 보존했다. 이번 검증 범위는 timestamp의 개별 파일에 한정한다.
+
+| 분류 | 현재 위치와 역할 |
+|---|---|
+| 정책/문장 | dialog/DialogInstructions.java: 기본 역할 및 고정 교정; dialog/InstructionTemplates.java: 첫 응답·휴식·재요청·범위 닫기 |
+| 공급자 경계 | voice/ProviderRequestFactory.java: session.start와 append의 허용 필드·아이 데이터 따옴표 처리; voice/ProviderPort.java: 타입 포트 |
+| 상태 제어 | session/JoinFlow.java: 승인 안내와 참여; dialog/StopConfirmFlow.java: 모호한 종료 확인; session/ProviderSendQueue.java: 지시 직렬화 |
+| 출력 검수 | gate/OutputGate.java, session/GuardrailCoordinator.java, guardrail/JevGuardrailClient.java |
+| 정책 리소스 | guardrail/policy-v2.json은 JEV 검사 질문이며 GPT-Live 기본 지시와 별도; content/LiveContentResources.java가 검증 적재 |
+| 회귀 시험 | dialog/DialogInstructionsTest.java, voice/ProviderRequestFactoryWireTest.java, guardrail/GuardrailPolicyV2Test.java |
+
+위 경로는 모두 backend/realtime-activity/src/main 또는 src/test 아래다. SessionExecutor는 관련 호출과 보류/출력 구역만 확인해 shallow로 기록했다. 기존 전체 구조·파일 수 표는 재계수하지 않았다.
+

@@ -260,6 +260,26 @@ public final class StopIntentJudge {
         return unclear(text) ? Judgment.CONFIRM : Judgment.NONE;
     }
 
+    /** 휴식은 전체 종료와 구별한다. 인용/부정은 현재 요청으로 승격하지 않는다. */
+    public boolean requestsRest(String transcript) {
+        String text = normalize(transcript);
+        if (transcript == null || reported(text, tokens(transcript)) || judge(transcript, false).verdict() == Verdict.STOP
+                || text.contains("쉬고싶지않") || text.contains("안쉴") || text.contains("생각안할")) return false;
+        return containsAny(text, List.of("쉬고싶", "잠깐쉴", "잠깐쉬자", "좀쉴게", "생각할게", "생각좀할", "기다려줘"));
+    }
+
+    public boolean refusesTopic(String transcript) {
+        String text = normalize(transcript);
+        return transcript != null && !reported(text, tokens(transcript))
+                && (containsAny(text, TOPIC_REFUSAL) || topicStop(text));
+    }
+
+    public boolean requestsImmediateMute(String transcript) {
+        String text = normalize(transcript);
+        return transcript != null && !reported(text, tokens(transcript))
+                && containsAny(text, List.of("말하지마", "소리내지마", "조용히해", "지금당장멈춰"));
+    }
+
     /** 계속 표현이 들어 있는가(해야 할 일 · 이어 주는 말로 쓰인 것은 빼고). */
     private static boolean continuing(String text) {
         for (String phrase : CONTINUE) {

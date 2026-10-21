@@ -1,0 +1,12 @@
+{
+  "description": "U17 소비용 합성 guardrail 조각. 전체 LiveView나 실제 안내/기기 청취의 증거가 아니다. null/UNKNOWN은 성공으로 채우지 않는다.",
+  "normal": {"schemaVersion":1,"notice":"COMPLETED","participation":"ACCEPTED","goodbye":"NONE","confirmedStopBubbleSeq":null},
+  "refused": {"schemaVersion":1,"notice":"COMPLETED","participation":"REFUSED","goodbye":"NONE","confirmedStopBubbleSeq":null},
+  "noResponse": {"schemaVersion":1,"notice":"COMPLETED","participation":"NO_RESPONSE","goodbye":"NONE","confirmedStopBubbleSeq":null},
+  "unknown": {"schemaVersion":1,"notice":"UNKNOWN","participation":"UNKNOWN","goodbye":"UNKNOWN","confirmedStopBubbleSeq":null},
+  "legacyOrFallback": null,
+  "goodbyePending": {"schemaVersion":1,"notice":"COMPLETED","participation":"ACCEPTED","goodbye":"PENDING","confirmedStopBubbleSeq":7},
+  "goodbyePlaying": {"schemaVersion":1,"notice":"COMPLETED","participation":"ACCEPTED","goodbye":"PLAYING","confirmedStopBubbleSeq":7},
+  "goodbyeCompleted": {"schemaVersion":1,"notice":"COMPLETED","participation":"ACCEPTED","goodbye":"COMPLETED","confirmedStopBubbleSeq":7},
+  "visibleStopItem": {"seq":7,"speaker":"CHILD","text":"오늘은 여기까지 할래","final":true,"uncertain":false,"startedAt":"2026-10-21T00:00:00Z","endedAt":"2026-10-21T00:00:01Z"}
+}

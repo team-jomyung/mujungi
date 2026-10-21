@@ -16,6 +16,7 @@ import org.junit.jupiter.api.Test;
  * {@link JsonCodec}으로 {@code StartBody}에 읽은 뒤 명령으로 바꾼다.
  */
 @Tag("live-content")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class SessionStartReceiveTest {
 
     private static final String SPEECH_VERSION = "00000000-0000-4000-8000-0000000008b3";

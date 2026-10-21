@@ -43,6 +43,7 @@ import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 /** 실제 Inbox 상태·사본·발송 요청을 한 트랜잭션으로 검증한다. 외부 호출과 스케줄러는 실행하지 않는다. */
 @Tag("web-push")
 @Tag("db")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class PushInboxIT {
     private final JsonCodec json = JsonCodec.shared();
     private final List<UUID> owners = new ArrayList<>();

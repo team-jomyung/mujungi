@@ -1,0 +1,20 @@
+{
+  "files": [
+    "frontend/src/device/audio/player.ts",
+    "frontend/src/device/ws/deviceSession.ts",
+    "frontend/src/parent/common/activity/livePresentation.ts",
+    "frontend/src/parent/common/api/apiClient.ts",
+    "frontend/src/parent/common/api/guardrailPresentation.ts",
+    "frontend/src/parent/common/api/live.ts",
+    "frontend/src/parent/common/api/liveUpdates.ts",
+    "frontend/src/parent/common/api/types.ts",
+    "frontend/src/parent/common/hooks/useLivePolling.ts",
+    "frontend/src/parent/features/done/DoneScreen.tsx",
+    "frontend/src/parent/features/done/presentation.ts",
+    "frontend/src/parent/features/done/useDoneScreen.ts",
+    "frontend/src/parent/features/live/LiveScreen.tsx",
+    "frontend/src/parent/features/live/NoticeDialog.tsx",
+    "frontend/src/parent/features/live/useLiveScreen.ts",
+    "frontend/src/shared/copy/activity.ts"
+  ]
+}

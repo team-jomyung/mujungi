@@ -14,6 +14,7 @@ import org.junit.jupiter.api.Test;
  * 새 구간의 행과 섞이지 않고 종료 때 FINAL · 승인 거짓으로 닫힌다.
  */
 @Tag("jev-guardrail")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class TranscriptWriterHoldTest {
 
     private final SessionHarness h = new SessionHarness();

@@ -17,6 +17,7 @@ import org.junit.jupiter.api.Test;
  * 판정 턴 실행기 연결 2 — 참여 확인 J1 (U11 W1 · BR6.x · BR7.1, 설계 편차 U11-D6). 공급자와 판정기는 가짜, 값은 합성이다(R-F1 · R-F3).
  */
 @Tag("judgment-turn")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class JoinJudgmentExecutorTest {
 
     private final JudgmentExecutorSupport t = new JudgmentExecutorSupport();
@@ -64,12 +65,13 @@ class JoinJudgmentExecutorTest {
     }
 
     @Test
-    void declineOffersTheAlternativeAndRestUnclearAndAbstainAllReprompt() {
+    void declineEndsWithoutAlternativeAndRestUnclearAndAbstainAllReprompt() {
         t.waiting();
         t.h.childSays("j-1", JudgmentExecutorSupport.UNCLEAR_JOIN);
         t.judge.confirm("DECLINE", 0.9, "UNCLEAR", 0.05);
         t.h.drain();
-        assertThat(t.events(JoinFlow.EVENT_JOIN_ALTERNATIVE_OFFERED)).hasSize(1);
+        assertThat(t.events(JoinFlow.EVENT_JOIN_ALTERNATIVE_OFFERED)).isEmpty();
+        assertThat(t.h.executor.status()).isEqualTo(SessionStatus.DECLINED);
         assertThat(t.records().getLast().nextAction()).isEqualTo(NextAction.DECLINE_JOIN);
 
         JudgmentExecutorSupport second = new JudgmentExecutorSupport();
@@ -97,6 +99,7 @@ class JoinJudgmentExecutorTest {
         t.h.childSays("j-1", JudgmentExecutorSupport.UNCLEAR_JOIN);
         t.judge.confirm("UNCLEAR", 0.9, "REST", 0.05);
         t.h.drain();
+        t.h.completeNotice();
         t.h.childSays("j-2", JudgmentExecutorSupport.UNCLEAR_JOIN);
         t.judge.confirm("UNCLEAR", 0.9, "REST", 0.05);
         t.h.drain();

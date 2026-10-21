@@ -40,6 +40,7 @@ import org.junit.jupiter.api.Test;
  * 시작점(J300).
  */
 @Tag("skeleton")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class SessionExecutorTest {
 
     private final SessionHarness h = new SessionHarness();

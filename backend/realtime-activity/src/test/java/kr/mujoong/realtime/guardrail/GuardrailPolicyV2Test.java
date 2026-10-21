@@ -23,6 +23,7 @@ import org.junit.jupiter.api.Test;
  * 확인한다. 이 파일의 성공은 테스트 대역(리소스 파일) 증거이고 제브 실호출 증거가 아니다(R-M11).
  */
 @Tag("jev-guardrail")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class GuardrailPolicyV2Test {
 
     private static final List<String> CATEGORIES = List.of("DIAGNOSIS", "TREATMENT", "SCORE", "CAUSE", "GENERALIZATION", "EMOTION_CLAIM",

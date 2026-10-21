@@ -22,6 +22,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 @Tag("practice-legacy")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class PracticeExecutorIntegrationTest {
     final SessionHarness h = new SessionHarness();
     final Controlled extension = new Controlled();

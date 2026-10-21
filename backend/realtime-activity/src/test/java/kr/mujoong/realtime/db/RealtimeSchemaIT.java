@@ -41,6 +41,7 @@ import org.springframework.context.annotation.Configuration;
  */
 @Tag("skeleton")
 @Tag("db")
+@Tag("service-guardrail")
 class RealtimeSchemaIT {
 
     /** V1 일곱 표 + U3 V2 세 표 + U4b V3 한 표 + U5b V4 다섯 표 + U11 V5 한 표 + U13 V6 한 표 + U12 V7 두 표(pg_tables 이름 순). */
@@ -85,18 +86,18 @@ class RealtimeSchemaIT {
             assertThat(tables.stream().map(row -> (String) row.get(0)).toList()).containsExactlyElementsOf(REALTIME_TABLES);
             assertThat(tables).allSatisfy(row -> assertThat(row.get(1)).isEqualTo("mujoong_owner"));
 
-            // core 위치가 먼저 flyway 스키마를 썼으므로 realtime 이력은 버전 0 기준선 뒤 V1 · V2 · V3 · V4 · V5 · V6 · V7이다(J116 보완)
+            // 같은 V1–V7 이력 뒤 U16의 additive V8 인덱스가 적용된다. 새 표/권한은 없다.
             assertThat(query(owner,
                     "select version, type, success from flyway.realtime_schema_history order by installed_rank"))
                     .containsExactly(List.of("0", "BASELINE", true), List.of("1", "SQL", true), List.of("2", "SQL", true),
                             List.of("3", "SQL", true), List.of("4", "SQL", true), List.of("5", "SQL", true),
-                            List.of("6", "SQL", true), List.of("7", "SQL", true));
+                            List.of("6", "SQL", true), List.of("7", "SQL", true), List.of("8", "SQL", true));
         }
         try (Connection realtime = postgres.connect(Role.REALTIME_APP)) {
             // 기동 점검 S2가 읽는 최신 버전
             assertThat(single(realtime,
                     "select max(version) from flyway.realtime_schema_history where success and type = 'SQL'"))
-                    .isEqualTo("7");
+                    .isEqualTo("8");
         }
     }
 
@@ -245,10 +246,13 @@ class RealtimeSchemaIT {
                             + " order by indexname");
             assertThat(partial.stream().map(row -> (String) row.get(0)).toList()).containsExactly(
                     "realtime_activity_session_in_progress_device_uk",
-                    "realtime_activity_session_in_progress_guardian_uk");
-            assertThat(partial).allSatisfy(row -> assertThat((String) row.get(1))
+                    "realtime_activity_session_in_progress_guardian_uk", "realtime_session_guardrail_revision_idx");
+            assertThat(partial.subList(0, 2)).allSatisfy(row -> assertThat((String) row.get(1))
                     .startsWith("CREATE UNIQUE INDEX").contains("'PREPARING'").contains("'CLOSING'")
                     .doesNotContain("'ENDED'"));
+            assertThat((String) partial.get(2).get(1)).startsWith("CREATE INDEX")
+                    .contains("realtime_session_event", "session_id", "revision", "DESC", "SESSION_GUARDRAIL_FACTS")
+                    .doesNotContain("UNIQUE");
             // 전사 (session_id, sequence_no) 유일과 폴러 · 삭제 참가자 색인
             assertThat(single(realtime,
                     "select count(*) from pg_indexes where schemaname = 'realtime' and indexname in"

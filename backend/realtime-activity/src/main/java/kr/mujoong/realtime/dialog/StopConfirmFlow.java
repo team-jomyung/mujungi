@@ -42,6 +42,7 @@ public final class StopConfirmFlow {
     }
 
     private final Duration wait;
+    private final boolean serviceGuardrail;
     private Phase phase = Phase.IDLE;
     private Instant windowStart;
 
@@ -49,11 +50,16 @@ public final class StopConfirmFlow {
      * @param wait 확인 질문 창({@code mujoong.timing.session.stop-confirm-wait})
      */
     public StopConfirmFlow(Duration wait) {
+        this(wait, false);
+    }
+
+    public StopConfirmFlow(Duration wait, boolean serviceGuardrail) {
         Objects.requireNonNull(wait, "wait");
         if (wait.isNegative() || wait.isZero()) {
             throw new IllegalArgumentException("확인 질문 창은 0보다 커야 한다");
         }
         this.wait = wait;
+        this.serviceGuardrail = serviceGuardrail;
     }
 
     /** 확인 중이 아닐 때 종료 의도 판정 결과를 받는다. 확인 중이면 {@link Decision#NONE}(대답은 {@link #onReply}가 본다). */
@@ -93,11 +99,16 @@ public final class StopConfirmFlow {
         if (phase == Phase.IDLE) {
             return Decision.NONE;
         }
+        if (serviceGuardrail && stopVerdict) return finish(Decision.CLOSE);
+        if (serviceGuardrail && phase == Phase.ASKING) return Decision.NONE;
         if (expired(at)) {
             return finish(Decision.RESUME);
         }
-        boolean accept = JoinTracker.classify(transcript) == JoinTracker.Reply.ACCEPT;
-        return finish(stopVerdict || accept ? Decision.CLOSE : Decision.RESUME);
+        JoinTracker.Reply reply = JoinTracker.classify(transcript);
+        if (!serviceGuardrail) return finish(stopVerdict || reply == JoinTracker.Reply.ACCEPT ? Decision.CLOSE : Decision.RESUME);
+        if (reply == JoinTracker.Reply.ACCEPT) return finish(Decision.CLOSE);
+        if (reply == JoinTracker.Reply.REFUSE) return finish(Decision.RESUME);
+        return Decision.NONE;
     }
 
     /** 시간 경과 확인: 창이 끝났으면(창 끝 시각 포함) RESUME. */

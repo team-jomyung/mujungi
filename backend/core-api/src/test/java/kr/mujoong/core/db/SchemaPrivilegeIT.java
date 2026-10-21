@@ -30,6 +30,7 @@ import org.junit.jupiter.api.Test;
  */
 @Tag("skeleton")
 @Tag("db")
+@Tag("service-guardrail")
 class SchemaPrivilegeIT {
 
     private static final String INSUFFICIENT_PRIVILEGE = "42501";
@@ -108,13 +109,13 @@ class SchemaPrivilegeIT {
     void eachAppReadsOnlyItsOwnFlywayHistoryTable() throws SQLException {
         try (Connection core = postgres.connect(Role.CORE_APP);
                 Connection realtime = postgres.connect(Role.REALTIME_APP)) {
-            // afterMigrate.sql이 준 자기 이력 표 SELECT(J116, 기동 점검 S2가 읽는다). core 최고 버전은 U14의 V9, realtime은 U12의 V7
+            // afterMigrate.sql의 기존 앱별 SELECT 격리와 realtime V8 등록을 함께 확인한다.
             assertThat(single(core,
                     "select max(version) from flyway.core_schema_history where success and type = 'SQL'"))
                     .isEqualTo("9");
             assertThat(single(realtime,
                     "select max(version) from flyway.realtime_schema_history where success and type = 'SQL'"))
-                    .isEqualTo("7");
+                    .isEqualTo("8");
             expectSqlStateAutoCommit(INSUFFICIENT_PRIVILEGE,
                     () -> query(core, "select version from flyway.realtime_schema_history"));
             expectSqlStateAutoCommit(INSUFFICIENT_PRIVILEGE,

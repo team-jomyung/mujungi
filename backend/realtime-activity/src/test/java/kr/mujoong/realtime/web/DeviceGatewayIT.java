@@ -59,6 +59,7 @@ import org.springframework.transaction.support.TransactionTemplate;
  */
 @Tag("skeleton")
 @Tag("db")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class DeviceGatewayIT {
 
     private static final Map<String, String> PRODUCTION_TIMES = Map.of(
@@ -240,7 +241,7 @@ class DeviceGatewayIT {
         env.join(sessionId);
         awaitTrue(() -> env.app.bean(ActivitySessionRepository.class).find(sessionId)
                 .map(row -> row.status() == SessionStatus.ACTIVE).orElse(false), "ACTIVE");
-        env.provider.emitTurn("item-1", "안녕", "안녕 반가워", List.of(kr.mujoong.realtime.testing.RealtimeItEnvironment.audiblePcm(4800)));
+        env.provider.emitTurn("item-1", "안녕", "네 이야기를 듣고 있어", List.of(kr.mujoong.realtime.testing.RealtimeItEnvironment.audiblePcm(4800)));
         WsEnvelope begin = device.await(WsMessageType.OUTPUT_BEGIN, WAIT);
         device.playbackMark(sessionId, ((OutputBegin) begin.payload()).playbackId(), PlaybackMark.Status.STARTED);
 

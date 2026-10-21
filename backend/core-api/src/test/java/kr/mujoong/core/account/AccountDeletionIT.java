@@ -68,6 +68,7 @@ import org.springframework.transaction.PlatformTransactionManager;
  */
 @Tag("parent-account")
 @Tag("db")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class AccountDeletionIT {
 
     private static final Duration TICK = Duration.ofHours(1);

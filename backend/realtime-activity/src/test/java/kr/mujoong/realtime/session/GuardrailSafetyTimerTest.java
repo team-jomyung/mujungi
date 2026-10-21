@@ -16,6 +16,7 @@ import org.junit.jupiter.api.Test;
  * 못한다. 정상 결과가 오면 타이머는 꺼지고, 늦게 도착하는 결과는 버려진다. 제브는 시험이 손으로 푸는 대역이다(R-F1 · R-M11).
  */
 @Tag("jev-guardrail")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class GuardrailSafetyTimerTest {
 
     private static final byte[] AUDIO = new byte[4800];

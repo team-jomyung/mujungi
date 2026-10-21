@@ -40,6 +40,7 @@ import tools.jackson.databind.json.JsonMapper;
  * 발화가 비면 옛 본문과 같은 바이트를 보내는지 본다.
  */
 @Tag("live-content")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class RealtimeStartBodyTest {
 
     private static final Duration START = Duration.ofSeconds(3);

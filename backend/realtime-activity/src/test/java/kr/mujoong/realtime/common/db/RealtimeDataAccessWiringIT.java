@@ -75,6 +75,7 @@ import org.springframework.util.unit.DataSize;
  */
 @Tag("skeleton")
 @Tag("db")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class RealtimeDataAccessWiringIT {
 
     private static final Instant T0 = Instant.parse("2026-10-15T09:00:00Z");

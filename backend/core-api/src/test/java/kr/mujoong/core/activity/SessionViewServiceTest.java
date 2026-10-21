@@ -36,6 +36,7 @@ import org.junit.jupiter.api.Test;
  * observedAt 기준 30초 stale(조회 한 번 실패만으로는 아님) · 종료 세션 stale 아님 · 남의 세션 404 · 음수 sinceSeq 400.
  */
 @Tag("skeleton")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class SessionViewServiceTest {
 
     private static final Instant REQUESTED_AT = Instant.parse("2001-05-01T09:00:00Z");

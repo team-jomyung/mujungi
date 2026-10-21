@@ -15,27 +15,29 @@ import org.springframework.mock.env.MockEnvironment;
 import org.springframework.transaction.PlatformTransactionManager;
 
 @Tag("knowledge-graph")
+@Tag("service-guardrail")
 class ConfigurationTest {
     final KnowledgeConfiguration config = new KnowledgeConfiguration();
     CoreProperties core() {
         var value = mock(CoreProperties.class, RETURNS_DEEP_STUBS);
         when(value.timing().knowledge().graphBudget()).thenReturn(Duration.ofSeconds(2));
+        when(value.timing().knowledge().graphInitializationBudget()).thenReturn(Duration.ofSeconds(10));
         return value;
     }
     @Test void packagedOriginalLoadsFourteenSeeds() throws Exception {
         assertThat(config.knowledgeSeedCatalog().seeds()).hasSize(14);
     }
     @Test void enabledGraphRefusesMissingCredentialsWithoutLeakingAValue() {
-        assertThatThrownBy(() -> config.childKnowledgeGraph(new KnowledgeProperties(true), core(), new MockEnvironment()))
+        assertThatThrownBy(() -> config.childKnowledgeGraph(new KnowledgeProperties(true), core(), new MockEnvironment(), new MutableClock()))
                 .isInstanceOf(IllegalStateException.class).hasMessage("Neo4j enabled but NEO4J_AUTH is missing");
     }
     @Test void disabledFlagNeverConstructsRemoteGraph() {
-        assertThat(config.childKnowledgeGraph(new KnowledgeProperties(false), core(), new MockEnvironment().withProperty("NEO4J_AUTH", "neo4j/test-only")))
+        assertThat(config.childKnowledgeGraph(new KnowledgeProperties(false), core(), new MockEnvironment().withProperty("NEO4J_AUTH", "neo4j/test-only"), new MutableClock()))
                 .isInstanceOf(MemoryChildKnowledgeGraph.class);
     }
     @Test void enabledGraphRefusesUnreachableDatabaseDuringStartup() {
         assertThatThrownBy(() -> config.childKnowledgeGraph(new KnowledgeProperties(true, "http://127.0.0.1:1"), core(),
-                new MockEnvironment().withProperty("NEO4J_AUTH", "neo4j/test-only")))
+                new MockEnvironment().withProperty("NEO4J_AUTH", "neo4j/test-only"), new MutableClock()))
                 .isInstanceOf(IllegalStateException.class).hasMessageNotContaining("test-only");
     }
     @Test void keylessServiceAndSeedProviderStartWithoutExternalCall() throws Exception {

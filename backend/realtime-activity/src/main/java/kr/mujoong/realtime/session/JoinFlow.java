@@ -6,6 +6,8 @@ import java.util.Optional;
 import java.util.UUID;
 import kr.mujoong.contract.status.ActivityType;
 import kr.mujoong.contract.status.SessionStatus;
+import kr.mujoong.contract.status.FailureCode;
+import kr.mujoong.contract.ws.message.PlaybackMark;
 import kr.mujoong.contract.ws.message.PlayApprovedContent;
 import kr.mujoong.realtime.dialog.JoinTracker;
 import kr.mujoong.realtime.judgment.JudgmentPoint;
@@ -41,6 +43,8 @@ final class JoinFlow {
 
         /** ACTIVE 전이 승자의 뒷일: 진입 몫과 발언권 반환(응답 생성 요청 1회). */
         void afterActiveWon();
+
+        void participationWindowOpened();
     }
 
     private final SessionContext ctx;
@@ -51,6 +55,8 @@ final class JoinFlow {
 
     /** U4b 참여 판단(WAITING_CHILD에 들어갈 때 만든다). */
     private JoinTracker join;
+    private boolean noticeDelivered;
+    private boolean currentIncludesQuestion;
 
     JoinFlow(SessionContext ctx, IdleClock idle, JudgmentCoordinator judgment, EndingFlow ending, Env env) {
         this.ctx = ctx;
@@ -83,6 +89,10 @@ final class JoinFlow {
      * APPROVED_CONTENT_MISSING을 코드별 1회 남긴 뒤 곧바로 재생이 끝난 것으로 본다(시계 · 횟수는 그대로). 보내지 못해도 끝난 것으로 본다.
      */
     private void playJoinPrompt(String contentCode) {
+        if (freeTalk()) {
+            playVerifiedPrompt(contentCode);
+            return;
+        }
         Instant now = ctx.services().clock().now();
         Optional<SessionExecutor.ApprovedItem> item = ctx.plan().approvedItem(contentCode);
         if (item.isEmpty()) {
@@ -103,6 +113,10 @@ final class JoinFlow {
 
     /** 참여 안내 재생이 끝났다(서버가 끝 표식을 받은 시각): 창을 연다. */
     void onJoinPromptPlayed(Instant at) {
+        if (freeTalk()) {
+            failNotice(FailureCode.DEVICE_NO_ACK);
+            return;
+        }
         if (ctx.status() != SessionStatus.WAITING_CHILD || join == null || join.isFinished()) {
             return;
         }
@@ -142,12 +156,24 @@ final class JoinFlow {
      * JoinTracker 동작).
      */
     void onJoinReply(String transcript, Instant at) {
+        onJoinReply(transcript, at, at);
+    }
+
+    void onJoinReply(String transcript, Instant at, Instant beganAt) {
         if (join == null || join.isFinished()) {
             return;
         }
+        if (freeTalk() && !currentInput(beganAt)) return;
         // J1이 열린 동안 새 확정 전사가 오면 이전 J1을 SUPERSEDED로 닫고 새 전사를 처음부터 다시 처리한다
         judgment.onTranscript(false);
         JoinTracker.Reply reply = JoinTracker.classify(transcript);
+        if (freeTalk() && reply == JoinTracker.Reply.TOPIC_REFUSAL) {
+            reply = JoinTracker.Reply.UNCLEAR;
+        }
+        if (freeTalk() && reply == JoinTracker.Reply.REFUSE) {
+            declineJoin(SessionGuardrailFacts.Participation.REFUSED);
+            return;
+        }
         if (reply == JoinTracker.Reply.UNCLEAR && judgment.openJoinJudgment(transcript, at)) {
             return;
         }
@@ -157,6 +183,11 @@ final class JoinFlow {
     /** 결과를 참여 대답 하나로 넣는다(참여 대기 중이 아니면 아무것도 하지 않는다). */
     void applyJoinReply(JoinTracker.Reply reply, Instant at) {
         if (ctx.status() == SessionStatus.WAITING_CHILD && join != null && !join.isFinished()) {
+            if (freeTalk() && !currentInput(at)) return;
+            if (freeTalk() && reply == JoinTracker.Reply.REFUSE) {
+                declineJoin(SessionGuardrailFacts.Participation.REFUSED);
+                return;
+            }
             applyJoinAction(join.reply(reply, at), reply, at);
         }
     }
@@ -184,7 +215,7 @@ final class JoinFlow {
                         + (reply == null ? "NONE" : reply.name()) + "\"}", at);
                 playJoinPrompt(DECLINE_ALTERNATIVE);
             }
-            case DECLINE -> declineJoin();
+            case DECLINE -> declineJoin(SessionGuardrailFacts.Participation.NO_RESPONSE);
             case NONE -> {
                 // 안내 없이 같은 창을 계속 기다린다(재안내를 이미 쓴 불명확 대답)
             }
@@ -195,13 +226,15 @@ final class JoinFlow {
     private void acceptJoin() {
         ctx.timers().cancel(Kind.JOIN_WINDOW);
         Instant now = ctx.services().clock().now();
+        SessionGuardrailFacts proposed = freeTalk() ? nextFacts(SessionGuardrailFacts.Participation.ACCEPTED) : null;
         Optional<ActivitySessionRow> row = ctx.services().transitions().transition(ctx.plan().sessionId(),
                 SessionStatus.WAITING_CHILD, SessionStatus.ACTIVE, SessionChange.none().withStartedAt(now),
-                SessionTransitions.Origin.REALTIME, ctx.plan().traceId());
+                SessionTransitions.Origin.REALTIME, ctx.plan().traceId(), new SessionTransitions.Extras(null, false, proposed));
         if (row.isEmpty()) {
             ending.syncFromDb();
             return;
         }
+        if (proposed != null) ctx.guardrailFacts(proposed);
         ending.changeStatus(SessionStatus.ACTIVE, ctx.services().clock().now());
         ctx.putEvent(EVENT_JOIN_ACCEPTED, "{\"prompts\":" + (join == null ? 1 : join.prompts()) + "}", now);
         env.afterActiveWon();
@@ -211,18 +244,23 @@ final class JoinFlow {
      * 참여 거절 → DECLINED: 기록기의 대기 칸을 버린 뒤 전이 트랜잭션에서 그 세션의 전사 행을 지우고, 마무리 인사를 closing-confirm
      * 상한 안에서 돌린다(말풍선 행 없음).
      */
-    private void declineJoin() {
+    private void declineJoin(SessionGuardrailFacts.Participation disposition) {
         ctx.timers().cancel(Kind.JOIN_WINDOW);
         ctx.services().recorder().discardTranscripts(ctx.plan().sessionId(), ctx.services().settings().timerTick());
         Instant now = ctx.services().clock().now();
+        SessionGuardrailFacts proposed = freeTalk() ? nextFacts(disposition) : null;
+        if (proposed != null) proposed = new SessionGuardrailFacts(1, proposed.sessionId(), proposed.revision(), proposed.statusVersion(),
+                proposed.notice(), proposed.participation(), ending.closingVersion() == null
+                        ? SessionGuardrailFacts.Goodbye.NONE : SessionGuardrailFacts.Goodbye.PENDING, null, now);
         Optional<ActivitySessionRow> row = ctx.services().transitions().transition(ctx.plan().sessionId(),
                 SessionStatus.WAITING_CHILD, SessionStatus.DECLINED,
                 TransitionTable.changeFor(Trigger.JOIN_DECLINED, null, now), SessionTransitions.Origin.REALTIME,
-                ctx.plan().traceId(), new SessionTransitions.Extras(null, true));
+                ctx.plan().traceId(), new SessionTransitions.Extras(null, true, proposed));
         if (row.isEmpty()) {
             ending.syncFromDb();
             return;
         }
+        if (proposed != null) ctx.guardrailFacts(proposed);
         ending.changeStatus(SessionStatus.DECLINED, ctx.services().clock().now());
         ctx.putEvent(EVENT_JOIN_DECLINED, "{\"prompts\":" + (join == null ? 1 : join.prompts()) + "}", now);
         ending.startFarewell();
@@ -230,5 +268,96 @@ final class JoinFlow {
 
     private SessionExecutor.Settings.Lifecycle lifecycle() {
         return ctx.services().settings().lifecycle();
+    }
+
+    private boolean freeTalk() { return ctx.plan().activityType() == ActivityType.FREE_TALK; }
+
+    private boolean currentInput(Instant beganAt) {
+        return join.phase() == JoinTracker.Phase.WAITING && ctx.noticeDelivery() != null
+                && ctx.link() != null && ctx.noticeDelivery().boundTo(ctx.plan().sessionId(), ctx.link().connectionId())
+                && ctx.noticeDelivery().permitsInput(beganAt);
+    }
+
+    private SessionGuardrailFacts nextFacts(SessionGuardrailFacts.Participation participation) {
+        ActivitySessionRow row = ctx.services().transitions().find(ctx.plan().sessionId()).orElseThrow();
+        return ctx.proposeFacts(row.statusVersion() + 1, SessionGuardrailFacts.Notice.COMPLETED, participation);
+    }
+
+    private void playVerifiedPrompt(String code) {
+        var item = ctx.plan().approvedItem(code);
+        var asset = item.flatMap(value -> ctx.services().notices().verified(value, ctx.plan().approvedAudio(),
+                ctx.servicePolicy().policyVersion(), ctx.services().settings().playbackExpiry()));
+        if (asset.isEmpty() || ctx.link() == null || !ctx.link().isOpen()) {
+            failNotice(FailureCode.PROVIDER_UNAVAILABLE);
+            return;
+        }
+        if (ctx.noticeDelivery() != null) ctx.noticeDelivery().invalidate();
+        Instant now = ctx.services().clock().now();
+        UUID playback = UUID.randomUUID();
+        ctx.noticeDelivery(new NoticeDelivery(ctx.plan().sessionId(), ctx.link().connectionId(), playback,
+                ctx.servicePolicy().promptVersion(), ctx.servicePolicy().policyVersion(),
+                now.plus(ctx.services().settings().playbackExpiry())));
+        currentIncludesQuestion = asset.get().includesParticipationQuestion();
+        if (!ctx.recordFacts(noticeDelivered ? SessionGuardrailFacts.Notice.COMPLETED : SessionGuardrailFacts.Notice.PENDING,
+                SessionGuardrailFacts.Participation.UNKNOWN)) {
+            ending.syncFromDb();
+            return;
+        }
+        ctx.joinPromptPlaybackId(playback);
+        if (!ctx.sendControl(new PlayApprovedContent(playback, code, item.orElseThrow().contentVersionId()))) {
+            failNotice(FailureCode.DEVICE_NO_ACK);
+            return;
+        }
+        ctx.playback().started(playback, code);
+        ctx.timers().arm(Kind.PLAYBACK_EXPIRY, ctx.services().settings().playbackExpiry());
+        env.approvedBubble(item.orElseThrow(), now);
+    }
+
+    /** 자유대화 안내 표식만 가로채며 연습 재생은 기존 처리에 남긴다. */
+    boolean onPlaybackMark(SessionMailbox.PlaybackMarkReceived received) {
+        NoticeDelivery delivery = ctx.noticeDelivery();
+        if (!freeTalk() || delivery == null || ctx.status() != SessionStatus.WAITING_CHILD
+                || !delivery.playbackId().equals(received.mark().playbackId())) return false;
+        if (!ctx.fromBoundConnection(received.connectionId())) return true;
+        boolean completed = delivery.mark(ctx.plan().sessionId(), received.connectionId(), received.mark().playbackId(),
+                received.mark().status(), received.serverRecvAt());
+        if (completed) {
+            ctx.timers().cancel(Kind.PLAYBACK_EXPIRY);
+            ctx.playback().clearIfMatches(delivery.playbackId());
+            ctx.joinPromptPlaybackId(null);
+            noticeDelivered = true;
+            if (!ctx.recordFacts(SessionGuardrailFacts.Notice.COMPLETED, SessionGuardrailFacts.Participation.PENDING)) {
+                ending.syncFromDb();
+                return true;
+            }
+            env.participationWindowOpened();
+            if (!currentIncludesQuestion) {
+                playJoinPrompt(RE_PROMPT);
+                return true;
+            }
+            join.promptPlayed(received.serverRecvAt());
+            armJoinWindow();
+        } else if (delivery.state() == NoticeDelivery.State.FAILED || delivery.state() == NoticeDelivery.State.INVALIDATED) {
+            failNotice(FailureCode.DEVICE_NO_ACK);
+        }
+        return true;
+    }
+
+    private void failNotice(FailureCode code) {
+        if (ctx.status() != SessionStatus.WAITING_CHILD) return;
+        if (ctx.noticeDelivery() != null) ctx.noticeDelivery().invalidate();
+        ctx.joinPromptPlaybackId(null);
+        ctx.timers().cancel(Kind.PLAYBACK_EXPIRY);
+        ctx.timers().cancel(Kind.JOIN_WINDOW);
+        ActivitySessionRow current = ctx.services().transitions().find(ctx.plan().sessionId()).orElseThrow();
+        var proposed = ctx.proposeFacts(current.statusVersion() + 1, SessionGuardrailFacts.Notice.FAILED,
+                SessionGuardrailFacts.Participation.UNKNOWN);
+        var changed = ctx.services().transitions().transition(ctx.plan().sessionId(), SessionStatus.WAITING_CHILD,
+                SessionStatus.FAILED, SessionChange.failed(code, ctx.services().clock().now()),
+                SessionTransitions.Origin.REALTIME, ctx.plan().traceId(), new SessionTransitions.Extras(null, false, proposed));
+        if (changed.isPresent()) {
+            ctx.guardrailFacts(proposed);
+            ending.afterFailed();
+        } else ending.syncFromDb();
     }
 }

@@ -207,8 +207,8 @@ export class AudioPlayer<C extends AudioClip> {
         continue;
       }
       const playedRange = this.playedRange(playback);
-      this.stopPieces(playback);
       playback.state = "stopped";
+      this.stopPieces(playback);
       this.mark(playback, "STOPPED", { stopCause: cause, playedRange });
     }
     this.playbacks.clear();
@@ -231,8 +231,8 @@ export class AudioPlayer<C extends AudioClip> {
           playedRange: this.playedRange(playback),
         });
       }
-      this.stopPieces(playback);
       playback.state = "stopped";
+      this.stopPieces(playback);
     }
     this.playbacks.clear();
     this.timelineEndSec = 0;
@@ -333,8 +333,8 @@ export class AudioPlayer<C extends AudioClip> {
     if (playback.state !== "active") {
       return;
     }
-    this.stopPieces(playback);
     playback.state = "failed";
+    this.stopPieces(playback);
     this.playbacks.delete(playback.playbackId);
     if (this.openStreamId === playback.playbackId) {
       this.openStreamId = null;

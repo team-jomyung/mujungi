@@ -211,7 +211,13 @@ describe("DeviceSession — 같은 opId로 다시 온 명령(U3-J7)", () => {
     session.handleMessage({ type: "STOP_OUTPUT", opId: SECOND_OP_ID, sessionId: SESSION_ID, reason: "GUARDIAN_STOP" });
     session.handleMessage({ type: "STOP_OUTPUT", opId: SECOND_OP_ID, sessionId: SESSION_ID, reason: "GUARDIAN_STOP" });
     session.handleMessage({ type: "STOP_OUTPUT", opId: SECOND_OP_ID, sessionId: OTHER_SESSION_ID, reason: "GUARDIAN_STOP" });
-    expect(player.stopAll).toHaveBeenCalledTimes(2);
+    expect(player.stopAll).toHaveBeenCalledTimes(1);
+    session.handleMessage(start(OTHER_SESSION_ID));
+    await flushPromises();
+    player.stopAll.mockClear();
+    session.handleMessage({ type: "STOP_OUTPUT", opId: SECOND_OP_ID, sessionId: OTHER_SESSION_ID, reason: "GUARDIAN_STOP" });
+    session.handleMessage({ type: "STOP_OUTPUT", opId: SECOND_OP_ID, sessionId: OTHER_SESSION_ID, reason: "GUARDIAN_STOP" });
+    expect(player.stopAll).toHaveBeenCalledTimes(1);
   });
 
   it("기억하는 opId는 최근 64개까지다", async () => {

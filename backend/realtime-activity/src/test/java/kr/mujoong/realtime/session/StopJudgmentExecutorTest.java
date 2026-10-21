@@ -22,6 +22,7 @@ import org.junit.jupiter.api.Test;
  * 판정 턴 실행기 연결 2 — 종료 의도 J6 (U11 W2 · BR6.x · BR7.x, 첫 판 검토 R-13 · R-14). 공급자와 판정기는 가짜, 값은 합성이다(R-F1 · R-F3).
  */
 @Tag("judgment-turn")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class StopJudgmentExecutorTest {
 
     private final JudgmentExecutorSupport t = new JudgmentExecutorSupport();
@@ -90,7 +91,7 @@ class StopJudgmentExecutorTest {
         t.h.settleSend();
 
         assertThat(t.appendedContents()).hasSize(before + 1);
-        assertThat(t.appendedContents().getLast()).isEqualTo(InstructionTemplates.ResponseStart.CONTINUE.content());
+        assertThat(t.appendedContents().getLast()).isEqualTo(InstructionTemplates.ResponseStart.CONTINUE.content(kr.mujoong.contract.status.ActivityType.FREE_TALK));
         assertThat(t.events(SessionExecutor.EVENT_STOP_CONFIRM_ASKED)).isEmpty();
         assertThat(t.onlyRecord().nextAction()).isEqualTo(NextAction.RESUME);
         assertThat(t.h.executor.status()).isEqualTo(SessionStatus.ACTIVE);
@@ -117,7 +118,7 @@ class StopJudgmentExecutorTest {
     }
 
     @Test
-    void restInFreeTalkSendsTheAcknowledgeAndReturnInstructionOnce() {
+    void restInFreeTalkSendsOnlyOneAcknowledgmentWithoutReturnPressure() {
         t.openStopJudgment();
         t.h.settleSend();
         int before = t.appendedContents().size();
@@ -129,8 +130,8 @@ class StopJudgmentExecutorTest {
         t.advance(Duration.ofSeconds(1));
 
         assertThat(t.appendedContents()).hasSize(before + 1);
-        assertThat(t.appendedContents().getLast()).isEqualTo(InstructionTemplates.NextAction.REST_ACK_AND_RETURN.content());
-        assertThat(t.onlyRecord().nextAction()).isEqualTo(NextAction.REST_ACK_AND_RETURN);
+        assertThat(t.appendedContents().getLast()).isEqualTo(InstructionTemplates.NextAction.REST_ACK_ONLY.content(kr.mujoong.contract.status.ActivityType.FREE_TALK));
+        assertThat(t.onlyRecord().nextAction()).isEqualTo(NextAction.REST_ACK_ONLY);
         assertThat(t.h.executor.status()).isEqualTo(SessionStatus.ACTIVE);
     }
 

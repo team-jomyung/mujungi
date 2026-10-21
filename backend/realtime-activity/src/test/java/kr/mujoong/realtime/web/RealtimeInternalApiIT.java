@@ -50,6 +50,7 @@ import tools.jackson.databind.JsonNode;
  */
 @Tag("skeleton")
 @Tag("db")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class RealtimeInternalApiIT {
 
     private static final Map<String, String> ARGS = Map.of(
@@ -146,7 +147,9 @@ class RealtimeInternalApiIT {
         assertThat(again.json().get("status").asString()).isEqualTo("CLOSING");
         assertThat(device.awaitCount(WsMessageType.STOP_OUTPUT, 1, WAIT)).hasSize(1);
         // 마무리 순서를 끝내 ENDED → 종료 상태는 409
-        WsEnvelope closing = device.await(WsMessageType.PLAY_APPROVED_CONTENT, WAIT);
+        WsEnvelope closing = device.await(envelope -> sessionId.equals(envelope.sessionId())
+                && envelope.payload() instanceof PlayApprovedContent content
+                && PlayApprovedContent.CLOSING.equals(content.contentCode()), WAIT);
         device.playbackMark(sessionId, ((PlayApprovedContent) closing.payload()).playbackId(),
                 PlaybackMark.Status.COMPLETED);
         device.await(WsMessageType.CLOSE_TRANSPORT, WAIT);
@@ -229,7 +232,7 @@ class RealtimeInternalApiIT {
         assertValidationFailed(startRaw(valid.replace("\"FREE_TALK\"", "\"WEBINAR\"")));
         assertValidationFailed(startRaw(valid.replace("\"FREE_TALK\"", "\"PRACTICE\"").replace("\"practice\":null",
                 "\"practice\":{\"goals\":\"not-a-list\"}")));
-        assertValidationFailed(startRaw(valid.replace("/media/approved/closing-v1.wav", "https://evil.invalid/x.wav")));
+        assertValidationFailed(startRaw(valid.replace("/media/approved/closing.wav", "https://evil.invalid/x.wav")));
         assertValidationFailed(startRaw(valid.replace("\"WAITING_FILLER\":", "\"OTHER_CONTENT\":")));
         assertValidationFailed(startRaw(valid.replace("[{\"text\":\"무중아 그만할래\",\"isDefault\":true}]", "[]")));
         assertValidationFailed(startRaw(valid.replace("\"sessionId\":\"" + sessionId + "\",", "")));
@@ -270,33 +273,36 @@ class RealtimeInternalApiIT {
         env.join(sessionId);
         awaitStatus(sessionId, SessionStatus.ACTIVE);
         env.provider.emitTurn("item-1", "공룡이 좋아", "나도 공룡 좋아해", List.of(kr.mujoong.realtime.testing.RealtimeItEnvironment.audiblePcm(4800)));
-        awaitTrue(() -> transcripts().findAll(sessionId).size() == 2
-                && transcripts().findAll(sessionId).stream().allMatch(row -> row.isFinal()), "전사 두 행 FINAL");
+        awaitTrue(() -> transcripts().findAll(sessionId).size() == 3
+                && transcripts().findAll(sessionId).stream().allMatch(row -> row.isFinal()), "현재 안내와 대화 두 행 FINAL");
 
         Reply turn = api.get(SESSIONS + "/" + sessionId + "/view?sinceSeq=0");
         assertThat(InternalApi.schemaErrors("internal-session-view.schema.json", turn.body())).isEmpty();
         JsonNode items = turn.json().get("items");
-        assertThat(items).hasSize(2);
-        assertThat(items.get(0).get("speaker").asString()).isEqualTo("CHILD");
-        assertThat(items.get(0).get("text").asString()).isEqualTo("공룡이 좋아");
-        assertThat(items.get(1).get("speaker").asString()).isEqualTo("AI");
-        assertThat(items.get(1).get("final").asBoolean()).isTrue();
-        assertThat(turn.json().get("nextSeq").asInt()).isEqualTo(2);
+        assertThat(items).hasSize(3);
+        assertThat(items.get(0).get("speaker").asString()).isEqualTo("AI");
+        assertThat(items.get(0).get("text").asString()).isEqualTo(kr.mujoong.realtime.session.ServiceGuardrailFixtures.TEXT);
+        assertThat(items.get(0).get("final").asBoolean()).isTrue();
+        assertThat(items.get(1).get("speaker").asString()).isEqualTo("CHILD");
+        assertThat(items.get(1).get("text").asString()).isEqualTo("공룡이 좋아");
+        assertThat(items.get(2).get("speaker").asString()).isEqualTo("AI");
+        assertThat(items.get(2).get("final").asBoolean()).isTrue();
+        assertThat(turn.json().get("nextSeq").asInt()).isEqualTo(3);
         assertThat(turn.json().get("status").asString()).isEqualTo("ACTIVE");
         assertThat(turn.json().get("startedAt").isNull()).isFalse();
         // 처음 실린 확정 행마다 SESSION_ITEMS_SERVED 한 줄(OD-8)
-        awaitTrue(() -> logs.events(EventCode.SESSION_ITEMS_SERVED).size() == 2, "SESSION_ITEMS_SERVED 2줄");
+        awaitTrue(() -> logs.events(EventCode.SESSION_ITEMS_SERVED).size() == 3, "SESSION_ITEMS_SERVED 3줄");
         assertThat(LogCapture.attrs(logs.events(EventCode.SESSION_ITEMS_SERVED).get(0)))
                 .containsKeys("tViewItemReady", "tViewItemFirstServed");
         api.get(SESSIONS + "/" + sessionId + "/view?sinceSeq=0");
-        assertThat(logs.events(EventCode.SESSION_ITEMS_SERVED)).hasSize(2);
+        assertThat(logs.events(EventCode.SESSION_ITEMS_SERVED)).hasSize(3);
 
-        // 확정 전 아이 조각(seq 3)은 실리되 nextSeq는 그 앞에 머문다(J23)
-        upsertPartialChild(sessionId, 3, "그리고");
-        Reply partial = api.get(SESSIONS + "/" + sessionId + "/view?sinceSeq=2");
+        // 안내 seq 1을 보존한다. 확정 전 아이 조각(seq 4)은 실리되 nextSeq는 그 앞에 머문다(J23).
+        upsertPartialChild(sessionId, 4, "그리고");
+        Reply partial = api.get(SESSIONS + "/" + sessionId + "/view?sinceSeq=3");
         assertThat(partial.json().get("items")).hasSize(1);
         assertThat(partial.json().get("items").get(0).get("final").asBoolean()).isFalse();
-        assertThat(partial.json().get("nextSeq").asInt()).isEqualTo(2);
+        assertThat(partial.json().get("nextSeq").asInt()).isEqualTo(3);
 
         assertValidationFailed(api.get(SESSIONS + "/" + sessionId + "/view?sinceSeq=-1"));
         assertValidationFailed(api.get(SESSIONS + "/" + sessionId + "/view?sinceSeq=abc"));

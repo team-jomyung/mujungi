@@ -25,6 +25,7 @@
     "technicalPause": { "$ref": "common.schema.json#/$defs/TechnicalPause" },
     "silenceWarning": { "$ref": "live-view.schema.json#/$defs/SilenceWarning" },
     "practice": { "$ref": "live-view.schema.json#/$defs/Practice" },
+    "guardrail": { "$ref": "guardrail-presentation.schema.json" },
     "gaps": { "type": "array", "items": { "$ref": "live-view.schema.json#/$defs/Gap" } },
     "items": { "type": "array", "items": { "$ref": "live-view.schema.json#/$defs/Bubble" } },
     "nextSeq": { "type": "integer", "minimum": 0 }

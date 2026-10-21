@@ -46,6 +46,7 @@ import tools.jackson.databind.JsonNode;
  */
 @Tag("session-runtime")
 @Tag("db")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class RealtimeDeletionHandlerIT {
 
     private static final JsonCodec JSON = JsonCodec.shared();

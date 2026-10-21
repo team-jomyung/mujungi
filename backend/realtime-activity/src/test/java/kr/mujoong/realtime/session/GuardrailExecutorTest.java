@@ -26,6 +26,7 @@ import org.junit.jupiter.api.Test;
  * teardown 취소, 재지시 응답의 폐기 훅, begin 예외, 모드 OFF 불변. 제브 · 공급자는 모두 대역이다(실제 호출 없음, R-F1 · R-M11).
  */
 @Tag("jev-guardrail")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class GuardrailExecutorTest {
 
     private static final byte[] AUDIO = new byte[4800];
@@ -241,7 +242,7 @@ class GuardrailExecutorTest {
         List<String> contents = appended();
         assertThat(contents).hasSize(2);
         assertThat(contents.get(1)).isEqualTo(contents.get(0));
-        assertThat(contents.get(1)).contains(InstructionTemplates.INTERJECTION_LEAD);
+        assertThat(contents.get(1)).doesNotContain(InstructionTemplates.INTERJECTION_LEAD);
         assertThat(coordinator().state()).isEqualTo(GuardrailCoordinator.State.RETRYING);
 
         // 아이가 말한 뒤의 자유 응답은 기억한 지시가 없어 새 템플릿을 쓴다
@@ -265,7 +266,7 @@ class GuardrailExecutorTest {
 
         List<String> contents = appended();
         assertThat(contents).hasSize(before + 1);
-        assertThat(contents.getLast()).isEqualTo(InstructionTemplates.Retry.RETRY_FREE_TURN.content());
+        assertThat(contents.getLast()).isEqualTo(InstructionTemplates.Retry.RETRY_FREE_TURN.content(h.activityType));
         assertThat(contents.getLast()).doesNotContain(CLEAN);
         assertThat(coordinator().state()).isEqualTo(GuardrailCoordinator.State.RETRYING);
         assertThat(coordinator().holdsThinking()).isTrue();

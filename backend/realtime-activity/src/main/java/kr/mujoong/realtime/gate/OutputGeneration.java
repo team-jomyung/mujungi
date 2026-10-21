@@ -115,7 +115,7 @@ public final class OutputGeneration {
     private final Duration segmentQuiet;
     private final long marginMs;
 
-    private long generation;
+    private volatile long generation;
     private Phase phase = Phase.RECEIVING;
     private Mode mode = Mode.GAP;
     private Instant lastDeltaAt;

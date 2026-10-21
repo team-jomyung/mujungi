@@ -31,6 +31,7 @@ import org.junit.jupiter.params.provider.MethodSource;
  * 명령을 낸다. 같은 세션의 반복 요청은 전이 · 기기 종료 명령 없이 같은 답만 돌려준다.
  */
 @Tag("session-runtime")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class EndRequestTest {
 
     private final SessionHarness h = new SessionHarness();

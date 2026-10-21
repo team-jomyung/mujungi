@@ -45,6 +45,7 @@ import tools.jackson.databind.JsonNode;
  */
 @Tag("voice-session")
 @Tag("db")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class SessionVoiceIT {
 
     /**
@@ -94,9 +95,9 @@ class SessionVoiceIT {
         // 설계 개정 A2: 첫 응답 지시(mj-1) 다음에 교정 지시 하나가 같은 큐로 나간다(교정도 발화를 시작하는 지시다)
         List<JsonNode> instructions = env.provider.await("session.instructions.append", 2, WAIT);
         assertThat(instructions).hasSize(2);
-        assertThat(instructions.get(0).get("content").asString()).isEqualTo(InstructionTemplates.ResponseStart.FIRST.content());
+        assertThat(instructions.get(0).get("content").asString()).isEqualTo(InstructionTemplates.ResponseStart.FIRST.content(kr.mujoong.contract.status.ActivityType.FREE_TALK));
         assertThat(instructions.get(1).get("content").asString())
-                .isEqualTo(InstructionTemplates.correctionContent(DialogInstructions.Correction.DIAGNOSIS));
+                .isEqualTo(InstructionTemplates.correctionContent(DialogInstructions.Correction.DIAGNOSIS, kr.mujoong.contract.status.ActivityType.FREE_TALK));
         assertThat(instructions).allSatisfy(append -> assertThat(append.get("delegation_id").isNull()).isTrue());
         assertThat(String.join("\n", env.provider.rawReceived())).doesNotContain("진단 결과는");
         assertThat(device.received(WsMessageType.OUTPUT_BEGIN)).hasSize(1);
@@ -140,7 +141,7 @@ class SessionVoiceIT {
         awaitTrue(() -> transcripts.findAll(sessionId).stream().filter(row -> row.speaker() == TranscriptEntry.Speaker.CHILD
                 && row.assemblyStatus() == TranscriptEntry.AssemblyStatus.FINAL).count() == 3, "아이 전사 3행");
         Map<String, Boolean> review = new LinkedHashMap<>();
-        transcripts.findAll(sessionId).forEach(row -> review.put(row.text(), row.reviewNeeded()));
+        env.activityTranscripts(sessionId).forEach(row -> review.put(row.text(), row.reviewNeeded()));
         assertThat(review).containsExactly(Map.entry("응", false), Map.entry("공룡 좋아", false), Map.entry("몰라", false));
         assertThat(transcripts.findAll(sessionId)).allSatisfy(row ->
                 assertThat(row.assemblyStatus()).isEqualTo(TranscriptEntry.AssemblyStatus.FINAL));
@@ -157,7 +158,7 @@ class SessionVoiceIT {
             device.sendAudio(frame);
         }
         env.provider.await("session.input_audio.append", 5, WAIT);
-        env.provider.emitTurn("item-1", "안녕", "반가워 하늘아", List.of(PCM));
+        env.provider.emitTurn("item-1", "안녕", "네 이야기를 듣고 있어", List.of(PCM));
         device.await(WsMessageType.OUTPUT_BEGIN, WAIT);
         endConfirmed(device, consented);
 

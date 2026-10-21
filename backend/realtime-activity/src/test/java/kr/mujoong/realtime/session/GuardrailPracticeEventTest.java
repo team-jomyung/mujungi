@@ -27,6 +27,7 @@ import org.junit.jupiter.api.Test;
  * 대역이다(실제 호출 없음, R-F1 · R-M11).
  */
 @Tag("jev-guardrail")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class GuardrailPracticeEventTest {
 
     private final SessionHarness h = new SessionHarness();

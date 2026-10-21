@@ -221,7 +221,19 @@ public final class SessionExecutor {
             SessionSettlement settlement,
             PracticeSessionExtension.Factory practice,
             JudgmentSupport judgment,
-            GuardrailSupport guardrail) {
+            GuardrailSupport guardrail,
+            NoticeAssetCatalog notices) {
+
+        public Services(SessionTransitions transitions, Function<UUID, Optional<? extends DeviceLink>> deviceLinks,
+                DeviceStatusPort deviceStatus, ProviderConnector connector, ProviderRequestFactory requests,
+                OutputGate gate, AsyncRecorder recorder, LatencyRecorder latency, TimerClocks clocks,
+                TaskLauncher launcher, EventLogger events, RealtimeMetrics metrics, MujoongClock clock, Settings settings,
+                SessionGapPort gaps, AudioRecordings recordings, SessionSettlement settlement,
+                PracticeSessionExtension.Factory practice, JudgmentSupport judgment, GuardrailSupport guardrail) {
+            this(transitions, deviceLinks, deviceStatus, connector, requests, gate, recorder, latency, clocks, launcher,
+                    events, metrics, clock, settings, gaps, recordings, settlement, practice, judgment, guardrail,
+                    new NoticeAssetCatalog());
+        }
 
         /** 제브 장치 없음(U13 전 모양, 제브 단계를 건너뛰고 지금 흐름이 그대로 돈다 — {@link GuardrailSupport#DISABLED}). */
         public Services(SessionTransitions transitions, Function<UUID, Optional<? extends DeviceLink>> deviceLinks,
@@ -271,6 +283,7 @@ public final class SessionExecutor {
             Objects.requireNonNull(practice, "practice");
             Objects.requireNonNull(judgment, "judgment");
             Objects.requireNonNull(guardrail, "guardrail");
+            Objects.requireNonNull(notices, "notices");
             Objects.requireNonNull(transitions, "transitions");
             Objects.requireNonNull(deviceLinks, "deviceLinks");
             Objects.requireNonNull(deviceStatus, "deviceStatus");
@@ -465,6 +478,13 @@ public final class SessionExecutor {
     private int droppedAfterConsent;
     /** U4b 연습 확장점(PRACTICE 세션만, 예외가 나면 null로 두고 자유대화처럼 잇는다). */
     private PracticeSessionExtension practice;
+    /** 안내 경계 이전에 열린 발화의 꼬리는 조용 경계까지 참여 입력으로 재사용하지 않는다. */
+    private boolean participationInputDraining;
+    private final ParticipationInputBoundary participationInputs = new ParticipationInputBoundary();
+    /** 안전 편지함의 완료 표식이 이미 수신한 일반 전사/음성을 앞질러도 경계가 뒤로 가지 않는다. */
+    private final java.util.concurrent.atomic.AtomicLong receivedProviderAudioBytes = new java.util.concurrent.atomic.AtomicLong();
+    private final java.util.concurrent.atomic.AtomicLong receivedInputEndMs = new java.util.concurrent.atomic.AtomicLong(-1L);
+    private final GreetingHandoff greetingHandoff = new GreetingHandoff();
     /** 확장점 예외가 났다(정산 시점을 건너뛰고 practice는 null). */
     private boolean practiceFailed;
     /** 확장점이 공급자 출력을 막았다. */
@@ -513,6 +533,7 @@ public final class SessionExecutor {
     public IdleClock.LiveState liveState() {
         return idle.liveState();
     }
+    public GuardrailProjection guardrailProjection() { return ctx.guardrailProjection(); }
 
     // ------------------------------------------------------------------ 실행
 
@@ -585,6 +606,10 @@ public final class SessionExecutor {
             ctx.services().events().appError(EventLog.Component.SESSION_LIFECYCLE, e);
             failFromTopLevel();
         } finally {
+            if (ctx.status().isTerminal()) {
+                participationInputs.clear();
+                greetingHandoff.clear();
+            }
             processing = previous;
         }
     }
@@ -710,7 +735,18 @@ public final class SessionExecutor {
             case DeviceReadyReceived ready -> onDeviceReady(ready);
             case LinkReplaced replaced -> ending.onLinkReplaced(replaced);
             case DeviceStateReceived state -> ending.onDeviceState(state);
-            case PlaybackMarkReceived mark -> ending.onPlaybackMark(mark);
+            case PlaybackMarkReceived mark -> {
+                if (ctx.fromBoundConnection(mark.connectionId()) && ctx.status() == SessionStatus.ACTIVE
+                        && mark.mark().status() == kr.mujoong.contract.ws.message.PlaybackMark.Status.COMPLETED) {
+                    greetingHandoff.completed(mark.mark().playbackId(), ctx.outputGeneration().get(), mark.connectionId(),
+                            mark.serverRecvAt());
+                } else if (ctx.fromBoundConnection(mark.connectionId())
+                        && (mark.mark().status() == kr.mujoong.contract.ws.message.PlaybackMark.Status.FAILED
+                            || mark.mark().status() == kr.mujoong.contract.ws.message.PlaybackMark.Status.STOPPED)) {
+                    greetingHandoff.failed(mark.mark().playbackId());
+                }
+                if (!joinFlow.onPlaybackMark(mark)) ending.onPlaybackMark(mark);
+            }
             case VoiceClosed closed -> ending.onVoiceClosed(closed);
             case ProviderConnected connected -> onProviderConnected(connected);
             case ProviderFailed failed -> onProviderFailed(failed);
@@ -748,6 +784,11 @@ public final class SessionExecutor {
         ctx.startSent(true);
         ctx.timers().arm(Kind.DEVICE_ACK, ctx.services().settings().deviceAckTimeout());
         ctx.providerAttempt(ctx.services().connector().connect(ctx.plan().sessionId(), ctx.plan().childContext(), event -> {
+            if (event instanceof ProviderEvent.OutputAudioDelta audio) receivedProviderAudioBytes.addAndGet(audio.audio().length);
+            else if (event instanceof ProviderEvent.OutputSilenceDelta silence) receivedProviderAudioBytes.addAndGet(silence.bytes());
+            else if (event instanceof ProviderEvent.InputTranscriptDelta input && input.startMs() >= 0 && input.endMs() >= input.startMs()) {
+                receivedInputEndMs.accumulateAndGet(input.endMs(), Math::max);
+            }
             boolean output = isOutputChunk(event);
             if (output) {
                 pendingOutputChunks.incrementAndGet();
@@ -768,7 +809,7 @@ public final class SessionExecutor {
             public void failed(kr.mujoong.realtime.voice.ProviderPort.ProviderUnavailableException.Reason reason) {
                 putFromProvider(new ProviderFailed(reason));
             }
-        }));
+        }, ctx.servicePolicy()));
     }
 
     private static boolean isOutputChunk(ProviderEvent event) {
@@ -911,6 +952,9 @@ public final class SessionExecutor {
 
     /** ACTIVE 전이 승자의 뒷일: 진입 몫과 발언권 반환(응답 생성 요청 1회). */
     private void afterActiveWon() {
+        participationInputs.clear();
+        if (ctx.plan().activityType() == ActivityType.FREE_TALK && ctx.noticeDelivery() != null
+                && ctx.noticeDelivery().state() == NoticeDelivery.State.COMPLETED) greetingHandoff.arm();
         enterActive();
         Instant now = ctx.services().clock().now();
         idle.resetSilence(now);
@@ -1286,8 +1330,11 @@ public final class SessionExecutor {
         @Override
         public boolean sendInstruction(UUID turnId, InstructionTemplates.NextAction action) {
             return SessionExecutor.this.sendInstruction(OutputGeneration.BumpReason.SERVER_SEND, "provider-judgment-",
-                    id -> ctx.services().requests().instructionsAppend(id, action.content()),
-                    () -> ctx.mailbox().putSafety(new SessionMailbox.JudgmentInstructionFailed(turnId)), true);
+                    id -> ctx.services().requests().instructionsAppend(id, action.content(ctx.plan().activityType())),
+                    () -> ctx.mailbox().putSafety(new SessionMailbox.JudgmentInstructionFailed(turnId)), true,
+                    action == InstructionTemplates.NextAction.REST_ACK_ONLY && ctx.plan().activityType() == ActivityType.FREE_TALK
+                            ? kr.mujoong.realtime.gate.OutputAuthority.Purpose.REST_ACK
+                            : kr.mujoong.realtime.gate.OutputAuthority.Purpose.NORMAL);
         }
 
         @Override
@@ -1346,6 +1393,19 @@ public final class SessionExecutor {
         public void afterActiveWon() {
             SessionExecutor.this.afterActiveWon();
         }
+
+        @Override
+        public void participationWindowOpened() {
+            judgment.onTranscript(false);
+            participationInputs.open(Math.max(ctx.outputGen().audioClockMs(),
+                    receivedProviderAudioBytes.get() / OutputGeneration.PCM_BYTES_PER_MILLISECOND), receivedInputEndMs.get());
+            participationInputDraining = inputGroupId != null;
+            clearInputGroup();
+            ctx.inputBeganAt(null);
+            if (participationInputDraining) {
+                ctx.timers().arm(Kind.INPUT_TRANSCRIPT_QUIET, ctx.services().settings().inputTranscriptQuiet());
+            }
+        }
     }
 
     /** 기기 표식 · 끝내기 협력 객체가 실행기에 남은 로직으로 되돌아오는 자리. */
@@ -1379,6 +1439,11 @@ public final class SessionExecutor {
         @Override
         public void onStopConfirmPlayed(Instant at) {
             SessionExecutor.this.onStopConfirmPlayed(at);
+        }
+
+        @Override
+        public void onStopConfirmFailed() {
+            SessionExecutor.this.onStopConfirmFailed();
         }
 
         @Override
@@ -1559,6 +1624,11 @@ public final class SessionExecutor {
         }
 
         @Override
+        public void onStopConfirmFailed() {
+            SessionExecutor.this.onStopConfirmFailed();
+        }
+
+        @Override
         public void redeliver() {
             SessionExecutor.this.redeliver();
         }
@@ -1611,6 +1681,12 @@ public final class SessionExecutor {
         @Override
         public boolean outputHeld() {
             return SessionExecutor.this.outputHeld();
+        }
+
+        @Override
+        public kr.mujoong.realtime.gate.OutputAuthority outputAuthority() { return ctx.outputAuthority(); }
+        @Override public String servicePolicyVersion() {
+            return ctx.servicePolicy() == null ? "practice" : ctx.servicePolicy().policyVersion();
         }
 
         @Override
@@ -1682,7 +1758,7 @@ public final class SessionExecutor {
         public boolean sendRetryFreeTurn(UUID retryId) {
             return SessionExecutor.this.sendInstruction(OutputGeneration.BumpReason.GUARDRAIL_RETRY,
                     "provider-guardrail-retry-",
-                    id -> ctx.services().requests().instructionsAppend(id, InstructionTemplates.Retry.RETRY_FREE_TURN.content()),
+                    id -> ctx.services().requests().instructionsAppend(id, InstructionTemplates.Retry.RETRY_FREE_TURN.content(ctx.plan().activityType())),
                     () -> ctx.mailbox().putSafety(new SessionMailbox.GuardrailRetryNotHeard(retryId)), false);
         }
 
@@ -2020,12 +2096,15 @@ public final class SessionExecutor {
      */
     private void requestResponse(InstructionTemplates.ResponseStart start) {
         sendInstruction(OutputGeneration.BumpReason.SERVER_SEND, "provider-respond-",
-                id -> ctx.services().requests().responseStart(id, start), null, true);
+                id -> ctx.services().requests().responseStart(id, start, ctx.plan().activityType()), null, true);
     }
 
     /** 공급자 출력을 받지 않는 때(참여 확인 중 · 종료 확인 질문 중 · 확장점이 막은 동안). */
     private boolean outputHeld() {
         return ctx.status() == SessionStatus.WAITING_CHILD || ctx.stopConfirm().isActive() || judgment.holdsOutput()
+                || (ctx.plan().activityType() == ActivityType.FREE_TALK && ctx.conversationPolicy().resting()
+                    && (ctx.outputAuthority() == null || ctx.outputAuthority().purpose()
+                        != kr.mujoong.realtime.gate.OutputAuthority.Purpose.REST_ACK))
                 || (practiceHold && ctx.status() == SessionStatus.ACTIVE);
     }
 
@@ -2073,6 +2152,11 @@ public final class SessionExecutor {
             case ProviderEvent.InputTranscriptDone done -> {
                 // 공급자는 이 사건을 보내지 않는다(설계 개정 A7). 대신 보내는 쪽(시험 대역)이 있으면 묶음을 그것으로 확정한 것으로 본다
                 clearInputGroup();
+                if (ctx.plan().activityType() == ActivityType.FREE_TALK && ctx.status() == SessionStatus.WAITING_CHILD
+                        && !participationInputs.acceptsLegacyDone(done.itemId())) {
+                    return;
+                }
+                ctx.inputBeganAt(at);
                 onConfirmedChildTranscript(done, at);
             }
             case ProviderEvent.UsageUpdated ignored -> {
@@ -2101,6 +2185,12 @@ public final class SessionExecutor {
      * 없으면 {@link #onInputTranscriptQuiet}가 그 묶음을 확정 전사로 만든다. 조각의 저장 규칙(동의 철회 · 참여 전 · 출력 범위)은 그대로다.
      */
     private void onInputTranscriptDelta(ProviderEvent.InputTranscriptDelta delta, Instant at) {
+        if (ctx.plan().activityType() == ActivityType.FREE_TALK && ctx.status() == SessionStatus.WAITING_CHILD
+                && !participationInputs.accepts(delta)) return;
+        if (participationInputDraining && ctx.status() == SessionStatus.WAITING_CHILD) {
+            ctx.timers().arm(Kind.INPUT_TRANSCRIPT_QUIET, ctx.services().settings().inputTranscriptQuiet());
+            return;
+        }
         groupInputDelta(delta);
         if (ctx.consentWithdrawnAt() != null ||ctx.status() == SessionStatus.WAITING_CHILD) {
             // 동의 철회 뒤 도착한 아이 전사는 저장하지 않는다(확정 때 센다). 참여 전 아이 전사도 저장하지 않는다
@@ -2119,6 +2209,7 @@ public final class SessionExecutor {
     /** 조각을 현재 묶음에 더하고(없으면 묶음을 연다) 조용 시계를 다시 건다. 묶음 id를 돌려준다. */
     private String groupInputDelta(ProviderEvent.InputTranscriptDelta delta) {
         if (inputGroupId == null) {
+            ctx.inputBeganAt(ctx.services().clock().now());
             inputGroupOpens++;
             inputGroupId = delta.itemId() != null ? delta.itemId() : "in-" + (++inputGroupSeq);
             inputGroup.setLength(0);
@@ -2136,6 +2227,12 @@ public final class SessionExecutor {
 
     /** 입력 전사 묶음이 조용해졌다: 확정 전사를 지금 확정 전사 입구({@link ProviderEvent.InputTranscriptDone})와 같은 길로 흘린다. */
     private void onInputTranscriptQuiet() {
+        if (participationInputDraining) {
+            participationInputDraining = false;
+            clearInputGroup();
+            ctx.inputBeganAt(null);
+            return;
+        }
         String id = inputGroupId;
         String text = inputGroup.toString();
         clearInputGroup();
@@ -2173,10 +2270,12 @@ public final class SessionExecutor {
             return;
         }
         if (ctx.status() == SessionStatus.WAITING_CHILD) {
-            joinFlow.onJoinReply(done.transcript(), at);
+            greetingHandoff.childInput(done.transcript());
+            joinFlow.onJoinReply(done.transcript(), at, ctx.inputBeganAt() == null ? at : ctx.inputBeganAt());
             return;
         }
         if (inRelayRange()) {
+            greetingHandoff.childInput(done.transcript());
             boolean uncertain = uncertain(done);
             java.util.OptionalInt seq = ctx.transcripts().childFinal(done.itemId(), done.transcript(), at, uncertain);
             // 아이의 빈 아닌 확정 전사가 공백 시계를 0으로 한다(빈 전사는 리셋하지 않는다)
@@ -2278,6 +2377,7 @@ public final class SessionExecutor {
     private long bumpOutput(OutputGeneration.BumpReason reason) {
         Instant now = ctx.services().clock().now();
         long generation = ctx.outputGen().bump(now, reason);
+        ctx.outputAuthority(newOutputAuthority(kr.mujoong.realtime.gate.OutputAuthority.Purpose.NORMAL));
         instructionNotHeard = null;
         ctx.timers().cancel(Kind.INSTRUCTION_WAIT);
         ctx.segment().reset();
@@ -2362,6 +2462,15 @@ public final class SessionExecutor {
     private boolean sendInstruction(OutputGeneration.BumpReason reason, String name,
             java.util.function.Function<String, ProviderRequestFactory.InstructionsAppend> build, Runnable onFailure,
             boolean replayable) {
+        return sendInstruction(reason, name, build, onFailure, replayable, kr.mujoong.realtime.gate.OutputAuthority.Purpose.NORMAL);
+    }
+
+    private boolean sendInstruction(OutputGeneration.BumpReason reason, String name,
+            java.util.function.Function<String, ProviderRequestFactory.InstructionsAppend> build, Runnable onFailure,
+            boolean replayable, kr.mujoong.realtime.gate.OutputAuthority.Purpose purpose) {
+        if (ctx.plan().activityType() == ActivityType.FREE_TALK && ctx.conversationPolicy().resting()
+                && (purpose != kr.mujoong.realtime.gate.OutputAuthority.Purpose.REST_ACK
+                    || !ctx.conversationPolicy().claimRestAck())) return false;
         ProviderSession session = ctx.providerSession();
         if (session == null || !session.isOpen()) {
             return false;
@@ -2370,6 +2479,7 @@ public final class SessionExecutor {
         ProviderRequestFactory.InstructionsAppend request = build.apply(eventId);
         Instant now = ctx.services().clock().now();
         ctx.outputGen().bumpForInstruction(now, reason, eventId);
+        ctx.outputAuthority(newOutputAuthority(purpose));
         ctx.segment().reset();
         ctx.transcripts().aiFinal("", false, now);
         ctx.timers().cancel(Kind.SEGMENT_QUIET);
@@ -2468,8 +2578,36 @@ public final class SessionExecutor {
         if (ctx.status() != SessionStatus.ACTIVE) {
             return false;
         }
+        if (ctx.plan().activityType() == ActivityType.FREE_TALK) {
+            if (stopJudge.requestsImmediateMute(transcript)) {
+                ctx.immediateMute(true);
+                applyStopDecision(StopConfirmFlow.Decision.CLOSE, "IMMEDIATE_MUTE", at);
+                return true;
+            }
+            if (stopJudge.requestsRest(transcript)) {
+                if (ctx.conversationPolicy().rest()) {
+                    stopOutputForIntent(at);
+                    sendInstruction(OutputGeneration.BumpReason.SERVER_SEND, "provider-rest-",
+                            id -> ctx.services().requests().instructionsAppend(id,
+                                    InstructionTemplates.NextAction.REST_ACK_ONLY.content(ActivityType.FREE_TALK)), null, false,
+                            kr.mujoong.realtime.gate.OutputAuthority.Purpose.REST_ACK);
+                }
+                return true;
+            }
+            ctx.conversationPolicy().resumeOnNewInput();
+            if (stopJudge.refusesTopic(transcript)) {
+                ctx.conversationPolicy().refuseCurrent();
+                stopOutputForIntent(at);
+                sendInstruction(OutputGeneration.BumpReason.SERVER_SEND, "provider-topic-refusal-",
+                        id -> ctx.services().requests().instructionsAppend(id, InstructionTemplates.scoped(
+                                "그 이야기는 하지 않겠다는 선택을 짧게 수용하고 새 질문 없이 기다린다. 같은 정보를 표현만 바꾸어 요구하지 않는다.")), null);
+                return true;
+            }
+        }
         if (ctx.stopConfirm().isActive()) {
             boolean stop = stopJudge.judge(transcript, false).verdict() == StopIntentJudge.Verdict.STOP;
+            if (!stop && ctx.plan().activityType() == ActivityType.FREE_TALK && ctx.stopQuestionDelivery() != null
+                    && !ctx.stopQuestionDelivery().permitsInput(ctx.inputBeganAt() == null ? at : ctx.inputBeganAt())) return true;
             applyStopDecision(ctx.stopConfirm().onReply(transcript, stop, at), "REPLY", at);
             return true;
         }
@@ -2514,12 +2652,14 @@ public final class SessionExecutor {
     /** 결과 → 지시 여부. 휴식(REST)만 ACTIVE에서 지시 하나를 낸다: 출력권 연습은 받아 주기만, 그 밖은 받아 주고 이어 가기. */
     private JudgmentTurn.Decision decideStopJudgment(JudgmentTurn turn, JudgeOutcome outcome) {
         if (outcome.kind() == JudgmentOutcomeKind.CONFIRMED && "REST".equals(outcome.firstOption()) && ctx.status() == SessionStatus.ACTIVE) {
+            if (ctx.plan().activityType() == ActivityType.FREE_TALK) ctx.conversationPolicy().rest();
             boolean controlled = practice != null && practice.controlsOutput();
             if (controlled) {
                 // J6가 연습 발화를 끊으며 건 출력 막음을 풀어야 받아 주는 말이 들린다(이후 막을지는 REST_REQUESTED를 받은 확장이 정한다)
                 practiceHold = false;
             }
-            return JudgmentTurn.Decision.instruct(controlled ? InstructionTemplates.NextAction.REST_ACK_ONLY
+            return JudgmentTurn.Decision.instruct(controlled || ctx.plan().activityType() == ActivityType.FREE_TALK
+                    ? InstructionTemplates.NextAction.REST_ACK_ONLY
                     : InstructionTemplates.NextAction.REST_ACK_AND_RETURN);
         }
         return JudgmentTurn.Decision.close();
@@ -2552,6 +2692,7 @@ public final class SessionExecutor {
         }
         String first = outcome.kind() == JudgmentOutcomeKind.CONFIRMED ? outcome.firstOption() : null;
         if ("END_CLEAR".equals(first)) {
+            ctx.confirmedStopSeq(seq > 0 ? seq : null);
             ctx.putEvent(EVENT_CHILD_STOP_INTENT, "{\"basis\":\"" + StopIntentJudge.Basis.LUNA_J6.name() + "\"}", now);
             stopOutputForIntent(now);
             ending.beginClosing(Trigger.CHILD_STOP_CONFIRMED, null);
@@ -2564,7 +2705,8 @@ public final class SessionExecutor {
                         PracticeSessionExtension.ExtensionEvent.Kind.REST_REQUESTED, "judgment", null, null)));
             }
             NextAction next = closure.instruction() == null ? NextAction.NONE
-                    : controlled ? NextAction.REST_ACK_ONLY : NextAction.REST_ACK_AND_RETURN;
+                    : controlled || ctx.plan().activityType() == ActivityType.FREE_TALK
+                            ? NextAction.REST_ACK_ONLY : NextAction.REST_ACK_AND_RETURN;
             return new JudgmentCoordinator.Handled(next, true);
         }
         if ("NOT_END".equals(first)) {
@@ -2601,6 +2743,7 @@ public final class SessionExecutor {
     private void applyStopDecision(StopConfirmFlow.Decision decision, String cause, Instant at) {
         switch (decision) {
             case CLOSE -> {
+                ctx.confirmedStopSeq(currentTranscriptSeq > 0 ? currentTranscriptSeq : null);
                 ctx.timers().cancel(Kind.STOP_CONFIRM);
                 ctx.stopConfirmPlaybackId(null);
                 if (cause != null) {
@@ -2640,10 +2783,21 @@ public final class SessionExecutor {
     private void playStopConfirm() {
         Instant now = ctx.services().clock().now();
         Optional<ApprovedItem> item = ctx.plan().approvedItem(STOP_CONFIRM);
+        if (ctx.plan().activityType() == ActivityType.FREE_TALK && (item.isEmpty()
+                || ctx.services().notices().verified(item.get(), ctx.plan().approvedAudio(),
+                        ctx.servicePolicy().policyVersion(), ctx.services().settings().playbackExpiry()).isEmpty())) {
+            onStopConfirmFailed();
+            return;
+        }
         if (item.isEmpty()) {
             reportMissing(STOP_CONFIRM, now);
         } else {
             UUID playbackId = UUID.randomUUID();
+            if (ctx.plan().activityType() == ActivityType.FREE_TALK && ctx.link() != null) {
+                ctx.stopQuestionDelivery(new NoticeDelivery(ctx.plan().sessionId(), ctx.link().connectionId(), playbackId,
+                        ctx.servicePolicy().promptVersion(), ctx.servicePolicy().policyVersion(),
+                        now.plus(ctx.services().settings().playbackExpiry())));
+            }
             if (ctx.sendControl(new PlayApprovedContent(playbackId, STOP_CONFIRM, item.get().contentVersionId()))) {
                 ctx.stopConfirmPlaybackId(playbackId);
                 ctx.playback().started(playbackId, STOP_CONFIRM);
@@ -2653,7 +2807,19 @@ public final class SessionExecutor {
             }
         }
         ctx.stopConfirmPlaybackId(null);
-        onStopConfirmPlayed(now);
+        if (ctx.plan().activityType() == ActivityType.FREE_TALK) onStopConfirmFailed();
+        else onStopConfirmPlayed(now);
+    }
+
+    private void onStopConfirmFailed() {
+        if (ctx.stopQuestionDelivery() != null) ctx.stopQuestionDelivery().invalidate();
+        ctx.stopConfirmPlaybackId(null);
+        ctx.timers().cancel(Kind.STOP_CONFIRM);
+        ctx.stopConfirm().cancel();
+        if (ctx.status() == SessionStatus.ACTIVE) {
+            resumePracticeTimers(ctx.services().clock().now());
+            listeningAgain();
+        }
     }
 
     private void onStopConfirmPlayed(Instant at) {
@@ -2751,6 +2917,10 @@ public final class SessionExecutor {
         }
         // U11 W8-5: 공급자 출력 끝(tTranscriptFinal)은 구간의 마지막 조각 시각이다(봉인 시각이 아니라 800ms 대기가 지표에 섞이지 않는다)
         ctx.transcripts().aiDone(sealed.lastOutAt());
+        if (duplicateGreeting(sealed)) {
+            discard(sealed, GateDecision.DiscardReason.GATE_PATTERN, false);
+            return;
+        }
         try {
             GateDecision inspected = ctx.services().gate().inspect(sealed);
             if (!inspected.passed()) {
@@ -2820,9 +2990,15 @@ public final class SessionExecutor {
      * @return 기기로 보냈으면 참, recheck에서 폐기했으면 거짓
      */
     private boolean recheckAndSend(SegmentBuffer.Sealed sealed, TranscriptWriter.Held held, boolean ownsLatency) {
+        if (duplicateGreeting(sealed)) {
+            discard(sealed, GateDecision.DiscardReason.GATE_PATTERN, false, held, ownsLatency);
+            return false;
+        }
         DeviceLink target = ctx.link();
+        if (ctx.outputAuthority() == null) ctx.outputAuthority(newOutputAuthority(
+                kr.mujoong.realtime.gate.OutputAuthority.Purpose.NORMAL));
         boolean activeAndCurrent = ctx.status() == SessionStatus.ACTIVE && sealed.generation() == ctx.outputGeneration().get()
-                && target != null && target.isOpen();
+                && target != null && target.isOpen() && hasOutputAuthority(ctx.outputAuthority(), sealed);
         OutputGate.Rechecked<DeviceLink.AudioReservation> rechecked = ctx.services().gate().recheck(activeAndCurrent,
                 ctx.services().recorder().isDegraded(ctx.plan().sessionId()),
                 () -> target == null ? Optional.empty() : target.reserveAudio(sealed.totalBytes()));
@@ -2843,6 +3019,8 @@ public final class SessionExecutor {
         Instant passAt = ctx.services().clock().now();
         correctionsInARow = 0;
         UUID playbackId = UUID.randomUUID();
+        greetingHandoff.sent(playbackId, sealed.generation(), target.connectionId(),
+                passAt.plus(ctx.services().settings().playbackExpiry()));
         if (ownsLatency) {
             ctx.services().latency().gatePassed(ctx.plan().sessionId(), playbackId, passAt);
         }
@@ -2859,21 +3037,49 @@ public final class SessionExecutor {
             schedulePracticeTimer("u5b-audio-" + playbackId, ctx.services().settings().playbackExpiry());
         }
         long generation = sealed.generation();
+        var authority = ctx.outputAuthority();
         // 리뷰 반영 6: 기기로 실제 보낸 AI 음성 프레임만 기록한다(송신기가 소켓에 쓴 직후 넘긴다). 음성 레인에 못 들어간 묶음 ·
         // 세대가 올라 잘린 나머지 프레임은 기록하지 않는다
         AudioRecordings.Session aiRecording = ctx.recording();
         OutputBundle bundle = new OutputBundle(ctx.plan().sessionId(), playbackId, OutputBegin.Source.GPT_LIVE,
                 OutputBundle.frame(sealed.chunks()), sealed.totalMs(), reservation,
-                () -> ctx.outputGeneration().get() == generation,
-                firstFrameAt -> ctx.services().latency().firstFrameSent(ctx.plan().sessionId(), playbackId, firstFrameAt),
+                () -> ctx.outputGeneration().get() == generation && ctx.outputAuthority() == authority
+                        && hasOutputAuthority(authority, sealed),
+                firstFrameAt -> {
+                    greetingHandoff.frameSent(playbackId);
+                    ctx.services().latency().firstFrameSent(ctx.plan().sessionId(), playbackId, firstFrameAt);
+                },
                 aiRecording == null ? frame -> { } : aiRecording::ai);
         if (!target.sendOutput(bundle)) {
+            greetingHandoff.failed(playbackId);
             ctx.services().metrics().gateDiscard(GateDecision.DiscardReason.OUTBOUND_FULL.name());
             if (speech != null) {
                 practiceAudio.remove(playbackId); cancelPracticeTimer("u5b-audio-" + playbackId);
                 practicePlayback(speech, kr.mujoong.realtime.practicelegacy.PracticePorts.Playback.FAILED);
             }
         }
+    }
+
+    private kr.mujoong.realtime.gate.OutputAuthority newOutputAuthority(
+            kr.mujoong.realtime.gate.OutputAuthority.Purpose purpose) {
+        return new kr.mujoong.realtime.gate.OutputAuthority(ctx.plan().sessionId(), ctx.plan().activityType(),
+                ctx.outputGeneration().get(), ctx.outputGen().generation(),
+                ctx.servicePolicy() == null ? "practice" : ctx.servicePolicy().policyVersion(),
+                ctx.services().guardrail().policyVersion(), purpose);
+    }
+
+    private boolean duplicateGreeting(SegmentBuffer.Sealed candidate) {
+        return ctx.plan().activityType() == ActivityType.FREE_TALK && greetingHandoff.blocks(candidate.transcript(),
+                ctx.plan().approvedItem(INTRO_FREE_TALK).map(ApprovedItem::text).orElse(null),
+                ctx.plan().approvedItem(RE_PROMPT).map(ApprovedItem::text).orElse(null));
+    }
+
+    private boolean hasOutputAuthority(kr.mujoong.realtime.gate.OutputAuthority authority, SegmentBuffer.Sealed candidate) {
+        return authority != null && authority.permits(ctx.plan().sessionId(), ctx.plan().activityType(),
+                ctx.outputGeneration().get(), ctx.outputGen().generation(),
+                ctx.servicePolicy() == null ? "practice" : ctx.servicePolicy().policyVersion(),
+                ctx.services().guardrail().policyVersion(), ctx.status() == SessionStatus.ACTIVE && !ctx.terminated(),
+                ctx.plan().activityType() == ActivityType.FREE_TALK && ctx.conversationPolicy().resting(), candidate);
     }
 
     /** 폐기: AI 행 FINAL · false, 그다음 대체 문구 판정(겹침 규칙 R3-19). 교정은 사유에 따라. */
@@ -2973,7 +3179,7 @@ public final class SessionExecutor {
         }
         DialogInstructions.Correction chosen = correction;
         if (sendInstruction(OutputGeneration.BumpReason.GATE_CORRECTION, "provider-correct-",
-                id -> ctx.services().requests().instructionsAppend(id, chosen), null)) {
+                id -> ctx.services().requests().instructionsAppend(id, chosen, ctx.plan().activityType()), null)) {
             correctionsInARow++;
         }
     }

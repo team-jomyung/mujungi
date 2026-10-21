@@ -1,0 +1,271 @@
+{
+  "stage": "user-stories",
+  "upstream_ids": [
+    "FR1",
+    "FR1.1",
+    "FR1.2",
+    "FR1.3",
+    "FR2",
+    "FR2.1",
+    "FR2.2",
+    "FR2.3",
+    "FR2.4",
+    "FR2.5",
+    "FR3",
+    "FR3.1",
+    "FR3.2",
+    "FR3.3",
+    "FR3.4",
+    "FR4",
+    "FR4.1",
+    "FR4.2",
+    "FR4.3",
+    "FR5",
+    "FR5.1",
+    "FR5.2",
+    "FR5.3",
+    "FR6",
+    "FR6.1",
+    "FR6.2",
+    "FR6.3",
+    "FR7",
+    "FR7.1",
+    "FR7.2",
+    "FR7.3",
+    "NFR1",
+    "NFR2",
+    "NFR3",
+    "NFR4",
+    "NFR5",
+    "NFR6"
+  ],
+  "coverage": [
+    {
+      "id": "FR1",
+      "status": "OK",
+      "target": "US1.1"
+    },
+    {
+      "id": "FR1.1",
+      "status": "OK",
+      "target": "US1.1"
+    },
+    {
+      "id": "FR1.2",
+      "status": "OK",
+      "target": "US1.1"
+    },
+    {
+      "id": "FR1.3",
+      "status": "OK",
+      "target": "US1.1"
+    },
+    {
+      "id": "FR2",
+      "status": "OK",
+      "target": "US1.2, US1.3"
+    },
+    {
+      "id": "FR2.1",
+      "status": "OK",
+      "target": "US1.2"
+    },
+    {
+      "id": "FR2.2",
+      "status": "OK",
+      "target": "US1.2"
+    },
+    {
+      "id": "FR2.3",
+      "status": "OK",
+      "target": "US1.3"
+    },
+    {
+      "id": "FR2.4",
+      "status": "OK",
+      "target": "US1.3"
+    },
+    {
+      "id": "FR2.5",
+      "status": "OK",
+      "target": "US1.2, US1.3"
+    },
+    {
+      "id": "FR3",
+      "status": "OK",
+      "target": "US1.4, US1.5, US1.6"
+    },
+    {
+      "id": "FR3.1",
+      "status": "OK",
+      "target": "US1.4"
+    },
+    {
+      "id": "FR3.2",
+      "status": "OK",
+      "target": "US1.4, US1.6"
+    },
+    {
+      "id": "FR3.3",
+      "status": "OK",
+      "target": "US1.5"
+    },
+    {
+      "id": "FR3.4",
+      "status": "OK",
+      "target": "US1.5"
+    },
+    {
+      "id": "FR4",
+      "status": "OK",
+      "target": "US1.6"
+    },
+    {
+      "id": "FR4.1",
+      "status": "OK",
+      "target": "US1.6"
+    },
+    {
+      "id": "FR4.2",
+      "status": "OK",
+      "target": "US1.6"
+    },
+    {
+      "id": "FR4.3",
+      "status": "OK",
+      "target": "US1.6"
+    },
+    {
+      "id": "FR5",
+      "status": "OK",
+      "target": "US1.1, US2.1"
+    },
+    {
+      "id": "FR5.1",
+      "status": "OK",
+      "target": "US2.1"
+    },
+    {
+      "id": "FR5.2",
+      "status": "OK",
+      "target": "US1.1"
+    },
+    {
+      "id": "FR5.3",
+      "status": "OK",
+      "target": "US2.1"
+    },
+    {
+      "id": "FR6",
+      "status": "OK",
+      "target": "US1.3, US1.6, US2.1, US2.2"
+    },
+    {
+      "id": "FR6.1",
+      "status": "OK",
+      "target": "US1.3, US1.6"
+    },
+    {
+      "id": "FR6.2",
+      "status": "OK",
+      "target": "US1.6"
+    },
+    {
+      "id": "FR6.3",
+      "status": "OK",
+      "target": "US1.3, US2.1, US2.2"
+    },
+    {
+      "id": "FR7",
+      "status": "OK",
+      "target": "US1.1, US2.2"
+    },
+    {
+      "id": "FR7.1",
+      "status": "OK",
+      "target": "US1.1, US2.2"
+    },
+    {
+      "id": "FR7.2",
+      "status": "OK",
+      "target": "US2.2"
+    },
+    {
+      "id": "FR7.3",
+      "status": "OK",
+      "target": "US2.2"
+    },
+    {
+      "id": "NFR1",
+      "status": "Deferred",
+      "target": "nfr-requirements, nfr-design, functional-design, build-and-test: 허용 로그와 모델 문맥 보호를 분리해 구체화"
+    },
+    {
+      "id": "NFR2",
+      "status": "OK",
+      "target": "US1.2, US1.3, US1.6, US2.2"
+    },
+    {
+      "id": "NFR3",
+      "status": "Deferred",
+      "target": "code-generation, build-and-test: test-after, 줄 80%, 기존 검사 및 전체 verify.sh"
+    },
+    {
+      "id": "NFR4",
+      "status": "Deferred",
+      "target": "build-and-test: 대역 시험과 실제 모델·기기 품질의 증거 구분"
+    },
+    {
+      "id": "NFR5",
+      "status": "OK",
+      "target": "US1.1"
+    },
+    {
+      "id": "NFR6",
+      "status": "Deferred",
+      "target": "contract-design, nfr-requirements, code-generation, build-and-test: 기존 호출·예산·계약 호환성"
+    }
+  ],
+  "reverse": [
+    {
+      "id": "US1.1",
+      "status": "OK",
+      "target": "FR1, FR1.1, FR1.2, FR1.3, FR5, FR5.2, FR7, FR7.1, NFR5"
+    },
+    {
+      "id": "US1.2",
+      "status": "OK",
+      "target": "FR2, FR2.1, FR2.2, FR2.5, NFR2"
+    },
+    {
+      "id": "US1.3",
+      "status": "OK",
+      "target": "FR2, FR2.3, FR2.4, FR2.5, FR6, FR6.1, FR6.3, NFR2"
+    },
+    {
+      "id": "US1.4",
+      "status": "OK",
+      "target": "FR3, FR3.1, FR3.2"
+    },
+    {
+      "id": "US1.5",
+      "status": "OK",
+      "target": "FR3, FR3.3, FR3.4"
+    },
+    {
+      "id": "US1.6",
+      "status": "OK",
+      "target": "FR3, FR3.2, FR4, FR4.1, FR4.2, FR4.3, FR6, FR6.1, FR6.2, NFR2"
+    },
+    {
+      "id": "US2.1",
+      "status": "OK",
+      "target": "FR5, FR5.1, FR5.3, FR6, FR6.3"
+    },
+    {
+      "id": "US2.2",
+      "status": "OK",
+      "target": "FR6, FR6.3, FR7, FR7.1, FR7.2, FR7.3, NFR2"
+    }
+  ]
+}

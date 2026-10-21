@@ -1,0 +1,14 @@
+{
+  "stage": "domain-design",
+  "upstream_ids": ["US1.1", "US1.2", "US1.3", "US1.4", "US1.5", "US1.6", "US2.1", "US2.2"],
+  "coverage": [
+    {"id": "US1.1", "status": "OK", "target": "ServicePolicyCatalog, DialoguePolicy, PolicyBundle"},
+    {"id": "US1.2", "status": "OK", "target": "SessionLifecycle, NoticeDeliveryEvidence, ConversationPresentation"},
+    {"id": "US1.3", "status": "OK", "target": "SessionLifecycle, SessionConversation, DialoguePolicy, ConversationPresentation"},
+    {"id": "US1.4", "status": "OK", "target": "DialoguePolicy, SessionLifecycle"},
+    {"id": "US1.5", "status": "OK", "target": "DialoguePolicy, SessionConversation"},
+    {"id": "US1.6", "status": "OK", "target": "SessionLifecycle, DialoguePolicy, ConversationPresentation"},
+    {"id": "US2.1", "status": "OK", "target": "ServicePolicyCatalog, DialoguePolicy, ConversationPresentation"},
+    {"id": "US2.2", "status": "OK", "target": "SessionLifecycle, DialoguePolicy, OutputGuard, OutputCandidateBinding"}
+  ]
+}

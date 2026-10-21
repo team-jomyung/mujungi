@@ -31,6 +31,7 @@ import org.junit.jupiter.params.provider.EnumSource;
  * RETRYING), 검사표 무효 여덟 경우, 대기열 1칸, 턴당 재지시 1회, 폐기 훅을 확인한다. 제브는 시험이 손으로 푸는 대역이다(실제 제브 아님, R-F1 · R-M11).
  */
 @Tag("jev-guardrail")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class GuardrailCoordinatorTest {
 
     private static final String POLICY = FakeGuardrailClient.POLICY;

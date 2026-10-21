@@ -20,12 +20,13 @@ import org.springframework.jdbc.core.JdbcTemplate;
 
 @Tag("practice-legacy")
 @Tag("db")
+@Tag("service-guardrail")
 class PracticeMigrationIT {
     private static final List<String> TABLES = List.of("realtime_session_goal", "realtime_practice_attempt",
             "realtime_practice_response", "realtime_practice_cue", "realtime_practice_evaluation");
 
     @Test
-    void upgradingFromV3PreservesTheExistingSessionAndAppliesV4AndTheLaterV5V6AndV7() {
+    void upgradingFromV3PreservesTheExistingSessionAndAppliesV4ThroughAdditiveV8() {
         try (var db = MujoongPostgres.builder().migrate(false).start()) {
             db.flyway(MigrationSet.CORE).migrate();
             Flyway.configure().configuration(db.flyway(MigrationSet.REALTIME).getConfiguration())
@@ -42,11 +43,11 @@ class PracticeMigrationIT {
                     now, "{\"policyVersion\":\"1\",\"voiceAndText\":true,\"guardianView\":true,"
                             + "\"reportSharing\":false,\"rawAudio\":false}", now, now);
 
-            assertThat(db.flyway(MigrationSet.REALTIME).migrate().migrationsExecuted).isEqualTo(4);
+            assertThat(db.flyway(MigrationSet.REALTIME).migrate().migrationsExecuted).isEqualTo(5);
 
             assertThat(jdbc.queryForObject("select status from realtime.realtime_activity_session where id=?",
                     String.class, session)).isEqualTo("ACTIVE");
-            assertThat(new SchemaVersionCheck(jdbc).verify()).isEqualTo("7");
+            assertThat(new SchemaVersionCheck(jdbc).verify()).isEqualTo("8");
             assertThat(db.flyway(MigrationSet.REALTIME).migrate().migrationsExecuted).isZero();
         }
     }

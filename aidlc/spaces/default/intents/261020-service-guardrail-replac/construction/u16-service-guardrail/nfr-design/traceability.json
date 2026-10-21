@@ -1,0 +1,128 @@
+{
+  "stage": "nfr-design",
+  "unit": "u16-service-guardrail",
+  "upstream_ids": [
+    "NFR1.1",
+    "NFR1.2",
+    "NFR1.3",
+    "NFR1.4",
+    "NFR2.1",
+    "NFR2.2",
+    "NFR2.3",
+    "NFR2.4",
+    "NFR3.1",
+    "NFR3.2",
+    "NFR3.3",
+    "NFR4.1",
+    "NFR4.2",
+    "NFR4.3",
+    "NFR5.1",
+    "NFR5.2",
+    "NFR5.3",
+    "NFR6.1",
+    "NFR6.2",
+    "NFR6.3"
+  ],
+  "coverage": [
+    {
+      "id": "NFR1.1",
+      "status": "OK",
+      "target": "security-design.md 및 observability-design.md: 허용 로그/직렬화"
+    },
+    {
+      "id": "NFR1.2",
+      "status": "OK",
+      "target": "security-design.md: 기존 인증/소유와 현재 기기 귀속"
+    },
+    {
+      "id": "NFR1.3",
+      "status": "OK",
+      "target": "security-design.md: 최소 데이터 whitelist/이스케이프"
+    },
+    {
+      "id": "NFR1.4",
+      "status": "OK",
+      "target": "reliability-design.md: 기존 세션 사건 수명/원자적 보존"
+    },
+    {
+      "id": "NFR2.1",
+      "status": "OK",
+      "target": "reliability-design.md: 누적 출력 허용·현재성 확인"
+    },
+    {
+      "id": "NFR2.2",
+      "status": "OK",
+      "target": "performance-design.md: 기존 서버 시계/경합 경계"
+    },
+    {
+      "id": "NFR2.3",
+      "status": "OK",
+      "target": "reliability-design.md: 상태·사실 원자성/null 복구"
+    },
+    {
+      "id": "NFR2.4",
+      "status": "OK",
+      "target": "reliability-design.md: 질문 실패 전이와 듣기/기술정리"
+    },
+    {
+      "id": "NFR3.1",
+      "status": "OK",
+      "target": "observability-design.md: 층 test-after/기존80%"
+    },
+    {
+      "id": "NFR3.2",
+      "status": "OK",
+      "target": "observability-design.md: 승인 Unit검증·최종전체회귀"
+    },
+    {
+      "id": "NFR3.3",
+      "status": "OK",
+      "target": "observability-design.md: 실제 요청/상태효과 분리"
+    },
+    {
+      "id": "NFR4.1",
+      "status": "OK",
+      "target": "observability-design.md: 자동·실호출·실기기 구분"
+    },
+    {
+      "id": "NFR4.2",
+      "status": "OK",
+      "target": "security-design.md 및 reliability-design.md: 실제 말소리와 placeholder 구분"
+    },
+    {
+      "id": "NFR4.3",
+      "status": "OK",
+      "target": "observability-design.md: 사전 음성 제작/청취·판 등록 근거"
+    },
+    {
+      "id": "NFR5.1",
+      "status": "OK",
+      "target": "observability-design.md: 정본→적용본→요청/시험 추적"
+    },
+    {
+      "id": "NFR5.2",
+      "status": "OK",
+      "target": "performance-design.md: 앱 초기 불변 적재/참조"
+    },
+    {
+      "id": "NFR5.3",
+      "status": "OK",
+      "target": "security-design.md: 원본과 정책/데이터 신뢰분리"
+    },
+    {
+      "id": "NFR6.1",
+      "status": "OK",
+      "target": "reliability-design.md: 기존 공급자/JEV/연습/저장 회귀"
+    },
+    {
+      "id": "NFR6.2",
+      "status": "OK",
+      "target": "performance-design.md: 마감/큐·호출/재시도 보존"
+    },
+    {
+      "id": "NFR6.3",
+      "status": "OK",
+      "target": "scalability-design.md: 기존 용량/단일소유·구성 유지"
+    }
+  ]
+}

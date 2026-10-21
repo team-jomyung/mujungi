@@ -38,6 +38,7 @@ import org.junit.jupiter.api.Test;
  * 시작 뒤 {@code session.error}는 세션 유지, 아이 전사 불확실 표시, 동의된 세션만 원음 기록을 실제 스레드 없이 확인한다.
  */
 @Tag("voice-session")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class SessionVoiceTest {
 
     private static final byte[] FRAME = new byte[960];
@@ -173,8 +174,8 @@ class SessionVoiceTest {
         List<ProviderRequestFactory.InstructionsAppend> corrections =
                 h.provider.last().requests(ProviderRequestFactory.InstructionsAppend.class);
         assertThat(corrections).extracting(ProviderRequestFactory.InstructionsAppend::content).containsExactly(
-                InstructionTemplates.ResponseStart.FIRST.content(),
-                InstructionTemplates.correctionContent(DialogInstructions.Correction.DIAGNOSIS), InstructionTemplates.correctionContent(DialogInstructions.Correction.EMOTION_CLAIM));
+                InstructionTemplates.ResponseStart.FIRST.content(h.activityType),
+                InstructionTemplates.correctionContent(DialogInstructions.Correction.DIAGNOSIS, h.activityType), InstructionTemplates.correctionContent(DialogInstructions.Correction.EMOTION_CLAIM, h.activityType));
         assertThat(corrections).allSatisfy(correction -> {
             assertThat(correction.type()).isEqualTo(ProviderRequestFactory.TYPE_INSTRUCTIONS_APPEND);
             assertThat(correction.content()).doesNotContain("하늘색", "화가났군요", "늦은 조각");
@@ -198,8 +199,8 @@ class SessionVoiceTest {
 
         assertThat(h.provider.last().requests(ProviderRequestFactory.InstructionsAppend.class))
                 .extracting(ProviderRequestFactory.InstructionsAppend::content)
-                .containsExactly(InstructionTemplates.ResponseStart.FIRST.content(),
-                        InstructionTemplates.correctionContent(DialogInstructions.Correction.INCOMPLETE));
+                .containsExactly(InstructionTemplates.ResponseStart.FIRST.content(h.activityType),
+                        InstructionTemplates.correctionContent(DialogInstructions.Correction.INCOMPLETE, h.activityType));
     }
 
     @Test
@@ -220,8 +221,8 @@ class SessionVoiceTest {
         assertThat(h.launcher.runAll("provider-")).as("CLOSING에는 교정하지 않는다").isZero();
         assertThat(h.provider.last().requests(ProviderRequestFactory.InstructionsAppend.class))
                 .extracting(ProviderRequestFactory.InstructionsAppend::content)
-                .containsExactly(InstructionTemplates.ResponseStart.FIRST.content(),
-                        InstructionTemplates.correctionContent(DialogInstructions.Correction.INCOMPLETE));
+                .containsExactly(InstructionTemplates.ResponseStart.FIRST.content(h.activityType),
+                        InstructionTemplates.correctionContent(DialogInstructions.Correction.INCOMPLETE, h.activityType));
     }
 
     @Test
@@ -328,7 +329,7 @@ class SessionVoiceTest {
     void withoutRawAudioConsentNothingIsRecorded() {
         h.activate();
         offerFrames(2);
-        respond("r1", "안녕 반가워", 4_800);
+        respond("r1", "네 이야기를 듣고 있어", 4_800);
         end();
 
         assertThat(h.recordings.opened()).isEmpty();
@@ -340,7 +341,7 @@ class SessionVoiceTest {
         h.activate();
         offerFrames(3);
         // 리뷰 반영 6: 송신기가 기기로 실제 보낸 프레임만 기록된다
-        h.link.deliver(respond("r1", "안녕 반가워", 4_800), h.clock.now());
+        h.link.deliver(respond("r1", "네 이야기를 듣고 있어", 4_800), h.clock.now());
         emitComplete("r2", "진단 결과야");
         h.advance(Duration.ofMillis(800));
         Instant endedAt = h.clock.now();
@@ -400,7 +401,7 @@ class SessionVoiceTest {
         assertThat(h.launcher.names()).noneMatch(name -> name.startsWith("provider-"));
         mark(bundle.playbackId(), PlaybackMark.Status.COMPLETED, null);
 
-        done("i2", "쉬고 싶어", 0.9);
+        done("i2", "그만", 0.9);
 
         // U4b(FR11.3 · BR4.3): 불명확한 종료 의도는 확인 질문으로 간다(사건 STOP_CONFIRM_ASKED, 확인 중 출력 막음)
         assertThat(sessionEvents()).noneMatch(event -> event.getEventType().startsWith("CHILD_STOP"));

@@ -21,6 +21,7 @@ import org.junit.jupiter.api.Test;
  * </ul>
  */
 @Tag("voice-session")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class SessionExecutorReview3Test {
 
     private final SessionHarness h = new SessionHarness();

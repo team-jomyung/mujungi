@@ -126,10 +126,12 @@ export class DeviceSession {
 
   /** 재생기의 PLAYBACK_MARK를 서버로 보낸다. */
   sendPlaybackMark(sessionId: string, mark: PlaybackMarkPayload): void {
+    if (!this.isCurrent(sessionId)) return;
     this.deps.send("PLAYBACK_MARK", mark, sessionId);
   }
 
   handleMessage(message: ServerMessage): void {
+    if (message.type !== "START_SESSION" && "sessionId" in message && this.current !== null && message.sessionId !== this.current.sessionId) return;
     if ("opId" in message && !this.firstTime(`${message.type}:${message.sessionId}:${message.opId}`)) {
       // 재접속 뒤 같은 명령 · 같은 opId로 다시 온 것: wsClient가 ACK를 다시 보냈고 실행은 한 번뿐이다(U3-J7)
       return;
@@ -139,7 +141,7 @@ export class DeviceSession {
         void this.startSession(message.sessionId, message.approvedAudio);
         return;
       case "SESSION_STATE":
-        if (message.view === "STANDBY" && this.current !== null && message.sessionId !== this.current.sessionId) {
+        if (this.suspended !== null || (this.current !== null && message.sessionId !== this.current.sessionId)) {
           // 3차 리뷰 4: 끝난 다른 세션을 대기로 돌려보내는 뒤늦은 명령이 지금 세션의 표시를 덮지 않는다
           return;
         }
@@ -153,7 +155,7 @@ export class DeviceSession {
         }
         return;
       case "OUTPUT_END":
-        this.deps.player.endStream(message.playbackId);
+        if (this.isCurrent(message.sessionId)) this.deps.player.endStream(message.playbackId);
         return;
       case "PLAY_APPROVED_CONTENT":
         if (this.isCurrent(message.sessionId)) {
@@ -166,7 +168,7 @@ export class DeviceSession {
         }
         return;
       case "STOP_OUTPUT":
-        this.deps.player.stopAll("STOP_OUTPUT");
+        if (this.isCurrent(message.sessionId)) this.deps.player.stopAll("STOP_OUTPUT");
         return;
       case "CLOSE_TRANSPORT":
         this.closeTransport(message.sessionId);
@@ -227,7 +229,7 @@ export class DeviceSession {
     return true;
   }
 
-  private isCurrent(sessionId: string): boolean {
+  private isCurrent(sessionId: string | null): boolean {
     return this.current !== null && this.current.sessionId === sessionId;
   }
 
@@ -282,6 +284,7 @@ export class DeviceSession {
   }
 
   private closeTransport(sessionId: string): void {
+    if (this.current !== null && !this.isCurrent(sessionId)) return;
     // 입력 송신을 먼저 멈추고(마이크 닫힘 시각), 재생 · 대기열을 정리한 뒤(출력 멈춤 시각) 확인을 보낸다.
     if (this.isCurrent(sessionId)) {
       this.setInputOpen(false);

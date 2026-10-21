@@ -22,6 +22,7 @@ import org.junit.jupiter.api.Test;
  * 출력 · 일치를 확인할 수 없는(UNKNOWN) 출력은 새 발화로 검사한다(호출 1). 제브 · 공급자는 모두 대역이다(실제 호출 없음, R-F1 · R-M11).
  */
 @Tag("jev-guardrail")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class GuardrailApprovedSkipTest {
 
     private static final byte[] AUDIO = new byte[4800];

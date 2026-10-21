@@ -48,6 +48,7 @@ import org.springframework.util.unit.DataSize;
  * (technicalPause · silenceWarning)을 싣는지 본다.
  */
 @Tag("session-runtime")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class SessionInternalControllerSessionRuntimeTest {
 
     private static final Instant T0 = Instant.parse("2026-10-15T09:00:00Z");

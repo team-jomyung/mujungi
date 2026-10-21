@@ -9,6 +9,10 @@ import java.util.Objects;
 import kr.mujoong.contract.audio.AudioFrameCodec;
 import kr.mujoong.realtime.dialog.DialogInstructions;
 import kr.mujoong.realtime.dialog.InstructionTemplates;
+import kr.mujoong.realtime.dialog.PolicyBundle;
+import kr.mujoong.realtime.dialog.ServicePolicyCatalog;
+import kr.mujoong.contract.status.ActivityType;
+import org.springframework.beans.factory.annotation.Autowired;
 import kr.mujoong.realtime.session.ChildContext;
 import org.springframework.stereotype.Component;
 
@@ -29,6 +33,22 @@ import org.springframework.stereotype.Component;
  */
 @Component
 public class ProviderRequestFactory {
+
+    private final ServicePolicyCatalog policies;
+
+    public ProviderRequestFactory() {
+        this(new ServicePolicyCatalog());
+    }
+
+    @Autowired
+    public ProviderRequestFactory(ServicePolicyCatalog policies) {
+        this.policies = Objects.requireNonNull(policies, "policies");
+    }
+
+    /** 세션이 고정할 참조다. 연습은 기존 정책 입구를 사용한다. */
+    public PolicyBundle servicePolicy(ActivityType mode) {
+        return policies.select(mode).orElse(null);
+    }
 
     /** 공급자 모델(코드 상수, BR7.2 · ai-io 2절). */
     public static final String MODEL = "gpt-live-1";
@@ -119,6 +139,25 @@ public class ProviderRequestFactory {
                 limitInterests(context.interests()));
         return new SessionStart(TYPE_SESSION_START,
                 new SessionBody(MODEL, instructions(data), new AudioSpec(new AudioFormat(AUDIO_TYPE, rate))));
+    }
+
+    /** 현재 자유대화 세션에 고정한 정책을 한 번만 포함한다. 내부 판/해시는 wire 필드가 아니다. */
+    public SessionStart sessionStart(ChildContext context, PolicyBundle policy) {
+        Objects.requireNonNull(context, "context");
+        String instructions = DialogInstructions.serviceRole(Objects.requireNonNull(policy, "policy"),
+                limit(context.displayName(), MAX_DISPLAY_NAME),
+                context.age() == null ? null : Math.max(MIN_AGE, Math.min(MAX_AGE, context.age())),
+                limitInterests(context.interests()));
+        return new SessionStart(TYPE_SESSION_START,
+                new SessionBody(MODEL, instructions, new AudioSpec(new AudioFormat(AUDIO_TYPE, AUDIO_RATE))));
+    }
+
+    public InstructionsAppend responseStart(String eventId, InstructionTemplates.ResponseStart start, ActivityType mode) {
+        return instructionsAppend(eventId, Objects.requireNonNull(start, "start").content(mode));
+    }
+
+    public InstructionsAppend instructionsAppend(String eventId, DialogInstructions.Correction correction, ActivityType mode) {
+        return instructionsAppend(eventId, InstructionTemplates.correctionContent(correction, mode));
     }
 
     /** 입력 음성 한 프레임. 본문은 변환하지 않는다(J131 무변환). */

@@ -1,6 +1,7 @@
 package kr.mujoong.realtime.dialog;
 
 import java.util.Objects;
+import kr.mujoong.contract.status.ActivityType;
 
 /**
  * 서버 발화 지시문 템플릿 (U11 설계 개정 A2 · A4.5 · A6). 공급자에는 응답 요청 type이 없어 서버의 모든 발화가 지시({@code session.instructions.append})
@@ -36,6 +37,17 @@ public final class InstructionTemplates {
         public String content() {
             return scoped(lead);
         }
+
+        public String content(ActivityType mode) {
+            if (mode == ActivityType.PRACTICE) return content();
+            if (this == FIRST) return scoped("서버가 현재 안내 전달과 참여 수락을 확인했다. 현재 연결에서 검증된 시작 안내 녹음의 실제 재생이 완료됐다. "
+                    + "시작 인사·자기소개·안내 대본·참여 질문을 다시 시작하거나 반복하지 않는다. "
+                    + "아이가 마지막으로 한 질문·경험·정정을 먼저 따르고 바로 이어 답한다. 아이가 누구인지나 이름을 명시적으로 물으면 그 질문에만 답한다. "
+                    + "새 질문·맞장구를 강제하지 않고 아이에게 발언권을 돌려준다.");
+            return scoped("서버가 현재 안내 전달과 참여 수락을 확인했다. 같은 안내나 참여 질문은 반복하지 않는다. "
+                    + "아이가 이미 말한 질문·경험·정정을 먼저 따르고, 답 뒤 새 질문을 자동으로 붙이지 않는다. "
+                    + "아직 아이가 말하지 않았다면 짧게 참여를 받아 주고 발언권을 돌려준다.");
+        }
     }
 
     /**
@@ -60,6 +72,16 @@ public final class InstructionTemplates {
         public String content() {
             return scoped(lead);
         }
+
+        public String content(ActivityType mode) {
+            if (mode == ActivityType.PRACTICE) return content();
+            return switch (this) {
+                case HOLD_REASK -> scoped("판정이 보류되었다. 이해 실패를 꾸미거나 새 질문을 강제하지 말고, "
+                        + "확인된 아이 말을 존중하며 기다린다.");
+                case REST_ACK_AND_RETURN, REST_ACK_ONLY -> scoped("쉬거나 생각하겠다는 선택을 짧게 한 번 수용한다. "
+                        + "새 질문이나 다시 이어 하자는 권유 없이 아이가 새로 말할 때까지 기다린다.");
+            };
+        }
     }
 
     /**
@@ -79,6 +101,11 @@ public final class InstructionTemplates {
         public String content() {
             return scoped(lead);
         }
+
+        public String content(ActivityType mode) {
+            return mode == ActivityType.PRACTICE ? content() : scoped("전달하지 않은 방금 응답은 이어서 말하지 않는다. "
+                    + "확인된 현재 아이 문맥만으로 짧게 답한다. 이해 실패·도움 요청을 꾸미거나 질문·맞장구를 강제하지 않는다.");
+        }
     }
 
     private InstructionTemplates() {
@@ -95,5 +122,23 @@ public final class InstructionTemplates {
     public static String correctionContent(DialogInstructions.Correction correction) {
         Objects.requireNonNull(correction, "correction");
         return scoped(INTERJECTION_LEAD + " 아래 지침에 따라 다시 답한다. 지침: " + correction.text());
+    }
+
+    /** 기존 금지 범주는 유지하면서 교정이 새 질문/의무 맞장구를 요구하지 않게 한다. */
+    public static String correctionContent(DialogInstructions.Correction correction, ActivityType mode) {
+        if (mode == ActivityType.PRACTICE) return correctionContent(correction);
+        Objects.requireNonNull(correction, "correction");
+        String constraint = switch (correction) {
+            case DIAGNOSIS -> "상태를 진단하거나 이름 붙이지 않는다.";
+            case TREATMENT -> "치료나 처치를 권하거나 지시하지 않는다.";
+            case SCORE -> "점수·등급·남과의 비교로 평가하지 않는다.";
+            case CAUSE -> "원인을 단정하거나 원인 확인 질문을 강제하지 않는다.";
+            case GENERALIZATION -> "늘·절대로 일반화하지 않는다.";
+            case EMOTION_CLAIM -> "감정을 단정하거나 감정 확인 질문을 강제하지 않는다.";
+            case PRESSURE -> "재촉하지 않고 아이가 선택한 만큼 기다린다.";
+            case INCOMPLETE -> "확인된 문맥에서 완결된 한두 문장만 사용한다.";
+        };
+        return scoped("방금 응답은 아이에게 전달하지 않았다. " + constraint
+                + " 취소된 질문을 잇지 않고 이해 실패를 꾸미거나 새 질문·맞장구를 강제하지 않는다.");
     }
 }

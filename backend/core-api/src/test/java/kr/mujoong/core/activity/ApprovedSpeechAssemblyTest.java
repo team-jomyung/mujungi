@@ -54,6 +54,7 @@ import org.springframework.transaction.PlatformTransactionManager;
  * 보내는지, 허용 목록 · 종류 · APPROVED 판으로 거르는지, 두 맵의 code가 겹치지 않는지, 발화가 없으면 옛 본문 경로를 그대로 쓰는지 본다.
  */
 @Tag("live-content")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class ApprovedSpeechAssemblyTest {
 
     private static final Instant NOW = Instant.parse("2026-10-16T00:00:00Z");

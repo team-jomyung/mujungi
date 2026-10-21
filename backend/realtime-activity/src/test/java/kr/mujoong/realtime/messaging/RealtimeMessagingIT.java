@@ -34,6 +34,7 @@ import tools.jackson.databind.JsonNode;
  */
 @Tag("skeleton")
 @Tag("db")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class RealtimeMessagingIT {
 
     private static final JsonCodec JSON = JsonCodec.shared();
