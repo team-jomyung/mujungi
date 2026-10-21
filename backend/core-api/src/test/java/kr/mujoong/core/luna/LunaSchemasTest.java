@@ -52,6 +52,32 @@ class LunaSchemasTest {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
+    void goalRequestRequiresExplicitStructureDecisionButKeepsHistoricalContractCompatible() {
+        var schemas = LunaSchemas.loadDefault(JSON);
+        var pair = schemas.pair(LunaPurpose.GOAL_CANDIDATES).orElseThrow();
+        var properties = (Map<String, Object>) pair.requestSchema().get("properties");
+        var candidates = (Map<String, Object>) properties.get("candidates");
+        var item = (Map<String, Object>) candidates.get("items");
+        assertThat((List<String>) item.get("required")).contains("structureSignature");
+        assertThat(pair.strict()).isTrue();
+        // The unchanged contract still reads earlier outputs lacking this optional field.
+        String historical = LunaTestFixtures.example("ai-goal-candidate-output.schema.json");
+        assertThat(schemas.isValidOutput(LunaPurpose.GOAL_CANDIDATES, historical)).isTrue();
+        var output = JSON.read(historical, Map.class);
+        var candidate = (Map<String, Object>) ((List<?>) output.get("candidates")).getFirst();
+        candidate.put("structureSignature", null);
+        assertThat(schemas.isValidOutput(LunaPurpose.GOAL_CANDIDATES, JSON.write(output))).isTrue();
+        candidate.put("structureSignature", Map.of("targetSkill", "PRODUCE", "requiredInference", "타인의 선호를 확인할 질문을 고르기",
+                "perspectiveStructure", "상대의 의도 1층", "decidableByEvidence", "NO", "directCheckAllowed", "YES"));
+        assertThat(schemas.isValidOutput(LunaPurpose.GOAL_CANDIDATES, JSON.write(output))).isTrue();
+        var invalid = new java.util.HashMap<>((Map<String, Object>) candidate.get("structureSignature"));
+        invalid.put("targetSkill", "INVENTED");
+        candidate.put("structureSignature", invalid);
+        assertThat(schemas.isValidOutput(LunaPurpose.GOAL_CANDIDATES, JSON.write(output))).isFalse();
+    }
+
+    @Test
     void reviewRequestHasProviderCompatibleRootWhileServerKeepsConditionalSafetyChecks() {
         var schemas=LunaSchemas.loadDefault(JSON);
         var pair=schemas.pair(LunaPurpose.SCENARIO_REVIEW).orElseThrow();
