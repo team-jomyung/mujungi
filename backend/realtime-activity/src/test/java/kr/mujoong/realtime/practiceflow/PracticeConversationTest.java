@@ -3,6 +3,7 @@ package kr.mujoong.realtime.practiceflow;
 import static kr.mujoong.realtime.practiceflow.PracticeScriptFixtures.fullScript;
 import static kr.mujoong.realtime.practiceflow.PracticeScriptFixtures.minimalScript;
 import static kr.mujoong.realtime.practiceflow.PracticeScriptFixtures.packageJson;
+import static kr.mujoong.realtime.practiceflow.PracticeScriptFixtures.sceneScript;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -962,5 +963,142 @@ class PracticeConversationTest {
         assertThat(once.out.slots).hasSize(slots);
         assertThat(once.ext.controlsOutput()).isTrue();
         assertThat(once.ext.toString()).doesNotContain(INTRO);
+    }
+
+    // ---- 도입이 기회 문장을 담는 대본(core 규칙): 기회 문장은 입력 대기까지 한 번만 ----
+
+    private static final String CARRYING_INTRO = "블록 놀이 중이야. 친구가 멈추려 해. 이제 그만할래.";
+    private static final String STOP = "이제 그만할래.";
+
+    private static Harness carrying(String partnerRole) {
+        return new Harness(packageJson(GOAL, sceneScript(SCENARIO, CARRYING_INTRO, STOP, partnerRole)), APPROVED);
+    }
+
+    private static long spokenTimes(Harness h, String sentence) {
+        String target = SceneIntro.normalize(sentence);
+        return h.out.slots.stream().filter(slot -> !slot.generated())
+                .filter(slot -> SceneIntro.normalize(slot.text()).contains(target)).count();
+    }
+
+    @Test
+    void anIntroThatCarriesTheOpportunitySentenceIsPlayedWholeAndTheSentenceIsNotPlayedAgainBeforeInput() {
+        Harness h = carrying("친한 친구");
+
+        h.activate();
+        assertThat(h.out.lastSlot().text()).as("도입은 승인 원문 그대로(자르지 않는다)").isEqualTo(CARRYING_INTRO);
+        assertThat(h.out.lastSlot().speech().matches(CARRYING_INTRO.replace(" ", ""))).isTrue();
+        int slots = h.out.slots.size();
+        assertThat(h.out.timers).doesNotContainKey("no-response");
+        h.played();
+
+        assertThat(h.out.slots).as("기회 문장을 따로 재생하지 않는다").hasSize(slots);
+        assertThat(h.out.timers).as("곧바로 아이 말을 기다린다").containsKey("no-response");
+        assertThat(h.ext.progress().stage()).isEqualTo("FIRST_RESPONSE");
+        h.child("그래 쉬자");
+        assertThat(h.out.lastJudgment().point()).isEqualTo(JudgmentPoint.J2);
+        assertThat(spokenTimes(h, STOP)).as("입력 대기까지 기회 문장 재생 1회").isEqualTo(1);
+        assertThat(h.out.slots.stream().filter(slot -> !slot.generated()).map(Slot::text))
+                .as("승인 발화는 대본 문장 원문뿐").containsOnly(CARRYING_INTRO);
+        assertThat(h.recorder.only().sceneKind()).isEqualTo(SceneKind.BASE);
+        assertThat(h.failures).isEmpty();
+    }
+
+    @Test
+    void anInterruptedCarryingIntroStillPlaysTheOpportunitySentenceSeparately() {
+        Harness h = carrying("친한 친구");
+        h.activate();
+
+        h.end(Playback.INTERRUPTED);
+
+        assertThat(h.out.lastSlot().text()).as("끊긴 도입 뒤에는 기회 문장을 못 들었을 수 있다").isEqualTo(STOP);
+        assertThat(h.out.timers).doesNotContainKey("no-response");
+        h.played();
+        assertThat(h.out.timers).containsKey("no-response");
+        h.child("그래 쉬자");
+        assertThat(h.out.lastJudgment().point()).isEqualTo(JudgmentPoint.J2);
+    }
+
+    @Test
+    void theNoResponseReguideStillReplaysTheOpportunitySentenceAfterACarryingIntro() {
+        Harness h = carrying("친한 친구");
+        h.activate();
+        h.played();
+        int slots = h.out.slots.size();
+
+        h.advance(Duration.ofSeconds(10));
+
+        assertThat(h.out.slots).hasSize(slots + 1);
+        assertThat(h.out.lastSlot().text()).as("무응답 재안내는 의도된 재생").isEqualTo(STOP);
+        assertThat(h.out.lastSlot().generated()).isFalse();
+    }
+
+    @Test
+    void aPlainIntroWithoutTheSentenceKeepsTheSeparateOpportunityPlayback() {
+        Harness h = minimal();
+        h.activate();
+        h.played();
+
+        assertThat(h.out.lastSlot().text()).isEqualTo(OPPORTUNITY);
+        assertThat(spokenTimes(h, OPPORTUNITY)).isEqualTo(1);
+    }
+
+    // ---- 친구 역할 이름(partnerRole = 짧은 역할 이름, 금지 규칙은 고정 지시) ----
+
+    @Test
+    void aLabelledScriptNamesThePartnerInThePeerInstructionAndKeepsEveryPeerRule() {
+        Harness h = carrying("친한 친구");
+        h.activate();
+        h.played();
+        h.child("그래");
+
+        h.result("J2", "PARTIAL");
+
+        Slot reask = h.out.lastSlot();
+        assertThat(reask.generated()).isTrue();
+        assertThat(reask.role()).isEqualTo("PEER");
+        assertThat(reask.text()).contains("너는 아이의 친한 친구 역할이다", "아이 대신 대답하지 않는다",
+                "정답이나 모범 문장을 먼저 말하지 말고, 아이의 말을 고쳐 주거나 평가하지 않는다.");
+        assertThat(h.out.slots.getFirst().speech().partnerRole()).as("승인 발화의 말하는 사람 표시").isEqualTo("친한 친구");
+    }
+
+    @Test
+    void anOldInstructionValueInPartnerRoleBecomesFriendInInstructionsAndApprovedSpeech() {
+        String oldInstruction = "제시된 상황의 상대 역할을 맡아. 아이의 답을 대신 말하거나 평가하지 마.";
+        Harness h = carrying(oldInstruction);
+        h.activate();
+        h.played();
+        h.child("그래");
+
+        h.result("J2", "PARTIAL");
+
+        assertThat(h.out.lastSlot().text()).contains("너는 아이의 친구 역할이다", "아이 대신 대답하지 않는다")
+                .doesNotContain("제시된 상황의");
+        assertThat(h.out.slots.getFirst().speech().partnerRole()).isEqualTo("친구");
+    }
+
+    @Test
+    void peerNameFallsBackForBlankOverlongOrSentenceLikeValuesOnly() {
+        assertThat(RolePolicy.peerName("같은 반 친구")).isEqualTo("같은 반 친구");
+        assertThat(RolePolicy.peerName("  동생 ")).isEqualTo("동생");
+        assertThat(RolePolicy.peerName("가".repeat(20))).isEqualTo("가".repeat(20));
+        for (String bad : new String[] {null, "", "  ", "가".repeat(21), "친구야.", "누구?", "친구!", "친구。", "친\u0007구"}) {
+            assertThat(RolePolicy.peerName(bad)).as(String.valueOf(bad)).isEqualTo("친구");
+        }
+        assertThat(RolePolicy.partnerLabel(PracticeFlowTypes.FlowRole.COACH, "친한 친구")).isEqualTo("코치");
+        assertThat(RolePolicy.partnerLabel(PracticeFlowTypes.FlowRole.PEER, "누구?")).isEqualTo("친구");
+    }
+
+    @Test
+    void thePeerRuleSurvivesTheInstructionLengthLimitWithLongestFields() {
+        String longDescription = "놀".repeat(400) + STOP;
+        Harness h = new Harness(packageJson(GOAL, sceneScript(SCENARIO, longDescription, STOP, "가".repeat(20))), APPROVED);
+        h.activate();
+        h.played();
+        h.child("그래");
+        h.result("J2", "PARTIAL");
+
+        String reask = h.out.lastSlot().text();
+        assertThat(reask.codePointCount(0, reask.length())).isLessThanOrEqualTo(PracticeInstructions.MAX_LENGTH);
+        assertThat(reask).endsWith("한두 문장으로 말한다. 아이 대신 대답하지 않는다.");
     }
 }

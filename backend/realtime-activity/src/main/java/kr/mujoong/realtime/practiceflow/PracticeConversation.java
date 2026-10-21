@@ -47,6 +47,8 @@ import kr.mujoong.realtime.voice.PracticeSpeech;
  *   <li>GPT-Live가 만드는 모든 역할 발화는 {@code speakGenerated} 한 길로만 낸다(D6). 낼 수 없으면(거짓) 그 슬롯을 실패로 닫고 이어 간다.
  *       역할 전환 · 복귀 알림은 승인 문장이 있으면 {@code announceRoleSwitch}로, 없거나 못 내면 생성형으로 낸다(BR5.4).
  *   <li>슬롯 종료 사건은 correlationId마다 첫 사건만 처리하고(중복 무시), 확장이 스스로 닫은 슬롯은 곧바로 처리 완료로 둔다(§3.5).
+ *   <li>도입(장면 설명)이 기회 문장을 담고 끝까지 재생됐으면 OPPORTUNITY 진입에서 기회 문장을 다시 재생하지 않는다({@link SceneIntro}).
+ *       설명은 자르지 않고 승인 원문 그대로 재생한다.
  *   <li>레거시 평가 · 단서 포트에 기대지 않는다: 이 클래스는 {@code practice} 패키지를 참조하지 않는다(BR2.5 · BR10.2).
  *   <li>아이 전사 · 대본 문장 · 판정 입력은 로그 · 기록 · 예외 메시지에 쓰지 않는다. 오류는 고정 사유 코드로만 알린다(R-F14).
  * </ul>
@@ -103,6 +105,8 @@ public final class PracticeConversation implements PracticeSessionExtension {
     private boolean sceneRowCreated;
     private UUID openSlot;
     private boolean awaitingNotice;
+    /** 지금 도입이 기회 문장을 담는가. 도입이 끝까지 재생되지 않으면 거짓으로 바뀐다. */
+    private boolean introCarriesOpportunity;
     private boolean inputReady;
     private Utterance earlyUtterance;
     private UUID judgmentCorrelation;
@@ -310,6 +314,7 @@ public final class PracticeConversation implements PracticeSessionExtension {
         sceneRowCreated = false;
         earlyUtterance = null;
         pendingConsent = null;
+        introCarriesOpportunity = SceneIntro.carriesOpportunity(scene.sceneDescription(), scene.opportunitySentence());
         speakApproved(scene.sceneDescription());
     }
 
@@ -497,6 +502,10 @@ public final class PracticeConversation implements PracticeSessionExtension {
         if (introEnded) {
             createSceneRow();
         }
+        if (state.phase() == Phase.SCENE_INTRO && end != SlotEnd.PLAYED) {
+            // 도입이 끊기면 아이가 설명 끝의 기회 문장을 못 들었을 수 있다: 기회 문장을 따로 재생한다
+            introCarriesOpportunity = false;
+        }
         Step step = transitions.onSlotEnded(state, end);
         if (step.action() == FlowTransitions.Action.IGNORE) {
             unexpected();
@@ -680,7 +689,7 @@ public final class PracticeConversation implements PracticeSessionExtension {
     private void dispatch(Step step, Phase previous) {
         switch (step.phase()) {
             case SCENE_INTRO -> enterScene(SceneKind.VARIANT);
-            case OPPORTUNITY -> speakApproved(currentScene.opportunitySentence());
+            case OPPORTUNITY -> opportunity(previous);
             case REASK -> speakGenerated(FlowRole.PEER, PracticeInstructions.peerReask(currentScene, false));
             case HELP_OFFER -> speakGenerated(FlowRole.PEER, PracticeInstructions.peerHelpOffer(currentScene, false));
             case FOCUS -> {
@@ -712,6 +721,20 @@ public final class PracticeConversation implements PracticeSessionExtension {
     }
 
     // ---- 출력 ----
+
+    /**
+     * 기회 문장 단계 진입. 방금 끝까지 재생한 도입이 기회 문장을 담았으면 다시 재생하지 않고 바로 아이 말을 기다린다. 상황 다시 설명 뒤의 재진입은
+     * 지금처럼 기회 문장을 재생한다.
+     */
+    private void opportunity(Phase previous) {
+        boolean heard = previous == Phase.SCENE_INTRO && introCarriesOpportunity;
+        introCarriesOpportunity = false;
+        if (heard) {
+            awaitInput();
+        } else {
+            speakApproved(currentScene.opportunitySentence());
+        }
+    }
 
     /** 코치 첫 도움 · 다시 해 보기 권유 발화(FOCUS 진입 ②). 집중 시계는 코치가 말하기 시작할 때 한 번 건다. */
     private void coachUtterance() {

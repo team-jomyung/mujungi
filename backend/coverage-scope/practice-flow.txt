@@ -34,4 +34,5 @@ backend/realtime-activity/src/main/java/kr/mujoong/realtime/practiceflow/Practic
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/practiceflow/PracticeScriptReader.java
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/practiceflow/PracticeScriptRequester.java
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/practiceflow/PracticeStartPackage.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/practiceflow/SceneIntro.java
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/runtime/PracticeRecoveryRouter.java

@@ -10,6 +10,10 @@ final class RolePolicy {
 
     /** 코치 발화의 말하는 사람 표시(친구는 대본의 partnerRole을 쓴다). */
     static final String COACH_LABEL = "코치";
+    /** 대본 partnerRole을 역할 이름으로 쓸 수 없을 때의 친구 표시. core 라벨 규칙의 대체값과 같다(contracts/ai-io.md 10.15). */
+    static final String PEER_FALLBACK = "친구";
+    /** 역할 이름 상한(코드 포인트). core 라벨 규칙과 같다. */
+    static final int PEER_NAME_MAX = 20;
 
     private RolePolicy() {
     }
@@ -19,9 +23,23 @@ final class RolePolicy {
         return role.name();
     }
 
-    /** 말하는 사람 표시: 친구는 대본의 상대 역할 문구, 코치는 고정 문구. */
+    /** 말하는 사람 표시: 친구는 대본의 상대 역할 이름({@link #peerName}), 코치는 고정 문구. */
     static String partnerLabel(FlowRole role, String scenePartnerRole) {
-        return role == FlowRole.COACH ? COACH_LABEL : scenePartnerRole;
+        return role == FlowRole.COACH ? COACH_LABEL : peerName(scenePartnerRole);
+    }
+
+    /**
+     * 대본 partnerRole을 친구 역할 이름으로 쓴다. 비었거나 상한을 넘거나 문장부호({@code .?!。}) · 제어 문자가 있으면 지시문으로 보고
+     * '친구'로 바꾼다. 배포 전에 저장된 준비 패키지 · 옛 대본에 남은 지시문 값이 "너는 아이의 … 역할이다"에 끼어들지 않게 막는다.
+     */
+    static String peerName(String scenePartnerRole) {
+        if (scenePartnerRole == null || scenePartnerRole.isBlank()) {
+            return PEER_FALLBACK;
+        }
+        String name = scenePartnerRole.strip();
+        boolean shortName = name.codePointCount(0, name.length()) <= PEER_NAME_MAX;
+        boolean plain = name.codePoints().noneMatch(c -> Character.isISOControl(c) || ".?!。".indexOf(c) >= 0);
+        return shortName && plain ? name : PEER_FALLBACK;
     }
 
     /**
