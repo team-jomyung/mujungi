@@ -20,7 +20,10 @@ PR은 둘로 나눈다.
 | PR-A | (0) 진단 로그, (1) 짧은 긍정 판정, (2) 입력 전사 발화 간격 분할 | `60d46a8` ~ **`57638c8`**(PR-A 경계, 이 커밋까지) |
 | PR-B | (3) J1 진행 중 새 전사, (4) 창 만료 경계, (5) prompt-v2, (6) 재생 중 에코 | `4eeac6c` ~ 브랜치 끝(마지막 문서 커밋 포함) |
 
-- 커밋 순서: `60d46a8` (0) → `10c5dfb` (1) → `57638c8` (2) ‖ `4eeac6c` (3) → `ea36b66` (4) → `93d65d2` (5) → `5401f78` (6) → 문서 마무리.
+- 커밋 순서: `60d46a8` (0) → `10c5dfb` (1) → `57638c8` (2) ‖ `4eeac6c` (3) → `ea36b66` (4) → `93d65d2` (5) → `5401f78` (6) → 문서 마무리 `f25e793`
+  → 리뷰 반영 `ca55551`((1) 종료 확인 회귀) → `cfcac23`((6) 에코 시각 조건 · 새 키) → `82e9827`((3) SUPERSEDED 경로 시험) → `01314eb`((2) 범위 파일) → 문서.
+- 리뷰 반영 중 `ca55551`((1))과 `01314eb`((2))는 PR-A 몫이다. PR-A를 `57638c8` 머리로 따로 내면 종료 확인 회귀가 main에 먼저 들어가므로, 두 커밋을 PR-A
+  브랜치로 옮긴다(7절 7번). `01314eb`는 코드 부분이 그대로 붙고, `ca55551`은 `JoinTrackerTest`의 시험 자리((6) 에코 시험 옆)와 이 문서에서 손으로 맞춰야 한다.
 - PR-A는 `57638c8`을 머리로 하는 브랜치(지시서 예: `claude/join-gate-diag`)로, PR-B는 PR-A 병합 뒤 이 브랜치 끝으로 낸다. 브랜치 push와 PR 생성은 하지 않았다(7절).
 
 ## 2. 바뀐 동작 한눈에
@@ -358,7 +361,7 @@ PR은 둘로 나눈다.
 5. **J1 합성 탐침(선택)**: R-F15 기록 뒤 그 PC의 셸 env로만 키를 넣고 `cd backend && ./gradlew :realtime-activity:lunaReachTest`. 결과는
    `backend/realtime-activity/build/luna-reach/j1-report.md`(번호 · 기대 · 결과 코드 · 1 · 2순위 · 지연만)이고 이 문서 8절에 `[실호출-합성]`으로 옮긴다.
 6. **팀원 확인 · 공지**: 6절의 질문을 성민 · 도연 · 동훈에게 묻고 답을 PR 설명에 요약한다. 리뷰어: 성민(realtime 전체), 동훈(`infra/` 두 파일).
-7. **브랜치 push · PR 두 개**: PR-A(머리 `57638c8`)와 PR-B(이 브랜치 끝). `ci-gate`가 통과한 뒤에만 병합한다(R-M1). 이 PR은 `contracts/`를 고치므로 모든 조건부 검사가 돈다.
+7. **브랜치 push · PR 두 개**: PR-A(머리 `57638c8` + 리뷰 반영 `ca55551` · `01314eb`를 옮긴 것, 1절)와 PR-B(이 브랜치 끝). `ci-gate`가 통과한 뒤에만 병합한다(R-M1). 이 PR은 `contracts/`를 고치므로 모든 조건부 검사가 돈다.
 8. **값 확정**: `input-utterance-gap`(임시 700ms)을 실키 로그의 `maxGapMs`로 확정한다. 바꾸면 `application.yml` · `contracts/timing.md` 14절 · 설정 레코드를 같은
    커밋에서 고친다(R-M5). `join-echo-tail`(임시 1s)도 4번 점검으로 확정하고, 바꾸면 `application.yml` · `contracts/timing.md` 3절 · 설정 레코드를 함께 고친다.
 9. **이 작업 밖**: demo의 `mujoong.luna.enabled` 결정(ECS 배포), 안내 음성 v3 교체, 기기 '듣는 중' 표시.
@@ -370,6 +373,8 @@ PR은 둘로 나눈다.
 | 명령 | 결과 |
 |---|---|
 | `cd backend && ./gradlew --no-daemon :contract-model:check :realtime-activity:check -Pmujoong.test.db=docker --continue` (브랜치 끝 `5401f78` 코드) | BUILD SUCCESSFUL. contract-model 325건 통과 · 실패 0, realtime-activity 1,930건 통과 · 실패 0, JaCoCo 모듈 하한 검사 통과(줄 98.53% · 93.81%) |
+| 같은 명령, 리뷰 반영 뒤(`01314eb` 코드) | BUILD SUCCESSFUL. contract-model 325건 통과 · 실패 0, realtime-activity 1,956건 통과 · 실패 0, JaCoCo 모듈 하한 검사 통과(줄 98.53% · 93.82%). `JoinTracker` · `StopConfirmFlow` · `InputTranscriptGroup` 100%, `JoinFlow` 94.7%, `SessionExecutor` 90.8% |
+| `cd backend && ./gradlew --no-daemon :core-api:test --tests "kr.mujoong.core.config.*" --tests "kr.mujoong.core.arch.*" …`(계약 문서를 읽는 core 시험, 리뷰 반영 뒤) | 79건 통과 · 실패 0(`contracts/timing.md` · `ai-io.md` · `deviations.md`를 고쳐서 돌렸다. core 전체는 다시 돌리지 않았다 — 운영 코드 변경은 realtime뿐) |
 | `cd backend && ./gradlew --no-daemon :core-api:test -Pmujoong.test.db=docker --continue` (contract-model을 함께 쓰는 앱) | 1,725건 중 실패 1건: `GraphWorkflowIT.realGraphSeedToU14CandidateToU10ApprovedVariantAndScopedDeletion`. 느린 컨테이너에서 Neo4j 초기 적재가 2초 트랜잭션 예산을 넘는 **알려진 기준선 실패**(main에서도 실패)이고 이 작업은 core · 그래프 경로를 바꾸지 않았다 |
 | `cd backend && ./gradlew --no-daemon :realtime-activity:test -PincludeTags=practice-flow,session-runtime,voice-session,judgment-turn -Pmujoong.test.db=docker` ((2) 커밋 뒤) | 961건 통과 · 실패 0 |
 | `cd backend && env -u OPENAI_API_KEY -u JEV_API_KEY ./gradlew --no-daemon :realtime-activity:lunaReachTest verifyLunaReachIsolation` | `LunaReachTest` · `JoinJudgmentReachTest` 모두 건너뜀(키 없음, 실호출 없음). `verifyLunaReachIsolation` 통과(check · test 그래프에 lunaReachTest 없음) |
@@ -396,11 +401,14 @@ PR은 둘로 나눈다.
 |---|---|---|---|---|
 | (0) 진단 로그 두 사건 · 허용 표 · 원문 없음 | 통과(JoinReplyLogTest · JoinJudgmentExecutorTest · PrivacyLogTest · test-host-tools) | 없음 | 없음 | 없음 |
 | (1) 짧은 긍정 · 거부 우선 · 물음표 | 통과(JoinTrackerTest 24행 · SessionJoinTest) | 없음 | 없음 | 없음 |
+| (1) 리뷰: 종료 확인은 첫 낱말 규칙 없음 | 통과(StopConfirmFlowTest 8행 · JoinTrackerTest 12행 · SessionStopTest) | 없음 | 없음 | 없음 |
 | (2) 발화 간격 분할 | 통과(GenerationSendExecutorTest · InputTranscriptGroupTest) | 없음 | 없음 | 없음 |
 | (3) J1 대기 칸 · 다시 판정 | 통과(JoinJudgmentExecutorTest, 가짜 판정기) | 없음 | 없음 | 없음 |
+| (3) 리뷰: SUPERSEDED 뒤 미룬 만기 | 통과(JoinJudgmentExecutorTest 2건, 가짜 판정기) | 없음 | 없음 | 없음 |
 | (4) 창 끝 경계 · 말하는 중 | 통과(SessionJoinTest) | 없음 | 없음 | 없음 |
 | (5) prompt-v2 · COACH 줄 | 통과(지시문 · 요청 스키마 · 실행기 시험) | 없음(J1 합성 탐침은 키 없이 건너뜀) | 없음 | 없음 |
 | (6) 에코 의심 | 통과(SessionJoinTest · JoinTrackerTest) | 없음 | 없음 | 없음 |
+| (6) 리뷰: 마지막 안내 · 재생 중 · 꼬리 1s | 통과(SessionJoinTest 4건 · ConfigKeyContractTest · JoinGateContractDocsTest) | 없음 | 없음 | 없음(꼬리 값은 실키 확정, 7절) |
 | 완료 조건 2 · 3(실키 "응" · "응 좋아" · "어 할래" → ACTIVE) | 해당 없음 | 미실시 | 미실시 | 미실시(사람 몫, 7절) |
 
 10/18 진단 결과(판정 기록 조회): **미조회**(사람 몫, 7절 2번). 실키 결과 표: **미실시**.
