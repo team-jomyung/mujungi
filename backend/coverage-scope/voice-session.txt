@@ -39,6 +39,7 @@ backend/realtime-activity/src/main/java/kr/mujoong/realtime/observability/Realti
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/EndingFlow.java
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/SessionClocks.java
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/IdleClock.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/InputTranscriptGroup.java
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/JoinFlow.java
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/SessionContext.java
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/SessionExecutor.java
@@ -62,7 +63,6 @@ backend/realtime-activity/src/main/java/kr/mujoong/realtime/voice/InputRelay.jav
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/voice/ProviderClient.java
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/voice/ProviderPort.java
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/voice/ProviderRequestFactory.java
-backend/realtime-activity/src/main/java/kr/mujoong/realtime/voice/ProviderResponseId.java
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/dialog/StopIntentJudge.java
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/log/RealtimeVoiceDeletionParticipant.java
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/common/collect/BoundedCollections.java

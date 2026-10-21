@@ -276,7 +276,7 @@ PR은 둘로 나눈다.
 | JOIN-GATE-A14 | 대기 칸은 한 칸이고 SUPERSEDED · FAULT_CANCELLED · SESSION_EXITED에서 버린다. 다시 연 J1이 열린 동안 또 불명확한 대답이 오면 다시 대기 칸에 둔다(아이가 계속 말하는 동안은 재안내 없이 판정을 잇는다) | 말하는 중은 무응답이 아니다 |
 | JOIN-GATE-A15 | COACH 줄은 마지막으로 기기에 **보낸** 참여 안내 글이다. 패키지에 없어 건너뛴 안내는 COACH 줄을 바꾸지 않는다 | 아이가 들은 말이 문맥이다 |
 | JOIN-GATE-A16 | 에코 대조 대상은 마지막으로 보낸 참여 안내 글 하나이고, 말 시작 시각(첫 조각 수신)이 그 안내를 보낸 때부터 끝 표식 + `join-echo-tail`까지일 때만 본다. 재생 상태(`devicePlaying`)는 로그에만 쓰고 판정에는 시각을 쓴다. 에코 의심 전사는 열린 J1을 닫지 않는다 | 지시서 "직전에 재생한 안내 글". 처음 구현(안내 글 전부 · 시각 무관)은 재생 뒤 따라 말한 대답까지 버려 리뷰에서 고쳤다. 시각으로 보면 보낸 뒤 `STARTED` 표식 전의 틈도 덮는다 |
-| JOIN-GATE-A17 | 새 운영 소스 `session/InputTranscriptGroup.java`를 `backend/coverage-scope/session-runtime.txt` · `judgment-turn.txt`에 더했다. 새 시험의 태그는 기능 이름 `join-gate`와 기존 `session-runtime`이다 | 팀 규칙(기능 이름 태그) |
+| JOIN-GATE-A17 | 새 운영 소스 `session/InputTranscriptGroup.java`를 `SessionExecutor`를 담은 범위 파일 넷(`backend/coverage-scope/session-runtime.txt` · `judgment-turn.txt` · `voice-session.txt` · `skeleton.txt`)에 모두 더했다(뒤의 둘은 리뷰 지적으로 더함). `voice-session.txt`에 남아 있던 지운 파일 `voice/ProviderResponseId.java`(U11 `c90f474`에서 지움) 줄은 범위 측정이 설정 단계에서 실패해 함께 뺐다. 새 시험의 태그는 기능 이름 `join-gate`와 기존 `session-runtime`이다 | 팀 규칙(새 운영 소스는 해당 기능 범위 파일 전부, 기능 이름 태그) |
 | JOIN-GATE-A18 | prompt-v2의 J1 규칙 문장은 지시서 문장에 "J1에서"를 붙여 다른 지점에 번지지 않게 했고, 지시서의 `[J1]` 머리표는 선택지 절 머리표(`[J1] 질문`)와 겹쳐 쓰지 않았다 | 같은 지시문을 J2 ~ J6 · 연습도 쓴다 |
 | JOIN-GATE-A19 | J1 합성 탐침의 COACH 글은 시드 파일(`infra/seed/003-u4a-reference.sql`)의 INTRO_FREE_TALK v2 글을 읽어 쓴다. 보고서에는 문장 대신 번호를 적는다 | 승인 문구를 코드에 다시 적지 않는다 · R-F14 |
 | JOIN-GATE-A20 | 에코 기준 8자는 정규화 뒤 코드 포인트 수다 | 분류기와 같은 기준 |
@@ -306,6 +306,8 @@ PR은 둘로 나눈다.
 - 에코 의심 꼬리 `join-echo-tail`(임시 1s, JG-e · A21)을 받아들일지. 꼬리 안에 바로 따라 말한 반향어는 여전히 버려진다. 꼬리 없이 '재생 중'만 볼지,
   꼬리를 더 짧게 할지 실키 결과로 정한다.
 - J1 결과를 판정 기록 뒤에 넣는 순서(JG-D2)와 대기 칸 체인(A14)이 U11 W1 의도와 맞는지.
+- `voice-session` 범위(`-PincludeTags=voice-session`)는 main부터 줄 71%로 80%에 못 미치고 지운 파일 줄 때문에 측정도 못 했다(8절). 이 범위를 어느 태그로 재는지,
+  voice-session 태그 시험을 더할지.
 - 연습 세션(U12, INTRO_PRACTICE)도 같은 참여 관문 · prompt-v2를 쓴다. 태그 재시험(`practice-flow` 포함)은 통과했지만 연습 쪽 실키는 보지 않았다.
 
 **도연**
@@ -379,6 +381,12 @@ PR은 둘로 나눈다.
   통과했다. 이 작업이 바꾸지 않은 삭제 경로이고 그때 부하(load average 약 4)가 높았다 — 부하에 민감한 시험으로 본다.
 - 바꾼 운영 파일의 줄 커버리지(모듈 전체 시험 기준): `InputTranscriptGroup` 100% · `JoinTracker` 100% · `JoinFlow` 93.0% · `JudgmentCoordinator` 93.1% ·
   `SessionExecutor` 90.8% · `EventCode` · `AttrKey` 100%.
+- **범위 커버리지(리뷰 반영 뒤, 로컬 근거 — 백엔드 범위는 CI가 막지 않는다)**:
+  `./gradlew :realtime-activity:test :realtime-activity:jacocoTestCoverageVerification -PincludeTags=skeleton -PcoverageScope=skeleton` → 551건 통과 ·
+  줄 80.09%(통과, `InputTranscriptGroup` 46/49줄). `-PincludeTags=voice-session -PcoverageScope=voice-session` → 시험은 모두 통과했지만 줄 70.71%로
+  80% 검사에 **못 미친다**. main `fec5285`는 지운 파일 줄 때문에 이 측정이 설정 단계에서 실패하고, 그 줄만 빼고 같은 명령을 돌리면 71.14%다(292건 통과).
+  곧 기준선부터 모자라고, 이 브랜치는 `JoinFlow` · `SessionExecutor`에 더한 코드를 다른 태그(`session-runtime` · `judgment-turn`) 시험이 덮어 0.43%p 낮췄다.
+  하한을 낮추거나 태그를 옮겨 맞추지 않았다(R-F2). voice-session 태그 시험을 더할지는 원 담당자와 정한다(6절).
 - **돌리지 않은 것**(다음 단계 몫): 백엔드 전체 `./gradlew clean check verifyBootJarHasNoTestClasses -Pmujoong.test.db=docker --continue`, `bash scripts/verify.sh`,
   PR의 `ci-gate`(push하지 않았다).
 
