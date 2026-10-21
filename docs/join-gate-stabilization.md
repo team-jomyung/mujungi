@@ -380,6 +380,8 @@ PR은 둘로 나눈다.
 | `cd backend && env -u OPENAI_API_KEY -u JEV_API_KEY ./gradlew --no-daemon :realtime-activity:lunaReachTest verifyLunaReachIsolation` | `LunaReachTest` · `JoinJudgmentReachTest` 모두 건너뜀(키 없음, 실호출 없음). `verifyLunaReachIsolation` 통과(check · test 그래프에 lunaReachTest 없음) |
 | `bash infra/bin/infra-validate` | 8건 모두 통과(compose-config · compose-invariants · demo-profile · secret-env-files · nginx · shellcheck · migrations · bundle) |
 | `bash infra/ci/test-host-tools.sh` | 44건 중 어긋남 0건(`log-hygiene-allowlist-matches-java(21종)` · `log-hygiene-join-gate-events` 포함) |
+| **최종 검증**: `cd backend && ./gradlew clean check verifyBootJarHasNoTestClasses -Pmujoong.test.db=docker --continue` (브랜치 끝 `fa32ede` 코드, load average 약 10) | BUILD SUCCESSFUL(9분 53초). contract-model 325건 · core-api 1,725건 · realtime-activity 1,956건 · test-support 31건 모두 통과 · 실패 0 · 건너뜀 0. 이번에는 `GraphWorkflowIT`도 통과했다(기준선 실패가 재현되지 않음 — 부하에 따라 흔들리는 시험). JaCoCo 모듈 하한 통과(줄 contract-model 98.53% · core-api 96.21% · realtime-activity 93.84%), `verifyBootJarHasNoTestClasses` 두 앱 통과, `verifyGptLiveIsolation` · `verifyJevLiveIsolation` · `verifyLunaLiveIsolation` · `verifyLunaReachIsolation` 통과 |
+| **최종 검증**: `bash infra/bin/infra-validate` · `bash infra/ci/test-host-tools.sh` (`fa32ede` 코드) | 8건 모두 통과 · 44건 중 어긋남 0건 |
 
 - 커밋마다 그 층의 시험을 좁게 돌렸고 모두 통과했다((0) 직후 realtime 전체 1,882건 통과 등). (1) 뒤 `session.*` · `dialog.*` 묶음에서
   `RealtimeDeletionHandlerIT` 1건이 기기 메시지 10초 대기 시간 초과로 한 번 실패했다. 그 시험만 다시 돌리면 4건 모두 통과했고 브랜치 끝 전체 check에서도
@@ -392,8 +394,7 @@ PR은 둘로 나눈다.
   80% 검사에 **못 미친다**. main `fec5285`는 지운 파일 줄 때문에 이 측정이 설정 단계에서 실패하고, 그 줄만 빼고 같은 명령을 돌리면 71.14%다(292건 통과).
   곧 기준선부터 모자라고, 이 브랜치는 `JoinFlow` · `SessionExecutor`에 더한 코드를 다른 태그(`session-runtime` · `judgment-turn`) 시험이 덮어 0.43%p 낮췄다.
   하한을 낮추거나 태그를 옮겨 맞추지 않았다(R-F2). voice-session 태그 시험을 더할지는 원 담당자와 정한다(6절).
-- **돌리지 않은 것**(다음 단계 몫): 백엔드 전체 `./gradlew clean check verifyBootJarHasNoTestClasses -Pmujoong.test.db=docker --continue`, `bash scripts/verify.sh`,
-  PR의 `ci-gate`(push하지 않았다).
+- **돌리지 않은 것**(다음 단계 몫): `bash scripts/verify.sh`(끝-끝), PR의 `ci-gate`(push하지 않았다). 백엔드 전체 check는 위 최종 검증 줄에서 돌렸다.
 
 증거 구분(R-M11):
 
