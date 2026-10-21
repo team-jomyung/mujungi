@@ -10,8 +10,9 @@
 | 항목 | 한 일 | 커밋 |
 |---|---|---|
 | (a) 변형 어휘 · 관계 좌표 · 생성 v3 | 자유 한국어 상대로도 BASE · VARIANT 두 장면이 나오게 고쳤다. 허용 어휘를 Luna 구조 문맥에 넣고 상황 생성 판을 v3로 올렸다 | `3d4a368` |
-| (c) 연습 세션 GPT-Live 지시문 자리 | 활동 종류별 지시문 본문을 자원 파일로 나누고 판 · sha256을 세션 사건으로 남긴다. 자유대화 지시문은 바이트 단위로 같다 | `8207f81` · `8a4db10`(위치만 옮김) |
+| (c) 연습 세션 GPT-Live 지시문 자리 | 활동 종류별 지시문 본문을 자원 파일로 나누고 판 · sha256을 세션 사건으로 남긴다. 자유대화 지시문은 바이트 단위로 같다 | `8207f81` · `8a4db10`(위치만 옮김) · `c49856b`(사건 시점 수정) |
 | (d) 제브 연습 모드 표본 | 친구 · 코치 역할 합성 표본과 문턱별 다시 계산 보고를 더했다. 실호출은 하지 않았다 | `374f19d` |
+| 리뷰 반영 | 어휘 밖 BASE 시험이 실제 계획기를 거치게 함 · v3 대본 시험 사례 추가 · 세션 사건 시점 수정 · NEAR 관계 축 위험 기록(11절) | `692b6c2` · `c49856b` · 이 문서 |
 | (b) · 언어 부담 | 선택지 · 권장안만(5 · 6절) | 이 문서 |
 
 ## 2. 바꾼 동작
@@ -29,7 +30,7 @@
 1. 관계 좌표 분리(지시서의 R1): `ScenarioScript.Preservation`에 `relationship`(씨앗 관계 열거값)을 더하고, 좌표는 `preservation.relationship`에서 읽는다. 장면 `relation`은 목표 상대로 그대로 둔다(BASE 검사 그대로).
 2. 옛 노출 행 보호: 관계 좌표가 없는 옛 `scenes_json` 행은 좌표가 빈 값이 되어 `VariantPlanner`에서 NPE → 그래프 없는 경로로 빠졌다. 다섯 좌표가 모두 있는 노출만 계획 입력에 넣는다(`ScenarioGraphContext.complete`, `StructuredScenarioFlow`).
 3. 허용 어휘 전달: `structureContext`에 `allowedTopics` · `allowedPlaces` · `allowedParticipants` · `allowedRelationships` · `allowedSituations`를 더했다. 값은 `VariantPlanner` · `KnowledgeSeed` 상수를 정렬한 목록이다(복사하지 않음, `Set` 순회 순서에 흔들리지 않음). 금지 키와 겹치지 않고 정리기를 거쳐도 남는 것을 시험으로 확인했다.
-4. 생성 판 v3: `prompts/scenario/generation.v3.txt`를 새로 두고 v2 파일은 그대로 남겼다. v2 규칙에 더한 것은 ① 모든 장면 `relation` = 입력 relation 그대로 ② structureContext가 있으면 BASE에도 preservation, 고정값 세 개는 글자 그대로 ③ 좌표 다섯 값은 허용 목록에서 글자 그대로 ④ BASE의 관계 · 자리는 씨앗 값, BASE의 거리 · 변경 축 칸은 `SAME_CONTEXT` · `topic` ⑤ VARIANT 좌표 · 거리 · 축은 `variantPlan` 값 그대로.
+4. 생성 판 v3(아래 ①의 'VARIANT도 같은 상대'는 NEAR 관계 축 변형과 부딪힌다 — 11절 · A20): `prompts/scenario/generation.v3.txt`를 새로 두고 v2 파일은 그대로 남겼다. v2 규칙에 더한 것은 ① 모든 장면 `relation` = 입력 relation 그대로 ② structureContext가 있으면 BASE에도 preservation, 고정값 세 개는 글자 그대로 ③ 좌표 다섯 값은 허용 목록에서 글자 그대로 ④ BASE의 관계 · 자리는 씨앗 값, BASE의 거리 · 변경 축 칸은 `SAME_CONTEXT` · `topic` ⑤ VARIANT 좌표 · 거리 · 축은 `variantPlan` 값 그대로.
 5. 판 이름 한 곳: `ScenarioScriptProvider.GENERATION_PROMPT_VERSION`(= `scenario-generation.v3`)과 `GENERATION_INSTRUCTIONS`(자원 경로). 흩어져 있던 네 곳(`LunaTextAiProvider` 두 곳, `ScenarioScriptGenerator` 두 곳)이 이 상수를 쓴다.
 6. 계약
    - `contracts/schemas/ai-scenario-output.schema.json`: preservation에 `relationship`(필수)을 더하고 `participants` · `relationship` · `situation`을 서버 어휘 enum으로 묶었다. 그래프 경로 예시를 하나 더했다. 최상위 topic · place는 자유 문자열 그대로다(A3).
@@ -45,7 +46,7 @@
 |---|---|---|---|
 | BASE preservation 없음 | BASE 정상(허용 어휘) | 내용 수정 1회를 써서 **BASE 한 장면만** 발급, calls 4, graphContextUsed true | `baseWithoutPreservationIsCorrectedOnceAndIssuesOnlyTheApprovedBase` |
 | BASE preservation 없음 | 또 없음 | **연습 시작 실패** `SCENARIO_GEN_FAILED` | `baseWithoutPreservationTwiceFailsTheGraphPathStart` |
-| topic이 허용 어휘 밖 | — | 계획 없음 → 그래프 없는 새 BASE 한 장면, graphContextUsed false, calls 4 | `baseOutsideVocabularyFallsBackToGraphFreeBase` |
+| topic이 허용 어휘 밖 | — | 실제 `VariantPlanner` 어휘 검사가 거절 → 계획 없음 → 그래프 없는 새 BASE 한 장면, graphContextUsed false, calls 4 | `baseOutsideVocabularyFallsBackToGraphFreeBase`(계획 대역을 덮어쓰지 않음, 리뷰 반영) |
 | preservation 좌표가 enum 밖 | — | 실제 경로에서는 Luna 응답 스키마 검증 실패(`SCHEMA_INVALID` → 내용 실패) → 내용 수정 1회 | `ScenarioContractTest.graphBaseNeeds…`(스키마) · 기존 `ScenarioLunaProviderTest.schemaFailureIsContentCorrectionNotTechnical` |
 
 ### 2.2 (c) 연습 세션 GPT-Live 지시문 자리 — realtime
@@ -61,7 +62,7 @@
 3. 공통 역할 문장(`DialogInstructions.role`)과 따옴표로 묶은 아이 정보는 그대로 코드에 둔다. 지시문 = 역할 문장 + " " + 활동 본문.
 4. `ProviderRequestFactory`가 활동 종류를 받는 `sessionStart`(같은 패키지 안에서만, 연결부가 부름)와 본문 묶음을 돌려주는 `liveInstructions()`를 더했다. 기존 `sessionStart(ChildContext)` · `sessionStart(ChildContext, int)`는 자유대화로 그대로 동작한다.
 5. `ProviderConnector.connect`에 활동 종류를 받는 판을 더하고 기존 4인자 판은 자유대화로 넘긴다. `SessionExecutor`가 세션 계획의 `activityType`을 넘긴다.
-6. 공급자 연결 직후(연결 스레드가 `session.start`를 보내는 때) 세션 사건 `LIVE_INSTRUCTIONS {"kind","version","sha256"}` 하나를 남긴다. 본문 · 아이 정보는 없다. 연결이 안 되면 남기지 않는다.
+6. 공급자가 `session.started`로 시작을 받아들였을 때(시작 단계에서 첫 번째 한 번) 세션 사건 `LIVE_INSTRUCTIONS {"kind","version","sha256"}` 하나를 남긴다. 본문 · 아이 정보는 없다. 연결이 안 되거나, 연결은 됐지만 `session.start` 전송이 실패하거나, `session.started`가 오지 않으면 남기지 않는다(리뷰 반영 `c49856b`: 처음에는 연결 직후에 남겨 시작 전송 실패에도 사건이 남았다).
 7. `DialogInstructions.JOIN_FIRST_QUESTION` 상수는 자원 파일로 옮겨 없앴다(쓰던 곳은 공급자 요청 공장 하나).
 8. 새 운영 파일은 `backend/coverage-scope/voice-session.txt`에 등록했다.
 9. 계약: `contracts/ai-io.md` 3절 `session.start` 행 · 10.4 판 리소스, `contracts/deviations.md` `(U11-e)`. 선 형식 키는 같다.
@@ -108,7 +109,7 @@
 | preservation 고정값 | 서버가 채우지 않음(모델이 옮긴 값을 지금처럼 검사) | 서버가 씨앗 값으로 채운 뒤 검사 | 채우면 `validBase` · `valid`의 뜻이 바뀌는 결정이라 도연 몫이다. 대신 v3 프롬프트가 옮기라고 지시하고, 두 번 빠지면 실패하는 조건을 시험 · 문서로 고정했다. 데모 안정성에는 서버 채움이 낫다 — 권장안으로 남긴다(10절) |
 | 판 이름 한 곳 | `ScenarioScriptProvider` 인터페이스 상수 | 새 상수 클래스 | 두 사용처(`luna.adapter` · `practice`)가 이미 이 인터페이스에 기대므로 새 파일 · 새 의존이 없다 |
 | 세션 지시문 분리 범위 | 활동 본문만 자원 파일로, 공통 역할 문장은 코드에 둠 | 공통 역할 문장까지 자원 파일로 | 열린 PR #47이 `DialogInstructions.role` 첫 문장과 나이 처리를 바꾼다. 역할 문장을 옮기면 그 PR과 정면 충돌한다. 대신 판 · 해시가 활동 본문만 덮는다(A10) |
-| 세션 사건 시점 | 공급자 연결 직후(`ProviderConnected` 처리) | `connect` 요청 때 | 연결이 안 되면 `session.start`도 안 나가므로 사건을 남기지 않는 쪽이 사실에 맞다 |
+| 세션 사건 시점 | 공급자 `session.started` 처리(시작 단계, 첫 번째 한 번) | `connect` 요청 때 · 공급자 연결 직후(`ProviderConnected` 처리, 처음 구현) | 사건의 뜻은 '공급자가 이 판으로 세션을 시작했다'다. 연결 스레드는 연결을 먼저 알리고 그 뒤에 `session.start`를 보내므로, 연결 직후에 남기면 시작 전송이 실패해도 사건이 남는다. `session.started`는 공급자가 지시문을 받아들였다는 응답이라 사실과 맞다 |
 | 활동 종류를 받는 공장 메서드 | 같은 패키지 안(연결부만)으로 둠 | 공개 메서드 | 기존 구조 시험(`ProviderRequestWhitelistIT`)이 공장 공개 메서드 인자 형식을 묶어 둔다. 그 단언을 넓히지 않고 맞췄다 |
 | 제브 경계 사례 | 새 기대값 `BORDERLINE`(판정 기대 없음, 확률만 관측) | ALLOW/NOT_ALLOW에 끼워 넣기 | 문턱 근처 사례를 합격 · 오판 수에 섞으면 문턱 판단이 흐려진다 |
 
@@ -117,7 +118,7 @@
 | 기호 | 내용 | 기록 위치 |
 |---|---|---|
 | `(U10-b)` | 상황 생성 v3, `preservation.relationship`, 좌표 enum, 허용 어휘 전달, promptVersion v2 · v3 허용, 옛 노출 행 제외. 호환 분류: 새 필드 · 규칙 구체화 | `contracts/deviations.md` U10 표 · `ai-io.md` 10.11 · `knowledge-graph.md` |
-| `(U11-e)` | 세션 지시문 활동 본문 분리와 `LIVE_INSTRUCTIONS` 사건, `JOIN_FIRST_QUESTION` 상수 제거. 호환 분류: 규칙 구체화(선 형식 키 같음) | `contracts/deviations.md` U11 표 · `ai-io.md` 3절 · 10.4 |
+| `(U11-e)` | 세션 지시문 활동 본문 분리와 `LIVE_INSTRUCTIONS` 사건(`session.started` 때), `JOIN_FIRST_QUESTION` 상수 제거. 호환 분류: 규칙 구체화(선 형식 키 같음) | `contracts/deviations.md` U11 표 · `ai-io.md` 3절 · 10.4 |
 | 지시서와 다른 점 | ① 지시서는 항목마다 브랜치를 나누라고 했지만 이 브랜치 하나에 (a) · (c) · (d)를 담았다(작업 지시). ② 결과를 `docs/units/u10 · u11 · u13/report.md`가 아니라 이 문서 하나에 적었다(A17). ③ 세션 지시문 로그 한 줄은 남기지 않았다(A11). ④ `free-talk.v1`에 고정 3문장을 옮기지 않았다(A10) | 이 문서 |
 
 ## 5. (b) 데모 5단계 '새 상황 재시도' — 선택지와 권장안(고르는 것은 사람)
@@ -149,8 +150,8 @@
 
 | 누구 | 무엇 |
 |---|---|
-| 도연(core 상황 생성 · 지식 그래프) | R1 채택과 `preservation.relationship` 이름 · 필수 여부, 좌표 enum 범위(최상위 topic · place는 자유 문자열로 둠), v3 프롬프트 문구, 서버의 preservation 고정값 채움 여부(권장: 채움), `validBase`에 관계 · 자리 = 씨앗 조건을 더할지, `VariantPlanner` 기본 변경 축 정렬(BR3), 옛 노출 행 제외 방식 |
-| 성민(realtime 연습 흐름 · 대화 · 제브) | `ProviderConnector.connect` 5인자 판 · `sessionStart` 활동 종류 판(같은 패키지 안) 서명, 자원 위치 `live-prompts/`와 판 이름 `live-free-talk.v1` · `live-practice.v1`, 세션 사건 이름 `LIVE_INSTRUCTIONS`와 남기는 시점, `JOIN_FIRST_QUESTION` 상수 제거, 공개 대본 `generation.promptVersion`이 enum(v2 · v3)이 된 것(realtime은 검사하지 않고 옮기기만 함), 제브 표본 문안과 경계 사례 기대 |
+| 도연(core 상황 생성 · 지식 그래프) | R1 채택과 `preservation.relationship` 이름 · 필수 여부, 좌표 enum 범위(최상위 topic · place는 자유 문자열로 둠), v3 프롬프트 문구, 서버의 preservation 고정값 채움 여부(권장: 채움), `validBase`에 관계 · 자리 = 씨앗 조건을 더할지, `VariantPlanner` 기본 변경 축 정렬(BR3), 옛 노출 행 제외 방식, **NEAR 관계 축 변형과 v3 '모든 장면 relation = 목표 상대' 규칙의 충돌(11절, 선택지 가 · 나)** |
+| 성민(realtime 연습 흐름 · 대화 · 제브) | `ProviderConnector.connect` 5인자 판 · `sessionStart` 활동 종류 판(같은 패키지 안) 서명, 자원 위치 `live-prompts/`와 판 이름 `live-free-talk.v1` · `live-practice.v1`, 세션 사건 이름 `LIVE_INSTRUCTIONS`와 남기는 시점(`session.started` 처리), 시험용 공급자의 새 모드 `START_FAILS`, `JOIN_FIRST_QUESTION` 상수 제거, 공개 대본 `generation.promptVersion`이 enum(v2 · v3)이 된 것(realtime은 검사하지 않고 옮기기만 함), 제브 표본 문안과 경계 사례 기대 |
 | D 담당(대화 품질 · 가드레일 패키지) | `practice.v1` 다음 판 본문(service-0.1 · v0.3 규칙 8개 반영), 자유대화 `JOIN_FIRST_QUESTION`을 뺄지 · 바꿀지, `ResponseStart.FIRST`와 교정 문장을 같은 묶음으로 옮길지와 질문 편향 문구, 제브 표본 문안 검토, '정답 먼저 알려 주기' 범주가 정책에 없는 문제(정책 v3) |
 | PR #47(feat/child-birthdate) 작성자 | 이 브랜치는 `DialogInstructions.role`을 건드리지 않고 `JOIN_FIRST_QUESTION` 상수만 지웠다. `ProviderRequestFactory`는 `sessionStart` 서명 줄과 지시문 조립부만 바꿨다. **PR #47 머리(`22b6e45`)와 `git merge-tree`로 시험 병합하면 충돌이 없다.** 두 브랜치를 다 합친 뒤에는 자유대화 지시문이 PR #47의 새 첫 문장 + `free-talk.v1` 본문이 된다(이 브랜치 시험은 `DialogInstructions.role(…)`을 기준으로 비교하므로 그대로 통과할 것으로 본다. 합친 뒤 한 번 돌려 확인) |
 | 같은 날 작업한 다른 브랜치 | `claude/practice-seams`와는 `ScenarioScriptGenerator.approved()`에서 텍스트 충돌이 난다(저쪽은 partnerRole 줄, 이쪽은 판 이름 두 줄 — 둘 다 살리면 된다). `claude/join-gate`와 `ai-io.md` 10.4 충돌은 항목 위치를 옮겨 없앴다(`8a4db10`). `claude/done-screen-practice`와는 충돌 없음 |
@@ -160,7 +161,7 @@
 ## 8. 가정 목록
 
 - **PRACTICE-VARIANT-INSTRUCTIONS-A1**: 관계 좌표는 R1(`preservation.relationship`)로 고쳤다. 지시서가 권장한 안이고, 사람 결정 없이 구현했다.
-- **A2**: 장면 `relation`의 뜻은 '목표 상대(자유 문자열)'로 그대로 둔다. v3 프롬프트는 모든 장면에 입력 relation을 그대로 쓰게 한다(VARIANT도 같은 상대).
+- **A2**: 장면 `relation`의 뜻은 '목표 상대(자유 문자열)'로 그대로 둔다. v3 프롬프트는 모든 장면에 입력 relation을 그대로 쓰게 한다(VARIANT도 같은 상대). **위험**: NEAR 등급에서 관계 축이 바뀌는 변형 계획이 나오면 이 규칙과 'VARIANT의 preservation.relationship은 variantPlan.context 값' 규칙이 서로 부딪힌다(11절 · A20).
 - **A3**: 최상위 topic · place에는 enum을 두지 않았다. 어휘 밖이면 계획이 없어 그래프 없는 BASE로 떨어지는 지금 동작을 유지한다.
 - **A4**: 서버가 preservation 고정값을 채우지 않는다. 그래프 경로에서 BASE preservation이 두 번 빠지면 연습 시작이 실패하는 지금 동작을 시험으로 고정했다.
 - **A5**: `validBase`에 "BASE의 preservation 관계 · 자리 = 씨앗 값" 조건을 더하지 않았다(프롬프트로만 요구).
@@ -178,6 +179,8 @@
 - **A17**: 결과는 유닛 보고서(`docs/units/u10 · u11 · u13/report.md`) 대신 이 문서 한 곳에 적었다(여러 브랜치가 같은 보고서를 고치는 충돌을 피함). 병합 뒤 필요하면 원 담당자가 옮긴다.
 - **A18**: 제브 문턱별 다시 계산은 응답에 다른 라벨 확률이 없어 동률(PASS_TIED) 판단을 원래 판정의 사유 코드로만 한다.
 - **A19**: `(U10-b)` · `(U11-e)` 기호는 각 표의 다음 글자로 골랐다. 다른 브랜치가 같은 기호를 먼저 쓰면 병합 때 다음 글자로 바꾼다.
+- **PRACTICE-VARIANT-INSTRUCTIONS-A20**: NEAR 관계 축 충돌(11절)은 프롬프트 · 계획기를 고치지 않고 위험과 선택지만 적었다. 까닭: 고치는 두 길이 모두 원 담당자 결정을 바꾼다 — (가)는 장면 `relation`의 뜻('목표 상대', A2)과 중간발표의 '지킬 것: 상대 역할'을, (나)는 BR3 변형 규칙을 바꾼다. 데모의 새 아이 자료에서는 노출 이력이 3회 미만이라 NEAR가 나오지 않으므로(SAME_CONTEXT만) 데모 경로에는 닿지 않는다고 봤다.
+- **PRACTICE-VARIANT-INSTRUCTIONS-A21**: `LIVE_INSTRUCTIONS` 사건 시점을 `session.started` 처리로 옮겼다(리뷰 반영). 같은 세션에서 `session.started`가 두 번 와도 첫 번째만 남긴다. 사건 시각은 공급자 사건을 받은 시각이다.
 
 ## 9. 시험 결과
 
@@ -192,6 +195,9 @@
 | `./gradlew :realtime-activity:test --tests "kr.mujoong.realtime.guardrail.*" -Pmujoong.test.db=docker`((d) 뒤) | 92건 통과(`JevLiveTaskIsolationTest` 10건 포함) |
 | 넓은 회귀: `./gradlew :core-api:test -Pmujoong.test.db=docker` | **1734건 통과, 실패 0, 건너뜀 0**(5분 59초) |
 | 넓은 회귀: `./gradlew :realtime-activity:test -Pmujoong.test.db=docker` | **1885건 통과, 실패 0, 건너뜀 0**(5분 23초) |
+| 리뷰 반영(`692b6c2`): `./gradlew :core-api:test --tests "…PlannedGenerationIT" --tests "…start.PracticePackageTest" --tests "…ScenarioRepositoryIT" --tests "…ScenarioContractTest" -Pmujoong.test.db=docker` | 42건 통과(11 · 9 · 11 · 11). 확인용으로 `VariantPlanner`의 topic 어휘 조건을 잠시 빼고 돌리면 `baseOutsideVocabularyFallsBackToGraphFreeBase`가 "Expected size: 1 but was: 2"로 실패했다(되돌림, 커밋에 없음) |
+| 리뷰 반영(`c49856b`): `./gradlew :realtime-activity:test --tests "kr.mujoong.realtime.session.LiveInstructionsSessionTest" -Pmujoong.test.db=docker` | 5건 통과. 옮기기 전 `SessionExecutor`로 돌리면 새 두 건(시작 전송 실패 · `session.started` 없음)이 실패했다 |
+| 리뷰 반영 뒤 넓은 회귀: `./gradlew :realtime-activity:test -Pmujoong.test.db=docker` | **1887건 통과, 실패 0, 건너뜀 0**(5분 9초) |
 
 실호출: 하지 않음. `jevLiveTest` · `lunaLiveTest` · `gptLiveTest`는 돌리지 않았다(R-F1 · R-F15, 사람 몫).
 
@@ -213,3 +219,15 @@
 8. **언어 부담 검사(6절)**를 할지와 기준값.
 9. **팀원 확인 · 공지**: 도연 · 성민 리뷰, 계약 변경 PR 같은 날 병합, D 담당 실명 정하기.
 10. **전체 검증**: `./gradlew check`와 `bash scripts/verify.sh --mode compose`는 다음 단계에서 돈다(이 브랜치에서는 돌리지 않음).
+11. **도연과 결정 — NEAR 관계 축(11절)**: 선택지 (가) · (나) 중 고르거나 지금대로 둔다.
+12. **커밋 제목 범위**: 커밋 `fb35917`의 제목 `docs: 연습 변형 어휘 · 세션 지시문 · 제브 표본 작업 기록을 남긴다`에 범위가 없다(팀 형식 `<종류>(<범위>): …`). 이력 재작성이라 모델은 고치지 않았다. push 전에 사람이 `docs(practice): …`처럼 범위를 붙이거나, 그대로 둘 거면 PR 설명에 적는다.
+
+## 11. 리뷰 반영 — NEAR 관계 축 변형과 v3 '같은 상대' 규칙의 충돌(고치지 않음, 위험 · 선택지)
+
+- 무엇이 부딪히나: v3 6행은 "모든 장면의 relation에는 입력 relation 값을 글자 그대로 쓰고, 장면 설명은 이 상대에 맞춰" 쓰게 한다. 같은 프롬프트 9행은 VARIANT의 `preservation.relationship`을 `variantPlan.context` 값으로 쓰게 한다. `VariantPlanner`는 같은 씨앗 · 관계 · 상황 노출이 3회 이상이면 NEAR 등급으로 관계 · 상황 축 후보만 만들고, 정렬이 변경 축 이름순(`relationship` < `situation`)이라 아직 노출되지 않은 관계 축 후보가 있으면 **관계 축을 먼저 고른다**. 이때 좌표는 '관계가 바뀌었다'(예: `FRIEND_CLOSE` → `CLASSMATE`)고 하는데 장면 상대와 설명은 그대로라는 모순 지시가 된다.
+- 결과 예상(코드와 프롬프트를 읽어 판단, 실호출로 확인하지 않음): 검토(`review.v1` 4행)는 "정확히 한 변경 요소를 실제 서술과 함께" 보므로 `UNCHANGED_VARIANT`나 `TRANSFER_MISMATCH`로 변형이 버려지고 BASE 한 장면만 발급될 가능성이 크다. 서버 검사(`ScenarioScriptValidation`)는 VARIANT `relation`을 보지 않아 막지 못한다.
+- 언제 닿나: 노출 이력(최근 3건)이 모두 같은 씨앗 · 관계 · 상황일 때만이다. 데모의 새 아이 자료에서는 나오지 않는다(SAME_CONTEXT, A20).
+- 선택지(고르는 것은 도연):
+  - **(가) 프롬프트 예외**: `variantPlan.changedField`가 `relationship`인 VARIANT만 장면 설명에서 새 관계(`preservation.relationship`)를 드러내게 v3 문구에 예외를 둔다. 장면 `relation` 칸을 목표 상대로 둘지 새 관계를 한국어로 쓸지도 함께 정해야 한다. 판을 올리지 않고 v3를 고칠 수 있는 것은 v3가 아직 `main`에 없을 때까지다.
+  - **(나) 계획기에서 관계 축 빼기**: `VariantPlanner`의 NEAR 후보에서 관계 축을 빼고 상황 축만 남긴다. 중간발표의 '지킬 것: 상대 역할'과 맞지만 BR3 변경이다.
+  - 지금대로 두기: NEAR 관계 축 변형은 대부분 검토에서 버려진다. 검토 사유가 변형 사유(`UNCHANGED_VARIANT` · `TRANSFER_MISMATCH` 등)뿐이면 `ScenarioScriptGenerator`가 승인된 BASE만 한 번 더 검토해 BASE 한 장면으로 발급하므로 연습 시작은 실패하지 않는다. 다만 검토 호출이 하나 늘어 15초 한도에 더 가까워진다.
