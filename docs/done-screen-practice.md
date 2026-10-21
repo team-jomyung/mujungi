@@ -46,12 +46,14 @@
 - 운영
   - `frontend/src/shared/copy/ko.ts`: `COPY.done.practiceHeader` · `practiceEndedTitle`(문구표 원문), `PROPOSED_COPY.done.practiceClosingTitle` · `practiceHeaderWithoutGoals`(제안), 함수 `donePracticeHeader` · `donePracticeTimeRangeLine`
   - `frontend/src/parent/features/done/presentation.ts`: `presentDone`이 머리 · 시간 줄 · 활성 탭까지 정한다. 세 번째 인자 `goalCount`(기본 `null`)
-  - `frontend/src/parent/features/done/useDoneScreen.ts`: 목표 수 기억(`useGoalCount`), 연습 시작 실패 경로
+  - `frontend/src/parent/features/done/useDoneScreen.ts`: 목표 수를 조회 캐시의 진행 값에서 읽음, 연습 시작 실패 경로
+  - `frontend/src/parent/common/api/live.ts`: `mergeLiveView`가 연습 마무리 · 종료 응답에서 진행 값이 비면 앞 값을 남긴다(4.1)
   - `frontend/src/parent/features/done/DoneScreen.tsx`: 표시 판단 결과로 머리 · 시간 줄 · 탭을 그린다(시간 줄 계산은 `presentation.ts`로 옮김)
   - `frontend/src/parent/common/activity/failure.ts`: `practiceFailedRoute` 추가
   - `frontend/src/parent/features/live/useLiveScreen.ts`: 같은 경로를 `practiceFailedRoute`로 만든다(동작 같음)
 - 시험
-  - `frontend/tests/parent/features/done/done-17.test.tsx`: 연습 사례 6개
+  - `frontend/tests/parent/features/done/done-17.test.tsx`: 연습 사례 8개(12가 캐시에 남긴 진행 값 → 17이 바로 종료 · 실행 중 FAILED를 받는 사례 2개 포함)
+  - `frontend/tests/parent/common/api/api-types.test.ts`: `mergeLiveView` 연습 진행 값 남김 1개
   - `frontend/tests/parent/features/done/done-17-presentation.test.ts`(새 파일): 표시 판단 단위 시험 8개
   - `frontend/tests/shared/copy.test.ts`: 연습 문구 함수 1개
   - `frontend/tests/parent/common/activity-logic.test.ts`: `practiceFailedRoute` 1개
@@ -67,14 +69,22 @@
 
 | 후보 | 지금 코드 사실 | 판단 |
 |---|---|---|
-| (i) `view.practice?.goalCount` | 진행 중 · 마무리 중에만 온다. 종료 상태면 realtime이 비운다(`SessionViewQuery.View`가 종료 세션의 `live`를 `NONE`으로 바꿈 → `SessionInternalController.wire`의 `practice`가 null). core가 사본으로 답하면 늘 null이다(`SessionViewService.fromCopy`). 프런트 병합(`mergeLiveView`)도 다음 응답의 null을 그대로 쓴다. | **고름.** 대신 화면이 받은 마지막 값을 기억한다. |
+| (i) `view.practice?.goalCount` | 진행 중 · 마무리 중에만 온다. 종료 상태면 realtime이 비운다(`SessionViewQuery.View`가 종료 세션의 `live`를 `NONE`으로 바꿈 → `SessionInternalController.wire`의 `practice`가 null). core가 사본으로 답하면 늘 null이다(`SessionViewService.fromCopy`). 프런트 병합(`mergeLiveView`)은 고치기 전에는 다음 응답의 null을 그대로 썼다. | **고름.** 대신 조회 캐시를 합칠 때 마지막 값을 남긴다. |
 | (ii) `/api/records`의 `goalCount` | 그날 목록(`?date=`)에만 있고 기록이 저장된 뒤에만 나온다. 값은 정리 결과의 목표 기록 수(`practiceJson`의 goals 수)라 '고른 목표 수'와 다를 수 있다. 17은 지금 이 API를 부르지 않는다. | 열린 질문(Q1). |
 | (iii) 연습 시작 202 응답의 `goalCount` | `startPort.ts`의 `parseStartResult`가 `sessionId`만 남기고 버린다. 18 → 12 → 17로 값을 넘기는 통로가 없고, 새로 고침하면 잃는다. | 열린 질문(Q1). |
 
-- 정상 흐름은 18 → 12 → 17이다. 12와 17은 같은 조회 캐시(`queryKeys.session(sessionId)`)를 쓰므로, 17이 처음 그릴 때 12가 받은 마지막 진행 값(목표 수 포함)이 이미 있다. 17은 마무리 중에도 다시 읽는다.
-- `useDoneScreen`의 `useGoalCount`가 목표 수를 세션별로 기억한다. 값을 받으면 그 값을 쓰고, 종료 응답에서 practice가 비면 기억한 값을 쓴다. 렌더 중 상태 조정(React 문서의 '이전 렌더 정보 저장' 꼴)으로 했다. 효과 안의 setState나 렌더 중 ref 읽기는 쓰지 않았다(eslint react-hooks 규칙).
+- 정상 흐름은 18 → 12 → 17이다. 12와 17은 같은 조회 캐시(`queryKeys.session(sessionId)`)를 쓰고, 폴링 응답은 늘 `mergeLiveView`로 앞 값과 합쳐 캐시에 들어간다. 12는 마무리(CLOSING)나 종료를 받으면 바로 17로 간다.
+- 12가 받는 마지막 응답이 늘 진행 값이 있는 마무리 중은 아니다. 다음 두 경우 12는 진행 중(ACTIVE) 다음에 진행 값이 빈 응답을 받고 17로 간다.
+  - 12는 2초마다 읽는다(`mujoong.timing.parent.poll-interval`). 마무리가 한 번 읽는 사이에 끝나면 12는 CLOSING을 보지 못하고 바로 ENDED를 받는다.
+  - 실행 중 · 마무리 중에 realtime이 다시 시작되면 FAILED(`SERVER_RESTART`)가 된다(`TransitionTable.SERVER_RESTART`). 이것은 시작 실패가 아니라 12 · 17 모두 '끝남'으로 다룬다(`liveOutcome` → `done`).
+- 고치기 전에는 `mergeLiveView`가 이 빈 값으로 캐시의 진행 값을 덮었다(앞 값을 남기는 것은 진행 중 잘못 온 값(`practiceIssue === "invalid"`)뿐이었다). 그래서 정상 흐름에서도 17이 처음 그릴 때 목표 수가 없어 대체 표시(D2)가 나왔다(검토 지적).
+- 지금은 `mergeLiveView`가 같은 세션의 연습 응답이 마무리 중이거나 종료 상태이고 진행 값이 비었으면 앞 값을 남긴다. 새 진행 값이 오면 그 값을 쓴다. 자유대화 응답 · 다른 세션 응답에는 이 규칙이 없다.
+  - 12 표시는 바뀌지 않는다. 12는 이 상태를 받으면 바로 17로 가기 때문이다.
+  - 17의 `useDoneScreen`은 캐시 값의 `practice.goalCount`를 그대로 읽는다. 앞서 두었던 화면 안의 목표 수 기억(`useGoalCount`)은 같은 일을 캐시 합치기가 하게 되어 지웠다. 기억을 한 곳(캐시 합치기)에만 두면 12에서 넘어온 값과 17이 받은 값이 같은 규칙을 따른다.
 - API · 계약을 바꾸지 않고, 새 호출을 더하지 않는다(작업 지시: 있는 값으로 할 수 있는 만큼만).
-- 한계: 종료 뒤 처음 들어오면(종료 뒤 새로 고침 · 푸시 알림으로 바로 17을 여는 경우 등) 목표 수가 없다. 마무리 중에 들어오면 그 응답에 진행 값이 있어 채워진다(A9). 그때는 대체 표시(D2)다.
+- 한계: 이 세션의 진행 값을 한 번도 받지 못한 채 17에 들어오면 목표 수가 없다. 대체 표시(D2)다.
+  - 종료 뒤 새로 고침, 푸시 알림으로 바로 17을 여는 경우(조회 캐시가 비어 있음).
+  - 12가 진행 중 응답을 한 번도 받지 못하고 바로 마무리 · 종료를 받은 경우(예: 시작 직후 끝냄. 이때 마무리 중 응답에 진행 값이 있으면 채워진다, A9).
 
 ### 4.2 표시 판단을 `presentDone` 한 곳에 모은다
 
@@ -112,7 +122,8 @@
 | DONE-SCREEN-PRACTICE-A6 | 목표 수 기억은 화면 상태에만 둔다. 브라우저 저장소에 넣지 않는다(새로 고침 뒤에는 대체 표시). 저장소 값은 다른 세션과 섞이거나 오래 남을 위험이 있어서다. |
 | DONE-SCREEN-PRACTICE-A7 | 연습 시작 실패는 12와 똑같이 사유 코드를 늘 싣는다(코드가 없으면 `DEVICE_NO_ACK`). 08로 가는 자유대화처럼 기본 사유를 빼는 규칙은 연습에 쓰지 않는다(12의 기존 동작). |
 | DONE-SCREEN-PRACTICE-A8 | 탭은 기존 4탭 막대(홈 · 자유대화 · 연습 · 기록)를 그대로 쓰고 활성만 바꾼다. 자유대화 문구표(C.S-17.16.7 ~ 9)가 탭을 3개로 적은 것은 활성 탭 이름이 머리와 겹쳐 빠진 것으로 읽었다. 정리 중 · 끝에 연습 탭을 누르면 18이다(S-17 분기 표, 기존 `routeForTab`). |
-| DONE-SCREEN-PRACTICE-A9 | realtime은 마무리 중(CLOSING)에도 실행기가 살아 있으면 연습 진행 값을 낸다고 보았다(`IdleClock.publishLive`가 `practiceProgress()`를 그대로 쓴다, 정적 분석). 마지막 목표가 끝나 진행 값이 비어도 12에서 넘어온 마지막 진행 값이 있으면 그것을 쓴다. 실제 세션으로는 확인하지 않았다. |
+| DONE-SCREEN-PRACTICE-A9 | realtime은 마무리 중(CLOSING)에도 실행기가 살아 있으면 연습 진행 값을 낸다고 보았다(`IdleClock.publishLive`가 `practiceProgress()`를 그대로 쓴다, 정적 분석). 마지막 목표가 끝나 진행 값이 비어도 조회 캐시에 앞서 받은 진행 값이 있으면 `mergeLiveView`가 그것을 남긴다. 실제 세션으로는 확인하지 않았다. |
+| DONE-SCREEN-PRACTICE-A10 | 마무리 중 · 종료 응답에서 진행 값이 빈 것은 '이 세션에 목표가 없음'이 아니라 '더 보내지 않음'이라고 보았다(종료 세션은 realtime이 비우고 core 사본에는 없다, 4.1). 목표 수는 한 세션 안에서 바뀌지 않으므로 앞 값을 남겨도 틀린 숫자를 보이지 않는다고 보았다. 마무리 중에 새 진행 값이 오면 그 값을 쓴다. |
 
 ## 7. 원 담당자와 맞출 것 · 열린 질문
 
@@ -123,6 +134,7 @@
 | Q3 | 도연 | 목표 수 모름의 대체 표시(D2) 승인. |
 | Q4 | 도연 · 성민 | 첫 응답 전 자유대화 문구가 잠깐 보이는 것(D3)을 중립 로딩 표시로 바꿀지. 바꾸면 자유대화 17 시험의 단언도 함께 바뀐다. |
 | 알림 | 성민 | 17 화면 파일(`DoneScreen.tsx` · `useDoneScreen.ts` · `presentation.ts`)을 고쳤고, 12의 연습 시작 실패 경로를 `failure.ts`의 `practiceFailedRoute`로 옮겼다(동작 같음). |
+| 알림 | 도연 · 성민 | 12 · 17이 같이 쓰는 `live.ts`의 `mergeLiveView`를 고쳤다. 연습 응답이 마무리 중 · 종료 상태이고 진행 값이 비면 앞 값을 남긴다(4.1). 12는 이 상태에서 바로 17로 가므로 12 표시는 같다. 다른 화면이 마무리 · 종료 뒤 진행 값을 '비었음'으로 읽어야 한다면 알려 달라(지금은 그런 화면이 없다). |
 
 ## 8. 사람이 할 일
 
@@ -137,15 +149,15 @@
 
 | 명령(`frontend/`에서) | 결과 |
 |---|---|
-| `npx --no-install vitest run tests/parent/features/done tests/parent/common/activity-logic.test.ts tests/parent/features/practice tests/parent/features/live tests/parent/features/activity-session-screens.test.tsx tests/shared/test-ids.test.tsx tests/shared/routes.test.tsx tests/shared/copy.test.ts` | 13 파일 · 236건 통과, 실패 0 |
-| `npx --no-install vitest run tests --coverage` | 76 파일 · 1,014건 통과, 실패 0. 전체 줄 98.55% · 문장 97.22% · 분기 93.61% · 함수 96.85% |
-| 바뀐 운영 파일 줄 커버리지(위 실행) | `DoneScreen.tsx` 100% · `useDoneScreen.ts` 100% · `presentation.ts` 96.55% · `failure.ts` 100% · `ko.ts` 100% · `useLiveScreen.ts` 97.4% |
+| `npx --no-install vitest run tests/parent/features/done tests/parent/common/activity-logic.test.ts tests/parent/common/api/api-types.test.ts tests/parent/features/practice tests/parent/features/live tests/parent/features/activity-session-screens.test.tsx tests/shared/test-ids.test.tsx tests/shared/routes.test.tsx tests/shared/copy.test.ts` | 14 파일 · 252건 통과, 실패 0 |
+| `npx --no-install vitest run tests --coverage` | 76 파일 · 1,017건 통과, 실패 0. 전체 줄 98.55% · 문장 97.22% · 분기 93.60% · 함수 96.85% |
+| 바뀐 운영 파일 줄 커버리지(위 실행) | `DoneScreen.tsx` 100% · `useDoneScreen.ts` 100% · `presentation.ts` 96.55% · `live.ts` 100% · `failure.ts` 100% · `ko.ts` 100% · `useLiveScreen.ts` 97.4% |
 | `MUJOONG_COVERAGE_SCOPE=practice-legacy npx --no-install vitest run $(cat coverage-scope/practice-legacy.tests) --coverage` | 3 파일 · 32건 통과, 범위 줄 96.06%(하한 80%) |
 | `MUJOONG_COVERAGE_SCOPE=web-push npx --no-install vitest run $(cat coverage-scope/web-push.tests) --coverage` | 6 파일 · 89건 통과, 범위 줄 88.17%(하한 80%, `ko.ts`가 이 범위에 들어 있음) |
 | `npx --no-install eslint .` | 오류 · 경고 0 |
 | `npx --no-install tsc --noEmit` | 통과 |
 | `npx --no-install next build` | 통과(`/parent/sessions/[sessionId]/done` 포함) |
 
-- 시험 검증: 목표 수 기억을 일부러 끈 코드(`useGoalCount`가 받은 값만 돌려줌)로 돌리면 연습 사례 2건(마무리 중 → 종료 목표 수 유지, 기기 응답 없이 끝냄)이 실패하는 것을 확인하고 되돌렸다.
+- 시험 검증: `mergeLiveView`의 마무리 · 종료 진행 값 남김을 일부러 끈 코드로 돌리면 5건(병합 단위 시험 1건, 17 연습 사례 4건: 마무리 중 → 종료 목표 수 유지, 12 캐시 → 바로 ENDED, 12 캐시 → 바로 실행 중 FAILED, 기기 응답 없이 끝냄)이 실패하는 것을 확인하고 되돌렸다.
 - 기존 자유대화 17 시험(`done-17.test.tsx`의 기존 11건, `done-17-result.test.tsx` 6건, `activity-session-screens.test.tsx`, `activity-logic.test.ts`의 17 사유 표)은 고치지 않고 그대로 통과했다. 기존 단언 · 하한은 낮추지 않았다.
 - 백엔드는 바꾸지 않아 Gradle 시험은 돌리지 않았다.
