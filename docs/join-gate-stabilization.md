@@ -92,6 +92,30 @@ PR은 둘로 나눈다.
 - **문서 · 설정(R-M5 · R-M10, 같은 커밋)**: `contracts/timing.md` 14절 새 행과 머리말, `contracts/ai-io.md` 3절 입력 전사 묶음 문단,
   `contracts/deviations.md` (JG-a). 화면이 읽지 않는 서버 키라 `timing-defaults.json`에는 넣지 않는다. `ConfigKeyContractTest` · `TimeLiteralScanTest` 통과.
 
+### (3) J1 진행 중 새 전사로 결과를 버리는 문제 (PR-B, 권장안 A)
+
+- **바꾼 동작**(WAITING_CHILD · J1에서만, ACTIVE의 J6 · 확장 턴은 그대로):
+  - `JoinFlow.onJoinReply`가 분류를 먼저 한다. J1이 열려 있고 새 대답이 **UNCLEAR**면 J1을 닫지 않고 '대기 칸' 한 칸(메모리만)에 둔다. 또 오면 덮어쓴다.
+    `JOIN_REPLY`의 `joinAction`은 `J1_HELD`다.
+  - 새 대답이 ACCEPT · REFUSE · TOPIC_REFUSAL이면 지금처럼 J1을 SUPERSEDED로 닫고(대기 칸도 버린다) 새 대답을 처음부터 처리한다.
+  - J1이 닫히면: PARTICIPATE · DECLINE이면 대기 칸을 버리고 결과를 넣는다. 그 밖의 결과이고 대기 칸이 있으면 `join.reply(UNCLEAR)`를 넣지 않고
+    대기 대답으로 J1을 한 번 더 연다(앞 전사를 `recentTurns`의 CHILD 줄로). 대기 칸이 없으면 지금처럼 UNCLEAR를 넣는다 — 두 대답에 재안내는 B17대로 한 번이다.
+  - 미뤄 둔 창 만기(`joinTickDeferred`)는 어느 길에서도 잃지 않는다: 결과를 넣은 뒤, 다시 연 J1로 넘겨 그 J1이 닫힌 뒤, SUPERSEDED면 새 대답을 처리한 뒤 부른다.
+  - 새 J1과 결과 넣기(상태 전이)는 `JudgmentCoordinator.onClosed` 안에서 하지 않고, 앞 턴의 판정 기록 · `JUDGMENT_TURN` 줄 · 보기 복원이 끝난 뒤
+    (`onClosed` 끝, `afterClose`) 한다. 그래서 로그 순서가 `JUDGMENT_TURN` → `JOIN_REPLY`(결과 적용 · 새 J1)다.
+- **고른 방안과 까닭**: 권장안 A. 대안 B(SUPERSEDED는 그대로 두고 새 J1에 앞 전사를 문맥으로 넣기만)는 잡음 전사가 이어지면 J1이 끝나지 않는다.
+  A는 잡음이 이어져도 첫 J1 결과는 쓰고, 다시 여는 것도 대기 칸 한 번뿐이다. J1 결과 해석(PARTICIPATE → 참여 등)을 협력 객체에서 `JoinFlow`로 옮겨
+  참여 판단 상태(대기 칸 · 미룬 만기)를 한 곳이 쥐게 했다. 협력 객체 `Env`의 `applyJoinReply` · `runDeferredJoinTick`은 없앴다.
+  - 다시 판정하려고 닫힌 첫 J1의 기록 `nextAction`은 `NONE`이다(참여 판단에 아무것도 넣지 않았다, JOIN-GATE-A13).
+- **설계 편차**: JG-D1(U11 W1 · BR5.3의 "J1 중 새 확정 전사는 SUPERSEDED"를 불명확한 새 대답에 한해 바꾼다). U11 설계 편차 표에 둘지는 성민과 정한다.
+- **바꾼 파일**: `session/JoinFlow.java`(대기 칸 · J1 결과 해석 · 다시 열기), `session/JudgmentCoordinator.java`(`openJoinJudgment(전사, 확정 시각,
+  직전 대화, 닫힘 뒤 일)` · `afterClose`), `session/SessionExecutor.java`(`JudgmentEnv`에서 두 메서드 삭제).
+- **시험**(`JoinJudgmentExecutorTest`): `aSecondUnclearReplyWhileJ1IsOpenIsHeldAndTheResultIsNotThrownAway`(요청 1회 · SUPERSEDED 기록 없음 →
+  PARTICIPATE로 ACTIVE · CONFIRMED 기록 하나), `anUnclearResultReopensJ1WithTheHeldReply…`(두 번째 요청의 CHILD 문맥 · `JOIN_RE_PROMPTED` 1건 · 로그
+  순서), `aWindowExpiryDeferredByTheFirstJ1SurvivesTheReopenWithTheHeldReply`(미룬 만기가 다시 연 J1 뒤에 돌아 DECLINED). 기존
+  `theRepromptIsCountedOnlyOnceAcrossTwoUnclearAnswers` · `aWindowExpiryDuringAnOpenJ1IsDeferred…` · `aNewReplyWhileJ1IsOpenSupersedesIt…`은 그대로 통과한다.
+- **문서**: 계약 변경 없음.
+
 (다음 항목은 작성 중)
 
 ## 4. 설계 편차

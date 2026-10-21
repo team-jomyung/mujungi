@@ -13,7 +13,6 @@ import java.util.function.Function;
 import kr.mujoong.contract.status.SessionStatus;
 import kr.mujoong.realtime.content.LiveContentResources;
 import kr.mujoong.realtime.dialog.InstructionTemplates;
-import kr.mujoong.realtime.dialog.JoinTracker;
 import kr.mujoong.realtime.judgment.AbstainReason;
 import kr.mujoong.realtime.judgment.JudgeOutcome;
 import kr.mujoong.realtime.judgment.JudgeRequest;
@@ -66,12 +65,6 @@ final class JudgmentCoordinator implements JudgmentTurn.Host {
 
         /** 낡은 결과 · 전사를 버렸다(사유 코드 {@code JUDGMENT_LATE_DROPPED}, 개수만). */
         void lateDropped(String reasonCode);
-
-        /** 결과를 참여 확인의 대답 하나로 넣는다(참여 대기 중이 아니면 아무것도 하지 않는다). */
-        void applyJoinReply(JoinTracker.Reply reply, Instant at);
-
-        /** J1이 열린 동안 미뤄 둔 참여 창 만기를 처리한다(참여 대기 중이고 기술 일시정지가 아닐 때만). */
-        void runDeferredJoinTick();
 
         /**
          * 판정 턴 하나가 닫히거나 열지 못했다: 진단 로그 JUDGMENT_TURN 한 줄(contracts/ai-io.md 10.15). 결과 코드만 남기고 확률 · 전사는
@@ -126,6 +119,8 @@ final class JudgmentCoordinator implements JudgmentTurn.Host {
     private final Deque<Recent> recent = new ArrayDeque<>();
     private JudgmentTurn current;
     private Open currentOpen;
+    /** 닫힘 뒤 일이 맡긴, 판정 기록 · 보기 복원까지 마친 뒤 할 일(새 턴 열기 · 참여 대답 넣기). 닫힐 때마다 비운다. */
+    private Runnable afterClose;
 
     JudgmentCoordinator(JudgmentSupport support, SessionExecutor.Plan plan, Duration responseReady, Env env) {
         this.responseReady = Objects.requireNonNull(responseReady, "responseReady");
@@ -245,41 +240,30 @@ final class JudgmentCoordinator implements JudgmentTurn.Host {
     }
 
     /**
-     * W1: 불명확한 참여 대답은 아직 {@code join.reply}에 넣지 않고 J1을 연다. 열 수 없으면(공급자 없음 · 판독 불가) 기록 한 건만 남기고 지금 흐름으로
-     * 간다.
+     * W1: 불명확한 참여 대답은 아직 {@code join.reply}에 넣지 않고 J1을 연다. 열 수 없으면(공급자 없음 · 판독 불가) 기록 한 건만 남기고 거짓을
+     * 돌려준다(부르는 쪽이 지금 흐름으로 간다). 결과를 참여 대답으로 바꾸는 일은 부르는 쪽({@link JoinFlow})의 {@code after}가 한다.
+     *
+     * @param speechEndAt 판정 대상 확정 전사의 확정 시각(10초 시계 기준, 설계 개정 A8)
+     * @param recent 직전 대화(최대 3줄)
      */
-    boolean openJoinJudgment(String transcript, Instant at) {
+    boolean openJoinJudgment(String transcript, Instant speechEndAt, List<JudgeRequest.RecentTurn> recent,
+            Function<JudgmentTurn.Closure, Handled> after) {
         Readiness ready = preflight(transcript);
         if (ready != Readiness.READY) {
             recordSkipped(ready, JudgmentPoint.J1, JudgmentTrigger.JOIN_UNCLEAR, 0, NextAction.REPROMPT_JOIN);
             return false;
         }
         open(new Open(JudgmentPoint.J1, JudgmentTrigger.JOIN_UNCLEAR, JudgmentOwner.EXECUTOR, 0,
-                transcript, at, null, List.of(), (turn, outcome) -> JudgmentTurn.Decision.close(),
-                closure -> afterJoinJudgment(closure, at)));
+                transcript, speechEndAt, null, recent, (turn, outcome) -> JudgmentTurn.Decision.close(), after));
         return true;
     }
 
-    /** 결과 → {@link JoinTracker} 답 하나(원래 확정 시각으로 한 번만 넣는다, W1 4). 휴식 · 불명확 · 보류는 모두 불명확이다. */
-    private Handled afterJoinJudgment(JudgmentTurn.Closure closure, Instant at) {
-        JudgmentOutcomeKind kind = closure.outcome().kind();
-        if (kind != JudgmentOutcomeKind.CONFIRMED && kind != JudgmentOutcomeKind.ABSTAINED) {
-            return Handled.NOTHING;
-        }
-        JoinTracker.Reply reply = JoinTracker.Reply.UNCLEAR;
-        NextAction next = NextAction.REPROMPT_JOIN;
-        if (kind == JudgmentOutcomeKind.CONFIRMED && "PARTICIPATE".equals(closure.outcome().firstOption())) {
-            reply = JoinTracker.Reply.ACCEPT;
-            next = NextAction.START_JOIN;
-        } else if (kind == JudgmentOutcomeKind.CONFIRMED && "DECLINE".equals(closure.outcome().firstOption())) {
-            reply = JoinTracker.Reply.REFUSE;
-            next = NextAction.DECLINE_JOIN;
-        }
-        env.applyJoinReply(reply, at);
-        if (closure.joinTickDeferred()) {
-            env.runDeferredJoinTick();
-        }
-        return new Handled(next, false);
+    /**
+     * 지금 닫히는 턴의 닫힘 뒤 일({@link Open#after})에서만 부른다: 그 턴의 판정 기록 · 진단 로그 · 보기 복원을 마친 뒤(onClosed 끝) 할 일을 맡긴다.
+     * 닫힘 뒤 일 안에서 곧바로 새 턴을 열면 아직 닫는 중인 턴의 기록보다 새 턴이 앞서므로 이 순서를 지킨다.
+     */
+    void afterClose(Runnable task) {
+        afterClose = Objects.requireNonNull(task, "task");
     }
 
     private Map<String, String> aliases() {
@@ -408,6 +392,7 @@ final class JudgmentCoordinator implements JudgmentTurn.Host {
         Open open = currentOpen;
         current = null;
         currentOpen = null;
+        afterClose = null;
         Handled handled = Handled.NOTHING;
         boolean threw = true;
         try {
@@ -425,6 +410,11 @@ final class JudgmentCoordinator implements JudgmentTurn.Host {
                     env.restoreListening();
                 }
             }
+        }
+        Runnable next = afterClose;
+        afterClose = null;
+        if (next != null) {
+            next.run();
         }
     }
 
@@ -450,5 +440,6 @@ final class JudgmentCoordinator implements JudgmentTurn.Host {
     void shutdown() {
         current = null;
         currentOpen = null;
+        afterClose = null;
     }
 }

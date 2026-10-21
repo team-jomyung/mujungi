@@ -37,7 +37,6 @@ import kr.mujoong.realtime.config.RealtimeProperties;
 import kr.mujoong.realtime.config.RealtimeTimingProperties;
 import kr.mujoong.realtime.dialog.DialogInstructions;
 import kr.mujoong.realtime.dialog.InstructionTemplates;
-import kr.mujoong.realtime.dialog.JoinTracker;
 import kr.mujoong.realtime.dialog.StopConfirmFlow;
 import kr.mujoong.realtime.dialog.StopIntentJudge;
 import kr.mujoong.realtime.judgment.JudgeOutcome;
@@ -1308,16 +1307,6 @@ public final class SessionExecutor {
         @Override
         public void lateDropped(String reasonCode) {
             ctx.services().events().appError(EventLog.Component.SESSION_LIFECYCLE, reasonCode, EventCode.Level.INFO);
-        }
-
-        @Override
-        public void applyJoinReply(JoinTracker.Reply reply, Instant at) {
-            joinFlow.applyJoinReply(reply, at);
-        }
-
-        @Override
-        public void runDeferredJoinTick() {
-            joinFlow.runDeferredJoinTick();
         }
 
         @Override

@@ -145,6 +145,88 @@ class JoinJudgmentExecutorTest {
         assertThat(t.records()).as("늦은 결과는 버린다").hasSize(1);
     }
 
+    // ------------------------------------------------------------------ 참여 관문 안정화 (3): J1 진행 중 불명확한 새 대답
+
+    @Test
+    void aSecondUnclearReplyWhileJ1IsOpenIsHeldAndTheResultIsNotThrownAway() {
+        t.waiting();
+        t.h.childSays("j-1", JudgmentExecutorSupport.UNCLEAR_JOIN);
+
+        t.h.childSays("j-2", "모르겠는데");
+
+        assertThat(t.judge.calls()).as("J1을 닫지 않는다").hasSize(1);
+        assertThat(t.records()).as("SUPERSEDED 기록이 없다").isEmpty();
+        t.judge.confirm("PARTICIPATE", 0.9, "UNCLEAR", 0.05);
+        t.h.drain();
+
+        assertThat(t.h.executor.status()).isEqualTo(SessionStatus.ACTIVE);
+        assertThat(t.onlyRecord().outcome()).isEqualTo(JudgmentOutcomeKind.CONFIRMED);
+        assertThat(t.judge.calls()).as("참여 결과면 대기 칸은 버린다").hasSize(1);
+        assertThat(t.h.logs.events(EventCode.JOIN_REPLY)).extracting(LogCapture::attrs)
+                .extracting(attrs -> attrs.get("joinReply") + "/" + attrs.get("joinAction"))
+                .containsExactly("UNCLEAR/J1_OPENED", "UNCLEAR/J1_HELD", "ACCEPT/START");
+    }
+
+    @Test
+    void anUnclearResultReopensJ1WithTheHeldReplyAndThePreviousOneAsChildContextAfterTheFirstRecord() {
+        t.waiting();
+        t.h.childSays("j-1", JudgmentExecutorSupport.UNCLEAR_JOIN);
+        t.h.childSays("j-2", "모르겠는데");
+
+        t.judge.confirm("UNCLEAR", 0.9, "REST", 0.05);
+        t.h.drain();
+
+        assertThat(t.judge.calls()).hasSize(2);
+        kr.mujoong.realtime.judgment.JudgeRequest second = t.judge.last().request();
+        assertThat(second.childUtterance()).isEqualTo("모르겠는데");
+        assertThat(second.recentTurns()).filteredOn(turn -> turn.speaker() == kr.mujoong.realtime.judgment.JudgeRequest.Speaker.CHILD)
+                .extracting(kr.mujoong.realtime.judgment.JudgeRequest.RecentTurn::text)
+                .containsExactly(JudgmentExecutorSupport.UNCLEAR_JOIN);
+        assertThat(t.events(JoinFlow.EVENT_JOIN_RE_PROMPTED)).as("첫 결과는 참여 판단에 넣지 않는다").isEmpty();
+
+        t.judge.confirm("UNCLEAR", 0.9, "REST", 0.05);
+        t.h.drain();
+
+        assertThat(t.events(JoinFlow.EVENT_JOIN_RE_PROMPTED)).as("두 대답에 재안내는 한 번(B17)").singleElement()
+                .satisfies(event -> assertThat(event.getPayloadJson()).contains("\"cause\":\"UNCLEAR\""));
+        assertThat(t.records()).extracting(JudgmentLiveRecord::nextAction)
+                .containsExactlyInAnyOrder(NextAction.NONE, NextAction.REPROMPT_JOIN);
+        // 새 턴은 앞 턴의 판정 기록 · 진단 로그가 남은 뒤에 열린다(onClosed 안에서 열지 않는다)
+        assertThat(t.h.logs.events().stream().filter(event -> List.of("JOIN_REPLY", "JUDGMENT_TURN").contains(event.get("event")))
+                .map(event -> event.get("event") + ":" + LogCapture.attrs(event).getOrDefault("joinAction",
+                        LogCapture.attrs(event).get("nextAction"))).toList())
+                .containsExactly("JOIN_REPLY:J1_OPENED", "JOIN_REPLY:J1_HELD", "JUDGMENT_TURN:NONE", "JOIN_REPLY:J1_OPENED",
+                        "JUDGMENT_TURN:REPROMPT_JOIN", "JOIN_REPLY:CLARIFY");
+    }
+
+    @Test
+    void aWindowExpiryDeferredByTheFirstJ1SurvivesTheReopenWithTheHeldReply() {
+        t.waiting();
+        // 되묻기를 먼저 써서, 다음 창 만기는 DECLINED가 되게 한다
+        t.h.childSays("j-0", JudgmentExecutorSupport.UNCLEAR_JOIN);
+        t.judge.confirm("UNCLEAR", 0.9, "REST", 0.05);
+        t.h.drain();
+        t.mark(t.h.link.sent(kr.mujoong.contract.ws.message.PlayApprovedContent.class).getLast(),
+                kr.mujoong.contract.ws.message.PlaybackMark.Status.COMPLETED);
+        t.advance(Duration.ofSeconds(19));
+        t.h.childSays("j-1", "음 그게");
+        t.advance(Duration.ofMillis(500));
+        t.h.childSays("j-2", "모르겠는데");
+        t.advance(Duration.ofMillis(800));
+        assertThat(t.h.executor.status()).as("창 만기는 J1 중 미뤄진다").isEqualTo(SessionStatus.WAITING_CHILD);
+
+        t.judge.confirm("UNCLEAR", 0.9, "REST", 0.05);
+        t.h.drain();
+        assertThat(t.judge.calls()).as("대기 칸으로 다시 판정").hasSize(3);
+        assertThat(t.h.executor.status()).isEqualTo(SessionStatus.WAITING_CHILD);
+
+        t.judge.confirm("UNCLEAR", 0.9, "REST", 0.05);
+        t.h.drain();
+
+        assertThat(t.h.transitions.status(t.h.sessionId)).as("새 J1이 닫힌 뒤 미룬 만기가 돌았다").isEqualTo(SessionStatus.DECLINED);
+        assertThat(t.events(JoinFlow.EVENT_JOIN_RE_PROMPTED)).hasSize(1);
+    }
+
     @Test
     void eachClosedOrSkippedJ1LeavesOneJudgmentTurnLineWithCodesOnly() {
         t.waiting();
