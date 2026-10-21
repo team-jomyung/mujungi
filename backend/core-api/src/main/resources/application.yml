@@ -248,7 +248,7 @@ mujoong:
         reasoning-effort: none
       scenario-review:
         max-output-tokens: 4000
-        reasoning-effort: none
+        reasoning-effort: low
       seed-generation:
         max-output-tokens: 4000
         reasoning-effort: medium

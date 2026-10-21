@@ -47,7 +47,9 @@ public final class ScenarioScriptGenerator {
                 Map<String,Object> payload=new LinkedHashMap<>(current.payload());
                 if(correction>0)payload.put("correction",true);
                 if(preserved!=null)payload.put("baseToPreserve",preserved);
+                var generationStartedWith=deadline.remaining();
                 var generated=invoke(()->provider.generate(call(payload,current,deadline)),budget,deadline);
+                var generationCost=generationStartedWith.minus(deadline.remaining());
                 if(generated==null||generated.script()==null||!metadata(generated.model()))throw content();
                 model=generated.model();var script=generated.script();
                 Input reviewedInput=current;
@@ -60,7 +62,9 @@ public final class ScenarioScriptGenerator {
                         if(!planMismatch)reviewedInput=actual;
                     }
                 }
+                var reviewStartedWith=deadline.remaining();
                 var reviewed=review(script,reviewedInput,budget,deadline);
+                var reviewCost=reviewStartedWith.minus(deadline.remaining());
                 var result=validation.inspect(script,current.rules());
                 if(current.graphContextUsed()&&script.scenes().size()>1&&!current.payload().containsKey("variantPlan")&&result!=ScenarioScriptValidation.Result.INVALID_BASE)
                     result=ScenarioScriptValidation.Result.INVALID_VARIANT;
@@ -71,6 +75,13 @@ public final class ScenarioScriptGenerator {
                     active=withoutGraph(current);preserved=null;continue;
                 }
                 if(correction==0&&reviewedInput.payload().containsKey("variantPlan")&&result!=ScenarioScriptValidation.Result.INVALID_BASE){
+                    // 다음 호출은 BASE와 VARIANT를 함께 생성하고 다시 검토해야 한다.
+                    // 실제 첫 호출 비용으로 남은 예산을 비교하고, 부족하면 검증 완료 BASE만 발급한다.
+                    // 거절/불확실/서버 검사 실패인 BASE는 이 경로로 발급하지 않는다.
+                    var estimatedVariantCost=generationCost.multipliedBy(2).plus(reviewCost);
+                    if(result==ScenarioScriptValidation.Result.VALID && reviewed.review().approved()
+                            && deadline.remaining().compareTo(estimatedVariantCost)<=0)
+                        return approved(script,model,reviewed.model(),current,budget,deadline);
                     active=reviewedInput;
                     preserved=reviewed.review().approved()?script.scenes().getFirst():null;
                     continue;
