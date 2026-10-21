@@ -14,4 +14,6 @@ focusPoints와 expressionExamples는 코치 전용으로 분리한다. 나이에
 - sceneDescription은 간결한 1~3문장, reexplanation은 1~2문장이다. 코치 요점·표현 예시는 각각 최대 2개만 쓴다.
 - baseOnly가 true면 BASE 하나만 반환한다. structureContext가 없으면 preservation 필드를 생략한다.
 - structureContext가 있으면 preservation.skillRef/invariantSentence/preservationRule은 그 값을 그대로 복사한다. topic은 그림/독서/놀이 중 하나, place는 교실/도서관/운동장 중 하나, preservation.participants는 아이와 친구/아이와 또래/아이와 모둠원 중 하나를 쓴다. preservation.situation은 structureContext.situation과 같은 코드를 쓴다. BASE의 transferDistance는 SAME_CONTEXT, changedElement는 topic으로 표기한다(실제 변경은 VARIANT에서만 수행한다).
+- structureContext가 있는 연습은 과거 일화를 그대로 재현하는 것이 아니라 새 가상 상황이다. 원래 일화에 집·거실 등 다른 장소가 있어도 place와 실제 장면의 장소는 위 허용 목록 안에서 고른다. goal.fourElements.partner는 설명용 이름이며, 출력 relation에는 서버가 준 relation 코드를 그대로 쓴다.
+- 불변 구조를 추론할 수 있게 가상 장면의 눈에 보이는 맥락을 넣는다. 특히 상태 진술이 행동 요청을 뜻하는 장면이라면 불편의 원인과 상대가 직접 해결하기 어려운 상황이 드러나야 한다. 예를 들어 열린 창문으로 바람이 들어오고 친구의 양손에 물감이 묻은 상태에서 “춥다”고 말하는 식이다. 친구가 행동을 원한다고 해설하거나 아이가 할 행동을 미리 알려주지 않는다. 가상 장면에 더한 단서를 과거 실제 대화의 사실로 서술하지 않는다.
 - variantPlan이 있으면 BASE를 보존하고 VARIANT의 좌표를 variantPlan.context와 정확히 맞춘다. 변형의 transferDistance/changedElement는 계획의 grade/changedField를 그대로 따른다. 새 사실·정답·해설을 구조 보존 근거로 덧붙이지 않는다.
