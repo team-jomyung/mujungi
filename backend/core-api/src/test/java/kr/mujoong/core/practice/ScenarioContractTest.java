@@ -2,8 +2,12 @@ package kr.mujoong.core.practice;
 
 import static org.assertj.core.api.Assertions.*;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import kr.mujoong.contract.json.JsonCodec;
+import kr.mujoong.core.knowledge.KnowledgeSeed;
+import kr.mujoong.core.knowledge.VariantPlanner;
 import kr.mujoong.core.textai.ScenarioReview;
 import kr.mujoong.core.textai.ScenarioScript;
 import kr.mujoong.core.web.support.WebFixtures;
@@ -63,5 +67,41 @@ class ScenarioContractTest {
         var list=new java.util.ArrayList<>(List.of(scene)); var script=new ScenarioScript(list); list.clear();
         assertThat(script.scenes()).hasSize(1);
         assertThatThrownBy(()->script.scenes().clear()).isInstanceOf(UnsupportedOperationException.class);
+    }
+    static ScenarioScript.Scene graphBase(String participants,String relationship){
+        return new ScenarioScript.Scene("base-1","BASE","교실에서 친구와 놀이 중이야. 이제 그만할래.","이제 그만할래.","친구가 쉬려고 해.",null,null,
+                "같은 반 친구","교실","놀이",new ScenarioScript.Preservation("seed:S1","친구가 멈추려 한다","의도를 유지한다","SAME_CONTEXT","topic",
+                participants,"SCHOOL_GROUP",relationship),null);
+    }
+    @Test void graphCoordinatesInTheOutputSchemaAreExactlyTheServerVocabulary() throws java.io.IOException {
+        Map<?,?> schema;
+        try(var in=getClass().getClassLoader().getResourceAsStream("luna/schemas/ai-scenario-output.schema.json")){
+            schema=json.read(new String(in.readAllBytes(),java.nio.charset.StandardCharsets.UTF_8),Map.class);
+        }
+        Map<?,?> preservation=(Map<?,?>)((Map<?,?>)((Map<?,?>)((Map<?,?>)((Map<?,?>)schema.get("properties")).get("scenes")).get("items")).get("properties")).get("preservation");
+        Map<?,?> props=(Map<?,?>)preservation.get("properties");
+        assertThat(Set.copyOf((List<?>)((Map<?,?>)props.get("participants")).get("enum"))).isEqualTo(VariantPlanner.PARTICIPANTS);
+        assertThat(Set.copyOf((List<?>)((Map<?,?>)props.get("relationship")).get("enum"))).isEqualTo(KnowledgeSeed.RELATIONSHIPS);
+        assertThat(Set.copyOf((List<?>)((Map<?,?>)props.get("situation")).get("enum"))).isEqualTo(KnowledgeSeed.SITUATIONS);
+        @SuppressWarnings("unchecked") var required=(List<Object>)preservation.get("required");
+        assertThat(required).contains("relationship","participants","situation");
+    }
+    @Test void graphBaseNeedsAnEnumeratedRelationshipCoordinateBesideTheFreePartner() {
+        assertThat(WebFixtures.schemaErrors("ai-scenario-output.schema.json",json.write(new ScenarioScript(List.of(graphBase("아이와 친구","CLASSMATE")))))).isEmpty();
+        assertThat(WebFixtures.schemaErrors("ai-scenario-output.schema.json",json.write(new ScenarioScript(List.of(graphBase("아이와 친구",null)))))).isNotEmpty();
+        assertThat(WebFixtures.schemaErrors("ai-scenario-output.schema.json",json.write(new ScenarioScript(List.of(graphBase("아이와 친구","같은 반 친구")))))).isNotEmpty();
+        assertThat(WebFixtures.schemaErrors("ai-scenario-output.schema.json",json.write(new ScenarioScript(List.of(graphBase("아이와 형","CLASSMATE")))))).isNotEmpty();
+    }
+    @Test void storedV2AndNewV3GenerationsBothMatchThePracticeScenarioContract() {
+        for(String version:List.of("scenario-generation.v2",kr.mujoong.core.textai.ScenarioScriptProvider.GENERATION_PROMPT_VERSION)){
+            var value=new Scenario(UUID.randomUUID(),"ORIGINAL","PEER","기회","상황","역할","말",new Scenario.Validation(true,true,false),
+                    "scenario-script.v1",List.of(scene().withPartnerRole("역할")),new Scenario.Review("APPROVE","fake","scenario-review.v1"),
+                    new Scenario.Generation("fake",version,false,2));
+            assertThat(WebFixtures.schemaErrors("practice-scenario.schema.json",json.write(value))).as(version).isEmpty();
+        }
+        var unknown=new Scenario(UUID.randomUUID(),"ORIGINAL","PEER","기회","상황","역할","말",new Scenario.Validation(true,true,false),
+                "scenario-script.v1",List.of(scene().withPartnerRole("역할")),new Scenario.Review("APPROVE","fake","scenario-review.v1"),
+                new Scenario.Generation("fake","scenario-generation.v1",false,2));
+        assertThat(WebFixtures.schemaErrors("practice-scenario.schema.json",json.write(unknown))).isNotEmpty();
     }
 }

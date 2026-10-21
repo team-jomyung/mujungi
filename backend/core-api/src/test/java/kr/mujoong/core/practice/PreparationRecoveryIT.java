@@ -38,7 +38,7 @@ import org.junit.jupiter.api.*;
             when(f.graph.skillContext(any(),any(),any())).thenReturn(Optional.of(new kr.mujoong.core.knowledge.ChildKnowledgeService.SkillContext(graph.seed,"v1")));
             when(f.graph.variantPlan(any(),any(),any(),any(),any())).thenThrow(new IllegalStateException("synthetic unavailable"));
             var base=f.generated("그림").script().scenes().getFirst();
-            var preserved=new kr.mujoong.core.textai.ScenarioScript.Scene(base.sceneKey(),base.sceneKind(),base.sceneDescription(),base.opportunitySentence(),base.reexplanation(),base.focusPoints(),base.expressionExamples(),base.relation(),base.place(),base.topic(),new kr.mujoong.core.textai.ScenarioScript.Preservation("seed:S1",graph.seed.invariantSentence(),graph.seed.preservationRule(),"SAME_CONTEXT","none","아이와 친구","FRIEND_PRIVATE"),null);
+            var preserved=new kr.mujoong.core.textai.ScenarioScript.Scene(base.sceneKey(),base.sceneKind(),base.sceneDescription(),base.opportunitySentence(),base.reexplanation(),base.focusPoints(),base.expressionExamples(),base.relation(),base.place(),base.topic(),new kr.mujoong.core.textai.ScenarioScript.Preservation("seed:S1",graph.seed.invariantSentence(),graph.seed.preservationRule(),"SAME_CONTEXT","none","아이와 친구","FRIEND_PRIVATE","FRIEND_CLOSE"),null);
             var invalid=new kr.mujoong.core.textai.ScenarioScript.Scene("base","BASE","기회 없는 장면","말","설명",List.of(),List.of(),"PEER","교실","놀이",null,null);
             doReturn(ScenarioGenerationTest.generated(invalid),ScenarioGenerationTest.generated(preserved)).when(f.provider).generate(any());
             fails();assertThat(preparations.find(f.legacy.guardian,request.idempotencyKey()).orElseThrow().status()).isEqualTo("PREPARING");

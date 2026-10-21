@@ -15,7 +15,7 @@ import org.junit.jupiter.api.*;
     VariantPlanner.Plan plan;
     @BeforeEach void setup(){f.setup();plan=new VariantPlanner().plan(f.seed,base,List.of()).orElseThrow();when(f.service.variantPlan(any(),any(),any(),any(),any())).thenReturn(Optional.of(plan));}
     @AfterEach void close(){f.close();}
-    ScenarioScript.Scene scene(VariantPlanner.Context c,String distance,String changed){return new ScenarioScript.Scene("s","VARIANT","친구가 쉬려 한다","쉴래","친구의 말을 듣자",List.of(),List.of(),c.relationship(),c.place(),c.topic(),new ScenarioScript.Preservation("seed:S1",f.seed.invariantSentence(),f.seed.preservationRule(),distance,changed,c.participants(),c.situation()),null);}
+    ScenarioScript.Scene scene(VariantPlanner.Context c,String distance,String changed){return new ScenarioScript.Scene("s","VARIANT","친구가 쉬려 한다","쉴래","친구의 말을 듣자",List.of(),List.of(),c.relationship(),c.place(),c.topic(),new ScenarioScript.Preservation("seed:S1",f.seed.invariantSentence(),f.seed.preservationRule(),distance,changed,c.participants(),c.situation(),c.relationship()),null);}
     ScenarioScript.Scene original(){return scene(base,"SAME_CONTEXT","none");}
     ScenarioScript.Scene variant(){return scene(plan.context(),plan.grade(),plan.changedField());}
     @Test void acceptsExactPlanAndPreservedSkill(){assertThat(f.open().valid(original(),variant())).isTrue();}

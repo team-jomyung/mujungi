@@ -48,8 +48,9 @@ public final class ScenarioScriptValidation {
         if(s.preservation()!=null) {
             var p=s.preservation();
             if(!text(p.skillRef(),200)||!text(p.invariantSentence(),2000)||!text(p.preservationRule(),2000)
-                    ||!text(p.transferDistance(),200)||!text(p.changedElement(),200)||!text(p.participants(),200)||!text(p.situation(),2000))return false;
-            all.addAll(List.of(p.skillRef(),p.invariantSentence(),p.preservationRule(),p.transferDistance(),p.changedElement(),p.participants(),p.situation()));
+                    ||!text(p.transferDistance(),200)||!text(p.changedElement(),200)||!text(p.participants(),200)||!text(p.situation(),2000)
+                    ||!text(p.relationship(),200))return false;
+            all.addAll(List.of(p.skillRef(),p.invariantSentence(),p.preservationRule(),p.transferDistance(),p.changedElement(),p.participants(),p.situation(),p.relationship()));
         }
         if(all.stream().anyMatch(v->!forbidden.isAllowed(v)||rules.originalNames().stream().anyMatch(v::contains)
                 ||v.matches("(?s).*(?:[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}|01[016789][- ]?[0-9]{3,4}[- ]?[0-9]{4}).*")))return false;

@@ -420,7 +420,7 @@ Luna 호출부(core-api · realtime-activity 각자)는 공급자 시도마다 `
 
 ### 10.11 U10 상황 생성 경로
 
-실제 Luna 구성의 상황 생성은 `CONTRACT_SINGLE_CALL`로 생성 `scenario-generation.v2`와 별도 검토 `scenario-review.v1`을 각각 스키마 검증한다. 안쪽 재시도 없이 바깥 요청이 최초 15초·내용 수정1·기술 재시도1·BASE-only 검토1(최대6호출)을 공유한다. 기존 직접 호출 어댑터 메서드의 json_object 계약과 다른 목적의 호출 예산은 그대로다.
+실제 Luna 구성의 상황 생성은 `CONTRACT_SINGLE_CALL`로 생성 `scenario-generation.v3`와 별도 검토 `scenario-review.v1`을 각각 스키마 검증한다. 판 이름과 자원 경로는 `ScenarioScriptProvider.GENERATION_PROMPT_VERSION` · `GENERATION_INSTRUCTIONS` 한 곳에서 정하고, 이미 저장된 v2 대본은 공개 대본 계약(`practice-scenario.schema.json` `generation.promptVersion` enum)에서 계속 받는다. v3는 v2 규칙에 다음을 더한다: 모든 장면의 `relation`은 입력 relation을 그대로 쓴다. `structureContext`가 있으면 BASE에도 `preservation`을 넣고 skillRef·invariantSentence·preservationRule을 글자 그대로 옮긴다. topic·place·preservation.participants·relationship·situation은 `structureContext.allowed*` 목록에서 골라 글자 그대로 쓴다. 출력 스키마는 preservation의 participants·relationship·situation을 서버 어휘 enum으로 묶는다(최상위 topic·place는 자유 문자열 그대로) [U10 편차 (U10-b)]. 안쪽 재시도 없이 바깥 요청이 최초 15초·내용 수정1·기술 재시도1·BASE-only 검토1(최대6호출)을 공유한다. 기존 직접 호출 어댑터 메서드의 json_object 계약과 다른 목적의 호출 예산은 그대로다.
 
 사용자 결정 Q1-A로 최상위 interests의 이름을 정리한 최대10개·각80자 관심사만 SCENARIO_GENERATION/SCENARIO_REVIEW에 허용한다. 중첩 interests·일반 정리 API·다른 목적은 기존 금지를 유지한다. 이름은 소유 프로필에서 얻은 비공개 별칭으로 ‘아이’로 치환하고 연락처·과도한 자유문은 제외한다. 생성·검토 모두 같은 나이·최근 실제 노출3건·지정 원본·고정 목표의 정리 값을 쓴다. 원래 이름·식별자·판정 전용 기준·검토 원문을 공급자 데이터나 로그에 넣지 않는다. 모르는 타인의 이름 탐지 품질은 자동 시험으로 보장하지 않는다.
 

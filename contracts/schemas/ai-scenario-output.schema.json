@@ -60,16 +60,18 @@
           "place": { "type": "string", "minLength": 1, "maxLength": 200 },
           "topic": { "type": "string", "minLength": 1, "maxLength": 200 },
           "preservation": {
+            "description": "그래프 경로의 보존 정보. participants · relationship · situation은 변형 계획 좌표라 서버 어휘(VariantPlanner.PARTICIPANTS · KnowledgeSeed.RELATIONSHIPS · KnowledgeSeed.SITUATIONS)만 받는다. relationship은 장면 relation(목표 상대, 자유 문자열)과 다른 값이다. [U10 편차 (U10-b)]",
             "type": "object", "additionalProperties": false,
-            "required": ["skillRef", "invariantSentence", "preservationRule", "transferDistance", "changedElement", "participants", "situation"],
+            "required": ["skillRef", "invariantSentence", "preservationRule", "transferDistance", "changedElement", "participants", "situation", "relationship"],
             "properties": {
               "skillRef": {"type": "string", "minLength": 1, "maxLength": 200},
               "invariantSentence": {"type": "string", "minLength": 1, "maxLength": 2000},
               "preservationRule": {"type": "string", "minLength": 1, "maxLength": 2000},
               "transferDistance": {"enum": ["SAME_CONTEXT", "NEAR"]},
               "changedElement": {"enum": ["topic", "place", "participants", "relationship", "situation"]},
-              "participants": {"type": "string", "minLength": 1, "maxLength": 200},
-              "situation": {"type": "string", "minLength": 1, "maxLength": 2000}
+              "participants": {"enum": ["아이와 또래", "아이와 모둠원", "아이와 친구"]},
+              "situation": {"enum": ["CLUB", "FAMILY", "FRIEND_PRIVATE", "SCHOOL_GROUP"]},
+              "relationship": {"enum": ["CLASSMATE", "CLUB_JUNIOR", "CLUB_PEER", "CLUB_SENIOR", "FAMILY", "FRIEND_CASUAL", "FRIEND_CLOSE", "TEACHER", "TEAMMATE"]}
             }
           }
         }
@@ -90,6 +92,30 @@
           "relation": "FRIEND_CLOSE",
           "place": "HOME",
           "topic": "블록 놀이"
+        }
+      ]
+    },
+    {
+      "scenes": [
+        {
+          "sceneKey": "base-1",
+          "sceneKind": "BASE",
+          "sceneDescription": "교실에서 친구와 놀이를 하고 있어. 친구가 이제 그만하고 싶어 해. 이제 그만할래.",
+          "opportunitySentence": "이제 그만할래.",
+          "reexplanation": "친구가 놀이를 멈추고 쉬고 싶어 해.",
+          "relation": "같은 반 친구",
+          "place": "교실",
+          "topic": "놀이",
+          "preservation": {
+            "skillRef": "seed:S1",
+            "invariantSentence": "친구가 멈추려 한다",
+            "preservationRule": "의도를 유지한다",
+            "transferDistance": "SAME_CONTEXT",
+            "changedElement": "topic",
+            "participants": "아이와 친구",
+            "situation": "SCHOOL_GROUP",
+            "relationship": "CLASSMATE"
+          }
         }
       ]
     }

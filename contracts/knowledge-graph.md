@@ -32,7 +32,7 @@ Neo4j HTTP 주소는 `mujoong.knowledge.neo4j.endpoint`(기본 `http://neo4j:747
 
 기존 최소 ai-seed-output 스키마를 받는 공통 Luna 호출 경로는 호환 분기로 유지한다. U15는 v2 업무 검사를 별도로 적용한다.
 
-SAME_CONTEXT의 서버 소유 표면 어휘는 화제 `그림/독서/놀이`, 장소 `교실/도서관/운동장`, 등장인물 `아이와 친구/아이와 또래/아이와 모둠원`이다. 원본 POC의 CHANGE 지시를 실행 가능한 유한 선택지로 구체화한 값이며 아동 이름·실제 장소를 입력하지 않는다. U10은 이 표면 어휘와 아동용 관계·자리 열거값으로 기준 맥락과 실제 노출을 전달한다.
+SAME_CONTEXT의 서버 소유 표면 어휘는 화제 `그림/독서/놀이`, 장소 `교실/도서관/운동장`, 등장인물 `아이와 친구/아이와 또래/아이와 모둠원`이다. 원본 POC의 CHANGE 지시를 실행 가능한 유한 선택지로 구체화한 값이며 아동 이름·실제 장소를 입력하지 않는다. U10은 이 표면 어휘와 아동용 관계·자리 열거값으로 기준 맥락과 실제 노출을 전달한다. 상황 생성 입력 `structureContext`에는 씨앗 고정값과 함께 `allowedTopics`·`allowedPlaces`·`allowedParticipants`(위 표면 어휘)와 `allowedRelationships`·`allowedSituations`(씨앗 관계·자리 열거값)를 정렬한 목록으로 넣는다. 변형 계획의 관계 좌표는 장면 `relation`(목표 상대를 나타내는 자유 문자열)이 아니라 `preservation.relationship`(열거값)에서 읽고, 관계 좌표가 없는 옛 노출 행은 계획 입력에서 뺀다 [U10 편차 (U10-b)].
 
 ## U15 v2 정확한 출력 분기
 
