@@ -142,7 +142,10 @@ public final class ScenarioScriptGenerator {
     private Result approved(ScenarioScript script,String model,String reviewModel,Input input,Budget budget,ScenarioDeadline deadline){
         deadline.check();var base=script.scenes().getFirst();
         var legacy=new GeneratedScenario(base.sceneDescription(),base.opportunitySentence(),input.rules().relation(),input.rules().opportunity(),model,"scenario-generation.v2");
-        var scenes=script.scenes().stream().map(s->s.withPartnerRole(ScenarioContentPolicy.PARTNER_ROLE)).toList();
+        // 장면 partnerRole은 지시가 아니라 짧은 역할 이름이다. 모델은 이 칸을 내지 않고 서버가 관계에서 만든다
+        var scenes = script.scenes().stream()
+                .map(s -> s.withPartnerRole(ScenarioContentPolicy.partnerRoleName(s.relation())))
+                .toList();
         String version=input.graphContextUsed()&&input.rules().variants() instanceof ScenarioGraphContext.Session graph?graph.graphVersion():null;
         return new Result(legacy,new ScenarioRepository.Details("scenario-script.v1",scenes,new Scenario.Review("APPROVE",reviewModel,"scenario-review.v1"),new Scenario.Generation(model,"scenario-generation.v2",input.graphContextUsed(),budget.calls,version),input.goalContextJson()));
     }

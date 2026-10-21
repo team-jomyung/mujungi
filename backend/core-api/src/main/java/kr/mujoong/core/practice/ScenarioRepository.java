@@ -135,6 +135,19 @@ public class ScenarioRepository {
                 select exists(select 1 from core.core_scenario where child_id=:child and content_fingerprint=:fingerprint)
                 """, new MapSqlParameterSource("child",child).addValue("fingerprint",fingerprint), Boolean.class));
     }
+    /**
+     * 발급 대본 한 행의 값. 저장과 교차 계약 시험(contracts/fixtures)이 같은 조립을 쓴다. 레거시 칸은 고지 붙인 본문과 고정 역할 지시이고,
+     * 새 흐름 칸(scriptVersion · scenes · selfReview · generation)은 생성 결과를 그대로 싣는다.
+     */
+    public static Scenario issued(UUID id, String kind, GeneratedScenario output, Details details) {
+        return new Scenario(id, kind, output.relationType(), output.opportunityCondition(),
+                ScenarioContentPolicy.childText(output.scenarioText()), ScenarioContentPolicy.PARTNER_ROLE, output.triggerScript(),
+                new Scenario.Validation(true, true, false),
+                details == null ? null : details.scriptVersion(),
+                details == null ? null : details.scenes(),
+                details == null ? null : details.review(),
+                details == null ? null : details.generation());
+    }
     public Scenario save(String key, UUID claim, SessionContext context, GoalSnapshot goal, ScenarioService.Request request,
                          GeneratedScenario output, Instant now) {
         return save(key,claim,context,goal,request,output,now,null);
@@ -171,10 +184,7 @@ public class ScenarioRepository {
                 """, params,Integer.class);
         if (owns == null || owns != 1) throw CoreApiException.of(ErrorCode.SERVICE_NOT_READY);
         if(deadline!=null)limitSql(deadline);
-        Scenario scenario = new Scenario(UUID.randomUUID(),request.kind(),output.relationType(),output.opportunityCondition(),
-                ScenarioContentPolicy.childText(output.scenarioText()),ScenarioContentPolicy.PARTNER_ROLE,output.triggerScript(),
-                new Scenario.Validation(true,true,false),details==null?null:details.scriptVersion(),
-                details==null?null:details.scenes(),details==null?null:details.review(),details==null?null:details.generation());
+        Scenario scenario = issued(UUID.randomUUID(), request.kind(), output, details);
         params.addValue("id",scenario.scenarioId()).addValue("behavior",goal.behaviorKey()).addValue("version",goal.behaviorVersion())
                 .addValue("relation",scenario.relationType()).addValue("opportunity",scenario.opportunityCondition())
                 .addValue("scene",scenario.scenarioText()).addValue("role",scenario.partnerRoleText())
