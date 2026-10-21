@@ -242,19 +242,45 @@ jobs:
             aws ecs update-service --cluster "$ECS_CLUSTER" --service "$1" --task-definition "$2" >/dev/null
           }
 
+          # 배포 단계 전체 시간 예산 — job timeout(45분) 안에서 공개 주소 검사 등 여유를 남긴다.
+          # AWS 자격 증명은 1시간(역할 최대 세션도 3600초)이라 job timeout을 늘릴 때는 함께 검토할 것.
+          deploy_deadline=$((SECONDS + 35 * 60))
+
           # 서비스가 "이번에 등록한 리비전"으로 COMPLETED 되고 실행 수가 원하는 수와 같은지 확인한다.
-          # 회로 차단기가 이전 리비전으로 되돌린 경우(그쪽은 정상이어도) 이번 배포는 실패로 본다.
+          # - 갱신 직후 조회에 새 리비전이 늦게 보일 수 있으므로 최대 90초는 전파를 기다린다.
+          # - 새 리비전이 한 번 보인 뒤 이전 리비전으로 바뀌면 회로 차단기 롤백으로 판정한다.
+          # - 서비스별 상한 12분, 단 전체 예산을 넘지 않는다.
           verify_service() {
-            local service="$1" td="$2" waited=true info primary state running desired
-            aws ecs wait services-stable --cluster "$ECS_CLUSTER" --services "$service" || waited=false
-            info="$(aws ecs describe-services --cluster "$ECS_CLUSTER" --services "$service" --output json)"
-            primary="$(jq -r '.services[0].deployments[] | select(.status == "PRIMARY") | .taskDefinition' <<<"$info")"
-            state="$(jq -r '.services[0].deployments[] | select(.status == "PRIMARY") | .rolloutState' <<<"$info")"
-            running="$(jq -r '.services[0].runningCount' <<<"$info")"
-            desired="$(jq -r '.services[0].desiredCount' <<<"$info")"
-            summary "$service: rollout=$state running=$running/$desired 안정화대기=$waited 리비전=${primary##*/}"
+            local service="$1" td="$2" info primary state running desired seen=false
+            local appear_deadline=$((SECONDS + 90))
+            local deadline=$((SECONDS + 12 * 60))
+            if [ "$deadline" -gt "$deploy_deadline" ]; then deadline=$deploy_deadline; fi
+
+            while :; do
+              info="$(aws ecs describe-services --cluster "$ECS_CLUSTER" --services "$service" --output json)"
+              primary="$(jq -r '.services[0].deployments[] | select(.status == "PRIMARY") | .taskDefinition' <<<"$info")"
+              state="$(jq -r '.services[0].deployments[] | select(.status == "PRIMARY") | .rolloutState' <<<"$info")"
+              running="$(jq -r '.services[0].runningCount' <<<"$info")"
+              desired="$(jq -r '.services[0].desiredCount' <<<"$info")"
+
+              if [ "$primary" = "$td" ]; then
+                seen=true
+                if [ "$state" = FAILED ]; then break; fi
+                if [ "$state" = COMPLETED ] && [ "$running" = "$desired" ]; then
+                  break
+                fi
+              elif [ "$seen" = true ]; then
+                break                                   # 새 리비전이 보였다가 이전으로 → 롤백
+              elif [ "$SECONDS" -ge "$appear_deadline" ]; then
+                break                                   # 90초가 지나도 새 리비전이 안 보임
+              fi
+              if [ "$SECONDS" -ge "$deadline" ]; then break; fi
+              sleep 15
+            done
+
+            summary "$service: rollout=$state running=$running/$desired 리비전=${primary##*/} 새리비전확인=$seen"
             if [ "$primary" != "$td" ] || [ "$state" != COMPLETED ] || [ "$running" != "$desired" ]; then
-              echo "::error::$service 배포 실패 — 이전 리비전으로 되돌려졌거나 안정화되지 않았다(로그: /ecs/$service)"
+              echo "::error::$service 배포 실패 — 롤백·FAILED·시간 초과·새 리비전 미반영 중 하나(로그: /ecs/$service)"
               return 1
             fi
           }
