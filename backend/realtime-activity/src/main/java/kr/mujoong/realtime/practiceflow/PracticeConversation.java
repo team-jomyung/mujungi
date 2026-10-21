@@ -105,7 +105,7 @@ public final class PracticeConversation implements PracticeSessionExtension {
     private boolean sceneRowCreated;
     private UUID openSlot;
     private boolean awaitingNotice;
-    /** 지금 도입이 기회 문장을 담는가. 도입이 끝까지 재생되지 않으면 거짓으로 바뀐다. */
+    /** 지금 도입이 기회 문장으로 끝나는가. 도입이 끝까지 재생되지 않으면 거짓으로 바뀐다. */
     private boolean introCarriesOpportunity;
     private boolean inputReady;
     private Utterance earlyUtterance;
@@ -179,6 +179,10 @@ public final class PracticeConversation implements PracticeSessionExtension {
             } else if (!state.judgmentOpen()) {
                 judge(utterance);
             }
+        } else if (phase == Phase.SCENE_INTRO && state.sub() == Sub.NONE && introCarriesOpportunity && openSlot != null) {
+            // 도입이 기회 문장으로 끝나면 아이는 도입 재생 중에 대답할 수 있다. 기회 문장을 따로 재생할 때처럼 마지막 전사 하나만 두었다가
+            // 도입이 끝까지 재생되면 OPPORTUNITY 입력 대기에서 곧바로 판정한다
+            earlyUtterance = utterance;
         } else if (phase == Phase.FOCUS && state.sub() == Sub.COACH_UTTERANCE) {
             // 코치 발화에 끼어든 전사는 재생이 끝난 뒤 RETRY 진입에서 곧바로 J5 입력으로 처리한다(§3.3)
             earlyUtterance = utterance;
@@ -503,8 +507,9 @@ public final class PracticeConversation implements PracticeSessionExtension {
             createSceneRow();
         }
         if (state.phase() == Phase.SCENE_INTRO && end != SlotEnd.PLAYED) {
-            // 도입이 끊기면 아이가 설명 끝의 기회 문장을 못 들었을 수 있다: 기회 문장을 따로 재생한다
+            // 도입이 끊기면 아이가 설명 끝의 기회 문장을 못 들었을 수 있다: 기회 문장을 따로 재생하고, 도입 중에 온 전사는 대답으로 보지 않는다
             introCarriesOpportunity = false;
+            earlyUtterance = null;
         }
         Step step = transitions.onSlotEnded(state, end);
         if (step.action() == FlowTransitions.Action.IGNORE) {
@@ -723,8 +728,8 @@ public final class PracticeConversation implements PracticeSessionExtension {
     // ---- 출력 ----
 
     /**
-     * 기회 문장 단계 진입. 방금 끝까지 재생한 도입이 기회 문장을 담았으면 다시 재생하지 않고 바로 아이 말을 기다린다. 상황 다시 설명 뒤의 재진입은
-     * 지금처럼 기회 문장을 재생한다.
+     * 기회 문장 단계 진입. 방금 끝까지 재생한 도입이 기회 문장으로 끝났으면 다시 재생하지 않고 바로 아이 말을 기다린다(도입 중에 온 대답이 있으면
+     * 곧바로 판정한다). 상황 다시 설명 뒤의 재진입은 지금처럼 기회 문장을 재생한다.
      */
     private void opportunity(Phase previous) {
         boolean heard = previous == Phase.SCENE_INTRO && introCarriesOpportunity;

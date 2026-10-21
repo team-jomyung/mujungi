@@ -1019,6 +1019,66 @@ class PracticeConversationTest {
     }
 
     @Test
+    void anAnswerThatArrivesBeforeACarryingIntroFinishesIsJudgedAsTheOpportunityAnswerOnceTheIntroPlayed() {
+        Harness h = carrying("친한 친구");
+        h.activate();
+
+        h.child("그래 쉬자");
+        assertThat(h.out.judgments).as("도입 재생 중에는 판정하지 않는다").isEmpty();
+        int slots = h.out.slots.size();
+        h.played();
+
+        assertThat(h.out.judgments).hasSize(1);
+        assertThat(h.out.lastJudgment().point()).isEqualTo(JudgmentPoint.J2);
+        assertThat(h.out.lastJudgment().seq()).isEqualTo(h.seq);
+        assertThat(h.out.slots).as("기회 문장을 따로 재생하지 않는다").hasSize(slots);
+        assertThat(h.out.timers).as("판정 중이라 무응답으로 기다리지 않는다").doesNotContainKey("no-response");
+        assertThat(spokenTimes(h, STOP)).isEqualTo(1);
+    }
+
+    @Test
+    void onlyTheLastUtteranceHeardDuringACarryingIntroIsJudged() {
+        Harness h = carrying("친한 친구");
+        h.activate();
+        h.child("음");
+        h.child("그래 쉬자");
+        int last = h.seq;
+
+        h.played();
+
+        assertThat(h.out.judgments).hasSize(1);
+        assertThat(h.out.lastJudgment().seq()).isEqualTo(last);
+    }
+
+    @Test
+    void anUtteranceDuringAnInterruptedCarryingIntroIsNotTakenAsTheAnswer() {
+        Harness h = carrying("친한 친구");
+        h.activate();
+        h.child("그래");
+
+        h.end(Playback.INTERRUPTED);
+        assertThat(h.out.lastSlot().text()).isEqualTo(STOP);
+        h.played();
+
+        assertThat(h.out.judgments).as("기회 문장을 다시 듣기 전의 말은 대답으로 보지 않는다").isEmpty();
+        assertThat(h.out.timers).containsKey("no-response");
+    }
+
+    @Test
+    void anUtteranceDuringAnIntroWithoutTheSentenceIsStillIgnored() {
+        Harness h = minimal();
+        h.activate();
+        h.child("그래");
+
+        h.played();
+        assertThat(h.out.lastSlot().text()).isEqualTo(OPPORTUNITY);
+        h.played();
+
+        assertThat(h.out.judgments).isEmpty();
+        assertThat(h.out.timers).containsKey("no-response");
+    }
+
+    @Test
     void theNoResponseReguideStillReplaysTheOpportunitySentenceAfterACarryingIntro() {
         Harness h = carrying("친한 친구");
         h.activate();
