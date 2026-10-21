@@ -33,9 +33,10 @@ import org.junit.jupiter.api.Test;
 @Tag("session-runtime")
 class SessionJoinTest {
 
-    private static final String INTRO = "안녕, 무중이야. 오늘 나랑 이야기할래?";
+    /** 승인 문구 v2(infra/seed/003-u4a-reference.sql)와 같은 꼴의 합성 안내 글. 에코 시험 문장이 이 글의 부분 문자열이다. */
+    private static final String INTRO = "안녕, 무중이야. 나는 사람이 아니라 AI야. 그만하고 싶으면 \"무중아 그만할래\"라고 말해 줘. 오늘 나랑 이야기할래?";
     private static final String REPROMPT = "천천히 생각해도 돼. 이야기할래?";
-    private static final String ALTERNATIVE = "그럼 다른 이야기를 해 볼까?";
+    private static final String ALTERNATIVE = "괜찮아. 그럼 오늘 있었던 일 하나만 이야기해 볼래? 하기 싫으면 안 해도 돼.";
 
     private final SessionHarness h = new SessionHarness();
 
@@ -290,6 +291,64 @@ class SessionJoinTest {
 
         assertThat(plays()).as("빈 전사로 끝난 말은 대답이 아니다 — 미룬 만기가 재안내한다").extracting(PlayApprovedContent::contentCode)
                 .containsExactly(SessionExecutor.INTRO_FREE_TALK, SessionExecutor.RE_PROMPT);
+    }
+
+    // ------------------------------------------------------------------ 참여 관문 안정화 (6): 재생 중 에코
+
+    @Test
+    void anEchoOfTheIntroWhileItPlaysNeitherStartsNorOpensJ1NorReprompts() {
+        withPrompts();
+        toWaitingChild();
+        mark(plays().getFirst(), PlaybackMark.Status.STARTED);
+
+        h.childSays("i-1", "오늘 나랑 이야기할래");
+
+        assertThat(h.executor.status()).as("안내 글의 '할래'가 참여로 분류되지 않는다").isEqualTo(SessionStatus.WAITING_CHILD);
+        assertThat(events(JoinFlow.EVENT_JOIN_RE_PROMPTED)).isEmpty();
+        assertThat(h.logs.events(kr.mujoong.contract.log.EventCode.JUDGMENT_TURN)).as("J1도 열지 않는다").isEmpty();
+        assertThat(h.logs.events(kr.mujoong.contract.log.EventCode.JOIN_REPLY)).singleElement()
+                .satisfies(line -> assertThat(kr.mujoong.testsupport.log.LogCapture.attrs(line))
+                        .containsEntry("joinReply", "ECHO_SUSPECT").containsEntry("joinAction", "NONE")
+                        .containsEntry("devicePlaying", true));
+    }
+
+    @Test
+    void anEchoOfTheStopHintInTheIntroIsNotARefusal() {
+        withPrompts();
+        toWaitingChild();
+        mark(plays().getFirst(), PlaybackMark.Status.STARTED);
+
+        h.childSays("i-1", "그만하고 싶으면 무중아 그만할래라고 말해 줘");
+
+        assertThat(events(JoinFlow.EVENT_JOIN_ALTERNATIVE_OFFERED)).isEmpty();
+        assertThat(plays()).extracting(PlayApprovedContent::contentCode).containsExactly(SessionExecutor.INTRO_FREE_TALK);
+    }
+
+    @Test
+    void anEchoOfTheAlternativeAfterItPlayedDoesNotDecline() {
+        withPrompts();
+        toWaitingChild();
+        mark(plays().getFirst(), PlaybackMark.Status.COMPLETED);
+        h.childSays("i-1", "싫어");
+        mark(plays().getLast(), PlaybackMark.Status.COMPLETED);
+
+        h.childSays("i-2", "하기 싫으면 안 해도 돼");
+
+        assertThat(h.transitions.status(h.sessionId)).as("대안 글의 '싫으면 안 해도'는 거부가 아니다").isEqualTo(SessionStatus.WAITING_CHILD);
+        assertThat(events(JoinFlow.EVENT_JOIN_DECLINED)).isEmpty();
+        h.childSays("i-3", "응");
+        assertThat(h.executor.status()).isEqualTo(SessionStatus.ACTIVE);
+    }
+
+    @Test
+    void aShortYesWhileTheIntroPlaysIsNeverTakenForAnEcho() {
+        withPrompts();
+        toWaitingChild();
+        mark(plays().getFirst(), PlaybackMark.Status.STARTED);
+
+        h.childSays("i-1", "응 이야기할래");
+
+        assertThat(h.executor.status()).as("8자 미만은 안내 글의 일부여도 대답이다(U4b-J33 유지)").isEqualTo(SessionStatus.ACTIVE);
     }
 
     @Test

@@ -166,7 +166,28 @@ PR은 둘로 나눈다.
   `lunaReachTest`를 돌려 두 탐침 모두 **건너뜀**(실호출 없음)을 확인했다. 실호출 결과는 아직 없다(7절 · 사람이 할 일).
 - **문서**: `contracts/ai-io.md` 10.4 한 줄, `contracts/deviations.md` (JG-d).
 
-(다음 항목은 작성 중)
+### (6) 재생 중 에코의 참여 판정 오염 (PR-B, 최소 방어)
+
+- **바꾼 동작**: WAITING_CHILD에서 확정 전사가 다음 둘을 모두 만족하면 '에코 의심'으로 보고 분류도 J1도 하지 않고 버린다. `JOIN_REPLY`만
+  `joinReply=ECHO_SUSPECT` · `joinAction=NONE`으로 남긴다. 열린 J1도 닫지 않는다.
+  1. 정규화(`StopIntentJudge.normalize`: NFKC · 소문자 · 한글 · 영문 · 숫자만) 뒤 **8자 이상**이다.
+  2. 이 세션에서 기기에 보낸 참여 안내(INTRO · RE_PROMPT · DECLINE_ALTERNATIVE, 최대 3개)의 승인 글을 같은 방식으로 정규화한 글 하나의 **부분 문자열**이다.
+  - 재생 중인지는 조건에 넣지 않았다. 재생이 끝난 직후에 전사가 늦게 확정되는 경우도 막기 위해서다(JOIN-GATE-A16). `devicePlaying`은 로그에만 남긴다.
+  - "응" · "어 할래" · "응 이야기할래"처럼 짧은 대답은 8자 미만이라 걸리지 않는다. 재생 중 대답을 곧바로 처리하는 결정(U4b-J33)은 그대로다.
+- **고른 방안과 까닭**: 지시서 최소 방어안 그대로다. 승인 v2 글이 에코로 전사되면 INTRO의 "사람이 **아니**라" · "**그만**", DECLINE_ALTERNATIVE의
+  "하기 **싫**으면 **안 해**도"가 거부로, INTRO 끝의 "이야기**할래**"가 참여로 분류된다. 8은 시간 값이 아닌 상수(`JoinTracker.ECHO_MIN_CHARS`)이고,
+  참여 대답(대개 1 ~ 7자)과 안내 글 조각을 가르는 기준이다(주석 · 이 문서). 안내 글과 아이 말이 한 묶음에 섞인 경우는 (2)의 분할로 줄인다. 그래도 남는
+  오분류는 실키 로그(`devicePlaying=true` 건수와 그 분류)를 본 뒤 정한다.
+- **점검(사람 몫)**: 지금 안내 음성은 334Hz 합성 톤이라 에코가 전사될 일이 적다. 사람 목소리 v3(다른 지시서)가 들어오면 스피커 음량을 키워 `JOIN_REPLY`의
+  `devicePlaying=true` 건수와 `ECHO_SUSPECT` 건수를 센다.
+- **설계 편차**: JG-D3(U4b-J33 "재생 중 대답도 바로 분류"를 긴 에코 의심 전사에 한해 좁힌다).
+- **바꾼 파일**: `dialog/JoinTracker.java`(`ECHO_MIN_CHARS` · `echoOf`), `session/JoinFlow.java`(재생한 안내 글 목록 · 에코 버림).
+- **시험**: `SessionJoinTest` — INTRO 재생 중 "오늘 나랑 이야기할래" → START · J1 · 재안내 없음(`ECHO_SUSPECT` 한 줄), INTRO 재생 중 "그만하고 싶으면 무중아
+  그만할래라고 말해 줘" → `JOIN_ALTERNATIVE_OFFERED` 없음, 대안 재생 뒤 "하기 싫으면 안 해도 돼" → DECLINED 아님(뒤의 "응"으로 ACTIVE), 재생 중 "응 이야기할래"
+  → START. 시험 자료의 INTRO · ALTERNATIVE를 승인 v2 꼴로 바꿔 위 문장이 부분 문자열이 되게 했다(기존 :205 "응" 시험 그대로 통과). `JoinTrackerTest`에
+  `echoOf` 경계(8자 · 문장부호 · 섞인 말 · 빈 목록).
+- **문서**: 로그 값 `ECHO_SUSPECT`는 (0)에서 ai-io 10.15에 넣었다. 계약 변경은 그 밖에 없다.
+
 
 ## 4. 설계 편차
 

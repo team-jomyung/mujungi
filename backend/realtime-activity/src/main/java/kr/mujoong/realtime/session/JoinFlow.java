@@ -73,6 +73,8 @@ final class JoinFlow {
     private boolean speechTickPending;
     /** 마지막으로 기기에 보낸 참여 안내의 승인 글(J1 요청의 COACH 줄, 로그에 쓰지 않는다). 글을 모르면 null. */
     private String lastPromptText;
+    /** 이 세션에서 기기에 보낸 참여 안내의 승인 글(최대 3개, 에코 의심 대조에만 쓴다). */
+    private final List<String> playedPromptTexts = new ArrayList<>();
 
     /** 진단 로그(contracts/ai-io.md 10.15)에 남기는 확정 전사 하나의 모양. 원문은 담지 않는다. */
     private record ReplyMeta(int textLen, int wordCount, InputTranscriptGroup.Shape shape, boolean lateForWindow) {
@@ -130,6 +132,9 @@ final class JoinFlow {
             UUID playbackId = UUID.randomUUID();
             if (ctx.sendControl(new PlayApprovedContent(playbackId, contentCode, item.get().contentVersionId()))) {
                 lastPromptText = item.get().text();
+                if (lastPromptText != null && !lastPromptText.isBlank()) {
+                    playedPromptTexts.add(lastPromptText);
+                }
                 ctx.joinPromptPlaybackId(playbackId);
                 ctx.playback().started(playbackId, contentCode);
                 ctx.timers().arm(Kind.PLAYBACK_EXPIRY, ctx.services().settings().playbackExpiry());
@@ -187,7 +192,8 @@ final class JoinFlow {
      * JoinTracker 동작). 처리마다 진단 로그 한 줄을 남긴다(원문 없음).
      *
      * <p>J1이 열린 동안 온 대답이 불명확하면 J1을 닫지 않고 대기 칸에 둔다(판정 결과를 버리지 않는다). 참여 · 거절 · 주제 거부처럼 분명하면 J1을
-     * SUPERSEDED로 닫고 새 대답을 처음부터 처리한다(docs/join-gate-stabilization.md (3)).
+     * SUPERSEDED로 닫고 새 대답을 처음부터 처리한다(docs/join-gate-stabilization.md (3)). 이 세션에서 재생한 참여 안내 글의 에코로 보이는 전사
+     * ({@link JoinTracker#echoOf})는 분류도 J1도 하지 않고 버린다((6)).
      *
      * @param confirmedAt 확정 전사 시각
      * @param shape 이 전사로 묶인 입력 전사 조각의 모양
@@ -199,6 +205,11 @@ final class JoinFlow {
         // 대답 시각은 말을 시작한 때(그 묶음의 첫 조각을 서버가 받은 시각)다: 창 끝 직전에 시작한 말은 확정이 창 뒤여도 창 안의 대답이다
         Instant at = shape != null ? shape.openedAt() : confirmedAt;
         ReplyMeta meta = meta(transcript, at, shape);
+        if (JoinTracker.echoOf(transcript, playedPromptTexts)) {
+            // 재생한 안내 글이 마이크로 다시 들어와 전사된 것으로 본다: 분류 · J1 없이 버리고 열린 J1도 그대로 둔다
+            logReply("ECHO_SUSPECT", JoinTracker.Action.NONE.name(), meta);
+            return;
+        }
         JoinTracker.Reply reply = JoinTracker.classify(transcript);
         if (reply == JoinTracker.Reply.UNCLEAR && judgment.openPoint() == JudgmentPoint.J1) {
             held = new PendingReply(transcript, at, confirmedAt, meta);

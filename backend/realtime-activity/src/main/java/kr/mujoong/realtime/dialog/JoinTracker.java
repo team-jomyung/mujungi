@@ -4,6 +4,7 @@ import java.text.Normalizer;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
 import java.util.regex.Pattern;
@@ -74,6 +75,11 @@ public final class JoinTracker {
 
     /** 안내 최대 횟수(처음 · 재안내 · 대안, B17). */
     public static final int MAX_PROMPTS = 3;
+    /**
+     * 에코로 의심하는 최소 글자 수(정규화 뒤, 시간 값 아님). 참여 대답은 짧고("응" 1자 · "어 할래" 3자 · "나도 이야기할래" 7자) 안내 글은 길어서, 이보다 짧은
+     * 전사는 안내 글의 일부여도 아이 대답으로 본다 — 재생 중 대답을 바로 처리하는 결정(U4b-J33)을 지킨다.
+     */
+    public static final int ECHO_MIN_CHARS = 8;
 
     private static final List<String> REFUSE_WORDS = List.of("싫어", "싫은데", "안할래", "안해", "안하고싶", "하기싫",
             "아니", "아뇨", "노노", "안돼", "그만", "못하겠", "안할거", "안좋", "별로");
@@ -256,6 +262,23 @@ public final class JoinTracker {
 
     private static List<String> normalized(String... words) {
         return Arrays.stream(words).map(StopIntentJudge::normalize).toList();
+    }
+
+    /**
+     * 확정 전사가 재생한 안내 글의 에코로 보이는가: 정규화(종료 판정기와 같다) 뒤 {@link #ECHO_MIN_CHARS}자 이상이고, 같은 방식으로 정규화한 안내 글
+     * 하나의 부분 문자열이다. 기기 스피커 소리가 마이크로 다시 들어와 전사되면 안내 글의 "아니라" · "그만" · "하기 싫으면 안 해도"가 거부로 분류되는 것을 막는다.
+     */
+    public static boolean echoOf(String transcript, Collection<String> promptTexts) {
+        String text = StopIntentJudge.normalize(transcript);
+        if (text.codePointCount(0, text.length()) < ECHO_MIN_CHARS) {
+            return false;
+        }
+        for (String prompt : promptTexts) {
+            if (prompt != null && StopIntentJudge.normalize(prompt).contains(text)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** 정규화(종료 판정기와 같다) 뒤 글자 수. 진단 로그에 쓴다(원문 대신 모양만 남긴다). */

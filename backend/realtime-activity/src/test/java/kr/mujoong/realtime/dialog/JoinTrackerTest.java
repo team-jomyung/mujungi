@@ -182,6 +182,18 @@ class JoinTrackerTest {
         assertThat(JoinTracker.classify(text)).isEqualTo(expected);
     }
 
+    @Test
+    void anEchoNeedsEightNormalizedCharactersThatAppearInsideAPlayedPrompt() {
+        java.util.List<String> prompts = java.util.List.of("괜찮아. 그럼 오늘 있었던 일 하나만 이야기해 볼래? 하기 싫으면 안 해도 돼.");
+
+        assertThat(JoinTracker.echoOf("하기 싫으면 안 해도 돼", prompts)).isTrue();
+        assertThat(JoinTracker.echoOf("하기 싫으면, 안 해도!", prompts)).as("문장부호 · 공백은 정규화로 지운다").isTrue();
+        assertThat(JoinTracker.echoOf("안 해도 돼", prompts)).as("8자 미만").isFalse();
+        assertThat(JoinTracker.echoOf("이야기해 볼래 공룡 얘기", prompts)).as("안내 글에 없는 말이 섞였다").isFalse();
+        assertThat(JoinTracker.echoOf("하기 싫으면 안 해도 돼", java.util.List.of())).isFalse();
+        assertThat(JoinTracker.ECHO_MIN_CHARS).isEqualTo(8);
+    }
+
     private static JoinTracker repromptedAt(Instant start) {
         JoinTracker value = new JoinTracker(WINDOW);
         value.promptPlayed(start);
