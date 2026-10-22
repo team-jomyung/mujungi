@@ -95,6 +95,11 @@ public final class TranscriptWriter {
         return openAi.seq;
     }
 
+    /** Stable transcript row identifier for diagnostics; zero means no row has been allocated. */
+    public int diagnosticSequence(Held held) {
+        return held != null ? (held.row == null ? 0 : held.row.seq) : (openAi == null ? 0 : openAi.seq);
+    }
+
     /** 열린 AI 행이 있는가. */
     public boolean hasOpenAi() {
         return openAi != null;

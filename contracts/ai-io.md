@@ -491,3 +491,12 @@ realtime 새 연습 흐름(U12)이 읽는 설정이다. 시간 값이 아니며 
 보호자의 입력 원문을 Live 지시문에 넣지 않는다. Core가 고정 키워드와 상황 구분에서 추출한 `conversationGuide.topics`(열거형 1~3개)와 `sourceType`(SEEN, HEARD_FROM_CHILD, UNSPECIFIED)만 자유대화 시작 내부 요청에 선택적으로 포함한다. 이름·연락처·사건 주장·임의 지시문을 담을 문자열 필드는 없다. 아이 기본 정보의 기존 childContext(이름·나이·관심사)는 유지한다.
 
 Realtime은 고정된 중립 질문으로 바꾸며 보호자의 주장을 아이가 말한 사실로 간주하지 않는다. 출처를 아이에게 노출하거나 답을 유도하지 않는다. 지원하지 않는 주제는 일상 질문으로 대체한다. 연습대화에는 이 guide를 전달하지 않는다. 대화 후 구조화는 개인정보를 정리한 원래 보호자 입력과 실제 아이 발화를 각각 사용하고, 출처와 발화 근거를 구분한다. 새 optional 필드 수신을 지원하는 Realtime을 Core보다 먼저 적용한다.
+
+
+### 개별 출력 폐기 감사 로그 (`OUTPUT_DISCARDED`)
+
+- `realtime/OutputGate`, INFO, 반복 병합 없음. 기존 `ownerHash`(세션 해시)·세션 `traceId`와 `seq`로 해당 AI 전사 행을 찾는다. `seq=0`은 아직 전사 행이 없는 취소다.
+- 허용 속성: `seq`, `discardReason`, `discardDetail`, `outputGeneration`, `deviceGeneration`, `currentDeviceGeneration`, `segmentComplete`, `audioBytes`, `transcriptChars`, `expectedChars`, `generatedSpeech`, `practicePhase`, `practiceSub`, `tProviderFirstOut`, `tTranscriptFinal`. 없는 자료는 생략한다.
+- `discardReason`은 기존 게이트 사유(무효화는 `VOIDED`), `discardDetail`은 `DiscardDetail`의 고정 코드다. `GATE_EMPTY`를 구간 불완전·빈 전사·음성 없음·홀수 PCM 길이·검사 예외로 구분한다. 대본 불일치, 금지 표현, 공급자 오류/음성 없음, 아이 입력에 의한 미재생 취소, Jev 차단/시간 초과/오류/무효화 및 전송 실패도 구분한다.
+- 판정 우선순위와 폐기·재시도·종료·Jev 정책은 변경하지 않는다. 음성·전사·승인 대본·보호자 메모·예외 메시지·원본 세션 UUID는 로그에 쓰지 않는다. 길이와 시간은 진단용이며 표시 승인이나 안전 검사 근거를 대신하지 않는다.
+- 연습 단계는 폐기를 관측한 시점이다. 제브 대기 중 보관된 구간은 보관 행의 `seq`를 사용해 뒤에 열린 AI 행과 혼동하지 않는다. 기존 기록에 소급해 사유를 추정하지 않는다.

@@ -1,5 +1,17 @@
 package kr.mujoong.contract.log;
 
+import static kr.mujoong.contract.log.AttrKey.DISCARD_REASON;
+import static kr.mujoong.contract.log.AttrKey.DISCARD_DETAIL;
+import static kr.mujoong.contract.log.AttrKey.OUTPUT_GENERATION;
+import static kr.mujoong.contract.log.AttrKey.DEVICE_GENERATION;
+import static kr.mujoong.contract.log.AttrKey.CURRENT_DEVICE_GENERATION;
+import static kr.mujoong.contract.log.AttrKey.SEGMENT_COMPLETE;
+import static kr.mujoong.contract.log.AttrKey.AUDIO_BYTES;
+import static kr.mujoong.contract.log.AttrKey.TRANSCRIPT_CHARS;
+import static kr.mujoong.contract.log.AttrKey.EXPECTED_CHARS;
+import static kr.mujoong.contract.log.AttrKey.GENERATED_SPEECH;
+import static kr.mujoong.contract.log.AttrKey.PRACTICE_PHASE;
+import static kr.mujoong.contract.log.AttrKey.PRACTICE_SUB;
 import static kr.mujoong.contract.log.AttrKey.ATTEMPT;
 import static kr.mujoong.contract.log.AttrKey.BREAKER_OPEN_SEC;
 import static kr.mujoong.contract.log.AttrKey.CHANNEL;
@@ -90,7 +102,7 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * 사건 코드 19종(OD-2: 요구 문서 15종 + APP_ERROR · QUEUE_PRESSURE, U9 SD6: LUNA_CALL · LUNA_STARTUP). 코드마다 기본 수준 · 허용 attrs
+ * 사건 코드 20종(OD-2: 요구 문서 15종 + APP_ERROR · QUEUE_PRESSURE, U9 SD6: LUNA_CALL · LUNA_STARTUP). 코드마다 기본 수준 · 허용 attrs
  * 키 · 병합 대상 여부를 정한다. 허용 표에 없는 키는 쓸 수 없다({@link EventLog}가 막는다). LUNA_CALL은 시도마다 한 줄이어야 해서(BR6.1)
  * 병합하지 않는다.
  */
@@ -106,6 +118,10 @@ public enum EventCode {
             EnumSet.of(SEQ, SPEAKER, T_TRANSCRIPT_FINAL, T_VIEW_ITEM_READY, T_VIEW_ITEM_FIRST_SERVED)),
     PLAYBACK_MARK_STOPPED(Level.INFO, false, false,
             EnumSet.of(STOP_CAUSE, T_DEVICE_OBSERVED, T_SERVER_RECV, CLOCK_OFFSET_MS, RTT_MS)),
+    OUTPUT_DISCARDED(Level.INFO, false, false, EnumSet.of(SEQ, DISCARD_REASON, DISCARD_DETAIL,
+            OUTPUT_GENERATION, DEVICE_GENERATION, CURRENT_DEVICE_GENERATION, SEGMENT_COMPLETE, AUDIO_BYTES,
+            TRANSCRIPT_CHARS, EXPECTED_CHARS, GENERATED_SPEECH, PRACTICE_PHASE, PRACTICE_SUB,
+            T_PROVIDER_FIRST_OUT, T_TRANSCRIPT_FINAL)),
     DEVICE_CONNECTION(Level.INFO, false, false, EnumSet.of(FROM, TO, CLOSE_CODE)),
     INTERNAL_HTTP(Level.INFO, true, false,
             EnumSet.of(TARGET, OUTCOME, STATUS_CODE, DURATION_MS, ATTEMPT, REPEAT)),

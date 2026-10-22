@@ -257,6 +257,10 @@ public interface PracticeSessionExtension {
 
     default Progress progress() { return null; }
 
+    /** Fixed state identifiers for operational diagnostics; no user/model text. */
+    default String diagnosticPhase() { return "NONE"; }
+    default String diagnosticSub() { return "NONE"; }
+
     default void onStopping() { }
 
     default Duration settlementDelay(Instant now) { return Duration.ZERO; }

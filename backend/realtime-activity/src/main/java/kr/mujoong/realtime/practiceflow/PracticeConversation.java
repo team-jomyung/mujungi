@@ -300,6 +300,10 @@ public final class PracticeConversation implements PracticeSessionExtension {
         return new Progress(state.goalIndex() + 1, pack.goals().size(), pack.goals().get(state.goalIndex()).goalName(), stage());
     }
 
+    /** Read-only diagnostic state; does not update display progress. */
+    public String diagnosticPhase() { return state.phase().name(); }
+    public String diagnosticSub() { return state.sub().name(); }
+
     private String stage() {
         if (state.phase() == Phase.CLOSING) {
             return lastStage;

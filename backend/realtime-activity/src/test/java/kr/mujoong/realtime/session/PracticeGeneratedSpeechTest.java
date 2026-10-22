@@ -45,6 +45,9 @@ class PracticeGeneratedSpeechTest {
         assertThat(extension.endFacts(slot)).containsExactly(PracticePorts.Playback.INTERRUPTED);
         assertThat(h.link.outputs()).isEmpty();assertThat(guard.count()).isZero();
         assertThat(h.executor.status()).isEqualTo(kr.mujoong.contract.status.SessionStatus.ACTIVE);
+        assertThat(kr.mujoong.testsupport.log.LogCapture.attrs(h.logs.last(
+                kr.mujoong.contract.log.EventCode.OUTPUT_DISCARDED).orElseThrow()))
+                .containsEntry("discardDetail", "INPUT_SUPERSEDED_UNPLAYED");
         h.speak(" 말해도 돼.",4800);h.advance(Duration.ofMillis(801));
         assertThat(h.link.outputs()).isEmpty();
         UUID next=UUID.randomUUID();extension.replySlot=next;
@@ -70,6 +73,20 @@ class PracticeGeneratedSpeechTest {
         h.advance(SessionHarness.SETTINGS.inputTranscriptQuiet().plusMillis(1));
         assertThat(judge.last().request().point()).isEqualTo(kr.mujoong.realtime.judgment.JudgmentPoint.J6);
         assertThat(h.link.outputs()).isEmpty();assertThat(guard.count()).isZero();
+    }
+
+    @Test void approvedMismatchIsDistinctFromAForbiddenPattern() {
+        start(true);
+        PracticeSpeech speech = PracticeSpeech.scenario(UUID.randomUUID(), UUID.randomUUID(), 1,
+                "친구", "나는 블록 놀이를 하고 싶어.", PracticeSpeech.ReadingCue.SCENE);
+        assertThat(extension.out.speak(speech)).isTrue(); h.settleSend();
+        say("나는 카드 놀이를 하고 싶어.");
+        assertThat(kr.mujoong.testsupport.log.LogCapture.attrs(h.logs.last(
+                kr.mujoong.contract.log.EventCode.OUTPUT_DISCARDED).orElseThrow()))
+                .containsEntry("discardDetail", "APPROVED_TEXT_MISMATCH")
+                .containsEntry("generatedSpeech", false)
+                .containsKey("expectedChars");
+        assertThat(guard.count()).isZero(); assertThat(h.link.outputs()).isEmpty();
     }
 
     private static final String INSTRUCTION = "친구로서 방금 말을 한 번 더 물어보세요";
@@ -152,6 +169,10 @@ class PracticeGeneratedSpeechTest {
             assertThat(event.mode()).isEqualTo(GuardrailRequest.Mode.PRACTICE_PEER);
         });
         assertThat(extension.endFacts(slot)).containsExactly(PracticePorts.Playback.FAILED);
+        var discarded = h.logs.events(kr.mujoong.contract.log.EventCode.OUTPUT_DISCARDED);
+        assertThat(discarded).hasSize(2);
+        assertThat(discarded).allSatisfy(e -> assertThat(kr.mujoong.testsupport.log.LogCapture.attrs(e))
+                .containsEntry("discardDetail", "GUARDRAIL_BLOCK"));
     }
 
     @Test
@@ -165,6 +186,9 @@ class PracticeGeneratedSpeechTest {
 
         assertThat(h.link.outputs()).isEmpty();
         assertThat(extension.endFacts(slot)).containsExactly(PracticePorts.Playback.FAILED);
+        assertThat(kr.mujoong.testsupport.log.LogCapture.attrs(h.logs.last(
+                kr.mujoong.contract.log.EventCode.OUTPUT_DISCARDED).orElseThrow()))
+                .containsEntry("discardDetail", "GUARDRAIL_DISABLED");
     }
 
     @Test

@@ -51,6 +51,7 @@ import kr.mujoong.realtime.judgment.NextAction;
 import kr.mujoong.realtime.gate.ApprovedPlayback;
 import kr.mujoong.realtime.gate.ClosingSequence;
 import kr.mujoong.realtime.gate.GateDecision;
+import kr.mujoong.realtime.gate.DiscardDetail;
 import kr.mujoong.realtime.gate.OutputGate;
 import kr.mujoong.realtime.gate.OutputGeneration;
 import kr.mujoong.realtime.gate.SegmentBuffer;
@@ -1662,6 +1663,8 @@ public final class SessionExecutor {
         @Override
         public void discardSilent(SegmentBuffer.Sealed sealed, TranscriptWriter.Held held,
                 GateDecision.DiscardReason reasonOrNull) {
+            logOutputDiscard(sealed, held, reasonOrNull, reasonOrNull == null ? DiscardDetail.GUARDRAIL_VOIDED
+                    : defaultDiscardDetail(reasonOrNull), null);
             if (reasonOrNull != null) {
                 ctx.services().metrics().gateDiscard(reasonOrNull.name());
             }
@@ -2344,7 +2347,8 @@ public final class SessionExecutor {
             case NOT_YET -> ctx.timers().arm(Kind.SEGMENT_QUIET, Duration.between(now, result.waitUntil()));
             case ABANDON_NO_AUDIO -> {
                 if (inOutputRange() && ctx.segment().isOpen()) {
-                    discard(ctx.segment().sealByGeneration(ctx.outputGeneration().get()), GateDecision.DiscardReason.GATE_EMPTY);
+                    discard(ctx.segment().sealByGeneration(ctx.outputGeneration().get()), GateDecision.DiscardReason.GATE_EMPTY,
+                            true, null, true, DiscardDetail.PROVIDER_NO_AUDIO);
                 }
                 ctx.timers().arm(Kind.SEGMENT_QUIET, ctx.services().settings().segmentQuiet());
             }
@@ -2443,7 +2447,8 @@ public final class SessionExecutor {
         }
         // 응답 도중 오류면 열린 구간은 끝까지 오지 않은 응답이다: 응답 끝 사건이 없으니 완결로 볼 수 없어 불완전으로 닫아 폐기하고 대기 문구로 잇는다
         if (inOutputRange() && ctx.segment().isOpen()) {
-            discard(ctx.segment().sealByGeneration(ctx.outputGeneration().get()), GateDecision.DiscardReason.GATE_EMPTY);
+            discard(ctx.segment().sealByGeneration(ctx.outputGeneration().get()), GateDecision.DiscardReason.GATE_EMPTY,
+                    true, null, true, DiscardDetail.PROVIDER_ERROR);
         }
     }
 
@@ -2766,7 +2771,9 @@ public final class SessionExecutor {
 
     private void yieldUnplayedPracticeToInput(SegmentBuffer.Sealed sealed) {
         guardrail.onDiscardedBeforeCheck();
-        if(sealed!=null)recordDiscard(sealed,null,GateDecision.DiscardReason.GATE_EMPTY,true);
+        if(sealed!=null)recordDiscard(sealed,null,GateDecision.DiscardReason.GATE_EMPTY,true,
+                DiscardDetail.INPUT_SUPERSEDED_UNPLAYED);
+        else logOutputDiscard(null, null, null, DiscardDetail.INPUT_SUPERSEDED_UNPLAYED, pendingPracticeSpeech);
         var speech=pendingPracticeSpeech;
         pendingPracticeSpeech=null;
         practiceHold=true;
@@ -2808,11 +2815,13 @@ public final class SessionExecutor {
         // U11 W8-5: 공급자 출력 끝(tTranscriptFinal)은 구간의 마지막 조각 시각이다(봉인 시각이 아니라 800ms 대기가 지표에 섞이지 않는다)
         ctx.transcripts().aiDone(sealed.lastOutAt());
         try {
-            GateDecision inspected = ctx.services().gate().inspect(sealed);
+            OutputGate.Inspection inspection = ctx.services().gate().inspectDetailed(sealed);
+            GateDecision inspected = inspection.decision();
             if (!inspected.passed()) {
                 // 금지 패턴은 대화가 넘어갔어도 교정한다(같은 표현을 되풀이하지 않게)
                 discard(sealed, inspected.reason(),
-                        !movedOn || inspected.reason() == GateDecision.DiscardReason.GATE_PATTERN);
+                        !movedOn || inspected.reason() == GateDecision.DiscardReason.GATE_PATTERN,
+                        null, true, inspection.detail());
                 return;
             }
             boolean practiceControlled = practice != null && practice.controlsOutput();
@@ -2822,7 +2831,8 @@ public final class SessionExecutor {
                 // (기능 설계 3.5): 열린 생성형 슬롯의 새 발화는 제브(연습 모드)가 ALLOW한 것만 재생된다. 제브가 꺼져 있거나 시작이
                 // 실패하면 폐기한다(fail-closed). 원문 일치로 제브를 건너뛸 수 없다
                 if (!guardrail.enabled() || ctx.status() != SessionStatus.ACTIVE) {
-                    discard(sealed, GateDecision.DiscardReason.GATE_PATTERN, false);
+                    discard(sealed, GateDecision.DiscardReason.GATE_PATTERN, false, null, true,
+                            !guardrail.enabled() ? DiscardDetail.GUARDRAIL_DISABLED : DiscardDetail.SESSION_INACTIVE);
                     return;
                 }
                 try {
@@ -2837,7 +2847,8 @@ public final class SessionExecutor {
                 if (pendingPracticeSpeech != null && !pendingPracticeSpeech.generated()) {
                     var rejectedSpeech = pendingPracticeSpeech;
                     guardrail.onDiscardedBeforeCheck();
-                    recordDiscard(sealed, null, GateDecision.DiscardReason.GATE_PATTERN, true);
+                    recordDiscard(sealed, null, GateDecision.DiscardReason.GATE_PATTERN, true,
+                            DiscardDetail.APPROVED_TEXT_MISMATCH);
                     pendingPracticeSpeech = null;
                     practiceHold = true;
                     bumpOutput(OutputGeneration.BumpReason.PRACTICE_DISCARD);
@@ -2846,7 +2857,8 @@ public final class SessionExecutor {
                             rejectedSpeech.correlationId(), rejectedSpeech)));
                     return;
                 }
-                discard(sealed, GateDecision.DiscardReason.GATE_PATTERN, false);
+                discard(sealed, GateDecision.DiscardReason.GATE_PATTERN, false, null, true,
+                        DiscardDetail.NO_OPEN_PRACTICE_SLOT);
                 return;
             }
             if (practiceControlled && guardrail.enabled()) {
@@ -2874,7 +2886,8 @@ public final class SessionExecutor {
             // 게이트 처리 중 예외는 폐기한다(fail-closed, SD-17)
             ctx.services().events().appError(EventLog.Component.OUTPUT_GATE, e);
             if (ctx.transcripts().hasOpenAi()) {
-                discard(sealed, GateDecision.DiscardReason.GATE_EMPTY, !movedOn);
+                discard(sealed, GateDecision.DiscardReason.GATE_EMPTY, !movedOn,
+                        null, true, DiscardDetail.GATE_PROCESSING_EXCEPTION);
             }
         }
     }
@@ -2895,7 +2908,13 @@ public final class SessionExecutor {
                 ctx.services().recorder().isDegraded(ctx.plan().sessionId()),
                 () -> target == null ? Optional.empty() : target.reserveAudio(sealed.totalBytes()));
         if (!rechecked.decision().passed()) {
-            discard(sealed, rechecked.decision().reason(), true, held, ownsLatency);
+            DiscardDetail detail = defaultDiscardDetail(rechecked.decision().reason());
+            if (rechecked.decision().reason() == GateDecision.DiscardReason.NOT_ACTIVE) {
+                detail = ctx.status() != SessionStatus.ACTIVE ? DiscardDetail.SESSION_INACTIVE
+                        : sealed.generation() != ctx.outputGeneration().get() ? DiscardDetail.STALE_GENERATION
+                        : DiscardDetail.DEVICE_UNAVAILABLE;
+            }
+            discard(sealed, rechecked.decision().reason(), true, held, ownsLatency, detail);
             return false;
         }
         send(sealed, target, rechecked.reservation(), held, ownsLatency);
@@ -2915,6 +2934,7 @@ public final class SessionExecutor {
             ctx.services().latency().gatePassed(ctx.plan().sessionId(), playbackId, passAt);
         }
         // 유효한 ALLOW 뒤에도 표시를 보류하고, 기기 STARTED 때 표시한다. 수신용 seq는 유지한다.
+        if (held == null) held = ctx.transcripts().aiHold();
         ctx.transcripts().awaitPlayback(playbackId, held, sealed.transcript());
         var speech = pendingPracticeSpeech;
         if (speech != null) {
@@ -2932,6 +2952,8 @@ public final class SessionExecutor {
                 firstFrameAt -> ctx.services().latency().firstFrameSent(ctx.plan().sessionId(), playbackId, firstFrameAt),
                 aiRecording == null ? frame -> { } : aiRecording::ai);
         if (!target.sendOutput(bundle)) {
+            logOutputDiscard(sealed, held, GateDecision.DiscardReason.OUTBOUND_FULL,
+                    DiscardDetail.AUDIO_SEND_FAILED, speech);
             ctx.transcripts().playbackAbandoned(playbackId, ctx.services().clock().now());
             ctx.services().metrics().gateDiscard(GateDecision.DiscardReason.OUTBOUND_FULL.name());
             if (speech != null) {
@@ -2959,11 +2981,16 @@ public final class SessionExecutor {
      */
     private void discard(SegmentBuffer.Sealed sealed, GateDecision.DiscardReason reason, boolean correct,
             TranscriptWriter.Held held, boolean ownsLatency) {
+        discard(sealed, reason, correct, held, ownsLatency, defaultDiscardDetail(reason));
+    }
+
+    private void discard(SegmentBuffer.Sealed sealed, GateDecision.DiscardReason reason, boolean correct,
+            TranscriptWriter.Held held, boolean ownsLatency, DiscardDetail detail) {
         if (!isGuardrailReason(reason)) {
             // U13 훅: 재지시 응답이 제브에 닿기 전에 어떤 길로든 폐기되면 협력 객체는 RETRYING에서 IDLE로 돌아온다. 마무리는 아래가 한다
             guardrail.onDiscardedBeforeCheck();
         }
-        recordDiscard(sealed, held, reason, ownsLatency);
+        recordDiscard(sealed, held, reason, ownsLatency, detail);
         if (pendingPracticeSpeech != null) {
             var speech = pendingPracticeSpeech; pendingPracticeSpeech = null; practiceHold = true;
             bumpOutput(OutputGeneration.BumpReason.PRACTICE_DISCARD);
@@ -2986,11 +3013,57 @@ public final class SessionExecutor {
     /** 폐기의 기록 부분: 지표 · 지연 기록 · AI 행 FINAL 거짓(보관 행이면 그 손잡이로). */
     private void recordDiscard(SegmentBuffer.Sealed sealed, TranscriptWriter.Held held, GateDecision.DiscardReason reason,
             boolean ownsLatency) {
+        recordDiscard(sealed, held, reason, ownsLatency, defaultDiscardDetail(reason));
+    }
+
+    private void recordDiscard(SegmentBuffer.Sealed sealed, TranscriptWriter.Held held, GateDecision.DiscardReason reason,
+            boolean ownsLatency, DiscardDetail detail) {
+        logOutputDiscard(sealed, held, reason, detail, held == null ? pendingPracticeSpeech : null);
         ctx.services().metrics().gateDiscard(reason.name());
         if (ownsLatency) {
             ctx.services().latency().gateDiscarded(ctx.plan().sessionId());
         }
         closeAiRow(sealed, held);
+    }
+
+    private static DiscardDetail defaultDiscardDetail(GateDecision.DiscardReason reason) {
+        return switch (reason) {
+            case GATE_EMPTY -> DiscardDetail.UNCLASSIFIED_GATE_EMPTY;
+            case GATE_PATTERN -> DiscardDetail.OUTPUT_POLICY_MISMATCH;
+            case NOT_ACTIVE -> DiscardDetail.SESSION_INACTIVE;
+            case OUTBOUND_FULL -> DiscardDetail.AUDIO_QUEUE_FULL;
+            default -> DiscardDetail.valueOf(reason.name());
+        };
+    }
+
+    /** One unmerged event per discarded segment. No raw transcript, audio, prompt, or exception message. */
+    private void logOutputDiscard(SegmentBuffer.Sealed sealed, TranscriptWriter.Held held,
+            GateDecision.DiscardReason reason, DiscardDetail detail,
+            kr.mujoong.realtime.voice.PracticeSpeech speech) {
+        ctx.services().events().log(EventCode.OUTPUT_DISCARDED, EventLog.Component.OUTPUT_GATE,
+                ctx.plan().sessionId(), ctx.plan().traceId(), entry -> {
+                    entry.attr(AttrKey.SEQ, ctx.transcripts().diagnosticSequence(held))
+                            .attr(AttrKey.DISCARD_REASON, reason == null ? "VOIDED" : reason.name())
+                            .attr(AttrKey.DISCARD_DETAIL, detail.name())
+                            .attr(AttrKey.CURRENT_DEVICE_GENERATION, ctx.outputGeneration().get())
+                            .attr(AttrKey.PRACTICE_PHASE, practice == null ? "NONE" : practice.diagnosticPhase())
+                            .attr(AttrKey.PRACTICE_SUB, practice == null ? "NONE" : practice.diagnosticSub());
+                    if (sealed != null) {
+                        entry.attr(AttrKey.OUTPUT_GENERATION, sealed.outputGen())
+                                .attr(AttrKey.DEVICE_GENERATION, sealed.generation())
+                                .attr(AttrKey.SEGMENT_COMPLETE, sealed.complete())
+                                .attr(AttrKey.AUDIO_BYTES, sealed.totalBytes())
+                                .attr(AttrKey.TRANSCRIPT_CHARS, sealed.transcript() == null ? 0
+                                        : sealed.transcript().codePointCount(0, sealed.transcript().length()));
+                        if (sealed.firstOutAt() != null) entry.attr(AttrKey.T_PROVIDER_FIRST_OUT, sealed.firstOutAt());
+                        if (sealed.lastOutAt() != null) entry.attr(AttrKey.T_TRANSCRIPT_FINAL, sealed.lastOutAt());
+                    }
+                    if (speech != null) {
+                        entry.attr(AttrKey.GENERATED_SPEECH, speech.generated());
+                        if (!speech.generated()) entry.attr(AttrKey.EXPECTED_CHARS,
+                                speech.text().codePointCount(0, speech.text().length()));
+                    }
+                });
     }
 
     private void closeAiRow(SegmentBuffer.Sealed sealed, TranscriptWriter.Held held) {
