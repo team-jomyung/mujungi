@@ -1,14 +1,12 @@
 package kr.mujoong.core.db;
 
 import static kr.mujoong.core.db.CoreDbFixtures.T0;
-import static kr.mujoong.core.db.CoreDbFixtures.migrationVersions;
 import static kr.mujoong.core.db.CoreDbFixtures.query;
 import static kr.mujoong.core.db.CoreDbFixtures.single;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityManagerFactory;
-import java.io.IOException;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.HashMap;
@@ -102,7 +100,7 @@ class CoreSchemaIT {
     }
 
     @Test
-    void migrationsCreateTheRequiredCoreTablesOwnedByTheMigrationRole() throws SQLException, IOException {
+    void migrationsCreateTheRequiredCoreTablesOwnedByTheMigrationRole() throws SQLException {
         try (Connection owner = postgres.connect(Role.OWNER)) {
             List<List<Object>> tables = query(owner,
                     "select tablename, tableowner from pg_tables where schemaname = 'core' order by tablename");
@@ -116,7 +114,7 @@ class CoreSchemaIT {
             // 저장소의 core 마이그레이션 파일이 버전 순서대로 모두 성공으로 있다(J116). core 위치가 먼저라 기준선 행은 없다.
             List<List<Object>> history = query(owner,
                     "select version, type, success from flyway.core_schema_history order by installed_rank");
-            assertThat(history).containsExactlyElementsOf(migrationVersions(postgres.repoRoot(), MigrationSet.CORE).stream()
+            assertThat(history).containsExactlyElementsOf(postgres.migrationVersions(MigrationSet.CORE).stream()
                     .map(version -> List.<Object>of(version, "SQL", true)).toList());
         }
     }

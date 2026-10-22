@@ -24,7 +24,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -246,8 +245,13 @@ class RealtimeMetricsScrapeIT {
                 "openConnections", "sessionsActive").doesNotContainKeys("restTotal", "viewTotal", "breakerOpenSec");
     }
 
+    /**
+     * 실제 풀(연결 1개)에서 다른 빌림이 연결을 기다렸다가 해제 뒤 받으면, 대기 측정기가 Hikari의 Micrometer 추적기 앞에 걸려
+     * 빌림 두 번이 그대로 재지고 우리 초과 지표가 모니터 합계와 같다. 시간 의존 없이 실제 대기 스레드를 확인한 뒤 해제한다.
+     * 대기 시간 · 임계값 판정(초과 횟수 · 구간 최댓값)은 DbPoolWaitMonitorTest가 본다.
+     */
     @Test
-    void aRealPoolWaitOverTheThresholdIsCountedWhileHikariStillReports() throws Exception {
+    void aRealPoolWaitIsMeasuredAndWiredToTheMetricsWhileHikariStillReports() throws Exception {
         SimpleMeterRegistry registry = new SimpleMeterRegistry();
         RealtimeMetrics metrics = new RealtimeMetrics(registry);
         DefaultListableBeanFactory beans = new DefaultListableBeanFactory();
@@ -263,30 +267,28 @@ class RealtimeMetricsScrapeIT {
             pool.setPassword(env.postgres.password(Role.REALTIME_APP));
             pool.setMaximumPoolSize(1);
             monitor.apply(pool);
-            CountDownLatch holding = new CountDownLatch(1);
-            CompletableFuture<Void> holder = CompletableFuture.runAsync(() -> {
-                try (Connection held = pool.getConnection()) {
-                    holding.countDown();
-                    Thread.sleep(Duration.ofMillis(300));
-                } catch (Exception e) {
-                    throw new IllegalStateException(e);
-                }
-            });
-            assertThat(holding.await(WAIT.toSeconds(), TimeUnit.SECONDS)).isTrue();
 
-            try (Connection waited = pool.getConnection()) {
-                assertThat(waited.isValid(1)).isTrue();
+            CompletableFuture<Boolean> waiter;
+            try (Connection held = pool.getConnection()) {
+                assertThat(held.isValid(1)).isTrue();
+                waiter = CompletableFuture.supplyAsync(() -> {
+                    try (Connection waited = pool.getConnection()) {
+                        return waited.isValid(1);
+                    } catch (Exception e) {
+                        throw new IllegalStateException(e);
+                    }
+                });
+                // 연결 하나를 쥔 채로 두 번째 빌림이 실제로 기다리기 시작할 때까지 본 뒤 해제한다
+                awaitTrue(() -> pool.getHikariPoolMXBean().getThreadsAwaitingConnection() >= 1, "대기 스레드");
             }
-            holder.get(WAIT.toSeconds(), TimeUnit.SECONDS);
+            assertThat(waiter.get(WAIT.toSeconds(), TimeUnit.SECONDS)).as("해제 뒤 기다린 빌림이 끝난다").isTrue();
             assertThat(registry.find("hikaricp.connections.acquire").tag("pool", "wait-probe").timer())
                     .as("품은 Micrometer 추적기가 빌림 두 번을 그대로 잰다").isNotNull()
                     .satisfies(timer -> assertThat(timer.count()).isEqualTo(2));
         }
 
-        // 기다린 빌림은 반드시 센다. 첫 빌림은 바로 받지만 기계가 바쁘면 10ms를 넘을 수 있어 하나 더 셀 수 있다(그것도 실제 초과다)
-        assertThat(monitor.exceededTotal()).isBetween(1L, 2L);
-        assertThat(metrics.count(RealtimeMetrics.DB_POOL_WAIT_EXCEEDED)).isEqualTo((double) monitor.exceededTotal());
-        assertThat(monitor.drainWindow().maxWait()).as("구간 최댓값은 붙잡힌 시간 가까이").isGreaterThan(Duration.ofMillis(100));
+        assertThat(metrics.count(RealtimeMetrics.DB_POOL_WAIT_EXCEEDED)).as("초과 지표는 모니터 합계와 같다")
+                .isEqualTo((double) monitor.exceededTotal());
         assertThat(value(scrape(), "hikaricp_connections_acquire_seconds_count{pool=\"realtime\"}"))
                 .as("앱 풀에도 같은 추적기가 걸려 Boot의 hikaricp 지표가 그대로 나온다").isPositive();
     }

@@ -1,7 +1,6 @@
 package kr.mujoong.core.db;
 
 import static kr.mujoong.core.db.CoreDbFixtures.expectSqlStateAutoCommit;
-import static kr.mujoong.core.db.CoreDbFixtures.migrationVersions;
 import static kr.mujoong.core.db.CoreDbFixtures.query;
 import static kr.mujoong.core.db.CoreDbFixtures.single;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -76,8 +75,8 @@ class FlywayConfIT {
             Flyway realtime = flywayFromConf(postgres, MigrationSet.REALTIME, Map.of());
 
             // 개수 · 버전은 저장소 마이그레이션 파일에서 읽는다(마이그레이션을 더해도 이 시험을 고치지 않는다)
-            List<String> coreVersions = migrationVersions(postgres.repoRoot(), MigrationSet.CORE);
-            List<String> realtimeVersions = migrationVersions(postgres.repoRoot(), MigrationSet.REALTIME);
+            List<String> coreVersions = postgres.migrationVersions(MigrationSet.CORE);
+            List<String> realtimeVersions = postgres.migrationVersions(MigrationSet.REALTIME);
 
             // 기준선 없이 두 번째 위치를 돌리면 "비어 있지 않은 flyway 스키마 + 이력 표 없음"으로 실패한다(report-g1-b 재현)
             MigrateResult coreResult = core.migrate();
