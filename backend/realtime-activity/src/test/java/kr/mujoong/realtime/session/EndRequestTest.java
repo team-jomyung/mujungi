@@ -213,8 +213,10 @@ class EndRequestTest {
         h.provider.last().emit(new ProviderEvent.InputTranscriptDone("after", "그만할래", null));
         h.drain();
 
+        // 아이 행은 수락한 참여 대답("응")과 동의 철회 전의 한 마디뿐이다
         assertThat(h.store.transcripts.stream().filter(entry -> entry.speaker()
-                == kr.mujoong.realtime.log.TranscriptEntry.Speaker.CHILD)).hasSize(1);
+                == kr.mujoong.realtime.log.TranscriptEntry.Speaker.CHILD).map(entry -> entry.text()))
+                .containsExactlyInAnyOrder("응", "공룡 좋아");
         assertThat(h.store.transcripts.size()).isGreaterThanOrEqualTo(rowsBefore);
         assertThat(h.store.transcripts.stream().map(entry -> entry.text())).doesNotContain("그만할래", "그만");
     }

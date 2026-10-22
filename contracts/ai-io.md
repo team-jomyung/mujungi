@@ -68,7 +68,7 @@
 - **출력 세대 · 새 말 시작(설계 개정 A4)**: 세션마다 세대 번호를 올리기만 한다. 오디오 시계 = 이 세션에서 받은 출력 음성의 누적 바이트 / 48(ms). 지시를 보내며 올린 세대는 ① `session.instructions.appended`(`client_event_id` 일치)의 `end_ms`를 `ackEndMs`로 기록하고 ② 그 뒤 처음 오는 **출력 전사 조각 중 `start_ms >= ackEndMs`**를 새 말의 시작(`newStartMs`)으로 보며 그 조각부터의 전사는 받고 ③ 오디오 시계(조각이 시작하는 위치)가 `newStartMs + mujoong.timing.provider.new-speech-margin`(timing.md 14절, 임시 700ms)에 닿는 첫 음성 조각부터 받는다. 첫 낱말이 잘려도 낡은 꼬리가 새는 것보다 낫다(fail-closed). 확인 사건이 `mujoong.timing.judgment.response-ready`(10초, 지시 송신부터) 안에 안 오면 사유 `OutputAckMissing`을 남기고 가장 최근 지시를 보낼 때의 오디오 시계 이후 `start_ms`인 전사로 ②를 대신해 계속하며, 새 말 전사가 시한 안에 없으면 사유 `OutputNewSpeechNotObserved`를 남기고 그 세대를 닫는다(아이는 아무 소리도 듣지 않는다 = 안전 쪽 실패). 같은 세대에서 지시를 다시 보내면(세대가 다시 오른다) 마지막 지시의 확인 기준으로 다시 맞춘다.
 - **지시 없이 올린 세대(설계 개정 A5)**: 끼어들기 · 종료 의도 · 연습 폐기 · 게이트 폐기 · 출력 보류 해제는 마지막 조각 시각과 세대를 올린 시각 중 늦은 쪽에서 `mujoong.gate.segment-quiet`(800ms)가 지나면 끊김을 확인하고 그 뒤 처음 오는 조각부터 받는다. 출력 보류 중(참여 확인 · 종료 확인 질문 · 연습 보류)에는 단계와 관계없이 조각을 버린다. 응답 취소 type이 없으므로 이 경우 공급자로는 아무것도 보내지 않고 낡은 응답은 자연 종료까지 이어진다.
 - **구간**: 받는 단계에서 마지막 조각 뒤 `segment-quiet`가 지나면 구간을 '완전'으로 봉인해 게이트에 넣는다(응답 끝 사건이 없다). 응답이 30초를 넘을 수 있어 구간 상한(20초 분량)으로 자르는 경로가 기본 경로다. 세대가 바뀌어 닫은 구간 · 첫 조각을 놓친 구간 · 아이 입력이 끊김 전에 재개되어 닫은 구간은 불완전이라 게이트가 GATE_EMPTY로 폐기한다(SD-17 3단계 fail-closed). 지시 뒤 전사만 받고 음성이 여유 시각에 닿지 못한 채 끝난 구간도 같다.
-- **입력 전사 묶음(설계 개정 A7)**: 서버가 `session.input_transcript.delta`를 묶고, `mujoong.timing.provider.input-transcript-quiet`(timing.md 14절, 임시 1500ms) 동안 조각이 없으면 그 묶음을 확정 전사로 만든다. 확정 전사는 지금 확정 전사 입구(`InputTranscriptDone`, 신뢰도 null = 확실)와 같은 길로 흘러 참여 확인 · 종료 의도 · 연습 흐름을 바꾸지 않는다. 지연 출처는 `INPUT_TRANSCRIPT_FINAL` · `LAST_INPUT_FRAME`이다. 아이가 길게 쉬면 한 발화가 둘로 나뉠 수 있다.
+- **입력 전사 묶음(설계 개정 A7)**: 서버가 `session.input_transcript.delta`를 묶고, `mujoong.timing.provider.input-transcript-quiet`(timing.md 14절, 임시 1000ms) 동안 조각이 없으면 그 묶음을 확정 전사로 만든다. 확정 전사는 지금 확정 전사 입구(`InputTranscriptDone`, 신뢰도 null = 확실)와 같은 길로 흘러 참여 확인 · 종료 의도 · 연습 흐름을 바꾸지 않는다. 지연 출처는 `INPUT_TRANSCRIPT_FINAL` · `LAST_INPUT_FRAME`이다. 아이가 길게 쉬면 한 발화가 둘로 나뉠 수 있다.
 
 ### 3.2 가짜 공급자
 
@@ -328,7 +328,7 @@ U15 씨앗 v2는 GENERATED/DUPLICATE/NONE의 배타적 출력 분기를 사용�
 
 ### 10.4 판 리소스와 세션 고정
 
-- 판정 질문 · 선택지(J1 ~ J6, A §7.3 · B §5.2)는 realtime `judgment/option-sets-v1.json`, 제브 검사 질문 · 라벨 8개 설명(7개 범주 + `PASS`) · 7개 범주 · 모드(C §3.1 · §3.2, AI 동작 명세 §10.2)는 `guardrail/policy-v2.json`에 둔다(U8의 `policy-v1.json`은 이력으로 남기고 코드가 읽지 않는다) [U13 편차 (U13-c)]. J7은 core 상황 생성 자체 검토 프롬프트(U10)라 realtime 판에 넣지 않는다.
+- 판정 질문 · 선택지(J1 ~ J6, A §7.3 · B §5.2)는 realtime `judgment/option-sets-v1.json`, 현재 제브 검사 질문 · 라벨 설명(`PROFANITY` + `PASS`) · 모드는 `guardrail/policy-v3.json`에 둔다. 이전 `policy-v1.json` · `policy-v2.json`은 이력으로 남긴다 [U13 편차 (U13-c)]. J7은 core 상황 생성 자체 검토 프롬프트(U10)라 realtime 판에 넣지 않는다.
 - realtime은 기동 때 두 파일을 읽어 검증하고, 파일이 없거나 형식이 틀리면 기동을 거부한다(BR2.1 · 4절 시드 사전과 같은 방식).
 - 세션을 받을 때 두 판의 번호와 패키지의 승인 문구 판(`approvedContent` · `approvedSpeech`)을 세션 계획에 고정하고, 세션 정산이 끝나면 놓는다. 판정 · 검사 기록 행은 고정된 판 번호를 함께 남긴다(BR2.2, 기록은 U11 · U13).
 
@@ -441,7 +441,7 @@ realtime 출력 게이트의 제브 단계(U13)가 읽는 설정이다. 시간 �
 
 기동 점검(모드 × 프로필 × 키): 공개 프로필(demo · prod)은 `REAL` + `JEV_API_KEY` + 허용 호스트 + 고정 모델이 아니면 기동을 거부하고(`STUB` · `OFF`도 거부), 그 밖(dev · test · 프로필 없음)은 `REAL` · `STUB` · `OFF`를 모두 허용하되 `REAL`이면 키가 있어야 한다. `STUB`은 제브 단계를 모두 지나며 1차 사전 통과를 대역 표시가 붙은 `ALLOW`(`reasonCode` `STUB_ALLOW`)로 돌려주고 `OFF`는 제브 단계를 건너뛴다. 둘로 시작하면 기동 로그에 한 줄이 남는다. 대역의 통과는 실제 검사 성공이 아니다(R-M11).
 
-정책 판 이름은 `guardrail/policy-v2.json`의 `jev-guardrail-v2`다(선 형식 정정으로 `policy-v1.json`의 `jev-guardrail-v1`을 올렸다, 10.13). 스키마 파일(`guardrail-request` · `guardrail-result`)의 예시가 쓰던 `guardrail-v1`은 이 판 이름 규칙으로 정정했다 [U13 편차 (U13-b)] [U13 편차 (U13-c)].
+현재 정책 판은 `guardrail/policy-v3.json`의 `jev-guardrail-v3`이다. v3는 GPT-Live 출력 조각의 욕설·비속어·직접적인 모욕 표현만 검사한다. 기존 진단·평가·대화 맥락 분류는 Jev 검사에서 제외하며, 1차 출력 사전과 서비스 정책은 그대로 적용한다. `policy-v1.json`과 `policy-v2.json`은 이력으로 보관한다. 스키마 파일(`guardrail-request` · `guardrail-result`)의 예시가 쓰던 `guardrail-v1`은 이 판 이름 규칙으로 정정했다 [U13 편차 (U13-b)] [U13 편차 (U13-c)].
 
 ### 10.13 U13 제브 공급자 선 형식 · 판정 규칙
 
@@ -453,7 +453,7 @@ realtime 출력 게이트의 제브 단계(U13)가 읽는 설정이다. 시간 �
 
 - `model`: 설정의 고정 모델 버전(`mujoong.guardrail.jev.model`). 모델 이름을 코드에 두지 않는다.
 - `state`: `{ "candidate": <후보 문장>, "context": [ { "speaker": "CHILD|PARTNER|COACH|MUJOONG", "text": <문장> }, … ] }`. 후보 문장과 익명 최근 맥락 3턴 이하만 싣고 식별자 칸이 없다. 내부 요청의 `mode`는 보내지 않는다.
-- `questions`: 질문 ID `guardrail` 하나. `{ "type": "choice", "instructions": <정책 판의 한국어 검사 질문>, "criteria": { <라벨>: <설명> … } }`. 라벨은 7개 범주 `DIAGNOSIS` · `TREATMENT` · `SCORE` · `CAUSE` · `GENERALIZATION` · `EMOTION_CLAIM` · `PRESSURE`와 `PASS`, 모두 8개다(제브 상한 255개 이하). 문안은 정책 판 `guardrail/policy-v2.json`에서 온다. 후보 문장 · 맥락 안의 지시문은 `state` 데이터일 뿐 `questions`를 바꾸지 못한다.
+- `questions`: 질문 ID `guardrail` 하나. `{ "type": "choice", "instructions": <정책 판의 한국어 검사 질문>, "criteria": { <라벨>: <설명> … } }`. 현재 라벨은 `PROFANITY`와 `PASS` 두 개다. 문안은 정책 판 `guardrail/policy-v3.json`에서 온다. 과거 결과의 7개 범주는 이력 호환을 위해 결과 스키마에 남긴다. 후보 문장 · 맥락 안의 지시문은 `state` 데이터일 뿐 `questions`를 바꾸지 못한다.
 
 **응답 읽기:** `answers.guardrail`의 `type`(`choice`) · `choice`(1순위 라벨) · `probabilities`(라벨별 확률)만 읽는다. `confidence` · `usage`는 판정에 쓰지 않는다. 최상위 `model`은 실호출 보고서에만 옮긴다(모델 이름 형식일 때). 응답에 정책 판 · 이유 코드가 없으므로 내부 결과의 `policyVersion`은 요청에 실은 판이고 `reasonCode`는 아래 규칙으로 정한다.
 
@@ -491,6 +491,31 @@ realtime 새 연습 흐름(U12)이 읽는 설정이다. 시간 값이 아니며 
 
 참여 전 입력 전사 quiet는 과거 발화를 새 현재 발화로 바꾸는 근거가 아니다. 실제 null `itemId` 입력은 현재 안내 완료 때의 세션 오디오 시간선과 관측 입력 끝 watermark 이후에 시작한 유효 `start_ms/end_ms`만 현재 참여 후보로 삼는다. 시간/식별 근거가 둘 다 없는 전사는 참여 수락으로 추정하지 않는다. 내부 합성 완료 사건과 legacy item ID 대역은 실제 공급자 wire 증거와 구분한다.
 
-J1/J6의 고정 질문·선택지는 `judgment-service-v1`, 공통 지시문은 `prompt-service-v1`을 사용한다. 기존 판정 입출력 스키마·4초 마감·호출 횟수는 그대로다. JEV의 `policyVersion`은 기존 JEV 판이며 서비스 정책판으로 바꾸지 않는다. 내부 검사표만 session/mode/generation/목적·후보 본문 해시·서비스/JEV판을 연결한다. ALLOW 뒤에도 actor의 현재 출력 권한을 다시 확인한다. 7개 범주·확률/동률·800ms·실패/REVIEW 차단은 바꾸지 않는다.
+J1/J6의 고정 질문·선택지는 `judgment-service-v1`, 공통 지시문은 `prompt-service-v1`을 사용한다. 기존 판정 입출력 스키마·4초 마감·호출 횟수는 그대로다. JEV의 `policyVersion`은 기존 JEV 판이며 서비스 정책판으로 바꾸지 않는다. 내부 검사표만 session/mode/generation/목적·후보 본문 해시·서비스/JEV판을 연결한다. ALLOW 뒤에도 actor의 현재 출력 권한을 다시 확인한다. 확률/동률·800ms·실패/REVIEW 차단은 유지한다. 현재 Jev 범주와 출력 단위는 10.15절의 v3 정책을 따른다.
 
 안내·참여 질문·종료 확인·인사는 현재 승인 본문/음성 판과 해시·PCM16LE 24kHz 모노 형식·길이·SPOKEN_VERIFIED 검수판이 일치해야 전달 후보가 된다. 실제 서비스 말소리는 후속 제작/청취/등록 전까지 미준비다. 운영 notice-assets manifest는 비어 있으며 톤·무음이나 합성 시험 자원은 실제 안내로 승격하지 않는다. 새 공급자 API 필드·SDK·자동 AI 호출은 추가하지 않는다.
+
+
+### 10.15 Jev 출력 단위별 검사 (v3)
+
+시간 정보가 있는 `session.output_transcript.delta` 하나를 출력 단위로 삼는다. 음성에는 개별 시간 정보가 없으므로 세션 PCM 누적 바이트 시계(24kHz PCM16 모노, 48바이트/ms)로 해당 전사의 `end_ms`까지 정확히 분리한다. 각 단위가 완성되는 즉시 1차 게이트 → 비동기 Jev → 송신 직전 권한 확인 → 기기 송신을 수행한다. 전체 발화 종료나 추가 무음 대기를 요구하지 않는다. 하나의 음성 프레임이 전사 경계를 넘으면 바이트 단위로 나누며, 전사가 없는 꼬리는 송신하지 않는다.
+
+검사는 출력 순서대로 진행하며, 앞 단위의 판정 동안 최대 128개 단위를 보관한다(추가 대기 음성 상한은 기존 구간 상한 960,000바이트). Jev에는 현재 조각과 직전에 통과한 출력의 마지막 64자만 전달하여 조각 경계에 걸친 욕설을 판단한다. 아동의 대화 맥락은 이 경로에 보내지 않는다. BLOCK·REVIEW·검사 실패·정렬 실패·대기열 초과는 남은 응답을 무효화한다. 기존의 한 차례 재지시와 끼어들기·종료·연결 변경에 대한 권한 검사는 유지한다.
+
+전사가 음성보다 앞서 도착하면 `mujoong.timing.judgment.response-ready` 한도 안에서 대응 음성을 기다린다. 시간 정보가 없거나 음성부터 시작해 전사 대응을 확인할 수 없는 제공자는 기존 무음 구간 검사 경로를 사용한다. 생성형 연습 발화에도 단위별 검사를 적용하되 연습 슬롯의 완료 사실은 모든 단위의 검사·재생과 발화 종료가 확인된 뒤 한 번만 보낸다. 등록 원문 재생 경로는 유지한다.
+
+단위 테스트의 PASS/BLOCK은 합성 입력과 테스트 대역의 결과이며 실제 Jev 분류 정확도·운영 지연 측정 결과가 아니다.
+
+문장부호 · 공백만 든 전사 조각(예: `,`)은 따로 검사하지 않고 다음 조각과 합친다. 검사가 도는 동안 쌓인 뒤따르는 단위는 후보 문장 3,000자 상한 안에서 한꺼번에 묶어 Jev에 한 번 보낸다. 검사 중이 아니면 첫 단위는 기다리지 않고 바로 보낸다. 자유대화 응답은 **전사가 음성보다 먼저 오는 성질을 이용해**, 전사 조각이 도착해 새 말의 음성이 시작되면 그 조각이 가리키는 음성이 다 오길 기다리지 않고 바로 검사한다. 사전 검사만 통과한 전사로 요청하고(음성은 아직 오는 중이다), 유효한 `ALLOW`(또는 원문 일치)가 나면 그 단위의 전사가 끝나는 PCM 위치까지 **도착한 음성을 도착하는 대로** 기기에 보낸다. `ALLOW` 전에는 어떤 음성도 나가지 않고, 통과한 단위의 끝 위치를 넘는 음성은 나가지 않는다. 응답이 `ALLOW`보다 먼저 끝나도 검사 중인 단위의 음성은 마지막 단위가 정리될 때까지 보관한다. 연습 흐름이 출력을 쥔 응답은 기존처럼 음성이 다 온 단위만 검사한다. 묶인 단위는 한 번의 `ALLOW`로 순서대로 재생하고, `BLOCK` · 무효 · 오류는 묶음 전체를 재생 없이 닫는다.
+
+보호자 화면의 AI 말풍선은 응답 하나가 행 하나다. 단위별로 통과한 전사는 모아 두었다가 응답이 끝났을 때(남은 검사 · 대기 단위가 없을 때), 아이 입력 전사가 시작될 때, 출력 세대가 올라 응답을 버릴 때 한 번에 `FINAL`로 낸다. 응답 도중에는 확정 전 칸(`PARTIAL`, 텍스트 비움)만 보인다.
+
+### 10.16 입력 중계: 안내 녹음 · 말하는 동안
+
+- **참여 안내 녹음(`INTRO_FREE_TALK` · `INTRO_PRACTICE` · `RE_PROMPT` · `DECLINE_ALTERNATIVE`) 재생 중**에는 아이 소리를 입력으로 받지 않는다. 서버는 기기 프레임을 같은 길이의 무음으로 바꿔 공급자에 보내(공급자 세션 시간선은 이어 간다) 끝 표식(`COMPLETED`) · 실패 · 참여 수락 · 거절에서 푼다. 기기는 이 녹음이 재생되는 동안 마이크 음성을 끼어들기로 보지 않아 녹음을 끊지 않는다.
+- **GPT-Live가 말하는 동안에도 아이 소리는 실시간으로 그대로 보낸다.** 말하는 동안 소리를 모았다가 몰아 보내는 방식은 공급자 입력 속도 한도(`input_audio_rate_limit_exceeded`)에 걸려 아이 말이 버려져서 쓰지 않는다(2026-10-22 실호출 확인).
+- 참여 대답이 인식되지 않을 때 원인을 가릴 수 있도록 참여 전 전사 조각을 버릴 때 창마다 사유 한 번을 로그 사유 코드 `ParticipationInputDroppedNOT_OPEN` · `ParticipationInputDroppedBEFORE_WINDOW` · `ParticipationInputDroppedBEFORE_WATERMARK` · `ParticipationInputDroppedLEGACY_ITEM`(INFO)로만 남긴다. 전사 원문은 남기지 않는다.
+- **시작 의사 판정(J1)은 제브로 한다.** 제브가 실제 모드(`REAL`)이면 J1은 제브 `systemone`의 `choice` 질문으로 판정한다(질문 ID `judgment`, 질문 · 라벨 설명은 판정 선택지 판의 J1 질문과 선택지 뜻, 확률 1 · 2순위는 기존 판정 검증기의 하한 · 최소 차이 규칙을 그대로 받는다). 제브를 쓸 수 없으면 Luna로 간다. 자유대화의 시작 의사는 **거절인가만** 본다: 사전 분류가 명확한 거절이거나 판정이 `DECLINE`으로 확정되면 대화를 끝내고(거절 흐름), 그 밖(참여 · 불명확 · 휴식 · 판독 불가 · 보류 · 공급자 장애 · 판정을 열 수 없음)은 모두 대화를 시작한다. 무응답(창 만기)은 기존처럼 다시 안내한다. J2 ~ J6은 아직 Luna이며, 같은 구현으로 지점만 더하면 제브로 옮길 수 있다(`JudgmentConfiguration.JEV_POINTS`).
+- **참여 확인 중 공급자가 스스로 시작한 응답은 버리지 않고 보관한다.** GPT-Live는 아이 말이 끝나면 서버 지시 없이 응답을 시작한다. 안내가 끝난 뒤 이 응답의 전사 · 음성 · 무음 조각을 상한(음성 20초 분량 · 전사 8,192자) 안에서 보관했다가, 참여가 수락되면 새 세대의 첫 응답으로 다시 흘려 넣는다(이때 첫 응답 지시는 따로 보내지 않는다). 보관한 응답이 없거나 상한을 넘었으면 기존처럼 첫 응답 지시를 보낸다. 거절 · 불명확이면 보관한 응답은 쓰지 않는다. 다시 흘려 넣은 응답도 제브 검사 · 출력 사전 · 송신 직전 재확인을 똑같이 거친다. 로그 사유 코드는 `JoinHeldOutputReplayed` · `JoinHeldOutputNone` · `JoinHeldOutputOverflow`(INFO)다.
+- **공급자 오류 코드.** 입력 쪽 오류(`input_`으로 시작하는 코드)는 지금 나오는 AI 응답을 버리지 않는다. 공급자 `error` 사건마다 오류 코드를 사유 코드 `ProviderErrorCode_<코드>`(WARN)로 남긴다. 코드가 소문자 · 숫자 · 밑줄로 된 2 ~ 61자 식별자일 때만 싣고, 그 밖은 `ProviderErrorCode_unknown`이다(자유 문자열 · 메시지 · 매개변수는 남기지 않는다, R-F14).
+- **안내 직후 첫 응답의 인사 차단 완화.** 아이의 마지막 말에 인사(안녕 · 반가워 · 하이 · 헬로)가 있었으면 그 인사에 답하는 인사말은 시작 인사 반복으로 보지 않는다. 자기소개(`나는 AI` · `나는 무중`)와 안내 · 참여 질문 문장 반복은 계속 막는다.

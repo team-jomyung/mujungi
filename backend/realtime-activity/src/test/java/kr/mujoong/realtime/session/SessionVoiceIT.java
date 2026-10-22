@@ -139,10 +139,12 @@ class SessionVoiceIT {
 
         TranscriptRepository transcripts = env.app.bean(TranscriptRepository.class);
         awaitTrue(() -> transcripts.findAll(sessionId).stream().filter(row -> row.speaker() == TranscriptEntry.Speaker.CHILD
-                && row.assemblyStatus() == TranscriptEntry.AssemblyStatus.FINAL).count() == 3, "아이 전사 3행");
-        Map<String, Boolean> review = new LinkedHashMap<>();
-        env.activityTranscripts(sessionId).forEach(row -> review.put(row.text(), row.reviewNeeded()));
-        assertThat(review).containsExactly(Map.entry("응", false), Map.entry("공룡 좋아", false), Map.entry("몰라", false));
+                && row.assemblyStatus() == TranscriptEntry.AssemblyStatus.FINAL).count() == 4, "아이 전사 4행");
+        // 같은 글자("응")가 두 행이라 맵이 아니라 목록으로 본다: 첫 행은 참여를 수락한 대답이다
+        List<Map.Entry<String, Boolean>> review = new java.util.ArrayList<>();
+        env.activityTranscripts(sessionId).forEach(row -> review.add(Map.entry(row.text(), row.reviewNeeded())));
+        assertThat(review).containsExactly(Map.entry("응", false), Map.entry("응", false), Map.entry("공룡 좋아", false),
+                Map.entry("몰라", false));
         assertThat(transcripts.findAll(sessionId)).allSatisfy(row ->
                 assertThat(row.assemblyStatus()).isEqualTo(TranscriptEntry.AssemblyStatus.FINAL));
     }

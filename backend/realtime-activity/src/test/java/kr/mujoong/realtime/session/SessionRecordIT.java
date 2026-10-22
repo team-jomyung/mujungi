@@ -81,7 +81,7 @@ class SessionRecordIT {
         assertThat(payload.get("endReason").asString()).isEqualTo("GUARDIAN_STOP");
         assertThat(payload.get("confirmed").asBoolean()).isTrue();
         assertThat(payload.get("termination").get("transportClosedAt").isNull()).isFalse();
-        assertThat(payload.get("record").get("utterances").size()).as("현재 실제 안내 · 아이 · AI · 마무리 인사").isEqualTo(4);
+        assertThat(payload.get("record").get("utterances").size()).as("현재 실제 안내 · 수락한 아이 대답 · 아이 · AI · 마무리 인사").isEqualTo(5);
         assertThat(payload.get("record").get("practice").isNull()).isTrue();
         String hash = env.db.single("select snapshot_hash from realtime.realtime_result_input_snapshot"
                 + " where session_id = cast(:id as uuid)", params(sessionId), String.class);

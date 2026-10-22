@@ -10,11 +10,14 @@ import java.util.regex.Pattern;
 final class GreetingHandoff {
     private static final Pattern RESTART = Pattern.compile(
             "^(?:음[,，]?\\s*)?(?:안녕(?:하세요)?(?:[!.,?~\\s]|$)|반가워|반갑습니다|나는\\s*(?:AI|에이아이|무중|무중이)|저는\\s*(?:AI|에이아이|무중|무중이))");
+    private static final Pattern SELF_INTRO = Pattern.compile("(?:나는|저는)\\s*(?:AI|에이아이|무중|무중이)");
     private static final Pattern FINAL_QUESTION = Pattern.compile("([^.!?。！？]+[?？])\\s*$");
     private record Playback(long generation, UUID connection, Instant deadline, AtomicBoolean frameSent) { }
     private final ConcurrentHashMap<UUID, Playback> playbacks = new ConcurrentHashMap<>();
     private boolean pending;
     private boolean identityRequested;
+    /** 아이의 마지막 말이 인사(안녕 · 반가워 …)였다: 그 인사에 답하는 짧은 인사말은 재시작이 아니다. 자기소개와 안내 문장 반복은 계속 막는다. */
+    private boolean childGreeted;
 
     void arm() { pending = true; }
 
@@ -25,12 +28,17 @@ final class GreetingHandoff {
                 || normalized.contains("누구야") || normalized.contains("자기소개해")
                 || normalized.endsWith("인사해줘") || normalized.endsWith("인사해줄래")
                 || normalized.endsWith("안녕이라고말해줘");
+        childGreeted = normalized.contains("안녕") || normalized.contains("반가워") || normalized.contains("반갑")
+                || normalized.contains("하이") || normalized.contains("헬로");
     }
 
     boolean blocks(String text, String intro, String question) {
         if (!pending || text == null) return false;
         String normalized = normalize(text);
-        return (!identityRequested && RESTART.matcher(text.strip()).find())
+        boolean restart = RESTART.matcher(text.strip()).find();
+        // 아이가 인사했으면 인사말만으로는 막지 않는다(자기소개가 들어 있으면 여전히 막는다)
+        boolean greetingReply = childGreeted && !SELF_INTRO.matcher(text).find();
+        return (!identityRequested && restart && !greetingReply)
                 || duplicate(normalized, intro) || duplicate(normalized, question);
     }
 
@@ -57,6 +65,7 @@ final class GreetingHandoff {
     void clear() {
         pending = false;
         identityRequested = false;
+        childGreeted = false;
         playbacks.clear();
     }
 

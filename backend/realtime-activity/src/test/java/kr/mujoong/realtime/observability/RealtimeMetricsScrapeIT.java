@@ -192,7 +192,8 @@ class RealtimeMetricsScrapeIT {
         assertThat(value(body, "mujoong_session_start_to_active_seconds_count")).isEqualTo(1.0);
         assertThat(value(body, "mujoong_relay_in_seconds_count")).isEqualTo(3.0);
         assertThat(value(body, "mujoong_relay_out_seconds_count")).isEqualTo(1.0);
-        assertThat(value(body, "mujoong_view_item_ready_seconds_count{speaker=\"child\"}")).isEqualTo(1.0);
+        // 아이 행은 수락한 참여 대답 하나와 이어진 아이 말 하나다
+        assertThat(value(body, "mujoong_view_item_ready_seconds_count{speaker=\"child\"}")).isEqualTo(2.0);
         assertThat(value(body, "mujoong_sessions_active")).isEqualTo(1.0);
         assertThat(value(body, "mujoong_device_connections_open")).isEqualTo(1.0);
         assertThat(value(body, "mujoong_relay_out_seconds_sum")).as("구간 확정 → 첫 프레임은 음수가 아니다")

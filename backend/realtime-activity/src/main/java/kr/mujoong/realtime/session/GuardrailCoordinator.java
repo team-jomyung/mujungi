@@ -179,23 +179,31 @@ final class GuardrailCoordinator {
         void appError(String reasonCode, EventCode.Level level);
 
         void appError(RuntimeException error);
+
+        default void invalidateStreaming() { }
+
+
     }
 
     /** 검사표(BR4.1): 요청 한 건의 유효 조건. 같은 {@link SegmentBuffer.Sealed}를 쥐어 전사와 소리가 한 구간이라는 구조를 지킨다. */
     private record Ticket(UUID requestId, SegmentBuffer.Sealed sealed, long deviceGeneration, long providerGeneration,
             UUID connectionId, long inputGroupOpens, UUID practiceSpeechId, TranscriptWriter.Held held,
-            GuardrailRequest.Mode mode, boolean fromQueue, UUID sessionId, String servicePolicyVersion,
-            String jevPolicyVersion, String bodySha256, kr.mujoong.realtime.gate.OutputAuthority authority) {
+            GuardrailRequest.Mode mode, boolean fromQueue, boolean streaming, UUID sessionId, String servicePolicyVersion,
+            String jevPolicyVersion, String bodySha256, kr.mujoong.realtime.gate.OutputAuthority authority,
+            List<Queued> batch) {
 
         @Override
         public String toString() {
-            return "Ticket[requestId=" + requestId + ", mode=" + mode + "]";
+            return "Ticket[requestId=" + requestId + ", mode=" + mode + ", batch=" + batch.size() + "]";
         }
     }
 
-    /** 대기열 1칸의 구간(BR5.3). */
+    /** 한 번에 묶어 보내는 후보 문장의 글자 수 상한(요청 상한 {@link GuardrailRequest#CANDIDATE_MAX}보다 넉넉히 작게 둔다). */
+    private static final int BATCH_CHARS_MAX = 3000;
+
+    /** 검사 대기 구간. 기존 무음 구간은 1칸, 스트리밍 단위는 바이트·개수 상한 안에서 순서대로 보관한다. */
     private record Queued(SegmentBuffer.Sealed sealed, TranscriptWriter.Held held, long deviceGeneration, long providerGeneration,
-            UUID connectionId, long inputGroupOpens, UUID practiceSpeechId, GuardrailRequest.Mode mode) {
+            UUID connectionId, long inputGroupOpens, UUID practiceSpeechId, GuardrailRequest.Mode mode, boolean streaming) {
 
         @Override
         public String toString() {
@@ -214,6 +222,9 @@ final class GuardrailCoordinator {
     private Ticket ticket;
     private CompletionStage<GuardrailVerdict> inFlight;
     private Queued queue;
+    private final Deque<Queued> streamingQueue = new ArrayDeque<>();
+    private int streamingQueueBytes;
+    private String streamingTail = "";
     /** 턴의 재지시 수(0 또는 1, BR6.1). */
     private int retries;
     private ReplayableInstruction lastInstruction;
@@ -266,6 +277,10 @@ final class GuardrailCoordinator {
      * 아니면 AI 행을 보관 손잡이로 빼고 비동기 요청을 보낸다. 이 호출은 어떤 HTTP도 기다리지 않는다. 예외는 호출자가 {@link #onBeginFailed}로 받는다.
      */
     void begin(SegmentBuffer.Sealed sealed, GuardrailRequest.Mode mode, UUID practiceSpeechId) {
+        begin(sealed, mode, practiceSpeechId, false);
+    }
+
+    void begin(SegmentBuffer.Sealed sealed, GuardrailRequest.Mode mode, UUID practiceSpeechId, boolean streaming) {
         Objects.requireNonNull(sealed, "sealed");
         Objects.requireNonNull(mode, "mode");
         if (!support.enabled()) {
@@ -273,13 +288,13 @@ final class GuardrailCoordinator {
         }
         refreshRetrying();
         if (state == State.CHECKING) {
-            enqueue(sealed, mode, practiceSpeechId);
+            enqueue(sealed, mode, practiceSpeechId, streaming);
             return;
         }
         retryId = null;
         TranscriptWriter.Held held = env.holdAiRow();
         pendingHeld = held;
-        start(sealed, mode, practiceSpeechId, held, false);
+        start(sealed, mode, practiceSpeechId, held, false, streaming);
         pendingHeld = null;
     }
 
@@ -431,6 +446,8 @@ final class GuardrailCoordinator {
         cancelInFlight();
         ticket = null;
         queue = null;
+        streamingQueue.clear();
+        streamingQueueBytes = 0;
         pendingHeld = null;
         retryId = null;
         state = State.IDLE;
@@ -439,15 +456,25 @@ final class GuardrailCoordinator {
     // ---- 검사 시작 · 대기열 ----
 
     private void start(SegmentBuffer.Sealed sealed, GuardrailRequest.Mode mode, UUID practiceSpeechId,
-            TranscriptWriter.Held held, boolean fromQueue) {
+            TranscriptWriter.Held held, boolean fromQueue, boolean streaming) {
+        start(sealed, mode, practiceSpeechId, held, fromQueue, streaming, List.of());
+    }
+
+    /**
+     * @param batch 같은 검사 한 번에 묶는 뒤따르는 스트리밍 단위들(순서대로). 요청 후보 문장은 {@code sealed}와 이들의 전사를 이은 것이고,
+     *     결과는 단위마다 순서대로 적용한다
+     */
+    private void start(SegmentBuffer.Sealed sealed, GuardrailRequest.Mode mode, UUID practiceSpeechId,
+            TranscriptWriter.Held held, boolean fromQueue, boolean streaming, List<Queued> batch) {
+        String checked = checkedText(sealed, batch);
         Ticket created = new Ticket(UUID.randomUUID(), sealed, env.deviceGeneration(), env.providerGeneration(),
-                env.connectionId(), env.inputGroupOpenCount(), practiceSpeechId, held, mode, fromQueue,
+                env.connectionId(), env.inputGroupOpenCount(), practiceSpeechId, held, mode, fromQueue, streaming,
                 plan.sessionId(), env.servicePolicyVersion(), support.policyVersion(),
-                NoticeAssetCatalog.sha256(sealed.transcript().getBytes(java.nio.charset.StandardCharsets.UTF_8)),
-                env.outputAuthority());
+                NoticeAssetCatalog.sha256(checked.getBytes(java.nio.charset.StandardCharsets.UTF_8)),
+                env.outputAuthority(), List.copyOf(batch));
         ticket = created;
         state = State.CHECKING;
-        Optional<GuardrailRequest> request = factory.create(mode, sealed.transcript(), List.copyOf(context),
+        Optional<GuardrailRequest> request = factory.create(mode, checked, streaming ? streamingContext() : List.copyOf(context),
                 support.policyVersion(), names());
         if (request.isEmpty()) {
             // 요청을 만들 수 없다(후보 문장 길이 등): 부르지 않고 막힘으로 센다(BR2.4)
@@ -470,17 +497,27 @@ final class GuardrailCoordinator {
         env.armCheckTimer(support.safetyDelay());
     }
 
-    private void enqueue(SegmentBuffer.Sealed sealed, GuardrailRequest.Mode mode, UUID practiceSpeechId) {
-        if (queue != null) {
+    private void enqueue(SegmentBuffer.Sealed sealed, GuardrailRequest.Mode mode, UUID practiceSpeechId, boolean streaming) {
+        if (queue != null && (!streaming || streamingQueue.size() >= 127
+                || streamingQueueBytes + (long) sealed.totalBytes() > SegmentBuffer.MAX_BYTES)) {
             // 대기열이 찼다(BR5.3): 보관하지 않고 바로 FINAL 거짓으로 닫는다. 앞 검사의 끝(재생 · 마무리)을 건드리지 않는다
             record(UUID.randomUUID(), GuardrailEventRecord.Decision.QUEUE_FULL, REASON_QUEUE_FULL, 0L);
             env.discardSilent(sealed, null, GateDecision.DiscardReason.GUARDRAIL_QUEUE_FULL);
+            if (streaming) {
+                env.invalidateStreaming();
+                discardQueue();
+            }
             return;
         }
         TranscriptWriter.Held held = env.holdAiRow();
         pendingHeld = held;
-        queue = new Queued(sealed, held, env.deviceGeneration(), env.providerGeneration(), env.connectionId(),
-                env.inputGroupOpenCount(), practiceSpeechId, mode);
+        Queued added = new Queued(sealed, held, env.deviceGeneration(), env.providerGeneration(), env.connectionId(),
+                env.inputGroupOpenCount(), practiceSpeechId, mode, streaming);
+        if (queue == null) queue = added;
+        else {
+            streamingQueue.addLast(added);
+            streamingQueueBytes += sealed.totalBytes();
+        }
         pendingHeld = null;
     }
 
@@ -490,21 +527,39 @@ final class GuardrailCoordinator {
         if (waiting == null) {
             return;
         }
-        queue = null;
+        queue = streamingQueue.pollFirst();
+        if (queue != null) streamingQueueBytes -= queue.sealed().totalBytes();
         if (!previousSent || !stillValid(waiting)) {
             record(UUID.randomUUID(), GuardrailEventRecord.Decision.VOIDED, REASON_QUEUE_DISCARDED, 0L);
             env.discardSilent(waiting.sealed(), waiting.held(), null);
+            discardQueue();
             return;
         }
+        // 검사가 도는 동안 쌓인 뒤따르는 스트리밍 단위는 한 번에 묶어 검사한다(제브 호출 수 · 대기 줄이기). 후보 문장 글자 수 상한 안에서 순서대로 가져온다
+        List<Queued> batch = new ArrayList<>();
+        if (waiting.streaming()) {
+            int chars = waiting.sealed().transcript().length();
+            while (queue != null && queue.streaming() && queue.mode() == waiting.mode() && stillValid(queue)
+                    && chars + queue.sealed().transcript().length() <= BATCH_CHARS_MAX) {
+                batch.add(queue);
+                chars += queue.sealed().transcript().length();
+                queue = streamingQueue.pollFirst();
+                if (queue != null) streamingQueueBytes -= queue.sealed().totalBytes();
+            }
+        }
         try {
-            start(waiting.sealed(), waiting.mode(), waiting.practiceSpeechId(), waiting.held(), true);
+            start(waiting.sealed(), waiting.mode(), waiting.practiceSpeechId(), waiting.held(), true, waiting.streaming(), batch);
         } catch (RuntimeException e) {
+            for (Queued extra : batch) {
+                env.discardSilent(extra.sealed(), extra.held(), GateDecision.DiscardReason.GUARDRAIL_ERROR);
+            }
             // 앞 구간은 이미 보냈다: 대기 구간만 조용히 버리고 앞 구간의 일에는 번지지 않게 한다(fail-closed)
             env.appError(e);
             cancelInFlight();
             ticket = null;
             state = State.IDLE;
             env.discardSilent(waiting.sealed(), waiting.held(), GateDecision.DiscardReason.GUARDRAIL_ERROR);
+            discardQueue();
         }
     }
 
@@ -534,13 +589,32 @@ final class GuardrailCoordinator {
         }
     }
 
+    /** 이번 검사가 보는 후보 문장: 첫 단위와 묶인 단위들의 전사를 순서대로 이은 것. */
+    private static String checkedText(SegmentBuffer.Sealed sealed, List<Queued> batch) {
+        if (batch.isEmpty()) {
+            return sealed.transcript();
+        }
+        StringBuilder joined = new StringBuilder(sealed.transcript());
+        for (Queued extra : batch) {
+            joined.append(extra.sealed().transcript());
+        }
+        return joined.toString();
+    }
+
+    /** 묶였던 뒤따르는 단위들을 재생 없이 닫는다(보관 행도 닫는다). 첫 단위는 부르는 쪽이 따로 닫는다. */
+    private void discardBatch(Ticket current) {
+        for (Queued extra : current.batch()) {
+            env.discardSilent(extra.sealed(), extra.held(), null);
+        }
+    }
+
     /** 검사표 유효 조건 다섯(BR4.2)을 확인해 첫 어긋남을 돌려준다(없으면 null). */
     private VoidCause voidCause(Ticket current) {
         if (current.authority() != env.outputAuthority()
                 || !current.sessionId().equals(plan.sessionId()) || !current.jevPolicyVersion().equals(support.policyVersion())
                 || !current.servicePolicyVersion().equals(env.servicePolicyVersion())
                 || !current.bodySha256().equals(NoticeAssetCatalog.sha256(
-                        current.sealed().transcript().getBytes(java.nio.charset.StandardCharsets.UTF_8)))) return VoidCause.GENERATION_CHANGED;
+                        checkedText(current.sealed(), current.batch()).getBytes(java.nio.charset.StandardCharsets.UTF_8)))) return VoidCause.GENERATION_CHANGED;
         if (env.terminated() || env.status() != SessionStatus.ACTIVE) {
             return VoidCause.SESSION_ENDED;
         }
@@ -577,6 +651,7 @@ final class GuardrailCoordinator {
             env.practiceVoided(current.practiceSpeechId());
         }
         env.discardSilent(current.sealed(), current.held(), null);
+        discardBatch(current);
         discardQueue();
         env.listeningAgain();
     }
@@ -590,12 +665,35 @@ final class GuardrailCoordinator {
         }
         boolean sent = env.recheckAndSend(current.sealed(), current.held(), !current.fromQueue());
         if (sent) {
-            remember(GuardrailRequest.Speaker.MUJOONG, current.sealed().transcript());
+            sentUnit(current.streaming(), current.sealed());
         }
-        settleQueue(sent);
+        // 묶인 뒤따르는 단위는 한 번의 ALLOW를 순서대로 이어 받는다. 하나라도 못 보내면 나머지는 재생 없이 닫는다
+        boolean allSent = sent;
+        for (Queued extra : current.batch()) {
+            if (allSent) {
+                allSent = env.recheckAndSend(extra.sealed(), extra.held(), false);
+                if (allSent) {
+                    sentUnit(current.streaming(), extra.sealed());
+                }
+            } else {
+                env.discardSilent(extra.sealed(), extra.held(), null);
+            }
+        }
+        settleQueue(allSent);
+    }
+
+    /** 기기로 보낸 단위를 맥락(직전 발화 · 조각 경계 꼬리)에 남긴다. */
+    private void sentUnit(boolean streaming, SegmentBuffer.Sealed sealed) {
+        remember(GuardrailRequest.Speaker.MUJOONG, sealed.transcript());
+        if (streaming) {
+            String joined = streamingTail + sealed.transcript();
+            streamingTail = joined.substring(Math.max(0, joined.length() - 64));
+        }
     }
 
     private void blocked(Ticket current, GuardrailVerdict verdict) {
+        discardBatch(current);
+        if (current.streaming()) env.invalidateStreaming();
         GateDecision.DiscardReason reason = reasonFor(verdict);
         record(current.requestId(), verdict.eventDecision(), verdict.reasonCode(), verdict.latencyMs());
         if (retries >= 1) {
@@ -648,6 +746,7 @@ final class GuardrailCoordinator {
         retryId = null;
         ticket = null;
         cancelInFlight();
+        discardBatch(current);
         try {
             discardQueue();
         } catch (RuntimeException ignored) {
@@ -659,6 +758,7 @@ final class GuardrailCoordinator {
     }
 
     private void resetTurn() {
+        streamingTail = "";
         retries = 0;
         lastInstruction = null;
         if (state == State.RETRYING) {
@@ -725,6 +825,11 @@ final class GuardrailCoordinator {
         while (context.size() > GuardrailRequest.CONTEXT_MAX_TURNS) {
             context.removeFirst();
         }
+    }
+
+    private List<GuardrailRequestFactory.Turn> streamingContext() {
+        return streamingTail.isEmpty() ? List.of()
+                : List.of(new GuardrailRequestFactory.Turn(GuardrailRequest.Speaker.MUJOONG, streamingTail));
     }
 
     private List<String> names() {

@@ -54,7 +54,15 @@ class JevGuardrailClientTest {
 
     private final MutableClock clock = new MutableClock();
     private final AtomicReference<String> key = new AtomicReference<>(FAKE_KEY);
-    private final LiveContentResources.GuardrailPolicy policy = LiveContentResources.loadDefault().guardrail();
+    private final LiveContentResources.GuardrailPolicy policy = historicalPolicy();
+
+    private static LiveContentResources.GuardrailPolicy historicalPolicy() {
+        try (var judgment = JevGuardrailClientTest.class.getClassLoader().getResourceAsStream(LiveContentResources.JUDGMENT_RESOURCE);
+                var guardrail = JevGuardrailClientTest.class.getClassLoader().getResourceAsStream("guardrail/policy-v2.json")) {
+            return LiveContentResources.parse(new String(judgment.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8),
+                    new String(guardrail.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8)).guardrail();
+        } catch (java.io.IOException e) { throw new java.io.UncheckedIOException(e); }
+    }
     private FakeJev jev;
     private LogCapture logs;
 

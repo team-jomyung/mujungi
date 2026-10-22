@@ -94,8 +94,10 @@ class SessionJoinTest {
         h.settleSend();
         assertThat(h.provider.last().requests(ProviderRequestFactory.InstructionsAppend.class)).hasSize(1);
         assertThat(h.recordings.opened()).as("원음 기록은 ACTIVE부터").hasSize(1);
-        assertThat(h.store.transcripts).as("참여 대답은 저장하지 않는다(BR2.5)")
-                .noneMatch(entry -> entry.speaker() == TranscriptEntry.Speaker.CHILD);
+        // 참여 확인 중에는 저장하지 않지만, 참여를 수락한 그 대답은 수락 때 첫 아이 말 한 행으로 남는다(BR2.5 개정)
+        assertThat(h.store.transcripts).as("수락한 참여 대답만 아이 행으로 남는다")
+                .filteredOn(entry -> entry.speaker() == TranscriptEntry.Speaker.CHILD).singleElement()
+                .satisfies(entry -> assertThat(entry.text()).isEqualTo("응"));
         assertThat(events(JoinFlow.EVENT_JOIN_ACCEPTED)).singleElement()
                 .satisfies(event -> assertThat(event.getPayloadJson()).isEqualTo("{\"prompts\":1}"));
     }

@@ -35,10 +35,24 @@ class GreetingHandoffServiceGuardrailTest {
         assertThat(h.provider.last().requests(ProviderRequestFactory.InstructionsAppend.class)).isEmpty();
     }
 
+    @Test void aGreetingReplyToTheChildsGreetingIsAllowedButSelfIntroductionAndScriptRepeatsAreStillBlocked() {
+        var h = active("응, 안녕");
+        speak(h, "안녕! 반가워.");
+        assertThat(h.link.outputs()).as("아이가 인사했으니 인사말 답은 막지 않는다").hasSize(1);
+    }
+
     @Test void unnecessaryGreetingAndSelfIntroductionProduceZeroAudioWithoutNewRequests() {
-        for (String text : java.util.List.of("안녕", "안녕, 나는 무중이야. 반가워.", "나는 AI야. 만나서 반가워.",
-                "반가워. 이야기해 볼까?", "지금 이야기해 볼까?")) {
+        for (String text : java.util.List.of("안녕, 나는 무중이야. 반가워.", "나는 AI야. 만나서 반가워.", "지금 이야기해 볼까?")) {
             var h = active("응, 안녕");
+            speak(h, text);
+            assertThat(h.link.outputs()).isEmpty();
+            assertThat(h.link.deliveredFrames()).isEmpty();
+            h.settleSend();
+            assertThat(h.provider.last().requests(ProviderRequestFactory.InstructionsAppend.class)).hasSize(1);
+        }
+        // 아이가 인사하지 않았으면 인사말로 시작하는 응답도 시작 인사 반복으로 막는다
+        for (String text : java.util.List.of("안녕", "반가워. 이야기해 볼까?")) {
+            var h = active("응");
             speak(h, text);
             assertThat(h.link.outputs()).isEmpty();
             assertThat(h.link.deliveredFrames()).isEmpty();
@@ -141,6 +155,46 @@ class GreetingHandoffServiceGuardrailTest {
         practice.boot(); practice.ackAndReady(); practice.join(); practice.settleSend();
         speak(practice, "안녕, 나는 무중이야.");
         assertThat(practice.link.outputs()).hasSize(1);
+    }
+
+    @Test void aDiscardedRestartGreetingUnitNeverLetsTheSoundOfItsOwnResponseOutThroughALaterUnit() {
+        var h = ServiceGuardrailFixtures.harness(); h.useJudge(); var guard = h.useGuardrail();
+        h.boot(); h.ackAndReady(); completeAndAccept(h, "응, 안녕");
+        long margin = h.settings.newSpeechMargin().toMillis();
+        h.provider.last().newSpeechMargin(null);
+        String id = h.provider.last().requests(ProviderRequestFactory.InstructionsAppend.class).getLast().eventId();
+        h.provider.last().emit(new kr.mujoong.realtime.voice.ProviderPort.ProviderEvent.InstructionsAppended(id, 0, 0));
+        h.provider.last().emit(new kr.mujoong.realtime.voice.ProviderPort.ProviderEvent.OutputTranscriptDelta("안녕!", 0, 100 + margin));
+        h.provider.last().emit(new kr.mujoong.realtime.voice.ProviderPort.ProviderEvent.OutputTranscriptDelta("오늘 뭐 할까?",
+                100 + margin, 300 + margin));
+        h.provider.last().emit(new kr.mujoong.realtime.voice.ProviderPort.ProviderEvent.OutputAudioDelta(new byte[(int) margin * 48]));
+        h.provider.last().emit(new kr.mujoong.realtime.voice.ProviderPort.ProviderEvent.OutputAudioDelta(
+                kr.mujoong.realtime.testing.RealtimeItEnvironment.audiblePcm(14_400)));
+        h.drain();
+        assertThat(guard.count()).as("폐기한 응답의 뒷 단위는 검사도 받지 않는다").isZero();
+        assertThat(h.link.outputs()).as("폐기된 인사의 음성이 뒷 단위와 함께 나가지 않는다").isEmpty();
+        assertThat(h.link.deliveredFrames()).isEmpty();
+    }
+
+    @Test void firstResponseAfterALunaAcceptedUnclearGreetingStillReachesTheDevice() {
+        var h = ServiceGuardrailFixtures.harness(); h.useJudge(); var guard = h.useGuardrail();
+        h.boot(); h.ackAndReady(); completeAndAccept(h, "안녕, 무중아");
+        assertThat(h.executor.status()).isEqualTo(kr.mujoong.contract.status.SessionStatus.ACTIVE);
+        long margin = h.settings.newSpeechMargin().toMillis();
+        h.provider.last().newSpeechMargin(null);
+        var instructions = h.provider.last().requests(ProviderRequestFactory.InstructionsAppend.class);
+        assertThat(instructions).as("참여 수락 뒤 첫 응답 지시가 나갔다").isNotEmpty();
+        String id = instructions.getLast().eventId();
+        h.provider.last().emit(new kr.mujoong.realtime.voice.ProviderPort.ProviderEvent.InstructionsAppended(id, 0, 0));
+        h.provider.last().emit(new kr.mujoong.realtime.voice.ProviderPort.ProviderEvent.OutputTranscriptDelta("그래, 이야기해 보자.",
+                0, 200 + margin));
+        h.provider.last().emit(new kr.mujoong.realtime.voice.ProviderPort.ProviderEvent.OutputAudioDelta(new byte[(int) margin * 48]));
+        h.provider.last().emit(new kr.mujoong.realtime.voice.ProviderPort.ProviderEvent.OutputAudioDelta(
+                kr.mujoong.realtime.testing.RealtimeItEnvironment.audiblePcm(9_600)));
+        h.drain();
+        assertThat(guard.count()).as("첫 응답이 제브 검사까지 간다").isEqualTo(1);
+        guard.allow(); h.drain();
+        assertThat(h.link.outputs()).as("허용되면 소리가 나간다").isNotEmpty();
     }
 
     private static SessionHarness ready() {

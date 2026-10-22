@@ -436,10 +436,56 @@ class GenerationSendExecutorTest {
         return h.store.transcripts.stream()
                 .filter(entry -> entry.speaker() == kr.mujoong.realtime.log.TranscriptEntry.Speaker.CHILD)
                 .filter(entry -> entry.assemblyStatus() == kr.mujoong.realtime.log.TranscriptEntry.AssemblyStatus.FINAL)
+                // 참여를 수락한 첫 대답("응")은 활동 시작 때 남는 행이라 이 시험이 보는 대화 발화에서 뺀다
+                .filter(entry -> !entry.text().equals("응"))
                 .map(kr.mujoong.realtime.log.TranscriptEntry::text).toList();
     }
 
     /** 응답 한 개를 흘리고 조용함으로 봉인해 기기로 보낸다. 재생 id를 돌려준다. */
+    // ------------------------------------------------------------------ 말하는 동안 아이 소리 보관
+
+    @Test
+    void childSoundIsHeldWhileGptLiveSpeaksAndReleasedWhenItsOutputEnds() {
+        h.activate();
+        assertThat(h.executor.relay().isHolding()).isFalse();
+
+        h.speak("우와, 공룡 그림이네!", 4_800);
+        assertThat(h.executor.relay().isHolding()).as("GPT-Live가 말하기 시작하면 아이 소리를 모은다").isTrue();
+        assertThat(h.executor.offerAudio(h.link.connectionId(), 1, loudFrame(), h.clock.monotonicNanos())).isTrue();
+        assertThat(h.executor.relay().heldFrameCount()).isEqualTo(1);
+
+        h.advance(QUIET);
+        assertThat(h.executor.relay().isHolding()).as("출력이 끝나면 풀어 보낸다").isFalse();
+        assertThat(h.executor.relay().heldFrameCount()).isZero();
+    }
+
+    @Test
+    void aBargeInReleasesTheHeldChildSoundAtOnce() {
+        h.activate();
+        UUID first = respond("첫 응답");
+        mark(first, PlaybackMark.Status.STARTED, null);
+        assertThat(h.executor.relay().isHolding()).as("앞 응답은 끝났다").isFalse();
+
+        h.speak("이어서 말하는 두 번째 응답", 4_800);
+        assertThat(h.executor.relay().isHolding()).isTrue();
+        h.executor.offerAudio(h.link.connectionId(), 1, loudFrame(), h.clock.monotonicNanos());
+        assertThat(h.executor.relay().heldFrameCount()).isEqualTo(1);
+
+        // 아이가 끼어들어 기기가 재생을 멈췄다: 출력 세대가 올라가 모아 둔 소리를 바로 풀어 보낸다
+        mark(first, PlaybackMark.Status.STOPPED, PlaybackMark.StopCause.LOCAL_VOICE_ACTIVITY);
+        assertThat(h.executor.relay().isHolding()).isFalse();
+        assertThat(h.executor.relay().heldFrameCount()).isZero();
+    }
+
+    private static byte[] loudFrame() {
+        byte[] pcm = new byte[960];
+        for (int i = 0; i < pcm.length; i += 2) {
+            pcm[i] = (byte) 0x10;
+            pcm[i + 1] = (byte) 0x27;
+        }
+        return pcm;
+    }
+
     private UUID respond(String text) {
         int before = h.link.outputs().size();
         h.speak(text, 48_000);

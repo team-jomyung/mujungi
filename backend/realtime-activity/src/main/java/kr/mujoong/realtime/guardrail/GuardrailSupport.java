@@ -19,7 +19,7 @@ public record GuardrailSupport(GuardrailMode mode, GuardrailClient client, Guard
         String policyVersion, ApprovedVerbatimPort approved) {
 
     /** 정책 리소스({@code guardrail/policy-v2.json})의 판. 장치를 직접 만드는 시험의 기본값이다. */
-    public static final String DEFAULT_POLICY_VERSION = "jev-guardrail-v2";
+    public static final String DEFAULT_POLICY_VERSION = "jev-guardrail-v3";
 
     /** 검사 없음(= OFF). 기존 생성 경로의 기본값. */
     public static final GuardrailSupport DISABLED = new GuardrailSupport(GuardrailMode.OFF,

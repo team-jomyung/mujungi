@@ -92,8 +92,9 @@ class SessionLifecycleIT {
         UUID playbackId = ((OutputBegin) begin.payload()).playbackId();
         device.playbackMark(sessionId, playbackId, PlaybackMark.Status.STARTED);
         awaitTrue(() -> logs.last(EventCode.LATENCY_TURN).isPresent(), "LATENCY_TURN");
-        awaitTrue(() -> transcripts(sessionId).size() == 2 && transcripts(sessionId).stream()
-                .allMatch(TranscriptRow::isFinal), "전사 두 행 FINAL");
+        // 수락한 참여 대답 · 이어진 아이 말 · AI 응답
+        awaitTrue(() -> transcripts(sessionId).size() == 3 && transcripts(sessionId).stream()
+                .allMatch(TranscriptRow::isFinal), "전사 세 행 FINAL");
         List<TranscriptRow> rows = transcripts(sessionId);
         assertThat(rows.get(0).speaker()).isEqualTo(kr.mujoong.realtime.log.TranscriptEntry.Speaker.CHILD);
         assertThat(rows.get(1).approvedForDisplay()).isTrue();

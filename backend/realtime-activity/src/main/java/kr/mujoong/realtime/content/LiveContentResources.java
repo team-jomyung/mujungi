@@ -17,7 +17,7 @@ import kr.mujoong.contract.json.JsonCodec;
 /**
  * 판정 선택지 판 · 가드레일 정책 판 자원 (U8 functional-spec 8.3 · BR2.1 · NFR2.3 · SD5, contracts/ai-io.md 10.4절).
  *
- * <p>{@value #JUDGMENT_RESOURCE}(J1 ~ J6 질문 · 선택지)와 {@value #GUARDRAIL_RESOURCE}(제브 검사 질문 · 라벨 8개 설명 · 7개 범주 · 모드)를 기동 때
+ * <p>{@value #JUDGMENT_RESOURCE}(J1 ~ J6 질문 · 선택지)와 {@value #GUARDRAIL_RESOURCE}(제브 검사 질문 · 라벨 설명 · 범주 · 모드)를 기동 때
  * 한 번 읽어 검증하고 이후 읽기 전용 값으로 쓴다(핫 리로드 없음, {@code gate.SeedDictionary}와 같은 방식). 하나라도 틀리면
  * {@link LoadException}을 던져 Realtime 기동 점검이 기동을 거부한다. 예외 메시지는 사유 열거값과 판정 지점 · 키 이름뿐이다(문구 원문 없음).
  * J7(연습 대본 사전 점검)은 core 상황 생성 자체 검토(U10) 프롬프트라 이 판에 없다.
@@ -27,11 +27,11 @@ public final class LiveContentResources {
     /** 판정 선택지 판(classpath). */
     public static final String JUDGMENT_RESOURCE = "judgment/option-sets-service-v1.json";
     /**
-     * 가드레일 정책 판(classpath). 선 형식 정정(D4 · D5)으로 새 판 {@code policy-v2.json}을 읽는다. {@code policy-v1.json}은 이력으로 자원에 남기고 코드가
-     * 읽지 않는다.
+     * 가드레일 정책 판(classpath). 출력 단위별 욕설 검사에는 {@code policy-v3.json}을 읽는다.
+     * {@code policy-v1.json} · {@code policy-v2.json}은 이력으로 보관한다.
      */
-    public static final String GUARDRAIL_RESOURCE = "guardrail/policy-v2.json";
-    /** 제브 선택지 중 '해당 없음' 라벨(7개 범주에 더해 criteria에 정확히 있어야 한다). */
+    public static final String GUARDRAIL_RESOURCE = "guardrail/policy-v3.json";
+    /** 제브 선택지 중 '해당 없음' 라벨(정책 범주에 더해 criteria에 정확히 있어야 한다). */
     public static final String GUARDRAIL_PASS_LABEL = "PASS";
 
     /** 진행 중 판정 지점(J7은 core 몫). */
@@ -44,8 +44,8 @@ public final class LiveContentResources {
         FREE_TALK, PRACTICE_PEER, PRACTICE_COACH
     }
 
-    /** 제브 범주 수(C §3.1의 기존 7개 범주). */
-    public static final int GUARDRAIL_CATEGORY_COUNT = 7;
+    /** 현재 v3 정책의 제브 범주 수(PROFANITY). */
+    public static final int GUARDRAIL_CATEGORY_COUNT = 1;
 
     private static final Pattern CODE = Pattern.compile("^[A-Z][A-Z0-9_]*$");
 
@@ -110,8 +110,8 @@ public final class LiveContentResources {
     }
 
     /**
-     * 가드레일 정책 판. {@code instructions}는 제브 {@code choice} 질문의 한국어 검사 질문이고 {@code criteria}는 '라벨 → 설명'(삽입 순서 유지, 7개 범주 +
-     * {@value #GUARDRAIL_PASS_LABEL})이다. {@code categories}는 계약 스키마 enum과 같은 7개 범주 이름이다.
+     * 가드레일 정책 판. {@code instructions}는 제브 {@code choice} 질문의 한국어 검사 질문이고 {@code criteria}는 '라벨 → 설명'(삽입 순서 유지, 정책 범주 +
+     * {@value #GUARDRAIL_PASS_LABEL})이다. {@code categories}는 정책 판의 범주 이름이다(v3: PROFANITY).
      */
     public record GuardrailPolicy(String version, String source, String instructions, Map<String, String> criteria,
             List<String> categories, Set<GuardrailMode> modes) {
@@ -236,17 +236,18 @@ public final class LiveContentResources {
         if (blank(file.instructions())) {
             throw new LoadException(Problem.BAD_INSTRUCTIONS, GUARDRAIL_RESOURCE);
         }
+        int categoryCount = "jev-guardrail-v2".equals(file.version()) ? 7 : GUARDRAIL_CATEGORY_COUNT;
         List<String> categories = file.categories();
-        if (categories == null || categories.size() != GUARDRAIL_CATEGORY_COUNT || new HashSet<>(categories).size() != categories.size()
+        if (categories == null || categories.size() != categoryCount || new HashSet<>(categories).size() != categories.size()
                 || categories.stream().anyMatch(category -> category == null || !CODE.matcher(category).matches())) {
-            throw new LoadException(Problem.BAD_CATEGORIES, "categories " + GUARDRAIL_CATEGORY_COUNT + "개 · 중복 없음");
+            throw new LoadException(Problem.BAD_CATEGORIES, "categories " + categoryCount + "개 · 중복 없음");
         }
-        // criteria 키는 정확히 7개 범주 + PASS이고 설명은 모두 비어 있지 않다(제브 선택지 8개, FR1.3 · D4)
+        // criteria 키는 정책 판의 범주 + PASS이고 설명은 모두 비어 있지 않다.
         Map<String, String> criteria = file.criteria();
         Set<String> expectedLabels = new HashSet<>(categories);
         expectedLabels.add(GUARDRAIL_PASS_LABEL);
         if (criteria == null || !criteria.keySet().equals(expectedLabels) || criteria.values().stream().anyMatch(LiveContentResources::blank)) {
-            throw new LoadException(Problem.BAD_CRITERIA, "criteria = categories 7개 + " + GUARDRAIL_PASS_LABEL + ", 설명 비어 있지 않음");
+            throw new LoadException(Problem.BAD_CRITERIA, "criteria = categories + " + GUARDRAIL_PASS_LABEL + ", 설명 비어 있지 않음");
         }
         List<String> modes = file.modes();
         Set<GuardrailMode> parsed = EnumSet.noneOf(GuardrailMode.class);
