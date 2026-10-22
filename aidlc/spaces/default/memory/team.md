@@ -25,7 +25,7 @@
 - 끝까지 이어지는 가장 얇은 조각은 U1에서 이미 만들었다(두 앱 + PostgreSQL + Nginx + 웹, 기기 시뮬레이터와 가짜 공급자로 자유 대화 한 턴).
   우리는 새 스켈레톤을 만들지 않고, 이 끝-끝 경로가 계속 통과하는 것을 회귀 기준으로 삼는다(Q2-A).
 - 회귀 기준 명령은 `bash scripts/verify.sh`다(A 정적 · 단위 · 통합 → B 기동 · 3종 호출 → C 기기 시뮬레이터 한 턴 → 사후 단언 P1 · P2 · P3 · T).
-  CI `skeleton` 작업이 `main` 푸시 · 수동 실행마다 같은 명령(`--mode compose`)을 돈다. PR에서는 돌지 않는다.
+  CI `skeleton` 작업은 `main` 푸시마다 A를 생략한 경량 명령(`--mode compose --skip-a`: A0 산출물 · B 이미지 빌드 · 기동 · C 한 턴 · 사후 단언)을 돈다. 전체 명령(A1 ~ A4 회귀 포함)은 `workflow_dispatch` 수동 실행(`full_verify=true`)과 Build and Test에서 돈다. PR에서는 돌지 않고, `skeleton`은 비차단이며 재시도가 없다.
 - `classic` 범위는 `skeleton: off`라서 스켈레톤 체크포인트 의식을 하지 않고, Construction에 들어갈 때 진행 방식(자동 진행 / 체크포인트마다 검토)을 고른다.
 - 작업 단계마다의 검증(Q4 · Q4-1):
   - 작업 단계가 끝날 때마다 **바꾼 쪽**의 정적 검사 · 단위 · 통합 시험을 돌린다(백엔드: `cd backend && ./gradlew clean check -Pmujoong.test.db=docker`, 프런트: `eslint` · `vitest --coverage` · `next build`, tools: `vitest`).

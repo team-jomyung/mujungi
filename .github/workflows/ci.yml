@@ -4,7 +4,8 @@
 # 소유자: A 계정 · 클라우드 담당(J104). 실명 · 계정은 쓰지 않는다.
 #
 # PR(main 대상): 변경 경로에 해당하는 필수 검사와 secrets 실행.
-# main Push: 필수 검사와 skeleton 실행.
+# main Push: 필수 검사와 skeleton 경량 실행(verify.sh --skip-a: A1 ~ A4 회귀 생략, A0 산출물 · B · C · 사후 단언).
+# 수동 실행(workflow_dispatch): 필수 검사와 skeleton. 입력 full_verify=true면 skeleton이 verify.sh 전체(A 포함)를 돈다.
 # ci-gate 성공 후 images 빌드·검사·GHCR 게시, images 성공 후 deploy 호출.
 # PR에서는 skeleton · images · deploy를 실행하지 않는다.
 # contracts/ 또는 .github/ 변경 시 PR용 조건부 검사를 모두 실행한다.
@@ -23,6 +24,12 @@ on:
     branches: [main]
   push:
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      full_verify:
+        description: "skeleton에서 verify.sh 전체(A1 ~ A4 회귀 포함)를 돈다. 끄면 A를 건너뛰는 경량 실행"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -88,7 +95,7 @@ jobs:
           out infra "$i"
           if [ "$b" = true ] || [ "$d" = true ]; then out backend_deps true; else out backend_deps false; fi
           if [ "$f" = true ] || [ "$t" = true ] || [ "$d" = true ]; then out frontend_deps true; else out frontend_deps false; fi
-          if [ "$EVENT" = push ] && [ "$REF" = refs/heads/main ]; then
+          if { [ "$EVENT" = push ] && [ "$REF" = refs/heads/main ]; } || [ "$EVENT" = workflow_dispatch ]; then
             out skeleton true
           else
             out skeleton false
@@ -461,8 +468,19 @@ jobs:
           cache-dependency-path: |
             frontend/package-lock.json
             tools/package-lock.json
-      - name: 검증 명령 C안(A 정적 · 단위 · 통합 → B 기동 · 3종 호출 → C 기기 시뮬레이터 한 턴 → 사후 단언)
-        run: bash scripts/verify.sh --mode compose
+      # 기본은 경량: A1 ~ A4(전체 회귀 · 비밀 스캔)는 ci-gate가 이미 돌았으므로 건너뛰고, A0 산출물 → B(이미지 빌드 · 기동 ·
+      # 3종 호출) → C 기기 시뮬레이터 한 턴 → 사후 단언을 돈다. 수동 실행에서 full_verify=true면 기존 전체 실행이다.
+      # 스켈레톤에는 재시도를 넣지 않는다. 외부 입력은 env로만 넘긴다(R-F11)
+      - name: 검증 명령 C안(경량 A0 산출물 또는 전체 A → B 기동 · 3종 호출 → C 기기 시뮬레이터 한 턴 → 사후 단언)
+        env:
+          FULL_VERIFY: ${{ github.event_name == 'workflow_dispatch' && inputs.full_verify }}
+        run: |
+          set -euo pipefail
+          if [ "$FULL_VERIFY" = true ]; then
+            bash scripts/verify.sh --mode compose
+          else
+            bash scripts/verify.sh --mode compose --skip-a
+          fi
       - name: 검증 결과(report.txt — 단계별 한 줄, 비밀 값 없음)
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -470,6 +488,7 @@ jobs:
           name: skeleton-report
           path: |
             build/verify/report.txt
+            build/verify/logs/A0.log
             build/verify/logs/A1.log
             build/verify/logs/B.log
             build/verify/logs/C.log
