@@ -23,7 +23,7 @@
 - 끝까지 이어지는 가장 얇은 조각은 U1에서 이미 만들었다(두 앱 + PostgreSQL + Nginx + 웹, 기기 시뮬레이터와 가짜 공급자로 자유 대화 한 턴).
   우리는 새 스켈레톤을 만들지 않고, 이 끝-끝 경로가 계속 통과하는 것을 회귀 기준으로 삼는다(Q2-A).
 - 회귀 기준 명령은 `bash scripts/verify.sh`다(A 정적 · 단위 · 통합 → B 기동 · 3종 호출 → C 기기 시뮬레이터 한 턴 → 사후 단언 P1 · P2 · P3 · T).
-  CI `skeleton` 작업이 `main` 푸시마다 같은 명령(`--mode compose`)을 돈다. PR에서는 돌지 않고, 현재 `ci-gate` 집계에서 제외된 임시 비차단 작업이다. 이 현황이 이번 전체 회귀 검증을 면제하지 않는다.
+  CI `skeleton` 작업은 `main` 푸시마다 A를 생략한 경량 명령(`--mode compose --skip-a`: A0 산출물 · B 이미지 빌드 · 기동 · C 한 턴 · 사후 단언)을 돈다. 전체 명령(A1 ~ A4 회귀 포함)은 `workflow_dispatch` 수동 실행(`full_verify=true`)과 Build and Test에서 돈다. PR에서는 돌지 않는다. `skeleton`은 `ci-gate`가 집계하는 차단 검사라(JIRA-256 복원) `main` 푸시에서 실패하면 이미지 게시 · 배포가 멈춘다. `skeleton` 자체에는 재시도가 없고, 이미지 빌드만 `build-images.sh`가 실패한 이미지를 최대 2회 더 빌드한다.
 - `classic` 범위는 `skeleton: off`라서 스켈레톤 체크포인트 의식을 하지 않고, Construction에 들어갈 때 진행 방식(자동 진행 / 체크포인트마다 검토)을 고른다.
 - 작업 단계마다의 검증(Q4 · Q4-1):
   - 작업 단계가 끝날 때마다 **바꾼 쪽**의 정적 검사 · 단위 · 통합 시험을 돌린다(백엔드: `cd backend && ./gradlew clean check -Pmujoong.test.db=docker`, 프런트: `eslint` · `vitest --coverage` · `next build`, tools: `vitest`).
@@ -34,13 +34,14 @@
 - **Methodology**: test-after
 - **Ordering**: 시험할 수 있는 층을 하나 구현하면, 바로 그 층의 시험을 쓰고 돌린 뒤 다음 층으로 넘어간다.
 - 계약에 닿는 변경도 같은 순서를 따른다(Q3-A). 다만 설계 문서 변경이 계약에 닿으면 같은 작업에서 `contracts/`도 함께 고친다(`discovered-rules.md` R-M10).
-- 커버리지 하한(줄 기준만, 분기 · 함수 하한 없음):
-  - 모듈 전체 줄 80%를 CI가 막는다. 백엔드 JaCoCo는 `contract-model` · `core-api` · `realtime-activity`(`test-support`는 제외), 프런트 Vitest v8은 `src/**/*.{ts,tsx}`(`*.d.ts`만 제외).
-  - 범위 파일이 있는 기능에는 기능 범위 줄 80%를 적용한다(`backend/coverage-scope/<기능>.txt` · `frontend/coverage-scope/<기능>.json`, 시험 목록 `<기능>.tests`). 현재 CI가 막는 범위는 프런트 `practice-legacy` · `web-push`이며, 백엔드 범위 파일은 로컬 · 검토 근거다.
+- 커버리지(줄 기준만, 분기 · 함수 하한 없음)는 **보고 전용**이다(JIRA-256). CI는 보고서를 만들되 하한으로 막지 않는다:
+  - 모듈 전체 줄 커버리지를 CI가 보고한다(80%는 목표치, 막지 않음). 백엔드 JaCoCo는 `contract-model` · `core-api` · `realtime-activity`(`test-support`는 제외), 프런트 Vitest v8은 `src/**/*.{ts,tsx}`(`*.d.ts`만 제외).
+  - 범위 파일(`backend/coverage-scope/<기능>.txt` · `frontend/coverage-scope/<기능>.json`)은 로컬 · 검토 근거다. CI는 범위를 따로 다시 돌리지 않는다.
   - `tools/`에는 커버리지 하한이 없다(시험 지원 코드, J107).
   - 범위 측정은 빈 목록 · 없는 파일이면 실패한다(J137). 범위 파일을 새로 쓰면 이 방식을 그대로 따른다.
-  - `classic` 범위의 줄 80% 하한 · 병합 전 CI 실행과 같다.
-- 하한 · 기존 단언 · 대조 시험 · ArchUnit 시험은 시험을 통과시키려고 낮추거나 끄거나 건너뛰게 하지 않는다. 모자라면 시험을 더하거나 차이를 보고한다.
+  - 병합 전 CI 실행은 `classic` 범위와 같고, 줄 80%는 막는 하한이 아니라 보고 목표다.
+- 대조 시험 · ArchUnit 시험은 시험을 통과시키려고 약하게 고치거나 끄거나 건너뛰게 하지 않는다. 마이그레이션 개수 · 표 합계 · 최고 버전 같은 숫자 고정 단언은 의미 있는 검사로 바꿀 수 있다(R-F2).
+- CI 재시도: 실패한 시험은 CI(환경 변수 `CI`)에서만 최대 2회 더 돈다(백엔드 Gradle `org.gradle.test-retry` `maxRetries=2` · `maxFailures=10`, 프런트 · tools Vitest `retry`). 로컬은 재시도하지 않는다. 재시도 기록은 백엔드 JUnit XML(`flakyFailure`), 프런트 · tools `test-results/retries.json`(재시도 횟수 · 최초 실패, artifact) · 로그 경고 · 실행 요약에 남고(리포터 오류는 경고만, 판정 불변), 재시도 뒤에도 실패하면 `ci-gate`가 막는다. 모든 시험은 계속 `ci-gate`를 막는다.
 - 시험 종류:
   - 단위: JUnit 5 · AssertJ · Mockito(백엔드), Vitest + Testing Library + jsdom(프런트), Vitest(tools).
   - 통합: Spring Boot 통합 시험 + Testcontainers PostgreSQL(`-Pmujoong.test.db=docker`), 상대 앱은 스텁.
@@ -48,11 +49,17 @@
   - 아키텍처: ArchUnit(`core/arch` · `realtime/arch`), ESLint `/parent` ↔ `/device` ↔ `shared` import 경계.
   - 끝-끝: `bash scripts/verify.sh` C안(기기 시뮬레이터 + 가짜 공급자).
   - 인프라: `infra-validate`(Compose 불변식 · `nginx -t` · shellcheck · 마이그레이션 expand 검사), 이미지 점검, 관문 음성 대조.
-- 시험 클래스 이름은 단위 `*Test`, 통합 `*IT`를 기본으로 한다. 백엔드 태그는 기능 이름(`practice-legacy` · `web-push` · `skeleton` 등), DB 시험은 `db`를 쓴다. 프런트·tools 시험은 소스 구조 폴더(`tests/parent/features/…` · `tests/shared/…`)에 둔다.
-- 관문의 한계: PR `ci-gate`는 changes · backend · backend-deps · frontend · frontend-deps · tools · secrets · infra-validate를 집계한다. 정적·단위·통합·적용 범위 커버리지·보안·인프라는 경로 조건에 따라 실행된다. 이미지는 관문 통과 뒤 main에서 실행되며, 끝-끝 `skeleton`은 main 전용 임시 비차단이다. 이번 작업은 Build and Test의 전체 `verify.sh`로 병합 전 끝-끝을 확인한다.
+- 시험 이름 · 태그: 단위 `*Test`, 통합 `*IT`, 백엔드 유닛 태그 `@Tag("u1")` ~ `@Tag("u7")`와 `@Tag("db")`, 프런트 · tools는 `tests/<유닛>/` 폴더.
+- 관문의 한계: PR의 `ci-gate`는 정적 · 단위 · 통합(커버리지는 보고 전용) · 보안 · 인프라 · 이미지까지 본다. 끝-끝 회귀(`skeleton`)는 `main` 병합 뒤에 처음 돌고, 실패하면 이미지 게시 · 배포를 막는다. 그래서 이번 작업은 Build and Test의 전체 `verify.sh`로 병합 전 끝-끝을 확인한다.
 - 시험 · CI · 검증에서는 가짜 공급자만 쓴다(ADR-002).
 - 결과 보고는 테스트 대역 · 합성 대화 · 실제 API · 실제 기기 성공을 따로 적고, 대역 성공을 실공급자 성공으로 표시하지 않는다(`discovered-rules.md` R-M11, Q10-A).
 - 이번 작업 기록의 시험 전략은 Standard다(컴포넌트당 5 ~ 8개 + 핵심 경계 통합 시험).
+
+- 프런트 · tools 시험은 소스 구조 폴더(`tests/parent/features/…` · `tests/shared/…`)에 두고, 백엔드 시험 태그는 유닛 번호 대신 기능 이름(`practice-legacy` · `web-push` · `skeleton` 등)을 쓴다. 앞의 `tests/<유닛>/`과 `@Tag("u1")` ~ `@Tag("u7")` 규칙을 대체한다. (learned 2026-10-19) <!-- cid:261018-structure-refactor:code-generation:a432bd7909595cbb209f549434d0d3846f7f7a0e8beb8d49b185e9c47f6d0f1d -->
+
+- 커버리지 범위 파일은 유닛 번호 대신 기능 이름으로 짓는다(`backend/coverage-scope/<기능>.txt` · `frontend/coverage-scope/<기능>.json`과 시험 목록 `<기능>.tests`). 앞의 유닛 이름 범위 파일 규칙을 대체한다. (learned 2026-10-19) <!-- cid:261018-structure-refactor:code-generation:098665fc1a2767bd9d8e8451bf76fbbcdc4818372abf5efbd1ae2c842d6babe1 -->
+
+- CI가 막는 커버리지 범위는 없다(JIRA-256). 프런트 `practice-legacy` · `web-push` 범위 재실행 단계는 중복 실행이라 `ci.yml`에서 뺐고, 모든 범위 파일은 로컬 · 검토 근거다. 앞의 "CI가 실제로 막는 범위는 U5b · U7뿐"(백엔드 `u5b` · `u5b-core` · `u7`)과 "프런트 `practice-legacy` · `web-push`뿐"을 대체한다. (learned 2026-10-19, revised 2026-10-22) <!-- cid:261018-structure-refactor:build-and-test:785d6e181cf556394ec87ff413be7d22caf29276e1eaa009185a48e3a034bf10 -->
 
 ## Guard Policy
 

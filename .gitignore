@@ -112,6 +112,8 @@ build/verify/
 node_modules/
 .next/
 coverage/
+# CI 재시도 기록(Vitest retries.json)
+test-results/
 *.tsbuildinfo
 # VS Code Java(Eclipse JDT) 빌드 산출물
 backend/**/bin/

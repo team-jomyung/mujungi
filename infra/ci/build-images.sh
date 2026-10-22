@@ -28,6 +28,9 @@
 #   --only        core-api,realtime,web,migrate,backup,infra,nginx,fake-provider 중 일부만(쉼표 목록)
 #   --fingerprint 부르는 쪽이 미리 계산한 지문(scripts/verify.sh 시작 지문). 주면 지금 지문과 같아야 한다
 # 표준 출력: 이미지마다 한 줄(이름 · 태그 · 걸린 초). docker build 출력은 로그 디렉터리의 <이름>.log에만 쓴다.
+# 빌드 재시도(JIRA-256): 이미지 하나의 docker build가 실패하면 그 이미지의 빌드 전체를 잠시 뒤 최대 2회 더 시도한다(외부 받기 ·
+#   레지스트리 일시 장애 대비). 받는 파일의 ADD --checksum 검증은 그대로이고, 마지막 시도까지 실패하면 그대로 실패한다.
+#   첫 시도 로그는 <이름>.log, 재시도 로그는 <이름>.attempt-<n>.log로 남기고, 재시도한 사실을 표준 오류(CI는 경고 주석)에 적는다.
 # 종료 코드: 0 성공, 1 빌드 실패 · 지문 불일치 · 낡은 산출물, 2 전제 누락(docker · 산출물 · git), 64 인자 오류
 
 set -Eeuo pipefail
@@ -37,7 +40,7 @@ readonly ROOT
 readonly ALL_IMAGES=(core-api realtime web migrate backup infra nginx fake-provider)
 
 usage() {
-  sed -n '2,31p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+  sed -n '2,34p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
 }
 
 registry=mujoong.local
@@ -206,10 +209,21 @@ image_ref() {
   esac
 }
 
+# 이미지 하나의 빌드 시도 수(첫 시도 + 재시도 2회)와 재시도 전 대기(초 × 시도 번호)
+readonly BUILD_ATTEMPTS=3
+readonly BUILD_RETRY_WAIT_SEC=15
+
+warn() {
+  echo "build-images: $*" >&2
+  # GitHub Actions에서는 경고 주석으로도 남긴다(로컬 출력은 그대로)
+  if [ "${GITHUB_ACTIONS:-}" = true ]; then
+    echo "::warning title=build-images::$*"
+  fi
+}
+
 build_one() {
-  local name="$1" ref log started
+  local name="$1" ref log started attempt
   ref="$(image_ref "$name")"
-  log="$log_dir/$name.log"
   local common=(--progress plain --build-arg "GIT_SHA=$git_sha" --build-arg "MUJOONG_SOURCE_FINGERPRINT=$fingerprint"
     -t "$ref" "${secret_args[@]}")
   local args=()
@@ -228,11 +242,23 @@ build_one() {
     nginx) args=(-f infra/nginx-ecs/Dockerfile infra) ;;
   esac
   started="$(date +%s)"
-  if ! (cd "$ROOT" && DOCKER_BUILDKIT=1 docker build "${common[@]}" "${args[@]}") >"$log" 2>&1; then
-    echo "build-images: $name 빌드 실패(로그 ${log#"$ROOT"/})" >&2
-    return 1
-  fi
-  echo "build-images: $name $ref $(($(date +%s) - started))s"
+  for ((attempt = 1; attempt <= BUILD_ATTEMPTS; attempt++)); do
+    log="$log_dir/$name.log"
+    [ "$attempt" -gt 1 ] && log="$log_dir/$name.attempt-$attempt.log"
+    if (cd "$ROOT" && DOCKER_BUILDKIT=1 docker build "${common[@]}" "${args[@]}") >"$log" 2>&1; then
+      if [ "$attempt" -gt 1 ]; then
+        warn "$name 재시도 뒤 빌드 성공(시도 $attempt/$BUILD_ATTEMPTS, 첫 실패 로그 ${log_dir#"$ROOT"/}/$name.log)"
+      fi
+      echo "build-images: $name $ref $(($(date +%s) - started))s"
+      return 0
+    fi
+    if [ "$attempt" -lt "$BUILD_ATTEMPTS" ]; then
+      warn "$name 빌드 실패(시도 $attempt/$BUILD_ATTEMPTS, 로그 ${log#"$ROOT"/}) — $((BUILD_RETRY_WAIT_SEC * attempt))초 뒤 다시 빌드한다"
+      sleep $((BUILD_RETRY_WAIT_SEC * attempt))
+    fi
+  done
+  echo "build-images: $name 빌드 실패(시도 $BUILD_ATTEMPTS회 모두, 마지막 로그 ${log#"$ROOT"/})" >&2
+  return 1
 }
 
 for name in "${selected[@]}"; do

@@ -228,7 +228,8 @@ class DeviceGatewayIT {
 
         device.clockSkew(Duration.ofSeconds(5)).heartbeat(40L);
         awaitTrue(() -> connection(connectionId).clockOffsetMs() != null, "clockOffsetMs");
-        assertThat(connection(connectionId).clockOffsetMs()).isBetween(5_000L - 20L, 5_000L + 20L);
+        // 실제 통신 지연이 섞이므로 정밀 오차가 아니라 기기 시계 차이(5초)가 반영됐는지만 본다
+        assertThat(connection(connectionId).clockOffsetMs()).isBetween(5_000L - 1_000L, 5_000L + 1_000L);
         assertThat(connection(connectionId).rttMs()).isEqualTo(40L);
 
         device.heartbeatWithoutSentAt(40L);

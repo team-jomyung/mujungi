@@ -1,7 +1,7 @@
 import type { QueryClient } from "@tanstack/react-query";
-import { render, type RenderResult } from "@testing-library/react";
+import { cleanup, render, type RenderResult } from "@testing-library/react";
 import type { ReactElement } from "react";
-import { vi, type Mock } from "vitest";
+import { afterEach, vi, type Mock } from "vitest";
 import { ParentProviders } from "@/parent/common/ParentProviders";
 import { createApiClient, type ApiClient, type FetchLike } from "@/parent/common/api/apiClient";
 import { createParentQueryClient } from "@/parent/common/api/queries";
@@ -60,6 +60,18 @@ function matches(path: string, filter: string | RegExp | undefined): boolean {
   return typeof filter === "string" ? path === filter : filter.test(path);
 }
 
+// 렌더마다 만든 QueryClient를 시험이 끝날 때 비운다(캐시 · GC 타이머가 다음 시험으로 넘어가지 않게).
+// 화면을 먼저 내린 뒤 비운다(구독 중인 화면이 비운 캐시를 다시 읽지 않게). cleanup은 여러 번 불러도 안전하다
+const createdClients = new Set<QueryClient>();
+
+afterEach(() => {
+  cleanup();
+  for (const client of createdClients) {
+    client.clear();
+  }
+  createdClients.clear();
+});
+
 export function renderParent(ui: ReactElement, options: RenderParentOptions): ParentHarness {
   const csrfToken = makeCsrfToken();
   const recorded: RecordedRequest[] = [];
@@ -75,6 +87,7 @@ export function renderParent(ui: ReactElement, options: RenderParentOptions): Pa
   const timing = testTiming(options.timing);
   const api = createApiClient({ timeoutMs: options.timeoutMs ?? timing.parentRequestTimeoutMs, fetchImpl });
   const queryClient = createParentQueryClient();
+  createdClients.add(queryClient);
   options.prepare?.(queryClient);
   const view = render(
     <TimingProvider timing={timing}>

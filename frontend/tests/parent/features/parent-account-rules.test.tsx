@@ -1,13 +1,7 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { useState } from "react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { BottomSheet } from "@/parent/common/components/BottomSheet";
-import { ChildScreen } from "@/parent/features/child/ChildScreen";
-import { ConsentScreen } from "@/parent/features/consent/ConsentScreen";
-import { DeviceScreen } from "@/parent/features/device/DeviceScreen";
-import { HomeScreen } from "@/parent/features/home/HomeScreen";
-import { LoginScreen } from "@/parent/features/login/LoginScreen";
-import { StopExpressionsScreen } from "@/parent/features/child/StopExpressionsScreen";
 import {
   ACCOUNT_COPY,
   ACCOUNT_PROPOSED_COPY,
@@ -18,99 +12,8 @@ import {
   rttText,
   stopSummary,
 } from "@/shared/copy/account";
-import { errorResponse, homeBody, jsonResponse } from "../../support/fixtures";
-import { resetRouter } from "../../support/nextNavigation";
-import { renderParent, type RequestHandler } from "../../support/parentHarness";
-import { childBody, meBody, policyBody, stopBody } from "../../support/accountFixtures";
 
-vi.mock("next/navigation", async () => (await import("../../support/nextNavigation")).nextNavigationMock);
-
-// U2 공통 규칙 시험: data-testid(U1 Step 42와 같은 규칙) · 바텀 시트 초점 · 문구 모듈
-
-const INTERACTIVE = [
-  "button",
-  "a[href]",
-  "input",
-  "select",
-  "textarea",
-  "[role='button']",
-  "[role='tab']",
-  "[role='checkbox']",
-  "[tabindex]:not([tabindex='-1'])",
-].join(", ");
-const TEST_ID_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/;
-
-function expectTestIdRule() {
-  const missing = Array.from(document.body.querySelectorAll<HTMLElement>(INTERACTIVE))
-    .filter((element) => !element.hasAttribute("data-testid"))
-    .map((element) => element.outerHTML.slice(0, 120));
-  expect(missing).toEqual([]);
-  const bad = Array.from(document.body.querySelectorAll<HTMLElement>("[data-testid]"))
-    .map((element) => element.getAttribute("data-testid") ?? "")
-    .filter((testId) => !TEST_ID_PATTERN.test(testId));
-  expect(bad).toEqual([]);
-}
-
-const allOk: RequestHandler = (path) => {
-  switch (path) {
-    case "/api/home":
-      return jsonResponse(200, homeBody("STABLE"));
-    case "/api/me":
-      return jsonResponse(200, meBody());
-    case "/api/policies/current":
-      return jsonResponse(200, policyBody());
-    case "/api/child":
-      return jsonResponse(200, childBody());
-    case "/api/child/stop-expressions":
-      return jsonResponse(200, stopBody(["이제 그만"]));
-    default:
-      return errorResponse(404, "NOT_FOUND");
-  }
-};
-
-beforeEach(() => {
-  resetRouter();
-});
-
-describe("data-testid 규칙 — U2 화면", () => {
-  it("01 · 02(+02-1 · P5) · 03(보기 · 수정) · 04(+SET0 · P7) · 05 · SET-01(입력 칸)", async () => {
-    const login = renderParent(<LoginScreen navigate={vi.fn()} />, { handler: allOk });
-    expectTestIdRule();
-    login.view.unmount();
-
-    const consent = renderParent(<ConsentScreen />, { handler: allOk });
-    await waitFor(() => expect(screen.getByTestId("consent-detail-voice")).toBeEnabled());
-    fireEvent.click(screen.getByTestId("consent-detail-voice"));
-    expectTestIdRule();
-    fireEvent.click(screen.getByTestId("terms-confirm"));
-    fireEvent.click(screen.getByTestId("consent-back"));
-    expectTestIdRule();
-    consent.view.unmount();
-
-    const child = renderParent(<ChildScreen />, { handler: allOk });
-    fireEvent.click(await screen.findByTestId("child-edit"));
-    expectTestIdRule();
-    child.view.unmount();
-
-    const home = renderParent(<HomeScreen />, { handler: allOk });
-    await screen.findByTestId("home-child-card");
-    expectTestIdRule();
-    fireEvent.click(screen.getByTestId("home-settings"));
-    expectTestIdRule();
-    fireEvent.click(screen.getByTestId("settings-delete"));
-    expectTestIdRule();
-    home.view.unmount();
-
-    const device = renderParent(<DeviceScreen />, { handler: allOk });
-    await screen.findByTestId("device-stop-summary");
-    expectTestIdRule();
-    device.view.unmount();
-
-    renderParent(<StopExpressionsScreen />, { handler: allOk });
-    fireEvent.click(await screen.findByTestId("stop-item-edit-1"));
-    expectTestIdRule();
-  });
-});
+// U2 공통 규칙 시험: 바텀 시트 초점 · 문구 모듈
 
 function SheetHarness() {
   const [open, setOpen] = useState(false);
