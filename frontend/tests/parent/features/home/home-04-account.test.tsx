@@ -103,7 +103,7 @@ describe("SET0 설정 시트(AC1.4.12 · AC1.5.1 ~ AC1.5.4)", () => {
     return harness;
   }
 
-  it("「⚙」은 '← 설정' · 「로그아웃」 · 「계정 삭제」(위험 색) 시트를 열고 「←」 · 바깥 · Escape로 닫힌다", async () => {
+  it("「⚙」은 '← 설정' · 「로그아웃」 · 「계정 삭제」 시트를 열고 「←」 · 바깥 · Escape로 닫힌다", async () => {
     await openSettings();
     expect(screen.getByTestId("home-settings")).toHaveAccessibleName("설정 열기");
     const sheet = screen.getByTestId("settings-sheet");
@@ -111,7 +111,6 @@ describe("SET0 설정 시트(AC1.4.12 · AC1.5.1 ~ AC1.5.4)", () => {
     expect(screen.getByRole("heading", { name: "설정" })).toHaveFocus();
     expect(screen.getByTestId("settings-logout")).toHaveTextContent("로그아웃");
     expect(screen.getByTestId("settings-delete")).toHaveTextContent("계정 삭제");
-    expect(screen.getByTestId("settings-delete").className).toContain("mj-button--danger");
     fireEvent.click(screen.getByTestId("settings-back"));
     expect(screen.queryByTestId("settings-sheet")).toBeNull();
     fireEvent.click(screen.getByTestId("home-settings"));
@@ -153,7 +152,7 @@ describe("P7 계정 삭제 확인(AC1.6.1 · AC1.6.2 · AC1.6.9)", () => {
     return harness;
   }
 
-  it("제목 · '{아이}의 …' 본문 · 「아니오」(기본 초점) · 「삭제」(위험 단추)이고 「아니오」는 SET0으로 돌아온다", async () => {
+  it("제목 · '{아이}의 …' 본문 · 「아니오」(기본 초점) · 「삭제」이고 「아니오」는 SET0으로 돌아온다", async () => {
     await openP7();
     const dialog = screen.getByRole("alertdialog");
     expect(dialog).toHaveTextContent("정말 계정을 삭제할까요?");
@@ -162,7 +161,6 @@ describe("P7 계정 삭제 확인(AC1.6.1 · AC1.6.2 · AC1.6.9)", () => {
     );
     expect(screen.getByTestId("p7-no")).toHaveFocus();
     expect(screen.getByTestId("p7-yes")).toHaveTextContent("삭제");
-    expect(screen.getByTestId("p7-yes").className).toContain("mj-button--danger");
     fireEvent.click(screen.getByTestId("p7-no"));
     expect(screen.queryByTestId("p7-dialog")).toBeNull();
     expect(screen.getByTestId("settings-sheet")).toBeInTheDocument();

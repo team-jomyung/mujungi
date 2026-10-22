@@ -11,6 +11,7 @@ import kr.mujoong.testsupport.db.MujoongPostgres;
 import kr.mujoong.testsupport.db.MujoongPostgres.MigrationSet;
 import kr.mujoong.testsupport.db.MujoongPostgres.Role;
 import org.flywaydb.core.Flyway;
+import org.flywaydb.core.api.MigrationVersion;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -42,11 +43,15 @@ class PracticeMigrationIT {
                     now, "{\"policyVersion\":\"1\",\"voiceAndText\":true,\"guardianView\":true,"
                             + "\"reportSharing\":false,\"rawAudio\":false}", now, now);
 
-            assertThat(db.flyway(MigrationSet.REALTIME).migrate().migrationsExecuted).isEqualTo(4);
+            // V3 뒤의 realtime 마이그레이션 파일 전부가 적용된다(개수 · 최고 버전은 파일에서 읽는다)
+            List<String> versions = db.migrationVersions(MigrationSet.REALTIME);
+            long afterV3 = versions.stream().filter(version -> MigrationVersion.fromVersion(version)
+                    .compareTo(MigrationVersion.fromVersion("3")) > 0).count();
+            assertThat(db.flyway(MigrationSet.REALTIME).migrate().migrationsExecuted).isEqualTo((int) afterV3);
 
             assertThat(jdbc.queryForObject("select status from realtime.realtime_activity_session where id=?",
                     String.class, session)).isEqualTo("ACTIVE");
-            assertThat(new SchemaVersionCheck(jdbc).verify()).isEqualTo("7");
+            assertThat(new SchemaVersionCheck(jdbc).verify()).isEqualTo(versions.getLast());
             assertThat(db.flyway(MigrationSet.REALTIME).migrate().migrationsExecuted).isZero();
         }
     }

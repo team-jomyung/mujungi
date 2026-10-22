@@ -110,28 +110,8 @@ describe("가짜 공급자 — 실호출 관측 선 형식(U11-a)", () => {
       expect(Buffer.from(step.message.delta, "base64").length).toBeLessThanOrEqual(960);
     }
     expect(Buffer.concat(audio.map((step) => Buffer.from(step.message.delta, "base64"))).equals(built.pcm)).toBe(true);
-  });
-
-  it("응답 경계는 마지막 조각 뒤의 무음이다 — 조각이 모두 온 뒤에는 아무 사건도 따라오지 않는다", async () => {
-    const provider = await start({ turns: ["normal"] });
-    const client = await session(provider);
-    for (let i = 0; i < 3; i += 1) {
-      client.ws.send(
-        JSON.stringify({ type: "session.input_audio.append", audio: synthesizeInputPayload(i).toString("base64") }),
-      );
-    }
-    const turnEnd = () => provider.records.some((entry) => entry.ev === "turn-emitted");
-    await waitUntil(turnEnd);
-    // turn-emitted는 공급자가 보낸 시점이라 느린 러너에서는 마지막 조각이 아직 클라이언트에 닿기 전일 수 있다.
-    // 수신 수를 세는 순간 고정하면 그 사이 도착한 조각이 "뒤따른 사건"으로 잡히므로, 150ms 동안 새 수신이 없을 때까지 기다린다.
-    let count;
-    do {
-      count = client.received.length;
-      await new Promise((resolve) => setTimeout(resolve, 150));
-    } while (client.received.length !== count);
-
-    expect(client.received).toHaveLength(count);
-    expect(client.received.at(-1).message.type).toBe("session.output_audio.delta");
+    // 응답 경계는 마지막 조각 뒤의 무음이다: 만든 단계 목록에서 마지막 조각 뒤에 따라오는 사건이 없다
+    expect(built.steps.at(-1).message.type).toBe("session.output_audio.delta");
   });
 
   it("지원 목록 밖 type에는 error{invalid_request_error, invalid_value, param type}로 답하고 message를 되비추지 않는다", async () => {

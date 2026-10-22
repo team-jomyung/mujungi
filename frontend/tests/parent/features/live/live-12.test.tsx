@@ -43,12 +43,14 @@ function setVisibility(state: DocumentVisibilityState) {
 }
 
 const pause = (ms: number) => act(() => new Promise<void>((resolve) => setTimeout(resolve, ms)));
+const advance = (ms: number) => act(() => vi.advanceTimersByTimeAsync(ms));
 
 beforeEach(() => {
   resetRouter();
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   Reflect.deleteProperty(document, "visibilityState");
   // 오프라인 시험이 바꾼 TanStack 온라인 상태(모듈 단일 객체)를 되돌린다.
   onlineManager.setOnline(true);
@@ -110,18 +112,23 @@ describe("12 — 폴링과 말풍선(BR6.15 · PD-12)", () => {
   });
 
   it("탭이 숨으면 멈추고 다시 보이면 바로 한 번 읽는다(PD-12)", async () => {
+    // 폴링 간격은 가짜 시계로 진행한다(실제 대기 · 러너 속도에 기대지 않는다)
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval"] });
     const harness = renderLive(() => jsonResponse(200, liveViewBody("ACTIVE")));
-    await waitFor(() => expect(liveCalls(harness).length).toBeGreaterThanOrEqual(2));
+    await advance(POLL_MS * 3);
+    expect(liveCalls(harness).length).toBeGreaterThanOrEqual(2);
     act(() => setVisibility("hidden"));
-    await pause(POLL_MS);
+    await advance(POLL_MS);
     const whileHidden = liveCalls(harness).length;
-    await pause(POLL_MS * 4);
+    await advance(POLL_MS * 4);
     expect(liveCalls(harness).length).toBe(whileHidden);
     act(() => setVisibility("visible"));
-    await waitFor(() => expect(liveCalls(harness).length).toBeGreaterThan(whileHidden));
+    await advance(0);
+    expect(liveCalls(harness).length).toBeGreaterThan(whileHidden);
   });
 
   it("응답이 늦으면 다음 간격은 진행 중 요청에 합류해 동시에 둘을 보내지 않는다", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval"] });
     let inFlight = 0;
     let maxInFlight = 0;
     const harness = renderLive(async () => {
@@ -131,7 +138,8 @@ describe("12 — 폴링과 말풍선(BR6.15 · PD-12)", () => {
       inFlight -= 1;
       return jsonResponse(200, liveViewBody("ACTIVE"));
     });
-    await waitFor(() => expect(liveCalls(harness).length).toBeGreaterThanOrEqual(2), { timeout: 2_000 });
+    await advance(POLL_MS * 10);
+    expect(liveCalls(harness).length).toBeGreaterThanOrEqual(2);
     expect(maxInFlight).toBe(1);
   });
 });

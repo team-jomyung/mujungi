@@ -2,3 +2,8 @@
 plugins {
     `kotlin-dsl`
 }
+
+dependencies {
+    // CI 전용 시험 재시도(org.gradle.test-retry)
+    implementation(libs.gradle.test.retry.plugin)
+}
