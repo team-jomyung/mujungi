@@ -1,5 +1,6 @@
 package kr.mujoong.realtime.voice;
 
+import kr.mujoong.contract.context.ConversationGuide;
 import java.time.Duration;
 import java.util.Objects;
 import java.util.UUID;
@@ -86,25 +87,29 @@ public class ProviderConnector {
 
     /** 연결 스레드를 띄운다. */
     public Attempt connect(UUID sessionId, ChildContext childContext, Listener listener, Callback callback) {
+        return connect(sessionId, childContext, null, listener, callback);
+    }
+
+    public Attempt connect(UUID sessionId, ChildContext childContext, ConversationGuide guide, Listener listener, Callback callback) {
         Objects.requireNonNull(sessionId, "sessionId");
         Objects.requireNonNull(childContext, "childContext");
         Objects.requireNonNull(listener, "listener");
         Objects.requireNonNull(callback, "callback");
         Attempt attempt = new Attempt();
         attempt.thread = launcher.launch("provider-connect-" + sessionId,
-                () -> run(attempt, childContext, listener, callback));
+                () -> run(attempt, childContext, guide, listener, callback));
         if (attempt.isCancelled() && attempt.thread != null) {
             attempt.thread.interrupt();
         }
         return attempt;
     }
 
-    private void run(Attempt attempt, ChildContext childContext, Listener listener, Callback callback) {
+    private void run(Attempt attempt, ChildContext childContext, ConversationGuide guide, Listener listener, Callback callback) {
         if (!ProviderHosts.isConnectable(port.endpoint(), activeProfiles)) {
             callback.failed(ProviderUnavailableException.Reason.HOST_NOT_ALLOWED);
             return;
         }
-        ProviderRequestFactory.SessionStart request = factory.sessionStart(childContext);
+        ProviderRequestFactory.SessionStart request = guide == null ? factory.sessionStart(childContext) : factory.sessionStart(childContext, ProviderRequestFactory.AUDIO_RATE, guide);
         ProviderSession session = null;
         try {
             session = port.open(listener, connectTimeout);

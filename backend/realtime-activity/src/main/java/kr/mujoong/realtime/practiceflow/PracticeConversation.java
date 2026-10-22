@@ -492,6 +492,14 @@ public final class PracticeConversation implements PracticeSessionExtension {
             output.cancel(TIMER_NOTICE_GUARD);
             awaitingNotice = false;
         }
+        if (mine && state.phase() == Phase.SCENE_INTRO && !sceneRowCreated
+                && (end == SlotEnd.FAILED || end == SlotEnd.BLOCKED)) {
+            // 들려주지 못한 도입을 '장면 완료'로 건너뛰지 않는다. 안전 검사 실패도 그대로 막는다.
+            output.cancel(TIMER_GOAL_LIMIT);
+            state.phase(Phase.CLOSING, Sub.NONE);
+            pendingSignal = Signal.OUTPUT_FAILED;
+            return;
+        }
         boolean introEnded = state.phase() == Phase.SCENE_INTRO && state.sub() == Sub.NONE && !sceneRowCreated
                 && (end == SlotEnd.PLAYED || end == SlotEnd.INTERRUPTED);
         if (introEnded) {

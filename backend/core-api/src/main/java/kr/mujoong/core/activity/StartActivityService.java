@@ -52,7 +52,7 @@ import org.springframework.transaction.support.TransactionTemplate;
  *
  * <ol>
  *   <li>입력 검증(BR6.4): context 서술 칸 knownContent · question은 200자 이하, 고르기 칸은 계약 값만. 위반은 400. context는 Core에만
- *       저장하고(08 배경, 결과 구조화 입력) 세션 패키지 · Realtime에는 보내지 않는다(빌더에 넘길 인자가 없다, NFR3 · AC3.1.7).
+ *       저장한다(08 배경, 결과 구조화 입력). 원문은 Realtime에 보내지 않고, 자유대화에는 제한된 주제 코드와 출처만 전달한다.
  *   <li>⓪ 보호자가 없으면 401, 삭제 접수 상태면 403 ACCOUNT_DELETION_IN_PROGRESS.
  *   <li>⓪′ (보호자, 멱등 키) 사본이 있으면 ① ~ ③을 건너뛰고 BR6.2 재생: 요청 해시가 다르면 409 IDEMPOTENCY_CONFLICT, 로컬 FAILED면 저장된
  *       start_result_code(503 · 423 · 409 · 202) 재생, 그 밖은 첫 응답 202 {sessionId, REQUESTED}.
@@ -285,6 +285,7 @@ public class StartActivityService implements DisposableBean {
         SessionPackage sessionPackage = packageBuilder.build(sessionId, request.idempotencyKey(), guardianId,
                 readiness.deviceId(), child, consent.snapshot(), approved);
         if(activityType==ActivityType.PRACTICE) sessionPackage=sessionPackage.forPractice();
+        else sessionPackage=sessionPackage.withConversationGuide(GuardianConversationGuide.from(request.context()));
         // 사본 행과 08 배경을 한 트랜잭션에 쓴다(배경은 이긴 요청만 쓴다, AC3.1.2 · AC3.1.8 · U4a-J1)
         Boolean insertedResult = transactions.execute(status -> {
             if(activityType==ActivityType.PRACTICE) {
@@ -494,7 +495,7 @@ public class StartActivityService implements DisposableBean {
     public record StartRequest(UUID idempotencyKey, Context context) {
     }
 
-    /** 08 입력 네 칸(모두 선택). 검증만 하고 저장 · 전송하지 않는다(NFR3.1). */
+    /** 08 입력 네 칸(모두 선택). 원문은 Core 배경 저장소에 보관하고, 자유대화 전에는 주제 코드·출처로만 변환한다. */
     public record Context(String knownContent, String situationType, String sourceType, String question) {
 
         /** 원문은 문자열 표현에 내지 않는다. */

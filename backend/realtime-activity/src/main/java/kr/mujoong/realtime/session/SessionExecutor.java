@@ -1,5 +1,6 @@
 package kr.mujoong.realtime.session;
 
+import kr.mujoong.contract.context.ConversationGuide;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -333,7 +334,13 @@ public final class SessionExecutor {
             Map<String, ApprovedItem> approved,
             String practiceJson,
             UUID guardianId,
-            Map<String, String> approvedSpeech) {
+            Map<String, String> approvedSpeech, ConversationGuide conversationGuide) {
+        public Plan(UUID sessionId, UUID deviceId, String traceId, ChildContext childContext,
+                List<StartSession.ApprovedAudio> approvedAudio, ApprovedItem closing, ApprovedItem waitingFiller,
+                boolean rawAudioConsent, List<String> stopExpressions, ActivityType activityType,
+                Map<String, ApprovedItem> approved, String practiceJson, UUID guardianId, Map<String,String> approvedSpeech) {
+            this(sessionId,deviceId,traceId,childContext,approvedAudio,closing,waitingFiller,rawAudioConsent,stopExpressions,activityType,approved,practiceJson,guardianId,approvedSpeech,null);
+        }
 
         /**
          * U12 이전 모양(승인 발화 문장 지도 없음 — 연습 시작 패키지의 approvedSpeech를 확장에 싣지 않는다). 기존 호출처 · 시험은 이 모양을 그대로
@@ -747,7 +754,7 @@ public final class SessionExecutor {
         }
         ctx.startSent(true);
         ctx.timers().arm(Kind.DEVICE_ACK, ctx.services().settings().deviceAckTimeout());
-        ctx.providerAttempt(ctx.services().connector().connect(ctx.plan().sessionId(), ctx.plan().childContext(), event -> {
+        ctx.providerAttempt(connectProvider(ctx.plan().sessionId(), ctx.plan().childContext(), event -> {
             boolean output = isOutputChunk(event);
             if (output) {
                 pendingOutputChunks.incrementAndGet();
@@ -984,6 +991,10 @@ public final class SessionExecutor {
             // FD-Q6: 연습 완료는 CHILD_STOP + end_detail PRACTICE_COMPLETED
             stopOutputForIntent(ctx.services().clock().now());
             ending.beginClosing(Trigger.PRACTICE_COMPLETED, null);
+        }
+        if (signal == PracticeSessionExtension.Signal.OUTPUT_FAILED) {
+            stopOutputForIntent(ctx.services().clock().now());
+            ending.beginClosing(Trigger.PRACTICE_OUTPUT_FAILED, null);
         }
         // NEXT_GOAL은 계속한다(다음 목표 진행은 확장점이 출력 능력으로 한다)
     }
@@ -2020,7 +2031,9 @@ public final class SessionExecutor {
      */
     private void requestResponse(InstructionTemplates.ResponseStart start) {
         sendInstruction(OutputGeneration.BumpReason.SERVER_SEND, "provider-respond-",
-                id -> ctx.services().requests().responseStart(id, start), null, true);
+                id -> start == InstructionTemplates.ResponseStart.FIRST && ctx.plan().conversationGuide() != null
+                        ? ctx.services().requests().responseStart(id, start, ctx.plan().conversationGuide())
+                        : ctx.services().requests().responseStart(id, start), null, true);
     }
 
     /** 공급자 출력을 받지 않는 때(참여 확인 중 · 종료 확인 질문 중 · 확장점이 막은 동안). */
@@ -2109,7 +2122,11 @@ public final class SessionExecutor {
         if (inRelayRange()) {
             ctx.services().latency().inputActivity(ctx.plan().sessionId());
             // 아이 입력 재개는 열린 구간을 확정한다(대화가 넘어갔으니 완결 요청 교정은 하지 않는다)
-            if (ctx.segment().isOpen()) {
+            // 승인 대본은 전부 받은 뒤 원문 일치를 검사한다. 수집 중의 입력 전사만으로
+            // 앞 조각을 봉인하면 정상 대본도 불완전/불일치로 폐기돼 연습이 종료된다.
+            // 입력 기록·종료 의도 처리는 계속하며, 실제 재생 중 끼어들기와 생성형 슬롯은 기존 규칙이다.
+            boolean collectingApprovedPractice = pendingPracticeSpeech != null && !pendingPracticeSpeech.generated();
+            if (ctx.segment().isOpen() && !collectingApprovedPractice) {
                 sealAndGate(true);
             }
             ctx.transcripts().childDelta(inputGroupId, delta.delta(), at);
@@ -3093,4 +3110,10 @@ public final class SessionExecutor {
     public String toString() {
         return "SessionExecutor[sessionId=" + ctx.plan().sessionId() + ", status=" + ctx.status() + "]";
     }
+    private ProviderConnector.Attempt connectProvider(UUID session, ChildContext child,
+            kr.mujoong.realtime.voice.ProviderPort.Listener listener, ProviderConnector.Callback callback) {
+        if (ctx.plan().conversationGuide() == null) return ctx.services().connector().connect(session, child, listener, callback);
+        return ctx.services().connector().connect(session, child, ctx.plan().conversationGuide(), listener, callback);
+    }
+
 }

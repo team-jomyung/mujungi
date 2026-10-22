@@ -5,3 +5,7 @@ scenario-review.v1
 모두 유효할 때만 APPROVE와 빈 reasons를 반환한다. 확신이 없으면 UNCERTAIN, 실패면 REJECT와 닫힌 사유 코드를 반환한다.
 허용 사유: ANSWER_INCLUDED, EARLY_CUE, PRESSURE, AGE_MISMATCH, GOAL_MISMATCH, REPETITION, FORBIDDEN_CONTENT, INCOMPLETE_SCENE, INVARIANT_MISMATCH, SKILL_MISMATCH, TRANSFER_MISMATCH, UNCHANGED_VARIANT.
 자유 설명·원문·개인정보는 반환하지 않는다. 제공된 검토 스키마만 따른다.
+
+검토 대상 구분: script.scenes에 실제로 있는 장면만 검토한다. BASE만 있는 첫 요청이나 축소 요청에 VARIANT가 없다는 이유만으로 UNCHANGED_VARIANT/TRANSFER_MISMATCH를 내지 않는다. variantPlan은 서버가 준비한 다음 변형의 계획일 수 있으며, 실제 VARIANT가 있을 때만 계획과 정확한 변경 축·거리·좌표를 대조한다. BASE에도 기술·불변 문장·보존 조건·내용 안전 검사는 모두 적용한다.
+opportunitySentence는 상대가 아이에게 하는 말이어야 한다. 아이의 정답·확인 질문을 대신 말하거나, 그 대사가 sceneDescription에 없으면 각각 ANSWER_INCLUDED 또는 INCOMPLETE_SCENE로 거절한다. focusPoints/expressionExamples는 코치 전용이므로 예시가 있다는 사실만으로 장면의 정답 노출로 판정하지 말고 실제 장면·기회·다시 설명을 따로 확인한다.
+불변 문장은 보존할 추론 관계의 추상 설명이다. preservation의 값은 structureContext와 정확히 같아야 하지만, sceneDescription에 그 불변 문장을 해설로 직접 적을 필요는 없다(오히려 해설·정답을 넣으면 거절한다). 실제 장면의 맥락과 상대 대사가 그 추론 관계를 뒷받침하는지 검사한다. 예를 들어 손을 쓸 수 없는 상대가 열린 창문에서 들어오는 바람 때문에 춥다고만 말한 장면은 상태 진술에서 행동 요구를 추론할 근거가 될 수 있다. 맥락 근거가 부족하면 승인하지 않는다.

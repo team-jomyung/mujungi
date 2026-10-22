@@ -56,6 +56,7 @@ export const COPY = {
   },
   free: {
     title: "오늘 아이와 자유롭게 이야기해요", // C.S-08.10.1
+    contextUsage: "입력한 내용은 중립적인 대화 주제를 준비하고 대화 후 분석하는 데 사용해요. 보호자의 설명과 아이의 말은 구분해요.",
     knownContentLabel: "알고 있는 내용", // C.S-08.10.2
     knownContentExample:
       "친구와 블록 놀이를 하다가 다퉜다고 들었어요. 친구가 그만하자고 했는데 계속 쌓으려고 했대요.", // C.S-08.10.3

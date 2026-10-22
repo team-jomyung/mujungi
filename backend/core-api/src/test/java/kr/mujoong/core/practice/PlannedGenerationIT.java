@@ -50,6 +50,22 @@ import org.junit.jupiter.api.*;
         var first=new kr.mujoong.core.practice.start.PreparedPracticePackageMapper().map(snapshot).firstScenario();
         assertThat(json.write(first)).contains("graph-v7");assertThat(kr.mujoong.core.web.support.WebFixtures.schemaErrors("practice-scenario.schema.json",json.write(first))).isEmpty();
     }
+    @Test void limitedRemainingTimeIssuesOnlyAlreadyApprovedGraphBase() {
+        doAnswer(c->{f.legacy.clock.advance(java.time.Duration.ofSeconds(5));return ScenarioGenerationTest.generated(scene(new VariantPlanner.Context("놀이","교실","아이와 친구","FRIEND_CLOSE","FRIEND_PRIVATE"),null,"base","BASE"));}).when(f.provider).generate(any());
+        doAnswer(c->{f.legacy.clock.advance(java.time.Duration.ofSeconds(1));return ScenarioGenerationTest.approve();}).when(f.provider).review(any());
+        var result=f.legacy.service.generate(f.legacy.original());
+        assertThat(result.scenes()).hasSize(1);
+        assertThat(result.generation().graphContextUsed()).isTrue();
+        assertThat(result.generation().kgVersion()).isEqualTo("graph-v7");
+        assertThat(result.selfReview().verdict()).isEqualTo("APPROVE");
+        verify(f.provider,times(1)).generate(any());verify(f.provider,times(1)).review(any());
+    }
+    @Test void limitedTimeNeverIssuesRejectedGraphBase() {
+        doAnswer(c->{f.legacy.clock.advance(java.time.Duration.ofSeconds(5));return ScenarioGenerationTest.generated(scene(new VariantPlanner.Context("놀이","교실","아이와 친구","FRIEND_CLOSE","FRIEND_PRIVATE"),null,"base","BASE"));}).when(f.provider).generate(any());
+        doAnswer(c->{f.legacy.clock.advance(java.time.Duration.ofSeconds(1));return ScenarioGenerationTest.reject("FORBIDDEN_CONTENT");}).when(f.provider).review(any());
+        assertThatThrownBy(()->f.legacy.service.generate(f.legacy.original())).isInstanceOf(kr.mujoong.core.common.error.CoreApiException.class);
+        assertThat(f.legacy.db.jdbc().queryForObject("select count(*) from core.core_scenario where guardian_id=:g",Map.of("g",f.legacy.guardian),Integer.class)).isZero();
+    }
     @Test void missingPlanGetsFreshStructureFreeBaseAndNullVersion(){
         doReturn(Optional.empty()).when(f.graph).variantPlan(any(),any(),any(),any(),any());
         var result=f.legacy.service.generate(f.legacy.original());assertThat(result.scenes()).hasSize(1);assertThat(result.generation().graphContextUsed()).isFalse();assertThat(result.generation().kgVersion()).isNull();

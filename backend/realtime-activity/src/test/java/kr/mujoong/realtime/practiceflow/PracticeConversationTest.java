@@ -75,6 +75,26 @@ class PracticeConversationTest {
         assertThat(InternalApi.schemaErrors("practice-record-v2.schema.json", JsonCodec.shared().write(practice))).isEmpty();
     }
 
+    @Test
+    void unheardSceneIntroductionDoesNotCompleteThePracticeOrWaitForChildInput() {
+        Harness h = minimal();
+        h.activate();
+        assertThat(h.end(Playback.FAILED)).isEqualTo(Signal.OUTPUT_FAILED);
+        assertThat(h.recorder.rows).isEmpty();
+        assertThat(h.out.timers).doesNotContainKey("no-response");
+        assertThat(h.out.slots).hasSize(1);
+    }
+
+    @Test
+    void blockedSceneIntroductionRemainsBlockedAndIsNotACompletedPractice() {
+        Harness h = minimal();
+        h.activate();
+        Slot intro = h.out.lastSlot();
+        assertThat(h.event(ExtensionEvent.Kind.GUARDRAIL_BLOCKED, "guardrail-blocked", intro.correlationId(),
+                new GuardrailBlockedEvent(intro.correlationId(), kr.mujoong.realtime.guardrail.GuardrailRequest.Mode.PRACTICE_PEER, "BLOCK", true))).isEqualTo(Signal.OUTPUT_FAILED);
+        assertThat(h.recorder.rows).isEmpty();
+    }
+
     // ---- AC1.2.3: 되묻기로 해결 ----
 
     @Test
@@ -202,7 +222,7 @@ class PracticeConversationTest {
         assertThat(h.advance(Duration.ofSeconds(19))).isEqualTo(Signal.NONE);
         Signal end = h.advance(Duration.ofSeconds(1));
 
-        assertThat(end).as("도입이 끝내 안 들려도 연습은 멈추지 않고 정리한다").isEqualTo(Signal.LAST_GOAL);
+        assertThat(end).as("도입을 듣지 못한 연습은 완료가 아니다").isEqualTo(Signal.OUTPUT_FAILED);
         assertThat(h.recorder.list()).as("도입 재생이 성공하지 못했으니 행이 없다").isEmpty();
         assertThat(h.out.cancelledSpeech).containsExactly(h.out.slots.getFirst().correlationId());
     }
@@ -445,13 +465,13 @@ class PracticeConversationTest {
     }
 
     @Test
-    void anApprovedSpeechTheOutputRefusesSkipsTheSceneButTheGoalListStillEnds() {
+    void anApprovedSpeechTheOutputRefusesEndsAsTechnicalFailure() {
         Harness h = minimal();
         h.out.speakResult = false;
 
         Signal end = h.activate();
 
-        assertThat(end).isEqualTo(Signal.LAST_GOAL);
+        assertThat(end).isEqualTo(Signal.OUTPUT_FAILED);
         assertThat(h.recorder.list()).isEmpty();
     }
 

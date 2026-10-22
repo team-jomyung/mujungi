@@ -52,6 +52,17 @@ class LunaSchemasTest {
     }
 
     @Test
+    void reviewRequestHasProviderCompatibleRootWhileServerKeepsConditionalSafetyChecks() {
+        var schemas=LunaSchemas.loadDefault(JSON);
+        var pair=schemas.pair(LunaPurpose.SCENARIO_REVIEW).orElseThrow();
+        assertThat(pair.requestSchema()).containsEntry("type","object").doesNotContainKey("anyOf");
+        assertThat(pair.strict()).isTrue();
+        assertThat(schemas.isValidOutput(LunaPurpose.SCENARIO_REVIEW,"{\"verdict\":\"APPROVE\",\"reasons\":[]}")).isTrue();
+        assertThat(schemas.isValidOutput(LunaPurpose.SCENARIO_REVIEW,"{\"verdict\":\"APPROVE\",\"reasons\":[\"PRESSURE\"]}")).isFalse();
+        assertThat(schemas.isValidOutput(LunaPurpose.SCENARIO_REVIEW,"{\"verdict\":\"REJECT\",\"reasons\":[\"UNKNOWN\"]}")).isFalse();
+    }
+
+    @Test
     void strictIsTrueOnlyWhenEveryObjectIsClosedAndFullyRequired() {
         Map<String, Object> closed = Map.of("type", "object", "additionalProperties", false, "required", List.of("a"),
                 "properties", Map.of("a", Map.of("type", "array", "items", Map.of("type", "object",

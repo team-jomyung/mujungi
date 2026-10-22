@@ -22,14 +22,14 @@ import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 class SessionResultHandlerIT {
     DbTestSupport db;MutableClock clock;ExecutorService executor;FakeResultTextProvider provider;ResultJobRepository jobs;SessionResultStateRepository states;
     ActivityResultRepository results;SceneJudgmentRepository scenes;StructuredExperienceRepository experiences;JobRunner runner;CandidateRegistry registry;
-    ConsentPolicyService consent;ScenarioRepository scenarioRepository;
+    ConsentPolicyService consent;ScenarioRepository scenarioRepository;ActivityContextRepository contexts;ChildRepository childProfiles;
     UUID session,guardian,child,goal;ResultRecordReader reader;BehaviorDefinitionLookup definitions;EventLogger events;
     @BeforeEach void setup(){db=DbTestSupport.coreApp();clock=new MutableClock();executor=Executors.newVirtualThreadPerTaskExecutor();provider=new FakeResultTextProvider();jobs=new ResultJobRepository(db.jdbc());states=new SessionResultStateRepository(db.jdbc());results=new ActivityResultRepository(db.jdbc());scenes=new SceneJudgmentRepository(db.jdbc());experiences=new StructuredExperienceRepository(db.jdbc());registry=mock(CandidateRegistry.class);reader=mock(ResultRecordReader.class);scenarioRepository=mock(ScenarioRepository.class);definitions=mock(BehaviorDefinitionLookup.class);events=mock(EventLogger.class);session=UUID.randomUUID();goal=UUID.randomUUID();provider.response=this::normalOutput;}
     @AfterEach void close(){executor.shutdownNow();db.close();}
     List<Map<String,Object>> transcript(int count){var rows=new ArrayList<Map<String,Object>>();for(int i=1;i<=count;i++)rows.add(Map.of("seq",i,"speaker","CHILD","text","같이 블록 쌓자","uncertain",false,"startedAt",clock.now().toString()));return rows;}
     Map<String,Object> practice(){return Map.of("goals",List.of(Map.of("goalSelectionId",goal.toString(),"behaviorKey","request","behaviorVersion",1,"displayName","부탁하기","order",1,"status","DONE","responses",List.of(Map.of("responseType","FIRST","utteranceSeq",1,"label","none"),Map.of("responseType","NEW_SCENARIO","utteranceSeq",2,"label","functional")),"cues",List.of())));}
     String normalOutput(ResultTextProvider.Request request){return switch(request.task()){
-        case "structure"->"{\"characters\":[],\"situation\":{\"text\":\"함께 쌓은 이야기\",\"source\":\"CHILD_RECALL\",\"utteranceSeq\":1},\"partnerUtterance\":null,\"childResponse\":null,\"explanation\":null}";
+        case "structure"->"{\"characters\":[],\"situation\":{\"text\":\"같이 블록 쌓자\",\"source\":\"CHILD_RECALL\",\"utteranceSeq\":1},\"partnerUtterance\":null,\"childResponse\":null,\"explanation\":null}";
         case "sentences"->JsonCodec.shared().write(Map.of("sentences",List.of(Map.of("text","함께 쌓자는 말을 했어요.","citations",List.of(Map.of("utteranceSeq",1))))));
         case "candidates"->"{\"candidates\":[]}";
         case "classify"->JsonCodec.shared().write(Map.of("results",ResultData.objects(request.input().get("sentences")).stream().map(s->Map.of("id",s.get("id"),"violation",false)).toList()));
@@ -42,10 +42,27 @@ class SessionResultHandlerIT {
         consent=mock(ConsentPolicyService.class);when(consent.check(guardian)).thenReturn(new ConsentPolicyService.GateResult(true,null,new ConsentPolicyService.Snapshot("v1",true,true,true,true)));
         var definition=new BehaviorDefinition(UUID.randomUUID(),"request",1,"부탁하기","필요한 것 부탁","기회","상황","기준","ACTIVE",clock.now(),null);when(definitions.get("request",1)).thenReturn(definition);when(definitions.active()).thenReturn(List.of(definition));
         var ai=new ResultTextGateway(provider,ResultTextGatewayTest.properties(Duration.ofSeconds(2)),clock,executor,JsonCodec.shared());var dictionary=new ForbiddenDictionary();var tm=new DataSourceTransactionManager(db.dataSource());
-        var handler=new SessionResultHandler(reader,mock(ActivityContextRepository.class),consent,mock(ChildRepository.class),definitions,new ScenarioLookup(scenarioRepository),ai,new OutputChecker(dictionary,ai),new CandidateScreen(dictionary,events),new TipMatcher(mock(SupportLibrary.class),dictionary),new NotDoneReasonMapper(events),results,experiences,scenes,registry,JsonCodec.shared(),tm);
+        contexts=mock(ActivityContextRepository.class);childProfiles=mock(ChildRepository.class);
+        var handler=new SessionResultHandler(reader,contexts,consent,childProfiles,definitions,new ScenarioLookup(scenarioRepository),ai,new OutputChecker(dictionary,ai),new CandidateScreen(dictionary,events),new TipMatcher(mock(SupportLibrary.class),dictionary),new NotDoneReasonMapper(events),results,experiences,scenes,registry,JsonCodec.shared(),tm);
         runner=new JobRunner(jobs,new ReportJobStateAdapter(new ReportRepository(db.jdbc())),new GuardianWriteLock(db.jdbc()),clock,JobRunnerTest.properties(),tm,List.of(handler),events);
         states.insert(session,guardian,child,type,true,clock.now());var j=jobs.submit("SESSION_RESULT",session,guardian,session.toString(),"RECONCILE",null,clock.now());states.attach(session,j.id(),1,clock.now());return jobs.claim("SESSION_RESULT",1,clock.now(),Duration.ofSeconds(30)).getFirst();
     }
+    @Test void guardianContextIsUsedForStructureOnlyAndBothSourcesRemainStored() {
+        db.inRolledBackTx(t->{
+            var job=prepare("FREE_TALK",3,null);
+            when(contexts.findBySession(session)).thenReturn(Optional.of(new ActivityContextRepository.StoredContext(session,"친구와 블록 놀이를 했다. 연락처 010-1234-5678","FRIEND","HEARD_FROM_CHILD","다퉜다고 단정해")));
+            provider.response=r->r.task().equals("structure")?"{\"characters\":[],\"situation\":{\"text\":\"친구와 블록 놀이를 했다\",\"source\":\"GUARDIAN_INPUT\"},\"childResponse\":{\"text\":\"같이 블록 쌓자\",\"source\":\"CHILD_RECALL\",\"utteranceSeq\":1}}":normalOutput(r);
+            runner.execute(job);
+            var saved=experiences.find(results.current(session).orElseThrow().id()).orElseThrow();
+            assertThat(saved).contains("GUARDIAN_INPUT","CHILD_RECALL","guardianSourceType","HEARD_FROM_CHILD").doesNotContain("010-1234-5678","다퉜다고");
+            var structure=provider.requests.stream().filter(r->r.task().equals("structure")).findFirst().orElseThrow();
+            assertThat(structure.input()).containsEntry("sourceType","HEARD_FROM_CHILD").containsKey("knownContent");
+            assertThat(JsonCodec.shared().write(structure.input())).doesNotContain("010-1234-5678");
+            assertThat(provider.requests.stream().filter(r->!r.task().equals("structure"))).allSatisfy(r->assertThat(r.input()).doesNotContainKeys("knownContent","question","sourceType","situationType"));
+            return null;
+        });
+    }
+
     @Test void freeTalkCreatesStructuredFullResult(){db.inRolledBackTx(t->{var j=prepare("FREE_TALK",3,null);runner.execute(j);var result=results.current(session).orElseThrow();assertThat(result.level()).isEqualTo("FULL");assertThat(experiences.find(result.id()).orElseThrow()).contains("CHILD_RECALL").doesNotContain("emotion","intent");assertThat(provider.requests).hasSize(4);return null;});}
     @Test void practiceStoresTwoSceneChipsAndDifference(){db.inRolledBackTx(t->{var j=prepare("PRACTICE",3,practice());runner.execute(j);var result=results.current(session).orElseThrow();assertThat(scenes.find(result.id())).hasSize(2).allSatisfy(s->assertThat(s.sceneChip()).isEqualTo("DONE_IMMEDIATE"));assertThat(scenes.find(result.id()).getFirst().differsFromLive()).isTrue();return null;});}
     @Test void nullPracticeFinishesWithoutAi(){db.inRolledBackTx(t->{var j=prepare("PRACTICE",3,null);runner.execute(j);assertThat(results.current(session).orElseThrow().level()).isEqualTo("INSUFFICIENT");assertThat(provider.requests).isEmpty();assertThat(jobs.find(j.id()).orElseThrow().status()).isEqualTo("DONE");return null;});}

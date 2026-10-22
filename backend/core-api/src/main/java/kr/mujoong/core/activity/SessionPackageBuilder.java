@@ -1,5 +1,6 @@
 package kr.mujoong.core.activity;
 
+import kr.mujoong.contract.context.ConversationGuide;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -21,7 +22,7 @@ import org.springframework.stereotype.Component;
  * displayName · age · interests 세 필드뿐 — 앞뒤 공백을 걷고 빈 항목은 뺀다), stopExpressions(ChildContext 포트의 종료 표현 스냅숏 —
  * 기본 '무중아 그만할래'가 맨 앞, 아이 추가 표현이 뒤), approvedContent(CLOSING · WAITING_FILLER 필수 + 시작 서비스가 고른 승인 문구). 이
  * 빌더는 08 입력(context 네 칸)과 보호자 연락처를 인자로 받지 않는다 — 넣을 길이 없다(NFR3.1 · SD-20). practice는 U5 몫이라 넣지 않는다.
- * 계약 형식 밖 값은 값을 메시지에 넣지 않고 IllegalStateException으로 시작을 멈춘다(J343).
+ * 자유대화에는 원문 없는 conversationGuide 주제 코드를 별도로 더할 수 있다. 계약 형식 밖 값은 값을 메시지에 넣지 않고 IllegalStateException으로 시작을 멈춘다(J343).
  */
 @Component
 public class SessionPackageBuilder {
@@ -121,7 +122,18 @@ public class SessionPackageBuilder {
             ConsentSnapshot consentSnapshot,
             ChildContext childContext,
             List<StopExpression> stopExpressions,
-            Map<String, ApprovedItem> approvedContent) {
+            Map<String, ApprovedItem> approvedContent, ConversationGuide conversationGuide) {
+
+        public SessionPackage(UUID sessionId, UUID idempotencyKey, UUID guardianId, UUID childId, UUID deviceId,
+                ActivityType activityType, ConsentSnapshot consentSnapshot, ChildContext childContext,
+                List<StopExpression> stopExpressions, Map<String, ApprovedItem> approvedContent) {
+            this(sessionId, idempotencyKey, guardianId, childId, deviceId, activityType, consentSnapshot, childContext, stopExpressions, approvedContent, null);
+        }
+
+        public SessionPackage withConversationGuide(ConversationGuide guide) {
+            if (activityType != ActivityType.FREE_TALK && guide != null) throw new IllegalArgumentException("Free talk guide only");
+            return new SessionPackage(sessionId,idempotencyKey,guardianId,childId,deviceId,activityType,consentSnapshot,childContext,stopExpressions,approvedContent,guide);
+        }
 
         public SessionPackage forPractice() {
             return new SessionPackage(sessionId,idempotencyKey,guardianId,childId,deviceId,ActivityType.PRACTICE,

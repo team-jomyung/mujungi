@@ -209,6 +209,53 @@ class PracticeGeneratedSpeechTest {
         h.advance(Duration.ofMillis(801));
     }
 
+    @Test
+    void childInputWhileCollectingApprovedScriptDoesNotSealAPartialScene() {
+        start(true);
+        UUID slot=UUID.randomUUID();
+        String text="친구와 놀이를 정하는 중이야. 친구가 공을 들고 있어.";
+        extension.out.speak(PracticeSpeech.scenario(slot,UUID.randomUUID(),1,"PEER",text));
+        h.settleSend();
+        h.speak("친구와 놀이를 정하는",4800);
+        h.provider.last().emit(new ProviderEvent.InputTranscriptDelta("overlap","응"));
+        h.drain();
+        assertThat(extension.endFacts(slot)).isEmpty();
+        assertThat(h.link.outputs()).isEmpty();
+        h.speak(" 중이야. 친구가 공을 들고 있어.",4800);
+        h.advance(Duration.ofMillis(801));
+        assertThat(h.link.outputs()).hasSize(1);
+        assertThat(extension.endFacts(slot)).isEmpty();
+        assertThat(guard.count()).as("전체 승인 원문 일치 경로만 기존대로 건너뜀").isZero();
+        mark(h.link.outputs().getFirst().playbackId(),PlaybackMark.Status.COMPLETED);
+        assertThat(extension.endFacts(slot)).containsExactly(PracticePorts.Playback.COMPLETED);
+    }
+
+    @Test
+    void overlappingInputCannotMakeAnAlteredApprovedScriptPlayable() {
+        start(true);
+        UUID slot=UUID.randomUUID();
+        extension.out.speak(PracticeSpeech.scenario(slot,UUID.randomUUID(),1,"PEER","친구가 공을 들고 있어."));
+        h.settleSend();
+        h.speak("친구가 공을",4800);
+        h.provider.last().emit(new ProviderEvent.InputTranscriptDelta("overlap","응"));
+        h.drain();
+        h.speak(" 들고 있어. 다른 말을 덧붙였어.",4800);
+        h.advance(Duration.ofMillis(801));
+        assertThat(h.link.outputs()).isEmpty();
+        assertThat(extension.endFacts(slot)).containsExactly(PracticePorts.Playback.FAILED);
+    }
+
+    @Test
+    void aStopRequestStillStopsWhileApprovedSpeechIsBeingCollected() {
+        start(true);
+        extension.out.speak(PracticeSpeech.scenario(UUID.randomUUID(),UUID.randomUUID(),1,"PEER","친구가 공을 들고 있어."));
+        h.settleSend();
+        h.speak("친구가 공을",4800);
+        h.childSays("stop","무중아 그만할래");
+        assertThat(h.executor.status()).isEqualTo(kr.mujoong.contract.status.SessionStatus.CLOSING);
+        assertThat(h.link.outputs()).isEmpty();
+    }
+
     private void mark(UUID id, PlaybackMark.Status status) {
         h.mailbox.offerGeneral(new SessionMailbox.PlaybackMarkReceived(h.link.connectionId(),
                 new PlaybackMark(id, status, null, h.clock.now(), null, null), h.clock.now()));

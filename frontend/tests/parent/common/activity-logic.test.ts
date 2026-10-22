@@ -240,3 +240,23 @@ describe("응답 읽기(계약 3절 · 편차 (U4a-a))", () => {
     expect(request).toHaveBeenCalledWith(expect.objectContaining({ method: "GET", path: "/api/sessions/current", csrf: false }));
   });
 });
+
+describe("연습 종료 사유 분리", () => {
+  it("연습 완료를 아이의 중단 발화로 바꾸지 않는다", () => {
+    const result = presentDone(view("ENDED", { activityType: "PRACTICE", endReason: "CHILD_STOP", endDetail: "PRACTICE_COMPLETED" }), "하늘");
+    expect(result.title).toBe("연습이 종료됐어요");
+    expect(result.reasonTitle).toBe("이번 연습을 마쳤어요");
+    expect(result.reasonBody).toBeNull();
+  });
+  it("도입 재생 실패는 완료도 아이의 종료 요청도 아니다", () => {
+    const result = presentDone(view("ENDED", { activityType: "PRACTICE", endReason: "DISCONNECT", endDetail: "PRACTICE_OUTPUT_FAILED" }), "하늘");
+    expect(result.reasonTitle).toBe("연습 음성을 재생하지 못했어요");
+    expect(result.reasonBody).toContain("완료된 것은 아니에요");
+  });
+});
+
+it("연습의 상세 종료 사유가 없는 대체 응답도 아이 발화를 추정하지 않는다", () => {
+  const result = presentDone(view("ENDED", { activityType: "PRACTICE", endReason: "CHILD_STOP" }), "하늘");
+  expect(result.reasonTitle).toBe("연습이 종료됐어요");
+  expect(result.reasonBody).toBeNull();
+});

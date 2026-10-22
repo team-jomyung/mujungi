@@ -154,7 +154,7 @@ public class SessionController {
             Map<String, Object> practice,
             List<Map<String, Object>> gaps,
             List<Map<String, Object>> items,
-            long nextSeq) {
+            long nextSeq, String endDetail) {
 
         /** 서비스 값을 응답 모양으로. */
         public static LiveViewBody of(LiveView view) {
@@ -164,7 +164,7 @@ public class SessionController {
                     ApiResponses.time(view.startedAt()), ApiResponses.time(view.endedAt()), view.statusVersion(),
                     ApiResponses.time(view.serverTime()), ApiResponses.time(view.observedAt()), view.stale(),
                     technicalPause(view.technicalPause()), silenceWarning(view.silenceWarning()), practice(view.practice()),
-                    view.gaps().stream().map(LiveViewBody::gap).toList(), view.items(), view.nextSeq());
+                    view.gaps().stream().map(LiveViewBody::gap).toList(), view.items(), view.nextSeq(), view.endDetail());
         }
 
         private static Map<String, Object> gap(LiveExtras.Gap gap) {
