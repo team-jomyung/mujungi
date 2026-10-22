@@ -405,6 +405,8 @@ class SessionExecutorTest {
         h.advance(Duration.ofMillis(800));
 
         Timer ai = h.metrics.registry().find(RealtimeMetrics.VIEW_ITEM_READY).tag("speaker", "ai").timer();
+        assertThat(ai.count()).isZero();
+        mark(h.link.outputs().get(0).playbackId(), PlaybackMark.Status.STARTED);
         assertThat(ai.count()).isEqualTo(1);
         assertThat(ai.totalTime(TimeUnit.MILLISECONDS)).as("구간의 마지막 조각(300ms) → 게이트 통과 커밋(1100ms): 응답 끝 사건이 없어 공급자 출력 끝은 마지막 조각 시각이다")
                 .isEqualTo(800.0);

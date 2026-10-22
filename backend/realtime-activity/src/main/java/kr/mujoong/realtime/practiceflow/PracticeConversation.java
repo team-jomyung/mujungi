@@ -1047,7 +1047,15 @@ public final class PracticeConversation implements PracticeSessionExtension {
     private void onApprovedTextMismatch(PracticeSpeech speech) {
         if (speech.generated() || !speech.correlationId().equals(openSlot) || openSlotPlaying) return;
         if (approvedReadingRetried) {
-            handleSlotEnd(speech.correlationId(), SlotEnd.FAILED);
+            String recovery = PracticeInstructions.recoverApprovedNarration(speech.text());
+            if (recovery == null) {
+                handleSlotEnd(speech.correlationId(), SlotEnd.FAILED);
+                return;
+            }
+            cancelOpenSlot();
+            // One fresh generated narration; normal gate + Jev and slot timeout still apply.
+            // Generated slots cannot enter this mismatch retry path, so this cannot loop.
+            speakGenerated(state.role(), recovery);
             return;
         }
         // No mismatched audio was delivered. One fresh slot gets one bounded attempt at the SAME approved text.

@@ -13,6 +13,7 @@ export interface SessionSummary {
   readonly activityType: ActivityKind;
   readonly status: SessionStatus;
   readonly endReason: EndReason | null;
+  readonly endDetail?: "PRACTICE_COMPLETED" | "PRACTICE_OUTPUT_FAILED" | null;
   readonly failureCode: string | null;
   readonly confirmed: boolean;
   readonly requestedAt: string | null;
@@ -142,6 +143,7 @@ export function parseSessionSummary(value: unknown): SessionSummary | null {
     activityType,
     status,
     endReason,
+    endDetail: value.endDetail === "PRACTICE_COMPLETED" || value.endDetail === "PRACTICE_OUTPUT_FAILED" ? value.endDetail : null,
     failureCode: text(value, "failureCode"),
     confirmed: value.confirmed === true,
     requestedAt: text(value, "requestedAt"),

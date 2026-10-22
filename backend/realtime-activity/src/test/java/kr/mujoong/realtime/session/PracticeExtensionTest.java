@@ -205,6 +205,9 @@ class PracticeExtensionTest {
 
         assertThat(extension.output.playApproved("PRACTICE_CUE")).isTrue();
         PlayApprovedContent cue = h.link.sent(PlayApprovedContent.class).getLast();
+        h.mailbox.offerGeneral(new SessionMailbox.PlaybackMarkReceived(h.link.connectionId(),
+                new PlaybackMark(cue.playbackId(), PlaybackMark.Status.STARTED, null, h.clock.now(), null, null), h.clock.now()));
+        h.drain();
         assertThat(h.store.transcripts).anySatisfy(row -> assertThat(row.text()).isEqualTo("이번엔 친구에게 인사해 볼까?"));
         h.mailbox.offerGeneral(new SessionMailbox.PlaybackMarkReceived(h.link.connectionId(),
                 new PlaybackMark(cue.playbackId(), PlaybackMark.Status.COMPLETED, null, h.clock.now(), null, null),

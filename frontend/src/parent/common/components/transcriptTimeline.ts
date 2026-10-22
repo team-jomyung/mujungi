@@ -12,13 +12,17 @@ export type TimelineEntry =
   | { readonly kind: "gap"; readonly gap: LiveGap; readonly key: string };
 
 /**
- * 말풍선(seq 순) 사이에 구간을 시작 시각 순으로 끼운다: 구간은 그보다 늦게 시작한 첫 말풍선 앞에 놓이고, 시각을 모르는 말풍선은 앞
+ * 말풍선을 재생/입력 시각순으로 정렬하고 구간을 시작 시각 순으로 끼운다: 구간은 그보다 늦게 시작한 첫 말풍선 앞에 놓이고, 시각을 모르는 말풍선은 앞
  * 말풍선 뒤에 그대로 둔다. 남은 구간은 끝에 붙는다(진행 중 끊김은 늘 맨 뒤다).
  */
 export function buildTimeline(items: readonly Bubble[], gaps: readonly LiveGap[]): TimelineEntry[] {
   const pending = [...gaps].sort((left, right) => Date.parse(left.from) - Date.parse(right.from));
   const entries: TimelineEntry[] = [];
-  for (const bubble of items) {
+  const ordered = [...items].sort((a, b) => {
+    const left = Date.parse(a.startedAt), right = Date.parse(b.startedAt);
+    return Number.isFinite(left) && Number.isFinite(right) ? left - right || a.seq - b.seq : a.seq - b.seq;
+  });
+  for (const bubble of ordered) {
     const startedAt = Date.parse(bubble.startedAt);
     while (pending.length > 0 && !Number.isNaN(startedAt) && Date.parse(pending[0].from) < startedAt) {
       const gap = pending.shift() as LiveGap;

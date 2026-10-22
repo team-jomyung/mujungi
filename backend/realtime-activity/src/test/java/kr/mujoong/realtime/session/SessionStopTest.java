@@ -59,6 +59,7 @@ class SessionStopTest {
 
         assertThat(h.executor.status()).isEqualTo(SessionStatus.ACTIVE);
         PlayApprovedContent question = h.link.sent(PlayApprovedContent.class).getLast();
+        mark(question, PlaybackMark.Status.STARTED);
         assertThat(question.contentCode()).isEqualTo(SessionExecutor.STOP_CONFIRM);
         assertThat(h.store.transcripts).anySatisfy(row -> {
             assertThat(row.text()).isEqualTo(QUESTION);

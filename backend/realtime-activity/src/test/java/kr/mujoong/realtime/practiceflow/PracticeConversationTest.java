@@ -194,8 +194,25 @@ class PracticeConversationTest {
         int slots=h.out.slots.size();
         h.event(ExtensionEvent.Kind.ASYNC_RESULT,"approved-text-mismatch",first.correlationId(),first.speech());
         assertThat(h.out.slots).hasSize(slots);
-        assertThat(h.event(ExtensionEvent.Kind.ASYNC_RESULT,"approved-text-mismatch",retry.correlationId(),retry.speech())).isEqualTo(Signal.OUTPUT_FAILED);
-        assertThat(h.out.slots).hasSize(slots);
+        assertThat(h.event(ExtensionEvent.Kind.ASYNC_RESULT,"approved-text-mismatch",retry.correlationId(),retry.speech())).isEqualTo(Signal.NONE);
+        assertThat(h.out.slots).hasSize(slots + 1);
+        assertThat(h.out.lastSlot().generated()).isTrue();
+        assertThat(h.out.lastSlot().text()).contains("승인 자료=");
+        assertThat(h.recorder.rows).isEmpty();
+        assertThat(h.played()).isEqualTo(Signal.NONE);
+        assertThat(h.recorder.rows).hasSize(1);
+    }
+
+    @Test
+    void recoveryNarrationDoesNotLoopOnFailureOrAdvanceWithoutPlayback() {
+        Harness h=minimal();h.activate();Slot first=h.out.lastSlot();
+        h.event(ExtensionEvent.Kind.ASYNC_RESULT,"approved-text-mismatch",first.correlationId(),first.speech());
+        Slot retry=h.out.lastSlot();
+        h.event(ExtensionEvent.Kind.ASYNC_RESULT,"approved-text-mismatch",retry.correlationId(),retry.speech());
+        assertThat(h.out.lastSlot().generated()).isTrue();
+        int count=h.out.slots.size();
+        assertThat(h.end(Playback.FAILED)).isEqualTo(Signal.OUTPUT_FAILED);
+        assertThat(h.out.slots).hasSize(count);
         assertThat(h.recorder.rows).isEmpty();
     }
 

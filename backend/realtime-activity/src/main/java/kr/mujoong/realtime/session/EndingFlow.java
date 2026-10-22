@@ -131,6 +131,11 @@ public final class EndingFlow {
         }
         idle.deviceHeard();
         PlaybackMark mark = received.mark();
+        if (mark.status() == PlaybackMark.Status.STARTED) {
+            ctx.transcripts().playbackStarted(mark.playbackId(), received.serverRecvAt());
+        } else if (mark.status() != PlaybackMark.Status.PROGRESS) {
+            ctx.transcripts().playbackAbandoned(mark.playbackId(), received.serverRecvAt());
+        }
         var speech = env.practiceAudio().get(mark.playbackId());
         if (speech != null && mark.status() != PlaybackMark.Status.PROGRESS) {
             var fact = switch (mark.status()) {

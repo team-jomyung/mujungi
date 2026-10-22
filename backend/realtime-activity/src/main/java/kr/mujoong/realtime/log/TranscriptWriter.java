@@ -15,7 +15,7 @@ import kr.mujoong.realtime.log.TranscriptEntry.Speaker;
  *
  * <p>세션 실행기 한 스레드만 부른다(잠금 없음, PD-1). 번호는 세션 안에서 1부터 오르고 처음 칸에 넣는 순서가 번호 순서다. 아이 전사는
  * 공급자 입력 전사 항목마다 번호 하나를 첫 조각 때 정하고, 조각은 같은 번호로 덮어쓰며 확정(done)되면 FINAL · 승인 true다. AI 말은 응답의
- * 첫 출력 조각 때 번호를 정해 확정 전 칸(approved false, 텍스트 비움)을 넣고, 게이트 판정과 함께 FINAL · 통과 여부로 한 번에 닫는다 —
+ * 첫 출력 조각 때 번호를 정해 확정 전 칸(approved false, 텍스트 비움)을 넣고, 폐기는 게이트 판정 때 닫고, 승인된 음성은 기기 STARTED 확인 때 재생 시각으로 FINAL 처리한다 —
  * 폐기한 구간도 FINAL · false로 닫아야 12의 nextSeq가 풀린다(BR6.15). 게이트를 통과하기 전의 AI 텍스트는 DB에 쓰지 않는다(NFR1.1).
  */
 public final class TranscriptWriter {
@@ -26,6 +26,8 @@ public final class TranscriptWriter {
     private final Map<String, ChildRow> childRows = new HashMap<>();
     private int lastSeq;
     private AiRow openAi;
+    private final Map<UUID, PendingPlayback> pendingPlayback = new HashMap<>();
+    private record PendingPlayback(Held held, String text) {}
     /** U13 BR5.5: 제브 검사를 기다리는 보관 행(최대 검사 중 1건 + 대기열 1칸). */
     private final List<Held> heldRows = new ArrayList<>();
 
@@ -157,6 +159,37 @@ public final class TranscriptWriter {
         return OptionalInt.of(row.seq);
     }
 
+    public void awaitApprovedPlayback(UUID playbackId, String text, Instant at) {
+        if (pendingPlayback.containsKey(playbackId)) return;
+        AiRow row = new AiRow(++lastSeq, at);
+        Held held = new Held(row);
+        heldRows.add(held);
+        recorder.putTranscript(TranscriptEntry.partial(sessionId, row.seq, Speaker.AI, "", at));
+        awaitPlayback(playbackId, held, text);
+    }
+
+    /** Gate-approved speech remains hidden until the bound device confirms playback. */
+    public void awaitPlayback(UUID playbackId, Held held, String text) {
+        Held handle = held == null ? aiHold() : held;
+        pendingPlayback.put(playbackId, new PendingPlayback(handle, text));
+    }
+
+    public void playbackStarted(UUID playbackId, Instant at) {
+        PendingPlayback pending = pendingPlayback.remove(playbackId);
+        if (pending == null || pending.held.closed || pending.held.row == null) return;
+        Held held = pending.held;
+        held.closed = true;
+        heldRows.remove(held);
+        recorder.putTranscript(TranscriptEntry.finalized(sessionId, held.row.seq, Speaker.AI,
+                pending.text, true, at, at));
+    }
+
+    /** Never display unplayed text, including send failure or a missing STARTED mark. */
+    public void playbackAbandoned(UUID playbackId, Instant at) {
+        PendingPlayback pending = pendingPlayback.remove(playbackId);
+        if (pending != null) aiFinal(pending.held, "", false, at);
+    }
+
     /** 보관 중인(아직 닫지 않은) AI 행 수. */
     public int heldCount() {
         return heldRows.size();
@@ -164,6 +197,7 @@ public final class TranscriptWriter {
 
     /** 종료 · 취소 때 열린 행을 모두 닫는다: 아이 조각은 지금 텍스트로 FINAL · true, AI 행(보관 행 포함)은 FINAL · false(fail-closed). */
     public void closeAll(Instant at) {
+        pendingPlayback.clear();
         for (ChildRow row : childRows.values()) {
             if (!row.closed) {
                 row.closed = true;

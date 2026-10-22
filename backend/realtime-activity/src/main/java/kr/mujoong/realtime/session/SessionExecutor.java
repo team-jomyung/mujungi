@@ -2056,7 +2056,8 @@ public final class SessionExecutor {
     /** 보낸 승인 문구의 AI 말풍선 행(원문을 모르면 남기지 않는다). */
     private void approvedBubble(ApprovedItem item, Instant at) {
         if (item.text() != null && !item.text().isBlank()) {
-            ctx.transcripts().approvedLine(item.text(), at);
+            ctx.playback().current().ifPresent(playing ->
+                    ctx.transcripts().awaitApprovedPlayback(playing.playbackId(), item.text(), at));
         }
     }
 
@@ -2913,12 +2914,8 @@ public final class SessionExecutor {
         if (ownsLatency) {
             ctx.services().latency().gatePassed(ctx.plan().sessionId(), playbackId, passAt);
         }
-        // 보호자 화면 승인(aiFinal true)은 유효한 ALLOW 뒤 기기로 보내는 시점이다. 보관 행이면 그 손잡이로 닫아 새로 열린 행을 건드리지 않는다
-        if (held != null) {
-            ctx.transcripts().aiFinal(held, sealed.transcript(), true, passAt);
-        } else {
-            ctx.transcripts().aiFinal(sealed.transcript(), true, passAt);
-        }
+        // 유효한 ALLOW 뒤에도 표시를 보류하고, 기기 STARTED 때 표시한다. 수신용 seq는 유지한다.
+        ctx.transcripts().awaitPlayback(playbackId, held, sealed.transcript());
         var speech = pendingPracticeSpeech;
         if (speech != null) {
             pendingPracticeSpeech = null; practiceHold = true;
@@ -2935,6 +2932,7 @@ public final class SessionExecutor {
                 firstFrameAt -> ctx.services().latency().firstFrameSent(ctx.plan().sessionId(), playbackId, firstFrameAt),
                 aiRecording == null ? frame -> { } : aiRecording::ai);
         if (!target.sendOutput(bundle)) {
+            ctx.transcripts().playbackAbandoned(playbackId, ctx.services().clock().now());
             ctx.services().metrics().gateDiscard(GateDecision.DiscardReason.OUTBOUND_FULL.name());
             if (speech != null) {
                 practiceAudio.remove(playbackId); cancelPracticeTimer("u5b-audio-" + playbackId);
