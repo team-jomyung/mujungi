@@ -49,8 +49,9 @@ import kr.mujoong.realtime.voice.PracticeSpeech;
  *   <li>GPT-Live가 만드는 모든 역할 발화는 {@code speakGenerated} 한 길로만 낸다(D6). 낼 수 없으면(거짓) 그 슬롯을 실패로 닫고 이어 간다.
  *       역할 전환 · 복귀 알림은 승인 문장이 있으면 {@code announceRoleSwitch}로, 없거나 못 내면 생성형으로 낸다(BR5.4).
  *   <li>슬롯 종료 사건은 correlationId마다 첫 사건만 처리하고(중복 무시), 확장이 스스로 닫은 슬롯은 곧바로 처리 완료로 둔다(§3.5).
- *   <li>도입(장면 설명)이 기회 문장을 담고 끝까지 재생됐으면 OPPORTUNITY 진입에서 기회 문장을 다시 재생하지 않는다({@link SceneIntro}).
- *       설명은 자르지 않고 승인 원문 그대로 재생한다.
+ *   <li>장면은 무중의 장면 설명(역할 밖) → 친구 첫 대사(대본에 있으면) → 친구 기회 문장 순서로 승인 원문 그대로 재생한다. 첫 대사가 없는 옛
+ *       대본에서 도입(장면 설명)이 기회 문장을 담고 끝까지 재생됐으면 OPPORTUNITY 진입에서 기회 문장을 다시 재생하지 않는다({@link SceneIntro}).
+ *       설명은 자르지 않는다. 승인 발화의 말하는 사람 표시는 설명이면 무중, 대사면 친구다({@link RolePolicy}).
  *   <li>레거시 평가 · 단서 포트에 기대지 않는다: 이 클래스는 {@code practice} 패키지를 참조하지 않는다(BR2.5 · BR10.2).
  *   <li>아이 전사 · 대본 문장 · 판정 입력은 로그 · 기록 · 예외 메시지에 쓰지 않는다. 오류는 고정 사유 코드로만 알린다(R-F14).
  * </ul>
@@ -315,13 +316,16 @@ public final class PracticeConversation implements PracticeSessionExtension {
         }
         currentScene = scene;
         state.resetScene(kind);
+        state.partnerOpener(scene.hasPartnerOpener());
         state.phase(Phase.SCENE_INTRO, Sub.NONE);
         sceneRunId = UUID.randomUUID();
         sceneRowCreated = false;
         earlyUtterance = null;
         pendingConsent = null;
-        introCarriesOpportunity = SceneIntro.carriesOpportunity(scene.sceneDescription(), scene.opportunitySentence());
-        speakApproved(scene.sceneDescription());
+        // 친구 첫 대사가 있으면 아이가 마지막으로 듣는 말은 설명이 아니라 첫 대사다: 설명이 기회 문장으로 끝나도 기회 문장을 따로 재생한다
+        introCarriesOpportunity = !scene.hasPartnerOpener()
+                && SceneIntro.carriesOpportunity(scene.sceneDescription(), scene.opportunitySentence());
+        speakNarration(scene.sceneDescription());
     }
 
     private void moveOn() {
@@ -634,7 +638,7 @@ public final class PracticeConversation implements PracticeSessionExtension {
             }
         }
         switch (state.phase()) {
-            case OPPORTUNITY -> speakApproved(currentScene.opportunitySentence());
+            case OPPORTUNITY -> speakPeerLine(currentScene.opportunitySentence());
             case REASK -> speakGenerated(FlowRole.PEER, PracticeInstructions.peerReask(currentScene, true));
             case HELP_OFFER -> speakGenerated(FlowRole.PEER, PracticeInstructions.peerHelpOffer(currentScene, true));
             case RETRY -> speakGenerated(FlowRole.COACH, PracticeInstructions.coachRetryPrompt(currentScene));
@@ -652,7 +656,7 @@ public final class PracticeConversation implements PracticeSessionExtension {
         step.facts().forEach(this::recordFact);
         state.phase(step.phase(), Sub.REEXPLAIN);
         help(HelpKind.SITUATION_EXPLAIN, state.role(), false, null, currentScene.reexplanation().length());
-        speakApproved(currentScene.reexplanation());
+        speakNarration(currentScene.reexplanation());
     }
 
     private void enter(Step step) {
@@ -702,7 +706,13 @@ public final class PracticeConversation implements PracticeSessionExtension {
 
     private void dispatch(Step step, Phase previous) {
         switch (step.phase()) {
-            case SCENE_INTRO -> enterScene(SceneKind.VARIANT);
+            case SCENE_INTRO -> {
+                if (step.sub() == Sub.PARTNER_OPENER) {
+                    speakPeerLine(currentScene.partnerOpener());
+                } else {
+                    enterScene(SceneKind.VARIANT);
+                }
+            }
             case OPPORTUNITY -> opportunity(previous);
             case REASK -> speakGenerated(FlowRole.PEER, PracticeInstructions.peerReask(currentScene, false));
             case HELP_OFFER -> speakGenerated(FlowRole.PEER, PracticeInstructions.peerHelpOffer(currentScene, false));
@@ -737,8 +747,8 @@ public final class PracticeConversation implements PracticeSessionExtension {
     // ---- 출력 ----
 
     /**
-     * 기회 문장 단계 진입. 방금 끝까지 재생한 도입이 기회 문장으로 끝났으면 다시 재생하지 않고 바로 아이 말을 기다린다(도입 중에 온 대답이 있으면
-     * 곧바로 판정한다). 상황 다시 설명 뒤의 재진입은 지금처럼 기회 문장을 재생한다.
+     * 기회 문장 단계 진입. 방금 끝까지 재생한 도입이 기회 문장으로 끝났으면(첫 대사가 없는 옛 대본) 다시 재생하지 않고 바로 아이 말을 기다린다(도입
+     * 중에 온 대답이 있으면 곧바로 판정한다). 친구 첫 대사 뒤 · 상황 다시 설명 뒤의 진입은 기회 문장을 친구 대사로 재생한다.
      */
     private void opportunity(Phase previous) {
         boolean heard = previous == Phase.SCENE_INTRO && introCarriesOpportunity;
@@ -746,7 +756,7 @@ public final class PracticeConversation implements PracticeSessionExtension {
         if (heard) {
             awaitInput();
         } else {
-            speakApproved(currentScene.opportunitySentence());
+            speakPeerLine(currentScene.opportunitySentence());
         }
     }
 
@@ -778,13 +788,22 @@ public final class PracticeConversation implements PracticeSessionExtension {
         speakGenerated(toRole, PracticeInstructions.roleNotice(toRole.name(), currentScene));
     }
 
-    private void speakApproved(String text) {
+    /** 무중이 역할 밖에서 하는 설명(장면 설명 · 상황 다시 설명)을 승인 원문 그대로 낸다. */
+    private void speakNarration(String text) {
+        speakApproved(RolePolicy.NARRATOR_LABEL, text);
+    }
+
+    /** 장면 속 친구의 대사(첫 대사 · 기회 문장)를 승인 원문 그대로 낸다. */
+    private void speakPeerLine(String text) {
+        speakApproved(RolePolicy.peerName(currentScene.partnerRole()), text);
+    }
+
+    private void speakApproved(String speaker, String text) {
         UUID correlation = UUID.randomUUID();
         openSlot(correlation);
         PracticeSpeech speech = null;
         try {
-            speech = PracticeSpeech.scenario(correlation, currentScript.scenarioId(), speechGeneration++,
-                    RolePolicy.partnerLabel(state.role(), currentScene.partnerRole()), text);
+            speech = PracticeSpeech.scenario(correlation, currentScript.scenarioId(), speechGeneration++, speaker, text);
         } catch (IllegalArgumentException invalid) {
             // 승인 문장이 재생 형식(길이 · 제어 문자)을 못 맞춘다: 문장 내용은 남기지 않고 재생 실패로 닫는다
             speech = null;

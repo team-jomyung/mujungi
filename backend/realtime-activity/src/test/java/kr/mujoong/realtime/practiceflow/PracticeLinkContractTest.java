@@ -57,12 +57,14 @@ class PracticeLinkContractTest {
         assertThat(pack.firstScenario().baseScene().partnerRole()).isEqualTo("친한 친구");
         assertThat(pack.firstScenario().variantScene().orElseThrow().partnerRole()).isEqualTo("같은 반 친구");
         Scene base = pack.firstScenario().baseScene();
+        assertThat(base.hasPartnerOpener()).as("고정 자료(생성 판 v6)의 BASE에는 친구 첫 대사가 있다").isTrue();
+        assertThat(pack.firstScenario().variantScene().orElseThrow().hasPartnerOpener()).as("변형은 첫 대사 없이 기회 문장으로 시작").isFalse();
         assertThat(SceneIntro.carriesOpportunity(base.sceneDescription(), base.opportunitySentence()))
-                .as("고정 자료의 BASE 설명은 기회 문장으로 끝난다(재생 생략 경로를 지난다)").isTrue();
+                .as("무중의 설명은 기회 문장을 옮겨 쓰지 않는다").isFalse();
     }
 
     @Test
-    void theCoreStartPackageRunsOneSceneWithTheOpportunitySentenceHeardOnceAndTheLabelInThePeerInstruction()
+    void theCoreStartPackageRunsOneSceneInTheHeardOrderWithTheOpportunitySentenceOnceAndTheLabelInThePeerInstruction()
             throws IOException {
         String json = fixture("practice-start-package.json");
         Scene base = PracticeStartPackage.parse(json).firstScenario().baseScene();
@@ -71,10 +73,14 @@ class PracticeLinkContractTest {
         h.activate();
         assertThat(h.out.lastSlot().generated()).isFalse();
         assertThat(h.out.lastSlot().text()).as("도입 = 장면 설명 원문").isEqualTo(base.sceneDescription());
-        assertThat(h.out.lastSlot().speech().partnerRole()).isEqualTo("친한 친구");
-        int slots = h.out.slots.size();
+        assertThat(h.out.lastSlot().speech().partnerRole()).as("장면 설명은 무중이 역할 밖에서 한다").isEqualTo(RolePolicy.NARRATOR_LABEL);
         h.played();
-        assertThat(h.out.slots).as("기회 문장을 다시 재생하지 않는다").hasSize(slots);
+        assertThat(h.out.lastSlot().text()).as("친구 첫 대사").isEqualTo(base.partnerOpener());
+        assertThat(h.out.lastSlot().speech().partnerRole()).isEqualTo("친한 친구");
+        h.played();
+        assertThat(h.out.lastSlot().text()).as("친구 기회 문장").isEqualTo(base.opportunitySentence());
+        assertThat(h.out.lastSlot().speech().partnerRole()).isEqualTo("친한 친구");
+        h.played();
         assertThat(h.out.timers).as("입력 대기").containsKey("no-response");
 
         h.child("그래 쉬자");

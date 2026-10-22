@@ -1208,14 +1208,18 @@ class PracticeConversationTest {
         assertThat(reask.role()).isEqualTo("PEER");
         assertThat(reask.text()).contains("너는 아이의 친한 친구 역할이다", "아이 대신 대답하지 않는다",
                 "정답이나 모범 문장을 먼저 말하지 말고, 아이의 말을 고쳐 주거나 평가하지 않는다.");
-        assertThat(h.out.slots.getFirst().speech().partnerRole()).as("승인 발화의 말하는 사람 표시").isEqualTo("친한 친구");
+        assertThat(h.out.slots.getFirst().speech().partnerRole()).as("장면 설명은 무중이 역할 밖에서 한다(말하는 사람 표시)")
+                .isEqualTo(RolePolicy.NARRATOR_LABEL);
     }
 
     @Test
     void anOldInstructionValueInPartnerRoleBecomesFriendInInstructionsAndApprovedSpeech() {
         String oldInstruction = "제시된 상황의 상대 역할을 맡아. 아이의 답을 대신 말하거나 평가하지 마.";
-        Harness h = carrying(oldInstruction);
+        Harness h = new Harness(packageJson(GOAL, sceneScript(SCENARIO, INTRO, OPPORTUNITY, oldInstruction)), APPROVED);
         h.activate();
+        h.played();
+        assertThat(h.out.lastSlot().text()).isEqualTo(OPPORTUNITY);
+        assertThat(h.out.lastSlot().speech().partnerRole()).as("친구 대사의 말하는 사람 표시").isEqualTo("친구");
         h.played();
         h.child("그래");
 
@@ -1223,7 +1227,7 @@ class PracticeConversationTest {
 
         assertThat(h.out.lastSlot().text()).contains("너는 아이의 친구 역할이다", "아이 대신 대답하지 않는다")
                 .doesNotContain("제시된 상황의");
-        assertThat(h.out.slots.getFirst().speech().partnerRole()).isEqualTo("친구");
+        assertThat(h.out.slots.getFirst().speech().partnerRole()).isEqualTo(RolePolicy.NARRATOR_LABEL);
     }
 
     @Test
@@ -1234,8 +1238,112 @@ class PracticeConversationTest {
         for (String bad : new String[] {null, "", "  ", "가".repeat(21), "친구야.", "누구?", "친구!", "친구。", "친\u0007구"}) {
             assertThat(RolePolicy.peerName(bad)).as(String.valueOf(bad)).isEqualTo("친구");
         }
-        assertThat(RolePolicy.partnerLabel(PracticeFlowTypes.FlowRole.COACH, "친한 친구")).isEqualTo("코치");
-        assertThat(RolePolicy.partnerLabel(PracticeFlowTypes.FlowRole.PEER, "누구?")).isEqualTo("친구");
+        assertThat(RolePolicy.NARRATOR_LABEL).as("역할 밖 설명의 말하는 사람 표시").isEqualTo("무중");
+    }
+
+    // ---- 친구 첫 대사(partnerOpener): 무중의 설명 → 친구 첫 대사 → 친구 기회 문장 (docs/practice-dialogue-standard.md) ----
+
+    private static final String NARRATION = "무중이랑 상자 정리를 한다고 생각해 보자. 무중이가 같은 반 친구야. 네가 친구한테 파란 상자를 달라고 했어.";
+    private static final String OPENER = "알았어, 잠깐만!";
+    private static final String HANDOVER = "자, 여기 빨간 상자!";
+
+    private static Harness withOpener() {
+        return new Harness(packageJson(GOAL, PracticeScriptFixtures.openerScript(SCENARIO, NARRATION, OPENER, HANDOVER, "같은 반 친구")),
+                APPROVED);
+    }
+
+    @Test
+    void aSceneWithAnOpenerPlaysTheNarrationAsMujoongThenTheOpenerAndTheOpportunityAsTheFriend() {
+        Harness h = withOpener();
+
+        h.activate();
+        Slot narration = h.out.lastSlot();
+        assertThat(narration.text()).isEqualTo(NARRATION);
+        assertThat(narration.speech().partnerRole()).isEqualTo(RolePolicy.NARRATOR_LABEL);
+        assertThat(h.recorder.list()).isEmpty();
+        h.played();
+        assertThat(h.recorder.list()).as("장면 행은 설명이 들린 뒤에 생긴다").hasSize(1);
+        Slot opener = h.out.lastSlot();
+        assertThat(opener.text()).isEqualTo(OPENER);
+        assertThat(opener.generated()).isFalse();
+        assertThat(opener.speech().partnerRole()).isEqualTo("같은 반 친구");
+        assertThat(h.ext.progress().stage()).isEqualTo("SCENARIO_INTRO");
+        assertThat(h.out.timers).doesNotContainKey("no-response");
+        h.played();
+        Slot opportunity = h.out.lastSlot();
+        assertThat(opportunity.text()).isEqualTo(HANDOVER);
+        assertThat(opportunity.speech().partnerRole()).isEqualTo("같은 반 친구");
+        assertThat(h.out.timers).as("기회 문장이 끝나기 전에는 입력을 기다리지 않는다").doesNotContainKey("no-response");
+        h.played();
+
+        assertThat(h.out.timers).containsKey("no-response");
+        h.child("어, 이거 아닌데");
+        assertThat(h.out.lastJudgment().point()).isEqualTo(JudgmentPoint.J2);
+        assertThat(h.out.slots).extracting(Slot::text).containsExactly(NARRATION, OPENER, HANDOVER);
+        assertThat(h.failures).isEmpty();
+    }
+
+    @Test
+    void anUtteranceDuringTheNarrationOrTheOpenerIsNotTakenAsTheAnswer() {
+        Harness h = withOpener();
+        h.activate();
+        h.child("음");
+        h.played();
+        h.child("뭐라고?");
+        h.played();
+        h.played();
+
+        assertThat(h.out.judgments).as("기회 문장을 듣기 전의 말은 대답이 아니다").isEmpty();
+        assertThat(h.out.timers).containsKey("no-response");
+    }
+
+    @Test
+    void anInterruptedOpenerStillPlaysTheOpportunityLineAndAFailedOneWrapsTheStartedScene() {
+        Harness interrupted = withOpener();
+        interrupted.activate();
+        interrupted.played();
+        interrupted.end(Playback.INTERRUPTED);
+        assertThat(interrupted.out.lastSlot().text()).isEqualTo(HANDOVER);
+
+        Harness failed = withOpener();
+        failed.activate();
+        failed.played();
+        Signal end = failed.end(Playback.FAILED);
+
+        assertThat(end).isEqualTo(Signal.LAST_GOAL);
+        SceneRunRecord row = failed.recorder.only();
+        assertThat(failed.recorder.factKinds(row)).containsExactly(FactKind.PLAYBACK_FAILED, FactKind.VARIANT_SKIPPED);
+        assertThat(row.variantSkipReason()).isEqualTo(VariantSkipReason.NO_VARIANT);
+        assertThat(failed.out.slots).extracting(Slot::text).doesNotContain(HANDOVER);
+    }
+
+    @Test
+    void whenAnOpenerFollowsANarrationThatEndsWithTheOpportunityLineTheLineIsStillPlayedAfterTheOpener() {
+        Harness h = new Harness(packageJson(GOAL, PracticeScriptFixtures.openerScript(SCENARIO, CARRYING_INTRO, OPENER, STOP,
+                "친한 친구")), APPROVED);
+        h.activate();
+        h.played();
+        assertThat(h.out.lastSlot().text()).isEqualTo(OPENER);
+        h.played();
+
+        assertThat(h.out.lastSlot().text()).as("마지막으로 들은 말이 첫 대사라 기회 문장을 다시 들려준다").isEqualTo(STOP);
+        assertThat(h.out.timers).doesNotContainKey("no-response");
+    }
+
+    @Test
+    void theReexplanationIsNarratedByMujoongAndTheOpportunityLineAfterItIsTheFriendAgain() {
+        Harness h = withOpener();
+        h.toOpportunityThroughOpener();
+        h.child("공룡 좋아");
+        h.result("J2", "IRRELEVANT");
+
+        Slot reexplanation = h.out.lastSlot();
+        assertThat(reexplanation.text()).isEqualTo("친구는 빨간 상자와 파란 상자를 들고 있어.");
+        assertThat(reexplanation.speech().partnerRole()).isEqualTo(RolePolicy.NARRATOR_LABEL);
+        h.played();
+        assertThat(h.out.lastSlot().text()).isEqualTo(HANDOVER);
+        assertThat(h.out.lastSlot().speech().partnerRole()).isEqualTo("같은 반 친구");
+        assertThat(h.out.slots).extracting(Slot::text).as("다시 설명 뒤에 첫 대사를 다시 하지 않는다").containsOnlyOnce(OPENER);
     }
 
     @Test

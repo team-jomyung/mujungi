@@ -40,19 +40,35 @@ final class PracticeScriptFixtures {
     }
 
     /**
-     * BASE 장면 하나짜리 대본. 설명 · 기회 문장 · 역할 이름을 바꿔 core 규칙(설명이 기회 문장을 포함)이나 옛 지시문 값을 흉내 낸다.
+     * BASE 장면 하나짜리 대본. 설명 · 기회 문장 · 역할 이름을 바꿔 옛 core 규칙(설명이 기회 문장을 포함)이나 옛 지시문 값을 흉내 낸다.
      */
     static String sceneScript(UUID scenarioId, String sceneDescription, String opportunitySentence, String partnerRole) {
+        return openerScript(scenarioId, sceneDescription, null, opportunitySentence, partnerRole);
+    }
+
+    /** BASE 장면 하나짜리 대본에 친구 첫 대사(partnerOpener, null이면 칸 없음)를 싣는다. */
+    static String openerScript(UUID scenarioId, String sceneDescription, String partnerOpener, String opportunitySentence,
+            String partnerRole) {
+        return JsonCodec.shared().write(Map.of("scenarioId", scenarioId.toString(), "kind", "ORIGINAL",
+                "scriptVersion", "scenario-script.v1",
+                "scenes", List.of(scene("base-1", "BASE", sceneDescription, partnerOpener, opportunitySentence, partnerRole)),
+                "validation", Map.of("goalIncluded", true, "triggerIncluded", true, "forbiddenFound", false)));
+    }
+
+    /** 장면 JSON 한 건(빈 값이 아닌 선택 칸만 싣는다). 코치 자료는 상자 고르기 장면 것이다. */
+    static Map<String, Object> scene(String key, String kind, String sceneDescription, String partnerOpener,
+            String opportunitySentence, String partnerRole) {
         Map<String, Object> scene = new LinkedHashMap<>();
-        scene.put("sceneKey", "base-1");
-        scene.put("sceneKind", "BASE");
+        scene.put("sceneKey", key);
+        scene.put("sceneKind", kind);
         scene.put("sceneDescription", sceneDescription);
+        if (partnerOpener != null) {
+            scene.put("partnerOpener", partnerOpener);
+        }
         scene.put("opportunitySentence", opportunitySentence);
         scene.put("reexplanation", "친구는 빨간 상자와 파란 상자를 들고 있어.");
         scene.put("partnerRole", partnerRole);
-        return JsonCodec.shared().write(Map.of("scenarioId", scenarioId.toString(), "kind", "ORIGINAL",
-                "scriptVersion", "scenario-script.v1", "scenes", List.of(scene),
-                "validation", Map.of("goalIncluded", true, "triggerIncluded", true, "forbiddenFound", false)));
+        return scene;
     }
 
     /** 목표 하나 짜리 시작 패키지 practice 조각(첫 목표에 firstScenario). */

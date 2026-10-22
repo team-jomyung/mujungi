@@ -28,9 +28,11 @@ public final class FlowState {
         }
     }
 
-    /** 단계 안의 소단계(FOCUS 진입 ① · ②, SCENE_WRAP 소단계, 상황 다시 설명 재생 중). */
+    /** 단계 안의 소단계(SCENE_INTRO 친구 첫 대사, FOCUS 진입 ① · ②, SCENE_WRAP 소단계, 상황 다시 설명 재생 중). */
     public enum Sub {
         NONE,
+        /** SCENE_INTRO: 무중의 장면 설명 뒤 친구 역할 첫 대사 재생 중. */
+        PARTNER_OPENER,
         /** FOCUS 진입 ①: 역할 전환 알림 재생 중. */
         ROLE_NOTICE,
         /** FOCUS 진입 ②: 코치 발화 재생 중. */
@@ -59,6 +61,7 @@ public final class FlowState {
     private boolean judgmentOpen;
     private boolean helpConsented;
     private boolean endRequested;
+    private boolean partnerOpener;
     private EndCause sceneEndCause;
     private LiveTiming sceneTiming;
     private Instant goalActiveStartedAt;
@@ -129,6 +132,11 @@ public final class FlowState {
         return endRequested;
     }
 
+    /** 지금 장면 대본에 친구 첫 대사가 있는가(도입 설명이 끝나면 첫 대사를 거쳐 기회 문장으로 간다). */
+    public boolean partnerOpener() {
+        return partnerOpener;
+    }
+
     /** 장면이 정리로 들어간 원인(SCENE_WRAP 이후에만 값이 있다). */
     public EndCause sceneEndCause() {
         return sceneEndCause;
@@ -186,6 +194,7 @@ public final class FlowState {
         this.focusLimitReached = false;
         this.judgmentOpen = false;
         this.helpConsented = false;
+        this.partnerOpener = false;
         this.sceneEndCause = null;
         this.sceneTiming = null;
         this.focusStartedAt = null;
@@ -232,6 +241,10 @@ public final class FlowState {
 
     void endRequested(boolean value) {
         this.endRequested = value;
+    }
+
+    void partnerOpener(boolean value) {
+        this.partnerOpener = value;
     }
 
     void sceneEnd(EndCause cause, LiveTiming timing) {

@@ -560,6 +560,26 @@ class FlowTransitionsTest {
         assertEnters(table.onSlotEnded(at(Phase.SCENE_INTRO, Sub.NONE), SlotEnd.BLOCKED), Phase.CLOSING, Sub.NONE);
     }
 
+    @Test
+    void withAPartnerOpenerTheNarrationLeadsToTheFriendOpenerAndOnlyThenToTheOpportunityLine() {
+        FlowState state = at(Phase.SCENE_INTRO, Sub.NONE, false);
+        state.partnerOpener(true);
+
+        assertEnters(table.onSlotEnded(state, SlotEnd.PLAYED), Phase.SCENE_INTRO, Sub.PARTNER_OPENER);
+        assertEnters(table.onSlotEnded(state, SlotEnd.INTERRUPTED), Phase.SCENE_INTRO, Sub.PARTNER_OPENER);
+        assertEnters(table.onSlotEnded(state, SlotEnd.FAILED), Phase.NEXT_GOAL, Sub.NONE);
+
+        FlowState opener = at(Phase.SCENE_INTRO, Sub.PARTNER_OPENER, false);
+        opener.partnerOpener(true);
+        assertEnters(table.onSlotEnded(opener, SlotEnd.PLAYED), Phase.OPPORTUNITY, Sub.NONE);
+        assertEnters(table.onSlotEnded(opener, SlotEnd.INTERRUPTED), Phase.OPPORTUNITY, Sub.NONE);
+        Step failed = table.onSlotEnded(opener, SlotEnd.FAILED);
+        assertEnters(failed, Phase.SCENE_WRAP, Sub.VARIANT_EVAL);
+        assertThat(failed.cause()).as("장면 행이 생긴 뒤라 미실시가 아니라 재생 실패로 정리한다").isEqualTo(EndCause.PLAYBACK_FAILED);
+        assertThat(failed.fact()).isEqualTo(FactKind.PLAYBACK_FAILED);
+        assertThat(table.onSlotEnded(opener, SlotEnd.BLOCKED).cause()).isEqualTo(EndCause.SLOT_BLOCKED);
+    }
+
     @ParameterizedTest
     @EnumSource(value = Phase.class, names = {"OPPORTUNITY", "REASK", "HELP_OFFER", "RETRY"})
     void aFinishedQuestionWaitsForInputAndAFailedOneClosesTheScene(Phase phase) {

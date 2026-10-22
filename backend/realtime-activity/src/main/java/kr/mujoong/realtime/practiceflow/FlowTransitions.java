@@ -478,13 +478,28 @@ public final class FlowTransitions {
     public Step onSlotEnded(FlowState s, SlotEnd end) {
         boolean ended = end == SlotEnd.PLAYED || end == SlotEnd.INTERRUPTED;
         return switch (s.phase()) {
-            case SCENE_INTRO -> ended ? Step.enter(Phase.OPPORTUNITY, Sub.NONE) : Step.enter(afterScene(s), Sub.NONE);
+            case SCENE_INTRO -> introSlot(s, end);
             case OPPORTUNITY, REASK, HELP_OFFER, RETRY -> inputPhaseSlot(s, end);
             case VARIANT_OFFER -> ended ? Step.await() : declineVariant(s, VariantSkipReason.NO_VARIANT);
             case FOCUS -> focusSlot(s, end);
             case SCENE_WRAP -> s.sub() == Sub.RETURN_NOTICE ? returnNoticeEnded(s, end) : Step.ignore();
             default -> Step.ignore();
         };
+    }
+
+    /**
+     * 도입 슬롯: 무중의 장면 설명이 끝나면 친구 첫 대사(대본에 있을 때) → 기회 문장 순서다. 설명이 실패하면 장면을 미실시로 건너뛰고(행 없음),
+     * 행이 생긴 뒤의 첫 대사 실패는 재생 실패로 장면을 정리한다.
+     */
+    private Step introSlot(FlowState s, SlotEnd end) {
+        boolean ended = end == SlotEnd.PLAYED || end == SlotEnd.INTERRUPTED;
+        if (s.sub() == Sub.PARTNER_OPENER) {
+            return ended ? Step.enter(Phase.OPPORTUNITY, Sub.NONE) : failedWrap(s, end);
+        }
+        if (!ended) {
+            return Step.enter(afterScene(s), Sub.NONE);
+        }
+        return s.partnerOpener() ? Step.enter(Phase.SCENE_INTRO, Sub.PARTNER_OPENER) : Step.enter(Phase.OPPORTUNITY, Sub.NONE);
     }
 
     private Step inputPhaseSlot(FlowState s, SlotEnd end) {

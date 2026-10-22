@@ -12,7 +12,7 @@
         "kind": "ORIGINAL",
         "relationType": "친한 친구",
         "opportunityCondition": "친구가 그만하자고 해.",
-        "scenarioText": "지금부터는 상상 속 상황이야. 블록 놀이 중이야. 친구가 그만하자고 해. 이제 그만할래.",
+        "scenarioText": "지금부터는 상상 속 상황이야. 무중이랑 블록 놀이를 한다고 생각해 보자. 무중이가 친한 친구야. 둘이서 한참 동안 블록 탑을 쌓았어.",
         "partnerRoleText": "제시된 상황의 상대 역할을 맡아. 아이의 답을 대신 말하거나 평가하지 마.",
         "triggerScript": "이제 그만할래.",
         "validation": {
@@ -25,9 +25,10 @@
           {
             "sceneKey": "base-1",
             "sceneKind": "BASE",
-            "sceneDescription": "블록 놀이 중이야. 친구가 그만하자고 해. 이제 그만할래.",
+            "sceneDescription": "무중이랑 블록 놀이를 한다고 생각해 보자. 무중이가 친한 친구야. 둘이서 한참 동안 블록 탑을 쌓았어.",
+            "partnerOpener": "휴, 오래 했다.",
             "opportunitySentence": "이제 그만할래.",
-            "reexplanation": "친구는 블록 놀이를 그만하고 쉬고 싶대.",
+            "reexplanation": "너랑 친구가 오래 블록 탑을 쌓았어. 친구가 블록을 내려놓았어.",
             "focusPoints": [
               "친구가 한 말을 떠올려 보기"
             ],
@@ -42,9 +43,10 @@
           {
             "sceneKey": "variant-1",
             "sceneKind": "VARIANT",
-            "sceneDescription": "운동장에서 공놀이 중이야. 같은 반 친구가 그만하자고 해. 이제 그만할래.",
-            "opportunitySentence": "이제 그만할래.",
-            "reexplanation": "같은 반 친구는 공놀이를 그만하고 쉬고 싶대.",
+            "sceneDescription": "블록 탑이 다 됐네. 이번에는 운동장에서 같은 반 친구랑 공놀이를 해.",
+            "partnerOpener": "",
+            "opportunitySentence": "나 이제 그만할래.",
+            "reexplanation": "너랑 같은 반 친구가 운동장에서 오래 공놀이를 했어.",
             "focusPoints": [
               "친구가 한 말을 떠올려 보기"
             ],
@@ -60,11 +62,11 @@
         "selfReview": {
           "verdict": "APPROVE",
           "model": "fake-review",
-          "promptVersion": "scenario-review.v3"
+          "promptVersion": "scenario-review.v4"
         },
         "generation": {
           "model": "fake-model",
-          "promptVersion": "scenario-generation.v5",
+          "promptVersion": "scenario-generation.v6",
           "graphContextUsed": false,
           "calls": 2
         }

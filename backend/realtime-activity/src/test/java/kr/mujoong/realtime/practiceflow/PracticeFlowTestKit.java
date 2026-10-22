@@ -365,5 +365,13 @@ final class PracticeFlowTestKit {
             played();
             played();
         }
+
+        /** 친구 첫 대사가 있는 대본: 활성화 → 무중의 설명 → 친구 첫 대사 → 기회 문장 재생 완료(아이 말을 기다리는 상태). */
+        void toOpportunityThroughOpener() {
+            activate();
+            played();
+            played();
+            played();
+        }
     }
 }

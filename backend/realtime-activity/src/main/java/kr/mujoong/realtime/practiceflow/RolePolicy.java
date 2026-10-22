@@ -5,11 +5,14 @@ import kr.mujoong.realtime.practiceflow.PracticeFlowTypes.FlowRole;
 /**
  * 역할별 발화 정책 (U12 BR5.2). 친구는 정답 · 모범 문장을 미리 말하지 않고, 코치는 아이가 동의한 뒤에만 표현 예시를 줄 수 있다. 레거시
  * CueProvider의 전역 금지를 이 역할별 정책으로 나눈 것이다. 정책의 문장은 {@link PracticeInstructions}가 지시문 템플릿에 담는다.
+ *
+ * <p>승인 발화의 말하는 사람 표시는 문장 종류로 정한다: 장면 설명 · 상황 다시 설명처럼 무중이 역할 밖에서 하는 설명은 {@link #NARRATOR_LABEL},
+ * 친구 첫 대사 · 기회 문장처럼 장면 속 친구의 대사는 {@link #peerName}이다(docs/practice-dialogue-standard.md).
  */
 final class RolePolicy {
 
-    /** 코치 발화의 말하는 사람 표시(친구는 대본의 partnerRole을 쓴다). */
-    static final String COACH_LABEL = "코치";
+    /** 무중이 역할 밖에서 하는 설명 · 제안의 말하는 사람 표시. */
+    static final String NARRATOR_LABEL = "무중";
     /** 대본 partnerRole을 역할 이름으로 쓸 수 없을 때의 친구 표시. core 라벨 규칙의 대체값과 같다(contracts/ai-io.md 10.15). */
     static final String PEER_FALLBACK = "친구";
     /** 역할 이름 상한(코드 포인트). core 라벨 규칙과 같다. */
@@ -21,11 +24,6 @@ final class RolePolicy {
     /** {@code speakGenerated}의 역할 인자(제브 모드 PRACTICE_PEER · PRACTICE_COACH로 대응한다). */
     static String slotRole(FlowRole role) {
         return role.name();
-    }
-
-    /** 말하는 사람 표시: 친구는 대본의 상대 역할 이름({@link #peerName}), 코치는 고정 문구. */
-    static String partnerLabel(FlowRole role, String scenePartnerRole) {
-        return role == FlowRole.COACH ? COACH_LABEL : peerName(scenePartnerRole);
     }
 
     /**

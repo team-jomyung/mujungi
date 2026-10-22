@@ -65,6 +65,7 @@ class ContractSchemasTest {
             List.of("/properties/candidate", "/properties/recentContext/items/properties/text"),
             "ai-scenario-output.schema.json",
             List.of("/properties/scenes/items/properties/sceneDescription",
+                    "/properties/scenes/items/properties/partnerOpener",
                     "/properties/scenes/items/properties/opportunitySentence",
                     "/properties/scenes/items/properties/reexplanation"),
             "ai-goal-candidate-output.schema.json",
@@ -236,6 +237,24 @@ class ContractSchemasTest {
 
         assertThat(schema("practice-record-v2.schema.json").validate(record)).isEmpty();
         assertThat(record.path("scenes").size()).isEqualTo(3);
+    }
+
+    /** 대본 형식 v6: 공유 고정 자료의 BASE는 친구 첫 대사를 싣고 VARIANT는 비우며, 공개 대본 계약은 첫 대사 상한(300자)을 지킨다. */
+    @Test
+    void theSharedFixtureCarriesAFriendOpenerOnTheBaseAndThePublicContractBoundsIt() {
+        JsonNode first = JSON.readTree(read(contracts.resolve("fixtures/practice-start-package.json"))).path("goals").get(0)
+                .path("firstScenario");
+        Schema scenario = schema("practice-scenario.schema.json");
+
+        assertThat(first.path("scenes").get(0).path("partnerOpener").asString()).isNotBlank();
+        assertThat(first.path("scenes").get(1).path("partnerOpener").asString()).isEmpty();
+        assertThat(first.path("generation").path("promptVersion").asString()).isEqualTo("scenario-generation.v6");
+        ObjectNode tooLong = (ObjectNode) first.deepCopy();
+        ((ObjectNode) tooLong.path("scenes").get(0)).put("partnerOpener", "가".repeat(301));
+        assertThat(scenario.validate(tooLong)).isNotEmpty();
+        ObjectNode withoutOpener = (ObjectNode) first.deepCopy();
+        ((ObjectNode) withoutOpener.path("scenes").get(0)).remove("partnerOpener");
+        assertThat(scenario.validate(withoutOpener)).as("첫 대사가 없는 옛 대본도 받는다").isEmpty();
     }
 
     @Test

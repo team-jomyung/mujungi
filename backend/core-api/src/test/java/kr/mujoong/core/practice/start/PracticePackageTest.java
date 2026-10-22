@@ -30,8 +30,23 @@ import org.junit.jupiter.api.*;
         String body=JsonCodec.shared().write(mapper.map(new PreparedPracticePackageMapper.PreparedSnapshot(session,key,List.of(frozen(true)),v3)).firstScenario());
         Map<?,?> wire=JsonCodec.shared().read(body,Map.class);
         @SuppressWarnings("unchecked") var generation=(Map<String,Object>)wire.get("generation");
-        assertThat(generation).containsEntry("promptVersion","scenario-generation.v5").containsEntry("kgVersion","graph-v7");
+        assertThat(generation).containsEntry("promptVersion","scenario-generation.v6").containsEntry("kgVersion","graph-v7");
         assertThat((List<?>)wire.get("scenes")).hasSize(2);
+        assertThat(WebFixtures.schemaErrors("practice-scenario.schema.json",body)).isEmpty();
+    }
+    /** 대본 형식 v6: 친구 첫 대사가 첫 패키지 장면에 그대로 실리고, 첫 대사가 빈 변형 · 칸이 없는 옛 장면도 공개 대본 계약을 통과한다. */
+    @Test void v6PartnerOpenerReachesTheInitialPackageAndOldScenesWithoutItStillPass(){
+        var base=new ScenarioScript.Scene("base","BASE","무중이랑 블록 놀이를 한다고 생각해 보자.","나는 성을 쌓고 있어.","이것 봐, 높지?","설명",List.of(),List.of(),"같은 반 친구","교실","놀이",null,"같은 반 친구");
+        var variant=new ScenarioScript.Scene("variant","VARIANT","탑이 다 됐네. 이번엔 자동차 놀이야.","","부릉부릉, 빠르지?","설명",List.of(),List.of(),"같은 반 친구","교실","그림",null,"같은 반 친구");
+        var old=new ScenarioScript.Scene("old","VARIANT","옛 상황","말","설명",List.of(),List.of(),"같은 반 친구","교실","그림",null,"같은 반 친구");
+        var v6=new Scenario(UUID.randomUUID(),"ORIGINAL","같은 반 친구","기회","상황","역할","말",new Scenario.Validation(true,true,false),"scenario-script.v1",
+                List.of(base,variant,old),new Scenario.Review("APPROVE","fake","scenario-review.v4"),
+                new Scenario.Generation("fake","scenario-generation.v6",false,2));
+        String body=JsonCodec.shared().write(mapper.map(new PreparedPracticePackageMapper.PreparedSnapshot(session,key,List.of(frozen(true)),v6)).firstScenario());
+        @SuppressWarnings("unchecked") var scenes=(List<Map<String,Object>>)JsonCodec.shared().read(body,Map.class).get("scenes");
+        assertThat(scenes.get(0)).containsEntry("partnerOpener","나는 성을 쌓고 있어.");
+        assertThat(scenes.get(1)).containsEntry("partnerOpener","");
+        assertThat(scenes.get(2)).doesNotContainKey("partnerOpener");
         assertThat(WebFixtures.schemaErrors("practice-scenario.schema.json",body)).isEmpty();
     }
     @Test void oldBehaviorWireValuesStayUnchanged(){var first=(Map<?,?>)((List<?>)mapper.c8(snapshot(false,false)).get("goals")).getFirst();assertThat(first.get("behaviorKey")).isEqualTo("ACCEPT_STOP");assertThat(first.get("behaviorVersion")).isEqualTo(1);assertThat(first.containsKey("candidateRef")).isFalse();}

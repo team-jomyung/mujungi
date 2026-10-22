@@ -35,17 +35,19 @@ public record PracticeScript(UUID scenarioId, String scriptVersion, List<Scene> 
     }
 
     /**
-     * 장면 하나. 필수 6필드는 비어 있지 않다. 선택 필드(focusPoints · expressionExamples · relation · place · topic)가 없으면 빈 값이다.
+     * 장면 하나. 필수 6필드는 비어 있지 않다. 선택 필드(partnerOpener · focusPoints · expressionExamples · relation · place · topic)가 없으면
+     * 빈 값이다.
      *
      * @param sceneKey 대본 안 장면 식별(장면 식별은 이 값뿐이다, 장면별 UUID 없음)
-     * @param sceneDescription 상황 문장(SCENE_INTRO 승인 발화)
-     * @param opportunitySentence 기회 문장
+     * @param sceneDescription 무중이 역할 밖에서 들려주는 장면 설명(SCENE_INTRO 승인 발화)
+     * @param partnerOpener 친구 역할의 첫 대사(선택). 비어 있으면 설명 뒤 곧바로 기회 문장이다(옛 대본 · 첫 대사 없는 변형)
+     * @param opportunitySentence 기회 문장(친구 역할의 대사)
      * @param reexplanation 상황 다시 설명 문장
      * @param partnerRole 상대 역할 문구(core가 발급 때 덮어쓴 값)
      */
-    public record Scene(String sceneKey, SceneKind sceneKind, String sceneDescription, String opportunitySentence,
-            String reexplanation, String partnerRole, List<String> focusPoints, List<String> expressionExamples,
-            String relation, String place, String topic) {
+    public record Scene(String sceneKey, SceneKind sceneKind, String sceneDescription, String partnerOpener,
+            String opportunitySentence, String reexplanation, String partnerRole, List<String> focusPoints,
+            List<String> expressionExamples, String relation, String place, String topic) {
 
         public Scene {
             requireText(sceneKey, "sceneKey");
@@ -54,11 +56,17 @@ public record PracticeScript(UUID scenarioId, String scriptVersion, List<Scene> 
             requireText(opportunitySentence, "opportunitySentence");
             requireText(reexplanation, "reexplanation");
             requireText(partnerRole, "partnerRole");
+            partnerOpener = partnerOpener == null || partnerOpener.isBlank() ? "" : partnerOpener;
             focusPoints = focusPoints == null ? List.of() : List.copyOf(focusPoints);
             expressionExamples = expressionExamples == null ? List.of() : List.copyOf(expressionExamples);
             relation = relation == null ? "" : relation;
             place = place == null ? "" : place;
             topic = topic == null ? "" : topic;
+        }
+
+        /** 친구 첫 대사가 있는가(있으면 도입 → 첫 대사 → 기회 문장 순서로 재생한다). */
+        public boolean hasPartnerOpener() {
+            return !partnerOpener.isEmpty();
         }
 
         private static void requireText(String value, String field) {

@@ -53,6 +53,8 @@ class PracticeLinkContractTest {
     static final String OPPORTUNITY = "친구가 그만하자고 해.";
     static final String STOP = "이제 그만할래.";
     static final String TARGET = "그래, 잠깐 쉬자";
+    static final String NARRATION = "무중이랑 블록 놀이를 한다고 생각해 보자. 무중이가 친한 친구야. 둘이서 한참 동안 블록 탑을 쌓았어.";
+    static final String OPENER = "휴, 오래 했다.";
 
     private static final JsonMapper TREE = JsonMapper.builder().build();
 
@@ -75,15 +77,17 @@ class PracticeLinkContractTest {
                 new FrozenGoal(GOAL_TWO, "차례 말하기", "TAKE_TURN", 1, "자기 차례를 말로 요청한다", 20, 2, 2, false, 1, 1, 2));
     }
 
+    /** 대본 형식 v6: 무중의 설명(기회 조건 · 기회 문장을 옮기지 않음) → 친구 첫 대사 → 친구 기회 문장. */
     static ScenarioScript.Scene base() {
-        return new ScenarioScript.Scene("base-1", "BASE", "블록 놀이 중이야. " + OPPORTUNITY + " " + STOP, STOP,
-                "친구는 블록 놀이를 그만하고 쉬고 싶대.", List.of("친구가 한 말을 떠올려 보기"), List.of(TARGET),
+        return new ScenarioScript.Scene("base-1", "BASE", NARRATION, OPENER, STOP,
+                "너랑 친구가 오래 블록 탑을 쌓았어. 친구가 블록을 내려놓았어.", List.of("친구가 한 말을 떠올려 보기"), List.of(TARGET),
                 "친한 친구", "교실", "블록 놀이", null, null);
     }
 
+    /** 변형 설명은 무중이 변형을 제안할 때 들리고(서버가 '이어서 해 볼까?'를 붙임) 첫 대사는 비운다. */
     static ScenarioScript.Scene variant() {
-        return new ScenarioScript.Scene("variant-1", "VARIANT", "운동장에서 공놀이 중이야. 같은 반 친구가 그만하자고 해. " + STOP, STOP,
-                "같은 반 친구는 공놀이를 그만하고 쉬고 싶대.", List.of("친구가 한 말을 떠올려 보기"), List.of(TARGET),
+        return new ScenarioScript.Scene("variant-1", "VARIANT", "블록 탑이 다 됐네. 이번에는 운동장에서 같은 반 친구랑 공놀이를 해.", "",
+                "나 이제 그만할래.", "너랑 같은 반 친구가 운동장에서 오래 공놀이를 했어.", List.of("친구가 한 말을 떠올려 보기"), List.of(TARGET),
                 "CLASSMATE", "운동장", "공놀이", null, null);
     }
 
@@ -122,6 +126,19 @@ class PracticeLinkContractTest {
         JsonNode expected = TREE.readTree(fixture("practice-start-package.json"));
 
         assertThat(actual).isEqualTo(expected);
+    }
+
+    @Test
+    void theIssuedV6ScenesCarryTheFriendOpenerAndANarrationThatDoesNotCopyTheOpportunityCondition() {
+        JsonNode first = TREE.readTree(JsonCodec.shared().write(issuedPackage())).path("goals").get(0).path("firstScenario");
+        JsonNode scenes = first.path("scenes");
+
+        assertThat(scenes.get(0).path("partnerOpener").asString()).isEqualTo(OPENER);
+        assertThat(scenes.get(1).path("partnerOpener").asString()).as("변형은 첫 대사 없이 기회 문장으로 시작").isEmpty();
+        assertThat(scenes.get(0).path("sceneDescription").asString()).doesNotContain(OPPORTUNITY).doesNotContain(STOP);
+        assertThat(first.path("generation").path("promptVersion").asString()).isEqualTo("scenario-generation.v6");
+        assertThat(first.path("selfReview").path("promptVersion").asString()).isEqualTo("scenario-review.v4");
+        assertThat(first.path("validation").path("goalIncluded").asBoolean()).as("검증 표시는 서버 검사 · 별도 검토 통과의 뜻 그대로").isTrue();
     }
 
     @Test

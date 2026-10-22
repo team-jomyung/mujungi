@@ -39,7 +39,7 @@ final class StructuredFixture implements AutoCloseable {
                 new TextAiProperties(Duration.ofSeconds(3),new TextAiProperties.Retry(1,Duration.ofMillis(250))),executor,properties,JsonCodec.shared());
     }
     ScenarioScriptProvider.Generated generated(String material){
-        var s=new ScenarioScript.Scene("base","BASE",material+" 놀이 중. "+legacy.opportunity+" 이제 그만할래.","이제 그만할래.","친구가 쉬려 해.",List.of(),List.of(),"PEER","교실","놀이",null,null);
+        var s=new ScenarioScript.Scene("base","BASE",material+" 놀이 중. "+legacy.opportunity+" 이제 그만할래.","휴, 오래 했다.","이제 그만할래.","친구가 쉬려 해.",List.of(),List.of(),"PEER","교실","놀이",null,null);
         return new ScenarioScriptProvider.Generated(new ScenarioScript(List.of(s)),"fake");
     }
     @Override public void close(){executor.shutdownNow();legacy.cleanUp();}

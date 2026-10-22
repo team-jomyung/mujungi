@@ -30,7 +30,7 @@ import org.junit.jupiter.api.*;
     }
     ScenarioScript.Scene scene(VariantPlanner.Context c,VariantPlanner.Plan p,String key,String kind){
         var seed=graphFixture.seed;var preservation=new ScenarioScript.Preservation(seed.seedId(),seed.invariantSentence(),seed.preservationRule(),p==null?"SAME_CONTEXT":p.grade(),p==null?"none":p.changedField(),c.participants(),c.situation(),c.relationship());
-        return new ScenarioScript.Scene(key,kind,"놀이 중. "+f.legacy.opportunity+" 이제 그만할래.","이제 그만할래.","친구가 쉬려 해.",List.of(),List.of(),c.relationship(),c.place(),c.topic(),preservation,null);
+        return new ScenarioScript.Scene(key,kind,"놀이 중. "+f.legacy.opportunity+" 이제 그만할래.","BASE".equals(kind)?"휴, 오래 했다.":"","이제 그만할래.","친구가 쉬려 해.",List.of(),List.of(),c.relationship(),c.place(),c.topic(),preservation,null);
     }
     @AfterEach void close(){graphFixture.close();f.close();}
     @Test void variantCanOnlyBeBuiltFromPlanActuallyDeliveredToCorrectionAndReview(){
@@ -41,7 +41,7 @@ import org.junit.jupiter.api.*;
         verify(f.provider,times(2)).review(calls.capture());assertThat(calls.getAllValues().getLast().input().get("variantPlan")).isEqualTo(corrected.get("variantPlan"));
         assertThat(json.write(corrected.get("variantPlan"))).doesNotContain(f.legacy.guardian.toString(),f.legacy.child.toString(),"sourceActivityId");
         verify(f.graph).variantPlan(any(),any(),any(),eq(new VariantPlanner.Context("놀이","교실","아이와 친구","FRIEND_CLOSE","FRIEND_PRIVATE")),any());
-        assertThat(result.selfReview().promptVersion()).isEqualTo("scenario-review.v3").isEqualTo(ScenarioScriptProvider.REVIEW_PROMPT_VERSION);
+        assertThat(result.selfReview().promptVersion()).isEqualTo("scenario-review.v4").isEqualTo(ScenarioScriptProvider.REVIEW_PROMPT_VERSION);
     }
     /** 첫 BASE 검토는 변형이 없으므로 다음 생성용 계획을 보지 않고, 구조 맥락만 본다. 변형이 실린 검토만 받은 계획을 본다. */
     @Test void baseOnlyReviewSeesStructureButNotTheNextVariantPlan(){
@@ -110,7 +110,7 @@ import org.junit.jupiter.api.*;
         freeKoreanGoal();answerLikeV3(relational(scene(ALLOWED,null,"base","BASE")));
         var result=f.legacy.service.generate(f.legacy.original());
         assertThat(result.scenes()).hasSize(2);assertThat(result.generation().calls()).isEqualTo(4);assertThat(result.generation().graphContextUsed()).isTrue();
-        assertThat(result.generation().promptVersion()).isEqualTo("scenario-generation.v5");
+        assertThat(result.generation().promptVersion()).isEqualTo("scenario-generation.v6");
         assertThat(result.scenes()).allSatisfy(s->assertThat(s.relation()).isEqualTo("같은 반 친구"));
         assertThat(result.scenes().getLast().preservation().relationship()).isEqualTo("FRIEND_CLOSE");
         verify(f.graph).variantPlan(any(),any(),any(),eq(ALLOWED),any());
@@ -139,14 +139,14 @@ import org.junit.jupiter.api.*;
     }
     @Test void baseWithoutPreservationIsCorrectedOnceAndIssuesOnlyTheApprovedBase(){
         freeKoreanGoal();var missing=relational(scene(ALLOWED,null,"base","BASE"));
-        var bare=new ScenarioScript.Scene(missing.sceneKey(),missing.sceneKind(),missing.sceneDescription(),missing.opportunitySentence(),missing.reexplanation(),List.of(),List.of(),missing.relation(),missing.place(),missing.topic(),null,null);
+        var bare=new ScenarioScript.Scene(missing.sceneKey(),missing.sceneKind(),missing.sceneDescription(),missing.partnerOpener(),missing.opportunitySentence(),missing.reexplanation(),List.of(),List.of(),missing.relation(),missing.place(),missing.topic(),null,null);
         doReturn(ScenarioGenerationTest.generated(bare),ScenarioGenerationTest.generated(missing)).when(f.provider).generate(any());
         var result=f.legacy.service.generate(f.legacy.original());
         assertThat(result.scenes()).hasSize(1);assertThat(result.generation().calls()).isEqualTo(4);assertThat(result.generation().graphContextUsed()).isTrue();
     }
     @Test void baseWithoutPreservationTwiceFailsTheGraphPathStart(){
         freeKoreanGoal();var missing=relational(scene(ALLOWED,null,"base","BASE"));
-        var bare=new ScenarioScript.Scene(missing.sceneKey(),missing.sceneKind(),missing.sceneDescription(),missing.opportunitySentence(),missing.reexplanation(),List.of(),List.of(),missing.relation(),missing.place(),missing.topic(),null,null);
+        var bare=new ScenarioScript.Scene(missing.sceneKey(),missing.sceneKind(),missing.sceneDescription(),missing.partnerOpener(),missing.opportunitySentence(),missing.reexplanation(),List.of(),List.of(),missing.relation(),missing.place(),missing.topic(),null,null);
         doReturn(ScenarioGenerationTest.generated(bare)).when(f.provider).generate(any());
         assertThatThrownBy(()->f.legacy.service.generate(f.legacy.original())).isInstanceOfSatisfying(kr.mujoong.core.common.error.CoreApiException.class,
                 e->assertThat(e.code()).isEqualTo(kr.mujoong.contract.error.ErrorCode.SCENARIO_GEN_FAILED));
@@ -163,6 +163,6 @@ import org.junit.jupiter.api.*;
     }
     /** 목표 상대(scene.relation)는 Luna가 쓴 자유 한국어 그대로 두고, 관계 좌표만 열거값으로 둔다. */
     ScenarioScript.Scene relational(ScenarioScript.Scene s){
-        return new ScenarioScript.Scene(s.sceneKey(),s.sceneKind(),s.sceneDescription(),s.opportunitySentence(),s.reexplanation(),s.focusPoints(),s.expressionExamples(),"같은 반 친구",s.place(),s.topic(),s.preservation(),null);
+        return new ScenarioScript.Scene(s.sceneKey(),s.sceneKind(),s.sceneDescription(),s.partnerOpener(),s.opportunitySentence(),s.reexplanation(),s.focusPoints(),s.expressionExamples(),"같은 반 친구",s.place(),s.topic(),s.preservation(),null);
     }
 }

@@ -61,6 +61,22 @@ class PracticeScriptReaderTest {
         assertThat(base.topic()).isEmpty();
     }
 
+    @Test
+    void thePartnerOpenerIsReadWhenPresentAndAnOldScriptWithoutItOrABlankOneMeansNoOpener() {
+        PracticeScript.Scene withOpener = PracticeScriptReader.read(PracticeScriptFixtures.openerScript(SCENARIO,
+                "무중이랑 상자 정리를 한다고 생각해 보자.", "잠깐만, 찾아볼게.", "자, 여기 빨간 상자!", "같은 반 친구")).baseScene();
+        PracticeScript.Scene old = PracticeScriptReader.read(minimalScript(SCENARIO)).baseScene();
+        PracticeScript.Scene blank = PracticeScriptReader.read(PracticeScriptFixtures.openerScript(SCENARIO,
+                "상자를 정리하고 있어.", "   ", "자, 여기!", "친구")).baseScene();
+
+        assertThat(withOpener.partnerOpener()).isEqualTo("잠깐만, 찾아볼게.");
+        assertThat(withOpener.hasPartnerOpener()).isTrue();
+        assertThat(old.partnerOpener()).as("partnerOpener가 없는 옛 대본은 거절하지 않고 빈 값").isEmpty();
+        assertThat(old.hasPartnerOpener()).isFalse();
+        assertThat(blank.hasPartnerOpener()).as("공백뿐인 첫 대사는 없는 것으로 본다").isFalse();
+        assertThat(withOpener.toString()).doesNotContain("찾아볼게");
+    }
+
     @ParameterizedTest
     @ValueSource(strings = {"sceneKey", "sceneKind", "sceneDescription", "opportunitySentence", "reexplanation", "partnerRole"})
     void eachOfTheSixRequiredSceneFieldsIsRequired(String field) {

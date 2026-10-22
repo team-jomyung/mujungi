@@ -14,8 +14,9 @@ import kr.mujoong.realtime.practiceflow.PracticeScriptException.Reason;
  * <ul>
  *   <li>필수: {@code scenarioId}(UUID) · {@code scriptVersion}({@value PracticeScript#SCRIPT_VERSION_V1}) · {@code scenes[]} 1건 이상 · 장면
  *       필수 6필드 · 쓸 수 있는 원 장면(BASE) · {@code validation}(통과). 하나라도 어기면 {@link PracticeScriptException}(사유 코드만).
- *   <li>선택: {@code selfReview} · {@code generation} · 변형 장면 · 장면의 {@code focusPoints · expressionExamples · relation · place · topic}.
- *       없으면 빈 값으로 정규화한다(거절하지 않는다). 모르는 필드는 무시한다(계약 10절).
+ *   <li>선택: {@code selfReview} · {@code generation} · 변형 장면 · 장면의 {@code partnerOpener · focusPoints · expressionExamples ·
+ *       relation · place · topic}. 없으면 빈 값으로 정규화한다(거절하지 않는다). {@code partnerOpener}가 없는 옛 대본은 지금처럼 도입 뒤
+ *       곧바로 기회 문장으로 간다. 모르는 필드는 무시한다(계약 10절).
  *   <li>{@code scriptVersion}이 없으면 새 흐름 대상이 아니다({@link Reason#NO_SCRIPT_VERSION}, 분기는 BR1.4가 정한다).
  * </ul>
  *
@@ -29,9 +30,9 @@ public final class PracticeScriptReader {
     // ---- 읽기 전용 JSON 모양(계약 필드 이름 그대로, 모든 값이 null일 수 있다) ----
 
     /** 장면 JSON 모양. */
-    record RawScene(String sceneKey, String sceneKind, String sceneDescription, String opportunitySentence,
-            String reexplanation, String partnerRole, List<String> focusPoints, List<String> expressionExamples,
-            String relation, String place, String topic) {
+    record RawScene(String sceneKey, String sceneKind, String sceneDescription, String partnerOpener,
+            String opportunitySentence, String reexplanation, String partnerRole, List<String> focusPoints,
+            List<String> expressionExamples, String relation, String place, String topic) {
     }
 
     /** 대본 검토 JSON 모양. */
@@ -124,9 +125,9 @@ public final class PracticeScriptReader {
         } catch (IllegalArgumentException e) {
             throw new PracticeScriptException(Reason.BAD_SCENE_KIND, e);
         }
-        return new PracticeScript.Scene(raw.sceneKey(), kind, raw.sceneDescription(), raw.opportunitySentence(),
-                raw.reexplanation(), raw.partnerRole(), raw.focusPoints(), raw.expressionExamples(), raw.relation(),
-                raw.place(), raw.topic());
+        return new PracticeScript.Scene(raw.sceneKey(), kind, raw.sceneDescription(), raw.partnerOpener(),
+                raw.opportunitySentence(), raw.reexplanation(), raw.partnerRole(), raw.focusPoints(), raw.expressionExamples(),
+                raw.relation(), raw.place(), raw.topic());
     }
 
     private static PracticeScript.SelfReview selfReview(RawSelfReview raw) {
