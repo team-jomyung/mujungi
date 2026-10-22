@@ -248,13 +248,33 @@ class ContractSchemasTest {
 
         assertThat(first.path("scenes").get(0).path("partnerOpener").asString()).isNotBlank();
         assertThat(first.path("scenes").get(1).path("partnerOpener").asString()).isEmpty();
-        assertThat(first.path("generation").path("promptVersion").asString()).isEqualTo("scenario-generation.v6");
+        assertThat(first.path("generation").path("promptVersion").asString()).isEqualTo("scenario-generation.v7");
         ObjectNode tooLong = (ObjectNode) first.deepCopy();
         ((ObjectNode) tooLong.path("scenes").get(0)).put("partnerOpener", "가".repeat(301));
         assertThat(scenario.validate(tooLong)).isNotEmpty();
         ObjectNode withoutOpener = (ObjectNode) first.deepCopy();
         ((ObjectNode) withoutOpener.path("scenes").get(0)).remove("partnerOpener");
         assertThat(scenario.validate(withoutOpener)).as("첫 대사가 없는 옛 대본도 받는다").isEmpty();
+    }
+
+    /** 대본 형식 v7(실측 F5): 공유 고정 자료는 코치 전용 빈칸 예문을 표현 예시와 1:1로 싣고, 공개 대본은 그 칸이 없는 옛 대본도 받는다. */
+    @Test
+    void theSharedFixtureCarriesExpressionFramesOneToOneAndThePublicContractAcceptsScriptsWithoutThem() {
+        JsonNode first = JSON.readTree(read(contracts.resolve("fixtures/practice-start-package.json"))).path("goals").get(0)
+                .path("firstScenario");
+        Schema scenario = schema("practice-scenario.schema.json");
+
+        for (JsonNode scene : first.path("scenes")) {
+            assertThat(scene.path("expressionFrames").size()).isEqualTo(scene.path("expressionExamples").size());
+            scene.path("expressionFrames").forEach(frame -> assertThat(frame.asString()).contains("뭐뭐"));
+        }
+        assertThat(first.path("selfReview").path("promptVersion").asString()).isEqualTo("scenario-review.v5");
+        ObjectNode withoutFrames = (ObjectNode) first.deepCopy();
+        ((ObjectNode) withoutFrames.path("scenes").get(0)).remove("expressionFrames");
+        assertThat(scenario.validate(withoutFrames)).as("빈칸 예문이 없는 옛 대본도 받는다").isEmpty();
+        ObjectNode tooMany = (ObjectNode) first.deepCopy();
+        ((ObjectNode) tooMany.path("scenes").get(0)).putArray("expressionFrames").add("가 뭐뭐").add("나 뭐뭐").add("다 뭐뭐").add("라 뭐뭐");
+        assertThat(scenario.validate(tooMany)).isNotEmpty();
     }
 
     @Test

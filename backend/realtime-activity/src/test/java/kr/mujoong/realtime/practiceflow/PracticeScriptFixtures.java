@@ -80,6 +80,18 @@ final class PracticeScriptFixtures {
                 "validation", Map.of("goalIncluded", true, "triggerIncluded", true, "forbiddenFound", false)));
     }
 
+    /** 판 v7 대본의 빈칸 예문(표현 예시의 핵심 내용 낱말 자리를 '뭐뭐'로 비운 말, 두 장면 같은 틀). */
+    static final String V7_FRAME = "아니, 나 뭐뭐 달라고 했어.";
+
+    /** 판 v7 모양: 판 v6 대본에 코치 전용 빈칸 예문(expressionFrames)을 표현 예시와 1:1로 더한다. */
+    static String v7Script(UUID scenarioId) {
+        Map<String, Object> script = JsonCodec.shared().read(v6Script(scenarioId, null), LinkedHashMap.class);
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> scenes = (List<Map<String, Object>>) script.get("scenes");
+        scenes.forEach(scene -> scene.put("expressionFrames", List.of(V7_FRAME)));
+        return JsonCodec.shared().write(script);
+    }
+
     /** 장면 JSON 한 건(빈 값이 아닌 선택 칸만 싣는다). 코치 자료는 상자 고르기 장면 것이다. */
     static Map<String, Object> scene(String key, String kind, String sceneDescription, String partnerOpener,
             String opportunitySentence, String partnerRole) {

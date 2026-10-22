@@ -20,6 +20,7 @@
           "partnerOpener",
           "opportunitySentence",
           "reexplanation",
+          "expressionFrames",
           "relation",
           "place",
           "topic"
@@ -62,6 +63,12 @@
             "maxItems": 3,
             "items": { "type": "string", "minLength": 1, "maxLength": 500 }
           },
+          "expressionFrames": {
+            "description": "빈칸 예문(생성 판 v7부터 필수 칸). expressionExamples와 같은 순서 · 같은 개수로, 각 예시에서 아이가 채워야 할 핵심 내용 낱말 자리를 '뭐뭐'로 비운다(꾸밈말 하나만 비우지 않음). 코치의 첫 도움이 글자 그대로 말하고, 코치 역할 · 동의 뒤에만 쓴다. 예시가 없으면 빈 배열 [U10 편차 (U10-e)]",
+            "type": "array",
+            "maxItems": 3,
+            "items": { "type": "string", "minLength": 1, "maxLength": 500 }
+          },
           "relation": { "type": "string", "minLength": 1, "maxLength": 200 },
           "place": { "type": "string", "minLength": 1, "maxLength": 200 },
           "topic": { "type": "string", "minLength": 1, "maxLength": 200 },
@@ -96,6 +103,7 @@
           "reexplanation": "너는 빨간 블록이 하나 필요해. 빨간 블록은 친구한테 다 있어.",
           "focusPoints": ["친구 물건을 쓰고 싶을 때는 하고 싶은 걸 말하고 물어보면 돼"],
           "expressionExamples": ["나도 블록 하나 써도 돼?"],
+          "expressionFrames": ["나도 뭐뭐 하나 써도 돼?"],
           "relation": "FRIEND_CLOSE",
           "place": "HOME",
           "topic": "블록 놀이"
@@ -111,6 +119,7 @@
           "partnerOpener": "휴, 오래 했다.",
           "opportunitySentence": "나 이제 그만할래.",
           "reexplanation": "너랑 친구가 교실에서 오래 블록 탑을 쌓았어.",
+          "expressionFrames": [],
           "relation": "같은 반 친구",
           "place": "교실",
           "topic": "놀이",

@@ -35,6 +35,9 @@
             "expressionExamples": [
               "그래, 잠깐 쉬자"
             ],
+            "expressionFrames": [
+              "그래, 잠깐 뭐뭐"
+            ],
             "relation": "친한 친구",
             "place": "교실",
             "topic": "블록 놀이",
@@ -53,6 +56,9 @@
             "expressionExamples": [
               "그래, 잠깐 쉬자"
             ],
+            "expressionFrames": [
+              "그래, 잠깐 뭐뭐"
+            ],
             "relation": "CLASSMATE",
             "place": "운동장",
             "topic": "공놀이",
@@ -62,11 +68,11 @@
         "selfReview": {
           "verdict": "APPROVE",
           "model": "fake-review",
-          "promptVersion": "scenario-review.v4"
+          "promptVersion": "scenario-review.v5"
         },
         "generation": {
           "model": "fake-model",
-          "promptVersion": "scenario-generation.v6",
+          "promptVersion": "scenario-generation.v7",
           "graphContextUsed": false,
           "calls": 2
         }

@@ -77,6 +77,22 @@ class PracticeScriptReaderTest {
         assertThat(withOpener.toString()).doesNotContain("찾아볼게");
     }
 
+    /** 생성 판 v7의 코치 전용 빈칸 예문은 선택 칸이다: 있으면 그대로 읽고, 없는 옛 대본 · 공백 항목은 빈 값으로 둔다(거절하지 않는다). */
+    @Test
+    void expressionFramesAreReadWhenPresentAndAnOldScriptWithoutThemHasNone() {
+        PracticeScript v7 = PracticeScriptReader.read(PracticeScriptFixtures.v7Script(SCENARIO));
+        PracticeScript.Scene old = PracticeScriptReader.read(PracticeScriptFixtures.v6Script(SCENARIO, null)).baseScene();
+        String blankJson = PracticeScriptFixtures.v7Script(SCENARIO).replace(PracticeScriptFixtures.V7_FRAME, "  ");
+
+        assertThat(v7.baseScene().expressionFrames()).containsExactly(PracticeScriptFixtures.V7_FRAME);
+        assertThat(v7.baseScene().firstFrame()).isEqualTo(PracticeScriptFixtures.V7_FRAME);
+        assertThat(v7.variantScene().orElseThrow().firstFrame()).isEqualTo(PracticeScriptFixtures.V7_FRAME);
+        assertThat(old.expressionFrames()).as("빈칸 예문이 없는 옛 대본은 빈 값").isEmpty();
+        assertThat(old.firstFrame()).isEmpty();
+        assertThat(PracticeScriptReader.read(blankJson).baseScene().firstFrame()).as("공백 항목은 없는 것으로 본다").isEmpty();
+        assertThat(v7.baseScene().toString()).doesNotContain("뭐뭐");
+    }
+
     @ParameterizedTest
     @ValueSource(strings = {"sceneKey", "sceneKind", "sceneDescription", "opportunitySentence", "reexplanation", "partnerRole"})
     void eachOfTheSixRequiredSceneFieldsIsRequired(String field) {
