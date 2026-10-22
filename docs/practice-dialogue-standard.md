@@ -2,6 +2,7 @@
 
 > 브랜치 `claude/practice-dialogue-standard`(기준 `origin/claude/practice-live-fixes` 3194f8e = main + 연습 연결부 수정 + 변형 어휘 수정 + 검토 스키마 수정 + 검토 v3 · 생성 v5 + 머뭇거림 도움 제안 + 추론 강도 low + 실제 AI 평가 하니스).
 > 팀장이 확정한 기준 연습 대화(1절)대로 연습이 나오게 core 대본 형식 · realtime 흐름 · 실호출 하니스를 고쳤다. 사람 대신 모델이 지시대로 구현했고, 묻지 않고 정한 것은 8절 가정(DLG-A)에 남겼다.
+> **2회차(14절)**: 12.2.1절 실측 뒤 F1 ~ F6 · F8을 고쳤다 — 승인된 BASE 보존, 대본 형식 v7(빈칸 예문 · 들리는 대사 규칙 · 생성 v7 · 검토 v5), 다시 설명 뒤 첫 대사, 되묻기 · 코치 첫 도움 · 음성 규칙, J4 판정 지시문 `prompt-v3`, 제브 OFF의 생성형 발화 재생. 새 깨는 변경은 없다(14.10절).
 > **깨는 변경**: 대본 계약 C-DS1을 판 v6으로 바꿨다. **core와 realtime을 같은 날, 한 PR로 병합하고 같은 SHA로 배포한다**(6절).
 > **증거 구분(R-M11)**: 12.1절 시험 결과는 모두 **테스트 대역(가짜 공급자 · 가짜 판정 · 가짜 제브) · 합성 대화** 증거다. 12.2절은 실호출 하니스를 돌린 **실제 API · 합성 자료** 증거다(생성 · 검토 · 판정은 실제 Luna, 친구 · 코치 말은 텍스트 대리, 아이는 대본 · AI · 규칙 문장). 실제 GPT-Live 음성 · 실제 제브 · 실제 기기에서는 돌지 않았다(12.3절).
 
@@ -348,7 +349,7 @@ Luna가 만든 대본에서 사람이 읽어 찾은 것(자동 점검은 글자�
 
 **판단**: 흐름은 기준 대화대로 돈다(기준 대본 + 실제 Luna 판정). Luna가 만든 대본은 모양(설명 → 첫 대사 → 친구 대사, 목표 표현 · 칭찬 없음)은 맞다. 다만 6개 중 2개는 단서를 설명에서 말하거나 목표 일부를 먼저 말하고, 발급된 4개 중 변형이 있는 2개는 소재가 바뀌지 않았으며, 2개는 아예 발급되지 않았다. 실제 음성 · 제브 · 기기에서는 아직 확인하지 않았다.
 
-**다음에 고칠 것**(제안, 이 브랜치에는 넣지 않았다):
+**다음에 고칠 것**(제안 당시. F1 ~ F6은 2회차에 고쳤고 F7은 범위 밖이다, 14절):
 
 | # | 무엇 | 어디 | 담당 확인 |
 |---|---|---|---|
@@ -374,7 +375,7 @@ Luna가 만든 대본에서 사람이 읽어 찾은 것(자동 점검은 글자�
 ## 13. 남은 위험
 
 1. **생성 품질(실측함, 12.2.1절)**: 발급 4/6, 변형 2/6. 모양은 맞지만 단서를 설명에서 말하거나 목표 일부를 먼저 말하는 대본, 소재를 바꾸지 않는 변형이 있다. 실패 2건은 승인된 BASE를 버리는 판정 줄 때문이다(F1). 첫 대본 지연 예산(시작 요청 15초 · 호출 3초) 초과는 이 브랜치 전과 같다(`docs/practice-live-fixes.md` 5.3절).
-2. **말틀 누설**: 코치 지시문에 완성 예시가 들어가고 GPT-Live가 낱말을 비우게 지시한다. 모델이 완성 예시를 그대로 말하면 첫 도움에서 정답 문장 전체가 들린다. 하니스 점검과 리허설로 본다. 서버가 말틀을 직접 만들려면 대본에 말틀 칸이 필요하다(계약 변경).
+2. **말틀 누설**: 코치 지시문에 완성 예시가 들어가고 GPT-Live가 낱말을 비우게 지시한다. 모델이 완성 예시를 그대로 말하면 첫 도움에서 정답 문장 전체가 들린다. 하니스 점검과 리허설로 본다. 서버가 말틀을 직접 만들려면 대본에 말틀 칸이 필요하다(계약 변경). → 2회차에서 판 v7 대본은 core가 만든 빈칸 예문을 그대로 말하게 했다(F5, 14.4절). 옛 대본에는 이 위험이 남는다.
 3. **생성형 되묻기 · 반응의 칭찬 · 교정 · 정답**: 지시문 금지 + 제브 `PRACTICE_PEER` + 하니스 칭찬 말 점검으로만 막는다. 결정적 검사는 없다.
 4. **지시문 '상황:'의 80자 자르기**: 되묻기 · 반응 · 코치 지시문은 장면 설명을 80자(`FIELD_MAX`)에서 자른다. 설명이 길면 끝(대개 아이가 한 부탁)이 잘린다. GPT-Live 세션의 대화 맥락으로 보완된다고 보지만 확인 전이다.
 5. **합친 변형 제안의 원문 대조**: 설명 + 꼬리가 길어 GPT-Live 출력 전사가 조금만 달라도 원문 대조가 어긋날 수 있다(명세 §4.2). U13 처리에 달렸다(9절 성민 3).
@@ -386,3 +387,210 @@ Luna가 만든 대본에서 사람이 읽어 찾은 것(자동 점검은 글자�
 11. **명세 D_WRAP · D_BACK_TO_SCENE 미구현**: 시계 만료 · 도움 거절 · 보류로 닫힌 장면은 마무리 한마디 없이 넘어간다.
 12. **반응 중 아이 말을 버림**(DLG-A8): 아이가 반응에 대꾸하면 대답 없이 다음으로 넘어가 어색할 수 있다.
 13. **AI 아이 ≠ 실제 아이, 텍스트 대리 ≠ GPT-Live 음성**: 하니스 결과는 실제 API · 합성 자료 증거일 뿐이다(R-M11).
+
+## 14. 실측 뒤 고친 것 — F1 ~ F6 · F8 (2회차, 2026-10-22)
+
+> 12.2.1절 실측의 '다음에 고칠 것' F1 ~ F6과 새 항목 F8을 같은 브랜치에 구현했다(c4000c2 ~ af9fc95). F7(지연 예산)은 이번 범위가 아니다.
+> **팀장 결정(2026-10-22)**: ① 제브를 뺀다(F8). ② 진행 중 판정은 운영처럼 Luna가 한다. ③ 목표는 Luna가 아이마다 **생성한** 대본이 기준 대화 품질에 닿는 것이다. 다음 실측은 생성 대본만 판단하고, 고정 기준 대본(1절 · `standard-practice-dialogue.json`)은 참고로 남긴다.
+> **증거 구분(R-M11)**: 14.12절 결과는 모두 **테스트 대역 · 합성 대화**다. 실제 API 실측은 이 절의 코드로 아직 다시 돌리지 않았다(14.8절 명령, 오케스트레이터가 돌린다). 실제 GPT-Live 음성 · 실제 기기 결과는 없다.
+
+### 14.1 바꾼 것 한눈에
+
+| # | 실측에서 본 것(12.2.1절) | 바꾼 것 | 앱 | 커밋 |
+|---|---|---|---|---|
+| F1 | s1 · s8 실패: 단독 검토에서 승인된 BASE를 2차 생성이 `focusPoints` 문구만 고쳐 써서 서버가 `INVALID_BASE`로 버림 | 고쳐 쓴 보존 BASE를 **검토 전에 되돌리고** 생성된 VARIANT와 함께 검토한다. 그래도 변형 때문에 실패하면 검토 입력이 단독 검토 때와 같을 때 **추가 검토 없이** 그 BASE만 발급한다(서버 검사는 다시 돈다). 발급 경로는 공개 대본 `generation.basePreservation` | core · 계약 | c4000c2 |
+| F2 | 설명이 단서를 말함(s6) · 친구가 실수를 먼저 드러냄(s6) · 목표 일부를 먼저 말함(x4) · 단서가 첫 대사에 있음(x4) · 변형 소재가 그대로(s10 · x4) | 생성 `scenario-generation.v7` · 검토 `scenario-review.v5`(새 파일). 서버가 VARIANT 기회 문장이 BASE와 같으면 변형을 뺀다 | core · 계약 | 3f7059f |
+| F3 | 다시 설명 뒤에 부탁(단서) 없이 기회 문장만 들림(x4) | 다시 설명 뒤 재진입에서 첫 대사 → 기회 문장을 다시 들려준다 | realtime | 61fe8f3 |
+| F4 | 되묻기가 답을 말함 2/13 · 장면 밖 질문 3/13 · 이모지 «🥛» | 되묻기 지시(아이가 원하는 것 · 할 말의 낱말 금지, 열린 질문 하나, 장면 밖 질문 금지), 모든 생성형 지시문에 이모지 · 기호 · 괄호 금지 | realtime | 61fe8f3 |
+| F5 | 말틀 12회 중 5회 문제(정답 대부분 2 · 빈 도움 2 · '말틀' 낱말 1) | 생성 출력에 빈칸 예문 `expressionFrames`(표현 예시와 1:1, '뭐뭐'), 서버 결정 검사, 코치 첫 도움이 빈칸 예문을 글자 그대로 말하게 함, 지시문에서 '말틀' 낱말 삭제 | core · 계약 · realtime | 3f7059f · 61fe8f3 |
+| F6 | J4에서 '그만하고 싶어' 류 11번이 UNCLEAR 7 · 보류 1 · REFUSE 3 | 판정 지시문 `prompt-v3`(v1 + J4 거절 예 네 가지) | realtime | 0d7909a |
+| F8 | (팀장 결정) 제브 OFF에서 생성형 연습 발화가 모두 버려짐 | OFF에서는 기본 게이트를 지난 생성형 연습 발화를 재생한다 | realtime | 65cd2f1 |
+| 하니스 | s8 진단 'VARIANT_DROPPED_BY_SERVER_CHECK'가 실제 원인과 달랐다 | 점검표 항목을 더하고 진단을 생성기의 실제 사유 코드로 정한다 | 시험 소스 | af9fc95 |
+
+### 14.2 F1 — 승인된 BASE를 버리지 않는다 (core `ScenarioScriptGenerator`)
+
+- 그래프 경로에서 첫 BASE가 단독 검토(VARIANT 없는 대본)에서 승인되면 그 BASE를 `baseToPreserve`로 다음 생성에 보낸다(전과 같다).
+- 다음 생성이 보존 BASE와 다른 BASE를 내면 **계획 계산과 검토 전에** 보존 BASE로 바꿔 끼운다(사유 코드 `BASE_REPLACED`). 생성된 VARIANT는 그대로 두고, 검토는 실제로 발급할 모습(보존 BASE + 새 VARIANT)을 본다. 이전에는 이 경우를 `INVALID_BASE`로 보아 승인된 BASE까지 버렸다.
+- 그래도 변형 때문에 실패하면(서버 검사가 변형을 빼거나 검토가 변형 사유 `INVARIANT_MISMATCH` · `SKILL_MISMATCH` · `TRANSFER_MISMATCH` · `UNCHANGED_VARIANT`로만 거절) 마지막 BASE-only 단계에서 검토 입력을 다시 만든다. 그 입력(정리 값 + 대본)이 단독 검토 때와 **같으면(`equals`)** 그때의 승인을 그대로 쓰고 검토를 부르지 않는다(`REVIEW_REUSED` → `BASE_ONLY_EARLIER_REVIEW`). 다르면 BASE-only 검토를 한 번 부른다(`BASE_ONLY_REVIEWED`). 어느 쪽이든 서버 검사는 다시 돈다.
+- 호출 상한 6 · 검토 사유 목록 · 내용 사유 거절의 처리(수정 한 번 뒤 소진)는 그대로다.
+- 사유 코드(`ScenarioScriptGenerator.Note` 10종)는 결과와 실패 예외에 실린다(저장하지 않음, 하니스 진단용). 발급 경로 세 값만 공개 대본 `generation.basePreservation`(선택 칸)에 남는다 [`contracts/deviations.md` (U10-d)].
+- 시험(가짜 공급자): s8 모양(2차 BASE의 `focusPoints`만 바뀜 + 변형 승인) → BASE + VARIANT 발급, 호출 4, `BASE_REPLACED`. s1 모양(같은 2차 BASE + 변형 거절) → BASE만 발급, 검토 2회(추가 검토 없음), `BASE_ONLY_EARLIER_REVIEW`. 서버 검사가 변형을 뺀 경우도 같은 재사용 길이다(`PlannedGenerationIT` 3 · `ScenarioGraphFallbackTest` 2 · `ScenarioContractTest` 1).
+
+### 14.3 F2 · F5 — 대본 형식 v7 (core · 계약)
+
+| 칸 | 생성 v7 규칙(생성 v6에 더함) |
+|---|---|
+| `sceneDescription` | 무슨 놀이 · 무중이 맡은 친구 · 네가 방금 한 일이나 원하는 것만 말한다. 상대의 실수 · 아이가 알아챌 단서 · 상대의 속마음은 쓰지 않는다. 지시문의 예는 '너는 친구한테 줄넘기를 달라고 했어'(된다) · '무중이가 공을 건넸어'(안 된다)다(DLG-A22) |
+| `partnerOpener` | 단서 없는 짧은 도입 대사 한 마디. 단서(부탁 · 실수 · 질문)는 기회 문장에만 둔다. BASE는 반드시 쓴다 |
+| `opportunitySentence` | 친구가 의심 없이 하는 자연스러운 말 · 행동. 자기 실수를 먼저 드러내거나('~인 줄 알았어') 맞는지 확인하지('이거 맞아?') 않고, 목표 표현이나 아이가 할 대답의 일부를 먼저 말하지 않는다. 좋은 예는 '자, 여기!' |
+| VARIANT | 같은 관계 · 같은 짜임 · 같은 종류의 단서 · 같은 말 길이로 장면 속 물건 · 활동(소재)을 바꾼다. BASE의 물건을 다시 쓰지 않고 기회 문장도 BASE와 다르게 쓴다 |
+| `expressionFrames`(새 칸) | 표현 예시와 같은 순서 · 같은 개수, 아이가 채울 핵심 내용 낱말 자리를 '뭐뭐'로 비운 빈칸 예문. 꾸밈말('잠깐' · '좀' · '그냥') 하나만 비우지 않는다. 코치 전용(도움 동의 뒤에만 들림) |
+
+- **계약**: `expressionFrames`는 생성 출력(`ai-scenario-output`)의 필수 칸, 공개 대본(`practice-scenario`) · 시작 패키지의 선택 칸이다. 공개 대본 판 enum에 생성 v7 · 검토 v5를 더했다(v2 ~ v6 · v1 ~ v4는 그대로 받는다). 공유 고정 자료 `contracts/fixtures/practice-start-package.json`에 빈칸 예문을 실었다. 규칙 문장은 `contracts/ai-io.md` 10.11 · 10.15, 편차는 (U10-e)다.
+- **서버 결정 검사**(`ScenarioScriptValidation`, 결정적인 것만):
+  - VARIANT 기회 문장이 BASE 기회 문장과 같으면(글자 · 숫자만 남긴 비교) 변형을 뺀다(`INVALID_VARIANT`, 변형 사유 길이라 F1의 BASE만 발급으로 갈 수 있다).
+  - 빈칸 예문이 있으면: 표현 예시와 개수가 같다 · 예문마다 '뭐뭐'가 있다 · 예시와 같지 않다 · '뭐뭐' 밖의 말이 남는다 · 빈칸 밖의 말이 예시에 순서대로 있어 맞춰 볼 수 있으면 비운 자리 가운데 하나는 꾸밈말 · 지시어 · 대명사 · 감탄사 목록 밖의 말이다(빈칸 바로 뒤 조사는 받침 뒤 모양도 같은 것으로 본다). 어긴 장면이 BASE면 `INVALID_BASE`, VARIANT면 `INVALID_VARIANT`다.
+  - 소재가 실제로 바뀌었는지, 설명이 단서를 말하는지, 맞춰 볼 수 없는 빈칸 예문의 뜻은 결정적으로 볼 수 없어 검토 v5와 하니스 참고 점검이 본다(DLG-A24 · A25).
+- **검토 v5**: 기존 사유 코드로 거절한다 — 설명이 상대의 실수 · 단서를 말함 = `EARLY_CUE`, 첫 대사 · 기회 문장이 목표 표현이나 대답 일부를 먼저 말하거나 친구가 실수를 드러내거나 맞는지 확인함 = `EARLY_CUE`, 빈칸 예문이 예시와 짝이 안 맞거나 꾸밈말만 비움 = `INCOMPLETE_SCENE`, 소재 · 기회 문장이 BASE 그대로 = `UNCHANGED_VARIANT`. 사유 목록은 그대로다(DLG-A23).
+
+### 14.4 F3 · F4 · F5 — realtime 흐름 · 지시문
+
+- **F3 다시 설명 뒤 재진입**: 장면에 친구 첫 대사가 있으면 무중의 다시 설명 → 친구 첫 대사 → 친구 기회 문장을 다시 들려준다(`FlowTransitions.inputPhaseSlot`, OPPORTUNITY 소단계 PARTNER_OPENER). 다시 들려주는 첫 대사 중의 아이 말은 대답으로 보지 않고 무응답 시계도 걸지 않는다. 첫 대사가 끊기면 기회 문장으로 가고, 실패 · 막힘은 재생 실패로 장면을 정리한다. 무응답 재안내는 지금처럼 기회 문장만 다시 들려준다. 첫 대사가 없는 옛 대본 · RETRY의 다시 설명은 그대로다(U12-D10).
+- **F4 되묻기**: «친구 역할 그대로 아이 말에서 더 알고 싶은 것을, 아이가 자기 말로 채워 답할 열린 질문 하나로 짧게 되묻는다. 아이가 원하는 것이나 아이가 할 말의 낱말은 상황에 나와 있어도 먼저 말하지 않고, 그 낱말을 넣어 맞는지 묻지도 않는다. 지금 장면과 상관없는 새 질문은 하지 않는다.» 같은 말 다시 묻기에도 같은 금지가 붙는다.
+- **F4 음성 규칙**: 되묻기 · 친구 반응 · 코치 도움 · 코치 다시 해 보기 · 생성형 도움 제안 · 생성형 변형 제안 · 생성형 알림 지시문 모두에 «이모지, 기호, 괄호 없이 말로만 한다.»를 더했다. 끝의 금지 규칙(친구 · 코치)은 맨 뒤에 두어, 칸이 모두 상한 길이여도 500자 안에 남는다(시험이 가장 긴 칸으로 확인).
+- **F5 코치 첫 도움**(동의 · 요청 뒤, FRAME):
+  - 판 v7 대본(빈칸 예문 있음): «이 순서로 꼭 말한다. 첫째, 요점을 쉬운 말 한 문장으로 말한다: {요점}. 둘째, 이 빈칸 예문을 '뭐뭐'까지 그대로 말하고 '처럼 말할 수 있어'를 붙인다: {빈칸 예문}. 셋째, 네 말로 해 볼래? 하고 묻는다. 요점과 빈칸 예문을 꼭 넣고, '빈칸 예문'이라는 말은 소리 내어 하지 않는다.» 완성 예시는 지시문에 넣지 않는다. 빈칸 예문이 지시문 칸 상한(80자)을 넘거나 '뭐뭐'가 없으면 쓰지 않고 옛 길로 간다.
+  - 옛 대본(빈칸 예문 없음): 전처럼 GPT-Live가 표현 예시에서 핵심 낱말을 '뭐뭐'로 비운다. 문구의 '말틀'을 '빈칸 예문'으로 바꾸고 빼먹지 말라는 문장을 더했다.
+  - 다시 해 보기 뒤(FULL) 도움은 바꾸지 않았다(표현 예시 하나).
+- realtime 대본 읽기(`PracticeScriptReader`)는 `expressionFrames`를 읽고 없으면 빈 목록으로 둔다. 비어 있는 칸은 빈 문자열로 자리를 지킨다(예시와 짝이 어긋나지 않게).
+- 계약 · 설계: `contracts/ai-io.md` 10.15 2항 · 5항, (U12-g), `docs/units/u12/design.md` U12-D8 · U12-D10 · U12-D11.
+
+### 14.5 F6 — J4 판정 지시문 (`prompt-v3`)
+
+- `judgment/prompt-v3.txt` = `prompt-v1.txt` 본문 + 두 줄: «J4는 무중의 도움 제안(예: '무중이가 조금 도와줄까?')과 이어서 다른 장면을 할지 묻는 제안(예: '… 이어서 해 볼까?')에 대한 아이의 대답에 쓴다.» «J4에서 그 제안을 받지 않고 그만하겠다는 말은 REFUSE다. 예: '그만하고 싶어', '이제 그만할래', '여기까지만 할래', '오늘은 안 할래'. 이런 말을 UNCLEAR로 고르지 않는다.»
+- `prompt-v1.txt`는 고치지 않았다. `JudgmentPrompt.RESOURCE` · `DEFAULT_VERSION`을 v3로 바꾸고 `JudgmentSupport.NONE`이 판 상수를 쓰게 했다. 선택지 판 `judgment-v1` · 판정 요청 · 출력 스키마는 그대로다. 판정 기록의 `promptVersion` 값만 `prompt-v3`이 된다.
+- 판 이름 v2는 `claude/join-gate` 브랜치(J1 규칙)가 쓰고 있어 건너뛰었다(DLG-A32, 14.10절 병합).
+- 계약 · 설계: `contracts/ai-io.md` 10.4, (U11-f), `docs/units/u11/design.md` 2절 표.
+
+### 14.6 F8 — 제브 OFF에서 생성형 연습 발화 재생
+
+- `SessionExecutor.sealAndGate`: 연습이 연 생성형 슬롯(되묻기 · 친구 반응 · 코치 도움 · 생성형 도움 제안 · 변형 제안 · 생성형 알림)의 발화는 제브 단계를 건너뛰는 모드(`OFF`)에서 기본 게이트(금지 패턴 · 완결)와 송신 직전 재확인을 지나면 자유 대화처럼 재생되고 슬롯은 재생 완료로 닫힌다. 이전에는 OFF에서 모두 폐기해(fail-closed) 첫 되묻기에서 재생 실패로 장면이 닫혔다.
+- `REAL` · `STUB`은 그대로다(제브가 `ALLOW`한 것만 재생). 승인 발화 길도 그대로다. ACTIVE가 아니면 전처럼 폐기한다.
+- **안전 장치 완화이며 범위가 정해져 있다**: 공개 프로필(demo · prod)은 지금처럼 `REAL`이 아니면 기동을 거부한다(`GuardrailStartupRules`, AC2.3.1, 바꾸지 않음). 그래서 이 길은 dev · test · 프로필 없음에서만 생긴다. 공개 환경에서 제브 없이 돌리려면 기동 규칙을 바꾸는 별도 결정이 필요하고 이 작업은 하지 않았다(DLG-A33).
+- OFF와 관계된 다른 곳도 확인했다: 승인 알림(`announceRoleSwitch`)은 원래 제브와 무관하다. 승인 문장이 없을 때의 생성형 알림 · 생성형 도움 제안은 생성형 슬롯이라 이번 변경으로 OFF에서 들린다. 판정 · 기록 · 자유 대화 OFF 길(전부터 재생)은 바뀌지 않는다.
+- 계약 · 설계: `contracts/ai-io.md` 10.12, (U13-d), `docs/units/u12/design.md` U12-D12 · 3절, `docs/units/u13/design.md` U13-D8. **성민 확인이 필요하다.**
+- 시험(대역): OFF 재생 · OFF에서도 금지 패턴 폐기 · STUB은 검사 대기(`PracticeGeneratedSpeechTest`), OFF에서 기준 연습 대화를 실행부 · 라우터 · 상태 기계로 끝까지(`PracticeFlowGuardrailOffTest`: 승인 7줄 + 생성형 4줄 모두 기기로, 제브 기록 0, 장면 1 AFTER_REASK · 장면 2 AFTER_HELP, 연습 완료).
+
+### 14.7 실호출 하니스 점검표 (시험 소스, af9fc95)
+
+글자 비교 도우미는 `backend/test-support/.../dialogue/HeardWords.java`다(정규화, 띄어쓰기 낱말에서 끝 조사 하나를 뗀 핵심 낱말, 빈칸 예문이 비운 말, 기호, 지시문 낱말). 형태소 분석이 아니어서 **참고 값**이다(DLG-A35).
+
+| 하니스 | 새 점검 | 결과 칸 |
+|---|---|---|
+| realtime `PracticeDialogueLiveTest` | 되묻기가 아이가 원하는 것 · 할 말의 낱말을 먼저 말했나(빈칸 예문이 비운 말 `FRAME`, 없으면 표현 예시 낱말 `EXAMPLE`) | `checks.reaskNamedWantedWords` |
+| 〃 | 첫 코치 도움이 대본의 빈칸 예문을 글자 그대로 말했나 | `checks.firstCoachFrameVerbatim` |
+| 〃 | 무중 · 친구 · 코치 줄에 '말틀' · '빈칸 예문'이 들렸나 | `checks.instructionWordsSpoken` |
+| 〃 | 이모지 · 기호 · 괄호 | `checks.emojiOrSymbols` |
+| 〃 | VARIANT 기회 문장이 BASE와 같나 · 같은 핵심 낱말(소재)을 쓰나 | `checks.variantOpportunity` |
+| core `PracticeQualityLiveTest` | 설명이 기회 문장의 핵심 낱말(단서)을 미리 말하나 | `heard[].checks.descriptionMentionsOpportunityWords`, 합계 `descriptionMentionsOpportunityWords` |
+| 〃 | 빈칸 예문 칸 있음 · 1:1 · 모두 '뭐뭐' · 비운 말 | `heard[].checks.expressionFrames`, 합계 `scenesWithoutExpressionFrames` · `expressionFramesNotOneToOneOrWithoutBlank` |
+| 〃 | VARIANT 기회 문장 같음 · 같은 핵심 낱말 | `heard[].checks.variantOpportunity`, 합계 `variantOpportunitySameAsBase` · `variantOpportunitySharesKeyWords` |
+| 〃 | 진단은 실제 사유: 생성기가 낸 사유 코드와 그 뜻('BASE 바꿔 끼움' · 'BASE만 발급(추가 검토 없음)' 등) | `generatorNotes`, `variant.generatorPath`, `variant.diagnosis`(`source` GENERATOR_NOTES · RECORDED_CALLS · ISSUED_SCRIPT · NONE), `variant.basePreservation` |
+
+- 되묻기가 장면 밖 새 질문을 했는지는 글자 비교로 가릴 수 없어(실측 예 «너는 무슨 그림 그리고 있어?»는 장면 낱말 '그림'을 같이 쓴다) 점검표에 넣지 않았다. 대화 기록을 사람이 읽는다(DLG-A34).
+- 사람이 읽는 `practice-dialogues.md` 점검표에 위 다섯 줄이 더해진다. 하니스 자체 점검(`PracticeDialogueHarnessSelfCheckTest`)이 루프백 가짜 공급자로 새 줄이 나오는지 본다.
+
+### 14.8 실호출 명령 (오케스트레이터가 돌린다, 키 자리는 env 이름만)
+
+11절과 같다. 같은 출력 폴더로 core 먼저, 이어서 realtime이다.
+
+```
+cd backend
+MUJOONG_LIVE_EVAL_OUT=<폴더> ./gradlew --no-daemon :core-api:lunaLiveTest --tests "*PracticeQualityLiveTest*" -Pmujoong.test.db=docker
+MUJOONG_LIVE_EVAL_OUT=<폴더> ./gradlew --no-daemon :realtime-activity:lunaReachTest --tests "*PracticeDialogueLiveTest*"
+```
+
+| env | 필수 | 쓰임 |
+|---|---|---|
+| `OPENAI_API_KEY` | 예 | 셸 env로만 넣는다. 없으면 `SKIPPED_NO_KEY` |
+| `MUJOONG_LIVE_EVAL_OUT` | 권장 | 출력 폴더(두 하니스에 같은 값) |
+| `OPENAI_ANALYSIS_MODEL` | 아니오 | core 생성 · 검토, realtime 텍스트 대리 · AI 아이 모델 |
+| `OPENAI_JUDGE_MODEL` | 아니오 | realtime 판정 모델 |
+| `MUJOONG_LIVE_CHILD_MODES` | 아니오 | `SCRIPT` · `AI` · `RULE`. 생성 대본만 판단하려면 `AI,RULE`(대본 아이는 고정 기준 대본에서만 돈다) |
+
+- realtime 하니스는 제브를 부르지 않는다(생성형 말은 텍스트 대리). F8은 실제 기기 · GPT-Live 음성 리허설(dev 프로필, `JEV_MODE=OFF`)에서 생성형 말이 들리게 하는 변경이다.
+- 볼 것 — core: 발급 건수 · 판(v7 · v5), `variant.generatorPath`(BASE 바꿔 끼움 · BASE만 발급), `heardChecks`의 새 합계가 0인지(`descriptionMentionsOpportunityWords` · `scenesWithoutExpressionFrames` · `expressionFramesNotOneToOneOrWithoutBlank` · `variantOpportunitySameAsBase` · `variantOpportunitySharesKeyWords`), 검토 사유 분포(EARLY_CUE · INCOMPLETE_SCENE · UNCHANGED_VARIANT가 늘어 발급률이 떨어지는지). realtime: 되묻기 낱말 · 빈칸 예문 그대로 · 지시문 낱말 · 기호 · 변형 소재 줄, J4 '그만하고 싶어' 류가 REFUSE로 읽히는지, 다시 설명 뒤 첫 대사가 다시 들리는지.
+
+### 14.9 가정 (DLG-A19 ~)
+
+- **DLG-A19** F1 재사용 조건은 "검토에 보낼 입력(정리 값 + 대본)이 단독 검토 때와 `equals`로 같다"이다. 코드가 그 입력을 그대로 비교하므로 같은 입력 · 같은 대본의 검토를 다시 부르지 않는다는 것이 코드로 보인다. 다르면 BASE-only 검토 한 번(상한 6 안)을 부른다.
+- **DLG-A20** 보존 BASE 되돌리기는 계획 계산 전에 한다. 그래서 고쳐 쓴 BASE 때문에 계획 불일치가 생기지 않는다. 내용 사유(변형 사유가 아닌) 거절은 전처럼 수정 한 번 뒤 소진한다(보수적).
+- **DLG-A21** 발급 경로는 공개 대본 선택 칸 `generation.basePreservation` 세 값으로만 남기고, 사유 코드 전체는 저장하지 않는다(결과 · 실패 예외에만, 하니스 진단용). realtime은 이 칸을 읽지 않는다.
+- **DLG-A22** 생성 v7 · 검토 v5는 새 파일이다(같은 판 이름의 문장을 고치지 않는다, DLG-A17). 지시서의 설명 예 '너는 파란색을 달라고 했어 · 무중이가 초록색을 건넸어'는 크레용 · 색 소재라서 지시문에는 줄넘기 · 공으로 바꿔 넣었다(목표 '다시 말해 바로잡기'에서 베끼지 않게). 형식 예(블록 놀이)에 빈칸 예문 한 줄을 더했다.
+- **DLG-A23** 검토 v5의 빈칸 예문 결함은 기존 사유 가운데 `INCOMPLETE_SCENE`으로 정했다(코치 자료가 덜 됨 = 장면 완결성). 지시서가 정한 매핑(EARLY_CUE · UNCHANGED_VARIANT)은 그대로 따랐고 새 사유 코드는 만들지 않았다.
+- **DLG-A24** 서버의 '같은 기회 문장' 검사는 정규화 동일만 본다. '같은 핵심 낱말(소재)'은 띄어쓰기 낱말 비교로는 놓침 · 잘못 잡음이 있어 서버 검사에 넣지 않고 검토 v5와 하니스 점검에 맡겼다.
+- **DLG-A25** 빈칸 예문 결정 검사의 꾸밈말 · 지시어 · 대명사 · 감탄사 목록은 47낱말이다(`ScenarioScriptValidation.TRIVIAL_BLANKS`, '잠깐' · '좀' · '그냥' · '이거' · '나도' 등). 맞춰 볼 수 없는 빈칸 예문(빈칸 밖의 말을 예시와 다르게 쓴 것)은 결정적으로 거절하지 않고 검토가 본다.
+- **DLG-A26** 빈칸 예문은 금지 표현 · 이름 · 연락처 검사는 받고, 목표 표현 글자 그대로 금지(도움 동의 없이 들리는 칸 전용)는 받지 않는다 — 도움 동의 뒤에만 들린다.
+- **DLG-A27** F3은 지시서 권장안(첫 대사가 있으면 첫 대사 → 기회 문장)을 따랐다. 다시 들려주는 첫 대사의 아이 말 · 실패 처리는 도입의 첫 대사와 같게 했다.
+- **DLG-A28** 되묻기 지시에 열린 질문의 예를 넣지 않았다. 기준 대화의 '그럼 뭐 줄까?'는 부탁 장면 전용이라 다른 목표에서 그대로 베낄 수 있어서다. '아이가 자기 말로 채워 답할 열린 질문 하나'로 적었다.
+- **DLG-A29** 음성 규칙 문구는 500자 상한 때문에 짧게(«이모지, 기호, 괄호 없이 말로만 한다.») 했다. 따옴표는 막지 않는다(소리로 읽지 않고 빈칸 예문을 감쌀 수 있다).
+- **DLG-A30** 코치 첫 도움은 '첫째 · 둘째 · 셋째'로 순서를 박고 '요점과 빈칸 예문을 꼭 넣고'로 빈 도움을 막았다. 빈칸 예문 뒤에 '처럼 말할 수 있어'를 붙인다(기준 대화 «…처럼 말하면 돼»). 칸 상한(80자)을 넘는 빈칸 예문은 자르면 글자 그대로가 아니므로 쓰지 않고 옛 길로 간다.
+- **DLG-A31** 다시 해 보기 뒤 도움(FULL, 완성 예시 하나)은 바꾸지 않았다(지시서 범위 밖).
+- **DLG-A32** 판정 지시문 판은 `prompt-v3`이다(v2는 `claude/join-gate`의 J1 규칙). 선택지 판(`judgment-v1`)의 J4 질문 문구('도와줘도 되는지')는 바꾸지 않고, 본문에서 J4를 '이어서 해 볼까?' 제안에도 쓴다고 알렸다 — 선택지 판을 올리면 세션에 고정되는 판 번호와 판정 기록 값이 함께 바뀌는 더 큰 변경이다.
+- **DLG-A33** F8은 OFF 모드의 생성형 슬롯만 바꿨다. 지시서의 '제브 제거'를 공개 프로필 기동 규칙까지 풀라는 뜻으로 읽지 않았다 — 공개 환경의 안전 장치를 푸는 것은 명시 결정이 따로 필요하다고 보았다(14.10절 팀장).
+- **DLG-A34** 하니스의 '장면 밖 새 질문' 점검은 넣지 않았다(14.7절).
+- **DLG-A35** 하니스 핵심 낱말은 형태소 분석 없이 띄어쓰기 낱말의 끝 조사 하나를 떼고 흔한 말을 뺀 것이다(`HeardWords`). 참고 값으로만 쓴다.
+
+### 14.10 원 담당자 · 팀장과 맞출 것 · 병합
+
+- **도연(core U10 · 대본 계약 C-DS1)**
+  1. F1: 재사용 조건(DLG-A19), 되돌리기 위치(A20), `generation.basePreservation`(A21).
+  2. F2 · F5: 생성 v7 · 검토 v5 문구와 예 바꿈(A22), 검토 사유 매핑(A23), 같은 기회 문장 서버 검사(A24), 빈칸 예문 계약(생성 필수 · 공개 선택)과 결정 검사 · 꾸밈말 목록(A25 · A26).
+  3. `VariantPlanner`(SAME_CONTEXT)가 변경 축을 이름 순으로 골라 participants 축을 먼저 쓴다 — '소재를 바꾼다'는 지금 프롬프트 · 검토에만 기댄다(14.13절 위험 3).
+- **성민(realtime U12 흐름 · U11 판정 · U13 제브)**
+  1. F3 다시 설명 뒤 첫 대사(A27, U12-D10).
+  2. F4 되묻기 · 음성 규칙 문구(A28 · A29), F5 코치 첫 도움 문구(A30 · A31, U12-D11).
+  3. F6 판 이름 v3과 J1 규칙 합치기(A32, (U11-f)).
+  4. **F8 확인 필요**: OFF에서 생성형 연습 발화 재생(A33, (U13-d) · U12-D12 · U13-D8).
+- **팀장**: F8 범위(공개 프로필 기동 규칙은 그대로), 생성 대본만 판단하는 다음 실측의 기준(14.8절 볼 것), 고정 기준 대본은 참고로 둠.
+- **깨는 변경**: 이번 회차에 새 깨는 변경은 없다. 6절의 판 v6 깨는 변경(같은 날 병합 · 같은 SHA 배포)이 그대로다.
+
+| 조합 | 결과 |
+|---|---|
+| 새 core(판 v7) + 새 realtime | 14절대로 돈다 |
+| 새 core(판 v7) + 옛 realtime(이번 회차 전) | 멈추지 않는다. 옛 realtime은 `expressionFrames` · `basePreservation`을 모르는 칸으로 무시하고 GPT-Live가 예시에서 빈칸을 만든다(F5 코치 효과 없음). F3 · F4 · F6 · F8도 없다 |
+| 옛 core(판 v6) + 새 realtime | 멈추지 않는다. 빈칸 예문이 없어 코치 첫 도움은 옛 길, F3 · F4 · F6 · F8은 적용된다 |
+
+1. 이 브랜치는 6절대로 **한 PR**로 합친다. 공유 고정 자료(`contracts/fixtures/practice-start-package.json`)에 빈칸 예문을 실어 core · realtime `PracticeLinkContractTest`가 함께 읽는다.
+2. 배포는 두 앱을 같은 SHA로 올린다. 나눠야 하면 realtime 먼저(6절 3번과 같다).
+3. **`claude/join-gate`와 병합**: `JudgmentPrompt.RESOURCE` · `DEFAULT_VERSION`과 `JudgmentSupport.NONE`이 겹친다(NONE은 두 브랜치가 같은 바꿈). 먼저 들어간 쪽 뒤에 `judgment/prompt-v4.txt` = v1 본문 + J1 네 줄(v2) + J4 두 줄(v3)을 만들고, 판 상수 · `JudgmentInstructionsTest` · `JudgmentConfigurationTest` 기대값 · `contracts/ai-io.md` 10.4 · (U11-f) 문장을 v4로 고친다. v2 · v3 파일은 이력으로 둔다.
+4. 마이그레이션 없음. 롤백은 같은 SHA 롤백이면 함께 돌아간다. 롤백 전에 발급된 판 v7 대본은 옛 realtime에서 위 표 둘째 줄처럼 돈다.
+
+### 14.11 동작이 바뀌어 고친 단언 (R-F2)
+
+커버리지 하한 · 계약 대조 시험 · ArchUnit · 금지어 · 지시문 위생 단언은 낮추지 않았다. 고친 단언은 모두 동작이 바뀐 곳이다.
+
+| 시험 | 바꾼 것 | 까닭 | 커밋 |
+|---|---|---|---|
+| core 판 · 고정 자료 기대값(`ScenarioLunaProviderTest` · `ScenarioRepositoryIT` · `PracticePackageTest` · `PlannedGenerationIT` · `ScenarioContractTest` · core `PracticeLinkContractTest` · `ContractSchemasTest`) | 생성 v6 → v7, 검토 v4 → v5 | 판 올림 | 3f7059f |
+| `ScenarioLunaProviderTest` 지시문 문장 | 첫 대사 문장 «…짧은 대사 한 마디이고 BASE에는 반드시 쓴다» → v7 문장(«단서를 담지 않는 짧은 도입 대사 한 마디다» · «BASE에는 partnerOpener를 반드시 쓴다»), 도움 자료 문장에 `expressionFrames` 더함. `doesNotContain`에 v6 · v4 · '말틀'을 더함(강화) | 생성 · 검토 지시문이 바뀜 | 3f7059f |
+| 시험 입력(단언 아님): `PlannedGenerationIT` · `ScenarioGraphFallbackTest` · `GraphWorkflowIT` · `ScenarioValidationTest`의 변형 장면 | 변형 기회 문장을 BASE와 다른 문장으로 | 새 서버 규칙(같으면 변형을 뺀다). 단언은 그대로 | 3f7059f |
+| `ScenarioContractTest` 장면 자료 | 생성 출력 장면에 빈 `expressionFrames` | 생성 출력 스키마의 새 필수 칸 | 3f7059f |
+| `PracticeConversationTest` 다시 설명 시험 | 다시 설명 뒤 '첫 대사를 다시 하지 않는다' → 첫 대사 → 기회 문장(슬롯 순서 전체 단언) | F3 | 61fe8f3 |
+| `PracticeConversationTest` 코치 첫 도움 문구 | «'뭐뭐'로 비운 말틀» → «'뭐뭐'로 비운 빈칸 예문»(2곳, «'빈칸 예문'이라는 말은 소리 내어 하지 않는다» 더함) | F5 지시문 낱말 '말틀' 삭제 | 61fe8f3 |
+| `StandardPracticeDialogueTest` 코치 첫 도움 | GPT-Live가 완성 예시에서 빈칸을 만드는 문구 → 대본의 빈칸 예문 글자 그대로(첫째 · 둘째 · 셋째, 완성 예시 없음). 차례 이름 '요점 + 말틀' → '요점 + 빈칸 예문' | F5(고정 기준 대본에 빈칸 예문을 실음) | 61fe8f3 |
+| `JudgmentInstructionsTest` · `JudgmentConfigurationTest` | 기본 판 `prompt-v1` → `prompt-v3` | F6 판 올림 | 0d7909a |
+| `PracticeGeneratedSpeechTest` OFF 시험 | OFF에서 생성형 발화 폐기(출력 0 · 종료 FAILED) → 재생(출력 1 · 종료 COMPLETED) | F8(팀장 결정) | 65cd2f1 |
+| `PracticeQualityHeardLinesTest` 첫 시험 | 점검 지도 동등 비교에 새 칸과 합계를 더함(강화) | 하니스 점검 칸이 늘어남 | af9fc95 |
+
+### 14.12 시험 결과 (테스트 대역 · 합성 대화, 실제 AI 없음)
+
+| 단계 | 명령(`cd backend`, `-Pmujoong.test.db=docker`) | 결과 |
+|---|---|---|
+| F1(c4000c2) · F2 · F5 core · 계약(3f7059f) | `:contract-model:test`, `:core-api:test`(practice · practicegoal · luna 패키지), `:realtime-activity:test --tests "*PracticeScriptReaderTest*"` | 통과. 새 시험 `PlannedGenerationIT` 3 · `ScenarioGraphFallbackTest` 2 · `ScenarioContractTest` 2 · `ScenarioValidationTest` 3 · `ScenarioLunaProviderTest` 1 · `ContractSchemasTest` 1 · `PracticePackageTest` 1 · `PracticeScriptReaderTest` 1 |
+| F3 · F4 · F5 realtime(61fe8f3) | `:realtime-activity:test --tests "kr.mujoong.realtime.practiceflow.*"` | 248건 통과. 새 시험 `FlowTransitionsTest` 2 · `PracticeConversationTest` 6, `StandardPracticeDialogueTest` 단언 더함 |
+| F6(0d7909a) | `:realtime-activity:test`(judgment · content 패키지와 판정 실행부 시험) | 109건 통과. 새 시험 `JudgmentInstructionsTest` 1 |
+| F8(65cd2f1) | `:realtime-activity:test` 전체 | 1978건 통과. 새 시험 `PracticeGeneratedSpeechTest` 2 · `PracticeFlowGuardrailOffTest` 1 |
+| 하니스 점검표(af9fc95) | `:test-support:test`, `:core-api:test --tests "*PracticeQualityHeardLinesTest*"`, `:realtime-activity:test --tests "*PracticeDialogueHarnessSelfCheckTest*"` | test-support 37 · core 3 · realtime 3건 통과. 새 시험 `HeardWordsTest` 6 · `PracticeQualityHeardLinesTest` 2 |
+| 최종 전체(af9fc95 + 이 문서) | `./gradlew --no-daemon clean check verifyBootJarHasNoTestClasses -Pmujoong.test.db=docker --continue` | contract-model 327 · test-support 37 · realtime 1978건 모두 통과, 두 모듈 JaCoCo 줄 하한 통과(realtime 줄 93.89%), 두 앱 boot jar 시험 항목 0건, 격리 검사 `verifyLunaLiveIsolation` · `verifyLunaReachIsolation` · `verifyGptLiveIsolation` · `verifyJevLiveIsolation` 통과. **core는 1793건 중 2건 실패**: `Neo4jIT.concurrentCommitAndTerminationCannotResurrectAfterCleanup`(그래프 요청이 2초 예산을 넘음, 바로 뒤 혼자 돌리면 10건 모두 통과)와 `GraphWorkflowIT`(아래). 그래서 이 실행에서는 core JaCoCo 검사가 돌지 않았다 |
+| core 다시(같은 코드) | `:core-api:test --continue` 뒤 `:core-api:jacocoTestCoverageVerification -x :core-api:test`(같은 실행의 측정 자료) | 1793건 중 `GraphWorkflowIT` 1건만 실패(`Neo4jIT` 통과). JaCoCo 줄 하한 통과(core 줄 96.17%) |
+
+- **`GraphWorkflowIT`는 이 컨테이너(4 CPU)의 환경 문제다**:
+  - 새로 띄운 Neo4j의 첫 Cypher 질의가 2.16초, 첫 MERGE가 1.76초 걸린다(curl 실측). 시험 코드가 정한 그래프 예산 `Duration.ofSeconds(2)` 안에 `initializeChild`가 끝나지 않아 52행 단언이 실패한다(원인 예외 "Graph operation unresolved").
+  - 이 회차 전 커밋(c8645e0)에서도 같은 줄에서 똑같이 실패했다. 지식 그래프 코드는 이번에 바꾸지 않았다(이 시험의 변형 장면 입력 문장만 3f7059f에서 바꿨다, 14.11절).
+  - R-F2에 따라 시험 · 예산을 고치거나 건너뛰지 않았다. CI 러너에서 확인해야 한다.
+- 첫 전체 실행에서는 `GptLiveLoopbackTest`도 부하 중 시간 문제로 한 번 실패했다. 혼자 돌리면 3건 모두 통과했고 두 번째 전체 실행에서도 통과했다.
+- 대역 시험이 보는 것: 보존 BASE 되돌리기와 BASE만 발급(검토 재사용), 판 v7 · v5 이름 · 빈칸 예문 계약 · 결정 검사 · 같은 기회 문장 검사, 다시 설명 뒤 첫 대사 → 기회 문장, 되묻기 금지 · 음성 규칙 · 코치 첫 도움의 빈칸 예문 그대로, 가장 긴 칸에서도 지시문 500자 안, J4 거절 예, OFF에서 생성형 발화 재생과 금지 패턴 폐기, 하니스 점검 칸. 친구 · 코치의 실제 말은 대역 시험이 만들지 않는다(지시문만 확인).
+- **실제 API · 실제 기기 결과는 없다**: 실호출 하니스(core `PracticeQualityLiveTest` · realtime `PracticeDialogueLiveTest`)는 이 회차 코드로 다시 돌리지 않았다(14.8절, 오케스트레이터가 돌린다). 실제 GPT-Live 음성 · 실제 기기 결과도 없다.
+
+### 14.13 남은 위험
+
+1. **생성 품질은 아직 실측 전이다**: v7 · v5 규칙을 실제 Luna가 지키는지 모른다. 검토 v5가 더 엄격해져(EARLY_CUE · INCOMPLETE_SCENE · UNCHANGED_VARIANT) 15초 예산 · 호출 상한 6 안에서 소진되는 목표가 늘 수 있다. F1은 승인된 BASE를 지키지만 BASE마저 거절되면 실패다.
+2. **빈칸 예문 결정 검사의 한계**: 꾸밈말 목록 밖의 다른 사소한 말만 비우거나, 맞춰 볼 수 없게 쓴 빈칸 예문은 서버를 지난다(검토 v5에 기댐).
+3. **소재 바꾸기는 서버가 막지 않는다**: 같은 핵심 낱말을 쓰는 변형은 검토 · 하니스만 본다. `VariantPlanner`가 participants 축을 고르면 소재가 그대로여도 계획상 맞다.
+4. **되묻기 · 반응 · 코치는 여전히 생성형이다**: 지시문의 '상황:'에 아이가 원한 것이 들어 있어 모델이 금지를 어길 수 있다(결정 검사 없음). 텍스트 대리 결과 ≠ GPT-Live 음성.
+5. **코치 첫 도움의 '첫째 · 둘째 · 셋째'를 GPT-Live가 소리로 읽을 수 있다**. 음성 리허설(10절 2번)에서 본다.
+6. **F8 OFF의 생성형 발화는 기본 게이트(금지 패턴 사전)만 지난다**: 사전에 없는 진단 · 평가 · 압박 표현은 그대로 들린다. dev · test 전용이며 공개 프로필은 기동을 거부하지만, 프로필 없이 띄우면 OFF가 허용된다(전부터).
+7. **F6**: J4 규칙은 본문에만 있고 선택지 판 J4 질문은 '도와줘도 되는지' 그대로다. 변형 제안 분류 품질은 실측으로 본다. join-gate의 J1 규칙과 합치기가 남았다(14.10절 3번).
+8. **하니스 점검은 글자 비교다**: 핵심 낱말 · 비운 말 · 기호 판단에 놓침 · 잘못 잡음이 있다. 장면 밖 새 질문은 점검하지 않는다.
+9. **F7 지연(시작 요청 15초 · 호출 3초 초과)은 그대로다**(`docs/practice-live-fixes.md` 5.3절).
