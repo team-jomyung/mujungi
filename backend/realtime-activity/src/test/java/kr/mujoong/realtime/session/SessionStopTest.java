@@ -51,7 +51,7 @@ class SessionStopTest {
 
     @Test
     void aQuestionShapedStopPhraseClosesWithChildStopWithoutAQuestion() {
-        h.extraApproved.put(SessionExecutor.STOP_CONFIRM, QUESTION);
+        h.extraApproved.put("STOP_CONFIRM", QUESTION);
         h.activate();
         h.childSays("i-1", "그만할래?");
 
@@ -59,21 +59,20 @@ class SessionStopTest {
         assertThat(row.status()).isEqualTo(SessionStatus.CLOSING);
         assertThat(row.endReason()).isEqualTo(EndReason.CHILD_STOP);
         assertThat(h.link.sent(PlayApprovedContent.class)).extracting(PlayApprovedContent::contentCode)
-                .doesNotContain(SessionExecutor.STOP_CONFIRM);
+                .doesNotContain("STOP_CONFIRM");
         assertThat(h.store.transcripts).noneMatch(entry -> QUESTION.equals(entry.text()));
     }
 
     @Test
     void anUnclearSignalAsksNothingAndTheNextAnswerIsHeardAtOnce() {
-        h.extraApproved.put(SessionExecutor.STOP_CONFIRM, QUESTION);
+        h.extraApproved.put("STOP_CONFIRM", QUESTION);
         h.activate();
         h.childSays("i-1", "그만");
 
         assertThat(h.executor.status()).isEqualTo(SessionStatus.ACTIVE);
         assertThat(h.link.sent(PlayApprovedContent.class)).extracting(PlayApprovedContent::contentCode)
-                .doesNotContain(SessionExecutor.STOP_CONFIRM);
-        assertThat(h.executor.timers().isArmed(SessionTimers.Kind.STOP_CONFIRM)).isFalse();
-        assertThat(events(SessionExecutor.EVENT_STOP_CONFIRM_ASKED)).isEmpty();
+                .doesNotContain("STOP_CONFIRM");
+        assertThat(events("STOP_CONFIRM_ASKED")).isEmpty();
         // 출력을 막지 않으므로 다음 응답은 평소대로 기기에 간다
         emitComplete("r-1", "티라노는 아주 컸어");
         h.advanceAlive(Duration.ofSeconds(1));

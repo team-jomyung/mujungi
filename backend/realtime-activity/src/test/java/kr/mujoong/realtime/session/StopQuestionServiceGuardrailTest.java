@@ -31,7 +31,7 @@ class StopQuestionServiceGuardrailTest {
 
     private static long questions(SessionHarness h) {
         return h.link.sent(PlayApprovedContent.class).stream()
-                .filter(play -> play.contentCode().equals(SessionExecutor.STOP_CONFIRM)).count();
+                .filter(play -> play.contentCode().equals("STOP_CONFIRM")).count();
     }
 
     @Test
@@ -42,7 +42,6 @@ class StopQuestionServiceGuardrailTest {
 
         assertThat(h.executor.status()).isEqualTo(SessionStatus.ACTIVE);
         assertThat(questions(h)).isZero();
-        assertThat(h.executor.timers().isArmed(SessionTimers.Kind.STOP_CONFIRM)).isFalse();
     }
 
     @Test

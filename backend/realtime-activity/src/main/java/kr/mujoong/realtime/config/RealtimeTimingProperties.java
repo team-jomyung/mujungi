@@ -74,7 +74,7 @@ public record RealtimeTimingProperties(
 
     /**
      * ② 기기 응답 20초((h) PROVIDER_UNAVAILABLE에도) · ③ 마무리 확인 30초. U4b: 참여 창 처음 20초 · 안내 뒤 20초
-     * 공백 경고 4분 · 종료 6분, 종료 확인 질문 창 20초(계약 7절 밖), 정산 창 2초(
+     * 공백 경고 4분 · 종료 6분, 정산 창 2초(
      * 계약 7절 밖). 공백 경고는 공백 종료보다 짧아야 한다.
      */
     public record SessionTiming(
@@ -84,7 +84,6 @@ public record RealtimeTimingProperties(
             Duration joinWaitAfterReprompt,
             Duration silenceWarning,
             Duration silenceEnd,
-            Duration stopConfirmWait,
             Duration recordSettle) {
 
         public SessionTiming {
@@ -94,7 +93,6 @@ public record RealtimeTimingProperties(
             positive(joinWaitAfterReprompt, "mujoong.timing.session.join-wait-after-reprompt");
             positive(silenceWarning, "mujoong.timing.session.silence-warning");
             positive(silenceEnd, "mujoong.timing.session.silence-end");
-            positive(stopConfirmWait, "mujoong.timing.session.stop-confirm-wait");
             positive(recordSettle, "mujoong.timing.session.record-settle");
             if (silenceWarning.compareTo(silenceEnd) >= 0) {
                 throw invalid("mujoong.timing.session.silence-warning은 mujoong.timing.session.silence-end보다 짧아야 한다");

@@ -58,7 +58,7 @@ class PracticeStopConfirmRaceTest {
         assertThat(f.h.executor.liveState().technicalPause()).isNull();
         assertThat(f.probe.events).extracting(PracticeSessionExtension.ExtensionEvent::name).containsExactly(ASYNC_READY);
         assertThat(f.h.link.sent(PlayApprovedContent.class)).as("확인 질문은 없다")
-                .noneMatch(play -> SessionExecutor.STOP_CONFIRM.equals(play.contentCode()));
+                .noneMatch(play -> "STOP_CONFIRM".equals(play.contentCode()));
     }
 
     @Test void deferredPlaybackKeepsItsReceiptTimeAndCountsOnlyTheTechnicalPause() {
@@ -104,7 +104,7 @@ class PracticeStopConfirmRaceTest {
         Fixture() {
             h.activityType = ActivityType.PRACTICE;
             h.practice = ignored -> probe;
-            h.extraApproved.put(SessionExecutor.STOP_CONFIRM, "이야기를 그만할까?");
+            h.extraApproved.put("STOP_CONFIRM", "이야기를 그만할까?");
             h.activate();
             assertThat(probe.output.schedule(RESPONSE_WAIT, Duration.ofSeconds(20))).isTrue();
         }
@@ -113,7 +113,7 @@ class PracticeStopConfirmRaceTest {
             h.childSays("unclear-stop", "쉬고 싶어");
             assertThat(h.executor.status()).isEqualTo(SessionStatus.ACTIVE);
             assertThat(h.link.sent(PlayApprovedContent.class)).as("확인 질문을 재생하지 않는다")
-                    .noneMatch(play -> SessionExecutor.STOP_CONFIRM.equals(play.contentCode()));
+                    .noneMatch(play -> "STOP_CONFIRM".equals(play.contentCode()));
         }
         void deviceReturns() {
             h.link.touch(h.clock.now());

@@ -159,7 +159,8 @@ class GreetingHandoffServiceGuardrailTest {
 
     @Test void aDiscardedRestartGreetingUnitNeverLetsTheSoundOfItsOwnResponseOutThroughALaterUnit() {
         var h = ServiceGuardrailFixtures.harness(); h.useJudge(); var guard = h.useGuardrail();
-        h.boot(); h.ackAndReady(); completeAndAccept(h, "응, 안녕");
+        // 아이가 인사하지 않아야 "안녕!"이 시작 인사 반복으로 폐기된다(아이가 인사했으면 인사말 답은 막지 않는다, GreetingHandoff)
+        h.boot(); h.ackAndReady(); completeAndAccept(h, "응");
         long margin = h.settings.newSpeechMargin().toMillis();
         h.provider.last().newSpeechMargin(null);
         String id = h.provider.last().requests(ProviderRequestFactory.InstructionsAppend.class).getLast().eventId();

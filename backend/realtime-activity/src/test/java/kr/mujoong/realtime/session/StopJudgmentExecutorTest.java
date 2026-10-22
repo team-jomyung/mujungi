@@ -63,9 +63,9 @@ class StopJudgmentExecutorTest {
     private void assertNoJudgmentAndNoQuestion() {
         assertThat(t.judge.calls()).as("J6를 열지 않는다").isEmpty();
         assertThat(t.records()).as("건너뛴 판정 기록도 없다").isEmpty();
-        assertThat(t.events(SessionExecutor.EVENT_STOP_CONFIRM_ASKED)).as("확인 질문이 없다").isEmpty();
+        assertThat(t.events("STOP_CONFIRM_ASKED")).as("확인 질문이 없다").isEmpty();
         assertThat(t.h.link.sent(PlayApprovedContent.class)).extracting(PlayApprovedContent::contentCode)
-                .doesNotContain(SessionExecutor.STOP_CONFIRM);
+                .doesNotContain("STOP_CONFIRM");
     }
 
     @Test

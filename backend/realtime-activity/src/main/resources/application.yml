@@ -92,12 +92,11 @@ mujoong:
     session:
       device-ack-timeout: 20s
       closing-confirm: 30s
-      # U4b: 참여 창(처음 · 안내 뒤) · 공백 경고 · 공백 종료(계약 7절), 종료 확인 질문 창 · 정산 창(7절 밖)
+      # U4b: 참여 창(처음 · 안내 뒤) · 공백 경고 · 공백 종료(계약 7절), 정산 창(7절 밖)
       join-wait: 20s
       join-wait-after-reprompt: 20s
       silence-warning: 4m
       silence-end: 6m
-      stop-confirm-wait: 20s
       record-settle: 2s
     device:
       disconnect: 40s

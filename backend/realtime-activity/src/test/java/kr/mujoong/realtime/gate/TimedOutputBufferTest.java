@@ -52,13 +52,18 @@ class TimedOutputBufferTest {
     }
 
     @Test
-    void aGapOrOverlappingTranscriptInvalidatesTheBufferUntilReset() {
+    void anOverlappingTranscriptIsAcceptedButAnAudioGapInvalidatesTheBufferUntilReset() {
+        // 실제 공급자는 앞 조각과 겹치는 조각을 보내기도 하므로 겹침은 받는다(TimedOutputBuffer#transcript). 음성 틈만 버퍼를 못 쓰게 한다
         buffer.transcript("첫 조각", 0, 20, at, 1);
         buffer.transcript("겹침", 10, 30, at, 2);
+        assertThat(buffer.failed()).isFalse();
+        buffer.audio(new byte[240], 0);
+        buffer.audio(new byte[240], 480);
         assertThat(buffer.failed()).isTrue();
-        buffer.audio(new byte[960], 0);
+        assertThat(buffer.failReason()).isEqualTo(TimedOutputBuffer.FailReason.AUDIO_GAP);
         assertThat(buffer.poll(0, 0, at, 3)).isNull();
         buffer.reset();
+        assertThat(buffer.failed()).isFalse();
         buffer.transcript("새 조각", 0, 20, at, 4);
         buffer.audio(new byte[240], 0);
         buffer.audio(new byte[240], 480);

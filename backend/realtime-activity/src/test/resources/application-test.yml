@@ -27,7 +27,6 @@ mujoong:
       join-wait-after-reprompt: 10s
       silence-warning: 1m
       silence-end: 2m
-      stop-confirm-wait: 10s
       record-settle: 200ms
     # U11: 입력 전사 묶음 확정 대기 · 새 말 여유. 통합 시험이 빨리 돌게 줄인다(운영 1500ms · 600ms)
     provider:

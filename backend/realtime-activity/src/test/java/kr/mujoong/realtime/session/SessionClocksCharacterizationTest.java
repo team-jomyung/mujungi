@@ -8,6 +8,7 @@ import java.util.concurrent.CompletableFuture;
 import kr.mujoong.contract.status.EndRequestReason;
 import kr.mujoong.contract.status.FailureCode;
 import kr.mujoong.contract.status.SessionStatus;
+import kr.mujoong.contract.ws.message.PlayApprovedContent;
 import kr.mujoong.realtime.judgment.AbstainReason;
 import kr.mujoong.realtime.judgment.JudgmentLiveRecord;
 import kr.mujoong.realtime.judgment.JudgmentOutcomeKind;
@@ -91,18 +92,18 @@ class SessionClocksCharacterizationTest {
     }
 
     @Test
-    void anUnclearStopSignalNeverArmsTheStopConfirmWindow() {
-        // 종료 확인 질문은 2026-10-22 결정으로 없앴다: 불명확한 신호는 질문 재생도 확인 창도 열지 않는다
+    void anUnclearStopSignalPlaysNoQuestionAndKeepsTheSessionActive() {
+        // 종료 확인 질문은 2026-10-22 결정으로 없앴다: 불명확한 신호는 질문을 재생하지 않고, 재생 상한이 지나도 세션은 그대로다
         SessionHarness h = new SessionHarness();
-        h.extraApproved.put(SessionExecutor.STOP_CONFIRM, "이야기를 그만할까?");
+        h.extraApproved.put("STOP_CONFIRM", "이야기를 그만할까?");
         h.activate();
         h.childSays("i-1", "그만");
-        assertThat(h.executor.timers().isArmed(Kind.STOP_CONFIRM)).isFalse();
+        assertThat(h.link.sent(PlayApprovedContent.class)).extracting(PlayApprovedContent::contentCode)
+                .doesNotContain("STOP_CONFIRM");
 
         h.advanceAlive(h.settings.playbackExpiry());
 
         assertThat(h.executor.status()).isEqualTo(SessionStatus.ACTIVE);
-        assertThat(h.executor.timers().isArmed(Kind.STOP_CONFIRM)).isFalse();
     }
 
     private static long currentGeneration(SessionHarness h, Kind kind) {

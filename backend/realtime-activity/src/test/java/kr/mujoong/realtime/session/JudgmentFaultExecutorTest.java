@@ -77,7 +77,7 @@ class JudgmentFaultExecutorTest {
         t.h.link.touch(t.h.clock.now());
         t.h.advance(t.h.settings.timerTick());
         assertThat(t.h.executor.liveState().technicalPause()).isNull();
-        assertThat(t.events(SessionExecutor.EVENT_STOP_CONFIRM_ASKED)).as("장애로 닫힌 턴은 확인 질문을 하지 않는다").isEmpty();
+        assertThat(t.events("STOP_CONFIRM_ASKED")).as("장애로 닫힌 턴은 확인 질문을 하지 않는다").isEmpty();
     }
 
     @Test
@@ -110,12 +110,15 @@ class JudgmentFaultExecutorTest {
     void aProviderErrorEventFollowsTodaysPathAndDoesNotCloseTheTurn() {
         t.openExtensionJudgment();
 
-        t.h.provider.last().emit(new ProviderEvent.Error("rate_limit"));
+        // 공급자 오류는 짧은 식별자 꼴일 때만 사유 코드에 싣는다(ProviderErrorCode_*). 자유 문자열은 unknown으로 바꿔 원문을 남기지 않는다
+        t.h.provider.last().emit(new ProviderEvent.Error("Rate limit reached for 하준"));
         t.h.drain();
 
         assertThat(t.h.executor.status()).isEqualTo(SessionStatus.ACTIVE);
         assertThat(t.records()).isEmpty();
-        assertThat(t.h.logs.anyLineContains("rate_limit")).as("사유 원문 없이 고정 사유만").isFalse();
+        assertThat(t.h.logs.anyLineContains("Rate limit reached")).as("사유 원문 없이 고정 사유만").isFalse();
+        assertThat(t.h.logs.anyLineContains("하준")).isFalse();
+        assertThat(t.h.logs.anyLineContains("ProviderErrorCode_unknown")).isTrue();
         t.judge.confirm("PARTIAL", 0.9, "FULL", 0.05);
         t.h.drain();
         assertThat(t.records()).hasSize(1);

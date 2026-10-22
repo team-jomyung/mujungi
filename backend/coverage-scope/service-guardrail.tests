@@ -60,7 +60,6 @@ backend/realtime-activity/src/test/java/kr/mujoong/realtime/dialog/InstructionTe
 # 정책·거절/도움/휴식·종료 구분 (BR1/3/4)
 backend/realtime-activity/src/test/java/kr/mujoong/realtime/dialog/ServicePolicyCatalogServiceGuardrailTest.java
 # 정책·거절/도움/휴식·종료 구분 (BR1/3/4)
-backend/realtime-activity/src/test/java/kr/mujoong/realtime/dialog/StopConfirmFlowTest.java
 # 정책·거절/도움/휴식·종료 구분 (BR1/3/4)
 backend/realtime-activity/src/test/java/kr/mujoong/realtime/dialog/StopIntentJudgeTest.java
 # 정책·거절/도움/휴식·종료 구분 (BR1/3/4)

@@ -45,7 +45,7 @@ public final class ServiceGuardrailFixtures {
         var reprompt = new NoticeAssetCatalog.Asset(UUID.fromString("11111111-1111-4111-8111-111111111117"),
                 SessionExecutor.RE_PROMPT, "/media/approved/re_prompt.wav", intro.resource(), intro.textSha256(),
                 intro.audioSha256(), intro.frames(), intro.verification(), intro.reviewVersion(), intro.policyVersion(), true);
-        var stop = new NoticeAssetCatalog.Asset(STOP, SessionExecutor.STOP_CONFIRM, "/media/approved/stop_confirm.wav",
+        var stop = new NoticeAssetCatalog.Asset(STOP, "STOP_CONFIRM", "/media/approved/stop_confirm.wav",
                 intro.resource(), NoticeAssetCatalog.sha256(STOP_TEXT.getBytes(StandardCharsets.UTF_8)),
                 intro.audioSha256(), intro.frames(), intro.verification(), intro.reviewVersion(), intro.policyVersion(), false);
         var assets = new java.util.ArrayList<>(List.of(intro, reprompt, stop));
@@ -69,8 +69,8 @@ public final class ServiceGuardrailFixtures {
         harness.approvedVersions.put(SessionExecutor.RE_PROMPT, UUID.fromString("11111111-1111-4111-8111-111111111117"));
         harness.closingText = "알겠어. 안녕.";
         harness.noticeAssets = catalog(harness.closingVersion);
-        harness.extraApproved.put(SessionExecutor.STOP_CONFIRM, STOP_TEXT);
-        harness.approvedVersions.put(SessionExecutor.STOP_CONFIRM, STOP);
+        harness.extraApproved.put("STOP_CONFIRM", STOP_TEXT);
+        harness.approvedVersions.put("STOP_CONFIRM", STOP);
     }
 
     public static SessionExecutor.ApprovedItem item() { return new SessionExecutor.ApprovedItem(CODE, INTRO, TEXT); }

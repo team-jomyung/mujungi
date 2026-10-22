@@ -9,7 +9,6 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
 import kr.mujoong.contract.log.EventLog;
-import kr.mujoong.contract.status.ActivityType;
 import kr.mujoong.contract.status.EndReason;
 import kr.mujoong.contract.status.SessionStatus;
 import kr.mujoong.contract.ws.WsPayload;
@@ -17,7 +16,6 @@ import kr.mujoong.contract.ws.message.SessionState;
 import kr.mujoong.contract.ws.message.StopOutput;
 import kr.mujoong.contract.ws.message.View;
 import kr.mujoong.realtime.common.scaling.SingleInstanceAssumption;
-import kr.mujoong.realtime.dialog.StopConfirmFlow;
 import kr.mujoong.realtime.gate.ApprovedPlayback;
 import kr.mujoong.realtime.gate.ClosingSequence;
 import kr.mujoong.realtime.gate.OutputGeneration;
@@ -64,8 +62,6 @@ public final class SessionContext {
     private final LinkedHashMap<UUID, WsPayload> pendingCommands = new LinkedHashMap<>();
     /** 기기가 STARTED를 알리고 아직 끝 표식이 없는 재생. */
     private final Set<UUID> devicePlaying = new HashSet<>();
-    /** 종료 확인 질문 흐름. 확인 중이면 공급자 출력을 막는다. */
-    private final StopConfirmFlow stopConfirm;
     private final kr.mujoong.realtime.dialog.PolicyBundle servicePolicy;
     private volatile SessionGuardrailFacts guardrailFacts;
     private volatile GuardrailProjection guardrailProjection;
@@ -74,7 +70,6 @@ public final class SessionContext {
     private UUID goodbyeConnectionId;
     private Instant goodbyeDeadline;
     private NoticeDelivery noticeDelivery;
-    private NoticeDelivery stopQuestionDelivery;
     private Instant inputBeganAt;
     private final kr.mujoong.realtime.dialog.ConversationPolicyState conversationPolicy =
             new kr.mujoong.realtime.dialog.ConversationPolicyState();
@@ -97,7 +92,6 @@ public final class SessionContext {
 
     // 재생 표식을 기다리는 안내
     private UUID joinPromptPlaybackId;
-    private UUID stopConfirmPlaybackId;
 
     // 마무리
     private EndReason closingReason;
@@ -131,8 +125,6 @@ public final class SessionContext {
         this.relay = new InputRelay(plan.sessionId(), services.settings().inputQueueFrames(), services.requests(),
                 services.clock(), services.metrics());
         this.transcripts = new TranscriptWriter(plan.sessionId(), 0, services.recorder(), services.latency());
-        this.stopConfirm = new StopConfirmFlow(services.settings().lifecycle().stopConfirmWait(),
-                plan.activityType() == ActivityType.FREE_TALK);
         this.servicePolicy = services.requests().servicePolicy(plan.activityType());
     }
 
@@ -171,8 +163,6 @@ public final class SessionContext {
     }
     NoticeDelivery noticeDelivery() { return noticeDelivery; }
     void noticeDelivery(NoticeDelivery value) { noticeDelivery = value; }
-    NoticeDelivery stopQuestionDelivery() { return stopQuestionDelivery; }
-    void stopQuestionDelivery(NoticeDelivery value) { stopQuestionDelivery = value; }
     Instant inputBeganAt() { return inputBeganAt; }
     void inputBeganAt(Instant value) { inputBeganAt = value; }
     kr.mujoong.realtime.dialog.ConversationPolicyState conversationPolicy() { return conversationPolicy; }
@@ -246,10 +236,6 @@ public final class SessionContext {
 
     Set<UUID> devicePlaying() {
         return devicePlaying;
-    }
-
-    StopConfirmFlow stopConfirm() {
-        return stopConfirm;
     }
 
     SessionStatus status() {
@@ -348,15 +334,6 @@ public final class SessionContext {
 
     void joinPromptPlaybackId(UUID joinPromptPlaybackId) {
         this.joinPromptPlaybackId = joinPromptPlaybackId;
-    }
-
-    /** 지금 재생 중인 종료 확인 질문의 playbackId(끝 표식이 창을 연다, 없으면 null). */
-    UUID stopConfirmPlaybackId() {
-        return stopConfirmPlaybackId;
-    }
-
-    void stopConfirmPlaybackId(UUID stopConfirmPlaybackId) {
-        this.stopConfirmPlaybackId = stopConfirmPlaybackId;
     }
 
     /** CLOSING에 들어갈 때 쓴 마무리 사유. */

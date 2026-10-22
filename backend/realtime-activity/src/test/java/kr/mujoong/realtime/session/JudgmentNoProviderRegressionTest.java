@@ -28,7 +28,7 @@ class JudgmentNoProviderRegressionTest {
 
     private static SessionHarness base() {
         SessionHarness h = new SessionHarness();
-        h.extraApproved.put(SessionExecutor.STOP_CONFIRM, "이야기를 그만할까?");
+        h.extraApproved.put("STOP_CONFIRM", "이야기를 그만할까?");
         return h;
     }
 
@@ -85,9 +85,9 @@ class JudgmentNoProviderRegressionTest {
 
         assertThat(observe(withUnavailableJudge(), UNCLEAR_STOP)).isEqualTo(before);
         assertThat(observe(withUnavailablePort(), UNCLEAR_STOP)).isEqualTo(before);
-        assertThat(before.events()).as("확인 질문 없이 대화를 잇는다").doesNotContain(SessionExecutor.EVENT_STOP_CONFIRM_ASKED,
+        assertThat(before.events()).as("확인 질문 없이 대화를 잇는다").doesNotContain("STOP_CONFIRM_ASKED",
                 SessionExecutor.EVENT_CHILD_STOP_INTENT);
-        assertThat(before.played()).doesNotContain(SessionExecutor.STOP_CONFIRM);
+        assertThat(before.played()).doesNotContain("STOP_CONFIRM");
     }
 
     @Test

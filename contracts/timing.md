@@ -25,7 +25,7 @@
 | `mujoong.timing.session.closing-confirm` | `30s` | realtime | CLOSING 전이를 이긴 커밋 시각 → VOICE_SESSION_CLOSED가 없으면 ENDED_UNCONFIRMED. 끊김보다 우선. U4b: DECLINED 뒤 마무리 인사 대기 상한으로도 쓴다 | BR6.12 ③ · B11 · U4b-J8 |
 | `mujoong.timing.session.join-wait` | `20s` | realtime | 시작 안내(참여 질문) 재생 완료 보고를 서버가 받은 시각 → 응답 없으면 재안내(U4b). 기술 일시정지 동안 멈춘다 | 계약 7절 · U4b-J4 · U4b-J5 |
 | `mujoong.timing.session.join-wait-after-reprompt` | `20s` | realtime | 재안내 · 되묻기 · 대안 재생 완료 보고 수신 → 응답 없으면 재안내(아직 안 썼으면) 또는 DECLINED(U4b) | 계약 7절 · U4b-J4 |
-| `mujoong.timing.session.silence-warning` | `4m` | realtime | ACTIVE 공백 누적(기기 재생 · 서버 출력 대기 · 기술 일시정지 · 확인 질문 대기 동안 멈춤) → 12 경고 + SILENCE_WARNING 1회(U4b) | 계약 7절 · U4b-R6 · U4b-J10 · U4b-J11 |
+| `mujoong.timing.session.silence-warning` | `4m` | realtime | ACTIVE 공백 누적(기기 재생 · 서버 출력 대기 · 기술 일시정지 동안 멈춤) → 12 경고 + SILENCE_WARNING 1회(U4b) | 계약 7절 · U4b-R6 · U4b-J10 · U4b-J11 |
 | `mujoong.timing.session.silence-end` | `6m` | realtime | 같은 공백 누적 → CLOSING(SILENCE)(U4b) | 계약 7절 · U4b-R6 · B9 |
 | `mujoong.timing.device.gap-display` | `10s` | realtime | WAITING_CHILD · ACTIVE에서 마지막 기기 메시지 → 기술 일시정지(technicalPause) · 끊김 구간(DISCONNECT) 시작, 12 점선(U4b) | 계약 7절 · U4b-R7 · U4b-J13 |
 | `mujoong.timing.device.heartbeat-interval` | `5s` | realtime · web | 기기 HEARTBEAT 송신 주기. Realtime이 HELLO_OK.heartbeatIntervalMs로 내려준다 | ADR-005 · J27 |
@@ -67,7 +67,7 @@ U4b가 옮긴 것: `session.join-wait` · `session.join-wait-after-reprompt` · 
 | `mujoong.timing.practice.cue-budget` | 5초 | U5 |
 | `mujoong.timing.practice.judge-budget` | 5초 + 재시도 1회 | U5 |
 
-## 3. 계약 7절 밖 U1 · U4b 시간 키 (`mujoong.timing.*` U1 4종 · U4b 2종, J80 · R3-17 · U4b-J21)
+## 3. 계약 7절 밖 U1 · U4b 시간 키 (`mujoong.timing.*` U1 4종 · U4b 1종, J80 · R3-17 · U4b-J21)
 
 | 키 | 기본값 | 소유 앱 | 뜻 | 근거 |
 |---|---|---|---|---|
@@ -75,7 +75,6 @@ U4b가 옮긴 것: `session.join-wait` · `session.join-wait-after-reprompt` · 
 | `mujoong.timing.recorder.flush-interval` | `200ms` | realtime | 전사 기록기 플러시 주기 | J73 · PD-5 |
 | `mujoong.timing.cache.approved-content-ttl` | `10m` | core-api | 승인 문구 캐시 수명(U1은 DB 직접 읽기로 대신, PD-7은 3.6) | J73 · PD |
 | `mujoong.timing.cache.policy-version-ttl` | `1m` | core-api | 현재 정책 버전 캐시 수명 | J73 · PD · J114 |
-| `mujoong.timing.session.stop-confirm-wait` | `20s` | realtime | 종료 확인 질문(STOP_CONFIRM) 재생 완료 보고 수신 → 대답 없으면 막은 출력을 풀고 대화를 잇는다(U4b). 기술 일시정지 동안 멈춘다 | U4b-R4 · U4b-J6 · U4b-J21 |
 | `mujoong.timing.session.record-settle` | `2s` | realtime | 종료 전이 뒤 공급자를 닫은 시각 → 공급자 연결이 닫히거나 이 시간이 지나면 정산 창을 끝내고 결과 스냅숏을 쓴다(U4b) | U4b-R11 · U4b-J15 · U4b-J21 |
 
 ## 4. 메시징 · 정리 · 보존 · 세션 보조 키

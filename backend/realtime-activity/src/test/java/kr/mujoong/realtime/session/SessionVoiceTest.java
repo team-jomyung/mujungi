@@ -404,7 +404,7 @@ class SessionVoiceTest {
         done("i1", "그만", 0.9);
         assertThat(sessionEvents()).noneMatch(event -> event.getEventType().startsWith("CHILD_STOP"));
         assertThat(sessionEvents()).extracting(SessionEvent::getEventType)
-                .doesNotContain(SessionExecutor.EVENT_STOP_CONFIRM_ASKED);
+                .doesNotContain("STOP_CONFIRM_ASKED");
         assertThat(h.executor.outputGeneration()).as("종료 의도가 아니니 출력을 멈추지 않는다").isEqualTo(generation);
         assertThat(h.executor.status()).isEqualTo(SessionStatus.ACTIVE);
 

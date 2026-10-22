@@ -38,7 +38,6 @@ import kr.mujoong.realtime.config.RealtimeTimingProperties;
 import kr.mujoong.realtime.dialog.DialogInstructions;
 import kr.mujoong.realtime.dialog.InstructionTemplates;
 import kr.mujoong.realtime.dialog.JoinTracker;
-import kr.mujoong.realtime.dialog.StopConfirmFlow;
 import kr.mujoong.realtime.dialog.StopIntentJudge;
 import kr.mujoong.realtime.judgment.JudgeOutcome;
 import kr.mujoong.realtime.judgment.JudgmentOutcomeKind;
@@ -149,19 +148,17 @@ public final class SessionExecutor {
          * @param joinWaitAfterReprompt 재안내 · 되묻기 · 대안 뒤 참여 창(join-wait-after-reprompt)
          * @param silenceWarning 공백 경고 누적(silence-warning)
          * @param silenceEnd 공백 종료 누적(silence-end)
-         * @param stopConfirmWait 종료 확인 질문 창(stop-confirm-wait)
          * @param recordSettle 종료 뒤 정산 창 상한(record-settle)
          * @param gapDisplay 마지막 기기 메시지 뒤 기술 일시정지(device.gap-display)
          */
         public record Lifecycle(Duration joinWait, Duration joinWaitAfterReprompt, Duration silenceWarning,
-                Duration silenceEnd, Duration stopConfirmWait, Duration recordSettle, Duration gapDisplay) {
+                Duration silenceEnd, Duration recordSettle, Duration gapDisplay) {
 
             public Lifecycle {
                 Objects.requireNonNull(joinWait, "joinWait");
                 Objects.requireNonNull(joinWaitAfterReprompt, "joinWaitAfterReprompt");
                 Objects.requireNonNull(silenceWarning, "silenceWarning");
                 Objects.requireNonNull(silenceEnd, "silenceEnd");
-                Objects.requireNonNull(stopConfirmWait, "stopConfirmWait");
                 Objects.requireNonNull(recordSettle, "recordSettle");
                 Objects.requireNonNull(gapDisplay, "gapDisplay");
             }
@@ -169,7 +166,7 @@ public final class SessionExecutor {
             public static Lifecycle from(RealtimeProperties properties) {
                 RealtimeTimingProperties.SessionTiming session =properties.timing().session();
                 return new Lifecycle(session.joinWait(), session.joinWaitAfterReprompt(), session.silenceWarning(),
-                        session.silenceEnd(), session.stopConfirmWait(), session.recordSettle(),
+                        session.silenceEnd(), session.recordSettle(),
                         properties.timing().device().gapDisplay());
             }
         }
@@ -332,7 +329,6 @@ public final class SessionExecutor {
     public static final String INTRO_PRACTICE = "INTRO_PRACTICE";
     public static final String RE_PROMPT = "RE_PROMPT";
     public static final String DECLINE_ALTERNATIVE = "DECLINE_ALTERNATIVE";
-    public static final String STOP_CONFIRM = "STOP_CONFIRM";
     public static final String SILENCE_WARNING = "SILENCE_WARNING";
 
     /**
@@ -425,8 +421,6 @@ public final class SessionExecutor {
     static final String EVENT_CHILD_STOP_LIFTED = "CHILD_STOP_LIFTED";
     /** U4b 세션 사건 종류(payload는 코드 · 횟수 · 분류 이름 · 시각뿐, entities SessionEvent). */
     static final String EVENT_APPROVED_CONTENT_MISSING = "APPROVED_CONTENT_MISSING";
-    static final String EVENT_STOP_CONFIRM_ASKED = "STOP_CONFIRM_ASKED";
-    static final String EVENT_STOP_CONFIRM_RESOLVED = "STOP_CONFIRM_RESOLVED";
     static final String EVENT_PRACTICE_EXTENSION_FAILED = "PRACTICE_EXTENSION_FAILED";
     /** ACTIVE 중 공급자 끊김의 end_detail. */
     static final String END_DETAIL_PROVIDER_LOST = "PROVIDER_LOST";
@@ -1258,8 +1252,7 @@ public final class SessionExecutor {
     }
 
     private boolean practiceProgressPaused() {
-        return idle.technicalPause() != null || (practice != null && practice.controlsOutput()
-                && ctx.stopConfirm().isActive());
+        return idle.technicalPause() != null;
     }
 
     private void interruptPracticeSpeech(Instant now) {
@@ -1274,7 +1267,7 @@ public final class SessionExecutor {
                 kr.mujoong.realtime.practicelegacy.PracticePorts.Playback.INTERRUPTED, now));
     }
 
-    /** 기술 일시정지와 종료 확인 동안 남은 반응 시간을 보존한다. */
+    /** 기술 일시정지 동안 남은 반응 시간을 보존한다. */
     private void pausePracticeTimers(Instant now) {
         if (practice != null && practice.controlsOutput() && practicePauseStartedAt == null) practicePauseStartedAt = now;
         for (Map.Entry<String, PracticeTimer> entry : List.copyOf(practiceTimers.entrySet())) {
@@ -1528,16 +1521,6 @@ public final class SessionExecutor {
         }
 
         @Override
-        public void onStopConfirmPlayed(Instant at) {
-            SessionExecutor.this.onStopConfirmPlayed(at);
-        }
-
-        @Override
-        public void onStopConfirmFailed() {
-            SessionExecutor.this.onStopConfirmFailed();
-        }
-
-        @Override
         public void armDisconnect() {
             clocks.armDisconnect();
         }
@@ -1664,11 +1647,6 @@ public final class SessionExecutor {
         public void resumeJoinWindow(Duration paused) {
             joinFlow.resumeJoinWindow(paused);
         }
-
-        @Override
-        public void armStopConfirm() {
-            SessionExecutor.this.armStopConfirm();
-        }
     }
 
     /** 시계 구역 협력 객체가 실행기에 남은 로직으로 되돌아오는 자리. */
@@ -1715,16 +1693,6 @@ public final class SessionExecutor {
         }
 
         @Override
-        public void onStopConfirmPlayed(Instant at) {
-            SessionExecutor.this.onStopConfirmPlayed(at);
-        }
-
-        @Override
-        public void onStopConfirmFailed() {
-            SessionExecutor.this.onStopConfirmFailed();
-        }
-
-        @Override
         public void redeliver() {
             SessionExecutor.this.redeliver();
         }
@@ -1732,11 +1700,6 @@ public final class SessionExecutor {
         @Override
         public void onJoinWindow() {
             joinFlow.onJoinWindow();
-        }
-
-        @Override
-        public void onStopConfirmWindow() {
-            SessionExecutor.this.onStopConfirmWindow();
         }
     }
 
@@ -2199,9 +2162,9 @@ public final class SessionExecutor {
                 id -> ctx.services().requests().responseStart(id, start, ctx.plan().activityType()), null, true);
     }
 
-    /** 공급자 출력을 받지 않는 때(참여 확인 중 · 종료 확인 질문 중 · 확장점이 막은 동안). */
+    /** 공급자 출력을 받지 않는 때(참여 확인 중 · 확장점이 막은 동안). */
     private boolean outputHeld() {
-        return ctx.status() == SessionStatus.WAITING_CHILD || ctx.stopConfirm().isActive() || judgment.holdsOutput()
+        return ctx.status() == SessionStatus.WAITING_CHILD || judgment.holdsOutput()
                 || (ctx.plan().activityType() == ActivityType.FREE_TALK && ctx.conversationPolicy().resting()
                     && (ctx.outputAuthority() == null || ctx.outputAuthority().purpose()
                         != kr.mujoong.realtime.gate.OutputAuthority.Purpose.REST_ACK))
@@ -2898,9 +2861,8 @@ public final class SessionExecutor {
 
     /**
      * U4b: ACTIVE의 확정 아이 전사로 종료 의도를 판정한다(기기 재생 중에 확정된 전사도 판정한다, 2026-10-22 결정).
-     * STOP이면 곧바로 CLOSING(CHILD_STOP)이다. CONFIRM이면 확인 질문(STOP_CONFIRM)을 재생하고 공급자 출력을 막은 뒤, 재생 완료부터
-     * stop-confirm-wait 안의 첫 확정 전사가 STOP이거나 참여 분류 ACCEPT면 CHILD_STOP으로 확정하고, 그 밖이거나 창이 끝나면 막은 것을 풀고 응답 생성
-     * 요청을 한 번 보낸다. U3의 '막고 ACTIVE 유지 → 적극적 계속이면 해제'(CHILD_STOP_LIFTED) 경로는 없앴다.
+     * STOP이면 곧바로 CLOSING(CHILD_STOP)이고, 그 밖이면 대화를 잇는다. 불명확한 종료 의도로 확인 질문(STOP_CONFIRM)을 여는 흐름과
+     * U3의 '막고 ACTIVE 유지 → 적극적 계속이면 해제'(CHILD_STOP_LIFTED) 경로는 없앴다(contracts/deviations.md FT-1022-b · FT-1022-c).
      *
      * @return 이번 발화를 종료 의도 흐름이 맡았으면 참('생각 중'을 보내지 않는다)
      */
@@ -2911,7 +2873,8 @@ public final class SessionExecutor {
         if (ctx.plan().activityType() == ActivityType.FREE_TALK) {
             if (stopJudge.requestsImmediateMute(transcript)) {
                 ctx.immediateMute(true);
-                applyStopDecision(StopConfirmFlow.Decision.CLOSE, "IMMEDIATE_MUTE", at);
+                ctx.putEvent(EVENT_CHILD_STOP_INTENT, "{\"basis\":\"IMMEDIATE_MUTE\"}", at);
+                closeForStop(at);
                 return true;
             }
             if (stopJudge.requestsRest(transcript)) {
@@ -2934,137 +2897,23 @@ public final class SessionExecutor {
                 return true;
             }
         }
-        if (ctx.stopConfirm().isActive()) {
-            boolean stop = stopJudge.judge(transcript).verdict() == StopIntentJudge.Verdict.STOP;
-            if (!stop && ctx.plan().activityType() == ActivityType.FREE_TALK && ctx.stopQuestionDelivery() != null
-                    && !ctx.stopQuestionDelivery().permitsInput(ctx.inputBeganAt() == null ? at : ctx.inputBeganAt())) return true;
-            applyStopDecision(ctx.stopConfirm().onReply(transcript, stop, at), "REPLY", at);
-            return true;
-        }
         StopIntentJudge.Judgment stopJudgment = stopJudge.judge(transcript);
-        StopConfirmFlow.Decision decision = ctx.stopConfirm().onJudgment(stopJudgment.verdict());
-        if (decision == StopConfirmFlow.Decision.CLOSE) {
-            ctx.putEvent(EVENT_CHILD_STOP_INTENT, "{\"basis\":\"" + stopJudgment.basis().name() + "\"}", at);
+        if (stopJudgment.verdict() != StopIntentJudge.Verdict.STOP) {
+            return false;
         }
-        applyStopDecision(decision, null, at);
-        return decision != StopConfirmFlow.Decision.NONE;
+        ctx.putEvent(EVENT_CHILD_STOP_INTENT, "{\"basis\":\"" + stopJudgment.basis().name() + "\"}", at);
+        closeForStop(at);
+        return true;
     }
 
-    /**
-     * 확인 질문 흐름의 결정을 실행한다.
-     *
-     * @param cause RESOLVED 사건의 근거(REPLY · EXPIRED, 질문 전이면 null)
-     */
-    private void applyStopDecision(StopConfirmFlow.Decision decision, String cause, Instant at) {
-        switch (decision) {
-            case CLOSE -> {
-                ctx.confirmedStopSeq(currentTranscriptSeq > 0 ? currentTranscriptSeq : null);
-                ctx.timers().cancel(Kind.STOP_CONFIRM);
-                ctx.stopConfirmPlaybackId(null);
-                if (cause != null) {
-                    ctx.putEvent(EVENT_STOP_CONFIRM_RESOLVED, "{\"result\":\"STOP\",\"cause\":\"" + cause + "\"}", at);
-                }
-                stopOutputForIntent(at);
-                ending.beginClosing(Trigger.CHILD_STOP_CONFIRMED, null);
-            }
-            case ASK -> {
-                if (practice != null && practice.controlsOutput()) {
-                    pausePracticeTimers(at);
-                    interruptPracticeSpeech(at);
-                }
-                stopOutputForIntent(at);
-                ctx.putEvent(EVENT_STOP_CONFIRM_ASKED, null, at);
-                playStopConfirm();
-            }
-            case RESUME -> {
-                ctx.timers().cancel(Kind.STOP_CONFIRM);
-                ctx.stopConfirmPlaybackId(null);
-                ctx.putEvent(EVENT_STOP_CONFIRM_RESOLVED,
-                        "{\"result\":\"CONTINUE\",\"cause\":\"" + (cause == null ? "REPLY" : cause) + "\"}", at);
-                if (practice != null && practice.controlsOutput()) {
-                    resumePracticeTimers(at);
-                } else {
-                    requestResponse(InstructionTemplates.ResponseStart.CONTINUE);
-                }
-                listeningAgain();
-            }
-            case NONE -> {
-                // 종료 의도 아님
-            }
-        }
+    /** 종료 의도 확정: 출력을 멈추고 CLOSING(CHILD_STOP)으로 간다. */
+    private void closeForStop(Instant at) {
+        ctx.confirmedStopSeq(currentTranscriptSeq > 0 ? currentTranscriptSeq : null);
+        stopOutputForIntent(at);
+        ending.beginClosing(Trigger.CHILD_STOP_CONFIRMED, null);
     }
 
-    /** 확인 질문 재생: 보낸 순간 말풍선, 끝 표식이 창을 연다. 패키지에 없으면 곧바로 창을 연다. */
-    private void playStopConfirm() {
-        Instant now = ctx.services().clock().now();
-        Optional<ApprovedItem> item = ctx.plan().approvedItem(STOP_CONFIRM);
-        if (ctx.plan().activityType() == ActivityType.FREE_TALK && (item.isEmpty()
-                || ctx.services().notices().verified(item.get(), ctx.plan().approvedAudio(),
-                        ctx.servicePolicy().policyVersion(), ctx.services().settings().playbackExpiry()).isEmpty())) {
-            onStopConfirmFailed();
-            return;
-        }
-        if (item.isEmpty()) {
-            reportMissing(STOP_CONFIRM, now);
-        } else {
-            UUID playbackId = UUID.randomUUID();
-            if (ctx.plan().activityType() == ActivityType.FREE_TALK && ctx.link() != null) {
-                ctx.stopQuestionDelivery(new NoticeDelivery(ctx.plan().sessionId(), ctx.link().connectionId(), playbackId,
-                        ctx.servicePolicy().promptVersion(), ctx.servicePolicy().policyVersion(),
-                        now.plus(ctx.services().settings().playbackExpiry())));
-            }
-            if (ctx.sendControl(new PlayApprovedContent(playbackId, STOP_CONFIRM, item.get().contentVersionId()))) {
-                ctx.stopConfirmPlaybackId(playbackId);
-                ctx.playback().started(playbackId, STOP_CONFIRM);
-                ctx.timers().arm(Kind.PLAYBACK_EXPIRY, ctx.services().settings().playbackExpiry());
-                approvedBubble(item.get(), now);
-                return;
-            }
-        }
-        ctx.stopConfirmPlaybackId(null);
-        if (ctx.plan().activityType() == ActivityType.FREE_TALK) onStopConfirmFailed();
-        else onStopConfirmPlayed(now);
-    }
-
-    private void onStopConfirmFailed() {
-        if (ctx.stopQuestionDelivery() != null) ctx.stopQuestionDelivery().invalidate();
-        ctx.stopConfirmPlaybackId(null);
-        ctx.timers().cancel(Kind.STOP_CONFIRM);
-        ctx.stopConfirm().cancel();
-        if (ctx.status() == SessionStatus.ACTIVE) {
-            resumePracticeTimers(ctx.services().clock().now());
-            listeningAgain();
-        }
-    }
-
-    private void onStopConfirmPlayed(Instant at) {
-        ctx.stopConfirm().promptPlayed(at);
-        armStopConfirm();
-    }
-
-    private void armStopConfirm() {
-        Instant end = ctx.stopConfirm().windowEnd();
-        if (end == null || idle.technicalPause() != null) {
-            return;
-        }
-        Duration left = Duration.between(ctx.services().clock().now(), end);
-        ctx.timers().arm(Kind.STOP_CONFIRM, left.isNegative() ? Duration.ZERO : left);
-    }
-
-    // ------------------------------------------------------------------ 확인 질문 창 만기 · 출력 보조
-
-    /** 확인 질문 창 시계 만기: 대답이 없으면 대화를 잇는다. */
-    private void onStopConfirmWindow() {
-        if (ctx.status() != SessionStatus.ACTIVE || !ctx.stopConfirm().isActive()) {
-            return;
-        }
-        StopConfirmFlow.Decision decision = ctx.stopConfirm().tick(ctx.services().clock().now());
-        if (decision == StopConfirmFlow.Decision.NONE) {
-            armStopConfirm();
-            return;
-        }
-        applyStopDecision(decision, "EXPIRED", ctx.services().clock().now());
-    }
+    // ------------------------------------------------------------------ 출력 보조
 
     /**
      * 종료 의도: 남은 프레임을 보내지 않고(기기 프레임 세대 올림) 출력 세대를 올려 만들던 · 재생 중이던 응답의 남은 조각을 버리고 열린 구간을

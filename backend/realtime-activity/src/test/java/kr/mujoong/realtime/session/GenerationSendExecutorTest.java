@@ -191,8 +191,11 @@ class GenerationSendExecutorTest {
 
         h.advanceAlive(RESPONSE_READY);
 
-        List<String> kinds = h.logs.events(EventCode.APP_ERROR).stream().map(event -> (String) LogCapture.attrs(event).get("errorKind")).toList();
-        assertThat(kinds).containsExactly("OutputNewSpeechNotObserved");
+        // 출력 사유만 본다(참여 수락 때의 JoinHeldOutput* 진단은 이 시험과 무관하다). 확인이 왔으니 AckMissing 없이 첫 시한에 바로 남기고,
+        // 지시 뒤 조각이 하나도 없었으므로 진단 사유는 ProviderSilent다
+        List<String> kinds = h.logs.events(EventCode.APP_ERROR).stream().map(event -> (String) LogCapture.attrs(event).get("errorKind"))
+                .filter(kind -> kind.startsWith("Output")).toList();
+        assertThat(kinds).containsExactly("OutputNotObservedProviderSilent", "OutputNewSpeechNotObserved");
     }
 
     // ------------------------------------------------------------------ 세대로 버리기 (A5)
@@ -445,33 +448,32 @@ class GenerationSendExecutorTest {
     // ------------------------------------------------------------------ 말하는 동안 아이 소리 보관
 
     @Test
-    void childSoundIsHeldWhileGptLiveSpeaksAndReleasedWhenItsOutputEnds() {
+    void childSoundIsNeverHeldWhileGptLiveSpeaks() {
+        // 말하는 동안 아이 소리를 모았다가 몰아 보내면 공급자 입력 속도 한도(input_audio_rate_limit_exceeded)에 걸려 아이 말이 버려진다.
+        // 그래서 모으지 않고 늘 실시간으로 보낸다(SessionExecutor 출력 조각 처리 참고)
         h.activate();
-        assertThat(h.executor.relay().isHolding()).isFalse();
 
         h.speak("우와, 공룡 그림이네!", 4_800);
-        assertThat(h.executor.relay().isHolding()).as("GPT-Live가 말하기 시작하면 아이 소리를 모은다").isTrue();
+        assertThat(h.executor.relay().isHolding()).as("GPT-Live가 말하는 중에도 모으지 않는다").isFalse();
         assertThat(h.executor.offerAudio(h.link.connectionId(), 1, loudFrame(), h.clock.monotonicNanos())).isTrue();
-        assertThat(h.executor.relay().heldFrameCount()).isEqualTo(1);
+        assertThat(h.executor.relay().heldFrameCount()).isZero();
 
         h.advance(QUIET);
-        assertThat(h.executor.relay().isHolding()).as("출력이 끝나면 풀어 보낸다").isFalse();
+        assertThat(h.executor.relay().isHolding()).isFalse();
         assertThat(h.executor.relay().heldFrameCount()).isZero();
     }
 
     @Test
-    void aBargeInReleasesTheHeldChildSoundAtOnce() {
+    void aBargeInDuringASecondResponseFindsNoHeldChildSound() {
         h.activate();
         UUID first = respond("첫 응답");
         mark(first, PlaybackMark.Status.STARTED, null);
-        assertThat(h.executor.relay().isHolding()).as("앞 응답은 끝났다").isFalse();
 
         h.speak("이어서 말하는 두 번째 응답", 4_800);
-        assertThat(h.executor.relay().isHolding()).isTrue();
-        h.executor.offerAudio(h.link.connectionId(), 1, loudFrame(), h.clock.monotonicNanos());
-        assertThat(h.executor.relay().heldFrameCount()).isEqualTo(1);
+        assertThat(h.executor.relay().isHolding()).isFalse();
+        assertThat(h.executor.offerAudio(h.link.connectionId(), 1, loudFrame(), h.clock.monotonicNanos())).isTrue();
+        assertThat(h.executor.relay().heldFrameCount()).isZero();
 
-        // 아이가 끼어들어 기기가 재생을 멈췄다: 출력 세대가 올라가 모아 둔 소리를 바로 풀어 보낸다
         mark(first, PlaybackMark.Status.STOPPED, PlaybackMark.StopCause.LOCAL_VOICE_ACTIVITY);
         assertThat(h.executor.relay().isHolding()).isFalse();
         assertThat(h.executor.relay().heldFrameCount()).isZero();
