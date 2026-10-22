@@ -2084,7 +2084,7 @@ public final class SessionExecutor {
                     tryActivate();
                 }
             }
-            case ProviderEvent.Error ignored -> providerError();
+            case ProviderEvent.Error error -> providerError(error);
             case ProviderEvent.Closed ignored -> providerLost();
             case ProviderEvent.InputTranscriptDelta delta -> onInputTranscriptDelta(delta, at);
             case ProviderEvent.InputTranscriptDone done -> {
@@ -2428,12 +2428,12 @@ public final class SessionExecutor {
      * 있어 세션을 끝내지 않는다 — PD 2.1-C의 WARN 한 줄만 남기고, 완결되지 않은 구간은 게이트가 폐기해 대기 문구로 잇는다(U1 그대로).
      * 연결이 실제로 끊기면 뒤따르는 끊김 알림이 {@link #providerLost}로 끝낸다.
      */
-    private void providerError() {
+    private void providerError(ProviderEvent.Error error) {
+        ctx.services().events().appError(EventLog.Component.VOICE_RELAY, error.diagnosticKind(), EventCode.Level.WARN);
         if (START_PHASE.contains(ctx.status())) {
             ending.multiOriginFail(Trigger.PROVIDER_FAILED, FailureCode.PROVIDER_UNAVAILABLE, SessionTransitions.Origin.REALTIME);
             return;
         }
-        ctx.services().events().appError(EventLog.Component.VOICE_RELAY, "ProviderDisconnected", EventCode.Level.WARN);
         // 응답 도중 오류면 열린 구간은 끝까지 오지 않은 응답이다: 응답 끝 사건이 없으니 완결로 볼 수 없어 불완전으로 닫아 폐기하고 대기 문구로 잇는다
         if (inOutputRange() && ctx.segment().isOpen()) {
             discard(ctx.segment().sealByGeneration(ctx.outputGeneration().get()), GateDecision.DiscardReason.GATE_EMPTY);

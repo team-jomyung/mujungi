@@ -27,6 +27,14 @@ public final class ScenarioScriptGenerator {
     private final TextAiProperties timing;
     private final ExecutorService executor;
     private final Sleeper sleeper;
+    private java.util.function.Consumer<String> diagnostics = ignored -> {};
+    public ScenarioScriptGenerator diagnostics(java.util.function.Consumer<String> observer) {
+        this.diagnostics=java.util.Objects.requireNonNull(observer);return this;
+    }
+    private void diagnose(String fixedCode) {
+        // Observability must never alter generation or its fail-closed checks.
+        try { diagnostics.accept(fixedCode); } catch(RuntimeException ignored) { }
+    }
     public ScenarioScriptGenerator(ScenarioScriptProvider provider,ScenarioScriptValidation validation,
             TextAiProperties timing,ExecutorService executor,Sleeper sleeper){
         this.provider=provider;this.validation=validation;this.timing=timing;this.executor=executor;this.sleeper=sleeper;
@@ -90,6 +98,11 @@ public final class ScenarioScriptGenerator {
                 if(result==ScenarioScriptValidation.Result.VALID&&reviewed.review().approved())
                     return approved(script,model,reviewed.model(),current,budget,deadline);
                 correctionReasons=new java.util.ArrayList<>(reviewed.review().reasons());
+                if(result!=ScenarioScriptValidation.Result.VALID)diagnose("ScenarioValidation_"+result.name());
+                if(!reviewed.review().approved()){
+                    diagnose("ScenarioReview_"+reviewed.review().verdict());
+                    reviewed.review().reasons().forEach(reason->diagnose("ScenarioReview_"+reason));
+                }
                 if(result!=ScenarioScriptValidation.Result.VALID)correctionReasons.add(result.name());
                 if(!script.scenes().isEmpty()&&script.scenes().getFirst().sceneDescription()!=null){
                     var base=script.scenes().getFirst();
@@ -105,6 +118,7 @@ public final class ScenarioScriptGenerator {
                 preserved=variantOnly&&result!=ScenarioScriptValidation.Result.INVALID_BASE&&!script.scenes().isEmpty()
                         ?script.scenes().getFirst():null;
             }catch(ScenarioScriptProvider.Failure failure){
+                diagnose("ScenarioProvider_"+failure.kind().name());
                 if(failure.kind()!=ScenarioScriptProvider.Failure.Kind.CONTENT)throw ScenarioDeadline.failed();
                 correctionReasons=List.of("INVALID_OUTPUT_FORMAT");
             }

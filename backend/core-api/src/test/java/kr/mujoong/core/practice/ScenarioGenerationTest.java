@@ -17,6 +17,16 @@ import org.mockito.ArgumentCaptor;
 
 @Tag("scenario-generation")
 class ScenarioGenerationTest {
+    @Test void diagnosticsSeparateReviewRejectionWithoutIncludingSceneText(){
+        var codes=new java.util.ArrayList<String>();generator.diagnostics(codes::add);
+        when(provider.review(any())).thenReturn(reject("GOAL_MISMATCH"),approve());
+        run();assertThat(codes).containsExactly("ScenarioReview_REJECT","ScenarioReview_GOAL_MISMATCH");
+    }
+    @Test void brokenDiagnosticSinkCannotChangeApprovedGeneration(){
+        generator.diagnostics(code->{throw new IllegalStateException("unavailable");});
+        when(provider.review(any())).thenReturn(reject("GOAL_MISMATCH"),approve());
+        assertThat(run().details().scenes()).hasSize(1);
+    }
     ScenarioScriptProvider provider;MutableClock clock;ExecutorService executor;ScenarioScriptGenerator generator;
     static final String OPPORTUNITY="친구가 멈추려 해.";
     static ScenarioScript.Scene base(){return new ScenarioScript.Scene("base","BASE","블록 놀이 중이야. "+OPPORTUNITY+" 이제 그만할래.","이제 그만할래.","친구가 쉬려고 해.",List.of("친구의 말을 들어보자"),List.of("잠깐 쉬자"),"PEER","교실","놀이",null,null);}
