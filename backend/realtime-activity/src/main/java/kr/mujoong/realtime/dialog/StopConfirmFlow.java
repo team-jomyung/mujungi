@@ -11,8 +11,8 @@ import java.util.Objects;
  *
  * <ul>
  *   <li>판정 STOP: 곧바로 {@link Decision#CLOSE}(CLOSING(CHILD_STOP)). 출력만 막고 ACTIVE를 유지하는 U3 경로는 없다(FD-Q3).
- *   <li>판정 CONFIRM: {@link Decision#ASK} — 확인 질문(STOP_CONFIRM)을 재생하고 공급자 출력을 막는다. 재생 완료를 서버가 받은 시각부터
- *       {@code stop-confirm-wait} 창이 열린다.
+ *   <li>불명확한 종료 의도로 확인 질문을 여는 입구(판정 CONFIRM · 판정 AI J6의 UNCLEAR)는 없앴다(2026-10-22 결정). 판정기는 STOP · NONE만
+ *       내므로 아래 확인 중 단계는 지금 열리지 않는다.
  *   <li>확인 중 첫 확정 전사: STOP이거나 참여 분류 ACCEPT면 {@link Decision#CLOSE}, 그 밖이면 {@link Decision#RESUME}(차단 해제 + 응답 생성
  *       요청 1회). 창이 끝나도(창 끝 시각 포함) RESUME이다(무응답만으로 종료를 확정하지 않는다, AC6.3.7).
  * </ul>
@@ -68,15 +68,7 @@ public final class StopConfirmFlow {
         if (phase != Phase.IDLE) {
             return Decision.NONE;
         }
-        return switch (verdict) {
-            case STOP -> Decision.CLOSE;
-            case CONFIRM -> {
-                phase = Phase.ASKING;
-                windowStart = null;
-                yield Decision.ASK;
-            }
-            default -> Decision.NONE;
-        };
+        return verdict == StopIntentJudge.Verdict.STOP ? Decision.CLOSE : Decision.NONE;
     }
 
     /** 확인 질문 재생이 끝났다(서버가 끝 표식을 받은 시각): 창을 연다. */

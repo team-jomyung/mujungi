@@ -7,21 +7,21 @@ import org.junit.jupiter.api.Test;
 class StopIntentServiceGuardrailTest {
     private final StopIntentJudge judge = new StopIntentJudge(java.util.List.of("무중아 그만할래"));
     @Test void aRegisteredStopIsClear() {
-        assertThat(judge.judge("무중아 그만할래", false).verdict()).isEqualTo(StopIntentJudge.Verdict.STOP);
+        assertThat(judge.judge("무중아 그만할래").verdict()).isEqualTo(StopIntentJudge.Verdict.STOP);
     }
     @Test void anUnregisteredClearStopIsNotRestrictedToTheSnapshot() {
-        assertThat(judge.judge("오늘은 여기까지 할래", false).verdict()).isEqualTo(StopIntentJudge.Verdict.STOP);
+        assertThat(judge.judge("오늘은 여기까지 할래").verdict()).isEqualTo(StopIntentJudge.Verdict.STOP);
     }
     @Test void reportedSpeechDoesNotBecomeTheCurrentStop() {
-        assertThat(judge.judge("엄마가 그만하라고 했어", false).verdict()).isEqualTo(StopIntentJudge.Verdict.NONE);
+        assertThat(judge.judge("엄마가 그만하라고 했어").verdict()).isEqualTo(StopIntentJudge.Verdict.NONE);
         assertThat(judge.requestsImmediateMute("엄마가 조용히 하라고 했어")).isFalse();
     }
     @Test void aNegatedStopDoesNotClose() {
-        assertThat(judge.judge("그만하고 싶지 않아", false).verdict()).isEqualTo(StopIntentJudge.Verdict.NONE);
+        assertThat(judge.judge("그만하고 싶지 않아").verdict()).isEqualTo(StopIntentJudge.Verdict.NONE);
     }
     @Test void topicRefusalIsNotAWholeConversationStop() {
         assertThat(judge.refusesTopic("공룡 얘기 그만할래")).isTrue();
-        assertThat(judge.judge("공룡 얘기 그만할래", false).verdict()).isEqualTo(StopIntentJudge.Verdict.NONE);
+        assertThat(judge.judge("공룡 얘기 그만할래").verdict()).isEqualTo(StopIntentJudge.Verdict.NONE);
     }
     @Test void restAndThinkingDoNotRequireAStopQuestion() {
         assertThat(judge.requestsRest("잠깐 쉴게")).isTrue();

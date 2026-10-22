@@ -33,6 +33,8 @@ mujoong:
     provider:
       input-transcript-quiet: 150ms
       new-speech-margin: 40ms
+      # 통합 시험은 기다리지 않고 바로 첫 응답 지시를 보낸다(기존 시험 동작 유지)
+      join-self-start-wait: 0ms
     device:
       disconnect: 4s
       # 끊김(4s)보다 짧아야 한다(기동 검증)

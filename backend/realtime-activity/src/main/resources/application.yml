@@ -130,6 +130,8 @@ mujoong:
     provider:
       input-transcript-quiet: 1000ms
       new-speech-margin: 700ms
+      # 참여 수락 때 보관한 응답이 비어 있으면 첫 응답 지시 전에 모델이 스스로 답을 시작하기를 기다린다(0이면 바로 지시, 2026-10-22 임시값)
+      join-self-start-wait: 1s
   outbox:
     poll-interval: 500ms
     batch-size: 20

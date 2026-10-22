@@ -12,9 +12,10 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 /**
- * 종료 확인 질문 흐름 시험 (U4b L4 · FR3.1 · BR4.2 ~ BR4.4 · U4b-J6 · FD-Q3).
+ * 종료 흐름 시험 (U4b L4 · FR3.1 · U4b-J6 · FD-Q3).
  *
- * <p>네 경로(STOP → 곧바로 종료, CONFIRM → 확정, CONFIRM → 무응답, CONFIRM → 다른 말)와 19 · 21초 경계, 일시정지 동안 창 멈춤을 본다.
+ * <p>2026-10-22 결정으로 확인 질문(ASK)으로 들어가는 입구가 없어졌다: 판정 STOP이면 곧바로 종료, 그 밖은 아무것도 하지 않는다. 확인 중 단계가
+ * 열리지 않으므로 대답 · 시간 경과 · 재생 끝 · 일시정지가 흐름을 바꾸지 않는 것을 본다(서비스 가드레일 흐름도 같다).
  */
 @Tag("session-runtime")
 @org.junit.jupiter.api.Tag("service-guardrail")
@@ -29,76 +30,57 @@ class StopConfirmFlowTest {
     void aClearStopClosesAtOnceWithoutAQuestion() {
         assertThat(flow.onJudgment(Verdict.STOP)).isEqualTo(Decision.CLOSE);
         assertThat(flow.isActive()).isFalse();
-        assertThat(flow.onJudgment(Verdict.NONE)).isEqualTo(Decision.NONE);
-    }
-
-    @Test
-    void anUnclearIntentAsksThenAStopOrAJoinWordConfirmsTheEnd() {
-        assertThat(flow.onJudgment(Verdict.CONFIRM)).isEqualTo(Decision.ASK);
-        assertThat(flow.phase()).isEqualTo(Phase.ASKING);
-        flow.promptPlayed(T0);
-        assertThat(flow.onReply("응", false, T0.plusSeconds(19))).as("참여 분류 ACCEPT").isEqualTo(Decision.CLOSE);
-        assertThat(flow.isActive()).isFalse();
-
-        flow.onJudgment(Verdict.CONFIRM);
-        flow.promptPlayed(T0);
-        assertThat(flow.onReply("이제 끝", true, T0.plusSeconds(3))).as("STOP 판정").isEqualTo(Decision.CLOSE);
-    }
-
-    @Test
-    void anyOtherReplyResumesTheConversation() {
-        flow.onJudgment(Verdict.CONFIRM);
-        flow.promptPlayed(T0);
-
-        assertThat(flow.onReply("공룡 얘기 더 해 줘", false, T0.plusSeconds(5))).isEqualTo(Decision.RESUME);
         assertThat(flow.phase()).isEqualTo(Phase.IDLE);
     }
 
     @Test
-    void noReplyUntil21SecondsResumesAndNineteenStillWaits() {
-        flow.onJudgment(Verdict.CONFIRM);
-        flow.promptPlayed(T0);
-
-        assertThat(flow.tick(T0.plusSeconds(19))).isEqualTo(Decision.NONE);
-        assertThat(flow.windowEnd()).isEqualTo(T0.plus(WAIT));
-        assertThat(flow.tick(T0.plusSeconds(21))).isEqualTo(Decision.RESUME);
+    void anythingButAStopNeverAsksAQuestion() {
+        assertThat(flow.onJudgment(Verdict.NONE)).isEqualTo(Decision.NONE);
+        assertThat(flow.isActive()).isFalse();
+        assertThat(flow.phase()).isEqualTo(Phase.IDLE);
         assertThat(flow.windowEnd()).isNull();
     }
 
     @Test
-    void aReplyAfterTheWindowEdgeIsTheExpiryFirst() {
-        flow.onJudgment(Verdict.CONFIRM);
-        flow.promptPlayed(T0);
+    void withoutAnOpenQuestionRepliesTicksAndPromptEndsChangeNothing() {
+        flow.onJudgment(Verdict.NONE);
 
-        assertThat(flow.onReply("응", false, T0.plus(WAIT))).as("창 끝 시각의 대답은 만료").isEqualTo(Decision.RESUME);
+        flow.promptPlayed(T0);
+        assertThat(flow.phase()).as("질문을 재생하지 않았으면 재생 끝이 창을 열지 않는다").isEqualTo(Phase.IDLE);
+        assertThat(flow.windowEnd()).isNull();
+        assertThat(flow.onReply("응", false, T0.plusSeconds(1))).isEqualTo(Decision.NONE);
+        assertThat(flow.onReply("그만할래", true, T0.plusSeconds(2))).as("종료는 onJudgment 경로가 맡는다")
+                .isEqualTo(Decision.NONE);
+        assertThat(flow.tick(T0.plusSeconds(60))).isEqualTo(Decision.NONE);
     }
 
     @Test
-    void aReplyWhileTheQuestionIsPlayingIsTheFirstReply() {
-        flow.onJudgment(Verdict.CONFIRM);
-
-        assertThat(flow.tick(T0.plusSeconds(60))).as("창이 열리기 전에는 만료가 없다").isEqualTo(Decision.NONE);
-        assertThat(flow.onReply("그만할래", true, T0)).isEqualTo(Decision.CLOSE);
-    }
-
-    @Test
-    void aPauseShiftsTheWindowAndCancelForgetsTheFlow() {
-        flow.onJudgment(Verdict.CONFIRM);
-        flow.promptPlayed(T0);
+    void aPauseShiftAndCancelAreHarmlessWhenIdle() {
         flow.shift(Duration.ofSeconds(10));
-        assertThat(flow.tick(T0.plusSeconds(21))).isEqualTo(Decision.NONE);
-        assertThat(flow.tick(T0.plusSeconds(30))).isEqualTo(Decision.RESUME);
-
-        flow.onJudgment(Verdict.CONFIRM);
         flow.cancel();
+
         assertThat(flow.isActive()).isFalse();
-        assertThat(flow.onReply("응", false, T0)).isEqualTo(Decision.NONE);
+        assertThat(flow.windowEnd()).isNull();
+        assertThat(flow.onJudgment(Verdict.STOP)).as("취소 뒤에도 종료는 곧바로다").isEqualTo(Decision.CLOSE);
     }
 
     @Test
-    void judgmentsWhileAskingAreIgnoredAndTheWindowMustBePositive() {
-        flow.onJudgment(Verdict.CONFIRM);
-        assertThat(flow.onJudgment(Verdict.STOP)).isEqualTo(Decision.NONE);
+    void theServiceGuardrailFlowBehavesTheSame() {
+        StopConfirmFlow guarded = new StopConfirmFlow(WAIT, true);
+
+        assertThat(guarded.onJudgment(Verdict.STOP)).isEqualTo(Decision.CLOSE);
+        assertThat(guarded.onJudgment(Verdict.NONE)).isEqualTo(Decision.NONE);
+        guarded.promptPlayed(T0);
+        assertThat(guarded.onReply("응", false, T0)).isEqualTo(Decision.NONE);
+        assertThat(guarded.onReply("그만할래", true, T0)).isEqualTo(Decision.NONE);
+        assertThat(guarded.isActive()).isFalse();
+    }
+
+    @Test
+    void theWindowMustBePositiveAndAVerdictIsRequired() {
         assertThatThrownBy(() -> new StopConfirmFlow(Duration.ZERO)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new StopConfirmFlow(Duration.ofSeconds(-1), true))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> flow.onJudgment(null)).isInstanceOf(NullPointerException.class);
     }
 }

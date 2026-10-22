@@ -10,18 +10,15 @@ import kr.mujoong.contract.ws.message.CloseTransport;
 import kr.mujoong.contract.ws.message.PlayApprovedContent;
 import kr.mujoong.contract.ws.message.PlaybackMark;
 import kr.mujoong.contract.ws.message.StopOutput;
-import kr.mujoong.realtime.log.TranscriptEntry;
 import kr.mujoong.realtime.testing.SessionHarness;
-import kr.mujoong.realtime.voice.ProviderPort.ProviderEvent;
-import kr.mujoong.realtime.voice.ProviderRequestFactory;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 /**
  * U4b 아이 종료 의도 · 확인 질문 · 공통 마무리 시험 (L4 · FR3.1 · FR3.2 · BR4.1 ~ BR4.6 · BR2.6 · AC6.4.8).
  *
- * <p>STOP → 곧바로 CLOSING(CHILD_STOP) 마무리 순서, CONFIRM → 확인 질문(말풍선 · 출력 막음 · 재생 완료부터 창) → 확정 · 계속, 종료 확정 뒤
- * 이전 응답이 재생되지 않음을 본다.
+ * <p>STOP → 곧바로 CLOSING(CHILD_STOP) 마무리 순서(물음꼴 종료 표현 포함), 종료 확정 뒤 이전 응답이 재생되지 않음을 본다. 확인 질문
+ * (CONFIRM → 질문 · 출력 막음 · 창)은 2026-10-22 결정으로 없앴으므로 불명확한 신호가 질문 없이 대화를 잇는지 본다.
  */
 @Tag("session-runtime")
 @org.junit.jupiter.api.Tag("service-guardrail")
@@ -53,64 +50,34 @@ class SessionStopTest {
     }
 
     @Test
-    void anUnclearIntentAsksTheQuestionHoldsTheOutputAndAYesConfirmsTheEnd() {
+    void aQuestionShapedStopPhraseClosesWithChildStopWithoutAQuestion() {
+        h.extraApproved.put(SessionExecutor.STOP_CONFIRM, QUESTION);
+        h.activate();
+        h.childSays("i-1", "그만할래?");
+
+        ActivitySessionRow row = h.transitions.find(h.sessionId).orElseThrow();
+        assertThat(row.status()).isEqualTo(SessionStatus.CLOSING);
+        assertThat(row.endReason()).isEqualTo(EndReason.CHILD_STOP);
+        assertThat(h.link.sent(PlayApprovedContent.class)).extracting(PlayApprovedContent::contentCode)
+                .doesNotContain(SessionExecutor.STOP_CONFIRM);
+        assertThat(h.store.transcripts).noneMatch(entry -> QUESTION.equals(entry.text()));
+    }
+
+    @Test
+    void anUnclearSignalAsksNothingAndTheNextAnswerIsHeardAtOnce() {
         h.extraApproved.put(SessionExecutor.STOP_CONFIRM, QUESTION);
         h.activate();
         h.childSays("i-1", "그만");
 
         assertThat(h.executor.status()).isEqualTo(SessionStatus.ACTIVE);
-        PlayApprovedContent question = h.link.sent(PlayApprovedContent.class).getLast();
-        assertThat(question.contentCode()).isEqualTo(SessionExecutor.STOP_CONFIRM);
-        assertThat(h.store.transcripts).anySatisfy(row -> {
-            assertThat(row.text()).isEqualTo(QUESTION);
-            assertThat(row.speaker()).isEqualTo(TranscriptEntry.Speaker.AI);
-        });
-        assertThat(h.executor.timers().isArmed(SessionTimers.Kind.STOP_CONFIRM)).as("창은 재생 완료부터").isFalse();
-        // 확인 중의 공급자 응답은 취소하고 보내지 않는다(BR2.6)
-        emitComplete("r-held", "그래 알았어");
-        h.advanceAlive(Duration.ofSeconds(1));
-        assertThat(h.link.outputs()).isEmpty();
-
-        mark(question, PlaybackMark.Status.COMPLETED);
-        h.childSays("i-2", "응");
-
-        assertThat(h.transitions.find(h.sessionId).orElseThrow().endReason()).isEqualTo(EndReason.CHILD_STOP);
-        assertThat(h.executor.status()).isEqualTo(SessionStatus.CLOSING);
-    }
-
-    @Test
-    void aClearNoAfterTheDeliveredQuestionLiftsTheHoldAndHandsTheFloorBackOnce() {
-        h.activate();
-        h.launcher.runAll("provider-create-");
-        int creates = h.provider.last().requests(ProviderRequestFactory.InstructionsAppend.class).size();
-        h.childSays("i-1", "그만");
-        mark(h.link.sent(PlayApprovedContent.class).getLast(), PlaybackMark.Status.COMPLETED);
-        h.childSays("i-2", "아니");
-
-        assertThat(h.executor.status()).isEqualTo(SessionStatus.ACTIVE);
-        h.settleSend();
-        assertThat(h.provider.last().requests(ProviderRequestFactory.InstructionsAppend.class)).hasSize(creates + 1);
+        assertThat(h.link.sent(PlayApprovedContent.class)).extracting(PlayApprovedContent::contentCode)
+                .doesNotContain(SessionExecutor.STOP_CONFIRM);
+        assertThat(h.executor.timers().isArmed(SessionTimers.Kind.STOP_CONFIRM)).isFalse();
+        assertThat(events(SessionExecutor.EVENT_STOP_CONFIRM_ASKED)).isEmpty();
+        // 출력을 막지 않으므로 다음 응답은 평소대로 기기에 간다
         emitComplete("r-1", "티라노는 아주 컸어");
         h.advanceAlive(Duration.ofSeconds(1));
         assertThat(h.link.outputs()).hasSize(1);
-        assertThat(events(SessionExecutor.EVENT_STOP_CONFIRM_RESOLVED)).singleElement()
-                .satisfies(event -> assertThat(event.getPayloadJson()).contains("CONTINUE").doesNotContain("티라노"));
-    }
-
-    @Test
-    void noAnswerWithin20SecondsContinuesAndNineteenStillHolds() {
-        h.activate();
-        h.childSays("i-1", "그만");
-        mark(h.link.sent(PlayApprovedContent.class).getLast(), PlaybackMark.Status.COMPLETED);
-
-        h.advanceAlive(Duration.ofSeconds(19));
-        assertThat(h.executor.timers().isArmed(SessionTimers.Kind.STOP_CONFIRM)).isTrue();
-        h.advanceAlive(Duration.ofSeconds(2));
-
-        assertThat(h.executor.timers().isArmed(SessionTimers.Kind.STOP_CONFIRM)).isFalse();
-        assertThat(h.executor.status()).isEqualTo(SessionStatus.ACTIVE);
-        assertThat(events(SessionExecutor.EVENT_STOP_CONFIRM_RESOLVED)).singleElement()
-                .satisfies(event -> assertThat(event.getPayloadJson()).contains("EXPIRED"));
     }
 
     @Test
@@ -128,7 +95,7 @@ class SessionStopTest {
     }
 
     @Test
-    void aStopHeardWhileTheDevicePlaysIsNotJudged() {
+    void aStopHeardWhileTheDevicePlaysIsStillJudged() {
         h.activate();
         emitComplete("r-1", "같이 노래 부를까");
         h.advanceAlive(Duration.ofSeconds(1));
@@ -139,7 +106,7 @@ class SessionStopTest {
 
         h.childSays("i-1", "무중아 그만할래");
 
-        assertThat(h.executor.status()).as("기기 재생 중 전사는 판정하지 않는다(BR4.1)").isEqualTo(SessionStatus.ACTIVE);
+        assertThat(h.executor.status()).as("AI 말 위에 겹쳐 한 종료 표현도 판정한다(2026-10-22 결정)").isEqualTo(SessionStatus.CLOSING);
     }
 
     private void emitComplete(String responseId, String text) {

@@ -101,17 +101,17 @@ class PrivacyLogTest {
     }
 
     @Test
-    void theStopConfirmPathKeepsTheChildsWordsAndTheQuestionOut() {
+    void theChildStopPathKeepsTheChildsWordsOut() {
+        // "그만할까"는 확인 질문 없이 곧바로 끝내는 명확한 종료 표현이다(2026-10-22 결정)
         h.extraApproved.put(SessionExecutor.STOP_CONFIRM, STOP_QUESTION);
         h.activate();
         h.childSays("i-1", "그만할까 이구아노돈?");
-        mark(lastPlay());
-        h.childSays("i-2", "응");
 
         assertThat(h.executor.status()).isEqualTo(SessionStatus.CLOSING);
         assertNoSecrets("그만할까 이구아노돈?", "이구아노돈", STOP_QUESTION);
         assertThat(sessionEvents()).extracting(SessionEvent::getEventType)
-                .contains(SessionExecutor.EVENT_STOP_CONFIRM_ASKED, SessionExecutor.EVENT_STOP_CONFIRM_RESOLVED);
+                .contains(SessionExecutor.EVENT_CHILD_STOP_INTENT)
+                .doesNotContain(SessionExecutor.EVENT_STOP_CONFIRM_ASKED);
     }
 
     @Test

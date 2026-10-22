@@ -41,7 +41,7 @@ class SessionExecutorFaultTest {
     private static final SessionExecutor.Settings SMALL_MAILBOX = new SessionExecutor.Settings(Duration.ofSeconds(20),
             Duration.ofSeconds(30), Duration.ofSeconds(40), Duration.ofMillis(800), Duration.ofSeconds(20),
             Duration.ofSeconds(1), 50, 4, 60, SessionHarness.LIFECYCLE, Duration.ofMillis(1500),
-            Duration.ofMillis(600), Duration.ofSeconds(10));
+            Duration.ofMillis(600), Duration.ofSeconds(10), Duration.ZERO);
     private static final Duration DEADLOCK_GUARD = Duration.ofSeconds(5);
 
     private final SessionHarness h = new SessionHarness();

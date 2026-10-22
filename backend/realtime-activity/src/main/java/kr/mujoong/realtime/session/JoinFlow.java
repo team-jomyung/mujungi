@@ -10,7 +10,6 @@ import kr.mujoong.contract.status.FailureCode;
 import kr.mujoong.contract.ws.message.PlaybackMark;
 import kr.mujoong.contract.ws.message.PlayApprovedContent;
 import kr.mujoong.realtime.dialog.JoinTracker;
-import kr.mujoong.realtime.judgment.JudgmentPoint;
 import kr.mujoong.realtime.session.SessionTimers.Kind;
 import kr.mujoong.realtime.session.TransitionTable.Trigger;
 
@@ -149,11 +148,6 @@ final class JoinFlow {
         if (ctx.status() != SessionStatus.WAITING_CHILD || join == null || join.isFinished()) {
             return;
         }
-        if (judgment.openPoint() == JudgmentPoint.J1) {
-            // U11 W1 6: J1이 열린 동안의 창 만기는 표시만 하고 턴이 닫힌 뒤 tick을 부른다
-            judgment.deferJoinTick();
-            return;
-        }
         JoinTracker.Action action = join.tick(ctx.services().clock().now());
         if (action == JoinTracker.Action.NONE) {
             armJoinWindow();
@@ -176,8 +170,6 @@ final class JoinFlow {
         }
         if (freeTalk() && !currentInput(beganAt)) return;
         lastReplyTranscript = transcript;
-        // J1이 열린 동안 새 확정 전사가 오면 이전 J1을 SUPERSEDED로 닫고 새 전사를 처음부터 다시 처리한다
-        judgment.onTranscript(false);
         JoinTracker.Reply reply = JoinTracker.classify(transcript);
         if (freeTalk() && reply == JoinTracker.Reply.TOPIC_REFUSAL) {
             reply = JoinTracker.Reply.UNCLEAR;
@@ -186,34 +178,12 @@ final class JoinFlow {
             declineJoin(SessionGuardrailFacts.Participation.REFUSED);
             return;
         }
-        if (reply == JoinTracker.Reply.UNCLEAR && judgment.openJoinJudgment(transcript, at)) {
-            return;
-        }
         if (freeTalk() && reply != JoinTracker.Reply.REFUSE) {
-            // 자유대화의 시작 의사는 '거절인가'만 본다: 거절이 아니면(판정을 열 수 없는 불명확 대답 포함) 대화를 시작한다
+            // 자유대화의 시작 의사는 '거절인가'만 본다: 거절이 아니면(불명확한 대답 포함) 대화를 시작한다. 불명확한 대답을 판정 AI(J1)에 넘기던
+            // 단계는 없앴다(2026-10-22 결정)
             reply = JoinTracker.Reply.ACCEPT;
         }
         applyJoinAction(join.reply(reply, at), reply, at);
-    }
-
-    /** 결과를 참여 대답 하나로 넣는다(참여 대기 중이 아니면 아무것도 하지 않는다). */
-    void applyJoinReply(JoinTracker.Reply reply, Instant at) {
-        if (ctx.status() == SessionStatus.WAITING_CHILD && join != null && !join.isFinished()) {
-            if (freeTalk() && !currentInput(at)) return;
-            if (freeTalk() && reply == JoinTracker.Reply.REFUSE) {
-                declineJoin(SessionGuardrailFacts.Participation.REFUSED);
-                return;
-            }
-            applyJoinAction(join.reply(reply, at), reply, at);
-        }
-    }
-
-    /** J1이 열린 동안 미뤄 둔 참여 창 만기를 처리한다(참여 대기 중이고 기술 일시정지가 아닐 때만). */
-    void runDeferredJoinTick() {
-        if (ctx.status() == SessionStatus.WAITING_CHILD && join != null && !join.isFinished()
-                && idle.technicalPause() == null) {
-            onJoinWindow();
-        }
     }
 
     private void applyJoinAction(JoinTracker.Action action, JoinTracker.Reply reply, Instant at) {

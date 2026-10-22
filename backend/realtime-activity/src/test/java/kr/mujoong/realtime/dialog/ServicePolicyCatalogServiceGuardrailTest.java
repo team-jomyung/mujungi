@@ -18,7 +18,7 @@ class ServicePolicyCatalogServiceGuardrailTest {
     @Test
     void packagedBytesAndManifestAgreeAndRetainKorean() {
         PolicyBundle bundle = new ServicePolicyCatalog().freeTalk();
-        assertThat(bundle.promptVersion()).isEqualTo("service-0.1-app.1");
+        assertThat(bundle.promptVersion()).isEqualTo("service-0.1-app.2");
         assertThat(bundle.instructions()).contains("AI 인형 무중", "비밀 보장을 약속하지 않는다", "같은 정보를 얻기 위한 도움");
         assertThat(bundle.appliedSha256()).isEqualTo(ServicePolicyCatalog.sha256(
                 bundle.instructions().getBytes(StandardCharsets.UTF_8)));
