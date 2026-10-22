@@ -160,6 +160,12 @@ public final class PracticeConversation implements PracticeSessionExtension {
     public boolean collectingIntroduction() {
         return state.phase() == Phase.SCENE_INTRO && openSlot != null && !stopping;
     }
+    @Override public boolean canYieldUnplayedSpeech() {
+        // No goal achievement, consent, coaching or closing transition may be inferred from an unheard output.
+        return !stopping && !reflecting && state.phase() == Phase.OPPORTUNITY
+                && (state.sub() == Sub.NONE || state.sub() == Sub.DIALOGUE_REPLY
+                || state.sub() == Sub.CLARIFICATION_REPLY || state.sub() == Sub.INPUT_CONFIRMATION);
+    }
 
     // ---- 확장점 시점 ----
 

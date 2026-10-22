@@ -27,6 +27,50 @@ import org.junit.jupiter.api.Test;
  */
 @Tag("practice-flow")
 class PracticeGeneratedSpeechTest {
+    @Test void inputBeforeTheFirstGeneratedChunkYieldsWithoutAnInstructionTimeoutFailure(){
+        start(true);UUID slot=UUID.randomUUID();extension.out.speakGenerated(slot,"PEER",INSTRUCTION);h.settleSend();
+        h.provider.last().emit(new ProviderEvent.InputTranscriptDelta("before-audio","무슨 놀이를 하고 싶어"));h.drain();
+        assertThat(extension.endFacts(slot)).containsExactly(PracticePorts.Playback.INTERRUPTED);
+        h.advanceAlive(Duration.ofSeconds(11));
+        assertThat(h.executor.status()).isEqualTo(kr.mujoong.contract.status.SessionStatus.ACTIVE);
+        assertThat(extension.endFacts(slot)).containsExactly(PracticePorts.Playback.INTERRUPTED);
+        assertThat(h.link.outputs()).isEmpty();assertThat(guard.count()).isZero();
+    }
+    @Test
+    void childInputDuringUnplayedGeneratedAudioDiscardsOnlyTheAudioAndTheNextReplyStillNeedsJev() {
+        start(true);UUID slot=UUID.randomUUID();
+        extension.out.speakGenerated(slot,"PEER",INSTRUCTION);h.settleSend();
+        h.speak("음, 편할 때",4800);h.advance(Duration.ofMillis(187));
+        h.provider.last().emit(new ProviderEvent.InputTranscriptDelta("during-collection","무슨 놀이를 하고 싶어"));h.drain();
+        assertThat(extension.endFacts(slot)).containsExactly(PracticePorts.Playback.INTERRUPTED);
+        assertThat(h.link.outputs()).isEmpty();assertThat(guard.count()).isZero();
+        assertThat(h.executor.status()).isEqualTo(kr.mujoong.contract.status.SessionStatus.ACTIVE);
+        h.speak(" 말해도 돼.",4800);h.advance(Duration.ofMillis(801));
+        assertThat(h.link.outputs()).isEmpty();
+        UUID next=UUID.randomUUID();extension.replySlot=next;
+        h.childSays("reply","무슨 놀이를 하고 싶어");h.settleSend();say("나는 블록 놀이를 하고 싶어.");
+        assertThat(guard.count()).as("discard=%s next=%s status=%s",h.metrics.registry().find("mujoong.gate.discard").counters().stream()
+                .map(c->c.getId().getTags()+"="+c.count()).toList(),extension.endFacts(next),h.executor.status()).isEqualTo(1);assertThat(h.link.outputs()).isEmpty();
+        guard.allow();h.drain();assertThat(h.link.outputs()).hasSize(1);
+    }
+    @Test
+    void stopWhileCollectingConversationalAudioClosesAndNeverPlaysThePartialReply() {
+        start(true);extension.out.speakGenerated(UUID.randomUUID(),"PEER",INSTRUCTION);h.settleSend();
+        h.speak("음, 편할 때",4800);
+        h.provider.last().emit(new ProviderEvent.InputTranscriptDelta("stop-partial","무중아 그만할래"));h.drain();
+        h.advance(SessionHarness.SETTINGS.inputTranscriptQuiet().plusMillis(1));
+        assertThat(h.executor.status()).isEqualTo(kr.mujoong.contract.status.SessionStatus.CLOSING);
+        assertThat(h.link.outputs()).isEmpty();assertThat(guard.count()).isZero();
+    }
+    @Test
+    void restWhileCollectingConversationalAudioStillUsesTheImmediateRestPath() {
+        var judge=h.useJudge();start(true);extension.out.speakGenerated(UUID.randomUUID(),"PEER",INSTRUCTION);h.settleSend();
+        h.speak("음, 편할 때",4800);
+        h.provider.last().emit(new ProviderEvent.InputTranscriptDelta("rest-partial","쉬고 싶어"));h.drain();
+        h.advance(SessionHarness.SETTINGS.inputTranscriptQuiet().plusMillis(1));
+        assertThat(judge.last().request().point()).isEqualTo(kr.mujoong.realtime.judgment.JudgmentPoint.J6);
+        assertThat(h.link.outputs()).isEmpty();assertThat(guard.count()).isZero();
+    }
 
     private static final String INSTRUCTION = "친구로서 방금 말을 한 번 더 물어보세요";
     private static final String SPOKEN = "그거 줘 하면 어느 색을 말하는 건지 잘 모르겠어";
@@ -347,6 +391,7 @@ class PracticeGeneratedSpeechTest {
     private static final class Recording implements PracticeSessionExtension {
         PracticeOutput out;
         boolean introduction;
+        UUID replySlot;
         final List<PlaybackFact> facts = new ArrayList<>();
         final List<GuardrailBlockedEvent> blocked = new ArrayList<>();
         final List<ExtensionEvent> mismatches = new ArrayList<>();
@@ -362,6 +407,7 @@ class PracticeGeneratedSpeechTest {
         }
 
         @Override public boolean collectingIntroduction() { return introduction; }
+        @Override public boolean canYieldUnplayedSpeech() { return !introduction; }
 
         @Override
         public Signal onActive(PracticeContext context, PracticeOutput output) {
@@ -371,6 +417,7 @@ class PracticeGeneratedSpeechTest {
 
         @Override
         public Signal onChildUtterance(Utterance utterance, PracticeOutput output) {
+            if(replySlot!=null){UUID slot=replySlot;replySlot=null;output.speakGenerated(slot,"PEER",INSTRUCTION);}
             return Signal.NONE;
         }
 

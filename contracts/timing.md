@@ -72,6 +72,7 @@ U4b가 옮긴 것: `session.join-wait` · `session.join-wait-after-reprompt` · 
 | 키 | 기본값 | 소유 앱 | 뜻 | 근거 |
 |---|---|---|---|---|
 | `mujoong.timing.parent.request-timeout` | `10s` | web | 보호자 웹의 REST 요청 제한 시간 | J80 · PD |
+| `mujoong.timing.parent.practice-start-request-timeout` | `35s` | web | 연습 시작 요청은 서버의 30초 상황 준비 결과와 전송 여유를 기다린다. 다른 REST 요청의 시한은 유지한다. | 연습 시작 신뢰성 보완 |
 | `mujoong.timing.recorder.flush-interval` | `200ms` | realtime | 전사 기록기 플러시 주기 | J73 · PD-5 |
 | `mujoong.timing.cache.approved-content-ttl` | `10m` | core-api | 승인 문구 캐시 수명(U1은 DB 직접 읽기로 대신, PD-7은 3.6) | J73 · PD |
 | `mujoong.timing.cache.policy-version-ttl` | `1m` | core-api | 현재 정책 버전 캐시 수명 | J73 · PD · J114 |
@@ -161,7 +162,7 @@ WSS 텍스트 프레임 8KB(`mujoong.limits.ws-text-frame-max`, 넘으면 4400 [
 | `mujoong.text-ai.request-timeout` | `10s` | core-api | 호출 한 번의 상한 | U5a-J7 |
 | `mujoong.text-ai.retry.max-retries` | `1` | core-api | 일시적 오류의 재시도 횟수 | U5a-J7 |
 | `mujoong.text-ai.retry.backoff` | `250ms` | core-api | 기술 재시도 사이 간격 | U5a-J7 |
-| `mujoong.timing.practice.scenario-request-timeout` | `15s` | core-api | C10 전체 생성/재생성/재시도 예산과 요청 선점 시한 | U5a-J18 |
+| `mujoong.timing.practice.scenario-request-timeout` | `30s` | core-api | C10 전체 생성/재생성/재시도 예산과 요청 선점 시한. 독립 검토·보완을 포함한다. | U5a-J18 · 연습 시작 신뢰성 보완 |
 | `mujoong.timing.practice.scenario-history-timeout` | `500ms` | core-api | U10 실제 노출 최근 3건 읽기 상한. 최초 생성 잔여 시한과 작은 값, 전용 읽기 트랜잭션 LOCAL timeout과 바깥 취소 | U10 R-02 · U8-c |
 | `mujoong.timing.goal.restore-window` | `5s` | core-api | 삭제 요청 처리 뒤 서버 복구 시한 | C4 · U5a-J3 |
 | `mujoong.timing.parent.loading-notice-delay` | `5s` | web | 화면 18 최초 조회가 이 시간을 넘으면 안내 토스트 | 화면 18 interaction-spec · U5a-J23 |
@@ -208,7 +209,7 @@ web의 loading-notice-delay는 MUJOONG_TIMING_PARENT_LOADINGNOTICEDELAY 환경 �
 | `mujoong.timing.practice.cue-budget` | `5s` | 도움 요청 → 실제 재생 시작 |
 | `mujoong.timing.practice.after-cue-response-wait` | `20s` | 도움 재생 완료 → 반응 |
 | `mujoong.timing.practice.new-scenario-response-wait` | `20s` | 새 상황 재생 완료 → 반응 |
-| `mujoong.timing.practice.scenario-budget` | `15s` | C10 준비 시작 → 결과 |
+| `mujoong.timing.practice.scenario-budget` | `30s` | C10 준비 시작 → 결과 |
 | `mujoong.timing.practice.judge-budget` | `5s` | 판정 한 호출 상한, 최대 두 시도 |
 | `mujoong.timing.practice.judge-total-budget` | `12s` | 반응 수락 → 최종 DB 커밋, 종료 뒤에도 원래 시한 유지 |
 | `mujoong.timing.practice.judge-finalization-reserve` | `2s` | 전체 예산 중 최종 저장용 확보, 부하 검증 전 가정 |
@@ -246,3 +247,7 @@ U11(선 형식 정비)이 더한 키다. 공급자 실호출에는 응답 id도 
 ### 2026-10-21 실제 분석 호출 보완
 
 저장 대화의 구조화 응답이 medium 추론에서 10.6초, none에서 4.5초로 관찰됐다(서비스 수준 보장은 아님). Core의 결과 호출 한도는 20초, 순차 분석 작업 전체는 90초로 제한하며 작업 취소·재시도 횟수는 유지한다. 일반 Core 텍스트 호출은 10초이고 U10 상황 생성 전체 한도는 기존 15초를 유지한다. 결과 텍스트·목표 후보·상황 생성·상황 검토는 추론 none을 사용하되 입력 정리·출력 형식·출처·안전 분류 검사를 생략하지 않는다. 실시간 발화 판정·Jev 설정은 변경하지 않는다.
+
+### 2026-10-22 연습 시작 대기 정합성 보완
+
+위 10월 21일 기록 이후, 상황 생성·독립 검토·보완을 포함하는 전체 예산을 15초에서 30초로 변경했다. 웹 연습 시작 요청만 35초까지 결과를 기다린다. 일반 REST 요청은 10초이며, 실시간 발화 판정·종료·휴식·Jev의 시한과 호출 상한은 변경하지 않는다. 새 한도 내에서도 내용 검사 불통과·시간 초과는 실패로 처리하며 승인되지 않은 대본은 발급하지 않는다.

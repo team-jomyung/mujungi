@@ -15,6 +15,7 @@ import { PracticeStartAction } from "./PracticeStartAction";
 import { MAX_PRACTICE_GOALS } from "./practiceStart";
 import { PROPOSED_COPY } from "@/shared/copy/ko";
 import { useToast } from "@/shared/toast/ToastProvider";
+import { useTiming } from "@/shared/timing/TimingProvider";
 import "./practice.css";
 
 /** AC4.1.1/2/5–11/13. 추첨 순서는 Core가 고정하고 화면은 선택 ID만 전달한다. */
@@ -22,7 +23,8 @@ export function PracticeScreen({ returnedFailed = false, failureCode = null }: {
   const router = useRouter();
   const api = useApiClient();
   const toast = useToast();
-  const port = useMemo(() => practiceStartPort(api), [api]);
+  const timing = useTiming();
+  const port = useMemo(() => practiceStartPort(api, timing.practiceStartRequestTimeoutMs), [api, timing.practiceStartRequestTimeoutMs]);
   const goals = usePracticeGoals();
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   const [startLocked, setStartLocked] = useState(false);

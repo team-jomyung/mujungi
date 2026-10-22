@@ -252,6 +252,8 @@ public interface PracticeSessionExtension {
 
     /** 안내 수집 중 일반 입력은 대화 턴을 열지 않는다. 입력 기록과 종료·휴식 처리는 실행기가 계속한다. */
     default boolean collectingIntroduction() { return false; }
+    /** Whether an unplayed generated conversational response may yield to new child input without completing a task. */
+    default boolean canYieldUnplayedSpeech() { return false; }
 
     default Progress progress() { return null; }
 

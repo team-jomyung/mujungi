@@ -17,6 +17,17 @@ import kr.mujoong.realtime.session.PracticeSessionExtension.*;
 import org.junit.jupiter.api.Test;
 
 class FlexiblePracticeConversationTest {
+    @Test void unheardCheckInYieldsToChildInputWithoutFailureOrGoalCompletion(){
+        Harness h=dialogue();h.advance(Duration.ofSeconds(10));
+        assertThat(h.ext.canYieldUnplayedSpeech()).isTrue();
+        assertThat(h.end(Playback.INTERRUPTED)).isEqualTo(Signal.NONE);
+        assertThat(h.recorder.only().endedAt()).isNull();
+        h.child("무슨 놀이를 하고 싶어?");
+        assertThat(h.out.lastJudgment().point()).isEqualTo(JudgmentPoint.J2);
+        h.result("J2","FULL");h.played();
+        assertThat(h.ext.state().phase()).isEqualTo(FlowState.Phase.OPPORTUNITY);
+        assertThat(h.recorder.only().endedAt()).isNull();
+    }
     private Harness fresh(boolean variant) {
         return new Harness(packageJson(UUID.randomUUID(), variant ? fullScript(UUID.randomUUID()) : minimalScript(UUID.randomUUID())),
                 Map.of("COACH_SWITCH", "이제 코치가 도와줄게.", "PEER_RETURN", "다시 친구로 돌아왔어."),

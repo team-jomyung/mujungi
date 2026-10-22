@@ -29,6 +29,10 @@ public record ScenarioScript(List<Scene> scenes) {
             return new Scene(sceneKey, sceneKind, sceneDescription, opportunitySentence, reexplanation,
                     focusPoints, expressionExamples, relation, place, topic, preservation, role, spokenIntroduction, reflectionPrompt);
         }
+        public Scene withDescription(String description) {
+            return new Scene(sceneKey, sceneKind, description, opportunitySentence, reexplanation, focusPoints,
+                    expressionExamples, relation, place, topic, preservation, partnerRole, spokenIntroduction, reflectionPrompt);
+        }
         @Override public String toString() { return "Scene[redacted]"; }
     }
     public record Preservation(String skillRef, String invariantSentence, String preservationRule,

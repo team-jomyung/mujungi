@@ -2129,8 +2129,14 @@ public final class SessionExecutor {
             // 승인 대본은 전부 받은 뒤 원문 일치를 검사한다. 수집 중의 입력 전사만으로
             // 앞 조각을 봉인하면 정상 대본도 불완전/불일치로 폐기돼 연습이 종료된다.
             // 입력 기록·종료 의도 처리는 계속한다. 시작 안내의 일반 입력만 구분하고 역할 대화의 끼어들기는 기존대로 둔다.
-            boolean collectingApprovedPractice = pendingPracticeSpeech != null && !pendingPracticeSpeech.generated();
-            if (ctx.segment().isOpen() && !collectingApprovedPractice && !inputGroupDuringIntroduction) {
+            boolean collectingPractice = pendingPracticeSpeech != null;
+            boolean yieldingPractice = collectingPractice && pendingPracticeSpeech.generated()
+                    && practice != null && practice.canYieldUnplayedSpeech();
+            if (yieldingPractice && !ctx.segment().isOpen() && !guardrail.isChecking()) {
+                // Child input may also arrive before the provider produces its first chunk.
+                yieldUnplayedPracticeToInput(null);
+            }
+            if (ctx.segment().isOpen() && (!collectingPractice || yieldingPractice) && !inputGroupDuringIntroduction) {
                 sealAndGate(true);
             }
             ctx.transcripts().childDelta(inputGroupId, delta.delta(), at);
@@ -2757,6 +2763,18 @@ public final class SessionExecutor {
 
     // ------------------------------------------------------------------ 게이트
 
+    private void yieldUnplayedPracticeToInput(SegmentBuffer.Sealed sealed) {
+        guardrail.onDiscardedBeforeCheck();
+        if(sealed!=null)recordDiscard(sealed,null,GateDecision.DiscardReason.GATE_EMPTY,true);
+        var speech=pendingPracticeSpeech;
+        pendingPracticeSpeech=null;
+        practiceHold=true;
+        ctx.timers().cancel(Kind.INSTRUCTION_WAIT);
+        instructionNotHeard=null;
+        bumpOutput(OutputGeneration.BumpReason.PRACTICE_DISCARD);
+        practicePlayback(speech,kr.mujoong.realtime.practicelegacy.PracticePorts.Playback.INTERRUPTED);
+    }
+
     /**
      * 구간 확정(조용 시간 만기 · 아이 입력 재개) → 검사 → 송신 직전 재확인 → 송신 또는 폐기(PD-3 표 2.3-C).
      *
@@ -2772,6 +2790,13 @@ public final class SessionExecutor {
         SegmentBuffer.Sealed sealed = movedOn ? ctx.segment().sealEarly(ctx.outputGeneration().get(), quietEnough)
                 : ctx.segment().sealQuiet(ctx.outputGeneration().get());
         if (sealed == null) {
+            return;
+        }
+        if (movedOn && !quietEnough && pendingPracticeSpeech != null && pendingPracticeSpeech.generated()
+                && practice != null && practice.canYieldUnplayedSpeech()) {
+            // Never pass incomplete audio to Jev or playback. Losing an unplayed response to child input
+            // is conversational interruption, not a device failure or a successful practice action.
+            yieldUnplayedPracticeToInput(sealed);
             return;
         }
         if (!guardrail.isChecking()) {

@@ -59,7 +59,7 @@ public final class ScenarioScriptGenerator {
                 var generated=invoke(()->provider.generate(call(payload,current,deadline)),budget,deadline);
                 var generationCost=generationStartedWith.minus(deadline.remaining());
                 if(generated==null||generated.script()==null||!metadata(generated.model()))throw content();
-                model=generated.model();var script=generated.script();
+                model=generated.model();var script=includeBasePartnerLine(generated.script());
                 Input reviewedInput=current;
                 boolean planMismatch=false;
                 if(current.graphContextUsed()&&current.rules().variants() instanceof ScenarioGraphContext.Session graph&&!script.scenes().isEmpty()){
@@ -140,6 +140,19 @@ public final class ScenarioScriptGenerator {
         var payload=new LinkedHashMap<>(input.payload());payload.remove("structureContext");payload.remove("variantPlan");payload.put("baseOnly",true);
         var r=input.rules();
         return new Input(payload,input.aliases(),new ScenarioScriptValidation.Rules(r.relation(),r.opportunity(),r.targetExpression(),r.originalNames(),r.sourceText(),r.seen(),(a,b)->false,r.reflectionAllowed()),false,input.goalContextJson());
+    }
+    /** Internal description only. The repaired script must still receive independent approval and every server check. */
+    static ScenarioScript includeBasePartnerLine(ScenarioScript script){
+        if(script.scenes().isEmpty())return script;
+        var base=script.scenes().getFirst();
+        if(!"BASE".equals(base.sceneKind()) || base.sceneDescription()==null || base.sceneDescription().isBlank()
+                || base.opportunitySentence()==null || base.opportunitySentence().isBlank()
+                || ScenarioContentPolicy.normalize(base.sceneDescription()).contains(ScenarioContentPolicy.normalize(base.opportunitySentence())))return script;
+        // These are already generated scene facts, never an inferred child answer or new event.
+        String description=base.sceneDescription()+" 상대가 “"+base.opportunitySentence()+"”라고 말한다.";
+        if(description.length()>8000)return script;
+        var scenes=new java.util.ArrayList<>(script.scenes());scenes.set(0,base.withDescription(description));
+        return new ScenarioScript(scenes);
     }
     private Input withPlan(Input input,kr.mujoong.core.knowledge.VariantPlanner.Plan plan){
         var projected=Map.<String,Object>of("grade",plan.grade(),"changedField",plan.changedField(),"context",plan.context(),

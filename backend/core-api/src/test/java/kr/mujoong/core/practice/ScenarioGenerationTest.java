@@ -49,13 +49,20 @@ class ScenarioGenerationTest {
         assertThat(calls.getAllValues().getFirst().input()).doesNotContainKey("correctionReasons");
         assertThat(calls.getAllValues().getLast().input()).containsEntry("correctionReasons",List.of("REPETITION"));
     }
-    @Test void missingQuotedOpportunityProvidesSpecificCorrectionAndStillNeedsAValidReplacement(){
+    @Test void missingQuotedOpportunityIsIncludedBeforeIndependentReview(){
         var scene=base();var indirect=new ScenarioScript.Scene(scene.sceneKey(),scene.sceneKind(),"블록 놀이 중이야. "+OPPORTUNITY,
                 scene.opportunitySentence(),scene.reexplanation(),scene.focusPoints(),scene.expressionExamples(),scene.relation(),scene.place(),scene.topic(),null,null);
         when(provider.generate(any())).thenReturn(generated(indirect),generated(scene));
-        assertThat(run().details().generation().calls()).isEqualTo(4);
-        var calls=ArgumentCaptor.forClass(ScenarioScriptProvider.Call.class);verify(provider,times(2)).generate(calls.capture());
-        assertThat(calls.getAllValues().getLast().input().get("correctionReasons")).isEqualTo(List.of("INVALID_BASE","OPPORTUNITY_NOT_COPIED"));
+        assertThat(run().details().generation().calls()).isEqualTo(2);
+        var calls=ArgumentCaptor.forClass(ScenarioScriptProvider.Call.class);verify(provider).review(calls.capture());
+        var reviewed=(ScenarioScript)calls.getValue().input().get("script");
+        assertThat(reviewed.scenes().getFirst().sceneDescription()).contains(scene.opportunitySentence());
+    }
+    @Test void includedPartnerLineNeverBypassesRejectionOrAnswerSafety(){
+        var scene=base();var indirect=scene.withDescription("블록 놀이 중이야. "+OPPORTUNITY);
+        when(provider.generate(any())).thenReturn(generated(indirect));when(provider.review(any())).thenReturn(reject("INCOMPLETE_SCENE"));
+        assertThatThrownBy(this::run).isInstanceOf(ScenarioScriptGenerator.ContentExhausted.class);
+        verify(provider,times(2)).review(any());
     }
     @Test void uncertainIsNotApproval(){when(provider.review(any())).thenReturn(new ScenarioScriptProvider.Reviewed(new ScenarioReview("UNCERTAIN",List.of()),"fake"));assertThatThrownBy(this::run).isInstanceOf(kr.mujoong.core.common.error.CoreApiException.class);verify(provider,times(2)).generate(any());}
     @Test void schemaFailureUsesContentNotTechnicalRetry(){when(provider.generate(any())).thenThrow(failure(ScenarioScriptProvider.Failure.Kind.CONTENT)).thenReturn(generated(base()));assertThat(run().details().generation().calls()).isEqualTo(3);verify(provider,times(2)).generate(any());verify(provider).review(any());}

@@ -4,6 +4,7 @@ import { ApiError, createApiClient, type FetchLike } from "@/parent/common/api/a
 import { createCsrfStore } from "@/parent/common/api/csrf";
 import { registerDevice } from "@/parent/features/device/api";
 import { startFreeTalk } from "@/parent/features/free/api";
+import { practiceStartPort } from "@/parent/features/practice/startPort";
 import { fetchHome } from "@/parent/common/api/home";
 import { endSession } from "@/parent/common/api/live";
 import { devLogin } from "@/parent/features/login/api";
@@ -41,6 +42,23 @@ function headers(call: Call): Record<string, string> {
 
 afterEach(() => {
   vi.useRealTimers();
+});
+
+it("연습 시작은 30초 준비 결과를 기다리고 일반 조회는 기존 10초 시한을 유지한다", async () => {
+  vi.useFakeTimers();
+  const ready=deferred<Response>();let startSignal: AbortSignal | null | undefined;
+  const c=client((_path,init)=>{startSignal=init.signal;return ready.promise;});
+  const request=practiceStartPort(c.api)({idempotencyKey:"same-key",goalSelectionIds:["goal"]});
+  await vi.advanceTimersByTimeAsync(31_000);
+  expect(startSignal?.aborted).toBe(false);
+  ready.resolve(jsonResponse(202,{sessionId:SESSION_ID,status:"REQUESTED"}));
+  await expect(request).resolves.toEqual({kind:"accepted",sessionId:SESSION_ID});
+  const ordinary=client((_path,init)=>new Promise<Response>((_resolve,reject)=>{
+    init.signal?.addEventListener("abort",()=>reject(new DOMException("aborted","AbortError")));
+  }));
+  const result=fetchHome(ordinary.api).catch((error: unknown)=>error);
+  await vi.advanceTimersByTimeAsync(10_001);
+  await expect(result).resolves.toMatchObject({kind:"timeout"});
 });
 
 describe("apiClient — 요청 형식", () => {
