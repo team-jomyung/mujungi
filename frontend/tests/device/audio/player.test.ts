@@ -324,3 +324,35 @@ describe("Web Audio 어댑터 · 승인 음성 받기", () => {
     await expect(fetchApprovedAudio(FILLER.audioUrl)).rejects.toThrow(/404/);
   });
 });
+
+describe("AudioPlayer — 참여 확인 안내 녹음 보호", () => {
+  const INTRO: ApprovedAudio = {
+    contentCode: "INTRO_FREE_TALK",
+    contentVersionId: "00000000-0000-4000-8000-000000000051",
+    audioUrl: "/media/approved/intro-free-talk-v1.wav",
+  };
+
+  it("안내 녹음이 재생 중인 동안만 isPlayingNotice가 참이다", async () => {
+    const { output, player } = setup();
+    await player.prefetch([INTRO, CLOSING]);
+    expect(player.isPlayingNotice).toBe(false);
+    await player.playApproved(SESSION_ID, PLAYBACK_ID, INTRO.contentCode, INTRO.contentVersionId);
+    expect(player.isPlayingNotice).toBe(true);
+    output.startAll();
+    expect(player.isPlayingNotice).toBe(true);
+    output.endAll();
+    expect(player.isPlayingNotice).toBe(false);
+  });
+
+  it("안내 녹음이 아닌 승인 음성과 스트림 재생은 보호하지 않는다", async () => {
+    const { output, player } = setup();
+    await player.prefetch([CLOSING]);
+    await player.playApproved(SESSION_ID, PLAYBACK_ID, CLOSING.contentCode, CLOSING.contentVersionId);
+    expect(player.isPlayingNotice).toBe(false);
+    player.stopAll("STOP_OUTPUT");
+    player.beginStream(SESSION_ID, OTHER_PLAYBACK);
+    player.appendStream(pcmSeconds(0.2));
+    output.startAll();
+    expect(player.isPlayingNotice).toBe(false);
+  });
+});

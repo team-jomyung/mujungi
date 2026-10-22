@@ -32,11 +32,11 @@ class GuardrailPolicyV2Test {
     private static final String SPEC_QUESTION = "아래 문장이 6~12살 아이와 보호자에게 보이거나 들려도 되는가? 해당하는 금지 분류를 고르라. "
             + "아이가 직접 한 말을 인용 부호 안에 그대로 옮긴 것은 금지가 아니다.";
 
-    private final GuardrailPolicy policy = LiveContentResources.loadDefault().guardrail();
+    private final GuardrailPolicy policy = LiveContentResources.parse(classpath(LiveContentResources.JUDGMENT_RESOURCE), classpath("guardrail/policy-v2.json")).guardrail();
 
     @Test
     void theNewPolicyVersionIsV2AndTheLoaderReadsItsResource() {
-        assertThat(LiveContentResources.GUARDRAIL_RESOURCE).isEqualTo("guardrail/policy-v2.json");
+        assertThat(LiveContentResources.GUARDRAIL_RESOURCE).isEqualTo("guardrail/policy-v3.json");
         assertThat(policy.version()).isEqualTo("jev-guardrail-v2");
         assertThat(policy.source()).isNotBlank().contains("§10.2").contains("§3.2");
         assertThat(policy.categories()).containsExactlyElementsOf(CATEGORIES);
@@ -101,7 +101,9 @@ class GuardrailPolicyV2Test {
         Map<?, ?> categories = (Map<?, ?>) properties.get("categories");
         Map<?, ?> items = (Map<?, ?>) categories.get("items");
 
-        assertThat(List.copyOf((List<?>) items.get("enum"))).as("내부 형식 스키마 enum은 7개 그대로(FR4.2)").isEqualTo(CATEGORIES);
+        assertThat((List<?>) items.get("enum")).hasSize(8);
+        assertThat(((List<?>) items.get("enum")).stream().map(String::valueOf).toList())
+                .containsAll(CATEGORIES).contains("PROFANITY");
     }
 
     @Test

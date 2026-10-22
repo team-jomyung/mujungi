@@ -317,7 +317,8 @@ class SessionVoiceTest {
                 .filter(entry -> entry.speaker() == TranscriptEntry.Speaker.CHILD
                         && entry.assemblyStatus() == TranscriptEntry.AssemblyStatus.FINAL)
                 .forEach(entry -> review.put(entry.text(), entry.reviewNeeded()));
-        assertThat(review).containsExactly(Map.entry("공룡 좋아", false), Map.entry("응", true), Map.entry("", true),
+        // 첫 행은 참여를 수락한 대답("응", 신뢰도 정보 없음)이다
+        assertThat(review).containsExactly(Map.entry("응", true), Map.entry("공룡 좋아", false), Map.entry("", true),
                 Map.entry("몰라", false), Map.entry("글쎄", false), Map.entry("음", true));
         assertThat(h.store.transcripts).filteredOn(entry -> entry.speaker() == TranscriptEntry.Speaker.AI)
                 .allSatisfy(entry -> assertThat(entry.reviewNeeded()).isFalse());

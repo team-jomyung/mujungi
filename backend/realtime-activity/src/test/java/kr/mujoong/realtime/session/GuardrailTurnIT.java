@@ -67,8 +67,10 @@ class GuardrailTurnIT {
             assertThat(play.contentCode()).isEqualTo(SessionExecutor.INTRO_FREE_TALK);
             assertThat(play.contentVersionId()).isEqualTo(ServiceGuardrailFixtures.INTRO);
         });
-        awaitTrue(() -> env.app.bean(TranscriptRepository.class).findAll(sessionId).size() == 1, "승인 안내 준비 행");
-        var prelude = env.app.bean(TranscriptRepository.class).findAll(sessionId).getFirst();
+        // 승인 안내 한 행과, 참여를 수락한 아이 대답 한 행이 있다
+        awaitTrue(() -> env.app.bean(TranscriptRepository.class).findAll(sessionId).size() == 2, "승인 안내 준비 행");
+        var prelude = env.app.bean(TranscriptRepository.class).findAll(sessionId).stream()
+                .min(java.util.Comparator.comparingInt(row -> row.sequenceNo())).orElseThrow();
         assertThat(prelude.text()).isEqualTo(ServiceGuardrailFixtures.TEXT);
         assertThat(prelude.approvedForDisplay()).isTrue();
         approvedNoticeSeq = prelude.sequenceNo();
@@ -163,8 +165,9 @@ class GuardrailTurnIT {
 
         guard.allow();
         awaitTrue(() -> device.received(WsMessageType.OUTPUT_BEGIN).size() == 2, "대기 구간 송신");
-        awaitTrue(() -> visibleAiRows().size() == 2, "승인된 AI 행 둘");
-        assertThat(visibleAiRows()).extracting(TranscriptRow::text).containsExactly(CLEAN, "티라노도 좋아하니");
+        // 같은 응답에서 나온 두 출력 단위는 보호자 화면에서 한 행으로, 응답이 끝나고 두 단위가 모두 정리된 뒤 한꺼번에 나온다
+        awaitTrue(() -> visibleAiRows().size() == 1, "승인된 AI 행 하나");
+        assertThat(visibleAiRows()).extracting(TranscriptRow::text).containsExactly(CLEAN + "티라노도 좋아하니");
     }
 
     // ---- 도우미 ----

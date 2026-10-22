@@ -255,18 +255,16 @@ final class JudgmentCoordinator implements JudgmentTurn.Host {
     /** 결과 → {@link JoinTracker} 답 하나(원래 확정 시각으로 한 번만 넣는다, W1 4). 휴식 · 불명확 · 보류는 모두 불명확이다. */
     private Handled afterJoinJudgment(JudgmentTurn.Closure closure, Instant at) {
         JudgmentOutcomeKind kind = closure.outcome().kind();
-        if (kind != JudgmentOutcomeKind.CONFIRMED && kind != JudgmentOutcomeKind.ABSTAINED) {
+        if (kind != JudgmentOutcomeKind.CONFIRMED && kind != JudgmentOutcomeKind.ABSTAINED
+                && kind != JudgmentOutcomeKind.FAULT_CANCELLED) {
+            // 새 전사가 판정을 대체했거나(SUPERSEDED) 종료 표현 · 세션 이탈로 닫혔다: 그 길이 이어 처리한다
             return Handled.NOTHING;
         }
-        JoinTracker.Reply reply = JoinTracker.Reply.UNCLEAR;
-        NextAction next = NextAction.REPROMPT_JOIN;
-        if (kind == JudgmentOutcomeKind.CONFIRMED && "PARTICIPATE".equals(closure.outcome().firstOption())) {
-            reply = JoinTracker.Reply.ACCEPT;
-            next = NextAction.START_JOIN;
-        } else if (kind == JudgmentOutcomeKind.CONFIRMED && "DECLINE".equals(closure.outcome().firstOption())) {
-            reply = JoinTracker.Reply.REFUSE;
-            next = NextAction.DECLINE_JOIN;
-        }
+        // 시작 의사 판정은 '거절인가'만 본다: 거절로 확정되면 대화를 끝내고, 그 밖(참여 · 불명확 · 휴식 · 판독 불가 · 보류 · 공급자 장애)은
+        // 모두 대화를 시작한다
+        boolean declined = kind == JudgmentOutcomeKind.CONFIRMED && "DECLINE".equals(closure.outcome().firstOption());
+        JoinTracker.Reply reply = declined ? JoinTracker.Reply.REFUSE : JoinTracker.Reply.ACCEPT;
+        NextAction next = declined ? NextAction.DECLINE_JOIN : NextAction.START_JOIN;
         env.applyJoinReply(reply, at);
         if (closure.joinTickDeferred()) {
             env.runDeferredJoinTick();

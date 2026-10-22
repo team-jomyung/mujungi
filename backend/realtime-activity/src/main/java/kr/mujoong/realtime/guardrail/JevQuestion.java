@@ -7,10 +7,10 @@ import java.util.Map;
 import java.util.Objects;
 
 /**
- * 제브 {@code choice} 질문 하나 (선 형식 정정 FR1.3 · D3 · D4). 정책 리소스({@code guardrail/policy-v2.json})의 한국어 검사 질문과 라벨별 설명을
+ * 제브 {@code choice} 질문 하나 (선 형식 정정 FR1.3 · D3 · D4). 정책 리소스({@code guardrail/policy-v3.json})의 한국어 검사 질문과 라벨별 설명을
  * 어댑터가 요청의 {@code questions}에 싣기 좋게 묶은 값 객체다. 문안은 코드 상수가 아니라 정책 리소스에서 온다(FR4).
  *
- * <p>{@code criteria}는 삽입 순서를 지킨 '라벨 → 설명' 맵이다(7개 범주 + {@value #PASS}). 문자열 표현에는 문안 원문을 내지 않는다.
+ * <p>{@code criteria}는 삽입 순서를 지킨 '라벨 → 설명' 맵이다(정책 범주 + {@value #PASS}). 문자열 표현에는 문안 원문을 내지 않는다.
  *
  * @param instructions 한국어 검사 질문(비어 있지 않음)
  * @param criteria 라벨 → 설명(비어 있지 않음, 값도 비어 있지 않음, 제브 상한 255개 이하)

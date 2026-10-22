@@ -76,17 +76,22 @@ class SessionLifecycleSessionRuntimeIT {
         ActivitySessionRow row = sessions().find(sessionId).orElseThrow();
         assertThat(row.startedAt()).isNotNull();
         assertThat(row.statusVersion()).isEqualTo(4);
-        // 참여 대답은 저장하지 않고 시작 안내는 말풍선 한 행이다
-        awaitTrue(() -> transcripts(sessionId).size() == 1, "말풍선 한 행");
-        assertThat(transcripts(sessionId)).singleElement().satisfies(bubble -> {
+        // 시작 안내는 말풍선 한 행이고, 참여를 수락한 대답은 수락 때 아이 행으로 이어서 남는다
+        awaitTrue(() -> transcripts(sessionId).size() == 2, "말풍선 두 행");
+        assertThat(transcripts(sessionId)).satisfiesExactly(bubble -> {
             assertThat(bubble.speaker()).isEqualTo(TranscriptEntry.Speaker.AI);
             assertThat(bubble.text()).isEqualTo(INTRO);
             assertThat(bubble.approvedForDisplay()).isTrue();
+        }, reply -> {
+            assertThat(reply.speaker()).isEqualTo(TranscriptEntry.Speaker.CHILD);
+            assertThat(reply.text()).isEqualTo("응");
+            assertThat(reply.approvedForDisplay()).isTrue();
         });
 
         env.provider.emitTurn("item-1", "공룡이 좋아", "나도 공룡 좋아해", List.of(kr.mujoong.realtime.testing.RealtimeItEnvironment.audiblePcm(4800)));
         device.await(WsMessageType.OUTPUT_END, WAIT);
-        awaitTrue(() -> transcripts(sessionId).size() == 3, "아이 · AI 행");
+        // 시작 안내 · 수락한 참여 대답 · 이어진 아이 말 · AI 응답
+        awaitTrue(() -> transcripts(sessionId).size() == 4, "아이 · AI 행");
     }
 
     @Test

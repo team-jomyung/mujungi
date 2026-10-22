@@ -45,6 +45,12 @@ final class JoinFlow {
         void afterActiveWon();
 
         void participationWindowOpened();
+
+        /**
+         * 참여 수락을 일으킨 아이 발화를 대화 행으로 남긴다. 참여 확인 중의 아이 말은 분류에만 쓰고 저장하지 않지만, 수락된 발화는 그 뒤 대화의
+         * 첫 아이 말이라 수락 때 한 번 남긴다(거절 · 무응답으로 끝나면 남기지 않는다).
+         */
+        void acceptedReply(String transcript, Instant at);
     }
 
     private final SessionContext ctx;
@@ -56,6 +62,8 @@ final class JoinFlow {
     /** U4b 참여 판단(WAITING_CHILD에 들어갈 때 만든다). */
     private JoinTracker join;
     private boolean noticeDelivered;
+    /** 가장 최근에 분류하러 받은 참여 대답의 전사(수락되면 대화 행으로 남긴다, 원문은 여기에만 잠깐 둔다). */
+    private String lastReplyTranscript;
     private boolean currentIncludesQuestion;
 
     JoinFlow(SessionContext ctx, IdleClock idle, JudgmentCoordinator judgment, EndingFlow ending, Env env) {
@@ -100,6 +108,8 @@ final class JoinFlow {
         } else {
             UUID playbackId = UUID.randomUUID();
             if (ctx.sendControl(new PlayApprovedContent(playbackId, contentCode, item.get().contentVersionId()))) {
+                // 안내를 재생하는 동안 아이 소리는 공급자에 들려주지 않는다(끝 표식이 풀어 준다)
+                ctx.relay().setMuted(true);
                 ctx.joinPromptPlaybackId(playbackId);
                 ctx.playback().started(playbackId, contentCode);
                 ctx.timers().arm(Kind.PLAYBACK_EXPIRY, ctx.services().settings().playbackExpiry());
@@ -113,6 +123,7 @@ final class JoinFlow {
 
     /** 참여 안내 재생이 끝났다(서버가 끝 표식을 받은 시각): 창을 연다. */
     void onJoinPromptPlayed(Instant at) {
+        ctx.relay().setMuted(false);
         if (freeTalk()) {
             failNotice(FailureCode.DEVICE_NO_ACK);
             return;
@@ -164,6 +175,7 @@ final class JoinFlow {
             return;
         }
         if (freeTalk() && !currentInput(beganAt)) return;
+        lastReplyTranscript = transcript;
         // J1이 열린 동안 새 확정 전사가 오면 이전 J1을 SUPERSEDED로 닫고 새 전사를 처음부터 다시 처리한다
         judgment.onTranscript(false);
         JoinTracker.Reply reply = JoinTracker.classify(transcript);
@@ -176,6 +188,10 @@ final class JoinFlow {
         }
         if (reply == JoinTracker.Reply.UNCLEAR && judgment.openJoinJudgment(transcript, at)) {
             return;
+        }
+        if (freeTalk() && reply != JoinTracker.Reply.REFUSE) {
+            // 자유대화의 시작 의사는 '거절인가'만 본다: 거절이 아니면(판정을 열 수 없는 불명확 대답 포함) 대화를 시작한다
+            reply = JoinTracker.Reply.ACCEPT;
         }
         applyJoinAction(join.reply(reply, at), reply, at);
     }
@@ -224,6 +240,7 @@ final class JoinFlow {
 
     /** 참여 수락 → ACTIVE: started_at, 원음 기록 시작, 응답 생성 요청 1회. */
     private void acceptJoin() {
+        ctx.relay().setMuted(false);
         ctx.timers().cancel(Kind.JOIN_WINDOW);
         Instant now = ctx.services().clock().now();
         SessionGuardrailFacts proposed = freeTalk() ? nextFacts(SessionGuardrailFacts.Participation.ACCEPTED) : null;
@@ -237,6 +254,10 @@ final class JoinFlow {
         if (proposed != null) ctx.guardrailFacts(proposed);
         ending.changeStatus(SessionStatus.ACTIVE, ctx.services().clock().now());
         ctx.putEvent(EVENT_JOIN_ACCEPTED, "{\"prompts\":" + (join == null ? 1 : join.prompts()) + "}", now);
+        if (freeTalk() && lastReplyTranscript != null) {
+            env.acceptedReply(lastReplyTranscript, now);
+        }
+        lastReplyTranscript = null;
         env.afterActiveWon();
     }
 
@@ -245,6 +266,7 @@ final class JoinFlow {
      * 상한 안에서 돌린다(말풍선 행 없음).
      */
     private void declineJoin(SessionGuardrailFacts.Participation disposition) {
+        ctx.relay().setMuted(false);
         ctx.timers().cancel(Kind.JOIN_WINDOW);
         ctx.services().recorder().discardTranscripts(ctx.plan().sessionId(), ctx.services().settings().timerTick());
         Instant now = ctx.services().clock().now();
@@ -308,6 +330,9 @@ final class JoinFlow {
             failNotice(FailureCode.DEVICE_NO_ACK);
             return;
         }
+        // 안내를 재생하는 동안 아이 소리는 공급자에 들려주지 않는다: 말해도 안내 도중에는 전사되지 않고, 안내를 따라 마이크에 새어 든
+        // 소리가 참여 대답으로 섞이지 않는다. 끝 표식(COMPLETED)이 풀어 준다
+        ctx.relay().setMuted(true);
         ctx.playback().started(playback, code);
         ctx.timers().arm(Kind.PLAYBACK_EXPIRY, ctx.services().settings().playbackExpiry());
         env.approvedBubble(item.orElseThrow(), now);
@@ -322,6 +347,7 @@ final class JoinFlow {
         boolean completed = delivery.mark(ctx.plan().sessionId(), received.connectionId(), received.mark().playbackId(),
                 received.mark().status(), received.serverRecvAt());
         if (completed) {
+            ctx.relay().setMuted(false);
             ctx.timers().cancel(Kind.PLAYBACK_EXPIRY);
             ctx.playback().clearIfMatches(delivery.playbackId());
             ctx.joinPromptPlaybackId(null);
@@ -345,6 +371,7 @@ final class JoinFlow {
 
     private void failNotice(FailureCode code) {
         if (ctx.status() != SessionStatus.WAITING_CHILD) return;
+        ctx.relay().setMuted(false);
         if (ctx.noticeDelivery() != null) ctx.noticeDelivery().invalidate();
         ctx.joinPromptPlaybackId(null);
         ctx.timers().cancel(Kind.PLAYBACK_EXPIRY);

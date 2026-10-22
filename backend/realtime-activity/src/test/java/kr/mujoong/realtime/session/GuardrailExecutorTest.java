@@ -40,6 +40,270 @@ class GuardrailExecutorTest {
         return h.executor.guardrail();
     }
 
+    @Test
+    void timestampedUnitsAreCheckedAndSentBeforeTheResponseEndsInOrder() {
+        h.activate();
+        childSpeaks();
+        timedText("첫 조각", 0, 100);
+        timedText("다음 조각", 100, 200);
+        timedText("마지막 조각", 200, 300);
+        h.provider.last().emit(new ProviderEvent.OutputAudioDelta(new byte[14400]));
+        h.drain();
+        assertThat(guard.count()).isEqualTo(1);
+        assertThat(guard.last().request().candidate()).isEqualTo("첫 조각");
+        assertThat(guard.last().request().recentContext()).isEmpty();
+        assertThat(h.link.outputs()).isEmpty();
+        guard.allow(); h.drain();
+        assertThat(h.link.outputs()).hasSize(1);
+        // 검사가 도는 동안 쌓인 두 조각은 제브 한 번에 묶어 보내고, 한 번의 ALLOW로 순서대로 나간다
+        assertThat(guard.count()).isEqualTo(2);
+        assertThat(guard.last().request().candidate()).isEqualTo("다음 조각마지막 조각");
+        assertThat(guard.last().request().recentContext()).singleElement()
+                .satisfies(turn -> assertThat(turn.text()).isEqualTo("첫 조각"));
+        guard.allow(); h.drain();
+        assertThat(h.link.outputs()).hasSize(3);
+        assertThat(guard.count()).isEqualTo(2);
+        assertThat(coordinator().hasQueued()).isFalse();
+    }
+
+    @Test
+    void aStreamedResponseIsOneGuardianRowShownWhenTheResponseEnds() {
+        h.activate(); childSpeaks();
+        timedText("첫 조각", 0, 100);
+        timedText("다음 조각", 100, 200);
+        timedText("마지막 조각", 200, 300);
+        h.provider.last().emit(new ProviderEvent.OutputAudioDelta(new byte[14400]));
+        h.drain();
+        guard.allow(); h.drain();
+        guard.allow(); h.drain();
+        assertThat(h.link.outputs()).hasSize(3);
+        // 단위가 나가는 동안은 한 행이 확정 전(PARTIAL · 텍스트 비움)으로만 보인다
+        assertThat(aiRows()).singleElement().satisfies(row -> {
+            assertThat(row.assemblyStatus()).isEqualTo(TranscriptEntry.AssemblyStatus.PARTIAL);
+            assertThat(row.text()).isEmpty();
+        });
+        // 응답이 끝나면(조용 시간) 통과한 전사가 한 행으로 한꺼번에 나온다
+        h.advance(Duration.ofMillis(800));
+        assertThat(aiRows()).singleElement().satisfies(row -> {
+            assertThat(row.assemblyStatus()).isEqualTo(TranscriptEntry.AssemblyStatus.FINAL);
+            assertThat(row.approvedForDisplay()).isTrue();
+            assertThat(row.text()).isEqualTo("첫 조각다음 조각마지막 조각");
+        });
+    }
+
+    @Test
+    void theStreamedAiRowIsShownAtOnceWhenTheChildStartsSpeakingBeforeTheResponseEnds() {
+        h.activate(); childSpeaks();
+        timedText("안내하는 말", 0, 100);
+        h.provider.last().emit(new ProviderEvent.OutputAudioDelta(AUDIO));
+        h.drain();
+        guard.allow(); h.drain();
+        assertThat(aiRows()).singleElement().satisfies(row ->
+                assertThat(row.assemblyStatus()).isEqualTo(TranscriptEntry.AssemblyStatus.PARTIAL));
+        h.provider.last().emit(new ProviderEvent.InputTranscriptDelta("item-2", "잠깐"));
+        h.drain();
+        assertThat(aiRows()).singleElement().satisfies(row -> {
+            assertThat(row.assemblyStatus()).isEqualTo(TranscriptEntry.AssemblyStatus.FINAL);
+            assertThat(row.text()).isEqualTo("안내하는 말");
+        });
+    }
+
+    @Test
+    void aNextResponseDoesNotCloseThePreviousRowWhileItsLastUnitIsStillBeingChecked() {
+        h.activate(); childSpeaks();
+        timedText("앞 응답의 말", 0, 100);
+        h.provider.last().emit(new ProviderEvent.OutputAudioDelta(AUDIO));
+        h.drain();
+        // 앞 응답의 마지막 단위를 검사하는 중에 응답이 끝났다
+        h.advance(Duration.ofMillis(800));
+        assertThat(aiRows()).singleElement().satisfies(row ->
+                assertThat(row.assemblyStatus()).isEqualTo(TranscriptEntry.AssemblyStatus.PARTIAL));
+        // 늦게 온 허용이 앞 응답의 행을 완성한다
+        guard.allow(); h.drain();
+        assertThat(aiRows()).singleElement().satisfies(row -> {
+            assertThat(row.assemblyStatus()).isEqualTo(TranscriptEntry.AssemblyStatus.FINAL);
+            assertThat(row.approvedForDisplay()).isTrue();
+            assertThat(row.text()).isEqualTo("앞 응답의 말");
+        });
+    }
+
+    @Test
+    void aBlockedStreamedResponseKeepsOnlyWhatWasAlreadyApprovedInItsRow() {
+        h.activate(); childSpeaks();
+        timedText("안전한 말", 0, 100);
+        timedText("금지된 말", 100, 200);
+        h.provider.last().emit(new ProviderEvent.OutputAudioDelta(new byte[9600]));
+        h.drain();
+        guard.allow(); h.drain();
+        guard.block(); h.drain();
+        assertThat(aiRows()).singleElement().satisfies(row -> {
+            assertThat(row.assemblyStatus()).isEqualTo(TranscriptEntry.AssemblyStatus.FINAL);
+            assertThat(row.text()).isEqualTo("안전한 말").doesNotContain("금지");
+        });
+    }
+
+    @Test
+    void aBatchStopsAtTheCandidateLengthLimitAndTheRestIsCheckedInTheNextCall() {
+        h.activate(); childSpeaks();
+        String wide = "가".repeat(2_000);
+        timedText("첫 조각", 0, 100);
+        timedText(wide, 100, 200);
+        timedText(wide, 200, 300);
+        h.provider.last().emit(new ProviderEvent.OutputAudioDelta(new byte[14400]));
+        h.drain();
+        guard.allow(); h.drain();
+        // 둘째 호출은 첫 넓은 조각 하나뿐이다(묶으면 4,000자로 상한 3,000자를 넘는다)
+        assertThat(guard.count()).isEqualTo(2);
+        assertThat(guard.last().request().candidate()).isEqualTo(wide);
+        guard.allow(); h.drain();
+        assertThat(guard.count()).isEqualTo(3);
+        assertThat(h.link.outputs()).hasSize(2);
+        guard.allow(); h.drain();
+        assertThat(h.link.outputs()).hasSize(3);
+    }
+
+    @Test
+    void blockingABatchClosesEveryUnitInItWithoutPlayingAnyAndInvalidatesTheRest() {
+        h.activate(); childSpeaks();
+        timedText("첫 조각", 0, 100);
+        timedText("가", 100, 200);
+        timedText("나", 200, 300);
+        timedText("다", 300, 400);
+        h.provider.last().emit(new ProviderEvent.OutputAudioDelta(new byte[19200]));
+        h.drain();
+        guard.allow(); h.drain();
+        assertThat(guard.last().request().candidate()).isEqualTo("가나다");
+        guard.block(); h.drain();
+        assertThat(h.link.outputs()).hasSize(1);
+        assertThat(coordinator().hasQueued()).isFalse();
+        assertThat(aiRows()).as("닫지 못한 AI 행이 없다")
+                .noneMatch(entry -> entry.assemblyStatus() != TranscriptEntry.AssemblyStatus.FINAL);
+    }
+
+    @Test
+    void blockingAStreamingUnitDropsTheRemainingQueuedAudio() {
+        h.activate(); childSpeaks();
+        timedText("안전한 말", 0, 100);
+        timedText("금지된 말", 100, 200);
+        timedText("나머지", 200, 300);
+        h.provider.last().emit(new ProviderEvent.OutputAudioDelta(new byte[14400]));
+        h.drain();
+        guard.allow(); h.drain();
+        guard.block(); h.drain();
+        assertThat(h.link.outputs()).hasSize(1);
+        assertThat(guard.count()).isEqualTo(2);
+        assertThat(coordinator().hasQueued()).isFalse();
+        h.provider.last().emit(new ProviderEvent.OutputAudioDelta(AUDIO));
+        h.drain();
+        assertThat(h.link.outputs()).hasSize(1);
+    }
+
+    @Test
+    void theCheckStartsWhenTheTranscriptArrivesAndSoundFollowsAsItArrivesButNeverBeforeItsAllowOrPastItsEnd() {
+        h.activate(); childSpeaks();
+        timedText("조각", 0, 200);
+        assertThat(guard.count()).as("새 말의 음성이 시작되기 전에는 검사하지 않는다(낡은 꼬리 여유 구간)").isZero();
+        h.provider.last().emit(new ProviderEvent.OutputAudioDelta(AUDIO));
+        h.drain();
+        // 전사가 음성보다 먼저 오므로, 그 전사가 가리키는 음성(200ms)이 다 오기 전에 검사를 시작한다
+        assertThat(guard.count()).isEqualTo(1);
+        assertThat(h.link.outputs()).as("ALLOW 전에는 음성이 나가지 않는다").isEmpty();
+
+        guard.allow(); h.drain();
+        assertThat(sentMs()).as("ALLOW가 나면 그때까지 도착한 음성(100ms)을 바로 낸다").isEqualTo(100L);
+
+        // 이어서 오는 음성은 도착하는 대로 나가되, 통과한 전사가 끝나는 위치(200ms)를 넘어서는 나가지 않는다
+        h.provider.last().emit(new ProviderEvent.OutputAudioDelta(new byte[48_000]));
+        h.drain();
+        assertThat(sentMs()).isEqualTo(200L);
+    }
+
+    @Test
+    void anAllowThatArrivesAfterTheResponseEndedStillSendsTheSoundKeptForIt() {
+        h.activate(); childSpeaks();
+        timedText("끝난 응답", 0, 200);
+        h.provider.last().emit(new ProviderEvent.OutputAudioDelta(new byte[9_600]));
+        h.drain();
+        assertThat(guard.count()).isEqualTo(1);
+        // 응답(조용 0.8초)이 먼저 끝났지만 검사가 아직 돌고 있다: 음성은 버퍼에 남아 있어야 한다
+        h.advance(Duration.ofMillis(800));
+        assertThat(h.link.outputs()).isEmpty();
+        guard.allow(); h.drain();
+        assertThat(sentMs()).isEqualTo(200L);
+        assertThat(coordinator().hasQueued()).isFalse();
+    }
+
+    @Test
+    void aBlockedUnitNeverSendsItsSoundNorTheSoundAfterIt() {
+        h.activate(); childSpeaks();
+        timedText("막힐 말", 0, 200);
+        h.provider.last().emit(new ProviderEvent.OutputAudioDelta(new byte[9_600]));
+        h.drain();
+        guard.block(); h.drain();
+        h.provider.last().emit(new ProviderEvent.OutputAudioDelta(new byte[9_600]));
+        h.drain();
+        assertThat(h.link.outputs()).isEmpty();
+    }
+
+    private long sentMs() {
+        return h.link.outputs().stream().mapToLong(bundle -> bundle.totalMs()).sum();
+    }
+
+    @Test
+    void aTranscriptLeadingAudioByMoreThanTheQuietWindowIsNotDiscarded() {
+        h.activate(); childSpeaks();
+        timedText("조금 뒤 들릴 말", 0, 100);
+        h.drain();
+        h.advanceAlive(Duration.ofMillis(1000));
+        assertThat(guard.count()).isZero();
+        h.provider.last().emit(new ProviderEvent.OutputAudioDelta(AUDIO));
+        h.drain();
+        assertThat(guard.count()).isEqualTo(1);
+        guard.allow(); h.drain();
+        assertThat(h.link.outputs()).hasSize(1);
+    }
+
+    @Test
+    void aLateAllowForAStreamingUnitCannotPlayAfterTheChildInterrupts() {
+        h.activate(); childSpeaks();
+        timedText("검사 중인 조각", 0, 100);
+        h.provider.last().emit(new ProviderEvent.OutputAudioDelta(AUDIO));
+        h.drain();
+        assertThat(guard.count()).isEqualTo(1);
+        h.provider.last().emit(new ProviderEvent.InputTranscriptDone("item-1", "공룡"));
+        h.drain();
+        h.provider.last().emit(new ProviderEvent.InputTranscriptDelta("item-2", "잠깐"));
+        h.drain();
+        guard.allow(); h.drain();
+        assertThat(h.link.outputs()).isEmpty();
+    }
+
+    @Test
+    void aStreamingBacklogOverflowInvalidatesThePendingAllowAndClosesEveryQueuedUnit() {
+        h.activate(); childSpeaks();
+        for (int index = 0; index < 130; index++) {
+            timedText("출력 조각", index * 100L, (index + 1) * 100L);
+            h.provider.last().emit(new ProviderEvent.OutputAudioDelta(AUDIO));
+            h.drain();
+        }
+        assertThat(guard.count()).isEqualTo(1);
+        assertThat(coordinator().hasQueued()).isFalse();
+        guard.allow(); h.drain();
+        assertThat(h.link.outputs()).isEmpty();
+        assertThat(coordinator().state()).isEqualTo(GuardrailCoordinator.State.IDLE);
+    }
+
+    private void timedText(String text, long start, long end) {
+        long margin = h.settings.newSpeechMargin().toMillis();
+        if (start == 0) {
+            h.provider.last().newSpeechMargin(null);
+            String instructionId = h.provider.last().requests(ProviderRequestFactory.InstructionsAppend.class).getLast().eventId();
+            h.provider.last().emit(new ProviderEvent.InstructionsAppended(instructionId, 0, 0));
+        }
+        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta(text, start == 0 ? 0 : start + margin, end + margin));
+        if (start == 0) h.provider.last().emit(new ProviderEvent.OutputAudioDelta(new byte[(int) margin * 48]));
+    }
+
     // ---- 위치 · 승인 시점 ----
 
     @Test

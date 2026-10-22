@@ -47,6 +47,24 @@ public final class OutputGate {
     }
 
     /**
+     * 전사 먼저 방출 경로의 단계 3 · 4: 음성은 아직 오는 중이라 전사만 본다. 전사가 사전의 금지 표현이 아닌지, 정규화 뒤 남는 글자가 있는지만
+     * 확인한다. 음성이 전사 끝까지 대응하는지는 단위를 만들 때 이미 시간선으로 맞춘다.
+     */
+    public GateDecision inspectText(SegmentBuffer.Sealed segment) {
+        try {
+            if (segment == null || segment.transcript() == null || SeedDictionary.normalize(segment.transcript()).isEmpty()) {
+                return GateDecision.discard(DiscardReason.GATE_EMPTY);
+            }
+            if (dictionary.findMatch(segment.transcript()).isPresent()) {
+                return GateDecision.discard(DiscardReason.GATE_PATTERN);
+            }
+            return GateDecision.pass();
+        } catch (RuntimeException e) {
+            return GateDecision.discard(DiscardReason.GATE_EMPTY);
+        }
+    }
+
+    /**
      * U3-R7: 폐기한 구간의 전사가 걸리는 시드 사전 범주(교정 문장 고르기 — 미완 · 너무 김으로 폐기한 구간도 본다). 걸리지 않았거나 판정 중
      * 예외면 빈 값.
      */

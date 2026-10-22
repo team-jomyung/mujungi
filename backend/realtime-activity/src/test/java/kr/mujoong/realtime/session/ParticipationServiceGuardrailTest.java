@@ -44,6 +44,48 @@ class ParticipationServiceGuardrailTest {
         assertThat(partial.executor.status()).isEqualTo(SessionStatus.ACTIVE);
     }
 
+    @Test void childVoiceIsMutedWhileTheNoticePlaysAndReleasedByTheRealCompletion() {
+        SessionHarness h = ready();
+        assertThat(h.executor.relay().isMuted()).as("안내를 재생하는 동안 아이 소리는 공급자에 들려주지 않는다").isTrue();
+        mark(h, PlaybackMark.Status.STARTED);
+        assertThat(h.executor.relay().isMuted()).as("재생 시작 표식은 풀지 않는다").isTrue();
+        complete(h);
+        assertThat(h.executor.relay().isMuted()).as("끝 표식이 풀어 준다").isFalse();
+        h.join();
+        assertThat(h.executor.status()).isEqualTo(SessionStatus.ACTIVE);
+        assertThat(h.executor.relay().isMuted()).isFalse();
+    }
+
+    @Test void aNoticeThatFailsToDeliverAlsoReleasesTheMute() {
+        SessionHarness h = ready();
+        assertThat(h.executor.relay().isMuted()).isTrue();
+        mark(h, PlaybackMark.Status.FAILED);
+        assertThat(h.executor.status()).isEqualTo(SessionStatus.FAILED);
+        assertThat(h.executor.relay().isMuted()).isFalse();
+    }
+
+    @Test void theReplyThatAcceptedParticipationBecomesTheFirstChildRowBeforeTheFirstResponse() {
+        SessionHarness h = ready();
+        complete(h);
+        h.childSays("accepting", "응, 이야기하자");
+        assertThat(h.executor.status()).isEqualTo(SessionStatus.ACTIVE);
+        h.recorder.tick();
+        var rows = h.store.transcripts.stream().sorted(java.util.Comparator.comparingInt(row -> row.sequenceNo())).toList();
+        assertThat(rows).extracting(row -> row.speaker().name()).containsExactly("AI", "CHILD");
+        assertThat(rows.get(1).text()).isEqualTo("응, 이야기하자");
+        assertThat(rows.get(1).approvedForDisplay()).isTrue();
+        assertThat(rows.get(1).assemblyStatus().name()).isEqualTo("FINAL");
+    }
+
+    @Test void aRefusedReplyIsNeverStoredAsAChildRow() {
+        SessionHarness h = ready();
+        complete(h);
+        h.childSays("refusal", "싫어");
+        assertThat(h.executor.status()).isEqualTo(SessionStatus.DECLINED);
+        h.recorder.tick();
+        assertThat(h.store.transcripts).noneMatch(row -> row.speaker().name().equals("CHILD"));
+    }
+
     @Test void startedIsNotCompletionAndCannotOpenParticipation() {
         SessionHarness h = ready();
         mark(h, PlaybackMark.Status.STARTED);
