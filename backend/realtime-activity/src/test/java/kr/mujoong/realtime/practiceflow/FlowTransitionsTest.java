@@ -349,6 +349,72 @@ class FlowTransitionsTest {
         assertThat(second.timing()).isEqualTo(LiveTiming.ABSTAINED);
     }
 
+    /** 재안내 사건을 {@code PracticeConversation.reguide}처럼 상태에 적용한다(표지는 사유와 관계없이 하나다). */
+    private static void applyReguide(FlowState state, Step step) {
+        assertThat(step.action()).isEqualTo(Action.REGUIDE);
+        switch (step.guard()) {
+            case NO_RESPONSE -> state.noResponseGuided(true);
+            case UNREADABLE -> state.unreadableGuided(true);
+            case NONE -> {
+                // 표지 없음
+            }
+        }
+    }
+
+    /**
+     * 첫 재안내가 판정 쪽 실패(시간 초과 · 공급자 장애 · 요청 거절)나 판독 불가 전사로 섰어도, 같은 기회에서 다음에 오는 확신 부족 보류는 '두 번째'로 세어
+     * 도움 제안으로 간다(LIVE-FIX-A6). 1순위가 HELP가 아니어도 그렇다.
+     */
+    @ParameterizedTest
+    @CsvSource({"TIMEOUT", "PROVIDER_ERROR", "REQUEST_REFUSED", "UNREADABLE_TRANSCRIPT"})
+    void anUnsureAbstainAfterAReguideForAnotherReasonOffersHelpEvenWhenNotLeaningToHelp(String firstCause) {
+        FlowState state = at(Phase.OPPORTUNITY, Sub.NONE);
+        Step first = switch (firstCause) {
+            case "REQUEST_REFUSED" -> table.onJudgmentUnavailable(state, JudgmentPoint.J2);
+            case "UNREADABLE_TRANSCRIPT" -> table.onJudgment(state, JudgmentPoint.J2, "UNREADABLE");
+            default -> table.onJudgmentAbstained(state, JudgmentPoint.J2, firstCause, null);
+        };
+        assertThat(first.guard()).isEqualTo(Guard.UNREADABLE);
+        applyReguide(state, first);
+
+        Step second = table.onJudgmentAbstained(state, JudgmentPoint.J2, "LOW_MARGIN", "PARTIAL");
+
+        assertEnters(second, Phase.HELP_OFFER, Sub.NONE);
+        assertThat(second.cause()).as("장면을 보류로 닫지 않는다").isNull();
+        assertThat(second.consent()).as("보류는 확정이 아니므로 동의로 적지 않는다").isNull();
+        assertThat(second.consentsToHelp()).isFalse();
+    }
+
+    /** 반대로 첫 보류가 확신 부족이어도 두 번째가 판정 쪽 실패(시간 초과)면 도움 제안이 아니라 지금처럼 보류로 닫는다(LIVE-FIX-A5 · A6). */
+    @ParameterizedTest
+    @CsvSource({"TIMEOUT", "PROVIDER_ERROR"})
+    void aJudgeSideFailureAfterAnUnsureReguideClosesTheSceneAsAbstained(String secondReason) {
+        FlowState state = at(Phase.OPPORTUNITY, Sub.NONE);
+        Step first = table.onJudgmentAbstained(state, JudgmentPoint.J2, "LOW_CONFIDENCE", "PARTIAL");
+        applyReguide(state, first);
+
+        Step second = table.onJudgmentAbstained(state, JudgmentPoint.J2, secondReason, null);
+
+        assertEnters(second, Phase.SCENE_WRAP, Sub.VARIANT_EVAL);
+        assertThat(second.cause()).isEqualTo(EndCause.ABSTAINED);
+        assertThat(second.timing()).isEqualTo(LiveTiming.ABSTAINED);
+        assertThat(second.facts()).isEmpty();
+    }
+
+    /** 무응답 재안내는 다른 표지라 '두 번째'로 세지 않는다. 그 뒤 첫 확신 부족 보류는 같은 질문을 한 번 더 안내한다(LIVE-FIX-A6). */
+    @Test
+    void aNoResponseReguideDoesNotCountAsTheFirstAbstainAtTheOpportunity() {
+        FlowState state = at(Phase.OPPORTUNITY, Sub.NONE);
+        applyReguide(state, table.onNoResponse(state));
+
+        Step first = table.onJudgmentAbstained(state, JudgmentPoint.J2, "LOW_CONFIDENCE", "PARTIAL");
+        assertThat(first.action()).isEqualTo(Action.REGUIDE);
+        assertThat(first.guard()).isEqualTo(Guard.UNREADABLE);
+        applyReguide(state, first);
+
+        assertEnters(table.onJudgmentAbstained(state, JudgmentPoint.J2, "LOW_CONFIDENCE", "PARTIAL"), Phase.HELP_OFFER, Sub.NONE);
+    }
+
     @ParameterizedTest
     @EnumSource(value = Phase.class, names = {"REASK", "HELP_OFFER", "RETRY"})
     void anUnsureAbstainOutsideTheOpportunityKeepsTheExistingPath(Phase phase) {
