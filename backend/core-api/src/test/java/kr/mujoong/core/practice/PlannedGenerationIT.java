@@ -110,7 +110,7 @@ import org.junit.jupiter.api.*;
         freeKoreanGoal();answerLikeV3(relational(scene(ALLOWED,null,"base","BASE")));
         var result=f.legacy.service.generate(f.legacy.original());
         assertThat(result.scenes()).hasSize(2);assertThat(result.generation().calls()).isEqualTo(4);assertThat(result.generation().graphContextUsed()).isTrue();
-        assertThat(result.generation().promptVersion()).isEqualTo("scenario-generation.v3");
+        assertThat(result.generation().promptVersion()).isEqualTo("scenario-generation.v4");
         assertThat(result.scenes()).allSatisfy(s->assertThat(s.relation()).isEqualTo("같은 반 친구"));
         assertThat(result.scenes().getLast().preservation().relationship()).isEqualTo("FRIEND_CLOSE");
         verify(f.graph).variantPlan(any(),any(),any(),eq(ALLOWED),any());

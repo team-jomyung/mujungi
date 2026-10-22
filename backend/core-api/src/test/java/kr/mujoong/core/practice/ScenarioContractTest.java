@@ -105,7 +105,7 @@ class ScenarioContractTest {
         assertThat(WebFixtures.schemaErrors("practice-scenario.schema.json",json.write(unknown))).isNotEmpty();
     }
     @Test void storedV2AndNewV3GenerationsBothMatchThePracticeScenarioContract() {
-        for(String version:List.of("scenario-generation.v2",kr.mujoong.core.textai.ScenarioScriptProvider.GENERATION_PROMPT_VERSION)){
+        for(String version:List.of("scenario-generation.v2","scenario-generation.v3",kr.mujoong.core.textai.ScenarioScriptProvider.GENERATION_PROMPT_VERSION)){
             var value=new Scenario(UUID.randomUUID(),"ORIGINAL","PEER","기회","상황","역할","말",new Scenario.Validation(true,true,false),
                     "scenario-script.v1",List.of(scene().withPartnerRole("역할")),new Scenario.Review("APPROVE","fake","scenario-review.v1"),
                     new Scenario.Generation("fake",version,false,2));
