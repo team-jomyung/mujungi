@@ -3,6 +3,7 @@
 - 브랜치: `claude/practice-variant-instructions` (main `fec5285`에서 땀)
 - 근거 지시서: 작업 묶음 3 「'새 상황에서 재시도'(변형)가 실제로 나오게 하기 + 연습 대화 품질 자리 만들기」의 (a) · (c) · (d)를 구현했다. (b) 데모 5단계 표현과 (a)의 '언어 부담' 결정적 검사는 선택지와 권장안만 적었다(5 · 6절). (e) 17 화면은 다른 브랜치가 맡아 손대지 않았다.
 - 작성: 사람 대신 작업한 모델(Claude). 사람에게 묻지 않고 스스로 정한 것은 8절 가정 목록(`PRACTICE-VARIANT-INSTRUCTIONS-A*`)에 적었다. 원 담당자 검토가 끝나기 전에는 초안이다.
+- 판 기록: 이 문서의 판 이름(`scenario-generation.v3` · `scenario-review.v1` · `practice-scenario` enum `[v2, v3]` 등)은 이 브랜치 때 값이다. 지금 판과 판마다 바뀐 규칙은 `contracts/ai-io.md` 10.11과 `docs/practice-live-fixes.md`에 있다.
 - 증거 표시(R-M11): `[대역]` = 가짜 공급자 · 시험 대역으로 확인, `[실호출-합성]` = 실제 AI에 합성 자료, `[실기기]` = 실제 기기. **이 브랜치의 증거는 모두 `[대역]`이다.** 실제 Luna · GPT-Live · 제브는 한 번도 부르지 않았다.
 
 ## 1. 한눈에
@@ -31,7 +32,7 @@
 2. 옛 노출 행 보호: 관계 좌표가 없는 옛 `scenes_json` 행은 좌표가 빈 값이 되어 `VariantPlanner`에서 NPE → 그래프 없는 경로로 빠졌다. 다섯 좌표가 모두 있는 노출만 계획 입력에 넣는다(`ScenarioGraphContext.complete`, `StructuredScenarioFlow`).
 3. 허용 어휘 전달: `structureContext`에 `allowedTopics` · `allowedPlaces` · `allowedParticipants` · `allowedRelationships` · `allowedSituations`를 더했다. 값은 `VariantPlanner` · `KnowledgeSeed` 상수를 정렬한 목록이다(복사하지 않음, `Set` 순회 순서에 흔들리지 않음). 금지 키와 겹치지 않고 정리기를 거쳐도 남는 것을 시험으로 확인했다.
 4. 생성 판 v3(아래 ①의 'VARIANT도 같은 상대'는 NEAR 관계 축 변형과 부딪힌다 — 11절 · A20): `prompts/scenario/generation.v3.txt`를 새로 두고 v2 파일은 그대로 남겼다. v2 규칙에 더한 것은 ① 모든 장면 `relation` = 입력 relation 그대로 ② structureContext가 있으면 BASE에도 preservation, 고정값 세 개는 글자 그대로 ③ 좌표 다섯 값은 허용 목록에서 글자 그대로 ④ BASE의 관계 · 자리는 씨앗 값, BASE의 거리 · 변경 축 칸은 `SAME_CONTEXT` · `topic` ⑤ VARIANT 좌표 · 거리 · 축은 `variantPlan` 값 그대로.
-5. 판 이름 한 곳: `ScenarioScriptProvider.GENERATION_PROMPT_VERSION`(= `scenario-generation.v3`)과 `GENERATION_INSTRUCTIONS`(자원 경로). 흩어져 있던 네 곳(`LunaTextAiProvider` 두 곳, `ScenarioScriptGenerator` 두 곳)이 이 상수를 쓴다.
+5. 판 이름 한 곳: `ScenarioScriptProvider.GENERATION_PROMPT_VERSION`(이 브랜치 때 = `scenario-generation.v3`, 지금 값은 `contracts/ai-io.md` 10.11)과 `GENERATION_INSTRUCTIONS`(자원 경로). 흩어져 있던 네 곳(`LunaTextAiProvider` 두 곳, `ScenarioScriptGenerator` 두 곳)이 이 상수를 쓴다.
 6. 계약
    - `contracts/schemas/ai-scenario-output.schema.json`: preservation에 `relationship`(필수)을 더하고 `participants` · `relationship` · `situation`을 서버 어휘 enum으로 묶었다. 그래프 경로 예시를 하나 더했다. 최상위 topic · place는 자유 문자열 그대로다(A3).
    - `contracts/schemas/practice-scenario.schema.json`: `generation.promptVersion`을 `const v2` → `enum [v2, v3]`. 이미 저장된 v2 대본이 멱등 재생으로 다시 나가도 통과한다.
