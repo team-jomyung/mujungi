@@ -639,6 +639,42 @@ class FlowTransitionsTest {
         assertThat(table.onSlotEnded(at(Phase.RETRY, Sub.REEXPLAIN), SlotEnd.FAILED).cause()).isEqualTo(EndCause.PLAYBACK_FAILED);
     }
 
+    /**
+     * 실측 F3: 단서가 친구 첫 대사에 있으면 다시 설명 뒤 기회 문장만으로는 상황이 다시 서지 않는다. 첫 대사가 있는 장면은 다시 설명 → 첫 대사 → 기회
+     * 문장으로 돌아간다. RETRY의 다시 설명은 지금처럼 코치 발화로 간다.
+     */
+    @Test
+    void withAPartnerOpenerAFinishedReexplanationReplaysTheOpenerBeforeTheOpportunityLine() {
+        FlowState reexplained = at(Phase.OPPORTUNITY, Sub.REEXPLAIN);
+        reexplained.partnerOpener(true);
+        assertEnters(table.onSlotEnded(reexplained, SlotEnd.PLAYED), Phase.OPPORTUNITY, Sub.PARTNER_OPENER);
+        assertEnters(table.onSlotEnded(reexplained, SlotEnd.INTERRUPTED), Phase.OPPORTUNITY, Sub.PARTNER_OPENER);
+        assertThat(table.onSlotEnded(reexplained, SlotEnd.FAILED).cause()).isEqualTo(EndCause.PLAYBACK_FAILED);
+
+        FlowState retry = at(Phase.RETRY, Sub.REEXPLAIN);
+        retry.partnerOpener(true);
+        assertEnters(table.onSlotEnded(retry, SlotEnd.PLAYED), Phase.FOCUS, Sub.COACH_UTTERANCE);
+
+        FlowState opener = at(Phase.OPPORTUNITY, Sub.PARTNER_OPENER);
+        opener.partnerOpener(true);
+        assertEnters(table.onSlotEnded(opener, SlotEnd.PLAYED), Phase.OPPORTUNITY, Sub.NONE);
+        assertEnters(table.onSlotEnded(opener, SlotEnd.INTERRUPTED), Phase.OPPORTUNITY, Sub.NONE);
+        Step failed = table.onSlotEnded(opener, SlotEnd.FAILED);
+        assertThat(failed.cause()).as("장면이 이미 시작됐으니 재생 실패로 정리한다").isEqualTo(EndCause.PLAYBACK_FAILED);
+        assertThat(failed.fact()).isEqualTo(FactKind.PLAYBACK_FAILED);
+        assertThat(table.onSlotEnded(opener, SlotEnd.BLOCKED).cause()).isEqualTo(EndCause.SLOT_BLOCKED);
+    }
+
+    @Test
+    void whileTheOpenerIsReplayedAfterAReexplanationNeitherAnswersNorTheNoResponseClockCount() {
+        FlowState opener = at(Phase.OPPORTUNITY, Sub.PARTNER_OPENER);
+        opener.partnerOpener(true);
+
+        assertThat(table.onJudgment(opener, JudgmentPoint.J2, "FULL").action()).isEqualTo(Action.IGNORE);
+        assertThat(table.onNoResponse(opener).action()).isEqualTo(Action.IGNORE);
+        assertThat(table.onJudgmentAbstained(opener, JudgmentPoint.J2, "LOW_CONFIDENCE", "HELP").action()).isEqualTo(Action.IGNORE);
+    }
+
     @Test
     void aVariantOfferSlotWaitsWhenPlayedAndDeclinesWhenItFails() {
         FlowState state = at(Phase.VARIANT_OFFER, Sub.NONE, false);

@@ -45,7 +45,7 @@ public record PracticeScript(UUID scenarioId, String scriptVersion, List<Scene> 
      * @param reexplanation 상황 다시 설명 문장
      * @param partnerRole 상대 역할 문구(core가 발급 때 덮어쓴 값)
      * @param expressionFrames 빈칸 예문(선택, 생성 판 v7부터). 표현 예시와 같은 순서로 핵심 내용 낱말 자리를 '뭐뭐'로 비운 말이고 코치 첫 도움이 글자
-     *     그대로 말한다. 옛 대본에는 없어 빈 목록이다
+     *     그대로 말한다. 옛 대본에는 없어 빈 목록이다. 비어 있는 칸은 빈 문자열로 자리를 지킨다
      */
     public record Scene(String sceneKey, SceneKind sceneKind, String sceneDescription, String partnerOpener,
             String opportunitySentence, String reexplanation, String partnerRole, List<String> focusPoints,
@@ -61,8 +61,9 @@ public record PracticeScript(UUID scenarioId, String scriptVersion, List<Scene> 
             partnerOpener = partnerOpener == null || partnerOpener.isBlank() ? "" : partnerOpener;
             focusPoints = focusPoints == null ? List.of() : List.copyOf(focusPoints);
             expressionExamples = expressionExamples == null ? List.of() : List.copyOf(expressionExamples);
+            // 빈칸 예문은 표현 예시와 자리로 짝을 이루므로 빈 칸을 빼지 않고 빈 문자열로 둔다(뒤 예시와 어긋나지 않게)
             expressionFrames = expressionFrames == null ? List.of()
-                    : expressionFrames.stream().filter(frame -> frame != null && !frame.isBlank()).toList();
+                    : expressionFrames.stream().map(frame -> frame == null ? "" : frame).toList();
             relation = relation == null ? "" : relation;
             place = place == null ? "" : place;
             topic = topic == null ? "" : topic;
@@ -73,9 +74,9 @@ public record PracticeScript(UUID scenarioId, String scriptVersion, List<Scene> 
             return !partnerOpener.isEmpty();
         }
 
-        /** 첫 표현 예시의 빈칸 예문(대본에 있을 때). 없으면 빈 문자열이다(옛 대본 · 예시 없음). */
+        /** 첫 표현 예시의 빈칸 예문(대본에 있을 때). 없거나 비었으면 빈 문자열이다(옛 대본 · 예시 없음). */
         public String firstFrame() {
-            return expressionFrames.isEmpty() || expressionExamples.isEmpty() ? "" : expressionFrames.getFirst();
+            return expressionFrames.isEmpty() || expressionExamples.isEmpty() ? "" : expressionFrames.getFirst().strip();
         }
 
         private static void requireText(String value, String field) {

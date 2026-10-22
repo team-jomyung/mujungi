@@ -51,7 +51,8 @@ import kr.mujoong.realtime.voice.PracticeSpeech;
  *   <li>슬롯 종료 사건은 correlationId마다 첫 사건만 처리하고(중복 무시), 확장이 스스로 닫은 슬롯은 곧바로 처리 완료로 둔다(§3.5).
  *   <li>장면은 무중의 장면 설명(역할 밖) → 친구 첫 대사(대본에 있으면) → 친구 기회 문장 순서로 승인 원문 그대로 재생한다. 첫 대사가 없는 옛
  *       대본에서 도입(장면 설명)이 기회 문장을 담고 끝까지 재생됐으면 OPPORTUNITY 진입에서 기회 문장을 다시 재생하지 않는다({@link SceneIntro}).
- *       설명은 자르지 않는다. 승인 발화의 말하는 사람 표시는 설명이면 무중, 대사면 친구다({@link RolePolicy}).
+ *       설명은 자르지 않는다. 승인 발화의 말하는 사람 표시는 설명이면 무중, 대사면 친구다({@link RolePolicy}). 상황 다시 설명 뒤에는 첫 대사(있으면)
+ *       → 기회 문장을 다시 들려주고, 무응답 재안내는 기회 문장만 다시 들려준다.
  *   <li>칭찬 · 채점 대신 친구가 역할 안에서 반응한다: 판정한 아이 대답이 장면을 닫으면(J2 충분 · J3 전달됨 · J5 결과) 친구 반응 한 마디(D_CONTINUE ·
  *       코치 역할이면 복귀 알림 뒤 D_RESUME)를 낸 뒤 변형 평가로 간다. 도움 제안 · 변형 제안은 무중이 역할 밖에서 한다.
  *   <li>레거시 평가 · 단서 포트에 기대지 않는다: 이 클래스는 {@code practice} 패키지를 참조하지 않는다(BR2.5 · BR10.2).
@@ -749,7 +750,14 @@ public final class PracticeConversation implements PracticeSessionExtension {
                     enterScene(SceneKind.VARIANT);
                 }
             }
-            case OPPORTUNITY -> opportunity(previous);
+            case OPPORTUNITY -> {
+                if (step.sub() == Sub.PARTNER_OPENER) {
+                    // 상황 다시 설명 뒤 재진입: 단서가 첫 대사에 있을 수 있어 첫 대사 → 기회 문장을 다시 들려준다(실측 F3)
+                    speakPeerLine(currentScene.partnerOpener());
+                } else {
+                    opportunity(previous);
+                }
+            }
             case REASK -> speakGenerated(FlowRole.PEER, PracticeInstructions.peerReask(currentScene, false));
             case HELP_OFFER -> helpOffer(false);
             case FOCUS -> {
@@ -813,7 +821,8 @@ public final class PracticeConversation implements PracticeSessionExtension {
 
     /**
      * 기회 문장 단계 진입. 방금 끝까지 재생한 도입이 기회 문장으로 끝났으면(첫 대사가 없는 옛 대본) 다시 재생하지 않고 바로 아이 말을 기다린다(도입
-     * 중에 온 대답이 있으면 곧바로 판정한다). 친구 첫 대사 뒤 · 상황 다시 설명 뒤의 진입은 기회 문장을 친구 대사로 재생한다.
+     * 중에 온 대답이 있으면 곧바로 판정한다). 친구 첫 대사 뒤 · 상황 다시 설명 뒤의 진입은 기회 문장을 친구 대사로 재생한다(상황 다시 설명 뒤에 첫 대사가
+     * 있는 장면은 첫 대사를 먼저 다시 들려준 뒤 여기로 온다).
      */
     private void opportunity(Phase previous) {
         boolean heard = previous == Phase.SCENE_INTRO && introCarriesOpportunity;

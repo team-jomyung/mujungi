@@ -517,14 +517,26 @@ public final class FlowTransitions {
         return s.partnerOpener() ? Step.enter(Phase.SCENE_INTRO, Sub.PARTNER_OPENER) : Step.enter(Phase.OPPORTUNITY, Sub.NONE);
     }
 
+    /**
+     * 입력 단계의 슬롯. 질문이 끝나면 입력을 기다린다. 상황 다시 설명이 끝나면 RETRY는 코치 발화로, OPPORTUNITY는 기회 문장으로 다시 간다 — 장면에
+     * 친구 첫 대사가 있으면 첫 대사부터 다시 들려준다(실측 F3: 단서가 첫 대사에 있으면 기회 문장만으로는 상황이 다시 서지 않는다). 다시 들려준 첫 대사가
+     * 끝나거나 끊기면 기회 문장으로 가고, 실패 · 막힘은 도입의 첫 대사처럼 재생 실패로 정리한다. 무응답 재안내는 기회 문장만 다시 들려준다(REGUIDE).
+     */
     private Step inputPhaseSlot(FlowState s, SlotEnd end) {
-        if (end == SlotEnd.PLAYED || end == SlotEnd.INTERRUPTED) {
-            if (s.sub() == Sub.REEXPLAIN) {
-                return s.phase() == Phase.RETRY ? Step.enter(Phase.FOCUS, Sub.COACH_UTTERANCE) : Step.enter(Phase.OPPORTUNITY, Sub.NONE);
-            }
-            return Step.await();
+        boolean ended = end == SlotEnd.PLAYED || end == SlotEnd.INTERRUPTED;
+        if (!ended) {
+            return failedWrap(s, end);
         }
-        return failedWrap(s, end);
+        return switch (s.sub()) {
+            case REEXPLAIN -> {
+                if (s.phase() == Phase.RETRY) {
+                    yield Step.enter(Phase.FOCUS, Sub.COACH_UTTERANCE);
+                }
+                yield s.partnerOpener() ? Step.enter(Phase.OPPORTUNITY, Sub.PARTNER_OPENER) : Step.enter(Phase.OPPORTUNITY, Sub.NONE);
+            }
+            case PARTNER_OPENER -> Step.enter(Phase.OPPORTUNITY, Sub.NONE);
+            default -> Step.await();
+        };
     }
 
     private Step focusSlot(FlowState s, SlotEnd end) {

@@ -31,7 +31,10 @@ public final class FlowState {
     /** 단계 안의 소단계(SCENE_INTRO 친구 첫 대사, FOCUS 진입 ① · ②, SCENE_WRAP 소단계, 상황 다시 설명 재생 중). */
     public enum Sub {
         NONE,
-        /** SCENE_INTRO: 무중의 장면 설명 뒤 친구 역할 첫 대사 재생 중. */
+        /**
+         * SCENE_INTRO: 무중의 장면 설명 뒤 친구 역할 첫 대사 재생 중. OPPORTUNITY: 상황 다시 설명 뒤 첫 대사를 다시 재생 중(이어서 기회 문장, 실측 F3).
+         * 어느 쪽이든 이 동안의 아이 말은 대답으로 보지 않는다.
+         */
         PARTNER_OPENER,
         /** FOCUS 진입 ①: 역할 전환 알림 재생 중. */
         ROLE_NOTICE,

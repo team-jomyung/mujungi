@@ -33,7 +33,7 @@ import tools.jackson.databind.json.JsonMapper;
  *
  * <ol>
  *   <li>장면 1: 무중의 설명 → 친구 첫 대사 → 친구 기회 문장 → (일부 전달) 친구 되묻기 → (전달됨) 친구 반응 — 칭찬 · 채점 없음.
- *   <li>장면 2: 무중의 변형 제안 → (수락) 친구 기회 문장 → (도움 요청) 전환 알림 → 무중(코치)의 요점 + 말틀 → (다시 말함) 복귀 알림 → 친구 반응.
+ *   <li>장면 2: 무중의 변형 제안 → (수락) 친구 기회 문장 → (도움 요청) 전환 알림 → 무중(코치)의 요점 + 대본의 빈칸 예문 → (다시 말함) 복귀 알림 → 친구 반응.
  * </ol>
  *
  * <p>가짜 출력 · 가짜 판정 위의 합성 대화다(테스트 대역 증거). 친구 · 코치 대사는 실제 모델이 만들지 않고 지시문만 확인한다 — 실제 말은
@@ -86,6 +86,9 @@ class StandardPracticeDialogueTest {
         // 아이: 어… 이거 아닌데. → J2 일부 전달 → 친구: 되묻기(D_REASK)
         answer(h, child.get(0));
         expectGenerated(h, "PEER", PracticeInstructions.peerReask(base, false));
+        assertThat(h.out.lastSlot().text()).as("되묻기는 설명에 나온 '파란색'을 먼저 말하거나 그 낱말로 확인하지 않는다(실측 F4)")
+                .contains("상황에 나와 있어도 먼저 말하지 않고", "열린 질문 하나", "지금 장면과 상관없는 새 질문은 하지 않는다",
+                        PracticeInstructions.VOICE_RULE);
         h.played();
         // 아이: 파란색! 나 파란색 달라고 했어. → J3 전달됨 → 친구: 역할 안의 반응(D_CONTINUE), 칭찬 · 채점 없음
         answer(h, child.get(1));
@@ -100,14 +103,17 @@ class StandardPracticeDialogueTest {
         expectApproved(h, FRIEND, "자, 초코 우유 여기!");
         assertThat(h.ext.progress().stage()).isEqualTo("NEW_SCENARIO_RESPONSE");
         h.played();
-        // 아이: 음… 몰라. 뭐라고 해? → J2 도움 요청 → 무중: 잠깐, 무중이 도와줄게.(승인 알림) → 요점 + 말틀(D_FOCUS)
+        // 아이: 음… 몰라. 뭐라고 해? → J2 도움 요청 → 무중: 잠깐, 무중이 도와줄게.(승인 알림) → 요점 + 빈칸 예문(D_FOCUS)
         answer(h, child.get(3));
         assertThat(h.out.timeline.getLast()).isEqualTo("ANNOUNCE:COACH");
         h.announcedNotice(Playback.COMPLETED);
         String coach = PracticeInstructions.coachHelp(variant, RolePolicy.Example.FRAME);
         expectGenerated(h, "COACH", coach);
-        assertThat(coach).contains("이 요점 하나만 쉬운 말로 짧게 알려 준다: 달라고 한 것과 받은 것이 같은지 생각해 보기",
-                "'뭐뭐'로 비운 말틀로 바꿔 하나만 들어 준다: 아니, 나 딸기 우유 달라고 했어.", "마지막에 아이 말로 해 보자고 한다");
+        // 판 v7 대본: 요점 → 대본의 빈칸 예문 글자 그대로 + '처럼 말할 수 있어' → '네 말로 해 볼래?'(실측 F5). 완성 예시는 지시문에 없다
+        assertThat(coach).contains("첫째, 요점을 쉬운 말 한 문장으로 말한다: 달라고 한 것과 받은 것이 같은지 생각해 보기",
+                "둘째, 이 빈칸 예문을 '뭐뭐'까지 그대로 말하고 '처럼 말할 수 있어'를 붙인다: 아니, 나 뭐뭐 달라고 했어.",
+                "셋째, 네 말로 해 볼래? 하고 묻는다", "'빈칸 예문'이라는 말은 소리 내어 하지 않는다")
+                .doesNotContain("아니, 나 딸기 우유 달라고 했어", "말틀");
         h.played();
         // 아이: 아니, 나 딸기 우유 달라고 했어. → J5 → 무중: 다시 친구 역할로 돌아갈게.(승인 알림) → 친구: 반응(D_RESUME)
         answer(h, child.get(4));
@@ -130,7 +136,7 @@ class StandardPracticeDialogueTest {
                 FRIEND + ": 자, 초코 우유 여기!",
                 "판정 J2",
                 "무중(승인 알림): COACH",
-                "코치(생성): 요점 + 말틀",
+                "코치(생성): 요점 + 빈칸 예문",
                 "판정 J5",
                 "무중(승인 알림): PEER",
                 "친구(생성): 반응");
@@ -200,6 +206,9 @@ class StandardPracticeDialogueTest {
         assertThat(spoken).isNotEmpty().allSatisfy(text -> assertThat(text).doesNotContain(PRAISE.toArray(new String[0])));
         assertThat(h.out.generatedSlots()).filteredOn(slot -> slot.role().equals("PEER"))
                 .allSatisfy(slot -> assertThat(slot.text()).contains("고쳐 주"));
+        assertThat(h.out.generatedSlots()).isNotEmpty().allSatisfy(slot -> assertThat(slot.text())
+                .as("지시문 낱말 '말틀'을 쓰지 않고, 생성형 말은 이모지 · 기호 · 괄호 없이 말로만 한다(실측 F4 · F5)")
+                .doesNotContain("말틀").contains(PracticeInstructions.VOICE_RULE));
     }
 
     // ---- 보조 ----
@@ -256,7 +265,7 @@ class StandardPracticeDialogueTest {
                 return "친구(생성): 반응";
             }
             if (slot.text().equals(PracticeInstructions.coachHelp(scene, RolePolicy.Example.FRAME))) {
-                return "코치(생성): 요점 + 말틀";
+                return "코치(생성): 요점 + 빈칸 예문";
             }
         }
         return slot.role() + "(생성): 기타";
@@ -281,7 +290,7 @@ class StandardPracticeDialogueTest {
         assertThat(h.recorder.helps).extracting(HelpRecord::kind).containsExactly(HelpKind.ROLE_SWITCH, HelpKind.FOCUS_HELP,
                 HelpKind.ROLE_RETURN);
         assertThat(h.recorder.helps.getFirst().consentAnswer()).isEqualTo(consent);
-        assertThat(h.recorder.helps.get(1).exampleGiven()).as("말틀도 표현 예시를 준 도움으로 남긴다").isTrue();
+        assertThat(h.recorder.helps.get(1).exampleGiven()).as("빈칸 예문도 표현 예시를 준 도움으로 남긴다").isTrue();
 
         String json = JsonCodec.shared().write(h.ext.practiceRecord());
         assertThat(InternalApi.schemaErrors("practice-record-v2.schema.json", json)).isEmpty();

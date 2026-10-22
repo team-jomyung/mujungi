@@ -232,9 +232,10 @@ class PracticeConversationTest {
 
         List<Slot> coach = h.out.generatedSlots().stream().filter(slot -> slot.role().equals("COACH")).toList();
         assertThat(coach).hasSize(2);
-        assertThat(coach.get(0).text()).as("첫 도움은 요점 + 핵심 낱말을 비운 말틀(기준 연습 대화 D_FOCUS)")
-                .contains("이 요점 하나만 쉬운 말로 짧게 알려 준다: 어느 것인지 말하기", "그대로 말하지 말고", "'뭐뭐'로 비운 말틀")
-                .doesNotContain("표현 예시를 하나만 들어도 된다");
+        assertThat(coach.get(0).text()).as("첫 도움은 요점 + 핵심 낱말을 비운 빈칸 예문(기준 연습 대화 D_FOCUS, 빈칸 예문이 없는 옛 대본)")
+                .contains("이 요점 하나만 쉬운 말로 짧게 알려 준다: 어느 것인지 말하기", "그대로 말하지 말고", "'뭐뭐'로 비운 빈칸 예문",
+                        "'빈칸 예문'이라는 말은 소리 내어 하지 않는다")
+                .doesNotContain("표현 예시를 하나만 들어도 된다", "말틀");
         assertThat(coach.get(1).text()).as("다시 해 보기 뒤의 도움은 대본의 표현 예시 하나")
                 .contains("표현 예시를 하나만 들어도 된다: 파란 상자를 줘").doesNotContain("말틀");
         assertThat(h.out.announces).as("둘째 한도에서 정리하며 복귀 알림").containsExactly("COACH", "PEER");
@@ -246,7 +247,7 @@ class PracticeConversationTest {
         assertThat(row.variantSkipReason()).isEqualTo(VariantSkipReason.FOCUS_LIMIT);
         assertThat(h.recorder.factKinds(row)).contains(FactKind.EXPRESSION_EXAMPLE);
         assertThat(h.recorder.helps).filteredOn(help -> help.kind() == HelpKind.FOCUS_HELP)
-                .extracting(PracticeFlowTypes.HelpRecord::exampleGiven).as("말틀도 표현 예시를 준 도움으로 남긴다").containsExactly(true, true);
+                .extracting(PracticeFlowTypes.HelpRecord::exampleGiven).as("빈칸 예문도 표현 예시를 준 도움으로 남긴다").containsExactly(true, true);
     }
 
     @Test
@@ -480,8 +481,8 @@ class PracticeConversationTest {
         assertThat(coach).isNotEmpty();
         assertThat(coach.stream().filter(slot -> slot.text().contains("표현 예시를 하나만 들어도 된다")))
                 .as("코치는 아이가 도움에 동의한 뒤에만 표현 예시").isNotEmpty();
-        assertThat(coach.stream().filter(slot -> slot.text().contains("'뭐뭐'로 비운 말틀")))
-                .as("동의 뒤 첫 코치 도움은 말틀(예시를 그대로 말하지 않는다)").hasSize(1)
+        assertThat(coach.stream().filter(slot -> slot.text().contains("'뭐뭐'로 비운 빈칸 예문")))
+                .as("동의 뒤 첫 코치 도움은 빈칸 예문(예시를 그대로 말하지 않는다)").hasSize(1)
                 .allSatisfy(slot -> assertThat(slot.text()).contains("그대로 말하지 말고"));
         List<String> praise = List.of("잘 마쳤", "잘했", "훌륭", "멋지", "최고", "정답이야", "맞았");
         for (Slot slot : generated) {
@@ -1384,8 +1385,12 @@ class PracticeConversationTest {
         assertThat(h.out.timers).doesNotContainKey("no-response");
     }
 
+    /**
+     * 실측 F3: 단서(부탁)가 첫 대사에 있으면 다시 설명 뒤 기회 문장만으로는 상황이 다시 서지 않았다. 다시 설명(무중) 뒤에 친구 첫 대사 → 기회 문장을
+     * 다시 들려주고, 다시 들려주는 첫 대사 중의 아이 말은 대답으로 보지 않는다.
+     */
     @Test
-    void theReexplanationIsNarratedByMujoongAndTheOpportunityLineAfterItIsTheFriendAgain() {
+    void theReexplanationIsNarratedByMujoongAndThenTheFriendReplaysTheOpenerAndTheOpportunityLine() {
         Harness h = withOpener();
         h.toOpportunityThroughOpener();
         h.child("공룡 좋아");
@@ -1395,9 +1400,55 @@ class PracticeConversationTest {
         assertThat(reexplanation.text()).isEqualTo("친구는 빨간 상자와 파란 상자를 들고 있어.");
         assertThat(reexplanation.speech().partnerRole()).isEqualTo(RolePolicy.NARRATOR_LABEL);
         h.played();
+        assertThat(h.out.lastSlot().text()).as("다시 설명 뒤에는 첫 대사부터 다시 들려준다").isEqualTo(OPENER);
+        assertThat(h.out.lastSlot().speech().partnerRole()).isEqualTo("같은 반 친구");
+        assertThat(h.ext.state().phase()).isEqualTo(FlowState.Phase.OPPORTUNITY);
+        assertThat(h.ext.state().sub()).isEqualTo(FlowState.Sub.PARTNER_OPENER);
+        int judgments = h.out.judgments.size();
+        h.child("응?");
+        assertThat(h.out.judgments).as("다시 들려주는 첫 대사 중의 말은 대답이 아니다").hasSize(judgments);
+        assertThat(h.out.timers).doesNotContainKey("no-response");
+        h.played();
+
         assertThat(h.out.lastSlot().text()).isEqualTo(HANDOVER);
         assertThat(h.out.lastSlot().speech().partnerRole()).isEqualTo("같은 반 친구");
-        assertThat(h.out.slots).extracting(Slot::text).as("다시 설명 뒤에 첫 대사를 다시 하지 않는다").containsOnlyOnce(OPENER);
+        assertThat(h.out.slots).extracting(Slot::text).containsExactly(NARRATION, OPENER, HANDOVER,
+                "친구는 빨간 상자와 파란 상자를 들고 있어.", OPENER, HANDOVER);
+        h.played();
+        assertThat(h.out.timers).containsKey("no-response");
+        h.child("파란 상자 줘");
+        assertThat(h.out.lastJudgment().point()).isEqualTo(JudgmentPoint.J2);
+        assertThat(h.failures).isEmpty();
+    }
+
+    @Test
+    void theNoResponseReguideReplaysOnlyTheOpportunityLineEvenWhenTheSceneHasAnOpener() {
+        Harness h = withOpener();
+        h.toOpportunityThroughOpener();
+        int slots = h.out.slots.size();
+
+        h.advance(Duration.ofSeconds(10));
+
+        assertThat(h.out.slots).hasSize(slots + 1);
+        assertThat(h.out.lastSlot().text()).as("무응답 재안내는 기회 문장만 다시").isEqualTo(HANDOVER);
+        assertThat(h.out.slots).extracting(Slot::text).containsOnlyOnce(OPENER);
+    }
+
+    @Test
+    void aReplayedOpenerThatFailsWrapsTheSceneAsAPlaybackFailure() {
+        Harness h = withOpener();
+        h.toOpportunityThroughOpener();
+        h.child("공룡 좋아");
+        h.result("J2", "IRRELEVANT");
+        h.played();
+        assertThat(h.out.lastSlot().text()).isEqualTo(OPENER);
+
+        Signal end = h.end(Playback.FAILED);
+
+        assertThat(end).isEqualTo(Signal.LAST_GOAL);
+        SceneRunRecord row = h.recorder.only();
+        assertThat(h.recorder.factKinds(row)).contains(FactKind.SITUATION_EXPLAINED, FactKind.PLAYBACK_FAILED);
+        assertThat(h.out.slots).extracting(Slot::text).as("실패한 첫 대사 뒤에 기회 문장을 내지 않는다").containsOnlyOnce(HANDOVER);
     }
 
     @Test
@@ -1674,5 +1725,106 @@ class PracticeConversationTest {
         assertThat(PracticeInstructions.coachGivesExample(scene, RolePolicy.Example.FRAME)).isTrue();
         assertThat(PracticeInstructions.coachGivesExample(bare, RolePolicy.Example.FULL)).as("대본에 예시가 없으면 예시를 준 것이 아니다").isFalse();
         assertThat(PracticeInstructions.coachHelp(bare, RolePolicy.Example.FULL)).contains("단서만 준다");
+    }
+
+    // ---- 코치 첫 도움의 빈칸 예문 · 되묻기 · 생성형 말의 음성 규칙 (실측 F4 · F5, docs/practice-dialogue-standard.md 14절) ----
+
+    @Test
+    void aV7ScriptMakesTheFirstCoachHelpSayTheScriptFrameVerbatimBetweenTheFocusPointAndTheInvitation() {
+        Harness h = new Harness(packageJson(GOAL, PracticeScriptFixtures.v7Script(SCENARIO)), APPROVED);
+        h.toOpportunityThroughOpener();
+        h.child("어떻게 말해?");
+        h.result("J2", "HELP");
+        h.announcedNotice(Playback.COMPLETED);
+
+        Slot coach = h.out.lastSlot();
+        assertThat(coach.role()).isEqualTo("COACH");
+        String text = coach.text();
+        assertThat(text).as("요점 → 대본의 빈칸 예문 글자 그대로 → 네 말로 해 볼래? 를 빠짐없이 이 순서로")
+                .contains("첫째, 요점을 쉬운 말 한 문장으로 말한다: 달라고 한 것과 받은 것이 같은지 보기",
+                        "둘째, 이 빈칸 예문을 '뭐뭐'까지 그대로 말하고 '처럼 말할 수 있어'를 붙인다: " + PracticeScriptFixtures.V7_FRAME,
+                        "셋째, 네 말로 해 볼래? 하고 묻는다", "요점과 빈칸 예문을 꼭 넣고", "'빈칸 예문'이라는 말은 소리 내어 하지 않는다")
+                .as("완성 예시는 지시문에 없다 — 빈칸은 core가 만든 것이다").doesNotContain("아니, 나 파란 상자 달라고 했어", "말틀");
+        assertThat(text.indexOf("첫째")).isLessThan(text.indexOf("둘째"));
+        assertThat(text.indexOf("둘째")).isLessThan(text.indexOf("셋째"));
+        assertThat(h.recorder.helps).filteredOn(help -> help.kind() == HelpKind.FOCUS_HELP)
+                .extracting(PracticeFlowTypes.HelpRecord::exampleGiven).as("빈칸 예문도 표현 예시를 준 도움이다").containsExactly(true);
+
+        h.played();
+        h.child("음");
+        h.result("J5", "PARTIAL");
+        h.played();
+        assertThat(h.out.generatedSlots()).filteredOn(slot -> slot.role().equals("COACH")).last()
+                .satisfies(second -> assertThat(second.text()).as("다시 해 보기 뒤의 도움은 지금처럼 표현 예시 하나")
+                        .contains("표현 예시를 하나만 들어도 된다: 아니, 나 파란 상자 달라고 했어").doesNotContain("둘째"));
+    }
+
+    @Test
+    void aFrameTooLongForTheInstructionOrWithoutTheBlankIsNotUsedAndTheOldFramePathIsTaken() {
+        PracticeScript.Scene base = PracticeScriptReader.read(PracticeScriptFixtures.v7Script(SCENARIO)).baseScene();
+        PracticeScript.Scene longFrame = withFrames(base, List.of("뭐뭐 " + "가".repeat(PracticeInstructions.FIELD_MAX)));
+        PracticeScript.Scene noBlank = withFrames(base, List.of("아니, 나 그거 달라고 했어."));
+
+        assertThat(PracticeInstructions.frame(base)).isEqualTo(PracticeScriptFixtures.V7_FRAME);
+        for (PracticeScript.Scene scene : List.of(longFrame, noBlank)) {
+            assertThat(PracticeInstructions.frame(scene)).isEmpty();
+            assertThat(PracticeInstructions.coachHelp(scene, RolePolicy.Example.FRAME))
+                    .as("글자 그대로 넣을 수 없는 빈칸 예문은 쓰지 않고 표현 예시에서 빈칸을 만들게 한다")
+                    .contains("그대로 말하지 말고", "'뭐뭐'로 비운 빈칸 예문으로 바꿔 하나만 들어 준다").doesNotContain("둘째");
+        }
+        assertThat(PracticeInstructions.coachHelp(base, RolePolicy.Example.NONE)).as("동의 전에는 빈칸 예문도 없다")
+                .contains("단서만 준다").doesNotContain(PracticeScriptFixtures.V7_FRAME);
+    }
+
+    @Test
+    void theReaskNeverNamesWhatTheChildWantsAndAsksOneOpenQuestionInsideTheScene() {
+        Harness h = new Harness(packageJson(GOAL, PracticeScriptFixtures.v7Script(SCENARIO)), APPROVED);
+        h.toOpportunityThroughOpener();
+        h.child("어, 이거 아닌데");
+        h.result("J2", "PARTIAL");
+
+        String reask = h.out.lastSlot().text();
+        assertThat(reask).as("설명에 '파란 상자'가 있어도 친구가 먼저 말하거나 그 낱말로 확인하지 않게 막는다(실측 F4)")
+                .contains("상황에 나와 있어도 먼저 말하지 않고, 그 낱말을 넣어 맞는지 묻지도 않는다", "열린 질문 하나",
+                        "지금 장면과 상관없는 새 질문은 하지 않는다", PracticeInstructions.VOICE_RULE)
+                .endsWith("한두 문장으로 말한다. 아이 대신 대답하지 않는다.");
+        assertThat(PracticeInstructions.peerReask(PracticeScriptReader.read(PracticeScriptFixtures.v7Script(SCENARIO)).baseScene(), true))
+                .as("같은 말 다시 묻기에도 같은 금지").contains("같은 질문을 같은 말투로", "상황에 나와 있어도 먼저 말하지 않고");
+    }
+
+    @Test
+    void everyGeneratedInstructionForbidsEmojisSymbolsAndBracketsAndKeepsItsClosingRuleWithTheLongestFields() {
+        PracticeScript.Scene longest = new PracticeScript.Scene("base-1", SceneKind.BASE, "설".repeat(8000), "첫".repeat(300),
+                "기".repeat(2000), "다".repeat(2000), "가".repeat(RolePolicy.PEER_NAME_MAX), List.of("요".repeat(500)),
+                List.of("예".repeat(500)), List.of("뭐뭐" + "틀".repeat(PracticeInstructions.FIELD_MAX - 2)), "친구", "교실", "놀이");
+        PracticeScript.Scene oldLongest = withFrames(longest, List.of());
+        Map<String, String> instructions = new java.util.LinkedHashMap<>();
+        instructions.put("reask", PracticeInstructions.peerReask(longest, false));
+        instructions.put("reaskAgain", PracticeInstructions.peerReask(longest, true));
+        instructions.put("reaction", PracticeInstructions.peerReaction(longest));
+        instructions.put("helpOffer", PracticeInstructions.mujoongHelpOffer(true));
+        instructions.put("variantOffer", PracticeInstructions.mujoongVariantOffer(true));
+        instructions.put("coachFrameV7", PracticeInstructions.coachHelp(longest, RolePolicy.Example.FRAME));
+        instructions.put("coachFrameOld", PracticeInstructions.coachHelp(oldLongest, RolePolicy.Example.FRAME));
+        instructions.put("coachFull", PracticeInstructions.coachHelp(longest, RolePolicy.Example.FULL));
+        instructions.put("coachNone", PracticeInstructions.coachHelp(longest, RolePolicy.Example.NONE));
+        instructions.put("coachRetry", PracticeInstructions.coachRetryPrompt(longest));
+        instructions.put("noticeCoach", PracticeInstructions.roleNotice("COACH", longest));
+        instructions.put("noticePeer", PracticeInstructions.roleNotice("PEER", longest));
+
+        assertThat(instructions.get("coachFrameV7")).as("가장 긴 칸에서도 빈칸 예문 길로 간다").contains("둘째");
+        instructions.forEach((name, text) -> {
+            assertThat(text.codePointCount(0, text.length())).as(name).isLessThanOrEqualTo(PracticeInstructions.MAX_LENGTH);
+            assertThat(text).as(name + ": 생성형 말은 이모지 · 기호 · 괄호 없이 말로만(실측 F4)").contains(PracticeInstructions.VOICE_RULE);
+            assertThat(text).as(name + ": 끝의 금지 규칙이 잘리지 않는다")
+                    .satisfiesAnyOf(t -> assertThat(t).endsWith("아이 대신 대답하지 않는다."), t -> assertThat(t).endsWith("따뜻하게 말한다."));
+            assertThat(text).as(name + ": 지시문 낱말 '말틀'을 쓰지 않는다(실측 F5)").doesNotContain("말틀");
+        });
+    }
+
+    private static PracticeScript.Scene withFrames(PracticeScript.Scene scene, List<String> frames) {
+        return new PracticeScript.Scene(scene.sceneKey(), scene.sceneKind(), scene.sceneDescription(), scene.partnerOpener(),
+                scene.opportunitySentence(), scene.reexplanation(), scene.partnerRole(), scene.focusPoints(), scene.expressionExamples(),
+                frames, scene.relation(), scene.place(), scene.topic());
     }
 }
