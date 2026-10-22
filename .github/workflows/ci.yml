@@ -376,8 +376,9 @@ jobs:
           registry="$(aws sts get-caller-identity --query Account --output text).dkr.ecr.${AWS_REGION}.amazonaws.com"
           echo "REGISTRY=$registry" >>"$GITHUB_ENV"
           bash infra/ci/build-images.sh --registry "$registry" --tag "$GITHUB_SHA" --log-dir "$RUNNER_TEMP/image-logs"
-      - name: 이미지 빌드 실패 진단
-        if: failure()
+      # 빌드를 재시도했으면 성공해도 첫 실패 로그(<이름>.log)와 재시도 로그(<이름>.attempt-<n>.log)를 남긴다
+      - name: 이미지 빌드 로그(실패 · 재시도 진단)
+        if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: image-build-logs
