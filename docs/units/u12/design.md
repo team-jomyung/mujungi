@@ -6,7 +6,7 @@
 
 ## 1. 범위
 
-연습(PRACTICE) 세션을 새 연습 흐름으로 진행한다: 시작 요청이 연습 대본을 받고 → 참여 확인(실행부) 뒤 도입(무중의 설명 → 친구 첫 대사) → 친구 기회 문장 → 판정(J2 ~ J5) → 되묻기 · 도움 · 변형 → 친구 반응 → 정리 → 정산(`record.practice`)까지. 친구(PEER) · 코치(COACH) 역할 발화는 GPT-Live가 그 자리에서 만들고 **제브(연습 모드)가 `ALLOW`한 것만** 재생된다. 장면 진행 말의 기준은 팀 기준 연습 대화다(`docs/practice-dialogue-standard.md`).
+연습(PRACTICE) 세션을 새 연습 흐름으로 진행한다: 시작 요청이 연습 대본을 받고 → 참여 확인(실행부) 뒤 도입(무중의 설명 → 친구 첫 대사) → 친구 기회 문장 → 판정(J2 ~ J5) → 되묻기 · 도움 · 변형 → 친구 반응 → 정리 → 정산(`record.practice`)까지. 친구(PEER) · 코치(COACH) 역할 발화는 GPT-Live가 그 자리에서 만들고 **제브(연습 모드)가 `ALLOW`한 것만** 재생된다(제브 단계를 건너뛰는 dev · test 전용 OFF에서는 기본 게이트만 지난다, U12-D12). 장면 진행 말의 기준은 팀 기준 연습 대화다(`docs/practice-dialogue-standard.md`).
 
 하지 않는 것: 프런트 · core-api 코드 변경(12 화면은 진행 6값으로 그대로 돈다), 기기 시뮬레이터 · `verify.sh` 단계 확장(후속), 레거시 연습 코드 · V4 표 삭제(BR10.1), 제브 실호출.
 
@@ -31,7 +31,7 @@
 
 - **생성형 슬롯**: `PracticeSpeech`에 `generated` 성분을 더했다(기존 6인자 생성자 유지). 생성형이면 `partnerRole`은 `PEER`/`COACH`, `text`는 서버가 만든 지시문 템플릿 문장이고 `matches()`는 언제나 거짓이다 — 원문 일치로 제브를 건너뛸 수 없다.
 - **`speakGenerated(correlationId, role, 지시문)` 하나**로 GPT-Live 역할 발화를 낸다: 슬롯 열기 → 연습 출력 보류 해제 → 출력 세대 올림 → 지시를 `replayable=true`로 송신 → 송신 실패 · 새 말 미시작이면 기존 `u5b-voice-failed` 길. 발화마다 제브 재지시 수를 새로 센다(`onTurnBoundary`). `instructProvider`는 새 흐름이 부르지 않는다.
-- **`sealAndGate`**: 열린 슬롯이 생성형이면 제브를 `PRACTICE_PEER`/`PRACTICE_COACH`로 불러 `ALLOW`일 때만 재생한다. 제브가 꺼져 있거나 시작이 실패하면 폐기한다(fail-closed). 승인 발화 슬롯(`generated=false`)의 기존 길은 바뀌지 않았다(U5b 시험 무변경).
+- **`sealAndGate`**: 열린 슬롯이 생성형이면 제브(`REAL` · `STUB`)를 `PRACTICE_PEER`/`PRACTICE_COACH`로 불러 `ALLOW`일 때만 재생한다. 시작이 실패하면 폐기한다(fail-closed). 제브 단계를 건너뛰는 `OFF`(dev · test 전용)에서는 기본 게이트와 송신 직전 재확인을 지난 생성형 발화를 그대로 재생한다(U12-D12, 편차 (U13-d)). 승인 발화 슬롯(`generated=false`)의 기존 길은 바뀌지 않았다(U5b 시험 무변경).
 - **첫 막힘**은 같은 역할 지시문을 다시 보내 한 번 다시 검사한다. `discardForRetry`는 슬롯을 닫지 않으므로(코드로 확인, FA3) 재지시 동안 슬롯이 열려 있다. **두 번째 막힘**은 `GUARDRAIL_BLOCKED` 사건 다음 FAILED 사실이다.
 - **슬롯 종료 사실은 정확히 한 번**: 재생 완료/끊김/실패(기존), 폐기(FAILED), 검사 중 아이가 말함(INTERRUPTED), 그리고 이번에 메운 두 길 — 무효로 닫힌 검사(`Env.practiceVoided` → INTERRUPTED)와 재지시가 소리로 이어지지 않은 경우(`finishAbandoned` → FAILED). 확장은 correlationId마다 첫 사건만 처리한다.
 - **`announceRoleSwitch(toRole)`**: 시작 패키지 `approvedSpeech`의 `COACH_SWITCH`/`PEER_RETURN` 문장이 있으면 기존 승인 발화 `speak` 길로 낸다(원문 일치라 제브 호출 없음). 없으면 거짓이고 확장이 생성형 알림으로 낸다.
@@ -58,6 +58,7 @@
 | U12-D9 | functional-spec §3.3 종료 · 휴식(CLOSING) 행 · 정산 직전 종료(onStopping) | 진행 중이던 장면을 END_REQUEST로 닫는다 | 이미 정리된 장면(친구 반응 · 복귀 알림 · 변형 제안 중)에 온 종료 · 휴식 요청과 세션 종료는 정리 때 정한 `liveOutcome.timing`을 지우지 않고, 원 장면이면 변형 평가가 그 순간 냈을 `variantSkipReason`만 더한다(종료 · 휴식을 반영한 `decideVariant`: 변형 장면이 없으면 NO_VARIANT, 집중 한도로 닫혔으면 FOCUS_LIMIT, 그 밖 END_OR_REST) | 기록 손실 방지: 이전에는 변형 제안 중 휴식 요청이 끝난 장면의 '바로 전달' · '되묻기 뒤 전달'을 NONE으로 덮었고, 복귀 알림 중 요청 · 세션 종료는 생략 사유를 비워 두었다 |
 | U12-D10 | 상황 다시 설명 뒤 OPPORTUNITY 재진입(이전 구현: 기회 문장만 다시 재생) | 다시 설명 → 기회 문장 | 장면에 친구 첫 대사가 있으면 다시 설명 → 첫 대사 → 기회 문장(OPPORTUNITY 소단계 PARTNER_OPENER, 그동안의 아이 말 · 판정 · 무응답 시계는 보지 않음, 첫 대사가 끊기면 기회 문장, 실패 · 막힘은 재생 실패로 정리). 무응답 재안내는 지금처럼 기회 문장만 | 실측 F3(x4: 부탁 단서가 첫 대사에 있어 다시 설명 뒤에 부탁 없이 기회 문장만 들렸다). 생성 v7이 단서를 기회 문장에 두게 했지만 옛 대본 · 지시를 어긴 대본에도 상황이 다시 서게 한다 |
 | U12-D11 | 되묻기 · 코치 첫 도움 · 생성형 지시문 문구 | 되묻기는 더 알고 싶은 것을 한 번 되묻기, 첫 도움은 GPT-Live가 예시에서 낱말을 비운 말틀 | 되묻기: 아이가 원하는 것 · 할 말의 낱말을 설명에 나와 있어도 먼저 말하거나 확인하지 않는 열린 질문 하나, 장면 밖 새 질문 금지. 첫 도움: 판 v7 대본이면 요점 → 대본의 빈칸 예문 글자 그대로 + '처럼 말할 수 있어' → '네 말로 해 볼래?'를 빠짐없이(빈칸 예문이 칸 상한 80자를 넘거나 `뭐뭐`가 없으면 옛 길). 모든 생성형 지시문에 이모지 · 기호 · 괄호 금지. 지시문 낱말 '말틀'을 없애고 '빈칸 예문'이라는 말도 소리 내지 않게 한다. 가장 긴 칸에서도 끝 금지 규칙이 500자 안에 남는다 | 실측 F4(«파란색 크레용이 필요해?» · «너는 무슨 그림 그리고 있어?» · «🥛») · F5(«말틀은 …야» · 빈 도움 «네가 떠올린 말을 먼저 들려줘.» · 꾸밈말만 비운 말틀) · AI 동작 명세 §3.1 `D_REASK` · `D_FOCUS` |
+| U12-D12 | 기능 설계 3.5(생성형 슬롯은 제브 ALLOW만 재생, 제브가 꺼져 있으면 폐기) | OFF에서 생성형 슬롯 폐기 | OFF에서는 기본 게이트 · 송신 직전 재확인을 지난 생성형 발화를 재생하고 슬롯을 재생 완료로 닫는다. REAL · STUB은 그대로 | 팀장 결정(2026-10-22, 실측 F8, 편차 (U13-d)): 제브 없이 기준 대화를 듣고 측정하기 위해서다. 공개 프로필은 OFF로 기동하지 않는다(기동 규칙 무변경). 성민 확인 필요 |
 
 ## 6. 레거시 사실 기록
 
@@ -83,7 +84,7 @@
 | V7 · 저장소 · 기록기 | `PracticeFlowSchemaIT` · `PracticeFlowRepositoryIT` · `PracticeFlowRecorderIT`(실제 DB) |
 | 시작 경로 · 대본 읽기 | `PracticeStartPathIT` · `PracticeStartBodyU12Test` · `PracticeScriptReaderTest` |
 | 전이표 · 상태 기계 · 라우터 | `FlowTransitionsTest` · `PracticeConversationTest` · `PracticeFlowRouterTest` |
-| 실행부 슬롯 · 제브 연결 | `PracticeGeneratedSpeechTest`(ALLOW · BLOCK 0바이트 · 제브 비활성 폐기 · 같은 지시문 재지시 · 종료 사실 한 번) |
+| 실행부 슬롯 · 제브 연결 | `PracticeGeneratedSpeechTest`(ALLOW · BLOCK 0바이트 · OFF 재생과 기본 게이트 폐기 · STUB 검사 대기 · 같은 지시문 재지시 · 종료 사실 한 번) · `PracticeFlowGuardrailOffTest`(OFF에서 기준 대화를 실행부로 끝까지) |
 | 기록 · 진행 | `PracticeFlowRecordTest`(표식 문자열 · 값 타입 · 행 생성 조건) · `PracticeProgressMappingTest` |
 | 끝-끝(대역) | `PracticeFlowIT`: 시작 → 도입 → 기회 → J2 일부 전달 → 제브 PRACTICE_PEER ALLOW → J3 충분 → 친구 반응(제브 PRACTICE_PEER ALLOW) → 정리 → 정산 → `record.practice` |
 | 기준 연습 대화(대역) | `StandardPracticeDialogueTest`: 고정 대본(크레용 · 우유, 판 v7 빈칸 예문 포함, `src/test/resources/practiceflow/standard-practice-dialogue.json`)으로 기준 대화 차례 16개를 순서 · 말하는 사람까지 재현, 기록 장면 1 AFTER_REASK · 장면 2 AFTER_HELP, 코치 첫 도움이 대본의 빈칸 예문을 그대로 담는지 |

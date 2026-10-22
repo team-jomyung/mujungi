@@ -2782,10 +2782,17 @@ public final class SessionExecutor {
             var generatedSlot = practiceControlled && pendingPracticeSpeech != null && pendingPracticeSpeech.generated()
                     ? pendingPracticeSpeech : null;
             if (generatedSlot != null) {
-                // (기능 설계 3.5): 열린 생성형 슬롯의 새 발화는 제브(연습 모드)가 ALLOW한 것만 재생된다. 제브가 꺼져 있거나 시작이
-                // 실패하면 폐기한다(fail-closed). 원문 일치로 제브를 건너뛸 수 없다
-                if (!guardrail.enabled() || ctx.status() != SessionStatus.ACTIVE) {
+                // (기능 설계 3.5): 열린 생성형 슬롯의 새 발화는 제브(연습 모드)가 ALLOW한 것만 재생된다(REAL · STUB). 시작이 실패하면
+                // 폐기한다(fail-closed). 원문 일치로 제브를 건너뛸 수 없다
+                if (ctx.status() != SessionStatus.ACTIVE) {
                     discard(sealed, GateDecision.DiscardReason.GATE_PATTERN, false);
+                    return;
+                }
+                if (!guardrail.enabled()) {
+                    // 제브 단계를 건너뛰는 모드(OFF)에서는 기본 게이트 검사를 지난 생성형 연습 발화를 자유 대화처럼 송신 직전 재확인 뒤 재생한다
+                    // (팀장 결정 2026-10-22, 실측 F8 · 편차 U13-d). 이전에는 폐기해 OFF에서 되묻기 · 친구 반응 · 코치 도움 · 생성형 알림이 모두
+                    // 들리지 않았다. 공개 프로필(demo · prod)은 OFF로 기동하지 않으므로(GuardrailStartupRules) 이 길은 dev · test에만 있다
+                    recheckAndSend(sealed, null, true);
                     return;
                 }
                 try {

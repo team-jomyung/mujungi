@@ -443,7 +443,7 @@ realtime 출력 게이트의 제브 단계(U13)가 읽는 설정이다. 시간 �
 | `mujoong.guardrail.jev.model` | `${JEV_MODEL:}` | realtime | 고정 모델 버전. 요청의 모델 이름은 이 값과 같아야 한다 |
 | `mujoong.guardrail.jev.pass-threshold` | `${JEV_PASS_THRESHOLD:0.5}` | realtime | 통과 문턱, 허용 `0 < x <= 1`. `PASS`가 1순위이고 `PASS` 확률이 이 값 **이상**일 때만 자동 통과한다(10.13). 비밀이 아니다. **임시 시험값이다 — AI 성능 시험으로 확정한다.** `REAL`에서 범위 밖이거나 숫자가 아니면 기동을 거부한다 [U13 편차 (U13-c)] |
 
-기동 점검(모드 × 프로필 × 키): 공개 프로필(demo · prod)은 `REAL` + `JEV_API_KEY` + 허용 호스트 + 고정 모델이 아니면 기동을 거부하고(`STUB` · `OFF`도 거부), 그 밖(dev · test · 프로필 없음)은 `REAL` · `STUB` · `OFF`를 모두 허용하되 `REAL`이면 키가 있어야 한다. `STUB`은 제브 단계를 모두 지나며 1차 사전 통과를 대역 표시가 붙은 `ALLOW`(`reasonCode` `STUB_ALLOW`)로 돌려주고 `OFF`는 제브 단계를 건너뛴다. 둘로 시작하면 기동 로그에 한 줄이 남는다. 대역의 통과는 실제 검사 성공이 아니다(R-M11).
+기동 점검(모드 × 프로필 × 키): 공개 프로필(demo · prod)은 `REAL` + `JEV_API_KEY` + 허용 호스트 + 고정 모델이 아니면 기동을 거부하고(`STUB` · `OFF`도 거부), 그 밖(dev · test · 프로필 없음)은 `REAL` · `STUB` · `OFF`를 모두 허용하되 `REAL`이면 키가 있어야 한다. `STUB`은 제브 단계를 모두 지나며 1차 사전 통과를 대역 표시가 붙은 `ALLOW`(`reasonCode` `STUB_ALLOW`)로 돌려주고 `OFF`는 제브 단계를 건너뛴다. `OFF`에서는 연습 흐름의 생성형 발화(되묻기 · 친구 반응 · 코치 도움 · 생성형 제안 · 알림)도 자유 대화처럼 기본 게이트(금지 패턴 · 완결)와 송신 직전 재확인을 지나면 재생되고 슬롯은 재생 완료로 닫힌다. 이전에는 생성형 슬롯을 폐기했다(fail-closed) [U13 편차 (U13-d)]. `REAL` · `STUB`의 생성형 발화는 지금처럼 제브가 `ALLOW`한 것만 재생된다. 둘로 시작하면 기동 로그에 한 줄이 남는다. 대역의 통과는 실제 검사 성공이 아니고, `OFF`의 재생은 검사를 받지 않은 재생이다(R-M11).
 
 정책 판 이름은 `guardrail/policy-v2.json`의 `jev-guardrail-v2`다(선 형식 정정으로 `policy-v1.json`의 `jev-guardrail-v1`을 올렸다, 10.13). 스키마 파일(`guardrail-request` · `guardrail-result`)의 예시가 쓰던 `guardrail-v1`은 이 판 이름 규칙으로 정정했다 [U13 편차 (U13-b)] [U13 편차 (U13-c)].
 
