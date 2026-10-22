@@ -258,6 +258,9 @@ public interface PracticeSessionExtension {
     default Progress progress() { return null; }
 
     /** Fixed state identifiers for operational diagnostics; no user/model text. */
+    /** Consumes correlated technical-audio recovery events. */
+    default boolean handlesAudioRecovery() { return false; }
+
     default String diagnosticPhase() { return "NONE"; }
     default String diagnosticSub() { return "NONE"; }
 

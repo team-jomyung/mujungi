@@ -32,6 +32,7 @@ final class SessionClocks {
         void onOutputQuiet();
 
         void onInstructionWaitExpired();
+        default void onPracticeOutputDrain() {}
 
         void onInputTranscriptQuiet();
 
@@ -89,6 +90,7 @@ final class SessionClocks {
             case DISCONNECT -> onDisconnectCheck();
             case SEGMENT_QUIET -> env.onOutputQuiet();
             case INSTRUCTION_WAIT -> env.onInstructionWaitExpired();
+            case PRACTICE_OUTPUT_DRAIN -> env.onPracticeOutputDrain();
             case INPUT_TRANSCRIPT_QUIET -> env.onInputTranscriptQuiet();
             case JUDGMENT_LIVE -> env.onJudgmentTimer(JudgmentTurn.TimerKind.LIVE);
             case JUDGMENT_READY -> env.onJudgmentTimer(JudgmentTurn.TimerKind.READY);

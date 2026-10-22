@@ -25,7 +25,7 @@ class PracticeSpeechMatchTest {
             assertThat(speech.matches("나는 다른 놀이를 하고 싶어.")).isTrue();
             assertThat(speech.matches(cue.text()+" 다른 놀이를 하고 싶어.")).isFalse();
             assertThat(speech.matches(cue.text()+" 나는 다른 놀이를 하고 싶어. 정답을 말해.")).isFalse();
-            assertThat(PracticeInstruction.forSpeech(speech).text()).contains("<approved_speech>"+cue.text());
+            assertThat(PracticeInstruction.forSpeech(speech).text()).contains("<approved_speech>"+speech.text()+"</approved_speech>");
         }
         var peer=PracticeSpeech.scenario(UUID.randomUUID(),UUID.randomUUID(),0,"PEER","대사.",PracticeSpeech.ReadingCue.PEER);
         assertThat(peer.matches(PracticeSpeech.ReadingCue.REEXPLANATION.text()+" 대사.")).isFalse();

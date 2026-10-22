@@ -39,6 +39,34 @@ class OutputGenerationTest {
         assertThat(audio(900).fromStart()).isTrue();
     }
 
+    @Test
+    void quietPracticeKeepsShortAudioAndTranscriptBeforeOrAfterAnAckWithoutTheLegacyMargin() {
+        gen.bumpForQuietInstruction(at(1000), BumpReason.SERVER_SEND, "practice-1");
+        assertThat(gen.awaitingNewSpeech()).isTrue();
+        var first = gen.onAudio(at(1010), CHUNK, false);
+        assertThat(first.verdict()).isEqualTo(ChunkVerdict.ACCEPT);
+        assertThat(first.fromStart()).isTrue();
+        assertThat(gen.onTranscript(at(1020), 0, false).verdict()).isEqualTo(ChunkVerdict.ACCEPT);
+        assertThat(gen.onAppended("older-request", 99999)).isFalse();
+        assertThat(gen.onAppended("practice-1", 99999)).isTrue();
+        assertThat(gen.onAudio(at(1030), CHUNK, false).verdict()).isEqualTo(ChunkVerdict.ACCEPT);
+        assertThat(gen.onQuiet(at(1830)).verdict()).isEqualTo(QuietVerdict.SEAL_RECEIVING);
+        assertThat(gen.onInstructionTimeout()).isEqualTo(InstructionTimeout.NONE);
+    }
+
+    @Test
+    void quietPracticeStillHonorsHoldCancellationAndTheNoOutputDeadline() {
+        gen.bumpForQuietInstruction(at(0), BumpReason.SERVER_SEND, "quiet");
+        assertThat(gen.onAudio(at(10), CHUNK, true).verdict()).isEqualTo(ChunkVerdict.DISCARD_HELD);
+        assertThat(gen.awaitingNewSpeech()).isTrue();
+        assertThat(gen.onInstructionTimeout()).isEqualTo(InstructionTimeout.NEW_SPEECH_NOT_OBSERVED);
+        assertThat(gen.onAudio(at(20), CHUNK, false).verdict()).isEqualTo(ChunkVerdict.DISCARD);
+        gen.bumpForQuietInstruction(at(30), BumpReason.SERVER_SEND, "cancel");
+        gen.bump(at(40), BumpReason.STOP_INTENT);
+        assertThat(gen.onAppended("cancel", 0)).isFalse();
+        assertThat(gen.onTranscript(at(50), 0, false).verdict()).isEqualTo(ChunkVerdict.DISCARD);
+    }
+
     private static Instant at(long ms) {
         return T0.plusMillis(ms);
     }

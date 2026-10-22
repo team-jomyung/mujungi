@@ -104,6 +104,7 @@ public final class PracticeConversation implements PracticeSessionExtension {
     private UUID openSlot;
     private boolean openSlotPlaying;
     private boolean approvedReadingRetried;
+    private boolean generatedAudioRetried;
     private boolean awaitingNotice;
     private boolean inputReady;
     private Utterance earlyUtterance;
@@ -248,6 +249,8 @@ public final class PracticeConversation implements PracticeSessionExtension {
                     onScript(result);
                 } else if ("approved-text-mismatch".equals(event.name()) && event.value() instanceof PracticeSpeech speech) {
                     onApprovedTextMismatch(speech);
+                } else if ("practice-audio-incomplete".equals(event.name()) && event.value() instanceof PracticeSpeech speech) {
+                    onIncompleteAudio(speech);
                 }
             }
             case JUDGMENT_RESULT -> onJudgmentResult(event);
@@ -300,7 +303,10 @@ public final class PracticeConversation implements PracticeSessionExtension {
         return new Progress(state.goalIndex() + 1, pack.goals().size(), pack.goals().get(state.goalIndex()).goalName(), stage());
     }
 
+    @Override public boolean handlesAudioRecovery() { return true; }
+
     /** Read-only diagnostic state; does not update display progress. */
+    @Override
     public String diagnosticPhase() { return state.phase().name(); }
     public String diagnosticSub() { return state.sub().name(); }
 
@@ -1048,6 +1054,16 @@ public final class PracticeConversation implements PracticeSessionExtension {
         submitApproved(text);
     }
 
+    private void onIncompleteAudio(PracticeSpeech speech) {
+        if (!speech.correlationId().equals(openSlot) || openSlotPlaying || stopping) return;
+        if (!speech.generated()) { onApprovedTextMismatch(speech); return; }
+        if (generatedAudioRetried) { handleSlotEnd(speech.correlationId(), SlotEnd.FAILED); return; }
+        cancelOpenSlot();
+        // Retry the trusted server instruction, never the rejected model output or an inferred child answer.
+        speakGenerated("COACH".equals(speech.partnerRole()) ? FlowRole.COACH : FlowRole.PEER, speech.text());
+        generatedAudioRetried = true;
+    }
+
     private void onApprovedTextMismatch(PracticeSpeech speech) {
         if (speech.generated() || !speech.correlationId().equals(openSlot) || openSlotPlaying) return;
         if (approvedReadingRetried) {
@@ -1086,6 +1102,7 @@ public final class PracticeConversation implements PracticeSessionExtension {
     }
 
     private void speakGenerated(FlowRole role, String instruction) {
+        generatedAudioRetried = false;
         UUID correlation = UUID.randomUUID();
         openSlot(correlation);
         boolean sent = output.speakGenerated(correlation, RolePolicy.slotRole(role), instruction);

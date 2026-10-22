@@ -115,6 +115,7 @@ class ProviderRequestFactoryWireTest {
                 factory.instructionsAppend("mj-1", DialogInstructions.Correction.PRESSURE),
                 factory.practiceInstruction("mj-reading", PracticeInstruction.forSpeech(PracticeSpeech.scenario(
                         java.util.UUID.randomUUID(), java.util.UUID.randomUUID(), 0, "친구", "상황을 떠올려 봐."))),
+                factory.practiceInstruction("mj-generated", PracticeInstruction.forGeneratedSpeech("친구 역할로 응답해.")),
                 factory.sessionClose());
 
         Set<String> types = new HashSet<>();
@@ -158,12 +159,12 @@ class ProviderRequestFactoryWireTest {
     }
 
     @Test
-    void approvedPracticeReadingUsesSpokenCommentaryWithoutChangingItsTextOrDelegationBoundary() {
+    void approvedPracticeReadingUsesInstructionsForExactWordsWithoutChangingItsDelegationBoundary() {
         var speech = PracticeSpeech.scenario(java.util.UUID.randomUUID(), java.util.UUID.randomUUID(), 0,
                 "친구", "친구와 놀이를 골라 보자.", PracticeSpeech.ReadingCue.SCENE);
         var instruction = PracticeInstruction.forSpeech(speech);
         JsonNode append = wire(factory.practiceInstruction("reading-1", instruction));
-        assertThat(append.get("type").asString()).isEqualTo("session.commentary.append");
+        assertThat(append.get("type").asString()).isEqualTo("session.instructions.append");
         assertThat(append.get("event_id").asString()).isEqualTo("reading-1");
         assertThat(append.get("delegation_id").isNull()).isTrue();
         assertThat(keys(append, "")).containsExactlyInAnyOrder("type", "event_id", "delegation_id", "content");

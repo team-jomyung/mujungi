@@ -84,6 +84,10 @@ public final class PracticeFlowRouter implements PracticeSessionExtension {
         return delegate == null ? null : delegate.progress();
     }
 
+    @Override public boolean handlesAudioRecovery() { return delegate != null && delegate.handlesAudioRecovery(); }
+    @Override public String diagnosticPhase() { return delegate == null ? "NONE" : delegate.diagnosticPhase(); }
+    @Override public String diagnosticSub() { return delegate == null ? "NONE" : delegate.diagnosticSub(); }
+
     @Override
     public boolean collectingIntroduction() {
         return delegate != null && delegate.collectingIntroduction();

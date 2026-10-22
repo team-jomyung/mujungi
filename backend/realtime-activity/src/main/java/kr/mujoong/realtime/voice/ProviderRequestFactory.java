@@ -171,15 +171,14 @@ public class ProviderRequestFactory {
     }
 
     /**
-     * 연습 확장점의 지시 추가. 명시적인 낭독·생성 발화는 {@code session.commentary.append}, 그 밖의 지시는 {@code session.instructions.append}로 보낸다. 문장은 확장점이 자기
+     * 연습 확장점의 지시 추가. 생성 발화는 {@code session.commentary.append}, 승인 문장 낭독과 그 밖의 지시는 {@code session.instructions.append}로 보낸다. 문장은 확장점이 자기
      * 승인된 템플릿에서 만든 것이고, 검사된 값 타입({@link PracticeInstruction})으로만 받는다(자유 문자열 입구 없음). 범위를 닫는 문장은 여기서
      * 더한다.
      */
     public InstructionsAppend practiceInstruction(String eventId, PracticeInstruction instruction) {
         Objects.requireNonNull(instruction, "instruction");
-        // Instructions are context updates, not a reliable speech trigger. The same exact-reading
-        // instruction and downstream transcript match gate still constrain commentary output.
-        if (instruction.requestsSpeech()) {
+        // Commentary may paraphrase. Exact reading uses instructions and must still match the approved body.
+        if (instruction.requestsSpeech() && !instruction.approvedReading()) {
             return new InstructionsAppend(TYPE_COMMENTARY_APPEND, eventId, null, InstructionTemplates.scoped(instruction.text()));
         }
         return instructionsAppend(eventId, InstructionTemplates.scoped(instruction.text()));

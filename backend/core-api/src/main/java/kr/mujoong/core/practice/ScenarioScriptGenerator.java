@@ -48,18 +48,21 @@ public final class ScenarioScriptGenerator {
     }
     public Result generate(Input input,ScenarioDeadline deadline){
         var budget=new Budget();ScenarioScript.Scene preserved=null;String model=null;
-        Input active=input;List<String> correctionReasons=List.of();
-        for(int correction=0;correction<=1;correction++){
+        Input active=input;List<String> correctionReasons=List.of();ScenarioScript scriptToRepair=null;
+        for(int correction=0;correction<=2;correction++){
+            if(correction==2 && (correctionReasons.isEmpty() || !correctionReasons.stream().allMatch(
+                    reason->java.util.Set.of("INCOMPLETE_SCENE","ANSWER_INCLUDED","EARLY_CUE").contains(reason))))break;
             final Input current=active;
             try {
                 Map<String,Object> payload=new LinkedHashMap<>(current.payload());
-                if(correction>0){payload.put("correction",true);payload.put("correctionReasons",correctionReasons);}
+                if(correction>0){payload.put("correction",true);payload.put("correctionReasons",correctionReasons);
+                    if(scriptToRepair!=null)payload.put("scriptToRepair",scriptToRepair);}
                 if(preserved!=null)payload.put("baseToPreserve",preserved);
                 var generationStartedWith=deadline.remaining();
                 var generated=invoke(()->provider.generate(call(payload,current,deadline)),budget,deadline);
                 var generationCost=generationStartedWith.minus(deadline.remaining());
                 if(generated==null||generated.script()==null||!metadata(generated.model()))throw content();
-                model=generated.model();var script=includeBasePartnerLine(generated.script());
+                model=generated.model();var script=includeBasePartnerLine(generated.script());scriptToRepair=script;
                 Input reviewedInput=current;
                 boolean planMismatch=false;
                 if(current.graphContextUsed()&&current.rules().variants() instanceof ScenarioGraphContext.Session graph&&!script.scenes().isEmpty()){

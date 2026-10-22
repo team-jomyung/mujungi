@@ -184,6 +184,35 @@ class PracticeConversationTest {
     }
 
     @Test
+    void mismatchThenEmptyAudioRecoversWithFreshNarrationAndContinuesOnlyAfterPlayback() {
+        Harness h=minimal();h.activate();Slot first=h.out.lastSlot();
+        h.event(ExtensionEvent.Kind.ASYNC_RESULT,"approved-text-mismatch",first.correlationId(),first.speech());
+        Slot retry=h.out.lastSlot();
+        assertThat(h.event(ExtensionEvent.Kind.ASYNC_RESULT,"practice-audio-incomplete",retry.correlationId(),retry.speech())).isEqualTo(Signal.NONE);
+        assertThat(h.out.lastSlot().generated()).isTrue();
+        assertThat(h.recorder.rows).isEmpty();
+        h.played();
+        assertThat(h.recorder.rows).hasSize(1);
+        assertThat(h.recorder.factKinds(h.recorder.only())).doesNotContain(FactKind.PLAYBACK_FAILED);
+    }
+
+    @Test
+    void generatedTechnicalRecoveryRetriesTrustedInstructionsOnceAndIgnoresStaleFailures() {
+        Harness h=minimal();h.toOpportunity();h.child("그거 줘");h.result("J2","PARTIAL");
+        Slot first=h.out.lastSlot();
+        var speech=kr.mujoong.realtime.voice.PracticeSpeech.generatedSlot(first.correlationId(), SCENARIO, 1, first.role(), first.text());
+        assertThat(h.event(ExtensionEvent.Kind.ASYNC_RESULT,"practice-audio-incomplete",first.correlationId(),speech)).isEqualTo(Signal.NONE);
+        Slot retry=h.out.lastSlot();
+        assertThat(retry.text()).isEqualTo(first.text());
+        int count=h.out.slots.size();
+        h.event(ExtensionEvent.Kind.ASYNC_RESULT,"practice-audio-incomplete",first.correlationId(),speech);
+        assertThat(h.out.slots).hasSize(count);
+        var retrySpeech=kr.mujoong.realtime.voice.PracticeSpeech.generatedSlot(retry.correlationId(), SCENARIO, 2, retry.role(), retry.text());
+        assertThat(h.event(ExtensionEvent.Kind.ASYNC_RESULT,"practice-audio-incomplete",retry.correlationId(),retrySpeech)).isEqualTo(Signal.OUTPUT_FAILED);
+        assertThat(h.out.slots).hasSize(count);
+    }
+
+    @Test
     void aTextMismatchRetriesOnlyTheSameApprovedBodyOnceAndRejectsLateMismatchEvents() {
         Harness h = minimal();h.activate();Slot first=h.out.lastSlot();
         assertThat(h.event(ExtensionEvent.Kind.ASYNC_RESULT,"approved-text-mismatch",first.correlationId(),first.speech())).isEqualTo(Signal.NONE);

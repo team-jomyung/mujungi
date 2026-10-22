@@ -484,6 +484,9 @@ public final class SessionExecutor {
     /** 확장점이 요청한 재생(playbackId → 승인 문구 코드). 끝 표식이 PLAYBACK_DONE이 된다. */
     private final Map<UUID, String> practicePlaybacks = new HashMap<>();
     private volatile kr.mujoong.realtime.voice.PracticeSpeech pendingPracticeSpeech;
+    private record DeferredPracticeInstruction(OutputGeneration.BumpReason reason, ProviderSendQueue.Job job,
+            UUID speechId, Instant deadline) {}
+    private DeferredPracticeInstruction deferredPracticeInstruction;
     private final Map<UUID, kr.mujoong.realtime.voice.PracticeSpeech> practiceAudio = new HashMap<>();
     private final java.util.ArrayDeque<PracticeSessionExtension.ExtensionEvent> pausedPracticeEvents = new java.util.ArrayDeque<>();
     private Instant practicePauseStartedAt;
@@ -1029,7 +1032,8 @@ public final class SessionExecutor {
         if (event.name().equals("u5b-voice-failed") && event.value() instanceof kr.mujoong.realtime.voice.PracticeSpeech speech) {
             if (speech.equals(pendingPracticeSpeech)) {
                 pendingPracticeSpeech = null; practiceHold = true;
-                practicePlayback(speech, kr.mujoong.realtime.practicelegacy.PracticePorts.Playback.FAILED);
+                bumpOutput(OutputGeneration.BumpReason.PRACTICE_DISCARD);
+                recoverPracticeAudio(speech);
             }
             return;
         }
@@ -1537,6 +1541,9 @@ public final class SessionExecutor {
         public void onOutputQuiet() {
             SessionExecutor.this.onOutputQuiet();
         }
+
+        @Override
+        public void onPracticeOutputDrain() { SessionExecutor.this.onPracticeOutputDrain(); }
 
         @Override
         public void onInstructionWaitExpired() {
@@ -2266,14 +2273,16 @@ public final class SessionExecutor {
      * @param startMs 출력 전사 조각의 전사 시간선 시작(음성이면 -1)
      */
     private void onOutputChunk(String transcript, long startMs, byte[] audio, Instant at, long nanos) {
+        boolean drainingPractice = deferredPracticeInstruction != null;
         OutputGeneration.ChunkResult result = transcript != null
-                ? ctx.outputGen().onTranscript(at, startMs, outputHeld())
-                : ctx.outputGen().onAudio(at, audio.length, outputHeld());
+                ? ctx.outputGen().onTranscript(at, startMs, outputHeld() || drainingPractice)
+                : ctx.outputGen().onAudio(at, audio.length, outputHeld() || drainingPractice);
         // 버리는 조각도 조용 시계를 다시 건다: 조각이 계속 오는 동안은 끊김이 아니다
         ctx.timers().arm(Kind.SEGMENT_QUIET, ctx.services().settings().segmentQuiet());
         if (!ctx.outputGen().awaitingNewSpeech()) {
             ctx.timers().cancel(Kind.INSTRUCTION_WAIT);
         }
+        if (drainingPractice) return;
         if (judgment.isOpen()) {
             // 판정 턴 중 음성은 버리고 전사 조각만 모은다(구간 · 대화 기록 · 보호자 중계에 넣지 않는다)
             if (result.verdict() != OutputGeneration.ChunkVerdict.ACCEPT) {
@@ -2318,6 +2327,8 @@ public final class SessionExecutor {
     private long bumpOutput(OutputGeneration.BumpReason reason) {
         Instant now = ctx.services().clock().now();
         long generation = ctx.outputGen().bump(now, reason);
+        deferredPracticeInstruction = null;
+        ctx.timers().cancel(Kind.PRACTICE_OUTPUT_DRAIN);
         instructionNotHeard = null;
         ctx.timers().cancel(Kind.INSTRUCTION_WAIT);
         ctx.segment().reset();
@@ -2331,6 +2342,7 @@ public final class SessionExecutor {
      * 확인한다. 지시를 보낸 세대에서 전사만 받고 음성이 여유 시각에 닿지 못한 채 끝났으면 그 구간을 불완전으로 버린다.
      */
     private void onOutputQuiet() {
+        if (deferredPracticeInstruction != null) { onPracticeOutputDrain(); return; }
         if (pendingOutputChunks.get() > 0) {
             // 이 만기는 안전 편지함으로 먼저 들어와 일반 편지함에 쌓인 출력 조각을 앞질렀다 — 그 조각이 같은 응답의 나머지일 수 있어 지금 끊김으로 보지
             // 않는다(조각을 처리하면 조용 시계를 다시 건다)
@@ -2363,6 +2375,47 @@ public final class SessionExecutor {
      * 찾아 계속한다. 확인은 왔는데 새 말 전사가 시한 안에 없거나 두 번째 시한도 지났으면 사유 {@code OutputNewSpeechNotObserved}를 남기고 이 세대를
      * 닫는다 — 아이는 아무 소리도 듣지 않는다(안전 쪽 실패). 연습 발화는 확장에 실패를 알린다.
      */
+    private void recoverPracticeAudio(kr.mujoong.realtime.voice.PracticeSpeech speech) {
+        if (practice != null && practice.handlesAudioRecovery()) {
+            ctx.mailbox().putSafety(new SessionMailbox.PracticeEvent(new PracticeSessionExtension.ExtensionEvent(
+                    PracticeSessionExtension.ExtensionEvent.Kind.ASYNC_RESULT, "practice-audio-incomplete",
+                    speech.correlationId(), speech)));
+        } else practicePlayback(speech, kr.mujoong.realtime.practicelegacy.PracticePorts.Playback.FAILED);
+    }
+
+    private void onPracticeOutputDrain() {
+        var deferred = deferredPracticeInstruction;
+        if (deferred == null) return;
+        if (!practiceActive() || pendingPracticeSpeech == null
+                || !deferred.speechId().equals(pendingPracticeSpeech.correlationId())) {
+            deferredPracticeInstruction = null;
+            return;
+        }
+        Instant now = ctx.services().clock().now();
+        if (!now.isBefore(deferred.deadline())) {
+            deferredPracticeInstruction = null;
+            ctx.services().events().appError(EventLog.Component.OUTPUT_GATE, "PracticeOutputDrainTimeout", EventCode.Level.WARN);
+            if (deferred.job().onFailure != null) deferred.job().onFailure.run();
+            return;
+        }
+        Instant last = ctx.outputGen().lastDeltaAt();
+        Instant ready = last == null ? now : last.plus(ctx.services().settings().segmentQuiet());
+        // Let a pending child utterance reach stop/rest classification before starting more audio.
+        if (pendingOutputChunks.get() > 0 || inputGroupId != null || now.isBefore(ready)) {
+            ctx.timers().arm(Kind.PRACTICE_OUTPUT_DRAIN, now.isBefore(ready)
+                    ? Duration.between(now, ready) : ctx.services().settings().segmentQuiet());
+            return;
+        }
+        deferredPracticeInstruction = null;
+        ctx.outputGen().bumpForQuietInstruction(now, deferred.reason(), deferred.job().append.eventId());
+        ctx.segment().reset();
+        ctx.transcripts().aiFinal("", false, now);
+        ctx.timers().cancel(Kind.SEGMENT_QUIET);
+        ctx.timers().arm(Kind.INSTRUCTION_WAIT, ctx.services().settings().instructionWait());
+        instructionNotHeard = deferred.job().onFailure;
+        ctx.sendQueue().submit(deferred.job());
+    }
+
     private void onInstructionWaitExpired() {
         switch (ctx.outputGen().onInstructionTimeout()) {
             case ACK_MISSING -> {
@@ -2410,6 +2463,17 @@ public final class SessionExecutor {
         String eventId = "mj-" + (++instructionSeq);
         ProviderRequestFactory.InstructionsAppend request = build.apply(eventId);
         Instant now = ctx.services().clock().now();
+        if (pendingPracticeSpeech != null && practice != null && practice.controlsOutput()) {
+            // An append ACK is context delivery, not the first audio sample. Wait for old speech
+            // to finish BEFORE the request, then collect the full next utterance without chopping it.
+            bumpOutput(OutputGeneration.BumpReason.PRACTICE_DISCARD);
+            deferredPracticeInstruction = new DeferredPracticeInstruction(reason,
+                    new ProviderSendQueue.Job(name, session, request, onFailure), pendingPracticeSpeech.correlationId(),
+                    now.plus(ctx.services().settings().instructionWait()));
+            guardrail.onServerInstruction(replayable ? new GuardrailCoordinator.ReplayableInstruction(name, build) : null);
+            onPracticeOutputDrain();
+            return true;
+        }
         ctx.outputGen().bumpForInstruction(now, reason, eventId);
         ctx.segment().reset();
         ctx.transcripts().aiFinal("", false, now);
@@ -2994,7 +3058,8 @@ public final class SessionExecutor {
         if (pendingPracticeSpeech != null) {
             var speech = pendingPracticeSpeech; pendingPracticeSpeech = null; practiceHold = true;
             bumpOutput(OutputGeneration.BumpReason.PRACTICE_DISCARD);
-            practicePlayback(speech, kr.mujoong.realtime.practicelegacy.PracticePorts.Playback.FAILED);
+            if (reason == GateDecision.DiscardReason.GATE_EMPTY) recoverPracticeAudio(speech);
+            else practicePlayback(speech, kr.mujoong.realtime.practicelegacy.PracticePorts.Playback.FAILED);
             return;
         }
         if (correct) {

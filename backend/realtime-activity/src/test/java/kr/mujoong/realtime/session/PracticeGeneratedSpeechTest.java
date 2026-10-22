@@ -27,6 +27,36 @@ import org.junit.jupiter.api.Test;
  */
 @Tag("practice-flow")
 class PracticeGeneratedSpeechTest {
+    @Test
+    void practiceDrainsOldTailBeforeSendingAndKeepsTheWholeShortNextUtterance() {
+        start(true);h.provider.last().newSpeechMargin(null);
+        UUID old=UUID.randomUUID();extension.out.speakGenerated(old,"PEER",INSTRUCTION);h.settleSend();
+        h.speak("old tail",4800);extension.out.cancelSpeech(old);
+        var speech=PracticeSpeech.scenario(UUID.randomUUID(),UUID.randomUUID(),1,"친구","응.");
+        int requests=appended().size();extension.out.speak(speech);h.settleSend();
+        assertThat(appended()).hasSize(requests);
+        h.speak("late old tail",4800);h.advance(Duration.ofMillis(801));h.settleSend();
+        assertThat(appended()).hasSize(requests+1);
+        h.speak(speech.text(),960);h.advance(Duration.ofMillis(801));
+        assertThat(h.link.outputs()).hasSize(1);
+        assertThat(h.link.outputs().getFirst().totalMs()).isEqualTo(20);
+        assertThat(guard.count()).isZero();
+    }
+
+    @Test
+    void aStopDuringOldOutputDrainCannotSendTheDeferredPracticeInstruction() {
+        start(true);UUID old=UUID.randomUUID();extension.out.speakGenerated(old,"PEER",INSTRUCTION);h.settleSend();
+        h.speak("old tail",4800);extension.out.cancelSpeech(old);
+        extension.out.speak(PracticeSpeech.scenario(UUID.randomUUID(),UUID.randomUUID(),1,"친구","응."));
+        int requests=appended().size();
+        h.provider.last().emit(new ProviderEvent.InputTranscriptDelta("stop-drain","무중아 그만할래"));h.drain();
+        h.advance(SessionHarness.SETTINGS.inputTranscriptQuiet().plusMillis(1));
+        h.advance(Duration.ofMillis(801));h.settleSend();
+        assertThat(h.executor.status()).isEqualTo(kr.mujoong.contract.status.SessionStatus.CLOSING);
+        assertThat(appended()).hasSize(requests);
+        assertThat(h.link.outputs()).isEmpty();
+    }
+
     @Test void inputBeforeTheFirstGeneratedChunkYieldsWithoutAnInstructionTimeoutFailure(){
         start(true);UUID slot=UUID.randomUUID();extension.out.speakGenerated(slot,"PEER",INSTRUCTION);h.settleSend();
         h.provider.last().emit(new ProviderEvent.InputTranscriptDelta("before-audio","무슨 놀이를 하고 싶어"));h.drain();

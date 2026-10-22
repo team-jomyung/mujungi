@@ -47,7 +47,7 @@ public final class PracticeInstruction {
         Objects.requireNonNull(speech, "speech");
         String role = kr.mujoong.contract.json.JsonCodec.shared().write(java.util.Map.of("partnerRole", speech.partnerRole()));
         // Keep spoken quotation marks as characters, rather than JSON backslash escapes the voice model may read aloud.
-        String reading = (speech.readingCue().text() + " " + speech.text()).replace("&", "&amp;")
+        String reading = speech.text().replace("&", "&amp;")
                 .replace("<", "&lt;").replace(">", "&gt;").replaceAll("[\\r\\n\\t]", " ");
         return new PracticeInstruction(
                 "이번 출력 한 번은 이전 대화와 역할극 응답 지시를 이어가지 않고 승인 문장만 낭독한다. 배경 역할 " + role
