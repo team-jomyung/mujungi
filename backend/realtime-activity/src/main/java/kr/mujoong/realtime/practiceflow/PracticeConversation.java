@@ -236,10 +236,16 @@ public final class PracticeConversation implements PracticeSessionExtension {
         }
         stopping = true;
         // 실행부는 종료 전이 때 확장점 시계를 직접 비우고 ACTIVE가 아닌 출력 능력 호출은 거절한다. 여기서는 기록만 닫는다
-        if (sceneRowCreated && state.sceneEndCause() == null && state.phase() != Phase.CLOSING
-                && state.phase() != Phase.NEXT_GOAL) {
+        if (!sceneRowCreated || state.phase() == Phase.CLOSING || state.phase() == Phase.NEXT_GOAL) {
+            return;
+        }
+        if (state.sceneEndCause() == null) {
             recordFact(FactKind.END_REQUEST);
             recordOutcome(VariantSkipReason.END_OR_REST, LiveTiming.NONE);
+        } else if (state.phase() == Phase.SCENE_WRAP || state.phase() == Phase.VARIANT_OFFER) {
+            // 세션 종료도 변형 평가에는 종료 · 휴식이다(BR6.1 (2)). 끝나는 세션이라 표지를 세워도 뒤 흐름에 영향이 없다
+            state.endRequested(true);
+            recordVariantNotReached();
         }
     }
 
@@ -776,23 +782,31 @@ public final class PracticeConversation implements PracticeSessionExtension {
 
     /**
      * 종료 · 휴식 요청으로 닫을 때 지금 장면의 결과를 남긴다. 진행 중이던 장면은 END_REQUEST(진행 중 판정 시점 NONE)로 닫는다. 이미 정리된 장면(친구
-     * 반응 · 복귀 알림 · 변형 제안 중)은 정리 때 정한 시점(예: 되묻기 뒤 전달)을 지우지 않고, 원 장면이면 변형을 못 한 까닭(END_OR_REST)만 더한다.
+     * 반응 · 복귀 알림 · 변형 제안 중)은 정리 때 정한 시점(예: 되묻기 뒤 전달)을 지우지 않고, 원 장면이면 변형을 못 한 까닭만 더한다.
      */
     private void recordEndByRequest(Phase previous) {
         switch (previous) {
             case NEXT_GOAL, CLOSING -> {
                 // 열린 장면이 없다
             }
-            case SCENE_WRAP, VARIANT_OFFER -> {
-                if (state.sceneKind() == SceneKind.BASE) {
-                    recordOutcome(VariantSkipReason.END_OR_REST, state.sceneTiming());
-                }
-            }
+            case SCENE_WRAP, VARIANT_OFFER -> recordVariantNotReached();
             default -> {
                 state.sceneEnd(FlowTransitions.EndCause.END_REQUEST, LiveTiming.NONE);
                 recordOutcome(VariantSkipReason.END_OR_REST, LiveTiming.NONE);
             }
         }
+    }
+
+    /**
+     * 정리된 원 장면이 변형 평가 · 변형 장면 전에 종료 · 휴식으로 끝났다. 정리 때 정한 시점은 두고, 변형 평가가 그 순간 냈을 생략 사유만 더한다(BR6.1
+     * 순서: 변형이 없는 대본은 NO_VARIANT, 집중 한도로 닫힌 장면은 FOCUS_LIMIT, 나머지는 END_OR_REST). 변형 장면은 생략 사유가 없다.
+     */
+    private void recordVariantNotReached() {
+        if (state.sceneKind() != SceneKind.BASE) {
+            return;
+        }
+        VariantSkipReason skip = transitions.decideVariant(state, currentScript.variantScene().isPresent()).skip();
+        recordOutcome(skip == null ? VariantSkipReason.END_OR_REST : skip, state.sceneTiming());
     }
 
     // ---- 출력 ----

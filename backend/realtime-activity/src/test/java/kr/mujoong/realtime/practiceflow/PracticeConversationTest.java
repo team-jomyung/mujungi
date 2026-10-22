@@ -1497,9 +1497,47 @@ class PracticeConversationTest {
         assertThat(h.out.holds).containsExactly(true);
         SceneRunRecord row = h.recorder.only();
         assertThat(row.liveTiming()).as("되묻기 뒤 전달은 지워지지 않는다").isEqualTo(LiveTiming.AFTER_REASK);
-        assertThat(row.variantSkipReason()).isEqualTo(VariantSkipReason.END_OR_REST);
+        assertThat(row.variantSkipReason()).as("변형 장면이 없는 대본은 변형 없음이 먼저다(BR6.1 순서)").isEqualTo(VariantSkipReason.NO_VARIANT);
         assertThat(h.recorder.factKinds(row)).containsExactly(FactKind.REASK_RESOLVED, FactKind.END_REQUEST);
         assertThat(h.slotEvent(reaction.correlationId(), Playback.INTERRUPTED, null, reaction.text())).isEqualTo(Signal.NONE);
+    }
+
+    @Test
+    void stoppingDuringTheFriendReactionOrTheVariantOfferKeepsTheFinishedSceneTimingAndAddsOnlyTheSkipReason() {
+        Harness reacting = full();
+        reacting.toOpportunity();
+        reacting.child("파란 상자 줘");
+        reacting.result("J2", "FULL");
+        assertThat(reacting.ext.state().sub()).isEqualTo(FlowState.Sub.PEER_REACTION);
+        int calls = reacting.out.calls;
+        reacting.ext.onStopping();
+        SceneRunRecord row = reacting.recorder.only();
+        assertThat(row.liveTiming()).isEqualTo(LiveTiming.IMMEDIATE);
+        assertThat(row.variantSkipReason()).as("세션 종료도 변형 평가에는 종료 · 휴식이다").isEqualTo(VariantSkipReason.END_OR_REST);
+        assertThat(reacting.recorder.factKinds(row)).as("끝난 장면에 종료 사실을 더하지 않는다").isEmpty();
+        assertThat(reacting.out.calls).isEqualTo(calls);
+
+        Harness withoutVariant = minimal();
+        withoutVariant.toOpportunity();
+        withoutVariant.child("파란 상자 줘");
+        withoutVariant.result("J2", "FULL");
+        withoutVariant.ext.onStopping();
+        assertThat(withoutVariant.recorder.only().liveTiming()).isEqualTo(LiveTiming.IMMEDIATE);
+        assertThat(withoutVariant.recorder.only().variantSkipReason()).isEqualTo(VariantSkipReason.NO_VARIANT);
+
+        Harness offered = full();
+        offered.toOpportunity();
+        offered.child("그거 줘");
+        offered.result("J2", "PARTIAL");
+        offered.played();
+        offered.child("파란 상자");
+        offered.result("J3", "DELIVERED");
+        offered.played();
+        assertThat(offered.ext.state().phase()).isEqualTo(FlowState.Phase.VARIANT_OFFER);
+        offered.ext.onSettle(null);
+        assertThat(offered.recorder.only().liveTiming()).isEqualTo(LiveTiming.AFTER_REASK);
+        assertThat(offered.recorder.only().variantSkipReason()).isEqualTo(VariantSkipReason.END_OR_REST);
+        assertRecordMatchesTheContract(offered.ext.practiceRecord());
     }
 
     @Test
