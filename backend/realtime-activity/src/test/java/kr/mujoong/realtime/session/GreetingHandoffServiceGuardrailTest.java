@@ -88,7 +88,7 @@ class GreetingHandoffServiceGuardrailTest {
                 late.mailbox.putSafety(new SessionMailbox.LinkReplaced(replacement, true, late.clock.now()));
                 late.drain();
                 old.setOpen(false);
-            } else late.childSays("stop", "그만할래");
+            } else late.childSays("stop", "무중아 그만할래");
             lateGuard.allow(); late.drain();
             assertThat(late.link.outputs()).isEmpty();
             assertThat(late.link.deliveredFrames()).isEmpty();

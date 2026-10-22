@@ -892,7 +892,7 @@ public final class EndingFlow {
     }
 
     UUID closingVersion() {
-        if (ctx.immediateMute() || ctx.plan().closing() == null) return null;
+        if (ctx.plan().closing() == null) return null;
         if (ctx.plan().activityType() == kr.mujoong.contract.status.ActivityType.FREE_TALK
                 && ctx.services().notices().verified(ctx.plan().closing(), ctx.plan().approvedAudio(),
                         ctx.servicePolicy().policyVersion(), ctx.services().settings().playbackExpiry()).isEmpty()) return null;

@@ -53,7 +53,7 @@ class SessionStopTest {
     void aQuestionShapedStopPhraseClosesWithChildStopWithoutAQuestion() {
         h.extraApproved.put("STOP_CONFIRM", QUESTION);
         h.activate();
-        h.childSays("i-1", "그만할래?");
+        h.childSays("i-1", "무중아 그만할래?");
 
         ActivitySessionRow row = h.transitions.find(h.sessionId).orElseThrow();
         assertThat(row.status()).isEqualTo(SessionStatus.CLOSING);
@@ -84,7 +84,7 @@ class SessionStopTest {
         h.activate();
         h.speak("공룡은 멋져", 4_800);
 
-        h.childSays("i-1", "그만할래");
+        h.childSays("i-1", "무중아 그만할래");
         h.drain();
         h.advanceAlive(Duration.ofSeconds(1));
 

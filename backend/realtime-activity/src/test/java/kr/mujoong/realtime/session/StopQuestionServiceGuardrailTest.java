@@ -59,7 +59,7 @@ class StopQuestionServiceGuardrailTest {
     void aQuestionShapedStopPhraseEndsAtOnce() {
         var h = active();
 
-        h.childSays("candidate", "그만할래?");
+        h.childSays("candidate", "무중아 그만할래?");
 
         assertThat(h.executor.status()).isEqualTo(SessionStatus.CLOSING);
         assertThat(h.transitions.find(h.sessionId).orElseThrow().endReason()).isEqualTo(EndReason.CHILD_STOP);

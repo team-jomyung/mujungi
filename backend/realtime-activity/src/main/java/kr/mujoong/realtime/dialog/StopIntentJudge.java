@@ -5,7 +5,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
-import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
@@ -22,15 +21,8 @@ import java.util.regex.Pattern;
  *       아니야")은 NONE.
  *   <li>세션 스냅숏의 종료 표현(기본 "무중아 그만할래" + 보호자 추가 표현)이 낱말 경계에 맞게 들어 있으면 {@link Verdict#STOP}. 물음꼴도
  *       STOP이다(전사의 물음표는 믿을 수 없다, 2026-10-22 결정).
- *   <li>주제 거부("이거 말고" · "공룡 얘기 그만")는 NONE(AC6.3.5 · AC6.4.6 '주제 거부').
- *   <li>명확한 종료 표현("그만할래" · "끝낼래" · "이제 끝내자" · "그만할까" …)이 있으면 물음꼴이어도 STOP. 같은 문장에 계속 표현이 섞여도 종료가 이긴다("더 하고
- *       싶은데 졸려서 그만할래", 3차 리뷰 후속).
- *   <li>계속 표현에 부정이 붙은 말("더 얘기하기 싫어" · "더 얘기 안 할래")은 앞말이 대화 자체를 가리키면 STOP, 주제 낱말이 앞서면
- *       주제 거부로 보고 NONE(3차 리뷰 후속).
- *   <li>계속 표현("더 할래" · "계속하자")은 NONE.
- *   <li>그 밖은 모두 NONE이다. 불명확한 종료 신호("그만" 단독 · "쉬고 싶어" · "안 해" · "힘들어" …)로 확인 질문이나 판정 AI(J6)를 여는
- *       단계는 없앴다(2026-10-22 결정, AC6.4.5 확인 질문 폐기) — 일상 말("숙제를 안 해가서")이 걸려 응답이 끊기던 문제. 확실히 끝내는 말은
- *       등록 종료 표현이다.
+ *   <li>그 밖은 모두 NONE이다. 판정기가 따로 갖던 명확한 종료 표현("그만할래" · "끝낼래" · "그만할까" …)과 '계속 표현 + 부정'("더 얘기하기
+ *       싫어")으로 끝내던 규칙은 없앴다 — 세션은 등록 종료 표현으로만 끝난다(2026-10-23 결정, 초기 기획, contracts/deviations.md FT-1023-a).
  * </ol>
  *
  * <p>비교는 정규화한 글자열로 한다: 유니코드 NFKC, 영문 소문자, 한글 · 영문 · 숫자 밖의 글자(공백 · 문장 부호)는 지운다. 판정 기준(표현 목록)은 이
@@ -50,7 +42,7 @@ public final class StopIntentJudge {
     public enum Basis {
         /** 세션 스냅숏의 종료 표현. */
         SNAPSHOT,
-        /** 판정기의 명확한 종료 표현. */
+        /** 판정기의 명확한 종료 표현(2026-10-23부터 내지 않는다, FT-1023-a). */
         CLEAR_PATTERN,
         /** U11 W2: Luna 종료 판정(J6)의 END_CLEAR(세션 사건 payload의 근거 값). */
         LUNA_J6
@@ -135,15 +127,6 @@ public final class StopIntentJudge {
             "다음에", "다음번", "담에", "나중에", "내일", "이따", "있다가", "자고일어나");
 
 
-    /** '더 · 계속 · 또 · 다시'에 부정이 바로 붙은 말("더 안 할래" · "더는 싫어" · "더 이상 못 하겠어" · "계속 안 할래"). */
-    private static final Pattern NEGATED_MORE = Pattern.compile(
-            "(?:더는|더이상|더|계속|또|다시)(?:안(?:할|해|하)|싫|못(?:할|해|하))");
-
-    /** 뒤에 부정이 따라붙는지 보는 계속 표현의 줄기("더 얘기하기 싫어"의 '더얘기'). */
-    private static final List<String> CONTINUATION_STEMS = List.of(
-            "더얘기", "더이야기", "더놀", "더하", "더할", "더해", "계속얘기", "계속이야기", "계속놀", "계속하", "계속할",
-            "계속해", "또하", "또할", "또해", "다시하", "다시할", "다시해");
-
     /** 계속 표현 뒤 같은 절에 오면 부정이 되는 말("재미없어"의 '없'처럼 홀로 쓰인 '없'은 아니다). */
     private static final List<String> NEGATIONS = List.of(
             "안할", "안해", "안하", "싫", "않", "지마", "지말", "못하", "못할", "못해", "거없", "것없", "수없", "생각없",
@@ -173,19 +156,6 @@ public final class StopIntentJudge {
     private static final List<String> NON_TOPIC_HEADS = List.of("", "나", "나는", "나이제", "이제", "이제나", "우리",
             "우리이제", "이제우리", "무중아", "무중아나", "무중아이제", "무중아나이제", "그럼", "그럼이제", "오늘은", "오늘",
             "이제오늘은", "아", "음", "어", "아니", "아니나", "아니이제", "진짜", "정말", "이제진짜", "나진짜", "나이제진짜");
-
-    /** 명확한 종료 표현 — 어미가 분명한 동사꼴이라 들어 있기만 하면 된다(정규화 뒤, 물음꼴이어도 STOP). */
-    private static final List<String> CLEAR_STOP = List.of(
-            "그만할래", "그만할게", "그만하고싶", "그만하자", "그만할거야", "그만할거예", "그만할거에", "그만할라고", "그만둘래",
-            "그만둘게", "그만하겠", "그만얘기할래", "그만이야기할래", "그만말할래", "그만얘기하자", "그만이야기하자", "그만말하자",
-            "끝낼래", "끝낼게", "끝내자", "끝내고싶", "끝낼거야", "끝내겠", "여기까지할래", "여기까지하자", "이제안할래",
-            "그만나갈래", "이제갈래", "이제갈게", "이제잘래", "이제잘게", "그만할까", "끝낼까");
-
-    /** 명확한 종료 표현 — 명사로 끝나 낱말 경계에 맞을 때만 본다("이제 끝말잇기"는 아니다). */
-    private static final List<String> CLEAR_STOP_PHRASES = List.of(
-            "이제끝", "대화끝", "얘기끝", "이야기끝", "오늘은여기까지", "오늘은여기서끝", "대화그만", "이제그만대화");
-
-
 
     /** 스냅숏 표현 끝에 붙어도 같은 말로 보는 어미(문장 끝). */
     private static final List<String> FINAL_SUFFIXES = List.of("", "요", "야", "이야", "이에요", "예요", "다", "이다");
@@ -223,18 +193,6 @@ public final class StopIntentJudge {
         }
         if (matchesPhrase(words, snapshot)) {
             return new Judgment(Verdict.STOP, Basis.SNAPSHOT);
-        }
-        if (containsAny(text, TOPIC_REFUSAL) || topicStop(text)) {
-            return Judgment.NONE;
-        }
-        if (containsAny(text, CLEAR_STOP) || matchesPhrase(words, CLEAR_STOP_PHRASES)) {
-            return new Judgment(Verdict.STOP, Basis.CLEAR_PATTERN);
-        }
-        int negated = negatedContinuation(text);
-        if (negated >= 0) {
-            // "공룡 얘기 더 하기 싫어"처럼 주제 낱말이 앞서면 그 주제를 싫다는 말이다(종료 아님)
-            boolean aboutTheTalk = NON_TOPIC_HEADS.contains(text.substring(0, negated));
-            return aboutTheTalk ? new Judgment(Verdict.STOP, Basis.CLEAR_PATTERN) : Judgment.NONE;
         }
         return Judgment.NONE;
     }
@@ -346,41 +304,17 @@ public final class StopIntentJudge {
         return false;
     }
 
-    /** 종료 표현(스냅숏 · 명확한 표현) 바로 뒤에 그 표현을 되받아 부정하는 말이 오는가("그만할래 아니야" · "그만하자는 거 아니야"). */
+    /** 스냅숏 종료 표현 바로 뒤에 그 표현을 되받아 부정하는 말이 오는가("무중아 그만할래 아니야" · "무중아 그만할래 말고"). */
     private boolean denied(String text) {
-        for (List<String> expressions : List.of(snapshot, CLEAR_STOP)) {
-            for (String expression : expressions) {
-                for (int at = text.indexOf(expression); at >= 0; at = text.indexOf(expression, at + 1)) {
-                    String rest = text.substring(at + expression.length());
-                    if (startsWithAny(rest.startsWith("요") ? rest.substring(1) : rest, DENIALS)) {
-                        return true;
-                    }
+        for (String expression : snapshot) {
+            for (int at = text.indexOf(expression); at >= 0; at = text.indexOf(expression, at + 1)) {
+                String rest = text.substring(at + expression.length());
+                if (startsWithAny(rest.startsWith("요") ? rest.substring(1) : rest, DENIALS)) {
+                    return true;
                 }
             }
         }
         return false;
-    }
-
-    /**
-     * 계속 표현에 부정이 붙은 자리(없으면 -1): "더 안 할래" · "더 이상 못 하겠어"처럼 바로 붙은 부정, 또는 "더 얘기하기 싫어" · "더 하고 싶지
-     * 않아"처럼 같은 절에 따라붙은 부정. 이중 부정("더 얘기 안 하면 안 돼")은 아니다.
-     */
-    private static int negatedContinuation(String text) {
-        Matcher more = NEGATED_MORE.matcher(text);
-        while (more.find()) {
-            String rest = text.substring(more.end());
-            if (!containsAny(rest.substring(0, Math.min(rest.length(), 5)), DOUBLE_NEGATIONS)) {
-                return more.start();
-            }
-        }
-        for (String stem : CONTINUATION_STEMS) {
-            for (int at = text.indexOf(stem); at >= 0; at = text.indexOf(stem, at + 1)) {
-                if (negatedAhead(text.substring(at + stem.length()))) {
-                    return at;
-                }
-            }
-        }
-        return -1;
     }
 
     /** 계속 표현 뒤 같은 절(최대 {@value #CLAUSE_WINDOW}글자, 절을 끝내는 글자 앞까지)에 부정이 있고, 이중 부정이 아닌가. */

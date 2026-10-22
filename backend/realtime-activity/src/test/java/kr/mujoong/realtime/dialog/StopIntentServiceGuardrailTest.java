@@ -9,8 +9,10 @@ class StopIntentServiceGuardrailTest {
     @Test void aRegisteredStopIsClear() {
         assertThat(judge.judge("무중아 그만할래").verdict()).isEqualTo(StopIntentJudge.Verdict.STOP);
     }
-    @Test void anUnregisteredClearStopIsNotRestrictedToTheSnapshot() {
-        assertThat(judge.judge("오늘은 여기까지 할래").verdict()).isEqualTo(StopIntentJudge.Verdict.STOP);
+    @Test void anUnregisteredStopWordDoesNotEndTheSession() {
+        // 세션은 등록 종료 표현으로만 끝난다(FT-1023-a)
+        assertThat(judge.judge("오늘은 여기까지 할래").verdict()).isEqualTo(StopIntentJudge.Verdict.NONE);
+        assertThat(judge.judge("그만할래").verdict()).isEqualTo(StopIntentJudge.Verdict.NONE);
     }
     @Test void reportedSpeechDoesNotBecomeTheCurrentStop() {
         assertThat(judge.judge("엄마가 그만하라고 했어").verdict()).isEqualTo(StopIntentJudge.Verdict.NONE);

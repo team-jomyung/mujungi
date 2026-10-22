@@ -15,9 +15,9 @@ import org.junit.jupiter.params.provider.CsvSource;
 /**
  * 종료 의도 판정기 시험(U3 L4 · U3-R12 · AC6.4.4 ~ 6.4.6 · AC6.4.8).
  *
- * <p>AC6.4.8 합성 세트 20건(종료 10 · 종료 아님 10)에 3차 리뷰 후속 8건(종료 4 · 종료 아님 4: 부정이 붙은 계속 표현 · 종료와 계속이 섞인
- * 문장 · 이중 부정 · 입말 인용)을 더한 28건에서 오인식(종료 아님 → STOP) 0, 미인식(종료 → STOP 아님) 1 이하를 확인하고, 규칙별 경계를 따로
- * 본다. 세션 스냅숏은 기본 표현 "무중아 그만할래"와 보호자 추가 표현 "이제 끝"이다.
+ * <p>AC6.4.8 합성 세트에서 오인식(종료 아님 → STOP) 0, 미인식(종료 → STOP 아님) 1 이하를 확인하고, 규칙별 경계를 따로 본다. 세션 스냅숏은
+ * 기본 표현 "무중아 그만할래"와 보호자 추가 표현 "이제 끝"이다. 2026-10-23부터 세션은 등록 종료 표현으로만 끝나므로(FT-1023-a) 판정기가
+ * 따로 갖던 종료 말("그만할래" · "끝낼래" · "더 얘기하기 싫어" …)은 종료 아님 쪽으로 옮겼다.
  */
 @Tag("voice-session")
 @org.junit.jupiter.api.Tag("service-guardrail")
@@ -33,6 +33,11 @@ class StopIntentJudgeTest {
             "무중아, 그만할래!",
             "음 무중아 그만할래요",
             "이제 끝",
+            "무중아 그만할래, 더 얘기 안 할래",
+            "무중아 그만할래?");
+
+    /** 등록되지 않은 종료 말: 2026-10-23까지 판정기가 종료로 보던 말이다(FT-1023-a). */
+    private static final List<String> UNREGISTERED_STOP_WORDS = List.of(
             "나 이제 그만할래",
             "오늘은 여기까지 할래",
             "이제 끝낼래",
@@ -40,7 +45,6 @@ class StopIntentJudgeTest {
             "나 이제 얘기 그만할래",
             "무중아 우리 이제 끝내자",
             "더 얘기하기 싫어",
-            "무중아 그만할래, 더 얘기 안 할래",
             "더 얘기 안 할래",
             "나 이제 더 하고 싶지 않아");
 
@@ -63,10 +67,12 @@ class StopIntentJudgeTest {
 
     @Test
     void theSyntheticTwentyHasNoFalseStopAndAtMostOneMissedStop() {
-        assertThat(STOPS).hasSize(14);
+        assertThat(STOPS).hasSize(6);
         assertThat(NOT_STOPS).hasSize(14);
+        assertThat(UNREGISTERED_STOP_WORDS).hasSize(9);
 
-        long falseStops = NOT_STOPS.stream().filter(text -> judge.judge(text).verdict() == Verdict.STOP).count();
+        long falseStops = java.util.stream.Stream.concat(NOT_STOPS.stream(), UNREGISTERED_STOP_WORDS.stream())
+                .filter(text -> judge.judge(text).verdict() == Verdict.STOP).count();
         long missedStops = STOPS.stream().filter(text -> judge.judge(text).verdict() != Verdict.STOP).count();
 
         assertThat(falseStops).as("오인식(AC6.4.8: 0)").isZero();
@@ -86,18 +92,17 @@ class StopIntentJudgeTest {
     }
 
     @Test
-    void aClearPatternIsAStopWithItsBasisEvenAsAQuestion() {
-        assertThat(judge.judge("나 그만할래")).isEqualTo(new Judgment(Verdict.STOP, Basis.CLEAR_PATTERN));
-        assertThat(judge.judge("이제 끝내자.")).isEqualTo(new Judgment(Verdict.STOP, Basis.CLEAR_PATTERN));
-        // 전사의 물음표는 믿을 수 없어 물음꼴도 종료다(2026-10-22 결정, 확인 질문 폐기)
-        assertThat(judge.judge("그만할래?")).isEqualTo(new Judgment(Verdict.STOP, Basis.CLEAR_PATTERN));
-        assertThat(judge.judge("우리 이제 끝낼까")).as("'끝낼까'는 명확한 종료 표현")
-                .isEqualTo(new Judgment(Verdict.STOP, Basis.CLEAR_PATTERN));
-        assertThat(judge.judge("이제 그만할까")).as("'그만할까'는 명확한 종료 표현")
-                .isEqualTo(new Judgment(Verdict.STOP, Basis.CLEAR_PATTERN));
-        assertThat(judge.judge("대화 끝")).isEqualTo(new Judgment(Verdict.STOP, Basis.CLEAR_PATTERN));
-        assertThat(new StopIntentJudge(List.of()).judge("이제 끝이야"))
-                .isEqualTo(new Judgment(Verdict.STOP, Basis.CLEAR_PATTERN));
+    void onlyRegisteredExpressionsStopEvenAsAQuestion() {
+        // 판정기가 따로 갖던 종료 말은 더 종료가 아니다(2026-10-23 결정, FT-1023-a)
+        assertThat(judge.judge("나 그만할래")).isEqualTo(new Judgment(Verdict.NONE, null));
+        assertThat(judge.judge("이제 끝내자.")).isEqualTo(new Judgment(Verdict.NONE, null));
+        assertThat(judge.judge("그만할래?")).isEqualTo(new Judgment(Verdict.NONE, null));
+        assertThat(judge.judge("우리 이제 끝낼까")).isEqualTo(new Judgment(Verdict.NONE, null));
+        assertThat(judge.judge("이제 그만할까")).isEqualTo(new Judgment(Verdict.NONE, null));
+        assertThat(judge.judge("대화 끝")).isEqualTo(new Judgment(Verdict.NONE, null));
+        assertThat(new StopIntentJudge(List.of()).judge("이제 끝이야")).as("스냅숏이 비면 무엇도 종료가 아니다")
+                .isEqualTo(new Judgment(Verdict.NONE, null));
+        // 전사의 물음표는 믿을 수 없어 등록 종료 표현은 물음꼴도 종료다(2026-10-22 결정, 확인 질문 폐기)
         assertThat(judge.judge("이제 끝이야?")).as("스냅숏 표현도 물음꼴이면 종료")
                 .isEqualTo(new Judgment(Verdict.STOP, Basis.SNAPSHOT));
         assertThat(judge.judge("무중아 그만할래?")).as("등록 종료 표현의 물음꼴")
@@ -183,15 +188,15 @@ class StopIntentJudgeTest {
     /** 2차 리뷰 1: 청유형 인용 표지는 낱말 경계를 넘어 걸리지 않는다 — "혼자 대화" · "피자 대신"의 '자대'는 인용이 아니다. */
     @ParameterizedTest
     @CsvSource(delimiter = '|', value = {
-        "나 혼자 대화하는 거 그만할래",
-        "피자 대신 이제 그만할래",
-        "혼자 더라도 그만할래",
-        "의자 던데 그만할래",
-        "나 혼자 고민했어 그만할래",
-        "동생이랑 같이 자고 싶어 그만할래"
+        "나 혼자 대화하는 거 무중아 그만할래",
+        "피자 대신 이제 무중아 그만할래",
+        "혼자 더라도 무중아 그만할래",
+        "의자 던데 무중아 그만할래",
+        "나 혼자 고민했어 무중아 그만할래",
+        "동생이랑 같이 자고 싶어 무중아 그만할래"
     })
     void hortativeQuoteMarkersDoNotCrossWordBoundaries(String text) {
-        assertThat(judge.judge(text)).isEqualTo(new Judgment(Verdict.STOP, Basis.CLEAR_PATTERN));
+        assertThat(judge.judge(text)).isEqualTo(new Judgment(Verdict.STOP, Basis.SNAPSHOT));
     }
 
     @ParameterizedTest
@@ -266,7 +271,7 @@ class StopIntentJudgeTest {
         "엄마가 계속하라고 했어",
         "다음에 또 하자",
         "나중에 다시 하자",
-        "더 놀자는 말은 그만할래",
+        "더 놀자는 말은 무중아 그만할래",
         "더 얘기하기 싫어",
         "계속 얘기하기 싫어",
         "더 이야기하고 싶지 않아",
@@ -276,16 +281,16 @@ class StopIntentJudgeTest {
         "더 놀고 싶지 않아",
         "더 하고 싶진 않아",
         "더 하고 싶지는 않아",
-        "계속하고 싶지만 이제 끝낼래",
-        "더 하고 싶은데 졸려서 그만할래",
-        "더 얘기하자는 말은 그만할래",
+        "계속하고 싶지만 이제 끝",
+        "더 하고 싶은데 졸려서 무중아 그만할래",
+        "더 얘기하자는 말은 무중아 그만할래",
         "형이 더 하자구 했는데 나는 그만할래"
     })
     void negatedReportedOrStoppingContinuationsDoNotLift(String text) {
         assertThat(judge.continues(text)).isFalse();
     }
 
-    /** 3차 리뷰 후속 ①: 계속 표현에 부정이 붙으면 종료 쪽이다(같은 절 안의 부정, 바로 붙은 부정). */
+    /** 계속 표현에 부정이 붙은 말은 2026-10-23부터 종료가 아니다(등록 종료 표현만 끝낸다, FT-1023-a). */
     @ParameterizedTest
     @CsvSource(delimiter = '|', value = {
         "더 얘기하기 싫어",
@@ -303,17 +308,14 @@ class StopIntentJudgeTest {
         "더 이상 못 하겠어",
         "무중아 이제 더 얘기 안 할래"
     })
-    void aContinuationFollowedByANegationIsAStop(String text) {
-        assertThat(judge.judge(text)).isEqualTo(new Judgment(Verdict.STOP, Basis.CLEAR_PATTERN));
+    void aContinuationFollowedByANegationIsNoLongerAStop(String text) {
+        assertThat(judge.judge(text)).isEqualTo(new Judgment(Verdict.NONE, null));
     }
 
-    /**
-     * 부정이 붙은 계속 표현은 물음꼴이어도 앞말이 대화 자체면 종료이고, 주제 낱말이 앞서면 주제 거부라 NONE이다. 이중 부정 · 다른 절의
-     * 부정은 계속이다(2026-10-22 결정).
-     */
+    /** 부정이 붙은 계속 표현은 물음꼴 · 주제 낱말 · 이중 부정 · 다른 절의 부정 어느 쪽이든 종료가 아니다(FT-1023-a). */
     @Test
-    void aNegatedContinuationIsAStopAsAQuestionButNothingAfterATopicOrADoubleNegation() {
-        assertThat(judge.judge("더 얘기 안 할래?")).isEqualTo(new Judgment(Verdict.STOP, Basis.CLEAR_PATTERN));
+    void aNegatedContinuationIsNothingInAnyShape() {
+        assertThat(judge.judge("더 얘기 안 할래?").verdict()).isEqualTo(Verdict.NONE);
         assertThat(judge.judge("공룡 얘기 더 하기 싫어").verdict()).as("주제 낱말이 앞선다").isEqualTo(Verdict.NONE);
         assertThat(judge.judge("더 얘기 안 하면 안 돼").verdict()).isEqualTo(Verdict.NONE);
         assertThat(judge.judge("더 얘기하기 싫은 건 아니야").verdict()).isEqualTo(Verdict.NONE);
@@ -321,15 +323,15 @@ class StopIntentJudgeTest {
         assertThat(judge.judge("계속해서 재미없어").verdict()).as("'계속해서'는 계속 표현이 아니다").isEqualTo(Verdict.NONE);
     }
 
-    /** 3차 리뷰 후속 ②: 한 문장에 명확한 종료 표현 · 스냅숏 표현이 있으면 계속 표현보다 종료가 이긴다. 인용 · 종료를 되받는 부정은 그대로 NONE이다. */
+    /** 3차 리뷰 후속 ②: 한 문장에 등록 종료 표현이 있으면 계속 표현보다 종료가 이긴다. 인용 · 종료를 되받는 부정은 그대로 NONE이다. */
     @Test
     void aStopExpressionWinsOverAContinuationInTheSameSentence() {
         assertThat(judge.judge("무중아 그만할래, 더 얘기 안 할래")).isEqualTo(new Judgment(Verdict.STOP, Basis.SNAPSHOT));
-        assertThat(judge.judge("그만할래 더 하고 싶지 않아")).isEqualTo(new Judgment(Verdict.STOP, Basis.CLEAR_PATTERN));
-        assertThat(judge.judge("더 하고 싶은데 졸려서 그만할래")).isEqualTo(new Judgment(Verdict.STOP, Basis.CLEAR_PATTERN));
-        assertThat(judge.judge("계속하고 싶지만 이제 끝낼래")).isEqualTo(new Judgment(Verdict.STOP, Basis.CLEAR_PATTERN));
-        assertThat(judge.judge("그만할래? 아니면 더 할래")).as("고르는 물음도 명확한 종료 표현이 이긴다")
-                .isEqualTo(new Judgment(Verdict.STOP, Basis.CLEAR_PATTERN));
+        assertThat(judge.judge("무중아 그만할래 더 하고 싶지 않아")).isEqualTo(new Judgment(Verdict.STOP, Basis.SNAPSHOT));
+        assertThat(judge.judge("더 하고 싶은데 졸려서 무중아 그만할래")).isEqualTo(new Judgment(Verdict.STOP, Basis.SNAPSHOT));
+        assertThat(judge.judge("계속하고 싶지만 이제 끝")).isEqualTo(new Judgment(Verdict.STOP, Basis.SNAPSHOT));
+        assertThat(judge.judge("무중아 그만할래? 아니면 더 할래")).as("고르는 물음도 등록 종료 표현이 이긴다")
+                .isEqualTo(new Judgment(Verdict.STOP, Basis.SNAPSHOT));
 
         assertThat(judge.judge("아직 그만할래 아니야 더 얘기하자").verdict()).isEqualTo(Verdict.NONE);
         assertThat(judge.judge("그만하자는 거 아니야 더 놀자").verdict()).isEqualTo(Verdict.NONE);
@@ -360,11 +362,12 @@ class StopIntentJudgeTest {
         assertThat(judge.judge(text).verdict()).isEqualTo(Verdict.NONE);
     }
 
-    /** 문장 끝의 '-자고(요)'는 아이 자신의 강조라 종료다. */
+    /** 문장 끝의 '-자고(요)'는 아이 자신의 강조라 인용이 아니다 — 같은 문장의 등록 종료 표현을 막지 않는다. 그 말만으로는 종료가 아니다(FT-1023-a). */
     @Test
     void aSentenceFinalHortativeJagoIsTheChildsOwnEmphasis() {
-        assertThat(judge.judge("이제 그만하자고!")).isEqualTo(new Judgment(Verdict.STOP, Basis.CLEAR_PATTERN));
-        assertThat(judge.judge("그만하자고요")).isEqualTo(new Judgment(Verdict.STOP, Basis.CLEAR_PATTERN));
+        assertThat(judge.judge("무중아 그만할래 이제 그만하자고!")).isEqualTo(new Judgment(Verdict.STOP, Basis.SNAPSHOT));
+        assertThat(judge.judge("무중아 그만할래 그만하자고요")).isEqualTo(new Judgment(Verdict.STOP, Basis.SNAPSHOT));
+        assertThat(judge.judge("이제 그만하자고!").verdict()).isEqualTo(Verdict.NONE);
     }
 
     /** 3차 리뷰 후속: 떠나는 말 · 해야 할 일 · 이어 주는 말은 종료 의도를 풀지 않는다. */
@@ -399,27 +402,24 @@ class StopIntentJudgeTest {
         assertThat(judge.continues(text)).isTrue();
     }
 
-    /** 3차 리뷰 후속: 이유 · 다그침의 '-니까'도, 물음 '-ㄹ까'도 종료 표현이면 STOP이다(2026-10-22 물음꼴 처리 삭제). */
+    /** 이유 · 다그침의 '-니까'가 뒤따라도 등록 종료 표현이면 STOP이다. 등록되지 않은 '-ㄹ까' 물음은 종료가 아니다(FT-1023-a). */
     @Test
-    void aReasonOrInsistingNikkaAndAQuestionKkaAreStops() {
-        assertThat(judge.judge("그만하자니까!")).isEqualTo(new Judgment(Verdict.STOP, Basis.CLEAR_PATTERN));
+    void aReasonNikkaAfterARegisteredStopIsAStopButUnregisteredKkaQuestionsAreNot() {
         assertThat(judge.judge("무중아 그만할래, 졸리니까")).isEqualTo(new Judgment(Verdict.STOP, Basis.SNAPSHOT));
-        assertThat(judge.judge("그만할래 엄마가 부르니까")).isEqualTo(new Judgment(Verdict.STOP, Basis.CLEAR_PATTERN));
-        assertThat(judge.judge("오늘은 여기까지 할까").verdict()).isEqualTo(Verdict.STOP);
-        assertThat(judge.judge("이제 끝낼까요")).isEqualTo(new Judgment(Verdict.STOP, Basis.CLEAR_PATTERN));
-        assertThat(judge.judge("우리 그만할까요")).isEqualTo(new Judgment(Verdict.STOP, Basis.CLEAR_PATTERN));
+        assertThat(judge.judge("무중아 그만할래 엄마가 부르니까")).isEqualTo(new Judgment(Verdict.STOP, Basis.SNAPSHOT));
+        assertThat(judge.judge("그만하자니까!").verdict()).isEqualTo(Verdict.NONE);
+        assertThat(judge.judge("오늘은 여기까지 할까").verdict()).isEqualTo(Verdict.NONE);
+        assertThat(judge.judge("이제 끝낼까요").verdict()).isEqualTo(Verdict.NONE);
+        assertThat(judge.judge("우리 그만할까요").verdict()).isEqualTo(Verdict.NONE);
     }
 
-    /**
-     * 3차 리뷰 후속: 어미가 분명한 흔한 종료 말은 STOP이다. 확인 질문을 열던 짧은 · 문장 전체 신호("그만 놀자" · "그만해" · "이제 끝내")는
-     * 이제 NONE이다(2026-10-22 결정). 주제 낱말 뒤의 "그만 얘기할래"는 주제 거부다.
-     */
+    /** 흔한 종료 말 · 짧은 신호 · 주제 낱말 뒤의 그만은 모두 종료가 아니다(2026-10-22 · 2026-10-23 결정, FT-1023-a). */
     @Test
-    void commonStopWordsAreStopsShortSignalsAreNothingAndATopicBeforeThemIsARefusal() {
-        assertThat(judge.judge("그만 얘기하자")).isEqualTo(new Judgment(Verdict.STOP, Basis.CLEAR_PATTERN));
-        assertThat(judge.judge("이제 그만할 거예요")).isEqualTo(new Judgment(Verdict.STOP, Basis.CLEAR_PATTERN));
-        assertThat(judge.judge("나 이제 그만할라고")).isEqualTo(new Judgment(Verdict.STOP, Basis.CLEAR_PATTERN));
-        assertThat(judge.judge("이제 갈게")).isEqualTo(new Judgment(Verdict.STOP, Basis.CLEAR_PATTERN));
+    void commonStopWordsShortSignalsAndTopicStopsAreNothing() {
+        assertThat(judge.judge("그만 얘기하자").verdict()).isEqualTo(Verdict.NONE);
+        assertThat(judge.judge("이제 그만할 거예요").verdict()).isEqualTo(Verdict.NONE);
+        assertThat(judge.judge("나 이제 그만할라고").verdict()).isEqualTo(Verdict.NONE);
+        assertThat(judge.judge("이제 갈게").verdict()).isEqualTo(Verdict.NONE);
         assertThat(judge.judge("이제 그만 놀래").verdict()).isEqualTo(Verdict.NONE);
         assertThat(judge.judge("그만 놀자").verdict()).isEqualTo(Verdict.NONE);
         assertThat(judge.judge("무중아 그만해").verdict()).isEqualTo(Verdict.NONE);
@@ -430,13 +430,16 @@ class StopIntentJudgeTest {
         assertThat(judge.judge("안 졸려").verdict()).isEqualTo(Verdict.NONE);
     }
 
+    /** 보호자가 "그만하자"를 등록했을 때 청유형 인용 표지가 그 표현이나 '재'가 든 낱말을 삼키지 않는다. */
     @Test
-    void theHortativeQuoteMarkersDoNotSwallowOrdinaryStopsOrWordsWithJae() {
-        assertThat(judge.judge("그만하자")).isEqualTo(new Judgment(Verdict.STOP, Basis.CLEAR_PATTERN));
-        assertThat(judge.judge("재미없어 그만하자")).isEqualTo(new Judgment(Verdict.STOP, Basis.CLEAR_PATTERN));
-        assertThat(judge.judge("그만하자 재미없어")).isEqualTo(new Judgment(Verdict.STOP, Basis.CLEAR_PATTERN));
-        assertThat(judge.judge("이제 끝내 재미없어").verdict()).isEqualTo(Verdict.NONE);
-        assertThat(judge.judge("나는 천재").verdict()).isEqualTo(Verdict.NONE);
+    void theHortativeQuoteMarkersDoNotSwallowARegisteredHortativeOrWordsWithJae() {
+        StopIntentJudge custom = new StopIntentJudge(List.of("무중아 그만할래", "그만하자"));
+        assertThat(custom.judge("그만하자")).isEqualTo(new Judgment(Verdict.STOP, Basis.SNAPSHOT));
+        assertThat(custom.judge("재미없어 그만하자")).isEqualTo(new Judgment(Verdict.STOP, Basis.SNAPSHOT));
+        assertThat(custom.judge("그만하자 재미없어")).isEqualTo(new Judgment(Verdict.STOP, Basis.SNAPSHOT));
+        assertThat(custom.judge("이제 끝내 재미없어").verdict()).isEqualTo(Verdict.NONE);
+        assertThat(custom.judge("나는 천재").verdict()).isEqualTo(Verdict.NONE);
+        assertThat(judge.judge("그만하자").verdict()).as("등록하지 않으면 종료가 아니다").isEqualTo(Verdict.NONE);
     }
 
     @Test
@@ -453,8 +456,8 @@ class StopIntentJudgeTest {
         assertThat(custom.judge("나 그만 놀래")).isEqualTo(new Judgment(Verdict.STOP, Basis.SNAPSHOT));
         assertThat(custom.judge("끝").verdict()).as("한 글자 표현은 스냅숏에서 빠진다(종료로 보지 않는다)")
                 .isEqualTo(Verdict.NONE);
-        assertThat(new StopIntentJudge(null).judge("무중아 그만할래")).as("스냅숏이 없어도 명확한 표현은 잡는다")
-                .isEqualTo(new Judgment(Verdict.STOP, Basis.CLEAR_PATTERN));
+        assertThat(new StopIntentJudge(null).judge("무중아 그만할래")).as("스냅숏이 없으면 무엇도 종료가 아니다(기본 표현은 core가 스냅숏에 넣는다)")
+                .isEqualTo(new Judgment(Verdict.NONE, null));
     }
 
     @Test

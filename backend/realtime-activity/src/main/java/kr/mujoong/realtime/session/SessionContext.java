@@ -73,7 +73,6 @@ public final class SessionContext {
     private Instant inputBeganAt;
     private final kr.mujoong.realtime.dialog.ConversationPolicyState conversationPolicy =
             new kr.mujoong.realtime.dialog.ConversationPolicyState();
-    private boolean immediateMute;
 
     // 다른 스레드가 읽는 상태
     private volatile SessionStatus status = SessionStatus.PREPARING;
@@ -166,8 +165,6 @@ public final class SessionContext {
     Instant inputBeganAt() { return inputBeganAt; }
     void inputBeganAt(Instant value) { inputBeganAt = value; }
     kr.mujoong.realtime.dialog.ConversationPolicyState conversationPolicy() { return conversationPolicy; }
-    boolean immediateMute() { return immediateMute; }
-    void immediateMute(boolean value) { immediateMute = value; }
 
     SessionGuardrailFacts proposeFacts(int statusVersion, SessionGuardrailFacts.Notice notice,
             SessionGuardrailFacts.Participation participation) {

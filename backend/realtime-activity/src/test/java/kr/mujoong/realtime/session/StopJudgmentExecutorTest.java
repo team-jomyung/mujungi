@@ -81,8 +81,8 @@ class StopJudgmentExecutorTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"무중아 그만할래?", "그만할래?", "우리 이제 그만할까", "이제 끝낼까"})
-    void aQuestionShapedStopPhraseAlsoEndsAtOnceWithoutAQuestion(String text) {
+    @ValueSource(strings = {"무중아 그만할래?", "무중아, 그만할래요?"})
+    void aQuestionShapedRegisteredStopPhraseAlsoEndsAtOnceWithoutAQuestion(String text) {
         t.h.activate();
 
         t.h.childSays("i-1", text);
@@ -94,7 +94,9 @@ class StopJudgmentExecutorTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"그만", "그만해", "졸려", "힘들어", "쉬고 싶어", "숙제를 안 해가서 혼났어", "어떻게 됐어"})
+    @ValueSource(strings = {"그만", "그만해", "졸려", "힘들어", "쉬고 싶어", "숙제를 안 해가서 혼났어", "어떻게 됐어",
+            // 등록되지 않은 종료 말도 세션을 끝내지 않는다(FT-1023-a)
+            "그만할래", "그만할래?", "우리 이제 그만할까", "이제 끝낼까", "이제 끝내자", "더 얘기하기 싫어"})
     void anUnclearSignalOrEverydayTalkKeepsTheConversationWithoutJ6OrAQuestion(String text) {
         t.h.activate();
 

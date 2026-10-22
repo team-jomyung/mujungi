@@ -2861,7 +2861,7 @@ public final class SessionExecutor {
 
     /**
      * U4b: ACTIVE의 확정 아이 전사로 종료 의도를 판정한다(기기 재생 중에 확정된 전사도 판정한다, 2026-10-22 결정).
-     * STOP이면 곧바로 CLOSING(CHILD_STOP)이고, 그 밖이면 대화를 잇는다. 불명확한 종료 의도로 확인 질문(STOP_CONFIRM)을 여는 흐름과
+     * 등록 종료 표현(STOP)이면 곧바로 CLOSING(CHILD_STOP)이고, 그 밖이면 대화를 잇는다(FT-1023-a). 불명확한 종료 의도로 확인 질문(STOP_CONFIRM)을 여는 흐름과
      * U3의 '막고 ACTIVE 유지 → 적극적 계속이면 해제'(CHILD_STOP_LIFTED) 경로는 없앴다(contracts/deviations.md FT-1022-b · FT-1022-c).
      *
      * @return 이번 발화를 종료 의도 흐름이 맡았으면 참('생각 중'을 보내지 않는다)
@@ -2872,9 +2872,8 @@ public final class SessionExecutor {
         }
         if (ctx.plan().activityType() == ActivityType.FREE_TALK) {
             if (stopJudge.requestsImmediateMute(transcript)) {
-                ctx.immediateMute(true);
-                ctx.putEvent(EVENT_CHILD_STOP_INTENT, "{\"basis\":\"IMMEDIATE_MUTE\"}", at);
-                closeForStop(at);
+                // "말하지 마"는 지금 말을 멈추라는 뜻이다. 세션은 등록 종료 표현으로만 끝나므로 닫지 않는다(FT-1023-a)
+                stopOutputForIntent(at);
                 return true;
             }
             if (stopJudge.requestsRest(transcript)) {
