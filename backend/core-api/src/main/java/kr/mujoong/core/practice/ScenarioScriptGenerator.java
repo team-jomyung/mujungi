@@ -115,7 +115,11 @@ public final class ScenarioScriptGenerator {
         return new ScenarioScriptProvider.Call(payload,input.aliases(),deadline.callDeadline(timing.requestTimeout()));
     }
     private ScenarioScriptProvider.Reviewed review(ScenarioScript script,Input input,Budget budget,ScenarioDeadline deadline){
-        var payload=new LinkedHashMap<>(input.payload());payload.put("script",script);
+        var payload=new LinkedHashMap<>(input.payload());
+        // 변형 장면이 없는 대본(첫 BASE 검토 · BASE만 남긴 재검토)에 다음 생성용 변형 계획을 보이면 검토가 BASE를 변형으로 읽고
+        // UNCHANGED_VARIANT · TRANSFER_MISMATCH로 거절한다. 계획은 검토할 변형이 있을 때만 넘긴다
+        if(script.scenes().stream().noneMatch(s->"VARIANT".equals(s.sceneKind())))payload.remove("variantPlan");
+        payload.put("script",script);
         var reviewed=invoke(()->provider.review(call(payload,input,deadline)),budget,deadline);
         if(reviewed==null||reviewed.review()==null||!metadata(reviewed.model()))throw content();
         return reviewed;
@@ -147,7 +151,7 @@ public final class ScenarioScriptGenerator {
                 .map(s -> s.withPartnerRole(ScenarioContentPolicy.partnerRoleName(s.relation())))
                 .toList();
         String version=input.graphContextUsed()&&input.rules().variants() instanceof ScenarioGraphContext.Session graph?graph.graphVersion():null;
-        return new Result(legacy,new ScenarioRepository.Details("scenario-script.v1",scenes,new Scenario.Review("APPROVE",reviewModel,"scenario-review.v1"),new Scenario.Generation(model,ScenarioScriptProvider.GENERATION_PROMPT_VERSION,input.graphContextUsed(),budget.calls,version),input.goalContextJson()));
+        return new Result(legacy,new ScenarioRepository.Details("scenario-script.v1",scenes,new Scenario.Review("APPROVE",reviewModel,ScenarioScriptProvider.REVIEW_PROMPT_VERSION),new Scenario.Generation(model,ScenarioScriptProvider.GENERATION_PROMPT_VERSION,input.graphContextUsed(),budget.calls,version),input.goalContextJson()));
     }
     private static boolean variantReason(String code){return java.util.Set.of("INVARIANT_MISMATCH","SKILL_MISMATCH","TRANSFER_MISMATCH","UNCHANGED_VARIANT").contains(code);}
     private static boolean metadata(String value){return value!=null&&value.matches("[A-Za-z0-9][A-Za-z0-9._:-]{0,79}");}

@@ -41,6 +41,17 @@ import org.junit.jupiter.api.*;
         verify(f.provider,times(2)).review(calls.capture());assertThat(calls.getAllValues().getLast().input().get("variantPlan")).isEqualTo(corrected.get("variantPlan"));
         assertThat(json.write(corrected.get("variantPlan"))).doesNotContain(f.legacy.guardian.toString(),f.legacy.child.toString(),"sourceActivityId");
         verify(f.graph).variantPlan(any(),any(),any(),eq(new VariantPlanner.Context("놀이","교실","아이와 친구","FRIEND_CLOSE","FRIEND_PRIVATE")),any());
+        assertThat(result.selfReview().promptVersion()).isEqualTo("scenario-review.v2").isEqualTo(ScenarioScriptProvider.REVIEW_PROMPT_VERSION);
+    }
+    /** 첫 BASE 검토는 변형이 없으므로 다음 생성용 계획을 보지 않고, 구조 맥락만 본다. 변형이 실린 검토만 받은 계획을 본다. */
+    @Test void baseOnlyReviewSeesStructureButNotTheNextVariantPlan(){
+        var result=f.legacy.service.generate(f.legacy.original());assertThat(result.scenes()).hasSize(2);
+        var reviews=org.mockito.ArgumentCaptor.forClass(ScenarioScriptProvider.Call.class);verify(f.provider,times(2)).review(reviews.capture());
+        var first=reviews.getAllValues().getFirst().input();var last=reviews.getAllValues().getLast().input();
+        assertThat(((ScenarioScript)first.get("script")).scenes()).extracting(ScenarioScript.Scene::sceneKind).containsExactly("BASE");
+        assertThat(first).containsKeys("structureContext","goal","opportunityCondition","relation").doesNotContainKey("variantPlan");
+        assertThat(((ScenarioScript)last.get("script")).scenes()).extracting(ScenarioScript.Scene::sceneKind).containsExactly("BASE","VARIANT");
+        assertThat(last).containsKeys("structureContext","variantPlan");
     }
     @Test void actualGraphVersionSurvivesDatabaseAndFirstPackage(){
         var result=f.legacy.service.generate(f.legacy.original());assertThat(result.generation().kgVersion()).isEqualTo("graph-v7");
@@ -70,7 +81,13 @@ import org.junit.jupiter.api.*;
         var generated=org.mockito.ArgumentCaptor.forClass(ScenarioScriptProvider.Call.class);verify(f.provider,times(2)).generate(generated.capture());
         Object delivered=generated.getAllValues().getLast().input().get("variantPlan");
         var reviews=org.mockito.ArgumentCaptor.forClass(ScenarioScriptProvider.Call.class);verify(f.provider,times(3)).review(reviews.capture());
-        assertThat(reviews.getAllValues()).allSatisfy(call->assertThat(call.input().get("variantPlan")).isEqualTo(delivered));
+        // 변형이 실린 검토는 생성에 실제로 넘긴 계획만 보고, BASE만 담은 검토(첫 검토 · BASE만 남긴 재검토)는 계획을 보지 않는다
+        assertThat(reviews.getAllValues()).allSatisfy(call->{
+            boolean variant=((ScenarioScript)call.input().get("script")).scenes().stream().anyMatch(s->"VARIANT".equals(s.sceneKind()));
+            if(variant)assertThat(call.input().get("variantPlan")).isEqualTo(delivered);
+            else assertThat(call.input()).doesNotContainKey("variantPlan");
+        });
+        assertThat(reviews.getAllValues()).filteredOn(call->call.input().containsKey("variantPlan")).hasSize(1);
         verify(f.graph,times(2)).variantPlan(any(),any(),any(),any(),any());
     }
     static final VariantPlanner.Context ALLOWED=new VariantPlanner.Context("놀이","교실","아이와 친구","FRIEND_CLOSE","FRIEND_PRIVATE");
