@@ -250,6 +250,9 @@ public interface PracticeSessionExtension {
     /** 실제 연습은 출력권을 소유하고, 무동작·기존 확장은 기존 경로를 유지한다. */
     default boolean controlsOutput() { return false; }
 
+    /** 안내 수집 중 일반 입력은 대화 턴을 열지 않는다. 입력 기록과 종료·휴식 처리는 실행기가 계속한다. */
+    default boolean collectingIntroduction() { return false; }
+
     default Progress progress() { return null; }
 
     default void onStopping() { }

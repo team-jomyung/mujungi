@@ -440,6 +440,7 @@ public final class SessionExecutor {
     /** 설계 개정 A7: 입력 전사 조각을 묶는 중인 발화(공급자는 전사 완료 사건을 주지 않는다). */
     private final StringBuilder inputGroup = new StringBuilder();
     private String inputGroupId;
+    private boolean inputGroupDuringIntroduction;
     private long inputGroupSeq;
     private final List<Object> pendingRetry = new ArrayList<>();
 
@@ -2127,9 +2128,9 @@ public final class SessionExecutor {
             // 아이 입력 재개는 열린 구간을 확정한다(대화가 넘어갔으니 완결 요청 교정은 하지 않는다)
             // 승인 대본은 전부 받은 뒤 원문 일치를 검사한다. 수집 중의 입력 전사만으로
             // 앞 조각을 봉인하면 정상 대본도 불완전/불일치로 폐기돼 연습이 종료된다.
-            // 입력 기록·종료 의도 처리는 계속하며, 실제 재생 중 끼어들기와 생성형 슬롯은 기존 규칙이다.
+            // 입력 기록·종료 의도 처리는 계속한다. 시작 안내의 일반 입력만 구분하고 역할 대화의 끼어들기는 기존대로 둔다.
             boolean collectingApprovedPractice = pendingPracticeSpeech != null && !pendingPracticeSpeech.generated();
-            if (ctx.segment().isOpen() && !collectingApprovedPractice) {
+            if (ctx.segment().isOpen() && !collectingApprovedPractice && !inputGroupDuringIntroduction) {
                 sealAndGate(true);
             }
             ctx.transcripts().childDelta(inputGroupId, delta.delta(), at);
@@ -2139,7 +2140,10 @@ public final class SessionExecutor {
     /** 조각을 현재 묶음에 더하고(없으면 묶음을 연다) 조용 시계를 다시 건다. 묶음 id를 돌려준다. */
     private String groupInputDelta(ProviderEvent.InputTranscriptDelta delta) {
         if (inputGroupId == null) {
-            inputGroupOpens++;
+            inputGroupDuringIntroduction = practice != null && practice.collectingIntroduction();
+            // Only a conversational input group supersedes a pending guardrail ticket.
+            // Stop/rest still invalidate output through their normal status/generation changes.
+            if (!inputGroupDuringIntroduction) inputGroupOpens++;
             inputGroupId = delta.itemId() != null ? delta.itemId() : "in-" + (++inputGroupSeq);
             inputGroup.setLength(0);
         }
@@ -2151,6 +2155,7 @@ public final class SessionExecutor {
     private void clearInputGroup() {
         ctx.timers().cancel(Kind.INPUT_TRANSCRIPT_QUIET);
         inputGroupId = null;
+        inputGroupDuringIntroduction = false;
         inputGroup.setLength(0);
     }
 
@@ -2158,6 +2163,7 @@ public final class SessionExecutor {
     private void onInputTranscriptQuiet() {
         String id = inputGroupId;
         String text = inputGroup.toString();
+        boolean duringIntroduction = inputGroupDuringIntroduction;
         clearInputGroup();
         if (id == null || text.isBlank()) {
             return;
@@ -2170,7 +2176,7 @@ public final class SessionExecutor {
             }
             return;
         }
-        onConfirmedChildTranscript(done, at);
+        onConfirmedChildTranscript(done, at, duringIntroduction);
     }
 
     /** 정산 창이 끝날 때 묶던 입력 전사가 있으면 정산 창 규칙으로 확정한다(발화 시작이 ended_at보다 이르면 저장). */
@@ -2188,6 +2194,10 @@ public final class SessionExecutor {
      * 불확실이 아니다.
      */
     private void onConfirmedChildTranscript(ProviderEvent.InputTranscriptDone done, Instant at) {
+        onConfirmedChildTranscript(done, at, practice != null && practice.collectingIntroduction());
+    }
+
+    private void onConfirmedChildTranscript(ProviderEvent.InputTranscriptDone done, Instant at, boolean duringIntroduction) {
         if (ctx.consentWithdrawnAt() != null) {
             droppedAfterConsent++;
             return;
@@ -2205,7 +2215,7 @@ public final class SessionExecutor {
             }
             currentTranscriptSeq = seq.orElse(0);
             // U13 호출 지점 ③: 아이 확정 전사 = 새 턴(재지시 수를 0으로, 마지막 서버 지시를 지운다)
-            guardrail.onNewTurn(done.transcript());
+            if (!duringIntroduction) guardrail.onNewTurn(done.transcript());
             if (ctx.status() == SessionStatus.ACTIVE) {
                 judgment.remember(currentTranscriptSeq, done.transcript(), at);
                 if (judgment.isOpen()) {
@@ -2222,7 +2232,7 @@ public final class SessionExecutor {
             }
             boolean controlledPractice = practice != null && practice.controlsOutput();
             boolean stopHandled = controlledPractice && judgeStopIntent(done.transcript(), uncertain, at);
-            if (!stopHandled && ctx.status() == SessionStatus.ACTIVE && practice != null
+            if (!stopHandled && !duringIntroduction && ctx.status() == SessionStatus.ACTIVE && practice != null
                     && !(controlledPractice && idle.technicalPause() != null)) {
                 PracticeSessionExtension.Utterance utterance = new PracticeSessionExtension.Utterance(
                         seq.orElse(0), at, done.transcript() == null ? "" : done.transcript(), uncertain,
@@ -2230,7 +2240,7 @@ public final class SessionExecutor {
                 practiceSignal(() -> practice.onChildUtterance(utterance, practiceOutput), true);
             }
             // 2차 리뷰 2: 종료 의도를 푼 발화의 응답은 막힌 동안 이미 취소됐을 수 있다 — 끝 신호가 오지 않을 '생각 중'을 보내지 않는다
-            if (!(controlledPractice ? stopHandled : judgeStopIntent(done.transcript(), uncertain, at))) {
+            if (!duringIntroduction && !(controlledPractice ? stopHandled : judgeStopIntent(done.transcript(), uncertain, at))) {
                 thinking();
             }
         }

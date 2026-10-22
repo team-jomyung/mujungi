@@ -85,6 +85,11 @@ public final class PracticeFlowRouter implements PracticeSessionExtension {
     }
 
     @Override
+    public boolean collectingIntroduction() {
+        return delegate != null && delegate.collectingIntroduction();
+    }
+
+    @Override
     public void onStopping() {
         if (delegate != null) {
             delegate.onStopping();

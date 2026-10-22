@@ -43,6 +43,19 @@ class FlexiblePracticeConversationTest {
         h.played();assertThat(h.out.lastSlot().generated()).isFalse();
     }
 
+    @Test
+    void interruptedGoalBriefContinuesToTheReviewedSceneWithoutLoopingOrClaimingFailure() {
+        Harness h=fresh(false);h.activate();
+        assertThat(h.ext.collectingIntroduction()).isTrue();
+        assertThat(h.end(Playback.INTERRUPTED)).isEqualTo(Signal.NONE);
+        assertThat(h.ext.state().sub()).isEqualTo(FlowState.Sub.NONE);
+        assertThat(h.out.lastSlot().generated()).isFalse();assertThat(h.recorder.rows).isEmpty();
+        h.played();h.played();
+        assertThat(h.ext.collectingIntroduction()).isFalse();
+        assertThat(h.ext.state().phase()).isEqualTo(FlowState.Phase.OPPORTUNITY);
+        assertThat(h.out.generatedSlots()).hasSize(1);
+    }
+
     private void completeDialogue(Harness h) {
         h.child("파란 상자를 줘");h.result("J2","FULL");h.played();
         h.child("고마워");h.result("J3","DELIVERED");h.played();

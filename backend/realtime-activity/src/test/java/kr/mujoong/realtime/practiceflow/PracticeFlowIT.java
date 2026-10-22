@@ -229,6 +229,42 @@ class PracticeFlowIT {
     }
 
     @Test
+    void routedGoalBriefSurvivesOverlappingInputAndTheActualJevGateBeforeTheSceneStarts() {
+        flexible=true;h.activate();h.settleSend();
+        h.speak("오늘 연습할 목표는",4800);
+        h.provider.last().emit(new kr.mujoong.realtime.voice.ProviderPort.ProviderEvent.InputTranscriptDelta("intro-overlap","응, 알겠어"));
+        h.drain();h.advance(Duration.ofMillis(501));
+        assertThat(h.executor.status()).isEqualTo(SessionStatus.ACTIVE);
+        assertThat(repository.findSceneRuns(h.sessionId)).isEmpty();
+        assertThat(h.link.outputs()).isEmpty();
+        h.speak(" 부탁하기야. 짧게 해 보자.",4800);h.advance(Duration.ofMillis(801));
+        assertThat(guard.last().request().mode()).isEqualTo(GuardrailRequest.Mode.PRACTICE_PEER);
+        guard.allow();h.drain();assertThat(h.link.outputs()).hasSize(1);
+        complete(h.link.outputs().getLast().playbackId());
+        playApproved("상상 속 상황을 떠올려 봐. 무중이가 상황 속 상대 역할을 해 볼게.");playApproved(OPPORTUNITY);
+        assertThat(h.executor.status()).isEqualTo(SessionStatus.ACTIVE);
+        assertThat(repository.findSceneRuns(h.sessionId)).hasSize(1);
+        assertThat(failures).isEmpty();
+    }
+
+    @Test
+    void stoppingAPlayingGoalBriefKeepsChildStopPriorityOverTheNextIntroduction() {
+        flexible=true;h.activate();h.settleSend();h.speak("오늘은 부탁하기를 연습할 거야.",4800);
+        h.advance(Duration.ofMillis(801));guard.allow();h.drain();
+        UUID id=h.link.outputs().getLast().playbackId();
+        for(var status:List.of(PlaybackMark.Status.STARTED,PlaybackMark.Status.STOPPED)) {
+            h.mailbox.offerGeneral(new SessionMailbox.PlaybackMarkReceived(h.link.connectionId(),
+                    new PlaybackMark(id,status,null,h.clock.now(),status==PlaybackMark.Status.STOPPED
+                            ? PlaybackMark.StopCause.LOCAL_VOICE_ACTIVITY:null,null),h.clock.now()));h.drain();
+        }
+        assertThat(h.executor.status()).isEqualTo(SessionStatus.ACTIVE);
+        h.childSays("stop-playing-intro","무중아 그만할래");
+        assertThat(h.executor.status()).isEqualTo(SessionStatus.CLOSING);
+        assertThat(h.transitions.find(h.sessionId).orElseThrow().endReason()).isEqualTo(kr.mujoong.contract.status.EndReason.CHILD_STOP);
+        assertThat(repository.findSceneRuns(h.sessionId)).isEmpty();
+    }
+
+    @Test
     void flexibleDialogueSeparatesTargetAchievementFromAgreementAndGuardsEveryGeneratedReply() {
         flexible = true; h.activate();
         playGenerated("오늘은 부탁하기를 짧은 역할놀이로 연습해 볼 거야. 원하면 쉬거나 끝내도 돼.");

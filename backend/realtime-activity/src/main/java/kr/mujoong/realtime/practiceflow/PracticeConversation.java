@@ -156,6 +156,11 @@ public final class PracticeConversation implements PracticeSessionExtension {
         return true;
     }
 
+    @Override
+    public boolean collectingIntroduction() {
+        return state.phase() == Phase.SCENE_INTRO && openSlot != null && !stopping;
+    }
+
     // ---- 확장점 시점 ----
 
     @Override
@@ -713,9 +718,10 @@ public final class PracticeConversation implements PracticeSessionExtension {
             return;
         }
         if (mine && state.sub() == Sub.GOAL_BRIEF && end == SlotEnd.INTERRUPTED) {
-            // Do not continue a scene whose goal/range was not heard.
-            outputFailed = true;
-            closing(false);
+            // A played, guarded brief interrupted by speech is not a transport failure.
+            // Continue to the reviewed scene introduction; never repeat the brief indefinitely.
+            goalBriefPlayed = true;
+            beginReflectionOrIntroduction();
             return;
         }
         if (reflecting && mine && (end == SlotEnd.PLAYED || end == SlotEnd.INTERRUPTED)) {

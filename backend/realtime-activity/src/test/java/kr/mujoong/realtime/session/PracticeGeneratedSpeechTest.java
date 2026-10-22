@@ -210,6 +210,66 @@ class PracticeGeneratedSpeechTest {
     }
 
     @Test
+    void ordinaryInputDuringGeneratedIntroductionDoesNotSealPartialAudioAndStillRequiresJev() {
+        start(true);extension.introduction=true;UUID slot=UUID.randomUUID();
+        extension.out.speakGenerated(slot,"PEER",INSTRUCTION);h.settleSend();
+        h.speak("오늘 연습할 목표는",4800);
+        h.provider.last().emit(new ProviderEvent.InputTranscriptDelta("intro-overlap","응"));h.drain();
+        h.advance(Duration.ofMillis(501));h.speak(null,4800);
+        h.advance(Duration.ofMillis(501));h.speak(null,4800);h.advance(Duration.ofMillis(501));
+        assertThat(h.executor.status()).isEqualTo(kr.mujoong.contract.status.SessionStatus.ACTIVE);
+        assertThat(extension.endFacts(slot)).isEmpty();assertThat(guard.count()).isZero();
+        h.speak(" 의견 묻기야. 짧게 해 보자.",4800);h.advance(Duration.ofMillis(801));
+        assertThat(guard.count()).isEqualTo(1);assertThat(h.link.outputs()).isEmpty();
+        guard.allow();h.drain();assertThat(h.link.outputs()).hasSize(1);
+        mark(h.link.outputs().getFirst().playbackId(),PlaybackMark.Status.COMPLETED);
+        assertThat(extension.endFacts(slot)).containsExactly(PracticePorts.Playback.COMPLETED);
+    }
+
+    @Test
+    void ordinaryInputWhileIntroductionJevCheckIsPendingDoesNotCancelItsTicket() {
+        start(true);extension.introduction=true;UUID slot=UUID.randomUUID();
+        extension.out.speakGenerated(slot,"PEER",INSTRUCTION);h.settleSend();say(SPOKEN);
+        h.provider.last().emit(new ProviderEvent.InputTranscriptDelta("intro-check","응, 알겠어"));h.drain();
+        h.advance(Duration.ofMillis(501));h.childSays("intro-done","응, 알겠어");guard.allow();h.drain();
+        assertThat(h.link.outputs()).hasSize(1);assertThat(extension.endFacts(slot)).isEmpty();
+        assertThat(h.executor.status()).isEqualTo(kr.mujoong.contract.status.SessionStatus.ACTIVE);
+    }
+
+    @Test
+    void stopDuringIntroductionStillClosesImmediatelyAndLateJevAllowCannotPlay() {
+        start(true);extension.introduction=true;
+        extension.out.speakGenerated(UUID.randomUUID(),"PEER",INSTRUCTION);h.settleSend();say(SPOKEN);
+        h.provider.last().emit(new ProviderEvent.InputTranscriptDelta("intro-stop","무중아 그만할래"));h.drain();
+        h.advance(SessionHarness.SETTINGS.inputTranscriptQuiet().plusMillis(1));
+        assertThat(h.executor.status()).isEqualTo(kr.mujoong.contract.status.SessionStatus.CLOSING);
+        guard.allow();h.drain();assertThat(h.link.outputs()).isEmpty();
+    }
+
+    @Test
+    void restDuringIntroductionImmediatelyInterruptsOutputAndUsesTheExistingRestJudgment() {
+        var judge=h.useJudge();start(true);extension.introduction=true;UUID slot=UUID.randomUUID();
+        extension.out.speakGenerated(slot,"PEER",INSTRUCTION);h.settleSend();h.speak("오늘 연습할 목표는",4800);
+        h.childSays("intro-rest","쉬고 싶어");
+        assertThat(judge.last().request().point()).isEqualTo(kr.mujoong.realtime.judgment.JudgmentPoint.J6);
+        h.speak(" 의견 묻기야. 해 보자.",4800);h.advance(Duration.ofMillis(801));
+        assertThat(guard.count()).as("휴식 판단 중 이전 안내 조각은 검사·재생으로 가지 않는다").isZero();
+        assertThat(h.link.outputs()).isEmpty();
+        judge.confirm("REST",0.95,"NOT_END",0.03);h.drain();
+        assertThat(h.link.outputs()).isEmpty();
+    }
+
+    @Test
+    void forbiddenIntroAudioWithOverlappingInputStillFailsClosedBeforeJev() {
+        start(true);extension.introduction=true;UUID slot=UUID.randomUUID();
+        extension.out.speakGenerated(slot,"PEER",INSTRUCTION);h.settleSend();h.speak("검사해 보니",4800);
+        h.provider.last().emit(new ProviderEvent.InputTranscriptDelta("intro-pattern","응"));h.drain();
+        h.speak(" 비정상이에요",4800);h.advance(Duration.ofMillis(801));
+        assertThat(h.link.outputs()).isEmpty();assertThat(guard.count()).isZero();
+        assertThat(extension.endFacts(slot)).containsExactly(PracticePorts.Playback.FAILED);
+    }
+
+    @Test
     void childInputWhileCollectingApprovedScriptDoesNotSealAPartialScene() {
         start(true);
         UUID slot=UUID.randomUUID();
@@ -286,6 +346,7 @@ class PracticeGeneratedSpeechTest {
     /** 출력을 쥐고 받은 사건을 기록하는 최소 연습 확장점. */
     private static final class Recording implements PracticeSessionExtension {
         PracticeOutput out;
+        boolean introduction;
         final List<PlaybackFact> facts = new ArrayList<>();
         final List<GuardrailBlockedEvent> blocked = new ArrayList<>();
         final List<ExtensionEvent> mismatches = new ArrayList<>();
@@ -299,6 +360,8 @@ class PracticeGeneratedSpeechTest {
         public boolean controlsOutput() {
             return true;
         }
+
+        @Override public boolean collectingIntroduction() { return introduction; }
 
         @Override
         public Signal onActive(PracticeContext context, PracticeOutput output) {
