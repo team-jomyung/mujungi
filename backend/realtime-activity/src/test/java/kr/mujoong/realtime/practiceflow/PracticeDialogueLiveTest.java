@@ -79,6 +79,7 @@ import kr.mujoong.realtime.voice.PracticeInstruction;
 import kr.mujoong.realtime.voice.PracticeSpeech;
 import kr.mujoong.realtime.voice.ProviderRequestFactory;
 import kr.mujoong.testsupport.log.LogCapture;
+import kr.mujoong.testsupport.dialogue.HeardWords;
 import kr.mujoong.testsupport.time.MutableClock;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -2246,8 +2247,10 @@ class PracticeDialogueLiveTest {
 
         /**
          * 대화마다 자동 점검표(하니스 참고용 글자 비교, 운영 검사 아님): 아이가 첫 대답 전에 들은 말에 목표 표현이 글자 그대로 있었나 · 성공한 장면 뒤
-         * 친구가 반응했나 · 무중 · 친구 · 코치 말에 칭찬 · 채점 말이 있나 · 도움 제안을 누가 했나 · 장면 수 · 첫 코치 도움(말틀)이 표현 예시를 그대로
-         * 말했나 · (대본 아이) 기대 판정과 같은가.
+         * 친구가 반응했나 · 무중 · 친구 · 코치 말에 칭찬 · 채점 말이 있나 · 도움 제안을 누가 했나 · 장면 수 · 첫 코치 도움(빈칸 예문)이 표현 예시를
+         * 그대로 말했나 · (대본 아이) 기대 판정과 같은가. 실측 F4 · F5(docs/practice-dialogue-standard.md 14절)로 더한 것: 되묻기가 아이가 원하는 것 ·
+         * 할 말의 핵심 낱말을 먼저 말했나 · 첫 코치 도움이 대본의 빈칸 예문을 그대로 말했나 · 지시문 낱말('말틀' · '빈칸 예문')이 들렸나 · 이모지 · 기호 ·
+         * 괄호가 있나 · 변형 기회 문장이 BASE와 같거나 같은 핵심 낱말을 쓰나. 되묻기가 장면 밖 새 질문을 했는지는 글자로 가릴 수 없어 사람이 읽는다.
          */
         private Map<String, Object> checks() {
             Map<String, Object> checks = new LinkedHashMap<>();
@@ -2283,6 +2286,11 @@ class PracticeDialogueLiveTest {
                     .distinct().toList());
             checks.put("scenes", rows.stream().map(row -> row.sceneKind().name()).toList());
             checks.put("firstCoachFrameSaidTheExample", firstFrameSaidExample());
+            checks.put("reaskNamedWantedWords", reaskNamedWantedWords());
+            checks.put("firstCoachFrameVerbatim", firstCoachFrameVerbatim());
+            checks.put("instructionWordsSpoken", spokenFindings(HeardWords::instructionWords));
+            checks.put("emojiOrSymbols", spokenFindings(HeardWords::symbols));
+            checks.put("variantOpportunity", variantOpportunity());
             if (actor.mode() == ChildMode.SCRIPT) {
                 checks.put("standardJudgmentMatches", standardMatches());
             }
@@ -2333,7 +2341,7 @@ class PracticeDialogueLiveTest {
             return -1;
         }
 
-        /** 첫 '요점 + 말틀' 코치 도움이 장면의 표현 예시를 글자 그대로 말했나(말틀 대신 정답을 준 셈). 그런 도움이 없으면 null. */
+        /** 첫 '요점 + 빈칸 예문' 코치 도움이 장면의 표현 예시를 글자 그대로 말했나(빈칸 대신 정답을 준 셈). 그런 도움이 없으면 null. */
         private Object firstFrameSaidExample() {
             for (Map<String, Object> entry : timeline) {
                 if (String.valueOf(entry.get("template")).startsWith("COACH_HELP_FRAME")) {
@@ -2348,6 +2356,92 @@ class PracticeDialogueLiveTest {
                 }
             }
             return null;
+        }
+
+        /** 기록 줄의 장면(변형 줄이면 변형 장면, 아니면 원 장면). */
+        private Scene sceneOf(Map<String, Object> entry) {
+            return "VARIANT".equals(entry.get("sceneKind")) ? script.variantScene().orElse(script.baseScene()) : script.baseScene();
+        }
+
+        /**
+         * 아이가 원하는 것 · 할 말의 핵심 낱말: 대본의 빈칸 예문이 표현 예시에서 비운 말(FRAME). 빈칸 예문이 없거나 맞춰 볼 수 없으면 표현 예시의 핵심
+         * 낱말(EXAMPLE, 덜 정확하다).
+         */
+        private static Map<String, Object> wantedWords(Scene scene) {
+            List<String> words = new ArrayList<>();
+            for (int i = 0; i < Math.min(scene.expressionExamples().size(), scene.expressionFrames().size()); i++) {
+                HeardWords.blankedWords(scene.expressionExamples().get(i), scene.expressionFrames().get(i))
+                        .ifPresent(spans -> spans.stream().filter(span -> !span.isEmpty() && !words.contains(span)).forEach(words::add));
+            }
+            if (!words.isEmpty()) {
+                return ordered("words", words, "source", "FRAME");
+            }
+            scene.expressionExamples().stream().flatMap(example -> HeardWords.keyWords(example).stream()).distinct().forEach(words::add);
+            return ordered("words", words, "source", "EXAMPLE");
+        }
+
+        /** 친구 되묻기 줄이 아이가 원하는 것 · 할 말의 핵심 낱말을 먼저 말했나(실측 F4 «파란색 크레용이 필요해?», 참고 값). */
+        @SuppressWarnings("unchecked")
+        private Map<String, Object> reaskNamedWantedWords() {
+            int reasks = 0;
+            List<Map<String, Object>> named = new ArrayList<>();
+            for (Map<String, Object> entry : timeline) {
+                if (String.valueOf(entry.get("template")).startsWith("PEER_REASK") && entry.get("text") instanceof String text) {
+                    reasks++;
+                    Scene scene = sceneOf(entry);
+                    Map<String, Object> wanted = wantedWords(scene);
+                    List<String> words = HeardWords.mentioned((List<String>) wanted.get("words"), text);
+                    if (!words.isEmpty()) {
+                        named.add(ordered("n", entry.get("n"), "scene", scene.sceneKind().name(), "words", words, "source", wanted.get("source")));
+                    }
+                }
+            }
+            return ordered("reasks", reasks, "named", named);
+        }
+
+        /**
+         * 첫 '요점 + 빈칸 예문' 코치 도움이 대본의 첫 빈칸 예문을 글자 그대로(정규화 비교) 말했나(실측 F5). 대본에 빈칸 예문이 없으면
+         * NO_FRAME_IN_SCRIPT, 그런 도움이 없으면 null.
+         */
+        private Object firstCoachFrameVerbatim() {
+            for (Map<String, Object> entry : timeline) {
+                if (String.valueOf(entry.get("template")).startsWith("COACH_HELP_FRAME")) {
+                    if (!(entry.get("text") instanceof String text)) {
+                        return "NOT_SPOKEN";
+                    }
+                    String frame = sceneOf(entry).firstFrame();
+                    if (frame.isBlank()) {
+                        return "NO_FRAME_IN_SCRIPT";
+                    }
+                    return HeardWords.normalize(text).contains(HeardWords.normalize(frame));
+                }
+            }
+            return null;
+        }
+
+        /** 무중 · 친구 · 코치 줄에서 찾은 것(지시문 낱말 · 기호 등): 찾은 줄마다 줄 번호 · 화자 · 찾은 것. */
+        private List<Map<String, Object>> spokenFindings(java.util.function.Function<String, List<String>> finder) {
+            List<Map<String, Object>> found = new ArrayList<>();
+            for (Map<String, Object> entry : timeline) {
+                if (spoken(entry) && entry.get("text") instanceof String text) {
+                    List<String> items = finder.apply(text);
+                    if (!items.isEmpty()) {
+                        found.add(ordered("n", entry.get("n"), "speaker", Transcript.speaker(entry), "found", items));
+                    }
+                }
+            }
+            return found;
+        }
+
+        /** 변형 기회 문장이 BASE 기회 문장과 같거나 같은 핵심 낱말(소재)을 쓰나(실측 F2: 변형이 소재를 바꾸지 않음). 변형 장면이 없으면 null. */
+        private Map<String, Object> variantOpportunity() {
+            Optional<Scene> variant = script.variantScene();
+            if (variant.isEmpty()) {
+                return null;
+            }
+            String base = script.baseScene().opportunitySentence();
+            String other = variant.get().opportunitySentence();
+            return ordered("sameAsBase", HeardWords.same(base, other), "sharedKeyWords", HeardWords.sharedKeyWords(base, other));
         }
 
         /** 대본 아이: 판정된 아이 대사 가운데 기대 지점 · 선택지와 같게 확정된 수. */
@@ -2444,7 +2538,7 @@ class PracticeDialogueLiveTest {
             templates.putIfAbsent(PracticeInstructions.mujoongVariantOffer(false), "MUJOONG_VARIANT_OFFER(무중 변형 제안 · 옛 대본)");
             templates.putIfAbsent(PracticeInstructions.mujoongVariantOffer(true), "MUJOONG_VARIANT_OFFER_AGAIN(무중 변형 제안 · 다시 안내)");
             templates.putIfAbsent(PracticeInstructions.coachHelp(scene, RolePolicy.Example.NONE), "COACH_HELP_CUE(코치 단서만)");
-            templates.putIfAbsent(PracticeInstructions.coachHelp(scene, RolePolicy.Example.FRAME), "COACH_HELP_FRAME(코치 요점 + 말틀)");
+            templates.putIfAbsent(PracticeInstructions.coachHelp(scene, RolePolicy.Example.FRAME), "COACH_HELP_FRAME(코치 요점 + 빈칸 예문)");
             templates.putIfAbsent(PracticeInstructions.coachHelp(scene, RolePolicy.Example.FULL), "COACH_HELP_EXAMPLE(코치 요점 + 표현 예시)");
             templates.putIfAbsent(PracticeInstructions.coachRetryPrompt(scene), "COACH_RETRY_PROMPT(코치 다시 해 보기 권유)");
             templates.putIfAbsent(PracticeInstructions.roleNotice("COACH", scene), "ROLE_NOTICE_COACH(코치 전환 알림 · 생성형)");
@@ -2584,7 +2678,8 @@ class PracticeDialogueLiveTest {
             md.append("- 화자: 무중(역할 밖 설명 · 제안 · 역할 알림), 친구(장면 속 친구), 코치(무중의 도움 발화), 아이. 친구 · 코치의 생성 발화는 GPT-Live 음성이 "
                     + "아니라 같은 지시를 받은 텍스트 모델의 글이다(텍스트 대리).\n");
             md.append("- 아이 말 뒤 괄호는 실제 판정(지점 1순위 확률, 또는 보류 사유)이다. 대본 아이는 기대 판정을 같이 적는다.\n");
-            md.append("- 점검표는 하니스가 글자로 비교한 참고 값이다. 연습이 되는지는 사람이 대사를 읽고 판단한다.\n");
+            md.append("- 점검표는 하니스가 글자로 비교한 참고 값이다. 연습이 되는지는 사람이 대사를 읽고 판단한다. 되묻기가 장면 밖 새 질문을 했는지는 "
+                    + "글자로 가릴 수 없어 점검표에 없다.\n");
             for (Map<String, Object> goal : goals) {
                 renderGoal(md, goal);
             }
@@ -2719,8 +2814,26 @@ class PracticeDialogueLiveTest {
             md.append("- 장면 수: ").append(checks.get("scenes") instanceof List<?> scenes
                     ? scenes.size() + "(" + String.join(" · ", scenes.stream().map(String::valueOf).toList()) + ")" : "?").append('\n');
             Object frame = checks.get("firstCoachFrameSaidTheExample");
-            md.append("- 첫 코치 도움(말틀)이 표현 예시를 그대로 말함: ").append(frame == null ? "말틀 도움 없음"
+            md.append("- 첫 코치 도움(빈칸 예문)이 표현 예시를 그대로 말함: ").append(frame == null ? "빈칸 예문 도움 없음"
                     : Boolean.TRUE.equals(frame) ? "예(주의)" : Boolean.FALSE.equals(frame) ? "아니오" : String.valueOf(frame)).append('\n');
+            Object verbatim = checks.get("firstCoachFrameVerbatim");
+            md.append("- 첫 코치 도움이 대본의 빈칸 예문을 그대로 말함: ").append(verbatim == null ? "빈칸 예문 도움 없음"
+                    : Boolean.TRUE.equals(verbatim) ? "예" : Boolean.FALSE.equals(verbatim) ? "아니오(주의)"
+                    : "NO_FRAME_IN_SCRIPT".equals(verbatim) ? "대본에 빈칸 예문 없음" : String.valueOf(verbatim)).append('\n');
+            if (checks.get("reaskNamedWantedWords") instanceof Map<?, ?> reask) {
+                md.append("- 되묻기가 아이가 원하는 것 · 할 말의 낱말을 먼저 말함(참고): ").append(list(reask.get("named"),
+                        item -> "줄 " + item.get("n") + "(" + item.get("scene") + ") " + item.get("words") + "(" + item.get("source") + ", 주의)",
+                        "없음(되묻기 " + reask.get("reasks") + "번)")).append('\n');
+            }
+            md.append("- 지시문 낱말('말틀' · '빈칸 예문')이 들림: ").append(list(checks.get("instructionWordsSpoken"),
+                    item -> item.get("speaker") + " " + item.get("found") + "(줄 " + item.get("n") + ", 주의)", "없음")).append('\n');
+            md.append("- 이모지 · 기호 · 괄호: ").append(list(checks.get("emojiOrSymbols"),
+                    item -> item.get("speaker") + " " + item.get("found") + "(줄 " + item.get("n") + ", 주의)", "없음")).append('\n');
+            if (checks.get("variantOpportunity") instanceof Map<?, ?> variant) {
+                md.append("- 변형 기회 문장이 BASE와 같음 · 같은 핵심 낱말(참고): ").append(Boolean.TRUE.equals(variant.get("sameAsBase")) ? "같음(주의)"
+                        : variant.get("sharedKeyWords") instanceof List<?> shared && !shared.isEmpty() ? "같은 낱말 " + shared + "(주의)" : "다름")
+                        .append('\n');
+            }
             if (checks.get("standardJudgmentMatches") instanceof Map<?, ?> matches) {
                 md.append("- 기준 대화 기대 판정과 같음: ").append(matches.get("matched")).append(" / ").append(matches.get("judged")).append('\n');
             }

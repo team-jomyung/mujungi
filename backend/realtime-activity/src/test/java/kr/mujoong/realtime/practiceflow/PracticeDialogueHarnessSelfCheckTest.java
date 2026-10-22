@@ -90,6 +90,11 @@ class PracticeDialogueHarnessSelfCheckTest {
                     "성공한 장면 뒤 친구 반응: BASE(AFTER_REASK) 있음 · VARIANT(AFTER_HELP) 있음",
                     "무중 · 친구 · 코치 말의 칭찬 · 채점 말: 없음",
                     "장면 수: 2(BASE · VARIANT)");
+            // 실측 F4 · F5로 더한 점검 줄(값은 가짜 공급자의 글에 따라 다르다. 기준 대본의 변형은 소재를 바꿨다)
+            assertThat(standard).contains("첫 코치 도움이 대본의 빈칸 예문을 그대로 말함: ", "되묻기가 아이가 원하는 것 · 할 말의 낱말을 먼저 말함(참고): ",
+                    "지시문 낱말('말틀' · '빈칸 예문')이 들림: ", "이모지 · 기호 · 괄호: ", "변형 기회 문장이 BASE와 같음 · 같은 핵심 낱말(참고): 다름");
+            assertThat(json.replaceAll("\\s", "")).contains("\"reaskNamedWantedWords\":", "\"firstCoachFrameVerbatim\":",
+                    "\"instructionWordsSpoken\":", "\"emojiOrSymbols\":", "\"variantOpportunity\":");
 
             // AI 아이 P2(모름 → 도움 수락 → 도움 뒤 자기 말로)는 도움 요청 → 코치 도움 → 다시 해 보기 → 친구 반응 길을 탄다
             String helped = md.substring(md.indexOf("### AI가 연기하는 아이 · P2"), md.indexOf("### AI가 연기하는 아이 · P3"));

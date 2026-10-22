@@ -83,6 +83,7 @@ import kr.mujoong.core.support.TestEvents;
 import kr.mujoong.core.textai.ForbiddenExpressionPolicy;
 import kr.mujoong.core.textai.ScenarioScript;
 import kr.mujoong.core.textai.TextAiProperties;
+import kr.mujoong.testsupport.dialogue.HeardWords;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.context.properties.bind.Bindable;
@@ -527,9 +528,11 @@ class PracticeQualityLiveTest {
             Instant started = clock.now();
             long startedNanos = clock.monotonicNanos();
             Scenario scenario = null;
+            List<ScenarioScriptGenerator.Note> notes = List.of();
             try {
                 ScenarioScriptGenerator.Result result = flow.generate(context, snapshot, null, null, account, started,
                         new ScenarioDeadline(clock, started.plus(SCENARIO_LIMIT)));
+                notes = result.notes();
                 // 발급 대본 · 준비 원본 · C8 조각은 저장과 교차 계약 시험(PracticeLinkContractTest)이 쓰는 같은 조립이다
                 scenario = ScenarioRepository.issued(UUID.randomUUID(), "ORIGINAL", result.legacy(), result.details());
                 var pack = new PreparedPracticePackageMapper().c8(new PreparedPracticePackageMapper.PreparedSnapshot(session, UUID.randomUUID(),
@@ -544,6 +547,7 @@ class PracticeQualityLiveTest {
                 row.put("selfReview", plain(scenario.selfReview()));
                 row.put("generation", plain(scenario.generation()));
             } catch (ScenarioScriptGenerator.ContentExhausted exhausted) {
+                notes = exhausted.notes();
                 row.put("result", "FAILED");
                 row.put("failure", Map.of("code", exhausted.code().name(), "kind", "CONTENT_EXHAUSTED", "permanent", exhausted.permanent()));
             } catch (CoreApiException failure) {
@@ -560,7 +564,8 @@ class PracticeQualityLiveTest {
             row.put("reviews", reviews(recorded));
             row.put("graphContextUsed", scenario != null && scenario.generation() != null && scenario.generation().graphContextUsed());
             row.put("graphContextOffered", recorded.stream().anyMatch(c -> ResultData.object(c.get("input")).containsKey("structureContext")));
-            row.put("variant", VariantDiagnosis.of(scenario, spec.skillRef(), seed, recorded));
+            row.put("generatorNotes", notes.stream().map(Enum::name).toList());
+            row.put("variant", VariantDiagnosis.of(scenario, spec.skillRef(), seed, recorded, notes));
             row.put("calls", recorded);
             return row;
         }
@@ -697,10 +702,14 @@ class PracticeQualityLiveTest {
                     "씨앗 목표(HARNESS_SELECTED_SEED)는 카탈로그 기술(label)에 하니스가 합성 4요소를 붙인 후보 목표다. 운영에서 후보 생성이 seedId를 skillRef로 고른 상태와 같다.",
                     "시작 패키지는 ScenarioRepository.issued → PreparedPracticePackageMapper.c8 조립이고 DB 저장 · 준비 원본 임대(PracticeStartService) · 동의 확인은 거치지 않았다(내용에는 영향 없음).",
                     "노출 이력은 비어 있다(아이의 첫 연습). 그래서 변형 거리는 SAME_CONTEXT가 기대값이다.",
-                    "variant.diagnosis는 기록된 호출로 하니스가 추정한 코드다. 운영 코드가 낸 사유 코드가 아니다.",
+                    "generatorNotes · variant.generatorPath는 운영 생성기(ScenarioScriptGenerator.Note)가 실제로 낸 사유 코드와 그 뜻이다(예: BASE 바꿔 "
+                            + "끼움 · BASE만 발급(추가 검토 없음)). variant.diagnosis는 그 사유 코드로 정하고(source GENERATOR_NOTES), 사유 코드가 "
+                            + "말하지 않는 앞 단계(그래프 · 계획 · 모델 출력)만 기록된 호출로 하니스가 정한다(source RECORDED_CALLS).",
                     "heard는 아이가 듣는 순서(무중의 설명 → 친구 첫 대사 → 친구 기회 문장, 다시 설명은 무중, 변형은 무중의 제안 '… 이어서 해 볼까?' 뒤 "
                             + "첫 대사 → 기회 문장)로 펼친 장면 말과 하니스 참고 점검(들리는 말에 목표 표현 · 표현 예시가 글자 그대로 있나, 설명이 기회 "
-                            + "조건을 옮겨 썼나, 칭찬 · 채점 말, BASE 첫 대사)이다. 운영 검사가 아니다.");
+                            + "조건을 옮겨 썼나, 칭찬 · 채점 말, BASE 첫 대사, 설명이 기회 문장의 핵심 낱말을 미리 말하나, 빈칸 예문 칸 · '뭐뭐' · 비운 말, "
+                            + "VARIANT 기회 문장이 BASE와 같거나 같은 핵심 낱말을 쓰나)이다. 핵심 낱말은 띄어쓰기 낱말에서 끝 조사 하나를 뗀 글자 비교"
+                            + "(test-support HeardWords)라 참고 값이다. 운영 검사가 아니다.");
         }
 
         private static Map<String, Object> timing(Duration elapsed, List<Map<String, Object>> calls, Duration productionTotal,
@@ -903,7 +912,9 @@ class PracticeQualityLiveTest {
     /**
      * 발급 대본의 장면 말을 아이가 듣는 순서로 펼치고 하니스 참고 점검을 붙인다(운영 검사 아님, 정규화는 core {@link ScenarioContentPolicy#normalize}).
      * 점검: 아이가 대답하기 전에 들리는 말(설명 · 첫 대사 · 기회 문장 · 다시 설명)에 목표 표현 · 장면 표현 예시가 글자 그대로 있나, BASE 설명이 기회
-     * 조건을 옮겨 썼나(판 v5까지의 모양), 칭찬 · 채점 말이 있나, BASE 첫 대사가 있나.
+     * 조건을 옮겨 썼나(판 v5까지의 모양), 칭찬 · 채점 말이 있나, BASE 첫 대사가 있나. 실측 F2 · F5(docs/practice-dialogue-standard.md 14절)로 더한
+     * 참고 점검: 설명이 기회 문장의 핵심 낱말(단서)을 미리 말하나, 빈칸 예문 칸이 있고 예시와 1:1 · '뭐뭐'를 담나 · 무엇을 비웠나, VARIANT 기회 문장이
+     * BASE와 같거나 같은 핵심 낱말을 쓰나(소재가 그대로인가). 핵심 낱말은 {@link HeardWords} 글자 비교다.
      */
     static final class HeardLines {
 
@@ -921,6 +932,7 @@ class PracticeQualityLiveTest {
             if (scenario == null || scenario.scenes() == null) {
                 return scenes;
             }
+            ScenarioScript.Scene base = scenario.scenes().stream().filter(s -> "BASE".equals(s.sceneKind())).findFirst().orElse(null);
             for (ScenarioScript.Scene scene : scenario.scenes()) {
                 boolean variant = "VARIANT".equals(scene.sceneKind());
                 boolean opener = scene.partnerOpener() != null && !scene.partnerOpener().isBlank();
@@ -952,6 +964,15 @@ class PracticeQualityLiveTest {
                 if (!variant) {
                     checks.put("partnerOpenerPresent", opener);
                 }
+                checks.put("descriptionMentionsOpportunityWords",
+                        HeardWords.mentioned(HeardWords.keyWords(scene.opportunitySentence()), scene.sceneDescription()));
+                checks.put("expressionFrames", frames(scene));
+                if (variant && base != null) {
+                    Map<String, Object> same = new LinkedHashMap<>();
+                    same.put("sameAsBase", HeardWords.same(base.opportunitySentence(), scene.opportunitySentence()));
+                    same.put("sharedKeyWords", HeardWords.sharedKeyWords(base.opportunitySentence(), scene.opportunitySentence()));
+                    checks.put("variantOpportunity", same);
+                }
                 Map<String, Object> view = new LinkedHashMap<>();
                 view.put("sceneKind", scene.sceneKind());
                 view.put("heardOrder", order);
@@ -962,6 +983,25 @@ class PracticeQualityLiveTest {
             return scenes;
         }
 
+        /** 빈칸 예문 칸 보기: 있나, 예시와 1:1인가, 모두 '뭐뭐'를 담나, 예시마다 무엇을 비웠나(맞춰 볼 수 없으면 UNALIGNED). */
+        static Map<String, Object> frames(ScenarioScript.Scene scene) {
+            Map<String, Object> view = new LinkedHashMap<>();
+            List<String> frames = scene.expressionFrames();
+            view.put("present", frames != null);
+            if (frames == null) {
+                return view;
+            }
+            List<String> examples = scene.expressionExamples();
+            view.put("oneToOne", frames.size() == examples.size());
+            view.put("allBlanked", frames.stream().allMatch(frame -> frame.contains(HeardWords.BLANK)));
+            List<Object> blanked = new ArrayList<>();
+            for (int i = 0; i < Math.min(frames.size(), examples.size()); i++) {
+                blanked.add(HeardWords.blankedWords(examples.get(i), frames.get(i)).<Object>map(words -> words).orElse("UNALIGNED"));
+            }
+            view.put("blankedWords", blanked);
+            return view;
+        }
+
         /** 목표들의 점검 합계(장면 수 기준). */
         static Map<String, Object> totals(List<Map<String, Object>> goals) {
             int scenes = 0;
@@ -969,6 +1009,11 @@ class PracticeQualityLiveTest {
             int conditionCopied = 0;
             int praise = 0;
             int missingOpener = 0;
+            int cueInDescription = 0;
+            int framesMissing = 0;
+            int framesOff = 0;
+            int variantSame = 0;
+            int variantShared = 0;
             for (Map<String, Object> goal : goals) {
                 for (Map<String, Object> scene : ResultData.objects(goal.get("heard"))) {
                     Map<String, Object> checks = ResultData.object(scene.get("checks"));
@@ -977,6 +1022,14 @@ class PracticeQualityLiveTest {
                     conditionCopied += Boolean.TRUE.equals(checks.get("opportunityConditionCopied")) ? 1 : 0;
                     praise += checks.get("praiseWords") instanceof List<?> words && !words.isEmpty() ? 1 : 0;
                     missingOpener += Boolean.FALSE.equals(checks.get("partnerOpenerPresent")) ? 1 : 0;
+                    cueInDescription += checks.get("descriptionMentionsOpportunityWords") instanceof List<?> cue && !cue.isEmpty() ? 1 : 0;
+                    Map<String, Object> frames = ResultData.object(checks.get("expressionFrames"));
+                    framesMissing += Boolean.FALSE.equals(frames.get("present")) ? 1 : 0;
+                    framesOff += Boolean.TRUE.equals(frames.get("present"))
+                            && (!Boolean.TRUE.equals(frames.get("oneToOne")) || !Boolean.TRUE.equals(frames.get("allBlanked"))) ? 1 : 0;
+                    Map<String, Object> variant = ResultData.object(checks.get("variantOpportunity"));
+                    variantSame += Boolean.TRUE.equals(variant.get("sameAsBase")) ? 1 : 0;
+                    variantShared += variant.get("sharedKeyWords") instanceof List<?> shared && !shared.isEmpty() ? 1 : 0;
                 }
             }
             Map<String, Object> totals = new LinkedHashMap<>();
@@ -985,27 +1038,60 @@ class PracticeQualityLiveTest {
             totals.put("opportunityConditionCopied", conditionCopied);
             totals.put("praiseWords", praise);
             totals.put("baseWithoutPartnerOpener", missingOpener);
+            totals.put("descriptionMentionsOpportunityWords", cueInDescription);
+            totals.put("scenesWithoutExpressionFrames", framesMissing);
+            totals.put("expressionFramesNotOneToOneOrWithoutBlank", framesOff);
+            totals.put("variantOpportunitySameAsBase", variantSame);
+            totals.put("variantOpportunitySharesKeyWords", variantShared);
             return totals;
         }
     }
 
     // ------------------------------------------------------------------ VARIANT 진단
 
-    /** VARIANT가 발급됐는지, 아니면 왜 안 나왔는지를 기록된 호출로 추정한다(하니스 진단 코드). */
+    /**
+     * VARIANT가 발급됐는지, 아니면 왜 안 나왔는지. 생성기가 실제로 낸 사유 코드({@link ScenarioScriptGenerator.Note})를 {@code generatorPath}에 뜻과
+     * 함께 싣고, 생성된 VARIANT가 어떻게 됐는지는 그 사유 코드로 정한다(source GENERATOR_NOTES). 사유 코드가 말하지 않는 앞 단계(그래프 맥락 · BASE 좌표
+     * · 계획 요청 · 모델 출력)만 기록된 호출로 정한다(source RECORDED_CALLS). 지난 실측의 s8 진단은 마지막 추정이 실제 원인(보존 BASE 판정)과
+     * 달랐다(docs/practice-dialogue-standard.md 12.2.1).
+     */
     static final class VariantDiagnosis {
 
         private VariantDiagnosis() {
         }
 
-        static Map<String, Object> of(Scenario scenario, String skillRef, KnowledgeSeed seed, List<Map<String, Object>> calls) {
+        /** 사유 코드의 뜻(사람이 읽는 보고서용). */
+        static String label(ScenarioScriptGenerator.Note note) {
+            return switch (note) {
+                case BASE_APPROVED_ALONE -> "BASE 단독 검토 승인";
+                case BASE_REPLACED -> "BASE 바꿔 끼움(다음 생성이 고친 보존 BASE를 검토 전에 되돌림)";
+                case REVIEW_REUSED -> "단독 검토 승인을 다시 씀(검토 호출 없음)";
+                case VARIANT_INVALID -> "서버 검사가 변형을 뺌";
+                case VARIANT_REJECTED -> "검토가 변형 사유로만 거절";
+                case BASE_INVALID -> "서버 검사가 BASE를 거절";
+                case REVIEW_NOT_APPROVED -> "검토가 승인하지 않음(변형 사유만은 아님)";
+                case GRAPH_FALLBACK -> "그래프 맥락이 늦어 그래프 없이 다시 생성";
+                case BASE_ONLY_EARLIER_REVIEW -> "BASE만 발급(추가 검토 없음)";
+                case BASE_ONLY_REVIEWED -> "BASE만 발급(BASE만 다시 검토)";
+            };
+        }
+
+        static Map<String, Object> of(Scenario scenario, String skillRef, KnowledgeSeed seed, List<Map<String, Object>> calls,
+                List<ScenarioScriptGenerator.Note> notes) {
             Map<String, Object> result = new LinkedHashMap<>();
             boolean issued = scenario != null && scenario.scenes() != null
                     && scenario.scenes().stream().anyMatch(s -> "VARIANT".equals(s.sceneKind()));
             result.put("issued", issued);
+            result.put("generatorPath", notes.stream().map(VariantDiagnosis::label).toList());
+            if (scenario != null && scenario.generation() != null && scenario.generation().basePreservation() != null) {
+                result.put("basePreservation", scenario.generation().basePreservation());
+            }
             if (issued) {
                 result.put("diagnosis", "VARIANT_ISSUED");
+                result.put("source", "ISSUED_SCRIPT");
                 return result;
             }
+            result.put("source", "RECORDED_CALLS");
             if (scenario == null) {
                 result.put("scenario", "NOT_ISSUED");
             }
@@ -1016,6 +1102,11 @@ class PracticeQualityLiveTest {
             boolean offered = calls.stream().anyMatch(c -> ResultData.object(c.get("input")).containsKey("structureContext"));
             if (seed == null || !offered) {
                 result.put("diagnosis", "GRAPH_CONTEXT_UNAVAILABLE");
+                return result;
+            }
+            if (notes.contains(ScenarioScriptGenerator.Note.GRAPH_FALLBACK)) {
+                result.put("diagnosis", "GRAPH_FALLBACK");
+                result.put("source", "GENERATOR_NOTES");
                 return result;
             }
             var firstBase = calls.stream()
@@ -1066,14 +1157,29 @@ class PracticeQualityLiveTest {
                 result.put("diagnosis", "VARIANT_NOT_GENERATED_BY_MODEL");
                 return result;
             }
+            // 여기부터는 생성된 VARIANT가 어떻게 됐는지다: 생성기가 낸 사유 코드로 정한다
             List<Object> reasons = rejectedReasons(calls, true);
-            if (!reasons.isEmpty()) {
+            if (notes.contains(ScenarioScriptGenerator.Note.VARIANT_REJECTED)) {
                 result.put("diagnosis", "VARIANT_REJECTED_BY_REVIEW");
+                result.put("source", "GENERATOR_NOTES");
                 result.put("reasons", reasons);
                 return result;
             }
-            // 검토는 통과했지만 서버 결정 검사(계획 좌표 · 거리 · 변경 축 · 보존 값 · 금지 표현)나 계획 불일치로 BASE만 남았다
-            result.put("diagnosis", "VARIANT_DROPPED_BY_SERVER_CHECK");
+            if (notes.contains(ScenarioScriptGenerator.Note.VARIANT_INVALID)) {
+                // 서버 결정 검사(계획 좌표 · 거리 · 변경 축 · 보존 값 · 금지 표현 · BASE와 같은 기회 문장)나 계획 불일치로 변형을 뺐다
+                result.put("diagnosis", "VARIANT_DROPPED_BY_SERVER_CHECK");
+                result.put("source", "GENERATOR_NOTES");
+                return result;
+            }
+            if (notes.contains(ScenarioScriptGenerator.Note.BASE_INVALID) || notes.contains(ScenarioScriptGenerator.Note.REVIEW_NOT_APPROVED)) {
+                result.put("diagnosis", "SCRIPT_REJECTED_WITH_VARIANT");
+                result.put("source", "GENERATOR_NOTES");
+                result.put("reasons", reasons);
+                return result;
+            }
+            result.put("diagnosis", "UNEXPLAINED");
+            result.put("source", "NONE");
+            result.put("reasons", reasons);
             return result;
         }
 
