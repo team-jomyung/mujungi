@@ -12,9 +12,9 @@ public interface ScenarioScriptProvider {
     /** {@link #GENERATION_PROMPT_VERSION} 판의 지시 자원(첫 줄이 판 이름). */
     String GENERATION_INSTRUCTIONS = "prompts/scenario/generation.v4.txt";
     /** 별도 검토 프롬프트 판. 판을 올릴 때는 이 값과 자원 파일만 바꾼다(저장된 대본의 selfReview 판도 이 값이다). */
-    String REVIEW_PROMPT_VERSION = "scenario-review.v2";
+    String REVIEW_PROMPT_VERSION = "scenario-review.v3";
     /** {@link #REVIEW_PROMPT_VERSION} 판의 지시 자원(첫 줄이 판 이름). */
-    String REVIEW_INSTRUCTIONS = "prompts/scenario/review.v2.txt";
+    String REVIEW_INSTRUCTIONS = "prompts/scenario/review.v3.txt";
     Generated generate(Call request);
     Reviewed review(Call request);
     record Call(Map<String,Object> input,Map<String,String> aliases,Instant deadline) {

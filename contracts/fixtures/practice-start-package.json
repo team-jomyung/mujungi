@@ -60,7 +60,7 @@
         "selfReview": {
           "verdict": "APPROVE",
           "model": "fake-review",
-          "promptVersion": "scenario-review.v2"
+          "promptVersion": "scenario-review.v3"
         },
         "generation": {
           "model": "fake-model",

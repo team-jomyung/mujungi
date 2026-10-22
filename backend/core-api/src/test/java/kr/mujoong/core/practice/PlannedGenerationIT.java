@@ -41,7 +41,7 @@ import org.junit.jupiter.api.*;
         verify(f.provider,times(2)).review(calls.capture());assertThat(calls.getAllValues().getLast().input().get("variantPlan")).isEqualTo(corrected.get("variantPlan"));
         assertThat(json.write(corrected.get("variantPlan"))).doesNotContain(f.legacy.guardian.toString(),f.legacy.child.toString(),"sourceActivityId");
         verify(f.graph).variantPlan(any(),any(),any(),eq(new VariantPlanner.Context("놀이","교실","아이와 친구","FRIEND_CLOSE","FRIEND_PRIVATE")),any());
-        assertThat(result.selfReview().promptVersion()).isEqualTo("scenario-review.v2").isEqualTo(ScenarioScriptProvider.REVIEW_PROMPT_VERSION);
+        assertThat(result.selfReview().promptVersion()).isEqualTo("scenario-review.v3").isEqualTo(ScenarioScriptProvider.REVIEW_PROMPT_VERSION);
     }
     /** 첫 BASE 검토는 변형이 없으므로 다음 생성용 계획을 보지 않고, 구조 맥락만 본다. 변형이 실린 검토만 받은 계획을 본다. */
     @Test void baseOnlyReviewSeesStructureButNotTheNextVariantPlan(){
