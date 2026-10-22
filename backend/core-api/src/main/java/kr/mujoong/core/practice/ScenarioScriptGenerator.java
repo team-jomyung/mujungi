@@ -73,7 +73,9 @@ public final class ScenarioScriptGenerator {
                 var reviewStartedWith=deadline.remaining();
                 var reviewed=review(script,reviewedInput,budget,deadline);
                 var reviewCost=reviewStartedWith.minus(deadline.remaining());
-                var result=validation.inspect(script,current.rules());
+                var inspection=validation.inspectDetailed(script,current.rules());
+                var result=inspection.result();
+                if(result!=ScenarioScriptValidation.Result.VALID)diagnose("ScenarioRule_"+inspection.reason().name());
                 if(current.graphContextUsed()&&script.scenes().size()>1&&!current.payload().containsKey("variantPlan")&&result!=ScenarioScriptValidation.Result.INVALID_BASE)
                     result=ScenarioScriptValidation.Result.INVALID_VARIANT;
                 if(planMismatch&&script.scenes().size()>1&&result!=ScenarioScriptValidation.Result.INVALID_BASE)

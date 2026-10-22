@@ -8,6 +8,24 @@ import org.junit.jupiter.api.*;
 
 @Tag("scenario-generation")
 class ScenarioValidationTest {
+    @Test void detailedChecksDistinguishMissingConditionRelationAndAnswerWithoutCopyingText(){
+        var rules=ScenarioGenerationTest.rules();var base=ScenarioGenerationTest.base();
+        assertThat(validator.inspectDetailed(new ScenarioScript(List.of(scene(base.sceneDescription(),"BASE","OTHER"))),rules).reason())
+                .isEqualTo(ScenarioScriptValidation.Reason.RELATION_MISMATCH);
+        assertThat(validator.inspectDetailed(new ScenarioScript(List.of(scene("이제 그만할래.","BASE","PEER"))),rules).reason())
+                .isEqualTo(ScenarioScriptValidation.Reason.CONDITION_MISSING);
+        assertThat(validator.inspectDetailed(new ScenarioScript(List.of(introduction("잠깐 쉬자"))),rules).reason())
+                .isEqualTo(ScenarioScriptValidation.Reason.TARGET_EXPRESSION_DISCLOSED);
+    }
+    @Test void detailedDuplicateCheckRunsOnceAndKeepsTheExistingRejection(){
+        var r=ScenarioGenerationTest.rules();var calls=new java.util.concurrent.atomic.AtomicInteger();
+        var rules=new ScenarioScriptValidation.Rules(r.relation(),r.opportunity(),r.targetExpression(),r.originalNames(),null,
+                fingerprint->{calls.incrementAndGet();return true;},r.variants());
+        var result=validator.inspectDetailed(new ScenarioScript(List.of(ScenarioGenerationTest.base())),rules);
+        assertThat(result.result()).isEqualTo(ScenarioScriptValidation.Result.INVALID_BASE);
+        assertThat(result.reason()).isEqualTo(ScenarioScriptValidation.Reason.ALREADY_SEEN);
+        assertThat(calls.get()).isEqualTo(1);
+    }
     final ScenarioScriptValidation validator=new ScenarioScriptValidation(new ForbiddenExpressionPolicy());
     ScenarioScriptValidation.Result inspect(ScenarioScript.Scene...scenes){return validator.inspect(new ScenarioScript(List.of(scenes)),ScenarioGenerationTest.rules());}
     ScenarioScript.Scene scene(String text,String kind,String relation){var s=ScenarioGenerationTest.base();return new ScenarioScript.Scene(s.sceneKey(),kind,text,s.opportunitySentence(),s.reexplanation(),s.focusPoints(),s.expressionExamples(),relation,s.place(),s.topic(),null,null);}
