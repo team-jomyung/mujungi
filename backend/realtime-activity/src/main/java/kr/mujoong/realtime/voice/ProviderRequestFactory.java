@@ -17,7 +17,7 @@ import org.springframework.stereotype.Component;
  *
  * <p>요청 타입은 아래 <b>다섯 가지</b>뿐이다: {@code session.start} ·
  * {@code session.input_audio.append} · {@code session.instructions.append} · {@code session.commentary.append} · {@code session.close}. {@code response.create}는 없다 —
- * client 위임 세션은 거절한다. 승인 낭독은 commentary로 발화를 요청하며, 일반 지시·교정은 instructions를 사용한다. 필드는 지시문 · 음성 프레임뿐이고 아이 정보(이름 · 나이 ·
+ * client 위임 세션은 거절한다. 승인 낭독·생성 역할 발화는 commentary로 출력을 요청하며, 일반 지시·교정은 instructions를 사용한다. 필드는 지시문 · 음성 프레임뿐이고 아이 정보(이름 · 나이 ·
  * 관심사)는 지시문 문장 안에 따옴표로 묶은 데이터로만 들어간다(별도 필드 없음).
  * 자유 {@code Map} · 문자열 이어 붙이기 입구가 없고 판정 기준 · 보호자 입력 · 이전 판정 · 식별자 필드는 타입에 없다(SD-20 구조 규칙).
  * 길이 상한(이름 10자 · 관심사 10개 x 20자, 계약 C8)은 입력 단계가 검증하고 여기서 한 번 더 자른다.
@@ -171,7 +171,7 @@ public class ProviderRequestFactory {
     }
 
     /**
-     * 연습 확장점의 지시 추가. 승인 낭독은 {@code session.commentary.append}, 그 밖의 지시는 {@code session.instructions.append}로 보낸다. 문장은 확장점이 자기
+     * 연습 확장점의 지시 추가. 명시적인 낭독·생성 발화는 {@code session.commentary.append}, 그 밖의 지시는 {@code session.instructions.append}로 보낸다. 문장은 확장점이 자기
      * 승인된 템플릿에서 만든 것이고, 검사된 값 타입({@link PracticeInstruction})으로만 받는다(자유 문자열 입구 없음). 범위를 닫는 문장은 여기서
      * 더한다.
      */
@@ -179,7 +179,7 @@ public class ProviderRequestFactory {
         Objects.requireNonNull(instruction, "instruction");
         // Instructions are context updates, not a reliable speech trigger. The same exact-reading
         // instruction and downstream transcript match gate still constrain commentary output.
-        if (instruction.approvedReading()) {
+        if (instruction.requestsSpeech()) {
             return new InstructionsAppend(TYPE_COMMENTARY_APPEND, eventId, null, InstructionTemplates.scoped(instruction.text()));
         }
         return instructionsAppend(eventId, InstructionTemplates.scoped(instruction.text()));

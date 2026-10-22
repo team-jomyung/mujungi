@@ -45,7 +45,13 @@ public record PracticeScript(UUID scenarioId, String scriptVersion, List<Scene> 
      */
     public record Scene(String sceneKey, SceneKind sceneKind, String sceneDescription, String opportunitySentence,
             String reexplanation, String partnerRole, List<String> focusPoints, List<String> expressionExamples,
-            String relation, String place, String topic, String spokenIntroduction) {
+            String relation, String place, String topic, String spokenIntroduction, String reflectionPrompt) {
+        public Scene(String sceneKey, SceneKind sceneKind, String sceneDescription, String opportunitySentence,
+                String reexplanation, String partnerRole, List<String> focusPoints, List<String> expressionExamples,
+                String relation, String place, String topic, String spokenIntroduction) {
+            this(sceneKey,sceneKind,sceneDescription,opportunitySentence,reexplanation,partnerRole,focusPoints,
+                    expressionExamples,relation,place,topic,spokenIntroduction,null);
+        }
 
         public Scene(String sceneKey, SceneKind sceneKind, String sceneDescription, String opportunitySentence,
                 String reexplanation, String partnerRole, List<String> focusPoints, List<String> expressionExamples,

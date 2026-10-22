@@ -174,6 +174,17 @@ class ProviderRequestFactoryWireTest {
     }
 
     @Test
+    void explicitGeneratedSpeechRequestsCommentaryButNeverBecomesAnApprovedReading() {
+        var instruction=PracticeInstruction.forGeneratedSpeech("상대 역할로 필요한 정보 하나만 물어봐.");
+        assertThat(instruction.requestsSpeech()).isTrue();
+        assertThat(instruction.approvedReading()).isFalse();
+        assertThat(wire(factory.practiceInstruction("generated-1",instruction)).get("type").asString()).isEqualTo("session.commentary.append");
+        assertThat(PracticeSpeech.generatedSlot(java.util.UUID.randomUUID(),java.util.UUID.randomUUID(),0,"PEER",instruction.text())
+                .matches("어느 색이야?")).isFalse();
+        assertThatThrownBy(()->PracticeInstruction.forGeneratedSpeech("가".repeat(501))).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
     void everyInstructionTemplateClosesItsScopeAndStartsWithAShortInterjectionWhereItSpeaksFreely() {
         List<String> contents = new java.util.ArrayList<>();
         for (DialogInstructions.Correction correction : DialogInstructions.Correction.values()) {

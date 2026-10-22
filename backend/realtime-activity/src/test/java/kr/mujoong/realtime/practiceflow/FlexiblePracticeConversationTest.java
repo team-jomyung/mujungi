@@ -80,14 +80,97 @@ class FlexiblePracticeConversationTest {
     }
 
     @Test
-    void partialOrUnclearRoleSpeechGetsAContextualReplyInsteadOfAScriptedRepeat() {
-        for (String option : List.of("PARTIAL", "IRRELEVANT", "NOT_UNDERSTOOD", "UNREADABLE")) {
+    void offTopicRoleSpeechContinuesWithoutPresumingAHelpNeed() {
+        for (String option : List.of("IRRELEVANT")) {
             Harness h = dialogue(); h.child("왜 그 놀이가 싫어?"); h.result("J2", option);
             assertThat(h.out.lastSlot().generated()).isTrue();
             assertThat(h.out.lastSlot().text()).contains("제안·거절·수정", "필요할 때만").doesNotContain("같은 질문을 같은 말투로");
             assertThat(h.out.announces).isEmpty();
             assertThat(h.ext.state().phase()).isEqualTo(FlowState.Phase.OPPORTUNITY);
         }
+    }
+
+    @Test
+    void contextualClarificationCanResolveTheGoalWithoutCoachOrSentenceDrill() {
+        Harness h=dialogue();h.child("그거 줘");h.result("J2","PARTIAL");
+        assertThat(h.out.lastSlot().text()).contains("정보 하나만", "단어로 답해도");
+        assertThat(h.out.announces).isEmpty();h.played();
+        h.child("파란색");h.result("J2","FULL");h.played();
+        h.child("응, 고마워");h.result("J3","DELIVERED");h.played();
+        assertThat(h.recorder.only().liveTiming()).isEqualTo(LiveTiming.AFTER_REASK);
+        assertThat(h.recorder.factKinds(h.recorder.only())).contains(FactKind.REASK_RESOLVED)
+                .doesNotContain(FactKind.FOCUS_HELP,FactKind.COACH_SWITCH);
+    }
+
+    @Test
+    void repeatedMissingInformationOffersOptionalHelpInsteadOfForcingACoach() {
+        Harness h=dialogue();h.child("그거");h.result("J2","PARTIAL");h.played();
+        h.child("저거");h.result("J2","PARTIAL");
+        assertThat(h.ext.state().phase()).isEqualTo(FlowState.Phase.HELP_OFFER);
+        assertThat(h.out.announces).isEmpty();h.played();h.child("응");h.result("J4","ACCEPT");
+        assertThat(h.out.announces).containsExactly("COACH");
+    }
+
+    @Test
+    void sceneConfusionGetsSceneExplanationBeforeExpressionHelp() {
+        Harness h=dialogue();h.child("누구랑 뭘 하는 상황이야?");h.result("J2","NOT_UNDERSTOOD");
+        assertThat(h.out.lastSlot().generated()).isFalse();
+        assertThat(h.ext.state().sub()).isEqualTo(FlowState.Sub.REEXPLAIN);
+        assertThat(h.recorder.factKinds(h.recorder.only())).contains(FactKind.SITUATION_EXPLAINED).doesNotContain(FactKind.FOCUS_HELP);
+        assertThat(h.out.announces).isEmpty();h.played();
+        h.child("무슨 놀이 하고 싶어?");h.result("J2","FULL");
+        assertThat(h.ext.state().sub()).isEqualTo(FlowState.Sub.DIALOGUE_REPLY);
+    }
+
+    @Test
+    void uncertainAudioIsNotJudgedAsSuccessOrUsedToStartCoaching() {
+        Harness h=dialogue();int count=h.out.judgments.size();
+        h.ext.onChildUtterance(new Utterance(++h.seq,h.clock.now(),"파란색",true,false),h.out);
+        assertThat(h.out.judgments).hasSize(count);
+        assertThat(h.out.lastSlot().text()).contains("잘 듣지 못했을", "교정하지 마");
+        h.played();h.ext.onChildUtterance(new Utterance(++h.seq,h.clock.now(),"파란색",true,false),h.out);
+        assertThat(h.recorder.only().liveTiming()).isEqualTo(LiveTiming.NONE);
+        assertThat(h.recorder.factKinds(h.recorder.only())).contains(FactKind.TRANSCRIPT_FAILED).doesNotContain(FactKind.FOCUS_HELP);
+    }
+
+    private Harness reflection() {
+        String script=minimalScript(UUID.randomUUID()).replace("\"sceneKey\":",
+                "\"reflectionPrompt\":\"지난번 놀이 이야기를 잠깐 떠올려 볼까?\",\"sceneKey\":");
+        return new Harness(packageJson(UUID.randomUUID(),script),Map.of(),
+                new PracticeFlowSettings(Duration.ofSeconds(10),Duration.ofSeconds(90),Duration.ofMinutes(10),Duration.ofSeconds(20),2,1));
+    }
+
+    @Test
+    void reflectionIsOptionalAndDoesNotBecomeARequiredMemoryTest() {
+        Harness h=reflection();h.activate();assertThat(h.out.lastSlot().text()).contains("건너뛰고");
+        h.played();h.child("바로 연습할래");assertThat(h.out.lastJudgment().point()).isEqualTo(JudgmentPoint.J4);
+        h.result("J4","REFUSE");
+        assertThat(h.out.lastSlot().text()).contains("상상 속 상황");
+        assertThat(h.recorder.rows).isEmpty();h.played();assertThat(h.recorder.rows).hasSize(1);
+    }
+
+    @Test
+    void reflectionConsentLeadsToOneReviewedQuestionThenTheNewSceneWithoutGradingTheStory() {
+        Harness h=reflection();h.activate();h.played();h.child("응");
+        int requests=h.out.judgments.size();h.child("응, 얘기할래");
+        assertThat(h.out.judgments).hasSize(requests);
+        h.result("J4","ACCEPT");
+        assertThat(h.out.lastSlot().generated()).isFalse();
+        assertThat(h.out.lastSlot().text()).isEqualTo("지난번 놀이 이야기를 잠깐 떠올려 볼까?");
+        h.played();int judged=h.out.judgments.size();h.child("기억이 잘 안 나");
+        assertThat(h.out.judgments).hasSize(judged);
+        assertThat(h.out.lastSlot().text()).contains("기억을 평가·교정");h.played();
+        assertThat(h.out.lastSlot().text()).contains("상상 속 상황");
+        assertThat(h.recorder.rows).isEmpty();
+    }
+
+    @Test
+    void silenceOrJudgeAbstentionSkipsReflectionAndNeverForcesIt() {
+        Harness h=reflection();h.activate();h.played();h.advance(Duration.ofSeconds(10));
+        assertThat(h.ext.state().sub()).isEqualTo(FlowState.Sub.NONE);
+        assertThat(h.out.lastSlot().generated()).isFalse();
+        Harness other=reflection();other.activate();other.played();other.child("어");other.abstained("J4");
+        assertThat(other.ext.state().sub()).isEqualTo(FlowState.Sub.NONE);
     }
 
     @Test

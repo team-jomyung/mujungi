@@ -16,7 +16,11 @@ public final class ScenarioScriptValidation {
         default boolean validBase(Scene base){return true;}
     }
     public record Rules(String relation,String opportunity,String targetExpression,Set<String> originalNames,
-            String sourceText,Predicate<String> seen,VariantCheck variants) {
+            String sourceText,Predicate<String> seen,VariantCheck variants,boolean reflectionAllowed) {
+        public Rules(String relation,String opportunity,String targetExpression,Set<String> originalNames,
+                String sourceText,Predicate<String> seen,VariantCheck variants) {
+            this(relation,opportunity,targetExpression,originalNames,sourceText,seen,variants,false);
+        }
         public Rules {originalNames=Set.copyOf(originalNames);}
         @Override public String toString(){return "ScenarioRules[redacted]";}
     }
@@ -49,6 +53,11 @@ public final class ScenarioScriptValidation {
             spoken.add(s.spokenIntroduction());
         }
         var all=new java.util.ArrayList<>(spoken);all.addAll(s.focusPoints());all.addAll(s.expressionExamples());
+        if(s.reflectionPrompt()!=null) {
+            if(!rules.reflectionAllowed() || !"BASE".equals(s.sceneKind()) || !text(s.reflectionPrompt(),300)
+                    ||s.reflectionPrompt().chars().anyMatch(Character::isISOControl))return false;
+            spoken.add(s.reflectionPrompt());all.add(s.reflectionPrompt());
+        }
         all.addAll(List.of(s.relation(),s.place(),s.topic()));
         if(s.preservation()!=null) {
             var p=s.preservation();

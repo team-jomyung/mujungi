@@ -41,6 +41,10 @@ public final class FlowState {
         PEER_REPLY,
         /** OPPORTUNITY: 상대 역할의 답변. 재생 뒤 같은 역할 대화의 입력을 기다린다. */
         DIALOGUE_REPLY,
+        /** 상황 안의 확인 질문 또는 인식이 불확실할 때의 확인. */
+        CLARIFICATION_REPLY, INPUT_CONFIRMATION,
+        /** 선택적 이전 대화 돌아보기. */
+        REFLECTION_OFFER, REFLECTION_PROMPT, REFLECTION_ACK,
         /** SCENE_WRAP: 변형 평가(알림이 없거나 끝났다). */
         VARIANT_EVAL,
         /** OPPORTUNITY · RETRY: 상황 다시 설명(승인 발화) 재생 중. */

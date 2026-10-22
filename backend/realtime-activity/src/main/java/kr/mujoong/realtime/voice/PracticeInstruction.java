@@ -13,6 +13,7 @@ public final class PracticeInstruction {
 
     private final String text;
     private final boolean approvedReading;
+    private final boolean requestsSpeech;
 
     /** 지시문 상한(코드 포인트). */
     public static final int MAX_LENGTH = 500;
@@ -22,6 +23,10 @@ public final class PracticeInstruction {
     }
 
     private PracticeInstruction(String text, int maxLength, boolean approvedReading) {
+        this(text,maxLength,approvedReading,approvedReading);
+    }
+
+    private PracticeInstruction(String text, int maxLength, boolean approvedReading, boolean requestsSpeech) {
         Objects.requireNonNull(text, "text");
         if (text.isBlank()) {
             throw new IllegalArgumentException("지시문이 비었다");
@@ -34,6 +39,7 @@ public final class PracticeInstruction {
         }
         this.text = text;
         this.approvedReading = approvedReading;
+        this.requestsSpeech = requestsSpeech;
     }
 
     /** 상관 식별자를 버리고 검증된 역할·발화 데이터만 기존 공급자 입구에 넘긴다. */
@@ -55,10 +61,16 @@ public final class PracticeInstruction {
     public String text() { return text; }
     /** 승인된 낭독만 명시적인 발화 요청으로 전송한다. 판정·교정 지시는 기존 경로를 유지한다. */
     public boolean approvedReading() { return approvedReading; }
-    @Override public boolean equals(Object value) {
-        return value instanceof PracticeInstruction other && text.equals(other.text) && approvedReading == other.approvedReading;
+    public boolean requestsSpeech() { return requestsSpeech; }
+    /** Explicit generated speech request; this does NOT make its output an approved reading. */
+    public static PracticeInstruction forGeneratedSpeech(String text) {
+        return new PracticeInstruction(text,MAX_LENGTH,false,true);
     }
-    @Override public int hashCode() { return Objects.hash(text, approvedReading); }
+    @Override public boolean equals(Object value) {
+        return value instanceof PracticeInstruction other && text.equals(other.text) && approvedReading == other.approvedReading
+                && requestsSpeech == other.requestsSpeech;
+    }
+    @Override public int hashCode() { return Objects.hash(text, approvedReading, requestsSpeech); }
 
     /** 원문은 문자열 표현에 넣지 않는다. */
     @Override

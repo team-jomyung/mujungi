@@ -1224,7 +1224,7 @@ public final class SessionExecutor {
         }
         judgment.open(new JudgmentCoordinator.Open(point, JudgmentTrigger.EXTENSION_REQUEST, JudgmentOwner.EXTENSION, target.seq(),
                 target.text(), target.at(), shaped,
-                shaped != null && "ROLE_DIALOGUE_CLOSURE".equals(shaped.coreFunction())
+                practice != null && practice.controlsOutput()
                         ? judgment.dialogueBefore(target.seq(), target.at()) : judgment.recentBefore(target.seq()),
                 (turn, outcome) -> JudgmentTurn.Decision.close(), closure -> afterExtensionJudgment(closure, correlationId)));
         return true;
@@ -1946,7 +1946,7 @@ public final class SessionExecutor {
             try {
                 slot = kr.mujoong.realtime.voice.PracticeSpeech.generatedSlot(correlationId, NOTICE_SCENARIO_ID,
                         ctx.outputGen().generation(), role, instructionText);
-                instruction = new kr.mujoong.realtime.voice.PracticeInstruction(instructionText);
+                instruction = kr.mujoong.realtime.voice.PracticeInstruction.forGeneratedSpeech(instructionText);
             } catch (RuntimeException e) {
                 return refusePractice("speakGenerated", "INVALID");
             }

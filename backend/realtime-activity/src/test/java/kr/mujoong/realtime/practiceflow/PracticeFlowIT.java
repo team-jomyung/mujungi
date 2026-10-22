@@ -261,6 +261,27 @@ class PracticeFlowIT {
         assertThat(failures).isEmpty();
     }
 
+    @Test
+    void contextualClarificationIsRecordedDurablyAndShortAnswersUseTheActualPartnerQuestion() {
+        flexible=true;h.activate();
+        playApproved("상상 속 상황을 떠올려 봐. 무중이가 상황 속 상대 역할을 해 볼게.");playApproved(OPPORTUNITY);
+        h.childSays("clarify-1","그거 줘");judge.confirm("PARTIAL",0.95,"FULL",0.03);h.drain();
+        playGenerated("어느 색 상자를 말하는 거야?");
+        h.childSays("clarify-2","파란색");
+        assertThat(judge.last().request().recentTurns()).anySatisfy(turn->{
+            assertThat(turn.speaker()).isEqualTo(kr.mujoong.realtime.judgment.JudgeRequest.Speaker.PARTNER);
+            assertThat(turn.text()).isEqualTo("어느 색 상자를 말하는 거야?");
+        });
+        judge.confirm("FULL",0.95,"PARTIAL",0.03);h.drain();playGenerated("응, 여기 있어. 같이 정리할까?");
+        h.childSays("clarify-3","응, 같이 정리하자");judge.confirm("DELIVERED",0.95,"STILL_SHORT",0.03);h.drain();playGenerated("좋아, 같이 정리하자.");
+        var row=repository.findSceneRuns(h.sessionId).getFirst();
+        assertThat(row.liveTiming()).isEqualTo(LiveTiming.AFTER_REASK);
+        assertThat(row.facts()).extracting(PracticeFlowTypes.Fact::kind).contains(PracticeFlowTypes.FactKind.REASK_RESOLVED)
+                .doesNotContain(PracticeFlowTypes.FactKind.FOCUS_HELP);
+        assertThat(h.executor.status()).isEqualTo(SessionStatus.CLOSING);
+        assertThat(failures).isEmpty();
+    }
+
     private void complete(UUID playbackId) {
         for (PlaybackMark.Status status : List.of(PlaybackMark.Status.STARTED, PlaybackMark.Status.COMPLETED)) {
             h.mailbox.offerGeneral(new SessionMailbox.PlaybackMarkReceived(h.link.connectionId(),

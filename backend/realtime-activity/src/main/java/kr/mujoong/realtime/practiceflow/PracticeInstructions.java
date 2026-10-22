@@ -45,6 +45,26 @@ final class PracticeInstructions {
                 + " 역할로 아이가 생각할 시간을 주고 편할 때 말해도 된다고 한 문장으로 알려줘. 답변·반복을 요구하거나 첫 대사와 상황 안내를 반복하지 마.");
     }
 
+    static String peerClarification(Scene scene) {
+        return fit("지금 '음,'이라고 짧게 말한 뒤 " + partner(scene)
+                + " 역할로 방금 들은 말에서 실제로 필요한 정보 하나만 자연스럽게 물어봐. 이미 전달된 정보는 다시 묻지 마. "
+                + "완성된 문장이나 공손한 말투를 요구하지 말고 단어로 답해도 뜻이 전달되면 받아줘. 정답·모범 문장을 먼저 말하거나 평가하지 마. "
+                + "상황을 반복 설명하지 마. 상황 자료: " + cut(fieldLong(scene.sceneDescription()),160));
+    }
+
+    static String inputConfirmation() {
+        return "지금 '음,'이라고 짧게 말한 뒤 잘 듣지 못했을 수 있으니 편하면 한 번 더 말해 달라고 한 문장으로 물어봐. "
+                + "아이의 표현이나 이해가 부족하다고 판단하거나 교정하지 마. 못 들은 말을 추측하거나 정답·예시를 주지 마. 말하기를 강요하지 마.";
+    }
+
+    static String reflectionOffer() {
+        return "지금 '음,'이라고 짧게 말한 뒤 지난번 이야기부터 잠깐 떠올려 볼지 물어봐. 기억나지 않거나 원하지 않으면 건너뛰고 바로 새 연습을 해도 된다고 알려줘. 이전 사건·감정·정답을 지어내지 마. 한두 문장으로 말해.";
+    }
+
+    static String reflectionAcknowledgment() {
+        return "지금 '음,'이라고 짧게 말한 뒤 이야기하거나 건너뛰어도 괜찮다고 짧게 받아들이고 이제 새 가상 상황을 연습해 보자고 알려줘. 아이의 기억을 평가·교정하거나 사건을 사실로 확정하지 마. 추가 질문·정답·예시를 말하지 마.";
+    }
+
     private static String partner(Scene scene) {
         return cut(field(scene.relation().isBlank() ? scene.partnerRole() : scene.relation()), 40);
     }
@@ -74,7 +94,7 @@ final class PracticeInstructions {
     /** 도움 제안(강제 아님). */
     static String peerHelpOffer(Scene scene, boolean again) {
         return fit("너는 아이의 " + field(scene.partnerRole()) + " 역할이다. 상황: " + field(scene.sceneDescription())
-                + (again ? " 도와줘도 되는지 같은 말로 한 번 더 부드럽게 묻는다." : " 아이가 어려워 보이면 도와줘도 되는지 부드럽게 묻는다.")
+                + (again ? " 도와줘도 되는지 같은 말로 한 번 더 부드럽게 묻는다." : " 필요한 부분만 잠깐 도와줄지 선택할 수 있게 부드럽게 묻는다. 아이의 능력·감정을 단정하지 않는다.")
                 + " 싫다고 하면 그대로 받아들인다. " + PEER_RULE);
     }
 

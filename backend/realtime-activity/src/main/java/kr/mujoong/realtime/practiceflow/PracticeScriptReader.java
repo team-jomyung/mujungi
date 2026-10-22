@@ -31,7 +31,7 @@ public final class PracticeScriptReader {
     /** 장면 JSON 모양. */
     record RawScene(String sceneKey, String sceneKind, String sceneDescription, String opportunitySentence,
             String reexplanation, String partnerRole, List<String> focusPoints, List<String> expressionExamples,
-            String relation, String place, String topic, String spokenIntroduction) {
+            String relation, String place, String topic, String spokenIntroduction, String reflectionPrompt) {
     }
 
     /** 대본 검토 JSON 모양. */
@@ -123,6 +123,9 @@ public final class PracticeScriptReader {
             throw new PracticeScriptException(Reason.VALIDATION_FAILED);
         }
         SceneKind kind;
+        if (raw.reflectionPrompt() != null && (blank(raw.reflectionPrompt()) || raw.reflectionPrompt().length() > 300
+                || raw.reflectionPrompt().chars().anyMatch(Character::isISOControl)))
+            throw new PracticeScriptException(Reason.VALIDATION_FAILED);
         try {
             kind = SceneKind.valueOf(raw.sceneKind());
         } catch (IllegalArgumentException e) {
@@ -130,7 +133,7 @@ public final class PracticeScriptReader {
         }
         return new PracticeScript.Scene(raw.sceneKey(), kind, raw.sceneDescription(), raw.opportunitySentence(),
                 raw.reexplanation(), raw.partnerRole(), raw.focusPoints(), raw.expressionExamples(), raw.relation(),
-                raw.place(), raw.topic(), raw.spokenIntroduction());
+                raw.place(), raw.topic(), raw.spokenIntroduction(), raw.reflectionPrompt());
     }
 
     private static PracticeScript.SelfReview selfReview(RawSelfReview raw) {

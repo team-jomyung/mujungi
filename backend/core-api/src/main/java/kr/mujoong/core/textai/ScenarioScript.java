@@ -8,7 +8,13 @@ public record ScenarioScript(List<Scene> scenes) {
     public record Scene(String sceneKey, String sceneKind, String sceneDescription,
             String opportunitySentence, String reexplanation, List<String> focusPoints,
             List<String> expressionExamples, String relation, String place, String topic,
-            Preservation preservation, String partnerRole, String spokenIntroduction) {
+            Preservation preservation, String partnerRole, String spokenIntroduction, String reflectionPrompt) {
+        public Scene(String sceneKey, String sceneKind, String sceneDescription, String opportunitySentence,
+                String reexplanation, List<String> focusPoints, List<String> expressionExamples, String relation,
+                String place, String topic, Preservation preservation, String partnerRole, String spokenIntroduction) {
+            this(sceneKey,sceneKind,sceneDescription,opportunitySentence,reexplanation,focusPoints,expressionExamples,
+                    relation,place,topic,preservation,partnerRole,spokenIntroduction,null);
+        }
         public Scene(String sceneKey, String sceneKind, String sceneDescription, String opportunitySentence,
                 String reexplanation, List<String> focusPoints, List<String> expressionExamples, String relation,
                 String place, String topic, Preservation preservation, String partnerRole) {
@@ -21,7 +27,7 @@ public record ScenarioScript(List<Scene> scenes) {
         }
         public Scene withPartnerRole(String role) {
             return new Scene(sceneKey, sceneKind, sceneDescription, opportunitySentence, reexplanation,
-                    focusPoints, expressionExamples, relation, place, topic, preservation, role, spokenIntroduction);
+                    focusPoints, expressionExamples, relation, place, topic, preservation, role, spokenIntroduction, reflectionPrompt);
         }
         @Override public String toString() { return "Scene[redacted]"; }
     }

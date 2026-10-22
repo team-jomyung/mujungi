@@ -123,7 +123,7 @@ public final class ScenarioScriptGenerator {
     private Input withoutGraph(Input input){
         var payload=new LinkedHashMap<>(input.payload());payload.remove("structureContext");payload.remove("variantPlan");payload.put("baseOnly",true);
         var r=input.rules();
-        return new Input(payload,input.aliases(),new ScenarioScriptValidation.Rules(r.relation(),r.opportunity(),r.targetExpression(),r.originalNames(),r.sourceText(),r.seen(),(a,b)->false),false,input.goalContextJson());
+        return new Input(payload,input.aliases(),new ScenarioScriptValidation.Rules(r.relation(),r.opportunity(),r.targetExpression(),r.originalNames(),r.sourceText(),r.seen(),(a,b)->false,r.reflectionAllowed()),false,input.goalContextJson());
     }
     private Input withPlan(Input input,kr.mujoong.core.knowledge.VariantPlanner.Plan plan){
         var projected=Map.<String,Object>of("grade",plan.grade(),"changedField",plan.changedField(),"context",plan.context(),

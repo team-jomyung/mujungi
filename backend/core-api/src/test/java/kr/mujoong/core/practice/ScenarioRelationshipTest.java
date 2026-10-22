@@ -38,6 +38,7 @@ class ScenarioRelationshipTest {
             when(privacy.require(f.guardian,f.child)).thenReturn(new ScenarioPrivacyContextPort.Context("합성아이"));
             var repository=mock(ScenarioRepository.class);
             when(repository.recentExposed(any(),any(),any(),any())).thenReturn(List.of());
+            when(repository.continuity(any(),any(),any(),any(),any())).thenReturn(new PracticeContinuity.Context(List.of(),List.of()));
             var goal=new GoalContext(SavedGoalReader.SavedGoalView.Kind.CANDIDATE,"candidate",1,"쉬고 싶은지 물어보기",
                     new FourElements("함께 놀다가 친구가 쉬려는 상황","친구","뜻 확인","쉬고 싶어?"),"seed:S1",null,null);
             var snapshot=new PracticeSessionContextPort.GoalSnapshot(UUID.randomUUID(),goal.carrierKey(),1,"친구",goal);
