@@ -2,6 +2,7 @@
 
 > 브랜치 `claude/practice-live-fixes`(기준 `claude/practice-path-merge` b27a271 = main + 연습 연결부 수정 + 변형 어휘 수정 + 검토 스키마 수정 + 실제 AI 평가 하니스).
 > 사람 대신 모델이 지시대로 구현했다. 사람이 정할 일은 7절 · 8절에 남겼다. 독립 리뷰 지적 5건을 반영한 결과는 11절에 있다(검토 v3 · 생성 v5).
+> 판 기록: 이 문서의 판 이름(생성 v5 · 검토 v3)과 '설명이 기회 조건 · 기회 문장을 담는다'는 서버 규칙은 이 브랜치 때 값이다. 뒤 브랜치 `claude/practice-dialogue-standard`가 대본 형식 v6(생성 v6 · 검토 v4, 포함 규칙 폐지)으로 바꿨다(`docs/practice-dialogue-standard.md`).
 > **증거 구분(R-M11)**: 이 브랜치의 시험 결과는 모두 **테스트 대역(가짜 공급자 · 가짜 판정) · 합성 자료** 증거다. 실제 AI는 부르지 않았다.
 > 2절의 숫자는 이 브랜치 이전에 사람이 돌린 **실제 API · 합성 자료** 실행(`PracticeQualityLiveTest` · `PracticeDialogueLiveTest`)의 결과 파일에서 읽은 것이다.
 > 이 브랜치의 고침이 그 숫자를 얼마나 바꾸는지는 아직 재지 않았다(8절).

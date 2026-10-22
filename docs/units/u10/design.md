@@ -42,7 +42,7 @@ U15 → U14는 main에 순서대로 병합했고 각각 main CI의 skeleton·ci-
 
 기존 생성 스키마는 장면 필드를 유지하며 구조 보존의 비발화용 선택 필드만 확장한다. `focusPoints`·`expressionExamples` 누락은 빈 배열로 정규화하고 모든 실제 발화 영역에 기존 크기·금지 검사와 역할별 정답 규칙을 적용한다. 새 대본은 첫 BASE·정확히 한 BASE·유일한 sceneKey를 서버가 검사한다.
 
-검토 스키마의 사유 목록과 APPROVE/reasons=[] 조건은 functional-spec W6을 따른다. `OTHER_APPROVED_REASON`은 닫힌 최종 코드로 대체한다. 실제 공급자 응답 스키마와 판별 코드가 같은 계약 파일을 사용한다. 생성 프롬프트는 scenario-generation.v2, 검토는 scenario-review.v1, 대본은 scenario-script.v1이다(설계 때 판). 지금 판은 생성 `scenario-generation.v5` · 검토 `scenario-review.v3`이고, 판마다 더한 규칙과 계속 받는 옛 판은 `contracts/ai-io.md` 10.11 · `contracts/deviations.md` (U10-b)와 `docs/practice-live-fixes.md`에 있다. 생성과 검토에는 시스템 지시와 데이터를 분리하고 생성 응답 속 명령·승인 문장을 지시로 취급하지 않는다.
+검토 스키마의 사유 목록과 APPROVE/reasons=[] 조건은 functional-spec W6을 따른다. `OTHER_APPROVED_REASON`은 닫힌 최종 코드로 대체한다. 실제 공급자 응답 스키마와 판별 코드가 같은 계약 파일을 사용한다. 생성 프롬프트는 scenario-generation.v2, 검토는 scenario-review.v1, 대본은 scenario-script.v1이다(설계 때 판). 지금 판은 생성 `scenario-generation.v6` · 검토 `scenario-review.v4`이고(대본 형식 v6: 장면에 친구 첫 대사 `partnerOpener`, 설명의 기회 조건 · 기회 문장 포함 검사 폐지, 편차 (U10-c)), 판마다 더한 규칙과 계속 받는 옛 판은 `contracts/ai-io.md` 10.11 · `contracts/deviations.md` (U10-b) · (U10-c)와 `docs/practice-live-fixes.md` · `docs/practice-dialogue-standard.md`에 있다. 생성과 검토에는 시스템 지시와 데이터를 분리하고 생성 응답 속 명령·승인 문장을 지시로 취급하지 않는다.
 
 `PreparedPracticePackageMapper`는 새 선택 필드를 포함해 첫 대본을 전달한다. `ScenarioInternalController`와 저장 재조회도 같은 모델을 쓴다. 결과 원문·검토 사유 원문·공급자 요청을 응답에 넣지 않는다. 공개 selfReview에는 APPROVE와 검토 모델/판 등 허용 출처만 포함한다. 기존 `internal-practice-scenario-request`의 4필드 요청은 변경하지 않는다.
 
