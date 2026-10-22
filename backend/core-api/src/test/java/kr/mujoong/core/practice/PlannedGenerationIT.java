@@ -161,6 +161,58 @@ import org.junit.jupiter.api.*;
         verify(f.graph).variantPlan(any(),any(),any(),eq(outside),any());
         assertThat(new VariantPlanner().plan(graphFixture.seed,outside,List.of())).isEmpty();
     }
+    /**
+     * 실측 s1 · s8 모양(docs/practice-dialogue-standard.md 12.2.1 · F1): 첫 BASE는 단독 검토에서 승인되고, 다음 생성은 그 BASE의 focusPoints 문구만
+     * 바꾼 BASE와 계획대로 만든 VARIANT를 낸다.
+     */
+    void answerWithRewrittenBase(ScenarioScript.Scene firstBase){
+        doAnswer(c->{ScenarioScriptProvider.Call call=c.getArgument(0);var input=call.input();
+            if(!input.containsKey("variantPlan"))return ScenarioGenerationTest.generated(firstBase);
+            var plan=json.read(json.write(input.get("variantPlan")),VariantPlanner.Plan.class);
+            var rewritten=withFocus(firstBase,"친구가 한 말의 뜻 떠올려 보기");
+            return ScenarioGenerationTest.generated(rewritten,relational(scene(plan.context(),plan,"variant","VARIANT")));
+        }).when(f.provider).generate(any());
+    }
+    ScenarioScript.Scene withFocus(ScenarioScript.Scene s,String focus){
+        return new ScenarioScript.Scene(s.sceneKey(),s.sceneKind(),s.sceneDescription(),s.partnerOpener(),s.opportunitySentence(),s.reexplanation(),List.of(focus),s.expressionExamples(),s.relation(),s.place(),s.topic(),s.preservation(),s.partnerRole());
+    }
+    /** s8: 변형 검토가 승인했다. 고쳐 쓴 BASE를 승인 BASE로 되돌려 검토하므로 BASE + VARIANT가 발급되고 BASE는 첫 승인 그대로다. */
+    @Test void aRewrittenApprovedBaseIsPutBackBeforeReviewSoTheApprovedVariantIsIssued(){
+        freeKoreanGoal();var firstBase=withFocus(relational(scene(ALLOWED,null,"base","BASE")),"상대가 한 말의 뜻 떠올려 보기");answerWithRewrittenBase(firstBase);
+        var result=f.legacy.service.generate(f.legacy.original());
+        assertThat(result.scenes()).extracting(ScenarioScript.Scene::sceneKind).containsExactly("BASE","VARIANT");
+        assertThat(result.scenes().getFirst().focusPoints()).as("발급 BASE는 단독 승인된 문구다").containsExactly("상대가 한 말의 뜻 떠올려 보기");
+        assertThat(result.generation().calls()).isEqualTo(4);assertThat(result.generation().basePreservation()).isEqualTo("BASE_REPLACED");
+        var reviews=org.mockito.ArgumentCaptor.forClass(ScenarioScriptProvider.Call.class);verify(f.provider,times(2)).review(reviews.capture());
+        var reviewed=(ScenarioScript)reviews.getAllValues().getLast().input().get("script");
+        assertThat(reviewed.scenes().getFirst().focusPoints()).as("검토는 실제로 발급할 BASE를 본다").containsExactly("상대가 한 말의 뜻 떠올려 보기");
+        assertThat(f.legacy.repository.require(result.scenarioId()).scenario().generation().basePreservation()).as("저장 기록").isEqualTo("BASE_REPLACED");
+    }
+    /** s1: 변형 검토가 변형 사유로 거절했다. 단독 승인된 같은 BASE를 추가 검토 호출 없이 발급한다(검토 2회 · 호출 4회). */
+    @Test void aVariantRejectedAfterThePutBackIssuesTheAloneApprovedBaseWithoutAnotherReview(){
+        freeKoreanGoal();var firstBase=withFocus(relational(scene(ALLOWED,null,"base","BASE")),"상대가 한 말의 뜻 떠올려 보기");answerWithRewrittenBase(firstBase);
+        when(f.provider.review(any())).thenReturn(ScenarioGenerationTest.approve(),ScenarioGenerationTest.reject("INVARIANT_MISMATCH"),ScenarioGenerationTest.approve());
+        var result=f.legacy.service.generate(f.legacy.original());
+        assertThat(result.scenes()).extracting(ScenarioScript.Scene::sceneKind).containsExactly("BASE");
+        assertThat(result.scenes().getFirst().focusPoints()).containsExactly("상대가 한 말의 뜻 떠올려 보기");
+        verify(f.provider,times(2)).review(any());verify(f.provider,times(2)).generate(any());
+        assertThat(result.generation().calls()).isEqualTo(4);assertThat(result.generation().basePreservation()).isEqualTo("BASE_ONLY_EARLIER_REVIEW");
+        assertThat(result.generation().graphContextUsed()).isTrue();assertThat(result.selfReview().verdict()).isEqualTo("APPROVE");
+        assertThat(kr.mujoong.core.web.support.WebFixtures.schemaErrors("practice-scenario.schema.json",json.write(f.legacy.repository.require(result.scenarioId()).scenario()))).isEmpty();
+    }
+    /** 서버 검사가 변형을 빼도(계획과 다른 좌표의 변형) 같은 길이다: 단독 승인된 BASE를 추가 검토 없이 발급한다. */
+    @Test void aVariantDroppedByTheServerCheckAlsoReusesTheAloneReview(){
+        freeKoreanGoal();var firstBase=relational(scene(ALLOWED,null,"base","BASE"));
+        doAnswer(c->{ScenarioScriptProvider.Call call=c.getArgument(0);var input=call.input();
+            if(!input.containsKey("variantPlan"))return ScenarioGenerationTest.generated(firstBase);
+            var plan=json.read(json.write(input.get("variantPlan")),VariantPlanner.Plan.class);
+            var offPlan=new VariantPlanner.Context("독서",plan.context().place(),plan.context().participants(),plan.context().relationship(),plan.context().situation());
+            return ScenarioGenerationTest.generated(firstBase,relational(scene(offPlan,plan,"variant","VARIANT")));
+        }).when(f.provider).generate(any());
+        var result=f.legacy.service.generate(f.legacy.original());
+        assertThat(result.scenes()).hasSize(1);verify(f.provider,times(2)).review(any());
+        assertThat(result.generation().calls()).isEqualTo(4);assertThat(result.generation().basePreservation()).isEqualTo("BASE_ONLY_EARLIER_REVIEW");
+    }
     /** 목표 상대(scene.relation)는 Luna가 쓴 자유 한국어 그대로 두고, 관계 좌표만 열거값으로 둔다. */
     ScenarioScript.Scene relational(ScenarioScript.Scene s){
         return new ScenarioScript.Scene(s.sceneKey(),s.sceneKind(),s.sceneDescription(),s.partnerOpener(),s.opportunitySentence(),s.reexplanation(),s.focusPoints(),s.expressionExamples(),"같은 반 친구",s.place(),s.topic(),s.preservation(),null);

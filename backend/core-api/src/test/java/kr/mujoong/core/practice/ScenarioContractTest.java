@@ -36,6 +36,24 @@ class ScenarioContractTest {
         assertThat(WebFixtures.schemaErrors("practice-scenario.schema.json",json.write(value))).isEmpty();
         assertThat(json.read(json.write(value), Scenario.class)).isEqualTo(value);
     }
+    /** 보존 BASE를 어떻게 썼는지(실측 F1)는 선택 칸이다: 닫힌 값만 받고, 없으면 칸 자체가 나가지 않는다. */
+    @Test void howTheBaseWasKeptIsAnOptionalClosedGenerationNote() {
+        for (String path : List.of("BASE_REPLACED", "BASE_ONLY_EARLIER_REVIEW", "BASE_ONLY_REVIEWED")) {
+            var value = new Scenario(UUID.randomUUID(), "ORIGINAL", "PEER", "기회", "상황", "역할", "말",
+                    new Scenario.Validation(true, true, false), "scenario-script.v1", List.of(scene().withPartnerRole("역할")),
+                    new Scenario.Review("APPROVE", "fake", kr.mujoong.core.textai.ScenarioScriptProvider.REVIEW_PROMPT_VERSION),
+                    new Scenario.Generation("fake", kr.mujoong.core.textai.ScenarioScriptProvider.GENERATION_PROMPT_VERSION, true, 4, "kg-1", path));
+            assertThat(WebFixtures.schemaErrors("practice-scenario.schema.json", json.write(value))).as(path).isEmpty();
+            assertThat(json.read(json.write(value), Scenario.class)).isEqualTo(value);
+        }
+        var plain = new Scenario.Generation("fake", kr.mujoong.core.textai.ScenarioScriptProvider.GENERATION_PROMPT_VERSION, false, 2);
+        assertThat(json.write(plain)).doesNotContain("basePreservation");
+        String unknown = json.write(new Scenario(UUID.randomUUID(), "ORIGINAL", "PEER", "기회", "상황", "역할", "말",
+                new Scenario.Validation(true, true, false), "scenario-script.v1", List.of(scene().withPartnerRole("역할")),
+                new Scenario.Review("APPROVE", "fake", kr.mujoong.core.textai.ScenarioScriptProvider.REVIEW_PROMPT_VERSION),
+                new Scenario.Generation("fake", kr.mujoong.core.textai.ScenarioScriptProvider.GENERATION_PROMPT_VERSION, false, 2, null, "GUESSED")));
+        assertThat(WebFixtures.schemaErrors("practice-scenario.schema.json", unknown)).isNotEmpty();
+    }
     @Test void missingCoachListsBecomeEmptyAndContentIsRedacted() {
         var value=scene();
         assertThat(value.focusPoints()).isEmpty(); assertThat(value.expressionExamples()).isEmpty();
