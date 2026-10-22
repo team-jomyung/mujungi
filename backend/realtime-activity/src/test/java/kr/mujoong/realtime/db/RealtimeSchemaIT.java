@@ -43,6 +43,7 @@ import org.springframework.context.annotation.Configuration;
  */
 @Tag("skeleton")
 @Tag("db")
+@Tag("service-guardrail")
 class RealtimeSchemaIT {
 
     /** V1 일곱 표 + U3 V2 세 표 + U4b V3 한 표 + U5b V4 다섯 표 + U11 V5 한 표 + U13 V6 한 표 + U12 V7 두 표(pg_tables 이름 순). */
@@ -247,10 +248,14 @@ class RealtimeSchemaIT {
                             + " order by indexname");
             assertThat(partial.stream().map(row -> (String) row.get(0)).toList()).containsExactly(
                     "realtime_activity_session_in_progress_device_uk",
-                    "realtime_activity_session_in_progress_guardian_uk");
-            assertThat(partial).allSatisfy(row -> assertThat((String) row.get(1))
+                    "realtime_activity_session_in_progress_guardian_uk", "realtime_session_guardrail_revision_idx");
+            assertThat(partial.subList(0, 2)).allSatisfy(row -> assertThat((String) row.get(1))
                     .startsWith("CREATE UNIQUE INDEX").contains("'PREPARING'").contains("'CLOSING'")
                     .doesNotContain("'ENDED'"));
+            // V8 서비스 가드레일 사실 조회 색인: 부분 색인이지만 유일 색인은 아니다
+            assertThat((String) partial.get(2).get(1)).startsWith("CREATE INDEX")
+                    .contains("realtime_session_event", "session_id", "revision", "DESC", "SESSION_GUARDRAIL_FACTS")
+                    .doesNotContain("UNIQUE");
             // 전사 (session_id, sequence_no) 유일과 폴러 · 삭제 참가자 색인
             assertThat(single(realtime,
                     "select count(*) from pg_indexes where schemaname = 'realtime' and indexname in"
