@@ -128,11 +128,23 @@ class PracticeFlowIT {
         assertThat(h.link.outputs()).hasSize(3);
         complete(h.link.outputs().getLast().playbackId());
 
-        // 아이가 "파란색" → J3 충분 → 정리(변형 없음) → 연습 종료 신호
+        // 충분히 전달한 뒤에도 친구 답변은 Jev 승인과 기기 재생 완료를 기다린다.
         h.childSays("child-2", "파란색");
         assertThat(judge.last().request().point()).isEqualTo(JudgmentPoint.J3);
         judge.confirm("DELIVERED", 0.9, "STILL_SHORT", 0.05);
         h.drain();
+        assertThat(h.executor.status()).isEqualTo(SessionStatus.ACTIVE);
+        assertThat(repository.findSceneRuns(h.sessionId).getFirst().endedAt()).isNull();
+        h.settleSend();
+        h.speak("응, 여기 파란 상자가 있어.", 4800);
+        h.advance(Duration.ofMillis(801));
+        assertThat(guard.last().request().mode()).isEqualTo(GuardrailRequest.Mode.PRACTICE_PEER);
+        assertThat(h.link.outputs()).hasSize(3);
+        guard.allow();
+        h.drain();
+        assertThat(h.link.outputs()).hasSize(4);
+        assertThat(h.executor.status()).isEqualTo(SessionStatus.ACTIVE);
+        complete(h.link.outputs().getLast().playbackId());
         assertThat(h.executor.status()).isEqualTo(SessionStatus.CLOSING);
         assertThat(h.transitions.find(h.sessionId).orElseThrow().endDetail()).isEqualTo("PRACTICE_COMPLETED");
 

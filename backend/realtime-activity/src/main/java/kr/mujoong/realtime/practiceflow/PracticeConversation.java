@@ -229,7 +229,9 @@ public final class PracticeConversation implements PracticeSessionExtension {
         }
         stopping = true;
         // 실행부는 종료 전이 때 확장점 시계를 직접 비우고 ACTIVE가 아닌 출력 능력 호출은 거절한다. 여기서는 기록만 닫는다
-        if (sceneRowCreated && state.sceneEndCause() == null && state.phase() != Phase.CLOSING
+        if (sceneRowCreated && (state.sceneEndCause() == null
+                || (state.phase() == Phase.SCENE_WRAP && state.sceneEndCause() == FlowTransitions.EndCause.NORMAL))
+                && state.phase() != Phase.CLOSING
                 && state.phase() != Phase.NEXT_GOAL) {
             recordFact(FactKind.END_REQUEST);
             recordOutcome(VariantSkipReason.END_OR_REST, LiveTiming.NONE);
@@ -509,7 +511,8 @@ public final class PracticeConversation implements PracticeSessionExtension {
             return;
         }
         state.markHandled(correlation);
-        if (end == SlotEnd.FAILED || end == SlotEnd.BLOCKED) {
+        if (end == SlotEnd.FAILED || end == SlotEnd.BLOCKED
+                || (end == SlotEnd.INTERRUPTED && state.sub() == Sub.PEER_REPLY)) {
             outputFailed = true;
         }
         if (mine) {
@@ -712,7 +715,9 @@ public final class PracticeConversation implements PracticeSessionExtension {
         cancelOpenSlot();
         dropJudgment();
         earlyUtterance = null;
-        recordOutcome(null, state.sceneTiming());
+        if (state.sceneEndCause() != FlowTransitions.EndCause.NORMAL) {
+            recordOutcome(null, state.sceneTiming());
+        }
     }
 
     private void dispatch(Step step, Phase previous, Sub previousSub) {
@@ -735,14 +740,18 @@ public final class PracticeConversation implements PracticeSessionExtension {
             case SCENE_WRAP -> {
                 if (step.sub() == Sub.RETURN_NOTICE) {
                     announce(FlowRole.PEER);
+                } else if (step.sub() == Sub.PEER_REPLY) {
+                    speakGenerated(FlowRole.PEER, PracticeInstructions.peerCompletion(currentScene));
                 } else {
+                    recordOutcome(null, state.sceneTiming());
                     applyStep(transitions.evaluateVariant(state, currentScript.variantScene().isPresent()));
                 }
             }
             case VARIANT_OFFER -> speakGenerated(FlowRole.PEER, PracticeInstructions.peerVariantOffer(currentScene, false));
             case NEXT_GOAL -> advanceGoal();
             case CLOSING -> {
-                boolean sceneWasOpen = previous != Phase.SCENE_WRAP && previous != Phase.NEXT_GOAL && previous != Phase.CLOSING;
+                boolean sceneWasOpen = (previous != Phase.SCENE_WRAP || previousSub == Sub.PEER_REPLY
+                        || previousSub == Sub.RETURN_NOTICE) && previous != Phase.NEXT_GOAL && previous != Phase.CLOSING;
                 if (step.endsByRequest() && sceneWasOpen) {
                     state.sceneEnd(FlowTransitions.EndCause.END_REQUEST, LiveTiming.NONE);
                     recordOutcome(VariantSkipReason.END_OR_REST, LiveTiming.NONE);

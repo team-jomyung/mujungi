@@ -89,7 +89,8 @@ class PracticeConversationTest {
         assertThat(h.out.timers).doesNotContainKey("no-response");
         h.slotEvent(explanation.correlationId(),Playback.COMPLETED,explanation.speech(),explanation.text());
         assertThat(h.out.judgments).hasSize(2);
-        assertThat(h.result("J2","FULL")).isEqualTo(Signal.LAST_GOAL);
+        assertThat(h.result("J2","FULL")).isEqualTo(Signal.NONE);
+        assertThat(h.played()).isEqualTo(Signal.LAST_GOAL);
     }
 
     @Test
@@ -122,7 +123,8 @@ class PracticeConversationTest {
     @Test
     void aRealRoleQuestionCanStillCompleteTheGoal() {
         Harness h=minimal();h.toOpportunity();h.child("무슨 놀이를 하고 싶어?");
-        assertThat(h.result("J2","FULL")).isEqualTo(Signal.LAST_GOAL);
+        assertThat(h.result("J2","FULL")).isEqualTo(Signal.NONE);
+        assertThat(h.played()).isEqualTo(Signal.LAST_GOAL);
     }
 
     @Test
@@ -202,7 +204,8 @@ class PracticeConversationTest {
         Harness h=minimal();h.activate();Slot first=h.out.lastSlot();
         h.event(ExtensionEvent.Kind.ASYNC_RESULT,"approved-text-mismatch",first.correlationId(),first.speech());
         h.played();h.played();h.child("파란 블록 하나 줘");
-        assertThat(h.result("J2","FULL")).isEqualTo(Signal.LAST_GOAL);
+        assertThat(h.result("J2","FULL")).isEqualTo(Signal.NONE);
+        assertThat(h.played()).isEqualTo(Signal.LAST_GOAL);
         assertThat(h.recorder.factKinds(h.recorder.only())).doesNotContain(FactKind.PLAYBACK_FAILED);
     }
 
@@ -252,7 +255,8 @@ class PracticeConversationTest {
         h.child("파란색");
         assertThat(h.out.lastJudgment().point()).isEqualTo(JudgmentPoint.J3);
         assertThat(h.out.lastJudgment().criteria()).isNotNull();
-        Signal end = h.result("J3", "DELIVERED");
+        assertThat(h.result("J3", "DELIVERED")).isEqualTo(Signal.NONE);
+        Signal end = h.played();
 
         assertThat(end).isEqualTo(Signal.LAST_GOAL);
         SceneRunRecord row = h.recorder.only();
@@ -434,7 +438,8 @@ class PracticeConversationTest {
         h.played();
         h.child("파란 상자를 줘");
         h.result("J5", "COPIED");
-        Signal end = h.announcedNotice(Playback.COMPLETED);
+        assertThat(h.announcedNotice(Playback.COMPLETED)).isEqualTo(Signal.NONE);
+        Signal end = h.played();
 
         assertThat(end).isEqualTo(Signal.LAST_GOAL);
         SceneRunRecord row = h.recorder.only();
@@ -498,8 +503,10 @@ class PracticeConversationTest {
         assertThat(h.out.slots).hasSize(slots);
         assertThat(h.recorder.only().endedAt()).isNull();
         h.result("J2", "FULL");
-        assertThat(h.recorder.only().liveTiming()).isEqualTo(LiveTiming.IMMEDIATE);
+        assertThat(h.recorder.only().endedAt()).isNull();
         assertThat(h.result(UUID.randomUUID(), "J2", "PARTIAL")).as("닫힌 판정 뒤 사건").isEqualTo(Signal.NONE);
+        h.played();
+        assertThat(h.recorder.only().liveTiming()).isEqualTo(LiveTiming.IMMEDIATE);
     }
 
     // ---- 지시문 위생 ----
@@ -533,14 +540,15 @@ class PracticeConversationTest {
         offer.child(marker + "6");
         offer.result("J2", "FULL");
         offer.played();
+        offer.played();
         offer.child(marker + "7");
         offer.result("J4", "UNCLEAR");
 
         List<Slot> generated = new java.util.ArrayList<>(h.out.generatedSlots());
         generated.addAll(offer.out.generatedSlots());
         assertThat(h.out.announces).as("승인 문장이 없으면 알림 능력을 부르지 않고 생성형으로 낸다").isEmpty();
-        assertThat(h.out.generatedSlots()).hasSize(7);
-        assertThat(offer.out.generatedSlots()).as("변형 제안과 같은 말 다시 제안").hasSize(2);
+        assertThat(h.out.generatedSlots()).hasSize(8);
+        assertThat(offer.out.generatedSlots()).as("친구 답변 뒤 변형 제안과 같은 말 다시 제안").hasSize(3);
         List<String> forbidden = List.of("FULL", "PARTIAL", "HELP", "NOT_UNDERSTOOD", "IRRELEVANT", "UNREADABLE", "DELIVERED",
                 "STILL_SHORT", "ACCEPT", "REFUSE", "UNCLEAR", "COPIED", "%", "확률", CRITERIA, marker, "판정", "J2", "J3", "J4", "J5");
         for (Slot slot : generated) {
@@ -708,6 +716,7 @@ class PracticeConversationTest {
         h.toOpportunity();
         h.child("그거 줘");
         h.result("J2", "FULL");
+        h.played();
         Slot offer = h.out.lastSlot();
         assertThat(offer.generated()).isTrue();
         assertThat(offer.role()).isEqualTo("PEER");
@@ -724,7 +733,8 @@ class PracticeConversationTest {
         assertThat(h.out.lastSlot().text()).isEqualTo("동생이 말했어. 그거 줘.");
         h.played();
         h.child("그거 줘");
-        Signal end = h.result("J2", "FULL");
+        assertThat(h.result("J2", "FULL")).isEqualTo(Signal.NONE);
+        Signal end = h.played();
 
         assertThat(end).isEqualTo(Signal.LAST_GOAL);
         List<SceneRunRecord> rows = h.recorder.list();
@@ -732,7 +742,7 @@ class PracticeConversationTest {
         assertThat(rows.get(0).variantSkipReason()).isNull();
         assertThat(rows.get(0).liveTiming()).isEqualTo(LiveTiming.IMMEDIATE);
         assertThat(h.recorder.factKinds(rows.get(1))).containsExactly(FactKind.VARIANT_PLAYED);
-        assertThat(h.out.generatedSlots()).as("변형 장면 뒤에는 다시 제안하지 않는다").hasSize(1);
+        assertThat(h.out.generatedSlots()).as("두 장면의 친구 답변과 한 번의 변형 제안").hasSize(3);
         assertRecordMatchesTheContract(h.ext.practiceRecord());
     }
 
@@ -742,6 +752,7 @@ class PracticeConversationTest {
         h.toOpportunity();
         h.child("그거 줘");
         h.result("J2", "FULL");
+        h.played();
         h.played();
         h.child("싫어");
 
@@ -761,12 +772,13 @@ class PracticeConversationTest {
         h.toOpportunity();
         h.child("그거 줘");
 
-        Signal advanced = h.result("J2", "FULL");
+        assertThat(h.result("J2", "FULL")).isEqualTo(Signal.NONE);
+        Signal advanced = h.played();
 
         assertThat(advanced).as("첫 목표가 끝났고 다음 대본은 아직 안 닿았다").isEqualTo(Signal.NEXT_GOAL);
-        assertThat(h.out.slots).hasSize(2);
+        assertThat(h.out.slots).hasSize(3);
         h.deliverPosted();
-        assertThat(h.out.slots).as("대본이 닿으면 다음 목표의 도입").hasSize(3);
+        assertThat(h.out.slots).as("대본이 닿으면 다음 목표의 도입").hasSize(4);
         assertThat(h.out.lastSlot().text()).isEqualTo(INTRO);
         assertThat(h.ext.progress().goalIndex()).isEqualTo(2);
         assertThat(h.ext.progress().goalCount()).isEqualTo(2);
@@ -774,7 +786,8 @@ class PracticeConversationTest {
         h.played();
         h.played();
         h.child("싫어");
-        Signal end = h.result("J2", "FULL");
+        assertThat(h.result("J2", "FULL")).isEqualTo(Signal.NONE);
+        Signal end = h.played();
 
         assertThat(end).isEqualTo(Signal.LAST_GOAL);
         assertThat(h.recorder.list()).hasSize(2);
@@ -791,6 +804,7 @@ class PracticeConversationTest {
         h.toOpportunity();
         h.child("그거 줘");
         h.result("J2", "FULL");
+        h.played();
 
         Signal end = h.deliverPosted();
 
@@ -886,7 +900,8 @@ class PracticeConversationTest {
         h.toOpportunity();
         h.child("그거 줘");
 
-        Signal end = h.result("J2", "FULL");
+        assertThat(h.result("J2", "FULL")).isEqualTo(Signal.NONE);
+        Signal end = h.played();
 
         assertThat(end).isEqualTo(Signal.LAST_GOAL);
         assertThat(h.failures).hasSize(1);
@@ -958,6 +973,7 @@ class PracticeConversationTest {
         h.child("라");
         h.result("J5", "FULL");
         h.announcedNotice(Playback.COMPLETED);
+        h.played();
         assertThat(h.out.lastSlot().text()).as("변형 제안").contains("새 상황");
         h.played();
         slots = h.out.slots.size();
@@ -1108,7 +1124,8 @@ class PracticeConversationTest {
         h.toOpportunity();
         h.child("그거 줘");
 
-        Signal end = h.result("J2", "FULL");
+        assertThat(h.result("J2", "FULL")).isEqualTo(Signal.NONE);
+        Signal end = h.played();
 
         assertThat(end).isEqualTo(Signal.LAST_GOAL);
         assertThat(h.failures).extracting(Throwable::getMessage).containsExactly("PRACTICE_SCRIPT_REQUEST_FAILED");
@@ -1134,6 +1151,88 @@ class PracticeConversationTest {
     }
 
     // ---- 시작과 구조 ----
+
+    @Test
+    void achievementWaitsForOneGeneratedFriendReplyAndItsPlaybackBeforeFinishing() {
+        Harness h = minimal(); h.toOpportunity(); h.child("파란 상자를 줘");
+        assertThat(h.result("J2", "FULL")).isEqualTo(Signal.NONE);
+        Slot reply = h.out.lastSlot();
+        assertThat(h.ext.state().sub()).isEqualTo(FlowState.Sub.PEER_REPLY);
+        assertThat(reply.generated()).isTrue();
+        assertThat(reply.role()).isEqualTo("PEER");
+        assertThat(reply.text()).contains("직접 답하며", "추가 답변을 요구하지 않는다");
+        assertThat(h.out.timers).doesNotContainKey("no-response");
+        int judgments = h.out.judgments.size();
+        h.child("응"); // Acknowledgement during the closing reply must not restart judgment.
+        assertThat(h.out.judgments).hasSize(judgments);
+        assertThat(h.end(Playback.STARTED)).isEqualTo(Signal.NONE);
+        assertThat(h.played()).isEqualTo(Signal.LAST_GOAL);
+        assertThat(h.slotEvent(reply.correlationId(), Playback.COMPLETED, reply.speech(), "응"))
+                .isEqualTo(Signal.NONE);
+        assertThat(h.out.generatedSlots()).hasSize(1);
+        assertThat(h.recorder.only().liveTiming()).isEqualTo(LiveTiming.IMMEDIATE);
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = Playback.class, names = {"FAILED", "INTERRUPTED"})
+    void failedOrCutOffFriendReplyCannotBeReportedAsNormalCompletion(Playback playback) {
+        Harness h = minimal(); h.toOpportunity(); h.child("파란 상자를 줘"); h.result("J2", "FULL");
+        assertThat(h.end(playback)).isEqualTo(Signal.OUTPUT_FAILED);
+        assertThat(h.recorder.factKinds(h.recorder.only())).contains(FactKind.PLAYBACK_FAILED);
+        assertThat(h.out.generatedSlots()).hasSize(1);
+    }
+
+    @Test
+    void jevBlockedFriendReplyIsNotRetriedAsApprovedSpeechOrOfferedAsAnotherScene() {
+        Harness h = full(); h.toOpportunity(); h.child("파란 상자를 줘"); h.result("J2", "FULL");
+        Slot reply = h.out.lastSlot();
+        assertThat(h.event(ExtensionEvent.Kind.GUARDRAIL_BLOCKED, "guardrail-blocked", reply.correlationId(),
+                new GuardrailBlockedEvent(reply.correlationId(), kr.mujoong.realtime.guardrail.GuardrailRequest.Mode.PRACTICE_PEER,
+                        "BLOCK", true))).isEqualTo(Signal.OUTPUT_FAILED);
+        assertThat(h.out.generatedSlots()).hasSize(1);
+        assertThat(h.recorder.only().variantSkipReason()).isEqualTo(VariantSkipReason.NO_VARIANT);
+    }
+
+    @Test
+    void silentFriendReplyTimesOutInsteadOfHangingOrLooping() {
+        Harness h = minimal(); h.toOpportunity(); h.child("파란 상자를 줘"); h.result("J2", "FULL");
+        assertThat(h.advance(Duration.ofSeconds(20))).isEqualTo(Signal.OUTPUT_FAILED);
+        assertThat(h.out.generatedSlots()).hasSize(1);
+    }
+
+    @Test
+    void childStopCancelsTheClosingFriendReplyImmediately() {
+        Harness h = minimal(); h.toOpportunity(); h.child("파란 상자를 줘"); h.result("J2", "FULL");
+        Slot reply = h.out.lastSlot();
+        assertThat(h.event(ExtensionEvent.Kind.REST_REQUESTED, "judgment", null, null)).isEqualTo(Signal.NONE);
+        assertThat(h.out.holds).contains(true);
+        assertThat(h.out.cancelledSpeech).contains(reply.correlationId());
+        assertThat(h.recorder.only().endedAt()).isNotNull();
+        assertThat(h.recorder.only().variantSkipReason()).isEqualTo(VariantSkipReason.END_OR_REST);
+        assertThat(h.slotEvent(reply.correlationId(), Playback.COMPLETED, reply.speech(), "응"))
+                .isEqualTo(Signal.NONE);
+        assertThat(h.out.generatedSlots()).hasSize(1);
+    }
+
+    @Test
+    void externalStopDuringTheFriendReplyStillClosesTheStoredScene() {
+        Harness h = minimal(); h.toOpportunity(); h.child("파란 상자를 줘"); h.result("J2", "FULL");
+        assertThat(h.recorder.only().endedAt()).isNull();
+        h.ext.onStopping();
+        assertThat(h.recorder.only().endedAt()).isNotNull();
+        assertThat(h.recorder.factKinds(h.recorder.only())).contains(FactKind.END_REQUEST);
+    }
+
+    @Test
+    void longestApprovedFieldsDoNotTruncateTheClosingReplySafetyRules() {
+        String field = "가".repeat(80);
+        var scene = new PracticeScript.Scene("base", SceneKind.BASE, field, field, field, field,
+                List.of(), List.of(), "", "", "");
+        String instruction = PracticeInstructions.peerCompletion(scene);
+        assertThat(instruction.codePointCount(0, instruction.length())).isLessThanOrEqualTo(500);
+        assertThat(instruction).contains("추가 답변을 요구하지 않는다", "정답이나 모범 문장을 먼저 말하지 말고")
+                .endsWith("한두 문장으로 말한다.");
+    }
 
     @Test
     void anEmptyOrUnreadablePracticeFragmentFailsTheStartAndEventsBeforeActivationAreIgnored() {

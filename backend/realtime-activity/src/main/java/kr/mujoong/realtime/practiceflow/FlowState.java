@@ -37,6 +37,8 @@ public final class FlowState {
         COACH_UTTERANCE,
         /** SCENE_WRAP: 복귀 알림 재생 중. */
         RETURN_NOTICE,
+        /** SCENE_WRAP: 수행한 말에 친구 역할로 답한 뒤 장면을 마무리한다. */
+        PEER_REPLY,
         /** SCENE_WRAP: 변형 평가(알림이 없거나 끝났다). */
         VARIANT_EVAL,
         /** OPPORTUNITY · RETRY: 상황 다시 설명(승인 발화) 재생 중. */

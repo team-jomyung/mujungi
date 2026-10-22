@@ -26,6 +26,17 @@ final class PracticeInstructions {
     private PracticeInstructions() {
     }
 
+    /** 수행 뒤 상대의 답을 한 번 들려준다. 새 질문으로 연습을 다시 열거나 아이를 평가하지 않는다. */
+    static String peerCompletion(Scene scene) {
+        return fit("너는 아이의 " + cut(field(scene.partnerRole()), 40) + " 역할이다. 상황: " + field(scene.sceneDescription())
+                + " 상대가 건넸던 말: " + field(scene.opportunitySentence())
+                + " 방금 들은 아이의 말에 상대 입장에서 직접 답하며 마무리한다."
+                + " 놀이 의견을 물으면 원하는 놀이를 답하고, 요청·거절은 존중한다."
+                + " 발화가 불분명하면 내용을 지어내지 말고 짧게 받아들인다."
+                + " 질문을 다시 하거나 추가 답변을 요구하지 않는다. 성공·점수·칭찬은 말하지 않는다."
+                + " 상황 설명을 반복하거나 아이 대사를 대신 말하지 않는다. " + PEER_RULE);
+    }
+
     /** 친구 되묻기(OPPORTUNITY 뒤 부분적으로만 전해졌을 때). */
     static String peerReask(Scene scene, boolean again) {
         return fit("너는 아이의 " + field(scene.partnerRole()) + " 역할이다. 상황: " + field(scene.sceneDescription())
