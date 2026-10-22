@@ -110,7 +110,7 @@ class ProviderRequestWhitelistIT {
                     case "session.start" -> assertThat(SESSION_START_KEYS).containsAll(keys);
                     case "session.input_audio.append" -> assertThat(INPUT_AUDIO_KEYS).containsAll(keys);
                     case "session.close" -> assertThat(SESSION_CLOSE_KEYS).containsAll(keys);
-                    case "session.instructions.append" -> assertThat(INSTRUCTIONS_APPEND_KEYS).containsAll(keys);
+                    case "session.instructions.append", "session.commentary.append" -> assertThat(INSTRUCTIONS_APPEND_KEYS).containsAll(keys);
                     default -> throw new AssertionError("허용 밖 요청 type: " + type);
                 }
             }

@@ -375,7 +375,7 @@ public final class FakeProviderWsServer implements AutoCloseable {
         } else if ("response.create".equals(type)) {
             socket.send(JSON.write(new ErrorEvent("error", new ErrorBody("invalid_request_error", "invalid_request",
                     "response.create requires a session with Responses delegation", null))));
-        } else if ("session.instructions.append".equals(type)) {
+        } else if ("session.instructions.append".equals(type) || "session.commentary.append".equals(type)) {
             onAppend(socket, node);
         } else if ("session.start".equals(type)) {
             answerStart(socket);
@@ -412,7 +412,8 @@ public final class FakeProviderWsServer implements AutoCloseable {
         long ackEnd = clock + 300L;
         long newStart = Math.max(ackEnd, clock + tail.toMillis());
         // 확인 사건은 곧바로 간다(관측: 낡은 꼬리가 이어지는 동안 도착)
-        socket.send(JSON.write(new AppendedEvent("session.instructions.appended", "fake-a-" + eventSeq.incrementAndGet(), eventId, clock,
+        String ackType = "session.commentary.append".equals(text(node, "type")) ? "session.commentary.appended" : "session.instructions.appended";
+        socket.send(JSON.write(new AppendedEvent(ackType, "fake-a-" + eventSeq.incrementAndGet(), eventId, clock,
                 ackEnd)));
         if (newSpeechChunks <= 0) {
             return;

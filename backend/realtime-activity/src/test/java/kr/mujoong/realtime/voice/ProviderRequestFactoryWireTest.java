@@ -112,7 +112,10 @@ class ProviderRequestFactoryWireTest {
     void onlyFourRequestTypesExistAndEveryOneIsOnTheSupportedList() {
         List<Object> requests = List.of(factory.sessionStart(new ChildContext("하늘", 8, List.of())),
                 factory.inputAudio(new byte[AudioFrameCodec.INPUT_PAYLOAD_BYTES]),
-                factory.instructionsAppend("mj-1", DialogInstructions.Correction.PRESSURE), factory.sessionClose());
+                factory.instructionsAppend("mj-1", DialogInstructions.Correction.PRESSURE),
+                factory.practiceInstruction("mj-reading", PracticeInstruction.forSpeech(PracticeSpeech.scenario(
+                        java.util.UUID.randomUUID(), java.util.UUID.randomUUID(), 0, "친구", "상황을 떠올려 봐."))),
+                factory.sessionClose());
 
         Set<String> types = new HashSet<>();
         for (Object request : requests) {
@@ -120,7 +123,7 @@ class ProviderRequestFactoryWireTest {
         }
 
         assertThat(types).containsExactlyInAnyOrder("session.start", "session.input_audio.append",
-                "session.instructions.append", "session.close");
+                "session.instructions.append", "session.commentary.append", "session.close");
         assertThat(types).isEqualTo(ProviderRequestFactory.SENT_TYPES);
         assertThat(types).doesNotContain("response.create", "session.response.cancel", "session.response.create",
                 "session.instructions.correct");
@@ -152,6 +155,22 @@ class ProviderRequestFactoryWireTest {
         assertThat(keys(append, "")).containsExactlyInAnyOrder("type", "event_id", "delegation_id", "content");
         assertThat(append.get("type").asString()).isEqualTo("session.instructions.append");
         assertThat(append.get("content").asString()).isEqualTo("목표 문장을 한 번 더 안내한다. " + InstructionTemplates.SCOPE_CLOSE);
+    }
+
+    @Test
+    void approvedPracticeReadingUsesSpokenCommentaryWithoutChangingItsTextOrDelegationBoundary() {
+        var speech = PracticeSpeech.scenario(java.util.UUID.randomUUID(), java.util.UUID.randomUUID(), 0,
+                "친구", "친구와 놀이를 골라 보자.", PracticeSpeech.ReadingCue.SCENE);
+        var instruction = PracticeInstruction.forSpeech(speech);
+        JsonNode append = wire(factory.practiceInstruction("reading-1", instruction));
+        assertThat(append.get("type").asString()).isEqualTo("session.commentary.append");
+        assertThat(append.get("event_id").asString()).isEqualTo("reading-1");
+        assertThat(append.get("delegation_id").isNull()).isTrue();
+        assertThat(keys(append, "")).containsExactlyInAnyOrder("type", "event_id", "delegation_id", "content");
+        assertThat(append.get("content").asString()).isEqualTo(InstructionTemplates.scoped(instruction.text()));
+        assertThat(speech.matches("친구와 놀이를 골라 보자.")).isTrue();
+        assertThat(speech.matches("친구가 하고 싶은 놀이를 물어봐.")).isFalse();
+        assertThat(new PracticeInstruction(instruction.text()).approvedReading()).isFalse();
     }
 
     @Test

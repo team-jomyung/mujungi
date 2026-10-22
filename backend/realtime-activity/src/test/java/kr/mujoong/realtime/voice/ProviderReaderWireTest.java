@@ -20,6 +20,13 @@ class ProviderReaderWireTest {
     }
 
     @Test
+    void commentaryAcknowledgmentPreservesCorrelationAndTimelineWithoutTreatingItAsPlayback() {
+        assertThat(parse("{\"type\":\"session.commentary.appended\",\"client_event_id\":\"reading-1\",\"start_ms\":120,\"end_ms\":140}"))
+                .isEqualTo(new ProviderEvent.InstructionsAppended("reading-1", 120, 140));
+        assertThat(parse("{\"type\":\"session.commentary.appended\",\"start_ms\":120,\"end_ms\":140}")).isNull();
+    }
+
+    @Test
     void continuousDigitalSilenceIsSeparateFromEvenTheQuietestSpeech() {
         assertThat(parse("{\"type\":\"session.output_audio.delta\",\"delta\":\"AAAAAA==\"}"))
                 .isEqualTo(new ProviderEvent.OutputSilenceDelta(4));
