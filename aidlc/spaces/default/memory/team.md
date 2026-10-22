@@ -44,7 +44,7 @@
   - 범위 측정은 빈 목록 · 없는 파일이면 실패한다(J137). 범위 파일을 새로 쓰면 이 방식을 그대로 따른다.
   - 병합 전 CI 실행은 `classic` 범위와 같고, 줄 80%는 막는 하한이 아니라 보고 목표다.
 - 대조 시험 · ArchUnit 시험은 시험을 통과시키려고 약하게 고치거나 끄거나 건너뛰게 하지 않는다. 마이그레이션 개수 · 표 합계 · 최고 버전 같은 숫자 고정 단언은 의미 있는 검사로 바꿀 수 있다(R-F2).
-- CI 재시도: 실패한 시험은 CI(환경 변수 `CI`)에서만 최대 2회 더 돈다(백엔드 Gradle `org.gradle.test-retry` `maxRetries=2` · `maxFailures=10`, 프런트 · tools Vitest `retry`). 로컬은 재시도하지 않는다. 재시도 뒤 통과는 보고서에 남고, 재시도 뒤에도 실패하면 `ci-gate`가 막는다. 모든 시험은 계속 `ci-gate`를 막는다.
+- CI 재시도: 실패한 시험은 CI(환경 변수 `CI`)에서만 최대 2회 더 돈다(백엔드 Gradle `org.gradle.test-retry` `maxRetries=2` · `maxFailures=10`, 프런트 · tools Vitest `retry`). 로컬은 재시도하지 않는다. 재시도 기록은 백엔드 JUnit XML(`flakyFailure`), 프런트 · tools `test-results/retries.json`(재시도 횟수 · 최초 실패, artifact) · 로그 경고 · 실행 요약에 남고(리포터 오류는 경고만, 판정 불변), 재시도 뒤에도 실패하면 `ci-gate`가 막는다. 모든 시험은 계속 `ci-gate`를 막는다.
 - 시험 종류:
   - 단위: JUnit 5 · AssertJ · Mockito(백엔드), Vitest + Testing Library + jsdom(프런트), Vitest(tools).
   - 통합: Spring Boot 통합 시험 + Testcontainers PostgreSQL(`-Pmujoong.test.db=docker`), 상대 앱은 스텁.
