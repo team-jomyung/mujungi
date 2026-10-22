@@ -3,7 +3,7 @@
 #
 # 저장소 루트에서 실행한다(이 스크립트가 자기 위치에서 루트를 직접 잡는다). 실공급자는 부르지 않는다(가짜 공급자).
 #
-# 쓰는 법: bash scripts/verify.sh [--mode auto|compose|host] [--engine] [--deadline <초>] [--help]
+# 쓰는 법: bash scripts/verify.sh [--mode auto|compose|host] [--engine | --skip-a] [--deadline <초>] [--help]
 #   --mode auto     (기본) docker info와 postgres 고정 태그 확보(로컬에 있거나 pull 성공)가 되면 compose, 아니면 host(J133)
 #   --mode compose  이미지 빌드 → docker compose(demo + ci 덧붙임)로 검증 스택(nginx 127.0.0.1:8443)
 #   --mode host     Docker 없이: 로컬 PostgreSQL 16 클러스터 + bootJar 두 개 + Next.js standalone + 가짜 공급자 +
@@ -11,6 +11,10 @@
 #   --engine        엔진 checkpoint용(J134 (가), 사람 결정 10): A와 이미지 빌드를 하지 않는다. 앞선 전체 실행이 만든 산출물
 #                   (compose: 이미지 라벨, host: build/verify/fingerprint)의 소스 지문이 지금 지문과 같을 때만 B · C · 사후 단언을
 #                   내부 기한 110초로 돈다. 다르거나 없으면 종료 코드 1
+#   --skip-a        스켈레톤 경량(CI skeleton 기본): A1 ~ A4(백엔드 · 프런트 · tools 전체 회귀와 비밀 스캔)를 건너뛰고
+#                   A0에서 기동 산출물(bootJar 두 개 · 시험 클래스 0 검사 · Next.js standalone · tools 의존성)만 만든다.
+#                   B(이미지 빌드 포함) · C · 사후 단언은 전체 실행과 같다. 건너뛴 A는 report.txt에 NOT_VERIFIED(skip-a)로 남긴다.
+#                   회귀는 PR의 ci-gate와 수동 전체 실행 · Build and Test가 맡는다. --engine과 함께 쓰지 않는다
 #   --deadline <초> 전체 내부 기한(기본 전체 실행 5400초, --engine 110초). 단계마다 기본 기한과 남은 시간 중 작은 값을 쓴다
 #   환경 변수 KEEP=1  끝에 스택(컨테이너 · host 프로세스 · 로컬 클러스터)만 남긴다. 생성 비밀 · 비밀 목록은 그래도 지운다
 #
@@ -20,6 +24,7 @@
 #   A2 frontend  npm ci · eslint . · vitest run tests --coverage(보고 전용, 유닛 시험 폴더 전부) · next build(+ standalone에 정적 자원 복사)
 #   A3 tools     npm ci · vitest run tests (J131, 유닛 시험 폴더 전부)
 #   A4 secrets   scripts/verify/a-secrets.sh — 비밀 스캔 ① · 무시 규칙 ② (SEC-10)
+#   A0 산출물    (--skip-a) a-checks.sh artifacts — bootJar · verifyBootJarHasNoTestClasses · next build(+ 정적 자원) · tools npm ci
 #   F  지문      A 동안 소스가 바뀌지 않았는지 보고 build/verify/fingerprint에 소스 지문 · 산출물 해시를 적는다(J134)
 #   E0 지문      (--engine) 미리 만든 산출물의 지문이 지금 소스 지문과 같은가
 #   B  기동      compose: b-stack.sh(이미지 빌드 · 병합 설정 단언 · migrate · 시드 두 번 · 프로필 가드 · up --wait · 3종 호출 ·
@@ -32,7 +37,7 @@
 #   T  작업 트리 시작과 끝의 git status --porcelain=v1 -uall · git diff --stat · 내용 해시가 같은가(SEC-18)
 #
 # 결과: build/verify/report.txt(첫 줄 mode=<모드>, 단계마다 한 줄과 소요 초, 마지막 줄 RESULT). 비밀 값은 쓰지 않는다.
-#   단계 PASS 줄은 그 단계가 종료 코드 0으로 끝난 뒤에만 쓴다. 단계 건너뛰기 옵션(SKIP_*)은 없다.
+#   단계 PASS 줄은 그 단계가 종료 코드 0으로 끝난 뒤에만 쓴다. 단계 건너뛰기는 --skip-a(A1 ~ A4)뿐이고 B · C · 사후 단언은 건너뛰지 않는다.
 # 종료 코드: 0 = A · B · C · 사후 단언 모두 통과, 1 = 어느 단언이든 실패(기한 초과 포함), 2 = 전제 누락(JDK 21 · Node 22 ·
 #   compose 모드의 Docker + Compose v2.24.4 이상 · host 모드의 PostgreSQL 16 바이너리 · git 작업 트리 등, 통과로 보고하지 않음),
 #   64 = 인자 오류
@@ -53,11 +58,13 @@ usage() {
 
 mode=auto
 engine=0
+skip_a=0
 deadline_total=""
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --mode) mode="${2:-}"; shift ;;
     --engine) engine=1 ;;
+    --skip-a) skip_a=1 ;;
     --deadline) deadline_total="${2:-}"; shift ;;
     -h | --help) usage; exit 0 ;;
     *) echo "verify: 모르는 인자: $1 (--help)" >&2; exit 64 ;;
@@ -65,6 +72,10 @@ while [ "$#" -gt 0 ]; do
   shift
 done
 case "$mode" in auto | compose | host) ;; *) echo "verify: --mode는 auto · compose · host 중 하나다" >&2; exit 64 ;; esac
+if [ "$engine" -eq 1 ] && [ "$skip_a" -eq 1 ]; then
+  echo "verify: --engine과 --skip-a는 함께 쓰지 않는다" >&2
+  exit 64
+fi
 if [ -z "$deadline_total" ]; then
   if [ "$engine" -eq 1 ]; then deadline_total=110; else deadline_total=5400; fi
 fi
@@ -275,9 +286,10 @@ export MUJOONG_VERIFY_MODE="$resolved" MUJOONG_VERIFY_ENGINE="$engine"
 
 report "mode=$resolved"
 report "engine=$engine"
+report "skip_a=$skip_a"
 report "started=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 report "revision=$(git rev-parse --short=12 HEAD 2>/dev/null || echo none)"
-say "verify: mode=$resolved engine=$engine 기한 ${deadline_total}초 (보고 build/verify/report.txt)"
+say "verify: mode=$resolved engine=$engine skip_a=$skip_a 기한 ${deadline_total}초 (보고 build/verify/report.txt)"
 
 missing=()
 java21="$(find_java21 || true)"
@@ -439,6 +451,11 @@ tree_compare() {
 # ---------------------------------------------------------------------------------------------------------------------
 if [ "$engine" -eq 1 ]; then
   run_fn E0 "미리 만든 산출물 지문 대조(J134 (가))" engine_check
+elif [ "$skip_a" -eq 1 ]; then
+  # 스켈레톤 경량: 회귀는 ci-gate · 수동 전체 실행이 맡는다. 건너뛴 것을 보고에서 빼지 않는다
+  report "NOT_VERIFIED(skip-a) A1 backend 전체 회귀 · A2 frontend eslint · vitest · A3 tools vitest · A4 비밀 스캔"
+  stage_or_exit A0 1800 "기동 산출물(bootJar · 시험 클래스 0 · next build · tools npm ci, 시험 없음)" --     bash scripts/verify/a-checks.sh artifacts
+  run_fn F "소스 지문 · 산출물 해시 기록(J134)" record_fingerprint
 else
   db_backend=auto
   [ "$resolved" = host ] && db_backend=local
