@@ -196,6 +196,14 @@ jobs:
           path: frontend/coverage/
           retention-days: 14
           if-no-files-found: ignore
+      - name: 재시도 기록(retries.json — 재시도 횟수 · 최초 실패)
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: frontend-retries
+          path: frontend/test-results/
+          retention-days: 14
+          if-no-files-found: ignore
 
   frontend-deps:
     name: frontend-deps
@@ -238,8 +246,17 @@ jobs:
           cache: npm
           cache-dependency-path: tools/package-lock.json
       - run: npm ci
+      # 실패한 시험은 CI에서만 최대 2회 더 돈다(vitest.config.mjs retry). 재시도 기록은 test-results/retries.json
       - name: 시험 도구 시험(가짜 공급자 · 기기 시뮬레이터 · C안 시나리오 · dev-edge · verify 종료 코드)
         run: npx --no-install vitest run tests
+      - name: 재시도 기록(retries.json — 재시도 횟수 · 최초 실패)
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: tools-retries
+          path: tools/test-results/
+          retention-days: 14
+          if-no-files-found: ignore
 
   secrets:
     name: secrets
