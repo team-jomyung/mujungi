@@ -49,7 +49,7 @@
   - 아키텍처: ArchUnit(`core/arch` · `realtime/arch`), ESLint `/parent` ↔ `/device` ↔ `shared` import 경계.
   - 끝-끝: `bash scripts/verify.sh` C안(기기 시뮬레이터 + 가짜 공급자).
   - 인프라: `infra-validate`(Compose 불변식 · `nginx -t` · shellcheck · 마이그레이션 expand 검사), 이미지 점검, 관문 음성 대조.
-- 시험 클래스 이름은 단위 `*Test`, 통합 `*IT`를 기본으로 한다. 백엔드 태그는 기능 이름(`practice-legacy` · `web-push` · `skeleton` 등), DB 시험은 `db`를 쓴다. 프런트·tools 시험은 소스 구조 폴더(`tests/parent/features/…` · `tests/shared/…`)에 둔다.
+- 시험 이름 · 태그: 단위 `*Test`, 통합 `*IT`, 백엔드 유닛 태그 `@Tag("u1")` ~ `@Tag("u7")`와 `@Tag("db")`, 프런트 · tools는 `tests/<유닛>/` 폴더.
 - 관문의 한계: PR의 `ci-gate`는 정적 · 단위 · 통합(커버리지는 보고 전용) · 보안 · 인프라 · 이미지까지 본다. 끝-끝 회귀(`skeleton`)는 `main` 병합 뒤에 처음 돌고, 실패하면 이미지 게시 · 배포를 막는다. 그래서 이번 작업은 Build and Test의 전체 `verify.sh`로 병합 전 끝-끝을 확인한다.
 - 시험 · CI · 검증에서는 가짜 공급자만 쓴다(ADR-002).
 - 결과 보고는 테스트 대역 · 합성 대화 · 실제 API · 실제 기기 성공을 따로 적고, 대역 성공을 실공급자 성공으로 표시하지 않는다(`discovered-rules.md` R-M11, Q10-A).
