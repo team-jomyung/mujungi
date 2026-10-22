@@ -467,7 +467,7 @@ public final class FlowTransitions {
     private Step inputPhaseSlot(FlowState s, SlotEnd end) {
         if (end == SlotEnd.PLAYED || end == SlotEnd.INTERRUPTED) {
             if (s.sub() == Sub.REEXPLAIN) {
-                return s.phase() == Phase.RETRY ? Step.enter(Phase.FOCUS, Sub.COACH_UTTERANCE) : Step.enter(Phase.OPPORTUNITY, Sub.NONE);
+                return Step.enter(s.phase(), Sub.NONE);
             }
             return Step.await();
         }

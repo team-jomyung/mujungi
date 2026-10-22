@@ -76,6 +76,80 @@ class PracticeConversationTest {
     }
 
     @Test
+    void answerDuringReexplanationIsJudgedOnceAfterPlaybackWithoutRepeatingTheOpportunity() {
+        Harness h=minimal();h.toOpportunity();h.child("상황을 잘 모르겠어");h.result("J2","NOT_UNDERSTOOD");
+        Slot explanation=h.out.lastSlot();int slots=h.out.slots.size();
+        h.child("무슨 놀이 하고 싶어?");
+        assertThat(h.out.judgments).hasSize(1);
+        h.played();
+        assertThat(h.out.slots).hasSize(slots);
+        assertThat(h.out.judgments).hasSize(2);
+        assertThat(h.out.lastJudgment().point()).isEqualTo(JudgmentPoint.J2);
+        assertThat(h.out.lastJudgment().seq()).isEqualTo(2);
+        assertThat(h.out.timers).doesNotContainKey("no-response");
+        h.slotEvent(explanation.correlationId(),Playback.COMPLETED,explanation.speech(),explanation.text());
+        assertThat(h.out.judgments).hasSize(2);
+        assertThat(h.result("J2","FULL")).isEqualTo(Signal.LAST_GOAL);
+    }
+
+    @Test
+    void reexplanationWithoutAnEarlyAnswerListensInsteadOfReadingTheSameOpportunityAgain() {
+        Harness h=minimal();h.toOpportunity();h.child("무슨 뜻이야");h.result("J2","NOT_UNDERSTOOD");
+        int slots=h.out.slots.size();h.played();
+        assertThat(h.out.slots).hasSize(slots);
+        assertThat(h.out.timers).containsKey("no-response");
+        h.child("어떤 놀이 하고 싶어?");
+        assertThat(h.out.judgments).hasSize(2);
+    }
+
+    @Test
+    void failedReexplanationCannotJudgeTheBufferedAnswerOrFinishSuccessfully() {
+        Harness h=minimal();h.toOpportunity();h.child("모르겠어");h.result("J2","NOT_UNDERSTOOD");
+        h.child("어떤 놀이 하고 싶어?");
+        assertThat(h.end(Playback.FAILED)).isEqualTo(Signal.OUTPUT_FAILED);
+        assertThat(h.out.judgments).hasSize(1);
+    }
+
+    @Test
+    void anIncorrectFullClassificationOfAProcedureQuestionOffersHelpInsteadOfCompleting() {
+        Harness h=minimal();h.toOpportunity();h.child("무슨 놀이를 하고 싶은지 물어봐야 하는 거야");
+        assertThat(h.result("J2","FULL")).isEqualTo(Signal.NONE);
+        assertThat(h.ext.state().phase()).isNotEqualTo(FlowState.Phase.CLOSING);
+        assertThat(h.out.announces).containsExactly("COACH");
+        assertThat(h.recorder.only().liveTiming()).isNull();
+    }
+
+    @Test
+    void aRealRoleQuestionCanStillCompleteTheGoal() {
+        Harness h=minimal();h.toOpportunity();h.child("무슨 놀이를 하고 싶어?");
+        assertThat(h.result("J2","FULL")).isEqualTo(Signal.LAST_GOAL);
+    }
+
+    @Test
+    void anAnswerDuringRetryReexplanationReturnsToJ5WithoutAnotherCoachSpeechOrRetryIncrement() {
+        Harness h=minimal();h.toOpportunity();h.child("도와줘");h.result("J2","HELP");
+        h.announcedNotice(Playback.COMPLETED);h.played();h.child("상황을 모르겠어");h.result("J5","NOT_UNDERSTOOD");
+        int slots=h.out.slots.size(), retries=h.ext.state().retryCount();
+        h.child("파란 블록 하나 줘");h.played();
+        assertThat(h.out.slots).hasSize(slots);
+        assertThat(h.out.lastJudgment().point()).isEqualTo(JudgmentPoint.J5);
+        assertThat(h.out.lastJudgment().seq()).isEqualTo(3);
+        assertThat(h.ext.state().retryCount()).isEqualTo(retries);
+    }
+
+    @Test
+    void aProcedureQuestionCannotCompleteTheReaskOrCoachedRetryEither() {
+        Harness peer=minimal();peer.toOpportunity();peer.child("그거 줘");peer.result("J2","PARTIAL");peer.played();
+        peer.child("뭐라고 대답해야 해?");
+        assertThat(peer.result("J3","DELIVERED")).isEqualTo(Signal.NONE);
+        assertThat(peer.ext.state().phase()).isNotEqualTo(FlowState.Phase.CLOSING);
+        Harness coach=minimal();coach.toOpportunity();coach.child("도와줘");coach.result("J2","HELP");
+        coach.announcedNotice(Playback.COMPLETED);coach.played();coach.child("이렇게 말하면 되는 거야?");
+        assertThat(coach.result("J5","COPIED")).isEqualTo(Signal.NONE);
+        assertThat(coach.ext.state().phase()).isNotEqualTo(FlowState.Phase.CLOSING);
+    }
+
+    @Test
     void unheardSceneIntroductionDoesNotCompleteThePracticeOrWaitForChildInput() {
         Harness h = minimal();
         h.activate();

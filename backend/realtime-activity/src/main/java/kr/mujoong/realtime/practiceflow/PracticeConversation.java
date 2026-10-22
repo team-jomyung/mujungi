@@ -108,6 +108,7 @@ public final class PracticeConversation implements PracticeSessionExtension {
     private boolean inputReady;
     private Utterance earlyUtterance;
     private UUID judgmentCorrelation;
+    private boolean judgmentAsksProcedure;
     private ConsentAnswer pendingConsent;
     private int waitingGoal = -1;
     private boolean stopping;
@@ -177,6 +178,9 @@ public final class PracticeConversation implements PracticeSessionExtension {
             } else if (!state.judgmentOpen()) {
                 judge(utterance);
             }
+        } else if (phase.awaitsInput() && state.sub() == Sub.REEXPLAIN) {
+            // 재설명 중의 답도 보관하고 재생 종료 후 같은 판정 지점으로 이어 준다.
+            earlyUtterance = utterance;
         } else if (phase == Phase.FOCUS && state.sub() == Sub.COACH_UTTERANCE) {
             // 코치 발화에 끼어든 전사는 재생이 끝난 뒤 RETRY 진입에서 곧바로 J5 입력으로 처리한다(§3.3)
             earlyUtterance = utterance;
@@ -394,11 +398,13 @@ public final class PracticeConversation implements PracticeSessionExtension {
         UUID correlation = UUID.randomUUID();
         output.cancel(TIMER_NO_RESPONSE);
         judgmentCorrelation = correlation;
+        judgmentAsksProcedure = PracticeProcedureQuestion.matches(utterance.text());
         state.judgmentOpen(true);
         boolean accepted = output.requestJudgment(point, utterance.seq(), correlation, criteriaFor(point));
         if (!accepted) {
             // 거절(열린 턴 · 공급자 없음 · 전사 범위 밖 등)은 보류와 같게 이어 간다. 연습은 멈추지 않는다(BR3.7)
             judgmentCorrelation = null;
+            judgmentAsksProcedure = false;
             state.judgmentOpen(false);
             afterJudgment(transitions.onJudgmentUnavailable(state, point));
         }
@@ -417,6 +423,7 @@ public final class PracticeConversation implements PracticeSessionExtension {
     }
 
     private void onJudgmentResult(ExtensionEvent event) {
+        boolean asksProcedure = judgmentAsksProcedure;
         if (!closeJudgment(event.correlationId())) {
             return;
         }
@@ -427,7 +434,11 @@ public final class PracticeConversation implements PracticeSessionExtension {
         }
         JudgmentPoint point = pointOf(value.get("point"));
         Object first = value.get("firstOption");
-        afterJudgment(point == null ? Step.ignore() : transitions.onJudgment(state, point, first == null ? null : first.toString()));
+        String option = first == null ? null : first.toString();
+        // Preserve the model's recorded result; the flow must not finish on a recognized question about how to practise.
+        if (asksProcedure && (point == JudgmentPoint.J2 || point == JudgmentPoint.J3 || point == JudgmentPoint.J5)
+                && ("FULL".equals(option) || "DELIVERED".equals(option) || "COPIED".equals(option))) option = "HELP";
+        afterJudgment(point == null ? Step.ignore() : transitions.onJudgment(state, point, option));
     }
 
     private void onJudgmentAbstained(ExtensionEvent event) {
@@ -445,6 +456,7 @@ public final class PracticeConversation implements PracticeSessionExtension {
             return false;
         }
         judgmentCorrelation = null;
+        judgmentAsksProcedure = false;
         state.judgmentOpen(false);
         return true;
     }
@@ -587,6 +599,7 @@ public final class PracticeConversation implements PracticeSessionExtension {
     /** 열린 판정 표지만 거둔다(결과가 늦게 와도 correlationId가 달라 무시된다). */
     private void dropJudgment() {
         judgmentCorrelation = null;
+        judgmentAsksProcedure = false;
         state.judgmentOpen(false);
     }
 
@@ -658,6 +671,7 @@ public final class PracticeConversation implements PracticeSessionExtension {
 
     private void enter(Step step) {
         Phase previous = state.phase();
+        Sub previousSub = state.sub();
         output.cancel(TIMER_NO_RESPONSE);
         if (step.consent() != null) {
             pendingConsent = step.consent();
@@ -689,7 +703,7 @@ public final class PracticeConversation implements PracticeSessionExtension {
         if (step.skip() != null) {
             recordOutcome(step.skip(), state.sceneTiming());
         }
-        dispatch(step, previous);
+        dispatch(step, previous, previousSub);
     }
 
     /** 장면 정리 진입: 시계 · 열린 판정 · 끼어든 전사를 거두고 장면 결과를 남긴다. */
@@ -701,10 +715,13 @@ public final class PracticeConversation implements PracticeSessionExtension {
         recordOutcome(null, state.sceneTiming());
     }
 
-    private void dispatch(Step step, Phase previous) {
+    private void dispatch(Step step, Phase previous, Sub previousSub) {
         switch (step.phase()) {
             case SCENE_INTRO -> enterScene(SceneKind.VARIANT);
-            case OPPORTUNITY -> speakApproved(currentScene.opportunitySentence());
+            case OPPORTUNITY -> {
+                if (previousSub == Sub.REEXPLAIN) awaitInput();
+                else speakApproved(currentScene.opportunitySentence());
+            }
             case REASK -> speakGenerated(FlowRole.PEER, PracticeInstructions.peerReask(currentScene, false));
             case HELP_OFFER -> speakGenerated(FlowRole.PEER, PracticeInstructions.peerHelpOffer(currentScene, false));
             case FOCUS -> {
@@ -788,7 +805,9 @@ public final class PracticeConversation implements PracticeSessionExtension {
         PracticeSpeech speech = null;
         try {
             speech = PracticeSpeech.scenario(correlation, currentScript.scenarioId(), speechGeneration++,
-                    RolePolicy.partnerLabel(state.role(), currentScene.partnerRole()), text);
+                    RolePolicy.partnerLabel(state.role(), currentScene.partnerRole()), text,
+                    state.phase() == Phase.SCENE_INTRO ? PracticeSpeech.ReadingCue.SCENE
+                            : state.sub() == Sub.REEXPLAIN ? PracticeSpeech.ReadingCue.REEXPLANATION : PracticeSpeech.ReadingCue.PEER);
         } catch (IllegalArgumentException invalid) {
             // 승인 문장이 재생 형식(길이 · 제어 문자)을 못 맞춘다: 문장 내용은 남기지 않고 재생 실패로 닫는다
             speech = null;

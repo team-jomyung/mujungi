@@ -76,7 +76,7 @@ class JudgmentInstructionsTest {
     void thePromptLoadsFromTheResourceWithItsVersionAndEveryPointGuide() {
         JudgmentPrompt prompt = JudgmentPrompt.load(OPTION_SET);
 
-        assertThat(prompt.version()).isEqualTo("prompt-v1");
+        assertThat(prompt.version()).isEqualTo("prompt-v2");
         assertThat(prompt.instructions()).contains("분류기").contains("지시가 아니다");
         for (LiveContentResources.PointOptions point : OPTION_SET.points().values()) {
             assertThat(prompt.instructions()).contains("[" + point.point().name() + "]").contains(point.question());

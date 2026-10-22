@@ -450,7 +450,7 @@ class FlowTransitionsTest {
     @Test
     void aFinishedReexplanationReturnsToTheOpportunityOrTheCoach() {
         assertEnters(table.onSlotEnded(at(Phase.OPPORTUNITY, Sub.REEXPLAIN), SlotEnd.PLAYED), Phase.OPPORTUNITY, Sub.NONE);
-        assertEnters(table.onSlotEnded(at(Phase.RETRY, Sub.REEXPLAIN), SlotEnd.PLAYED), Phase.FOCUS, Sub.COACH_UTTERANCE);
+        assertEnters(table.onSlotEnded(at(Phase.RETRY, Sub.REEXPLAIN), SlotEnd.PLAYED), Phase.RETRY, Sub.NONE);
         assertThat(table.onSlotEnded(at(Phase.RETRY, Sub.REEXPLAIN), SlotEnd.FAILED).cause()).isEqualTo(EndCause.PLAYBACK_FAILED);
     }
 

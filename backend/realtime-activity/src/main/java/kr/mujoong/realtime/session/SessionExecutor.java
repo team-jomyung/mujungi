@@ -1924,7 +1924,8 @@ public final class SessionExecutor {
             }
             try {
                 return speak(kr.mujoong.realtime.voice.PracticeSpeech.scenario(UUID.randomUUID(), NOTICE_SCENARIO_ID,
-                        ctx.outputGen().generation(), "COACH".equals(toRole) ? "코치" : "친구", sentence));
+                        ctx.outputGen().generation(), "COACH".equals(toRole) ? "코치" : "친구", sentence,
+                        kr.mujoong.realtime.voice.PracticeSpeech.ReadingCue.ROLE_NOTICE));
             } catch (IllegalArgumentException invalid) {
                 return false;
             }
