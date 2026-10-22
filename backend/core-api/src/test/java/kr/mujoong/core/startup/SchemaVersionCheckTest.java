@@ -19,14 +19,23 @@ import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
- * S2 이력 버전 확인 (RD-12 S2 · BR8.2 · J116): 앱이 들고 온 최고 버전(V9 → "9") 이상이면 통과, 미적용 · 낮은 버전(기준선 0만) · 읽기 실패는
+ * S2 이력 버전 확인 (RD-12 S2 · BR8.2 · J116): 앱이 들고 온 최고 버전 이상이면 통과, 미적용 · 낮은 버전(기준선 0만) · 읽기 실패는
  * 기동 거부이고 거부 줄에는 errorKind · 표 이름 · 버전 숫자만 있다. 버전 비교는 숫자 단위다.
+ *
+ * <p>시험 자료는 실제 마이그레이션 번호를 적지 않는다. 오래된 버전(0.1 · 기준선 0)과 앞선 버전(9000)은 어떤 마이그레이션이 더해져도 각각
+ * 기대 버전보다 낮고 높다. 그래서 마이그레이션을 더해도 이 시험은 고치지 않는다.
  */
 @Tag("skeleton")
 class SchemaVersionCheckTest {
 
+    /** 실제 마이그레이션은 V1부터라 언제나 기대 버전보다 낮은 버전. */
+    private static final String OLDER = "0.1";
+    /** 실제 마이그레이션 번호와 겹치지 않는 앞선 버전(다음 배포가 먼저 올린 이력). */
+    private static final String NEWER = "9000";
+
     private final JdbcTemplate jdbc = mock(JdbcTemplate.class);
     private final SchemaVersionCheck check = new SchemaVersionCheck(jdbc);
+    private final String expected = SchemaVersionCheck.expectedVersion();
     private final ByteArrayOutputStream stderr = new ByteArrayOutputStream();
     private PrintStream originalErr;
 
@@ -42,15 +51,20 @@ class SchemaVersionCheckTest {
     }
 
     @Test
+    void theExpectedVersionIsTheHighestBundledMigrationAndIsAboveTheFixtures() {
+        // 앱이 들고 온 마이그레이션에서 읽은 값이다(숫자를 적지 않는다). 시험 자료의 전제를 확인한다
+        assertThat(SchemaVersionCheck.compareVersions(expected, OLDER)).isPositive();
+        assertThat(SchemaVersionCheck.compareVersions(expected, "0")).isPositive();
+        assertThat(SchemaVersionCheck.compareVersions(NEWER, expected)).isPositive();
+    }
+
+    @Test
     void appliedVersionAtOrAboveTheBundledMigrationPasses() {
-        // 앱이 들고 온 최고 버전: V1(U1) · V2(U2) · V3(U4a) · V4(U5a) · V5(U6) · V6(U7) · V7(U5b) · V8(U15) · V9(U14)
-        assertThat(SchemaVersionCheck.expectedVersion()).isEqualTo("11");
-        history(List.of("0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11"));
+        history(List.of("0", OLDER, expected));
+        assertThat(check.verify()).isEqualTo(expected);
 
-        assertThat(check.verify()).isEqualTo("11");
-
-        history(List.of("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"));
-        assertThat(check.verify()).isEqualTo("12");
+        history(List.of(OLDER, expected, NEWER));
+        assertThat(check.verify()).isEqualTo(NEWER);
         assertThat(stderr.toString(StandardCharsets.UTF_8)).isEmpty();
     }
 
@@ -68,7 +82,17 @@ class SchemaVersionCheckTest {
     void onlyTheBaselineRowIsRejectedAsBehind() {
         history(List.of("0"));
 
-        assertThatThrownBy(check::verify).isInstanceOf(IllegalStateException.class).hasMessageContaining("0 < 기대 11");
+        assertThatThrownBy(check::verify).isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("0 < 기대 " + expected);
+        assertThat(stderr.toString(StandardCharsets.UTF_8)).contains("SchemaVersionBehind");
+    }
+
+    @Test
+    void anOlderHistoryCannotStartTheApplication() {
+        history(List.of("0", OLDER));
+
+        assertThatThrownBy(check::verify).isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining(OLDER + " < 기대 " + expected);
         assertThat(stderr.toString(StandardCharsets.UTF_8)).contains("SchemaVersionBehind");
     }
 
@@ -96,27 +120,13 @@ class SchemaVersionCheckTest {
         when(jdbc.queryForList(anyString(), eq(String.class))).thenAnswer(call -> {
             String sql = call.getArgument(0);
             assertThat(sql).contains(SchemaVersionCheck.HISTORY_TABLE).contains("success").contains("version is not null");
-            return List.of("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11");
+            return List.of(OLDER, expected);
         });
 
-        assertThat(check.verify()).isEqualTo("11");
-    }
-
-    @Test
-    void historyBeforeTheU5aMigrationCannotStartTheApplication() {
-        history(List.of("1", "2", "3"));
-        assertThatThrownBy(check::verify).isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("3 < 기대 11");
-        assertThat(stderr.toString(StandardCharsets.UTF_8)).contains("SchemaVersionBehind");
+        assertThat(check.verify()).isEqualTo(expected);
     }
 
     private void history(List<String> versions) {
         when(jdbc.queryForList(anyString(), eq(String.class))).thenReturn(versions);
     }
-    @Test
-    void historyAtThePreviousU15VersionIsStillBehind() {
-        history(List.of("1", "2", "3", "4", "5", "6", "7", "8"));
-        assertThatThrownBy(check::verify).isInstanceOf(IllegalStateException.class).hasMessageContaining("8 < 기대 11");
-    }
-    @Test void historyAtPreviousU14VersionIsStillBehind(){history(List.of("1","2","3","4","5","6","7","8","9"));assertThatThrownBy(check::verify).isInstanceOf(IllegalStateException.class).hasMessageContaining("9 < 기대 11");}
 }

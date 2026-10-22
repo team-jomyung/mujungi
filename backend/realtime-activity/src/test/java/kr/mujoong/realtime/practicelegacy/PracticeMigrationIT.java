@@ -11,6 +11,7 @@ import kr.mujoong.testsupport.db.MujoongPostgres;
 import kr.mujoong.testsupport.db.MujoongPostgres.MigrationSet;
 import kr.mujoong.testsupport.db.MujoongPostgres.Role;
 import org.flywaydb.core.Flyway;
+import org.flywaydb.core.api.MigrationVersion;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -20,13 +21,12 @@ import org.springframework.jdbc.core.JdbcTemplate;
 
 @Tag("practice-legacy")
 @Tag("db")
-@Tag("service-guardrail")
 class PracticeMigrationIT {
     private static final List<String> TABLES = List.of("realtime_session_goal", "realtime_practice_attempt",
             "realtime_practice_response", "realtime_practice_cue", "realtime_practice_evaluation");
 
     @Test
-    void upgradingFromV3PreservesTheExistingSessionAndAppliesV4ThroughAdditiveV8() {
+    void upgradingFromV3PreservesTheExistingSessionAndAppliesV4AndTheLaterV5V6AndV7() {
         try (var db = MujoongPostgres.builder().migrate(false).start()) {
             db.flyway(MigrationSet.CORE).migrate();
             Flyway.configure().configuration(db.flyway(MigrationSet.REALTIME).getConfiguration())
@@ -43,11 +43,15 @@ class PracticeMigrationIT {
                     now, "{\"policyVersion\":\"1\",\"voiceAndText\":true,\"guardianView\":true,"
                             + "\"reportSharing\":false,\"rawAudio\":false}", now, now);
 
-            assertThat(db.flyway(MigrationSet.REALTIME).migrate().migrationsExecuted).isEqualTo(5);
+            // V3 뒤의 realtime 마이그레이션 파일 전부가 적용된다(개수 · 최고 버전은 파일에서 읽는다)
+            List<String> versions = db.migrationVersions(MigrationSet.REALTIME);
+            long afterV3 = versions.stream().filter(version -> MigrationVersion.fromVersion(version)
+                    .compareTo(MigrationVersion.fromVersion("3")) > 0).count();
+            assertThat(db.flyway(MigrationSet.REALTIME).migrate().migrationsExecuted).isEqualTo((int) afterV3);
 
             assertThat(jdbc.queryForObject("select status from realtime.realtime_activity_session where id=?",
                     String.class, session)).isEqualTo("ACTIVE");
-            assertThat(new SchemaVersionCheck(jdbc).verify()).isEqualTo("8");
+            assertThat(new SchemaVersionCheck(jdbc).verify()).isEqualTo(versions.getLast());
             assertThat(db.flyway(MigrationSet.REALTIME).migrate().migrationsExecuted).isZero();
         }
     }

@@ -15,7 +15,6 @@ import org.springframework.core.io.ClassPathResource;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 @Tag("practice-legacy")
-@Tag("service-guardrail")
 class PracticeMigrationRegistrationTest {
     @Test
     void migrationIsVisibleToTheDeploymentAndStartupCheck() {
@@ -23,8 +22,6 @@ class PracticeMigrationRegistrationTest {
         assertThat(new ClassPathResource("db/migration/realtime/V5__u11_judgment_turn.sql").exists()).isTrue();
         assertThat(new ClassPathResource("db/migration/realtime/V6__u13_jev_guardrail.sql").exists()).isTrue();
         assertThat(new ClassPathResource("db/migration/realtime/V7__u12_practice_flow.sql").exists()).isTrue();
-        assertThat(new ClassPathResource("db/migration/realtime/V8__service_guardrail_facts_index.sql").exists()).isTrue();
-        assertThat(SchemaVersionCheck.expectedVersion()).isEqualTo("8");
     }
 
     @Test
@@ -32,6 +29,6 @@ class PracticeMigrationRegistrationTest {
         var jdbc = mock(JdbcTemplate.class);
         when(jdbc.queryForList(anyString(), eq(String.class))).thenReturn(List.of("0", "1", "2", "3"));
         assertThatThrownBy(() -> new SchemaVersionCheck(jdbc).verify())
-                .hasMessageContaining("버전 3 < 기대 8");
+                .hasMessageContaining("버전 3 < 기대 ");
     }
 }
