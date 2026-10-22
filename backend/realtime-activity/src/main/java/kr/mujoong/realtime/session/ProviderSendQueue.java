@@ -25,8 +25,21 @@ final class ProviderSendQueue {
         final ProviderRequestFactory.InstructionsAppend append;
         /** 보내지 못했을 때 부를 일(없으면 null). 큐 스레드에서 불리므로 스레드 안전한 일만 한다(예: 편지함에 넣기). */
         final Runnable onFailure;
+        final Runnable onSent;
+        final java.util.function.BooleanSupplier current;
 
         Job(String name, ProviderSession session, ProviderRequestFactory.InstructionsAppend append, Runnable onFailure) {
+            this(name, session, append, onFailure, null);
+        }
+
+        Job(String name, ProviderSession session, ProviderRequestFactory.InstructionsAppend append, Runnable onFailure, Runnable onSent) {
+            this(name, session, append, onFailure, onSent, () -> true);
+        }
+
+        Job(String name, ProviderSession session, ProviderRequestFactory.InstructionsAppend append, Runnable onFailure,
+                Runnable onSent, java.util.function.BooleanSupplier current) {
+            this.current = Objects.requireNonNull(current);
+            this.onSent = onSent;
             this.name = Objects.requireNonNull(name, "name");
             this.session = Objects.requireNonNull(session, "session");
             this.append = Objects.requireNonNull(append, "append");
@@ -82,7 +95,9 @@ final class ProviderSendQueue {
                 }
             }
             try {
+                if (!next.current.getAsBoolean()) continue;
                 next.session.appendInstructions(next.append);
+                if (next.onSent != null) next.onSent.run();
             } catch (ProviderUnavailableException e) {
                 if (next.onFailure != null) {
                     try {

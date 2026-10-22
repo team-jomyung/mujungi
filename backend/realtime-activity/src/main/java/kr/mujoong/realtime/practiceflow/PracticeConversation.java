@@ -690,7 +690,7 @@ public final class PracticeConversation implements PracticeSessionExtension {
                 // Generation and actual playback each have a bounded guard. Duplicate STARTED marks cannot extend it.
                 output.cancel(slotGuardName());
                 openSlotPlaying = true;
-                output.schedule(slotGuardName(), settings.slotGuard());
+                if (!output.managesSpeechTimeouts()) output.schedule(slotGuardName(), settings.slotGuard());
             }
             return;
         }
@@ -1120,7 +1120,7 @@ public final class PracticeConversation implements PracticeSessionExtension {
         openSlot = correlation;
         openSlotPlaying = false;
         inputReady = false;
-        output.schedule(slotGuardName(), settings.slotGuard());
+        if (!output.managesSpeechTimeouts()) output.schedule(slotGuardName(), settings.slotGuard());
     }
 
     private String slotGuardName() {

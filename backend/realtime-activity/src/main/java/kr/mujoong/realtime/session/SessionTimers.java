@@ -50,6 +50,10 @@ public final class SessionTimers {
         INSTRUCTION_WAIT(false),
         /** Drain prior practice speech before requesting the next complete utterance. */
         PRACTICE_OUTPUT_DRAIN(true),
+        /** Bounded queue/send wait, separate from waiting for the first provider speech. */
+        PRACTICE_SEND_WAIT(false),
+        /** Absolute collection bound; normal inter-chunk silence still uses SEGMENT_QUIET. */
+        PRACTICE_COLLECT_MAX(false),
         /** U11 A7: 입력 전사 조각이 이만큼 오지 않으면 그 묶음을 확정 전사로 본다(input-transcript-quiet). */
         INPUT_TRANSCRIPT_QUIET(true),
         /** U11 BR1.4: 판정 턴 열기 + live-budget(4s). 정확히 4.000초에 닿으면 보류(TIMEOUT). */

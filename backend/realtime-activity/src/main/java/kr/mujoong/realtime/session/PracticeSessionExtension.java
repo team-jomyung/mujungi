@@ -221,6 +221,9 @@ public interface PracticeSessionExtension {
         default boolean speakGenerated(UUID correlationId, String role, String instructionText) { return false; }
 
         /** '생각 중' 표시를 유지하거나(true) 풀도록(false) 요청한다. ACTIVE에서만 받는다. */
+        /** Executor owns drain, generation and collection deadlines; flow owns playback deadline. */
+        default boolean managesSpeechTimeouts() { return false; }
+
         default boolean setThinking(boolean on) { return false; }
     }
 

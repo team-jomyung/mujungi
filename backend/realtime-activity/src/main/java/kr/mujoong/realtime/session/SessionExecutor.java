@@ -487,6 +487,8 @@ public final class SessionExecutor {
     private record DeferredPracticeInstruction(OutputGeneration.BumpReason reason, ProviderSendQueue.Job job,
             UUID speechId, Instant deadline) {}
     private DeferredPracticeInstruction deferredPracticeInstruction;
+    private boolean practiceCollecting;
+    private final Set<UUID> practicePlaybackStarted = new HashSet<>();
     private final Map<UUID, kr.mujoong.realtime.voice.PracticeSpeech> practiceAudio = new HashMap<>();
     private final java.util.ArrayDeque<PracticeSessionExtension.ExtensionEvent> pausedPracticeEvents = new java.util.ArrayDeque<>();
     private Instant practicePauseStartedAt;
@@ -1029,6 +1031,14 @@ public final class SessionExecutor {
      * 센다). 정산 뒤 · 그 밖 상태는 무시한다.
      */
     private void onPracticeEvent(PracticeSessionExtension.ExtensionEvent event) {
+        if (event.name().equals("practice-request-sent") && event.value() instanceof kr.mujoong.realtime.voice.PracticeSpeech speech) {
+            if (speech.equals(pendingPracticeSpeech) && practiceActive()) {
+                ctx.timers().cancel(Kind.PRACTICE_SEND_WAIT);
+                practiceAudioStage("REQUEST_SENT");
+                if (!practiceCollecting) ctx.timers().arm(Kind.INSTRUCTION_WAIT, ctx.services().settings().instructionWait());
+            }
+            return;
+        }
         if (event.name().equals("u5b-voice-failed") && event.value() instanceof kr.mujoong.realtime.voice.PracticeSpeech speech) {
             if (speech.equals(pendingPracticeSpeech)) {
                 pendingPracticeSpeech = null; practiceHold = true;
@@ -1087,6 +1097,7 @@ public final class SessionExecutor {
         practice.onStopping();
         pendingPracticeSpeech = null;
         practiceAudio.clear();
+        practicePlaybackStarted.clear();
         pausedPracticeEvents.clear();
         practicePauseStartedAt = null;
         practicePauses.clear();
@@ -1103,7 +1114,11 @@ public final class SessionExecutor {
         if (fired.name().startsWith("u5b-audio-")) {
             UUID playbackId = UUID.fromString(fired.name().substring("u5b-audio-".length()));
             var speech = practiceAudio.remove(playbackId);
-            if (speech != null) practicePlayback(speech, kr.mujoong.realtime.practicelegacy.PracticePorts.Playback.FAILED);
+            practicePlaybackStarted.remove(playbackId);
+            if (speech != null) {
+                practiceAudioStage("PLAYBACK_TIMEOUT");
+                practicePlayback(speech, kr.mujoong.realtime.practicelegacy.PracticePorts.Playback.FAILED);
+            }
             return;
         }
         onPracticeEvent(new PracticeSessionExtension.ExtensionEvent(
@@ -1418,6 +1433,19 @@ public final class SessionExecutor {
         @Override
         public void practicePlayback(kr.mujoong.realtime.voice.PracticeSpeech speech,
                 kr.mujoong.realtime.practicelegacy.PracticePorts.Playback fact, Instant receivedAt) {
+            if (fact == kr.mujoong.realtime.practicelegacy.PracticePorts.Playback.STARTED) {
+                for (var entry : practiceAudio.entrySet()) if (entry.getValue().equals(speech)
+                        && practicePlaybackStarted.add(entry.getKey())) {
+                    Duration playbackBound = ctx.services().settings().playbackExpiry();
+                    if (practice != null && practice.handlesAudioRecovery())
+                        playbackBound = playbackBound.plus(ctx.services().settings().segmentQuiet());
+                    schedulePracticeTimer("u5b-audio-" + entry.getKey(), playbackBound);
+                    practiceAudioStage("PLAYING");
+                }
+            } else {
+                practicePlaybackStarted.removeIf(id -> !practiceAudio.containsKey(id));
+                practiceAudioStage("PLAYBACK_ENDED");
+            }
             SessionExecutor.this.practicePlayback(speech, fact, receivedAt);
         }
 
@@ -1544,6 +1572,8 @@ public final class SessionExecutor {
 
         @Override
         public void onPracticeOutputDrain() { SessionExecutor.this.onPracticeOutputDrain(); }
+        @Override public void onPracticeSendWait() { SessionExecutor.this.onPracticeSendWait(); }
+        @Override public void onPracticeCollectMax() { SessionExecutor.this.onPracticeCollectMax(); }
 
         @Override
         public void onInstructionWaitExpired() {
@@ -1979,7 +2009,9 @@ public final class SessionExecutor {
         }
 
         @Override
-        public boolean setThinking(boolean on) {
+        public boolean managesSpeechTimeouts() { return true; }
+
+        @Override public boolean setThinking(boolean on) {
             if (!practiceActive()) {
                 return refusePractice("setThinking", "NOT_ACTIVE");
             }
@@ -2306,6 +2338,15 @@ public final class SessionExecutor {
             }
             ctx.transcripts().aiStart(at);
         }
+        if (pendingPracticeSpeech != null && practice != null && practice.handlesAudioRecovery() && !practiceCollecting) {
+            practiceCollecting = true;
+            ctx.timers().cancel(Kind.PRACTICE_SEND_WAIT);
+            ctx.timers().cancel(Kind.INSTRUCTION_WAIT);
+            // Duration of audio is still capped by SegmentBuffer. This bounds wall time even if chunks trickle forever.
+            ctx.timers().arm(Kind.PRACTICE_COLLECT_MAX,
+                    ctx.services().settings().playbackExpiry().plus(ctx.services().settings().instructionWait()));
+            practiceAudioStage("COLLECTING");
+        }
         if (transcript != null) {
             ctx.segment().addTranscript(gen, result.fromStart(), transcript, at, nanos);
             return;
@@ -2328,6 +2369,9 @@ public final class SessionExecutor {
         Instant now = ctx.services().clock().now();
         long generation = ctx.outputGen().bump(now, reason);
         deferredPracticeInstruction = null;
+        practiceCollecting = false;
+        ctx.timers().cancel(Kind.PRACTICE_COLLECT_MAX);
+        ctx.timers().cancel(Kind.PRACTICE_SEND_WAIT);
         ctx.timers().cancel(Kind.PRACTICE_OUTPUT_DRAIN);
         instructionNotHeard = null;
         ctx.timers().cancel(Kind.INSTRUCTION_WAIT);
@@ -2383,6 +2427,29 @@ public final class SessionExecutor {
         } else practicePlayback(speech, kr.mujoong.realtime.practicelegacy.PracticePorts.Playback.FAILED);
     }
 
+    private void practiceAudioStage(String stage) {
+        ctx.services().events().log(EventCode.PRACTICE_AUDIO_STAGE, EventLog.Component.OUTPUT_GATE,
+                ctx.plan().sessionId(), ctx.plan().traceId(), entry -> entry
+                .attr(AttrKey.AUDIO_STAGE, stage).attr(AttrKey.OUTPUT_GENERATION, ctx.outputGen().generation())
+                .attr(AttrKey.PRACTICE_PHASE, practice == null ? "NONE" : practice.diagnosticPhase())
+                .attr(AttrKey.PRACTICE_SUB, practice == null ? "NONE" : practice.diagnosticSub()));
+    }
+
+    private void onPracticeSendWait() {
+        if (pendingPracticeSpeech == null || practiceCollecting) return;
+        practiceAudioStage("SEND_TIMEOUT");
+        var speech = pendingPracticeSpeech; pendingPracticeSpeech = null; practiceHold = true;
+        bumpOutput(OutputGeneration.BumpReason.PRACTICE_DISCARD);
+        recoverPracticeAudio(speech);
+    }
+
+    private void onPracticeCollectMax() {
+        if (pendingPracticeSpeech == null || !practiceCollecting) return;
+        practiceAudioStage("COLLECTION_TIMEOUT");
+        if (ctx.segment().isOpen()) discard(ctx.segment().sealByGeneration(ctx.outputGeneration().get()),
+                GateDecision.DiscardReason.GATE_EMPTY, false, null, true, DiscardDetail.PROVIDER_COLLECTION_TIMEOUT);
+    }
+
     private void onPracticeOutputDrain() {
         var deferred = deferredPracticeInstruction;
         if (deferred == null) return;
@@ -2394,6 +2461,7 @@ public final class SessionExecutor {
         Instant now = ctx.services().clock().now();
         if (!now.isBefore(deferred.deadline())) {
             deferredPracticeInstruction = null;
+            practiceAudioStage("DRAIN_TIMEOUT");
             ctx.services().events().appError(EventLog.Component.OUTPUT_GATE, "PracticeOutputDrainTimeout", EventCode.Level.WARN);
             if (deferred.job().onFailure != null) deferred.job().onFailure.run();
             return;
@@ -2411,8 +2479,9 @@ public final class SessionExecutor {
         ctx.segment().reset();
         ctx.transcripts().aiFinal("", false, now);
         ctx.timers().cancel(Kind.SEGMENT_QUIET);
-        ctx.timers().arm(Kind.INSTRUCTION_WAIT, ctx.services().settings().instructionWait());
+        ctx.timers().arm(Kind.PRACTICE_SEND_WAIT, ctx.services().settings().instructionWait());
         instructionNotHeard = deferred.job().onFailure;
+        practiceAudioStage("REQUEST_QUEUED");
         ctx.sendQueue().submit(deferred.job());
     }
 
@@ -2423,6 +2492,7 @@ public final class SessionExecutor {
                 ctx.timers().arm(Kind.INSTRUCTION_WAIT, ctx.services().settings().instructionWait());
             }
             case NEW_SPEECH_NOT_OBSERVED -> {
+                if (pendingPracticeSpeech != null) practiceAudioStage("FIRST_OUTPUT_TIMEOUT");
                 ctx.services().events().appError(EventLog.Component.VOICE_RELAY, "OutputNewSpeechNotObserved", EventCode.Level.WARN);
                 Runnable notHeard = instructionNotHeard;
                 instructionNotHeard = null;
@@ -2467,10 +2537,14 @@ public final class SessionExecutor {
             // An append ACK is context delivery, not the first audio sample. Wait for old speech
             // to finish BEFORE the request, then collect the full next utterance without chopping it.
             bumpOutput(OutputGeneration.BumpReason.PRACTICE_DISCARD);
+            var speechRequest = pendingPracticeSpeech;
             deferredPracticeInstruction = new DeferredPracticeInstruction(reason,
-                    new ProviderSendQueue.Job(name, session, request, onFailure), pendingPracticeSpeech.correlationId(),
+                    new ProviderSendQueue.Job(name, session, request, onFailure,
+                            () -> practiceOutput.post("practice-request-sent", speechRequest),
+                            () -> speechRequest.equals(pendingPracticeSpeech)), pendingPracticeSpeech.correlationId(),
                     now.plus(ctx.services().settings().instructionWait()));
             guardrail.onServerInstruction(replayable ? new GuardrailCoordinator.ReplayableInstruction(name, build) : null);
+            practiceAudioStage("DRAINING");
             onPracticeOutputDrain();
             return true;
         }
@@ -3002,6 +3076,11 @@ public final class SessionExecutor {
         ctx.transcripts().awaitPlayback(playbackId, held, sealed.transcript());
         var speech = pendingPracticeSpeech;
         if (speech != null) {
+            practiceAudioStage("PLAYBACK_QUEUED");
+            practiceCollecting = false;
+            ctx.timers().cancel(Kind.PRACTICE_COLLECT_MAX);
+            ctx.timers().cancel(Kind.PRACTICE_SEND_WAIT);
+            ctx.timers().cancel(Kind.INSTRUCTION_WAIT);
             pendingPracticeSpeech = null; practiceHold = true;
             practiceAudio.put(playbackId, speech);
             schedulePracticeTimer("u5b-audio-" + playbackId, ctx.services().settings().playbackExpiry());
