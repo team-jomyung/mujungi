@@ -62,6 +62,7 @@ import kr.mujoong.core.practice.GoalContext;
 import kr.mujoong.core.practice.PracticeAccountPort;
 import kr.mujoong.core.practice.PracticeSessionContextPort;
 import kr.mujoong.core.practice.Scenario;
+import kr.mujoong.core.practice.ScenarioContentPolicy;
 import kr.mujoong.core.practice.ScenarioDeadline;
 import kr.mujoong.core.practice.ScenarioGraphContext;
 import kr.mujoong.core.practice.ScenarioPrivacyContextPort;
@@ -118,7 +119,8 @@ import tools.jackson.databind.json.JsonMapper;
  *
  * <p>출력 위치: 시스템 속성 {@code mujoong.live.eval.out} → env {@code MUJOONG_LIVE_EVAL_OUT} → {@code build/live-eval/} 순으로 고른다.
  * 그 아래 {@code core-practice-packages.json}(요약)과 {@code practice-start-packages/<목표>.json}(realtime 하니스가 읽는 시작 패키지, 모양은
- * {@code contracts/fixtures/practice-start-package.json}과 같다)을 쓴다.
+ * {@code contracts/fixtures/practice-start-package.json}과 같다)을 쓴다. 요약의 목표마다 {@code heard}는 장면 말을 아이가 듣는 순서(무중의
+ * 설명 → 친구 첫 대사 → 친구 기회 문장, 변형은 무중의 제안 → 첫 대사 → 기회 문장)로 펼치고 참고 점검을 붙인다({@link HeardLines}).
  */
 @Tag("luna-live")
 class PracticeQualityLiveTest {
@@ -537,6 +539,7 @@ class PracticeQualityLiveTest {
                 row.put("result", "ISSUED");
                 row.put("startPackageFile", out.relativize(file).toString());
                 row.put("sceneKinds", scenario.scenes().stream().map(s -> s.sceneKind()).toList());
+                row.put("heard", HeardLines.of(scenario, goal.targetExpression()));
                 row.put("startPackage", plain(pack));
                 row.put("selfReview", plain(scenario.selfReview()));
                 row.put("generation", plain(scenario.generation()));
@@ -694,7 +697,10 @@ class PracticeQualityLiveTest {
                     "씨앗 목표(HARNESS_SELECTED_SEED)는 카탈로그 기술(label)에 하니스가 합성 4요소를 붙인 후보 목표다. 운영에서 후보 생성이 seedId를 skillRef로 고른 상태와 같다.",
                     "시작 패키지는 ScenarioRepository.issued → PreparedPracticePackageMapper.c8 조립이고 DB 저장 · 준비 원본 임대(PracticeStartService) · 동의 확인은 거치지 않았다(내용에는 영향 없음).",
                     "노출 이력은 비어 있다(아이의 첫 연습). 그래서 변형 거리는 SAME_CONTEXT가 기대값이다.",
-                    "variant.diagnosis는 기록된 호출로 하니스가 추정한 코드다. 운영 코드가 낸 사유 코드가 아니다.");
+                    "variant.diagnosis는 기록된 호출로 하니스가 추정한 코드다. 운영 코드가 낸 사유 코드가 아니다.",
+                    "heard는 아이가 듣는 순서(무중의 설명 → 친구 첫 대사 → 친구 기회 문장, 다시 설명은 무중, 변형은 무중의 제안 '… 이어서 해 볼까?' 뒤 "
+                            + "첫 대사 → 기회 문장)로 펼친 장면 말과 하니스 참고 점검(들리는 말에 목표 표현 · 표현 예시가 글자 그대로 있나, 설명이 기회 "
+                            + "조건을 옮겨 썼나, 칭찬 · 채점 말, BASE 첫 대사)이다. 운영 검사가 아니다.");
         }
 
         private static Map<String, Object> timing(Duration elapsed, List<Map<String, Object>> calls, Duration productionTotal,
@@ -748,6 +754,7 @@ class PracticeQualityLiveTest {
             totals.put("variantIssued", goals.stream().filter(g -> Boolean.TRUE.equals(ResultData.object(g.get("variant")).get("issued"))).count());
             totals.put("withinProductionScenarioBudget", goals.stream()
                     .filter(g -> Boolean.TRUE.equals(ResultData.object(g.get("timing")).get("withinProductionBudget"))).count());
+            totals.put("heardChecks", HeardLines.totals(goals));
             return totals;
         }
 
@@ -888,6 +895,97 @@ class PracticeQualityLiveTest {
             } catch (RuntimeException unreadable) {
                 return Map.of("raw", output);
             }
+        }
+    }
+
+    // ------------------------------------------------------------------ 아이가 듣는 순서 · 참고 점검
+
+    /**
+     * 발급 대본의 장면 말을 아이가 듣는 순서로 펼치고 하니스 참고 점검을 붙인다(운영 검사 아님, 정규화는 core {@link ScenarioContentPolicy#normalize}).
+     * 점검: 아이가 대답하기 전에 들리는 말(설명 · 첫 대사 · 기회 문장 · 다시 설명)에 목표 표현 · 장면 표현 예시가 글자 그대로 있나, BASE 설명이 기회
+     * 조건을 옮겨 썼나(판 v5까지의 모양), 칭찬 · 채점 말이 있나, BASE 첫 대사가 있나.
+     */
+    static final class HeardLines {
+
+        /** 들리는 말에서 찾는 칭찬 · 채점 말(realtime 대화 하니스 점검표와 같은 목록). */
+        static final List<String> PRAISE_WORDS = List.of("잘했", "잘 했", "잘 마쳤", "훌륭", "멋지", "최고", "대단", "정답", "맞았어", "맞아요",
+                "틀렸", "100점", "칭찬");
+        /** 서버가 변형 제안에 붙이는 고정 꼬리(realtime PracticeInstructions.VARIANT_OFFER_QUESTION과 같은 글). */
+        static final String VARIANT_OFFER_QUESTION = "이어서 해 볼까?";
+
+        private HeardLines() {
+        }
+
+        static List<Map<String, Object>> of(Scenario scenario, String targetExpression) {
+            List<Map<String, Object>> scenes = new ArrayList<>();
+            if (scenario == null || scenario.scenes() == null) {
+                return scenes;
+            }
+            for (ScenarioScript.Scene scene : scenario.scenes()) {
+                boolean variant = "VARIANT".equals(scene.sceneKind());
+                boolean opener = scene.partnerOpener() != null && !scene.partnerOpener().isBlank();
+                List<String> order = new ArrayList<>();
+                order.add("무중: " + scene.sceneDescription() + (variant ? " " + VARIANT_OFFER_QUESTION : ""));
+                if (opener) {
+                    order.add("친구: " + scene.partnerOpener());
+                }
+                order.add("친구: " + scene.opportunitySentence());
+                List<String> heard = new ArrayList<>();
+                for (String line : new String[] {scene.sceneDescription(), scene.partnerOpener(), scene.opportunitySentence(),
+                        scene.reexplanation()}) {
+                    if (line != null && !line.isBlank()) {
+                        heard.add(line);
+                    }
+                }
+                List<String> targets = new ArrayList<>();
+                if (targetExpression != null) {
+                    targets.add(targetExpression);
+                }
+                targets.addAll(scene.expressionExamples());
+                Map<String, Object> checks = new LinkedHashMap<>();
+                checks.put("targetHeard", targets.stream().map(ScenarioContentPolicy::normalize).filter(t -> t.length() >= 4)
+                        .anyMatch(t -> heard.stream().anyMatch(h -> ScenarioContentPolicy.normalize(h).contains(t))));
+                String condition = scenario.opportunityCondition();
+                checks.put("opportunityConditionCopied", !variant && condition != null && ScenarioContentPolicy.normalize(condition).length() >= 4
+                        && ScenarioContentPolicy.normalize(scene.sceneDescription()).contains(ScenarioContentPolicy.normalize(condition)));
+                checks.put("praiseWords", PRAISE_WORDS.stream().filter(word -> heard.stream().anyMatch(h -> h.contains(word))).toList());
+                if (!variant) {
+                    checks.put("partnerOpenerPresent", opener);
+                }
+                Map<String, Object> view = new LinkedHashMap<>();
+                view.put("sceneKind", scene.sceneKind());
+                view.put("heardOrder", order);
+                view.put("reexplanation", "무중: " + scene.reexplanation());
+                view.put("checks", checks);
+                scenes.add(view);
+            }
+            return scenes;
+        }
+
+        /** 목표들의 점검 합계(장면 수 기준). */
+        static Map<String, Object> totals(List<Map<String, Object>> goals) {
+            int scenes = 0;
+            int targetHeard = 0;
+            int conditionCopied = 0;
+            int praise = 0;
+            int missingOpener = 0;
+            for (Map<String, Object> goal : goals) {
+                for (Map<String, Object> scene : ResultData.objects(goal.get("heard"))) {
+                    Map<String, Object> checks = ResultData.object(scene.get("checks"));
+                    scenes++;
+                    targetHeard += Boolean.TRUE.equals(checks.get("targetHeard")) ? 1 : 0;
+                    conditionCopied += Boolean.TRUE.equals(checks.get("opportunityConditionCopied")) ? 1 : 0;
+                    praise += checks.get("praiseWords") instanceof List<?> words && !words.isEmpty() ? 1 : 0;
+                    missingOpener += Boolean.FALSE.equals(checks.get("partnerOpenerPresent")) ? 1 : 0;
+                }
+            }
+            Map<String, Object> totals = new LinkedHashMap<>();
+            totals.put("scenes", scenes);
+            totals.put("targetHeard", targetHeard);
+            totals.put("opportunityConditionCopied", conditionCopied);
+            totals.put("praiseWords", praise);
+            totals.put("baseWithoutPartnerOpener", missingOpener);
+            return totals;
         }
     }
 

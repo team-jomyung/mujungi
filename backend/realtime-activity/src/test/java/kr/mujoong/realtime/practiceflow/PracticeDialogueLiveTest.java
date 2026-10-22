@@ -102,29 +102,43 @@ import tools.jackson.databind.json.JsonMapper;
  *       사람이 env {@code OPENAI_API_KEY}를 넣고 {@code ./gradlew :realtime-activity:lunaReachTest --tests "*PracticeDialogueLiveTest*"}로만
  *       돈다. 새 Gradle 작업은 없다. 키가 없으면 출력 파일에 {@code SKIPPED_NO_KEY}만 쓰고 건너뛴다(통과로 보고하지 않음). 키는 env에 있는지만
  *       보고 값을 변수에 담지 않는다(전송부가 보낼 때마다 env에서 읽는다).
- *   <li>아이 쪽은 대본으로 정한 합성 반응 4종({@link Reaction})을 목표마다 돌린다. 반응 문장은 장면의 표현 예시 · 목표 표현에서 정해진 규칙으로
- *       만든다(랜덤 없음).
+ *   <li>아이 쪽은 세 방식({@link ChildMode})으로 맡는다. ① 대본 아이: 고정 기준 대본(크레용 · 우유,
+ *       {@code src/test/resources/practiceflow/standard-practice-dialogue.json})에 팀장 기준 연습 대화의 아이 대사를 글자 그대로 넣는다.
+ *       ② AI가 연기하는 아이: 텍스트 모델이 합성 인물 하늘이(8살)를 연기한다. 행동 계획 하나({@link Plan} P1 ~ P4)와 아이가 지금까지 들은 말
+ *       (승인 발화 · 친구 · 코치 발화)만 받고, 장면의 요점 · 표현 예시 · 목표 표현 · 판정 기준은 받지 않는다. 계획은 따르되 문장은 스스로
+ *       만든다. ③ 규칙 문장 아이: 이전 합성 반응 4종({@link Reaction}, 장면의 표현 예시 · 목표 표현에서 정한 문장, 랜덤 없음). 호출 상한 안에서
+ *       대본 아이 → AI 아이(기준 대본 · core 패키지) → 규칙 문장 아이 순서로 돈다. env {@value #CHILD_MODES_ENV}로 방식을 고를 수 있다.
  *   <li>판정(J2 ~ J5)은 운영 조립 그대로다: 확장점 요청을 실행부({@code SessionExecutor.requestExtensionJudgment} ·
  *       {@code JudgmentCoordinator.open})와 같은 {@link JudgeRequest}로 바꾸고 {@link LunaJudgeClient} → {@link RealtimeLunaClient}(STRICT,
  *       https + api.openai.com) → {@link JudgeOutcomeValidator}로 부른다. 시도 시한만 넉넉히 주고 운영 live-budget과 비교해 적는다.
  *   <li>친구 · 코치 생성형 발화는 원래 GPT-Live 음성이다. 여기서는 {@link PracticeOutput#speakGenerated}의 지시문을 가로채, 운영과 같은 세션 지시문
  *       (공통 역할 문장 + 연습 활동 본문 {@code live-prompts/practice.v1.txt})과 같은 범위 닫힌 추가 지시를 텍스트 모델(Responses API, realtime
  *       {@link LunaTransport})로 보내 텍스트 발화를 받는다. 출력에는 {@code textProxy: true}('GPT-Live 음성 아님, 텍스트 대리')로 표시한다.
- *   <li>승인 발화(장면 설명 · 기회 문장 · 상황 다시 설명 · 역할 전환 알림)는 모델을 부르지 않고 승인 원문 그대로 기록한다.
+ *   <li>승인 발화(무중의 장면 설명 · 친구 첫 대사 · 친구 기회 문장 · 상황 다시 설명 · 변형 제안 · 도움 제안 · 역할 전환 알림)는 모델을 부르지 않고
+ *       승인 원문 그대로 기록한다.
  *   <li>입력은 합성 자료뿐이다. 출력에는 평가용 합성 대본 · 발화 원문을 담고 키 · 요청 헤더 · 주소는 담지 않는다. 증거 종류는 '실제 API · 합성
  *       자료'다(테스트 대역 · 실제 기기 · 실제 GPT-Live 음성 증거 아님, R-M11). 콘솔에는 개수와 파일 위치만 쓴다(R-F14).
- *   <li>OpenAI 호출은 core 하니스와 합쳐 {@value #TOTAL_CALL_BUDGET}회 안쪽이 되게 상한을 둔다(core 요약의 실제 호출 수를 뺀 값, 최대
- *       {@value #REALTIME_CALL_MAX}회).
+ *   <li>OpenAI 호출(판정 · 텍스트 대리 · AI 아이)은 core 하니스와 합쳐 {@value #TOTAL_CALL_BUDGET}회 안쪽이 되게 상한을 둔다(core 요약의 실제
+ *       호출 수를 뺀 값, 최대 {@value #REALTIME_CALL_MAX}회).
  * </ul>
  *
- * <p>입력: 출력 폴더의 {@code practice-start-packages/*.json}(core 요약 순서), 없으면 {@code contracts/fixtures/practice-start-package.json}
- * 하나. 출력 위치: 시스템 속성 {@code mujoong.live.eval.out} → env {@code MUJOONG_LIVE_EVAL_OUT} → {@code build/live-eval/} 순으로 고르고 그 아래
- * {@code practice-dialogues.json}을 쓴다. 지난 실호출 결과는 지우지 않고 {@code previous-run/}으로 옮긴다.
+ * <p>입력: 고정 기준 대본 하나 + 출력 폴더의 {@code practice-start-packages/*.json}(core 요약 순서), 없으면
+ * {@code contracts/fixtures/practice-start-package.json} 하나. 출력 위치: 시스템 속성 {@code mujoong.live.eval.out} → env
+ * {@code MUJOONG_LIVE_EVAL_OUT} → {@code build/live-eval/} 순으로 고르고 그 아래 {@code practice-dialogues.json}(전체 기록)과
+ * {@code practice-dialogues.md}(사람이 읽는 대화 기록 '화자: 대사'와 대화마다 자동 점검표)를 쓴다. 지난 실호출 결과는 지우지 않고
+ * {@code previous-run/}으로 옮긴다.
  */
 @Tag("luna-reach")
 class PracticeDialogueLiveTest {
 
     static final String OUTPUT_FILE = "practice-dialogues.json";
+    static final String MARKDOWN_FILE = "practice-dialogues.md";
+    static final String STANDARD_KEY = "standard-practice-dialogue";
+    static final String STANDARD_FILE = "backend/realtime-activity/src/test/resources" + StandardPracticeDialogue.RESOURCE;
+    /** 아이 방식 고르기(쉼표로 SCRIPT · AI · RULE, 없으면 셋 다). */
+    static final String CHILD_MODES_ENV = "MUJOONG_LIVE_CHILD_MODES";
+    /** 대화 기록의 아이 화자 이름. */
+    static final String CHILD_SPEAKER = "아이";
     static final String PACKAGE_DIR = "practice-start-packages";
     static final String CORE_SUMMARY_FILE = "core-practice-packages.json";
     static final String PREVIOUS_DIR = "previous-run";
@@ -133,12 +147,12 @@ class PracticeDialogueLiveTest {
     static final String FIXTURE = "contracts/fixtures/practice-start-package.json";
     static final String APPROVED_SPEECH_SEED = "infra/seed/004-u8-reference.sql";
 
-    /** core 하니스와 합친 전체 OpenAI 호출 목표 상한. */
-    static final int TOTAL_CALL_BUDGET = 150;
+    /** core 하니스와 합친 전체 OpenAI 호출 목표 상한(AI 아이 호출 포함). */
+    static final int TOTAL_CALL_BUDGET = 300;
     /** core 요약을 읽지 못했을 때 core가 썼다고 보는 호출 수(core 하니스의 최악 51회). */
     static final int CORE_WORST_CASE_CALLS = 51;
     /** 이 하니스 혼자 쓰는 호출의 최대. */
-    static final int REALTIME_CALL_MAX = 110;
+    static final int REALTIME_CALL_MAX = 250;
 
     // 하니스 전용 넉넉한 시한(운영 값은 application.yml에서 읽어 비교만 한다). 시한 하나가 넘치면 그 대화가 보류 · 실패 쪽으로 꺾이므로 넉넉히 둔다
     static final Duration JUDGE_LIMIT = Duration.ofSeconds(60);
@@ -151,8 +165,11 @@ class PracticeDialogueLiveTest {
     /** 실행부와 같은 최근 아이 확정 전사 보관 수({@code JudgmentCoordinator.RECENT_LIMIT}). */
     static final int RECENT_LIMIT = 4;
 
-    /** 합성 아동 프로필(실제 아동 아님, core 하니스와 같은 값). 이름은 판정 입력에서 별칭 '아이'로 바뀐다. */
-    static final String SYNTHETIC_NAME = "합성아이";
+    /**
+     * 합성 아동 프로필(실제 아동 아님). 이름은 기준 연습 대화의 합성 인물(하늘이 8살)과 맞춰 GPT-Live 세션 지시문 · AI 아이가 같은 아이를 가리키게
+     * 한다. 판정 입력에서는 별칭 '아이'로 바뀐다.
+     */
+    static final String SYNTHETIC_NAME = "하늘";
     static final int SYNTHETIC_AGE = 8;
     static final List<String> SYNTHETIC_INTERESTS = List.of("공룡", "그림");
     static final String CHILD_ALIAS = "아이";
@@ -166,9 +183,12 @@ class PracticeDialogueLiveTest {
     private static final Pattern MODEL_NAME = Pattern.compile("^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$");
     private static final Pattern SAFE_TOKEN = Pattern.compile("^[A-Za-z0-9._:-]{1,64}$");
     private static final Pattern FIXED_CODE = Pattern.compile("^[A-Z][A-Z0-9_]{0,63}$");
+    /** 자동 점검표가 찾는 칭찬 · 채점 말(대화 기록의 무중 · 친구 · 코치 말에서만 찾는다). */
+    static final List<String> PRAISE_WORDS = List.of("잘했", "잘 했", "잘 마쳤", "훌륭", "멋지", "최고", "대단", "정답", "맞았어", "맞아요",
+            "틀렸", "100점", "칭찬");
 
     @Test
-    void scriptedSyntheticRepliesRunThroughThePracticeFlowWithRealLunaJudgments() throws IOException {
+    void practiceDialoguesRunWithRealLunaJudgmentsAndAreWrittenAsReadableTranscripts() throws IOException {
         Path out = outputDirectory();
         boolean keyPresent = keyPresent();
         if (!keyPresent) {
@@ -209,14 +229,18 @@ class PracticeDialogueLiveTest {
         Files.createDirectories(out);
         movePreviousResult(out);
         Files.writeString(out.resolve(OUTPUT_FILE), "{\"outcome\":\"" + SKIPPED + "\"}" + System.lineSeparator(), StandardCharsets.UTF_8);
+        Files.writeString(out.resolve(MARKDOWN_FILE), "# 연습 대화 기록" + System.lineSeparator() + System.lineSeparator() + SKIPPED
+                + ": env OPENAI_API_KEY 없음(실호출 안 함, 통과 아님)" + System.lineSeparator(), StandardCharsets.UTF_8);
     }
 
     /** 지난 실호출 결과(SKIPPED가 아닌 것)는 지우지 않고 previous-run/으로 옮긴다. */
     static void movePreviousResult(Path out) throws IOException {
-        Path current = out.resolve(OUTPUT_FILE);
-        if (Files.exists(current) && !Files.readString(current, StandardCharsets.UTF_8).contains(SKIPPED)) {
-            Path previous = Files.createDirectories(out.resolve(PREVIOUS_DIR));
-            Files.move(current, previous.resolve(OUTPUT_FILE), StandardCopyOption.REPLACE_EXISTING);
+        for (String name : List.of(OUTPUT_FILE, MARKDOWN_FILE)) {
+            Path current = out.resolve(name);
+            if (Files.exists(current) && !Files.readString(current, StandardCharsets.UTF_8).contains(SKIPPED)) {
+                Path previous = Files.createDirectories(out.resolve(PREVIOUS_DIR));
+                Files.move(current, previous.resolve(name), StandardCopyOption.REPLACE_EXISTING);
+            }
         }
     }
 
@@ -267,8 +291,20 @@ class PracticeDialogueLiveTest {
         }
     }
 
-    /** 아이 한 번의 행동. {@code text}가 null이면 말하지 않는다(무응답). */
-    record ChildAct(String text, String rule) {
+    /**
+     * 아이 한 번의 행동. {@code text}가 null이면 말하지 않는다(무응답). {@code end}면 아이 쪽에 더 할 말이 없어(대본 끝 · 호출 상한) 대화를 멈춘다.
+     * {@code detail}은 기록용 부가 정보(대본 기대 판정 · AI 호출 결과)다.
+     */
+    record ChildAct(String text, String rule, boolean end, Map<String, Object> detail) {
+
+        ChildAct(String text, String rule) {
+            this(text, rule, false, Map.of());
+        }
+
+        static ChildAct stop(String rule, Map<String, Object> detail) {
+            return new ChildAct(null, rule, true, detail);
+        }
+
         boolean silent() {
             return text == null;
         }
@@ -378,6 +414,350 @@ class PracticeDialogueLiveTest {
         }
     }
 
+    // ------------------------------------------------------------------ 아이 방식 (대본 · AI · 규칙)
+
+    /** 아이 쪽을 맡는 방식. env {@value #CHILD_MODES_ENV}(쉼표로 이름, 예: {@code SCRIPT,AI})로 고르고 없으면 셋 다 이 순서로 돈다. */
+    enum ChildMode {
+        SCRIPT("대본 아이", "팀장 기준 연습 대화의 아이 대사를 글자 그대로 말한다(고정 기준 대본 크레용 · 우유에서만 돈다)"),
+        AI("AI가 연기하는 아이", "텍스트 모델이 합성 인물 하늘이(8살)를 연기한다. 아이가 들은 말과 행동 계획 하나만 받고 문장은 스스로 만든다. "
+                + "장면의 요점 · 표현 예시 · 목표 표현 · 판정 기준은 받지 않는다"),
+        RULE("규칙 문장 아이", "이전 하니스의 규칙 반응 4종(장면의 표현 예시 · 목표 표현에서 정한 문장, 랜덤 없음). 기준 대본에서는 돌지 않는다");
+
+        final String label;
+        final String meaning;
+
+        ChildMode(String label, String meaning) {
+            this.label = label;
+            this.meaning = meaning;
+        }
+    }
+
+    /** env로 고른 아이 방식(모르는 이름은 버리고, 하나도 없으면 셋 다). */
+    static Set<ChildMode> childModes() {
+        String env = System.getenv(CHILD_MODES_ENV);
+        Set<ChildMode> modes = java.util.EnumSet.noneOf(ChildMode.class);
+        if (env != null) {
+            for (String part : env.split(",")) {
+                String name = part.strip().toUpperCase(Locale.ROOT);
+                Arrays.stream(ChildMode.values()).filter(mode -> mode.name().equals(name)).forEach(modes::add);
+            }
+        }
+        return modes.isEmpty() ? java.util.EnumSet.allOf(ChildMode.class) : modes;
+    }
+
+    /**
+     * AI 아이의 행동 계획 4종. 계획은 행동만 정하고 문장은 정하지 않는다. 장면의 요점 · 표현 예시 · 목표 표현 · 판정 기준 · 정답은 넣지 않는다(아이는
+     * 들은 말만 안다).
+     */
+    enum Plan {
+        P1("단서를 알아채지만 처음엔 짧게 말함 → 되묻기 뒤 끝까지", 16,
+                "장면에서 친구의 말이나 행동에 뭔가 이상하거나 마음에 걸리는 점이 있다는 건 알아챈다. 첫 대답에서는 그걸 아주 짧게만 말한다. "
+                        + "무엇을 원하는지나 무엇이 문제인지는 아직 다 말하지 않고, 한두 낱말만 말하거나 말끝을 흐린다. 친구가 되묻거나 다시 물으면 "
+                        + "그때는 하고 싶은 말을 분명하고 완전하게 말한다. 무중이 도와줘도 되는지 물으면 응이라고 하고, 도움을 받은 뒤에는 네 말로 "
+                        + "다시 말한다. 무중이 다른 장면으로 이어서 할지 물으면 하겠다고 하고, 새 장면에서도 같은 식으로 한다."),
+        P2("모름 → 도움 수락 → 도움 뒤 자기 말로", 12,
+                "장면에서 무슨 말을 해야 할지 모르겠다. 첫 대답에서는 모르겠다고 하거나 뭐라고 해야 하냐고 묻는다. 친구가 되물어도 아직 잘 "
+                        + "모르겠다고 한다. 무중이 도와줘도 되는지 물으면 좋다고 한다. 무중이 도와준 뒤에는 들은 예를 그대로 따라 하지 말고, 네 말로 "
+                        + "바꿔서 하고 싶은 말을 한다. 무중이 다른 장면으로 이어서 할지 물으면 이제 그만하고 싶다고 한다."),
+        P3("바로 잘함", 10,
+                "장면을 잘 알아듣고 첫 대답부터 상황에 맞게 하고 싶은 말을 분명하게 한다. 무중이 다른 장면으로 이어서 할지 물으면 하겠다고 하고, "
+                        + "새 장면에서도 첫 대답부터 상황에 맞게 말한다."),
+        P4("엉뚱한 말 → 다시 설명 뒤 잘함", 9,
+                "첫 대답에서는 장면과 상관없는 네 이야기(좋아하는 공룡이나 오늘 있었던 일)를 한다. 무중이 상황을 다시 설명해 주면 그때는 장면을 "
+                        + "알아듣고 상황에 맞게 하고 싶은 말을 분명하게 한다. 무중이 도와줘도 되는지 물으면 응이라고 한다. 무중이 다른 장면으로 이어서 "
+                        + "할지 물으면 이제 그만하고 싶다고 한다.");
+
+        final String label;
+        /** 이 대화를 시작하기 전에 남아 있어야 하는 호출 수(판정 · 텍스트 대리 · AI 아이를 합친 보통 수). */
+        final int reserve;
+        final String behavior;
+
+        Plan(String label, int reserve, String behavior) {
+            this.label = label;
+            this.reserve = reserve;
+            this.behavior = behavior;
+        }
+    }
+
+    /** 아이가 들은(또는 한) 말 한 줄. 화자는 무중 · 친구 · 코치 · 아이다. */
+    record Heard(String speaker, String text) {
+    }
+
+    /**
+     * 아이 차례 하나를 정할 때 주는 것: 지금 단계 · 장면 · 그 단계에서 몇 번째 입력인가 · 규칙 문장(규칙 아이만 쓴다) · 지금까지 들은 말 · 흐름이 기다리는
+     * 판정 지점. AI 아이는 이 가운데 단계 · 장면 · 순번 · 들은 말만 쓴다.
+     */
+    record ChildCue(Phase phase, SceneKind sceneKind, int nth, SceneLines lines, List<Heard> heard, JudgmentPoint expected) {
+    }
+
+    /** 아이 쪽(대본 · AI · 규칙) 하나. */
+    interface ChildActor {
+
+        ChildMode mode();
+
+        /** 기록 코드(대본은 STANDARD, AI는 계획 이름, 규칙은 반응 이름). */
+        String code();
+
+        String label();
+
+        /** 이 대화를 시작하기 전에 남아 있어야 하는 호출 수. */
+        int reserve();
+
+        ChildAct act(ChildCue cue);
+    }
+
+    /** 이전 규칙 반응 4종. */
+    record RuleActor(Reaction reaction) implements ChildActor {
+
+        @Override
+        public ChildMode mode() {
+            return ChildMode.RULE;
+        }
+
+        @Override
+        public String code() {
+            return reaction.name();
+        }
+
+        @Override
+        public String label() {
+            return reaction.label;
+        }
+
+        @Override
+        public int reserve() {
+            return reaction.reserve;
+        }
+
+        @Override
+        public ChildAct act(ChildCue cue) {
+            return Child.act(reaction, cue.phase(), cue.nth(), cue.lines());
+        }
+    }
+
+    /**
+     * 기준 연습 대화의 아이 대사를 순서대로 말한다. 흐름이 기다리는 판정 지점과 장면(변형 제안은 장면 2)이 맞는 다음 대사를 고르고, 앞의 안 쓴 대사는
+     * 건너뛴 것으로 적는다. 같은 지점을 다시 기다리면(재안내) 그 장면의 같은 지점 대사를 되풀이한다. 실제 판정이 기대와 다르면 그것도 평가 자료다.
+     */
+    static final class ScriptActor implements ChildActor {
+
+        private final List<StandardPracticeDialogue.ChildTurn> turns;
+        private final boolean[] used;
+
+        ScriptActor(List<StandardPracticeDialogue.ChildTurn> turns) {
+            this.turns = List.copyOf(turns);
+            this.used = new boolean[turns.size()];
+        }
+
+        @Override
+        public ChildMode mode() {
+            return ChildMode.SCRIPT;
+        }
+
+        @Override
+        public String code() {
+            return "STANDARD";
+        }
+
+        @Override
+        public String label() {
+            return "기준 연습 대화의 아이 대사 " + turns.size() + "개(크레용 · 우유)";
+        }
+
+        @Override
+        public int reserve() {
+            return 12;
+        }
+
+        @Override
+        public ChildAct act(ChildCue cue) {
+            String expected = cue.expected() == null ? null : cue.expected().name();
+            int scene = cue.phase() == Phase.VARIANT_OFFER || cue.sceneKind() == SceneKind.VARIANT ? 2 : 1;
+            int pick = -1;
+            for (int i = 0; i < turns.size() && pick < 0; i++) {
+                if (!used[i] && turns.get(i).scene() == scene && turns.get(i).point().equals(expected)) {
+                    pick = i;
+                }
+            }
+            boolean repeat = false;
+            for (int i = turns.size() - 1; i >= 0 && pick < 0; i--) {
+                if (used[i] && turns.get(i).scene() == scene && turns.get(i).point().equals(expected)) {
+                    pick = i;
+                    repeat = true;
+                }
+            }
+            for (int i = 0; i < turns.size() && pick < 0; i++) {
+                if (!used[i] && turns.get(i).scene() == scene) {
+                    pick = i;
+                }
+            }
+            if (pick < 0) {
+                return ChildAct.stop("기준 대화의 장면 " + scene + " 아이 대사를 다 썼다 → 멈춤", ordered("flowPoint", expected));
+            }
+            List<Integer> skipped = new ArrayList<>();
+            if (!repeat) {
+                for (int i = 0; i < pick; i++) {
+                    if (!used[i]) {
+                        used[i] = true;
+                        skipped.add(i + 1);
+                    }
+                }
+                used[pick] = true;
+            }
+            StandardPracticeDialogue.ChildTurn turn = turns.get(pick);
+            Map<String, Object> detail = ordered("standardTurn", pick + 1, "expectedPoint", turn.point(), "expectedOption", turn.option(),
+                    "flowPoint", expected, "pointMatches", turn.point().equals(expected), "repeated", repeat);
+            if (!skipped.isEmpty()) {
+                detail.put("skippedStandardTurns", skipped);
+            }
+            return new ChildAct(turn.text(), "기준 대화 아이 대사 " + (pick + 1) + "번" + (repeat ? " 되풀이" : "") + "(기대 " + turn.point() + " "
+                    + turn.option() + ")", false, detail);
+        }
+    }
+
+    /**
+     * 텍스트 모델이 연기하는 아이(합성 인물 하늘이 8살). 보내는 것은 인물 지시 + 행동 계획({@link Plan}) + 아이가 들은 말(무중 · 친구 · 코치는 user, 아이
+     * 자신은 assistant) + 지금 차례 메모뿐이다. 장면 대본의 요점 · 표현 예시 · 목표 표현 · 판정 기준 · 판정 결과는 보내지 않는다. 호출은 텍스트 대리와
+     * 같은 전송 · 모델 설정이고 하니스 호출 상한에 들어간다.
+     */
+    static final class AiChildActor implements ChildActor {
+
+        private final Plan plan;
+        private final Harness harness;
+
+        AiChildActor(Plan plan, Harness harness) {
+            this.plan = plan;
+            this.harness = harness;
+        }
+
+        @Override
+        public ChildMode mode() {
+            return ChildMode.AI;
+        }
+
+        @Override
+        public String code() {
+            return plan.name();
+        }
+
+        @Override
+        public String label() {
+            return plan.label;
+        }
+
+        @Override
+        public int reserve() {
+            return plan.reserve;
+        }
+
+        @Override
+        public ChildAct act(ChildCue cue) {
+            String hint = AiChild.hint(cue);
+            if (!harness.budget.available()) {
+                return ChildAct.stop("하니스 호출 상한 → AI 아이를 부르지 않고 멈춤", ordered("cutByCallCap", true));
+            }
+            String instructions = AiChild.instructions(plan);
+            List<Map<String, Object>> input = AiChild.input(cue.heard(), hint);
+            harness.budget.child++;
+            TextReply reply = harness.proxy.generate(instructions, input);
+            if (harness.proxy.shouldRetryWithoutReasoning(reply) && harness.budget.available()) {
+                harness.budget.child++;
+                reply = harness.proxy.generate(instructions, input);
+            }
+            Map<String, Object> detail = ordered("hint", hint, "outcome", reply.outcome(), "model", reply.model(), "latencyMs",
+                    reply.latencyMillis());
+            if (reply.errorCode() != null) {
+                detail.put("errorCode", reply.errorCode());
+            }
+            String text = reply.ok() ? AiChild.clean(reply.text()) : "";
+            if (text.isBlank()) {
+                return new ChildAct(null, "AI 아이 · " + plan.name() + " · 응답 없음(" + reply.outcome() + ") → 말하지 않음", false, detail);
+            }
+            if (!text.equals(reply.text())) {
+                detail.put("rawText", reply.text());
+            }
+            return new ChildAct(text, "AI 아이 · " + plan.name() + " · " + hint, false, detail);
+        }
+    }
+
+    /** AI 아이 지시 · 들은 말 · 응답 정리 규칙. */
+    static final class AiChild {
+
+        static final String NAME = "하늘이";
+        static final int MAX_CHARS = 120;
+        private static final String QUOTES = "\"'“”‘’「」";
+
+        private AiChild() {
+        }
+
+        static String instructions(Plan plan) {
+            return "너는 시험용 합성 인물 '" + NAME + "'다. 8살 초등학생이고 공룡과 그림을 좋아한다. 실제 아이가 아니다. "
+                    + "너는 무중(아이와 소리로 대화하는 AI 친구)과 사회성 연습 놀이를 하고 있다. 무중은 장면을 설명하거나 장면 속 친구 역할을 하고, "
+                    + "가끔 친구 역할에서 나와 도와준다.\n"
+                    + "- 8살 아이처럼 반말로 짧게 말한다(한두 문장). 어른스러운 설명, 높임말, 이모지, 따옴표, 이름표, 괄호 설명은 쓰지 않는다.\n"
+                    + "- 너는 지금까지 들은 말만 안다. 이 놀이의 정답이나 연습 목표는 모른다.\n"
+                    + "- 아래 행동 계획을 따르되 문장은 네가 스스로 만든다. 들은 말을 그대로 따라 하지 않는다.\n"
+                    + "- 소리 내어 할 말만 쓴다.\n\n"
+                    + "행동 계획(" + plan.name() + " " + plan.label + "): " + plan.behavior;
+        }
+
+        /** 아이가 들은 말을 대화로 바꾼다(무중 · 친구 · 코치 = user, 아이 자신 = assistant). 마지막에 지금 차례 메모를 붙인다. */
+        static List<Map<String, Object>> input(List<Heard> heard, String hint) {
+            List<Map<String, Object>> messages = new ArrayList<>();
+            for (Heard line : heard) {
+                messages.add(CHILD_SPEAKER.equals(line.speaker()) ? chat("assistant", line.text())
+                        : chat("user", line.speaker() + ": " + line.text()));
+            }
+            messages.add(chat("developer", "[연출 메모] 지금 차례: " + hint + ". 행동 계획에서 이 차례에 맞는 행동을 하고, " + NAME
+                    + "로서 소리 내어 할 말만 한두 문장으로 쓴다."));
+            return messages;
+        }
+
+        /** 지금 차례를 아이가 들은 말로만 적는다(흐름 내부 이름 · 판정 지점은 쓰지 않는다). */
+        static String hint(ChildCue cue) {
+            boolean variant = cue.sceneKind() == SceneKind.VARIANT;
+            return switch (cue.phase()) {
+                case OPPORTUNITY -> cue.nth() == 1
+                        ? (variant ? "새 장면에서 친구가 방금 말을 걸었다(새 장면의 첫 대답)" : "친구가 방금 말을 걸었다(첫 대답)")
+                        : "무중이나 친구가 같은 장면을 다시 들려줬다(" + cue.nth() + "번째 대답)";
+                case REASK -> "친구가 되물었다";
+                case HELP_OFFER -> "무중이 도와줘도 되는지 물었다";
+                case RETRY -> "무중이 도와준 뒤 네 말로 해 보자고 했다";
+                case VARIANT_OFFER -> "무중이 다른 장면으로 이어서 할지 물었다";
+                default -> "무중이나 친구가 말했다";
+            };
+        }
+
+        /** 이름표 · 바깥 따옴표 · 줄바꿈을 지우고 두 문장 · {@value #MAX_CHARS}자 안으로 줄인다. */
+        static String clean(String raw) {
+            if (raw == null) {
+                return "";
+            }
+            String text = raw.replaceAll("[\\r\\n\\t]+", " ").strip();
+            text = text.replaceFirst("^(하늘이|하늘|아이)\\s*[:：]\\s*", "");
+            while (text.length() >= 2 && QUOTES.indexOf(text.charAt(0)) >= 0 && QUOTES.indexOf(text.charAt(text.length() - 1)) >= 0) {
+                text = text.substring(1, text.length() - 1).strip();
+            }
+            text = text.replaceAll("\\s{2,}", " ");
+            String kept = firstSentences(text, 2).strip();
+            return kept.codePointCount(0, kept.length()) <= MAX_CHARS ? kept : kept.substring(0, kept.offsetByCodePoints(0, MAX_CHARS));
+        }
+
+        /** 앞의 문장 {@code count}개. 문장 끝은 뒤에 공백이 오거나 글이 끝나는 . ? ! 이고, 말줄임(… · ...)은 문장 끝으로 보지 않는다. */
+        static String firstSentences(String text, int count) {
+            int sentences = 0;
+            for (int i = 0; i < text.length(); i++) {
+                char c = text.charAt(i);
+                boolean end = (c == '.' || c == '?' || c == '!') && (i + 1 == text.length() || Character.isWhitespace(text.charAt(i + 1)));
+                boolean ellipsis = c == '.' && i > 0 && (text.charAt(i - 1) == '.' || text.charAt(i - 1) == '…');
+                if (end && !ellipsis && ++sentences == count) {
+                    return text.substring(0, i + 1);
+                }
+            }
+            return text;
+        }
+    }
+
     // ------------------------------------------------------------------ 운영 설정
 
     /** application.yml의 운영 값(시험 값을 지어내지 않는다). */
@@ -451,19 +831,20 @@ class PracticeDialogueLiveTest {
 
     // ------------------------------------------------------------------ 호출 상한
 
-    /** 하니스 전체 OpenAI 호출 수. 실호출 직전에만 센다. */
+    /** 하니스 전체 OpenAI 호출 수(판정 · 텍스트 대리 · AI 아이). 실호출 직전에만 센다. */
     static final class CallBudget {
 
         final int cap;
         int judgment;
         int text;
+        int child;
 
         CallBudget(int cap) {
             this.cap = cap;
         }
 
         int used() {
-            return judgment + text;
+            return judgment + text + child;
         }
 
         int remaining() {
@@ -749,12 +1130,18 @@ class PracticeDialogueLiveTest {
     /** 조립 · 실행 · 기록. */
     static final class Harness {
 
-        record Outcome(int runs, int completedRuns, int answeredJudgments, int judgmentCalls, int textCalls, int cap, String evidence,
-                Path file) {
+        record Outcome(int runs, int completedRuns, int answeredJudgments, int judgmentCalls, int textCalls, int childCalls, int cap,
+                String evidence, Path file, Path transcript) {
             String consoleLine() {
                 return "PracticeDialogueLiveTest: 대화 " + runs + "건(끝까지 진행 " + completedRuns + "건), 판정 호출 " + judgmentCalls
-                        + "회 · 텍스트 대리 호출 " + textCalls + "회(상한 " + cap + "), 증거=" + evidence + ", 파일=" + file;
+                        + "회 · 텍스트 대리 호출 " + textCalls + "회 · AI 아이 호출 " + childCalls + "회(상한 " + cap + "), 증거=" + evidence
+                        + ", 파일=" + file + ", 대화 기록=" + transcript;
             }
+        }
+
+        /** 진행할 목표 하나(대본 · 규칙 아이 문장 · 점검용 목표 표현). 대화 결과는 {@code runs}에 방식 순서대로 쌓인다. */
+        record GoalPlan(GoalInput input, Map<String, Object> row, List<Map<String, Object>> runs, PracticeScript script,
+                Map<SceneKind, SceneLines> lines, String goalName, List<String> targets, StandardPracticeDialogue standard) {
         }
 
         final Path out;
@@ -799,24 +1186,51 @@ class PracticeDialogueLiveTest {
                     throw new IllegalStateException("Luna 주소가 주소 규칙을 통과하지 못했다: " + hostProblem.map(Enum::name).orElse("MODE"));
                 }
                 List<GoalInput> inputs = new ArrayList<>();
+                StandardPracticeDialogue standard = StandardPracticeDialogue.load();
+                inputs.add(input(STANDARD_KEY, STANDARD_FILE, "STANDARD_SCRIPT", standard.practiceJson()));
                 summary.put("source", loadInputs(inputs));
                 budget = new CallBudget(callCap());
                 summary.put("callBudget", ordered("cap", budget.cap, "rule", "전체 " + TOTAL_CALL_BUDGET
-                        + "회 − core 하니스 호출 수(요약에서 읽음, 못 읽으면 core 최악 " + CORE_WORST_CASE_CALLS + "회), 최대 " + REALTIME_CALL_MAX
-                        + "회. 반응 하나를 시작하기 전에 그 반응의 보통 호출 수만큼 남아 있어야 하고, 모자라면 SKIPPED_CALL_CAP"));
+                        + "회(판정 · 텍스트 대리 · AI 아이) − core 하니스 호출 수(요약에서 읽음, 못 읽으면 core 최악 " + CORE_WORST_CASE_CALLS
+                        + "회), 최대 " + REALTIME_CALL_MAX + "회. 대화 하나를 시작하기 전에 그 아이 방식의 보통 호출 수만큼 남아 있어야 하고, "
+                        + "모자라면 SKIPPED_CALL_CAP. 방식 순서: 대본 아이 → AI 아이(기준 대본 → core 패키지) → 규칙 문장 아이"));
                 approvedSpeech = loadApprovedSpeech();
                 sessionInstructions = sessionInstructions();
                 judge = new Judge(production, budget, endpoint);
                 proxy = new TextProxy(production, endpoint);
                 summary.put("models", models());
                 summary.put("syntheticChild", ordered("displayName", SYNTHETIC_NAME, "ageYears", SYNTHETIC_AGE, "interests",
-                        SYNTHETIC_INTERESTS, "judgmentAliasRule", SYNTHETIC_NAME + " → " + CHILD_ALIAS, "kind", "합성 프로필(실제 아동 아님)"));
+                        SYNTHETIC_INTERESTS, "judgmentAliasRule", SYNTHETIC_NAME + " → " + CHILD_ALIAS, "aiChildPersona",
+                        AiChild.NAME + "(8살, AI 아이 방식에서 텍스트 모델이 연기)", "kind", "합성 프로필(실제 아동 아님)"));
+                Set<ChildMode> modes = childModes();
+                summary.put("childModes", childModeReport(modes));
+                summary.put("aiChildPlans", planReport());
                 summary.put("reactionTypes", reactionTypes());
                 summary.put("phaseLabels", phaseLabels());
                 summary.put("overview", overview);
                 summary.put("goals", goals);
+                List<GoalPlan> plans = new ArrayList<>();
                 for (GoalInput input : inputs) {
-                    goals.add(runGoal(input, overview));
+                    Map<String, Object> row = new LinkedHashMap<>();
+                    goals.add(row);
+                    GoalPlan plan = prepareGoal(input, row, STANDARD_KEY.equals(input.key()) ? standard : null);
+                    if (plan != null) {
+                        plans.add(plan);
+                    }
+                }
+                // 방식마다 한 바퀴씩 돈다: 상한이 모자라도 기준 대본 · AI 아이가 먼저 돌게
+                for (ChildMode mode : ChildMode.values()) {
+                    if (!modes.contains(mode)) {
+                        continue;
+                    }
+                    for (GoalPlan plan : plans) {
+                        for (ChildActor actor : actors(mode, plan)) {
+                            Map<String, Object> run = budget.remaining() < actor.reserve() ? skipped(actor)
+                                    : new DialogueRun(this, plan, actor).run();
+                            plan.runs().add(run);
+                            overview.add(overviewRow(plan.input().key(), plan.goalName(), run));
+                        }
+                    }
                 }
                 summary.put("outcome", "COMPLETED");
             } catch (RuntimeException | IOException failure) {
@@ -828,6 +1242,7 @@ class PracticeDialogueLiveTest {
                 summary.put("finishedAt", wallClock.now().toString());
                 summary.put("totals", totals(goals));
                 writePretty(out.resolve(OUTPUT_FILE), summary);
+                writeTranscript(goals);
                 closeQuietly(judge);
                 closeQuietly(proxy);
             }
@@ -846,7 +1261,20 @@ class PracticeDialogueLiveTest {
                 }
             }
             return new Outcome(runs, completed, answered, budget == null ? 0 : budget.judgment, budget == null ? 0 : budget.text,
-                    budget == null ? 0 : budget.cap, String.valueOf(summary.get("evidence")), out.resolve(OUTPUT_FILE));
+                    budget == null ? 0 : budget.child, budget == null ? 0 : budget.cap, String.valueOf(summary.get("evidence")),
+                    out.resolve(OUTPUT_FILE), out.resolve(MARKDOWN_FILE));
+        }
+
+        /** 사람이 읽는 대화 기록. 만들다 깨져도 JSON 결과는 이미 썼으므로 깨진 사실만 적는다. */
+        private void writeTranscript(List<Map<String, Object>> goals) throws IOException {
+            String text;
+            try {
+                text = Transcript.render(summary, goals);
+            } catch (RuntimeException failure) {
+                text = "# 연습 대화 기록" + System.lineSeparator() + System.lineSeparator() + "대화 기록을 만들지 못했다: "
+                        + failure.getClass().getSimpleName() + "(" + OUTPUT_FILE + "를 본다)" + System.lineSeparator();
+            }
+            Files.writeString(out.resolve(MARKDOWN_FILE), text, StandardCharsets.UTF_8);
         }
 
         private int coreCalls = -1;
@@ -931,13 +1359,16 @@ class PracticeDialogueLiveTest {
             return new GoalInput(key, file, source, JSON.write(trimmed), first, goals.size());
         }
 
-        /** 시작 패키지 approvedSpeech에 운영이 싣는 역할 전환 · 복귀 승인 문장(시드 SQL의 APPROVED 최고 판). 못 읽으면 비우고 생성형 알림으로 간다. */
+        /**
+         * 시작 패키지 approvedSpeech에 운영이 싣는 연습 승인 문장(도움 제안 · 역할 전환 · 복귀, 시드 SQL의 APPROVED 최고 판). 못 읽으면 비우고 생성형으로
+         * 간다.
+         */
         private Map<String, String> loadApprovedSpeech() {
             Map<String, String> speech = new LinkedHashMap<>();
             Map<String, Integer> versions = new LinkedHashMap<>();
             try {
                 String sql = Files.readString(repoRoot().resolve(APPROVED_SPEECH_SEED), StandardCharsets.UTF_8);
-                Matcher matcher = Pattern.compile("'(COACH_SWITCH|PEER_RETURN)',\\s*(\\d+),\\s*'([^']+)'").matcher(sql);
+                Matcher matcher = Pattern.compile("'(HELP_OFFER|COACH_SWITCH|PEER_RETURN)',\\s*(\\d+),\\s*'([^']+)'").matcher(sql);
                 while (matcher.find()) {
                     int version = Integer.parseInt(matcher.group(2));
                     if (version > versions.getOrDefault(matcher.group(1), 0)) {
@@ -949,7 +1380,7 @@ class PracticeDialogueLiveTest {
                 speech.clear();
             }
             summary.put("approvedSpeech", ordered("texts", speech, "source", APPROVED_SPEECH_SEED + "(운영 시작 패키지 approvedSpeech와 같은 시드)",
-                    "rule", "있으면 역할 전환 · 복귀 알림을 승인 문장으로 내고(모델 호출 없음), 없으면 생성형 알림으로 낸다"));
+                    "rule", "있으면 도움 제안 · 역할 전환 · 복귀 알림을 승인 문장으로 내고(모델 호출 없음), 없으면 생성형으로 낸다"));
             return Map.copyOf(speech);
         }
 
@@ -993,9 +1424,9 @@ class PracticeDialogueLiveTest {
 
         // ---- 목표 · 대화 ----
 
+        /** 목표 하나를 읽어 진행 준비를 한다. 진행할 수 없으면(패키지 · 대본 문제) 그 사실을 {@code row}에 적고 null. */
         @SuppressWarnings("unchecked")
-        private Map<String, Object> runGoal(GoalInput input, List<Map<String, Object>> overview) {
-            Map<String, Object> row = new LinkedHashMap<>();
+        private GoalPlan prepareGoal(GoalInput input, Map<String, Object> row, StandardPracticeDialogue standard) {
             row.put("key", input.key());
             row.put("startPackageFile", input.file());
             row.put("source", input.source());
@@ -1019,14 +1450,14 @@ class PracticeDialogueLiveTest {
             } catch (RuntimeException unreadable) {
                 row.put("result", "BAD_PACKAGE");
                 row.put("failure", unreadable.getClass().getSimpleName());
-                return row;
+                return null;
             }
             PracticeScript script = pack.firstScenario();
             if (script == null) {
                 row.put("result", "NO_NEW_FLOW_SCRIPT");
                 row.put("scriptVersion", pack.scriptVersion());
                 row.put("rejection", pack.firstScenarioRejection() == null ? null : pack.firstScenarioRejection().name());
-                return row;
+                return null;
             }
             String target = context.get("targetExpression") instanceof String text ? text : null;
             String expression = elements.get("expression") instanceof String text ? text : null;
@@ -1045,22 +1476,44 @@ class PracticeDialogueLiveTest {
             scenario.put("scenes", scenes);
             row.put("scenario", scenario);
             row.put("result", "RAN");
-            for (Reaction reaction : Reaction.values()) {
-                Map<String, Object> run;
-                if (budget.remaining() < reaction.reserve) {
-                    run = new LinkedHashMap<>();
-                    run.put("reaction", reaction.name());
-                    run.put("reactionLabel", reaction.label);
-                    run.put("status", "SKIPPED_CALL_CAP");
-                    run.put("remainingCalls", budget.remaining());
-                    run.put("reserveNeeded", reaction.reserve);
-                } else {
-                    run = new DialogueRun(this, input, script, lines, reaction).run();
-                }
-                runs.add(run);
-                overview.add(overviewRow(input.key(), String.valueOf(raw.get("displayName")), run));
+            // 점검표의 '아이가 말하기 전에 들은 말에 목표 표현' — 목표 표현 · 4요소 표현 · 장면 표현 예시(정규화, 4글자 이상)
+            List<String> targets = Stream.concat(Stream.of(target, expression),
+                            script.scenes().stream().flatMap(scene -> scene.expressionExamples().stream()))
+                    .filter(value -> value != null && !value.isBlank()).map(SceneIntro::normalize).filter(value -> value.length() >= 4)
+                    .distinct().toList();
+            return new GoalPlan(input, row, runs, script, lines, String.valueOf(raw.get("displayName")), targets, standard);
+        }
+
+        /** 방식마다 이 목표에서 돌릴 아이들. 대본 아이는 기준 대본에서만, 규칙 문장 아이는 기준 대본이 아닌 목표에서만 돈다. */
+        private List<ChildActor> actors(ChildMode mode, GoalPlan plan) {
+            return switch (mode) {
+                case SCRIPT -> plan.standard() == null ? List.of() : List.of(new ScriptActor(plan.standard().childTurns()));
+                case AI -> Arrays.stream(Plan.values()).map(each -> (ChildActor) new AiChildActor(each, this)).toList();
+                case RULE -> plan.standard() != null ? List.of()
+                        : Arrays.stream(Reaction.values()).map(each -> (ChildActor) new RuleActor(each)).toList();
+            };
+        }
+
+        private Map<String, Object> skipped(ChildActor actor) {
+            Map<String, Object> run = runHeader(actor);
+            run.put("status", "SKIPPED_CALL_CAP");
+            run.put("remainingCalls", budget.remaining());
+            run.put("reserveNeeded", actor.reserve());
+            return run;
+        }
+
+        /** 대화 기록 머리(아이 방식 · 코드 · 이름). 규칙 아이는 이전 칸 이름(reaction)도 같이 쓴다. */
+        static Map<String, Object> runHeader(ChildActor actor) {
+            Map<String, Object> run = new LinkedHashMap<>();
+            run.put("childMode", actor.mode().name());
+            run.put("childModeLabel", actor.mode().label);
+            run.put("child", actor.code());
+            run.put("childLabel", actor.label());
+            if (actor.mode() == ChildMode.RULE) {
+                run.put("reaction", actor.code());
+                run.put("reactionLabel", actor.label());
             }
-            return row;
+            return run;
         }
 
         private static Map<String, Object> sceneReport(Scene scene, SceneLines lines) {
@@ -1068,6 +1521,7 @@ class PracticeDialogueLiveTest {
             map.put("sceneKind", scene.sceneKind().name());
             map.put("sceneKey", scene.sceneKey());
             map.put("sceneDescription", scene.sceneDescription());
+            map.put("partnerOpener", scene.partnerOpener());
             map.put("opportunitySentence", scene.opportunitySentence());
             map.put("introEndsWithOpportunity", SceneIntro.carriesOpportunity(scene.sceneDescription(), scene.opportunitySentence()));
             map.put("reexplanation", scene.reexplanation());
@@ -1086,7 +1540,8 @@ class PracticeDialogueLiveTest {
             Map<String, Object> map = new LinkedHashMap<>();
             map.put("goal", key);
             map.put("goalName", goalName);
-            map.put("reaction", run.get("reaction"));
+            map.put("childMode", run.get("childMode"));
+            map.put("child", run.get("child"));
             map.put("status", run.get("status"));
             map.put("judgmentTrail", run.getOrDefault("judgmentTrail", List.of()));
             map.put("sceneEnds", run.getOrDefault("sceneEnds", List.of()));
@@ -1127,6 +1582,7 @@ class PracticeDialogueLiveTest {
             totals.put("skippedByCallCap", skipped);
             totals.put("judgmentCalls", budget == null ? 0 : budget.judgment);
             totals.put("textProxyCalls", budget == null ? 0 : budget.text);
+            totals.put("aiChildCalls", budget == null ? 0 : budget.child);
             totals.put("openAiCalls", budget == null ? 0 : budget.used());
             totals.put("callCap", budget == null ? 0 : budget.cap);
             totals.put("answeredJudgments", answered);
@@ -1139,23 +1595,46 @@ class PracticeDialogueLiveTest {
                     "증거 종류는 REAL_API_SYNTHETIC(실제 API · 합성 자료)다. 테스트 대역 · 실제 기기 · 실제 GPT-Live 음성 성공이 아니다(R-M11).",
                     "상태 기계는 운영 PracticeConversation 그대로다. 출력 능력(재생 · 생성형 발화 · 판정 요청 · 시계 · 비동기 결과)만 하니스가 실행부 대신 받는다.",
                     "판정(J2 ~ J5)은 운영 조립 그대로다: 실행부와 같은 JudgeRequest(판 순서 선택지, 최근 아이 확정 전사 최대 3개 — 운영처럼 아이 말만, "
-                            + "J2 · J3 · J5만 기준, 별칭 합성아이 → 아이) → LunaJudgeClient → RealtimeLunaClient → JudgeOutcomeValidator(min-confidence · "
+                            + "J2 · J3 · J5만 기준, 별칭 " + SYNTHETIC_NAME + " → 아이) → LunaJudgeClient → RealtimeLunaClient → JudgeOutcomeValidator(min-confidence · "
                             + "min-margin은 application.yml). 확정이면 JUDGMENT_RESULT, 보류면 JUDGMENT_ABSTAINED로 흐름에 넘긴다.",
                     "판정 시도 시한만 넉넉히(" + JUDGE_LIMIT + ") 주고, 판정마다 운영 live-budget 안이었는지(withinProductionLiveBudget)를 적는다. 운영에서는 "
                             + "live-budget을 넘으면 TIMEOUT 보류다.",
                     "친구 · 코치 생성형 발화는 텍스트 대리다(textProxy: true). GPT-Live에 갈 세션 지시문을 instructions로, 지금까지의 대화를 input으로"
                             + "(승인 발화 읽기 지시 · 생성 지시는 developer, 무중의 말은 assistant, 아이 말은 user), 이번 지시(운영처럼 범위를 닫은 문장)를 "
                             + "마지막 developer로 보낸다. 텍스트 대리에만 하니스 메모 한 줄을 덧붙였다(sessionInstructions.textProxyNote).",
-                    "승인 발화(장면 설명 · 기회 문장 · 상황 다시 설명 · 역할 전환 알림)는 모델을 부르지 않고 승인 원문 그대로 적었다. 운영에서는 GPT-Live가 읽고 "
-                            + "원문 일치를 확인한다.",
+                    "승인 발화(무중의 장면 설명 · 친구 첫 대사 · 친구 기회 문장 · 상황 다시 설명 · 변형 제안 · 도움 제안 · 역할 전환 알림)는 모델을 부르지 "
+                            + "않고 승인 원문 그대로 적었다. 운영에서는 GPT-Live가 읽고 원문 일치를 확인한다.",
                     "이 모의에는 제브 가드레일 검사 · 끼어들기 · 출력 세대가 없다. 재생은 곧바로 끝까지 들린 것으로(COMPLETED) 넘긴다.",
                     "시계는 가상 시계다. 아이가 말하지 않을 때만 무응답 시계(no-response-wait)만큼 시간을 흘린다. 집중 한도(focus-max) · 목표 한도"
                             + "(goal-active-limit)는 이 모의에서 흐르지 않는다.",
-                    "아이 반응 문장은 규칙으로 만든 합성 문장이다(랜덤 없음, reactionTypes). 반응 유형 이름은 하니스의 의도이고, 판정이 다르게 나오면 그것도 "
-                            + "평가 자료다.",
+                    "아이 쪽은 세 방식이다(childModes). 대본 아이는 팀장 기준 연습 대화의 아이 대사를 고정 기준 대본에서 글자 그대로 말하고 기대 판정을 "
+                            + "함께 적는다. AI 아이는 텍스트 모델이 합성 인물 하늘이(8살)를 연기한 것으로, 행동 계획(aiChildPlans)과 아이가 들은 말만 받았다 "
+                            + "(장면 요점 · 표현 예시 · 목표 표현 · 판정 기준 · 판정 결과는 보내지 않았다). 규칙 문장 아이는 규칙으로 만든 합성 문장이다"
+                            + "(reactionTypes, 랜덤 없음). 의도와 다른 판정이 나오면 그것도 평가 자료다.",
+                    "사람이 읽는 대화 기록은 " + MARKDOWN_FILE + "이다(화자: 대사, 아이 말 뒤 괄호에 실제 판정, 대화마다 자동 점검표). 점검표는 하니스 "
+                            + "참고용 글자 비교이고 운영 검사가 아니다.",
                     "OpenAI 호출은 core 하니스와 합쳐 약 " + TOTAL_CALL_BUDGET + "회 안쪽이 되게 상한을 둔다(callBudget). 상한에 걸린 대화는 "
                             + "SKIPPED_CALL_CAP(시작 안 함) 또는 CUT_BY_CALL_CAP(도중에 끊김)이다.",
                     "키 · 요청 헤더 · 주소는 쓰지 않는다. 오류는 사유 코드와 공급자 error.code · error.type 토큰만 적는다.");
+        }
+
+        private static List<Map<String, Object>> childModeReport(Set<ChildMode> modes) {
+            List<Map<String, Object>> list = new ArrayList<>();
+            for (ChildMode mode : ChildMode.values()) {
+                list.add(ordered("code", mode.name(), "label", mode.label, "meaning", mode.meaning, "enabled", modes.contains(mode),
+                        "selectWith", "env " + CHILD_MODES_ENV + "(쉼표로 이름, 없으면 셋 다)"));
+            }
+            list.add(ordered("code", "AI_CHILD_INSTRUCTIONS_EXAMPLE", "text", AiChild.instructions(Plan.P1), "inputRule",
+                    "아이가 들은 말(무중 · 친구 · 코치 = user, 아이 = assistant) + 지금 차례 메모(developer)만 보낸다"));
+            return list;
+        }
+
+        private static List<Map<String, Object>> planReport() {
+            List<Map<String, Object>> list = new ArrayList<>();
+            for (Plan plan : Plan.values()) {
+                list.add(ordered("code", plan.name(), "label", plan.label, "reserveCalls", plan.reserve, "behavior", plan.behavior));
+            }
+            return list;
         }
 
         private static List<Map<String, Object>> reactionTypes() {
@@ -1168,13 +1647,13 @@ class PracticeDialogueLiveTest {
 
         private static Map<String, String> phaseLabels() {
             Map<String, String> labels = new LinkedHashMap<>();
-            labels.put("SCENE_INTRO", "장면 도입(장면 설명 승인 발화)");
+            labels.put("SCENE_INTRO", "장면 도입(무중의 장면 설명 → 친구 첫 대사, 승인 발화)");
             labels.put("OPPORTUNITY", "기회 문장 · 첫 대답(J2)");
             labels.put("REASK", "친구 되묻기(J3)");
             labels.put("HELP_OFFER", "도움 제안(J4)");
             labels.put("FOCUS", "코치 도움");
             labels.put("RETRY", "다시 해 보기(J5)");
-            labels.put("SCENE_WRAP", "장면 정리");
+            labels.put("SCENE_WRAP", "장면 정리(복귀 알림 · 친구 반응 → 변형 평가)");
             labels.put("VARIANT_OFFER", "변형 제안(J4 재사용)");
             labels.put("NEXT_GOAL", "다음 목표");
             labels.put("CLOSING", "마무리");
@@ -1196,9 +1675,9 @@ class PracticeDialogueLiveTest {
     // ------------------------------------------------------------------ 대화 하나
 
     /**
-     * 목표 하나 × 반응 하나의 대화. 실행부 대신 출력 능력을 받아 편지함(차례 큐)처럼 사건을 하나씩 흐름에 넘긴다: 재생 → 끝까지 재생 사실, 생성형 발화
-     * → 텍스트 대리 → 재생 사실, 판정 요청 → 실제 Luna → 결과 · 보류 사건, 시계 → 만료 사건. 큐가 비고 흐름이 아이 말을 기다리면 반응 규칙대로
-     * 아이가 말하거나 침묵한다.
+     * 목표 하나 × 아이 하나(대본 · AI · 규칙)의 대화. 실행부 대신 출력 능력을 받아 편지함(차례 큐)처럼 사건을 하나씩 흐름에 넘긴다: 재생 → 끝까지 재생
+     * 사실, 생성형 발화 → 텍스트 대리 → 재생 사실, 판정 요청 → 실제 Luna → 결과 · 보류 사건, 시계 → 만료 사건. 큐가 비고 흐름이 아이 말을 기다리면
+     * 아이 쪽이 말하거나 침묵한다. 아이가 들은 말({@link Heard})은 승인 발화 · 친구 · 코치 발화가 나올 때마다 쌓는다.
      */
     static final class DialogueRun implements PracticeOutput {
 
@@ -1208,7 +1687,8 @@ class PracticeDialogueLiveTest {
         private final Harness harness;
         private final PracticeScript script;
         private final Map<SceneKind, SceneLines> lines;
-        private final Reaction reaction;
+        private final ChildActor actor;
+        private final List<String> targets;
         private final MutableClock clock = new MutableClock();
         private final UUID sessionId = UUID.randomUUID();
         private final TimelineRecorder recorder = new TimelineRecorder();
@@ -1227,6 +1707,8 @@ class PracticeDialogueLiveTest {
         private final List<String> judgmentTrail = new ArrayList<>();
         private final List<String> failures = new ArrayList<>();
         private final List<String> notices = new ArrayList<>();
+        private final List<Heard> heard = new ArrayList<>();
+        private boolean actorStopped;
         private int seq;
         private int childTurnCount;
         private boolean judgmentBusy;
@@ -1239,11 +1721,13 @@ class PracticeDialogueLiveTest {
         private int answeredJudgments;
         private int withinLiveBudget;
 
-        DialogueRun(Harness harness, GoalInput input, PracticeScript script, Map<SceneKind, SceneLines> lines, Reaction reaction) {
+        DialogueRun(Harness harness, Harness.GoalPlan plan, ChildActor actor) {
+            GoalInput input = plan.input();
             this.harness = harness;
-            this.script = script;
-            this.lines = lines;
-            this.reaction = reaction;
+            this.script = plan.script();
+            this.lines = plan.lines();
+            this.actor = actor;
+            this.targets = plan.targets();
             // 다음 목표 대본 요청은 쓰지 않는다(패키지의 첫 목표 하나만 진행, 내부 호출 대상 core가 없다)
             ext = new PracticeConversation(sessionId, UUID.randomUUID(), clock, harness.production.settings(),
                     new PracticeScriptRequester(mock(InternalHttpClient.class), Runnable::run, harness.production.slotGuard()), recorder,
@@ -1252,10 +1736,9 @@ class PracticeDialogueLiveTest {
         }
 
         Map<String, Object> run() {
-            Map<String, Object> result = new LinkedHashMap<>();
-            result.put("reaction", reaction.name());
-            result.put("reactionLabel", reaction.label);
+            Map<String, Object> result = Harness.runHeader(actor);
             int before = harness.budget.used();
+            int childBefore = harness.budget.child;
             try {
                 handle(ext.onActive(context, this));
                 int steps = 0;
@@ -1273,6 +1756,9 @@ class PracticeDialogueLiveTest {
                             break;
                         }
                         childActs();
+                        if (actorStopped) {
+                            break;
+                        }
                     } else if (ext.state().phase() == Phase.CLOSING) {
                         status = "CLOSING_WITHOUT_SIGNAL";
                         break;
@@ -1293,8 +1779,8 @@ class PracticeDialogueLiveTest {
             result.put("status", status);
             result.put("endSignal", endSignal);
             result.put("endPhase", ext.state().phase().name());
-            result.put("calls", ordered("judgment", judgmentCalls, "textProxy", textCalls, "thisRun", harness.budget.used() - before,
-                    "harnessTotalAfter", harness.budget.used()));
+            result.put("calls", ordered("judgment", judgmentCalls, "textProxy", textCalls, "aiChild", harness.budget.child - childBefore,
+                    "thisRun", harness.budget.used() - before, "harnessTotalAfter", harness.budget.used()));
             result.put("answeredJudgments", answeredJudgments);
             result.put("judgmentsWithinProductionLiveBudget", withinLiveBudget);
             result.put("judgmentTrail", judgmentTrail);
@@ -1305,6 +1791,11 @@ class PracticeDialogueLiveTest {
             result.put("situationReexplained", helps.stream().anyMatch(help -> help.kind() == HelpKind.SITUATION_EXPLAIN));
             result.put("helps", helps.stream().map(DialogueRun::helpReport).toList());
             result.put("turns", timeline);
+            try {
+                result.put("checks", checks());
+            } catch (RuntimeException failure) {
+                result.put("checks", Map.of("error", failure.getClass().getSimpleName()));
+            }
             Object record;
             try {
                 record = plain(ext.practiceRecord());
@@ -1346,11 +1837,24 @@ class PracticeDialogueLiveTest {
             Phase phase = state.phase();
             int nth = inputsPerPhase.merge(state.sceneKind() + ":" + phase, 1, Integer::sum);
             SceneLines sceneLines = lines.getOrDefault(state.sceneKind(), lines.get(SceneKind.BASE));
-            ChildAct act = Child.act(reaction, phase, nth, sceneLines);
+            ChildAct act = actor.act(new ChildCue(phase, state.sceneKind(), nth, sceneLines, List.copyOf(heard),
+                    FlowTransitions.expectedPoint(phase)));
+            if (act.end()) {
+                cutByCap |= Boolean.TRUE.equals(act.detail().get("cutByCallCap"));
+                Map<String, Object> stopped = flow("CHILD_STOPPED");
+                stopped.put("rule", act.rule());
+                add(stopped);
+                actorStopped = true;
+                status = cutByCap ? "CUT_BY_CALL_CAP" : "CHILD_SCRIPT_ENDED";
+                return;
+            }
             Map<String, Object> turn = entry("CHILD");
             turn.put("text", act.text());
             turn.put("silence", act.silent());
             turn.put("rule", act.rule());
+            if (!act.detail().isEmpty()) {
+                turn.put("detail", act.detail());
+            }
             if (act.silent()) {
                 add(turn);
                 Instant due = timers.remove(NO_RESPONSE);
@@ -1372,6 +1876,7 @@ class PracticeDialogueLiveTest {
                 recent.removeFirst();
             }
             history.add(message("user", act.text()));
+            heard.add(new Heard(CHILD_SPEAKER, act.text()));
             handle(ext.onChildUtterance(new Utterance(seq, clock.now(), act.text(), false, false), this));
         }
 
@@ -1391,6 +1896,7 @@ class PracticeDialogueLiveTest {
             attachHelps(line);
             add(line);
             spokenLines.put(speech.correlationId(), line);
+            heard.add(new Heard(RolePolicy.NARRATOR_LABEL.equals(speech.partnerRole()) ? "무중" : "친구", speech.text()));
             history.add(message("developer", harness.factory.practiceInstruction("speech", PracticeInstruction.forSpeech(speech)).content()));
             history.add(message("assistant", speech.text()));
             queue.add(() -> playbackDone(speech.correlationId(), speech, Playback.COMPLETED, speech.text()));
@@ -1417,6 +1923,7 @@ class PracticeDialogueLiveTest {
             line.put("text", sentence);
             attachHelps(line);
             add(line);
+            heard.add(new Heard("무중", sentence));
             history.add(message("developer", harness.factory.practiceInstruction("notice", PracticeInstruction.forSpeech(speech)).content()));
             history.add(message("assistant", sentence));
             queue.add(() -> playbackDone(speech.correlationId(), speech, Playback.COMPLETED, sentence));
@@ -1488,6 +1995,7 @@ class PracticeDialogueLiveTest {
             history.add(message("developer", scoped));
             if (ok) {
                 history.add(message("assistant", reply.text()));
+                heard.add(new Heard(Transcript.speakerOfTemplate(String.valueOf(line.get("template"))), reply.text()));
             }
             return playbackDone(correlationId, null, ok ? Playback.COMPLETED : Playback.FAILED, ok ? reply.text() : "");
         }
@@ -1734,6 +2242,131 @@ class PracticeDialogueLiveTest {
             return true;
         }
 
+        // ---- 자동 점검표 ----
+
+        /**
+         * 대화마다 자동 점검표(하니스 참고용 글자 비교, 운영 검사 아님): 아이가 첫 대답 전에 들은 말에 목표 표현이 글자 그대로 있었나 · 성공한 장면 뒤
+         * 친구가 반응했나 · 무중 · 친구 · 코치 말에 칭찬 · 채점 말이 있나 · 도움 제안을 누가 했나 · 장면 수 · 첫 코치 도움(말틀)이 표현 예시를 그대로
+         * 말했나 · (대본 아이) 기대 판정과 같은가.
+         */
+        private Map<String, Object> checks() {
+            Map<String, Object> checks = new LinkedHashMap<>();
+            List<SceneRunRecord> rows = recorder.delegate.list();
+            List<Map<String, Object>> heardTarget = new ArrayList<>();
+            for (SceneKind kind : rows.stream().map(SceneRunRecord::sceneKind).distinct().toList()) {
+                heardTarget.add(targetHeardBeforeFirstAnswer(kind));
+            }
+            checks.put("targetHeardBeforeFirstAnswer", heardTarget);
+            List<Map<String, Object>> reactions = new ArrayList<>();
+            for (SceneRunRecord row : rows) {
+                LiveTiming timing = row.liveTiming();
+                if (timing == LiveTiming.IMMEDIATE || timing == LiveTiming.AFTER_REASK || timing == LiveTiming.AFTER_HELP) {
+                    boolean reacted = timeline.stream().anyMatch(entry -> String.valueOf(entry.get("template")).startsWith("PEER_REACTION")
+                            && row.sceneKind().name().equals(entry.get("sceneKind")) && entry.get("text") != null);
+                    reactions.add(ordered("scene", row.sceneKind().name(), "timing", timing.name(), "friendReacted", reacted));
+                }
+            }
+            checks.put("friendReactionAfterSuccess", reactions);
+            List<Map<String, Object>> praise = new ArrayList<>();
+            for (Map<String, Object> entry : timeline) {
+                if (spoken(entry) && entry.get("text") instanceof String text) {
+                    for (String word : PRAISE_WORDS) {
+                        if (text.contains(word)) {
+                            praise.add(ordered("n", entry.get("n"), "speaker", Transcript.speaker(entry), "word", word));
+                        }
+                    }
+                }
+            }
+            checks.put("praiseOrScoringWords", praise);
+            checks.put("helpOfferSpeakers", timeline.stream().filter(entry -> spoken(entry) && "HELP_OFFER".equals(entry.get("phase")))
+                    .map(entry -> Transcript.speaker(entry) + ("APPROVED_SPEECH".equals(entry.get("speaker")) ? "(승인 문장)" : "(생성)"))
+                    .distinct().toList());
+            checks.put("scenes", rows.stream().map(row -> row.sceneKind().name()).toList());
+            checks.put("firstCoachFrameSaidTheExample", firstFrameSaidExample());
+            if (actor.mode() == ChildMode.SCRIPT) {
+                checks.put("standardJudgmentMatches", standardMatches());
+            }
+            return checks;
+        }
+
+        /** 무중 · 친구 · 코치가 낸 줄인가(아이 말 · 흐름 사건이 아니다). */
+        private static boolean spoken(Map<String, Object> entry) {
+            return !"CHILD".equals(entry.get("speaker")) && !"FLOW".equals(entry.get("speaker"));
+        }
+
+        /** 그 장면의 첫 대답 전에 들은 줄(변형은 변형 제안부터)에 목표 표현 · 표현 예시가 정규화 비교로 들어 있었나. */
+        private Map<String, Object> targetHeardBeforeFirstAnswer(SceneKind kind) {
+            int start = 0;
+            if (kind == SceneKind.VARIANT) {
+                start = indexOf(entry -> spoken(entry) && "VARIANT_OFFER".equals(entry.get("phase")), 0);
+                if (start < 0) {
+                    start = indexOf(entry -> "VARIANT".equals(entry.get("sceneKind")), 0);
+                }
+                if (start < 0) {
+                    start = timeline.size();
+                }
+            }
+            int end = indexOf(entry -> "CHILD".equals(entry.get("speaker")) && kind.name().equals(entry.get("sceneKind"))
+                    && "OPPORTUNITY".equals(entry.get("phase")), start);
+            if (end < 0) {
+                end = timeline.size();
+            }
+            List<Object> found = new ArrayList<>();
+            for (int i = start; i < end; i++) {
+                Map<String, Object> entry = timeline.get(i);
+                if (spoken(entry) && entry.get("text") instanceof String text) {
+                    String normalized = SceneIntro.normalize(text);
+                    if (targets.stream().anyMatch(normalized::contains)) {
+                        found.add(entry.get("n"));
+                    }
+                }
+            }
+            return ordered("scene", kind.name(), "targetHeard", !found.isEmpty(), "lines", found);
+        }
+
+        private int indexOf(java.util.function.Predicate<Map<String, Object>> test, int from) {
+            for (int i = Math.max(0, from); i < timeline.size(); i++) {
+                if (test.test(timeline.get(i))) {
+                    return i;
+                }
+            }
+            return -1;
+        }
+
+        /** 첫 '요점 + 말틀' 코치 도움이 장면의 표현 예시를 글자 그대로 말했나(말틀 대신 정답을 준 셈). 그런 도움이 없으면 null. */
+        private Object firstFrameSaidExample() {
+            for (Map<String, Object> entry : timeline) {
+                if (String.valueOf(entry.get("template")).startsWith("COACH_HELP_FRAME")) {
+                    if (!(entry.get("text") instanceof String text)) {
+                        return "NOT_SPOKEN";
+                    }
+                    Scene scene = "VARIANT".equals(entry.get("sceneKind")) ? script.variantScene().orElse(script.baseScene())
+                            : script.baseScene();
+                    String normalized = SceneIntro.normalize(text);
+                    return scene.expressionExamples().stream().map(SceneIntro::normalize).filter(example -> example.length() >= 4)
+                            .anyMatch(normalized::contains);
+                }
+            }
+            return null;
+        }
+
+        /** 대본 아이: 판정된 아이 대사 가운데 기대 지점 · 선택지와 같게 확정된 수. */
+        private Map<String, Object> standardMatches() {
+            int judged = 0;
+            int matched = 0;
+            for (Map<String, Object> turn : childTurns.values()) {
+                if (turn.get("detail") instanceof Map<?, ?> detail && detail.get("expectedOption") instanceof String expected
+                        && turn.get("judgment") instanceof Map<?, ?> judgment && Boolean.TRUE.equals(judgment.get("requested"))) {
+                    judged++;
+                    if ("CONFIRMED".equals(judgment.get("outcome")) && expected.equals(judgment.get("first"))
+                            && String.valueOf(detail.get("expectedPoint")).equals(judgment.get("point"))) {
+                        matched++;
+                    }
+                }
+            }
+            return ordered("matched", matched, "judged", judged);
+        }
+
         // ---- 기록 ----
 
         private Map<String, Object> entry(String speaker) {
@@ -1780,11 +2413,21 @@ class PracticeDialogueLiveTest {
             if (text.equals(scene.sceneDescription())) {
                 return "SCENE_DESCRIPTION";
             }
+            if (scene.hasPartnerOpener() && text.equals(scene.partnerOpener())) {
+                return "PARTNER_OPENER";
+            }
             if (text.equals(scene.opportunitySentence())) {
                 return "OPPORTUNITY_SENTENCE";
             }
             if (text.equals(scene.reexplanation())) {
                 return "REEXPLANATION";
+            }
+            if (script.variantScene().map(v -> v.sceneDescription() + " " + PracticeInstructions.VARIANT_OFFER_QUESTION).filter(text::equals)
+                    .isPresent()) {
+                return "VARIANT_OFFER";
+            }
+            if (text.equals(harness.approvedSpeech.get("HELP_OFFER"))) {
+                return "HELP_OFFER";
             }
             return "APPROVED_OTHER";
         }
@@ -1891,7 +2534,224 @@ class PracticeDialogueLiveTest {
         }
     }
 
+    // ------------------------------------------------------------------ 사람이 읽는 대화 기록
+
+    /** 사람이 읽는 대화 기록({@value #MARKDOWN_FILE}). JSON 결과 지도에서 만든다. 대사는 합성 자료다. */
+    static final class Transcript {
+
+        private Transcript() {
+        }
+
+        /** 생성형 지시문 템플릿 이름으로 화자를 정한다(친구 · 코치 · 무중). */
+        static String speakerOfTemplate(String template) {
+            if (template.startsWith("PEER_")) {
+                return "친구";
+            }
+            if (template.startsWith("COACH_")) {
+                return "코치";
+            }
+            return "무중";
+        }
+
+        /** 대화 기록 한 줄의 화자(무중 · 친구 · 코치 · 아이). */
+        static String speaker(Map<String, Object> entry) {
+            Object who = entry.get("speaker");
+            if ("CHILD".equals(who)) {
+                return CHILD_SPEAKER;
+            }
+            if ("APPROVED_SPEECH".equals(who)) {
+                if (String.valueOf(entry.get("kind")).startsWith("ROLE_NOTICE_")) {
+                    return "무중";
+                }
+                return RolePolicy.NARRATOR_LABEL.equals(entry.get("voice")) ? "무중" : "친구";
+            }
+            return speakerOfTemplate(String.valueOf(entry.get("template")));
+        }
+
+        static String render(Map<String, Object> summary, List<Map<String, Object>> goals) {
+            StringBuilder md = new StringBuilder();
+            md.append("# 연습 대화 기록 (실호출 · 합성)\n\n");
+            md.append("- 증거 종류: ").append(summary.get("evidence"))
+                    .append(". 실제 API · 합성 자료의 결과이고 테스트 대역 · 실제 기기 · 실제 GPT-Live 음성 결과가 아니다(R-M11).\n");
+            md.append("- 시각: ").append(summary.get("startedAt")).append(" ~ ").append(summary.get("finishedAt")).append(" · 결과: ")
+                    .append(summary.get("outcome")).append('\n');
+            if (summary.get("totals") instanceof Map<?, ?> totals) {
+                md.append("- 대화 ").append(totals.get("runs")).append("건(끝까지 ").append(totals.get("completedRuns")).append("건, 상한으로 건너뜀 ")
+                        .append(totals.get("skippedByCallCap")).append("건) · OpenAI 호출 ").append(totals.get("openAiCalls")).append("회(판정 ")
+                        .append(totals.get("judgmentCalls")).append(" · 텍스트 대리 ").append(totals.get("textProxyCalls")).append(" · AI 아이 ")
+                        .append(totals.get("aiChildCalls")).append(", 상한 ").append(totals.get("callCap")).append(")\n");
+            }
+            md.append("- 화자: 무중(역할 밖 설명 · 제안 · 역할 알림), 친구(장면 속 친구), 코치(무중의 도움 발화), 아이. 친구 · 코치의 생성 발화는 GPT-Live 음성이 "
+                    + "아니라 같은 지시를 받은 텍스트 모델의 글이다(텍스트 대리).\n");
+            md.append("- 아이 말 뒤 괄호는 실제 판정(지점 1순위 확률, 또는 보류 사유)이다. 대본 아이는 기대 판정을 같이 적는다.\n");
+            md.append("- 점검표는 하니스가 글자로 비교한 참고 값이다. 연습이 되는지는 사람이 대사를 읽고 판단한다.\n");
+            for (Map<String, Object> goal : goals) {
+                renderGoal(md, goal);
+            }
+            return md.toString();
+        }
+
+        @SuppressWarnings("unchecked")
+        private static void renderGoal(StringBuilder md, Map<String, Object> goal) {
+            Map<String, Object> info = goal.get("goal") instanceof Map<?, ?> map ? (Map<String, Object>) map : Map.of();
+            md.append("\n## ").append(oneLine(info.get("displayName"))).append(" (").append(goal.get("key")).append(", ").append(goal.get("source"))
+                    .append(")\n\n");
+            if (!"RAN".equals(goal.get("result"))) {
+                md.append("- 진행 안 함: ").append(goal.get("result")).append('\n');
+                return;
+            }
+            if (goal.get("scenario") instanceof Map<?, ?> scenario && scenario.get("scenes") instanceof List<?> scenes) {
+                for (Object item : scenes) {
+                    if (item instanceof Map<?, ?> scene) {
+                        md.append("- 대본 ").append(scene.get("sceneKind")).append(": 무중 «").append(oneLine(scene.get("sceneDescription"))).append("»");
+                        if (scene.get("partnerOpener") instanceof String opener && !opener.isBlank()) {
+                            md.append(" → 친구 «").append(oneLine(opener)).append("»");
+                        }
+                        md.append(" → 친구 «").append(oneLine(scene.get("opportunitySentence"))).append("»\n");
+                    }
+                }
+            }
+            if (goal.get("runs") instanceof List<?> runs) {
+                for (Object item : runs) {
+                    if (item instanceof Map<?, ?> run) {
+                        renderRun(md, (Map<String, Object>) run);
+                    }
+                }
+            }
+        }
+
+        @SuppressWarnings("unchecked")
+        private static void renderRun(StringBuilder md, Map<String, Object> run) {
+            md.append("\n### ").append(run.get("childModeLabel")).append(" · ").append(run.get("child")).append(" ").append(oneLine(run.get("childLabel")))
+                    .append("\n\n");
+            md.append("- 상태: ").append(run.get("status"));
+            if (run.get("sceneEnds") instanceof List<?> ends && !ends.isEmpty()) {
+                md.append(" · 장면 결과: ").append(String.join(" / ", ends.stream().map(String::valueOf).toList()));
+            }
+            md.append('\n');
+            if ("SKIPPED_CALL_CAP".equals(run.get("status"))) {
+                md.append("- 호출 상한으로 시작하지 않았다(남은 호출 ").append(run.get("remainingCalls")).append("회, 필요 ").append(run.get("reserveNeeded"))
+                        .append("회)\n");
+                return;
+            }
+            md.append('\n');
+            if (run.get("turns") instanceof List<?> turns) {
+                for (Object item : turns) {
+                    if (item instanceof Map<?, ?> entry) {
+                        String line = line((Map<String, Object>) entry);
+                        if (line != null) {
+                            md.append(line).append('\n');
+                        }
+                    }
+                }
+            }
+            if (run.get("checks") instanceof Map<?, ?> checks) {
+                renderChecks(md, (Map<String, Object>) checks);
+            }
+        }
+
+        private static String line(Map<String, Object> entry) {
+            Object who = entry.get("speaker");
+            if ("FLOW".equals(who)) {
+                return switch (String.valueOf(entry.get("event"))) {
+                    case "SCENE_STARTED" -> "- *장면 시작: " + entry.get("recordedSceneKind") + "*";
+                    case "CHILD_STOPPED" -> "- *아이 쪽 멈춤: " + oneLine(entry.get("rule")) + "*";
+                    case "GENERATED_SPEECH_REFUSED" -> "- *생성 발화 거절: " + entry.get("reason") + "*";
+                    default -> null;
+                };
+            }
+            if ("CHILD".equals(who)) {
+                String text = entry.get("text") instanceof String spoken ? oneLine(spoken) : "(말하지 않음)";
+                return "- " + CHILD_SPEAKER + ": " + text + judgment(entry);
+            }
+            String text;
+            if (entry.get("text") instanceof String spoken) {
+                text = oneLine(spoken);
+            } else if (Boolean.TRUE.equals(entry.get("cancelledBeforeGeneration"))) {
+                text = "(생성 전에 흐름이 끊음)";
+            } else if (entry.get("generation") instanceof Map<?, ?> generation) {
+                text = "(생성 실패: " + generation.get("outcome") + ")";
+            } else {
+                text = "(말 없음)";
+            }
+            return "- " + speaker(entry) + ": " + text + (Boolean.TRUE.equals(entry.get("cancelledByFlow")) ? " (흐름이 끊음)" : "");
+        }
+
+        private static String judgment(Map<String, Object> entry) {
+            List<String> parts = new ArrayList<>();
+            if (entry.get("judgment") instanceof Map<?, ?> judgment) {
+                Object point = judgment.get("point");
+                if (Boolean.FALSE.equals(judgment.get("requested"))) {
+                    parts.add(point + " 요청 거절(" + judgment.get("refusedBy") + ")");
+                } else if ("CONFIRMED".equals(judgment.get("outcome"))) {
+                    parts.add(point + " " + judgment.get("first") + probability(judgment.get("firstProbability")));
+                } else if (judgment.get("outcome") != null) {
+                    Object reason = judgment.get("abstainReason") != null ? judgment.get("abstainReason") : judgment.get("outcome");
+                    parts.add(point + " 보류(" + reason + (judgment.get("first") != null
+                            ? ", 1순위 " + judgment.get("first") + probability(judgment.get("firstProbability")) : "") + ")");
+                } else {
+                    parts.add(point + " 판정 전에 끝남");
+                }
+            }
+            if (entry.get("detail") instanceof Map<?, ?> detail && detail.get("expectedOption") != null) {
+                parts.add("기대 " + detail.get("expectedPoint") + " " + detail.get("expectedOption"));
+            }
+            return parts.isEmpty() ? "" : " (" + String.join(" · ", parts) + ")";
+        }
+
+        @SuppressWarnings("unchecked")
+        private static void renderChecks(StringBuilder md, Map<String, Object> checks) {
+            md.append("\n점검표\n\n");
+            if (checks.containsKey("error")) {
+                md.append("- 점검표를 만들지 못했다: ").append(checks.get("error")).append('\n');
+                return;
+            }
+            md.append("- 아이가 첫 대답 전에 들은 말에 목표 표현: ").append(list(checks.get("targetHeardBeforeFirstAnswer"),
+                    item -> item.get("scene") + " " + (Boolean.TRUE.equals(item.get("targetHeard")) ? "있음(주의, 줄 " + item.get("lines") + ")" : "없음"),
+                    "장면 없음")).append('\n');
+            md.append("- 성공한 장면 뒤 친구 반응: ").append(list(checks.get("friendReactionAfterSuccess"),
+                    item -> item.get("scene") + "(" + item.get("timing") + ") " + (Boolean.TRUE.equals(item.get("friendReacted")) ? "있음" : "없음(주의)"),
+                    "성공한 장면 없음")).append('\n');
+            md.append("- 무중 · 친구 · 코치 말의 칭찬 · 채점 말: ").append(list(checks.get("praiseOrScoringWords"),
+                    item -> item.get("speaker") + " '" + item.get("word") + "'(줄 " + item.get("n") + ")", "없음")).append('\n');
+            md.append("- 도움 제안 화자: ").append(checks.get("helpOfferSpeakers") instanceof List<?> speakers && !speakers.isEmpty()
+                    ? String.join(", ", speakers.stream().map(String::valueOf).toList()) : "도움 제안 없음").append('\n');
+            md.append("- 장면 수: ").append(checks.get("scenes") instanceof List<?> scenes
+                    ? scenes.size() + "(" + String.join(" · ", scenes.stream().map(String::valueOf).toList()) + ")" : "?").append('\n');
+            Object frame = checks.get("firstCoachFrameSaidTheExample");
+            md.append("- 첫 코치 도움(말틀)이 표현 예시를 그대로 말함: ").append(frame == null ? "말틀 도움 없음"
+                    : Boolean.TRUE.equals(frame) ? "예(주의)" : Boolean.FALSE.equals(frame) ? "아니오" : String.valueOf(frame)).append('\n');
+            if (checks.get("standardJudgmentMatches") instanceof Map<?, ?> matches) {
+                md.append("- 기준 대화 기대 판정과 같음: ").append(matches.get("matched")).append(" / ").append(matches.get("judged")).append('\n');
+            }
+        }
+
+        private static String list(Object value, java.util.function.Function<Map<?, ?>, String> each, String empty) {
+            if (!(value instanceof List<?> items) || items.isEmpty()) {
+                return empty;
+            }
+            return String.join(" · ", items.stream().filter(Map.class::isInstance).map(item -> each.apply((Map<?, ?>) item)).toList());
+        }
+
+        private static String probability(Object value) {
+            return value instanceof Number number ? String.format(Locale.ROOT, " %.2f", number.doubleValue()) : "";
+        }
+
+        /** 한 줄로(줄바꿈 · 탭을 공백으로). */
+        private static String oneLine(Object value) {
+            return value == null ? "" : String.valueOf(value).replaceAll("[\\r\\n\\t]+", " ").strip();
+        }
+    }
+
     // ------------------------------------------------------------------ 쓰기
+
+    /** 메시지 한 건(Responses API input 항목). */
+    static Map<String, Object> chat(String role, String content) {
+        Map<String, Object> message = new LinkedHashMap<>();
+        message.put("role", role);
+        message.put("content", content);
+        return message;
+    }
 
     /** 순서를 지키는 작은 지도(키, 값, 키, 값 …). */
     static Map<String, Object> ordered(Object... pairs) {
