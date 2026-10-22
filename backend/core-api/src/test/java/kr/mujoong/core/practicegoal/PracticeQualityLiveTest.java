@@ -677,6 +677,12 @@ class PracticeQualityLiveTest {
             prod.put("resultAttemptTimeoutMs", production.resultAttempt().toMillis());
             prod.put("graphBudgetMs", production.graphBudget().toMillis());
             prod.put("scenarioHistoryTimeoutMs", production.historyTimeout().toMillis());
+            // 목적별 추론 강도도 application.yml 값을 그대로 쓰므로, 어느 설정을 잰 실행인지 결과에 남긴다
+            Map<String, Object> effort = new LinkedHashMap<>();
+            for (LunaPurpose purpose : LunaPurpose.values()) {
+                effort.put(purpose.name(), production.purposes().of(purpose).reasoningEffort());
+            }
+            prod.put("lunaReasoningEffort", effort);
             return Map.of("harness", harness, "production(application.yml)", prod,
                     "rule", "운영 값은 바꾸지 않았다. 하니스는 넉넉한 시한으로 돌고 timing에 운영 예산 안이었는지를 적는다");
         }

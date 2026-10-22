@@ -242,12 +242,13 @@ mujoong:
     base-url: https://api.openai.com/v1
     max-response-bytes: 1000000
     purpose:
+      # 상황 생성 · 검토는 아이가 연습을 시작할 때 15초 예산 안에서 최대 6번 부르므로 추론을 낮춘다(docs/practice-live-fixes.md)
       scenario-generation:
         max-output-tokens: 4000
-        reasoning-effort: medium
+        reasoning-effort: low
       scenario-review:
         max-output-tokens: 4000
-        reasoning-effort: medium
+        reasoning-effort: low
       seed-generation:
         max-output-tokens: 4000
         reasoning-effort: medium

@@ -391,7 +391,7 @@ Luna 호출부(core-api · realtime-activity 각자)는 공급자 시도마다 `
 | `mujoong.luna.base-url` | `https://api.openai.com/v1` | core-api · realtime | Responses API 기준 주소(`{base-url}/responses`). test 프로필은 루프백으로 덮어쓴다 |
 | `mujoong.luna.max-response-bytes` | `1000000` | core-api · realtime | 응답 본문 바이트 상한. 넘으면 `LENGTH_EXCEEDED` |
 | `mujoong.luna.purpose.<목적>.max-output-tokens` | `4000` | core-api · realtime | 요청 `max_output_tokens`. core 목적: `scenario-generation` · `scenario-review` · `seed-generation` · `result-text` · `goal-candidates` · `rejudgment`, realtime 목적: `judgment-live` |
-| `mujoong.luna.purpose.<목적>.reasoning-effort` | `medium` | core-api · realtime | 요청 `reasoning.effort`(`none` · `minimal` · `low` · `medium` · `high`) |
+| `mujoong.luna.purpose.<목적>.reasoning-effort` | `medium`(core `scenario-generation` · `scenario-review`는 `low`) | core-api · realtime | 요청 `reasoning.effort`(`none` · `minimal` · `low` · `medium` · `high`). 상황 생성 · 검토는 시작 요청의 15초 예산을 함께 쓰므로 낮춘다 |
 
 ### 10.10 U9 호출 방식 · 실패 사유 · 기존 어댑터
 
