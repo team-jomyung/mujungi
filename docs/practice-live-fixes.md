@@ -122,7 +122,7 @@
 
 ## 7. 가정 (LIVE-FIX-A)
 
-- **LIVE-FIX-A1** 시험 DB: 이 컨테이너에 Docker 데몬이 떠 있지 않아(`docker.sock`만 있음) `-Pmujoong.test.db=local`(호스트 PostgreSQL 16 바이너리로 `MujoongPostgres` local 백엔드가 임시 클러스터를 만듦)로 돌렸다. Docker 데몬은 켜지 않았다. 리뷰 반영(11절) 때도 같은 상태라 같은 방식으로 돌렸다.
+- **LIVE-FIX-A1** 시험 DB: 이 컨테이너에 Docker 데몬이 떠 있지 않아(`docker.sock`만 있음) `-Pmujoong.test.db=local`(호스트 PostgreSQL 16 바이너리로 `MujoongPostgres` local 백엔드가 임시 클러스터를 만듦)로 돌렸다. Docker 데몬은 켜지 않았다. 리뷰 반영(11절) 때도 같은 상태라 같은 방식으로 돌렸다. 최종 검증(10절 마지막 줄)은 팀 규칙 명령(`-Pmujoong.test.db=docker`)대로 돌리려고 이 컨테이너의 `dockerd`를 켰다. 남아 있던 컨테이너 · `mujoong-manual` 볼륨은 없었고(R-F12), 시험이 끝난 뒤에도 컨테이너가 남지 않았다.
 - **LIVE-FIX-A2** `reexplanation`은 지시서와 달리 도움 동의 없이 들린다(3.2절). 처음 v2는 EARLY_CUE 대상에서 빼고 목표 표현을 그대로 담을 때만 ANSWER_INCLUDED로 보았으나, 리뷰 지적(11절 R1)대로 그러면 의미 검토가 없어지므로 v3은 처음 들리는 두 필드와 같은 기준(목표 표현이나 거의 같은 문장 · 핵심 단서 · 속마음 · 해야 할 행동 · 말해야 할 내용)으로 본다. 허용은 무슨 일이 있었는지를 더 쉽게 다시 말하는 것까지다. 생성 v5도 같은 기준을 지시한다.
 - **LIVE-FIX-A3** `opportunityCondition`을 글자 그대로 옮긴 부분은 EARLY_CUE가 아니다. 서버가 그 문장을 요구하므로 검토가 막으면 그 목표는 발급될 수 없다. 목표 상황 문장 자체에 단서가 든 경우(`s4` "공룡을 잘 모르는 친구에게")는 목표 후보(4요소) 쪽 문제로 남긴다. 이 예외는 글자 그대로 옮긴 부분에만 걸린다: v3 · v5는 허용 범위를 '눈에 보이는 장면 사실(장소 · 물건 · 상대의 대사 · 행동)'로 좁히고, 서술자가 상대의 지식 · 감정 · 의도를 직접 설명한 문장(같은 `s4` BASE의 "친구는 공룡 이름을 잘 모르고 …")은 장면 사실이 아니라 핵심 단서 설명으로 적었다(11절 R2).
 - **LIVE-FIX-A4** 불변 문장을 '아이가 놓치기 쉬운 순간의 요약'으로 풀었다. 씨앗 문장이 실수 장면을 과거형으로 적어("상대가 부탁을 했는데 대답 없이 내 이야기만 했다") 검토가 '장면에 그 실수가 없다'를 INVARIANT_MISMATCH로 읽었다고 보았다. `contracts/knowledge-graph.md`에 정의가 없어 가정이다.
@@ -169,6 +169,7 @@
 | 전체 `:contract-model:test :core-api:test :realtime-activity:test --continue`(마지막 커밋 ca34cfb) | contract-model 325건 · realtime 1932건 통과. core 1763건 중 2건 실패: `Neo4jIT` · `GraphWorkflowIT` 초기화 오류("Could not find a valid Docker environment") — Neo4j Testcontainers가 Docker 데몬을 못 찾은 환경 문제이고 이 브랜치 변경과 무관하다(기준선, LIVE-FIX-A1) |
 | 리뷰 반영(11절): `:core-api:test --tests "kr.mujoong.core.luna.*" --tests "kr.mujoong.core.practice.*" --tests "...PracticeLiveSettingsTest"` · `:realtime-activity:test --tests "kr.mujoong.realtime.practiceflow.*"` · `:contract-model:test` | core 356건 · realtime 213건 · contract-model 325건 통과 |
 | 리뷰 반영 뒤 전체 `:contract-model:test :core-api:test :realtime-activity:test --continue`(커밋 0e50028) | contract-model 325건 · realtime 1939건 통과. core 1764건 중 2건 실패: 같은 `Neo4jIT` · `GraphWorkflowIT` 초기화 오류(Docker 없음, 기준선) |
+| 최종 검증 `./gradlew --no-daemon clean check verifyBootJarHasNoTestClasses -Pmujoong.test.db=docker --continue`(커밋 3838137, Docker 데몬 켬 — LIVE-FIX-A1) | BUILD SUCCESSFUL. contract-model 325건 · core 1773건 · realtime 1939건 · test-support 31건 모두 통과(실패 · 오류 · 건너뜀 0). `Neo4jIT` · `GraphWorkflowIT`도 Docker로 통과. JaCoCo 줄 하한 검사 통과, 두 앱 boot jar 시험 항목 0건. live 태그 시험(`PracticeQualityLiveTest` · `PracticeDialogueLiveTest`)은 `check`에서 제외되어 돌지 않았다(R-F1) |
 
 더한 시험: `ScenarioLunaProviderTest`(검토 v2 · 생성 v4 판 · 지시 문장), `PlannedGenerationIT.baseOnlyReviewSeesStructureButNotTheNextVariantPlan`, `ScenarioContractTest.storedV1AndNewV2ReviewsBothMatchThePracticeScenarioContract`, `PracticeLiveSettingsTest`, `FlowTransitionsTest`(확신 부족 보류 5종), `PracticeConversationTest`(머뭇거림 → 도움 수락 끝까지 · 두 번째 보류 → 도움 거절 · 판정 쪽 실패는 그대로), `JudgmentExtensionPortTest.anUnsureAbstainCarriesOnlyTheUnconfirmedLeadingCodeAndAPlainAbstainCarriesNone`.
 
