@@ -332,6 +332,7 @@ U15 씨앗 v2는 GENERATED/DUPLICATE/NONE의 배타적 출력 분기를 사용�
 
 - 판정 질문 · 선택지(J1 ~ J6, A §7.3 · B §5.2)는 realtime `judgment/option-sets-v1.json`, 제브 검사 질문 · 라벨 8개 설명(7개 범주 + `PASS`) · 7개 범주 · 모드(C §3.1 · §3.2, AI 동작 명세 §10.2)는 `guardrail/policy-v2.json`에 둔다(U8의 `policy-v1.json`은 이력으로 남기고 코드가 읽지 않는다) [U13 편차 (U13-c)]. J7은 core 상황 생성 자체 검토 프롬프트(U10)라 realtime 판에 넣지 않는다.
 - realtime은 기동 때 두 파일을 읽어 검증하고, 파일이 없거나 형식이 틀리면 기동을 거부한다(BR2.1 · 4절 시드 사전과 같은 방식).
+- 판정 지시 본문은 realtime `judgment/prompt-v3.txt`(판 `prompt-v3`)이고, 지점별 질문 · 선택지 뜻은 위 선택지 판에서 이어 붙인다. 판을 올릴 때는 새 파일을 만들고 `JudgmentPrompt`의 판 상수만 바꾼다(옛 파일은 이력으로 남기고 코드가 읽지 않는다). v3은 v1 본문에 J4 규칙만 더했다: J4는 무중의 도움 제안과 '이어서 해 볼까?' 제안에 대한 대답에 쓰고, '그만하고 싶어' · '이제 그만할래' · '여기까지만 할래' · '오늘은 안 할래'처럼 제안을 받지 않고 그만하겠다는 말은 REFUSE다 [U11 편차 (U11-f)]. 선택지 판 `judgment-v1`과 판정 요청 · 출력 스키마는 그대로다.
 - 세션을 받을 때 두 판의 번호와 패키지의 승인 문구 판(`approvedContent` · `approvedSpeech`)을 세션 계획에 고정하고, 세션 정산이 끝나면 놓는다. 판정 · 검사 기록 행은 고정된 판 번호를 함께 남긴다(BR2.2, 기록은 U11 · U13).
 - GPT-Live 세션 지시문의 활동 본문은 realtime `live-prompts/free-talk.v1.txt`(판 `live-free-talk.v1`) · `live-prompts/practice.v1.txt`(판 `live-practice.v1`)다. 기동 때 읽고, 파일이 없거나 비었거나 임시 상한(4000자)을 넘거나 자리 표시자(`{ }`)가 있으면 기동을 거부한다. 판을 올릴 때는 새 파일을 만들고 `LiveSessionInstructions`의 판 상수 한 줄만 바꾼다. 세션마다 공급자가 `session.started`로 시작을 받아들였을 때 `LIVE_INSTRUCTIONS{kind, version, sha256}` 사건 하나를 남긴다(연결 뒤 `session.start` 전송이 실패하거나 `session.started`가 오지 않으면 남기지 않는다) [U11 편차 (U11-e)].
 

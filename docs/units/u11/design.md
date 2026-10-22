@@ -22,7 +22,7 @@
 | `InstructionTemplates` | `dialog/` | 모든 지시문 템플릿: 맞장구로 시작, "이번 한 번만 …"으로 범위를 닫음. `NextAction` 셋은 인자가 없다 |
 | `JudgeClient` · `LunaJudgeClient` · `UnavailableJudgeClient` | `judgment/` | 판정 포트. 실패도 예외 없이 보류 결과로 완료 |
 | `JudgeOutcomeValidator` | `judgment/` | 확률 범위 → 선택지 안 → 중복 → 0.6 → 0.15 순 검증(십진 비교, 경계는 확정) |
-| `JudgmentPrompt` · `prompt-v1.txt` | `judgment/` | 판정 지시 본문(데이터는 지시가 아님)과 지점별 선택지 뜻(판 리소스에서 이어 붙임), `promptVersion = prompt-v1` |
+| `JudgmentPrompt` · `prompt-v3.txt` | `judgment/` | 판정 지시 본문(데이터는 지시가 아님)과 지점별 선택지 뜻(판 리소스에서 이어 붙임), `promptVersion = prompt-v3`(v1 본문 + J4 거절 예, 편차 (U11-f) · `docs/practice-dialogue-standard.md` 14절 F6. `prompt-v1.txt`는 이력) |
 | `JudgmentTurn` | `judgment/` | 판정 턴 한 번의 수명(상태 기계 2.2). 실행기 · 게이트 · 기기 게이트웨이를 모른다(ArchUnit) |
 | `JudgmentCoordinator` · `JudgmentSupport` | `session/` | 열린 턴 하나 · 최근 확정 전사 4개 · 기록 쓰기, 실행기와는 `Env`로만 닿음 |
 | `JudgmentLive*` | `judgment/` | 판정 기록 저장소 · 비동기 기록기 · 삭제 참여자(순서 180), 표 `realtime_judgment_live`(realtime V5) |

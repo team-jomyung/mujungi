@@ -15,10 +15,14 @@ import kr.mujoong.realtime.content.LiveContentResources;
  */
 public record JudgmentPrompt(String version, String instructions) {
 
-    /** 지시 본문 자원. 판 번호는 파일 이름의 {@code prompt-v1}이다. */
-    public static final String RESOURCE = "judgment/prompt-v1.txt";
+    /**
+     * 지시 본문 자원. 판 번호는 파일 이름의 {@code prompt-v3}이다. v3은 v1 본문에 J4 규칙만 더했다: J4는 무중의 도움 제안과 '이어서 해 볼까?'
+     * 제안에 쓰고, '그만하고 싶어' · '이제 그만할래' · '여기까지만 할래' · '오늘은 안 할래'는 REFUSE다(실측 F6, docs/practice-dialogue-standard.md
+     * 14절). {@code prompt-v1.txt}는 이력으로 남기고 코드가 읽지 않는다. 판 이름 v2는 다른 작업 브랜치(J1 규칙)가 쓰고 있어 건너뛰었다.
+     */
+    public static final String RESOURCE = "judgment/prompt-v3.txt";
     /** 지금 판 번호. */
-    public static final String DEFAULT_VERSION = "prompt-v1";
+    public static final String DEFAULT_VERSION = "prompt-v3";
 
     private static final Pattern VERSION = Pattern.compile("^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$");
 

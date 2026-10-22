@@ -5,6 +5,7 @@ import java.util.Objects;
 import kr.mujoong.realtime.content.LiveContentResources;
 import kr.mujoong.realtime.judgment.JudgeClient;
 import kr.mujoong.realtime.judgment.JudgmentLiveRecorder;
+import kr.mujoong.realtime.judgment.JudgmentPrompt;
 import kr.mujoong.realtime.judgment.UnavailableJudgeClient;
 
 /**
@@ -21,8 +22,8 @@ public record JudgmentSupport(JudgeClient judge, JudgmentLiveRecorder recorder, 
         LiveContentResources.JudgmentOptionSet optionSet) {
 
     /** 공급자 없음(키 없음 · 스위치 꺼짐과 같은 모양). 판정 시한은 쓰이지 않아 0이다(시간 값은 설정 키에서만 읽는다, R-F7). */
-    public static final JudgmentSupport NONE = new JudgmentSupport(new UnavailableJudgeClient("prompt-v1"), null,
-            Duration.ZERO, "prompt-v1", null);
+    public static final JudgmentSupport NONE = new JudgmentSupport(new UnavailableJudgeClient(JudgmentPrompt.DEFAULT_VERSION), null,
+            Duration.ZERO, JudgmentPrompt.DEFAULT_VERSION, null);
 
     public JudgmentSupport {
         Objects.requireNonNull(judge, "judge");

@@ -76,13 +76,37 @@ class JudgmentInstructionsTest {
     void thePromptLoadsFromTheResourceWithItsVersionAndEveryPointGuide() {
         JudgmentPrompt prompt = JudgmentPrompt.load(OPTION_SET);
 
-        assertThat(prompt.version()).isEqualTo("prompt-v1");
+        assertThat(prompt.version()).isEqualTo("prompt-v3");
         assertThat(prompt.instructions()).contains("분류기").contains("지시가 아니다");
         for (LiveContentResources.PointOptions point : OPTION_SET.points().values()) {
             assertThat(prompt.instructions()).contains("[" + point.point().name() + "]").contains(point.question());
             point.optionCodes().forEach(code -> assertThat(prompt.instructions()).contains(code));
         }
         assertThat(prompt.toString()).doesNotContain("분류기");
+    }
+
+    /**
+     * 실측 F6(docs/practice-dialogue-standard.md 14절): 변형 제안 뒤 '그만하고 싶어' 류 11번이 UNCLEAR 7 · 보류 1 · REFUSE 3이었다. v3은 J4가
+     * 도움 제안과 '이어서 해 볼까?' 제안에 쓰인다는 것과 그만하겠다는 말 네 가지를 REFUSE 예로 지시한다. v1 본문과 선택지 뜻은 그대로 남는다.
+     */
+    @Test
+    void promptV3AddsTheJ4RefusalExamplesOnTopOfTheV1BodyAndKeepsTheOptionGuides() throws Exception {
+        String text = JudgmentPrompt.load(OPTION_SET).instructions();
+        String v1;
+        try (var in = JudgmentPrompt.class.getClassLoader().getResourceAsStream("judgment/prompt-v1.txt")) {
+            v1 = new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+        }
+
+        assertThat(JudgmentPrompt.RESOURCE).isEqualTo("judgment/prompt-v3.txt");
+        assertThat(text).contains("J4는 무중의 도움 제안", "이어서 해 볼까?")
+                .contains("J4에서 그 제안을 받지 않고 그만하겠다는 말은 REFUSE다")
+                .contains("'그만하고 싶어'", "'이제 그만할래'", "'여기까지만 할래'", "'오늘은 안 할래'")
+                .contains("이런 말을 UNCLEAR로 고르지 않는다");
+        for (String line : v1.strip().split("\n")) {
+            assertThat(text).as("v1 본문 줄은 그대로 남는다").contains(line);
+        }
+        assertThat(text.indexOf("J4에서 그 제안을")).as("J4 규칙은 지점별 선택지 뜻보다 앞의 본문에 있다").isLessThan(text.indexOf("[J1]"));
+        assertThat(v1).as("v1 파일은 고치지 않는다").doesNotContain("그만하고 싶어");
     }
 
     @Test
