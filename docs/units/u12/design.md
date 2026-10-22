@@ -6,7 +6,7 @@
 
 ## 1. 범위
 
-연습(PRACTICE) 세션을 새 연습 흐름으로 진행한다: 시작 요청이 연습 대본을 받고 → 참여 확인(실행부) 뒤 도입 → 기회 문장 → 판정(J2 ~ J5) → 되묻기 · 도움 · 변형 → 정리 → 정산(`record.practice`)까지. 친구(PEER) · 코치(COACH) 역할 발화는 GPT-Live가 그 자리에서 만들고 **제브(연습 모드)가 `ALLOW`한 것만** 재생된다.
+연습(PRACTICE) 세션을 새 연습 흐름으로 진행한다: 시작 요청이 연습 대본을 받고 → 참여 확인(실행부) 뒤 도입(무중의 설명 → 친구 첫 대사) → 친구 기회 문장 → 판정(J2 ~ J5) → 되묻기 · 도움 · 변형 → 친구 반응 → 정리 → 정산(`record.practice`)까지. 친구(PEER) · 코치(COACH) 역할 발화는 GPT-Live가 그 자리에서 만들고 **제브(연습 모드)가 `ALLOW`한 것만** 재생된다. 장면 진행 말의 기준은 팀 기준 연습 대화다(`docs/practice-dialogue-standard.md`).
 
 하지 않는 것: 프런트 · core-api 코드 변경(12 화면은 진행 6값으로 그대로 돈다), 기기 시뮬레이터 · `verify.sh` 단계 확장(후속), 레거시 연습 코드 · V4 표 삭제(BR10.1), 제브 실호출.
 
@@ -39,7 +39,7 @@
 
 ## 4. 기록 · 진행 표시 (BR7 · BR8)
 
-- 장면 행은 도입 재생이 성공한 뒤에만 만든다(도입 실패 · 시작 전 미참여는 행 없음). 사실 15종, 장면 결과(끝 시각 · 진행 중 판정 시점 · 변형 생략 사유 · 횟수), 도움 기록(종류 · 역할 · 예시 여부 · 동의 응답 · 길이)이 남는다.
+- 장면 행은 도입 재생이 성공한 뒤에만 만든다(도입 실패 · 시작 전 미참여는 행 없음). 판 v6 대본의 변형 장면은 제안에서 무중이 설명을 들려줬으므로 수락할 때 행을 만든다(U12-D7). 사실 15종, 장면 결과(끝 시각 · 진행 중 판정 시점 · 변형 생략 사유 · 횟수), 도움 기록(종류 · 역할 · 예시 여부 · 동의 응답 · 길이)이 남는다.
 - `record.practice`는 `flowVersion=practice-conversation-v1`, `scenes[]` 필수 4필드, `liveOutcome.timing`, `variantSkipReason`을 가지며 `practice-record-v2` 스키마를 통과한다(U14 읽기 코드 무변경). 판정 라벨 · 확률 · 전사 · 도움 내용은 어디에도 없다 — 값 타입에 문자열 칸이 없고 표식 문자열 시험이 로그 · 기록 · 이벤트 · 지시문을 훑는다.
 - 진행 표시는 새 단계를 6값(SCENARIO_INTRO · FIRST_RESPONSE · HELP_OFFER · CUE · AFTER_CUE_RESPONSE · NEW_SCENARIO_RESPONSE)으로 접어 보낸다. 접기는 표시에만 있고 저장 값은 새 단계를 사실대로 둔다.
 
@@ -51,6 +51,11 @@
 | U12-D2 | AC1.5.5 | 도움 내용 기록 | 도움 종류 · 예시 여부 · 동의 응답 · 시각 · 내용 **길이**만 저장 | R-F14, RA 검토 R-02 |
 | U12-D3 | AC1.5.4 | 변형 제안 동의 판정 지점 미정 | J4(수락 · 거절 · 불명확) 재사용 | 새 판정 지점은 계약을 바꾼다. 분류 품질은 실호출 확인 대상 |
 | U12-D4 | functional-spec §3.3 OPPORTUNITY(J2) 보류 행 | 보류는 재안내 1회, 두 번째면 장면 정리(ABSTAINED) | 확신 · 차이 문턱 미달 보류(LOW_CONFIDENCE · LOW_MARGIN)는 확정 안 된 1순위가 HELP이면 곧바로, 아니면 재안내 뒤 두 번째에 HELP_OFFER(J4 동의 확인)로 간다. 판정 쪽 실패(시간 초과 · 장애 · 거절)와 다른 단계는 그대로 | 실제 판정 모의에서 머뭇거리는 아이("음, 잘 모르겠어.")가 1순위 HELP 0.48 ~ 0.52 보류 두 번으로 도움 제안 없이 끝났다(docs/practice-live-fixes.md LIVE-FIX-A5 ~ A8) |
+| U12-D5 | functional-spec D6 · §3.3 SCENE_WRAP 행("장면 마무리 별도 발화는 없다") | 정리 진입 뒤 곧바로 변형 평가(코치 역할이면 복귀 알림 뒤) | 판정한 아이 대답이 장면을 닫으면(J2 FULL · J3 DELIVERED · J5 결과) 친구 반응 한 번(SCENE_WRAP 소단계 PEER_REACTION, 생성형 친구 슬롯)을 낸 뒤 변형 평가로 간다. 코치 역할이면 복귀 알림이 들린 뒤다. 시계 · 판독 불가 · 보류 · 막힘 · 도움 거절로 닫힌 장면은 반응 없이 평가한다. 반응 중의 아이 말 · 무응답은 보지 않는다 | 팀 기준 연습 대화 조건 4(칭찬 · 채점 대신 역할 안 반응) · AI 동작 명세 §3.1 `D_CONTINUE` · `D_RESUME` · §5.3 |
+| U12-D6 | 도움 제안 발화(이전 구현: 친구 생성형) | 친구가 도와줘도 되는지 묻는다 | 무중이 역할 밖에서 묻는다: 승인 발화 `HELP_OFFER`(«무중이가 조금 도와줄까?») 원문을 말하는 사람 `무중`으로 재생하고, 없으면 코치 슬롯 생성형 | AI 동작 명세 §3.1 `D_OFFER_HELP`("친구 역할에서 잠깐 나와") · 기준 연습 대화 조건 3 |
+| U12-D7 | functional-spec §3.3 SCENE_WRAP(변형 평가) 행("변형 제안 발화(`speakGenerated` PEER)") · VARIANT 도입 | 친구 생성형 제안(칭찬 '잘 마쳤다' 포함) → 수락 뒤 변형 설명부터 재생 | 판 v6 대본: VARIANT 설명 + «이어서 해 볼까?»를 무중 승인 발화로 묻고, 수락하면 설명을 다시 읽지 않고 행을 만든 뒤 첫 대사(있으면) → 기회 문장. 판 v5까지: 무중 생성형 질문(코치 슬롯, 칭찬 없음) → 수락 뒤 지금처럼 설명 → 기회 문장 | AI 동작 명세 §3.1 `D_VARIANT_OFFER` · `D_VARIANT_START`, 기준 연습 대화 조건 4 · 5. 판 v5 변형 설명은 기회 문장을 담아 제안에 넣으면 단서를 미리 듣는다 |
+| U12-D8 | BR5.2 · 코치 발화 예시 단계 | 동의 뒤에만 예시(첫 코치 발화는 단서만, 다시 해 보기 뒤 예시) | 동의 · 요청 뒤 첫 도움은 요점 + 표현 예시의 핵심 낱말을 비운 말틀, 다시 해 보기 뒤는 표현 예시 하나. 말틀도 `exampleGiven` · `EXPRESSION_EXAMPLE`로 남기고, 대본에 예시가 없으면 단서만 준다 | 기준 연습 대화 `D_FOCUS`("다르면 '아니, 나 ○○ 달라고 했어'처럼 말하면 돼"). AI 동작 명세 §8.2 예는 첫 도움에 예시 전체를 들지만 팀장 기준을 따른다 |
+| U12-D9 | functional-spec §3.3 종료 · 휴식(CLOSING) 행 | 진행 중이던 장면을 END_REQUEST로 닫는다 | 이미 정리된 장면(친구 반응 · 복귀 알림 · 변형 제안 중)에 온 요청은 정리 때 정한 `liveOutcome.timing`을 지우지 않고 원 장면이면 `variantSkipReason` END_OR_REST만 더한다 | 기록 손실 방지: 이전에는 변형 제안 중 휴식 요청이 끝난 장면의 '바로 전달' · '되묻기 뒤 전달'을 NONE으로 덮었다 |
 
 ## 6. 레거시 사실 기록
 
@@ -78,7 +83,8 @@
 | 전이표 · 상태 기계 · 라우터 | `FlowTransitionsTest` · `PracticeConversationTest` · `PracticeFlowRouterTest` |
 | 실행부 슬롯 · 제브 연결 | `PracticeGeneratedSpeechTest`(ALLOW · BLOCK 0바이트 · 제브 비활성 폐기 · 같은 지시문 재지시 · 종료 사실 한 번) |
 | 기록 · 진행 | `PracticeFlowRecordTest`(표식 문자열 · 값 타입 · 행 생성 조건) · `PracticeProgressMappingTest` |
-| 끝-끝(대역) | `PracticeFlowIT`: 시작 → 도입 → 기회 → J2 일부 전달 → 제브 PRACTICE_PEER ALLOW → J3 충분 → 정리 → 정산 → `record.practice` |
+| 끝-끝(대역) | `PracticeFlowIT`: 시작 → 도입 → 기회 → J2 일부 전달 → 제브 PRACTICE_PEER ALLOW → J3 충분 → 친구 반응(제브 PRACTICE_PEER ALLOW) → 정리 → 정산 → `record.practice` |
+| 기준 연습 대화(대역) | `StandardPracticeDialogueTest`: 고정 대본(크레용 · 우유, `src/test/resources/practiceflow/standard-practice-dialogue.json`)으로 기준 대화 차례 16개를 순서 · 말하는 사람까지 재현, 기록 장면 1 AFTER_REASK · 장면 2 AFTER_HELP |
 | 구조 | `PracticeFlowArchTest` |
 
 한국어 되묻기 · 코치 표현의 품질, 역할 전환 이해, J4 재사용 변형 동의 분류 품질, 제브 연습 모드의 실제 판정은 `[실호출-합성]` · `[실기기]`로 사람이 확인한다(R-F15 확인 기록 전에는 실제 제브 키를 넣지 않는다).

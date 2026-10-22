@@ -55,6 +55,10 @@ class PracticeProgressMappingTest {
         h.played();
         h.child("그거 줘");
         h.result("J2", "FULL");
+        assertThat(h.ext.progress().stage()).as("친구 반응(SCENE_WRAP/PEER_REACTION)은 방금 끝난 대답의 단계 값을 유지한다")
+                .isEqualTo("FIRST_RESPONSE");
+        seen.add(h.ext.progress().stage());
+        h.played();
         assertThat(h.ext.progress().stage()).as("변형 제안(VARIANT_OFFER)").isEqualTo("AFTER_CUE_RESPONSE");
         seen.add(h.ext.progress().stage());
         h.played();
@@ -68,6 +72,9 @@ class PracticeProgressMappingTest {
         seen.add(h.ext.progress().stage());
         h.child("그거 줘");
         h.result("J2", "FULL");
+        assertThat(h.ext.progress().stage()).as("변형 장면의 친구 반응도 변형 표시").isEqualTo("NEW_SCENARIO_RESPONSE");
+        seen.add(h.ext.progress().stage());
+        h.played();
 
         assertThat(h.ext.progress().stage()).as("다음 목표를 기다리는 NEXT_GOAL").isEqualTo("SCENARIO_INTRO");
         assertThat(h.ext.progress().goalIndex()).isEqualTo(1);
@@ -83,6 +90,9 @@ class PracticeProgressMappingTest {
         h.played();
         h.child("싫어");
         h.result("J3", "DELIVERED");
+        assertThat(h.ext.progress().stage()).as("되묻기 뒤 친구 반응").isEqualTo("FIRST_RESPONSE");
+        seen.add(h.ext.progress().stage());
+        h.played();
         seen.add(h.ext.progress().stage());
 
         assertThat(SIX).containsAll(seen);

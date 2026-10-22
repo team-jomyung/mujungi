@@ -55,6 +55,31 @@ final class PracticeScriptFixtures {
                 "validation", Map.of("goalIncluded", true, "triggerIncluded", true, "forbiddenFound", false)));
     }
 
+    /** 판 v6 대본의 BASE 설명(무중이 역할 밖에서 하는 상황 사실). */
+    static final String V6_BASE_DESCRIPTION = "무중이랑 상자 정리를 한다고 생각해 보자. 무중이가 같은 반 친구야. 네가 친구한테 파란 상자를 달라고 했어.";
+    /** 판 v6 대본의 VARIANT 설명(무중의 장면 전환 말, 서버가 '이어서 해 볼까?'를 붙인다). */
+    static final String V6_VARIANT_DESCRIPTION = "상자 정리 다 했네. 이번엔 간식 시간이야. 네가 친구한테 사과 주스를 달라고 했어.";
+    static final String V6_BASE_OPENER = "알았어, 잠깐만!";
+    static final String V6_BASE_OPPORTUNITY = "자, 여기 빨간 상자!";
+    static final String V6_VARIANT_OPPORTUNITY = "자, 포도 주스 여기!";
+
+    /**
+     * 판 v6 모양의 두 장면 대본: BASE는 친구 첫 대사가 있고(core 필수), VARIANT 설명은 무중의 장면 전환 말이다. {@code variantOpener}가 null이면
+     * VARIANT 첫 대사는 빈 문자열(생성 출력 규칙)이다.
+     */
+    static String v6Script(UUID scenarioId, String variantOpener) {
+        Map<String, Object> base = scene("base-1", "BASE", V6_BASE_DESCRIPTION, V6_BASE_OPENER, V6_BASE_OPPORTUNITY, "같은 반 친구");
+        base.put("focusPoints", List.of("달라고 한 것과 받은 것이 같은지 보기"));
+        base.put("expressionExamples", List.of("아니, 나 파란 상자 달라고 했어."));
+        Map<String, Object> variant = scene("variant-1", "VARIANT", V6_VARIANT_DESCRIPTION, variantOpener == null ? "" : variantOpener,
+                V6_VARIANT_OPPORTUNITY, "같은 반 친구");
+        variant.put("focusPoints", List.of("달라고 한 것과 받은 것이 같은지 보기"));
+        variant.put("expressionExamples", List.of("아니, 나 사과 주스 달라고 했어."));
+        return JsonCodec.shared().write(Map.of("scenarioId", scenarioId.toString(), "kind", "ORIGINAL",
+                "scriptVersion", "scenario-script.v1", "scenes", List.of(base, variant),
+                "validation", Map.of("goalIncluded", true, "triggerIncluded", true, "forbiddenFound", false)));
+    }
+
     /** 장면 JSON 한 건(빈 값이 아닌 선택 칸만 싣는다). 코치 자료는 상자 고르기 장면 것이다. */
     static Map<String, Object> scene(String key, String kind, String sceneDescription, String partnerOpener,
             String opportunitySentence, String partnerRole) {

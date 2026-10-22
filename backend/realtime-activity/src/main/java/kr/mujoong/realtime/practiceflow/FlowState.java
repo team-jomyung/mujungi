@@ -39,6 +39,8 @@ public final class FlowState {
         COACH_UTTERANCE,
         /** SCENE_WRAP: 복귀 알림 재생 중. */
         RETURN_NOTICE,
+        /** SCENE_WRAP: 장면을 닫은 아이 말에 친구가 역할 안에서 반응하는 중(D_CONTINUE · D_RESUME). */
+        PEER_REACTION,
         /** SCENE_WRAP: 변형 평가(알림이 없거나 끝났다). */
         VARIANT_EVAL,
         /** OPPORTUNITY · RETRY: 상황 다시 설명(승인 발화) 재생 중. */
@@ -62,6 +64,7 @@ public final class FlowState {
     private boolean helpConsented;
     private boolean endRequested;
     private boolean partnerOpener;
+    private boolean peerReaction;
     private EndCause sceneEndCause;
     private LiveTiming sceneTiming;
     private Instant goalActiveStartedAt;
@@ -137,6 +140,11 @@ public final class FlowState {
         return partnerOpener;
     }
 
+    /** 장면을 닫은 아이 말에 친구가 반응할 차례인가(복귀 알림 뒤 친구 반응 D_RESUME을 정한다). */
+    public boolean peerReaction() {
+        return peerReaction;
+    }
+
     /** 장면이 정리로 들어간 원인(SCENE_WRAP 이후에만 값이 있다). */
     public EndCause sceneEndCause() {
         return sceneEndCause;
@@ -195,6 +203,7 @@ public final class FlowState {
         this.judgmentOpen = false;
         this.helpConsented = false;
         this.partnerOpener = false;
+        this.peerReaction = false;
         this.sceneEndCause = null;
         this.sceneTiming = null;
         this.focusStartedAt = null;
@@ -245,6 +254,10 @@ public final class FlowState {
 
     void partnerOpener(boolean value) {
         this.partnerOpener = value;
+    }
+
+    void peerReaction(boolean value) {
+        this.peerReaction = value;
     }
 
     void sceneEnd(EndCause cause, LiveTiming timing) {

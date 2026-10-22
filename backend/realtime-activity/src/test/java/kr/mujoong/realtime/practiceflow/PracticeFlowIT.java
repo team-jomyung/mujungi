@@ -41,7 +41,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 /**
- * 새 연습 흐름 끝-끝 최소 범위 (U12 FR8.1, 계획 열린 질문 6): AC1.2.3 "그거 줘 → 어느 색? → 파란색" 한 장면을 실행부({@code SessionExecutor}) ·
+ * 새 연습 흐름 끝-끝 최소 범위 (U12 FR8.1, 계획 열린 질문 6): AC1.2.3 "그거 줘 → 어느 색? → 파란색 → 친구 반응" 한 장면을 실행부({@code SessionExecutor}) ·
  * 라우터 · 상태 기계 · 운영 기록기(실제 DB V7 표)로 시작부터 {@code record.practice}까지 본다. 공급자 · 제브 · 판정은 모두 시험이 손으로 푸는
  * 가짜이다(R-F1). 이 시험의 성공은 테스트 대역 · 합성 대화의 성공이며 실제 API · 실제 기기 성공이 아니다(R-M11). 기기 시뮬레이터 · {@code verify.sh}
  * 단계 확장은 하지 않고 후속 과제다.
@@ -55,6 +55,7 @@ class PracticeFlowIT {
     private static final String INTRO = "친구가 상자 두 개를 들고 있어.";
     private static final String OPPORTUNITY = "친구가 말했어. 그거 줘.";
     private static final String REASK = "어느 색을 말하는 건지 잘 모르겠어";
+    private static final String REACTION = "아, 파란 상자였구나! 여기 있어.";
     private static final String MARKER = "표식QX93";
 
     private static RealtimeDb db;
@@ -128,11 +129,20 @@ class PracticeFlowIT {
         assertThat(h.link.outputs()).hasSize(3);
         complete(h.link.outputs().getLast().playbackId());
 
-        // 아이가 "파란색" → J3 충분 → 정리(변형 없음) → 연습 종료 신호
+        // 아이가 "파란색" → J3 충분 → 친구가 역할 안에서 한 번 반응(D_CONTINUE, 제브 PRACTICE_PEER 검사 뒤 재생) → 정리(변형 없음) → 연습 종료
         h.childSays("child-2", "파란색");
         assertThat(judge.last().request().point()).isEqualTo(JudgmentPoint.J3);
         judge.confirm("DELIVERED", 0.9, "STILL_SHORT", 0.05);
         h.drain();
+        assertThat(h.executor.status()).as("친구 반응이 끝나기 전에는 닫지 않는다").isEqualTo(SessionStatus.ACTIVE);
+        h.settleSend();
+        h.speak(REACTION, 4800);
+        h.advance(Duration.ofMillis(801));
+        assertThat(guard.last().request().mode()).isEqualTo(GuardrailRequest.Mode.PRACTICE_PEER);
+        guard.allow();
+        h.drain();
+        assertThat(h.link.outputs()).as("도입 · 기회 문장 · 되묻기 · 친구 반응").hasSize(4);
+        complete(h.link.outputs().getLast().playbackId());
         assertThat(h.executor.status()).isEqualTo(SessionStatus.CLOSING);
         assertThat(h.transitions.find(h.sessionId).orElseThrow().endDetail()).isEqualTo("PRACTICE_COMPLETED");
 

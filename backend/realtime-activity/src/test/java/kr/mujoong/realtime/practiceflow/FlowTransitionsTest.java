@@ -59,10 +59,12 @@ class FlowTransitionsTest {
     // ---- J2 OPPORTUNITY (6코드) ----
 
     @Test
-    void j2FullClosesTheSceneImmediately() {
+    void j2FullClosesTheSceneWithOneFriendReactionInsteadOfPraise() {
         Step step = table.onJudgment(at(Phase.OPPORTUNITY, Sub.NONE), JudgmentPoint.J2, "FULL");
 
-        assertEnters(step, Phase.SCENE_WRAP, Sub.VARIANT_EVAL);
+        // 기준 연습 대화 조건 4 · AI 동작 명세 §3.1 D_CONTINUE: 칭찬 · 채점 대신 친구가 역할 안에서 한 번 반응한 뒤 정리한다
+        assertEnters(step, Phase.SCENE_WRAP, Sub.PEER_REACTION);
+        assertThat(step.reactsToTheAnswer()).isTrue();
         assertThat(step.cause()).isEqualTo(EndCause.NORMAL);
         assertThat(step.timing()).isEqualTo(LiveTiming.IMMEDIATE);
         assertThat(step.facts()).isEmpty();
@@ -120,7 +122,8 @@ class FlowTransitionsTest {
     void j3DeliveredResolvesAfterTheReaskWithoutFocusHelp() {
         Step step = table.onJudgment(at(Phase.REASK, Sub.NONE), JudgmentPoint.J3, "DELIVERED");
 
-        assertEnters(step, Phase.SCENE_WRAP, Sub.VARIANT_EVAL);
+        assertEnters(step, Phase.SCENE_WRAP, Sub.PEER_REACTION);
+        assertThat(step.reactsToTheAnswer()).as("D_CONTINUE").isTrue();
         assertThat(step.fact()).isEqualTo(FactKind.REASK_RESOLVED);
         assertThat(step.timing()).isEqualTo(LiveTiming.AFTER_REASK);
         assertThat(step.consent()).isNull();
@@ -203,9 +206,13 @@ class FlowTransitionsTest {
     @ParameterizedTest
     @CsvSource({"FULL", "COPIED"})
     void j5FullAndCopiedBothCloseAsAfterHelpAndCopiedCountsAsFollowingTheCoach(String code) {
-        Step step = table.onJudgment(at(Phase.RETRY, Sub.NONE), JudgmentPoint.J5, code);
+        FlowState state = at(Phase.RETRY, Sub.NONE);
+        state.role(FlowRole.COACH);
+        Step step = table.onJudgment(state, JudgmentPoint.J5, code);
 
-        assertEnters(step, Phase.SCENE_WRAP, Sub.VARIANT_EVAL);
+        // 다시 해 보기는 코치 역할 안이다: 복귀 알림 뒤 친구가 그 말에 반응한다(D_RESUME)
+        assertEnters(step, Phase.SCENE_WRAP, Sub.RETURN_NOTICE);
+        assertThat(step.reactsToTheAnswer()).isTrue();
         assertThat(step.cause()).isEqualTo(EndCause.NORMAL);
         assertThat(step.timing()).isEqualTo(LiveTiming.AFTER_HELP);
     }
@@ -223,14 +230,18 @@ class FlowTransitionsTest {
     @CsvSource({"PARTIAL", "HELP"})
     void j5PartialAndHelpCloseAsFocusLimitWhenTwoRetriesAreUsedOrTheFocusClockExpired(String code) {
         FlowState twoRetries = at(Phase.RETRY, Sub.NONE);
+        twoRetries.role(FlowRole.COACH);
         twoRetries.incrementRetry();
         twoRetries.incrementRetry();
         FlowState expired = at(Phase.RETRY, Sub.NONE);
+        expired.role(FlowRole.COACH);
         expired.focusLimitReached(true);
 
         for (FlowState state : List.of(twoRetries, expired)) {
             Step step = table.onJudgment(state, JudgmentPoint.J5, code);
-            assertEnters(step, Phase.SCENE_WRAP, Sub.VARIANT_EVAL);
+            // J5의 그 밖의 결과도 D_RESUME이다(AI 동작 명세 §5.3): 판정한 아이 말이 있으니 복귀 알림 뒤 친구가 반응한다
+            assertEnters(step, Phase.SCENE_WRAP, Sub.RETURN_NOTICE);
+            assertThat(step.reactsToTheAnswer()).isTrue();
             assertThat(step.cause()).isEqualTo(EndCause.FOCUS_LIMIT);
             assertThat(step.timing()).isEqualTo(LiveTiming.NONE);
         }
@@ -254,6 +265,30 @@ class FlowTransitionsTest {
         noRetryLeft.incrementRetry();
         noRetryLeft.incrementRetry();
         assertThat(table.onJudgment(noRetryLeft, JudgmentPoint.J5, code).cause()).isEqualTo(EndCause.FOCUS_LIMIT);
+    }
+
+    @Test
+    void aSceneClosedWithoutAJudgedChildAnswerHasNoFriendReaction() {
+        FlowState unreadable = at(Phase.OPPORTUNITY, Sub.NONE);
+        unreadable.unreadableGuided(true);
+        FlowState silent = at(Phase.REASK, Sub.NONE);
+        silent.noResponseGuided(true);
+        FlowState coach = at(Phase.RETRY, Sub.NONE);
+        coach.role(FlowRole.COACH);
+        List<Step> steps = List.of(
+                table.onJudgment(unreadable, JudgmentPoint.J2, "UNREADABLE"),
+                table.onJudgmentUnavailable(unreadable, JudgmentPoint.J2),
+                table.onNoResponse(silent),
+                table.onJudgment(at(Phase.HELP_OFFER, Sub.NONE), JudgmentPoint.J4, "REFUSE"),
+                table.onFocusLimit(coach),
+                table.onGoalLimit(at(Phase.OPPORTUNITY, Sub.NONE)),
+                table.onSlotEnded(at(Phase.REASK, Sub.NONE), SlotEnd.BLOCKED),
+                table.onEndRequested(at(Phase.OPPORTUNITY, Sub.NONE)));
+
+        assertThat(steps).allSatisfy(step -> {
+            assertThat(step.action()).isEqualTo(Action.ENTER);
+            assertThat(step.reactsToTheAnswer()).as(step.toString()).isFalse();
+        });
     }
 
     @Test
@@ -534,6 +569,7 @@ class FlowTransitionsTest {
         assertEnters(offer, Phase.NEXT_GOAL, Sub.NONE);
         assertThat(offer.skip()).isEqualTo(VariantSkipReason.TIME_LIMIT);
         assertThat(table.onGoalLimit(at(Phase.SCENE_WRAP, Sub.RETURN_NOTICE)).action()).isEqualTo(Action.IGNORE);
+        assertThat(table.onGoalLimit(at(Phase.SCENE_WRAP, Sub.PEER_REACTION)).action()).isEqualTo(Action.IGNORE);
         assertThat(table.onGoalLimit(at(Phase.CLOSING, Sub.NONE)).action()).isEqualTo(Action.IGNORE);
     }
 
@@ -544,6 +580,7 @@ class FlowTransitionsTest {
         assertEnters(step, Phase.CLOSING, Sub.NONE);
         assertThat(step.fact()).isEqualTo(FactKind.END_REQUEST);
         assertThat(step.endsByRequest()).isTrue();
+        assertEnters(table.onEndRequested(at(Phase.SCENE_WRAP, Sub.PEER_REACTION)), Phase.CLOSING, Sub.NONE);
         assertThat(table.onEndRequested(at(Phase.CLOSING, Sub.NONE)).action()).isEqualTo(Action.IGNORE);
         assertThat(table.onEndRequested(at(Phase.NEXT_GOAL, Sub.NONE)).action()).isEqualTo(Action.IGNORE);
     }
@@ -664,6 +701,50 @@ class FlowTransitionsTest {
         assertThat(table.onSlotEnded(limited, SlotEnd.PLAYED).facts()).containsExactly(FactKind.COACH_RETURN);
         assertThat(table.onSlotEnded(limited, SlotEnd.FAILED).facts())
                 .containsExactly(FactKind.COACH_RETURN, FactKind.PLAYBACK_FAILED);
+    }
+
+    @Test
+    void afterTheReturnNoticeTheFriendReactsOnlyWhenAJudgedAnswerClosedTheSceneAndTheNoticeWasHeard() {
+        FlowState answered = at(Phase.SCENE_WRAP, Sub.RETURN_NOTICE);
+        answered.role(FlowRole.COACH);
+        answered.sceneEnd(EndCause.NORMAL, LiveTiming.AFTER_HELP);
+        answered.peerReaction(true);
+
+        for (SlotEnd end : List.of(SlotEnd.PLAYED, SlotEnd.INTERRUPTED)) {
+            Step step = table.onSlotEnded(answered, end);
+            assertEnters(step, Phase.SCENE_WRAP, Sub.PEER_REACTION);
+            assertThat(step.role()).isEqualTo(FlowRole.PEER);
+            assertThat(step.facts()).containsExactly(FactKind.COACH_RETURN, FactKind.ORIGINAL_SCENE_RETURN);
+            assertThat(step.cause()).as("정리는 이미 했다: 장면 결과를 다시 쓰지 않는다").isNull();
+        }
+        // 복귀 알림이 들리지 않았으면 친구가 느닷없이 반응하지 않고 평가로 간다
+        assertEnters(table.onSlotEnded(answered, SlotEnd.FAILED), Phase.SCENE_WRAP, Sub.VARIANT_EVAL);
+        assertEnters(table.onSlotEnded(answered, SlotEnd.BLOCKED), Phase.SCENE_WRAP, Sub.VARIANT_EVAL);
+
+        FlowState timedOut = at(Phase.SCENE_WRAP, Sub.RETURN_NOTICE);
+        timedOut.role(FlowRole.COACH);
+        timedOut.sceneEnd(EndCause.TIMEOUT, LiveTiming.NONE);
+        assertEnters(table.onSlotEnded(timedOut, SlotEnd.PLAYED), Phase.SCENE_WRAP, Sub.VARIANT_EVAL);
+    }
+
+    @Test
+    void theFriendReactionGoesToTheVariantEvaluationHoweverItEndsAndOnlyAFailureLeavesAFact() {
+        FlowState state = at(Phase.SCENE_WRAP, Sub.PEER_REACTION);
+        state.sceneEnd(EndCause.NORMAL, LiveTiming.IMMEDIATE);
+        state.peerReaction(true);
+
+        for (SlotEnd end : List.of(SlotEnd.PLAYED, SlotEnd.INTERRUPTED, SlotEnd.BLOCKED)) {
+            Step step = table.onSlotEnded(state, end);
+            assertEnters(step, Phase.SCENE_WRAP, Sub.VARIANT_EVAL);
+            assertThat(step.facts()).as(end.name()).isEmpty();
+            assertThat(step.cause()).isNull();
+            assertThat(step.reactsToTheAnswer()).isFalse();
+        }
+        assertThat(table.onSlotEnded(state, SlotEnd.FAILED).facts()).containsExactly(FactKind.PLAYBACK_FAILED);
+        // 반응 중에는 아이 말을 판정하지 않고 무응답 · 집중 시계도 보지 않는다(입력을 기다리는 단계가 아니다)
+        assertThat(table.onJudgment(state, JudgmentPoint.J2, "FULL").action()).isEqualTo(Action.IGNORE);
+        assertThat(table.onNoResponse(state).action()).isEqualTo(Action.IGNORE);
+        assertThat(table.onFocusLimit(state).action()).isEqualTo(Action.IGNORE);
     }
 
     @Test

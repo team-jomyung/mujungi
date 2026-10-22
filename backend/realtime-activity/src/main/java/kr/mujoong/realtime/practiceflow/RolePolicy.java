@@ -40,14 +40,27 @@ final class RolePolicy {
         return shortName && plain ? name : PEER_FALLBACK;
     }
 
+    /** 코치 발화가 들어 줄 수 있는 표현 예시의 단계. */
+    enum Example {
+        /** 예시 없이 요점 · 단서만. */
+        NONE,
+        /** 핵심 낱말 자리를 비운 말틀 하나(첫 도움). */
+        FRAME,
+        /** 대본의 표현 예시 하나(다시 해 보기 뒤의 도움). */
+        FULL
+    }
+
     /**
-     * 코치가 표현 예시를 줄 수 있는가: 아이가 도움에 동의했거나 직접 요청했고(BR5.2), 첫 코치 발화 뒤에 다시 해 보게 된 경우다. 첫 코치 발화는
-     * 예시 없이 상황을 다시 떠올리는 단서만 준다(이 단위가 정한 지시문 단계).
+     * 코치가 들어 줄 표현 예시의 단계(BR5.2: 아이가 도움에 동의했거나 직접 요청한 뒤에만 예시). 첫 도움은 요점 하나와 핵심 낱말을 비운 말틀,
+     * 다시 해 보기 뒤의 도움은 완성된 표현 예시 하나다(AI 동작 명세 §3.1 D_FOCUS, docs/practice-dialogue-standard.md).
      *
      * @param consented 아이가 도움에 동의했거나 요청했다
      * @param retryCount 지금까지 다시 해 보기에 들어간 횟수
      */
-    static boolean mayGiveExample(boolean consented, int retryCount) {
-        return consented && retryCount > 0;
+    static Example example(boolean consented, int retryCount) {
+        if (!consented) {
+            return Example.NONE;
+        }
+        return retryCount == 0 ? Example.FRAME : Example.FULL;
     }
 }

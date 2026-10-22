@@ -52,6 +52,8 @@ import kr.mujoong.realtime.voice.PracticeSpeech;
  *   <li>장면은 무중의 장면 설명(역할 밖) → 친구 첫 대사(대본에 있으면) → 친구 기회 문장 순서로 승인 원문 그대로 재생한다. 첫 대사가 없는 옛
  *       대본에서 도입(장면 설명)이 기회 문장을 담고 끝까지 재생됐으면 OPPORTUNITY 진입에서 기회 문장을 다시 재생하지 않는다({@link SceneIntro}).
  *       설명은 자르지 않는다. 승인 발화의 말하는 사람 표시는 설명이면 무중, 대사면 친구다({@link RolePolicy}).
+ *   <li>칭찬 · 채점 대신 친구가 역할 안에서 반응한다: 판정한 아이 대답이 장면을 닫으면(J2 충분 · J3 전달됨 · J5 결과) 친구 반응 한 마디(D_CONTINUE ·
+ *       코치 역할이면 복귀 알림 뒤 D_RESUME)를 낸 뒤 변형 평가로 간다. 도움 제안 · 변형 제안은 무중이 역할 밖에서 한다.
  *   <li>레거시 평가 · 단서 포트에 기대지 않는다: 이 클래스는 {@code practice} 패키지를 참조하지 않는다(BR2.5 · BR10.2).
  *   <li>아이 전사 · 대본 문장 · 판정 입력은 로그 · 기록 · 예외 메시지에 쓰지 않는다. 오류는 고정 사유 코드로만 알린다(R-F14).
  * </ul>
@@ -69,6 +71,8 @@ public final class PracticeConversation implements PracticeSessionExtension {
 
     private static final String COACH_SWITCH_CODE = "COACH_SWITCH";
     private static final String PEER_RETURN_CODE = "PEER_RETURN";
+    /** 도움 제안 승인 발화(AI 동작 명세 §3.1 D_OFFER_HELP 예시 «무중이가 조금 도와줄까?», contracts/ai-io.md 10.6). */
+    private static final String HELP_OFFER_CODE = "HELP_OFFER";
     private static final int CORE_FUNCTION_MAX = 500;
     private static final String STAGE_SCENARIO_INTRO = "SCENARIO_INTRO";
     private static final String STAGE_FIRST_RESPONSE = "FIRST_RESPONSE";
@@ -101,7 +105,7 @@ public final class PracticeConversation implements PracticeSessionExtension {
 
     private PracticeOutput output;
     private PracticeStartPackage pack;
-    private Set<String> approvedSpeechCodes = Set.of();
+    private Map<String, String> approvedSpeech = Map.of();
     private PracticeScript currentScript;
     private Scene currentScene;
     private UUID sceneRunId;
@@ -157,7 +161,7 @@ public final class PracticeConversation implements PracticeSessionExtension {
         PracticeStartPackage parsed = PracticeStartPackage.parse(context.practiceJson());
         this.pack = parsed;
         this.output = Objects.requireNonNull(target, "output");
-        this.approvedSpeechCodes = context.approvedSpeechTexts().keySet();
+        this.approvedSpeech = context.approvedSpeechTexts();
         if (parsed.firstScenario() != null) {
             scripts.put(0, parsed.firstScenario());
         } else {
@@ -266,6 +270,10 @@ public final class PracticeConversation implements PracticeSessionExtension {
             lastStage = STAGE_NEW_SCENARIO_RESPONSE;
             return lastStage;
         }
+        if (state.phase() == Phase.SCENE_WRAP && state.sub() == Sub.PEER_REACTION) {
+            // 친구 반응은 방금 끝난 대답의 연장이라 보호자 화면은 그 단계 값을 그대로 보여 준다
+            return lastStage;
+        }
         lastStage = switch (state.phase()) {
             case SCENE_INTRO, NEXT_GOAL -> STAGE_SCENARIO_INTRO;
             case OPPORTUNITY, REASK -> STAGE_FIRST_RESPONSE;
@@ -317,15 +325,35 @@ public final class PracticeConversation implements PracticeSessionExtension {
         currentScene = scene;
         state.resetScene(kind);
         state.partnerOpener(scene.hasPartnerOpener());
-        state.phase(Phase.SCENE_INTRO, Sub.NONE);
         sceneRunId = UUID.randomUUID();
         sceneRowCreated = false;
         earlyUtterance = null;
         pendingConsent = null;
+        if (kind == SceneKind.VARIANT && variantIntroducedInOffer()) {
+            startOfferedVariant(scene);
+            return;
+        }
+        state.phase(Phase.SCENE_INTRO, Sub.NONE);
         // 친구 첫 대사가 있으면 아이가 마지막으로 듣는 말은 설명이 아니라 첫 대사다: 설명이 기회 문장으로 끝나도 기회 문장을 따로 재생한다
         introCarriesOpportunity = !scene.hasPartnerOpener()
                 && SceneIntro.carriesOpportunity(scene.sceneDescription(), scene.opportunitySentence());
         speakNarration(scene.sceneDescription());
+    }
+
+    /**
+     * 받아들인 변형 장면 시작(D_VARIANT_START, 판 v6 대본). 변형 설명은 제안(D_VARIANT_OFFER)에서 무중이 이미 들려줬으므로 다시 읽지 않고, 그
+     * 설명이 들린 것을 장면 시작으로 보아 행을 만든 뒤 친구 첫 대사(있으면) → 기회 문장으로 시작한다. 옛 대본의 변형은 BASE와 같은 도입으로 시작한다.
+     */
+    private void startOfferedVariant(Scene scene) {
+        introCarriesOpportunity = false;
+        createSceneRow();
+        if (scene.hasPartnerOpener()) {
+            state.phase(Phase.SCENE_INTRO, Sub.PARTNER_OPENER);
+            speakPeerLine(scene.partnerOpener());
+        } else {
+            state.phase(Phase.OPPORTUNITY, Sub.NONE);
+            speakPeerLine(scene.opportunitySentence());
+        }
     }
 
     private void moveOn() {
@@ -640,9 +668,9 @@ public final class PracticeConversation implements PracticeSessionExtension {
         switch (state.phase()) {
             case OPPORTUNITY -> speakPeerLine(currentScene.opportunitySentence());
             case REASK -> speakGenerated(FlowRole.PEER, PracticeInstructions.peerReask(currentScene, true));
-            case HELP_OFFER -> speakGenerated(FlowRole.PEER, PracticeInstructions.peerHelpOffer(currentScene, true));
+            case HELP_OFFER -> helpOffer(true);
             case RETRY -> speakGenerated(FlowRole.COACH, PracticeInstructions.coachRetryPrompt(currentScene));
-            case VARIANT_OFFER -> speakGenerated(FlowRole.PEER, PracticeInstructions.peerVariantOffer(currentScene, true));
+            case VARIANT_OFFER -> variantOffer(true);
             default -> {
                 // 입력을 기다리는 단계가 아니면 재안내하지 않는다
             }
@@ -676,8 +704,10 @@ public final class PracticeConversation implements PracticeSessionExtension {
         if (step.incrementsRetry()) {
             state.incrementRetry();
         }
-        if (step.cause() != null) {
+        if (step.cause() != null && !(step.endsByRequest() && state.sceneEndCause() != null)) {
+            // 이미 정리된 장면(친구 반응 · 복귀 알림 · 변형 제안 중)에 온 종료 · 휴식 요청은 정리 때 정한 장면 결과를 덮지 않는다
             state.sceneEnd(step.cause(), step.timing() == null ? LiveTiming.NONE : step.timing());
+            state.peerReaction(step.reactsToTheAnswer());
         }
         if (step.endsByRequest()) {
             state.endRequested(true);
@@ -715,7 +745,7 @@ public final class PracticeConversation implements PracticeSessionExtension {
             }
             case OPPORTUNITY -> opportunity(previous);
             case REASK -> speakGenerated(FlowRole.PEER, PracticeInstructions.peerReask(currentScene, false));
-            case HELP_OFFER -> speakGenerated(FlowRole.PEER, PracticeInstructions.peerHelpOffer(currentScene, false));
+            case HELP_OFFER -> helpOffer(false);
             case FOCUS -> {
                 if (step.sub() == Sub.ROLE_NOTICE) {
                     announce(FlowRole.COACH);
@@ -727,19 +757,40 @@ public final class PracticeConversation implements PracticeSessionExtension {
             case SCENE_WRAP -> {
                 if (step.sub() == Sub.RETURN_NOTICE) {
                     announce(FlowRole.PEER);
+                } else if (step.sub() == Sub.PEER_REACTION) {
+                    speakGenerated(FlowRole.PEER, PracticeInstructions.peerReaction(currentScene));
                 } else {
                     applyStep(transitions.evaluateVariant(state, currentScript.variantScene().isPresent()));
                 }
             }
-            case VARIANT_OFFER -> speakGenerated(FlowRole.PEER, PracticeInstructions.peerVariantOffer(currentScene, false));
+            case VARIANT_OFFER -> variantOffer(false);
             case NEXT_GOAL -> advanceGoal();
             case CLOSING -> {
-                boolean sceneWasOpen = previous != Phase.SCENE_WRAP && previous != Phase.NEXT_GOAL && previous != Phase.CLOSING;
-                if (step.endsByRequest() && sceneWasOpen) {
-                    state.sceneEnd(FlowTransitions.EndCause.END_REQUEST, LiveTiming.NONE);
-                    recordOutcome(VariantSkipReason.END_OR_REST, LiveTiming.NONE);
+                if (step.endsByRequest()) {
+                    recordEndByRequest(previous);
                 }
                 closing(step.endsByRequest());
+            }
+        }
+    }
+
+    /**
+     * 종료 · 휴식 요청으로 닫을 때 지금 장면의 결과를 남긴다. 진행 중이던 장면은 END_REQUEST(진행 중 판정 시점 NONE)로 닫는다. 이미 정리된 장면(친구
+     * 반응 · 복귀 알림 · 변형 제안 중)은 정리 때 정한 시점(예: 되묻기 뒤 전달)을 지우지 않고, 원 장면이면 변형을 못 한 까닭(END_OR_REST)만 더한다.
+     */
+    private void recordEndByRequest(Phase previous) {
+        switch (previous) {
+            case NEXT_GOAL, CLOSING -> {
+                // 열린 장면이 없다
+            }
+            case SCENE_WRAP, VARIANT_OFFER -> {
+                if (state.sceneKind() == SceneKind.BASE) {
+                    recordOutcome(VariantSkipReason.END_OR_REST, state.sceneTiming());
+                }
+            }
+            default -> {
+                state.sceneEnd(FlowTransitions.EndCause.END_REQUEST, LiveTiming.NONE);
+                recordOutcome(VariantSkipReason.END_OR_REST, LiveTiming.NONE);
             }
         }
     }
@@ -766,20 +817,56 @@ public final class PracticeConversation implements PracticeSessionExtension {
             state.focusStartedAt(clock.now());
             output.schedule(TIMER_FOCUS_MAX, settings.focusMax());
         }
-        boolean example = RolePolicy.mayGiveExample(state.helpConsented(), state.retryCount());
+        RolePolicy.Example example = RolePolicy.example(state.helpConsented(), state.retryCount());
+        boolean exampleGiven = PracticeInstructions.coachGivesExample(currentScene, example);
         String text = PracticeInstructions.coachHelp(currentScene, example);
         recordFact(FactKind.FOCUS_HELP);
-        if (example) {
+        if (exampleGiven) {
             recordFact(FactKind.EXPRESSION_EXAMPLE);
         }
-        help(HelpKind.FOCUS_HELP, FlowRole.COACH, example, state.retryCount() == 0 ? pendingConsent : null, text.length());
+        help(HelpKind.FOCUS_HELP, FlowRole.COACH, exampleGiven, state.retryCount() == 0 ? pendingConsent : null, text.length());
         speakGenerated(FlowRole.COACH, text);
+    }
+
+    /**
+     * 도움 제안(D_OFFER_HELP): 무중이 친구 역할에서 잠깐 나와 묻는다. 승인 문장(HELP_OFFER)이 있으면 그 원문을 무중의 승인 발화로, 없으면 코치
+     * 슬롯의 생성형 발화로 낸다. 재안내는 같은 문장을 다시 들려준다.
+     */
+    private void helpOffer(boolean again) {
+        String approved = approvedSpeech.get(HELP_OFFER_CODE);
+        if (approved != null && !approved.isBlank()) {
+            speakNarration(approved);
+        } else {
+            speakGenerated(FlowRole.COACH, PracticeInstructions.mujoongHelpOffer(again));
+        }
+    }
+
+    /**
+     * 변형 제안(D_VARIANT_OFFER): 무중이 역할 밖에서 묻는다. 판 v6 대본은 변형 장면 설명(승인 대본 문장) 뒤에 고정 문장 «이어서 해 볼까?»를 붙인
+     * 승인 발화라 평가 · 칭찬이 끼어들 자리가 없다. 옛 대본은 변형 설명이 기회 문장을 담아 제안에 쓰지 않고, 무중의 생성형 질문(코치 슬롯)으로
+     * 묻는다. 재안내도 같은 길이다.
+     */
+    private void variantOffer(boolean again) {
+        Scene variant = currentScript.variantScene().orElse(currentScene);
+        if (variantIntroducedInOffer()) {
+            speakNarration(variant.sceneDescription() + " " + PracticeInstructions.VARIANT_OFFER_QUESTION);
+        } else {
+            speakGenerated(FlowRole.COACH, PracticeInstructions.mujoongVariantOffer(again));
+        }
+    }
+
+    /**
+     * 변형 설명을 제안에서 들려주는가: 판 v6 대본(core가 BASE 친구 첫 대사를 필수로 둔다)이면 참이다. 판 v5까지의 변형 설명은 기회 문장을 글자 그대로
+     * 담으므로(그 판의 생성 규칙) 제안에 넣지 않고 수락 뒤 장면 도입으로 들려준다.
+     */
+    private boolean variantIntroducedInOffer() {
+        return currentScript.baseScene().hasPartnerOpener();
     }
 
     /** 역할 전환 · 복귀 알림. 승인 문장이 있으면 실행부의 알림 능력으로, 없거나 못 내면 생성형 발화로 낸다(BR5.4). */
     private void announce(FlowRole toRole) {
         String code = toRole == FlowRole.COACH ? COACH_SWITCH_CODE : PEER_RETURN_CODE;
-        if (approvedSpeechCodes.contains(code) && output.announceRoleSwitch(toRole.name())) {
+        if (approvedSpeech.containsKey(code) && output.announceRoleSwitch(toRole.name())) {
             awaitingNotice = true;
             inputReady = false;
             output.schedule(TIMER_NOTICE_GUARD, settings.slotGuard());

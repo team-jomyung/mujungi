@@ -91,6 +91,7 @@ public final class FlowTransitions {
         private boolean startVariant;
         private boolean helpConsented;
         private boolean endRequest;
+        private boolean peerReaction;
 
         private Step(Action action, Phase phase, Sub sub) {
             this.action = action;
@@ -177,6 +178,11 @@ public final class FlowTransitions {
             return this;
         }
 
+        Step peerReaction() {
+            this.peerReaction = true;
+            return this;
+        }
+
         public Action action() {
             return action;
         }
@@ -246,6 +252,11 @@ public final class FlowTransitions {
         /** 종료 · 휴식 의사로 닫는다. */
         public boolean endsByRequest() {
             return endRequest;
+        }
+
+        /** 장면을 닫은 아이 말에 친구가 역할 안에서 한두 마디로 반응한 뒤 정리한다(D_CONTINUE · D_RESUME). */
+        public boolean reactsToTheAnswer() {
+            return peerReaction;
         }
 
         @Override
@@ -339,7 +350,7 @@ public final class FlowTransitions {
 
     private Step opportunity(FlowState s, String code) {
         return switch (code) {
-            case "FULL" -> wrap(s, EndCause.NORMAL, null, LiveTiming.IMMEDIATE);
+            case "FULL" -> answered(s, EndCause.NORMAL, null, LiveTiming.IMMEDIATE);
             case "PARTIAL" -> Step.enter(Phase.REASK, Sub.NONE);
             case "HELP" -> helpRequested();
             case "NOT_UNDERSTOOD", "IRRELEVANT" -> s.reexplainCount() < reexplainMax
@@ -352,7 +363,7 @@ public final class FlowTransitions {
 
     private Step reask(FlowState s, String code) {
         return switch (code) {
-            case "DELIVERED" -> wrap(s, EndCause.NORMAL, FactKind.REASK_RESOLVED, LiveTiming.AFTER_REASK);
+            case "DELIVERED" -> answered(s, EndCause.NORMAL, FactKind.REASK_RESOLVED, LiveTiming.AFTER_REASK);
             case "STILL_SHORT" -> Step.enter(Phase.HELP_OFFER, Sub.NONE);
             case "HELP" -> helpRequested();
             case "UNREADABLE" -> unreadable(s);
@@ -374,13 +385,13 @@ public final class FlowTransitions {
 
     private Step retry(FlowState s, String code) {
         return switch (code) {
-            case "FULL", "COPIED" -> wrap(s, EndCause.NORMAL, null, LiveTiming.AFTER_HELP);
+            case "FULL", "COPIED" -> answered(s, EndCause.NORMAL, null, LiveTiming.AFTER_HELP);
             case "PARTIAL", "HELP" -> retriesLeft(s)
                     ? Step.enter(Phase.FOCUS, Sub.COACH_UTTERANCE)
-                    : wrap(s, EndCause.FOCUS_LIMIT, null, LiveTiming.NONE);
+                    : answered(s, EndCause.FOCUS_LIMIT, null, LiveTiming.NONE);
             case "NOT_UNDERSTOOD", "IRRELEVANT" -> s.reexplainCount() < reexplainMax && retriesLeft(s)
                     ? Step.reexplain(Phase.RETRY)
-                    : wrap(s, EndCause.FOCUS_LIMIT, null, LiveTiming.NONE);
+                    : answered(s, EndCause.FOCUS_LIMIT, null, LiveTiming.NONE);
             case "UNREADABLE" -> unreadable(s);
             default -> unavailable(s);
         };
@@ -482,7 +493,11 @@ public final class FlowTransitions {
             case OPPORTUNITY, REASK, HELP_OFFER, RETRY -> inputPhaseSlot(s, end);
             case VARIANT_OFFER -> ended ? Step.await() : declineVariant(s, VariantSkipReason.NO_VARIANT);
             case FOCUS -> focusSlot(s, end);
-            case SCENE_WRAP -> s.sub() == Sub.RETURN_NOTICE ? returnNoticeEnded(s, end) : Step.ignore();
+            case SCENE_WRAP -> switch (s.sub()) {
+                case RETURN_NOTICE -> returnNoticeEnded(s, end);
+                case PEER_REACTION -> peerReactionEnded(end);
+                default -> Step.ignore();
+            };
             default -> Step.ignore();
         };
     }
@@ -534,8 +549,11 @@ public final class FlowTransitions {
     }
 
     private Step returnNoticeEnded(FlowState s, SlotEnd end) {
-        // 알림이 어떻게 끝나든 역할은 친구로 돌아간다. 이 단계의 실패는 다시 알림을 만들지 않고 변형 평가로 넘어간다(BR5.3)
-        Step step = Step.enter(Phase.SCENE_WRAP, Sub.VARIANT_EVAL).role(FlowRole.PEER).fact(FactKind.COACH_RETURN);
+        // 알림이 어떻게 끝나든 역할은 친구로 돌아간다. 이 단계의 실패는 다시 알림을 만들지 않고 변형 평가로 넘어간다(BR5.3).
+        // 복귀를 알렸고 장면을 닫은 것이 아이의 다시 해 보기 대답이면 친구가 그 말에 반응한 뒤 정리한다(D_RESUME)
+        boolean heard = end == SlotEnd.PLAYED || end == SlotEnd.INTERRUPTED;
+        Sub next = heard && s.peerReaction() ? Sub.PEER_REACTION : Sub.VARIANT_EVAL;
+        Step step = Step.enter(Phase.SCENE_WRAP, next).role(FlowRole.PEER).fact(FactKind.COACH_RETURN);
         if (s.sceneEndCause() == EndCause.NORMAL) {
             step.fact(FactKind.ORIGINAL_SCENE_RETURN);
         }
@@ -543,6 +561,12 @@ public final class FlowTransitions {
             step.fact(FactKind.PLAYBACK_FAILED);
         }
         return step;
+    }
+
+    /** 친구 반응이 어떻게 끝나든 변형 평가로 간다. 반응은 장면 결과를 바꾸지 않고 재생 실패만 사실로 남긴다. */
+    private static Step peerReactionEnded(SlotEnd end) {
+        Step step = Step.enter(Phase.SCENE_WRAP, Sub.VARIANT_EVAL);
+        return end == SlotEnd.FAILED ? step.fact(FactKind.PLAYBACK_FAILED) : step;
     }
 
     // ---- 장면 정리 · 변형 ----
@@ -594,6 +618,16 @@ public final class FlowTransitions {
     private Step wrap(FlowState s, EndCause cause, FactKind fact, LiveTiming timing) {
         Sub sub = s.role() == FlowRole.COACH ? Sub.RETURN_NOTICE : Sub.VARIANT_EVAL;
         return Step.enter(Phase.SCENE_WRAP, sub).cause(cause).fact(fact).timing(timing);
+    }
+
+    /**
+     * 판정한 아이 대답이 장면을 닫았다(J2 FULL · J3 DELIVERED · J5의 정리 결과). 칭찬 · 채점 대신 친구가 역할 안에서 그 말에 반응한 뒤 정리한다:
+     * 친구 역할이면 곧바로 반응(D_CONTINUE), 코치 역할이면 복귀 알림 뒤 반응(D_RESUME). 시계 만료 · 판독 불가 · 보류 · 막힘 정리에는 반응하지
+     * 않는다(반응할 아이 말이 없다).
+     */
+    private Step answered(FlowState s, EndCause cause, FactKind fact, LiveTiming timing) {
+        Sub sub = s.role() == FlowRole.COACH ? Sub.RETURN_NOTICE : Sub.PEER_REACTION;
+        return Step.enter(Phase.SCENE_WRAP, sub).cause(cause).fact(fact).timing(timing).peerReaction();
     }
 
     private Step declineVariant(FlowState s, VariantSkipReason reason) {

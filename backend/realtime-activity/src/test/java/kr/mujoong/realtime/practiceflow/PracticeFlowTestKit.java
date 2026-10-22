@@ -63,6 +63,8 @@ final class PracticeFlowTestKit {
         final List<Boolean> holds = new ArrayList<>();
         final List<Map.Entry<String, Object>> posted = new ArrayList<>();
         final Map<String, Instant> timers = new LinkedHashMap<>();
+        /** 출력 능력 호출 순서: {@link Slot}(재생 · 생성형), {@link Judgment}(판정 요청), {@code "ANNOUNCE:<역할>"}(승인 알림). */
+        final List<Object> timeline = new ArrayList<>();
         int calls;
         boolean speakResult = true;
         boolean generatedResult = true;
@@ -146,7 +148,9 @@ final class PracticeFlowTestKit {
         @Override
         public boolean speak(PracticeSpeech speech) {
             calls++;
-            slots.add(new Slot(speech.correlationId(), false, speech.partnerRole(), speech.text(), speech));
+            Slot slot = new Slot(speech.correlationId(), false, speech.partnerRole(), speech.text(), speech);
+            slots.add(slot);
+            timeline.add(slot);
             return speakResult;
         }
 
@@ -160,7 +164,9 @@ final class PracticeFlowTestKit {
         @Override
         public boolean requestJudgment(JudgmentPoint point, long transcriptSeq, UUID correlationId, Map<String, Object> criteria) {
             calls++;
-            judgments.add(new Judgment(point, transcriptSeq, correlationId, criteria));
+            Judgment judgment = new Judgment(point, transcriptSeq, correlationId, criteria);
+            judgments.add(judgment);
+            timeline.add(judgment);
             return judgmentResult;
         }
 
@@ -168,13 +174,16 @@ final class PracticeFlowTestKit {
         public boolean announceRoleSwitch(String toRole) {
             calls++;
             announces.add(toRole);
+            timeline.add("ANNOUNCE:" + toRole);
             return announceResult;
         }
 
         @Override
         public boolean speakGenerated(UUID correlationId, String role, String instructionText) {
             calls++;
-            slots.add(new Slot(correlationId, true, role, instructionText, null));
+            Slot slot = new Slot(correlationId, true, role, instructionText, null);
+            slots.add(slot);
+            timeline.add(slot);
             return generatedResult;
         }
     }

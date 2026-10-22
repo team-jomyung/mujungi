@@ -1,0 +1,105 @@
+{
+  "about": "팀장 기준 연습 대화(목표: 다시 말해 바로잡기 · 합성 인물 하늘이 8세)를 고정 대본으로 옮긴 시험 자료다. docs/practice-dialogue-standard.md. 대본은 생성 판 v6 계약 모양(사람이 쓴 고정 대본이라 generation 칸은 없다)이고 듣는 아이는 '너'로 부른다. childTurns는 기준 대화의 아이 대사와 기대 판정이다(대역 시험은 이 판정을 그대로 주고, 실호출 대본 아이 모드는 실제 판정과 비교만 한다).",
+  "practice": {
+    "goals": [
+      {
+        "goalSelectionId": "00000000-0000-4000-8000-0000000005d1",
+        "order": 1,
+        "displayName": "다시 말해 바로잡기",
+        "behaviorKey": "candidate:repair-misheard",
+        "behaviorVersion": 1,
+        "judgmentCriteria": "상황: 친구가 내가 달라고 한 것과 다른 것을 줄 때 / 상대: 같은 모둠 친구 / 의도: 원래 원한 것을 다시 분명히 말한다 / 표현: 아니, 나 파란색 달라고 했어",
+        "firstScenario": {
+          "scenarioId": "00000000-0000-4000-8000-0000000005a1",
+          "kind": "ORIGINAL",
+          "relationType": "같은 모둠 친구",
+          "opportunityCondition": "친구가 부탁한 것과 다른 것을 줬어.",
+          "scenarioText": "지금부터는 상상 속 상황이야. 무중이랑 같이 공룡 그림 그린다고 생각해 보자. 무중이가 같은 모둠 친구야. 네가 티라노 칠하려고 친구한테 파란색 크레용을 달라고 했어.",
+          "partnerRoleText": "제시된 상황의 상대 역할을 맡아. 아이의 답을 대신 말하거나 평가하지 마.",
+          "triggerScript": "자, 여기 초록색!",
+          "validation": {
+            "goalIncluded": true,
+            "triggerIncluded": true,
+            "forbiddenFound": false
+          },
+          "scriptVersion": "scenario-script.v1",
+          "scenes": [
+            {
+              "sceneKey": "base-crayon",
+              "sceneKind": "BASE",
+              "sceneDescription": "무중이랑 같이 공룡 그림 그린다고 생각해 보자. 무중이가 같은 모둠 친구야. 네가 티라노 칠하려고 친구한테 파란색 크레용을 달라고 했어.",
+              "partnerOpener": "알았어, 잠깐만!",
+              "opportunitySentence": "자, 여기 초록색!",
+              "reexplanation": "너는 티라노를 칠하려고 친구한테 파란색 크레용을 달라고 했어. 친구가 크레용 하나를 건넸어.",
+              "focusPoints": [
+                "달라고 한 것과 받은 것이 같은지 생각해 보기"
+              ],
+              "expressionExamples": [
+                "아니, 나 파란색 달라고 했어."
+              ],
+              "relation": "같은 모둠 친구",
+              "place": "교실",
+              "topic": "공룡 그림 그리기",
+              "partnerRole": "같은 모둠 친구"
+            },
+            {
+              "sceneKey": "variant-milk",
+              "sceneKind": "VARIANT",
+              "sceneDescription": "그림 다 그렸네. 이번엔 쉬는 시간이야. 네가 친구한테 딸기 우유를 달라고 했어.",
+              "partnerOpener": "",
+              "opportunitySentence": "자, 초코 우유 여기!",
+              "reexplanation": "쉬는 시간에 너는 친구한테 딸기 우유를 달라고 했어. 친구가 우유 하나를 건넸어.",
+              "focusPoints": [
+                "달라고 한 것과 받은 것이 같은지 생각해 보기"
+              ],
+              "expressionExamples": [
+                "아니, 나 딸기 우유 달라고 했어."
+              ],
+              "relation": "같은 모둠 친구",
+              "place": "교실",
+              "topic": "쉬는 시간 간식",
+              "partnerRole": "같은 모둠 친구"
+            }
+          ],
+          "selfReview": {
+            "verdict": "APPROVE",
+            "model": "fixed-standard",
+            "promptVersion": "scenario-review.v4"
+          }
+        }
+      }
+    ]
+  },
+  "childTurns": [
+    {
+      "scene": 1,
+      "text": "어… 이거 아닌데.",
+      "point": "J2",
+      "option": "PARTIAL"
+    },
+    {
+      "scene": 1,
+      "text": "파란색! 나 파란색 달라고 했어.",
+      "point": "J3",
+      "option": "DELIVERED"
+    },
+    {
+      "scene": 2,
+      "text": "응.",
+      "point": "J4",
+      "option": "ACCEPT"
+    },
+    {
+      "scene": 2,
+      "text": "음… 몰라. 뭐라고 해?",
+      "point": "J2",
+      "option": "HELP"
+    },
+    {
+      "scene": 2,
+      "text": "아니, 나 딸기 우유 달라고 했어.",
+      "point": "J5",
+      "option": "FULL"
+    }
+  ]
+}

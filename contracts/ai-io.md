@@ -515,3 +515,10 @@ core 상황 생성(U10)이 내는 대본(`practice-scenario.schema.json`의 `scr
    - `contracts/fixtures/practice-record-v2.json`: realtime 기록 조립기(`PracticeFlowRecordAssembler`) 출력.
    - 시험: contract-model `ContractSchemasTest`(두 자료가 각 스키마를 통과), core `PracticeLinkContractTest`(core 출력이 자료 1과 트리로 같음 · 자료 2를 정산이 읽음), realtime `PracticeLinkContractTest`(자료 1로 한 장면 진행 · 조립기 출력이 자료 2와 트리로 같음), core `PracticeStartApiIT`(자료 2 모양으로 실제 DB 정산). 한쪽 모양이 바뀌면 세 모듈 시험이 함께 깨진다.
    - 자료는 합성 문장과 `00000000-0000-4000-8000-…` 식별자만 쓴다.
+5. **장면 진행 말: 친구 반응 · 도움 제안 · 변형 제안 · 코치 도움** [U12 편차 (U12-f)]
+   - 판정한 아이 대답이 장면을 닫으면(J2 `FULL` · J3 `DELIVERED` · J5의 정리 결과) 칭찬 · 채점 대신 친구가 역할 안에서 한 번 반응한다(B §3.1 `D_CONTINUE` · `D_RESUME`). 친구 역할이면 곧바로, 코치 역할이면 복귀 알림(`PEER_RETURN`)이 들린 뒤다. 생성형 친구 슬롯(제브 `PRACTICE_PEER`)이고 지시문은 칭찬 · 교정 · 새 질문을 막는다. 반응 중의 아이 말은 판정하지 않고 무응답 시계를 걸지 않는다. 장면 결과(`liveOutcome.timing`)는 반응 전에 정해지며 반응이 실패하거나 막혀도 바뀌지 않는다(재생 실패만 `PLAYBACK_FAILED` 사실로 남는다). 무응답 · 판독 불가 · 보류 · 막힘 · 시계 한도 · 도움 거절로 닫힌 장면에는 반응하지 않는다(B §3.1 `D_WRAP` · `D_BACK_TO_SCENE`은 이 판의 범위 밖이다).
+   - 도움 제안(B §3.1 `D_OFFER_HELP`)은 친구가 아니라 무중이 역할 밖에서 한다. 시작 패키지 `approvedSpeech`의 `HELP_OFFER`가 있으면 그 원문을 말하는 사람 표시 `무중`의 승인 발화로 재생하고(원문 일치라 제브 생략, 10.5), 없으면 코치 슬롯(제브 `PRACTICE_COACH`)의 생성형 발화로 낸다. 재안내도 같은 길이다.
+   - 변형 제안(B §3.1 `D_VARIANT_OFFER`): 판 v6 대본(BASE에 `partnerOpener`가 있다)이면 VARIANT `sceneDescription` 원문 + 공백 + 고정 문장 `이어서 해 볼까?`를 무중의 승인 발화로 재생한다. VARIANT 설명은 무중의 장면 전환 말이고(10.11) 붙는 꼬리는 서버 고정 문장뿐이라 원문 일치 · 제브 생략 근거가 넓어지지 않는다. 수락하면 설명을 다시 읽지 않고 그때 변형 장면 행을 만든 뒤 VARIANT `partnerOpener`(있으면) → `opportunitySentence` 순서로 재생한다(B §3.1 `D_VARIANT_START`). 판 v5까지의 대본은 VARIANT 설명이 기회 문장을 글자 그대로 담으므로 제안에 쓰지 않고, 무중의 생성형 질문(코치 슬롯)으로 묻고 수락 뒤 지금처럼 설명 → 기회 문장으로 시작한다.
+   - 코치 도움(B §3.1 `D_FOCUS`): 도움 동의 · 요청 뒤 첫 도움은 `focusPoints` 첫 요점과 `expressionExamples` 첫 예시의 핵심 낱말을 비운 말틀이고, 다시 해 보기 뒤의 도움은 표현 예시 하나다. 기록의 `exampleGiven`과 사실 `EXPRESSION_EXAMPLE`은 대본에 표현 예시가 있고 말틀이나 예시를 줬을 때만 남는다.
+   - 종료 · 휴식 요청이 이미 정리된 장면(친구 반응 · 복귀 알림 · 변형 제안 중)에 오면 정리 때 정한 `liveOutcome.timing`을 지우지 않고, 원 장면(BASE)이면 `variantSkipReason` `END_OR_REST`만 더한다.
+   - 화면 진행 6값은 그대로다. 친구 반응 동안에는 직전 값을 유지한다(변형 장면이면 `NEW_SCENARIO_RESPONSE`).
