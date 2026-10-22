@@ -30,7 +30,7 @@ import org.junit.jupiter.api.*;
         String body=JsonCodec.shared().write(mapper.map(new PreparedPracticePackageMapper.PreparedSnapshot(session,key,List.of(frozen(true)),v3)).firstScenario());
         Map<?,?> wire=JsonCodec.shared().read(body,Map.class);
         @SuppressWarnings("unchecked") var generation=(Map<String,Object>)wire.get("generation");
-        assertThat(generation).containsEntry("promptVersion","scenario-generation.v4").containsEntry("kgVersion","graph-v7");
+        assertThat(generation).containsEntry("promptVersion","scenario-generation.v5").containsEntry("kgVersion","graph-v7");
         assertThat((List<?>)wire.get("scenes")).hasSize(2);
         assertThat(WebFixtures.schemaErrors("practice-scenario.schema.json",body)).isEmpty();
     }

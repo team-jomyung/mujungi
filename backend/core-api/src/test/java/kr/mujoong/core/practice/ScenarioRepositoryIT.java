@@ -39,7 +39,7 @@ class ScenarioRepositoryIT {
                         new kr.mujoong.core.practicegoal.FourElements("기회","같은 반 친구","멈추기","잠깐 쉬자"),"seed:S1",null,null)));
         var saved=save("그래프 상황",details);var loaded=repo.require(saved.scenarioId());
         assertThat(loaded.scenario()).isEqualTo(saved);
-        assertThat(loaded.scenario().generation().promptVersion()).isEqualTo("scenario-generation.v4");
+        assertThat(loaded.scenario().generation().promptVersion()).isEqualTo("scenario-generation.v5");
         assertThat(loaded.scenario().scenes().getFirst().relation()).isEqualTo("같은 반 친구");
         expose(saved);
         assertThat(history()).singleElement().satisfies(e->{

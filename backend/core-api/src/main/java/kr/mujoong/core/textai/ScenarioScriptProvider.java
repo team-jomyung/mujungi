@@ -8,9 +8,9 @@ import java.util.Optional;
 /** U10: 별도 생성/검토 단일 호출 능력만 제공한다. 재시도는 생성 흐름이 소유한다. */
 public interface ScenarioScriptProvider {
     /** 대본 생성 프롬프트 판. 판을 올릴 때는 이 값과 자원 파일만 바꾼다. */
-    String GENERATION_PROMPT_VERSION = "scenario-generation.v4";
+    String GENERATION_PROMPT_VERSION = "scenario-generation.v5";
     /** {@link #GENERATION_PROMPT_VERSION} 판의 지시 자원(첫 줄이 판 이름). */
-    String GENERATION_INSTRUCTIONS = "prompts/scenario/generation.v4.txt";
+    String GENERATION_INSTRUCTIONS = "prompts/scenario/generation.v5.txt";
     /** 별도 검토 프롬프트 판. 판을 올릴 때는 이 값과 자원 파일만 바꾼다(저장된 대본의 selfReview 판도 이 값이다). */
     String REVIEW_PROMPT_VERSION = "scenario-review.v3";
     /** {@link #REVIEW_PROMPT_VERSION} 판의 지시 자원(첫 줄이 판 이름). */
