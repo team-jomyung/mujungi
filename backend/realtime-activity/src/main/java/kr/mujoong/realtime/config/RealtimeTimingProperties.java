@@ -35,10 +35,13 @@ public record RealtimeTimingProperties(
      * @param inputTranscriptQuiet 입력 전사 조각이 이만큼 오지 않으면 그 묶음을 확정 전사로 본다(말 끝 · 전사 완료 사건이 없다, A7)
      * @param newSpeechMargin 지시 뒤 새 말의 전사 시작 시각에 더하는 여유. 오디오 시계가 (새 말 시작 + 이 값)에 닿는 첫 음성 조각부터 받는다(A4)
      */
-    public record ProviderTiming(Duration inputTranscriptQuiet, Duration newSpeechMargin) {
+    public record ProviderTiming(Duration inputTranscriptQuiet, Duration newSpeechMargin, Duration joinSelfStartWait) {
         public ProviderTiming {
             positive(inputTranscriptQuiet, "mujoong.timing.provider.input-transcript-quiet");
             positive(newSpeechMargin, "mujoong.timing.provider.new-speech-margin");
+            if (joinSelfStartWait == null || joinSelfStartWait.isNegative()) {
+                throw new IllegalArgumentException("mujoong.timing.provider.join-self-start-wait는 0 이상이어야 한다");
+            }
         }
     }
 
@@ -71,7 +74,7 @@ public record RealtimeTimingProperties(
 
     /**
      * ② 기기 응답 20초((h) PROVIDER_UNAVAILABLE에도) · ③ 마무리 확인 30초. U4b: 참여 창 처음 20초 · 안내 뒤 20초
-     * 공백 경고 4분 · 종료 6분, 종료 확인 질문 창 20초(계약 7절 밖), 정산 창 2초(
+     * 공백 경고 4분 · 종료 6분, 정산 창 2초(
      * 계약 7절 밖). 공백 경고는 공백 종료보다 짧아야 한다.
      */
     public record SessionTiming(
@@ -81,7 +84,6 @@ public record RealtimeTimingProperties(
             Duration joinWaitAfterReprompt,
             Duration silenceWarning,
             Duration silenceEnd,
-            Duration stopConfirmWait,
             Duration recordSettle) {
 
         public SessionTiming {
@@ -91,7 +93,6 @@ public record RealtimeTimingProperties(
             positive(joinWaitAfterReprompt, "mujoong.timing.session.join-wait-after-reprompt");
             positive(silenceWarning, "mujoong.timing.session.silence-warning");
             positive(silenceEnd, "mujoong.timing.session.silence-end");
-            positive(stopConfirmWait, "mujoong.timing.session.stop-confirm-wait");
             positive(recordSettle, "mujoong.timing.session.record-settle");
             if (silenceWarning.compareTo(silenceEnd) >= 0) {
                 throw invalid("mujoong.timing.session.silence-warning은 mujoong.timing.session.silence-end보다 짧아야 한다");

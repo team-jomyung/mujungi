@@ -64,8 +64,6 @@ public final class IdleClock {
         boolean hasJoin();
 
         void resumeJoinWindow(Duration paused);
-
-        void armStopConfirm();
     }
 
     private final SessionContext ctx;
@@ -117,10 +115,10 @@ public final class IdleClock {
         publishLive(now);
     }
 
-    /** 멈춤 조건: 기기 재생 중 · 서버 출력 대기(열린 구간 · 게이트 대기 · 대기 문구) · 기술 일시정지 · 확인 질문 대기. */
+    /** 멈춤 조건: 기기 재생 중 · 서버 출력 대기(열린 구간 · 게이트 대기 · 대기 문구) · 기술 일시정지. */
     private boolean silencePaused() {
         return !ctx.devicePlaying().isEmpty() || ctx.playback().isPlaying() || ctx.segment().isOpen() || ctx.transcripts().hasOpenAi()
-                || technicalPause != null || ctx.stopConfirm().isActive();
+                || technicalPause != null;
     }
 
     private void armSilence(Instant now) {
@@ -246,7 +244,6 @@ public final class IdleClock {
         technicalPause = new SessionStateChanged.TechnicalPause(SessionStateChanged.TechnicalPause.Kind.DEVICE, since);
         pauseStartedAt = now;
         ctx.timers().cancel(Kind.JOIN_WINDOW);
-        ctx.timers().cancel(Kind.STOP_CONFIRM);
         env.judgmentOnFault();
         env.pausePracticeTimers(now);
         if (env.practiceControlsOutput()) {
@@ -278,10 +275,6 @@ public final class IdleClock {
         ctx.putEvent(EVENT_TECHNICAL_PAUSE_ENDED, "{\"pausedMs\":" + paused.toMillis() + "}", now);
         if (ctx.status() == SessionStatus.WAITING_CHILD && env.hasJoin()) {
             env.resumeJoinWindow(paused);
-        }
-        if (ctx.stopConfirm().isActive()) {
-            ctx.stopConfirm().shift(paused);
-            env.armStopConfirm();
         }
         env.resumePracticeTimers(now);
         armGapDisplay();

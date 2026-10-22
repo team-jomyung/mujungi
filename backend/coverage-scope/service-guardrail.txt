@@ -12,7 +12,6 @@ backend/realtime-activity/src/main/java/kr/mujoong/realtime/dialog/DialogInstruc
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/dialog/InstructionTemplates.java
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/dialog/PolicyBundle.java
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/dialog/ServicePolicyCatalog.java
-backend/realtime-activity/src/main/java/kr/mujoong/realtime/dialog/StopConfirmFlow.java
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/dialog/StopIntentJudge.java
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/gate/OutputAuthority.java
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/gate/OutputGeneration.java

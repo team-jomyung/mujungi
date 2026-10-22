@@ -72,10 +72,6 @@ public final class EndingFlow {
 
         void onJoinPromptPlayed(Instant at);
 
-        void onStopConfirmPlayed(Instant at);
-
-        void onStopConfirmFailed();
-
         void armDisconnect();
 
         void stopPracticeProgress();
@@ -202,17 +198,6 @@ public final class EndingFlow {
                             PracticeSessionExtension.ExtensionEvent.Kind.PLAYBACK_DONE, practiceCode, mark.playbackId(),
                             null)));
                 }
-                if (ctx.status() == SessionStatus.ACTIVE && mark.playbackId().equals(ctx.stopConfirmPlaybackId())) {
-                    boolean completed = ctx.plan().activityType() != kr.mujoong.contract.status.ActivityType.FREE_TALK
-                            || mark.status() == PlaybackMark.Status.COMPLETED;
-                    if (ctx.stopQuestionDelivery() != null) {
-                        completed = ctx.stopQuestionDelivery().mark(ctx.plan().sessionId(), received.connectionId(),
-                                mark.playbackId(), mark.status(), received.serverRecvAt());
-                    }
-                    ctx.stopConfirmPlaybackId(null);
-                    if (completed) env.onStopConfirmPlayed(received.serverRecvAt());
-                    else env.onStopConfirmFailed();
-                }
                 if (ctx.status() == SessionStatus.CLOSING && ctx.closing().onPlaybackMark(closingDevice(), mark.playbackId(),
                         mark.status())) {
                     // R3-8: CLOSE_TRANSPORT 송신까지만 입력을 중계한다
@@ -303,15 +288,10 @@ public final class EndingFlow {
             ctx.services().gaps().close(ctx.openGapId(), now);
             ctx.openGapId(null);
         }
-        // 재생 추적을 비웠으므로 끝 표식을 기다리던 참여 안내 · 확인 질문은 지금 끝난 것으로 본다(창이 영영 열리지 않는 일을 막는다)
+        // 재생 추적을 비웠으므로 끝 표식을 기다리던 참여 안내는 지금 끝난 것으로 본다(창이 영영 열리지 않는 일을 막는다)
         if (ctx.status() == SessionStatus.WAITING_CHILD && ctx.joinPromptPlaybackId() != null) {
             ctx.joinPromptPlaybackId(null);
             env.onJoinPromptPlayed(now);
-        }
-        if (ctx.status() == SessionStatus.ACTIVE && ctx.stopConfirmPlaybackId() != null) {
-            ctx.stopConfirmPlaybackId(null);
-            if (ctx.plan().activityType() == kr.mujoong.contract.status.ActivityType.FREE_TALK) env.onStopConfirmFailed();
-            else env.onStopConfirmPlayed(now);
         }
         ctx.putEvent(EVENT_LINK_REPLACED, "{\"resumed\":" + replaced.resumed() + "}", now);
         if (START_PHASE.contains(ctx.status())) {
@@ -607,12 +587,9 @@ public final class EndingFlow {
         ctx.timers().cancel(Kind.DISCONNECT);
         ctx.timers().cancel(Kind.PLAYBACK_EXPIRY);
         ctx.timers().cancel(Kind.JOIN_WINDOW);
-        ctx.timers().cancel(Kind.STOP_CONFIRM);
         ctx.timers().cancel(Kind.SILENCE);
         ctx.timers().cancel(Kind.GAP_DISPLAY);
         ctx.joinPromptPlaybackId(null);
-        ctx.stopConfirm().cancel();
-        ctx.stopConfirmPlaybackId(null);
         ctx.segment().reset();
         ctx.transcripts().aiFinal("", false, now);
         UUID closingVersion = closingVersion();
@@ -915,7 +892,7 @@ public final class EndingFlow {
     }
 
     UUID closingVersion() {
-        if (ctx.immediateMute() || ctx.plan().closing() == null) return null;
+        if (ctx.plan().closing() == null) return null;
         if (ctx.plan().activityType() == kr.mujoong.contract.status.ActivityType.FREE_TALK
                 && ctx.services().notices().verified(ctx.plan().closing(), ctx.plan().approvedAudio(),
                         ctx.servicePolicy().policyVersion(), ctx.services().settings().playbackExpiry()).isEmpty()) return null;

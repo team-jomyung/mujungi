@@ -38,7 +38,6 @@ import kr.mujoong.realtime.config.RealtimeTimingProperties;
 import kr.mujoong.realtime.dialog.DialogInstructions;
 import kr.mujoong.realtime.dialog.InstructionTemplates;
 import kr.mujoong.realtime.dialog.JoinTracker;
-import kr.mujoong.realtime.dialog.StopConfirmFlow;
 import kr.mujoong.realtime.dialog.StopIntentJudge;
 import kr.mujoong.realtime.judgment.JudgeOutcome;
 import kr.mujoong.realtime.judgment.JudgmentOutcomeKind;
@@ -123,6 +122,8 @@ public final class SessionExecutor {
      * @param inputTranscriptQuiet 입력 전사 조각이 이만큼 오지 않으면 그 묶음을 확정 전사로 본다({@code mujoong.timing.provider.input-transcript-quiet}, 설계 개정 A7)
      * @param newSpeechMargin 지시 뒤 새 말의 전사 시작에 더하는 여유({@code mujoong.timing.provider.new-speech-margin}, 설계 개정 A4)
      * @param instructionWait 지시를 보낸 뒤 새 말이 시작하기를 기다리는 시한({@code mujoong.timing.judgment.response-ready}, 지시 송신 시각부터, 설계 개정 A3)
+     * @param joinSelfStartWait 참여 수락 때 보관한 응답이 비어 있으면 첫 응답 지시 전에 모델이 스스로 말을 시작하기를 기다리는 시간
+     *     ({@code mujoong.timing.provider.join-self-start-wait}). 0이면 기다리지 않고 바로 지시한다
      */
     public record Settings(
             Duration deviceAckTimeout,
@@ -137,7 +138,8 @@ public final class SessionExecutor {
             Lifecycle lifecycle,
             Duration inputTranscriptQuiet,
             Duration newSpeechMargin,
-            Duration instructionWait) {
+            Duration instructionWait,
+            Duration joinSelfStartWait) {
 
         /**
          * U4b 세션 생애 시간 값(contracts/timing.md, 모두 설정 키에서 온다).
@@ -146,19 +148,17 @@ public final class SessionExecutor {
          * @param joinWaitAfterReprompt 재안내 · 되묻기 · 대안 뒤 참여 창(join-wait-after-reprompt)
          * @param silenceWarning 공백 경고 누적(silence-warning)
          * @param silenceEnd 공백 종료 누적(silence-end)
-         * @param stopConfirmWait 종료 확인 질문 창(stop-confirm-wait)
          * @param recordSettle 종료 뒤 정산 창 상한(record-settle)
          * @param gapDisplay 마지막 기기 메시지 뒤 기술 일시정지(device.gap-display)
          */
         public record Lifecycle(Duration joinWait, Duration joinWaitAfterReprompt, Duration silenceWarning,
-                Duration silenceEnd, Duration stopConfirmWait, Duration recordSettle, Duration gapDisplay) {
+                Duration silenceEnd, Duration recordSettle, Duration gapDisplay) {
 
             public Lifecycle {
                 Objects.requireNonNull(joinWait, "joinWait");
                 Objects.requireNonNull(joinWaitAfterReprompt, "joinWaitAfterReprompt");
                 Objects.requireNonNull(silenceWarning, "silenceWarning");
                 Objects.requireNonNull(silenceEnd, "silenceEnd");
-                Objects.requireNonNull(stopConfirmWait, "stopConfirmWait");
                 Objects.requireNonNull(recordSettle, "recordSettle");
                 Objects.requireNonNull(gapDisplay, "gapDisplay");
             }
@@ -166,7 +166,7 @@ public final class SessionExecutor {
             public static Lifecycle from(RealtimeProperties properties) {
                 RealtimeTimingProperties.SessionTiming session =properties.timing().session();
                 return new Lifecycle(session.joinWait(), session.joinWaitAfterReprompt(), session.silenceWarning(),
-                        session.silenceEnd(), session.stopConfirmWait(), session.recordSettle(),
+                        session.silenceEnd(), session.recordSettle(),
                         properties.timing().device().gapDisplay());
             }
         }
@@ -176,6 +176,9 @@ public final class SessionExecutor {
             Objects.requireNonNull(inputTranscriptQuiet, "inputTranscriptQuiet");
             Objects.requireNonNull(newSpeechMargin, "newSpeechMargin");
             Objects.requireNonNull(instructionWait, "instructionWait");
+            if (Objects.requireNonNull(joinSelfStartWait, "joinSelfStartWait").isNegative()) {
+                throw new IllegalArgumentException("joinSelfStartWait는 음수일 수 없다");
+            }
             Objects.requireNonNull(deviceAckTimeout, "deviceAckTimeout");
             Objects.requireNonNull(closingConfirm, "closingConfirm");
             Objects.requireNonNull(disconnect, "disconnect");
@@ -197,7 +200,8 @@ public final class SessionExecutor {
                     properties.session().timerTick(), properties.limits().sessionInputQueueFrames(),
                     properties.limits().sessionControlQueue(), properties.transcript().uncertainBelowPercent(),
                     Lifecycle.from(properties), properties.timing().provider().inputTranscriptQuiet(),
-                    properties.timing().provider().newSpeechMargin(), properties.timing().judgment().responseReady());
+                    properties.timing().provider().newSpeechMargin(), properties.timing().judgment().responseReady(),
+                    properties.timing().provider().joinSelfStartWait());
         }
     }
 
@@ -325,7 +329,6 @@ public final class SessionExecutor {
     public static final String INTRO_PRACTICE = "INTRO_PRACTICE";
     public static final String RE_PROMPT = "RE_PROMPT";
     public static final String DECLINE_ALTERNATIVE = "DECLINE_ALTERNATIVE";
-    public static final String STOP_CONFIRM = "STOP_CONFIRM";
     public static final String SILENCE_WARNING = "SILENCE_WARNING";
 
     /**
@@ -418,8 +421,6 @@ public final class SessionExecutor {
     static final String EVENT_CHILD_STOP_LIFTED = "CHILD_STOP_LIFTED";
     /** U4b 세션 사건 종류(payload는 코드 · 횟수 · 분류 이름 · 시각뿐, entities SessionEvent). */
     static final String EVENT_APPROVED_CONTENT_MISSING = "APPROVED_CONTENT_MISSING";
-    static final String EVENT_STOP_CONFIRM_ASKED = "STOP_CONFIRM_ASKED";
-    static final String EVENT_STOP_CONFIRM_RESOLVED = "STOP_CONFIRM_RESOLVED";
     static final String EVENT_PRACTICE_EXTENSION_FAILED = "PRACTICE_EXTENSION_FAILED";
     /** ACTIVE 중 공급자 끊김의 end_detail. */
     static final String END_DETAIL_PROVIDER_LOST = "PROVIDER_LOST";
@@ -439,6 +440,8 @@ public final class SessionExecutor {
     private Runnable instructionNotHeard;
     /** 게이트를 통과한 구간 없이 연달아 보낸 교정 지시 수(교정 지시가 곧 발화라 모델이 계속 어기면 끝없이 이어지는 것을 막는다). */
     private int correctionsInARow;
+    /** 참여 수락 뒤 모델이 스스로 첫 응답을 시작하기를 기다리는 세대(-1이면 기다리지 않는다). */
+    private long joinSelfStartGeneration = -1L;
     /** 지난 편지함 처리 끝의 출력 보류 상태(true → false가 되면 세대를 올린다). */
     private boolean lastHeld;
     /** 공급자 리더가 일반 편지함에 넣었고 실행기가 아직 처리하지 않은 출력 조각 수(끊김 만기가 쌓인 조각을 앞지르지 못하게 한다). */
@@ -467,8 +470,6 @@ public final class SessionExecutor {
     private long inputGroupOpens;
     /** U11 W2: 지금 처리 중인 아이 확정 전사의 대화 기록 순번(판정 요청 · 기록용, 원문 아님). */
     private int currentTranscriptSeq;
-    /** 새 전사가 J6를 대체할 때 그 전사의 종료 의도 판정(CONFIRM이면 연습 시계를 풀지 않는다). */
-    private StopIntentJudge.Verdict supersedeVerdict;
     /** 확장이 요청한 '생각 중' 유지(닫힐 때 듣는 중으로 되돌리지 않는다). */
     private boolean practiceThinking;
     /** 종료 의도 판정기(세션 스냅숏의 종료 표현). */
@@ -503,6 +504,11 @@ public final class SessionExecutor {
      * 않는다(GPT-Live는 아이 말이 끝나면 스스로 응답을 시작하므로, 보관하지 않으면 첫 발화에 대한 응답이 사라진다).
      */
     private final java.util.ArrayList<HeldOutput> joinHeldOutput = new java.util.ArrayList<>();
+    /** 진단(D): 지금 출력 세대에서 보류 · 낡은 꼬리로 버린 조각을 봤는가(세대를 올릴 때 사유 코드로 한 번씩 남긴다, 원문 없음). */
+    private boolean discardedHeldSeen;
+    private boolean discardedStaleSeen;
+    /** 진단(D): 마지막 지시 뒤 받은 출력 조각 수(새 말이 관측되지 않았을 때 공급자가 침묵했는지 서버가 버렸는지 가른다). */
+    private int chunksSinceInstruction;
     private long joinHeldClockBase = -1L;
     private int joinHeldBytes;
     private int joinHeldChars;
@@ -1001,7 +1007,13 @@ public final class SessionExecutor {
         // 안내 뒤 아이 첫 발화에 공급자가 스스로 시작해 둔 응답이 있으면 그것이 첫 응답이다(따로 지시하면 이미 응답한 모델이 응답하지 않는다)
         boolean replayed = practice == null || !practice.controlsOutput() ? replayJoinHeldOutput() : false;
         clearJoinHeldOutput();
-        if (!replayed && (practice == null || !practice.controlsOutput())) requestResponse(InstructionTemplates.ResponseStart.FIRST);
+        if (!replayed && (practice == null || !practice.controlsOutput())) {
+            if (ctx.plan().activityType() == ActivityType.FREE_TALK && !ctx.services().settings().joinSelfStartWait().isZero()) {
+                awaitJoinSelfStart();
+            } else {
+                requestResponse(InstructionTemplates.ResponseStart.FIRST);
+            }
+        }
         // PRACTICE면 확장점 'ACTIVE 진입'
         if (practice != null) {
             PracticeSessionExtension.PracticeContext context = new PracticeSessionExtension.PracticeContext(
@@ -1240,8 +1252,7 @@ public final class SessionExecutor {
     }
 
     private boolean practiceProgressPaused() {
-        return idle.technicalPause() != null || (practice != null && practice.controlsOutput()
-                && (ctx.stopConfirm().isActive() || judgment.openPoint() == JudgmentPoint.J6));
+        return idle.technicalPause() != null;
     }
 
     private void interruptPracticeSpeech(Instant now) {
@@ -1256,7 +1267,7 @@ public final class SessionExecutor {
                 kr.mujoong.realtime.practicelegacy.PracticePorts.Playback.INTERRUPTED, now));
     }
 
-    /** 기술 일시정지와 종료 확인 동안 남은 반응 시간을 보존한다. */
+    /** 기술 일시정지 동안 남은 반응 시간을 보존한다. */
     private void pausePracticeTimers(Instant now) {
         if (practice != null && practice.controlsOutput() && practicePauseStartedAt == null) practicePauseStartedAt = now;
         for (Map.Entry<String, PracticeTimer> entry : List.copyOf(practiceTimers.entrySet())) {
@@ -1428,16 +1439,6 @@ public final class SessionExecutor {
             ctx.services().events().appError(EventLog.Component.SESSION_LIFECYCLE, reasonCode, EventCode.Level.INFO);
         }
 
-        @Override
-        public void applyJoinReply(JoinTracker.Reply reply, Instant at) {
-            joinFlow.applyJoinReply(reply, at);
-        }
-
-        @Override
-        public void runDeferredJoinTick() {
-            joinFlow.runDeferredJoinTick();
-        }
-
         private Kind timerKind(JudgmentTurn.TimerKind kind) {
             return switch (kind) {
                 case LIVE -> Kind.JUDGMENT_LIVE;
@@ -1517,16 +1518,6 @@ public final class SessionExecutor {
         @Override
         public void onJoinPromptPlayed(Instant at) {
             joinFlow.onJoinPromptPlayed(at);
-        }
-
-        @Override
-        public void onStopConfirmPlayed(Instant at) {
-            SessionExecutor.this.onStopConfirmPlayed(at);
-        }
-
-        @Override
-        public void onStopConfirmFailed() {
-            SessionExecutor.this.onStopConfirmFailed();
         }
 
         @Override
@@ -1656,11 +1647,6 @@ public final class SessionExecutor {
         public void resumeJoinWindow(Duration paused) {
             joinFlow.resumeJoinWindow(paused);
         }
-
-        @Override
-        public void armStopConfirm() {
-            SessionExecutor.this.armStopConfirm();
-        }
     }
 
     /** 시계 구역 협력 객체가 실행기에 남은 로직으로 되돌아오는 자리. */
@@ -1674,6 +1660,11 @@ public final class SessionExecutor {
         @Override
         public void onInstructionWaitExpired() {
             SessionExecutor.this.onInstructionWaitExpired();
+        }
+
+        @Override
+        public void onJoinSelfStartExpired() {
+            SessionExecutor.this.onJoinSelfStartExpired();
         }
 
         @Override
@@ -1702,16 +1693,6 @@ public final class SessionExecutor {
         }
 
         @Override
-        public void onStopConfirmPlayed(Instant at) {
-            SessionExecutor.this.onStopConfirmPlayed(at);
-        }
-
-        @Override
-        public void onStopConfirmFailed() {
-            SessionExecutor.this.onStopConfirmFailed();
-        }
-
-        @Override
         public void redeliver() {
             SessionExecutor.this.redeliver();
         }
@@ -1719,11 +1700,6 @@ public final class SessionExecutor {
         @Override
         public void onJoinWindow() {
             joinFlow.onJoinWindow();
-        }
-
-        @Override
-        public void onStopConfirmWindow() {
-            SessionExecutor.this.onStopConfirmWindow();
         }
     }
 
@@ -2186,9 +2162,9 @@ public final class SessionExecutor {
                 id -> ctx.services().requests().responseStart(id, start, ctx.plan().activityType()), null, true);
     }
 
-    /** 공급자 출력을 받지 않는 때(참여 확인 중 · 종료 확인 질문 중 · 확장점이 막은 동안). */
+    /** 공급자 출력을 받지 않는 때(참여 확인 중 · 확장점이 막은 동안). */
     private boolean outputHeld() {
-        return ctx.status() == SessionStatus.WAITING_CHILD || ctx.stopConfirm().isActive() || judgment.holdsOutput()
+        return ctx.status() == SessionStatus.WAITING_CHILD || judgment.holdsOutput()
                 || (ctx.plan().activityType() == ActivityType.FREE_TALK && ctx.conversationPolicy().resting()
                     && (ctx.outputAuthority() == null || ctx.outputAuthority().purpose()
                         != kr.mujoong.realtime.gate.OutputAuthority.Purpose.REST_ACK))
@@ -2310,6 +2286,48 @@ public final class SessionExecutor {
         joinHeldBytes = 0;
         joinHeldChars = 0;
         joinHeldOverflow = false;
+    }
+
+    /**
+     * 수락 순간 보관한 응답이 비어 있다: 모델이 판정 직후에 스스로 답을 시작하는 중일 수 있다. 바로 첫 응답 지시를 보내면 그 답은 지시 확인
+     * 전의 낡은 말로 버려지고 모델은 이미 답하는 중이라 지시에 새로 답하지 않아 아무 말도 들리지 않는다(2026-10-22 15:05 세션). 그래서 지시 없이
+     * 세대를 올려 끊김이 확인된 것으로 두고(다음 조각을 새 응답의 시작으로 받는다) join-self-start-wait만큼 기다린 뒤, 그동안 받은 조각이
+     * 없을 때만 첫 응답 지시를 보낸다.
+     */
+    private void awaitJoinSelfStart() {
+        bumpOutput(OutputGeneration.BumpReason.HOLD_RELEASED);
+        ctx.outputGen().confirmGap();
+        joinSelfStartGeneration = ctx.outputGen().generation();
+        ctx.services().events().appError(EventLog.Component.OUTPUT_GATE, "JoinSelfStartWait", EventCode.Level.INFO);
+        ctx.timers().arm(Kind.JOIN_SELF_START, ctx.services().settings().joinSelfStartWait());
+    }
+
+    /** 스스로 시작 대기가 끝났다: 같은 세대에서 받은 조각이 없으면 첫 응답 지시를 보낸다. */
+    private void onJoinSelfStartExpired() {
+        long waited = joinSelfStartGeneration;
+        joinSelfStartGeneration = -1L;
+        if (waited < 0 || ctx.status() != SessionStatus.ACTIVE) {
+            return;
+        }
+        if (ctx.outputGen().generation() != waited || ctx.outputGen().phase() != OutputGeneration.Phase.GAP_CONFIRMED) {
+            // 모델이 스스로 답을 시작했거나(조각을 받아 RECEIVING) 그사이 다른 일(끼어들기 · 서버 발화)이 세대를 올렸다
+            ctx.services().events().appError(EventLog.Component.OUTPUT_GATE, "JoinSelfStartSeen", EventCode.Level.INFO);
+            return;
+        }
+        ctx.services().events().appError(EventLog.Component.OUTPUT_GATE, "JoinSelfStartMissed", EventCode.Level.INFO);
+        requestResponse(InstructionTemplates.ResponseStart.FIRST);
+    }
+
+    /** 진단(D): 지금 세대에서 보류 · 낡은 꼬리로 버린 조각이 있었으면 사유 코드를 한 번씩 남기고 표지를 지운다(원문 없음, R-F14). */
+    private void flushDiscardDiagnostics() {
+        if (discardedHeldSeen) {
+            ctx.services().events().appError(EventLog.Component.OUTPUT_GATE, "OutputDiscardedHeld", EventCode.Level.INFO);
+        }
+        if (discardedStaleSeen) {
+            ctx.services().events().appError(EventLog.Component.OUTPUT_GATE, "OutputDiscardedStale", EventCode.Level.INFO);
+        }
+        discardedHeldSeen = false;
+        discardedStaleSeen = false;
     }
 
     /**
@@ -2471,13 +2489,7 @@ public final class SessionExecutor {
                 if (judgment.isOpen()) {
                     // 설계 검토 판정 중(지시 단계 포함) 새 확정 전사 — 종료 표현이면 STOPPED, 아니면 SUPERSEDED로 닫고 이 전사를
                     // 아래 지금 흐름으로 처음부터 다시 처리한다(확장 소유 판정 단계는 턴을 그대로 두고 확장에 전달한다)
-                    StopIntentJudge.Verdict verdict = stopJudge.judge(done.transcript(), !ctx.devicePlaying().isEmpty()).verdict();
-                    supersedeVerdict = verdict;
-                    try {
-                        judgment.onTranscript(verdict == StopIntentJudge.Verdict.STOP);
-                    } finally {
-                        supersedeVerdict = null;
-                    }
+                    judgment.onTranscript(stopJudge.judge(done.transcript()).verdict() == StopIntentJudge.Verdict.STOP);
                 }
             }
             boolean controlledPractice = practice != null && practice.controlsOutput();
@@ -2514,6 +2526,9 @@ public final class SessionExecutor {
         OutputGeneration.ChunkResult result = transcript != null
                 ? ctx.outputGen().onTranscript(at, startMs, outputHeld())
                 : ctx.outputGen().onAudio(at, audio.length, outputHeld());
+        chunksSinceInstruction++;
+        if (result.verdict() == OutputGeneration.ChunkVerdict.DISCARD_HELD) discardedHeldSeen = true;
+        else if (result.verdict() == OutputGeneration.ChunkVerdict.DISCARD) discardedStaleSeen = true;
         // 버리는 조각도 조용 시계를 다시 건다: 조각이 계속 오는 동안은 끊김이 아니다
         ctx.timers().arm(Kind.SEGMENT_QUIET, ctx.services().settings().segmentQuiet());
         if (!ctx.outputGen().awaitingNewSpeech()) {
@@ -2597,6 +2612,7 @@ public final class SessionExecutor {
      * @return 새 출력 세대 번호
      */
     private long bumpOutput(OutputGeneration.BumpReason reason) {
+        flushDiscardDiagnostics();
         Instant now = ctx.services().clock().now();
         long generation = ctx.outputGen().bump(now, reason);
         ctx.outputAuthority(newOutputAuthority(kr.mujoong.realtime.gate.OutputAuthority.Purpose.NORMAL));
@@ -2680,6 +2696,9 @@ public final class SessionExecutor {
                 ctx.timers().arm(Kind.INSTRUCTION_WAIT, ctx.services().settings().instructionWait());
             }
             case NEW_SPEECH_NOT_OBSERVED -> {
+                // 진단(D): 지시 뒤 조각이 하나도 없으면 공급자가 침묵한 것이고, 있었으면 모두 지시 전의 낡은 말로 버린 것이다
+                ctx.services().events().appError(EventLog.Component.VOICE_RELAY, chunksSinceInstruction == 0
+                        ? "OutputNotObservedProviderSilent" : "OutputNotObservedOnlyStaleChunks", EventCode.Level.WARN);
                 ctx.services().events().appError(EventLog.Component.VOICE_RELAY, "OutputNewSpeechNotObserved", EventCode.Level.WARN);
                 Runnable notHeard = instructionNotHeard;
                 instructionNotHeard = null;
@@ -2729,6 +2748,8 @@ public final class SessionExecutor {
         String eventId = "mj-" + (++instructionSeq);
         ProviderRequestFactory.InstructionsAppend request = build.apply(eventId);
         Instant now = ctx.services().clock().now();
+        flushDiscardDiagnostics();
+        chunksSinceInstruction = 0;
         ctx.outputGen().bumpForInstruction(now, reason, eventId);
         streamedPracticeEnded = false;
         ctx.outputAuthority(newOutputAuthority(purpose));
@@ -2839,10 +2860,9 @@ public final class SessionExecutor {
     }
 
     /**
-     * U4b: ACTIVE의 확정 아이 전사로 종료 의도를 판정한다(기기 재생 중 전사는 판정기가 NONE으로 본다).
-     * STOP이면 곧바로 CLOSING(CHILD_STOP)이다. CONFIRM이면 확인 질문(STOP_CONFIRM)을 재생하고 공급자 출력을 막은 뒤, 재생 완료부터
-     * stop-confirm-wait 안의 첫 확정 전사가 STOP이거나 참여 분류 ACCEPT면 CHILD_STOP으로 확정하고, 그 밖이거나 창이 끝나면 막은 것을 풀고 응답 생성
-     * 요청을 한 번 보낸다. U3의 '막고 ACTIVE 유지 → 적극적 계속이면 해제'(CHILD_STOP_LIFTED) 경로는 없앴다.
+     * U4b: ACTIVE의 확정 아이 전사로 종료 의도를 판정한다(기기 재생 중에 확정된 전사도 판정한다, 2026-10-22 결정).
+     * 등록 종료 표현(STOP)이면 곧바로 CLOSING(CHILD_STOP)이고, 그 밖이면 대화를 잇는다(FT-1023-a). 불명확한 종료 의도로 확인 질문(STOP_CONFIRM)을 여는 흐름과
+     * U3의 '막고 ACTIVE 유지 → 적극적 계속이면 해제'(CHILD_STOP_LIFTED) 경로는 없앴다(contracts/deviations.md FT-1022-b · FT-1022-c).
      *
      * @return 이번 발화를 종료 의도 흐름이 맡았으면 참('생각 중'을 보내지 않는다)
      */
@@ -2852,8 +2872,8 @@ public final class SessionExecutor {
         }
         if (ctx.plan().activityType() == ActivityType.FREE_TALK) {
             if (stopJudge.requestsImmediateMute(transcript)) {
-                ctx.immediateMute(true);
-                applyStopDecision(StopConfirmFlow.Decision.CLOSE, "IMMEDIATE_MUTE", at);
+                // "말하지 마"는 지금 말을 멈추라는 뜻이다. 세션은 등록 종료 표현으로만 끝나므로 닫지 않는다(FT-1023-a)
+                stopOutputForIntent(at);
                 return true;
             }
             if (stopJudge.requestsRest(transcript)) {
@@ -2876,252 +2896,23 @@ public final class SessionExecutor {
                 return true;
             }
         }
-        if (ctx.stopConfirm().isActive()) {
-            boolean stop = stopJudge.judge(transcript, false).verdict() == StopIntentJudge.Verdict.STOP;
-            if (!stop && ctx.plan().activityType() == ActivityType.FREE_TALK && ctx.stopQuestionDelivery() != null
-                    && !ctx.stopQuestionDelivery().permitsInput(ctx.inputBeganAt() == null ? at : ctx.inputBeganAt())) return true;
-            applyStopDecision(ctx.stopConfirm().onReply(transcript, stop, at), "REPLY", at);
-            return true;
-        }
-        StopIntentJudge.Judgment stopJudgment = stopJudge.judge(transcript, !ctx.devicePlaying().isEmpty());
-        if (stopJudgment.verdict() == StopIntentJudge.Verdict.CONFIRM && openStopJudgment(transcript, at)) {
-            return true;
-        }
-        StopConfirmFlow.Decision decision = ctx.stopConfirm().onJudgment(stopJudgment.verdict());
-        if (decision == StopConfirmFlow.Decision.CLOSE) {
-            ctx.putEvent(EVENT_CHILD_STOP_INTENT, "{\"basis\":\"" + stopJudgment.basis().name() + "\"}", at);
-        }
-        applyStopDecision(decision, null, at);
-        return decision != StopConfirmFlow.Decision.NONE;
-    }
-
-    /**
-     * W2: 불명확한 종료 표현(CONFIRM)은 확인 질문을 바로 하지 않고 J6를 연다. 출력권 연습의 시계를 멈추고 연습 발화를 끊고 출력을 정리하는 것은 지금
-     * 확인 질문 앞 단계와 같고, {@code stopConfirm.onJudgment}는 부르지 않는다. 열 수 없으면(공급자 없음 · 이미 열린 턴) 기록만 남기고 지금 흐름이다.
-     *
-     * @return J6를 열었으면 참(이번 전사를 종료 의도 흐름이 맡았다)
-     */
-    private boolean openStopJudgment(String transcript, Instant at) {
-        JudgmentCoordinator.Readiness ready = judgment.preflight(transcript);
-        if (ready != JudgmentCoordinator.Readiness.READY) {
-            judgment.recordSkipped(ready, JudgmentPoint.J6, JudgmentTrigger.STOP_CONFIRM_CANDIDATE, currentTranscriptSeq,
-                    NextAction.ASK_STOP_CONFIRM);
+        StopIntentJudge.Judgment stopJudgment = stopJudge.judge(transcript);
+        if (stopJudgment.verdict() != StopIntentJudge.Verdict.STOP) {
             return false;
         }
-        boolean controlled = practice != null && practice.controlsOutput();
-        if (controlled) {
-            pausePracticeTimers(at);
-            interruptPracticeSpeech(at);
-        }
-        stopOutputForIntent(at);
-        int seq = currentTranscriptSeq;
-        judgment.open(new JudgmentCoordinator.Open(JudgmentPoint.J6, JudgmentTrigger.STOP_CONFIRM_CANDIDATE, JudgmentOwner.EXECUTOR,
-                seq, transcript, at, null, judgment.recentBefore(seq), this::decideStopJudgment,
-                closure -> afterStopJudgment(closure, transcript, seq, at)));
+        ctx.putEvent(EVENT_CHILD_STOP_INTENT, "{\"basis\":\"" + stopJudgment.basis().name() + "\"}", at);
+        closeForStop(at);
         return true;
     }
 
-    /** 결과 → 지시 여부. 휴식(REST)만 ACTIVE에서 지시 하나를 낸다: 출력권 연습은 받아 주기만, 그 밖은 받아 주고 이어 가기. */
-    private JudgmentTurn.Decision decideStopJudgment(JudgmentTurn turn, JudgeOutcome outcome) {
-        if (outcome.kind() == JudgmentOutcomeKind.CONFIRMED && "REST".equals(outcome.firstOption()) && ctx.status() == SessionStatus.ACTIVE) {
-            if (ctx.plan().activityType() == ActivityType.FREE_TALK) ctx.conversationPolicy().rest();
-            boolean controlled = practice != null && practice.controlsOutput();
-            if (controlled) {
-                // J6가 연습 발화를 끊으며 건 출력 막음을 풀어야 받아 주는 말이 들린다(이후 막을지는 REST_REQUESTED를 받은 확장이 정한다)
-                practiceHold = false;
-            }
-            return JudgmentTurn.Decision.instruct(controlled || ctx.plan().activityType() == ActivityType.FREE_TALK
-                    ? InstructionTemplates.NextAction.REST_ACK_ONLY
-                    : InstructionTemplates.NextAction.REST_ACK_AND_RETURN);
-        }
-        return JudgmentTurn.Decision.close();
+    /** 종료 의도 확정: 출력을 멈추고 CLOSING(CHILD_STOP)으로 간다. */
+    private void closeForStop(Instant at) {
+        ctx.confirmedStopSeq(currentTranscriptSeq > 0 ? currentTranscriptSeq : null);
+        stopOutputForIntent(at);
+        ending.beginClosing(Trigger.CHILD_STOP_CONFIRMED, null);
     }
 
-    /** J6가 닫힌 뒤 결과표(W2 4)대로 한다. */
-    private JudgmentCoordinator.Handled afterStopJudgment(JudgmentTurn.Closure closure, String utterance, int seq, Instant at) {
-        Instant now = ctx.services().clock().now();
-        boolean controlled = practice != null && practice.controlsOutput();
-        JudgeOutcome outcome = closure.outcome();
-        switch (outcome.kind()) {
-            case SUPERSEDED -> {
-                // 새 전사가 다시 CONFIRM이면 연습 시계 멈춤을 유지하고(새 J6가 이어 받는다), 아니면 재개한다
-                if (supersedeVerdict != StopIntentJudge.Verdict.CONFIRM) {
-                    resumePracticeTimers(now);
-                }
-                return JudgmentCoordinator.Handled.NOTHING;
-            }
-            case STOPPED, SESSION_EXITED -> {
-                return JudgmentCoordinator.Handled.NOTHING;
-            }
-            case FAULT_CANCELLED -> {
-                resumePracticeTimers(now);
-                handToPractice(utterance, seq, at);
-                return new JudgmentCoordinator.Handled(NextAction.NONE, true);
-            }
-            default -> {
-                // CONFIRMED · ABSTAINED: 아래 결과표
-            }
-        }
-        String first = outcome.kind() == JudgmentOutcomeKind.CONFIRMED ? outcome.firstOption() : null;
-        if ("END_CLEAR".equals(first)) {
-            ctx.confirmedStopSeq(seq > 0 ? seq : null);
-            ctx.putEvent(EVENT_CHILD_STOP_INTENT, "{\"basis\":\"" + StopIntentJudge.Basis.LUNA_J6.name() + "\"}", now);
-            stopOutputForIntent(now);
-            ending.beginClosing(Trigger.CHILD_STOP_CONFIRMED, null);
-            return new JudgmentCoordinator.Handled(NextAction.CLOSE, false);
-        }
-        if ("REST".equals(first)) {
-            resumePracticeTimers(now);
-            if (controlled && ctx.status() == SessionStatus.ACTIVE) {
-                ctx.mailbox().putSafety(new SessionMailbox.PracticeEvent(new PracticeSessionExtension.ExtensionEvent(
-                        PracticeSessionExtension.ExtensionEvent.Kind.REST_REQUESTED, "judgment", null, null)));
-            }
-            NextAction next = closure.instruction() == null ? NextAction.NONE
-                    : controlled || ctx.plan().activityType() == ActivityType.FREE_TALK
-                            ? NextAction.REST_ACK_ONLY : NextAction.REST_ACK_AND_RETURN;
-            return new JudgmentCoordinator.Handled(next, true);
-        }
-        if ("NOT_END".equals(first)) {
-            if (controlled) {
-                resumePracticeTimers(now);
-                handToPractice(utterance, seq, at);
-            } else if (ctx.status() == SessionStatus.ACTIVE) {
-                requestResponse(InstructionTemplates.ResponseStart.CONTINUE);
-            }
-            return new JudgmentCoordinator.Handled(NextAction.RESUME, true);
-        }
-        // UNCLEAR · 보류(모든 사유): 지금의 확인 질문 흐름
-        if (ctx.status() == SessionStatus.ACTIVE) {
-            applyStopDecision(ctx.stopConfirm().onJudgment(StopIntentJudge.Verdict.CONFIRM), null, now);
-        }
-        return new JudgmentCoordinator.Handled(NextAction.ASK_STOP_CONFIRM, false);
-    }
-
-    /** 판정 때문에 연습에 못 넘긴 확정 전사를 출력권 연습에 넘긴다. */
-    private void handToPractice(String utterance, int seq, Instant at) {
-        if (practice == null || !practice.controlsOutput() || ctx.status() != SessionStatus.ACTIVE) {
-            return;
-        }
-        PracticeSessionExtension.Utterance held = new PracticeSessionExtension.Utterance(seq, at, utterance, false,
-                !ctx.devicePlaying().isEmpty());
-        practiceSignal(() -> practice.onChildUtterance(held, practiceOutput), true);
-    }
-
-    /**
-     * 확인 질문 흐름의 결정을 실행한다.
-     *
-     * @param cause RESOLVED 사건의 근거(REPLY · EXPIRED, 질문 전이면 null)
-     */
-    private void applyStopDecision(StopConfirmFlow.Decision decision, String cause, Instant at) {
-        switch (decision) {
-            case CLOSE -> {
-                ctx.confirmedStopSeq(currentTranscriptSeq > 0 ? currentTranscriptSeq : null);
-                ctx.timers().cancel(Kind.STOP_CONFIRM);
-                ctx.stopConfirmPlaybackId(null);
-                if (cause != null) {
-                    ctx.putEvent(EVENT_STOP_CONFIRM_RESOLVED, "{\"result\":\"STOP\",\"cause\":\"" + cause + "\"}", at);
-                }
-                stopOutputForIntent(at);
-                ending.beginClosing(Trigger.CHILD_STOP_CONFIRMED, null);
-            }
-            case ASK -> {
-                if (practice != null && practice.controlsOutput()) {
-                    pausePracticeTimers(at);
-                    interruptPracticeSpeech(at);
-                }
-                stopOutputForIntent(at);
-                ctx.putEvent(EVENT_STOP_CONFIRM_ASKED, null, at);
-                playStopConfirm();
-            }
-            case RESUME -> {
-                ctx.timers().cancel(Kind.STOP_CONFIRM);
-                ctx.stopConfirmPlaybackId(null);
-                ctx.putEvent(EVENT_STOP_CONFIRM_RESOLVED,
-                        "{\"result\":\"CONTINUE\",\"cause\":\"" + (cause == null ? "REPLY" : cause) + "\"}", at);
-                if (practice != null && practice.controlsOutput()) {
-                    resumePracticeTimers(at);
-                } else {
-                    requestResponse(InstructionTemplates.ResponseStart.CONTINUE);
-                }
-                listeningAgain();
-            }
-            case NONE -> {
-                // 종료 의도 아님
-            }
-        }
-    }
-
-    /** 확인 질문 재생: 보낸 순간 말풍선, 끝 표식이 창을 연다. 패키지에 없으면 곧바로 창을 연다. */
-    private void playStopConfirm() {
-        Instant now = ctx.services().clock().now();
-        Optional<ApprovedItem> item = ctx.plan().approvedItem(STOP_CONFIRM);
-        if (ctx.plan().activityType() == ActivityType.FREE_TALK && (item.isEmpty()
-                || ctx.services().notices().verified(item.get(), ctx.plan().approvedAudio(),
-                        ctx.servicePolicy().policyVersion(), ctx.services().settings().playbackExpiry()).isEmpty())) {
-            onStopConfirmFailed();
-            return;
-        }
-        if (item.isEmpty()) {
-            reportMissing(STOP_CONFIRM, now);
-        } else {
-            UUID playbackId = UUID.randomUUID();
-            if (ctx.plan().activityType() == ActivityType.FREE_TALK && ctx.link() != null) {
-                ctx.stopQuestionDelivery(new NoticeDelivery(ctx.plan().sessionId(), ctx.link().connectionId(), playbackId,
-                        ctx.servicePolicy().promptVersion(), ctx.servicePolicy().policyVersion(),
-                        now.plus(ctx.services().settings().playbackExpiry())));
-            }
-            if (ctx.sendControl(new PlayApprovedContent(playbackId, STOP_CONFIRM, item.get().contentVersionId()))) {
-                ctx.stopConfirmPlaybackId(playbackId);
-                ctx.playback().started(playbackId, STOP_CONFIRM);
-                ctx.timers().arm(Kind.PLAYBACK_EXPIRY, ctx.services().settings().playbackExpiry());
-                approvedBubble(item.get(), now);
-                return;
-            }
-        }
-        ctx.stopConfirmPlaybackId(null);
-        if (ctx.plan().activityType() == ActivityType.FREE_TALK) onStopConfirmFailed();
-        else onStopConfirmPlayed(now);
-    }
-
-    private void onStopConfirmFailed() {
-        if (ctx.stopQuestionDelivery() != null) ctx.stopQuestionDelivery().invalidate();
-        ctx.stopConfirmPlaybackId(null);
-        ctx.timers().cancel(Kind.STOP_CONFIRM);
-        ctx.stopConfirm().cancel();
-        if (ctx.status() == SessionStatus.ACTIVE) {
-            resumePracticeTimers(ctx.services().clock().now());
-            listeningAgain();
-        }
-    }
-
-    private void onStopConfirmPlayed(Instant at) {
-        ctx.stopConfirm().promptPlayed(at);
-        armStopConfirm();
-    }
-
-    private void armStopConfirm() {
-        Instant end = ctx.stopConfirm().windowEnd();
-        if (end == null || idle.technicalPause() != null) {
-            return;
-        }
-        Duration left = Duration.between(ctx.services().clock().now(), end);
-        ctx.timers().arm(Kind.STOP_CONFIRM, left.isNegative() ? Duration.ZERO : left);
-    }
-
-    // ------------------------------------------------------------------ 확인 질문 창 만기 · 출력 보조
-
-    /** 확인 질문 창 시계 만기: 대답이 없으면 대화를 잇는다. */
-    private void onStopConfirmWindow() {
-        if (ctx.status() != SessionStatus.ACTIVE || !ctx.stopConfirm().isActive()) {
-            return;
-        }
-        StopConfirmFlow.Decision decision = ctx.stopConfirm().tick(ctx.services().clock().now());
-        if (decision == StopConfirmFlow.Decision.NONE) {
-            armStopConfirm();
-            return;
-        }
-        applyStopDecision(decision, "EXPIRED", ctx.services().clock().now());
-    }
+    // ------------------------------------------------------------------ 출력 보조
 
     /**
      * 종료 의도: 남은 프레임을 보내지 않고(기기 프레임 세대 올림) 출력 세대를 올려 만들던 · 재생 중이던 응답의 남은 조각을 버리고 열린 구간을

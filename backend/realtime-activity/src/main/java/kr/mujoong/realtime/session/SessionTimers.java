@@ -38,8 +38,6 @@ public final class SessionTimers {
         REDELIVER(false),
         /** U4b 참여 창 끝(join-wait · join-wait-after-reprompt, BR2.2). */
         JOIN_WINDOW(false),
-        /** U4b 종료 확인 질문 창 끝(stop-confirm-wait, BR4.3). */
-        STOP_CONFIRM(false),
         /** U4b 공백 시계의 다음 경고 · 종료 시각(silence-warning · silence-end, BR5.3 · BR5.4). */
         SILENCE(false),
         /** U4b 마지막 기기 메시지 뒤 기술 일시정지(gap-display, BR6.1). */
@@ -48,6 +46,8 @@ public final class SessionTimers {
         RECORD_SETTLE(false),
         /** U11 A3: 지시를 보낸 뒤 새 말이 시작하기를 기다리는 시한(response-ready, 지시 송신 시각부터). */
         INSTRUCTION_WAIT(false),
+        /** 참여 수락 때 보관한 응답이 비어 있으면 모델이 스스로 첫 응답을 시작하기를 기다리는 시간(provider.join-self-start-wait). */
+        JOIN_SELF_START(false),
         /** U11 A7: 입력 전사 조각이 이만큼 오지 않으면 그 묶음을 확정 전사로 본다(input-transcript-quiet). */
         INPUT_TRANSCRIPT_QUIET(true),
         /** U11 BR1.4: 판정 턴 열기 + live-budget(4s). 정확히 4.000초에 닿으면 보류(TIMEOUT). */

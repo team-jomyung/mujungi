@@ -33,6 +33,8 @@ final class SessionClocks {
 
         void onInstructionWaitExpired();
 
+        void onJoinSelfStartExpired();
+
         void onInputTranscriptQuiet();
 
         void onJudgmentTimer(JudgmentTurn.TimerKind kind);
@@ -43,15 +45,9 @@ final class SessionClocks {
 
         void onJoinPromptPlayed(Instant at);
 
-        void onStopConfirmPlayed(Instant at);
-
-        void onStopConfirmFailed();
-
         void redeliver();
 
         void onJoinWindow();
-
-        void onStopConfirmWindow();
     }
 
     private final SessionContext ctx;
@@ -91,6 +87,7 @@ final class SessionClocks {
             case DISCONNECT -> onDisconnectCheck();
             case SEGMENT_QUIET -> env.onOutputQuiet();
             case INSTRUCTION_WAIT -> env.onInstructionWaitExpired();
+            case JOIN_SELF_START -> env.onJoinSelfStartExpired();
             case INPUT_TRANSCRIPT_QUIET -> env.onInputTranscriptQuiet();
             case JUDGMENT_LIVE -> env.onJudgmentTimer(JudgmentTurn.TimerKind.LIVE);
             case JUDGMENT_READY -> env.onJudgmentTimer(JudgmentTurn.TimerKind.READY);
@@ -104,15 +101,9 @@ final class SessionClocks {
                     ctx.joinPromptPlaybackId(null);
                     env.onJoinPromptPlayed(ctx.services().clock().now());
                 }
-                if (ctx.status() == SessionStatus.ACTIVE && ctx.stopConfirmPlaybackId() != null) {
-                    ctx.stopConfirmPlaybackId(null);
-                    if (ctx.plan().activityType() == kr.mujoong.contract.status.ActivityType.FREE_TALK) env.onStopConfirmFailed();
-                    else env.onStopConfirmPlayed(ctx.services().clock().now());
-                }
             }
             case REDELIVER -> env.redeliver();
             case JOIN_WINDOW -> env.onJoinWindow();
-            case STOP_CONFIRM -> env.onStopConfirmWindow();
             case SILENCE -> idle.onSilenceTimer();
             case GAP_DISPLAY -> idle.onGapDisplayCheck();
             case RECORD_SETTLE -> ending.finishSettle();
