@@ -573,13 +573,15 @@ class ConfigKeyContractTest {
             throw new UncheckedIOException(e);
         }
         TextAiProperties ai = bindRecord(TextAiProperties.class, "mujoong.text-ai", base);
-        assertThat(ai.requestTimeout()).isEqualTo(Duration.ofSeconds(3));
+        assertThat(ai.requestTimeout()).isEqualTo(Duration.ofSeconds(10));
+        assertThat(ai.result().requestTimeout()).isEqualTo(Duration.ofSeconds(20));
         assertThat(ai.retry().maxRetries()).isEqualTo(1);
         assertThat(ai.retry().backoff()).isEqualTo(Duration.ofMillis(250));
         assertThat(bindRecord(KnowledgeProperties.class, "mujoong.knowledge.neo4j", base).enabled()).isTrue();
         assertThat(bindRecord(KnowledgeProperties.class, "mujoong.knowledge.neo4j", base,
                 TEST_RESOURCES.resolve("application-test.yml")).enabled()).isFalse();
         CoreProperties bound = bind(base);
+        assertThat(bound.timing().result().attemptTimeout()).isEqualTo(Duration.ofSeconds(90));
         assertThat(bound.timing().practice().scenarioRequestTimeout()).isEqualTo(Duration.ofSeconds(15));
         assertThat(bound.timing().goal().restoreWindow()).isEqualTo(Duration.ofSeconds(5));
     }

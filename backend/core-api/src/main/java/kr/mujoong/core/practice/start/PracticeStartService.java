@@ -3,7 +3,6 @@ package kr.mujoong.core.practice.start;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
-import java.util.random.RandomGenerator;
 import kr.mujoong.contract.error.ErrorCode;
 import kr.mujoong.contract.time.MujoongClock;
 import kr.mujoong.core.activity.PracticeStart;
@@ -106,7 +105,7 @@ public class PracticeStartService implements PracticeStart {
                         selectedGoal.behaviorKey(),selectedGoal.behaviorVersion(),definition.judgmentCriteria(),
                         Math.toIntExact(selectedGoal.sortOrder()),selectedGoal.isFavorite());
             }).toList();
-            var frozen=new WeightedGoalOrder().freeze(guardian,account.childId(),selected,RandomGenerator.getDefault());
+            var frozen=new WeightedGoalOrder().freeze(guardian,account.childId(),selected);
             return preparations.insert(guardian,account.childId(),request,frozen,clock.now(),clock.now().plus(limits.requestTimeout()));
         }));
         if("READY".equals(claim.status())) return snapshot(claim);

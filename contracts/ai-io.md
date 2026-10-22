@@ -521,3 +521,9 @@ J1/J6의 고정 질문·선택지는 `judgment-service-v1`, 공통 지시문은 
 - **버린 출력 진단(2026-10-22).** 출력 세대를 올릴 때 그 세대에서 보류로 버린 조각이 있었으면 `OutputDiscardedHeld`, 지시 전 낡은 말로 버린 조각이 있었으면 `OutputDiscardedStale`(INFO)을 한 번씩 남긴다. `OutputNewSpeechNotObserved` 직전에는 마지막 지시 뒤 출력 조각이 하나도 없었으면 `OutputNotObservedProviderSilent`, 있었으면 `OutputNotObservedOnlyStaleChunks`(WARN)를 남긴다. 원문은 남기지 않는다(R-F14).
 - **공급자 오류 코드.** 입력 쪽 오류(`input_`으로 시작하는 코드)는 지금 나오는 AI 응답을 버리지 않는다. 공급자 `error` 사건마다 오류 코드를 사유 코드 `ProviderErrorCode_<코드>`(WARN)로 남긴다. 코드가 소문자 · 숫자 · 밑줄로 된 2 ~ 61자 식별자일 때만 싣고, 그 밖은 `ProviderErrorCode_unknown`이다(자유 문자열 · 메시지 · 매개변수는 남기지 않는다, R-F14).
 - **안내 직후 첫 응답의 인사 차단 완화.** 아이의 마지막 말에 인사(안녕 · 반가워 · 하이 · 헬로)가 있었으면 그 인사에 답하는 인사말은 시작 인사 반복으로 보지 않는다. 자기소개(`나는 AI` · `나는 무중`)와 안내 · 참여 질문 문장 반복은 계속 막는다.
+
+## 자유대화 전 보호자 입력 참고
+
+보호자의 입력 원문을 Live 지시문에 넣지 않는다. Core가 고정 키워드와 상황 구분에서 추출한 `conversationGuide.topics`(열거형 1~3개)와 `sourceType`(SEEN, HEARD_FROM_CHILD, UNSPECIFIED)만 자유대화 시작 내부 요청에 선택적으로 포함한다. 이름·연락처·사건 주장·임의 지시문을 담을 문자열 필드는 없다. 아이 기본 정보의 기존 childContext(이름·나이·관심사)는 유지한다.
+
+Realtime은 고정된 중립 질문으로 바꾸며 보호자의 주장을 아이가 말한 사실로 간주하지 않는다. 출처를 아이에게 노출하거나 답을 유도하지 않는다. 지원하지 않는 주제는 일상 질문으로 대체한다. 연습대화에는 이 guide를 전달하지 않는다. 대화 후 구조화는 개인정보를 정리한 원래 보호자 입력과 실제 아이 발화를 각각 사용하고, 출처와 발화 근거를 구분한다. 새 optional 필드 수신을 지원하는 Realtime을 Core보다 먼저 적용한다.

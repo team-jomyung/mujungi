@@ -107,6 +107,7 @@ export interface LiveView {
   readonly practiceIssue: ProgressIssue;
   readonly status: SessionStatus;
   readonly endReason: EndReason | null;
+  readonly endDetail?: "PRACTICE_COMPLETED" | "PRACTICE_OUTPUT_FAILED" | null;
   readonly failureCode: string | null;
   readonly confirmed: boolean;
   readonly requestedAt: string | null;
@@ -338,6 +339,7 @@ export function parseLiveView(value: unknown): LiveView {
     practiceIssue: activityType === "PRACTICE" && root.status === "ACTIVE" && practice === null ? "invalid" : null,
     status: oneOf(root.status, SESSION_STATUSES, "UNKNOWN"),
     endReason,
+    endDetail: root.endDetail === "PRACTICE_COMPLETED" || root.endDetail === "PRACTICE_OUTPUT_FAILED" ? root.endDetail : null,
     failureCode: optionalString(root, "failureCode"),
     confirmed: root.confirmed === true,
     requestedAt: optionalString(root, "requestedAt"),

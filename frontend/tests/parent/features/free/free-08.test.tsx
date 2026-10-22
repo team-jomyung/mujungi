@@ -22,6 +22,12 @@ function startBodies(harness: ParentHarness): Array<{ idempotencyKey: string; co
   return harness.requests("/api/activities/free").map((request) => request.body as { idempotencyKey: string; context?: Record<string, unknown> });
 }
 
+it("보호자 입력의 대화 전 참고·분석 활용과 출처 구분을 안내한다", () => {
+  setup(() => ACCEPTED());
+  expect(screen.getByTestId("free-context-usage")).toHaveTextContent("중립적인 대화 주제");
+  expect(screen.getByTestId("free-context-usage")).toHaveTextContent("보호자의 설명과 아이의 말은 구분");
+});
+
 beforeEach(() => {
   resetRouter();
 });

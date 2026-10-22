@@ -52,6 +52,20 @@ class SessionViewServiceTest {
     private final UUID sessionId = UUID.randomUUID();
 
     @Test
+    void practiceCompletionDetailIsForwardedButArbitraryInternalTextIsNot() {
+        owned(ActivityCopies.copy(sessionId, guardianId, SessionStatus.ENDED, 6, REQUESTED_AT));
+        for (String detail : List.of("PRACTICE_COMPLETED", "PRACTICE_OUTPUT_FAILED", "PRIVATE_DIAGNOSTIC")) {
+            when(realtime.view(sessionId, 0)).thenReturn(new ViewResult(ViewKind.OK,
+                    new InternalSessionView(sessionId, ActivityType.PRACTICE, SessionStatus.ENDED, EndReason.CHILD_STOP,
+                            null, true, REQUESTED_AT, REQUESTED_AT, REQUESTED_AT, 6L, REQUESTED_AT, List.of(), 0L,
+                            List.of(), null, null, null, null, detail)));
+            LiveView view = service.view(guardianId, sessionId, 0);
+            assertThat(view.endDetail()).isEqualTo("PRIVATE_DIAGNOSTIC".equals(detail) ? null : detail);
+            assertThat(kr.mujoong.core.activity.web.SessionController.LiveViewBody.of(view).endDetail()).isEqualTo(view.endDetail());
+        }
+    }
+
+    @Test
     void relaysRealtimeItemsAndNextSeqAndMarksObservedNow() {
         owned(ActivityCopies.copy(sessionId, guardianId, SessionStatus.ACTIVE, 3, REQUESTED_AT));
         clock.advance(Duration.ofSeconds(5));

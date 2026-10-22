@@ -129,6 +129,10 @@ public class ProviderRequestFactory {
 
     /** 세션 시작 요청(표본율 지정, 실호출 도구가 16kHz 같은 값을 시험한다). */
     public SessionStart sessionStart(ChildContext context, int rate) {
+        return sessionStart(context, rate, null);
+    }
+
+    public SessionStart sessionStart(ChildContext context, int rate, kr.mujoong.contract.context.ConversationGuide guide) {
         Objects.requireNonNull(context, "context");
         if (rate <= 0) {
             throw new IllegalArgumentException("표본율은 0보다 커야 한다");
@@ -138,22 +142,35 @@ public class ProviderRequestFactory {
                 context.age() == null ? null : Math.max(MIN_AGE, context.age()),
                 limitInterests(context.interests()));
         return new SessionStart(TYPE_SESSION_START,
-                new SessionBody(MODEL, instructions(data), new AudioSpec(new AudioFormat(AUDIO_TYPE, rate))));
+                new SessionBody(MODEL, guide == null ? instructions(data) : DialogInstructions.role(data.displayName(), data.age(), data.interests())
+                        + DialogInstructions.conversationGuide(guide), new AudioSpec(new AudioFormat(AUDIO_TYPE, rate))));
     }
 
     /** 현재 자유대화 세션에 고정한 정책을 한 번만 포함한다. 내부 판/해시는 wire 필드가 아니다. */
     public SessionStart sessionStart(ChildContext context, PolicyBundle policy) {
+        return sessionStart(context, policy, null);
+    }
+
+    /** 서비스 정책 지시문 뒤에 대화 전 보호자 참고(선택, 고정 문장만)를 붙인다. */
+    public SessionStart sessionStart(ChildContext context, PolicyBundle policy,
+            kr.mujoong.contract.context.ConversationGuide guide) {
         Objects.requireNonNull(context, "context");
         String instructions = DialogInstructions.serviceRole(Objects.requireNonNull(policy, "policy"),
                 limit(context.displayName(), MAX_DISPLAY_NAME),
                 context.age() == null ? null : Math.max(MIN_AGE, Math.min(SERVICE_MAX_AGE, context.age())),
-                limitInterests(context.interests()));
+                limitInterests(context.interests())) + DialogInstructions.conversationGuide(guide);
         return new SessionStart(TYPE_SESSION_START,
                 new SessionBody(MODEL, instructions, new AudioSpec(new AudioFormat(AUDIO_TYPE, AUDIO_RATE))));
     }
 
     public InstructionsAppend responseStart(String eventId, InstructionTemplates.ResponseStart start, ActivityType mode) {
-        return instructionsAppend(eventId, Objects.requireNonNull(start, "start").content(mode));
+        return responseStart(eventId, start, mode, null);
+    }
+
+    /** 활동 종류별 발언권 지시. 자유대화 첫 응답에는 대화 전 보호자 참고(선택)를 함께 싣는다. */
+    public InstructionsAppend responseStart(String eventId, InstructionTemplates.ResponseStart start, ActivityType mode,
+            kr.mujoong.contract.context.ConversationGuide guide) {
+        return instructionsAppend(eventId, Objects.requireNonNull(start, "start").content(mode, guide));
     }
 
     public InstructionsAppend instructionsAppend(String eventId, DialogInstructions.Correction correction, ActivityType mode) {
@@ -187,6 +204,14 @@ public class ProviderRequestFactory {
     /** 발언권을 모델에 돌려주는 지시(참여 뒤 첫 응답 · 확인 질문 뒤 이어 가기 · 연습 requestResponse). 응답 요청 type이 없어 지시가 응답을 시작한다. */
     public InstructionsAppend responseStart(String eventId, InstructionTemplates.ResponseStart start) {
         return instructionsAppend(eventId, Objects.requireNonNull(start, "start").content());
+    }
+
+    /** 참여 확인 직후에도 동일한 주제 지시를 사용해 일반 첫 질문 지시와 충돌하지 않게 한다. */
+    public InstructionsAppend responseStart(String eventId, InstructionTemplates.ResponseStart start,
+            kr.mujoong.contract.context.ConversationGuide guide) {
+        if (start != InstructionTemplates.ResponseStart.FIRST || guide == null) return responseStart(eventId, start);
+        return instructionsAppend(eventId, InstructionTemplates.scoped(InstructionTemplates.INTERJECTION_LEAD
+                + DialogInstructions.conversationGuide(guide)));
     }
 
     /** 서버 템플릿 지시문(문장은 DialogPolicy의 역할 지시문, U3-R14). 아이 문맥 값은 따옴표 안 데이터로만 들어간다. */

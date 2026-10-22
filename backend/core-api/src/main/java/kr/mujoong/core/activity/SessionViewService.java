@@ -112,7 +112,8 @@ public class SessionViewService {
                 LiveExtras.practice(view.practice()),
                 items,
                 nextSeq,
-                LiveExtras.guardrail(view.guardrail()));
+                LiveExtras.guardrail(view.guardrail()),
+                safeEndDetail(view.endDetail()));
     }
 
     private LiveView fromCopy(ActivityCopy copy, long sinceSeq, Instant now) {
@@ -169,6 +170,10 @@ public class SessionViewService {
         }
     }
 
+    private static String safeEndDetail(String value) {
+        return "PRACTICE_COMPLETED".equals(value) || "PRACTICE_OUTPUT_FAILED".equals(value) ? value : null;
+    }
+
     private static EndReason known(EndReason value) {
         return value == EndReason.UNRECOGNIZED ? null : value;
     }
@@ -204,7 +209,8 @@ public class SessionViewService {
             List<Map<String, Object>> items,
             long nextSeq,
             @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.ALWAYS)
-            kr.mujoong.contract.guardrail.GuardrailPresentation guardrail) {
+            kr.mujoong.contract.guardrail.GuardrailPresentation guardrail,
+            String endDetail) {
 
         public LiveView(UUID sessionId, ActivityType activityType, SessionStatus status, EndReason endReason,
                 FailureCode failureCode, boolean confirmed, Instant requestedAt, Instant startedAt, Instant endedAt,
@@ -212,7 +218,8 @@ public class SessionViewService {
                 LiveExtras.TechnicalPause technicalPause, LiveExtras.SilenceWarning silenceWarning,
                 LiveExtras.Practice practice, List<Map<String, Object>> items, long nextSeq) {
             this(sessionId, activityType, status, endReason, failureCode, confirmed, requestedAt, startedAt, endedAt,
-                    statusVersion, serverTime, observedAt, stale, gaps, technicalPause, silenceWarning, practice, items, nextSeq, null);
+                    statusVersion, serverTime, observedAt, stale, gaps, technicalPause, silenceWarning, practice, items, nextSeq,
+                    null, null);
         }
 
         public LiveView {

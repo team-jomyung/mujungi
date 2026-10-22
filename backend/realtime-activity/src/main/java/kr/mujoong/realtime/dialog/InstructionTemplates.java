@@ -39,11 +39,16 @@ public final class InstructionTemplates {
         }
 
         public String content(ActivityType mode) {
+            return content(mode, null);
+        }
+
+        /** 자유대화 첫 응답에는 대화 전 보호자 참고(선택, {@link DialogInstructions#conversationGuide})를 덧붙인다. 연습에는 싣지 않는다. */
+        public String content(ActivityType mode, kr.mujoong.contract.context.ConversationGuide guide) {
             if (mode == ActivityType.PRACTICE) return content();
             if (this == FIRST) return scoped("서버가 현재 안내 전달과 참여 수락을 확인했다. 현재 연결에서 검증된 시작 안내 녹음의 실제 재생이 완료됐다. "
                     + "시작 인사·자기소개·안내 대본·참여 질문을 다시 시작하거나 반복하지 않는다. "
                     + "아이가 마지막으로 한 질문·경험·정정을 먼저 따르고 바로 이어 답한다. 아이가 누구인지나 이름을 명시적으로 물으면 그 질문에만 답한다. "
-                    + "새 질문·맞장구를 강제하지 않고 아이에게 발언권을 돌려준다.");
+                    + "새 질문·맞장구를 강제하지 않고 아이에게 발언권을 돌려준다." + DialogInstructions.conversationGuide(guide));
             return scoped("서버가 현재 안내 전달과 참여 수락을 확인했다. 같은 안내나 참여 질문은 반복하지 않는다. "
                     + "아이가 이미 말한 질문·경험·정정을 먼저 따르고, 답 뒤 새 질문을 자동으로 붙이지 않는다. "
                     + "아직 아이가 말하지 않았다면 짧게 참여를 받아 주고 발언권을 돌려준다.");

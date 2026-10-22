@@ -22,6 +22,7 @@
     "nextSeq"
   ],
   "properties": {
+    "endDetail": { "enum": [null, "PRACTICE_COMPLETED", "PRACTICE_OUTPUT_FAILED"] },
     "statusVersion": { "type": "integer", "minimum": 0 },
     "serverTime": { "$ref": "common.schema.json#/$defs/DateTime" },
     "observedAt": {

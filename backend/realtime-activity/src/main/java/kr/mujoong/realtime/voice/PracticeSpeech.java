@@ -14,6 +14,9 @@ import kr.mujoong.realtime.practicelegacy.PracticePorts.OutputKind;
 public record PracticeSpeech(UUID correlationId, UUID scenarioId, long generation,
         OutputKind kind, String partnerRole, String text, boolean generated) {
 
+    /** 출력 경계에서 앞부분이 잘려도 본문을 온전히 받기 위한 서버 고정 안내. */
+    public static final String READING_LEAD = "음, 이제 들어봐.";
+
     /** U12 이전 모양(승인 발화). 기존 호출처 · 시험이 그대로 쓴다. */
     public PracticeSpeech(UUID correlationId, UUID scenarioId, long generation, OutputKind kind, String partnerRole, String text) {
         this(correlationId, scenarioId, generation, kind, partnerRole, text, false);
@@ -35,7 +38,7 @@ public record PracticeSpeech(UUID correlationId, UUID scenarioId, long generatio
      * {@link OutputKind}를 직접 가리키지 않게 하는 얇은 공장이다. 재생 증거 표지는 SCENARIO다.
      */
     public static PracticeSpeech scenario(UUID correlationId, UUID scenarioId, long generation, String partnerRole, String text) {
-        return new PracticeSpeech(correlationId, scenarioId, generation, OutputKind.SCENARIO, partnerRole, text);
+        return new PracticeSpeech(correlationId, scenarioId, generation, OutputKind.SCENARIO, partnerRole, sentence(text));
     }
 
     /**
@@ -50,7 +53,20 @@ public record PracticeSpeech(UUID correlationId, UUID scenarioId, long generatio
 
     /** 생성형 슬롯은 원문 일치로 제브를 건너뛸 수 없다(항상 거짓). */
     public boolean matches(String actual) {
-        return !generated && sameWithoutAsciiWhitespace(text, actual);
+        if (generated || actual == null) return false;
+        if (sameWithoutAsciiWhitespace(text, actual)) return true;
+        String body = text.replaceAll("\\s+", "");
+        String received = actual.replaceAll("\\s+", "");
+        if (!received.endsWith(body)) return false;
+        String prefix = received.substring(0, received.length() - body.length());
+        String lead = READING_LEAD.replaceAll("\\s+", "");
+        // 본문은 완전 일치해야 한다. 앞에 올 수 있는 것은 서버 고정 안내의 끝부분뿐이다.
+        return !prefix.isEmpty() && lead.endsWith(prefix);
+    }
+
+    private static String sentence(String text) {
+        if (text == null || text.isBlank()) return text;
+        return text.matches("(?s).*[.!?。！？…][\"”’']?$") ? text : text + ".";
     }
 
     /**

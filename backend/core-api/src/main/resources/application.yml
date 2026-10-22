@@ -135,7 +135,7 @@ mujoong:
       job-attempts: 4
       job-retry-backoff: [5s, 15s, 30s]
       job-tick: 1s
-      attempt-timeout: 30s
+      attempt-timeout: 90s
       reconcile-interval: 5m
       undecided-limit: 1h
     report:
@@ -226,10 +226,11 @@ mujoong:
       exchange-timeout: 5s
   # U5a 텍스트 AI(timing.md 9절 · ai-io.md 7절). 기본 공급자는 '사용 불가'이고, 실제 어댑터를 붙일 때 환경 변수
   # MUJOONG_TEXT_AI_ENDPOINT · MUJOONG_TEXT_AI_MODEL · MUJOONG_TEXT_AI_API_KEY 이름을 쓴다(이 파일에는 값을 두지 않는다)
+  # 저장 대화 실호출: medium 구조화가 10초를 초과했다. 목적별 none과 유한 시한을 사용하고 검증·분류는 유지한다.
   text-ai:
-    request-timeout: 3s
+    request-timeout: 10s
     result:
-      request-timeout: 10s
+      request-timeout: 20s
       temperature-judgment: 0
       temperature-generation: 0.2
       prompt-version: v1
@@ -245,19 +246,19 @@ mujoong:
     purpose:
       scenario-generation:
         max-output-tokens: 4000
-        reasoning-effort: medium
+        reasoning-effort: none
       scenario-review:
         max-output-tokens: 4000
-        reasoning-effort: medium
+        reasoning-effort: low
       seed-generation:
         max-output-tokens: 4000
         reasoning-effort: medium
       result-text:
         max-output-tokens: 4000
-        reasoning-effort: medium
+        reasoning-effort: none
       goal-candidates:
         max-output-tokens: 4000
-        reasoning-effort: medium
+        reasoning-effort: none
       rejudgment:
         max-output-tokens: 4000
         reasoning-effort: medium

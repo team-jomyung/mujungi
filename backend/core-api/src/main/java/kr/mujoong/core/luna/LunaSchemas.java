@@ -84,6 +84,11 @@ public final class LunaSchemas {
             }
             Map<String, Object> document = readDocument(json, reader, file);
             Map<String, Object> requestSchema = requestNode(document, json, reader, file);
+            // 공급자는 최상위 anyOf를 받지 않는다. 공통 객체 모양은 전송하고,
+            // APPROVE/reasons 같은 조건부 제약은 아래 원본 계약으로 반드시 재검사한다.
+            if ("object".equals(requestSchema.get("type")) && requestSchema.containsKey("properties")) {
+                requestSchema.remove("anyOf");
+            }
             Schema contract;
             try {
                 contract = registry.getSchema(SchemaLocation.of(ID_PREFIX + file));

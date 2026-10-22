@@ -1,5 +1,6 @@
 package kr.mujoong.realtime.voice;
 
+import kr.mujoong.contract.context.ConversationGuide;
 import java.time.Duration;
 import java.util.Objects;
 import java.util.UUID;
@@ -87,31 +88,44 @@ public class ProviderConnector {
 
     /** 연결 스레드를 띄운다. */
     public Attempt connect(UUID sessionId, ChildContext childContext, Listener listener, Callback callback) {
-        return connect(sessionId, childContext, listener, callback, null);
+        return connect(sessionId, childContext, listener, callback, null, null);
+    }
+
+    /** 대화 전 보호자 참고(선택)를 지시문에 싣는다. */
+    public Attempt connect(UUID sessionId, ChildContext childContext, ConversationGuide guide, Listener listener, Callback callback) {
+        return connect(sessionId, childContext, listener, callback, null, guide);
     }
 
     public Attempt connect(UUID sessionId, ChildContext childContext, Listener listener, Callback callback,
             PolicyBundle policy) {
+        return connect(sessionId, childContext, listener, callback, policy, null);
+    }
+
+    /** 자유대화 서비스 정책(선택)과 대화 전 보호자 참고(선택)를 함께 세션 시작 지시문에 싣는다. */
+    public Attempt connect(UUID sessionId, ChildContext childContext, Listener listener, Callback callback,
+            PolicyBundle policy, ConversationGuide guide) {
         Objects.requireNonNull(sessionId, "sessionId");
         Objects.requireNonNull(childContext, "childContext");
         Objects.requireNonNull(listener, "listener");
         Objects.requireNonNull(callback, "callback");
         Attempt attempt = new Attempt();
         attempt.thread = launcher.launch("provider-connect-" + sessionId,
-                () -> run(attempt, childContext, listener, callback, policy));
+                () -> run(attempt, childContext, listener, callback, policy, guide));
         if (attempt.isCancelled() && attempt.thread != null) {
             attempt.thread.interrupt();
         }
         return attempt;
     }
 
-    private void run(Attempt attempt, ChildContext childContext, Listener listener, Callback callback, PolicyBundle policy) {
+    private void run(Attempt attempt, ChildContext childContext, Listener listener, Callback callback, PolicyBundle policy,
+            ConversationGuide guide) {
         if (!ProviderHosts.isConnectable(port.endpoint(), activeProfiles)) {
             callback.failed(ProviderUnavailableException.Reason.HOST_NOT_ALLOWED);
             return;
         }
-        ProviderRequestFactory.SessionStart request = policy == null ? factory.sessionStart(childContext)
-                : factory.sessionStart(childContext, policy);
+        ProviderRequestFactory.SessionStart request = policy != null ? factory.sessionStart(childContext, policy, guide)
+                : guide != null ? factory.sessionStart(childContext, ProviderRequestFactory.AUDIO_RATE, guide)
+                : factory.sessionStart(childContext);
         ProviderSession session = null;
         try {
             session = port.open(listener, connectTimeout);

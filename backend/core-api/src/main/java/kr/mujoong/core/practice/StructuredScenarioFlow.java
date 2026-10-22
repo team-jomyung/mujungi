@@ -54,6 +54,10 @@ public final class StructuredScenarioFlow {
         var exposures=history.stream().filter(e->e.skillRef()!=null&&e.graphContext()!=null)
                 .map(e->new VariantPlanner.Exposure(e.skillRef(),e.graphContext())).toList();
         var knowledge=graph.open(session.guardianId(),session.childId(),original.skillRef(),exposures,deadline);
+        // U14 keeps a readable partner label; U15 plans use closed relationship codes.
+        // Resolve only known equivalent labels, never replace a different relationship.
+        payload.put("relation",graphRelation(relation,knowledge.context()
+                .map(value->value.seed().relationship()).orElse(null)));
         knowledge.context().ifPresent(value->{var seed=value.seed();payload.put("structureContext",Map.of(
                 "skillRef",seed.seedId(),"signature",seed.signature(),"invariantSentence",seed.invariantSentence(),
                 "preservationRule",seed.preservationRule(),"relationship",seed.relationship(),"situation",seed.situation()));});
@@ -67,5 +71,17 @@ public final class StructuredScenarioFlow {
                 sourceText,fingerprint->{boolean seen=repository.seen(session.childId(),fingerprint);if(seen)duplicate.set(true);return seen;},knowledge);
         try{return generator.generate(new ScenarioScriptGenerator.Input(clean,aliases.aliases(),rules,knowledge.context().isPresent(),json.write(cleanGoal)),deadline);}
         catch(ScenarioScriptGenerator.ContentExhausted exhausted){exhausted.retryableDuplicate=duplicate.get();throw exhausted;}
+    }
+    static String graphRelation(String relation,String seedRelationship){
+        if(seedRelationship==null||kr.mujoong.core.knowledge.KnowledgeSeed.RELATIONSHIPS.contains(relation))return relation;
+        boolean equivalent=switch(relation){
+            case "친구" -> java.util.Set.of("FRIEND_CLOSE","FRIEND_CASUAL").contains(seedRelationship);
+            case "친한 친구" -> "FRIEND_CLOSE".equals(seedRelationship);
+            case "반 친구", "같은 반 친구" -> "CLASSMATE".equals(seedRelationship);
+            case "선생님", "교사" -> "TEACHER".equals(seedRelationship);
+            case "가족" -> "FAMILY".equals(seedRelationship);
+            default -> false;
+        };
+        return equivalent?seedRelationship:relation;
     }
 }

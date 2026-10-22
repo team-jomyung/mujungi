@@ -9,8 +9,18 @@ import org.springframework.stereotype.Component;
 public class OutputChecker {
     private final ForbiddenDictionary dictionary;private final ResultTextGateway gateway;
     public OutputChecker(ForbiddenDictionary dictionary,ResultTextGateway gateway){this.dictionary=dictionary;this.gateway=gateway;}
-    public record Draft(String id,String text,List<String> verifiedQuotes,String fallback){}
-    public boolean firstPass(Draft draft){return draft.text()!=null&&!draft.text().isBlank()&&QuoteMatcher.allVerified(draft.text(),draft.verifiedQuotes())&&NumberGuard.allowed(draft.text())&&dictionary.allowed(draft.text());}
+    /** 서버 호출자가 정하는 용도다. 모델 응답이나 사용자 입력으로 선택하지 않는다. */
+    public enum TextUse { OBSERVED_EVIDENCE, PRACTICE_PROPOSAL }
+    public record Draft(String id,String text,List<String> verifiedQuotes,String fallback,TextUse textUse){
+        public Draft(String id,String text,List<String> verifiedQuotes,String fallback){this(id,text,verifiedQuotes,fallback,TextUse.OBSERVED_EVIDENCE);}
+        public Draft {Objects.requireNonNull(textUse);}
+    }
+    public boolean firstPass(Draft draft){
+        if(draft.text()==null||draft.text().isBlank())return false;
+        if(draft.textUse()==TextUse.PRACTICE_PROPOSAL)
+            return NumberGuard.allowedLiteral(draft.text())&&dictionary.allowedLiteral(draft.text());
+        return QuoteMatcher.allVerified(draft.text(),draft.verifiedQuotes())&&NumberGuard.allowed(draft.text())&&dictionary.allowed(draft.text());
+    }
     public Map<String,String> check(List<Draft> drafts,Instant deadline){
         return check(drafts,deadline,()->{});
     }
@@ -18,7 +28,9 @@ public class OutputChecker {
         Map<String,String> result=new LinkedHashMap<>();List<Draft> clean=new ArrayList<>();
         for(Draft draft:drafts){if(result.containsKey(draft.id()))throw new IllegalArgumentException("DUPLICATE_TEXT_ID");result.put(draft.id(),draft.fallback());if(firstPass(draft))clean.add(draft);}
         if(clean.isEmpty())return result;
-        var input=clean.stream().map(d->Map.<String,Object>of("id",d.id(),"text",d.text())).toList();
+        var input=clean.stream().map(d->d.textUse()==TextUse.PRACTICE_PROPOSAL
+                ?Map.<String,Object>of("id",d.id(),"text",d.text(),"textUse",d.textUse().name())
+                :Map.<String,Object>of("id",d.id(),"text",d.text())).toList();
         var output=gateway.call("classify",Map.of("sentences",input),Map.of(),deadline,accessCheck);
         if(!(output.get("results") instanceof List<?> rows))throw new ResultAiException("SCHEMA_INVALID");
         Map<String,Boolean> violations=new HashMap<>();

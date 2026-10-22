@@ -49,6 +49,18 @@ class PracticeExtensionTest {
     }
 
     @Test
+    void outputFailureIsTechnicalAndNeverChildStopOrCompleted() {
+        practiceSession();
+        extension.onUtterance = (utterance, out) -> Signal.OUTPUT_FAILED;
+        h.activate();
+        h.childSays("i-1", "연습하자");
+        ActivitySessionRow row = h.transitions.find(h.sessionId).orElseThrow();
+        assertThat(row.status()).isEqualTo(SessionStatus.CLOSING);
+        assertThat(row.endReason()).isEqualTo(EndReason.DISCONNECT);
+        assertThat(row.endDetail()).isEqualTo("PRACTICE_OUTPUT_FAILED");
+    }
+
+    @Test
     void theDefaultNoOpMakesAPracticeSessionWalkTheSameTransitionsAsFreeTalk() {
         SessionHarness free = new SessionHarness();
         free.activate();

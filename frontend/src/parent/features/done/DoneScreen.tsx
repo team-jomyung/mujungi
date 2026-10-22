@@ -37,7 +37,7 @@ export function DoneScreen({ sessionId }: DoneScreenProps) {
   return (
     <div className="mj-screen" data-testid="done-view" data-state={presentation.closing ? "CLOSING" : (status ?? "LOADING")}>
       <header className="mj-header mj-header--stacked">
-        <p className="mj-header__eyebrow">{COPY.done.header}</p>
+        <p className="mj-header__eyebrow">{view?.activityType === "PRACTICE" ? "연습" : COPY.done.header}</p>
         <h1 className="mj-header__title" data-testid="done-title">
           {presentation.title}
         </h1>
@@ -74,7 +74,7 @@ export function DoneScreen({ sessionId }: DoneScreenProps) {
         </button>
       </main>
       <BottomTabBar
-        active="free"
+        active={view?.activityType === "PRACTICE" ? "practice" : "free"}
         lockMessage={presentation.closing ? PROPOSED_COPY.closingTabToast : null}
         onNavigate={handleNavigate}
         onLockedPress={onLockedPress}

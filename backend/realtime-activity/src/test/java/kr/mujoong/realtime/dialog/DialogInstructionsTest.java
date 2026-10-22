@@ -38,11 +38,13 @@ class DialogInstructionsTest {
         List<Method> publicStatics = Arrays.stream(DialogInstructions.class.getDeclaredMethods())
                 .filter(method -> Modifier.isPublic(method.getModifiers()) && Modifier.isStatic(method.getModifiers()))
                 .toList();
-        assertThat(publicStatics).extracting(Method::getName).containsExactlyInAnyOrder("role", "serviceRole");
+        assertThat(publicStatics).extracting(Method::getName).containsExactlyInAnyOrder("role", "serviceRole", "conversationGuide");
         assertThat(publicStatics.stream().filter(method -> method.getName().equals("role")).findFirst().orElseThrow()
                 .getParameterTypes()).containsExactly(String.class, Integer.class, List.class);
         assertThat(publicStatics.stream().filter(method -> method.getName().equals("serviceRole")).findFirst().orElseThrow()
                 .getParameterTypes()).containsExactly(PolicyBundle.class, String.class, Integer.class, List.class);
+        assertThat(publicStatics.stream().filter(method -> method.getName().equals("conversationGuide")).findFirst().orElseThrow()
+                .getParameterTypes()).containsExactly(kr.mujoong.contract.context.ConversationGuide.class);
     }
 
     @Test

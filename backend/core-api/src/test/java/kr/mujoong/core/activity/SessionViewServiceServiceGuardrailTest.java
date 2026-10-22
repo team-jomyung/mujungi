@@ -30,7 +30,7 @@ class SessionViewServiceServiceGuardrailTest {
     private void result(Map<String,Object> facts) {
         when(realtime.view(session, 0)).thenReturn(new ViewResult(ViewKind.OK, new InternalSessionView(session, ActivityType.FREE_TALK,
                 SessionStatus.CLOSING, EndReason.CHILD_STOP, null, false, clock.now(), null, null, 5L, clock.now(),
-                List.of(), 0L, List.of(), null, null, null, facts)));
+                List.of(), 0L, List.of(), null, null, null, facts, null)));
     }
     @Test void successfulInternalFactsAreRelayed() { owned(); result(facts("ACCEPTED", "PLAYING")); assertThat(service.view(guardian, session, 0).guardrail().goodbye()).isEqualTo(GuardrailPresentation.Goodbye.PLAYING); }
     @Test void legacyMissingObjectIsNull() { owned(); result(null); assertThat(service.view(guardian, session, 0).guardrail()).isNull(); }

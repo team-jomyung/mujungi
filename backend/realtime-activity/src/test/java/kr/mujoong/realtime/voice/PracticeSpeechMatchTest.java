@@ -18,6 +18,19 @@ class PracticeSpeechMatchTest {
     private static final String TEXT = "다시 친구 역할로 돌아갈게";
 
     @Test
+    void onlyFixedReadingLeadMayPrecedeTheEntireApprovedBody() {
+        var speech = PracticeSpeech.scenario(UUID.randomUUID(), UUID.randomUUID(), 0, "친구", "이제 그만하자");
+        assertThat(speech.text()).isEqualTo("이제 그만하자.");
+        assertThat(speech.matches("음, 이제 들어봐. 이제 그만하자.")).isTrue();
+        assertThat(speech.matches("들어봐. 이제 그만하자.")).isTrue();
+        assertThat(speech.matches("이제 그만하자.")).isTrue();
+        assertThat(speech.matches("그만하자.")).isFalse();
+        assertThat(speech.matches("정답은 이거야. 이제 그만하자.")).isFalse();
+        assertThat(speech.matches("음, 이제 들어봐. 이제 그만하자. 더 해봐.")).isFalse();
+        assertThat(PracticeSpeech.generatedSlot(UUID.randomUUID(),UUID.randomUUID(),0,"PEER","지시").matches("음, 이제 들어봐. 지시")).isFalse();
+    }
+
+    @Test
     void theSharedRuleIgnoresOnlyAsciiWhitespaceAndAgreesWithMatches() {
         PracticeSpeech speech = new PracticeSpeech(UUID.randomUUID(), UUID.randomUUID(), 0, OutputKind.SCENARIO, "친구", TEXT);
 

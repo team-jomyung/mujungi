@@ -160,3 +160,13 @@ describe("17 — 실패 · 이동", () => {
     expect(screen.getByTestId("toast")).toHaveTextContent("찾을 수 없어요.");
   });
 });
+
+describe("연습 종료 화면", () => {
+  it("연습 완료에는 자유대화와 아이 중단 인용문을 표시하지 않는다", async () => {
+    renderDone(() => jsonResponse(200, liveViewBody("ENDED", { activityType: "PRACTICE", endReason: "CHILD_STOP", endDetail: "PRACTICE_COMPLETED", confirmed: true, endedAt: ENDED_AT })));
+    expect(await screen.findByText("이번 연습을 마쳤어요")).toBeInTheDocument();
+    expect(screen.getByTestId("done-title")).toHaveTextContent("연습이 종료됐어요");
+    expect(screen.queryByText(/그만할래/)).not.toBeInTheDocument();
+    expect(screen.queryByText("오늘 자유대화가 끝났어요")).not.toBeInTheDocument();
+  });
+});

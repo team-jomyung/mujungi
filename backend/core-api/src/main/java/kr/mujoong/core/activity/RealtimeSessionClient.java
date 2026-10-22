@@ -111,7 +111,8 @@ public class RealtimeSessionClient {
             Map<String, Object> technicalPause,
             Map<String, Object> silenceWarning,
             Map<String, Object> practice,
-            Map<String, Object> guardrail) {
+            Map<String, Object> guardrail,
+            String endDetail) {
 
         public InternalSessionView(UUID sessionId, ActivityType activityType, SessionStatus status, EndReason endReason,
                 FailureCode failureCode, Boolean confirmed, Instant requestedAt, Instant startedAt, Instant endedAt,
@@ -119,7 +120,7 @@ public class RealtimeSessionClient {
                 List<Map<String, Object>> gaps, Map<String, Object> technicalPause, Map<String, Object> silenceWarning,
                 Map<String, Object> practice) {
             this(sessionId, activityType, status, endReason, failureCode, confirmed, requestedAt, startedAt, endedAt,
-                    statusVersion, serverTime, items, nextSeq, gaps, technicalPause, silenceWarning, practice, null);
+                    statusVersion, serverTime, items, nextSeq, gaps, technicalPause, silenceWarning, practice, null, null);
         }
 
         /** U1 모양(진행 보기 덧붙임 없음). */

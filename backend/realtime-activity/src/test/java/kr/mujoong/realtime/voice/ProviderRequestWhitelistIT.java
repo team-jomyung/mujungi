@@ -20,6 +20,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 import kr.mujoong.contract.audio.AudioFrameCodec;
+import kr.mujoong.contract.context.ConversationGuide;
 import kr.mujoong.contract.json.JsonCodec;
 import kr.mujoong.contract.status.SessionStatus;
 import kr.mujoong.contract.ws.WsEnvelope;
@@ -72,8 +73,10 @@ class ProviderRequestWhitelistIT {
         try (RealtimeItEnvironment env = RealtimeItEnvironment.start()) {
             DeviceSimulatorClient device = env.connectDevice();
             UUID sessionId = UUID.randomUUID();
-            StartSessionHandler.StartCommand command = env.startCommand(sessionId,
+            StartSessionHandler.StartCommand original = env.startCommand(sessionId,
                     new ChildContext("하늘", 8, List.of("공룡", "우주")));
+            var guide=new kr.mujoong.contract.context.ConversationGuide(List.of(kr.mujoong.contract.context.ConversationGuide.Topic.BLOCKS),kr.mujoong.contract.context.ConversationGuide.SourceType.SEEN);
+            var command=new StartSessionHandler.StartCommand(original.sessionId(),original.idempotencyKey(),original.guardianId(),original.childId(),original.deviceId(),original.activityType(),original.consentSnapshot(),original.childContext(),original.stopExpressions(),original.approvedContent(),original.approvedSpeech(),original.practiceJson(),guide);
             env.app.bean(StartSessionHandler.class).start(command, null);
             WsEnvelope start = device.await(WsMessageType.START_SESSION, WAIT);
             device.ack(start.opId(), sessionId);
@@ -85,6 +88,12 @@ class ProviderRequestWhitelistIT {
             // 그 사이 프레임이 NOT_ACCEPTING으로 버려질 수 있다(3.6 재시험 1차 실패 원인, U3 L6 — RealtimeMetricsScrapeIT와 같은 대기)
             device.await(envelope -> envelope.payload() instanceof SessionState state && state.view() == View.LISTENING,
                     WAIT);
+            env.provider.await("session.instructions.append", 1, WAIT);
+            assertThat(env.provider.received().stream()
+                    .filter(m -> "session.instructions.append".equals(m.get("type").asString()))
+                    .map(m -> m.get("content").asString()).toList())
+                    .anySatisfy(content -> assertThat(content).contains("블록 놀이에 대해 이야기해 줄래?")
+                            .doesNotContain("관심사나 일상 질문"));
             byte[] pcm = new byte[960];
             for (int i = 0; i < 3; i++) {
                 pcm[0] = (byte) i;
@@ -116,7 +125,7 @@ class ProviderRequestWhitelistIT {
             });
             String everything = String.join("\n", env.provider.rawReceived());
             assertThat(markers).allSatisfy(marker -> assertThat(everything).doesNotContain(marker));
-            assertThat(everything).contains("하늘").contains("공룡");
+            assertThat(everything).contains("하늘").contains("공룡").contains("블록 놀이에 대해 이야기해 줄래?").contains("사실 확인이나 아이의 발언이 아니다");
             // 입력 음성은 무변환으로 간다(J131)
             assertThat(env.provider.audioHashes()).hasSize(3).doesNotHaveDuplicates();
         }
@@ -144,6 +153,10 @@ class ProviderRequestWhitelistIT {
                 }
             }
         }
+        assertThat(components(ConversationGuide.class)).containsExactly("topics", "sourceType");
+        assertThat(ConversationGuide.class.getRecordComponents()[0].getGenericType().getTypeName())
+                .isEqualTo("java.util.List<kr.mujoong.contract.context.ConversationGuide$Topic>");
+        assertThat(ConversationGuide.class.getRecordComponents()[1].getType()).isEqualTo(ConversationGuide.SourceType.class);
         // 공장 공개 메서드는 아이 맥락 · 음성 프레임 · 정리만 받는다(세션 패키지 전체를 받는 입구가 없다). U3: 형식을 지킨 공급자 응답 id ·
         // 고정 교정 범주만 더한다(자유 문자열 입구 없음)
         assertThat(Arrays.stream(ProviderRequestFactory.class.getDeclaredMethods())
@@ -151,7 +164,7 @@ class ProviderRequestWhitelistIT {
                 .flatMap(method -> Arrays.stream(method.getParameterTypes())).map(Class::getSimpleName))
                 // U4b: 연습 확장점 지시문은 검사된 값 타입(PracticeInstruction)으로만 받는다(BR10.4)
                 .allMatch(name -> Set.of("ChildContext", "byte[]", "int", "Correction", "PracticeInstruction", "String", "ResponseStart",
-                                "ActivityType", "PolicyBundle")
+                                "ActivityType", "PolicyBundle", "ConversationGuide")
                         .contains(name));
         // U16 internal mode/pinned-policy inputs are allowed only at these exact assembly boundaries.
         // The serialized record and actual wire whitelist above remain unchanged.
@@ -163,7 +176,10 @@ class ProviderRequestWhitelistIT {
                 .map(method -> method.getName() + "(" + Arrays.stream(method.getParameterTypes())
                         .map(Class::getSimpleName).collect(java.util.stream.Collectors.joining(",")) + ")"))
                 .containsExactlyInAnyOrder("servicePolicy(ActivityType)", "sessionStart(ChildContext,PolicyBundle)",
-                        "responseStart(String,ResponseStart,ActivityType)", "instructionsAppend(String,Correction,ActivityType)");
+                        "responseStart(String,ResponseStart,ActivityType)", "instructionsAppend(String,Correction,ActivityType)",
+                        // 서비스 정책과 대화 전 보호자 참고(main #50)를 함께 싣는 조립 경계. 보호자 참고는 열거값만 받는다
+                        "sessionStart(ChildContext,PolicyBundle,ConversationGuide)",
+                        "responseStart(String,ResponseStart,ActivityType,ConversationGuide)");
     }
 
     @Test

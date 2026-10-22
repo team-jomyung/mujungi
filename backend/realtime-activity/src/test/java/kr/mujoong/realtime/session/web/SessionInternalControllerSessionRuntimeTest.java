@@ -59,6 +59,18 @@ class SessionInternalControllerSessionRuntimeTest {
     private final EndRequestHandler ends = mock(EndRequestHandler.class);
     private final SessionViewQuery views = mock(SessionViewQuery.class);
 
+    @Test void guideIsOptionalFreeTalkOnlyAndReachesTheExecutorPlan() {
+        var guide=new kr.mujoong.contract.context.ConversationGuide(List.of(kr.mujoong.contract.context.ConversationGuide.Topic.FRIEND),kr.mujoong.contract.context.ConversationGuide.SourceType.SEEN);
+        var original=body(ActivityType.FREE_TALK,approvedWith(U4B_CODES),child("하늘",8),stops());
+        var withGuide=new SessionInternalController.StartBody(original.sessionId(),original.idempotencyKey(),original.guardianId(),original.childId(),original.deviceId(),original.activityType(),original.consentSnapshot(),original.childContext(),original.stopExpressions(),original.approvedContent(),original.approvedSpeech(),original.practice(),guide);
+        var command=SessionInternalController.toCommand(withGuide);
+        assertThat(command.conversationGuide()).isEqualTo(guide);
+        kr.mujoong.realtime.session.SessionExecutor.Plan plan=org.springframework.test.util.ReflectionTestUtils.invokeMethod(StartSessionHandler.class,"plan",command,"trace");
+        assertThat(plan.conversationGuide()).isEqualTo(guide);
+        var practice=new SessionInternalController.StartBody(original.sessionId(),original.idempotencyKey(),original.guardianId(),original.childId(),original.deviceId(),ActivityType.PRACTICE,original.consentSnapshot(),original.childContext(),original.stopExpressions(),original.approvedContent(),original.approvedSpeech(),null,guide);
+        assertBadRequest(practice);
+    }
+
     @Test
     void theStartBodyCarriesTheU4bApprovedPromptsIntoTheCommandUnchanged() {
         Map<String, SessionInternalController.ApprovedBody> approved = approvedWith(U4B_CODES);
