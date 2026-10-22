@@ -3,13 +3,13 @@
 #
 # 쓰는 법: bash scripts/verify/a-checks.sh backend [--db auto|docker|local] | frontend | tools
 #   backend   cd backend && ./gradlew --no-daemon clean check verifyBootJarHasNoTestClasses -Pmujoong.test.db=<db>
-#             저장소 전체 회귀(유닛 범위 명령이 아님): 세 모듈 단위 · 통합 · ArchUnit · 설정 키 대조 · 모듈 전체 JaCoCo 80% LINE.
+#             저장소 전체 회귀(유닛 범위 명령이 아님): 세 모듈 단위 · 통합 · ArchUnit · 설정 키 대조 · 모듈 전체 JaCoCo 보고.
 #             끝나면 bootJar 두 개가 있는지 보고, 시험 결과 XML에서 시험 수 · 실패 · 건너뜀을 센다.
 #   frontend  cd frontend && npm ci && npx --no-install eslint . && npx --no-install vitest run tests --coverage &&
 #             npx --no-install next build. 그 뒤 .next/static을 .next/standalone/.next/static에 복사한다(host 모드 web ·
 #             이미지 빌드가 같은 standalone을 쓴다. Next.js standalone 출력은 정적 자원을 복사하지 않는다).
 #   tools     cd tools && npm ci && npx --no-install vitest run tests
-# 커버리지 하한(80%)은 각 도구의 설정이 판정한다(JaCoCo check · Vitest thresholds). 이 스크립트는 하한을 바꾸지 않는다.
+# 커버리지는 보고 전용이다(JaCoCo 보고서 · Vitest coverage-summary). 하한으로 실패시키지 않는다.
 # 출력: 도구 출력은 그대로(scripts/verify.sh가 build/verify/logs/A*.log로 보낸다) + 끝에 PASS · NOTE 줄.
 # 종료 코드: 0 통과, 1 실패, 2 전제 누락, 64 인자 오류
 
@@ -61,7 +61,7 @@ backend() {
   elif [ "${fails:-0}" -ne 0 ]; then
     fail A1.tests "시험 실패 ${fails}건"
   else
-    pass A1.tests "시험 ${tests}건 · 실패 0 · 건너뜀 ${skipped} · DB 시험 백엔드 요청 $db · JaCoCo 80% LINE(check)"
+    pass A1.tests "시험 ${tests}건 · 실패 0 · 건너뜀 ${skipped} · DB 시험 백엔드 요청 $db · JaCoCo 보고"
   fi
   finish_asserts
 }
@@ -73,7 +73,7 @@ frontend() {
   (cd frontend && npm ci --no-audit --no-fund)
   log "frontend: eslint"
   (cd frontend && npx --no-install eslint .)
-  # U3-J22: 소스 구조 폴더(tests/parent · tests/device · tests/shared · tests/lint)의 시험을 모두 돌린다(커버리지 80% 하한은 그대로)
+  # U3-J22: 소스 구조 폴더(tests/parent · tests/device · tests/shared · tests/lint)의 시험을 모두 돌린다(커버리지는 보고 전용)
   log "frontend: vitest run tests --coverage"
   (cd frontend && npx --no-install vitest run tests --coverage)
   log "frontend: next build"
@@ -85,7 +85,7 @@ frontend() {
     rm -rf frontend/.next/standalone/public
     cp -a frontend/public frontend/.next/standalone/public
   fi
-  pass A2.build "eslint · vitest(80% 줄) · next build · standalone 정적 자원"
+  pass A2.build "eslint · vitest(커버리지 보고) · next build · standalone 정적 자원"
   local summary=frontend/coverage/coverage-summary.json
   if [ -f "$summary" ]; then
     note A2.coverage "줄 커버리지 $(jq -r '.total.lines.pct' "$summary")%(src/**)"

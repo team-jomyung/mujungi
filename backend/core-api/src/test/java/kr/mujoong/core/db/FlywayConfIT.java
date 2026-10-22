@@ -1,6 +1,7 @@
 package kr.mujoong.core.db;
 
 import static kr.mujoong.core.db.CoreDbFixtures.expectSqlStateAutoCommit;
+import static kr.mujoong.core.db.CoreDbFixtures.migrationVersions;
 import static kr.mujoong.core.db.CoreDbFixtures.query;
 import static kr.mujoong.core.db.CoreDbFixtures.single;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -13,6 +14,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.SQLException;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -73,48 +75,56 @@ class FlywayConfIT {
             Flyway core = flywayFromConf(postgres, MigrationSet.CORE, Map.of());
             Flyway realtime = flywayFromConf(postgres, MigrationSet.REALTIME, Map.of());
 
+            // 개수 · 버전은 저장소 마이그레이션 파일에서 읽는다(마이그레이션을 더해도 이 시험을 고치지 않는다)
+            List<String> coreVersions = migrationVersions(postgres.repoRoot(), MigrationSet.CORE);
+            List<String> realtimeVersions = migrationVersions(postgres.repoRoot(), MigrationSet.REALTIME);
+
             // 기준선 없이 두 번째 위치를 돌리면 "비어 있지 않은 flyway 스키마 + 이력 표 없음"으로 실패한다(report-g1-b 재현)
             MigrateResult coreResult = core.migrate();
-            // core 위치: V1(U1) · V2(U2) · V3(U4a) · V4(U5a) · V5(U6) · V6(U7) · V7(U5b) · V8(U15) · V9(U14) · V10(U10)
-            assertThat(coreResult.migrationsExecuted).isEqualTo(11);
+            assertThat(coreResult.migrationsExecuted).as("core 마이그레이션 파일 전부").isEqualTo(coreVersions.size());
             Flyway realtimeWithoutBaseline =
                     flywayFromConf(postgres, MigrationSet.REALTIME, Map.of("flyway.baselineOnMigrate", "false"));
             assertThatThrownBy(realtimeWithoutBaseline::migrate)
                     .isInstanceOf(FlywayException.class)
                     .hasMessageContaining("non-empty schema");
 
-            // 설정 파일 그대로면 버전 0 기준선 뒤 V1 · V2(U3) · V3(U4b) · V4(U5b) · V5(U11) · V6(U13) · V7(U12)가 적용된다
-            assertThat(realtime.migrate().migrationsExecuted).isEqualTo(7);
-            // 다시 돌리면 적용할 것이 없다(배포마다 migrate를 불러도 안전)
+            // 설정 파일 그대로면 버전 0 기준선 뒤 realtime 마이그레이션 파일 전부가 적용된다
+            assertThat(realtime.migrate().migrationsExecuted).as("realtime 마이그레이션 파일 전부")
+                    .isEqualTo(realtimeVersions.size());
+            // 남은 것 0(pending 0) · 실패 0, 다시 돌리면 적용할 것이 없다(배포마다 migrate를 불러도 안전)
+            for (Flyway flyway : List.of(core, realtime)) {
+                assertThat(flyway.info().pending()).isEmpty();
+                assertThat(flyway.info().applied()).allSatisfy(info -> assertThat(info.getState().isFailed()).isFalse());
+            }
             assertThat(core.migrate().migrationsExecuted).isZero();
             assertThat(realtime.migrate().migrationsExecuted).isZero();
 
             try (Connection owner = postgres.connect(Role.OWNER)) {
+                // core 위치가 먼저라 기준선 행이 없고, realtime은 버전 0 기준선 뒤 파일 순서대로 모두 성공이다
                 assertThat(query(owner,
                         "select version, type, success from flyway.core_schema_history order by installed_rank"))
-                        .containsExactly(List.of("1", "SQL", true), List.of("2", "SQL", true), List.of("3", "SQL", true),
-                                List.of("4", "SQL", true), List.of("5", "SQL", true), List.of("6", "SQL", true),
-                                List.of("7", "SQL", true), List.of("8", "SQL", true), List.of("9", "SQL", true), List.of("10", "SQL", true), List.of("11", "SQL", true));
+                        .containsExactlyElementsOf(historyRows(List.of(), coreVersions));
                 assertThat(query(owner,
                         "select version, type, success from flyway.realtime_schema_history order by installed_rank"))
-                        .containsExactly(List.of("0", "BASELINE", true), List.of("1", "SQL", true), List.of("2", "SQL", true),
-                                List.of("3", "SQL", true), List.of("4", "SQL", true), List.of("5", "SQL", true),
-                                List.of("6", "SQL", true), List.of("7", "SQL", true));
-                // core 45(V1~V9) + realtime 20(V1~V7)
-                assertThat(single(owner, "select count(*) from pg_tables where schemaname in ('core', 'realtime')"))
-                        .as("core 45(V1 12 + U2 V2 2 + U4a V3 2 + U5a V4 7 + U6 V5 10 + U7 V6 2 + U5b V7 1 + U15 V8 6 + U14 V9 3)"
-                                + " · realtime 20(V1 7 + U3 V2 3 + U4b V3 1 + U5b V4 5 + U11 V5 1 + U13 V6 1 + U12 V7 2)")
-                        .isEqualTo(65L);
+                        .containsExactlyElementsOf(historyRows(List.of(List.of("0", "BASELINE", true)), realtimeVersions));
+                // 두 앱의 기본 표가 만들어졌다(표 목록 전체는 CoreSchemaIT · RealtimeSchemaIT가 본다)
+                assertThat(query(owner, "select schemaname || '.' || tablename from pg_tables"
+                        + " where schemaname in ('core', 'realtime')").stream().map(row -> row.get(0)).toList())
+                        .contains("core.core_guardian", "core.core_device", "core.core_activity",
+                                "realtime.realtime_device_connection", "realtime.realtime_transcript",
+                                "realtime.realtime_activity_session");
             }
             // afterMigrate.sql: 앱 역할은 자기 이력 표만 읽는다
             try (Connection coreApp = postgres.connect(Role.CORE_APP);
                     Connection realtimeApp = postgres.connect(Role.REALTIME_APP)) {
-                // core V1 · V2(U2) · V3(U4a) · V4(U5a) · V5(U6) · V6(U7) · V7(U5b) · V8(U15) · V9(U14) · V10(U10)
-                // realtime BASELINE · V1 · V2(U3) · V3(U4b) · V4(U5b) · V5(U11) · V6(U13) · V7(U12)
-                assertThat(single(coreApp, "select count(*) from flyway.core_schema_history")).isEqualTo(11L);
-                assertThat(single(realtimeApp, "select count(*) from flyway.realtime_schema_history")).isEqualTo(8L);
+                assertThat(single(coreApp, "select count(*) from flyway.core_schema_history"))
+                        .isEqualTo((long) coreVersions.size());
+                assertThat(single(realtimeApp, "select count(*) from flyway.realtime_schema_history"))
+                        .as("기준선 행 포함").isEqualTo(realtimeVersions.size() + 1L);
                 expectSqlStateAutoCommit("42501",
                         () -> query(coreApp, "select count(*) from flyway.realtime_schema_history"));
+                expectSqlStateAutoCommit("42501",
+                        () -> query(realtimeApp, "select count(*) from flyway.core_schema_history"));
             }
 
             // 운영 DB를 지우는 clean은 막혀 있다
@@ -156,6 +166,13 @@ class FlywayConfIT {
     }
 
     // ------------------------------------------------------------------ 도구
+
+    /** 앞 행(기준선 등) 뒤에 버전마다 성공한 SQL 행 하나. */
+    private static List<List<Object>> historyRows(List<List<Object>> leading, List<String> versions) {
+        List<List<Object>> rows = new ArrayList<>(leading);
+        versions.forEach(version -> rows.add(List.of(version, "SQL", true)));
+        return rows;
+    }
 
     /** 저장소의 마이그레이션 위치 파일을 그대로 복사한다(afterMigrate.sql 포함). */
     private static void copyMigrations(MujoongPostgres postgres, MigrationSet set, Path target) throws IOException {

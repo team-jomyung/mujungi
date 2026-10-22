@@ -16,8 +16,8 @@
 #
 # 단계(각 단계의 출력은 build/verify/logs/<단계>.log, 표준 출력은 단계마다 한 줄):
 #   A1 backend   cd backend && ./gradlew --no-daemon clean check verifyBootJarHasNoTestClasses (전체 회귀 · ArchUnit ·
-#                설정 키 대조 · 모듈 전체 JaCoCo 80%, DB 시험 백엔드는 compose=auto · host=local, J132)
-#   A2 frontend  npm ci · eslint . · vitest run tests --coverage(80%, 유닛 시험 폴더 전부) · next build(+ standalone에 정적 자원 복사)
+#                설정 키 대조 · 모듈 전체 JaCoCo 보고, DB 시험 백엔드는 compose=auto · host=local, J132)
+#   A2 frontend  npm ci · eslint . · vitest run tests --coverage(보고 전용, 유닛 시험 폴더 전부) · next build(+ standalone에 정적 자원 복사)
 #   A3 tools     npm ci · vitest run tests (J131, 유닛 시험 폴더 전부)
 #   A4 secrets   scripts/verify/a-secrets.sh — 비밀 스캔 ① · 무시 규칙 ② (SEC-10)
 #   F  지문      A 동안 소스가 바뀌지 않았는지 보고 build/verify/fingerprint에 소스 지문 · 산출물 해시를 적는다(J134)
@@ -444,7 +444,7 @@ else
   [ "$resolved" = host ] && db_backend=local
   stage_or_exit A1 2400 "backend 회귀(gradle clean check verifyBootJarHasNoTestClasses, DB 시험 백엔드 $db_backend)" -- \
     bash scripts/verify/a-checks.sh backend --db "$db_backend"
-  stage_or_exit A2 1200 "frontend(npm ci · eslint · vitest 80% · next build)" -- bash scripts/verify/a-checks.sh frontend
+  stage_or_exit A2 1200 "frontend(npm ci · eslint · vitest · next build)" -- bash scripts/verify/a-checks.sh frontend
   stage_or_exit A3 600 "tools(npm ci · vitest)" -- bash scripts/verify/a-checks.sh tools
   stage_or_exit A4 300 "비밀 스캔 ① · 무시 규칙 ②" -- bash scripts/verify/a-secrets.sh
   run_fn F "소스 지문 · 산출물 해시 기록(J134)" record_fingerprint

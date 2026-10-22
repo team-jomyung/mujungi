@@ -3,6 +3,9 @@ package kr.mujoong.core.db;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.fail;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.security.SecureRandom;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -14,9 +17,15 @@ import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.stream.Stream;
+import kr.mujoong.testsupport.db.MujoongPostgres.MigrationSet;
+import org.flywaydb.core.api.MigrationVersion;
 
 /**
  * Step 14 core DB 시험의 공통 픽스처(시험 소스 전용). 행은 시험마다 새 UUID · 새 코드로 만들고, 호출한 시험이 트랜잭션을 되돌려
@@ -116,6 +125,24 @@ final class CoreDbFixtures {
         List<List<Object>> rows = query(connection, sql, params);
         assertThat(rows).as("한 행 한 열: " + sql).hasSize(1);
         return rows.get(0).get(0);
+    }
+
+    private static final Pattern VERSIONED_MIGRATION = Pattern.compile("^V([0-9]+(?:[._][0-9]+)*)__.+\\.sql$");
+
+    /**
+     * 저장소 마이그레이션 위치의 버전(V*__*.sql) 목록을 버전 순서로 돌려준다. 시험이 마이그레이션 개수 · 최고 버전을 숫자로 적지 않고
+     * 파일에서 읽게 해, 마이그레이션을 더해도 시험을 고치지 않게 한다.
+     */
+    static List<String> migrationVersions(Path repoRoot, MigrationSet set) throws IOException {
+        try (Stream<Path> files = Files.list(repoRoot.resolve(set.relativeLocation()))) {
+            List<String> versions = files.map(file -> VERSIONED_MIGRATION.matcher(file.getFileName().toString()))
+                    .filter(Matcher::matches)
+                    .map(matcher -> matcher.group(1).replace('_', '.'))
+                    .sorted(Comparator.comparing(MigrationVersion::fromVersion))
+                    .toList();
+            assertThat(versions).as("마이그레이션 파일: " + set.relativeLocation()).isNotEmpty();
+            return versions;
+        }
     }
 
     private static void bind(PreparedStatement statement, Object... params) throws SQLException {

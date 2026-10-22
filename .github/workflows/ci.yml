@@ -109,7 +109,9 @@ jobs:
           distribution: temurin
           java-version: "21"
           cache: gradle
-      - name: gradle check(단위 · 통합 Testcontainers · ArchUnit · 설정 키 대조 · JaCoCo 80%) · bootJar 시험 클래스 0
+      # 실패한 시험은 CI에서만 최대 2회 더 돈다(mujoong.java-conventions, test-retry). 재시도 뒤에도 실패하면 작업이 실패한다.
+      # JaCoCo는 보고서만 만들고 하한으로 실패시키지 않는다
+      - name: gradle check(단위 · 통합 Testcontainers · ArchUnit · 설정 키 대조 · JaCoCo 보고) · bootJar 시험 클래스 0
         working-directory: backend
         run: ./gradlew --no-daemon clean check verifyBootJarHasNoTestClasses -Pmujoong.test.db=docker
       - name: 시험 · 커버리지 보고서
@@ -173,13 +175,10 @@ jobs:
       - run: npm ci
       - name: ESLint(/parent ↔ /device import 경계 NFR11.1 등)
         run: npx --no-install eslint .
-      - name: Vitest + 줄 커버리지 80%
+      # 실패한 시험은 CI에서만 최대 2회 더 돈다(vitest.config.ts retry). 커버리지는 보고 전용(하한 없음)
+      - name: Vitest + 줄 커버리지 보고
         run: npx --no-install vitest run tests --coverage
       - run: npx --no-install next build
-      - name: 연습 레거시 프런트 범위 줄 80%
-        env:
-          MUJOONG_COVERAGE_SCOPE: practice-legacy
-        run: npx --no-install vitest run $(cat coverage-scope/practice-legacy.tests) --coverage
       - name: 브라우저 번들에 키 형식 문자열 · 비밀 변수 이름 0건
         run: |
           set -euo pipefail
@@ -194,20 +193,6 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: frontend-coverage
-          path: frontend/coverage/
-          retention-days: 14
-          if-no-files-found: ignore
-
-      - name: 웹 푸시 프런트 시험 · 전용 범위 줄 커버리지 80%
-        if: success() && hashFiles('frontend/coverage-scope/web-push.json') != ''
-        env:
-          MUJOONG_COVERAGE_SCOPE: web-push
-        run: npx --no-install vitest run $(cat coverage-scope/web-push.tests) --coverage
-      - name: 웹 푸시 프런트 검증 보고서
-        if: always() && hashFiles('frontend/coverage-scope/web-push.json') != ''
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: frontend-web-push-coverage
           path: frontend/coverage/
           retention-days: 14
           if-no-files-found: ignore

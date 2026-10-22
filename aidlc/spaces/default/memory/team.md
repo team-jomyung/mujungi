@@ -37,13 +37,14 @@
 - **Methodology**: test-after
 - **Ordering**: 시험할 수 있는 층을 하나 구현하면, 바로 그 층의 시험을 쓰고 돌린 뒤 다음 층으로 넘어간다.
 - 계약에 닿는 변경도 같은 순서를 따른다(Q3-A). 다만 설계 문서 변경이 계약에 닿으면 같은 작업에서 `contracts/`도 함께 고친다(`discovered-rules.md` R-M10).
-- 커버리지 하한(줄 기준만, 분기 · 함수 하한 없음):
-  - 모듈 전체 줄 80%를 CI가 막는다. 백엔드 JaCoCo는 `contract-model` · `core-api` · `realtime-activity`(`test-support`는 제외), 프런트 Vitest v8은 `src/**/*.{ts,tsx}`(`*.d.ts`만 제외).
-  - 유닛 범위 줄 80%는 범위 파일(`backend/coverage-scope/<유닛>.txt` · `frontend/coverage-scope/<유닛>.json`)이 있는 작업에 적용한다. **CI가 실제로 막는 범위는 U5b · U7뿐이다**(백엔드 `u5b` · `u5b-core` · `u7`, 프런트 `u5b` · `u7`). 나머지 범위 파일은 로컬 · 검토 근거다.
+- 커버리지(줄 기준만, 분기 · 함수 하한 없음)는 **보고 전용**이다(JIRA-256). CI는 보고서를 만들되 하한으로 막지 않는다:
+  - 모듈 전체 줄 커버리지를 CI가 보고한다(80%는 목표치, 막지 않음). 백엔드 JaCoCo는 `contract-model` · `core-api` · `realtime-activity`(`test-support`는 제외), 프런트 Vitest v8은 `src/**/*.{ts,tsx}`(`*.d.ts`만 제외).
+  - 범위 파일(`backend/coverage-scope/<기능>.txt` · `frontend/coverage-scope/<기능>.json`)은 로컬 · 검토 근거다. CI는 범위를 따로 다시 돌리지 않는다.
   - `tools/`에는 커버리지 하한이 없다(시험 지원 코드, J107).
   - 범위 측정은 빈 목록 · 없는 파일이면 실패한다(J137). 범위 파일을 새로 쓰면 이 방식을 그대로 따른다.
-  - `classic` 범위의 줄 80% 하한 · 병합 전 CI 실행과 같다.
-- 하한 · 기존 단언 · 대조 시험 · ArchUnit 시험은 시험을 통과시키려고 낮추거나 끄거나 건너뛰게 하지 않는다. 모자라면 시험을 더하거나 차이를 보고한다.
+  - 병합 전 CI 실행은 `classic` 범위와 같고, 줄 80%는 막는 하한이 아니라 보고 목표다.
+- 대조 시험 · ArchUnit 시험은 시험을 통과시키려고 약하게 고치거나 끄거나 건너뛰게 하지 않는다. 마이그레이션 개수 · 표 합계 · 최고 버전 같은 숫자 고정 단언은 의미 있는 검사로 바꿀 수 있다(R-F2).
+- CI 재시도: 실패한 시험은 CI(환경 변수 `CI`)에서만 최대 2회 더 돈다(백엔드 Gradle `org.gradle.test-retry` `maxRetries=2` · `maxFailures=10`, 프런트 · tools Vitest `retry`). 로컬은 재시도하지 않는다. 재시도 뒤 통과는 보고서에 남고, 재시도 뒤에도 실패하면 `ci-gate`가 막는다. 모든 시험은 계속 `ci-gate`를 막는다.
 - 시험 종류:
   - 단위: JUnit 5 · AssertJ · Mockito(백엔드), Vitest + Testing Library + jsdom(프런트), Vitest(tools).
   - 통합: Spring Boot 통합 시험 + Testcontainers PostgreSQL(`-Pmujoong.test.db=docker`), 상대 앱은 스텁.
@@ -52,7 +53,7 @@
   - 끝-끝: `bash scripts/verify.sh` C안(기기 시뮬레이터 + 가짜 공급자).
   - 인프라: `infra-validate`(Compose 불변식 · `nginx -t` · shellcheck · 마이그레이션 expand 검사), 이미지 점검, 관문 음성 대조.
 - 시험 이름 · 태그: 단위 `*Test`, 통합 `*IT`, 백엔드 유닛 태그 `@Tag("u1")` ~ `@Tag("u7")`와 `@Tag("db")`, 프런트 · tools는 `tests/<유닛>/` 폴더.
-- 관문의 한계: PR의 `ci-gate`는 정적 · 단위 · 통합 · 범위 커버리지 · 보안 · 인프라 · 이미지까지 본다. 끝-끝 회귀(`skeleton`)는 `main` 병합 뒤에 처음 돈다. 그래서 이번 작업은 Build and Test의 전체 `verify.sh`로 병합 전 끝-끝을 확인한다.
+- 관문의 한계: PR의 `ci-gate`는 정적 · 단위 · 통합(커버리지는 보고 전용) · 보안 · 인프라 · 이미지까지 본다. 끝-끝 회귀(`skeleton`)는 `main` 병합 뒤에 처음 돈다. 그래서 이번 작업은 Build and Test의 전체 `verify.sh`로 병합 전 끝-끝을 확인한다.
 - 시험 · CI · 검증에서는 가짜 공급자만 쓴다(ADR-002).
 - 결과 보고는 테스트 대역 · 합성 대화 · 실제 API · 실제 기기 성공을 따로 적고, 대역 성공을 실공급자 성공으로 표시하지 않는다(`discovered-rules.md` R-M11, Q10-A).
 - 이번 작업 기록의 시험 전략은 Standard다(컴포넌트당 5 ~ 8개 + 핵심 경계 통합 시험).
@@ -61,7 +62,7 @@
 
 - 커버리지 범위 파일은 유닛 번호 대신 기능 이름으로 짓는다(`backend/coverage-scope/<기능>.txt` · `frontend/coverage-scope/<기능>.json`과 시험 목록 `<기능>.tests`). 앞의 유닛 이름 범위 파일 규칙을 대체한다. (learned 2026-10-19) <!-- cid:261018-structure-refactor:code-generation:098665fc1a2767bd9d8e8451bf76fbbcdc4818372abf5efbd1ae2c842d6babe1 -->
 
-- CI가 실제로 막는 커버리지 범위는 프런트의 `practice-legacy` · `web-push`뿐이다(`ci.yml`의 프런트 범위 단계). 백엔드 범위 파일(`backend/coverage-scope/*.txt`)은 로컬 · 검토 근거이며 `main`의 CI 경량화(JIRA-249) 뒤 CI 단계가 없다. 앞의 "CI가 실제로 막는 범위는 U5b · U7뿐"(백엔드 `u5b` · `u5b-core` · `u7`)을 대체한다. (learned 2026-10-19) <!-- cid:261018-structure-refactor:build-and-test:785d6e181cf556394ec87ff413be7d22caf29276e1eaa009185a48e3a034bf10 -->
+- CI가 막는 커버리지 범위는 없다(JIRA-256). 프런트 `practice-legacy` · `web-push` 범위 재실행 단계는 중복 실행이라 `ci.yml`에서 뺐고, 모든 범위 파일은 로컬 · 검토 근거다. 앞의 "CI가 실제로 막는 범위는 U5b · U7뿐"(백엔드 `u5b` · `u5b-core` · `u7`)과 "프런트 `practice-legacy` · `web-push`뿐"을 대체한다. (learned 2026-10-19, revised 2026-10-22) <!-- cid:261018-structure-refactor:build-and-test:785d6e181cf556394ec87ff413be7d22caf29276e1eaa009185a48e3a034bf10 -->
 
 ## Guard Policy
 

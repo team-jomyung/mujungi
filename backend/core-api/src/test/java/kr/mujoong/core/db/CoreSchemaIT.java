@@ -1,15 +1,19 @@
 package kr.mujoong.core.db;
 
 import static kr.mujoong.core.db.CoreDbFixtures.T0;
+import static kr.mujoong.core.db.CoreDbFixtures.migrationVersions;
 import static kr.mujoong.core.db.CoreDbFixtures.query;
 import static kr.mujoong.core.db.CoreDbFixtures.single;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityManagerFactory;
+import java.io.IOException;
 import java.sql.Connection;
 import java.sql.SQLException;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import kr.mujoong.core.catalog.ApprovedContent;
 import kr.mujoong.core.catalog.ApprovedContentVersion;
@@ -17,6 +21,7 @@ import kr.mujoong.core.identity.Child;
 import kr.mujoong.core.identity.Consent;
 import kr.mujoong.core.identity.Guardian;
 import kr.mujoong.testsupport.db.MujoongPostgres;
+import kr.mujoong.testsupport.db.MujoongPostgres.MigrationSet;
 import kr.mujoong.testsupport.db.MujoongPostgres.Role;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
@@ -97,27 +102,27 @@ class CoreSchemaIT {
     }
 
     @Test
-    void migrationsCreateExactlyTheCoreTablesOwnedByTheMigrationRole() throws SQLException {
+    void migrationsCreateTheRequiredCoreTablesOwnedByTheMigrationRole() throws SQLException, IOException {
         try (Connection owner = postgres.connect(Role.OWNER)) {
             List<List<Object>> tables = query(owner,
                     "select tablename, tableowner from pg_tables where schemaname = 'core' order by tablename");
-            assertThat(tables.stream().map(row -> (String) row.get(0)).toList()).containsExactlyElementsOf(
+            // 필요한 표가 모두 있다. 뒤 마이그레이션이 표를 더해도 이 시험은 고치지 않는다
+            assertThat(tables.stream().map(row -> (String) row.get(0)).toList()).containsAll(
                     java.util.stream.Stream.of(CORE_TABLES, U5A_TABLES, U6_TABLES, U7_TABLES, U5B_TABLES, U15_TABLES, U14_TABLES)
-                            .flatMap(List::stream).sorted().toList());
+                            .flatMap(List::stream).toList());
             // 편차 (x): 표 소유는 마이그레이션 역할, 앱 역할은 쓰는 역할일 뿐이다
             assertThat(tables).allSatisfy(row -> assertThat(row.get(1)).isEqualTo("mujoong_owner"));
 
-            // V1 · V2(U2) · V3(U4a) · V4(U5a) · V5(U6) · V6(U7) · V7(U5b) · V8(U15) · V9(U14)가 차례로 성공으로 있다(J116).
-            // core 위치가 먼저라 기준선 행은 없다.
+            // 저장소의 core 마이그레이션 파일이 버전 순서대로 모두 성공으로 있다(J116). core 위치가 먼저라 기준선 행은 없다.
             List<List<Object>> history = query(owner,
                     "select version, type, success from flyway.core_schema_history order by installed_rank");
-            assertThat(history).containsExactly(List.of("1", "SQL", true), List.of("2", "SQL", true),
-                    List.of("3", "SQL", true), List.of("4", "SQL", true), List.of("5", "SQL", true),
-                    List.of("6", "SQL", true), List.of("7", "SQL", true), List.of("8", "SQL", true), List.of("9", "SQL", true), List.of("10", "SQL", true), List.of("11", "SQL", true));
+            assertThat(history).containsExactlyElementsOf(migrationVersions(postgres.repoRoot(), MigrationSet.CORE).stream()
+                    .map(version -> List.<Object>of(version, "SQL", true)).toList());
         }
     }
 
-    @ParameterizedTest(name = "{0}: {1}열")
+    /** 엔터티가 쓰는 열 수 이상이다(열이 빠지면 실패, 뒤 마이그레이션이 열을 더하는 것은 허용). 열 이름 · 형식은 JPA validate 시험이 본다. */
+    @ParameterizedTest(name = "{0}: {1}열 이상")
     @CsvSource({
         "core_device, 22",
         "core_activity, 20",
@@ -148,7 +153,8 @@ class CoreSchemaIT {
         try (Connection core = postgres.connect(Role.CORE_APP)) {
             assertThat(single(core,
                     "select count(*) from information_schema.columns where table_schema = 'core' and table_name = ?", table))
-                    .isEqualTo((long) expectedColumns);
+                    .asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.LONG)
+                    .isGreaterThanOrEqualTo((long) expectedColumns);
         }
     }
 
@@ -208,10 +214,11 @@ class CoreSchemaIT {
                             + " where n.nspname = 'core' and c.relname = 'core_device'"))
                     .isEqualTo("fillfactor=90");
 
-            List<List<Object>> partial = query(core,
-                    "select indexname, indexdef from pg_indexes where schemaname = 'core' and indexdef like '%WHERE%'"
-                            + " order by indexname");
-            assertThat(partial.stream().map(row -> (String) row.get(0)).toList()).containsExactly(
+            // 부분 색인은 이름으로 찾는다(뒤 마이그레이션이 부분 색인을 더해도 이 시험은 고치지 않는다)
+            Map<String, String> partial = new HashMap<>();
+            query(core, "select indexname, indexdef from pg_indexes where schemaname = 'core' and indexdef like '%WHERE%'")
+                    .forEach(row -> partial.put((String) row.get(0), (String) row.get(1)));
+            assertThat(partial).containsKeys(
                     "core_activity_in_progress_guardian_uk",
                     "core_data_deletion_request_open_guardian_uk",
                     "core_device_active_guardian_uk",
@@ -220,19 +227,21 @@ class CoreSchemaIT {
                     "core_push_subscription_active_guardian_idx",
                     "core_result_job_subject_active_idx",
                     "core_saved_goal_active_candidate_idx");
-            assertThat(partial.subList(0, 4)).allSatisfy(row -> assertThat((String) row.get(1)).startsWith("CREATE UNIQUE INDEX"));
-            assertThat((String) partial.get(4).get(1)).startsWith("CREATE INDEX")
-                    .contains("(next_attempt_at, requested_at)").contains("'REQUESTED'");
-            assertThat((String) partial.get(5).get(1)).startsWith("CREATE INDEX")
-                    .contains("(guardian_id)").contains("revoked_at IS NULL");
-            assertThat((String) partial.get(6).get(1)).startsWith("CREATE UNIQUE INDEX")
-                    .contains("(subject_id)").contains("'REQUESTED'").contains("'RUNNING'");
-            assertThat((String) partial.get(2).get(1)).contains("(guardian_id)").contains("'REGISTERED'");
-            assertThat((String) partial.get(3).get(1)).contains("(registration_code)").contains("'UNREGISTERED'");
-            assertThat((String) partial.get(0).get(1)).contains("'REQUESTED'").contains("'CLOSING'")
-                    .doesNotContain("'ENDED'");
+            assertThat(partial.get("core_activity_in_progress_guardian_uk")).startsWith("CREATE UNIQUE INDEX")
+                    .contains("'REQUESTED'").contains("'CLOSING'").doesNotContain("'ENDED'");
             // U2: 보호자당 열린(REQUESTED) 삭제 요청 하나
-            assertThat((String) partial.get(1).get(1)).contains("(guardian_id)").contains("'REQUESTED'");
+            assertThat(partial.get("core_data_deletion_request_open_guardian_uk")).startsWith("CREATE UNIQUE INDEX")
+                    .contains("(guardian_id)").contains("'REQUESTED'");
+            assertThat(partial.get("core_device_active_guardian_uk")).startsWith("CREATE UNIQUE INDEX")
+                    .contains("(guardian_id)").contains("'REGISTERED'");
+            assertThat(partial.get("core_device_pending_code_uk")).startsWith("CREATE UNIQUE INDEX")
+                    .contains("(registration_code)").contains("'UNREGISTERED'");
+            assertThat(partial.get("core_push_dispatch_due_idx")).startsWith("CREATE INDEX")
+                    .contains("(next_attempt_at, requested_at)").contains("'REQUESTED'");
+            assertThat(partial.get("core_push_subscription_active_guardian_idx")).startsWith("CREATE INDEX")
+                    .contains("(guardian_id)").contains("revoked_at IS NULL");
+            assertThat(partial.get("core_result_job_subject_active_idx")).startsWith("CREATE UNIQUE INDEX")
+                    .contains("(subject_id)").contains("'REQUESTED'").contains("'RUNNING'");
         }
     }
 
