@@ -13,9 +13,9 @@
 # 운영 6종(core-api · realtime · web · migrate · backup · nginx)을 커밋 SHA 태그로 ECR에 게시 → S4 · S5 배포(deploy.yml).
 # 권한: 기본 contents: read. id-token: write는 images(ECR 게시) · 배포 호출 작업만.
 #
-# skeleton은 CD 연결 작업 동안 임시 비차단 검사로 운영한다.
-# 실패 표시는 유지하고 C.log를 수집한다.
-# 공개 시연 전 원인 수정·전체 PASS 확인 후 ci-gate에 복원한다.
+# skeleton은 ci-gate가 집계하는 차단 검사다(JIRA-256 복원). PR에서는 건너뛰어 집계가 허용하고,
+# main 푸시 · 수동 실행에서는 skeleton까지 성공해야 ci-gate가 성공하고 images · deploy가 진행된다.
+# skeleton 자체에는 재시도가 없다(이미지 빌드의 제한 재시도는 build-images.sh가 한다). 실패하면 C.log 등을 수집한다.
 
 name: ci
 
@@ -511,7 +511,7 @@ jobs:
   ci-gate:
     name: ci-gate
     if: always()
-    needs: [changes, backend, backend-deps, frontend, frontend-deps, tools, secrets, infra-validate]
+    needs: [changes, backend, backend-deps, frontend, frontend-deps, tools, secrets, infra-validate, skeleton]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
