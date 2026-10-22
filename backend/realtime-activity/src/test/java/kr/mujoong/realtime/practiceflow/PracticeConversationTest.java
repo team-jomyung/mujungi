@@ -68,7 +68,7 @@ class PracticeConversationTest {
 
     private static PracticeFlowSettings quiet(Duration focusMax, Duration goalLimit) {
         Duration hour = Duration.ofHours(1);
-        return new PracticeFlowSettings(hour, focusMax, goalLimit, hour, 2, 1);
+        return new PracticeFlowSettings(hour, focusMax, goalLimit, hour, 2, 1, false);
     }
 
     private static void assertRecordMatchesTheContract(Object practice) {

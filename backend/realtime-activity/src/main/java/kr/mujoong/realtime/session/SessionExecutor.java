@@ -1223,7 +1223,9 @@ public final class SessionExecutor {
             return false;
         }
         judgment.open(new JudgmentCoordinator.Open(point, JudgmentTrigger.EXTENSION_REQUEST, JudgmentOwner.EXTENSION, target.seq(),
-                target.text(), target.at(), shaped, judgment.recentBefore(target.seq()),
+                target.text(), target.at(), shaped,
+                shaped != null && "ROLE_DIALOGUE_CLOSURE".equals(shaped.coreFunction())
+                        ? judgment.dialogueBefore(target.seq(), target.at()) : judgment.recentBefore(target.seq()),
                 (turn, outcome) -> JudgmentTurn.Decision.close(), closure -> afterExtensionJudgment(closure, correlationId)));
         return true;
     }
@@ -2903,6 +2905,9 @@ public final class SessionExecutor {
                 practiceAudio.remove(playbackId); cancelPracticeTimer("u5b-audio-" + playbackId);
                 practicePlayback(speech, kr.mujoong.realtime.practicelegacy.PracticePorts.Playback.FAILED);
             }
+        } else {
+            // Only approved output accepted by the device link may ground a subsequent agreement judgment.
+            judgment.rememberPartner(sealed.transcript(), passAt, speech != null && "COACH".equals(speech.partnerRole()));
         }
     }
 

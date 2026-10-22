@@ -45,7 +45,14 @@ public record PracticeScript(UUID scenarioId, String scriptVersion, List<Scene> 
      */
     public record Scene(String sceneKey, SceneKind sceneKind, String sceneDescription, String opportunitySentence,
             String reexplanation, String partnerRole, List<String> focusPoints, List<String> expressionExamples,
-            String relation, String place, String topic) {
+            String relation, String place, String topic, String spokenIntroduction) {
+
+        public Scene(String sceneKey, SceneKind sceneKind, String sceneDescription, String opportunitySentence,
+                String reexplanation, String partnerRole, List<String> focusPoints, List<String> expressionExamples,
+                String relation, String place, String topic) {
+            this(sceneKey, sceneKind, sceneDescription, opportunitySentence, reexplanation, partnerRole, focusPoints,
+                    expressionExamples, relation, place, topic, null);
+        }
 
         public Scene {
             requireText(sceneKey, "sceneKey");

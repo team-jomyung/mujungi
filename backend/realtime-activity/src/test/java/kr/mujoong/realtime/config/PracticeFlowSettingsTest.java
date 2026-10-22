@@ -28,6 +28,7 @@ class PracticeFlowSettingsTest {
         RealtimeProperties properties = ConfigKeyContractTest.bind(APPLICATION_YML);
 
         PracticeFlowSettings settings = PracticeFlowSettings.from(properties);
+        assertThat(settings.flexibleDialogue()).isTrue();
 
         assertThat(settings.retryMax()).isEqualTo(2);
         assertThat(settings.reexplainMax()).isEqualTo(1);

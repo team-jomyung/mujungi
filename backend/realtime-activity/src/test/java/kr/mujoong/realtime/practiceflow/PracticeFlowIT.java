@@ -65,6 +65,7 @@ class PracticeFlowIT {
     private final List<Object> settled = new ArrayList<>();
     private final List<RuntimeException> failures = new ArrayList<>();
     private PracticeFlowRepository repository;
+    private boolean flexible;
 
     @BeforeAll
     static void openDatabase() {
@@ -94,7 +95,9 @@ class PracticeFlowIT {
         PracticeScriptRequester requester = new PracticeScriptRequester(mock(InternalHttpClient.class), Runnable::run,
                 Duration.ofSeconds(1));
         h.practice = session -> new PracticeFlowRouter(NoOpPracticeSessionExtension.FACTORY.create(session),
-                () -> new PracticeConversation(session, h.guardianId, h.clock, PracticeFlowTestKit.defaults(), requester,
+                () -> new PracticeConversation(session, h.guardianId, h.clock,
+                        flexible ? new PracticeFlowSettings(Duration.ofSeconds(10), Duration.ofSeconds(90), Duration.ofMinutes(10),
+                                Duration.ofSeconds(20), 2, 1, true) : PracticeFlowTestKit.defaults(), requester,
                         new PracticeFlowRecorder(repository, db.transactions()), failures::add));
     }
 
@@ -213,6 +216,49 @@ class PracticeFlowIT {
         h.advance(Duration.ofMillis(801));
         assertThat(h.link.outputs()).isNotEmpty();
         complete(h.link.outputs().getLast().playbackId());
+    }
+
+    private void playGenerated(String text) {
+        int before = h.link.outputs().size();
+        h.settleSend(); h.speak(text, 4800); h.advance(Duration.ofMillis(801));
+        assertThat(guard.last().request().mode()).isEqualTo(GuardrailRequest.Mode.PRACTICE_PEER);
+        assertThat(h.link.outputs()).hasSize(before);
+        guard.allow(); h.drain();
+        assertThat(h.link.outputs()).hasSize(before + 1);
+        complete(h.link.outputs().getLast().playbackId());
+    }
+
+    @Test
+    void flexibleDialogueSeparatesTargetAchievementFromAgreementAndGuardsEveryGeneratedReply() {
+        flexible = true; h.activate();
+        playApproved("상상 속 상황을 떠올려 봐. 무중이가 상황 속 상대 역할을 해 볼게.");
+        playApproved(OPPORTUNITY);
+        h.childSays("flex-child-1", "파란색 상자를 줘");
+        assertThat(judge.last().request().point()).isEqualTo(JudgmentPoint.J2);
+        judge.confirm("FULL", 0.95, "PARTIAL", 0.03); h.drain();
+        assertThat(h.executor.status()).isEqualTo(SessionStatus.ACTIVE);
+        playGenerated("파란 상자를 줄게. 같이 정리할까?");
+        h.childSays("flex-child-2", "이 상자에는 뭐가 들어 있어?");
+        assertThat(judge.last().request().point()).isEqualTo(JudgmentPoint.J3);
+        assertThat(judge.last().request().criteria().coreFunction()).isEqualTo("ROLE_DIALOGUE_CLOSURE");
+        assertThat(judge.last().request().recentTurns()).anySatisfy(turn -> {
+            assertThat(turn.speaker()).isEqualTo(kr.mujoong.realtime.judgment.JudgeRequest.Speaker.PARTNER);
+            assertThat(turn.text()).isEqualTo("파란 상자를 줄게. 같이 정리할까?");
+        });
+        assertThat(judge.last().request().recentTurns()).noneSatisfy(turn ->
+                assertThat(turn.text()).isEqualTo("이 상자에는 뭐가 들어 있어?"));
+        judge.confirm("STILL_SHORT", 0.95, "DELIVERED", 0.03); h.drain();
+        playGenerated("여기에는 블록이 들어 있어. 같이 담아 보자.");
+        assertThat(repository.findSceneRuns(h.sessionId).getFirst().endedAt()).isNull();
+        h.childSays("flex-child-3", "응, 같이 담자");
+        judge.confirm("DELIVERED", 0.95, "STILL_SHORT", 0.03); h.drain();
+        assertThat(h.executor.status()).isEqualTo(SessionStatus.ACTIVE);
+        playGenerated("좋아, 같이 담자.");
+        assertThat(h.executor.status()).isEqualTo(SessionStatus.CLOSING);
+        assertThat(h.transitions.find(h.sessionId).orElseThrow().endDetail()).isEqualTo("PRACTICE_COMPLETED");
+        assertThat(repository.findSceneRuns(h.sessionId).getFirst().liveTiming()).isEqualTo(LiveTiming.IMMEDIATE);
+        assertThat(repository.findSceneRuns(h.sessionId).getFirst().endedAt()).isNotNull();
+        assertThat(failures).isEmpty();
     }
 
     private void complete(UUID playbackId) {

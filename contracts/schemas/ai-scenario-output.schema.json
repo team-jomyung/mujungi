@@ -32,6 +32,10 @@
             "minLength": 1,
             "maxLength": 8000
           },
+          "spokenIntroduction": {
+            "description": "아이에게 말하듯 자연스러운 가상 장면 안내. 내부 조건·정답·상대 대사 반복을 포함하지 않는다",
+            "type": "string", "minLength": 1, "maxLength": 500
+          },
           "opportunitySentence": {
             "description": "기회 문장(세션 동안 고정). 아이 이름은 '아이'로 치환된 값",
             "type": "string",

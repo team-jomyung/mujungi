@@ -26,9 +26,36 @@ final class PracticeInstructions {
     private PracticeInstructions() {
     }
 
+    static String spokenIntroduction(Scene scene) {
+        if (scene.spokenIntroduction() != null && !scene.spokenIntroduction().isBlank()) return scene.spokenIntroduction();
+        // Old approved scripts have no spoken field. Do not guess facts by rewriting their prose.
+        return "상상 속 상황을 떠올려 봐. 무중이가 상황 속 상대 역할을 해 볼게.";
+    }
+
+    static String peerDialogue(Scene scene) {
+        return fit("지금 '음,'이라고 짧게 말한 뒤 " + partner(scene) + " 역할로 방금 들은 아이 말에 직접 답해 줘. "
+                + "설명자가 아니라 그 상황의 상대처럼 대화해. 아이의 질문에는 먼저 답하고, 제안·거절·수정에는 그 내용에 맞춰 반응해. "
+                + "필요할 때만 자연스러운 질문 하나를 해. 합의되면 짧게 받아들여. 정해진 첫 대사나 상황 안내를 반복하지 마. "
+                + "아이의 말·감정을 지어내거나 목표 문장을 대신 말하거나 평가하지 마. 한두 문장으로 말해. 상황 자료: "
+                + cut(fieldLong(scene.sceneDescription()), 160));
+    }
+
+    static String peerCheckIn(Scene scene) {
+        return fit("지금 '음,'이라고 짧게 말한 뒤 " + partner(scene)
+                + " 역할로 아이가 생각할 시간을 주고 편할 때 말해도 된다고 한 문장으로 알려줘. 답변·반복을 요구하거나 첫 대사와 상황 안내를 반복하지 마.");
+    }
+
+    private static String partner(Scene scene) {
+        return cut(field(scene.relation().isBlank() ? scene.partnerRole() : scene.relation()), 40);
+    }
+
+    private static String fieldLong(String value) {
+        return value == null ? "" : value.replaceAll("\\p{Cntrl}+", " ").trim();
+    }
+
     /** 수행 뒤 상대의 답을 한 번 들려준다. 새 질문으로 연습을 다시 열거나 아이를 평가하지 않는다. */
     static String peerCompletion(Scene scene) {
-        return fit("너는 아이의 " + cut(field(scene.partnerRole()), 40) + " 역할이다. 상황: " + field(scene.sceneDescription())
+        return fit("지금 '음,'이라고 짧게 말한 뒤 " + partner(scene) + " 역할로 답해 줘. 상황: " + field(scene.sceneDescription())
                 + " 상대가 건넸던 말: " + field(scene.opportunitySentence())
                 + " 방금 들은 아이의 말에 상대 입장에서 직접 답하며 마무리한다."
                 + " 놀이 의견을 물으면 원하는 놀이를 답하고, 요청·거절은 존중한다."

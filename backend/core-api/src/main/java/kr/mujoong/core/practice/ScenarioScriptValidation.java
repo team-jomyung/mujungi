@@ -42,7 +42,12 @@ public final class ScenarioScriptValidation {
         if(!text(s.sceneDescription(),8000)||!text(s.opportunitySentence(),2000)||!text(s.reexplanation(),2000)
                 ||!text(s.relation(),200)||!text(s.place(),200)||!text(s.topic(),200)
                 ||!list(s.focusPoints())||!list(s.expressionExamples()))return false;
-        var spoken=List.of(s.sceneDescription(),s.opportunitySentence(),s.reexplanation());
+        var spoken=new java.util.ArrayList<>(List.of(s.sceneDescription(),s.opportunitySentence(),s.reexplanation()));
+        if(s.spokenIntroduction()!=null) {
+            if(!text(s.spokenIntroduction(),500)||s.spokenIntroduction().chars().anyMatch(Character::isISOControl)
+                    ||s.spokenIntroduction().matches("(?s).*(?:하고 있다|라고 말한다|다를 때)[.!?。\\s]*$"))return false;
+            spoken.add(s.spokenIntroduction());
+        }
         var all=new java.util.ArrayList<>(spoken);all.addAll(s.focusPoints());all.addAll(s.expressionExamples());
         all.addAll(List.of(s.relation(),s.place(),s.topic()));
         if(s.preservation()!=null) {
