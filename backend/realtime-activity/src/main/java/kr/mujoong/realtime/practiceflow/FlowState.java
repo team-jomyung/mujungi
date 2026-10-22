@@ -31,6 +31,8 @@ public final class FlowState {
     /** 단계 안의 소단계(FOCUS 진입 ① · ②, SCENE_WRAP 소단계, 상황 다시 설명 재생 중). */
     public enum Sub {
         NONE,
+        /** 오늘의 목표·범위 안내와 사실에 근거한 목표 마무리. */
+        GOAL_BRIEF, GOAL_RECAP,
         /** FOCUS 진입 ①: 역할 전환 알림 재생 중. */
         ROLE_NOTICE,
         /** FOCUS 진입 ②: 코치 발화 재생 중. */

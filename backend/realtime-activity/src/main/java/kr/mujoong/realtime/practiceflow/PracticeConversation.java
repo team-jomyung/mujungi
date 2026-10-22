@@ -121,6 +121,14 @@ public final class PracticeConversation implements PracticeSessionExtension {
     private int uncertainAttempts;
     private boolean reflectionAwaiting;
     private boolean reflecting;
+    private boolean goalBriefPlayed;
+    private boolean goalRecapped;
+    private boolean reviewPerformed;
+    private boolean reviewAfterHelp;
+    private boolean reviewClarified;
+    private boolean reviewHelpProvided;
+    private boolean reviewInterrupted;
+    private boolean recapAdvances;
 
     /**
      * @param sessionId 이 세션
@@ -325,6 +333,9 @@ public final class PracticeConversation implements PracticeSessionExtension {
     private void beginGoal(int index) {
         currentScript = scripts.get(index);
         state.goal(index, index == pack.goals().size() - 1, clock.now());
+        goalBriefPlayed = false;
+        goalRecapped = false;
+        reviewPerformed = reviewAfterHelp = reviewClarified = reviewHelpProvided = reviewInterrupted = false;
         output.schedule(TIMER_GOAL_LIMIT, settings.goalActiveLimit());
         requestScript(index + 1);
         enterScene(SceneKind.BASE);
@@ -348,7 +359,18 @@ public final class PracticeConversation implements PracticeSessionExtension {
         goalAchievementTiming = null;
         clarificationAttempts = 0;
         uncertainAttempts = 0;
-        if (settings.flexibleDialogue() && kind == SceneKind.BASE && scene.reflectionPrompt() != null) {
+        if (settings.flexibleDialogue() && kind == SceneKind.BASE && !goalBriefPlayed) {
+            state.phase(Phase.SCENE_INTRO, Sub.GOAL_BRIEF);
+            speakGenerated(FlowRole.PEER, PracticeInstructions.goalBrief(pack.goals().get(state.goalIndex()).goalName(),
+                    state.goalIndex() + 1, pack.goals().size()));
+            return;
+        }
+        beginReflectionOrIntroduction();
+    }
+
+    private void beginReflectionOrIntroduction() {
+        Scene scene = currentScene;
+        if (settings.flexibleDialogue() && state.sceneKind() == SceneKind.BASE && scene.reflectionPrompt() != null) {
             reflecting = true;
             reflectionAwaiting = false;
             state.phase(Phase.SCENE_INTRO, Sub.REFLECTION_OFFER);
@@ -382,6 +404,7 @@ public final class PracticeConversation implements PracticeSessionExtension {
     }
 
     private void advanceGoal() {
+        if (beginGoalRecap(true)) return;
         output.cancel(TIMER_GOAL_LIMIT);
         output.cancel(TIMER_FOCUS_MAX);
         output.cancel(TIMER_NO_RESPONSE);
@@ -392,6 +415,7 @@ public final class PracticeConversation implements PracticeSessionExtension {
     private boolean outputFailed;
 
     private void closing(boolean byRequest) {
+        if (!byRequest && beginGoalRecap(false)) return;
         output.cancel(TIMER_GOAL_LIMIT);
         output.cancel(TIMER_FOCUS_MAX);
         output.cancel(TIMER_NO_RESPONSE);
@@ -403,6 +427,22 @@ public final class PracticeConversation implements PracticeSessionExtension {
         } else {
             pendingSignal = outputFailed ? Signal.OUTPUT_FAILED : Signal.LAST_GOAL;
         }
+    }
+
+    private boolean beginGoalRecap(boolean advances) {
+        if (!settings.flexibleDialogue() || goalRecapped || !sceneRowCreated || outputFailed || stopping) return false;
+        goalRecapped = true;
+        recapAdvances = advances;
+        output.cancel(TIMER_GOAL_LIMIT);
+        output.cancel(TIMER_FOCUS_MAX);
+        output.cancel(TIMER_NO_RESPONSE);
+        cancelOpenSlot();
+        dropJudgment();
+        earlyUtterance = null;
+        state.phase(Phase.SCENE_WRAP, Sub.GOAL_RECAP);
+        speakGenerated(FlowRole.PEER, PracticeInstructions.goalRecap(pack.goals().get(state.goalIndex()).goalName(),
+                reviewPerformed, reviewAfterHelp, reviewClarified, reviewHelpProvided, reviewInterrupted, !advances));
+        return true;
     }
 
     // ---- 다음 목표 대본 ----
@@ -659,6 +699,24 @@ public final class PracticeConversation implements PracticeSessionExtension {
         } else {
             output.cancel(TIMER_NOTICE_GUARD);
             awaitingNotice = false;
+        }
+        if (mine && state.sub() == Sub.GOAL_RECAP) {
+            // No retry or approved-speech fallback: safety refusal and missing playback stay failures.
+            if (end != SlotEnd.PLAYED) outputFailed = true;
+            if (recapAdvances && !outputFailed) advanceGoal();
+            else closing(false);
+            return;
+        }
+        if (mine && state.sub() == Sub.GOAL_BRIEF && end == SlotEnd.PLAYED) {
+            goalBriefPlayed = true;
+            beginReflectionOrIntroduction();
+            return;
+        }
+        if (mine && state.sub() == Sub.GOAL_BRIEF && end == SlotEnd.INTERRUPTED) {
+            // Do not continue a scene whose goal/range was not heard.
+            outputFailed = true;
+            closing(false);
+            return;
         }
         if (reflecting && mine && (end == SlotEnd.PLAYED || end == SlotEnd.INTERRUPTED)) {
             if (state.sub() == Sub.REFLECTION_ACK) finishReflection();
@@ -1053,6 +1111,8 @@ public final class PracticeConversation implements PracticeSessionExtension {
     }
 
     private void recordFact(FactKind kind) {
+        if (kind == FactKind.FOCUS_HELP || kind == FactKind.EXPRESSION_EXAMPLE) reviewHelpProvided = true;
+        if (kind == FactKind.TIMEOUT || kind == FactKind.TRANSCRIPT_FAILED || kind == FactKind.END_REQUEST) reviewInterrupted = true;
         if (sceneRowCreated) {
             Instant at = clock.now();
             safely(() -> recorder.fact(sceneRunId, kind, at));
@@ -1063,6 +1123,12 @@ public final class PracticeConversation implements PracticeSessionExtension {
         if (sceneRowCreated) {
             Instant at = clock.now();
             LiveTiming recordedTiming = settings.flexibleDialogue() && goalAchieved ? goalAchievementTiming : timing;
+            if (recordedTiming == LiveTiming.IMMEDIATE || recordedTiming == LiveTiming.AFTER_REASK || recordedTiming == LiveTiming.AFTER_HELP) {
+                reviewPerformed = true;
+                reviewAfterHelp |= recordedTiming == LiveTiming.AFTER_HELP;
+                reviewClarified |= recordedTiming == LiveTiming.AFTER_REASK;
+            }
+            if (recordedTiming == LiveTiming.NONE || recordedTiming == LiveTiming.ABSTAINED) reviewInterrupted = true;
             safely(() -> recorder.sceneOutcome(sceneRunId, at, recordedTiming, skip, state.retryCount(), state.reexplainCount()));
         }
     }

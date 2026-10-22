@@ -9,6 +9,11 @@ import org.junit.jupiter.api.Test;
 
 @Tag("practice-legacy")
 class PracticeStartRequestTest {
+    @Test void acceptsThreeGoalsButRejectsFourBeforePreparation() {
+        List<UUID> ids=java.util.stream.IntStream.range(0,4).mapToObj(i->UUID.randomUUID()).toList();
+        assertThat(new PracticeStartRequest(UUID.randomUUID(),ids.subList(0,3)).goalSelectionIds()).hasSize(3);
+        assertThatThrownBy(()->new PracticeStartRequest(UUID.randomUUID(),ids)).isInstanceOf(CoreApiException.class);
+    }
     @Test void reorderingTheSameSelectionDoesNotChangeIdempotencyIdentity() {
         UUID key = UUID.randomUUID(), a = UUID.randomUUID(), b = UUID.randomUUID();
         assertThat(new PracticeStartRequest(key, List.of(a, b)).requestHash())

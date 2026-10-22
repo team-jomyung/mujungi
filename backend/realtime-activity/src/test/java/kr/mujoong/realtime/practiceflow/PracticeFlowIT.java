@@ -231,6 +231,7 @@ class PracticeFlowIT {
     @Test
     void flexibleDialogueSeparatesTargetAchievementFromAgreementAndGuardsEveryGeneratedReply() {
         flexible = true; h.activate();
+        playGenerated("오늘은 부탁하기를 짧은 역할놀이로 연습해 볼 거야. 원하면 쉬거나 끝내도 돼.");
         playApproved("상상 속 상황을 떠올려 봐. 무중이가 상황 속 상대 역할을 해 볼게.");
         playApproved(OPPORTUNITY);
         h.childSays("flex-child-1", "파란색 상자를 줘");
@@ -254,6 +255,8 @@ class PracticeFlowIT {
         judge.confirm("DELIVERED", 0.95, "STILL_SHORT", 0.03); h.drain();
         assertThat(h.executor.status()).isEqualTo(SessionStatus.ACTIVE);
         playGenerated("좋아, 같이 담자.");
+        assertThat(h.executor.status()).isEqualTo(SessionStatus.ACTIVE);
+        playGenerated("오늘은 원하는 상자를 말로 부탁했어. 오늘 연습은 여기까지야.");
         assertThat(h.executor.status()).isEqualTo(SessionStatus.CLOSING);
         assertThat(h.transitions.find(h.sessionId).orElseThrow().endDetail()).isEqualTo("PRACTICE_COMPLETED");
         assertThat(repository.findSceneRuns(h.sessionId).getFirst().liveTiming()).isEqualTo(LiveTiming.IMMEDIATE);
@@ -264,6 +267,7 @@ class PracticeFlowIT {
     @Test
     void contextualClarificationIsRecordedDurablyAndShortAnswersUseTheActualPartnerQuestion() {
         flexible=true;h.activate();
+        playGenerated("오늘은 부탁하기를 짧게 연습할 거야. 필요하면 도움을 받고 언제든 끝내도 돼.");
         playApproved("상상 속 상황을 떠올려 봐. 무중이가 상황 속 상대 역할을 해 볼게.");playApproved(OPPORTUNITY);
         h.childSays("clarify-1","그거 줘");judge.confirm("PARTIAL",0.95,"FULL",0.03);h.drain();
         playGenerated("어느 색 상자를 말하는 거야?");
@@ -274,6 +278,7 @@ class PracticeFlowIT {
         });
         judge.confirm("FULL",0.95,"PARTIAL",0.03);h.drain();playGenerated("응, 여기 있어. 같이 정리할까?");
         h.childSays("clarify-3","응, 같이 정리하자");judge.confirm("DELIVERED",0.95,"STILL_SHORT",0.03);h.drain();playGenerated("좋아, 같이 정리하자.");
+        playGenerated("오늘은 친구가 어느 색인지 물었을 때 파란색이라고 알려줬어. 오늘 연습은 여기까지야.");
         var row=repository.findSceneRuns(h.sessionId).getFirst();
         assertThat(row.liveTiming()).isEqualTo(LiveTiming.AFTER_REASK);
         assertThat(row.facts()).extracting(PracticeFlowTypes.Fact::kind).contains(PracticeFlowTypes.FactKind.REASK_RESOLVED)

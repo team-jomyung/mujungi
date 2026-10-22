@@ -355,6 +355,7 @@ final class PracticeFlowTestKit {
         /** 활성화 → 도입 재생 완료 → 기회 문장 재생 완료(아이 말을 기다리는 상태). */
         void toOpportunity() {
             activate();
+            if (ext.state().sub() == FlowState.Sub.GOAL_BRIEF) played();
             played();
             played();
         }
