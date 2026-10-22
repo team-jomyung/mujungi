@@ -1606,6 +1606,10 @@ class PracticeDialogueLiveTest {
                 } else {
                     kind = ExtensionEvent.Kind.JUDGMENT_ABSTAINED;
                     value.put("abstainReason", outcome.abstainReason() == null ? "FAULT" : outcome.abstainReason().name());
+                    // 실행부(SessionExecutor.afterExtensionJudgment)와 같이 문턱 미달 보류에만 확정 안 된 1순위 코드를 싣는다
+                    if (outcome.firstOption() != null) {
+                        value.put("leadingOption", outcome.firstOption());
+                    }
                 }
             }
             judgment.put("deliveredToFlow", kind.name());

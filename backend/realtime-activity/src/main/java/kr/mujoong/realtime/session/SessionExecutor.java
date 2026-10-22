@@ -1244,6 +1244,10 @@ public final class SessionExecutor {
             case ABSTAINED -> {
                 kind = PracticeSessionExtension.ExtensionEvent.Kind.JUDGMENT_ABSTAINED;
                 value.put("abstainReason", outcome.abstainReason().name());
+                // 확신 · 차이 문턱에 못 미친 보류만 1순위 코드가 남는다. 확률은 넘기지 않고, 확장은 이 코드로 확정 행동을 하지 않는다
+                if (outcome.firstOption() != null) {
+                    value.put("leadingOption", outcome.firstOption());
+                }
             }
             case FAULT_CANCELLED -> {
                 kind = PracticeSessionExtension.ExtensionEvent.Kind.JUDGMENT_ABSTAINED;

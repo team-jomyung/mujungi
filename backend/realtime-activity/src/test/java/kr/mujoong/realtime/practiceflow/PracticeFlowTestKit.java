@@ -309,6 +309,13 @@ final class PracticeFlowTestKit {
                     out.lastJudgment().correlationId(), Map.of("point", point, "abstainReason", "FAULT")), out);
         }
 
+        /** 확신 · 차이 문턱에 못 미친 보류(실행부처럼 확정되지 않은 1순위 코드만 싣고 확률은 없다). */
+        Signal unsure(String point, String reason, String leadingOption) {
+            return ext.onExtensionEvent(new ExtensionEvent(ExtensionEvent.Kind.JUDGMENT_ABSTAINED, "judgment",
+                    out.lastJudgment().correlationId(), Map.of("point", point, "abstainReason", reason, "leadingOption", leadingOption)),
+                    out);
+        }
+
         Signal event(ExtensionEvent.Kind kind, String name, UUID correlationId, Object value) {
             return ext.onExtensionEvent(new ExtensionEvent(kind, name, correlationId, value), out);
         }

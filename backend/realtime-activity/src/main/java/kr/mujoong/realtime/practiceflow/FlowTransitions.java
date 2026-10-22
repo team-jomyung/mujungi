@@ -310,6 +310,29 @@ public final class FlowTransitions {
         return unavailable(s);
     }
 
+    /**
+     * 판정이 돌았지만 확신이 모자라 보류된 사건(JUDGMENT_ABSTAINED). 기회 단계(J2)에서 사유가 {@link #UNSURE}이고 확정되지 않은 1순위가 도움
+     * 요청(HELP)이거나 이 기회에서 이미 한 번 다시 안내했으면, 장면을 닫지 않고 도움 제안(동의 확인)으로 간다. 머뭇거리는 아이에게 같은 질문만
+     * 되풀이하다 끝내지 않기 위해서다. 보류는 확정이 아니므로 도움을 바로 주지 않고 J4로 동의를 묻는다. 시간 초과 · 공급자 장애 같은 판정 쪽 실패와
+     * 다른 단계의 보류는 {@link #onJudgmentUnavailable}과 같다.
+     *
+     * @param abstainReason 보류 사유 코드(모르면 null)
+     * @param leadingOption 확정되지 않은 1순위 코드(LOW_CONFIDENCE · LOW_MARGIN 보류에만 있다, 없으면 null)
+     */
+    public Step onJudgmentAbstained(FlowState s, JudgmentPoint point, String abstainReason, String leadingOption) {
+        if (!acceptsJudgment(s, point)) {
+            return Step.ignore();
+        }
+        boolean unsure = abstainReason != null && UNSURE.contains(abstainReason);
+        if (s.phase() == Phase.OPPORTUNITY && unsure && ("HELP".equals(leadingOption) || s.unreadableGuided())) {
+            return Step.enter(Phase.HELP_OFFER, Sub.NONE);
+        }
+        return unavailable(s);
+    }
+
+    /** 모델이 선택지를 골랐지만 문턱(확신 · 차이)을 넘지 못한 보류 사유. 아이 말이 판정 경계에 있다는 뜻이고 판정 쪽 실패가 아니다. */
+    static final java.util.Set<String> UNSURE = java.util.Set.of("LOW_CONFIDENCE", "LOW_MARGIN");
+
     private static boolean acceptsJudgment(FlowState s, JudgmentPoint point) {
         return s.sub() == Sub.NONE && s.phase().awaitsInput() && expectedPoint(s.phase()) == point;
     }

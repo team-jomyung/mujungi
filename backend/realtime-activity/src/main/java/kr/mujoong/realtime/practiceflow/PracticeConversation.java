@@ -43,7 +43,9 @@ import kr.mujoong.realtime.voice.PracticeSpeech;
  *   <li>시계는 모두 확장점 시계({@code schedule}/{@code cancel})다: {@code no-response} · {@code focus-max} · {@code goal-limit} ·
  *       {@code slot-guard-<correlationId>}(§3.2). 시간 값은 {@link PracticeFlowSettings}가 설정 키에서 읽은 것뿐이고 한도는 만료 표지로 본다(D3).
  *   <li>판정은 {@code requestJudgment}로 요청한다(J2 · J3 · J5에만 판정 기준을 싣고 J4에는 싣지 않는다, D2). 거절(거짓) · 보류 · 장애는 판독
- *       불가와 같이 교정 없이 같은 질문을 한 번 다시 안내하고 두 번째면 정해진 방식으로 닫는다(BR3.7). 연습이 멈추지 않는다.
+ *       불가와 같이 교정 없이 같은 질문을 한 번 다시 안내하고 두 번째면 정해진 방식으로 닫는다(BR3.7). 연습이 멈추지 않는다. 다만 기회
+ *       단계에서 확신이 모자란 보류(1순위 도움 요청이거나 다시 안내 뒤의 보류)는 닫지 않고 도움 제안으로 간다
+ *       ({@link FlowTransitions#onJudgmentAbstained}, docs/practice-live-fixes.md).
  *   <li>GPT-Live가 만드는 모든 역할 발화는 {@code speakGenerated} 한 길로만 낸다(D6). 낼 수 없으면(거짓) 그 슬롯을 실패로 닫고 이어 간다.
  *       역할 전환 · 복귀 알림은 승인 문장이 있으면 {@code announceRoleSwitch}로, 없거나 못 내면 생성형으로 낸다(BR5.4).
  *   <li>슬롯 종료 사건은 correlationId마다 첫 사건만 처리하고(중복 무시), 확장이 스스로 닫은 슬롯은 곧바로 처리 완료로 둔다(§3.5).
@@ -437,9 +439,11 @@ public final class PracticeConversation implements PracticeSessionExtension {
         if (!closeJudgment(event.correlationId())) {
             return;
         }
-        JudgmentPoint point = event.value() instanceof Map<?, ?> value ? pointOf(value.get("point"))
+        Map<?, ?> value = event.value() instanceof Map<?, ?> map ? map : Map.of();
+        JudgmentPoint point = event.value() instanceof Map<?, ?> ? pointOf(value.get("point"))
                 : FlowTransitions.expectedPoint(state.phase());
-        afterJudgment(point == null ? Step.ignore() : transitions.onJudgmentUnavailable(state, point));
+        afterJudgment(point == null ? Step.ignore()
+                : transitions.onJudgmentAbstained(state, point, text(value.get("abstainReason")), text(value.get("leadingOption"))));
     }
 
     /** 이 사건이 지금 열린 판정의 것인가(늦은 · 다른 판정의 사건은 무시). 맞으면 판정을 닫는다. */
@@ -450,6 +454,11 @@ public final class PracticeConversation implements PracticeSessionExtension {
         judgmentCorrelation = null;
         state.judgmentOpen(false);
         return true;
+    }
+
+    /** 사건 값의 코드 칸(문자열이 아니면 없는 것으로 본다). */
+    private static String text(Object value) {
+        return value instanceof String code ? code : null;
     }
 
     private static JudgmentPoint pointOf(Object value) {

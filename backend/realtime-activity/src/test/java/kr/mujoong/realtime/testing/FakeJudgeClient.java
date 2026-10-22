@@ -51,6 +51,13 @@ public final class FakeJudgeClient implements JudgeClient {
         last().future().complete(JudgeOutcome.confirmed(first, firstP, second, secondP, Duration.ofMillis(900), "luna-test", "prompt-v1"));
     }
 
+    /** 마지막 요청에 확률이 남는 보류(LOW_CONFIDENCE · LOW_MARGIN)를 준다. */
+    public void abstainUnsure(kr.mujoong.realtime.judgment.AbstainReason reason, String first, double firstP, String second,
+            double secondP) {
+        last().future().complete(JudgeOutcome.abstainedWithScores(reason, first, firstP, second, secondP, Duration.ofMillis(900),
+                "luna-test", "prompt-v1"));
+    }
+
     /** 마지막 요청에 확률 없는 보류를 준다. */
     public void abstain(kr.mujoong.realtime.judgment.AbstainReason reason) {
         last().future().complete(JudgeOutcome.abstained(reason, Duration.ofMillis(900), "luna-test", "prompt-v1"));

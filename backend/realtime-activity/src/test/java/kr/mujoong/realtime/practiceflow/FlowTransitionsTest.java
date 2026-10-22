@@ -306,6 +306,68 @@ class FlowTransitionsTest {
         assertThat(second.facts()).isEmpty();
     }
 
+    // ---- 기회 단계의 확신 부족 보류 → 도움 제안 (docs/practice-live-fixes.md) ----
+
+    @ParameterizedTest
+    @CsvSource({"LOW_CONFIDENCE", "LOW_MARGIN"})
+    void anUnsureOpportunityAbstainLeaningToHelpOffersHelpAtOnceWithoutAFactOrConsent(String reason) {
+        FlowState state = at(Phase.OPPORTUNITY, Sub.NONE);
+
+        Step step = table.onJudgmentAbstained(state, JudgmentPoint.J2, reason, "HELP");
+
+        assertEnters(step, Phase.HELP_OFFER, Sub.NONE);
+        assertThat(step.facts()).as("도움 제안 진입은 사실을 남기지 않는다(동의 응답은 J4 뒤 기록)").isEmpty();
+        assertThat(step.consent()).as("보류는 확정이 아니므로 도움 요청 동의로 적지 않는다").isNull();
+        assertThat(step.consentsToHelp()).isFalse();
+        assertThat(step.cause()).isNull();
+    }
+
+    @Test
+    void anUnsureOpportunityAbstainNotLeaningToHelpReguidesFirstAndOffersHelpTheSecondTime() {
+        FlowState state = at(Phase.OPPORTUNITY, Sub.NONE);
+
+        Step first = table.onJudgmentAbstained(state, JudgmentPoint.J2, "LOW_CONFIDENCE", "PARTIAL");
+        assertThat(first.action()).isEqualTo(Action.REGUIDE);
+        assertThat(first.guard()).isEqualTo(Guard.UNREADABLE);
+
+        state.unreadableGuided(true);
+        Step second = table.onJudgmentAbstained(state, JudgmentPoint.J2, "LOW_MARGIN", null);
+        assertEnters(second, Phase.HELP_OFFER, Sub.NONE);
+        assertThat(second.cause()).as("장면을 보류로 닫지 않는다").isNull();
+    }
+
+    @ParameterizedTest
+    @CsvSource({"TIMEOUT,", "PROVIDER_ERROR,", "FAULT,", "SCHEMA_INVALID,", ",HELP", "TIMEOUT,HELP"})
+    void aJudgeSideFailureAtTheOpportunityKeepsTheReguideThenAbstainedPath(String reason, String leading) {
+        FlowState state = at(Phase.OPPORTUNITY, Sub.NONE);
+        assertThat(table.onJudgmentAbstained(state, JudgmentPoint.J2, reason, leading).action()).isEqualTo(Action.REGUIDE);
+
+        state.unreadableGuided(true);
+        Step second = table.onJudgmentAbstained(state, JudgmentPoint.J2, reason, leading);
+        assertEnters(second, Phase.SCENE_WRAP, Sub.VARIANT_EVAL);
+        assertThat(second.cause()).isEqualTo(EndCause.ABSTAINED);
+        assertThat(second.timing()).isEqualTo(LiveTiming.ABSTAINED);
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = Phase.class, names = {"REASK", "HELP_OFFER", "RETRY"})
+    void anUnsureAbstainOutsideTheOpportunityKeepsTheExistingPath(Phase phase) {
+        FlowState state = at(phase, Sub.NONE);
+        JudgmentPoint point = FlowTransitions.expectedPoint(phase);
+        assertThat(table.onJudgmentAbstained(state, point, "LOW_CONFIDENCE", "HELP").action()).isEqualTo(Action.REGUIDE);
+
+        state.unreadableGuided(true);
+        assertThat(table.onJudgmentAbstained(state, point, "LOW_CONFIDENCE", "HELP").cause()).isEqualTo(EndCause.ABSTAINED);
+    }
+
+    @Test
+    void anUnsureAbstainForTheWrongPointOrDuringAReexplanationIsIgnored() {
+        assertThat(table.onJudgmentAbstained(at(Phase.OPPORTUNITY, Sub.NONE), JudgmentPoint.J3, "LOW_CONFIDENCE", "HELP").action())
+                .isEqualTo(Action.IGNORE);
+        assertThat(table.onJudgmentAbstained(at(Phase.OPPORTUNITY, Sub.REEXPLAIN), JudgmentPoint.J2, "LOW_CONFIDENCE", "HELP").action())
+                .isEqualTo(Action.IGNORE);
+    }
+
     @Test
     void anUnknownOptionCodeIsTreatedLikeAnAbstention() {
         FlowState state = at(Phase.OPPORTUNITY, Sub.NONE);

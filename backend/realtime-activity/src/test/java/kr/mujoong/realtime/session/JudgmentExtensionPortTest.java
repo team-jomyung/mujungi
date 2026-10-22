@@ -44,6 +44,11 @@ class JudgmentExtensionPortTest {
         return criteria;
     }
 
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> asMap(Object value) {
+        return (Map<String, Object>) value;
+    }
+
     private long say(String itemId, String text) {
         t.h.childSays(itemId, text);
         return extension.utterances.getLast().seq();
@@ -102,6 +107,32 @@ class JudgmentExtensionPortTest {
         assertThat(extension.events.stream().filter(e -> e.kind() == ExtensionEvent.Kind.JUDGMENT_ABSTAINED).findFirst()
                 .orElseThrow().value().toString()).contains("LOW_CONFIDENCE");
         assertThat(extension.events.getLast().value().toString()).contains("이전 응답 문장");
+    }
+
+    @Test
+    void anUnsureAbstainCarriesOnlyTheUnconfirmedLeadingCodeAndAPlainAbstainCarriesNone() {
+        practice();
+        long seq = say("i-1", "음, 잘 모르겠어");
+        extension.output.requestJudgment(JudgmentPoint.J2, seq, correlation, criteria());
+        t.judge.abstainUnsure(AbstainReason.LOW_CONFIDENCE, "HELP", 0.52, "PARTIAL", 0.31);
+        t.h.drain();
+
+        ExtensionEvent unsure = extension.events.stream().filter(e -> e.kind() == ExtensionEvent.Kind.JUDGMENT_ABSTAINED)
+                .reduce((a, b) -> b).orElseThrow();
+        assertThat(asMap(unsure.value())).containsEntry("point", "J2").containsEntry("abstainReason", "LOW_CONFIDENCE")
+                .containsEntry("leadingOption", "HELP").doesNotContainKey("firstOption").doesNotContainKey("secondOption");
+        assertThat(unsure.value().toString()).as("확률은 넘기지 않는다").doesNotContain("0.52", "0.31", "PARTIAL");
+
+        UUID second = UUID.randomUUID();
+        long next = say("i-2", "음");
+        extension.output.requestJudgment(JudgmentPoint.J2, next, second, criteria());
+        t.judge.abstain(AbstainReason.TIMEOUT);
+        t.h.drain();
+
+        ExtensionEvent plain = extension.events.stream().filter(e -> e.kind() == ExtensionEvent.Kind.JUDGMENT_ABSTAINED)
+                .reduce((a, b) -> b).orElseThrow();
+        assertThat(plain.correlationId()).isEqualTo(second);
+        assertThat(asMap(plain.value())).containsEntry("abstainReason", "TIMEOUT").doesNotContainKey("leadingOption");
     }
 
     @Test

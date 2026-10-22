@@ -101,7 +101,10 @@ public interface PracticeSessionExtension {
             ASYNC_RESULT,
             /** 판정 결과(이름 {@code judgment}, 값 {@code {point, firstOption, secondOption}} — 확률 없음). */
             JUDGMENT_RESULT,
-            /** 판정 보류 · 장애(값 {@code {point, abstainReason}}, 장애는 사유 FAULT). */
+            /**
+             * 판정 보류 · 장애(값 {@code {point, abstainReason}}, 장애는 사유 FAULT). LOW_CONFIDENCE · LOW_MARGIN 보류는 확정되지 않은 1순위
+             * 코드 {@code leadingOption}을 더 싣는다(확률 없음). 확정 결과가 아니므로 확정 행동에 쓰지 않는다.
+             */
             JUDGMENT_ABSTAINED,
             /** 판정 중 모은 출력 전사(값 {@code {text}}, 비어 있으면 보내지 않는다). */
             HELD_OUTPUT_TRANSCRIPT,

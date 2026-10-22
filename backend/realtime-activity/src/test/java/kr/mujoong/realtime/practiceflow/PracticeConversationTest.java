@@ -299,6 +299,96 @@ class PracticeConversationTest {
         assertThat(h.failures).isEmpty();
     }
 
+    // ---- 머뭇거림(확신이 모자란 보류) → 도움 제안 → 도움 → 도움 뒤 반응 (docs/practice-live-fixes.md) ----
+
+    @Test
+    void aHesitantAnswerWhoseUnsureLeadingOptionIsHelpIsOfferedHelpAndTheHelpedRetryIsRecordedAfterHelp() {
+        Harness h = minimal();
+        h.toOpportunity();
+        h.child("음, 잘 모르겠어.");
+        int slots = h.out.slots.size();
+
+        h.unsure("J2", "LOW_CONFIDENCE", "HELP");
+        assertThat(h.ext.state().phase()).as("장면을 닫지 않고 도움 제안으로 간다").isEqualTo(FlowState.Phase.HELP_OFFER);
+        assertThat(h.out.slots).hasSize(slots + 1);
+        Slot offer = h.out.lastSlot();
+        assertThat(offer.generated()).isTrue();
+        assertThat(offer.role()).isEqualTo("PEER");
+        assertThat(offer.text()).contains("도와줘도 되는지").doesNotContain("HELP", "LOW_CONFIDENCE");
+        assertThat(h.out.announces).as("동의 전에는 코치로 바꾸지 않는다").isEmpty();
+        h.played();
+
+        h.child("응, 도와줘.");
+        assertThat(h.out.lastJudgment().point()).isEqualTo(JudgmentPoint.J4);
+        h.result("J4", "ACCEPT");
+        assertThat(h.out.announces).containsExactly("COACH");
+        h.announcedNotice(Playback.COMPLETED);
+        assertThat(h.out.lastSlot().role()).isEqualTo("COACH");
+        h.played();
+        h.child("파란 상자를 줘");
+        assertThat(h.out.lastJudgment().point()).isEqualTo(JudgmentPoint.J5);
+        h.result("J5", "FULL");
+        Signal end = h.announcedNotice(Playback.COMPLETED);
+
+        assertThat(end).isEqualTo(Signal.LAST_GOAL);
+        assertThat(h.out.judgments).extracting(PracticeFlowTestKit.Judgment::point)
+                .containsExactly(JudgmentPoint.J2, JudgmentPoint.J4, JudgmentPoint.J5);
+        SceneRunRecord row = h.recorder.only();
+        assertThat(row.liveTiming()).isEqualTo(LiveTiming.AFTER_HELP);
+        assertThat(h.recorder.factKinds(row)).containsSubsequence(FactKind.HELP_ACCEPTED, FactKind.COACH_SWITCH, FactKind.FOCUS_HELP,
+                FactKind.COACH_RETURN, FactKind.ORIGINAL_SCENE_RETURN);
+        assertThat(h.recorder.helps).extracting(PracticeFlowTypes.HelpRecord::kind)
+                .containsExactly(HelpKind.ROLE_SWITCH, HelpKind.FOCUS_HELP, HelpKind.ROLE_RETURN);
+        assertThat(h.recorder.helps.getFirst().consentAnswer()).as("도움 동의는 J4 수락으로 남는다(보류를 도움 요청으로 적지 않는다)")
+                .isEqualTo(PracticeFlowTypes.ConsentAnswer.ACCEPT);
+        assertThat(h.recorder.helps.get(1).exampleGiven()).as("첫 코치 발화는 예시 없이 단서만").isFalse();
+        assertThat(h.failures).isEmpty();
+        assertRecordMatchesTheContract(h.ext.practiceRecord());
+    }
+
+    @Test
+    void twoUnsureAbstainsAtTheSameOpportunityOfferHelpInsteadOfClosingAndADeclinedOfferIsNotMarkedAbstained() {
+        Harness h = minimal();
+        h.toOpportunity();
+        h.child("음...");
+        int slots = h.out.slots.size();
+
+        h.unsure("J2", "LOW_CONFIDENCE", "PARTIAL");
+        assertThat(h.out.slots).as("첫 보류는 지금처럼 같은 기회 문장을 다시 안내").hasSize(slots + 1);
+        assertThat(h.out.lastSlot().text()).isEqualTo(OPPORTUNITY);
+        h.played();
+        h.child("음, 잘 모르겠어.");
+        h.unsure("J2", "LOW_MARGIN", "IRRELEVANT");
+        assertThat(h.ext.state().phase()).isEqualTo(FlowState.Phase.HELP_OFFER);
+        assertThat(h.out.lastSlot().text()).contains("도와줘도 되는지");
+        h.played();
+
+        h.child("아니, 괜찮아.");
+        Signal end = h.result("J4", "REFUSE");
+
+        assertThat(end).isEqualTo(Signal.LAST_GOAL);
+        SceneRunRecord row = h.recorder.only();
+        assertThat(row.liveTiming()).as("보류로 닫히지 않았다").isEqualTo(LiveTiming.NONE);
+        assertThat(h.recorder.factKinds(row)).containsExactly(FactKind.HELP_DECLINED, FactKind.VARIANT_SKIPPED);
+        assertThat(h.recorder.helps).as("거절하면 도움 기록이 없다").isEmpty();
+        assertRecordMatchesTheContract(h.ext.practiceRecord());
+    }
+
+    @Test
+    void aSlowOrFailedJudgeAtTheOpportunityStillClosesAbstainedEvenWhenItLeanedToHelp() {
+        Harness h = minimal();
+        h.toOpportunity();
+        h.child("음");
+        h.unsure("J2", "TIMEOUT", "HELP");
+        h.played();
+        h.child("음");
+        Signal end = h.unsure("J2", "TIMEOUT", "HELP");
+
+        assertThat(end).isEqualTo(Signal.LAST_GOAL);
+        assertThat(h.out.judgments).extracting(PracticeFlowTestKit.Judgment::point).containsOnly(JudgmentPoint.J2);
+        assertThat(h.recorder.only().liveTiming()).isEqualTo(LiveTiming.ABSTAINED);
+    }
+
     @Test
     void aLateOrForeignJudgmentResultIsIgnored() {
         Harness h = minimal();
