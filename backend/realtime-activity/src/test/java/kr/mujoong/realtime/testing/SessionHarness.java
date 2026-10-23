@@ -38,10 +38,11 @@ public final class SessionHarness {
     public static final SessionExecutor.Settings.Lifecycle LIFECYCLE = new SessionExecutor.Settings.Lifecycle(
             Duration.ofSeconds(20), Duration.ofSeconds(20), Duration.ofMinutes(4), Duration.ofMinutes(6),
             Duration.ofSeconds(20), Duration.ofSeconds(2), Duration.ofSeconds(10));
-    /** 시험 설정: 운영 기본값을 그대로 쓴다(20초 · 30초 · 40초 · 800ms · 20초 · 1초 · 불확실 기준 60%). */
+    /** 시험 설정: 운영 기본값을 그대로 쓴다(20초 · 30초 · 40초 · 800ms · 20초 · 1초 · 불확실 기준 60%, 4회차 R2 지시 미룸 상한 3초). */
     public static final SessionExecutor.Settings SETTINGS = new SessionExecutor.Settings(Duration.ofSeconds(20),
             Duration.ofSeconds(30), Duration.ofSeconds(40), Duration.ofMillis(800), Duration.ofSeconds(20),
-            Duration.ofSeconds(1), 50, 1000, 60, LIFECYCLE, Duration.ofMillis(1500), Duration.ofMillis(600), Duration.ofSeconds(10));
+            Duration.ofSeconds(1), 50, 1000, 60, LIFECYCLE, Duration.ofMillis(1500), Duration.ofMillis(600), Duration.ofSeconds(10),
+            Duration.ofSeconds(3));
     /** U4b 참여 응답의 공급자 항목 id(참여 확인 대답 "응"). */
     public static final String JOIN_ITEM = "join-reply";
     /** 시험 세션의 종료 표현 스냅숏(기본 표현 + 추가 표현 하나). */

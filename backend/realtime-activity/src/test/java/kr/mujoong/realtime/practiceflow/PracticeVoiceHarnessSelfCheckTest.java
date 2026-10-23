@@ -188,7 +188,8 @@ class PracticeVoiceHarnessSelfCheckTest {
     @Test
     void aDeliberatelyDifferentReadingOfAnApprovedLineIsRecordedAsUnheardWithItsReasonAndTheTranscriptDifferenceIsKept() throws Exception {
         try (FakeResponses luna = FakeResponses.start(); FakeSpeech tts = FakeSpeech.start(); LoopbackGptLive live = LoopbackGptLive.start(tts)) {
-            live.mismatchVerbatim(1).hearing(text -> "응, 할래.".equals(text) ? "응 할게" : text);
+            // 4회차 R2: 원문 대조로 버려진 읽기는 한 번 다시 보내므로, 다시 보낸 읽기도 다르게 읽어야 그 줄이 끝내 안 들린다
+            live.mismatchVerbatim(1, 2).hearing(text -> "응, 할래.".equals(text) ? "응 할게" : text);
 
             // 대본 줄 음성을 끈 배선(3회차 V1 전과 같다): 모든 대본 줄을 GPT-Live가 원문 읽기로 읽어야 일부러 다르게 읽을 수 있다
             Harness.Outcome outcome = new Harness(out, wiring(live, luna, tts, null, EnumSet.of(ChildMode.SCRIPT),
@@ -196,19 +197,20 @@ class PracticeVoiceHarnessSelfCheckTest {
 
             String md = Files.readString(out.resolve(PracticeVoiceDialogueLiveTest.MARKDOWN_FILE), StandardCharsets.UTF_8);
             assertThat(outcome.ranDialogues()).as(md).isEqualTo(1);
-            assertThat(live.mismatched).as(md).hasSize(1);
+            assertThat(live.mismatched).as(md).hasSize(2);
             String approved = live.mismatched.getFirst();
+            assertThat(live.mismatched).as("다시 보낸 지시는 같은 줄이다").containsOnly(approved);
             Map<String, Object> run = runs(readJson(out.resolve(PracticeVoiceDialogueLiveTest.OUTPUT_FILE))).getFirst();
             assertThat(run.get("status")).as(md).isNotEqualTo("ERROR");
 
             List<Map<String, Object>> discarded = turns(run).stream().filter(turn -> Boolean.FALSE.equals(turn.get("heard"))).toList();
-            assertThat(discarded).as(md).singleElement().satisfies(turn -> {
+            assertThat(discarded).as(md).hasSize(2).allSatisfy(turn -> {
                 assertThat(turn).containsEntry("discard", "APPROVED_TEXT_MISMATCH").containsEntry("gateReason", "GATE_PATTERN")
                         .containsEntry("approvedText", approved).containsEntry("text", approved + LoopbackGptLive.MISMATCH_TAIL)
                         .containsEntry("requested", "VERBATIM");
             });
             Map<String, Object> checks = map(run.get("checks"));
-            assertThat(map(map(checks.get("unheardSegments")).get("byKind"))).containsExactly(Map.entry("APPROVED_TEXT_MISMATCH", 1));
+            assertThat(map(map(checks.get("unheardSegments")).get("byKind"))).containsExactly(Map.entry("APPROVED_TEXT_MISMATCH", 2));
             Map<String, Object> verbatim = map(checks.get("approvedVerbatim"));
             assertThat(number(verbatim.get("played"))).isEqualTo(number(verbatim.get("requested")) - 1);
             assertThat((List<?>) verbatim.get("notHeard")).singleElement().satisfies(item -> assertThat(map(item))
@@ -219,11 +221,37 @@ class PracticeVoiceHarnessSelfCheckTest {
                     .containsEntry("fallback", number(verbatim.get("requested")));
             assertThat(map(clipCheck.get("fallbackReasons"))).containsOnlyKeys("DISABLED");
             assertThat(((List<?>) run.get("instructionTimeline")).stream().map(PracticeVoiceHarnessSelfCheckTest::map))
-                    .anySatisfy(row -> assertThat(row).containsEntry("instruction", "VERBATIM_READ").containsEntry("observed", true));
+                    .anySatisfy(row -> assertThat(row).containsEntry("instruction", "VERBATIM_READ").containsEntry("observed", true))
+                    .anySatisfy(row -> assertThat(row).containsEntry("instruction", "VERBATIM_READ").containsEntry("resend", true));
 
             assertThat(md).contains("(안 들림) ", approved + LoopbackGptLive.MISMATCH_TAIL + " — 폐기: 승인 원문과 다름(APPROVED_TEXT_MISMATCH) · 원문 «"
-                    + approved + "»", "- 안 들린 GPT-Live 구간: {APPROVED_TEXT_MISMATCH=1}", "→ 들은 전사 «응 할게»(의도와 다름)",
-                    "- 아이 전사가 의도와 다름: 1 / ", "- 대체(GPT-Live 원문 읽기): 1(사유 {DISABLED=1})", "| VERBATIM_READ |");
+                    + approved + "»", "- 안 들린 GPT-Live 구간: {APPROVED_TEXT_MISMATCH=2}", "→ 들은 전사 «응 할게»(의도와 다름)",
+                    "- 아이 전사가 의도와 다름: 1 / ", "- 대체(GPT-Live 원문 읽기): 1(사유 {DISABLED=1})", "| VERBATIM_READ |", "다시 보냄");
+        }
+    }
+
+    /** 4회차 R2: 원문 대조로 한 번 버려진 읽기는 같은 지시를 한 번 다시 보내 들린다(하니스 지시표에 '다시 보냄'으로 남는다). */
+    @Test
+    void aReadingDiscardedOnceByTheTextCheckIsSentOnceMoreAndHeard() throws Exception {
+        try (FakeResponses luna = FakeResponses.start(); FakeSpeech tts = FakeSpeech.start(); LoopbackGptLive live = LoopbackGptLive.start(tts)) {
+            live.mismatchVerbatim(1);
+
+            new Harness(out, wiring(live, luna, tts, null, EnumSet.of(ChildMode.SCRIPT), new Caps(Duration.ofSeconds(60), 900, 1, 40, 60)))
+                    .run();
+
+            String md = Files.readString(out.resolve(PracticeVoiceDialogueLiveTest.MARKDOWN_FILE), StandardCharsets.UTF_8);
+            assertThat(live.mismatched).as(md).hasSize(1);
+            String approved = live.mismatched.getFirst();
+            assertThat(live.spokenVerbatim).as("다시 보낸 지시에 원문대로 읽었다").contains(approved);
+            Map<String, Object> run = runs(readJson(out.resolve(PracticeVoiceDialogueLiveTest.OUTPUT_FILE))).getFirst();
+            Map<String, Object> checks = map(run.get("checks"));
+            assertThat(map(map(checks.get("unheardSegments")).get("byKind"))).as(md).containsExactly(Map.entry("APPROVED_TEXT_MISMATCH", 1));
+            Map<String, Object> verbatim = map(checks.get("approvedVerbatim"));
+            assertThat(number(verbatim.get("played"))).as("한 번 다시 보내 모든 요청이 들렸다").isEqualTo(number(verbatim.get("requested")));
+            assertThat((List<?>) verbatim.get("notHeard")).isEmpty();
+            assertThat(((List<?>) run.get("instructionTimeline")).stream().map(PracticeVoiceHarnessSelfCheckTest::map)
+                    .filter(row -> Boolean.TRUE.equals(row.get("resend")))).singleElement()
+                    .satisfies(row -> assertThat(row).containsEntry("instruction", "VERBATIM_READ").containsEntry("outcome", "RECEIVING"));
         }
     }
 
@@ -476,6 +504,7 @@ class PracticeVoiceHarnessSelfCheckTest {
         private final AtomicLong appends = new AtomicLong();
         private volatile long sessionStartNanos = System.nanoTime();
         private volatile int mismatchAt = -1;
+        private volatile int mismatchTimes = 1;
         private volatile Function<String, String> hearing = Function.identity();
         // 서버 수신 스레드에서만 쓴다
         private int verbatimInSession;
@@ -499,7 +528,13 @@ class PracticeVoiceHarnessSelfCheckTest {
 
         /** 세션마다 {@code nth}번째(1부터) 승인 원문 지시를 원문과 다르게 읽는다. */
         LoopbackGptLive mismatchVerbatim(int nth) {
+            return mismatchVerbatim(nth, 1);
+        }
+
+        /** 세션마다 {@code nth}번째부터 {@code times}번 승인 원문 지시를 원문과 다르게 읽는다(4회차 R2: 한 번 다시 보낸 지시도 다르게 읽게 할 때 2). */
+        LoopbackGptLive mismatchVerbatim(int nth, int times) {
             this.mismatchAt = nth;
+            this.mismatchTimes = times;
             return this;
         }
 
@@ -536,7 +571,8 @@ class PracticeVoiceHarnessSelfCheckTest {
             if (content != null && content.startsWith(VERBATIM_LEAD)) {
                 Map<String, Object> data = JSON.read(content.substring(content.indexOf('{'), content.lastIndexOf('}') + 1), Map.class);
                 String approved = String.valueOf(data.get("speech"));
-                if (++verbatimInSession == mismatchAt) {
+                int nth = ++verbatimInSession;
+                if (mismatchAt > 0 && nth >= mismatchAt && nth < mismatchAt + mismatchTimes) {
                     mismatched.add(approved);
                     return approved + MISMATCH_TAIL;
                 }

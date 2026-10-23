@@ -235,12 +235,13 @@ U8(계약 · 버전 리소스)이 더한 키다. 새 연습 흐름 키는 12절 
 
 ## 14. U11 공급자 출력 세대 · 입력 전사 묶음
 
-U11(선 형식 정비)이 더한 키다. 공급자 실호출에는 응답 id도 응답 취소 type도 응답 끝 · 말 끝 · 입력 전사 완료 사건도 없다(편차 (U11-a)). 그래서 서버가 출력 세대를 올려 앞 조각을 버리고, 지시를 보낸 뒤 새 말의 시작은 지시 확인 사건의 `end_ms`와 출력 전사의 `start_ms`(전사 시간선)로 정하며, 아이 말은 입력 전사 조각을 묶어 일정 시간 조용하면 확정한다. 지시 없이 세대만 올린 경우의 끊김 확인은 기존 `mujoong.gate.segment-quiet` 800ms(4절)를 쓴다. 화면이 읽지 않는 서버 키라 `frontend/src/shared/timing/timing-defaults.json`에는 넣지 않는다 — R-M5의 '세 곳'은 이 표 · 소유 앱 `application.yml` · 설정 레코드(`RealtimeProperties.ProviderTiming`)다. 두 값은 실호출 3회 관측에 기댄 **임시값**이고 Build and Test 실호출로 확정한다.
+U11(선 형식 정비)이 더한 키다. 공급자 실호출에는 응답 id도 응답 취소 type도 응답 끝 · 말 끝 · 입력 전사 완료 사건도 없다(편차 (U11-a)). 그래서 서버가 출력 세대를 올려 앞 조각을 버리고, 지시를 보낸 뒤 새 말의 시작은 지시 확인 사건의 `end_ms`와 출력 전사의 `start_ms`(전사 시간선)로 정하며, 아이 말은 입력 전사 조각을 묶어 일정 시간 조용하면 확정한다. 지시 없이 세대만 올린 경우의 끊김 확인은 기존 `mujoong.gate.segment-quiet` 800ms(4절)를 쓴다. 화면이 읽지 않는 서버 키라 `frontend/src/shared/timing/timing-defaults.json`에는 넣지 않는다 — R-M5의 '세 곳'은 이 표 · 소유 앱 `application.yml` · 설정 레코드(`RealtimeProperties.ProviderTiming`)다. 앞의 두 값은 실호출 3회 관측에 기댄 **임시값**이고 Build and Test 실호출로 확정한다. 4회차 R2가 연습 발화 지시를 미루는 상한(`instruction-defer-max`)을 더했다.
 
 | 키 | 기본값 | 소유 앱 | 뜻 | 근거 |
 |---|---|---|---|---|
 | `mujoong.timing.provider.input-transcript-quiet` | `1500ms` | realtime | 입력 전사 조각(`session.input_transcript.delta`)이 이만큼 오지 않으면 그 묶음을 확정 전사로 본다. 전사가 음성보다 0.2 ~ 2초 앞서 도착하고 모델이 말 끝 전에 반응하므로 아이의 쉼보다 길게 잡는다. 아이가 길게 쉬면 한 발화가 둘로 나뉠 수 있다 | A7 · U11-a |
 | `mujoong.timing.provider.new-speech-margin` | `700ms` | realtime | 지시 뒤 새 말의 전사 `start_ms`에 더하는 여유. 오디오 시계(출력 바이트 / 48 ms)가 (새 말 시작 + 이 값)에 닿는 첫 음성 조각부터 받는다. 전사 시간선과 오디오 시계의 어긋남(단계마다 0.2 ~ 0.4초 늘어남)을 덮는다. 낡은 꼬리가 새는 것보다 첫 낱말이 잘리는 쪽을 택한다. **말하는 중 보낸 지시에만 쓴다** — 조용할 때 보낸 지시(마지막 출력 조각 뒤 `mujoong.gate.segment-quiet`가 지남)는 낡은 꼬리가 없어 확인 사건을 기다리지 않고 첫 조각부터, 음성은 여유 없이 받는다(설계 개정 A4-b, 3회차 V2, 편차 (PDS-V2)) | A4 · A4-b · U11-a · PDS-V2 |
+| `mujoong.timing.provider.instruction-defer-max` | `3s` | realtime | 새 연습 흐름의 연습 발화 지시(GPT-Live 원문 읽기 · 생성형 역할 지시)를 공급자가 말하는 중이면 이만큼까지 미룬다. 그 안에 출력이 조용해지면(A4-b 기준) 그때 조용 시작으로 보내고, 넘으면 지금처럼 말하는 중에 보낸다. 연습 밖 지시(참여 안내 · 게이트 교정 · 판정 뒤 행동 · 자유대화)는 미루지 않는다(4회차 R2, 편차 (PDS-V3), ai-io.md 3절). 실측 전 **임시값**이다 | R2 · PDS-V3 |
 
 ## 15. 3회차 V1 연습 대본 줄 음성 미리 합성
 

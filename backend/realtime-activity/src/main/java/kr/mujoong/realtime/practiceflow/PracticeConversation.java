@@ -159,6 +159,12 @@ public final class PracticeConversation implements PracticeSessionExtension {
         return true;
     }
 
+    /** 4회차 R2: GPT-Live 연습 발화 지시는 공급자 출력이 조용할 때 보내고, 새 말이 없었으면 한 번 다시 보내게 한다(실행부가 한다). */
+    @Override
+    public boolean pacesSpeech() {
+        return true;
+    }
+
     /**
      * 3회차 V1: 첫 대본의 승인 원문 대본 줄과 승인 발화 HELP_OFFER(실행부가 참여 확인 동안 음성을 미리 만든다). 상태를 바꾸지 않는다. 첫 대본이 없거나
      * 거절된 패키지는 없음이다(그 목표는 onActive가 지금처럼 '미실시'로 둔다). 다음 목표 대본은 도착할 때 {@link PracticeOutput#prepareSpeech}로 맡긴다.

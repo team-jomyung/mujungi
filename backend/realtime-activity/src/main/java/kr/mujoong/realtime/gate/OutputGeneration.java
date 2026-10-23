@@ -97,16 +97,45 @@ public final class OutputGeneration {
      * @param discardedTranscriptChars 그 조각들의 글자 수(코드 포인트)
      * @param discardedAudioMs 음성을 받기 전에 버린 음성 길이
      * @param heldChunks 출력 보류로 버린 조각 수
+     * @param pacing 4회차 R2: 보내기 전에 미룬 시간 · 미룸이 끝난 까닭 · 한 번 다시 보낸 지시인가(연습 발화 지시만, 그 밖은 {@link Pacing#NONE})
      */
     public record InstructionTrace(String eventId, BumpReason reason, boolean quietAtSend, long sentClockMs, long ackStartMs,
             long ackEndMs, long firstTranscriptStartMs, long firstTranscriptClockMs, long audioFromClockMs,
             int discardedTranscriptChunks, int discardedTranscriptChars, long discardedAudioMs, int heldChunks,
-            TraceOutcome outcome) {
+            TraceOutcome outcome, Pacing pacing) {
 
         public InstructionTrace {
             Objects.requireNonNull(eventId, "eventId");
             Objects.requireNonNull(reason, "reason");
             Objects.requireNonNull(outcome, "outcome");
+            Objects.requireNonNull(pacing, "pacing");
+        }
+    }
+
+    /** 4회차 R2: 미룬 지시를 보낸 까닭. */
+    public enum DeferEnd {
+        /** 출력이 조용해졌다(조용 시작으로 보냈다). */
+        QUIET,
+        /** 미룸 상한이 지났다(말하는 중에 보냈다). */
+        CAP
+    }
+
+    /**
+     * 4회차 R2: 연습 발화 지시 하나를 보내기까지의 사정(세션 사건 {@code OUTPUT_NEW_SPEECH}의 관측 값, 원문 없음).
+     *
+     * @param deferredMs 출력이 조용해지기를 기다리며 미룬 시간(ms, 미루지 않았으면 0)
+     * @param deferEnd 미룸이 끝난 까닭(미루지 않았으면 null)
+     * @param resend 새 말이 없었거나 원문 대조로 버려진 연습 발화를 한 번 다시 보낸 지시인가
+     */
+    public record Pacing(long deferredMs, DeferEnd deferEnd, boolean resend) {
+
+        /** 미루지 않고 처음 보낸 지시(연습 발화 밖의 지시도 이 값이다). */
+        public static final Pacing NONE = new Pacing(0L, null, false);
+
+        public Pacing {
+            if (deferredMs < 0) {
+                throw new IllegalArgumentException("미룬 시간은 음수일 수 없다");
+            }
         }
     }
 
@@ -451,11 +480,20 @@ public final class OutputGeneration {
      * @return 새 세대 번호
      */
     public long bumpForInstruction(Instant now, BumpReason reason, String eventId, boolean chunksInFlight) {
+        return bumpForInstruction(now, reason, eventId, chunksInFlight, Pacing.NONE);
+    }
+
+    /**
+     * 4회차 R2: {@link #bumpForInstruction(Instant, BumpReason, String, boolean)}와 같고, 이 지시를 보내기까지의 사정(미룬 시간 · 까닭 · 다시
+     * 보냄)을 관측 값에 싣는다. 새 말 판단은 바뀌지 않는다.
+     */
+    public long bumpForInstruction(Instant now, BumpReason reason, String eventId, boolean chunksInFlight, Pacing pacing) {
         Objects.requireNonNull(eventId, "eventId");
+        Objects.requireNonNull(pacing, "pacing");
         boolean quiet = !chunksInFlight && quietAt(now);
         long next = doBump(now, reason, Mode.INSTRUCTION, eventId);
         quietStart = quiet;
-        trace = new TraceState(eventId, reason, quiet, sentClockMs);
+        trace = new TraceState(eventId, reason, quiet, sentClockMs, pacing);
         return next;
     }
 
@@ -562,7 +600,7 @@ public final class OutputGeneration {
         traces.accept(new InstructionTrace(open.eventId, open.reason, open.quietAtSend, open.sentClockMs, open.ackStartMs,
                 open.ackEndMs, open.firstTranscriptStartMs, open.firstTranscriptClockMs, open.audioFromClockMs,
                 open.discardedTranscriptChunks, open.discardedTranscriptChars, open.discardedAudioMs, open.heldChunks,
-                open.outcome));
+                open.outcome, open.pacing));
     }
 
     /** 지시 하나의 새 말 관측(실행기 스레드 전용). */
@@ -571,6 +609,7 @@ public final class OutputGeneration {
         final BumpReason reason;
         final boolean quietAtSend;
         final long sentClockMs;
+        final Pacing pacing;
         long ackStartMs = -1L;
         long ackEndMs = -1L;
         long firstTranscriptStartMs = -1L;
@@ -583,11 +622,12 @@ public final class OutputGeneration {
         /** 정해진 결과(아직 열려 있으면 null). */
         TraceOutcome outcome;
 
-        TraceState(String eventId, BumpReason reason, boolean quietAtSend, long sentClockMs) {
+        TraceState(String eventId, BumpReason reason, boolean quietAtSend, long sentClockMs, Pacing pacing) {
             this.eventId = eventId;
             this.reason = reason;
             this.quietAtSend = quietAtSend;
             this.sentClockMs = sentClockMs;
+            this.pacing = pacing;
         }
     }
 

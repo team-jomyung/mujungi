@@ -47,6 +47,14 @@ public final class ControllingPracticeExtension implements PracticeSessionExtens
         return true;
     }
 
+    /** 4회차 R2: 참이면 실행부가 이 대역의 연습 발화 지시를 공급자가 조용할 때 보낸다(create 전에 바꾼다, 기본은 거짓 = 곧바로 보낸다). */
+    public boolean paces;
+
+    @Override
+    public boolean pacesSpeech() {
+        return paces;
+    }
+
     @Override
     public Signal onActive(PracticeContext context, PracticeOutput output) {
         out = output;

@@ -285,6 +285,13 @@ public interface PracticeSessionExtension {
     default boolean controlsOutput() { return false; }
 
     /**
+     * 4회차 R2: 이 확장의 GPT-Live 연습 발화 지시({@link PracticeOutput#speak}의 원문 읽기 · {@link PracticeOutput#speakGenerated})를 공급자
+     * 출력이 조용할 때 보내게 하는가(출력권을 가진 확장만 뜻이 있다). 참이면 실행부가 말하는 중의 지시를 {@code instruction-defer-max}까지 미루고, 새 말이
+     * 없었거나 원문 대조로 버려진 발화를 한 번 다시 보낸다. 기본은 거짓(지금처럼 곧바로 보낸다).
+     */
+    default boolean pacesSpeech() { return false; }
+
+    /**
      * 3회차 V1: 이 세션의 시작 패키지에서 낼 승인 원문 대본 줄들(첫 대본의 장면 설명 · 친구 첫 대사 · 기회 문장 · 상황 다시 설명 · 변형 제안, 승인 발화).
      * 실행부가 참여 확인 · 시작 안내 동안 음성을 미리 만든다. ACTIVE 전(WAITING_CHILD 진입 때) 실행기 스레드에서 한 번 부르며 상태를 바꾸지 않아야 한다.
      * 기본은 없음(모든 대본 줄을 GPT-Live 원문 읽기로 낸다). 예외는 실행부가 삼키고 미리 만들지 않을 뿐이다.

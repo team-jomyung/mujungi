@@ -130,6 +130,8 @@ mujoong:
     provider:
       input-transcript-quiet: 1500ms
       new-speech-margin: 700ms
+      # 4회차 R2: 공급자가 말하는 중이면 연습 발화 지시를 이만큼까지 미뤄 조용할 때 보낸다(넘으면 말하는 중에 보낸다)
+      instruction-defer-max: 3s
     # 3회차 V1(timing.md 15절): 연습 대본 줄 음성 미리 합성. 합성 요청 하나의 상한 · 낼 차례에 합성이 덜 끝났을 때 기다리는 상한(넘기면 GPT-Live 원문 읽기)
     speech-clip:
       synthesis-timeout: 10s

@@ -49,11 +49,14 @@ public record RealtimeTimingProperties(
      *
      * @param inputTranscriptQuiet 입력 전사 조각이 이만큼 오지 않으면 그 묶음을 확정 전사로 본다(말 끝 · 전사 완료 사건이 없다, A7)
      * @param newSpeechMargin 지시 뒤 새 말의 전사 시작 시각에 더하는 여유. 오디오 시계가 (새 말 시작 + 이 값)에 닿는 첫 음성 조각부터 받는다(A4)
+     * @param instructionDeferMax 4회차 R2: 공급자가 말하는 중에 연습 발화 지시를 미루는 상한. 그 안에 출력이 조용해지면 그때 보내고, 넘으면 말하는 중에
+     *     보낸다(A4-b, timing.md 14절)
      */
-    public record ProviderTiming(Duration inputTranscriptQuiet, Duration newSpeechMargin) {
+    public record ProviderTiming(Duration inputTranscriptQuiet, Duration newSpeechMargin, Duration instructionDeferMax) {
         public ProviderTiming {
             positive(inputTranscriptQuiet, "mujoong.timing.provider.input-transcript-quiet");
             positive(newSpeechMargin, "mujoong.timing.provider.new-speech-margin");
+            positive(instructionDeferMax, "mujoong.timing.provider.instruction-defer-max");
         }
     }
 

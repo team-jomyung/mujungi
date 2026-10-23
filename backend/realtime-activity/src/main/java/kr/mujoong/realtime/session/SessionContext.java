@@ -450,9 +450,11 @@ public final class SessionContext {
 
     /**
      * 3회차 V2: 지시 하나의 새 말 시작 관측을 세션 사건 {@code OUTPUT_NEW_SPEECH}로 남긴다(사유 코드 · 시각 · 개수뿐, 전사 원문 없음 R-F14). 실기기
-     * 리허설 · 실음성 하니스가 지시마다 조용 시작 여부 · 확인 사건 · 첫 조각 · 버린 조각을 같은 값으로 본다.
+     * 리허설 · 실음성 하니스가 지시마다 조용 시작 여부 · 확인 사건 · 첫 조각 · 버린 조각을 같은 값으로 본다. 4회차 R2: 연습 발화 지시를 미룬 시간
+     * ({@code deferredMs}) · 미룸이 끝난 까닭({@code deferEnd} QUIET · CAP, 미루지 않았으면 null) · 한 번 다시 보낸 지시인가({@code resend})를 더한다.
      */
     private void recordNewSpeech(OutputGeneration.InstructionTrace trace) {
+        OutputGeneration.Pacing pacing = trace.pacing();
         String payload = "{\"eventId\":\"" + trace.eventId() + "\",\"reason\":\"" + trace.reason().name() + "\",\"start\":\""
                 + (trace.quietAtSend() ? "QUIET" : "SPEAKING") + "\",\"sentClockMs\":" + trace.sentClockMs() + ",\"ackStartMs\":"
                 + known(trace.ackStartMs()) + ",\"ackEndMs\":" + known(trace.ackEndMs()) + ",\"firstTranscriptStartMs\":"
@@ -460,7 +462,9 @@ public final class SessionContext {
                 + ",\"audioFromClockMs\":" + known(trace.audioFromClockMs()) + ",\"discardedTranscriptChunks\":"
                 + trace.discardedTranscriptChunks() + ",\"discardedTranscriptChars\":" + trace.discardedTranscriptChars()
                 + ",\"discardedAudioMs\":" + trace.discardedAudioMs() + ",\"heldChunks\":" + trace.heldChunks() + ",\"outcome\":\""
-                + trace.outcome().name() + "\"}";
+                + trace.outcome().name() + "\",\"deferredMs\":" + pacing.deferredMs() + ",\"deferEnd\":"
+                + (pacing.deferEnd() == null ? "null" : "\"" + pacing.deferEnd().name() + "\"") + ",\"resend\":" + pacing.resend()
+                + "}";
         putEvent(SessionExecutor.EVENT_OUTPUT_NEW_SPEECH, payload, services.clock().now());
     }
 

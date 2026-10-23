@@ -37,6 +37,12 @@ public final class PracticeFlowRouter implements PracticeSessionExtension {
         return true;
     }
 
+    /** 4회차 R2: 고른 쪽을 따른다(새 흐름은 참, 레거시는 거짓). 고르기 전에는 연습 발화가 없으므로 거짓이다. */
+    @Override
+    public boolean pacesSpeech() {
+        return delegate != null && delegate.pacesSpeech();
+    }
+
     @Override
     public Signal onActive(PracticeContext context, PracticeOutput output) {
         if (delegate == null) {

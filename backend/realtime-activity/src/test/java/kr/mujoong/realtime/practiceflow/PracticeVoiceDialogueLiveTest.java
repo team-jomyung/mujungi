@@ -2240,6 +2240,12 @@ class PracticeVoiceDialogueLiveTest {
             return delegate.controlsOutput();
         }
 
+        /** 4회차 R2: 운영 라우터 · 흐름 그대로(새 흐름은 말 간격을 맞춘다). */
+        @Override
+        public boolean pacesSpeech() {
+            return delegate.pacesSpeech();
+        }
+
         @Override
         public Progress progress() {
             return delegate.progress();
@@ -3232,9 +3238,10 @@ class PracticeVoiceDialogueLiveTest {
                 Map<?, ?> trace = traces.get(eventId);
                 row.put("observed", trace != null);
                 if (trace != null) {
+                    // 4회차 R2: 연습 발화 지시를 미룬 시간 · 미룸이 끝난 까닭(QUIET · CAP) · 한 번 다시 보낸 지시인가도 옮긴다
                     for (String key : List.of("reason", "start", "sentClockMs", "ackStartMs", "ackEndMs", "firstTranscriptStartMs",
                             "firstTranscriptClockMs", "audioFromClockMs", "discardedTranscriptChunks", "discardedTranscriptChars", "discardedAudioMs",
-                            "heldChunks", "outcome")) {
+                            "heldChunks", "outcome", "deferredMs", "deferEnd", "resend")) {
                         row.put(key, trace.get(key));
                     }
                 }
@@ -3780,9 +3787,9 @@ class PracticeVoiceDialogueLiveTest {
          * 결과(실행부 OUTPUT_NEW_SPEECH, 시각은 공급자 오디오 시계 ms).
          */
         private static void renderTimeline(StringBuilder md, List<?> timeline) {
-            md.append("\n지시별 새 말 시작(3회차 V2, 시각은 공급자 오디오 시계 ms)\n\n");
-            md.append("| 지시 | 종류 | 보낼 때 | 보낸 시계 | 확인 start · end | 첫 전사 start · 도착 | 버린 조각 · 글자 · 음성 | 결과 |\n");
-            md.append("| --- | --- | --- | --- | --- | --- | --- | --- |\n");
+            md.append("\n지시별 새 말 시작(3회차 V2 · 4회차 R2, 시각은 공급자 오디오 시계 ms)\n\n");
+            md.append("| 지시 | 종류 | 보낼 때 | 미룸 · 다시 | 보낸 시계 | 확인 start · end | 첫 전사 start · 도착 | 버린 조각 · 글자 · 음성 | 결과 |\n");
+            md.append("| --- | --- | --- | --- | --- | --- | --- | --- | --- |\n");
             for (Object item : timeline) {
                 if (!(item instanceof Map<?, ?> row)) {
                     continue;
@@ -3790,10 +3797,11 @@ class PracticeVoiceDialogueLiveTest {
                 md.append("| ").append(row.get("eventId")).append(" [").append(time(row.get("atMs"))).append("] | ").append(row.get("instruction"))
                         .append(" | ");
                 if (!Boolean.TRUE.equals(row.get("observed"))) {
-                    md.append("관측 없음 | | | | | |\n");
+                    md.append("관측 없음 | | | | | | |\n");
                     continue;
                 }
-                md.append("QUIET".equals(row.get("start")) ? "조용" : "말하는 중").append(" | ").append(value(row.get("sentClockMs"))).append(" | ")
+                md.append("QUIET".equals(row.get("start")) ? "조용" : "말하는 중").append(" | ").append(pacing(row)).append(" | ")
+                        .append(value(row.get("sentClockMs"))).append(" | ")
                         .append(value(row.get("ackStartMs"))).append(" · ").append(value(row.get("ackEndMs"))).append(" | ")
                         .append(value(row.get("firstTranscriptStartMs"))).append(" · ").append(value(row.get("firstTranscriptClockMs"))).append(" | ")
                         .append(value(row.get("discardedTranscriptChunks"))).append(" · ").append(value(row.get("discardedTranscriptChars")))
@@ -3803,6 +3811,12 @@ class PracticeVoiceDialogueLiveTest {
 
         private static String value(Object value) {
             return value == null ? "-" : String.valueOf(value);
+        }
+
+        /** 4회차 R2: 미룬 시간(까닭)과 한 번 다시 보낸 지시 표시. 미루지 않고 처음 보낸 지시는 '-'다. */
+        private static String pacing(Map<?, ?> row) {
+            String deferred = row.get("deferEnd") == null ? "-" : value(row.get("deferredMs")) + "ms(" + row.get("deferEnd") + ")";
+            return Boolean.TRUE.equals(row.get("resend")) ? deferred + " · 다시 보냄" : deferred;
         }
 
         static String discardLabel(String kind) {

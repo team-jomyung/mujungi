@@ -122,6 +122,8 @@ public final class SessionExecutor {
      * @param inputTranscriptQuiet 입력 전사 조각이 이만큼 오지 않으면 그 묶음을 확정 전사로 본다({@code mujoong.timing.provider.input-transcript-quiet}, 설계 개정 A7)
      * @param newSpeechMargin 지시 뒤 새 말의 전사 시작에 더하는 여유({@code mujoong.timing.provider.new-speech-margin}, 설계 개정 A4)
      * @param instructionWait 지시를 보낸 뒤 새 말이 시작하기를 기다리는 시한({@code mujoong.timing.judgment.response-ready}, 지시 송신 시각부터, 설계 개정 A3)
+     * @param instructionDeferMax 4회차 R2: 공급자가 말하는 중이면 연습 발화 지시를 미루는 상한({@code mujoong.timing.provider.instruction-defer-max},
+     *     0이면 미루지 않는다)
      */
     public record Settings(
             Duration deviceAckTimeout,
@@ -136,7 +138,17 @@ public final class SessionExecutor {
             Lifecycle lifecycle,
             Duration inputTranscriptQuiet,
             Duration newSpeechMargin,
-            Duration instructionWait) {
+            Duration instructionWait,
+            Duration instructionDeferMax) {
+
+        /** 4회차 R2 전 모양(연습 발화 지시를 미루지 않는다). 기존 시험 · 조립이 그대로 쓴다. */
+        public Settings(Duration deviceAckTimeout, Duration closingConfirm, Duration disconnect, Duration segmentQuiet,
+                Duration playbackExpiry, Duration timerTick, int inputQueueFrames, int mailboxCapacity, int uncertainBelowPercent,
+                Lifecycle lifecycle, Duration inputTranscriptQuiet, Duration newSpeechMargin, Duration instructionWait) {
+            this(deviceAckTimeout, closingConfirm, disconnect, segmentQuiet, playbackExpiry, timerTick, inputQueueFrames,
+                    mailboxCapacity, uncertainBelowPercent, lifecycle, inputTranscriptQuiet, newSpeechMargin, instructionWait,
+                    Duration.ZERO);
+        }
 
         /**
          * U4b 세션 생애 시간 값(contracts/timing.md, 모두 설정 키에서 온다).
@@ -175,6 +187,10 @@ public final class SessionExecutor {
             Objects.requireNonNull(inputTranscriptQuiet, "inputTranscriptQuiet");
             Objects.requireNonNull(newSpeechMargin, "newSpeechMargin");
             Objects.requireNonNull(instructionWait, "instructionWait");
+            Objects.requireNonNull(instructionDeferMax, "instructionDeferMax");
+            if (instructionDeferMax.isNegative()) {
+                throw new IllegalArgumentException("지시를 미루는 상한은 음수일 수 없다");
+            }
             Objects.requireNonNull(deviceAckTimeout, "deviceAckTimeout");
             Objects.requireNonNull(closingConfirm, "closingConfirm");
             Objects.requireNonNull(disconnect, "disconnect");
@@ -196,7 +212,8 @@ public final class SessionExecutor {
                     properties.session().timerTick(), properties.limits().sessionInputQueueFrames(),
                     properties.limits().sessionControlQueue(), properties.transcript().uncertainBelowPercent(),
                     Lifecycle.from(properties), properties.timing().provider().inputTranscriptQuiet(),
-                    properties.timing().provider().newSpeechMargin(), properties.timing().judgment().responseReady());
+                    properties.timing().provider().newSpeechMargin(), properties.timing().judgment().responseReady(),
+                    properties.timing().provider().instructionDeferMax());
         }
     }
 
@@ -431,6 +448,10 @@ public final class SessionExecutor {
     static final String EVENT_PRACTICE_SPEECH_SOURCE = "PRACTICE_SPEECH_SOURCE";
     /** 3회차 V1: 대본 줄 음성을 기다리는 연습 시계 이름의 앞머리(확장에 전달하지 않는다). */
     static final String TIMER_CLIP_WAIT = "speech-clip-wait-";
+    /** 4회차 R2: 공급자 출력이 조용해지기를 기다리며 미룬 연습 발화 지시의 상한 시계 이름 앞머리(확장에 전달하지 않는다). */
+    static final String TIMER_SPEECH_DEFER = "speech-defer-";
+    /** 4회차 R2 PRACTICE_SPEECH_SOURCE의 사유 값: 미룬 지시를 보내기 전에 버렸다(새 발화 · 취소 · 끼어들기 · 진행 멈춤). */
+    static final String REASON_DEFER_ABANDONED = "DEFER_ABANDONED";
     /** 3회차 V1 PRACTICE_SPEECH_SOURCE의 출처 값: 미리 만든 대본 줄 음성. */
     static final String SOURCE_TTS_CLIP = "TTS_CLIP";
     /** 출처 값: 대본 줄을 GPT-Live 원문 읽기로 냈다(음성을 쓸 수 없었다 — 사유 코드가 함께 간다). */
@@ -534,8 +555,42 @@ public final class SessionExecutor {
     /** 3회차 V1: 미리 만든 음성으로 내고 아직 생성형 지시에 싣지 않은 대본 줄(GPT-Live 대화 맥락에 없다, 최근 {@value #MAX_HEARD_CLIPS}줄만). */
     private final java.util.ArrayDeque<kr.mujoong.realtime.voice.PracticeInstruction.Heard> heardClips = new java.util.ArrayDeque<>();
 
+    /** 4회차 R2: 공급자 출력이 조용해지기를 기다리며 미룬 연습 발화 지시(없으면 null). 새 발화 · 취소 · 끼어들기 · 출력 보류 · 진행 멈춤이 버린다. */
+    private DeferredSpeech deferredSpeech;
+    private long deferSeq;
+    /** 4회차 R2: 공급자에 보낸 가장 최근 연습 발화 지시(새 말이 없었거나 원문 대조로 버려지면 한 번 다시 보낸다). */
+    private PracticeAttempt sentAttempt;
+
     /** 대본 줄 음성을 기다리는 연습 발화(요청 번호 · 시계 이름 · 기다리기 시작한 시각). */
     private record ClipWait(kr.mujoong.realtime.voice.PracticeSpeech speech, int seq, String timer, Instant since) {
+    }
+
+    /**
+     * 4회차 R2: GPT-Live에 보내는 연습 발화 지시 하나(승인 원문 읽기 또는 생성형 역할 지시). 미룬 뒤에 보낼 때 · 한 번 다시 보낼 때도 같은 값을 쓴다.
+     * 원문은 문자열 표현에 내지 않는다.
+     *
+     * @param seq 이 세션의 연습 발화 요청 번호(PRACTICE_SPEECH_SOURCE의 seq)
+     * @param reason 원문 읽기로 낸 사유 코드(생성형이면 null)
+     * @param waitedSince 대본 줄 음성을 기다리기 시작한 시각(기다리지 않았으면 null)
+     * @param heard 생성형 지시에 실은 들린 대본 줄 수(원문 읽기면 null)
+     * @param resend 한 번 다시 보내는 지시인가(출처 사건은 처음 보낼 때만 남긴다)
+     */
+    private record PracticeAttempt(kr.mujoong.realtime.voice.PracticeSpeech speech, int seq,
+            kr.mujoong.realtime.voice.PracticeInstruction instruction, String reason, Instant waitedSince, Integer heard,
+            boolean resend) {
+
+        PracticeAttempt again() {
+            return new PracticeAttempt(speech, seq, instruction, reason, waitedSince, heard, true);
+        }
+
+        @Override
+        public String toString() {
+            return "PracticeAttempt[seq=" + seq + ", resend=" + resend + "]";
+        }
+    }
+
+    /** 4회차 R2: 미룬 연습 발화 지시(상한 시계 이름 · 미루기 시작한 시각). */
+    private record DeferredSpeech(PracticeAttempt attempt, String timer, Instant since) {
     }
 
     /**
@@ -1123,6 +1178,11 @@ public final class SessionExecutor {
     private void onPracticeEvent(PracticeSessionExtension.ExtensionEvent event) {
         if (event.name().equals("u5b-voice-failed") && event.value() instanceof kr.mujoong.realtime.voice.PracticeSpeech speech) {
             if (speech.equals(pendingPracticeSpeech)) {
+                // 4회차 R2: 새 말이 시작하지 않았거나 송신이 실패한 연습 발화는 실패를 알리기 전에 같은 길로 한 번 다시 보낸다
+                PracticeAttempt again = resendableAttempt(speech);
+                if (again != null && deliverPracticeAttempt(again)) {
+                    return;
+                }
                 pendingPracticeSpeech = null; practiceHold = true;
                 practicePlayback(speech, kr.mujoong.realtime.practicelegacy.PracticePorts.Playback.FAILED);
             }
@@ -1177,6 +1237,8 @@ public final class SessionExecutor {
         if (practice == null || !practice.controlsOutput()) return;
         practice.onStopping();
         clearClipWait();
+        dropDeferredSpeech();
+        sentAttempt = null;
         pendingPracticeSpeech = null;
         practiceAudio.clear();
         pausedPracticeEvents.clear();
@@ -1197,6 +1259,14 @@ public final class SessionExecutor {
             ClipWait waiting = clipWait;
             if (waiting != null && waiting.timer().equals(fired.name())) {
                 resumeClipWait(waiting);
+            }
+            return;
+        }
+        if (fired.name().startsWith(TIMER_SPEECH_DEFER)) {
+            // 4회차 R2: 미룬 지시의 상한이 지났다 — 공급자가 아직 말하는 중이어도 지금처럼 보낸다(확장에 전달하지 않는다)
+            DeferredSpeech waiting = deferredSpeech;
+            if (waiting != null && waiting.timer().equals(fired.name())) {
+                releaseDeferredSpeech(OutputGeneration.DeferEnd.CAP);
             }
             return;
         }
@@ -1249,6 +1319,7 @@ public final class SessionExecutor {
     private void interruptPracticeSpeech(Instant now) {
         if (practice == null || !practice.controlsOutput()) return;
         clearClipWait();
+        dropDeferredSpeech();
         var interrupted = new LinkedHashSet<kr.mujoong.realtime.voice.PracticeSpeech>(practiceAudio.values());
         if (pendingPracticeSpeech != null) interrupted.add(pendingPracticeSpeech);
         pendingPracticeSpeech = null;
@@ -2018,24 +2089,165 @@ public final class SessionExecutor {
      */
     private boolean speakWithGptLive(int seq, kr.mujoong.realtime.voice.PracticeSpeech speech, String reason,
             Instant waitedSince) {
-        if (ctx.providerSession() == null || !ctx.providerSession().isOpen()) {
-            recordSpeechSource(seq, SOURCE_NONE, "PROVIDER_CLOSED", null, waitedSince, null, false);
-            return false;
+        return deliverPracticeAttempt(new PracticeAttempt(speech, seq, kr.mujoong.realtime.voice.PracticeInstruction.forSpeech(speech),
+                reason, waitedSince, null, false));
+    }
+
+    // ------------------------------------------------------------------ 4회차 R2 연습 발화 지시의 말 간격
+
+    /**
+     * 연습 발화 지시 하나를 낸다. 말 간격을 맞추는 출력권 연습({@link PracticeSessionExtension#pacesSpeech})이고 공급자가 말하는 중이면(A4-b 기준이
+     * 조용하지 않다) 보내지 않고 {@code instruction-defer-max}까지 미룬다 — 처음 조용해질 때(구간 조용 시계 만기) 조용 시작으로 보내고, 상한이 지나면
+     * 지금처럼 말하는 중에 보낸다. 연습 밖 출력 보류(참여 확인 · 종료 확인 · 판정 턴) 중이거나 상한이 0이거나 공급자 연결이 없으면 미루지 않는다.
+     *
+     * @return 보냈거나 미뤘으면 참, 공급자 연결이 없으면 거짓
+     */
+    private boolean deliverPracticeAttempt(PracticeAttempt attempt) {
+        Instant now = ctx.services().clock().now();
+        boolean open = ctx.providerSession() != null && ctx.providerSession().isOpen();
+        if (open && pacesPracticeSpeech() && !outputHeldBeyondPractice() && !outputQuietForInstruction(now)) {
+            deferPracticeAttempt(attempt, now);
+            return true;
         }
-        ctx.bumpGeneration();
-        ctx.transcripts().aiFinal("", false, ctx.services().clock().now());
-        pendingPracticeSpeech = speech;
-        practiceHold = false;
-        // 설계 개정 A2: 승인된 발화 읽기 지시를 세대를 올리며 직렬 큐로 보낸다(응답 요청 type이 없어 지시가 발화를 시작한다). 새 말이 시한
-        // 안에 시작하지 않거나 송신이 실패하면 지금처럼 확장에 실패를 알린다
-        kr.mujoong.realtime.voice.PracticeInstruction instruction =
-                kr.mujoong.realtime.voice.PracticeInstruction.forSpeech(speech);
-        boolean sent = sendInstruction(OutputGeneration.BumpReason.SERVER_SEND, "provider-practice-speech-",
-                id -> ctx.services().requests().practiceInstruction(id, instruction),
-                () -> practiceOutput.post("u5b-voice-failed", speech));
-        recordSpeechSource(seq, sent ? SOURCE_GPT_LIVE_FALLBACK : SOURCE_NONE, sent ? reason : "PROVIDER_CLOSED", null,
-                waitedSince, null, sent);
+        return sendPracticeAttempt(attempt, new OutputGeneration.Pacing(0L, null, attempt.resend()));
+    }
+
+    private boolean pacesPracticeSpeech() {
+        return practice != null && practice.controlsOutput() && practice.pacesSpeech()
+                && ctx.services().settings().instructionDeferMax().isPositive();
+    }
+
+    /** 설계 개정 A4-b와 같은 조용함: 공급자 리더가 넣고 처리하지 않은 출력 조각이 없고 마지막 조각 뒤 {@code segment-quiet}가 지났다. */
+    private boolean outputQuietForInstruction(Instant now) {
+        return pendingOutputChunks.get() == 0 && ctx.outputGen().quietAt(now);
+    }
+
+    /**
+     * 연습 발화 지시를 지금 보낸다(설계 개정 A2: 세대를 올리며 직렬 큐로, 응답 요청 type이 없어 지시가 발화를 시작한다). 새 말이 시한 안에 시작하지
+     * 않거나 송신이 실패하면 확장에 실패를 알리는 길로 간다(그 앞에 한 번은 다시 보낸다). 생성형 역할 지시는 제브 첫 막힘 뒤 재지시가 같은 지시를 다시
+     * 보내도록 replayable이다. 출처 사건 · 들린 줄 비우기는 처음 보낼 때만 한다.
+     */
+    private boolean sendPracticeAttempt(PracticeAttempt attempt, OutputGeneration.Pacing pacing) {
+        kr.mujoong.realtime.voice.PracticeSpeech speech = attempt.speech();
+        boolean sent = false;
+        if (ctx.providerSession() != null && ctx.providerSession().isOpen()) {
+            ctx.bumpGeneration();
+            ctx.transcripts().aiFinal("", false, ctx.services().clock().now());
+            pendingPracticeSpeech = speech;
+            practiceHold = false;
+            sent = sendInstruction(OutputGeneration.BumpReason.SERVER_SEND,
+                    speech.generated() ? "provider-practice-generated-" : "provider-practice-speech-",
+                    id -> ctx.services().requests().practiceInstruction(id, attempt.instruction()),
+                    () -> practiceOutput.post("u5b-voice-failed", speech), speech.generated(), pacing);
+        }
+        if (sent) {
+            sentAttempt = attempt;
+        } else if (speech.equals(pendingPracticeSpeech)) {
+            pendingPracticeSpeech = null;
+            practiceHold = true;
+        }
+        if (!attempt.resend()) {
+            if (!sent) {
+                recordSpeechSource(attempt.seq(), SOURCE_NONE, "PROVIDER_CLOSED", null, attempt.waitedSince(), null, false);
+            } else if (speech.generated()) {
+                recordSpeechSource(attempt.seq(), SOURCE_GPT_LIVE_GENERATED, null, null, null, attempt.heard(), true);
+                heardClips.clear();
+            } else {
+                recordSpeechSource(attempt.seq(), SOURCE_GPT_LIVE_FALLBACK, attempt.reason(), null, attempt.waitedSince(), null, true);
+            }
+        }
         return sent;
+    }
+
+    /**
+     * 공급자가 말하는 중이라 지시를 미룬다. 앞 소리와 낡은 공급자 조각은 지금 멈추고 버리며(대본 줄 음성을 기다릴 때와 같다) 보낼 때까지 공급자 출력을
+     * 막는다. 세대를 올리며 구간 조용 시계가 걸리므로 출력이 조용해지면 {@link #onOutputQuiet}가 보낸다.
+     */
+    private void deferPracticeAttempt(PracticeAttempt attempt, Instant now) {
+        dropDeferredSpeech();
+        ctx.bumpGeneration();
+        bumpOutput(OutputGeneration.BumpReason.PRACTICE_DISCARD);
+        // 세대를 올리면 구간 조용 시계가 지금부터 다시 걸린다 — 마지막 조각 뒤 조용 시간이 차는 때로 당겨 그때 곧바로 보낸다(조각이 더 오면 다시 걸린다)
+        Instant last = ctx.outputGen().lastDeltaAt();
+        Duration untilQuiet = last == null ? Duration.ZERO : Duration.between(now, last.plus(ctx.services().settings().segmentQuiet()));
+        ctx.timers().arm(Kind.SEGMENT_QUIET, untilQuiet.isNegative() ? Duration.ZERO : untilQuiet);
+        pendingPracticeSpeech = attempt.speech();
+        practiceHold = true;
+        String timer = TIMER_SPEECH_DEFER + (++deferSeq);
+        deferredSpeech = new DeferredSpeech(attempt, timer, now);
+        schedulePracticeTimer(timer, ctx.services().settings().instructionDeferMax());
+    }
+
+    /**
+     * 미룬 지시를 지금 보낸다(출력이 조용해졌거나 상한이 지났다). 그사이 그 발화가 바뀌었으면(취소 · 새 발화) 아무것도 하지 않는다. 보낼 수 없으면(공급자
+     * 닫힘) 확장에 재생 실패로 알린다.
+     */
+    private void releaseDeferredSpeech(OutputGeneration.DeferEnd end) {
+        DeferredSpeech waiting = takeDeferredSpeech();
+        if (waiting == null) {
+            return;
+        }
+        PracticeAttempt attempt = waiting.attempt();
+        if (!practiceActive() || !attempt.speech().equals(pendingPracticeSpeech)) {
+            return;
+        }
+        long deferredMs = Math.max(0L, Duration.between(waiting.since(), ctx.services().clock().now()).toMillis());
+        if (!sendPracticeAttempt(attempt, new OutputGeneration.Pacing(deferredMs, end, attempt.resend()))) {
+            practicePlayback(attempt.speech(), kr.mujoong.realtime.practicelegacy.PracticePorts.Playback.FAILED);
+        }
+    }
+
+    /** 미룬 지시를 떼어 낸다(상한 시계를 끈다, 기록하지 않는다). */
+    private DeferredSpeech takeDeferredSpeech() {
+        DeferredSpeech waiting = deferredSpeech;
+        if (waiting != null) {
+            deferredSpeech = null;
+            cancelPracticeTimer(waiting.timer());
+        }
+        return waiting;
+    }
+
+    /**
+     * 미룬 지시를 버린다(새 발화 · 취소 · 끼어들기 · 출력 보류 · 진행 멈춤) — 낡은 지시는 보내지 않는다. 재생 사실은 그 길이 지금처럼 알리고, 여기서는
+     * 처음 보내려던 지시의 출처 사건만 남긴다(다시 보내려던 지시는 처음 보낼 때 남겼다).
+     */
+    private void dropDeferredSpeech() {
+        DeferredSpeech waiting = takeDeferredSpeech();
+        if (waiting != null && !waiting.attempt().resend()) {
+            recordSpeechSource(waiting.attempt().seq(), SOURCE_NONE, REASON_DEFER_ABANDONED, null, waiting.attempt().waitedSince(),
+                    null, false);
+        }
+    }
+
+    /**
+     * 아이가 새로 말하기 시작했다(새 입력 전사 묶음): 미룬 연습 발화는 재생 중에 끼어든 것과 같이 보내지 않고 INTERRUPTED로 닫는다 — 아이 말 위에
+     * 낡은 지시를 보내지 않는다.
+     */
+    private void interruptDeferredSpeech(Instant at) {
+        DeferredSpeech waiting = deferredSpeech;
+        if (waiting == null || ctx.status() != SessionStatus.ACTIVE) {
+            return;
+        }
+        dropDeferredSpeech();
+        kr.mujoong.realtime.voice.PracticeSpeech speech = waiting.attempt().speech();
+        if (speech.equals(pendingPracticeSpeech)) {
+            pendingPracticeSpeech = null;
+            practiceHold = true;
+            practicePlayback(speech, kr.mujoong.realtime.practicelegacy.PracticePorts.Playback.INTERRUPTED, at);
+        }
+    }
+
+    /**
+     * 이 연습 발화를 한 번 다시 보낼 수 있으면 그 지시(다시 보냄 표시), 아니면 null. 말 간격을 맞추는 출력권 연습이고 · 공급자에 보낸 가장 최근 지시가 이
+     * 발화이고 · 아직 다시 보내지 않았고 · 연습이 진행 중일 때만이다(슬롯마다 한 번).
+     */
+    private PracticeAttempt resendableAttempt(kr.mujoong.realtime.voice.PracticeSpeech speech) {
+        PracticeAttempt attempt = sentAttempt;
+        if (attempt == null || attempt.resend() || !attempt.speech().equals(speech) || !practiceActive()
+                || practiceProgressPaused() || practice == null || !practice.controlsOutput() || !practice.pacesSpeech()) {
+            return null;
+        }
+        return attempt.again();
     }
 
     /** 대본 줄 음성을 쓰지 못한 사유 코드(원문 · 음성 없음). */
@@ -2091,6 +2303,7 @@ public final class SessionExecutor {
         @Override public boolean speak(kr.mujoong.realtime.voice.PracticeSpeech speech) {
             if (!practiceActive()) return false;
             clearClipWait();
+            dropDeferredSpeech();
             int seq = ++practiceSpeechSeq;
             ScriptClips.Lookup clip = scriptClips.lookup(speech.partnerRole(), speech.text());
             boolean held = outputHeldBeyondPractice();
@@ -2117,6 +2330,9 @@ public final class SessionExecutor {
         @Override public boolean cancelSpeech(UUID correlationId) {
             if (clipWait != null && clipWait.speech().correlationId().equals(correlationId)) {
                 clearClipWait();
+            }
+            if (deferredSpeech != null && deferredSpeech.attempt().speech().correlationId().equals(correlationId)) {
+                dropDeferredSpeech();
             }
             if (pendingPracticeSpeech != null && pendingPracticeSpeech.correlationId().equals(correlationId)) {
                 pendingPracticeSpeech = null; practiceHold = true;
@@ -2204,6 +2420,12 @@ public final class SessionExecutor {
             }
             practiceHold = hold;
             if (hold) {
+                // 4회차 R2: 막는 동안 미룬 연습 발화를 보내면 보류가 풀리므로 버린다
+                DeferredSpeech waiting = deferredSpeech;
+                dropDeferredSpeech();
+                if (waiting != null && waiting.attempt().speech().equals(pendingPracticeSpeech)) {
+                    pendingPracticeSpeech = null;
+                }
                 stopOutputForIntent(ctx.services().clock().now());
             }
             return true;
@@ -2278,26 +2500,13 @@ public final class SessionExecutor {
                 return refusePractice("speakGenerated", "INVALID");
             }
             clearClipWait();
+            dropDeferredSpeech();
             int seq = ++practiceSpeechSeq;
             // 한 발화마다 재지시 수를 새로 센다(앞 발화가 재지시를 썼어도 이 발화는 한 번 다시 검사받는다)
             guardrail.onTurnBoundary();
-            ctx.bumpGeneration();
-            ctx.transcripts().aiFinal("", false, ctx.services().clock().now());
-            pendingPracticeSpeech = slot;
-            practiceHold = false;
-            // 제브 첫 막힘 뒤 재지시가 같은 역할 지시문을 다시 보내도록 replayable로 보낸다. 새 말 미시작 · 송신 실패는 기존 실패 길이다
-            boolean sent = sendInstruction(OutputGeneration.BumpReason.SERVER_SEND, "provider-practice-generated-",
-                    id -> ctx.services().requests().practiceInstruction(id, instruction),
-                    () -> practiceOutput.post("u5b-voice-failed", slot), true);
-            if (!sent) {
-                pendingPracticeSpeech = null;
-                practiceHold = true;
-                recordSpeechSource(seq, SOURCE_NONE, "PROVIDER_CLOSED", null, null, null, false);
-            } else {
-                recordSpeechSource(seq, SOURCE_GPT_LIVE_GENERATED, null, null, null, heard, true);
-                heardClips.clear();
-            }
-            return sent;
+            // 제브 첫 막힘 뒤 재지시가 같은 역할 지시문을 다시 보내도록 replayable로 보낸다. 새 말 미시작 · 송신 실패는 기존 실패 길이다.
+            // 4회차 R2: 공급자가 말하는 중이면 조용해질 때까지 미룬다
+            return deliverPracticeAttempt(new PracticeAttempt(slot, seq, instruction, null, null, heard, false));
         }
 
         @Override
@@ -2465,6 +2674,7 @@ public final class SessionExecutor {
             }
             ctx.transcripts().childDelta(inputGroupId, delta.delta(), at);
             if (opened) {
+                interruptDeferredSpeech(at);
                 childSpeechStarted(at);
             }
         }
@@ -2681,6 +2891,10 @@ public final class SessionExecutor {
                 // 끊김 확인(다음 조각부터 받는다) 또는 할 일 없음
             }
         }
+        // 4회차 R2: 미룬 연습 발화 지시는 출력이 처음 조용해질 때 조용 시작으로 보낸다
+        if (deferredSpeech != null && outputQuietForInstruction(now)) {
+            releaseDeferredSpeech(OutputGeneration.DeferEnd.QUIET);
+        }
     }
 
     /**
@@ -2728,6 +2942,13 @@ public final class SessionExecutor {
     private boolean sendInstruction(OutputGeneration.BumpReason reason, String name,
             java.util.function.Function<String, ProviderRequestFactory.InstructionsAppend> build, Runnable onFailure,
             boolean replayable) {
+        return sendInstruction(reason, name, build, onFailure, replayable, OutputGeneration.Pacing.NONE);
+    }
+
+    /** @param pacing 4회차 R2: 연습 발화 지시를 미룬 시간 · 까닭 · 다시 보냄(관측 사건에만 싣는다, 그 밖의 지시는 {@code NONE}) */
+    private boolean sendInstruction(OutputGeneration.BumpReason reason, String name,
+            java.util.function.Function<String, ProviderRequestFactory.InstructionsAppend> build, Runnable onFailure,
+            boolean replayable, OutputGeneration.Pacing pacing) {
         ProviderSession session = ctx.providerSession();
         if (session == null || !session.isOpen()) {
             return false;
@@ -2737,7 +2958,7 @@ public final class SessionExecutor {
         Instant now = ctx.services().clock().now();
         // 설계 개정 A4-b(3회차 V2): 보낼 때 출력이 조용했는지는 출력 세대가 마지막 조각 시각으로 정한다. 공급자 리더가 넣었지만 아직 처리하지 않은
         // 출력 조각이 있으면 말하는 중으로 본다
-        ctx.outputGen().bumpForInstruction(now, reason, eventId, pendingOutputChunks.get() > 0);
+        ctx.outputGen().bumpForInstruction(now, reason, eventId, pendingOutputChunks.get() > 0, pacing);
         ctx.segment().reset();
         ctx.transcripts().aiFinal("", false, now);
         ctx.timers().cancel(Kind.SEGMENT_QUIET);
@@ -3153,6 +3374,12 @@ public final class SessionExecutor {
             }
             if (practiceControlled
                     && (pendingPracticeSpeech == null || !pendingPracticeSpeech.matches(sealed.transcript()))) {
+                // 4회차 R2: 저절로 끝난 원문 읽기가 대조로 버려졌으면 한 번 다시 보낸다(아이 입력 재개로 닫은 구간은 아이가 말하는 중이라 다시 보내지 않는다)
+                PracticeAttempt again = pendingPracticeSpeech == null || movedOn ? null : resendableAttempt(pendingPracticeSpeech);
+                if (again != null) {
+                    resendAfterMismatch(sealed, again);
+                    return;
+                }
                 discard(sealed, GateDecision.DiscardReason.GATE_PATTERN, false);
                 return;
             }
@@ -3283,6 +3510,22 @@ public final class SessionExecutor {
             correctAfterDiscard(sealed, reason);
         }
         finishDiscard();
+    }
+
+    /**
+     * 4회차 R2: 승인 원문 읽기가 원문 대조로 버려졌다(덧붙임 · 첫머리 잘림). 구간은 지금처럼 GATE_PATTERN 폐기로 기록하고 낡은 조각을 버린 뒤, 실패를
+     * 알리기 전에 같은 지시를 같은 길(미루기 포함)로 한 번 다시 보낸다. 보낼 수 없으면 지금처럼 재생 실패다.
+     */
+    private void resendAfterMismatch(SegmentBuffer.Sealed sealed, PracticeAttempt again) {
+        guardrail.onDiscardedBeforeCheck();
+        recordDiscard(sealed, null, GateDecision.DiscardReason.GATE_PATTERN, true);
+        kr.mujoong.realtime.voice.PracticeSpeech speech = again.speech();
+        pendingPracticeSpeech = null;
+        practiceHold = true;
+        bumpOutput(OutputGeneration.BumpReason.PRACTICE_DISCARD);
+        if (!deliverPracticeAttempt(again)) {
+            practicePlayback(speech, kr.mujoong.realtime.practicelegacy.PracticePorts.Playback.FAILED);
+        }
     }
 
     private static boolean isGuardrailReason(GateDecision.DiscardReason reason) {
