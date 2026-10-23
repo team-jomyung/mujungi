@@ -279,6 +279,70 @@ MUJOONG_LIVE_EVAL_OUT=<폴더> ./gradlew --no-daemon :realtime-activity:lunaReac
 
 결과에서 볼 것: core — 발급 건수와 판(v6 · v4), `heard` 합계(`baseWithoutPartnerOpener` · `opportunityConditionCopied` · `targetHeard` · `praiseWords`가 0인지), 기회 문장이 친구 대사인지(사람이 읽음), 검토 사유 분포(INCOMPLETE_SCENE · GOAL_MISMATCH가 늘었는지), VARIANT 설명이 물음으로 끝나는지, 지연. realtime — 대본 아이의 기대 판정 일치(실제 Luna가 기준 대화의 판정을 내는지), 성공 뒤 친구 반응, 칭찬 · 채점 말 0, 도움 제안 화자 무중, 장면 BASE + VARIANT, 첫 코치 말틀이 예시를 그대로 말하지 않았는지, AI 아이 P1 ~ P4가 계획한 길로 갔는지, J4 짧은 수락 분류.
 
+### 11.1 실음성 연습 대화 하니스 — GPT-Live 실음성 · 합성 아이 음성 (시험 소스, 운영 코드 아님 — b008d72)
+
+텍스트 하니스는 생성형 발화를 텍스트 대리로 받고 승인 발화를 원문 그대로 적으므로, 게이트 · 출력 보류 · 승인 원문 대조 · 입력 전사 묶기를 거친 뒤 **아이가 실제로 들은 말**은 보지 못한다. 이 하니스는 그 빈칸을 채운다.
+
+- **realtime `PracticeVoiceDialogueLiveTest`**(`@Tag("gpt-live-practice")`, Gradle 작업 `gptLivePracticeTest`): 운영 실시간 세션 엔진 — `SessionExecutor`(게이트 · 생성형 슬롯 · 출력 보류 · 승인 원문 대조 · 입력 전사 묶기), `PracticeFlowRouter` → `PracticeConversation`, 운영 판정 조립 → 실제 Luna(시한은 운영 live-budget 그대로), 제브 OFF(F8) — 에 실제 GPT-Live 음성 세션(운영 `ProviderClient` · `ProviderConnector`, demo 호스트 규칙)을 붙여 연습 대화를 실제 시간으로 돌린다. 운영 시간 값은 `application.yml`을 그대로 묶어 실행부 · 흐름에 준다.
+  - 시험 대역은 셋뿐이다: 기기 WSS 끝점 → 가상 기기(`DeviceLink` 구현: 명령 ACK · START_SESSION에 DEVICE_READY, DEVICE_READY부터 CLOSE_TRANSPORT까지 20ms 입력 프레임을 계속 보냄, 받은 출력 묶음 · 승인 음성을 그 길이만큼 실제 시간으로 재생한 것으로 보고 PLAYBACK_MARK), 세션 행 전이 → 메모리(`InMemoryTransitions`), 기록기 DB → 메모리 저장소(운영 `AsyncRecorder` 그대로). 다음 목표 대본 요청은 쓰지 않는다(첫 목표만). **운영 코드는 바꾸지 않았다.** 관찰은 시험 쪽 감싸기로만 한다: 기록기 저장 입구(전사 행 · 세션 사건), 지표의 게이트 폐기 사유, 확장점과 그 출력 능력, 공급자 포트, 판정 포트.
+  - 아이: 대본 아이(기준 대본의 아이 대사 5줄, 기대 판정 대조)는 기준 대본에서, AI 아이(P1 · P2, 아이가 실제로 들은 말만 받는다)는 core 패키지(없으면 공유 고정 자료)에서 돈다. 아이 한 줄 = 글 → TTS(`/audio/speech`, `response_format: pcm` 24kHz 16비트 모노) → 20ms 프레임 → 무음. 기기 출력이 1.2초 조용하고 앞 줄 뒤 1.5초가 지났으며 흐름이 대답을 기다릴 때(무응답 시계가 걸린 입력 단계) 말한다. 말하지 않기로 하면(무응답 갈래) 운영 무응답 시계를 기다린다. 참여 확인에는 «응, 할래.», 종료 확인 질문에는 «아니, 더 할래.»(P2는 «응, 그만할래.»)라고 답한다.
+  - '들림' = 게이트를 지나 기기로 간 GPT-Live 구간의 전사 + 기기가 재생한 승인 음성 문구다. 게이트가 버린 구간은 '(안 들림)'과 사유 코드로 적는다: `APPROVED_TEXT_MISMATCH`(승인 원문을 기다리는데 다른 말), `UNREQUESTED_DURING_HOLD`(연습이 출력을 쥔 동안 요청 없이 나온 말), 그 밖은 운영 게이트 사유(`GATE_PATTERN` · `GATE_EMPTY` · `NOT_ACTIVE` 등). 게이트에 닿지도 않은 GPT-Live 말(출력 보류 중 버린 조각 · 세대가 바뀐 낡은 꼬리)은 `unheardBeforeGate`에 참고로 남긴다.
+  - 출력(`MUJOONG_LIVE_EVAL_OUT` 폴더, 텍스트 하니스와 같은 규칙): `practice-voice-dialogues.json`(전체 기록)과 `practice-voice-dialogues.md`(사람이 읽는 대화 기록). 차례마다 화자와 재생된 전사, 승인 원문 일치(«승인 원문 그대로 · 종류»), 폐기 구간과 사유, 아이 줄은 의도한 글 → GPT-Live 입력 전사(실행부가 묶은 확정 전사. 참여 확인 대답은 J1이 받은 전사, J1이 없으면 입력 전사 조각을 이은 글) · 실제 판정(지점 · 1 · 2순위 · 확률 · 지연 · 운영 시한 안인지) · 아이 말 끝 → 다음 AI 말 시작(6초를 넘으면 '긴 침묵'). 대화마다 점검표: 텍스트 하니스 항목(목표 표현 · 친구 반응 · 칭찬 말 · 도움 제안 화자 · 장면 수 · 빈칸 예문 · 되묻기 낱말 · 지시문 낱말 · 이모지 · 기호 · 변형 소재 · 기대 판정) + 승인 원문 그대로 재생 n/m · 생성형 발화 들림 n/m · 안 들린 구간(사유별) · 아이 전사가 의도와 다른 줄 · 응답 지연(중앙 · 최대 · 긴 침묵 수). 맨 위 합계: GPT-Live 사용 초(`session.usage.updated`) · 연결 초 · OpenAI 호출 수(판정 · AI 아이) · TTS 호출 수.
+  - 상한(env, 보수적 기본값 — 아래 표). 넘으면 진행 중 대화는 보호자 종료와 같은 길(`EndRequested GUARDIAN_STOP`)로 끝내고 상태에 사유(`TIME_CAP` · `GPT_LIVE_SECONDS_CAP` · `TTS_CALL_CAP` · `TEXT_CALL_CAP`)를 적으며, 남은 대화는 `SKIPPED`(사유 `DIALOGUE_CAP` · `GPT_LIVE_SECONDS_CAP` · `TTS_CALL_CAP` · `TEXT_CALL_CAP`)로 적는다. 판정이 상한에 걸리면 부르지 않고 보류(`NOT_CALLED_HARNESS_CAP`)로 적는다.
+  - 증거 종류: `REAL_API_SYNTHETIC_CHILD_VOICE` = **실제 API(GPT-Live 음성 · Luna 판정) · 합성 아이 음성(TTS)**. 실제 기기 · 실제 아이 결과가 아니다(R-M11). 아이 음성은 TTS가 만든 합성 음성이고 기기는 가상 기기다.
+  - 기본 `test` · `check` · CI에서 돌지 않는다: build-logic이 모든 모듈의 기본 test에서 `gpt-live-practice`를 빼고 키를 지우며(태그는 이름이 정확히 같아야 걸리므로 `gpt-live` 제외와 따로 둔다), 루트 `verifyGptLivePracticeIsolation`(check가 의존)이 작업 그래프 · 태그 · 키를 확인한다. 키가 없으면 결과 파일에 `SKIPPED_NO_KEY`만 쓰고 건너뛴다(통과 아님). 지난 실호출 결과는 `previous-run/`으로 옮긴다. 콘솔에는 개수와 파일 위치만 쓴다(R-F14). 키 값 · 요청 헤더 · 주소는 어떤 출력에도 쓰지 않는다(R-F3).
+- **배선 점검 `PracticeVoiceHarnessSelfCheckTest`**(`@Tag("practice-flow")`, 기본 test, 실제 API 없음): 루프백 가짜 GPT-Live(가짜 공급자 WS 서버 + 응답기 — 승인 원문 지시에는 그 speech, 그 밖의 지시에는 정해진 한 문장을 전사 + 음성으로 돌려주고, 아이 음성이 끝나면 그 음성의 글을 입력 전사 조각 둘로 보낸다) + 가짜 TTS(표식이 든 음 PCM) + 가짜 Luna로 대본 아이 1개 · AI 아이 P1 1개 대화를 운영 세션 엔진에서 끝까지 돌리고(P2는 대화 수 상한으로 `SKIPPED`), 일부러 승인 원문과 다르게 읽은 구간이 `APPROVED_TEXT_MISMATCH` · '(안 들림)'으로, 의도와 다른 입력 전사가 '의도와 다름'으로 적히는지, 대화 중 호출 상한에 닿으면 판정을 부르지 않고 보호자 종료 길로 끝낸 뒤 남은 대화를 `SKIPPED`로 적는지 본다. 운영 시간 값은 `application.yml` + `application-test.yml`이고, 구간 조용 시간 · 입력 전사 묶음 대기만 300ms · 400ms로 덮는다(test 프로필 50ms · 150ms는 루프백 조각 사이가 GC로 잠깐 멈추면 한 말을 둘로 자를 수 있다. 운영 800ms · 1500ms보다 짧다). 증거 종류 `FAKE_PROVIDER_SELF_CHECK`(테스트 대역 · 합성 대화). 이를 위해 test-support `FakeProviderWsServer`에 응답기 연결(`onReceive`)과 세션마다 오디오 시계 되돌리기(`resetAudioClock`, 실제 공급자처럼 세션마다 0부터)를 더했다. 둘 다 부르는 시험만 쓰므로 기존 시험 동작은 그대로다.
+
+실행(키 자리는 env 이름만. AI 아이를 core 패키지로 돌리려면 같은 출력 폴더로 core 하니스를 먼저 돌린다):
+
+```
+cd backend
+MUJOONG_LIVE_EVAL_OUT=<폴더> ./gradlew --no-daemon :realtime-activity:gptLivePracticeTest
+```
+
+| env | 기본값 | 쓰임 |
+|---|---|---|
+| `OPENAI_API_KEY` | (필수) | 셸 env로만 넣는다. GPT-Live · Luna · TTS가 같은 키를 쓴다. 없으면 SKIP(통과 아님) |
+| `MUJOONG_LIVE_EVAL_OUT` | `realtime-activity/build/live-eval/` | 출력 폴더(core · 텍스트 하니스와 같은 값이면 core 패키지를 읽는다) |
+| `MUJOONG_LIVE_TTS_MODEL` | `gpt-4o-mini-tts` | 아이 음성 TTS 모델(`tts-`로 시작하는 모델에는 목소리 지시를 보내지 않는다) |
+| `MUJOONG_LIVE_TTS_VOICE` | `nova` | TTS 목소리 |
+| `MUJOONG_LIVE_CHILD_MODES` | `SCRIPT,AI` | 아이 방식(`RULE`은 이 하니스에서 돌지 않는다) |
+| `OPENAI_JUDGE_MODEL` | 운영 기본값 | 판정 모델 |
+| `OPENAI_ANALYSIS_MODEL` | 운영 기본값 | AI 아이 모델 |
+| `MUJOONG_LIVE_VOICE_DIALOGUE_SECONDS` | `300` | 대화 하나의 시간 상한(초) |
+| `MUJOONG_LIVE_VOICE_TOTAL_SECONDS` | `1800` | 모든 대화의 GPT-Live 사용 초 합계 상한(공급자 보고와 연결 시간 중 큰 값으로 센다) |
+| `MUJOONG_LIVE_VOICE_MAX_DIALOGUES` | `8` | 돌릴 대화 수 상한(대본 1 + 패키지마다 AI P1 · P2) |
+| `MUJOONG_LIVE_VOICE_TTS_CALLS` | `120` | TTS 호출 수 상한 |
+| `MUJOONG_LIVE_VOICE_TEXT_CALLS` | `200` | 판정 + AI 아이 호출 수 상한 |
+
+상한 값이 숫자가 아니거나 0 이하면 부르기 전에 거절한다. 대화 수는 대본 아이 1 + core 패키지마다 AI 아이 2(P1 · P2)이므로, 패키지가 4개면 9개다 — 기본 상한 8이면 마지막 P2가 `DIALOGUE_CAP`으로 건너뛰므로 다 돌리려면 `MUJOONG_LIVE_VOICE_MAX_DIALOGUES=9`를 준다(시간 · 사용 초 상한도 함께 본다). 출력 파일: `practice-voice-dialogues.json` · `practice-voice-dialogues.md`. 실행 환경의 프록시 처리는 `docs/practice-live-fixes.md` 12절을 본다(TTS도 JDK 기본 프록시 선택기를 쓴다).
+
+결과에서 볼 것: 승인 원문 그대로 재생 n/m(GPT-Live가 승인 원문을 바꿔 읽어 버려진 줄), 안 들린 구간과 사유(특히 `APPROVED_TEXT_MISMATCH` · `UNREQUESTED_DURING_HOLD`), 생성형 발화가 실제로 들렸는지, 아이 입력 전사가 의도와 다른 줄과 그때의 판정, 아이 말 끝 → 다음 말 지연 · 긴 침묵, 첫 대답 전 들은 말에 목표 표현, 첫 코치 도움이 빈칸 예문을 그대로 말했는지, 이모지 · 기호. 실제 기기 · 실제 아이에서 같은지는 이 결과로 말할 수 없다.
+
+하니스 가정(DLG-A36 ~ DLG-A43, 14.9절 뒤 번호):
+
+- **DLG-A36** 기기 승인 음성(INTRO_PRACTICE · CLOSING 등)은 녹음 파일을 재생하지 않고 글자 수 / 초당 6자(최소 1.5초)로 재생 시간을 어림한다. 저장소 `infra/seed-audio/*.wav`는 글 길이와 맞지 않는 자리 파일(INTRO_PRACTICE 4.0초 · CLOSING 2.0초)이라 쓰지 않았다. 승인 음성 재생 중 아이가 끼어들지 않는다.
+- **DLG-A37** 가상 기기는 DEVICE_READY부터 CLOSE_TRANSPORT까지 마이크를 끄지 않고 무음 프레임을 계속 보낸다(운영 기기 웹과 같은 가정). 출력 재생 중 반향 · 소음은 없다.
+- **DLG-A38** 아이는 기기 출력이 1.2초 조용하고 흐름이 대답을 기다릴 때만 말한다(재생 중 끼어들기 · 겹쳐 말하기 없음). 1.2초 · 1.5초는 하니스 값이고 운영 기준이 아니다.
+- **DLG-A39** 참여 확인 대답은 모든 아이가 «응, 할래.»이고, 종료 확인 질문 대답은 P2만 «응, 그만할래.», 나머지는 «아니, 더 할래.»다. 참여 확인 대답은 운영 참여 규칙(`JoinTracker`)이 낱말로 먼저 가르고 불분명할 때만 J1 판정을 부르며, 실행부가 전사 행으로 남기지 않는다(참여 전 아이 전사 미저장). 그래서 그 줄의 들은 전사는 J1 판정이 받은 확정 전사, 판정이 없으면 그 사이 GPT-Live 입력 전사 조각을 이은 글이다(`transcriptSource`로 구분).
+- **DLG-A40** '긴 침묵'은 아이 말 끝 → 다음 AI 말(GPT-Live 묶음 · 승인 음성) 재생 시작이 6초를 넘는 차례다(하니스 참고 값).
+- **DLG-A41** 판정 시한은 운영 live-budget(4초) 그대로다. 넘으면 운영처럼 TIMEOUT 보류로 흐름이 꺾이고, 그 사실을 판정 줄에 '시한 넘음'으로 적는다.
+- **DLG-A42** 출력 묶음의 화자는 그 구간을 요청한 연습 발화의 화자다. 요청 없이 들린 구간은 'GPT-Live(요청 없음)'으로 적는다. 폐기 사유 세분(`APPROVED_TEXT_MISMATCH` · `UNREQUESTED_DURING_HOLD`)은 실행기 스레드에서 지표의 폐기 사유 바로 뒤에 오는 AI 확정 거짓 행으로 짝짓는다.
+- **DLG-A43** 대화 하나는 세션 하나다(세션마다 GPT-Live 연결 하나). 핵심 낱말 · 목표 표현 비교는 텍스트 하니스와 같은 참고 값(`HeardWords`)이다.
+
+하니스 위험: ① GPT-Live 입력 전사가 TTS 합성 음성을 실제 아이 말보다 잘 알아들을 수 있다(실제 아이 · 실제 기기 마이크 · 소음에서는 전사 차이가 더 클 수 있다). ② 가상 기기는 재생 시간을 바이트 수로 셈하므로 기기 버퍼링 · 재생 지연 · 네트워크 흔들림이 없다. 지연 수치는 서버 쪽 지연만 담는다. ③ 대화 하나가 실제 시간으로 몇 분이 걸리고 GPT-Live 사용 초가 쌓인다 — 상한을 env로 줄여서 돌린다. ④ 승인 음성 재생 시간 어림이 실제 녹음보다 짧거나 길면 아이가 말하는 시점과 무응답 시계의 겹침이 달라진다. ⑤ 배선 점검은 루프백 가짜의 단순한 응답(승인 원문을 곧바로 그대로 읽음 · 생성형은 정해진 한 문장)만 보므로, 실제 GPT-Live의 낡은 꼬리 · 자동 응답 · 덧붙임이 어떻게 분류되는지는 실측 결과로만 확인된다.
+
+결과(테스트 대역 · 합성 대화, 실제 AI 없음, b008d72):
+
+| 무엇 | 결과 |
+|---|---|
+| 배선 점검 `PracticeVoiceHarnessSelfCheckTest` | 7건 통과(한 번 35 ~ 40초, 연속 네 번 통과). 대본 아이: 기준 대화 순서 그대로 승인 원문 7/7 · 생성형 4/4가 들렸고 아이 전사 0/6 다름, 기대 판정 5/5, 장면 BASE(AFTER_REASK) · VARIANT(AFTER_HELP). AI 아이 P1(공유 고정 자료): 승인 원문 5/5 · 생성형 4/4, 장면 둘 다 AFTER_REASK. P2는 `DIALOGUE_CAP`으로 SKIPPED. 다르게 읽은 장면 설명은 '(안 들림) … 폐기: 승인 원문과 다름(APPROVED_TEXT_MISMATCH) · 원문 «…»'으로 적히고 장면이 미실시로 정리됐다. 호출 상한 2회에 닿은 대화는 세 번째 판정을 부르지 않고 `TEXT_CALL_CAP`으로 끝났으며(보호자 종료 길, 세션 ENDED) 남은 대화는 `SKIPPED(TEXT_CALL_CAP)` |
+| 키 없이 `gptLivePracticeTest` | 시험 1건 SKIPPED, 결과 파일에 `SKIPPED_NO_KEY`만 씀(실호출 없음) |
+| 격리 검사 | `verifyGptLivePracticeIsolation` 통과(check · test 그래프에 작업 없음, 모든 기본 test가 태그 제외 · 키 없음, 작업 포함 목록 = `gpt-live-practice`). 기존 네 격리 검사도 통과 |
+| 전체 `clean check verifyBootJarHasNoTestClasses` | contract-model 327 · test-support 37 · realtime 1985건 통과(줄 커버리지 contract-model 98.52% · realtime 93.94%), 운영 jar 검사 두 앱 통과. core 1793건 중 `GraphWorkflowIT` 1건 실패 — 차가운 Neo4j에 2초 예산을 고정한 기존 시험(14.12절)이 이번에도 같은 줄(`initializeChild`)에서 실패했고 단독 재실행도 같다. 이번 변경은 core를 건드리지 않는다. 그 실행 기록으로 잰 core 줄 커버리지 96.18%(하한 통과) |
+
+실제 API(GPT-Live 음성 · Luna 판정 · TTS) 결과와 실제 기기 · 실제 아이 결과는 없다. 실측은 오케스트레이터가 위 명령으로 돌린다.
+
 ## 12. 시험 결과
 
 ### 12.1 테스트 대역 · 합성 대화 (이 브랜치, 실제 AI 없음)
