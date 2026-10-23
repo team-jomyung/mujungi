@@ -216,12 +216,14 @@ class RealtimeLogHygieneIT {
 
         // 아이 조각 → AI 출력 조각 · 음성 → 응답 끝 없이 공급자 오류(code에 표식)
         env.provider.emit(providerEvent("session.input_transcript.delta", "item-x", childPartial));
-        env.provider.emitSpeech(aiPartial, List.of(kr.mujoong.realtime.testing.RealtimeItEnvironment.audiblePcm(4800)));
+        // 완성된 시간 단위는 오류 전에 승인·재생될 수 있다. 여기서는 전사 끝까지 음성이 오지 않은 구간을 검증한다.
+        env.provider.emitSpeechPrefix(aiPartial, List.of(kr.mujoong.realtime.testing.RealtimeItEnvironment.audiblePcm(4800)),
+                java.time.Duration.ofMillis(100));
         env.provider.emitError("server_error", providerCode, null);
 
-        // 빈 수집으로 통과하지 않는다: 끊김 WARN 줄이 나왔고, 완결 안 된 구간은 폐기돼 대기 문구가 나갔다(출력 0바이트)
+        // 빈 수집으로 통과하지 않는다: 고정 오류 코드가 남고 미완성 응답은 폐기된다. 연결 끊김으로 오인하지 않는다.
         awaitTrue(() -> logs.events(EventCode.APP_ERROR).stream()
-                .anyMatch(event -> "ProviderDisconnected".equals(LogCapture.attrs(event).get("errorKind"))), "끊김 줄");
+                .anyMatch(event -> "ProviderUnclassifiedError".equals(LogCapture.attrs(event).get("errorKind"))), "고정 공급자 오류 줄");
         device.await(envelope -> envelope.payload() instanceof PlayApprovedContent play
                 && PlayApprovedContent.WAITING_FILLER.equals(play.contentCode()), WAIT);
         assertThat(device.received(WsMessageType.OUTPUT_BEGIN)).isEmpty();

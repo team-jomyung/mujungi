@@ -110,6 +110,7 @@ class PracticeGeneratedSpeechTest {
 
     @Test void approvedMismatchIsDistinctFromAForbiddenPattern() {
         start(true);
+        extension.recovery = true;
         PracticeSpeech speech = PracticeSpeech.scenario(UUID.randomUUID(), UUID.randomUUID(), 1,
                 "친구", "나는 블록 놀이를 하고 싶어.", PracticeSpeech.ReadingCue.SCENE);
         assertThat(extension.out.speak(speech)).isTrue(); h.settleSend();
@@ -120,6 +121,11 @@ class PracticeGeneratedSpeechTest {
                 .containsEntry("generatedSpeech", false)
                 .containsKey("expectedChars");
         assertThat(guard.count()).isZero(); assertThat(h.link.outputs()).isEmpty();
+        assertThat(extension.mismatches).singleElement().satisfies(event -> {
+            assertThat(event.correlationId()).isEqualTo(speech.correlationId());
+            assertThat(event.value()).isEqualTo(speech);
+        });
+        assertThat(extension.endFacts(speech.correlationId())).isEmpty();
     }
 
     private static final String INSTRUCTION = "친구로서 방금 말을 한 번 더 물어보세요";
@@ -424,6 +430,7 @@ class PracticeGeneratedSpeechTest {
     @Test
     void overlappingInputCannotMakeAnAlteredApprovedScriptPlayable() {
         start(true);
+        extension.recovery = true;
         UUID slot=UUID.randomUUID();
         extension.out.speak(PracticeSpeech.scenario(slot,UUID.randomUUID(),1,"PEER","친구가 공을 들고 있어."));
         h.settleSend();
@@ -478,6 +485,7 @@ class PracticeGeneratedSpeechTest {
     private static final class Recording implements PracticeSessionExtension {
         PracticeOutput out;
         boolean introduction;
+        boolean recovery;
         UUID replySlot;
         final List<PlaybackFact> facts = new ArrayList<>();
         final List<GuardrailBlockedEvent> blocked = new ArrayList<>();
@@ -495,6 +503,7 @@ class PracticeGeneratedSpeechTest {
         }
 
         @Override public boolean collectingIntroduction() { return introduction; }
+        @Override public boolean handlesAudioRecovery() { return recovery; }
         @Override public boolean canYieldUnplayedSpeech() { return !introduction; }
 
         @Override

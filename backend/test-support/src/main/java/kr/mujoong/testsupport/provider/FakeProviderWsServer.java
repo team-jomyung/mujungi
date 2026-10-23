@@ -292,8 +292,18 @@ public final class FakeProviderWsServer implements AutoCloseable {
 
     /** AI 말 하나(전사 + 음성). 지시에 대한 응답이면 확인 end_ms 뒤에서 시작하고 앞에 채움 음성을 둔다({@link #emitTurn}). */
     public void emitSpeech(String aiText, List<byte[]> pcmChunks) {
+        emitSpeech(aiText, pcmChunks, 0);
+    }
+
+    /** 전사 끝까지의 음성이 오기 전에 공급자 오류가 나는 시험용 미완성 구간. */
+    public void emitSpeechPrefix(String aiText, List<byte[]> pcmChunks, Duration missingTail) {
+        if (missingTail == null || missingTail.toMillis() <= 0) throw new IllegalArgumentException("missing tail must be positive");
+        emitSpeech(aiText, pcmChunks, missingTail.toMillis());
+    }
+
+    private void emitSpeech(String aiText, List<byte[]> pcmChunks, long missingTailMs) {
         long clock = audioClockMs.get();
-        long total = pcmChunks.stream().mapToLong(chunk -> chunk.length / 48L).sum();
+        long total = pcmChunks.stream().mapToLong(chunk -> chunk.length / 48L).sum() + missingTailMs;
         long pending = pendingAckEndMs;
         if (pending >= 0) {
             pendingAckEndMs = -1L;

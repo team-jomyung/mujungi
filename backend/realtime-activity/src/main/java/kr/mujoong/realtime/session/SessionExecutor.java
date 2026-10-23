@@ -3387,9 +3387,13 @@ public final class SessionExecutor {
                     pendingPracticeSpeech = null;
                     practiceHold = true;
                     bumpOutput(OutputGeneration.BumpReason.PRACTICE_DISCARD);
-                    ctx.mailbox().putSafety(new SessionMailbox.PracticeEvent(new PracticeSessionExtension.ExtensionEvent(
-                            PracticeSessionExtension.ExtensionEvent.Kind.ASYNC_RESULT, "approved-text-mismatch",
-                            rejectedSpeech.correlationId(), rejectedSpeech)));
+                    if (practice.handlesAudioRecovery()) {
+                        ctx.mailbox().putSafety(new SessionMailbox.PracticeEvent(new PracticeSessionExtension.ExtensionEvent(
+                                PracticeSessionExtension.ExtensionEvent.Kind.ASYNC_RESULT, "approved-text-mismatch",
+                                rejectedSpeech.correlationId(), rejectedSpeech)));
+                    } else {
+                        practicePlayback(rejectedSpeech, kr.mujoong.realtime.practicelegacy.PracticePorts.Playback.FAILED);
+                    }
                     return;
                 }
                 discard(sealed, GateDecision.DiscardReason.GATE_PATTERN, false, null, true,
