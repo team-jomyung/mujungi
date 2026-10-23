@@ -35,6 +35,8 @@ final class SessionClocks {
 
         void onJoinSelfStartExpired();
 
+        void onResponseStallExpired();
+
         void onInputTranscriptQuiet();
 
         void onJudgmentTimer(JudgmentTurn.TimerKind kind);
@@ -88,6 +90,7 @@ final class SessionClocks {
             case SEGMENT_QUIET -> env.onOutputQuiet();
             case INSTRUCTION_WAIT -> env.onInstructionWaitExpired();
             case JOIN_SELF_START -> env.onJoinSelfStartExpired();
+            case RESPONSE_STALL -> env.onResponseStallExpired();
             case INPUT_TRANSCRIPT_QUIET -> env.onInputTranscriptQuiet();
             case JUDGMENT_LIVE -> env.onJudgmentTimer(JudgmentTurn.TimerKind.LIVE);
             case JUDGMENT_READY -> env.onJudgmentTimer(JudgmentTurn.TimerKind.READY);

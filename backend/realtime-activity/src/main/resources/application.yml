@@ -131,6 +131,8 @@ mujoong:
       new-speech-margin: 700ms
       # 참여 수락 때 보관한 응답이 비어 있으면 첫 응답 지시 전에 모델이 스스로 답을 시작하기를 기다린다(0이면 바로 지시, 2026-10-22 임시값)
       join-self-start-wait: 1s
+      # 자유대화 응답 정체 안전망(JIRA-270): 아이 말 확정 · 미루는 말로 끝난 응답 뒤 이만큼 새 출력 · 아이 말이 없으면 이어 말하기 지시 1회(0이면 끔, 2026-10-23 임시값)
+      response-stall-wait: 6s
   outbox:
     poll-interval: 500ms
     batch-size: 20
