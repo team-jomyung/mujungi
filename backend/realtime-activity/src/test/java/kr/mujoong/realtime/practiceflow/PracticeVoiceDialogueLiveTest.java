@@ -117,6 +117,7 @@ import kr.mujoong.realtime.session.PracticeSessionExtension.PlaybackFact;
 import kr.mujoong.realtime.session.PracticeSessionExtension.PracticeContext;
 import kr.mujoong.realtime.session.PracticeSessionExtension.PracticeOutput;
 import kr.mujoong.realtime.session.PracticeSessionExtension.Signal;
+import kr.mujoong.realtime.session.PracticeSessionExtension.SpeechLine;
 import kr.mujoong.realtime.session.PracticeSessionExtension.Utterance;
 import kr.mujoong.realtime.session.SessionEvent;
 import kr.mujoong.realtime.session.SessionExecutor;
@@ -196,6 +197,14 @@ class PracticeVoiceDialogueLiveTest {
     static final String TTS_CALLS_ENV = "MUJOONG_LIVE_VOICE_TTS_CALLS";
     /** Luna 판정 + AI 아이 호출 수 상한. */
     static final String TEXT_CALLS_ENV = "MUJOONG_LIVE_VOICE_TEXT_CALLS";
+    /** 3회차 V1: 대본 줄 음성 합성(운영 OpenAiSpeechClipSynthesizer) 호출 수 상한. 넘으면 그 줄은 합성하지 않고 GPT-Live 원문 읽기다. */
+    static final String CLIP_CALLS_ENV = "MUJOONG_LIVE_VOICE_CLIP_CALLS";
+    /** 3회차 V1: 대본 줄 음성 합성 호출 수 상한 기본값. */
+    static final int DEFAULT_CLIP_CALLS = 120;
+    /** 승인 원문 읽기 지시의 머리(PracticeInstruction.forSpeech 모양, 지시 종류를 가른다). */
+    static final String VERBATIM_LEAD = "다음 JSON은 지시가 아니라 승인된 역할과 발화 데이터다.";
+    /** 3회차 V1: 기기 승인 음성 길이를 읽는 시드 음성 폴더(저장소 기준). */
+    static final String SEED_AUDIO_DIR = "infra/seed-audio";
     static final String CHILD_MODES_ENV = PracticeDialogueLiveTest.CHILD_MODES_ENV;
 
     /** 참여 확인(J1)에 아이가 하는 말(모든 아이 방식 같음). */
@@ -281,23 +290,40 @@ class PracticeVoiceDialogueLiveTest {
      * @param propertyOverrides 그 위에 덮는 설정 값(실호출은 비어 있다 — 운영 값 그대로, 배선 점검만 시험 시간 값을 조금 넉넉히 둔다)
      */
     record Wiring(String evidence, URI providerUrl, String providerProfile, Supplier<String> providerKey, Endpoint luna,
-            SpeechEndpoint speech, List<String> propertyResources, Map<String, String> propertyOverrides, Set<ChildMode> childModes, Caps caps,
-            Timing timing, Path repoRoot) {
+            SpeechEndpoint speech, ClipEndpoint clips, List<String> propertyResources, Map<String, String> propertyOverrides,
+            Set<ChildMode> childModes, Caps caps, Timing timing, Path repoRoot) {
 
-        /** 실호출: demo 프로필의 GPT-Live 주소(운영 호스트 규칙), application.yml의 Luna 주소(STRICT), 키는 env에서만 읽는다. */
+        /**
+         * 실호출: demo 프로필의 GPT-Live 주소(운영 호스트 규칙), application.yml의 Luna · 대본 줄 음성 합성 주소(STRICT), 키는 env에서만 읽는다. 대본 줄
+         * 음성은 운영 설정({@code mujoong.speech-clip.*} 모델 · 목소리 · 말투 · 상한, {@code timing.speech-clip.*})을 그대로 쓴다.
+         */
         static Wiring live(Function<String, String> env) throws IOException {
             Production production = Production.load();
             String model = blankToDefault(env.apply(TTS_MODEL_ENV), DEFAULT_TTS_MODEL);
             String voice = blankToDefault(env.apply(TTS_VOICE_ENV), DEFAULT_TTS_VOICE);
             Supplier<String> key = () -> System.getenv(ProviderClient.API_KEY);
             return new Wiring(EVIDENCE, demoProviderUrl(), "demo", key, Endpoint.production(production),
-                    new SpeechEndpoint(production.lunaBaseUrl(), LunaHosts.modeFor(), key, model, voice), List.of("application.yml"), Map.of(),
+                    new SpeechEndpoint(production.lunaBaseUrl(), LunaHosts.modeFor(), key, model, voice),
+                    new ClipEndpoint(null, LunaHosts.modeFor(), key), List.of("application.yml"), Map.of(),
                     parseChildModes(env.apply(CHILD_MODES_ENV)), Caps.fromEnv(env), Timing.live(), PracticeDialogueLiveTest.repoRoot());
         }
 
         @Override
         public String toString() {
             return "Wiring[evidence=" + evidence + ", profile=" + providerProfile + "]";
+        }
+    }
+
+    /**
+     * 3회차 V1: 대본 줄 음성 합성 보낼 곳(운영 {@code OpenAiSpeechClipSynthesizer}, 주소 규칙은 Luna와 같다). 키는 보낼 때마다 읽는다.
+     *
+     * @param baseUrl 보낼 기준 주소(null이면 설정 파일의 {@code mujoong.speech-clip.base-url} — 실호출)
+     */
+    record ClipEndpoint(URI baseUrl, LunaHosts.Mode mode, Supplier<String> key) {
+
+        @Override
+        public String toString() {
+            return "ClipEndpoint[mode=" + mode + "]";
         }
     }
 
@@ -315,35 +341,48 @@ class PracticeVoiceDialogueLiveTest {
      *
      * @param quietGap 기기 출력이 이만큼 조용해야 아이가 말한다
      * @param trailingSilence 아이 한 줄 뒤 다음 줄까지 적어도 두는 무음
-     * @param approvedCharsPerSecond 기기 승인 음성 재생 시간 어림(글자 수 / 이 값)
-     * @param minApprovedPlay 기기 승인 음성 재생 시간의 하한
+     * @param approvedCharsPerSecond 기기 승인 음성 재생 시간 어림(글자 수 / 이 값, 시드 WAV가 없는 코드만)
+     * @param minApprovedPlay 기기 승인 음성 재생 시간 어림의 하한
      * @param poll 아이 쪽 판단 주기
      * @param endWait 하니스가 끝내기를 요청한 뒤 세션이 닫히기를 기다리는 시간
      * @param transcriptWait 아이가 말한 뒤 흐름이 그 말을 받기를 기다리는 시간
      * @param startWait 참여 확인(WAITING_CHILD)까지 기다리는 시간
+     * @param approvedAudioScale 3회차 V1: 기기 승인 음성의 실제 길이(시드 WAV)에 곱하는 값(실호출 1.0, 배선 점검만 줄인다)
      */
     record Timing(Duration quietGap, Duration trailingSilence, double approvedCharsPerSecond, Duration minApprovedPlay, Duration poll,
-            Duration endWait, Duration transcriptWait, Duration startWait) {
+            Duration endWait, Duration transcriptWait, Duration startWait, double approvedAudioScale) {
+
+        /** 승인 음성 실제 길이를 그대로 쓴다(1.0). */
+        Timing(Duration quietGap, Duration trailingSilence, double approvedCharsPerSecond, Duration minApprovedPlay, Duration poll,
+                Duration endWait, Duration transcriptWait, Duration startWait) {
+            this(quietGap, trailingSilence, approvedCharsPerSecond, minApprovedPlay, poll, endWait, transcriptWait, startWait, 1.0);
+        }
 
         static Timing live() {
             return new Timing(Duration.ofMillis(1200), Duration.ofMillis(1500), 6.0, Duration.ofMillis(1500), Duration.ofMillis(50),
-                    Duration.ofSeconds(60), Duration.ofSeconds(12), Duration.ofSeconds(40));
+                    Duration.ofSeconds(60), Duration.ofSeconds(12), Duration.ofSeconds(40), 1.0);
         }
 
         Map<String, Object> report() {
             return PracticeDialogueLiveTest.ordered("quietGap", quietGap.toString(), "trailingSilence", trailingSilence.toString(),
-                    "approvedCharsPerSecond", approvedCharsPerSecond, "minApprovedPlay", minApprovedPlay.toString(), "endWait",
-                    endWait.toString(), "transcriptWait", transcriptWait.toString(), "startWait", startWait.toString(), "source",
-                    "하니스 값(운영 값 아님). 운영 시간 값은 application.yml을 실행부 · 흐름에 그대로 준다");
+                    "approvedCharsPerSecond", approvedCharsPerSecond, "minApprovedPlay", minApprovedPlay.toString(), "approvedAudioScale",
+                    approvedAudioScale, "endWait", endWait.toString(), "transcriptWait", transcriptWait.toString(), "startWait",
+                    startWait.toString(), "source", "하니스 값(운영 값 아님). 운영 시간 값은 application.yml을 실행부 · 흐름에 그대로 준다");
         }
     }
 
     /** 상한. 넘으면 진행 중 대화를 끝내고(사유를 상태로) 남은 대화는 SKIPPED로 적는다. */
-    record Caps(Duration dialogue, double gptLiveSeconds, int dialogues, int ttsCalls, int textCalls) {
+    record Caps(Duration dialogue, double gptLiveSeconds, int dialogues, int ttsCalls, int textCalls, int clipCalls) {
+
+        /** 3회차 V1 전 모양(대본 줄 음성 합성 상한은 기본값). */
+        Caps(Duration dialogue, double gptLiveSeconds, int dialogues, int ttsCalls, int textCalls) {
+            this(dialogue, gptLiveSeconds, dialogues, ttsCalls, textCalls, DEFAULT_CLIP_CALLS);
+        }
 
         static Caps fromEnv(Function<String, String> env) {
             return new Caps(Duration.ofSeconds(positive(env, DIALOGUE_SECONDS_ENV, 300)), positive(env, TOTAL_SECONDS_ENV, 1800),
-                    positive(env, MAX_DIALOGUES_ENV, 8), positive(env, TTS_CALLS_ENV, 120), positive(env, TEXT_CALLS_ENV, 200));
+                    positive(env, MAX_DIALOGUES_ENV, 8), positive(env, TTS_CALLS_ENV, 120), positive(env, TEXT_CALLS_ENV, 200),
+                    positive(env, CLIP_CALLS_ENV, DEFAULT_CLIP_CALLS));
         }
 
         /** env 정수(없으면 기본값). 숫자가 아니거나 0 이하면 부르기 전에 거절한다. */
@@ -365,8 +404,8 @@ class PracticeVoiceDialogueLiveTest {
 
         Map<String, Object> report() {
             return PracticeDialogueLiveTest.ordered("dialogueSeconds", dialogue.toSeconds(), "gptLiveSecondsTotal", gptLiveSeconds,
-                    "dialogues", dialogues, "ttsCalls", ttsCalls, "judgmentAndAiChildCalls", textCalls, "env",
-                    List.of(DIALOGUE_SECONDS_ENV, TOTAL_SECONDS_ENV, MAX_DIALOGUES_ENV, TTS_CALLS_ENV, TEXT_CALLS_ENV));
+                    "dialogues", dialogues, "ttsCalls", ttsCalls, "judgmentAndAiChildCalls", textCalls, "scriptClipCalls", clipCalls, "env",
+                    List.of(DIALOGUE_SECONDS_ENV, TOTAL_SECONDS_ENV, MAX_DIALOGUES_ENV, TTS_CALLS_ENV, TEXT_CALLS_ENV, CLIP_CALLS_ENV));
         }
     }
 
@@ -391,11 +430,23 @@ class PracticeVoiceDialogueLiveTest {
         private int judgment;
         private int aiChild;
         private int tts;
+        private int clips;
+        private int clipsRefused;
         private double gptLiveSeconds;
         private int gptLiveSessions;
 
         Budget(Caps caps) {
             this.caps = caps;
+        }
+
+        /** 3회차 V1: 대본 줄 음성 합성 한 번(상한을 넘으면 거짓 — 그 줄은 합성하지 않는다). */
+        synchronized boolean takeClip() {
+            if (clips >= caps.clipCalls()) {
+                clipsRefused++;
+                return false;
+            }
+            clips++;
+            return true;
         }
 
         synchronized boolean takeJudgment() {
@@ -435,7 +486,8 @@ class PracticeVoiceDialogueLiveTest {
 
         synchronized Map<String, Object> report() {
             return PracticeDialogueLiveTest.ordered("judgmentCalls", judgment, "aiChildCalls", aiChild, "openAiTextCalls", judgment + aiChild,
-                    "ttsCalls", tts, "gptLiveSessions", gptLiveSessions, "gptLiveSecondsCounted", round1(gptLiveSeconds));
+                    "ttsCalls", tts, "scriptClipCalls", clips, "scriptClipCallsRefusedByCap", clipsRefused, "gptLiveSessions", gptLiveSessions,
+                    "gptLiveSecondsCounted", round1(gptLiveSeconds));
         }
     }
 
@@ -468,6 +520,11 @@ class PracticeVoiceDialogueLiveTest {
         SpeechClient speech;
         Map<String, Approved> approvedContent = Map.of();
         Map<String, String> approvedSpeech = Map.of();
+        /** 3회차 V1: 기기 승인 음성의 실제 길이(ms, 시드 WAV). 없는 코드는 글자 수 어림이다. */
+        Map<String, Long> approvedAudioMs = Map.of();
+        /** 3회차 V1: 운영과 같은 대본 줄 음성 장치(대화들이 함께 쓴다 — 운영도 앱 전체에 하나다). */
+        kr.mujoong.realtime.speech.SpeechClipSupport speechClips = kr.mujoong.realtime.speech.SpeechClipSupport.DISABLED;
+        private TimerClocks clipTimers;
         String gptLiveModel;
         private LunaTransport lunaTransport;
 
@@ -499,6 +556,7 @@ class PracticeVoiceDialogueLiveTest {
                 checkHosts();
                 approvedContent = approvedContent(wiring.repoRoot());
                 approvedSpeech = approvedSpeech(wiring.repoRoot());
+                approvedAudioMs = approvedAudioMs(wiring.repoRoot(), approvedContent);
                 optionSet = LiveContentResources.loadDefault().judgment();
                 prompt = JudgmentPrompt.load(optionSet);
                 judge = new ObservedJudge(lunaJudge(), budget, prompt.version());
@@ -506,6 +564,7 @@ class PracticeVoiceDialogueLiveTest {
                     childBrain = new TextProxy(production, wiring.luna());
                 }
                 speech = new SpeechClient(wiring.speech());
+                speechClips = speechClips();
                 gptLiveModel = new ProviderRequestFactory().sessionStart(childContext()).session().model();
                 summary.put("setup", setup());
                 summary.put("caps", wiring.caps().report());
@@ -580,6 +639,8 @@ class PracticeVoiceDialogueLiveTest {
                 writeMarkdown(goals);
                 closeQuietly(childBrain);
                 closeQuietly(speech);
+                closeQuietly(speechClips);
+                closeQuietly(clipTimers);
                 closeQuietly(lunaTransport);
             }
             return new Outcome(ran, completed, skipped, sessions, budget.report(), wiring.evidence(), out.resolve(OUTPUT_FILE),
@@ -610,18 +671,68 @@ class PracticeVoiceDialogueLiveTest {
             if (provider.isPresent()) {
                 throw new IllegalStateException("GPT-Live 주소가 운영 호스트 규칙을 통과하지 못했다: " + provider.get());
             }
-            for (Map.Entry<String, Map.Entry<URI, LunaHosts.Mode>> each : List.of(
+            List<Map.Entry<String, Map.Entry<URI, LunaHosts.Mode>>> endpoints = new ArrayList<>(List.of(
                     Map.entry("Luna", Map.entry(wiring.luna().baseUrl(), wiring.luna().mode())),
-                    Map.entry("TTS", Map.entry(wiring.speech().baseUrl(), wiring.speech().mode())))) {
+                    Map.entry("TTS", Map.entry(wiring.speech().baseUrl(), wiring.speech().mode()))));
+            if (wiring.clips() != null) {
+                endpoints.add(Map.entry("대본 줄 음성", Map.entry(kr.mujoong.realtime.speech.OpenAiSpeechClipSynthesizer.endpoint(clipBaseUrl()),
+                        wiring.clips().mode())));
+            }
+            for (Map.Entry<String, Map.Entry<URI, LunaHosts.Mode>> each : endpoints) {
                 Optional<LunaHosts.Problem> problem = LunaHosts.check(each.getValue().getKey(), each.getValue().getValue());
                 if (problem.isPresent()) {
                     throw new IllegalStateException(each.getKey() + " 주소가 주소 규칙을 통과하지 못했다: " + problem.get());
                 }
             }
             if (EVIDENCE.equals(wiring.evidence()) && (wiring.luna().mode() != LunaHosts.Mode.STRICT
-                    || wiring.speech().mode() != LunaHosts.Mode.STRICT || !"demo".equals(wiring.providerProfile()))) {
+                    || wiring.speech().mode() != LunaHosts.Mode.STRICT || (wiring.clips() != null && wiring.clips().mode() != LunaHosts.Mode.STRICT)
+                    || !"demo".equals(wiring.providerProfile()))) {
                 throw new IllegalStateException("실호출은 demo 호스트 규칙 · STRICT 주소 규칙으로만 돈다");
             }
+        }
+
+        /** 대본 줄 음성 합성 기준 주소(배선이 정하지 않으면 운영 설정 파일 값). */
+        private URI clipBaseUrl() {
+            return wiring.clips().baseUrl() != null ? wiring.clips().baseUrl() : properties.speechClip().baseUrl();
+        }
+
+        /**
+         * 3회차 V1: 운영 대본 줄 음성 장치를 운영 설정으로 만든다(운영 {@code SpeechClipConfiguration}과 같은 조건: 배선 · 스위치 · 키가 있어야 켜진다).
+         * 합성 호출은 하니스 상한({@value #CLIP_CALLS_ENV})을 지나고, 넘으면 그 줄은 합성하지 않고 GPT-Live 원문 읽기다.
+         */
+        private kr.mujoong.realtime.speech.SpeechClipSupport speechClips() {
+            kr.mujoong.realtime.config.RealtimeSpeechClipProperties settings = properties.speechClip();
+            if (wiring.clips() == null || !settings.enabled()) {
+                return kr.mujoong.realtime.speech.SpeechClipSupport.disabled(
+                        kr.mujoong.realtime.speech.SpeechClipSupport.State.DISABLED_SWITCH_OFF);
+            }
+            String key = wiring.clips().key().get();
+            if (key == null || key.isBlank()) {
+                return kr.mujoong.realtime.speech.SpeechClipSupport.disabled(kr.mujoong.realtime.speech.SpeechClipSupport.State.DISABLED_NO_KEY);
+            }
+            clipTimers = TimerClocks.system(clock);
+            var timing = properties.timing().speechClip();
+            kr.mujoong.realtime.speech.OpenAiSpeechClipSynthesizer synthesizer = new kr.mujoong.realtime.speech.OpenAiSpeechClipSynthesizer(
+                    clipBaseUrl(), wiring.clips().mode(), wiring.clips().key(), settings.model(), settings.voice(), settings.narratorStyle(),
+                    settings.peerStyle(), timing.synthesisTimeout(), kr.mujoong.realtime.speech.SpeechClipSupport.MAX_CLIP_BYTES,
+                    clipTimers.safety(), JSON);
+            kr.mujoong.realtime.speech.SpeechClipSynthesizer counted = new kr.mujoong.realtime.speech.SpeechClipSynthesizer() {
+                @Override
+                public CompletableFuture<byte[]> synthesize(kr.mujoong.realtime.speech.SpeechClipVoice voice, String text) {
+                    if (!budget.takeClip()) {
+                        return CompletableFuture.failedFuture(new kr.mujoong.realtime.speech.SpeechClipException(
+                                kr.mujoong.realtime.speech.SpeechClipFailure.OVERLOADED));
+                    }
+                    return synthesizer.synthesize(voice, text);
+                }
+
+                @Override
+                public void close() {
+                    synthesizer.close();
+                }
+            };
+            return new kr.mujoong.realtime.speech.SpeechClipSupport(counted, clock, timing.readyWait(), settings.maxConcurrency(),
+                    settings.maxPending(), settings.cacheMaxBytes().toBytes(), settings.sessionMaxLines());
         }
 
         /** 운영 판정 부품: {@link LunaJudgeClient} → {@link RealtimeLunaClient}(JUDGMENT_LIVE, 시한은 운영 live-budget 그대로). */
@@ -674,6 +785,15 @@ class PracticeVoiceDialogueLiveTest {
                             : " + 하니스 덮어쓰기 " + new java.util.TreeMap<>(wiring.propertyOverrides()))));
             setup.put("approvedContent", approvedContent.keySet());
             setup.put("approvedSpeech", approvedSpeech);
+            kr.mujoong.realtime.config.RealtimeSpeechClipProperties clip = properties.speechClip();
+            setup.put("scriptClips", PracticeDialogueLiveTest.ordered("state", speechClips.state().name(), "model", clip.model(), "voice",
+                    clip.voice(), "format", "pcm(24kHz 16비트 모노)", "synthesisTimeout", properties.timing().speechClip().synthesisTimeout()
+                            .toString(), "readyWait", properties.timing().speechClip().readyWait().toString(), "maxConcurrency",
+                    clip.maxConcurrency(), "sessionMaxLines", clip.sessionMaxLines(), "baseUrlRule", wiring.clips() == null ? null
+                            : wiring.clips().mode().name(), "source", "운영 SpeechClipSupport + OpenAiSpeechClipSynthesizer(application.yml "
+                            + "mujoong.speech-clip.* · timing.speech-clip.* 그대로, 하니스는 호출 수 상한만 더한다)", "callCapEnv", CLIP_CALLS_ENV));
+            setup.put("approvedAudioMs", PracticeDialogueLiveTest.ordered("byCode", approvedAudioMs, "source", SEED_AUDIO_DIR
+                    + "의 WAV 길이(없으면 글자 수 어림 timing.approvedCharsPerSecond)"));
             return setup;
         }
 
@@ -779,7 +899,14 @@ class PracticeVoiceDialogueLiveTest {
                             + "말 · 보류 중 자동 응답), 그 밖은 운영 게이트 사유(GATE_PATTERN · GATE_EMPTY · NOT_ACTIVE · OUTBOUND_FULL 등).",
                     "아이 말은 의도한 글과 GPT-Live 입력 전사(실행부가 묶은 확정 전사)를 함께 적고, 판정은 실제 Luna 결과(지점 · 1 · 2순위 · 확률 · 지연)다. "
                             + "판정 시한은 운영 live-budget 그대로라 넘으면 TIMEOUT 보류다.",
-                    "기기 승인 음성(INTRO_PRACTICE · CLOSING 등)은 녹음 파일 대신 글자 수로 재생 시간을 어림한다(timing.approvedCharsPerSecond).",
+                    "기기 승인 음성(INTRO_PRACTICE · CLOSING 등)의 재생 시간은 " + SEED_AUDIO_DIR + "의 시드 WAV 길이다(없는 코드만 글자 수 어림 "
+                            + "timing.approvedCharsPerSecond, 3회차).",
+                    "3회차 V1: 대본 줄(무중 설명 · 친구 첫 대사 · 기회 문장 · 변형 제안 · 상황 다시 설명 · 도움 제안 · 역할 전환 · 복귀 알림)은 운영 대본 줄 음성 "
+                            + "장치(SpeechClipSupport + OpenAiSpeechClipSynthesizer, 운영 설정 그대로)가 참여 확인 동안 미리 만든 음성으로 내고, 못 쓰면 "
+                            + "GPT-Live 원문 읽기로 대체한다. 줄마다 출처(TTS_CLIP · GPT_LIVE_FALLBACK · GPT_LIVE_GENERATED)와 사유를 적는다(실행부 "
+                            + "PRACTICE_SPEECH_SOURCE). 합성 호출은 하니스 상한 " + CLIP_CALLS_ENV + "을 지난다.",
+                    "3회차 V2: 지시마다 보낼 때 조용 · 말하는 중, 오디오 시계, 확인 사건 start · end, 첫 전사 조각 start와 도착 시계, 버린 조각 · 글자를 "
+                            + "instructionTimeline(실행부 OUTPUT_NEW_SPEECH)으로 적는다.",
                     "아이 쪽: 대본 아이는 기준 대본의 아이 대사 5줄, AI 아이는 텍스트 모델이 합성 인물 하늘이를 연기한다(행동 계획 P1 · P2, 아이가 들은 말만 "
                             + "받는다). 참여 확인에는 '" + JOIN_LINE + "'라고 답한다.",
                     "기기 출력이 조용해진 뒤(timing.quietGap) 흐름이 대답을 기다리면 말하고, 말하지 않기로 하면 운영 무응답 시계를 기다린다.",
@@ -860,7 +987,7 @@ class PracticeVoiceDialogueLiveTest {
             ObservedRecorder recorder = new ObservedRecorder(new MemoryStore(), launcher, latency, events, metrics, clock,
                     properties.limits().recorderQueue(), properties.limits().recorderFlushConcurrency(), facts);
             TimerClocks timers = TimerClocks.system(clock);
-            VirtualDevice device = new VirtualDevice(deviceId, clock, facts, timing);
+            VirtualDevice device = new VirtualDevice(deviceId, clock, facts, timing, harness.approvedAudioMs);
             ObservedFlowRecorder flowRecorder = new ObservedFlowRecorder(new MemoryRecorder(), facts);
             AtomicReference<PracticeConversation> conversation = new AtomicReference<>();
             PracticeFlowSettings flowSettings = PracticeFlowSettings.from(properties);
@@ -882,7 +1009,7 @@ class PracticeVoiceDialogueLiveTest {
                     id -> id.equals(deviceId) ? Optional.of(device) : Optional.empty(), (device1, connection) -> facts.notice("기기 무응답 표시"),
                     connector, requests, new OutputGate(SeedDictionary.loadDefault()), recorder, latency, timers, launcher, events, metrics, clock,
                     SessionExecutor.Settings.from(properties), new FakeSessionGaps(), new FakeAudioRecordings(), settlement, factory, judgment,
-                    GuardrailSupport.DISABLED);
+                    GuardrailSupport.DISABLED, harness.speechClips);
             SessionExecutor executor = new SessionExecutor(plan(), services, new SessionMailbox(services.settings().mailboxCapacity()),
                     () -> facts.flowEvent("SESSION_TERMINATED", Map.of()));
             device.attach(executor);
@@ -921,6 +1048,7 @@ class PracticeVoiceDialogueLiveTest {
             result.put("checks", report.checks());
             result.put("sceneEnds", facts.sceneEnds());
             result.put("unheardBeforeGate", report.unmatchedOutput());
+            result.put("instructionTimeline", report.instructionTimeline());
             result.put("instructionsSent", facts.instructionsReport());
             result.put("sessionEvents", facts.sessionEventsReport());
             result.put("record", Map.of("practice", facts.practiceRecordPlain()));
@@ -1092,6 +1220,12 @@ class PracticeVoiceDialogueLiveTest {
         final UUID correlationId;
         boolean delivered;
         String outcome;
+        /** 3회차 V1: 실행부가 이 말을 무엇으로 냈는가(PRACTICE_SPEECH_SOURCE의 TTS_CLIP · GPT_LIVE_FALLBACK · GPT_LIVE_GENERATED · NONE). */
+        String lineSource;
+        String sourceReason;
+        Long clipMs;
+        Long waitedMs;
+        Integer heardLines;
 
         Request(long atMs, String type, String text, String kind, String speaker, Flow flow, UUID correlationId) {
             this.atMs = atMs;
@@ -1105,7 +1239,8 @@ class PracticeVoiceDialogueLiveTest {
 
         Map<String, Object> report() {
             return PracticeDialogueLiveTest.ordered("atMs", atMs, "type", type, "kind", kind, "speaker", speaker, "text", text, "outcome",
-                    outcome, "phase", flow == null ? null : flow.phase().name(), "sceneKind", flow == null ? null : flow.sceneKind().name());
+                    outcome, "lineSource", lineSource, "sourceReason", sourceReason, "phase", flow == null ? null : flow.phase().name(),
+                    "sceneKind", flow == null ? null : flow.sceneKind().name());
         }
     }
 
@@ -1263,6 +1398,9 @@ class PracticeVoiceDialogueLiveTest {
         private final List<String> sceneEnds = new ArrayList<>();
         private final List<SceneRunRecord> sceneRuns = new ArrayList<>();
         private final List<HelpRecord> helps = new ArrayList<>();
+        /** 3회차 V1: 출처 사건을 아직 받지 않은 말 요청 · 요청을 아직 못 찾은 출처 사건(둘 다 실행부의 요청 순서 그대로다). */
+        private final ArrayDeque<Request> unsourced = new ArrayDeque<>();
+        private final ArrayDeque<Map<String, Object>> sources = new ArrayDeque<>();
         private int inputTranscriptDeltas;
         private long outputAudioBytes;
         private long framesOffered;
@@ -1357,7 +1495,8 @@ class PracticeVoiceDialogueLiveTest {
 
         void bundle(OutputBundle bundle) {
             synchronized (this) {
-                Play play = new Play(bundle.playbackId(), "GPT_LIVE", null, null, ms());
+                // 3회차 V1: 출력 묶음의 출처(GPT_LIVE · 미리 만든 대본 줄 음성 SCENARIO_SCRIPT). 기기 프레임은 같다
+                Play play = new Play(bundle.playbackId(), bundle.source().name(), null, null, ms());
                 play.durationMs = bundle.totalBytes() / BYTES_PER_MS;
                 if (lastHeard != null && lastHeard.play == null) {
                     lastHeard.play = play;
@@ -1369,7 +1508,7 @@ class PracticeVoiceDialogueLiveTest {
 
         void localPlay(UUID playbackId, String code, long durationMs) {
             synchronized (this) {
-                Play play = new Play(playbackId, "DEVICE_APPROVED", code, localTexts.get(code), ms());
+                Play play = new Play(playbackId, DEVICE_APPROVED, code, localTexts.get(code), ms());
                 play.durationMs = durationMs;
                 plays.add(play);
             }
@@ -1411,12 +1550,60 @@ class PracticeVoiceDialogueLiveTest {
 
         // ---- 실행기 스레드: 확장점 감싸기 ----
 
-        void request(String type, String text, String kind, String speaker, Flow flow, UUID correlationId) {
+        /**
+         * 말 요청 하나. 승인 원문 · 알림은 실행부를 부르기 전에 남긴다: 미리 만든 음성은 부르는 동안 곧바로 게이트 · 기기로 가므로 그 구간이 이 요청에
+         * 이어져야 한다. 실행부가 거절하면 {@link #withdraw}로 거둔다.
+         */
+        Request request(String type, String text, String kind, String speaker, Flow flow, UUID correlationId) {
             Request request = new Request(ms(), type, text, kind, speaker, flow, correlationId);
             synchronized (this) {
                 requests.add(request);
+                unsourced.addLast(request);
+                pairSources();
             }
             outstanding = request;
+            return request;
+        }
+
+        /** 실행부가 거절한 요청을 거두고 그 앞의 요청을 다시 기다리는 말로 둔다. */
+        void withdraw(Request request, Request previous) {
+            synchronized (this) {
+                requests.remove(request);
+                unsourced.remove(request);
+            }
+            if (outstanding == request) {
+                outstanding = previous;
+            }
+        }
+
+        /** 출처 사건과 말 요청을 순서대로 짝짓는다(잠금 아래). */
+        private void pairSources() {
+            while (!unsourced.isEmpty() && !sources.isEmpty()) {
+                Request request = unsourced.pollFirst();
+                Map<String, Object> source = sources.pollFirst();
+                request.lineSource = String.valueOf(source.get("source"));
+                request.sourceReason = source.get("reason") instanceof String reason ? reason : null;
+                request.clipMs = source.get("clipMs") instanceof Number number ? number.longValue() : null;
+                request.waitedMs = source.get("waitedMs") instanceof Number number ? number.longValue() : null;
+                request.heardLines = source.get("heard") instanceof Number number ? number.intValue() : null;
+            }
+        }
+
+        /**
+         * 3회차 V1: PRACTICE_SPEECH_SOURCE 하나. 실행부가 거절한 호출의 사건(기다리지 않은 공급자 닫힘)은 하니스 요청이 없으므로 짝짓지 않는다.
+         */
+        private void speechSource(Map<?, ?> payload) {
+            boolean refused = "NONE".equals(payload.get("source")) && "PROVIDER_CLOSED".equals(payload.get("reason"))
+                    && payload.get("waitedMs") == null;
+            if (refused) {
+                return;
+            }
+            Map<String, Object> copy = new LinkedHashMap<>();
+            payload.forEach((key, value) -> copy.put(String.valueOf(key), value));
+            synchronized (this) {
+                sources.addLast(copy);
+                pairSources();
+            }
         }
 
         void requestRefused(String capability) {
@@ -1532,6 +1719,9 @@ class PracticeVoiceDialogueLiveTest {
             synchronized (this) {
                 sessionEvents.add(entry);
             }
+            if ("PRACTICE_SPEECH_SOURCE".equals(event.getEventType()) && entry.get("payload") instanceof Map<?, ?> payload) {
+                speechSource(payload);
+            }
         }
 
         void settled(Object practice) {
@@ -1645,7 +1835,7 @@ class PracticeVoiceDialogueLiveTest {
         synchronized Snapshot snapshot() {
             return new Snapshot(List.copyOf(requests), List.copyOf(segments), List.copyOf(plays), List.copyOf(childRows), List.copyOf(children),
                     List.copyOf(judgments), List.copyOf(flowEvents), List.copyOf(outputDeltas), List.copyOf(inputDeltas), List.copyOf(instructions),
-                    List.copyOf(sceneRuns), List.copyOf(helps));
+                    List.copyOf(sceneRuns), List.copyOf(helps), List.copyOf(sessionEvents));
         }
 
         synchronized Map<String, Object> providerReport() {
@@ -1701,20 +1891,29 @@ class PracticeVoiceDialogueLiveTest {
             judgments.add(call);
         }
 
-        /** 재생의 화자: GPT-Live 묶음은 요청한 말의 화자(요청 없으면 GPT-Live), 기기 승인 음성은 무중. */
+        /**
+         * 재생의 화자: 출력 묶음(GPT-Live · 미리 만든 대본 줄 음성)은 요청한 말의 화자(요청 없으면 출처 표시), 기기 승인 음성은 무중.
+         */
         static String speakerOf(Play play) {
-            if (!"GPT_LIVE".equals(play.source)) {
+            if (DEVICE_APPROVED.equals(play.source)) {
                 return "무중";
             }
             Request request = play.segment == null ? null : play.segment.request;
-            return request == null ? "GPT-Live(요청 없음)" : request.speaker;
+            if (request != null) {
+                return request.speaker;
+            }
+            return "SCENARIO_SCRIPT".equals(play.source) ? "대본 음성(요청 없음)" : "GPT-Live(요청 없음)";
         }
     }
+
+    /** 기기 승인 음성 재생의 출처 표시(출력 묶음이 아니다). */
+    static final String DEVICE_APPROVED = "DEVICE_APPROVED";
 
     /** 대화가 끝난 뒤 보고서를 만들 때의 사실 사본. */
     record Snapshot(List<Request> requests, List<Segment> segments, List<Play> plays, List<ChildRow> childRows, List<ChildSpeech> children,
             List<JudgeCall> judgments, List<Map<String, Object>> flowEvents, List<OutDelta> outputDeltas, List<OutDelta> inputDeltas,
-            List<Map<String, Object>> instructions, List<SceneRunRecord> sceneRuns, List<HelpRecord> helps) {
+            List<Map<String, Object>> instructions, List<SceneRunRecord> sceneRuns, List<HelpRecord> helps,
+            List<Map<String, Object>> sessionEvents) {
     }
 
     // ------------------------------------------------------------------ 시험 쪽 관찰점
@@ -1993,6 +2192,14 @@ class PracticeVoiceDialogueLiveTest {
             return signal;
         }
 
+        /** 3회차 V1: 참여 확인 때 실행부가 묻는 대본 줄(운영 라우터 · 흐름 그대로, 개수만 남긴다). */
+        @Override
+        public List<SpeechLine> speechLines(String practiceJson, Map<String, String> approvedSpeechTexts) {
+            List<SpeechLine> lines = delegate.speechLines(practiceJson, approvedSpeechTexts);
+            facts.flowEvent("SPEECH_LINES_OFFERED", Map.of("lines", lines == null ? 0 : lines.size()));
+            return lines;
+        }
+
         @Override
         public Signal onChildUtterance(Utterance utterance, PracticeOutput output) {
             facts.utterance(utterance);
@@ -2115,15 +2322,25 @@ class PracticeVoiceDialogueLiveTest {
         @Override
         public boolean speak(PracticeSpeech speech) {
             Flow flow = extension.flow();
+            String kind = PracticeDialogueLiveTest.DialogueRun.approvedKindOf(facts().script, extension.scene(flow), facts().approvedSpeech,
+                    speech.text());
+            String speaker = RolePolicy.NARRATOR_LABEL.equals(speech.partnerRole()) ? "무중" : "친구";
+            // 3회차 V1: 미리 만든 음성은 부르는 동안 게이트 · 기기로 가므로 요청을 먼저 남긴다(거절되면 거둔다)
+            Request previous = facts().outstanding;
+            Request request = facts().request("VERBATIM", speech.text(), kind, speaker, flow, speech.correlationId());
             boolean accepted = delegate.speak(speech);
-            if (accepted) {
-                String kind = PracticeDialogueLiveTest.DialogueRun.approvedKindOf(facts().script, extension.scene(flow), facts().approvedSpeech,
-                        speech.text());
-                String speaker = RolePolicy.NARRATOR_LABEL.equals(speech.partnerRole()) ? "무중" : "친구";
-                facts().request("VERBATIM", speech.text(), kind, speaker, flow, speech.correlationId());
-            } else {
+            if (!accepted) {
+                facts().withdraw(request, previous);
                 facts().requestRefused("speak");
             }
+            return accepted;
+        }
+
+        @Override
+        public boolean prepareSpeech(List<SpeechLine> lines) {
+            boolean accepted = delegate.prepareSpeech(lines);
+            facts().flowEvent("PREPARE_SPEECH", PracticeDialogueLiveTest.ordered("lines", lines == null ? 0 : lines.size(), "accepted",
+                    accepted));
             return accepted;
         }
 
@@ -2149,10 +2366,12 @@ class PracticeVoiceDialogueLiveTest {
         @Override
         public boolean announceRoleSwitch(String toRole) {
             Flow flow = extension.flow();
+            String code = "COACH".equals(toRole) ? "COACH_SWITCH" : "PEER_RETURN";
+            Request previous = facts().outstanding;
+            Request request = facts().request("NOTICE", facts().approvedSpeech.get(code), "ROLE_NOTICE_" + code, "무중", flow, null);
             boolean accepted = delegate.announceRoleSwitch(toRole);
-            if (accepted) {
-                String code = "COACH".equals(toRole) ? "COACH_SWITCH" : "PEER_RETURN";
-                facts().request("NOTICE", facts().approvedSpeech.get(code), "ROLE_NOTICE_" + code, "무중", flow, null);
+            if (!accepted) {
+                facts().withdraw(request, previous);
             }
             return accepted;
         }
@@ -2232,6 +2451,8 @@ class PracticeVoiceDialogueLiveTest {
         private final MujoongClock clock;
         private final Facts facts;
         private final Timing timing;
+        /** 3회차 V1: 승인 음성 코드 → 실제 길이(ms, 시드 WAV). 없는 코드는 글자 수 어림이다. */
+        private final Map<String, Long> approvedAudioMs;
         private final ExecutorService inbound = Executors.newSingleThreadExecutor(Thread.ofVirtual().name("voice-device-inbound").factory());
         private final LinkedBlockingDeque<Queued> queue = new LinkedBlockingDeque<>();
         private final ArrayDeque<byte[]> childFrames = new ArrayDeque<>();
@@ -2248,11 +2469,23 @@ class PracticeVoiceDialogueLiveTest {
         private Thread speakerThread;
         private Thread micThread;
 
-        VirtualDevice(UUID deviceId, MujoongClock clock, Facts facts, Timing timing) {
+        VirtualDevice(UUID deviceId, MujoongClock clock, Facts facts, Timing timing, Map<String, Long> approvedAudioMs) {
             this.deviceId = deviceId;
             this.clock = clock;
             this.facts = facts;
             this.timing = timing;
+            this.approvedAudioMs = Map.copyOf(approvedAudioMs);
+        }
+
+        /** 승인 음성의 재생 시간: 시드 WAV의 실제 PCM 길이, 없으면 글자 수 어림(하한 있음). */
+        long approvedPlayMs(String code) {
+            Long real = approvedAudioMs.get(code);
+            if (real != null && real > 0) {
+                return Math.max(1L, Math.round(real * timing.approvedAudioScale()));
+            }
+            String text = facts.localTexts.get(code);
+            return Math.max(timing.minApprovedPlay().toMillis(),
+                    Math.round((text == null ? 0 : text.length()) / timing.approvedCharsPerSecond() * 1000));
         }
 
         void attach(SessionExecutor value) {
@@ -2319,9 +2552,7 @@ class PracticeVoiceDialogueLiveTest {
                     startMic();
                 }
                 case PlayApprovedContent play -> {
-                    String text = facts.localTexts.get(play.contentCode());
-                    long duration = Math.max(timing.minApprovedPlay().toMillis(),
-                            Math.round((text == null ? 0 : text.length()) / timing.approvedCharsPerSecond() * 1000));
+                    long duration = approvedPlayMs(play.contentCode());
                     facts.localPlay(play.playbackId(), play.contentCode(), duration);
                     queue.add(new Queued(new LocalItem(play.playbackId(), play.contentCode(), duration), stopEpoch));
                 }
@@ -2784,11 +3015,14 @@ class PracticeVoiceDialogueLiveTest {
                 entry.put("speaker", Facts.speakerOf(play));
                 entry.put("heard", true);
                 entry.put("source", play.source);
-                if ("GPT_LIVE".equals(play.source)) {
+                if (!DEVICE_APPROVED.equals(play.source)) {
                     Segment segment = play.segment;
                     entry.put("text", segment == null ? null : segment.transcript);
                     Request request = segment == null ? null : segment.request;
                     putRequest(entry, request);
+                    if (request == null) {
+                        entry.put("lineSource", "SCENARIO_SCRIPT".equals(play.source) ? "TTS_CLIP" : "GPT_LIVE");
+                    }
                 } else {
                     entry.put("text", play.text);
                     entry.put("code", play.code);
@@ -2804,7 +3038,7 @@ class PracticeVoiceDialogueLiveTest {
                 Map<String, Object> entry = new LinkedHashMap<>();
                 entry.put("speaker", segment.request == null ? "GPT-Live(요청 없음)" : segment.request.speaker);
                 entry.put("heard", false);
-                entry.put("source", "GPT_LIVE");
+                entry.put("source", segment.request != null && "TTS_CLIP".equals(segment.request.lineSource) ? "SCENARIO_SCRIPT" : "GPT_LIVE");
                 entry.put("text", segment.transcript);
                 entry.put("discard", segment.kind);
                 entry.put("gateReason", segment.gateReason);
@@ -2850,6 +3084,21 @@ class PracticeVoiceDialogueLiveTest {
                 entry.put("approvedText", request.text);
             } else {
                 entry.put("instruction", request.text);
+            }
+            // 3회차 V1: 줄의 출처(미리 만든 음성 · GPT-Live 원문 읽기 대체 · GPT-Live 생성형)와 사유 · 길이 · 기다림 · 실은 들린 대본 줄 수
+            entry.put("lineSource", request.lineSource != null ? request.lineSource : "GENERATED".equals(request.type) ? "GPT_LIVE_GENERATED"
+                    : null);
+            if (request.sourceReason != null) {
+                entry.put("sourceReason", request.sourceReason);
+            }
+            if (request.clipMs != null) {
+                entry.put("clipMs", request.clipMs);
+            }
+            if (request.waitedMs != null) {
+                entry.put("clipWaitedMs", request.waitedMs);
+            }
+            if (request.heardLines != null) {
+                entry.put("heardLinesInInstruction", request.heardLines);
             }
             if (request.flow != null) {
                 entry.put("phase", request.flow.phase().name());
@@ -2951,6 +3200,121 @@ class PracticeVoiceDialogueLiveTest {
             return PracticeDialogueLiveTest.ordered("atMs", atMs, "text", text.strip());
         }
 
+        /**
+         * 3회차 V2: 지시마다 새 말 시작 관측(실행부 세션 사건 OUTPUT_NEW_SPEECH)을 보낸 지시와 잇는다 — 보낼 때 조용 · 말하는 중, 보낸 때의 오디오 시계,
+         * 확인 사건 start · end, 받은 첫 전사 조각의 start와 그 도착 시계, 버린 조각 수 · 글자 수 · 음성 길이, 결과. 지시 종류는 원문 읽기 · 생성형(그
+         * 요청의 지시문 종류) · 그 밖(교정 · 판정 뒤 지시 등)이다. 지시문 원문은 넣지 않는다.
+         */
+        List<Map<String, Object>> instructionTimeline() {
+            Map<String, Map<?, ?>> traces = new LinkedHashMap<>();
+            for (Map<String, Object> event : facts.sessionEvents()) {
+                if ("OUTPUT_NEW_SPEECH".equals(event.get("type")) && event.get("payload") instanceof Map<?, ?> payload
+                        && payload.get("eventId") != null) {
+                    traces.put(String.valueOf(payload.get("eventId")), payload);
+                }
+            }
+            List<Map<String, Object>> rows = new ArrayList<>();
+            for (Map<String, Object> instruction : facts.instructions()) {
+                String eventId = String.valueOf(instruction.get("eventId"));
+                Map<String, Object> row = new LinkedHashMap<>();
+                row.put("eventId", eventId);
+                row.put("atMs", instruction.get("atMs"));
+                row.put("instruction", instructionKind(String.valueOf(instruction.get("content"))));
+                Map<?, ?> trace = traces.get(eventId);
+                row.put("observed", trace != null);
+                if (trace != null) {
+                    for (String key : List.of("reason", "start", "sentClockMs", "ackStartMs", "ackEndMs", "firstTranscriptStartMs",
+                            "firstTranscriptClockMs", "audioFromClockMs", "discardedTranscriptChunks", "discardedTranscriptChars", "discardedAudioMs",
+                            "heldChunks", "outcome")) {
+                        row.put(key, trace.get(key));
+                    }
+                }
+                rows.add(row);
+            }
+            return rows;
+        }
+
+        /** 보낸 지시의 종류(원문 읽기 · 생성형 지시문 종류 · 그 밖). */
+        private String instructionKind(String content) {
+            if (content.startsWith(VERBATIM_LEAD)) {
+                return "VERBATIM_READ";
+            }
+            for (Request request : facts.requests()) {
+                if ("GENERATED".equals(request.type) && request.text != null && content.contains(request.text)) {
+                    return "GENERATED:" + request.kind;
+                }
+            }
+            return "OTHER";
+        }
+
+        /**
+         * 3회차 V2 점검(참고): 들린 생성형 줄의 첫머리가 낱말 중간에서 시작했나. 그 지시를 보낸 뒤 다음 지시까지 공급자가 보낸 출력 전사 조각을 이은 글에서
+         * 들린 글이 시작하는 자리 바로 앞이 글자 · 숫자면(낱말 경계가 아니면) 첫머리가 잘린 것으로 본다. 맞춰 볼 수 없는 줄은 따로 센다.
+         */
+        private Map<String, Object> generatedHeadCut() {
+            List<Map<String, Object>> sent = facts.instructions();
+            int heard = 0;
+            int unaligned = 0;
+            List<Map<String, Object>> suspected = new ArrayList<>();
+            for (Map<String, Object> turn : turns) {
+                if (!Boolean.TRUE.equals(turn.get("heard")) || !"GENERATED".equals(turn.get("requested"))
+                        || !(turn.get("text") instanceof String text) || text.isBlank()) {
+                    continue;
+                }
+                heard++;
+                String instructionText = String.valueOf(turn.get("instruction"));
+                long playedAt = ((Number) turn.get("atMs")).longValue();
+                int index = -1;
+                for (int i = 0; i < sent.size(); i++) {
+                    long at = ((Number) sent.get(i).get("atMs")).longValue();
+                    if (at <= playedAt && String.valueOf(sent.get(i).get("content")).contains(instructionText)) {
+                        index = i;
+                    }
+                }
+                if (index < 0) {
+                    unaligned++;
+                    continue;
+                }
+                long from = ((Number) sent.get(index).get("atMs")).longValue();
+                long to = index + 1 < sent.size() ? ((Number) sent.get(index + 1).get("atMs")).longValue() : Long.MAX_VALUE;
+                String said = facts.outputDeltas().stream().filter(delta -> delta.atMs() >= from && delta.atMs() < to).map(OutDelta::text)
+                        .collect(java.util.stream.Collectors.joining());
+                String head = text.strip();
+                int at = said.indexOf(head);
+                if (at < 0) {
+                    unaligned++;
+                    continue;
+                }
+                if (at > 0 && Character.isLetterOrDigit(said.codePointBefore(at))) {
+                    String before = said.substring(said.offsetByCodePoints(at, -Math.min(said.codePointCount(0, at), 6)), at);
+                    suspected.add(PracticeDialogueLiveTest.ordered("n", turn.get("n"), "kind", turn.get("kind"), "heardStart",
+                            head.substring(0, head.offsetByCodePoints(0, Math.min(head.codePointCount(0, head.length()), 8))), "cutBefore", before,
+                            "eventId", sent.get(index).get("eventId")));
+                }
+            }
+            return PracticeDialogueLiveTest.ordered("suspected", suspected.size(), "heardGenerated", heard, "unaligned", unaligned, "lines",
+                    suspected);
+        }
+
+        /** 3회차 V1 점검: 대본 줄(승인 원문 · 알림)을 미리 만든 음성으로 낸 수 · GPT-Live 원문 읽기로 대체한 수와 사유. */
+        private Map<String, Object> scriptLineClips() {
+            List<Request> lines = facts.requests().stream().filter(request -> !"GENERATED".equals(request.type)).toList();
+            long clipPlayed = lines.stream().filter(request -> "TTS_CLIP".equals(request.lineSource) && request.delivered).count();
+            long clipNotHeard = lines.stream().filter(request -> "TTS_CLIP".equals(request.lineSource) && !request.delivered).count();
+            Map<String, Integer> reasons = new LinkedHashMap<>();
+            for (Request request : lines) {
+                if ("GPT_LIVE_FALLBACK".equals(request.lineSource)) {
+                    reasons.merge(String.valueOf(request.sourceReason), 1, Integer::sum);
+                }
+            }
+            long none = lines.stream().filter(request -> "NONE".equals(request.lineSource)).count();
+            long unknown = lines.stream().filter(request -> request.lineSource == null).count();
+            List<Long> waited = lines.stream().filter(request -> request.waitedMs != null).map(request -> request.waitedMs).sorted().toList();
+            return PracticeDialogueLiveTest.ordered("clipPlayed", clipPlayed, "requested", lines.size(), "clipNotHeard", clipNotHeard,
+                    "fallback", reasons.values().stream().mapToInt(Integer::intValue).sum(), "fallbackReasons", reasons, "notSpoken", none,
+                    "sourceUnknown", unknown, "clipWaits", waited.size(), "clipWaitMaxMs", waited.isEmpty() ? null : waited.getLast());
+        }
+
         // ---- 점검표 ----
 
         Map<String, Object> checks() {
@@ -2970,6 +3334,8 @@ class PracticeVoiceDialogueLiveTest {
             List<Request> generated = facts.requests().stream().filter(request -> "GENERATED".equals(request.type)).toList();
             checks.put("generatedHeard", PracticeDialogueLiveTest.ordered("played", generated.stream().filter(request -> request.delivered).count(),
                     "requested", generated.size()));
+            checks.put("scriptLineClips", scriptLineClips());
+            checks.put("generatedHeadCut", generatedHeadCut());
             Map<String, Integer> unheard = new LinkedHashMap<>();
             List<Object> unheardLines = new ArrayList<>();
             for (Map<String, Object> turn : turns) {
@@ -3194,14 +3560,16 @@ class PracticeVoiceDialogueLiveTest {
                         .append(totals.get("gptLiveSessionsStarted")).append("개 · GPT-Live 사용 ").append(totals.get("gptLiveUsageSecondsReported"))
                         .append("초(공급자 보고) · 연결 ").append(totals.get("gptLiveConnectedSeconds")).append("초 · OpenAI 호출 ")
                         .append(totals.get("openAiTextCalls")).append("회(판정 ").append(totals.get("judgmentCalls")).append(" · AI 아이 ")
-                        .append(totals.get("aiChildCalls")).append(") · TTS ").append(totals.get("ttsCalls")).append("회\n");
+                        .append(totals.get("aiChildCalls")).append(") · TTS ").append(totals.get("ttsCalls")).append("회 · 대본 줄 음성 합성 ")
+                        .append(totals.get("scriptClipCalls")).append("회(상한으로 막힘 ").append(totals.get("scriptClipCallsRefusedByCap")).append(")\n");
             }
             if (summary.get("caps") instanceof Map<?, ?> caps) {
                 md.append("- 상한: 대화당 ").append(caps.get("dialogueSeconds")).append("초 · GPT-Live 합계 ").append(caps.get("gptLiveSecondsTotal"))
                         .append("초 · 대화 ").append(caps.get("dialogues")).append("건 · TTS ").append(caps.get("ttsCalls")).append("회 · 판정 + AI 아이 ")
-                        .append(caps.get("judgmentAndAiChildCalls")).append("회\n");
+                        .append(caps.get("judgmentAndAiChildCalls")).append("회 · 대본 줄 음성 합성 ").append(caps.get("scriptClipCalls")).append("회\n");
             }
-            md.append("- 읽는 법: '들림'은 게이트를 지나 기기로 간 GPT-Live 구간의 전사와 기기가 재생한 승인 음성 문구다. '(안 들림)'은 게이트가 버린 구간이고 사유 "
+            md.append("- 읽는 법: '들림'은 게이트를 지나 기기로 간 GPT-Live 구간의 전사, 미리 만든 대본 줄 음성(TTS_CLIP)의 원문, 기기가 재생한 승인 음성 "
+                    + "문구다. '(안 들림)'은 게이트가 버린 구간이고 사유 "
                     + "코드를 붙였다. 아이 줄은 의도한 글 → GPT-Live 입력 전사, 괄호에 실제 판정과 다음 AI 말까지 걸린 시간이다. [분:초]는 대화 시작부터의 "
                     + "시간이다.\n");
             md.append("- 점검표는 하니스가 글자로 비교한 참고 값이다. 연습이 되는지는 사람이 대사를 읽고 판단한다.\n");
@@ -3282,6 +3650,9 @@ class PracticeVoiceDialogueLiveTest {
                     }
                 }
             }
+            if (run.get("instructionTimeline") instanceof List<?> timeline && !timeline.isEmpty()) {
+                renderTimeline(md, timeline);
+            }
             if (run.get("checks") instanceof Map<?, ?> checks) {
                 renderChecks(md, (Map<String, Object>) checks);
             }
@@ -3347,19 +3718,36 @@ class PracticeVoiceDialogueLiveTest {
                 return line.toString();
             }
             String tag;
-            if ("DEVICE_APPROVED".equals(entry.get("source"))) {
+            if (DEVICE_APPROVED.equals(entry.get("source"))) {
                 tag = "기기 승인 음성 " + entry.get("code");
             } else if ("GENERATED".equals(entry.get("requested"))) {
-                tag = "생성 · " + entry.get("kind");
+                tag = "생성 · " + entry.get("kind") + " · GPT-Live" + (entry.get("heardLinesInInstruction") instanceof Number heard
+                        && heard.intValue() > 0 ? " · 지시에 들린 대본 " + heard + "줄" : "");
             } else if (entry.get("requested") != null) {
-                tag = "승인 원문 그대로 · " + entry.get("kind");
+                tag = "승인 원문 그대로 · " + entry.get("kind") + " · " + sourceLabel(entry);
             } else {
-                tag = "요청 없이 들림";
+                tag = "요청 없이 들림" + ("SCENARIO_SCRIPT".equals(entry.get("source")) ? " · 미리 만든 음성" : "");
             }
             if (entry.get("playEnd") != null && !"COMPLETED".equals(entry.get("playEnd"))) {
                 tag += " · 재생 " + entry.get("playEnd");
             }
             return "- " + at + who + ": " + text + " (" + tag + ")";
+        }
+
+        /** 3회차 V1: 승인 원문 줄의 출처 표시(미리 만든 음성 · GPT-Live 원문 읽기 대체와 사유). */
+        static String sourceLabel(Map<String, Object> entry) {
+            Object source = entry.get("lineSource");
+            Object reason = entry.get("sourceReason");
+            if ("TTS_CLIP".equals(source)) {
+                return "미리 만든 음성(TTS_CLIP" + (entry.get("clipWaitedMs") instanceof Number waited ? ", " + waited + "ms 기다림" : "") + ")";
+            }
+            if ("GPT_LIVE_FALLBACK".equals(source)) {
+                return "GPT-Live 원문 읽기(대체 GPT_LIVE_FALLBACK: " + reason + ")";
+            }
+            if ("NONE".equals(source)) {
+                return "내지 않음(" + reason + ")";
+            }
+            return "출처 모름";
         }
 
         private static String judgment(Map<?, ?> judgment) {
@@ -3376,6 +3764,36 @@ class PracticeVoiceDialogueLiveTest {
             Object reason = judgment.get("abstainReason") != null ? judgment.get("abstainReason") : judgment.get("outcome");
             return point + " 보류(" + reason + (judgment.get("first") != null ? ", 1순위 " + judgment.get("first")
                     + probability(judgment.get("firstProbability")) : "") + latency + ")";
+        }
+
+        /**
+         * 3회차 V2 표: 지시마다 보낼 때 조용 · 말하는 중, 보낸 오디오 시계, 확인 사건 start · end, 받은 첫 전사 조각의 start와 도착 시계, 버린 조각 · 글자,
+         * 결과(실행부 OUTPUT_NEW_SPEECH, 시각은 공급자 오디오 시계 ms).
+         */
+        private static void renderTimeline(StringBuilder md, List<?> timeline) {
+            md.append("\n지시별 새 말 시작(3회차 V2, 시각은 공급자 오디오 시계 ms)\n\n");
+            md.append("| 지시 | 종류 | 보낼 때 | 보낸 시계 | 확인 start · end | 첫 전사 start · 도착 | 버린 조각 · 글자 · 음성 | 결과 |\n");
+            md.append("| --- | --- | --- | --- | --- | --- | --- | --- |\n");
+            for (Object item : timeline) {
+                if (!(item instanceof Map<?, ?> row)) {
+                    continue;
+                }
+                md.append("| ").append(row.get("eventId")).append(" [").append(time(row.get("atMs"))).append("] | ").append(row.get("instruction"))
+                        .append(" | ");
+                if (!Boolean.TRUE.equals(row.get("observed"))) {
+                    md.append("관측 없음 | | | | | |\n");
+                    continue;
+                }
+                md.append("QUIET".equals(row.get("start")) ? "조용" : "말하는 중").append(" | ").append(value(row.get("sentClockMs"))).append(" | ")
+                        .append(value(row.get("ackStartMs"))).append(" · ").append(value(row.get("ackEndMs"))).append(" | ")
+                        .append(value(row.get("firstTranscriptStartMs"))).append(" · ").append(value(row.get("firstTranscriptClockMs"))).append(" | ")
+                        .append(value(row.get("discardedTranscriptChunks"))).append(" · ").append(value(row.get("discardedTranscriptChars")))
+                        .append(" · ").append(value(row.get("discardedAudioMs"))).append("ms | ").append(row.get("outcome")).append(" |\n");
+            }
+        }
+
+        private static String value(Object value) {
+            return value == null ? "-" : String.valueOf(value);
         }
 
         static String discardLabel(String kind) {
@@ -3404,6 +3822,33 @@ class PracticeVoiceDialogueLiveTest {
             }
             if (checks.get("generatedHeard") instanceof Map<?, ?> generated) {
                 md.append("- 생성형 발화 들림: ").append(generated.get("played")).append(" / ").append(generated.get("requested")).append('\n');
+            }
+            if (checks.get("scriptLineClips") instanceof Map<?, ?> clips) {
+                md.append("- 대본 줄 TTS 재생: ").append(clips.get("clipPlayed")).append(" / ").append(clips.get("requested"));
+                if (clips.get("clipWaits") instanceof Number waits && waits.intValue() > 0) {
+                    md.append("(음성을 기다린 줄 ").append(waits).append(" · 최대 ").append(clips.get("clipWaitMaxMs")).append("ms)");
+                }
+                md.append('\n');
+                md.append("- 대체(GPT-Live 원문 읽기): ").append(clips.get("fallback"));
+                if (clips.get("fallbackReasons") instanceof Map<?, ?> reasons && !reasons.isEmpty()) {
+                    md.append("(사유 ").append(reasons).append(")");
+                }
+                if (clips.get("notSpoken") instanceof Number none && none.intValue() > 0) {
+                    md.append(" · 내지 않음 ").append(none);
+                }
+                md.append('\n');
+            }
+            if (checks.get("generatedHeadCut") instanceof Map<?, ?> cut) {
+                md.append("- 생성형 줄 첫머리 잘림 의심(낱말 중간 시작): ").append(cut.get("suspected")).append(" / ").append(cut.get("heardGenerated"));
+                if (cut.get("lines") instanceof List<?> lines && !lines.isEmpty()) {
+                    md.append("(").append(String.join(" · ", lines.stream().filter(Map.class::isInstance).map(item -> "줄 "
+                            + ((Map<?, ?>) item).get("n") + " «…" + oneLine(((Map<?, ?>) item).get("cutBefore")) + "|"
+                            + oneLine(((Map<?, ?>) item).get("heardStart")) + "»").toList())).append(", 주의)");
+                }
+                if (cut.get("unaligned") instanceof Number unaligned && unaligned.intValue() > 0) {
+                    md.append(" · 맞춰 볼 수 없음 ").append(unaligned);
+                }
+                md.append('\n');
             }
             if (checks.get("unheardSegments") instanceof Map<?, ?> unheard) {
                 md.append("- 안 들린 GPT-Live 구간: ").append(unheard.get("byKind") instanceof Map<?, ?> kinds && !kinds.isEmpty()
@@ -3558,6 +4003,60 @@ class PracticeVoiceDialogueLiveTest {
             }
         }
         return ordered;
+    }
+
+    /**
+     * 3회차 V1: 승인 음성 코드 → 시드 WAV({@value #SEED_AUDIO_DIR})의 실제 길이(ms). 파일이 없거나 읽을 수 없는 코드는 빼고(그 코드는 글자 수 어림),
+     * PCM 데이터 길이를 RIFF 머리의 표본률 · 채널 · 비트로 나눈다.
+     */
+    static Map<String, Long> approvedAudioMs(Path repoRoot, Map<String, Approved> approved) {
+        Map<String, Long> lengths = new LinkedHashMap<>();
+        for (Approved item : approved.values()) {
+            Path file = repoRoot.resolve(SEED_AUDIO_DIR).resolve(item.audioFile());
+            try {
+                if (Files.isRegularFile(file)) {
+                    long ms = wavDurationMs(Files.readAllBytes(file));
+                    if (ms > 0) {
+                        lengths.put(item.code(), ms);
+                    }
+                }
+            } catch (IOException | RuntimeException unreadable) {
+                // 그 코드는 글자 수 어림으로 재생한다(하니스 알림 대상 아님 — setup.approvedAudioMs에 빠진 코드로 보인다)
+            }
+        }
+        return lengths;
+    }
+
+    /** RIFF/WAVE PCM 길이(ms). 형식이 아니면 -1. */
+    static long wavDurationMs(byte[] wav) {
+        java.nio.ByteBuffer buffer = java.nio.ByteBuffer.wrap(wav).order(java.nio.ByteOrder.LITTLE_ENDIAN);
+        if (wav.length < 12 || !"RIFF".equals(new String(wav, 0, 4, StandardCharsets.US_ASCII))
+                || !"WAVE".equals(new String(wav, 8, 4, StandardCharsets.US_ASCII))) {
+            return -1;
+        }
+        int channels = -1;
+        int sampleRate = -1;
+        int bits = -1;
+        long dataBytes = -1;
+        int offset = 12;
+        while (offset + 8 <= wav.length) {
+            String id = new String(wav, offset, 4, StandardCharsets.US_ASCII);
+            long size = Integer.toUnsignedLong(buffer.getInt(offset + 4));
+            int body = offset + 8;
+            if ("fmt ".equals(id) && body + 16 <= wav.length) {
+                channels = buffer.getShort(body + 2);
+                sampleRate = buffer.getInt(body + 4);
+                bits = buffer.getShort(body + 14);
+            } else if ("data".equals(id)) {
+                dataBytes = Math.min(size, wav.length - body);
+            }
+            offset = (int) Math.min(Integer.MAX_VALUE, body + size + (size % 2));
+        }
+        if (channels <= 0 || sampleRate <= 0 || bits <= 0 || dataBytes < 0) {
+            return -1;
+        }
+        long bytesPerSecond = (long) sampleRate * channels * (bits / 8);
+        return bytesPerSecond <= 0 ? -1 : dataBytes * 1000L / bytesPerSecond;
     }
 
     /** 시드의 음성 없는 승인 발화(연습 approvedSpeech 목록, 코드별 최고 판). */
