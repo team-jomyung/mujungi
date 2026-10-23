@@ -62,11 +62,22 @@ public record CoreTimingProperties(
         }
     }
 
-    /** 리포트 절대 마감과 미저장 보존. */
-    public record ReportTiming(Duration readyTarget, Duration unsavedRetention) {
+    /**
+     * 리포트 절대 마감과 미저장 보존, 결과 정리 대기. 정리 대기 상한은 마감보다 짧아야 대기가 끝난 뒤 리포트를 만들 시간이 남는다.
+     *
+     * @param resultSettleWait 접수부터 고른 활동의 결과 정리를 기다리는 상한(FT-1023-c)
+     * @param resultSettlePoll 정리를 기다리는 동안 다시 보는 간격
+     */
+    public record ReportTiming(Duration readyTarget, Duration unsavedRetention, Duration resultSettleWait,
+            Duration resultSettlePoll) {
         public ReportTiming {
             positive(readyTarget, "mujoong.timing.report.ready-target");
             positive(unsavedRetention, "mujoong.timing.report.unsaved-retention");
+            positive(resultSettleWait, "mujoong.timing.report.result-settle-wait");
+            positive(resultSettlePoll, "mujoong.timing.report.result-settle-poll");
+            if (resultSettleWait.compareTo(readyTarget) >= 0) {
+                throw invalid("mujoong.timing.report.result-settle-wait는 ready-target보다 짧아야 한다");
+            }
         }
     }
 

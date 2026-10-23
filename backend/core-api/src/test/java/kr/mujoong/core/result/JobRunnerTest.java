@@ -25,16 +25,10 @@ class JobRunnerTest {
     @Test void nonRetryableFailureStops(){var j=job(1);handler(Outcome.failed("ACCOUNT_DELETING",false));runner.execute(j);verify(jobs).transition(j,"FAILED","ACCOUNT_DELETING",null,clock.now(),"FAILED");}
     @Test void leaseExpirationRequestsTimeoutRetry(){var j=job(1);when(jobs.expired(clock.now())).thenReturn(List.of(j));assertThat(runner.expire()).containsExactly(j.id());verify(jobs).transition(j,"REQUESTED","TIMEOUT",clock.now().plusSeconds(5),clock.now(),"FAILED");}
     @Test void duplicateTypeFailsAtRegistration(){handler(Outcome.done());assertThatThrownBy(()->handler(Outcome.done())).isInstanceOf(IllegalStateException.class).hasMessage("DUPLICATE_JOB_HANDLER");}
-    /** 처리기가 미룬 시도(리포트가 정리 중 활동을 기다림)는 오류 코드 없이 다음 재시도 시각에 다시 잡힌다(FT-1023-c). */
-    @Test void deferredOutcomeRequeuesWithoutErrorCode(){var j=job(1);handler(Outcome.deferred());runner.execute(j);verify(jobs).transition(j,"REQUESTED",null,clock.now().plusSeconds(5),clock.now(),"FAILED");}
-    @Test void deferredOutcomeWithoutRemainingAttemptFails(){var j=job(3);handler(Outcome.deferred());runner.execute(j);verify(jobs).transition(j,"FAILED","DEADLINE_EXCEEDED",null,clock.now(),"FAILED");}
-    @Test void contextTellsWhetherAnotherAttemptFitsBeforeDeadline(){
-        List<Boolean> seen=new ArrayList<>();
-        runner.register(new JobHandler(){public String jobType(){return "REPORT";}public Outcome handle(JobContext c){seen.add(c.retryAvailable());return Outcome.failed("INTERNAL",false);}});
-        java.util.function.BiFunction<Integer,Integer,ResultJob> report=(attempt,deadline)->new ResultJob(UUID.randomUUID(),"REPORT",UUID.randomUUID(),UUID.randomUUID(),"key","RUNNING",attempt,clock.now(),clock.now().plusSeconds(30),clock.now().plusSeconds(deadline),null);
-        runner.execute(report.apply(1,60));runner.execute(report.apply(2,60));runner.execute(report.apply(3,60));runner.execute(report.apply(1,5));runner.execute(report.apply(1,6));
-        // 1회차: 5초 뒤 재시도가 마감 안 · 2회차: 15초 뒤 · 3회차: 횟수 끝 · 마감 5초: 5초 뒤가 마감과 같아 없음 · 마감 6초: 있음.
-        assertThat(seen).containsExactly(true,true,false,false,true);
-    }
+    ResultJob report(int attempt,int deadlineSeconds){return new ResultJob(UUID.randomUUID(),"REPORT",UUID.randomUUID(),UUID.randomUUID(),"key","RUNNING",attempt,clock.now(),clock.now().plusSeconds(deadlineSeconds),clock.now().plusSeconds(deadlineSeconds),null);}
+    void reportHandler(Outcome outcome){runner.register(new JobHandler(){public String jobType(){return "REPORT";}public Outcome handle(JobContext c){return outcome;}});}
+    /** 처리기가 미룬 시도(리포트가 정리 중 활동을 기다림)는 오류 코드 없이 정한 시각에 다시 잡히고 시도 횟수를 돌려받는다(FT-1023-c). */
+    @Test void deferredOutcomeReleasesAttemptUntilRequestedTime(){var j=report(4,360);var until=clock.now().plusSeconds(10);reportHandler(Outcome.deferredUntil(until));runner.execute(j);verify(jobs).release(j,until,clock.now());verify(jobs,never()).transition(eq(j),any(),any(),any(),any(),any());}
+    @Test void deferredOutcomeAtOrAfterDeadlineFails(){var j=report(1,10);reportHandler(Outcome.deferredUntil(clock.now().plusSeconds(10)));runner.execute(j);verify(jobs).transition(j,"FAILED","DEADLINE_EXCEEDED",null,clock.now(),"FAILED");verify(jobs,never()).release(any(),any(),any());}
     @Test void doneWithoutCommitFailsAndContextHasNoRepository(){handler(Outcome.done());var j=job(1);runner.execute(j);verify(jobs).transition(j,"FAILED","INTERNAL",null,clock.now(),"FAILED");assertThat(Arrays.stream(JobContext.class.getDeclaredFields()).map(java.lang.reflect.Field::getType)).doesNotContain(ResultJobRepository.class);}
 }

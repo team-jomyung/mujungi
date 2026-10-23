@@ -35,7 +35,10 @@ mujoong:
       reconcile-interval: 5m
       undecided-limit: 1h
     report:
-      ready-target: 60s
+      ready-target: 6m
+      # 접수부터 고른 활동의 결과 정리를 기다리는 상한과 다시 보는 간격(FT-1023-c)
+      result-settle-wait: 5m
+      result-settle-poll: 10s
       unsaved-retention: 24h
     session:
       preparing-timeout: 1s

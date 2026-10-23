@@ -11,8 +11,8 @@ import org.junit.jupiter.api.*;
     @Test void generatingSectionsAreEmptyAndReadySectionsHavePublicShape(){var f=family();var session=copy(f,"ENDED",null);record(f,session,"ENDED",3);var id=create(f.guardianId(),session);var user=WebFixtures.guardianFor(app,f.guardianId());assertThat(checked("GET /api/reports/{reportId}",app.get("/api/reports/"+id).session(user.session())).json().get("sections")).isEqualTo(List.of());db.jdbc().update("update core.core_report set status='READY' where id=:id",Map.of("id",id));var response=checked("GET /api/reports/{reportId}",app.get("/api/reports/"+id).session(user.session()));assertThat(response.status()).isEqualTo(200);assertThat(response.body()).doesNotContain("requestHash","guardianId","jobId","templated","interests");}
     /** JIRA-267(FT-1023-c): 공급자 키가 없는 설정(결과 공급자가 부르면 PROVIDER_UNAVAILABLE)에서도 리포트가 READY가 된다 — AI 호출 0회. */
     @Test void reportBecomesReadyWithoutProviderKey(){var f=family();var session=copy(f,"ENDED",null);record(f,session,"ENDED",3);var id=create(f.guardianId(),session);var runner=app.bean(kr.mujoong.core.result.JobRunner.class);var jobs=app.bean(kr.mujoong.core.result.ResultJobRepository.class);
-        // 결과 접수 전 활동이라 리포트는 정리를 기다리며 미루다가, 절대 마감 안의 마지막 시도에서 있는 자료로 만든다.
-        for(int attempt=0;attempt<4&&app.bean(ReportRepository.class).find(id).orElseThrow().status().equals("GENERATING");attempt++){
+        // 결과 접수 전 활동이라 리포트는 정리를 10초마다 다시 보며 미루다가, 정리 대기 상한(5분)이 지나면 있는 자료로 만든다.
+        for(int attempt=0;attempt<40&&app.bean(ReportRepository.class).find(id).orElseThrow().status().equals("GENERATING");attempt++){
             var job=runner.claim("REPORT").stream().filter(j->j.subjectId().equals(id)).findFirst().orElseThrow();runner.execute(job);
             var after=jobs.find(job.id()).orElseThrow();if(after.status().equals("REQUESTED"))app.clock().advance(java.time.Duration.between(app.clock().now(),after.nextAttemptAt()));
         }
