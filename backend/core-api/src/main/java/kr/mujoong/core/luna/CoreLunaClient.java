@@ -90,8 +90,7 @@ public class CoreLunaClient {
             audit(request, List.of(), LunaFailureReason.FORBIDDEN_INPUT.name(), null, Duration.ZERO, 0);
             throw rejected;
         }
-        Optional<LunaSchemas.OutputSchemaPair> schema = request.outputMode() == LunaRequest.OutputMode.REPORT_JSON_SCHEMA_SINGLE_CALL
-                ? Optional.of(ReportResponseSchema.pair()) : request.outputMode() != LunaRequest.OutputMode.LEGACY_JSON_OBJECT
+        Optional<LunaSchemas.OutputSchemaPair> schema = request.outputMode() != LunaRequest.OutputMode.LEGACY_JSON_OBJECT
                 ? schemas.pair(request.purpose(), input.payload()) : Optional.empty();
         String body = json.write(new ResponsesRequest(properties.model(), request.instructions(), json.write(input.payload()),
                 schema.orElse(null), request.purpose(), properties.options(request.purpose())).body());
@@ -163,9 +162,7 @@ public class CoreLunaClient {
         } catch (ExecutionException failed) {
             return Attempt.failed(LunaTransport.translate(failed).reason(), null, Optional.empty());
         }
-        // 리포트는 아래 ResultTextGateway의 기존 ResultAiSchema가 전체 계약을 다시 검사한다.
-        return classify(response, request.purpose(), schema.isPresent()
-                && request.outputMode() != LunaRequest.OutputMode.REPORT_JSON_SCHEMA_SINGLE_CALL);
+        return classify(response, request.purpose(), schema.isPresent());
     }
 
     /** 응답 분류(BR4.4 → BR4.1 → BR4.3 → BR4.2). */

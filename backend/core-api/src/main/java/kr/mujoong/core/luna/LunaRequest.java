@@ -30,9 +30,7 @@ public record LunaRequest(LunaPurpose purpose, String promptVersion, String inst
         /** U10: 계약 스키마 검증은 유지하되 재시도는 바깥 요청 예산만 소유한다. */
         CONTRACT_SINGLE_CALL,
         /** 기존 인터페이스 어댑터: json_object 1회, 재시도 없음(BR3.4 · BR4.2). */
-        LEGACY_JSON_OBJECT,
-        /** 리포트 전용 구조화 출력 1회. 응답은 ResultAiSchema와 인용·안전 검사로 다시 검증한다. */
-        REPORT_JSON_SCHEMA_SINGLE_CALL
+        LEGACY_JSON_OBJECT
     }
 
     public LunaRequest {
@@ -48,8 +46,6 @@ public record LunaRequest(LunaPurpose purpose, String promptVersion, String inst
         aliases = ordered(aliases);
         Objects.requireNonNull(deadline, "deadline");
         Objects.requireNonNull(outputMode, "outputMode");
-        if (outputMode == OutputMode.REPORT_JSON_SCHEMA_SINGLE_CALL && purpose != LunaPurpose.RESULT_TEXT)
-            throw new IllegalArgumentException("리포트 출력 모드는 RESULT_TEXT 전용이다");
     }
 
     /** 계약 스키마 요청(U10 · U14 · U15가 직접 부를 때). */

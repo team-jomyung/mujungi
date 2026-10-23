@@ -36,7 +36,7 @@ public class JobRunner {
         return expired;
     });}
     public void execute(ResultJob job){
-        JobContext context=new JobContext(job,clock,(writer,after)->commit(job,writer,after),()->requireActiveGuardian(job));
+        JobContext context=new JobContext(job,clock,(writer,after)->commit(job,writer,after),()->requireActiveGuardian(job),()->nextAttempt(job,clock.now())!=null);
         Outcome outcome;
         try{context.requireActiveGuardian();JobHandler handler=handlers.get(job.jobType());outcome=handler==null?Outcome.failed("INTERNAL",false):handler.handle(context);}
         catch(ResultAiException error){
@@ -45,6 +45,7 @@ public class JobRunner {
         }
         catch(RuntimeException error){outcome=Outcome.failed("INTERNAL",true);}
         if(context.committed())return;
+        if(outcome!=null&&outcome.isDeferred()){tx.executeWithoutResult(t->defer(job));return;}
         if(outcome==null||outcome.successful())outcome=Outcome.failed("INTERNAL",false);
         Outcome failed=outcome;tx.executeWithoutResult(t->failure(job,failed));
     }
@@ -75,6 +76,22 @@ public class JobRunner {
             events.appError(kr.mujoong.contract.log.EventLog.Component.CORE_MAINTENANCE,"ResultAfterCommitFailed");
         }
         return committed;
+    }
+    /** 재시도 간격 · 시도 횟수 · 절대 마감 안에서 다음 시도 시각. 남은 시도가 없으면 null. */
+    private Instant nextAttempt(ResultJob job,Instant now){
+        if(job.attemptCount()>=timing.jobAttempts())return null;
+        Instant next=now.plus(timing.jobRetryBackoff().get(job.attemptCount()-1));
+        if(job.deadlineAt()!=null&&(!now.isBefore(job.deadlineAt())||!next.isBefore(job.deadlineAt())))return null;
+        return next;
+    }
+    /**
+     * 처리기가 미룬 시도: 오류 코드 없이 다음 재시도 시각에 다시 잡는다(시도 횟수는 쓴다). 그사이 마감 · 횟수가 다 찼으면
+     * 마감 초과로 끝낸다(처리기는 retryAvailable이 참일 때만 미루므로 경합일 때만 생긴다).
+     */
+    private void defer(ResultJob job){
+        Instant now=clock.now();Instant next=nextAttempt(job,now);
+        if(next==null){failure(job,Outcome.failed("DEADLINE_EXCEEDED",false));return;}
+        jobs.transition(job,"REQUESTED",null,next,now,"FAILED");
     }
     private void failure(ResultJob job,Outcome outcome){
         Instant now=clock.now();String code=outcome.code();

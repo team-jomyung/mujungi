@@ -123,24 +123,11 @@ class LunaAdapterBoundaryTest {
     }
 
     @Test
-    @SuppressWarnings("unchecked")
-    void reportRequestsBooleanMissingAsStrictStructuredOutput() {
-        var sections = List.of(2,5,6,10).stream().map(no -> Map.of("sectionNo", no, "text", "자료 부족", "missing", true, "citations", List.of())).toList();
-        stub.respond(Reply.ok(MODEL, JSON.write(Map.of("sections", sections))));
-        assertThat(resultGateway().call("report", Map.of("sections",List.of(),"activities",List.of()), Map.of(), clock.now().plusSeconds(10))).containsKey("sections");
-        var format = (Map<String,Object>)((Map<String,Object>)stub.requests().getFirst().json().get("text")).get("format");
-        assertThat(format).containsEntry("type", "json_schema").containsEntry("strict", true);
-        String schema = JSON.write(format.get("schema"));
-        assertThat(schema).contains("boolean", "missing", "additionalProperties");
-        assertThat(stub.requestCount()).isEqualTo(1);
-    }
-
-    @Test
-    void reportStillRejectsStringMissingInsteadOfCoercingItOrRetryingInsideTheAdapter() {
-        stub.respond(Reply.ok(MODEL, "{\"sections\":[{\"sectionNo\":2,\"text\":\"자료 부족\",\"missing\":\"false\",\"citations\":[]}]}"));
-        assertThatThrownBy(() -> resultGateway().call("report",Map.of("sections",List.of()),Map.of(),clock.now().plusSeconds(10)))
-                .isInstanceOfSatisfying(ResultAiException.class,e -> assertThat(e.code()).isEqualTo("SCHEMA_INVALID"));
-        assertThat(stub.requestCount()).isEqualTo(1);
+    void reportTaskNoLongerReachesTheProvider() {
+        // JIRA-267(FT-1023-c): 리포트 생성은 AI를 부르지 않아 report 지시 파일이 없다. 호출해도 공급자 요청은 0건이다.
+        assertThatThrownBy(() -> resultGateway().call("report", Map.of("sections", List.of()), Map.of(), clock.now().plusSeconds(10)))
+                .isInstanceOfSatisfying(ResultAiException.class, e -> assertThat(e.code()).isEqualTo("INTERNAL"));
+        assertThat(stub.requestCount()).isZero();
     }
 
     @Test
