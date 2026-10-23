@@ -23,7 +23,7 @@
 - 끝까지 이어지는 가장 얇은 조각은 U1에서 이미 만들었다(두 앱 + PostgreSQL + Nginx + 웹, 기기 시뮬레이터와 가짜 공급자로 자유 대화 한 턴).
   우리는 새 스켈레톤을 만들지 않고, 이 끝-끝 경로가 계속 통과하는 것을 회귀 기준으로 삼는다(Q2-A).
 - 회귀 기준 명령은 `bash scripts/verify.sh`다(A 정적 · 단위 · 통합 → B 기동 · 3종 호출 → C 기기 시뮬레이터 한 턴 → 사후 단언 P1 · P2 · P3 · T).
-  CI `skeleton` 작업은 `main` 푸시마다 A를 생략한 경량 명령(`--mode compose --skip-a`: A0 산출물 · B 이미지 빌드 · 기동 · C 한 턴 · 사후 단언)을 돈다. 전체 명령(A1 ~ A4 회귀 포함)은 `workflow_dispatch` 수동 실행(`full_verify=true`)과 Build and Test에서 돈다. PR에서는 돌지 않는다. `skeleton`은 `ci-gate`가 집계하는 차단 검사라(JIRA-256 복원) `main` 푸시에서 실패하면 이미지 게시 · 배포가 멈춘다. `skeleton` 자체에는 재시도가 없고, 이미지 빌드만 `build-images.sh`가 실패한 이미지를 최대 2회 더 빌드한다.
+  CI `skeleton` 작업은 기능 변경이 잦은 동안 **`main` 푸시와 PR에서 돌지 않고 `workflow_dispatch` 수동 실행에서만 돈다**(JIRA-259). 수동 실행 기본은 A를 생략한 경량 명령(`--mode compose --skip-a`: A0 산출물 · B 이미지 빌드 · 기동 · C 한 턴 · 사후 단언)이고, `full_verify=true`면 전체 명령(A1 ~ A4 회귀 포함)이다. 그래서 끝-끝 회귀는 배포를 막지 않고, 시연 전이나 게이트 · 음성 · 시드 같은 realtime 핵심 경로를 바꾼 뒤에는 수동 실행으로 확인한다. `skeleton` 자체에는 재시도가 없고, 이미지 빌드만 `build-images.sh`가 실패한 이미지를 최대 2회 더 빌드한다.
 - `classic` 범위는 `skeleton: off`라서 스켈레톤 체크포인트 의식을 하지 않고, Construction에 들어갈 때 진행 방식(자동 진행 / 체크포인트마다 검토)을 고른다.
 - 작업 단계마다의 검증(Q4 · Q4-1):
   - 작업 단계가 끝날 때마다 **바꾼 쪽**의 정적 검사 · 단위 · 통합 시험을 돌린다(백엔드: `cd backend && ./gradlew clean check -Pmujoong.test.db=docker`, 프런트: `eslint` · `vitest --coverage` · `next build`, tools: `vitest`).
@@ -50,7 +50,7 @@
   - 끝-끝: `bash scripts/verify.sh` C안(기기 시뮬레이터 + 가짜 공급자).
   - 인프라: `infra-validate`(Compose 불변식 · `nginx -t` · shellcheck · 마이그레이션 expand 검사), 이미지 점검, 관문 음성 대조.
 - 시험 이름 · 태그: 단위 `*Test`, 통합 `*IT`, 백엔드 유닛 태그 `@Tag("u1")` ~ `@Tag("u7")`와 `@Tag("db")`, 프런트 · tools는 `tests/<유닛>/` 폴더.
-- 관문의 한계: PR의 `ci-gate`는 정적 · 단위 · 통합(커버리지는 보고 전용) · 보안 · 인프라 · 이미지까지 본다. 끝-끝 회귀(`skeleton`)는 `main` 병합 뒤에 처음 돌고, 실패하면 이미지 게시 · 배포를 막는다. 그래서 이번 작업은 Build and Test의 전체 `verify.sh`로 병합 전 끝-끝을 확인한다.
+- 관문의 한계: PR의 `ci-gate`는 정적 · 단위 · 통합(커버리지는 보고 전용) · 보안 · 인프라 · 이미지까지 본다. 끝-끝 회귀(`skeleton`)는 자동으로 돌지 않고 수동 실행에서만 돌며, 배포를 막지 않는다(JIRA-259). 그래서 이번 작업은 Build and Test의 전체 `verify.sh`로 병합 전 끝-끝을 확인한다.
 - 시험 · CI · 검증에서는 가짜 공급자만 쓴다(ADR-002).
 - 결과 보고는 테스트 대역 · 합성 대화 · 실제 API · 실제 기기 성공을 따로 적고, 대역 성공을 실공급자 성공으로 표시하지 않는다(`discovered-rules.md` R-M11, Q10-A).
 - 이번 작업 기록의 시험 전략은 Standard다(컴포넌트당 5 ~ 8개 + 핵심 경계 통합 시험).
