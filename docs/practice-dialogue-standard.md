@@ -3,6 +3,7 @@
 > 브랜치 `claude/practice-dialogue-standard`(기준 `origin/claude/practice-live-fixes` 3194f8e = main + 연습 연결부 수정 + 변형 어휘 수정 + 검토 스키마 수정 + 검토 v3 · 생성 v5 + 머뭇거림 도움 제안 + 추론 강도 low + 실제 AI 평가 하니스).
 > 팀장이 확정한 기준 연습 대화(1절)대로 연습이 나오게 core 대본 형식 · realtime 흐름 · 실호출 하니스를 고쳤다. 사람 대신 모델이 지시대로 구현했고, 묻지 않고 정한 것은 8절 가정(DLG-A)에 남겼다.
 > **2회차(14절)**: 12.2.1절 실측 뒤 F1 ~ F6 · F8을 고쳤다 — 승인된 BASE 보존, 대본 형식 v7(빈칸 예문 · 들리는 대사 규칙 · 생성 v7 · 검토 v5), 다시 설명 뒤 첫 대사, 되묻기 · 코치 첫 도움 · 음성 규칙, J4 판정 지시문 `prompt-v3`, 제브 OFF의 생성형 발화 재생. 새 깨는 변경은 없다(14.10절).
+> **3회차(15절)**: 12.3절 실음성 실측 뒤 V1 · V2를 realtime에 구현했다 — 대본 줄은 GPT-Live가 읽지 않고 세션 시작 때 미리 합성한 TTS 음성으로 낸다(V1, 목소리가 GPT-Live와 다를 수 있다), 조용할 때 보낸 지시의 새 말은 첫 조각부터 받는다(V2). 실음성 하니스가 줄마다 출처 · 지시별 새 말 시작을 적는다. 선 형식 · 기기 · core는 바꾸지 않았다(15.8절).
 > **깨는 변경**: 대본 계약 C-DS1을 판 v6으로 바꿨다. **core와 realtime을 같은 날, 한 PR로 병합하고 같은 SHA로 배포한다**(6절).
 > **증거 구분(R-M11)**: 12.1절 시험 결과는 모두 **테스트 대역(가짜 공급자 · 가짜 판정 · 가짜 제브) · 합성 대화** 증거다. 12.2절은 실호출 하니스를 돌린 **실제 API · 합성 자료** 증거다(생성 · 검토 · 판정은 실제 Luna, 친구 · 코치 말은 텍스트 대리, 아이는 대본 · AI · 규칙 문장). 실제 GPT-Live 음성 · 실제 제브 · 실제 기기에서는 돌지 않았다(12.3절).
 
@@ -314,6 +315,7 @@ MUJOONG_LIVE_EVAL_OUT=<폴더> ./gradlew --no-daemon :realtime-activity:gptLiveP
 | `MUJOONG_LIVE_VOICE_MAX_DIALOGUES` | `8` | 돌릴 대화 수 상한(대본 1 + 패키지마다 AI P1 · P2) |
 | `MUJOONG_LIVE_VOICE_TTS_CALLS` | `120` | TTS 호출 수 상한 |
 | `MUJOONG_LIVE_VOICE_TEXT_CALLS` | `200` | 판정 + AI 아이 호출 수 상한 |
+| `MUJOONG_LIVE_VOICE_CLIP_CALLS` | `120` | (3회차 V1) 대본 줄 음성 합성 호출 수 상한. 넘으면 그 줄은 합성하지 않고 GPT-Live 원문 읽기다(15.4절) |
 
 상한 값이 숫자가 아니거나 0 이하면 부르기 전에 거절한다. 대화 수는 대본 아이 1 + core 패키지마다 AI 아이 2(P1 · P2)이므로, 패키지가 4개면 9개다 — 기본 상한 8이면 마지막 P2가 `DIALOGUE_CAP`으로 건너뛰므로 다 돌리려면 `MUJOONG_LIVE_VOICE_MAX_DIALOGUES=9`를 준다(시간 · 사용 초 상한도 함께 본다). 출력 파일: `practice-voice-dialogues.json` · `practice-voice-dialogues.md`. 실행 환경의 프록시 처리는 `docs/practice-live-fixes.md` 12절을 본다(TTS도 JDK 기본 프록시 선택기를 쓴다).
 
@@ -321,7 +323,7 @@ MUJOONG_LIVE_EVAL_OUT=<폴더> ./gradlew --no-daemon :realtime-activity:gptLiveP
 
 하니스 가정(DLG-A36 ~ DLG-A43, 14.9절 뒤 번호):
 
-- **DLG-A36** 기기 승인 음성(INTRO_PRACTICE · CLOSING 등)은 녹음 파일을 재생하지 않고 글자 수 / 초당 6자(최소 1.5초)로 재생 시간을 어림한다. 저장소 `infra/seed-audio/*.wav`는 글 길이와 맞지 않는 자리 파일(INTRO_PRACTICE 4.0초 · CLOSING 2.0초)이라 쓰지 않았다. 승인 음성 재생 중 아이가 끼어들지 않는다.
+- **DLG-A36** 기기 승인 음성(INTRO_PRACTICE · CLOSING 등)은 녹음 파일을 재생하지 않고 글자 수 / 초당 6자(최소 1.5초)로 재생 시간을 어림한다. 저장소 `infra/seed-audio/*.wav`는 글 길이와 맞지 않는 자리 파일(INTRO_PRACTICE 4.0초 · CLOSING 2.0초)이라 쓰지 않았다. 승인 음성 재생 중 아이가 끼어들지 않는다. → 3회차에서 시드 WAV의 실제 길이를 쓰도록 바꿨다(DLG-A60, 15.4절).
 - **DLG-A37** 가상 기기는 DEVICE_READY부터 CLOSE_TRANSPORT까지 마이크를 끄지 않고 무음 프레임을 계속 보낸다(운영 기기 웹과 같은 가정). 출력 재생 중 반향 · 소음은 없다.
 - **DLG-A38** 아이는 기기 출력이 1.2초 조용하고 흐름이 대답을 기다릴 때만 말한다(재생 중 끼어들기 · 겹쳐 말하기 없음). 1.2초 · 1.5초는 하니스 값이고 운영 기준이 아니다.
 - **DLG-A39** 참여 확인 대답은 모든 아이가 «응, 할래.»이고, 종료 확인 질문 대답은 P2만 «응, 그만할래.», 나머지는 «아니, 더 할래.»다. 참여 확인 대답은 운영 참여 규칙(`JoinTracker`)이 낱말로 먼저 가르고 불분명할 때만 J1 판정을 부르며, 실행부가 전사 행으로 남기지 않는다(참여 전 아이 전사 미저장). 그래서 그 줄의 들은 전사는 J1 판정이 받은 확정 전사, 판정이 없으면 그 사이 GPT-Live 입력 전사 조각을 이은 글이다(`transcriptSource`로 구분).
@@ -487,6 +489,8 @@ Luna가 만든 대본에서 사람이 읽어 찾은 것(자동 점검은 글자�
 | V1 (추천) | 대본 줄(장면 설명 · 친구 첫 대사 · 기회 문장 · 변형 제안 · 역할 알림)은 GPT-Live가 읽지 않는다. 대본을 만들 때 음성을 미리 합성하고, 인사 · 마무리처럼 기기 승인 음성(`approvedContent.audioUrl`)으로 재생한다. AI 동작 명세 v0.2 §4.2 '같은 문구가 자주 어긋나면 그 문구만 GPT-Live 목소리로 미리 녹음한 클립으로 바꾸는 후보로 올린다'와 같은 방향이다. 목소리를 GPT-Live와 맞추는 것과 음성 저장 위치를 정해야 한다 | 도연(core 생성 · 대본 계약) · 동훈(음성 저장 · 배포) · 성민(재생 흐름) |
 | V2 | 지시로 시작한 새 말의 시작점 판정을 고쳐 첫머리가 잘리지 않게 한다. 생성형 말에도 필요하다 | 성민 |
 | V3 | V1 · V2 뒤에 이 하니스를 다시 돌린다(대화마다 1 ~ 3분, GPT-Live 상한 1800초) | 오케스트레이터 |
+
+→ V1 · V2는 팀장 결정(2026-10-23)으로 3회차에 구현했다(15절). V1의 음성은 미리 녹음하지 않고 세션 시작 때 TTS로 만들어 기기 승인 음성이 아닌 GPT-Live 출력과 같은 길(0x02 프레임)로 보낸다 — 음성 저장 위치 · 배포는 필요 없다.
 
 실제 기기 · 실제 아이로는 아직 확인하지 않았다(10절 2번 리허설).
 
@@ -712,3 +716,137 @@ MUJOONG_LIVE_EVAL_OUT=<폴더> ./gradlew --no-daemon :realtime-activity:lunaReac
 7. **F6**: J4 규칙은 본문에만 있고 선택지 판 J4 질문은 '도와줘도 되는지' 그대로다. 변형 제안 분류 품질은 실측으로 본다. join-gate의 J1 규칙과 합치기가 남았다(14.10절 3번).
 8. **하니스 점검은 글자 비교다**: 핵심 낱말 · 비운 말 · 기호 판단에 놓침 · 잘못 잡음이 있다. 장면 밖 새 질문은 점검하지 않는다.
 9. **F7 지연(시작 요청 15초 · 호출 3초 초과)은 그대로다**(`docs/practice-live-fixes.md` 5.3절).
+
+## 15. 실음성 실측 뒤 고친 것 — V1 · V2 (3회차, 2026-10-23)
+
+> 12.3절 실음성 실측의 제안 V1 · V2를 같은 브랜치에 구현했다(d7f70ea · 0d35035 · caff915). V3(다시 실측)은 오케스트레이터가 15.5절 명령으로 돌린다.
+> **팀장 결정(2026-10-23)**: ① 대본 줄은 GPT-Live가 읽지 않고 미리 합성한 TTS 음성으로 낸다(V1). 목소리는 GPT-Live와 다를 수 있다. ② 지시로 시작한 말의 첫머리가 잘리지 않게 한다(V2). ③ 운영 기본은 켜짐이다.
+> **증거 구분(R-M11)**: 15.10절 결과는 모두 **테스트 대역(가짜 GPT-Live · 가짜 TTS · 가짜 Luna) · 합성 대화**다. 실제 TTS 합성 · 실제 GPT-Live 음성 · 실제 기기 결과는 없다.
+
+### 15.1 바꾼 것 한눈에
+
+| # | 실측에서 본 것(12.3절) | 바꾼 것 | 앱 | 커밋 |
+|---|---|---|---|---|
+| V2 | 버려진 대본 줄 9줄 중 7줄의 첫머리가 잘렸다. 유휴 중 보낸 지시에 GPT-Live가 곧바로 말을 시작해 첫 전사 `start_ms`가 확인 `end_ms`보다 앞섰다 | 조용할 때 보낸 지시는 확인 사건을 기다리지 않고 보낸 뒤 첫 조각부터 여유 없이 받는다(설계 개정 A4-b). 말하는 중 보낸 지시는 A4 그대로다. 지시마다 세션 사건 `OUTPUT_NEW_SPEECH`를 남긴다 | realtime · 계약 | d7f70ea |
+| V1 | GPT-Live가 읽은 대본 줄 15줄 중 6줄만 원문대로 들렸다(첫머리 잘림 7 · 덧붙임 1 · 무응답 1). 9건 모두 아이의 첫 연습 대답 전에 끝났다 | 대본 줄을 세션 시작 때 OpenAI TTS로 미리 합성하고, 이미 승인된 구간처럼 같은 게이트 · 같은 기기 프레임으로 낸다. 못 쓰면 지금처럼 GPT-Live 원문 읽기다(사유 기록). 미리 만든 음성으로 낸 줄은 다음 생성형 지시에 데이터로 싣는다 | realtime · 계약 · 운영 문서 | 0d35035 |
+| 하니스 | 대본 줄이 무엇으로 나갔는지, 지시마다 새 말이 어디서 시작했는지 볼 칸이 없었다. 승인 음성 재생 시간을 글자 수로 어림했다 | 대본 줄이 운영 TTS 클립 길을 탄다. 줄마다 출처(TTS_CLIP · GPT_LIVE_FALLBACK · GPT-Live 생성), 지시별 새 말 시작 표, 승인 음성 시간은 시드 WAV 실제 길이, 점검표 세 줄 | 시험 소스 | caff915 |
+
+### 15.2 V2 — 조용할 때 보낸 지시 (설계 개정 A4-b, `gate.OutputGeneration`)
+
+- **조용함**: 지시를 보내는 순간 ⓐ 공급자 리더가 넣고 실행기가 아직 처리하지 않은 출력 조각이 없고 ⓑ 마지막 출력 조각(버린 · 보류한 조각 포함, 디지털 무음 제외) 뒤로 `mujoong.gate.segment-quiet`(800ms)가 지났거나 받은 조각이 없다. 구간 봉인과 같은 기준이다(DLG-A44 · A46).
+- **조용할 때**: 확인 사건을 기다리지 않는다. 보낸 뒤 처음 오는 시각 있는 출력 전사 조각(`start_ms >= 0`)이나 첫 음성 조각이 새 말의 시작이고, 그 조각부터 여유 없이 받는다(DLG-A45). 확인 사건은 관측 값으로만 남긴다.
+- **말하는 중**: A4 그대로다 — 확인 `end_ms` 뒤에 시작한 첫 전사부터, 음성은 오디오 시계가 시작 + `new-speech-margin`(700ms)에 닿는 조각부터 받는다. 낡은 꼬리는 지금처럼 버린다.
+- 게이트 교정 지시는 구간을 봉인한 뒤 보내므로 늘 조용 시작이다. 지시 없이 올리는 세대(끼어들기 · 종료 의도 · 연습 폐기 · 보류 해제 · V1 대본 줄 음성)는 지금처럼 끊김(`segment-quiet`)을 기다린다.
+- **관측 사건** `OUTPUT_NEW_SPEECH`(세션 사건, 원문 없음 R-F14): `eventId` · `reason` · `start`(`QUIET` · `SPEAKING`) · `sentClockMs` · `ackStartMs` · `ackEndMs` · `firstTranscriptStartMs` · `firstTranscriptClockMs` · `audioFromClockMs` · `discardedTranscriptChunks` · `discardedTranscriptChars` · `discardedAudioMs` · `heldChunks` · `outcome`(`RECEIVING` · `NEW_SPEECH_NOT_OBSERVED` · `NO_AUDIO` · `SUPERSEDED`). 조용 시작은 새 말이 확인 사건보다 먼저 오므로 확인 사건이 오거나 다음 세대가 될 때 사건을 쓴다.
+- **가짜 공급자**: 인메모리 `FakeProviderPort`는 실행기와 같은 조용 간격으로, 말하는 중 받은 지시에만 낡은 꼬리(음성 조각)를 보내고 조용할 때 받은 지시에는 같은 길이의 무음 조각만 보낸다. `FakeProviderWsServer` · C안 `tools/fake-provider/`는 바꾸지 않았다(DLG-A47).
+- 계약: `contracts/ai-io.md` 3절 A4-b · 3.2, `contracts/timing.md` 14절 `new-speech-margin` 행, 편차 (PDS-V2).
+
+### 15.3 V1 — 대본 줄 음성 미리 합성 (`speech` · `session.ScriptClips` · `SessionExecutor`)
+
+| 무엇 | 정한 것 |
+|---|---|
+| 대상 줄 | 확장이 승인 원문 그대로 내는 줄 — BASE · VARIANT 장면 설명(무중), 친구 첫 대사 · 기회 문장(친구), 상황 다시 설명(무중), 변형 제안(VARIANT 설명 + «이어서 해 볼까?», 무중), 승인 발화 `HELP_OFFER`(무중) — 과 실행부가 내는 역할 전환 · 복귀 알림 `COACH_SWITCH` · `PEER_RETURN`(무중 말투). 생성형 줄(되묻기 · 친구 반응 · 코치 도움 등)은 지금처럼 GPT-Live가 그 자리에서 만든다. 기기 승인 음성(INTRO_PRACTICE · CLOSING 등)은 그대로 녹음 파일이다(DLG-A49) |
+| 만드는 때 | 참여 확인(WAITING_CHILD) 진입 때 확장이 첫 대본의 줄을 알려 주고(`PracticeSessionExtension.speechLines`, 기본은 없음) 실행부가 알림 두 줄을 더해 맡긴다. 다음 목표 대본은 도착할 때 확장이 `PracticeOutput.prepareSpeech`로 맡긴다. 시작 안내 · 참여 확인 동안 병렬로 만들고 기다리지 않는다(DLG-A56) |
+| 합성 | OpenAI Audio API `POST {base-url}/audio/speech` — `model` `gpt-4o-mini-tts` · `voice` `nova` · `response_format` `pcm`(24kHz s16 모노, GPT-Live 출력 · 기기 0x02 프레임과 같아 바꾸지 않는다) · 말투 `instructions`(무중 · 친구 두 가지). 키는 env `OPENAI_API_KEY`(새 비밀 없음). 주소 규칙은 Luna와 같다(demo · prod · 프로필 없음은 https + `api.openai.com`만, test는 루프백만, dev는 둘 다) — 기동 때 확인하고 보내기 직전에 다시 확인한다. 리다이렉트 · 프록시를 쓰지 않는다(DLG-A54). 시한 10초는 본문 끝까지 덮고, 본문은 출력 구간 상한(20초 분량)까지만 읽는다. 안쪽 재시도는 없다(DLG-A55) |
+| 공유 캐시 | 앱 전체에 하나다. 같은 말투 · 원문은 한 번만 만들고(만드는 중이면 같은 약속), 바이트 상한 32MB 안에서 오래 안 쓴 것부터 버린다. 동시 4 · 대기 200 · 세션 48줄 상한, 실패한 줄은 두지 않는다 |
+| 내는 길 | 낼 차례에 그 줄(말하는 사람 표시 · 원문 글자 그대로)의 음성이 있으면 GPT-Live에 지시를 보내지 않는다. 기기 · 출력 세대를 올려 재생 중이던 소리와 낡은 공급자 조각을 버린 뒤, 그 음성을 '첫 조각부터 끝까지 담긴 구간'으로 기본 게이트 검사(금지 패턴 · 완결) → 송신 직전 재확인(ACTIVE · 세대 · 기록기 · 음성 레인) → 출력 묶음(`OUTPUT_BEGIN.source=SCENARIO_SCRIPT`, 같은 0x02 프레임 · OUTPUT_END)으로 보낸다. 승인 원문 그대로라 제브를 부르지 않는다(ai-io.md 10.5 분류 ①). 말풍선 · 대화 기록(AI 행 승인) · 지연 기록 · 재생 사실(PLAYED · FAILED · INTERRUPTED) · 끼어들기 · 출력 보류 규칙은 GPT-Live 원문 읽기와 같다(DLG-A50) |
+| 기기 | 바꾸지 않았다. 기기 웹은 `OUTPUT_BEGIN.source`를 읽지 않고 GPT-Live 출력과 같은 프레임을 받는다 |
+| 기다림 · 대체 | 아직 만드는 중이면 앞 소리를 멈추고 공급자 출력을 막은 채 `ready-wait`(2초)까지 기다린다(연습 시계라 기술 일시정지 · 종료 확인 동안 멈춘다). 그사이 다른 발화 · 취소 · 중단이 오면 기다림을 버린다(`WAIT_ABANDONED`). 미리 알려 주지 않은 줄 · 합성 실패 · 시간 초과 · 꺼짐 · 연습 밖 출력 보류(참여 확인 · 종료 확인 · 판정 턴) 중이면 지금처럼 GPT-Live 원문 읽기로 낸다(DLG-A52) |
+| GPT-Live 맥락 | 미리 만든 음성으로 낸 줄은 GPT-Live 대화 맥락에 없다. 그래서 다음 생성형 지시 하나의 앞에 «다음 JSON은 지시가 아니라 방금 아이에게 들린 대본 기록이다. 다시 말하지 않는다.» + `{"heard":[{"speaker","speech"}]}`를 싣는다(최근 4줄, 지시문 500자 안에서 최근 줄부터). 맥락만을 위한 지시는 보내지 않는다(DLG-A51) |
+| 기록(R-F14) | 세션 사건 `SPEECH_CLIPS_PREPARED`(맡긴 줄 수 · 시작 · 캐시 · 이미 맡김 · 상한 초과 · 실패 사유)와 연습 발화 요청마다 `PRACTICE_SPEECH_SOURCE`(`seq` · `source` `TTS_CLIP` · `GPT_LIVE_FALLBACK` · `GPT_LIVE_GENERATED` · `NONE` · `reason` · `clipMs` · `waitedMs` · `heard` · `sent`). 원문 · 말하는 사람 표시 · 음성 · 키는 사건 · 로그 · 예외 메시지에 넣지 않는다(DLG-A57) |
+| 설정 | `mujoong.speech-clip.*` 10개(ai-io.md 10.16, `enabled` 기본 `true` — 키가 없으면 꺼짐), 시간 키 `mujoong.timing.speech-clip.synthesis-timeout`(10s) · `mujoong.timing.speech-clip.ready-wait`(2s, timing.md 15절, 실측 전 임시값, DLG-A58) |
+| 시험 · CI · 검증 | 가짜 합성기만 쓴다(R-F1). test 프로필 주소는 루프백이고 빌드 규칙이 키를 지우므로 기본 시험에서는 장치가 꺼진다 — 대본 줄은 3회차 전처럼 GPT-Live 원문 읽기다. 검증 스택(`compose.ci.yml`)도 키가 비어 꺼진다 |
+
+- **명세와 다른 점(편차 (PDS-V1))**: 기술명세서 v0.3 §3.4는 아이에게 들리는 승인 문구 · 고정 대본이 `ScriptSpeaker` 경계(GPT-Live 낭독 / 클립 재생)를 거치고, 클립은 GPT-Live 목소리로 미리 만든 것이라고 정한다. AI 동작 명세 v0.2 §4.2는 같은 문구가 자주 어긋나면 그 문구만 클립으로 바꾸는 후보로 올리게 한다. 이 판은 ① 대본 줄 전부를 ② TTS로 ③ 세션마다 만든다 — **그래서 대본 줄 목소리가 생성형 줄의 GPT-Live 목소리와 다를 수 있다**(DLG-A53). 경계와 연습 상태 기계는 그대로다.
+- **R-F15**: 나가는 글은 대본 원문 · 승인 문장뿐이다(GPT-Live 원문 읽기 지시로 같은 공급자에 이미 나가던 글이고 아이 말 · 전사는 나가지 않는다). 같은 키로 여는 공급자 API가 하나 늘어 `infra/RUNBOOK.md` 단계 4에 확인 항목을 하나 열었다 — 확인 기록 전에는 realtime에 `MUJOONG_SPEECHCLIP_ENABLED=false`를 주어 끈다(DLG-A59).
+- 계약: `contracts/ai-io.md` 8절 표 · 10.16, `contracts/timing.md` 15절, 편차 (PDS-V1). contract-model `PracticeDialogueDeviationsTest`가 PDS 편차 행과 표시를, `SpeechClipPropertiesTest`가 10.16 키 표와 `application.yml` 기본값을 대조한다.
+
+### 15.4 실음성 하니스 (시험 소스, 운영 코드 아님)
+
+- **대본 줄이 운영 길을 탄다**: 하니스가 운영 `SpeechClipSupport` + `OpenAiSpeechClipSynthesizer`를 운영 설정(`application.yml`의 `mujoong.speech-clip.*` · `mujoong.timing.speech-clip.*`)으로 만들어 실행부에 준다. 하니스는 호출 수 상한만 더한다(`MUJOONG_LIVE_VOICE_CLIP_CALLS`, 기본 120 — 넘으면 그 줄은 합성하지 않고 GPT-Live 원문 읽기, DLG-A61).
+- **줄마다 출처**: «미리 만든 음성(TTS_CLIP)» · «GPT-Live 원문 읽기(대체 GPT_LIVE_FALLBACK: 사유)» · 생성형은 «GPT-Live»(지시에 실은 들린 대본 줄 수를 함께 적는다). JSON 차례에는 `lineSource` · `sourceReason` · `clipMs` · `clipWaitedMs`가 붙는다.
+- **지시별 새 말 시작 표**(JSON `instructionTimeline`, MD 표): 지시 · 종류(원문 읽기 · 생성형 지시문 종류 · 그 밖) · 보낼 때 조용 · 말하는 중 · 보낸 시계 · 확인 start · end · 첫 전사 start · 도착 시계 · 버린 조각 수 · 글자 수 · 음성 길이 · 결과. 실행부의 `OUTPUT_NEW_SPEECH`를 보낸 지시와 지시 id로 잇는다.
+- **점검표에 더한 줄**: «대본 줄 TTS 재생 n / m», «대체(GPT-Live 원문 읽기): n(사유별)», «생성형 줄 첫머리 잘림 의심(낱말 중간 시작): n / m»(JSON `checks.scriptLineClips` · `checks.generatedHeadCut`). 맨 위 합계 · 상한 줄에 대본 줄 음성 합성 호출 수(상한으로 막힌 수)와 상한을 더했다.
+- **기기 승인 음성 재생 시간**은 시드 WAV(`infra/seed-audio/*.wav`)의 실제 PCM 길이다(RIFF 머리, JSON `setup.approvedAudioMs`). DLG-A36의 글자 수 어림을 대체한다(DLG-A60).
+- **배선 점검** `PracticeVoiceHarnessSelfCheckTest`(7 → 9건, 실제 API 없음): 가짜 TTS 클립 끝점을 붙여 기준 대화의 대본 줄 7줄이 모두 클립으로 들리고 가짜 GPT-Live가 대본 줄 읽기 지시를 받지 않으며 생성 지시에 들린 줄이 데이터로 실리는지, 지시별 표가 생성형 지시마다 채워지는지 본다. 합성이 실패한 한 줄(`SYNTHESIS_PROVIDER_ERROR`)이 대체로 적히는지, 시드 WAV 길이 읽기도 본다. 일부러 다르게 읽은 줄 시험은 장치를 끈 배선(3회차 전과 같다)에서 돈다. 샘플 기록의 지시별 표는 모두 조용 시작 · 버린 조각 0 · RECEIVING이었다(루프백 가짜, 참고).
+
+### 15.5 실측 명령 (오케스트레이터가 돌린다, 키 자리는 env 이름만)
+
+11.1절과 같다(`MUJOONG_LIVE_EVAL_OUT=<폴더> ./gradlew --no-daemon :realtime-activity:gptLivePracticeTest`). 새 env는 `MUJOONG_LIVE_VOICE_CLIP_CALLS`(기본 120)뿐이다. 실제 합성 호출이 하나 늘어난다(대화마다 대본 줄 · 알림 10줄 안팎 — 기준 대본은 10줄, 같은 원문은 캐시로 한 번).
+
+- **프록시**: 합성기는 Luna 호출부처럼 `HttpClient.Builder.NO_PROXY`다(`OpenAiSpeechClipSynthesizer` 생성자). 컨테이너가 프록시로만 밖에 나가면 12절의 `LunaTransport`처럼 실행 동안만 로컬에서 풀어야 한다(커밋하지 않는다). 풀지 않으면 모든 대본 줄이 `SYNTHESIS_TRANSPORT_ERROR`로 대체돼 V1을 잴 수 없다 — 결과의 «대체» 사유로 바로 보인다.
+- **볼 것**: «대본 줄 TTS 재생 n / m»과 «대체» 사유, 생성형 줄 «첫머리 잘림 의심», 지시별 새 말 시작 표(조용 시작 줄의 버린 전사 조각이 0인지, 말하는 중 줄의 낡은 꼬리가 버려졌는지), 아이 «응, 할래» 뒤 첫 장면 설명까지 무음(12.3절 8.9 ~ 21.1초), 대본 줄 목소리와 GPT-Live 목소리 차이(사람이 듣는다).
+
+### 15.6 가정 (DLG-A44 ~)
+
+- **DLG-A44** (V2) 조용 기준은 구간 봉인과 같은 `segment-quiet`(800ms)다. 12.3절 실측 기록에서 한 응답 안 조각 사이 쉼은 가장 길어도 234ms였다(800ms 이상 0번). 새 시간 키는 만들지 않았다.
+- **DLG-A45** (V2) 조용 시작의 새 말 시작은 처음 오는 시각 있는 전사 조각이나 첫 음성 조각이다. 시각 없는 전사 조각은 지금처럼 새 말을 열지 않는다. 확인 사건은 관측 값으로만 쓴다.
+- **DLG-A46** (V2) 공급자 리더가 넣고 실행기가 아직 처리하지 않은 출력 조각이 있으면 말하는 중으로 본다(보내는 순간 이미 도착한 낡은 조각).
+- **DLG-A47** (V2) `FakeProviderWsServer` · C안 가짜 공급자는 바꾸지 않았다. 둘의 채움은 디지털 무음이라 앱이 무음 조각으로 분류해(`ProviderClient`) 조용 시작에서도 기기로 가지 않는다 — C9 바이트 대조(기기가 받은 0x02 = 공급자가 보낸 말)가 그대로 맞는 까닭이다. 조용할 때 첫 전사가 확인 `end_ms`보다 앞서는 실제 모양은 인메모리 대역 시험(`OutputGenerationTest` · `GenerationSendExecutorTest`)이 만든다. 이 회차에 `scripts/verify.sh`는 돌리지 않았다.
+- **DLG-A48** (V2) 조용할 때 보낸 지시 직후 공급자 자동 응답이 먼저 시작하면 그 말을 새 말로 받는 위험은 받아들인다. 승인 원문 읽기는 원문 대조가 막고, 생성형 줄은 기본 게이트 · 제브를 지난 것만 들린다. V1 뒤에는 대본 줄 대부분이 지시 없이 나가므로 이 위험은 생성형 줄 · 대체 줄에만 남는다.
+- **DLG-A49** (V1) 대상 줄은 확장이 승인 원문 그대로 내는 줄 전부와 실행부 알림 두 줄이다. 기기 승인 음성(INTRO_PRACTICE · RE_PROMPT · CLOSING 등)은 이미 녹음 파일이라 대상이 아니다.
+- **DLG-A50** (V1) 줄을 찾는 열쇠는 (말하는 사람 표시, 원문 글자 그대로)다. 참여 확인 때 알려 준 줄과 낼 때의 줄이 한 글자라도 다르면 대체(`NOT_PREPARED`)다. 기준 대화 · 공유 고정 자료가 내는 승인 줄은 모두 알려 준 줄에 든다(`PracticeSpeechLinesTest`).
+- **DLG-A51** (V1) '들린 대본 줄'은 기기로 보낸 클립 줄이다(뒤에 끼어들기로 끊겨도 넣는다). GPT-Live 원문 읽기로 낸 줄은 이미 GPT-Live 맥락에 있어 싣지 않는다. 생성형 지시 하나에 실은 뒤에는 실리지 못한 옛 줄까지 비운다. 기준 대화의 지시문으로는 1 ~ 2줄이 들어간다(되묻기 1 · 코치 2 · 반응 1, `PracticeFlowScriptClipTest`).
+- **DLG-A52** (V1) 연습 밖 출력 보류(참여 확인 · 종료 확인 · 판정 턴) 중에는 클립을 쓰지 않고 GPT-Live 원문 읽기다(사유 `HELD`). 보류 규칙을 바꾸지 않으려고서다.
+- **DLG-A53** (V1) 무중 · 친구는 같은 목소리(`nova`)이고 말투 지시만 둘이다(무중 · 친구). 코치 알림은 무중 말투다. 대본 줄 목소리가 GPT-Live 목소리와 다를 수 있다 — 팀장 결정 범위이고 사람이 듣고 판단한다.
+- **DLG-A54** (V1) 합성기는 Luna 관례대로 리다이렉트 · 프록시를 쓰지 않는다. 프록시로만 나가는 실측 환경에서는 실행 동안만 로컬에서 푼다(15.5절).
+- **DLG-A55** (V1) 실패한 줄은 캐시에 두지 않고 그 세션에서 다시 맡기지 않는다(낼 때 대체). 안쪽 재시도는 없다. 20초가 넘는 음성은 `AUDIO_TOO_LONG`이다 — 출력 구간 상한과 같아 GPT-Live 원문 읽기도 그 길이는 한 구간에 담지 못한다.
+- **DLG-A56** (V1) 알림 두 줄은 확장이 줄을 하나라도 알려 줄 때만 맡긴다(레거시 흐름은 역할 전환 알림을 내지 않는다). 확장이 줄 목록에서 예외를 내면 알림만 맡기고 연습은 그대로 돈다.
+- **DLG-A57** (V1) 세션 사건에는 correlationId · 원문을 넣지 않았다(`seq`만). 하니스는 연습 발화 요청 순서로 짝짓는다.
+- **DLG-A58** (V1) R-M5: 새 시간 키 두 개는 화면이 읽지 않는 서버 키라 `frontend/src/shared/timing/timing-defaults.json`에 넣지 않았다(14절 `provider.*`와 같은 처리). 값(10s · 2s)은 실측 전 임시값이다.
+- **DLG-A59** (V1) 운영 기본 켜짐(팀장 결정)이라 RUNBOOK 단계 4에 R-F15 확인 항목을 열어 두고, 기록 전에는 env로 끄는 길을 적었다. 확인 자체는 사람이 한다.
+- **DLG-A60** (하니스) 기기 승인 음성 재생 시간은 시드 WAV의 실제 PCM 길이다(DLG-A36 대체). WAV가 없는 코드는 전처럼 글자 수 어림이다. 시드 WAV는 자리 파일이라(INTRO_PRACTICE 4.0초 · CLOSING 2.0초) 그 길이가 그대로 쓰인다.
+- **DLG-A61** (하니스) 대본 줄 합성 상한은 120회다(넘으면 `OVERLOADED` → 대체). '첫머리 잘림 의심'은 그 지시 뒤 공급자가 보낸 출력 전사를 이은 글에서, 들린 글이 시작하는 자리 바로 앞이 글자 · 숫자일 때 센다(참고 값, 맞춰 볼 수 없는 줄은 따로 센다).
+
+### 15.7 원 담당자 · 팀장과 맞출 것
+
+- **성민(realtime 실행부 · 게이트 · 연습 흐름)**
+  1. V2 조용 기준과 남은 위험(DLG-A44 ~ A48, (PDS-V2)).
+  2. V1 내는 길(`SessionExecutor.playScriptClip`): 게이트 · 송신 직전 재확인 · 기록 · 보류 · 끼어들기가 GPT-Live 원문 읽기와 같은지(DLG-A50 · A52).
+  3. 확장점 추가: `PracticeSessionExtension.speechLines` · `PracticeOutput.prepareSpeech`(기본 메서드), 편지함 `ScriptClipSettled`, `SessionExecutor.Services` 21번째 인자.
+  4. 들린 줄 맥락(DLG-A51)과 지시문 500자 상한.
+- **동훈(운영 · 배포)**: R-F15 확인 항목(RUNBOOK 단계 4)과 끄는 env `MUJOONG_SPEECHCLIP_ENABLED`, 새 설정 키 10개 · 시간 키 2개, 밖으로 나가는 호출 한 곳(`api.openai.com/v1/audio/speech`). 비밀 이름 목록은 그대로다(R-M9).
+- **도연(core 대본)**: 대본 원문이 TTS로 읽힌다. 20초 넘게 읽히는 긴 줄은 클립이 거절되고 GPT-Live 원문 읽기다(DLG-A55). core 코드 변화는 없다.
+- **팀장**: 목소리 차이(DLG-A53), 운영 기본 켜짐과 R-F15 확인 순서(DLG-A59), 시간 키 임시값(10s · 2s).
+
+### 15.8 깨는 변경 · 병합
+
+- 공급자 선 형식 · 기기 WSS 프레임 · 시작 패키지 · `practice-record-v2` · 판정 요청 · 이벤트 모양 · DB 마이그레이션은 바꾸지 않았다. 새 세션 사건 세 종류는 `realtime_session_event`(종류 제약 없음, payload jsonb)에 들어간다. core · 프런트 코드 변화는 없다.
+- **같은 앱 안 자바 모양**(다른 브랜치가 직접 만들면 맞춰야 한다): `SessionExecutor.Services` 21번째 인자 `SpeechClipSupport`(20개짜리 생성자는 남겨 `DISABLED`), `RealtimeProperties` 20번째 구성 요소 `speechClip`, `RealtimeTimingProperties` 8번째 구성 요소 `speechClip`, `OutputGeneration.BumpReason.SCRIPT_CLIP` · 3인자 생성자, `bumpForInstruction` · `onTranscript` · `onAppended`의 인자가 하나씩 는 판(옛 판은 남김).
+- **설정**: 새 키는 모두 기본값이 있어 설정 없이 기동한다. demo · prod에서 `mujoong.speech-clip.base-url`이 주소 규칙 밖이면 기동을 거부한다(값 미출력).
+- **겹치는 파일**: `SessionExecutor` · `OutputGeneration` · `PracticeConversation`을 고치는 다른 브랜치가 먼저 들어가면 V1 · V2 구간(`sendInstruction`의 `bumpForInstruction`, `PracticeOutputPort.speak` · `speakGenerated`, 출력 조각 처리)을 손으로 합친다. `claude/join-gate`와의 판정 지시문 합치기는 14.10절 3번 그대로다.
+- **배포 · 롤백**: realtime만 바뀐다. 롤백은 같은 SHA 롤백이다. V1만 끄려면 `MUJOONG_SPEECHCLIP_ENABLED=false`(대본 줄이 3회차 전처럼 GPT-Live 원문 읽기), V2는 끌 스위치가 없다.
+
+### 15.9 동작이 바뀌어 고친 단언 (R-F2)
+
+커버리지 하한 · 계약 대조 시험 · ArchUnit · 금지어 단언은 낮추지 않았다. 고친 단언은 동작이 바뀐 곳과 생성자 인자뿐이다.
+
+| 시험 | 바꾼 것 | 까닭 | 커밋 |
+|---|---|---|---|
+| `SessionExecutorReview2Test` 진단 교정 시험 | 기대 지시 목록 끝에 짧은 완결 요청(`INCOMPLETE` 교정 문장)을 더함 | V2: 교정 지시는 조용할 때(구간 봉인 뒤) 보낸 지시라, 그 뒤 처음 온 음성 조각을 교정에 따른 새 말로 받는다(전에는 확인 `end_ms` + 여유 앞이라 낡은 꼬리로 버렸다). 전사 없는 그 말도 미완이라 폐기되고, 응답당 한 번 · 연달아 두 번까지 규칙대로 짧은 완결 요청이 한 번 더 간다. 이 시험이 보는 것(금지 패턴 범주의 교정 문장)은 그대로다 | d7f70ea |
+| `JudgmentSettingsTest` · `PracticeFlowSettingsTest` · `TimingPropertiesTest`의 레코드 생성 | 생성자에 인자 하나(null · 시간 묶음)를 더함 | 설정 레코드에 구성 요소가 늘었다. 단언은 그대로다 | 0d35035 |
+| `PracticeVoiceHarnessSelfCheckTest` | 기준 대화 대본 줄이 GPT-Live가 아니라 클립으로 들린다고 본다(가짜 GPT-Live가 받은 원문 읽기 지시 → 없음, 대신 들린 줄 데이터). 일부러 다르게 읽은 줄 시험은 장치를 끈 배선에서 돈다. 출처 · 지시별 표 · WAV 길이 · 대체 줄 · 합계 줄 단언을 더함(강화) | V1 · V2 · 하니스 관찰 칸 | caff915 |
+
+### 15.10 시험 결과 (테스트 대역 · 합성 대화, 실제 AI 없음)
+
+| 단계 | 명령(`cd backend`, `-Pmujoong.test.db=docker`) | 결과 |
+|---|---|---|
+| V2(d7f70ea) | 커밋 트리를 내보내 `:contract-model:test :realtime-activity:test` | contract-model 327 · realtime 1994건 통과. 새 시험 `OutputGenerationTest` 6 · `GenerationSendExecutorTest` 3 |
+| V1(0d35035) | 같은 방식(하니스 시험 소스는 3회차 전 판) | contract-model 329 · realtime 2041건 통과. 새 시험 49건 — `ScriptClipExecutorTest` 14 · `SpeechClipSupportTest` 7 · `OpenAiSpeechClipSynthesizerTest` 7 · `PracticeSpeechLinesTest` 6 · `SpeechClipPropertiesTest` 4 · `PracticeInstructionHeardTest` 4 · `SpeechClipConfigurationTest` 3 · `PracticeDialogueDeviationsTest` 2 · `PracticeFlowScriptClipTest` 1 · `TimingPropertiesTest` 1 |
+| 하니스(caff915) | `:realtime-activity:test --tests "*PracticeVoiceHarnessSelfCheckTest*" --tests "*PracticeDialogueHarnessSelfCheckTest*"` | 9 · 3건 통과(새 시험 2) |
+| 최종 전체(caff915) | `env -u OPENAI_API_KEY -u JEV_API_KEY ./gradlew --no-daemon clean check verifyBootJarHasNoTestClasses -Pmujoong.test.db=docker --continue` | BUILD SUCCESSFUL(6분 26초). contract-model 329 · test-support 37 · core 1793 · realtime 2043건 모두 통과(실패 · 오류 · 건너뜀 0, 이번에는 `GraphWorkflowIT`도 통과). JaCoCo 줄 하한 통과(contract-model 98.45% · core 96.14% · realtime 93.93%), 두 앱 boot jar 시험 항목 0건, 격리 검사 `verifyLunaLiveIsolation` · `verifyLunaReachIsolation` · `verifyGptLiveIsolation` · `verifyJevLiveIsolation` · `verifyGptLivePracticeIsolation` 통과 — 실호출 하니스는 돌지 않았다(R-F1) |
+
+- 대역 시험이 보는 것 — V2: 조용할 때 보낸 지시는 첫 전사가 확인 `end_ms`보다 앞서도 문장 전체가 들리고, 음성이 전사보다 먼저 와도 새 말이 시작되며, 말하는 중 보낸 지시는 낡은 꼬리 · 여유 안 음성을 지금처럼 버린다. 처리하지 않은 조각 · 800ms 안 조각은 말하는 중이고 무음은 세지 않는다. 관측 사건 값(버린 조각 · 결과 · 확인 늦음 · 다음 세대). 연습 원문 읽기가 조용 시작에서 원문 불일치로 버려지지 않는다.
+- 대역 시험이 보는 것 — V1: 미리 만든 줄은 GPT-Live 지시 없이 재생되고 같은 재생 사실로 끝난다(알림 줄 포함). 만드는 중이면 출력을 막고 기다렸다가 재생, 시간 초과면 한 번만 GPT-Live로 읽고 늦은 음성은 내지 않는다. 기다리는 중 다른 발화가 오면 버린다. 합성 실패 · 꺼짐 · 알려 주지 않은 줄 · 판정 턴 보류는 GPT-Live 원문 읽기(사유 기록). 끼어들기는 GPT-Live 줄과 똑같이 끊고, 기본 게이트가 거절하면 보내지 않는다. 들린 줄은 다음 생성형 지시 앞에 한 번만 실리고 맥락만의 지시는 없다. 기준 대화 16차례가 대본 줄 7줄을 클립으로, 생성형 4줄만 GPT-Live로 낸다(`PracticeFlowScriptClipTest`). 합성기 요청 모양 · 말투 · 오류 사유(본문 미기록) · 키 · 주소 규칙 · 본문 상한 · 본문 끝까지 시한, 공유 캐시(한 번 만들기 · LRU · 상한 · 실패 미보관), 설정 기본값 · 형식 거부 · 기동 거부.
+- **실제 API · 실제 기기 결과는 없다**: 실음성 하니스(`gptLivePracticeTest`)는 이 회차 코드로 돌리지 않았다(15.5절, 오케스트레이터가 돌린다). 실제 TTS 합성 · 실제 GPT-Live 음성 · 실제 기기 결과도 없다. `scripts/verify.sh`(끝-끝)는 이 회차에 돌리지 않았다(DLG-A47).
+
+### 15.11 남은 위험
+
+1. **목소리 차이**: 대본 줄(TTS `nova`)과 생성형 줄(GPT-Live)의 목소리가 다르면 아이가 친구 · 무중을 다른 사람으로 들을 수 있다. 실측과 리허설에서 사람이 듣는다.
+2. **합성 지연**: 첫 장면 설명이 참여 확인 · 시작 안내 안에 다 만들어지지 않으면 2초 기다린 뒤 GPT-Live 원문 읽기로 대체된다. 그 줄에는 12.3절의 위험(첫머리 · 덧붙임)이 남는다(V2로 첫머리 잘림은 줄어든다).
+3. **조용 시작 직후 자동 응답**(DLG-A48).
+4. **들린 줄 맥락**: GPT-Live가 데이터를 지시로 읽거나 대본 줄을 다시 말할 수 있다(지시문 금지 문장만). 500자 상한에 1 ~ 2줄만 들어간다.
+5. **부하 · 비용**: 세션마다 대본 줄 · 알림 10줄 안팎을 합성한다(같은 원문은 캐시로 한 번). 동시 4 · 대기 200 상한을 넘는 부하에서는 대체가 는다.
+6. **R-F15 확인 전 배포**: 키가 있는 demo에 이 SHA가 먼저 나가면 확인 기록 없이 Audio API를 부른다 — RUNBOOK 항목대로 끄거나 기록을 먼저 남긴다.
+7. **하니스 승인 음성 길이**: 시드 WAV는 자리 파일이라 실제 녹음 길이와 다르다. 아이가 말하는 시점과 무응답 시계의 겹침이 실제와 다를 수 있다.
+8. **이 회차 결과는 대역 · 합성뿐이다**(R-M11). 실제 TTS 합성 품질 · 지연, 실제 GPT-Live의 조용 시작 판단은 실측(15.5절)으로만 확인된다.
