@@ -25,7 +25,11 @@ public final class InstructionTemplates {
         /** 참여 확인 뒤 첫 응답. */
         FIRST(INTERJECTION_LEAD + " 관심사나 일상 질문 하나로 아이와 이야기를 시작한다. "),
         /** 확인 질문 뒤 이어 가기 · 연습의 응답 요청. */
-        CONTINUE(INTERJECTION_LEAD + " 아이가 마지막으로 한 말에 한두 문장으로 답한다. ");
+        CONTINUE(INTERJECTION_LEAD + " 아이가 마지막으로 한 말에 한두 문장으로 답한다. "),
+        /**
+         * 자유대화 응답 정체 안전망(JIRA-270): 아이 말 뒤 응답이 오지 않거나 모델이 "생각해 볼게" 같은 미루는 말만 하고 멈췄을 때 한 번 보낸다.
+         */
+        STALL_RESUME(INTERJECTION_LEAD + " 아이가 마지막으로 한 말에 바로 한두 문장으로 답한다. ");
 
         private final String lead;
 
@@ -45,6 +49,8 @@ public final class InstructionTemplates {
         /** 자유대화 첫 응답에는 대화 전 보호자 참고(선택, {@link DialogInstructions#conversationGuide})를 덧붙인다. 연습에는 싣지 않는다. */
         public String content(ActivityType mode, kr.mujoong.contract.context.ConversationGuide guide) {
             if (mode == ActivityType.PRACTICE) return content();
+            if (this == STALL_RESUME) return scoped("방금 응답이 이어지지 않았다. 생각 중이라고 말하거나 답을 미루지 말고, "
+                    + "아이가 마지막으로 한 말에 바로 짧게 답한다. 모르면 모른다고 짧게 말한다. 답 뒤 새 질문을 자동으로 붙이지 않는다.");
             if (this == FIRST) return scoped("서버가 현재 안내 전달과 참여 수락을 확인했다. 현재 연결에서 검증된 시작 안내 녹음의 실제 재생이 완료됐다. "
                     + "시작 인사·자기소개·안내 대본·참여 질문을 다시 시작하거나 반복하지 않는다. "
                     + "아이가 마지막으로 한 질문·경험·정정을 먼저 따르고 바로 이어 답한다. 아이가 누구인지나 이름을 명시적으로 물으면 그 질문에만 답한다. "

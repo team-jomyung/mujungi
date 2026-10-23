@@ -18,8 +18,11 @@ class ServicePolicyCatalogServiceGuardrailTest {
     @Test
     void packagedBytesAndManifestAgreeAndRetainKorean() {
         PolicyBundle bundle = new ServicePolicyCatalog().freeTalk();
-        assertThat(bundle.promptVersion()).isEqualTo("service-0.1-app.2");
+        assertThat(bundle.promptVersion()).isEqualTo("service-0.1-app.3");
         assertThat(bundle.instructions()).contains("AI 인형 무중", "비밀 보장을 약속하지 않는다", "같은 정보를 얻기 위한 도움");
+        // JIRA-270: 답을 미루지 말고 바로 짧게 답하라는 문장(app.3)
+        assertThat(bundle.instructions()).contains("생각 중이라고 말하거나 답을 미루지 않는다", "바로 짧게 답한다",
+                "모르면 모른다고 말한다");
         assertThat(bundle.appliedSha256()).isEqualTo(ServicePolicyCatalog.sha256(
                 bundle.instructions().getBytes(StandardCharsets.UTF_8)));
         assertThat(bundle.sourceSha256()).isEqualTo("1d92f114af7b48cefd86ed3df03feea30cdecc6ac546b128c236427f3d7fe5b7");

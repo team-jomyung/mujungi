@@ -48,6 +48,8 @@ public final class SessionTimers {
         INSTRUCTION_WAIT(false),
         /** 참여 수락 때 보관한 응답이 비어 있으면 모델이 스스로 첫 응답을 시작하기를 기다리는 시간(provider.join-self-start-wait). */
         JOIN_SELF_START(false),
+        /** JIRA-270: 자유대화 응답 정체 안전망(provider.response-stall-wait). 아이 말 확정 · 미루는 말로 끝난 응답부터 잰다. */
+        RESPONSE_STALL(false),
         /** U11 A7: 입력 전사 조각이 이만큼 오지 않으면 그 묶음을 확정 전사로 본다(input-transcript-quiet). */
         INPUT_TRANSCRIPT_QUIET(true),
         /** U11 BR1.4: 판정 턴 열기 + live-budget(4s). 정확히 4.000초에 닿으면 보류(TIMEOUT). */
