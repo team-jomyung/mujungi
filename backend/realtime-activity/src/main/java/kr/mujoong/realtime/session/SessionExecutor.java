@@ -221,7 +221,20 @@ public final class SessionExecutor {
             SessionSettlement settlement,
             PracticeSessionExtension.Factory practice,
             JudgmentSupport judgment,
-            GuardrailSupport guardrail) {
+            GuardrailSupport guardrail,
+            kr.mujoong.realtime.speech.SpeechClipSupport speechClips) {
+
+        /** 대본 줄 음성 장치 없음(3회차 V1 전 모양, 모든 연습 대본 줄을 GPT-Live 원문 읽기로 낸다 — {@code SpeechClipSupport.DISABLED}). */
+        public Services(SessionTransitions transitions, Function<UUID, Optional<? extends DeviceLink>> deviceLinks,
+                DeviceStatusPort deviceStatus, ProviderConnector connector, ProviderRequestFactory requests,
+                OutputGate gate, AsyncRecorder recorder, LatencyRecorder latency, TimerClocks clocks,
+                TaskLauncher launcher, EventLogger events, RealtimeMetrics metrics, MujoongClock clock, Settings settings,
+                SessionGapPort gaps, AudioRecordings recordings, SessionSettlement settlement,
+                PracticeSessionExtension.Factory practice, JudgmentSupport judgment, GuardrailSupport guardrail) {
+            this(transitions, deviceLinks, deviceStatus, connector, requests, gate, recorder, latency, clocks, launcher,
+                    events, metrics, clock, settings, gaps, recordings, settlement, practice, judgment, guardrail,
+                    kr.mujoong.realtime.speech.SpeechClipSupport.DISABLED);
+        }
 
         /** 제브 장치 없음(U13 전 모양, 제브 단계를 건너뛰고 지금 흐름이 그대로 돈다 — {@link GuardrailSupport#DISABLED}). */
         public Services(SessionTransitions transitions, Function<UUID, Optional<? extends DeviceLink>> deviceLinks,
@@ -271,6 +284,7 @@ public final class SessionExecutor {
             Objects.requireNonNull(practice, "practice");
             Objects.requireNonNull(judgment, "judgment");
             Objects.requireNonNull(guardrail, "guardrail");
+            Objects.requireNonNull(speechClips, "speechClips");
             Objects.requireNonNull(transitions, "transitions");
             Objects.requireNonNull(deviceLinks, "deviceLinks");
             Objects.requireNonNull(deviceStatus, "deviceStatus");
@@ -411,6 +425,25 @@ public final class SessionExecutor {
     static final String EVENT_LIVE_INSTRUCTIONS = "LIVE_INSTRUCTIONS";
     /** 3회차 V2: 지시 하나의 새 말 시작 관측(payload는 지시 id · 사유 · 조용 시작 여부 · 시각 · 개수 · 결과뿐, 원문 없음). */
     static final String EVENT_OUTPUT_NEW_SPEECH = "OUTPUT_NEW_SPEECH";
+    /** 3회차 V1: 대본 줄 음성을 맡긴 결과(payload는 줄 수 · 맡긴 수 · 캐시 · 상한 초과 수 · 실패 사유 코드뿐). */
+    static final String EVENT_SPEECH_CLIPS_PREPARED = "SPEECH_CLIPS_PREPARED";
+    /** 3회차 V1: 승인 원문 연습 발화 하나를 무엇으로 냈는가(payload는 출처 · 사유 코드 · 음성 길이 · 기다린 시간뿐, 원문 없음). */
+    static final String EVENT_PRACTICE_SPEECH_SOURCE = "PRACTICE_SPEECH_SOURCE";
+    /** 3회차 V1: 대본 줄 음성을 기다리는 연습 시계 이름의 앞머리(확장에 전달하지 않는다). */
+    static final String TIMER_CLIP_WAIT = "speech-clip-wait-";
+    /** 3회차 V1 PRACTICE_SPEECH_SOURCE의 출처 값: 미리 만든 대본 줄 음성. */
+    static final String SOURCE_TTS_CLIP = "TTS_CLIP";
+    /** 출처 값: 대본 줄을 GPT-Live 원문 읽기로 냈다(음성을 쓸 수 없었다 — 사유 코드가 함께 간다). */
+    static final String SOURCE_GPT_LIVE_FALLBACK = "GPT_LIVE_FALLBACK";
+    /** 출처 값: GPT-Live가 그 자리에서 만드는 생성형 역할 발화. */
+    static final String SOURCE_GPT_LIVE_GENERATED = "GPT_LIVE_GENERATED";
+    /** 출처 값: 내지 못했다(기다리던 중 다른 발화 · 취소 · 중단, 공급자 닫힘). */
+    static final String SOURCE_NONE = "NONE";
+    /** 3회차 V1: 생성형 지시에 싣는 들린 대본 줄 수 상한(시간 값이 아니다). */
+    static final int MAX_HEARD_CLIPS = 4;
+    /** 역할 전환 · 복귀 알림의 말하는 사람 표시(announceRoleSwitch가 낸다). */
+    static final String COACH_SPEAKER = "코치";
+    static final String PEER_SPEAKER = "친구";
     /** ACTIVE 중 공급자 끊김의 end_detail. */
     static final String END_DETAIL_PROVIDER_LOST = "PROVIDER_LOST";
     /** 취소 · 교정 · 재생 위치를 기억하는 응답 · 재생 수의 상한(오래된 것부터 잊는다). */
@@ -491,6 +524,19 @@ public final class SessionExecutor {
     private int droppedLate;
     /** 빠진 승인 문구를 이미 남긴 코드(세션당 코드별 1회). */
     private final Set<String> missingReported = new HashSet<>();
+    /** 3회차 V1: 이 세션의 대본 줄 음성(미리 만든 것 · 만드는 중, 실행기 스레드 전용). */
+    private final ScriptClips scriptClips;
+    /** 3회차 V1: 낼 차례에 음성이 아직 만들어지는 중이라 기다리는 연습 발화(없으면 null). */
+    private ClipWait clipWait;
+    private long clipWaitSeq;
+    /** 3회차 V1: 이 세션의 연습 발화 요청 번호(승인 원문 · 생성형, PRACTICE_SPEECH_SOURCE의 seq — 요청마다 사건이 하나다). */
+    private int practiceSpeechSeq;
+    /** 3회차 V1: 미리 만든 음성으로 내고 아직 생성형 지시에 싣지 않은 대본 줄(GPT-Live 대화 맥락에 없다, 최근 {@value #MAX_HEARD_CLIPS}줄만). */
+    private final java.util.ArrayDeque<kr.mujoong.realtime.voice.PracticeInstruction.Heard> heardClips = new java.util.ArrayDeque<>();
+
+    /** 대본 줄 음성을 기다리는 연습 발화(요청 번호 · 시계 이름 · 기다리기 시작한 시각). */
+    private record ClipWait(kr.mujoong.realtime.voice.PracticeSpeech speech, int seq, String timer, Instant since) {
+    }
 
     /**
      * @param onTerminated 종료 정리 뒤 레지스트리에서 지우는 함수
@@ -507,6 +553,8 @@ public final class SessionExecutor {
         this.ending = new EndingFlow(ctx, idle, judgment, guardrail, onTerminated, new EndingEnv());
         this.joinFlow = new JoinFlow(ctx, idle, judgment, ending, new JoinEnv());
         this.clocks = new SessionClocks(ctx, idle, ending, new ClocksEnv());
+        this.scriptClips = new ScriptClips(ctx.services().speechClips(),
+                (speaker, text) -> ctx.mailbox().putSafety(new SessionMailbox.ScriptClipSettled(speaker, text)));
         // 연습 확장점은 PRACTICE 세션에서만 부른다(자유대화는 부르지 않는다)
         this.practice = ctx.plan().activityType() == ActivityType.PRACTICE
                 ? Objects.requireNonNull(ctx.services().practice().create(ctx.plan().sessionId()), "practice extension")
@@ -705,6 +753,7 @@ public final class SessionExecutor {
             case SessionMailbox.DeletionStop stop -> clocks.onDeletionStop(stop);
             case SessionMailbox.PracticeEvent event -> onPracticeEvent(event.event());
             case SessionMailbox.PracticeTimerFired fired -> onPracticeTimer(fired);
+            case SessionMailbox.ScriptClipSettled settled -> onScriptClipSettled(settled);
             case SessionMailbox.DeviceTakenOver ignored -> {
                 if (ending.farewellPending()) {
                     ending.finishFarewell(false);
@@ -901,7 +950,52 @@ public final class SessionExecutor {
         ctx.relay().start(ctx.services().launcher());
         ctx.sendControl(new SessionState(View.LISTENING));
         clocks.armDisconnect();
+        // 3회차 V1: 참여 확인 · 시작 안내(약 20초) 동안 대본 줄 음성을 미리 만든다
+        prepareScriptClips();
         joinFlow.begin();
+    }
+
+    /**
+     * 3회차 V1: 연습 세션의 대본 줄(확장이 알려 준 첫 대본의 줄 + 실행부가 내는 역할 전환 · 복귀 알림의 승인 문장)을 공유 장치에 맡긴다. 확장이 줄을 내지
+     * 못해도(예외) 연습은 그대로 돌고 그 줄들은 낼 때 GPT-Live 원문 읽기다 — 예외는 확장이 ACTIVE 진입에서 다시 만나 지금처럼 처리한다. 확장이 줄을 하나도
+     * 내지 않으면(레거시 흐름 등) 알림 문장도 맡기지 않는다(그 흐름은 역할 전환 알림을 내지 않는다).
+     */
+    private void prepareScriptClips() {
+        if (practice == null || !scriptClips.enabled()) {
+            return;
+        }
+        List<PracticeSessionExtension.SpeechLine> lines = new ArrayList<>();
+        String failure = null;
+        try {
+            List<PracticeSessionExtension.SpeechLine> offered = practice.speechLines(ctx.plan().practiceJson(),
+                    ctx.plan().approvedSpeech());
+            if (offered != null) {
+                lines.addAll(offered);
+            }
+        } catch (RuntimeException e) {
+            failure = "SPEECH_LINES_FAILED";
+            ctx.services().events().appError(EventLog.Component.SESSION_LIFECYCLE, e);
+        }
+        if (lines.isEmpty() && failure == null) {
+            return;
+        }
+        addNotice(lines, "COACH_SWITCH", COACH_SPEAKER);
+        addNotice(lines, "PEER_RETURN", PEER_SPEAKER);
+        recordPrepared(scriptClips.prepare(lines), failure);
+    }
+
+    /** announceRoleSwitch가 낼 승인 문장(같은 말하는 사람 표시 · 원문, 무중의 말투). */
+    private void addNotice(List<PracticeSessionExtension.SpeechLine> lines, String code, String speaker) {
+        String sentence = ctx.plan().approvedSpeech().get(code);
+        if (sentence != null && !sentence.isBlank()) {
+            lines.add(new PracticeSessionExtension.SpeechLine(speaker, sentence, PracticeSessionExtension.SpeechVoice.NARRATOR));
+        }
+    }
+
+    private void recordPrepared(ScriptClips.Prepared prepared, String failure) {
+        ctx.putEvent(EVENT_SPEECH_CLIPS_PREPARED, "{\"lines\":" + prepared.lines() + ",\"started\":" + prepared.started()
+                + ",\"cached\":" + prepared.cached() + ",\"known\":" + prepared.known() + ",\"refused\":" + prepared.refused()
+                + ",\"failure\":" + (failure == null ? "null" : "\"" + failure + "\"") + "}", ctx.services().clock().now());
     }
 
     /** ACTIVE 진입의 승자 몫(④): ② 시계 해제 · 원음 기록 시작 · LISTENING · 끊김 시계. */
@@ -1082,6 +1176,7 @@ public final class SessionExecutor {
     private void stopPracticeProgress() {
         if (practice == null || !practice.controlsOutput()) return;
         practice.onStopping();
+        clearClipWait();
         pendingPracticeSpeech = null;
         practiceAudio.clear();
         pausedPracticeEvents.clear();
@@ -1097,6 +1192,14 @@ public final class SessionExecutor {
             return;
         }
         practiceTimers.remove(fired.name());
+        if (fired.name().startsWith(TIMER_CLIP_WAIT)) {
+            // 3회차 V1: 대본 줄 음성을 기다린 시간이 다 됐다 — 확장에 전달하지 않고 GPT-Live 원문 읽기로 낸다
+            ClipWait waiting = clipWait;
+            if (waiting != null && waiting.timer().equals(fired.name())) {
+                resumeClipWait(waiting);
+            }
+            return;
+        }
         if (fired.name().startsWith("u5b-audio-")) {
             UUID playbackId = UUID.fromString(fired.name().substring("u5b-audio-".length()));
             var speech = practiceAudio.remove(playbackId);
@@ -1145,6 +1248,7 @@ public final class SessionExecutor {
 
     private void interruptPracticeSpeech(Instant now) {
         if (practice == null || !practice.controlsOutput()) return;
+        clearClipWait();
         var interrupted = new LinkedHashSet<kr.mujoong.realtime.voice.PracticeSpeech>(practiceAudio.values());
         if (pendingPracticeSpeech != null) interrupted.add(pendingPracticeSpeech);
         pendingPracticeSpeech = null;
@@ -1781,25 +1885,239 @@ public final class SessionExecutor {
         return ctx.status() == SessionStatus.ACTIVE && !ctx.settling() && !ctx.terminated() && practice != null;
     }
 
+    // ------------------------------------------------------------------ 3회차 V1 대본 줄 음성
+
+    /**
+     * 연습 밖의 출력 보류(참여 확인 · 종료 확인 · 판정 턴). 이 동안의 연습 발화는 미리 만든 음성을 쓰지 않고 지금처럼 GPT-Live 원문 읽기로 보낸다 — 대본 줄
+     * 음성 때문에 보류 규칙이 바뀌지 않게 한다.
+     */
+    private boolean outputHeldBeyondPractice() {
+        return ctx.status() == SessionStatus.WAITING_CHILD || ctx.stopConfirm().isActive() || judgment.holdsOutput();
+    }
+
+    /**
+     * 미리 만든 대본 줄 음성을 낸다(편차 (PDS-V1)). GPT-Live에 지시를 보내지 않고 기기 · 출력 세대를 올려 재생 중이던 소리와 낡은 공급자 조각을 버린 뒤,
+     * 그 음성을 첫 조각부터 끝까지 담긴 봉인 구간으로 만들어 GPT-Live 출력과 같은 길(기본 게이트 검사 → 송신 직전 재확인 → 출력 묶음, 0x02 프레임)로
+     * 보낸다. 대화 기록(AI 행 승인) · 지연 기록 · 재생 사실(PLAYED · FAILED · INTERRUPTED)도 같은 길이다. 공급자 출력은 계속 막는다(연습 발화를 보낸 뒤와
+     * 같다). 게이트 · 재확인에서 폐기되면 그 발화는 지금처럼 FAILED로 확장에 돌아간다.
+     *
+     * @param waitedSince 음성을 기다리기 시작한 시각(기다리지 않았으면 null)
+     * @return 언제나 참(결과는 재생 사실로 돌아간다)
+     */
+    private boolean playScriptClip(int seq, kr.mujoong.realtime.voice.PracticeSpeech speech,
+            kr.mujoong.realtime.speech.SpeechClipSupport.Clip clip, Instant waitedSince) {
+        ctx.bumpGeneration();
+        bumpOutput(OutputGeneration.BumpReason.SCRIPT_CLIP);
+        // 원문 읽기 지시(재지시 대상 아님)를 보낸 것과 같게 마지막 서버 지시 기억을 지운다(U13 W2b)
+        guardrail.onServerInstruction(null);
+        pendingPracticeSpeech = speech;
+        practiceHold = true;
+        Instant now = ctx.services().clock().now();
+        long nanos = ctx.services().clock().monotonicNanos();
+        if (!guardrail.isChecking()) {
+            // 이 턴의 첫 출력 · 구간 확정은 음성을 내는 지금이다(공급자 응답 · 조용 대기 0ms)
+            ctx.services().latency().providerFirstOut(ctx.plan().sessionId(), now);
+            ctx.services().latency().segmentConfirmed(ctx.plan().sessionId(), now, nanos, nanos, nanos);
+        }
+        ctx.transcripts().aiStart(now);
+        ctx.transcripts().aiDone(now);
+        SegmentBuffer.Sealed sealed = new SegmentBuffer.Sealed(ctx.outputGen().generation(), speech.text(),
+                List.of(clip.pcm()), clip.pcm().length, ctx.outputGeneration().get(), now, nanos, now, nanos, false, true);
+        try {
+            GateDecision inspected = ctx.services().gate().inspect(sealed);
+            if (!inspected.passed()) {
+                discard(sealed, inspected.reason(), false);
+            } else {
+                if (guardrail.enabled()) {
+                    // U13 분류 ①과 같다: 승인 원문 그대로의 음성이라 제브를 부르지 않고 기본 게이트 검사만 거친다
+                    guardrail.onVerbatimSkipped(GuardrailCoordinator.SOURCE_PRACTICE_SPEECH, sealed.transcript());
+                }
+                recheckAndSend(sealed, null, true, OutputBegin.Source.SCENARIO_SCRIPT);
+            }
+        } catch (RuntimeException e) {
+            // 게이트 처리 중 예외는 폐기한다(fail-closed, SD-17 — GPT-Live 구간과 같다)
+            ctx.services().events().appError(EventLog.Component.OUTPUT_GATE, e);
+            if (ctx.transcripts().hasOpenAi()) {
+                discard(sealed, GateDecision.DiscardReason.GATE_EMPTY, false);
+            }
+        }
+        boolean sent = practiceAudio.containsValue(speech);
+        if (sent) {
+            rememberHeard(speech);
+        }
+        recordSpeechSource(seq, SOURCE_TTS_CLIP, sent ? null : "NOT_SENT", clip.audioMs(), waitedSince, null, sent);
+        return true;
+    }
+
+    /**
+     * 낼 차례에 대본 줄 음성이 아직 만들어지는 중이다: 지금처럼 앞 소리를 멈추고 공급자 출력을 막은 채 {@code ready-wait}까지 기다린다. 다 되면
+     * ({@link SessionMailbox.ScriptClipSettled}) 그 음성으로, 시간이 다 되면 GPT-Live 원문 읽기로 낸다.
+     */
+    private boolean waitForScriptClip(int seq, kr.mujoong.realtime.voice.PracticeSpeech speech) {
+        ctx.bumpGeneration();
+        bumpOutput(OutputGeneration.BumpReason.SCRIPT_CLIP);
+        guardrail.onServerInstruction(null);
+        pendingPracticeSpeech = speech;
+        practiceHold = true;
+        String timer = TIMER_CLIP_WAIT + (++clipWaitSeq);
+        clipWait = new ClipWait(speech, seq, timer, ctx.services().clock().now());
+        schedulePracticeTimer(timer, scriptClips.readyWait());
+        return true;
+    }
+
+    /** 기다리던 대본 줄 음성이 다 됐거나(실패 포함) 기다린 시간이 다 됐다. 그사이 다른 발화 · 취소 · 중단이 있었으면 아무것도 하지 않는다. */
+    private void resumeClipWait(ClipWait waiting) {
+        takeClipWait();
+        kr.mujoong.realtime.voice.PracticeSpeech speech = waiting.speech();
+        if (!practiceActive() || !speech.equals(pendingPracticeSpeech)) {
+            return;
+        }
+        ScriptClips.Lookup clip = scriptClips.lookup(speech.partnerRole(), speech.text());
+        boolean held = outputHeldBeyondPractice();
+        if (clip.state() == ScriptClips.State.READY && !held) {
+            playScriptClip(waiting.seq(), speech, clip.clip(), waiting.since());
+            return;
+        }
+        if (!speakWithGptLive(waiting.seq(), speech, fallbackReason(clip, held), waiting.since())) {
+            // 확장은 이미 참을 받았으므로 지금처럼 재생 실패로 알린다
+            pendingPracticeSpeech = null;
+            practiceHold = true;
+            practicePlayback(speech, kr.mujoong.realtime.practicelegacy.PracticePorts.Playback.FAILED);
+        }
+    }
+
+    /** 음성을 기다리는 발화를 떼어 낸다(시계를 끈다, 기록하지 않는다). */
+    private ClipWait takeClipWait() {
+        ClipWait waiting = clipWait;
+        if (waiting != null) {
+            clipWait = null;
+            cancelPracticeTimer(waiting.timer());
+        }
+        return waiting;
+    }
+
+    /** 음성을 기다리는 발화를 버린다(다른 발화 · 취소 · 중단 · 진행 멈춤). 재생 사실은 그 길이 지금처럼 알리고, 여기서는 출처 사건만 남긴다. */
+    private void clearClipWait() {
+        ClipWait waiting = takeClipWait();
+        if (waiting != null) {
+            recordSpeechSource(waiting.seq(), SOURCE_NONE, "WAIT_ABANDONED", null, waiting.since(), null, false);
+        }
+    }
+
+    private void onScriptClipSettled(SessionMailbox.ScriptClipSettled settled) {
+        ClipWait waiting = clipWait;
+        if (waiting != null && waiting.speech().partnerRole().equals(settled.speaker())
+                && waiting.speech().text().equals(settled.text())) {
+            resumeClipWait(waiting);
+        }
+    }
+
+    /**
+     * 대본 줄을 지금처럼 GPT-Live 원문 읽기 지시로 낸다(3회차 V1 전 동작 그대로 — 대본 줄 음성이 없거나 · 실패했거나 · 꺼졌거나 · 늦었거나 · 연습 밖 출력
+     * 보류 중일 때). 공급자 연결이 없으면 보내지 않고 거짓.
+     */
+    private boolean speakWithGptLive(int seq, kr.mujoong.realtime.voice.PracticeSpeech speech, String reason,
+            Instant waitedSince) {
+        if (ctx.providerSession() == null || !ctx.providerSession().isOpen()) {
+            recordSpeechSource(seq, SOURCE_NONE, "PROVIDER_CLOSED", null, waitedSince, null, false);
+            return false;
+        }
+        ctx.bumpGeneration();
+        ctx.transcripts().aiFinal("", false, ctx.services().clock().now());
+        pendingPracticeSpeech = speech;
+        practiceHold = false;
+        // 설계 개정 A2: 승인된 발화 읽기 지시를 세대를 올리며 직렬 큐로 보낸다(응답 요청 type이 없어 지시가 발화를 시작한다). 새 말이 시한
+        // 안에 시작하지 않거나 송신이 실패하면 지금처럼 확장에 실패를 알린다
+        kr.mujoong.realtime.voice.PracticeInstruction instruction =
+                kr.mujoong.realtime.voice.PracticeInstruction.forSpeech(speech);
+        boolean sent = sendInstruction(OutputGeneration.BumpReason.SERVER_SEND, "provider-practice-speech-",
+                id -> ctx.services().requests().practiceInstruction(id, instruction),
+                () -> practiceOutput.post("u5b-voice-failed", speech));
+        recordSpeechSource(seq, sent ? SOURCE_GPT_LIVE_FALLBACK : SOURCE_NONE, sent ? reason : "PROVIDER_CLOSED", null,
+                waitedSince, null, sent);
+        return sent;
+    }
+
+    /** 대본 줄 음성을 쓰지 못한 사유 코드(원문 · 음성 없음). */
+    private String fallbackReason(ScriptClips.Lookup clip, boolean held) {
+        if (held) {
+            return "HELD";
+        }
+        if (!scriptClips.enabled()) {
+            return "DISABLED";
+        }
+        return switch (clip.state()) {
+            case ABSENT -> "NOT_PREPARED";
+            case PENDING -> "CLIP_NOT_READY";
+            case FAILED -> "SYNTHESIS_" + clip.failure();
+            case READY -> "HELD";
+        };
+    }
+
+    /** 미리 만든 음성으로 아이에게 보낸 대본 줄을 다음 생성형 지시의 맥락으로 쥔다(최근 {@value #MAX_HEARD_CLIPS}줄). */
+    private void rememberHeard(kr.mujoong.realtime.voice.PracticeSpeech speech) {
+        if (heardClips.size() >= MAX_HEARD_CLIPS) {
+            heardClips.removeFirst();
+        }
+        heardClips.addLast(new kr.mujoong.realtime.voice.PracticeInstruction.Heard(speech.partnerRole(), speech.text()));
+    }
+
+    /**
+     * 연습 발화 요청 하나를 무엇으로 냈는가(PRACTICE_SPEECH_SOURCE, R-F14: 원문 · 말하는 사람 · 음성 없이 번호 · 출처 · 사유 코드 · 길이 · 개수만).
+     *
+     * @param seq 이 세션의 연습 발화 요청 번호(승인 원문 · 생성형을 함께 센다)
+     * @param clipMs 대본 줄 음성 길이(음성으로 냈을 때만)
+     * @param waitedSince 음성을 기다리기 시작한 시각(기다렸을 때만)
+     * @param heard 생성형 지시에 실은 들린 대본 줄 수(생성형일 때만)
+     */
+    private void recordSpeechSource(int seq, String source, String reason, Long clipMs, Instant waitedSince, Integer heard,
+            boolean sent) {
+        Instant now = ctx.services().clock().now();
+        Long waitedMs = waitedSince == null ? null : Math.max(0L, Duration.between(waitedSince, now).toMillis());
+        ctx.putEvent(EVENT_PRACTICE_SPEECH_SOURCE, "{\"seq\":" + seq + ",\"source\":\"" + source + "\",\"reason\":"
+                + (reason == null ? "null" : "\"" + reason + "\"") + ",\"clipMs\":" + clipMs + ",\"waitedMs\":" + waitedMs
+                + ",\"heard\":" + heard + ",\"sent\":" + sent + "}", now);
+    }
+
     /** 실행기가 확장점에 주는 출력 능력. post 밖의 능력은 실행기 스레드에서만 부른다. */
     private final class PracticeOutputPort implements PracticeSessionExtension.PracticeOutput {
 
+        /**
+         * 승인 원문 연습 발화(3회차 V1, 편차 (PDS-V1)). 그 줄 음성을 미리 만들었으면 GPT-Live에 읽게 하지 않고 그 음성을 이미 승인된 구간처럼 기본 게이트
+         * 검사 → 송신 직전 재확인 → 기기 출력 묶음(OUTPUT_BEGIN source=SCENARIO_SCRIPT, 같은 0x02 프레임)으로 낸다. 만드는 중이면 {@code ready-wait}까지
+         * 기다리고, 미리 알려 주지 않았거나 · 실패했거나 · 꺼졌거나 · 늦었거나 · 연습 밖 출력 보류 중이면 지금처럼 GPT-Live 원문 읽기다. 어느 길이든 결과는
+         * 같은 재생 사실(PLAYED · FAILED · INTERRUPTED)로 확장에 돌아간다.
+         */
         @Override public boolean speak(kr.mujoong.realtime.voice.PracticeSpeech speech) {
-            if (!practiceActive() || ctx.providerSession() == null || !ctx.providerSession().isOpen()) return false;
-            ctx.bumpGeneration();
-            ctx.transcripts().aiFinal("", false, ctx.services().clock().now());
-            pendingPracticeSpeech = speech;
-            practiceHold = false;
-            // 설계 개정 A2: 승인된 발화 읽기 지시를 세대를 올리며 직렬 큐로 보낸다(응답 요청 type이 없어 지시가 발화를 시작한다). 새 말이 시한
-            // 안에 시작하지 않거나 송신이 실패하면 지금처럼 확장에 실패를 알린다
-            kr.mujoong.realtime.voice.PracticeInstruction instruction =
-                    kr.mujoong.realtime.voice.PracticeInstruction.forSpeech(speech);
-            return sendInstruction(OutputGeneration.BumpReason.SERVER_SEND, "provider-practice-speech-",
-                    id -> ctx.services().requests().practiceInstruction(id, instruction),
-                    () -> practiceOutput.post("u5b-voice-failed", speech));
+            if (!practiceActive()) return false;
+            clearClipWait();
+            int seq = ++practiceSpeechSeq;
+            ScriptClips.Lookup clip = scriptClips.lookup(speech.partnerRole(), speech.text());
+            boolean held = outputHeldBeyondPractice();
+            if (clip.state() == ScriptClips.State.READY && !held) {
+                return playScriptClip(seq, speech, clip.clip(), null);
+            }
+            if (clip.state() == ScriptClips.State.PENDING && !held && scriptClips.readyWait().isPositive()) {
+                return waitForScriptClip(seq, speech);
+            }
+            return speakWithGptLive(seq, speech, fallbackReason(clip, held), null);
+        }
+
+        @Override public boolean prepareSpeech(List<PracticeSessionExtension.SpeechLine> lines) {
+            if (!practiceActive()) {
+                return refusePractice("prepareSpeech", "NOT_ACTIVE");
+            }
+            if (!scriptClips.enabled() || lines == null) {
+                return false;
+            }
+            recordPrepared(scriptClips.prepare(lines), null);
+            return true;
         }
 
         @Override public boolean cancelSpeech(UUID correlationId) {
+            if (clipWait != null && clipWait.speech().correlationId().equals(correlationId)) {
+                clearClipWait();
+            }
             if (pendingPracticeSpeech != null && pendingPracticeSpeech.correlationId().equals(correlationId)) {
                 pendingPracticeSpeech = null; practiceHold = true;
                 stopOutputForIntent(ctx.services().clock().now());
@@ -1947,13 +2265,20 @@ public final class SessionExecutor {
             }
             kr.mujoong.realtime.voice.PracticeSpeech slot;
             kr.mujoong.realtime.voice.PracticeInstruction instruction;
+            int heard;
             try {
                 slot = kr.mujoong.realtime.voice.PracticeSpeech.generatedSlot(correlationId, NOTICE_SCENARIO_ID,
                         ctx.outputGen().generation(), role, instructionText);
-                instruction = new kr.mujoong.realtime.voice.PracticeInstruction(instructionText);
+                // 3회차 V1: 미리 만든 음성으로 낸 대본 줄은 GPT-Live가 듣지 못했으므로 이 지시 앞에 데이터로 싣는다(맥락만을 위한 지시는 따로 보내지
+                // 않는다). 지시문 상한 안에 들어가는 최근 줄만 싣는다
+                List<kr.mujoong.realtime.voice.PracticeInstruction.Heard> recent = List.copyOf(heardClips);
+                heard = kr.mujoong.realtime.voice.PracticeInstruction.heardThatFits(recent, instructionText);
+                instruction = kr.mujoong.realtime.voice.PracticeInstruction.withHeard(recent, instructionText);
             } catch (RuntimeException e) {
                 return refusePractice("speakGenerated", "INVALID");
             }
+            clearClipWait();
+            int seq = ++practiceSpeechSeq;
             // 한 발화마다 재지시 수를 새로 센다(앞 발화가 재지시를 썼어도 이 발화는 한 번 다시 검사받는다)
             guardrail.onTurnBoundary();
             ctx.bumpGeneration();
@@ -1967,6 +2292,10 @@ public final class SessionExecutor {
             if (!sent) {
                 pendingPracticeSpeech = null;
                 practiceHold = true;
+                recordSpeechSource(seq, SOURCE_NONE, "PROVIDER_CLOSED", null, null, null, false);
+            } else {
+                recordSpeechSource(seq, SOURCE_GPT_LIVE_GENERATED, null, null, null, heard, true);
+                heardClips.clear();
             }
             return sent;
         }
@@ -2850,6 +3179,12 @@ public final class SessionExecutor {
      * @return 기기로 보냈으면 참, recheck에서 폐기했으면 거짓
      */
     private boolean recheckAndSend(SegmentBuffer.Sealed sealed, TranscriptWriter.Held held, boolean ownsLatency) {
+        return recheckAndSend(sealed, held, ownsLatency, OutputBegin.Source.GPT_LIVE);
+    }
+
+    /** @param source 출력 묶음의 OUTPUT_BEGIN source(GPT-Live 출력 · 미리 만든 대본 줄 음성 SCENARIO_SCRIPT) */
+    private boolean recheckAndSend(SegmentBuffer.Sealed sealed, TranscriptWriter.Held held, boolean ownsLatency,
+            OutputBegin.Source source) {
         DeviceLink target = ctx.link();
         boolean activeAndCurrent = ctx.status() == SessionStatus.ACTIVE && sealed.generation() == ctx.outputGeneration().get()
                 && target != null && target.isOpen();
@@ -2860,16 +3195,12 @@ public final class SessionExecutor {
             discard(sealed, rechecked.decision().reason(), true, held, ownsLatency);
             return false;
         }
-        send(sealed, target, rechecked.reservation(), held, ownsLatency);
+        send(sealed, target, rechecked.reservation(), held, ownsLatency, source);
         return true;
     }
 
-    private void send(SegmentBuffer.Sealed sealed, DeviceLink target, DeviceLink.AudioReservation reservation) {
-        send(sealed, target, reservation, null, true);
-    }
-
     private void send(SegmentBuffer.Sealed sealed, DeviceLink target, DeviceLink.AudioReservation reservation,
-            TranscriptWriter.Held held, boolean ownsLatency) {
+            TranscriptWriter.Held held, boolean ownsLatency, OutputBegin.Source source) {
         Instant passAt = ctx.services().clock().now();
         correctionsInARow = 0;
         UUID playbackId = UUID.randomUUID();
@@ -2892,7 +3223,7 @@ public final class SessionExecutor {
         // 리뷰 반영 6: 기기로 실제 보낸 AI 음성 프레임만 기록한다(송신기가 소켓에 쓴 직후 넘긴다). 음성 레인에 못 들어간 묶음 ·
         // 세대가 올라 잘린 나머지 프레임은 기록하지 않는다
         AudioRecordings.Session aiRecording = ctx.recording();
-        OutputBundle bundle = new OutputBundle(ctx.plan().sessionId(), playbackId, OutputBegin.Source.GPT_LIVE,
+        OutputBundle bundle = new OutputBundle(ctx.plan().sessionId(), playbackId, source,
                 OutputBundle.frame(sealed.chunks()), sealed.totalMs(), reservation,
                 () -> ctx.outputGeneration().get() == generation,
                 firstFrameAt -> ctx.services().latency().firstFrameSent(ctx.plan().sessionId(), playbackId, firstFrameAt),

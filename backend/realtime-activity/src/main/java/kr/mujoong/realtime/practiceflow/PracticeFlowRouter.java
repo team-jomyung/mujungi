@@ -45,6 +45,18 @@ public final class PracticeFlowRouter implements PracticeSessionExtension {
         return delegate.onActive(context, output);
     }
 
+    /**
+     * 3회차 V1: 실행부가 참여 확인 때(onActive 전) 묻는 대본 줄. 같은 패키지로 고를 쪽을 미리 고르고 그 쪽에 묻는다(레거시는 기본값 없음). 고르기가
+     * 실패하면(대본 없음) 예외가 올라가 실행부가 미리 만들지 않을 뿐이고, onActive가 지금처럼 다시 만나 처리한다.
+     */
+    @Override
+    public java.util.List<SpeechLine> speechLines(String practiceJson, java.util.Map<String, String> approvedSpeechTexts) {
+        if (delegate == null) {
+            delegate = choose(practiceJson);
+        }
+        return delegate.speechLines(practiceJson, approvedSpeechTexts);
+    }
+
     private PracticeSessionExtension choose(String practiceJson) {
         if (practiceJson == null || practiceJson.isBlank()) {
             throw new IllegalStateException("연습 대본 없음");

@@ -243,6 +243,11 @@ aws ssm put-parameter --name /mujoong/demo/GHCR_PULL_USER --type String --value 
   - [x] 아동 데이터의 외부 모델 전달이 보호자 동의 범위 안인지 확인했다(동의 문구 · 판).
   - [x] 확인 대상이 Luna 판정(core · realtime)과 GPT-Live 음성 중계 둘 다임을 기록에 적었다(U11 BR12.4).
   - [x] 아래 확인 기록 표에 한 줄을 남겼다(키 값 · 계정 정보는 적지 않는다, R-F3).
+  - [ ] (3회차 V1) 같은 키로 연습 대본 줄 음성 합성(OpenAI Audio API `/v1/audio/speech`)도 켜진다(`mujoong.speech-clip.enabled` 기본 `true`,
+    `contracts/ai-io.md` 10.16 · 편차 (PDS-V1)). 나가는 글은 연습 대본 원문 · 승인 문장뿐이고(GPT-Live 원문 읽기 지시로 이미 나가던 글) 아이 말 ·
+    전사는 나가지 않는다. 이 기능이 든 SHA를 demo에 배포하기 전에 Audio API가 위 약관 · 처리 조건 확인 범위에 드는지 보고 확인 기록 표 비고에
+    'Audio API 포함'을 적는다. 기록 전에는 realtime에 `MUJOONG_SPEECHCLIP_ENABLED=false`를 주어 끈다(꺼지면 대본 줄은 3회차 전처럼 GPT-Live 원문
+    읽기다).
 
   | 확인자 | 확인 날짜(UTC) | 확인한 약관 · 처리 조건 판(또는 문서 날짜) | 환경 | 비고 |
   |---|---|---|---|---|

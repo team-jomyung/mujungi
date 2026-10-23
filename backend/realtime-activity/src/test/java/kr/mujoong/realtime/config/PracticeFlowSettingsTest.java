@@ -81,6 +81,6 @@ class PracticeFlowSettingsTest {
     @Test
     void thePracticeFlowRootIsRequiredByTheMujoongTree() {
         assertThatThrownBy(() -> new RealtimeProperties(null, null, null, null, null, null, null, null, null, null, null,
-                null, null, null, null, null, null, null, null)).isInstanceOf(IllegalArgumentException.class);
+                null, null, null, null, null, null, null, null, null)).isInstanceOf(IllegalArgumentException.class);
     }
 }

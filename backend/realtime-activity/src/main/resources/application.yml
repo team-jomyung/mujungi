@@ -130,6 +130,10 @@ mujoong:
     provider:
       input-transcript-quiet: 1500ms
       new-speech-margin: 700ms
+    # 3회차 V1(timing.md 15절): 연습 대본 줄 음성 미리 합성. 합성 요청 하나의 상한 · 낼 차례에 합성이 덜 끝났을 때 기다리는 상한(넘기면 GPT-Live 원문 읽기)
+    speech-clip:
+      synthesis-timeout: 10s
+      ready-wait: 2s
   outbox:
     poll-interval: 500ms
     batch-size: 20
@@ -214,6 +218,20 @@ mujoong:
   practice-flow:
     retry-max: 2
     reexplain-max: 1
+  # 3회차 V1(contracts/ai-io.md 10.16, 편차 (PDS-V1)): 연습 대본 줄(장면 설명 · 친구 대사 · 기회 문장 · 다시 설명 · 변형 제안 · 승인 발화)을 세션 시작
+  # 때 미리 합성한 음성으로 낸다. 키는 env OPENAI_API_KEY(새 비밀 없음)이고 없거나 enabled가 false면 꺼져 GPT-Live 원문 읽기로 낸다.
+  # 시간 값이 아니다: 합성 시한 · 대기는 timing.speech-clip.*. demo · prod는 https + api.openai.com만, test는 루프백만(Luna와 같은 주소 규칙)
+  speech-clip:
+    enabled: true
+    base-url: https://api.openai.com/v1
+    model: gpt-4o-mini-tts
+    voice: nova
+    narrator-style: "6 ~ 12세 아이에게 이야기를 들려주는 다정하고 차분한 어른 목소리로, 또박또박 조금 천천히 말한다."
+    peer-style: "아이와 같은 또래 친구처럼 밝고 자연스럽게, 친구에게 말하듯 말한다."
+    max-concurrency: 4
+    max-pending: 200
+    cache-max-bytes: 32MB
+    session-max-lines: 48
   # U13 제브 게이트(contracts/ai-io.md 10.12). 시간 값이 아니다: 검사 시한은 timing.guardrail.jev-budget(R-F7). 값은 모두 환경 변수로만 받고 저장소에는 이름만 둔다(R-F3).
   # mode가 비면 프로필 기본값(demo · prod = REAL, 그 밖 = STUB). demo · prod는 REAL + 키 JEV_API_KEY + 허용 호스트 + 고정 모델이 아니면 기동을 거부한다
   guardrail:

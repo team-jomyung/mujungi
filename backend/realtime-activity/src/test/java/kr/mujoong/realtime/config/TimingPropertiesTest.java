@@ -54,13 +54,31 @@ class TimingPropertiesTest {
         RealtimeTimingProperties bound =ConfigKeyContractTest.bind(APPLICATION_YML).timing();
 
         assertThatThrownBy(() -> new RealtimeTimingProperties(bound.session(), bound.device(), bound.recorder(),
-                null, bound.guardrail(), bound.conversation(), bound.provider()))
+                null, bound.guardrail(), bound.conversation(), bound.provider(), bound.speechClip()))
                 .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("mujoong.timing.judgment");
         assertThatThrownBy(() -> new RealtimeTimingProperties(bound.session(), bound.device(), bound.recorder(),
-                bound.judgment(), bound.guardrail(), null, bound.provider()))
+                bound.judgment(), bound.guardrail(), null, bound.provider(), bound.speechClip()))
                 .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("mujoong.timing.conversation");
         assertThatThrownBy(() -> new RealtimeTimingProperties(bound.session(), bound.device(), bound.recorder(),
-                bound.judgment(), bound.guardrail(), bound.conversation(), null))
+                bound.judgment(), bound.guardrail(), bound.conversation(), null, bound.speechClip()))
                 .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("mujoong.timing.provider");
+        // 3회차 V1: 대본 줄 음성 시간 묶음도 빠지면 기동을 거부한다
+        assertThatThrownBy(() -> new RealtimeTimingProperties(bound.session(), bound.device(), bound.recorder(),
+                bound.judgment(), bound.guardrail(), bound.conversation(), bound.provider(), null))
+                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("mujoong.timing.speech-clip");
+    }
+
+    @Test
+    void applicationYmlBindsTheSpeechClipTimingDefaultsAndRejectsZero() {
+        RealtimeTimingProperties.SpeechClipTiming clip = ConfigKeyContractTest.bind(APPLICATION_YML).timing().speechClip();
+
+        assertThat(clip.synthesisTimeout()).isEqualTo(Duration.parse("PT10S"));
+        assertThat(clip.readyWait()).isEqualTo(Duration.parse("PT2S"));
+        Duration one = Duration.parse("PT1S");
+        assertThatThrownBy(() -> new RealtimeTimingProperties.SpeechClipTiming(Duration.ZERO, one))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("mujoong.timing.speech-clip.synthesis-timeout");
+        assertThatThrownBy(() -> new RealtimeTimingProperties.SpeechClipTiming(one, null))
+                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("mujoong.timing.speech-clip.ready-wait");
     }
 }

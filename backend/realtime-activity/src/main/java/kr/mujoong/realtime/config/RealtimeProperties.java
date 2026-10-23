@@ -51,7 +51,8 @@ public record RealtimeProperties(
         RealtimeMetricsProperties metrics,
         RealtimeObservabilityProperties observability,
         RealtimeJudgmentProperties judgment,
-        RealtimePracticeFlowProperties practiceFlow) {
+        RealtimePracticeFlowProperties practiceFlow,
+        RealtimeSpeechClipProperties speechClip) {
 
     public RealtimeProperties {
         required(timing, "mujoong.timing");
@@ -73,6 +74,7 @@ public record RealtimeProperties(
         required(observability, "mujoong.observability");
         required(judgment, "mujoong.judgment");
         required(practiceFlow, "mujoong.practice-flow");
+        required(speechClip, "mujoong.speech-clip");
 
         if (internalHttp.verifyTokenTimeout().compareTo(timing.device().helloTimeout()) >= 0) {
             throw invalid("불변식 I-3: mujoong.internal-http.verify-token-timeout는 "

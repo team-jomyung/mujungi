@@ -241,3 +241,12 @@ U11(선 형식 정비)이 더한 키다. 공급자 실호출에는 응답 id도 
 |---|---|---|---|---|
 | `mujoong.timing.provider.input-transcript-quiet` | `1500ms` | realtime | 입력 전사 조각(`session.input_transcript.delta`)이 이만큼 오지 않으면 그 묶음을 확정 전사로 본다. 전사가 음성보다 0.2 ~ 2초 앞서 도착하고 모델이 말 끝 전에 반응하므로 아이의 쉼보다 길게 잡는다. 아이가 길게 쉬면 한 발화가 둘로 나뉠 수 있다 | A7 · U11-a |
 | `mujoong.timing.provider.new-speech-margin` | `700ms` | realtime | 지시 뒤 새 말의 전사 `start_ms`에 더하는 여유. 오디오 시계(출력 바이트 / 48 ms)가 (새 말 시작 + 이 값)에 닿는 첫 음성 조각부터 받는다. 전사 시간선과 오디오 시계의 어긋남(단계마다 0.2 ~ 0.4초 늘어남)을 덮는다. 낡은 꼬리가 새는 것보다 첫 낱말이 잘리는 쪽을 택한다. **말하는 중 보낸 지시에만 쓴다** — 조용할 때 보낸 지시(마지막 출력 조각 뒤 `mujoong.gate.segment-quiet`가 지남)는 낡은 꼬리가 없어 확인 사건을 기다리지 않고 첫 조각부터, 음성은 여유 없이 받는다(설계 개정 A4-b, 3회차 V2, 편차 (PDS-V2)) | A4 · A4-b · U11-a · PDS-V2 |
+
+## 15. 3회차 V1 연습 대본 줄 음성 미리 합성
+
+연습 대본 줄(장면 설명 · 친구 첫 대사 · 기회 문장 · 상황 다시 설명 · 변형 제안 · 승인 발화 HELP_OFFER · COACH_SWITCH · PEER_RETURN)을 GPT-Live가 읽지 않고 세션 시작 때 미리 합성한 음성으로 낸다(contracts/ai-io.md 10.16, 편차 (PDS-V1)). 시간이 아닌 설정(스위치 · 모델 · 목소리 · 말투 · 동시 수 · 캐시)은 `mujoong.speech-clip.*`(ai-io.md 10.16)이다. 화면이 읽지 않는 서버 키라 14절처럼 `frontend/src/shared/timing/timing-defaults.json`에는 넣지 않는다 — R-M5의 '세 곳'은 이 표 · realtime `application.yml` · 설정 레코드(`RealtimeTimingProperties.SpeechClipTiming`)다. 두 값은 실측 전 **임시값**이다.
+
+| 키 | 기본값 | 소유 앱 | 뜻 | 근거 |
+|---|---|---|---|---|
+| `mujoong.timing.speech-clip.synthesis-timeout` | `10s` | realtime | 대본 줄 음성 합성 요청 하나의 상한(보내기 → 본문 끝). 넘기면 그 줄은 합성 실패(`TIMEOUT`)이고 낼 차례에 GPT-Live 원문 읽기로 낸다 | V1 · PDS-V1 |
+| `mujoong.timing.speech-clip.ready-wait` | `2s` | realtime | 대본 줄을 낼 차례에 그 줄의 합성이 아직 끝나지 않았을 때 기다리는 상한(연습 시계와 같이 기술 일시정지 동안 멈춘다). 넘기면 GPT-Live 원문 읽기로 낸다(사유 `CLIP_NOT_READY`) | V1 · PDS-V1 |

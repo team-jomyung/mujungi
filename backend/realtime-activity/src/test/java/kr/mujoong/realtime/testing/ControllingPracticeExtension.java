@@ -16,8 +16,23 @@ public final class ControllingPracticeExtension implements PracticeSessionExtens
     public final List<ExtensionEvent> events = new ArrayList<>();
     public final List<PlaybackFact> facts = new ArrayList<>();
     public final List<Utterance> utterances = new ArrayList<>();
+    /** 3회차 V1: 참여 확인 때 실행부에 알려 줄 대본 줄(create 전에 넣는다). */
+    public final List<SpeechLine> speechLines = new ArrayList<>();
+    /** 3회차 V1: speechLines를 물은 횟수. */
+    public int speechLinesAsked;
+    /** 3회차 V1: 참이면 speechLines가 예외를 던진다. */
+    public boolean speechLinesFail;
     /** 이 대역을 돌려주는 공장. */
     public final Factory factory = sessionId -> this;
+
+    @Override
+    public List<SpeechLine> speechLines(String practiceJson, java.util.Map<String, String> approvedSpeechTexts) {
+        speechLinesAsked++;
+        if (speechLinesFail) {
+            throw new IllegalStateException("시험용 대본 줄 실패");
+        }
+        return List.copyOf(speechLines);
+    }
 
     /** 그 발화의 끝 사실(시작 사실 STARTED는 뺀다). */
     public List<PracticePorts.Playback> endFacts(UUID correlationId) {

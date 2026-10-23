@@ -104,6 +104,23 @@ public final class SessionHarness {
     public kr.mujoong.realtime.guardrail.GuardrailSupport guardrail = kr.mujoong.realtime.guardrail.GuardrailSupport.DISABLED;
     /** U13: {@link #useGuardrail()} 뒤의 시험용 제브 대역(손으로 푸는 약속). */
     public FakeGuardrailClient guard;
+    /** 3회차 V1: 대본 줄 음성 장치(create 전에 {@link #useSpeechClips()}로 바꾼다). 기본은 꺼짐 — 모든 대본 줄이 GPT-Live 원문 읽기다. */
+    public kr.mujoong.realtime.speech.SpeechClipSupport speechClips = kr.mujoong.realtime.speech.SpeechClipSupport.DISABLED;
+    /** 3회차 V1: {@link #useSpeechClips()} 뒤의 합성 대역. */
+    public FakeSpeechClipSynthesizer synth;
+    /** 3회차 V1: 낼 차례에 합성이 덜 끝났을 때 기다리는 상한(운영 기본값 2초). */
+    public static final Duration CLIP_READY_WAIT = Duration.ofSeconds(2);
+
+    /**
+     * 대본 줄 음성 합성 대역을 쓴다(create 전에 부른다): 운영 기본값(동시 4 · 대기 200 · 캐시 32MB · 세션 48줄 · 대기 2초)의 공유 장치. 대역일 뿐 실제
+     * 합성이 아니다(R-F1 · R-M11).
+     */
+    public FakeSpeechClipSynthesizer useSpeechClips() {
+        synth = new FakeSpeechClipSynthesizer();
+        speechClips = new kr.mujoong.realtime.speech.SpeechClipSupport(synth, clock, CLIP_READY_WAIT, 4, 200,
+                32L * 1024 * 1024, 48);
+        return synth;
+    }
 
     /** 시험용 제브 대역을 쓴다(create 전에 부른다): 실제 모드(REAL 표시), 기록은 {@link MemoryStore#guardrails}로 간다. 대역일 뿐 실제 제브가 아니다. */
     public FakeGuardrailClient useGuardrail() {
@@ -143,7 +160,7 @@ public final class SessionHarness {
                 new ProviderConnector(provider, new ProviderRequestFactory(), Duration.ofSeconds(10), launcher, "test"),
                 new ProviderRequestFactory(), new OutputGate(SeedDictionary.loadDefault()), recorder, latency,
                 new TimerClocks(safety, quiet), launcher, events, metrics, clock, settings, gaps, recordings, settlement,
-                practice, judgment, guardrail);
+                practice, judgment, guardrail, speechClips);
         List<StartSession.ApprovedAudio> audio = new ArrayList<>(List.of(
                 new StartSession.ApprovedAudio("CLOSING", closingVersion, "/media/approved/closing.wav"),
                 new StartSession.ApprovedAudio("WAITING_FILLER", fillerVersion, "/media/approved/filler.wav")));

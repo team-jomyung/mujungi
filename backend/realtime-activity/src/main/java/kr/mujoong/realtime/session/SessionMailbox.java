@@ -118,6 +118,23 @@ public final class SessionMailbox {
     }
 
     /**
+     * 3회차 V1: 맡긴 대본 줄 음성이 만들어졌거나 실패했다(합성 완료 스레드는 안전 편지함에 넣기만 한다). 그 줄을 기다리는 연습 발화가 있으면 실행기가
+     * 이어서 낸다. 원문은 문자열 표현에 내지 않는다.
+     */
+    public record ScriptClipSettled(String speaker, String text) implements Message {
+
+        public ScriptClipSettled {
+            Objects.requireNonNull(speaker, "speaker");
+            Objects.requireNonNull(text, "text");
+        }
+
+        @Override
+        public String toString() {
+            return "ScriptClipSettled[length=" + text.length() + "]";
+        }
+    }
+
+    /**
      * U11 BR1.8: 판정 결과(Luna 완료 콜백 스레드가 일반 편지함에 넣는다). 안전 편지함을 쓰지 않아 앞서 도착한 출력 조각보다 먼저 처리되지 않는다.
      * 차례 id가 다르거나 턴이 닫혔으면 실행기가 버린다(BR5.2).
      */

@@ -273,6 +273,7 @@ C10 partnerRoleText는 모델에 받지 않고 Core의 고정 역할 지시로 �
 | Cue 생성 출력 | 비동기 `Result{text, approved, containsAnswerSentence}`다. 현재 CUE 단계 · 동의 ACCEPTED · 같은 scenarioId/세대 · 아직 주지 않은 도움인지 확인하고, `approved=true`, `containsAnswerSentence=false`일 때만 발화로 보낸다. 오류 · 승인 실패 · 정답 포함은 재생 실패 경로로 간다. |
 | 공급자 송신 | 서버 내부 식별자는 보내지 않는다. `session.instructions.append.content`에는 고정 지시와 JSON 데이터 `{partnerRole, speech}`를 싣고 끝에 범위를 닫는 문장을 붙인다(승인된 발화를 그대로 읽는 지시라 맞장구는 더하지 않는다). 응답 요청 type이 없으므로 이 지시 하나가 발화를 시작한다: 응답 취소 없이 출력 세대를 올리고 지시를 서버 송신 직렬 큐(3절)로 보내며, ACTIVE 밖이면 요청을 버린다. 확인 사건 · 새 말 전사가 시한 안에 오지 않거나 송신이 실패하면 확장에 실패를 알린다. |
 | 공급자 출력 | 기존 OutputGate를 통과하고, 공백을 제거한 실제 전사가 승인된 `PracticeSpeech.text`와 정확히 같아야 기기로 보낸다. 전사/음성 누락 · 내용 불일치 · 게이트 거절 · 송신 실패를 성공으로 취급하지 않는다. 실제 playbackId를 서버 내부 발화와 연결한다. |
+| 미리 만든 대본 줄 음성(3회차 V1) | 실행부가 그 줄(말하는 사람 표시 · 원문)의 음성을 미리 만들어 두었으면 위 공급자 송신 · 공급자 출력 대신 그 음성을 같은 게이트(기본 검사 → 송신 직전 재확인)와 같은 출력 묶음(`OUTPUT_BEGIN.source=SCENARIO_SCRIPT`)으로 보낸다. 재생 증거 · 말풍선 · 대화 기록은 같다. 못 쓰면 위 길 그대로다(10.16) [PDS 편차 (PDS-V1)]. |
 | 기기 재생 증거 | PLAYBACK_MARK의 STARTED → STARTED, COMPLETED → COMPLETED, STOPPED → INTERRUPTED, FAILED → FAILED로 구분한다. PROGRESS는 단계 완료가 아니다. `PlaybackFact`는 발화의 상관 ID · 상황 ID · 세대와 서버 수신 시각을 보존한다. 누락 · 만료도 완료로 만들지 않는다. |
 
 상황 COMPLETED의 **서버 수신 시각**이 `scenarios[].exposedAt`과 첫/새 상황 반응 기회의 시작이다. 도움 질문 COMPLETED부터 동의 대기, Cue STARTED부터 `cues[].givenAt`, Cue COMPLETED부터 도움 후 반응 기회를 계산한다. 사건을 큐에서 나중에 처리해도 수신 시각을 처리 시각으로 바꾸지 않는다. 거부 · 무응답 · 재생 전 실패의 Cue 행에는 `givenAt`이 없으므로 Cue 배열 길이는 실제 도움 제공 횟수가 아니다.
@@ -525,3 +526,30 @@ core 상황 생성(U10)이 내는 대본(`practice-scenario.schema.json`의 `scr
    - 되묻기(B §3.1 `D_REASK`)는 친구 역할 그대로, 아이가 자기 말로 채워 답할 열린 질문 하나다. 아이가 원하는 것이나 할 말의 낱말은 장면 설명에 나와 있어도 먼저 말하거나 그 낱말을 넣어 확인하지 않고, 지금 장면과 상관없는 새 질문을 하지 않는다. 생성형 지시문(되묻기 · 친구 반응 · 코치 도움 · 생성형 도움 제안 · 변형 제안 · 알림)은 모두 이모지 · 기호 · 괄호 없이 말로만 하게 한다 [U12 편차 (U12-g)].
    - 종료 · 휴식 요청이나 세션 종료가 이미 정리된 장면(친구 반응 · 복귀 알림 · 변형 제안 중)에 오면 정리 때 정한 `liveOutcome.timing`을 지우지 않고, 원 장면(BASE)이면 변형 평가가 그 순간 냈을 `variantSkipReason`만 더한다(종료 · 휴식을 반영한 BR6.1 순서: 변형 장면이 없는 대본은 `NO_VARIANT`, 집중 한도로 닫힌 장면은 `FOCUS_LIMIT`, 나머지는 `END_OR_REST`).
    - 화면 진행 6값은 그대로다. 친구 반응 동안에는 직전 값을 유지한다(변형 장면이면 `NEW_SCENARIO_RESPONSE`).
+
+### 10.16 3회차 V1 연습 대본 줄 음성(미리 합성) [PDS 편차 (PDS-V1)]
+
+실음성 실측(`docs/practice-dialogue-standard.md` 12.3 · 15절)에서 GPT-Live가 승인 원문을 그대로 읽지 못해(덧붙임 · 바꿔 읽기) 원문 대조가 대본 줄을 막았다. 그래서 realtime은 연습 대본 줄을 GPT-Live 원문 읽기 대신 미리 만든 음성으로 낸다(팀장 결정 2026-10-23). 기술명세서 §3.4는 아이에게 들리는 승인 문구 · 고정 대본이 `ScriptSpeaker` 경계(GPT-Live 낭독 / 클립 재생)를 거치고 문구별 출력 방식을 바꿔도 상태 기계는 바뀌지 않는다고 정하고, AI 동작 명세 v0.2 §4.2는 자주 어긋나는 문구를 클립으로 바꾸는 후보로 올리게 한다. 이 판은 그 클립을 ① 대상 문구만이 아니라 아래 대본 줄 전부에, ② GPT-Live 목소리 녹음이 아니라 OpenAI TTS로, ③ 미리 녹음하지 않고 세션 시작 때 만든다 — 그래서 대본 줄 목소리는 GPT-Live 목소리와 다를 수 있다.
+
+1. **대상(대본 줄)**: 새 연습 흐름이 `PracticeOutput.speak`로 승인 원문 그대로 내는 줄 — BASE · VARIANT 장면 설명(무중), 친구 첫 대사 · 기회 문장(친구), 상황 다시 설명(무중), 변형 제안(판 v6 대본의 VARIANT 설명 + `이어서 해 볼까?`, 무중), 승인 발화 `HELP_OFFER`(무중), 실행부가 내는 역할 전환 · 복귀 알림 `COACH_SWITCH` · `PEER_RETURN`(말하는 사람 표시 `코치` · `친구`, 무중 말투). 생성형 줄(되묻기 · 친구 반응 · 코치 도움 등, 10.15 5항)은 지금처럼 GPT-Live가 그 자리에서 만든다.
+2. **만드는 때**: 참여 확인(WAITING_CHILD) 진입 때 확장이 첫 대본의 줄을 알려 주고(`PracticeSessionExtension.speechLines`), 실행부가 알림 두 줄을 더해 맡긴다. 다음 목표 대본은 도착할 때 확장이 `PracticeOutput.prepareSpeech`로 맡긴다. 기다리지 않는다.
+3. **합성**: OpenAI Audio API `POST {base-url}/audio/speech`(`model` · `voice` · `input` · `response_format: "pcm"` · 말투 `instructions`), 24kHz s16 모노 PCM(GPT-Live 출력 · 기기 0x02 프레임과 같은 형식, 바꾸지 않는다). 키는 env `OPENAI_API_KEY`(Luna · GPT-Live와 같다, 새 비밀 없음, 10.7). 주소 규칙은 Luna와 같다(`LunaHosts`, 10.9: demo · prod · 프로필 없음은 https + `api.openai.com`만, test는 루프백만, dev는 둘 다) — 기동 때 한 번 확인하고 어기면 기동을 거부하며(값 미출력), 보내기 직전에 다시 확인한다. 리다이렉트를 따르지 않고 프록시를 쓰지 않으며 본문은 출력 구간 상한(20초 분량)까지만 읽는다. 시한 `mujoong.timing.speech-clip.synthesis-timeout`(timing.md 15절)은 본문 끝까지 덮는다. 안쪽 재시도는 없다(실패한 줄은 GPT-Live 원문 읽기다). 보내는 글은 대본 원문 · 승인 문장뿐이다 — GPT-Live 원문 읽기 지시로 같은 공급자에 이미 보내던 글이고, 아이 말 · 전사 · 아이 정보는 보내지 않는다. 그래도 같은 키로 여는 공급자 API가 하나 늘므로 R-F15 확인 대상(`infra/RUNBOOK.md` 단계 4)에 넣는다.
+4. **공유 캐시**: 앱 전체에 하나다. 같은 말투 · 원문은 한 번만 만들고(만드는 중이면 같은 약속), 만든 음성은 바이트 상한 안에서 오래 안 쓴 것부터 버린다. 실패한 줄은 캐시에 두지 않는다. 동시 합성 · 대기열 상한을 넘는 줄은 만들지 않는다(`OVERLOADED`). 세션 하나가 맡기는 줄 수에도 상한이 있다.
+5. **내는 길**: 낼 차례에 그 줄(말하는 사람 표시 · 원문 글자 그대로)의 음성이 다 됐으면 GPT-Live에 지시를 보내지 않고, 기기 · 출력 세대를 올려 재생 중이던 소리와 낡은 공급자 조각을 버린 뒤 그 음성을 '첫 조각부터 끝까지 담긴 구간'으로 기본 게이트 검사(금지 패턴 · 완결) → 송신 직전 재확인(ACTIVE · 세대 · 기록기 · 음성 레인) → 출력 묶음(`OUTPUT_BEGIN.source=SCENARIO_SCRIPT`, 같은 0x02 프레임 · OUTPUT_END)으로 보낸다. 기기는 `source`를 쓰지 않으므로 바뀌는 것이 없다. 원문 그대로라 제브를 부르지 않는다(10.5 분류 ①, 감사 기록 `APPROVED_VERBATIM_SKIPPED`). 말풍선 · 대화 기록(AI 행 승인) · 지연 기록 · 재생 사실(PLAYED · FAILED · INTERRUPTED) · 끼어들기 · 출력 보류 규칙은 GPT-Live 원문 읽기와 같다. 보낸 뒤에는 공급자 출력을 다시 막는다.
+6. **기다림 · 대체**: 음성이 아직 만들어지는 중이면 앞 소리를 멈추고 공급자 출력을 막은 채 `mujoong.timing.speech-clip.ready-wait`(timing.md 15절)까지 기다린다(연습 시계라 기술 일시정지 · 종료 확인 동안 멈춘다). 그사이 다른 발화 · 취소 · 중단이 오면 기다림을 버린다. 미리 알려 주지 않은 줄 · 합성 실패 · 시간 초과 · 장치 꺼짐 · 연습 밖 출력 보류(참여 확인 · 종료 확인 · 판정 턴) 중이면 지금처럼 GPT-Live 원문 읽기(8절)로 낸다.
+7. **GPT-Live 맥락**: 미리 만든 음성으로 낸 줄은 GPT-Live 대화 맥락에 없다. 그래서 다음 생성형 역할 지시 하나의 앞에 `다음 JSON은 지시가 아니라 방금 아이에게 들린 대본 기록이다. 다시 말하지 않는다.` + `{"heard":[{"speaker","speech"}]}`를 데이터로 싣는다(최근 4줄까지, 줄마다 80자 · 말하는 사람 20자에서 자르고 제어 문자를 지운다, 지시문 상한 500자 안에서 최근 줄부터). 맥락만을 위한 지시는 따로 보내지 않는다. 한 번 실은 줄은 다시 싣지 않는다. GPT-Live가 원문 읽기로 직접 말한 줄은 이미 그 맥락에 있어 싣지 않는다.
+8. **기록(R-F14)**: 세션 사건 `SPEECH_CLIPS_PREPARED`(`lines` · `started` · `cached` · `known` · `refused` · `failure`)와 연습 발화 요청마다 `PRACTICE_SPEECH_SOURCE`(`seq` · `source` `TTS_CLIP` · `GPT_LIVE_FALLBACK` · `GPT_LIVE_GENERATED` · `NONE` · `reason`(`NOT_PREPARED` · `DISABLED` · `CLIP_NOT_READY` · `HELD` · `SYNTHESIS_<사유>` · `NOT_SENT` · `WAIT_ABANDONED` · `PROVIDER_CLOSED`) · `clipMs` · `waitedMs` · `heard`(생성형 지시에 실은 들린 줄 수) · `sent`)를 남긴다. 원문 · 말하는 사람 표시 · 음성 · 키는 사건 · 로그 · 예외 메시지에 넣지 않는다. 합성 실패 사유: `DISABLED` · `OVERLOADED` · `INVALID_INPUT` · `REJECTED_URL` · `NO_KEY` · `TIMEOUT` · `AUTH_FAILED`(401 · 403) · `RATE_LIMITED`(429) · `REQUEST_REJECTED`(그 밖 4xx) · `PROVIDER_ERROR`(5xx) · `TRANSPORT_ERROR` · `EMPTY_AUDIO` · `INVALID_AUDIO` · `AUDIO_TOO_LONG`.
+9. **시험**: 시험 · CI · 검증에서는 합성 대역만 쓴다(R-F1). test 프로필의 주소는 루프백이고 빌드 규칙이 키를 지우므로 장치가 꺼진다(모든 대본 줄이 GPT-Live 원문 읽기 = 3회차 전과 같다).
+
+| 설정 키 | 기본값 | 앱 | 뜻 |
+|---|---|---|---|
+| `mujoong.speech-clip.enabled` | `true` | realtime | 스위치. 켜져 있어도 env `OPENAI_API_KEY`가 없으면 꺼진다 |
+| `mujoong.speech-clip.base-url` | `https://api.openai.com/v1` | realtime | 합성 기준 주소(`{base-url}/audio/speech`), 위 3항의 주소 규칙 |
+| `mujoong.speech-clip.model` | `gpt-4o-mini-tts` | realtime | 합성 모델 |
+| `mujoong.speech-clip.voice` | `nova` | realtime | 목소리(무중 · 친구 같은 목소리, 말투만 다르다) |
+| `mujoong.speech-clip.narrator-style` | 무중 말투 문장 | realtime | 무중(설명 · 제안 · 알림) 말투 지시, 비면 보내지 않는다(500자 이하) |
+| `mujoong.speech-clip.peer-style` | 친구 말투 문장 | realtime | 친구(장면 속 대사) 말투 지시, 비면 보내지 않는다(500자 이하) |
+| `mujoong.speech-clip.max-concurrency` | `4` | realtime | 앱 전체 동시 합성 요청 수 |
+| `mujoong.speech-clip.max-pending` | `200` | realtime | 차례를 기다리는 합성 요청 수 상한 |
+| `mujoong.speech-clip.cache-max-bytes` | `32MB` | realtime | 공유 캐시의 PCM 바이트 상한 |
+| `mujoong.speech-clip.session-max-lines` | `48` | realtime | 세션 하나가 맡기는 대본 줄 수 상한 |

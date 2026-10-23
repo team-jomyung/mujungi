@@ -186,6 +186,16 @@ final class PracticeFlowTestKit {
             timeline.add(slot);
             return generatedResult;
         }
+
+        /** 3회차 V1: 미리 음성을 만들게 맡긴 대본 줄 묶음(호출마다 하나). */
+        final List<List<PracticeSessionExtension.SpeechLine>> prepared = new ArrayList<>();
+
+        @Override
+        public boolean prepareSpeech(List<PracticeSessionExtension.SpeechLine> lines) {
+            calls++;
+            prepared.add(List.copyOf(lines));
+            return true;
+        }
     }
 
     /** 메모리 기록기: 상태 기계가 남기는 장면 · 사실 · 도움을 그대로 쌓는다(원문 칸이 없다). */

@@ -151,6 +151,59 @@ public final class PracticeConversation implements PracticeSessionExtension {
         return true;
     }
 
+    /**
+     * 3회차 V1: 첫 대본의 승인 원문 대본 줄과 승인 발화 HELP_OFFER(실행부가 참여 확인 동안 음성을 미리 만든다). 상태를 바꾸지 않는다. 첫 대본이 없거나
+     * 거절된 패키지는 없음이다(그 목표는 onActive가 지금처럼 '미실시'로 둔다). 다음 목표 대본은 도착할 때 {@link PracticeOutput#prepareSpeech}로 맡긴다.
+     */
+    @Override
+    public java.util.List<SpeechLine> speechLines(String practiceJson, Map<String, String> approvedSpeechTexts) {
+        PracticeStartPackage parsed = PracticeStartPackage.parse(practiceJson);
+        if (parsed.firstScenario() == null) {
+            return java.util.List.of();
+        }
+        return scriptLines(parsed.firstScenario(), approvedSpeechTexts == null ? null : approvedSpeechTexts.get(HELP_OFFER_CODE));
+    }
+
+    /**
+     * 대본 하나에서 승인 원문 그대로 낼 대본 줄(말하는 사람 표시 · 원문은 {@link #speakNarration} · {@link #speakPeerLine}이 낼 때와 글자 그대로
+     * 같다). 낼 차례가 이른 줄부터: 원 장면 설명 → 친구 첫 대사 → 기회 문장 → 상황 다시 설명 → 도움 제안 → 변형 제안(판 v6 대본은 변형 설명 +
+     * «이어서 해 볼까?», 옛 대본은 변형 장면 설명) → 변형 첫 대사 → 변형 기회 문장 → 변형 상황 다시 설명.
+     *
+     * @param helpOffer 승인 발화 HELP_OFFER 원문(없으면 null — 그때 도움 제안은 생성형이라 줄이 아니다)
+     */
+    static java.util.List<SpeechLine> scriptLines(PracticeScript script, String helpOffer) {
+        java.util.List<SpeechLine> lines = new java.util.ArrayList<>();
+        Scene base = script.baseScene();
+        narrationLine(lines, base.sceneDescription());
+        peerLine(lines, base, base.partnerOpener());
+        peerLine(lines, base, base.opportunitySentence());
+        narrationLine(lines, base.reexplanation());
+        if (helpOffer != null && !helpOffer.isBlank()) {
+            narrationLine(lines, helpOffer);
+        }
+        script.variantScene().ifPresent(variant -> {
+            // variantIntroducedInOffer와 같은 판단: 판 v6 대본(원 장면에 첫 대사가 있다)만 변형 설명을 제안에서 들려준다
+            narrationLine(lines, base.hasPartnerOpener()
+                    ? variant.sceneDescription() + " " + PracticeInstructions.VARIANT_OFFER_QUESTION : variant.sceneDescription());
+            peerLine(lines, variant, variant.partnerOpener());
+            peerLine(lines, variant, variant.opportunitySentence());
+            narrationLine(lines, variant.reexplanation());
+        });
+        return java.util.List.copyOf(lines);
+    }
+
+    private static void narrationLine(java.util.List<SpeechLine> lines, String text) {
+        if (text != null && !text.isBlank()) {
+            lines.add(new SpeechLine(RolePolicy.NARRATOR_LABEL, text, SpeechVoice.NARRATOR));
+        }
+    }
+
+    private static void peerLine(java.util.List<SpeechLine> lines, Scene scene, String text) {
+        if (text != null && !text.isBlank()) {
+            lines.add(new SpeechLine(RolePolicy.peerName(scene.partnerRole()), text, SpeechVoice.PEER));
+        }
+    }
+
     // ---- 확장점 시점 ----
 
     @Override
@@ -420,6 +473,8 @@ public final class PracticeConversation implements PracticeSessionExtension {
     private void onScript(ScriptResult result) {
         if (result.script() != null) {
             scripts.put(result.goalIndex(), result.script());
+            // 3회차 V1: 다음 목표 대본의 줄 음성을 지금 맡긴다(앞 목표를 하는 동안 만든다). 쓰지 않는 실행부면 거짓이고 낼 때 GPT-Live 원문 읽기다
+            output.prepareSpeech(scriptLines(result.script(), approvedSpeech.get(HELP_OFFER_CODE)));
         } else {
             failedScripts.add(result.goalIndex());
             reportFailure(result.failure());

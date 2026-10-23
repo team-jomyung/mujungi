@@ -65,7 +65,9 @@ public final class OutputGeneration {
         /** 출력 보류가 풀렸다(BR11.13). */
         HOLD_RELEASED,
         /** 제브가 막은 뒤 같은 다음 행동을 한 번 다시 지시한다(U13 BR6.2). */
-        GUARDRAIL_RETRY
+        GUARDRAIL_RETRY,
+        /** 대본 줄을 미리 합성한 음성으로 낸다(3회차 V1): 지시를 보내지 않으므로 공급자 조각은 끊김까지 버린다. */
+        SCRIPT_CLIP
     }
 
     /** 지시 하나의 새 말 관측이 어떻게 끝났는가(사건 {@code OUTPUT_NEW_SPEECH}). */

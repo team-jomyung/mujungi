@@ -69,6 +69,6 @@ class JudgmentSettingsTest {
     @Test
     void theJudgmentRootIsRequired() {
         assertThatThrownBy(() -> new RealtimeProperties(null, null, null, null, null, null, null, null, null, null, null, null,
-                null, null, null, null, null, null, null)).isInstanceOf(IllegalArgumentException.class);
+                null, null, null, null, null, null, null, null)).isInstanceOf(IllegalArgumentException.class);
     }
 }

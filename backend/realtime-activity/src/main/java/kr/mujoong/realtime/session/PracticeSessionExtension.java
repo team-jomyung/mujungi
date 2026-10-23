@@ -2,6 +2,7 @@ package kr.mujoong.realtime.session;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
@@ -67,6 +68,31 @@ public interface PracticeSessionExtension {
         @Override
         public String toString() {
             return "PracticeContext[sessionId=" + sessionId + "]";
+        }
+    }
+
+    /** 대본 줄을 말하는 사람의 말투(3회차 V1). 무중이 역할 밖에서 하는 설명 · 제안이면 NARRATOR, 장면 속 친구의 대사면 PEER다. */
+    enum SpeechVoice {
+        NARRATOR,
+        PEER
+    }
+
+    /**
+     * 실행부가 미리 음성으로 만들어 둘 승인 원문 대본 줄 하나(3회차 V1). {@code speaker} · {@code text}는 나중에 {@link PracticeOutput#speak}에 넘길
+     * {@link kr.mujoong.realtime.voice.PracticeSpeech}의 {@code partnerRole} · {@code text}와 글자 그대로 같아야 만든 음성으로 낸다(다르면 GPT-Live 원문
+     * 읽기). 원문은 문자열 표현에 내지 않는다.
+     */
+    record SpeechLine(String speaker, String text, SpeechVoice voice) {
+
+        public SpeechLine {
+            Objects.requireNonNull(speaker, "speaker");
+            Objects.requireNonNull(text, "text");
+            Objects.requireNonNull(voice, "voice");
+        }
+
+        @Override
+        public String toString() {
+            return "SpeechLine[voice=" + voice + "]";
         }
     }
 
@@ -223,6 +249,12 @@ public interface PracticeSessionExtension {
 
         /** '생각 중' 표시를 유지하거나(true) 풀도록(false) 요청한다. ACTIVE에서만 받는다. */
         default boolean setThinking(boolean on) { return false; }
+
+        /**
+         * 3회차 V1: 곧 낼 승인 원문 대본 줄의 음성을 미리 만들어 두게 한다(다음 목표 대본이 도착했을 때 등). 기다리지 않고, 이미 맡긴 줄은 다시 만들지 않는다.
+         * 대본 줄 음성을 쓰지 않는 실행부 · 꺼진 장치면 거짓이고 그 줄은 낼 때 GPT-Live 원문 읽기다.
+         */
+        default boolean prepareSpeech(List<SpeechLine> lines) { return false; }
     }
 
     record PlaybackFact(kr.mujoong.realtime.voice.PracticeSpeech speech,
@@ -250,6 +282,16 @@ public interface PracticeSessionExtension {
 
     /** 실제 연습은 출력권을 소유하고, 무동작·기존 확장은 기존 경로를 유지한다. */
     default boolean controlsOutput() { return false; }
+
+    /**
+     * 3회차 V1: 이 세션의 시작 패키지에서 낼 승인 원문 대본 줄들(첫 대본의 장면 설명 · 친구 첫 대사 · 기회 문장 · 상황 다시 설명 · 변형 제안, 승인 발화).
+     * 실행부가 참여 확인 · 시작 안내 동안 음성을 미리 만든다. ACTIVE 전(WAITING_CHILD 진입 때) 실행기 스레드에서 한 번 부르며 상태를 바꾸지 않아야 한다.
+     * 기본은 없음(모든 대본 줄을 GPT-Live 원문 읽기로 낸다). 예외는 실행부가 삼키고 미리 만들지 않을 뿐이다.
+     *
+     * @param practiceJson 시작 패키지의 {@code practice} 조각(없으면 null)
+     * @param approvedSpeechTexts 시작 패키지 approvedSpeech의 승인 발화 문장 지도(code → text)
+     */
+    default List<SpeechLine> speechLines(String practiceJson, java.util.Map<String, String> approvedSpeechTexts) { return List.of(); }
 
     default Progress progress() { return null; }
 

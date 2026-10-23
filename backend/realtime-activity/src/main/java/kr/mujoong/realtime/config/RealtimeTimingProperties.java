@@ -18,7 +18,8 @@ public record RealtimeTimingProperties(
         JudgmentTiming judgment,
         GuardrailTiming guardrail,
         ConversationTiming conversation,
-        ProviderTiming provider) {
+        ProviderTiming provider,
+        SpeechClipTiming speechClip) {
     public RealtimeTimingProperties {
         required(session, "mujoong.timing.session");
         required(device, "mujoong.timing.device");
@@ -27,6 +28,20 @@ public record RealtimeTimingProperties(
         required(guardrail, "mujoong.timing.guardrail");
         required(conversation, "mujoong.timing.conversation");
         required(provider, "mujoong.timing.provider");
+        required(speechClip, "mujoong.timing.speech-clip");
+    }
+
+    /**
+     * 3회차 V1(timing.md 15절): 연습 대본 줄 음성 미리 합성의 시간 값.
+     *
+     * @param synthesisTimeout 합성 요청 하나의 상한(보내기 → 본문 끝). 넘기면 그 줄은 합성 실패이고 GPT-Live 원문 읽기로 낸다
+     * @param readyWait 대본 줄을 낼 차례에 그 줄의 합성이 아직 끝나지 않았을 때 기다리는 상한. 넘기면 GPT-Live 원문 읽기로 낸다
+     */
+    public record SpeechClipTiming(Duration synthesisTimeout, Duration readyWait) {
+        public SpeechClipTiming {
+            positive(synthesisTimeout, "mujoong.timing.speech-clip.synthesis-timeout");
+            positive(readyWait, "mujoong.timing.speech-clip.ready-wait");
+        }
     }
 
     /**
