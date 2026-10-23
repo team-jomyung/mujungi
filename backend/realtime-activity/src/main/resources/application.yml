@@ -134,7 +134,8 @@ mujoong:
       instruction-defer-max: 3s
     # 3회차 V1(timing.md 15절): 연습 대본 줄 음성 미리 합성. 합성 요청 하나의 상한 · 낼 차례에 합성이 덜 끝났을 때 기다리는 상한(넘기면 GPT-Live 원문 읽기)
     speech-clip:
-      synthesis-timeout: 10s
+      # 4회차 R6: 10s → 20s(실측 B5: OpenAI TTS가 가끔 10초를 넘겼다). 낼 때 기다리는 ready-wait는 그대로 2s
+      synthesis-timeout: 20s
       ready-wait: 2s
   outbox:
     poll-interval: 500ms

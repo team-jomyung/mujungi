@@ -247,9 +247,9 @@ U11(선 형식 정비)이 더한 키다. 공급자 실호출에는 응답 id도 
 
 ## 15. 3회차 V1 연습 대본 줄 음성 미리 합성
 
-연습 대본 줄(장면 설명 · 친구 첫 대사 · 기회 문장 · 상황 다시 설명 · 변형 제안 · 승인 발화 HELP_OFFER · COACH_SWITCH · PEER_RETURN)을 GPT-Live가 읽지 않고 세션 시작 때 미리 합성한 음성으로 낸다(contracts/ai-io.md 10.16, 편차 (PDS-V1)). 시간이 아닌 설정(스위치 · 모델 · 목소리 · 말투 · 동시 수 · 캐시)은 `mujoong.speech-clip.*`(ai-io.md 10.16)이다. 화면이 읽지 않는 서버 키라 14절처럼 `frontend/src/shared/timing/timing-defaults.json`에는 넣지 않는다 — R-M5의 '세 곳'은 이 표 · realtime `application.yml` · 설정 레코드(`RealtimeTimingProperties.SpeechClipTiming`)다. 두 값은 실측 전 **임시값**이다.
+연습 대본 줄(장면 설명 · 친구 첫 대사 · 기회 문장 · 상황 다시 설명 · 변형 제안 · 승인 발화 HELP_OFFER · COACH_SWITCH · PEER_RETURN)을 GPT-Live가 읽지 않고 세션 시작 때 미리 합성한 음성으로 낸다(contracts/ai-io.md 10.16, 편차 (PDS-V1)). 시간이 아닌 설정(스위치 · 모델 · 목소리 · 말투 · 동시 수 · 캐시)은 `mujoong.speech-clip.*`(ai-io.md 10.16)이다. 화면이 읽지 않는 서버 키라 14절처럼 `frontend/src/shared/timing/timing-defaults.json`에는 넣지 않는다 — R-M5의 '세 곳'은 이 표 · realtime `application.yml` · 설정 레코드(`RealtimeTimingProperties.SpeechClipTiming`)다. 두 값은 실측 전 **임시값**이다. 4회차 R6가 3회차 실측(47줄 중 9줄이 10초를 넘겨 `TIMEOUT`)으로 `synthesis-timeout`을 10s → 20s로 늘렸다. 줄은 낼 차례보다 앞서(참여 확인 진입 · 다음 대본 도착 때) 맡기고 낼 때 기다리는 `ready-wait`는 그대로라, 늘린 시한이 낼 차례를 늦추지 않는다 — 그때까지 덜 만든 줄은 지금처럼 `ready-wait`만 기다리고 GPT-Live 원문 읽기로 낸다.
 
 | 키 | 기본값 | 소유 앱 | 뜻 | 근거 |
 |---|---|---|---|---|
-| `mujoong.timing.speech-clip.synthesis-timeout` | `10s` | realtime | 대본 줄 음성 합성 요청 하나의 상한(보내기 → 본문 끝). 넘기면 그 줄은 합성 실패(`TIMEOUT`)이고 낼 차례에 GPT-Live 원문 읽기로 낸다 | V1 · PDS-V1 |
+| `mujoong.timing.speech-clip.synthesis-timeout` | `20s` | realtime | 대본 줄 음성 합성 요청 하나의 상한(보내기 → 본문 끝). 넘기면 그 시도는 합성 실패(`TIMEOUT`)이고, 공유 장치가 같은 줄을 곧바로 한 번 더 맡긴다(4회차 R6, 일시 실패 공통, ai-io.md 10.16 3항). 두 번째도 실패하면 그 줄은 낼 차례에 GPT-Live 원문 읽기로 낸다 | V1 · PDS-V1 · R6 |
 | `mujoong.timing.speech-clip.ready-wait` | `2s` | realtime | 대본 줄을 낼 차례에 그 줄의 합성이 아직 끝나지 않았을 때 기다리는 상한(연습 시계와 같이 기술 일시정지 동안 멈춘다). 넘기면 GPT-Live 원문 읽기로 낸다(사유 `CLIP_NOT_READY`) | V1 · PDS-V1 |

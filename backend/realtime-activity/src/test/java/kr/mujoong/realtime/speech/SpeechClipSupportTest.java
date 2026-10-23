@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
+import java.util.concurrent.atomic.AtomicInteger;
 import kr.mujoong.realtime.gate.SegmentBuffer;
 import kr.mujoong.realtime.testing.FakeSpeechClipSynthesizer;
 import kr.mujoong.testsupport.time.MutableClock;
@@ -14,8 +15,8 @@ import org.junit.jupiter.api.Test;
 
 /**
  * 3회차 V1: 세션들이 함께 쓰는 대본 줄 음성 장치(contracts/ai-io.md 10.16). 같은 말투 · 원문은 한 번만 만들고(만드는 중이면 같은 약속, 만든 것은 캐시),
- * 캐시는 바이트 상한 안에서 오래 안 쓴 것부터 버리며, 동시 합성 · 대기열 상한을 넘는 줄은 만들지 않고, 실패한 줄은 캐시에 남지 않는지 본다. 합성은
- * 대역이다(R-F1).
+ * 캐시는 바이트 상한 안에서 오래 안 쓴 것부터 버리며, 동시 합성 · 대기열 상한을 넘는 줄은 만들지 않고, 실패한 줄은 캐시에 남지 않는지 본다. 4회차 R6:
+ * 일시 실패는 같은 차례에서 곧바로 한 번 더 맡기고, 다시 해도 같은 실패는 다시 하지 않는다. 합성은 대역이다(R-F1).
  */
 @Tag("practice-flow")
 class SpeechClipSupportTest {
@@ -93,10 +94,71 @@ class SpeechClipSupportTest {
         SpeechClipSupport support = support(4, 10, 1_000_000);
 
         assertThat(failure(support.clip(SpeechClipVoice.PEER, LINE))).isEqualTo(SpeechClipFailure.RATE_LIMITED);
+        // 4회차 R6: 일시 실패(요청 많음)는 곧바로 한 번 더 맡긴 뒤 실패로 끝난다
+        assertThat(synth.callsFor(LINE)).isEqualTo(2);
         synth.failures.clear();
         assertThat(support.clip(SpeechClipVoice.PEER, LINE).join().pcm()).isNotEmpty();
-        assertThat(synth.callsFor(LINE)).isEqualTo(2);
+        assertThat(synth.callsFor(LINE)).isEqualTo(3);
         assertThat(support.cachedBytes()).isEqualTo(FakeSpeechClipSynthesizer.pcmFor(LINE).length);
+    }
+
+    /** 4회차 R6(실측 B5): 시간 초과는 같은 차례에서 곧바로 한 번 더 맡기고, 그 음성을 캐시에 둔다. 만든 시간은 처음 맡긴 때부터다. */
+    @Test
+    void aTimeoutIsTriedOnceMoreAndTheSecondSuccessBecomesTheCachedClip() {
+        synth.immediate = false;
+        SpeechClipSupport support = support(4, 10, 1_000_000);
+        CompletableFuture<SpeechClipSupport.Clip> clip = support.clip(SpeechClipVoice.NARRATOR, LINE);
+        clock.advance(Duration.ofSeconds(20));
+
+        synth.fail(LINE, SpeechClipFailure.TIMEOUT);
+
+        assertThat(clip).as("한 번 더 맡겨 아직 기다린다").isNotDone();
+        assertThat(synth.callsFor(LINE)).isEqualTo(2);
+        clock.advance(Duration.ofSeconds(3));
+        synth.complete(LINE);
+        assertThat(clip.join().synthesisLatency()).isEqualTo(Duration.ofSeconds(23));
+        assertThat(support.clip(SpeechClipVoice.NARRATOR, LINE).join()).as("다시 만든 음성은 캐시에서 준다").isSameAs(clip.join());
+        assertThat(synth.callsFor(LINE)).isEqualTo(2);
+    }
+
+    @Test
+    void twoTransientFailuresInARowEndAsAFailureAndTheRetryKeepsTheConcurrencySlotUntilThen() {
+        synth.immediate = false;
+        SpeechClipSupport support = support(1, 10, 1_000_000);
+        CompletableFuture<SpeechClipSupport.Clip> first = support.clip(SpeechClipVoice.PEER, LINE);
+        CompletableFuture<SpeechClipSupport.Clip> queued = support.clip(SpeechClipVoice.PEER, OTHER);
+
+        synth.fail(LINE, SpeechClipFailure.PROVIDER_ERROR);
+        assertThat(synth.texts()).as("다시 맡기는 동안 동시 자리를 쥐고 있어 기다리던 줄은 아직이다").containsExactly(LINE, LINE);
+        synth.fail(LINE, SpeechClipFailure.TRANSPORT_ERROR);
+
+        assertThat(failure(first)).isEqualTo(SpeechClipFailure.TRANSPORT_ERROR);
+        assertThat(synth.texts()).as("두 번째 실패 뒤 자리를 돌려준다").containsExactly(LINE, LINE, OTHER);
+        synth.complete(OTHER);
+        assertThat(queued.join().pcm()).isNotEmpty();
+        assertThat(support.cachedBytes()).isEqualTo(FakeSpeechClipSynthesizer.pcmFor(OTHER).length);
+    }
+
+    @Test
+    void authInputAndAudioFailuresAreNotTriedAgain() {
+        synth.failures.put(LINE, SpeechClipFailure.AUTH_FAILED);
+        synth.failures.put(OTHER, SpeechClipFailure.REQUEST_REJECTED);
+        SpeechClipSupport support = support(4, 10, 1_000_000);
+        AtomicInteger oddCalls = new AtomicInteger();
+        SpeechClipSupport odd = new SpeechClipSupport((voice, text) -> {
+            oddCalls.incrementAndGet();
+            return CompletableFuture.completedFuture(new byte[3]);
+        }, clock, WAIT, 4, 10, 1_000_000, 48);
+
+        assertThat(failure(support.clip(SpeechClipVoice.PEER, LINE))).isEqualTo(SpeechClipFailure.AUTH_FAILED);
+        assertThat(failure(support.clip(SpeechClipVoice.PEER, OTHER))).isEqualTo(SpeechClipFailure.REQUEST_REJECTED);
+        assertThat(failure(odd.clip(SpeechClipVoice.PEER, LINE))).isEqualTo(SpeechClipFailure.INVALID_AUDIO);
+
+        assertThat(synth.callsFor(LINE)).isEqualTo(1);
+        assertThat(synth.callsFor(OTHER)).isEqualTo(1);
+        assertThat(oddCalls).hasValue(1);
+        assertThat(SpeechClipSupport.transientFailure(SpeechClipFailure.TIMEOUT)).isTrue();
+        assertThat(SpeechClipSupport.transientFailure(SpeechClipFailure.OVERLOADED)).as("장치 과부하는 장치 안에서 다시 하지 않는다").isFalse();
     }
 
     @Test

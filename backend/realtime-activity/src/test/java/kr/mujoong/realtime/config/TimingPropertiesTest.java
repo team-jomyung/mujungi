@@ -72,7 +72,8 @@ class TimingPropertiesTest {
     void applicationYmlBindsTheSpeechClipTimingDefaultsAndRejectsZero() {
         RealtimeTimingProperties.SpeechClipTiming clip = ConfigKeyContractTest.bind(APPLICATION_YML).timing().speechClip();
 
-        assertThat(clip.synthesisTimeout()).isEqualTo(Duration.parse("PT10S"));
+        // 4회차 R6: 10s → 20s(실측 B5)
+        assertThat(clip.synthesisTimeout()).isEqualTo(Duration.parse("PT20S"));
         assertThat(clip.readyWait()).isEqualTo(Duration.parse("PT2S"));
         Duration one = Duration.parse("PT1S");
         assertThatThrownBy(() -> new RealtimeTimingProperties.SpeechClipTiming(Duration.ZERO, one))

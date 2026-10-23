@@ -2049,6 +2049,10 @@ public final class SessionExecutor {
             playScriptClip(waiting.seq(), speech, clip.clip(), waiting.since());
             return;
         }
+        if (clip.state() == ScriptClips.State.FAILED) {
+            // 4회차 R6: 기다리던 줄이 실패로 끝났다 — 다음에 낼 때 쓰도록 뒤에서 한 번 다시 맡긴다(이번에는 GPT-Live 원문 읽기)
+            scriptClips.retryFailed(speech.partnerRole(), speech.text());
+        }
         if (!speakWithGptLive(waiting.seq(), speech, fallbackReason(clip, held), waiting.since())) {
             // 확장은 이미 참을 받았으므로 지금처럼 재생 실패로 알린다
             pendingPracticeSpeech = null;
@@ -2312,6 +2316,10 @@ public final class SessionExecutor {
             }
             if (clip.state() == ScriptClips.State.PENDING && !held && scriptClips.readyWait().isPositive()) {
                 return waitForScriptClip(seq, speech);
+            }
+            if (clip.state() == ScriptClips.State.FAILED) {
+                // 4회차 R6: 이번에는 GPT-Live 원문 읽기로 내고, 일시 실패였으면 다음에 낼 때 쓰도록 뒤에서 한 번 다시 맡긴다
+                scriptClips.retryFailed(speech.partnerRole(), speech.text());
             }
             return speakWithGptLive(seq, speech, fallbackReason(clip, held), null);
         }

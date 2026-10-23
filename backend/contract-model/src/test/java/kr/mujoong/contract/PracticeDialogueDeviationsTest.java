@@ -57,6 +57,15 @@ class PracticeDialogueDeviationsTest {
     }
 
     @Test
+    void theV1RowStatesTheLongerSynthesisTimeoutAndTheOneRetry() throws IOException {
+        String v1 = read("contracts/deviations.md").lines().filter(line -> line.startsWith("| (PDS-V1) |")).findFirst()
+                .orElseThrow();
+
+        assertThat(v1).contains("`mujoong.timing.speech-clip.synthesis-timeout`(20s", "곧바로 한 번 더 맡기고", "뒤에서 한 번 다시 맡긴다");
+        assertThat(read("contracts/timing.md")).contains("| `mujoong.timing.speech-clip.synthesis-timeout` | `20s` | realtime |");
+    }
+
+    @Test
     void theV3RowStatesTheDeferralKeyAndTheOneResend() throws IOException {
         String v3 = read("contracts/deviations.md").lines().filter(line -> line.startsWith("| (PDS-V3) |")).findFirst()
                 .orElseThrow();

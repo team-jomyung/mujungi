@@ -324,6 +324,54 @@ class ScriptClipExecutorTest {
                 .as("GPT-Live가 읽은 줄은 이미 그 대화 맥락에 있다").isEqualTo(InstructionTemplates.practiceScoped(GENERATED));
     }
 
+    // ------------------------------------------------------------------ 4회차 R6 실패한 줄 다시 맡기기
+
+    /** 실측 B5: 시간 초과로 실패한 줄은 낼 때마다 대체였다(DLG-A55). 이제 낼 때 이번에는 GPT-Live로 읽고 다음을 위해 뒤에서 한 번 다시 맡긴다. */
+    @Test
+    void aLineThatFailedTransientlyIsReadByGptLiveNowAndAskedAgainSoItsNextTurnIsTheClip() {
+        FakeSpeechClipSynthesizer clips = h.useSpeechClips();
+        clips.failures.put(OPPORTUNITY, SpeechClipFailure.TIMEOUT);
+        practiceWithClips(line(PEER, OPPORTUNITY, SpeechVoice.PEER));
+        assertThat(clips.callsFor(OPPORTUNITY)).as("세션 시작 때 장치가 한 번 더 맡겨 본 뒤 실패").isEqualTo(2);
+        clips.failures.clear();
+
+        assertThat(extension.out.speak(speech(PEER, OPPORTUNITY))).isTrue();
+        h.settleSend();
+        assertThat(h.provider.last().requests(InstructionsAppend.class)).as("이번에는 GPT-Live 원문 읽기").hasSize(1);
+        assertThat(clips.callsFor(OPPORTUNITY)).as("낼 때 뒤에서 한 번 다시 맡긴다").isEqualTo(3);
+        h.speak(OPPORTUNITY, 4_800);
+        h.advance(QUIET);
+        assertThat(h.link.outputs()).singleElement().satisfies(bundle -> assertThat(bundle.source()).isEqualTo(OutputBegin.Source.GPT_LIVE));
+
+        assertThat(extension.out.speak(speech(PEER, OPPORTUNITY))).isTrue();
+        h.settleSend();
+
+        assertThat(h.link.outputs()).last().satisfies(bundle -> assertThat(bundle.source()).isEqualTo(OutputBegin.Source.SCENARIO_SCRIPT));
+        assertThat(events(SessionExecutor.EVENT_PRACTICE_SPEECH_SOURCE)).hasSize(2).satisfiesExactly(
+                first -> assertThat(first).contains("\"source\":\"GPT_LIVE_FALLBACK\"", "\"reason\":\"SYNTHESIS_TIMEOUT\""),
+                second -> assertThat(second).contains("\"source\":\"TTS_CLIP\""));
+    }
+
+    @Test
+    void aLineIsAskedAgainAtMostOnceAndOnlyAfterATransientFailure() {
+        FakeSpeechClipSynthesizer clips = h.useSpeechClips();
+        clips.failures.put(OPPORTUNITY, SpeechClipFailure.PROVIDER_ERROR);
+        clips.failures.put(OPENER, SpeechClipFailure.AUTH_FAILED);
+        practiceWithClips(line(PEER, OPPORTUNITY, SpeechVoice.PEER), line(PEER, OPENER, SpeechVoice.PEER));
+        assertThat(clips.callsFor(OPPORTUNITY)).isEqualTo(2);
+        assertThat(clips.callsFor(OPENER)).as("인증 실패는 장치도 다시 하지 않는다").isEqualTo(1);
+
+        extension.out.speak(speech(PEER, OPPORTUNITY));
+        extension.out.speak(speech(PEER, OPPORTUNITY));
+        extension.out.speak(speech(PEER, OPENER));
+        h.settleSend();
+
+        assertThat(clips.callsFor(OPPORTUNITY)).as("줄마다 한 번만 다시 맡긴다(그 맡김도 장치가 한 번 더 해 본다)").isEqualTo(4);
+        assertThat(clips.callsFor(OPENER)).as("일시 실패가 아니면 다시 맡기지 않는다").isEqualTo(1);
+        assertThat(events(SessionExecutor.EVENT_PRACTICE_SPEECH_SOURCE)).hasSize(3)
+                .allSatisfy(payload -> assertThat(payload).contains("\"source\":\"GPT_LIVE_FALLBACK\""));
+    }
+
     // ------------------------------------------------------------------ 보조
 
     private void practiceWithClips(SpeechLine... lines) {

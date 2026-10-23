@@ -16,7 +16,7 @@ import kr.mujoong.realtime.gate.SegmentBuffer;
  *
  * <ul>
  *   <li>같은 말투 · 같은 원문은 한 번만 만든다: 만드는 중이면 같은 약속을, 만든 것은 캐시({@code cache-max-bytes}, 오래 안 쓴 것부터 버림)를 돌려준다.
- *       실패한 줄은 캐시에 두지 않는다(다음 세션이 다시 맡길 수 있다).
+ *       일시 실패(시간 초과 · 요청 많음 · 공급자 · 전송 오류)는 곧바로 한 번 더 맡기고(4회차 R6), 그래도 실패한 줄은 캐시에 두지 않는다(다시 맡길 수 있다).
  *   <li>앱 전체 동시 합성은 {@code max-concurrency}개, 차례를 기다리는 요청은 {@code max-pending}개까지다. 넘으면 그 줄은 OVERLOADED이고 GPT-Live로
  *       읽는다.
  *   <li>음성은 24kHz s16 모노 PCM이고 비어 있지 않으며 출력 구간 상한(20초 분량, {@link SegmentBuffer#MAX_BYTES}) 안이어야 한다.
@@ -34,6 +34,8 @@ public final class SpeechClipSupport implements AutoCloseable {
 
     /** 대본 줄 하나의 입력 상한(코드 포인트). 출력 구간 20초에 들어가는 문장보다 넉넉하다. */
     public static final int MAX_INPUT_LENGTH = 600;
+    /** 4회차 R6: 한 줄을 만드는 시도 수 상한(처음 + 일시 실패 뒤 한 번, 시간 값이 아니다). */
+    public static final int MAX_ATTEMPTS = 2;
     /** 합성 음성 상한(출력 구간 상한과 같은 20초 분량). */
     public static final int MAX_CLIP_BYTES = SegmentBuffer.MAX_BYTES;
 
@@ -198,8 +200,24 @@ public final class SpeechClipSupport implements AutoCloseable {
         return "SpeechClipSupport[state=" + state + "]";
     }
 
+    /**
+     * 4회차 R6: 같은 줄을 한 번 더 맡겨 볼 만한 일시 실패인가(시간 초과 · 요청 많음 · 공급자 5xx · 전송 오류). 인증 · 입력 · 길이 · 음성 형식 실패는 다시
+     * 해도 같으므로 아니다.
+     */
+    public static boolean transientFailure(SpeechClipFailure failure) {
+        return failure == SpeechClipFailure.TIMEOUT || failure == SpeechClipFailure.RATE_LIMITED
+                || failure == SpeechClipFailure.PROVIDER_ERROR || failure == SpeechClipFailure.TRANSPORT_ERROR;
+    }
+
     private void launch(Key key, CompletableFuture<Clip> result) {
-        long started = clock.monotonicNanos();
+        attempt(key, result, clock.monotonicNanos(), 1);
+    }
+
+    /**
+     * 합성 한 번. 4회차 R6: 일시 실패면 같은 차례(동시 합성 자리를 쥔 채)에서 곧바로 한 번 더 맡긴다(실측 B5: 47줄 중 9줄이 10초 시한을 넘겼고 같은 줄이
+     * 두 세션 연속으로 넘기기도 했다). 그래도 실패하면 지금처럼 실패로 끝내 캐시에 두지 않는다. 만든 시간은 처음 맡긴 때부터 잰다.
+     */
+    private void attempt(Key key, CompletableFuture<Clip> result, long started, int attempt) {
         CompletableFuture<byte[]> call;
         try {
             call = synthesizer.synthesize(key.voice(), key.text());
@@ -219,6 +237,10 @@ public final class SpeechClipSupport implements AutoCloseable {
                 reason = SpeechClipFailure.AUDIO_TOO_LONG;
             } else {
                 clip = new Clip(pcm, clock.elapsedSince(started));
+            }
+            if (clip == null && attempt < MAX_ATTEMPTS && transientFailure(reason)) {
+                attempt(key, result, started, attempt + 1);
+                return;
             }
             settle(key, result, clip, reason);
             next();
