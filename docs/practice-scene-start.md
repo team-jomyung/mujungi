@@ -1,4 +1,4 @@
-# 연습 장면 시작 개선 — 원래 대화 요약 · 무중이 여는 말 (구현 지시)
+# 연습 장면 시작 개선 — 원래 대화 요약 · 무중이 여는 말 · 오류에도 대화 유지 (구현 지시)
 
 작업 브랜치: `feat/practice-scene-start` (이 문서만 있는 상태로 올린다. PR은 구현을 마친 뒤 만든다)
 
@@ -67,6 +67,29 @@
      - 무응답이면 `no-response-wait` 뒤 기회 문장으로 넘어간다(무응답 재안내 횟수에 넣지 않는다).
   5. 그 뒤(기회 문장 → 판정 → 되묻기 · 도움 …)는 지금 흐름 그대로다.
 
+### 요구 3. 오류가 나도 대화를 끝내지 않는다 (2026-10-23 추가)
+
+- "두 번 오류가 나면 강제로 끝내는" 로직을 없앤다. 발화 · 판정 · 전사 오류가 나도 연습 대화는 그대로 이어 간다.
+- 연습이 끝나는 길은 다음만 남긴다.
+  - 등록 종료 표현 · 쉬기 요청
+  - 보호자 종료
+  - 공백 경고 · 공백 종료(`silence-warning` · `silence-end`)
+  - 목표 시간 상한(`goal-active-limit`) · 집중 상한(`focus-max`) 같은 기존 시간 상한
+  - 모든 목표 완료
+  - 공급자 · 기기 연결이 실제로 끊긴 경우(실행부의 끊김 처리)
+- 인수 기준:
+  1. 연습 확장점이 `Signal.OUTPUT_FAILED`를 내는 경로가 없다. 실행부의 `Trigger.PRACTICE_OUTPUT_FAILED` 종료는 쓰이지 않는다. 옛 기록 · 화면 표시를 읽는 코드는 남긴다.
+  2. 생성형 발화를 끝내 내지 못하면(재요청 1회 뒤 실패, 제브 두 번째 막힘, 시한 초과) 그 발화를 건너뛰고 다음 단계로 진행한다. 사유 코드와 장면 사실(`PLAYBACK_FAILED`)은 남긴다.
+     - 장면 도입을 못 들려준 경우: 장면 행을 만들고 기회 문장(요구 2가 들어가면 여는 말)으로 진행한다.
+     - 목표 마무리(`GOAL_RECAP`)를 못 들려준 경우: 다음 목표 또는 마무리 인사로 진행한다.
+  3. 승인 문장 낭독이 원문과 다르거나 실패한 경우(재요청 · 복구 뒤에도): 그 문장을 건너뛰고 다음 단계로 진행한다. 안전 차단(제브 BLOCK)된 말은 들려주지 않는다(안전 규칙 유지). 끝내지만 않는다.
+  4. 판독 불가 · 판정 보류 · 판정 장애가 두 번째여도 장면을 닫지 않는다.
+     - 교정 없이 같은 기회를 다시 안내하거나 도움 제안으로 이어 간다.
+     - 같은 안내를 끝없이 반복하지 않도록, 두 번째부터는 도움 제안으로 넘긴다.
+     - 장면 종료는 시간 상한이 맡는다.
+  5. 도움 제안에 대한 불명확 대답 두 번째, 슬롯 두 번째 막힘(`FlowTransitions`의 "두 번째" 규칙들)도 같은 원칙이다. 장면 · 연습을 닫지 않고 다음 단계(도움 · 다시 해 보기 · 다음 대화 차례)로 진행한다.
+  6. 오류 기록은 그대로 남긴다(장면 사실 `TRANSCRIPT_FAILED` · `PLAYBACK_FAILED`, 사유 코드). 결과 정리 · 리포트가 "입력 · 재생 장애는 능력 부족으로 보지 않는다" 규칙을 계속 쓸 수 있어야 한다.
+
 ## 3. 지금 구조 (코드 위치)
 
 ### core — 대본 생성
@@ -95,6 +118,22 @@
   - 돌아보기 관련 필드: `reflecting` · `reflectionAwaiting` · `earlyUtterance`. 관련 분기: 166 · 200 · 222 · 532 · 561 · 586 · 592 · 743 · 797행 근처.
 - `practiceflow/PracticeInstructions.java`: `reflectionOffer()` · `reflectionAcknowledgment()`(98 ~ 104행), `spokenIntroduction(scene)`(59행).
 - `practiceflow/FlowState.java`: `Sub.REFLECTION_OFFER` · `REFLECTION_PROMPT` · `REFLECTION_ACK`.
+
+### 요구 3 관련 — 오류로 끝나는 경로 (2026-10-23 기준 코드)
+- `practiceflow/PracticeConversation.java`
+  - 생성형 발화 실패: `onIncompleteAudio`(`generatedAudioRetried` — 1회 재요청 뒤 `handleSlotEnd(FAILED)`)
+  - 승인 낭독 불일치: `onApprovedTextMismatch`(`approvedReadingRetried` → `recoverApprovedNarration` → 실패면 FAILED)
+  - `handleSlotEnd`:
+    - FAILED · BLOCKED면 `outputFailed = true`
+    - `GOAL_RECAP` 실패 → `closing(false)`
+    - **장면 도입 실패(SCENE_INTRO, 장면 행 전) → `Phase.CLOSING` + `Signal.OUTPUT_FAILED`**(761행 근처)
+    - `RETURN_NOTICE` 실패 → 장면 종료(PLAYBACK_FAILED)
+  - `closing()`이 `outputFailed`면 `Signal.OUTPUT_FAILED`를 낸다(449행 근처).
+  - `confirmUncertainInput`: 두 번째면 장면 종료(TRANSCRIPT_FAILED · ABSTAINED)(645행 근처)
+  - `unavailableJudgment` → `FlowTransitions.onJudgmentUnavailable`
+  - 슬롯 안전 시계 만료 → FAILED
+- `practiceflow/FlowTransitions.java`: "두 번째" 규칙들 — 판독 불가(384행), 보류 · 장애(305 · 392행), 도움 제안 불명확, 슬롯 두 번째 막힘(54 ~ 60행 EndCause 설명).
+- `session/SessionExecutor.java` 1130행 근처: `Signal.OUTPUT_FAILED` → `ending.beginClosing(Trigger.PRACTICE_OUTPUT_FAILED)`. `session/TransitionTable.java` 70행.
 
 ## 4. 설계 방향 (권장안 — 다르게 정하면 이 절을 고치고 진행)
 
@@ -131,10 +170,24 @@
   - 이렇게 두면 여는 말에 대한 아이 대답도 그 장면 인용 범위에 들어간다. 판정과 연결되지 않은 발화라 2항목 '장면 판정이 가리키는 발화'에는 잡히지 않는지 core `ReportRuleSections`에서 확인한다.
 - `practice-record-v2.schema.json`에 새 사실(facts)이 필요한지 확인한다. 권장: 필요 없음 — 판정이 없는 단계다.
 
+### 요구 3
+- **확장점(`PracticeConversation`)**
+  - `outputFailed`로 연습을 닫는 분기와 `Signal.OUTPUT_FAILED` 발신을 없앤다.
+  - 실패한 슬롯은 '건너뜀'으로 닫고, 지금 단계의 다음 단계로 간다. 단계별로 정하는 "실패 시 다음 단계" 표를 `FlowTransitions`에 둔다(테스트하기 쉬움).
+- **`FlowTransitions`**
+  - "두 번째면 장면 종료" 규칙을 "두 번째면 도움 제안(또는 다시 해 보기 / 다음 대화 차례)"으로 바꾼다.
+  - 같은 안내 반복 상한은 두되, 상한에 닿으면 끝내지 않고 다음 단계로 간다.
+  - 장면 종료는 시간 상한(`goal-limit` · `focus-max`)과 정상 진행만 맡는다.
+- **실행부**
+  - `Signal.OUTPUT_FAILED` 처리와 `Trigger.PRACTICE_OUTPUT_FAILED` 전이는 더 쓰이지 않는다. 지우되, 옛 세션 기록의 `end_detail PRACTICE_OUTPUT_FAILED`를 읽고 보이는 코드(core · 프런트 · `RecordCaptureService`)는 남긴다.
+  - `TransitionTable` 항목을 지울 때 `ContractFilesTest` · 전이 표 시험이 무엇을 대조하는지 먼저 확인한다.
+- **안전 규칙은 그대로다.** 제브 BLOCK · 출력 사전에 걸린 말, 승인 원문과 다른 말은 들려주지 않는다. 바뀌는 것은 '그 뒤 끝낸다' → '건너뛰고 잇는다'뿐이다.
+- **무한 반복 방지:** 발화가 계속 실패하는 경우(공급자가 말을 전혀 못 내는 상태)는 시간 상한과 공백 종료가 끝낸다. 연속 실패 횟수를 사유 코드(INFO)로 남겨 진단할 수 있게 한다.
+
 ## 5. 계약 · 문서 (R-M10)
 - `contracts/schemas/ai-scenario-output.schema.json` · `practice-scenario.schema.json`(필요하면 `internal-practice-scenario-request.schema.json`): `reflectionPrompt` → `reflectionSummary`, `openingLine`을 더한다. 옛 필드를 읽는 쪽 호환을 적는다.
 - `contracts/ai-io.md`의 상황 생성 절(10.11 근처)과 연습 흐름 설명.
-- `contracts/deviations.md` **FT-1023-g**: 근거는 2026-10-23 사람 결정(요구 1 · 2)과 17:14 로컬 실키 사례. 화면 설계 v1.5j의 연습 흐름(장면 → 기회)과 다름을 적는다.
+- `contracts/deviations.md` **FT-1023-g**: 근거는 2026-10-23 사람 결정(요구 1 · 2 · 3)과 16:29 · 17:14 로컬 실키 사례. 요구 3은 U12 설계의 "두 번째면 닫는다"(§3.3a 등) · `PRACTICE_OUTPUT_FAILED` 종료를 대체한다. 화면 설계 v1.5j의 연습 흐름(장면 → 기회)과 다름을 적는다.
 - `docs/adaptive-practice-dialogue.md` 해당 절 갱신.
 - 화면 설계 정본(`aidlc/spaces/default/knowledge/documents/`)은 고치지 않는다. 바꿀 필요가 있으면 개정 제안(RP-n) 표로 남긴다.
 
@@ -154,6 +207,14 @@
   6. 여는 말 → 무응답 만기 → 기회 문장(재안내 횟수 불변)
   7. `openingLine` 없는 옛 패키지 → 지금 흐름
   8. 17:14 사례 재현: 여는 말이 나온 뒤 기회 문장으로 이어지는지
+- **요구 3 (realtime)**
+  1. 16:29 · 17:14 사례 재현: 생성형 발화가 재요청 뒤에도 실패 → 연습이 닫히지 않고 다음 단계로 진행, `Signal.OUTPUT_FAILED` 없음
+  2. 장면 도입 실패 → 장면 행 생성 · 기회 문장(또는 여는 말)으로 진행
+  3. `GOAL_RECAP` 실패 → 다음 목표 / 마무리 인사
+  4. 판독 불가 · 판정 보류 두 번째 → 장면이 닫히지 않고 도움 제안으로
+  5. 슬롯 두 번째 막힘 → 다음 단계, 막힌 말은 재생 안 됨
+  6. 연속 실패라도 `goal-active-limit` 만기로 장면이 정상 종료
+  7. 기존 "두 번째면 종료"를 단언하던 시험은 새 규칙으로 바꾸고, PR에 바꾼 단언과 대신 지키는 검사를 적는다(R-F2)
 - **계약 대조 시험 · ArchUnit 통과**
 - **실호출-합성(수동, CI 밖)**: core 대본 생성으로 요약 · 여는 말의 품질을 몇 건 확인하고 결과를 따로 보고한다.
 
@@ -163,10 +224,11 @@
 - 아동 대화 내용을 다시 들려주는 것이 보호자 동의 · 표시 범위 안에 드는지(R-F15). 같은 내용은 이미 대본 생성 입력으로 Luna에 가고 있다.
 - 여는 대화를 1차례로 할지.
 - 화면 설계 v1.5j 개정 제안(RP) 처리 여부.
+- 요구 3: 같은 안내 반복 상한(예: 재안내 2회 뒤 도움 제안)과 "연습 음성을 재생하지 못했어요" 완료 화면 문구(이제 새 세션에서는 나오지 않음)를 남길지.
 
 ## 8. 진행 순서 (권장)
 1. 계약 · 스키마 → core 생성 · 검토 · 검사 → core 시험
-2. realtime 대본 읽기 → 흐름(요약 → 도입 → 여는 말 → 기회) → realtime 시험
+2. realtime 대본 읽기 → 흐름(요약 → 도입 → 여는 말 → 기회) → 오류 시 건너뛰고 잇기(요구 3) → realtime 시험
 3. 계약 문서 · 편차 · 설계 문서 갱신
 4. 바꾼 쪽 정적 검사 · 단위 · 통합 시험(team.md '작업 단계마다의 검증')
 5. 로컬 실키(`bash scripts/live/up.sh --local`)로 연습 1회 확인 → 결과를 대역 / 실호출 / 실기기로 나눠 PR에 적는다.
