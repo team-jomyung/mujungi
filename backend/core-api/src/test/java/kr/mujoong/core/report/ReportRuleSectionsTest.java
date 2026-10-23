@@ -205,6 +205,31 @@ class ReportRuleSectionsTest {
                 "미실시 장면 · 시간 종료 2개 · 활동 끝 1개");
     }
 
+    /**
+     * FT-1023-e: 연습 음성 출력 실패 종료는 end_reason이 계약상 DISCONNECT여도 '연결이 끊겨 끝났어요'로 보이지 않는다. 같은 DISCONNECT라도 상세
+     * 사유가 없으면(진짜 연결 끊김) 지금 문구 그대로다.
+     */
+    @Test
+    void practiceOutputFailureIsNotShownAsADisconnect() {
+        var outputFailed = withEndDetail(withEndReason(input(1, "PRACTICE", 1, "DONE", "FULL"), "DISCONNECT"), "PRACTICE_OUTPUT_FAILED");
+        var disconnected = withEndReason(input(2, "FREE_TALK", 1, "DONE", "FULL"), "DISCONNECT");
+        assertThat(ReportRuleSections.endReasonText(outputFailed)).isEqualTo("음성 안내를 준비하지 못해 연습이 중단됐어요");
+        assertThat(ReportRuleSections.endReasonText(disconnected)).isEqualTo("연결이 끊겨 끝났어요");
+        var section = sections.write(List.of(outputFailed, disconnected)).get(10);
+        assertThat(section.text().lines()).contains(
+                "끝난 이유 · 연결이 끊겨 끝났어요 1회 · 음성 안내를 준비하지 못해 연습이 중단됐어요 1회");
+        assertThat(ReportRuleSections.FIXED_PHRASES).contains("음성 안내를 준비하지 못해 연습이 중단됐어요");
+    }
+
+    private static ReportInput withEndDetail(ReportInput in, String endDetail) {
+        var r = in.record();
+        var record = new kr.mujoong.core.record.ActivityRecordRepository.StoredRecord(r.sessionId(), r.guardianId(), r.childId(),
+                r.activityType(), r.finalStatus(), r.endReason(), r.confirmed(), r.startedAt(), r.endedAt(), r.listedAt(),
+                r.recordFrom(), r.recordTo(), r.transcriptJson(), r.gapsJson(), r.practiceJson(), r.snapshotHash(), r.recordedAt(),
+                endDetail);
+        return new ReportInput(in.activityNo(), record, in.status(), in.result(), in.scenes(), in.structured(), in.definitions());
+    }
+
     @Test
     void limitationsAddPracticeSentenceOnlyWhenPracticeIsSelected() {
         var free = sections.write(List.of(input(1, "FREE_TALK", 1, "DONE", "FULL"))).get(10);

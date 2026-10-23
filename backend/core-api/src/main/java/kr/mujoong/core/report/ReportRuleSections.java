@@ -42,6 +42,13 @@ public class ReportRuleSections {
             "DISCONNECT", "연결이 끊겨 끝났어요",
             "CONSENT_WITHDRAWN", "동의가 철회되어 끝났어요");
     static final String END_REASON_UNKNOWN = "활동이 끝났어요";
+    /**
+     * 연습 음성 출력 실패 종료(end_detail PRACTICE_OUTPUT_FAILED). end_reason은 계약상 DISCONNECT지만 기기 연결이 끊긴 것이 아니다(FT-1023-e). 27 기록
+     * 화면(EndReasonCard)과 같은 문장이다(임시 문구).
+     */
+    static final String END_REASON_PRACTICE_OUTPUT_FAILED = "음성 안내를 준비하지 못해 연습이 중단됐어요";
+    /** 연습 출력 실패의 end_detail 값(Realtime TransitionTable · contracts/events). */
+    static final String END_DETAIL_PRACTICE_OUTPUT_FAILED = "PRACTICE_OUTPUT_FAILED";
     static final String END_REASON_NO_DEVICE = "기기 응답 없이 끝냈어요";
 
     /** 금지 표현 1차 사전 시험이 검사하는 고정 문구 전부(ForbiddenDictionaryTest). */
@@ -301,6 +308,9 @@ public class ReportRuleSections {
         if ("FAILED".equals(status) || "ENDED_UNCONFIRMED".equals(status)) {
             return END_REASON_NO_DEVICE;
         }
+        if (END_DETAIL_PRACTICE_OUTPUT_FAILED.equals(input.record().endDetail())) {
+            return END_REASON_PRACTICE_OUTPUT_FAILED;
+        }
         return END_REASON_TEXT.getOrDefault(input.record().endReason() == null ? "" : input.record().endReason(), END_REASON_UNKNOWN);
     }
 
@@ -369,7 +379,8 @@ public class ReportRuleSections {
 
     private static List<String> fixedPhrases() {
         List<String> phrases = new ArrayList<>(List.of(FREE_TALK, PRACTICE, SCENE, PENDING, FAILED,
-                UNCONFIRMED, END_REASONS, NOT_DONE_SCENES, END_REASON_UNKNOWN, END_REASON_NO_DEVICE));
+                UNCONFIRMED, END_REASONS, NOT_DONE_SCENES, END_REASON_UNKNOWN, END_REASON_NO_DEVICE,
+                END_REASON_PRACTICE_OUTPUT_FAILED));
         phrases.addAll(FIELD_NAMES.values());
         phrases.addAll(END_REASON_TEXT.values().stream().sorted().toList());
         return List.copyOf(phrases);

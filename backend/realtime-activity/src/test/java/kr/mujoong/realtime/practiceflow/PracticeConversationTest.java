@@ -196,6 +196,22 @@ class PracticeConversationTest {
         assertThat(h.recorder.factKinds(h.recorder.only())).doesNotContain(FactKind.PLAYBACK_FAILED);
     }
 
+    /** FT-1023-e: 재생이 시작된(STARTED) 생성형 발화의 꼬리가 비었다는 알림은 재요청도 실패도 아니라 재생됨으로 닫는다. */
+    @Test
+    void anIncompleteTailAfterPlaybackStartedClosesTheGeneratedSlotAsPlayedWithoutARetry() {
+        Harness h=minimal();h.toOpportunity();h.child("그거 줘");h.result("J2","PARTIAL");
+        Slot first=h.out.lastSlot();
+        var speech=kr.mujoong.realtime.voice.PracticeSpeech.generatedSlot(first.correlationId(), SCENARIO, 1, first.role(), first.text());
+        h.slotEvent(first.correlationId(), Playback.STARTED, speech, first.text());
+        int count=h.out.slots.size();
+        Signal signal=h.event(ExtensionEvent.Kind.ASYNC_RESULT,"practice-audio-incomplete",first.correlationId(),speech);
+        assertThat(signal).isNotEqualTo(Signal.OUTPUT_FAILED);
+        assertThat(h.out.slots).as("같은 지시를 다시 요청하지 않는다").hasSize(count);
+        assertThat(h.event(ExtensionEvent.Kind.ASYNC_RESULT,"practice-audio-incomplete",first.correlationId(),speech))
+                .as("한 번 닫힌 슬롯의 늦은 알림은 무시한다").isEqualTo(Signal.NONE);
+        assertThat(h.recorder.rows.values().stream().flatMap(row -> h.recorder.factKinds(row).stream())).doesNotContain(FactKind.PLAYBACK_FAILED);
+    }
+
     @Test
     void generatedTechnicalRecoveryRetriesTrustedInstructionsOnceAndIgnoresStaleFailures() {
         Harness h=minimal();h.toOpportunity();h.child("그거 줘");h.result("J2","PARTIAL");

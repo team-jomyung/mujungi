@@ -171,18 +171,17 @@ final class JoinFlow {
         if (freeTalk() && !currentInput(beganAt)) return;
         lastReplyTranscript = transcript;
         JoinTracker.Reply reply = JoinTracker.classify(transcript);
-        if (freeTalk() && reply == JoinTracker.Reply.TOPIC_REFUSAL) {
+        // 시작 의사는 '거절인가'만 본다: 주제 거절 표현은 불명확으로 보고, 거절이면 대안 제시 없이 바로 끝내고, 거절이 아니면(불명확한 대답 포함)
+        // 대화를 시작한다. 불명확한 대답을 판정 AI(J1) · 재안내 · 대안 제시로 넘기던 단계는 없앴다(자유대화 2026-10-22 결정, 연습도 같은 규칙
+        // FT-1023-f 2026-10-23 사람 지시). 무응답(창 만기)의 재안내 · 종료 결정표는 두 활동 모두 그대로다
+        if (reply == JoinTracker.Reply.TOPIC_REFUSAL) {
             reply = JoinTracker.Reply.UNCLEAR;
         }
-        if (freeTalk() && reply == JoinTracker.Reply.REFUSE) {
+        if (reply == JoinTracker.Reply.REFUSE) {
             declineJoin(SessionGuardrailFacts.Participation.REFUSED);
             return;
         }
-        if (freeTalk() && reply != JoinTracker.Reply.REFUSE) {
-            // 자유대화의 시작 의사는 '거절인가'만 본다: 거절이 아니면(불명확한 대답 포함) 대화를 시작한다. 불명확한 대답을 판정 AI(J1)에 넘기던
-            // 단계는 없앴다(2026-10-22 결정)
-            reply = JoinTracker.Reply.ACCEPT;
-        }
+        reply = JoinTracker.Reply.ACCEPT;
         applyJoinAction(join.reply(reply, at), reply, at);
     }
 
@@ -224,7 +223,9 @@ final class JoinFlow {
         if (proposed != null) ctx.guardrailFacts(proposed);
         ending.changeStatus(SessionStatus.ACTIVE, ctx.services().clock().now());
         ctx.putEvent(EVENT_JOIN_ACCEPTED, "{\"prompts\":" + (join == null ? 1 : join.prompts()) + "}", now);
-        if (freeTalk() && lastReplyTranscript != null) {
+        // 수락한 대답을 보호자 화면에 남긴다(자유대화 · 연습 모두, 연습은 FT-1023-f). 이 행의 번호는 여기서 정해지고 첫 응답 · 첫 연습 발화 행은
+        // 아래 afterActiveWon(→ 연습 확장점 onActive) 뒤에 만든다. 기록만 하고 연습 확장점에 아이 발화로 넘기지 않는다
+        if (lastReplyTranscript != null) {
             env.acceptedReply(lastReplyTranscript, now);
         }
         lastReplyTranscript = null;

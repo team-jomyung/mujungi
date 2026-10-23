@@ -64,6 +64,12 @@ describe("12 상태 → 할 일(liveOutcome · AC3.4.1 · AC3.5.1 · AC3.6.9 · 
     expect(isStartFailure(beforeStart)).toBe(true);
     expect(liveOutcome(beforeStart)).toEqual({ kind: "startFailed", failureCode: "SERVER_RESTART" });
   });
+
+  it("연습 출력 실패(DISCONNECT · PRACTICE_OUTPUT_FAILED)는 CLOSING → ENDED로 와 연결 끊김 팝업(P2)이 아니라 17이다(FT-1023-e)", () => {
+    for (const status of ["CLOSING", "ENDED", "ENDED_UNCONFIRMED"] as const) {
+      expect(liveOutcome(view(status, { activityType: "PRACTICE", endReason: "DISCONNECT", endDetail: "PRACTICE_OUTPUT_FAILED" })).kind).toBe("done");
+    }
+  });
 });
 
 it("생성 순번 대신 실제 재생 시각에 맞춰 아이 답변 사이에 AI 안내를 배치한다", () => {
@@ -260,6 +266,10 @@ describe("연습 종료 사유 분리", () => {
     const result = presentDone(view("ENDED", { activityType: "PRACTICE", endReason: "DISCONNECT", endDetail: "PRACTICE_OUTPUT_FAILED" }), "하늘");
     expect(result.reasonTitle).toBe("연습 음성을 재생하지 못했어요");
     expect(result.reasonBody).toContain("완료된 것은 아니에요");
+    // FT-1023-e: 기기 연결 문제가 아니므로 연결 확인을 안내하지 않는다(end_reason DISCONNECT여도)
+    expect(result.reasonBody).not.toContain("연결");
+    expect(result.reasonTitle).not.toBe("연결이 끊겨 끝났어요");
+    expect(result.reasonBody).toContain("잠시 뒤 다시 시작해 주세요");
   });
 });
 

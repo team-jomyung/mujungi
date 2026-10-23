@@ -1,5 +1,6 @@
 package kr.mujoong.realtime.gate;
 
+import java.text.Normalizer;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Supplier;
@@ -32,23 +33,43 @@ public final class OutputGate {
         return inspectDetailed(segment).decision();
     }
 
-    /** Same safety decision and precedence, with the exact failed predicate for diagnostics. */
-    public record Inspection(GateDecision decision, DiscardDetail detail) {}
+    /**
+     * Same safety decision and precedence, with the exact failed predicate for diagnostics.
+     *
+     * @param punctuationOnly 통과한 단위의 전사가 구두점뿐이다(정규화 뒤 비지만 원문은 비지 않음 — FT-1023-e). 사전 · 제브가 볼 글이
+     *     없어 호출자는 제브를 부르지 않고 사유 코드만 남긴 채 재생한다. 폐기면 늘 거짓
+     */
+    public record Inspection(GateDecision decision, DiscardDetail detail, boolean punctuationOnly) {
+
+        public Inspection(GateDecision decision, DiscardDetail detail) {
+            this(decision, detail, false);
+        }
+    }
 
     private static Inspection failed(DiscardReason reason, DiscardDetail detail) {
         return new Inspection(GateDecision.discard(reason), detail);
     }
 
     public Inspection inspectDetailed(SegmentBuffer.Sealed segment) {
+        return inspectDetailed(segment, false);
+    }
+
+    /**
+     * @param alignedUnit 시간 정보로 음성과 맞춘 단위별 경로의 단위인가({@link TimedOutputBuffer#poll}). 참이면 구두점뿐인 전사(말끝 "?" 등)를
+     *     빈 전사로 버리지 않고 음성 검사만 거쳐 통과시킨다(FT-1023-e). 전체 구간(무음으로 봉인한 구간)은 거짓 — 지금처럼 EMPTY_TRANSCRIPT다
+     */
+    public Inspection inspectDetailed(SegmentBuffer.Sealed segment, boolean alignedUnit) {
         try {
             // 단계 3: 첫 조각부터 끊김까지 전체를 담은 구간만 전사가 음성과 1:1로 대응한다는 근거가 있다(J285 → U11 BR11.6). 전사는 사전과 같은
-            // 정규화(NFKC · 공백 · 제로폭 · 구두점 제거) 뒤 남는 글자가 있어야 한다(J287)
+            // 정규화(NFKC · 공백 · 제로폭 · 구두점 제거) 뒤 남는 글자가 있어야 한다(J287). 단위별 경로의 구두점뿐인 단위는 예외다(FT-1023-e)
             if (segment == null) return failed(DiscardReason.GATE_EMPTY, DiscardDetail.MISSING_SEGMENT);
             if (!segment.complete()) return failed(DiscardReason.GATE_EMPTY, DiscardDetail.INCOMPLETE_SEGMENT);
-            if (segment.transcript() == null || SeedDictionary.normalize(segment.transcript()).isEmpty())
+            boolean punctuationOnly = alignedUnit && punctuationOnly(segment.transcript());
+            if (!punctuationOnly && (segment.transcript() == null || SeedDictionary.normalize(segment.transcript()).isEmpty()))
                 return failed(DiscardReason.GATE_EMPTY, DiscardDetail.EMPTY_TRANSCRIPT);
             if (segment.totalBytes() == 0) return failed(DiscardReason.GATE_EMPTY, DiscardDetail.MISSING_AUDIO);
             if (segment.totalBytes() % 2 != 0) return failed(DiscardReason.GATE_EMPTY, DiscardDetail.INVALID_PCM_LENGTH);
+            if (punctuationOnly) return new Inspection(GateDecision.pass(), null, true);
             if (dictionary.findMatch(segment.transcript()).isPresent()) {
                 return failed(DiscardReason.GATE_PATTERN, DiscardDetail.FORBIDDEN_PATTERN);
             }
@@ -59,17 +80,34 @@ public final class OutputGate {
     }
 
     /**
+     * 구두점뿐인 전사인가: 사전 정규화(NFKC · 공백 · 제로폭 · 구두점 제거) 뒤 남는 글자가 없지만, 공백 · 제로폭 · 서식 문자가 아닌 글자(문장부호)가 하나
+     * 이상 있다. null · 빈 문자열 · 공백 · 제로폭만 든 전사는 거짓이다(그대로 EMPTY_TRANSCRIPT, fail-closed).
+     */
+    public static boolean punctuationOnly(String transcript) {
+        if (transcript == null || !SeedDictionary.normalize(transcript).isEmpty()) {
+            return false;
+        }
+        return Normalizer.normalize(transcript, Normalizer.Form.NFKC).codePoints()
+                .anyMatch(cp -> !Character.isWhitespace(cp) && !Character.isSpaceChar(cp)
+                        && Character.getType(cp) != Character.FORMAT);
+    }
+
+    /**
      * 전사 먼저 방출 경로의 단계 3 · 4: 음성은 아직 오는 중이라 전사만 본다. 전사가 사전의 금지 표현이 아닌지, 정규화 뒤 남는 글자가 있는지만
-     * 확인한다. 음성이 전사 끝까지 대응하는지는 단위를 만들 때 이미 시간선으로 맞춘다.
+     * 확인한다(구두점뿐인 단위는 통과 — FT-1023-e). 음성이 전사 끝까지 대응하는지는 단위를 만들 때 이미 시간선으로 맞춘다.
      */
     public GateDecision inspectText(SegmentBuffer.Sealed segment) {
         return inspectTextDetailed(segment).decision();
     }
 
-    /** Same aligned text-unit safety predicates, with a closed diagnostic reason. */
+    /**
+     * Same aligned text-unit safety predicates, with a closed diagnostic reason. 구두점뿐인 단위(말끝 "?" 등)는 버리지 않고 통과시킨다 —
+     * 결과의 {@link Inspection#punctuationOnly()}가 참이다(FT-1023-e).
+     */
     public Inspection inspectTextDetailed(SegmentBuffer.Sealed segment) {
         try {
             if (segment == null) return failed(DiscardReason.GATE_EMPTY, DiscardDetail.MISSING_SEGMENT);
+            if (punctuationOnly(segment.transcript())) return new Inspection(GateDecision.pass(), null, true);
             if (segment.transcript() == null || SeedDictionary.normalize(segment.transcript()).isEmpty())
                 return failed(DiscardReason.GATE_EMPTY, DiscardDetail.EMPTY_TRANSCRIPT);
             if (dictionary.findMatch(segment.transcript()).isPresent())
