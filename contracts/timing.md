@@ -41,7 +41,8 @@
 | `mujoong.timing.gate.local-voice-min` | `200ms` | web | 끼어들기 판정에 넣는 최소 음성 길이(이보다 짧은 소리는 무시) | U3-J20 |
 | `mujoong.timing.device.cookie-max-age` | `400d` | core-api | `GET /api/device/me` 성공마다 MUJOONG_DEVICE 쿠키 수명을 다시 이 값으로(서버 토큰은 만료 없음) | BR3.5 · B4 · J29 |
 | `mujoong.timing.core.device-status-stale` | `30s` | core-api | Core가 마지막 보고를 받은 시각 → '기기 상태 확인 불가'(BR4.3 ③), 12 stale(BR6.15) | B6 · RD-6 |
-| `mujoong.timing.parent.poll-interval` | `2s` | web | 12 진행 화면 폴링 주기(다른 화면은 진입 때 1회) | A2 · BR6.15 |
+| `mujoong.timing.parent.poll-interval` | `2s` | web | 12 진행 화면 및 홈 SSE 장애 시 보완 조회 주기 | A2 · BR6.15 · JIRA-274 |
+| `mujoong.timing.parent.home-reconcile-interval` | `30s` | web | 홈 SSE 정상 연결 중 알림 유실·상태 노후화 보완 조회 | JIRA-274 |
 | `mujoong.timing.bootstrap.code-ttl` | `24h` | core-api | 코드 발급 → 만료면 EXPIRED, bootstrap 쿠키 Max-Age도 이 값 | BR1.4 · J22 |
 | `mujoong.timing.bootstrap.status-poll` | `2s` | web | D0 등록 상태 확인 주기 | BR1.7 · J22 |
 | `mujoong.timing.bootstrap.rate-limit.max` | `20` | core-api | `POST /api/device/bootstrap` IP당 창 안 최대 발급 수(같은 쿠키 반복은 세지 않음) | BR1.6 · J29 · [편차 (k)] |

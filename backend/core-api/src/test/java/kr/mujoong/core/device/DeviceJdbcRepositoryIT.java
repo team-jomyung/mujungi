@@ -421,6 +421,35 @@ class DeviceJdbcRepositoryIT {
     // ------------------------------------------------------------------ 연결 상태 사본 (BR4.1 · BR4.2)
 
     @Test
+    void homeInvalidationIsCommitOnlyAndFansOutAcrossConnections() throws Exception {
+        UUID guardian = db.inTx(status -> db.insertGuardian("ACTIVE"));
+        UUID device = db.inTx(status -> registeredDevice(guardian, EPOCH));
+        try (var first = db.dataSource().getConnection(); var second = db.dataSource().getConnection()) {
+            first.setAutoCommit(true);
+            second.setAutoCommit(true);
+            try (var command = first.createStatement()) { command.execute("LISTEN mujoong_home_changed"); }
+            try (var command = second.createStatement()) { command.execute("LISTEN mujoong_home_changed"); }
+            var a = first.unwrap(org.postgresql.PGConnection.class);
+            var b = second.unwrap(org.postgresql.PGConnection.class);
+            ConnectionReport report = new ConnectionReport(ConnectionState.DISCONNECTED, EPOCH.plusSeconds(100), null, null, null, null);
+            db.inRolledBackTx(status -> {
+                assertThat(devices.applyConnectionReport(device, report, report.reportedAt())).isEqualTo(1);
+                try { assertThat(a.getNotifications(100)).isNullOrEmpty(); }
+                catch (java.sql.SQLException error) { throw new IllegalStateException(error); }
+                return null;
+            });
+            assertThat(a.getNotifications(100)).as("rollback must not notify").isNullOrEmpty();
+            db.inTx(status -> devices.applyConnectionReport(device, report, report.reportedAt()));
+            assertThat(a.getNotifications(2000)).extracting(org.postgresql.PGNotification::getParameter).containsExactly(guardian.toString());
+            assertThat(b.getNotifications(2000)).extracting(org.postgresql.PGNotification::getParameter).containsExactly(guardian.toString());
+            db.inTx(status -> devices.applyConnectionReport(device, report, report.reportedAt()));
+            assertThat(a.getNotifications(100)).as("duplicate report must not notify").isNullOrEmpty();
+            try (var command = first.createStatement()) { command.execute("UNLISTEN *"); }
+            try (var command = second.createStatement()) { command.execute("UNLISTEN *"); }
+        }
+    }
+
+    @Test
     void connectionReportsApplyOnlyStrictlyNewerReportsAndKeepMissingFields() {
         db.inRolledBackTx(status -> {
             UUID guardianId = db.insertGuardian("ACTIVE");
