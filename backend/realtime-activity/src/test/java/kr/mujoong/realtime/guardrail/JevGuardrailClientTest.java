@@ -79,7 +79,7 @@ class JevGuardrailClientTest {
     }
 
     private JevGuardrailClient client(String baseUrl, String model, Duration budget, JevHosts.Mode hostMode, double threshold) {
-        return new JevGuardrailClient(new GuardrailProperties("REAL", baseUrl, model, threshold), hostMode, key::get,
+        return new JevGuardrailClient(new GuardrailProperties("REAL", baseUrl, model, threshold, false), hostMode, key::get,
                 version -> policy.version().equals(version) ? Optional.of(new JevQuestion(policy.instructions(), policy.criteria()))
                         : Optional.empty(),
                 budget, clock, JSON);

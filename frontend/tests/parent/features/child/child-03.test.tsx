@@ -127,6 +127,19 @@ describe("03 처음 등록(AC1.3.1 · AC1.3.2 · AC1.3.5 · AC1.3.8)", () => {
     expect(screen.getByTestId("child-name")).toHaveValue("하늘");
     expect(router.replace).not.toHaveBeenCalled();
   });
+
+  it("욕설 이름으로 거절되면(CHILD_NAME_NOT_ALLOWED) 다른 이름을 넣으라는 토스트이고 입력은 그대로다(JIRA-266)", async () => {
+    renderParent(<ChildScreen />, {
+      handler: handler({ ...notRegistered, "POST /api/child": () => errorResponse(400, "CHILD_NAME_NOT_ALLOWED") }),
+    });
+    await screen.findByTestId("child-form");
+    type("child-name", "하늘");
+    chooseBirthDate("2018-10-15");
+    fireEvent.click(screen.getByTestId("child-confirm"));
+    expect(await screen.findByTestId("toast")).toHaveTextContent("이 이름은 쓸 수 없어요. 다른 이름을 입력해 주세요.");
+    expect(screen.getByTestId("child-name")).toHaveValue("하늘");
+    expect(router.replace).not.toHaveBeenCalled();
+  });
 });
 
 describe("03 보기 · 수정(AC1.3.3 · AC1.3.4 · AC1.3.7 · AC1.3.9 · AC1.3.10)", () => {

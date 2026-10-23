@@ -61,8 +61,8 @@ public final class TranscriptWriter {
             return true;
         }
         row.text.append(delta == null ? "" : delta);
-        return recorder.putTranscript(TranscriptEntry.partial(sessionId, row.seq, Speaker.CHILD, row.text.toString(),
-                row.startedAt));
+        return recorder.putTranscript(TranscriptEntry.partial(sessionId, row.seq, Speaker.CHILD,
+                TranscriptMarkers.cleanChild(row.text.toString()), row.startedAt));
     }
 
     /** 아이 입력 전사 확정: FINAL · 승인 true, 즉시 플러시(BR7.5). 정한 번호를 돌려준다. */
@@ -85,7 +85,8 @@ public final class TranscriptWriter {
             return OptionalInt.of(row.seq);
         }
         row.closed = true;
-        String text = transcript != null ? transcript : row.text.toString();
+        // JIRA-262: 비언어 표지 · 앞머리 잡음은 저장 전에 지운다(보호자 표시 · 결과 작업 인용 대조가 같은 글을 본다)
+        String text = TranscriptMarkers.cleanChild(transcript != null ? transcript : row.text.toString());
         latency.transcriptFinal(sessionId, row.seq, at);
         boolean accepted = recorder.putTranscript(TranscriptEntry.childFinal(sessionId, row.seq, text, row.startedAt, at,
                 reviewNeeded));
@@ -162,8 +163,8 @@ public final class TranscriptWriter {
         }
         stream.written = true;
         endedStreams.remove(stream);
-        recorder.putTranscript(TranscriptEntry.finalized(sessionId, stream.row.seq, Speaker.AI, stream.text.toString(),
-                stream.approved, stream.row.startedAt, stream.endedAt));
+        recorder.putTranscript(TranscriptEntry.finalized(sessionId, stream.row.seq, Speaker.AI,
+                TranscriptMarkers.cleanAi(stream.text.toString()), stream.approved, stream.row.startedAt, stream.endedAt));
         return OptionalInt.of(stream.row.seq);
     }
 
@@ -204,8 +205,8 @@ public final class TranscriptWriter {
             }
             return endStream(endedAt);
         }
-        recorder.putTranscript(TranscriptEntry.finalized(sessionId, row.seq, Speaker.AI, text == null ? "" : text,
-                approved, row.startedAt, endedAt));
+        recorder.putTranscript(TranscriptEntry.finalized(sessionId, row.seq, Speaker.AI,
+                text == null ? "" : TranscriptMarkers.cleanAi(text), approved, row.startedAt, endedAt));
         return OptionalInt.of(row.seq);
     }
 
@@ -249,8 +250,8 @@ public final class TranscriptWriter {
             return OptionalInt.of(held.row.seq);
         }
         AiRow row = held.row;
-        recorder.putTranscript(TranscriptEntry.finalized(sessionId, row.seq, Speaker.AI, text == null ? "" : text,
-                approved, row.startedAt, endedAt));
+        recorder.putTranscript(TranscriptEntry.finalized(sessionId, row.seq, Speaker.AI,
+                text == null ? "" : TranscriptMarkers.cleanAi(text), approved, row.startedAt, endedAt));
         return OptionalInt.of(row.seq);
     }
 
@@ -301,8 +302,8 @@ public final class TranscriptWriter {
         for (ChildRow row : childRows.values()) {
             if (!row.closed) {
                 row.closed = true;
-                recorder.putTranscript(TranscriptEntry.finalized(sessionId, row.seq, Speaker.CHILD, row.text.toString(),
-                        true, row.startedAt, at));
+                recorder.putTranscript(TranscriptEntry.finalized(sessionId, row.seq, Speaker.CHILD,
+                        TranscriptMarkers.cleanChild(row.text.toString()), true, row.startedAt, at));
             }
         }
         aiFinal("", false, at);
@@ -343,8 +344,8 @@ public final class TranscriptWriter {
             if (!row.closed) {
                 row.closed = true;
                 closed++;
-                recorder.putTranscript(TranscriptEntry.finalized(sessionId, row.seq, Speaker.CHILD, row.text.toString(),
-                        true, row.startedAt, at));
+                recorder.putTranscript(TranscriptEntry.finalized(sessionId, row.seq, Speaker.CHILD,
+                        TranscriptMarkers.cleanChild(row.text.toString()), true, row.startedAt, at));
             }
         }
         return closed;

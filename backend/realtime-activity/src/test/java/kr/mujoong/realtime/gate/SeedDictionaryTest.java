@@ -37,6 +37,20 @@ class SeedDictionaryTest {
         assertThat(DEFAULT.version()).isNotBlank();
     }
 
+    /** JIRA-266: 욕설은 파일 대표 항목에 더해 공통 욕설 사전으로 걸리고(변형 포함), 일반 문장은 걸리지 않는다. */
+    @Test
+    void profanityIsFoundThroughTheSharedLexiconIncludingVariantsAndOrdinarySentencesPass() {
+        assertThat(DEFAULT.findMatch(".씨발아, 불렀어")).map(SeedDictionary.Match::category).contains(Category.PROFANITY);
+        assertThat(DEFAULT.findMatch("이 병신아")).hasValueSatisfying(match -> {
+            assertThat(match.category()).isEqualTo(Category.PROFANITY);
+            assertThat(match.id()).isEqualTo(SeedDictionary.LEXICON_PROFANITY_ID);
+        });
+        assertThat(DEFAULT.findMatch("개 새 끼")).map(SeedDictionary.Match::category).contains(Category.PROFANITY);
+        assertThat(DEFAULT.findMatch("시발점에서 출발했어")).isEmpty();
+        assertThat(DEFAULT.findMatch("아저씨 발이 커요")).isEmpty();
+        assertThat(DEFAULT.findMatch("수박씨 발라 먹었어")).isEmpty();
+    }
+
     static Stream<Arguments> variants() {
         List<Arguments> cases = new ArrayList<>();
         for (SeedDictionary.Entry entry : DEFAULT.entries()) {

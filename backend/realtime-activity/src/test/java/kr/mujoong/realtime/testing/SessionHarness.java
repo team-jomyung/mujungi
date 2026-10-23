@@ -71,6 +71,8 @@ public final class SessionHarness {
     /** U4b: 활동 종류(create 전에 바꾼다). */
     public kr.mujoong.contract.status.ActivityType activityType = kr.mujoong.contract.status.ActivityType.FREE_TALK;
     /** U4b: 마무리 · 대기 문구 밖의 승인 문구(코드 → 원문, create 전에 넣는다). 없으면 그 재생은 건너뛴다(BR3.3). */
+    /** 세션 패키지의 아이 문맥(create 전에 바꾼다). JIRA-266 시험은 욕설 이름을 넣는다. */
+    public ChildContext childContext = new ChildContext("하늘", 8, List.of("공룡"));
     public final java.util.Map<String, String> extraApproved = new java.util.LinkedHashMap<>();
     /** U12: 시작 패키지 approvedSpeech의 승인 발화 문장 지도(코드 → 원문, create 전에 넣는다). 확장의 역할 전환 알림이 쓴다. */
     public final java.util.Map<String, String> approvedSpeech = new java.util.LinkedHashMap<>();
@@ -160,7 +162,7 @@ public final class SessionHarness {
                     "/media/approved/" + extra.getKey().toLowerCase(java.util.Locale.ROOT) + ".wav"));
         }
         SessionExecutor.Plan plan = new SessionExecutor.Plan(sessionId, deviceId, "0123456789abcdef0123456789abcdef",
-                new ChildContext("하늘", 8, List.of("공룡")), audio,
+                childContext, audio,
                 new SessionExecutor.ApprovedItem("CLOSING", closingVersion, closingText),
                 new SessionExecutor.ApprovedItem("WAITING_FILLER", fillerVersion), rawAudioConsent, STOP_EXPRESSIONS,
                 activityType, approved, practiceJson, guardianId, approvedSpeech);

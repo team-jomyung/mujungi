@@ -214,7 +214,7 @@ final class GuardrailCoordinator {
     private final GuardrailSupport support;
     private final SessionExecutor.Plan plan;
     private final Env env;
-    private final GuardrailRequestFactory factory = new GuardrailRequestFactory();
+    private final GuardrailRequestFactory factory;
     /** 익명화 전의 최근 대화 꼬리(아이 확정 전사 · 기기로 나간 무중 발화, 실행기 스레드 전용). */
     private final Deque<GuardrailRequestFactory.Turn> context = new ArrayDeque<>();
 
@@ -238,6 +238,8 @@ final class GuardrailCoordinator {
         this.support = Objects.requireNonNull(support, "support");
         this.plan = Objects.requireNonNull(plan, "plan");
         this.env = Objects.requireNonNull(env, "env");
+        // JIRA-266: 아이 이름 원문 전달 스위치(기본 꺼짐 — 이름을 '아이'로 바꾼다)
+        this.factory = new GuardrailRequestFactory(support.sendChildName());
     }
 
     // ---- 읽기 ----

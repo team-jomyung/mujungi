@@ -130,7 +130,7 @@ class JevLiveTaskIsolationTest {
         Duration budget = JevLiveProbe.operationalBudget();
 
         assertThat(budget).isPositive();
-        GuardrailClient client = JevLiveProbe.operationalClient(new GuardrailProperties("REAL", FAKE_URL, FAKE_MODEL, 0.5), () -> FAKE_KEY,
+        GuardrailClient client = JevLiveProbe.operationalClient(new GuardrailProperties("REAL", FAKE_URL, FAKE_MODEL, 0.5, false), () -> FAKE_KEY,
                 budget, new MutableClock());
         assertThat(client).isInstanceOf(JevGuardrailClient.class);
         assertThat(client.mode()).isEqualTo(GuardrailMode.REAL);

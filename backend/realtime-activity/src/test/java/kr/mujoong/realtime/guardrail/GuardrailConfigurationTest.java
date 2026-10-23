@@ -60,7 +60,7 @@ class GuardrailConfigurationTest {
     }
 
     private GuardrailClient client(GuardrailMode mode, MockEnvironment environment) {
-        return configuration.guardrailClient(checksWith(mode), new GuardrailProperties("", "https://" + JevHosts.ALLOWED_HOSTS.iterator().next(), "jev-model-1", 0.5),
+        return configuration.guardrailClient(checksWith(mode), new GuardrailProperties("", "https://" + JevHosts.ALLOWED_HOSTS.iterator().next(), "jev-model-1", 0.5, false),
                 environment, budget(Duration.ofMillis(800)), new LiveContentRegistry(LiveContentResources.loadDefault()), new MutableClock(),
                 JsonCodec.shared());
     }
@@ -117,19 +117,30 @@ class GuardrailConfigurationTest {
         Duration jevBudget = Duration.ofMillis(5);
 
         GuardrailSupport stub = configuration.guardrailSupport(checksWith(GuardrailMode.STUB), new StubGuardrailClient(), budget(jevBudget),
-                recorderProvider(recorder), events);
+                jevProperties(false), recorderProvider(recorder), events);
         GuardrailSupport off = configuration.guardrailSupport(checksWith(GuardrailMode.OFF),
-                new UnavailableGuardrailClient(GuardrailMode.OFF), budget(jevBudget), recorderProvider(recorder), events);
+                new UnavailableGuardrailClient(GuardrailMode.OFF), budget(jevBudget), jevProperties(false), recorderProvider(recorder), events);
+        GuardrailSupport namesOn = configuration.guardrailSupport(checksWith(GuardrailMode.STUB), new StubGuardrailClient(),
+                budget(jevBudget), jevProperties(true), recorderProvider(recorder), events);
 
         assertThat(stub.mode()).isEqualTo(GuardrailMode.STUB);
         assertThat(stub.recorder()).isSameAs(recorder);
         assertThat(stub.budget()).as("시간 값은 설정 키에서만 읽는다").isEqualTo(jevBudget);
         assertThat(off).isSameAs(GuardrailSupport.DISABLED);
+        // JIRA-266: 아이 이름 원문 전달 스위치는 기본 꺼짐이고, 켠 설정만 장치에 실린다
+        assertThat(stub.sendChildName()).isFalse();
+        assertThat(namesOn.sendChildName()).isTrue();
+        // 같은 기동 로그 줄은 병합 창 안에서 한 번만 남는다(세 번째 STUB 줄은 반복으로 접힌다)
         assertThat(errorKinds()).containsExactly("GuardrailModeStub", "GuardrailModeOff");
+    }
+
+    private static GuardrailProperties jevProperties(boolean sendChildName) {
+        return new GuardrailProperties("", "", "", 0.5, sendChildName);
     }
 
     @Test
     void theRequestFactoryBeanIsAPlainFactory() {
-        assertThat(configuration.guardrailRequestFactory()).isNotNull();
+        assertThat(configuration.guardrailRequestFactory(jevProperties(false)).sendsChildName()).isFalse();
+        assertThat(configuration.guardrailRequestFactory(jevProperties(true)).sendsChildName()).isTrue();
     }
 }

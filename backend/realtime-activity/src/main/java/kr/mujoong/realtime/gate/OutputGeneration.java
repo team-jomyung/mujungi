@@ -32,6 +32,8 @@ import java.util.Objects;
  *       이어진다. 마지막 조각 시각과 세대를 올린 시각 중 늦은 쪽에서 {@code segment-quiet}가 지나면 {@link Phase#GAP_CONFIRMED}이고 그 뒤 처음 오는
  *       조각부터 {@link Phase#RECEIVING}이다.
  * </ul>
+ * 예외 하나(JIRA-261): 끊김이 확인된 채 조각 없이 보낸 지시({@link #bumpForInstructionAfterQuietGap}, 참여 직후 스스로 시작 대기가 빈손으로
+ * 끝났을 때)는 그 세대의 첫 조각을 새 응답의 시작으로 바로 받는다.
  * 출력 보류 중(참여 확인 · 종료 확인 질문 · 연습 보류)에는 단계와 관계없이 조각을 버린다(BR11.13). 받는 단계에서 조각이 {@code segment-quiet} 동안
  * 오지 않으면 열린 구간을 '완전'으로 봉인한다(공급자 응답 끝 사건이 없다).
  */
@@ -138,6 +140,13 @@ public final class OutputGeneration {
     private boolean ackMissing;
     private long newStartMs = -1L;
     private boolean transcriptOpen;
+    /**
+     * 끊김이 확인된 채 조각 없이 보낸 지시의 세대인가(JIRA-261, {@link #bumpForInstructionAfterQuietGap}). 이 세대의 첫 조각(보류 아님)은 확인
+     * 사건 · 전사 시간선과 관계없이 새 응답의 시작으로 받는다. 첫 조각을 보면 끈다.
+     */
+    private boolean openStart;
+    /** {@link #openStart}로 받기 시작했는가(진단 사유 코드용, {@link #takeOpenStartAccepted}가 한 번 읽고 지운다). */
+    private boolean openStartAccepted;
     private boolean waitingQuietSpeech;
 
     /**
@@ -240,7 +249,11 @@ public final class OutputGeneration {
         audioBytes += Math.max(0, bytes);
         lastDeltaAt = at;
         if (held) {
+            openStart = false;
             return new ChunkResult(ChunkVerdict.DISCARD_HELD, false);
+        }
+        if (takeOpenStart()) {
+            return new ChunkResult(ChunkVerdict.ACCEPT, takeBoundary());
         }
         switch (phase) {
             case RECEIVING:
@@ -277,7 +290,11 @@ public final class OutputGeneration {
             }
         }
         if (held) {
+            openStart = false;
             return new ChunkResult(ChunkVerdict.DISCARD_HELD, false);
+        }
+        if (takeOpenStart()) {
+            return new ChunkResult(ChunkVerdict.ACCEPT, takeBoundary());
         }
         switch (phase) {
             case RECEIVING:
@@ -364,6 +381,52 @@ public final class OutputGeneration {
         return doBump(now, reason, Mode.INSTRUCTION, Objects.requireNonNull(eventId, "eventId"));
     }
 
+    /**
+     * JIRA-261: 끊김이 확인된 뒤 조각이 하나도 오지 않은 채로 지시를 보내며 세대를 올린다(참여 직후 스스로 시작 대기가 빈손으로 끝났을 때). 모델은
+     * 대기가 끝난 직후에 아이 말에 스스로 답을 시작할 수 있고, 그 답의 전사 시간선은 지시 확인({@code ackEndMs})보다 앞이라 일반 지시 경로에서는 낡은
+     * 말로 모두 버려진다(2026-10-23 12:46 세션, 약 18초 무음). 그래서 이 세대의 <b>첫 조각</b>은 새 응답의 시작으로 바로 받는다: 끊김을 확인한 뒤
+     * 지시를 보낼 때까지 조각이 없었으므로 그 뒤 처음 오는 조각은 앞 응답의 꼬리가 아니다(모델이 스스로 시작한 답이든 지시에 대한 답이든 새 말이다).
+     * 첫 조각이 보류 중에 오거나 다음 세대로 넘어가면 이 예외는 사라지고 일반 지시 경로(확인 사건 · 전사 시간선 · 여유)를 따른다.
+     *
+     * @param eventId 보내는 {@code append}의 {@code event_id}
+     * @return 새 세대 번호
+     * @throws IllegalStateException 지금 세대가 끊김 확인 단계가 아니면(조각을 이미 받았거나 버리는 중)
+     */
+    public long bumpForInstructionAfterQuietGap(Instant now, BumpReason reason, String eventId) {
+        if (phase != Phase.GAP_CONFIRMED) {
+            throw new IllegalStateException("끊김이 확인된 단계에서만 쓴다");
+        }
+        long next = bumpForInstruction(now, reason, eventId);
+        openStart = true;
+        return next;
+    }
+
+    /** 지금 세대가 끊김 확인 뒤 첫 조각을 새 응답으로 받는 지시 세대인가(아직 첫 조각 전). */
+    public boolean awaitingOpenStart() {
+        return openStart;
+    }
+
+    /** {@link #bumpForInstructionAfterQuietGap} 세대의 첫 조각으로 받기 시작했으면 참을 한 번 돌려주고 지운다. */
+    public boolean takeOpenStartAccepted() {
+        boolean accepted = openStartAccepted;
+        openStartAccepted = false;
+        return accepted;
+    }
+
+    private boolean takeOpenStart() {
+        if (!openStart) {
+            return false;
+        }
+        openStart = false;
+        if (phase != Phase.DISCARDING || mode != Mode.INSTRUCTION) {
+            return false;
+        }
+        phase = Phase.RECEIVING;
+        boundary = true;
+        openStartAccepted = true;
+        return true;
+    }
+
     /** Caller has drained old speech to a quiet boundary before sending this instruction.
      * Capture the next whole segment, including pre-ack text/audio and sub-margin utterances.
      * The same completeness, content, exact-reading and Jev gates still decide playback.
@@ -390,6 +453,8 @@ public final class OutputGeneration {
         ackMissing = false;
         newStartMs = -1L;
         transcriptOpen = false;
+        openStart = false;
+        openStartAccepted = false;
         waitingQuietSpeech = false;
         return generation;
     }

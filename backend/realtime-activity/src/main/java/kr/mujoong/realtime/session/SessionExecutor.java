@@ -126,6 +126,7 @@ public final class SessionExecutor {
      * @param instructionWait 지시를 보낸 뒤 새 말이 시작하기를 기다리는 시한({@code mujoong.timing.judgment.response-ready}, 지시 송신 시각부터, 설계 개정 A3)
      * @param joinSelfStartWait 참여 수락 때 보관한 응답이 비어 있으면 첫 응답 지시 전에 모델이 스스로 말을 시작하기를 기다리는 시간
      *     ({@code mujoong.timing.provider.join-self-start-wait}). 0이면 기다리지 않고 바로 지시한다
+     * @param responseStallWait 자유대화 응답 정체 안전망 대기({@code mujoong.timing.provider.response-stall-wait}, JIRA-270). 0이면 끈다
      */
     public record Settings(
             Duration deviceAckTimeout,
@@ -141,7 +142,18 @@ public final class SessionExecutor {
             Duration inputTranscriptQuiet,
             Duration newSpeechMargin,
             Duration instructionWait,
-            Duration joinSelfStartWait) {
+            Duration joinSelfStartWait,
+            Duration responseStallWait) {
+
+        /** 응답 정체 안전망 없이(0) 만든다(안전망 전 모양, 시험 · 기존 호출자). */
+        public Settings(Duration deviceAckTimeout, Duration closingConfirm, Duration disconnect, Duration segmentQuiet,
+                Duration playbackExpiry, Duration timerTick, int inputQueueFrames, int mailboxCapacity,
+                int uncertainBelowPercent, Lifecycle lifecycle, Duration inputTranscriptQuiet, Duration newSpeechMargin,
+                Duration instructionWait, Duration joinSelfStartWait) {
+            this(deviceAckTimeout, closingConfirm, disconnect, segmentQuiet, playbackExpiry, timerTick, inputQueueFrames,
+                    mailboxCapacity, uncertainBelowPercent, lifecycle, inputTranscriptQuiet, newSpeechMargin, instructionWait,
+                    joinSelfStartWait, Duration.ZERO);
+        }
 
         /**
          * U4b 세션 생애 시간 값(contracts/timing.md, 모두 설정 키에서 온다).
@@ -181,6 +193,9 @@ public final class SessionExecutor {
             if (Objects.requireNonNull(joinSelfStartWait, "joinSelfStartWait").isNegative()) {
                 throw new IllegalArgumentException("joinSelfStartWait는 음수일 수 없다");
             }
+            if (Objects.requireNonNull(responseStallWait, "responseStallWait").isNegative()) {
+                throw new IllegalArgumentException("responseStallWait는 음수일 수 없다");
+            }
             Objects.requireNonNull(deviceAckTimeout, "deviceAckTimeout");
             Objects.requireNonNull(closingConfirm, "closingConfirm");
             Objects.requireNonNull(disconnect, "disconnect");
@@ -203,7 +218,7 @@ public final class SessionExecutor {
                     properties.limits().sessionControlQueue(), properties.transcript().uncertainBelowPercent(),
                     Lifecycle.from(properties), properties.timing().provider().inputTranscriptQuiet(),
                     properties.timing().provider().newSpeechMargin(), properties.timing().judgment().responseReady(),
-                    properties.timing().provider().joinSelfStartWait());
+                    properties.timing().provider().joinSelfStartWait(), properties.timing().provider().responseStallWait());
         }
     }
 
@@ -450,6 +465,14 @@ public final class SessionExecutor {
     private int correctionsInARow;
     /** 참여 수락 뒤 모델이 스스로 첫 응답을 시작하기를 기다리는 세대(-1이면 기다리지 않는다). */
     private long joinSelfStartGeneration = -1L;
+    /** JIRA-270: 미루는 말 판단에 쓰는 응답 전사 끝부분 길이(글자 수). */
+    private static final int RESPONSE_TAIL_CHARS = 64;
+    /** JIRA-270: 이번 아이 턴에서 응답 정체 이어 말하기 지시를 이미 보냈는가(아이의 새 확정 전사가 지운다). 턴마다 한 번만 보낸다. */
+    private boolean stallNudgeUsed;
+    /** JIRA-270: 지금 받는 응답의 전사 끝부분(미루는 말 판단용, 원문은 로그에 남기지 않는다). 응답이 끝나거나 세대가 오르면 비운다. */
+    private final StringBuilder responseTail = new StringBuilder();
+    /** JIRA-261: 다음 지시를 끊김 확인 뒤 조각 없는 세대에서 보낸다(첫 조각을 새 응답으로 받는다). {@link #onJoinSelfStartExpired}만 켠다. */
+    private boolean instructionAfterQuietGap;
     /** 지난 편지함 처리 끝의 출력 보류 상태(true → false가 되면 세대를 올린다). */
     private boolean lastHeld;
     /** 공급자 리더가 일반 편지함에 넣었고 실행기가 아직 처리하지 않은 출력 조각 수(끊김 만기가 쌓인 조각을 앞지르지 못하게 한다). */
@@ -508,6 +531,10 @@ public final class SessionExecutor {
     private boolean progressiveSoundStarted;
     /** 시간 정보가 있는 출력 전사를 이 세션에서 한 번이라도 받았는가(공급자가 시간 정보를 주는지 알아보는 표지). */
     private boolean timedTranscriptsSeen;
+    /** 진단: 아이 입력 전사 조각을 마지막으로 받은 시각(기기로 보내는 음성이 아이가 말하기 전에 이미 끝난 응답의 것인지 가린다). */
+    private Instant lastChildInputAt;
+    /** 진단: 단위별 경로에 공급자 음성(무음 포함)이 마지막으로 들어온 시각. */
+    private Instant timedAudioLastAt;
     /**
      * 참여 확인 중(안내가 끝난 뒤) 공급자가 스스로 시작한 응답을 버리지 않고 보관한 것. 참여가 수락되면 이것을 첫 응답으로 다시 흘려 넣고, 수락 지시를 따로 보내지
      * 않는다(GPT-Live는 아이 말이 끝나면 스스로 응답을 시작하므로, 보관하지 않으면 첫 발화에 대한 응답이 사라진다).
@@ -1722,6 +1749,11 @@ public final class SessionExecutor {
         }
 
         @Override
+        public void onResponseStallExpired() {
+            SessionExecutor.this.onResponseStallExpired();
+        }
+
+        @Override
         public void onInputTranscriptQuiet() {
             SessionExecutor.this.onInputTranscriptQuiet();
         }
@@ -2311,6 +2343,7 @@ public final class SessionExecutor {
         if (!outputHeld() && inOutputRange() && ctx.outputGen().phase() == OutputGeneration.Phase.RECEIVING) {
             if (timedOutput.isOpen()) {
                 timedOutput.audio(new byte[bytes], ctx.outputGen().audioClockBytes() - bytes);
+                timedAudioLastAt = at;
                 drainTimedOutput(at, nanos);
             } else ctx.segment().addSilence(bytes);
         }
@@ -2381,7 +2414,90 @@ public final class SessionExecutor {
             return;
         }
         ctx.services().events().appError(EventLog.Component.OUTPUT_GATE, "JoinSelfStartMissed", EventCode.Level.INFO);
-        requestResponse(InstructionTemplates.ResponseStart.FIRST);
+        // JIRA-261: 모델이 대기 직후에 스스로 답을 시작하면 그 조각의 전사 시간선은 지시 확인보다 앞이라 일반 지시 경로가 낡은 말로 버린다
+        // (2026-10-23 12:46 세션). 끊김 확인 뒤 지금까지 조각이 없었으므로 이 지시 세대의 첫 조각은 새 응답으로 받는다
+        instructionAfterQuietGap = true;
+        try {
+            requestResponse(InstructionTemplates.ResponseStart.FIRST);
+        } finally {
+            instructionAfterQuietGap = false;
+        }
+    }
+
+    /**
+     * JIRA-270 응답 정체 안전망을 건다. 자유대화 ACTIVE에서만, 연습이 출력을 쥐지 않았을 때, 이번 아이 턴에 아직 보내지 않았을 때만 건다. 시계는
+     * 하나라 다시 걸면 처음부터 잰다.
+     */
+    private void armResponseStall() {
+        Duration wait = ctx.services().settings().responseStallWait();
+        if (wait.isZero() || stallNudgeUsed || ctx.plan().activityType() != ActivityType.FREE_TALK
+                || ctx.status() != SessionStatus.ACTIVE || (practice != null && practice.controlsOutput())) {
+            return;
+        }
+        ctx.timers().arm(Kind.RESPONSE_STALL, wait);
+    }
+
+    private void cancelResponseStall() {
+        if (ctx.timers().isArmed(Kind.RESPONSE_STALL)) {
+            ctx.timers().cancel(Kind.RESPONSE_STALL);
+        }
+    }
+
+    /** 받은 응답 전사를 끝부분만 모은다(미루는 말 판단용). */
+    private void appendResponseTail(String transcript) {
+        if (transcript == null || transcript.isEmpty()) {
+            return;
+        }
+        responseTail.append(transcript);
+        int over = responseTail.length() - RESPONSE_TAIL_CHARS;
+        if (over > 0) {
+            responseTail.delete(0, over);
+        }
+    }
+
+    /**
+     * 응답 하나가 끝났다(조용함으로 봉인): 전사가 "생각해 볼게" 같은 미루는 말로 끝났으면 응답 정체 안전망을 건다. 공급자가 이어 말하면 그 조각이
+     * 시계를 끈다.
+     */
+    private void onResponseEnded() {
+        boolean deferral = kr.mujoong.realtime.dialog.DeferralPhrases.endsWithDeferral(responseTail);
+        responseTail.setLength(0);
+        if (deferral && !stallNudgeUsed && ctx.plan().activityType() == ActivityType.FREE_TALK
+                && ctx.status() == SessionStatus.ACTIVE) {
+            ctx.services().events().appError(EventLog.Component.OUTPUT_GATE, "ResponseStallDeferralEnd", EventCode.Level.INFO);
+            armResponseStall();
+        }
+    }
+
+    /**
+     * 응답 정체 안전망 만기(JIRA-270): 아이 말 확정 뒤(또는 미루는 말로 끝난 응답 뒤) 이 시간 동안 새 출력도 아이 말도 없었다. 보낼 수 있으면 이어
+     * 말하기 지시({@link InstructionTemplates.ResponseStart#STALL_RESUME})를 한 번 보낸다. 기기가 아직 재생 중이거나 제브 검사가 남았으면 같은
+     * 시간만큼 다시 기다리고, 아이가 말하는 중 · 출력 보류 · 판정 · 다른 지시를 기다리는 중 · ACTIVE가 아니면 보내지 않는다.
+     */
+    private void onResponseStallExpired() {
+        if (stallNudgeUsed || ctx.status() != SessionStatus.ACTIVE || ctx.terminated()
+                || ctx.plan().activityType() != ActivityType.FREE_TALK || (practice != null && practice.controlsOutput())
+                || outputHeld() || judgment.isOpen() || inputGroupId != null || joinSelfStartGeneration >= 0
+                || ctx.outputGen().awaitingNewSpeech() || ctx.segment().isOpen() || timedOutput.isOpen()
+                || ctx.transcripts().hasOpenAi()) {
+            return;
+        }
+        Instant now = ctx.services().clock().now();
+        Instant lastDelta = ctx.outputGen().lastDeltaAt();
+        boolean outputFlowing = lastDelta != null && now.isBefore(lastDelta.plus(ctx.services().settings().segmentQuiet()));
+        if (!ctx.devicePlaying().isEmpty() || ctx.playback().isPlaying() || guardrail.isChecking() || guardrail.hasQueued()
+                || outputFlowing) {
+            // 앞 응답이 아직 재생 · 검사 중이다: 끝난 뒤 다시 잰다
+            ctx.timers().arm(Kind.RESPONSE_STALL, ctx.services().settings().responseStallWait());
+            return;
+        }
+        stallNudgeUsed = true;
+        ctx.services().events().appError(EventLog.Component.OUTPUT_GATE, "ResponseStallNudge", EventCode.Level.INFO);
+        if (!sendInstruction(OutputGeneration.BumpReason.SERVER_SEND, "provider-respond-",
+                id -> ctx.services().requests().responseStart(id, InstructionTemplates.ResponseStart.STALL_RESUME,
+                        ctx.plan().activityType(), null), null, true)) {
+            ctx.services().events().appError(EventLog.Component.OUTPUT_GATE, "ResponseStallNudgeNotSent", EventCode.Level.INFO);
+        }
     }
 
     /** 진단(D): 지금 세대에서 보류 · 낡은 꼬리로 버린 조각이 있었으면 사유 코드를 한 번씩 남기고 표지를 지운다(원문 없음, R-F14). */
@@ -2461,6 +2577,8 @@ public final class SessionExecutor {
         }
         if (inRelayRange()) {
             ctx.services().latency().inputActivity(ctx.plan().sessionId());
+            // JIRA-270: 아이가 말하는 중이다 — 정체 안전망을 끈다(말이 확정되면 다시 건다)
+            cancelResponseStall();
             // 아이 입력 재개는 열린 구간을 확정한다(대화가 넘어갔으니 완결 요청 교정은 하지 않는다)
             // 승인 대본은 전부 받은 뒤 원문 일치를 검사한다. 수집 중의 입력 전사만으로
             // 앞 조각을 봉인하면 정상 대본도 불완전/불일치로 폐기돼 연습이 종료된다.
@@ -2483,6 +2601,7 @@ public final class SessionExecutor {
 
     /** 조각을 현재 묶음에 더하고(없으면 묶음을 연다) 조용 시계를 다시 건다. 묶음 id를 돌려준다. */
     private String groupInputDelta(ProviderEvent.InputTranscriptDelta delta) {
+        lastChildInputAt = ctx.services().clock().now();
         if (inputGroupId == null) {
             ctx.inputBeganAt(ctx.services().clock().now());
             inputGroupDuringIntroduction = practice != null && practice.collectingIntroduction();
@@ -2559,6 +2678,12 @@ public final class SessionExecutor {
             return;
         }
         if (inRelayRange()) {
+            // JIRA-262: 비언어 표지([cry 등) · 앞머리 문장부호 잡음을 지운 글로 저장 · 판정 · 제브 문맥 · 종료 판정을 한다(표지만 있던 말은 빈 전사 =
+            // 불확실). 참여 확인 대답(위)은 지금 동작을 바꾸지 않으려고 정리하지 않는다
+            String cleaned = kr.mujoong.realtime.log.TranscriptMarkers.cleanChild(done.transcript());
+            if (!java.util.Objects.equals(cleaned, done.transcript())) {
+                done = new ProviderEvent.InputTranscriptDone(done.itemId(), cleaned, done.confidence());
+            }
             greetingHandoff.childInput(done.transcript());
             boolean uncertain = uncertain(done);
             java.util.OptionalInt seq = ctx.transcripts().childFinal(done.itemId(), done.transcript(), at, uncertain);
@@ -2589,6 +2714,16 @@ public final class SessionExecutor {
             // 2차 리뷰 2: 종료 의도를 푼 발화의 응답은 막힌 동안 이미 취소됐을 수 있다 — 끝 신호가 오지 않을 '생각 중'을 보내지 않는다
             if (!duringIntroduction && !(controlledPractice ? stopHandled : judgeStopIntent(done.transcript(), uncertain, at))) {
                 thinking();
+                // JIRA-270: 아이 말 확정 = 새 턴. 응답이 오지 않으면 이어 말하기 지시를 한 번 보낼 수 있게 시계를 건다. 아이가 "잠깐 생각할게"처럼
+                // 기다려 달라고 하면 서비스 정책대로 기다린다(걸지 않는다)
+                if (ctx.status() == SessionStatus.ACTIVE && done.transcript() != null && !done.transcript().isBlank()) {
+                    stallNudgeUsed = false;
+                    if (!kr.mujoong.realtime.dialog.DeferralPhrases.endsWithDeferral(done.transcript())) {
+                        armResponseStall();
+                    } else {
+                        cancelResponseStall();
+                    }
+                }
             }
         }
     }
@@ -2613,6 +2748,10 @@ public final class SessionExecutor {
                 ? ctx.outputGen().onTranscript(at, startMs, outputHeld() || drainingPractice)
                 : ctx.outputGen().onAudio(at, audio.length, outputHeld() || drainingPractice);
         chunksSinceInstruction++;
+        if (ctx.outputGen().takeOpenStartAccepted()) {
+            // JIRA-261: 참여 직후 지시를 보낸 뒤 처음 온 조각을 새 응답으로 받았다(모델이 스스로 시작한 답일 수 있다)
+            ctx.services().events().appError(EventLog.Component.OUTPUT_GATE, "JoinSelfStartLateAccepted", EventCode.Level.INFO);
+        }
         if (result.verdict() == OutputGeneration.ChunkVerdict.DISCARD_HELD) discardedHeldSeen = true;
         else if (result.verdict() == OutputGeneration.ChunkVerdict.DISCARD) discardedStaleSeen = true;
         // 버리는 조각도 조용 시계를 다시 건다: 조각이 계속 오는 동안은 끊김이 아니다
@@ -2635,6 +2774,9 @@ public final class SessionExecutor {
         if (result.verdict() != OutputGeneration.ChunkVerdict.ACCEPT || !inOutputRange()) {
             return;
         }
+        // JIRA-270: 응답이 오고 있다 — 정체 안전망을 끄고 미루는 말 판단용 끝부분을 모은다
+        cancelResponseStall();
+        appendResponseTail(transcript);
         if (pendingPracticeSpeech != null && practice != null && practice.handlesAudioRecovery() && !practiceCollecting) {
             practiceCollecting = true;
             ctx.timers().cancel(Kind.PRACTICE_SEND_WAIT);
@@ -2677,7 +2819,10 @@ public final class SessionExecutor {
                 }
             }
             if (transcript != null) timedOutput.transcript(transcript, startMs, endMs, at, nanos);
-            else timedOutput.audio(audio, ctx.outputGen().audioClockBytes() - audio.length);
+            else {
+                timedOutput.audio(audio, ctx.outputGen().audioClockBytes() - audio.length);
+                timedAudioLastAt = at;
+            }
             drainTimedOutput(at, nanos);
             return;
         }
@@ -2711,6 +2856,7 @@ public final class SessionExecutor {
         flushDiscardDiagnostics();
         Instant now = ctx.services().clock().now();
         long generation = ctx.outputGen().bump(now, reason);
+        responseTail.setLength(0);
         deferredPracticeInstruction = null;
         practiceCollecting = false;
         ctx.timers().cancel(Kind.PRACTICE_COLLECT_MAX);
@@ -2771,6 +2917,7 @@ public final class SessionExecutor {
                     // 응답이 끝났다: 모아 둔 AI 전사를 한 행으로 닫는다(검사 중인 단위가 남았으면 마지막 단위가 정리될 때 닫힌다)
                     ctx.transcripts().endStream(now);
                     ctx.relay().setHolding(false);
+                    onResponseEnded();
                 }
             }
             case NOT_YET -> ctx.timers().arm(Kind.SEGMENT_QUIET, Duration.between(now, result.waitUntil()));
@@ -2943,11 +3090,19 @@ public final class SessionExecutor {
             streamedPracticeEnded = false;
             guardrail.onServerInstruction(replayable ? new GuardrailCoordinator.ReplayableInstruction(name, build) : null);
             practiceAudioStage("DRAINING");
+            cancelResponseStall();
             onPracticeOutputDrain();
             return true;
         }
-        ctx.outputGen().bumpForInstruction(now, reason, eventId);
+        if (instructionAfterQuietGap && ctx.outputGen().phase() == OutputGeneration.Phase.GAP_CONFIRMED) {
+            ctx.outputGen().bumpForInstructionAfterQuietGap(now, reason, eventId);
+        } else {
+            ctx.outputGen().bumpForInstruction(now, reason, eventId);
+        }
         streamedPracticeEnded = false;
+        responseTail.setLength(0);
+        // 서버가 발화를 지시했다: 그 응답은 지시 응답 시한(INSTRUCTION_WAIT)이 지킨다
+        cancelResponseStall();
         ctx.outputAuthority(newOutputAuthority(purpose));
         ctx.segment().reset();
         timedOutput.reset();
@@ -3230,6 +3385,40 @@ public final class SessionExecutor {
     }
 
     /** 통과한 단위들의 끝 위치까지 도착한 음성을 한 묶음으로 기기에 보낸다(도착한 만큼만, 더 오면 다음에 이어 낸다). */
+    /** 진단: 이 비율(%) 이상이 디지털 무음 표본이면 '대부분 무음' 묶음으로 본다(시간 값이 아니다). */
+    private static final int MOSTLY_SILENT_PERCENT = 90;
+
+    /**
+     * 진단(2026-10-23 현장 시험): 기기가 "무중이가 말하는 중"인데 소리가 나지 않는 경우를 가린다. 기기로 보내는 AI 음성 묶음 하나가 디지털 무음(표본 값
+     * 0)으로만 되어 있으면 {@code OutputBundleAllSilent}, {@value #MOSTLY_SILENT_PERCENT}% 이상이면 {@code OutputBundleMostlySilent}를 남긴다.
+     * 응답의 첫 묶음이면 이름에 {@code First}가 붙는다(예: {@code OutputBundleFirstAllSilent}). 묶음의 공급자 음성이 아이의 마지막 입력 조각보다
+     * 먼저 끝났으면(아이가 말하는 중에 앞 응답이 늦게 나감) {@code OutputBundleAfterChildInput}을 남긴다. 사유 코드만 남기고 원문 · 음성은 남기지 않는다(R-F14).
+     *
+     * @param audioLastAt 묶음에 든 공급자 음성이 마지막으로 들어온 시각(모르면 null)
+     */
+    private void logBundleSilence(List<byte[]> chunks, boolean firstOfResponse, Instant audioLastAt) {
+        long samples = 0;
+        long silent = 0;
+        for (byte[] chunk : chunks) {
+            for (int i = 0; i + 1 < chunk.length; i += 2) {
+                samples++;
+                if (chunk[i] == 0 && chunk[i + 1] == 0) {
+                    silent++;
+                }
+            }
+        }
+        String where = firstOfResponse ? "First" : "";
+        if (samples > 0 && silent == samples) {
+            ctx.services().events().appError(EventLog.Component.OUTPUT_GATE, "OutputBundle" + where + "AllSilent", EventCode.Level.INFO);
+        } else if (samples > 0 && silent * 100 >= samples * MOSTLY_SILENT_PERCENT) {
+            ctx.services().events().appError(EventLog.Component.OUTPUT_GATE, "OutputBundle" + where + "MostlySilent",
+                    EventCode.Level.INFO);
+        }
+        if (lastChildInputAt != null && audioLastAt != null && audioLastAt.isBefore(lastChildInputAt)) {
+            ctx.services().events().appError(EventLog.Component.OUTPUT_GATE, "OutputBundleAfterChildInput", EventCode.Level.INFO);
+        }
+    }
+
     private void pumpApprovedAudio() {
         if (!progressiveResponse || approvedEndByte <= 0) {
             return;
@@ -3261,6 +3450,7 @@ public final class SessionExecutor {
         UUID playbackId = UUID.randomUUID();
         boolean first = !progressiveSoundStarted;
         progressiveSoundStarted = true;
+        logBundleSilence(chunks, first, timedAudioLastAt);
         greetingHandoff.sent(playbackId, generation, target.connectionId(), now.plus(ctx.services().settings().playbackExpiry()));
         if (first) {
             ctx.services().latency().gatePassed(ctx.plan().sessionId(), playbackId, now);
@@ -3477,6 +3667,7 @@ public final class SessionExecutor {
             TranscriptWriter.Held held, boolean ownsLatency) {
         Instant passAt = ctx.services().clock().now();
         correctionsInARow = 0;
+        logBundleSilence(sealed.chunks(), ownsLatency, sealed.lastOutAt());
         UUID playbackId = UUID.randomUUID();
         greetingHandoff.sent(playbackId, sealed.generation(), target.connectionId(),
                 passAt.plus(ctx.services().settings().playbackExpiry()));
@@ -3726,6 +3917,9 @@ public final class SessionExecutor {
         }
     }
 
+    /** 세션 시작 지시문의 아이 이름을 중립 호칭으로 바꿨다는 사유 코드(JIRA-266, INFO). */
+    static final String REASON_CHILD_NAME_REPLACED = "ChildNameProfanityReplaced";
+
     static DialogInstructions.Correction correctionFor(SeedDictionary.Category category) {
         return switch (category) {
             case DIAGNOSIS -> DialogInstructions.Correction.DIAGNOSIS;
@@ -3735,6 +3929,7 @@ public final class SessionExecutor {
             case GENERALIZATION -> DialogInstructions.Correction.GENERALIZATION;
             case EMOTION_CLAIM -> DialogInstructions.Correction.EMOTION_CLAIM;
             case PRESSURE -> DialogInstructions.Correction.PRESSURE;
+            case PROFANITY -> DialogInstructions.Correction.PROFANITY;
         };
     }
 
@@ -3844,6 +4039,10 @@ public final class SessionExecutor {
     private ProviderConnector.Attempt connectProvider(UUID session, ChildContext child,
             kr.mujoong.realtime.voice.ProviderPort.Listener listener, ProviderConnector.Callback callback,
             kr.mujoong.realtime.dialog.PolicyBundle policy) {
+        // JIRA-266: 저장된 이름이 욕설 사전에 걸리면 요청 공장이 지시문의 이름을 중립 호칭으로 바꾼다. 여기서는 그 사실만 사유 코드로 남긴다(원문 없음, R-F14)
+        if (ProviderRequestFactory.nameNeedsReplacement(child.displayName())) {
+            ctx.services().events().appError(EventLog.Component.SESSION_LIFECYCLE, REASON_CHILD_NAME_REPLACED, EventCode.Level.INFO);
+        }
         return ctx.services().connector().connect(session, child, listener, callback, policy, ctx.plan().conversationGuide());
     }
 

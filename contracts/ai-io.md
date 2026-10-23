@@ -19,7 +19,7 @@
 | 결과 문장 출력 | 6.3절 | ResultPipeline → core_result(U6) |
 | 리포트 항목 출력 | 6.5절 — 리포트 생성 때 AI를 부르지 않아 AI 출력이 없다. 10항목 모두 서버가 만든다 [편차 FT-1023-c] | Report → core_report_section(U6) |
 | 금지 표현 2차 분류 출력 | 6.6절 | TextAiGateway(U6) |
-| 금지 표현 사전 항목 | `{ id, pattern, category: DIAGNOSIS\|TREATMENT\|SCORE\|CAUSE\|GENERALIZATION\|EMOTION_CLAIM\|PRESSURE, appliesTo: [OUTPUT_GATE, RESULT_TEXT, PDF, APPROVED_CONTENT] }` | OutputGate(U1 시드 · U3 정식) · TextAiGateway · Report |
+| 금지 표현 사전 항목 | `{ id, pattern, category: DIAGNOSIS\|TREATMENT\|SCORE\|CAUSE\|GENERALIZATION\|EMOTION_CLAIM\|PRESSURE\|PROFANITY, appliesTo: [OUTPUT_GATE, RESULT_TEXT, PDF, APPROVED_CONTENT] }` — `PROFANITY`(욕설)는 2026-10-23 JIRA-266으로 더한 값이다(편차 FT-1023-b, 4절) | OutputGate(U1 시드 · U3 정식) · TextAiGateway · Report |
 
 ## 2. 공급자 연결 (Realtime VoiceRelay, BR7.2 · J109 · J110 · J141 · SD-20 · SD-25)
 
@@ -103,8 +103,9 @@ U11 이전 가정은 아래 편차들로 계약에 들어 있었고 실호출 �
 |---|---|
 | 패턴 문법 | 리터럴과 숫자 자리표시 `#`(숫자 한 자 이상)만. 정규식을 쓰지 않는다(선형 시간, ReDoS 없음) |
 | 정규화 | 전사를 NFKC → 공백 · 제로폭 문자 · 구두점(`%`는 남김) 제거 → 라틴 소문자로 바꾼 뒤 부분 문자열로 찾는다 |
-| 로딩 거부 | 파일 없음 · 파싱 실패 · 중복 id · category 7개 중 빈 것 · 정규화 뒤 형태가 아닌 패턴(공백 · 구두점 · 대문자 라틴 · 정규식 메타 문자 포함) → Realtime 기동 거부(S1b, 종료 코드 1). 로딩 완료가 readiness 조건이다(S6) |
+| 로딩 거부 | 파일 없음 · 파싱 실패 · 중복 id · category 8개 중 빈 것 · 공통 욕설 사전 로딩 실패 · 정규화 뒤 형태가 아닌 패턴(공백 · 구두점 · 대문자 라틴 · 정규식 메타 문자 포함) → Realtime 기동 거부(S1b, 종료 코드 1). 로딩 완료가 readiness 조건이다(S6) |
 | U1 시드 항목(J101 · 사람 결정 12) | DIAGNOSIS `진단` · TREATMENT `치료` · SCORE `비정상` · CAUSE `핵심원인` · GENERALIZATION `학교에서도그럴` · EMOTION_CLAIM `화가났군요` · PRESSURE `꼭해야해요`. `점수` · `정상이에요` · `정상입니다`는 정식 사전 v1(D 담당)에서 더한다(알려진 틈) |
+| 욕설 범주 `PROFANITY`(JIRA-266 · 편차 FT-1023-b) | 이 파일에는 범주 표지인 대표 항목 `SEED-PROFANITY-1`(`씨발새끼`) 하나만 둔다. 어휘 · 변형 · 예외 낱말은 두 앱 공통 욕설 사전(`backend/contract-model/src/main/resources/kr/mujoong/contract/text/profanity-lexicon.txt`, 판정기 `kr.mujoong.contract.text.ProfanityLexicon`)이 맡고, 게이트는 파일 항목을 먼저 본 뒤 공통 사전의 문장 판정을 본다. 공통 사전은 NFKC · 라틴 소문자 뒤 문장부호 · 숫자 · 기호를 지우고, 공백은 낱말 경계로 남겨 낱말마다(한 글자 낱말이 이어진 곳은 이어서) 찾으며, 예외 낱말(`시발점` · `수박씨` · `아저씨` 등)을 먼저 지운다. 이 파일은 공백을 지우고 찾으므로 낱말 경계를 넘어 걸릴 짧은 욕설(`아저씨 발` → `씨발`)은 파일에 두지 않는다. 걸리면 `GATE_PATTERN` 폐기 뒤 교정 지시 `PROFANITY`를 보낸다. 같은 공통 사전을 core 아이 이름 입력(오류 `CHILD_NAME_NOT_ALLOWED`)과 realtime 세션 시작 지시문의 이름 대체(중립 호칭 `친구`, 사유 코드 `ChildNameProfanityReplaced` INFO)에 쓴다 |
 
 ## 5. 승인 문구 · 승인 음성 (J60 · J102 · J114 · J117)
 
@@ -316,7 +317,7 @@ U15 씨앗 v2는 GENERATED/DUPLICATE/NONE의 배타적 출력 분기를 사용�
 
 ### 10.2 금지 필드와 외부 전달
 
-- 외부 AI(Luna · 제브)로 보내는 필드는 스키마가 허용한 최소 필드뿐이다. 다음은 어느 요청 스키마의 속성도 될 수 없다: 아동 · 보호자 · 세션 · 기기 식별자(`childId` · `guardianId` · `sessionId` · `deviceId` 등), 키(`apiKey` 등), 원음(`audio`), 보호자 입력 원문, 이메일, 동의 상태. 아이 이름은 '아이'로 바꾼다(BR5.4 · NFR3.1).
+- 외부 AI(Luna · 제브)로 보내는 필드는 스키마가 허용한 최소 필드뿐이다. 다음은 어느 요청 스키마의 속성도 될 수 없다: 아동 · 보호자 · 세션 · 기기 식별자(`childId` · `guardianId` · `sessionId` · `deviceId` 등), 키(`apiKey` 등), 원음(`audio`), 보호자 입력 원문, 이메일, 동의 상태. 아이 이름은 '아이'로 바꾼다(BR5.4 · NFR3.1). **예외(JIRA-266 · 편차 FT-1023-b):** 제브 출력 검사 요청은 설정 `mujoong.guardrail.jev.send-child-name`(10.12)이 켜진 경우에만 후보 문장 · 맥락의 아이 이름을 바꾸지 않고 원문으로 보낸다(욕설로 저장된 이름을 제브가 보게 하려는 것). 기본은 꺼짐이고, `infra/RUNBOOK.md` R-F15 확인 기록에 제브의 아동 이름 전달 허용 범위 확인이 남기 전에는 켜지 않는다. Luna 등 다른 외부 AI 경로는 이 스위치와 관계없이 언제나 이름을 바꾼다.
 - **R-F15** 공급자 약관 · 보호자 동의 확인 전에는 실제 아동 데이터를 외부 모델로 보내지 않는다. 실호출은 합성 자료로만 한다. U9는 코드로 판정하지 않고 RUNBOOK 확인 기록으로 지킨다(편차 U9-b). 키(`OPENAI_API_KEY`)를 넣는 순간 실제 어댑터가 켜지므로, `infra/RUNBOOK.md` 단계 4의 R-F15 확인 기록 표에 한 줄을 남기기 전에는 운영 환경에 키를 넣지 않는다 [U9 편차 (U9-b)].
 - 시험 · CI · 검증은 가짜 공급자만 쓴다(R-F1). 테스트 대역의 성공을 실공급자 성공으로 표시하지 않는다(R-M11).
 
@@ -448,6 +449,7 @@ realtime 출력 게이트의 제브 단계(U13)가 읽는 설정이다. 시간 �
 | `mujoong.guardrail.jev.mode` | `${JEV_MODE:}` | realtime | 제브 단계 모드 `REAL` · `STUB` · `OFF`. 비면 프로필 기본값(demo · prod = `REAL`, 그 밖 = `STUB`). 세션 안에서 바뀌지 않는다 [U13 편차 (U13-a)] |
 | `mujoong.guardrail.jev.base-url` | `${JEV_BASE_URL:}` | realtime | 제브 주소. 호스트는 위 허용 호스트 안이어야 한다 |
 | `mujoong.guardrail.jev.model` | `${JEV_MODEL:}` | realtime | 고정 모델 버전. 요청의 모델 이름은 이 값과 같아야 한다 |
+| `mujoong.guardrail.jev.send-child-name` | `${JEV_SEND_CHILD_NAME:false}` | realtime | `true`면 제브 요청 후보 문장 · 맥락의 아이 이름을 '아이'로 바꾸지 않고 원문으로 보낸다(10.2 예외, JIRA-266). 비밀이 아니고 시간 값이 아니다. **R-F15 확인 기록(제브의 아동 이름 전달 허용 범위) 전에는 켜지 않는다.** 다른 외부 AI 경로에는 영향이 없다 [편차 FT-1023-b] |
 | `mujoong.guardrail.jev.pass-threshold` | `${JEV_PASS_THRESHOLD:0.5}` | realtime | 통과 문턱, 허용 `0 < x <= 1`. `PASS`가 1순위이고 `PASS` 확률이 이 값 **이상**일 때만 자동 통과한다(10.13). 비밀이 아니다. **임시 시험값이다 — AI 성능 시험으로 확정한다.** `REAL`에서 범위 밖이거나 숫자가 아니면 기동을 거부한다 [U13 편차 (U13-c)] |
 
 기동 점검(모드 × 프로필 × 키): 공개 프로필(demo · prod)은 `REAL` + `JEV_API_KEY` + 허용 호스트 + 고정 모델이 아니면 기동을 거부하고(`STUB` · `OFF`도 거부), 그 밖(dev · test · 프로필 없음)은 `REAL` · `STUB` · `OFF`를 모두 허용하되 `REAL`이면 키가 있어야 한다. `STUB`은 제브 단계를 모두 지나며 1차 사전 통과를 대역 표시가 붙은 `ALLOW`(`reasonCode` `STUB_ALLOW`)로 돌려주고 `OFF`는 제브 단계를 건너뛴다. 둘로 시작하면 기동 로그에 한 줄이 남는다. 대역의 통과는 실제 검사 성공이 아니다(R-M11).
@@ -496,7 +498,7 @@ realtime 새 연습 흐름(U12)이 읽는 설정이다. 시간 값이 아니며 
 
 ### 10.15 자유대화 서비스 정책 적용
 
-자유대화는 앱에 포함한 `service-0.1-app.2` 정책을 세션에 고정한다. 원본/적용본 해시와 문장 편차는 `service-guardrail-policy-deviations.md`에 기록한다. 이름·나이·관심사만 기존 상한·이스케이프로 데이터 구역에 둔다. 초기 안내/현재 참여 수락은 서버가 확인하며, FIRST/CONTINUE·교정·재시도 지시는 강제 관심사 질문·고정 맞장구·휴식 뒤 자동 재개를 추가하지 않는다. 연습의 기존 역할과 검증된 발화 입구는 유지한다.
+자유대화는 앱에 포함한 `service-0.1-app.3` 정책을 세션에 고정한다. 원본/적용본 해시와 문장 편차는 `service-guardrail-policy-deviations.md`에 기록한다. 이름·나이·관심사만 기존 상한·이스케이프로 데이터 구역에 둔다. 초기 안내/현재 참여 수락은 서버가 확인하며, FIRST/CONTINUE·교정·재시도 지시는 강제 관심사 질문·고정 맞장구·휴식 뒤 자동 재개를 추가하지 않는다. 연습의 기존 역할과 검증된 발화 입구는 유지한다.
 
 녹음 안내는 GPT-Live 자신이 발화한 이력으로 추정하지 않는다. 현재 연결의 검증 안내 `COMPLETED`와 참여 수락 뒤 기존 FIRST 지시 하나로 실제 안내 전달 사실을 알리고, 시작 인사·자기소개·대본·참여 질문을 반복하지 않고 아이의 마지막 말에 이어 답하게 한다(RG1). 명확한 재시작 인사/자기소개와 등록 시작 대본 반복은 첫 현재 응답이 실제 기기 프레임으로 송신되고 현재 세대의 재생 완료를 확인하기 전까지 음성·전사 후보 전체를 폐기한다. 제브 ALLOW나 승인 원문 생략도 이 검사를 우회하지 않는다. 별도 AI 판정·자동 재생성·교정 호출은 추가하지 않는다. 아이의 명시적 이름/정체 질문에 대한 답, 인사 인용, 이후 대화와 연습은 구분한다. 이 유한한 표현/상태 검사는 임의의 모든 의미적 바꿔 말하기 탐지나 실모델의 항상 준수를 보장하지 않는다.
 
@@ -528,6 +530,10 @@ J1/J6의 고정 질문·선택지는 `judgment-service-v1`, 공통 지시문은 
 - 참여 대답이 인식되지 않을 때 원인을 가릴 수 있도록 참여 전 전사 조각을 버릴 때 창마다 사유 한 번을 로그 사유 코드 `ParticipationInputDroppedNOT_OPEN` · `ParticipationInputDroppedBEFORE_WINDOW` · `ParticipationInputDroppedBEFORE_WATERMARK` · `ParticipationInputDroppedLEGACY_ITEM`(INFO)로만 남긴다. 전사 원문은 남기지 않는다.
 - **시작 의사 판정(J1)은 제브로 한다(2026-10-22부터 자유대화에서는 J1을 열지 않는다 — 아래 항목).** 제브가 실제 모드(`REAL`)이면 J1은 제브 `systemone`의 `choice` 질문으로 판정한다(질문 ID `judgment`, 질문 · 라벨 설명은 판정 선택지 판의 J1 질문과 선택지 뜻, 확률 1 · 2순위는 기존 판정 검증기의 하한 · 최소 차이 규칙을 그대로 받는다). 제브를 쓸 수 없으면 Luna로 간다. 자유대화의 시작 의사는 **거절인가만** 본다: 사전 분류가 명확한 거절이거나 판정이 `DECLINE`으로 확정되면 대화를 끝내고(거절 흐름), 그 밖(참여 · 불명확 · 휴식 · 판독 불가 · 보류 · 공급자 장애 · 판정을 열 수 없음)은 모두 대화를 시작한다. 무응답(창 만기)은 기존처럼 다시 안내한다. J2 ~ J6은 아직 Luna이며, 같은 구현으로 지점만 더하면 제브로 옮길 수 있다(`JudgmentConfiguration.JEV_POINTS`).
 - **참여 확인 중 공급자가 스스로 시작한 응답은 버리지 않고 보관한다.** GPT-Live는 아이 말이 끝나면 서버 지시 없이 응답을 시작한다. 안내가 끝난 뒤 이 응답의 전사 · 음성 · 무음 조각을 상한(음성 20초 분량 · 전사 8,192자) 안에서 보관했다가, 참여가 수락되면 새 세대의 첫 응답으로 다시 흘려 넣는다(이때 첫 응답 지시는 따로 보내지 않는다). 보관한 응답이 없거나 상한을 넘었으면 기존처럼 첫 응답 지시를 보낸다. 거절 · 불명확이면 보관한 응답은 쓰지 않는다. 다시 흘려 넣은 응답도 제브 검사 · 출력 사전 · 송신 직전 재확인을 똑같이 거친다. 로그 사유 코드는 `JoinHeldOutputReplayed` · `JoinHeldOutputNone` · `JoinHeldOutputOverflow`(INFO)다.
+- **보관한 응답이 없으면 스스로 시작을 기다린다(2026-10-22) · 대기 직후 시작한 답도 받는다(2026-10-23, JIRA-261).** 보관한 응답이 비어 있으면 지시 없이 세대를 올려 끊김이 확인된 것으로 두고 `mujoong.timing.provider.join-self-start-wait`만큼 기다린다(`JoinSelfStartWait`). 그사이 조각이 오면 그것이 첫 응답이다(`JoinSelfStartSeen`, 지시 없음). 조각이 하나도 없으면 첫 응답 지시를 보낸다(`JoinSelfStartMissed`). 이 지시 세대는 **첫 조각을 확인 사건 · 전사 시간선과 관계없이 새 응답의 시작으로 받는다**(`JoinSelfStartLateAccepted`, INFO). 모델이 대기 직후 스스로 시작한 답은 전사 시간선이 지시 확인(`end_ms`)보다 앞이라 A4 규칙으로는 낡은 말로 모두 버려져 약 18초 동안 아무 말도 들리지 않았기 때문이다(2026-10-23 12:46 세션). 끊김 확인 뒤 지시를 보낼 때까지 조각이 없었으므로 그 뒤 처음 오는 조각은 앞 응답의 꼬리가 아니다. 이 예외는 끊김이 확인된 단계(조각 없음)에서 보낸 그 지시 세대의 첫 조각에만 쓰고, 첫 조각이 출력 보류 중에 오거나 다음 세대로 넘어가면 사라진다. 그 밖의 모든 지시는 A4 규칙(확인 사건 · 전사 시간선 · 여유)으로 낡은 꼬리를 버린다. 모델이 스스로 시작한 답 뒤에 지시에 대한 답을 또 하면 두 답이 이어서 들릴 수 있다(실호출에서는 관측되지 않음).
+- **응답 정체 안전망(2026-10-23, JIRA-270).** 자유대화 ACTIVE에서 아이의 빈 아닌 확정 전사 뒤, 또는 전사 끝이 "생각해 볼게" · "정리해서 말해 볼게" · "잠깐만" 같은 미루는 말(사전 규칙, 한글 음절만 비교)로 끝난 AI 응답이 조용함으로 봉인된 뒤 `mujoong.timing.provider.response-stall-wait` 동안 받는 출력 조각도 아이 입력 전사 조각도 없으면, 이어 말하기 지시(`ResponseStart.STALL_RESUME`: 미루지 말고 아이의 마지막 말에 바로 짧게 답하고, 모르면 모른다고 말하고, 새 질문을 붙이지 않는다)를 **아이 턴마다 한 번만** 보낸다(`ResponseStallNudge`, 보낼 수 없었으면 `ResponseStallNudgeNotSent`, 미루는 말로 끝난 응답을 보면 `ResponseStallDeferralEnd`, 모두 INFO · 원문 없음). 아이가 "잠깐 생각할게"처럼 기다려 달라고 한 말 뒤에는 걸지 않는다(서비스 정책). 기기 재생 · 승인 문구 재생 · 제브 검사가 남았으면 같은 시간만큼 다시 기다리고, 아이가 말하는 중 · 출력 보류(참여 확인 · 휴식 · 연습 보류) · 판정 턴 · 다른 지시의 새 말 대기 · 참여 직후 스스로 시작 대기 · 열린 응답 · 연습이 출력을 쥔 때 · ACTIVE 밖에서는 보내지 않는다. 보낸 지시는 다른 서버 발화와 같이 세대를 올리고 `response-ready` 시한을 건다. 공백 시계(`silence-warning` · `silence-end`, 아이 침묵 누적)와 연습 무응답 재안내(`conversation.no-response-wait`)는 아이가 말하지 않는 것을 재고, 이 안전망은 모델이 답하지 않는 것을 잰다. 공백 시계는 이 지시로 리셋되지 않는다.
+- **전사 표지 정리(2026-10-23, JIRA-262).** 전사 행을 저장하기 전에(`TranscriptWriter`) AI 행은 영문 대괄호 비언어 표지(`[hum` · `[hum]` 등, 닫는 괄호 없어도)를, 아이 행은 같은 표지 · 짝 없는 `]` · 앞머리 문장부호 잡음(`.` · `..` 등)을 지운다. 대괄호가 없는 AI 글은 바꾸지 않고, 한글이 든 대괄호 쌍은 사람 말일 수 있어 둔다. 아이의 울음 같은 표지도 지운다(표지 글자가 아이 말로 인용 · 판정되지 않게 한다). 표지만 있던 아이 말은 빈 전사(검토 표시)로 남는다. 아이 확정 전사는 저장 전에 같은 규칙으로 정리한 글로 판정 기억 · 제브 대화 문맥 · 종료 판정 · 연습 확장점에 넘긴다(참여 확인 대답은 지금 동작을 지키려고 정리하지 않는다). 제브 출력 후보(AI 전사 단위)에는 표지가 그대로 들어간다.
+- **무음 묶음 진단(2026-10-23).** 기기가 "말하는 중"인데 소리가 나지 않는 경우를 가리려고, 기기로 보내는 AI 음성 묶음마다 디지털 무음(표본 값 0) 비율을 센다. 전부 무음이면 `OutputBundleAllSilent`, 90% 이상이면 `OutputBundleMostlySilent`이고, 응답의 첫 묶음이면 이름에 `First`가 붙는다(`OutputBundleFirstAllSilent` · `OutputBundleFirstMostlySilent`). 묶음의 공급자 음성이 아이의 마지막 입력 전사 조각보다 먼저 끝났으면(아이가 말하는 중에 앞 응답이 늦게 나감) `OutputBundleAfterChildInput`을 남긴다. 모두 INFO 사유 코드이고 원문 · 음성은 남기지 않는다(R-F14). 동작은 바꾸지 않는다.
 - **판정 AI J1(참여 대답) · J6(종료 의도)는 자유대화에서 열지 않는다(2026-10-22 결정).** 참여 대답은 거절이 아니면 불명확해도 바로 참여를 수락하고, 종료 의도는 규칙 판정기의 STOP(등록 종료 표현 — 기본 "무중아 그만할래" + 보호자 추가 표현, 물음꼴 포함)만으로 끝낸다(2026-10-23부터 판정기 자체의 명확한 종료 표현 · 즉시 멈춤으로는 끝내지 않는다, `deviations.md` FT-1023-a). 불명확한 종료 신호로 확인 질문이나 판정을 여는 단계는 없다. 그래서 판정 중 출력 보류로 응답이 사라지던 경로도 없다. 연습 확장점이 요청하는 판정(J2 ~ J5)은 그대로다.
 - **버린 출력 진단(2026-10-22).** 출력 세대를 올릴 때 그 세대에서 보류로 버린 조각이 있었으면 `OutputDiscardedHeld`, 지시 전 낡은 말로 버린 조각이 있었으면 `OutputDiscardedStale`(INFO)을 한 번씩 남긴다. `OutputNewSpeechNotObserved` 직전에는 마지막 지시 뒤 출력 조각이 하나도 없었으면 `OutputNotObservedProviderSilent`, 있었으면 `OutputNotObservedOnlyStaleChunks`(WARN)를 남긴다. 원문은 남기지 않는다(R-F14).
 - **공급자 오류 코드.** 입력 쪽 오류(`input_`으로 시작하는 코드)는 지금 나오는 AI 응답을 버리지 않는다. 공급자 `error` 사건마다 오류 코드를 사유 코드 `ProviderErrorCode_<코드>`(WARN)로 남긴다. 코드가 소문자 · 숫자 · 밑줄로 된 2 ~ 61자 식별자일 때만 싣고, 그 밖은 `ProviderErrorCode_unknown`이다(자유 문자열 · 메시지 · 매개변수는 남기지 않는다, R-F14).

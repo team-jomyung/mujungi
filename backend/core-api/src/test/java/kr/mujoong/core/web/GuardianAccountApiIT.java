@@ -330,6 +330,12 @@ class GuardianAccountApiIT {
             assertThat(send("POST /api/child", app.post("/api/child").session(guardian.session()).csrf(guardian.csrf())
                     .json(body)).status()).as(body).isEqualTo(400);
         }
+        // JIRA-266: 욕설 이름은 400 CHILD_NAME_NOT_ALLOWED이고 응답에 입력값이 없다(연산 계약 x-error-codes와 대조)
+        Result profane = send("POST /api/child", app.post("/api/child").session(guardian.session()).csrf(guardian.csrf())
+                .json("{\"displayName\":\"씨발\",\"birthDate\":\"2018-10-15\"}"));
+        assertThat(profane.status()).isEqualTo(400);
+        assertThat(profane.code()).isEqualTo("CHILD_NAME_NOT_ALLOWED");
+        assertThat(profane.body()).doesNotContain("씨발");
 
         Result created = send("POST /api/child", app.post("/api/child").session(guardian.session()).csrf(guardian.csrf())
                 .json("{\"displayName\":\" 하늘 \",\"birthDate\":\"2018-10-15\",\"interests\":[\"공룡\",\"블록 놀이\"]}"));
@@ -343,6 +349,8 @@ class GuardianAccountApiIT {
         Result edited = send("PATCH /api/child", app.call("PATCH", "/api/child").session(guardian.session())
                 .csrf(guardian.csrf()).json("{\"birthDate\":\"2017-10-15\"}"));
         assertThat(edited.json()).containsEntry("childId", childId).containsEntry("age", 9).containsEntry("displayName", "하늘");
+        assertThat(send("PATCH /api/child", app.call("PATCH", "/api/child").session(guardian.session()).csrf(guardian.csrf())
+                .json("{\"displayName\":\"개 새끼\"}")).code()).isEqualTo("CHILD_NAME_NOT_ALLOWED");
         assertThat(send("PATCH /api/child", app.call("PATCH", "/api/child").session(guardian.session()).csrf(guardian.csrf())
                 .json("{}")).status()).isEqualTo(400);
         assertThat(send("GET /api/child", app.get("/api/child").session(guardian.session())).json())

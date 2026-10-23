@@ -658,7 +658,7 @@ paths:
             application/json:
               schema: { $ref: "schemas/child-response.schema.json" }
               example: { childId: 00000000-0000-4000-8000-000000000002, displayName: 하늘, age: 8, birthDate: "2018-10-15", registeredOn: "2026-10-15", interests: [공룡, 그림] }
-        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "400": { $ref: "#/components/responses/ChildInputRejected" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/CsrfOrDeletion" }
         "409":
@@ -690,7 +690,7 @@ paths:
             application/json:
               schema: { $ref: "schemas/child-response.schema.json" }
               example: { childId: 00000000-0000-4000-8000-000000000002, displayName: 하늘, age: 9, birthDate: "2017-10-15", registeredOn: "2026-10-15", interests: [공룡, 그림] }
-        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "400": { $ref: "#/components/responses/ChildInputRejected" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/CsrfOrDeletion" }
         "404": { $ref: "#/components/responses/ChildNotRegistered" }
@@ -1314,6 +1314,14 @@ components:
       content:
         application/json:
           schema: { $ref: "schemas/error-envelope.schema.json" }
+    ChildInputRejected:
+      description: "형식 오류 · JSON 아님 · 본문 64KB 초과(편차 (r) — 413 대신 400), 또는 아이 이름이 공통 욕설 사전에 걸림(CHILD_NAME_NOT_ALLOWED, JIRA-266 · 편차 FT-1023-b)"
+      x-error-codes: [VALIDATION_FAILED, CHILD_NAME_NOT_ALLOWED]
+      x-deviation: ["(r)"]
+      content:
+        application/json:
+          schema: { $ref: "schemas/error-envelope.schema.json" }
+          example: { code: CHILD_NAME_NOT_ALLOWED, message: 이 이름은 쓸 수 없어요. 다른 이름을 입력해 주세요., traceId: 4bf92f3577b34da6a3ce929d0e0e4736 }
     GoalWriteForbidden:
       description: CSRF 오류 · 삭제 접수 또는 생성 목표의 필수 동의 철회
       x-error-codes: [CSRF_TOKEN_INVALID, ACCOUNT_DELETION_IN_PROGRESS, CONSENT_MISSING]

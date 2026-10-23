@@ -131,6 +131,8 @@ mujoong:
       new-speech-margin: 700ms
       # 참여 수락 때 보관한 응답이 비어 있으면 첫 응답 지시 전에 모델이 스스로 답을 시작하기를 기다린다(0이면 바로 지시, 2026-10-22 임시값)
       join-self-start-wait: 1s
+      # 자유대화 응답 정체 안전망(JIRA-270): 아이 말 확정 · 미루는 말로 끝난 응답 뒤 이만큼 새 출력 · 아이 말이 없으면 이어 말하기 지시 1회(0이면 끔, 2026-10-23 임시값)
+      response-stall-wait: 6s
   outbox:
     poll-interval: 500ms
     batch-size: 20
@@ -224,6 +226,9 @@ mujoong:
       model: ${JEV_MODEL:}
       # 통과 문턱(선 형식 정정 D6). PASS가 1순위이고 확률이 이 값 이상일 때만 자동 통과한다. 0 < x <= 1. 임시 시험값 — AI 성능 시험으로 확정한다
       pass-threshold: ${JEV_PASS_THRESHOLD:0.5}
+      # JIRA-266: true면 제브 요청 후보 · 맥락의 아이 이름을 '아이'로 바꾸지 않고 원문으로 보낸다(욕설 이름을 제브가 보게). 비밀 아님.
+      # R-F15 확인 기록(제브의 아동 이름 전달 허용 범위, infra/RUNBOOK.md) 전에는 켜지 않는다. Luna 등 다른 경로는 언제나 이름을 바꾼다
+      send-child-name: ${JEV_SEND_CHILD_NAME:false}
   # U9 Luna 호출부(contracts/ai-io.md 10.9). 키 env OPENAI_API_KEY가 있고 enabled가 true일 때만 RealtimeLunaClient가 켜진다(값은 env에만).
   # 시간 값이 아니다: 시도 시한은 timing.judgment.live-budget. demo · prod는 https + api.openai.com만, test는 루프백만
   luna:
