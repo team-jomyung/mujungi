@@ -180,7 +180,9 @@ web의 loading-notice-delay는 MUJOONG_TIMING_PARENT_LOADINGNOTICEDELAY 환경 �
 | `mujoong.timing.result.attempt-timeout` | `90s` | core-api | 세션 결과 시도 시한 | FD-Q2 |
 | `mujoong.timing.result.reconcile-interval` | `5m` | core-api | 누락 · 후보 등록 · 리포트 정리 점검 | FD-Q2 |
 | `mujoong.timing.result.undecided-limit` | `1h` | core-api | 기록 저장 뒤 UNDECIDED 판정 유예 상한 | R-12 |
-| `mujoong.timing.report.ready-target` | `60s` | core-api · web | 리포트 접수부터 절대 마감 | BR9.4 · U6-e |
+| `mujoong.timing.report.ready-target` | `6m` | core-api · web | 리포트 접수부터 절대 마감(web은 이만큼 기다린 뒤 실패로 본다) | BR9.4 · U6-e · FT-1023-c |
+| `mujoong.timing.report.result-settle-wait` | `5m` | core-api | 접수부터 고른 활동의 결과 정리를 기다리는 상한(`ready-target`보다 짧아야 한다) | FT-1023-c |
+| `mujoong.timing.report.result-settle-poll` | `10s` | core-api | 정리를 기다리는 동안 다시 보는 간격 | FT-1023-c |
 | `mujoong.timing.report.unsaved-retention` | `24h` | core-api | 저장 안 된 READY · FAILED 보존 | FD-Q2 |
 | `mujoong.text-ai.result.request-timeout` | `20s` | core-api | AI 한 번의 최대 시한(시도 잔여 시간 이하) | FD-Q2 |
 | `mujoong.text-ai.result.temperature-judgment` | `0` | core-api | 재판정 온도 | ai-io 6.1 |
@@ -189,7 +191,7 @@ web의 loading-notice-delay는 MUJOONG_TIMING_PARENT_LOADINGNOTICEDELAY 환경 �
 
 생성 온도 `mujoong.text-ai.result.temperature-generation=0.2`, 재판정 온도 `temperature-judgment=0`, 프롬프트 버전 `prompt-version=v1`, `mujoong.limits.result-workers=2`는 시간이 아닌 설정이다. 실행 스레드 하나는 REPORT 전용이다. 17 · 27 · 28도 정리/생성 중에만 기존 `parent.poll-interval`을 사용한다(U6-h).
 
-리포트(REPORT 작업)는 AI를 부르지 않아 `mujoong.text-ai.result.*`를 쓰지 않는다. `report.ready-target`(접수부터 60초 절대 마감)과 작업 시도 · 재시도 키의 뜻 · 값은 그대로이며, 시도 실패는 저장 자료 읽기 · 쓰기 오류 같은 AI 밖 원인으로만 생긴다. 고른 활동의 결과 정리가 아직 끝나지 않았으면 리포트 시도를 오류 코드 없이 미뤄 `result.job-retry-backoff` 간격으로 다시 보고(시도 횟수를 쓴다), 마감 안에 다음 시도가 없으면 그 시도에서 만든다 [편차 FT-1023-c].
+리포트(REPORT 작업)는 AI를 부르지 않아 `mujoong.text-ai.result.*`를 쓰지 않는다. 작업 시도 · 재시도 키의 뜻 · 값은 그대로이며, 시도 실패는 저장 자료 읽기 · 쓰기 오류 같은 AI 밖 원인으로만 생긴다. 고른 활동의 결과 정리가 아직 끝나지 않았으면 리포트 시도를 오류 코드 없이 미뤄 `report.result-settle-poll`(10초) 간격으로 다시 보고(미룬 시도는 시도 횟수를 쓰지 않는다), 접수부터 `report.result-settle-wait`(5분)가 지나면 그때 있는 자료로 만든다. 그래서 `report.ready-target`은 60초에서 6분(정리 대기 5분 + 생성 여유 1분)으로 늘었다 [편차 FT-1023-c].
 ## 11. U7 웹 푸시 시간
 
 | 키 | 기본값 | 소유 앱 | 뜻 | 근거 |

@@ -75,6 +75,21 @@ public class ResultJobRepository {
         return true;
     }
 
+    /**
+     * 처리기가 미룬 시도를 REQUESTED로 되돌리고 시도 횟수에서 돌려준다(그 시도 기록도 지운다). 리포트가 결과 정리를 기다리는
+     * 동안 시도 횟수 상한(4회)을 쓰지 않게 한다(contracts/deviations.md FT-1023-c).
+     */
+    public boolean release(ResultJob job, Instant next, Instant now) {
+        var p=at(now).addValue("id",job.id()).addValue("attempt",job.attemptCount());
+        instant(p,"next",next);
+        int n=jdbc.update("update core.core_result_job set status='REQUESTED',attempt_count=attempt_count-1,next_attempt_at=:next,"
+                + "lease_until=null,updated_at=:now where id=:id and status='RUNNING' and attempt_count=:attempt",p);
+        if(n==0)return false;
+        jdbc.update("delete from core.core_result_job_attempt where job_id=:id and attempt_no=:attempt",p);
+        synchronize(job,"REQUESTED",now);
+        return true;
+    }
+
     public List<ResultJob> unfinished() {
         return jdbc.query("select * from core.core_result_job where status in ('RUNNING','REQUESTED')",
                 Map.of(),ResultJobRepository::map);

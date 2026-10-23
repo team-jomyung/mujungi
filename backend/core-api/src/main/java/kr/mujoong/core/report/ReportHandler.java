@@ -3,6 +3,9 @@ package kr.mujoong.core.report;
 import static kr.mujoong.core.result.ResultData.*;
 
 import java.util.*;
+import java.time.Instant;
+import kr.mujoong.core.config.CoreProperties;
+import kr.mujoong.core.config.CoreTimingProperties;
 import kr.mujoong.core.consent.ConsentPolicyService;
 import kr.mujoong.core.knowledge.BehaviorDefinitionLookup;
 import kr.mujoong.core.record.ResultRecordReader;
@@ -16,8 +19,8 @@ import org.springframework.transaction.support.TransactionTemplate;
  * 리포트 생성 때 AI(글 생성 · 금지 표현 2차 분류)를 부르지 않는다(JIRA-267, contracts/deviations.md FT-1023-c).
  *
  * <p>고른 활동 중 결과 정리가 아직 끝나지 않은 활동(정리 대기 · 정리 중, 결과 접수 전)이 있으면 이번 시도를 미루고
- * 작업 재시도 간격(result.job-retry-backoff)으로 다시 본다. 리포트 절대 마감(report.ready-target) 안에 다음 시도가 없으면
- * 그때 있는 자료로 만든다. 정리하지 못한(FAILED) 활동 · 결과 대상이 아닌 활동 · 동의 철회 활동은 기다리지 않는다.
+ * {@code report.result-settle-poll} 간격으로 다시 본다(시도 횟수를 쓰지 않는다). 접수부터 {@code report.result-settle-wait}가
+ * 지나면 그때 있는 자료로 만든다. 정리하지 못한(FAILED) 활동 · 결과 대상이 아닌 활동 · 동의 철회 활동은 기다리지 않는다.
  */
 @Component
 public class ReportHandler implements JobHandler {
@@ -32,11 +35,12 @@ public class ReportHandler implements JobHandler {
     private final ReportRuleSections ruleSections;
     private final ConsentPolicyService consent;
     private final TransactionTemplate tx;
+    private final CoreTimingProperties.ReportTiming timing;
 
     public ReportHandler(ReportRepository reports, ResultRecordReader records, SessionResultStateRepository states,
             ActivityResultRepository results, SceneJudgmentRepository scenes, StructuredExperienceRepository structures,
             BehaviorDefinitionLookup definitions, ReportAssembler assembler, ReportRuleSections ruleSections,
-            PlatformTransactionManager transactions, ConsentPolicyService consent) {
+            PlatformTransactionManager transactions, ConsentPolicyService consent, CoreProperties properties) {
         this.reports = reports;
         this.records = records;
         this.states = states;
@@ -48,6 +52,7 @@ public class ReportHandler implements JobHandler {
         this.ruleSections = ruleSections;
         this.consent = consent;
         this.tx = new TransactionTemplate(transactions);
+        this.timing = properties.timing().report();
     }
 
     public String jobType() {
@@ -66,8 +71,11 @@ public class ReportHandler implements JobHandler {
         if (snapshot == null) {
             return Outcome.failed("REPORT_DISCARDED", false);
         }
-        if (snapshot.settling() && job.retryAvailable()) {
-            return Outcome.deferred();
+        if (snapshot.settling()) {
+            Instant until = settleRecheck(job);
+            if (until != null) {
+                return Outcome.deferredUntil(until);
+            }
         }
         var inputs = snapshot.inputs();
         Map<Integer, ReportRepository.Section> sections = new TreeMap<>(assembler.assemble(snapshot.report(), inputs));
@@ -83,6 +91,20 @@ public class ReportHandler implements JobHandler {
             }
         }, () -> {});
         return done ? Outcome.done() : Outcome.failed("REPORT_DISCARDED", false);
+    }
+
+    /**
+     * 정리를 기다릴 때 다시 볼 시각. 접수 시각은 절대 마감(작업 임대 끝 = 접수 + ready-target)에서 거꾸로 구한다.
+     * 접수부터 정리 대기 상한이 지났으면 null(지금 있는 자료로 만든다).
+     */
+    private Instant settleRecheck(JobContext job) {
+        Instant now = job.clock().now();
+        Instant settleUntil = job.deadline().minus(timing.readyTarget()).plus(timing.resultSettleWait());
+        if (!now.isBefore(settleUntil)) {
+            return null;
+        }
+        Instant next = now.plus(timing.resultSettlePoll());
+        return next.isBefore(settleUntil) ? next : settleUntil;
     }
 
     /**
