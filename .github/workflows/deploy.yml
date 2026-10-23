@@ -1,7 +1,7 @@
 # 무중 demo 배포 — ECS(EC2 · bridge) · main 병합 자동 + 수동 실행(DEPLOY · ROLLBACK)
 #
 # 흐름: OIDC(mujoong-gha-deploy) → 최신 태스크 정의에서 image만 SHA로 교체 → ECS 서비스 갱신
-#   DEPLOY  : migrate(종료 코드 0 필수) → core-api · realtime → web → nginx
+#   DEPLOY  : migrate(스키마 + 참조 시드, 종료 코드 0 필수) → core-api · realtime → web → nginx
 #   ROLLBACK: migrate 생략, 앱 이미지만 되돌림(설정 · DB 스키마는 복원 안 함)
 #
 # 전제: 태스크 정의 뼈대는 Terraform, image는 이 워크플로가 관리한다. 등록은 Terraform · 이 워크플로만 하고,
@@ -9,7 +9,7 @@
 # 복구: 자동 롤백은 서비스별(회로 차단기)뿐이다. 중간 실패 시 요약의 서비스별 상태를 보고 수동 복구한다.
 #       ECR은 최근 5개만 보관 → 롤백 가능한 SHA도 그 범위.
 # 건너뜀: SERVICE_HOST 비어 있음 · 자동 실행인데 AUTO_DEPLOY=false · ECS 인스턴스 미연결(서버 정지)
-# 확인(S5b): /healthz · /parent → 200, /api/health → 200 + status=UP
+# 확인(S5b): /healthz · /parent → 200, /api/health → 200 + status=UP, 승인 음성 URL·SHA-256
 #       ⚠️ WSS · 인증서 확인 없음 — 음성 경로 정상을 뜻하지 않는다(시연 전 probe-three로 복원)
 # 저장소 변수(비밀 아님): AWS_REGION · AWS_DEPLOY_ROLE_ARN · SERVICE_HOST · AUTO_DEPLOY
 
@@ -151,6 +151,13 @@ jobs:
       SERVICE_HOST: ${{ vars.SERVICE_HOST }}
       AWS_REGION: ${{ vars.AWS_REGION }}
     steps:
+      - name: 배포할 커밋의 승인 음성 목록 가져오기
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.plan.outputs.sha }}
+          persist-credentials: false
+          sparse-checkout: backend/realtime-activity/src/main/resources/service-policy
+
       - name: OIDC로 배포 역할 맡기(장기 키 없음, 1시간 이하)
         uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
         with:
@@ -382,3 +389,30 @@ jobs:
             echo "::error::공개 주소 확인 실패(CloudFront → nginx → web · core 경로 점검)"
             exit 1
           fi
+
+      - name: 승인 음성 공개 URL 및 파일 해시 확인
+        if: steps.d0.outputs.online == 'true'
+        run: |
+          set -euo pipefail
+          manifest=backend/realtime-activity/src/main/resources/service-policy/notice-assets.json
+          jq -e '.assets | type == "array" and length > 0' "$manifest" >/dev/null
+          audio_list="$(jq -r '.assets[] | [.audioUrl, .audioSha256] | @tsv' "$manifest")"
+          audio_file="$(mktemp)"
+          trap 'rm -f "$audio_file"' EXIT
+          failed=0
+          while IFS=$'\t' read -r audio_path expected_hash; do
+            if ! [[ "$audio_path" =~ ^/media/approved/[A-Za-z0-9._-]+\.wav$ && "$expected_hash" =~ ^[a-f0-9]{64}$ ]]; then
+              echo "::error::승인 음성 목록의 경로 또는 해시가 올바르지 않다"
+              exit 1
+            fi
+            if curl --fail --silent --show-error --connect-timeout 5 --max-time 15 \
+              --retry 5 --retry-delay 10 --retry-all-errors \
+              "https://$SERVICE_HOST$audio_path" -o "$audio_file" \
+              && [ "$(sha256sum "$audio_file" | cut -d' ' -f1)" = "$expected_hash" ]; then
+              echo "$audio_path → 음성 파일 확인 통과" | tee -a "$GITHUB_STEP_SUMMARY"
+            else
+              echo "::error::$audio_path 승인 음성을 받지 못했거나 파일 해시가 다르다"
+              failed=1
+            fi
+          done <<< "$audio_list"
+          [ "$failed" -eq 0 ]
