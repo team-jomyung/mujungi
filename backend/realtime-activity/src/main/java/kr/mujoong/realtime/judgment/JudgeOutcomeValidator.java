@@ -37,6 +37,25 @@ public final class JudgeOutcomeValidator {
         if (first == null || second == null) {
             return JudgeOutcome.abstained(AbstainReason.SCHEMA_INVALID, latency, model, promptVersion);
         }
+        return check(first, second, allowedOptions, latency, model, promptVersion);
+    }
+
+    /**
+     * 이미 고른 1 · 2순위를 {@link #validate}와 같은 순서 · 같은 하한으로 확인한다(Decisions 판정 경로, FT-1023-d). 확률 범위 → 선택지 안 → 중복 →
+     * 하한(minConfidence) → 최소 차이(minMargin)이고 같으면 확정 쪽이다.
+     */
+    public JudgeOutcome validateRanked(String firstOption, double firstProbability, String secondOption, double secondProbability,
+            List<String> allowedOptions, Duration latency, String model, String promptVersion) {
+        Ranked first = Ranked.of(firstOption, firstProbability);
+        Ranked second = Ranked.of(secondOption, secondProbability);
+        if (first == null || second == null) {
+            return JudgeOutcome.abstained(AbstainReason.SCHEMA_INVALID, latency, model, promptVersion);
+        }
+        return check(first, second, allowedOptions, latency, model, promptVersion);
+    }
+
+    private JudgeOutcome check(Ranked first, Ranked second, List<String> allowedOptions, Duration latency, String model,
+            String promptVersion) {
         if (!first.inUnitInterval() || !second.inUnitInterval()) {
             return JudgeOutcome.abstained(AbstainReason.PROBABILITY_OUT_OF_RANGE, latency, model, promptVersion);
         }
@@ -64,7 +83,13 @@ public final class JudgeOutcomeValidator {
                     || !(map.get("probability") instanceof Number number)) {
                 return null;
             }
-            double value = number.doubleValue();
+            return of(option, number.doubleValue());
+        }
+
+        static Ranked of(String option, double value) {
+            if (option == null || option.isBlank()) {
+                return null;
+            }
             if (Double.isNaN(value) || Double.isInfinite(value)) {
                 return new Ranked(option, BigDecimal.TEN);
             }

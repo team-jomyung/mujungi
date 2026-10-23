@@ -27,7 +27,8 @@ final class RealtimeLunaTestFixtures {
 
     static LunaProperties properties(URI baseUrl) {
         return new LunaProperties("gpt-6-luna", baseUrl, 1_000_000,
-                new LunaProperties.Purposes(new LunaProperties.PurposeOptions(4000, "medium")), true);
+                new LunaProperties.Purposes(new LunaProperties.PurposeOptions(4000, "medium")), true,
+                LunaProperties.JudgeEndpoint.RESPONSES);
     }
 
     static LunaTransport transport(URI baseUrl, LunaHosts.Mode mode) {

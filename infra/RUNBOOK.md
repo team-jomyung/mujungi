@@ -258,6 +258,10 @@ aws ssm put-parameter --name /mujoong/demo/GHCR_PULL_USER --type String --value 
      `lunaState=DISABLED_SWITCH_OFF`다.
   4. realtime Luna를 켜려면 1번 확인 기록 뒤에 demo 설정의 `mujoong.luna.enabled`를 `true`로 바꾸고(기본 `false`) 배포한 다음 realtime의
      `lunaState=ENABLED`를 확인한다(U11 계약 편차 (U11-c)). 확인 기록 없이는 바꾸지 않는다.
+  5. (FT-1023-d, 선택) 진행 중 판정을 Decisions 끝점으로 바꾸려면 `mujoong.luna.judge-endpoint=decisions`(env `LUNA_JUDGE_ENDPOINT`, 기본 `responses`)를 쓴다.
+     같은 공급자 · 같은 키 · 같은 최소 필드지만 다른 엔드포인트이므로, **실제 아동 데이터로 켜기 전에 위 확인 기록 표의 비고에 'Decisions 끝점 확인'(보존 ·
+     데이터 사용 조건 포함)을 남긴 뒤에만** 바꾼다. 비밀이 아니므로 `OPENAI_JUDGE_MODEL`과 같은 길로 넣되, `infra/compose.demo.yml` · `render-env`에 이 이름이
+     없으면 먼저 더한다. 롤백은 `responses`로 되돌려 같은 SHA로 `DEPLOY`한다. 켠 뒤 `LUNA_CALL`의 `promptVersion`이 `….decisions-v1`인지 확인한다.
   - **롤백:** realtime Luna는 `mujoong.luna.enabled`를 `false`로 되돌려 같은 SHA로 `DEPLOY`하면 꺼진다(`DISABLED_SWITCH_OFF`). 키를 비우는 길은
     demo realtime이 기동을 거부하므로(GPT-Live 키 필수, U11 BR12.2) 쓰지 않는다. core-api Luna는 지금처럼 키만으로 켜져 키가 있는 동안 꺼지지
     않는다. 어댑터가 꺼지면 지금과 같은 실패 경로라 데이터 변경 · 마이그레이션 되돌림이 없다. 재기동만으로는 컨테이너 환경이 갱신되지 않으므로

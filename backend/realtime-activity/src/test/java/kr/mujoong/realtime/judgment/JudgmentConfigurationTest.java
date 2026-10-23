@@ -12,6 +12,7 @@ import kr.mujoong.realtime.config.RealtimeProperties;
 import kr.mujoong.realtime.content.LiveContentRegistry;
 import kr.mujoong.realtime.content.LiveContentResources;
 import kr.mujoong.realtime.luna.LunaConfiguration;
+import kr.mujoong.realtime.luna.LunaProperties;
 import kr.mujoong.realtime.observability.EventLogger;
 import kr.mujoong.realtime.observability.RealtimeMetrics;
 import kr.mujoong.realtime.testing.TestEventLoggers;
@@ -21,7 +22,10 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 
-/** 판정 포트 빈 선택 (U11 BR1.6 · U11-c): 키와 스위치가 모두 있을 때만 Luna 구현, 아니면 보류 구현. 키는 가짜 문자열만 쓴다(R-F3). */
+/**
+ * 판정 포트 빈 선택 (U11 BR1.6 · U11-c · FT-1023-d): 키와 스위치가 모두 있을 때만 Luna 구현(끝점 설정이 responses면 Responses, decisions면 Decisions),
+ * 아니면 보류 구현. 틀린 끝점 값은 기동 실패. 키는 가짜 문자열만 쓴다(R-F3).
+ */
 @Tag("judgment-turn")
 @org.junit.jupiter.api.Tag("service-guardrail")
 class JudgmentConfigurationTest {
@@ -71,5 +75,40 @@ class JudgmentConfigurationTest {
             assertThat(client).isInstanceOf(LunaJudgeClient.class);
             assertThat(client.available()).isTrue();
         });
+    }
+
+    @Test
+    void theDefaultEndpointKeepsTheResponsesClient() {
+        runner().withPropertyValues("OPENAI_API_KEY=test-key-not-real-u11", "mujoong.luna.enabled=true",
+                "mujoong.luna.judge-endpoint=responses").run(context -> {
+                    assertThat(context).hasNotFailed();
+                    assertThat(context.getBean(JudgeClient.class)).isInstanceOf(LunaJudgeClient.class);
+                    assertThat(context.getBean(LunaProperties.class).judgeEndpoint()).isEqualTo(LunaProperties.JudgeEndpoint.RESPONSES);
+                });
+    }
+
+    @Test
+    void theDecisionsEndpointSelectsTheDecisionsClient() {
+        runner().withPropertyValues("OPENAI_API_KEY=test-key-not-real-u11", "mujoong.luna.enabled=true",
+                "mujoong.luna.judge-endpoint=decisions").run(context -> {
+                    assertThat(context).hasNotFailed();
+                    JudgeClient client = context.getBean(JudgeClient.class);
+                    assertThat(client).isInstanceOf(DecisionsJudgeClient.class);
+                    assertThat(client.available()).isTrue();
+                });
+    }
+
+    @Test
+    void theDecisionsEndpointWithoutTheSwitchStillMeansNoProvider() {
+        runner().withPropertyValues("OPENAI_API_KEY=test-key-not-real-u11", "mujoong.luna.judge-endpoint=decisions")
+                .run(context -> assertThat(context.getBean(JudgeClient.class)).isInstanceOf(UnavailableJudgeClient.class));
+    }
+
+    @Test
+    void anUnknownEndpointRefusesToStart() {
+        runner().withPropertyValues("OPENAI_API_KEY=test-key-not-real-u11", "mujoong.luna.enabled=true",
+                "mujoong.luna.judge-endpoint=chat").run(context -> assertThat(context).hasFailed());
+        runner().withPropertyValues("mujoong.luna.judge-endpoint=chat").run(context -> assertThat(context)
+                .as("스위치가 꺼져 있어도 틀린 값은 기동 실패").hasFailed());
     }
 }

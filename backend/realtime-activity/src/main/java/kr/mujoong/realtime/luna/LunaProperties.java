@@ -15,10 +15,12 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * @param maxResponseBytes 응답 본문 바이트 상한(넘으면 LENGTH_EXCEEDED, NFR3.10)
  * @param purpose 목적별 출력 한도 · 추론 강도
  * @param enabled realtime Luna 스위치(U11 BR12.3, 기본 {@code false}). 시간 값이 아니라 R-M5 대상이 아니다. 키가 있어도 이 값이 false면 꺼진다
+ * @param judgeEndpoint 진행 중 판정을 부를 끝점(FT-1023-d, env {@code LUNA_JUDGE_ENDPOINT}, 기본 {@code responses}). 시간 값 · 비밀이 아니다.
+ *     모르는 값이면 바인딩이 실패해 기동하지 않는다. 비면 RESPONSES다
  */
 @ConfigurationProperties(prefix = "mujoong.luna")
 public record LunaProperties(String model, URI baseUrl, int maxResponseBytes, Purposes purpose,
-        boolean enabled) {
+        boolean enabled, JudgeEndpoint judgeEndpoint) {
 
     /** env 모델 이름이 비었을 때 쓰는 이름(BR1.5). */
     public static final String DEFAULT_MODEL = "gpt-6-luna";
@@ -37,6 +39,7 @@ public record LunaProperties(String model, URI baseUrl, int maxResponseBytes, Pu
             throw new IllegalArgumentException("mujoong.luna.max-response-bytes는 양수여야 한다");
         }
         Objects.requireNonNull(purpose, "mujoong.luna.purpose");
+        judgeEndpoint = judgeEndpoint == null ? JudgeEndpoint.RESPONSES : judgeEndpoint;
     }
 
     /** 목적의 출력 한도 · 추론 강도. */
@@ -44,6 +47,17 @@ public record LunaProperties(String model, URI baseUrl, int maxResponseBytes, Pu
         return switch (lunaPurpose) {
             case JUDGMENT_LIVE -> purpose.judgmentLive();
         };
+    }
+
+    /**
+     * 진행 중 판정 끝점(FT-1023-d). 같은 공급자(OpenAI) · 같은 키 · 같은 최소 입력 필드지만 엔드포인트가 다르므로, 실제 아동 데이터로
+     * DECISIONS를 켜기 전에 {@code infra/RUNBOOK.md}의 R-F15 확인 기록에 Decisions 끝점 확인을 남긴다.
+     */
+    public enum JudgeEndpoint {
+        /** Responses API 구조화 출력(U9 기본 경로). */
+        RESPONSES,
+        /** Decisions API {@code choice} 질문. */
+        DECISIONS
     }
 
     /** realtime 목적의 설정. */

@@ -83,16 +83,21 @@ public final class LunaJudgeClient implements JudgeClient {
     }
 
     private JudgeOutcome failure(Throwable failure, Duration latency) {
+        return JudgeOutcome.abstained(abstainReason(failure), latency, null, prompt.version());
+    }
+
+    /** 호출 실패 → 보류 사유(TIMEOUT · SCHEMA_INVALID, 그 밖은 PROVIDER_ERROR). Decisions 구현도 같은 표를 쓴다(FT-1023-d). */
+    static AbstainReason abstainReason(Throwable failure) {
         Throwable cause = failure instanceof CompletionException && failure.getCause() != null ? failure.getCause() : failure;
-        AbstainReason reason = AbstainReason.PROVIDER_ERROR;
         if (cause instanceof LunaException luna) {
             LunaFailureReason lunaReason = luna.reason();
             if (lunaReason == LunaFailureReason.TIMEOUT) {
-                reason = AbstainReason.TIMEOUT;
-            } else if (lunaReason == LunaFailureReason.SCHEMA_INVALID) {
-                reason = AbstainReason.SCHEMA_INVALID;
+                return AbstainReason.TIMEOUT;
+            }
+            if (lunaReason == LunaFailureReason.SCHEMA_INVALID) {
+                return AbstainReason.SCHEMA_INVALID;
             }
         }
-        return JudgeOutcome.abstained(reason, latency, null, prompt.version());
+        return AbstainReason.PROVIDER_ERROR;
     }
 }
