@@ -111,7 +111,8 @@ public final class SessionContext {
         this.services = Objects.requireNonNull(services, "services");
         this.mailbox = Objects.requireNonNull(mailbox, "mailbox");
         this.timers = new SessionTimers(services.clocks(), mailbox::putSafety);
-        this.outputGen = new OutputGeneration(services.settings().segmentQuiet(), services.settings().newSpeechMargin());
+        this.outputGen = new OutputGeneration(services.settings().segmentQuiet(), services.settings().newSpeechMargin(),
+                this::recordNewSpeech);
         this.sendQueue = new ProviderSendQueue(services.launcher(), plan.sessionId().toString(),
                 failure -> services.events().appError(EventLog.Component.VOICE_RELAY, failure));
         this.relay = new InputRelay(plan.sessionId(), services.settings().inputQueueFrames(), services.requests(),
@@ -445,6 +446,27 @@ public final class SessionContext {
     /** U3 세션 이벤트 한 줄(payload는 식별자 · 숫자 · 불리언뿐, 전사 · 원음 없음). */
     void putEvent(String type, String payloadJson, Instant at) {
         services.recorder().putEvent(new SessionEvent(UUID.randomUUID(), plan.sessionId(), type, null, payloadJson, at));
+    }
+
+    /**
+     * 3회차 V2: 지시 하나의 새 말 시작 관측을 세션 사건 {@code OUTPUT_NEW_SPEECH}로 남긴다(사유 코드 · 시각 · 개수뿐, 전사 원문 없음 R-F14). 실기기
+     * 리허설 · 실음성 하니스가 지시마다 조용 시작 여부 · 확인 사건 · 첫 조각 · 버린 조각을 같은 값으로 본다.
+     */
+    private void recordNewSpeech(OutputGeneration.InstructionTrace trace) {
+        String payload = "{\"eventId\":\"" + trace.eventId() + "\",\"reason\":\"" + trace.reason().name() + "\",\"start\":\""
+                + (trace.quietAtSend() ? "QUIET" : "SPEAKING") + "\",\"sentClockMs\":" + trace.sentClockMs() + ",\"ackStartMs\":"
+                + known(trace.ackStartMs()) + ",\"ackEndMs\":" + known(trace.ackEndMs()) + ",\"firstTranscriptStartMs\":"
+                + known(trace.firstTranscriptStartMs()) + ",\"firstTranscriptClockMs\":" + known(trace.firstTranscriptClockMs())
+                + ",\"audioFromClockMs\":" + known(trace.audioFromClockMs()) + ",\"discardedTranscriptChunks\":"
+                + trace.discardedTranscriptChunks() + ",\"discardedTranscriptChars\":" + trace.discardedTranscriptChars()
+                + ",\"discardedAudioMs\":" + trace.discardedAudioMs() + ",\"heldChunks\":" + trace.heldChunks() + ",\"outcome\":\""
+                + trace.outcome().name() + "\"}";
+        putEvent(SessionExecutor.EVENT_OUTPUT_NEW_SPEECH, payload, services.clock().now());
+    }
+
+    /** 모르는 값(-1)은 JSON null로 쓴다. */
+    private static String known(long value) {
+        return value < 0 ? "null" : Long.toString(value);
     }
 
     void bumpGeneration() {

@@ -150,10 +150,14 @@ class SessionExecutorReview2Test {
 
         assertThat(h.link.outputs()).isEmpty();
         h.launcher.runAll("provider-correct-");
+        // 3회차 V2(설계 개정 A4-b): 진단 교정은 출력이 조용할 때(구간 봉인 뒤) 보낸 지시라, 그 뒤 처음 온 음성 조각은 교정에 따른 새 말로 받는다(전에는
+        // 확인 사건 end_ms + 여유 앞이라 낡은 꼬리로 버렸다). 전사 없는 그 새 말도 미완이라 폐기되고, 응답당 한 번 · 연달아 두 번까지의 규칙대로 짧은
+        // 완결 요청이 한 번 더 간다. 이 시험이 보는 것(미완 폐기여도 금지 패턴 범주의 교정 문장)은 그대로다
         assertThat(h.provider.last().requests(ProviderRequestFactory.InstructionsAppend.class))
                 .extracting(ProviderRequestFactory.InstructionsAppend::content)
                 .containsExactly(InstructionTemplates.ResponseStart.FIRST.content(),
-                        InstructionTemplates.correctionContent(DialogInstructions.Correction.DIAGNOSIS));
+                        InstructionTemplates.correctionContent(DialogInstructions.Correction.DIAGNOSIS),
+                        InstructionTemplates.correctionContent(DialogInstructions.Correction.INCOMPLETE));
     }
 
     // ------------------------------------------------------------------ 보조

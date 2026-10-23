@@ -409,6 +409,8 @@ public final class SessionExecutor {
     static final String EVENT_PRACTICE_EXTENSION_FAILED = "PRACTICE_EXTENSION_FAILED";
     /** 공급자가 session.started로 받아들인 세션 지시문의 활동 본문(payload는 활동 종류 · 판 이름 · sha256뿐, 본문 · 아이 정보 없음). */
     static final String EVENT_LIVE_INSTRUCTIONS = "LIVE_INSTRUCTIONS";
+    /** 3회차 V2: 지시 하나의 새 말 시작 관측(payload는 지시 id · 사유 · 조용 시작 여부 · 시각 · 개수 · 결과뿐, 원문 없음). */
+    static final String EVENT_OUTPUT_NEW_SPEECH = "OUTPUT_NEW_SPEECH";
     /** ACTIVE 중 공급자 끊김의 end_detail. */
     static final String END_DETAIL_PROVIDER_LOST = "PROVIDER_LOST";
     /** 취소 · 교정 · 재생 위치를 기억하는 응답 · 재생 수의 상한(오래된 것부터 잊는다). */
@@ -2098,7 +2100,7 @@ public final class SessionExecutor {
                 // 사용량 초는 파싱만 한다(실호출 도구 보고서가 기록). 지표 이름은 contracts 표에 없어 이 단위에서 더하지 않는다
             }
             case ProviderEvent.InstructionsAppended appended -> {
-                if (ctx.outputGen().onAppended(appended.clientEventId(), appended.endMs())) {
+                if (ctx.outputGen().onAppended(appended.clientEventId(), appended.startMs(), appended.endMs())) {
                     judgment.onInstructionAcked();
                 }
             }
@@ -2246,7 +2248,7 @@ public final class SessionExecutor {
      */
     private void onOutputChunk(String transcript, long startMs, byte[] audio, Instant at, long nanos) {
         OutputGeneration.ChunkResult result = transcript != null
-                ? ctx.outputGen().onTranscript(at, startMs, outputHeld())
+                ? ctx.outputGen().onTranscript(at, startMs, transcript.codePointCount(0, transcript.length()), outputHeld())
                 : ctx.outputGen().onAudio(at, audio.length, outputHeld());
         // 버리는 조각도 조용 시계를 다시 건다: 조각이 계속 오는 동안은 끊김이 아니다
         ctx.timers().arm(Kind.SEGMENT_QUIET, ctx.services().settings().segmentQuiet());
@@ -2388,7 +2390,9 @@ public final class SessionExecutor {
         String eventId = "mj-" + (++instructionSeq);
         ProviderRequestFactory.InstructionsAppend request = build.apply(eventId);
         Instant now = ctx.services().clock().now();
-        ctx.outputGen().bumpForInstruction(now, reason, eventId);
+        // 설계 개정 A4-b(3회차 V2): 보낼 때 출력이 조용했는지는 출력 세대가 마지막 조각 시각으로 정한다. 공급자 리더가 넣었지만 아직 처리하지 않은
+        // 출력 조각이 있으면 말하는 중으로 본다
+        ctx.outputGen().bumpForInstruction(now, reason, eventId, pendingOutputChunks.get() > 0);
         ctx.segment().reset();
         ctx.transcripts().aiFinal("", false, now);
         ctx.timers().cancel(Kind.SEGMENT_QUIET);

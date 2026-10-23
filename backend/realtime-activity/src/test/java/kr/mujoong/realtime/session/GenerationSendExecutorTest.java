@@ -85,8 +85,7 @@ class GenerationSendExecutorTest {
 
     @Test
     void afterAnInstructionStaleChunksAreDroppedUntilTheAckAndANewSpeechTranscriptAreSeen() {
-        h.activate();
-        h.provider.last().newSpeechMargin(null);
+        activateWhileTheProviderSpeaks();
 
         // 낡은 응답의 꼬리: 확인 사건 전의 음성 · 전사는 모두 버린다
         h.provider.last().emit(new ProviderEvent.OutputAudioDelta(new byte[9_600]));
@@ -119,8 +118,7 @@ class GenerationSendExecutorTest {
 
     @Test
     void theFirstChunkWhoseClockReachesNewStartPlusMarginStartsReceivingAndNotOneEarlier() {
-        h.activate();
-        h.provider.last().newSpeechMargin(null);
+        activateWhileTheProviderSpeaks();
         h.provider.last().emit(new ProviderEvent.InstructionsAppended("mj-1", 0L, 100L));
         h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("새 말", 100L, 400L));
         // 시계 0에서 700까지 채운다(시작 100 + 여유 600 = 700): 마지막 채움 조각의 시작은 680 < 700이라 버린다
@@ -141,12 +139,92 @@ class GenerationSendExecutorTest {
         assertThat(extension.calls).isEmpty();
     }
 
+    // ------------------------------------------------------------------ 조용할 때 보낸 지시 (A4-b, 3회차 V2)
+
+    @Test
+    void aQuietSendKeepsTheWholeSentenceAlthoughItsFirstChunkStartsBeforeTheAckEnd() {
+        h.activate();
+        h.provider.last().newSpeechMargin(null);
+        kr.mujoong.realtime.testing.FakeProviderPort.FakeSession provider = h.provider.last();
+
+        // 실음성 실측 12.3의 시간표: 유휴 중 받은 지시에 공급자가 곧바로(+40ms) 말을 시작하고, 확인 사건은 그 뒤에 첫 조각보다 늦은 end_ms로 온다
+        provider.emit(new ProviderEvent.OutputTranscriptDelta("공룡 그림이", 40L, 380L));
+        provider.emit(new ProviderEvent.OutputAudioDelta(new byte[4_800]));
+        provider.emit(new ProviderEvent.InstructionsAppended("mj-1", 20L, 700L));
+        provider.emit(new ProviderEvent.OutputTranscriptDelta(" 점점 커지고 있네.", 420L, 1_400L));
+        provider.emit(new ProviderEvent.OutputAudioDelta(new byte[4_800]));
+        provider.emit(new ProviderEvent.OutputAudioDelta(new byte[4_800]));
+        h.drain();
+        h.advance(QUIET);
+
+        assertThat(h.link.outputs()).singleElement()
+                .satisfies(bundle -> assertThat(bundle.totalMs()).as("첫 음성 조각부터 여유 없이 받는다").isEqualTo(300L));
+        assertThat(approvedAiLines()).as("첫머리(«공룡 그림이»)가 잘리지 않는다").containsExactly("공룡 그림이 점점 커지고 있네.");
+        assertThat(newSpeechEvents()).singleElement().satisfies(payload -> assertThat(payload).contains("\"eventId\":\"mj-1\"",
+                "\"start\":\"QUIET\"", "\"ackStartMs\":20", "\"ackEndMs\":700", "\"firstTranscriptStartMs\":40",
+                "\"discardedTranscriptChunks\":0", "\"discardedAudioMs\":0", "\"outcome\":\"RECEIVING\"")
+                .doesNotContain("공룡"));
+    }
+
+    @Test
+    void aSpeakingSendStillDropsTheStaleTailBeforeTheAckEndAndTheAudioInsideTheMargin() {
+        activateWhileTheProviderSpeaks();
+        kr.mujoong.realtime.testing.FakeProviderPort.FakeSession provider = h.provider.last();
+
+        // 말하는 중 받은 지시: 낡은 말이 1초쯤 더 이어진 뒤(확인 사건 end_ms 앞) 새 말이 쉼 없이 이어진다
+        provider.emit(new ProviderEvent.OutputTranscriptDelta("그럼 연습 시작해", 0L, 300L));
+        provider.emit(new ProviderEvent.OutputAudioDelta(new byte[14_400]));
+        provider.emit(new ProviderEvent.InstructionsAppended("mj-1", 200L, 400L));
+        provider.emit(new ProviderEvent.OutputTranscriptDelta(" 볼까?", 300L, 390L));
+        provider.emit(new ProviderEvent.OutputTranscriptDelta("공룡 그림이 점점 커지고 있네.", 400L, 1_400L));
+        // 오디오 시계 300에서 새 말 시작 400 + 여유 600 = 1000까지는 버린다
+        provider.emit(new ProviderEvent.OutputAudioDelta(new byte[(int) ((1_000L - provider.audioClockMs()) * 48L)]));
+        provider.emit(new ProviderEvent.OutputAudioDelta(new byte[4_800]));
+        h.drain();
+        h.advance(QUIET);
+
+        assertThat(h.link.outputs()).singleElement().satisfies(bundle -> assertThat(bundle.totalMs()).isEqualTo(100L));
+        assertThat(approvedAiLines()).as("낡은 꼬리는 새지 않는다").containsExactly("공룡 그림이 점점 커지고 있네.");
+        assertThat(newSpeechEvents()).singleElement().satisfies(payload -> assertThat(payload).contains("\"start\":\"SPEAKING\"",
+                "\"discardedTranscriptChunks\":2", "\"discardedTranscriptChars\":13", "\"discardedAudioMs\":1000",
+                "\"audioFromClockMs\":1000", "\"outcome\":\"RECEIVING\""));
+    }
+
+    @Test
+    void aPracticeLineSentWhileQuietIsHeardVerbatimInsteadOfBeingDiscardedAsAMismatch() {
+        kr.mujoong.realtime.testing.ControllingPracticeExtension extension = new kr.mujoong.realtime.testing.ControllingPracticeExtension();
+        h.activityType = ActivityType.PRACTICE;
+        h.practice = extension.factory;
+        h.activate();
+        kr.mujoong.realtime.voice.PracticeSpeech opener = kr.mujoong.realtime.voice.PracticeSpeech.scenario(UUID.randomUUID(),
+                UUID.randomUUID(), 1, "친구", "공룡 그림이 점점 커지고 있네.");
+
+        assertThat(extension.out.speak(opener)).isTrue();
+        h.settleSend();
+        kr.mujoong.realtime.testing.FakeProviderPort.FakeSession provider = h.provider.last();
+        provider.newSpeechMargin(null);
+        provider.emit(new ProviderEvent.OutputTranscriptDelta("공룡 그림이", 40L, 380L));
+        provider.emit(new ProviderEvent.OutputAudioDelta(new byte[4_800]));
+        provider.emit(new ProviderEvent.InstructionsAppended("mj-1", 20L, 700L));
+        provider.emit(new ProviderEvent.OutputTranscriptDelta(" 점점 커지고 있네.", 420L, 1_400L));
+        provider.emit(new ProviderEvent.OutputAudioDelta(new byte[4_800]));
+        h.drain();
+        h.advance(QUIET);
+
+        assertThat(h.metrics.count("mujoong.gate.discard", "reason", "gate_pattern")).as("원문 불일치 폐기 없음").isZero();
+        assertThat(h.link.outputs()).singleElement();
+        UUID playback = h.link.outputs().getFirst().playbackId();
+        mark(playback, PlaybackMark.Status.STARTED, null);
+        mark(playback, PlaybackMark.Status.COMPLETED, null);
+        assertThat(extension.endFacts(opener.correlationId()))
+                .containsExactly(kr.mujoong.realtime.practicelegacy.PracticePorts.Playback.COMPLETED);
+    }
+
     // ------------------------------------------------------------------ 확인 사건 누락 · 새 말 전사 누락 (4.6)
 
     @Test
     void withoutAnAckWithinResponseReadyAckMissingIsLoggedAndTheNextTranscriptAfterTheSendClockStartsTheNewSpeech() {
-        h.activate();
-        h.provider.last().newSpeechMargin(null);
+        activateWhileTheProviderSpeaks();
 
         h.advanceAlive(RESPONSE_READY);
 
@@ -429,6 +507,36 @@ class GenerationSendExecutorTest {
     }
 
     // ------------------------------------------------------------------ 도움
+
+    /**
+     * 말하는 중 보낸 지시(설계 개정 A4 그대로)로 ACTIVE까지 간다: 참여 대답에 공급자가 자동으로 응답하던 중(WAITING_CHILD라 보류로 버린 전사 조각)
+     * 참여 뒤 첫 응답 지시가 나간다. 조용할 때 보낸 지시는 A4-b가 맡는다(3회차 V2). 시험이 시간표를 직접 만들도록 가짜 공급자의 응답 흉내는 끈다.
+     */
+    private void activateWhileTheProviderSpeaks() {
+        h.boot();
+        h.ackAndReady();
+        h.provider.last().newSpeechMargin(null);
+        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("좋아, 그럼", 0L, 0L));
+        h.drain();
+        h.join();
+        h.settleSend();
+    }
+
+    /** 보호자 화면에 승인된 AI 확정 행의 글(전사 순서대로). */
+    private List<String> approvedAiLines() {
+        return h.store.transcripts.stream()
+                .filter(entry -> entry.speaker() == kr.mujoong.realtime.log.TranscriptEntry.Speaker.AI)
+                .filter(entry -> entry.assemblyStatus() == kr.mujoong.realtime.log.TranscriptEntry.AssemblyStatus.FINAL)
+                .filter(kr.mujoong.realtime.log.TranscriptEntry::approvedForDisplay)
+                .map(kr.mujoong.realtime.log.TranscriptEntry::text).toList();
+    }
+
+    /** 세션 사건 OUTPUT_NEW_SPEECH의 payload(기록기를 비운 뒤). */
+    private List<String> newSpeechEvents() {
+        h.recorder.tick();
+        return h.store.sessionEvents.stream().filter(event -> SessionExecutor.EVENT_OUTPUT_NEW_SPEECH.equals(event.getEventType()))
+                .map(SessionEvent::getPayloadJson).toList();
+    }
 
     private List<String> childFinals() {
         return h.store.transcripts.stream()

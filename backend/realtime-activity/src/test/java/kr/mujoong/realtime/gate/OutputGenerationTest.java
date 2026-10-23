@@ -27,7 +27,8 @@ class OutputGenerationTest {
     private static final Duration MARGIN = Duration.ofMillis(600);
     private static final int CHUNK = 960;
 
-    private final OutputGeneration gen = new OutputGeneration(QUIET, MARGIN);
+    private final java.util.List<OutputGeneration.InstructionTrace> traces = new java.util.ArrayList<>();
+    private final OutputGeneration gen = new OutputGeneration(QUIET, MARGIN, traces::add);
 
     @Test
     void continuousSilenceAdvancesTheTimelineWithoutPostponingTheSpeechBoundary() {
@@ -248,6 +249,8 @@ class OutputGenerationTest {
 
     @Test
     void anOutputThatEndsBeforeTheAudioReachesTheMarginAbandonsTheTranscriptOnlySegment() {
+        // 여유는 말하는 중 보낸 지시에만 있다(설계 개정 A4-b): 지시를 보낼 때 낡은 응답 조각이 막 왔다
+        gen.onTranscript(at(0), 0L, false);
         gen.bumpForInstruction(at(0), BumpReason.SERVER_SEND, "mj-1");
         gen.onAppended("mj-1", 200L);
         gen.onTranscript(at(10), 300L, false);
@@ -259,6 +262,134 @@ class OutputGenerationTest {
         assertThat(gen.awaitingNewSpeech()).isFalse();
         assertThat(audio(950).verdict()).as("같은 응답의 남은 음성은 다시 끊김을 기다린다").isEqualTo(ChunkVerdict.DISCARD);
         assertThat(gen.onQuiet(at(2000)).verdict()).isEqualTo(QuietVerdict.GAP_CONFIRMED);
+    }
+
+    // ---- 조용할 때 보낸 지시(A4-b, 3회차 V2): 확인 사건 · 여유 없이 첫 조각부터 새 말 ----
+
+    @Test
+    void anInstructionSentWhileQuietKeepsTheFirstTranscriptEvenThoughItStartsBeforeTheAckEnd() {
+        // 실음성 실측 12.3: 유휴 중 보낸 지시는 곧바로 말을 시작해 첫 전사 조각이 확인 사건보다 먼저, end_ms보다 앞선 start_ms로 온다
+        play(1000, 0);
+        gen.bumpForInstruction(at(5_000), BumpReason.SERVER_SEND, "mj-1");
+        assertThat(gen.quietStart()).as("마지막 조각 0ms 뒤 5초").isTrue();
+
+        ChunkResult first = gen.onTranscript(at(5_040), 1_020L, 6, false);
+
+        assertThat(first.verdict()).as("«공룡 그림이»: 확인 사건 전이어도 새 말의 첫 조각").isEqualTo(ChunkVerdict.ACCEPT);
+        assertThat(first.fromStart()).isTrue();
+        assertThat(gen.newStartMs()).isEqualTo(1_020L);
+        assertThat(gen.onAppended("mj-1", 1_010L, 1_700L)).as("확인 사건은 받아 두지만 새 말 시작을 바꾸지 않는다").isTrue();
+        assertThat(gen.onTranscript(at(5_100), 1_400L, 9, false).verdict()).isEqualTo(ChunkVerdict.ACCEPT);
+        ChunkResult audio = gen.onAudio(at(5_150), CHUNK, false);
+        assertThat(audio.verdict()).as("음성은 여유 없이 첫 조각부터 받는다").isEqualTo(ChunkVerdict.ACCEPT);
+        assertThat(audio.fromStart()).as("전사가 구간을 이미 열었다").isFalse();
+        assertThat(gen.phase()).isEqualTo(Phase.RECEIVING);
+        assertThat(gen.newStartMs()).isEqualTo(1_020L);
+    }
+
+    @Test
+    void whileQuietAnAudioChunkThatArrivesBeforeAnyTranscriptStartsTheNewSpeech() {
+        gen.bumpForInstruction(at(0), BumpReason.SERVER_SEND, "mj-1");
+        assertThat(gen.quietStart()).as("조각을 받은 적이 없다").isTrue();
+
+        ChunkResult audio = gen.onAudio(at(40), CHUNK, false);
+
+        assertThat(audio.verdict()).isEqualTo(ChunkVerdict.ACCEPT);
+        assertThat(audio.fromStart()).isTrue();
+        assertThat(gen.newStartMs()).as("음성이 시작한 오디오 시계").isZero();
+        assertThat(gen.onTranscript(at(50), 0L, 3, false).verdict()).isEqualTo(ChunkVerdict.ACCEPT);
+        assertThat(gen.awaitingNewSpeech()).isFalse();
+    }
+
+    @Test
+    void theSendIsSpeakingWhenAChunkCameWithinSegmentQuietOrIsStillQueuedAndSilenceDoesNotCount() {
+        audio(0);
+        gen.bumpForInstruction(at(799), BumpReason.SERVER_SEND, "mj-1");
+        assertThat(gen.quietStart()).as("마지막 조각 뒤 799ms").isFalse();
+        gen.bumpForInstruction(at(800), BumpReason.SERVER_SEND, "mj-2");
+        assertThat(gen.quietStart()).as("segment-quiet 800ms가 찼다").isTrue();
+        for (int i = 0; i < 20; i++) {
+            gen.onSilentAudio(4_800);
+        }
+        gen.bumpForInstruction(at(900), BumpReason.SERVER_SEND, "mj-3");
+        assertThat(gen.quietStart()).as("디지털 무음은 말하는 중이 아니다").isTrue();
+        gen.bumpForInstruction(at(5_000), BumpReason.SERVER_SEND, "mj-4", true);
+        assertThat(gen.quietStart()).as("받았지만 처리하지 않은 조각이 있으면 말하는 중").isFalse();
+        gen.bump(at(5_001), BumpReason.BARGE_IN);
+        assertThat(gen.quietStart()).as("지시 없이 올린 세대").isFalse();
+    }
+
+    @Test
+    void aSpeakingSendStillDropsTheStaleTailBeforeTheAckEndAndTheAudioInsideTheMargin() {
+        play(1000, 0);
+        gen.bumpForInstruction(at(10), BumpReason.SERVER_SEND, "mj-1");
+        assertThat(gen.quietStart()).isFalse();
+
+        assertThat(gen.onTranscript(at(20), 1_000L, 5, false).verdict()).as("낡은 꼬리 전사").isEqualTo(ChunkVerdict.DISCARD);
+        gen.onAppended("mj-1", 1_100L, 1_300L);
+        assertThat(gen.onTranscript(at(30), 1_200L, 4, false).verdict()).as("end_ms 앞").isEqualTo(ChunkVerdict.DISCARD);
+        assertThat(gen.onTranscript(at(40), 1_500L, 7, false).verdict()).isEqualTo(ChunkVerdict.ACCEPT);
+        // 새 말 시작 1500 + 여유 600 = 2100: 시계 1000 ~ 2080에서 시작하는 조각 55개(1100ms)는 버리고 2100에서 시작하는 조각부터 받는다
+        play(2_120, 50);
+        assertThat(gen.phase()).isEqualTo(Phase.RECEIVING);
+
+        assertThat(traces).singleElement().satisfies(trace -> {
+            assertThat(trace.quietAtSend()).isFalse();
+            assertThat(trace.discardedTranscriptChunks()).isEqualTo(2);
+            assertThat(trace.discardedTranscriptChars()).isEqualTo(9);
+            assertThat(trace.discardedAudioMs()).isEqualTo(1_100L);
+            assertThat(trace.firstTranscriptStartMs()).isEqualTo(1_500L);
+            assertThat(trace.audioFromClockMs()).isEqualTo(2_100L);
+        });
+    }
+
+    @Test
+    void aQuietSendReportsItsTraceWhenTheAudioStartsAndNothingWasDiscarded() {
+        play(1000, 0);
+        gen.bumpForInstruction(at(3_000), BumpReason.SERVER_SEND, "mj-7");
+        gen.onTranscript(at(3_040), 1_030L, 6, false);
+        gen.onAppended("mj-7", 1_000L, 1_650L);
+        assertThat(traces).as("음성을 받기 전에는 아직 열린 관측").isEmpty();
+
+        gen.onAudio(at(3_200), CHUNK, false);
+
+        assertThat(traces).singleElement().satisfies(trace -> {
+            assertThat(trace.eventId()).isEqualTo("mj-7");
+            assertThat(trace.reason()).isEqualTo(BumpReason.SERVER_SEND);
+            assertThat(trace.quietAtSend()).isTrue();
+            assertThat(trace.sentClockMs()).isEqualTo(1_000L);
+            assertThat(trace.ackStartMs()).isEqualTo(1_000L);
+            assertThat(trace.ackEndMs()).isEqualTo(1_650L);
+            assertThat(trace.firstTranscriptStartMs()).isEqualTo(1_030L);
+            assertThat(trace.firstTranscriptClockMs()).isEqualTo(1_000L);
+            assertThat(trace.audioFromClockMs()).isEqualTo(1_000L);
+            assertThat(trace.discardedTranscriptChunks()).isZero();
+            assertThat(trace.discardedAudioMs()).isZero();
+            assertThat(trace.outcome()).isEqualTo(OutputGeneration.TraceOutcome.RECEIVING);
+        });
+        gen.onAudio(at(3_220), CHUNK, false);
+        assertThat(traces).as("관측은 지시마다 한 번").hasSize(1);
+    }
+
+    @Test
+    void anUnfinishedTraceEndsAsSupersededNotObservedOrNoAudioAndCountsHeldChunks() {
+        gen.bumpForInstruction(at(0), BumpReason.SERVER_SEND, "mj-1");
+        gen.onTranscript(at(10), 100L, 3, true);
+        gen.bumpForInstruction(at(20), BumpReason.GATE_CORRECTION, "mj-2");
+        gen.onInstructionTimeout();
+        gen.onInstructionTimeout();
+        play(2_000, 3_000);
+        gen.onQuiet(at(10_000));
+        gen.bumpForInstruction(at(10_000), BumpReason.SERVER_SEND, "mj-3");
+        gen.onTranscript(at(10_010), 3_000L, 2, false);
+        gen.onQuiet(at(11_000));
+
+        assertThat(traces).extracting(OutputGeneration.InstructionTrace::eventId).containsExactly("mj-1", "mj-2", "mj-3");
+        assertThat(traces).extracting(OutputGeneration.InstructionTrace::outcome).containsExactly(
+                OutputGeneration.TraceOutcome.SUPERSEDED, OutputGeneration.TraceOutcome.NEW_SPEECH_NOT_OBSERVED,
+                OutputGeneration.TraceOutcome.NO_AUDIO);
+        assertThat(traces.getFirst().heldChunks()).isEqualTo(1);
+        assertThat(traces.get(1).ackEndMs()).as("확인 사건이 없었다").isEqualTo(-1L);
     }
 
     // ---- 시한(ACK_MISSING · NEW_SPEECH_NOT_OBSERVED) ----

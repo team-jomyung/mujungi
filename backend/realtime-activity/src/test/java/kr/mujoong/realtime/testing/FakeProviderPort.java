@@ -32,10 +32,21 @@ public final class FakeProviderPort implements ProviderPort {
     private volatile Mode mode = Mode.OK;
     private volatile boolean signalClosedOnClose;
     private volatile Duration newSpeechMargin;
+    private volatile java.util.function.Supplier<java.time.Instant> clock;
+    private volatile Duration quietGap;
 
     /** 이후 여는 세션이 실행기의 new-speech-margin으로 지시 응답을 흉내 내게 한다(시간 없는 출력 → 확인 사건 · 새 말 · 채움). */
     public void newSpeechMargin(Duration margin) {
         this.newSpeechMargin = margin;
+    }
+
+    /**
+     * 3회차 V2: 지시를 받을 때 말하는 중이었는지를 이 시계와 조용 간격(실행기의 segment-quiet)으로 정한다. 실제 공급자처럼 말하는 중 받은 지시에만
+     * 낡은 꼬리(채움 음성)가 따르고, 조용할 때 받은 지시는 디지털 무음 뒤 곧바로 새 말이다. 주지 않으면 언제나 말하는 중으로 본다(이전 동작).
+     */
+    public void speakingClock(java.util.function.Supplier<java.time.Instant> now, Duration gap) {
+        this.clock = now;
+        this.quietGap = gap;
     }
 
     public FakeProviderPort() {
@@ -67,6 +78,7 @@ public final class FakeProviderPort implements ProviderPort {
         }
         FakeSession session = new FakeSession(listener, mode, signalClosedOnClose);
         session.newSpeechMargin(newSpeechMargin);
+        session.speakingClock(clock, quietGap);
         synchronized (sessions) {
             sessions.add(session);
         }
@@ -105,6 +117,12 @@ public final class FakeProviderPort implements ProviderPort {
         private volatile boolean autoAck;
         private volatile long ackStartMs;
         private volatile long ackEndMs;
+        private volatile java.util.function.Supplier<java.time.Instant> clock;
+        private volatile Duration quietGap;
+        /** 마지막으로 흘려 넣은 출력 조각(음성 · 전사, 무음 제외) 시각(시계가 있을 때만). */
+        private volatile java.time.Instant lastOutputAt;
+        /** 지시 id → 받을 때 말하는 중이었는가. */
+        private final java.util.Map<String, Boolean> speakingAtAppend = new java.util.concurrent.ConcurrentHashMap<>();
 
         private FakeSession(Listener listener, Mode mode, boolean signalOnClose) {
             this.listener = listener;
@@ -139,10 +157,22 @@ public final class FakeProviderPort implements ProviderPort {
                 throw new ProviderUnavailableException(ProviderUnavailableException.Reason.CLOSED);
             }
             record(request);
+            java.util.function.Supplier<java.time.Instant> now = clock;
+            Duration gap = quietGap;
+            if (now != null && gap != null) {
+                java.time.Instant last = lastOutputAt;
+                speakingAtAppend.put(request.eventId(), last != null && now.get().isBefore(last.plus(gap)));
+            }
             if (autoAck) {
                 // 공급자처럼 확인 사건을 곧바로 돌려준다(시간은 호출자가 정한 오디오 시계 위 값)
                 listener.onEvent(new ProviderEvent.InstructionsAppended(request.eventId(), ackStartMs, ackEndMs));
             }
+        }
+
+        /** 이 세션의 말하는 중 판단 시계(3회차 V2, {@link FakeProviderPort#speakingClock}). */
+        public void speakingClock(java.util.function.Supplier<java.time.Instant> now, Duration gap) {
+            this.clock = now;
+            this.quietGap = gap;
         }
 
         @Override
@@ -191,7 +221,18 @@ public final class FakeProviderPort implements ProviderPort {
             if (event instanceof ProviderEvent.OutputAudioDelta delta) {
                 audioBytes += delta.audio().length;
             }
+            if (event instanceof ProviderEvent.OutputSilenceDelta silence) {
+                audioBytes += silence.bytes();
+            }
+            markOutput(event);
             listener.onEvent(event);
+        }
+
+        private void markOutput(ProviderEvent event) {
+            java.util.function.Supplier<java.time.Instant> now = clock;
+            if (now != null && (event instanceof ProviderEvent.OutputAudioDelta || event instanceof ProviderEvent.OutputTranscriptDelta)) {
+                lastOutputAt = now.get();
+            }
         }
 
         private static boolean untimedOutput(ProviderEvent event) {
@@ -199,7 +240,10 @@ public final class FakeProviderPort implements ProviderPort {
                     || (event instanceof ProviderEvent.OutputTranscriptDelta transcript && transcript.startMs() < 0);
         }
 
-        /** 지시 응답 시작 동작: 확인 사건 → 새 말 시작 전사(빈 글) → 채움 음성 → 빈 음성 조각(받는 단계로 간다). */
+        /**
+         * 지시 응답 시작 동작: 확인 사건 → 새 말 시작 전사(빈 글) → 채움 → 빈 음성 조각(받는 단계로 간다). 채움은 말하는 중 받은 지시면 낡은 꼬리를
+         * 흉내 낸 음성(실행기가 여유 시각까지 버린다), 조용할 때 받은 지시면 공급자 시간선의 디지털 무음이다(3회차 V2, 조용 시작은 낡은 꼬리가 없다).
+         */
         private void handshake() {
             List<ProviderRequestFactory.InstructionsAppend> sent = requests(ProviderRequestFactory.InstructionsAppend.class);
             String id = sent.get(sent.size() - 1).eventId();
@@ -210,8 +254,13 @@ public final class FakeProviderPort implements ProviderPort {
             listener.onEvent(new ProviderEvent.OutputTranscriptDelta("", ackEnd, ackEnd));
             byte[] filler = new byte[(int) ((100L + newSpeechMargin.toMillis()) * 48L)];
             audioBytes += filler.length;
-            listener.onEvent(new ProviderEvent.OutputAudioDelta(filler));
+            if (speakingAtAppend.getOrDefault(id, Boolean.TRUE)) {
+                listener.onEvent(new ProviderEvent.OutputAudioDelta(filler));
+            } else {
+                listener.onEvent(new ProviderEvent.OutputSilenceDelta(filler.length));
+            }
             listener.onEvent(new ProviderEvent.OutputAudioDelta(new byte[0]));
+            markOutput(new ProviderEvent.OutputAudioDelta(new byte[0]));
         }
 
         /** 지금까지 흘려 넣은 출력 음성의 누적 ms(공급자의 세션 오디오 시계). */

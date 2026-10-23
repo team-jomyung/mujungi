@@ -128,6 +128,8 @@ public final class SessionHarness {
     public SessionHarness(SessionExecutor.Settings settings) {
         this.settings = settings;
         this.provider.newSpeechMargin(settings.newSpeechMargin());
+        // 3회차 V2: 가짜 공급자도 실행기와 같은 조용 간격으로 말하는 중 받은 지시에만 낡은 꼬리를 흉내 낸다
+        this.provider.speakingClock(clock::now, settings.segmentQuiet());
         this.mailbox = new SessionMailbox(settings.mailboxCapacity());
         this.link = new FakeDeviceLink(deviceId, clock.now());
     }
