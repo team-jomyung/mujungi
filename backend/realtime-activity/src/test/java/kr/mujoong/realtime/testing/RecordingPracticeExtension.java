@@ -49,6 +49,13 @@ public final class RecordingPracticeExtension implements PracticeSessionExtensio
         return onUtterance.apply(utterance, out);
     }
 
+    /** 4회차 R1: 출력권이 없는 확장에는 부르지 않아야 한다(불리면 기록에 남는다). */
+    @Override
+    public Signal onChildSpeechStarted(java.time.Instant at, PracticeOutput out) {
+        calls.add("onChildSpeechStarted");
+        return Signal.NONE;
+    }
+
     @Override
     public Signal onExtensionEvent(ExtensionEvent event, PracticeOutput out) {
         calls.add("onExtensionEvent");

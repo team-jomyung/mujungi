@@ -139,6 +139,21 @@ class PracticeFlowRouterTest {
     }
 
     @Test
+    void aChildSpeechStartIsHarmlessBeforeTheChoiceAndDelegatedToTheChosenSideAfterIt() {
+        assertThat(router.onChildSpeechStarted(Instant.EPOCH, output)).isEqualTo(Signal.NONE);
+        verifyNoInteractions(legacy, flow);
+
+        PracticeContext context = context(packageJson(GOAL, minimalScript(SCENARIO)));
+        when(flow.onActive(context, output)).thenReturn(Signal.NONE);
+        when(flow.onChildSpeechStarted(Instant.EPOCH, output)).thenReturn(Signal.NEXT_GOAL);
+        router.onActive(context, output);
+
+        assertThat(router.onChildSpeechStarted(Instant.EPOCH, output)).isEqualTo(Signal.NEXT_GOAL);
+        verify(flow).onChildSpeechStarted(Instant.EPOCH, output);
+        verifyNoInteractions(legacy);
+    }
+
+    @Test
     void theChoiceIsMadeOnceEvenIfOnActiveIsCalledAgain() {
         PracticeContext context = context(packageJson(GOAL, minimalScript(SCENARIO)));
         when(flow.onActive(any(), any())).thenReturn(Signal.NONE);

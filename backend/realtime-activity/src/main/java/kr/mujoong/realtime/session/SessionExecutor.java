@@ -2451,6 +2451,7 @@ public final class SessionExecutor {
      * 없으면 {@link #onInputTranscriptQuiet}가 그 묶음을 확정 전사로 만든다. 조각의 저장 규칙(동의 철회 · 참여 전 · 출력 범위)은 그대로다.
      */
     private void onInputTranscriptDelta(ProviderEvent.InputTranscriptDelta delta, Instant at) {
+        boolean opened = inputGroupId == null;
         groupInputDelta(delta);
         if (ctx.consentWithdrawnAt() != null ||ctx.status() == SessionStatus.WAITING_CHILD) {
             // 동의 철회 뒤 도착한 아이 전사는 저장하지 않는다(확정 때 센다). 참여 전 아이 전사도 저장하지 않는다
@@ -2463,7 +2464,22 @@ public final class SessionExecutor {
                 sealAndGate(true);
             }
             ctx.transcripts().childDelta(inputGroupId, delta.delta(), at);
+            if (opened) {
+                childSpeechStarted(at);
+            }
         }
+    }
+
+    /**
+     * 4회차 R1: 새 입력 전사 묶음이 열렸다(아이 말이 시작됐다). 확정 전사는 조용 시간 뒤에야 오므로 출력권을 가진 연습에 먼저 알려 무응답 대기를
+     * 멈추게 한다. ACTIVE에서만, 연습 진행이 멈춘 동안(기술 일시정지 · 종료 확인 · 종료 판정)에는 알리지 않는다 — 그때의 말은 실행부가 맡는다.
+     */
+    private void childSpeechStarted(Instant at) {
+        PracticeSessionExtension current = practice;
+        if (current == null || !current.controlsOutput() || ctx.status() != SessionStatus.ACTIVE || practiceProgressPaused()) {
+            return;
+        }
+        practiceSignal(() -> current.onChildSpeechStarted(at, practiceOutput), true);
     }
 
     /** 조각을 현재 묶음에 더하고(없으면 묶음을 연다) 조용 시계를 다시 건다. 묶음 id를 돌려준다. */

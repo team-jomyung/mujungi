@@ -2208,6 +2208,15 @@ class PracticeVoiceDialogueLiveTest {
             return signal;
         }
 
+        /** 4회차 R1: 실행부의 '아이 말 시작' 알림(운영 라우터 · 흐름 그대로, 받은 시각만 남긴다). */
+        @Override
+        public Signal onChildSpeechStarted(Instant at, PracticeOutput output) {
+            facts.flowEvent("CHILD_SPEECH_STARTED", Map.of());
+            Signal signal = delegate.onChildSpeechStarted(at, wrap(output));
+            facts.snapshot(flow());
+            return signal;
+        }
+
         @Override
         public Signal onExtensionEvent(ExtensionEvent event, PracticeOutput output) {
             facts.extensionEvent(event);
