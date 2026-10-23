@@ -26,6 +26,8 @@ backend/core-api/src/main/java/kr/mujoong/core/luna/adapter/LunaTextAiProvider.j
 backend/core-api/src/main/java/kr/mujoong/core/result/ResultTextConfiguration.java
 backend/core-api/src/main/java/kr/mujoong/core/textai/TextAiConfiguration.java
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/luna/LunaConfiguration.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/luna/LunaDecision.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/luna/LunaDecisionQuestion.java
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/luna/LunaException.java
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/luna/LunaFailureReason.java
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/luna/LunaHosts.java
@@ -34,7 +36,6 @@ backend/realtime-activity/src/main/java/kr/mujoong/realtime/luna/LunaKeyPresentC
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/luna/LunaProperties.java
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/luna/LunaPurpose.java
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/luna/LunaRequest.java
-backend/realtime-activity/src/main/java/kr/mujoong/realtime/luna/LunaResult.java
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/luna/LunaSchemas.java
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/luna/LunaStartup.java
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/luna/LunaTransport.java

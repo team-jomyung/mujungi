@@ -242,6 +242,9 @@ aws ssm put-parameter --name /mujoong/demo/GHCR_PULL_USER --type String --value 
   - [x] 공급자의 개인정보 처리 조건(처리 위치 · 하위 처리자 · 삭제)을 확인했다.
   - [x] 아동 데이터의 외부 모델 전달이 보호자 동의 범위 안인지 확인했다(동의 문구 · 판).
   - [x] 확인 대상이 Luna 판정(core · realtime)과 GPT-Live 음성 중계 둘 다임을 기록에 적었다(U11 BR12.4).
+  - [ ] (FT-1023-d) realtime 진행 중 판정은 Decisions API `POST {base-url}/decisions`로만 간다. 이 끝점의 보존 · 데이터 사용 조건을 따로
+    확인했다 — Decisions 요청에는 `store` 매개변수가 없어 위 `store=false` 확인이 이 끝점을 덮지 않는다. 확인 기록 표 비고에
+    'Decisions 끝점 확인'을 남긴다. 이 항목 없이 realtime Luna(`mujoong.luna.enabled`)를 켜지 않는다.
   - [x] 아래 확인 기록 표에 한 줄을 남겼다(키 값 · 계정 정보는 적지 않는다, R-F3).
 
   | 확인자 | 확인 날짜(UTC) | 확인한 약관 · 처리 조건 판(또는 문서 날짜) | 환경 | 비고 |
@@ -258,10 +261,11 @@ aws ssm put-parameter --name /mujoong/demo/GHCR_PULL_USER --type String --value 
      `lunaState=DISABLED_SWITCH_OFF`다.
   4. realtime Luna를 켜려면 1번 확인 기록 뒤에 demo 설정의 `mujoong.luna.enabled`를 `true`로 바꾸고(기본 `false`) 배포한 다음 realtime의
      `lunaState=ENABLED`를 확인한다(U11 계약 편차 (U11-c)). 확인 기록 없이는 바꾸지 않는다.
-  5. (FT-1023-d, 선택) 진행 중 판정을 Decisions 끝점으로 바꾸려면 `mujoong.luna.judge-endpoint=decisions`(env `LUNA_JUDGE_ENDPOINT`, 기본 `responses`)를 쓴다.
-     같은 공급자 · 같은 키 · 같은 최소 필드지만 다른 엔드포인트이므로, **실제 아동 데이터로 켜기 전에 위 확인 기록 표의 비고에 'Decisions 끝점 확인'(보존 ·
-     데이터 사용 조건 포함)을 남긴 뒤에만** 바꾼다. 비밀이 아니므로 `OPENAI_JUDGE_MODEL`과 같은 길로 넣되, `infra/compose.demo.yml` · `render-env`에 이 이름이
-     없으면 먼저 더한다. 롤백은 `responses`로 되돌려 같은 SHA로 `DEPLOY`한다. 켠 뒤 `LUNA_CALL`의 `promptVersion`이 `….decisions-v1`인지 확인한다.
+  5. (FT-1023-d) realtime 진행 중 판정은 Decisions API(`{base-url}/decisions`) 한 길뿐이고 끝점을 고르는 설정은 없다. 그래서 4번에서
+     `mujoong.luna.enabled`를 켜는 순간 실제 아동 판정 입력(정리된 최소 필드)이 Decisions 끝점으로 나간다. **4번 전에 위 확인 기록에 Decisions
+     끝점 확인(보존 · 데이터 사용 조건, `store` 매개변수 없음)을 남긴 뒤에만** 켠다(체크 항목 · 표 비고 'Decisions 끝점 확인'). 켠 뒤
+     `LUNA_CALL`의 `promptVersion`이 `prompt-service-v3`인지 확인한다. Decisions가 느리거나 실패하면 대신 부를 끝점이 없어 판정은 보류로 끝난다
+     (`LUNA_CALL` `lunaOutcome` · 판정 기록 `abstainReason`으로 본다).
   - **롤백:** realtime Luna는 `mujoong.luna.enabled`를 `false`로 되돌려 같은 SHA로 `DEPLOY`하면 꺼진다(`DISABLED_SWITCH_OFF`). 키를 비우는 길은
     demo realtime이 기동을 거부하므로(GPT-Live 키 필수, U11 BR12.2) 쓰지 않는다. core-api Luna는 지금처럼 키만으로 켜져 키가 있는 동안 꺼지지
     않는다. 어댑터가 꺼지면 지금과 같은 실패 경로라 데이터 변경 · 마이그레이션 되돌림이 없다. 재기동만으로는 컨테이너 환경이 갱신되지 않으므로

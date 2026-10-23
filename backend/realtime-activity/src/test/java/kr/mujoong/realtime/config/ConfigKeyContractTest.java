@@ -86,8 +86,6 @@ class ConfigKeyContractTest {
             "MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET", "",
             // U9 BR1.5: 판정 모델 이름은 env로만 받는다(비밀 아님). 시험 값은 기본 이름과 같다
             "OPENAI_JUDGE_MODEL", "gpt-6-luna",
-            // FT-1023-d: 판정 끝점 스위치도 env로 받는다(비밀 아님). 시험 값은 기본값과 같다
-            "LUNA_JUDGE_ENDPOINT", "responses",
             // U13 BR1.3 · BR2.2: 제브 모드 · 주소 · 모델은 env로만 받는다(비밀 아님). 시험 값은 빈 값(프로필 기본값 규칙을 쓴다)
             "JEV_MODE", "",
             "JEV_BASE_URL", "",

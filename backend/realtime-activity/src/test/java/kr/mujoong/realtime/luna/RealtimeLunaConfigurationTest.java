@@ -38,8 +38,7 @@ class RealtimeLunaConfigurationTest {
                 .withBean(EventLogger.class, () -> events)
                 .withBean(RealtimeProperties.class, () -> realtime)
                 .withPropertyValues("mujoong.luna.model=${OPENAI_JUDGE_MODEL:gpt-6-luna}", "mujoong.luna.base-url=" + baseUrl,
-                        "mujoong.luna.max-response-bytes=1000000", "mujoong.luna.purpose.judgment-live.max-output-tokens=4000",
-                        "mujoong.luna.purpose.judgment-live.reasoning-effort=medium");
+                        "mujoong.luna.max-response-bytes=1000000");
     }
 
     private String startupState() {
