@@ -14,12 +14,16 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
@@ -28,6 +32,10 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
 import kr.mujoong.contract.json.JsonCodec;
+import kr.mujoong.realtime.judgment.JudgeClient;
+import kr.mujoong.realtime.judgment.JudgeOutcome;
+import kr.mujoong.realtime.judgment.JudgeRequest;
+import kr.mujoong.realtime.judgment.JudgmentPoint;
 import kr.mujoong.realtime.luna.LunaHosts;
 import kr.mujoong.realtime.practiceflow.PracticeDialogueHarnessSelfCheckTest.FakeResponses;
 import kr.mujoong.realtime.practiceflow.PracticeDialogueLiveTest.ChildMode;
@@ -140,7 +148,35 @@ class PracticeVoiceHarnessSelfCheckTest {
                 assertThat(number(map(checks.get("childTranscriptDiffers")).get("spoken"))).isGreaterThanOrEqualTo(3);
                 assertThat(map(run.get("gptLive"))).containsEntry("sessionStarted", true);
                 assertThat(number(map(run.get("gptLive")).get("voicedInputFramesOffered"))).as("아이 음성이 20ms 프레임으로 들어갔다").isPositive();
+                // 4회차 H3: 아이 차례마다 첫 입력 전사 조각 · 확정 전사 시각(대화 시작부터 ms). 루프백 가짜는 아이 말이 끝난 뒤 조각 둘을 보낸다
+                List<Map<String, Object>> spoken = turns(run).stream().filter(turn -> "CHILD".equals(turn.get("speaker"))
+                        && turn.get("intended") != null && !Boolean.TRUE.equals(turn.get("silence"))).toList();
+                assertThat(spoken).isNotEmpty().allSatisfy(turn -> {
+                    Map<String, Object> timing = map(turn.get("inputTranscriptTiming"));
+                    assertThat(timing).containsEntry("chunks", 2).containsEntry("firstChunkBeforeSpeechEnd", false);
+                    assertThat(number(timing.get("firstChunkAtMs"))).isGreaterThan(number(timing.get("speechEndMs")))
+                            .isGreaterThanOrEqualTo(number(timing.get("speechStartMs")));
+                });
+                assertThat(spoken).filteredOn(turn -> "ANSWER".equals(turn.get("childKind"))).isNotEmpty().allSatisfy(turn -> {
+                    Map<String, Object> timing = map(turn.get("inputTranscriptTiming"));
+                    assertThat(timing).containsEntry("confirmedSource", "TRANSCRIPT_ROW");
+                    assertThat(number(timing.get("confirmedAtMs"))).isGreaterThanOrEqualTo(number(timing.get("firstChunkAtMs")));
+                });
+                // 4회차 H3: 이 대화가 낸 대본 줄 음성 합성 요청마다 걸린 시간 · 결과 · 시도(원문 없이 줄 순번 · 종류)
+                Map<String, Object> synthesis = map(run.get("scriptClipSynthesis"));
+                List<Map<String, Object>> calls = ((List<?>) synthesis.get("calls")).stream().map(PracticeVoiceHarnessSelfCheckTest::map).toList();
+                assertThat(calls).allSatisfy(call -> assertThat(call).containsEntry("outcome", "OK").containsEntry("attempt", 1)
+                        .containsKeys("line", "kind", "voice", "atMs", "durationMs", "audioMs"));
+                assertThat(calls).extracting(call -> call.get("kind")).doesNotContain("OTHER");
+                assertThat(map(synthesis.get("summary"))).containsEntry("calls", calls.size()).containsEntry("linesTriedAgain", 0)
+                        .containsEntry("linesFailed", 0).containsEntry("inFlight", 0);
+                assertThat(JSON.write(synthesis)).as("합성 기록에 대본 원문이 없다").doesNotContain("자, 여기 초록색!", "알았어, 잠깐만!");
             }
+            assertThat(runs.subList(0, 2).stream().mapToInt(run -> number(map(map(run.get("scriptClipSynthesis")).get("summary")).get("calls"))).sum())
+                    .as("대화마다 남긴 합성 요청을 합하면 가짜 합성기가 받은 요청 수다(다른 대화가 만든 줄은 캐시)").isEqualTo(clips.requests.size());
+            assertThat(((List<?>) map(runs.getFirst().get("scriptClipSynthesis")).get("calls")).stream().map(item -> map(item).get("kind")))
+                    .contains("SCENE_DESCRIPTION", "PARTNER_OPENER", "OPPORTUNITY_SENTENCE", "VARIANT_OFFER", "ROLE_NOTICE_COACH_SWITCH",
+                            "ROLE_NOTICE_PEER_RETURN");
             Map<String, Object> scriptChecks = map(runs.getFirst().get("checks"));
             Map<String, Object> standard = map(scriptChecks.get("standardJudgmentMatches"));
             assertThat(standard.get("matched")).as("기준 대화 기대 판정").isEqualTo(standard.get("judged"));
@@ -159,7 +195,9 @@ class PracticeVoiceHarnessSelfCheckTest {
                     "기대 J2 PARTIAL", "다음 말까지 ", "- 안 들린 GPT-Live 구간: 없음", "- 기준 대화 기대 판정과 같음: 5 / 5",
                     "- 대본 줄 TTS 재생: " + STANDARD_SCRIPT_LINES + " / " + STANDARD_SCRIPT_LINES, "- 대체(GPT-Live 원문 읽기): 0",
                     "- 생성형 줄 첫머리 잘림 의심(낱말 중간 시작): 0 / 4", "지시별 새 말 시작(3회차 V2", "| GENERATED:",
-                    " · 대본 줄 음성 합성 " + clips.requests.size() + "회(상한으로 막힘 0)", " · 대본 줄 음성 합성 120회\n")
+                    " · 대본 줄 음성 합성 " + clips.requests.size() + "회(상한으로 막힘 0)", " · 대본 줄 음성 합성 120회\n",
+                    "대본 줄 음성 합성(4회차 H3, 원문 없음", "| OPPORTUNITY_SENTENCE | PEER | 1 | [", "- 합성 요약: 호출 ",
+                    " · 다시 맡긴 줄 0(그중 성공 0) · 끝내 실패한 줄 0", "(말 끝 뒤) · 확정 [")
                     .as("폐기된 구간 줄이 없다").doesNotContainPattern("\\] \\(안 들림\\) ");
             String standardRun = md.substring(md.indexOf("### 대본 아이 · STANDARD"), md.indexOf("### AI가 연기하는 아이 · P1"));
             assertInOrder(standardRun, "아이: 응, 할래. → 들은 전사 «응, 할래.»", "무중: 무중이랑 같이 공룡 그림 그린다고 생각해 보자.",
@@ -255,11 +293,16 @@ class PracticeVoiceHarnessSelfCheckTest {
         }
     }
 
+    /**
+     * 3회차 V1 · 4회차 R6 · H3: 합성이 끝내 실패한 줄은 GPT-Live 원문 읽기로 대체되고, 첫 시도만 일시 실패한 줄은 장치가 곧바로 한 번 더 맡겨 미리 만든
+     * 음성으로 낸다. 하니스 합성 기록에 줄마다 시도와 결과가 남는다.
+     */
     @Test
     void aScriptLineWhoseVoiceFailsFallsBackToTheGptLiveReadingAndIsMarkedWithItsReason() throws Exception {
         try (FakeResponses luna = FakeResponses.start(); FakeSpeech tts = FakeSpeech.start(); FakeSpeech clips = FakeSpeech.start();
                 LoopbackGptLive live = LoopbackGptLive.start(tts)) {
             clips.failOn("자, 여기 초록색!", 500);
+            clips.failFirst("알았어, 잠깐만!", 503, 1);
 
             Harness.Outcome outcome = new Harness(out, wiring(live, luna, tts, clips, EnumSet.of(ChildMode.SCRIPT),
                     new Caps(Duration.ofSeconds(60), 900, 1, 40, 60))).run();
@@ -267,7 +310,19 @@ class PracticeVoiceHarnessSelfCheckTest {
             String md = Files.readString(out.resolve(PracticeVoiceDialogueLiveTest.MARKDOWN_FILE), StandardCharsets.UTF_8);
             assertThat(outcome.completed()).as(md).isEqualTo(1);
             assertThat(live.spokenVerbatim).as("합성에 실패한 그 줄만 GPT-Live가 읽었다").containsExactly("자, 여기 초록색!");
+            // 4회차 R6: 일시 실패(5xx)는 장치가 곧바로 한 번 더 맡기고, 끝내 실패한 줄은 낼 때 뒤에서 한 번 다시 맡긴다(그 맡김도 한 번 더 해 본다)
+            assertThat(clips.inputs()).filteredOn("자, 여기 초록색!"::equals).hasSize(4);
+            assertThat(clips.inputs()).filteredOn("알았어, 잠깐만!"::equals).hasSize(2);
             Map<String, Object> run = runs(readJson(out.resolve(PracticeVoiceDialogueLiveTest.OUTPUT_FILE))).getFirst();
+            Map<String, Object> synthesis = map(run.get("scriptClipSynthesis"));
+            List<Map<String, Object>> calls = ((List<?>) synthesis.get("calls")).stream().map(PracticeVoiceHarnessSelfCheckTest::map).toList();
+            assertThat(calls).filteredOn(call -> "OPPORTUNITY_SENTENCE".equals(call.get("kind")))
+                    .extracting(call -> call.get("attempt") + ":" + call.get("outcome"))
+                    .containsExactly("1:PROVIDER_ERROR", "2:PROVIDER_ERROR", "3:PROVIDER_ERROR", "4:PROVIDER_ERROR");
+            assertThat(calls).filteredOn(call -> "PARTNER_OPENER".equals(call.get("kind")))
+                    .extracting(call -> call.get("attempt") + ":" + call.get("outcome")).containsExactly("1:PROVIDER_ERROR", "2:OK");
+            assertThat(map(synthesis.get("summary"))).containsEntry("linesTriedAgain", 2).containsEntry("linesOkAfterRetry", 1)
+                    .containsEntry("linesFailed", 1).containsEntry("failures", Map.of("PROVIDER_ERROR", 5));
             Map<String, Object> clipCheck = map(map(run.get("checks")).get("scriptLineClips"));
             assertThat(clipCheck).containsEntry("clipPlayed", STANDARD_SCRIPT_LINES - 1).containsEntry("requested", STANDARD_SCRIPT_LINES)
                     .containsEntry("fallback", 1);
@@ -277,8 +332,69 @@ class PracticeVoiceHarnessSelfCheckTest {
                             .containsEntry("sourceReason", "SYNTHESIS_PROVIDER_ERROR"));
             assertThat(md).contains("- 대본 줄 TTS 재생: " + (STANDARD_SCRIPT_LINES - 1) + " / " + STANDARD_SCRIPT_LINES,
                     "- 대체(GPT-Live 원문 읽기): 1(사유 {SYNTHESIS_PROVIDER_ERROR=1})",
-                    "친구: 자, 여기 초록색! (승인 원문 그대로 · ", "GPT-Live 원문 읽기(대체 GPT_LIVE_FALLBACK: SYNTHESIS_PROVIDER_ERROR)");
+                    "친구: 자, 여기 초록색! (승인 원문 그대로 · ", "GPT-Live 원문 읽기(대체 GPT_LIVE_FALLBACK: SYNTHESIS_PROVIDER_ERROR)",
+                    "친구: 알았어, 잠깐만! (승인 원문 그대로 · PARTNER_OPENER · 미리 만든 음성(TTS_CLIP", "| PARTNER_OPENER | PEER | 2 | [",
+                    " · 다시 맡긴 줄 2(그중 성공 1) · 끝내 실패한 줄 1");
         }
+    }
+
+    /**
+     * 4회차 H1: 판정 턴이 시한에 돌려받은 Future를 취소하면(JudgmentTurn.cancelRequest) 하니스 감싸개가 '판정 중' 수를 정확히 한 번 줄이고 '시한
+     * 취소'로 적으며 원래 호출에도 취소를 넘긴다. 하니스 아이는 '판정 중' 수가 0일 때만 다음 차례에 말하므로, 3회차처럼 끝나지 않는 판정 하나 때문에 그
+     * 대화 끝까지 말하지 않는 일이 없다. 실제 AI를 부르지 않는다(끝나지 않는 가짜 판정).
+     */
+    @Test
+    void aJudgmentThatNeverAnswersAndIsCancelledAtTheDeadlineIsCountedDoneOnceAndCancelsTheOriginalCall() {
+        List<CompletableFuture<JudgeOutcome>> originals = new CopyOnWriteArrayList<>();
+        JudgeClient neverAnswers = new JudgeClient() {
+            @Override
+            public boolean available() {
+                return true;
+            }
+
+            @Override
+            public CompletionStage<JudgeOutcome> judge(JudgeRequest request, UUID turnId) {
+                CompletableFuture<JudgeOutcome> pending = new CompletableFuture<>();
+                originals.add(pending);
+                return pending;
+            }
+        };
+        PracticeVoiceDialogueLiveTest.ObservedJudge judge = new PracticeVoiceDialogueLiveTest.ObservedJudge(neverAnswers,
+                new PracticeVoiceDialogueLiveTest.Budget(new Caps(Duration.ofSeconds(60), 900, 1, 40, 60)), "judgment-prompt-self-check");
+        PracticeVoiceDialogueLiveTest.Facts facts = new PracticeVoiceDialogueLiveTest.Facts(null, Map.of(), Map.of());
+        judge.bind(facts);
+
+        CompletableFuture<JudgeOutcome> cancelled = judge.judge(judgeRequest(), UUID.randomUUID()).toCompletableFuture();
+        assertThat(facts.judgeInFlight).hasValue(1);
+        assertThat(cancelled.cancel(true)).as("판정 턴이 시한에 취소한다").isTrue();
+        cancelled.cancel(true);
+
+        assertThat(facts.judgeInFlight).as("취소가 두 번 와도 한 번만 준다").hasValue(0);
+        assertThat(originals.getFirst()).as("원래 호출에도 취소를 넘긴다").isCancelled();
+        PracticeVoiceDialogueLiveTest.JudgeCall call = facts.snapshot().judgments().getFirst();
+        assertThat(call.outcome).isEqualTo(PracticeVoiceDialogueLiveTest.CANCELLED_AT_DEADLINE);
+        assertThat(call.latencyMs).as("지연은 취소된 때까지").isGreaterThanOrEqualTo(0);
+        Map<String, Object> report = call.report(Duration.ofSeconds(4));
+        assertThat(report).containsEntry("outcome", "CANCELLED_AT_DEADLINE").containsKey("doneAtMs");
+        assertThat(PracticeVoiceDialogueLiveTest.Markdown.judgment(report)).startsWith("J1 시한 취소(").endsWith("초)");
+
+        // 결과가 먼저 오면 그 결과를 적고, 뒤늦은 취소는 아무것도 줄이지 않는다
+        CompletableFuture<JudgeOutcome> answered = judge.judge(judgeRequest(), UUID.randomUUID()).toCompletableFuture();
+        originals.get(1).complete(JudgeOutcome.confirmed("ACCEPT", 0.9, "REFUSE", 0.05, Duration.ofMillis(800), null,
+                "judgment-prompt-self-check"));
+        assertThat(answered.cancel(true)).isFalse();
+        assertThat(facts.judgeInFlight).hasValue(0);
+        PracticeVoiceDialogueLiveTest.JudgeCall done = facts.snapshot().judgments().get(1);
+        assertThat(done.outcome).isEqualTo("CONFIRMED");
+        assertThat(done.latencyMs).isEqualTo(800);
+        assertThat(answered.join().firstOption()).isEqualTo("ACCEPT");
+
+        // 원래 호출이 실패로 끝나도 한 번만 줄고 실패를 그대로 넘긴다
+        CompletableFuture<JudgeOutcome> failed = judge.judge(judgeRequest(), UUID.randomUUID()).toCompletableFuture();
+        originals.get(2).completeExceptionally(new IllegalStateException("판정 실패 흉내"));
+        assertThat(failed).isCompletedExceptionally();
+        assertThat(facts.judgeInFlight).hasValue(0);
+        assertThat(facts.snapshot().judgments().get(2).outcome).isEqualTo("ERROR");
     }
 
     @Test
@@ -411,6 +527,11 @@ class PracticeVoiceHarnessSelfCheckTest {
 
     private static String read(String relative) throws IOException {
         return Files.readString(REPO_ROOT.resolve(relative), StandardCharsets.UTF_8);
+    }
+
+    private static JudgeRequest judgeRequest() {
+        return new JudgeRequest(JudgmentPoint.J1, "judgment-self-check", List.of("ACCEPT", "REFUSE"), "응.", List.of(), null, Map.of(), false,
+                Instant.EPOCH);
     }
 
     private static Map<String, Object> readJson(Path file) throws IOException {
@@ -669,6 +790,8 @@ class PracticeVoiceHarnessSelfCheckTest {
         private final List<String> inputs = new CopyOnWriteArrayList<>();
         /** 3회차 V1: 이 글이 오면 이 상태 코드로 거절한다(대본 줄 음성 합성 실패 흉내). */
         private final Map<String, Integer> failures = new ConcurrentHashMap<>();
+        /** 4회차 R6: 남은 거절 횟수(없으면 늘 거절한다). */
+        private final Map<String, AtomicInteger> failuresLeft = new ConcurrentHashMap<>();
         private final AtomicInteger ids = new AtomicInteger();
         private final HttpServer server;
         private final ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
@@ -703,6 +826,13 @@ class PracticeVoiceHarnessSelfCheckTest {
             return this;
         }
 
+        /** 4회차 R6: 이 글의 처음 {@code times}번만 이 상태 코드로 거절하고 그 뒤에는 만든다(일시 실패 흉내). */
+        FakeSpeech failFirst(String text, int status, int times) {
+            failures.put(text, status);
+            failuresLeft.put(text, new AtomicInteger(times));
+            return this;
+        }
+
         @SuppressWarnings("unchecked")
         private void handle(HttpExchange exchange) throws IOException {
             try (exchange) {
@@ -720,7 +850,8 @@ class PracticeVoiceHarnessSelfCheckTest {
                 String text = String.valueOf(body.get("input"));
                 inputs.add(text);
                 Integer failure = failures.get(text);
-                if (failure != null) {
+                AtomicInteger left = failuresLeft.get(text);
+                if (failure != null && (left == null || left.getAndDecrement() > 0)) {
                     exchange.sendResponseHeaders(failure, -1);
                     return;
                 }

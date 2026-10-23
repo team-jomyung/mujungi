@@ -20,6 +20,7 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.EnumSet;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -33,6 +34,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.LockSupport;
@@ -524,6 +526,8 @@ class PracticeVoiceDialogueLiveTest {
         Map<String, Long> approvedAudioMs = Map.of();
         /** 3회차 V1: 운영과 같은 대본 줄 음성 장치(대화들이 함께 쓴다 — 운영도 앱 전체에 하나다). */
         kr.mujoong.realtime.speech.SpeechClipSupport speechClips = kr.mujoong.realtime.speech.SpeechClipSupport.DISABLED;
+        /** 4회차 H3: 지금 도는 대화의 사실(합성 요청을 그 대화에 남긴다, 대화마다 바꿔 끼운다). */
+        volatile Facts clipFacts;
         private TimerClocks clipTimers;
         String gptLiveModel;
         private LunaTransport lunaTransport;
@@ -716,14 +720,32 @@ class PracticeVoiceDialogueLiveTest {
                     clipBaseUrl(), wiring.clips().mode(), wiring.clips().key(), settings.model(), settings.voice(), settings.narratorStyle(),
                     settings.peerStyle(), timing.synthesisTimeout(), kr.mujoong.realtime.speech.SpeechClipSupport.MAX_CLIP_BYTES,
                     clipTimers.safety(), JSON);
+            // 4회차 H3: 합성 요청마다 걸린 시간 · 결과 · 그 줄의 몇 번째 시도인가를 그 요청을 낸 대화의 사실에 남긴다(운영 장치 · 합성기는 그대로)
             kr.mujoong.realtime.speech.SpeechClipSynthesizer counted = new kr.mujoong.realtime.speech.SpeechClipSynthesizer() {
                 @Override
                 public CompletableFuture<byte[]> synthesize(kr.mujoong.realtime.speech.SpeechClipVoice voice, String text) {
+                    Facts current = clipFacts;
+                    ClipCall call = current == null ? null : current.clipCall(voice.name(), text);
                     if (!budget.takeClip()) {
+                        if (call != null) {
+                            call.refusedByCap();
+                        }
                         return CompletableFuture.failedFuture(new kr.mujoong.realtime.speech.SpeechClipException(
                                 kr.mujoong.realtime.speech.SpeechClipFailure.OVERLOADED));
                     }
-                    return synthesizer.synthesize(voice, text);
+                    CompletableFuture<byte[]> result;
+                    try {
+                        result = synthesizer.synthesize(voice, text);
+                    } catch (RuntimeException failure) {
+                        if (call != null) {
+                            call.finish(null, failure);
+                        }
+                        throw failure;
+                    }
+                    if (call != null) {
+                        result.whenComplete(call::finish);
+                    }
+                    return result;
                 }
 
                 @Override
@@ -907,6 +929,9 @@ class PracticeVoiceDialogueLiveTest {
                             + "PRACTICE_SPEECH_SOURCE). 합성 호출은 하니스 상한 " + CLIP_CALLS_ENV + "을 지난다.",
                     "3회차 V2: 지시마다 보낼 때 조용 · 말하는 중, 오디오 시계, 확인 사건 start · end, 첫 전사 조각 start와 도착 시계, 버린 조각 · 글자를 "
                             + "instructionTimeline(실행부 OUTPUT_NEW_SPEECH)으로 적는다.",
+                    "4회차 H1 · H3: 판정 턴이 시한에 취소한 판정은 '시한 취소'(CANCELLED_AT_DEADLINE, 지연은 취소된 때까지)다. 아이 차례마다 첫 입력 "
+                            + "전사 조각 · 확정 전사 시각(inputTranscriptTiming)을, 대본 줄 음성 합성 요청마다 걸린 시간 · 결과 · 그 줄의 몇 번째 시도인가"
+                            + "(scriptClipSynthesis, 원문 없이 줄 순번 · 종류)를 적는다.",
                     "아이 쪽: 대본 아이는 기준 대본의 아이 대사 5줄, AI 아이는 텍스트 모델이 합성 인물 하늘이를 연기한다(행동 계획 P1 · P2, 아이가 들은 말만 "
                             + "받는다). 참여 확인에는 '" + JOIN_LINE + "'라고 답한다.",
                     "기기 출력이 조용해진 뒤(timing.quietGap) 흐름이 대답을 기다리면 말하고, 말하지 않기로 하면 운영 무응답 시계를 기다린다.",
@@ -972,6 +997,7 @@ class PracticeVoiceDialogueLiveTest {
             MujoongClock clock = harness.clock;
             Timing timing = harness.wiring.timing();
             harness.judge.bind(facts);
+            harness.clipFacts = facts;
             ObservedMetrics metrics = new ObservedMetrics(facts);
             EventLogger events = TestEventLoggers.strict(clock, LogCapture.detached(), metrics);
             InMemoryTransitions transitions = new InMemoryTransitions(clock);
@@ -1025,6 +1051,7 @@ class PracticeVoiceDialogueLiveTest {
                 closeQuietly(timers);
                 client.destroy();
                 harness.judge.bind(null);
+                harness.clipFacts = null;
             }
             double connected = facts.connectedSeconds();
             double usage = facts.usageSeconds;
@@ -1049,6 +1076,7 @@ class PracticeVoiceDialogueLiveTest {
             result.put("sceneEnds", facts.sceneEnds());
             result.put("unheardBeforeGate", report.unmatchedOutput());
             result.put("instructionTimeline", report.instructionTimeline());
+            result.put("scriptClipSynthesis", facts.clipSynthesisReport());
             result.put("instructionsSent", facts.instructionsReport());
             result.put("sessionEvents", facts.sessionEventsReport());
             result.put("record", Map.of("practice", facts.practiceRecordPlain()));
@@ -1341,10 +1369,68 @@ class PracticeVoiceDialogueLiveTest {
             this.capped = capped;
         }
 
+        /** 4회차 H1: 끝난 시각(대화 시작부터 ms, 시한 취소면 취소된 때)도 남긴다. */
         Map<String, Object> report(Duration liveBudget) {
             return PracticeDialogueLiveTest.ordered("point", point, "outcome", outcome, "first", first, "firstProbability", firstProbability,
                     "second", second, "secondProbability", secondProbability, "abstainReason", abstainReason, "model", model, "latencyMs",
-                    latencyMs, "withinProductionLiveBudget", latencyMs >= 0 && latencyMs <= liveBudget.toMillis(), "notCalledByCap", capped);
+                    latencyMs, "withinProductionLiveBudget", latencyMs >= 0 && latencyMs <= liveBudget.toMillis(), "notCalledByCap", capped,
+                    "doneAtMs", doneAtMs);
+        }
+    }
+
+    /**
+     * 4회차 H3: 대본 줄 음성 합성 요청 하나(하니스가 운영 합성기를 감싸 잰다). 원문은 넣지 않고 줄 순번(이 대화에서 처음 맡긴 차례) · 종류 · 목소리 ·
+     * 그 줄의 몇 번째 시도인가만 남긴다. 결과는 합성기 스레드에서 적는다.
+     */
+    static final class ClipCall {
+        /** 하니스 상한으로 부르지 않은 요청의 결과 값(운영 장치에는 OVERLOADED로 돌아간다). */
+        static final String NOT_CALLED_HARNESS_CAP = "NOT_CALLED_HARNESS_CAP";
+
+        final int line;
+        final String kind;
+        final String voice;
+        final int attempt;
+        final long atMs;
+        private final long startNanos = System.nanoTime();
+        volatile long durationMs = -1;
+        volatile long audioMs = -1;
+        volatile String outcome;
+
+        ClipCall(int line, String kind, String voice, int attempt, long atMs) {
+            this.line = line;
+            this.kind = kind;
+            this.voice = voice;
+            this.attempt = attempt;
+            this.atMs = atMs;
+        }
+
+        /** 합성기가 돌려준 결과(운영 장치와 같은 음성 검사: 빈 음성 · 홀수 바이트 · 출력 구간 상한). */
+        void finish(byte[] pcm, Throwable failure) {
+            String result;
+            if (failure != null) {
+                result = kr.mujoong.realtime.speech.SpeechClipException.failureOf(failure).name();
+            } else if (pcm == null || pcm.length == 0) {
+                result = kr.mujoong.realtime.speech.SpeechClipFailure.EMPTY_AUDIO.name();
+            } else if (pcm.length % 2 != 0) {
+                result = kr.mujoong.realtime.speech.SpeechClipFailure.INVALID_AUDIO.name();
+            } else if (pcm.length > kr.mujoong.realtime.speech.SpeechClipSupport.MAX_CLIP_BYTES) {
+                result = kr.mujoong.realtime.speech.SpeechClipFailure.AUDIO_TOO_LONG.name();
+            } else {
+                result = "OK";
+                audioMs = pcm.length / BYTES_PER_MS;
+            }
+            durationMs = (System.nanoTime() - startNanos) / 1_000_000L;
+            outcome = result;
+        }
+
+        void refusedByCap() {
+            durationMs = 0;
+            outcome = NOT_CALLED_HARNESS_CAP;
+        }
+
+        Map<String, Object> report() {
+            return PracticeDialogueLiveTest.ordered("line", line, "kind", kind, "voice", voice, "attempt", attempt, "atMs", atMs, "durationMs",
+                    durationMs, "outcome", outcome == null ? "IN_FLIGHT" : outcome, "audioMs", audioMs < 0 ? null : audioMs);
         }
     }
 
@@ -1401,6 +1487,9 @@ class PracticeVoiceDialogueLiveTest {
         /** 3회차 V1: 출처 사건을 아직 받지 않은 말 요청 · 요청을 아직 못 찾은 출처 사건(둘 다 실행부의 요청 순서 그대로다). */
         private final ArrayDeque<Request> unsourced = new ArrayDeque<>();
         private final ArrayDeque<Map<String, Object>> sources = new ArrayDeque<>();
+        /** 4회차 H3: 대본 줄 음성 합성 요청(순서대로)과 (목소리, 원문) → 줄 순번. 원문은 순번을 찾는 데만 쓰고 보고에 넣지 않는다. */
+        private final List<ClipCall> clipCalls = new ArrayList<>();
+        private final Map<String, Integer> clipLines = new HashMap<>();
         private int inputTranscriptDeltas;
         private long outputAudioBytes;
         private long framesOffered;
@@ -1776,6 +1865,102 @@ class PracticeVoiceDialogueLiveTest {
             }
         }
 
+        // ---- 4회차 H3: 대본 줄 음성 합성(합성기 감싸개, 아무 스레드) ----
+
+        /** 합성 요청 하나를 남긴다. 같은 (목소리, 원문)은 같은 줄 순번이고 시도 번호가 오른다. */
+        ClipCall clipCall(String voice, String text) {
+            synchronized (this) {
+                int line = clipLines.computeIfAbsent(voice + '\u0000' + text, key -> clipLines.size() + 1);
+                int attempt = (int) clipCalls.stream().filter(call -> call.line == line).count() + 1;
+                ClipCall call = new ClipCall(line, clipLineKind(text), voice, attempt, ms());
+                clipCalls.add(call);
+                return call;
+            }
+        }
+
+        /** 대본 줄 종류(원 장면 · 변형 장면 줄, 변형 제안, 승인 발화 코드). 하니스 요청 종류와 같은 이름이다. */
+        String clipLineKind(String text) {
+            if (script != null) {
+                String kind = sceneLineKind(script.baseScene(), text, "");
+                if (kind != null) {
+                    return kind;
+                }
+                Optional<Scene> variant = script.variantScene();
+                if (variant.isPresent()) {
+                    if (text.equals(variant.get().sceneDescription() + " " + PracticeInstructions.VARIANT_OFFER_QUESTION)) {
+                        return "VARIANT_OFFER";
+                    }
+                    kind = sceneLineKind(variant.get(), text, "VARIANT_");
+                    if (kind != null) {
+                        return kind;
+                    }
+                }
+            }
+            for (Map.Entry<String, String> each : approvedSpeech.entrySet()) {
+                if (text.equals(each.getValue())) {
+                    return "COACH_SWITCH".equals(each.getKey()) || "PEER_RETURN".equals(each.getKey()) ? "ROLE_NOTICE_" + each.getKey() : each.getKey();
+                }
+            }
+            return "OTHER";
+        }
+
+        private static String sceneLineKind(Scene scene, String text, String prefix) {
+            if (text.equals(scene.sceneDescription())) {
+                return prefix + "SCENE_DESCRIPTION";
+            }
+            if (scene.hasPartnerOpener() && text.equals(scene.partnerOpener())) {
+                return prefix + "PARTNER_OPENER";
+            }
+            if (text.equals(scene.opportunitySentence())) {
+                return prefix + "OPPORTUNITY_SENTENCE";
+            }
+            if (text.equals(scene.reexplanation())) {
+                return prefix + "REEXPLANATION";
+            }
+            return null;
+        }
+
+        /**
+         * 이 대화의 합성 요청 목록과 요약: 호출 수(하니스 상한으로 부르지 않은 것은 따로) · 줄 수 · 성공 · 실패 사유별 수 · 다시 맡긴 줄(그중 끝내
+         * 성공) · 끝내 실패한 줄 · 걸린 시간 가운데 · 최대 · 보고 때 아직 만드는 중. 다른 대화가 캐시에 만든 줄은 여기서 부르지 않는다.
+         */
+        synchronized Map<String, Object> clipSynthesisReport() {
+            List<ClipCall> calls = List.copyOf(clipCalls);
+            List<ClipCall> called = calls.stream().filter(call -> !ClipCall.NOT_CALLED_HARNESS_CAP.equals(call.outcome)).toList();
+            Map<String, Integer> failures = new java.util.TreeMap<>();
+            for (ClipCall call : called) {
+                if (call.outcome != null && !"OK".equals(call.outcome)) {
+                    failures.merge(call.outcome, 1, Integer::sum);
+                }
+            }
+            Map<Integer, List<ClipCall>> byLine = new LinkedHashMap<>();
+            calls.forEach(call -> byLine.computeIfAbsent(call.line, line -> new ArrayList<>()).add(call));
+            int triedAgain = 0;
+            int okAfterRetry = 0;
+            int failedLines = 0;
+            for (List<ClipCall> attempts : byLine.values()) {
+                boolean ok = attempts.stream().anyMatch(call -> "OK".equals(call.outcome));
+                boolean finished = attempts.stream().allMatch(call -> call.outcome != null);
+                if (attempts.size() > 1) {
+                    triedAgain++;
+                    if (ok) {
+                        okAfterRetry++;
+                    }
+                }
+                if (!ok && finished) {
+                    failedLines++;
+                }
+            }
+            List<Long> durations = called.stream().filter(call -> call.outcome != null && call.durationMs >= 0).map(call -> call.durationMs)
+                    .sorted().toList();
+            Map<String, Object> summary = PracticeDialogueLiveTest.ordered("calls", called.size(), "refusedByCap", calls.size() - called.size(),
+                    "lines", byLine.size(), "ok", called.stream().filter(call -> "OK".equals(call.outcome)).count(), "failures", failures,
+                    "linesTriedAgain", triedAgain, "linesOkAfterRetry", okAfterRetry, "linesFailed", failedLines, "medianMs",
+                    durations.isEmpty() ? null : durations.get(durations.size() / 2), "maxMs", durations.isEmpty() ? null : durations.getLast(),
+                    "inFlight", called.stream().filter(call -> call.outcome == null).count());
+            return PracticeDialogueLiveTest.ordered("calls", calls.stream().map(ClipCall::report).toList(), "summary", summary);
+        }
+
         // ---- 기기 마이크 · 아이 쪽 ----
 
         void frameOffered(boolean voiced) {
@@ -2077,26 +2262,69 @@ class PracticeVoiceDialogueLiveTest {
             if (current != null) {
                 current.judgeInFlight.incrementAndGet();
             }
-            return delegate.judge(request, turnId).whenComplete((outcome, error) -> {
-                if (current != null) {
-                    current.judgeInFlight.decrementAndGet();
-                    call.doneAtMs = current.ms();
+            // 4회차 H1: 판정 턴은 시한을 넘기면 돌려받은 Future를 취소한다(JudgmentTurn.cancelRequest). whenComplete가 만든 뒤 단계를 돌려주면 그 취소에
+            // 기록 동작이 돌지 않아 '판정 중' 수가 줄지 않았다(3회차 실측 H1). 원래 Future의 끝과 돌려준 Future의 취소를 모두 보고, 먼저 온 쪽이 한 번만 줄인다
+            CompletableFuture<JudgeOutcome> original;
+            try {
+                original = delegate.judge(request, turnId).toCompletableFuture();
+            } catch (RuntimeException failure) {
+                finish(current, call, null);
+                throw failure;
+            }
+            CompletableFuture<JudgeOutcome> returned = new CompletableFuture<>();
+            AtomicBoolean settled = new AtomicBoolean();
+            original.whenComplete((outcome, error) -> {
+                if (settled.compareAndSet(false, true)) {
+                    finish(current, call, outcome);
                 }
-                if (outcome != null) {
-                    call.outcome = outcome.kind().name();
-                    call.first = outcome.firstOption();
-                    call.firstProbability = outcome.firstProbability();
-                    call.second = outcome.secondOption();
-                    call.secondProbability = outcome.secondProbability();
-                    call.abstainReason = outcome.abstainReason() == null ? null : outcome.abstainReason().name();
-                    call.model = outcome.model() != null && SAFE_TOKEN.matcher(outcome.model()).matches() ? outcome.model() : null;
-                    call.latencyMs = outcome.latency().toMillis();
+                if (error != null) {
+                    returned.completeExceptionally(error);
                 } else {
-                    call.outcome = "ERROR";
+                    returned.complete(outcome);
                 }
             });
+            returned.whenComplete((outcome, error) -> {
+                if (returned.isCancelled() && settled.compareAndSet(false, true)) {
+                    cancelled(current, call);
+                    original.cancel(true);
+                }
+            });
+            return returned;
+        }
+
+        /** 판정 결과가 왔다: '판정 중' 수를 줄이고 결과를 적는다. */
+        private static void finish(Facts current, JudgeCall call, JudgeOutcome outcome) {
+            if (current != null) {
+                current.judgeInFlight.decrementAndGet();
+                call.doneAtMs = current.ms();
+            }
+            if (outcome != null) {
+                call.outcome = outcome.kind().name();
+                call.first = outcome.firstOption();
+                call.firstProbability = outcome.firstProbability();
+                call.second = outcome.secondOption();
+                call.secondProbability = outcome.secondProbability();
+                call.abstainReason = outcome.abstainReason() == null ? null : outcome.abstainReason().name();
+                call.model = outcome.model() != null && SAFE_TOKEN.matcher(outcome.model()).matches() ? outcome.model() : null;
+                call.latencyMs = outcome.latency().toMillis();
+            } else {
+                call.outcome = "ERROR";
+            }
+        }
+
+        /** 4회차 H1: 판정 턴이 시한에 결과를 취소했다('시한 취소'): '판정 중' 수를 줄이고, 지연은 취소된 때까지로 적는다. 원래 호출에도 취소를 넘긴다. */
+        private static void cancelled(Facts current, JudgeCall call) {
+            call.outcome = CANCELLED_AT_DEADLINE;
+            if (current != null) {
+                current.judgeInFlight.decrementAndGet();
+                call.doneAtMs = current.ms();
+                call.latencyMs = call.atMs >= 0 ? Math.max(0L, call.doneAtMs - call.atMs) : -1L;
+            }
         }
     }
+
+    /** 4회차 H1: 판정 턴이 시한에 결과를 취소한 판정의 결과 값. */
+    static final String CANCELLED_AT_DEADLINE = "CANCELLED_AT_DEADLINE";
 
     /** 흐름 기록기 관찰(운영 기록기 자리의 메모리 기록기에 쌓으면서 장면 · 도움 사건을 남긴다). */
     static final class ObservedFlowRecorder implements FlowRecorder {
@@ -3148,12 +3376,14 @@ class PracticeVoiceDialogueLiveTest {
             JudgeCall judge = facts.judgments().stream().filter(call -> call.atMs >= from && call.atMs < nextCueMs).findFirst().orElse(null);
             // 참여 확인(WAITING_CHILD) 대답은 실행부가 전사 행으로 남기지 않는다(참여 전 아이 전사 미저장). 그때는 판정이 받은 확정 전사, 판정도
             // 없으면(참여 규칙이 판정 없이 정한 대답) 그 사이 GPT-Live 입력 전사 조각을 이은 글이 들은 전사다
-            String deltas = facts.inputDeltas().stream().filter(delta -> delta.atMs() >= child.startMs && delta.atMs() < nextCueMs)
-                    .map(OutDelta::text).collect(java.util.stream.Collectors.joining());
+            List<OutDelta> chunks = facts.inputDeltas().stream().filter(delta -> delta.atMs() >= child.startMs && delta.atMs() < nextCueMs)
+                    .toList();
+            String deltas = chunks.stream().map(OutDelta::text).collect(java.util.stream.Collectors.joining());
             String heardText = row != null ? row.text() : judge != null ? judge.utterance : deltas.isBlank() ? null : deltas;
             entry.put("transcript", heardText);
             entry.put("transcriptSource", row != null ? "TRANSCRIPT_ROW" : judge != null ? "JUDGMENT_INPUT"
                     : heardText != null ? "PROVIDER_INPUT_DELTAS" : null);
+            entry.put("inputTranscriptTiming", inputTranscriptTiming(child, chunks, row, judge));
             entry.put("transcriptSameAsIntended", heardText != null && HeardWords.same(child.intended, heardText));
             if (row != null && row.reviewNeeded()) {
                 entry.put("transcriptUncertain", true);
@@ -3169,6 +3399,19 @@ class PracticeVoiceDialogueLiveTest {
                 entry.put("longSilence", latency > LONG_SILENCE_MS);
             }
             return entry;
+        }
+
+        /**
+         * 4회차 H3: 아이 차례 하나의 입력 전사 시각(대화 시작부터 ms) — 첫 입력 전사 조각이 닿은 때 · 조각 수 · 첫 조각이 아이 말이 끝나기 전에 왔는가
+         * (실행부가 '말 시작'으로 쓰는 신호가 말 도중에 오는가), 확정 전사 시각(실행부 전사 행이 남은 때, 참여 확인처럼 행이 없으면 그 전사로 판정을 부른 때,
+         * 둘 다 없으면 없음).
+         */
+        private static Map<String, Object> inputTranscriptTiming(ChildSpeech child, List<OutDelta> chunks, ChildRow row, JudgeCall judge) {
+            Long first = chunks.isEmpty() ? null : chunks.getFirst().atMs();
+            Long confirmed = row != null ? Long.valueOf(row.atMs()) : judge != null && judge.atMs >= 0 ? Long.valueOf(judge.atMs) : null;
+            return PracticeDialogueLiveTest.ordered("speechStartMs", child.startMs, "speechEndMs", child.endMs, "firstChunkAtMs", first,
+                    "chunks", chunks.size(), "firstChunkBeforeSpeechEnd", first == null ? null : first < child.endMs, "confirmedAtMs", confirmed,
+                    "confirmedSource", row != null ? "TRANSCRIPT_ROW" : confirmed != null ? "JUDGMENT_REQUEST" : null);
         }
 
         /** GPT-Live가 한 말 중 게이트에 닿은 구간과 맞지 않는 것(세대가 바뀌어 버린 낡은 꼬리 등, 참고 값). */
@@ -3669,6 +3912,9 @@ class PracticeVoiceDialogueLiveTest {
             if (run.get("instructionTimeline") instanceof List<?> timeline && !timeline.isEmpty()) {
                 renderTimeline(md, timeline);
             }
+            if (run.get("scriptClipSynthesis") instanceof Map<?, ?> synthesis) {
+                renderClipSynthesis(md, synthesis);
+            }
             if (run.get("checks") instanceof Map<?, ?> checks) {
                 renderChecks(md, (Map<String, Object>) checks);
             }
@@ -3716,6 +3962,9 @@ class PracticeVoiceDialogueLiveTest {
                 if (entry.get("detail") instanceof Map<?, ?> detail && detail.get("expectedOption") != null) {
                     parts.add("기대 " + detail.get("expectedPoint") + " " + detail.get("expectedOption"));
                 }
+                if (entry.get("inputTranscriptTiming") instanceof Map<?, ?> timing) {
+                    parts.add(inputTiming(timing));
+                }
                 if (entry.get("responseLatencyMs") instanceof Number latency) {
                     parts.add("다음 말까지 " + seconds(latency) + "초" + (Boolean.TRUE.equals(entry.get("longSilence")) ? "(긴 침묵)" : ""));
                 }
@@ -3750,6 +3999,15 @@ class PracticeVoiceDialogueLiveTest {
             return "- " + at + who + ": " + text + " (" + tag + ")";
         }
 
+        /** 4회차 H3: 아이 차례의 첫 입력 전사 조각 시각(아이 말 도중 · 끝 뒤)과 확정 전사 시각. */
+        static String inputTiming(Map<?, ?> timing) {
+            if (!(timing.get("firstChunkAtMs") instanceof Number first)) {
+                return "입력 전사 조각 없음";
+            }
+            return "첫 전사 조각 [" + time(first) + "](" + (Boolean.TRUE.equals(timing.get("firstChunkBeforeSpeechEnd")) ? "말 도중" : "말 끝 뒤")
+                    + ") · 확정 " + (timing.get("confirmedAtMs") instanceof Number confirmed ? "[" + time(confirmed) + "]" : "없음");
+        }
+
         /** 3회차 V1: 승인 원문 줄의 출처 표시(미리 만든 음성 · GPT-Live 원문 읽기 대체와 사유). */
         static String sourceLabel(Map<String, Object> entry) {
             Object source = entry.get("lineSource");
@@ -3766,10 +4024,15 @@ class PracticeVoiceDialogueLiveTest {
             return "출처 모름";
         }
 
-        private static String judgment(Map<?, ?> judgment) {
+        static String judgment(Map<?, ?> judgment) {
             Object point = judgment.get("point");
             if (Boolean.TRUE.equals(judgment.get("notCalledByCap"))) {
                 return point + " 호출 상한으로 부르지 않음";
+            }
+            if (CANCELLED_AT_DEADLINE.equals(judgment.get("outcome"))) {
+                // 4회차 H1: 판정 턴이 시한에 결과를 취소했다(지연은 취소된 때까지)
+                return point + " 시한 취소(" + (judgment.get("latencyMs") instanceof Number number && number.longValue() >= 0
+                        ? seconds(number) + "초" : "-") + ")";
             }
             String latency = judgment.get("latencyMs") instanceof Number number && number.longValue() >= 0
                     ? ", " + seconds(number) + "초" + (Boolean.TRUE.equals(judgment.get("withinProductionLiveBudget")) ? "" : " 시한 넘음") : "";
@@ -3806,6 +4069,43 @@ class PracticeVoiceDialogueLiveTest {
                         .append(value(row.get("firstTranscriptStartMs"))).append(" · ").append(value(row.get("firstTranscriptClockMs"))).append(" | ")
                         .append(value(row.get("discardedTranscriptChunks"))).append(" · ").append(value(row.get("discardedTranscriptChars")))
                         .append(" · ").append(value(row.get("discardedAudioMs"))).append("ms | ").append(row.get("outcome")).append(" |\n");
+            }
+        }
+
+        /**
+         * 4회차 H3 표: 이 대화가 낸 대본 줄 음성 합성 요청마다 줄 순번 · 종류 · 목소리 · 시도 · 시작 · 걸린 시간 · 결과(원문 없음)와 대화 요약. 다른 대화가
+         * 이미 만든 줄(캐시)은 부르지 않으므로 없다.
+         */
+        private static void renderClipSynthesis(StringBuilder md, Map<?, ?> synthesis) {
+            if (!(synthesis.get("calls") instanceof List<?> calls) || calls.isEmpty()) {
+                md.append("\n대본 줄 음성 합성(4회차 H3): 이 대화가 새로 맡긴 줄 없음(캐시 · 꺼진 장치)\n");
+                return;
+            }
+            md.append("\n대본 줄 음성 합성(4회차 H3, 원문 없음 — 줄은 이 대화에서 처음 맡긴 차례)\n\n");
+            md.append("| 줄 | 종류 | 목소리 | 시도 | 시작 | 걸린 시간 | 결과 |\n");
+            md.append("| --- | --- | --- | --- | --- | --- | --- |\n");
+            for (Object item : calls) {
+                if (item instanceof Map<?, ?> call) {
+                    md.append("| ").append(call.get("line")).append(" | ").append(call.get("kind")).append(" | ").append(call.get("voice"))
+                            .append(" | ").append(call.get("attempt")).append(" | [").append(time(call.get("atMs"))).append("] | ")
+                            .append(call.get("durationMs") instanceof Number ms && ms.longValue() >= 0 ? seconds(ms) + "초" : "-").append(" | ")
+                            .append(call.get("outcome")).append(" |\n");
+                }
+            }
+            if (synthesis.get("summary") instanceof Map<?, ?> summary) {
+                md.append("\n- 합성 요약: 호출 ").append(summary.get("calls")).append(" · 줄 ").append(summary.get("lines")).append(" · 성공 ")
+                        .append(summary.get("ok")).append(" · 실패 ").append(summary.get("failures") instanceof Map<?, ?> failures && !failures.isEmpty()
+                                ? failures : "없음").append(" · 다시 맡긴 줄 ").append(summary.get("linesTriedAgain")).append("(그중 성공 ")
+                        .append(summary.get("linesOkAfterRetry")).append(") · 끝내 실패한 줄 ").append(summary.get("linesFailed"))
+                        .append(" · 걸린 시간 가운데 ").append(seconds(summary.get("medianMs"))).append("초 · 최대 ").append(seconds(summary.get("maxMs")))
+                        .append("초");
+                if (summary.get("inFlight") instanceof Number pending && pending.intValue() > 0) {
+                    md.append(" · 보고 때 아직 만드는 중 ").append(pending);
+                }
+                if (summary.get("refusedByCap") instanceof Number refused && refused.intValue() > 0) {
+                    md.append(" · 하니스 상한으로 부르지 않음 ").append(refused);
+                }
+                md.append('\n');
             }
         }
 
