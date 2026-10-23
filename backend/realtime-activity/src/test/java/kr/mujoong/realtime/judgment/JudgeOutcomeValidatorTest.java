@@ -5,29 +5,25 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.Duration;
 import java.util.List;
-import kr.mujoong.contract.json.JsonCodec;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
 /**
- * 판정 결과 검증 (U11 BR1.3 · BR1.5). 시험 벡터는 functional-spec 5절 그대로다. 합성 값만 쓴다.
+ * 판정 결과 검증 (U11 BR1.3 · BR1.5). 시험 벡터는 functional-spec 5절 그대로다. 입력은 Decisions 확률에서 고른 1 · 2순위 모양이다(FT-1023-d).
+ * 합성 값만 쓴다.
  */
 @Tag("judgment-turn")
 class JudgeOutcomeValidatorTest {
 
     private static final List<String> OPTIONS = List.of("FULL", "PARTIAL", "HELP", "UNREADABLE");
     private static final Duration LATENCY = Duration.ofMillis(900);
-    private final JudgeOutcomeValidator validator = new JudgeOutcomeValidator(0.6, 0.15, JsonCodec.shared());
+    private final JudgeOutcomeValidator validator = new JudgeOutcomeValidator(0.6, 0.15);
 
-    private JudgeOutcome validate(String json) {
-        return validator.validate(json, OPTIONS, LATENCY, "luna-test", "prompt-v1");
-    }
-
-    private static String output(String first, String firstP, String second, String secondP) {
-        return "{\"first\":{\"option\":\"" + first + "\",\"probability\":" + firstP + "},\"second\":{\"option\":\"" + second
-                + "\",\"probability\":" + secondP + "}}";
+    private JudgeOutcome validate(String first, String firstP, String second, String secondP) {
+        return validator.validateRanked(first, Double.parseDouble(firstP), second, Double.parseDouble(secondP), OPTIONS, LATENCY,
+                "luna-test", "prompt-v1");
     }
 
     @ParameterizedTest(name = "{0} / {1} -> {2} {3}")
@@ -40,7 +36,7 @@ class JudgeOutcomeValidatorTest {
         "0.75, 0.60, CONFIRMED, "
     })
     void theFiveSpecVectorsAndTheExactBoundaries(String first, String second, JudgmentOutcomeKind kind, AbstainReason reason) {
-        JudgeOutcome outcome = validate(output("FULL", first, "PARTIAL", second));
+        JudgeOutcome outcome = validate("FULL", first, "PARTIAL", second);
 
         assertThat(outcome.kind()).isEqualTo(kind);
         assertThat(outcome.abstainReason()).isEqualTo(reason);
@@ -51,7 +47,7 @@ class JudgeOutcomeValidatorTest {
 
     @Test
     void aConfirmedOutcomeKeepsBothRankedOptionsAndTheirProbabilities() {
-        JudgeOutcome outcome = validate(output("FULL", "0.7", "HELP", "0.2"));
+        JudgeOutcome outcome = validate("FULL", "0.7", "HELP", "0.2");
 
         assertThat(outcome.isConfirmed()).isTrue();
         assertThat(outcome.firstOption()).isEqualTo("FULL");
@@ -63,7 +59,7 @@ class JudgeOutcomeValidatorTest {
 
     @Test
     void lowScoresAreAbstainedButTheScoresStayForTheRecord() {
-        JudgeOutcome outcome = validate(output("FULL", "0.5", "HELP", "0.4"));
+        JudgeOutcome outcome = validate("FULL", "0.5", "HELP", "0.4");
 
         assertThat(outcome.abstainReason()).isEqualTo(AbstainReason.LOW_CONFIDENCE);
         assertThat(outcome.firstProbability()).isEqualTo(0.5);
@@ -71,13 +67,13 @@ class JudgeOutcomeValidatorTest {
 
     @Test
     void anOptionOutsideTheRequestedSetIsAbstained() {
-        assertThat(validate(output("FULL", "0.9", "NOT_A_CODE", "0.05")).abstainReason()).isEqualTo(AbstainReason.OPTION_OUT_OF_SET);
-        assertThat(validate(output("NOT_A_CODE", "0.9", "FULL", "0.05")).abstainReason()).isEqualTo(AbstainReason.OPTION_OUT_OF_SET);
+        assertThat(validate("FULL", "0.9", "NOT_A_CODE", "0.05").abstainReason()).isEqualTo(AbstainReason.OPTION_OUT_OF_SET);
+        assertThat(validate("NOT_A_CODE", "0.9", "FULL", "0.05").abstainReason()).isEqualTo(AbstainReason.OPTION_OUT_OF_SET);
     }
 
     @Test
     void theSameOptionTwiceIsAbstained() {
-        JudgeOutcome outcome = validate(output("FULL", "0.9", "FULL", "0.05"));
+        JudgeOutcome outcome = validate("FULL", "0.9", "FULL", "0.05");
 
         assertThat(outcome.abstainReason()).isEqualTo(AbstainReason.DUPLICATE_OPTION);
         assertThat(outcome.firstOption()).isNull();
@@ -85,19 +81,21 @@ class JudgeOutcomeValidatorTest {
 
     @Test
     void probabilitiesOutsideZeroToOneAreAbstained() {
-        assertThat(validate(output("FULL", "1.2", "HELP", "0.05")).abstainReason()).isEqualTo(AbstainReason.PROBABILITY_OUT_OF_RANGE);
-        assertThat(validate(output("FULL", "0.9", "HELP", "-0.1")).abstainReason()).isEqualTo(AbstainReason.PROBABILITY_OUT_OF_RANGE);
-        assertThat(validate(output("FULL", "2", "HELP", "0")).abstainReason()).isEqualTo(AbstainReason.PROBABILITY_OUT_OF_RANGE);
+        assertThat(validate("FULL", "1.2", "HELP", "0.05").abstainReason()).isEqualTo(AbstainReason.PROBABILITY_OUT_OF_RANGE);
+        assertThat(validate("FULL", "0.9", "HELP", "-0.1").abstainReason()).isEqualTo(AbstainReason.PROBABILITY_OUT_OF_RANGE);
+        assertThat(validate("FULL", "2", "HELP", "0").abstainReason()).isEqualTo(AbstainReason.PROBABILITY_OUT_OF_RANGE);
     }
 
     @Test
-    void anUnreadableOrIncompleteShapeIsSchemaInvalid() {
-        assertThat(validate("not json").abstainReason()).isEqualTo(AbstainReason.SCHEMA_INVALID);
-        assertThat(validate("{}").abstainReason()).isEqualTo(AbstainReason.SCHEMA_INVALID);
-        assertThat(validate("{\"first\":{\"option\":\"FULL\"},\"second\":{\"option\":\"HELP\",\"probability\":0.1}}").abstainReason())
+    void aMissingCodeIsSchemaInvalidAndANonFiniteProbabilityIsOutOfRange() {
+        assertThat(validator.validateRanked(null, 0.9, "HELP", 0.1, OPTIONS, LATENCY, "luna-test", "prompt-v1").abstainReason())
                 .isEqualTo(AbstainReason.SCHEMA_INVALID);
-        assertThat(validate("{\"first\":{\"option\":\"FULL\",\"probability\":\"high\"},\"second\":{\"option\":\"HELP\",\"probability\":0.1}}")
-                .abstainReason()).isEqualTo(AbstainReason.SCHEMA_INVALID);
+        assertThat(validator.validateRanked("FULL", 0.9, " ", 0.1, OPTIONS, LATENCY, "luna-test", "prompt-v1").abstainReason())
+                .isEqualTo(AbstainReason.SCHEMA_INVALID);
+        assertThat(validator.validateRanked("FULL", Double.NaN, "HELP", 0.1, OPTIONS, LATENCY, "luna-test", "prompt-v1")
+                .abstainReason()).isEqualTo(AbstainReason.PROBABILITY_OUT_OF_RANGE);
+        assertThat(validator.validateRanked("FULL", 0.9, "HELP", Double.POSITIVE_INFINITY, OPTIONS, LATENCY, "luna-test", "prompt-v1")
+                .abstainReason()).isEqualTo(AbstainReason.PROBABILITY_OUT_OF_RANGE);
     }
 
     @Test

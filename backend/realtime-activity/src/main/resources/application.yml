@@ -232,15 +232,9 @@ mujoong:
   # U9 Luna 호출부(contracts/ai-io.md 10.9). 키 env OPENAI_API_KEY가 있고 enabled가 true일 때만 RealtimeLunaClient가 켜진다(값은 env에만).
   # 시간 값이 아니다: 시도 시한은 timing.judgment.live-budget. demo · prod는 https + api.openai.com만, test는 루프백만
   luna:
+    # FT-1023-d: 진행 중 판정은 Decisions API({base-url}/decisions) 한 길뿐이다. 이 스위치를 켜기 전에
+    # infra/RUNBOOK.md 단계 4의 R-F15 확인 기록에 Decisions 끝점 확인(보존 · 데이터 사용 조건)을 남긴다(contracts/ai-io.md 10.9)
     enabled: false
-    # FT-1023-d: 진행 중 판정 끝점 responses | decisions(기본 responses = 지금 동작). 시간 값 · 비밀이 아니다. 모르는 값이면 기동하지 않는다.
-    # decisions는 같은 공급자(OpenAI) · 같은 키 · 같은 최소 필드지만 다른 엔드포인트다. 실제 아동 데이터로 decisions를 켜기 전에
-    # infra/RUNBOOK.md의 R-F15 확인 기록에 Decisions 끝점 확인을 남긴다(contracts/ai-io.md 10.9)
-    judge-endpoint: ${LUNA_JUDGE_ENDPOINT:responses}
     model: ${OPENAI_JUDGE_MODEL:gpt-6-luna}
     base-url: https://api.openai.com/v1
     max-response-bytes: 1000000
-    purpose:
-      judgment-live:
-        max-output-tokens: 4000
-        reasoning-effort: medium

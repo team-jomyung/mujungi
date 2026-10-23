@@ -1,6 +1,7 @@
 package kr.mujoong.realtime.judgment;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.net.URI;
 import java.time.Duration;
@@ -16,6 +17,8 @@ import kr.mujoong.contract.json.JsonCodec;
 import kr.mujoong.contract.log.EventCode;
 import kr.mujoong.realtime.content.LiveContentResources;
 import kr.mujoong.realtime.luna.LunaDecision;
+import kr.mujoong.realtime.luna.LunaException;
+import kr.mujoong.realtime.luna.LunaFailureReason;
 import kr.mujoong.realtime.luna.LunaHosts;
 import kr.mujoong.realtime.luna.LunaInputSanitizer;
 import kr.mujoong.realtime.luna.LunaProperties;
@@ -36,10 +39,11 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 /**
- * Decisions 판정 구현 (FT-1023-d, U11 BR1.1 ~ BR1.7 · BR4.3과 같은 계약). 공급자는 {@link LunaDecisionsStub} 루프백 대역, 키는 가짜 문자열, 입력은
+ * 진행 중 판정 구현 — Decisions API (U11 BR1.1 ~ BR1.7 · BR4.3, FT-1023-d). 공급자는 {@link LunaDecisionsStub} 루프백 대역, 키는 가짜 문자열, 입력은
  * 합성 값이다(R-F1 · R-F3). 증거 종류: 테스트 대역(R-M11) — 실제 Decisions API 성공이 아니다.
  */
 @Tag("judgment-turn")
+@Tag("service-guardrail")
 class DecisionsJudgeClientTest {
 
     private static final JsonCodec JSON = JsonCodec.shared();
@@ -70,16 +74,14 @@ class DecisionsJudgeClientTest {
 
     private RealtimeLunaClient luna(Duration budget) {
         URI base = stub.baseUrl();
-        LunaProperties properties = new LunaProperties(MODEL, base, 1_000_000,
-                new LunaProperties.Purposes(new LunaProperties.PurposeOptions(4000, "medium")), true,
-                LunaProperties.JudgeEndpoint.DECISIONS);
+        LunaProperties properties = new LunaProperties(MODEL, base, 1_000_000, true);
         EventLogger events = TestEventLoggers.strict(clock, capture, RealtimeMetrics.inMemory());
         return new RealtimeLunaClient(properties, budget, LunaSchemas.loadDefault(JSON), new LunaInputSanitizer(JSON),
                 new LunaTransport(base, LunaHosts.Mode.TEST, () -> "test-key-not-real-ft1023d", 1_000_000), events, clock, JSON);
     }
 
     private DecisionsJudgeClient clientWithBudget(Duration budget) {
-        return new DecisionsJudgeClient(luna(budget)::decide, PROMPT, new JudgeOutcomeValidator(0.6, 0.15, JSON), clock);
+        return new DecisionsJudgeClient(luna(budget)::decide, PROMPT, new JudgeOutcomeValidator(0.6, 0.15), clock);
     }
 
     private JudgeRequest request(String utterance, Duration remaining) {
@@ -115,7 +117,7 @@ class DecisionsJudgeClientTest {
         assertThat(outcome.secondOption()).isEqualTo("PARTIAL");
         assertThat(outcome.secondProbability()).isEqualTo(0.1);
         assertThat(outcome.model()).isEqualTo(MODEL);
-        assertThat(outcome.promptVersion()).isEqualTo("prompt-service-v2.decisions-v1");
+        assertThat(outcome.promptVersion()).isEqualTo("prompt-service-v3");
         assertThat(stub.requestCount()).isEqualTo(1);
 
         LunaResponsesStub.RecordedRequest sent = stub.requests().getFirst();
@@ -128,8 +130,9 @@ class DecisionsJudgeClientTest {
             assertThat(question).containsEntry("type", "choice").containsEntry("name", NAME);
             String instructions = (String) question.get("instructions");
             assertThat(instructions).contains("분류기").contains("아이의 가장 마지막 말(childUtterance) 하나만 판정한다")
-                    .contains("[J2] " + OPTION_SET.points().get(LiveContentResources.JudgmentPoint.J2).question())
-                    .doesNotContain("[J3] ").doesNotContain("그거 줘").doesNotContain("이것 봐");
+                    .endsWith("[J2] " + OPTION_SET.points().get(LiveContentResources.JudgmentPoint.J2).question())
+                    .doesNotContain("[J3] ").doesNotContain("그거 줘").doesNotContain("이것 봐")
+                    .as("Responses 출력 형식 문장이 없다").doesNotContain("first").doesNotContain("second").doesNotContain("JSON만");
             List<Map<String, Object>> choices = (List<Map<String, Object>>) question.get("choices");
             assertThat(choices).extracting(choice -> choice.get("value")).containsExactlyElementsOf(OPTIONS);
             for (int i = 0; i < choices.size(); i++) {
@@ -146,7 +149,7 @@ class DecisionsJudgeClientTest {
         assertThat(data).containsEntry("childUtterance", "그거 줘. 높이 쌓고 싶어서.").containsEntry("options", OPTIONS);
         assertThat(LogCapture.attrs(capture.events(EventCode.LUNA_CALL).getFirst()))
                 .containsEntry("lunaOutcome", "OK").containsEntry("attempt", 1)
-                .containsEntry("promptVersion", "prompt-service-v2.decisions-v1");
+                .containsEntry("promptVersion", "prompt-service-v3");
         assertThat(capture.events(EventCode.LUNA_CALL)).hasSize(1);
         assertThat(capture.anyLineContains("높이 쌓고")).isFalse();
     }
@@ -167,7 +170,7 @@ class DecisionsJudgeClientTest {
     }
 
     @Test
-    void theSameLowerBoundsAsTheResponsesPathTurnWeakAnswersIntoAbstentionsWithScores() throws Exception {
+    void theLowerBoundsTurnWeakAnswersIntoAbstentionsWithScores() throws Exception {
         stub.respond(Reply.choice(MODEL, NAME, "FULL", probabilities(0.55, 0.2, 0.25)),
                 Reply.choice(MODEL, NAME, "FULL", probabilities(0.7, 0.6)),
                 Reply.choice(MODEL, NAME, "FULL", probabilities(0.6, 0.45)));
@@ -180,7 +183,7 @@ class DecisionsJudgeClientTest {
         assertThat(lowConfidence.firstOption()).isEqualTo("FULL");
         assertThat(lowConfidence.secondOption()).as("2순위는 확률 내림차순(판 순서 아님)").isEqualTo("HELP");
         assertThat(lowMargin.abstainReason()).isEqualTo(AbstainReason.LOW_MARGIN);
-        assertThat(boundary.isConfirmed()).as("하한 · 최소 차이와 같으면 확정(Responses 경로와 같은 경계)").isTrue();
+        assertThat(boundary.isConfirmed()).as("하한 · 최소 차이와 같으면 확정").isTrue();
     }
 
     @Test
@@ -251,7 +254,7 @@ class DecisionsJudgeClientTest {
         DecisionsJudgeClient fake = new DecisionsJudgeClient((request, question) -> {
             calls.incrementAndGet();
             return inFlight;
-        }, PROMPT, new JudgeOutcomeValidator(0.6, 0.15, JSON), clock);
+        }, PROMPT, new JudgeOutcomeValidator(0.6, 0.15), clock);
 
         CompletionStage<JudgeOutcome> outcome = fake.judge(request("그거 줘", Duration.ofSeconds(4)), UUID.randomUUID());
         outcome.toCompletableFuture().cancel(true);
@@ -264,12 +267,69 @@ class DecisionsJudgeClientTest {
     void anUnexpectedFailureWhileStartingTheCallIsAnAbstentionNotAnException() throws Exception {
         DecisionsJudgeClient broken = new DecisionsJudgeClient((request, question) -> {
             throw new IllegalStateException("대역 실패");
-        }, PROMPT, new JudgeOutcomeValidator(0.6, 0.15, JSON), clock);
+        }, PROMPT, new JudgeOutcomeValidator(0.6, 0.15), clock);
 
         JudgeOutcome outcome = broken.judge(request("그거 줘", Duration.ofSeconds(4)), UUID.randomUUID()).toCompletableFuture()
                 .get(WAIT.toSeconds(), TimeUnit.SECONDS);
 
         assertThat(outcome.abstainReason()).isEqualTo(AbstainReason.PROVIDER_ERROR);
         assertThat(broken.available()).isTrue();
+    }
+
+    @Test
+    void anAnswerArrivingJustBeforeTheFourSecondLimitIsStillUsed() throws Exception {
+        stub.respond(Reply.choice(MODEL, NAME, "FULL", probabilities(0.8, 0.1)));
+
+        JudgeOutcome outcome = run(request("그거 줘.", Duration.ofMillis(3_999)));
+
+        assertThat(outcome.isConfirmed()).isTrue();
+        assertThat(stub.requestCount()).isEqualTo(1);
+    }
+
+    @Test
+    void aRejectedCallIsAProviderErrorAbstentionWithOneCall() throws Exception {
+        AtomicInteger calls = new AtomicInteger();
+        DecisionsJudgeClient rejecting = new DecisionsJudgeClient((request, question) -> {
+            calls.incrementAndGet();
+            return CompletableFuture.failedFuture(new LunaException(LunaFailureReason.RATE_LIMITED, 1));
+        }, PROMPT, new JudgeOutcomeValidator(0.6, 0.15), clock);
+
+        JudgeOutcome outcome = rejecting.judge(request("그거 줘", Duration.ofSeconds(4)), UUID.randomUUID()).toCompletableFuture()
+                .get(WAIT.toSeconds(), TimeUnit.SECONDS);
+
+        assertThat(outcome.abstainReason()).isEqualTo(AbstainReason.PROVIDER_ERROR);
+        assertThat(DecisionsJudgeClient.abstainReason(new LunaException(LunaFailureReason.TIMEOUT, 0)))
+                .isEqualTo(AbstainReason.TIMEOUT);
+        assertThat(DecisionsJudgeClient.abstainReason(new java.util.concurrent.CompletionException(
+                new LunaException(LunaFailureReason.SCHEMA_INVALID, 1)))).isEqualTo(AbstainReason.SCHEMA_INVALID);
+        assertThat(calls).hasValue(1);
+    }
+
+    @Test
+    void theRequestValueRejectsWhatTheContractForbids() {
+        Map<String, String> none = Map.of();
+        assertThatThrownBy(() -> new JudgeRequest(JudgmentPoint.J1, "judgment-v1", List.of("A", "A"), "x", List.of(), null, none, false,
+                clock.now())).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new JudgeRequest(JudgmentPoint.J6, "judgment-v1", List.of("A"), "x", List.of(),
+                new JudgeRequest.Criteria("a", "b"), none, false, clock.now())).isInstanceOf(IllegalArgumentException.class);
+        List<JudgeRequest.RecentTurn> four = java.util.Collections.nCopies(4, new JudgeRequest.RecentTurn(JudgeRequest.Speaker.CHILD, "x"));
+        assertThatThrownBy(() -> new JudgeRequest(JudgmentPoint.J2, "judgment-v1", List.of("A"), "x", four, null, none, false,
+                clock.now())).isInstanceOf(IllegalArgumentException.class);
+        assertThat(request("비밀 전사", Duration.ofSeconds(4)).toString()).doesNotContain("비밀 전사");
+    }
+
+    @Test
+    void theUnavailableClientReportsNoProviderWithoutAnyCall() throws Exception {
+        UnavailableJudgeClient unavailable = new UnavailableJudgeClient(PROMPT.version());
+
+        JudgeOutcome outcome = unavailable.judge(request("그거 줘.", Duration.ofSeconds(4)), UUID.randomUUID()).toCompletableFuture()
+                .get(WAIT.toSeconds(), TimeUnit.SECONDS);
+
+        assertThat(unavailable.available()).isFalse();
+        assertThat(judge.available()).isTrue();
+        assertThat(outcome.abstainReason()).isEqualTo(AbstainReason.NO_PROVIDER);
+        assertThat(outcome.model()).isNull();
+        assertThat(outcome.promptVersion()).isEqualTo("prompt-service-v3");
+        assertThat(stub.requestCount()).isZero();
     }
 }

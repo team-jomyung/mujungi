@@ -13,8 +13,8 @@ import java.util.regex.Pattern;
  *
  * @param purpose 목적(지금은 JUDGMENT_LIVE뿐)
  * @param promptVersion 보낸 프롬프트 판
- * @param instructions 판 리소스의 시스템 지시. 요청 {@code instructions} 자리로만 간다
- * @param input 데이터({@code ai-judgment-request.schema.json} 모양). 요청 {@code input} 자리에 JSON 문자열로 간다
+ * @param instructions 판 리소스의 질문 지시문. Decisions 요청 {@code questions[0].instructions} 자리로만 간다
+ * @param input 데이터({@code ai-judgment-request.schema.json} 모양). 정리 뒤 요청 {@code input}의 {@code input_json} 파트로 간다
  * @param aliases 별칭 표(비면 치환 없음)
  * @param deadline 호출자 마감({@code MujoongClock} 기준)
  */

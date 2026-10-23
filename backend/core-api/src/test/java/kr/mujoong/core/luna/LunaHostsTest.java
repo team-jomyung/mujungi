@@ -120,7 +120,13 @@ class LunaHostsTest {
             originals = files.filter(file -> file.getFileName().toString().matches("ai-.*\\.schema\\.json|common\\.schema\\.json"))
                     .sorted().toList();
         }
-        assertThat(originals).as("contracts/schemas/ai-*.schema.json + common(빈 대조 아님)").hasSizeGreaterThanOrEqualTo(8);
+        // 빈 대조로 통과하지 않게, core 목적이 실제로 읽는 출력 스키마와 그 $ref 대상이 원본 목록에 있는지 본다(realtime 판정 출력 스키마는
+        // FT-1023-d로 지워 개수 하한 대신 이 검사를 쓴다)
+        List<String> required = new java.util.ArrayList<>(Arrays.stream(LunaPurpose.values()).map(LunaPurpose::outputSchema)
+                .filter(java.util.Objects::nonNull).toList());
+        required.add("common.schema.json");
+        assertThat(originals).as("contracts/schemas/ai-*.schema.json + common(빈 대조 아님)")
+                .extracting(file -> file.getFileName().toString()).containsAll(required);
         for (Path original : originals) {
             String name = original.getFileName().toString();
             try (InputStream resource = getClass().getClassLoader().getResourceAsStream("luna/schemas/" + name)) {
