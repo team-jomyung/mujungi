@@ -1289,9 +1289,32 @@ class PracticeDialogueLiveTest {
         // ---- 입력 ----
 
         /** core 하니스 패키지(요약 순서 → 나머지 이름 순), 없으면 공유 고정 자료 하나. */
-        @SuppressWarnings("unchecked")
         private Map<String, Object> loadInputs(List<GoalInput> inputs) throws IOException {
+            CoreInputs loaded = coreInputs(out, repoRoot());
+            inputs.addAll(loaded.inputs());
+            if (loaded.coreCalls() >= 0) {
+                coreCalls = loaded.coreCalls();
+            }
+            fromCore = loaded.fromCore();
+            Map<String, Object> source = new LinkedHashMap<>(loaded.source());
+            source.put("files", inputs.stream().map(GoalInput::file).toList());
+            source.put("goalRule", "시작 패키지마다 첫 목표(대본이 실린 목표)만 진행한다. 다음 목표 대본은 core 내부 호출로 받는데 이 모의에는 core가 없다");
+            return source;
+        }
+
+        /**
+         * 출력 폴더에서 읽은 시작 패키지들. {@code coreCalls}는 core 요약의 Luna 호출 수(읽지 못했으면 -1), {@code fromCore}는 core 패키지를 읽었는가.
+         * 실음성 하니스({@link PracticeVoiceDialogueLiveTest})도 같은 규칙으로 읽는다.
+         */
+        record CoreInputs(List<GoalInput> inputs, Map<String, Object> source, int coreCalls, boolean fromCore) {
+        }
+
+        /** core 하니스 패키지(요약 순서 → 나머지 이름 순), 없으면 공유 고정 자료 하나. 패키지마다 첫 목표만 남긴다. */
+        @SuppressWarnings("unchecked")
+        static CoreInputs coreInputs(Path out, Path repoRoot) throws IOException {
             Map<String, Object> source = new LinkedHashMap<>();
+            List<GoalInput> inputs = new ArrayList<>();
+            int coreCalls = -1;
             Path dir = out.resolve(PACKAGE_DIR);
             Path coreSummary = out.resolve(CORE_SUMMARY_FILE);
             List<Path> files = new ArrayList<>();
@@ -1326,8 +1349,8 @@ class PracticeDialogueLiveTest {
                             .filter(path -> !files.contains(path)).forEach(files::add);
                 }
             }
-            if (!files.isEmpty()) {
-                fromCore = true;
+            boolean fromCore = !files.isEmpty();
+            if (fromCore) {
                 source.put("kind", "CORE_HARNESS_START_PACKAGES");
                 source.put("directory", PACKAGE_DIR + "/");
                 if (core == null || core.containsKey("outcome")) {
@@ -1342,15 +1365,13 @@ class PracticeDialogueLiveTest {
                 source.put("kind", "SHARED_FIXTURE");
                 source.put("warning", "core 하니스 결과(" + PACKAGE_DIR + "/)가 없어 공유 고정 자료 하나로 진행했다. 이 대본은 가짜 모델이 만든 고정 자료다");
                 inputs.add(input("shared-fixture", FIXTURE, "SHARED_FIXTURE",
-                        Files.readString(repoRoot().resolve(FIXTURE), StandardCharsets.UTF_8)));
+                        Files.readString(repoRoot.resolve(FIXTURE), StandardCharsets.UTF_8)));
             }
-            source.put("files", inputs.stream().map(GoalInput::file).toList());
-            source.put("goalRule", "시작 패키지마다 첫 목표(대본이 실린 목표)만 진행한다. 다음 목표 대본은 core 내부 호출로 받는데 이 모의에는 core가 없다");
-            return source;
+            return new CoreInputs(List.copyOf(inputs), source, coreCalls, fromCore);
         }
 
         @SuppressWarnings("unchecked")
-        private static GoalInput input(String key, String file, String source, String json) {
+        static GoalInput input(String key, String file, String source, String json) {
             Map<String, Object> raw = JSON.read(json, Map.class);
             List<Object> goals = raw.get("goals") instanceof List<?> list ? (List<Object>) list : List.of();
             Map<String, Object> first = goals.isEmpty() || !(goals.getFirst() instanceof Map<?, ?>) ? Map.of()
@@ -2503,7 +2524,11 @@ class PracticeDialogueLiveTest {
         }
 
         private String approvedKind(String text) {
-            Scene scene = currentScene();
+            return approvedKindOf(script, currentScene(), harness.approvedSpeech, text);
+        }
+
+        /** 승인 발화가 대본의 어느 칸인지(지금 장면 · 변형 제안 · 도움 제안). 실음성 하니스도 같은 규칙으로 쓴다. */
+        static String approvedKindOf(PracticeScript script, Scene scene, Map<String, String> approvedSpeech, String text) {
             if (text.equals(scene.sceneDescription())) {
                 return "SCENE_DESCRIPTION";
             }
@@ -2520,7 +2545,7 @@ class PracticeDialogueLiveTest {
                     .isPresent()) {
                 return "VARIANT_OFFER";
             }
-            if (text.equals(harness.approvedSpeech.get("HELP_OFFER"))) {
+            if (text.equals(approvedSpeech.get("HELP_OFFER"))) {
                 return "HELP_OFFER";
             }
             return "APPROVED_OTHER";
@@ -2528,7 +2553,11 @@ class PracticeDialogueLiveTest {
 
         /** 지시문이 어느 템플릿에서 왔는지(지금 장면으로 템플릿을 다시 만들어 글자 그대로 맞춘다). */
         private String template(String instruction) {
-            Scene scene = currentScene();
+            return templateOf(currentScene(), instruction);
+        }
+
+        /** 지시문 템플릿 이름(장면으로 템플릿을 다시 만들어 글자 그대로 맞춘다, 없으면 UNKNOWN). 실음성 하니스도 같은 규칙으로 쓴다. */
+        static String templateOf(Scene scene, String instruction) {
             Map<String, String> templates = new LinkedHashMap<>();
             templates.putIfAbsent(PracticeInstructions.peerReask(scene, false), "PEER_REASK(친구 되묻기)");
             templates.putIfAbsent(PracticeInstructions.peerReask(scene, true), "PEER_REASK_AGAIN(친구 되묻기 · 다시 안내)");

@@ -210,6 +210,23 @@ tasks.named<Test>("test") {
     environment.remove("JEV_API_KEY")
 }
 
+// ---- 실음성 연습 대화 하니스 분리 (실측 하니스, gptLiveTest · jevLiveTest와 같은 방식) ----
+// 실제 GPT-Live 음성 · Luna 판정 · TTS를 부르는 연습 대화 하니스(@Tag("gpt-live-practice"))는 모든 모듈의 기본 test 작업에서 언제나 빠지고,
+// 시험 JVM에는 키가 넘어가지 않는다(R-F1 · R-F3). 태그는 이름이 정확히 같아야 걸리므로 gpt-live 제외와 따로 둔다. gptLivePracticeTest 작업은
+// realtime-activity 빌드 파일에만 있고 check · build에 물리지 않는다. 확인은 루트 verifyGptLivePracticeIsolation이 한다.
+
+/** 실음성 연습 대화 하니스 태그. */
+val gptLivePracticeTag = "gpt-live-practice"
+
+tasks.named<Test>("test") {
+    options {
+        (this as JUnitPlatformOptions).excludeTags(gptLivePracticeTag)
+    }
+    inputs.property("fixedExcludeTagsGptLivePractice", gptLivePracticeTag)
+    // 기본 시험은 키를 보지 않는다. 개발 PC env에 키가 있어도 시험 JVM에는 넘기지 않는다
+    environment.remove("OPENAI_API_KEY")
+}
+
 // ---- 커버리지 (Step 5 · J91 · J107 · J137) ----
 
 val coverageScopeName: String? = providers.gradleProperty("coverageScope").orNull

@@ -90,6 +90,7 @@ public final class FakeProviderWsServer implements AutoCloseable {
     private volatile Duration chunkInterval = Duration.ofMillis(2);
     private volatile Duration childConfirmDelay = Duration.ZERO;
     private volatile boolean autoAck = true;
+    private volatile java.util.function.Consumer<JsonNode> onReceive = node -> { };
 
     private FakeProviderWsServer() throws InterruptedException {
         this.server = new Server(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0));
@@ -175,6 +176,25 @@ public final class FakeProviderWsServer implements AutoCloseable {
     public FakeProviderWsServer autoAck(boolean value) {
         this.autoAck = value;
         return this;
+    }
+
+    /**
+     * 받은 메시지마다 시험의 응답기를 부른다(실음성 하니스 배선 점검의 루프백 GPT-Live 흉내). 서버가 정해진 답(오류 · started · 지시 확인 사건)을
+     * 보낸 뒤 서버 수신 스레드에서 부르므로, 응답기는 오래 막지 않고 말을 흘릴 때는 자기 스레드로 넘긴다. 기본은 아무것도 하지 않는다.
+     */
+    public FakeProviderWsServer onReceive(java.util.function.Consumer<JsonNode> listener) {
+        this.onReceive = Objects.requireNonNull(listener, "listener");
+        return this;
+    }
+
+    /**
+     * 출력 오디오 시계와 아직 쓰지 않은 지시 확인을 처음으로 되돌린다. 실제 공급자의 오디오 시계는 세션(연결)마다 0부터이므로, 한 서버로 세션을 여러 번
+     * 여는 시험이 새 {@code session.start}마다 부른다(부르지 않으면 지금처럼 서버 시계가 이어진다).
+     */
+    public void resetAudioClock() {
+        audioClockMs.set(0L);
+        pendingAckEndMs = -1L;
+        lastAudioNanos = System.nanoTime() - Duration.ofHours(1).toNanos();
     }
 
     /** 지금까지 보낸 출력 음성의 누적 ms. */
@@ -383,6 +403,7 @@ public final class FakeProviderWsServer implements AutoCloseable {
             String audio = text(node, "audio");
             audioHashes.add(sha256(audio == null ? new byte[0] : Base64.getDecoder().decode(audio)));
         }
+        onReceive.accept(node);
     }
 
     /** 지시 추가: {@code delegation_id} 키(null 값 허용)와 {@code content}가 있어야 받는다. 받으면 확인 사건을 보내고 단순 모델을 돌린다. */
