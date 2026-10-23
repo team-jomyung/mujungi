@@ -102,16 +102,34 @@ public final class PracticeConversation implements PracticeSessionExtension {
     private UUID sceneRunId;
     private boolean sceneRowCreated;
     private UUID openSlot;
+    private boolean openSlotPlaying;
+    private boolean approvedReadingRetried;
+    private boolean generatedAudioRetried;
     private boolean awaitingNotice;
     private boolean inputReady;
     private Utterance earlyUtterance;
     private UUID judgmentCorrelation;
+    private boolean judgmentAsksProcedure;
     private ConsentAnswer pendingConsent;
     private int waitingGoal = -1;
     private boolean stopping;
     private Signal pendingSignal = Signal.NONE;
     private long speechGeneration;
     private String lastStage = STAGE_SCENARIO_INTRO;
+    private boolean goalAchieved;
+    private LiveTiming goalAchievementTiming;
+    private int clarificationAttempts;
+    private int uncertainAttempts;
+    private boolean reflectionAwaiting;
+    private boolean reflecting;
+    private boolean goalBriefPlayed;
+    private boolean goalRecapped;
+    private boolean reviewPerformed;
+    private boolean reviewAfterHelp;
+    private boolean reviewClarified;
+    private boolean reviewHelpProvided;
+    private boolean reviewInterrupted;
+    private boolean recapAdvances;
 
     /**
      * @param sessionId 이 세션
@@ -137,6 +155,17 @@ public final class PracticeConversation implements PracticeSessionExtension {
     @Override
     public boolean controlsOutput() {
         return true;
+    }
+
+    @Override
+    public boolean collectingIntroduction() {
+        return state.phase() == Phase.SCENE_INTRO && openSlot != null && !stopping;
+    }
+    @Override public boolean canYieldUnplayedSpeech() {
+        // No goal achievement, consent, coaching or closing transition may be inferred from an unheard output.
+        return !stopping && !reflecting && state.phase() == Phase.OPPORTUNITY
+                && (state.sub() == Sub.NONE || state.sub() == Sub.DIALOGUE_REPLY
+                || state.sub() == Sub.CLARIFICATION_REPLY || state.sub() == Sub.INPUT_CONFIRMATION);
     }
 
     // ---- 확장점 시점 ----
@@ -168,6 +197,10 @@ public final class PracticeConversation implements PracticeSessionExtension {
             return Signal.NONE;
         }
         Phase phase = state.phase();
+        if (reflecting) {
+            reflectionUtterance(utterance);
+            return finish();
+        }
         if (phase.awaitsInput() && state.sub() == Sub.NONE) {
             if (!inputReady) {
                 // 우리 질문이 아직 재생 중이다. 재생이 끝나는 대로 이 전사를 판정한다
@@ -175,11 +208,28 @@ public final class PracticeConversation implements PracticeSessionExtension {
             } else if (!state.judgmentOpen()) {
                 judge(utterance);
             }
+        } else if (phase.awaitsInput() && (state.sub() == Sub.REEXPLAIN || state.sub() == Sub.DIALOGUE_REPLY
+                || state.sub() == Sub.CLARIFICATION_REPLY || state.sub() == Sub.INPUT_CONFIRMATION)) {
+            // 재설명 중의 답도 보관하고 재생 종료 후 같은 판정 지점으로 이어 준다.
+            earlyUtterance = utterance;
         } else if (phase == Phase.FOCUS && state.sub() == Sub.COACH_UTTERANCE) {
             // 코치 발화에 끼어든 전사는 재생이 끝난 뒤 RETRY 진입에서 곧바로 J5 입력으로 처리한다(§3.3)
             earlyUtterance = utterance;
         }
         return finish();
+    }
+
+    private void reflectionUtterance(Utterance utterance) {
+        if (state.judgmentOpen()) return;
+        if (!reflectionAwaiting || openSlot != null) earlyUtterance = utterance;
+        else if (utterance.uncertain()) finishReflection();
+        else if (state.sub() == Sub.REFLECTION_OFFER) judge(utterance);
+        else {
+            reflectionAwaiting = false;
+            output.cancel(TIMER_NO_RESPONSE);
+            state.phase(Phase.SCENE_INTRO, Sub.REFLECTION_ACK);
+            speakGenerated(FlowRole.PEER, PracticeInstructions.reflectionAcknowledgment());
+        }
     }
 
     @Override
@@ -197,6 +247,10 @@ public final class PracticeConversation implements PracticeSessionExtension {
             case ASYNC_RESULT -> {
                 if (ASYNC_SCRIPT.equals(event.name()) && event.value() instanceof ScriptResult result) {
                     onScript(result);
+                } else if ("approved-text-mismatch".equals(event.name()) && event.value() instanceof PracticeSpeech speech) {
+                    onApprovedTextMismatch(speech);
+                } else if ("practice-audio-incomplete".equals(event.name()) && event.value() instanceof PracticeSpeech speech) {
+                    onIncompleteAudio(speech);
                 }
             }
             case JUDGMENT_RESULT -> onJudgmentResult(event);
@@ -221,7 +275,9 @@ public final class PracticeConversation implements PracticeSessionExtension {
         }
         stopping = true;
         // 실행부는 종료 전이 때 확장점 시계를 직접 비우고 ACTIVE가 아닌 출력 능력 호출은 거절한다. 여기서는 기록만 닫는다
-        if (sceneRowCreated && state.sceneEndCause() == null && state.phase() != Phase.CLOSING
+        if (sceneRowCreated && (state.sceneEndCause() == null
+                || (state.phase() == Phase.SCENE_WRAP && state.sceneEndCause() == FlowTransitions.EndCause.NORMAL))
+                && state.phase() != Phase.CLOSING
                 && state.phase() != Phase.NEXT_GOAL) {
             recordFact(FactKind.END_REQUEST);
             recordOutcome(VariantSkipReason.END_OR_REST, LiveTiming.NONE);
@@ -246,6 +302,13 @@ public final class PracticeConversation implements PracticeSessionExtension {
         }
         return new Progress(state.goalIndex() + 1, pack.goals().size(), pack.goals().get(state.goalIndex()).goalName(), stage());
     }
+
+    @Override public boolean handlesAudioRecovery() { return true; }
+
+    /** Read-only diagnostic state; does not update display progress. */
+    @Override
+    public String diagnosticPhase() { return state.phase().name(); }
+    public String diagnosticSub() { return state.sub().name(); }
 
     private String stage() {
         if (state.phase() == Phase.CLOSING) {
@@ -291,6 +354,9 @@ public final class PracticeConversation implements PracticeSessionExtension {
     private void beginGoal(int index) {
         currentScript = scripts.get(index);
         state.goal(index, index == pack.goals().size() - 1, clock.now());
+        goalBriefPlayed = false;
+        goalRecapped = false;
+        reviewPerformed = reviewAfterHelp = reviewClarified = reviewHelpProvided = reviewInterrupted = false;
         output.schedule(TIMER_GOAL_LIMIT, settings.goalActiveLimit());
         requestScript(index + 1);
         enterScene(SceneKind.BASE);
@@ -310,7 +376,44 @@ public final class PracticeConversation implements PracticeSessionExtension {
         sceneRowCreated = false;
         earlyUtterance = null;
         pendingConsent = null;
-        speakApproved(scene.sceneDescription());
+        goalAchieved = false;
+        goalAchievementTiming = null;
+        clarificationAttempts = 0;
+        uncertainAttempts = 0;
+        if (settings.flexibleDialogue() && kind == SceneKind.BASE && !goalBriefPlayed) {
+            state.phase(Phase.SCENE_INTRO, Sub.GOAL_BRIEF);
+            speakGenerated(FlowRole.PEER, PracticeInstructions.goalBrief(pack.goals().get(state.goalIndex()).goalName(),
+                    state.goalIndex() + 1, pack.goals().size()));
+            return;
+        }
+        beginReflectionOrIntroduction();
+    }
+
+    private void beginReflectionOrIntroduction() {
+        Scene scene = currentScene;
+        if (settings.flexibleDialogue() && state.sceneKind() == SceneKind.BASE && scene.reflectionPrompt() != null) {
+            reflecting = true;
+            reflectionAwaiting = false;
+            state.phase(Phase.SCENE_INTRO, Sub.REFLECTION_OFFER);
+            speakGenerated(FlowRole.PEER, PracticeInstructions.reflectionOffer());
+            return;
+        }
+        beginIntroduction();
+    }
+
+    private void finishReflection() {
+        reflecting = false;
+        reflectionAwaiting = false;
+        earlyUtterance = null;
+        output.cancel(TIMER_NO_RESPONSE);
+        beginIntroduction();
+    }
+
+    private void beginIntroduction() {
+        state.phase(Phase.SCENE_INTRO, Sub.NONE);
+        Scene scene = currentScene;
+        if (settings.flexibleDialogue()) speakApproved(PracticeInstructions.spokenIntroduction(scene));
+        else speakApproved(scene.sceneDescription());
     }
 
     private void moveOn() {
@@ -322,6 +425,7 @@ public final class PracticeConversation implements PracticeSessionExtension {
     }
 
     private void advanceGoal() {
+        if (beginGoalRecap(true)) return;
         output.cancel(TIMER_GOAL_LIMIT);
         output.cancel(TIMER_FOCUS_MAX);
         output.cancel(TIMER_NO_RESPONSE);
@@ -329,7 +433,10 @@ public final class PracticeConversation implements PracticeSessionExtension {
         startGoal(state.goalIndex() + 1);
     }
 
+    private boolean outputFailed;
+
     private void closing(boolean byRequest) {
+        if (!byRequest && beginGoalRecap(false)) return;
         output.cancel(TIMER_GOAL_LIMIT);
         output.cancel(TIMER_FOCUS_MAX);
         output.cancel(TIMER_NO_RESPONSE);
@@ -339,8 +446,24 @@ public final class PracticeConversation implements PracticeSessionExtension {
             // 종료 · 휴식 판정은 실행부(J6) 소유다. 확장은 말을 멈추고 출력을 막은 채 실행부의 결정을 기다린다(신호를 내지 않는다)
             output.holdOutput(true);
         } else {
-            pendingSignal = Signal.LAST_GOAL;
+            pendingSignal = outputFailed ? Signal.OUTPUT_FAILED : Signal.LAST_GOAL;
         }
+    }
+
+    private boolean beginGoalRecap(boolean advances) {
+        if (!settings.flexibleDialogue() || goalRecapped || !sceneRowCreated || outputFailed || stopping) return false;
+        goalRecapped = true;
+        recapAdvances = advances;
+        output.cancel(TIMER_GOAL_LIMIT);
+        output.cancel(TIMER_FOCUS_MAX);
+        output.cancel(TIMER_NO_RESPONSE);
+        cancelOpenSlot();
+        dropJudgment();
+        earlyUtterance = null;
+        state.phase(Phase.SCENE_WRAP, Sub.GOAL_RECAP);
+        speakGenerated(FlowRole.PEER, PracticeInstructions.goalRecap(pack.goals().get(state.goalIndex()).goalName(),
+                reviewPerformed, reviewAfterHelp, reviewClarified, reviewHelpProvided, reviewInterrupted, !advances));
+        return true;
     }
 
     // ---- 다음 목표 대본 ----
@@ -384,22 +507,34 @@ public final class PracticeConversation implements PracticeSessionExtension {
     // ---- 아이 말 · 판정 ----
 
     private void judge(Utterance utterance) {
-        JudgmentPoint point = FlowTransitions.expectedPoint(state.phase());
+        if (settings.flexibleDialogue() && !reflecting && state.phase() == Phase.OPPORTUNITY && utterance.uncertain()) {
+            confirmUncertainInput(false);
+            return;
+        }
+        JudgmentPoint point = expectedJudgmentPoint();
         UUID correlation = UUID.randomUUID();
         output.cancel(TIMER_NO_RESPONSE);
         judgmentCorrelation = correlation;
+        judgmentAsksProcedure = PracticeProcedureQuestion.matches(utterance.text());
         state.judgmentOpen(true);
         boolean accepted = output.requestJudgment(point, utterance.seq(), correlation, criteriaFor(point));
         if (!accepted) {
             // 거절(열린 턴 · 공급자 없음 · 전사 범위 밖 등)은 보류와 같게 이어 간다. 연습은 멈추지 않는다(BR3.7)
             judgmentCorrelation = null;
+            judgmentAsksProcedure = false;
             state.judgmentOpen(false);
-            afterJudgment(transitions.onJudgmentUnavailable(state, point));
+            unavailableJudgment(point);
         }
     }
 
     /** J2 · J3 · J5에만 판정 기준을 싣는다(D2). coreFunction은 목표의 판정 기준 문자열에서 만든다(상한 안으로 줄인다). */
     private Map<String, Object> criteriaFor(JudgmentPoint point) {
+        if (reflecting) return null;
+        if (settings.flexibleDialogue() && goalAchieved && state.phase() == Phase.OPPORTUNITY) {
+            return Map.of("coreFunction", "ROLE_DIALOGUE_CLOSURE", "judgmentCriteria",
+                    "친구 역할 대화에서 제안에 동의하거나 대안을 합의하는 등 현재 상황이 정리됐는지 본다. "
+                    + "새 질문·이유 묻기·조건 제시·반대·진행 방법 질문은 대화가 더 필요하다. 짧은 응도 직전 제안을 받아들이는 맥락이면 정리될 수 있다.");
+        }
         if (point != JudgmentPoint.J2 && point != JudgmentPoint.J3 && point != JudgmentPoint.J5) {
             return null;
         }
@@ -411,17 +546,31 @@ public final class PracticeConversation implements PracticeSessionExtension {
     }
 
     private void onJudgmentResult(ExtensionEvent event) {
+        boolean asksProcedure = judgmentAsksProcedure;
         if (!closeJudgment(event.correlationId())) {
             return;
         }
         if (!(event.value() instanceof Map<?, ?> value)) {
             // 모양이 틀린 결과는 보류와 같게 이어 간다(교정 없이, 연습은 멈추지 않는다)
-            afterJudgment(transitions.onJudgmentUnavailable(state, FlowTransitions.expectedPoint(state.phase())));
+            unavailableJudgment(expectedJudgmentPoint());
             return;
         }
         JudgmentPoint point = pointOf(value.get("point"));
         Object first = value.get("firstOption");
-        afterJudgment(point == null ? Step.ignore() : transitions.onJudgment(state, point, first == null ? null : first.toString()));
+        String option = first == null ? null : first.toString();
+        if (reflecting) {
+            if ("ACCEPT".equals(option)) {
+                reflectionAwaiting = false;
+                state.phase(Phase.SCENE_INTRO, Sub.REFLECTION_PROMPT);
+                speakApproved(currentScene.reflectionPrompt());
+            } else finishReflection();
+            return;
+        }
+        if (settings.flexibleDialogue() && flexibleJudgment(point, option, asksProcedure)) return;
+        // Preserve the model's recorded result; the flow must not finish on a recognized question about how to practise.
+        if (asksProcedure && (point == JudgmentPoint.J2 || point == JudgmentPoint.J3 || point == JudgmentPoint.J5)
+                && ("FULL".equals(option) || "DELIVERED".equals(option) || "COPIED".equals(option))) option = "HELP";
+        afterJudgment(point == null ? Step.ignore() : transitions.onJudgment(state, point, option));
     }
 
     private void onJudgmentAbstained(ExtensionEvent event) {
@@ -429,8 +578,76 @@ public final class PracticeConversation implements PracticeSessionExtension {
             return;
         }
         JudgmentPoint point = event.value() instanceof Map<?, ?> value ? pointOf(value.get("point"))
-                : FlowTransitions.expectedPoint(state.phase());
-        afterJudgment(point == null ? Step.ignore() : transitions.onJudgmentUnavailable(state, point));
+                : expectedJudgmentPoint();
+        unavailableJudgment(point);
+    }
+
+    private JudgmentPoint expectedJudgmentPoint() {
+        if (reflecting) return JudgmentPoint.J4;
+        return settings.flexibleDialogue() && goalAchieved && state.phase() == Phase.OPPORTUNITY
+                ? JudgmentPoint.J3 : FlowTransitions.expectedPoint(state.phase());
+    }
+
+    private void unavailableJudgment(JudgmentPoint point) {
+        if (reflecting) { finishReflection(); return; }
+        if (settings.flexibleDialogue() && state.phase() == Phase.OPPORTUNITY) {
+            confirmUncertainInput(true);
+        } else {
+            afterJudgment(point == null ? Step.ignore() : transitions.onJudgmentUnavailable(state, point));
+        }
+    }
+
+    private boolean flexibleJudgment(JudgmentPoint point, String option, boolean asksProcedure) {
+        if (state.phase() == Phase.OPPORTUNITY && point == expectedJudgmentPoint()) {
+            if ("UNREADABLE".equals(option)) {
+                confirmUncertainInput(false);
+            } else if (asksProcedure || "HELP".equals(option)) {
+                uncertainAttempts = 0;
+                applyStep(transitions.onJudgment(state, JudgmentPoint.J2, "HELP"));
+            } else if ("NOT_UNDERSTOOD".equals(option)) {
+                uncertainAttempts = 0;
+                if (state.reexplainCount() < settings.reexplainMax()) applyStep(Step.reexplain(Phase.OPPORTUNITY));
+                else applyStep(Step.enter(Phase.HELP_OFFER, Sub.NONE));
+            } else if (!goalAchieved && "PARTIAL".equals(option)) {
+                uncertainAttempts = 0;
+                if (++clarificationAttempts > 1) applyStep(Step.enter(Phase.HELP_OFFER, Sub.NONE));
+                else applyStep(Step.enter(Phase.OPPORTUNITY, Sub.CLARIFICATION_REPLY));
+            } else if (goalAchieved && "DELIVERED".equals(option)) {
+                applyStep(Step.enter(Phase.SCENE_WRAP, Sub.PEER_REPLY)
+                        .cause(FlowTransitions.EndCause.NORMAL).timing(goalAchievementTiming));
+            } else {
+                if (!goalAchieved && "FULL".equals(option)) {
+                    goalAchieved = true;
+                    goalAchievementTiming = clarificationAttempts > 0 ? LiveTiming.AFTER_REASK : LiveTiming.IMMEDIATE;
+                    if (clarificationAttempts > 0) recordFact(FactKind.REASK_RESOLVED);
+                }
+                uncertainAttempts = 0;
+                continueDialogue();
+            }
+            return true;
+        }
+        if (state.phase() == Phase.RETRY && point == JudgmentPoint.J5 && !asksProcedure
+                && ("FULL".equals(option) || "COPIED".equals(option))) {
+            if (!goalAchieved) goalAchievementTiming = LiveTiming.AFTER_HELP;
+            goalAchieved = true;
+            applyStep(Step.enter(Phase.OPPORTUNITY, Sub.RETURN_NOTICE));
+            return true;
+        }
+        return false;
+    }
+
+    private void continueDialogue() {
+        applyStep(Step.enter(Phase.OPPORTUNITY, Sub.DIALOGUE_REPLY));
+    }
+
+    private void confirmUncertainInput(boolean abstained) {
+        output.cancel(TIMER_NO_RESPONSE);
+        if (++uncertainAttempts > 1) {
+            applyStep(Step.enter(Phase.SCENE_WRAP, Sub.VARIANT_EVAL)
+                    .cause(abstained ? FlowTransitions.EndCause.ABSTAINED : FlowTransitions.EndCause.TRANSCRIPT_FAILED)
+                    .timing(abstained ? LiveTiming.ABSTAINED : LiveTiming.NONE)
+                    .fact(abstained ? null : FactKind.TRANSCRIPT_FAILED));
+        } else applyStep(Step.enter(Phase.OPPORTUNITY, Sub.INPUT_CONFIRMATION));
     }
 
     /** 이 사건이 지금 열린 판정의 것인가(늦은 · 다른 판정의 사건은 무시). 맞으면 판정을 닫는다. */
@@ -439,6 +656,7 @@ public final class PracticeConversation implements PracticeSessionExtension {
             return false;
         }
         judgmentCorrelation = null;
+        judgmentAsksProcedure = false;
         state.judgmentOpen(false);
         return true;
     }
@@ -466,10 +684,16 @@ public final class PracticeConversation implements PracticeSessionExtension {
     // ---- 슬롯 · 재생 사건 ----
 
     private void onPlayback(PlaybackFact fact, UUID eventCorrelation) {
+        UUID correlation = fact.speech() != null ? fact.speech().correlationId() : eventCorrelation;
         if (fact.started()) {
+            if (correlation != null && correlation.equals(openSlot) && !openSlotPlaying) {
+                // Generation and actual playback each have a bounded guard. Duplicate STARTED marks cannot extend it.
+                output.cancel(slotGuardName());
+                openSlotPlaying = true;
+                if (!output.managesSpeechTimeouts()) output.schedule(slotGuardName(), settings.slotGuard());
+            }
             return;
         }
-        UUID correlation = fact.speech() != null ? fact.speech().correlationId() : eventCorrelation;
         SlotEnd end = fact.played() ? SlotEnd.PLAYED : fact.interrupted() ? SlotEnd.INTERRUPTED : SlotEnd.FAILED;
         handleSlotEnd(correlation, end);
     }
@@ -485,12 +709,49 @@ public final class PracticeConversation implements PracticeSessionExtension {
             return;
         }
         state.markHandled(correlation);
+        if (end == SlotEnd.FAILED || end == SlotEnd.BLOCKED
+                || (end == SlotEnd.INTERRUPTED && state.sub() == Sub.PEER_REPLY)) {
+            outputFailed = true;
+        }
         if (mine) {
-            output.cancel(TIMER_SLOT_GUARD + correlation);
+            output.cancel(slotGuardName());
             openSlot = null;
+            openSlotPlaying = false;
         } else {
             output.cancel(TIMER_NOTICE_GUARD);
             awaitingNotice = false;
+        }
+        if (mine && state.sub() == Sub.GOAL_RECAP) {
+            // No retry or approved-speech fallback: safety refusal and missing playback stay failures.
+            if (end != SlotEnd.PLAYED) outputFailed = true;
+            if (recapAdvances && !outputFailed) advanceGoal();
+            else closing(false);
+            return;
+        }
+        if (mine && state.sub() == Sub.GOAL_BRIEF && end == SlotEnd.PLAYED) {
+            goalBriefPlayed = true;
+            beginReflectionOrIntroduction();
+            return;
+        }
+        if (mine && state.sub() == Sub.GOAL_BRIEF && end == SlotEnd.INTERRUPTED) {
+            // A played, guarded brief interrupted by speech is not a transport failure.
+            // Continue to the reviewed scene introduction; never repeat the brief indefinitely.
+            goalBriefPlayed = true;
+            beginReflectionOrIntroduction();
+            return;
+        }
+        if (reflecting && mine && (end == SlotEnd.PLAYED || end == SlotEnd.INTERRUPTED)) {
+            if (state.sub() == Sub.REFLECTION_ACK) finishReflection();
+            else {
+                reflectionAwaiting = true;
+                output.schedule(TIMER_NO_RESPONSE, settings.noResponseWait());
+                if (earlyUtterance != null) {
+                    Utterance early = earlyUtterance;
+                    earlyUtterance = null;
+                    reflectionUtterance(early);
+                }
+            }
+            return;
         }
         if (mine && state.phase() == Phase.SCENE_INTRO && !sceneRowCreated
                 && (end == SlotEnd.FAILED || end == SlotEnd.BLOCKED)) {
@@ -505,6 +766,25 @@ public final class PracticeConversation implements PracticeSessionExtension {
         if (introEnded) {
             createSceneRow();
         }
+        if (settings.flexibleDialogue() && state.phase() == Phase.OPPORTUNITY) {
+            if ((state.sub() == Sub.DIALOGUE_REPLY || state.sub() == Sub.CLARIFICATION_REPLY || state.sub() == Sub.INPUT_CONFIRMATION)
+                    && (end == SlotEnd.PLAYED || end == SlotEnd.INTERRUPTED)) {
+                applyStep(Step.enter(Phase.OPPORTUNITY, Sub.NONE));
+                return;
+            }
+            if (state.sub() == Sub.RETURN_NOTICE && end == SlotEnd.PLAYED) {
+                applyStep(Step.enter(Phase.OPPORTUNITY, Sub.DIALOGUE_REPLY)
+                        .role(FlowRole.PEER).fact(FactKind.COACH_RETURN).fact(FactKind.ORIGINAL_SCENE_RETURN));
+                return;
+            }
+            if (state.sub() == Sub.RETURN_NOTICE) {
+                outputFailed = true;
+                applyStep(Step.enter(Phase.SCENE_WRAP, Sub.VARIANT_EVAL).role(FlowRole.PEER)
+                        .cause(FlowTransitions.EndCause.PLAYBACK_FAILED).timing(goalAchievementTiming)
+                        .fact(FactKind.PLAYBACK_FAILED));
+                return;
+            }
+        }
         Step step = transitions.onSlotEnded(state, end);
         if (step.action() == FlowTransitions.Action.IGNORE) {
             unexpected();
@@ -514,6 +794,7 @@ public final class PracticeConversation implements PracticeSessionExtension {
     }
 
     private void onTimer(String name) {
+        if (reflecting && TIMER_NO_RESPONSE.equals(name)) { finishReflection(); return; }
         switch (name) {
             case TIMER_NO_RESPONSE -> applyStep(transitions.onNoResponse(state));
             case TIMER_FOCUS_MAX -> onFocusMax();
@@ -525,7 +806,7 @@ public final class PracticeConversation implements PracticeSessionExtension {
                 }
             }
             default -> {
-                if (name.startsWith(TIMER_SLOT_GUARD) && openSlot != null && name.equals(TIMER_SLOT_GUARD + openSlot)) {
+                if (name.startsWith(TIMER_SLOT_GUARD) && openSlot != null && name.equals(slotGuardName())) {
                     // 종료 사건이 끝내 오지 않았다: 실패로 본다(안전망). 늦게 닿는 사건은 처리 완료로 무시한다
                     UUID stuck = openSlot;
                     output.cancelSpeech(stuck);
@@ -571,6 +852,7 @@ public final class PracticeConversation implements PracticeSessionExtension {
     /** 열린 판정 표지만 거둔다(결과가 늦게 와도 correlationId가 달라 무시된다). */
     private void dropJudgment() {
         judgmentCorrelation = null;
+        judgmentAsksProcedure = false;
         state.judgmentOpen(false);
     }
 
@@ -619,7 +901,10 @@ public final class PracticeConversation implements PracticeSessionExtension {
             }
         }
         switch (state.phase()) {
-            case OPPORTUNITY -> speakApproved(currentScene.opportunitySentence());
+            case OPPORTUNITY -> {
+                if (settings.flexibleDialogue()) speakGenerated(FlowRole.PEER, PracticeInstructions.peerCheckIn(currentScene));
+                else speakApproved(currentScene.opportunitySentence());
+            }
             case REASK -> speakGenerated(FlowRole.PEER, PracticeInstructions.peerReask(currentScene, true));
             case HELP_OFFER -> speakGenerated(FlowRole.PEER, PracticeInstructions.peerHelpOffer(currentScene, true));
             case RETRY -> speakGenerated(FlowRole.COACH, PracticeInstructions.coachRetryPrompt(currentScene));
@@ -642,6 +927,7 @@ public final class PracticeConversation implements PracticeSessionExtension {
 
     private void enter(Step step) {
         Phase previous = state.phase();
+        Sub previousSub = state.sub();
         output.cancel(TIMER_NO_RESPONSE);
         if (step.consent() != null) {
             pendingConsent = step.consent();
@@ -673,7 +959,7 @@ public final class PracticeConversation implements PracticeSessionExtension {
         if (step.skip() != null) {
             recordOutcome(step.skip(), state.sceneTiming());
         }
-        dispatch(step, previous);
+        dispatch(step, previous, previousSub);
     }
 
     /** 장면 정리 진입: 시계 · 열린 판정 · 끼어든 전사를 거두고 장면 결과를 남긴다. */
@@ -682,13 +968,23 @@ public final class PracticeConversation implements PracticeSessionExtension {
         cancelOpenSlot();
         dropJudgment();
         earlyUtterance = null;
-        recordOutcome(null, state.sceneTiming());
+        if (state.sceneEndCause() != FlowTransitions.EndCause.NORMAL) {
+            recordOutcome(null, state.sceneTiming());
+        }
     }
 
-    private void dispatch(Step step, Phase previous) {
+    private void dispatch(Step step, Phase previous, Sub previousSub) {
         switch (step.phase()) {
             case SCENE_INTRO -> enterScene(SceneKind.VARIANT);
-            case OPPORTUNITY -> speakApproved(currentScene.opportunitySentence());
+            case OPPORTUNITY -> {
+                if (step.sub() == Sub.DIALOGUE_REPLY) speakGenerated(FlowRole.PEER, PracticeInstructions.peerDialogue(currentScene));
+                else if (step.sub() == Sub.CLARIFICATION_REPLY) speakGenerated(FlowRole.PEER, PracticeInstructions.peerClarification(currentScene));
+                else if (step.sub() == Sub.INPUT_CONFIRMATION) speakGenerated(FlowRole.PEER, PracticeInstructions.inputConfirmation());
+                else if (step.sub() == Sub.RETURN_NOTICE) announce(FlowRole.PEER);
+                else if (previousSub == Sub.REEXPLAIN || previousSub == Sub.DIALOGUE_REPLY
+                        || previousSub == Sub.CLARIFICATION_REPLY || previousSub == Sub.INPUT_CONFIRMATION) awaitInput();
+                else speakApproved(currentScene.opportunitySentence());
+            }
             case REASK -> speakGenerated(FlowRole.PEER, PracticeInstructions.peerReask(currentScene, false));
             case HELP_OFFER -> speakGenerated(FlowRole.PEER, PracticeInstructions.peerHelpOffer(currentScene, false));
             case FOCUS -> {
@@ -702,14 +998,18 @@ public final class PracticeConversation implements PracticeSessionExtension {
             case SCENE_WRAP -> {
                 if (step.sub() == Sub.RETURN_NOTICE) {
                     announce(FlowRole.PEER);
+                } else if (step.sub() == Sub.PEER_REPLY) {
+                    speakGenerated(FlowRole.PEER, PracticeInstructions.peerCompletion(currentScene));
                 } else {
+                    recordOutcome(null, state.sceneTiming());
                     applyStep(transitions.evaluateVariant(state, currentScript.variantScene().isPresent()));
                 }
             }
             case VARIANT_OFFER -> speakGenerated(FlowRole.PEER, PracticeInstructions.peerVariantOffer(currentScene, false));
             case NEXT_GOAL -> advanceGoal();
             case CLOSING -> {
-                boolean sceneWasOpen = previous != Phase.SCENE_WRAP && previous != Phase.NEXT_GOAL && previous != Phase.CLOSING;
+                boolean sceneWasOpen = (previous != Phase.SCENE_WRAP || previousSub == Sub.PEER_REPLY
+                        || previousSub == Sub.RETURN_NOTICE) && previous != Phase.NEXT_GOAL && previous != Phase.CLOSING;
                 if (step.endsByRequest() && sceneWasOpen) {
                     state.sceneEnd(FlowTransitions.EndCause.END_REQUEST, LiveTiming.NONE);
                     recordOutcome(VariantSkipReason.END_OR_REST, LiveTiming.NONE);
@@ -750,12 +1050,50 @@ public final class PracticeConversation implements PracticeSessionExtension {
     }
 
     private void speakApproved(String text) {
+        approvedReadingRetried = false;
+        submitApproved(text);
+    }
+
+    private void onIncompleteAudio(PracticeSpeech speech) {
+        if (!speech.correlationId().equals(openSlot) || openSlotPlaying || stopping) return;
+        if (!speech.generated()) { onApprovedTextMismatch(speech); return; }
+        if (generatedAudioRetried) { handleSlotEnd(speech.correlationId(), SlotEnd.FAILED); return; }
+        cancelOpenSlot();
+        // Retry the trusted server instruction, never the rejected model output or an inferred child answer.
+        speakGenerated("COACH".equals(speech.partnerRole()) ? FlowRole.COACH : FlowRole.PEER, speech.text());
+        generatedAudioRetried = true;
+    }
+
+    private void onApprovedTextMismatch(PracticeSpeech speech) {
+        if (speech.generated() || !speech.correlationId().equals(openSlot) || openSlotPlaying) return;
+        if (approvedReadingRetried) {
+            String recovery = PracticeInstructions.recoverApprovedNarration(speech.text());
+            if (recovery == null) {
+                handleSlotEnd(speech.correlationId(), SlotEnd.FAILED);
+                return;
+            }
+            cancelOpenSlot();
+            // One fresh generated narration; normal gate + Jev and slot timeout still apply.
+            // Generated slots cannot enter this mismatch retry path, so this cannot loop.
+            speakGenerated(state.role(), recovery);
+            return;
+        }
+        // No mismatched audio was delivered. One fresh slot gets one bounded attempt at the SAME approved text.
+        cancelOpenSlot();
+        approvedReadingRetried = true;
+        submitApproved(speech.text());
+    }
+
+    private void submitApproved(String text) {
         UUID correlation = UUID.randomUUID();
         openSlot(correlation);
         PracticeSpeech speech = null;
         try {
             speech = PracticeSpeech.scenario(correlation, currentScript.scenarioId(), speechGeneration++,
-                    RolePolicy.partnerLabel(state.role(), currentScene.partnerRole()), text);
+                    RolePolicy.partnerLabel(state.role(), currentScene.partnerRole()), text,
+                    state.sub() == Sub.REFLECTION_PROMPT ? PracticeSpeech.ReadingCue.ROLE_NOTICE
+                            : state.phase() == Phase.SCENE_INTRO ? PracticeSpeech.ReadingCue.SCENE
+                            : state.sub() == Sub.REEXPLAIN ? PracticeSpeech.ReadingCue.REEXPLANATION : PracticeSpeech.ReadingCue.PEER);
         } catch (IllegalArgumentException invalid) {
             // 승인 문장이 재생 형식(길이 · 제어 문자)을 못 맞춘다: 문장 내용은 남기지 않고 재생 실패로 닫는다
             speech = null;
@@ -764,6 +1102,7 @@ public final class PracticeConversation implements PracticeSessionExtension {
     }
 
     private void speakGenerated(FlowRole role, String instruction) {
+        generatedAudioRetried = false;
         UUID correlation = UUID.randomUUID();
         openSlot(correlation);
         boolean sent = output.speakGenerated(correlation, RolePolicy.slotRole(role), instruction);
@@ -779,18 +1118,24 @@ public final class PracticeConversation implements PracticeSessionExtension {
 
     private void openSlot(UUID correlation) {
         openSlot = correlation;
+        openSlotPlaying = false;
         inputReady = false;
-        output.schedule(TIMER_SLOT_GUARD + correlation, settings.slotGuard());
+        if (!output.managesSpeechTimeouts()) output.schedule(slotGuardName(), settings.slotGuard());
+    }
+
+    private String slotGuardName() {
+        return TIMER_SLOT_GUARD + openSlot + (openSlotPlaying ? "-playing" : "");
     }
 
     /** 확장이 스스로 슬롯을 닫는다(한도 만료 · 단계 변경): 취소 즉시 처리 완료로 두어 늦게 닿는 사건을 무시한다. */
     private void cancelOpenSlot() {
         if (openSlot != null) {
             UUID slot = openSlot;
+            output.cancel(slotGuardName());
             openSlot = null;
+            openSlotPlaying = false;
             state.markHandled(slot);
             output.cancelSpeech(slot);
-            output.cancel(TIMER_SLOT_GUARD + slot);
         }
         if (awaitingNotice) {
             awaitingNotice = false;
@@ -807,6 +1152,8 @@ public final class PracticeConversation implements PracticeSessionExtension {
     }
 
     private void recordFact(FactKind kind) {
+        if (kind == FactKind.FOCUS_HELP || kind == FactKind.EXPRESSION_EXAMPLE) reviewHelpProvided = true;
+        if (kind == FactKind.TIMEOUT || kind == FactKind.TRANSCRIPT_FAILED || kind == FactKind.END_REQUEST) reviewInterrupted = true;
         if (sceneRowCreated) {
             Instant at = clock.now();
             safely(() -> recorder.fact(sceneRunId, kind, at));
@@ -816,7 +1163,14 @@ public final class PracticeConversation implements PracticeSessionExtension {
     private void recordOutcome(VariantSkipReason skip, LiveTiming timing) {
         if (sceneRowCreated) {
             Instant at = clock.now();
-            safely(() -> recorder.sceneOutcome(sceneRunId, at, timing, skip, state.retryCount(), state.reexplainCount()));
+            LiveTiming recordedTiming = settings.flexibleDialogue() && goalAchieved ? goalAchievementTiming : timing;
+            if (recordedTiming == LiveTiming.IMMEDIATE || recordedTiming == LiveTiming.AFTER_REASK || recordedTiming == LiveTiming.AFTER_HELP) {
+                reviewPerformed = true;
+                reviewAfterHelp |= recordedTiming == LiveTiming.AFTER_HELP;
+                reviewClarified |= recordedTiming == LiveTiming.AFTER_REASK;
+            }
+            if (recordedTiming == LiveTiming.NONE || recordedTiming == LiveTiming.ABSTAINED) reviewInterrupted = true;
+            safely(() -> recorder.sceneOutcome(sceneRunId, at, recordedTiming, skip, state.retryCount(), state.reexplainCount()));
         }
     }
 

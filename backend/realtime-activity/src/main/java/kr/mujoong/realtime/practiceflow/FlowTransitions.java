@@ -459,7 +459,11 @@ public final class FlowTransitions {
             case OPPORTUNITY, REASK, HELP_OFFER, RETRY -> inputPhaseSlot(s, end);
             case VARIANT_OFFER -> ended ? Step.await() : declineVariant(s, VariantSkipReason.NO_VARIANT);
             case FOCUS -> focusSlot(s, end);
-            case SCENE_WRAP -> s.sub() == Sub.RETURN_NOTICE ? returnNoticeEnded(s, end) : Step.ignore();
+            case SCENE_WRAP -> switch (s.sub()) {
+                case RETURN_NOTICE -> returnNoticeEnded(s, end);
+                case PEER_REPLY -> peerReplyEnded(s, end);
+                default -> Step.ignore();
+            };
             default -> Step.ignore();
         };
     }
@@ -467,7 +471,7 @@ public final class FlowTransitions {
     private Step inputPhaseSlot(FlowState s, SlotEnd end) {
         if (end == SlotEnd.PLAYED || end == SlotEnd.INTERRUPTED) {
             if (s.sub() == Sub.REEXPLAIN) {
-                return s.phase() == Phase.RETRY ? Step.enter(Phase.FOCUS, Sub.COACH_UTTERANCE) : Step.enter(Phase.OPPORTUNITY, Sub.NONE);
+                return Step.enter(s.phase(), Sub.NONE);
             }
             return Step.await();
         }
@@ -497,7 +501,9 @@ public final class FlowTransitions {
 
     private Step returnNoticeEnded(FlowState s, SlotEnd end) {
         // 알림이 어떻게 끝나든 역할은 친구로 돌아간다. 이 단계의 실패는 다시 알림을 만들지 않고 변형 평가로 넘어간다(BR5.3)
-        Step step = Step.enter(Phase.SCENE_WRAP, Sub.VARIANT_EVAL).role(FlowRole.PEER).fact(FactKind.COACH_RETURN);
+        Step step = Step.enter(Phase.SCENE_WRAP,
+                end == SlotEnd.PLAYED && s.sceneEndCause() == EndCause.NORMAL ? Sub.PEER_REPLY : Sub.VARIANT_EVAL)
+                .role(FlowRole.PEER).fact(FactKind.COACH_RETURN);
         if (s.sceneEndCause() == EndCause.NORMAL) {
             step.fact(FactKind.ORIGINAL_SCENE_RETURN);
         }
@@ -505,6 +511,16 @@ public final class FlowTransitions {
             step.fact(FactKind.PLAYBACK_FAILED);
         }
         return step;
+    }
+
+    private Step peerReplyEnded(FlowState s, SlotEnd end) {
+        if (end == SlotEnd.PLAYED) {
+            return Step.enter(Phase.SCENE_WRAP, Sub.VARIANT_EVAL);
+        }
+        // Blocked, failed or cut-off replies never start another generated reply or a variant.
+        return Step.enter(Phase.SCENE_WRAP, Sub.VARIANT_EVAL)
+                .cause(end == SlotEnd.BLOCKED ? EndCause.SLOT_BLOCKED : EndCause.PLAYBACK_FAILED)
+                .timing(s.sceneTiming()).fact(end == SlotEnd.BLOCKED ? null : FactKind.PLAYBACK_FAILED);
     }
 
     // ---- 장면 정리 · 변형 ----
@@ -554,7 +570,8 @@ public final class FlowTransitions {
     }
 
     private Step wrap(FlowState s, EndCause cause, FactKind fact, LiveTiming timing) {
-        Sub sub = s.role() == FlowRole.COACH ? Sub.RETURN_NOTICE : Sub.VARIANT_EVAL;
+        Sub sub = s.role() == FlowRole.COACH ? Sub.RETURN_NOTICE
+                : cause == EndCause.NORMAL ? Sub.PEER_REPLY : Sub.VARIANT_EVAL;
         return Step.enter(Phase.SCENE_WRAP, sub).cause(cause).fact(fact).timing(timing);
     }
 

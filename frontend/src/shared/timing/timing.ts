@@ -15,6 +15,8 @@ export interface Timing {
   readonly parentPollIntervalMs: number;
   /** 보호자 웹 REST 요청 제한 시간(mujoong.timing.parent.request-timeout, J80 · RD-21). */
   readonly parentRequestTimeoutMs: number;
+  /** Scenario preparation can take 30 seconds; the start request waits for its definitive result. */
+  readonly practiceStartRequestTimeoutMs: number;
   /** Long parent reads show a connection hint at this threshold (interaction-spec 1). */
   readonly parentLoadingNoticeDelayMs: number;
   /** D0 등록 상태 확인 주기(mujoong.timing.bootstrap.status-poll, BR1.7). */
@@ -70,6 +72,7 @@ export const TIMING_KEYS: readonly TimingKeySpec[] = [
   contractKey("reportReadyTargetMs", "mujoong.timing.report.ready-target"),
   contractKey("parentPollIntervalMs", "mujoong.timing.parent.poll-interval"),
   contractKey("parentRequestTimeoutMs", "mujoong.timing.parent.request-timeout"),
+  contractKey("practiceStartRequestTimeoutMs", "mujoong.timing.parent.practice-start-request-timeout"),
   contractKey("parentLoadingNoticeDelayMs", "mujoong.timing.parent.loading-notice-delay"),
   contractKey("bootstrapStatusPollMs", "mujoong.timing.bootstrap.status-poll"),
   contractKey("deviceHeartbeatIntervalMs", "mujoong.timing.device.heartbeat-interval"),

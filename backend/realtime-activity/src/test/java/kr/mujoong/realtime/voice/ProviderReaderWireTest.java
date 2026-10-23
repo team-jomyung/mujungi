@@ -13,10 +13,25 @@ import org.junit.jupiter.api.Test;
 @Tag("judgment-turn")
 class ProviderReaderWireTest {
 
+    @Test
+    void providerDiagnosticsNeverCopyUnknownCodesOrErrorMessages() {
+        assertThat(new ProviderEvent.Error("invalid_value").diagnosticKind()).isEqualTo("ProviderRejectedValue");
+        assertThat(new ProviderEvent.Error("private_child_text").diagnosticKind()).isEqualTo("ProviderUnclassifiedError");
+        assertThat(new ProviderEvent.Error("private_child_text").toString()).doesNotContain("private_child_text");
+        assertThat(new ProviderEvent.Error(null).diagnosticKind()).isEqualTo("ProviderUnclassifiedError");
+    }
+
     private static final JsonCodec JSON = JsonCodec.shared();
 
     private static ProviderEvent parse(String message) {
         return ProviderClient.parse(JSON, message);
+    }
+
+    @Test
+    void commentaryAcknowledgmentPreservesCorrelationAndTimelineWithoutTreatingItAsPlayback() {
+        assertThat(parse("{\"type\":\"session.commentary.appended\",\"client_event_id\":\"reading-1\",\"start_ms\":120,\"end_ms\":140}"))
+                .isEqualTo(new ProviderEvent.InstructionsAppended("reading-1", 120, 140));
+        assertThat(parse("{\"type\":\"session.commentary.appended\",\"start_ms\":120,\"end_ms\":140}")).isNull();
     }
 
     @Test

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { U5B_COPY } from "../../common/copy/practice";
 import { PRACTICE_COPY } from "./copy";
-import { PracticeStartCoordinator, ownedSelection, type StartOutcome, type StartPort } from "./practiceStart";
+import { MAX_PRACTICE_GOALS, PracticeStartCoordinator, ownedSelection, type StartOutcome, type StartPort } from "./practiceStart";
 
 /** 18 시작 동작. 미확인 결과의 재시도는 화면 목록이 바뀌어도 처음 요청을 그대로 사용한다. */
 export function PracticeStartAction({ selected, owned, port, newKey, onAccepted, onLockedChange, onRejected, blocked = false, onSubmitting }: {
@@ -25,7 +25,7 @@ export function PracticeStartAction({ selected, owned, port, newKey, onAccepted,
   const count = sending || unresolved ? requestedCount : ownedSelection(selected, owned).length;
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   async function submit() {
-    if (running.current || outcome?.kind === "accepted" || (count === 0 && !unresolved)) return;
+    if (running.current || outcome?.kind === "accepted" || (!unresolved && (count === 0 || count > MAX_PRACTICE_GOALS))) return;
     running.current = true;
     if (!unresolved) setRequestedCount(count);
     onSubmitting?.();
@@ -46,7 +46,7 @@ export function PracticeStartAction({ selected, owned, port, newKey, onAccepted,
   else if (outcome?.kind === "rejected") message = U5B_COPY.rejected[outcome.code as keyof typeof U5B_COPY.rejected] ?? U5B_COPY.otherRejected;
   return <div className="mj-practice__start">
     <button type="button" className="mj-button mj-button--primary mj-button--block" data-testid="practice-start"
-      disabled={sending || (!unresolved && (count === 0 || blocked)) || outcome?.kind === "accepted"}
+      disabled={sending || (!unresolved && (count === 0 || count > MAX_PRACTICE_GOALS || blocked)) || outcome?.kind === "accepted"}
       onClick={() => { void submit(); }}>{count ? PRACTICE_COPY.start(count) : PRACTICE_COPY.choose}</button>
     <p className="mj-practice__notice" role="status" aria-live="polite">{message}</p>
   </div>;

@@ -53,7 +53,7 @@ class JudgmentConfigurationTest {
             JudgeClient client = context.getBean(JudgeClient.class);
             assertThat(client).isInstanceOf(UnavailableJudgeClient.class);
             assertThat(client.available()).isFalse();
-            assertThat(context.getBean(JudgmentPrompt.class).version()).isEqualTo("prompt-service-v1");
+            assertThat(context.getBean(JudgmentPrompt.class).version()).isEqualTo("prompt-service-v2");
         });
     }
 

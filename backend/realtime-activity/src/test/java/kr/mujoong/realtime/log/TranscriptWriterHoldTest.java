@@ -22,6 +22,55 @@ class TranscriptWriterHoldTest {
     private final TranscriptWriter writer = new TranscriptWriter(sessionId, 0, h.recorder, h.latency);
     private final Instant t0 = h.clock.now();
 
+    @Test
+    void streamedPlaybackSettlesEveryUnitWithoutLosingEarlierPlayedText() {
+        int ai = writer.aiStartStreaming(t0);
+        UUID first = UUID.randomUUID();
+        writer.awaitPlayback(first, writer.aiHold(), "첫 문장.");
+        writer.aiStartStreaming(t0.plusSeconds(1));
+        UUID second = UUID.randomUUID();
+        writer.awaitPlayback(second, writer.aiHold(), "다음 문장.");
+        writer.endStream(t0.plusSeconds(2));
+        writer.playbackStarted(first, t0.plusSeconds(3));
+        assertThat(row(ai).approvedForDisplay()).isFalse();
+        writer.playbackStarted(second, t0.plusSeconds(4));
+        assertThat(row(ai).text()).contains("첫 문장.", "다음 문장.");
+        assertThat(row(ai).approvedForDisplay()).isTrue();
+        assertThat(writer.heldCount()).isZero();
+    }
+
+    @Test
+    void displayWaitsForPlaybackAndKeepsInputSequenceStable() {
+        int ai = writer.aiStart(t0);
+        UUID playback = UUID.randomUUID();
+        writer.awaitPlayback(playback, null, "지난번 이야기를 떠올려 볼까?");
+        writer.childFinal("child", "그래 알았어", t0.plusSeconds(3));
+        assertThat(row(ai).approvedForDisplay()).isFalse();
+        writer.playbackStarted(playback, t0.plusSeconds(5));
+        assertThat(row(ai).startedAt()).isEqualTo(t0.plusSeconds(5));
+        assertThat(row(ai).approvedForDisplay()).isTrue();
+        assertThat(row(ai + 1).startedAt()).isEqualTo(t0.plusSeconds(3));
+        writer.playbackStarted(playback, t0.plusSeconds(9));
+        assertThat(row(ai).startedAt()).isEqualTo(t0.plusSeconds(5));
+    }
+
+    @Test
+    void unplayedAndStaleAudioNeverBecomesVisible() {
+        int ai = writer.aiStart(t0);
+        UUID playback = UUID.randomUUID();
+        writer.awaitPlayback(playback, null, "재생되지 않은 말");
+        writer.playbackAbandoned(playback, t0.plusSeconds(1));
+        writer.playbackStarted(playback, t0.plusSeconds(2));
+        assertThat(row(ai).approvedForDisplay()).isFalse();
+        assertThat(row(ai).text()).isEmpty();
+        int second = writer.aiStart(t0.plusSeconds(3));
+        UUID next = UUID.randomUUID();
+        writer.awaitPlayback(next, null, "종료 후 말");
+        writer.closeAll(t0.plusSeconds(4));
+        writer.playbackStarted(next, t0.plusSeconds(5));
+        assertThat(row(second).approvedForDisplay()).isFalse();
+    }
+
     private TranscriptEntry row(int seq) {
         h.recorder.tick();
         return h.store.row(seq).orElseThrow();

@@ -2,6 +2,7 @@ export type StartRequest = Readonly<{ idempotencyKey: string; goalSelectionIds: 
 export type StartResult = { kind: "accepted"; sessionId: string } | { kind: "rejected"; code: string };
 export type StartOutcome = StartResult | { kind: "unknown" };
 export type StartPort = (request: StartRequest) => Promise<StartResult>;
+export const MAX_PRACTICE_GOALS = 3;
 
 export function ownedSelection(selected: readonly string[], owned: readonly string[]): string[] {
   const available = new Set(owned);
@@ -21,6 +22,7 @@ export class PracticeStartCoordinator {
     const ids = ownedSelection(selected, owned);
     if (!this.request || this.outcome?.kind === "rejected") {
       if (ids.length === 0) return Promise.reject(new Error("선택 목표가 없어요."));
+      if (ids.length > MAX_PRACTICE_GOALS) return Promise.resolve({ kind: "rejected", code: "VALIDATION_FAILED" });
       this.request = Object.freeze({ idempotencyKey: this.key(), goalSelectionIds: Object.freeze(ids) });
     }
     const original = this.request;

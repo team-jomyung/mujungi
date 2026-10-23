@@ -27,6 +27,14 @@ public final class ScenarioScriptGenerator {
     private final TextAiProperties timing;
     private final ExecutorService executor;
     private final Sleeper sleeper;
+    private java.util.function.Consumer<String> diagnostics = ignored -> {};
+    public ScenarioScriptGenerator diagnostics(java.util.function.Consumer<String> observer) {
+        this.diagnostics=java.util.Objects.requireNonNull(observer);return this;
+    }
+    private void diagnose(String fixedCode) {
+        // Observability must never alter generation or its fail-closed checks.
+        try { diagnostics.accept(fixedCode); } catch(RuntimeException ignored) { }
+    }
     public ScenarioScriptGenerator(ScenarioScriptProvider provider,ScenarioScriptValidation validation,
             TextAiProperties timing,ExecutorService executor,Sleeper sleeper){
         this.provider=provider;this.validation=validation;this.timing=timing;this.executor=executor;this.sleeper=sleeper;
@@ -40,18 +48,21 @@ public final class ScenarioScriptGenerator {
     }
     public Result generate(Input input,ScenarioDeadline deadline){
         var budget=new Budget();ScenarioScript.Scene preserved=null;String model=null;
-        Input active=input;
-        for(int correction=0;correction<=1;correction++){
+        Input active=input;List<String> correctionReasons=List.of();ScenarioScript scriptToRepair=null;
+        for(int correction=0;correction<=2;correction++){
+            if(correction==2 && (correctionReasons.isEmpty() || !correctionReasons.stream().allMatch(
+                    reason->java.util.Set.of("INCOMPLETE_SCENE","ANSWER_INCLUDED","EARLY_CUE").contains(reason))))break;
             final Input current=active;
             try {
                 Map<String,Object> payload=new LinkedHashMap<>(current.payload());
-                if(correction>0)payload.put("correction",true);
+                if(correction>0){payload.put("correction",true);payload.put("correctionReasons",correctionReasons);
+                    if(scriptToRepair!=null)payload.put("scriptToRepair",scriptToRepair);}
                 if(preserved!=null)payload.put("baseToPreserve",preserved);
                 var generationStartedWith=deadline.remaining();
                 var generated=invoke(()->provider.generate(call(payload,current,deadline)),budget,deadline);
                 var generationCost=generationStartedWith.minus(deadline.remaining());
                 if(generated==null||generated.script()==null||!metadata(generated.model()))throw content();
-                model=generated.model();var script=generated.script();
+                model=generated.model();var script=includeBasePartnerLine(generated.script());scriptToRepair=script;
                 Input reviewedInput=current;
                 boolean planMismatch=false;
                 if(current.graphContextUsed()&&current.rules().variants() instanceof ScenarioGraphContext.Session graph&&!script.scenes().isEmpty()){
@@ -65,7 +76,9 @@ public final class ScenarioScriptGenerator {
                 var reviewStartedWith=deadline.remaining();
                 var reviewed=review(script,reviewedInput,budget,deadline);
                 var reviewCost=reviewStartedWith.minus(deadline.remaining());
-                var result=validation.inspect(script,current.rules());
+                var inspection=validation.inspectDetailed(script,current.rules());
+                var result=inspection.result();
+                if(result!=ScenarioScriptValidation.Result.VALID)diagnose("ScenarioRule_"+inspection.reason().name());
                 if(current.graphContextUsed()&&script.scenes().size()>1&&!current.payload().containsKey("variantPlan")&&result!=ScenarioScriptValidation.Result.INVALID_BASE)
                     result=ScenarioScriptValidation.Result.INVALID_VARIANT;
                 if(planMismatch&&script.scenes().size()>1&&result!=ScenarioScriptValidation.Result.INVALID_BASE)
@@ -89,12 +102,30 @@ public final class ScenarioScriptGenerator {
                 if(preserved!=null&&(script.scenes().isEmpty()||!preserved.equals(script.scenes().getFirst())))result=ScenarioScriptValidation.Result.INVALID_BASE;
                 if(result==ScenarioScriptValidation.Result.VALID&&reviewed.review().approved())
                     return approved(script,model,reviewed.model(),current,budget,deadline);
+                correctionReasons=new java.util.ArrayList<>(reviewed.review().reasons());
+                if(result!=ScenarioScriptValidation.Result.VALID)diagnose("ScenarioValidation_"+result.name());
+                if(!reviewed.review().approved()){
+                    diagnose("ScenarioReview_"+reviewed.review().verdict());
+                    reviewed.review().reasons().forEach(reason->diagnose("ScenarioReview_"+reason));
+                }
+                if(result!=ScenarioScriptValidation.Result.VALID)correctionReasons.add(result.name());
+                if(!script.scenes().isEmpty()&&script.scenes().getFirst().sceneDescription()!=null){
+                    var base=script.scenes().getFirst();
+                    String description=ScenarioContentPolicy.normalize(base.sceneDescription());
+                    if(base.opportunitySentence()!=null&&!description.contains(ScenarioContentPolicy.normalize(base.opportunitySentence())))
+                        correctionReasons.add("OPPORTUNITY_NOT_COPIED");
+                    if(!description.contains(ScenarioContentPolicy.normalize(current.rules().opportunity())))
+                        correctionReasons.add("CONDITION_NOT_COPIED");
+                    if(!java.util.Objects.equals(base.relation(),current.rules().relation()))correctionReasons.add("RELATION_MISMATCH");
+                }
                 boolean variantOnly=result==ScenarioScriptValidation.Result.INVALID_VARIANT
                         ||(!reviewed.review().reasons().isEmpty()&&reviewed.review().reasons().stream().allMatch(ScenarioScriptGenerator::variantReason));
                 preserved=variantOnly&&result!=ScenarioScriptValidation.Result.INVALID_BASE&&!script.scenes().isEmpty()
                         ?script.scenes().getFirst():null;
             }catch(ScenarioScriptProvider.Failure failure){
+                diagnose("ScenarioProvider_"+failure.kind().name());
                 if(failure.kind()!=ScenarioScriptProvider.Failure.Kind.CONTENT)throw ScenarioDeadline.failed();
+                correctionReasons=List.of("INVALID_OUTPUT_FORMAT");
             }
         }
         if(preserved!=null&&model!=null){
@@ -111,7 +142,20 @@ public final class ScenarioScriptGenerator {
     private Input withoutGraph(Input input){
         var payload=new LinkedHashMap<>(input.payload());payload.remove("structureContext");payload.remove("variantPlan");payload.put("baseOnly",true);
         var r=input.rules();
-        return new Input(payload,input.aliases(),new ScenarioScriptValidation.Rules(r.relation(),r.opportunity(),r.targetExpression(),r.originalNames(),r.sourceText(),r.seen(),(a,b)->false),false,input.goalContextJson());
+        return new Input(payload,input.aliases(),new ScenarioScriptValidation.Rules(r.relation(),r.opportunity(),r.targetExpression(),r.originalNames(),r.sourceText(),r.seen(),(a,b)->false,r.reflectionAllowed()),false,input.goalContextJson());
+    }
+    /** Internal description only. The repaired script must still receive independent approval and every server check. */
+    static ScenarioScript includeBasePartnerLine(ScenarioScript script){
+        if(script.scenes().isEmpty())return script;
+        var base=script.scenes().getFirst();
+        if(!"BASE".equals(base.sceneKind()) || base.sceneDescription()==null || base.sceneDescription().isBlank()
+                || base.opportunitySentence()==null || base.opportunitySentence().isBlank()
+                || ScenarioContentPolicy.normalize(base.sceneDescription()).contains(ScenarioContentPolicy.normalize(base.opportunitySentence())))return script;
+        // These are already generated scene facts, never an inferred child answer or new event.
+        String description=base.sceneDescription()+" 상대가 “"+base.opportunitySentence()+"”라고 말한다.";
+        if(description.length()>8000)return script;
+        var scenes=new java.util.ArrayList<>(script.scenes());scenes.set(0,base.withDescription(description));
+        return new ScenarioScript(scenes);
     }
     private Input withPlan(Input input,kr.mujoong.core.knowledge.VariantPlanner.Plan plan){
         var projected=Map.<String,Object>of("grade",plan.grade(),"changedField",plan.changedField(),"context",plan.context(),

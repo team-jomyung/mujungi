@@ -200,6 +200,11 @@ public final class FakeProviderPort implements ProviderPort {
             String id = sent.get(sent.size() - 1).eventId();
             acked = sent.size();
             long clock = audioClockMs();
+            var latest = sent.get(sent.size() - 1);
+            if (latest.type().equals("session.commentary.append") || latest.content().contains("<approved_speech>")) {
+                listener.onEvent(new ProviderEvent.InstructionsAppended(id, clock, clock));
+                return;
+            }
             long ackEnd = clock + 100L;
             listener.onEvent(new ProviderEvent.InstructionsAppended(id, clock, ackEnd));
             listener.onEvent(new ProviderEvent.OutputTranscriptDelta("", ackEnd, ackEnd));

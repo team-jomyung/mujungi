@@ -109,6 +109,10 @@ final class JudgmentCoordinator implements JudgmentTurn.Host {
     /** 10초 응답 준비 시한(= 지시 응답 시한, {@code mujoong.timing.judgment.response-ready}). */
     private final Duration responseReady;
     private final Deque<Recent> recent = new ArrayDeque<>();
+    private record DialogueLine(int childSeq, Instant at, JudgeRequest.RecentTurn turn) {
+        @Override public String toString() { return "DialogueLine[redacted]"; }
+    }
+    private final Deque<DialogueLine> dialogue = new ArrayDeque<>();
     private JudgmentTurn current;
     private Open currentOpen;
 
@@ -149,9 +153,27 @@ final class JudgmentCoordinator implements JudgmentTurn.Host {
             return;
         }
         recent.addLast(new Recent(seq, text, at));
+        rememberDialogue(new DialogueLine(seq, at, new JudgeRequest.RecentTurn(JudgeRequest.Speaker.CHILD, clip(text))));
         while (recent.size() > RECENT_LIMIT) {
             recent.removeFirst();
         }
+    }
+
+    void rememberPartner(String text, Instant at, boolean coach) {
+        if (text != null && !text.isBlank()) rememberDialogue(new DialogueLine(0, at,
+                new JudgeRequest.RecentTurn(coach ? JudgeRequest.Speaker.COACH : JudgeRequest.Speaker.PARTNER, clip(text))));
+    }
+
+    private void rememberDialogue(DialogueLine line) {
+        dialogue.addLast(line);
+        while (dialogue.size() > 8) dialogue.removeFirst();
+    }
+
+    List<JudgeRequest.RecentTurn> dialogueBefore(int childSeq, Instant at) {
+        List<JudgeRequest.RecentTurn> lines = dialogue.stream()
+                .filter(line -> !line.at().isAfter(at) && (line.childSeq() == 0 || line.childSeq() < childSeq))
+                .map(DialogueLine::turn).toList();
+        return lines.subList(Math.max(0, lines.size() - JudgeRequest.MAX_RECENT_TURNS), lines.size());
     }
 
     /** 최근 확정 전사 중 그 순번의 것(없으면 null). */

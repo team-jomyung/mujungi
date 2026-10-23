@@ -106,7 +106,7 @@ public class RecordQueryService {
             bubbles.add(new Bubble(n.longValue(), s, t, Boolean.TRUE.equals(item.get("uncertain")), startedAt,
                     instant(item.get("endedAt"))));
         }
-        bubbles.sort(Comparator.comparingLong(Bubble::seq));
+        bubbles.sort(Comparator.comparing(Bubble::startedAt).thenComparingLong(Bubble::seq));
         return List.copyOf(bubbles);
     }
 

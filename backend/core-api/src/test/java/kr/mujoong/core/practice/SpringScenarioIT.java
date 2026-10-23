@@ -35,6 +35,7 @@ import org.springframework.boot.test.context.runner.ApplicationContextRunner;
                 .withUserConfiguration(LunaAdapterConfiguration.class)
                 .withBean(CoreLunaClient.class,()->client).withBean(MujoongClock.class,()->f.legacy.clock)
                 .withBean(JsonCodec.class,JsonCodec::shared)
+                .withBean(kr.mujoong.core.observability.EventLogger.class,()->mock(kr.mujoong.core.observability.EventLogger.class))
                 .withBean(ScenarioPrivacyContextPort.class,()->f.privacy).withBean(LunaInputSanitizer.class,()->new LunaInputSanitizer(JsonCodec.shared()))
                 .withBean(ChildKnowledgeService.class,()->f.graph).withBean(ForbiddenExpressionPolicy.class,ForbiddenExpressionPolicy::new)
                 .withBean(TextAiProperties.class,()->new TextAiProperties(Duration.ofSeconds(3),new TextAiProperties.Retry(1,Duration.ofMillis(250))))

@@ -11,3 +11,5 @@ infra/bin/lib/* text eol=lf
 infra/host/entry/* text eol=lf
 **/Dockerfile* text eol=lf
 **/.dockerignore text eol=lf
+# Byte-hashed service policies must keep the same bytes on Windows and Linux.
+backend/realtime-activity/src/main/resources/service-policy/*.txt text eol=lf

@@ -31,6 +31,7 @@ describe("timing — 기본값과 계약", () => {
       parentPollIntervalMs: 2_000,
       reportReadyTargetMs: 60_000,
       parentRequestTimeoutMs: 10_000,
+      practiceStartRequestTimeoutMs: 35_000,
       parentLoadingNoticeDelayMs: 5_000,
       bootstrapStatusPollMs: 2_000,
       deviceHeartbeatIntervalMs: 5_000,

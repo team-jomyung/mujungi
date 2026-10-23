@@ -3,6 +3,7 @@
   "mujoong.timing.parent.poll-interval": "2s",
   "mujoong.timing.report.ready-target": "60s",
   "mujoong.timing.parent.request-timeout": "10s",
+  "mujoong.timing.parent.practice-start-request-timeout": "35s",
   "mujoong.timing.parent.loading-notice-delay": "5s",
   "mujoong.timing.bootstrap.status-poll": "2s",
   "mujoong.timing.device.heartbeat-interval": "5s",

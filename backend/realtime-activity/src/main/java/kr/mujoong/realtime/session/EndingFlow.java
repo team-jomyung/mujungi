@@ -129,6 +129,11 @@ public final class EndingFlow {
         }
         idle.deviceHeard();
         PlaybackMark mark = received.mark();
+        if (mark.status() == PlaybackMark.Status.STARTED) {
+            ctx.transcripts().playbackStarted(mark.playbackId(), received.serverRecvAt());
+        } else if (mark.status() != PlaybackMark.Status.PROGRESS) {
+            ctx.transcripts().playbackAbandoned(mark.playbackId(), received.serverRecvAt());
+        }
         if ((ctx.status() == SessionStatus.CLOSING || farewellPending()) && mark.playbackId().equals(ctx.closing().closingPlaybackId())
                 && received.connectionId().equals(ctx.goodbyeConnectionId()) && ctx.goodbyeDeadline() != null
                 && received.serverRecvAt().isBefore(ctx.goodbyeDeadline())) {

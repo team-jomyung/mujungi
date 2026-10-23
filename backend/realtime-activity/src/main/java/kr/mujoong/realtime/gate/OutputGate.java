@@ -29,20 +29,32 @@ public final class OutputGate {
 
     /** 단계 3 · 4. */
     public GateDecision inspect(SegmentBuffer.Sealed segment) {
+        return inspectDetailed(segment).decision();
+    }
+
+    /** Same safety decision and precedence, with the exact failed predicate for diagnostics. */
+    public record Inspection(GateDecision decision, DiscardDetail detail) {}
+
+    private static Inspection failed(DiscardReason reason, DiscardDetail detail) {
+        return new Inspection(GateDecision.discard(reason), detail);
+    }
+
+    public Inspection inspectDetailed(SegmentBuffer.Sealed segment) {
         try {
             // 단계 3: 첫 조각부터 끊김까지 전체를 담은 구간만 전사가 음성과 1:1로 대응한다는 근거가 있다(J285 → U11 BR11.6). 전사는 사전과 같은
             // 정규화(NFKC · 공백 · 제로폭 · 구두점 제거) 뒤 남는 글자가 있어야 한다(J287)
-            if (segment == null || !segment.complete() || segment.transcript() == null
-                    || SeedDictionary.normalize(segment.transcript()).isEmpty()
-                    || segment.totalBytes() == 0 || segment.totalBytes() % 2 != 0) {
-                return GateDecision.discard(DiscardReason.GATE_EMPTY);
-            }
+            if (segment == null) return failed(DiscardReason.GATE_EMPTY, DiscardDetail.MISSING_SEGMENT);
+            if (!segment.complete()) return failed(DiscardReason.GATE_EMPTY, DiscardDetail.INCOMPLETE_SEGMENT);
+            if (segment.transcript() == null || SeedDictionary.normalize(segment.transcript()).isEmpty())
+                return failed(DiscardReason.GATE_EMPTY, DiscardDetail.EMPTY_TRANSCRIPT);
+            if (segment.totalBytes() == 0) return failed(DiscardReason.GATE_EMPTY, DiscardDetail.MISSING_AUDIO);
+            if (segment.totalBytes() % 2 != 0) return failed(DiscardReason.GATE_EMPTY, DiscardDetail.INVALID_PCM_LENGTH);
             if (dictionary.findMatch(segment.transcript()).isPresent()) {
-                return GateDecision.discard(DiscardReason.GATE_PATTERN);
+                return failed(DiscardReason.GATE_PATTERN, DiscardDetail.FORBIDDEN_PATTERN);
             }
-            return GateDecision.pass();
+            return new Inspection(GateDecision.pass(), null);
         } catch (RuntimeException e) {
-            return GateDecision.discard(DiscardReason.GATE_EMPTY);
+            return failed(DiscardReason.GATE_EMPTY, DiscardDetail.INSPECTION_EXCEPTION);
         }
     }
 
@@ -51,16 +63,20 @@ public final class OutputGate {
      * 확인한다. 음성이 전사 끝까지 대응하는지는 단위를 만들 때 이미 시간선으로 맞춘다.
      */
     public GateDecision inspectText(SegmentBuffer.Sealed segment) {
+        return inspectTextDetailed(segment).decision();
+    }
+
+    /** Same aligned text-unit safety predicates, with a closed diagnostic reason. */
+    public Inspection inspectTextDetailed(SegmentBuffer.Sealed segment) {
         try {
-            if (segment == null || segment.transcript() == null || SeedDictionary.normalize(segment.transcript()).isEmpty()) {
-                return GateDecision.discard(DiscardReason.GATE_EMPTY);
-            }
-            if (dictionary.findMatch(segment.transcript()).isPresent()) {
-                return GateDecision.discard(DiscardReason.GATE_PATTERN);
-            }
-            return GateDecision.pass();
+            if (segment == null) return failed(DiscardReason.GATE_EMPTY, DiscardDetail.MISSING_SEGMENT);
+            if (segment.transcript() == null || SeedDictionary.normalize(segment.transcript()).isEmpty())
+                return failed(DiscardReason.GATE_EMPTY, DiscardDetail.EMPTY_TRANSCRIPT);
+            if (dictionary.findMatch(segment.transcript()).isPresent())
+                return failed(DiscardReason.GATE_PATTERN, DiscardDetail.FORBIDDEN_PATTERN);
+            return new Inspection(GateDecision.pass(), null);
         } catch (RuntimeException e) {
-            return GateDecision.discard(DiscardReason.GATE_EMPTY);
+            return failed(DiscardReason.GATE_EMPTY, DiscardDetail.INSPECTION_EXCEPTION);
         }
     }
 

@@ -28,6 +28,105 @@ import org.junit.jupiter.api.Test;
 @Tag("practice-flow")
 @org.junit.jupiter.api.Tag("service-guardrail")
 class PracticeGeneratedSpeechTest {
+    @Test
+    void practiceDrainsOldTailBeforeSendingAndKeepsTheWholeShortNextUtterance() {
+        start(true);h.provider.last().newSpeechMargin(null);
+        UUID old=UUID.randomUUID();extension.out.speakGenerated(old,"PEER",INSTRUCTION);h.settleSend();
+        h.speak("old tail",4800);extension.out.cancelSpeech(old);
+        var speech=PracticeSpeech.scenario(UUID.randomUUID(),UUID.randomUUID(),1,"친구","응.");
+        int requests=appended().size();extension.out.speak(speech);h.settleSend();
+        assertThat(appended()).hasSize(requests);
+        h.speak("late old tail",4800);h.advance(Duration.ofMillis(801));h.settleSend();
+        assertThat(appended()).hasSize(requests+1);
+        h.speak(speech.text(),960);h.advance(Duration.ofMillis(801));
+        assertThat(h.link.outputs()).hasSize(1);
+        assertThat(h.link.outputs().getFirst().totalMs()).isEqualTo(20);
+        assertThat(guard.count()).isZero();
+    }
+
+    @Test
+    void aStopDuringOldOutputDrainCannotSendTheDeferredPracticeInstruction() {
+        start(true);UUID old=UUID.randomUUID();extension.out.speakGenerated(old,"PEER",INSTRUCTION);h.settleSend();
+        h.speak("old tail",4800);extension.out.cancelSpeech(old);
+        extension.out.speak(PracticeSpeech.scenario(UUID.randomUUID(),UUID.randomUUID(),1,"친구","응."));
+        int requests=appended().size();
+        h.provider.last().emit(new ProviderEvent.InputTranscriptDelta("stop-drain","무중아 그만할래"));h.drain();
+        h.advance(SessionHarness.SETTINGS.inputTranscriptQuiet().plusMillis(1));
+        h.advance(Duration.ofMillis(801));h.settleSend();
+        assertThat(h.executor.status()).isEqualTo(kr.mujoong.contract.status.SessionStatus.CLOSING);
+        assertThat(appended()).hasSize(requests);
+        assertThat(h.link.outputs()).isEmpty();
+    }
+
+    @Test void inputBeforeTheFirstGeneratedChunkYieldsWithoutAnInstructionTimeoutFailure(){
+        start(true);UUID slot=UUID.randomUUID();extension.out.speakGenerated(slot,"PEER",INSTRUCTION);h.settleSend();
+        h.provider.last().emit(new ProviderEvent.InputTranscriptDelta("before-audio","무슨 놀이를 하고 싶어"));h.drain();
+        assertThat(extension.endFacts(slot)).containsExactly(PracticePorts.Playback.INTERRUPTED);
+        h.advanceAlive(Duration.ofSeconds(11));
+        assertThat(h.executor.status()).isEqualTo(kr.mujoong.contract.status.SessionStatus.ACTIVE);
+        assertThat(extension.endFacts(slot)).containsExactly(PracticePorts.Playback.INTERRUPTED);
+        assertThat(h.link.outputs()).isEmpty();assertThat(guard.count()).isZero();
+    }
+    @Test
+    void childInputDuringUnplayedGeneratedAudioDiscardsOnlyTheAudioAndTheNextReplyStillNeedsJev() {
+        start(true);UUID slot=UUID.randomUUID();
+        extension.out.speakGenerated(slot,"PEER",INSTRUCTION);h.settleSend();
+        h.speak("음, 편할 때",4800);h.advance(Duration.ofMillis(187));
+        h.provider.last().emit(new ProviderEvent.InputTranscriptDelta("during-collection","무슨 놀이를 하고 싶어"));h.drain();
+        assertThat(extension.endFacts(slot)).containsExactly(PracticePorts.Playback.INTERRUPTED);
+        assertThat(h.link.outputs()).isEmpty();assertThat(guard.count()).isZero();
+        assertThat(h.executor.status()).isEqualTo(kr.mujoong.contract.status.SessionStatus.ACTIVE);
+        assertThat(kr.mujoong.testsupport.log.LogCapture.attrs(h.logs.last(
+                kr.mujoong.contract.log.EventCode.OUTPUT_DISCARDED).orElseThrow()))
+                .containsEntry("discardDetail", "INPUT_SUPERSEDED_UNPLAYED");
+        h.speak(" 말해도 돼.",4800);h.advance(Duration.ofMillis(801));
+        assertThat(h.link.outputs()).isEmpty();
+        UUID next=UUID.randomUUID();extension.replySlot=next;
+        h.childSays("reply","무슨 놀이를 하고 싶어");h.settleSend();say("나는 블록 놀이를 하고 싶어.");
+        assertThat(guard.count()).as("discard=%s next=%s status=%s",h.metrics.registry().find("mujoong.gate.discard").counters().stream()
+                .map(c->c.getId().getTags()+"="+c.count()).toList(),extension.endFacts(next),h.executor.status()).isEqualTo(1);assertThat(h.link.outputs()).isEmpty();
+        guard.allow();h.drain();assertThat(h.link.outputs()).hasSize(1);
+    }
+    @Test
+    void stopWhileCollectingConversationalAudioClosesAndNeverPlaysThePartialReply() {
+        start(true);extension.out.speakGenerated(UUID.randomUUID(),"PEER",INSTRUCTION);h.settleSend();
+        h.speak("음, 편할 때",4800);
+        h.provider.last().emit(new ProviderEvent.InputTranscriptDelta("stop-partial","무중아 그만할래"));h.drain();
+        h.advance(SessionHarness.SETTINGS.inputTranscriptQuiet().plusMillis(1));
+        assertThat(h.executor.status()).isEqualTo(kr.mujoong.contract.status.SessionStatus.CLOSING);
+        assertThat(h.link.outputs()).isEmpty();assertThat(guard.count()).isZero();
+    }
+    @Test
+    void restWhileCollectingConversationalAudioStillUsesTheImmediateRestPath() {
+        var judge=h.useJudge();start(true);extension.out.speakGenerated(UUID.randomUUID(),"PEER",INSTRUCTION);h.settleSend();
+        h.speak("음, 편할 때",4800);
+        h.provider.last().emit(new ProviderEvent.InputTranscriptDelta("rest-partial","쉬고 싶어"));h.drain();
+        h.advance(SessionHarness.SETTINGS.inputTranscriptQuiet().plusMillis(1));
+        assertThat(extension.events).anySatisfy(event -> assertThat(event.kind())
+                .isEqualTo(PracticeSessionExtension.ExtensionEvent.Kind.REST_REQUESTED));
+        assertThat(judge.calls()).isEmpty();
+        assertThat(h.link.outputs()).isEmpty();assertThat(guard.count()).isZero();
+    }
+
+    @Test void approvedMismatchIsDistinctFromAForbiddenPattern() {
+        start(true);
+        extension.recovery = true;
+        PracticeSpeech speech = PracticeSpeech.scenario(UUID.randomUUID(), UUID.randomUUID(), 1,
+                "친구", "나는 블록 놀이를 하고 싶어.", PracticeSpeech.ReadingCue.SCENE);
+        assertThat(extension.out.speak(speech)).isTrue(); h.settleSend();
+        say("나는 카드 놀이를 하고 싶어.");
+        assertThat(kr.mujoong.testsupport.log.LogCapture.attrs(h.logs.last(
+                kr.mujoong.contract.log.EventCode.OUTPUT_DISCARDED).orElseThrow()))
+                .containsEntry("discardDetail", "APPROVED_TEXT_MISMATCH")
+                .containsEntry("generatedSpeech", false)
+                .containsKey("expectedChars");
+        assertThat(guard.count()).isZero(); assertThat(h.link.outputs()).isEmpty();
+        assertThat(extension.mismatches).singleElement().satisfies(event -> {
+            assertThat(event.correlationId()).isEqualTo(speech.correlationId());
+            assertThat(event.value()).isEqualTo(speech);
+        });
+        assertThat(extension.endFacts(speech.correlationId())).isEmpty();
+    }
 
     private static final String INSTRUCTION = "친구로서 방금 말을 한 번 더 물어보세요";
     private static final String SPOKEN = "그거 줘 하면 어느 색을 말하는 건지 잘 모르겠어";
@@ -138,6 +237,10 @@ class PracticeGeneratedSpeechTest {
             assertThat(event.mode()).isEqualTo(GuardrailRequest.Mode.PRACTICE_PEER);
         });
         assertThat(extension.endFacts(slot)).containsExactly(PracticePorts.Playback.FAILED);
+        var discarded = h.logs.events(kr.mujoong.contract.log.EventCode.OUTPUT_DISCARDED);
+        assertThat(discarded).hasSize(2);
+        assertThat(discarded).allSatisfy(e -> assertThat(kr.mujoong.testsupport.log.LogCapture.attrs(e))
+                .containsEntry("discardDetail", "GUARDRAIL_BLOCK"));
     }
 
     @Test
@@ -151,6 +254,9 @@ class PracticeGeneratedSpeechTest {
 
         assertThat(h.link.outputs()).isEmpty();
         assertThat(extension.endFacts(slot)).containsExactly(PracticePorts.Playback.FAILED);
+        assertThat(kr.mujoong.testsupport.log.LogCapture.attrs(h.logs.last(
+                kr.mujoong.contract.log.EventCode.OUTPUT_DISCARDED).orElseThrow()))
+                .containsEntry("discardDetail", "GUARDRAIL_DISABLED");
     }
 
     @Test
@@ -240,6 +346,67 @@ class PracticeGeneratedSpeechTest {
     }
 
     @Test
+    void ordinaryInputDuringGeneratedIntroductionDoesNotSealPartialAudioAndStillRequiresJev() {
+        start(true);extension.introduction=true;UUID slot=UUID.randomUUID();
+        extension.out.speakGenerated(slot,"PEER",INSTRUCTION);h.settleSend();
+        h.speak("오늘 연습할 목표는",4800);
+        h.provider.last().emit(new ProviderEvent.InputTranscriptDelta("intro-overlap","응"));h.drain();
+        h.advance(Duration.ofMillis(501));h.speak(null,4800);
+        h.advance(Duration.ofMillis(501));h.speak(null,4800);h.advance(Duration.ofMillis(501));
+        assertThat(h.executor.status()).isEqualTo(kr.mujoong.contract.status.SessionStatus.ACTIVE);
+        assertThat(extension.endFacts(slot)).isEmpty();assertThat(guard.count()).isZero();
+        h.speak(" 의견 묻기야. 짧게 해 보자.",4800);h.advance(Duration.ofMillis(801));
+        assertThat(guard.count()).isEqualTo(1);assertThat(h.link.outputs()).isEmpty();
+        guard.allow();h.drain();assertThat(h.link.outputs()).hasSize(1);
+        mark(h.link.outputs().getFirst().playbackId(),PlaybackMark.Status.COMPLETED);
+        assertThat(extension.endFacts(slot)).containsExactly(PracticePorts.Playback.COMPLETED);
+    }
+
+    @Test
+    void ordinaryInputWhileIntroductionJevCheckIsPendingDoesNotCancelItsTicket() {
+        start(true);extension.introduction=true;UUID slot=UUID.randomUUID();
+        extension.out.speakGenerated(slot,"PEER",INSTRUCTION);h.settleSend();say(SPOKEN);
+        h.provider.last().emit(new ProviderEvent.InputTranscriptDelta("intro-check","응, 알겠어"));h.drain();
+        h.advance(Duration.ofMillis(501));h.childSays("intro-done","응, 알겠어");guard.allow();h.drain();
+        assertThat(h.link.outputs()).hasSize(1);assertThat(extension.endFacts(slot)).isEmpty();
+        assertThat(h.executor.status()).isEqualTo(kr.mujoong.contract.status.SessionStatus.ACTIVE);
+    }
+
+    @Test
+    void stopDuringIntroductionStillClosesImmediatelyAndLateJevAllowCannotPlay() {
+        start(true);extension.introduction=true;
+        extension.out.speakGenerated(UUID.randomUUID(),"PEER",INSTRUCTION);h.settleSend();say(SPOKEN);
+        h.provider.last().emit(new ProviderEvent.InputTranscriptDelta("intro-stop","무중아 그만할래"));h.drain();
+        h.advance(SessionHarness.SETTINGS.inputTranscriptQuiet().plusMillis(1));
+        assertThat(h.executor.status()).isEqualTo(kr.mujoong.contract.status.SessionStatus.CLOSING);
+        guard.allow();h.drain();assertThat(h.link.outputs()).isEmpty();
+    }
+
+    @Test
+    void restDuringIntroductionImmediatelyInterruptsOutputAndUsesTheExistingRestJudgment() {
+        var judge=h.useJudge();start(true);extension.introduction=true;UUID slot=UUID.randomUUID();
+        extension.out.speakGenerated(slot,"PEER",INSTRUCTION);h.settleSend();h.speak("오늘 연습할 목표는",4800);
+        h.childSays("intro-rest","쉬고 싶어");
+        assertThat(extension.events).anySatisfy(event -> assertThat(event.kind())
+                .isEqualTo(PracticeSessionExtension.ExtensionEvent.Kind.REST_REQUESTED));
+        assertThat(judge.calls()).isEmpty();
+        h.speak(" 의견 묻기야. 해 보자.",4800);h.advance(Duration.ofMillis(801));
+        assertThat(guard.count()).as("휴식 판단 중 이전 안내 조각은 검사·재생으로 가지 않는다").isZero();
+        assertThat(h.link.outputs()).isEmpty();
+        assertThat(h.link.outputs()).isEmpty();
+    }
+
+    @Test
+    void forbiddenIntroAudioWithOverlappingInputStillFailsClosedBeforeJev() {
+        start(true);extension.introduction=true;UUID slot=UUID.randomUUID();
+        extension.out.speakGenerated(slot,"PEER",INSTRUCTION);h.settleSend();h.speak("검사해 보니",4800);
+        h.provider.last().emit(new ProviderEvent.InputTranscriptDelta("intro-pattern","응"));h.drain();
+        h.speak(" 비정상이에요",4800);h.advance(Duration.ofMillis(801));
+        assertThat(h.link.outputs()).isEmpty();assertThat(guard.count()).isZero();
+        assertThat(extension.endFacts(slot)).containsExactly(PracticePorts.Playback.FAILED);
+    }
+
+    @Test
     void childInputWhileCollectingApprovedScriptDoesNotSealAPartialScene() {
         start(true);
         UUID slot=UUID.randomUUID();
@@ -263,6 +430,7 @@ class PracticeGeneratedSpeechTest {
     @Test
     void overlappingInputCannotMakeAnAlteredApprovedScriptPlayable() {
         start(true);
+        extension.recovery = true;
         UUID slot=UUID.randomUUID();
         extension.out.speak(PracticeSpeech.scenario(slot,UUID.randomUUID(),1,"PEER","친구가 공을 들고 있어."));
         h.settleSend();
@@ -272,7 +440,13 @@ class PracticeGeneratedSpeechTest {
         h.speak(" 들고 있어. 다른 말을 덧붙였어.",4800);
         h.advance(Duration.ofMillis(801));
         assertThat(h.link.outputs()).isEmpty();
-        assertThat(extension.endFacts(slot)).containsExactly(PracticePorts.Playback.FAILED);
+        assertThat(extension.endFacts(slot)).isEmpty();
+        assertThat(extension.mismatches).singleElement().satisfies(event -> {
+            assertThat(event.kind()).isEqualTo(PracticeSessionExtension.ExtensionEvent.Kind.ASYNC_RESULT);
+            assertThat(event.correlationId()).isEqualTo(slot);
+            assertThat(((PracticeSpeech)event.value()).text()).isEqualTo("친구가 공을 들고 있어.");
+        });
+        assertThat(guard.count()).isZero();
     }
 
     @Test
@@ -284,6 +458,16 @@ class PracticeGeneratedSpeechTest {
         h.childSays("stop","무중아 그만할래");
         assertThat(h.executor.status()).isEqualTo(kr.mujoong.contract.status.SessionStatus.CLOSING);
         assertThat(h.link.outputs()).isEmpty();
+    }
+
+    @Test
+    void aForbiddenPatternIsNotReclassifiedAsARetryableReadingMismatch() {
+        start(true);UUID slot=UUID.randomUUID();
+        extension.out.speak(PracticeSpeech.scenario(slot,UUID.randomUUID(),1,"PEER","친구가 공을 들고 있어."));
+        h.settleSend();say("검사해 보니 비정상이에요");
+        assertThat(h.link.outputs()).isEmpty();
+        assertThat(extension.mismatches).isEmpty();
+        assertThat(extension.endFacts(slot)).containsExactly(PracticePorts.Playback.FAILED);
     }
 
     private void mark(UUID id, PlaybackMark.Status status) {
@@ -300,8 +484,13 @@ class PracticeGeneratedSpeechTest {
     /** 출력을 쥐고 받은 사건을 기록하는 최소 연습 확장점. */
     private static final class Recording implements PracticeSessionExtension {
         PracticeOutput out;
+        boolean introduction;
+        boolean recovery;
+        UUID replySlot;
         final List<PlaybackFact> facts = new ArrayList<>();
         final List<GuardrailBlockedEvent> blocked = new ArrayList<>();
+        final List<ExtensionEvent> mismatches = new ArrayList<>();
+        final List<ExtensionEvent> events = new ArrayList<>();
 
         List<PracticePorts.Playback> endFacts(UUID correlationId) {
             return facts.stream().filter(fact -> !fact.started())
@@ -313,6 +502,10 @@ class PracticeGeneratedSpeechTest {
             return true;
         }
 
+        @Override public boolean collectingIntroduction() { return introduction; }
+        @Override public boolean handlesAudioRecovery() { return recovery; }
+        @Override public boolean canYieldUnplayedSpeech() { return !introduction; }
+
         @Override
         public Signal onActive(PracticeContext context, PracticeOutput output) {
             out = output;
@@ -321,11 +514,14 @@ class PracticeGeneratedSpeechTest {
 
         @Override
         public Signal onChildUtterance(Utterance utterance, PracticeOutput output) {
+            if(replySlot!=null){UUID slot=replySlot;replySlot=null;output.speakGenerated(slot,"PEER",INSTRUCTION);}
             return Signal.NONE;
         }
 
         @Override
         public Signal onExtensionEvent(ExtensionEvent event, PracticeOutput output) {
+            events.add(event);
+            if ("approved-text-mismatch".equals(event.name())) mismatches.add(event);
             if (event.value() instanceof PlaybackFact fact) {
                 facts.add(fact);
             }
