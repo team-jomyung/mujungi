@@ -29,6 +29,7 @@ import org.springframework.mock.env.MockEnvironment;
  * 로그에 사유 코드 한 줄이 남으며 REAL이면 남기지 않는다. 이 파일의 성공은 테스트 대역 증거다.
  */
 @Tag("jev-guardrail")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class GuardrailConfigurationTest {
 
     private final LogCapture logs = LogCapture.detached();

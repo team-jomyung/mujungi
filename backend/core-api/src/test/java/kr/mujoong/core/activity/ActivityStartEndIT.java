@@ -46,6 +46,7 @@ import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
  */
 @Tag("skeleton")
 @Tag("db")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class ActivityStartEndIT {
 
     private static final String START = "/internal/sessions";

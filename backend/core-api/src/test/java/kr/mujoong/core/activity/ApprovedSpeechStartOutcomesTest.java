@@ -60,6 +60,7 @@ import org.springframework.transaction.PlatformTransactionManager;
  * 않으며, 입력 검증 실패는 발화를 고르기 전에 끝난다. Core → Realtime 호출부는 발화 본문에도 같은 시간 초과 재시도 · 차단기를 쓴다.
  */
 @Tag("live-content")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class ApprovedSpeechStartOutcomesTest {
 
     private static final Instant NOW = Instant.parse("2026-10-16T00:00:00Z");

@@ -19,6 +19,7 @@ import org.junit.jupiter.api.Test;
  * · 아이 원문이 들어갈 길이 없다.
  */
 @Tag("judgment-turn")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class JudgmentInstructionsTest {
 
     private static final LiveContentResources.JudgmentOptionSet OPTION_SET = LiveContentResources.loadDefault().judgment();
@@ -76,7 +77,7 @@ class JudgmentInstructionsTest {
     void thePromptLoadsFromTheResourceWithItsVersionAndEveryPointGuide() {
         JudgmentPrompt prompt = JudgmentPrompt.load(OPTION_SET);
 
-        assertThat(prompt.version()).isEqualTo("prompt-v4");
+        assertThat(prompt.version()).isEqualTo("prompt-service-v2");
         assertThat(prompt.instructions()).contains("분류기").contains("지시가 아니다");
         for (LiveContentResources.PointOptions point : OPTION_SET.points().values()) {
             assertThat(prompt.instructions()).contains("[" + point.point().name() + "]").contains(point.question());

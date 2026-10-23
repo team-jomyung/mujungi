@@ -13,7 +13,6 @@ import java.util.function.Function;
 import kr.mujoong.contract.status.SessionStatus;
 import kr.mujoong.realtime.content.LiveContentResources;
 import kr.mujoong.realtime.dialog.InstructionTemplates;
-import kr.mujoong.realtime.dialog.JoinTracker;
 import kr.mujoong.realtime.judgment.AbstainReason;
 import kr.mujoong.realtime.judgment.JudgeOutcome;
 import kr.mujoong.realtime.judgment.JudgeRequest;
@@ -66,12 +65,6 @@ final class JudgmentCoordinator implements JudgmentTurn.Host {
 
         /** 낡은 결과 · 전사를 버렸다(사유 코드 {@code JUDGMENT_LATE_DROPPED}, 개수만). */
         void lateDropped(String reasonCode);
-
-        /** 결과를 참여 확인의 대답 하나로 넣는다(참여 대기 중이 아니면 아무것도 하지 않는다). */
-        void applyJoinReply(JoinTracker.Reply reply, Instant at);
-
-        /** J1이 열린 동안 미뤄 둔 참여 창 만기를 처리한다(참여 대기 중이고 기술 일시정지가 아닐 때만). */
-        void runDeferredJoinTick();
     }
 
     /** 턴을 열 수 있는 상태인가. */
@@ -258,44 +251,6 @@ final class JudgmentCoordinator implements JudgmentTurn.Host {
         JudgmentTurn.open(spec, support.judge(), judgeRequest, this, request.decide(), now);
     }
 
-    /**
-     * W1: 불명확한 참여 대답은 아직 {@code join.reply}에 넣지 않고 J1을 연다. 열 수 없으면(공급자 없음 · 판독 불가) 기록 한 건만 남기고 지금 흐름으로
-     * 간다.
-     */
-    boolean openJoinJudgment(String transcript, Instant at) {
-        Readiness ready = preflight(transcript);
-        if (ready != Readiness.READY) {
-            recordSkipped(ready, JudgmentPoint.J1, JudgmentTrigger.JOIN_UNCLEAR, 0, NextAction.REPROMPT_JOIN);
-            return false;
-        }
-        open(new Open(JudgmentPoint.J1, JudgmentTrigger.JOIN_UNCLEAR, JudgmentOwner.EXECUTOR, 0,
-                transcript, at, null, List.of(), (turn, outcome) -> JudgmentTurn.Decision.close(),
-                closure -> afterJoinJudgment(closure, at)));
-        return true;
-    }
-
-    /** 결과 → {@link JoinTracker} 답 하나(원래 확정 시각으로 한 번만 넣는다, W1 4). 휴식 · 불명확 · 보류는 모두 불명확이다. */
-    private Handled afterJoinJudgment(JudgmentTurn.Closure closure, Instant at) {
-        JudgmentOutcomeKind kind = closure.outcome().kind();
-        if (kind != JudgmentOutcomeKind.CONFIRMED && kind != JudgmentOutcomeKind.ABSTAINED) {
-            return Handled.NOTHING;
-        }
-        JoinTracker.Reply reply = JoinTracker.Reply.UNCLEAR;
-        NextAction next = NextAction.REPROMPT_JOIN;
-        if (kind == JudgmentOutcomeKind.CONFIRMED && "PARTICIPATE".equals(closure.outcome().firstOption())) {
-            reply = JoinTracker.Reply.ACCEPT;
-            next = NextAction.START_JOIN;
-        } else if (kind == JudgmentOutcomeKind.CONFIRMED && "DECLINE".equals(closure.outcome().firstOption())) {
-            reply = JoinTracker.Reply.REFUSE;
-            next = NextAction.DECLINE_JOIN;
-        }
-        env.applyJoinReply(reply, at);
-        if (closure.joinTickDeferred()) {
-            env.runDeferredJoinTick();
-        }
-        return new Handled(next, false);
-    }
-
     private Map<String, String> aliases() {
         String name = plan.childContext().displayName();
         return name == null || name.isBlank() ? Map.of() : Map.of(name, CHILD_ALIAS);
@@ -350,12 +305,6 @@ final class JudgmentCoordinator implements JudgmentTurn.Host {
 
     JudgmentTurn.TranscriptAction onTranscript(boolean stopExpression) {
         return current == null ? JudgmentTurn.TranscriptAction.NONE : current.onConfirmedTranscript(stopExpression, env.now());
-    }
-
-    void deferJoinTick() {
-        if (current != null) {
-            current.deferJoinTick();
-        }
     }
 
     void onFault() {

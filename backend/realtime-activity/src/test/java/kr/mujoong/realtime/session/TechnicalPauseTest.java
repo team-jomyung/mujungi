@@ -23,6 +23,7 @@ import org.junit.jupiter.api.Test;
  * 이어짐, 전이 시점의 일시정지가 SessionStateChanged에 실림을 본다.
  */
 @Tag("session-runtime")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class TechnicalPauseTest {
 
     private final SessionHarness h = new SessionHarness();
@@ -85,6 +86,7 @@ class TechnicalPauseTest {
     void waitingChildAlsoAbortsAfterFortySeconds() {
         h.boot();
         h.ackAndReady();
+        h.completeNotice();
         h.link.touch(h.clock.now());
 
         h.advance(Duration.ofSeconds(41));
@@ -116,6 +118,7 @@ class TechnicalPauseTest {
     void theJoinWindowStopsDuringThePauseAndResumesWithTheTimeThatWasLeft() {
         h.boot();
         h.ackAndReady();
+        h.completeNotice();
         Instant start = h.clock.now();
         h.link.touch(start);
 

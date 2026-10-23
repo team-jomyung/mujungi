@@ -53,6 +53,7 @@ import org.junit.jupiter.api.Test;
  */
 @Tag("voice-session")
 @Tag("db")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class DeviceGatewayVoiceSessionIT {
 
     private static final Map<String, String> PRODUCTION_SESSION_TIMES = Map.of(
@@ -229,14 +230,18 @@ class DeviceGatewayVoiceSessionIT {
         UUID sessionId = activate(device);
 
         assertThat(end(sessionId)).isEqualTo(EndOutcome.CLOSING);
-        WsEnvelope play = device.await(WsMessageType.PLAY_APPROVED_CONTENT, WAIT);
+        WsEnvelope play = device.await(envelope -> sessionId.equals(envelope.sessionId())
+                && envelope.payload() instanceof PlayApprovedContent content
+                && PlayApprovedContent.CLOSING.equals(content.contentCode()), WAIT);
         device.await(WsMessageType.STOP_OUTPUT, WAIT);
         // ACK 없이 끊긴다
         device.close();
 
         RealtimeItEnvironment.Connected again = env.connectDevice(sessionId);
         assertThat(again.helloOk().session()).isEqualTo(new HelloOk.SessionInfo(sessionId, View.CLOSING, true));
-        WsEnvelope replay = again.device().await(WsMessageType.PLAY_APPROVED_CONTENT, WAIT);
+        WsEnvelope replay = again.device().await(envelope -> sessionId.equals(envelope.sessionId())
+                && envelope.payload() instanceof PlayApprovedContent content
+                && PlayApprovedContent.CLOSING.equals(content.contentCode()), WAIT);
         assertThat(replay.opId()).isEqualTo(play.opId());
         assertThat(((PlayApprovedContent) replay.payload()).playbackId())
                 .isEqualTo(((PlayApprovedContent) play.payload()).playbackId());

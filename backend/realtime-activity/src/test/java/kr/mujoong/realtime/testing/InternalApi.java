@@ -132,7 +132,7 @@ public final class InternalApi {
         return schema.validate(JSON.readTree(body)).stream().map(com.networknt.schema.Error::toString).toList();
     }
 
-    /** U1 자유대화 시작 명령 본문(계약 예시와 같은 모양). */
+    /** 자유대화 HTTP 시작 fixture. 검증 메타데이터는 합성 대역이며 운영 말소리 승인이 아니다. */
     public static String startBody(UUID sessionId, UUID guardianId, UUID childId, UUID deviceId) {
         return """
                 {"sessionId":"%s","idempotencyKey":"%s","guardianId":"%s","childId":"%s","deviceId":"%s",
@@ -141,11 +141,14 @@ public final class InternalApi {
                  "childContext":{"displayName":"하늘","age":8,"interests":["공룡","그림"]},
                  "stopExpressions":[{"text":"무중아 그만할래","isDefault":true}],
                  "approvedContent":{
-                   "CLOSING":{"contentVersionId":"%s","text":"오늘 이야기 즐거웠어. 다음에 또 만나!","audioUrl":"/media/approved/closing-v1.wav"},
-                   "WAITING_FILLER":{"contentVersionId":"%s","text":"음, 잠깐만 생각해 볼게.","audioUrl":"/media/approved/waiting-filler-v1.wav"}},
+                   "CLOSING":{"contentVersionId":"11111111-1111-4111-8111-111111111119","text":"알겠어. 안녕.","audioUrl":"/media/approved/closing.wav"},
+                   "WAITING_FILLER":{"contentVersionId":"%s","text":"음, 잠깐만 생각해 볼게.","audioUrl":"/media/approved/waiting-filler-v1.wav"},
+                   "INTRO_FREE_TALK":{"contentVersionId":"11111111-1111-4111-8111-111111111116","text":%s,"audioUrl":"/media/approved/intro_free_talk.wav"},
+                   "RE_PROMPT":{"contentVersionId":"11111111-1111-4111-8111-111111111117","text":%s,"audioUrl":"/media/approved/re_prompt.wav"}},
                  "practice":null}
                 """.formatted(sessionId, UUID.randomUUID(), guardianId, childId, deviceId, UUID.randomUUID(),
-                UUID.randomUUID());
+                JSON.writeValueAsString(kr.mujoong.realtime.session.ServiceGuardrailFixtures.TEXT),
+                JSON.writeValueAsString(kr.mujoong.realtime.session.ServiceGuardrailFixtures.TEXT));
     }
 
     /** 끝내기 명령 본문. */

@@ -15,6 +15,7 @@ import org.junit.jupiter.api.Test;
  * 대조는 {@link ConfigKeyContractTest}가 계속 맡는다.
  */
 @Tag("live-content")
+@Tag("service-guardrail")
 class TimingPropertiesTest {
 
     private static final Path APPLICATION_YML = Path.of(System.getProperty("mujoong.repo.root", ".."))
@@ -29,11 +30,11 @@ class TimingPropertiesTest {
 
     @Test
     void zeroNegativeOrMissingGraphBudgetIsRejectedWithTheKeyName() {
-        assertThatThrownBy(() -> new KnowledgeTiming(Duration.ZERO))
+        assertThatThrownBy(() -> new KnowledgeTiming(Duration.ZERO, Duration.ofSeconds(10)))
                 .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("mujoong.timing.knowledge.graph-budget");
-        assertThatThrownBy(() -> new KnowledgeTiming(Duration.parse("PT-1S")))
+        assertThatThrownBy(() -> new KnowledgeTiming(Duration.parse("PT-1S"), Duration.ofSeconds(10)))
                 .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("mujoong.timing.knowledge.graph-budget");
-        assertThatThrownBy(() -> new KnowledgeTiming(null))
+        assertThatThrownBy(() -> new KnowledgeTiming(null, Duration.ofSeconds(10)))
                 .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("mujoong.timing.knowledge.graph-budget");
     }
 
@@ -44,5 +45,43 @@ class TimingPropertiesTest {
         assertThatThrownBy(() -> new CoreTimingProperties(t.session(), t.core(), t.bootstrap(), t.device(), t.login(),
                 t.cache(), t.account(), t.practice(), t.goal(), t.result(), t.report(), t.push(), null))
                 .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("mujoong.timing.knowledge");
+    }
+
+    @Test
+    void initializationDefaultBindsSeparatelyFromTheOrdinaryBudget() {
+        KnowledgeTiming timing = ConfigKeyContractTest.bind(APPLICATION_YML).timing().knowledge();
+        assertThat(timing.graphInitializationBudget()).isEqualTo(Duration.ofSeconds(10));
+        assertThat(timing.graphBudget()).isEqualTo(Duration.ofSeconds(2));
+    }
+
+    @Test
+    void initializationOverrideBindsWithoutChangingTheOrdinaryBudget() {
+        var source = new org.springframework.boot.context.properties.source.MapConfigurationPropertySource(
+                java.util.Map.of("graph-budget", "2s", "graph-initialization-budget", "15s"));
+        KnowledgeTiming timing = new org.springframework.boot.context.properties.bind.Binder(source)
+                .bind("", org.springframework.boot.context.properties.bind.Bindable.of(KnowledgeTiming.class)).get();
+        assertThat(timing.graphInitializationBudget()).isEqualTo(Duration.ofSeconds(15));
+        assertThat(timing.graphBudget()).isEqualTo(Duration.ofSeconds(2));
+    }
+
+    @Test
+    void missingInitializationBudgetIsRejected() {
+        assertThatThrownBy(() -> new KnowledgeTiming(Duration.ofSeconds(2), null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("mujoong.timing.knowledge.graph-initialization-budget");
+    }
+
+    @Test
+    void zeroInitializationBudgetIsRejected() {
+        assertThatThrownBy(() -> new KnowledgeTiming(Duration.ofSeconds(2), Duration.ZERO))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("mujoong.timing.knowledge.graph-initialization-budget");
+    }
+
+    @Test
+    void negativeInitializationBudgetIsRejected() {
+        assertThatThrownBy(() -> new KnowledgeTiming(Duration.ofSeconds(2), Duration.ofSeconds(-1)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("mujoong.timing.knowledge.graph-initialization-budget");
     }
 }

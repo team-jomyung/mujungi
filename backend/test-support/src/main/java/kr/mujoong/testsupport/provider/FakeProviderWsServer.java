@@ -298,7 +298,8 @@ public final class FakeProviderWsServer implements AutoCloseable {
         if (pending >= 0) {
             pendingAckEndMs = -1L;
             long start = Math.max(clock, pending);
-            emitOutputTranscript(aiText, start, start + total);
+            // Transcript time includes the synthetic leading silence on the same continuous PCM timeline.
+            emitOutputTranscript(aiText, start, start + FILLER_MS + total);
             emitAudio(new byte[(int) ((start - clock + FILLER_MS) * 48L)]);
         } else {
             emitOutputTranscript(aiText, clock, clock + total);

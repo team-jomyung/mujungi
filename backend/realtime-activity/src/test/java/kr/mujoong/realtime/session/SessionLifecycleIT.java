@@ -41,6 +41,7 @@ import org.junit.jupiter.api.Test;
  */
 @Tag("skeleton")
 @Tag("db")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class SessionLifecycleIT {
 
     private static final byte[] PCM = kr.mujoong.realtime.testing.RealtimeItEnvironment.audiblePcm(4800);
@@ -91,8 +92,9 @@ class SessionLifecycleIT {
         UUID playbackId = ((OutputBegin) begin.payload()).playbackId();
         device.playbackMark(sessionId, playbackId, PlaybackMark.Status.STARTED);
         awaitTrue(() -> logs.last(EventCode.LATENCY_TURN).isPresent(), "LATENCY_TURN");
-        awaitTrue(() -> transcripts(sessionId).size() == 2 && transcripts(sessionId).stream()
-                .allMatch(TranscriptRow::isFinal), "전사 두 행 FINAL");
+        // 수락한 참여 대답 · 이어진 아이 말 · AI 응답
+        awaitTrue(() -> transcripts(sessionId).size() == 3 && transcripts(sessionId).stream()
+                .allMatch(TranscriptRow::isFinal), "전사 세 행 FINAL");
         List<TranscriptRow> rows = transcripts(sessionId);
         assertThat(rows.get(0).speaker()).isEqualTo(kr.mujoong.realtime.log.TranscriptEntry.Speaker.CHILD);
         assertThat(rows.get(1).approvedForDisplay()).isTrue();
@@ -114,7 +116,8 @@ class SessionLifecycleIT {
         assertThat(again).isEqualTo(EndOutcome.CLOSING);
         WsEnvelope stopOutput = device.await(WsMessageType.STOP_OUTPUT, WAIT);
         assertThat(((StopOutput) stopOutput.payload()).reason()).isEqualTo(StopOutput.Reason.GUARDIAN_STOP);
-        WsEnvelope closing = device.await(WsMessageType.PLAY_APPROVED_CONTENT, WAIT);
+        WsEnvelope closing = device.await(value -> sessionId.equals(value.sessionId()) && value.payload() instanceof PlayApprovedContent content
+                && content.contentCode().equals(PlayApprovedContent.CLOSING), WAIT);
         PlayApprovedContent play = (PlayApprovedContent) closing.payload();
         assertThat(play.contentCode()).isEqualTo(PlayApprovedContent.CLOSING);
         // CLOSING 뒤 도착한 공급자 출력은 기기로 한 바이트도 가지 않는다(NFR1.1 · SD-17)
@@ -132,7 +135,8 @@ class SessionLifecycleIT {
         assertThat(row.confirmed()).isTrue();
         device.await(envelope -> envelope.payload() instanceof SessionState state && state.view() == View.STANDBY,
                 WAIT);
-        assertThat(device.received(WsMessageType.PLAY_APPROVED_CONTENT)).hasSize(1);
+        assertThat(device.received(WsMessageType.PLAY_APPROVED_CONTENT)).filteredOn(value ->
+                ((PlayApprovedContent) value.payload()).contentCode().equals(PlayApprovedContent.CLOSING)).hasSize(1);
         assertThat(device.received(WsMessageType.CLOSE_TRANSPORT)).hasSize(1);
         assertThat(device.outputFrames()).isEqualTo(framesBefore);
         // U4b(FR11.3 · BR3.1): 마무리 인사 말풍선 한 행이 더해져 AI 행은 둘(턴 · 마무리 인사). U11: 마무리가 올린 출력 세대가 CLOSING 직후 도착한 늦은
@@ -150,7 +154,8 @@ class SessionLifecycleIT {
 
         env.provider.emitTurn("item-1", "나 어때?", "검사해 보니 비정상이에요", List.of(PCM));
 
-        WsEnvelope filler = device.await(WsMessageType.PLAY_APPROVED_CONTENT, WAIT);
+        WsEnvelope filler = device.await(value -> sessionId.equals(value.sessionId()) && value.payload() instanceof PlayApprovedContent content
+                && content.contentCode().equals(PlayApprovedContent.WAITING_FILLER), WAIT);
         assertThat(((PlayApprovedContent) filler.payload()).contentCode()).isEqualTo(PlayApprovedContent.WAITING_FILLER);
         assertThat(device.received(WsMessageType.OUTPUT_BEGIN)).isEmpty();
         assertThat(device.outputFrames()).isZero();
@@ -273,7 +278,7 @@ class SessionLifecycleIT {
     }
 
     private List<TranscriptRow> transcripts(UUID sessionId) {
-        return env.app.bean(TranscriptRepository.class).findAll(sessionId);
+        return env.activityTranscripts(sessionId);
     }
 
     /** 기기가 살아 있게 HEARTBEAT를 보내며 기다린다. */

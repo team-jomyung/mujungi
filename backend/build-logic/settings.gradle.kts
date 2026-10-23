@@ -3,6 +3,12 @@ dependencyResolutionManagement {
     repositories {
         gradlePluginPortal()
     }
+    // 규약 플러그인이 쓰는 Gradle 플러그인 판도 백엔드 판 목록 한 곳에서 읽는다
+    versionCatalogs {
+        create("libs") {
+            from(files("../gradle/libs.versions.toml"))
+        }
+    }
 }
 
 rootProject.name = "build-logic"

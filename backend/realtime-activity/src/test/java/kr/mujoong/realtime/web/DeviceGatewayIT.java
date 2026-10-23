@@ -59,6 +59,7 @@ import org.springframework.transaction.support.TransactionTemplate;
  */
 @Tag("skeleton")
 @Tag("db")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class DeviceGatewayIT {
 
     private static final Map<String, String> PRODUCTION_TIMES = Map.of(
@@ -227,7 +228,8 @@ class DeviceGatewayIT {
 
         device.clockSkew(Duration.ofSeconds(5)).heartbeat(40L);
         awaitTrue(() -> connection(connectionId).clockOffsetMs() != null, "clockOffsetMs");
-        assertThat(connection(connectionId).clockOffsetMs()).isBetween(5_000L - 20L, 5_000L + 20L);
+        // 실제 통신 지연이 섞이므로 정밀 오차가 아니라 기기 시계 차이(5초)가 반영됐는지만 본다
+        assertThat(connection(connectionId).clockOffsetMs()).isBetween(5_000L - 1_000L, 5_000L + 1_000L);
         assertThat(connection(connectionId).rttMs()).isEqualTo(40L);
 
         device.heartbeatWithoutSentAt(40L);
@@ -240,7 +242,7 @@ class DeviceGatewayIT {
         env.join(sessionId);
         awaitTrue(() -> env.app.bean(ActivitySessionRepository.class).find(sessionId)
                 .map(row -> row.status() == SessionStatus.ACTIVE).orElse(false), "ACTIVE");
-        env.provider.emitTurn("item-1", "안녕", "안녕 반가워", List.of(kr.mujoong.realtime.testing.RealtimeItEnvironment.audiblePcm(4800)));
+        env.provider.emitTurn("item-1", "안녕", "네 이야기를 듣고 있어", List.of(kr.mujoong.realtime.testing.RealtimeItEnvironment.audiblePcm(4800)));
         WsEnvelope begin = device.await(WsMessageType.OUTPUT_BEGIN, WAIT);
         device.playbackMark(sessionId, ((OutputBegin) begin.payload()).playbackId(), PlaybackMark.Status.STARTED);
 

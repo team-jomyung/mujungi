@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 @Tag("practice-legacy")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class PracticeSpeechTest {
     @Test void spokenQuotesAreNotJsonEscapesAndReadingDelimitersCannotBeInjected() {
         var speech=PracticeSpeech.scenario(UUID.randomUUID(),UUID.randomUUID(),0,"친구","친구가 \"다른 놀이를 하고 싶어.\"라고 말한다.");

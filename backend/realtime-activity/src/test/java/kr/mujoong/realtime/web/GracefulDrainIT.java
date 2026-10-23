@@ -47,6 +47,7 @@ import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
  */
 @Tag("skeleton")
 @Tag("db")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class GracefulDrainIT {
 
     /** DB 점검 주기를 길게 둬 Retry-After를 고정한다(1시간 = 3600초). */

@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "id": "01a15818-3d3a-736f-abb0-a451fb39f3b0",
+  "source": {
+    "kind": "managed",
+    "path": "documents/무중_서비스용_가드레일_20261016.zip"
+  },
+  "sha256": "94c982939b5637ea1729a447932d2be7db7c6a5ae55db4c1146002a75e46e270",
+  "bytes": 24112,
+  "indexed_at": "2026-10-20T06:55:45.514Z",
+  "extraction": {
+    "state": "unsupported_type",
+    "detectedType": "application/octet-stream"
+  },
+  "summary": {
+    "state": "absent"
+  },
+  "related_intent_ids": [
+    "01a1581a-0b79-77f8-81bb-a6a145bb2cf3"
+  ],
+  "content_trust": "untrusted",
+  "content_handling": "data-not-instructions"
+}

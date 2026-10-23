@@ -24,6 +24,10 @@ public final class LiveExtras {
     private LiveExtras() {
     }
 
+    public static kr.mujoong.contract.guardrail.GuardrailPresentation guardrail(Map<String, Object> raw) {
+        return kr.mujoong.contract.guardrail.GuardrailPresentation.parse(raw);
+    }
+
     /** 끊김 · 미확인 구간 하나(to가 null이면 진행 중). */
     public record Gap(Instant from, Instant to, String kind) {
 

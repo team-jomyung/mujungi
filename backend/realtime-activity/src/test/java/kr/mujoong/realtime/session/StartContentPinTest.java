@@ -32,6 +32,7 @@ import org.springframework.transaction.PlatformTransactionManager;
  * APP_ERROR(errorKind {@value StartSessionHandler#APPROVED_SPEECH_DUPLICATE_CODE}) 한 줄만 남기며, 그 줄에 문구 원문이 없는지 본다.
  */
 @Tag("live-content")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class StartContentPinTest {
 
     private static final String CLOSING_SPEECH = "몰래-섞인-마무리-문구-7Q";
@@ -81,7 +82,7 @@ class StartContentPinTest {
 
         assertThat(registry.plan(old.sessionId())).get().satisfies(plan -> {
             assertThat(plan.approvedSpeech()).isEmpty();
-            assertThat(plan.judgmentSetVersion()).isEqualTo("judgment-v1");
+            assertThat(plan.judgmentSetVersion()).isEqualTo("judgment-service-v1");
         });
         assertThat(registry.matchApproved(old.sessionId(), REST_ACK).kind()).isEqualTo(MatchKind.NOT_MATCHED);
         assertThat(logs.lines()).isEmpty();

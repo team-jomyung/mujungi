@@ -1,6 +1,9 @@
 package kr.mujoong.realtime.judgment;
 
-/** 판정 기록에 남기는 다음 행동 (U11 entities JudgmentLiveRecord.nextAction). */
+/**
+ * 판정 기록에 남기는 다음 행동 (U11 entities JudgmentLiveRecord.nextAction). J1 · J6 몫인 값(START_JOIN ~ ASK_STOP_CONFIRM 등)은 이미 쓴 판정
+ * 기록을 읽으려고 남긴다(contracts/deviations.md FT-1022-c).
+ */
 public enum NextAction {
     NONE,
     START_JOIN,

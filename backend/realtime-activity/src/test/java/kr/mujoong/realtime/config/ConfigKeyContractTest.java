@@ -123,8 +123,7 @@ class ConfigKeyContractTest {
         assertThat(owned).as("U4b가 옮기거나 더한 Realtime 시간 키")
                 .contains("mujoong.timing.session.join-wait", "mujoong.timing.session.join-wait-after-reprompt",
                         "mujoong.timing.session.silence-warning", "mujoong.timing.session.silence-end",
-                        "mujoong.timing.device.gap-display", "mujoong.timing.session.stop-confirm-wait",
-                        "mujoong.timing.session.record-settle", "mujoong.session.deletion-stop-wait");
+                        "mujoong.timing.device.gap-display", "mujoong.timing.session.record-settle", "mujoong.session.deletion-stop-wait");
         assertThat(notOwned).as("옮긴 키는 더 이상 예약 키가 아니다")
                 .doesNotContain("mujoong.timing.session.join-wait", "mujoong.timing.device.gap-display");
 

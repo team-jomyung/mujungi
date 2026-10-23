@@ -71,6 +71,8 @@ export function useDoneScreen(sessionId: string) {
 
   return {
     view,
+    // 자료가 아직 없으면 로딩/조회 오류를 구분하고, 있는 사실은 현재 귀속을 검사한다.
+    trusted: view === undefined ? error === null : polling.trusted,
     status,
     childName,
     jobStatus,

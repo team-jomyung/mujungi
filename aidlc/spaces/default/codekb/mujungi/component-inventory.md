@@ -44,3 +44,32 @@
 
 ## 주요 내부 구성요소(참고, 컴포넌트 아님)
 `SessionExecutor`(4,361줄), `GuardrailCoordinator`(759), `JudgmentCoordinator`, `PracticeConversation`(862), `PracticeSessionExtension`의 책임과 구역은 `code-structure.md`에 있다.
+
+## 집중 조사 보강 — 2026-10-20
+
+아래 이름은 위 기존 컴포넌트의 하위 구성요소다. 이번 깊은 검증은 timestamp의 파일 목록으로 한정한다.
+
+| 기존 컴포넌트 | 이번 확인 책임 |
+|---|---|
+| backend/realtime-activity | JoinFlow가 참여 수락을 ACTIVE로 전이. SessionExecutor가 전사를 묶고 응답을 봉인·검사·전송. ProviderClient가 공급자 이벤트를 매핑. LatencyRecorder가 시각·미관측 사유 기록 |
+| backend/core-api | ActivityController 자유대화 시작 HTTP 경계 확인. 상세 시작 서비스·보호자 세션 보안은 이번 깊은 스캔 제외 |
+| backend/contract-model | 음성 바이너리 규격과 PlaybackMark 계약 |
+| frontend | 실제 마이크 캡처·resample·프레임 송신·Web Audio와 부모 폴링/DOM |
+| tools | DeviceSimulator는 톤 입력과 모의 재생, seed 두 생성기는 말소리 없는 톤/무음 WAV |
+| infra | compose.live.yml이 실제 공급자·Luna와 로컬 9443 환경 연결 |
+| scripts | scripts/live는 존재와 가이드만 확인; 내부를 깊게 검증하지 않아 이번 analyzed.components에서 제외 |
+
+추가 구현이 필요할 후보는 **새 진단 도구**(합성 말소리 생성/준비, 실제 브라우저 자동화, 안전한 단계별 관측 보고)다. 아직 생성하지 않았고 운영 컴포넌트로 등록하지 않는다.
+
+## 집중 조사 보강 — 261020-service-guardrail-replac
+
+기준: 2026-10-20, 커밋 2e3d7b0. 이전 절은 이전 의도의 기록으로 보존했다. 이번 검증 범위는 timestamp의 개별 파일에 한정한다.
+
+이번 깊은 분석 컴포넌트는 **backend/realtime-activity** 하나다. 기존 다른 컴포넌트의 본문은 보존하되 깊은 검증으로 승계하지 않았다.
+
+- dialog: 기본 지시와 후속 지시의 정책 일관성 경계.
+- voice: 최소 아이 문맥과 공급자 요청 whitelist.
+- session: 승인 안내·참여·직렬 지시·검사표 귀속.
+- gate/content/guardrail: 전사-음성 완전성, 고정 정책 적재, JEV 검사 및 fail-closed.
+- ZIP은 외부 사용자 입력 자료이며 실행 컴포넌트가 아니다. 새 어댑터나 연습 엔진이 패키지에 구현돼 있지 않다.
+

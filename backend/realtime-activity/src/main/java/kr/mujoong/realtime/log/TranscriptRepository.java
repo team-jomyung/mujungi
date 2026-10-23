@@ -136,6 +136,14 @@ public class TranscriptRepository {
         return jdbc.query(SELECT_VISIBLE_AFTER, sinceParams(sessionId, sinceSeq), ROW_MAPPER);
     }
 
+    public boolean isVisibleFinalChild(UUID sessionId, int sequenceNo) {
+        Boolean visible = jdbc.queryForObject("select exists(select 1 from realtime.realtime_transcript"
+                + " where session_id = :sessionId and sequence_no = :seq and speaker = 'CHILD'"
+                + " and assembly_status = 'FINAL' and not review_needed and deleted_at is null and text <> '')",
+                sessionParam(sessionId).addValue("seq", sequenceNo), Boolean.class);
+        return Boolean.TRUE.equals(visible);
+    }
+
     /** {@code sinceSeq} 뒤의 확정 전 행 중 가장 작은 번호(BR6.15: nextSeq는 이 번호 − 1을 넘지 않는다). */
     public Optional<Integer> lowestPartialAfter(UUID sessionId, int sinceSeq) {
         Integer lowest = jdbc.queryForObject(SELECT_LOWEST_PARTIAL, sinceParams(sessionId, sinceSeq), Integer.class);

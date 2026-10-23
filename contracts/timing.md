@@ -25,7 +25,7 @@
 | `mujoong.timing.session.closing-confirm` | `30s` | realtime | CLOSING 전이를 이긴 커밋 시각 → VOICE_SESSION_CLOSED가 없으면 ENDED_UNCONFIRMED. 끊김보다 우선. U4b: DECLINED 뒤 마무리 인사 대기 상한으로도 쓴다 | BR6.12 ③ · B11 · U4b-J8 |
 | `mujoong.timing.session.join-wait` | `20s` | realtime | 시작 안내(참여 질문) 재생 완료 보고를 서버가 받은 시각 → 응답 없으면 재안내(U4b). 기술 일시정지 동안 멈춘다 | 계약 7절 · U4b-J4 · U4b-J5 |
 | `mujoong.timing.session.join-wait-after-reprompt` | `20s` | realtime | 재안내 · 되묻기 · 대안 재생 완료 보고 수신 → 응답 없으면 재안내(아직 안 썼으면) 또는 DECLINED(U4b) | 계약 7절 · U4b-J4 |
-| `mujoong.timing.session.silence-warning` | `4m` | realtime | ACTIVE 공백 누적(기기 재생 · 서버 출력 대기 · 기술 일시정지 · 확인 질문 대기 동안 멈춤) → 12 경고 + SILENCE_WARNING 1회(U4b) | 계약 7절 · U4b-R6 · U4b-J10 · U4b-J11 |
+| `mujoong.timing.session.silence-warning` | `4m` | realtime | ACTIVE 공백 누적(기기 재생 · 서버 출력 대기 · 기술 일시정지 동안 멈춤) → 12 경고 + SILENCE_WARNING 1회(U4b) | 계약 7절 · U4b-R6 · U4b-J10 · U4b-J11 |
 | `mujoong.timing.session.silence-end` | `6m` | realtime | 같은 공백 누적 → CLOSING(SILENCE)(U4b) | 계약 7절 · U4b-R6 · B9 |
 | `mujoong.timing.device.gap-display` | `10s` | realtime | WAITING_CHILD · ACTIVE에서 마지막 기기 메시지 → 기술 일시정지(technicalPause) · 끊김 구간(DISCONNECT) 시작, 12 점선(U4b) | 계약 7절 · U4b-R7 · U4b-J13 |
 | `mujoong.timing.device.heartbeat-interval` | `5s` | realtime · web | 기기 HEARTBEAT 송신 주기. Realtime이 HELLO_OK.heartbeatIntervalMs로 내려준다 | ADR-005 · J27 |
@@ -67,7 +67,7 @@ U4b가 옮긴 것: `session.join-wait` · `session.join-wait-after-reprompt` · 
 | `mujoong.timing.practice.cue-budget` | 5초 | U5 |
 | `mujoong.timing.practice.judge-budget` | 5초 + 재시도 1회 | U5 |
 
-## 3. 계약 7절 밖 U1 · U4b 시간 키 (`mujoong.timing.*` U1 4종 · U4b 2종, J80 · R3-17 · U4b-J21)
+## 3. 계약 7절 밖 U1 · U4b 시간 키 (`mujoong.timing.*` U1 4종 · U4b 1종, J80 · R3-17 · U4b-J21)
 
 | 키 | 기본값 | 소유 앱 | 뜻 | 근거 |
 |---|---|---|---|---|
@@ -76,7 +76,6 @@ U4b가 옮긴 것: `session.join-wait` · `session.join-wait-after-reprompt` · 
 | `mujoong.timing.recorder.flush-interval` | `200ms` | realtime | 전사 기록기 플러시 주기 | J73 · PD-5 |
 | `mujoong.timing.cache.approved-content-ttl` | `10m` | core-api | 승인 문구 캐시 수명(U1은 DB 직접 읽기로 대신, PD-7은 3.6) | J73 · PD |
 | `mujoong.timing.cache.policy-version-ttl` | `1m` | core-api | 현재 정책 버전 캐시 수명 | J73 · PD · J114 |
-| `mujoong.timing.session.stop-confirm-wait` | `20s` | realtime | 종료 확인 질문(STOP_CONFIRM) 재생 완료 보고 수신 → 대답 없으면 막은 출력을 풀고 대화를 잇는다(U4b). 기술 일시정지 동안 멈춘다 | U4b-R4 · U4b-J6 · U4b-J21 |
 | `mujoong.timing.session.record-settle` | `2s` | realtime | 종료 전이 뒤 공급자를 닫은 시각 → 공급자 연결이 닫히거나 이 시간이 지나면 정산 창을 끝내고 결과 스냅숏을 쓴다(U4b) | U4b-R11 · U4b-J15 · U4b-J21 |
 
 ## 4. 메시징 · 정리 · 보존 · 세션 보조 키
@@ -233,6 +232,9 @@ U8(계약 · 버전 리소스)이 더한 키다. 새 연습 흐름 키는 12절 
 | `mujoong.timing.conversation.focus-max` | `90s` | realtime | 집중 연습 한 번의 상한(U12) | AC1.5.4 |
 | `mujoong.timing.conversation.goal-active-limit` | `10m` | realtime | 목표 하나의 진행 상한(U12) | FR4.5 |
 | `mujoong.timing.knowledge.graph-budget` | `2s` | core-api | 지식 그래프 조회 한 번의 상한. 넘기면 빈 응답(U15) | FR9.5 |
+| `mujoong.timing.knowledge.graph-initialization-budget` | `10s` | core-api | 시작 시 제약·교체 계획 준비 전체 마감. 일반 업무 요청2초와 분리 | 사용자 초기화 지시(2026-10-21) |
+
+초기화 전용 키는 Core 서버만 소비한다. 기본10초는 초기 구현값이며 일반 조회·쓰기·트랜잭션 요청과 JDBC 업무의 기존2초를 바꾸지 않는다. 준비 작업의 각 HTTP 요청은 전체 초기화 마감의 남은 시간 안에서만 기다린다. 실패·중단·만료 시 준비 상태를 열지 않고 시작 실패로 전파한다. 실패 후 알려진 트랜잭션 정리에는 일반 graph-budget을 전체 정리의 별도 상한으로 사용한다(기본 최대2초 추가). 따라서 준비10초와 실패 정리2초를 합친 네트워크 대기 상한은 기본12초다. 자동 재시도는 없다. 정상 계획 트랜잭션 종료는 초기화 마감 안에 포함된다.
 
 ## 14. U11 공급자 출력 세대 · 입력 전사 묶음
 
@@ -240,8 +242,9 @@ U11(선 형식 정비)이 더한 키다. 공급자 실호출에는 응답 id도 
 
 | 키 | 기본값 | 소유 앱 | 뜻 | 근거 |
 |---|---|---|---|---|
-| `mujoong.timing.provider.input-transcript-quiet` | `1500ms` | realtime | 입력 전사 조각(`session.input_transcript.delta`)이 이만큼 오지 않으면 그 묶음을 확정 전사로 본다. 전사가 음성보다 0.2 ~ 2초 앞서 도착하고 모델이 말 끝 전에 반응하므로 아이의 쉼보다 길게 잡는다. 아이가 길게 쉬면 한 발화가 둘로 나뉠 수 있다 | A7 · U11-a |
+| `mujoong.timing.provider.input-transcript-quiet` | `1000ms` | realtime | 입력 전사 조각(`session.input_transcript.delta`)이 이만큼 오지 않으면 그 묶음을 확정 전사로 본다. 전사가 음성보다 0.2 ~ 2초 앞서 도착하고 모델이 말 끝 전에 반응하므로 아이의 쉼보다 길게 잡는다. 아이가 길게 쉬면 한 발화가 둘로 나뉠 수 있다. 아이 발화 완료 대기를 줄이려고 1500ms에서 1000ms로 줄였다(2026-10-22) | A7 · U11-a |
 | `mujoong.timing.provider.new-speech-margin` | `700ms` | realtime | 자유대화·판정의 기존 전사/오디오 시간선 경계에 적용한다. 제어된 연습 발화는 앞 음성의 조용함을 확인한 후 새 발화를 처음부터 수집하므로 이 여유로 첫 부분을 자르지 않는다 | A4 · U11-a · 연습 구간 분리 |
+| `mujoong.timing.provider.join-self-start-wait` | `1s` | realtime | 참여 수락 때 보관한 모델 응답이 비어 있으면, 첫 응답 지시를 보내기 전에 모델이 스스로 답을 시작하기를 이만큼 기다린다. 그사이 출력 조각이 오면 그것을 첫 응답으로 받고 지시를 보내지 않는다. 판정 직후 시작한 자동 응답이 지시 확인 전 낡은 말로 버려져 첫 응답이 들리지 않던 문제(2026-10-22) 대응. `0`이면 기다리지 않는다(통합 시험). 실호출로 조정하는 임시값 | 2026-10-22 실호출 관측 |
 
 
 ### 2026-10-21 실제 분석 호출 보완

@@ -32,6 +32,7 @@ import org.junit.jupiter.api.Test;
  * {@code mujoong_session_ended_total}(라벨) 한 번과 동시 활성 − 1. 그 밖의 전이는 지표를 움직이지 않는다.
  */
 @Tag("skeleton")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class SessionStateEmitterTest {
 
     private static final Instant T0 = Instant.parse("2026-10-11T01:00:00Z");

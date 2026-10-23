@@ -19,6 +19,7 @@ import tools.jackson.databind.JsonNode;
  * 확인한다 (U11 FR12.3 · BR11.10). 실제 공급자를 부르지 않는다(R-F1).
  */
 @Tag("judgment-turn")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class FakeProviderWireIT {
 
     private static final JsonCodec JSON = JsonCodec.shared();

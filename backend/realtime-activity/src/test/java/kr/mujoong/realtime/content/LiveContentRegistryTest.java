@@ -21,6 +21,7 @@ import org.junit.jupiter.api.Test;
  * 판 리소스 적재와 세션 콘텐츠 계획 · 원문 일치 (U8 functional-spec 7절 · 8.3 · BR1.4 · BR2.1 ~ BR2.3 · NFR2.1 ~ NFR2.4 · NFR3.6 · SD5 · SD6).
  */
 @Tag("live-content")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class LiveContentRegistryTest {
 
     private static final String REST_ACK = "잠깐 쉬고 싶구나. 천천히 해도 괜찮아.";
@@ -35,20 +36,18 @@ class LiveContentRegistryTest {
 
     @Test
     void theShippedResourcesLoadWithJ1ToJ6SevenCategoriesAndThreeModes() {
-        assertThat(resources.judgment().version()).isEqualTo("judgment-v1");
+        assertThat(resources.judgment().version()).isEqualTo("judgment-service-v1");
         assertThat(resources.judgment().points().keySet()).containsExactly(JudgmentPoint.values());
         assertThat(resources.judgment().points().get(JudgmentPoint.J2).optionCodes())
                 .containsExactly("FULL", "PARTIAL", "HELP", "NOT_UNDERSTOOD", "IRRELEVANT", "UNREADABLE");
         assertThat(resources.judgment().points().get(JudgmentPoint.J5).optionCodes()).as("J2 여섯 + 코치 표현 그대로 따라 함")
                 .startsWith("FULL", "PARTIAL", "HELP", "NOT_UNDERSTOOD", "IRRELEVANT", "UNREADABLE").endsWith("COPIED");
-        assertThat(resources.guardrail().version()).isEqualTo("jev-guardrail-v2");
-        assertThat(resources.guardrail().categories()).containsExactly("DIAGNOSIS", "TREATMENT", "SCORE", "CAUSE",
-                "GENERALIZATION", "EMOTION_CLAIM", "PRESSURE");
+        assertThat(resources.guardrail().version()).isEqualTo("jev-guardrail-v3");
+        assertThat(resources.guardrail().categories()).containsExactly("PROFANITY");
         assertThat(resources.guardrail().modes()).containsExactlyInAnyOrder(GuardrailMode.values());
-        assertThat(resources.guardrail().instructions()).startsWith("아래 문장이 6~12살 아이와 보호자에게 보이거나 들려도 되는가?")
-                .contains("아이가 직접 한 말을 인용 부호 안에 그대로 옮긴 것은 금지가 아니다.").contains("state.candidate");
+        assertThat(resources.guardrail().instructions()).contains("욕설", "state.candidate", "출력 조각");
         assertThat(resources.guardrail().criteria().keySet()).as("제브 선택지 라벨: 7개 범주 + PASS(삽입 순서)")
-                .containsExactly("DIAGNOSIS", "TREATMENT", "SCORE", "CAUSE", "GENERALIZATION", "EMOTION_CLAIM", "PRESSURE", "PASS");
+                .containsExactly("PROFANITY", "PASS");
         assertThat(resources.judgment().toString()).doesNotContain("아이의 대답");
     }
 
@@ -59,21 +58,21 @@ class LiveContentRegistryTest {
 
         assertRefused(judgment.replace("\"point\": \"J3\"", "\"point\": \"J7\""), guardrail, Problem.BAD_JUDGMENT_POINTS);
         assertRefused(judgment.replaceFirst("\"options\": \\[[^\\]]*\\]", "\"options\": []"), guardrail, Problem.BAD_OPTIONS);
-        assertRefused(judgment, guardrail.replace("\"PRESSURE\"]", "]").replace("\"EMOTION_CLAIM\",", "\"EMOTION_CLAIM\""),
+        assertRefused(judgment, guardrail.replace("\"PROFANITY\"\n  ]", "\"PROFANITY\", \"EXTRA\"\n  ]"),
                 Problem.BAD_CATEGORIES);
         assertRefused(judgment, guardrail.replace("\"PRACTICE_COACH\"", "\"PRACTICE_PEER\""), Problem.BAD_MODES);
         assertRefused(judgment, guardrail.replaceFirst("\"instructions\": \"[^\"]*\"", "\"instructions\": \" \""),
                 Problem.BAD_INSTRUCTIONS);
-        assertRefused(judgment, guardrail.replace("\"PASS\": \"해당 없음. 위 금지 분류 어디에도 해당하지 않는다.\"", "\"NONE\": \"해당 없음\""),
+        assertRefused(judgment, guardrail.replace("\"PASS\": \"해당 없음. 출력 조각에 욕설·비속어·직접적인 모욕 표현이 없다.\"", "\"NONE\": \"해당 없음\""),
                 Problem.BAD_CRITERIA);
-        assertRefused(judgment, guardrail.replace("\"PASS\": \"해당 없음. 위 금지 분류 어디에도 해당하지 않는다.\"", "\"PASS\": \" \""),
+        assertRefused(judgment, guardrail.replace("\"PASS\": \"해당 없음. 출력 조각에 욕설·비속어·직접적인 모욕 표현이 없다.\"", "\"PASS\": \" \""),
                 Problem.BAD_CRITERIA);
-        assertRefused(judgment, guardrail.replace("    \"PASS\": \"해당 없음. 위 금지 분류 어디에도 해당하지 않는다.\"",
+        assertRefused(judgment, guardrail.replace("    \"PASS\": \"해당 없음. 출력 조각에 욕설·비속어·직접적인 모욕 표현이 없다.\"",
                 "    \"PASS\": \"해당 없음\",\n    \"EXTRA\": \"더한 라벨\""), Problem.BAD_CRITERIA);
         assertRefused(judgment, guardrail.replaceFirst(",\\s*\"criteria\": \\{[^}]*\\}", ""), Problem.BAD_CRITERIA);
         assertRefused(judgment.replace("\"code\": \"PARTIAL\"", "\"code\": \"FULL\""), guardrail, Problem.BAD_OPTIONS);
         assertRefused("{not json", guardrail, Problem.PARSE_FAILED);
-        assertRefused(judgment.replace("\"version\": \"judgment-v1\"", "\"version\": \"\""), guardrail, Problem.BAD_VERSION);
+        assertRefused(judgment.replace("\"version\": \"judgment-service-v1\"", "\"version\": \"\""), guardrail, Problem.BAD_VERSION);
     }
 
     @Test
@@ -110,8 +109,8 @@ class LiveContentRegistryTest {
                 Map.of("D_REST_ACK", new SpeechText(UUID.randomUUID(), "다른 판")));
 
         assertThat(again).isSameAs(first);
-        assertThat(first.judgmentSetVersion()).isEqualTo("judgment-v1");
-        assertThat(first.guardrailPolicyVersion()).isEqualTo("jev-guardrail-v2");
+        assertThat(first.judgmentSetVersion()).isEqualTo("judgment-service-v1");
+        assertThat(first.guardrailPolicyVersion()).isEqualTo("jev-guardrail-v3");
         assertThat(first.approvedContentVersionIds()).containsEntry("D_REST_ACK", restAckVersion);
         assertThat(registry.matchApproved(sessionId, "다른 판").kind()).isEqualTo(MatchKind.NOT_MATCHED);
         assertThat(first.toString()).doesNotContain("쉬고");
@@ -159,7 +158,7 @@ class LiveContentRegistryTest {
         assertThat(result.version()).isEqualTo("script-1");
         assertThat(registry.plan(sessionId)).get().extracting(SessionContentPlan::scriptVersion).isEqualTo("script-1");
         assertThat(registry.plan(sessionId).get().judgmentSetVersion()).as("대본 등록은 판 번호를 바꾸지 않는다")
-                .isEqualTo("judgment-v1");
+                .isEqualTo("judgment-service-v1");
     }
 
     @Test

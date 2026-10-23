@@ -26,6 +26,7 @@ import org.junit.jupiter.api.Test;
  * (R-M11).
  */
 @Tag("practice-flow")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class PracticeGeneratedSpeechTest {
     @Test
     void practiceDrainsOldTailBeforeSendingAndKeepsTheWholeShortNextUtterance() {
@@ -101,7 +102,9 @@ class PracticeGeneratedSpeechTest {
         h.speak("음, 편할 때",4800);
         h.provider.last().emit(new ProviderEvent.InputTranscriptDelta("rest-partial","쉬고 싶어"));h.drain();
         h.advance(SessionHarness.SETTINGS.inputTranscriptQuiet().plusMillis(1));
-        assertThat(judge.last().request().point()).isEqualTo(kr.mujoong.realtime.judgment.JudgmentPoint.J6);
+        assertThat(extension.events).anySatisfy(event -> assertThat(event.kind())
+                .isEqualTo(PracticeSessionExtension.ExtensionEvent.Kind.REST_REQUESTED));
+        assertThat(judge.calls()).isEmpty();
         assertThat(h.link.outputs()).isEmpty();assertThat(guard.count()).isZero();
     }
 
@@ -133,6 +136,35 @@ class PracticeGeneratedSpeechTest {
         h.activityType = ActivityType.PRACTICE;
         h.practice = ignored -> extension;
         h.activate();
+    }
+
+    @Test
+    void generatedUnitsPlayEarlyButCompleteThePracticeSlotOnlyOnceAfterTheWholeStream() {
+        start(true);
+        UUID slot = UUID.randomUUID();
+        extension.out.speakGenerated(slot, "PEER", INSTRUCTION);
+        h.settleSend();
+        h.provider.last().newSpeechMargin(null);
+        var request = h.provider.last().requests(ProviderRequestFactory.InstructionsAppend.class).getLast();
+        h.provider.last().emit(new ProviderEvent.InstructionsAppended(request.eventId(), 0, 0));
+        long margin = h.settings.newSpeechMargin().toMillis();
+        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("첫 조각", 0, margin + 100));
+        h.provider.last().emit(new ProviderEvent.OutputAudioDelta(new byte[(int) margin * 48]));
+        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("다음 조각", margin + 100, margin + 200));
+        h.provider.last().emit(new ProviderEvent.OutputAudioDelta(new byte[9600]));
+        h.drain();
+        assertThat(guard.count()).isEqualTo(1);
+        guard.allow(); h.drain();
+        assertThat(h.link.outputs()).hasSize(1);
+        assertThat(guard.count()).isEqualTo(2);
+        mark(h.link.outputs().getFirst().playbackId(), PlaybackMark.Status.COMPLETED);
+        assertThat(extension.endFacts(slot)).isEmpty();
+        guard.allow(); h.drain();
+        assertThat(h.link.outputs()).hasSize(2);
+        mark(h.link.outputs().getLast().playbackId(), PlaybackMark.Status.COMPLETED);
+        assertThat(extension.endFacts(slot)).isEmpty();
+        h.advance(Duration.ofMillis(801));
+        assertThat(extension.endFacts(slot)).containsExactly(PracticePorts.Playback.COMPLETED);
     }
 
     @Test
@@ -349,11 +381,12 @@ class PracticeGeneratedSpeechTest {
         var judge=h.useJudge();start(true);extension.introduction=true;UUID slot=UUID.randomUUID();
         extension.out.speakGenerated(slot,"PEER",INSTRUCTION);h.settleSend();h.speak("오늘 연습할 목표는",4800);
         h.childSays("intro-rest","쉬고 싶어");
-        assertThat(judge.last().request().point()).isEqualTo(kr.mujoong.realtime.judgment.JudgmentPoint.J6);
+        assertThat(extension.events).anySatisfy(event -> assertThat(event.kind())
+                .isEqualTo(PracticeSessionExtension.ExtensionEvent.Kind.REST_REQUESTED));
+        assertThat(judge.calls()).isEmpty();
         h.speak(" 의견 묻기야. 해 보자.",4800);h.advance(Duration.ofMillis(801));
         assertThat(guard.count()).as("휴식 판단 중 이전 안내 조각은 검사·재생으로 가지 않는다").isZero();
         assertThat(h.link.outputs()).isEmpty();
-        judge.confirm("REST",0.95,"NOT_END",0.03);h.drain();
         assertThat(h.link.outputs()).isEmpty();
     }
 
@@ -449,6 +482,7 @@ class PracticeGeneratedSpeechTest {
         final List<PlaybackFact> facts = new ArrayList<>();
         final List<GuardrailBlockedEvent> blocked = new ArrayList<>();
         final List<ExtensionEvent> mismatches = new ArrayList<>();
+        final List<ExtensionEvent> events = new ArrayList<>();
 
         List<PracticePorts.Playback> endFacts(UUID correlationId) {
             return facts.stream().filter(fact -> !fact.started())
@@ -477,6 +511,7 @@ class PracticeGeneratedSpeechTest {
 
         @Override
         public Signal onExtensionEvent(ExtensionEvent event, PracticeOutput output) {
+            events.add(event);
             if ("approved-text-mismatch".equals(event.name())) mismatches.add(event);
             if (event.value() instanceof PlaybackFact fact) {
                 facts.add(fact);

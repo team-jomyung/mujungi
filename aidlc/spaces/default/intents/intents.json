@@ -109,5 +109,21 @@
     "scope": "refactor",
     "status": "complete",
     "request": "de7f555a"
+  },
+  {
+    "uuid": "01a157b9-e36b-7782-b6b6-7db150262e4e",
+    "slug": "synthetic-voice-e2e",
+    "dirName": "261020-synthetic-voice-e2e",
+    "scope": "classic",
+    "status": "archived",
+    "request": "ab66e28d"
+  },
+  {
+    "uuid": "01a1581a-0b79-77f8-81bb-a6a145bb2cf3",
+    "slug": "service-guardrail-replac",
+    "dirName": "261020-service-guardrail-replac",
+    "scope": "classic",
+    "status": "in-flight",
+    "request": "8e014f2a"
   }
 ]

@@ -28,6 +28,7 @@ import org.junit.jupiter.api.Test;
  * 불변)로 틱을 기다린다. 커밋이 실패하면 칸을 되돌려 다음 틱에 다시 쓴다. 기기 last_seen은 기기당 마지막 값만 쓴다.
  */
 @Tag("skeleton")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class AsyncRecorderTest {
 
     private final MutableClock clock = new MutableClock();

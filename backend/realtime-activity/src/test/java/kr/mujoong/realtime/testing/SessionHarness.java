@@ -34,14 +34,14 @@ import kr.mujoong.testsupport.time.MutableClock;
  */
 public final class SessionHarness {
 
-    /** U4b 생애 시간 값: 운영 기본값(참여 20초 · 20초, 공백 4분 · 6분, 확인 질문 20초, 정산 2초, 점선 10초). */
+    /** U4b 생애 시간 값: 운영 기본값(참여 20초 · 20초, 공백 4분 · 6분, 정산 2초, 점선 10초). */
     public static final SessionExecutor.Settings.Lifecycle LIFECYCLE = new SessionExecutor.Settings.Lifecycle(
             Duration.ofSeconds(20), Duration.ofSeconds(20), Duration.ofMinutes(4), Duration.ofMinutes(6),
-            Duration.ofSeconds(20), Duration.ofSeconds(2), Duration.ofSeconds(10));
-    /** 시험 설정: 운영 기본값을 그대로 쓴다(20초 · 30초 · 40초 · 800ms · 20초 · 1초 · 불확실 기준 60%). */
+            Duration.ofSeconds(2), Duration.ofSeconds(10));
+    /** 시험 설정: 운영 기본값을 그대로 쓴다(20초 · 30초 · 40초 · 800ms · 20초 · 1초 · 불확실 기준 60% · 입력 전사 조용 1초). */
     public static final SessionExecutor.Settings SETTINGS = new SessionExecutor.Settings(Duration.ofSeconds(20),
             Duration.ofSeconds(30), Duration.ofSeconds(40), Duration.ofMillis(800), Duration.ofSeconds(20),
-            Duration.ofSeconds(1), 50, 1000, 60, LIFECYCLE, Duration.ofMillis(1500), Duration.ofMillis(600), Duration.ofSeconds(10));
+            Duration.ofSeconds(1), 50, 1000, 60, LIFECYCLE, Duration.ofMillis(1000), Duration.ofMillis(600), Duration.ofSeconds(10), Duration.ZERO);
     /** U4b 참여 응답의 공급자 항목 id(참여 확인 대답 "응"). */
     public static final String JOIN_ITEM = "join-reply";
     /** 시험 세션의 종료 표현 스냅숏(기본 표현 + 추가 표현 하나). */
@@ -87,6 +87,10 @@ public final class SessionHarness {
     public final UUID guardianId = UUID.randomUUID();
     public final UUID deviceId = UUID.randomUUID();
     public final UUID closingVersion = UUID.randomUUID();
+    public String closingText;
+    public boolean autoCompleteNoticeForJoin = true;
+    public record NoticePrelude(List<kr.mujoong.contract.ws.message.PlayApprovedContent> plays, List<TranscriptEntry> rows) { }
+    public NoticePrelude noticePrelude = new NoticePrelude(List.of(), List.of());
     public final UUID fillerVersion = UUID.randomUUID();
     public final SessionExecutor.Settings settings;
     public final SessionMailbox mailbox;
@@ -102,6 +106,8 @@ public final class SessionHarness {
             new kr.mujoong.realtime.guardrail.GuardrailEventRecorder(store, TaskLauncher.inline(), events);
     /** U13: 제브 장치(create 전에 {@link #useGuardrail()}로 바꾼다). 기본은 검사 없음(DISABLED) — 제브 단계를 건너뛴다. */
     public kr.mujoong.realtime.guardrail.GuardrailSupport guardrail = kr.mujoong.realtime.guardrail.GuardrailSupport.DISABLED;
+    /** 실제 서비스 자원과 구별되는, 시험이 명시적으로 주입하는 안내 검수 대역. */
+    public kr.mujoong.realtime.session.NoticeAssetCatalog noticeAssets = new kr.mujoong.realtime.session.NoticeAssetCatalog();
     /** U13: {@link #useGuardrail()} 뒤의 시험용 제브 대역(손으로 푸는 약속). */
     public FakeGuardrailClient guard;
 
@@ -130,6 +136,7 @@ public final class SessionHarness {
         this.provider.newSpeechMargin(settings.newSpeechMargin());
         this.mailbox = new SessionMailbox(settings.mailboxCapacity());
         this.link = new FakeDeviceLink(deviceId, clock.now());
+        kr.mujoong.realtime.session.ServiceGuardrailFixtures.configure(this);
     }
 
     /** 실행기를 만든다(아직 Bootstrap 전). */
@@ -141,7 +148,7 @@ public final class SessionHarness {
                 new ProviderConnector(provider, new ProviderRequestFactory(), Duration.ofSeconds(10), launcher, "test"),
                 new ProviderRequestFactory(), new OutputGate(SeedDictionary.loadDefault()), recorder, latency,
                 new TimerClocks(safety, quiet), launcher, events, metrics, clock, settings, gaps, recordings, settlement,
-                practice, judgment, guardrail);
+                practice, judgment, guardrail, noticeAssets);
         List<StartSession.ApprovedAudio> audio = new ArrayList<>(List.of(
                 new StartSession.ApprovedAudio("CLOSING", closingVersion, "/media/approved/closing.wav"),
                 new StartSession.ApprovedAudio("WAITING_FILLER", fillerVersion, "/media/approved/filler.wav")));
@@ -154,7 +161,7 @@ public final class SessionHarness {
         }
         SessionExecutor.Plan plan = new SessionExecutor.Plan(sessionId, deviceId, "0123456789abcdef0123456789abcdef",
                 new ChildContext("하늘", 8, List.of("공룡")), audio,
-                new SessionExecutor.ApprovedItem("CLOSING", closingVersion),
+                new SessionExecutor.ApprovedItem("CLOSING", closingVersion, closingText),
                 new SessionExecutor.ApprovedItem("WAITING_FILLER", fillerVersion), rawAudioConsent, STOP_EXPRESSIONS,
                 activityType, approved, practiceJson, guardianId, approvedSpeech);
         executor = new SessionExecutor(plan, services, mailbox, () -> removed = true);
@@ -203,6 +210,19 @@ public final class SessionHarness {
         boot();
         ackAndReady();
         join();
+        if (autoCompleteNoticeForJoin && activityType == kr.mujoong.contract.status.ActivityType.FREE_TALK
+                && executor.status() == kr.mujoong.contract.status.SessionStatus.ACTIVE) {
+            var plays = link.sent(kr.mujoong.contract.ws.message.PlayApprovedContent.class).stream()
+                    .filter(play -> play.contentCode().equals(SessionExecutor.INTRO_FREE_TALK)
+                            && play.contentVersionId().equals(kr.mujoong.realtime.session.ServiceGuardrailFixtures.INTRO)).toList();
+            var rows = store.transcripts.stream().filter(row -> row.speaker() == TranscriptEntry.Speaker.AI
+                    && row.approvedForDisplay() && row.text().equals(kr.mujoong.realtime.session.ServiceGuardrailFixtures.TEXT)).toList();
+            noticePrelude = new NoticePrelude(plays, rows);
+            var seqs = rows.stream().map(TranscriptEntry::sequenceNo).collect(java.util.stream.Collectors.toSet());
+            store.transcripts.removeIf(row -> seqs.contains(row.sequenceNo()));
+            link.checkpointApproved(plays.stream().map(kr.mujoong.contract.ws.message.PlayApprovedContent::playbackId)
+                    .collect(java.util.stream.Collectors.toSet()));
+        }
     }
 
     /**
@@ -230,7 +250,36 @@ public final class SessionHarness {
 
     /** U4b: 참여 확인에 아이가 "응"이라고 답한다(공급자 입력 전사 확정). */
     public void join() {
+        if (autoCompleteNoticeForJoin && activityType == kr.mujoong.contract.status.ActivityType.FREE_TALK
+                && executor.status() == kr.mujoong.contract.status.SessionStatus.WAITING_CHILD) completeNotice();
         childSays(JOIN_ITEM, "응");
+    }
+
+    /** 기본 회귀 대역도 검수 메타데이터와 현재 실제 완료 표식을 명시적으로 거친다. */
+    public void completeNotice() {
+        var plays = link.sent(kr.mujoong.contract.ws.message.PlayApprovedContent.class);
+        if (plays.isEmpty()) return;
+        var play = plays.getLast();
+        if (!play.contentCode().equals(SessionExecutor.INTRO_FREE_TALK) && !play.contentCode().equals(SessionExecutor.RE_PROMPT)) return;
+        link.sent().stream().filter(sent -> sent.payload() instanceof kr.mujoong.contract.ws.message.PlayApprovedContent value
+                && value.playbackId().equals(play.playbackId())).findFirst().ifPresent(sent -> {
+                    if (sent.opId() != null) mailbox.offerGeneral(new SessionMailbox.DeviceAck(link.connectionId(), sent.opId(), clock.now()));
+                });
+        mailbox.putSafety(new SessionMailbox.PlaybackMarkReceived(link.connectionId(),
+                new kr.mujoong.contract.ws.message.PlaybackMark(play.playbackId(),
+                        kr.mujoong.contract.ws.message.PlaybackMark.Status.COMPLETED, null, clock.now(), null, null), clock.now()));
+        drain();
+    }
+
+    /** 알려진 승인 콘텐츠 판/현재 playback 제어와 approvedLine의 즉시 확정 시각이 모두 맞는 시험 행만 구분한다. */
+    public boolean isApprovedContentRow(TranscriptEntry row) {
+        if (row.speaker() != TranscriptEntry.Speaker.AI || !row.approvedForDisplay()
+                || row.startedAt() == null || !row.startedAt().equals(row.endedAt())) return false;
+        return link.sent(kr.mujoong.contract.ws.message.PlayApprovedContent.class).stream().anyMatch(play -> {
+            UUID version = play.contentCode().equals("CLOSING") ? closingVersion : approvedVersions.get(play.contentCode());
+            String text = play.contentCode().equals("CLOSING") ? closingText : extraApproved.get(play.contentCode());
+            return play.contentVersionId().equals(version) && row.text().equals(text);
+        });
     }
 
     /** 아이 확정 전사 하나를 공급자 이벤트로 흘려 넣고 처리한다. */

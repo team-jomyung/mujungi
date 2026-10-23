@@ -65,6 +65,7 @@ import org.springframework.transaction.support.TransactionTemplate;
  * 어댑터 → 기존 게이트웨이 · 검사기가 그대로 도는지 본다. 공급자는 대역, 키는 가짜 문자열, 입력은 합성 값이다(R-F1 · R-F3).
  */
 @Tag("luna")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class LunaAdapterBoundaryTest {
 
     private static final JsonCodec JSON = JsonCodec.shared();

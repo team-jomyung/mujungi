@@ -38,6 +38,7 @@ import org.junit.jupiter.api.Test;
  * 시작 뒤 {@code session.error}는 세션 유지, 아이 전사 불확실 표시, 동의된 세션만 원음 기록을 실제 스레드 없이 확인한다.
  */
 @Tag("voice-session")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class SessionVoiceTest {
 
     private static final byte[] FRAME = new byte[960];
@@ -111,7 +112,10 @@ class SessionVoiceTest {
         h.drain();
 
         assertThat(h.provider.last().requests()).hasSize(sent);
-        assertThat(h.logs.events(EventCode.APP_ERROR)).hasSize(appErrors);
+        // 끼어들기로 세대를 올릴 때 낡은 꼬리 조각을 버렸다는 진단 사유 코드(INFO, 원문 없음)만 더해지고, 닫힌 소켓에 보내다 난 오류는 없다
+        assertThat(h.logs.events(EventCode.APP_ERROR).stream().skip(appErrors)
+                .map(event -> LogCapture.attrs(event).get("errorKind")).toList())
+                .containsOnly("OutputDiscardedStale");
         assertThat(h.executor.status()).isEqualTo(SessionStatus.ACTIVE);
         assertThat(h.launcher.names()).noneMatch(name -> name.startsWith("provider-"));
     }
@@ -173,8 +177,8 @@ class SessionVoiceTest {
         List<ProviderRequestFactory.InstructionsAppend> corrections =
                 h.provider.last().requests(ProviderRequestFactory.InstructionsAppend.class);
         assertThat(corrections).extracting(ProviderRequestFactory.InstructionsAppend::content).containsExactly(
-                InstructionTemplates.ResponseStart.FIRST.content(),
-                InstructionTemplates.correctionContent(DialogInstructions.Correction.DIAGNOSIS), InstructionTemplates.correctionContent(DialogInstructions.Correction.EMOTION_CLAIM));
+                InstructionTemplates.ResponseStart.FIRST.content(h.activityType),
+                InstructionTemplates.correctionContent(DialogInstructions.Correction.DIAGNOSIS, h.activityType), InstructionTemplates.correctionContent(DialogInstructions.Correction.EMOTION_CLAIM, h.activityType));
         assertThat(corrections).allSatisfy(correction -> {
             assertThat(correction.type()).isEqualTo(ProviderRequestFactory.TYPE_INSTRUCTIONS_APPEND);
             assertThat(correction.content()).doesNotContain("하늘색", "화가났군요", "늦은 조각");
@@ -198,8 +202,8 @@ class SessionVoiceTest {
 
         assertThat(h.provider.last().requests(ProviderRequestFactory.InstructionsAppend.class))
                 .extracting(ProviderRequestFactory.InstructionsAppend::content)
-                .containsExactly(InstructionTemplates.ResponseStart.FIRST.content(),
-                        InstructionTemplates.correctionContent(DialogInstructions.Correction.INCOMPLETE));
+                .containsExactly(InstructionTemplates.ResponseStart.FIRST.content(h.activityType),
+                        InstructionTemplates.correctionContent(DialogInstructions.Correction.INCOMPLETE, h.activityType));
     }
 
     @Test
@@ -220,8 +224,8 @@ class SessionVoiceTest {
         assertThat(h.launcher.runAll("provider-")).as("CLOSING에는 교정하지 않는다").isZero();
         assertThat(h.provider.last().requests(ProviderRequestFactory.InstructionsAppend.class))
                 .extracting(ProviderRequestFactory.InstructionsAppend::content)
-                .containsExactly(InstructionTemplates.ResponseStart.FIRST.content(),
-                        InstructionTemplates.correctionContent(DialogInstructions.Correction.INCOMPLETE));
+                .containsExactly(InstructionTemplates.ResponseStart.FIRST.content(h.activityType),
+                        InstructionTemplates.correctionContent(DialogInstructions.Correction.INCOMPLETE, h.activityType));
     }
 
     @Test
@@ -316,7 +320,8 @@ class SessionVoiceTest {
                 .filter(entry -> entry.speaker() == TranscriptEntry.Speaker.CHILD
                         && entry.assemblyStatus() == TranscriptEntry.AssemblyStatus.FINAL)
                 .forEach(entry -> review.put(entry.text(), entry.reviewNeeded()));
-        assertThat(review).containsExactly(Map.entry("공룡 좋아", false), Map.entry("응", true), Map.entry("", true),
+        // 첫 행은 참여를 수락한 대답("응", 신뢰도 정보 없음)이다
+        assertThat(review).containsExactly(Map.entry("응", true), Map.entry("공룡 좋아", false), Map.entry("", true),
                 Map.entry("몰라", false), Map.entry("글쎄", false), Map.entry("음", true));
         assertThat(h.store.transcripts).filteredOn(entry -> entry.speaker() == TranscriptEntry.Speaker.AI)
                 .allSatisfy(entry -> assertThat(entry.reviewNeeded()).isFalse());
@@ -328,7 +333,7 @@ class SessionVoiceTest {
     void withoutRawAudioConsentNothingIsRecorded() {
         h.activate();
         offerFrames(2);
-        respond("r1", "안녕 반가워", 4_800);
+        respond("r1", "네 이야기를 듣고 있어", 4_800);
         end();
 
         assertThat(h.recordings.opened()).isEmpty();
@@ -340,7 +345,7 @@ class SessionVoiceTest {
         h.activate();
         offerFrames(3);
         // 리뷰 반영 6: 송신기가 기기로 실제 보낸 프레임만 기록된다
-        h.link.deliver(respond("r1", "안녕 반가워", 4_800), h.clock.now());
+        h.link.deliver(respond("r1", "네 이야기를 듣고 있어", 4_800), h.clock.now());
         emitComplete("r2", "진단 결과야");
         h.advance(Duration.ofMillis(800));
         Instant endedAt = h.clock.now();
@@ -389,33 +394,24 @@ class SessionVoiceTest {
     }
 
     @Test
-    void aStopPhraseHeardWhileTheDevicePlaysIsNotAStopAndAnUnclearOneIsOnlyRecorded() {
+    void anUnclearSignalWhileTheDevicePlaysIsNothingButAStopPhraseIsStillJudged() {
         h.activate();
         OutputBundle bundle = respond("r1", "같이 노래 부를까", 4_800);
         mark(bundle.playbackId(), PlaybackMark.Status.STARTED, null);
         long generation = h.executor.outputGeneration();
-        done("i1", "무중아 그만할래", 0.9);
-        assertThat(sessionEvents()).noneMatch(event -> event.getEventType().startsWith("CHILD_STOP"));
-        assertThat(h.executor.outputGeneration()).as("종료 의도가 아니니 출력을 멈추지 않는다").isEqualTo(generation);
-        assertThat(h.launcher.names()).noneMatch(name -> name.startsWith("provider-"));
-        mark(bundle.playbackId(), PlaybackMark.Status.COMPLETED, null);
 
-        done("i2", "쉬고 싶어", 0.9);
-
-        // U4b(FR11.3 · BR4.3): 불명확한 종료 의도는 확인 질문으로 간다(사건 STOP_CONFIRM_ASKED, 확인 중 출력 막음)
+        // 불명확한 종료 신호는 확인 질문 없이 아무것도 하지 않는다(2026-10-22 결정)
+        done("i1", "그만", 0.9);
         assertThat(sessionEvents()).noneMatch(event -> event.getEventType().startsWith("CHILD_STOP"));
         assertThat(sessionEvents()).extracting(SessionEvent::getEventType)
-                .contains(SessionExecutor.EVENT_STOP_CONFIRM_ASKED);
-        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("그래 조금 쉬었다 할까"));
-        h.drain();
-        assertThat(h.link.outputs()).as("확인 중에는 응답을 내보내지 않는다").hasSize(1);
-        // 대답 없이 확인 창이 끝나면 대화를 잇는다(종료를 확정하지 않는다)
-        h.advanceAlive(Duration.ofSeconds(21));
+                .doesNotContain("STOP_CONFIRM_ASKED");
+        assertThat(h.executor.outputGeneration()).as("종료 의도가 아니니 출력을 멈추지 않는다").isEqualTo(generation);
         assertThat(h.executor.status()).isEqualTo(SessionStatus.ACTIVE);
-        // 확인 뒤 이어 가는 응답 요청이 끊김을 확인하고 나간 다음의 응답
-        h.settleSend();
-        respond("r3", "그래 조금 쉬었다 할까", 4_800);
-        assertThat(h.link.outputs()).hasSize(2);
+
+        // 재생 중에 확정된 전사도 판정한다: AI 말 위에 겹쳐 한 종료 표현을 놓치지 않는다(2026-10-22 결정)
+        done("i2", "무중아 그만할래", 0.9);
+        assertThat(sessionEvents()).extracting(SessionEvent::getEventType).contains(SessionExecutor.EVENT_CHILD_STOP_INTENT);
+        assertThat(h.executor.status()).isEqualTo(SessionStatus.CLOSING);
     }
 
     @Test

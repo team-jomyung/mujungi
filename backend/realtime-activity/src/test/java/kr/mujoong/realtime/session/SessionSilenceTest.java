@@ -20,6 +20,7 @@ import org.junit.jupiter.api.Test;
  * 살아 있게 둔다(끊김을 보지 않는다).
  */
 @Tag("session-runtime")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class SessionSilenceTest {
 
     private static final String WARNING_TEXT = "괜찮아, 천천히 이야기해도 돼.";

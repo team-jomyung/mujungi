@@ -1,0 +1,108 @@
+{
+  "assets": [
+    {
+      "contentVersionId": "ef3ed73e-7aba-58bf-b30c-fdd59fd36d9b",
+      "contentCode": "CLOSING",
+      "audioUrl": "/media/approved/closing-v2-spoken-20261021.wav",
+      "resource": "approved-audio/closing-v2-spoken-20261021.wav",
+      "textSha256": "cb07dcf4b28e0c685fe629686d6464cebe8977c6e93e0cc12021d4d2a7515ff2",
+      "audioSha256": "b7057cf8a736f885d312923714f4a94b9ac6e79a89216c16b2a75651c8a7b867",
+      "frames": 72000,
+      "verification": "SPOKEN_VERIFIED",
+      "reviewVersion": "human-approved-20261021",
+      "policyVersion": "service-0.1",
+      "includesParticipationQuestion": false
+    },
+    {
+      "contentVersionId": "9086a211-3354-5b22-b6c4-47f81c28dc45",
+      "contentCode": "DECLINE_ALTERNATIVE",
+      "audioUrl": "/media/approved/decline-alternative-v3-spoken-20261021.wav",
+      "resource": "approved-audio/decline-alternative-v3-spoken-20261021.wav",
+      "textSha256": "c4179c608960488743fd68499286aa5de8ed6919b249b22418fb022cbfe2eb97",
+      "audioSha256": "771bdf47ce5c81a41ff8510967216e42fddf8bf3af000b6a9de67fa1ab041840",
+      "frames": 134614,
+      "verification": "SPOKEN_VERIFIED",
+      "reviewVersion": "human-approved-20261021",
+      "policyVersion": "service-0.1",
+      "includesParticipationQuestion": true
+    },
+    {
+      "contentVersionId": "7dfe7883-ecdc-555d-b369-b66edde15377",
+      "contentCode": "INTRO_FREE_TALK",
+      "audioUrl": "/media/approved/intro-free-talk-v3-spoken-20261021.wav",
+      "resource": "approved-audio/intro-free-talk-v3-spoken-20261021.wav",
+      "textSha256": "b87aca8c085c6397e743be28160c7188b007af2426900bb064292d3e185408da",
+      "audioSha256": "149e4a359f6af2f5fa3f627419dc3b8ddd77b0318a3071eced92b5dfc5c53336",
+      "frames": 407001,
+      "verification": "SPOKEN_VERIFIED",
+      "reviewVersion": "human-approved-20261021",
+      "policyVersion": "service-0.1",
+      "includesParticipationQuestion": true
+    },
+    {
+      "contentVersionId": "c5741639-ef4d-5a2e-a565-52023edb7d9d",
+      "contentCode": "INTRO_PRACTICE",
+      "audioUrl": "/media/approved/intro-practice-v3-spoken-20261021.wav",
+      "resource": "approved-audio/intro-practice-v3-spoken-20261021.wav",
+      "textSha256": "3c18587872dbd63904acea5429c60d560537e063b78ae70f2d453270e472147b",
+      "audioSha256": "ee5e0dd7c0233dfb6fb956aa119933020d546428c5bf218b688f5120df1f1575",
+      "frames": 431920,
+      "verification": "SPOKEN_VERIFIED",
+      "reviewVersion": "human-approved-20261021",
+      "policyVersion": "service-0.1",
+      "includesParticipationQuestion": true
+    },
+    {
+      "contentVersionId": "e3ed0bae-5569-50fe-bdf4-4a19e559f003",
+      "contentCode": "RE_PROMPT",
+      "audioUrl": "/media/approved/re-prompt-v3-spoken-20261021.wav",
+      "resource": "approved-audio/re-prompt-v3-spoken-20261021.wav",
+      "textSha256": "752891ff07f749d911fcbdba6049529812159d1f02823fc25a1f0010ed859152",
+      "audioSha256": "3da06edeed8a48f7777529e4cdcf6bcc4f70b0fbce31759e7bb6bee0f0d34d5c",
+      "frames": 86381,
+      "verification": "SPOKEN_VERIFIED",
+      "reviewVersion": "human-approved-20261021",
+      "policyVersion": "service-0.1",
+      "includesParticipationQuestion": true
+    },
+    {
+      "contentVersionId": "d33cc0b0-45a5-5be8-a8b5-fe98acedd557",
+      "contentCode": "SILENCE_WARNING",
+      "audioUrl": "/media/approved/silence-warning-v3-spoken-20261021.wav",
+      "resource": "approved-audio/silence-warning-v3-spoken-20261021.wav",
+      "textSha256": "e7ea291543674ac10f2be13dfc5165812d418bce03a8312efc4fbcb0c2c919f5",
+      "audioSha256": "2257a91dd2aea8e69a6b6e87367e4d99e6cacf0f33a200e02b79753756bf00b3",
+      "frames": 98400,
+      "verification": "SPOKEN_VERIFIED",
+      "reviewVersion": "human-approved-20261021",
+      "policyVersion": "service-0.1",
+      "includesParticipationQuestion": false
+    },
+    {
+      "contentVersionId": "b9875cb6-6082-50d3-ae7d-d377e0f17ab0",
+      "contentCode": "STOP_CONFIRM",
+      "audioUrl": "/media/approved/stop-confirm-v3-spoken-20261021.wav",
+      "resource": "approved-audio/stop-confirm-v3-spoken-20261021.wav",
+      "textSha256": "855df23d6ce0f5218c472bf9a8622a81cddf649839624a6b1394c29a4062a994",
+      "audioSha256": "215eaaf5dee211d9581b9f4e2cc593b9f11edeb687767a3f13eb6b7fa263efdd",
+      "frames": 45241,
+      "verification": "SPOKEN_VERIFIED",
+      "reviewVersion": "human-approved-20261021",
+      "policyVersion": "service-0.1",
+      "includesParticipationQuestion": true
+    },
+    {
+      "contentVersionId": "57ab36a7-15d6-5b84-ac2b-4e2cc9de809a",
+      "contentCode": "WAITING_FILLER",
+      "audioUrl": "/media/approved/waiting-filler-v2-spoken-20261021.wav",
+      "resource": "approved-audio/waiting-filler-v2-spoken-20261021.wav",
+      "textSha256": "860d2f9f173010143d2a4c144ab50a73e7fd19644f81d083cb6df13037bf5867",
+      "audioSha256": "6c5922fdc3d4454ebc21a2fbb37e19423ad2373bb6c2e02880fcb5bea3977852",
+      "frames": 60790,
+      "verification": "SPOKEN_VERIFIED",
+      "reviewVersion": "human-approved-20261021",
+      "policyVersion": "service-0.1",
+      "includesParticipationQuestion": false
+    }
+  ]
+}

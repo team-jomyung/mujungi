@@ -122,7 +122,7 @@ public final class OutputGeneration {
     private final Duration segmentQuiet;
     private final long marginMs;
 
-    private long generation;
+    private volatile long generation;
     private Phase phase = Phase.RECEIVING;
     private Mode mode = Mode.GAP;
     private Instant lastDeltaAt;
@@ -163,6 +163,30 @@ public final class OutputGeneration {
     }
 
     /** 이 세션에서 받은 출력 음성의 누적 길이(ms, 보류 · 버린 조각도 센다). */
+    public long audioClockBytes() { return audioBytes; }
+
+    /**
+     * 참여 확인 중 보관했던 공급자 응답을 수락 뒤 새 응답처럼 다시 받기 위한 준비. 지시 없이 올린 세대(바로 앞의 {@link #bump})가 끊김을 이미
+     * 확인한 것으로 두어 다음 조각을 새 응답의 시작으로 받게 한다.
+     */
+    public void confirmGap() {
+        phase = Phase.GAP_CONFIRMED;
+        mode = Mode.GAP;
+        boundary = true;
+        pendingEventId = null;
+    }
+
+    /**
+     * 오디오 시계를 {@code bytes}로 되감는다. 보관한 조각은 처음 받을 때 이미 시계에 더해졌으므로, 다시 흘려 넣기 전에 보관을 시작한 시점의 값으로
+     * 되돌려야 전사 시간선(바이트 위치)이 맞는다. 다시 흘려 넣으면 시계는 원래 값으로 돌아온다.
+     */
+    public void rewindAudioClock(long bytes) {
+        if (bytes < 0 || bytes > audioBytes) {
+            throw new IllegalArgumentException("되감을 시계 위치가 범위 밖이다");
+        }
+        audioBytes = bytes;
+    }
+
     public long audioClockMs() {
         return audioBytes / PCM_BYTES_PER_MILLISECOND;
     }

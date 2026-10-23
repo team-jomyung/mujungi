@@ -1,0 +1,294 @@
+# U16 기능 시험과 직접 영향 회귀. 기존 태그/시험/단언은 유지하고 service-guardrail을 추가한다.
+# 운영 Java 35개 전체를 측정하며 이전 구현 줄도 아래 회귀로 함께 검증한다.
+# Loop-back 1의 신규 운영 helper 2개도 함께 측정한다(기존 35개 보존).
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/ParticipationLateItemServiceGuardrailTest.java
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/GreetingHandoffServiceGuardrailTest.java
+# C1/C2 형식·nullable·enum 경계 (FR7, NFR3.3)
+backend/contract-model/src/test/java/kr/mujoong/contract/guardrail/GuardrailPresentationServiceGuardrailTest.java
+# Core 소유·내부 HTTP·fallback 및 연습/삭제 호환 (C1, BR5.3–5.4, NFR1.2/6.1)
+backend/core-api/src/test/java/kr/mujoong/core/account/AccountDeletionIT.java
+# Core 소유·내부 HTTP·fallback 및 연습/삭제 호환 (C1, BR5.3–5.4, NFR1.2/6.1)
+backend/core-api/src/test/java/kr/mujoong/core/activity/ActivityStartEndIT.java
+# Core 소유·내부 HTTP·fallback 및 연습/삭제 호환 (C1, BR5.3–5.4, NFR1.2/6.1)
+backend/core-api/src/test/java/kr/mujoong/core/activity/ApprovedSpeechAssemblyTest.java
+# Core 소유·내부 HTTP·fallback 및 연습/삭제 호환 (C1, BR5.3–5.4, NFR1.2/6.1)
+backend/core-api/src/test/java/kr/mujoong/core/activity/ApprovedSpeechStartOutcomesTest.java
+# Core 소유·내부 HTTP·fallback 및 연습/삭제 호환 (C1, BR5.3–5.4, NFR1.2/6.1)
+backend/core-api/src/test/java/kr/mujoong/core/activity/CoordinatorUnitTest.java
+# Core 소유·내부 HTTP·fallback 및 연습/삭제 호환 (C1, BR5.3–5.4, NFR1.2/6.1)
+backend/core-api/src/test/java/kr/mujoong/core/activity/PreparingTimeoutCheckerTest.java
+# Core 소유·내부 HTTP·fallback 및 연습/삭제 호환 (C1, BR5.3–5.4, NFR1.2/6.1)
+backend/core-api/src/test/java/kr/mujoong/core/activity/RealtimeSessionClientTest.java
+# Core 소유·내부 HTTP·fallback 및 연습/삭제 호환 (C1, BR5.3–5.4, NFR1.2/6.1)
+backend/core-api/src/test/java/kr/mujoong/core/activity/RealtimeStartBodyTest.java
+# Core 소유·내부 HTTP·fallback 및 연습/삭제 호환 (C1, BR5.3–5.4, NFR1.2/6.1)
+backend/core-api/src/test/java/kr/mujoong/core/activity/SessionViewServiceGuardrailIT.java
+# Core 소유·내부 HTTP·fallback 및 연습/삭제 호환 (C1, BR5.3–5.4, NFR1.2/6.1)
+backend/core-api/src/test/java/kr/mujoong/core/activity/SessionViewServiceServiceGuardrailTest.java
+# Core 소유·내부 HTTP·fallback 및 연습/삭제 호환 (C1, BR5.3–5.4, NFR1.2/6.1)
+backend/core-api/src/test/java/kr/mujoong/core/activity/SessionViewServiceTest.java
+# Core 소유·내부 HTTP·fallback 및 연습/삭제 호환 (C1, BR5.3–5.4, NFR1.2/6.1)
+backend/core-api/src/test/java/kr/mujoong/core/activity/StartActivityPolicyTest.java
+# Core 소유·내부 HTTP·fallback 및 연습/삭제 호환 (C1, BR5.3–5.4, NFR1.2/6.1)
+backend/core-api/src/test/java/kr/mujoong/core/arch/SingleInstanceMarkerTest.java
+# Core 소유·내부 HTTP·fallback 및 연습/삭제 호환 (C1, BR5.3–5.4, NFR1.2/6.1)
+backend/core-api/src/test/java/kr/mujoong/core/luna/adapter/LunaAdapterBoundaryTest.java
+# Core 소유·내부 HTTP·fallback 및 연습/삭제 호환 (C1, BR5.3–5.4, NFR1.2/6.1)
+backend/core-api/src/test/java/kr/mujoong/core/notification/PushInboxIT.java
+# Core 소유·내부 HTTP·fallback 및 연습/삭제 호환 (C1, BR5.3–5.4, NFR1.2/6.1)
+backend/core-api/src/test/java/kr/mujoong/core/practice/ScenarioRepositoryIT.java
+# Core 소유·내부 HTTP·fallback 및 연습/삭제 호환 (C1, BR5.3–5.4, NFR1.2/6.1)
+backend/core-api/src/test/java/kr/mujoong/core/practice/ScenarioServiceTest.java
+# Core 소유·내부 HTTP·fallback 및 연습/삭제 호환 (C1, BR5.3–5.4, NFR1.2/6.1)
+backend/core-api/src/test/java/kr/mujoong/core/practice/start/PracticeRealtimeClientTest.java
+# Core 소유·내부 HTTP·fallback 및 연습/삭제 호환 (C1, BR5.3–5.4, NFR1.2/6.1)
+backend/core-api/src/test/java/kr/mujoong/core/practice/start/PracticeStartServiceTest.java
+# 세션 전달/참여/종료·시계·검수/연습/삭제 통합 회귀 (BR2/4/5/6/7, NFR2/6)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/arch/RealtimeArchTest.java
+# 세션 전달/참여/종료·시계·검수/연습/삭제 통합 회귀 (BR2/4/5/6/7, NFR2/6)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/arch/SingleInstanceMarkerTest.java
+# 세션 전달/참여/종료·시계·검수/연습/삭제 통합 회귀 (BR2/4/5/6/7, NFR2/6)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/common/db/RealtimeDataAccessWiringIT.java
+# 세션 전달/참여/종료·시계·검수/연습/삭제 통합 회귀 (BR2/4/5/6/7, NFR2/6)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/content/LiveContentRegistryTest.java
+# 정책·거절/도움/휴식·종료 구분 (BR1/3/4)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/dialog/ConversationPolicyServiceGuardrailTest.java
+# 정책·거절/도움/휴식·종료 구분 (BR1/3/4)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/dialog/DialogInstructionsTest.java
+# 정책·거절/도움/휴식·종료 구분 (BR1/3/4)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/dialog/InstructionTemplatesServiceGuardrailTest.java
+# 정책·거절/도움/휴식·종료 구분 (BR1/3/4)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/dialog/ServicePolicyCatalogServiceGuardrailTest.java
+# 정책·거절/도움/휴식·종료 구분 (BR1/3/4)
+# 정책·거절/도움/휴식·종료 구분 (BR1/3/4)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/dialog/StopIntentJudgeTest.java
+# 정책·거절/도움/휴식·종료 구분 (BR1/3/4)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/dialog/StopIntentServiceGuardrailTest.java
+# 기존 inspect/정렬·현재 출력 권한/송신 세대 (BR7.1, NFR2.1)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/gate/OutputAuthorityServiceGuardrailTest.java
+# 기존 inspect/정렬·현재 출력 권한/송신 세대 (BR7.1, NFR2.1)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/gate/OutputGateTest.java
+# 기존 inspect/정렬·현재 출력 권한/송신 세대 (BR7.1, NFR2.1)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/gate/OutputGenerationTest.java
+# 세션 전달/참여/종료·시계·검수/연습/삭제 통합 회귀 (BR2/4/5/6/7, NFR2/6)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/gateway/ConnectionHandoverTest.java
+# 세션 전달/참여/종료·시계·검수/연습/삭제 통합 회귀 (BR2/4/5/6/7, NFR2/6)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/gateway/DeviceStatusPolicyTest.java
+# 세션 전달/참여/종료·시계·검수/연습/삭제 통합 회귀 (BR2/4/5/6/7, NFR2/6)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/guardrail/GuardrailConfigurationTest.java
+# 세션 전달/참여/종료·시계·검수/연습/삭제 통합 회귀 (BR2/4/5/6/7, NFR2/6)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/guardrail/GuardrailPolicyV2Test.java
+# 세션 전달/참여/종료·시계·검수/연습/삭제 통합 회귀 (BR2/4/5/6/7, NFR2/6)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/guardrail/JevGuardrailClientTest.java
+# J1/J6 요청·판정 현재성/마감 (BR4.2–4.4, NFR3.3/6.2)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/judgment/JudgmentConfigurationTest.java
+# J1/J6 요청·판정 현재성/마감 (BR4.2–4.4, NFR3.3/6.2)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/judgment/JudgmentInstructionsTest.java
+# J1/J6 요청·판정 현재성/마감 (BR4.2–4.4, NFR3.3/6.2)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/judgment/JudgmentRequestServiceGuardrailTest.java
+# J1/J6 요청·판정 현재성/마감 (BR4.2–4.4, NFR3.3/6.2)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/judgment/JudgmentTurnTest.java
+# J1/J6 요청·판정 현재성/마감 (BR4.2–4.4, NFR3.3/6.2)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/judgment/LunaJudgeClientTest.java
+# 전사 공개·삭제·기존 수명 (BR5.3, NFR1.4)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/log/AsyncRecorderTest.java
+# 전사 공개·삭제·기존 수명 (BR5.3, NFR1.4)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/log/LatencyRecorderTest.java
+# 전사 공개·삭제·기존 수명 (BR5.3, NFR1.4)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/log/RealtimeVoiceDeletionParticipantIT.java
+# 전사 공개·삭제·기존 수명 (BR5.3, NFR1.4)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/log/TranscriptRepositoryIT.java
+# 전사 공개·삭제·기존 수명 (BR5.3, NFR1.4)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/log/TranscriptWriterHoldTest.java
+# 세션 전달/참여/종료·시계·검수/연습/삭제 통합 회귀 (BR2/4/5/6/7, NFR2/6)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/messaging/RealtimeMessagingIT.java
+# 세션 전달/참여/종료·시계·검수/연습/삭제 통합 회귀 (BR2/4/5/6/7, NFR2/6)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/observability/RealtimeMetricsScrapeIT.java
+# 세션 전달/참여/종료·시계·검수/연습/삭제 통합 회귀 (BR2/4/5/6/7, NFR2/6)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/practiceflow/PracticeFlowIT.java
+# 세션 전달/참여/종료·시계·검수/연습/삭제 통합 회귀 (BR2/4/5/6/7, NFR2/6)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/practicelegacy/PracticeExecutorIntegrationTest.java
+# 세션 전달/참여/종료·시계·검수/연습/삭제 통합 회귀 (BR2/4/5/6/7, NFR2/6)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/practicelegacy/PracticeRuntimeRaceTest.java
+# 세션 전달/참여/종료·시계·검수/연습/삭제 통합 회귀 (BR2/4/5/6/7, NFR2/6)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/practicelegacy/PracticeSpeechTest.java
+# 세션 전달/참여/종료·시계·검수/연습/삭제 통합 회귀 (BR2/4/5/6/7, NFR2/6)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/practicelegacy/PracticeStopConfirmRaceTest.java
+# 세션 전달/참여/종료·시계·검수/연습/삭제 통합 회귀 (BR2/4/5/6/7, NFR2/6)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/practicelegacy/RecordCapturePracticeRecoveryTest.java
+# 세션 전달/참여/종료·시계·검수/연습/삭제 통합 회귀 (BR2/4/5/6/7, NFR2/6)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/ContinuousSilenceExecutorTest.java
+# 세션 전달/참여/종료·시계·검수/연습/삭제 통합 회귀 (BR2/4/5/6/7, NFR2/6)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/EndRequestTest.java
+# 세션 전달/참여/종료·시계·검수/연습/삭제 통합 회귀 (BR2/4/5/6/7, NFR2/6)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/GenerationSendExecutorTest.java
+# 세션 전달/참여/종료·시계·검수/연습/삭제 통합 회귀 (BR2/4/5/6/7, NFR2/6)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/GuardrailApprovedSkipTest.java
+# 세션 전달/참여/종료·시계·검수/연습/삭제 통합 회귀 (BR2/4/5/6/7, NFR2/6)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/GuardrailCoordinatorTest.java
+# 세션 전달/참여/종료·시계·검수/연습/삭제 통합 회귀 (BR2/4/5/6/7, NFR2/6)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/GuardrailExecutorTest.java
+# 세션 전달/참여/종료·시계·검수/연습/삭제 통합 회귀 (BR2/4/5/6/7, NFR2/6)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/GuardrailMetricsTest.java
+# 세션 전달/참여/종료·시계·검수/연습/삭제 통합 회귀 (BR2/4/5/6/7, NFR2/6)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/GuardrailPracticeEventTest.java
+# 세션 전달/참여/종료·시계·검수/연습/삭제 통합 회귀 (BR2/4/5/6/7, NFR2/6)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/GuardrailSafetyTimerTest.java
+# 세션 전달/참여/종료·시계·검수/연습/삭제 통합 회귀 (BR2/4/5/6/7, NFR2/6)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/GuardrailTurnIT.java
+# 세션 전달/참여/종료·시계·검수/연습/삭제 통합 회귀 (BR2/4/5/6/7, NFR2/6)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/JoinJudgmentExecutorTest.java
+# 세션 전달/참여/종료·시계·검수/연습/삭제 통합 회귀 (BR2/4/5/6/7, NFR2/6)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/JudgmentExtensionPortTest.java
+# 세션 전달/참여/종료·시계·검수/연습/삭제 통합 회귀 (BR2/4/5/6/7, NFR2/6)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/JudgmentFaultExecutorTest.java
+# 세션 전달/참여/종료·시계·검수/연습/삭제 통합 회귀 (BR2/4/5/6/7, NFR2/6)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/JudgmentNoProviderRegressionTest.java
+# 세션 전달/참여/종료·시계·검수/연습/삭제 통합 회귀 (BR2/4/5/6/7, NFR2/6)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/JudgmentTurnExecutorTest.java
+# 세션 전달/참여/종료·시계·검수/연습/삭제 통합 회귀 (BR2/4/5/6/7, NFR2/6)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/NoticeAssetServiceGuardrailTest.java
+# 세션 전달/참여/종료·시계·검수/연습/삭제 통합 회귀 (BR2/4/5/6/7, NFR2/6)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/NoticeDeliveryServiceGuardrailIT.java
+# 세션 전달/참여/종료·시계·검수/연습/삭제 통합 회귀 (BR2/4/5/6/7, NFR2/6)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/NoticeDeliveryServiceGuardrailTest.java
+# 세션 전달/참여/종료·시계·검수/연습/삭제 통합 회귀 (BR2/4/5/6/7, NFR2/6)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/OutputRuntimeServiceGuardrailTest.java
+# 세션 전달/참여/종료·시계·검수/연습/삭제 통합 회귀 (BR2/4/5/6/7, NFR2/6)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/ParticipationServiceGuardrailTest.java
+# 세션 전달/참여/종료·시계·검수/연습/삭제 통합 회귀 (BR2/4/5/6/7, NFR2/6)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/PracticeExtensionTest.java
+# 세션 전달/참여/종료·시계·검수/연습/삭제 통합 회귀 (BR2/4/5/6/7, NFR2/6)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/PracticeGeneratedSpeechTest.java
+# 세션 전달/참여/종료·시계·검수/연습/삭제 통합 회귀 (BR2/4/5/6/7, NFR2/6)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/PracticeStartPathIT.java
+# 세션 전달/참여/종료·시계·검수/연습/삭제 통합 회귀 (BR2/4/5/6/7, NFR2/6)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/PresentationQueryServiceGuardrailIT.java
+# 세션 전달/참여/종료·시계·검수/연습/삭제 통합 회귀 (BR2/4/5/6/7, NFR2/6)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/PresentationQueryServiceGuardrailTest.java
+# 세션 전달/참여/종료·시계·검수/연습/삭제 통합 회귀 (BR2/4/5/6/7, NFR2/6)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/PrivacyLogTest.java
+# 세션 전달/참여/종료·시계·검수/연습/삭제 통합 회귀 (BR2/4/5/6/7, NFR2/6)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/RealtimeDeletionHandlerIT.java
+# 세션 전달/참여/종료·시계·검수/연습/삭제 통합 회귀 (BR2/4/5/6/7, NFR2/6)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/SessionClocksCharacterizationTest.java
+# 세션 전달/참여/종료·시계·검수/연습/삭제 통합 회귀 (BR2/4/5/6/7, NFR2/6)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/SessionExecutorFaultTest.java
+# 세션 전달/참여/종료·시계·검수/연습/삭제 통합 회귀 (BR2/4/5/6/7, NFR2/6)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/SessionExecutorReview2Test.java
+# 세션 전달/참여/종료·시계·검수/연습/삭제 통합 회귀 (BR2/4/5/6/7, NFR2/6)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/SessionExecutorReview3Test.java
+# 세션 전달/참여/종료·시계·검수/연습/삭제 통합 회귀 (BR2/4/5/6/7, NFR2/6)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/SessionExecutorReviewTest.java
+# 세션 전달/참여/종료·시계·검수/연습/삭제 통합 회귀 (BR2/4/5/6/7, NFR2/6)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/SessionExecutorTest.java
+# 세션 전달/참여/종료·시계·검수/연습/삭제 통합 회귀 (BR2/4/5/6/7, NFR2/6)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/SessionExecutorVoiceSessionTest.java
+# 세션 전달/참여/종료·시계·검수/연습/삭제 통합 회귀 (BR2/4/5/6/7, NFR2/6)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/SessionGuardrailFactsServiceGuardrailIT.java
+# 세션 전달/참여/종료·시계·검수/연습/삭제 통합 회귀 (BR2/4/5/6/7, NFR2/6)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/SessionGuardrailFactsServiceGuardrailTest.java
+# 세션 전달/참여/종료·시계·검수/연습/삭제 통합 회귀 (BR2/4/5/6/7, NFR2/6)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/SessionJoinTest.java
+# 세션 전달/참여/종료·시계·검수/연습/삭제 통합 회귀 (BR2/4/5/6/7, NFR2/6)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/SessionLifecycleIT.java
+# 세션 전달/참여/종료·시계·검수/연습/삭제 통합 회귀 (BR2/4/5/6/7, NFR2/6)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/SessionLifecycleSessionRuntimeIT.java
+# 세션 전달/참여/종료·시계·검수/연습/삭제 통합 회귀 (BR2/4/5/6/7, NFR2/6)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/SessionRecordIT.java
+# 세션 전달/참여/종료·시계·검수/연습/삭제 통합 회귀 (BR2/4/5/6/7, NFR2/6)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/SessionSettleTest.java
+# 세션 전달/참여/종료·시계·검수/연습/삭제 통합 회귀 (BR2/4/5/6/7, NFR2/6)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/SessionSilenceTest.java
+# 세션 전달/참여/종료·시계·검수/연습/삭제 통합 회귀 (BR2/4/5/6/7, NFR2/6)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/SessionStateEmitterTest.java
+# 세션 전달/참여/종료·시계·검수/연습/삭제 통합 회귀 (BR2/4/5/6/7, NFR2/6)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/SessionStopTest.java
+# 세션 전달/참여/종료·시계·검수/연습/삭제 통합 회귀 (BR2/4/5/6/7, NFR2/6)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/SessionTimersTest.java
+# 세션 전달/참여/종료·시계·검수/연습/삭제 통합 회귀 (BR2/4/5/6/7, NFR2/6)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/SessionViewIT.java
+# 세션 전달/참여/종료·시계·검수/연습/삭제 통합 회귀 (BR2/4/5/6/7, NFR2/6)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/SessionVoiceIT.java
+# 세션 전달/참여/종료·시계·검수/연습/삭제 통합 회귀 (BR2/4/5/6/7, NFR2/6)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/SessionVoiceTest.java
+# 세션 전달/참여/종료·시계·검수/연습/삭제 통합 회귀 (BR2/4/5/6/7, NFR2/6)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/StartContentPinTest.java
+# 세션 전달/참여/종료·시계·검수/연습/삭제 통합 회귀 (BR2/4/5/6/7, NFR2/6)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/StartSessionHandlerPathsTest.java
+# 세션 전달/참여/종료·시계·검수/연습/삭제 통합 회귀 (BR2/4/5/6/7, NFR2/6)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/StopJudgmentExecutorTest.java
+# 세션 전달/참여/종료·시계·검수/연습/삭제 통합 회귀 (BR2/4/5/6/7, NFR2/6)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/StopQuestionServiceGuardrailTest.java
+# 세션 전달/참여/종료·시계·검수/연습/삭제 통합 회귀 (BR2/4/5/6/7, NFR2/6)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/TechnicalPauseTest.java
+# 세션 전달/참여/종료·시계·검수/연습/삭제 통합 회귀 (BR2/4/5/6/7, NFR2/6)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/web/PracticeStartBodyTest.java
+# 세션 전달/참여/종료·시계·검수/연습/삭제 통합 회귀 (BR2/4/5/6/7, NFR2/6)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/web/SessionInternalControllerSessionRuntimeTest.java
+# 세션 전달/참여/종료·시계·검수/연습/삭제 통합 회귀 (BR2/4/5/6/7, NFR2/6)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/web/SessionInternalControllerVoiceSessionTest.java
+# 세션 전달/참여/종료·시계·검수/연습/삭제 통합 회귀 (BR2/4/5/6/7, NFR2/6)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/web/SessionStartEndpointTest.java
+# 세션 전달/참여/종료·시계·검수/연습/삭제 통합 회귀 (BR2/4/5/6/7, NFR2/6)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/web/SessionStartReceiveTest.java
+# 세션 전달/참여/종료·시계·검수/연습/삭제 통합 회귀 (BR2/4/5/6/7, NFR2/6)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/startup/DrainingLifecycleTest.java
+# 세션 전달/참여/종료·시계·검수/연습/삭제 통합 회귀 (BR2/4/5/6/7, NFR2/6)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/startup/LiveContentRealtimeStartupChecksTest.java
+# 세션 전달/참여/종료·시계·검수/연습/삭제 통합 회귀 (BR2/4/5/6/7, NFR2/6)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/startup/RealtimeStartupRecoveryIT.java
+# 세션 전달/참여/종료·시계·검수/연습/삭제 통합 회귀 (BR2/4/5/6/7, NFR2/6)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/startup/RealtimeStartupSequenceTest.java
+# 실제 초기/후속 공급자 요청·형식/모드 호환 (BR1.3–1.4, NFR6.1)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/voice/FakeProviderWireIT.java
+# 실제 초기/후속 공급자 요청·형식/모드 호환 (BR1.3–1.4, NFR6.1)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/voice/GptLiveIsolationTest.java
+# 실제 초기/후속 공급자 요청·형식/모드 호환 (BR1.3–1.4, NFR6.1)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/voice/InputRelayTest.java
+# 실제 초기/후속 공급자 요청·형식/모드 호환 (BR1.3–1.4, NFR6.1)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/voice/ProviderAuthHeaderTest.java
+# 실제 초기/후속 공급자 요청·형식/모드 호환 (BR1.3–1.4, NFR6.1)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/voice/ProviderClientIT.java
+# 실제 초기/후속 공급자 요청·형식/모드 호환 (BR1.3–1.4, NFR6.1)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/voice/ProviderClientVoiceSessionIT.java
+# 실제 초기/후속 공급자 요청·형식/모드 호환 (BR1.3–1.4, NFR6.1)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/voice/ProviderRequestFactoryWireTest.java
+# 실제 초기/후속 공급자 요청·형식/모드 호환 (BR1.3–1.4, NFR6.1)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/voice/ProviderRequestServiceGuardrailIT.java
+# 실제 초기/후속 공급자 요청·형식/모드 호환 (BR1.3–1.4, NFR6.1)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/voice/ProviderRequestServiceGuardrailTest.java
+# 실제 초기/후속 공급자 요청·형식/모드 호환 (BR1.3–1.4, NFR6.1)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/voice/ProviderRequestWhitelistIT.java
+# 세션 전달/참여/종료·시계·검수/연습/삭제 통합 회귀 (BR2/4/5/6/7, NFR2/6)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/web/DeviceGatewayIT.java
+# 세션 전달/참여/종료·시계·검수/연습/삭제 통합 회귀 (BR2/4/5/6/7, NFR2/6)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/web/DeviceGatewayVoiceSessionIT.java
+# 세션 전달/참여/종료·시계·검수/연습/삭제 통합 회귀 (BR2/4/5/6/7, NFR2/6)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/web/GracefulDrainIT.java
+# 세션 전달/참여/종료·시계·검수/연습/삭제 통합 회귀 (BR2/4/5/6/7, NFR2/6)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/web/RealtimeInternalApiIT.java
+# 세션 전달/참여/종료·시계·검수/연습/삭제 통합 회귀 (BR2/4/5/6/7, NFR2/6)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/web/RealtimeLogHygieneIT.java
+# V8 적용·재적용0건·기존 이력/권한/표 보존 (BR5.3, NFR1.4/2.3/6.1)
+backend/core-api/src/test/java/kr/mujoong/core/db/FlywayConfIT.java
+# 앱별 Flyway 이력 SELECT/쓰기 금지 유지 (NFR1.2/6.1)
+backend/core-api/src/test/java/kr/mujoong/core/db/SchemaPrivilegeIT.java
+# V8 index 추가와 기존 정확한 표/유일성/권한 유지 (BR5.3, NFR1.4/6.1)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/db/RealtimeSchemaIT.java
+# V3→V8 업그레이드에서 이전 앱 세션·연습 스키마/쓰기 보존 (NFR6.1)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/practicelegacy/PracticeMigrationIT.java
+# 이전 V4–V7 자원 보존 및 V8 포함 기동 거부 경계 (NFR2.3/6.1)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/practicelegacy/PracticeMigrationRegistrationTest.java
+# 전체검증에서 확정된 technical regression: 2초 JDBC 안 cold graph 초기화 1요청·파라미터/실패 경계 (NFR3.2/6.1)
+backend/core-api/src/test/java/kr/mujoong/core/knowledge/GraphInitializationTechnicalRegressionServiceGuardrailTest.java
+# 실제 Neo4j CAS 판·타아이·생성seed·rollback/멱등 보존 (NFR6.1, technical regression fix)
+backend/core-api/src/test/java/kr/mujoong/core/knowledge/Neo4jIT.java
+# 실제 PostgreSQL/Neo4j 초기화→후속 연습→삭제 전체, 기존2초 유지 (NFR3.2/6.1, technical regression fix)
+backend/core-api/src/test/java/kr/mujoong/core/practicegoal/GraphWorkflowIT.java
+# 초기화 전용10초/일반2초 설정·실제바인딩·구성/누적마감·정리·중단 회귀
+backend/core-api/src/test/java/kr/mujoong/core/config/TimingPropertiesTest.java
+backend/core-api/src/test/java/kr/mujoong/core/config/ConfigKeyContractTest.java
+backend/core-api/src/test/java/kr/mujoong/core/startup/CorePropertiesValidationTest.java
+backend/core-api/src/test/java/kr/mujoong/core/knowledge/ConfigurationTest.java
+backend/core-api/src/test/java/kr/mujoong/core/knowledge/GraphInitializationBudgetServiceGuardrailTest.java

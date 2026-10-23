@@ -93,7 +93,8 @@ public class RealtimeRuntimeConfig {
             org.springframework.beans.factory.ObjectProvider<kr.mujoong.realtime.judgment.JudgmentLiveRecorder> judgmentRecorder,
             kr.mujoong.realtime.judgment.JudgmentPrompt judgmentPrompt,
             kr.mujoong.realtime.content.LiveContentRegistry liveContent,
-            kr.mujoong.realtime.guardrail.GuardrailSupport guardrail) {
+            kr.mujoong.realtime.guardrail.GuardrailSupport guardrail,
+            kr.mujoong.realtime.session.NoticeAssetCatalog notices) {
         // U4b(BR8.1): 종료 뒤 정산(결과 입력 스냅숏 + SessionRecordCaptured)은 RecordCaptureService가 맡는다.
         // U4b(BR10.2): 연습 확장점은 U5b가 빈을 등록하면 그것을, 없으면 무동작 공장을 쓴다
         return new SessionExecutor.Services(transitions, sockets::current, deviceStatus, connector, requests, gate,
@@ -105,6 +106,7 @@ public class RealtimeRuntimeConfig {
                 // U13: 제브 게이트(모드는 기동 점검이 정했다). 정책 판은 세션에 고정되는 정책 리소스의 판이다. OFF면 검사 없음(DISABLED)이다
                 // 승인 원문 일치는 콘텐츠 레지스트리를 좁은 포트로만 연결한다(BR7.4). MATCHED만 생략 근거다(BR7.2)
                 guardrail.enabled() ? guardrail.withPolicyVersion(liveContent.resources().guardrail().version())
-                        .withApprovedVerbatim(kr.mujoong.realtime.guardrail.ApprovedVerbatimPort.of(liveContent)) : guardrail);
+                        .withApprovedVerbatim(kr.mujoong.realtime.guardrail.ApprovedVerbatimPort.of(liveContent)) : guardrail,
+                notices);
     }
 }

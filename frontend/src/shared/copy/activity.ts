@@ -29,13 +29,19 @@ export const ACTIVITY_COPY = {
     title: "아이가 대답하지 않아 시작하지 못했어요", // C.P-03.15.1
     confirm: "확인", // C.P-03.15.2
   },
+  nonParticipation: {
+    refused: "아이가 지금은 이야기하지 않기로 했어요",
+    unknown: "이야기를 시작하지 않았어요",
+  },
   done: {
+    loading: "활동 상태를 불러오고 있어요",
+    loadFailed: "활동 상태를 불러오지 못했어요",
+    unknown: "활동 상태를 확인하고 있어요",
     cleaning: "기록을 정리하고 있어요", // C.S-17.16.4
     viewRecord: "오늘 기록 보기", // C.S-17.16.5
     childStopSuffix: " 끝내자고 했어요", // C.S-17.72.4 '민준이 끝내자고 했어요'
     silenceTitle: "말이 없어 자동으로 끝났어요", // C.S-17.53.4
     silenceBody: "공백 6분 · 6분 동안 말소리가 없어 활동을 끝냈어요.", // C.S-17.53.5 · mockups §1 F1-a(사람 지시로 고친 글)
-    defaultStopExpression: "무중아 그만할래", // C.S-17.72.5 '"무중아 그만할래" · 10:52'
   },
 } as const;
 
@@ -124,8 +130,8 @@ export function childStopTitle(childName: string | null): string {
   return `${attachParticle(name, "이/가")}${ACTIVITY_COPY.done.childStopSuffix}`;
 }
 
-/** '"무중아 그만할래" · 10:52'(C.S-17.72.5, 표현은 기본 표현 — U4a-J13). */
-export function childStopDetail(hhmm: string | null): string {
-  const expression = quoted(ACTIVITY_COPY.done.defaultStopExpression);
+/** 현재 공개 확정 행의 원문과 해당 행 시각만 조합한다. */
+export function childStopDetail(text: string, hhmm: string | null): string {
+  const expression = quoted(text);
   return hhmm === null ? expression : `${expression}${ACTIVITY_TEMP_COPY.separator}${hhmm}`;
 }

@@ -72,8 +72,6 @@ public final class EndingFlow {
 
         void onJoinPromptPlayed(Instant at);
 
-        void onStopConfirmPlayed(Instant at);
-
         void armDisconnect();
 
         void stopPracticeProgress();
@@ -136,6 +134,20 @@ public final class EndingFlow {
         } else if (mark.status() != PlaybackMark.Status.PROGRESS) {
             ctx.transcripts().playbackAbandoned(mark.playbackId(), received.serverRecvAt());
         }
+        if ((ctx.status() == SessionStatus.CLOSING || farewellPending()) && mark.playbackId().equals(ctx.closing().closingPlaybackId())
+                && received.connectionId().equals(ctx.goodbyeConnectionId()) && ctx.goodbyeDeadline() != null
+                && received.serverRecvAt().isBefore(ctx.goodbyeDeadline())) {
+            var goodbye = switch (mark.status()) {
+                case STARTED -> SessionGuardrailFacts.Goodbye.PLAYING;
+                case COMPLETED -> SessionGuardrailFacts.Goodbye.COMPLETED;
+                case STOPPED -> SessionGuardrailFacts.Goodbye.STOPPED;
+                case FAILED -> SessionGuardrailFacts.Goodbye.FAILED;
+                default -> null;
+            };
+            if (goodbye != null && ctx.guardrailFacts() != null
+                    && (ctx.guardrailFacts().goodbye() == SessionGuardrailFacts.Goodbye.PENDING
+                        || ctx.guardrailFacts().goodbye() == SessionGuardrailFacts.Goodbye.PLAYING)) ctx.recordGoodbye(goodbye);
+        }
         var speech = env.practiceAudio().get(mark.playbackId());
         if (speech != null && mark.status() != PlaybackMark.Status.PROGRESS) {
             var fact = switch (mark.status()) {
@@ -190,11 +202,6 @@ public final class EndingFlow {
                     ctx.mailbox().putSafety(new SessionMailbox.PracticeEvent(new PracticeSessionExtension.ExtensionEvent(
                             PracticeSessionExtension.ExtensionEvent.Kind.PLAYBACK_DONE, practiceCode, mark.playbackId(),
                             null)));
-                }
-                if (ctx.status() == SessionStatus.ACTIVE && mark.playbackId().equals(ctx.stopConfirmPlaybackId())) {
-                    // 확인 질문의 끝 표식을 서버가 받은 시각부터 창을 연다
-                    ctx.stopConfirmPlaybackId(null);
-                    env.onStopConfirmPlayed(received.serverRecvAt());
                 }
                 if (ctx.status() == SessionStatus.CLOSING && ctx.closing().onPlaybackMark(closingDevice(), mark.playbackId(),
                         mark.status())) {
@@ -277,6 +284,7 @@ public final class EndingFlow {
         ctx.bumpGeneration();
         ctx.playback().clear();
         ctx.devicePlaying().clear();
+        clearDynamicGoodbye();
         ctx.timers().cancel(Kind.PLAYBACK_EXPIRY);
         Instant now = ctx.services().clock().now();
         // 다시 묶이면 일시정지를 끄고 구간을 닫는다
@@ -285,14 +293,10 @@ public final class EndingFlow {
             ctx.services().gaps().close(ctx.openGapId(), now);
             ctx.openGapId(null);
         }
-        // 재생 추적을 비웠으므로 끝 표식을 기다리던 참여 안내 · 확인 질문은 지금 끝난 것으로 본다(창이 영영 열리지 않는 일을 막는다)
+        // 재생 추적을 비웠으므로 끝 표식을 기다리던 참여 안내는 지금 끝난 것으로 본다(창이 영영 열리지 않는 일을 막는다)
         if (ctx.status() == SessionStatus.WAITING_CHILD && ctx.joinPromptPlaybackId() != null) {
             ctx.joinPromptPlaybackId(null);
             env.onJoinPromptPlayed(now);
-        }
-        if (ctx.status() == SessionStatus.ACTIVE && ctx.stopConfirmPlaybackId() != null) {
-            ctx.stopConfirmPlaybackId(null);
-            env.onStopConfirmPlayed(now);
         }
         ctx.putEvent(EVENT_LINK_REPLACED, "{\"resumed\":" + replaced.resumed() + "}", now);
         if (START_PHASE.contains(ctx.status())) {
@@ -417,8 +421,7 @@ public final class EndingFlow {
         closeProvider();
         SessionChange change = TransitionTable.changeFor(Trigger.VOICE_CLOSED, null, now).withProviderClosedAt(now)
                 .withOutputStoppedAt(closed.closed().outputStoppedAt());
-        Optional<ActivitySessionRow> row = ctx.services().transitions().transition(ctx.plan().sessionId(), SessionStatus.CLOSING,
-                SessionStatus.ENDED, change, SessionTransitions.Origin.REALTIME, ctx.plan().traceId());
+        Optional<ActivitySessionRow> row = finishClosing(SessionStatus.ENDED, change);
         if (row.isEmpty()) {
             syncFromDb();
             return;
@@ -519,15 +522,26 @@ public final class EndingFlow {
         }
         Instant now = ctx.services().clock().now();
         SessionStatus from = ctx.status();
+        SessionGuardrailFacts facts = null;
+        var previous = ctx.guardrailFacts();
+        if (previous != null && ctx.plan().activityType() == kr.mujoong.contract.status.ActivityType.FREE_TALK) {
+            var current = ctx.services().transitions().find(ctx.plan().sessionId()).orElseThrow();
+            facts = new SessionGuardrailFacts(1, ctx.plan().sessionId(), previous.revision() + 1,
+                    current.statusVersion() + 1, previous.notice(), previous.participation(),
+                    closingVersion() == null ? SessionGuardrailFacts.Goodbye.NONE : SessionGuardrailFacts.Goodbye.PENDING,
+                    trigger.endReason() == EndReason.CHILD_STOP ? ctx.confirmedStopSeq() : null, now);
+        }
         Optional<ActivitySessionRow> row = ctx.services().transitions().transition(ctx.plan().sessionId(), from,
                 SessionStatus.CLOSING, TransitionTable.changeFor(trigger, null, now).withTerminationRequestedAt(now)
                         .withOutputStoppedAt(now),
-                SessionTransitions.Origin.REALTIME, ctx.plan().traceId(), transitionExtras());
+                SessionTransitions.Origin.REALTIME, ctx.plan().traceId(),
+                facts == null ? transitionExtras() : new SessionTransitions.Extras(idle.technicalPause(), false, facts));
         if (row.isEmpty()) {
             syncFromDb(requestId);
             return false;
         }
         changeStatus(SessionStatus.CLOSING, ctx.services().clock().now());
+        if (facts != null) ctx.guardrailFacts(facts);
         ctx.closingReason(row.get().endReason() != null ? row.get().endReason() : trigger.endReason());
         ctx.closingDetail(row.get().endDetail());
         enterClosing(now, requestId);
@@ -537,6 +551,26 @@ public final class EndingFlow {
     /** 전이와 함께 쓸 값: 전이 시점에 켜진 기술 일시정지. */
     SessionTransitions.Extras transitionExtras() {
         return SessionTransitions.Extras.pause(idle.technicalPause());
+    }
+
+    /** Terminal status and its stable facts commit together; a live playback is never restored. */
+    Optional<ActivitySessionRow> finishClosing(SessionStatus target, SessionChange change) {
+        var previous = ctx.guardrailFacts();
+        SessionGuardrailFacts facts = null;
+        if (previous != null) {
+            var current = ctx.services().transitions().find(ctx.plan().sessionId()).orElseThrow();
+            var goodbye = previous.goodbye() == SessionGuardrailFacts.Goodbye.PENDING
+                    || previous.goodbye() == SessionGuardrailFacts.Goodbye.PLAYING
+                    ? SessionGuardrailFacts.Goodbye.UNKNOWN : previous.goodbye();
+            facts = new SessionGuardrailFacts(1, ctx.plan().sessionId(), previous.revision() + 1,
+                    current.statusVersion() + 1, previous.notice(), previous.participation(), goodbye,
+                    previous.confirmedStopBubbleSeq(), ctx.services().clock().now());
+        }
+        var row = ctx.services().transitions().transition(ctx.plan().sessionId(), SessionStatus.CLOSING, target,
+                change, SessionTransitions.Origin.REALTIME, ctx.plan().traceId(),
+                facts == null ? transitionExtras() : new SessionTransitions.Extras(idle.technicalPause(), false, facts));
+        if (row.isPresent() && facts != null) ctx.guardrailFacts(facts);
+        return row;
     }
 
     /**
@@ -558,17 +592,20 @@ public final class EndingFlow {
         ctx.timers().cancel(Kind.DISCONNECT);
         ctx.timers().cancel(Kind.PLAYBACK_EXPIRY);
         ctx.timers().cancel(Kind.JOIN_WINDOW);
-        ctx.timers().cancel(Kind.STOP_CONFIRM);
         ctx.timers().cancel(Kind.SILENCE);
         ctx.timers().cancel(Kind.GAP_DISPLAY);
         ctx.joinPromptPlaybackId(null);
-        ctx.stopConfirm().cancel();
-        ctx.stopConfirmPlaybackId(null);
         ctx.segment().reset();
         ctx.transcripts().aiFinal("", false, now);
-        ctx.closing().begin(closingDevice(), ctx.plan().closing() == null ? null : ctx.plan().closing().contentVersionId(),
+        UUID closingVersion = closingVersion();
+        ctx.closing().begin(closingDevice(), closingVersion,
                 ctx.playback(), UUID::randomUUID, stopReasonFor(ctx.closingReason()),
                 closeReasonForClosing(ctx.closingReason()));
+        if (closingVersion == null || !ctx.playback().isPlaying()) {
+            ctx.recordGoodbye(closingVersion == null ? SessionGuardrailFacts.Goodbye.NONE : SessionGuardrailFacts.Goodbye.FAILED);
+            ctx.closing().closeNow(closingDevice());
+            ctx.relay().setAccepting(false);
+        }
         // 마무리 인사도 보낸 순간 말풍선 행
         if (ctx.plan().closing() != null && ctx.playback().isPlaying()) {
             env.approvedBubble(ctx.plan().closing(), now);
@@ -617,6 +654,7 @@ public final class EndingFlow {
         if (!ctx.fromBoundConnection(lost.connectionId())) {
             return;
         }
+        clearDynamicGoodbye();
         // SD-17: 연결 교체 · 끊김마다 세대를 올린다. 세션 전이는 ④ 시계(ACTIVE) · ② · ③ 시한이 정한다
         ctx.bumpGeneration();
         ctx.playback().clear();
@@ -643,7 +681,7 @@ public final class EndingFlow {
         ctx.relay().setAccepting(false);
         ctx.joinPromptPlaybackId(null);
         boolean closedNow = ctx.closing().beginFarewell(closingDevice(),
-                ctx.plan().closing() == null ? null : ctx.plan().closing().contentVersionId(), ctx.playback(), UUID::randomUUID);
+                closingVersion(), ctx.playback(), UUID::randomUUID);
         if (closedNow) {
             finishFarewell(true);
             return;
@@ -659,6 +697,7 @@ public final class EndingFlow {
      */
     void finishFarewell(boolean deviceStillOurs) {
         ctx.timers().cancel(Kind.CLOSING_CONFIRM);
+        clearDynamicGoodbye();
         Instant now = ctx.services().clock().now();
         if (deviceStillOurs) {
             ctx.annotateQuietly(SessionStatus.DECLINED, SessionChange.none().withTransportClosedAt(now));
@@ -832,7 +871,11 @@ public final class EndingFlow {
 
             @Override
             public boolean playApproved(UUID playbackId, String contentCode, UUID contentVersionId) {
-                return ctx.sendControl(new PlayApprovedContent(playbackId, contentCode, contentVersionId));
+                boolean sent = ctx.sendControl(new PlayApprovedContent(playbackId, contentCode, contentVersionId));
+                if (sent && ctx.link() != null) ctx.goodbyeAttempt(ctx.link().connectionId(),
+                        ctx.services().clock().now().plus(ctx.services().settings().playbackExpiry()));
+                if (sent) ctx.timers().arm(Kind.PLAYBACK_EXPIRY, ctx.services().settings().playbackExpiry());
+                return sent;
             }
 
             @Override
@@ -848,7 +891,25 @@ public final class EndingFlow {
      */
     void changeStatus(SessionStatus next, Instant now) {
         ctx.status(next);
+        // DECLINED may still deliver its verified farewell; its completion or expiry clears the attempt.
+        if (next.isTerminal() && next != SessionStatus.DECLINED) clearDynamicGoodbye();
         judgment.onStatus(next);
+    }
+
+    UUID closingVersion() {
+        if (ctx.plan().closing() == null) return null;
+        if (ctx.plan().activityType() == kr.mujoong.contract.status.ActivityType.FREE_TALK
+                && ctx.services().notices().verified(ctx.plan().closing(), ctx.plan().approvedAudio(),
+                        ctx.servicePolicy().policyVersion(), ctx.services().settings().playbackExpiry()).isEmpty()) return null;
+        return ctx.plan().closing().contentVersionId();
+    }
+
+    void clearDynamicGoodbye() {
+        if (ctx.guardrailFacts() != null && (ctx.guardrailFacts().goodbye() == SessionGuardrailFacts.Goodbye.PENDING
+                || ctx.guardrailFacts().goodbye() == SessionGuardrailFacts.Goodbye.PLAYING)) {
+            ctx.recordGoodbye(SessionGuardrailFacts.Goodbye.UNKNOWN);
+        }
+        ctx.goodbyeAttempt(null, null);
     }
 
     void closeProvider() {

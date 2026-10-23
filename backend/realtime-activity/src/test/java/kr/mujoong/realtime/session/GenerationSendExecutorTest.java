@@ -27,6 +27,7 @@ import org.junit.jupiter.api.Test;
  * 공급자는 가짜 대역이고 시각은 수동 시계다(R-F1). 오디오 조각 4,800바이트 = 100ms, 시계 여유 600ms.
  */
 @Tag("judgment-turn")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class GenerationSendExecutorTest {
 
     private static final Duration QUIET = Duration.ofMillis(800);
@@ -50,7 +51,7 @@ class GenerationSendExecutorTest {
             assertThat(append.type()).isEqualTo("session.instructions.append");
             assertThat(append.eventId()).isEqualTo("mj-1");
             assertThat(append.delegationId()).isNull();
-            assertThat(append.content()).isEqualTo(InstructionTemplates.ResponseStart.FIRST.content());
+            assertThat(append.content()).isEqualTo(InstructionTemplates.ResponseStart.FIRST.content(h.activityType));
         });
     }
 
@@ -190,8 +191,11 @@ class GenerationSendExecutorTest {
 
         h.advanceAlive(RESPONSE_READY);
 
-        List<String> kinds = h.logs.events(EventCode.APP_ERROR).stream().map(event -> (String) LogCapture.attrs(event).get("errorKind")).toList();
-        assertThat(kinds).containsExactly("OutputNewSpeechNotObserved");
+        // 출력 사유만 본다(참여 수락 때의 JoinHeldOutput* 진단은 이 시험과 무관하다). 확인이 왔으니 AckMissing 없이 첫 시한에 바로 남기고,
+        // 지시 뒤 조각이 하나도 없었으므로 진단 사유는 ProviderSilent다
+        List<String> kinds = h.logs.events(EventCode.APP_ERROR).stream().map(event -> (String) LogCapture.attrs(event).get("errorKind"))
+                .filter(kind -> kind.startsWith("Output")).toList();
+        assertThat(kinds).containsExactly("OutputNotObservedProviderSilent", "OutputNewSpeechNotObserved");
     }
 
     // ------------------------------------------------------------------ 세대로 버리기 (A5)
@@ -283,9 +287,9 @@ class GenerationSendExecutorTest {
 
         List<InstructionsAppend> sent = h.provider.last().requests(InstructionsAppend.class);
         assertThat(sent).extracting(InstructionsAppend::content).containsExactly(
-                InstructionTemplates.ResponseStart.FIRST.content(),
+                InstructionTemplates.ResponseStart.FIRST.content(h.activityType),
                 "목표 문장을 한 번 더 안내한다. " + InstructionTemplates.SCOPE_CLOSE,
-                InstructionTemplates.ResponseStart.CONTINUE.content());
+                InstructionTemplates.ResponseStart.CONTINUE.content(h.activityType));
         assertThat(sent).extracting(InstructionsAppend::eventId).containsExactly("mj-1", "mj-2", "mj-3");
         assertThat(sent).allSatisfy(append -> assertThat(append.delegationId()).isNull());
     }
@@ -339,7 +343,7 @@ class GenerationSendExecutorTest {
         h.drain();
         List<InstructionsAppend> afterFirst = h.provider.last().requests(InstructionsAppend.class);
         assertThat(afterFirst).hasSize(2);
-        assertThat(afterFirst.get(1).content()).isEqualTo(InstructionTemplates.correctionContent(DialogInstructions.Correction.DIAGNOSIS));
+        assertThat(afterFirst.get(1).content()).isEqualTo(InstructionTemplates.correctionContent(DialogInstructions.Correction.DIAGNOSIS, h.activityType));
 
         // 교정 지시에 대한 새 말도 금지 표현이다 — 폐기하고 한 번 더 교정한다
         h.speak("치료가 필요해요", 4_800);
@@ -407,8 +411,9 @@ class GenerationSendExecutorTest {
         h.boot();
         h.ackAndReady();
         assertThat(h.executor.status()).isEqualTo(SessionStatus.WAITING_CHILD);
+        h.completeNotice();
 
-        h.provider.last().emit(new ProviderEvent.InputTranscriptDelta(null, "응"));
+        h.provider.last().emit(new ProviderEvent.InputTranscriptDelta(null, "응", 1, 1));
         h.drain();
         assertThat(h.executor.status()).isEqualTo(SessionStatus.WAITING_CHILD);
         h.advance(h.settings.inputTranscriptQuiet());
@@ -434,10 +439,55 @@ class GenerationSendExecutorTest {
         return h.store.transcripts.stream()
                 .filter(entry -> entry.speaker() == kr.mujoong.realtime.log.TranscriptEntry.Speaker.CHILD)
                 .filter(entry -> entry.assemblyStatus() == kr.mujoong.realtime.log.TranscriptEntry.AssemblyStatus.FINAL)
+                // 참여를 수락한 첫 대답("응")은 활동 시작 때 남는 행이라 이 시험이 보는 대화 발화에서 뺀다
+                .filter(entry -> !entry.text().equals("응"))
                 .map(kr.mujoong.realtime.log.TranscriptEntry::text).toList();
     }
 
     /** 응답 한 개를 흘리고 조용함으로 봉인해 기기로 보낸다. 재생 id를 돌려준다. */
+    // ------------------------------------------------------------------ 말하는 동안 아이 소리 보관
+
+    @Test
+    void childSoundIsNeverHeldWhileGptLiveSpeaks() {
+        // 말하는 동안 아이 소리를 모았다가 몰아 보내면 공급자 입력 속도 한도(input_audio_rate_limit_exceeded)에 걸려 아이 말이 버려진다.
+        // 그래서 모으지 않고 늘 실시간으로 보낸다(SessionExecutor 출력 조각 처리 참고)
+        h.activate();
+
+        h.speak("우와, 공룡 그림이네!", 4_800);
+        assertThat(h.executor.relay().isHolding()).as("GPT-Live가 말하는 중에도 모으지 않는다").isFalse();
+        assertThat(h.executor.offerAudio(h.link.connectionId(), 1, loudFrame(), h.clock.monotonicNanos())).isTrue();
+        assertThat(h.executor.relay().heldFrameCount()).isZero();
+
+        h.advance(QUIET);
+        assertThat(h.executor.relay().isHolding()).isFalse();
+        assertThat(h.executor.relay().heldFrameCount()).isZero();
+    }
+
+    @Test
+    void aBargeInDuringASecondResponseFindsNoHeldChildSound() {
+        h.activate();
+        UUID first = respond("첫 응답");
+        mark(first, PlaybackMark.Status.STARTED, null);
+
+        h.speak("이어서 말하는 두 번째 응답", 4_800);
+        assertThat(h.executor.relay().isHolding()).isFalse();
+        assertThat(h.executor.offerAudio(h.link.connectionId(), 1, loudFrame(), h.clock.monotonicNanos())).isTrue();
+        assertThat(h.executor.relay().heldFrameCount()).isZero();
+
+        mark(first, PlaybackMark.Status.STOPPED, PlaybackMark.StopCause.LOCAL_VOICE_ACTIVITY);
+        assertThat(h.executor.relay().isHolding()).isFalse();
+        assertThat(h.executor.relay().heldFrameCount()).isZero();
+    }
+
+    private static byte[] loudFrame() {
+        byte[] pcm = new byte[960];
+        for (int i = 0; i < pcm.length; i += 2) {
+            pcm[i] = (byte) 0x10;
+            pcm[i + 1] = (byte) 0x27;
+        }
+        return pcm;
+    }
+
     private UUID respond(String text) {
         int before = h.link.outputs().size();
         h.speak(text, 48_000);

@@ -236,6 +236,9 @@ describe("U7 SET0 현재 기기 알림", () => {
     disable.focus();
     fireEvent.click(disable);
     await waitFor(() => expect(screen.queryByTestId("push-disable")).toBeNull());
-    expect(enabled ? screen.getByTestId("push-enable") : screen.getByRole("heading", { name: "이 기기 알림" })).toHaveFocus();
+    // 초점 복원은 구독이 비고 진행 표시(busy)가 꺼진 다음 렌더에서 일어나므로 그때까지 기다린다
+    await waitFor(() =>
+      expect(enabled ? screen.getByTestId("push-enable") : screen.getByRole("heading", { name: "이 기기 알림" })).toHaveFocus(),
+    );
   });
 });

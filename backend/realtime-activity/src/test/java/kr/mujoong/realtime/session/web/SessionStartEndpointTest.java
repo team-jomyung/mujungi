@@ -26,6 +26,7 @@ import org.springframework.util.unit.DataSize;
  * (202 · 409 · 423)으로 답하는지 본다(U8 NFR6.1 · SD7 · 편차 U8-b, 계약 internal-api.yaml 예시와 같은 본문).
  */
 @Tag("live-content")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class SessionStartEndpointTest {
 
     private final StartSessionHandler starts = mock(StartSessionHandler.class);

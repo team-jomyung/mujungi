@@ -1,6 +1,6 @@
 "use client";
 
-import { showsPauseLine, silentMinutes } from "../../common/activity/livePresentation";
+import { nonParticipationTitle, showsPauseLine, silentMinutes } from "../../common/activity/livePresentation";
 import type { LiveView } from "../../common/api/types";
 import { BottomTabBar } from "../../common/components/BottomTabBar";
 import { ConfirmDialog } from "../../common/components/ConfirmDialog";
@@ -157,7 +157,7 @@ export function LiveScreen({ sessionId }: LiveScreenProps) {
       />
       <NoticeDialog
         open={outcomeKind === "noResponse"}
-        title={ACTIVITY_COPY.noResponse.title}
+        title={nonParticipationTitle(view)}
         confirmLabel={ACTIVITY_COPY.noResponse.confirm}
         onConfirm={goToHome}
         testIdPrefix="p3"

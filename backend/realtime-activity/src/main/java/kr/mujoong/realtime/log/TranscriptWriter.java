@@ -28,6 +28,13 @@ public final class TranscriptWriter {
     private AiRow openAi;
     private final Map<UUID, PendingPlayback> pendingPlayback = new HashMap<>();
     private record PendingPlayback(Held held, String text) {}
+    /**
+     * 단위별 검사 경로(스트리밍)의 응답 묶음 행. 응답이 여러 출력 단위로 나뉘어도 보호자 화면에는 한 행으로 보이도록, 통과한 단위의 전사를 응답마다
+     * 여기에 모았다가 응답이 끝나고 그 응답의 검사 중인 단위가 모두 정리되면 한 번에 닫는다(통과 전 텍스트는 DB에 쓰지 않는다, NFR1.1).
+     * 앞 응답의 단위가 아직 검사 중일 때 다음 응답이 시작될 수 있어 응답마다 따로 둔다.
+     */
+    private StreamRow currentStream;
+    private final List<StreamRow> endedStreams = new ArrayList<>();
     /** U13 BR5.5: 제브 검사를 기다리는 보관 행(최대 검사 중 1건 + 대기열 1칸). */
     private final List<Held> heldRows = new ArrayList<>();
 
@@ -106,6 +113,69 @@ public final class TranscriptWriter {
     }
 
     /**
+     * 단위별 검사 경로의 출력 단위 시작: 이 응답의 묶음 행이 없으면 번호를 정해 확정 전 칸을 넣고, 있으면 그 행을 다시 연다. 단위가 몇 개로
+     * 나뉘어도 응답 하나는 번호 하나다.
+     */
+    public int aiStartStreaming(Instant at) {
+        if (currentStream == null) {
+            AiRow row = new AiRow(++lastSeq, at);
+            currentStream = new StreamRow(row);
+            latency.aiItem(sessionId, row.seq);
+            recorder.putTranscript(TranscriptEntry.partial(sessionId, row.seq, Speaker.AI, "", at));
+        }
+        if (openAi == null) {
+            openAi = currentStream.row;
+        }
+        return currentStream.row.seq;
+    }
+
+    /** 모으는 중인 응답 묶음 행이 있는가. */
+    public boolean hasStream() {
+        return currentStream != null;
+    }
+
+    /**
+     * 지금 모으는 응답이 끝났다(응답 끝 · 아이 입력 시작 · 응답을 버림). 그 응답의 검사 중인 단위가 없으면 모은 전사를 한 번에 FINAL로 닫고
+     * (하나라도 통과했으면 승인 true), 있으면 마지막 단위가 정리될 때 닫는다. 모으는 응답이 없으면 아무것도 하지 않는다.
+     *
+     * @return 지금 닫았으면 닫은 번호, 아니면 빈 값
+     */
+    public OptionalInt endStream(Instant endedAt) {
+        StreamRow stream = currentStream;
+        if (stream == null) {
+            return OptionalInt.empty();
+        }
+        currentStream = null;
+        if (openAi == stream.row) {
+            openAi = null;
+        }
+        stream.ended = true;
+        stream.endedAt = endedAt;
+        endedStreams.add(stream);
+        return settle(stream);
+    }
+
+    /** 끝난 묶음 행의 검사 중인 단위가 모두 정리됐으면 닫는다. */
+    private OptionalInt settle(StreamRow stream) {
+        if (!stream.ended || stream.pending > 0 || stream.written) {
+            return OptionalInt.empty();
+        }
+        stream.written = true;
+        endedStreams.remove(stream);
+        recorder.putTranscript(TranscriptEntry.finalized(sessionId, stream.row.seq, Speaker.AI, stream.text.toString(),
+                stream.approved, stream.row.startedAt, stream.endedAt));
+        return OptionalInt.of(stream.row.seq);
+    }
+
+    /** 통과한 전사를 묶음 행에 더한다(비었거나 통과가 아니면 아무것도 하지 않는다). */
+    private static void collect(StreamRow stream, String text, boolean approved) {
+        if (approved && text != null && !text.isEmpty()) {
+            stream.text.append(text);
+            stream.approved = true;
+        }
+    }
+
+    /**
      * 열린 AI 행의 응답 끝(output.done)을 처리했다: 그 시각이 행의 tTranscriptFinal이다(OD-8 · 3.6 수정 J300). 열린 행이 없으면 아무것도 하지
      * 않는다. 실행기는 열린 구간이 그 응답일 때만 부른다.
      */
@@ -126,6 +196,14 @@ public final class TranscriptWriter {
         }
         AiRow row = openAi;
         openAi = null;
+        if (currentStream != null && row == currentStream.row) {
+            // 응답 묶음 행: 통과한 전사는 모으기만 하고, 버리는 닫기는 응답을 끝내는 것이라 모은 것으로 닫는다
+            if (approved && text != null && !text.isEmpty()) {
+                collect(currentStream, text, true);
+                return OptionalInt.of(row.seq);
+            }
+            return endStream(endedAt);
+        }
         recorder.putTranscript(TranscriptEntry.finalized(sessionId, row.seq, Speaker.AI, text == null ? "" : text,
                 approved, row.startedAt, endedAt));
         return OptionalInt.of(row.seq);
@@ -137,8 +215,12 @@ public final class TranscriptWriter {
      * 닫을 것이 없는 손잡이를 돌려준다(null이 아니다).
      */
     public Held aiHold() {
-        Held held = new Held(openAi);
+        StreamRow stream = openAi != null && currentStream != null && openAi == currentStream.row ? currentStream : null;
+        Held held = new Held(openAi, stream);
         openAi = null;
+        if (stream != null) {
+            stream.pending++;
+        }
         if (held.row != null) {
             heldRows.add(held);
         }
@@ -158,6 +240,14 @@ public final class TranscriptWriter {
         }
         held.closed = true;
         heldRows.remove(held);
+        if (held.stream != null) {
+            // 응답 묶음 행의 단위: 통과한 전사만 모으고, 행은 그 응답이 끝나고 검사 중인 단위가 모두 정리되면 닫는다
+            StreamRow stream = held.stream;
+            stream.pending--;
+            collect(stream, text, approved);
+            settle(stream);
+            return OptionalInt.of(held.row.seq);
+        }
         AiRow row = held.row;
         recorder.putTranscript(TranscriptEntry.finalized(sessionId, row.seq, Speaker.AI, text == null ? "" : text,
                 approved, row.startedAt, endedAt));
@@ -167,7 +257,7 @@ public final class TranscriptWriter {
     public void awaitApprovedPlayback(UUID playbackId, String text, Instant at) {
         if (pendingPlayback.containsKey(playbackId)) return;
         AiRow row = new AiRow(++lastSeq, at);
-        Held held = new Held(row);
+        Held held = new Held(row, null);
         heldRows.add(held);
         recorder.putTranscript(TranscriptEntry.partial(sessionId, row.seq, Speaker.AI, "", at));
         awaitPlayback(playbackId, held, text);
@@ -183,6 +273,11 @@ public final class TranscriptWriter {
         PendingPlayback pending = pendingPlayback.remove(playbackId);
         if (pending == null || pending.held.closed || pending.held.row == null) return;
         Held held = pending.held;
+        if (held.stream != null) {
+            // Streaming units share one response row; settle the unit through its owner.
+            aiFinal(held, pending.text, true, at);
+            return;
+        }
         held.closed = true;
         heldRows.remove(held);
         recorder.putTranscript(TranscriptEntry.finalized(sessionId, held.row.seq, Speaker.AI,
@@ -213,6 +308,11 @@ public final class TranscriptWriter {
         aiFinal("", false, at);
         for (Held held : List.copyOf(heldRows)) {
             aiFinal(held, "", false, at);
+        }
+        endStream(at);
+        for (StreamRow stream : List.copyOf(endedStreams)) {
+            stream.pending = 0;
+            settle(stream);
         }
     }
 
@@ -280,13 +380,31 @@ public final class TranscriptWriter {
     private record AiRow(int seq, Instant startedAt) {
     }
 
+    /** 응답 하나의 묶음 행: 통과한 전사를 모으고, 끝난 뒤 검사 중인 단위({@link #pending})가 없어지면 한 번에 닫는다. */
+    private static final class StreamRow {
+        private final AiRow row;
+        private final StringBuilder text = new StringBuilder();
+        private boolean approved;
+        private int pending;
+        private boolean ended;
+        private boolean written;
+        private Instant endedAt;
+
+        private StreamRow(AiRow row) {
+            this.row = row;
+        }
+    }
+
     /** U13 BR5.5: 제브 검사를 기다리는 AI 행의 보관 손잡이(실행기 스레드 전용). 문자열 표현에 번호만 낸다. */
     public static final class Held {
         private final AiRow row;
+        /** 응답 묶음 행의 단위면 그 묶음(닫아도 행을 닫지 않고 전사만 모은다), 아니면 null. */
+        private final StreamRow stream;
         private boolean closed;
 
-        private Held(AiRow row) {
+        private Held(AiRow row, StreamRow stream) {
             this.row = row;
+            this.stream = stream;
         }
 
         @Override

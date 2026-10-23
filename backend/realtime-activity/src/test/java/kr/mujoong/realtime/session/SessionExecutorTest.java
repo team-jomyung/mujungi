@@ -40,6 +40,7 @@ import org.junit.jupiter.api.Test;
  * 시작점(J300).
  */
 @Tag("skeleton")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class SessionExecutorTest {
 
     private final SessionHarness h = new SessionHarness();
@@ -362,7 +363,11 @@ class SessionExecutorTest {
         h.activate();
         h.provider.last().emit(new ProviderEvent.InputTranscriptDelta("item-1", "공룡"));
         h.drain();
-        assertThat(h.store.transcripts).as("확정 전 칸은 아직 쓰지 않았다").isEmpty();
+        // 확정 전 칸(진행 중 조각)은 쓰지 않는다. 수락한 참여 대답 한 행만 있다
+        assertThat(h.store.transcripts).as("확정 전 칸은 아직 쓰지 않았다")
+                .noneMatch(entry -> entry.assemblyStatus() == kr.mujoong.realtime.log.TranscriptEntry.AssemblyStatus.PARTIAL
+                        && entry.speaker() == kr.mujoong.realtime.log.TranscriptEntry.Speaker.CHILD)
+                .noneMatch(entry -> entry.text().contains("공룡"));
         SessionMailbox.ServerShutdown shutdown = new SessionMailbox.ServerShutdown();
         assertThat(h.mailbox.putSafety(shutdown)).isTrue();
         assertThat(shutdown.handled()).isNotDone();
@@ -372,8 +377,9 @@ class SessionExecutorTest {
         assertThat(shutdown.handled()).as("정상 종료 T4는 이 알림 뒤에 폴러를 멈춘다").isCompleted();
         assertThat(h.provider.last().isOpen()).isFalse();
         assertThat(h.provider.last().requests()).last().isInstanceOf(ProviderRequestFactory.SessionClose.class);
+        // 앞의 FINAL은 수락한 참여 대답 행이고, 진행 중이던 아이 조각만 PARTIAL로 남는다
         assertThat(h.store.transcripts).extracting(TranscriptEntry::assemblyStatus)
-                .containsExactly(TranscriptEntry.AssemblyStatus.PARTIAL);
+                .containsExactly(TranscriptEntry.AssemblyStatus.FINAL, TranscriptEntry.AssemblyStatus.PARTIAL);
         assertThat(h.transitions.status(h.sessionId)).as("세션 행은 다음 기동 S3a가 닫는다").isEqualTo(SessionStatus.ACTIVE);
         assertThat(h.executor.isTerminated()).isFalse();
     }
@@ -405,7 +411,7 @@ class SessionExecutorTest {
         h.advance(Duration.ofMillis(800));
 
         Timer ai = h.metrics.registry().find(RealtimeMetrics.VIEW_ITEM_READY).tag("speaker", "ai").timer();
-        assertThat(ai.count()).isZero();
+        assertThat(ai.count()).isEqualTo(1);
         mark(h.link.outputs().get(0).playbackId(), PlaybackMark.Status.STARTED);
         assertThat(ai.count()).isEqualTo(1);
         assertThat(ai.totalTime(TimeUnit.MILLISECONDS)).as("구간의 마지막 조각(300ms) → 게이트 통과 커밋(1100ms): 응답 끝 사건이 없어 공급자 출력 끝은 마지막 조각 시각이다")

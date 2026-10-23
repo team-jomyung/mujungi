@@ -26,6 +26,7 @@ import org.junit.jupiter.api.Test;
 
 /** ① PREPARING 10초 점검 (BR6.12 ① · BR6.7 · AC3.1.9 · OD-9 · OD-10): 9.999초 무동작 · 10.001초 로컬 FAILED + 취소 · 0행 무동작. */
 @Tag("skeleton")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class PreparingTimeoutCheckerTest {
 
     private static final Instant REQUESTED_AT = Instant.parse("2001-03-01T06:00:00Z");

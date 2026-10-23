@@ -14,12 +14,30 @@ import org.junit.jupiter.api.Test;
  * 새 구간의 행과 섞이지 않고 종료 때 FINAL · 승인 거짓으로 닫힌다.
  */
 @Tag("jev-guardrail")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class TranscriptWriterHoldTest {
 
     private final SessionHarness h = new SessionHarness();
     private final UUID sessionId = UUID.randomUUID();
     private final TranscriptWriter writer = new TranscriptWriter(sessionId, 0, h.recorder, h.latency);
     private final Instant t0 = h.clock.now();
+
+    @Test
+    void streamedPlaybackSettlesEveryUnitWithoutLosingEarlierPlayedText() {
+        int ai = writer.aiStartStreaming(t0);
+        UUID first = UUID.randomUUID();
+        writer.awaitPlayback(first, writer.aiHold(), "첫 문장.");
+        writer.aiStartStreaming(t0.plusSeconds(1));
+        UUID second = UUID.randomUUID();
+        writer.awaitPlayback(second, writer.aiHold(), "다음 문장.");
+        writer.endStream(t0.plusSeconds(2));
+        writer.playbackStarted(first, t0.plusSeconds(3));
+        assertThat(row(ai).approvedForDisplay()).isFalse();
+        writer.playbackStarted(second, t0.plusSeconds(4));
+        assertThat(row(ai).text()).contains("첫 문장.", "다음 문장.");
+        assertThat(row(ai).approvedForDisplay()).isTrue();
+        assertThat(writer.heldCount()).isZero();
+    }
 
     @Test
     void displayWaitsForPlaybackAndKeepsInputSequenceStable() {

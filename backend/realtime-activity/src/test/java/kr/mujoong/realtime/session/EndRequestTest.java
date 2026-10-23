@@ -31,6 +31,7 @@ import org.junit.jupiter.params.provider.MethodSource;
  * 명령을 낸다. 같은 세션의 반복 요청은 전이 · 기기 종료 명령 없이 같은 답만 돌려준다.
  */
 @Tag("session-runtime")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class EndRequestTest {
 
     private final SessionHarness h = new SessionHarness();
@@ -212,8 +213,10 @@ class EndRequestTest {
         h.provider.last().emit(new ProviderEvent.InputTranscriptDone("after", "그만할래", null));
         h.drain();
 
+        // 아이 행은 수락한 참여 대답("응")과 동의 철회 전의 한 마디뿐이다
         assertThat(h.store.transcripts.stream().filter(entry -> entry.speaker()
-                == kr.mujoong.realtime.log.TranscriptEntry.Speaker.CHILD)).hasSize(1);
+                == kr.mujoong.realtime.log.TranscriptEntry.Speaker.CHILD).map(entry -> entry.text()))
+                .containsExactlyInAnyOrder("응", "공룡 좋아");
         assertThat(h.store.transcripts.size()).isGreaterThanOrEqualTo(rowsBefore);
         assertThat(h.store.transcripts.stream().map(entry -> entry.text())).doesNotContain("그만할래", "그만");
     }

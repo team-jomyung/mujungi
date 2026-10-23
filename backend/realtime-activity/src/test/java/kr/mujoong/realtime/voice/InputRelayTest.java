@@ -21,6 +21,7 @@ import org.junit.jupiter.api.Test;
  * 잠깐 있고 보낸 뒤 남지 않는다(원음 미저장).
  */
 @Tag("skeleton")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class InputRelayTest {
 
     private final MutableClock clock = new MutableClock();
@@ -39,6 +40,124 @@ class InputRelayTest {
         assertThat(relay.relayAvailable()).isEqualTo(1);
         assertThat(relay.droppedFrames()).isEqualTo(1);
         assertThat(metrics.count("mujoong.input.frames.dropped", "cause", "not_accepting")).isEqualTo(1.0);
+    }
+
+    @Test
+    void mutedFramesAreRelayedAsSilenceOfTheSameLengthAndNeverMoveTheVoiceClock() throws Exception {
+        relay.attach(provider.open(event -> { }, Duration.ofSeconds(1)));
+        relay.setAccepting(true);
+        byte[] loud = loud();
+        relay.setMuted(true);
+        assertThat(relay.offer(1, loud, clock.monotonicNanos())).as("순번은 그대로 센다").isTrue();
+        assertThat(relay.lastVoiceFrameAt()).isNull();
+        relay.setMuted(false);
+        relay.offer(2, loud, clock.monotonicNanos());
+        assertThat(relay.lastVoiceFrameAt()).isNotNull();
+
+        relay.relayAvailable();
+
+        List<ProviderRequestFactory.InputAudioAppend> sent =
+                provider.last().requests(ProviderRequestFactory.InputAudioAppend.class);
+        assertThat(sent).hasSize(2);
+        assertThat(Base64.getDecoder().decode(sent.get(0).audio())).hasSize(loud.length).containsOnly(0);
+        assertThat(Base64.getDecoder().decode(sent.get(1).audio())).isEqualTo(loud);
+    }
+
+    @Test
+    void whileHoldingTheProviderGetsSilenceInPlaceAndTheRealSoundIsReleasedInOrderAtTheEnd() throws Exception {
+        relay.attach(provider.open(event -> { }, Duration.ofSeconds(1)));
+        relay.setAccepting(true);
+        byte[] first = loud();
+        byte[] second = loud();
+        second[0] = 0x11;
+        relay.setHolding(true);
+        relay.offer(1, first, clock.monotonicNanos());
+        relay.offer(2, second, clock.monotonicNanos());
+
+        assertThat(relay.heldFrameCount()).isEqualTo(2);
+        relay.relayAvailable();
+        List<ProviderRequestFactory.InputAudioAppend> sent =
+                provider.last().requests(ProviderRequestFactory.InputAudioAppend.class);
+        assertThat(sent).as("모으는 동안 공급자에는 무음만 간다").hasSize(2);
+        assertThat(sent).allSatisfy(append -> assertThat(Base64.getDecoder().decode(append.audio())).containsOnly(0));
+
+        relay.setHolding(false);
+        assertThat(relay.heldFrameCount()).isZero();
+        relay.relayAvailable();
+        sent = provider.last().requests(ProviderRequestFactory.InputAudioAppend.class);
+        assertThat(sent).hasSize(4);
+        assertThat(Base64.getDecoder().decode(sent.get(2).audio())).isEqualTo(first);
+        assertThat(Base64.getDecoder().decode(sent.get(3).audio())).isEqualTo(second);
+    }
+
+    @Test
+    void theHeldSoundIsReleasedWhenTheChildsUtteranceEndsEvenWhileHoldingContinues() throws Exception {
+        relay.attach(provider.open(event -> { }, Duration.ofSeconds(1)));
+        relay.setAccepting(true);
+        relay.holdQuiet(Duration.ofMillis(40));
+        relay.setHolding(true);
+        relay.offer(1, loud(), clock.monotonicNanos());
+        relay.offer(2, loud(), clock.monotonicNanos());
+        relay.offer(3, new byte[960], clock.monotonicNanos());
+        assertThat(relay.heldFrameCount()).as("조용이 모자라면 아직 모은다").isEqualTo(3);
+        relay.offer(4, new byte[960], clock.monotonicNanos());
+
+        assertThat(relay.heldFrameCount()).as("소리 뒤 조용이 끝났으니 풀었다").isZero();
+        assertThat(relay.isHolding()).as("모으기는 이어진다").isTrue();
+        relay.relayAvailable();
+        assertThat(provider.last().requests(ProviderRequestFactory.InputAudioAppend.class)).hasSize(8);
+        relay.offer(5, loud(), clock.monotonicNanos());
+        assertThat(relay.heldFrameCount()).as("다음 발화는 다시 모은다").isEqualTo(1);
+    }
+
+    @Test
+    void silenceAloneNeverTriggersTheUtteranceEndRelease() {
+        relay.setAccepting(true);
+        relay.holdQuiet(Duration.ofMillis(40));
+        relay.setHolding(true);
+        for (int i = 1; i <= 10; i++) {
+            relay.offer(i, new byte[960], clock.monotonicNanos());
+        }
+        assertThat(relay.heldFrameCount()).isEqualTo(10);
+    }
+
+    @Test
+    void theRawRecordingGetsTheRealSoundOnceAndInTheOriginalOrder() throws Exception {
+        relay.attach(provider.open(event -> { }, Duration.ofSeconds(1)));
+        relay.setAccepting(true);
+        List<byte[]> recorded = new java.util.ArrayList<>();
+        relay.tap(recorded::add);
+        byte[] a = loud();
+        byte[] b = loud();
+        b[0] = 0x12;
+        relay.offer(1, new byte[960], clock.monotonicNanos());
+        relay.setHolding(true);
+        relay.offer(2, a, clock.monotonicNanos());
+        relay.offer(3, b, clock.monotonicNanos());
+        relay.relayAvailable();
+        relay.setHolding(false);
+        relay.relayAvailable();
+
+        assertThat(recorded).as("보관했다 풀어도 기록은 한 번, 말한 순서").hasSize(3);
+        assertThat(recorded.get(1)).isEqualTo(a);
+        assertThat(recorded.get(2)).isEqualTo(b);
+    }
+
+    @Test
+    void aReleasedBacklogLargerThanTheQueueIsNotTrimmedByTheQueueLimit() throws Exception {
+        relay.attach(provider.open(event -> { }, Duration.ofSeconds(1)));
+        relay.setAccepting(true);
+        relay.setHolding(true);
+        for (int i = 1; i <= 120; i++) {
+            relay.offer(i, loud(), clock.monotonicNanos());
+            relay.relayAvailable();
+        }
+        relay.setHolding(false);
+        relay.offer(121, loud(), clock.monotonicNanos());
+        relay.relayAvailable();
+
+        assertThat(provider.last().requests(ProviderRequestFactory.InputAudioAppend.class)).hasSize(241);
+        assertThat(relay.droppedFrames()).isZero();
     }
 
     @Test

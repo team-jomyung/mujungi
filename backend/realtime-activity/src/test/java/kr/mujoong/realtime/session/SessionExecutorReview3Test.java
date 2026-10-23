@@ -21,6 +21,7 @@ import org.junit.jupiter.api.Test;
  * </ul>
  */
 @Tag("voice-session")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class SessionExecutorReview3Test {
 
     private final SessionHarness h = new SessionHarness();
@@ -28,7 +29,7 @@ class SessionExecutorReview3Test {
     @Test
     void negatedOrReportedContinuationsKeepTheBlockAndACommonOneLiftsIt() {
         h.activate();
-        done("i1", "이제 그만할래");
+        done("i1", "무중아 그만할래");
         done("i2", "더 얘기 안 할래");
         done("i3", "형이 더 하자고 했는데 나는 그만할래");
         assertThat(eventTypes()).doesNotContain(SessionExecutor.EVENT_CHILD_STOP_LIFTED);

@@ -16,7 +16,7 @@ import kr.mujoong.core.textai.*;
 import org.junit.jupiter.api.*;
 
 /** Synthetic integration: real PostgreSQL and Neo4j, fake AI only. */
-@Tag("knowledge-graph") @Tag("goal-result") @Tag("scenario-generation") @Tag("db")
+@Tag("knowledge-graph") @Tag("goal-result") @Tag("scenario-generation") @Tag("db") @Tag("service-guardrail")
 class GraphWorkflowIT {
   static final String PASSWORD = UUID.randomUUID().toString();
   static final org.testcontainers.containers.GenericContainer<?> NEO4J = new org.testcontainers.containers.GenericContainer<>(org.testcontainers.utility.DockerImageName.parse("neo4j:5.26.31-community"))
@@ -35,21 +35,49 @@ class GraphWorkflowIT {
     Neo4jChildKnowledgeGraph graph = null;
     try (var workers = Executors.newVirtualThreadPerTaskExecutor()) {
       String auth = "neo4j/"+PASSWORD;
-      graph = new Neo4jChildKnowledgeGraph(URI.create("http://"+NEO4J.getHost()+":"+NEO4J.getMappedPort(7474)),auth,Duration.ofSeconds(2));
-      graph.prepareSchema();
+      graph = new Neo4jChildKnowledgeGraph(URI.create("http://"+NEO4J.getHost()+":"+NEO4J.getMappedPort(7474)),auth,
+          Duration.ofSeconds(2),Duration.ofSeconds(10),new kr.mujoong.contract.time.SystemMujoongClock());
+      var graphDiagnostics = GraphHttpDiagnostics.install(graph);
+      try {
+        graph.prepareSchema();
+      } catch (RuntimeException preparationFailure) {
+        // 준비 실패도 기존 관측기의 연산명/HTTP 상태/오류 종류/시간만 남기고 같은 실패를 다시 던진다.
+        System.out.println("GRAPH_PREPARATION_FAILURE " + graphDiagnostics.snapshot());
+        throw preparationFailure;
+      }
       SeedCatalog catalog;
       try(var source = getClass().getResourceAsStream("/knowledge/social-comm-poc.zip")) {
         catalog = new SeedArchiveLoader().load(source,"poc-v1");
       }
       assertThat(catalog.seeds()).hasSize(14);
-      ledger = new KnowledgeLedgerRepository(f.db.jdbc());
+      var ledgerFailures = new java.util.concurrent.CopyOnWriteArrayList<String>();
+      ledger = mock(KnowledgeLedgerRepository.class, withSettings()
+          .spiedInstance(new KnowledgeLedgerRepository(f.db.jdbc())).defaultAnswer(invocation -> {
+            try { return invocation.callRealMethod(); }
+            catch (RuntimeException failure) {
+              ledgerFailures.add(invocation.getMethod().getName() + ":" + failure.getClass().getSimpleName());
+              throw failure;
+            }
+          }));
       var access = mock(KnowledgeAccessPolicy.class);
       var lock = new GuardianWriteLock(f.db.jdbc());
       doAnswer(c->{ lock.lockActive(f.guardian); return null; }).when(access).requireAllowed(f.guardian,f.child);
       doAnswer(c->{ lock.statusForUpdate(f.guardian); return null; }).when(access).requireDeletionOwner(f.guardian,f.child);
       when(access.source(f.guardian,f.child,f.session)).thenReturn(new KnowledgeAccessPolicy.Source(List.of(),List.of("합성아이")));
       service = new ChildKnowledgeService(ledger,access,graph,f.db.tx().getTransactionManager(),f.clock,catalog,true,Duration.ofSeconds(2));
-      assertThat(service.initializeChild(f.guardian,f.child)).isTrue();
+      var clockBefore = f.clock.now();
+      long initializationBegan = System.nanoTime();
+      boolean initialized = service.initializeChild(f.guardian,f.child);
+      var pool = f.db.dataSource().unwrap(com.zaxxer.hikari.HikariDataSource.class).getHikariPoolMXBean();
+      String diagnostic = "GraphInitialization[outcome=" + initialized + ",elapsedMs="
+          + Duration.ofNanos(System.nanoTime()-initializationBegan).toMillis()
+          + ",clockAdvanced=" + !clockBefore.equals(f.clock.now()) + ",poolActive=" + pool.getActiveConnections()
+          + ",poolIdle=" + pool.getIdleConnections() + ",poolAwaiting=" + pool.getThreadsAwaitingConnection()
+          + ",ledgerFailures=" + ledgerFailures
+          + ",threadStates=" + Thread.getAllStackTraces().keySet().stream().collect(java.util.stream.Collectors.groupingBy(
+              Thread::getState,java.util.stream.Collectors.counting())) + ",calls=" + graphDiagnostics.snapshot() + "]";
+      System.out.println(diagnostic);
+      assertThat(initialized).withFailMessage(diagnostic).isTrue();
       assertThat(service.seedSummaries(f.guardian,f.child)).hasSize(14);
       assertThat(graph.seeds(UUID.randomUUID())).isEmpty();
 

@@ -74,6 +74,7 @@ import org.springframework.jdbc.datasource.DelegatingDataSource;
  */
 @Tag("skeleton")
 @Tag("db")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class RealtimeLogHygieneIT {
 
     private static final String CHILD_TEXT = "하늘이비밀전사첫문장";

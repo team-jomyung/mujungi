@@ -63,6 +63,10 @@ public final class RealtimeItEnvironment implements AutoCloseable {
     public final UUID deviceId = UUID.randomUUID();
     public final UUID guardianId = UUID.randomUUID();
     public final UUID childId = UUID.randomUUID();
+    private DeviceSimulatorClient currentDevice;
+    private static final UUID SPOKEN_CLOSING = UUID.fromString("11111111-1111-4111-8111-111111111119");
+    public record NoticePrelude(UUID playbackId, UUID contentVersionId, int sequenceNo) { }
+    private final Map<UUID, NoticePrelude> noticePreludes = new LinkedHashMap<>();
 
     private RealtimeItEnvironment(Map<String, String> extraArgs, URI providerOverride,
             ApplicationContextInitializer<ConfigurableApplicationContext> initializer) {
@@ -85,7 +89,13 @@ public final class RealtimeItEnvironment implements AutoCloseable {
         args.put("mujoong.internal-http.verify-token-timeout", "1s");
         args.put("mujoong.timing.device.hello-timeout", "2s");
         args.putAll(extraArgs);
-        this.app = RealtimeTestApp.start(args, initializer);
+        this.app = RealtimeTestApp.start(args, context -> {
+            initializer.initialize(context);
+            context.addBeanFactoryPostProcessor(factory -> {
+                if (!factory.containsSingleton("noticeAssetCatalog")) factory.registerSingleton("noticeAssetCatalog",
+                        kr.mujoong.realtime.session.ServiceGuardrailFixtures.catalog(SPOKEN_CLOSING));
+            });
+        });
     }
 
     /** 기본 묶음. */
@@ -118,6 +128,7 @@ public final class RealtimeItEnvironment implements AutoCloseable {
     /** 기기를 연결하고 HELLO_OK까지 받는다. 원장이 CONNECTED가 되고 소켓 레지스트리에 오를 때까지 기다린다. */
     public DeviceSimulatorClient connectDevice() {
         DeviceSimulatorClient device = DeviceSimulatorClient.open(app.deviceUri(), ORIGIN, deviceToken, WAIT);
+        currentDevice = device;
         kr.mujoong.contract.ws.message.HelloOk ok = device.hello(WAIT);
         awaitTrue(() -> ledger().map(row -> row.state() == ConnectionState.CONNECTED
                 && ok.connectionId().equals(row.connectionId())).orElse(false), "원장 CONNECTED");
@@ -135,6 +146,7 @@ public final class RealtimeItEnvironment implements AutoCloseable {
      */
     public Connected connectDevice(UUID resumeSessionId) {
         DeviceSimulatorClient device = DeviceSimulatorClient.open(app.deviceUri(), ORIGIN, deviceToken, WAIT);
+        currentDevice = device;
         kr.mujoong.contract.ws.message.HelloOk ok = device.hello(WAIT, resumeSessionId);
         awaitTrue(() -> ledger().map(row -> (row.state() == ConnectionState.CONNECTED
                 || row.state() == ConnectionState.UNSTABLE) && ok.connectionId().equals(row.connectionId())).orElse(false),
@@ -151,8 +163,14 @@ public final class RealtimeItEnvironment implements AutoCloseable {
     /** 시작 명령(U1 자유대화 패키지). */
     public StartSessionHandler.StartCommand startCommand(UUID sessionId, ChildContext childContext) {
         Map<String, StartSessionHandler.ApprovedContentItem> approved = new LinkedHashMap<>();
-        approved.put(PlayApprovedContent.CLOSING, new StartSessionHandler.ApprovedContentItem(UUID.randomUUID(),
-                "오늘 이야기 고마워. 다음에 또 만나!", "/media/approved/closing.wav"));
+        approved.put(PlayApprovedContent.CLOSING, new StartSessionHandler.ApprovedContentItem(SPOKEN_CLOSING,
+                "알겠어. 안녕.", "/media/approved/closing.wav"));
+        approved.put(kr.mujoong.realtime.session.ServiceGuardrailFixtures.CODE, new StartSessionHandler.ApprovedContentItem(
+                kr.mujoong.realtime.session.ServiceGuardrailFixtures.INTRO, kr.mujoong.realtime.session.ServiceGuardrailFixtures.TEXT,
+                kr.mujoong.realtime.session.ServiceGuardrailFixtures.URL));
+        approved.put(kr.mujoong.realtime.session.SessionExecutor.RE_PROMPT, new StartSessionHandler.ApprovedContentItem(
+                UUID.fromString("11111111-1111-4111-8111-111111111117"), kr.mujoong.realtime.session.ServiceGuardrailFixtures.TEXT,
+                "/media/approved/re_prompt.wav"));
         approved.put(PlayApprovedContent.WAITING_FILLER, new StartSessionHandler.ApprovedContentItem(UUID.randomUUID(),
                 "음, 잠깐만 생각해 볼게.", "/media/approved/filler.wav"));
         return new StartSessionHandler.StartCommand(sessionId, UUID.randomUUID(), guardianId, childId, deviceId,
@@ -171,15 +189,51 @@ public final class RealtimeItEnvironment implements AutoCloseable {
      * 될 때까지 기다린다. 시작 패키지에 시작 안내가 없으면 창이 곧바로 열린다.
      */
     public void join(UUID sessionId) {
+        completeNotice(sessionId);
+        childSays("join-" + sessionId, "응");
+        awaitOrDump(sessionId, () -> sessionStatus(sessionId) == kr.mujoong.contract.status.SessionStatus.ACTIVE, "ACTIVE");
+        provider.await("session.instructions.append", 1, Duration.ofSeconds(3));
+    }
+
+    public void completeNotice(UUID sessionId) {
         awaitOrDump(sessionId,
                 () -> sessionStatus(sessionId) == kr.mujoong.contract.status.SessionStatus.WAITING_CHILD,
                 "WAITING_CHILD");
-        childSays("join-" + sessionId, "응");
-        awaitOrDump(sessionId, () -> sessionStatus(sessionId) == kr.mujoong.contract.status.SessionStatus.ACTIVE,
-                "ACTIVE");
-        // 설계 개정 A2: 참여 뒤 첫 응답은 지시 하나로 시작한다. 가짜 공급자가 그 지시를 받은 뒤의 말부터 응답으로 받는다(연습처럼 지시를 보내지
-        // 않는 세션은 잠깐 기다리고 넘어간다)
-        provider.await("session.instructions.append", 1, Duration.ofSeconds(3));
+        var facts = app.bean(kr.mujoong.realtime.session.SessionGuardrailFactsRepository.class);
+        if (app.bean(kr.mujoong.realtime.session.ActivitySessionRepository.class).find(sessionId).orElseThrow().activityType() == ActivityType.FREE_TALK) {
+            awaitOrDump(sessionId, () -> facts.latest(sessionId).map(value -> value.notice()
+                    == kr.mujoong.realtime.session.SessionGuardrailFacts.Notice.PENDING
+                    || value.notice() == kr.mujoong.realtime.session.SessionGuardrailFacts.Notice.COMPLETED).orElse(false), "current notice attempt");
+        }
+        if (facts.latest(sessionId).map(value -> value.notice() == kr.mujoong.realtime.session.SessionGuardrailFacts.Notice.PENDING).orElse(false)) {
+            var envelope = currentDevice.await(value -> sessionId.equals(value.sessionId())
+                    && value.payload() instanceof PlayApprovedContent play
+                    && play.contentVersionId().equals(kr.mujoong.realtime.session.ServiceGuardrailFixtures.INTRO), WAIT);
+            var play = (PlayApprovedContent) envelope.payload();
+            currentDevice.ack(envelope.opId(), sessionId);
+            currentDevice.playbackMark(sessionId, play.playbackId(), kr.mujoong.contract.ws.message.PlaybackMark.Status.COMPLETED);
+            awaitOrDump(sessionId, () -> facts.latest(sessionId).map(value -> value.notice()
+                    == kr.mujoong.realtime.session.SessionGuardrailFacts.Notice.COMPLETED).orElse(false), "notice COMPLETED");
+        }
+        if (facts.latest(sessionId).map(value -> value.notice() == kr.mujoong.realtime.session.SessionGuardrailFacts.Notice.COMPLETED).orElse(false)) {
+            var play = currentDevice.received(kr.mujoong.contract.ws.WsMessageType.PLAY_APPROVED_CONTENT).stream()
+                    .filter(envelope -> sessionId.equals(envelope.sessionId()))
+                    .map(envelope -> (PlayApprovedContent) envelope.payload())
+                    .filter(value -> value.contentVersionId().equals(kr.mujoong.realtime.session.ServiceGuardrailFixtures.INTRO))
+                    .findFirst().orElseThrow();
+            var transcripts = app.bean(kr.mujoong.realtime.log.TranscriptRepository.class);
+            awaitOrDump(sessionId, () -> transcripts.findAll(sessionId).stream().anyMatch(row -> row.sequenceNo() == 1
+                    && row.speaker() == kr.mujoong.realtime.log.TranscriptEntry.Speaker.AI && row.isFinal()
+                    && row.approvedForDisplay() && row.text().equals(kr.mujoong.realtime.session.ServiceGuardrailFixtures.TEXT)), "approved notice prelude row");
+            noticePreludes.putIfAbsent(sessionId, new NoticePrelude(play.playbackId(), play.contentVersionId(), 1));
+        }
+    }
+
+    /** 실제 안내의 session/playback/contentVersion 및 준비 seq로만 활동 이후 관측을 분리한다. */
+    public List<kr.mujoong.realtime.log.TranscriptRow> activityTranscripts(UUID sessionId) {
+        var prelude = noticePreludes.get(sessionId);
+        return app.bean(kr.mujoong.realtime.log.TranscriptRepository.class).findAll(sessionId).stream()
+                .filter(row -> prelude == null || row.sequenceNo() != prelude.sequenceNo()).toList();
     }
 
     /**

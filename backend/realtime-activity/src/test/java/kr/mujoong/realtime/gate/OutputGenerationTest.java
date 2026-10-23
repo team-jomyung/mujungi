@@ -20,6 +20,7 @@ import org.junit.jupiter.api.Test;
  * 오디오 조각 하나는 960바이트 = 20ms다.
  */
 @Tag("judgment-turn")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class OutputGenerationTest {
 
     private static final Instant T0 = Instant.parse("2026-10-17T00:00:00Z");

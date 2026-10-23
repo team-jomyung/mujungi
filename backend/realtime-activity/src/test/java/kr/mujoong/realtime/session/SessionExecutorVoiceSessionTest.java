@@ -35,6 +35,7 @@ import org.junit.jupiter.api.Test;
  * 세션 전이 표는 U1 그대로다(U3-J1).
  */
 @Tag("voice-session")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class SessionExecutorVoiceSessionTest {
 
     private final SessionHarness h = new SessionHarness();
@@ -92,7 +93,8 @@ class SessionExecutorVoiceSessionTest {
         assertThat(fresh.sent()).extracting(sent -> sent.payload().getClass().getSimpleName())
                 .containsExactly("StartSession", "SessionState");
         assertThat(fresh.sent().get(0).opId()).isEqualTo(startOpId);
-        assertThat(((StartSession) fresh.sent().get(0).payload()).approvedAudio()).hasSize(2);
+        assertThat(((StartSession) fresh.sent().get(0).payload()).approvedAudio())
+                .isEqualTo(h.link.sent(StartSession.class).getFirst().approvedAudio());
         assertThat(fresh.sent().get(0).sessionId()).isEqualTo(h.sessionId);
 
         h.mailbox.offerGeneral(new SessionMailbox.DeviceAck(fresh.connectionId(), startOpId, h.clock.now()));

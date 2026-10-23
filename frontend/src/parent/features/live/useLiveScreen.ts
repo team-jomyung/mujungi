@@ -8,8 +8,9 @@ import { liveOutcome } from "../../common/activity/livePresentation";
 import { ApiError } from "../../common/api/apiClient";
 import { queryKeys, useApiClient } from "../../common/api/queries";
 import { fetchHome } from "../../common/api/home";
-import { endSession, fetchLiveView, mergeLiveView } from "../../common/api/live";
-import { isTerminalStatus, type LiveView, type SessionStatus } from "../../common/api/types";
+import { endSession } from "../../common/api/live";
+import { readCurrentLiveView } from "../../common/api/liveUpdates";
+import { isTerminalStatus, type SessionStatus } from "../../common/api/types";
 import type { TabKey } from "../../common/components/BottomTabBar";
 import { useLivePolling } from "../../common/hooks/useLivePolling";
 import { PARENT_ROUTES, goToLogin, isUnauthenticated, routeForTab } from "../../common/navigation";
@@ -79,9 +80,7 @@ export function useLiveScreen(sessionId: string) {
   }, [failureStreak, refetch, toast]);
 
   const rereadAfterConflict = async () => {
-    const previous = queryClient.getQueryData<LiveView>(queryKeys.session(sessionId));
-    const fresh = await fetchLiveView(api, sessionId, previous?.nextSeq ?? 0);
-    queryClient.setQueryData<LiveView>(queryKeys.session(sessionId), mergeLiveView(previous, fresh));
+    const fresh = await readCurrentLiveView(api, queryClient, sessionId);
     // 이동은 위 효과(liveOutcome)가 한다. 아직 시작 중이면 머물며 알린다
     if (liveOutcome(fresh).kind === "stay") {
       toast.show({ message: TEMP_COPY.livePreparingEndToast });

@@ -136,7 +136,8 @@ cd tools && npm ci && npx --no-install vitest run tests
 
 - PostgreSQL이 필요한 시험(`@Tag("db")`)은 Docker(Testcontainers)나 호스트 PostgreSQL 16(`/usr/lib/postgresql/16/bin`)으로 돈다.
   `-Pmujoong.test.db=auto|docker|local`로 고르고 기본은 auto다(J132). root로 local을 쓰면 저장소 경로를 `postgres` 사용자가 지나갈 수 있어야 한다.
-- 줄 커버리지 하한은 80%(백엔드 모듈별 JaCoCo · 프런트 `src/**` Vitest)이고 낮추지 않는다. `-PcoverageScope=skeleton` ·
+- 줄 커버리지는 보고 전용이다(백엔드 모듈별 JaCoCo 보고서 · 프런트 `src/**` Vitest 보고서). CI는 하한으로 실패시키지 않는다.
+  80% 줄 규칙은 `jacocoTestCoverageVerification`을 직접 부를 때만 돈다(로컬 · 검토 근거). `-PcoverageScope=skeleton` ·
   `MUJOONG_COVERAGE_SCOPE=skeleton`은 U1이 만든 파일(`backend/coverage-scope/skeleton.txt` · `frontend/coverage-scope/skeleton.json`)만 잰다(J137).
 
 ### 검증 명령(C안)
@@ -145,6 +146,7 @@ cd tools && npm ci && npx --no-install vitest run tests
 bash scripts/verify.sh                 # 전체: A(시험 · 커버리지 · 빌드 · 비밀 스캔) → B(스택 기동 · 3종 호출) → C(기기 한 턴) → 사후 단언
 bash scripts/verify.sh --mode host     # Docker 없이(로컬 PostgreSQL 16 · java -jar · Next.js · Nginx 대역). NOT_VERIFIED(host) 줄이 남는다
 bash scripts/verify.sh --engine        # 엔진 checkpoint용: 소스 지문이 같은 미리 만든 산출물로 B · C · 사후 단언만 110초 안에
+bash scripts/verify.sh --skip-a        # 스켈레톤 경량(CI skeleton 기본): A1 ~ A4 회귀를 건너뛰고 산출물(A0) → B · C · 사후 단언. NOT_VERIFIED(skip-a) 줄이 남는다
 bash scripts/verify.sh --help          # 단계 · 모드 · 종료 코드
 ```
 

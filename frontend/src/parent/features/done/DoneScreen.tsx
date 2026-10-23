@@ -1,7 +1,7 @@
 "use client";
 
 import { presentDone } from "./presentation";
-import type { LiveView } from "../../common/api/types";
+import { isTerminalStatus, type LiveView } from "../../common/api/types";
 import { BottomTabBar } from "../../common/components/BottomTabBar";
 import { useDoneScreen } from "./useDoneScreen";
 import { RESULT_TEMP_COPY as RESULT_COPY } from "@/shared/copy/result";
@@ -30,8 +30,8 @@ export interface DoneScreenProps {
 }
 
 export function DoneScreen({ sessionId }: DoneScreenProps) {
-  const { view, status, childName, jobStatus, handleNavigate, onLockedPress, goToRecordDetail, goToHome } = useDoneScreen(sessionId);
-  const presentation = presentDone(view, childName);
+  const { view, status, childName, trusted, jobStatus, handleNavigate, onLockedPress, goToRecordDetail, goToHome } = useDoneScreen(sessionId);
+  const presentation = presentDone(view, childName, trusted);
   const timeRange = timeRangeFor(view);
 
   return (
@@ -48,6 +48,9 @@ export function DoneScreen({ sessionId }: DoneScreenProps) {
         ) : null}
       </header>
       <main className="mj-screen__body">
+        {presentation.goodbyeLine !== null ? <p role="status" data-testid="done-goodbye">{presentation.goodbyeLine}</p> : null}
+        {presentation.closing ? <p data-testid="done-closing-note">{presentation.reasonBody}</p> : null}
+        {presentation.stopQuote !== null ? <p className="mj-reason__body" style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }} data-testid="done-stop-quote">{presentation.stopQuote}</p> : null}
         {presentation.reasonTitle !== null ? (
           <section className="mj-card mj-reason" role="status" data-testid="done-reason">
             <p className="mj-reason__title">{presentation.reasonTitle}</p>
@@ -59,7 +62,7 @@ export function DoneScreen({ sessionId }: DoneScreenProps) {
             {presentation.unconfirmedLine}
           </p>
         ) : null}
-        {!presentation.closing && jobStatus !== "NONE" ? (
+        {status !== undefined && isTerminalStatus(status) && jobStatus !== "NONE" ? (
           <p className="mj-done__cleaning" role="status" aria-live="polite" data-testid="done-cleaning">
             {jobStatus === "DONE" ? RESULT_COPY.done : jobStatus === "FAILED" ? RESULT_COPY.failed : RESULT_COPY.cleaning}
           </p>

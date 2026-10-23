@@ -35,10 +35,13 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Stream;
 import javax.sql.DataSource;
 import kr.mujoong.testsupport.secret.TestSecrets;
 import org.flywaydb.core.Flyway;
+import org.flywaydb.core.api.MigrationVersion;
 import org.junit.jupiter.api.Assumptions;
 import org.testcontainers.DockerClientFactory;
 import org.testcontainers.containers.GenericContainer;
@@ -428,6 +431,28 @@ public final class MujoongPostgres implements AutoCloseable {
     /** 저장소 루트. */
     public Path repoRoot() {
         return repoRoot;
+    }
+
+    private static final Pattern VERSIONED_MIGRATION = Pattern.compile("^V([0-9]+(?:[._][0-9]+)*)__.+\\.sql$");
+
+    /**
+     * 저장소 마이그레이션 위치의 버전(V*__*.sql) 목록을 버전 순서로 돌려준다. 시험이 마이그레이션 개수 · 최고 버전을 숫자로 적지 않고
+     * 파일에서 읽게 해, 마이그레이션을 더해도 시험을 고치지 않게 한다.
+     */
+    public List<String> migrationVersions(MigrationSet set) {
+        try (Stream<Path> files = Files.list(repoRoot.resolve(set.relativeLocation()))) {
+            List<String> versions = files.map(file -> VERSIONED_MIGRATION.matcher(file.getFileName().toString()))
+                    .filter(Matcher::matches)
+                    .map(matcher -> matcher.group(1).replace('_', '.'))
+                    .sorted(Comparator.comparing(MigrationVersion::fromVersion))
+                    .toList();
+            if (versions.isEmpty()) {
+                throw new IllegalStateException("마이그레이션 파일이 없다: " + set.relativeLocation());
+            }
+            return versions;
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
     }
 
     /**

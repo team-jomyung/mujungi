@@ -9,7 +9,7 @@
 # - 베이스는 DB와 같은 postgres:16.15 이미지다(pg_dump · pg_dumpall · pg_restore · psql 16, util-linux flock, bash, tzdata).
 #   같은 판의 클라이언트로 덤프하고, 호스트에서는 postgres 서비스와 이미지 계층을 나눠 쓴다. 태그와 다이제스트를 함께 고정한다.
 # - 스케줄러는 root가 필요 없는 supercronic이다(V-15). 배포 바이너리(v0.2.49, 마지막 판)는 Go 1.26.6으로 빌드돼 Go 표준 라이브러리
-#   HIGH 취약점이 있고 더 새 판이 없다(이미지 점검 ③). 그래서 같은 판의 소스(태그 커밋 고정)를 고친 Go(1.27.2, 이미지 다이제스트 고정)로
+#   HIGH 취약점이 있고 더 새 판이 없다(이미지 점검 ③). 그래서 같은 판의 소스(태그 커밋 고정)를 고친 Go(1.27.3, 이미지 다이제스트 고정)로
 #   빌드한다(J352). 의존 모듈은 go.sum으로 검증한다. 이 빌드 단계만 네트워크로 Go 모듈을 받는다: CI는 바로 받고, 샌드박스(R-03)는
 #   build-images.sh --extra-ca가 주는 BuildKit 비밀(extra_ca · proxy_env, required=false)로 받는다. 값은 빌드 인자 · ENV · 실행 이미지에
 #   남지 않는다(빌드 단계는 실행 이미지에 들어가지 않는다).
@@ -20,7 +20,7 @@
 # - 상속된 VOLUME /var/lib/postgresql/data는 쓰지 않는다. Compose가 그 경로에 작은 tmpfs를 덮어 익명 볼륨이 생기지 않게 한다.
 
 ARG PG_IMAGE=postgres:16.15@sha256:ca0bd484cb98bf4b24eb1010e73fb3fcbd6714d240fbc1a10eea5b7dbecb641d
-ARG GO_IMAGE=golang:1.27.2-alpine3.23@sha256:9e45f0eb4a63ed37ad6e604950407558b7c738e34e015ae77a5d4ad369cde079
+ARG GO_IMAGE=golang:1.27.3-alpine3.23@sha256:7fd63dd7c37f5ddaef15bd8fd3f3e4f90f0d50cd9cae255c7cf73887a494d8df
 
 # 1단계: supercronic v0.2.49(github.com/aptible/supercronic 태그 v0.2.49 = 커밋 8e0a4a40…) 정적 바이너리
 FROM ${GO_IMAGE} AS supercronic

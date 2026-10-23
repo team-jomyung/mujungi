@@ -29,6 +29,7 @@ import org.junit.jupiter.api.Test;
  * 지표가 실검사(REAL)와 태그로 구분된다. 제브 · 공급자는 모두 대역이다(실제 호출 없음, R-F1 · R-M11).
  */
 @Tag("jev-guardrail")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class GuardrailMetricsTest {
 
     private static final byte[] AUDIO = new byte[4800];

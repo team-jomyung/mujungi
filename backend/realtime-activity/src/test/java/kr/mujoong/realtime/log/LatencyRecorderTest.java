@@ -28,6 +28,7 @@ import org.junit.jupiter.api.Test;
  * 주입한 오프셋 ± rttMs/2 안, 오프셋이 없으면 CLOCK_OFFSET_MISSING, 프레임 단위 로그 0줄을 본다.
  */
 @Tag("skeleton")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class LatencyRecorderTest {
 
     private final MutableClock clock = new MutableClock();

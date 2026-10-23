@@ -142,7 +142,7 @@ paths:
         - { name: sinceSeq, in: query, required: false, schema: { type: integer, minimum: 0, default: 0 } }
       responses:
         "200":
-          description: LiveView(내부) — 보호자 LiveView에서 observedAt · stale을 뺀 모양
+          description: LiveView(내부). 보호자 LiveView에서 observedAt · stale을 뺀 모양. 선택 guardrail은 확정 사실과 현재 actor projection을 대조한 값이며 재시작의 PLAYING/PENDING은 UNKNOWN이다.
           content:
             application/json:
               schema: { $ref: "schemas/internal-session-view.schema.json" }

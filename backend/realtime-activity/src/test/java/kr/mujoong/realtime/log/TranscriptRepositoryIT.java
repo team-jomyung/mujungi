@@ -32,6 +32,7 @@ import org.springframework.transaction.IllegalTransactionStateException;
  */
 @Tag("skeleton")
 @Tag("db")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class TranscriptRepositoryIT {
 
     private static final Instant T0 = Instant.parse("2026-10-15T09:00:00Z");

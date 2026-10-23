@@ -19,6 +19,7 @@ import org.junit.jupiter.api.Test;
  * 조각을 버리며, 계약 모양이 아니면 400 예외를 던지고, 명령의 문자열 표현에 조각이 없는지 본다. 서버 · DB 없음(테스트 대역 증거).
  */
 @Tag("practice-flow")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class PracticeStartBodyTest {
 
     private static final UUID GOAL = UUID.randomUUID();

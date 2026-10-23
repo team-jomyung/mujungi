@@ -30,6 +30,7 @@ import org.junit.jupiter.api.Test;
  * 폐기 행 FINAL · false · 출력 세대(취소 뒤 늦은 송신 0, 프레임 중간 세대 변경) · fail-closed · tGatePass 유무를 본다.
  */
 @Tag("skeleton")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class OutputGateTest {
 
     private static final byte[] AUDIO = new byte[4800];
@@ -189,8 +190,10 @@ class OutputGateTest {
 
         assertThat(h.link.outputs()).isEmpty();
         assertThat(h.metrics.count("mujoong.gate.discard", "reason", "not_active")).isEqualTo(1.0);
-        assertThat(h.store.transcripts).filteredOn(row -> row.speaker() == TranscriptEntry.Speaker.AI)
+        assertThat(aiRows())
                 .allSatisfy(row -> assertThat(row.approvedForDisplay()).isFalse());
+        assertThat(h.store.transcripts).filteredOn(h::isApprovedContentRow).singleElement()
+                .satisfies(row -> assertThat(row.text()).isEqualTo(h.closingText));
         // 마무리 문구 말고 대체 문구는 보내지 않는다(세션이 ACTIVE가 아니다)
         assertThat(h.link.sent(PlayApprovedContent.class)).extracting(PlayApprovedContent::contentCode)
                 .containsExactly(PlayApprovedContent.CLOSING);
@@ -312,11 +315,11 @@ class OutputGateTest {
         h.activate();
         childSpeaks();
         // 응답 경계는 조각 사이 무음이다(응답 id · 응답 끝 사건 없음): 800ms 넘게 끊긴 두 덩어리는 따로 봉인해 따로 검사한다
-        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("안녕"));
+        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("그래"));
         h.provider.last().emit(new ProviderEvent.OutputAudioDelta(AUDIO));
         h.drain();
         h.advance(Duration.ofMillis(800));
-        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("반가워"));
+        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("좋아"));
         h.provider.last().emit(new ProviderEvent.OutputAudioDelta(AUDIO));
         h.drain();
         h.advance(Duration.ofMillis(800));
@@ -392,6 +395,7 @@ class OutputGateTest {
     }
 
     private List<TranscriptEntry> aiRows() {
-        return h.store.transcripts.stream().filter(row -> row.speaker() == TranscriptEntry.Speaker.AI).toList();
+        return h.store.transcripts.stream().filter(row -> row.speaker() == TranscriptEntry.Speaker.AI)
+                .filter(row -> !h.isApprovedContentRow(row)).toList();
     }
 }

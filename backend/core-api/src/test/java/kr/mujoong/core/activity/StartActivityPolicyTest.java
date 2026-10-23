@@ -64,6 +64,7 @@ import org.springframework.transaction.PlatformTransactionManager;
  * 막는 사본은 view로 한 번 대조한다.
  */
 @Tag("skeleton")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class StartActivityPolicyTest {
 
     private static final Instant NOW = Instant.parse("2001-03-01T05:00:00Z");

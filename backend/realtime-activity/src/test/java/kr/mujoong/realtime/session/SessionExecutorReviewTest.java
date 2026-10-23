@@ -39,6 +39,7 @@ import org.junit.jupiter.api.Test;
  * </ul>
  */
 @Tag("voice-session")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class SessionExecutorReviewTest {
 
     private static final byte[] FRAME = new byte[960];
@@ -86,7 +87,7 @@ class SessionExecutorReviewTest {
     @Test
     void aChildWhoKeepsTalkingAfterAStopIntentLiftsTheOutputBlockForNewResponsesOnly() {
         h.activate();
-        done("i1", "그만할래");
+        done("i1", "무중아 그만할래");
         assertThat(eventTypes()).contains(SessionExecutor.EVENT_CHILD_STOP_INTENT);
         assertThat(h.executor.status()).isEqualTo(SessionStatus.CLOSING);
 

@@ -32,6 +32,7 @@ import org.junit.jupiter.params.provider.MethodSource;
  * 두 방식으로 돌린다. ④는 기기 메시지마다 다시 걸지 않고 만기 때 남은 시간으로 다시 건다. CLOSING 중에는 ④가 무동작이고 ③이 우선한다.
  */
 @Tag("skeleton")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class SessionTimersTest {
 
     private static final Duration TICK = Duration.ofMillis(1);
@@ -41,7 +42,7 @@ class SessionTimersTest {
                 Arguments.of("운영 값", SessionHarness.SETTINGS),
                 Arguments.of("줄인 키", new SessionExecutor.Settings(Duration.ofSeconds(2), Duration.ofSeconds(3),
                         Duration.ofSeconds(4), Duration.ofMillis(50), Duration.ofSeconds(2), Duration.ofMillis(50), 50,
-                        1000, 60, SessionHarness.LIFECYCLE, Duration.ofMillis(100), Duration.ofMillis(30), Duration.ofSeconds(2))));
+                        1000, 60, SessionHarness.LIFECYCLE, Duration.ofMillis(100), Duration.ofMillis(30), Duration.ofSeconds(2), Duration.ZERO)));
     }
 
     @ParameterizedTest(name = "{0}")

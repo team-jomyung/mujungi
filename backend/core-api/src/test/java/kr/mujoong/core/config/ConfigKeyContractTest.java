@@ -60,6 +60,7 @@ import org.springframework.core.io.FileSystemResource;
  * </ul>
  */
 @Tag("skeleton")
+@Tag("service-guardrail")
 class ConfigKeyContractTest {
 
     /** timing.md '소유 앱' 열에서 이 앱을 가리키는 이름. */
@@ -581,7 +582,7 @@ class ConfigKeyContractTest {
                 TEST_RESOURCES.resolve("application-test.yml")).enabled()).isFalse();
         CoreProperties bound = bind(base);
         assertThat(bound.timing().result().attemptTimeout()).isEqualTo(Duration.ofSeconds(90));
-        assertThat(bound.timing().practice().scenarioRequestTimeout()).isEqualTo(Duration.ofSeconds(15));
+        assertThat(bound.timing().practice().scenarioRequestTimeout()).isEqualTo(Duration.ofSeconds(30));
         assertThat(bound.timing().goal().restoreWindow()).isEqualTo(Duration.ofSeconds(5));
     }
 

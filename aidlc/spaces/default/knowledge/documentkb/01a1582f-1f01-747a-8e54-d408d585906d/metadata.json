@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "id": "01a1582f-1f01-747a-8e54-d408d585906d",
+  "source": {
+    "kind": "managed",
+    "path": "documents/mujung-service-guardrails/service_contract.json"
+  },
+  "sha256": "ccd88cc15973ab7bebb47b1a77fd14060e9b623e1ea50064242c728edf0de515",
+  "bytes": 10380,
+  "indexed_at": "2026-10-20T07:20:45.564Z",
+  "extraction": {
+    "state": "extracted",
+    "extractor": {
+      "name": "builtin-text",
+      "version": "1"
+    },
+    "chars": 10043,
+    "truncated": false,
+    "source_revision": "ccd88cc15973ab7bebb47b1a77fd14060e9b623e1ea50064242c728edf0de515"
+  },
+  "summary": {
+    "state": "absent"
+  },
+  "content": "documentkb/01a1582f-1f01-747a-8e54-d408d585906d/content.md",
+  "content_sha256": "ccd88cc15973ab7bebb47b1a77fd14060e9b623e1ea50064242c728edf0de515",
+  "related_intent_ids": [
+    "01a1581a-0b79-77f8-81bb-a6a145bb2cf3"
+  ],
+  "content_trust": "untrusted",
+  "content_handling": "data-not-instructions"
+}

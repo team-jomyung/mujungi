@@ -1,0 +1,19 @@
+{
+  "checked_at_date": "2026-10-16",
+  "checks": {
+    "html_balanced_markup": true,
+    "html_unique_section_ids": true,
+    "html_anchors_and_package_links": true,
+    "json_parse": true,
+    "source_hashes_unchanged": true,
+    "prompt_test_only_terms_absent": true,
+    "independent_screen_policy_review": "passed_with_two_followups_applied"
+  },
+  "scope": "offline document and contract checks only",
+  "not_performed": [
+    "service deployment",
+    "OpenAI or JEV API calls",
+    "device playback tests",
+    "browser visual preview (local file URL blocked by browser policy)"
+  ]
+}
