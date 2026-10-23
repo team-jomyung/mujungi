@@ -346,6 +346,8 @@ class GuardrailExecutorTest {
 
         guard.allow();
         h.drain();
+        assertThat(onlyAiRow().approvedForDisplay()).isTrue();
+        playbackStarted(h.link.outputs().getFirst().playbackId());
         TranscriptEntry approved = onlyAiRow();
         assertThat(approved.assemblyStatus()).isEqualTo(TranscriptEntry.AssemblyStatus.FINAL);
         assertThat(approved.approvedForDisplay()).isTrue();
@@ -366,6 +368,9 @@ class GuardrailExecutorTest {
         assertThat(row.assemblyStatus()).isEqualTo(TranscriptEntry.AssemblyStatus.FINAL);
         assertThat(row.approvedForDisplay()).isFalse();
         assertThat(h.metrics.count("mujoong.gate.discard", "reason", "guardrail_block")).isEqualTo(1.0);
+        assertThat(kr.mujoong.testsupport.log.LogCapture.attrs(h.logs.last(
+                kr.mujoong.contract.log.EventCode.OUTPUT_DISCARDED).orElseThrow()))
+                .containsEntry("discardDetail", "GUARDRAIL_BLOCK").containsEntry("seq", row.sequenceNo());
         assertThat(records()).singleElement().satisfies(event -> {
             assertThat(event.decision()).isEqualTo(GuardrailEventRecord.Decision.BLOCK);
             assertThat(event.mode()).isEqualTo(kr.mujoong.realtime.guardrail.GuardrailMode.REAL);
@@ -672,7 +677,15 @@ class GuardrailExecutorTest {
         guard.allow();
         h.drain();
         assertThat(h.link.outputs()).hasSize(2);
+        for (var output : h.link.outputs()) playbackStarted(output.playbackId());
         assertThat(aiRows()).allSatisfy(row -> assertThat(row.approvedForDisplay()).isTrue());
+    }
+
+    private void playbackStarted(UUID playback) {
+        h.mailbox.offerGeneral(new SessionMailbox.PlaybackMarkReceived(h.link.connectionId(),
+                new kr.mujoong.contract.ws.message.PlaybackMark(playback,
+                        kr.mujoong.contract.ws.message.PlaybackMark.Status.STARTED, null, h.clock.now(), null, null), h.clock.now()));
+        h.drain();
     }
 
     // ---- 도우미 ----

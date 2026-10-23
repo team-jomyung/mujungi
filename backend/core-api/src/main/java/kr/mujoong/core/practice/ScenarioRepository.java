@@ -130,6 +130,48 @@ public class ScenarioRepository {
         return new ExposureText(rs.getString("scenario_text"),rs.getString("trigger_script"),
                 goal==null?null:goal.skillRef(),base==null||base.preservation()==null?null:ScenarioGraphContext.coordinates(base));
     }
+
+    /** Bounded, owner-scoped continuity. Reuses immutable Core records; never reads Realtime tables. */
+    public PracticeContinuity.Context continuity(UUID guardian,UUID child,UUID goal,Instant started,Duration timeout) {
+        if(timeout==null||timeout.isNegative()||timeout.isZero())throw CoreApiException.of(ErrorCode.SCENARIO_GEN_FAILED);
+        var manager=new org.springframework.jdbc.datasource.DataSourceTransactionManager(
+                java.util.Objects.requireNonNull(jdbc.getJdbcTemplate().getDataSource()));
+        var read=new org.springframework.transaction.support.TransactionTemplate(manager);read.setReadOnly(true);
+        read.setPropagationBehavior(org.springframework.transaction.TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        return read.execute(status->{
+            jdbc.queryForObject("select set_config('statement_timeout',:timeout,true)",
+                    new MapSqlParameterSource("timeout",Math.max(1,timeout.toMillis()/2)+"ms"),String.class);
+            var p=new MapSqlParameterSource("guardian",guardian).addValue("child",child).addValue("goal",goal)
+                    .addValue("started",ClockParams.timestamptz(started));
+            var history=jdbc.query("""
+                    select entry::text as scene, s.scenes_json::text as settings
+                    from core.core_activity_record r
+                    cross join lateral jsonb_array_elements(case when jsonb_typeof(r.practice_json->'scenes')='array'
+                        then r.practice_json->'scenes' else '[]'::jsonb end) entry
+                    left join core.core_scenario s on s.id::text=entry->>'scenarioRef'
+                        and s.guardian_id=r.guardian_id and s.child_id=r.child_id
+                    where r.guardian_id=:guardian and r.child_id=:child and r.recorded_at<:started
+                        and r.practice_json->>'flowVersion'='practice-conversation-v1' and entry->>'goalRef'=cast(:goal as text)
+                    order by r.recorded_at desc,r.session_id desc limit 3
+                    """,p,(rs,n)-> {
+                        var scene=kr.mujoong.core.result.ResultData.object(json.read(rs.getString("scene"),java.util.Map.class));
+                        var settings=rs.getString("settings")==null?java.util.List.<java.util.Map<String,Object>>of()
+                                :kr.mujoong.core.result.ResultData.objects(json.read(rs.getString("settings"),java.util.List.class));
+                        return PracticeContinuity.support(scene,settings.isEmpty()?java.util.Map.of():settings.getFirst());
+                    });
+            var evidence=jdbc.query("""
+                    select v.evidence_json::text as evidence,r.transcript_json::text as transcript
+                    from core.core_saved_goal g join core.core_goal_candidate c on c.id=g.candidate_id and c.child_id=g.child_id
+                    join core.core_goal_candidate_version v on v.id=g.candidate_version_id and v.candidate_id=c.id and v.child_id=g.child_id
+                    join core.core_activity_record r on r.session_id=c.source_session_id and r.child_id=g.child_id and r.guardian_id=g.guardian_id
+                    where g.id=:goal and g.guardian_id=:guardian and g.child_id=:child and g.status='ACTIVE'
+                        and r.recorded_at<:started limit 1
+                    """,p,(rs,n)->PracticeContinuity.verifiedChildEvidence(
+                            kr.mujoong.core.result.ResultData.objects(json.read(rs.getString("evidence"),java.util.List.class)),
+                            kr.mujoong.core.result.ResultData.transcript(rs.getString("transcript"))));
+            return new PracticeContinuity.Context(history,evidence.isEmpty()?List.of():evidence.getFirst());
+        });
+    }
     public boolean seen(UUID child, String fingerprint) {
         return Boolean.TRUE.equals(jdbc.queryForObject("""
                 select exists(select 1 from core.core_scenario where child_id=:child and content_fingerprint=:fingerprint)

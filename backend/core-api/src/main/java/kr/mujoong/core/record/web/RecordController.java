@@ -126,7 +126,7 @@ public class RecordController {
             boolean confirmed,
             String requestedAt,
             String startedAt,
-            String endedAt) {
+            String endedAt, String endDetail) {
     }
 
     /** 27 연습 목표(이름 · 순서 · 상태). */
@@ -156,7 +156,7 @@ public class RecordController {
                     SessionStatus.fromWire(record.finalStatus()), SessionViewService.parse(EndReason.class, record.endReason()),
                     SessionViewService.parse(FailureCode.class, detail.copy().failureCode()), record.confirmed(),
                     ApiResponses.time(detail.copy().requestedAt()), ApiResponses.time(record.startedAt()),
-                    ApiResponses.time(record.endedAt()));
+                    ApiResponses.time(record.endedAt()), record.endDetail());
             List<Map<String, Object>> utterances = detail.utterances().stream().map(bubble -> {
                 Map<String, Object> body = new LinkedHashMap<>();
                 body.put("seq", bubble.seq());

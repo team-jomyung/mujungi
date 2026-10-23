@@ -22,6 +22,26 @@ class LunaSchemasTest {
 
     private static final JsonCodec JSON = JsonCodec.shared();
 
+    @Test
+    @SuppressWarnings("unchecked")
+    void scenarioRequestIsStrictWithGraphMetadataOnlyWhenTheRequestHasGraphContext() {
+        var schemas = LunaSchemas.loadDefault(JSON);
+        String original = JSON.write(schemas.pair(LunaPurpose.SCENARIO_GENERATION).orElseThrow().requestSchema());
+        for (boolean graph : List.of(false, true)) {
+            var pair = schemas.pair(LunaPurpose.SCENARIO_GENERATION, graph ? Map.of("structureContext", Map.of("skillRef", "S1")) : Map.of()).orElseThrow();
+            assertThat(pair.strict()).isTrue();
+            var root = (Map<String, Object>) pair.requestSchema().get("properties");
+            var scenes = (Map<String, Object>) root.get("scenes");
+            var item = (Map<String, Object>) scenes.get("items");
+            var fields = (Map<String, Object>) item.get("properties");
+            assertThat(fields.containsKey("preservation")).isEqualTo(graph);
+            assertThat((List<String>) item.get("required")).containsAll(fields.keySet());
+        }
+        assertThat(JSON.write(schemas.pair(LunaPurpose.SCENARIO_GENERATION).orElseThrow().requestSchema())).isEqualTo(original);
+        assertThat(schemas.isValidOutput(LunaPurpose.SCENARIO_GENERATION, LunaTestFixtures.example("ai-scenario-output.schema.json"))).isTrue();
+        assertThat(schemas.isValidOutput(LunaPurpose.SCENARIO_GENERATION, "{\"scenes\":[]}")).isFalse();
+    }
+
     private static String contractFile(String name) {
         try {
             Path file = LunaTestFixtures.REPO_ROOT.resolve("contracts/schemas/" + name);
@@ -49,6 +69,32 @@ class LunaSchemasTest {
         }
         String rejudgment = JSON.write(schemas.pair(LunaPurpose.REJUDGMENT).orElseThrow().requestSchema());
         assertThat(rejudgment).as("common Uuid 정의를 끼워 넣음").contains("\"sceneRunId\":{\"type\":\"string\"}");
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void goalRequestRequiresExplicitStructureDecisionButKeepsHistoricalContractCompatible() {
+        var schemas = LunaSchemas.loadDefault(JSON);
+        var pair = schemas.pair(LunaPurpose.GOAL_CANDIDATES).orElseThrow();
+        var properties = (Map<String, Object>) pair.requestSchema().get("properties");
+        var candidates = (Map<String, Object>) properties.get("candidates");
+        var item = (Map<String, Object>) candidates.get("items");
+        assertThat((List<String>) item.get("required")).contains("structureSignature");
+        assertThat(pair.strict()).isTrue();
+        // The unchanged contract still reads earlier outputs lacking this optional field.
+        String historical = LunaTestFixtures.example("ai-goal-candidate-output.schema.json");
+        assertThat(schemas.isValidOutput(LunaPurpose.GOAL_CANDIDATES, historical)).isTrue();
+        var output = JSON.read(historical, Map.class);
+        var candidate = (Map<String, Object>) ((List<?>) output.get("candidates")).getFirst();
+        candidate.put("structureSignature", null);
+        assertThat(schemas.isValidOutput(LunaPurpose.GOAL_CANDIDATES, JSON.write(output))).isTrue();
+        candidate.put("structureSignature", Map.of("targetSkill", "PRODUCE", "requiredInference", "타인의 선호를 확인할 질문을 고르기",
+                "perspectiveStructure", "상대의 의도 1층", "decidableByEvidence", "NO", "directCheckAllowed", "YES"));
+        assertThat(schemas.isValidOutput(LunaPurpose.GOAL_CANDIDATES, JSON.write(output))).isTrue();
+        var invalid = new java.util.HashMap<>((Map<String, Object>) candidate.get("structureSignature"));
+        invalid.put("targetSkill", "INVENTED");
+        candidate.put("structureSignature", invalid);
+        assertThat(schemas.isValidOutput(LunaPurpose.GOAL_CANDIDATES, JSON.write(output))).isFalse();
     }
 
     @Test

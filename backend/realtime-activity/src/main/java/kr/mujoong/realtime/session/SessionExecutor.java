@@ -50,6 +50,7 @@ import kr.mujoong.realtime.judgment.NextAction;
 import kr.mujoong.realtime.gate.ApprovedPlayback;
 import kr.mujoong.realtime.gate.ClosingSequence;
 import kr.mujoong.realtime.gate.GateDecision;
+import kr.mujoong.realtime.gate.DiscardDetail;
 import kr.mujoong.realtime.gate.OutputGate;
 import kr.mujoong.realtime.gate.OutputGeneration;
 import kr.mujoong.realtime.gate.SegmentBuffer;
@@ -457,6 +458,7 @@ public final class SessionExecutor {
     /** 설계 개정 A7: 입력 전사 조각을 묶는 중인 발화(공급자는 전사 완료 사건을 주지 않는다). */
     private final StringBuilder inputGroup = new StringBuilder();
     private String inputGroupId;
+    private boolean inputGroupDuringIntroduction;
     private long inputGroupSeq;
     private final List<Object> pendingRetry = new ArrayList<>();
 
@@ -544,6 +546,11 @@ public final class SessionExecutor {
     /** 확장점이 요청한 재생(playbackId → 승인 문구 코드). 끝 표식이 PLAYBACK_DONE이 된다. */
     private final Map<UUID, String> practicePlaybacks = new HashMap<>();
     private volatile kr.mujoong.realtime.voice.PracticeSpeech pendingPracticeSpeech;
+    private record DeferredPracticeInstruction(OutputGeneration.BumpReason reason, ProviderSendQueue.Job job,
+            UUID speechId, Instant deadline) {}
+    private DeferredPracticeInstruction deferredPracticeInstruction;
+    private boolean practiceCollecting;
+    private final Set<UUID> practicePlaybackStarted = new HashSet<>();
     private final Map<UUID, kr.mujoong.realtime.voice.PracticeSpeech> practiceAudio = new HashMap<>();
     private kr.mujoong.realtime.voice.PracticeSpeech streamedPractice;
     private boolean streamedPracticeEnded;
@@ -1123,10 +1130,19 @@ public final class SessionExecutor {
      * 센다). 정산 뒤 · 그 밖 상태는 무시한다.
      */
     private void onPracticeEvent(PracticeSessionExtension.ExtensionEvent event) {
+        if (event.name().equals("practice-request-sent") && event.value() instanceof kr.mujoong.realtime.voice.PracticeSpeech speech) {
+            if (speech.equals(pendingPracticeSpeech) && practiceActive()) {
+                ctx.timers().cancel(Kind.PRACTICE_SEND_WAIT);
+                practiceAudioStage("REQUEST_SENT");
+                if (!practiceCollecting) ctx.timers().arm(Kind.INSTRUCTION_WAIT, ctx.services().settings().instructionWait());
+            }
+            return;
+        }
         if (event.name().equals("u5b-voice-failed") && event.value() instanceof kr.mujoong.realtime.voice.PracticeSpeech speech) {
             if (speech.equals(pendingPracticeSpeech)) {
                 pendingPracticeSpeech = null; practiceHold = true;
-                practicePlayback(speech, kr.mujoong.realtime.practicelegacy.PracticePorts.Playback.FAILED);
+                bumpOutput(OutputGeneration.BumpReason.PRACTICE_DISCARD);
+                recoverPracticeAudio(speech);
             }
             return;
         }
@@ -1198,6 +1214,8 @@ public final class SessionExecutor {
                 || practiceAudio.containsValue(speech)) return;
         streamedPractice = null;
         pendingPracticeSpeech = null;
+        practiceCollecting = false;
+        ctx.timers().cancel(Kind.PRACTICE_COLLECT_MAX);
         practiceHold = true;
         practicePlayback(speech, kr.mujoong.realtime.practicelegacy.PracticePorts.Playback.COMPLETED);
     }
@@ -1208,6 +1226,7 @@ public final class SessionExecutor {
         streamedPractice = null;
         pendingPracticeSpeech = null;
         practiceAudio.clear();
+        practicePlaybackStarted.clear();
         pausedPracticeEvents.clear();
         practicePauseStartedAt = null;
         practicePauses.clear();
@@ -1224,7 +1243,11 @@ public final class SessionExecutor {
         if (fired.name().startsWith("u5b-audio-")) {
             UUID playbackId = UUID.fromString(fired.name().substring("u5b-audio-".length()));
             var speech = practiceAudio.remove(playbackId);
-            if (speech != null) practicePlayback(speech, kr.mujoong.realtime.practicelegacy.PracticePorts.Playback.FAILED);
+            practicePlaybackStarted.remove(playbackId);
+            if (speech != null) {
+                practiceAudioStage("PLAYBACK_TIMEOUT");
+                practicePlayback(speech, kr.mujoong.realtime.practicelegacy.PracticePorts.Playback.FAILED);
+            }
             return;
         }
         onPracticeEvent(new PracticeSessionExtension.ExtensionEvent(
@@ -1349,7 +1372,9 @@ public final class SessionExecutor {
             return false;
         }
         judgment.open(new JudgmentCoordinator.Open(point, JudgmentTrigger.EXTENSION_REQUEST, JudgmentOwner.EXTENSION, target.seq(),
-                target.text(), target.at(), shaped, judgment.recentBefore(target.seq()),
+                target.text(), target.at(), shaped,
+                practice != null && practice.controlsOutput()
+                        ? judgment.dialogueBefore(target.seq(), target.at()) : judgment.recentBefore(target.seq()),
                 (turn, outcome) -> JudgmentTurn.Decision.close(), closure -> afterExtensionJudgment(closure, correlationId)));
         return true;
     }
@@ -1549,6 +1574,19 @@ public final class SessionExecutor {
         @Override
         public void practicePlayback(kr.mujoong.realtime.voice.PracticeSpeech speech,
                 kr.mujoong.realtime.practicelegacy.PracticePorts.Playback fact, Instant receivedAt) {
+            if (fact == kr.mujoong.realtime.practicelegacy.PracticePorts.Playback.STARTED) {
+                for (var entry : practiceAudio.entrySet()) if (entry.getValue().equals(speech)
+                        && practicePlaybackStarted.add(entry.getKey())) {
+                    Duration playbackBound = ctx.services().settings().playbackExpiry();
+                    if (practice != null && practice.handlesAudioRecovery())
+                        playbackBound = playbackBound.plus(ctx.services().settings().segmentQuiet());
+                    schedulePracticeTimer("u5b-audio-" + entry.getKey(), playbackBound);
+                    practiceAudioStage("PLAYING");
+                }
+            } else {
+                practicePlaybackStarted.removeIf(id -> !practiceAudio.containsKey(id));
+                practiceAudioStage("PLAYBACK_ENDED");
+            }
             SessionExecutor.this.practicePlayback(speech, fact, receivedAt);
         }
 
@@ -1667,6 +1705,11 @@ public final class SessionExecutor {
         public void onOutputQuiet() {
             SessionExecutor.this.onOutputQuiet();
         }
+
+        @Override
+        public void onPracticeOutputDrain() { SessionExecutor.this.onPracticeOutputDrain(); }
+        @Override public void onPracticeSendWait() { SessionExecutor.this.onPracticeSendWait(); }
+        @Override public void onPracticeCollectMax() { SessionExecutor.this.onPracticeCollectMax(); }
 
         @Override
         public void onInstructionWaitExpired() {
@@ -1798,6 +1841,8 @@ public final class SessionExecutor {
         @Override
         public void discardSilent(SegmentBuffer.Sealed sealed, TranscriptWriter.Held held,
                 GateDecision.DiscardReason reasonOrNull) {
+            logOutputDiscard(sealed, held, reasonOrNull, reasonOrNull == null ? DiscardDetail.GUARDRAIL_VOIDED
+                    : defaultDiscardDetail(reasonOrNull), null);
             if (reasonOrNull != null) {
                 ctx.services().metrics().gateDiscard(reasonOrNull.name());
             }
@@ -2063,7 +2108,8 @@ public final class SessionExecutor {
             }
             try {
                 return speak(kr.mujoong.realtime.voice.PracticeSpeech.scenario(UUID.randomUUID(), NOTICE_SCENARIO_ID,
-                        ctx.outputGen().generation(), "COACH".equals(toRole) ? "코치" : "친구", sentence));
+                        ctx.outputGen().generation(), "COACH".equals(toRole) ? "코치" : "친구", sentence,
+                        kr.mujoong.realtime.voice.PracticeSpeech.ReadingCue.ROLE_NOTICE));
             } catch (IllegalArgumentException invalid) {
                 return false;
             }
@@ -2082,7 +2128,7 @@ public final class SessionExecutor {
             try {
                 slot = kr.mujoong.realtime.voice.PracticeSpeech.generatedSlot(correlationId, NOTICE_SCENARIO_ID,
                         ctx.outputGen().generation(), role, instructionText);
-                instruction = new kr.mujoong.realtime.voice.PracticeInstruction(instructionText);
+                instruction = kr.mujoong.realtime.voice.PracticeInstruction.forGeneratedSpeech(instructionText);
             } catch (RuntimeException e) {
                 return refusePractice("speakGenerated", "INVALID");
             }
@@ -2104,7 +2150,9 @@ public final class SessionExecutor {
         }
 
         @Override
-        public boolean setThinking(boolean on) {
+        public boolean managesSpeechTimeouts() { return true; }
+
+        @Override public boolean setThinking(boolean on) {
             if (!practiceActive()) {
                 return refusePractice("setThinking", "NOT_ACTIVE");
             }
@@ -2193,7 +2241,13 @@ public final class SessionExecutor {
     /** 보낸 승인 문구의 AI 말풍선 행(원문을 모르면 남기지 않는다). */
     private void approvedBubble(ApprovedItem item, Instant at) {
         if (item.text() != null && !item.text().isBlank()) {
-            ctx.transcripts().approvedLine(item.text(), at);
+            if (ctx.plan().activityType() == ActivityType.PRACTICE) {
+                ctx.playback().current().ifPresent(playing ->
+                        ctx.transcripts().awaitApprovedPlayback(playing.playbackId(), item.text(), at));
+            } else {
+                ctx.transcripts().aiStart(at);
+                ctx.transcripts().aiFinal(item.text(), true, at);
+            }
         }
     }
 
@@ -2221,7 +2275,7 @@ public final class SessionExecutor {
                     tryActivate();
                 }
             }
-            case ProviderEvent.Error error -> providerError(error.code());
+            case ProviderEvent.Error error -> providerError(error);
             case ProviderEvent.Closed ignored -> providerLost();
             case ProviderEvent.InputTranscriptDelta delta -> onInputTranscriptDelta(delta, at);
             case ProviderEvent.InputTranscriptDone done -> {
@@ -2410,9 +2464,15 @@ public final class SessionExecutor {
             // 아이 입력 재개는 열린 구간을 확정한다(대화가 넘어갔으니 완결 요청 교정은 하지 않는다)
             // 승인 대본은 전부 받은 뒤 원문 일치를 검사한다. 수집 중의 입력 전사만으로
             // 앞 조각을 봉인하면 정상 대본도 불완전/불일치로 폐기돼 연습이 종료된다.
-            // 입력 기록·종료 의도 처리는 계속하며, 실제 재생 중 끼어들기와 생성형 슬롯은 기존 규칙이다.
-            boolean collectingApprovedPractice = pendingPracticeSpeech != null && !pendingPracticeSpeech.generated();
-            if (ctx.segment().isOpen() && !collectingApprovedPractice) {
+            // 입력 기록·종료 의도 처리는 계속한다. 시작 안내의 일반 입력만 구분하고 역할 대화의 끼어들기는 기존대로 둔다.
+            boolean collectingPractice = pendingPracticeSpeech != null;
+            boolean yieldingPractice = collectingPractice && pendingPracticeSpeech.generated()
+                    && practice != null && practice.canYieldUnplayedSpeech();
+            if (yieldingPractice && !ctx.segment().isOpen() && !guardrail.isChecking()) {
+                // Child input may also arrive before the provider produces its first chunk.
+                yieldUnplayedPracticeToInput(null);
+            }
+            if (ctx.segment().isOpen() && (!collectingPractice || yieldingPractice) && !inputGroupDuringIntroduction) {
                 sealAndGate(true);
             }
             // 아이 입력이 시작되면 모아 둔 AI 전사를 먼저 한 행으로 낸다(보호자 화면의 순서가 말한 순서와 같게)
@@ -2425,7 +2485,10 @@ public final class SessionExecutor {
     private String groupInputDelta(ProviderEvent.InputTranscriptDelta delta) {
         if (inputGroupId == null) {
             ctx.inputBeganAt(ctx.services().clock().now());
-            inputGroupOpens++;
+            inputGroupDuringIntroduction = practice != null && practice.collectingIntroduction();
+            // Only a conversational input group supersedes a pending guardrail ticket.
+            // Stop/rest still invalidate output through their normal status/generation changes.
+            if (!inputGroupDuringIntroduction) inputGroupOpens++;
             inputGroupId = delta.itemId() != null ? delta.itemId() : "in-" + (++inputGroupSeq);
             inputGroup.setLength(0);
         }
@@ -2437,6 +2500,7 @@ public final class SessionExecutor {
     private void clearInputGroup() {
         ctx.timers().cancel(Kind.INPUT_TRANSCRIPT_QUIET);
         inputGroupId = null;
+        inputGroupDuringIntroduction = false;
         inputGroup.setLength(0);
     }
 
@@ -2450,6 +2514,7 @@ public final class SessionExecutor {
         }
         String id = inputGroupId;
         String text = inputGroup.toString();
+        boolean duringIntroduction = inputGroupDuringIntroduction;
         clearInputGroup();
         if (id == null || text.isBlank()) {
             return;
@@ -2462,7 +2527,7 @@ public final class SessionExecutor {
             }
             return;
         }
-        onConfirmedChildTranscript(done, at);
+        onConfirmedChildTranscript(done, at, duringIntroduction);
     }
 
     /** 정산 창이 끝날 때 묶던 입력 전사가 있으면 정산 창 규칙으로 확정한다(발화 시작이 ended_at보다 이르면 저장). */
@@ -2480,6 +2545,10 @@ public final class SessionExecutor {
      * 불확실이 아니다.
      */
     private void onConfirmedChildTranscript(ProviderEvent.InputTranscriptDone done, Instant at) {
+        onConfirmedChildTranscript(done, at, practice != null && practice.collectingIntroduction());
+    }
+
+    private void onConfirmedChildTranscript(ProviderEvent.InputTranscriptDone done, Instant at, boolean duringIntroduction) {
         if (ctx.consentWithdrawnAt() != null) {
             droppedAfterConsent++;
             return;
@@ -2499,7 +2568,7 @@ public final class SessionExecutor {
             }
             currentTranscriptSeq = seq.orElse(0);
             // U13 호출 지점 ③: 아이 확정 전사 = 새 턴(재지시 수를 0으로, 마지막 서버 지시를 지운다)
-            guardrail.onNewTurn(done.transcript());
+            if (!duringIntroduction) guardrail.onNewTurn(done.transcript());
             if (ctx.status() == SessionStatus.ACTIVE) {
                 judgment.remember(currentTranscriptSeq, done.transcript(), at);
                 if (judgment.isOpen()) {
@@ -2510,7 +2579,7 @@ public final class SessionExecutor {
             }
             boolean controlledPractice = practice != null && practice.controlsOutput();
             boolean stopHandled = controlledPractice && judgeStopIntent(done.transcript(), uncertain, at);
-            if (!stopHandled && ctx.status() == SessionStatus.ACTIVE && practice != null
+            if (!stopHandled && !duringIntroduction && ctx.status() == SessionStatus.ACTIVE && practice != null
                     && !(controlledPractice && idle.technicalPause() != null)) {
                 PracticeSessionExtension.Utterance utterance = new PracticeSessionExtension.Utterance(
                         seq.orElse(0), at, done.transcript() == null ? "" : done.transcript(), uncertain,
@@ -2518,7 +2587,7 @@ public final class SessionExecutor {
                 practiceSignal(() -> practice.onChildUtterance(utterance, practiceOutput), true);
             }
             // 2차 리뷰 2: 종료 의도를 푼 발화의 응답은 막힌 동안 이미 취소됐을 수 있다 — 끝 신호가 오지 않을 '생각 중'을 보내지 않는다
-            if (!(controlledPractice ? stopHandled : judgeStopIntent(done.transcript(), uncertain, at))) {
+            if (!duringIntroduction && !(controlledPractice ? stopHandled : judgeStopIntent(done.transcript(), uncertain, at))) {
                 thinking();
             }
         }
@@ -2539,9 +2608,10 @@ public final class SessionExecutor {
             // 이 공급자는 시간 정보가 있는 전사를 준다: 음성으로 시작하는 응답도 단위별 경로로 받는다(아래 열기 조건)
             timedTranscriptsSeen = true;
         }
+        boolean drainingPractice = deferredPracticeInstruction != null;
         OutputGeneration.ChunkResult result = transcript != null
-                ? ctx.outputGen().onTranscript(at, startMs, outputHeld())
-                : ctx.outputGen().onAudio(at, audio.length, outputHeld());
+                ? ctx.outputGen().onTranscript(at, startMs, outputHeld() || drainingPractice)
+                : ctx.outputGen().onAudio(at, audio.length, outputHeld() || drainingPractice);
         chunksSinceInstruction++;
         if (result.verdict() == OutputGeneration.ChunkVerdict.DISCARD_HELD) discardedHeldSeen = true;
         else if (result.verdict() == OutputGeneration.ChunkVerdict.DISCARD) discardedStaleSeen = true;
@@ -2550,6 +2620,7 @@ public final class SessionExecutor {
         if (!ctx.outputGen().awaitingNewSpeech()) {
             ctx.timers().cancel(Kind.INSTRUCTION_WAIT);
         }
+        if (drainingPractice) return;
         if (judgment.isOpen()) {
             // 판정 턴 중 음성은 버리고 전사 조각만 모은다(구간 · 대화 기록 · 보호자 중계에 넣지 않는다)
             if (result.verdict() != OutputGeneration.ChunkVerdict.ACCEPT) {
@@ -2563,6 +2634,15 @@ public final class SessionExecutor {
         }
         if (result.verdict() != OutputGeneration.ChunkVerdict.ACCEPT || !inOutputRange()) {
             return;
+        }
+        if (pendingPracticeSpeech != null && practice != null && practice.handlesAudioRecovery() && !practiceCollecting) {
+            practiceCollecting = true;
+            ctx.timers().cancel(Kind.PRACTICE_SEND_WAIT);
+            ctx.timers().cancel(Kind.INSTRUCTION_WAIT);
+            // Duration of audio is still capped by SegmentBuffer. This bounds wall time even if chunks trickle forever.
+            ctx.timers().arm(Kind.PRACTICE_COLLECT_MAX,
+                    ctx.services().settings().playbackExpiry().plus(ctx.services().settings().instructionWait()));
+            practiceAudioStage("COLLECTING");
         }
         if (streamedPractice != null && streamedPracticeEnded) return;
         // GPT-Live가 말하는 동안 아이 소리를 모아 두던 기능은 끈다: 모았다가 몰아 보내면 공급자 입력 속도 한도(input_audio_rate_limit_exceeded)에
@@ -2631,6 +2711,11 @@ public final class SessionExecutor {
         flushDiscardDiagnostics();
         Instant now = ctx.services().clock().now();
         long generation = ctx.outputGen().bump(now, reason);
+        deferredPracticeInstruction = null;
+        practiceCollecting = false;
+        ctx.timers().cancel(Kind.PRACTICE_COLLECT_MAX);
+        ctx.timers().cancel(Kind.PRACTICE_SEND_WAIT);
+        ctx.timers().cancel(Kind.PRACTICE_OUTPUT_DRAIN);
         ctx.outputAuthority(newOutputAuthority(kr.mujoong.realtime.gate.OutputAuthority.Purpose.NORMAL));
         instructionNotHeard = null;
         ctx.timers().cancel(Kind.INSTRUCTION_WAIT);
@@ -2650,6 +2735,7 @@ public final class SessionExecutor {
      * 확인한다. 지시를 보낸 세대에서 전사만 받고 음성이 여유 시각에 닿지 못한 채 끝났으면 그 구간을 불완전으로 버린다.
      */
     private void onOutputQuiet() {
+        if (deferredPracticeInstruction != null) { onPracticeOutputDrain(); return; }
         if (pendingOutputChunks.get() > 0) {
             // 이 만기는 안전 편지함으로 먼저 들어와 일반 편지함에 쌓인 출력 조각을 앞질렀다 — 그 조각이 같은 응답의 나머지일 수 있어 지금 끊김으로 보지
             // 않는다(조각을 처리하면 조용 시계를 다시 건다)
@@ -2690,7 +2776,8 @@ public final class SessionExecutor {
             case NOT_YET -> ctx.timers().arm(Kind.SEGMENT_QUIET, Duration.between(now, result.waitUntil()));
             case ABANDON_NO_AUDIO -> {
                 if (inOutputRange() && ctx.segment().isOpen()) {
-                    discard(ctx.segment().sealByGeneration(ctx.outputGeneration().get()), GateDecision.DiscardReason.GATE_EMPTY);
+                    discard(ctx.segment().sealByGeneration(ctx.outputGeneration().get()), GateDecision.DiscardReason.GATE_EMPTY,
+                            true, null, true, DiscardDetail.PROVIDER_NO_AUDIO);
                 }
                 ctx.timers().arm(Kind.SEGMENT_QUIET, ctx.services().settings().segmentQuiet());
             }
@@ -2705,6 +2792,81 @@ public final class SessionExecutor {
      * 찾아 계속한다. 확인은 왔는데 새 말 전사가 시한 안에 없거나 두 번째 시한도 지났으면 사유 {@code OutputNewSpeechNotObserved}를 남기고 이 세대를
      * 닫는다 — 아이는 아무 소리도 듣지 않는다(안전 쪽 실패). 연습 발화는 확장에 실패를 알린다.
      */
+    private void recoverPracticeAudio(kr.mujoong.realtime.voice.PracticeSpeech speech) {
+        if (practice != null && practice.handlesAudioRecovery()) {
+            ctx.mailbox().putSafety(new SessionMailbox.PracticeEvent(new PracticeSessionExtension.ExtensionEvent(
+                    PracticeSessionExtension.ExtensionEvent.Kind.ASYNC_RESULT, "practice-audio-incomplete",
+                    speech.correlationId(), speech)));
+        } else practicePlayback(speech, kr.mujoong.realtime.practicelegacy.PracticePorts.Playback.FAILED);
+    }
+
+    private void practiceAudioStage(String stage) {
+        ctx.services().events().log(EventCode.PRACTICE_AUDIO_STAGE, EventLog.Component.OUTPUT_GATE,
+                ctx.plan().sessionId(), ctx.plan().traceId(), entry -> entry
+                .attr(AttrKey.AUDIO_STAGE, stage).attr(AttrKey.OUTPUT_GENERATION, ctx.outputGen().generation())
+                .attr(AttrKey.PRACTICE_PHASE, practice == null ? "NONE" : practice.diagnosticPhase())
+                .attr(AttrKey.PRACTICE_SUB, practice == null ? "NONE" : practice.diagnosticSub()));
+    }
+
+    private void onPracticeSendWait() {
+        if (pendingPracticeSpeech == null || practiceCollecting) return;
+        practiceAudioStage("SEND_TIMEOUT");
+        var speech = pendingPracticeSpeech; pendingPracticeSpeech = null; practiceHold = true;
+        bumpOutput(OutputGeneration.BumpReason.PRACTICE_DISCARD);
+        recoverPracticeAudio(speech);
+    }
+
+    private void onPracticeCollectMax() {
+        if (pendingPracticeSpeech == null || !practiceCollecting) return;
+        practiceAudioStage("COLLECTION_TIMEOUT");
+        if (ctx.segment().isOpen()) discard(ctx.segment().sealByGeneration(ctx.outputGeneration().get()),
+                GateDecision.DiscardReason.GATE_EMPTY, false, null, true, DiscardDetail.PROVIDER_COLLECTION_TIMEOUT);
+        else if (streamedPractice != null) {
+            logOutputDiscard(null, null, GateDecision.DiscardReason.GATE_EMPTY,
+                    DiscardDetail.PROVIDER_COLLECTION_TIMEOUT, streamedPractice);
+            practicePlayback(streamedPractice, kr.mujoong.realtime.practicelegacy.PracticePorts.Playback.FAILED);
+        }
+    }
+
+    private void onPracticeOutputDrain() {
+        var deferred = deferredPracticeInstruction;
+        if (deferred == null) return;
+        if (!practiceActive() || pendingPracticeSpeech == null
+                || !deferred.speechId().equals(pendingPracticeSpeech.correlationId())) {
+            deferredPracticeInstruction = null;
+            return;
+        }
+        Instant now = ctx.services().clock().now();
+        if (!now.isBefore(deferred.deadline())) {
+            deferredPracticeInstruction = null;
+            practiceAudioStage("DRAIN_TIMEOUT");
+            ctx.services().events().appError(EventLog.Component.OUTPUT_GATE, "PracticeOutputDrainTimeout", EventCode.Level.WARN);
+            if (deferred.job().onFailure != null) deferred.job().onFailure.run();
+            return;
+        }
+        Instant last = ctx.outputGen().lastDeltaAt();
+        Instant ready = last == null ? now : last.plus(ctx.services().settings().segmentQuiet());
+        // Let a pending child utterance reach stop/rest classification before starting more audio.
+        if (pendingOutputChunks.get() > 0 || inputGroupId != null || now.isBefore(ready)) {
+            ctx.timers().arm(Kind.PRACTICE_OUTPUT_DRAIN, now.isBefore(ready)
+                    ? Duration.between(now, ready) : ctx.services().settings().segmentQuiet());
+            return;
+        }
+        deferredPracticeInstruction = null;
+        chunksSinceInstruction = 0;
+        ctx.outputGen().bumpForQuietInstruction(now, deferred.reason(), deferred.job().append.eventId());
+        ctx.outputAuthority(newOutputAuthority(ctx.outputAuthority().purpose()));
+        ctx.segment().reset();
+        timedOutput.reset();
+        resetProgressive();
+        ctx.transcripts().aiFinal("", false, now);
+        ctx.timers().cancel(Kind.SEGMENT_QUIET);
+        ctx.timers().arm(Kind.PRACTICE_SEND_WAIT, ctx.services().settings().instructionWait());
+        instructionNotHeard = deferred.job().onFailure;
+        practiceAudioStage("REQUEST_QUEUED");
+        ctx.sendQueue().submit(deferred.job());
+    }
+
     private void onInstructionWaitExpired() {
         switch (ctx.outputGen().onInstructionTimeout()) {
             case ACK_MISSING -> {
@@ -2712,6 +2874,7 @@ public final class SessionExecutor {
                 ctx.timers().arm(Kind.INSTRUCTION_WAIT, ctx.services().settings().instructionWait());
             }
             case NEW_SPEECH_NOT_OBSERVED -> {
+                if (pendingPracticeSpeech != null) practiceAudioStage("FIRST_OUTPUT_TIMEOUT");
                 // 진단(D): 지시 뒤 조각이 하나도 없으면 공급자가 침묵한 것이고, 있었으면 모두 지시 전의 낡은 말로 버린 것이다
                 ctx.services().events().appError(EventLog.Component.VOICE_RELAY, chunksSinceInstruction == 0
                         ? "OutputNotObservedProviderSilent" : "OutputNotObservedOnlyStaleChunks", EventCode.Level.WARN);
@@ -2766,6 +2929,23 @@ public final class SessionExecutor {
         Instant now = ctx.services().clock().now();
         flushDiscardDiagnostics();
         chunksSinceInstruction = 0;
+        if (pendingPracticeSpeech != null && practice != null && practice.controlsOutput()) {
+            // An append ACK is context delivery, not the first audio sample. Wait for old speech
+            // to finish BEFORE the request, then collect the full next utterance without chopping it.
+            bumpOutput(OutputGeneration.BumpReason.PRACTICE_DISCARD);
+            var speechRequest = pendingPracticeSpeech;
+            deferredPracticeInstruction = new DeferredPracticeInstruction(reason,
+                    new ProviderSendQueue.Job(name, session, request, onFailure,
+                            () -> practiceOutput.post("practice-request-sent", speechRequest),
+                            () -> speechRequest.equals(pendingPracticeSpeech)), pendingPracticeSpeech.correlationId(),
+                    now.plus(ctx.services().settings().instructionWait()));
+            ctx.outputAuthority(newOutputAuthority(purpose));
+            streamedPracticeEnded = false;
+            guardrail.onServerInstruction(replayable ? new GuardrailCoordinator.ReplayableInstruction(name, build) : null);
+            practiceAudioStage("DRAINING");
+            onPracticeOutputDrain();
+            return true;
+        }
         ctx.outputGen().bumpForInstruction(now, reason, eventId);
         streamedPracticeEnded = false;
         ctx.outputAuthority(newOutputAuthority(purpose));
@@ -2799,22 +2979,21 @@ public final class SessionExecutor {
      * 있어 세션을 끝내지 않는다 — PD 2.1-C의 WARN 한 줄만 남기고, 완결되지 않은 구간은 게이트가 폐기해 대기 문구로 잇는다(U1 그대로).
      * 연결이 실제로 끊기면 뒤따르는 끊김 알림이 {@link #providerLost}로 끝낸다.
      */
-    private void providerError(String code) {
-        // 공급자 오류 코드는 소문자 · 숫자 · 밑줄로 된 짧은 식별자일 때만 사유 코드에 싣는다(그 밖은 unknown). 자유 문자열은 로그에 남기지 않는다(R-F14)
-        ctx.services().events().appError(EventLog.Component.VOICE_RELAY, "ProviderErrorCode_" + safeProviderErrorCode(code),
-                EventCode.Level.WARN);
+    private void providerError(ProviderEvent.Error error) {
+        ctx.services().events().appError(EventLog.Component.VOICE_RELAY, error.diagnosticKind(), EventCode.Level.WARN);
         if (START_PHASE.contains(ctx.status())) {
             ending.multiOriginFail(Trigger.PROVIDER_FAILED, FailureCode.PROVIDER_UNAVAILABLE, SessionTransitions.Origin.REALTIME);
             return;
         }
-        ctx.services().events().appError(EventLog.Component.VOICE_RELAY, "ProviderDisconnected", EventCode.Level.WARN);
+        String code = error.code();
         if (code != null && code.startsWith("input_")) {
             // 입력 쪽 오류(예: input_audio_rate_limit_exceeded)는 지금 나오는 AI 응답과 관계없다: 응답을 버리지 않는다
             return;
         }
         // 응답 도중 오류면 열린 구간은 끝까지 오지 않은 응답이다: 응답 끝 사건이 없으니 완결로 볼 수 없어 불완전으로 닫아 폐기하고 대기 문구로 잇는다
         if (inOutputRange() && ctx.segment().isOpen()) {
-            discard(ctx.segment().sealByGeneration(ctx.outputGeneration().get()), GateDecision.DiscardReason.GATE_EMPTY);
+            discard(ctx.segment().sealByGeneration(ctx.outputGeneration().get()), GateDecision.DiscardReason.GATE_EMPTY,
+                    true, null, true, DiscardDetail.PROVIDER_ERROR);
         } else if (inOutputRange() && timedOutput.isOpen()) {
             // 단위별 검사 경로는 구간 버퍼가 아니라 단위 버퍼에 쌓는다: 아직 검사를 통과하지 못한 나머지(대기 단위 · 검사 중인 단위의 늦은 ALLOW)도
             // 끝 신호가 없는 응답의 일부라 세대를 올려 무효화하고, 이미 나간 단위는 그대로 둔 채 대기 문구로 잇는다
@@ -2885,6 +3064,13 @@ public final class SessionExecutor {
     private boolean judgeStopIntent(String transcript, boolean uncertain, Instant at) {
         if (ctx.status() != SessionStatus.ACTIVE) {
             return false;
+        }
+        if (ctx.plan().activityType() == ActivityType.PRACTICE && stopJudge.requestsRest(transcript)) {
+            stopOutputForIntent(at);
+            interruptPracticeSpeech(at);
+            ctx.mailbox().putSafety(new SessionMailbox.PracticeEvent(new PracticeSessionExtension.ExtensionEvent(
+                    PracticeSessionExtension.ExtensionEvent.Kind.REST_REQUESTED, "practice-rest", null, null)));
+            return true;
         }
         if (ctx.plan().activityType() == ActivityType.FREE_TALK) {
             if (stopJudge.requestsImmediateMute(transcript)) {
@@ -2972,6 +3158,20 @@ public final class SessionExecutor {
 
     // ------------------------------------------------------------------ 게이트
 
+    private void yieldUnplayedPracticeToInput(SegmentBuffer.Sealed sealed) {
+        guardrail.onDiscardedBeforeCheck();
+        if(sealed!=null)recordDiscard(sealed,null,GateDecision.DiscardReason.GATE_EMPTY,true,
+                DiscardDetail.INPUT_SUPERSEDED_UNPLAYED);
+        else logOutputDiscard(null, null, null, DiscardDetail.INPUT_SUPERSEDED_UNPLAYED, pendingPracticeSpeech);
+        var speech=pendingPracticeSpeech;
+        pendingPracticeSpeech=null;
+        practiceHold=true;
+        ctx.timers().cancel(Kind.INSTRUCTION_WAIT);
+        instructionNotHeard=null;
+        bumpOutput(OutputGeneration.BumpReason.PRACTICE_DISCARD);
+        practicePlayback(speech,kr.mujoong.realtime.practicelegacy.PracticePorts.Playback.INTERRUPTED);
+    }
+
     /**
      * 구간 확정(조용 시간 만기 · 아이 입력 재개) → 검사 → 송신 직전 재확인 → 송신 또는 폐기(PD-3 표 2.3-C).
      *
@@ -2986,6 +3186,11 @@ public final class SessionExecutor {
         boolean quietEnough = lastOutAt != null && !confirmedAt.isBefore(lastOutAt.plus(ctx.services().settings().segmentQuiet()));
         SegmentBuffer.Sealed sealed = movedOn ? ctx.segment().sealEarly(ctx.outputGeneration().get(), quietEnough)
                 : ctx.segment().sealQuiet(ctx.outputGeneration().get());
+        if (movedOn && !quietEnough && pendingPracticeSpeech != null && pendingPracticeSpeech.generated()
+                && practice != null && practice.canYieldUnplayedSpeech()) {
+            yieldUnplayedPracticeToInput(sealed);
+            return;
+        }
         gateSealed(sealed, movedOn, false, confirmedAt, confirmedNanos);
     }
 
@@ -3144,12 +3349,14 @@ public final class SessionExecutor {
             return;
         }
         try {
-            GateDecision inspected = textUnitEnds.containsKey(sealed) ? ctx.services().gate().inspectText(sealed)
-                    : ctx.services().gate().inspect(sealed);
+            OutputGate.Inspection inspection = textUnitEnds.containsKey(sealed)
+                    ? ctx.services().gate().inspectTextDetailed(sealed) : ctx.services().gate().inspectDetailed(sealed);
+            GateDecision inspected = inspection.decision();
             if (!inspected.passed()) {
                 // 금지 패턴은 대화가 넘어갔어도 교정한다(같은 표현을 되풀이하지 않게)
                 discard(sealed, inspected.reason(),
-                        !movedOn || inspected.reason() == GateDecision.DiscardReason.GATE_PATTERN);
+                        !movedOn || inspected.reason() == GateDecision.DiscardReason.GATE_PATTERN,
+                        null, true, inspection.detail());
                 return;
             }
             boolean practiceControlled = practice != null && practice.controlsOutput();
@@ -3159,7 +3366,8 @@ public final class SessionExecutor {
                 // (기능 설계 3.5): 열린 생성형 슬롯의 새 발화는 제브(연습 모드)가 ALLOW한 것만 재생된다. 제브가 꺼져 있거나 시작이
                 // 실패하면 폐기한다(fail-closed). 원문 일치로 제브를 건너뛸 수 없다
                 if (!guardrail.enabled() || ctx.status() != SessionStatus.ACTIVE) {
-                    discard(sealed, GateDecision.DiscardReason.GATE_PATTERN, false);
+                    discard(sealed, GateDecision.DiscardReason.GATE_PATTERN, false, null, true,
+                            !guardrail.enabled() ? DiscardDetail.GUARDRAIL_DISABLED : DiscardDetail.SESSION_INACTIVE);
                     return;
                 }
                 try {
@@ -3171,7 +3379,25 @@ public final class SessionExecutor {
             }
             if (practiceControlled
                     && (pendingPracticeSpeech == null || !pendingPracticeSpeech.matches(sealed.transcript()))) {
-                discard(sealed, GateDecision.DiscardReason.GATE_PATTERN, false);
+                if (pendingPracticeSpeech != null && !pendingPracticeSpeech.generated()) {
+                    var rejectedSpeech = pendingPracticeSpeech;
+                    guardrail.onDiscardedBeforeCheck();
+                    recordDiscard(sealed, null, GateDecision.DiscardReason.GATE_PATTERN, true,
+                            DiscardDetail.APPROVED_TEXT_MISMATCH);
+                    pendingPracticeSpeech = null;
+                    practiceHold = true;
+                    bumpOutput(OutputGeneration.BumpReason.PRACTICE_DISCARD);
+                    if (practice.handlesAudioRecovery()) {
+                        ctx.mailbox().putSafety(new SessionMailbox.PracticeEvent(new PracticeSessionExtension.ExtensionEvent(
+                                PracticeSessionExtension.ExtensionEvent.Kind.ASYNC_RESULT, "approved-text-mismatch",
+                                rejectedSpeech.correlationId(), rejectedSpeech)));
+                    } else {
+                        practicePlayback(rejectedSpeech, kr.mujoong.realtime.practicelegacy.PracticePorts.Playback.FAILED);
+                    }
+                    return;
+                }
+                discard(sealed, GateDecision.DiscardReason.GATE_PATTERN, false, null, true,
+                        DiscardDetail.NO_OPEN_PRACTICE_SLOT);
                 return;
             }
             if (practiceControlled && guardrail.enabled()) {
@@ -3199,7 +3425,8 @@ public final class SessionExecutor {
             // 게이트 처리 중 예외는 폐기한다(fail-closed, SD-17)
             ctx.services().events().appError(EventLog.Component.OUTPUT_GATE, e);
             if (ctx.transcripts().hasOpenAi()) {
-                discard(sealed, GateDecision.DiscardReason.GATE_EMPTY, !movedOn);
+                discard(sealed, GateDecision.DiscardReason.GATE_EMPTY, !movedOn,
+                        null, true, DiscardDetail.GATE_PROCESSING_EXCEPTION);
             }
         }
     }
@@ -3229,7 +3456,13 @@ public final class SessionExecutor {
                 ctx.services().recorder().isDegraded(ctx.plan().sessionId()),
                 () -> target == null ? Optional.empty() : target.reserveAudio(sealed.totalBytes()));
         if (!rechecked.decision().passed()) {
-            discard(sealed, rechecked.decision().reason(), true, held, ownsLatency);
+            DiscardDetail detail = defaultDiscardDetail(rechecked.decision().reason());
+            if (rechecked.decision().reason() == GateDecision.DiscardReason.NOT_ACTIVE) {
+                detail = ctx.status() != SessionStatus.ACTIVE ? DiscardDetail.SESSION_INACTIVE
+                        : sealed.generation() != ctx.outputGeneration().get() ? DiscardDetail.STALE_GENERATION
+                        : DiscardDetail.DEVICE_UNAVAILABLE;
+            }
+            discard(sealed, rechecked.decision().reason(), true, held, ownsLatency, detail);
             return false;
         }
         send(sealed, target, rechecked.reservation(), held, ownsLatency);
@@ -3250,15 +3483,23 @@ public final class SessionExecutor {
         if (ownsLatency) {
             ctx.services().latency().gatePassed(ctx.plan().sessionId(), playbackId, passAt);
         }
-        // 보호자 화면 승인(aiFinal true)은 유효한 ALLOW 뒤 기기로 보내는 시점이다. 보관 행이면 그 손잡이로 닫아 새로 열린 행을 건드리지 않는다
-        if (held != null) {
-            ctx.transcripts().aiFinal(held, sealed.transcript(), true, passAt);
-        } else {
+        // 유효한 ALLOW 뒤에도 표시를 보류하고, 기기 STARTED 때 표시한다. 수신용 seq는 유지한다.
+        if (ctx.plan().activityType() == ActivityType.PRACTICE) {
+            if (held == null) held = ctx.transcripts().aiHold();
+            ctx.transcripts().awaitPlayback(playbackId, held, sealed.transcript());
+        } else if (held == null) {
             ctx.transcripts().aiFinal(sealed.transcript(), true, passAt);
+        } else {
+            ctx.transcripts().aiFinal(held, sealed.transcript(), true, passAt);
         }
         var speech = pendingPracticeSpeech;
         if (speech != null) {
+            practiceAudioStage("PLAYBACK_QUEUED");
+            ctx.timers().cancel(Kind.PRACTICE_SEND_WAIT);
+            ctx.timers().cancel(Kind.INSTRUCTION_WAIT);
             if (!speech.equals(streamedPractice)) {
+                practiceCollecting = false;
+                ctx.timers().cancel(Kind.PRACTICE_COLLECT_MAX);
                 pendingPracticeSpeech = null;
                 practiceHold = true;
             }
@@ -3280,12 +3521,18 @@ public final class SessionExecutor {
                 },
                 aiRecording == null ? frame -> { } : aiRecording::ai);
         if (!target.sendOutput(bundle)) {
+            logOutputDiscard(sealed, held, GateDecision.DiscardReason.OUTBOUND_FULL,
+                    DiscardDetail.AUDIO_SEND_FAILED, speech);
+            ctx.transcripts().playbackAbandoned(playbackId, ctx.services().clock().now());
             greetingHandoff.failed(playbackId);
             ctx.services().metrics().gateDiscard(GateDecision.DiscardReason.OUTBOUND_FULL.name());
             if (speech != null) {
                 practiceAudio.remove(playbackId); cancelPracticeTimer("u5b-audio-" + playbackId);
                 practicePlayback(speech, kr.mujoong.realtime.practicelegacy.PracticePorts.Playback.FAILED);
             }
+        } else {
+            // Only approved output accepted by the device link may ground a subsequent agreement judgment.
+            judgment.rememberPartner(sealed.transcript(), passAt, speech != null && "COACH".equals(speech.partnerRole()));
         }
     }
 
@@ -3326,27 +3573,31 @@ public final class SessionExecutor {
      */
     private void discard(SegmentBuffer.Sealed sealed, GateDecision.DiscardReason reason, boolean correct,
             TranscriptWriter.Held held, boolean ownsLatency) {
+        discard(sealed, reason, correct, held, ownsLatency, defaultDiscardDetail(reason));
+    }
+
+    private void discard(SegmentBuffer.Sealed sealed, GateDecision.DiscardReason reason, boolean correct,
+            TranscriptWriter.Held held, boolean ownsLatency, DiscardDetail detail) {
         boolean textUnit = sealed != null && textUnitEnds.containsKey(sealed);
         long generationBefore = ctx.outputGen().generation();
-        discardUnit(sealed, reason, correct, held, ownsLatency);
+        discardUnit(sealed, reason, correct, held, ownsLatency, detail);
         if (textUnit && !isGuardrailReason(reason) && ctx.outputGen().generation() == generationBefore) {
-            // 전사 먼저 방출 경로에서 정책으로 폐기한 단위(재시작 인사 · 금지 표현 등)가 있는 응답은 더 내보내지 않는다: 단위 음성은 연속 구간이라 뒷
-            // 단위가 통과하면 이 단위의 음성이 함께 나가 버린다. 교정 지시가 이미 세대를 올렸으면 그대로 두고, 아니면 여기서 응답을 끝낸다.
             bumpOutput(OutputGeneration.BumpReason.GATE_CORRECTION);
         }
     }
 
     private void discardUnit(SegmentBuffer.Sealed sealed, GateDecision.DiscardReason reason, boolean correct,
-            TranscriptWriter.Held held, boolean ownsLatency) {
+            TranscriptWriter.Held held, boolean ownsLatency, DiscardDetail detail) {
         if (!isGuardrailReason(reason)) {
             // U13 훅: 재지시 응답이 제브에 닿기 전에 어떤 길로든 폐기되면 협력 객체는 RETRYING에서 IDLE로 돌아온다. 마무리는 아래가 한다
             guardrail.onDiscardedBeforeCheck();
         }
-        recordDiscard(sealed, held, reason, ownsLatency);
+        recordDiscard(sealed, held, reason, ownsLatency, detail);
         if (pendingPracticeSpeech != null) {
             var speech = pendingPracticeSpeech; pendingPracticeSpeech = null; practiceHold = true;
             bumpOutput(OutputGeneration.BumpReason.PRACTICE_DISCARD);
-            practicePlayback(speech, kr.mujoong.realtime.practicelegacy.PracticePorts.Playback.FAILED);
+            if (reason == GateDecision.DiscardReason.GATE_EMPTY) recoverPracticeAudio(speech);
+            else practicePlayback(speech, kr.mujoong.realtime.practicelegacy.PracticePorts.Playback.FAILED);
             return;
         }
         if (correct) {
@@ -3365,11 +3616,57 @@ public final class SessionExecutor {
     /** 폐기의 기록 부분: 지표 · 지연 기록 · AI 행 FINAL 거짓(보관 행이면 그 손잡이로). */
     private void recordDiscard(SegmentBuffer.Sealed sealed, TranscriptWriter.Held held, GateDecision.DiscardReason reason,
             boolean ownsLatency) {
+        recordDiscard(sealed, held, reason, ownsLatency, defaultDiscardDetail(reason));
+    }
+
+    private void recordDiscard(SegmentBuffer.Sealed sealed, TranscriptWriter.Held held, GateDecision.DiscardReason reason,
+            boolean ownsLatency, DiscardDetail detail) {
+        logOutputDiscard(sealed, held, reason, detail, held == null ? pendingPracticeSpeech : null);
         ctx.services().metrics().gateDiscard(reason.name());
         if (ownsLatency) {
             ctx.services().latency().gateDiscarded(ctx.plan().sessionId());
         }
         closeAiRow(sealed, held);
+    }
+
+    private static DiscardDetail defaultDiscardDetail(GateDecision.DiscardReason reason) {
+        return switch (reason) {
+            case GATE_EMPTY -> DiscardDetail.UNCLASSIFIED_GATE_EMPTY;
+            case GATE_PATTERN -> DiscardDetail.OUTPUT_POLICY_MISMATCH;
+            case NOT_ACTIVE -> DiscardDetail.SESSION_INACTIVE;
+            case OUTBOUND_FULL -> DiscardDetail.AUDIO_QUEUE_FULL;
+            default -> DiscardDetail.valueOf(reason.name());
+        };
+    }
+
+    /** One unmerged event per discarded segment. No raw transcript, audio, prompt, or exception message. */
+    private void logOutputDiscard(SegmentBuffer.Sealed sealed, TranscriptWriter.Held held,
+            GateDecision.DiscardReason reason, DiscardDetail detail,
+            kr.mujoong.realtime.voice.PracticeSpeech speech) {
+        ctx.services().events().log(EventCode.OUTPUT_DISCARDED, EventLog.Component.OUTPUT_GATE,
+                ctx.plan().sessionId(), ctx.plan().traceId(), entry -> {
+                    entry.attr(AttrKey.SEQ, ctx.transcripts().diagnosticSequence(held))
+                            .attr(AttrKey.DISCARD_REASON, reason == null ? "VOIDED" : reason.name())
+                            .attr(AttrKey.DISCARD_DETAIL, detail.name())
+                            .attr(AttrKey.CURRENT_DEVICE_GENERATION, ctx.outputGeneration().get())
+                            .attr(AttrKey.PRACTICE_PHASE, practice == null ? "NONE" : practice.diagnosticPhase())
+                            .attr(AttrKey.PRACTICE_SUB, practice == null ? "NONE" : practice.diagnosticSub());
+                    if (sealed != null) {
+                        entry.attr(AttrKey.OUTPUT_GENERATION, sealed.outputGen())
+                                .attr(AttrKey.DEVICE_GENERATION, sealed.generation())
+                                .attr(AttrKey.SEGMENT_COMPLETE, sealed.complete())
+                                .attr(AttrKey.AUDIO_BYTES, sealed.totalBytes())
+                                .attr(AttrKey.TRANSCRIPT_CHARS, sealed.transcript() == null ? 0
+                                        : sealed.transcript().codePointCount(0, sealed.transcript().length()));
+                        if (sealed.firstOutAt() != null) entry.attr(AttrKey.T_PROVIDER_FIRST_OUT, sealed.firstOutAt());
+                        if (sealed.lastOutAt() != null) entry.attr(AttrKey.T_TRANSCRIPT_FINAL, sealed.lastOutAt());
+                    }
+                    if (speech != null) {
+                        entry.attr(AttrKey.GENERATED_SPEECH, speech.generated());
+                        if (!speech.generated()) entry.attr(AttrKey.EXPECTED_CHARS,
+                                speech.text().codePointCount(0, speech.text().length()));
+                    }
+                });
     }
 
     private void closeAiRow(SegmentBuffer.Sealed sealed, TranscriptWriter.Held held) {

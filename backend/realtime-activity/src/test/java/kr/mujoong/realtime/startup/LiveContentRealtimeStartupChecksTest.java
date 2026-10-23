@@ -139,7 +139,7 @@ class LiveContentRealtimeStartupChecksTest {
 
     private static String resource(String name) {
         try (var in = LiveContentRealtimeStartupChecksTest.class.getClassLoader().getResourceAsStream(name)) {
-            return new String(in.readAllBytes(), StandardCharsets.UTF_8);
+            return new String(in.readAllBytes(), StandardCharsets.UTF_8).replace("\r\n", "\n");
         } catch (java.io.IOException e) {
             throw new java.io.UncheckedIOException(e);
         }

@@ -67,7 +67,8 @@ class ProviderRequestServiceGuardrailTest {
         assertThat(wire.path("session").propertyNames()).containsExactly("model", "instructions", "audio");
         assertThat(wire.path("session").path("model").asString()).isEqualTo(ProviderRequestFactory.MODEL);
         assertThat(wire.toString()).doesNotContain("sourceSha256", "appliedSha256", "policyVersion", "promptVersion");
-        assertThat(ProviderRequestFactory.SENT_TYPES).hasSize(4);
+        assertThat(ProviderRequestFactory.SENT_TYPES).containsExactlyInAnyOrder("session.start", "session.input_audio.append",
+                "session.instructions.append", "session.commentary.append", "session.close");
     }
 
     @Test void scopedInstructionsKeepRequiredNullDelegationAndTokenBudget() {

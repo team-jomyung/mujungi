@@ -118,7 +118,7 @@ class JudgmentFaultExecutorTest {
         assertThat(t.records()).isEmpty();
         assertThat(t.h.logs.anyLineContains("Rate limit reached")).as("사유 원문 없이 고정 사유만").isFalse();
         assertThat(t.h.logs.anyLineContains("하준")).isFalse();
-        assertThat(t.h.logs.anyLineContains("ProviderErrorCode_unknown")).isTrue();
+        assertThat(t.h.logs.anyLineContains(new ProviderEvent.Error("Rate limit reached for 하준").diagnosticKind())).isTrue();
         t.judge.confirm("PARTIAL", 0.9, "FULL", 0.05);
         t.h.drain();
         assertThat(t.records()).hasSize(1);

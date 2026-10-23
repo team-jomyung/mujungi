@@ -66,6 +66,17 @@ class TranscriptRepositoryIT {
     }
 
     @Test
+    void aiDisplayTimeBecomesPlaybackStartWithoutRenumberingOrReopeningFinalRows() {
+        flush(TranscriptEntry.partial(sessionId, 1, Speaker.AI, "", T0));
+        flush(TranscriptEntry.finalized(sessionId, 1, Speaker.AI, "안내", true, T0.plusSeconds(5), T0.plusSeconds(5)));
+        flush(TranscriptEntry.finalized(sessionId, 1, Speaker.AI, "늦은 변경", true, T0.plusSeconds(9), T0.plusSeconds(9)));
+        TranscriptRow row = transcripts.findAll(sessionId).get(0);
+        assertThat(row.startedAt()).isEqualTo(T0.plusSeconds(5));
+        assertThat(row.sequenceNo()).isEqualTo(1);
+        assertThat(row.text()).isEqualTo("안내");
+    }
+
+    @Test
     void partialFragmentsAreOverwrittenInPlaceAndFinalClosesTheRow() {
         flush(TranscriptEntry.partial(sessionId, 1, Speaker.CHILD, "공룡", T0));
         UUID firstId = transcripts.findAll(sessionId).get(0).id();

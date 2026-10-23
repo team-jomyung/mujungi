@@ -32,6 +32,18 @@ beforeEach(() => { vi.useFakeTimers(); resetRouter(); });
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks(); });
 
 describe("18 — list, selection and scope", () => {
+  it("keeps saved goals but caps each session at three and allows replacement", async () => {
+    const fourth=goal({goalSelectionId:"10000000-0000-4000-8000-000000000004",displayName:"의견 묻기",sortOrder:4});
+    const harness=setup(()=>jsonResponse(200,{items:[...GOALS,fourth]}));await advance();
+    expect(screen.getByText(/한 번에 최대 3개/)).toBeVisible();
+    fireEvent.click(check());fireEvent.click(check("차례 기다리기"));fireEvent.click(check("도움 요청하기"));
+    expect(check("의견 묻기")).toBeDisabled();expect(check()).toBeEnabled();
+    expect(screen.getByTestId("practice-start")).toHaveTextContent("선택한 3개");
+    expect(screen.getAllByRole("checkbox")).toHaveLength(4);
+    fireEvent.click(check());expect(check("의견 묻기")).toBeEnabled();fireEvent.click(check("의견 묻기"));
+    expect(screen.getByTestId("practice-start")).toHaveTextContent("선택한 3개");
+    expect(harness.requests(/activities/)).toHaveLength(0);
+  });
   it("connects the actual route, enables explicit U5b start and never starts on selection", async () => {
     expect((await ParentPracticePage()).type).toBe(PracticeScreen);
     const harness = setup();

@@ -12,8 +12,10 @@ import { practiceStartPort } from "./startPort";
 import { PRACTICE_COPY, PRACTICE_TEMP_COPY, goalMeta } from "./copy";
 import { usePracticeGoals } from "./usePracticeGoals";
 import { PracticeStartAction } from "./PracticeStartAction";
+import { MAX_PRACTICE_GOALS } from "./practiceStart";
 import { PROPOSED_COPY } from "@/shared/copy/ko";
 import { useToast } from "@/shared/toast/ToastProvider";
+import { useTiming } from "@/shared/timing/TimingProvider";
 import "./practice.css";
 
 /** AC4.1.1/2/5–11/13. 추첨 순서는 Core가 고정하고 화면은 선택 ID만 전달한다. */
@@ -21,7 +23,8 @@ export function PracticeScreen({ returnedFailed = false, failureCode = null }: {
   const router = useRouter();
   const api = useApiClient();
   const toast = useToast();
-  const port = useMemo(() => practiceStartPort(api), [api]);
+  const timing = useTiming();
+  const port = useMemo(() => practiceStartPort(api, timing.practiceStartRequestTimeoutMs), [api, timing.practiceStartRequestTimeoutMs]);
   const goals = usePracticeGoals();
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   const [startLocked, setStartLocked] = useState(false);
@@ -30,8 +33,9 @@ export function PracticeScreen({ returnedFailed = false, failureCode = null }: {
   const selectedCount = visible.filter((goal) => selected.has(goal.goalSelectionId)).length;
 
   const toggleSelected = (id: string) => setSelected((before) => {
-    const after = new Set(before);
-    if (after.has(id)) after.delete(id); else after.add(id);
+    const available = new Set(visible.map((goal) => goal.goalSelectionId));
+    const after = new Set([...before].filter((key) => available.has(key)));
+    if (after.has(id)) after.delete(id); else if (after.size < MAX_PRACTICE_GOALS && available.has(id)) after.add(id);
     return after;
   });
 
@@ -52,7 +56,7 @@ export function PracticeScreen({ returnedFailed = false, failureCode = null }: {
           return (
             <li key={id} className="mj-practice__goal" data-testid={`goal-${id}`} data-selected={checked} aria-busy={busy}>
               <label className="mj-practice__select">
-                <input type="checkbox" checked={checked} disabled={startLocked} onChange={() => toggleSelected(id)} aria-label={PRACTICE_TEMP_COPY.select(goal.displayName)} />
+                <input type="checkbox" checked={checked} disabled={startLocked || (!checked && selectedCount >= MAX_PRACTICE_GOALS)} onChange={() => toggleSelected(id)} aria-label={PRACTICE_TEMP_COPY.select(goal.displayName)} />
                 <span className="mj-practice__text">
                   <span className="mj-practice__name">{goal.displayName}</span>
                   <span className="mj-practice__meta">{goalMeta(goal)}</span>
@@ -95,7 +99,7 @@ export function PracticeScreen({ returnedFailed = false, failureCode = null }: {
             <ol className="mj-practice__steps">{PRACTICE_COPY.steps.map((step) => <li key={step}>{step}</li>)}</ol>
             <Link className="mj-button mj-button--primary mj-button--block" href={PARENT_ROUTES.free} onClick={goals.cancelPending}>{PRACTICE_COPY.goFree}</Link>
           </section>
-        ) : <>{group(visible.filter((goal) => goal.isFavorite), true)}{group(visible.filter((goal) => !goal.isFavorite), false)}</>}
+        ) : <><p id="practice-selection-limit">{PRACTICE_COPY.selectionLimit}</p>{group(visible.filter((goal) => goal.isFavorite), true)}{group(visible.filter((goal) => !goal.isFavorite), false)}</>}
         {goals.items !== undefined && (visible.length > 0 || startLocked) ? (
           <PracticeStartAction selected={[...selected]} owned={visible.map((goal) => goal.goalSelectionId)} port={port}
             newKey={() => crypto.randomUUID()} blocked={goals.needsRecovery || goals.busyIds.size > 0 || goals.isFetching}

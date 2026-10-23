@@ -43,7 +43,7 @@ public class TranscriptRepository {
             + " on conflict (session_id, sequence_no) do update set text = excluded.text,"
             + " assembly_status = excluded.assembly_status, review_needed = excluded.review_needed,"
             + " approved_for_display = excluded.approved_for_display,"
-            + " started_at = coalesce(t.started_at, excluded.started_at), ended_at = coalesce(excluded.ended_at, t.ended_at)"
+            + " started_at = case when t.speaker = 'AI' and excluded.approved_for_display then excluded.started_at else coalesce(t.started_at, excluded.started_at) end, ended_at = coalesce(excluded.ended_at, t.ended_at)"
             // 확정 전 행만 덮는다. 같은 번호에 다른 화자가 오면(조립 결함) 덮지 않는다
             + " where t.assembly_status = 'PARTIAL' and t.speaker = excluded.speaker";
 

@@ -66,6 +66,7 @@ class PracticeFlowIT {
     private final List<Object> settled = new ArrayList<>();
     private final List<RuntimeException> failures = new ArrayList<>();
     private PracticeFlowRepository repository;
+    private boolean flexible;
 
     @BeforeAll
     static void openDatabase() {
@@ -95,7 +96,9 @@ class PracticeFlowIT {
         PracticeScriptRequester requester = new PracticeScriptRequester(mock(InternalHttpClient.class), Runnable::run,
                 Duration.ofSeconds(1));
         h.practice = session -> new PracticeFlowRouter(NoOpPracticeSessionExtension.FACTORY.create(session),
-                () -> new PracticeConversation(session, h.guardianId, h.clock, PracticeFlowTestKit.defaults(), requester,
+                () -> new PracticeConversation(session, h.guardianId, h.clock,
+                        flexible ? new PracticeFlowSettings(Duration.ofSeconds(10), Duration.ofSeconds(90), Duration.ofMinutes(10),
+                                Duration.ofSeconds(20), 2, 1, true) : PracticeFlowTestKit.defaults(), requester,
                         new PracticeFlowRecorder(repository, db.transactions()), failures::add));
     }
 
@@ -129,11 +132,23 @@ class PracticeFlowIT {
         assertThat(h.link.outputs()).hasSize(3);
         complete(h.link.outputs().getLast().playbackId());
 
-        // 아이가 "파란색" → J3 충분 → 정리(변형 없음) → 연습 종료 신호
+        // 충분히 전달한 뒤에도 친구 답변은 Jev 승인과 기기 재생 완료를 기다린다.
         h.childSays("child-2", "파란색");
         assertThat(judge.last().request().point()).isEqualTo(JudgmentPoint.J3);
         judge.confirm("DELIVERED", 0.9, "STILL_SHORT", 0.05);
         h.drain();
+        assertThat(h.executor.status()).isEqualTo(SessionStatus.ACTIVE);
+        assertThat(repository.findSceneRuns(h.sessionId).getFirst().endedAt()).isNull();
+        h.settleSend();
+        h.speak("응, 여기 파란 상자가 있어.", 4800);
+        h.advance(Duration.ofMillis(801));
+        assertThat(guard.last().request().mode()).isEqualTo(GuardrailRequest.Mode.PRACTICE_PEER);
+        assertThat(h.link.outputs()).hasSize(3);
+        guard.allow();
+        h.drain();
+        assertThat(h.link.outputs()).hasSize(4);
+        assertThat(h.executor.status()).isEqualTo(SessionStatus.ACTIVE);
+        complete(h.link.outputs().getLast().playbackId());
         assertThat(h.executor.status()).isEqualTo(SessionStatus.CLOSING);
         assertThat(h.transitions.find(h.sessionId).orElseThrow().endDetail()).isEqualTo("PRACTICE_COMPLETED");
 
@@ -202,6 +217,111 @@ class PracticeFlowIT {
         h.advance(Duration.ofMillis(801));
         assertThat(h.link.outputs()).isNotEmpty();
         complete(h.link.outputs().getLast().playbackId());
+    }
+
+    private void playGenerated(String text) {
+        int before = h.link.outputs().size();
+        h.settleSend(); h.speak(text, 4800); h.advance(Duration.ofMillis(801));
+        assertThat(guard.last().request().mode()).isEqualTo(GuardrailRequest.Mode.PRACTICE_PEER);
+        assertThat(h.link.outputs()).hasSize(before);
+        guard.allow(); h.drain();
+        assertThat(h.link.outputs()).hasSize(before + 1);
+        complete(h.link.outputs().getLast().playbackId());
+    }
+
+    @Test
+    void routedGoalBriefSurvivesOverlappingInputAndTheActualJevGateBeforeTheSceneStarts() {
+        flexible=true;h.activate();h.settleSend();
+        h.speak("오늘 연습할 목표는",4800);
+        h.provider.last().emit(new kr.mujoong.realtime.voice.ProviderPort.ProviderEvent.InputTranscriptDelta("intro-overlap","응, 알겠어"));
+        h.drain();h.advance(Duration.ofMillis(501));
+        assertThat(h.executor.status()).isEqualTo(SessionStatus.ACTIVE);
+        assertThat(repository.findSceneRuns(h.sessionId)).isEmpty();
+        assertThat(h.link.outputs()).isEmpty();
+        h.speak(" 부탁하기야. 짧게 해 보자.",4800);h.advance(Duration.ofMillis(801));
+        assertThat(guard.last().request().mode()).isEqualTo(GuardrailRequest.Mode.PRACTICE_PEER);
+        guard.allow();h.drain();assertThat(h.link.outputs()).hasSize(1);
+        complete(h.link.outputs().getLast().playbackId());
+        playApproved("상상 속 상황을 떠올려 봐. 무중이가 상황 속 상대 역할을 해 볼게.");playApproved(OPPORTUNITY);
+        assertThat(h.executor.status()).isEqualTo(SessionStatus.ACTIVE);
+        assertThat(repository.findSceneRuns(h.sessionId)).hasSize(1);
+        assertThat(failures).isEmpty();
+    }
+
+    @Test
+    void stoppingAPlayingGoalBriefKeepsChildStopPriorityOverTheNextIntroduction() {
+        flexible=true;h.activate();h.settleSend();h.speak("오늘은 부탁하기를 연습할 거야.",4800);
+        h.advance(Duration.ofMillis(801));guard.allow();h.drain();
+        UUID id=h.link.outputs().getLast().playbackId();
+        for(var status:List.of(PlaybackMark.Status.STARTED,PlaybackMark.Status.STOPPED)) {
+            h.mailbox.offerGeneral(new SessionMailbox.PlaybackMarkReceived(h.link.connectionId(),
+                    new PlaybackMark(id,status,null,h.clock.now(),status==PlaybackMark.Status.STOPPED
+                            ? PlaybackMark.StopCause.LOCAL_VOICE_ACTIVITY:null,null),h.clock.now()));h.drain();
+        }
+        assertThat(h.executor.status()).isEqualTo(SessionStatus.ACTIVE);
+        h.childSays("stop-playing-intro","무중아 그만할래");
+        assertThat(h.executor.status()).isEqualTo(SessionStatus.CLOSING);
+        assertThat(h.transitions.find(h.sessionId).orElseThrow().endReason()).isEqualTo(kr.mujoong.contract.status.EndReason.CHILD_STOP);
+        assertThat(repository.findSceneRuns(h.sessionId)).isEmpty();
+    }
+
+    @Test
+    void flexibleDialogueSeparatesTargetAchievementFromAgreementAndGuardsEveryGeneratedReply() {
+        flexible = true; h.activate();
+        playGenerated("오늘은 부탁하기를 짧은 역할놀이로 연습해 볼 거야. 원하면 쉬거나 끝내도 돼.");
+        playApproved("상상 속 상황을 떠올려 봐. 무중이가 상황 속 상대 역할을 해 볼게.");
+        playApproved(OPPORTUNITY);
+        h.childSays("flex-child-1", "파란색 상자를 줘");
+        assertThat(judge.last().request().point()).isEqualTo(JudgmentPoint.J2);
+        judge.confirm("FULL", 0.95, "PARTIAL", 0.03); h.drain();
+        assertThat(h.executor.status()).isEqualTo(SessionStatus.ACTIVE);
+        playGenerated("파란 상자를 줄게. 같이 정리할까?");
+        h.childSays("flex-child-2", "이 상자에는 뭐가 들어 있어?");
+        assertThat(judge.last().request().point()).isEqualTo(JudgmentPoint.J3);
+        assertThat(judge.last().request().criteria().coreFunction()).isEqualTo("ROLE_DIALOGUE_CLOSURE");
+        assertThat(judge.last().request().recentTurns()).anySatisfy(turn -> {
+            assertThat(turn.speaker()).isEqualTo(kr.mujoong.realtime.judgment.JudgeRequest.Speaker.PARTNER);
+            assertThat(turn.text()).isEqualTo("파란 상자를 줄게. 같이 정리할까?");
+        });
+        assertThat(judge.last().request().recentTurns()).noneSatisfy(turn ->
+                assertThat(turn.text()).isEqualTo("이 상자에는 뭐가 들어 있어?"));
+        judge.confirm("STILL_SHORT", 0.95, "DELIVERED", 0.03); h.drain();
+        playGenerated("여기에는 블록이 들어 있어. 같이 담아 보자.");
+        assertThat(repository.findSceneRuns(h.sessionId).getFirst().endedAt()).isNull();
+        h.childSays("flex-child-3", "응, 같이 담자");
+        judge.confirm("DELIVERED", 0.95, "STILL_SHORT", 0.03); h.drain();
+        assertThat(h.executor.status()).isEqualTo(SessionStatus.ACTIVE);
+        playGenerated("좋아, 같이 담자.");
+        assertThat(h.executor.status()).isEqualTo(SessionStatus.ACTIVE);
+        playGenerated("오늘은 원하는 상자를 말로 부탁했어. 오늘 연습은 여기까지야.");
+        assertThat(h.executor.status()).isEqualTo(SessionStatus.CLOSING);
+        assertThat(h.transitions.find(h.sessionId).orElseThrow().endDetail()).isEqualTo("PRACTICE_COMPLETED");
+        assertThat(repository.findSceneRuns(h.sessionId).getFirst().liveTiming()).isEqualTo(LiveTiming.IMMEDIATE);
+        assertThat(repository.findSceneRuns(h.sessionId).getFirst().endedAt()).isNotNull();
+        assertThat(failures).isEmpty();
+    }
+
+    @Test
+    void contextualClarificationIsRecordedDurablyAndShortAnswersUseTheActualPartnerQuestion() {
+        flexible=true;h.activate();
+        playGenerated("오늘은 부탁하기를 짧게 연습할 거야. 필요하면 도움을 받고 언제든 끝내도 돼.");
+        playApproved("상상 속 상황을 떠올려 봐. 무중이가 상황 속 상대 역할을 해 볼게.");playApproved(OPPORTUNITY);
+        h.childSays("clarify-1","그거 줘");judge.confirm("PARTIAL",0.95,"FULL",0.03);h.drain();
+        playGenerated("어느 색 상자를 말하는 거야?");
+        h.childSays("clarify-2","파란색");
+        assertThat(judge.last().request().recentTurns()).anySatisfy(turn->{
+            assertThat(turn.speaker()).isEqualTo(kr.mujoong.realtime.judgment.JudgeRequest.Speaker.PARTNER);
+            assertThat(turn.text()).isEqualTo("어느 색 상자를 말하는 거야?");
+        });
+        judge.confirm("FULL",0.95,"PARTIAL",0.03);h.drain();playGenerated("응, 여기 있어. 같이 정리할까?");
+        h.childSays("clarify-3","응, 같이 정리하자");judge.confirm("DELIVERED",0.95,"STILL_SHORT",0.03);h.drain();playGenerated("좋아, 같이 정리하자.");
+        playGenerated("오늘은 친구가 어느 색인지 물었을 때 파란색이라고 알려줬어. 오늘 연습은 여기까지야.");
+        var row=repository.findSceneRuns(h.sessionId).getFirst();
+        assertThat(row.liveTiming()).isEqualTo(LiveTiming.AFTER_REASK);
+        assertThat(row.facts()).extracting(PracticeFlowTypes.Fact::kind).contains(PracticeFlowTypes.FactKind.REASK_RESOLVED)
+                .doesNotContain(PracticeFlowTypes.FactKind.FOCUS_HELP);
+        assertThat(h.executor.status()).isEqualTo(SessionStatus.CLOSING);
+        assertThat(failures).isEmpty();
     }
 
     private void complete(UUID playbackId) {

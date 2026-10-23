@@ -19,9 +19,9 @@ import org.springframework.stereotype.Component;
 /**
  * 공급자로 가는 모든 요청을 만드는 유일한 팩토리 (U1 3.5 Step 25 · SD-20 · NFR3.1 · NFR3.2 · U11 BR11.1 · BR11.2 · contracts/ai-io.md 3절).
  *
- * <p>요청 타입은 아래 <b>네 가지</b>뿐이다(실호출로 확인한 지원 type 안에서만 보낸다, U11-a · 설계 개정 A1): {@code session.start} ·
- * {@code session.input_audio.append} · {@code session.instructions.append} · {@code session.close}. {@code response.create}는 없다 —
- * client 위임 세션은 거절한다. 모든 서버 발화는 지시 문장 하나({@code append})로 시작한다. 필드는 지시문 · 음성 프레임뿐이고 아이 정보(이름 · 나이 ·
+ * <p>요청 타입은 아래 <b>다섯 가지</b>뿐이다: {@code session.start} ·
+ * {@code session.input_audio.append} · {@code session.instructions.append} · {@code session.commentary.append} · {@code session.close}. {@code response.create}는 없다 —
+ * client 위임 세션은 거절한다. 승인 낭독·생성 역할 발화는 commentary로 출력을 요청하며, 일반 지시·교정은 instructions를 사용한다. 필드는 지시문 · 음성 프레임뿐이고 아이 정보(이름 · 나이 ·
  * 관심사)는 지시문 문장 안에 따옴표로 묶은 데이터로만 들어간다(별도 필드 없음).
  * 자유 {@code Map} · 문자열 이어 붙이기 입구가 없고 판정 기준 · 보호자 입력 · 이전 판정 · 식별자 필드는 타입에 없다(SD-20 구조 규칙).
  * 길이 상한(이름 10자 · 관심사 10개 x 20자, 계약 C8)은 입력 단계가 검증하고 여기서 한 번 더 자른다.
@@ -60,10 +60,11 @@ public class ProviderRequestFactory {
     public static final String TYPE_SESSION_START = "session.start";
     public static final String TYPE_INPUT_AUDIO_APPEND = "session.input_audio.append";
     public static final String TYPE_INSTRUCTIONS_APPEND = "session.instructions.append";
+    public static final String TYPE_COMMENTARY_APPEND = "session.commentary.append";
     public static final String TYPE_SESSION_CLOSE = "session.close";
     /** 송신할 수 있는 type 전부(지원 목록 안, 시험이 대조한다). */
     public static final java.util.Set<String> SENT_TYPES = java.util.Set.of(TYPE_SESSION_START, TYPE_INPUT_AUDIO_APPEND,
-            TYPE_INSTRUCTIONS_APPEND, TYPE_SESSION_CLOSE);
+            TYPE_INSTRUCTIONS_APPEND, TYPE_COMMENTARY_APPEND, TYPE_SESSION_CLOSE);
 
     static final int MAX_DISPLAY_NAME = 10;
     static final int MAX_INTERESTS = 10;
@@ -222,12 +223,16 @@ public class ProviderRequestFactory {
     }
 
     /**
-     * U4b 연습 확장점의 지시문 추가(BR10.4 · {@code instructProvider}): {@code session.instructions.append}로 보낸다. 문장은 확장점(U5b)이 자기
+     * 연습 확장점의 지시 추가. 생성 발화는 {@code session.commentary.append}, 승인 문장 낭독과 그 밖의 지시는 {@code session.instructions.append}로 보낸다. 문장은 확장점이 자기
      * 승인된 템플릿에서 만든 것이고, 검사된 값 타입({@link PracticeInstruction})으로만 받는다(자유 문자열 입구 없음). 범위를 닫는 문장은 여기서
      * 더한다.
      */
     public InstructionsAppend practiceInstruction(String eventId, PracticeInstruction instruction) {
         Objects.requireNonNull(instruction, "instruction");
+        // Commentary may paraphrase. Exact reading uses instructions and must still match the approved body.
+        if (instruction.requestsSpeech() && !instruction.approvedReading()) {
+            return new InstructionsAppend(TYPE_COMMENTARY_APPEND, eventId, null, InstructionTemplates.scoped(instruction.text()));
+        }
         return instructionsAppend(eventId, InstructionTemplates.scoped(instruction.text()));
     }
 

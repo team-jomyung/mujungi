@@ -57,6 +57,15 @@ class PracticeStartApiIT {
     String body(UUID key, UUID selected) { return json.write(Map.of("idempotencyKey",key,"goalSelectionIds",List.of(selected))); }
     CoreWebApp.Result post(UUID key) {return app.post("/api/activities/practice").session(guardian.session()).csrf(guardian.csrf()).json(body(key,goal)).send();}
     UUID started(UUID key) {var response=post(key);assertThat(response.status()).as(response.body()).isEqualTo(202);return UUID.fromString((String)response.json().get("sessionId"));}
+    @Test void moreThanThreeGoalsCannotReachAiOrRealtime() {
+        var ids=java.util.stream.IntStream.range(0,4).mapToObj(i->UUID.randomUUID()).toList();
+        var response=app.post("/api/activities/practice").session(guardian.session()).csrf(guardian.csrf())
+                .json(json.write(Map.of("idempotencyKey",UUID.randomUUID(),"goalSelectionIds",ids))).send();
+        assertThat(response.status()).isEqualTo(400);
+        assertThat(response.code()).isEqualTo("VALIDATION_FAILED");
+        verifyNoInteractions(ai);
+        assertThat(realtime.requests("POST",WebFixtures.RT_START)).isEmpty();
+    }
     @Test void authenticatedCsrfStartSendsRealPracticePackageAndReplaysWithoutSecondGeneration() {
         UUID key=UUID.randomUUID();
         assertThat(app.post("/api/activities/practice").json(body(key,goal)).send().status()).isEqualTo(401);

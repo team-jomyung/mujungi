@@ -292,8 +292,18 @@ public final class FakeProviderWsServer implements AutoCloseable {
 
     /** AI 말 하나(전사 + 음성). 지시에 대한 응답이면 확인 end_ms 뒤에서 시작하고 앞에 채움 음성을 둔다({@link #emitTurn}). */
     public void emitSpeech(String aiText, List<byte[]> pcmChunks) {
+        emitSpeech(aiText, pcmChunks, 0);
+    }
+
+    /** 전사 끝까지의 음성이 오기 전에 공급자 오류가 나는 시험용 미완성 구간. */
+    public void emitSpeechPrefix(String aiText, List<byte[]> pcmChunks, Duration missingTail) {
+        if (missingTail == null || missingTail.toMillis() <= 0) throw new IllegalArgumentException("missing tail must be positive");
+        emitSpeech(aiText, pcmChunks, missingTail.toMillis());
+    }
+
+    private void emitSpeech(String aiText, List<byte[]> pcmChunks, long missingTailMs) {
         long clock = audioClockMs.get();
-        long total = pcmChunks.stream().mapToLong(chunk -> chunk.length / 48L).sum();
+        long total = pcmChunks.stream().mapToLong(chunk -> chunk.length / 48L).sum() + missingTailMs;
         long pending = pendingAckEndMs;
         if (pending >= 0) {
             pendingAckEndMs = -1L;
@@ -376,7 +386,7 @@ public final class FakeProviderWsServer implements AutoCloseable {
         } else if ("response.create".equals(type)) {
             socket.send(JSON.write(new ErrorEvent("error", new ErrorBody("invalid_request_error", "invalid_request",
                     "response.create requires a session with Responses delegation", null))));
-        } else if ("session.instructions.append".equals(type)) {
+        } else if ("session.instructions.append".equals(type) || "session.commentary.append".equals(type)) {
             onAppend(socket, node);
         } else if ("session.start".equals(type)) {
             answerStart(socket);
@@ -413,7 +423,8 @@ public final class FakeProviderWsServer implements AutoCloseable {
         long ackEnd = clock + 300L;
         long newStart = Math.max(ackEnd, clock + tail.toMillis());
         // 확인 사건은 곧바로 간다(관측: 낡은 꼬리가 이어지는 동안 도착)
-        socket.send(JSON.write(new AppendedEvent("session.instructions.appended", "fake-a-" + eventSeq.incrementAndGet(), eventId, clock,
+        String ackType = "session.commentary.append".equals(text(node, "type")) ? "session.commentary.appended" : "session.instructions.appended";
+        socket.send(JSON.write(new AppendedEvent(ackType, "fake-a-" + eventSeq.incrementAndGet(), eventId, clock,
                 ackEnd)));
         if (newSpeechChunks <= 0) {
             return;

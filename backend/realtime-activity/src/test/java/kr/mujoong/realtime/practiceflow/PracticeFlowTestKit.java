@@ -39,7 +39,7 @@ final class PracticeFlowTestKit {
     /** 기본 설정(시험용 값: 무응답 10초 · 집중 90초 · 목표 10분 · 슬롯 안전 20초 · 재시도 2 · 다시 설명 1). */
     static PracticeFlowSettings defaults() {
         return new PracticeFlowSettings(Duration.ofSeconds(10), Duration.ofSeconds(90), Duration.ofMinutes(10),
-                Duration.ofSeconds(20), 2, 1);
+                Duration.ofSeconds(20), 2, 1, false);
     }
 
     /** 한 번의 {@code speak} · {@code speakGenerated} 호출. */
@@ -355,6 +355,7 @@ final class PracticeFlowTestKit {
         /** 활성화 → 도입 재생 완료 → 기회 문장 재생 완료(아이 말을 기다리는 상태). */
         void toOpportunity() {
             activate();
+            if (ext.state().sub() == FlowState.Sub.GOAL_BRIEF) played();
             played();
             played();
         }

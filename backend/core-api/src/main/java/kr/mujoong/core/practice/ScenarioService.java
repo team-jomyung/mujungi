@@ -39,6 +39,12 @@ public class ScenarioService {
     private final TransactionTemplate tx;
     private final ScenarioLimits limits;
     private StructuredScenarioFlow structured;
+    private kr.mujoong.core.observability.EventLogger diagnostics;
+    @org.springframework.beans.factory.annotation.Autowired
+    void connectDiagnostics(kr.mujoong.core.observability.EventLogger events){this.diagnostics=events;}
+    private void diagnose(String fixedCode){
+        if(diagnostics!=null)diagnostics.appError(kr.mujoong.contract.log.EventLog.Component.ACTIVITY_COORDINATOR,fixedCode);
+    }
     private kr.mujoong.core.consent.ConsentPolicyService consent;
     @org.springframework.beans.factory.annotation.Autowired
     void connectConsent(kr.mujoong.core.consent.ConsentPolicyService consent){this.consent=consent;}
@@ -50,7 +56,7 @@ public class ScenarioService {
             kr.mujoong.core.config.CoreProperties properties,JsonCodec json){
         if(provider instanceof kr.mujoong.core.textai.ScenarioScriptProvider scripts){
             structured=new StructuredScenarioFlow(new ScenarioScriptGenerator(scripts,new ScenarioScriptValidation(forbidden),timing,executor,
-                    kr.mujoong.core.luna.CoreLunaClient.SYSTEM_SLEEPER::sleep),privacy,sanitizer,
+                    kr.mujoong.core.luna.CoreLunaClient.SYSTEM_SLEEPER::sleep).diagnostics(this::diagnose),privacy,sanitizer,
                     new ScenarioGraphContext(graph,executor,clock,properties.timing().knowledge().graphBudget()),repository,executor,
                     properties.timing().practice().scenarioHistoryTimeout(),json);
         }

@@ -34,7 +34,7 @@ class PracticeStopConfirmRaceTest {
         f.saysUnclearStopAtNineteenSeconds();
         f.probe.output.post(ASYNC_READY, "합성 결과"); f.h.drain();
         assertThat(f.probe.events).as("확인 질문이 없으므로 연습 완료 사건을 곧바로 전달한다")
-                .extracting(PracticeSessionExtension.ExtensionEvent::name).containsExactly(ASYNC_READY);
+                .extracting(PracticeSessionExtension.ExtensionEvent::name).containsExactly("practice-rest", ASYNC_READY);
 
         f.assertOneSecondRemains();
         f.assertNoFreeTalkResponse();

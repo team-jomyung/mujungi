@@ -51,7 +51,8 @@
         "confirmed": { "type": "boolean" },
         "requestedAt": { "$ref": "common.schema.json#/$defs/DateTime" },
         "startedAt": { "$ref": "common.schema.json#/$defs/NullableDateTime" },
-        "endedAt": { "$ref": "common.schema.json#/$defs/NullableDateTime" }
+        "endedAt": { "$ref": "common.schema.json#/$defs/NullableDateTime" },
+        "endDetail": { "enum": [null, "PRACTICE_COMPLETED", "PRACTICE_OUTPUT_FAILED"] }
       }
     },
     "SessionSummary": {

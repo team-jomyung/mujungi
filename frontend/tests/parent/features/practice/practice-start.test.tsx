@@ -5,6 +5,15 @@ import { PracticeStartCoordinator, ownedSelection, type StartResult } from "@/pa
 import { PracticeStartAction } from "@/parent/features/practice/PracticeStartAction";
 
 afterEach(cleanup);
+it("한 번에 3개는 허용하고 4개는 전송하지 않는다", async () => {
+  const port=vi.fn().mockResolvedValue({kind:"accepted",sessionId:"session"});
+  const ids=["a","b","c","d"];
+  const coordinator=new PracticeStartCoordinator(port,()=>"key");
+  expect(await coordinator.submit(ids,ids)).toEqual({kind:"rejected",code:"VALIDATION_FAILED"});
+  expect(port).not.toHaveBeenCalled();
+  expect(await coordinator.submit(ids.slice(0,3),ids)).toEqual({kind:"accepted",sessionId:"session"});
+  expect(port.mock.calls[0][0].goalSelectionIds).toEqual(["a","b","c"]);
+});
 function deferred<T>() { let resolve!: (value: T) => void; const promise = new Promise<T>((r) => { resolve = r; }); return { resolve, promise }; }
 
 it("소유 목록과 교집합만 선택하고 빈 선택은 전송하지 않는다", async () => {

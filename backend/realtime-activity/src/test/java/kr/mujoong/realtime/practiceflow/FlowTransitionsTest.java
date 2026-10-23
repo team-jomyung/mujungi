@@ -59,10 +59,10 @@ class FlowTransitionsTest {
     // ---- J2 OPPORTUNITY (6코드) ----
 
     @Test
-    void j2FullClosesTheSceneImmediately() {
+    void j2FullWaitsForTheFriendReplyBeforeWrapping() {
         Step step = table.onJudgment(at(Phase.OPPORTUNITY, Sub.NONE), JudgmentPoint.J2, "FULL");
 
-        assertEnters(step, Phase.SCENE_WRAP, Sub.VARIANT_EVAL);
+        assertEnters(step, Phase.SCENE_WRAP, Sub.PEER_REPLY);
         assertThat(step.cause()).isEqualTo(EndCause.NORMAL);
         assertThat(step.timing()).isEqualTo(LiveTiming.IMMEDIATE);
         assertThat(step.facts()).isEmpty();
@@ -120,7 +120,7 @@ class FlowTransitionsTest {
     void j3DeliveredResolvesAfterTheReaskWithoutFocusHelp() {
         Step step = table.onJudgment(at(Phase.REASK, Sub.NONE), JudgmentPoint.J3, "DELIVERED");
 
-        assertEnters(step, Phase.SCENE_WRAP, Sub.VARIANT_EVAL);
+        assertEnters(step, Phase.SCENE_WRAP, Sub.PEER_REPLY);
         assertThat(step.fact()).isEqualTo(FactKind.REASK_RESOLVED);
         assertThat(step.timing()).isEqualTo(LiveTiming.AFTER_REASK);
         assertThat(step.consent()).isNull();
@@ -205,7 +205,7 @@ class FlowTransitionsTest {
     void j5FullAndCopiedBothCloseAsAfterHelpAndCopiedCountsAsFollowingTheCoach(String code) {
         Step step = table.onJudgment(at(Phase.RETRY, Sub.NONE), JudgmentPoint.J5, code);
 
-        assertEnters(step, Phase.SCENE_WRAP, Sub.VARIANT_EVAL);
+        assertEnters(step, Phase.SCENE_WRAP, Sub.PEER_REPLY);
         assertThat(step.cause()).isEqualTo(EndCause.NORMAL);
         assertThat(step.timing()).isEqualTo(LiveTiming.AFTER_HELP);
     }
@@ -450,7 +450,7 @@ class FlowTransitionsTest {
     @Test
     void aFinishedReexplanationReturnsToTheOpportunityOrTheCoach() {
         assertEnters(table.onSlotEnded(at(Phase.OPPORTUNITY, Sub.REEXPLAIN), SlotEnd.PLAYED), Phase.OPPORTUNITY, Sub.NONE);
-        assertEnters(table.onSlotEnded(at(Phase.RETRY, Sub.REEXPLAIN), SlotEnd.PLAYED), Phase.FOCUS, Sub.COACH_UTTERANCE);
+        assertEnters(table.onSlotEnded(at(Phase.RETRY, Sub.REEXPLAIN), SlotEnd.PLAYED), Phase.RETRY, Sub.NONE);
         assertThat(table.onSlotEnded(at(Phase.RETRY, Sub.REEXPLAIN), SlotEnd.FAILED).cause()).isEqualTo(EndCause.PLAYBACK_FAILED);
     }
 
@@ -509,7 +509,7 @@ class FlowTransitionsTest {
 
         for (SlotEnd end : SlotEnd.values()) {
             Step step = table.onSlotEnded(normal, end);
-            assertEnters(step, Phase.SCENE_WRAP, Sub.VARIANT_EVAL);
+            assertEnters(step, Phase.SCENE_WRAP, end == SlotEnd.PLAYED ? Sub.PEER_REPLY : Sub.VARIANT_EVAL);
             assertThat(step.role()).isEqualTo(FlowRole.PEER);
             assertThat(step.facts()).startsWith(FactKind.COACH_RETURN).contains(FactKind.ORIGINAL_SCENE_RETURN);
         }

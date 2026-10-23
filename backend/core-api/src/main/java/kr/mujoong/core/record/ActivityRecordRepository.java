@@ -33,7 +33,8 @@ public class ActivityRecordRepository {
     private static final String COLUMNS = """
             session_id, guardian_id, child_id, activity_type, final_status, end_reason, confirmed, started_at, ended_at,
             listed_at, record_from, record_to, transcript_json::text as transcript_json, gaps_json::text as gaps_json,
-            practice_json::text as practice_json, snapshot_hash, recorded_at
+            practice_json::text as practice_json, snapshot_hash, recorded_at,
+            case when termination_json->>'endDetail' in ('PRACTICE_COMPLETED','PRACTICE_OUTPUT_FAILED') then termination_json->>'endDetail' end as end_detail
             """;
 
     private final NamedParameterJdbcTemplate jdbc;
@@ -155,7 +156,7 @@ public class ActivityRecordRepository {
                 rs.getString("gaps_json"),
                 rs.getString("practice_json"),
                 rs.getString("snapshot_hash"),
-                ClockParams.instant(rs, "recorded_at"));
+                ClockParams.instant(rs, "recorded_at"), rs.getString("end_detail"));
     }
 
     /** 넣을 기록(json 열은 이미 직렬화한 글). */
@@ -220,7 +221,28 @@ public class ActivityRecordRepository {
             String gapsJson,
             String practiceJson,
             String snapshotHash,
+            Instant recordedAt, String endDetail) {
+
+        public StoredRecord(
+            UUID sessionId,
+            UUID guardianId,
+            UUID childId,
+            String activityType,
+            String finalStatus,
+            String endReason,
+            boolean confirmed,
+            Instant startedAt,
+            Instant endedAt,
+            Instant listedAt,
+            Instant recordFrom,
+            Instant recordTo,
+            String transcriptJson,
+            String gapsJson,
+            String practiceJson,
+            String snapshotHash,
             Instant recordedAt) {
+            this(sessionId, guardianId, childId, activityType, finalStatus, endReason, confirmed, startedAt, endedAt, listedAt, recordFrom, recordTo, transcriptJson, gapsJson, practiceJson, snapshotHash, recordedAt, null);
+        }
 
         @Override
         public String toString() {

@@ -155,6 +155,26 @@ public interface ProviderPort {
 
         /** {@code error{error{type, code, param}}}. code는 공급자가 준 짧은 값이고 로그에는 쓰지 않는다(message 원문은 읽지 않는다). */
         record Error(String code) implements ProviderEvent {
+            /** Only fixed protocol identifiers may enter logs; unknown values and messages stay private. */
+            public String diagnosticKind() {
+                return switch (code == null ? "" : code) {
+                    case "invalid_value" -> "ProviderRejectedValue";
+                    case "invalid_request_error" -> "ProviderRejectedRequest";
+                    case "invalid_event", "invalid_event_id" -> "ProviderRejectedEvent";
+                    case "missing_required_parameter" -> "ProviderMissingParameter";
+                    case "unknown_parameter", "invalid_type" -> "ProviderRejectedParameter";
+                    case "rate_limit", "rate_limited", "rate_limit_exceeded" -> "ProviderRateLimited";
+                    case "insufficient_quota" -> "ProviderQuotaExhausted";
+                    case "server_error", "internal_error" -> "ProviderInternalFailure";
+                    case "session_expired", "session_closed" -> "ProviderSessionUnavailable";
+                    case "context_length_exceeded", "input_too_long", "string_above_max_length",
+                            "token_limit_exceeded" -> "ProviderInputTooLong";
+                    case "audio_fixture_active" -> "ProviderAudioFixtureActive";
+                    case "invalid_delegation_id" -> "ProviderRejectedDelegation";
+                    default -> "ProviderUnclassifiedError";
+                };
+            }
+            @Override public String toString() { return "ProviderError[redacted]"; }
         }
 
         /** {@code session.closed} 또는 전송 끊김. */

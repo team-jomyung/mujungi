@@ -40,7 +40,7 @@ class JudgmentRequestServiceGuardrailTest {
         assertThat(capture(JudgmentPoint.J1, "응").instructions()).contains("질문을 듣기 전", "지난 세션");
     }
     @Test void stopUsesTheServicePromptVersion() {
-        assertThat(capture(JudgmentPoint.J6, "이제 마칠게").promptVersion()).isEqualTo("prompt-service-v1");
+        assertThat(capture(JudgmentPoint.J6, "이제 마칠게").promptVersion()).isEqualTo("prompt-service-v2");
     }
     @Test void stopInstructionsSeparateQuotationNegationTopicAndRest() {
         assertThat(capture(JudgmentPoint.J6, "대사야").instructions()).contains("인용/역할", "종료 부정", "화제 거절", "휴식");
@@ -64,6 +64,6 @@ class JudgmentRequestServiceGuardrailTest {
         var sent = capture(JudgmentPoint.J6, utterance);
         assertThat(sent.input()).containsEntry("judgmentPoint", "J6").containsEntry("childUtterance", utterance);
         assertThat(sent.instructions()).contains("인용/역할", "종료 부정", "화제 거절", "모호함", "휴식");
-        assertThat(sent.promptVersion()).isEqualTo("prompt-service-v1");
+        assertThat(sent.promptVersion()).isEqualTo("prompt-service-v2");
     }
 }

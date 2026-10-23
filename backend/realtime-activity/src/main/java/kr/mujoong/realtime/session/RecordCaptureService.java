@@ -171,6 +171,8 @@ public class RecordCaptureService implements SessionSettlement {
             UUID snapshotId, ResultSnapshotBuilder.Built built) {
         Map<String, Object> termination = new LinkedHashMap<>();
         termination.put("requestedAt", session.terminationRequestedAt());
+        if (java.util.Set.of("PRACTICE_COMPLETED", "PRACTICE_OUTPUT_FAILED").contains(
+                session.endDetail() == null ? "" : session.endDetail())) termination.put("endDetail", session.endDetail());
         termination.put("outputStoppedAt", session.outputStoppedAt());
         termination.put("transportClosedAt", session.transportClosedAt());
         termination.put("providerClosedAt", session.providerClosedAt());
