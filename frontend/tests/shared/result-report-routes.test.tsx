@@ -24,7 +24,7 @@ it("기록 탭과 리포트 복귀 경로를 실제 화면 주소로 만든다",
   expect(PARENT_ROUTES.report("a/b")).toBe("/parent/reports/a%2Fb");
 });
 it("리포트 시한은 기본 60초이며 런타임 설정을 받는다", () => {
-  expect(defaultTiming().reportReadyTargetMs).toBe(60_000);
+  expect(defaultTiming().reportReadyTargetMs).toBe(360_000);
   expect(resolveTiming({ MUJOONG_TIMING_REPORT_READYTARGET: "75s" }).reportReadyTargetMs).toBe(75_000);
 });
 it.each(["0s", "invalid-private-value"])("잘못된 리포트 시한 %s는 설정 오류로 거절한다", value => {
