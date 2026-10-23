@@ -188,6 +188,8 @@ web의 loading-notice-delay는 MUJOONG_TIMING_PARENT_LOADINGNOTICEDELAY 환경 �
 | `mujoong.text-ai.result.prompt-version` | `v1` | core-api | 프롬프트 리소스 버전 | U6-J |
 
 생성 온도 `mujoong.text-ai.result.temperature-generation=0.2`, 재판정 온도 `temperature-judgment=0`, 프롬프트 버전 `prompt-version=v1`, `mujoong.limits.result-workers=2`는 시간이 아닌 설정이다. 실행 스레드 하나는 REPORT 전용이다. 17 · 27 · 28도 정리/생성 중에만 기존 `parent.poll-interval`을 사용한다(U6-h).
+
+리포트(REPORT 작업)는 AI를 부르지 않아 `mujoong.text-ai.result.*`를 쓰지 않는다. `report.ready-target`(접수부터 60초 절대 마감)과 작업 시도 · 재시도 키의 뜻 · 값은 그대로이며, 시도 실패는 저장 자료 읽기 · 쓰기 오류 같은 AI 밖 원인으로만 생긴다. 고른 활동의 결과 정리가 아직 끝나지 않았으면 리포트 시도를 오류 코드 없이 미뤄 `result.job-retry-backoff` 간격으로 다시 보고(시도 횟수를 쓴다), 마감 안에 다음 시도가 없으면 그 시도에서 만든다 [편차 FT-1023-c].
 ## 11. U7 웹 푸시 시간
 
 | 키 | 기본값 | 소유 앱 | 뜻 | 근거 |

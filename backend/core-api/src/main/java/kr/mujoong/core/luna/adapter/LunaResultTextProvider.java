@@ -35,8 +35,7 @@ public final class LunaResultTextProvider implements ResultTextProvider {
         Objects.requireNonNull(request, "request");
         LunaRequest lunaRequest = new LunaRequest(LunaPurpose.RESULT_TEXT, request.promptVersion(), request.instructions(),
                 request.input(), Map.of(), clock.now().plus(Objects.requireNonNull(timeout, "timeout")),
-                "report".equals(request.task()) ? LunaRequest.OutputMode.REPORT_JSON_SCHEMA_SINGLE_CALL
-                        : LunaRequest.OutputMode.LEGACY_JSON_OBJECT);
+                LunaRequest.OutputMode.LEGACY_JSON_OBJECT);
         try {
             return client.call(lunaRequest).outputJson();
         } catch (LunaException failure) {
