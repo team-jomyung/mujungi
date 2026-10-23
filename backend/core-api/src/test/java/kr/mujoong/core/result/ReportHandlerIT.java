@@ -1,6 +1,10 @@
 package kr.mujoong.core.result;
+
 import static org.assertj.core.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
+
 import java.time.*;
 import java.util.*;
 import java.util.concurrent.*;
@@ -16,46 +20,83 @@ import kr.mujoong.core.result.check.*;
 import kr.mujoong.testsupport.time.MutableClock;
 import org.junit.jupiter.api.*;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
+
+/** REPORT 작업: AI 없이 10항목을 만들고 동의 · 삭제 · 버림 경계를 지킨다(JIRA-267, contracts/deviations.md FT-1023-c). */
 @Tag("result-report") @Tag("db") class ReportHandlerIT {
-    DbTestSupport db;MutableClock clock;ExecutorService executor;FakeResultTextProvider provider;ResultJobRepository jobs;ReportRepository reports;
-    SessionResultStateRepository states;ActivityResultRepository results;StructuredExperienceRepository structures;ResultRecordReader reader;JobRunner runner;
+    DbTestSupport db;MutableClock clock;ResultJobRepository jobs;ReportRepository reports;
+    SessionResultStateRepository states;ActivityResultRepository results;StructuredExperienceRepository structures;SceneJudgmentRepository scenes;ResultRecordReader reader;JobRunner runner;
     kr.mujoong.core.consent.ConsentPolicyService consent;
     UUID guardian,child,reportId;DataSourceTransactionManager tm;
-    @BeforeEach void setup(){db=DbTestSupport.coreApp();clock=new MutableClock();executor=Executors.newVirtualThreadPerTaskExecutor();provider=new FakeResultTextProvider();provider.response=this::normal;
-        jobs=new ResultJobRepository(db.jdbc());reports=new ReportRepository(db.jdbc());states=new SessionResultStateRepository(db.jdbc());results=new ActivityResultRepository(db.jdbc());structures=new StructuredExperienceRepository(db.jdbc());reader=mock(ResultRecordReader.class);tm=new DataSourceTransactionManager(db.dataSource());
-        consent=mock(kr.mujoong.core.consent.ConsentPolicyService.class);when(consent.check(any())).thenReturn(new kr.mujoong.core.consent.ConsentPolicyService.GateResult(true,null,new kr.mujoong.core.consent.ConsentPolicyService.Snapshot("v1",true,true,true,true)));
-        var ai=new ResultTextGateway(provider,ResultTextGatewayTest.properties(Duration.ofSeconds(10)),clock,executor,JsonCodec.shared());var handler=new ReportHandler(reports,reader,states,results,new SceneJudgmentRepository(db.jdbc()),structures,mock(BehaviorDefinitionLookup.class),new QuoteCandidatePicker(),new ReportAssembler(),ai,new OutputChecker(new ForbiddenDictionary(),ai),tm,consent);
+    @BeforeEach void setup(){db=DbTestSupport.coreApp();clock=new MutableClock();
+        jobs=new ResultJobRepository(db.jdbc());reports=new ReportRepository(db.jdbc());states=new SessionResultStateRepository(db.jdbc());results=new ActivityResultRepository(db.jdbc());structures=new StructuredExperienceRepository(db.jdbc());scenes=new SceneJudgmentRepository(db.jdbc());reader=mock(ResultRecordReader.class);tm=new DataSourceTransactionManager(db.dataSource());
+        consent=mock(kr.mujoong.core.consent.ConsentPolicyService.class);when(consent.check(any())).thenReturn(granted(true));
+        // 연습 목표의 고정 정의가 없으면 7항목에서 뺀다(BR12.2). 시험 목표는 정의가 없다.
+        var definitions=mock(BehaviorDefinitionLookup.class);when(definitions.get(anyString(),anyInt())).thenThrow(new IllegalArgumentException("정의 없음"));
+        var handler=new ReportHandler(reports,reader,states,results,scenes,structures,definitions,new ReportAssembler(),new ReportRuleSections(new QuoteCandidatePicker(),new ForbiddenDictionary()),tm,consent);
         runner=new JobRunner(jobs,new ReportJobStateAdapter(reports),new GuardianWriteLock(db.jdbc()),clock,JobRunnerTest.properties(),tm,List.of(handler),mock(EventLogger.class));
         guardian=db.insertGuardian("ACTIVE");child=db.insertChild(guardian);reportId=UUID.randomUUID();
     }
-    @AfterEach void close(){executor.shutdownNow();db.close();}
-    String normal(ResultTextProvider.Request request){if(request.task().equals("classify"))return JsonCodec.shared().write(Map.of("results",ResultData.objects(request.input().get("sentences")).stream().map(s->Map.of("id",s.get("id"),"violation",false)).toList()));
-        return JsonCodec.shared().write(Map.of("sections",ResultData.objects(request.input().get("sections")).stream().map(s->{var refs=ResultData.objects(s.get("quotes"));var quote=refs.isEmpty()?List.of():List.of(refs.getFirst());return Map.of("sectionNo",s.get("sectionNo"),"text",quote.isEmpty()?"자료 부족":"\"같이 블록 쌓자\"라고 말했어요.","missing",quote.isEmpty(),"citations",quote);}).toList()));}
+    @AfterEach void close(){db.close();}
+    static kr.mujoong.core.consent.ConsentPolicyService.GateResult granted(boolean voiceAndText){return new kr.mujoong.core.consent.ConsentPolicyService.GateResult(voiceAndText,null,new kr.mujoong.core.consent.ConsentPolicyService.Snapshot("v1",voiceAndText,true,true,true));}
+    /** 짝수 번째는 자유대화(구조화 · 결과 문장 있음), 홀수 번째는 U5b 형식 연습(장면 1 판정 + FIRST 반응 발화 2). */
     ResultJob prepare(int count,Duration deadline){
         List<ReportRepository.Activity> activities=new ArrayList<>();
-        for(int i=0;i<count;i++){UUID session=UUID.randomUUID();String type=i%2==0?"FREE_TALK":"PRACTICE";var transcript=List.of(Map.of("seq",1,"speaker","CHILD","text","같이 블록 쌓자","uncertain",false,"startedAt",clock.now().toString()));
-            var record=new ActivityRecordRepository.StoredRecord(session,guardian,child,type,"ENDED","CHILD_STOP",true,clock.now().minusSeconds(120),clock.now(),clock.now(),clock.now().minusSeconds(120),clock.now(),JsonCodec.shared().write(transcript),"[]",null,"hash",clock.now());
+        for(int i=0;i<count;i++){UUID session=UUID.randomUUID();boolean free=i%2==0;String type=free?"FREE_TALK":"PRACTICE";UUID goal=UUID.randomUUID();
+            var transcript=List.of(Map.of("seq",1,"speaker","CHILD","text","같이 블록 쌓자","uncertain",false,"startedAt",clock.now().toString()),
+                Map.of("seq",2,"speaker","CHILD","text","블록 하나 빌려 줄래","uncertain",false,"startedAt",clock.now().plusSeconds(1).toString()));
+            String practice=free?null:JsonCodec.shared().write(Map.of("goals",List.of(Map.of("goalSelectionId",goal.toString(),"behaviorKey","ask","behaviorVersion",1,"displayName","부탁하기","cues",List.of(),"responses",List.of(Map.of("responseType","FIRST","utteranceSeq",2))))));
+            var record=new ActivityRecordRepository.StoredRecord(session,guardian,child,type,"ENDED","CHILD_STOP",true,clock.now().minusSeconds(120),clock.now(),clock.now(),clock.now().minusSeconds(120),clock.now(),JsonCodec.shared().write(transcript),"[]",practice,"hash",clock.now());
             when(reader.find(session,guardian)).thenReturn(Optional.of(new ResultRecordReader.Input(record,"ENDED",null,true)));
             states.insert(session,guardian,child,type,true,clock.now());var resultJob=jobs.submit("SESSION_RESULT",session,guardian,"SR:"+session,"RECONCILE",null,clock.now());states.attach(session,resultJob.id(),1,clock.now());var claimed=jobs.claim("SESSION_RESULT",1,clock.now(),Duration.ofSeconds(30)).getFirst();
-            var result=results.insert(session,claimed.id(),"FULL","[]","[]","[]",null,"{}","[]",clock.now());structures.insert(result.id(),session,"{\"situation\":{\"text\":\"함께 쌓은 이야기\",\"source\":\"CHILD_RECALL\",\"utteranceSeq\":1},\"explanation\":{\"text\":\"보호자가 전한 상황\",\"source\":\"GUARDIAN_INPUT\"}}",clock.now());jobs.transition(claimed,"DONE",null,null,clock.now(),"SUCCEEDED");
+            var result=results.insert(session,claimed.id(),"FULL",free?"[{\"text\":\"2분 동안 이야기를 나눴어요.\"}]":"[]","[]","[]",null,"{}","[]",clock.now());
+            if(free)structures.insert(result.id(),session,"{\"situation\":{\"text\":\"같이 블록\",\"source\":\"CHILD_RECALL\",\"utteranceSeq\":1},\"explanation\":{\"text\":\"보호자가 전한 상황\",\"source\":\"GUARDIAN_INPUT\"}}",clock.now());
+            else scenes.insert(result.id(),session,new SceneJudgmentRepository.Scene(goal,1,1,"ORIGINAL",null,"functional","IMMEDIATE",null,null,false,null,"DONE_IMMEDIATE"),clock.now());
+            jobs.transition(claimed,"DONE",null,null,clock.now(),"SUCCEEDED");
             activities.add(new ReportRepository.Activity(session,clock.now().atZone(ReportService.ZONE).toLocalDate(),type,"DONE"));
         }
         LocalDate date=clock.now().atZone(ReportService.ZONE).toLocalDate();reports.create(reportId,guardian,child,UUID.randomUUID().toString(),"hash",date,date,"민수",7,activities,clock.now());var j=jobs.submit("REPORT",reportId,guardian,"RP:"+reportId,"REPORT_REQUEST",clock.now().plus(deadline),clock.now());reports.attachJob(reportId,j.id());return runner.claim("REPORT").getFirst();
     }
-    @Test void twentyActivitiesRecoverAfterFirstFailureWithinSixtySeconds()throws Exception{var job=prepare(20,Duration.ofSeconds(60));AtomicInteger calls=new AtomicInteger();provider.response=r->{try{Thread.sleep(2000);}catch(InterruptedException e){Thread.currentThread().interrupt();throw new ResultAiException("TIMEOUT");}clock.advance(Duration.ofSeconds(2));if(calls.incrementAndGet()==1)throw new ResultAiException("PROVIDER_ERROR");return normal(r);};long start=System.nanoTime();runner.execute(job);Thread.sleep(5000);clock.advance(Duration.ofSeconds(5));runner.execute(runner.claim("REPORT").getFirst());long elapsed=TimeUnit.NANOSECONDS.toMillis(System.nanoTime()-start);assertThat(reports.find(reportId).orElseThrow().status()).isEqualTo("READY");assertThat(elapsed).isLessThan(60000);assertThat(provider.requests).hasSize(3);System.out.println("U6_REPORT_A elapsed_ms="+elapsed+" activities=20");}
-    @Test void absoluteDeadlineStopsDespiteRemainingAttempts(){var job=prepare(1,Duration.ofSeconds(3));provider.response=r->{clock.advance(Duration.ofSeconds(3));throw new ResultAiException("TIMEOUT");};runner.execute(job);assertThat(jobs.find(job.id()).orElseThrow().lastErrorCode()).isEqualTo("DEADLINE_EXCEEDED");assertThat(reports.find(reportId).orElseThrow().status()).isEqualTo("FAILED");}
-    @Test void nextRetryBeyondDeadlineFailsImmediately(){var job=prepare(1,Duration.ofSeconds(4));provider.response=r->{throw new ResultAiException("PROVIDER_ERROR");};runner.execute(job);assertThat(jobs.find(job.id()).orElseThrow().status()).isEqualTo("FAILED");assertThat(jobs.find(job.id()).orElseThrow().lastErrorCode()).isEqualTo("DEADLINE_EXCEEDED");}
-    @Test void citationsDeduplicateAcrossSectionsAndChildIdentityNeverLeaves(){var job=prepare(1,Duration.ofSeconds(60));runner.execute(job);var report=reports.find(reportId).orElseThrow();assertThat(report.status()).isEqualTo("READY");assertThat(report.citationCount()).isEqualTo(1);assertThat(reports.sections(reportId)).hasSize(10);assertThat(JsonCodec.shared().write(provider.requests.getFirst().input())).doesNotContain(guardian.toString(),child.toString(),reportId.toString(),"민수","interests");}
-    @Test void badQuoteAndForbiddenBodyFallBackToVerifiedChronologicalQuotes(){var job=prepare(1,Duration.ofSeconds(60));provider.response=r->r.task().equals("report")?"{\"sections\":[{\"sectionNo\":2,\"text\":\"점수가 좋아요\",\"missing\":false,\"citations\":[{\"activityNo\":1,\"utteranceSeq\":1,\"quote\":\"없는 발화\"}]}]}":normal(r);runner.execute(job);var section=reports.sections(reportId).get(1);assertThat(section.templated()).isTrue();assertThat(section.text()).contains("같이 블록 쌓자").doesNotContain("없는 발화","점수");}
-    @Test void guardianInputSourceHasNoQuote(){var job=prepare(1,Duration.ofSeconds(60));provider.response=r->r.task().equals("report")?"{\"sections\":[{\"sectionNo\":5,\"text\":\"보호자가 상황을 전했어요.\",\"missing\":false,\"citations\":[{\"activityNo\":1,\"source\":\"GUARDIAN_INPUT\"}]}]}":normal(r);runner.execute(job);var section=reports.sections(reportId).get(4);assertThat(section.citations()).hasSize(1);assertThat(section.citations().getFirst().source()).isEqualTo("GUARDIAN_INPUT");assertThat(section.citations().getFirst().quote()).isNull();}
-    @Test void lateCompletionAfterDiscardCannotRestoreChildren(){var job=prepare(1,Duration.ofSeconds(60));provider.response=r->{if(r.task().equals("report"))new org.springframework.transaction.support.TransactionTemplate(tm).executeWithoutResult(t->reports.discard(reportId,clock.now()));return normal(r);};runner.execute(job);assertThat(reports.find(reportId).orElseThrow().status()).isEqualTo("DISCARDED");assertThat(reports.sections(reportId)).isEmpty();assertThat(reports.activities(reportId)).isEmpty();assertThat(jobs.find(job.id()).orElseThrow().lastErrorCode()).isEqualTo("REPORT_DISCARDED");}
-    @Test void missingAiSectionsBecomeMissingAndAlwaysKeepLimitNotice(){var job=prepare(1,Duration.ofSeconds(60));var session=reports.activities(reportId).getFirst().sessionId();var input=reader.find(session,guardian).orElseThrow();var r=input.record();when(reader.find(session,guardian)).thenReturn(Optional.of(new ResultRecordReader.Input(new ActivityRecordRepository.StoredRecord(r.sessionId(),guardian,child,r.activityType(),r.finalStatus(),r.endReason(),true,r.startedAt(),r.endedAt(),r.listedAt(),r.recordFrom(),r.recordTo(),"[]","[]",null,"hash",clock.now()),"ENDED",null,false)));provider.response=q->"{\"sections\":[]}";runner.execute(job);assertThat(reports.sections(reportId).get(1).missing()).isTrue();assertThat(reports.sections(reportId).get(9).text()).contains(ReportAssembler.LIMITATION,"자료 부족");}
+    UUID firstSession(){return reports.activities(reportId).getFirst().sessionId();}
+    ReportRepository.Section section(int no){return reports.sections(reportId).stream().filter(s->s.sectionNo()==no).findFirst().orElseThrow();}
+
+    @Test void handlerHasNoAiDependency(){
+        // 리포트 생성 경로에 텍스트 AI · 금지 표현 2차 분류 · Luna 호출부가 들어오지 않는다.
+        var forbidden=Set.<Class<?>>of(ResultTextGateway.class,ResultTextProvider.class,OutputChecker.class,RejudgmentGateway.class,kr.mujoong.core.luna.CoreLunaClient.class);
+        for(var constructor:ReportHandler.class.getConstructors())assertThat(constructor.getParameterTypes()).doesNotContainAnyElementsOf(forbidden);
+        for(var constructor:ReportRuleSections.class.getConstructors())assertThat(constructor.getParameterTypes()).doesNotContainAnyElementsOf(forbidden);
+    }
+    @Test void twentyActivitiesRecoverAfterFirstFailureWithinSixtySeconds()throws Exception{
+        var job=prepare(20,Duration.ofSeconds(60));UUID session=firstSession();var input=reader.find(session,guardian).orElseThrow();AtomicInteger reads=new AtomicInteger();
+        when(reader.find(session,guardian)).thenAnswer(call->{if(reads.incrementAndGet()==1)throw new IllegalStateException("일시 읽기 실패");return Optional.of(input);});
+        long start=System.nanoTime();runner.execute(job);clock.advance(Duration.ofSeconds(5));runner.execute(runner.claim("REPORT").getFirst());long elapsed=TimeUnit.NANOSECONDS.toMillis(System.nanoTime()-start);
+        assertThat(reports.find(reportId).orElseThrow().status()).isEqualTo("READY");assertThat(elapsed).isLessThan(60000);assertThat(reports.sections(reportId)).hasSize(10);
+        System.out.println("U6_REPORT_A elapsed_ms="+elapsed+" activities=20");
+    }
+    @Test void absoluteDeadlineStopsDespiteRemainingAttempts(){var job=prepare(1,Duration.ofSeconds(3));when(reader.find(firstSession(),guardian)).thenAnswer(call->{clock.advance(Duration.ofSeconds(3));throw new IllegalStateException("느린 읽기");});runner.execute(job);assertThat(jobs.find(job.id()).orElseThrow().lastErrorCode()).isEqualTo("DEADLINE_EXCEEDED");assertThat(reports.find(reportId).orElseThrow().status()).isEqualTo("FAILED");}
+    @Test void nextRetryBeyondDeadlineFailsImmediately(){var job=prepare(1,Duration.ofSeconds(4));when(reader.find(firstSession(),guardian)).thenThrow(new IllegalStateException("읽기 실패"));runner.execute(job);assertThat(jobs.find(job.id()).orElseThrow().status()).isEqualTo("FAILED");assertThat(jobs.find(job.id()).orElseThrow().lastErrorCode()).isEqualTo("DEADLINE_EXCEEDED");}
+    @Test void ruleSectionsAreWrittenFromStoredRecordsAndResults(){
+        var job=prepare(2,Duration.ofSeconds(60));runner.execute(job);
+        var report=reports.find(reportId).orElseThrow();assertThat(report.status()).isEqualTo("READY");assertThat(reports.sections(reportId)).hasSize(10);
+        // 2항목: 연습 장면 1의 FIRST 반응 발화(2)만 인용한다. 연습 인용이 있으면 자유대화 발화는 쓰지 않는다.
+        var practiceSession=reports.activities(reportId).stream().filter(a->a.activityType().equals("PRACTICE")).findFirst().orElseThrow().sessionId();
+        assertThat(section(2).citations()).singleElement().satisfies(c->{assertThat(c.sessionId()).isEqualTo(practiceSession);assertThat(c.utteranceSeq()).isEqualTo(2L);assertThat(c.quote()).isEqualTo("블록 하나 빌려 줄래");});
+        assertThat(section(2).text()).contains("부탁하기 · 장면 1 · 바로 전달");
+        // 5항목: 아이 회상은 칸 글, 보호자 입력은 칸 이름 · 출처만.
+        assertThat(section(5).text()).contains("상황 · “같이 블록”","설명 · 보호자 입력").doesNotContain("보호자가 전한 상황");
+        assertThat(section(5).citations()).extracting(ReportRepository.Citation::source).containsExactlyInAnyOrder("CHILD_RECALL","GUARDIAN_INPUT");
+        assertThat(section(5).citations()).filteredOn(c->c.source().equals("GUARDIAN_INPUT")).singleElement().satisfies(c->assertThat(c.quote()).isNull());
+        // 6항목: 자유대화는 저장 결과 문장, 결과 문장 없는 연습은 그 활동 인용.
+        assertThat(section(6).text()).contains("자유대화 · 2분 동안 이야기를 나눴어요.","연습 · 정리 문장 없음 · 아래 인용");
+        assertThat(section(10).text()).startsWith(ReportAssembler.LIMITATION).contains("끝난 이유 · 아이가 끝냈어요 2회");
+        assertThat(report.citationCount()).isEqualTo(3);
+    }
+    @Test void lateCompletionAfterDiscardCannotRestoreChildren(){var job=prepare(1,Duration.ofSeconds(60));var session=firstSession();var input=reader.find(session,guardian).orElseThrow();when(reader.find(session,guardian)).thenAnswer(call->{new org.springframework.transaction.support.TransactionTemplate(new DataSourceTransactionManager(db.dataSource())).executeWithoutResult(t->reports.discard(reportId,clock.now()));return Optional.of(input);});runner.execute(job);assertThat(reports.find(reportId).orElseThrow().status()).isEqualTo("DISCARDED");assertThat(reports.sections(reportId)).isEmpty();assertThat(reports.activities(reportId)).isEmpty();assertThat(jobs.find(job.id()).orElseThrow().lastErrorCode()).isEqualTo("REPORT_DISCARDED");}
+    @Test void emptyTranscriptLeavesQuoteSectionsMissingAndAlwaysKeepsLimitNotice(){var job=prepare(1,Duration.ofSeconds(60));var session=firstSession();var input=reader.find(session,guardian).orElseThrow();var r=input.record();when(reader.find(session,guardian)).thenReturn(Optional.of(new ResultRecordReader.Input(new ActivityRecordRepository.StoredRecord(r.sessionId(),guardian,child,r.activityType(),r.finalStatus(),r.endReason(),true,r.startedAt(),r.endedAt(),r.listedAt(),r.recordFrom(),r.recordTo(),"[]","[]",null,"hash",clock.now()),"ENDED",null,false)));db.jdbc().update("delete from core.core_structured_experience where session_id=:id",Map.of("id",session));runner.execute(job);assertThat(section(2).missing()).isTrue();assertThat(section(5).missing()).isTrue();assertThat(section(10).missing()).isFalse();assertThat(section(10).text()).startsWith(ReportAssembler.LIMITATION);}
     @Test void reportWorkerCompletesWhileThreeSlowSessionsAreQueued()throws Exception{
         var job=prepare(20,Duration.ofSeconds(60));db.jdbc().update("delete from core.core_result_job_attempt where job_id=:id",Map.of("id",job.id()));db.jdbc().update("update core.core_result_job set status='REQUESTED',attempt_count=0,lease_until=null where id=:id",Map.of("id",job.id()));
         CountDownLatch sessionStarted=new CountDownLatch(1),sessionFinished=new CountDownLatch(1);
         runner.register(new JobHandler(){public String jobType(){return "SESSION_RESULT";}public Outcome handle(JobContext context){sessionStarted.countDown();try{Thread.sleep(10000);sessionFinished.countDown();}catch(InterruptedException e){Thread.currentThread().interrupt();return Outcome.failed("TIMEOUT",true);}context.commit(()->{},()->{});return Outcome.done();}});
         for(int i=0;i<3;i++)jobs.submit("SESSION_RESULT",UUID.randomUUID(),guardian,"slow-"+i+reportId,"RECONCILE",null,clock.now());
-        provider.response=r->{try{Thread.sleep(2000);}catch(InterruptedException e){Thread.currentThread().interrupt();throw new ResultAiException("TIMEOUT");}return normal(r);};
         var loop=new JobRunnerLoop(runner,JobRunnerTest.properties(),mock(EventLogger.class));long start=System.nanoTime();
         try{loop.start();assertThat(sessionStarted.await(2,TimeUnit.SECONDS)).isTrue();while(!reports.find(reportId).orElseThrow().status().equals("READY")&&TimeUnit.NANOSECONDS.toSeconds(System.nanoTime()-start)<15)Thread.sleep(50);assertThat(reports.find(reportId).orElseThrow().status()).isEqualTo("READY");assertThat(sessionFinished.getCount()).isEqualTo(1);System.out.println("U6_REPORT_D elapsed_ms="+TimeUnit.NANOSECONDS.toMillis(System.nanoTime()-start));}finally{loop.stop();}
     }
@@ -67,9 +108,9 @@ import org.springframework.jdbc.datasource.DataSourceTransactionManager;
             mock(EventLogger.class),clock).request(guardian);
         return requests;
     }
-    @Test void realCreatedReportIsNotSentAfterDeletionRequestBeforeParticipants(){
+    @Test void realCreatedReportIsNotBuiltAfterDeletionRequestBeforeParticipants(){
         prepare(1,Duration.ofSeconds(60));
-        UUID session=reports.activities(reportId).getFirst().sessionId();var record=reader.find(session,guardian).orElseThrow().record();
+        UUID session=firstSession();var record=reader.find(session,guardian).orElseThrow().record();
         when(reader.reportRecords(guardian,child)).thenReturn(List.of(record));
         var children=mock(kr.mujoong.core.child.ChildProfileService.class);
         when(children.childContext(guardian)).thenReturn(Optional.of(new kr.mujoong.core.child.ChildProfileService.ChildContext(child,"민수",7,List.of(),List.of())));
@@ -81,56 +122,48 @@ import org.springframework.jdbc.datasource.DataSourceTransactionManager;
         assertThat(requests.findOpenByGuardian(guardian).orElseThrow().coreClearedAt()).isNull();
         assertThat(db.jdbc().queryForObject("select status from core.core_guardian where id=:id",Map.of("id",guardian),String.class)).isEqualTo("DELETION_REQUESTED");
         var job=runner.claim("REPORT").stream().filter(j->j.subjectId().equals(created.reportId())).findFirst().orElseThrow();
-        runner.execute(job);
-        assertThat(provider.requests).isEmpty();assertThat(jobs.find(job.id()).orElseThrow().lastErrorCode()).isEqualTo("ACCOUNT_DELETING");
+        clearInvocations(reader);runner.execute(job);
+        verify(reader,never()).find(any(),any());assertThat(jobs.find(job.id()).orElseThrow().lastErrorCode()).isEqualTo("ACCOUNT_DELETING");
         assertThat(reports.find(created.reportId()).orElseThrow().status()).isEqualTo("FAILED");
+        assertThat(reports.sections(created.reportId())).isEmpty();
         assertThat(reports.activities(created.reportId())).hasSize(1);
     }
     @org.junit.jupiter.params.ParameterizedTest
     @org.junit.jupiter.params.provider.ValueSource(booleans={false,true})
     void withdrawnActivityNeverSuppliesQuotesOrResultsEvenWhenDone(boolean done){
-        var job=prepare(2,Duration.ofSeconds(60));var session=reports.activities(reportId).getFirst().sessionId();
+        var job=prepare(2,Duration.ofSeconds(60));var session=firstSession();
         var r=reader.find(session,guardian).orElseThrow().record();
         var withdrawn=new ActivityRecordRepository.StoredRecord(r.sessionId(),guardian,child,r.activityType(),r.finalStatus(),"CONSENT_WITHDRAWN",
             r.confirmed(),r.startedAt(),r.endedAt(),r.listedAt(),r.recordFrom(),r.recordTo(),
             r.transcriptJson().replace("같이 블록 쌓자","철회 비밀 내용"),r.gapsJson(),r.practiceJson(),r.snapshotHash(),r.recordedAt());
         when(reader.find(session,guardian)).thenReturn(Optional.of(new ResultRecordReader.Input(withdrawn,"ENDED",null,true)));
+        db.jdbc().update("update core.core_activity_result set sentences_json='[{\"text\":\"철회 비밀 문장\"}]'::jsonb where session_id=:id",Map.of("id",session));
         if(!done)db.jdbc().update("update core.core_session_result_state set job_status='NONE' where session_id=:id",Map.of("id",session));
         runner.execute(job);
-        var request=provider.requests.stream().filter(q->q.task().equals("report")).findFirst().orElseThrow();
-        assertThat(JsonCodec.shared().write(request.input())).doesNotContain("철회 비밀 내용");
-        assertThat(ResultData.objects(request.input().get("activities"))).hasSize(1);
-        assertThat(ResultData.objects(request.input().get("sections")).stream().flatMap(s->ResultData.objects(s.get("quotes")).stream()))
-            .allSatisfy(q->assertThat(((Number)q.get("activityNo")).intValue()).isNotEqualTo(1));
-        assertThat(reports.sections(reportId).stream().flatMap(s->s.citations().stream())).noneMatch(c->c.sessionId().equals(session));
         assertThat(reports.find(reportId).orElseThrow().status()).isEqualTo("READY");
+        assertThat(reports.sections(reportId).stream().flatMap(s->s.citations().stream())).noneMatch(c->c.sessionId().equals(session));
+        assertThat(reports.sections(reportId)).allSatisfy(s->assertThat(s.text()).doesNotContain("철회 비밀 내용","철회 비밀 문장"));
+        assertThat(section(10).text()).contains("동의가 철회되어 끝났어요 1회");
         assertThat(reports.activities(reportId).stream().filter(a->a.sessionId().equals(session)).findFirst().orElseThrow().resultStatus()).isEqualTo(done?"DONE":"NONE");
     }
     @Test void missingCurrentConsentStopsBeforeReportInputIsRead(){
         var job=prepare(1,Duration.ofSeconds(60));clearInvocations(reader);
-        when(consent.check(guardian)).thenReturn(new kr.mujoong.core.consent.ConsentPolicyService.GateResult(false,null,new kr.mujoong.core.consent.ConsentPolicyService.Snapshot("v1",false,true,true,true)));
-        runner.execute(job);assertThat(provider.requests).isEmpty();verifyNoInteractions(reader);
+        when(consent.check(guardian)).thenReturn(granted(false));
+        runner.execute(job);verifyNoInteractions(reader);
         assertThat(jobs.find(job.id()).orElseThrow().lastErrorCode()).isEqualTo("INTERNAL");
         assertThat(jobs.find(job.id()).orElseThrow().status()).isEqualTo("FAILED");
     }
     @org.junit.jupiter.params.ParameterizedTest
     @org.junit.jupiter.params.provider.ValueSource(booleans={false,true})
-    void deletionOrWithdrawalAfterReportCallPreventsClassifier(boolean deletion){
-        var job=prepare(1,Duration.ofSeconds(60));
-        provider.response=r->{
-            assertThat(org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive()).isFalse();
-            if(deletion)requestDeletion();else when(consent.check(guardian)).thenReturn(new kr.mujoong.core.consent.ConsentPolicyService.GateResult(false,null,new kr.mujoong.core.consent.ConsentPolicyService.Snapshot("v1",false,true,true,true)));
-            return normal(r);
-        };
-        runner.execute(job);assertThat(provider.requests).extracting(ResultTextProvider.Request::task).containsExactly("report");
+    void deletionOrWithdrawalAfterReadingPreventsPublishingReport(boolean deletion){
+        var job=prepare(1,Duration.ofSeconds(60));var session=firstSession();var input=reader.find(session,guardian).orElseThrow();
+        when(reader.find(session,guardian)).thenAnswer(call->{
+            if(deletion)db.jdbc().update("update core.core_guardian set status='DELETION_REQUESTED' where id=:id",Map.of("id",guardian));
+            else when(consent.check(guardian)).thenReturn(granted(false));
+            return Optional.of(input);
+        });
+        runner.execute(job);
         assertThat(jobs.find(job.id()).orElseThrow().lastErrorCode()).isEqualTo(deletion?"ACCOUNT_DELETING":"INTERNAL");
         assertThat(reports.sections(reportId)).isEmpty();assertThat(reports.find(reportId).orElseThrow().status()).isEqualTo("FAILED");
-    }
-    @Test void withdrawalDuringClassifierPreventsPublishingReport(){
-        var job=prepare(1,Duration.ofSeconds(60));
-        provider.response=r->{if(r.task().equals("classify"))when(consent.check(guardian)).thenReturn(new kr.mujoong.core.consent.ConsentPolicyService.GateResult(false,null,new kr.mujoong.core.consent.ConsentPolicyService.Snapshot("v1",false,true,true,true)));return normal(r);};
-        runner.execute(job);assertThat(provider.requests).extracting(ResultTextProvider.Request::task).containsExactly("report","classify");
-        assertThat(reports.sections(reportId)).isEmpty();assertThat(reports.find(reportId).orElseThrow().status()).isEqualTo("FAILED");
-        assertThat(jobs.find(job.id()).orElseThrow().lastErrorCode()).isEqualTo("INTERNAL");
     }
 }

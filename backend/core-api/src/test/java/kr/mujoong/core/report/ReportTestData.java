@@ -18,5 +18,23 @@ final class ReportTestData {
         var scene=new SceneJudgmentRepository.Scene(goal,1,1,"ORIGINAL",null,"functional","IMMEDIATE","비공개 근거","none",true,null,"DONE_IMMEDIATE");
         return new ReportInput(no,record,status,base.result(),List.of(scene),Map.of(),List.of(Map.of("displayName","부탁하기","coreFunction","필요한 것을 부탁함")));
     }
+    /** 기록의 종료 정보 · 전사 · 연습 기록만 바꾼 사본(JIRA-267 규칙 항목 시험용). null이면 원래 값을 둔다. */
+    static ReportInput withRecord(ReportInput in,String finalStatus,String endReason,Boolean confirmed,String transcriptJson,String practiceJson){
+        var r=in.record();
+        var record=new StoredRecord(r.sessionId(),r.guardianId(),r.childId(),r.activityType(),finalStatus==null?r.finalStatus():finalStatus,
+                endReason==null?r.endReason():endReason,confirmed==null?r.confirmed():confirmed,r.startedAt(),r.endedAt(),r.listedAt(),r.recordFrom(),r.recordTo(),
+                transcriptJson==null?r.transcriptJson():transcriptJson,r.gapsJson(),practiceJson==null?r.practiceJson():practiceJson,r.snapshotHash(),r.recordedAt());
+        return new ReportInput(in.activityNo(),record,in.status(),in.result(),in.scenes(),in.structured(),in.definitions());
+    }
+    static ReportInput withEndReason(ReportInput in,String endReason){return withRecord(in,null,endReason,null,null,null);}
+    static ReportInput withSentences(ReportInput in,List<String> sentences){
+        var r=in.result();
+        var result=new ActivityResultRepository.Result(r.id(),r.sessionId(),r.version(),r.jobId(),r.level(),JsonCodec.shared().write(sentences.stream().map(s->Map.of("text",s)).toList()),
+                r.helpJson(),r.tipsJson(),r.noTipReason(),r.matchingLogJson(),r.pendingCandidatesJson(),r.candidatesRegisteredAt(),r.createdAt(),r.invalidatedAt());
+        return new ReportInput(in.activityNo(),in.record(),in.status(),result,in.scenes(),in.structured(),in.definitions());
+    }
+    static ReportInput withScenes(ReportInput in,List<SceneJudgmentRepository.Scene> scenes){return new ReportInput(in.activityNo(),in.record(),in.status(),in.result(),scenes,in.structured(),in.definitions());}
+    static ReportInput withStructured(ReportInput in,Map<String,Object> structured){return new ReportInput(in.activityNo(),in.record(),in.status(),in.result(),in.scenes(),structured,in.definitions());}
+    static Map<String,Object> utterance(int seq,String speaker,String text,Instant at){return Map.of("seq",seq,"speaker",speaker,"text",text,"startedAt",at.toString(),"uncertain",false);}
     static ReportRepository.Report report(){return new ReportRepository.Report(UUID.randomUUID(),UUID.randomUUID(),UUID.randomUUID(),"key","hash","GENERATING",LocalDate.of(2026,10,1),LocalDate.of(2026,10,14),2,0,null,null,"하늘",7,NOW,null,null,null);}
 }
