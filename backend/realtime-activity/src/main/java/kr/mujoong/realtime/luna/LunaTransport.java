@@ -11,7 +11,10 @@ import java.net.http.HttpTimeoutException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.Collections;
+import java.util.EnumMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.CancellationException;
@@ -26,7 +29,8 @@ import java.util.function.Supplier;
 
 /**
  * Luna 공급자로 나가는 유일한 길 — realtime (U9 SD3 · NFR3.4 · NFR3.6 · NFR3.9 · NFR3.10). core에 같은 모양이 따로 있다(R-F5).
- * GPT-Live 웹소켓({@code voice.ProviderClient})과는 다른 HTTP 경로다(NFR3.8).
+ * GPT-Live 웹소켓({@code voice.ProviderClient})과는 다른 HTTP 경로다(NFR3.8). 끝점은 Responses와 Decisions({@link Endpoint}) 둘이고 아래 규칙은
+ * 둘에 똑같이 적용된다(FT-1023-d).
  *
  * <ul>
  *   <li>앱마다 하나인 {@link HttpClient}: 리다이렉트를 따르지 않고 프록시를 쓰지 않는다.
@@ -41,14 +45,28 @@ public final class LunaTransport implements AutoCloseable {
     /** 공급자 키 env 이름(contracts/ai-io.md 10.7). */
     public static final String API_KEY_ENV = "OPENAI_API_KEY";
 
+    /** 보내는 끝점. 같은 기준 주소 · 같은 {@link HttpClient} · 같은 주소 규칙을 쓰고 경로만 다르다(FT-1023-d). */
+    public enum Endpoint {
+        /** Responses API {@code {baseUrl}/responses}(U9 기본 경로). */
+        RESPONSES("responses"),
+        /** Decisions API {@code {baseUrl}/decisions}(진행 중 판정 선택 경로, FT-1023-d). */
+        DECISIONS("decisions");
+
+        private final String path;
+
+        Endpoint(String path) {
+            this.path = path;
+        }
+    }
+
     private final HttpClient client;
-    private final URI endpoint;
+    private final Map<Endpoint, URI> endpoints;
     private final LunaHosts.Mode mode;
     private final Supplier<String> apiKey;
     private final int maxResponseBytes;
 
     /**
-     * @param baseUrl Responses API 기준 주소({@code {baseUrl}/responses}로 보낸다)
+     * @param baseUrl OpenAI API 기준 주소({@code {baseUrl}/responses} · {@code {baseUrl}/decisions}로 보낸다)
      * @param mode 주소 규칙(기동 때와 같은 모드)
      * @param apiKey 보낼 때마다 env에서 읽는 키 공급자(값을 보관하지 않음)
      * @param maxResponseBytes 응답 본문 바이트 상한
@@ -56,7 +74,12 @@ public final class LunaTransport implements AutoCloseable {
     public LunaTransport(URI baseUrl, LunaHosts.Mode mode, Supplier<String> apiKey, int maxResponseBytes) {
         Objects.requireNonNull(baseUrl, "baseUrl");
         String base = baseUrl.toString();
-        this.endpoint = URI.create((base.endsWith("/") ? base.substring(0, base.length() - 1) : base) + "/responses");
+        String trimmed = base.endsWith("/") ? base.substring(0, base.length() - 1) : base;
+        Map<Endpoint, URI> paths = new EnumMap<>(Endpoint.class);
+        for (Endpoint value : Endpoint.values()) {
+            paths.put(value, URI.create(trimmed + "/" + value.path));
+        }
+        this.endpoints = Collections.unmodifiableMap(paths);
         this.mode = Objects.requireNonNull(mode, "mode");
         this.apiKey = Objects.requireNonNull(apiKey, "apiKey");
         if (maxResponseBytes <= 0) {
@@ -71,15 +94,26 @@ public final class LunaTransport implements AutoCloseable {
 
     /** 보내는 주소({@code {baseUrl}/responses}). */
     public URI endpoint() {
-        return endpoint;
+        return endpoint(Endpoint.RESPONSES);
+    }
+
+    /** 끝점의 주소. */
+    public URI endpoint(Endpoint target) {
+        return endpoints.get(Objects.requireNonNull(target, "target"));
     }
 
     /**
-     * 요청 본문 하나를 보낸다. 반환 Future는 시한 {@code limit} 안에 끝나며, 실패는 {@link LunaException}을 원인으로 갖는다.
+     * Responses API로 요청 본문 하나를 보낸다. 반환 Future는 시한 {@code limit} 안에 끝나며, 실패는 {@link LunaException}을 원인으로 갖는다.
      */
     public CompletableFuture<RawResponse> send(String body, Duration limit) {
+        return send(Endpoint.RESPONSES, body, limit);
+    }
+
+    /** {@link #send(String, Duration)}와 같고 끝점만 고른다(FT-1023-d). */
+    public CompletableFuture<RawResponse> send(Endpoint target, String body, Duration limit) {
         Objects.requireNonNull(body, "body");
-        Optional<LunaFailureReason> rejected = rejectBeforeSend(limit);
+        URI endpoint = endpoint(target);
+        Optional<LunaFailureReason> rejected = rejectBeforeSend(target, limit);
         if (rejected.isPresent()) {
             return CompletableFuture.failedFuture(new LunaException(rejected.get(), 0));
         }
@@ -122,10 +156,15 @@ public final class LunaTransport implements AutoCloseable {
      * 경우를 공급자 시도로 세지 않는다({@code LUNA_CALL attempt=0}). {@link #send}도 같은 확인을 한다.
      */
     Optional<LunaFailureReason> rejectBeforeSend(Duration limit) {
+        return rejectBeforeSend(Endpoint.RESPONSES, limit);
+    }
+
+    /** {@link #rejectBeforeSend(Duration)}와 같고 고른 끝점 주소를 확인한다. */
+    Optional<LunaFailureReason> rejectBeforeSend(Endpoint target, Duration limit) {
         if (limit == null || limit.isNegative() || limit.isZero()) {
             return Optional.of(LunaFailureReason.TIMEOUT);
         }
-        if (LunaHosts.check(endpoint, mode).isPresent()) {
+        if (LunaHosts.check(endpoint(target), mode).isPresent()) {
             return Optional.of(LunaFailureReason.REQUEST_REJECTED);
         }
         String key = apiKey.get();

@@ -66,7 +66,8 @@ class LunaJudgeClientTest {
     private LunaJudgeClient clientWithBudget(Duration budget) {
         URI base = stub.baseUrl();
         LunaProperties properties = new LunaProperties("gpt-6-luna", base, 1_000_000,
-                new LunaProperties.Purposes(new LunaProperties.PurposeOptions(4000, "medium")), true);
+                new LunaProperties.Purposes(new LunaProperties.PurposeOptions(4000, "medium")), true,
+                LunaProperties.JudgeEndpoint.RESPONSES);
         EventLogger events = TestEventLoggers.strict(clock, LogCapture.detached(), RealtimeMetrics.inMemory());
         RealtimeLunaClient luna = new RealtimeLunaClient(properties, budget, LunaSchemas.loadDefault(JSON), new LunaInputSanitizer(JSON),
                 new LunaTransport(base, LunaHosts.Mode.TEST, () -> "test-key-not-real-u11", 1_000_000), events, clock, JSON);

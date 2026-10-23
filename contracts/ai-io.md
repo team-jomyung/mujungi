@@ -318,14 +318,15 @@ U15 씨앗 v2는 GENERATED/DUPLICATE/NONE의 배타적 출력 분기를 사용�
 ### 10.2 금지 필드와 외부 전달
 
 - 외부 AI(Luna · 제브)로 보내는 필드는 스키마가 허용한 최소 필드뿐이다. 다음은 어느 요청 스키마의 속성도 될 수 없다: 아동 · 보호자 · 세션 · 기기 식별자(`childId` · `guardianId` · `sessionId` · `deviceId` 등), 키(`apiKey` 등), 원음(`audio`), 보호자 입력 원문, 이메일, 동의 상태. 아이 이름은 '아이'로 바꾼다(BR5.4 · NFR3.1). **예외(JIRA-266 · 편차 FT-1023-b):** 제브 출력 검사 요청은 설정 `mujoong.guardrail.jev.send-child-name`(10.12)이 켜진 경우에만 후보 문장 · 맥락의 아이 이름을 바꾸지 않고 원문으로 보낸다(욕설로 저장된 이름을 제브가 보게 하려는 것). 기본은 꺼짐이고, `infra/RUNBOOK.md` R-F15 확인 기록에 제브의 아동 이름 전달 허용 범위 확인이 남기 전에는 켜지 않는다. Luna 등 다른 외부 AI 경로는 이 스위치와 관계없이 언제나 이름을 바꾼다.
-- **R-F15** 공급자 약관 · 보호자 동의 확인 전에는 실제 아동 데이터를 외부 모델로 보내지 않는다. 실호출은 합성 자료로만 한다. U9는 코드로 판정하지 않고 RUNBOOK 확인 기록으로 지킨다(편차 U9-b). 키(`OPENAI_API_KEY`)를 넣는 순간 실제 어댑터가 켜지므로, `infra/RUNBOOK.md` 단계 4의 R-F15 확인 기록 표에 한 줄을 남기기 전에는 운영 환경에 키를 넣지 않는다 [U9 편차 (U9-b)].
+- 진행 중 판정을 Decisions 끝점(`mujoong.luna.judge-endpoint=decisions`, 10.9 · 10.10)으로 보내도 외부 전달 필드는 Responses 경로와 **같은 최소 필드**다: 같은 입력 정리(금지 키 제거 · 별칭 치환 · 연락처 가림)를 지난 `ai-judgment-request` 모양 데이터(지점 · 판 번호 · 선택지 · 확정 전사 · 최근 3턴 · 기준)와, 판 리소스의 고정 글(판정 지시문 · 지점 질문 · 선택지 뜻)뿐이다. 식별자 · 아이 이름 원문 · 원음은 가지 않는다 [편차 FT-1023-d].
+- **R-F15** 공급자 약관 · 보호자 동의 확인 전에는 실제 아동 데이터를 외부 모델로 보내지 않는다. 실호출은 합성 자료로만 한다. U9는 코드로 판정하지 않고 RUNBOOK 확인 기록으로 지킨다(편차 U9-b). 키(`OPENAI_API_KEY`)를 넣는 순간 실제 어댑터가 켜지므로, `infra/RUNBOOK.md` 단계 4의 R-F15 확인 기록 표에 한 줄을 남기기 전에는 운영 환경에 키를 넣지 않는다 [U9 편차 (U9-b)]. Decisions 끝점은 같은 공급자(OpenAI) · 같은 키 · 같은 필드지만 다른 엔드포인트(보존 · 데이터 사용 조건이 따로일 수 있음)이므로, 실제 아동 데이터로 `judge-endpoint=decisions`를 켜기 전에 같은 확인 기록 표에 Decisions 끝점 확인을 남긴다 [편차 FT-1023-d].
 - 시험 · CI · 검증은 가짜 공급자만 쓴다(R-F1). 테스트 대역의 성공을 실공급자 성공으로 표시하지 않는다(R-M11).
 
 ### 10.3 목적 → 호출 경로 → 재시도 분류
 
 | 목적 | 호출 경로(단위) | 분류 | 호출 안 재시도 · 실패 뒤 |
 |---|---|---|---|
-| 진행 중 판정 J1 ~ J6 | realtime 판정 턴(U11) | `NONE` | 재시도 없음. `mujoong.timing.judgment.live-budget`(4초) 초과 · 형식 오류 · 선택지 밖 코드는 판정 보류 |
+| 진행 중 판정 J1 ~ J6 | realtime 판정 턴(U11). 끝점은 `mujoong.luna.judge-endpoint`로 Responses(기본) 또는 Decisions [편차 FT-1023-d] | `NONE` | 재시도 없음. `mujoong.timing.judgment.live-budget`(4초) 초과 · 형식 오류 · 선택지 밖 코드는 판정 보류. 두 끝점이 같은 시한 · 같은 하한(`mujoong.judgment.min-confidence` · `min-margin`) · 같은 보류 사유를 쓴다 |
 | 제브 검사(새 발화) | realtime 출력 게이트(U13) | `NONE` | 재시도 없음. `mujoong.timing.guardrail.jev-budget`(800ms) 초과(시간 초과는 막힘) · 전송 오류(비 2xx 포함) · 잘못된 응답(10.13)도 막힘이고 자동 `ALLOW`는 없다. 막힘 뒤 같은 다음 행동 지시를 다시 하는 것은 게이트 단계의 일이다(호출 안 재시도가 아님) [U13 편차 (U13-b)] |
 | 상황 생성 | core 상황 생성 요청(U10) | `REQUEST_BOUNDED` | 일시 실패 기술 재시도 1회 + 내용 재생성 1회(스키마 불일치 포함), 7절 15초 예산 안. 실패는 `SCENARIO_GEN_FAILED` |
 | 자체 검토(J7) | core 상황 생성 요청(U10) | `REQUEST_BOUNDED` | 같은 15초 예산 |
@@ -397,7 +398,8 @@ Luna 호출부(core-api · realtime-activity 각자)는 공급자 시도마다 `
 | `mujoong.luna.model` | `${OPENAI_ANALYSIS_MODEL:gpt-6-luna}` | core-api | 요청 모델 이름. env가 비면 `gpt-6-luna` |
 | `mujoong.luna.model` | `${OPENAI_JUDGE_MODEL:gpt-6-luna}` | realtime | 같음 |
 | `mujoong.luna.enabled` | `false` | realtime | realtime Luna 스위치(시간 값 아님). 키가 있어도 false면 `RealtimeLunaClient`를 등록하지 않는다. demo에서 true로 바꾸기 전에 `infra/RUNBOOK.md` 단계 4의 R-F15 확인 기록을 남긴다 |
-| `mujoong.luna.base-url` | `https://api.openai.com/v1` | core-api · realtime | Responses API 기준 주소(`{base-url}/responses`). test 프로필은 루프백으로 덮어쓴다 |
+| `mujoong.luna.judge-endpoint` | `${LUNA_JUDGE_ENDPOINT:responses}` | realtime | 진행 중 판정 끝점 `responses` \| `decisions`(시간 값 · 비밀 아님, 대소문자 무시). 모르는 값이면 기동하지 않는다. 기본 `responses`는 지금 동작 그대로다. `enabled`가 false면 값과 관계없이 보류 구현이다. 실제 아동 데이터로 `decisions`를 켜기 전에 `infra/RUNBOOK.md` 단계 4의 R-F15 확인 기록에 Decisions 끝점 확인을 남긴다(10.2) [편차 FT-1023-d] |
+| `mujoong.luna.base-url` | `https://api.openai.com/v1` | core-api · realtime | OpenAI API 기준 주소(`{base-url}/responses`, realtime Decisions 경로는 `{base-url}/decisions`). 두 끝점이 같은 주소 규칙을 쓴다. test 프로필은 루프백으로 덮어쓴다 |
 | `mujoong.luna.max-response-bytes` | `1000000` | core-api · realtime | 응답 본문 바이트 상한. 넘으면 `LENGTH_EXCEEDED` |
 | `mujoong.luna.purpose.<목적>.max-output-tokens` | `4000` | core-api · realtime | 요청 `max_output_tokens`. core 목적: `scenario-generation` · `scenario-review` · `seed-generation` · `result-text` · `goal-candidates` · `rejudgment`, realtime 목적: `judgment-live` |
 | `mujoong.luna.purpose.<목적>.reasoning-effort` | `medium` | core-api · realtime | 요청 `reasoning.effort`(`none` · `minimal` · `low` · `medium` · `high`) |
@@ -405,6 +407,10 @@ Luna 호출부(core-api · realtime-activity 각자)는 공급자 시도마다 `
 ### 10.10 U9 호출 방식 · 실패 사유 · 기존 어댑터
 
 - **호출 방식:** 두 앱이 각자(코드 공유 없음) JDK `HttpClient` + `JsonCodec`으로 Responses API `POST {base-url}/responses`를 직접 부른다 [U9 편차 (U9-a)]. 리다이렉트를 따르지 않고(3xx는 `REQUEST_REJECTED`) 프록시를 쓰지 않으며, 응답 본문은 `max-response-bytes`까지만 읽는다. 요청은 `model` · `instructions`(버전 파일의 지시) · `input`(정리된 데이터의 JSON 문자열, 지시와 다른 자리) · `text.format` · `max_output_tokens` · `reasoning.effort` · `store: false`이고 `temperature`는 보내지 않는다(기존 `ResultTextProvider.Request.temperature`는 받기만 하고 무시).
+- **Decisions 경로(realtime 진행 중 판정만, `judge-endpoint=decisions`) [편차 FT-1023-d]:** `POST {base-url}/decisions`. 같은 `HttpClient` · 같은 주소 재확인 · 리다이렉트 · 프록시 · 응답 상한 · 시한 · 보내기 전 정리 · 요청 스키마 검증 · 감사 한 줄(10.8)을 지나고 본문 모양과 2xx 응답 검증만 다르다.
+  - 요청: `model`(`mujoong.luna.model`) · `input`(사용자 메시지 하나, 파트 `{"type":"input_json","data":<정리된 판정 입력>}`) · `questions`(`choice` 질문 한 개: `name` `judgment`, `instructions` = 판정 지시 본문 + 그 지점 질문 + 응답 방식 덧붙임 `judgment/decisions-question-v1.txt`("아이의 가장 마지막 말(childUtterance) 하나만 판정한다" 포함), `choices` = 요청 선택지(판 순서) + 판의 선택지 뜻을 `description`으로). 데이터는 질문 지시문에 넣지 않는다(지시와 데이터 분리). `store` · `temperature` · `reasoning` · `max_output_tokens`는 Decisions에 없는 매개변수라 보내지 않는다. 판정 기록 `promptVersion`은 `<판 번호>.decisions-v1`(예: `prompt-service-v2.decisions-v1`)이다.
+  - 응답 검증(새 사유 코드 없음): 비 2xx는 아래 표와 같다. 2xx에서 JSON이 아니면 `SERVER_ERROR`, 질문 이름이 맞는 답이 없으면 `EMPTY_OUTPUT`(이름 없는 거절만 있으면 `REFUSED`), 같은 이름 답이 여럿이면 `SCHEMA_INVALID`, `type: refusal`이면 `REFUSED`, `model`이 없으면 `MODEL_MISSING`, 그 밖에 `type`이 `choice`가 아님 · `choice`가 보낸 선택지 밖 · `probabilities`가 보낸 선택지를 모두 덮지 않음(밖 · 중복 · 숫자 아님 · 0 ~ 1 밖 포함) · 고른 값의 확률이 가장 높지 않음(같으면 허용)이면 `SCHEMA_INVALID`다.
+  - 판정: 확률 내림차순 1 · 2순위(같으면 공급자가 고른 값, 그다음 판 순서)를 Responses 경로와 같은 검증기(하한 `min-confidence` → `LOW_CONFIDENCE`, 최소 차이 `min-margin` → `LOW_MARGIN`, 같으면 확정)에 넘긴다. 응답의 `confidence`는 쓰지 않는다(판정 규칙은 선택지 확률 기준이고 confidence는 정의가 다른 값). 판독 불가 입력은 공급자 없이 `UNREADABLE_INPUT`, 실패는 `TIMEOUT` · `SCHEMA_INVALID` · `PROVIDER_ERROR` 보류로 Responses 경로와 같다.
 - **보내기 전 정리:** 모든 깊이에서 10.2 금지 키(+ core 결과 게이트웨이의 `audioRefs` · `audioRefsJson` · `interests` 등)를 지우고, 호출자가 준 별칭 표로 아이 이름을 바꾸며, 이메일 · 휴대전화 모양 값을 '연락처'로 가린다. 남으면 · 요청 스키마(`ai-judgment-request`)에 맞지 않으면 부르지 않고 `FORBIDDEN_INPUT`이다. UUID → '참조N'과 복원은 지금 `ResultTextGateway`가 맡는다.
   - 금지 키는 대소문자와 `_` · `-`를 가리지 않고 비교한다(`child_name` · `Child-Id` · `api_key` · `guardian-id`도 지운다). 정리 뒤 안전망은 이 비교를 다시 쓰지 않는 독립 검사로, 글자 · 숫자 밖 문자를 모두 뺀 꼴(예: `child.name`)까지 보고 남으면 `FORBIDDEN_INPUT`이다.
   - 별칭은 긴 이름부터(길이가 같으면 사전순) 한 번만 훑으며 바꾼다. 이름끼리 포함 관계(예: '민수'와 '수')여도 결과가 별칭 표 순서에 기대지 않고, 바꿔 넣은 별칭을 짧은 이름이 다시 바꾸지 않는다. 빈 이름은 무시한다.
@@ -420,10 +426,10 @@ Luna 호출부(core-api · realtime-activity 각자)는 공급자 시도마다 `
 | `REQUEST_REJECTED` | 그 밖 4xx(스키마 거절 포함) · 3xx · 허용 밖 주소 | 아니오 | `UNAVAILABLE` · retryable=false | `PROVIDER_ERROR` |
 | `TRANSPORT_ERROR` | 연결 · 읽기 오류 | 예 | `UNAVAILABLE` · retryable=true | `PROVIDER_ERROR` |
 | `TIMEOUT` | 시도 시한 초과 · 남은 시간 없음 | 아니오 | `TIMEOUT` · retryable=true | `TIMEOUT` |
-| `EMPTY_OUTPUT` | 출력 텍스트가 빔 | 예 | `UNAVAILABLE` · retryable=true | `SCHEMA_INVALID` |
+| `EMPTY_OUTPUT` | 출력 텍스트가 빔(Decisions: 질문 이름이 맞는 답 없음) | 예 | `UNAVAILABLE` · retryable=true | `SCHEMA_INVALID` |
 | `LENGTH_EXCEEDED` | `status: incomplete` · 본문 바이트 상한 초과 | 아니오 | `INVALID_OUTPUT` | `SCHEMA_INVALID` |
-| `REFUSED` | 거절(refusal) 출력 | 아니오 | `INVALID_OUTPUT` | `SCHEMA_INVALID` |
-| `SCHEMA_INVALID` | 원본 계약 스키마 위반 · JSON 객체가 아님 | 아니오 | `INVALID_OUTPUT` | `SCHEMA_INVALID` |
+| `REFUSED` | 거절(refusal) 출력(Decisions: `type: refusal` 답) | 아니오 | `INVALID_OUTPUT` | `SCHEMA_INVALID` |
+| `SCHEMA_INVALID` | 원본 계약 스키마 위반 · JSON 객체가 아님(Decisions: 위 응답 검증 위반) | 아니오 | `INVALID_OUTPUT` | `SCHEMA_INVALID` |
 | `FORBIDDEN_INPUT` | 정리 뒤 금지 키 잔존 · 요청 스키마 위반 · (realtime) 보내기 전 준비 중 예기치 못한 오류 | 아니오 | `UNAVAILABLE` · retryable=false | `INTERNAL` |
 | `MODEL_MISSING` | 응답 `model` 없음 | 아니오 | `INVALID_OUTPUT` | `PROVIDER_ERROR` |
 

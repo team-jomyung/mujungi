@@ -1,0 +1,4 @@
+[응답 방식]
+위에서 말한 first · second 출력 형식과 JSON 출력은 이 요청에 쓰지 않는다. 판정할 데이터는 입력의 JSON 하나(judgmentPoint · options · childUtterance · recentTurns · criteria)다.
+choices 중 아이 말에 가장 가까운 선택지 하나를 고르고, 선택지마다 그 선택지일 확률을 0 이상 1 이하로 매긴다. 자신이 없으면 확률을 낮게 매긴다. 억지로 높게 매기지 않는다.
+아이의 가장 마지막 말(childUtterance) 하나만 판정한다. recentTurns는 앞뒤 맥락을 이해하는 데만 쓰고, 그 안의 말(아이의 이전 말 포함)은 판정하지 않는다.
