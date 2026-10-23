@@ -32,7 +32,7 @@ import org.springframework.jdbc.datasource.DataSourceTransactionManager;
         consent=mock(kr.mujoong.core.consent.ConsentPolicyService.class);when(consent.check(any())).thenReturn(granted(true));
         // 연습 목표의 고정 정의가 없으면 7항목에서 뺀다(BR12.2). 시험 목표는 정의가 없다.
         var definitions=mock(BehaviorDefinitionLookup.class);when(definitions.get(anyString(),anyInt())).thenThrow(new IllegalArgumentException("정의 없음"));
-        var handler=new ReportHandler(reports,reader,states,results,scenes,structures,definitions,new ReportAssembler(),new ReportRuleSections(new QuoteCandidatePicker(),new ForbiddenDictionary()),tm,consent);
+        var handler=new ReportHandler(reports,reader,states,results,scenes,structures,definitions,new ReportAssembler(),new ReportRuleSections(new ForbiddenDictionary()),tm,consent);
         runner=new JobRunner(jobs,new ReportJobStateAdapter(reports),new GuardianWriteLock(db.jdbc()),clock,JobRunnerTest.properties(),tm,List.of(handler),mock(EventLogger.class));
         guardian=db.insertGuardian("ACTIVE");child=db.insertChild(guardian);reportId=UUID.randomUUID();
     }
@@ -81,17 +81,20 @@ import org.springframework.jdbc.datasource.DataSourceTransactionManager;
         var practiceSession=reports.activities(reportId).stream().filter(a->a.activityType().equals("PRACTICE")).findFirst().orElseThrow().sessionId();
         assertThat(section(2).citations()).singleElement().satisfies(c->{assertThat(c.sessionId()).isEqualTo(practiceSession);assertThat(c.utteranceSeq()).isEqualTo(2L);assertThat(c.quote()).isEqualTo("블록 하나 빌려 줄래");});
         assertThat(section(2).text()).contains("부탁하기 · 장면 1 · 바로 전달");
-        // 5항목: 아이 회상은 칸 글, 보호자 입력은 칸 이름 · 출처만.
-        assertThat(section(5).text()).contains("상황 · “같이 블록”","설명 · 보호자 입력").doesNotContain("보호자가 전한 상황");
+        // 5항목: 아이 회상은 칸 글. 보호자 입력은 줄 없이 quote 없는 출처 인용만.
+        assertThat(section(5).text()).contains("상황 · “같이 블록”").doesNotContain("보호자");
         assertThat(section(5).citations()).extracting(ReportRepository.Citation::source).containsExactlyInAnyOrder("CHILD_RECALL","GUARDIAN_INPUT");
         assertThat(section(5).citations()).filteredOn(c->c.source().equals("GUARDIAN_INPUT")).singleElement().satisfies(c->assertThat(c.quote()).isNull());
-        // 6항목: 자유대화는 저장 결과 문장, 결과 문장 없는 연습은 그 활동 인용.
-        assertThat(section(6).text()).contains("자유대화 · 2분 동안 이야기를 나눴어요.","연습 · 정리 문장 없음 · 아래 인용");
+        // 6항목: 결과 문장이 있는 자유대화만. 결과 문장 없는 연습은 줄 · 인용이 없다.
+        assertThat(section(6).text().lines()).singleElement().satisfies(line->assertThat(line).endsWith("자유대화 · 2분 동안 이야기를 나눴어요."));
+        assertThat(section(6).citations()).isEmpty();
         assertThat(section(10).text()).startsWith(ReportAssembler.LIMITATION).contains("끝난 이유 · 아이가 끝냈어요 2회");
-        assertThat(report.citationCount()).isEqualTo(3);
+        assertThat(report.citationCount()).isEqualTo(2);
     }
     @Test void lateCompletionAfterDiscardCannotRestoreChildren(){var job=prepare(1,Duration.ofSeconds(60));var session=firstSession();var input=reader.find(session,guardian).orElseThrow();when(reader.find(session,guardian)).thenAnswer(call->{new org.springframework.transaction.support.TransactionTemplate(new DataSourceTransactionManager(db.dataSource())).executeWithoutResult(t->reports.discard(reportId,clock.now()));return Optional.of(input);});runner.execute(job);assertThat(reports.find(reportId).orElseThrow().status()).isEqualTo("DISCARDED");assertThat(reports.sections(reportId)).isEmpty();assertThat(reports.activities(reportId)).isEmpty();assertThat(jobs.find(job.id()).orElseThrow().lastErrorCode()).isEqualTo("REPORT_DISCARDED");}
-    @Test void emptyTranscriptLeavesQuoteSectionsMissingAndAlwaysKeepsLimitNotice(){var job=prepare(1,Duration.ofSeconds(60));var session=firstSession();var input=reader.find(session,guardian).orElseThrow();var r=input.record();when(reader.find(session,guardian)).thenReturn(Optional.of(new ResultRecordReader.Input(new ActivityRecordRepository.StoredRecord(r.sessionId(),guardian,child,r.activityType(),r.finalStatus(),r.endReason(),true,r.startedAt(),r.endedAt(),r.listedAt(),r.recordFrom(),r.recordTo(),"[]","[]",null,"hash",clock.now()),"ENDED",null,false)));db.jdbc().update("delete from core.core_structured_experience where session_id=:id",Map.of("id",session));runner.execute(job);assertThat(section(2).missing()).isTrue();assertThat(section(5).missing()).isTrue();assertThat(section(10).missing()).isFalse();assertThat(section(10).text()).startsWith(ReportAssembler.LIMITATION);}
+    @Test void emptyTranscriptLeavesQuoteSectionsMissingAndAlwaysKeepsLimitNotice(){var job=prepare(1,Duration.ofSeconds(60));var session=firstSession();var input=reader.find(session,guardian).orElseThrow();var r=input.record();when(reader.find(session,guardian)).thenReturn(Optional.of(new ResultRecordReader.Input(new ActivityRecordRepository.StoredRecord(r.sessionId(),guardian,child,r.activityType(),r.finalStatus(),r.endReason(),true,r.startedAt(),r.endedAt(),r.listedAt(),r.recordFrom(),r.recordTo(),"[]","[]",null,"hash",clock.now()),"ENDED",null,false)));db.jdbc().update("delete from core.core_structured_experience where session_id=:id",Map.of("id",session));runner.execute(job);assertThat(section(2).missing()).isTrue();assertThat(section(5).missing()).isTrue();assertThat(section(10).missing()).isFalse();
+        // 자유대화만 고른 리포트라 연습 고정 문장은 붙이지 않는다.
+        assertThat(section(10).text()).doesNotContain(ReportAssembler.LIMITATION).contains("끝난 이유");}
     @Test void reportWorkerCompletesWhileThreeSlowSessionsAreQueued()throws Exception{
         var job=prepare(20,Duration.ofSeconds(60));db.jdbc().update("delete from core.core_result_job_attempt where job_id=:id",Map.of("id",job.id()));db.jdbc().update("update core.core_result_job set status='REQUESTED',attempt_count=0,lease_until=null where id=:id",Map.of("id",job.id()));
         CountDownLatch sessionStarted=new CountDownLatch(1),sessionFinished=new CountDownLatch(1);
@@ -99,6 +102,52 @@ import org.springframework.jdbc.datasource.DataSourceTransactionManager;
         for(int i=0;i<3;i++)jobs.submit("SESSION_RESULT",UUID.randomUUID(),guardian,"slow-"+i+reportId,"RECONCILE",null,clock.now());
         var loop=new JobRunnerLoop(runner,JobRunnerTest.properties(),mock(EventLogger.class));long start=System.nanoTime();
         try{loop.start();assertThat(sessionStarted.await(2,TimeUnit.SECONDS)).isTrue();while(!reports.find(reportId).orElseThrow().status().equals("READY")&&TimeUnit.NANOSECONDS.toSeconds(System.nanoTime()-start)<15)Thread.sleep(50);assertThat(reports.find(reportId).orElseThrow().status()).isEqualTo("READY");assertThat(sessionFinished.getCount()).isEqualTo(1);System.out.println("U6_REPORT_D elapsed_ms="+TimeUnit.NANOSECONDS.toMillis(System.nanoTime()-start));}finally{loop.stop();}
+    }
+
+    void resultStatus(UUID session,String status){db.jdbc().update("update core.core_session_result_state set job_status=:status where session_id=:id",Map.of("id",session,"status",status));}
+    UUID practiceSession(){return reports.activities(reportId).stream().filter(a->a.activityType().equals("PRACTICE")).findFirst().orElseThrow().sessionId();}
+    ResultJob nextAttempt(ResultJob job){var waiting=jobs.find(job.id()).orElseThrow();clock.advance(Duration.between(clock.now(),waiting.nextAttemptAt()));return runner.claim("REPORT").getFirst();}
+
+    /** 실제 사례(JIRA-267 12:59): 세션 끝 15초 뒤 리포트를 만들면 그 활동이 아직 정리 중(RUNNING)이다. 정리가 끝날 때까지 미뤘다가 만든다. */
+    @Test void settlingActivityDefersReportUntilResultIsDone(){
+        var job=prepare(2,Duration.ofSeconds(60));var practice=practiceSession();resultStatus(practice,"RUNNING");
+        runner.execute(job);
+        var waiting=jobs.find(job.id()).orElseThrow();
+        assertThat(waiting.status()).isEqualTo("REQUESTED");assertThat(waiting.lastErrorCode()).isNull();
+        assertThat(waiting.nextAttemptAt()).isEqualTo(clock.now().plusSeconds(5));
+        assertThat(reports.find(reportId).orElseThrow().status()).isEqualTo("GENERATING");assertThat(reports.sections(reportId)).isEmpty();
+        resultStatus(practice,"DONE");
+        runner.execute(nextAttempt(job));
+        assertThat(reports.find(reportId).orElseThrow().status()).isEqualTo("READY");
+        assertThat(section(2).citations()).singleElement().satisfies(c->assertThat(c.sessionId()).isEqualTo(practice));
+        assertThat(section(10).text()).doesNotContain("정리 중인 활동");
+        assertThat(reports.activities(reportId)).allSatisfy(a->assertThat(a.resultStatus()).isEqualTo("DONE"));
+    }
+    /** 마지막 시도까지 정리가 끝나지 않으면 그때 있는 자료로 만들고 10항목에 정리 중 활동 수를 남긴다. */
+    @Test void stillSettlingAtLastAttemptBuildsWithAvailableRecords(){
+        var job=prepare(2,Duration.ofSeconds(60));var practice=practiceSession();resultStatus(practice,"RUNNING");
+        runner.execute(job);var second=nextAttempt(job);runner.execute(second);var third=nextAttempt(job);
+        assertThat(third.attemptCount()).isEqualTo(3);runner.execute(third);
+        assertThat(reports.find(reportId).orElseThrow().status()).isEqualTo("READY");
+        assertThat(section(2).missing()).isTrue();assertThat(section(2).text()).isEqualTo("자료 부족");
+        assertThat(section(10).text()).contains("정리 중인 활동 1개");
+        assertThat(reports.activities(reportId).stream().filter(a->a.sessionId().equals(practice)).findFirst().orElseThrow().resultStatus()).isEqualTo("RUNNING");
+    }
+    /** 결과 접수 전(결과 머리 없음)도 기다리지만, 정리하지 못한(FAILED) 활동 · 결과 대상이 아닌(NONE) 활동은 기다리지 않는다. */
+    @Test void failedOrIneligibleActivitiesAreNotAwaitedButUnacceptedOnesAre(){
+        var job=prepare(2,Duration.ofSeconds(60));var practice=practiceSession();
+        db.jdbc().update("delete from core.core_session_result_state where session_id=:id",Map.of("id",practice));
+        runner.execute(job);
+        assertThat(jobs.find(job.id()).orElseThrow().status()).isEqualTo("REQUESTED");
+        states.insert(practice,guardian,child,"PRACTICE",false,clock.now());
+        runner.execute(nextAttempt(job));
+        assertThat(reports.find(reportId).orElseThrow().status()).isEqualTo("READY");
+    }
+    @Test void failedActivityIsNotAwaited(){
+        var job=prepare(2,Duration.ofSeconds(60));resultStatus(practiceSession(),"FAILED");
+        runner.execute(job);
+        assertThat(reports.find(reportId).orElseThrow().status()).isEqualTo("READY");
+        assertThat(section(10).text()).contains("정리하지 못한 활동 1개");
     }
 
     kr.mujoong.core.account.DeletionRequestRepository requestDeletion(){

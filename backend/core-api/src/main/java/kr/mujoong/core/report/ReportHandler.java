@@ -14,6 +14,10 @@ import org.springframework.transaction.support.TransactionTemplate;
 /**
  * WF9 · BR9: 읽기 스냅숏으로 10항목을 서버 규칙만으로 만들고 쓰기 확인 안에서 확정한다.
  * 리포트 생성 때 AI(글 생성 · 금지 표현 2차 분류)를 부르지 않는다(JIRA-267, contracts/deviations.md FT-1023-c).
+ *
+ * <p>고른 활동 중 결과 정리가 아직 끝나지 않은 활동(정리 대기 · 정리 중, 결과 접수 전)이 있으면 이번 시도를 미루고
+ * 작업 재시도 간격(result.job-retry-backoff)으로 다시 본다. 리포트 절대 마감(report.ready-target) 안에 다음 시도가 없으면
+ * 그때 있는 자료로 만든다. 정리하지 못한(FAILED) 활동 · 결과 대상이 아닌 활동 · 동의 철회 활동은 기다리지 않는다.
  */
 @Component
 public class ReportHandler implements JobHandler {
@@ -50,13 +54,20 @@ public class ReportHandler implements JobHandler {
         return "REPORT";
     }
 
-    private record Snapshot(ReportRepository.Report report, List<ReportInput> inputs) {}
+    /** settling: 결과 정리를 기다릴 활동이 있다. */
+    private record Snapshot(ReportRepository.Report report, List<ReportInput> inputs, boolean settling) {}
+
+    /** 결과가 곧 생길 수 있는 정리 상태. 결과 머리가 아직 없는 활동(접수 전)도 기다린다. */
+    private static final Set<String> SETTLING = Set.of("REQUESTED", "RUNNING");
 
     public Outcome handle(JobContext job) {
         requireReportAccess(job);
         Snapshot snapshot = tx.execute(t -> load(job));
         if (snapshot == null) {
             return Outcome.failed("REPORT_DISCARDED", false);
+        }
+        if (snapshot.settling() && job.retryAvailable()) {
+            return Outcome.deferred();
         }
         var inputs = snapshot.inputs();
         Map<Integer, ReportRepository.Section> sections = new TreeMap<>(assembler.assemble(snapshot.report(), inputs));
@@ -92,9 +103,11 @@ public class ReportHandler implements JobHandler {
         }
         List<ReportInput> inputs = new ArrayList<>();
         int ordinal = 0;
+        boolean settling = false;
         for (var selected : reports.activities(report.id())) {
             var record = records.find(selected.sessionId(), job.guardianId()).orElseThrow().record();
-            String status = states.find(record.sessionId(), job.guardianId()).map(s -> s.jobStatus()).orElse("NONE");
+            var state = states.find(record.sessionId(), job.guardianId());
+            String status = state.map(s -> s.jobStatus()).orElse("NONE");
             var result = status.equals("DONE") ? results.current(record.sessionId()).orElse(null) : null;
             List<Map<String, Object>> defs = new ArrayList<>();
             for (var g : goals(practice(record.practiceJson()))) {
@@ -105,11 +118,14 @@ public class ReportHandler implements JobHandler {
                     // BR12.2: 없는 고정 버전은 7항목에서 뺀다.
                 }
             }
-            inputs.add(new ReportInput(++ordinal, record, status, result,
+            var input = new ReportInput(++ordinal, record, status, result,
                     result == null ? List.of() : scenes.find(result.id()),
                     result == null ? Map.of() : structures.find(result.id()).map(s -> practice(s)).orElse(Map.of()),
-                    defs));
+                    defs);
+            inputs.add(input);
+            // 결과 머리가 있고 NONE이면 결과 대상이 아닌 활동이라 기다려도 결과가 생기지 않는다.
+            settling |= input.contentAllowed() && (state.isEmpty() || SETTLING.contains(status));
         }
-        return new Snapshot(report, List.copyOf(inputs));
+        return new Snapshot(report, List.copyOf(inputs), settling);
     }
 }

@@ -28,7 +28,7 @@ backend/core-api/src/main/java/kr/mujoong/core/record/ActivityRecordRepository.j
 backend/core-api/src/main/java/kr/mujoong/core/record/RecordEligibility.java
 backend/core-api/src/main/java/kr/mujoong/core/record/RecordQueryService.java
 backend/core-api/src/main/java/kr/mujoong/core/record/ResultRecordReader.java
-backend/core-api/src/main/java/kr/mujoong/core/report/QuoteCandidatePicker.java
+backend/core-api/src/main/java/kr/mujoong/core/report/ReportQuotes.java
 backend/core-api/src/main/java/kr/mujoong/core/report/ReportAssembler.java
 backend/core-api/src/main/java/kr/mujoong/core/report/ReportHandler.java
 backend/core-api/src/main/java/kr/mujoong/core/report/ReportInput.java

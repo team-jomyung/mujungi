@@ -15,8 +15,10 @@ import org.springframework.stereotype.Component;
 /**
  * 2 · 5 · 6 · 10항목을 AI 없이 저장된 기록 · 결과로 만든다(JIRA-267, contracts/deviations.md FT-1023-c).
  *
- * <p>2항목은 연습 장면 판정이 가리키는 아이 발화를, 연습 장면 발화가 없으면 BR9.7 선별 인용을 날짜순으로 낸다.
- * 5항목은 저장된 경험 구조화 칸을, 6항목은 활동별 저장 결과 문장을, 10항목은 고정 문장과 집계 문장을 낸다.
+ * <p>자료가 부족한 항목은 다른 설명 · 대체 내용 없이 "자료 부족"만 낸다.
+ * 2항목은 연습 장면 판정이 가리키는 아이 발화만, 5항목은 이번 대화 자체가 아닌 실제 생활 경험 구조화만,
+ * 6항목은 결과 문장이 있는 활동만 낸다. 10항목의 연습 고정 문장은 연습 활동이 있을 때만 붙인다.
+ * 인용 글은 잡음을 걷어 낸 글이고({@link ReportQuotes}), 한 항목 안에서 같은 (세션, 발화) 인용은 한 번만 단다.
  * 동의 철회로 끝난 활동의 전사 · 결과는 어느 항목에도 넣지 않는다.
  */
 @Component
@@ -24,9 +26,6 @@ public class ReportRuleSections {
     // 임시 문구(J118): 화면 설계 문구표에 리포트 항목 본문 문구가 없어 둔다. 문구표 개정 때 바꾼다.
     static final String FREE_TALK = "자유대화";
     static final String PRACTICE = "연습";
-    static final String NO_SENTENCE = "정리 문장 없음";
-    static final String SEE_QUOTES = "아래 인용";
-    static final String GUARDIAN_INPUT = "보호자 입력";
     static final String SCENE = "장면";
     static final String PENDING = "정리 중인 활동";
     static final String FAILED = "정리하지 못한 활동";
@@ -51,19 +50,19 @@ public class ReportRuleSections {
     private static final int SCENE_QUOTES = 2;
     private static final int ACTIVITY_QUOTES = 5;
     private static final int SECTION_QUOTES = 30;
-    private static final int ACTIVITY_SECTION6_QUOTES = 2;
     private static final DateTimeFormatter DAY = DateTimeFormatter.ofPattern("M/d").withZone(ReportService.ZONE);
     private static final DateTimeFormatter MINUTE = DateTimeFormatter.ofPattern("M/d HH:mm").withZone(ReportService.ZONE);
 
-    private final QuoteCandidatePicker picker;
+    /** 이번 대화의 두 참여자(아이 · AI 무중)를 가리키는 등장인물 별칭. 비교는 소문자 · 공백 제거 뒤에 한다. */
+    static final Set<String> SELF_ALIASES = Set.of("아이", "나", "저", "ai", "에이아이", "인공지능", "무중", "무중이");
+
     private final ForbiddenDictionary dictionary;
 
-    public ReportRuleSections(QuoteCandidatePicker picker, ForbiddenDictionary dictionary) {
-        this.picker = picker;
+    public ReportRuleSections(ForbiddenDictionary dictionary) {
         this.dictionary = dictionary;
     }
 
-    private record SceneQuote(QuoteCandidatePicker.Quote quote, String label) {}
+    private record SceneQuote(ReportQuotes.Quote quote, String label) {}
 
     public Map<Integer, ReportRepository.Section> write(List<ReportInput> inputs) {
         Map<Integer, ReportRepository.Section> sections = new TreeMap<>();
@@ -74,15 +73,9 @@ public class ReportRuleSections {
         return sections;
     }
 
-    /** 2항목: 연습 장면 판정의 아이 발화. 없으면 BR9.7 선별 인용. */
+    /** 2항목: 연습 장면 판정의 아이 발화만. 없으면 자료 부족(자유대화 대체 인용 없음). */
     ReportRepository.Section observedScenes(List<ReportInput> inputs) {
-        List<SceneQuote> quotes = practiceQuotes(inputs);
-        if (quotes.isEmpty()) {
-            quotes = picker.pick(inputs).stream()
-                    .map(q -> new SceneQuote(q, typeLabel(input(inputs, q.activityNo()))))
-                    .toList();
-        }
-        var ordered = quotes.stream()
+        var ordered = practiceQuotes(inputs).stream()
                 .sorted(Comparator.comparing((SceneQuote q) -> q.quote().at())
                         .thenComparingInt(q -> q.quote().activityNo())
                         .thenComparingLong(q -> q.quote().utteranceSeq()))
@@ -100,12 +93,7 @@ public class ReportRuleSections {
                 .toList();
         for (var input : practices) {
             var transcript = transcript(input.record().transcriptJson());
-            Map<Long, Map<String, Object>> child = new HashMap<>();
-            for (var u : transcript) {
-                if (quotable(u)) {
-                    child.put(number(u, "seq"), u);
-                }
-            }
+            var child = childUtterances(transcript);
             var practice = practice(input.record().practiceJson());
             boolean modern = PracticeRecordV2.present(practice);
             var runs = modern ? PracticeRecordV2.read(practice) : List.<PracticeRecordV2.Scene>of();
@@ -124,7 +112,7 @@ public class ReportRuleSections {
                     }
                     var utterance = child.get(seq);
                     if (utterance != null && taken.add(seq)) {
-                        result.add(new SceneQuote(QuoteCandidatePicker.quote(input, utterance, "TRANSCRIPT"), label));
+                        result.add(new SceneQuote(ReportQuotes.quote(input, utterance, "TRANSCRIPT"), label));
                         if (result.size() == SECTION_QUOTES) {
                             return result;
                         }
@@ -174,87 +162,104 @@ public class ReportRuleSections {
                     Instant at = startedAt(u);
                     return at != null && !at.isBefore(from) && (to == null || at.isBefore(to));
                 })
-                .sorted(Comparator.comparing((Map<String, Object> u) -> !meaningful(u)).thenComparingLong(u -> number(u, "seq")))
+                .sorted(Comparator.comparing((Map<String, Object> u) -> !ReportQuotes.meaningful(text(u, "text"))).thenComparingLong(u -> number(u, "seq")))
                 .limit(SCENE_QUOTES)
                 .map(u -> number(u, "seq"))
                 .sorted()
                 .toList();
     }
 
-    /** 5항목: 저장된 경험 구조화 칸. 아이 회상은 그 칸 글을, 보호자 입력은 칸 이름과 출처만 낸다. */
+    /**
+     * 5항목: 저장된 경험 구조화 중 실제 생활 경험만. 등장인물이 아이 · AI뿐이고 상대가 한 말이 없는 구조화는 이번 대화 자체로 보고 뺀다.
+     * 아이 회상 칸은 칸 글과 그 발화 인용을, 보호자 입력 칸은 줄 없이 그 구조화가 남을 때만 quote 없는 출처 인용 하나를 단다.
+     */
     ReportRepository.Section experiences(List<ReportInput> inputs) {
         List<String> lines = new ArrayList<>();
         List<ReportRepository.Citation> citations = new ArrayList<>();
+        Set<String> cited = new HashSet<>();
         for (var input : chronological(inputs)) {
-            if (!input.done() || input.structured().isEmpty()) {
+            if (!input.done() || input.structured().isEmpty() || conversationItself(input.structured())) {
                 continue;
             }
-            Map<Long, Map<String, Object>> child = new HashMap<>();
-            for (var u : transcript(input.record().transcriptJson())) {
-                if (quotable(u)) {
-                    child.put(number(u, "seq"), u);
-                }
-            }
+            var child = childUtterances(transcript(input.record().transcriptJson()));
             String day = DAY.format(input.record().listedAt());
+            int before = lines.size();
+            boolean guardian = false;
             for (var field : FIELD_NAMES.entrySet()) {
-                Object value = input.structured().get(field.getKey());
-                var rows = value instanceof Map<?, ?> ? List.of(object(value)) : objects(value);
-                for (var row : rows) {
+                for (var row : rows(input.structured().get(field.getKey()))) {
                     String source = text(row, "source");
                     if ("GUARDIAN_INPUT".equals(source)) {
-                        lines.add(day + " · " + field.getValue() + " · " + GUARDIAN_INPUT);
-                        citations.add(new ReportRepository.Citation(input.record().sessionId(), null, null, null, "GUARDIAN_INPUT"));
-                    } else if ("CHILD_RECALL".equals(source)) {
-                        var utterance = child.get(number(row, "utteranceSeq"));
-                        if (utterance == null) {
-                            continue;
-                        }
-                        lines.add(day + " · " + field.getValue() + recallText(field.getKey(), row));
-                        citations.add(QuoteCandidatePicker.quote(input, utterance, "CHILD_RECALL").citation());
+                        guardian = true;
+                        continue;
+                    }
+                    var utterance = "CHILD_RECALL".equals(source) ? child.get(number(row, "utteranceSeq")) : null;
+                    String body = utterance == null ? "" : recallText(field.getKey(), row, utterance);
+                    if (body.isEmpty()) {
+                        continue;
+                    }
+                    lines.add(day + " · " + field.getValue() + body);
+                    var quote = ReportQuotes.quote(input, utterance, "CHILD_RECALL");
+                    if (cited.add(quote.sessionId() + ":" + quote.utteranceSeq())) {
+                        citations.add(quote.citation());
                     }
                 }
+            }
+            if (guardian && lines.size() > before) {
+                citations.add(new ReportRepository.Citation(input.record().sessionId(), null, null, null, "GUARDIAN_INPUT"));
             }
         }
         return section(5, lines, citations);
     }
 
-    /** 아이 회상 칸 글은 저장 전사 발화의 일부라 인용 부호로 싼다. 등장인물 별칭은 사전에 걸리면 뺀다. */
-    private String recallText(String key, Map<String, Object> row) {
+    /** 등장인물이 있고 모두 이번 대화의 참여자(아이 · AI)이며 상대가 한 말이 없으면 이번 대화 자체를 구조화한 것이다. */
+    static boolean conversationItself(Map<String, Object> structured) {
+        var characters = rows(structured.get("characters"));
+        boolean selfOnly = !characters.isEmpty() && characters.stream().allMatch(c -> selfAlias(text(c, "alias")));
+        boolean partner = rows(structured.get("partnerUtterance")).stream().anyMatch(r -> !text(r, "text").isBlank());
+        return selfOnly && !partner;
+    }
+
+    static boolean selfAlias(String alias) {
+        return SELF_ALIASES.contains(alias.toLowerCase(Locale.ROOT).replaceAll("\\s+", ""));
+    }
+
+    /**
+     * 아이 회상 칸의 줄 글. 칸 글은 근거 발화의 일부라 인용 부호로 싼다. 등장인물은 별칭만 쓰고, 아이 · AI 별칭과 사전에 걸리는 별칭은 줄을 내지 않는다.
+     * 칸 글이 근거 발화에 들어 있지 않으면(줄과 근거가 맞지 않으면) 줄 · 인용을 내지 않는다.
+     */
+    private String recallText(String key, Map<String, Object> row, Map<String, Object> utterance) {
         if (key.equals("characters")) {
             String alias = text(row, "alias").strip();
-            return alias.isEmpty() || !dictionary.allowedLiteral(alias) ? "" : " · " + alias;
+            return alias.isEmpty() || selfAlias(alias) || !dictionary.allowedLiteral(alias) ? "" : " · " + alias;
         }
-        String body = text(row, "text").strip();
-        return body.isEmpty() ? "" : " · “" + body + "”";
+        String body = ReportQuotes.clean(text(row, "text")).strip();
+        if (body.isEmpty() || !normalize(text(utterance, "text")).contains(normalize(body))) {
+            return "";
+        }
+        return " · “" + body + "”";
     }
 
-    /** 6항목: 활동별 날짜 · 유형 · 저장 결과 문장. 결과 문장이 없으면 그 활동 인용 2개까지. */
+    /** 6항목: 결과 문장이 있는 활동만 날짜 · 유형 · 저장 결과 문장을 낸다. 인용 대체 없음. */
     ReportRepository.Section conversations(List<ReportInput> inputs) {
         List<String> lines = new ArrayList<>();
-        List<ReportRepository.Citation> citations = new ArrayList<>();
         for (var input : chronological(inputs)) {
-            if (!input.contentAllowed()) {
+            if (!input.done()) {
                 continue;
             }
-            String prefix = DAY.format(input.record().listedAt()) + " · " + typeLabel(input);
-            List<String> sentences = input.done()
-                    ? transcript(input.result().sentencesJson()).stream().map(s -> text(s, "text").strip()).filter(s -> !s.isEmpty()).toList()
-                    : List.of();
+            var sentences = transcript(input.result().sentencesJson()).stream().map(s -> text(s, "text").strip()).filter(s -> !s.isEmpty()).toList();
             if (!sentences.isEmpty()) {
-                lines.add(prefix + " · " + String.join(" ", sentences));
-                continue;
+                lines.add(DAY.format(input.record().listedAt()) + " · " + typeLabel(input) + " · " + String.join(" ", sentences));
             }
-            var quotes = picker.pick(List.of(input)).stream().limit(ACTIVITY_SECTION6_QUOTES).toList();
-            lines.add(prefix + " · " + NO_SENTENCE + (quotes.isEmpty() ? "" : " · " + SEE_QUOTES));
-            quotes.forEach(q -> citations.add(q.citation()));
         }
-        return section(6, lines, citations);
+        return section(6, lines, List.of());
     }
 
-    /** 10항목: 고정 문장 + 정리 상태 · 종료 확인 · 끝난 이유 · 미실시 장면 집계. */
+    /** 10항목: 연습 활동이 있을 때의 고정 문장 + 정리 상태 · 종료 확인 · 끝난 이유 · 미실시 장면 집계. 줄이 없으면 자료 부족. */
     ReportRepository.Section limitations(List<ReportInput> inputs) {
         List<String> lines = new ArrayList<>();
-        lines.add(ReportAssembler.LIMITATION);
+        if (inputs.stream().anyMatch(i -> "PRACTICE".equals(i.record().activityType()))) {
+            lines.add(ReportAssembler.LIMITATION);
+        }
         long pending = inputs.stream().filter(i -> i.contentAllowed() && !Set.of("DONE", "FAILED").contains(i.status())).count();
         long failed = inputs.stream().filter(i -> i.contentAllowed() && "FAILED".equals(i.status())).count();
         long unconfirmed = inputs.stream().filter(i -> !i.record().confirmed()).count();
@@ -288,7 +293,7 @@ public class ReportRuleSections {
         if (!notDone.isEmpty()) {
             lines.add(NOT_DONE_SCENES + " · " + joinCounts(notDone, "개"));
         }
-        return new ReportRepository.Section(10, ReportAssembler.TITLES.get(9), String.join("\n", lines), false, true, List.of());
+        return section(10, lines, List.of());
     }
 
     static String endReasonText(ReportInput input) {
@@ -314,16 +319,33 @@ public class ReportRuleSections {
         return inputs.stream().sorted(Comparator.comparing((ReportInput i) -> i.record().listedAt()).thenComparingInt(ReportInput::activityNo)).toList();
     }
 
-    private static ReportInput input(List<ReportInput> inputs, int activityNo) {
-        return inputs.stream().filter(i -> i.activityNo() == activityNo).findFirst().orElseThrow();
-    }
-
     private static String typeLabel(ReportInput input) {
         return "FREE_TALK".equals(input.record().activityType()) ? FREE_TALK : PRACTICE;
     }
 
+    /** 인용할 수 있는 발화: 아이의 확정 전사이고 잡음을 걷어 낸 뒤 내용이 남는다. */
     private static boolean quotable(Map<String, Object> utterance) {
-        return "CHILD".equals(utterance.get("speaker")) && !Boolean.TRUE.equals(utterance.get("uncertain")) && number(utterance, "seq") > 0;
+        return "CHILD".equals(utterance.get("speaker")) && !Boolean.TRUE.equals(utterance.get("uncertain")) && number(utterance, "seq") > 0
+                && !ReportQuotes.clean(text(utterance, "text")).isEmpty();
+    }
+
+    private static Map<Long, Map<String, Object>> childUtterances(List<Map<String, Object>> transcript) {
+        Map<Long, Map<String, Object>> child = new HashMap<>();
+        for (var u : transcript) {
+            if (quotable(u)) {
+                child.put(number(u, "seq"), u);
+            }
+        }
+        return child;
+    }
+
+    /** 구조화 칸 값: 칸 하나(객체) 또는 여러 줄(배열). */
+    private static List<Map<String, Object>> rows(Object value) {
+        return value instanceof Map<?, ?> ? List.of(object(value)) : objects(value);
+    }
+
+    private static String normalize(String value) {
+        return java.text.Normalizer.normalize(value, java.text.Normalizer.Form.NFC).strip().replaceAll("\\s+", " ");
     }
 
     private static Instant startedAt(Map<String, Object> utterance) {
@@ -346,7 +368,7 @@ public class ReportRuleSections {
     }
 
     private static List<String> fixedPhrases() {
-        List<String> phrases = new ArrayList<>(List.of(FREE_TALK, PRACTICE, NO_SENTENCE, SEE_QUOTES, GUARDIAN_INPUT, SCENE, PENDING, FAILED,
+        List<String> phrases = new ArrayList<>(List.of(FREE_TALK, PRACTICE, SCENE, PENDING, FAILED,
                 UNCONFIRMED, END_REASONS, NOT_DONE_SCENES, END_REASON_UNKNOWN, END_REASON_NO_DEVICE));
         phrases.addAll(FIELD_NAMES.values());
         phrases.addAll(END_REASON_TEXT.values().stream().sorted().toList());
