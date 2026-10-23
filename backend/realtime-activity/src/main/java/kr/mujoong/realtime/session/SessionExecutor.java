@@ -506,6 +506,10 @@ public final class SessionExecutor {
     private boolean progressiveSoundStarted;
     /** 시간 정보가 있는 출력 전사를 이 세션에서 한 번이라도 받았는가(공급자가 시간 정보를 주는지 알아보는 표지). */
     private boolean timedTranscriptsSeen;
+    /** 진단: 아이 입력 전사 조각을 마지막으로 받은 시각(기기로 보내는 음성이 아이가 말하기 전에 이미 끝난 응답의 것인지 가린다). */
+    private Instant lastChildInputAt;
+    /** 진단: 단위별 경로에 공급자 음성(무음 포함)이 마지막으로 들어온 시각. */
+    private Instant timedAudioLastAt;
     /**
      * 참여 확인 중(안내가 끝난 뒤) 공급자가 스스로 시작한 응답을 버리지 않고 보관한 것. 참여가 수락되면 이것을 첫 응답으로 다시 흘려 넣고, 수락 지시를 따로 보내지
      * 않는다(GPT-Live는 아이 말이 끝나면 스스로 응답을 시작하므로, 보관하지 않으면 첫 발화에 대한 응답이 사라진다).
@@ -2257,6 +2261,7 @@ public final class SessionExecutor {
         if (!outputHeld() && inOutputRange() && ctx.outputGen().phase() == OutputGeneration.Phase.RECEIVING) {
             if (timedOutput.isOpen()) {
                 timedOutput.audio(new byte[bytes], ctx.outputGen().audioClockBytes() - bytes);
+                timedAudioLastAt = at;
                 drainTimedOutput(at, nanos);
             } else ctx.segment().addSilence(bytes);
         }
@@ -2423,6 +2428,7 @@ public final class SessionExecutor {
 
     /** 조각을 현재 묶음에 더하고(없으면 묶음을 연다) 조용 시계를 다시 건다. 묶음 id를 돌려준다. */
     private String groupInputDelta(ProviderEvent.InputTranscriptDelta delta) {
+        lastChildInputAt = ctx.services().clock().now();
         if (inputGroupId == null) {
             ctx.inputBeganAt(ctx.services().clock().now());
             inputGroupOpens++;
@@ -2597,7 +2603,10 @@ public final class SessionExecutor {
                 }
             }
             if (transcript != null) timedOutput.transcript(transcript, startMs, endMs, at, nanos);
-            else timedOutput.audio(audio, ctx.outputGen().audioClockBytes() - audio.length);
+            else {
+                timedOutput.audio(audio, ctx.outputGen().audioClockBytes() - audio.length);
+                timedAudioLastAt = at;
+            }
             drainTimedOutput(at, nanos);
             return;
         }
@@ -3025,6 +3034,40 @@ public final class SessionExecutor {
     }
 
     /** 통과한 단위들의 끝 위치까지 도착한 음성을 한 묶음으로 기기에 보낸다(도착한 만큼만, 더 오면 다음에 이어 낸다). */
+    /** 진단: 이 비율(%) 이상이 디지털 무음 표본이면 '대부분 무음' 묶음으로 본다(시간 값이 아니다). */
+    private static final int MOSTLY_SILENT_PERCENT = 90;
+
+    /**
+     * 진단(2026-10-23 현장 시험): 기기가 "무중이가 말하는 중"인데 소리가 나지 않는 경우를 가린다. 기기로 보내는 AI 음성 묶음 하나가 디지털 무음(표본 값
+     * 0)으로만 되어 있으면 {@code OutputBundleAllSilent}, {@value #MOSTLY_SILENT_PERCENT}% 이상이면 {@code OutputBundleMostlySilent}를 남긴다.
+     * 응답의 첫 묶음이면 이름에 {@code First}가 붙는다(예: {@code OutputBundleFirstAllSilent}). 묶음의 공급자 음성이 아이의 마지막 입력 조각보다
+     * 먼저 끝났으면(아이가 말하는 중에 앞 응답이 늦게 나감) {@code OutputBundleAfterChildInput}을 남긴다. 사유 코드만 남기고 원문 · 음성은 남기지 않는다(R-F14).
+     *
+     * @param audioLastAt 묶음에 든 공급자 음성이 마지막으로 들어온 시각(모르면 null)
+     */
+    private void logBundleSilence(List<byte[]> chunks, boolean firstOfResponse, Instant audioLastAt) {
+        long samples = 0;
+        long silent = 0;
+        for (byte[] chunk : chunks) {
+            for (int i = 0; i + 1 < chunk.length; i += 2) {
+                samples++;
+                if (chunk[i] == 0 && chunk[i + 1] == 0) {
+                    silent++;
+                }
+            }
+        }
+        String where = firstOfResponse ? "First" : "";
+        if (samples > 0 && silent == samples) {
+            ctx.services().events().appError(EventLog.Component.OUTPUT_GATE, "OutputBundle" + where + "AllSilent", EventCode.Level.INFO);
+        } else if (samples > 0 && silent * 100 >= samples * MOSTLY_SILENT_PERCENT) {
+            ctx.services().events().appError(EventLog.Component.OUTPUT_GATE, "OutputBundle" + where + "MostlySilent",
+                    EventCode.Level.INFO);
+        }
+        if (lastChildInputAt != null && audioLastAt != null && audioLastAt.isBefore(lastChildInputAt)) {
+            ctx.services().events().appError(EventLog.Component.OUTPUT_GATE, "OutputBundleAfterChildInput", EventCode.Level.INFO);
+        }
+    }
+
     private void pumpApprovedAudio() {
         if (!progressiveResponse || approvedEndByte <= 0) {
             return;
@@ -3056,6 +3099,7 @@ public final class SessionExecutor {
         UUID playbackId = UUID.randomUUID();
         boolean first = !progressiveSoundStarted;
         progressiveSoundStarted = true;
+        logBundleSilence(chunks, first, timedAudioLastAt);
         greetingHandoff.sent(playbackId, generation, target.connectionId(), now.plus(ctx.services().settings().playbackExpiry()));
         if (first) {
             ctx.services().latency().gatePassed(ctx.plan().sessionId(), playbackId, now);
@@ -3244,6 +3288,7 @@ public final class SessionExecutor {
             TranscriptWriter.Held held, boolean ownsLatency) {
         Instant passAt = ctx.services().clock().now();
         correctionsInARow = 0;
+        logBundleSilence(sealed.chunks(), ownsLatency, sealed.lastOutAt());
         UUID playbackId = UUID.randomUUID();
         greetingHandoff.sent(playbackId, sealed.generation(), target.connectionId(),
                 passAt.plus(ctx.services().settings().playbackExpiry()));

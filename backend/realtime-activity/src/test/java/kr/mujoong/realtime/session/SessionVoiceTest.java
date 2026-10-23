@@ -429,6 +429,40 @@ class SessionVoiceTest {
     // ------------------------------------------------------------------ 도움
 
     /** 응답 한 개를 끝까지 흘리고 조용 시간을 넘겨 게이트를 통과시킨다. 기기로 나간 묶음을 돌려준다. */
+    // ------------------------------------------------------------------ 무음 묶음 진단(2026-10-23 현장 시험)
+
+    @Test
+    void aBundleMadeOnlyOfDigitalSilenceIsLoggedAsTheResponsesFirstAllSilentBundle() {
+        h.activate();
+
+        respond("r1", "음", 4_800);
+
+        assertThat(errorKinds()).contains("OutputBundleFirstAllSilent").doesNotContain("OutputBundleAfterChildInput");
+    }
+
+    @Test
+    void aBundleWithAudibleSamplesIsNotLoggedAsSilent() {
+        h.activate();
+        byte[] audible = new byte[4_800];
+        for (int i = 0; i < audible.length; i += 2) {
+            audible[i] = 7;
+        }
+
+        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("나도 공룡이 좋아"));
+        h.provider.last().emit(new ProviderEvent.OutputAudioDelta(audible));
+        h.drain();
+        h.advance(Duration.ofMillis(800));
+
+        assertThat(h.link.outputs()).hasSize(1);
+        assertThat(errorKinds()).noneMatch(kind -> kind.startsWith("OutputBundle"));
+    }
+
+
+    private List<String> errorKinds() {
+        return h.logs.events(EventCode.APP_ERROR).stream().map(event -> String.valueOf(LogCapture.attrs(event).get("errorKind")))
+                .toList();
+    }
+
     private OutputBundle respond(String responseId, String text, int bytes) {
         int before = h.link.outputs().size();
         h.speak(text, bytes);
