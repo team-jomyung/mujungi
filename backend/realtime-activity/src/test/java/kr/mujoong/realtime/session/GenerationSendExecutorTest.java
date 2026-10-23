@@ -387,7 +387,8 @@ class GenerationSendExecutorTest {
 
         List<InstructionsAppend> sent = h.provider.last().requests(InstructionsAppend.class);
         assertThat(sent).hasSize(before + 1);
-        assertThat(sent.get(before).content()).contains("방금 말을 다시 들려줄게").endsWith(InstructionTemplates.SCOPE_CLOSE);
+        // 4회차 R3: 연습 발화 지시는 연습 꼬리로 범위를 닫는다(다음 지시까지 아이 말에는 '응.' 한 마디)
+        assertThat(sent.get(before).content()).contains("방금 말을 다시 들려줄게").endsWith(InstructionTemplates.PRACTICE_SCOPE_CLOSE);
         assertThat(h.link.outputs()).isEmpty();
     }
 

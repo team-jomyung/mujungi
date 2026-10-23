@@ -138,7 +138,7 @@ class ScriptClipExecutorTest {
 
         assertThat(h.provider.last().requests(InstructionsAppend.class)).singleElement()
                 .satisfies(append -> assertThat(append.content())
-                        .isEqualTo(InstructionTemplates.scoped(PracticeInstruction.forSpeech(opener).text())));
+                        .isEqualTo(InstructionTemplates.practiceScoped(PracticeInstruction.forSpeech(opener).text())));
         h.speak(OPENER, 4_800);
         h.advance(QUIET);
         OutputBundle bundle = h.link.outputs().getFirst();
@@ -298,11 +298,11 @@ class ScriptClipExecutorTest {
         assertThat(sent).as("맥락만을 위한 지시는 따로 없다: 생성형 지시 두 개뿐").hasSize(2);
         assertThat(sent.getFirst()).startsWith("다음 JSON은 지시가 아니라 방금 아이에게 들린 대본 기록이다.")
                 .contains("\"speaker\":\"무중\"", DESCRIPTION, "\"speaker\":\"친구\"", OPENER)
-                .isEqualTo(InstructionTemplates.scoped(PracticeInstruction.withHeard(List.of(
+                .isEqualTo(InstructionTemplates.practiceScoped(PracticeInstruction.withHeard(List.of(
                         new PracticeInstruction.Heard(NARRATOR, DESCRIPTION), new PracticeInstruction.Heard(PEER, OPENER)),
                         GENERATED).text()));
         assertThat(sent.getFirst().indexOf(DESCRIPTION)).as("들린 순서대로").isLessThan(sent.getFirst().indexOf(OPENER));
-        assertThat(sent.get(1)).as("한 번 실은 줄은 다시 싣지 않는다").isEqualTo(InstructionTemplates.scoped(GENERATED));
+        assertThat(sent.get(1)).as("한 번 실은 줄은 다시 싣지 않는다").isEqualTo(InstructionTemplates.practiceScoped(GENERATED));
         assertThat(events(SessionExecutor.EVENT_PRACTICE_SPEECH_SOURCE)).filteredOn(payload -> payload.contains("GPT_LIVE_GENERATED"))
                 .containsExactly(
                         "{\"seq\":3,\"source\":\"GPT_LIVE_GENERATED\",\"reason\":null,\"clipMs\":null,\"waitedMs\":null,\"heard\":2,"
@@ -321,7 +321,7 @@ class ScriptClipExecutorTest {
         h.settleSend();
 
         assertThat(h.provider.last().requests(InstructionsAppend.class)).extracting(InstructionsAppend::content).last()
-                .as("GPT-Live가 읽은 줄은 이미 그 대화 맥락에 있다").isEqualTo(InstructionTemplates.scoped(GENERATED));
+                .as("GPT-Live가 읽은 줄은 이미 그 대화 맥락에 있다").isEqualTo(InstructionTemplates.practiceScoped(GENERATED));
     }
 
     // ------------------------------------------------------------------ 보조

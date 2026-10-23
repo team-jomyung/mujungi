@@ -157,6 +157,35 @@ class ProviderRequestFactoryWireTest {
                 .as("이미 닫힌 지시는 한 번 더 닫지 않는다").isEqualTo(InstructionTemplates.ResponseStart.FIRST.content());
     }
 
+    /**
+     * 4회차 R3(실측 B3): 연습 발화 지시(승인 원문 읽기 · 생성형 역할 지시)는 연습 꼬리로 닫는다 — 다음 지시가 올 때까지 아이 말에는 '응.' 한 마디로만
+     * 답하게 해 '평소처럼 … 한두 문장' 자동 응답을 부르지 않는다. 자유대화 · 교정 · 확장점 instructProvider 지시는 공통 꼬리 그대로다.
+     */
+    @Test
+    void practiceSpeechInstructionsCloseWithThePracticeTailWhileEveryOtherInstructionKeepsTheCommonTail() {
+        PracticeSpeech speech = new PracticeSpeech(java.util.UUID.randomUUID(), java.util.UUID.randomUUID(), 1L,
+                kr.mujoong.realtime.practicelegacy.PracticePorts.OutputKind.SCENARIO, "친구", "자, 여기 초록색!");
+        List<String> practice = List.of(
+                factory.practiceSpeechInstruction("e", PracticeInstruction.forSpeech(speech)).content(),
+                factory.practiceSpeechInstruction("e", new PracticeInstruction("너는 아이의 친구 역할이다. 열린 질문 하나로 되묻는다.")).content());
+
+        assertThat(InstructionTemplates.PRACTICE_SCOPE_CLOSE).contains("이번 한 번만", "다음 지시가 올 때까지", "'응.' 한 마디로만")
+                .doesNotContain("평소처럼", "한두 문장");
+        assertThat(practice).allSatisfy(content -> {
+            assertThat(content).endsWith(InstructionTemplates.PRACTICE_SCOPE_CLOSE).doesNotContain(InstructionTemplates.SCOPE_CLOSE);
+            assertThat(content.codePointCount(0, content.length())).isLessThan(500);
+        });
+        assertThat(InstructionTemplates.practiceScoped(practice.getFirst())).as("이미 닫힌 지시는 한 번 더 닫지 않는다").isEqualTo(practice.getFirst());
+        List<String> others = new java.util.ArrayList<>();
+        others.add(factory.practiceInstruction("e", new PracticeInstruction("목표 문장을 한 번 더 안내한다.")).content());
+        for (InstructionTemplates.ResponseStart start : InstructionTemplates.ResponseStart.values()) {
+            others.add(factory.responseStart("e", start).content());
+        }
+        others.add(factory.instructionsAppend("e", DialogInstructions.Correction.INCOMPLETE).content());
+        assertThat(others).allSatisfy(content -> assertThat(content).endsWith(InstructionTemplates.SCOPE_CLOSE)
+                .doesNotContain(InstructionTemplates.PRACTICE_SCOPE_CLOSE));
+    }
+
     @Test
     void inputAudioMustBeExactlyOneFrameAndGoesOutUntransformed() {
         byte[] pcm = new byte[AudioFrameCodec.INPUT_PAYLOAD_BYTES];

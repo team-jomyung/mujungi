@@ -2137,7 +2137,7 @@ public final class SessionExecutor {
             practiceHold = false;
             sent = sendInstruction(OutputGeneration.BumpReason.SERVER_SEND,
                     speech.generated() ? "provider-practice-generated-" : "provider-practice-speech-",
-                    id -> ctx.services().requests().practiceInstruction(id, attempt.instruction()),
+                    id -> ctx.services().requests().practiceSpeechInstruction(id, attempt.instruction()),
                     () -> practiceOutput.post("u5b-voice-failed", speech), speech.generated(), pacing);
         }
         if (sent) {

@@ -54,7 +54,7 @@ class LiveSessionInstructionsTest {
         LiveSessionInstructions.Body free = live.of(ActivityType.FREE_TALK);
         LiveSessionInstructions.Body practice = live.of(ActivityType.PRACTICE);
         assertThat(free.version()).isEqualTo("live-free-talk.v1");
-        assertThat(practice.version()).isEqualTo("live-practice.v1");
+        assertThat(practice.version()).isEqualTo("live-practice.v2");
         for (LiveSessionInstructions.Body body : java.util.List.of(free, practice)) {
             assertThat(body.sha256()).matches("[0-9a-f]{64}");
             String file = new String(resource(LiveSessionInstructions.resource(body.version())), StandardCharsets.UTF_8);
@@ -70,7 +70,24 @@ class LiveSessionInstructionsTest {
 
         assertThat(live.of(ActivityType.FREE_TALK).text()).isEqualTo(FREE_TALK_BODY);
         assertThat(live.of(ActivityType.PRACTICE).text()).doesNotContain("관심사나 일상 질문", "질문 하나로 시작")
-                .contains("역할놀이", "친구 역할", "코치 역할은 지시가 있을 때만", "대신 알려 주거나 힌트를 주지 않는다");
+                .contains("친구 역할", "코치 역할은 지시가 있을 때만", "대신 알려 주거나 힌트를 주지 않는다");
+    }
+
+    /**
+     * 4회차 R3(실측 B3 · B6): 연습 본문 v2는 서버가 이끄는 연습이라 지시가 없을 때 아이 말에는 '응.' 한 마디로만 답하고 스스로 장면 · 역할 · 질문을 만들지
+     * 않게 하며, 무중과 아이 이름을 가른다. 자기 놀이를 부르던 낱말('역할놀이')은 쓰지 않는다. 앞 판(v1)은 기록을 되짚을 수 있게 자원에 남는다.
+     */
+    @Test
+    void thePracticeBodyV2LeadsAServerRunPracticeAnswersOnlyOkayWithoutAnInstructionAndSeparatesTheNames() throws Exception {
+        LiveSessionInstructions.Body practice = LiveSessionInstructions.loadDefault().of(ActivityType.PRACTICE);
+
+        assertThat(practice.text()).contains("서버가 순서를 정해 이끄는 말하기 연습", "진행 지시가 없을 때 아이가 말하면", "'응.' 한 마디로만 답하고",
+                "새 장면이나 역할이나 질문이나 놀이를 스스로 만들지 않는다", "지시한 말을 한 번만 하고 다른 말을 덧붙이지 않는다",
+                "너의 이름은 무중이다", "아이의 이름은 위 아이 정보의 이름", "아이를 무중이라고 부르지 않는다");
+        assertThat(practice.text()).as("자기 놀이 · 자유 응답을 부르는 낱말").doesNotContain("역할놀이", "평소처럼");
+        String first = new String(resource(LiveSessionInstructions.resource("live-practice.v1")), StandardCharsets.UTF_8).strip();
+        assertThat(first).as("앞 판은 남는다").contains("역할놀이 연습");
+        assertThat(practice.sha256()).isNotEqualTo(sha256(first));
     }
 
     @Test
@@ -112,7 +129,7 @@ class LiveSessionInstructionsTest {
         LiveSessionInstructions live = LiveSessionInstructions.loadDefault();
         LiveSessionInstructions.Body practice = live.of(ActivityType.PRACTICE);
 
-        assertThat(practice.toString()).contains("live-practice.v1", practice.sha256()).doesNotContain(practice.text(), "역할놀이");
+        assertThat(practice.toString()).contains("live-practice.v2", practice.sha256()).doesNotContain(practice.text(), "말하기 연습");
         assertThatThrownBy(() -> live.of(ActivityType.UNRECOGNIZED)).isInstanceOf(IllegalArgumentException.class);
     }
 }

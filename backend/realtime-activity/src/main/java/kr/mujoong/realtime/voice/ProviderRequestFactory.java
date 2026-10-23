@@ -180,7 +180,7 @@ public class ProviderRequestFactory {
 
     /**
      * 서버 템플릿 지시문: 공통 역할 문장(아이 문맥 값은 따옴표 안 데이터로만) 뒤에 활동 본문을 붙인다. 자유대화 본문은 참여 확인 뒤 첫 질문
-     * 문장이고, 연습 본문은 그 문장 없이 역할놀이 규칙만 둔다(장면과 질문은 연습 흐름의 지시로 온다).
+     * 문장이고, 연습 본문은 그 문장 없이 서버가 이끄는 연습의 규칙만 둔다(장면과 질문은 연습 흐름의 지시로 온다).
      */
     static String instructions(ChildContextData data, LiveSessionInstructions.Body body) {
         return DialogInstructions.role(data.displayName(), data.age(), data.interests()) + " " + body.text();
@@ -194,6 +194,15 @@ public class ProviderRequestFactory {
     public InstructionsAppend practiceInstruction(String eventId, PracticeInstruction instruction) {
         Objects.requireNonNull(instruction, "instruction");
         return instructionsAppend(eventId, InstructionTemplates.scoped(instruction.text()));
+    }
+
+    /**
+     * 4회차 R3: 연습 발화 지시(승인 원문 읽기 {@link PracticeInstruction#forSpeech} · 생성형 역할 지시)를 보낸다. {@link #practiceInstruction}과 같고 범위를
+     * 닫는 문장만 연습 꼬리({@link InstructionTemplates#PRACTICE_SCOPE_CLOSE})다 — 다음 지시가 올 때까지 아이 말에는 '응.' 한 마디로만 답한다.
+     */
+    public InstructionsAppend practiceSpeechInstruction(String eventId, PracticeInstruction instruction) {
+        Objects.requireNonNull(instruction, "instruction");
+        return instructionsAppend(eventId, InstructionTemplates.practiceScoped(instruction.text()));
     }
 
     private static List<String> limitInterests(List<String> interests) {

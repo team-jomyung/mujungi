@@ -19,6 +19,12 @@ public final class InstructionTemplates {
      */
     public static final String SCOPE_CLOSE = "이번 한 번만 위 지시를 따르고, 그 뒤에는 평소처럼 아이 말을 끝까지 듣고 한두 문장으로 답한다.";
 
+    /**
+     * 4회차 R3: 연습 발화 지시(승인 원문 읽기 · 생성형 역할 지시)의 꼬리. 연습은 서버가 이끌어 다음 지시가 곧 오므로, 그 사이 아이 말에는 '응.' 한 마디로만
+     * 답하게 해 스스로 지어낸 말(새 장면 · 역할 · 질문)이 다음 지시와 겹치지 않게 한다(실측 B3). 자유대화 · 판정 뒤 지시 · 교정은 {@link #SCOPE_CLOSE}다.
+     */
+    public static final String PRACTICE_SCOPE_CLOSE = "이번 한 번만 위 지시를 따른다. 그 뒤에는 다음 지시가 올 때까지 아이 말에 '응.' 한 마디로만 답한다.";
+
     /** 발언권을 돌려주는 지시(응답 요청 type이 없어 지시가 응답을 시작한다, 설계 개정 A2). */
     public enum ResponseStart {
         /** 참여 확인 뒤 첫 응답. */
@@ -89,6 +95,13 @@ public final class InstructionTemplates {
         Objects.requireNonNull(body, "body");
         String trimmed = body.strip();
         return trimmed.endsWith(SCOPE_CLOSE) ? trimmed : trimmed + " " + SCOPE_CLOSE;
+    }
+
+    /** 4회차 R3: 연습 발화 지시 본문 끝에 연습 꼬리({@link #PRACTICE_SCOPE_CLOSE})를 붙인다(이미 붙어 있으면 그대로). */
+    public static String practiceScoped(String body) {
+        Objects.requireNonNull(body, "body");
+        String trimmed = body.strip();
+        return trimmed.endsWith(PRACTICE_SCOPE_CLOSE) ? trimmed : trimmed + " " + PRACTICE_SCOPE_CLOSE;
     }
 
     /** 게이트 폐기 뒤 교정 지시 전문: 짧은 맞장구로 시작해 범주 지침대로 다시 답하고 범위를 닫는다. */

@@ -28,8 +28,11 @@ public final class LiveSessionInstructions {
     public static final String RESOURCE_DIR = "live-prompts/";
     /** 자유대화 활동 본문 판. 자원은 {@code live-prompts/free-talk.v1.txt}. */
     public static final String FREE_TALK_VERSION = "live-free-talk.v1";
-    /** 연습 활동 본문 판. 자원은 {@code live-prompts/practice.v1.txt}. */
-    public static final String PRACTICE_VERSION = "live-practice.v1";
+    /**
+     * 연습 활동 본문 판. 자원은 {@code live-prompts/practice.v2.txt}(4회차 R3: 서버가 이끄는 연습 — 지시가 없을 때 아이 말에는 '응.' 한 마디, 무중 · 아이
+     * 이름 구분). 앞 판 {@code practice.v1.txt}는 기록의 sha256을 되짚을 수 있게 남긴다.
+     */
+    public static final String PRACTICE_VERSION = "live-practice.v2";
     /**
      * 활동 본문 상한(코드 포인트). 공급자 {@code session.start} 지시문 상한은 기록이 없어 임시로 둔 값이다. 실제로 받아들여지는지는 실호출 도구로 사람이
      * 확인한다.

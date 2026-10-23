@@ -113,7 +113,7 @@ import tools.jackson.databind.json.JsonMapper;
  *       {@code JudgmentCoordinator.open})와 같은 {@link JudgeRequest}로 바꾸고 {@link LunaJudgeClient} → {@link RealtimeLunaClient}(STRICT,
  *       https + api.openai.com) → {@link JudgeOutcomeValidator}로 부른다. 시도 시한만 넉넉히 주고 운영 live-budget과 비교해 적는다.
  *   <li>친구 · 코치 생성형 발화는 원래 GPT-Live 음성이다. 여기서는 {@link PracticeOutput#speakGenerated}의 지시문을 가로채, 운영과 같은 세션 지시문
- *       (공통 역할 문장 + 연습 활동 본문 {@code live-prompts/practice.v1.txt})과 같은 범위 닫힌 추가 지시를 텍스트 모델(Responses API, realtime
+ *       (공통 역할 문장 + 연습 활동 본문 {@code live-prompts/practice.v2.txt})과 같은 범위 닫힌 추가 지시(연습 꼬리)를 텍스트 모델(Responses API, realtime
  *       {@link LunaTransport})로 보내 텍스트 발화를 받는다. 출력에는 {@code textProxy: true}('GPT-Live 음성 아님, 텍스트 대리')로 표시한다.
  *   <li>승인 발화(무중의 장면 설명 · 친구 첫 대사 · 친구 기회 문장 · 상황 다시 설명 · 변형 제안 · 도움 제안 · 역할 전환 알림)는 모델을 부르지 않고
  *       승인 원문 그대로 기록한다.
@@ -1919,7 +1919,7 @@ class PracticeDialogueLiveTest {
             add(line);
             spokenLines.put(speech.correlationId(), line);
             heard.add(new Heard(RolePolicy.NARRATOR_LABEL.equals(speech.partnerRole()) ? "무중" : "친구", speech.text()));
-            history.add(message("developer", harness.factory.practiceInstruction("speech", PracticeInstruction.forSpeech(speech)).content()));
+            history.add(message("developer", harness.factory.practiceSpeechInstruction("speech", PracticeInstruction.forSpeech(speech)).content()));
             history.add(message("assistant", speech.text()));
             queue.add(() -> playbackDone(speech.correlationId(), speech, Playback.COMPLETED, speech.text()));
             return true;
@@ -1946,7 +1946,7 @@ class PracticeDialogueLiveTest {
             attachHelps(line);
             add(line);
             heard.add(new Heard("무중", sentence));
-            history.add(message("developer", harness.factory.practiceInstruction("notice", PracticeInstruction.forSpeech(speech)).content()));
+            history.add(message("developer", harness.factory.practiceSpeechInstruction("notice", PracticeInstruction.forSpeech(speech)).content()));
             history.add(message("assistant", sentence));
             queue.add(() -> playbackDone(speech.correlationId(), speech, Playback.COMPLETED, sentence));
             return true;
@@ -1976,7 +1976,7 @@ class PracticeDialogueLiveTest {
             line.put("template", template(instructionText));
             line.put("instruction", instructionText);
             attachHelps(line);
-            String scoped = harness.factory.practiceInstruction("generated", instruction).content();
+            String scoped = harness.factory.practiceSpeechInstruction("generated", instruction).content();
             queue.add(() -> generate(correlationId, line, scoped));
             return true;
         }
