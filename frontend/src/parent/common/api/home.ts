@@ -15,7 +15,7 @@ export function fetchHome(api: ApiClient, signal?: AbortSignal): Promise<HomeVie
   return api.request({ method: "GET", path: "/api/home", parse: parseHome, csrf: false, signal });
 }
 
-/** 홈 화면만 상태를 계속 확인한다. 다른 화면의 진입 조회는 그대로 둔다. */
+/** 홈·기기 상태 화면에서만 SSE로 최신 상태를 확인한다. 다른 화면은 진입 조회를 유지한다. */
 export function useHomeQuery(poll = false) {
   const api = useApiClient();
   const client = useQueryClient();
