@@ -3474,6 +3474,9 @@ public final class SessionExecutor {
         }
     }
 
+    /** 세션 시작 지시문의 아이 이름을 중립 호칭으로 바꿨다는 사유 코드(JIRA-266, INFO). */
+    static final String REASON_CHILD_NAME_REPLACED = "ChildNameProfanityReplaced";
+
     static DialogInstructions.Correction correctionFor(SeedDictionary.Category category) {
         return switch (category) {
             case DIAGNOSIS -> DialogInstructions.Correction.DIAGNOSIS;
@@ -3483,6 +3486,7 @@ public final class SessionExecutor {
             case GENERALIZATION -> DialogInstructions.Correction.GENERALIZATION;
             case EMOTION_CLAIM -> DialogInstructions.Correction.EMOTION_CLAIM;
             case PRESSURE -> DialogInstructions.Correction.PRESSURE;
+            case PROFANITY -> DialogInstructions.Correction.PROFANITY;
         };
     }
 
@@ -3592,6 +3596,10 @@ public final class SessionExecutor {
     private ProviderConnector.Attempt connectProvider(UUID session, ChildContext child,
             kr.mujoong.realtime.voice.ProviderPort.Listener listener, ProviderConnector.Callback callback,
             kr.mujoong.realtime.dialog.PolicyBundle policy) {
+        // JIRA-266: 저장된 이름이 욕설 사전에 걸리면 요청 공장이 지시문의 이름을 중립 호칭으로 바꾼다. 여기서는 그 사실만 사유 코드로 남긴다(원문 없음, R-F14)
+        if (ProviderRequestFactory.nameNeedsReplacement(child.displayName())) {
+            ctx.services().events().appError(EventLog.Component.SESSION_LIFECYCLE, REASON_CHILD_NAME_REPLACED, EventCode.Level.INFO);
+        }
         return ctx.services().connector().connect(session, child, listener, callback, policy, ctx.plan().conversationGuide());
     }
 

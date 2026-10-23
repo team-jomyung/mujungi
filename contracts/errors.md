@@ -56,6 +56,7 @@
 | `GOOGLE_AUTH_FAILED` | 401 | 로그인하지 못했어요. 다시 시도해 주세요. | 보호자 | `POST /api/auth/google`의 모든 실패(code 없음 · redirectUri 불일치 · Origin 불일치 · 구글 교환 실패 · id_token 검증 실패 · 구글 설정 없음). 세션 쿠키를 만들지 않는다 | U2 · AC1.1.4 · 편차 (U2-a) |
 | `CHILD_NOT_REGISTERED` | 404 | 아이 정보가 아직 없어요. | 보호자 | 아이를 등록하지 않은 보호자의 `/api/child` 조회 · 수정 · 종료 표현 | 계약 3절 /child · U2 |
 | `CHILD_EXISTS` | 409 | 이미 등록된 아이가 있어요. | 보호자 | 계정당 아이 하나 — 두 번째 `POST /api/child` | 계약 3절 /child · AC1.3.9 · U2 |
+| `CHILD_NAME_NOT_ALLOWED` | 400 | 이 이름은 쓸 수 없어요. 다른 이름을 입력해 주세요. | 보호자 | `POST · PATCH /api/child`의 이름(`displayName`)이 공통 욕설 사전(`contract-model` `ProfanityLexicon`)에 걸림. 길이 · 형식 오류는 그대로 `VALIDATION_FAILED`이고, 이 검사는 형식 검사 뒤에 한다. message에 입력값을 싣지 않는다 | JIRA-266 · 편차 FT-1023-b |
 
 ## 응답 헤더 규칙
 

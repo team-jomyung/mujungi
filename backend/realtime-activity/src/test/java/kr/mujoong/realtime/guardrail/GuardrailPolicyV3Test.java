@@ -25,7 +25,7 @@ class GuardrailPolicyV3Test {
         var question = new JevQuestion(policy.instructions(), policy.criteria());
         var clock = new MutableClock();
         try (var client = new JevGuardrailClient(
-                new GuardrailProperties("REAL", "http://127.0.0.1:9", "jev-model-1", 0.5), JevHosts.Mode.TEST,
+                new GuardrailProperties("REAL", "http://127.0.0.1:9", "jev-model-1", 0.5, false), JevHosts.Mode.TEST,
                 () -> "synthetic-test-key", version -> Optional.of(question), Duration.ofMillis(800), clock, JsonCodec.shared())) {
             var request = GuardrailRequest.of(GuardrailRequest.Mode.FREE_TALK, "합성 출력 조각", policy.version(), List.of());
             String pass = "{\"model\":\"jev-model-1\",\"answers\":{\"guardrail\":{\"type\":\"choice\","

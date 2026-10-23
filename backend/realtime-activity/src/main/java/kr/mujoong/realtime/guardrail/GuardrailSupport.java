@@ -14,9 +14,11 @@ import java.util.Objects;
  * @param budget 검사 시한({@code mujoong.timing.guardrail.jev-budget}, 800ms). {@code OFF}에서는 쓰이지 않아 0이다(시간 값은 설정 키에서만 읽는다, R-F7)
  * @param policyVersion 세션에 고정되는 정책 판(요청의 {@code policyVersion}). 기동 설정 빈은 정책 리소스의 판으로 바꿔 넣는다({@link #withPolicyVersion})
  * @param approved 승인 원문 일치를 묻는 좁은 포트(BR7.4). 기동 설정은 콘텐츠 레지스트리를 {@link #withApprovedVerbatim}으로 연결한다. 기본은 {@link ApprovedVerbatimPort#NONE}
+ * @param sendChildName 제브 요청에 아이 이름을 원문으로 보내는가({@code mujoong.guardrail.jev.send-child-name}, 기본 false — 이름을 '아이'로 바꾼다,
+ *     JIRA-266). 기동 설정은 {@link #withSendChildName}으로 넣는다
  */
 public record GuardrailSupport(GuardrailMode mode, GuardrailClient client, GuardrailEventRecorder recorder, Duration budget,
-        String policyVersion, ApprovedVerbatimPort approved) {
+        String policyVersion, ApprovedVerbatimPort approved, boolean sendChildName) {
 
     /** 정책 리소스({@code guardrail/policy-v2.json})의 판. 장치를 직접 만드는 시험의 기본값이다. */
     public static final String DEFAULT_POLICY_VERSION = "jev-guardrail-v3";
@@ -45,6 +47,12 @@ public record GuardrailSupport(GuardrailMode mode, GuardrailClient client, Guard
         }
     }
 
+    /** 이름은 '아이'로 바꾼다(스위치 꺼짐). */
+    public GuardrailSupport(GuardrailMode mode, GuardrailClient client, GuardrailEventRecorder recorder, Duration budget,
+            String policyVersion, ApprovedVerbatimPort approved) {
+        this(mode, client, recorder, budget, policyVersion, approved, false);
+    }
+
     /** 승인 원문 포트는 없다({@link ApprovedVerbatimPort#NONE}). */
     public GuardrailSupport(GuardrailMode mode, GuardrailClient client, GuardrailEventRecorder recorder, Duration budget,
             String policyVersion) {
@@ -58,12 +66,17 @@ public record GuardrailSupport(GuardrailMode mode, GuardrailClient client, Guard
 
     /** 정책 판만 바꾼 사본. */
     public GuardrailSupport withPolicyVersion(String version) {
-        return new GuardrailSupport(mode, client, recorder, budget, version, approved);
+        return new GuardrailSupport(mode, client, recorder, budget, version, approved, sendChildName);
     }
 
     /** 승인 원문 포트만 바꾼 사본(BR7.4). */
     public GuardrailSupport withApprovedVerbatim(ApprovedVerbatimPort port) {
-        return new GuardrailSupport(mode, client, recorder, budget, policyVersion, port);
+        return new GuardrailSupport(mode, client, recorder, budget, policyVersion, port, sendChildName);
+    }
+
+    /** 아이 이름 원문 전달 스위치만 바꾼 사본(JIRA-266). */
+    public GuardrailSupport withSendChildName(boolean value) {
+        return new GuardrailSupport(mode, client, recorder, budget, policyVersion, approved, value);
     }
 
     /**

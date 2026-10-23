@@ -7,6 +7,7 @@ import java.util.Base64;
 import java.util.List;
 import java.util.Objects;
 import kr.mujoong.contract.audio.AudioFrameCodec;
+import kr.mujoong.contract.text.ProfanityLexicon;
 import kr.mujoong.realtime.dialog.DialogInstructions;
 import kr.mujoong.realtime.dialog.InstructionTemplates;
 import kr.mujoong.realtime.dialog.PolicyBundle;
@@ -25,6 +26,8 @@ import org.springframework.stereotype.Component;
  * 관심사)는 지시문 문장 안에 따옴표로 묶은 데이터로만 들어간다(별도 필드 없음).
  * 자유 {@code Map} · 문자열 이어 붙이기 입구가 없고 판정 기준 · 보호자 입력 · 이전 판정 · 식별자 필드는 타입에 없다(SD-20 구조 규칙).
  * 길이 상한(이름 10자 · 관심사 10개 x 20자, 계약 C8)은 입력 단계가 검증하고 여기서 한 번 더 자른다.
+ * 이름이 공통 욕설 사전({@link ProfanityLexicon#containsInName})에 걸리면 지시문에는 이름 대신 중립 호칭 {@value #NEUTRAL_CHILD_NAME}을 넣는다
+ * (JIRA-266 — core 입력 검사 전에 저장된 이름 대비, {@link #instructionName}).
  *
  * <p>U11: 응답 취소 {@code session.response.cancel}과 지시 교정 {@code session.instructions.correct}는 공급자 지원 목록에 없어 없앴다.
  * 끼어들기 · 종료 의도 · 연습 폐기는 서버 출력 세대로 처리한다. 추가한 지시는 이후 응답에도 남고 지울 방법이 없으므로(설계 개정 A6) 모든 지시문은
@@ -64,6 +67,9 @@ public class ProviderRequestFactory {
     /** 송신할 수 있는 type 전부(지원 목록 안, 시험이 대조한다). */
     public static final java.util.Set<String> SENT_TYPES = java.util.Set.of(TYPE_SESSION_START, TYPE_INPUT_AUDIO_APPEND,
             TYPE_INSTRUCTIONS_APPEND, TYPE_SESSION_CLOSE);
+
+    /** 이름이 욕설 사전에 걸렸을 때 지시문에 대신 넣는 중립 호칭(JIRA-266). */
+    public static final String NEUTRAL_CHILD_NAME = "친구";
 
     static final int MAX_DISPLAY_NAME = 10;
     static final int MAX_INTERESTS = 10;
@@ -138,7 +144,7 @@ public class ProviderRequestFactory {
             throw new IllegalArgumentException("표본율은 0보다 커야 한다");
         }
         ChildContextData data = new ChildContextData(
-                limit(context.displayName(), MAX_DISPLAY_NAME),
+                instructionName(context.displayName()),
                 context.age() == null ? null : Math.max(MIN_AGE, context.age()),
                 limitInterests(context.interests()));
         return new SessionStart(TYPE_SESSION_START,
@@ -156,7 +162,7 @@ public class ProviderRequestFactory {
             kr.mujoong.contract.context.ConversationGuide guide) {
         Objects.requireNonNull(context, "context");
         String instructions = DialogInstructions.serviceRole(Objects.requireNonNull(policy, "policy"),
-                limit(context.displayName(), MAX_DISPLAY_NAME),
+                instructionName(context.displayName()),
                 context.age() == null ? null : Math.max(MIN_AGE, Math.min(SERVICE_MAX_AGE, context.age())),
                 limitInterests(context.interests())) + DialogInstructions.conversationGuide(guide);
         return new SessionStart(TYPE_SESSION_START,
@@ -243,6 +249,16 @@ public class ProviderRequestFactory {
             limited.add(limit(interest, MAX_INTEREST_LENGTH));
         }
         return limited;
+    }
+
+    /** 이름이 공통 욕설 사전에 걸리는가(세션 실행기가 사유 코드를 남길지 정할 때도 쓴다, 원문은 남기지 않는다). */
+    public static boolean nameNeedsReplacement(String displayName) {
+        return displayName != null && ProfanityLexicon.shared().containsInName(displayName);
+    }
+
+    /** 지시문에 넣을 이름: 욕설 사전에 걸리면 {@value #NEUTRAL_CHILD_NAME}, 아니면 계약 상한으로 자른 이름. 자르기 전 전체 이름으로 판정한다. */
+    static String instructionName(String displayName) {
+        return nameNeedsReplacement(displayName) ? NEUTRAL_CHILD_NAME : limit(displayName, MAX_DISPLAY_NAME);
     }
 
     private static String limit(String value, int max) {

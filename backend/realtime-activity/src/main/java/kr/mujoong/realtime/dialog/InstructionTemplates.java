@@ -141,6 +141,7 @@ public final class InstructionTemplates {
             case GENERALIZATION -> "늘·절대로 일반화하지 않는다.";
             case EMOTION_CLAIM -> "감정을 단정하거나 감정 확인 질문을 강제하지 않는다.";
             case PRESSURE -> "재촉하지 않고 아이가 선택한 만큼 기다린다.";
+            case PROFANITY -> "욕설·비속어·놀리는 말을 쓰지 않고, 욕설처럼 들리는 이름은 부르지 않고 친구라고 부른다.";
             case INCOMPLETE -> "확인된 문맥에서 완결된 한두 문장만 사용한다.";
         };
         return scoped("방금 응답은 아이에게 전달하지 않았다. " + constraint

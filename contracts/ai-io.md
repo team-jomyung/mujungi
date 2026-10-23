@@ -19,7 +19,7 @@
 | 결과 문장 출력 | 6.3절 | ResultPipeline → core_result(U6) |
 | 리포트 항목 출력 | 6.5절 | Report → core_report_section(U6) |
 | 금지 표현 2차 분류 출력 | 6.6절 | TextAiGateway(U6) |
-| 금지 표현 사전 항목 | `{ id, pattern, category: DIAGNOSIS\|TREATMENT\|SCORE\|CAUSE\|GENERALIZATION\|EMOTION_CLAIM\|PRESSURE, appliesTo: [OUTPUT_GATE, RESULT_TEXT, PDF, APPROVED_CONTENT] }` | OutputGate(U1 시드 · U3 정식) · TextAiGateway · Report |
+| 금지 표현 사전 항목 | `{ id, pattern, category: DIAGNOSIS\|TREATMENT\|SCORE\|CAUSE\|GENERALIZATION\|EMOTION_CLAIM\|PRESSURE\|PROFANITY, appliesTo: [OUTPUT_GATE, RESULT_TEXT, PDF, APPROVED_CONTENT] }` — `PROFANITY`(욕설)는 2026-10-23 JIRA-266으로 더한 값이다(편차 FT-1023-b, 4절) | OutputGate(U1 시드 · U3 정식) · TextAiGateway · Report |
 
 ## 2. 공급자 연결 (Realtime VoiceRelay, BR7.2 · J109 · J110 · J141 · SD-20 · SD-25)
 
@@ -101,8 +101,9 @@ U11 이전 가정은 아래 편차들로 계약에 들어 있었고 실호출 �
 |---|---|
 | 패턴 문법 | 리터럴과 숫자 자리표시 `#`(숫자 한 자 이상)만. 정규식을 쓰지 않는다(선형 시간, ReDoS 없음) |
 | 정규화 | 전사를 NFKC → 공백 · 제로폭 문자 · 구두점(`%`는 남김) 제거 → 라틴 소문자로 바꾼 뒤 부분 문자열로 찾는다 |
-| 로딩 거부 | 파일 없음 · 파싱 실패 · 중복 id · category 7개 중 빈 것 · 정규화 뒤 형태가 아닌 패턴(공백 · 구두점 · 대문자 라틴 · 정규식 메타 문자 포함) → Realtime 기동 거부(S1b, 종료 코드 1). 로딩 완료가 readiness 조건이다(S6) |
+| 로딩 거부 | 파일 없음 · 파싱 실패 · 중복 id · category 8개 중 빈 것 · 공통 욕설 사전 로딩 실패 · 정규화 뒤 형태가 아닌 패턴(공백 · 구두점 · 대문자 라틴 · 정규식 메타 문자 포함) → Realtime 기동 거부(S1b, 종료 코드 1). 로딩 완료가 readiness 조건이다(S6) |
 | U1 시드 항목(J101 · 사람 결정 12) | DIAGNOSIS `진단` · TREATMENT `치료` · SCORE `비정상` · CAUSE `핵심원인` · GENERALIZATION `학교에서도그럴` · EMOTION_CLAIM `화가났군요` · PRESSURE `꼭해야해요`. `점수` · `정상이에요` · `정상입니다`는 정식 사전 v1(D 담당)에서 더한다(알려진 틈) |
+| 욕설 범주 `PROFANITY`(JIRA-266 · 편차 FT-1023-b) | 이 파일에는 범주 표지인 대표 항목 `SEED-PROFANITY-1`(`씨발새끼`) 하나만 둔다. 어휘 · 변형 · 예외 낱말은 두 앱 공통 욕설 사전(`backend/contract-model/src/main/resources/kr/mujoong/contract/text/profanity-lexicon.txt`, 판정기 `kr.mujoong.contract.text.ProfanityLexicon`)이 맡고, 게이트는 파일 항목을 먼저 본 뒤 공통 사전의 문장 판정을 본다. 공통 사전은 NFKC · 라틴 소문자 뒤 문장부호 · 숫자 · 기호를 지우고, 공백은 낱말 경계로 남겨 낱말마다(한 글자 낱말이 이어진 곳은 이어서) 찾으며, 예외 낱말(`시발점` · `수박씨` · `아저씨` 등)을 먼저 지운다. 이 파일은 공백을 지우고 찾으므로 낱말 경계를 넘어 걸릴 짧은 욕설(`아저씨 발` → `씨발`)은 파일에 두지 않는다. 걸리면 `GATE_PATTERN` 폐기 뒤 교정 지시 `PROFANITY`를 보낸다. 같은 공통 사전을 core 아이 이름 입력(오류 `CHILD_NAME_NOT_ALLOWED`)과 realtime 세션 시작 지시문의 이름 대체(중립 호칭 `친구`, 사유 코드 `ChildNameProfanityReplaced` INFO)에 쓴다 |
 
 ## 5. 승인 문구 · 승인 음성 (J60 · J102 · J114 · J117)
 
@@ -306,7 +307,7 @@ U15 씨앗 v2는 GENERATED/DUPLICATE/NONE의 배타적 출력 분기를 사용�
 
 ### 10.2 금지 필드와 외부 전달
 
-- 외부 AI(Luna · 제브)로 보내는 필드는 스키마가 허용한 최소 필드뿐이다. 다음은 어느 요청 스키마의 속성도 될 수 없다: 아동 · 보호자 · 세션 · 기기 식별자(`childId` · `guardianId` · `sessionId` · `deviceId` 등), 키(`apiKey` 등), 원음(`audio`), 보호자 입력 원문, 이메일, 동의 상태. 아이 이름은 '아이'로 바꾼다(BR5.4 · NFR3.1).
+- 외부 AI(Luna · 제브)로 보내는 필드는 스키마가 허용한 최소 필드뿐이다. 다음은 어느 요청 스키마의 속성도 될 수 없다: 아동 · 보호자 · 세션 · 기기 식별자(`childId` · `guardianId` · `sessionId` · `deviceId` 등), 키(`apiKey` 등), 원음(`audio`), 보호자 입력 원문, 이메일, 동의 상태. 아이 이름은 '아이'로 바꾼다(BR5.4 · NFR3.1). **예외(JIRA-266 · 편차 FT-1023-b):** 제브 출력 검사 요청은 설정 `mujoong.guardrail.jev.send-child-name`(10.12)이 켜진 경우에만 후보 문장 · 맥락의 아이 이름을 바꾸지 않고 원문으로 보낸다(욕설로 저장된 이름을 제브가 보게 하려는 것). 기본은 꺼짐이고, `infra/RUNBOOK.md` R-F15 확인 기록에 제브의 아동 이름 전달 허용 범위 확인이 남기 전에는 켜지 않는다. Luna 등 다른 외부 AI 경로는 이 스위치와 관계없이 언제나 이름을 바꾼다.
 - **R-F15** 공급자 약관 · 보호자 동의 확인 전에는 실제 아동 데이터를 외부 모델로 보내지 않는다. 실호출은 합성 자료로만 한다. U9는 코드로 판정하지 않고 RUNBOOK 확인 기록으로 지킨다(편차 U9-b). 키(`OPENAI_API_KEY`)를 넣는 순간 실제 어댑터가 켜지므로, `infra/RUNBOOK.md` 단계 4의 R-F15 확인 기록 표에 한 줄을 남기기 전에는 운영 환경에 키를 넣지 않는다 [U9 편차 (U9-b)].
 - 시험 · CI · 검증은 가짜 공급자만 쓴다(R-F1). 테스트 대역의 성공을 실공급자 성공으로 표시하지 않는다(R-M11).
 
@@ -437,6 +438,7 @@ realtime 출력 게이트의 제브 단계(U13)가 읽는 설정이다. 시간 �
 | `mujoong.guardrail.jev.mode` | `${JEV_MODE:}` | realtime | 제브 단계 모드 `REAL` · `STUB` · `OFF`. 비면 프로필 기본값(demo · prod = `REAL`, 그 밖 = `STUB`). 세션 안에서 바뀌지 않는다 [U13 편차 (U13-a)] |
 | `mujoong.guardrail.jev.base-url` | `${JEV_BASE_URL:}` | realtime | 제브 주소. 호스트는 위 허용 호스트 안이어야 한다 |
 | `mujoong.guardrail.jev.model` | `${JEV_MODEL:}` | realtime | 고정 모델 버전. 요청의 모델 이름은 이 값과 같아야 한다 |
+| `mujoong.guardrail.jev.send-child-name` | `${JEV_SEND_CHILD_NAME:false}` | realtime | `true`면 제브 요청 후보 문장 · 맥락의 아이 이름을 '아이'로 바꾸지 않고 원문으로 보낸다(10.2 예외, JIRA-266). 비밀이 아니고 시간 값이 아니다. **R-F15 확인 기록(제브의 아동 이름 전달 허용 범위) 전에는 켜지 않는다.** 다른 외부 AI 경로에는 영향이 없다 [편차 FT-1023-b] |
 | `mujoong.guardrail.jev.pass-threshold` | `${JEV_PASS_THRESHOLD:0.5}` | realtime | 통과 문턱, 허용 `0 < x <= 1`. `PASS`가 1순위이고 `PASS` 확률이 이 값 **이상**일 때만 자동 통과한다(10.13). 비밀이 아니다. **임시 시험값이다 — AI 성능 시험으로 확정한다.** `REAL`에서 범위 밖이거나 숫자가 아니면 기동을 거부한다 [U13 편차 (U13-c)] |
 
 기동 점검(모드 × 프로필 × 키): 공개 프로필(demo · prod)은 `REAL` + `JEV_API_KEY` + 허용 호스트 + 고정 모델이 아니면 기동을 거부하고(`STUB` · `OFF`도 거부), 그 밖(dev · test · 프로필 없음)은 `REAL` · `STUB` · `OFF`를 모두 허용하되 `REAL`이면 키가 있어야 한다. `STUB`은 제브 단계를 모두 지나며 1차 사전 통과를 대역 표시가 붙은 `ALLOW`(`reasonCode` `STUB_ALLOW`)로 돌려주고 `OFF`는 제브 단계를 건너뛴다. 둘로 시작하면 기동 로그에 한 줄이 남는다. 대역의 통과는 실제 검사 성공이 아니다(R-M11).

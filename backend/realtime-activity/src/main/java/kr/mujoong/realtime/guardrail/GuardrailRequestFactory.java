@@ -14,6 +14,8 @@ import java.util.regex.Pattern;
  *
  * <ul>
  *   <li>아이 이름은 '아이'로 바꾼다. 이름이 여럿이거나 서로 포함해도 긴 이름부터 한 번만 훑으며 바꾼다(바꿔 넣은 '아이'를 다시 바꾸지 않는다).
+ *       예외: 스위치 {@code mujoong.guardrail.jev.send-child-name}이 켜져 있으면({@link #GuardrailRequestFactory(boolean)}) 이름을 바꾸지 않는다 —
+ *       욕설로 저장된 이름을 제브가 보게 하려는 것이다(JIRA-266). 기본은 꺼짐이고 R-F15 확인 기록 전에는 켜지 않는다(contracts/ai-io.md 10.2).
  *   <li>아동 · 보호자 · 세션 · 기기 식별자와 키, Luna 생성물, U6 결과는 입력으로 받지도 않는다 — {@link GuardrailRequest}에 그 칸이 없다.
  *   <li>후보 문장과 맥락 안의 지시문은 데이터 필드의 문자열 값일 뿐 시스템 지시(정책 리소스의 {@code systemPrompt})에 섞이지 않는다. 이 클래스는
  *       시스템 지시를 만지지 않는다.
@@ -25,6 +27,24 @@ public final class GuardrailRequestFactory {
 
     /** 아이 이름을 바꿔 넣는 말. */
     public static final String CHILD_ALIAS = "아이";
+
+    /** 아이 이름을 원문으로 보내는가(기본 false — '아이'로 바꾼다). */
+    private final boolean sendChildName;
+
+    /** 이름을 '아이'로 바꾸는 기본 공장. */
+    public GuardrailRequestFactory() {
+        this(false);
+    }
+
+    /** @param sendChildName true면 이름을 바꾸지 않는다(JIRA-266 스위치, 기본 false) */
+    public GuardrailRequestFactory(boolean sendChildName) {
+        this.sendChildName = sendChildName;
+    }
+
+    /** 이름을 원문으로 보내는 공장인가. */
+    public boolean sendsChildName() {
+        return sendChildName;
+    }
 
     /**
      * 대화 기록에서 골라 온 원본 한 턴(아직 이름 치환 · 길이 정리 전). 정리된 값은 {@link GuardrailRequest.ContextTurn}이다.
@@ -44,7 +64,7 @@ public final class GuardrailRequestFactory {
      * 요청 하나를 만든다.
      *
      * @param recentTurns 최근 대화(오래된 것부터). 비어 있지 않은 마지막 {@value GuardrailRequest#CONTEXT_MAX_TURNS}턴만 쓴다
-     * @param childNames 바꿀 아이 이름들(빈 이름은 무시)
+     * @param childNames 바꿀 아이 이름들(빈 이름은 무시). 원문 전달 스위치가 켜져 있으면 쓰지 않는다
      * @return 만들 수 없으면(후보 문장 길이 · 정책 판 길이) 빈 값
      */
     public Optional<GuardrailRequest> create(GuardrailRequest.Mode mode, String candidate, List<Turn> recentTurns,
@@ -54,7 +74,7 @@ public final class GuardrailRequestFactory {
                 || policyVersion.length() > GuardrailEventRecord.POLICY_VERSION_MAX) {
             return Optional.empty();
         }
-        Pattern names = namePattern(childNames);
+        Pattern names = sendChildName ? null : namePattern(childNames);
         String replaced = replace(names, candidate.strip());
         if (replaced.isEmpty() || replaced.length() > GuardrailRequest.CANDIDATE_MAX) {
             return Optional.empty();

@@ -91,7 +91,9 @@ class ConfigKeyContractTest {
             "JEV_BASE_URL", "",
             "JEV_MODEL", "",
             // 선 형식 정정 D6: 통과 문턱도 env로 받는다(비밀 아님). 시험 값은 기본값과 같다
-            "JEV_PASS_THRESHOLD", "0.5");
+            "JEV_PASS_THRESHOLD", "0.5",
+            // JIRA-266: 아이 이름 원문 전달 스위치도 env로 받는다(비밀 아님). 시험 값은 기본값과 같다
+            "JEV_SEND_CHILD_NAME", "false");
 
     // ------------------------------------------------------------------ timing.md ↔ application.yml
 

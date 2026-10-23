@@ -70,7 +70,12 @@ export function useChildScreen() {
         guard.leave(() => goToLogin(router, toast));
         return;
       }
-      toast.show({ message: ACCOUNT_PROPOSED_COPY.childSaveFailed, kind: "error" });
+      // 욕설 이름 거절(JIRA-266)은 저장 실패 일반 문구 대신 다른 이름을 넣으라는 문장을 보인다. 입력은 그대로 둔다
+      const nameRejected = failure instanceof ApiError && failure.code === "CHILD_NAME_NOT_ALLOWED";
+      toast.show({
+        message: nameRejected ? TEMP_COPY.errors.CHILD_NAME_NOT_ALLOWED : ACCOUNT_PROPOSED_COPY.childSaveFailed,
+        kind: "error",
+      });
     } finally {
       setSaving(false);
     }
