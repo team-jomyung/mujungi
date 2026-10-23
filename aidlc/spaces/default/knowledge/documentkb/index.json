@@ -1154,6 +1154,82 @@
       "related_intent_ids": [
         "01a13e5c-0ac9-786b-8d26-8e248e3c22b1"
       ]
+    },
+    {
+      "id": "01a15818-3d3a-736f-abb0-a451fb39f3b0",
+      "source": {
+        "kind": "managed",
+        "path": "documents/무중_서비스용_가드레일_20261016.zip"
+      },
+      "sha256": "94c982939b5637ea1729a447932d2be7db7c6a5ae55db4c1146002a75e46e270",
+      "bytes": 24112,
+      "indexed_at": "2026-10-20T06:55:45.514Z",
+      "extraction": {
+        "state": "unsupported_type",
+        "detectedType": "application/octet-stream"
+      },
+      "summary": {
+        "state": "absent"
+      },
+      "related_intent_ids": [
+        "01a1581a-0b79-77f8-81bb-a6a145bb2cf3"
+      ]
+    },
+    {
+      "id": "01a1582f-1b1e-759a-9907-fe6b66fda3e5",
+      "source": {
+        "kind": "managed",
+        "path": "documents/mujung-service-guardrails/live_service_instructions.txt"
+      },
+      "sha256": "1d92f114af7b48cefd86ed3df03feea30cdecc6ac546b128c236427f3d7fe5b7",
+      "bytes": 10391,
+      "indexed_at": "2026-10-20T07:20:44.569Z",
+      "extraction": {
+        "state": "extracted",
+        "extractor": {
+          "name": "builtin-text",
+          "version": "1"
+        },
+        "chars": 4328,
+        "truncated": false,
+        "source_revision": "1d92f114af7b48cefd86ed3df03feea30cdecc6ac546b128c236427f3d7fe5b7"
+      },
+      "summary": {
+        "state": "absent"
+      },
+      "content": "documentkb/01a1582f-1b1e-759a-9907-fe6b66fda3e5/content.md",
+      "content_sha256": "1d92f114af7b48cefd86ed3df03feea30cdecc6ac546b128c236427f3d7fe5b7",
+      "related_intent_ids": [
+        "01a1581a-0b79-77f8-81bb-a6a145bb2cf3"
+      ]
+    },
+    {
+      "id": "01a1582f-1f01-747a-8e54-d408d585906d",
+      "source": {
+        "kind": "managed",
+        "path": "documents/mujung-service-guardrails/service_contract.json"
+      },
+      "sha256": "ccd88cc15973ab7bebb47b1a77fd14060e9b623e1ea50064242c728edf0de515",
+      "bytes": 10380,
+      "indexed_at": "2026-10-20T07:20:45.564Z",
+      "extraction": {
+        "state": "extracted",
+        "extractor": {
+          "name": "builtin-text",
+          "version": "1"
+        },
+        "chars": 10043,
+        "truncated": false,
+        "source_revision": "ccd88cc15973ab7bebb47b1a77fd14060e9b623e1ea50064242c728edf0de515"
+      },
+      "summary": {
+        "state": "absent"
+      },
+      "content": "documentkb/01a1582f-1f01-747a-8e54-d408d585906d/content.md",
+      "content_sha256": "ccd88cc15973ab7bebb47b1a77fd14060e9b623e1ea50064242c728edf0de515",
+      "related_intent_ids": [
+        "01a1581a-0b79-77f8-81bb-a6a145bb2cf3"
+      ]
     }
   ]
 }

@@ -31,6 +31,7 @@ public final class InMemoryTransitions implements SessionTransitions {
     }
 
     private final Map<UUID, ActivitySessionRow> rows = new ConcurrentHashMap<>();
+    public final Map<UUID, kr.mujoong.realtime.session.SessionGuardrailFacts> guardrailFacts = new ConcurrentHashMap<>();
     private final List<Applied> applied = new ArrayList<>();
     private final MujoongClock clock;
     private int failures;
@@ -89,9 +90,16 @@ public final class InMemoryTransitions implements SessionTransitions {
     @Override
     public synchronized Optional<ActivitySessionRow> transition(UUID sessionId, SessionStatus from, SessionStatus to,
             SessionChange change, Origin origin, String traceId, Extras extras) {
+        if (extras.guardrailFacts() != null) {
+            ActivitySessionRow current = rows.get(sessionId);
+            if (current == null || current.status() != from
+                    || current.statusVersion() + 1 != extras.guardrailFacts().statusVersion()) return Optional.empty();
+            checkFactRevision(extras.guardrailFacts());
+        }
         Optional<ActivitySessionRow> row = transition(sessionId, from, to, change, origin, traceId);
         if (row.isPresent() && extras != null) {
             extrasApplied.add(new AppliedExtras(sessionId, to, extras));
+            if (extras.guardrailFacts() != null) guardrailFacts.put(sessionId, extras.guardrailFacts());
         }
         return row;
     }
@@ -146,6 +154,25 @@ public final class InMemoryTransitions implements SessionTransitions {
     @Override
     public Optional<ActivitySessionRow> find(UUID sessionId) {
         return Optional.ofNullable(rows.get(sessionId));
+    }
+
+    @Override
+    public synchronized Optional<kr.mujoong.realtime.session.SessionGuardrailFacts> recordGuardrailFacts(
+            kr.mujoong.realtime.session.SessionGuardrailFacts facts, int expectedStatusVersion) {
+        maybeFail();
+        ActivitySessionRow row = rows.get(facts.sessionId());
+        if (row == null || row.statusVersion() != expectedStatusVersion) return Optional.empty();
+        checkFactRevision(facts);
+        guardrailFacts.put(facts.sessionId(), facts);
+        return Optional.of(facts);
+    }
+
+    private void checkFactRevision(kr.mujoong.realtime.session.SessionGuardrailFacts facts) {
+        var previous = guardrailFacts.get(facts.sessionId());
+        if (previous != null && previous.equals(facts)) return;
+        if (facts.revision() != (previous == null ? 1 : previous.revision() + 1)) {
+            throw new IllegalStateException("시험용 사실 개정 충돌");
+        }
     }
 
     public SessionStatus status(UUID sessionId) {

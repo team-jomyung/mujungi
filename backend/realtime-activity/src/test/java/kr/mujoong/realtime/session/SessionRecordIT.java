@@ -36,6 +36,7 @@ import tools.jackson.databind.JsonNode;
  */
 @Tag("session-runtime")
 @Tag("db")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class SessionRecordIT {
 
     private static final String EVENTS = "/internal/events";
@@ -66,7 +67,8 @@ class SessionRecordIT {
         awaitTrue(() -> transcriptCount(sessionId) >= 2, "대화 행");
 
         env.api().post("/internal/sessions/" + sessionId + "/end", InternalApi.endBody(UUID.randomUUID(), "GUARDIAN_STOP"));
-        WsEnvelope closing = device.await(WsMessageType.PLAY_APPROVED_CONTENT, WAIT);
+        WsEnvelope closing = device.await(value -> sessionId.equals(value.sessionId()) && value.payload() instanceof PlayApprovedContent content
+                && content.contentCode().equals(PlayApprovedContent.CLOSING), WAIT);
         device.playbackMark(sessionId, ((PlayApprovedContent) closing.payload()).playbackId(),
                 PlaybackMark.Status.COMPLETED);
         device.await(WsMessageType.CLOSE_TRANSPORT, WAIT);
@@ -79,7 +81,7 @@ class SessionRecordIT {
         assertThat(payload.get("endReason").asString()).isEqualTo("GUARDIAN_STOP");
         assertThat(payload.get("confirmed").asBoolean()).isTrue();
         assertThat(payload.get("termination").get("transportClosedAt").isNull()).isFalse();
-        assertThat(payload.get("record").get("utterances").size()).as("아이 · AI · 마무리 인사").isEqualTo(3);
+        assertThat(payload.get("record").get("utterances").size()).as("현재 실제 안내 · 수락한 아이 대답 · 아이 · AI · 마무리 인사").isEqualTo(5);
         assertThat(payload.get("record").get("practice").isNull()).isTrue();
         String hash = env.db.single("select snapshot_hash from realtime.realtime_result_input_snapshot"
                 + " where session_id = cast(:id as uuid)", params(sessionId), String.class);
@@ -135,6 +137,10 @@ class SessionRecordIT {
         start(Map.of());
         DeviceSimulatorClient device = env.connectDevice();
         UUID sessionId = ready(device);
+        env.completeNotice(sessionId);
+        var reprompt = device.await(envelope -> envelope.payload() instanceof PlayApprovedContent play
+                && SessionExecutor.RE_PROMPT.equals(play.contentCode()), WAIT);
+        device.playbackMark(sessionId, ((PlayApprovedContent) reprompt.payload()).playbackId(), PlaybackMark.Status.COMPLETED);
         awaitTrue(() -> env.sessionStatus(sessionId) == SessionStatus.DECLINED, "DECLINED");
         WsEnvelope farewell = device.await(envelope -> envelope.payload() instanceof PlayApprovedContent play
                 && PlayApprovedContent.CLOSING.equals(play.contentCode()), WAIT);

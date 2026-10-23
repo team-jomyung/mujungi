@@ -9,19 +9,18 @@ import kr.mujoong.contract.status.ActivityType;
 import kr.mujoong.contract.status.EndReason;
 import kr.mujoong.contract.status.SessionStatus;
 import kr.mujoong.contract.ws.message.PlayApprovedContent;
-import kr.mujoong.contract.ws.message.StopOutput;
-import kr.mujoong.realtime.dialog.InstructionTemplates;
-import kr.mujoong.realtime.judgment.AbstainReason;
-import kr.mujoong.realtime.judgment.JudgmentLiveRecord;
-import kr.mujoong.realtime.judgment.JudgmentOutcomeKind;
-import kr.mujoong.realtime.judgment.NextAction;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 /**
- * 판정 턴 실행기 연결 2 — 종료 의도 J6 (U11 W2 · BR6.x · BR7.x, 첫 판 검토 R-13 · R-14). 공급자와 판정기는 가짜, 값은 합성이다(R-F1 · R-F3).
+ * 종료 의도와 판정 AI (U11 W2 폐기, 2026-10-22 결정). 종료 의도 판정 AI(J6)와 확인 질문을 없앴다: 판정기가 STOP이면 곧바로 끝내고, 그 밖(불명확한
+ * 종료 신호 포함)은 판정 AI · 확인 질문 없이 대화를 잇는다. 출력권을 가진 연습에서도 아이 전사는 보류 없이 곧바로 연습에 넘어간다. 공급자와 판정기는
+ * 가짜, 값은 합성이다(R-F1 · R-F3). 증거 종류: 테스트 대역.
  */
 @Tag("judgment-turn")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class StopJudgmentExecutorTest {
 
     private final JudgmentExecutorSupport t = new JudgmentExecutorSupport();
@@ -30,12 +29,10 @@ class StopJudgmentExecutorTest {
     private static final class OwningExtension implements PracticeSessionExtension {
         final List<Utterance> utterances = new ArrayList<>();
         final List<ExtensionEvent> events = new ArrayList<>();
-        PracticeOutput output;
 
         @Override public boolean controlsOutput() { return true; }
 
         @Override public Signal onActive(PracticeContext context, PracticeOutput out) {
-            this.output = out;
             out.schedule("practice-clock", Duration.ofSeconds(10));
             return Signal.NONE;
         }
@@ -63,75 +60,12 @@ class StopJudgmentExecutorTest {
         return extension;
     }
 
-    @Test
-    void endClearClosesTheSessionWithTheLunaBasisAndNoConfirmationQuestion() {
-        t.openStopJudgment();
-
-        t.judge.confirm("END_CLEAR", 0.95, "NOT_END", 0.02);
-        t.h.drain();
-
-        assertThat(t.h.executor.status()).isEqualTo(SessionStatus.CLOSING);
-        assertThat(t.h.transitions.find(t.h.sessionId).orElseThrow().endReason()).isEqualTo(EndReason.CHILD_STOP);
-        assertThat(t.events(SessionExecutor.EVENT_CHILD_STOP_INTENT)).singleElement()
-                .satisfies(event -> assertThat(event.getPayloadJson()).contains("LUNA_J6").doesNotContain(JudgmentExecutorSupport.UNCLEAR_STOP));
-        assertThat(t.events(SessionExecutor.EVENT_STOP_CONFIRM_ASKED)).isEmpty();
-        assertThat(t.h.link.sent(StopOutput.class)).isNotEmpty();
-        assertThat(t.onlyRecord().nextAction()).isEqualTo(NextAction.CLOSE);
-    }
-
-    @Test
-    void notEndGoesBackToTheConversationWithTodaysContinueInstruction() {
-        t.openStopJudgment();
-        t.h.settleSend();
-        int before = t.appendedContents().size();
-
-        t.judge.confirm("NOT_END", 0.9, "UNCLEAR", 0.05);
-        t.h.drain();
-        t.h.settleSend();
-
-        assertThat(t.appendedContents()).hasSize(before + 1);
-        assertThat(t.appendedContents().getLast()).isEqualTo(InstructionTemplates.ResponseStart.CONTINUE.content());
-        assertThat(t.events(SessionExecutor.EVENT_STOP_CONFIRM_ASKED)).isEmpty();
-        assertThat(t.onlyRecord().nextAction()).isEqualTo(NextAction.RESUME);
-        assertThat(t.h.executor.status()).isEqualTo(SessionStatus.ACTIVE);
-    }
-
-    @Test
-    void unclearAndEveryAbstainFallBackToTodaysConfirmationQuestionAndItsEvents() {
-        t.openStopJudgment();
-
-        t.judge.confirm("UNCLEAR", 0.9, "REST", 0.05);
-        t.h.drain();
-
-        PlayApprovedContent question = t.h.link.sent(PlayApprovedContent.class).getLast();
-        assertThat(question.contentCode()).isEqualTo(SessionExecutor.STOP_CONFIRM);
-        assertThat(t.events(SessionExecutor.EVENT_STOP_CONFIRM_ASKED)).hasSize(1);
-        assertThat(t.onlyRecord().nextAction()).isEqualTo(NextAction.ASK_STOP_CONFIRM);
-
-        t.mark(question, kr.mujoong.contract.ws.message.PlaybackMark.Status.COMPLETED);
-        t.h.childSays("i-2", "응");
-
-        assertThat(t.events(SessionExecutor.EVENT_STOP_CONFIRM_RESOLVED)).singleElement()
-                .satisfies(event -> assertThat(event.getPayloadJson()).contains("STOP"));
-        assertThat(t.h.transitions.find(t.h.sessionId).orElseThrow().endReason()).isEqualTo(EndReason.CHILD_STOP);
-    }
-
-    @Test
-    void restInFreeTalkSendsTheAcknowledgeAndReturnInstructionOnce() {
-        t.openStopJudgment();
-        t.h.settleSend();
-        int before = t.appendedContents().size();
-
-        t.judge.confirm("REST", 0.9, "NOT_END", 0.05);
-        t.h.drain();
-        t.h.settleSend();
-        t.h.speak("그래, 잠깐 쉬었다가 하자", 4_800);
-        t.advance(Duration.ofSeconds(1));
-
-        assertThat(t.appendedContents()).hasSize(before + 1);
-        assertThat(t.appendedContents().getLast()).isEqualTo(InstructionTemplates.NextAction.REST_ACK_AND_RETURN.content());
-        assertThat(t.onlyRecord().nextAction()).isEqualTo(NextAction.REST_ACK_AND_RETURN);
-        assertThat(t.h.executor.status()).isEqualTo(SessionStatus.ACTIVE);
+    private void assertNoJudgmentAndNoQuestion() {
+        assertThat(t.judge.calls()).as("J6를 열지 않는다").isEmpty();
+        assertThat(t.records()).as("건너뛴 판정 기록도 없다").isEmpty();
+        assertThat(t.events("STOP_CONFIRM_ASKED")).as("확인 질문이 없다").isEmpty();
+        assertThat(t.h.link.sent(PlayApprovedContent.class)).extracting(PlayApprovedContent::contentCode)
+                .doesNotContain("STOP_CONFIRM");
     }
 
     @Test
@@ -142,111 +76,75 @@ class StopJudgmentExecutorTest {
 
         assertThat(t.judge.calls()).isEmpty();
         assertThat(t.h.executor.status()).isEqualTo(SessionStatus.CLOSING);
+        assertThat(t.h.transitions.find(t.h.sessionId).orElseThrow().endReason()).isEqualTo(EndReason.CHILD_STOP);
         assertThat(t.records()).isEmpty();
     }
 
-    @Test
-    void aStopPhraseWhileJ6IsOpenClosesItAsStoppedAndEndsTheSession() {
-        t.openStopJudgment();
+    @ParameterizedTest
+    @ValueSource(strings = {"무중아 그만할래?", "무중아, 그만할래요?"})
+    void aQuestionShapedRegisteredStopPhraseAlsoEndsAtOnceWithoutAQuestion(String text) {
+        t.h.activate();
 
-        t.h.childSays("i-2", "무중아 그만할래");
+        t.h.childSays("i-1", text);
 
         assertThat(t.h.executor.status()).isEqualTo(SessionStatus.CLOSING);
-        assertThat(t.onlyRecord().outcome()).isEqualTo(JudgmentOutcomeKind.STOPPED);
-        assertThat(t.judge.calls()).hasSize(1);
+        assertThat(t.events(SessionExecutor.EVENT_CHILD_STOP_INTENT)).singleElement()
+                .satisfies(event -> assertThat(event.getPayloadJson()).doesNotContain(text));
+        assertNoJudgmentAndNoQuestion();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"그만", "그만해", "졸려", "힘들어", "쉬고 싶어", "숙제를 안 해가서 혼났어", "어떻게 됐어",
+            // 등록되지 않은 종료 말도 세션을 끝내지 않는다(FT-1023-a)
+            "그만할래", "그만할래?", "우리 이제 그만할까", "이제 끝낼까", "이제 끝내자", "더 얘기하기 싫어"})
+    void anUnclearSignalOrEverydayTalkKeepsTheConversationWithoutJ6OrAQuestion(String text) {
+        t.h.activate();
+
+        t.h.childSays("i-1", text);
+
+        assertThat(t.h.executor.status()).isEqualTo(SessionStatus.ACTIVE);
+        assertThat(t.events(SessionExecutor.EVENT_CHILD_STOP_INTENT)).isEmpty();
+        assertNoJudgmentAndNoQuestion();
     }
 
     @Test
-    void aNewOrdinaryReplySupersedesJ6AndAnotherUnclearOneOpensAFreshTurn() {
-        t.openStopJudgment();
-
-        t.h.childSays("i-2", "티라노가 제일 커");
-        assertThat(t.records()).singleElement().extracting(JudgmentLiveRecord::outcome).isEqualTo(JudgmentOutcomeKind.SUPERSEDED);
-        assertThat(t.judge.calls()).hasSize(1);
-
-        t.h.childSays("i-3", JudgmentExecutorSupport.UNCLEAR_STOP);
-        t.h.childSays("i-4", JudgmentExecutorSupport.UNCLEAR_STOP);
-
-        assertThat(t.judge.calls()).hasSize(3);
-        assertThat(t.records()).extracting(JudgmentLiveRecord::outcome)
-                .containsExactly(JudgmentOutcomeKind.SUPERSEDED, JudgmentOutcomeKind.SUPERSEDED);
-    }
-
-    @Test
-    void noProviderKeepsTodaysConfirmationFlowAndOnlyOneRecord() {
+    void withoutAProviderAnUnclearSignalLeavesNoTrace() {
         t.judge.available(false);
         t.h.activate();
 
-        t.h.childSays("i-1", JudgmentExecutorSupport.UNCLEAR_STOP);
+        t.h.childSays("i-1", "그만");
 
-        assertThat(t.judge.calls()).isEmpty();
-        assertThat(t.events(SessionExecutor.EVENT_STOP_CONFIRM_ASKED)).hasSize(1);
-        assertThat(t.onlyRecord().abstainReason()).isEqualTo(AbstainReason.NO_PROVIDER);
+        assertThat(t.h.executor.status()).isEqualTo(SessionStatus.ACTIVE);
+        assertNoJudgmentAndNoQuestion();
     }
 
     @Test
-    void r13NotEndHandsTheHeldTranscriptToAnOutputOwningPracticeAndResumesItsClock() {
+    void anOutputOwningPracticeGetsAnUnclearSignalAtOnceAndItsClockKeepsRunning() {
         OwningExtension extension = owningPractice();
         t.h.activate();
-        t.h.childSays("i-1", JudgmentExecutorSupport.UNCLEAR_STOP);
-        assertThat(extension.utterances).as("판정 중에는 연습에 넘기지 않는다").isEmpty();
-
-        t.judge.confirm("NOT_END", 0.9, "UNCLEAR", 0.05);
-        t.h.drain();
-
-        assertThat(extension.utterances).singleElement().satisfies(utterance -> assertThat(utterance.text())
-                .isEqualTo(JudgmentExecutorSupport.UNCLEAR_STOP));
-        t.advance(Duration.ofSeconds(11));
-        assertThat(extension.events).extracting(PracticeSessionExtension.ExtensionEvent::kind)
-                .contains(PracticeSessionExtension.ExtensionEvent.Kind.TIMER_FIRED);
-    }
-
-    @Test
-    void r14SupersedeByAnOrdinaryReplyResumesThePracticeClockButAnotherUnclearOneKeepsItPaused() {
-        OwningExtension resumed = owningPractice();
-        t.h.activate();
         t.advance(Duration.ofSeconds(2));
-        t.h.childSays("i-1", JudgmentExecutorSupport.UNCLEAR_STOP);
-        t.h.childSays("i-2", "티라노가 제일 커");
+
+        t.h.childSays("i-1", "그만");
+
+        assertThat(extension.utterances).as("판정으로 보류하지 않고 곧바로 연습에 넘긴다").singleElement()
+                .satisfies(utterance -> assertThat(utterance.text()).isEqualTo("그만"));
         t.advance(Duration.ofSeconds(7));
-        assertThat(resumed.events).as("남은 8초 중 7초").extracting(PracticeSessionExtension.ExtensionEvent::kind)
+        assertThat(extension.events).as("남은 8초 중 7초").extracting(PracticeSessionExtension.ExtensionEvent::kind)
                 .doesNotContain(PracticeSessionExtension.ExtensionEvent.Kind.TIMER_FIRED);
         t.advance(Duration.ofSeconds(2));
-        assertThat(resumed.events).extracting(PracticeSessionExtension.ExtensionEvent::kind)
+        assertThat(extension.events).as("연습 시계는 멈추지 않는다").extracting(PracticeSessionExtension.ExtensionEvent::kind)
                 .contains(PracticeSessionExtension.ExtensionEvent.Kind.TIMER_FIRED);
-
-        JudgmentExecutorSupport second = new JudgmentExecutorSupport();
-        OwningExtension paused = new OwningExtension();
-        second.h.activityType = ActivityType.PRACTICE;
-        second.h.practiceJson = "{\"goals\":[{\"order\":1}]}";
-        second.h.practice = sessionId -> paused;
-        second.h.activate();
-        second.advance(Duration.ofSeconds(2));
-        second.h.childSays("i-1", JudgmentExecutorSupport.UNCLEAR_STOP);
-        second.h.childSays("i-2", JudgmentExecutorSupport.UNCLEAR_STOP);
-        second.advance(Duration.ofSeconds(3));
-        assertThat(paused.events).as("다시 CONFIRM이면 멈춤을 유지한다").extracting(PracticeSessionExtension.ExtensionEvent::kind)
-                .doesNotContain(PracticeSessionExtension.ExtensionEvent.Kind.TIMER_FIRED);
+        assertNoJudgmentAndNoQuestion();
     }
 
     @Test
-    void restInAnOutputOwningPracticeAcknowledgesOnlyAndTellsTheExtension() {
-        OwningExtension extension = owningPractice();
+    void aStopPhraseInAnOutputOwningPracticeStillEndsAtOnce() {
+        owningPractice();
         t.h.activate();
-        t.h.childSays("i-1", JudgmentExecutorSupport.UNCLEAR_STOP);
-        t.h.settleSend();
-        int before = t.appendedContents().size();
 
-        t.judge.confirm("REST", 0.9, "NOT_END", 0.05);
-        t.h.drain();
-        t.h.settleSend();
+        t.h.childSays("i-1", "무중아 그만할래");
 
-        assertThat(t.appendedContents()).hasSize(before + 1);
-        assertThat(t.appendedContents().getLast()).isEqualTo(InstructionTemplates.NextAction.REST_ACK_ONLY.content());
-        t.h.speak("그래, 편할 때 말해 줘", 4_800);
-        t.h.drain();
-        assertThat(extension.events).extracting(PracticeSessionExtension.ExtensionEvent::kind)
-                .contains(PracticeSessionExtension.ExtensionEvent.Kind.REST_REQUESTED);
-        assertThat(t.onlyRecord().nextAction()).isEqualTo(NextAction.REST_ACK_ONLY);
+        assertThat(t.h.executor.status()).isEqualTo(SessionStatus.CLOSING);
+        assertNoJudgmentAndNoQuestion();
     }
 }

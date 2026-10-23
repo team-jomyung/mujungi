@@ -121,7 +121,7 @@ describe("12 — 끝내기 · P2 · P3 · 실패(AC3.3.8 · AC3.4.1 · AC3.5.1 �
   });
 
   it("DECLINED면 P3 '아이가 대답하지 않아 시작하지 못했어요' → 「확인」 → 04", async () => {
-    renderLive(liveViewBody("DECLINED", { endReason: "DECLINED" }));
+    renderLive(liveViewBody("DECLINED", { endReason: "DECLINED", guardrail: { schemaVersion: 1, notice: "COMPLETED", participation: "NO_RESPONSE", goodbye: "NONE", confirmedStopBubbleSeq: null } }));
     expect(await screen.findByTestId("p3-dialog")).toHaveTextContent("아이가 대답하지 않아 시작하지 못했어요");
     fireEvent.click(screen.getByTestId("p3-confirm"));
     expect(router.replace).toHaveBeenCalledWith("/parent");
@@ -148,9 +148,9 @@ describe("17 — 사유 표 · 정리 중 · 미확인 줄(AC3.6.9 · AC3.4.3 ·
 
   it("CHILD_STOP은 '하늘이 끝내자고 했어요' + 기본 표현 · 시각, 정리 중 줄", async () => {
     let jobStatus = "REQUESTED";
-    renderDone(liveViewBody("ENDED", { endReason: "CHILD_STOP", confirmed: true, endedAt: ENDED_AT }), () => jobStatus);
+    renderDone(liveViewBody("ENDED", { endReason: "CHILD_STOP", confirmed: true, endedAt: ENDED_AT, guardrail: { schemaVersion: 1, notice: "COMPLETED", participation: "ACCEPTED", goodbye: "COMPLETED", confirmedStopBubbleSeq: 7 }, items: [{ ...bubble({ seq: 7, speaker: "CHILD", text: "오늘은 여기까지" }), startedAt: "2026-10-15T01:12:00Z" }] }), () => jobStatus);
     expect(await screen.findByText("하늘이 끝내자고 했어요")).toBeInTheDocument();
-    expect(screen.getByTestId("done-reason")).toHaveTextContent("\"무중아 그만할래\" · 10:21");
+    expect(screen.getByTestId("done-stop-quote")).toHaveTextContent("\"오늘은 여기까지\" · 10:12");
     expect(screen.getByTestId("done-cleaning")).toHaveTextContent("기록을 정리하고 있어요");
     expect(screen.queryByTestId("done-unconfirmed")).toBeNull();
     expect(screen.queryByText(/기록 보기/)).toBeNull();

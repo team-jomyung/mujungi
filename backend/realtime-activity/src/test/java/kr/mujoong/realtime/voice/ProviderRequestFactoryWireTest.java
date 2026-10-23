@@ -22,6 +22,7 @@ import tools.jackson.databind.JsonNode;
 
 /** 공급자 요청 팩토리의 실호출 관측 선 형식 (U11 FR12.1 · BR11.1 · BR11.2 · 편차 (U11-a), 설계 개정 A1 · A6). 키 · 식별자는 쓰지 않는다. */
 @Tag("judgment-turn")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class ProviderRequestFactoryWireTest {
 
     private static final JsonCodec JSON = JsonCodec.shared();
@@ -57,7 +58,7 @@ class ProviderRequestFactoryWireTest {
                 .doesNotContain("관심사나 일상 질문").endsWith(InstructionTemplates.SCOPE_CLOSE);
         assertThat(factory.responseStart("e", InstructionTemplates.ResponseStart.CONTINUE, guide))
                 .isEqualTo(factory.responseStart("e", InstructionTemplates.ResponseStart.CONTINUE));
-        assertThat(factory.responseStart("e", InstructionTemplates.ResponseStart.FIRST, null))
+        assertThat(factory.responseStart("e", InstructionTemplates.ResponseStart.FIRST, (kr.mujoong.contract.context.ConversationGuide) null))
                 .isEqualTo(factory.responseStart("e", InstructionTemplates.ResponseStart.FIRST));
     }
 

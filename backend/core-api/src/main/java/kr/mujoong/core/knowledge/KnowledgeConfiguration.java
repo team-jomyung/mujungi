@@ -17,7 +17,7 @@ import org.springframework.core.env.Environment;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.transaction.PlatformTransactionManager;
 
-/** Full service startup requires an authenticated graph; isolated tests opt out explicitly. */
+/** 서비스 시작은 인증된 그래프 준비 성공을 요구한다. 격리 시험은 명시적으로 비활성화한다. */
 @Configuration(proxyBeanMethods = false)
 @org.springframework.boot.context.properties.EnableConfigurationProperties(SeedGenerationProperties.class)
 public class KnowledgeConfiguration {
@@ -26,13 +26,15 @@ public class KnowledgeConfiguration {
             return new SeedArchiveLoader().load(input, "poc-v1");
         }
     }
-    @Bean ChildKnowledgeGraphPort childKnowledgeGraph(KnowledgeProperties properties, CoreProperties core, Environment environment) {
+    @Bean ChildKnowledgeGraphPort childKnowledgeGraph(KnowledgeProperties properties, CoreProperties core,
+            Environment environment, MujoongClock clock) {
         String auth = environment.getProperty("NEO4J_AUTH", "");
         if (!properties.enabled()) return new MemoryChildKnowledgeGraph();
         if (auth.isBlank()) throw new IllegalStateException("Neo4j enabled but NEO4J_AUTH is missing");
         var graph = new Neo4jChildKnowledgeGraph(URI.create(properties.endpoint()),
-                auth, core.timing().knowledge().graphBudget());
-        // A healthy process without a usable graph must not advertise full service readiness.
+                auth, core.timing().knowledge().graphBudget(),
+                core.timing().knowledge().graphInitializationBudget(), clock);
+        // 초기화 전용 마감 안에서 성공하기 전에는 서비스 준비 상태를 광고하지 않는다.
         graph.prepareSchema();
         return graph;
     }

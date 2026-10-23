@@ -26,6 +26,7 @@ import org.junit.jupiter.api.Test;
  * 버리며, 창이 끝나면 정산 입구를 세션당 한 번 부르는지 본다. DECLINED는 인사 순서 뒤에 정산한다.
  */
 @Tag("session-runtime")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class SessionSettleTest {
 
     private final SessionHarness h = new SessionHarness();
@@ -109,7 +110,8 @@ class SessionSettleTest {
         h.settlement = settlement;
         h.boot();
         h.ackAndReady();
-        h.advanceAlive(Duration.ofSeconds(40));
+        h.completeNotice(); h.advanceAlive(Duration.ofSeconds(20));
+        h.completeNotice(); h.advanceAlive(Duration.ofSeconds(20));
         assertThat(h.transitions.status(h.sessionId)).isEqualTo(SessionStatus.DECLINED);
         PlayApprovedContent farewell = h.link.sent(PlayApprovedContent.class).getLast();
         h.advanceAlive(Duration.ofSeconds(5));

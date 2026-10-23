@@ -25,6 +25,7 @@ import org.junit.jupiter.api.Test;
  */
 @Tag("session-runtime")
 @Tag("db")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class SessionViewIT {
 
     private static final Map<String, String> ARGS = Map.of(

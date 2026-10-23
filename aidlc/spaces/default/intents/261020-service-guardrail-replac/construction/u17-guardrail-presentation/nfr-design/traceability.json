@@ -1,0 +1,98 @@
+{
+  "stage": "nfr-design",
+  "unit": "u17-guardrail-presentation",
+  "upstream_ids": [
+    "NFR1.1",
+    "NFR1.2",
+    "NFR1.3",
+    "NFR2.1",
+    "NFR2.2",
+    "NFR2.3",
+    "NFR3.1",
+    "NFR3.2",
+    "NFR3.3",
+    "NFR4.1",
+    "NFR4.2",
+    "NFR5.1",
+    "NFR5.2",
+    "NFR6.1",
+    "NFR6.2"
+  ],
+  "coverage": [
+    {
+      "id": "NFR1.1",
+      "status": "OK",
+      "target": "security-design.md S1/S2/S3의 인증·세션 격리·원문/권한 경계"
+    },
+    {
+      "id": "NFR1.2",
+      "status": "OK",
+      "target": "security-design.md S1/S2/S3의 인증·세션 격리·원문/권한 경계"
+    },
+    {
+      "id": "NFR1.3",
+      "status": "OK",
+      "target": "security-design.md S1/S2/S3의 인증·세션 격리·원문/권한 경계"
+    },
+    {
+      "id": "NFR2.1",
+      "status": "OK",
+      "target": "performance-design.md P1/P2의 현재 응답·정규화·기기 수명"
+    },
+    {
+      "id": "NFR2.2",
+      "status": "OK",
+      "target": "performance-design.md P1/P2의 현재 응답·정규화·기기 수명"
+    },
+    {
+      "id": "NFR2.3",
+      "status": "OK",
+      "target": "performance-design.md P1/P2의 현재 응답·정규화·기기 수명"
+    },
+    {
+      "id": "NFR3.1",
+      "status": "OK",
+      "target": "performance-design.md P3의 test-after·LINE80%·전체 회귀"
+    },
+    {
+      "id": "NFR3.2",
+      "status": "OK",
+      "target": "performance-design.md P3의 test-after·LINE80%·전체 회귀"
+    },
+    {
+      "id": "NFR3.3",
+      "status": "OK",
+      "target": "performance-design.md P3의 test-after·LINE80%·전체 회귀"
+    },
+    {
+      "id": "NFR4.1",
+      "status": "OK",
+      "target": "performance-design.md P3 및 security-design.md S3의 대역/실제 구분·미해결 인계"
+    },
+    {
+      "id": "NFR4.2",
+      "status": "OK",
+      "target": "performance-design.md P3 및 security-design.md S3의 대역/실제 구분·미해결 인계"
+    },
+    {
+      "id": "NFR5.1",
+      "status": "OK",
+      "target": "performance-design.md P3 및 security-design.md S2/S3의 텍스트·접근성"
+    },
+    {
+      "id": "NFR5.2",
+      "status": "OK",
+      "target": "performance-design.md P3 및 security-design.md S2/S3의 텍스트·접근성"
+    },
+    {
+      "id": "NFR6.1",
+      "status": "OK",
+      "target": "performance-design.md P1/P2 및 logical-components.md의 기존 호출/모드/의존성 보존"
+    },
+    {
+      "id": "NFR6.2",
+      "status": "OK",
+      "target": "performance-design.md P1/P2 및 logical-components.md의 기존 호출/모드/의존성 보존"
+    }
+  ]
+}

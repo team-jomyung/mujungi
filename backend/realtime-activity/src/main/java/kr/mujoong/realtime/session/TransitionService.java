@@ -13,6 +13,7 @@ import kr.mujoong.realtime.common.db.DbRetry;
 import kr.mujoong.realtime.log.AsyncRecorder;
 import kr.mujoong.realtime.log.TranscriptRepository;
 import org.springframework.stereotype.Component;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -38,6 +39,7 @@ public class TransitionService implements SessionTransitions {
     private final AsyncRecorder recorder;
     private final JsonCodec json;
     private final MujoongClock clock;
+    private final SessionGuardrailFactsRepository guardrailFacts;
 
     public TransitionService(
             ActivitySessionRepository sessions,
@@ -48,6 +50,13 @@ public class TransitionService implements SessionTransitions {
             AsyncRecorder recorder,
             JsonCodec json,
             MujoongClock clock) {
+        this(sessions, transcripts, emitter, transactionManager, dbRetry, recorder, json, clock, null);
+    }
+
+    @Autowired
+    public TransitionService(ActivitySessionRepository sessions, TranscriptRepository transcripts,
+            SessionStateEmitter emitter, PlatformTransactionManager transactionManager, DbRetry dbRetry,
+            AsyncRecorder recorder, JsonCodec json, MujoongClock clock, SessionGuardrailFactsRepository guardrailFacts) {
         this.sessions = Objects.requireNonNull(sessions, "sessions");
         this.transcripts = Objects.requireNonNull(transcripts, "transcripts");
         this.emitter = Objects.requireNonNull(emitter, "emitter");
@@ -56,6 +65,7 @@ public class TransitionService implements SessionTransitions {
         this.recorder = Objects.requireNonNull(recorder, "recorder");
         this.json = Objects.requireNonNull(json, "json");
         this.clock = Objects.requireNonNull(clock, "clock");
+        this.guardrailFacts = guardrailFacts;
     }
 
     @Override
@@ -79,12 +89,23 @@ public class TransitionService implements SessionTransitions {
         Optional<ActivitySessionRow> changed = dbRetry.execute(DbRetry.Idempotency.IDEMPOTENT,
                 () -> transactions.execute(status -> {
                     Instant now = clock.now();
+                    if (extras.guardrailFacts() != null) {
+                        Optional<ActivitySessionRow> locked = sessions.findForUpdate(sessionId);
+                        if (locked.isEmpty() || locked.get().status() != from
+                                || locked.get().statusVersion() + 1 != extras.guardrailFacts().statusVersion()) {
+                            return Optional.empty();
+                        }
+                    }
                     Optional<ActivitySessionRow> row = sessions.transition(sessionId, from, to, now, change);
                     row.ifPresent(value -> {
                         if (extras.eraseTranscripts()) {
                             transcripts.deleteBySession(sessionId);
                         }
                         emitter.write(value, now, traceId, extras.technicalPause());
+                        if (extras.guardrailFacts() != null) {
+                            Objects.requireNonNull(guardrailFacts, "guardrailFacts")
+                                    .append(value, extras.guardrailFacts());
+                        }
                     });
                     return row;
                 }));
@@ -127,6 +148,18 @@ public class TransitionService implements SessionTransitions {
     @Override
     public Optional<ActivitySessionRow> find(UUID sessionId) {
         return dbRetry.execute(DbRetry.Idempotency.IDEMPOTENT, () -> sessions.find(sessionId));
+    }
+
+    @Override
+    public Optional<SessionGuardrailFacts> recordGuardrailFacts(SessionGuardrailFacts facts, int expectedStatusVersion) {
+        Objects.requireNonNull(facts, "facts");
+        return dbRetry.execute(DbRetry.Idempotency.IDEMPOTENT, () -> transactions.execute(status -> {
+            Optional<ActivitySessionRow> locked = sessions.findForUpdate(facts.sessionId());
+            if (locked.isEmpty() || locked.get().statusVersion() != expectedStatusVersion) {
+                return Optional.empty();
+            }
+            return Optional.of(Objects.requireNonNull(guardrailFacts, "guardrailFacts").append(locked.get(), facts));
+        }));
     }
 
     /**

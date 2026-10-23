@@ -27,6 +27,7 @@ import org.junit.jupiter.api.Test;
  * 사건 하나하나를 확인한다. 합성 값만 쓴다.
  */
 @Tag("judgment-turn")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class JudgmentTurnTest {
 
     private static final Instant T0 = Instant.parse("2026-10-17T09:00:00Z");

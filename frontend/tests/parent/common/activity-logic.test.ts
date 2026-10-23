@@ -108,7 +108,7 @@ describe("12 공백 경고 · 복구 중 · 흐름(AC3.2.8 · AC3.2.10 · U4a-J1
 describe("17 사유 표(AC3.6.9 · AC3.4.3 · U4a-J13 ~ J15)", () => {
   it.each([
     ["ENDED", "GUARDIAN_STOP", true, "보호자가 끝냈어요", "「이야기 끝내기」 · 10:21"],
-    ["ENDED", "CHILD_STOP", true, "하늘이 끝내자고 했어요", "\"무중아 그만할래\" · 10:21"],
+    ["ENDED", "CHILD_STOP", true, "하늘이 끝내자고 했어요", null],
     ["ENDED", "SILENCE", true, "말이 없어 자동으로 끝났어요", "공백 6분 · 6분 동안 말소리가 없어 활동을 끝냈어요."],
     ["ENDED_UNCONFIRMED", "UNCONFIRMED", false, "기기 응답 없이 끝냈어요", "기기가 30초 동안"],
     ["FAILED", "FAILED", false, "기기 응답 없이 끝냈어요", "기기가 30초 동안"],
@@ -117,7 +117,8 @@ describe("17 사유 표(AC3.6.9 · AC3.4.3 · U4a-J13 ~ J15)", () => {
     const presentation = presentDone(view(status, { endReason, confirmed, endedAt: "2026-10-15T01:21:00Z" }), "하늘");
     expect(presentation.title).toBe("오늘 자유대화가 끝났어요");
     expect(presentation.reasonTitle).toBe(title);
-    expect(presentation.reasonBody).toContain(body);
+    if (body === null) { expect(presentation.reasonBody).toBeNull(); expect(presentation.stopQuote).toBeNull(); }
+    else expect(presentation.reasonBody).toContain(body);
     expect(presentation.cleaningLine).toBe("기록을 정리하고 있어요");
     expect(presentation.unconfirmedLine).toBe(confirmed ? null : "기기 종료 확인 · 확인 안 됨");
   });
@@ -125,8 +126,9 @@ describe("17 사유 표(AC3.6.9 · AC3.4.3 · U4a-J13 ~ J15)", () => {
   it("마무리 중(CLOSING) · 아직 못 읽음은 마무리 카드이고 정리 줄 · 미확인 줄이 없다", () => {
     for (const current of [view("CLOSING", { endReason: "CHILD_STOP" }), undefined]) {
       const presentation = presentDone(current, null);
-      expect(presentation.closing).toBe(true);
-      expect(presentation.title).toBe("오늘 자유대화를 마무리하고 있어요");
+      expect(presentation.closing).toBe(current !== undefined);
+      expect(presentation.title).toBe(current === undefined ? "활동 상태를 불러오고 있어요" : "오늘 자유대화를 마무리하고 있어요");
+      expect(presentation.goodbyeLine).toBeNull();
       expect(presentation.cleaningLine).toBeNull();
       expect(presentation.unconfirmedLine).toBeNull();
     }
@@ -139,7 +141,7 @@ describe("17 사유 표(AC3.6.9 · AC3.4.3 · U4a-J13 ~ J15)", () => {
     const noTime = presentDone(view("ENDED", { endReason: "GUARDIAN_STOP", confirmed: true, endedAt: null }), null);
     expect(noTime.reasonBody).toBeNull();
     expect(childStopTitle(null)).toBe("아이가 끝내자고 했어요");
-    expect(childStopDetail(null)).toBe("\"무중아 그만할래\"");
+    expect(childStopDetail("오늘은 그만", null)).toBe("\"오늘은 그만\"");
   });
 });
 

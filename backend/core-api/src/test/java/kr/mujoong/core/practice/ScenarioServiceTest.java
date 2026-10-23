@@ -22,6 +22,7 @@ import org.junit.jupiter.api.*;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 
 @Tag("practice-core")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class ScenarioServiceTest {
     DbTestSupport db;
     MutableClock clock;

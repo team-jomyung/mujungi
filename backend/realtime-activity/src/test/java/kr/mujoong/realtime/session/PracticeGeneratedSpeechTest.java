@@ -26,6 +26,7 @@ import org.junit.jupiter.api.Test;
  * (R-M11).
  */
 @Tag("practice-flow")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class PracticeGeneratedSpeechTest {
 
     private static final String INSTRUCTION = "친구로서 방금 말을 한 번 더 물어보세요";
@@ -42,6 +43,35 @@ class PracticeGeneratedSpeechTest {
         h.activityType = ActivityType.PRACTICE;
         h.practice = ignored -> extension;
         h.activate();
+    }
+
+    @Test
+    void generatedUnitsPlayEarlyButCompleteThePracticeSlotOnlyOnceAfterTheWholeStream() {
+        start(true);
+        UUID slot = UUID.randomUUID();
+        extension.out.speakGenerated(slot, "PEER", INSTRUCTION);
+        h.settleSend();
+        h.provider.last().newSpeechMargin(null);
+        var request = h.provider.last().requests(ProviderRequestFactory.InstructionsAppend.class).getLast();
+        h.provider.last().emit(new ProviderEvent.InstructionsAppended(request.eventId(), 0, 0));
+        long margin = h.settings.newSpeechMargin().toMillis();
+        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("첫 조각", 0, margin + 100));
+        h.provider.last().emit(new ProviderEvent.OutputAudioDelta(new byte[(int) margin * 48]));
+        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("다음 조각", margin + 100, margin + 200));
+        h.provider.last().emit(new ProviderEvent.OutputAudioDelta(new byte[9600]));
+        h.drain();
+        assertThat(guard.count()).isEqualTo(1);
+        guard.allow(); h.drain();
+        assertThat(h.link.outputs()).hasSize(1);
+        assertThat(guard.count()).isEqualTo(2);
+        mark(h.link.outputs().getFirst().playbackId(), PlaybackMark.Status.COMPLETED);
+        assertThat(extension.endFacts(slot)).isEmpty();
+        guard.allow(); h.drain();
+        assertThat(h.link.outputs()).hasSize(2);
+        mark(h.link.outputs().getLast().playbackId(), PlaybackMark.Status.COMPLETED);
+        assertThat(extension.endFacts(slot)).isEmpty();
+        h.advance(Duration.ofMillis(801));
+        assertThat(extension.endFacts(slot)).containsExactly(PracticePorts.Playback.COMPLETED);
     }
 
     @Test

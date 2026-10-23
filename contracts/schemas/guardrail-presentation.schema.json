@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mujoong.invalid/contracts/schemas/guardrail-presentation.schema.json",
+  "title": "GuardrailPresentation",
+  "anyOf": [{"type": "null"}, {"$ref": "#/$defs/Facts"}],
+  "$defs": {
+    "Facts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "notice", "participation", "goodbye", "confirmedStopBubbleSeq"],
+      "properties": {
+        "schemaVersion": {"const": 1},
+        "notice": {"type": "string", "enum": ["UNKNOWN", "PENDING", "COMPLETED", "FAILED"]},
+        "participation": {"type": "string", "enum": ["UNKNOWN", "PENDING", "ACCEPTED", "REFUSED", "NO_RESPONSE"]},
+        "goodbye": {"type": "string", "enum": ["UNKNOWN", "NONE", "PENDING", "PLAYING", "COMPLETED", "STOPPED", "FAILED"]},
+        "confirmedStopBubbleSeq": {"anyOf": [{"type": "integer", "minimum": 1}, {"type": "null"}]}
+      }
+    }
+  }
+}

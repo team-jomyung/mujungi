@@ -36,12 +36,13 @@ import org.junit.jupiter.api.Test;
  */
 @Tag("session-runtime")
 @Tag("db")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class SessionLifecycleSessionRuntimeIT {
 
     private static final Map<String, String> ARGS = Map.of(
             "mujoong.timing.session.join-wait", "1500ms",
             "mujoong.timing.session.join-wait-after-reprompt", "1500ms");
-    private static final String INTRO = "안녕, 무중이야. 오늘 나랑 이야기할래?";
+    private static final String INTRO = ServiceGuardrailFixtures.TEXT;
 
     private RealtimeItEnvironment env;
 
@@ -66,6 +67,8 @@ class SessionLifecycleSessionRuntimeIT {
         assertThat(env.provider.received(ProviderRequestFactory.TYPE_INSTRUCTIONS_APPEND)).isEmpty();
         device.playbackMark(sessionId, ((PlayApprovedContent) intro.payload()).playbackId(),
                 PlaybackMark.Status.COMPLETED);
+        awaitTrue(() -> env.app.bean(SessionGuardrailFactsRepository.class).latest(sessionId)
+                .map(value -> value.notice() == SessionGuardrailFacts.Notice.COMPLETED).orElse(false), "현재 안내 완료");
         env.childSays("join-1", "응");
 
         awaitStatus(sessionId, SessionStatus.ACTIVE);
@@ -73,17 +76,22 @@ class SessionLifecycleSessionRuntimeIT {
         ActivitySessionRow row = sessions().find(sessionId).orElseThrow();
         assertThat(row.startedAt()).isNotNull();
         assertThat(row.statusVersion()).isEqualTo(4);
-        // 참여 대답은 저장하지 않고 시작 안내는 말풍선 한 행이다
-        awaitTrue(() -> transcripts(sessionId).size() == 1, "말풍선 한 행");
-        assertThat(transcripts(sessionId)).singleElement().satisfies(bubble -> {
+        // 시작 안내는 말풍선 한 행이고, 참여를 수락한 대답은 수락 때 아이 행으로 이어서 남는다
+        awaitTrue(() -> transcripts(sessionId).size() == 2, "말풍선 두 행");
+        assertThat(transcripts(sessionId)).satisfiesExactly(bubble -> {
             assertThat(bubble.speaker()).isEqualTo(TranscriptEntry.Speaker.AI);
             assertThat(bubble.text()).isEqualTo(INTRO);
             assertThat(bubble.approvedForDisplay()).isTrue();
+        }, reply -> {
+            assertThat(reply.speaker()).isEqualTo(TranscriptEntry.Speaker.CHILD);
+            assertThat(reply.text()).isEqualTo("응");
+            assertThat(reply.approvedForDisplay()).isTrue();
         });
 
         env.provider.emitTurn("item-1", "공룡이 좋아", "나도 공룡 좋아해", List.of(kr.mujoong.realtime.testing.RealtimeItEnvironment.audiblePcm(4800)));
         device.await(WsMessageType.OUTPUT_END, WAIT);
-        awaitTrue(() -> transcripts(sessionId).size() == 3, "아이 · AI 행");
+        // 시작 안내 · 수락한 참여 대답 · 이어진 아이 말 · AI 응답
+        awaitTrue(() -> transcripts(sessionId).size() == 4, "아이 · AI 행");
     }
 
     @Test
@@ -130,19 +138,20 @@ class SessionLifecycleSessionRuntimeIT {
     }
 
     @Test
-    void twoRefusalsDeclineEraseTheBubblesAndEndWithTheDeclinedFarewell() {
+    void oneCurrentRefusalDeclinesWithoutAlternativeErasesTheBubblesAndEndsWithTheFarewell() {
         DeviceSimulatorClient device = env.connectDevice();
         UUID sessionId = startWithPrompts(device);
         awaitStatus(sessionId, SessionStatus.WAITING_CHILD);
         awaitTrue(() -> transcripts(sessionId).size() == 1, "시작 안내 말풍선");
+        env.completeNotice(sessionId);
 
         env.childSays("r-1", "싫어");
-        awaitTrue(() -> device.received(WsMessageType.PLAY_APPROVED_CONTENT).size() == 2, "대안 안내");
-        env.childSays("r-2", "안 할래");
 
         awaitStatus(sessionId, SessionStatus.DECLINED);
         assertThat(sessions().find(sessionId).orElseThrow().endReason()).isEqualTo(EndReason.DECLINED);
-        awaitTrue(() -> device.received(WsMessageType.PLAY_APPROVED_CONTENT).size() == 3, "마무리 인사");
+        awaitTrue(() -> device.received(WsMessageType.PLAY_APPROVED_CONTENT).size() == 2, "대안 없이 마무리 인사");
+        assertThat(device.received(WsMessageType.PLAY_APPROVED_CONTENT)).noneMatch(envelope ->
+                ((PlayApprovedContent) envelope.payload()).contentCode().equals(SessionExecutor.DECLINE_ALTERNATIVE));
         PlayApprovedContent farewell = (PlayApprovedContent) device.received(WsMessageType.PLAY_APPROVED_CONTENT)
                 .getLast().payload();
         assertThat(farewell.contentCode()).isEqualTo(PlayApprovedContent.CLOSING);
@@ -161,10 +170,10 @@ class SessionLifecycleSessionRuntimeIT {
         StartSessionHandler.StartCommand base = env.startCommand(sessionId,
                 new ChildContext("하늘", 8, List.of("공룡")));
         Map<String, StartSessionHandler.ApprovedContentItem> approved = new LinkedHashMap<>(base.approvedContent());
-        approved.put(SessionExecutor.INTRO_FREE_TALK, new StartSessionHandler.ApprovedContentItem(UUID.randomUUID(),
-                INTRO, "/media/approved/intro.wav"));
-        approved.put(SessionExecutor.RE_PROMPT, new StartSessionHandler.ApprovedContentItem(UUID.randomUUID(),
-                "천천히 생각해도 돼.", "/media/approved/reprompt.wav"));
+        approved.put(SessionExecutor.INTRO_FREE_TALK, new StartSessionHandler.ApprovedContentItem(ServiceGuardrailFixtures.INTRO,
+                INTRO, ServiceGuardrailFixtures.URL));
+        approved.put(SessionExecutor.RE_PROMPT, new StartSessionHandler.ApprovedContentItem(UUID.fromString("11111111-1111-4111-8111-111111111117"),
+                INTRO, "/media/approved/re_prompt.wav"));
         approved.put(SessionExecutor.DECLINE_ALTERNATIVE, new StartSessionHandler.ApprovedContentItem(UUID.randomUUID(),
                 "그럼 다른 이야기를 해 볼까?", "/media/approved/alternative.wav"));
         StartSessionHandler.StartCommand command = new StartSessionHandler.StartCommand(sessionId,

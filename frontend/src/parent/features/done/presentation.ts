@@ -8,6 +8,8 @@ import { formatHhmm } from "@/shared/copy/timeText";
 // DECLINED · CONSENT_WITHDRAWN은 17로 오지 않는다(12가 P3 → 04, 계정 삭제는 01). 그래도 들어오면 U1처럼 제목만 보인다.
 
 export interface DonePresentation {
+  readonly goodbyeLine: string | null;
+  readonly stopQuote: string | null;
   readonly title: string;
   readonly reasonTitle: string | null;
   readonly reasonBody: string | null;
@@ -49,7 +51,7 @@ function reasonFor(view: LiveView, childName: string | null): Reason {
     case "GUARDIAN_STOP":
       return { title: PROPOSED_COPY.done.guardianStopTitle, body: endedHhmm === null ? null : guardianStopDetail(endedHhmm) };
     case "CHILD_STOP":
-      return { title: childStopTitle(childName), body: childStopDetail(endedHhmm) };
+      return { title: childStopTitle(childName), body: null };
     case "SILENCE":
       return { title: ACTIVITY_COPY.done.silenceTitle, body: ACTIVITY_COPY.done.silenceBody };
     case "DISCONNECT":
@@ -59,19 +61,40 @@ function reasonFor(view: LiveView, childName: string | null): Reason {
   }
 }
 
-export function presentDone(view: LiveView | undefined, childName: string | null): DonePresentation {
+/** 같은 세션 공개 items의 정확한 최종 CHILD 참조 외에는 인용하지 않는다. */
+export function confirmedStopQuote(view: LiveView | undefined): string | null {
+  if (view?.activityType !== "FREE_TALK" || view.endReason !== "CHILD_STOP") return null;
+  const seq = view.guardrail?.confirmedStopBubbleSeq;
+  if (seq === null || seq === undefined) return null;
+  const row = view.items.find((item) => item.seq === seq);
+  if (!row || row.speaker !== "CHILD" || !row.final || row.uncertain || row.text.trim().length === 0) return null;
+  return childStopDetail(row.text, formatHhmm(row.startedAt));
+}
+
+export function presentDone(view: LiveView | undefined, childName: string | null, trusted = true): DonePresentation {
   if (view === undefined || !isTerminalStatus(view.status)) {
+    const closing = view?.status === "CLOSING";
+    const goodbye = trusted && closing && view?.activityType === "FREE_TALK" && !view.stale && view.technicalPause === null &&
+      !view.gaps.some((gap) => gap.to === null) && view.guardrail?.goodbye === "PLAYING";
     return {
-      title: view?.activityType === "PRACTICE" ? "연습을 마무리하고 있어요" : COPY.done.closingTitle,
-      reasonTitle: COPY.done.closingBody,
-      reasonBody: COPY.done.closingNote,
-      closing: true,
+      goodbyeLine: goodbye ? COPY.done.closingBody : null,
+      stopQuote: confirmedStopQuote(view),
+      title: view === undefined
+        ? (trusted ? ACTIVITY_COPY.done.loading : ACTIVITY_COPY.done.loadFailed)
+        : closing
+          ? (view.activityType === "PRACTICE" ? "연습을 마무리하고 있어요" : COPY.done.closingTitle)
+          : ACTIVITY_COPY.done.unknown,
+      reasonTitle: null,
+      reasonBody: closing ? COPY.done.closingNote : null,
+      closing,
       cleaningLine: null,
       unconfirmedLine: null,
     };
   }
   const reason = reasonFor(view, childName);
   return {
+    goodbyeLine: null,
+    stopQuote: confirmedStopQuote(view),
     title: view.activityType === "PRACTICE" ? "연습이 종료됐어요" : COPY.done.endedTitle,
     reasonTitle: reason.title,
     reasonBody: reason.body,

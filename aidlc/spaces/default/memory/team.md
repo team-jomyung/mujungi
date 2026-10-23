@@ -6,14 +6,13 @@
 > not directly.
 
 ## Way of Working
-
 - 우리는 `main` 하나를 트렁크로 두고, 짧게 사는 작업 브랜치(보통 당일 ~ 1일)에서 GitHub PR로 `main`에 합친다.
 - **PR은 merge commit으로 합친다.** 작업 커밋을 `main` 이력에 그대로 남기고, squash로 바꾸지 않는다. 조직 기본값(squash)과 다른 팀 선택이다(Q1-A).
   Construction 작업 트리도 `--base main --target main --strategy merge`로 만들고 합친다.
 - 작업 브랜치는 `main`과 같은 커밋 위에서 새로 딴다. 브랜치가 오래 살면 `main`을 브랜치로 merge해 따라잡는다.
 - 브랜치 이름은 용도 접두어를 쓴다: `unit/<유닛>-<이름>`(유닛 구현) · `docs/<주제>`(지시서 · 인계) · `codex/<주제>` · `claude/<주제>`(에이전트 작업 · 통합) · `snapshot/<이름>-<날짜>`(고정 사본) · `ops/<주제>`(실행 준비) · `feat/<주제>`(기능 · 동기화 작업). 유닛 지시서가 브랜치 이름을 정하면 그것을 따른다.
 - 여러 유닛을 한꺼번에 합칠 때는 일회성 통합 브랜치에서 정해진 순서로 합친 뒤 PR 하나로 `main`에 올린다.
-- 유닛 사이 병합 순서는 DB 마이그레이션 버전 순서를 따른다(Flyway `outOfOrder` 꺼짐). 다음 번호는 core V8 · realtime V5다.
+- 유닛 사이 병합 순서는 DB 마이그레이션 버전 순서를 따른다(Flyway `outOfOrder` 꺼짐). 기존 마이그레이션 파일은 바꾸지 않고, 새 번호는 구현 전에 실제 파일 최댓값을 확인한다. 현재 CodeKB는 core V10 · realtime V7까지 기록한다.
 - 커밋 메시지는 `<종류>(<범위>): <한국어 요약>` 형식이다(`feat` · `fix` · `docs` · `test` · `chore` · `refactor` 등). 본문은 한국어로 쓴다.
 - AI-DLC 작업 기록(`aidlc/`)도 함께 커밋한다. 담당자마다 자기 PC에서 작업 기록을 새로 만들고, 남의 기록은 이어 가지 않는다.
 - 병합 관문: `main`에는 브랜치 보호가 있고 `ci-gate`가 필수 검사다(Q6-A). `ci-gate`가 통과해야 합친다.
@@ -21,7 +20,6 @@
 - **[확인 필요]** PR 병합에 리뷰 승인이 필요한지(필수 리뷰어 수)는 확인되지 않았다(Q6에서 선택하지 않음). 팀 문서(`docs/units/README.md`)는 "리뷰를 거쳐 main에 합친다"고 적는다.
 
 ## Walking Skeleton
-
 - 끝까지 이어지는 가장 얇은 조각은 U1에서 이미 만들었다(두 앱 + PostgreSQL + Nginx + 웹, 기기 시뮬레이터와 가짜 공급자로 자유 대화 한 턴).
   우리는 새 스켈레톤을 만들지 않고, 이 끝-끝 경로가 계속 통과하는 것을 회귀 기준으로 삼는다(Q2-A).
 - 회귀 기준 명령은 `bash scripts/verify.sh`다(A 정적 · 단위 · 통합 → B 기동 · 3종 호출 → C 기기 시뮬레이터 한 턴 → 사후 단언 P1 · P2 · P3 · T).
@@ -33,7 +31,6 @@
   - JDK 21은 백엔드 시험이나 `verify.sh`를 이 PC에서 돌려야 할 때 설치한다. `verify.sh`는 실행 방식(auto · compose · host)과 관계없이 처음에 JDK 21을 찾으므로, 전체 검증 전에는 반드시 설치해야 한다.
 
 ## Testing Posture
-
 - **Methodology**: test-after
 - **Ordering**: 시험할 수 있는 층을 하나 구현하면, 바로 그 층의 시험을 쓰고 돌린 뒤 다음 층으로 넘어간다.
 - 계약에 닿는 변경도 같은 순서를 따른다(Q3-A). 다만 설계 문서 변경이 계약에 닿으면 같은 작업에서 `contracts/`도 함께 고친다(`discovered-rules.md` R-M10).
@@ -69,22 +66,20 @@
 <!-- Affirmed by the team. Mode: strict, relaxed, or off. Strict here holds for every intent and cannot be changed from chat. A section under the retired Change Control heading, written by an earlier release, is still read. -->
 
 ## Deployment
-
-- 우리는 `main` 병합마다 `ci-gate`가 통과하면 **demo 환경**에 자동 배포하는 것을 팀 방식으로 둔다(Q5-A).
-  경로: GitHub Actions → OIDC 역할 `mujoong-gha-deploy`(신뢰 `environment:demo`) → SSM 문서 `mujoong-deploy` → 호스트 `/opt/mujoong/bin/deploy.sh`.
-- 이미지 6종은 커밋 SHA 태그로 GHCR에 `main` 병합 때만 올리고, 이미 있는 태그는 덮어쓰지 않는다. 배포할 수 있는 것은 GHCR에 이미 있는 SHA 태그뿐이다.
-- demo는 EC2 1대(`ap-northeast-2`, Docker Compose, IaC 없음)이고 유일한 원격 환경이다. staging / production 구분은 없어서, 조직 기본값의 "staging 자동 · production 수동 승인" 구조 대신 demo 하나에 자동 배포한다.
-- 지금은 저장소 변수 `SERVICE_HOST` · `AUTO_DEPLOY`가 없어 배포 단계가 건너뛰어진다. `AUTO_DEPLOY=false`는 시연 · 측정 창 · 롤백 중 동결 스위치이고, 수동 실행은 동결과 무관하다.
-- 배포 뒤 러너가 공개 도메인으로 3종 호출(health · `/device` · WSS 101)과 인증서 만료 20일 이상을 확인한다. 실패는 배포 실패로 표시하고 자동 롤백은 없다.
-  롤백은 `deploy.yml`을 `mode=ROLLBACK`, `deploy.log`의 마지막 `result=OK` SHA로 수동 실행한다.
-- 동시성: 배포 그룹 하나(`mujoong-deploy-demo`), 진행 중 배포를 취소하지 않고 대기열에는 최신 하나만 남긴다.
-- 로컬 실행 구성은 셋이다: dev(`infra/compose.dev.yml`), 검증 스택(`compose.demo.yml` + `compose.ci.yml`, 일회성 · `127.0.0.1:8443`), host 모드(Docker 없이).
-- 예약 실행은 매주 월요일 03:23 KST에 의존성 취약점 · 비밀 스캔만 돈다(이미지 재스캔은 하지 않음).
-- **이번 작업은 배포를 다루지 않는다**(Q5-A). 운영 AI 어댑터 등으로 새 비밀이 생기면 비밀 이름 목록을 함께 고친다(R-M9).
-- **[확인 필요]** GitHub 환경 `demo`를 `main` 브랜치에서만 배포하도록 제한했는지는 확인되지 않았다(Q6에서 선택하지 않음). OIDC 신뢰가 `environment:demo`에 묶여 있으므로 이 제한이 배포 권한의 실제 경계다.
+- 우리는 main 병합 뒤 ci-gate와 이미지 빌드·검사가 성공하면 demo에 자동 배포하는 팀 방식을 유지한다. **이번 작업에서는 배포를 실행하지 않는다.**
+- 현재 저장소 구성은 GitHub Actions → OIDC 역할 → ECR 커밋 SHA 이미지 6종 → ECS(EC2·bridge) demo다. 태스크 정의 뼈대는 Terraform이 관리한다고 deploy.yml에 명시되어 있으며, 배포 워크플로는 최신 태스크 정의의 이미지를 교체한다. 기존 GHCR·SSM·호스트 Compose 설명은 이 현재 구성 설명으로 갱신한다.
+- 이미지는 main 관문 통과 뒤 빌드·검사·게시하며 기존 SHA 태그를 덮어쓰지 않는다. PR에서는 images·deploy가 실행되지 않는다. ECR에 게시된 SHA 묶음으로 배포한다.
+- demo를 대상으로 하며 이번 작업에서 staging·production을 새로 만들지 않는다. 파일만으로 실제 원격 환경·정책·가동 상태를 인증하지 않는다.
+- SERVICE_HOST 없음, 자동 실행의 AUTO_DEPLOY=false, ECS 인스턴스 미연결이면 배포를 건너뛴다. 현재 저장소 변수 값과 실제 활성 여부는 조회하지 않았다. 수동 실행은 자동 배포 동결과 구분된다.
+- DEPLOY는 migrate 종료 코드 0 확인 뒤 core-api·realtime → web → nginx 순서다. ROLLBACK은 지정 SHA 이미지로 돌아가며 migrate를 생략하고 DB·설정을 복원하지 않는다. 자동 복구는 서비스별 ECS 회로 차단기 수준이며 전체 배포를 원자적으로 되돌리지 않는다.
+- 파일 주석상 ECR은 최근 5개를 보관하므로 롤백 SHA는 보존 범위에 제한된다. 실제 원격 보존 정책은 조회하지 않았다.
+- 사후 확인은 /healthz·/parent의 200 및 /api/health의 200 + status=UP이다. 현재 WSS·인증서 검사는 없으며, HTTP 성공을 음성 대화 성공으로 보고하지 않는다.
+- 로컬은 dev(infra/compose.dev.yml), 별도 일회성 검증 스택(compose.demo.yml + compose.ci.yml, 127.0.0.1:8443), host 모드로 구분한다. mujoong-manual과 볼륨·실행 설정은 변경·재시작·삭제하지 않는다.
+- 새 비밀이 생기면 R-M9의 비밀 이름 검사 목록을 함께 갱신한다. OIDC·최소 권한·불변 태그 등 기존 강제 제약을 유지한다.
+- 예약 의존성·비밀 스캔은 기존 승인 관례로 유지하되 이번에는 예약 파일·실제 실행 상태를 재검증하지 않았다.
+- 원격 필수 리뷰 수·demo 환경 제한·현재 배포 동시성 설정은 이 조사에서 인증하지 않았다.
 
 ## Code Style
-
 - 서식(Q7-A): **이번 작업에서 손대는 파일만** 다른 유닛 관례(한 줄 한 문장 · 연산자 주위 공백 · Java 4칸 들여쓰기)로 읽기 좋게 정리한다. 저장소 전체 포매터 도입 · 전면 재서식은 하지 않는다.
   - 원인 정리: `.prettierignore`가 `backend/`를 통째로 빼므로 U6 Java 압축 서식은 Prettier와 무관하고, **Java 포매터 · 줄 길이 검사가 처음부터 없어서** 들어왔다. Prettier는 설정(`printWidth 100`)만 있고 어느 `package.json`에도 없어 실행되지 않는다. 이것이 놓친 것은 프런트 쪽 긴 줄뿐이다.
   - `printWidth 100`은 실제 관례가 아니다(Java 100자 초과 10,186줄). 손대는 파일을 정리할 때 이 값을 강제 기준으로 쓰지 않는다.
@@ -96,9 +91,9 @@
   - 백엔드는 기능별 패키지(`kr.mujoong.core.{account, practice, result, report, …}`, `kr.mujoong.realtime.{session, voice, dialog, gateway, …}`)이고, 컨트롤러는 기능 패키지 아래 `web`에 둔다.
   - 이름 접미어: `*Service` · `*Repository` · `*Port`(기능 사이 경계) · `*Adapter`(구현) · `*Configuration` · `*Participant`.
   - 시험 클래스는 `Test` · `Tests` · `IT` · `TestCase` 접미어를 지키고, 운영 클래스에는 이 접미어를 쓰지 않는다(`verifyBootJarHasNoTestClasses`).
-  - 프런트 화면 파일은 화면 설계 번호를 이름 끝에 붙인다(`Login01.tsx` · `Report30.tsx` · `Register05a.tsx`).
+  - 프런트 화면 파일은 번호 접미 없이 `<기능>Screen.tsx`로 이름 짓고 `parent/features/<기능>/` · `device/features/<기능>/`에 둔다. 화면 번호는 `docs/screen-map.md`에서 찾는다(2026-10-19 승인 학습).
   - 이름은 언어 관례(TS camelCase, Java camelCase/PascalCase, SQL snake_case)를 따른다. 주석 · 문서 · 커밋 본문은 한국어, 식별자는 영어.
-  - 코드 주석은 결정 ID(J · BR · U*-J · 편차)를 인용하고, TODO · FIXME 대신 남은 일을 문서로 관리한다.
+  - 코드 주석은 무엇을 왜 하는지 쓰고, 결정 ID는 필요할 때 한 줄 문서 링크로 가리킨다(2026-10-19 승인 학습). TODO·FIXME 대신 남은 일을 문서로 관리한다.
 - 오류 처리 · 로그 · 시각(기준선 관례):
   - 오류 코드는 `backend/contract-model/.../error/ErrorCode.java` enum과 `contracts/errors.md` 표 한 곳에서만 정하고, `ContractFilesTest`가 대조한다. 받는 쪽은 모르는 code를 일반 오류로 처리한다.
   - 업무 거절은 `CoreApiException.of(ErrorCode)`로 던지고, 앱마다 하나인 `ApiExceptionHandler`가 봉투 `{code, message, traceId}`로 바꾼다. message는 code별 고정 문장이며 입력값 · 전사 · 예외 메시지 · 스택을 담지 않는다. 보호자에게는 `ErrorCode#forGuardian()`으로 번역해 내보낸다.
@@ -106,10 +101,7 @@
   - 운영 코드의 오류 기록은 `EventLog`(`events.appError(EventLog.Component.…, e)`)로 하고, 운영 앱 코드에서 slf4j `LoggerFactory`를 직접 쓰지 않는다.
   - 넓은 catch는 ① `events.appError` 후 계속(근거 주석 동반) ② 고정 code 결과로 번역 ③ 의미 있는 예외로 다시 던짐 중 하나로 쓰고, 주석 없이 삼키지 않는다.
   - 시각은 `kr.mujoong.contract.time.MujoongClock` 주입으로만 읽고, 시간 값은 `mujoong.timing.*` 설정 키에서만 읽는다.
-- **[확인 필요]** 새 저장소 코드를 JDBC(JdbcClient/JdbcTemplate)로 쓰는 것을 관례로 둘지(실제 55파일 대 JPA 7파일), 화면 번호가 바뀌거나 화면이 나뉠 때 파일 · 시험 이름을 같이 바꿀지는 인터뷰에서 묻지 않았다.
-- 프런트 화면 파일은 화면 설계 번호 접미 없이 `<기능>Screen.tsx`로 이름 짓고 `parent/features/<기능>/` · `device/features/<기능>/`에 둔다. 화면 번호는 `docs/screen-map.md`에서 찾는다. 앞의 "화면 파일 이름 끝에 화면 설계 번호를 붙인다"(`Login01.tsx` 등)를 대체한다. (learned 2026-10-19) <!-- cid:261018-structure-refactor:code-generation:6e0a4e4816383adc83ce9b2ba298dcbfdc2669a24d1d2bc6cc1fb8ea885f09dc -->
-
-- 코드 주석은 "무엇을 왜"만 쓰고, 결정 ID(J · BR · U*-J · 편차)는 필요할 때 한 줄 문서 링크로 가리킨다. 앞의 "코드 주석은 결정 ID를 인용한다"를 대체한다. (learned 2026-10-19) <!-- cid:261018-structure-refactor:code-generation:79e0fd466d4479a5a00526ede28fc6a4b2bc9da9b7b35008a479977e8cb08149 -->
+- 새 저장소 코드의 JDBC/JPA 선택을 팀 전체 관례로 확정하지 않았다. 이번에 해당 변경이 필요할 때 설계에서 판단한다.
 
 ## Forbidden
 

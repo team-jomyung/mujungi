@@ -32,6 +32,7 @@ import org.springframework.context.ConfigurableApplicationContext;
  */
 @Tag("practice-flow")
 @Tag("db")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class PracticeStartPathIT {
 
     private static final String SESSIONS = "/internal/sessions";

@@ -34,13 +34,14 @@ import org.junit.jupiter.api.Test;
  * 한 번만 거는지(F5)를 실제 스레드 없이 본다.
  */
 @Tag("skeleton")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class SessionExecutorFaultTest {
 
     /** 일반 편지함 상한만 4로 줄인 설정(나머지는 운영 기본값). */
     private static final SessionExecutor.Settings SMALL_MAILBOX = new SessionExecutor.Settings(Duration.ofSeconds(20),
             Duration.ofSeconds(30), Duration.ofSeconds(40), Duration.ofMillis(800), Duration.ofSeconds(20),
             Duration.ofSeconds(1), 50, 4, 60, SessionHarness.LIFECYCLE, Duration.ofMillis(1500),
-            Duration.ofMillis(600), Duration.ofSeconds(10));
+            Duration.ofMillis(600), Duration.ofSeconds(10), Duration.ZERO);
     private static final Duration DEADLOCK_GUARD = Duration.ofSeconds(5);
 
     private final SessionHarness h = new SessionHarness();
@@ -62,6 +63,7 @@ class SessionExecutorFaultTest {
 
         // CLOSING_CONFIRM 만기는 안전 편지함이라 가득 찬 일반 편지함보다 먼저 처리되고, 전이 전에 실행기 스레드에서 공급자를 닫는다
         assertTimeoutPreemptively(DEADLOCK_GUARD, () -> {
+            small.executor.step();
             small.executor.step();
         });
 
@@ -289,6 +291,7 @@ class SessionExecutorFaultTest {
         assertThat(h.link.sent(SessionState.class)).extracting(SessionState::view).containsExactly(View.LISTENING);
 
         // 20초 시계가 와도 ACK를 받은 세션을 DEVICE_NO_ACK로 닫지 않는다
+        h.completeNotice();
         h.advance(Duration.ofSeconds(20));
         assertThat(h.transitions.applied()).extracting(InMemoryTransitions.Applied::to)
                 .containsExactly(SessionStatus.DEVICE_ACK, SessionStatus.WAITING_CHILD);

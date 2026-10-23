@@ -78,6 +78,7 @@ import org.junit.jupiter.api.Test;
  * ({@code DO_NOT_INCLUDE_TESTS})에 들어가지 않는다.
  */
 @Tag("skeleton")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class SingleInstanceMarkerTest {
 
     private static final JavaClasses PRODUCTION = new ClassFileImporter()

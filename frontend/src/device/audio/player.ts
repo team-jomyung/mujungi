@@ -80,6 +80,8 @@ interface Playback {
   readonly playbackId: string;
   readonly sessionId: string;
   readonly kind: "stream" | "approved";
+  /** 승인 음성이면 서버가 보낸 contentCode(스트림은 null). */
+  readonly contentCode: string | null;
   readonly pieces: Piece[];
   /** OUTPUT_END를 받았거나(묶음) 조각 하나뿐인 승인 음성이면 true. */
   endReceived: boolean;
@@ -88,6 +90,12 @@ interface Playback {
 }
 
 const MS_PER_SECOND = 1_000;
+
+/**
+ * 참여 확인 안내 녹음(시작 안내 · 다시 안내 · 대안 제시). 재생하는 동안 아이 목소리는 입력으로 받지 않고 재생도 끊지 않는다 — 말하면
+ * 끼어들기로 안내가 잘려 서버가 안내 전달 실패로 세션을 끝내던 일을 막는다.
+ */
+const NOTICE_CONTENT_CODES: ReadonlySet<string> = new Set(["INTRO_FREE_TALK", "INTRO_PRACTICE", "RE_PROMPT", "DECLINE_ALTERNATIVE"]);
 
 function approvedKey(contentCode: string, contentVersionId: string): string {
   return `${contentCode}:${contentVersionId}`;
@@ -123,6 +131,7 @@ export class AudioPlayer<C extends AudioClip> {
       playbackId,
       sessionId,
       kind: "stream",
+      contentCode: null,
       pieces: [],
       endReceived: false,
       state: "active",
@@ -170,6 +179,7 @@ export class AudioPlayer<C extends AudioClip> {
       playbackId,
       sessionId,
       kind: "approved",
+      contentCode,
       pieces: [],
       endReceived: true,
       state: "active",
@@ -207,8 +217,8 @@ export class AudioPlayer<C extends AudioClip> {
         continue;
       }
       const playedRange = this.playedRange(playback);
-      this.stopPieces(playback);
       playback.state = "stopped";
+      this.stopPieces(playback);
       this.mark(playback, "STOPPED", { stopCause: cause, playedRange });
     }
     this.playbacks.clear();
@@ -231,8 +241,8 @@ export class AudioPlayer<C extends AudioClip> {
           playedRange: this.playedRange(playback),
         });
       }
-      this.stopPieces(playback);
       playback.state = "stopped";
+      this.stopPieces(playback);
     }
     this.playbacks.clear();
     this.timelineEndSec = 0;
@@ -242,6 +252,16 @@ export class AudioPlayer<C extends AudioClip> {
 
   get isSpeaking(): boolean {
     return this.speaking;
+  }
+
+  /** 참여 확인 안내 녹음이 재생 중이거나 대기 중인가(끼어들기로 끊지 않는다). */
+  get isPlayingNotice(): boolean {
+    for (const playback of this.playbacks.values()) {
+      if (playback.state === "active" && playback.contentCode !== null && NOTICE_CONTENT_CODES.has(playback.contentCode)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   private closeOpenStream(): void {
@@ -333,8 +353,8 @@ export class AudioPlayer<C extends AudioClip> {
     if (playback.state !== "active") {
       return;
     }
-    this.stopPieces(playback);
     playback.state = "failed";
+    this.stopPieces(playback);
     this.playbacks.delete(playback.playbackId);
     if (this.openStreamId === playback.playbackId) {
       this.openStreamId = null;

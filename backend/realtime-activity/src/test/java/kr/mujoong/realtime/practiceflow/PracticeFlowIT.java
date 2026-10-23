@@ -48,6 +48,7 @@ import org.junit.jupiter.api.Test;
  */
 @Tag("practice-flow")
 @Tag("db")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class PracticeFlowIT {
 
     private static final UUID GOAL = UUID.fromString("00000000-0000-4000-8000-000000000001");

@@ -37,6 +37,7 @@ import org.springframework.transaction.PlatformTransactionManager;
  * 계획을 고정한 뒤 실행기를 띄우지 못하면 계획을 놓아 맵에 남기지 않는지 본다. DB · 실행기는 대역이다.
  */
 @Tag("live-content")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class StartSessionHandlerPathsTest {
 
     private final LiveContentRegistry content = new LiveContentRegistry(LiveContentResources.loadDefault());

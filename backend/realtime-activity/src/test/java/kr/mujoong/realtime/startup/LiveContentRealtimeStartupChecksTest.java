@@ -23,6 +23,7 @@ import org.junit.jupiter.api.Test;
  * 사유만 남기며, 기존 U1 생성자는 classpath 판을 그대로 읽는다.
  */
 @Tag("live-content")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class LiveContentRealtimeStartupChecksTest {
 
     private static final URI LOOPBACK = URI.create("ws://127.0.0.1:9/fake-provider");
@@ -34,6 +35,8 @@ class LiveContentRealtimeStartupChecksTest {
 
     @BeforeEach
     void captureStderr() {
+        // Mock maker startup belongs to test setup, before observing application startup diagnostics.
+        org.mockito.Mockito.mock(kr.mujoong.realtime.config.RealtimeProperties.class);
         original = System.err;
         System.setErr(new PrintStream(err, true, StandardCharsets.UTF_8));
     }
@@ -48,8 +51,8 @@ class LiveContentRealtimeStartupChecksTest {
         RealtimeStartupChecks checks = new RealtimeStartupChecks(inputs, SeedDictionary::loadDefault,
                 LiveContentResources::loadDefault);
 
-        assertThat(checks.liveContent().judgment().version()).isEqualTo("judgment-v1");
-        assertThat(checks.liveContent().guardrail().version()).isEqualTo("jev-guardrail-v2");
+        assertThat(checks.liveContent().judgment().version()).isEqualTo("judgment-service-v1");
+        assertThat(checks.liveContent().guardrail().version()).isEqualTo("jev-guardrail-v3");
         assertThat(new LiveContentConfiguration().liveContentRegistry(checks).resources()).isSameAs(checks.liveContent());
         assertThat(err.toString(StandardCharsets.UTF_8)).isEmpty();
     }
@@ -66,7 +69,7 @@ class LiveContentRealtimeStartupChecksTest {
     void aBrokenVersionResourceRejectsStartupWithTheReasonOnly() {
         String guardrail = resource(LiveContentResources.GUARDRAIL_RESOURCE);
         String judgment = resource(LiveContentResources.JUDGMENT_RESOURCE);
-        String sixCategories = guardrail.replace(", \"PRESSURE\"]", "]");
+        String sixCategories = guardrail.replace("\"PROFANITY\"\n  ]", "\"PROFANITY\", \"EXTRA\"\n  ]");
 
         assertThatThrownBy(() -> new RealtimeStartupChecks(inputs, SeedDictionary::loadDefault,
                 () -> LiveContentResources.parse(judgment, sixCategories)))
@@ -121,7 +124,7 @@ class LiveContentRealtimeStartupChecksTest {
         String judgment = resource(LiveContentResources.JUDGMENT_RESOURCE);
         String guardrail = resource(LiveContentResources.GUARDRAIL_RESOURCE);
         assertProblem(judgment, "{broken", LiveContentResources.Problem.PARSE_FAILED);
-        assertProblem(judgment, guardrail.replace("\"version\": \"jev-guardrail-v2\"", "\"version\": \" \""),
+        assertProblem(judgment, guardrail.replace("\"version\": \"jev-guardrail-v3\"", "\"version\": \" \""),
                 LiveContentResources.Problem.BAD_VERSION);
         assertProblem(judgment, guardrail.replaceFirst(",\\s*\"modes\": \\[[^\\]]*\\]", ""), LiveContentResources.Problem.BAD_MODES);
         assertProblem("{\"version\":\"judgment-v1\",\"source\":\"x\"}", guardrail, LiveContentResources.Problem.BAD_JUDGMENT_POINTS);

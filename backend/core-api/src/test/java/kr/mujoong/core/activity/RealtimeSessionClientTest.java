@@ -41,6 +41,7 @@ import org.junit.jupiter.api.Test;
  * 열림 · 반열림(가변 Clock) · 409/423 성공 계수 · 열림 중에도 끝내기 · 조회 시도.
  */
 @Tag("skeleton")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class RealtimeSessionClientTest {
 
     private static final Instant NOW = Instant.parse("2001-03-01T04:00:00Z");

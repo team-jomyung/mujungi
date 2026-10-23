@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 @Tag("practice-legacy")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class PracticeSpeechTest {
     @Test void voiceRequestContainsOnlyQuotedSpeechAndRoleAndNoIdentifiers() {
         var speech = new PracticeSpeech(UUID.randomUUID(), UUID.randomUUID(), 3,

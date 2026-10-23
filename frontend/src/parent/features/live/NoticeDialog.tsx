@@ -46,7 +46,7 @@ export function NoticeDialog({ open, title, confirmLabel, onConfirm, testIdPrefi
         data-testid={`${testIdPrefix}-dialog`}
         onKeyDown={keepFocusInside}
       >
-        <h2 className="mj-dialog__title" id={titleId}>
+        <h2 className="mj-dialog__title" id={titleId} style={{ overflowWrap: "anywhere" }}>
           {title}
         </h2>
         <div className="mj-dialog__actions">

@@ -31,10 +31,11 @@ import org.junit.jupiter.api.Test;
  * 참여 전 공급자 응답 취소 · DECLINED 인사 순서를 본다.
  */
 @Tag("session-runtime")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class SessionJoinTest {
 
-    private static final String INTRO = "안녕, 무중이야. 오늘 나랑 이야기할래?";
-    private static final String REPROMPT = "천천히 생각해도 돼. 이야기할래?";
+    private static final String INTRO = ServiceGuardrailFixtures.TEXT;
+    private static final String REPROMPT = ServiceGuardrailFixtures.TEXT;
     private static final String ALTERNATIVE = "그럼 다른 이야기를 해 볼까?";
 
     private final SessionHarness h = new SessionHarness();
@@ -93,8 +94,10 @@ class SessionJoinTest {
         h.settleSend();
         assertThat(h.provider.last().requests(ProviderRequestFactory.InstructionsAppend.class)).hasSize(1);
         assertThat(h.recordings.opened()).as("원음 기록은 ACTIVE부터").hasSize(1);
-        assertThat(h.store.transcripts).as("참여 대답은 저장하지 않는다(BR2.5)")
-                .noneMatch(entry -> entry.speaker() == TranscriptEntry.Speaker.CHILD);
+        // 참여 확인 중에는 저장하지 않지만, 참여를 수락한 그 대답은 수락 때 첫 아이 말 한 행으로 남는다(BR2.5 개정)
+        assertThat(h.store.transcripts).as("수락한 참여 대답만 아이 행으로 남는다")
+                .filteredOn(entry -> entry.speaker() == TranscriptEntry.Speaker.CHILD).singleElement()
+                .satisfies(entry -> assertThat(entry.text()).isEqualTo("응"));
         assertThat(events(JoinFlow.EVENT_JOIN_ACCEPTED)).singleElement()
                 .satisfies(event -> assertThat(event.getPayloadJson()).isEqualTo("{\"prompts\":1}"));
     }
@@ -117,7 +120,7 @@ class SessionJoinTest {
         ActivitySessionRow row = h.transitions.find(h.sessionId).orElseThrow();
         assertThat(row.status()).isEqualTo(SessionStatus.DECLINED);
         assertThat(row.endReason()).isEqualTo(EndReason.DECLINED);
-        assertThat(h.transitions.extrasApplied()).singleElement()
+        assertThat(h.transitions.extrasApplied()).filteredOn(applied -> applied.extras().eraseTranscripts()).singleElement()
                 .satisfies(applied -> assertThat(applied.extras().eraseTranscripts()).as("전사 삭제(BR3.2)").isTrue());
         // 인사: STOP_OUTPUT 없이 마무리 문구 1회, 말풍선 없음
         assertThat(h.link.sent(StopOutput.class)).isEmpty();
@@ -135,16 +138,16 @@ class SessionJoinTest {
     }
 
     @Test
-    void aRefusalGetsTheAlternativeAndASecondRefusalDeclines() {
+    void aRefusalDeclinesImmediatelyWithoutAnAlternativeAndASecondReplyCannotReopenIt() {
         withPrompts();
         toWaitingChild();
         mark(plays().getFirst(), PlaybackMark.Status.COMPLETED);
 
         h.childSays("i-1", "싫어");
-        assertThat(plays()).extracting(PlayApprovedContent::contentCode).last()
-                .isEqualTo(SessionExecutor.DECLINE_ALTERNATIVE);
-        assertThat(events(JoinFlow.EVENT_JOIN_ALTERNATIVE_OFFERED)).singleElement()
-                .satisfies(event -> assertThat(event.getPayloadJson()).contains("REFUSE").doesNotContain("싫어"));
+        assertThat(plays()).extracting(PlayApprovedContent::contentCode).doesNotContain(SessionExecutor.DECLINE_ALTERNATIVE);
+        assertThat(events(JoinFlow.EVENT_JOIN_ALTERNATIVE_OFFERED)).isEmpty();
+        assertThat(h.transitions.status(h.sessionId)).isEqualTo(SessionStatus.DECLINED);
+        assertThat(h.transitions.guardrailFacts.get(h.sessionId).participation()).isEqualTo(SessionGuardrailFacts.Participation.REFUSED);
 
         mark(plays().getLast(), PlaybackMark.Status.COMPLETED);
         h.childSays("i-2", "안 할래");
@@ -153,79 +156,82 @@ class SessionJoinTest {
     }
 
     @Test
-    void aTopicRefusalIsNotAnEndAndTheChildCanStillJoin() {
+    void aTopicRefusalIsNotAnEndAndStartsTheConversationAtOnce() {
+        // 자유대화의 시작 의사는 '거절인가'만 본다(contracts/deviations.md FT-1022-b): 화제 거절도 거절이 아니므로 재안내 없이 시작한다
         withPrompts();
         toWaitingChild();
         mark(plays().getFirst(), PlaybackMark.Status.COMPLETED);
 
         h.childSays("i-1", "이거 말고 다른 거");
-        mark(plays().getLast(), PlaybackMark.Status.COMPLETED);
-        h.childSays("i-2", "좋아");
 
-        assertThat(plays()).extracting(PlayApprovedContent::contentCode)
-                .containsExactly(SessionExecutor.INTRO_FREE_TALK, SessionExecutor.DECLINE_ALTERNATIVE);
+        assertThat(plays()).extracting(PlayApprovedContent::contentCode).containsExactly(SessionExecutor.INTRO_FREE_TALK);
         assertThat(h.executor.status()).isEqualTo(SessionStatus.ACTIVE);
     }
 
     @Test
-    void anUnclearReplyUsesTheRepromptOnceThenTheSameWindowKeepsGoing() {
+    void anUnclearReplyStartsTheConversationAtOnceWithoutAReprompt() {
+        // 불명확한 대답을 판정 AI(J1)에 넘기거나 재안내로 되묻던 단계는 없앴다(contracts/deviations.md FT-1022-b)
         withPrompts();
         toWaitingChild();
         mark(plays().getFirst(), PlaybackMark.Status.COMPLETED);
 
         h.childSays("i-1", "음");
-        mark(plays().getLast(), PlaybackMark.Status.COMPLETED);
-        h.childSays("i-2", "어디");
 
-        assertThat(plays()).extracting(PlayApprovedContent::contentCode)
-                .containsExactly(SessionExecutor.INTRO_FREE_TALK, SessionExecutor.RE_PROMPT);
-        assertThat(h.executor.status()).isEqualTo(SessionStatus.WAITING_CHILD);
-        h.advanceAlive(Duration.ofSeconds(20));
-        assertThat(h.transitions.status(h.sessionId)).as("재안내를 쓴 뒤 무응답은 DECLINED").isEqualTo(SessionStatus.DECLINED);
+        assertThat(plays()).extracting(PlayApprovedContent::contentCode).containsExactly(SessionExecutor.INTRO_FREE_TALK);
+        assertThat(h.executor.status()).isEqualTo(SessionStatus.ACTIVE);
+        assertThat(events(JoinFlow.EVENT_JOIN_RE_PROMPTED)).isEmpty();
+        assertThat(events(JoinFlow.EVENT_JOIN_ACCEPTED)).singleElement()
+                .satisfies(event -> assertThat(event.getPayloadJson()).isEqualTo("{\"prompts\":1}"));
     }
 
     @Test
-    void promptsNeverExceedThreeAcrossRepromptAndAlternative() {
+    void promptsNeverExceedTwoAndARefusalNeverAddsAnAlternative() {
         withPrompts();
         toWaitingChild();
         mark(plays().getFirst(), PlaybackMark.Status.COMPLETED);
 
-        h.childSays("i-1", "음");
+        // 재안내는 무응답 때만 나온다
+        h.advanceAlive(Duration.ofSeconds(21));
         mark(plays().getLast(), PlaybackMark.Status.COMPLETED);
-        h.childSays("i-2", "싫어");
-        mark(plays().getLast(), PlaybackMark.Status.COMPLETED);
-        h.childSays("i-3", "모르겠는데");
+        h.childSays("i-1", "싫어");
         h.advanceAlive(Duration.ofSeconds(20));
 
-        assertThat(plays()).filteredOn(play -> !PlayApprovedContent.CLOSING.equals(play.contentCode())).hasSize(3);
+        assertThat(plays()).filteredOn(play -> !PlayApprovedContent.CLOSING.equals(play.contentCode()))
+                .extracting(PlayApprovedContent::contentCode)
+                .containsExactly(SessionExecutor.INTRO_FREE_TALK, SessionExecutor.RE_PROMPT);
+        assertThat(plays()).extracting(PlayApprovedContent::contentCode).doesNotContain(SessionExecutor.DECLINE_ALTERNATIVE);
         assertThat(h.transitions.status(h.sessionId)).isEqualTo(SessionStatus.DECLINED);
     }
 
     @Test
-    void aReplyWhileTheIntroIsStillPlayingIsHandledAtOnce() {
+    void aReplyWhileTheIntroIsStillPlayingCannotAcceptParticipation() {
         withPrompts();
         toWaitingChild();
 
         h.childSays("i-1", "응");
 
-        assertThat(h.executor.status()).as("창 시작을 기다리지 않는다(R-11)").isEqualTo(SessionStatus.ACTIVE);
+        assertThat(h.executor.status()).as("FR2: 실제 안내 완료 전 수락은 재사용하지 않는다").isEqualTo(SessionStatus.WAITING_CHILD);
+        mark(plays().getFirst(), PlaybackMark.Status.COMPLETED);
+        assertThat(h.executor.status()).isEqualTo(SessionStatus.WAITING_CHILD);
+        h.childSays("i-2", "응");
+        assertThat(h.executor.status()).isEqualTo(SessionStatus.ACTIVE);
     }
 
     @Test
-    void withoutThePromptsInThePackageTheClockStillRunsToDeclinedAndTheMissingCodesAreReportedOnce() {
+    void withoutThePromptsTheSessionFailsTechnicallyRatherThanInventingDeliveryOrSilence() {
+        h.extraApproved.remove(SessionExecutor.INTRO_FREE_TALK);
         toWaitingChild();
         assertThat(plays()).isEmpty();
-        assertThat(h.executor.timers().isArmed(SessionTimers.Kind.JOIN_WINDOW)).as("곧바로 재생 완료로 본다").isTrue();
+        assertThat(h.executor.timers().isArmed(SessionTimers.Kind.JOIN_WINDOW)).isFalse();
 
         h.advanceAlive(Duration.ofSeconds(20));
-        assertThat(h.executor.status()).isEqualTo(SessionStatus.WAITING_CHILD);
+        assertThat(h.executor.status()).isEqualTo(SessionStatus.FAILED);
         h.advanceAlive(Duration.ofSeconds(20));
 
-        assertThat(h.transitions.status(h.sessionId)).isEqualTo(SessionStatus.DECLINED);
-        assertThat(events(SessionExecutor.EVENT_APPROVED_CONTENT_MISSING)).extracting(SessionEvent::getPayloadJson)
-                .containsExactly("{\"code\":\"INTRO_FREE_TALK\"}", "{\"code\":\"RE_PROMPT\"}");
-        // 마무리 문구(필수)는 있다 → 인사 1회
-        assertThat(plays()).extracting(PlayApprovedContent::contentCode).containsExactly(PlayApprovedContent.CLOSING);
+        assertThat(h.transitions.status(h.sessionId)).isEqualTo(SessionStatus.FAILED);
+        assertThat(h.transitions.guardrailFacts.get(h.sessionId).notice()).isEqualTo(SessionGuardrailFacts.Notice.FAILED);
+        assertThat(h.transitions.guardrailFacts.get(h.sessionId).participation()).isEqualTo(SessionGuardrailFacts.Participation.UNKNOWN);
+        assertThat(plays()).isEmpty();
     }
 
     @Test
@@ -244,8 +250,7 @@ class SessionJoinTest {
 
     @Test
     void theFarewellIsCappedByTheClosingConfirmWhenNoMarkComes() {
-        toWaitingChild();
-        h.advanceAlive(Duration.ofSeconds(40));
+        declineByActualSilence();
         assertThat(h.transitions.status(h.sessionId)).isEqualTo(SessionStatus.DECLINED);
         assertThat(h.link.sent(CloseTransport.class)).isEmpty();
 
@@ -258,8 +263,7 @@ class SessionJoinTest {
 
     @Test
     void aNewSessionOnTheSameDeviceDropsTheRemainingFarewellWithoutDeviceCommands() {
-        toWaitingChild();
-        h.advanceAlive(Duration.ofSeconds(40));
+        declineByActualSilence();
         assertThat(h.transitions.status(h.sessionId)).isEqualTo(SessionStatus.DECLINED);
 
         h.link.bindSession(UUID.randomUUID());
@@ -307,14 +311,21 @@ class SessionJoinTest {
     }
 
     @Test
-    void anUnreportedIntroPlaybackStillOpensTheWindowAtTheOutputLimit() {
+    void anUnreportedIntroPlaybackFailsAtTheOutputLimitWithoutOpeningAWindow() {
         withPrompts();
         toWaitingChild();
         assertThat(h.executor.timers().isArmed(SessionTimers.Kind.JOIN_WINDOW)).isFalse();
 
         h.advanceAlive(h.settings.playbackExpiry());
 
-        assertThat(h.executor.timers().isArmed(SessionTimers.Kind.JOIN_WINDOW)).isTrue();
+        assertThat(h.executor.timers().isArmed(SessionTimers.Kind.JOIN_WINDOW)).isFalse();
+        assertThat(h.executor.status()).isEqualTo(SessionStatus.FAILED);
+    }
+
+    private void declineByActualSilence() {
+        toWaitingChild();
+        h.completeNotice(); h.advanceAlive(Duration.ofSeconds(20));
+        h.completeNotice(); h.advanceAlive(Duration.ofSeconds(20));
     }
 
     private List<PlayApprovedContent> plays() {

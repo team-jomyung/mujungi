@@ -54,6 +54,7 @@ import org.springframework.beans.factory.support.DefaultListableBeanFactory;
  * 앱의 커넥터 동작은 {@code GracefulDrainIT}가 본다.
  */
 @Tag("skeleton")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class DrainingLifecycleTest {
 
     private static final Duration GRACE = Duration.ofSeconds(2);

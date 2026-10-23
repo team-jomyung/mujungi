@@ -34,6 +34,7 @@ import org.junit.jupiter.api.Test;
  * 신호 무시와 정산 시점 1회 순서, CLOSING의 출력 능력 거절, 확장점 예외 처리, 출력 능력(재생 · 시계 · 출력 막음 · 지시문)을 본다.
  */
 @Tag("session-runtime")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class PracticeExtensionTest {
 
     private final SessionHarness h = new SessionHarness();

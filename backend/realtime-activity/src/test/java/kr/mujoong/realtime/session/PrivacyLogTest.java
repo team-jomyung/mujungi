@@ -51,12 +51,13 @@ import org.springframework.jdbc.core.namedparam.SqlParameterSource;
  * 계약)는 이 검사에서 뺀다 — 정산 입구에는 세션 id · practice · 마감 시각만 넘어가는지만 본다.
  */
 @Tag("session-runtime")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class PrivacyLogTest {
 
-    private static final String INTRO = "안녕 나는 무중이야 오늘은 이야기를 나눌 거야 시작할까";
-    private static final String RE_PROMPT_TEXT = "다시 한 번 물어볼게 이야기할까";
+    private static final String INTRO = ServiceGuardrailFixtures.TEXT;
+    private static final String RE_PROMPT_TEXT = ServiceGuardrailFixtures.TEXT;
     private static final String ALTERNATIVE_TEXT = "그럼 다른 놀이를 해 볼까";
-    private static final String STOP_QUESTION = "이야기를 그만할까";
+    private static final String STOP_QUESTION = ServiceGuardrailFixtures.STOP_TEXT;
     private static final String WARNING_TEXT = "무중이 기다리고 있어";
     private static final String AUDIO_PATH_MARK = "recordings/";
 
@@ -100,17 +101,17 @@ class PrivacyLogTest {
     }
 
     @Test
-    void theStopConfirmPathKeepsTheChildsWordsAndTheQuestionOut() {
-        h.extraApproved.put(SessionExecutor.STOP_CONFIRM, STOP_QUESTION);
+    void theChildStopPathKeepsTheChildsWordsOut() {
+        // 등록 종료 표현은 물음꼴이어도 확인 질문 없이 곧바로 끝낸다(2026-10-22 · FT-1023-a)
+        h.extraApproved.put("STOP_CONFIRM", STOP_QUESTION);
         h.activate();
-        h.childSays("i-1", "쉬고 싶어 이구아노돈");
-        mark(lastPlay());
-        h.childSays("i-2", "응");
+        h.childSays("i-1", "무중아 그만할래 이구아노돈?");
 
         assertThat(h.executor.status()).isEqualTo(SessionStatus.CLOSING);
-        assertNoSecrets("쉬고 싶어 이구아노돈", "이구아노돈", STOP_QUESTION);
+        assertNoSecrets("무중아 그만할래 이구아노돈?", "이구아노돈", STOP_QUESTION);
         assertThat(sessionEvents()).extracting(SessionEvent::getEventType)
-                .contains(SessionExecutor.EVENT_STOP_CONFIRM_ASKED, SessionExecutor.EVENT_STOP_CONFIRM_RESOLVED);
+                .contains(SessionExecutor.EVENT_CHILD_STOP_INTENT)
+                .doesNotContain("STOP_CONFIRM_ASKED");
     }
 
     @Test

@@ -29,6 +29,7 @@ import tools.jackson.databind.JsonNode;
  * (0 ~ 1일 때만)은 그대로 남아 있다.
  */
 @Tag("voice-session")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class ProviderClientVoiceSessionIT {
 
     private static final JsonCodec JSON = JsonCodec.shared();

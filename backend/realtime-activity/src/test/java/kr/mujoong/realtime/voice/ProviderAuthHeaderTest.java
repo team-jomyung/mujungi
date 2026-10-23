@@ -15,6 +15,7 @@ import org.junit.jupiter.api.Test;
  * (R-F1 · R-F3).
  */
 @Tag("judgment-turn")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class ProviderAuthHeaderTest {
 
     private static final JsonCodec JSON = JsonCodec.shared();

@@ -48,7 +48,7 @@ export function mergeLiveView(previous: LiveView | undefined, next: LiveView): L
   if (previous === undefined || previous.sessionId !== next.sessionId) {
     return next;
   }
-  if ((previous.activityType === "PRACTICE" || next.activityType === "PRACTICE") && next.statusVersion < previous.statusVersion) return previous;
+  if (next.statusVersion < previous.statusVersion) return previous;
   return { ...next, items: mergeBubbles(previous.items, next.items),
     practice: next.activityType === "PRACTICE" && next.practiceIssue === "invalid" ? previous.practice : next.practice };
 }

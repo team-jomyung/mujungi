@@ -7,6 +7,7 @@ import kr.mujoong.realtime.testing.SessionHarness;
 import kr.mujoong.realtime.voice.ProviderPort.ProviderEvent;
 import org.junit.jupiter.api.Test;
 
+@org.junit.jupiter.api.Tag("service-guardrail")
 class ContinuousSilenceExecutorTest {
     @Test
     void aRealStreamShapeSealsSpeechAndRequiresJevAllowEvenWhileSilenceKeepsArriving() {

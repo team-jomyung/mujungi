@@ -32,6 +32,7 @@ import org.junit.jupiter.api.Test;
  * </ul>
  */
 @Tag("voice-session")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class SessionExecutorReview2Test {
 
     private final SessionHarness h = new SessionHarness();
@@ -42,7 +43,7 @@ class SessionExecutorReview2Test {
     @Test
     void liftingTheStopIntentDoesNotLeaveTheDeviceThinking() {
         h.activate();
-        done("i1", "그만할래");
+        done("i1", "무중아 그만할래");
         h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("그래 더 하자"));
         h.drain();
 
@@ -59,7 +60,7 @@ class SessionExecutorReview2Test {
     @Test
     void reportedSpeechTopicRefusalOrOrdinaryTalkAfterAStopIntentDoesNotLiftIt() {
         h.activate();
-        done("i1", "이제 그만할래");
+        done("i1", "무중아 그만할래");
         done("i2", "엄마가 그만하라고 했어");
         done("i3", "공룡 얘기 그만");
         done("i4", "공룡이 좋아");
@@ -152,8 +153,8 @@ class SessionExecutorReview2Test {
         h.launcher.runAll("provider-correct-");
         assertThat(h.provider.last().requests(ProviderRequestFactory.InstructionsAppend.class))
                 .extracting(ProviderRequestFactory.InstructionsAppend::content)
-                .containsExactly(InstructionTemplates.ResponseStart.FIRST.content(),
-                        InstructionTemplates.correctionContent(DialogInstructions.Correction.DIAGNOSIS));
+                .containsExactly(InstructionTemplates.ResponseStart.FIRST.content(h.activityType),
+                        InstructionTemplates.correctionContent(DialogInstructions.Correction.DIAGNOSIS, h.activityType));
     }
 
     // ------------------------------------------------------------------ 보조

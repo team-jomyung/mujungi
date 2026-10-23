@@ -9,6 +9,10 @@ import java.util.Objects;
 import kr.mujoong.contract.audio.AudioFrameCodec;
 import kr.mujoong.realtime.dialog.DialogInstructions;
 import kr.mujoong.realtime.dialog.InstructionTemplates;
+import kr.mujoong.realtime.dialog.PolicyBundle;
+import kr.mujoong.realtime.dialog.ServicePolicyCatalog;
+import kr.mujoong.contract.status.ActivityType;
+import org.springframework.beans.factory.annotation.Autowired;
 import kr.mujoong.realtime.session.ChildContext;
 import org.springframework.stereotype.Component;
 
@@ -30,6 +34,22 @@ import org.springframework.stereotype.Component;
 @Component
 public class ProviderRequestFactory {
 
+    private final ServicePolicyCatalog policies;
+
+    public ProviderRequestFactory() {
+        this(new ServicePolicyCatalog());
+    }
+
+    @Autowired
+    public ProviderRequestFactory(ServicePolicyCatalog policies) {
+        this.policies = Objects.requireNonNull(policies, "policies");
+    }
+
+    /** 세션이 고정할 참조다. 연습은 기존 정책 입구를 사용한다. */
+    public PolicyBundle servicePolicy(ActivityType mode) {
+        return policies.select(mode).orElse(null);
+    }
+
     /** 공급자 모델(코드 상수, BR7.2 · ai-io 2절). */
     public static final String MODEL = "gpt-live-1";
     /** 음성 형식 type(실호출 확인, U11-a). */
@@ -49,6 +69,7 @@ public class ProviderRequestFactory {
     static final int MAX_INTERESTS = 10;
     static final int MAX_INTEREST_LENGTH = 20;
     static final int MIN_AGE = 6;
+    private static final int SERVICE_MAX_AGE = 12;
 
     /** {@code session.start}: 중첩 {@code session{model, instructions, audio{format{type, rate}}}}. */
     public record SessionStart(String type, SessionBody session) {
@@ -123,6 +144,37 @@ public class ProviderRequestFactory {
         return new SessionStart(TYPE_SESSION_START,
                 new SessionBody(MODEL, guide == null ? instructions(data) : DialogInstructions.role(data.displayName(), data.age(), data.interests())
                         + DialogInstructions.conversationGuide(guide), new AudioSpec(new AudioFormat(AUDIO_TYPE, rate))));
+    }
+
+    /** 현재 자유대화 세션에 고정한 정책을 한 번만 포함한다. 내부 판/해시는 wire 필드가 아니다. */
+    public SessionStart sessionStart(ChildContext context, PolicyBundle policy) {
+        return sessionStart(context, policy, null);
+    }
+
+    /** 서비스 정책 지시문 뒤에 대화 전 보호자 참고(선택, 고정 문장만)를 붙인다. */
+    public SessionStart sessionStart(ChildContext context, PolicyBundle policy,
+            kr.mujoong.contract.context.ConversationGuide guide) {
+        Objects.requireNonNull(context, "context");
+        String instructions = DialogInstructions.serviceRole(Objects.requireNonNull(policy, "policy"),
+                limit(context.displayName(), MAX_DISPLAY_NAME),
+                context.age() == null ? null : Math.max(MIN_AGE, Math.min(SERVICE_MAX_AGE, context.age())),
+                limitInterests(context.interests())) + DialogInstructions.conversationGuide(guide);
+        return new SessionStart(TYPE_SESSION_START,
+                new SessionBody(MODEL, instructions, new AudioSpec(new AudioFormat(AUDIO_TYPE, AUDIO_RATE))));
+    }
+
+    public InstructionsAppend responseStart(String eventId, InstructionTemplates.ResponseStart start, ActivityType mode) {
+        return responseStart(eventId, start, mode, null);
+    }
+
+    /** 활동 종류별 발언권 지시. 자유대화 첫 응답에는 대화 전 보호자 참고(선택)를 함께 싣는다. */
+    public InstructionsAppend responseStart(String eventId, InstructionTemplates.ResponseStart start, ActivityType mode,
+            kr.mujoong.contract.context.ConversationGuide guide) {
+        return instructionsAppend(eventId, Objects.requireNonNull(start, "start").content(mode, guide));
+    }
+
+    public InstructionsAppend instructionsAppend(String eventId, DialogInstructions.Correction correction, ActivityType mode) {
+        return instructionsAppend(eventId, InstructionTemplates.correctionContent(correction, mode));
     }
 
     /** 입력 음성 한 프레임. 본문은 변환하지 않는다(J131 무변환). */

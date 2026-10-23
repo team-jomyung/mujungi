@@ -38,6 +38,10 @@ public final class InputRelay {
 
     /** 음성 활동 판정 임계값(PCM16 평균 절대 진폭, J124 허용 목록 코드 상수). */
     public static final int VOICE_ENERGY_THRESHOLD = 500;
+    /** 24kHz PCM16 모노의 밀리초당 바이트. */
+    private static final int BYTES_PER_MILLISECOND = 48;
+    /** 보관할 아이 소리의 상한 바이트(20초 분량, 출력 구간 상한과 같다). 넘으면 지금까지 보관한 것을 풀어 보낸다. */
+    private static final int HOLD_MAX_BYTES = 960_000;
     /** relayIn 표본 링 크기(60초 분량, PD 2.3). */
     public static final int RELAY_IN_RING = 3000;
 
@@ -49,7 +53,15 @@ public final class InputRelay {
         PROVIDER_SEND
     }
 
-    private record Frame(long sequence, byte[] pcm, long receivedNanos) {
+    /**
+     * @param tapPcm 원음 기록기에 넘길 내용(null이면 {@code pcm} 그대로). 보관 중 무음으로 바꿔 보낸 프레임은 실제 소리를 여기에 둔다
+     * @param tapped 이미 기록기에 넘겼다(보관했다가 풀어 다시 보내는 프레임은 기록을 중복하지 않는다)
+     */
+    private record Frame(long sequence, byte[] pcm, long receivedNanos, byte[] tapPcm, boolean tapped) {
+
+        Frame(long sequence, byte[] pcm, long receivedNanos) {
+            this(sequence, pcm, receivedNanos, null, false);
+        }
     }
 
     private final UUID sessionId;
@@ -65,6 +77,18 @@ public final class InputRelay {
     private int ringSize;
     private int ringNext;
     private boolean accepting;
+    /** 켜면 들어오는 프레임을 같은 길이의 무음으로 바꿔 보낸다(승인 음성을 재생하는 동안 아이 소리를 공급자에 들려주지 않는다). */
+    private boolean muted;
+    /** 켜 있는 동안 아이 소리를 공급자에 바로 보내지 않고 모아 둔다(GPT-Live가 말하는 중, {@link #setHolding}). */
+    private boolean holding;
+    private final ArrayDeque<byte[]> heldFrames = new ArrayDeque<>();
+    private int heldBytes;
+    private boolean heldVoiceSeen;
+    private int heldSilentBytes;
+    /** 풀어 보낸 소리가 대기열에 남아 있는 동안 대기열 상한에 더하는 여유(보낼 때마다 줄어든다). */
+    private int releasedBacklog;
+    /** 보관 중 아이 발화가 끝났다고 보는 소리 뒤 조용 길이(바이트). 0이면 발화 끝으로는 풀지 않는다. */
+    private int holdQuietBytes;
     private boolean stopped;
     private long lastSequence = -1;
     /** {@link #lastSequence}를 센 연결. */
@@ -113,7 +137,93 @@ public final class InputRelay {
             if (!accepting) {
                 countDropped(DropCause.NOT_ACCEPTING, queue.size());
                 queue.clear();
+                releasedBacklog = 0;
+                clearHeld();
             }
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    /**
+     * 음소거. 켜 있는 동안 받은 프레임은 내용을 버리고 무음으로 보낸다 — 프레임을 끊으면 공급자의 세션 오디오 시간선이 멈춰 이후 전사
+     * {@code start_ms}가 참여 창 경계({@code ParticipationInputBoundary})와 어긋나므로, 시간선은 이어 가고 소리만 지운다. 음성 활동 시각은
+     * 갱신하지 않는다. 이미 대기열에 있는 프레임은 건드리지 않는다.
+     */
+    public void setMuted(boolean value) {
+        lock.lock();
+        try {
+            muted = value;
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    public boolean isMuted() {
+        lock.lock();
+        try {
+            return muted;
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    /**
+     * GPT-Live가 말하는 동안 아이 소리를 모아 두는지 정한다. 켜 있는 동안 받은 프레임은 실제 소리를 따로 모으고 공급자에는 같은 길이의 무음을
+     * 순서대로 보낸다(공급자 시간선과 원음 기록의 순서가 어긋나지 않는다). 끄면 모아 둔 소리를 순서대로 풀어 보낸다. 켠 채로도 아이 발화가 끝나면(소리
+     * 뒤 {@link #holdQuiet} 동안 조용) 그때까지 모은 소리를 풀고 이어서 다음 발화를 모은다.
+     */
+    public void setHolding(boolean value) {
+        lock.lock();
+        try {
+            if (holding == value) {
+                return;
+            }
+            holding = value;
+            if (!value) {
+                releaseHeld();
+            }
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    /** 아이 소리를 모아 두는 중인가. */
+    public boolean isHolding() {
+        lock.lock();
+        try {
+            return holding;
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    /** 모아 둔 아이 소리를 지금 풀어 보낸다(모으기는 계속한다). */
+    public void releaseHeldNow() {
+        lock.lock();
+        try {
+            releaseHeld();
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    /** 모아 둔 프레임 수(시험 · 진단). */
+    public int heldFrameCount() {
+        lock.lock();
+        try {
+            return heldFrames.size();
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    /** 보관 중 아이 발화가 끝났다고 보는 소리 뒤 조용 길이({@code mujoong.gate.segment-quiet}). 0이면 발화 끝으로는 풀지 않는다. */
+    public void holdQuiet(Duration quiet) {
+        Objects.requireNonNull(quiet, "quiet");
+        lock.lock();
+        try {
+            holdQuietBytes = (int) Math.min(Integer.MAX_VALUE, Math.max(0L, quiet.toMillis()) * BYTES_PER_MILLISECOND);
         } finally {
             lock.unlock();
         }
@@ -149,6 +259,14 @@ public final class InputRelay {
         if (pcm.length != AudioFrameCodec.INPUT_PAYLOAD_BYTES) {
             throw new IllegalArgumentException("입력 프레임 본문 길이가 틀렸다");
         }
+        lock.lock();
+        try {
+            if (muted) {
+                pcm = new byte[pcm.length];
+            }
+        } finally {
+            lock.unlock();
+        }
         boolean voice = isVoice(pcm);
         Instant now = voice ? clock.now() : null;
         lock.lock();
@@ -166,11 +284,15 @@ public final class InputRelay {
                 return false;
             }
             lastSequence = sequence;
-            if (queue.size() >= capacity) {
+            if (queue.size() >= capacity + releasedBacklog) {
                 queue.pollFirst();
                 countDropped(DropCause.QUEUE_FULL, 1);
             }
-            queue.addLast(new Frame(sequence, pcm, receivedNanos));
+            if (holding && !muted) {
+                holdFrame(sequence, pcm, receivedNanos, voice);
+            } else {
+                queue.addLast(new Frame(sequence, pcm, receivedNanos));
+            }
             if (voice) {
                 lastVoiceFrameAt = now;
             }
@@ -179,6 +301,50 @@ public final class InputRelay {
         } finally {
             lock.unlock();
         }
+    }
+
+    /** 보관 중 프레임 하나: 실제 소리는 모으고 공급자에는 무음을 같은 순서로 보낸다. 아이 발화가 끝났거나 상한을 넘기면 푼다. 잠금 안에서 부른다. */
+    private void holdFrame(long sequence, byte[] pcm, long receivedNanos, boolean voice) {
+        heldFrames.addLast(pcm);
+        heldBytes += pcm.length;
+        queue.addLast(new Frame(sequence, new byte[pcm.length], receivedNanos, pcm, false));
+        if (voice) {
+            heldVoiceSeen = true;
+            heldSilentBytes = 0;
+        } else if (heldVoiceSeen) {
+            heldSilentBytes += pcm.length;
+        }
+        boolean utteranceEnded = heldVoiceSeen && holdQuietBytes > 0 && heldSilentBytes >= holdQuietBytes;
+        if (utteranceEnded || heldBytes >= HOLD_MAX_BYTES) {
+            releaseHeld();
+        }
+    }
+
+    /**
+     * 모아 둔 소리를 순서대로 대기열 뒤에 붙인다. 대기열 상한({@link #capacity})은 밀린 소리를 버리는 장치라 풀어 보내는 소리에는 적용하지 않는다(상한
+     * 20초 분량). 이미 원음 기록기에 넘긴 소리라 기록을 중복하지 않고, 지연 표본이 보관 시간으로 부풀지 않게 푼 시각을 받은 시각으로 둔다. 잠금 안에서
+     * 부른다.
+     */
+    private void releaseHeld() {
+        if (heldFrames.isEmpty()) {
+            heldVoiceSeen = false;
+            heldSilentBytes = 0;
+            return;
+        }
+        long releasedAt = clock.monotonicNanos();
+        for (byte[] original : heldFrames) {
+            queue.addLast(new Frame(-1L, original, releasedAt, null, true));
+        }
+        releasedBacklog += heldFrames.size();
+        clearHeld();
+        available.signalAll();
+    }
+
+    private void clearHeld() {
+        heldFrames.clear();
+        heldBytes = 0;
+        heldVoiceSeen = false;
+        heldSilentBytes = 0;
     }
 
     /** 중계 가상 스레드를 띄운다. */
@@ -215,6 +381,8 @@ public final class InputRelay {
             stopped = true;
             accepting = false;
             queue.clear();
+            releasedBacklog = 0;
+            clearHeld();
             session = null;
             running = worker;
             available.signalAll();
@@ -242,6 +410,7 @@ public final class InputRelay {
                     return sent;
                 }
                 frame = queue.pollFirst();
+                releasedBacklog = Math.max(0, releasedBacklog - 1);
                 target = session;
             } finally {
                 lock.unlock();
@@ -267,6 +436,7 @@ public final class InputRelay {
                     return;
                 }
                 frame = queue.pollFirst();
+                releasedBacklog = Math.max(0, releasedBacklog - 1);
                 target = session;
             } catch (InterruptedException e) {
                 return;
@@ -279,9 +449,9 @@ public final class InputRelay {
 
     private boolean send(ProviderSession target, Frame frame) {
         AudioTap currentTap = tap;
-        if (currentTap != null) {
+        if (currentTap != null && !frame.tapped()) {
             try {
-                currentTap.childFrame(frame.pcm());
+                currentTap.childFrame(frame.tapPcm() != null ? frame.tapPcm() : frame.pcm());
             } catch (RuntimeException e) {
                 // 기록 실패가 중계를 멈추지 않는다(기록기가 스스로 오류를 남긴다)
             }

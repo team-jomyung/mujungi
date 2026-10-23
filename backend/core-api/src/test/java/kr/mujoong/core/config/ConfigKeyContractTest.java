@@ -60,6 +60,7 @@ import org.springframework.core.io.FileSystemResource;
  * </ul>
  */
 @Tag("skeleton")
+@Tag("service-guardrail")
 class ConfigKeyContractTest {
 
     /** timing.md '소유 앱' 열에서 이 앱을 가리키는 이름. */

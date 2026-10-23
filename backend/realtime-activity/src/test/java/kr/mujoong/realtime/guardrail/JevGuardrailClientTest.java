@@ -37,6 +37,7 @@ import org.junit.jupiter.api.Test;
  * 오류 상태를 본다. 이 파일의 성공은 테스트 대역(가짜 제브) 증거이고 실제 제브 응답 · 지연 · 분류 품질의 증거가 아니다(R-M11).
  */
 @Tag("jev-guardrail")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class JevGuardrailClientTest {
 
     private static final String FAKE_KEY = "fake-jev-key-not-real-u13";
@@ -53,7 +54,15 @@ class JevGuardrailClientTest {
 
     private final MutableClock clock = new MutableClock();
     private final AtomicReference<String> key = new AtomicReference<>(FAKE_KEY);
-    private final LiveContentResources.GuardrailPolicy policy = LiveContentResources.loadDefault().guardrail();
+    private final LiveContentResources.GuardrailPolicy policy = historicalPolicy();
+
+    private static LiveContentResources.GuardrailPolicy historicalPolicy() {
+        try (var judgment = JevGuardrailClientTest.class.getClassLoader().getResourceAsStream(LiveContentResources.JUDGMENT_RESOURCE);
+                var guardrail = JevGuardrailClientTest.class.getClassLoader().getResourceAsStream("guardrail/policy-v2.json")) {
+            return LiveContentResources.parse(new String(judgment.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8),
+                    new String(guardrail.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8)).guardrail();
+        } catch (java.io.IOException e) { throw new java.io.UncheckedIOException(e); }
+    }
     private FakeJev jev;
     private LogCapture logs;
 

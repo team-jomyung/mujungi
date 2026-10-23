@@ -37,6 +37,7 @@ import org.junit.jupiter.api.Test;
  * 테스트 대역(R-M11) — 실제 공급자 성공이 아니다.
  */
 @Tag("judgment-turn")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class LunaJudgeClientTest {
 
     private static final JsonCodec JSON = JsonCodec.shared();

@@ -36,6 +36,7 @@ import org.junit.jupiter.api.Test;
  * observedAt 기준 30초 stale(조회 한 번 실패만으로는 아님) · 종료 세션 stale 아님 · 남의 세션 404 · 음수 sinceSeq 400.
  */
 @Tag("skeleton")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class SessionViewServiceTest {
 
     private static final Instant REQUESTED_AT = Instant.parse("2001-05-01T09:00:00Z");
@@ -57,7 +58,7 @@ class SessionViewServiceTest {
             when(realtime.view(sessionId, 0)).thenReturn(new ViewResult(ViewKind.OK,
                     new InternalSessionView(sessionId, ActivityType.PRACTICE, SessionStatus.ENDED, EndReason.CHILD_STOP,
                             null, true, REQUESTED_AT, REQUESTED_AT, REQUESTED_AT, 6L, REQUESTED_AT, List.of(), 0L,
-                            List.of(), null, null, null, detail)));
+                            List.of(), null, null, null, null, detail)));
             LiveView view = service.view(guardianId, sessionId, 0);
             assertThat(view.endDetail()).isEqualTo("PRIVATE_DIAGNOSTIC".equals(detail) ? null : detail);
             assertThat(kr.mujoong.core.activity.web.SessionController.LiveViewBody.of(view).endDetail()).isEqualTo(view.endDetail());

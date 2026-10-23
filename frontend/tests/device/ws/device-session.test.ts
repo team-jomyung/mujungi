@@ -193,6 +193,6 @@ describe("DeviceSession — 서버 명령", () => {
       failureReason: null,
     };
     session.sendPlaybackMark(SESSION_ID, mark);
-    expect(deps.send).toHaveBeenLastCalledWith("PLAYBACK_MARK", mark, SESSION_ID);
+    expect(deps.send).not.toHaveBeenCalledWith("PLAYBACK_MARK", mark, SESSION_ID);
   });
 });

@@ -27,6 +27,7 @@ import org.junit.jupiter.api.Test;
 
 /** 공급자 완료와 타이머 콜백을 명시적으로 늦춰 실제 연결 경계의 경합을 재현한다. */
 @Tag("practice-legacy")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class PracticeRuntimeRaceTest {
     @Test void anAlreadyQueuedTimerCannotExpireTheOpportunityDuringTechnicalPause() {
         var h = new SessionHarness();

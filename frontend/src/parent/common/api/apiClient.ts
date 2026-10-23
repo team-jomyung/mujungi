@@ -1,6 +1,7 @@
 import { createCsrfStore, type CsrfStore } from "./csrf";
 import { parseCsrfToken, ResponseShapeError, type CsrfToken } from "./types";
 import { normalizeErrorCode, type ErrorCodeOrUnknown } from "@/shared/errors/codeToCopy";
+import { invalidateLiveIdentity } from "./liveUpdates";
 
 // 보호자 웹 REST 클라이언트 (U1 3.5 Step 39 · 계약 2 · 3절)
 //
@@ -145,8 +146,10 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
   );
 
   async function request<T>(request: ApiRequest<T>): Promise<T> {
+    if (request.path === "/api/auth/logout" || request.path === "/api/auth/google" || request.path === "/api/dev/login" || (request.path === "/api/me" && request.method === "DELETE")) invalidateLiveIdentity(client);
+    try {
     if (!request.csrf) {
-      return send(request, null);
+      return await send(request, null);
     }
     const token = await csrf.ensure();
     try {
@@ -155,11 +158,16 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
       if (error instanceof ApiError && error.status === 403 && error.code === "CSRF_TOKEN_INVALID") {
         // 상태를 바꾸기 전의 거절이라 같은 본문으로 한 번만 다시 보낸다. 두 번째 403은 그대로 돌려준다.
         const renewed = await csrf.refresh();
-        return send(request, renewed);
+        return await send(request, renewed);
       }
+      throw error;
+    }
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401) invalidateLiveIdentity(client);
       throw error;
     }
   }
 
-  return { request, csrf };
+  const client: ApiClient = { request, csrf };
+  return client;
 }

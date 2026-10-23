@@ -1,0 +1,786 @@
+{
+  "stage": "code-generation",
+  "unit": "u16-service-guardrail",
+  "upstream_ids": [
+    "AC1.1.1",
+    "AC1.1.2",
+    "AC1.1.3",
+    "AC1.1.4",
+    "AC1.1.5",
+    "AC1.2.1",
+    "AC1.2.2",
+    "AC1.2.3",
+    "AC1.2.4",
+    "AC1.2.5",
+    "AC1.3.1",
+    "AC1.3.2",
+    "AC1.3.3",
+    "AC1.3.4",
+    "AC1.3.5",
+    "AC1.4.1",
+    "AC1.4.2",
+    "AC1.4.3",
+    "AC1.4.4",
+    "AC1.4.5",
+    "AC1.5.1",
+    "AC1.5.2",
+    "AC1.5.3",
+    "AC1.5.4",
+    "AC1.5.5",
+    "AC1.6.1",
+    "AC1.6.2",
+    "AC1.6.3",
+    "AC1.6.4",
+    "AC1.6.5",
+    "AC2.1.1",
+    "AC2.1.2",
+    "AC2.1.3",
+    "AC2.1.4",
+    "AC2.1.5",
+    "AC2.2.1",
+    "AC2.2.2",
+    "AC2.2.3",
+    "AC2.2.4",
+    "AC2.2.5",
+    "BR1.1",
+    "BR1.2",
+    "BR1.3",
+    "BR1.4",
+    "BR2.1",
+    "BR2.2",
+    "BR2.3",
+    "BR2.4",
+    "BR2.5",
+    "BR2.6",
+    "BR3.1",
+    "BR3.2",
+    "BR3.3",
+    "BR3.4",
+    "BR4.1",
+    "BR4.2",
+    "BR4.3",
+    "BR4.4",
+    "BR5.1",
+    "BR5.2",
+    "BR5.3",
+    "BR5.4",
+    "BR6.1",
+    "BR6.2",
+    "BR7.1",
+    "NFR1.1",
+    "NFR1.2",
+    "NFR1.3",
+    "NFR1.4",
+    "NFR2.1",
+    "NFR2.2",
+    "NFR2.3",
+    "NFR2.4",
+    "NFR3.1",
+    "NFR3.2",
+    "NFR3.3",
+    "NFR4.1",
+    "NFR4.2",
+    "NFR4.3",
+    "NFR5.1",
+    "NFR5.2",
+    "NFR5.3",
+    "NFR6.1",
+    "NFR6.2",
+    "NFR6.3",
+    "FR1",
+    "FR1.1",
+    "FR1.2",
+    "FR1.3",
+    "FR2",
+    "FR2.1",
+    "FR2.2",
+    "FR2.3",
+    "FR2.4",
+    "FR2.5",
+    "FR3",
+    "FR3.1",
+    "FR3.2",
+    "FR3.3",
+    "FR3.4",
+    "FR4",
+    "FR4.1",
+    "FR4.2",
+    "FR4.3",
+    "FR5",
+    "FR5.1",
+    "FR5.2",
+    "FR5.3",
+    "FR6",
+    "FR6.1",
+    "FR6.2",
+    "FR6.3",
+    "FR7",
+    "FR7.1",
+    "FR7.2",
+    "FR7.3",
+    "NFR1",
+    "NFR2",
+    "NFR3",
+    "NFR4",
+    "NFR5",
+    "NFR6",
+    "RG1"
+  ],
+  "coverage": [
+    {
+      "id": "AC1.1.1",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/voice/ProviderRequestServiceGuardrailTest.java"
+    },
+    {
+      "id": "AC1.1.2",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/dialog/ServicePolicyCatalogServiceGuardrailTest.java"
+    },
+    {
+      "id": "AC1.1.3",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/voice/ProviderRequestServiceGuardrailTest.java"
+    },
+    {
+      "id": "AC1.1.4",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/dialog/ServicePolicyCatalogServiceGuardrailTest.java"
+    },
+    {
+      "id": "AC1.1.5",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/voice/ProviderRequestServiceGuardrailIT.java"
+    },
+    {
+      "id": "AC1.2.1",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/NoticeAssetServiceGuardrailTest.java"
+    },
+    {
+      "id": "AC1.2.2",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/NoticeDeliveryServiceGuardrailIT.java"
+    },
+    {
+      "id": "AC1.2.3",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/ParticipationServiceGuardrailTest.java"
+    },
+    {
+      "id": "AC1.2.4",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/NoticeDeliveryServiceGuardrailTest.java"
+    },
+    {
+      "id": "AC1.2.5",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/ParticipationServiceGuardrailTest.java"
+    },
+    {
+      "id": "AC1.3.1",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/ParticipationServiceGuardrailTest.java"
+    },
+    {
+      "id": "AC1.3.2",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/ParticipationServiceGuardrailTest.java"
+    },
+    {
+      "id": "AC1.3.3",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/ParticipationServiceGuardrailTest.java"
+    },
+    {
+      "id": "AC1.3.4",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/ParticipationServiceGuardrailTest.java"
+    },
+    {
+      "id": "AC1.3.5",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/ParticipationServiceGuardrailTest.java"
+    },
+    {
+      "id": "AC1.4.1",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/dialog/InstructionTemplatesServiceGuardrailTest.java"
+    },
+    {
+      "id": "AC1.4.2",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/dialog/InstructionTemplatesServiceGuardrailTest.java"
+    },
+    {
+      "id": "AC1.4.3",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/dialog/ConversationPolicyServiceGuardrailTest.java"
+    },
+    {
+      "id": "AC1.4.4",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/dialog/ConversationPolicyServiceGuardrailTest.java"
+    },
+    {
+      "id": "AC1.4.5",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/dialog/ServicePolicyCatalogServiceGuardrailTest.java"
+    },
+    {
+      "id": "AC1.5.1",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/dialog/InstructionTemplatesServiceGuardrailTest.java"
+    },
+    {
+      "id": "AC1.5.2",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/dialog/ConversationPolicyServiceGuardrailTest.java"
+    },
+    {
+      "id": "AC1.5.3",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/dialog/InstructionTemplatesServiceGuardrailTest.java"
+    },
+    {
+      "id": "AC1.5.4",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/dialog/InstructionTemplatesServiceGuardrailTest.java"
+    },
+    {
+      "id": "AC1.5.5",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/dialog/InstructionTemplatesServiceGuardrailTest.java"
+    },
+    {
+      "id": "AC1.6.1",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/OutputRuntimeServiceGuardrailTest.java"
+    },
+    {
+      "id": "AC1.6.2",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/OutputRuntimeServiceGuardrailTest.java"
+    },
+    {
+      "id": "AC1.6.3",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/StopQuestionServiceGuardrailTest.java"
+    },
+    {
+      "id": "AC1.6.4",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/judgment/JudgmentRequestServiceGuardrailTest.java"
+    },
+    {
+      "id": "AC1.6.5",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/TechnicalPauseTest.java"
+    },
+    {
+      "id": "AC2.1.1",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/dialog/ServicePolicyCatalogServiceGuardrailTest.java"
+    },
+    {
+      "id": "AC2.1.2",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/dialog/ServicePolicyCatalogServiceGuardrailTest.java"
+    },
+    {
+      "id": "AC2.1.3",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/dialog/ServicePolicyCatalogServiceGuardrailTest.java"
+    },
+    {
+      "id": "AC2.1.4",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/dialog/ServicePolicyCatalogServiceGuardrailTest.java"
+    },
+    {
+      "id": "AC2.1.5",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/RealtimeDeletionHandlerIT.java"
+    },
+    {
+      "id": "AC2.2.1",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/voice/ProviderRequestServiceGuardrailTest.java"
+    },
+    {
+      "id": "AC2.2.2",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/guardrail/GuardrailPolicyV2Test.java"
+    },
+    {
+      "id": "AC2.2.3",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/gate/OutputGateTest.java"
+    },
+    {
+      "id": "AC2.2.4",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/OutputRuntimeServiceGuardrailTest.java"
+    },
+    {
+      "id": "AC2.2.5",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/guardrail/GuardrailPolicyV2Test.java"
+    },
+    {
+      "id": "BR1.1",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/dialog/ServicePolicyCatalogServiceGuardrailTest.java"
+    },
+    {
+      "id": "BR1.2",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/dialog/ServicePolicyCatalogServiceGuardrailTest.java"
+    },
+    {
+      "id": "BR1.3",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/voice/ProviderRequestServiceGuardrailTest.java"
+    },
+    {
+      "id": "BR1.4",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/voice/ProviderRequestServiceGuardrailIT.java"
+    },
+    {
+      "id": "BR2.1",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/NoticeAssetServiceGuardrailTest.java"
+    },
+    {
+      "id": "BR2.2",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/NoticeDeliveryServiceGuardrailTest.java"
+    },
+    {
+      "id": "BR2.3",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/ParticipationServiceGuardrailTest.java"
+    },
+    {
+      "id": "BR2.4",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/ParticipationServiceGuardrailTest.java"
+    },
+    {
+      "id": "BR2.5",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/ParticipationServiceGuardrailTest.java"
+    },
+    {
+      "id": "BR2.6",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/dialog/InstructionTemplatesServiceGuardrailTest.java"
+    },
+    {
+      "id": "BR3.1",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/dialog/InstructionTemplatesServiceGuardrailTest.java"
+    },
+    {
+      "id": "BR3.2",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/dialog/ConversationPolicyServiceGuardrailTest.java"
+    },
+    {
+      "id": "BR3.3",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/dialog/ConversationPolicyServiceGuardrailTest.java"
+    },
+    {
+      "id": "BR3.4",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/dialog/InstructionTemplatesServiceGuardrailTest.java"
+    },
+    {
+      "id": "BR4.1",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/OutputRuntimeServiceGuardrailTest.java"
+    },
+    {
+      "id": "BR4.2",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/StopQuestionServiceGuardrailTest.java"
+    },
+    {
+      "id": "BR4.3",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/judgment/JudgmentRequestServiceGuardrailTest.java"
+    },
+    {
+      "id": "BR4.4",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/OutputRuntimeServiceGuardrailTest.java"
+    },
+    {
+      "id": "BR5.1",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/dialog/ServicePolicyCatalogServiceGuardrailTest.java"
+    },
+    {
+      "id": "BR5.2",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/dialog/ServicePolicyCatalogServiceGuardrailTest.java"
+    },
+    {
+      "id": "BR5.3",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/SessionGuardrailFactsServiceGuardrailIT.java"
+    },
+    {
+      "id": "BR5.4",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/PresentationQueryServiceGuardrailTest.java"
+    },
+    {
+      "id": "BR6.1",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/TechnicalPauseTest.java"
+    },
+    {
+      "id": "BR6.2",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/ParticipationServiceGuardrailTest.java"
+    },
+    {
+      "id": "BR7.1",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/gate/OutputGateTest.java"
+    },
+    {
+      "id": "NFR1.1",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/PrivacyLogTest.java"
+    },
+    {
+      "id": "NFR1.2",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/NoticeDeliveryServiceGuardrailIT.java"
+    },
+    {
+      "id": "NFR1.3",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/voice/ProviderRequestServiceGuardrailTest.java"
+    },
+    {
+      "id": "NFR1.4",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/SessionGuardrailFactsServiceGuardrailIT.java"
+    },
+    {
+      "id": "NFR2.1",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/OutputRuntimeServiceGuardrailTest.java"
+    },
+    {
+      "id": "NFR2.2",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/TechnicalPauseTest.java"
+    },
+    {
+      "id": "NFR2.3",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/SessionGuardrailFactsServiceGuardrailIT.java"
+    },
+    {
+      "id": "NFR2.4",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/StopQuestionServiceGuardrailTest.java"
+    },
+    {
+      "id": "NFR3.1",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/OutputRuntimeServiceGuardrailTest.java",
+      "justification": "사용자 추가 지시에 따라 일반2초와 시작 준비10초의 전체 deadline/유한 정리를 분리했다. 설정/업무58개 및 실제 cold22개, Core 기능237개와 최신 backend clean check 운영3모듈4118개가 실패/오류/skip0으로 통과했다. 모듈/기능 LINE80%·계약/ArchUnit을 유지했다. 세부 증거는 verification-results.md의 Startup Initialization Budget 절이다."
+    },
+    {
+      "id": "NFR3.2",
+      "status": "Deferred",
+      "target": "scripts/verify.sh"
+    },
+    {
+      "id": "NFR3.3",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/judgment/JudgmentRequestServiceGuardrailTest.java"
+    },
+    {
+      "id": "NFR4.1",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/ServiceGuardrailFixtures.java"
+    },
+    {
+      "id": "NFR4.2",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/NoticeAssetServiceGuardrailTest.java"
+    },
+    {
+      "id": "NFR4.3",
+      "status": "Deferred",
+      "target": "contracts/service-guardrail-policy-deviations.md"
+    },
+    {
+      "id": "NFR5.1",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/dialog/ServicePolicyCatalogServiceGuardrailTest.java"
+    },
+    {
+      "id": "NFR5.2",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/dialog/ServicePolicyCatalogServiceGuardrailTest.java"
+    },
+    {
+      "id": "NFR5.3",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/voice/ProviderRequestServiceGuardrailTest.java"
+    },
+    {
+      "id": "NFR6.1",
+      "status": "OK",
+      "target": "backend/core-api/src/test/java/kr/mujoong/core/knowledge/GraphInitializationTechnicalRegressionServiceGuardrailTest.java",
+      "justification": "초기화 전용 제한 시간 분리는 사용자의 2026-10-21 추가 지시다. 일반 graph-budget/연결/JDBC 업무2초, 3쿼리 EXPLAIN 무쓰기·단일 교체/CAS/digest/타아이·생성seed·rollback을 보존했다. GraphInitializationBudgetServiceGuardrailTest의8경계와 기존HTTP/실제Neo4j 회귀 및 최신backend 전체4118개가 통과했다. 이전cold2초실패와전체취소이력은 보존한다."
+    },
+    {
+      "id": "NFR6.2",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/judgment/JudgmentRequestServiceGuardrailTest.java"
+    },
+    {
+      "id": "NFR6.3",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/OutputRuntimeServiceGuardrailTest.java"
+    },
+    {
+      "id": "FR1",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/dialog/ServicePolicyCatalog.java",
+      "justification": "기존 하위 요구의 구현·시험 추적을 보존한다. 자동 대역 증거이며 실모델/실기기 품질 합격을 뜻하지 않는다."
+    },
+    {
+      "id": "FR1.1",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/dialog/ServicePolicyCatalog.java",
+      "justification": "기존 AC/BR/상세 NFR의 해당 구현·시험과 연결한다."
+    },
+    {
+      "id": "FR1.2",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/dialog/ServicePolicyCatalog.java",
+      "justification": "기존 AC/BR/상세 NFR의 해당 구현·시험과 연결한다."
+    },
+    {
+      "id": "FR1.3",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/dialog/ServicePolicyCatalog.java",
+      "justification": "기존 AC/BR/상세 NFR의 해당 구현·시험과 연결한다."
+    },
+    {
+      "id": "FR2",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/JoinFlow.java",
+      "justification": "기존 하위 요구의 구현·시험 추적을 보존한다. 자동 대역 증거이며 실모델/실기기 품질 합격을 뜻하지 않는다."
+    },
+    {
+      "id": "FR2.1",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/JoinFlow.java",
+      "justification": "기존 AC/BR/상세 NFR의 해당 구현·시험과 연결한다."
+    },
+    {
+      "id": "FR2.2",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/NoticeDelivery.java",
+      "justification": "기존 AC/BR/상세 NFR의 해당 구현·시험과 연결한다."
+    },
+    {
+      "id": "FR2.3",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/ParticipationLateItemServiceGuardrailTest.java",
+      "justification": "기존 AC/BR/상세 NFR의 해당 구현·시험과 연결한다."
+    },
+    {
+      "id": "FR2.4",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/ParticipationServiceGuardrailTest.java",
+      "justification": "기존 AC/BR/상세 NFR의 해당 구현·시험과 연결한다."
+    },
+    {
+      "id": "FR2.5",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/GreetingHandoffServiceGuardrailTest.java",
+      "justification": "기존 AC/BR/상세 NFR의 해당 구현·시험과 연결한다."
+    },
+    {
+      "id": "FR3",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/dialog/InstructionTemplates.java",
+      "justification": "기존 하위 요구의 구현·시험 추적을 보존한다. 자동 대역 증거이며 실모델/실기기 품질 합격을 뜻하지 않는다."
+    },
+    {
+      "id": "FR3.1",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/dialog/InstructionTemplates.java",
+      "justification": "기존 AC/BR/상세 NFR의 해당 구현·시험과 연결한다."
+    },
+    {
+      "id": "FR3.2",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/dialog/ConversationPolicyState.java",
+      "justification": "기존 AC/BR/상세 NFR의 해당 구현·시험과 연결한다."
+    },
+    {
+      "id": "FR3.3",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/dialog/ConversationPolicyServiceGuardrailTest.java",
+      "justification": "기존 AC/BR/상세 NFR의 해당 구현·시험과 연결한다."
+    },
+    {
+      "id": "FR3.4",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/dialog/InstructionTemplatesServiceGuardrailTest.java",
+      "justification": "기존 AC/BR/상세 NFR의 해당 구현·시험과 연결한다."
+    },
+    {
+      "id": "FR4",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/SessionExecutor.java",
+      "justification": "기존 하위 요구의 구현·시험 추적을 보존한다. 자동 대역 증거이며 실모델/실기기 품질 합격을 뜻하지 않는다."
+    },
+    {
+      "id": "FR4.1",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/dialog/StopIntentServiceGuardrailTest.java",
+      "justification": "기존 AC/BR/상세 NFR의 해당 구현·시험과 연결한다."
+    },
+    {
+      "id": "FR4.2",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/StopQuestionServiceGuardrailTest.java",
+      "justification": "기존 AC/BR/상세 NFR의 해당 구현·시험과 연결한다."
+    },
+    {
+      "id": "FR4.3",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/OutputRuntimeServiceGuardrailTest.java",
+      "justification": "기존 AC/BR/상세 NFR의 해당 구현·시험과 연결한다."
+    },
+    {
+      "id": "FR5",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/dialog/ServicePolicyCatalog.java",
+      "justification": "기존 하위 요구의 구현·시험 추적을 보존한다. 자동 대역 증거이며 실모델/실기기 품질 합격을 뜻하지 않는다."
+    },
+    {
+      "id": "FR5.1",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/dialog/ServicePolicyCatalog.java",
+      "justification": "기존 AC/BR/상세 NFR의 해당 구현·시험과 연결한다."
+    },
+    {
+      "id": "FR5.2",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/voice/ProviderRequestServiceGuardrailTest.java",
+      "justification": "기존 AC/BR/상세 NFR의 해당 구현·시험과 연결한다."
+    },
+    {
+      "id": "FR5.3",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/dialog/PolicyBundle.java",
+      "justification": "기존 AC/BR/상세 NFR의 해당 구현·시험과 연결한다."
+    },
+    {
+      "id": "FR6",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/SessionClocks.java",
+      "justification": "기존 하위 요구의 구현·시험 추적을 보존한다. 자동 대역 증거이며 실모델/실기기 품질 합격을 뜻하지 않는다."
+    },
+    {
+      "id": "FR6.1",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/SessionClocksCharacterizationTest.java",
+      "justification": "기존 AC/BR/상세 NFR의 해당 구현·시험과 연결한다."
+    },
+    {
+      "id": "FR6.2",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/SessionClocksCharacterizationTest.java",
+      "justification": "기존 AC/BR/상세 NFR의 해당 구현·시험과 연결한다."
+    },
+    {
+      "id": "FR6.3",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/ParticipationServiceGuardrailTest.java",
+      "justification": "기존 AC/BR/상세 NFR의 해당 구현·시험과 연결한다."
+    },
+    {
+      "id": "FR7",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/main/java/kr/mujoong/realtime/session/GuardrailCoordinator.java",
+      "justification": "기존 하위 요구의 구현·시험 추적을 보존한다. 자동 대역 증거이며 실모델/실기기 품질 합격을 뜻하지 않는다."
+    },
+    {
+      "id": "FR7.1",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/voice/ProviderRequestServiceGuardrailIT.java",
+      "justification": "기존 AC/BR/상세 NFR의 해당 구현·시험과 연결한다."
+    },
+    {
+      "id": "FR7.2",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/guardrail/GuardrailPolicyV2Test.java",
+      "justification": "기존 AC/BR/상세 NFR의 해당 구현·시험과 연결한다."
+    },
+    {
+      "id": "FR7.3",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/dialog/InstructionTemplatesServiceGuardrailTest.java",
+      "justification": "기존 AC/BR/상세 NFR의 해당 구현·시험과 연결한다."
+    },
+    {
+      "id": "NFR1",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/PrivacyLogTest.java",
+      "justification": "기존 민감 표식/본문 로그 금지 및 새 helper 원문 비보관."
+    },
+    {
+      "id": "NFR2",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/GreetingHandoffServiceGuardrailTest.java",
+      "justification": "현재성/실제 송신·재생/취소·늦은 결과. 참여/기존 출력 회귀도 보존."
+    },
+    {
+      "id": "NFR3",
+      "status": "Deferred",
+      "target": "scripts/verify.sh",
+      "justification": "최신 backend clean check4118개 및 모듈/기능80%·계약/ArchUnit은 통과했다. 전체 verify.sh와 U17 frontend/실브라우저 통합은 부모의 후속 정상 검증 경로이며 이 코드 구현 작업에서 실행하지 않았다. 하위NFR3.2의 미검증을 전체품질 완료로 승격하지 않는다."
+    },
+    {
+      "id": "NFR4",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/ServiceGuardrailFixtures.java",
+      "justification": "합성 검수 대역/실모델/실기기/실아동 증거 구분. 실제 음성 준비·청취는 여전히 미완료."
+    },
+    {
+      "id": "NFR5",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/dialog/ServicePolicyCatalogServiceGuardrailTest.java",
+      "justification": "판·UTF-8 바이트 해시·재현 자원 경계에 더해 초기화 전용 서버 키의 application.yml/타입설정/timing 계약을 함께 반영했다. TimingPropertiesTest8개·ConfigKeyContractTest11개·실제Spring무효바인딩 및 기존시간숫자대조, 최신전체검증이 통과했다."
+    },
+    {
+      "id": "NFR6",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/voice/ProviderRequestServiceGuardrailIT.java",
+      "justification": "실제 로컬 WS 형식/호출수와 기존 SDK/자동호출 불변 회귀, 실제Neo4j 무쓰기/CAS/기존연습·저장 연결을 최신 backend clean check4118개 및 확대 기능1357개로 확인했다. 초기화 전용 budget만 사용자 지시로 분리하고 일반2초를 유지했다. frontend/전체verify/실음성 검증 완료를 뜻하지 않는다."
+    },
+    {
+      "id": "RG1",
+      "status": "OK",
+      "target": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/GreetingHandoffServiceGuardrailTest.java",
+      "justification": "현재 완료 안내→첫 실제 요청 및 첫 재생 전 명확한 재시작/등록 대본 후보 음성·전사 전체 폐기. 8개 시험과 localhost wire IT. 유한 표현/상태 검사로 의미적 임의 바꿔말하기100%를 보장하지 않는다."
+    }
+  ]
+}

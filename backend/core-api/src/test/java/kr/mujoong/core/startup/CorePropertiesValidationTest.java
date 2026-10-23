@@ -23,6 +23,7 @@ import org.springframework.mock.env.MockEnvironment;
  * device-ack)라 Realtime 시험(Step 29)이 본다.
  */
 @Tag("skeleton")
+@Tag("service-guardrail")
 class CorePropertiesValidationTest {
 
     private final ApplicationContextRunner runner = new ApplicationContextRunner()
@@ -39,6 +40,8 @@ class CorePropertiesValidationTest {
             assertThat(properties.internalHttp().sessionStartRetries()).isEqualTo(1);
             assertThat(properties.outbox().retryBackoff()).hasSize(6);
             assertThat(properties.security().allowedOrigin()).isEqualTo("https://mujoong.invalid");
+            assertThat(properties.timing().knowledge().graphInitializationBudget()).isEqualTo(Duration.ofSeconds(10));
+            assertThat(properties.timing().knowledge().graphBudget()).isEqualTo(Duration.ofSeconds(2));
         });
     }
 
@@ -75,6 +78,17 @@ class CorePropertiesValidationTest {
             assertThat(rootMessage(context.getStartupFailure())).contains("mujoong.outbox.poll-interval");
         });
         runner.withPropertyValues("mujoong.internal-http.realtime-base-url=").run(context -> assertThat(context).hasFailed());
+    }
+
+    @Test
+    void invalidInitializationBudgetFailsBindingWithoutChangingOrdinaryBudget() {
+        for (String value : java.util.List.of("0s", "-1s", "", "invalid-duration")) {
+            runner.withPropertyValues("mujoong.timing.knowledge.graph-initialization-budget=" + value).run(context -> {
+                assertThat(context).hasFailed();
+                assertThat(rootMessage(context.getStartupFailure()))
+                        .contains("graph-initialization-budget");
+            });
+        }
     }
 
     @Test

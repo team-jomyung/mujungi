@@ -18,6 +18,7 @@ import org.junit.jupiter.api.Test;
  * <p>역할 지시문은 U1 서버 템플릿과 같은 문장이고 아이 문맥 세 값만 받는다. 교정 문장은 범주마다 하나씩 고정이고 채울 자리가 없다.
  */
 @Tag("voice-session")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class DialogInstructionsTest {
 
     @Test
@@ -37,11 +38,13 @@ class DialogInstructionsTest {
         List<Method> publicStatics = Arrays.stream(DialogInstructions.class.getDeclaredMethods())
                 .filter(method -> Modifier.isPublic(method.getModifiers()) && Modifier.isStatic(method.getModifiers()))
                 .toList();
-        assertThat(publicStatics).extracting(Method::getName).containsExactlyInAnyOrder("role", "conversationGuide");
-        assertThat(publicStatics.stream().filter(method -> method.getName().equals("role")).findFirst().orElseThrow().getParameterTypes())
-                .containsExactly(String.class, Integer.class, List.class);
-        assertThat(publicStatics.stream().filter(method -> method.getName().equals("conversationGuide")).findFirst().orElseThrow().getParameterTypes())
-                .containsExactly(kr.mujoong.contract.context.ConversationGuide.class);
+        assertThat(publicStatics).extracting(Method::getName).containsExactlyInAnyOrder("role", "serviceRole", "conversationGuide");
+        assertThat(publicStatics.stream().filter(method -> method.getName().equals("role")).findFirst().orElseThrow()
+                .getParameterTypes()).containsExactly(String.class, Integer.class, List.class);
+        assertThat(publicStatics.stream().filter(method -> method.getName().equals("serviceRole")).findFirst().orElseThrow()
+                .getParameterTypes()).containsExactly(PolicyBundle.class, String.class, Integer.class, List.class);
+        assertThat(publicStatics.stream().filter(method -> method.getName().equals("conversationGuide")).findFirst().orElseThrow()
+                .getParameterTypes()).containsExactly(kr.mujoong.contract.context.ConversationGuide.class);
     }
 
     @Test

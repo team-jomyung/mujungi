@@ -30,6 +30,7 @@ import org.mockito.ArgumentCaptor;
  * 새 연결을 대기로 돌려보낸다 — 기기가 '듣는 중'에 멈추지 않는다.
  */
 @Tag("voice-session")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class ConnectionHandoverTest {
 
     private final UUID deviceId = UUID.randomUUID();

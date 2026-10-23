@@ -1,0 +1,71 @@
+{
+  "version": "judgment-service-v1",
+  "source": "기술명세서 v0.3 §7.3(지점 · 선택지) · AI 동작 명세 v0.2 §5.2(질문 · 코드 · 정의)",
+  "points": [
+    {
+      "point": "J1",
+      "question": "현재 세션의 실제 안내와 참여 질문을 들은 뒤 새로 한 대답은 어떤 뜻인가? 이전 수락·안내 도중 발화·인용은 현재 수락이 아니다. 명확한 거절은 만류 없이 DECLINE이며 잠깐 쉬고 싶다는 말은 REST다.",
+      "options": [
+        { "code": "PARTICIPATE", "label": "참여", "definition": "하겠다, 좋다는 뜻" },
+        { "code": "REST", "label": "휴식 요청", "definition": "잠깐 쉬고 싶다는 뜻. 하지 않겠다는 뜻은 아님" },
+        { "code": "DECLINE", "label": "거부", "definition": "지금은 하지 않겠다는 뜻" },
+        { "code": "UNCLEAR", "label": "무관·불명확", "definition": "질문과 관계없는 말이거나 뜻이 분명하지 않음" },
+        { "code": "UNREADABLE", "label": "판독 불가", "definition": "글자가 깨졌거나 너무 짧아 뜻을 알 수 없음" }
+      ]
+    },
+    {
+      "point": "J2",
+      "question": "장면 속 친구의 말을 들은 아이의 대답이, 이 목표의 핵심 기능을 얼마나 전달했는가? 표현이 예상과 달라도 기능이 같으면 전달로 본다.",
+      "options": [
+        { "code": "FULL", "label": "충분히 전달", "definition": "판정 기준의 핵심 기능이 다 드러남" },
+        { "code": "PARTIAL", "label": "일부 전달", "definition": "핵심 기능의 일부만 드러남" },
+        { "code": "HELP", "label": "도움 요청", "definition": "어떻게 말해야 하는지 묻거나 도와 달라고 함" },
+        { "code": "NOT_UNDERSTOOD", "label": "상황 이해 못함", "definition": "장면 상황을 잘못 알아들은 대답" },
+        { "code": "IRRELEVANT", "label": "무관 발화", "definition": "장면과 관계없는 말" },
+        { "code": "UNREADABLE", "label": "판독 불가", "definition": "글자가 깨졌거나 뜻을 알 수 없음" }
+      ]
+    },
+    {
+      "point": "J3",
+      "question": "친구가 한 번 되물은 뒤 아이의 대답이 이 목표의 핵심 기능을 전달했는가?",
+      "options": [
+        { "code": "DELIVERED", "label": "전달됨", "definition": "핵심 기능이 다 드러남" },
+        { "code": "STILL_SHORT", "label": "여전히 부족", "definition": "아직 일부만 드러남" },
+        { "code": "HELP", "label": "도움 요청", "definition": "어떻게 말해야 하는지 묻거나 도와 달라고 함" },
+        { "code": "UNREADABLE", "label": "판독 불가", "definition": "뜻을 알 수 없음" }
+      ]
+    },
+    {
+      "point": "J4",
+      "question": "무중이 도와줘도 되는지 물었을 때, 아이의 대답은 어떤 뜻인가?",
+      "options": [
+        { "code": "ACCEPT", "label": "수락", "definition": "도와 달라, 좋다는 뜻" },
+        { "code": "REFUSE", "label": "거절", "definition": "괜찮다, 혼자 하겠다, 싫다는 뜻" },
+        { "code": "UNCLEAR", "label": "불명확", "definition": "뜻이 분명하지 않음" }
+      ]
+    },
+    {
+      "point": "J5",
+      "question": "코치가 도와준 뒤 아이가 다시 해 본 말이 이 목표의 핵심 기능을 얼마나 전달했는가? 코치가 든 예시를 그대로 따라 한 것인지도 가린다.",
+      "options": [
+        { "code": "FULL", "label": "충분히 전달", "definition": "판정 기준의 핵심 기능이 다 드러남" },
+        { "code": "PARTIAL", "label": "일부 전달", "definition": "핵심 기능의 일부만 드러남" },
+        { "code": "HELP", "label": "도움 요청", "definition": "어떻게 말해야 하는지 묻거나 도와 달라고 함" },
+        { "code": "NOT_UNDERSTOOD", "label": "상황 이해 못함", "definition": "장면 상황을 잘못 알아들은 대답" },
+        { "code": "IRRELEVANT", "label": "무관 발화", "definition": "장면과 관계없는 말" },
+        { "code": "UNREADABLE", "label": "판독 불가", "definition": "글자가 깨졌거나 뜻을 알 수 없음" },
+        { "code": "COPIED", "label": "코치 표현 그대로 따라 함", "definition": "코치가 든 표현 예시를 거의 그대로 반복함" }
+      ]
+    },
+    {
+      "point": "J6",
+      "question": "아이의 이 말은 현재 전체 대화를 명확히 끝내겠다는 뜻인가? 등록 표현뿐 아니라 등록되지 않은 명확한 전체 종료도 END_CLEAR다. 인용·역할 대사·종료 부정·화제만 거절은 NOT_END다. 휴식/생각할 시간은 REST로 구별한다. 정말 모호할 때만 UNCLEAR이며 현재 실제 확인 질문을 들은 뒤 명확한 종료 답은 END_CLEAR다. 조기 긍정을 확인 답으로 추정하거나 종료 이유·재확인·만류를 요구하지 않는다.",
+      "options": [
+        { "code": "END_CLEAR", "label": "종료 명확", "definition": "활동을 그만하고 싶다는 뜻이 분명함" },
+        { "code": "UNCLEAR", "label": "불명확", "definition": "그만하고 싶은지 분명하지 않음" },
+        { "code": "NOT_END", "label": "종료 아님", "definition": "역할 대사, 주제 거부, 다른 뜻" },
+        { "code": "REST", "label": "휴식 요청", "definition": "잠깐 쉬고 싶다는 뜻" }
+      ]
+    }
+  ]
+}

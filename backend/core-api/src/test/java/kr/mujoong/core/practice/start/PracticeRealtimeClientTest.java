@@ -21,6 +21,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
 @Tag("practice-legacy")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class PracticeRealtimeClientTest {
     final InternalHttpClient http=mock(InternalHttpClient.class);
     final RealtimeSessionClient client=new RealtimeSessionClient(http,

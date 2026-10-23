@@ -43,13 +43,13 @@ describe("17 — 마무리 중 → 종료(AC3.3.4 · AC3.3.5)", () => {
       jsonResponse(
         200,
         index <= 2
-          ? liveViewBody("CLOSING", { serverTime: "2026-10-15T01:20:30Z" })
+          ? liveViewBody("CLOSING", { serverTime: "2026-10-15T01:20:30Z", guardrail: { schemaVersion: 1, notice: "COMPLETED", participation: "ACCEPTED", goodbye: "PLAYING", confirmedStopBubbleSeq: null } })
           : liveViewBody("ENDED", { endReason: "GUARDIAN_STOP", confirmed: true, endedAt: ENDED_AT }),
       ),
     );
     expect(await screen.findByText("오늘 자유대화를 마무리하고 있어요")).toBeInTheDocument();
-    expect(screen.getByTestId("done-reason")).toHaveTextContent("무중이 마무리 인사를 하고 있어요");
-    expect(screen.getByTestId("done-reason")).toHaveTextContent("기기가 멈추면 기록을 정리해요.");
+    expect(screen.getByTestId("done-goodbye")).toHaveTextContent("무중이 마무리 인사를 하고 있어요");
+    expect(screen.getByTestId("done-closing-note")).toHaveTextContent("기기가 멈추면 기록을 정리해요.");
     expect(screen.getByTestId("done-view")).toHaveAttribute("data-state", "CLOSING");
     await waitFor(() => expect(screen.getByTestId("done-title")).toHaveTextContent("오늘 자유대화가 끝났어요"));
     expect(screen.getByTestId("done-reason")).toHaveTextContent("보호자가 끝냈어요");

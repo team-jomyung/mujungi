@@ -29,6 +29,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.SimpleTransactionStatus;
 
 @Tag("practice-legacy")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class RecordCapturePracticeRecoveryTest {
     private final ActivitySessionRepository sessions = mock(ActivitySessionRepository.class);
     private final ActivitySessionRow session = mock(ActivitySessionRow.class);

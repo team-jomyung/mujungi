@@ -42,6 +42,7 @@ import org.junit.jupiter.api.Test;
  */
 @Tag("skeleton")
 @Tag("db")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class ProviderClientIT {
 
     private static final JsonCodec JSON = JsonCodec.shared();

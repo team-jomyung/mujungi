@@ -67,6 +67,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
  * 500ms)이다.
  */
 @Tag("skeleton")
+@org.junit.jupiter.api.Tag("service-guardrail")
 class RealtimeStartupSequenceTest {
 
     private static final RealtimeProperties PROPERTIES = testProperties();

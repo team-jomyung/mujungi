@@ -1,0 +1,248 @@
+{
+  "stage": "build-and-test",
+  "unit_commands": [
+    {
+      "unit": "u17-guardrail-presentation",
+      "i": 0,
+      "cmd": "cd frontend && npx vitest run tests/parent/common/api/api-types.test.ts tests/device/audio/player.test.ts",
+      "exit_code": 0,
+      "output": "\n RUN  v4.1.11 /home/jdmea/mujungi/frontend\n\n\n Test Files  2 passed (2)\n      Tests  33 passed (33)\n   Start at  13:37:50\n   Duration  2.17s (transform 430ms, setup 682ms, import 469ms, tests 110ms, environment 2.60s)\n\n"
+    },
+    {
+      "unit": "u17-guardrail-presentation",
+      "i": 1,
+      "cmd": "cd frontend && npx vitest run tests/parent/common/api/guardrail-presentation.test.ts",
+      "exit_code": 0,
+      "output": "\n RUN  v4.1.11 /home/jdmea/mujungi/frontend\n\n\n Test Files  1 passed (1)\n      Tests  6 passed (6)\n   Start at  13:37:54\n   Duration  2.02s (transform 267ms, setup 359ms, import 254ms, tests 21ms, environment 1.20s)\n\n"
+    },
+    {
+      "unit": "u17-guardrail-presentation",
+      "i": 2,
+      "cmd": "cd frontend && npx vitest run tests/parent/common/guardrail-live-updates.test.tsx",
+      "exit_code": 0,
+      "output": "\n RUN  v4.1.11 /home/jdmea/mujungi/frontend\n\n\n Test Files  1 passed (1)\n      Tests  8 passed (8)\n   Start at  13:37:59\n   Duration  1.97s (transform 234ms, setup 274ms, import 260ms, tests 30ms, environment 1.14s)\n\n"
+    },
+    {
+      "unit": "u17-guardrail-presentation",
+      "i": 3,
+      "cmd": "cd frontend && npx vitest run tests/parent/features/live/guardrail-participation.test.tsx",
+      "exit_code": 0,
+      "output": "\n RUN  v4.1.11 /home/jdmea/mujungi/frontend\n\n\n Test Files  1 passed (1)\n      Tests  6 passed (6)\n   Start at  13:38:03\n   Duration  3.00s (transform 637ms, setup 295ms, import 772ms, tests 543ms, environment 1.18s)\n\n"
+    },
+    {
+      "unit": "u17-guardrail-presentation",
+      "i": 4,
+      "cmd": "cd frontend && npx vitest run tests/parent/features/done/guardrail-done-presentation.test.ts",
+      "exit_code": 0,
+      "output": "\n RUN  v4.1.11 /home/jdmea/mujungi/frontend\n\n\n Test Files  1 passed (1)\n      Tests  8 passed (8)\n   Start at  13:38:08\n   Duration  2.13s (transform 247ms, setup 278ms, import 258ms, tests 12ms, environment 1.33s)\n\n"
+    },
+    {
+      "unit": "u16-service-guardrail",
+      "i": 0,
+      "cmd": "./gradlew --no-daemon :realtime-activity:test --tests kr.mujoong.realtime.voice.ProviderRequestFactoryWireTest -Pmujoong.test.db=docker",
+      "exit_code": 0,
+      "output": "To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.14.3/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.\nDaemon will be stopped at the end of the build \n> Task :build-logic:checkKotlinGradlePluginConfigurationErrors SKIPPED\n> Task :build-logic:generateExternalPluginSpecBuilders UP-TO-DATE\n> Task :build-logic:extractPrecompiledScriptPluginPlugins UP-TO-DATE\n> Task :build-logic:compilePluginsBlocks UP-TO-DATE\n> Task :build-logic:generatePrecompiledScriptPluginAccessors UP-TO-DATE\n> Task :build-logic:generateScriptPluginAdapters UP-TO-DATE\n> Task :build-logic:compileKotlin UP-TO-DATE\n> Task :build-logic:compileJava NO-SOURCE\n> Task :build-logic:pluginDescriptors UP-TO-DATE\n> Task :build-logic:processResources UP-TO-DATE\n> Task :build-logic:classes UP-TO-DATE\n> Task :build-logic:jar UP-TO-DATE\n> Task :test-support:processResources NO-SOURCE\n> Task :realtime-activity:processResources UP-TO-DATE\n> Task :realtime-activity:processTestResources UP-TO-DATE\n> Task :contract-model:compileJava UP-TO-DATE\n> Task :contract-model:processResources NO-SOURCE\n> Task :contract-model:classes UP-TO-DATE\n> Task :contract-model:jar UP-TO-DATE\n> Task :test-support:compileJava UP-TO-DATE\n> Task :test-support:classes UP-TO-DATE\n> Task :test-support:jar UP-TO-DATE\n> Task :realtime-activity:compileJava UP-TO-DATE\n> Task :realtime-activity:classes UP-TO-DATE\n> Task :realtime-activity:compileTestJava UP-TO-DATE\n> Task :realtime-activity:testClasses UP-TO-DATE\n> Task :realtime-activity:test\n> Task :realtime-activity:jacocoTestReport\n\nBUILD SUCCESSFUL in 24s\n19 actionable tasks: 2 executed, 17 up-to-date\n"
+    },
+    {
+      "unit": "u17-guardrail-presentation",
+      "i": 5,
+      "cmd": "cd frontend && npx vitest run tests/parent/features/done/guardrail-done-screen.test.tsx",
+      "exit_code": 0,
+      "output": "\n RUN  v4.1.11 /home/jdmea/mujungi/frontend\n\n\n Test Files  1 passed (1)\n      Tests  6 passed (6)\n   Start at  13:38:13\n   Duration  2.51s (transform 527ms, setup 393ms, import 564ms, tests 259ms, environment 1.03s)\n\n"
+    },
+    {
+      "unit": "u17-guardrail-presentation",
+      "i": 6,
+      "cmd": "cd frontend && npx vitest run tests/device/ws/guardrail-device-session.test.ts",
+      "exit_code": 0,
+      "output": "\n RUN  v4.1.11 /home/jdmea/mujungi/frontend\n\n\n Test Files  1 passed (1)\n      Tests  6 passed (6)\n   Start at  13:38:18\n   Duration  1.92s (transform 207ms, setup 292ms, import 180ms, tests 16ms, environment 1.21s)\n\n"
+    },
+    {
+      "unit": "u17-guardrail-presentation",
+      "i": 7,
+      "cmd": "cd frontend && npx vitest run tests/device/audio/guardrail-player.test.ts",
+      "exit_code": 0,
+      "output": "\n RUN  v4.1.11 /home/jdmea/mujungi/frontend\n\n\n Test Files  1 passed (1)\n      Tests  6 passed (6)\n   Start at  13:38:22\n   Duration  1.99s (transform 225ms, setup 393ms, import 194ms, tests 26ms, environment 1.18s)\n\n"
+    },
+    {
+      "unit": "u17-guardrail-presentation",
+      "i": 8,
+      "cmd": "cd frontend && npx vitest run tests/parent/features/live/guardrail-accessibility.test.tsx",
+      "exit_code": 0,
+      "output": "\n RUN  v4.1.11 /home/jdmea/mujungi/frontend\n\n\n Test Files  1 passed (1)\n      Tests  5 passed (5)\n   Start at  13:38:27\n   Duration  2.64s (transform 529ms, setup 367ms, import 623ms, tests 415ms, environment 1.02s)\n\n"
+    },
+    {
+      "unit": "u17-guardrail-presentation",
+      "i": 9,
+      "cmd": "cd frontend && npx vitest run tests/parent/common/api/api-types.test.ts tests/parent/common/activity-logic.test.ts tests/parent/features/live/live-12.test.tsx tests/parent/features/live/p1-dialog.test.tsx tests/parent/features/done/done-17.test.tsx tests/parent/features/done/done-17-result.test.tsx tests/parent/features/activity-session-screens.test.tsx tests/parent/features/practice/practice-screens.test.tsx tests/device/ws/device-session.test.ts tests/device/ws/device-session-resume.test.ts tests/device/audio/player.test.ts tests/device/audio/player-progress.test.ts tests/device/audio/barge-in.test.ts tests/device/runtime/device-runtime-voice-session.test.ts tests/device/features/status/status-view.test.tsx tests/parent/common/api/api-client.test.ts tests/parent/common/api/account-api.test.ts tests/parent/features/login/dev-login.test.tsx tests/parent/features/login/login-01.test.tsx",
+      "exit_code": 0,
+      "output": "\n RUN  v4.1.11 /home/jdmea/mujungi/frontend\n\n\n Test Files  19 passed (19)\n      Tests  261 passed (261)\n   Start at  13:38:33\n   Duration  17.14s (transform 6.95s, setup 12.37s, import 12.21s, tests 19.46s, environment 55.91s)\n\n"
+    },
+    {
+      "unit": "u17-guardrail-presentation",
+      "i": 10,
+      "cmd": "cd frontend && MUJOONG_COVERAGE_SCOPE=guardrail-presentation npx vitest run tests/parent/common/api/guardrail-presentation.test.ts tests/parent/common/guardrail-live-updates.test.tsx tests/parent/features/live/guardrail-participation.test.tsx tests/parent/features/done/guardrail-done-presentation.test.ts tests/parent/features/done/guardrail-done-screen.test.tsx tests/device/ws/guardrail-device-session.test.ts tests/device/audio/guardrail-player.test.ts tests/parent/features/live/guardrail-accessibility.test.tsx tests/parent/common/api/api-types.test.ts tests/parent/common/activity-logic.test.ts tests/parent/features/live/live-12.test.tsx tests/parent/features/live/p1-dialog.test.tsx tests/parent/features/done/done-17.test.tsx tests/parent/features/done/done-17-result.test.tsx tests/parent/features/activity-session-screens.test.tsx tests/parent/features/practice/practice-screens.test.tsx tests/device/ws/device-session.test.ts tests/device/ws/device-session-resume.test.ts tests/device/audio/player.test.ts tests/device/audio/player-progress.test.ts tests/device/audio/barge-in.test.ts tests/device/runtime/device-runtime-voice-session.test.ts tests/device/features/status/status-view.test.tsx tests/parent/common/api/api-client.test.ts tests/parent/common/api/account-api.test.ts tests/parent/features/login/dev-login.test.tsx tests/parent/features/login/login-01.test.tsx --coverage",
+      "exit_code": 0,
+      "output": "\n RUN  v4.1.11 /home/jdmea/mujungi/frontend\n      Coverage enabled with v8\n\n\n Test Files  27 passed (27)\n      Tests  312 passed (312)\n   Start at  13:38:53\n   Duration  23.19s (transform 5.38s, setup 18.13s, import 11.05s, tests 23.51s, environment 73.39s)\n\n % Coverage report from v8\n\n=============================== Coverage summary ===============================\nStatements   : 98.52% ( 804/816 )\nBranches     : 96.37% ( 665/690 )\nFunctions    : 97.17% ( 172/177 )\nLines        : 99.09% ( 763/770 )\n================================================================================\n"
+    },
+    {
+      "unit": "u16-service-guardrail",
+      "i": 1,
+      "cmd": "./gradlew --no-daemon :realtime-activity:test --tests '*ServiceGuardrail*' -Pmujoong.test.db=docker",
+      "exit_code": 0,
+      "output": "To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.14.3/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.\nDaemon will be stopped at the end of the build \n> Task :build-logic:checkKotlinGradlePluginConfigurationErrors SKIPPED\n> Task :build-logic:generateExternalPluginSpecBuilders UP-TO-DATE\n> Task :build-logic:extractPrecompiledScriptPluginPlugins UP-TO-DATE\n> Task :build-logic:compilePluginsBlocks UP-TO-DATE\n> Task :build-logic:generatePrecompiledScriptPluginAccessors UP-TO-DATE\n> Task :build-logic:generateScriptPluginAdapters UP-TO-DATE\n> Task :build-logic:compileKotlin UP-TO-DATE\n> Task :build-logic:compileJava NO-SOURCE\n> Task :build-logic:pluginDescriptors UP-TO-DATE\n> Task :build-logic:processResources UP-TO-DATE\n> Task :build-logic:classes UP-TO-DATE\n> Task :build-logic:jar UP-TO-DATE\n> Task :test-support:processResources NO-SOURCE\n> Task :realtime-activity:processResources UP-TO-DATE\n> Task :realtime-activity:processTestResources UP-TO-DATE\n> Task :contract-model:compileJava UP-TO-DATE\n> Task :contract-model:processResources NO-SOURCE\n> Task :contract-model:classes UP-TO-DATE\n> Task :contract-model:jar UP-TO-DATE\n> Task :test-support:compileJava UP-TO-DATE\n> Task :test-support:classes UP-TO-DATE\n> Task :test-support:jar UP-TO-DATE\n> Task :realtime-activity:compileJava UP-TO-DATE\n> Task :realtime-activity:classes UP-TO-DATE\n> Task :realtime-activity:compileTestJava UP-TO-DATE\n> Task :realtime-activity:testClasses UP-TO-DATE\n> Task :realtime-activity:test\n\nOpenJDK 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has been appended\n\n> Task :realtime-activity:jacocoTestReport\n\nBUILD SUCCESSFUL in 1m 19s\n19 actionable tasks: 2 executed, 17 up-to-date\n"
+    },
+    {
+      "unit": "u16-service-guardrail",
+      "i": 2,
+      "cmd": "./gradlew --no-daemon :realtime-activity:test --tests kr.mujoong.realtime.dialog.ServicePolicyCatalogServiceGuardrailTest -Pmujoong.test.db=docker",
+      "exit_code": 0,
+      "output": "To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.14.3/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.\nDaemon will be stopped at the end of the build \n> Task :build-logic:checkKotlinGradlePluginConfigurationErrors SKIPPED\n> Task :build-logic:generateExternalPluginSpecBuilders UP-TO-DATE\n> Task :build-logic:extractPrecompiledScriptPluginPlugins UP-TO-DATE\n> Task :build-logic:compilePluginsBlocks UP-TO-DATE\n> Task :build-logic:generatePrecompiledScriptPluginAccessors UP-TO-DATE\n> Task :build-logic:generateScriptPluginAdapters UP-TO-DATE\n> Task :build-logic:compileKotlin UP-TO-DATE\n> Task :build-logic:compileJava NO-SOURCE\n> Task :build-logic:pluginDescriptors UP-TO-DATE\n> Task :build-logic:processResources UP-TO-DATE\n> Task :build-logic:classes UP-TO-DATE\n> Task :build-logic:jar UP-TO-DATE\n> Task :test-support:processResources NO-SOURCE\n> Task :realtime-activity:processResources UP-TO-DATE\n> Task :realtime-activity:processTestResources UP-TO-DATE\n> Task :contract-model:compileJava UP-TO-DATE\n> Task :contract-model:processResources NO-SOURCE\n> Task :contract-model:classes UP-TO-DATE\n> Task :contract-model:jar UP-TO-DATE\n> Task :test-support:compileJava UP-TO-DATE\n> Task :test-support:classes UP-TO-DATE\n> Task :test-support:jar UP-TO-DATE\n> Task :realtime-activity:compileJava UP-TO-DATE\n> Task :realtime-activity:classes UP-TO-DATE\n> Task :realtime-activity:compileTestJava UP-TO-DATE\n> Task :realtime-activity:testClasses UP-TO-DATE\n> Task :realtime-activity:test\n> Task :realtime-activity:jacocoTestReport\n\nBUILD SUCCESSFUL in 21s\n19 actionable tasks: 2 executed, 17 up-to-date\n"
+    },
+    {
+      "unit": "u16-service-guardrail",
+      "i": 3,
+      "cmd": "./gradlew --no-daemon :realtime-activity:test --tests kr.mujoong.realtime.session.SessionGuardrailFactsServiceGuardrailIT -Pmujoong.test.db=docker",
+      "exit_code": 0,
+      "output": "To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.14.3/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.\nDaemon will be stopped at the end of the build \n> Task :build-logic:checkKotlinGradlePluginConfigurationErrors SKIPPED\n> Task :build-logic:generateExternalPluginSpecBuilders UP-TO-DATE\n> Task :build-logic:extractPrecompiledScriptPluginPlugins UP-TO-DATE\n> Task :build-logic:compilePluginsBlocks UP-TO-DATE\n> Task :build-logic:generatePrecompiledScriptPluginAccessors UP-TO-DATE\n> Task :build-logic:generateScriptPluginAdapters UP-TO-DATE\n> Task :build-logic:compileKotlin UP-TO-DATE\n> Task :build-logic:compileJava NO-SOURCE\n> Task :build-logic:pluginDescriptors UP-TO-DATE\n> Task :build-logic:processResources UP-TO-DATE\n> Task :build-logic:classes UP-TO-DATE\n> Task :build-logic:jar UP-TO-DATE\n> Task :test-support:processResources NO-SOURCE\n> Task :realtime-activity:processResources UP-TO-DATE\n> Task :realtime-activity:processTestResources UP-TO-DATE\n> Task :contract-model:compileJava UP-TO-DATE\n> Task :contract-model:processResources NO-SOURCE\n> Task :contract-model:classes UP-TO-DATE\n> Task :contract-model:jar UP-TO-DATE\n> Task :test-support:compileJava UP-TO-DATE\n> Task :test-support:classes UP-TO-DATE\n> Task :test-support:jar UP-TO-DATE\n> Task :realtime-activity:compileJava UP-TO-DATE\n> Task :realtime-activity:classes UP-TO-DATE\n> Task :realtime-activity:compileTestJava UP-TO-DATE\n> Task :realtime-activity:testClasses UP-TO-DATE\nOpenJDK 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has been appended\n> Task :realtime-activity:test\n> Task :realtime-activity:jacocoTestReport\n\nBUILD SUCCESSFUL in 33s\n19 actionable tasks: 2 executed, 17 up-to-date\n"
+    },
+    {
+      "unit": "u16-service-guardrail",
+      "i": 4,
+      "cmd": "./gradlew --no-daemon :realtime-activity:test --tests kr.mujoong.realtime.session.StopConfirmServiceGuardrailTest -Pmujoong.test.db=docker",
+      "exit_code": 1,
+      "output": "To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.14.3/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.\nDaemon will be stopped at the end of the build \n> Task :build-logic:checkKotlinGradlePluginConfigurationErrors SKIPPED\n> Task :build-logic:generateExternalPluginSpecBuilders UP-TO-DATE\n> Task :build-logic:extractPrecompiledScriptPluginPlugins UP-TO-DATE\n> Task :build-logic:compilePluginsBlocks UP-TO-DATE\n> Task :build-logic:generatePrecompiledScriptPluginAccessors UP-TO-DATE\n> Task :build-logic:generateScriptPluginAdapters UP-TO-DATE\n> Task :build-logic:compileKotlin UP-TO-DATE\n> Task :build-logic:compileJava NO-SOURCE\n> Task :build-logic:pluginDescriptors UP-TO-DATE\n> Task :build-logic:processResources UP-TO-DATE\n> Task :build-logic:classes UP-TO-DATE\n> Task :build-logic:jar UP-TO-DATE\n> Task :test-support:processResources NO-SOURCE\n> Task :realtime-activity:processResources UP-TO-DATE\n> Task :realtime-activity:processTestResources UP-TO-DATE\n> Task :contract-model:compileJava UP-TO-DATE\n> Task :contract-model:processResources NO-SOURCE\n> Task :contract-model:classes UP-TO-DATE\n> Task :contract-model:jar UP-TO-DATE\n> Task :test-support:compileJava UP-TO-DATE\n> Task :test-support:classes UP-TO-DATE\n> Task :test-support:jar UP-TO-DATE\n> Task :realtime-activity:compileJava UP-TO-DATE\n> Task :realtime-activity:classes UP-TO-DATE\n> Task :realtime-activity:compileTestJava UP-TO-DATE\n> Task :realtime-activity:testClasses UP-TO-DATE\n> Task :realtime-activity:test FAILED\n18 actionable tasks: 1 executed, 17 up-to-date\n\nFAILURE: Build failed with an exception.\n\n* What went wrong:\nExecution failed for task ':realtime-activity:test'.\n> No tests found for given includes: [kr.mujoong.realtime.session.StopConfirmServiceGuardrailTest](--tests filter)\n\n* Try:\n> Run with --stacktrace option to get the stack trace.\n> Run with --info or --debug option to get more log output.\n> Run with --scan to get full insights.\n> Get more help at https://help.gradle.org.\n\nBUILD FAILED in 15s\n"
+    },
+    {
+      "unit": "u16-service-guardrail",
+      "i": 5,
+      "cmd": "./gradlew --no-daemon :core-api:test --tests '*ServiceGuardrail*' -Pmujoong.test.db=docker",
+      "exit_code": 0,
+      "output": "To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.14.3/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.\nDaemon will be stopped at the end of the build \n> Task :build-logic:checkKotlinGradlePluginConfigurationErrors SKIPPED\n> Task :build-logic:generateExternalPluginSpecBuilders UP-TO-DATE\n> Task :build-logic:extractPrecompiledScriptPluginPlugins UP-TO-DATE\n> Task :build-logic:compilePluginsBlocks UP-TO-DATE\n> Task :build-logic:generatePrecompiledScriptPluginAccessors UP-TO-DATE\n> Task :build-logic:generateScriptPluginAdapters UP-TO-DATE\n> Task :build-logic:compileKotlin UP-TO-DATE\n> Task :build-logic:compileJava NO-SOURCE\n> Task :build-logic:pluginDescriptors UP-TO-DATE\n> Task :build-logic:processResources UP-TO-DATE\n> Task :build-logic:classes UP-TO-DATE\n> Task :build-logic:jar UP-TO-DATE\n> Task :test-support:processResources NO-SOURCE\n> Task :core-api:processResources UP-TO-DATE\n> Task :core-api:processTestResources UP-TO-DATE\n> Task :contract-model:compileJava UP-TO-DATE\n> Task :contract-model:processResources NO-SOURCE\n> Task :contract-model:classes UP-TO-DATE\n> Task :contract-model:jar UP-TO-DATE\n> Task :test-support:compileJava UP-TO-DATE\n> Task :test-support:classes UP-TO-DATE\n> Task :test-support:jar UP-TO-DATE\n> Task :core-api:compileJava UP-TO-DATE\n> Task :core-api:classes UP-TO-DATE\n> Task :core-api:compileTestJava UP-TO-DATE\n> Task :core-api:testClasses UP-TO-DATE\nOpenJDK 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has been appended\n> Task :core-api:test\n> Task :core-api:jacocoTestReport\n\nBUILD SUCCESSFUL in 28s\n19 actionable tasks: 2 executed, 17 up-to-date\n"
+    },
+    {
+      "unit": "u16-service-guardrail",
+      "i": 6,
+      "cmd": "./gradlew --no-daemon :contract-model:test --tests '*ServiceGuardrail*'",
+      "exit_code": 0,
+      "output": "To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.14.3/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.\nDaemon will be stopped at the end of the build \n> Task :build-logic:checkKotlinGradlePluginConfigurationErrors SKIPPED\n> Task :build-logic:generateExternalPluginSpecBuilders UP-TO-DATE\n> Task :build-logic:extractPrecompiledScriptPluginPlugins UP-TO-DATE\n> Task :build-logic:compilePluginsBlocks UP-TO-DATE\n> Task :build-logic:generatePrecompiledScriptPluginAccessors UP-TO-DATE\n> Task :build-logic:generateScriptPluginAdapters UP-TO-DATE\n> Task :build-logic:compileKotlin UP-TO-DATE\n> Task :build-logic:compileJava NO-SOURCE\n> Task :build-logic:pluginDescriptors UP-TO-DATE\n> Task :build-logic:processResources UP-TO-DATE\n> Task :build-logic:classes UP-TO-DATE\n> Task :build-logic:jar UP-TO-DATE\n> Task :contract-model:compileJava UP-TO-DATE\n> Task :contract-model:processResources NO-SOURCE\n> Task :contract-model:classes UP-TO-DATE\n> Task :contract-model:compileTestJava UP-TO-DATE\n> Task :contract-model:processTestResources NO-SOURCE\n> Task :contract-model:testClasses UP-TO-DATE\n> Task :contract-model:test\n> Task :contract-model:jacocoTestReport\n\nBUILD SUCCESSFUL in 18s\n13 actionable tasks: 2 executed, 11 up-to-date\n"
+    },
+    {
+      "unit": "u16-service-guardrail",
+      "i": 7,
+      "cmd": "./gradlew --no-daemon :realtime-activity:test :realtime-activity:jacocoTestCoverageVerification -PincludeTags=service-guardrail -PcoverageScope=service-guardrail -Pmujoong.test.db=docker",
+      "exit_code": 0,
+      "output": "To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.14.3/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.\nDaemon will be stopped at the end of the build \n> Task :build-logic:checkKotlinGradlePluginConfigurationErrors SKIPPED\n> Task :build-logic:generateExternalPluginSpecBuilders UP-TO-DATE\n> Task :build-logic:extractPrecompiledScriptPluginPlugins UP-TO-DATE\n> Task :build-logic:compilePluginsBlocks UP-TO-DATE\n> Task :build-logic:generatePrecompiledScriptPluginAccessors UP-TO-DATE\n> Task :build-logic:generateScriptPluginAdapters UP-TO-DATE\n> Task :build-logic:compileKotlin UP-TO-DATE\n> Task :build-logic:compileJava NO-SOURCE\n> Task :build-logic:pluginDescriptors UP-TO-DATE\n> Task :build-logic:processResources UP-TO-DATE\n> Task :build-logic:classes UP-TO-DATE\n> Task :build-logic:jar UP-TO-DATE\n> Task :test-support:processResources NO-SOURCE\n> Task :realtime-activity:processResources UP-TO-DATE\n> Task :realtime-activity:processTestResources UP-TO-DATE\n> Task :contract-model:compileJava UP-TO-DATE\n> Task :contract-model:processResources NO-SOURCE\n> Task :contract-model:classes UP-TO-DATE\n> Task :contract-model:jar UP-TO-DATE\n> Task :test-support:compileJava UP-TO-DATE\n> Task :test-support:classes UP-TO-DATE\n> Task :test-support:jar UP-TO-DATE\n> Task :realtime-activity:compileJava UP-TO-DATE\n> Task :realtime-activity:classes UP-TO-DATE\n> Task :realtime-activity:compileTestJava UP-TO-DATE\n> Task :realtime-activity:testClasses UP-TO-DATE\n> Task :realtime-activity:test\n\nOpenJDK 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has been appended\n\n> Task :realtime-activity:jacocoTestCoverageVerification\n> Task :realtime-activity:jacocoTestReport\n\nBUILD SUCCESSFUL in 4m 34s\n20 actionable tasks: 3 executed, 17 up-to-date\n"
+    },
+    {
+      "unit": "u16-service-guardrail",
+      "i": 8,
+      "cmd": "./gradlew --no-daemon :core-api:test :core-api:jacocoTestCoverageVerification -PincludeTags=service-guardrail -PcoverageScope=service-guardrail -Pmujoong.test.db=docker",
+      "exit_code": 0,
+      "output": "To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.14.3/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.\nDaemon will be stopped at the end of the build \n> Task :build-logic:checkKotlinGradlePluginConfigurationErrors SKIPPED\n> Task :build-logic:generateExternalPluginSpecBuilders UP-TO-DATE\n> Task :build-logic:extractPrecompiledScriptPluginPlugins UP-TO-DATE\n> Task :build-logic:compilePluginsBlocks UP-TO-DATE\n> Task :build-logic:generatePrecompiledScriptPluginAccessors UP-TO-DATE\n> Task :build-logic:generateScriptPluginAdapters UP-TO-DATE\n> Task :build-logic:compileKotlin UP-TO-DATE\n> Task :build-logic:compileJava NO-SOURCE\n> Task :build-logic:pluginDescriptors UP-TO-DATE\n> Task :build-logic:processResources UP-TO-DATE\n> Task :build-logic:classes UP-TO-DATE\n> Task :build-logic:jar UP-TO-DATE\n> Task :test-support:processResources NO-SOURCE\n> Task :core-api:processResources UP-TO-DATE\n> Task :core-api:processTestResources UP-TO-DATE\n> Task :contract-model:compileJava UP-TO-DATE\n> Task :contract-model:processResources NO-SOURCE\n> Task :contract-model:classes UP-TO-DATE\n> Task :contract-model:jar UP-TO-DATE\n> Task :test-support:compileJava UP-TO-DATE\n> Task :test-support:classes UP-TO-DATE\n> Task :test-support:jar UP-TO-DATE\n> Task :core-api:compileJava UP-TO-DATE\n> Task :core-api:classes UP-TO-DATE\n> Task :core-api:compileTestJava UP-TO-DATE\n> Task :core-api:testClasses UP-TO-DATE\n> Task :core-api:test\n\nOpenJDK 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has been appended\n\n> Task :core-api:jacocoTestCoverageVerification\n> Task :core-api:jacocoTestReport\n\nBUILD SUCCESSFUL in 2m 14s\n20 actionable tasks: 3 executed, 17 up-to-date\n"
+    },
+    {
+      "unit": "u16-service-guardrail",
+      "i": 9,
+      "cmd": "./gradlew --no-daemon :contract-model:test :contract-model:jacocoTestCoverageVerification -PincludeTags=service-guardrail -PcoverageScope=service-guardrail",
+      "exit_code": 0,
+      "output": "To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.14.3/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.\nDaemon will be stopped at the end of the build \n> Task :build-logic:checkKotlinGradlePluginConfigurationErrors SKIPPED\n> Task :build-logic:generateExternalPluginSpecBuilders UP-TO-DATE\n> Task :build-logic:extractPrecompiledScriptPluginPlugins UP-TO-DATE\n> Task :build-logic:compilePluginsBlocks UP-TO-DATE\n> Task :build-logic:generatePrecompiledScriptPluginAccessors UP-TO-DATE\n> Task :build-logic:generateScriptPluginAdapters UP-TO-DATE\n> Task :build-logic:compileKotlin UP-TO-DATE\n> Task :build-logic:compileJava NO-SOURCE\n> Task :build-logic:pluginDescriptors UP-TO-DATE\n> Task :build-logic:processResources UP-TO-DATE\n> Task :build-logic:classes UP-TO-DATE\n> Task :build-logic:jar UP-TO-DATE\n> Task :contract-model:compileJava UP-TO-DATE\n> Task :contract-model:processResources NO-SOURCE\n> Task :contract-model:classes UP-TO-DATE\n> Task :contract-model:compileTestJava UP-TO-DATE\n> Task :contract-model:processTestResources NO-SOURCE\n> Task :contract-model:testClasses UP-TO-DATE\n> Task :contract-model:test\n> Task :contract-model:jacocoTestCoverageVerification\n> Task :contract-model:jacocoTestReport\n\nBUILD SUCCESSFUL in 17s\n14 actionable tasks: 3 executed, 11 up-to-date\n"
+    }
+  ],
+  "corrected_command": {
+    "unit": "u16-service-guardrail",
+    "command": "./gradlew --no-daemon :realtime-activity:test --tests kr.mujoong.realtime.dialog.StopConfirmServiceGuardrailTest -Pmujoong.test.db=docker",
+    "exit_code": 0,
+    "duration": "21s"
+  },
+  "regressions": [
+    {
+      "command": "./gradlew --no-daemon :realtime-activity:test --tests kr.mujoong.realtime.session.ParticipationLateItemServiceGuardrailTest -Pmujoong.test.db=docker",
+      "exit_code": 1,
+      "tests": 2,
+      "failed": 2,
+      "actual": "두 경우 모두 WAITING_CHILD가 아닌 ACTIVE",
+      "evidence": "backend/realtime-activity/src/test/java/kr/mujoong/realtime/session/ParticipationLateItemServiceGuardrailTest.java:59"
+    },
+    {
+      "command": "npx vitest run tests/parent/features/done/guardrail-review-regression.test.tsx",
+      "exit_code": 1,
+      "tests": 2,
+      "failed": 2,
+      "evidence": "frontend/tests/parent/features/done/guardrail-review-regression.test.tsx",
+      "lines": [
+        38,
+        64
+      ]
+    }
+  ],
+  "feature_results": [
+    {
+      "module": "realtime-activity",
+      "tests": 1095,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "line": [
+        {
+          "type": "LINE",
+          "missed": "316",
+          "covered": "4122"
+        }
+      ]
+    },
+    {
+      "module": "core-api",
+      "tests": 196,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "line": [
+        {
+          "type": "LINE",
+          "missed": "18",
+          "covered": "351"
+        }
+      ]
+    },
+    {
+      "module": "contract-model",
+      "tests": 8,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "line": [
+        {
+          "type": "LINE",
+          "missed": "0",
+          "covered": "19"
+        }
+      ]
+    },
+    {
+      "unit": "u17-guardrail-presentation",
+      "tests": 312,
+      "failed": 0,
+      "files": 27,
+      "line": {
+        "covered": 763,
+        "total": 770,
+        "percent": 99.09
+      }
+    }
+  ],
+  "full_verify": {
+    "executed": false,
+    "reason": "PreToolUse hook blocked bash scripts/verify.sh as audit write; PATH-prefixed and plain invocation both rejected; no guard bypass"
+  },
+  "full_build_reference": {
+    "unit_checkpoint": "u17-guardrail-presentation",
+    "finished_at": "2026-10-21T04:33:19.080Z",
+    "exit_code": 0,
+    "backend_tests": 4087,
+    "frontend_tests": 1049,
+    "frontend_line": "3515/3566=98.56%",
+    "note": "追加회귀 작성 전 참고 증거; 현재 추가 회귀 실패를 대체하지 않음"
+  }
+}
+
