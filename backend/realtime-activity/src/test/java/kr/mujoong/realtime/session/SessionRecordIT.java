@@ -63,12 +63,15 @@ class SessionRecordIT {
         DeviceSimulatorClient device = env.connectDevice();
         UUID sessionId = activate(device);
         env.provider.emitTurn("item-1", "공룡이 좋아", "나도 공룡 좋아해", List.of(kr.mujoong.realtime.testing.RealtimeItEnvironment.audiblePcm(4800)));
+        var output = (kr.mujoong.contract.ws.message.OutputBegin) device.await(WsMessageType.OUTPUT_BEGIN, WAIT).payload();
+        device.playbackMark(sessionId, output.playbackId(), PlaybackMark.Status.STARTED);
         device.await(WsMessageType.OUTPUT_END, WAIT);
         awaitTrue(() -> transcriptCount(sessionId) >= 2, "대화 행");
 
         env.api().post("/internal/sessions/" + sessionId + "/end", InternalApi.endBody(UUID.randomUUID(), "GUARDIAN_STOP"));
         WsEnvelope closing = device.await(value -> sessionId.equals(value.sessionId()) && value.payload() instanceof PlayApprovedContent content
                 && content.contentCode().equals(PlayApprovedContent.CLOSING), WAIT);
+        device.playbackMark(sessionId, ((PlayApprovedContent) closing.payload()).playbackId(), PlaybackMark.Status.STARTED);
         device.playbackMark(sessionId, ((PlayApprovedContent) closing.payload()).playbackId(),
                 PlaybackMark.Status.COMPLETED);
         device.await(WsMessageType.CLOSE_TRANSPORT, WAIT);

@@ -46,6 +46,12 @@ public final class SessionTimers {
         RECORD_SETTLE(false),
         /** U11 A3: 지시를 보낸 뒤 새 말이 시작하기를 기다리는 시한(response-ready, 지시 송신 시각부터). */
         INSTRUCTION_WAIT(false),
+        /** Drain prior practice speech before requesting the next complete utterance. */
+        PRACTICE_OUTPUT_DRAIN(true),
+        /** Bounded queue/send wait, separate from waiting for the first provider speech. */
+        PRACTICE_SEND_WAIT(false),
+        /** Absolute collection bound; normal inter-chunk silence still uses SEGMENT_QUIET. */
+        PRACTICE_COLLECT_MAX(false),
         /** 참여 수락 때 보관한 응답이 비어 있으면 모델이 스스로 첫 응답을 시작하기를 기다리는 시간(provider.join-self-start-wait). */
         JOIN_SELF_START(false),
         /** JIRA-270: 자유대화 응답 정체 안전망(provider.response-stall-wait). 아이 말 확정 · 미루는 말로 끝난 응답부터 잰다. */

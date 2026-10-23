@@ -17,6 +17,16 @@ import org.mockito.ArgumentCaptor;
 
 @Tag("scenario-generation")
 class ScenarioGenerationTest {
+    @Test void diagnosticsSeparateReviewRejectionWithoutIncludingSceneText(){
+        var codes=new java.util.ArrayList<String>();generator.diagnostics(codes::add);
+        when(provider.review(any())).thenReturn(reject("GOAL_MISMATCH"),approve());
+        run();assertThat(codes).containsExactly("ScenarioReview_REJECT","ScenarioReview_GOAL_MISMATCH");
+    }
+    @Test void brokenDiagnosticSinkCannotChangeApprovedGeneration(){
+        generator.diagnostics(code->{throw new IllegalStateException("unavailable");});
+        when(provider.review(any())).thenReturn(reject("GOAL_MISMATCH"),approve());
+        assertThat(run().details().scenes()).hasSize(1);
+    }
     ScenarioScriptProvider provider;MutableClock clock;ExecutorService executor;ScenarioScriptGenerator generator;
     static final String OPPORTUNITY="친구가 멈추려 해.";
     static ScenarioScript.Scene base(){return new ScenarioScript.Scene("base","BASE","블록 놀이 중이야. "+OPPORTUNITY+" 이제 그만할래.","이제 그만할래.","친구가 쉬려고 해.",List.of("친구의 말을 들어보자"),List.of("잠깐 쉬자"),"PEER","교실","놀이",null,null);}
@@ -32,6 +42,36 @@ class ScenarioGenerationTest {
     @Test void normalNeedsSeparateReviewAndServerRole(){var result=run();verify(provider).generate(any());verify(provider).review(any());assertThat(result.details().generation().calls()).isEqualTo(2);assertThat(result.details().review().verdict()).isEqualTo("APPROVE");assertThat(result.details().scenes().getFirst().partnerRole()).isEqualTo(ScenarioContentPolicy.PARTNER_ROLE);}
     @Test void rejectionUsesOneContentCorrectionThenSeparateReview(){when(provider.review(any())).thenReturn(reject("AGE_MISMATCH"),approve());assertThat(run().details().generation().calls()).isEqualTo(4);verify(provider,times(2)).generate(any());verify(provider,times(2)).review(any());}
     @Test void twiceRejectedNeverReturnsIssuableScript(){when(provider.review(any())).thenReturn(reject("REPETITION"));assertThatThrownBy(this::run).isInstanceOf(kr.mujoong.core.common.error.CoreApiException.class);verify(provider,times(2)).generate(any());verify(provider,times(2)).review(any());}
+    @Test void correctionReceivesTheRejectionReasonWithoutAcceptingTheRejectedScript(){
+        when(provider.review(any())).thenReturn(reject("REPETITION"),approve());
+        run();var calls=ArgumentCaptor.forClass(ScenarioScriptProvider.Call.class);
+        verify(provider,times(2)).generate(calls.capture());
+        assertThat(calls.getAllValues().getFirst().input()).doesNotContainKey("correctionReasons");
+        assertThat(calls.getAllValues().getLast().input()).containsEntry("correctionReasons",List.of("REPETITION"));
+        assertThat(calls.getAllValues().getLast().input().get("scriptToRepair")).isInstanceOf(ScenarioScript.class);
+    }
+    @Test void missingQuotedOpportunityIsIncludedBeforeIndependentReview(){
+        var scene=base();var indirect=new ScenarioScript.Scene(scene.sceneKey(),scene.sceneKind(),"블록 놀이 중이야. "+OPPORTUNITY,
+                scene.opportunitySentence(),scene.reexplanation(),scene.focusPoints(),scene.expressionExamples(),scene.relation(),scene.place(),scene.topic(),null,null);
+        when(provider.generate(any())).thenReturn(generated(indirect),generated(scene));
+        assertThat(run().details().generation().calls()).isEqualTo(2);
+        var calls=ArgumentCaptor.forClass(ScenarioScriptProvider.Call.class);verify(provider).review(calls.capture());
+        var reviewed=(ScenarioScript)calls.getValue().input().get("script");
+        assertThat(reviewed.scenes().getFirst().sceneDescription()).contains(scene.opportunitySentence());
+    }
+    @Test void repairableSceneRejectionGetsOneFinalReviewedAttemptWithinTheSixCallBudget(){
+        when(provider.review(any())).thenReturn(reject("INCOMPLETE_SCENE"),reject("ANSWER_INCLUDED"),approve());
+        var result=run();
+        assertThat(result.details().generation().calls()).isEqualTo(6);
+        verify(provider,times(3)).generate(any());verify(provider,times(3)).review(any());
+        assertThat(result.details().review().verdict()).isEqualTo("APPROVE");
+    }
+    @Test void includedPartnerLineNeverBypassesRejectionOrAnswerSafety(){
+        var scene=base();var indirect=scene.withDescription("블록 놀이 중이야. "+OPPORTUNITY);
+        when(provider.generate(any())).thenReturn(generated(indirect));when(provider.review(any())).thenReturn(reject("INCOMPLETE_SCENE"));
+        assertThatThrownBy(this::run).isInstanceOf(ScenarioScriptGenerator.ContentExhausted.class);
+        verify(provider,times(3)).review(any());
+    }
     @Test void uncertainIsNotApproval(){when(provider.review(any())).thenReturn(new ScenarioScriptProvider.Reviewed(new ScenarioReview("UNCERTAIN",List.of()),"fake"));assertThatThrownBy(this::run).isInstanceOf(kr.mujoong.core.common.error.CoreApiException.class);verify(provider,times(2)).generate(any());}
     @Test void schemaFailureUsesContentNotTechnicalRetry(){when(provider.generate(any())).thenThrow(failure(ScenarioScriptProvider.Failure.Kind.CONTENT)).thenReturn(generated(base()));assertThat(run().details().generation().calls()).isEqualTo(3);verify(provider,times(2)).generate(any());verify(provider).review(any());}
     @Test void oneTechnicalRetryIsSharedBetweenGenerationAndReview(){when(provider.generate(any())).thenThrow(failure(ScenarioScriptProvider.Failure.Kind.TRANSIENT)).thenReturn(generated(base()));assertThat(run().details().generation().calls()).isEqualTo(3);assertThat(clock.elapsedSince(0)).isGreaterThanOrEqualTo(Duration.ZERO);}

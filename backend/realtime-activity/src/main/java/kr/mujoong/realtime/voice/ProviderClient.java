@@ -227,7 +227,7 @@ public class ProviderClient implements ProviderPort, DisposableBean {
                         nullToEmpty(inbound.delta()), millis(inbound.startMs()), millis(inbound.endMs()));
                 case "session.output_transcript.delta" -> new ProviderEvent.OutputTranscriptDelta(nullToEmpty(inbound.delta()),
                         millis(inbound.startMs()), millis(inbound.endMs()));
-                case "session.instructions.appended" -> inbound.clientEventId() == null || inbound.clientEventId().isBlank()
+                case "session.instructions.appended", "session.commentary.appended" -> inbound.clientEventId() == null || inbound.clientEventId().isBlank()
                         ? null
                         : new ProviderEvent.InstructionsAppended(inbound.clientEventId(), millis(inbound.startMs()),
                                 millis(inbound.endMs()));

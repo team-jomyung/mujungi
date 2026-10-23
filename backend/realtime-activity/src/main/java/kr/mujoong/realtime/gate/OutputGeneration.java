@@ -11,7 +11,13 @@ import java.util.Objects;
  * 하나이고 번호는 올리기만 한다. <b>실행기 스레드에서만 바꾼다</b>(락 없음). 시각은 호출자가 {@code MujoongClock}으로 읽어 넘긴다(R-F6). 시간
  * 값은 생성자로 받는다({@code mujoong.gate.segment-quiet}, {@code mujoong.timing.provider.new-speech-margin}, R-F7).
  *
- * <p>세대를 올리는 방법이 둘이다.
+ * <p>Controlled practice speech waits for the preceding output to become quiet before sending its request.
+ * {@link #bumpForQuietInstruction} then captures the entire next utterance, including data arriving before its ACK.
+ * ACK timing describes context delivery, not the first spoken sample; this path applies no leading audio trim.
+ * Completeness, approved-body matching, server safety and Jev still apply before playback.
+ * The legacy paths below remain for free conversation and judgment turns.
+ *
+ * <p>기존 세대를 올리는 방법은 둘이다.
  * <ul>
  *   <li><b>지시를 보내며 올린다</b>({@link #bumpForInstruction}, 모든 서버 발화): 낡은 응답은 지시를 받아도 1.2 ~ 1.8초 더 이어지고 새 말이 쉼 없이
  *       뒤따르므로(조각 사이 쉼으로는 경계를 못 가른다) <b>전사 시간선</b>으로 새 말의 시작을 정한다. 오디오 시계 = 이 세션에서 받은 출력 음성의 누적
@@ -111,7 +117,8 @@ public final class OutputGeneration {
 
     private enum Mode {
         GAP,
-        INSTRUCTION
+        INSTRUCTION,
+        QUIET_INSTRUCTION
     }
 
     private final Duration segmentQuiet;
@@ -140,6 +147,7 @@ public final class OutputGeneration {
     private boolean openStart;
     /** {@link #openStart}로 받기 시작했는가(진단 사유 코드용, {@link #takeOpenStartAccepted}가 한 번 읽고 지운다). */
     private boolean openStartAccepted;
+    private boolean waitingQuietSpeech;
 
     /**
      * @param segmentQuiet 조각이 이만큼 끊기면 끊김 · 구간 봉인(env {@code mujoong.gate.segment-quiet})
@@ -210,7 +218,8 @@ public final class OutputGeneration {
 
     /** 지시를 보내며 올린 세대가 새 말을 기다리는 중인가(확인 사건 또는 새 말 전사 전, 시한 만료로 닫기 전). */
     public boolean awaitingNewSpeech() {
-        return mode == Mode.INSTRUCTION && phase == Phase.DISCARDING && newStartMs < 0;
+        return mode == Mode.QUIET_INSTRUCTION ? waitingQuietSpeech
+                : mode == Mode.INSTRUCTION && phase == Phase.DISCARDING && newStartMs < 0;
     }
 
     /** 확인 사건을 받았는가(지시 경로). */
@@ -248,6 +257,7 @@ public final class OutputGeneration {
         }
         switch (phase) {
             case RECEIVING:
+                waitingQuietSpeech = false;
                 return new ChunkResult(ChunkVerdict.ACCEPT, takeBoundary());
             case DISCARDING:
                 if (mode == Mode.INSTRUCTION && newStartMs >= 0 && clockStartMs >= newStartMs + marginMs) {
@@ -288,6 +298,7 @@ public final class OutputGeneration {
         }
         switch (phase) {
             case RECEIVING:
+                waitingQuietSpeech = false;
                 return new ChunkResult(ChunkVerdict.ACCEPT, takeBoundary());
             case DISCARDING:
                 if (mode == Mode.INSTRUCTION && newStartMs >= 0 && startMs >= newStartMs) {
@@ -311,7 +322,7 @@ public final class OutputGeneration {
      * @return 받았는가
      */
     public boolean onAppended(String clientEventId, long endMs) {
-        if (mode != Mode.INSTRUCTION || pendingEventId == null || !pendingEventId.equals(clientEventId) || endMs < 0
+        if ((mode != Mode.INSTRUCTION && mode != Mode.QUIET_INSTRUCTION) || pendingEventId == null || !pendingEventId.equals(clientEventId) || endMs < 0
                 || ackEndMs >= 0) {
             return false;
         }
@@ -328,6 +339,13 @@ public final class OutputGeneration {
     public InstructionTimeout onInstructionTimeout() {
         if (!awaitingNewSpeech()) {
             return InstructionTimeout.NONE;
+        }
+        if (mode == Mode.QUIET_INSTRUCTION) {
+            waitingQuietSpeech = false;
+            mode = Mode.GAP;
+            phase = Phase.DISCARDING;
+            pendingEventId = null;
+            return InstructionTimeout.NEW_SPEECH_NOT_OBSERVED;
         }
         if (ackEndMs < 0 && !ackMissing) {
             ackMissing = true;
@@ -409,6 +427,17 @@ public final class OutputGeneration {
         return true;
     }
 
+    /** Caller has drained old speech to a quiet boundary before sending this instruction.
+     * Capture the next whole segment, including pre-ack text/audio and sub-margin utterances.
+     * The same completeness, content, exact-reading and Jev gates still decide playback.
+     */
+    public long bumpForQuietInstruction(Instant now, BumpReason reason, String eventId) {
+        long result = doBump(now, reason, Mode.QUIET_INSTRUCTION, Objects.requireNonNull(eventId));
+        phase = Phase.RECEIVING;
+        waitingQuietSpeech = true;
+        return result;
+    }
+
     private long doBump(Instant now, BumpReason reason, Mode newMode, String eventId) {
         Objects.requireNonNull(now, "now");
         Objects.requireNonNull(reason, "reason");
@@ -426,6 +455,7 @@ public final class OutputGeneration {
         transcriptOpen = false;
         openStart = false;
         openStartAccepted = false;
+        waitingQuietSpeech = false;
         return generation;
     }
 

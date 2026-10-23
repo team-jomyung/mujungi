@@ -66,6 +66,12 @@ describe("12 상태 → 할 일(liveOutcome · AC3.4.1 · AC3.5.1 · AC3.6.9 · 
   });
 });
 
+it("생성 순번 대신 실제 재생 시각에 맞춰 아이 답변 사이에 AI 안내를 배치한다", () => {
+  const items = [bubbleAt(2, "2026-10-22T08:31:17Z"), bubbleAt(3, "2026-10-22T08:31:34Z"), bubbleAt(4, "2026-10-22T08:31:27Z")];
+  expect(buildTimeline(items, []).map(e => e.kind === "bubble" ? e.bubble.seq : 0)).toEqual([2, 4, 3]);
+  expect(items.map(b => b.seq)).toEqual([2, 3, 4]);
+});
+
 describe("12 공백 경고 · 복구 중 · 흐름(AC3.2.8 · AC3.2.10 · U4a-J19)", () => {
   it("공백 경고 분은 경고 시작부터 서버 시각까지이고 4분 경계에서 4, 경고가 없거나 시각을 모르면 null", () => {
     const warned = view("ACTIVE", { serverTime: "2026-10-15T01:06:00Z", silenceWarning: { silentSince: "2026-10-15T01:02:00Z", endsAt: "2026-10-15T01:08:00Z" } });

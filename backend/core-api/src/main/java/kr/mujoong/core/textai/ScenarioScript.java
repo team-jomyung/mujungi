@@ -8,14 +8,30 @@ public record ScenarioScript(List<Scene> scenes) {
     public record Scene(String sceneKey, String sceneKind, String sceneDescription,
             String opportunitySentence, String reexplanation, List<String> focusPoints,
             List<String> expressionExamples, String relation, String place, String topic,
-            Preservation preservation, String partnerRole) {
+            Preservation preservation, String partnerRole, String spokenIntroduction, String reflectionPrompt) {
+        public Scene(String sceneKey, String sceneKind, String sceneDescription, String opportunitySentence,
+                String reexplanation, List<String> focusPoints, List<String> expressionExamples, String relation,
+                String place, String topic, Preservation preservation, String partnerRole, String spokenIntroduction) {
+            this(sceneKey,sceneKind,sceneDescription,opportunitySentence,reexplanation,focusPoints,expressionExamples,
+                    relation,place,topic,preservation,partnerRole,spokenIntroduction,null);
+        }
+        public Scene(String sceneKey, String sceneKind, String sceneDescription, String opportunitySentence,
+                String reexplanation, List<String> focusPoints, List<String> expressionExamples, String relation,
+                String place, String topic, Preservation preservation, String partnerRole) {
+            this(sceneKey, sceneKind, sceneDescription, opportunitySentence, reexplanation, focusPoints,
+                    expressionExamples, relation, place, topic, preservation, partnerRole, null);
+        }
         public Scene {
             focusPoints = focusPoints == null ? List.of() : List.copyOf(focusPoints);
             expressionExamples = expressionExamples == null ? List.of() : List.copyOf(expressionExamples);
         }
         public Scene withPartnerRole(String role) {
             return new Scene(sceneKey, sceneKind, sceneDescription, opportunitySentence, reexplanation,
-                    focusPoints, expressionExamples, relation, place, topic, preservation, role);
+                    focusPoints, expressionExamples, relation, place, topic, preservation, role, spokenIntroduction, reflectionPrompt);
+        }
+        public Scene withDescription(String description) {
+            return new Scene(sceneKey, sceneKind, description, opportunitySentence, reexplanation, focusPoints,
+                    expressionExamples, relation, place, topic, preservation, partnerRole, spokenIntroduction, reflectionPrompt);
         }
         @Override public String toString() { return "Scene[redacted]"; }
     }

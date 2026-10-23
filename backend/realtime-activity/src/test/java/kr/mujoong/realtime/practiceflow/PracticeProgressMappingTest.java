@@ -55,8 +55,10 @@ class PracticeProgressMappingTest {
         h.played();
         h.child("그거 줘");
         h.result("J2", "FULL");
-        assertThat(h.ext.progress().stage()).as("변형 제안(VARIANT_OFFER)").isEqualTo("AFTER_CUE_RESPONSE");
+        assertThat(h.ext.progress().stage()).as("목표 달성 후 친구 답변(PEER_REPLY)").isEqualTo("AFTER_CUE_RESPONSE");
         seen.add(h.ext.progress().stage());
+        h.played();
+        assertThat(h.ext.progress().stage()).as("친구 답변 후 변형 제안(VARIANT_OFFER)").isEqualTo("AFTER_CUE_RESPONSE");
         h.played();
         h.child("응");
         h.result("J4", "ACCEPT");
@@ -69,6 +71,7 @@ class PracticeProgressMappingTest {
         h.child("그거 줘");
         h.result("J2", "FULL");
 
+        h.played(); // 변형 장면도 친구 역할 답변을 재생한 뒤 다음 목표로 이동한다.
         assertThat(h.ext.progress().stage()).as("다음 목표를 기다리는 NEXT_GOAL").isEqualTo("SCENARIO_INTRO");
         assertThat(h.ext.progress().goalIndex()).isEqualTo(1);
         seen.add(h.ext.progress().stage());

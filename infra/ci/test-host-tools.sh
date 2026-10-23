@@ -486,14 +486,14 @@ attr = dict(re.findall(r'^\s+([A-Z0-9_]+)\("([A-Za-z0-9]+)",\s*ValueType', open(
 body = open(sys.argv[2], encoding="utf-8").read().split("public enum EventCode {", 1)[1].split(";", 1)[0]
 rows = []
 for m in re.finditer(r"([A-Z_]+)\(Level\.\w+,\s*(?:true|false),\s*(?:true|false),\s*EnumSet\.of\(([^)]*)\)", body, re.S):
-    keys = sorted(attr[c.strip()] for c in m.group(2).split(",") if c.strip())
+    keys = sorted(attr[c.strip().removeprefix("AttrKey.")] for c in m.group(2).split(",") if c.strip())
     rows.append(m.group(1) + " " + ",".join(keys))
 print("\n".join(sorted(rows)))
 PY
   bash "$LHC" --print-allowlist >"$work/allow.script"
-  # U9 SD6: LUNA_CALL · LUNA_STARTUP을 더해 19종이다(정본 EventCode.java와 같은 커밋에서 고친다, R-M10)
-  if [ "$(wc -l <"$work/allow.java")" -eq 19 ] && diff -q "$work/allow.java" "$work/allow.script" >/dev/null; then
-    ok "log-hygiene-allowlist-matches-java(19종)"
+  # Add only the closed practice diagnostics; compare every key with the Java source of truth.
+  if [ "$(wc -l <"$work/allow.java")" -eq 21 ] && diff -q "$work/allow.java" "$work/allow.script" >/dev/null; then
+    ok "log-hygiene-allowlist-matches-java(21종)"
   else
     not_ok "log-hygiene-allowlist-matches-java" "$(diff "$work/allow.java" "$work/allow.script" | head -n 4 | paste -sd' ' -)"
   fi
@@ -521,6 +521,24 @@ else
 fi
 
 # ---- turn-metrics(MO-4 · NFR5.4 · OD-8, J348): 한 턴 로그만으로 NFR5.1 · 5.2 · 5.3 계산 · 표본 규칙 · 미관측 사유 ---------------------
+# New diagnostic events accept fixed metadata, never utterance text.
+r="$work/h-practice-audio"
+make_root "$r"
+{
+  app_line $((now_s - 500)) INFO PRACTICE_AUDIO_STAGE '{"audioStage":"COLLECTING","outputGeneration":4,"practicePhase":"SCENE_INTRO","practiceSub":"GOAL_BRIEF"}'
+  app_line $((now_s - 400)) INFO OUTPUT_DISCARDED '{"discardReason":"GATE_EMPTY","discardDetail":"EMPTY_AUDIO","audioBytes":0,"transcriptChars":12,"generatedSpeech":true}'
+} >>"$r/c/realtime.log"
+run_tool "$r" "$LHC" --since "$since_iso"
+practice_clean="$(grep '^CHECK attrs ' "$work/tool.out" || true)"
+app_line $((now_s - 300)) INFO OUTPUT_DISCARDED '{"discardDetail":"EMPTY_AUDIO","transcript":"synthetic private text"}' >>"$r/c/realtime.log"
+run_tool "$r" "$LHC" --since "$since_iso"
+practice_dirty="$(grep '^CHECK attrs ' "$work/tool.out" || true)"
+if [ "$practice_clean" = 'CHECK attrs violations=0' ] && [ "$practice_dirty" = 'CHECK attrs violations=1' ]; then
+  ok "log-hygiene-practice-diagnostics(no-utterance-text)"
+else
+  not_ok "log-hygiene-practice-diagnostics" "clean [$practice_clean] · forbidden [$practice_dirty]"
+fi
+
 readonly TM="$ROOT/infra/bin/turn-metrics"
 iso_ms() { date -u -d "@$(printf '%d.%03d' $(($1 / 1000)) $(($1 % 1000)))" +%Y-%m-%dT%H:%M:%S.%3NZ; }
 # lt <t0 ms> <relayIn> <relayOut|-> <말 끝→재생 시작 ms|-> [clock|recv|none] — LATENCY_TURN 한 줄(시각은 t0 기준 상대값)

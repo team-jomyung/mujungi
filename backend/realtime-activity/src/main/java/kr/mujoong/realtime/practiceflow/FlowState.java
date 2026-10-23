@@ -31,12 +31,22 @@ public final class FlowState {
     /** 단계 안의 소단계(FOCUS 진입 ① · ②, SCENE_WRAP 소단계, 상황 다시 설명 재생 중). */
     public enum Sub {
         NONE,
+        /** 오늘의 목표·범위 안내와 사실에 근거한 목표 마무리. */
+        GOAL_BRIEF, GOAL_RECAP,
         /** FOCUS 진입 ①: 역할 전환 알림 재생 중. */
         ROLE_NOTICE,
         /** FOCUS 진입 ②: 코치 발화 재생 중. */
         COACH_UTTERANCE,
         /** SCENE_WRAP: 복귀 알림 재생 중. */
         RETURN_NOTICE,
+        /** SCENE_WRAP: 수행한 말에 친구 역할로 답한 뒤 장면을 마무리한다. */
+        PEER_REPLY,
+        /** OPPORTUNITY: 상대 역할의 답변. 재생 뒤 같은 역할 대화의 입력을 기다린다. */
+        DIALOGUE_REPLY,
+        /** 상황 안의 확인 질문 또는 인식이 불확실할 때의 확인. */
+        CLARIFICATION_REPLY, INPUT_CONFIRMATION,
+        /** 선택적 이전 대화 돌아보기. */
+        REFLECTION_OFFER, REFLECTION_PROMPT, REFLECTION_ACK,
         /** SCENE_WRAP: 변형 평가(알림이 없거나 끝났다). */
         VARIANT_EVAL,
         /** OPPORTUNITY · RETRY: 상황 다시 설명(승인 발화) 재생 중. */

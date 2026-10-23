@@ -38,19 +38,21 @@
 텍스트 프레임 JSON 한 개 = 메시지 한 개, 공통 필드 `type`. 음성은 base64로 인코딩한 PCM16LE 24kHz 모노 바이트다. 모르는 type은 무시하고 개수만 센다(type 이름 · 본문은 남기지 않는다).
 출처 표시: **실호출** = U11 실호출 3회(합성 음성 · 실제 API, `[실호출-합성]`)에서 관측 · 공급자 오류 문장에서 확인, **문서** = 공급자 공개 문서(live-conversations · voice-websockets)에만 있고 우리 실행에서는 관측되지 않은 것, **미확인** = 관측도 문서도 없는 것(Build and Test 실호출에서 확인). 관측하지 않은 필드는 적지 않는다.
 
-공급자가 지원하는 클라이언트 메시지 type은 열다섯 개다(실호출 오류 문장): `session.start` · `session.update` · `session.close` · `session.input_audio.append` · `session.input_audio.mute` · `session.input_audio.unmute` · `session.instructions.append` · `session.thinking.append` · `session.commentary.append` · `session.output_audio.fixture.play` · `response.create` · `response.item.create` · `decision.create` · `decision.item.create` · `decision.item.delete`. 이 밖의 type은 `error{type: invalid_request_error, code: invalid_value, param: type}`로 거절된다. 응답 취소(`session.response.cancel`)와 지시 교정(`session.instructions.correct`), `session.response.create`는 목록에 없다. **서버는 아래 네 type만 보낸다**(`ProviderRequestFactory`가 이 네 레코드만 만든다). `response.create`는 Responses 위임 세션 전용이라 우리 세션(client 위임)에는 `error`("requires a session with Responses delegation")로 거절되고(실호출), `session.update`도 Responses 위임 설정에만 쓸 수 있어 보내지 않는다(문서). 자동 응답 · 말 끝(turn detection) 설정은 없다(문서).
+공급자가 지원하는 클라이언트 메시지 type은 열다섯 개다(실호출 오류 문장): `session.start` · `session.update` · `session.close` · `session.input_audio.append` · `session.input_audio.mute` · `session.input_audio.unmute` · `session.instructions.append` · `session.thinking.append` · `session.commentary.append` · `session.output_audio.fixture.play` · `response.create` · `response.item.create` · `decision.create` · `decision.item.create` · `decision.item.delete`. 이 밖의 type은 `error{type: invalid_request_error, code: invalid_value, param: type}`로 거절된다. 응답 취소(`session.response.cancel`)와 지시 교정(`session.instructions.correct`), `session.response.create`는 목록에 없다. **서버는 아래 다섯 type만 보낸다**(2026-10-22 승인된 연습 낭독에 `session.commentary.append` 추가; 같은 직렬 송신 큐와 출력 게이트를 사용한다). `response.create`는 Responses 위임 세션 전용이라 우리 세션(client 위임)에는 `error`("requires a session with Responses delegation")로 거절되고(실호출), `session.update`도 Responses 위임 설정에만 쓸 수 있어 보내지 않는다(문서). 자동 응답 · 말 끝(turn detection) 설정은 없다(문서).
 
 | 방향 | type | 필드 | 출처 · 쓰임 |
 |---|---|---|---|
 | 서버 → 공급자 | `session.start` | `session{model, instructions, audio{format{type: "audio/pcm", rate: 24000}}}` — `model`은 코드 상수, `instructions`는 서버 템플릿 지시문(아이 정보는 따옴표로 묶은 데이터로만) | 실호출(중첩 모양 · 24kHz 수락). 연결 직후 한 번. 응답 `session.started`가 ACTIVE 전이 조건의 하나다(BR6.8) |
 | 서버 → 공급자 | `session.input_audio.append` | `audio`(base64, 기기 0x01 프레임 본문 960바이트 그대로) | 실호출. ACTIVE 뒤 ~ CLOSE_TRANSPORT 전 기기 프레임을 순번 순으로(BR7.1 · R3-8). 그 밖의 프레임은 버린다. 참여 확인(WAITING_CHILD)부터 중계하고 원음 기록은 ACTIVE부터다(U4b-J2) |
-| 서버 → 공급자 | `session.instructions.append` | `event_id`(서버 발급, 확인 사건의 `client_event_id`로 돌아온다) · `delegation_id`(**항상 있어야 한다, 값은 `null`**) · `content`(지시문, 500토큰 이하) | 실호출. `delegation_id` 키가 없으면 공급자가 `error{missing_required_parameter, param delegation_id}`로 거절한다 — 이 프로젝트 JSON 코덱이 null 필드를 쓰지 않으므로 이 속성만 항상 쓰게 한다. 옛 본문 필드 `text`는 없다. **서버의 모든 발화는 이 지시 하나로 시작한다**(참여 뒤 첫 응답 · 확인 뒤 이어 가기 · 연습 발화 · 연습 `requestResponse` · 게이트 교정 · 판정 뒤 지시, 아래 '서버 발화'). 전사 · 걸린 패턴 · 미승인 원문은 넣지 않는다 |
+| 서버 → 공급자 | `session.instructions.append` | `event_id`(서버 발급, 확인 사건의 `client_event_id`로 돌아온다) · `delegation_id`(**항상 있어야 한다, 값은 `null`**) · `content`(지시문, 500토큰 이하) | 실호출. `delegation_id` 키가 없으면 공급자가 `error{missing_required_parameter, param delegation_id}`로 거절한다 — 이 프로젝트 JSON 코덱이 null 필드를 쓰지 않으므로 이 속성만 항상 쓰게 한다. 옛 본문 필드 `text`는 없다. **일반 지시·교정·생성 역할 지시는 이 경로를 유지한다. 승인된 연습 낭독의 발화 요청은 아래 commentary 경로로 구분한다. 지시 수락은 발화 시작·재생을 보장하지 않는다**(참여 뒤 첫 응답 · 확인 뒤 이어 가기 · 연습 발화 · 연습 `requestResponse` · 게이트 교정 · 판정 뒤 지시, 아래 '서버 발화'). 전사 · 걸린 패턴 · 미승인 원문은 넣지 않는다 |
+| 서버 → 공급자 | `session.commentary.append` | `event_id` · `delegation_id: null` · `content` | 2026-10-22 실호출. 승인된 연습 낭독의 음성 출력 요청. 동일한 고정 낭독 지시와 범위 종료 문장을 사용한다. 음성이 생성돼도 승인 원문과 다르면 기존 게이트가 차단한다. |
 | 서버 → 공급자 | `session.close` | — | 종료 · FAILED 전이 뒤 공급자 세션 정리(BR6.10 ④). 응답 `session.closed`(실호출) |
 | 공급자 → 서버 | `session.started` | `session{id, ...}` | 실호출. `session.id`를 공급자 세션 id로 읽는다 |
 | 공급자 → 서버 | `session.output_audio.delta` | `delta`(base64). **응답 id · 시간 정보가 없다** | 실호출. AI 말 음성 조각. 게이트 구간 버퍼에만 쌓는다(BR7.3 · BR11.6). 구간이 확정 · 통과될 때까지 기기로 보내지 않는다(BR7.4). 한 응답이 조각 300 ~ 350개(30 ~ 35초)일 수 있다 |
 | 공급자 → 서버 | `session.output_transcript.delta` | `start_ms` · `end_ms` · `delta` · `event_id` | 실호출. AI 말 전사 조각. 게이트 구간 버퍼에만 쌓는다. **음성보다 앞서 도착하고 그 폭이 늘어난다**(전사 `end_ms`와 도착 때 오디오 시계의 차 0.3 ~ 2.1초). `start_ms` · `end_ms`는 세션 전사 시간선의 ms다 |
 | 공급자 → 서버 | `session.input_transcript.delta` | `start_ms` · `end_ms` · `delta` · `event_id` | 실호출. 아이 전사 조각(PARTIAL, BR7.5). **완료 사건이 없다** — 서버가 조각을 묶어 확정한다(아래). `confidence`는 오지 않는다 |
 | 공급자 → 서버 | `session.instructions.appended` | `event_id` · `client_event_id` · `start_ms` · `end_ms` | 실호출. 지시 확인 사건. "세션 시간선이 추가한 지시의 추정 끝에 닿을 때" 온다(문서). `client_event_id`가 우리가 실은 `event_id`와 맞고, `end_ms`가 지시 뒤 새 말이 시작할 수 있는 전사 시간선의 하한이다 |
+| 공급자 → 서버 | `session.commentary.appended` | `event_id` · `client_event_id` · `start_ms` · `end_ms` | 2026-10-22 실호출. 기존 지시 확인 사건과 같은 내부 상관·시간선 처리로 전달한다. 확인만으로 음성 생성·전달·재생 완료를 확정하지 않는다. |
 | 공급자 → 서버 | `session.usage.updated` | `usage{seconds}` | 실호출. 누적 사용 초(해석기가 읽고 실호출 도구 보고서가 기록, 서버 지표에는 쓰지 않는다) |
 | 공급자 → 서버 | `error` | `error{type, code, message, param}` | 실호출. 앱은 `code`만 읽고 `message` 원문은 읽지도 남기지도 않는다(R-F14). `session.started` 전이면 PROVIDER_UNAVAILABLE |
 | 공급자 → 서버 | `session.closed` | `reason`(선택) | 실호출. 공급자가 세션을 닫음 |
@@ -533,3 +535,12 @@ J1/J6의 고정 질문·선택지는 `judgment-service-v1`, 공통 지시문은 
 보호자의 입력 원문을 Live 지시문에 넣지 않는다. Core가 고정 키워드와 상황 구분에서 추출한 `conversationGuide.topics`(열거형 1~3개)와 `sourceType`(SEEN, HEARD_FROM_CHILD, UNSPECIFIED)만 자유대화 시작 내부 요청에 선택적으로 포함한다. 이름·연락처·사건 주장·임의 지시문을 담을 문자열 필드는 없다. 아이 기본 정보의 기존 childContext(이름·나이·관심사)는 유지한다.
 
 Realtime은 고정된 중립 질문으로 바꾸며 보호자의 주장을 아이가 말한 사실로 간주하지 않는다. 출처를 아이에게 노출하거나 답을 유도하지 않는다. 지원하지 않는 주제는 일상 질문으로 대체한다. 연습대화에는 이 guide를 전달하지 않는다. 대화 후 구조화는 개인정보를 정리한 원래 보호자 입력과 실제 아이 발화를 각각 사용하고, 출처와 발화 근거를 구분한다. 새 optional 필드 수신을 지원하는 Realtime을 Core보다 먼저 적용한다.
+
+
+### 개별 출력 폐기 감사 로그 (`OUTPUT_DISCARDED`)
+
+- `realtime/OutputGate`, INFO, 반복 병합 없음. 기존 `ownerHash`(세션 해시)·세션 `traceId`와 `seq`로 해당 AI 전사 행을 찾는다. `seq=0`은 아직 전사 행이 없는 취소다.
+- 허용 속성: `seq`, `discardReason`, `discardDetail`, `outputGeneration`, `deviceGeneration`, `currentDeviceGeneration`, `segmentComplete`, `audioBytes`, `transcriptChars`, `expectedChars`, `generatedSpeech`, `practicePhase`, `practiceSub`, `tProviderFirstOut`, `tTranscriptFinal`. 없는 자료는 생략한다.
+- `discardReason`은 기존 게이트 사유(무효화는 `VOIDED`), `discardDetail`은 `DiscardDetail`의 고정 코드다. `GATE_EMPTY`를 구간 불완전·빈 전사·음성 없음·홀수 PCM 길이·검사 예외로 구분한다. 대본 불일치, 금지 표현, 공급자 오류/음성 없음, 아이 입력에 의한 미재생 취소, Jev 차단/시간 초과/오류/무효화 및 전송 실패도 구분한다.
+- 판정 우선순위와 폐기·재시도·종료·Jev 정책은 변경하지 않는다. 음성·전사·승인 대본·보호자 메모·예외 메시지·원본 세션 UUID는 로그에 쓰지 않는다. 길이와 시간은 진단용이며 표시 승인이나 안전 검사 근거를 대신하지 않는다.
+- 연습 단계는 폐기를 관측한 시점이다. 제브 대기 중 보관된 구간은 보관 행의 `seq`를 사용해 뒤에 열린 AI 행과 혼동하지 않는다. 기존 기록에 소급해 사유를 추정하지 않는다.

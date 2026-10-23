@@ -33,6 +33,8 @@ public final class StructuredScenarioFlow {
         var aliases=deadline.call(executor,deadline.remaining(),()->privacy.require(session.guardianId(),session.childId()));
         var history=deadline.call(executor,historyTimeout,()->repository.recentExposed(session.guardianId(),session.childId(),started,deadline.limit(historyTimeout)));
         var original=goal.goalContext();
+        var continuity=deadline.call(executor,historyTimeout,()->repository.continuity(session.guardianId(),session.childId(),
+                goal.goalSelectionId(),started,deadline.limit(historyTimeout)));
         Map<String,Object> payload=new LinkedHashMap<>();
         payload.put("ageYears",account.ageYears());payload.put("interests",account.interests());
         var cleanGoal=original.mapContent(text->(String)sanitizer.sanitize(Map.of("text",text),aliases.aliases(),LunaPurpose.SCENARIO_GENERATION).payload().get("text"));
@@ -42,6 +44,9 @@ public final class StructuredScenarioFlow {
             semanticGoal.put("targetExpression",cleanGoal.targetExpression());semanticGoal.put("fourElements",cleanGoal.fourElements());
         }
         payload.put("goal",semanticGoal);
+        payload.put("practiceContinuity",continuity.supportHistory());
+        if(previous==null&&!continuity.childEvidence().isEmpty())payload.put("reflectionContext",
+                Map.of("source","CHILD_UTTERANCE","verifiedQuotes",continuity.childEvidence()));
         String opportunity=original.candidate()?original.fourElements().situation():definition.opportunityCondition();
         String relation=previous==null?goal.relationType():previous.scenario().relationType();
         if(!original.candidate()){
@@ -68,14 +73,15 @@ public final class StructuredScenarioFlow {
         if(previous!=null)sourceText=(String)((Map<?,?>)clean.get("sourceScenario")).get("scenarioText");
         var duplicate=new java.util.concurrent.atomic.AtomicBoolean();
         var rules=new ScenarioScriptValidation.Rules(cleanRelation,cleanOpportunity,cleanGoal.targetExpression(),aliases.originalNames(),
-                sourceText,fingerprint->{boolean seen=repository.seen(session.childId(),fingerprint);if(seen)duplicate.set(true);return seen;},knowledge);
+                sourceText,fingerprint->{boolean seen=repository.seen(session.childId(),fingerprint);if(seen)duplicate.set(true);return seen;},knowledge,
+                clean.containsKey("reflectionContext"));
         try{return generator.generate(new ScenarioScriptGenerator.Input(clean,aliases.aliases(),rules,knowledge.context().isPresent(),json.write(cleanGoal)),deadline);}
         catch(ScenarioScriptGenerator.ContentExhausted exhausted){exhausted.retryableDuplicate=duplicate.get();throw exhausted;}
     }
     static String graphRelation(String relation,String seedRelationship){
         if(seedRelationship==null||kr.mujoong.core.knowledge.KnowledgeSeed.RELATIONSHIPS.contains(relation))return relation;
         boolean equivalent=switch(relation){
-            case "친구" -> java.util.Set.of("FRIEND_CLOSE","FRIEND_CASUAL").contains(seedRelationship);
+            case "친구", "같이 놀 친구" -> java.util.Set.of("FRIEND_CLOSE","FRIEND_CASUAL").contains(seedRelationship);
             case "친한 친구" -> "FRIEND_CLOSE".equals(seedRelationship);
             case "반 친구", "같은 반 친구" -> "CLASSMATE".equals(seedRelationship);
             case "선생님", "교사" -> "TEACHER".equals(seedRelationship);

@@ -221,6 +221,9 @@ public interface PracticeSessionExtension {
         default boolean speakGenerated(UUID correlationId, String role, String instructionText) { return false; }
 
         /** '생각 중' 표시를 유지하거나(true) 풀도록(false) 요청한다. ACTIVE에서만 받는다. */
+        /** Executor owns drain, generation and collection deadlines; flow owns playback deadline. */
+        default boolean managesSpeechTimeouts() { return false; }
+
         default boolean setThinking(boolean on) { return false; }
     }
 
@@ -250,7 +253,19 @@ public interface PracticeSessionExtension {
     /** 실제 연습은 출력권을 소유하고, 무동작·기존 확장은 기존 경로를 유지한다. */
     default boolean controlsOutput() { return false; }
 
+    /** 안내 수집 중 일반 입력은 대화 턴을 열지 않는다. 입력 기록과 종료·휴식 처리는 실행기가 계속한다. */
+    default boolean collectingIntroduction() { return false; }
+    /** Whether an unplayed generated conversational response may yield to new child input without completing a task. */
+    default boolean canYieldUnplayedSpeech() { return false; }
+
     default Progress progress() { return null; }
+
+    /** Fixed state identifiers for operational diagnostics; no user/model text. */
+    /** Consumes correlated technical-audio recovery events. */
+    default boolean handlesAudioRecovery() { return false; }
+
+    default String diagnosticPhase() { return "NONE"; }
+    default String diagnosticSub() { return "NONE"; }
 
     default void onStopping() { }
 

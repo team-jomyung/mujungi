@@ -48,6 +48,26 @@ class ProviderClientIT {
     private static final JsonCodec JSON = JsonCodec.shared();
 
     @Test
+    void approvedPracticeSpeechReceivesItsOwnCommentaryAcknowledgmentOverTheRealWebSocketClient() throws Exception {
+        try (FakeProviderWsServer server = FakeProviderWsServer.start()) {
+            var client = new ProviderClient(server.uri(), TestSecrets.base64Url(24), JSON, Duration.ofSeconds(2));
+            var events = new CopyOnWriteArrayList<ProviderEvent>();
+            var factory = new ProviderRequestFactory();
+            try (var session = client.open(events::add, Duration.ofSeconds(2))) {
+                session.start(factory.sessionStart(new ChildContext("하늘", 8, List.of())));
+                awaitTrue(() -> events.stream().anyMatch(ProviderEvent.Started.class::isInstance), "session.started");
+                session.appendInstructions(factory.practiceInstruction("spoken-1", PracticeInstruction.forSpeech(
+                        PracticeSpeech.scenario(UUID.randomUUID(), UUID.randomUUID(), 0, "친구", "상황을 떠올려 봐."))));
+                server.await("session.commentary.append", 1, WAIT);
+                awaitTrue(() -> events.stream().anyMatch(e -> e instanceof ProviderEvent.InstructionsAppended ack
+                        && "spoken-1".equals(ack.clientEventId())), "commentary acknowledgment");
+                assertThat(events).noneMatch(ProviderEvent.Error.class::isInstance);
+                session.close(factory.sessionClose());
+            } finally { client.destroy(); }
+        }
+    }
+
+    @Test
     void theWireFormatRoundTripsEveryEventTypeAndSendsTheKeyOnlyAsABearerHeader() throws Exception {
         try (FakeProviderWsServer server = FakeProviderWsServer.start()) {
             ProviderClient client = new ProviderClient(server.uri(), TestSecrets.base64Url(24), JSON, Duration.ofSeconds(2));

@@ -12,6 +12,7 @@ export const PRACTICE_COPY = {
   steps: ["자유대화 탭에서 아이와 이야기해요", "기록 탭에서 그날 기록을 열어요", '"연습 목표" 칸에서 담기를 눌러요'],
   goFree: "자유대화 하러 가기",
   choose: "목표를 골라 주세요",
+  selectionLimit: "한 번에 최대 3개까지 고를 수 있어요. 처음에는 1개로 시작해 보세요.",
   undo: "되돌리기",
   favoriteIcon: "★",
   notFavoriteIcon: "☆",

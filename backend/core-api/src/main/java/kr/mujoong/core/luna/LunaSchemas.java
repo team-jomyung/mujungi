@@ -84,6 +84,7 @@ public final class LunaSchemas {
             }
             Map<String, Object> document = readDocument(json, reader, file);
             Map<String, Object> requestSchema = requestNode(document, json, reader, file);
+            if (purpose == LunaPurpose.GOAL_CANDIDATES) requireCandidateStructure(requestSchema);
             // 공급자는 최상위 anyOf를 받지 않는다. 공통 객체 모양은 전송하고,
             // APPROVE/reasons 같은 조건부 제약은 아래 원본 계약으로 반드시 재검사한다.
             if ("object".equals(requestSchema.get("type")) && requestSchema.containsKey("properties")) {
@@ -105,6 +106,21 @@ public final class LunaSchemas {
     /** 목적의 스키마 짝(출력 스키마가 없는 목적은 빈 값). */
     public Optional<OutputSchemaPair> pair(LunaPurpose purpose) {
         return Optional.ofNullable(pairs.get(purpose));
+    }
+
+    /** A request-only subset: optional graph metadata cannot turn into null or an invented graph. */
+    @SuppressWarnings("unchecked")
+    public Optional<OutputSchemaPair> pair(LunaPurpose purpose, Map<String, Object> input) {
+        var original = pair(purpose);
+        if (purpose != LunaPurpose.SCENARIO_GENERATION || original.isEmpty()) return original;
+        Map<String, Object> copy = json.read(json.write(original.get().requestSchema()), Map.class);
+        var root = (Map<String, Object>) copy.get("properties");
+        var scenes = (Map<String, Object>) root.get("scenes");
+        var scene = (Map<String, Object>) scenes.get("items");
+        var fields = (Map<String, Object>) scene.get("properties");
+        if (!input.containsKey("structureContext")) fields.remove("preservation");
+        scene.put("required", new ArrayList<>(fields.keySet()));
+        return Optional.of(new OutputSchemaPair(original.get().file(), copy, isStrict(copy)));
     }
 
     /**
@@ -142,6 +158,17 @@ public final class LunaSchemas {
     }
 
     // ------------------------------------------------------------------ 요청용 사본
+
+    /** Ask for an explicit abstraction decision without invalidating older stored/provider fixtures. */
+    @SuppressWarnings("unchecked")
+    private static void requireCandidateStructure(Map<String, Object> requestSchema) {
+        var properties = (Map<String, Object>) requestSchema.get("properties");
+        var candidates = (Map<String, Object>) properties.get("candidates");
+        var item = (Map<String, Object>) candidates.get("items");
+        var required = new ArrayList<>((List<String>) item.get("required"));
+        if (!required.contains("structureSignature")) required.add("structureSignature");
+        item.put("required", required);
+    }
 
     @SuppressWarnings("unchecked")
     private static Map<String, Object> requestNode(Map<String, Object> node, JsonCodec json, Function<String, String> reader,

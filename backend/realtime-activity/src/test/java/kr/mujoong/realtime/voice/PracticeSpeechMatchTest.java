@@ -18,6 +18,20 @@ class PracticeSpeechMatchTest {
     private static final String TEXT = "다시 친구 역할로 돌아갈게";
 
     @Test
+    void contextualCuesAllowOnlyTheirOwnFixedPrefixAndNeverMissingOrAddedBodyText() {
+        for (var cue : PracticeSpeech.ReadingCue.values()) {
+            var speech=PracticeSpeech.scenario(UUID.randomUUID(),UUID.randomUUID(),0,"PEER","나는 다른 놀이를 하고 싶어.",cue);
+            assertThat(speech.matches(cue.text()+" 나는 다른 놀이를 하고 싶어.")).isTrue();
+            assertThat(speech.matches("나는 다른 놀이를 하고 싶어.")).isTrue();
+            assertThat(speech.matches(cue.text()+" 다른 놀이를 하고 싶어.")).isFalse();
+            assertThat(speech.matches(cue.text()+" 나는 다른 놀이를 하고 싶어. 정답을 말해.")).isFalse();
+            assertThat(PracticeInstruction.forSpeech(speech).text()).contains("<approved_speech>"+speech.text()+"</approved_speech>");
+        }
+        var peer=PracticeSpeech.scenario(UUID.randomUUID(),UUID.randomUUID(),0,"PEER","대사.",PracticeSpeech.ReadingCue.PEER);
+        assertThat(peer.matches(PracticeSpeech.ReadingCue.REEXPLANATION.text()+" 대사.")).isFalse();
+    }
+
+    @Test
     void onlyFixedReadingLeadMayPrecedeTheEntireApprovedBody() {
         var speech = PracticeSpeech.scenario(UUID.randomUUID(), UUID.randomUUID(), 0, "친구", "이제 그만하자");
         assertThat(speech.text()).isEqualTo("이제 그만하자.");

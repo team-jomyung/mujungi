@@ -194,7 +194,8 @@ class LiveContentRegistryTest {
 
     private static String resource(String name) {
         try (var in = LiveContentRegistryTest.class.getClassLoader().getResourceAsStream(name)) {
-            return new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+            // Mutation fixtures use LF patterns; resource checkout line endings are not policy semantics.
+            return new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8).replace("\r\n", "\n");
         } catch (java.io.IOException e) {
             throw new java.io.UncheckedIOException(e);
         }

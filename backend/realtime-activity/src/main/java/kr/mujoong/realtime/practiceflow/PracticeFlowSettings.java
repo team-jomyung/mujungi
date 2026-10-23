@@ -21,7 +21,13 @@ import kr.mujoong.realtime.config.RealtimeTimingProperties;
  * @param reexplainMax 장면당 상황 다시 설명 최대 횟수
  */
 public record PracticeFlowSettings(Duration noResponseWait, Duration focusMax, Duration goalActiveLimit, Duration slotGuard,
-        int retryMax, int reexplainMax) {
+        int retryMax, int reexplainMax, boolean flexibleDialogue) {
+
+    /** Existing callers also get the flexible flow by default. The original scripted flow is explicit opt-in only. */
+    public PracticeFlowSettings(Duration noResponseWait, Duration focusMax, Duration goalActiveLimit, Duration slotGuard,
+            int retryMax, int reexplainMax) {
+        this(noResponseWait, focusMax, goalActiveLimit, slotGuard, retryMax, reexplainMax, true);
+    }
 
     public PracticeFlowSettings {
         positive(noResponseWait, "mujoong.timing.conversation.no-response-wait");
@@ -43,7 +49,7 @@ public record PracticeFlowSettings(Duration noResponseWait, Duration focusMax, D
         return new PracticeFlowSettings(conversation.noResponseWait(), conversation.focusMax(),
                 conversation.goalActiveLimit(), properties.timing().device().outputQueueMax(),
                 properties.practiceFlow().retryMax(),
-                properties.practiceFlow().reexplainMax());
+                properties.practiceFlow().reexplainMax(), true);
     }
 
     private static void positive(Duration value, String key) {

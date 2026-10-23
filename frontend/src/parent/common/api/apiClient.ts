@@ -44,6 +44,8 @@ export interface ApiRequest<T> {
   /** 상태 변경 요청이면 true(CSRF 면제 경로는 false). */
   readonly csrf: boolean;
   readonly signal?: AbortSignal;
+  /** A bounded endpoint-specific wait; ordinary requests retain the shared default. */
+  readonly timeoutMs?: number;
 }
 
 export type FetchLike = (input: string, init: RequestInit) => Promise<Response>;
@@ -83,7 +85,7 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
     const timer = setTimeout(() => {
       timedOut = true;
       controller.abort();
-    }, options.timeoutMs);
+    }, request.timeoutMs ?? options.timeoutMs);
     const onExternalAbort = () => controller.abort();
     request.signal?.addEventListener("abort", onExternalAbort);
 

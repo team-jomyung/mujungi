@@ -9,8 +9,9 @@ import kr.mujoong.contract.json.JsonCodec;
 import kr.mujoong.core.common.error.CoreApiException;
 
 public record PracticeStartRequest(UUID idempotencyKey, List<UUID> goalSelectionIds) {
+    public static final int MAX_GOALS = 3;
     public PracticeStartRequest {
-        if (idempotencyKey == null || goalSelectionIds == null || goalSelectionIds.isEmpty()
+        if (idempotencyKey == null || goalSelectionIds == null || goalSelectionIds.isEmpty() || goalSelectionIds.size() > MAX_GOALS
                 || goalSelectionIds.stream().anyMatch(java.util.Objects::isNull)
                 || new HashSet<>(goalSelectionIds).size() != goalSelectionIds.size()) {
             throw CoreApiException.of(ErrorCode.VALIDATION_FAILED);

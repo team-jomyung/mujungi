@@ -165,6 +165,8 @@ class PracticeFlowRouterTest {
         routed.onChildUtterance(new Utterance(1, Instant.EPOCH, "그거 줘", false, false), h.out);
         routed.onExtensionEvent(new ExtensionEvent(ExtensionEvent.Kind.JUDGMENT_RESULT, "judgment", h.out.lastJudgment().correlationId(),
                 Map.of("point", "J2", "firstOption", "FULL", "secondOption", "NONE")), h.out);
+        assertThat(h.recorder.only().endedAt()).isNull();
+        assertThat(routed.onExtensionEvent(playedEvent(h), h.out)).isEqualTo(Signal.LAST_GOAL);
 
         assertThat(routed.progress()).isNotNull();
         assertThat(routed.practiceRecord()).isNotNull();

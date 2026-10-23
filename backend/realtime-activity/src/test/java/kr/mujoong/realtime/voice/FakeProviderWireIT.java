@@ -77,9 +77,9 @@ class FakeProviderWireIT {
     }
 
     @Test
-    void everySupportedTypeIsAcceptedAndTheOperationalFourAreSupported() throws Exception {
+    void everySupportedTypeIsAcceptedAndTheOperationalFiveAreSupported() throws Exception {
         assertThat(FakeProviderWsServer.SUPPORTED_TYPES).containsAll(ProviderRequestFactory.SENT_TYPES).hasSize(15);
-        assertThat(ProviderRequestFactory.SENT_TYPES).hasSize(4).doesNotContain("response.create");
+        assertThat(ProviderRequestFactory.SENT_TYPES).hasSize(5).doesNotContain("response.create");
         try (FakeProviderWsServer server = FakeProviderWsServer.start()) {
             ProviderClient client = new ProviderClient(server.uri(), TestSecrets.base64Url(24), JSON, Duration.ofSeconds(2));
             List<ProviderEvent> events = new CopyOnWriteArrayList<>();

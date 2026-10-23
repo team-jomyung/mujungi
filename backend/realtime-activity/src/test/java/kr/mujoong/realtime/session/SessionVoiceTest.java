@@ -275,7 +275,7 @@ class SessionVoiceTest {
         assertThat(h.executor.status()).isEqualTo(SessionStatus.ACTIVE);
         assertThat(h.link.sent(CloseTransport.class)).isEmpty();
         assertThat(LogCapture.attrs(h.logs.last(EventCode.APP_ERROR).orElseThrow()))
-                .containsEntry("errorKind", "ProviderDisconnected");
+                .containsEntry("errorKind", "ProviderRateLimited");
     }
 
     @Test
