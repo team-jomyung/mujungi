@@ -1740,13 +1740,15 @@ class PracticeConversationTest {
         Slot coach = h.out.lastSlot();
         assertThat(coach.role()).isEqualTo("COACH");
         String text = coach.text();
+        // 4회차 R4: 세 마디만 짧게(첫째 · 둘째 · 셋째 대신 먼저 · 이어서 · 끝으로, 다른 말 덧붙이지 않기)
         assertThat(text).as("요점 → 대본의 빈칸 예문 글자 그대로 → 네 말로 해 볼래? 를 빠짐없이 이 순서로")
-                .contains("첫째, 요점을 쉬운 말 한 문장으로 말한다: 달라고 한 것과 받은 것이 같은지 보기",
-                        "둘째, 이 빈칸 예문을 '뭐뭐'까지 그대로 말하고 '처럼 말할 수 있어'를 붙인다: " + PracticeScriptFixtures.V7_FRAME,
-                        "셋째, 네 말로 해 볼래? 하고 묻는다", "요점과 빈칸 예문을 꼭 넣고", "'빈칸 예문'이라는 말은 소리 내어 하지 않는다")
+                .contains("세 마디만 짧게 말하고 덧붙이지 않는다",
+                        "먼저 요점을 쉬운 한 문장으로: 달라고 한 것과 받은 것이 같은지 보기",
+                        "이어서 빈칸 예문을 '뭐뭐'까지 그대로 말하고 '처럼 말할 수 있어'를 붙인다: " + PracticeScriptFixtures.V7_FRAME,
+                        "끝으로 '네 말로 해 볼래?'라고 묻는다", "요점과 빈칸 예문을 꼭 넣고", "'빈칸 예문'이라는 말은 소리 내어 하지 않는다")
                 .as("완성 예시는 지시문에 없다 — 빈칸은 core가 만든 것이다").doesNotContain("아니, 나 파란 상자 달라고 했어", "말틀");
-        assertThat(text.indexOf("첫째")).isLessThan(text.indexOf("둘째"));
-        assertThat(text.indexOf("둘째")).isLessThan(text.indexOf("셋째"));
+        assertThat(text.indexOf("먼저 요점")).isLessThan(text.indexOf("이어서 빈칸 예문"));
+        assertThat(text.indexOf("이어서 빈칸 예문")).isLessThan(text.indexOf("끝으로 '네 말로 해 볼래?'"));
         assertThat(h.recorder.helps).filteredOn(help -> help.kind() == HelpKind.FOCUS_HELP)
                 .extracting(PracticeFlowTypes.HelpRecord::exampleGiven).as("빈칸 예문도 표현 예시를 준 도움이다").containsExactly(true);
 
@@ -1756,7 +1758,7 @@ class PracticeConversationTest {
         h.played();
         assertThat(h.out.generatedSlots()).filteredOn(slot -> slot.role().equals("COACH")).last()
                 .satisfies(second -> assertThat(second.text()).as("다시 해 보기 뒤의 도움은 지금처럼 표현 예시 하나")
-                        .contains("표현 예시를 하나만 들어도 된다: 아니, 나 파란 상자 달라고 했어").doesNotContain("둘째"));
+                        .contains("표현 예시를 하나만 들어도 된다: 아니, 나 파란 상자 달라고 했어").doesNotContain("마디만"));
     }
 
     @Test
@@ -1770,7 +1772,7 @@ class PracticeConversationTest {
             assertThat(PracticeInstructions.frame(scene)).isEmpty();
             assertThat(PracticeInstructions.coachHelp(scene, RolePolicy.Example.FRAME))
                     .as("글자 그대로 넣을 수 없는 빈칸 예문은 쓰지 않고 표현 예시에서 빈칸을 만들게 한다")
-                    .contains("그대로 말하지 말고", "'뭐뭐'로 비운 빈칸 예문으로 바꿔 하나만 들어 준다").doesNotContain("둘째");
+                    .contains("그대로 말하지 말고", "'뭐뭐'로 비운 빈칸 예문으로 바꿔 하나만 들어 준다").doesNotContain("마디만");
         }
         assertThat(PracticeInstructions.coachHelp(base, RolePolicy.Example.NONE)).as("동의 전에는 빈칸 예문도 없다")
                 .contains("단서만 준다").doesNotContain(PracticeScriptFixtures.V7_FRAME);
@@ -1812,7 +1814,7 @@ class PracticeConversationTest {
         instructions.put("noticeCoach", PracticeInstructions.roleNotice("COACH", longest));
         instructions.put("noticePeer", PracticeInstructions.roleNotice("PEER", longest));
 
-        assertThat(instructions.get("coachFrameV7")).as("가장 긴 칸에서도 빈칸 예문 길로 간다").contains("둘째");
+        assertThat(instructions.get("coachFrameV7")).as("가장 긴 칸에서도 빈칸 예문 길로 간다").contains("세 마디만", "이어서 빈칸 예문");
         instructions.forEach((name, text) -> {
             assertThat(text.codePointCount(0, text.length())).as(name).isLessThanOrEqualTo(PracticeInstructions.MAX_LENGTH);
             assertThat(text).as(name + ": 생성형 말은 이모지 · 기호 · 괄호 없이 말로만(실측 F4)").contains(PracticeInstructions.VOICE_RULE);

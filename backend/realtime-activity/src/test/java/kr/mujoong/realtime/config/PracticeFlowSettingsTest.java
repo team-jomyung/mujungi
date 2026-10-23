@@ -40,6 +40,29 @@ class PracticeFlowSettingsTest {
         assertThat(settings.goalActiveLimit()).isEqualTo(Duration.ofMinutes(10));
     }
 
+    /**
+     * 4회차 R4: 재생 시작 전 슬롯 안전 시계는 새 숫자 없이 기존 키로 셈한다 — 대본 줄 음성 기다림 + (지시 미룸 + 확인 · 새 말 두 시한) × (처음 + 한 번 다시)
+     * + 구간 상한 + 봉인 조용 시간 + 제브 검사 한 번. 운영 기본값으로 69.6초이고, 재생 시작 뒤 시계(출력 상한 20초)보다 길다.
+     */
+    @Test
+    void theStartGuardIsComputedFromExistingKeysAndCoversADeferredAttemptAResendAndTheGeneration() {
+        RealtimeProperties properties = ConfigKeyContractTest.bind(APPLICATION_YML);
+        RealtimeTimingProperties timing = properties.timing();
+
+        PracticeFlowSettings settings = PracticeFlowSettings.from(properties);
+
+        Duration attempt = timing.provider().instructionDeferMax().plus(timing.judgment().responseReady().multipliedBy(2));
+        assertThat(settings.slotStartGuard()).isEqualTo(timing.speechClip().readyWait().plus(attempt.multipliedBy(2))
+                .plus(timing.device().outputQueueMax()).plus(properties.gate().segmentQuiet()).plus(timing.guardrail().jevBudget()));
+        assertThat(settings.slotStartGuard()).as("운영 기본값").isEqualTo(Duration.ofMillis(69_600));
+        assertThat(settings.slotStartGuard()).isGreaterThan(settings.slotGuard());
+        assertThat(new PracticeFlowSettings(Duration.ofSeconds(10), Duration.ofSeconds(90), Duration.ofMinutes(10), Duration.ofSeconds(20), 2, 1)
+                .slotStartGuard()).as("옛 6인자 모양은 시작 전 시계도 같은 길이").isEqualTo(Duration.ofSeconds(20));
+        Duration ten = Duration.ofSeconds(10);
+        assertThatThrownBy(() -> new PracticeFlowSettings(ten, ten, ten, ten, 2, 1, Duration.ZERO))
+                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("output-queue-max");
+    }
+
     @Test
     void theAiIoTableListsBothCountKeysWithTheSameDefaults() throws IOException {
         String doc = Files.readString(AI_IO_MD, StandardCharsets.UTF_8);

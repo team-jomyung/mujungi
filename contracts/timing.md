@@ -233,6 +233,8 @@ U8(계약 · 버전 리소스)이 더한 키다. 새 연습 흐름 키는 12절 
 | `mujoong.timing.conversation.goal-active-limit` | `10m` | realtime | 목표 하나의 진행 상한(U12) | FR4.5 |
 | `mujoong.timing.knowledge.graph-budget` | `2s` | core-api | 지식 그래프 조회 한 번의 상한. 넘기면 빈 응답(U15) | FR9.5 |
 
+새 연습 흐름의 슬롯 안전 시계(`slot-guard-<correlationId>` · `slot-guard-notice`, 끝 사실이 끝내 오지 않는 슬롯을 실패로 닫는 안전망)는 새 키를 만들지 않고 기존 키로 정한다(4회차 R4). 재생이 시작되기 전에는 `speech-clip.ready-wait` + 2 × (`provider.instruction-defer-max` + 2 × `judgment.response-ready`) + `device.output-queue-max` + `mujoong.gate.segment-quiet` + `guardrail.jev-budget`(운영 기본값으로 69.6초 — 대본 줄 음성 기다림, 지시 미룸 · 확인 사건 없음 · 새 말 없음 시한을 처음 보냄과 한 번 다시 보냄에 두 번, 구간 상한까지 이어진 새 말과 봉인 조용 시간, 제브 검사 한 번)이고, 재생이 시작되면(STARTED) `device.output-queue-max`(20초, 한 줄의 재생 상한)로 다시 건다. 제브 첫 막힘 뒤 재지시 경로는 이 셈에 넣지 않았다.
+
 ## 14. U11 공급자 출력 세대 · 입력 전사 묶음
 
 U11(선 형식 정비)이 더한 키다. 공급자 실호출에는 응답 id도 응답 취소 type도 응답 끝 · 말 끝 · 입력 전사 완료 사건도 없다(편차 (U11-a)). 그래서 서버가 출력 세대를 올려 앞 조각을 버리고, 지시를 보낸 뒤 새 말의 시작은 지시 확인 사건의 `end_ms`와 출력 전사의 `start_ms`(전사 시간선)로 정하며, 아이 말은 입력 전사 조각을 묶어 일정 시간 조용하면 확정한다. 지시 없이 세대만 올린 경우의 끊김 확인은 기존 `mujoong.gate.segment-quiet` 800ms(4절)를 쓴다. 화면이 읽지 않는 서버 키라 `frontend/src/shared/timing/timing-defaults.json`에는 넣지 않는다 — R-M5의 '세 곳'은 이 표 · 소유 앱 `application.yml` · 설정 레코드(`RealtimeProperties.ProviderTiming`)다. 앞의 두 값은 실호출 3회 관측에 기댄 **임시값**이고 Build and Test 실호출로 확정한다. 4회차 R2가 연습 발화 지시를 미루는 상한(`instruction-defer-max`)을 더했다.

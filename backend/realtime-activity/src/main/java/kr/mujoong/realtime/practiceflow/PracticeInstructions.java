@@ -106,8 +106,9 @@ final class PracticeInstructions {
      * 코치 도움 발화(D_FOCUS). 아이가 동의 · 요청한 뒤에만 표현 예시를 든다({@link RolePolicy#example}).
      *
      * <ul>
-     *   <li>첫 도움(FRAME), 판 v7 대본(빈칸 예문이 있다): 요점 → 글자 그대로의 빈칸 예문 + '처럼 말할 수 있어' → '네 말로 해 볼래?' 세 가지를 이
-     *       순서로 빠짐없이 말하게 한다(실측 F5, 기준 연습 대화의 코치 줄). 빈칸은 core가 만든 것이라 GPT-Live가 정답 낱말을 고르지 않는다.
+     *   <li>첫 도움(FRAME), 판 v7 대본(빈칸 예문이 있다): 짧은 요점 한 문장 → 글자 그대로의 빈칸 예문 + '처럼 말할 수 있어' → '네 말로 해 볼래?' 세
+     *       마디만 이 순서로, 다른 말 없이 짧게 말하게 한다(실측 F5 · 4회차 R4 B4, 기준 연습 대화의 코치 줄, AI 동작 명세 §3.1 D_FOCUS '세 문장 이내').
+     *       빈칸은 core가 만든 것이라 GPT-Live가 정답 낱말을 고르지 않는다.
      *   <li>첫 도움(FRAME), 옛 대본(빈칸 예문 없음): 요점 하나, 표현 예시의 핵심 낱말 자리를 '뭐뭐'로 비운 빈칸 예문 하나를 GPT-Live가 만들어 들어
      *       준다(표현 예시를 그대로 말하지 않는다), 마지막에 아이 말로 해 보자고 한다.
      *   <li>다시 해 보기 뒤(FULL): 표현 예시 하나. 동의가 없거나(NONE) 대본에 표현 예시가 없으면 단서만 준다.
@@ -120,12 +121,14 @@ final class PracticeInstructions {
         String frame = frame(scene);
         boolean framed = example == RolePolicy.Example.FRAME && !sample.isEmpty();
         if (framed && !frame.isEmpty()) {
-            text.append("이 순서로 꼭 말한다. ");
+            // 4회차 R4(실측 B4): 도움 말이 10 ~ 13초로 길어 들리는 도중에 슬롯 시계가 끝났다. 짧은 마디 몇 개만 말하고 덧붙이지 않게 한다(가장 긴 칸에서도
+            // 지시문 상한 안에 끝의 금지 규칙이 남는 길이다)
+            text.append(focus.isEmpty() ? "두" : "세").append(" 마디만 짧게 말하고 덧붙이지 않는다. ");
             if (!focus.isEmpty()) {
-                text.append("첫째, 요점을 쉬운 말 한 문장으로 말한다: ").append(focus).append(". ");
+                text.append("먼저 요점을 쉬운 한 문장으로: ").append(focus).append(". ");
             }
-            text.append("둘째, 이 빈칸 예문을 '뭐뭐'까지 그대로 말하고 '처럼 말할 수 있어'를 붙인다: ").append(frame).append(". ")
-                    .append("셋째, 네 말로 해 볼래? 하고 묻는다. ").append(FRAME_RULE).append(' ');
+            text.append("이어서 빈칸 예문을 '뭐뭐'까지 그대로 말하고 '처럼 말할 수 있어'를 붙인다: ").append(frame).append(". ")
+                    .append("끝으로 '네 말로 해 볼래?'라고 묻는다. ").append(FRAME_RULE).append(' ');
         } else {
             if (!focus.isEmpty()) {
                 text.append("이 요점 하나만 쉬운 말로 짧게 알려 준다: ").append(focus).append(". ");

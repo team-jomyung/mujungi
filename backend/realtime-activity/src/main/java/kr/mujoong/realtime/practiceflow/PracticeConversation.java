@@ -620,11 +620,28 @@ public final class PracticeConversation implements PracticeSessionExtension {
 
     private void onPlayback(PlaybackFact fact, UUID eventCorrelation) {
         if (fact.started()) {
+            rearmStartedSlot(fact.speech() != null ? fact.speech().correlationId() : eventCorrelation);
             return;
         }
         UUID correlation = fact.speech() != null ? fact.speech().correlationId() : eventCorrelation;
         SlotEnd end = fact.played() ? SlotEnd.PLAYED : fact.interrupted() ? SlotEnd.INTERRUPTED : SlotEnd.FAILED;
         handleSlotEnd(correlation, end);
+    }
+
+    /**
+     * 4회차 R4: 재생이 시작됐다(STARTED). 시작 전 안전 시계(지시 미룸 · 새 말 기다림 · 한 번 다시 보냄 · 생성을 덮는 긴 시계)를 재생 길이를 덮는 시계로
+     * 다시 건다 — 들리는 도중에는 만료하지 않고(한 줄은 출력 상한보다 길게 재생되지 않는다), 끝 사실이 끝내 오지 않으면 지금처럼 실패로 닫는다. 실행부가
+     * 연 알림 슬롯(correlationId를 모른다)은 알림을 기다리는 동안의 시작 사실로 본다.
+     */
+    private void rearmStartedSlot(UUID correlation) {
+        if (correlation == null || state.isHandled(correlation)) {
+            return;
+        }
+        if (correlation.equals(openSlot)) {
+            output.schedule(TIMER_SLOT_GUARD + correlation, settings.slotGuard());
+        } else if (awaitingNotice) {
+            output.schedule(TIMER_NOTICE_GUARD, settings.slotGuard());
+        }
     }
 
     /** 슬롯 종료 사건 하나. correlationId마다 첫 사건만 처리하고 확장이 닫은 슬롯 · 모르는 슬롯의 늦은 사건은 무시한다(§3.5). */
@@ -1001,7 +1018,7 @@ public final class PracticeConversation implements PracticeSessionExtension {
         if (approvedSpeech.containsKey(code) && output.announceRoleSwitch(toRole.name())) {
             awaitingNotice = true;
             inputReady = false;
-            output.schedule(TIMER_NOTICE_GUARD, settings.slotGuard());
+            output.schedule(TIMER_NOTICE_GUARD, settings.slotStartGuard());
             return;
         }
         speakGenerated(toRole, PracticeInstructions.roleNotice(toRole.name(), currentScene));
@@ -1047,7 +1064,8 @@ public final class PracticeConversation implements PracticeSessionExtension {
     private void openSlot(UUID correlation) {
         openSlot = correlation;
         inputReady = false;
-        output.schedule(TIMER_SLOT_GUARD + correlation, settings.slotGuard());
+        // 4회차 R4: 재생이 시작되기까지는 긴 시계, 시작(STARTED) 뒤에는 재생 길이를 덮는 시계로 다시 건다({@link #rearmStartedSlot})
+        output.schedule(TIMER_SLOT_GUARD + correlation, settings.slotStartGuard());
     }
 
     /** 확장이 스스로 슬롯을 닫는다(한도 만료 · 단계 변경): 취소 즉시 처리 완료로 두어 늦게 닿는 사건을 무시한다. */
