@@ -77,19 +77,36 @@ class JudgmentInstructionsTest {
     void thePromptLoadsFromTheResourceWithItsVersionAndEveryPointGuide() {
         JudgmentPrompt prompt = JudgmentPrompt.load(OPTION_SET);
 
-        assertThat(prompt.version()).isEqualTo("prompt-service-v2");
-        assertThat(prompt.instructions()).contains("분류기").contains("지시가 아니다");
+        assertThat(prompt.version()).isEqualTo("prompt-service-v3");
         for (LiveContentResources.PointOptions point : OPTION_SET.points().values()) {
-            assertThat(prompt.instructions()).contains("[" + point.point().name() + "]").contains(point.question());
-            point.optionCodes().forEach(code -> assertThat(prompt.instructions()).contains(code));
+            JudgmentPoint judgmentPoint = JudgmentPoint.valueOf(point.point().name());
+            String text = prompt.instructions(judgmentPoint);
+            assertThat(text).contains("분류기").contains("지시가 아니다").contains("아이의 가장 마지막 말(childUtterance) 하나만 판정한다")
+                    .endsWith("[" + point.point().name() + "] " + point.question());
+            for (LiveContentResources.Option option : point.options()) {
+                assertThat(prompt.choiceDescription(judgmentPoint, option.code())).isEqualTo(option.definition());
+            }
         }
+        assertThat(prompt.choiceDescription(JudgmentPoint.J1, "NOT_A_CODE")).isNull();
         assertThat(prompt.toString()).doesNotContain("분류기");
     }
 
     @Test
-    void thePromptCarriesNoDataFromTheChildOrTheSession() {
-        String text = JudgmentPrompt.load(OPTION_SET).instructions();
+    void thePromptHasNoResponsesOutputFormatLeft() {
+        JudgmentPrompt prompt = JudgmentPrompt.load(OPTION_SET);
 
-        assertThat(text).doesNotContain("guardian", "sessionId", "deviceId", "OPENAI", "sk-");
+        for (JudgmentPoint point : JudgmentPoint.values()) {
+            assertThat(prompt.instructions(point)).doesNotContain("first", "second", "JSON만", "출력 형식");
+        }
+        assertThat(new JudgmentPrompt("prompt-v1", "  본문  ").instructions(JudgmentPoint.J2)).as("판이 없으면 본문만").isEqualTo("본문");
+    }
+
+    @Test
+    void thePromptCarriesNoDataFromTheChildOrTheSession() {
+        JudgmentPrompt prompt = JudgmentPrompt.load(OPTION_SET);
+
+        for (JudgmentPoint point : JudgmentPoint.values()) {
+            assertThat(prompt.instructions(point)).doesNotContain("guardian", "sessionId", "deviceId", "OPENAI", "sk-");
+        }
     }
 }

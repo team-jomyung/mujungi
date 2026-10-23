@@ -1,15 +1,27 @@
 package kr.mujoong.realtime.luna;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
+import java.net.URI;
+import java.net.http.HttpHeaders;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
+import kr.mujoong.contract.json.JsonCodec;
 import kr.mujoong.contract.log.EventCode;
 import kr.mujoong.realtime.observability.EventLogger;
 import kr.mujoong.realtime.observability.RealtimeMetrics;
@@ -25,8 +37,8 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 /**
- * Realtime Decisions 호출 (FT-1023-d). Responses 호출과 같은 단계(정리 · 스키마 · 시한 · 보내기 전 거절 · 분류 · {@code LUNA_CALL})를 지나는지와
- * Decisions 본문 · 응답 검증을 본다. 공급자는 {@link LunaDecisionsStub} 루프백 대역, 키는 가짜 문자열, 입력은 합성 값이다(R-F1 · R-F3). 증거
+ * Realtime 판정 호출 — Decisions API (U9 BR1.6 · BR2.4 · BR2.5 · BR3.1 · BR4.1 ~ BR4.4 · BR5.1 · BR6.1 · BR6.2 · NFR3.3 · NFR3.5,
+ * FT-1023-d). 정리 · 요청 스키마 · 시한 · 보내기 전 거절 · 전송 · 분류 · {@code LUNA_CALL} 단계와 Decisions 본문 · 응답 검증, 전송 계층 규칙을 본다. 공급자는 {@link LunaDecisionsStub} 루프백 대역, 키는 가짜 문자열, 입력은 합성 값이다(R-F1 · R-F3). 증거
  * 종류: 테스트 대역(R-M11) — 공식 문서 형식 기준이며 실공급자 성공이 아니다.
  */
 @Tag("luna")
@@ -58,7 +70,7 @@ class RealtimeLunaDecisionsTest {
     }
 
     private LunaRequest request(Map<String, Object> input, Map<String, String> aliases) {
-        return new LunaRequest(LunaPurpose.JUDGMENT_LIVE, "prompt-v1.decisions-v1", "아이의 가장 마지막 말 하나만 판정한다.", input, aliases,
+        return new LunaRequest(LunaPurpose.JUDGMENT_LIVE, "prompt-service-v3", "아이의 가장 마지막 말 하나만 판정한다.", input, aliases,
                 clock.now().plusSeconds(10));
     }
 
@@ -109,7 +121,7 @@ class RealtimeLunaDecisionsTest {
         assertThat(decision.probabilities()).extracting(LunaDecision.Probability::value).containsExactlyElementsOf(OPTIONS);
         assertThat(decision.probabilities().getFirst().probability()).isEqualTo(0.8);
         assertThat(decision.responseModel()).isEqualTo(MODEL);
-        assertThat(decision.promptVersion()).isEqualTo("prompt-v1.decisions-v1");
+        assertThat(decision.promptVersion()).isEqualTo("prompt-service-v3");
         assertThat(decision.toString()).isEqualTo("LunaDecision[redacted]");
 
         LunaResponsesStub.RecordedRequest sent = stub.requests().getFirst();
@@ -137,7 +149,7 @@ class RealtimeLunaDecisionsTest {
                 .containsExactly("judgmentPoint", "optionSetVersion", "options", "childUtterance", "recentTurns", "criteria");
         assertThat(LogCapture.attrs(capture.events(EventCode.LUNA_CALL).getFirst()))
                 .containsEntry("lunaPurpose", "JUDGMENT_LIVE").containsEntry("lunaOutcome", "OK").containsEntry("attempt", 1)
-                .containsEntry("promptVersion", "prompt-v1.decisions-v1")
+                .containsEntry("promptVersion", "prompt-service-v3")
                 .containsEntry("sentFields", "judgmentPoint,optionSetVersion,options,childUtterance,recentTurns,criteria")
                 .doesNotContainKey("responseModel");
         assertThat(capture.anyLineContains("그거 줘.")).isFalse();
@@ -162,6 +174,7 @@ class RealtimeLunaDecisionsTest {
         noProbabilities.put("choice", "FULL");
         List<Reply> replies = List.of(
                 Reply.status(500), Reply.rateLimited(1), Reply.status(401), Reply.status(403), Reply.status(400),
+                Reply.status(302).withHeader("Location", "https://x.invalid/"),
                 Reply.json(200, "<html>"),
                 Reply.answers(MODEL, List.of()),
                 Reply.refusal(MODEL, NAME),
@@ -175,6 +188,7 @@ class RealtimeLunaDecisionsTest {
         List<LunaFailureReason> expected = List.of(
                 LunaFailureReason.SERVER_ERROR, LunaFailureReason.RATE_LIMITED, LunaFailureReason.AUTH_FAILED,
                 LunaFailureReason.AUTH_FAILED, LunaFailureReason.REQUEST_REJECTED,
+                LunaFailureReason.REQUEST_REJECTED,
                 LunaFailureReason.SERVER_ERROR,
                 LunaFailureReason.EMPTY_OUTPUT,
                 LunaFailureReason.REFUSED,
@@ -228,7 +242,7 @@ class RealtimeLunaDecisionsTest {
         Map<String, Object> extra = new LinkedHashMap<>(RealtimeLunaTestFixtures.judgmentInput("x"));
         extra.put("guardianNote", "보호자 메모");
         extra.put("unknownField", "x");
-        LunaRequest expired = new LunaRequest(LunaPurpose.JUDGMENT_LIVE, "prompt-v1.decisions-v1", "i",
+        LunaRequest expired = new LunaRequest(LunaPurpose.JUDGMENT_LIVE, "prompt-service-v3", "i",
                 RealtimeLunaTestFixtures.judgmentInput("x"), Map.of(), clock.now());
         RealtimeLunaClient strictHost = new RealtimeLunaClient(RealtimeLunaTestFixtures.properties(stub.baseUrl()), Duration.ofSeconds(2),
                 LunaSchemas.loadDefault(RealtimeLunaTestFixtures.JSON), new LunaInputSanitizer(RealtimeLunaTestFixtures.JSON),
@@ -237,9 +251,16 @@ class RealtimeLunaDecisionsTest {
                 LunaSchemas.loadDefault(RealtimeLunaTestFixtures.JSON), new LunaInputSanitizer(RealtimeLunaTestFixtures.JSON),
                 new LunaTransport(stub.baseUrl(), LunaHosts.Mode.TEST, () -> " ", 1000), events, clock, RealtimeLunaTestFixtures.JSON);
 
+        Map<String, Object> broken = new LinkedHashMap<>();
+        broken.put("x", new RealtimeLunaInputAndSchemaTest.Unserializable());
+
         assertThat(failure(client.decide(request(extra, Map.of()), question()).toCompletableFuture()).reason())
-                .isEqualTo(LunaFailureReason.FORBIDDEN_INPUT);
-        assertThat(failure(client.decide(expired, question()).toCompletableFuture()).reason()).isEqualTo(LunaFailureReason.TIMEOUT);
+                .as("요청 스키마 위반(additionalProperties false)").isEqualTo(LunaFailureReason.FORBIDDEN_INPUT);
+        assertThat(failure(client.decide(request(broken, Map.of()), question()).toCompletableFuture()).reason())
+                .as("직렬화할 수 없는 입력").isEqualTo(LunaFailureReason.FORBIDDEN_INPUT);
+        LunaException noTime = failure(client.decide(expired, question()).toCompletableFuture());
+        assertThat(noTime.reason()).isEqualTo(LunaFailureReason.TIMEOUT);
+        assertThat(noTime.attemptsUsed()).as("검토 R-04: 보내지 않았으면 0").isZero();
         assertThat(failure(strictHost.decide(request(), question()).toCompletableFuture()).reason())
                 .isEqualTo(LunaFailureReason.REQUEST_REJECTED);
         assertThat(failure(noKey.decide(request(), question()).toCompletableFuture()).reason()).isEqualTo(LunaFailureReason.AUTH_FAILED);
@@ -247,18 +268,112 @@ class RealtimeLunaDecisionsTest {
                 .as("준비 중 예기치 못한 오류도 던지지 않는다").isEqualTo(LunaFailureReason.FORBIDDEN_INPUT);
 
         assertThat(stub.requestCount()).isZero();
-        assertThat(capture.events(EventCode.LUNA_CALL)).hasSize(4)
+        assertThat(capture.events(EventCode.LUNA_CALL)).hasSize(5)
                 .allSatisfy(line -> assertThat(LogCapture.attrs(line)).containsEntry("attempt", 0));
         assertThat(capture.anyLineContains("보호자 메모")).isFalse();
     }
 
     @Test
-    void theDecisionsEndpointSharesTheBaseUrlAndHostRules() {
-        LunaTransport transport = RealtimeLunaTestFixtures.transport(stub.baseUrl(), LunaHosts.Mode.TEST);
+    void anUnexpectedRuntimeErrorBeforeSendingBecomesAFailedStageInsteadOfAThrow() {
+        LunaSchemas broken = mock(LunaSchemas.class);
+        when(broken.isValidRequest(any(), any())).thenThrow(new IllegalStateException("합성 입력 본문이 담긴 메시지"));
+        RealtimeLunaClient fragile = new RealtimeLunaClient(RealtimeLunaTestFixtures.properties(stub.baseUrl()), Duration.ofSeconds(2),
+                broken, new LunaInputSanitizer(JsonCodec.shared()), RealtimeLunaTestFixtures.transport(stub.baseUrl(),
+                LunaHosts.Mode.TEST), events, clock, JsonCodec.shared());
 
-        assertThat(transport.endpoint(LunaTransport.Endpoint.DECISIONS).toString()).isEqualTo(stub.baseUrl() + "/decisions");
-        assertThat(transport.endpoint().toString()).isEqualTo(stub.baseUrl() + "/responses");
-        assertThat(RealtimeLunaTestFixtures.transport(stub.baseUrl(), LunaHosts.Mode.STRICT)
-                .rejectBeforeSend(LunaTransport.Endpoint.DECISIONS, Duration.ofSeconds(1))).contains(LunaFailureReason.REQUEST_REJECTED);
+        AtomicReference<CompletionStage<LunaDecision>> returned = new AtomicReference<>();
+        assertThatCode(() -> returned.set(fragile.decide(request(), question()))).as("검토 R-05: 호출 스레드로 던지지 않는다")
+                .doesNotThrowAnyException();
+        LunaException failure = failure(returned.get().toCompletableFuture());
+
+        assertThat(failure.reason()).isEqualTo(LunaFailureReason.FORBIDDEN_INPUT);
+        assertThat(failure.attemptsUsed()).isZero();
+        assertThat(failure.getMessage()).doesNotContain("합성 입력");
+        assertThat(stub.requestCount()).isZero();
+        assertThat(capture.events(EventCode.APP_ERROR)).singleElement()
+                .satisfies(line -> assertThat(LogCapture.attrs(line)).containsEntry("errorKind", "IllegalStateException"));
+        assertThat(capture.anyLineContains("합성 입력")).isFalse();
+
+        assertThat(failure(client.decide(null, question()).toCompletableFuture()).reason()).as("null 요청도 실패 완료")
+                .isEqualTo(LunaFailureReason.FORBIDDEN_INPUT);
+        EventLogger failingLog = mock(EventLogger.class);
+        doThrow(new IllegalStateException("기록 실패 대역")).when(failingLog).appError(any(), any(Throwable.class));
+        RealtimeLunaClient silent = RealtimeLunaTestFixtures.client(stub.baseUrl(), Duration.ofSeconds(2), failingLog, clock);
+        assertThat(failure(silent.decide(null, question()).toCompletableFuture()).reason()).as("기록이 실패해도 던지지 않는다")
+                .isEqualTo(LunaFailureReason.FORBIDDEN_INPUT);
+    }
+
+    @Test
+    void auditLinesCarryOnlyTheAllowedAttributesAndNeverTheBodyOrKey() {
+        stub.respond(Reply.choice("gpt-6-luna-judge-2026", NAME, "FULL", probabilities(0.8, 0.1, 0.04, 0.03, 0.02, 0.01)),
+                Reply.json(200, "{\"model\":\"m\",\"secretText\":\"대역 본문 문장\",\"answers\":[]}"));
+
+        client.decide(request(RealtimeLunaTestFixtures.judgmentInput("민감한 합성 전사"), Map.of()), question()).toCompletableFuture()
+                .join();
+        failure(client.decide(request(), question()).toCompletableFuture());
+
+        assertThat(capture.anyLineContains("민감한 합성 전사")).isFalse();
+        assertThat(capture.anyLineContains("대역 본문 문장")).isFalse();
+        assertThat(capture.anyLineContains(RealtimeLunaTestFixtures.FAKE_KEY)).isFalse();
+        assertThat(capture.events(EventCode.LUNA_CALL)).allSatisfy(line -> assertThat(LogCapture.attrs(line).keySet()).isSubsetOf(
+                "lunaPurpose", "lunaOutcome", "model", "responseModel", "promptVersion", "sentFields", "latencyMs", "attempt"));
+        assertThat(LogCapture.attrs(capture.events(EventCode.LUNA_CALL).getFirst()))
+                .containsEntry("responseModel", "gpt-6-luna-judge-2026");
+        assertThat(capture.events(EventCode.LUNA_CALL).get(1).get("level")).isEqualTo("WARN");
+    }
+
+    @Test
+    void theTransportSendsOnlyToTheDecisionsEndpointRefusesForeignHostsAndOversizedBodies() throws Exception {
+        try (LunaDecisionsStub big = LunaDecisionsStub.start()) {
+            // 전송 계층만 보는 시험이라 요청 본문은 최소 모양("{}")이다. 요청 검사는 호출부 시험이 본다
+            big.withoutRequestCheck().respond(Reply.json(200, "{\"pad\":\"" + "x".repeat(1_100_000) + "\"}"));
+            LunaTransport strict = RealtimeLunaTestFixtures.transport(big.baseUrl(), LunaHosts.Mode.STRICT);
+            LunaTransport test = RealtimeLunaTestFixtures.transport(big.baseUrl(), LunaHosts.Mode.TEST);
+            LunaTransport noKey = new LunaTransport(big.baseUrl(), LunaHosts.Mode.TEST, () -> null, 10);
+
+            assertThat(test.endpoint().toString()).isEqualTo(big.baseUrl() + "/decisions");
+            assertThat(reason(strict.send("{}", Duration.ofSeconds(1)))).isEqualTo(LunaFailureReason.REQUEST_REJECTED);
+            assertThat(reason(noKey.send("{}", Duration.ofSeconds(1)))).isEqualTo(LunaFailureReason.AUTH_FAILED);
+            assertThat(reason(test.send("{}", Duration.ZERO))).isEqualTo(LunaFailureReason.TIMEOUT);
+            assertThat(strict.rejectBeforeSend(Duration.ofSeconds(1))).contains(LunaFailureReason.REQUEST_REJECTED);
+            assertThat(test.rejectBeforeSend(Duration.ZERO)).contains(LunaFailureReason.TIMEOUT);
+            assertThat(big.requestCount()).isZero();
+            assertThat(reason(test.send("{}", Duration.ofSeconds(10)))).isEqualTo(LunaFailureReason.LENGTH_EXCEEDED);
+            assertThat(big.requests().getFirst().path()).isEqualTo(LunaDecisionsStub.PATH);
+            assertThat(big.requests().getFirst().header("authorization")).isEqualTo("Bearer " + RealtimeLunaTestFixtures.FAKE_KEY);
+        }
+        LunaTransport closed = RealtimeLunaTestFixtures.transport(URI.create("http://127.0.0.1:9/v1/"), LunaHosts.Mode.TEST);
+        assertThat(closed.endpoint().toString()).isEqualTo("http://127.0.0.1:9/v1/decisions");
+        assertThat(reason(closed.send("{}", Duration.ofSeconds(5)))).isEqualTo(LunaFailureReason.TRANSPORT_ERROR);
+        assertThat(LunaTransport.retryAfter(HttpHeaders.of(Map.of("Retry-After", List.of("3")), (a, b) -> true)))
+                .contains(Duration.ofSeconds(3));
+        assertThat(LunaTransport.retryAfter(HttpHeaders.of(Map.of("Retry-After", List.of("soon")), (a, b) -> true))).isEmpty();
+        assertThatThrownBy(() -> new LunaTransport(URI.create("http://127.0.0.1/v1"), LunaHosts.Mode.TEST, () -> "k", 0))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThat(new LunaTransport.RawResponse(200, "본문", Optional.empty()).toString()).doesNotContain("본문");
+    }
+
+    @Test
+    void recordsValidateTheirValues() {
+        assertThatThrownBy(() -> new LunaRequest(LunaPurpose.JUDGMENT_LIVE, "v 1", "i", Map.of(), Map.of(), clock.now()))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new LunaRequest(LunaPurpose.JUDGMENT_LIVE, "v1", "", Map.of(), Map.of(), clock.now()))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThat(new LunaRequest(LunaPurpose.JUDGMENT_LIVE, "v1", "i", Map.of(), null, clock.now()).toString())
+                .isEqualTo("LunaRequest[redacted]");
+        assertThatThrownBy(() -> new LunaException(LunaFailureReason.TIMEOUT, 2)).isInstanceOf(IllegalArgumentException.class);
+        assertThat(LunaFailureReason.SERVER_ERROR.isTransient()).isTrue();
+        assertThat(LunaFailureReason.AUTH_FAILED.isTransient()).isFalse();
+    }
+
+    private static LunaFailureReason reason(CompletableFuture<LunaTransport.RawResponse> future) {
+        try {
+            future.get(WAIT.toSeconds(), TimeUnit.SECONDS);
+        } catch (ExecutionException e) {
+            return ((LunaException) e.getCause()).reason();
+        } catch (Exception e) {
+            throw new AssertionError(e);
+        }
+        throw new AssertionError("실패해야 한다");
     }
 }

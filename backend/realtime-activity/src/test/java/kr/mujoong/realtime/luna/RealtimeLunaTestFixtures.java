@@ -13,7 +13,7 @@ import kr.mujoong.contract.json.JsonCodec;
 import kr.mujoong.realtime.observability.EventLogger;
 
 /**
- * U9 realtime 시험 공용 준비물(시험 소스 전용). 공급자는 언제나 {@code LunaResponsesStub} 루프백 대역이고 키는 가짜 문자열이다(R-F1 · R-F3).
+ * U9 realtime 시험 공용 준비물(시험 소스 전용). 공급자는 언제나 {@code LunaDecisionsStub} 루프백 대역이고 키는 가짜 문자열이다(R-F1 · R-F3).
  * 판정 요청 입력은 합성 값이다(실제 아동 데이터 아님).
  */
 final class RealtimeLunaTestFixtures {
@@ -26,9 +26,7 @@ final class RealtimeLunaTestFixtures {
     }
 
     static LunaProperties properties(URI baseUrl) {
-        return new LunaProperties("gpt-6-luna", baseUrl, 1_000_000,
-                new LunaProperties.Purposes(new LunaProperties.PurposeOptions(4000, "medium")), true,
-                LunaProperties.JudgeEndpoint.RESPONSES);
+        return new LunaProperties("gpt-6-luna", baseUrl, 1_000_000, true);
     }
 
     static LunaTransport transport(URI baseUrl, LunaHosts.Mode mode) {
@@ -52,18 +50,6 @@ final class RealtimeLunaTestFixtures {
         input.put("criteria", Map.of("coreFunction", "필요한 것과 이유를 함께 말해 부탁한다",
                 "judgmentCriteria", "무엇이 필요한지와 왜 필요한지가 드러나면 충분히 전달"));
         return input;
-    }
-
-    /** 계약 스키마 파일의 첫 정상 예시(JSON 텍스트). */
-    @SuppressWarnings("unchecked")
-    static String example(String schemaFile) {
-        try {
-            Map<String, Object> document = JSON.read(Files.readString(REPO_ROOT.resolve("contracts/schemas/" + schemaFile)),
-                    Map.class);
-            return JSON.write(((List<Object>) document.get("examples")).getFirst());
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
-        }
     }
 
     static String contractFile(String name) {

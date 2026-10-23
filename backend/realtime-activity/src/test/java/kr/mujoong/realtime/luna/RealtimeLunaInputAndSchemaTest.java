@@ -11,7 +11,7 @@ import kr.mujoong.contract.json.JsonCodec;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
-/** Realtime 입력 정리 · 스키마 짝 · 요청 스키마 (U9 BR2.1 ~ BR2.4 · BR4.2 · BR4.5 · SD1 · SD2 · NFR3.1). 합성 값만 쓴다. */
+/** Realtime 입력 정리 · 요청 스키마 (U9 BR2.1 ~ BR2.4 · SD1 · NFR3.1). 합성 값만 쓴다. */
 @Tag("luna")
 class RealtimeLunaInputAndSchemaTest {
 
@@ -100,35 +100,6 @@ class RealtimeLunaInputAndSchemaTest {
     }
 
     @Test
-    void theJudgmentRequestCopyKeepsOnlyProviderKeywordsAndIsStrict() {
-        LunaSchemas schemas = LunaSchemas.loadDefault(JSON);
-        LunaSchemas.OutputSchemaPair pair = schemas.pair(LunaPurpose.JUDGMENT_LIVE);
-
-        String copy = JSON.write(pair.requestSchema());
-        assertThat(copy).doesNotContain("\"pattern\"", "\"minimum\"", "\"maximum\"", "\"$id\"", "\"$schema\"", "\"examples\"",
-                "\"title\"").contains("\"$ref\":\"#/$defs/RankedOption\"");
-        assertThat(pair.strict()).as("판정 출력은 모든 객체가 닫히고 모든 속성이 required다").isTrue();
-        assertThat(pair.file()).isEqualTo("ai-judgment-output.schema.json");
-        assertThat(LunaSchemas.isStrict(Map.of("properties", Map.of("a", Map.of()), "required", List.of("a")))).isFalse();
-    }
-
-    @Test
-    void outputValidationUsesTheFullContractIncludingRangesAndPatterns() {
-        LunaSchemas schemas = LunaSchemas.loadDefault(JSON);
-        String valid = RealtimeLunaTestFixtures.example("ai-judgment-output.schema.json");
-
-        assertThat(schemas.isValidOutput(LunaPurpose.JUDGMENT_LIVE, valid)).isTrue();
-        assertThat(schemas.isValidOutput(LunaPurpose.JUDGMENT_LIVE, valid.replace("0.71", "1.5"))).as("maximum").isFalse();
-        assertThat(schemas.isValidOutput(LunaPurpose.JUDGMENT_LIVE, valid.replace("\"PARTIAL\"", "\"partial\""))).as("pattern")
-                .isFalse();
-        assertThat(schemas.isValidOutput(LunaPurpose.JUDGMENT_LIVE, "{\"first\":{\"option\":\"FULL\",\"probability\":0.5}}"))
-                .isFalse();
-        assertThat(schemas.isValidOutput(LunaPurpose.JUDGMENT_LIVE, "nope")).isFalse();
-        assertThat(schemas.isValidOutput(LunaPurpose.JUDGMENT_LIVE, "[]")).isFalse();
-        assertThat(schemas.isValidOutput(LunaPurpose.JUDGMENT_LIVE, null)).isFalse();
-    }
-
-    @Test
     void requestValidationRejectsExtraFieldsAndOutOfRangeValues() {
         LunaSchemas schemas = LunaSchemas.loadDefault(JSON);
         Map<String, Object> valid = RealtimeLunaTestFixtures.judgmentInput("그거 줘.");
@@ -143,24 +114,24 @@ class RealtimeLunaInputAndSchemaTest {
         assertThat(schemas.isValidRequest(LunaPurpose.JUDGMENT_LIVE, JSON.write(nullCriteria))).as("criteria null 허용").isTrue();
         assertThat(schemas.isValidRequest(LunaPurpose.JUDGMENT_LIVE, JSON.write(extra))).isFalse();
         assertThat(schemas.isValidRequest(LunaPurpose.JUDGMENT_LIVE, JSON.write(badPoint))).isFalse();
+        assertThat(schemas.isValidRequest(LunaPurpose.JUDGMENT_LIVE, "nope")).isFalse();
+        assertThat(schemas.isValidRequest(LunaPurpose.JUDGMENT_LIVE, "[]")).isFalse();
+        assertThat(schemas.isValidRequest(LunaPurpose.JUDGMENT_LIVE, null)).isFalse();
     }
 
     @Test
     void missingOrBrokenSchemaFilesRefuseToLoad() {
-        Function<String, String> noOutput = name -> name.equals("ai-judgment-output.schema.json") ? null
-                : RealtimeLunaTestFixtures.contractFile(name);
         Function<String, String> noRequest = name -> name.equals("ai-judgment-request.schema.json") ? null
                 : RealtimeLunaTestFixtures.contractFile(name);
-        Function<String, String> badExample = name -> name.equals("ai-judgment-output.schema.json")
+        Function<String, String> badExample = name -> name.equals("ai-judgment-request.schema.json")
                 ? RealtimeLunaTestFixtures.contractFile(name).replace("\"examples\": [", "\"examples\": [{},")
                 : RealtimeLunaTestFixtures.contractFile(name);
         Function<String, String> unreadable = name -> name.equals("ai-judgment-request.schema.json") ? "[["
                 : RealtimeLunaTestFixtures.contractFile(name);
 
-        assertThatThrownBy(() -> LunaSchemas.load(JSON, noOutput)).hasMessage("SCHEMA_MISSING: ai-judgment-output.schema.json");
         assertThatThrownBy(() -> LunaSchemas.load(JSON, noRequest)).hasMessage("SCHEMA_MISSING: ai-judgment-request.schema.json");
         assertThatThrownBy(() -> LunaSchemas.load(JSON, badExample))
-                .hasMessage("SCHEMA_EXAMPLE_INVALID: ai-judgment-output.schema.json");
+                .hasMessage("SCHEMA_EXAMPLE_INVALID: ai-judgment-request.schema.json");
         assertThatThrownBy(() -> LunaSchemas.load(JSON, unreadable)).isInstanceOf(LunaSchemas.LoadException.class);
     }
 
