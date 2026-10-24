@@ -1367,6 +1367,7 @@ class PracticeConversationTest {
         Harness blank = new Harness(" ", APPROVED);
         assertThat(blank.ext.onChildUtterance(null, blank.out)).isEqualTo(Signal.NONE);
         assertThat(blank.event(ExtensionEvent.Kind.TIMER_FIRED, "no-response", null, null)).isEqualTo(Signal.NONE);
+        assertThat(blank.speechStarted()).isEqualTo(Signal.NONE);
         assertThatThrownBy(blank::activate).isInstanceOf(PracticeScriptException.class);
         assertThatThrownBy(() -> new Harness("not json", APPROVED).activate()).isInstanceOf(PracticeScriptException.class);
 

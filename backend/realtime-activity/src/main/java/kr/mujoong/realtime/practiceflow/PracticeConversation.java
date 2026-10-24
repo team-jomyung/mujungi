@@ -46,8 +46,9 @@ import kr.mujoong.realtime.voice.PracticeSpeech;
  * <p>규칙 요약.
  *
  * <ul>
- *   <li>시계는 모두 확장점 시계({@code schedule}/{@code cancel})다: {@code no-response} · {@code focus-max} · {@code goal-limit} ·
- *       {@code slot-guard-<correlationId>}(§3.2). 시간 값은 {@link PracticeFlowSettings}가 설정 키에서 읽은 것뿐이고 한도는 만료 표지로 본다(D3).
+ *   <li>시계는 모두 확장점 시계({@code schedule}/{@code cancel})다: {@code no-response} · {@code child-speech} · {@code focus-max} ·
+ *       {@code goal-limit} · {@code slot-guard-<correlationId>}(§3.2). 시간 값은 {@link PracticeFlowSettings}가 설정 키에서 읽은 것뿐이고 한도는
+ *       만료 표지로 본다(D3). 아이 말이 시작되면(실행부 알림) 무응답 시계를 멈추고 확정 전사를 기다린다(4회차 R1).
  *   <li>판정은 {@code requestJudgment}로 요청한다(J2 · J3 · J5에만 판정 기준을 싣고 J4에는 싣지 않는다, D2). 거절(거짓) · 보류 · 장애는 판독
  *       불가와 같이 교정 없이 같은 질문을 한 번 다시 안내하고 두 번째면 정해진 방식으로 닫는다(BR3.7). 연습이 멈추지 않는다.
  *   <li>GPT-Live가 만드는 모든 역할 발화는 {@code speakGenerated} 한 길로만 낸다(D6). 낼 수 없으면(거짓) 그 슬롯을 실패로 닫고 이어 간다.
@@ -60,6 +61,11 @@ import kr.mujoong.realtime.voice.PracticeSpeech;
 public final class PracticeConversation implements PracticeSessionExtension {
 
     static final String TIMER_NO_RESPONSE = "no-response";
+    /**
+     * 4회차 R1: 아이 말이 시작된 뒤 그 말의 확정 전사를 기다리는 안전 시계(무응답 대기와 같은 길이). 확정 전사가 오면 거두고, 끝내 오지 않으면(빈 묶음 ·
+     * 실행부가 맡은 말) 만료 때 무응답 대기를 처음부터 다시 건다.
+     */
+    static final String TIMER_CHILD_SPEECH = "child-speech";
     static final String TIMER_FOCUS_MAX = "focus-max";
     static final String TIMER_GOAL_LIMIT = "goal-limit";
     static final String TIMER_SLOT_GUARD = "slot-guard-";
@@ -115,6 +121,8 @@ public final class PracticeConversation implements PracticeSessionExtension {
     private boolean generatedAudioRetried;
     private boolean awaitingNotice;
     private boolean inputReady;
+    /** 4회차 R1: 아이 말이 시작됐고 그 말의 확정 전사가 아직 오지 않았다. 참인 동안 무응답 시계를 걸지 않는다. */
+    private boolean childSpeaking;
     private Utterance earlyUtterance;
     private UUID judgmentCorrelation;
     private boolean judgmentAsksProcedure;
@@ -213,6 +221,8 @@ public final class PracticeConversation implements PracticeSessionExtension {
                 || utterance.seq() <= 0) {
             return Signal.NONE;
         }
+        // 시작된 말의 확정 전사가 왔다: 아래에서 판정 · 보관 · 무시 어느 쪽으로 가든 '말하는 중'은 끝났다(4회차 R1)
+        endChildSpeech();
         Phase phase = state.phase();
         if (reflecting) {
             reflectionUtterance(utterance);
@@ -246,6 +256,47 @@ public final class PracticeConversation implements PracticeSessionExtension {
             output.cancel(TIMER_NO_RESPONSE);
             state.phase(Phase.SCENE_INTRO, Sub.REFLECTION_ACK);
             speakGenerated(FlowRole.PEER, PracticeInstructions.reflectionAcknowledgment());
+        }
+    }
+
+    /**
+     * 4회차 R1: 아이 말이 시작됐다(실행부가 새 입력 전사 묶음의 첫 조각마다 한 번 알린다). 확정 전사는 말이 끝나고 조용 시간이 지나야 오므로, 그 사이
+     * 무응답 시계가 말 도중에 울리지 않게 멈추고 안전 시계만 건다. 우리 말이 아직 재생 중일 때 시작된 말도 같다 — 재생이 끝나 입력을 기다리기 시작해도
+     * 그 말의 확정 전사가 올 때까지 무응답 시계를 걸지 않는다. 확정 전사는 지금처럼 {@link #onChildUtterance}로 판정한다. 두 경로가 같다.
+     */
+    @Override
+    public Signal onChildSpeechStarted(Instant at, PracticeOutput target) {
+        if (output == null || stopping || state.phase() == Phase.CLOSING) {
+            return Signal.NONE;
+        }
+        childSpeaking = true;
+        output.cancel(TIMER_NO_RESPONSE);
+        output.schedule(TIMER_CHILD_SPEECH, settings.noResponseWait());
+        return finish();
+    }
+
+    /** 시작된 말의 확정 전사가 왔다: 안전 시계를 거둔다. */
+    private void endChildSpeech() {
+        if (childSpeaking) {
+            childSpeaking = false;
+            output.cancel(TIMER_CHILD_SPEECH);
+        }
+    }
+
+    /**
+     * 4회차 R1: 말이 시작됐는데 확정 전사가 끝내 오지 않았다(빈 묶음 · 종료 의도로 실행부가 맡은 말 · 안내 중의 말). 아직 아이 말을 기다리는 중이면
+     * 무응답 대기를 처음부터 다시 건다 — 그 말을 대답으로 치지 않고, 무응답 재안내도 그만큼 늦춘다.
+     */
+    private void onChildSpeechGuard() {
+        childSpeaking = false;
+        if (reflecting) {
+            if (reflectionAwaiting && openSlot == null && !state.judgmentOpen()) {
+                output.schedule(TIMER_NO_RESPONSE, settings.noResponseWait());
+            }
+            return;
+        }
+        if (state.phase().awaitsInput() && state.sub() == Sub.NONE && inputReady) {
+            armNoResponse();
         }
     }
 
@@ -459,6 +510,7 @@ public final class PracticeConversation implements PracticeSessionExtension {
         output.cancel(TIMER_GOAL_LIMIT);
         output.cancel(TIMER_FOCUS_MAX);
         output.cancel(TIMER_NO_RESPONSE);
+        endChildSpeech();
         cancelOpenSlot();
         state.phase(Phase.CLOSING, Sub.NONE);
         if (byRequest) {
@@ -764,7 +816,8 @@ public final class PracticeConversation implements PracticeSessionExtension {
             if (state.sub() == Sub.REFLECTION_ACK) finishReflection();
             else {
                 reflectionAwaiting = true;
-                output.schedule(TIMER_NO_RESPONSE, settings.noResponseWait());
+                // 아이가 이미 말하는 중이면 그 말의 확정 전사(또는 안전 시계)를 기다린다(4회차 R1)
+                if (!childSpeaking) output.schedule(TIMER_NO_RESPONSE, settings.noResponseWait());
                 if (earlyUtterance != null) {
                     Utterance early = earlyUtterance;
                     earlyUtterance = null;
@@ -817,6 +870,7 @@ public final class PracticeConversation implements PracticeSessionExtension {
         if (reflecting && TIMER_NO_RESPONSE.equals(name)) { finishReflection(); return; }
         switch (name) {
             case TIMER_NO_RESPONSE -> applyStep(transitions.onNoResponse(state));
+            case TIMER_CHILD_SPEECH -> onChildSpeechGuard();
             case TIMER_FOCUS_MAX -> onFocusMax();
             case TIMER_GOAL_LIMIT -> onGoalLimit();
             case TIMER_NOTICE_GUARD -> {
@@ -904,8 +958,9 @@ public final class PracticeConversation implements PracticeSessionExtension {
         armNoResponse();
     }
 
+    /** 무응답 시계를 처음부터 건다. 판정 중이거나 아이가 말하는 중(확정 전사를 기다리는 중)이면 걸지 않는다(4회차 R1). */
     private void armNoResponse() {
-        if (!state.judgmentOpen()) {
+        if (!state.judgmentOpen() && !childSpeaking) {
             output.schedule(TIMER_NO_RESPONSE, settings.noResponseWait());
         }
     }

@@ -304,6 +304,11 @@ final class PracticeFlowTestKit {
             return ext.onChildUtterance(new Utterance(++seq, clock.now(), text, false, false), out);
         }
 
+        /** 4회차 R1: 실행부가 알리는 '아이 말 시작'(새 입력 전사 묶음의 첫 조각). 확정 전사는 {@link #child}로 따로 준다. */
+        Signal speechStarted() {
+            return ext.onChildSpeechStarted(clock.now(), out);
+        }
+
         Signal result(String point, String option) {
             return result(out.lastJudgment().correlationId(), point, option);
         }

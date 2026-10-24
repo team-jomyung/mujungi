@@ -12,7 +12,8 @@ import kr.mujoong.realtime.config.RealtimeTimingProperties;
  * {@code mujoong.practice-flow.*}에서 읽는다. 이 객체는 시계를 걸지 않는다 — 시계는 상태 기계(묶음 B)가 확장점 능력
  * {@code schedule}로 건다.
  *
- * @param noResponseWait 입력을 기다리는 단계에서 첫 재안내까지의 무응답 대기(AC1.9.1)
+ * @param noResponseWait 입력을 기다리는 단계에서 첫 재안내까지의 무응답 대기(AC1.9.1). 아이 말이 시작된 뒤 확정 전사를 기다리는 안전 시계도 같은
+ *     길이다(4회차 R1)
  * @param focusMax 집중 연습 상한(AC1.5.4)
  * @param goalActiveLimit 목표 하나의 ACTIVE 상한
  * @param slotGuard 슬롯 안전 시계 길이(§3.2 {@code slot-guard-<correlationId>}). 실행부 재생 만료({@code SessionExecutor.Settings.playbackExpiry})와

@@ -33,7 +33,7 @@ import org.junit.jupiter.api.Test;
 
 /**
  * 분기 확장 시험 (U12 D1 · BR1.4 · AC1.1.5). 새 흐름이 읽는 scriptVersion(v1 · C안 v2)이면 새 흐름, 없으면 레거시로 가고
- * {@code controlsOutput}은 분기 전에도 참이며 분기 뒤 모든 시점이 고른 쪽으로 위임된다. 레거시 확장이
+ * {@code controlsOutput}은 분기 전에도 참이며 분기 뒤 모든 시점(아이 말 시작 알림 · 무중 화자 여부 포함)이 고른 쪽으로 위임된다. 레거시 확장이
  * 무엇을 부르든 실패하도록 만든 대역(레거시 평가 · 단서 포트가 실패를 돌려주는 상황) 위에서도 새 흐름이 끝까지 가는지 본다.
  */
 @Tag("practice-flow")
@@ -136,6 +136,7 @@ class PracticeFlowRouterTest {
         Utterance utterance = new Utterance(1, Instant.EPOCH, "말", false, false);
         ExtensionEvent event = new ExtensionEvent(ExtensionEvent.Kind.TIMER_FIRED, "no-response", null, null);
         assertThat(router.onChildUtterance(utterance, output)).isEqualTo(Signal.NONE);
+        assertThat(router.onChildSpeechStarted(Instant.EPOCH, output)).isEqualTo(Signal.NONE);
         assertThat(router.onExtensionEvent(event, output)).isEqualTo(Signal.NONE);
         assertThat(router.speaksAsMujoong()).as("고르기 전에는 역할 대화 화자").isFalse();
         assertThat(router.progress()).isNull();
@@ -148,6 +149,7 @@ class PracticeFlowRouterTest {
         PracticeContext context = context(packageJson(GOAL, minimalScript(SCENARIO)));
         when(flow.onActive(context, output)).thenReturn(Signal.NONE);
         when(flow.onChildUtterance(utterance, output)).thenReturn(Signal.LAST_GOAL);
+        when(flow.onChildSpeechStarted(Instant.EPOCH, output)).thenReturn(Signal.OUTPUT_FAILED);
         when(flow.speaksAsMujoong()).thenReturn(true);
         when(flow.onExtensionEvent(event, output)).thenReturn(Signal.NEXT_GOAL);
         PracticeSessionExtension.Progress progress = new PracticeSessionExtension.Progress(1, 1, "목표", "FIRST_RESPONSE");
@@ -157,6 +159,7 @@ class PracticeFlowRouterTest {
         router.onActive(context, output);
 
         assertThat(router.onChildUtterance(utterance, output)).isEqualTo(Signal.LAST_GOAL);
+        assertThat(router.onChildSpeechStarted(Instant.EPOCH, output)).isEqualTo(Signal.OUTPUT_FAILED);
         assertThat(router.speaksAsMujoong()).isTrue();
         assertThat(router.onExtensionEvent(event, output)).isEqualTo(Signal.NEXT_GOAL);
         assertThat(router.progress()).isEqualTo(progress);
@@ -195,6 +198,7 @@ class PracticeFlowRouterTest {
         routed.onExtensionEvent(playedEvent(h), h.out); // 목표 안내
         routed.onExtensionEvent(playedEvent(h), h.out); // 상황 안내
         routed.onExtensionEvent(playedEvent(h), h.out); // 친구 말 전하기 + 묻기
+        routed.onChildSpeechStarted(Instant.EPOCH, h.out);
         routed.onChildUtterance(new Utterance(1, Instant.EPOCH, "손 괜찮아?", false, false), h.out);
         routed.onExtensionEvent(new ExtensionEvent(ExtensionEvent.Kind.JUDGMENT_RESULT, "judgment", h.out.lastJudgment().correlationId(),
                 Map.of("point", "J2", "firstOption", "FULL", "secondOption", "NONE")), h.out);

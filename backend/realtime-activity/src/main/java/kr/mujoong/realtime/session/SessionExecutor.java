@@ -2598,6 +2598,7 @@ public final class SessionExecutor {
             ctx.timers().arm(Kind.INPUT_TRANSCRIPT_QUIET, ctx.services().settings().inputTranscriptQuiet());
             return;
         }
+        boolean opened = inputGroupId == null;
         groupInputDelta(delta);
         if (ctx.consentWithdrawnAt() != null ||ctx.status() == SessionStatus.WAITING_CHILD) {
             // 동의 철회 뒤 도착한 아이 전사는 저장하지 않는다(확정 때 센다). 참여 전 아이 전사도 저장하지 않는다
@@ -2624,7 +2625,22 @@ public final class SessionExecutor {
             // 아이 입력이 시작되면 모아 둔 AI 전사를 먼저 한 행으로 낸다(보호자 화면의 순서가 말한 순서와 같게)
             ctx.transcripts().endStream(at);
             ctx.transcripts().childDelta(inputGroupId, delta.delta(), at);
+            if (opened) {
+                childSpeechStarted(at);
+            }
         }
+    }
+
+    /**
+     * 4회차 R1: 새 입력 전사 묶음이 열렸다(아이 말이 시작됐다). 확정 전사는 조용 시간 뒤에야 오므로 출력권을 가진 연습에 먼저 알려 무응답 대기를
+     * 멈추게 한다. ACTIVE에서만, 연습 진행이 멈춘 동안(기술 일시정지)에는 알리지 않는다 — 그때의 말은 실행부가 맡는다.
+     */
+    private void childSpeechStarted(Instant at) {
+        PracticeSessionExtension current = practice;
+        if (current == null || !current.controlsOutput() || ctx.status() != SessionStatus.ACTIVE || practiceProgressPaused()) {
+            return;
+        }
+        practiceSignal(() -> current.onChildSpeechStarted(at, practiceOutput), true);
     }
 
     /**
