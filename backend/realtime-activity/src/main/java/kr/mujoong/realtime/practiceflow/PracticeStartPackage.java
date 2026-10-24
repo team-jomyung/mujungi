@@ -16,9 +16,9 @@ import kr.mujoong.realtime.practiceflow.PracticeScriptReader.RawScript;
  * <ul>
  *   <li>목표: 패키지의 {@code goals[]}를 {@code order} 순으로 읽어 {@link GoalSpec}으로 만든다. 목표가 없거나 목표 필수 값(goalSelectionId ·
  *       displayName · judgmentCriteria)이 없으면 {@link Reason#BAD_PACKAGE}다. goalSelectionId는 목표마다 있다(기록의 goalRef).
- *   <li>첫 대본: 첫 목표(order 1)에만 {@code firstScenario}가 있다. {@code scriptVersion}이 {@value PracticeScript#SCRIPT_VERSION_V1}이면 새 흐름
- *       대상이고, 없으면 레거시다(BR1.4). 새 흐름인데 대본이 계약을 어기면 {@link #firstScenario}는 null이고 {@link #firstScenarioRejection}에 사유가
- *       남는다(그 목표는 '미실시', BR1.3).
+ *   <li>첫 대본: 첫 목표(order 1)에만 {@code firstScenario}가 있다. {@code scriptVersion}이 {@value PracticeScript#SCRIPT_VERSION_V1} 또는
+ *       {@value PracticeScript#SCRIPT_VERSION_V2}이면 새 흐름 대상이고, 없으면 레거시다(BR1.4). 새 흐름인데 대본이 계약을 어기면
+ *       {@link #firstScenario}는 null이고 {@link #firstScenarioRejection}에 사유가 남는다(그 목표는 '미실시', BR1.3).
  * </ul>
  *
  * @param goals 목표 목록(1건 이상, order 순)
@@ -81,7 +81,7 @@ public record PracticeStartPackage(List<GoalSpec> goals, PracticeScript firstSce
         }
         RawScript first = ordered.getFirst().firstScenario();
         String version = first == null ? null : first.scriptVersion();
-        boolean newFlow = PracticeScript.SCRIPT_VERSION_V1.equals(version);
+        boolean newFlow = PracticeScript.readable(version);
         PracticeScript script = null;
         Reason rejection = null;
         if (newFlow) {
@@ -94,9 +94,9 @@ public record PracticeStartPackage(List<GoalSpec> goals, PracticeScript firstSce
         return new PracticeStartPackage(goals, script, version, rejection);
     }
 
-    /** 새 흐름 대상인가(첫 대본의 scriptVersion이 {@value PracticeScript#SCRIPT_VERSION_V1}, BR1.4). 없으면 레거시다. */
+    /** 새 흐름 대상인가(첫 대본의 scriptVersion이 새 흐름이 읽는 판 v1 · v2, BR1.4). 없으면 레거시다. */
     public boolean usesNewFlow() {
-        return PracticeScript.SCRIPT_VERSION_V1.equals(scriptVersion);
+        return PracticeScript.readable(scriptVersion);
     }
 
     /** 첫 목표. */

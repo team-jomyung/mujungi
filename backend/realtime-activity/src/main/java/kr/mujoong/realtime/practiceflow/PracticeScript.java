@@ -14,14 +14,21 @@ import kr.mujoong.realtime.practiceflow.PracticeFlowTypes.SceneKind;
  * <p>장면 문장은 승인 원문이라 문자열 표현 · 로그 · 기록에 내지 않는다(R-F14).
  *
  * @param scenarioId 대본 전체의 식별자(기록의 scenarioRef)
- * @param scriptVersion 대본 판(지금은 {@value #SCRIPT_VERSION_V1} 하나)
+ * @param scriptVersion 대본 판({@value #SCRIPT_VERSION_V1} 또는 C안 칸이 있는 {@value #SCRIPT_VERSION_V2})
  * @param scenes 장면(원 장면 BASE가 하나 이상, 변형 VARIANT는 없을 수 있다)
  */
 public record PracticeScript(UUID scenarioId, String scriptVersion, List<Scene> scenes, SelfReview selfReview,
         Generation generation) {
 
-    /** 새 흐름이 읽는 대본 판. */
+    /** 새 흐름이 읽는 대본 판(C안 칸이 없는 옛 판). */
     public static final String SCRIPT_VERSION_V1 = "scenario-script.v1";
+    /** C안 칸(opportunityRelay · askPrompt · reaskPrompt · helpSpeech · friendReaction)이 있는 판(docs/practice-direct-ask.md 4.1). */
+    public static final String SCRIPT_VERSION_V2 = "scenario-script.v2";
+
+    /** 새 흐름이 읽는 판인가(v1 · v2). realtime이 두 판을 모두 읽은 뒤에 core가 v2를 낸다(배포 순서). */
+    public static boolean readable(String scriptVersion) {
+        return SCRIPT_VERSION_V1.equals(scriptVersion) || SCRIPT_VERSION_V2.equals(scriptVersion);
+    }
 
     public PracticeScript {
         Objects.requireNonNull(scenarioId, "scenarioId");
@@ -36,16 +43,31 @@ public record PracticeScript(UUID scenarioId, String scriptVersion, List<Scene> 
 
     /**
      * 장면 하나. 필수 6필드는 비어 있지 않다. 선택 필드(focusPoints · expressionExamples · relation · place · topic)가 없으면 빈 값이다.
+     * 들리는 선택 칸(spokenIntroduction · reflectionPrompt와 C안 칸 다섯 개)은 없으면 null이다 — 쓰는 쪽이 대체 문장을 고른다
+     * ({@link DirectAskLines}).
      *
      * @param sceneKey 대본 안 장면 식별(장면 식별은 이 값뿐이다, 장면별 UUID 없음)
-     * @param sceneDescription 상황 문장(SCENE_INTRO 승인 발화)
-     * @param opportunitySentence 기회 문장
+     * @param sceneDescription 상황 문장(내부 사실. C안에서는 들려주지 않는다)
+     * @param opportunitySentence 기회 문장(상대의 직접 대사. C안에서는 들려주지 않는다)
      * @param reexplanation 상황 다시 설명 문장
      * @param partnerRole 상대 역할 문구(core가 발급 때 덮어쓴 값)
+     * @param opportunityRelay C안: 상대가 한 말을 무중이 자기 말로 전하는 문장
+     * @param askPrompt C안: "너라면 …?" 묻는 말 한 문장
+     * @param reaskPrompt C안: 일부만 전했을 때 되묻는 질문
+     * @param helpSpeech C안: 도움(요점 + 표현 예시 + 고정 꼬리 "네 말로 해 볼래?")
+     * @param friendReaction C안: 목표를 이룬 뒤 무중이 전하는 상대의 반응
      */
     public record Scene(String sceneKey, SceneKind sceneKind, String sceneDescription, String opportunitySentence,
             String reexplanation, String partnerRole, List<String> focusPoints, List<String> expressionExamples,
-            String relation, String place, String topic, String spokenIntroduction, String reflectionPrompt) {
+            String relation, String place, String topic, String spokenIntroduction, String reflectionPrompt,
+            String opportunityRelay, String askPrompt, String reaskPrompt, String helpSpeech, String friendReaction) {
+        public Scene(String sceneKey, SceneKind sceneKind, String sceneDescription, String opportunitySentence,
+                String reexplanation, String partnerRole, List<String> focusPoints, List<String> expressionExamples,
+                String relation, String place, String topic, String spokenIntroduction, String reflectionPrompt) {
+            this(sceneKey, sceneKind, sceneDescription, opportunitySentence, reexplanation, partnerRole, focusPoints,
+                    expressionExamples, relation, place, topic, spokenIntroduction, reflectionPrompt, null, null, null, null, null);
+        }
+
         public Scene(String sceneKey, SceneKind sceneKind, String sceneDescription, String opportunitySentence,
                 String reexplanation, String partnerRole, List<String> focusPoints, List<String> expressionExamples,
                 String relation, String place, String topic, String spokenIntroduction) {

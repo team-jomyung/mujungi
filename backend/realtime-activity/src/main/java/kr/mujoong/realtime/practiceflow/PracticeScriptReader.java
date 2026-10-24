@@ -12,10 +12,14 @@ import kr.mujoong.realtime.practiceflow.PracticeScriptException.Reason;
  * U10 대본 읽기 (U12 FR1.3 · BR1.3). JSON 한 건을 {@link PracticeScript}로 바꾼다.
  *
  * <ul>
- *   <li>필수: {@code scenarioId}(UUID) · {@code scriptVersion}({@value PracticeScript#SCRIPT_VERSION_V1}) · {@code scenes[]} 1건 이상 · 장면
- *       필수 6필드 · 쓸 수 있는 원 장면(BASE) · {@code validation}(통과). 하나라도 어기면 {@link PracticeScriptException}(사유 코드만).
+ *   <li>필수: {@code scenarioId}(UUID) · {@code scriptVersion}({@value PracticeScript#SCRIPT_VERSION_V1} 또는
+ *       {@value PracticeScript#SCRIPT_VERSION_V2}) · {@code scenes[]} 1건 이상 · 장면 필수 6필드 · 쓸 수 있는 원 장면(BASE) ·
+ *       {@code validation}(통과). 하나라도 어기면 {@link PracticeScriptException}(사유 코드만).
  *   <li>선택: {@code selfReview} · {@code generation} · 변형 장면 · 장면의 {@code focusPoints · expressionExamples · relation · place · topic}.
  *       없으면 빈 값으로 정규화한다(거절하지 않는다). 모르는 필드는 무시한다(계약 10절).
+ *   <li>들리는 선택 칸({@code spokenIntroduction · reflectionPrompt}과 C안 칸 {@code opportunityRelay · askPrompt · reaskPrompt · helpSpeech ·
+ *       friendReaction})은 없으면 null로 두고(옛 대본은 대체 문장을 쓴다), 있으면 비지 않고 계약 길이 안이며 제어 문자가 없어야 한다
+ *       (어기면 {@link Reason#VALIDATION_FAILED}).
  *   <li>{@code scriptVersion}이 없으면 새 흐름 대상이 아니다({@link Reason#NO_SCRIPT_VERSION}, 분기는 BR1.4가 정한다).
  * </ul>
  *
@@ -31,8 +35,18 @@ public final class PracticeScriptReader {
     /** 장면 JSON 모양. */
     record RawScene(String sceneKey, String sceneKind, String sceneDescription, String opportunitySentence,
             String reexplanation, String partnerRole, List<String> focusPoints, List<String> expressionExamples,
-            String relation, String place, String topic, String spokenIntroduction, String reflectionPrompt) {
+            String relation, String place, String topic, String spokenIntroduction, String reflectionPrompt,
+            String opportunityRelay, String askPrompt, String reaskPrompt, String helpSpeech, String friendReaction) {
     }
+
+    /** 들리는 선택 칸의 길이 상한(계약 {@code ai-scenario-output.schema.json} maxLength와 같다). */
+    private static final int SPOKEN_INTRODUCTION_MAX = 500;
+    private static final int REFLECTION_PROMPT_MAX = 300;
+    private static final int OPPORTUNITY_RELAY_MAX = 200;
+    private static final int ASK_PROMPT_MAX = 100;
+    private static final int REASK_PROMPT_MAX = 200;
+    private static final int HELP_SPEECH_MAX = 300;
+    private static final int FRIEND_REACTION_MAX = 200;
 
     /** 대본 검토 JSON 모양. */
     record RawSelfReview(String verdict, String model, String promptVersion) {
@@ -84,7 +98,7 @@ public final class PracticeScriptReader {
         if (raw.scriptVersion() == null || raw.scriptVersion().isBlank()) {
             throw new PracticeScriptException(Reason.NO_SCRIPT_VERSION);
         }
-        if (!PracticeScript.SCRIPT_VERSION_V1.equals(raw.scriptVersion())) {
+        if (!PracticeScript.readable(raw.scriptVersion())) {
             throw new PracticeScriptException(Reason.UNSUPPORTED_VERSION);
         }
         UUID scenarioId = uuid(raw.scenarioId());
@@ -118,14 +132,14 @@ public final class PracticeScriptReader {
                 || blank(raw.opportunitySentence()) || blank(raw.reexplanation()) || blank(raw.partnerRole())) {
             throw new PracticeScriptException(Reason.MISSING_SCENE_FIELD);
         }
-        if (raw.spokenIntroduction() != null && (blank(raw.spokenIntroduction()) || raw.spokenIntroduction().length() > 500
-                || raw.spokenIntroduction().chars().anyMatch(Character::isISOControl))) {
-            throw new PracticeScriptException(Reason.VALIDATION_FAILED);
-        }
+        spoken(raw.spokenIntroduction(), SPOKEN_INTRODUCTION_MAX);
+        spoken(raw.reflectionPrompt(), REFLECTION_PROMPT_MAX);
+        spoken(raw.opportunityRelay(), OPPORTUNITY_RELAY_MAX);
+        spoken(raw.askPrompt(), ASK_PROMPT_MAX);
+        spoken(raw.reaskPrompt(), REASK_PROMPT_MAX);
+        spoken(raw.helpSpeech(), HELP_SPEECH_MAX);
+        spoken(raw.friendReaction(), FRIEND_REACTION_MAX);
         SceneKind kind;
-        if (raw.reflectionPrompt() != null && (blank(raw.reflectionPrompt()) || raw.reflectionPrompt().length() > 300
-                || raw.reflectionPrompt().chars().anyMatch(Character::isISOControl)))
-            throw new PracticeScriptException(Reason.VALIDATION_FAILED);
         try {
             kind = SceneKind.valueOf(raw.sceneKind());
         } catch (IllegalArgumentException e) {
@@ -133,7 +147,15 @@ public final class PracticeScriptReader {
         }
         return new PracticeScript.Scene(raw.sceneKey(), kind, raw.sceneDescription(), raw.opportunitySentence(),
                 raw.reexplanation(), raw.partnerRole(), raw.focusPoints(), raw.expressionExamples(), raw.relation(),
-                raw.place(), raw.topic(), raw.spokenIntroduction(), raw.reflectionPrompt());
+                raw.place(), raw.topic(), raw.spokenIntroduction(), raw.reflectionPrompt(), raw.opportunityRelay(),
+                raw.askPrompt(), raw.reaskPrompt(), raw.helpSpeech(), raw.friendReaction());
+    }
+
+    /** 들리는 선택 칸: 없으면(null) 통과, 있으면 비지 않고 상한 안이며 제어 문자가 없어야 한다. 어기면 사유 코드만 남긴다. */
+    private static void spoken(String value, int max) {
+        if (value != null && (blank(value) || value.length() > max || value.chars().anyMatch(Character::isISOControl))) {
+            throw new PracticeScriptException(Reason.VALIDATION_FAILED);
+        }
     }
 
     private static PracticeScript.SelfReview selfReview(RawSelfReview raw) {

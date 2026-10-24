@@ -1,5 +1,6 @@
 package kr.mujoong.realtime.practiceflow;
 
+import static kr.mujoong.realtime.practiceflow.PracticeScriptFixtures.directAskScript;
 import static kr.mujoong.realtime.practiceflow.PracticeScriptFixtures.minimalScript;
 import static kr.mujoong.realtime.practiceflow.PracticeScriptFixtures.packageJson;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -30,9 +31,9 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 /**
- * 분기 확장 시험 (U12 D1 · BR1.4 · AC1.1.5). scriptVersion이 있으면 새 흐름, 없으면 레거시로 가고 {@code controlsOutput}은 분기 전에도 참이며
- * 분기 뒤 모든 시점이 고른 쪽으로 위임된다. 레거시 확장이 무엇을 부르든 실패하도록 만든 대역(레거시 평가 · 단서 포트가 실패를 돌려주는 상황)
- * 위에서도 새 흐름이 끝까지 가는지 본다.
+ * 분기 확장 시험 (U12 D1 · BR1.4 · AC1.1.5). 새 흐름이 읽는 scriptVersion(v1 · C안 v2)이면 새 흐름, 없으면 레거시로 가고
+ * {@code controlsOutput}은 분기 전에도 참이며 분기 뒤 모든 시점이 고른 쪽으로 위임된다. 레거시 확장이
+ * 무엇을 부르든 실패하도록 만든 대역(레거시 평가 · 단서 포트가 실패를 돌려주는 상황) 위에서도 새 흐름이 끝까지 가는지 본다.
  */
 @Tag("practice-flow")
 class PracticeFlowRouterTest {
@@ -64,6 +65,32 @@ class PracticeFlowRouterTest {
         assertThat(flowCreated).hasValue(1);
         verifyNoInteractions(legacy);
         assertThat(router.toString()).contains("flow");
+    }
+
+    @Test
+    void aPackageWhoseFirstScriptIsTheDirectAskVersionTwoAlsoGoesToTheNewFlow() {
+        PracticeContext context = context(packageJson(GOAL, directAskScript(SCENARIO)));
+        when(flow.onActive(context, output)).thenReturn(Signal.NONE);
+
+        router.onActive(context, output);
+
+        assertThat(flowCreated).hasValue(1);
+        verifyNoInteractions(legacy);
+        assertThat(router.toString()).contains("flow");
+    }
+
+    @Test
+    void anUnknownScriptVersionIsNotTakenByTheNewFlow() {
+        String future = packageJson(GOAL, minimalScript(SCENARIO).replace("scenario-script.v1", "scenario-script.v9"));
+        PracticeSessionExtension oldOne = mock(PracticeSessionExtension.class);
+        PracticeContext context = context(future);
+        PracticeFlowRouter old = new PracticeFlowRouter(oldOne, () -> {
+            throw new AssertionError("새 흐름을 만들면 안 된다");
+        });
+
+        old.onActive(context, output);
+
+        verify(oldOne).onActive(context, output);
     }
 
     @Test
