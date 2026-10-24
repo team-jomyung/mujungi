@@ -4,7 +4,7 @@
 >
 > - 결정: 2026-10-24 팀장(준하). 이 문서의 1장에 결정과 기본값을 적었다.
 > - 바탕: `main` `916ec12b`(10/24). 브랜치 `claude/practice-direct-ask`. main 병합은 팀 합의 뒤에 한다.
-> - 상태: **설계.** 구현 · 시험 · 5회차 실측 결과는 이 문서 뒤쪽 장에 이어 적는다.
+> - 상태: **구현 · 자동 시험 완료(가짜 공급자), 5회차 실측 준비 중.** 구현 결과는 13장에 적었다. 5회차 실측 결과는 그 뒤에 이어 적는다.
 > - 앞선 기록: `claude/practice-dialogue-standard` 브랜치의 `docs/practice-dialogue-standard.md`(4회차까지 실측). main과의 비교는 같은 날 조사로 확인했다(35개 파일 충돌, 같은 문제를 다르게 푼 곳 다수).
 
 ## 1. 결정
@@ -356,3 +356,79 @@ AI동작명세 §8.3(G-16)과 같다. 바뀌는 값은 다시 해 보기 하나�
 - **팀 정렬.** 운영에서 도연 님의 유연 대화를 내리고 C안을 올린다. main에 합치기 전에 팀 합의가 필요하고, 그때까지 이 브랜치에만 둔다.
 - **제브 의존.** 장면 밖 말(목표 안내 · 회고)이 생성형이라, 제브를 빼고 운영하려면 이 부분을 따로 정해야 한다(성민 님 결정 영역).
 - **R-F15.** 실제 아동 데이터로 켜기 전에 Decisions API 끝점 확인 기록이 필요하다. 이것은 main RUNBOOK에 이미 미확인 항목으로 적혀 있다.
+
+## 13. 구현 결과 (2026-10-24)
+
+### 13.1 커밋
+
+core와 realtime을 두 갈래로 나눠 동시에 구현하고 합쳤다. 합친 커밋은 `184b6bf7`이다. 그 뒤 계약 보충 `4b01e9c9`를 더했다.
+
+| 갈래 | 커밋 | 내용 |
+|---|---|---|
+| 계약(먼저) | `d6c9dbda` | 스키마: 대본 새 칸 다섯 개 · 판 v2 · 화자 MUJOONG |
+| core | `9d740f5a` | 대본 칸 · 들리는 칸 서버 검사(사유 코드 7개) · `generation.v3` · `review.v2` |
+| core | `23865f10` | 시드 006(고정 승인 문장 6종) · 연습 허용 목록(`COACH_SWITCH` · `PEER_RETURN` 제외) |
+| core | `02314f58` | 기록용 재판정 `rejudgment.v2`(전하는 식 대답 인정) |
+| core | `bb48e719` | 계약 문장: `ai-io.md` 10.17(C안 절) · 편차 FT-1024-a ~ e |
+| realtime | `411cd7a0` | 대본 판 v2의 새 칸 읽기 · 옛 대본 대체 문장 |
+| realtime | `16ccd72c` | 대본형 경로를 C안으로(`DirectAskLines` · `FlowTransitions` C안 표 · 문구) |
+| realtime | `238eeaa6` | `flexible-dialogue`(기본 false) · `retry-max` 1 · `judgment-service-v2` · `prompt-service-v4` |
+| realtime | `ce756064` | 판정 입력의 무중 줄 화자 `MUJOONG` |
+| realtime | `cc7792f9` | R1 무응답 시계(말 시작에서 멈추고 확정 전사를 기다림) |
+| 계약 보충 | `4b01e9c9` | 10.17 구현 세부 · 무응답 시계 · 대체 규칙 · 기록, `timing.md` 무응답 줄 설명 |
+
+### 13.2 자동 시험
+
+합친 브랜치에서 `./gradlew clean check -Pmujoong.test.db=docker`를 돌렸다. 결과는 BUILD SUCCESSFUL이다.
+
+| 모듈 | 시험 | 실패 · 오류 · 건너뜀 |
+|---|---|---|
+| contract-model | 394 | 0 |
+| core-api | 1,883 | 0 |
+| realtime-activity | 2,310 | 0 |
+| test-support | 31 | 0 |
+| 합계 | 4,618 | 0 |
+
+- 증거 종류는 가짜 공급자 · 합성 대화다. 실제 API · 실제 기기 · 실제 아이 성공이 아니다(R-M11).
+- 자유대화 시험 `RealtimeLogHygieneIT.aProviderErrorMidTurn…`이 realtime 갈래 작업 중 두 번 실패하고 세 번째에 통과했다. 바탕 `d6c9dbda`에서도 같은 실패가 재현되므로 이번 변경과 무관한 시간 의존 흔들림이다. 합친 실행에서는 통과했다.
+
+### 13.3 바꾼 시험 (R-F2)
+
+지운 시험은 없다. 설계로 동작이 바뀐 단언은 같은 갈래의 새 동작 단언으로 바꿨다.
+
+| 시험 | 바꾼 것 | 대신 지키는 것 |
+|---|---|---|
+| core `ScenarioLunaProviderTest` | 판 단언 `generation.v2` · `review.v1` → `v3` · `v2` | 새 판 파일과 옛 판 파일이 함께 남아 있는지 보는 시험을 더함 |
+| core `ScenarioApiIT` 2건 | `scenario-script.v1` → `v2` | `ScenarioGenerationTest`에 판 기록 시험을 더함 |
+| core `ApprovedSpeechAssemblyTest` | 연습 code 5종 → 9종(역할 전환 code 없음) | 시드 006이 없는 DB 시험을 더함 |
+| core `DevSeedRunnerStatementsTest` · `LiveContentDevSeedRunnerIT` | dev 시드 행 5개 → 11개 | 시각까지 값으로 단언 |
+| core `RejudgmentGatewayTest` | 대역이 돌려주는 판 문자열 v1 → v2 | — |
+| realtime `PracticeConversationTest` | 대본형 역할 · 코치 · 친구 답변 단언 26건 → 같은 갈래의 C안 단언 | — |
+| (새) realtime `FlexibleRoleNoticeTest` | 역할 전환 · 코치 두 회차 · 복귀 알림 · 알림 안전 시계 · 생성형 알림 · 막힌 알림 단언을 유연 대화 경로로 옮김 | 같은 단언 그대로 |
+| realtime `PracticeProgressMappingTest` · `PracticeFlowRecordTest` · `PracticeFlowRouterTest` | 준비 단계(흐름 단계)만 C안으로 | 단언 내용 그대로 |
+| realtime `PracticeFlowIT` | 대본형 2건 → C안 끝-끝 2건 | — |
+| realtime `PracticeFlowSettingsTest` | 이름 변경, 10.14 표 · yml · 설정 레코드 대조를 새 키까지 넓힘 | — |
+
+- `FlowTransitionsTest`(유연 대화 · 공통 전이)는 손대지 않았다.
+- 새 시험: C안 전이표 · 문장 · 대화(`DirectAskLinesTest` 등), 판정 판 · 화자, R1(`PracticeChildSpeechTest` · `ChildSpeechStartExecutorTest`), 서버 검사 사유, 시드 006.
+
+### 13.4 구현하면서 정한 것 (설계와 다르거나 설계에 없던 것)
+
+| # | 내용 | 까닭 |
+|---|---|---|
+| 1 | 서버 길이 상한은 계약 스키마를 따른다(`helpSpeech` 300자, `askPrompt` 100자 · 1문장) | 스키마가 받는 값을 서버가 거절하지 않게 |
+| 2 | 뜻에 관한 규칙(전하기의 단서 · 호칭과 높임말 · 예시의 뜻 · 반응이 대답을 가정하지 않음)은 생성 · 검토 지시로만 막는다. 서버는 모양만 본다 | 서버가 판단할 수 없는 의미 규칙 |
+| 3 | 칭찬 거절 서버 사유는 `REACTION_PRAISE`, 검토 사유는 `PRESSURE`. 도움 꼬리 대조는 공백을 무시한다 | 원문 대조와 같은 규칙 |
+| 4 | 도움을 받고 해낸 장면(`AFTER_HELP`)에도 변형을 권한다. 집중 시계 만료만 변형 생략 사유다 | `retry-max` 1이면 기존 표가 변형을 막아서 |
+| 5 | REASK 무응답 1회는 `WAIT_LEAD` + `reaskPrompt`. 도움 · 변형 제안의 무응답 · 불명확은 같은 제안 문장을 다시 읽는다 | 설계 3.2에 없던 갈래 |
+| 6 | `SCENE_CLOSE`는 상황 안내를 들려준 장면에서만 낸다. 끊긴 마무리 문장은 전달된 것으로, 재생 실패한 마무리 문장은 `OUTPUT_FAILED`로 본다. 마무리 도중의 종료 · 실패는 이룬 시점을 지우지 않는다 | 기록 정확성 |
+| 7 | 옛 대본 대체: `focusPoints`가 없으면 `reexplanation`, 예시가 없으면 예시 없이 쓴다. 이어 붙이는 옛 칸은 문장부호를 정리한다 | 원문 대조 실패를 줄이려고 |
+| 8 | 목표 안내 · 회고 · 돌아보기를 C안에서도 낸다 | 설계 7.3 '장면 밖 말은 main 그대로'를 운영 동작으로 읽음 |
+| 9 | 도움 말 기록 행의 역할 값은 `COACH` 그대로다 | V7 CHECK 제약 안, 화면은 '무중'으로만 보임 |
+
+모두 `contracts/ai-io.md` 10.17에 적었다.
+
+### 13.5 다음
+
+- 실측 장치 이식: core 실호출 대본 생성(실제 Luna로 C안 대본 → 시작 패키지)과 realtime 실음성 연습 대화(실제 GPT-Live · Luna 판정 + 합성 아이 음성 + 제브 대역). 옛 브랜치 장치를 main 구조에 맞춰 옮긴다.
+- 그다음 5회차 실측(11장 계획)을 돌리고 결과를 14장에 적는다.
