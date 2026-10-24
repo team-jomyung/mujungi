@@ -197,18 +197,18 @@ class FlexiblePracticeConversationTest {
         assertThat(h.ext.state().phase()).isEqualTo(FlowState.Phase.OPPORTUNITY);
         assertThat(h.ext.state().sub()).isEqualTo(FlowState.Sub.DIALOGUE_REPLY);
         assertThat(h.out.lastSlot().generated()).isTrue();
-        assertThat(h.out.lastSlot().text()).contains("최신 뜻에 먼저 직접 반응해", "이미 해결된 정보를 다시 묻지 마");
+        // 목표 달성 뒤 상대 답은 지금 상호작용을 정리한다: 새 주제 · 새 질문으로 다시 열지 않는다
+        assertThat(h.out.lastSlot().text()).contains("받아들이고 그 결과로 짧게 이어가", "새 주제나 새 질문을 꺼내지 말고");
         assertThat(h.recorder.only().endedAt()).isNull();
     }
 
     @Test
-    void negotiationContinuesUntilAnAgreementAndTheFinalReplyHasPlayed() {
+    void anAgreementBeforeTheCapClosesTheSceneAfterTheFinalReplyHasPlayed() {
         Harness h = dialogue(); h.child("무슨 놀이를 하고 싶어?"); h.result("J2", "FULL"); h.played();
         h.child("교실에서는 못 하잖아");
         assertThat(h.out.lastJudgment().point()).isEqualTo(JudgmentPoint.J3);
         assertThat(h.out.lastJudgment().criteria()).containsEntry("coreFunction", "ROLE_DIALOGUE_CLOSURE");
         h.result("J3", "STILL_SHORT"); h.played();
-        h.child("같이 블록 만들자"); h.result("J3", "STILL_SHORT"); h.played();
         h.child("응, 같이 만들자");
         assertThat(h.result("J3", "DELIVERED")).isEqualTo(Signal.NONE);
         assertThat(h.ext.state().sub()).isEqualTo(FlowState.Sub.PEER_REPLY);
@@ -218,6 +218,36 @@ class FlexiblePracticeConversationTest {
         assertThat(h.played()).isEqualTo(Signal.LAST_GOAL);
         assertThat(h.recorder.only().liveTiming()).isEqualTo(LiveTiming.IMMEDIATE);
         assertThat(h.recorder.factKinds(h.recorder.only())).doesNotContain(FactKind.REASK_RESOLVED);
+    }
+
+    /** 2026-10-24 실키 사례: 목표 달성 뒤 정리 판정이 끝내 안 나와 잡담이 목표 시간 상한까지 이어졌다. 정리 답은 두 번까지만 한다. */
+    @Test
+    void afterTheGoalIsAchievedTheConversationClosesAfterTwoSettleRepliesEvenWithoutAnAgreement() {
+        Harness h = dialogue(); h.child("다른 놀이 할까?"); h.result("J2", "FULL"); h.played();
+        h.child("요즘 게임이 재밌어"); h.result("J3", "STILL_SHORT");
+        assertThat(h.ext.state().sub()).as("두 번째 정리 답").isEqualTo(FlowState.Sub.DIALOGUE_REPLY);
+        h.played();
+        h.child("리니지");
+        assertThat(h.result("J3", "STILL_SHORT")).isEqualTo(Signal.NONE);
+        assertThat(h.ext.state().sub()).as("상한에 닿으면 마무리 답").isEqualTo(FlowState.Sub.PEER_REPLY);
+        assertThat(h.out.lastSlot().text()).contains("직접 답하며 이 상호작용을 마무리해");
+        assertThat(h.out.generatedSlots()).filteredOn(slot -> slot.text().contains("받아들이고 그 결과로 짧게 이어가")).hasSize(2);
+        h.played();
+        assertThat(h.ext.state().sub()).isEqualTo(FlowState.Sub.GOAL_RECAP);
+        assertThat(h.played()).isEqualTo(Signal.LAST_GOAL);
+        assertThat(h.recorder.only().liveTiming()).as("목표 달성 기록은 그대로").isEqualTo(LiveTiming.IMMEDIATE);
+    }
+
+    @Test
+    void anAbstainedClosureJudgmentAfterTheGoalIsAchievedClosesTheSceneInsteadOfChatting() {
+        Harness h = dialogue(); h.child("다른 놀이 할까?"); h.result("J2", "FULL"); h.played();
+        h.child("너는 어떤 게 좋아");
+        h.event(ExtensionEvent.Kind.JUDGMENT_ABSTAINED, "judgment", h.out.lastJudgment().correlationId(), Map.of("point", "J3"));
+        assertThat(h.ext.state().sub()).isEqualTo(FlowState.Sub.PEER_REPLY);
+        assertThat(h.recorder.only().liveTiming()).isNull();
+        h.played();
+        assertThat(h.played()).isEqualTo(Signal.LAST_GOAL);
+        assertThat(h.recorder.only().liveTiming()).isEqualTo(LiveTiming.IMMEDIATE);
     }
 
     @Test

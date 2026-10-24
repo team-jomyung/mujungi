@@ -69,6 +69,8 @@ public final class PracticeConversation implements PracticeSessionExtension {
     private static final String COACH_SWITCH_CODE = "COACH_SWITCH";
     private static final String PEER_RETURN_CODE = "PEER_RETURN";
     private static final int CORE_FUNCTION_MAX = 500;
+    /** 목표 달성 뒤 상대의 정리 답 상한(이 장면). 이 수를 채우면 다음 아이 말 뒤 마무리 답으로 장면을 닫는다. */
+    static final int SETTLE_REPLY_MAX = 2;
     private static final String STAGE_SCENARIO_INTRO = "SCENARIO_INTRO";
     private static final String STAGE_FIRST_RESPONSE = "FIRST_RESPONSE";
     private static final String STAGE_HELP_OFFER = "HELP_OFFER";
@@ -124,6 +126,8 @@ public final class PracticeConversation implements PracticeSessionExtension {
     private LiveTiming goalAchievementTiming;
     private int clarificationAttempts;
     private int uncertainAttempts;
+    /** 목표 달성 뒤 들려준 상대의 정리 답 수(이 장면). {@link #SETTLE_REPLY_MAX}에 닿으면 대화 정리 판정과 관계없이 장면을 마무리한다. */
+    private int settleReplies;
     private boolean goalBriefPlayed;
     private boolean goalRecapped;
     private boolean reviewPerformed;
@@ -365,6 +369,7 @@ public final class PracticeConversation implements PracticeSessionExtension {
         goalAchievementTiming = null;
         clarificationAttempts = 0;
         uncertainAttempts = 0;
+        settleReplies = 0;
         if (settings.flexibleDialogue() && kind == SceneKind.BASE && !goalBriefPlayed) {
             state.phase(Phase.SCENE_INTRO, Sub.GOAL_BRIEF);
             speakGenerated(FlowRole.PEER, PracticeInstructions.goalBrief(pack.goals().get(state.goalIndex()).goalName(),
@@ -542,7 +547,10 @@ public final class PracticeConversation implements PracticeSessionExtension {
     }
 
     private void unavailableJudgment(JudgmentPoint point) {
-        if (settings.flexibleDialogue() && state.phase() == Phase.OPPORTUNITY) {
+        if (settings.flexibleDialogue() && state.phase() == Phase.OPPORTUNITY && goalAchieved) {
+            // 목표는 이미 해냈고 남은 것은 대화 정리뿐이다: 정리 판정 보류는 '정리됨'으로 보고 마무리 답으로 닫는다
+            closeAchievedScene();
+        } else if (settings.flexibleDialogue() && state.phase() == Phase.OPPORTUNITY) {
             // 판정 보류 · 장애는 들은 말을 못 들은 것이 아니다: '잘 못 들었어' 없이 상대 역할로 대화를 잇는다(practice-system.v1)
             uncertainAttempts = 0;
             continueDialogue();
@@ -576,7 +584,8 @@ public final class PracticeConversation implements PracticeSessionExtension {
                     if (clarificationAttempts > 0) recordFact(FactKind.REASK_RESOLVED);
                 }
                 uncertainAttempts = 0;
-                continueDialogue();
+                if (goalAchieved && settleReplies >= SETTLE_REPLY_MAX) closeAchievedScene();
+                else continueDialogue();
             }
             return true;
         }
@@ -591,7 +600,17 @@ public final class PracticeConversation implements PracticeSessionExtension {
     }
 
     private void continueDialogue() {
+        if (goalAchieved) settleReplies++;
         applyStep(Step.enter(Phase.OPPORTUNITY, Sub.DIALOGUE_REPLY));
+    }
+
+    /**
+     * 목표를 이미 해낸 장면을 상대의 마무리 답으로 닫는다. 목표 달성 뒤의 대화는 지금 상호작용을 정리하는 데까지만 잇는다: 정리 답이
+     * {@link #SETTLE_REPLY_MAX}번에 닿았거나 대화 정리 판정(J3)이 보류되면 더 기다리지 않는다(2026-10-24 실키 사례 — 정리 판정이 계속 보류돼 잡담이
+     * 목표 시간 상한까지 이어졌다).
+     */
+    private void closeAchievedScene() {
+        applyStep(Step.enter(Phase.SCENE_WRAP, Sub.PEER_REPLY).cause(FlowTransitions.EndCause.NORMAL).timing(goalAchievementTiming));
     }
 
     /**
@@ -917,7 +936,8 @@ public final class PracticeConversation implements PracticeSessionExtension {
         switch (step.phase()) {
             case SCENE_INTRO -> enterScene(SceneKind.VARIANT);
             case OPPORTUNITY -> {
-                if (step.sub() == Sub.DIALOGUE_REPLY) speakGenerated(FlowRole.PEER, PracticeInstructions.peerDialogue(currentScene));
+                if (step.sub() == Sub.DIALOGUE_REPLY) speakGenerated(FlowRole.PEER, goalAchieved
+                        ? PracticeInstructions.peerSettle(currentScene) : PracticeInstructions.peerDialogue(currentScene));
                 else if (step.sub() == Sub.CLARIFICATION_REPLY) speakGenerated(FlowRole.PEER, PracticeInstructions.peerClarification(currentScene));
                 else if (step.sub() == Sub.INPUT_CONFIRMATION) speakGenerated(FlowRole.PEER, PracticeInstructions.inputConfirmation());
                 else if (step.sub() == Sub.RETURN_NOTICE) announce(FlowRole.PEER);
