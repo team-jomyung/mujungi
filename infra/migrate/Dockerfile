@@ -85,6 +85,7 @@ COPY --from=reference_seed 002-u2-reference.sql /flyway/sql/reference/V002__u2_r
 COPY --from=reference_seed 003-u4a-reference.sql /flyway/sql/reference/V003__u4a_reference.sql
 COPY --from=reference_seed 004-u8-reference.sql /flyway/sql/reference/V004__u8_reference.sql
 COPY --from=reference_seed 005-spoken-audio-reference.sql /flyway/sql/reference/V005__spoken_audio_reference.sql
+COPY --from=reference_seed 006-practice-direct-ask-reference.sql /flyway/sql/reference/V006__practice_direct_ask_reference.sql
 COPY flyway-core.conf flyway-realtime.conf flyway-reference.conf /flyway/conf/
 COPY --chmod=0755 migrate.sh /usr/local/bin/mujoong-migrate
 USER 10001:10001

@@ -89,12 +89,16 @@ public class StartActivityService implements DisposableBean {
     /**
      * 활동 유형별 음성 없는 승인 발화 허용 목록(U8 functional-spec 8.1 표 · BR1.2). 이 목록에 있고 종류가 APPROVED_SPEECH이며 APPROVED 판이
      * 있는 code만 approvedSpeech에 싣는다. 목록 밖 code(CONSENT_POLICY · POLICY_TERMS_* · DRAFT만 있는 code)는 싣지 않는다.
+     *
+     * <p>연습 대화 C안(docs/practice-direct-ask.md 5장 · 편차 FT-1024-a): 연습은 006 고정 문장 6종을 더하고, 역할 전환 표현
+     * COACH_SWITCH · PEER_RETURN은 이 목록에서만 뺀다(004 시드 행은 그대로). realtime은 두 code가 없으면 역할 알림을 생성형으로 낸다.
      */
     static final List<String> FREE_TALK_APPROVED_SPEECH =
             List.of(ApprovedContent.CODE_D_REST_ACK_START, ApprovedContent.CODE_D_REST_ACK);
     static final List<String> PRACTICE_APPROVED_SPEECH = List.of(ApprovedContent.CODE_HELP_OFFER,
-            ApprovedContent.CODE_D_REST_ACK_START, ApprovedContent.CODE_D_REST_ACK, ApprovedContent.CODE_COACH_SWITCH,
-            ApprovedContent.CODE_PEER_RETURN);
+            ApprovedContent.CODE_D_REST_ACK_START, ApprovedContent.CODE_D_REST_ACK, ApprovedContent.CODE_VARIANT_OFFER,
+            ApprovedContent.CODE_RETRY_PROMPT, ApprovedContent.CODE_INPUT_CONFIRM, ApprovedContent.CODE_SCENE_CLOSE,
+            ApprovedContent.CODE_WAIT_LEAD, ApprovedContent.CODE_ASK_DEFAULT);
 
     private final GuardianRepository guardians;
     private final ChildProfileService childProfiles;

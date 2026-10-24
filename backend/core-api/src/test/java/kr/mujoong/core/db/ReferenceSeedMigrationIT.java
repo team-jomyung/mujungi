@@ -84,6 +84,12 @@ class ReferenceSeedMigrationIT {
                 assertThat(single(owner, "select version from core.core_approved_content_version"
                         + " where id='7dfe7883-ecdc-555d-b369-b66edde15377' and status='APPROVED'"))
                         .isEqualTo(3);
+                // 연습 대화 C안 006: 이미지에 들어간 고정 승인 발화 6종이 음성 없는 APPROVED_SPEECH v1로 한 번 들어간다
+                assertThat(single(owner, "select count(*) from core.core_approved_content c"
+                        + " join core.core_approved_content_version v on v.content_id = c.id"
+                        + " where c.content_code in ('VARIANT_OFFER','RETRY_PROMPT','INPUT_CONFIRM','SCENE_CLOSE','WAIT_LEAD','ASK_DEFAULT')"
+                        + " and c.content_type = 'APPROVED_SPEECH' and v.status = 'APPROVED' and v.audio_path is null and v.version = 1"))
+                        .isEqualTo(6L);
             }
         }
     }

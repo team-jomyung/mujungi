@@ -149,19 +149,37 @@ class ApprovedSpeechAssemblyTest {
     }
 
     @Test
-    void practiceSendsTheFivePracticeCodesAndHelpOfferMovedOutOfApprovedContent() {
+    void practiceSendsHelpOfferRestAndTheSixDirectAskCodesButNoLongerTheRoleSwitchCodes() {
         allFiveSpeechCodes();
+        sixDirectAskCodes();
 
         service.startPractice(guardianId, UUID.randomUUID(), UUID.randomUUID(), "sha256:practice", Map.of("goals", List.of()));
 
         ArgumentCaptor<SessionPackage> pkg = ArgumentCaptor.forClass(SessionPackage.class);
         ArgumentCaptor<Map<String, SpeechItem>> speech = speechCaptor();
         verify(realtime).startPractice(pkg.capture(), anyMap(), speech.capture());
-        assertThat(speech.getValue().keySet())
-                .containsExactly("HELP_OFFER", "D_REST_ACK_START", "D_REST_ACK", "COACH_SWITCH", "PEER_RETURN");
+        // 연습 대화 C안(FT-1024-a): 006 고정 문장 6종을 싣고, 역할 전환 표현은 행이 있어도 허용 목록에서 빠져 싣지 않는다
+        assertThat(speech.getValue().keySet()).containsExactly("HELP_OFFER", "D_REST_ACK_START", "D_REST_ACK", "VARIANT_OFFER",
+                "RETRY_PROMPT", "INPUT_CONFIRM", "SCENE_CLOSE", "WAIT_LEAD", "ASK_DEFAULT");
+        assertThat(speech.getValue()).doesNotContainKeys("COACH_SWITCH", "PEER_RETURN");
         assertThat(speech.getValue().get("HELP_OFFER").contentVersionId()).isEqualTo(versionIds.get("HELP_OFFER"));
-        assertThat(pkg.getValue().approvedContent()).doesNotContainKey("HELP_OFFER");
+        assertThat(speech.getValue().get("ASK_DEFAULT").contentVersionId()).isEqualTo(versionIds.get("ASK_DEFAULT"));
+        assertThat(speech.getValue().get("SCENE_CLOSE").text()).isEqualTo("알겠어. 이 이야기는 여기까지 할게.");
+        assertThat(pkg.getValue().approvedContent()).doesNotContainKey("HELP_OFFER")
+                .doesNotContainKeys("VARIANT_OFFER", "RETRY_PROMPT", "INPUT_CONFIRM", "SCENE_CLOSE", "WAIT_LEAD", "ASK_DEFAULT");
         assertThat(StartActivityService.PRACTICE_SESSION_CONTENT).doesNotContain("HELP_OFFER");
+    }
+
+    @Test
+    void aPracticeStartWithoutSeed006StillCarriesTheCodesThatExist() {
+        allFiveSpeechCodes();
+
+        service.startPractice(guardianId, UUID.randomUUID(), UUID.randomUUID(), "sha256:practice", Map.of("goals", List.of()));
+
+        ArgumentCaptor<Map<String, SpeechItem>> speech = speechCaptor();
+        verify(realtime).startPractice(any(), anyMap(), speech.capture());
+        assertThat(speech.getValue().keySet()).as("006이 아직 없는 DB: 있는 code만, 역할 전환 표현은 빼고")
+                .containsExactly("HELP_OFFER", "D_REST_ACK_START", "D_REST_ACK");
     }
 
     @Test
@@ -169,7 +187,9 @@ class ApprovedSpeechAssemblyTest {
         assertThat(StartActivityService.FREE_TALK_APPROVED_SPEECH).isNotEqualTo(StartActivityService.PRACTICE_APPROVED_SPEECH);
         assertThat(StartActivityService.PRACTICE_APPROVED_SPEECH).containsAll(StartActivityService.FREE_TALK_APPROVED_SPEECH);
         assertThat(StartActivityService.FREE_TALK_APPROVED_SPEECH)
-                .doesNotContain("HELP_OFFER", "COACH_SWITCH", "PEER_RETURN");
+                .doesNotContain("HELP_OFFER", "COACH_SWITCH", "PEER_RETURN", "VARIANT_OFFER", "RETRY_PROMPT", "INPUT_CONFIRM",
+                        "SCENE_CLOSE", "WAIT_LEAD", "ASK_DEFAULT");
+        assertThat(StartActivityService.PRACTICE_APPROVED_SPEECH).doesNotContain("COACH_SWITCH", "PEER_RETURN");
         for (List<String> allowed : List.of(StartActivityService.FREE_TALK_APPROVED_SPEECH,
                 StartActivityService.PRACTICE_APPROVED_SPEECH)) {
             assertThat(allowed).doesNotContain(ApprovedContent.CODE_CONSENT_POLICY, ApprovedContent.CODE_CLOSING,
@@ -211,6 +231,15 @@ class ApprovedSpeechAssemblyTest {
         content(ApprovedContent.CODE_D_REST_ACK, ApprovedContent.TYPE_APPROVED_SPEECH, "잠깐 쉬고 싶구나. 천천히 해도 괜찮아.", null, true);
         content(ApprovedContent.CODE_COACH_SWITCH, ApprovedContent.TYPE_APPROVED_SPEECH, "잠깐, 무중이 도와줄게", null, true);
         content(ApprovedContent.CODE_PEER_RETURN, ApprovedContent.TYPE_APPROVED_SPEECH, "다시 친구 역할로 돌아갈게", null, true);
+    }
+
+    private void sixDirectAskCodes() {
+        content(ApprovedContent.CODE_VARIANT_OFFER, ApprovedContent.TYPE_APPROVED_SPEECH, "비슷한 이야기로 한 번 더 해 볼까?", null, true);
+        content(ApprovedContent.CODE_RETRY_PROMPT, ApprovedContent.TYPE_APPROVED_SPEECH, "네 말로 한 번 말해 볼래?", null, true);
+        content(ApprovedContent.CODE_INPUT_CONFIRM, ApprovedContent.TYPE_APPROVED_SPEECH, "잘 못 들었어. 한 번 더 말해 줄래?", null, true);
+        content(ApprovedContent.CODE_SCENE_CLOSE, ApprovedContent.TYPE_APPROVED_SPEECH, "알겠어. 이 이야기는 여기까지 할게.", null, true);
+        content(ApprovedContent.CODE_WAIT_LEAD, ApprovedContent.TYPE_APPROVED_SPEECH, "천천히 생각해도 돼.", null, true);
+        content(ApprovedContent.CODE_ASK_DEFAULT, ApprovedContent.TYPE_APPROVED_SPEECH, "너라면 친구한테 뭐라고 말할래?", null, true);
     }
 
     /** 가짜 저장소에 종류 행과 (approved면) APPROVED 판 하나를 둔다. approved가 아니면 APPROVED 판이 없다(DRAFT만). */

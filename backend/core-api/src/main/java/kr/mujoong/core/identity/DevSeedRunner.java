@@ -1,5 +1,6 @@
 package kr.mujoong.core.identity;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
@@ -26,6 +27,9 @@ import org.springframework.transaction.support.TransactionTemplate;
  * <p>U8(BR1.1 · 설계 검토 R-01): {@code infra/seed/004-u8-reference.sql}과 같은 승인 발화(APPROVED_SPEECH) 5종 — HELP_OFFER v2 ·
  * D_REST_ACK_START · D_REST_ACK · COACH_SWITCH · PEER_RETURN — 을 같은 UUID · 글로 넣고, HELP_OFFER 종류 행을 APPROVED_SPEECH로
  * 바꾼다(002 v1 DRAFT의 RETIRED 처리는 004 몫).
+ *
+ * <p>연습 대화 C안(docs/practice-direct-ask.md 5장): {@code infra/seed/006-practice-direct-ask-reference.sql}과 같은 고정 승인 발화 6종 —
+ * VARIANT_OFFER · RETRY_PROMPT · INPUT_CONFIRM · SCENE_CLOSE · WAIT_LEAD · ASK_DEFAULT — 을 같은 UUID · 글 · 시각으로 넣는다.
  */
 @Component
 @Profile("dev")
@@ -120,20 +124,31 @@ public class DevSeedRunner implements ApplicationRunner {
             new SpeechSeed(SeedIds.CONTENT_PEER_RETURN, ApprovedContent.CODE_PEER_RETURN, SeedIds.VERSION_PEER_RETURN, 1,
                     SeedIds.PEER_RETURN_TEXT));
 
+    /** 연습 대화 C안 고정 승인 발화 6종(006과 같은 순서 · 값, docs/practice-direct-ask.md 5장). */
+    static final List<SpeechSeed> DIRECT_ASK_SEEDS = List.of(
+            new SpeechSeed(SeedIds.CONTENT_VARIANT_OFFER, ApprovedContent.CODE_VARIANT_OFFER, SeedIds.VERSION_VARIANT_OFFER, 1,
+                    SeedIds.VARIANT_OFFER_TEXT),
+            new SpeechSeed(SeedIds.CONTENT_RETRY_PROMPT, ApprovedContent.CODE_RETRY_PROMPT, SeedIds.VERSION_RETRY_PROMPT, 1,
+                    SeedIds.RETRY_PROMPT_TEXT),
+            new SpeechSeed(SeedIds.CONTENT_INPUT_CONFIRM, ApprovedContent.CODE_INPUT_CONFIRM, SeedIds.VERSION_INPUT_CONFIRM, 1,
+                    SeedIds.INPUT_CONFIRM_TEXT),
+            new SpeechSeed(SeedIds.CONTENT_SCENE_CLOSE, ApprovedContent.CODE_SCENE_CLOSE, SeedIds.VERSION_SCENE_CLOSE, 1,
+                    SeedIds.SCENE_CLOSE_TEXT),
+            new SpeechSeed(SeedIds.CONTENT_WAIT_LEAD, ApprovedContent.CODE_WAIT_LEAD, SeedIds.VERSION_WAIT_LEAD, 1,
+                    SeedIds.WAIT_LEAD_TEXT),
+            new SpeechSeed(SeedIds.CONTENT_ASK_DEFAULT, ApprovedContent.CODE_ASK_DEFAULT, SeedIds.VERSION_ASK_DEFAULT, 1,
+                    SeedIds.ASK_DEFAULT_TEXT));
+
     /**
      * 004의 1 ~ 3단계와 같다: 종류 행(있으면 그대로) → HELP_OFFER 종류를 APPROVED_SPEECH로(002가 먼저 만든 DB) → 음성 없는 APPROVED 판.
      * 몇 번 돌아도 결과가 같다. 002의 HELP_OFFER v1 DRAFT를 RETIRED로 두는 4단계는 하지 않는다 — 조회는 APPROVED 최고 판만 보므로
-     * 동작이 같고, dev 시드가 다른 시드의 행 상태를 바꾸지 않게 한다(U8 code-summary 결정 표).
+     * 동작이 같고, dev 시드가 다른 시드의 행 상태를 바꾸지 않게 한다(U8 code-summary 결정 표). 그 뒤 006의 1 · 2단계(C안 6종)를 같은 방식으로
+     * 006 시각에 넣는다.
      */
     private int approvedSpeech() {
         int rows = 0;
         for (SpeechSeed seed : SPEECH_SEEDS) {
-            rows += jdbc.update("""
-                    insert into core.core_approved_content (id, content_code, content_type, created_at)
-                    values (:id, :code, :type, :now)
-                    on conflict do nothing
-                    """, u8SeedTime().uuid("id", seed.contentId()).text("code", seed.code())
-                    .text("type", ApprovedContent.TYPE_APPROVED_SPEECH).source());
+            rows += speechContent(seed, SeedIds.U8_SEED_TIME);
         }
         rows += jdbc.update("""
                 update core.core_approved_content
@@ -143,16 +158,37 @@ public class DevSeedRunner implements ApplicationRunner {
                 """, u8SeedTime().text("type", ApprovedContent.TYPE_APPROVED_SPEECH)
                 .text("code", ApprovedContent.CODE_HELP_OFFER).source());
         for (SpeechSeed seed : SPEECH_SEEDS) {
-            rows += jdbc.update("""
-                    insert into core.core_approved_content_version (id, content_id, version, content_text, audio_path, status, created_at)
-                    select cast(:versionId as uuid), content.id, :version, :text, null, 'APPROVED', :now
-                      from core.core_approved_content content
-                     where content.content_code = :code
-                    on conflict do nothing
-                    """, u8SeedTime().uuid("versionId", seed.versionId()).integer("version", seed.version())
-                    .text("text", seed.text()).text("code", seed.code()).source());
+            rows += speechVersion(seed, SeedIds.U8_SEED_TIME);
+        }
+        for (SpeechSeed seed : DIRECT_ASK_SEEDS) {
+            rows += speechContent(seed, SeedIds.DIRECT_ASK_SEED_TIME);
+        }
+        for (SpeechSeed seed : DIRECT_ASK_SEEDS) {
+            rows += speechVersion(seed, SeedIds.DIRECT_ASK_SEED_TIME);
         }
         return rows;
+    }
+
+    /** 승인 발화 종류 행(있으면 그대로). */
+    private int speechContent(SpeechSeed seed, Instant seededAt) {
+        return jdbc.update("""
+                insert into core.core_approved_content (id, content_code, content_type, created_at)
+                values (:id, :code, :type, :now)
+                on conflict do nothing
+                """, new Params(ClockParams.at(seededAt)).uuid("id", seed.contentId()).text("code", seed.code())
+                .text("type", ApprovedContent.TYPE_APPROVED_SPEECH).source());
+    }
+
+    /** 음성 없는 APPROVED 판(종류 행에 content_code로 붙는다, 같은 판이 있으면 그대로). */
+    private int speechVersion(SpeechSeed seed, Instant seededAt) {
+        return jdbc.update("""
+                insert into core.core_approved_content_version (id, content_id, version, content_text, audio_path, status, created_at)
+                select cast(:versionId as uuid), content.id, :version, :text, null, 'APPROVED', :now
+                  from core.core_approved_content content
+                 where content.content_code = :code
+                on conflict do nothing
+                """, new Params(ClockParams.at(seededAt)).uuid("versionId", seed.versionId()).integer("version", seed.version())
+                .text("text", seed.text()).text("code", seed.code()).source());
     }
 
     private static Params u8SeedTime() {

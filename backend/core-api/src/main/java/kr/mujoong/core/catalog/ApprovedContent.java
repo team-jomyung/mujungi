@@ -36,6 +36,20 @@ public class ApprovedContent {
     /** 친구 역할 복귀 표현(U8 · B §8.5). */
     public static final String CODE_PEER_RETURN = "PEER_RETURN";
 
+    // 연습 대화 C안 고정 승인 발화(006 시드 · docs/practice-direct-ask.md 5장). 장면 안 무중의 말 중 대본 밖 고정 문장이다
+    /** 변형 장면 제안. */
+    public static final String CODE_VARIANT_OFFER = "VARIANT_OFFER";
+    /** 다시 해 보기 무응답 뒤 다시 청하기. */
+    public static final String CODE_RETRY_PROMPT = "RETRY_PROMPT";
+    /** 판독 불가 · 판정 보류 뒤 다시 말해 달라고 하기. */
+    public static final String CODE_INPUT_CONFIRM = "INPUT_CONFIRM";
+    /** 장면 실패 · 거절 · 한도 뒤 장면 닫기. */
+    public static final String CODE_SCENE_CLOSE = "SCENE_CLOSE";
+    /** 무응답 다시 묻기의 앞머리(뒤에 대본 askPrompt가 붙는다). */
+    public static final String CODE_WAIT_LEAD = "WAIT_LEAD";
+    /** 옛 대본(askPrompt 없음)의 묻기 대체. */
+    public static final String CODE_ASK_DEFAULT = "ASK_DEFAULT";
+
     /** 승인 음성이 딸린 문구(J117). */
     public static final String TYPE_APPROVED_AUDIO = "APPROVED_AUDIO";
     /**

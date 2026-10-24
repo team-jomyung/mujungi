@@ -150,8 +150,10 @@ owner_psql() {
 # U8(BR1.1): 004가 음성 없는 승인 발화(APPROVED_SPEECH) 5종을 넣고 HELP_OFFER를 v2로 올린다
 # 005: 새 승인 음성 판 8종(INTRO_FREE_TALK v3 등)을 넣고 이전 판을 RETIRED로 바꾼다. 자유대화 첫 안내는 이 판의 음성이
 #   service-policy/notice-assets.json과 맞아야 재생된다(맞지 않으면 C8에서 안내가 오지 않는다). 매 회차 001 ~ 004 뒤에 둔다
+# 006: 연습 대화 C안의 음성 없는 고정 승인 발화(APPROVED_SPEECH) 6종을 넣는다. 매 회차 005 뒤에 둔다
 for i in 1 2; do
-  for seed in 001-reference.sql 002-u2-reference.sql 003-u4a-reference.sql 004-u8-reference.sql 005-spoken-audio-reference.sql; do
+  for seed in 001-reference.sql 002-u2-reference.sql 003-u4a-reference.sql 004-u8-reference.sql 005-spoken-audio-reference.sql \
+    006-practice-direct-ask-reference.sql; do
     if ! owner_psql --single-transaction -f "/seed/$seed"; then
       die_assert B2.seed "시드 $seed ${i}회차 실패"
     fi
@@ -168,6 +170,12 @@ if [ "$session_prompts" = "6" ]; then
   pass B2.seed003 "시드 002 · 003 두 번 적용(멱등) → 세션 승인 문구 6종 APPROVED(U4b 참여 확인 · 공백 안내)"
 else
   die_assert B2.seed003 "세션 승인 문구 APPROVED가 6종이 아니다(${session_prompts:-없음})"
+fi
+direct_ask_speech="$(owner_psql -At -c "SELECT count(DISTINCT c.content_code) FROM core.core_approved_content c JOIN core.core_approved_content_version v ON v.content_id = c.id WHERE v.status = 'APPROVED' AND v.audio_path IS NULL AND c.content_type = 'APPROVED_SPEECH' AND c.content_code IN ('VARIANT_OFFER','RETRY_PROMPT','INPUT_CONFIRM','SCENE_CLOSE','WAIT_LEAD','ASK_DEFAULT')" || true)"
+if [ "$direct_ask_speech" = "6" ]; then
+  pass B2.seed006 "시드 006 두 번 적용(멱등) → 연습 C안 고정 승인 발화 6종 APPROVED(음성 없음)"
+else
+  die_assert B2.seed006 "연습 C안 고정 승인 발화 APPROVED가 6종이 아니다(${direct_ask_speech:-없음})"
 fi
 
 # ---- B5 프로필 가드(앱을 올리기 전) -----------------------------------------------------------------------------------

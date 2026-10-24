@@ -75,6 +75,34 @@ public final class SeedIds {
     /** U8 시드 정의 시각(004-u8-reference.sql과 같다). */
     public static final Instant U8_SEED_TIME = Instant.parse("2026-10-16T00:00:00Z");
 
+    /**
+     * 연습 대화 C안 고정 승인 발화(APPROVED_SPEECH, {@code infra/seed/006-practice-direct-ask-reference.sql}과 같은 UUID · 글 · 시각). 종류 행은
+     * …8a5 ~ …8aa, 판 행은 …8b6 ~ …8bb이고 모두 v1이다. 글은 docs/practice-direct-ask.md 5장 표에서 글자 그대로 옮겼다.
+     */
+    public static final UUID CONTENT_VARIANT_OFFER = UUID.fromString("00000000-0000-4000-8000-0000000008a5");
+    public static final UUID CONTENT_RETRY_PROMPT = UUID.fromString("00000000-0000-4000-8000-0000000008a6");
+    public static final UUID CONTENT_INPUT_CONFIRM = UUID.fromString("00000000-0000-4000-8000-0000000008a7");
+    public static final UUID CONTENT_SCENE_CLOSE = UUID.fromString("00000000-0000-4000-8000-0000000008a8");
+    public static final UUID CONTENT_WAIT_LEAD = UUID.fromString("00000000-0000-4000-8000-0000000008a9");
+    public static final UUID CONTENT_ASK_DEFAULT = UUID.fromString("00000000-0000-4000-8000-0000000008aa");
+
+    public static final UUID VERSION_VARIANT_OFFER = UUID.fromString("00000000-0000-4000-8000-0000000008b6");
+    public static final UUID VERSION_RETRY_PROMPT = UUID.fromString("00000000-0000-4000-8000-0000000008b7");
+    public static final UUID VERSION_INPUT_CONFIRM = UUID.fromString("00000000-0000-4000-8000-0000000008b8");
+    public static final UUID VERSION_SCENE_CLOSE = UUID.fromString("00000000-0000-4000-8000-0000000008b9");
+    public static final UUID VERSION_WAIT_LEAD = UUID.fromString("00000000-0000-4000-8000-0000000008ba");
+    public static final UUID VERSION_ASK_DEFAULT = UUID.fromString("00000000-0000-4000-8000-0000000008bb");
+
+    public static final String VARIANT_OFFER_TEXT = "비슷한 이야기로 한 번 더 해 볼까?";
+    public static final String RETRY_PROMPT_TEXT = "네 말로 한 번 말해 볼래?";
+    public static final String INPUT_CONFIRM_TEXT = "잘 못 들었어. 한 번 더 말해 줄래?";
+    public static final String SCENE_CLOSE_TEXT = "알겠어. 이 이야기는 여기까지 할게.";
+    public static final String WAIT_LEAD_TEXT = "천천히 생각해도 돼.";
+    public static final String ASK_DEFAULT_TEXT = "너라면 친구한테 뭐라고 말할래?";
+
+    /** C안 시드 정의 시각(006-practice-direct-ask-reference.sql과 같다). */
+    public static final Instant DIRECT_ASK_SEED_TIME = Instant.parse("2026-10-24T00:00:00Z");
+
     private SeedIds() {
     }
 }
