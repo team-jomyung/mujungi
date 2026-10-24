@@ -20,7 +20,6 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
-import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -817,9 +816,12 @@ class PracticeQualityLiveTest {
                     "heard 칸마다의 checks는 하니스 참고 점검이다(운영 검사 아님): 문장부호(마침표 · 쉼표 · 물음표 밖의 부호), 길이(설계 4.3 · 생성 v3 "
                             + "칸별 상한의 글자 수 · 문장 수), 역할 말(운영 ROLE_TALK와 같은 모양), 목표 표현 · 표현 예시 누설(leakForbidden 칸만 합계에 센다. "
                             + "도움 · 상대 반응 칸 값은 참고), 칭찬 · 평가어. spokenIntroduction · reexplanation의 문장부호 · 길이 규칙은 생성 지시에만 있고 "
-                            + "서버 검사에는 없다.",
-                    "attempts: serverCheckReasons는 운영 생성기가 서버 검사에 걸릴 때마다 낸 진단 코드(ScenarioRule_<사유>)를 센 값이고 directAsk는 C안 "
-                            + "들리는 칸 사유다. reviewVerdicts · reviewReasons는 별도 검토 응답, correctionsSent는 다음 생성에 실제로 보낸 보완 사유다.",
+                            + "서버 검사에는 없다. 칸 없음(missing)은 발급 때 칸별 서버 검사에 걸려 뺀 칸이다(attempts.strippedFields).",
+                    "검토: 별도 검토는 main 검토 지시(review.v1)이고 C안 칸 다섯 개를 뺀 장면만 본다. C안 칸과 상황 안내는 운영 생성기가 칸마다 서버 검사하고 "
+                            + "걸린 칸만 뺀 채 장면을 발급한다(장면은 버리지 않는다). 뺀 칸은 realtime이 대체 문장으로 읽는다.",
+                    "attempts: serverCheckReasons는 운영 생성기가 장면 판정에 걸릴 때마다 낸 진단 코드(ScenarioRule_<사유>)를 센 값이다(걸리면 장면 실패 · "
+                            + "보완). strippedFields는 발급 때 뺀 칸의 진단 코드(ScenarioField_<칸>_<사유>, 고정 코드뿐이고 대본 글은 없다)다. "
+                            + "reviewVerdicts · reviewReasons는 별도 검토 응답, correctionsSent는 다음 생성에 실제로 보낸 보완 사유다.",
                     "script.storedRoundTrip은 발급 대본을 DB에서 다시 읽어 같은지, firstScenarioSchemaErrors는 시작 패키지 첫 대본이 계약 "
                             + "practice-scenario.schema.json을 지키는지(빈 목록이면 통과)다.");
         }
@@ -1004,18 +1006,14 @@ class PracticeQualityLiveTest {
 
     // ------------------------------------------------------------------ 생성 시도 · 보완 사유
 
-    /** 목표 하나의 생성 시도와 보완 사유(서버 검사 · 별도 검토 · 공급자 실패), 그리고 목표들의 합계. */
+    /** 목표 하나의 생성 시도와 보완 사유(서버 검사 · 별도 검토 · 공급자 실패) · 발급 때 뺀 칸, 그리고 목표들의 합계. */
     static final class Attempts {
 
-        /** C안 들리는 칸 서버 검사 사유(C안이 더한 사유와, 들리는 칸 모양 검사가 함께 쓰는 SPOKEN_FORMAT). */
-        static final Set<ScenarioScriptValidation.Reason> DIRECT_ASK_REASONS = EnumSet.of(
-                ScenarioScriptValidation.Reason.SPOKEN_PUNCTUATION, ScenarioScriptValidation.Reason.ROLE_TALK,
-                ScenarioScriptValidation.Reason.RELAY_COPIES_PARTNER_LINE, ScenarioScriptValidation.Reason.ASK_PROMPT_FORM,
-                ScenarioScriptValidation.Reason.HELP_TAIL_MISSING, ScenarioScriptValidation.Reason.REACTION_PRAISE,
-                ScenarioScriptValidation.Reason.REACTION_QUESTION, ScenarioScriptValidation.Reason.SPOKEN_FORMAT);
         static final String RULE = "ScenarioRule_";
         static final String RESULT = "ScenarioValidation_";
         static final String PROVIDER = "ScenarioProvider_";
+        /** 발급 때 칸별 서버 검사에 걸려 뺀 들리는 칸(ScenarioField_<칸>_<사유>, 고정 코드뿐이다). */
+        static final String FIELD = "ScenarioField_";
 
         private Attempts() {
         }
@@ -1048,17 +1046,22 @@ class PracticeQualityLiveTest {
             attempts.put("correctionsSent", calls.stream()
                     .filter(c -> purpose(c, LunaPurpose.SCENARIO_GENERATION) && c.get("correctionReasons") != null)
                     .map(c -> c.get("correctionReasons")).toList());
+            attempts.put("strippedFields", codes.stream().filter(code -> code.startsWith(FIELD)).toList());
             attempts.put("diagnostics", codes);
             return attempts;
         }
 
-        /** 목표들의 합계. directAsk는 C안 사유를 모두(0 포함) 보이고, other는 그 밖에 난 서버 검사 사유다. */
+        /**
+         * 목표들의 합계. serverCheckReasons는 장면 판정 사유(걸리면 장면 실패 · 보완), strippedFields는 발급 때 뺀 칸이다: byCode는 진단 코드
+         * (ScenarioField_ 뒤 칸_사유)별, byField는 칸별, byReason은 칸별 판정 사유를 모두(0 포함) 보인다.
+         */
         static Map<String, Object> totals(List<Map<String, Object>> goals) {
             Map<String, Integer> server = new LinkedHashMap<>();
             Map<String, Integer> results = new LinkedHashMap<>();
             Map<String, Integer> verdicts = new LinkedHashMap<>();
             Map<String, Integer> reasons = new LinkedHashMap<>();
             Map<String, Integer> providers = new LinkedHashMap<>();
+            List<String> stripped = new ArrayList<>();
             long generations = 0;
             long reviews = 0;
             for (Map<String, Object> goal : goals) {
@@ -1070,24 +1073,43 @@ class PracticeQualityLiveTest {
                 merge(verdicts, attempts.get("reviewVerdicts"));
                 merge(reasons, attempts.get("reviewReasons"));
                 merge(providers, attempts.get("providerFailures"));
+                if (attempts.get("strippedFields") instanceof List<?> codes) {
+                    codes.forEach(code -> stripped.add(String.valueOf(code)));
+                }
             }
-            Map<String, Integer> directAsk = new LinkedHashMap<>();
-            for (ScenarioScriptValidation.Reason reason : DIRECT_ASK_REASONS) {
-                directAsk.put(reason.name(), server.getOrDefault(reason.name(), 0));
-            }
-            Map<String, Integer> other = new LinkedHashMap<>(server);
-            directAsk.keySet().forEach(other::remove);
-            Map<String, Object> serverReasons = new LinkedHashMap<>();
-            serverReasons.put("directAsk", directAsk);
-            serverReasons.put("other", other);
             Map<String, Object> totals = new LinkedHashMap<>();
             totals.put("generationCalls", generations);
             totals.put("reviewCalls", reviews);
-            totals.put("serverCheckReasons", serverReasons);
+            totals.put("serverCheckReasons", server);
             totals.put("serverCheckResults", results);
             totals.put("reviewVerdicts", verdicts);
             totals.put("reviewReasons", reasons);
             totals.put("providerFailures", providers);
+            totals.put("strippedFields", strippedTotals(stripped));
+            return totals;
+        }
+
+        /** 뺀 칸 진단 코드 합계(코드 · 칸 · 사유별). 칸 이름에는 밑줄이 없어 첫 밑줄 앞이 칸, 뒤가 사유다. */
+        static Map<String, Object> strippedTotals(List<String> codes) {
+            Map<String, Integer> byCode = new LinkedHashMap<>();
+            Map<String, Integer> byField = new LinkedHashMap<>();
+            ScenarioScriptValidation.OPTIONAL_SPOKEN_FIELDS.forEach(field -> byField.put(field, 0));
+            Map<String, Integer> byReason = new LinkedHashMap<>();
+            ScenarioScriptValidation.FIELD_REASONS.forEach(reason -> byReason.put(reason.name(), 0));
+            for (String code : codes) {
+                String rest = code.substring(FIELD.length());
+                byCode.merge(rest, 1, Integer::sum);
+                int split = rest.indexOf('_');
+                if (split > 0) {
+                    byField.merge(rest.substring(0, split), 1, Integer::sum);
+                    byReason.merge(rest.substring(split + 1), 1, Integer::sum);
+                }
+            }
+            Map<String, Object> totals = new LinkedHashMap<>();
+            totals.put("count", codes.size());
+            totals.put("byCode", byCode);
+            totals.put("byField", byField);
+            totals.put("byReason", byReason);
             return totals;
         }
 
@@ -1190,7 +1212,7 @@ class PracticeQualityLiveTest {
     static final class HeardLines {
 
         static final String SPEAKER = "무중: ";
-        static final String MISSING = "(칸 없음: realtime이 옛 대본 대체 문장을 읽는다)";
+        static final String MISSING = "(칸 없음: 발급 때 서버 검사에 걸려 뺀 칸이다. realtime이 대체 문장을 읽는다)";
         /** 들리는 말에서 찾는 칭찬 · 평가어(운영 REACTION_PRAISE 목록과 옛 하니스 점검표를 합친 참고 목록, 공백을 뺀 글에서 찾는다). */
         static final List<String> PRAISE_WORDS = List.of("잘했", "잘한", "잘하네", "잘말했", "멋지", "멋져", "멋진", "멋있", "정답", "훌륭",
                 "최고", "대단", "똑똑", "완벽", "칭찬", "맞았", "맞혔", "틀렸", "100점");
