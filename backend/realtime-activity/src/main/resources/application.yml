@@ -254,4 +254,6 @@ mujoong:
     purpose:
       judgment-live:
         max-output-tokens: 4000
-        reasoning-effort: medium
+        # 4회차 R5: medium → none. 진행 중 판정은 live-budget(4s) 안에 와야 한다. 실측 비교(JudgmentEffortBenchTest, 168회)에서 none은
+        # 시한 안 확정 + 기대 일치가 medium과 같고(33/36) 지연 90%가 3.4s → 1.6s, 최대 5.8s → 2.0s였다. minimal은 이 모델이 받지 않는다
+        reasoning-effort: none
