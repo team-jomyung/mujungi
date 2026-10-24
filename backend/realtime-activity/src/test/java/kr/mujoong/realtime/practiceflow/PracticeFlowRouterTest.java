@@ -1,5 +1,6 @@
 package kr.mujoong.realtime.practiceflow;
 
+import static kr.mujoong.realtime.practiceflow.PracticeScriptFixtures.FIXED_SPEECH;
 import static kr.mujoong.realtime.practiceflow.PracticeScriptFixtures.directAskScript;
 import static kr.mujoong.realtime.practiceflow.PracticeScriptFixtures.minimalScript;
 import static kr.mujoong.realtime.practiceflow.PracticeScriptFixtures.packageJson;
@@ -182,17 +183,19 @@ class PracticeFlowRouterTest {
         PracticeSessionExtension failingLegacy = mock(PracticeSessionExtension.class, withSettings().defaultAnswer(invocation -> {
             throw new AssertionError("레거시 확장을 부르면 안 된다: " + invocation.getMethod().getName());
         }));
-        Harness h = new Harness(packageJson(GOAL, minimalScript(SCENARIO)), Map.of());
+        Harness h = new Harness(packageJson(GOAL, directAskScript(SCENARIO)), FIXED_SPEECH);
         PracticeFlowRouter routed = new PracticeFlowRouter(failingLegacy, () -> h.ext);
 
         assertThat(routed.controlsOutput()).isTrue();
         assertThat(routed.onActive(h.context, h.out)).isEqualTo(Signal.NONE);
-        routed.onExtensionEvent(playedEvent(h), h.out);
-        routed.onExtensionEvent(playedEvent(h), h.out);
-        routed.onChildUtterance(new Utterance(1, Instant.EPOCH, "그거 줘", false, false), h.out);
+        routed.onExtensionEvent(playedEvent(h), h.out); // 목표 안내
+        routed.onExtensionEvent(playedEvent(h), h.out); // 상황 안내
+        routed.onExtensionEvent(playedEvent(h), h.out); // 친구 말 전하기 + 묻기
+        routed.onChildUtterance(new Utterance(1, Instant.EPOCH, "손 괜찮아?", false, false), h.out);
         routed.onExtensionEvent(new ExtensionEvent(ExtensionEvent.Kind.JUDGMENT_RESULT, "judgment", h.out.lastJudgment().correlationId(),
                 Map.of("point", "J2", "firstOption", "FULL", "secondOption", "NONE")), h.out);
-        assertThat(h.recorder.only().endedAt()).isNull();
+        assertThat(h.recorder.only().endedAt()).as("친구 반응을 재생하기 전").isNull();
+        assertThat(routed.onExtensionEvent(playedEvent(h), h.out)).as("친구 반응 뒤 목표 회고").isEqualTo(Signal.NONE);
         assertThat(routed.onExtensionEvent(playedEvent(h), h.out)).isEqualTo(Signal.LAST_GOAL);
 
         assertThat(routed.progress()).isNotNull();

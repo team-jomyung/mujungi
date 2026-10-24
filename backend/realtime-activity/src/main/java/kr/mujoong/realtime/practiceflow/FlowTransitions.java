@@ -20,6 +20,12 @@ import kr.mujoong.realtime.practiceflow.PracticeFlowTypes.VariantSkipReason;
  * <p>한도는 {@code Instant} 차이가 아니라 시계 만료 표지({@link FlowState#focusLimitReached()} · {@link FlowState#goalLimitReached()})와 횟수로
  * 판단한다(D3). 표에 없는 입력은 오류가 아니라 {@link Action#IGNORE}다(BR3.1). 계약의 기록 사실 15종 · 변형 생략 사유 5종 · 진행 중 판정 시점
  * 5종만 쓴다. 아이 전사 · 대본 문장 · 판정 입력은 받지도 돌려주지도 않는다(R-F14).
+ *
+ * <p>C안 '무중이 직접 묻기'({@code directAsk}, docs/practice-direct-ask.md 3장)는 같은 표에서 네 곳만 다르다. ① 도움 요청 · 도움 동의는 역할 전환
+ * 알림({@code ROLE_NOTICE}) 없이 곧바로 무중의 도움으로 간다. ② 장면 정리는 복귀 알림({@code RETURN_NOTICE}) · 친구 역할 답변({@code PEER_REPLY})
+ * 대신, 수행이면 친구 반응({@code FRIEND_REACTION}), 실패 · 거절 · 한도면 고정 마무리 문장({@code SCENE_CLOSE})을 낸다. 재생 실패 · 막힘은
+ * 지금처럼 말 없이 정리한다. ③ 아이가 먼저 도움을 청해도(J2 · J3 HELP) 도움 동의(ACCEPT · HELP_ACCEPTED)로 남긴다. ④ 마무리 문장이 아이 말로
+ * 끊기면 전달된 것으로 보고 다음으로 간다. 다시 해 보기 한도는 설정({@code retry-max}, C안 기본 1)이 정한다.
  */
 public final class FlowTransitions {
 
@@ -260,17 +266,33 @@ public final class FlowTransitions {
 
     private final int retryMax;
     private final int reexplainMax;
+    private final boolean directAsk;
 
     /**
+     * 역할 대화 표(유연 대화 경로가 쓴다).
+     *
      * @param retryMax 장면당 다시 해 보기 최대 횟수(mujoong.practice-flow.retry-max)
      * @param reexplainMax 장면당 상황 다시 설명 최대 횟수(mujoong.practice-flow.reexplain-max)
      */
     public FlowTransitions(int retryMax, int reexplainMax) {
+        this(retryMax, reexplainMax, false);
+    }
+
+    /**
+     * @param directAsk 참이면 C안 '무중이 직접 묻기' 표(역할 전환 없음 · 마무리 문장)
+     */
+    public FlowTransitions(int retryMax, int reexplainMax, boolean directAsk) {
         if (retryMax < 0 || reexplainMax < 0) {
             throw new IllegalArgumentException("횟수 한도는 0 이상이어야 한다");
         }
         this.retryMax = retryMax;
         this.reexplainMax = reexplainMax;
+        this.directAsk = directAsk;
+    }
+
+    /** C안 표인가. */
+    public boolean directAsk() {
+        return directAsk;
     }
 
     /** 단계마다 묶인 판정 지점(OPPORTUNITY=J2, REASK=J3, HELP_OFFER=J4, RETRY=J5, VARIANT_OFFER=J4 재사용). */
@@ -339,7 +361,7 @@ public final class FlowTransitions {
 
     private Step helpOffer(FlowState s, String code) {
         return switch (code) {
-            case "ACCEPT" -> Step.enter(Phase.FOCUS, Sub.ROLE_NOTICE).fact(FactKind.HELP_ACCEPTED).consent(ConsentAnswer.ACCEPT)
+            case "ACCEPT" -> Step.enter(Phase.FOCUS, focusEntry()).fact(FactKind.HELP_ACCEPTED).consent(ConsentAnswer.ACCEPT)
                     .helpConsented();
             case "REFUSE" -> wrap(s, EndCause.HELP_DECLINED, FactKind.HELP_DECLINED, LiveTiming.NONE).consent(ConsentAnswer.DECLINE);
             case "UNCLEAR" -> s.unreadableGuided()
@@ -377,8 +399,21 @@ public final class FlowTransitions {
         return s.retryCount() < retryMax && !s.focusLimitReached();
     }
 
-    private static Step helpRequested() {
+    /**
+     * 아이가 먼저 도움을 청했다(J2 · J3 HELP). C안은 역할 전환 없이 곧바로 도움으로 가고, 청한 것을 도움 동의(ACCEPT · HELP_ACCEPTED)로 남긴다 —
+     * 리포트가 동의 응답을 사실 HELP_ACCEPTED로만 세므로 '요청'을 '답 없음'으로 세지 않게 한다(docs/practice-direct-ask.md 7.2).
+     */
+    private Step helpRequested() {
+        if (directAsk) {
+            return Step.enter(Phase.FOCUS, Sub.COACH_UTTERANCE).fact(FactKind.HELP_ACCEPTED).consent(ConsentAnswer.ACCEPT)
+                    .helpConsented();
+        }
         return Step.enter(Phase.FOCUS, Sub.ROLE_NOTICE).consent(ConsentAnswer.REQUESTED).helpConsented();
+    }
+
+    /** 도움 진입 소단계: 역할 대화는 전환 알림부터, C안은 곧바로 도움 말. */
+    private Sub focusEntry() {
+        return directAsk ? Sub.COACH_UTTERANCE : Sub.ROLE_NOTICE;
     }
 
     /** UNREADABLE: 같은 질문을 교정 없이 한 번 다시, 두 번째면 판독 불가로 미실시(TRANSCRIPT_FAILED, NONE). */
@@ -462,6 +497,7 @@ public final class FlowTransitions {
             case SCENE_WRAP -> switch (s.sub()) {
                 case RETURN_NOTICE -> returnNoticeEnded(s, end);
                 case PEER_REPLY -> peerReplyEnded(s, end);
+                case FRIEND_REACTION, SCENE_CLOSE -> closingLineEnded(s, end);
                 default -> Step.ignore();
             };
             default -> Step.ignore();
@@ -517,7 +553,22 @@ public final class FlowTransitions {
         if (end == SlotEnd.PLAYED) {
             return Step.enter(Phase.SCENE_WRAP, Sub.VARIANT_EVAL);
         }
-        // Blocked, failed or cut-off replies never start another generated reply or a variant.
+        return failedClosing(s, end);
+    }
+
+    /**
+     * C안 마무리 문장(친구 반응 · 고정 마무리)이 닫혔다. 끝까지 재생됐거나 아이 말로 끊겼으면 전달된 것으로 보고 변형 평가로 간다 — 아이가 마무리 위에
+     * 말한 것을 실패로 치지 않는다(docs/practice-direct-ask.md 7.2). 실패 · 막힘은 친구 역할 답변과 같게 재생 실패로 정리한다.
+     */
+    private Step closingLineEnded(FlowState s, SlotEnd end) {
+        if (end == SlotEnd.PLAYED || end == SlotEnd.INTERRUPTED) {
+            return Step.enter(Phase.SCENE_WRAP, Sub.VARIANT_EVAL);
+        }
+        return failedClosing(s, end);
+    }
+
+    /** Blocked, failed or cut-off replies never start another reply or a variant. */
+    private static Step failedClosing(FlowState s, SlotEnd end) {
         return Step.enter(Phase.SCENE_WRAP, Sub.VARIANT_EVAL)
                 .cause(end == SlotEnd.BLOCKED ? EndCause.SLOT_BLOCKED : EndCause.PLAYBACK_FAILED)
                 .timing(s.sceneTiming()).fact(end == SlotEnd.BLOCKED ? null : FactKind.PLAYBACK_FAILED);
@@ -565,14 +616,29 @@ public final class FlowTransitions {
         if (s.goalLimitReached()) {
             return VariantSkipReason.TIME_LIMIT;
         }
-        boolean focusExhausted = s.focusLimitReached() || (s.retryCount() > 0 && s.retryCount() >= retryMax);
+        // C안은 다시 해 보기가 장면마다 한 번이라 한 번 도움을 받고 해낸 장면도 횟수를 다 쓴다. 그 장면에 변형을 막지 않게, C안에서는 집중 시계 만료만
+        // 집중 한도로 본다(다시 해 보기 한도로 닫힌 장면은 원인 FOCUS_LIMIT으로 따로 생략된다, docs/practice-direct-ask.md 3.1)
+        boolean focusExhausted = s.focusLimitReached() || (!directAsk && s.retryCount() > 0 && s.retryCount() >= retryMax);
         return focusExhausted ? VariantSkipReason.FOCUS_LIMIT : null;
     }
 
     private Step wrap(FlowState s, EndCause cause, FactKind fact, LiveTiming timing) {
-        Sub sub = s.role() == FlowRole.COACH ? Sub.RETURN_NOTICE
+        Sub sub = directAsk ? closingLine(cause)
+                : s.role() == FlowRole.COACH ? Sub.RETURN_NOTICE
                 : cause == EndCause.NORMAL ? Sub.PEER_REPLY : Sub.VARIANT_EVAL;
         return Step.enter(Phase.SCENE_WRAP, sub).cause(cause).fact(fact).timing(timing);
+    }
+
+    /**
+     * C안 장면 정리에서 낼 말: 수행이면 친구 반응, 실패 · 거절 · 한도(무응답 · 판독 불가 · 보류 · 도움 거절 · 불명확 · 다시 해 보기 · 집중 · 목표 시간
+     * 한도)면 고정 마무리 문장이다. 재생 실패 · 막힘은 말이 나가지 못하는 때라 말 없이 정리하고(지금처럼), 종료 · 휴식 의사는 실행부가 맡는다.
+     */
+    private static Sub closingLine(EndCause cause) {
+        return switch (cause) {
+            case NORMAL -> Sub.FRIEND_REACTION;
+            case HELP_DECLINED, TIMEOUT, TRANSCRIPT_FAILED, ABSTAINED, HELP_UNCLEAR, TIME_LIMIT, FOCUS_LIMIT -> Sub.SCENE_CLOSE;
+            case SLOT_BLOCKED, PLAYBACK_FAILED, END_REQUEST -> Sub.VARIANT_EVAL;
+        };
     }
 
     private Step declineVariant(FlowState s, VariantSkipReason reason) {

@@ -10,6 +10,8 @@ final class RolePolicy {
 
     /** 코치 발화의 말하는 사람 표시(친구는 대본의 partnerRole을 쓴다). */
     static final String COACH_LABEL = "코치";
+    /** C안 승인 낭독의 말하는 사람 표시: 장면 속 역할이 없고 무중이 끝까지 무중으로 말한다(docs/practice-direct-ask.md 1.3). */
+    static final String MUJOONG_LABEL = "무중";
 
     private RolePolicy() {
     }

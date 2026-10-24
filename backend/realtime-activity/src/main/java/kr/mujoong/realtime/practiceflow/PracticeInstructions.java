@@ -4,7 +4,8 @@ import java.util.List;
 import kr.mujoong.realtime.practiceflow.PracticeScript.Scene;
 
 /**
- * GPT-Live가 만드는 역할 발화의 지시문 템플릿 (U12 BR3.7 · BR5.2 · D6). 모든 문장은 서버가 만든 고정 템플릿이다.
+ * GPT-Live가 만드는 역할 발화의 지시문 템플릿 (U12 BR3.7 · BR5.2 · D6). 모든 문장은 서버가 만든 고정 템플릿이다. C안 '무중이 직접 묻기'는 장면 안
+ * 말을 모두 승인 낭독({@link DirectAskLines})으로 내므로 여기서는 장면 밖 말(목표 안내 · 돌아보기 · 받아 주기 · 목표 회고 · 낭독 실패 복구)만 쓴다.
  *
  * <ul>
  *   <li>판정 라벨 · 선택지 코드 · 확률 · 판정 기준 문자열은 어디에도 넣지 않는다(BR3.7, NFR1). 이 클래스는 판정 값을 받는 자리조차 없다.
@@ -27,17 +28,38 @@ final class PracticeInstructions {
     }
 
     static String goalBrief(String name, int index, int count) {
-        String scope = count == 1 ? "이 목표로 짧게 역할놀이를 하고 오늘 연습을 마무리할 거야. "
-                : "오늘 고른 목표는 " + count + "개이고, 지금은 " + index + "번째야. 이 목표로 짧게 역할놀이를 해 볼 거야. ";
+        return goalBrief(name, index, count, false);
+    }
+
+    /**
+     * 목표 안내(생성형, 제브 필수). C안은 장면 속 역할이 없어 '역할놀이' 대신 '이야기 연습'이라고 말한다(docs/practice-direct-ask.md 7.3).
+     *
+     * @param directAsk C안 문구를 쓰는가(유연 대화는 거짓 — 지금 문구 그대로)
+     */
+    static String goalBrief(String name, int index, int count, boolean directAsk) {
+        String practice = directAsk ? "이야기 연습을" : "역할놀이를";
+        String scope = count == 1 ? "이 목표로 짧게 " + practice + " 하고 오늘 연습을 마무리할 거야. "
+                : "오늘 고른 목표는 " + count + "개이고, 지금은 " + index + "번째야. 이 목표로 짧게 " + practice + " 해 볼 거야. ";
         return factualNotice("오늘 연습할 목표는 ‘" + goalLabel(name) + "’야. " + scope
                 + "필요하면 도움을 받아도 되고, 언제든 쉬거나 끝내도 돼.");
     }
 
     static String goalRecap(String name, boolean performed, boolean afterHelp, boolean clarified,
             boolean helpProvided, boolean interrupted, boolean last) {
+        return goalRecap(name, performed, afterHelp, clarified, helpProvided, interrupted, last, false);
+    }
+
+    /**
+     * 목표 회고(생성형, 제브 필수). C안에서 다시 물은 쪽은 무중이라 '상대가' 대신 '무중이'라고 말한다(같은 문서 7.2).
+     *
+     * @param directAsk C안 문구를 쓰는가(유연 대화는 거짓 — 지금 문구 그대로)
+     */
+    static String goalRecap(String name, boolean performed, boolean afterHelp, boolean clarified,
+            boolean helpProvided, boolean interrupted, boolean last, boolean directAsk) {
+        String asker = directAsk ? "무중이" : "상대가";
         String action = performed
                 ? (afterHelp ? "도움을 받은 뒤 네 말로 해 봤어. " : helpProvided ? "네 말로 해 본 부분도 있고, 도움을 받으며 연습한 부분도 있어. "
-                        : clarified ? "상대가 다시 물었을 때 필요한 뜻을 전했어. " : "네 말로 해 봤어. ")
+                        : clarified ? asker + " 다시 물었을 때 필요한 뜻을 전했어. " : "네 말로 해 봤어. ")
                 : (helpProvided ? "도움을 받으며 연습해 봤어. " : "연습하다 여기서 마무리하게 됐어. ");
         String boundary = interrupted && performed ? "연습을 모두 마치지는 않았지만, 해 본 부분은 남겨 둘게. " : "";
         String prefix = performed && clarified && !afterHelp && !helpProvided ? "오늘 연습한 목표는 ‘" + goalLabel(name) + "’야. "

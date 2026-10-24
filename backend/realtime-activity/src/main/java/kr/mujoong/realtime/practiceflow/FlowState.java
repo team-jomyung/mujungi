@@ -33,14 +33,18 @@ public final class FlowState {
         NONE,
         /** 오늘의 목표·범위 안내와 사실에 근거한 목표 마무리. */
         GOAL_BRIEF, GOAL_RECAP,
-        /** FOCUS 진입 ①: 역할 전환 알림 재생 중. */
+        /** FOCUS 진입 ①: 역할 전환 알림 재생 중(유연 대화). */
         ROLE_NOTICE,
-        /** FOCUS 진입 ②: 코치 발화 재생 중. */
+        /** FOCUS 진입 ②: 코치 발화 재생 중. C안에서는 역할 전환 없이 곧바로 무중의 도움(대본 helpSpeech) 승인 낭독이다. */
         COACH_UTTERANCE,
         /** SCENE_WRAP: 복귀 알림 재생 중. */
         RETURN_NOTICE,
-        /** SCENE_WRAP: 수행한 말에 친구 역할로 답한 뒤 장면을 마무리한다. */
+        /** SCENE_WRAP: 수행한 말에 친구 역할로 답한 뒤 장면을 마무리한다(유연 대화). */
         PEER_REPLY,
+        /** SCENE_WRAP(C안): 목표를 이룬 뒤 무중이 대본의 친구 반응을 승인 낭독으로 전하는 중. */
+        FRIEND_REACTION,
+        /** SCENE_WRAP(C안): 실패 · 거절 · 한도로 닫으며 고정 마무리 문장을 승인 낭독하는 중. */
+        SCENE_CLOSE,
         /** OPPORTUNITY: 상대 역할의 답변. 재생 뒤 같은 역할 대화의 입력을 기다린다. */
         DIALOGUE_REPLY,
         /** 상황 안의 확인 질문 또는 인식이 불확실할 때의 확인. */

@@ -37,6 +37,12 @@ import kr.mujoong.realtime.voice.PracticeSpeech;
  * 실행부를 부르지 않는다 — 출력은 {@link PracticeOutput} 능력(재생 · 생성형 발화 · 판정 요청 · 시계 · 비동기 결과)으로만 낸다(한 방향, 순환 의존
  * 없음).
  *
+ * <p>경로는 둘이다({@link PracticeFlowSettings#flexibleDialogue()}). 운영 기본은 C안 '무중이 직접 묻기'(docs/practice-direct-ask.md)다: 장면 속
+ * 친구 · 코치 역할이 없고, 무중이 상황과 상대의 말을 자기 말로 전한 뒤 "너라면 뭐라고 말할래?"라고 묻는다. 장면 안 무중의 말(상황 안내 · 전하기 +
+ * 묻기 · 되묻기 · 다시 설명 · 도움 · 확인 · 다시 묻기 · 친구 반응 · 마무리 · 도움 제안 · 변형 제안)은 모두 대본 칸이나 고정 문장의 승인 낭독이다
+ * ({@link DirectAskLines}). 장면 밖 말(목표 안내 · 돌아보기 · 받아 주기 · 목표 회고 · 낭독 실패 복구)은 두 경로가 같이 생성형으로 내고 제브를
+ * 거친다. 유연 대화 경로는 설정 하나로 되돌릴 수 있게 그대로 둔다.
+ *
  * <p>규칙 요약.
  *
  * <ul>
@@ -97,6 +103,8 @@ public final class PracticeConversation implements PracticeSessionExtension {
     private PracticeOutput output;
     private PracticeStartPackage pack;
     private Set<String> approvedSpeechCodes = Set.of();
+    /** C안 장면 안 말(시작 패키지 approvedSpeech의 고정 문장 + 대본 칸 + 대체 문장). */
+    private DirectAskLines lines = new DirectAskLines(Map.of());
     private PracticeScript currentScript;
     private Scene currentScene;
     private UUID sceneRunId;
@@ -118,6 +126,8 @@ public final class PracticeConversation implements PracticeSessionExtension {
     private String lastStage = STAGE_SCENARIO_INTRO;
     private boolean goalAchieved;
     private LiveTiming goalAchievementTiming;
+    /** C안: 장면이 수행으로 정리될 때 정한 시점. 마무리 문장 중의 종료 · 재생 실패가 이룬 수행을 미수행(NONE)으로 덮지 않게 남긴다. */
+    private LiveTiming sceneAchievement;
     private int clarificationAttempts;
     private int uncertainAttempts;
     private boolean reflectionAwaiting;
@@ -148,7 +158,7 @@ public final class PracticeConversation implements PracticeSessionExtension {
         this.requester = Objects.requireNonNull(requester, "requester");
         this.recorder = Objects.requireNonNull(recorder, "recorder");
         this.failures = Objects.requireNonNull(failures, "failures");
-        this.transitions = new FlowTransitions(settings.retryMax(), settings.reexplainMax());
+        this.transitions = new FlowTransitions(settings.retryMax(), settings.reexplainMax(), settings.directAsk());
     }
 
     /** 이 상태 기계는 출력권을 쥔다(실행부가 첫 응답 요청 전에 묻는다, D1). */
@@ -180,6 +190,7 @@ public final class PracticeConversation implements PracticeSessionExtension {
         this.pack = parsed;
         this.output = Objects.requireNonNull(target, "output");
         this.approvedSpeechCodes = context.approvedSpeechTexts().keySet();
+        this.lines = new DirectAskLines(context.approvedSpeechTexts());
         if (parsed.firstScenario() != null) {
             scripts.put(0, parsed.firstScenario());
         } else {
@@ -378,12 +389,14 @@ public final class PracticeConversation implements PracticeSessionExtension {
         pendingConsent = null;
         goalAchieved = false;
         goalAchievementTiming = null;
+        sceneAchievement = null;
         clarificationAttempts = 0;
         uncertainAttempts = 0;
-        if (settings.flexibleDialogue() && kind == SceneKind.BASE && !goalBriefPlayed) {
+        // 목표 안내 · 돌아보기 · 목표 회고는 장면 밖 말이라 두 경로가 같이 낸다(생성형, 제브 필수). C안은 문구만 바꾼다(docs/practice-direct-ask.md 7.3)
+        if (kind == SceneKind.BASE && !goalBriefPlayed) {
             state.phase(Phase.SCENE_INTRO, Sub.GOAL_BRIEF);
             speakGenerated(FlowRole.PEER, PracticeInstructions.goalBrief(pack.goals().get(state.goalIndex()).goalName(),
-                    state.goalIndex() + 1, pack.goals().size()));
+                    state.goalIndex() + 1, pack.goals().size(), settings.directAsk()));
             return;
         }
         beginReflectionOrIntroduction();
@@ -391,7 +404,7 @@ public final class PracticeConversation implements PracticeSessionExtension {
 
     private void beginReflectionOrIntroduction() {
         Scene scene = currentScene;
-        if (settings.flexibleDialogue() && state.sceneKind() == SceneKind.BASE && scene.reflectionPrompt() != null) {
+        if (state.sceneKind() == SceneKind.BASE && scene.reflectionPrompt() != null) {
             reflecting = true;
             reflectionAwaiting = false;
             state.phase(Phase.SCENE_INTRO, Sub.REFLECTION_OFFER);
@@ -412,8 +425,8 @@ public final class PracticeConversation implements PracticeSessionExtension {
     private void beginIntroduction() {
         state.phase(Phase.SCENE_INTRO, Sub.NONE);
         Scene scene = currentScene;
-        if (settings.flexibleDialogue()) speakApproved(PracticeInstructions.spokenIntroduction(scene));
-        else speakApproved(scene.sceneDescription());
+        if (settings.directAsk()) speakApproved(lines.introduction(scene));
+        else speakApproved(PracticeInstructions.spokenIntroduction(scene));
     }
 
     private void moveOn() {
@@ -451,7 +464,7 @@ public final class PracticeConversation implements PracticeSessionExtension {
     }
 
     private boolean beginGoalRecap(boolean advances) {
-        if (!settings.flexibleDialogue() || goalRecapped || !sceneRowCreated || outputFailed || stopping) return false;
+        if (goalRecapped || !sceneRowCreated || outputFailed || stopping) return false;
         goalRecapped = true;
         recapAdvances = advances;
         output.cancel(TIMER_GOAL_LIMIT);
@@ -462,7 +475,8 @@ public final class PracticeConversation implements PracticeSessionExtension {
         earlyUtterance = null;
         state.phase(Phase.SCENE_WRAP, Sub.GOAL_RECAP);
         speakGenerated(FlowRole.PEER, PracticeInstructions.goalRecap(pack.goals().get(state.goalIndex()).goalName(),
-                reviewPerformed, reviewAfterHelp, reviewClarified, reviewHelpProvided, reviewInterrupted, !advances));
+                reviewPerformed, reviewAfterHelp, reviewClarified, reviewHelpProvided, reviewInterrupted, !advances,
+                settings.directAsk()));
         return true;
     }
 
@@ -900,6 +914,10 @@ public final class PracticeConversation implements PracticeSessionExtension {
                 // 재안내 표지 없음
             }
         }
+        if (settings.directAsk()) {
+            reguideDirectAsk(step.guard() == FlowTransitions.Guard.NO_RESPONSE);
+            return;
+        }
         switch (state.phase()) {
             case OPPORTUNITY -> {
                 if (settings.flexibleDialogue()) speakGenerated(FlowRole.PEER, PracticeInstructions.peerCheckIn(currentScene));
@@ -915,6 +933,23 @@ public final class PracticeConversation implements PracticeSessionExtension {
         }
     }
 
+    /**
+     * C안 재안내(docs/practice-direct-ask.md 3.2): 같은 단계의 질문을 교정 없이 승인 문장으로 한 번 더 낸다. 무응답이면 기다리기 + 그 단계의 질문(다시
+     * 해 보기는 고정 RETRY_PROMPT), 판독 불가 · 판정 보류면 고정 INPUT_CONFIRM이다. 도움 · 변형 제안은 같은 제안 문장을 다시 읽는다(불명확 대답 포함).
+     */
+    private void reguideDirectAsk(boolean noResponse) {
+        switch (state.phase()) {
+            case OPPORTUNITY -> speakApproved(noResponse ? lines.waitAndAsk(currentScene) : lines.fixed(DirectAskLines.INPUT_CONFIRM));
+            case REASK -> speakApproved(noResponse ? lines.waitAndReask(currentScene) : lines.fixed(DirectAskLines.INPUT_CONFIRM));
+            case RETRY -> speakApproved(lines.fixed(noResponse ? DirectAskLines.RETRY_PROMPT : DirectAskLines.INPUT_CONFIRM));
+            case HELP_OFFER -> speakApproved(lines.fixed(DirectAskLines.HELP_OFFER));
+            case VARIANT_OFFER -> speakApproved(lines.fixed(DirectAskLines.VARIANT_OFFER));
+            default -> {
+                // 입력을 기다리는 단계가 아니면 재안내하지 않는다
+            }
+        }
+    }
+
     private void reexplain(Step step) {
         output.cancel(TIMER_NO_RESPONSE);
         earlyUtterance = null;
@@ -922,7 +957,8 @@ public final class PracticeConversation implements PracticeSessionExtension {
         step.facts().forEach(this::recordFact);
         state.phase(step.phase(), Sub.REEXPLAIN);
         help(HelpKind.SITUATION_EXPLAIN, state.role(), false, null, currentScene.reexplanation().length());
-        speakApproved(currentScene.reexplanation());
+        // C안은 다시 설명 뒤 묻는 말을 같은 슬롯으로 다시 읽는다(main은 다시 설명만 읽고 듣는다)
+        speakApproved(settings.directAsk() ? lines.reexplanation(currentScene) : currentScene.reexplanation());
     }
 
     private void enter(Step step) {
@@ -945,6 +981,9 @@ public final class PracticeConversation implements PracticeSessionExtension {
         }
         if (step.cause() != null) {
             state.sceneEnd(step.cause(), step.timing() == null ? LiveTiming.NONE : step.timing());
+            if (settings.directAsk() && step.cause() == FlowTransitions.EndCause.NORMAL && sceneAchievement == null) {
+                sceneAchievement = step.timing();
+            }
         }
         if (step.endsByRequest()) {
             state.endRequested(true);
@@ -983,13 +1022,22 @@ public final class PracticeConversation implements PracticeSessionExtension {
                 else if (step.sub() == Sub.RETURN_NOTICE) announce(FlowRole.PEER);
                 else if (previousSub == Sub.REEXPLAIN || previousSub == Sub.DIALOGUE_REPLY
                         || previousSub == Sub.CLARIFICATION_REPLY || previousSub == Sub.INPUT_CONFIRMATION) awaitInput();
-                else speakApproved(currentScene.opportunitySentence());
+                // C안: 무중이 상대 말을 자기 말로 전하고 곧바로 묻는다(한 슬롯). 유연 대화는 상대의 직접 대사를 읽는다
+                else speakApproved(settings.directAsk() ? lines.opportunity(currentScene) : currentScene.opportunitySentence());
             }
-            case REASK -> speakGenerated(FlowRole.PEER, PracticeInstructions.peerReask(currentScene, false));
-            case HELP_OFFER -> speakGenerated(FlowRole.PEER, PracticeInstructions.peerHelpOffer(currentScene, false));
+            case REASK -> {
+                if (settings.directAsk()) speakApproved(lines.reask(currentScene));
+                else speakGenerated(FlowRole.PEER, PracticeInstructions.peerReask(currentScene, false));
+            }
+            case HELP_OFFER -> {
+                if (settings.directAsk()) speakApproved(lines.fixed(DirectAskLines.HELP_OFFER));
+                else speakGenerated(FlowRole.PEER, PracticeInstructions.peerHelpOffer(currentScene, false));
+            }
             case FOCUS -> {
                 if (step.sub() == Sub.ROLE_NOTICE) {
                     announce(FlowRole.COACH);
+                } else if (settings.directAsk()) {
+                    helpUtterance();
                 } else {
                     coachUtterance();
                 }
@@ -1000,16 +1048,25 @@ public final class PracticeConversation implements PracticeSessionExtension {
                     announce(FlowRole.PEER);
                 } else if (step.sub() == Sub.PEER_REPLY) {
                     speakGenerated(FlowRole.PEER, PracticeInstructions.peerCompletion(currentScene));
+                } else if (step.sub() == Sub.FRIEND_REACTION) {
+                    speakApproved(lines.friendReaction(currentScene));
+                } else if (step.sub() == Sub.SCENE_CLOSE && sceneRowCreated) {
+                    speakApproved(lines.fixed(DirectAskLines.SCENE_CLOSE));
                 } else {
+                    // 변형 평가(들려준 장면이 없으면 마무리 문장 없이 곧바로 평가한다)
                     recordOutcome(null, state.sceneTiming());
                     applyStep(transitions.evaluateVariant(state, currentScript.variantScene().isPresent()));
                 }
             }
-            case VARIANT_OFFER -> speakGenerated(FlowRole.PEER, PracticeInstructions.peerVariantOffer(currentScene, false));
+            case VARIANT_OFFER -> {
+                if (settings.directAsk()) speakApproved(lines.fixed(DirectAskLines.VARIANT_OFFER));
+                else speakGenerated(FlowRole.PEER, PracticeInstructions.peerVariantOffer(currentScene, false));
+            }
             case NEXT_GOAL -> advanceGoal();
             case CLOSING -> {
                 boolean sceneWasOpen = (previous != Phase.SCENE_WRAP || previousSub == Sub.PEER_REPLY
-                        || previousSub == Sub.RETURN_NOTICE) && previous != Phase.NEXT_GOAL && previous != Phase.CLOSING;
+                        || previousSub == Sub.RETURN_NOTICE || previousSub == Sub.FRIEND_REACTION)
+                        && previous != Phase.NEXT_GOAL && previous != Phase.CLOSING;
                 if (step.endsByRequest() && sceneWasOpen) {
                     state.sceneEnd(FlowTransitions.EndCause.END_REQUEST, LiveTiming.NONE);
                     recordOutcome(VariantSkipReason.END_OR_REST, LiveTiming.NONE);
@@ -1035,6 +1092,26 @@ public final class PracticeConversation implements PracticeSessionExtension {
         }
         help(HelpKind.FOCUS_HELP, FlowRole.COACH, example, state.retryCount() == 0 ? pendingConsent : null, text.length());
         speakGenerated(FlowRole.COACH, text);
+    }
+
+    /**
+     * C안 도움(FOCUS 진입): 역할 전환 없이 대본 helpSpeech(옛 대본은 대체 문장)를 승인 낭독한다. 첫 도움부터 표현 예시가 있다 — 도움은 장면마다 한 번이고
+     * 동의와 회차를 따지는 {@link RolePolicy#mayGiveExample}을 쓰지 않는다(docs/practice-direct-ask.md 1.3, 편차 FT-1024-d). 집중 시계는 처음 도울
+     * 때 한 번 건다. 도움 행의 역할은 '도운 쪽'이라 COACH 그대로 둔다(역할 전환 행 · 사실은 남기지 않는다).
+     */
+    private void helpUtterance() {
+        if (state.focusStartedAt() == null) {
+            state.focusStartedAt(clock.now());
+            output.schedule(TIMER_FOCUS_MAX, settings.focusMax());
+        }
+        DirectAskLines.Help speech = lines.help(currentScene);
+        recordFact(FactKind.FOCUS_HELP);
+        if (speech.exampleGiven()) {
+            recordFact(FactKind.EXPRESSION_EXAMPLE);
+        }
+        help(HelpKind.FOCUS_HELP, FlowRole.COACH, speech.exampleGiven(), state.retryCount() == 0 ? pendingConsent : null,
+                speech.text().length());
+        speakApproved(speech.text());
     }
 
     /** 역할 전환 · 복귀 알림. 승인 문장이 있으면 실행부의 알림 능력으로, 없거나 못 내면 생성형 발화로 낸다(BR5.4). */
@@ -1097,7 +1174,7 @@ public final class PracticeConversation implements PracticeSessionExtension {
         PracticeSpeech speech = null;
         try {
             speech = PracticeSpeech.scenario(correlation, currentScript.scenarioId(), speechGeneration++,
-                    RolePolicy.partnerLabel(state.role(), currentScene.partnerRole()), text,
+                    settings.directAsk() ? RolePolicy.MUJOONG_LABEL : RolePolicy.partnerLabel(state.role(), currentScene.partnerRole()), text,
                     state.sub() == Sub.REFLECTION_PROMPT ? PracticeSpeech.ReadingCue.ROLE_NOTICE
                             : state.phase() == Phase.SCENE_INTRO ? PracticeSpeech.ReadingCue.SCENE
                             : state.sub() == Sub.REEXPLAIN ? PracticeSpeech.ReadingCue.REEXPLANATION : PracticeSpeech.ReadingCue.PEER);
@@ -1170,7 +1247,8 @@ public final class PracticeConversation implements PracticeSessionExtension {
     private void recordOutcome(VariantSkipReason skip, LiveTiming timing) {
         if (sceneRowCreated) {
             Instant at = clock.now();
-            LiveTiming recordedTiming = settings.flexibleDialogue() && goalAchieved ? goalAchievementTiming : timing;
+            LiveTiming recordedTiming = settings.flexibleDialogue() ? (goalAchieved ? goalAchievementTiming : timing)
+                    : sceneAchievement != null ? sceneAchievement : timing;
             if (recordedTiming == LiveTiming.IMMEDIATE || recordedTiming == LiveTiming.AFTER_REASK || recordedTiming == LiveTiming.AFTER_HELP) {
                 reviewPerformed = true;
                 reviewAfterHelp |= recordedTiming == LiveTiming.AFTER_HELP;

@@ -36,10 +36,19 @@ final class PracticeFlowTestKit {
     private PracticeFlowTestKit() {
     }
 
-    /** 기본 설정(시험용 값: 무응답 10초 · 집중 90초 · 목표 10분 · 슬롯 안전 20초 · 재시도 2 · 다시 설명 1). */
+    /**
+     * 기본 설정 = C안 '무중이 직접 묻기'(운영 기본 경로, 시험용 값: 무응답 10초 · 집중 90초 · 목표 10분 · 슬롯 안전 20초 · 다시 해 보기 1 ·
+     * 다시 설명 1 — application.yml과 같은 횟수).
+     */
     static PracticeFlowSettings defaults() {
         return new PracticeFlowSettings(Duration.ofSeconds(10), Duration.ofSeconds(90), Duration.ofMinutes(10),
-                Duration.ofSeconds(20), 2, 1, false);
+                Duration.ofSeconds(20), 1, 1, false);
+    }
+
+    /** 유연 대화 경로(설정으로 되돌린 경로, 지금 시험 값: 다시 해 보기 2 · 다시 설명 1). */
+    static PracticeFlowSettings flexible() {
+        return new PracticeFlowSettings(Duration.ofSeconds(10), Duration.ofSeconds(90), Duration.ofMinutes(10),
+                Duration.ofSeconds(20), 2, 1, true);
     }
 
     /** 한 번의 {@code speak} · {@code speakGenerated} 호출. */
@@ -352,12 +361,33 @@ final class PracticeFlowTestKit {
             return last;
         }
 
-        /** 활성화 → 도입 재생 완료 → 기회 문장 재생 완료(아이 말을 기다리는 상태). */
+        /** 활성화 → (목표 안내 재생 완료) → 도입 재생 완료 → 기회 문장 재생 완료(아이 말을 기다리는 상태). */
         void toOpportunity() {
+            toIntroduction();
+            played();
+            played();
+        }
+
+        /** 활성화 → 목표 안내(생성형)가 있으면 재생 완료 → 장면 도입 승인 낭독이 열린 상태. */
+        void toIntroduction() {
             activate();
             if (ext.state().sub() == FlowState.Sub.GOAL_BRIEF) played();
-            played();
-            played();
+        }
+
+        /** 지금 슬롯을 재생 완료로 닫고, 그 뒤 목표 회고(생성형)가 열리면 그것도 재생 완료로 닫는다. 마지막 신호를 돌려준다. */
+        Signal playedThroughRecap() {
+            Signal signal = played();
+            if (ext.state().sub() == FlowState.Sub.GOAL_RECAP) {
+                assertRecapOpen();
+                signal = played();
+            }
+            return signal;
+        }
+
+        private void assertRecapOpen() {
+            if (!out.lastSlot().generated()) {
+                throw new AssertionError("목표 회고는 생성형 슬롯이어야 한다");
+            }
         }
     }
 }
