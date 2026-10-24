@@ -202,6 +202,17 @@ web의 loading-notice-delay는 MUJOONG_TIMING_PARENT_LOADINGNOTICEDELAY 환경 �
 | `mujoong.timing.push.send-timeout` | `5s` | core-api | 수신처 한 곳의 HTTP 발송 상한 | FR7.10 · U7-J11 |
 | `mujoong.timing.push.device-status-check` | `10s` | core-api | 등록 기기의 보고 신선도 점검 주기 | AC1.7.2 · U7-J7 |
 
+### 보호자 상태 변경 SSE (JIRA-274)
+
+| 키 | 기본값 | 소유 앱 | 뜻 | 근거 |
+|---|---|---|---|---|
+| `mujoong.timing.home-events.stream-timeout` | `2m` | core-api | 연결 수명, 재연결 시 세션 재검증 | home-events.md |
+| `mujoong.timing.home-events.heartbeat-interval` | `10s` | core-api | 프록시 유휴 만료 방지 이벤트 간격 | home-events.md |
+| `mujoong.timing.home-events.notification-wait` | `1s` | core-api | PostgreSQL 알림 수신 대기 상한 | home-events.md |
+| `mujoong.timing.home-events.reconnect-delay` | `1s` | core-api | LISTEN 연결 실패 후 재접속 간격 | home-events.md |
+
+수신 대기는 1ms 이상 int 밀리초 범위이며 heartbeat 간격 이하여야 한다. heartbeat 간격은 연결 수명보다 짧아야 한다.
+
 ## 12. U5b 연습 런타임
 
 2절의 U5 이름 공간은 아래 별도 타입 `PracticeProperties`가 사용한다. 기본 파일은 `backend/realtime-activity/src/main/resources/practice/practice-legacy-runtime.yml`이며 환경 설정이 우선한다. 기존 U1 `RealtimeProperties`/application.yml의 키 집합을 바꾸지 않고 U5b 설정 시험으로 별도 대조한다. 실제 운영 소유는 Realtime의 연습 모듈이다.

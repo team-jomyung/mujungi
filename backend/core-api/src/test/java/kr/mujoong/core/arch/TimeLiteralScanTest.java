@@ -81,6 +81,8 @@ class TimeLiteralScanTest {
                     "DB 재시도 지터 상한 0 ~ 50ms는 J124가 허용한 코드 상수다(3.6 S13 허용 목록)"),
             new Allowed(CORE + "common/db/DbRetry.java", "Thread.sleep(duration)",
                     "지터 대기 장치: 길이는 위 지터(J124)이고 시험은 대기 대역을 넣는다"),
+            new Allowed(CORE + "web/HomeEvents.java", "Thread.sleep(timing.reconnectDelay())",
+                    "시간값이 아닌 대기 장치: mujoong.timing.home-events.reconnect-delay 설정 Duration을 그대로 기다린다"),
             new Allowed(CORE + "observability/CoreMetrics.java", "REST_FAST = Duration.ofMillis(300)",
                     "METRIC_SNAPSHOT 키 이름 restLe300Ms가 값을 고정한 계약 상수다(OD-6 · NFR5.5, J324)"),
             new Allowed(CORE + "observability/CoreMetrics.java", "VIEW_FAST = Duration.ofMillis(500)",

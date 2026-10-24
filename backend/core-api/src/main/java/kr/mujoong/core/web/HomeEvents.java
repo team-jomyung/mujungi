@@ -3,13 +3,15 @@ package kr.mujoong.core.web;
 import java.io.IOException;
 import java.sql.Connection;
 import java.sql.SQLException;
-import java.time.Duration;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import javax.sql.DataSource;
 import kr.mujoong.contract.error.ErrorCode;
+import kr.mujoong.contract.time.MujoongClock;
 import kr.mujoong.core.common.error.CoreApiException;
+import kr.mujoong.core.config.CoreProperties;
+import kr.mujoong.core.config.CoreTimingProperties.HomeEventsTiming;
 import org.postgresql.PGConnection;
 import org.postgresql.PGNotification;
 import org.springframework.context.SmartLifecycle;
@@ -22,18 +24,22 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 @Component
 public class HomeEvents implements SmartLifecycle {
     static final String CHANNEL = "mujoong_home_changed";
-    private static final long STREAM_MS = Duration.ofMinutes(2).toMillis();
-    private static final long HEARTBEAT_NANOS = Duration.ofSeconds(10).toNanos();
     private final DataSource dataSource;
+    private final HomeEventsTiming timing;
+    private final MujoongClock clock;
     private final Set<Client> clients = ConcurrentHashMap.newKeySet();
     private volatile boolean running;
     private volatile Connection listening;
     private Thread worker;
 
-    public HomeEvents(DataSource dataSource) { this.dataSource = dataSource; }
+    public HomeEvents(DataSource dataSource, CoreProperties properties, MujoongClock clock) {
+        this.dataSource = dataSource;
+        this.timing = properties.timing().homeEvents();
+        this.clock = clock;
+    }
 
     public SseEmitter subscribe(UUID guardianId) {
-        SseEmitter emitter = new SseEmitter(STREAM_MS);
+        SseEmitter emitter = new SseEmitter(timing.streamTimeout().toMillis());
         Client client = new Client(guardianId, emitter);
         emitter.onCompletion(() -> clients.remove(client));
         emitter.onTimeout(() -> { clients.remove(client); emitter.complete(); });
@@ -80,21 +86,21 @@ public class HomeEvents implements SmartLifecycle {
                 connection.setAutoCommit(true);
                 try (var statement = connection.createStatement()) { statement.execute("LISTEN " + CHANNEL); }
                 try {
-                PGConnection pg = connection.unwrap(PGConnection.class);
-                clients.forEach(c -> send(c, "ready"));
-                long heartbeat = System.nanoTime();
-                while (running) {
-                    PGNotification[] notices = pg.getNotifications(1000);
-                    if (notices != null) for (PGNotification notice : notices) {
-                        if (!CHANNEL.equals(notice.getName())) continue;
-                        try { changed(UUID.fromString(notice.getParameter())); }
-                        catch (IllegalArgumentException ignored) { /* Never route malformed identity hints. */ }
+                    PGConnection pg = connection.unwrap(PGConnection.class);
+                    clients.forEach(c -> send(c, "ready"));
+                    long heartbeat = clock.monotonicNanos();
+                    while (running) {
+                        PGNotification[] notices = pg.getNotifications(Math.toIntExact(timing.notificationWait().toMillis()));
+                        if (notices != null) for (PGNotification notice : notices) {
+                            if (!CHANNEL.equals(notice.getName())) continue;
+                            try { changed(UUID.fromString(notice.getParameter())); }
+                            catch (IllegalArgumentException ignored) { /* Never route malformed identity hints. */ }
+                        }
+                        if (clock.elapsedSince(heartbeat).compareTo(timing.heartbeatInterval()) >= 0) {
+                            clients.forEach(c -> send(c, "heartbeat"));
+                            heartbeat = clock.monotonicNanos();
+                        }
                     }
-                    if (System.nanoTime() - heartbeat >= HEARTBEAT_NANOS) {
-                        clients.forEach(c -> send(c, "heartbeat"));
-                        heartbeat = System.nanoTime();
-                    }
-                }
                 } finally {
                     // A pooled JDBC connection must not return with LISTEN subscriptions attached.
                     if (!connection.isClosed()) try (var statement = connection.createStatement()) {
@@ -105,7 +111,7 @@ public class HomeEvents implements SmartLifecycle {
                 // NOTIFY has no durable replay. Force resync instead of keeping apparently healthy SSE streams.
                 clients.forEach(this::close);
                 if (running) {
-                    try { Thread.sleep(1000); }
+                    try { Thread.sleep(timing.reconnectDelay()); }
                     catch (InterruptedException interrupted) { Thread.currentThread().interrupt(); return; }
                 }
             } finally { listening = null; }

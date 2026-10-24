@@ -22,6 +22,24 @@ class TimingPropertiesTest {
             .toAbsolutePath().normalize().resolve("backend/core-api/src/main/resources/application.yml");
 
     @Test
+    void homeEventsDefaultsBindAndRejectInvalidWaits() {
+        var timing = ConfigKeyContractTest.bind(APPLICATION_YML).timing().homeEvents();
+        assertThat(timing.streamTimeout()).isEqualTo(Duration.ofMinutes(2));
+        assertThat(timing.heartbeatInterval()).isEqualTo(Duration.ofSeconds(10));
+        assertThat(timing.notificationWait()).isEqualTo(Duration.ofSeconds(1));
+        assertThat(timing.reconnectDelay()).isEqualTo(Duration.ofSeconds(1));
+        for (Duration wait : java.util.Arrays.asList(null, Duration.ZERO, Duration.ofNanos(1),
+                Duration.ofSeconds(-1), Duration.ofDays(30), Duration.ofSeconds(11))) {
+            assertThatThrownBy(() -> new CoreTimingProperties.HomeEventsTiming(timing.streamTimeout(),
+                    timing.heartbeatInterval(), wait, timing.reconnectDelay()))
+                    .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("mujoong.timing.home-events");
+        }
+        assertThatThrownBy(() -> new CoreTimingProperties.HomeEventsTiming(timing.heartbeatInterval(),
+                timing.heartbeatInterval(), timing.notificationWait(), timing.reconnectDelay()))
+                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("mujoong.timing.home-events");
+    }
+
+    @Test
     void applicationYmlBindsTheKnowledgeGraphBudget() {
         CoreProperties bound = ConfigKeyContractTest.bind(APPLICATION_YML);
 
@@ -43,7 +61,7 @@ class TimingPropertiesTest {
         CoreTimingProperties t =ConfigKeyContractTest.bind(APPLICATION_YML).timing();
 
         assertThatThrownBy(() -> new CoreTimingProperties(t.session(), t.core(), t.bootstrap(), t.device(), t.login(),
-                t.cache(), t.account(), t.practice(), t.goal(), t.result(), t.report(), t.push(), null))
+                t.cache(), t.account(), t.practice(), t.goal(), t.result(), t.report(), t.push(), null, t.homeEvents()))
                 .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("mujoong.timing.knowledge");
     }
 

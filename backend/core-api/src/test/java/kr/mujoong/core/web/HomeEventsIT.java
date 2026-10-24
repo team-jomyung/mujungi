@@ -40,6 +40,10 @@ class HomeEventsIT {
                         assertThat(a.lines.poll(5, TimeUnit.SECONDS)).isEqualTo("event:home-changed");
                         assertThat(b.lines.poll(200, TimeUnit.MILLISECONDS)).isNull();
                         assertThat(a.data.poll(5, TimeUnit.SECONDS)).isEqualTo("data:{}");
+                        // Heartbeats follow the injected monotonic clock, not wall-clock sleep.
+                        app.clock().advance(Duration.ofSeconds(10));
+                        assertThat(a.lines.poll(5, TimeUnit.SECONDS)).isEqualTo("event:heartbeat");
+                        assertThat(b.lines.poll(5, TimeUnit.SECONDS)).isEqualTo("event:heartbeat");
                         try (Stream c = stream(app, ownerSession); Stream d = stream(app, ownerSession);
                                 Stream e = stream(app, ownerSession)) {
                             assertThat(app.get("/api/home/events").session(ownerSession).send().status()).isEqualTo(429);

@@ -26,10 +26,12 @@ public record CoreTimingProperties(
         ResultTiming result,
         ReportTiming report,
         PushTiming push,
-        KnowledgeTiming knowledge) {
+        KnowledgeTiming knowledge,
+        HomeEventsTiming homeEvents) {
 
     public CoreTimingProperties {
         required(knowledge, "mujoong.timing.knowledge");
+        required(homeEvents, "mujoong.timing.home-events");
         required(session, "mujoong.timing.session");
         required(core, "mujoong.timing.core");
         required(bootstrap, "mujoong.timing.bootstrap");
@@ -42,6 +44,23 @@ public record CoreTimingProperties(
         required(result, "mujoong.timing.result");
         required(report, "mujoong.timing.report");
         required(push, "mujoong.timing.push");
+    }
+
+    /** 보호자 상태 변경 알림의 연결 수명 · heartbeat · DB 수신 대기 · 재접속 간격. */
+    public record HomeEventsTiming(Duration streamTimeout, Duration heartbeatInterval,
+            Duration notificationWait, Duration reconnectDelay) {
+        public HomeEventsTiming {
+            positive(streamTimeout, "mujoong.timing.home-events.stream-timeout");
+            positive(heartbeatInterval, "mujoong.timing.home-events.heartbeat-interval");
+            positive(notificationWait, "mujoong.timing.home-events.notification-wait");
+            positive(reconnectDelay, "mujoong.timing.home-events.reconnect-delay");
+            if (notificationWait.toMillis() < 1 || notificationWait.toMillis() > Integer.MAX_VALUE
+                    || notificationWait.compareTo(heartbeatInterval) > 0
+                    || heartbeatInterval.compareTo(streamTimeout) >= 0) {
+                throw invalid("mujoong.timing.home-events: notification-wait는 1ms 이상 int 범위이며 "
+                        + "heartbeat-interval 이하여야 하고 heartbeat-interval은 stream-timeout보다 짧아야 한다");
+            }
+        }
     }
 
     /** 작업 재시도 · 실행 · 누락 판정의 시간 계약. */
