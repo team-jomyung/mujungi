@@ -10,7 +10,7 @@ vi.mock("next/navigation", async () => (await import("../../../support/nextNavig
 
 // 04 홈 시험 (U1 3.5 Step 42 · BR4.5 · BR4.6 · BR2.9 · J57 · J118 · AC1.4.2 ~ AC1.4.5 · AC1.4.9 · AC1.4.11 · AC1.4.15 · AC2.1.1 ~ AC2.1.6 · PD-12)
 // 대화 기기 구역 6상태(색 + 아이콘 + 상태명 + 사유), 「기기 등록」은 등록이 없을 때만, 탭은 canStart일 때만 열리고
-// 잠긴 탭은 aria-disabled + 이유 토스트(mockups 9-6) 뒤 05(U1 스텁 → 04). 진입 때 1회 조회.
+// 잠긴 탭은 aria-disabled + 이유 토스트(mockups 9-6) 뒤 05(U1 스텁 → 04). 홈 체류 중에는 상태를 재조회한다.
 
 function renderHome(body: Record<string, unknown>) {
   return renderParent(<HomeScreen />, { handler: () => jsonResponse(200, body) });
@@ -127,7 +127,7 @@ describe("04 하단 탭 — 잠금(BR4.5 · J57 · AC1.4.9 · AC1.4.11 · AC1.4.
 });
 
 describe("04 조회(PD-12)", () => {
-  it("진입 때 홈을 한 번만 읽는다", async () => {
+  it("진입 때 중복 요청 없이 홈을 한 번 읽는다", async () => {
     const harness = renderHome(homeBody("STABLE"));
     await screen.findByTestId("home-device-card");
     await new Promise((resolve) => setTimeout(resolve, 50));
@@ -159,7 +159,7 @@ describe("04 조회(PD-12)", () => {
     expect(router.replace).not.toHaveBeenCalledWith("/parent/dev-login");
   });
 
-  it("오프라인인 채 들어와도 토스트 + 「다시 시도」이고, 온라인이 된 뒤 「다시 시도」하면 읽는다(PD-12 · J361)", async () => {
+  it("오프라인 진입 실패 뒤 온라인이 되면 홈을 자동으로 다시 읽는다(JIRA-274)", async () => {
     // 같은 앱 안에서 이미 offline 사건을 받은 상태(보호자 영역의 QueryClient는 화면 이동 뒤에도 같다).
     onlineManager.setOnline(false);
     let online = false;
@@ -175,10 +175,6 @@ describe("04 조회(PD-12)", () => {
     expect(harness.requests("/api/home")).toHaveLength(1);
     online = true;
     act(() => window.dispatchEvent(new Event("online")));
-    // 온라인 사건만으로는 다시 부르지 않는다(진입 때 1회 · 재연결 재조회 끔).
-    await new Promise((resolve) => setTimeout(resolve, 50));
-    expect(harness.requests("/api/home")).toHaveLength(1);
-    fireEvent.click(screen.getByTestId("toast-action"));
     expect(await screen.findByTestId("home-device-card")).toHaveAttribute("data-state", "stable");
     expect(harness.requests("/api/home")).toHaveLength(2);
   });

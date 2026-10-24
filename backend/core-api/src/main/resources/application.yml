@@ -98,6 +98,11 @@ springdoc:
 
 mujoong:
   timing:
+    home-events:
+      stream-timeout: 2m
+      heartbeat-interval: 10s
+      notification-wait: 1s
+      reconnect-delay: 1s
     session:
       preparing-timeout: 10s
     core:

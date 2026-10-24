@@ -5,6 +5,7 @@
 #   docker build -f infra/migrate/Dockerfile \
 #     --build-context core_sql=backend/core-api/src/main/resources/db/migration/core \
 #     --build-context realtime_sql=backend/realtime-activity/src/main/resources/db/migration/realtime \
+#     --build-context reference_seed=infra/seed \
 #     --build-arg GIT_SHA=<40자 커밋> --build-arg MUJOONG_SOURCE_FINGERPRINT=sha256:<64자> infra/migrate
 #   (보통은 infra/ci/build-images.sh가 부른다)
 #
@@ -78,7 +79,13 @@ RUN --mount=type=bind,from=os-patches,source=/debs,target=/tmp/os-patches \
 COPY --from=flyway-lib /lib/ /flyway/lib/
 COPY --from=core_sql . /flyway/sql/core/
 COPY --from=realtime_sql . /flyway/sql/realtime/
-COPY flyway-core.conf flyway-realtime.conf /flyway/conf/
+# 원본 시드는 infra/seed 한 곳에서 관리하고 별도 Flyway 이력으로 한 번씩 적용한다.
+COPY --from=reference_seed 001-reference.sql /flyway/sql/reference/V001__reference.sql
+COPY --from=reference_seed 002-u2-reference.sql /flyway/sql/reference/V002__u2_reference.sql
+COPY --from=reference_seed 003-u4a-reference.sql /flyway/sql/reference/V003__u4a_reference.sql
+COPY --from=reference_seed 004-u8-reference.sql /flyway/sql/reference/V004__u8_reference.sql
+COPY --from=reference_seed 005-spoken-audio-reference.sql /flyway/sql/reference/V005__spoken_audio_reference.sql
+COPY flyway-core.conf flyway-realtime.conf flyway-reference.conf /flyway/conf/
 COPY --chmod=0755 migrate.sh /usr/local/bin/mujoong-migrate
 USER 10001:10001
 ENTRYPOINT ["/usr/local/bin/mujoong-migrate"]

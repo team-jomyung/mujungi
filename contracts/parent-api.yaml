@@ -122,6 +122,39 @@ paths:
         "403": { $ref: "#/components/responses/AccountDeletion" }
         "500": { $ref: "#/components/responses/InternalError" }
         "503": { $ref: "#/components/responses/ServiceNotReady" }
+  /home/events:
+    get:
+      operationId: subscribeHomeEvents
+      summary: 보호자 홈·기기 상태 변경 알림(JIRA-274)
+      description: |
+        현재 인증된 활성 보호자에게만 ready, home-changed, heartbeat SSE 이벤트를 보낸다.
+        데이터는 빈 JSON 객체 {}이며 상태·아이 정보는 싣지 않는다. ready와 home-changed를 받으면
+        GET /home을 재조회한다. 재연결 후에도 재조회하며 이벤트 재생은 지원하지 않는다.
+        연결 수명·heartbeat는 timing.md, 클라이언트 복구 규칙은 home-events.md를 따른다.
+        보호자별 동시 연결은 4개까지 허용하고 초과 요청은 기존 연결을 유지한 채 429로 거절한다.
+      x-unit: U1
+      responses:
+        "200":
+          description: 인증된 보호자의 상태 재조회 신호 스트림
+          headers:
+            Cache-Control:
+              schema: { type: string, enum: [no-store] }
+            X-Accel-Buffering:
+              schema: { type: string, enum: ["no"] }
+          content:
+            text/event-stream:
+              schema: { type: string }
+              example: "event:ready\ndata:{}\n\n"
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/AccountDeletion" }
+        "429":
+          description: 보호자별 동시 연결 한도 초과
+          x-error-codes: [TOO_MANY_ATTEMPTS]
+          content:
+            application/json:
+              schema: { $ref: "schemas/error-envelope.schema.json" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/ServiceNotReady" }
   /device:
     get:
       operationId: getDevice

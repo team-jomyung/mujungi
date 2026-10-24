@@ -44,6 +44,23 @@ beforeEach(() => {
   resetRouter();
 });
 
+it("SSE 미지원 시에도 상세 화면의 끊김·연결·시작 잠금을 자동 재조회한다", async () => {
+  let state: NetworkState = "STABLE";
+  renderParent(<DeviceScreen />, {
+    timing: { parentPollIntervalMs: 40 },
+    handler: path => path === "/api/home" ? jsonResponse(200, homeBody(state)) : jsonResponse(200, stopBody([])),
+  });
+  await screen.findByTestId("device-rows");
+  state = "DISCONNECTED";
+  await waitFor(() => expect(screen.getByTestId("device-rows")).toHaveAttribute("data-state", "disconnected"));
+  expect(screen.getByTestId("device-verdict")).toHaveTextContent("지금은 시작할 수 없어요");
+  expect(screen.getByTestId("tab-free")).toHaveAttribute("aria-disabled", "true");
+  state = "STABLE";
+  await waitFor(() => expect(screen.getByTestId("device-rows")).toHaveAttribute("data-state", "stable"));
+  expect(screen.getByTestId("device-verdict")).toHaveTextContent("시작할 준비가 되었어요");
+  expect(screen.getByTestId("tab-practice")).not.toHaveAttribute("aria-disabled");
+});
+
 describe("05 두 줄 + 판정 카드(AC2.1.1 ~ AC2.1.6 · AC2.1.13 · AC2.1.14)", () => {
   it("등록 없음: 등록 줄 '없음', 네트워크 줄 '등록 뒤 표시', 판정 '기기를 등록해 주세요' + 「기기 등록」 → 05a, 탭 잠김", async () => {
     renderParent(<DeviceScreen />, { handler: handler("NONE") });

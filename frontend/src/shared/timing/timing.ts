@@ -13,6 +13,8 @@ export interface Timing {
   readonly reportReadyTargetMs: number;
   /** 12 진행 폴링 주기(mujoong.timing.parent.poll-interval, BR6.15 · PD-12). */
   readonly parentPollIntervalMs: number;
+  /** SSE 알림 유실·시간 경과로 바뀐 홈 상태의 보완 조회 간격. */
+  readonly homeReconcileIntervalMs: number;
   /** 보호자 웹 REST 요청 제한 시간(mujoong.timing.parent.request-timeout, J80 · RD-21). */
   readonly parentRequestTimeoutMs: number;
   /** Scenario preparation can take 30 seconds; the start request waits for its definitive result. */
@@ -71,6 +73,7 @@ function contractKey(field: TimingField, configKey: string, kind: "duration" | "
 export const TIMING_KEYS: readonly TimingKeySpec[] = [
   contractKey("reportReadyTargetMs", "mujoong.timing.report.ready-target"),
   contractKey("parentPollIntervalMs", "mujoong.timing.parent.poll-interval"),
+  contractKey("homeReconcileIntervalMs", "mujoong.timing.parent.home-reconcile-interval"),
   contractKey("parentRequestTimeoutMs", "mujoong.timing.parent.request-timeout"),
   contractKey("practiceStartRequestTimeoutMs", "mujoong.timing.parent.practice-start-request-timeout"),
   contractKey("parentLoadingNoticeDelayMs", "mujoong.timing.parent.loading-notice-delay"),
