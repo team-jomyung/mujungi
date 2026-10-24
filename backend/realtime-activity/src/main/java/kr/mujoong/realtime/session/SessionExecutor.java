@@ -581,6 +581,8 @@ public final class SessionExecutor {
     private final Map<UUID, kr.mujoong.realtime.voice.PracticeSpeech> practiceAudio = new HashMap<>();
     private kr.mujoong.realtime.voice.PracticeSpeech streamedPractice;
     private boolean streamedPracticeEnded;
+    /** 단위별 경로의 생성형 연습 발화({@link #streamedPractice})에서 단위 하나라도 기기 송신에 넘겼는가(FT-1023-e: 재생이 시작된 발화). */
+    private boolean streamedPracticeSent;
     private final java.util.ArrayDeque<PracticeSessionExtension.ExtensionEvent> pausedPracticeEvents = new java.util.ArrayDeque<>();
     private Instant practicePauseStartedAt;
     private record PracticePause(Instant from, Instant to) { }
@@ -1213,8 +1215,9 @@ public final class SessionExecutor {
 
     private void practicePlayback(kr.mujoong.realtime.voice.PracticeSpeech speech,
             kr.mujoong.realtime.practicelegacy.PracticePorts.Playback fact, Instant receivedAt) {
-        if (speech.equals(streamedPractice)) {
-            if (fact == kr.mujoong.realtime.practicelegacy.PracticePorts.Playback.STARTED) return;
+        if (speech.equals(streamedPractice) && fact != kr.mujoong.realtime.practicelegacy.PracticePorts.Playback.STARTED) {
+            // 단위별로 나가는 생성형 발화의 STARTED는 확장에 그대로 넘긴다(FT-1023-e: 확장이 '재생 중'을 알아야 한다 — 확장은 중복 STARTED를
+            // 무시한다). 단위 하나의 COMPLETED는 발화의 끝이 아니다: 응답이 끝나고 보낸 음성이 모두 끝났을 때 한 번 COMPLETED로 닫는다
             if (fact == kr.mujoong.realtime.practicelegacy.PracticePorts.Playback.COMPLETED) {
                 finishStreamedPractice();
                 return;
@@ -1245,6 +1248,31 @@ public final class SessionExecutor {
         ctx.timers().cancel(Kind.PRACTICE_COLLECT_MAX);
         practiceHold = true;
         practicePlayback(speech, kr.mujoong.realtime.practicelegacy.PracticePorts.Playback.COMPLETED);
+    }
+
+    /** FT-1023-e: 재생이 시작된 생성형 연습 발화의 뒤 단위를 버리고 나간 부분까지 재생됨으로 닫았다(앱 로그 INFO 사유 코드). */
+    static final String REASON_TAIL_UNIT_DROPPED = "PracticeTailUnitDroppedAfterPlayback";
+    /** FT-1023-e: 재생이 시작된 생성형 연습 발화의 남은 전사가 음성과 맞춰지지 못한 채 시한이 지나 나간 부분까지 재생됨으로 닫았다(INFO). */
+    static final String REASON_TAIL_TEXT_UNALIGNED = "PracticeTailTextUnalignedAfterPlayback";
+
+    /**
+     * FT-1023-e: 단위별 경로로 나가던 생성형 연습 발화({@link #streamedPractice})가 이미 단위 하나라도 기기로 나갔으면, 그 발화의 남은 출력을 받지 않고
+     * 나간 부분까지 '재생됨'으로 닫는다. 이미 보낸 음성은 끊지 않는다(출력 세대 · 출력 권한을 바꾸지 않는다). 보낸 음성이 아직 재생 중이거나 앞 단위가 제브
+     * 검사 중이면 그 끝({@link #finishStreamedPractice})에서 COMPLETED 한 번으로 닫힌다. 재생이 시작되지 않은 발화는 건드리지 않고 거짓을
+     * 돌려준다(지금처럼 재요청 1회 → 실패).
+     *
+     * @param reasonCode 앱 로그 사유 코드(INFO, 원문 없음)
+     * @return 닫는 길로 넘겼으면 참
+     */
+    private boolean closeSentStreamedPractice(String reasonCode) {
+        var speech = streamedPractice;
+        if (speech == null || !streamedPracticeSent || !speech.equals(pendingPracticeSpeech)) return false;
+        ctx.services().events().appError(EventLog.Component.OUTPUT_GATE, reasonCode, EventCode.Level.INFO);
+        // 이 응답의 뒤따르는 조각은 받지 않는다(onOutputChunk의 streamedPracticeEnded 길). 맞춰지길 기다리던 전사 · 음성도 버린다
+        streamedPracticeEnded = true;
+        timedOutput.reset();
+        finishStreamedPractice();
+        return true;
     }
 
     private void stopPracticeProgress() {
@@ -2816,6 +2844,7 @@ public final class SessionExecutor {
                 if (pendingPracticeSpeech != null && pendingPracticeSpeech.generated()) {
                     streamedPractice = pendingPracticeSpeech;
                     streamedPracticeEnded = false;
+                    streamedPracticeSent = false;
                 }
             }
             if (transcript != null) timedOutput.transcript(transcript, startMs, endMs, at, nanos);
@@ -2888,6 +2917,16 @@ public final class SessionExecutor {
             return;
         }
         Instant now = ctx.services().clock().now();
+        // FT-1023-e: 전사 먼저 방출 경로가 다음 조각과 합치려고 붙잡아 둔 말끝 구두점(예: "?")은 응답이 조용해지면 그대로 단위로 낸다
+        if (progressiveResponse && timedOutput.hasPendingText() && inOutputRange()) {
+            TimedOutputBuffer.TextUnit trailing = timedOutput.pollTrailingText(ctx.outputGen().generation(),
+                    ctx.outputGeneration().get(), now, ctx.services().clock().monotonicNanos());
+            if (trailing != null) {
+                ctx.transcripts().aiStartStreaming(trailing.sealed().firstOutAt());
+                textUnitEnds.put(trailing.sealed(), trailing.endByte());
+                gateSealed(trailing.sealed(), false, true, now, ctx.services().clock().monotonicNanos());
+            }
+        }
         // Transcript deltas may lead PCM by up to several seconds. Silence is not an end while aligned audio is pending.
         if (timedOutput.hasPendingText()) {
             Instant deadline = timedOutput.pendingSince().plus(ctx.services().settings().instructionWait());
@@ -2895,10 +2934,13 @@ public final class SessionExecutor {
                 ctx.timers().arm(Kind.SEGMENT_QUIET, Duration.between(now, deadline));
                 return;
             }
-            if (streamedPractice != null) closeGeneratedSlot(streamedPractice.correlationId(),
-                    kr.mujoong.realtime.practicelegacy.PracticePorts.Playback.FAILED);
-            bumpOutput(OutputGeneration.BumpReason.GATE_CORRECTION);
-            return;
+            // FT-1023-e: 재생이 시작된 연습 발화면 남은 전사를 버리고 나간 부분까지 재생됨으로 닫은 뒤 아래 조용 처리로 응답을 끝낸다
+            if (!closeSentStreamedPractice(REASON_TAIL_TEXT_UNALIGNED)) {
+                if (streamedPractice != null) closeGeneratedSlot(streamedPractice.correlationId(),
+                        kr.mujoong.realtime.practicelegacy.PracticePorts.Playback.FAILED);
+                bumpOutput(OutputGeneration.BumpReason.GATE_CORRECTION);
+                return;
+            }
         }
         OutputGeneration.QuietResult result = ctx.outputGen().onQuiet(now);
         switch (result.verdict()) {
@@ -3539,8 +3581,9 @@ public final class SessionExecutor {
             return;
         }
         try {
+            // 단위별 경로(streaming)의 단위는 구두점뿐이어도 통과한다(FT-1023-e). 전체 구간은 지금처럼 빈 전사로 버린다
             OutputGate.Inspection inspection = textUnitEnds.containsKey(sealed)
-                    ? ctx.services().gate().inspectTextDetailed(sealed) : ctx.services().gate().inspectDetailed(sealed);
+                    ? ctx.services().gate().inspectTextDetailed(sealed) : ctx.services().gate().inspectDetailed(sealed, streaming);
             GateDecision inspected = inspection.decision();
             if (!inspected.passed()) {
                 // 금지 패턴은 대화가 넘어갔어도 교정한다(같은 표현을 되풀이하지 않게)
@@ -3558,6 +3601,10 @@ public final class SessionExecutor {
                 if (!guardrail.enabled() || ctx.status() != SessionStatus.ACTIVE) {
                     discard(sealed, GateDecision.DiscardReason.GATE_PATTERN, false, null, true,
                             !guardrail.enabled() ? DiscardDetail.GUARDRAIL_DISABLED : DiscardDetail.SESSION_INACTIVE);
+                    return;
+                }
+                if (inspection.punctuationOnly()) {
+                    releasePunctuationOnly(sealed, practiceGuardrailMode(generatedSlot), generatedSlot.correlationId());
                     return;
                 }
                 try {
@@ -3593,6 +3640,10 @@ public final class SessionExecutor {
             if (practiceControlled && guardrail.enabled()) {
                 // U13 분류 ①: 연습이 출력을 쥐고 승인 발화와 원문이 같으면 제브를 부르지 않고 기존 게이트 검사만 거친 재생이다
                 guardrail.onVerbatimSkipped(GuardrailCoordinator.SOURCE_PRACTICE_SPEECH, sealed.transcript());
+            } else if (!practiceControlled && guardrail.enabled() && ctx.status() == SessionStatus.ACTIVE
+                    && inspection.punctuationOnly()) {
+                releasePunctuationOnly(sealed, GuardrailRequest.Mode.FREE_TALK, null);
+                return;
             } else if (!practiceControlled && guardrail.enabled() && ctx.status() == SessionStatus.ACTIVE) {
                 // U13 분류 ②: 레지스트리가 승인 원문 · 등록 대본과 원문 일치(MATCHED)로 확인한 출력도 제브를 건너뛴다. UNKNOWN ·
                 // NOT_MATCHED(일치를 확인할 수 없음)는 새 발화로 검사한다
@@ -3619,6 +3670,24 @@ public final class SessionExecutor {
                         null, true, DiscardDetail.GATE_PROCESSING_EXCEPTION);
             }
         }
+    }
+
+    /**
+     * FT-1023-e: 단위별 경로의 구두점뿐인 단위(말끝 "?" 등)를 낸다. 사전 · 제브가 볼 글이 없어 제브를 부르지 않는다(사유 코드
+     * {@link GuardrailCoordinator#SOURCE_PUNCTUATION_ONLY}). 앞 단위가 제브 검사 중이거나 대기 중이면 음성 순서를 지키려고 대기열 뒤에 넣는다 — 차례가
+     * 오면 협력 객체가 제브 없이 낸다(앞 대기 단위와 함께 묶이면 그 검사 글에 붙는다).
+     */
+    private void releasePunctuationOnly(SegmentBuffer.Sealed sealed, GuardrailRequest.Mode mode, UUID practiceSpeechId) {
+        if (guardrail.isChecking() || guardrail.hasQueued()) {
+            try {
+                guardrail.begin(sealed, mode, practiceSpeechId, true);
+            } catch (RuntimeException e) {
+                guardrail.onBeginFailed(sealed, e);
+            }
+            return;
+        }
+        guardrail.onPunctuationOnlySkipped();
+        recheckAndSend(sealed, null, true);
     }
 
     /**
@@ -3722,6 +3791,7 @@ public final class SessionExecutor {
                 practicePlayback(speech, kr.mujoong.realtime.practicelegacy.PracticePorts.Playback.FAILED);
             }
         } else {
+            if (speech != null && speech.equals(streamedPractice)) streamedPracticeSent = true;
             // Only approved output accepted by the device link may ground a subsequent agreement judgment.
             judgment.rememberPartner(sealed.transcript(), passAt, speech != null && "COACH".equals(speech.partnerRole()));
         }
@@ -3785,6 +3855,9 @@ public final class SessionExecutor {
         }
         recordDiscard(sealed, held, reason, ownsLatency, detail);
         if (pendingPracticeSpeech != null) {
+            // FT-1023-e: 앞 단위가 이미 기기로 나간 생성형 연습 발화의 단위 하나가 비어(GATE_EMPTY) 버려졌다. 같은 지시를 다시 요청하지 않고(아이가
+            // 같은 말을 두 번 듣는다) 나간 부분까지 '재생됨'으로 닫는다. 금지 표현 · 제브 · 송신 재확인 폐기는 지금처럼 실패다
+            if (reason == GateDecision.DiscardReason.GATE_EMPTY && closeSentStreamedPractice(REASON_TAIL_UNIT_DROPPED)) return;
             var speech = pendingPracticeSpeech; pendingPracticeSpeech = null; practiceHold = true;
             bumpOutput(OutputGeneration.BumpReason.PRACTICE_DISCARD);
             if (reason == GateDecision.DiscardReason.GATE_EMPTY) recoverPracticeAudio(speech);

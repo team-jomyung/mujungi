@@ -299,6 +299,87 @@ class SessionJoinTest {
         assertThat(plays()).extracting(PlayApprovedContent::contentCode).containsExactly(SessionExecutor.INTRO_PRACTICE);
     }
 
+    // ---- 연습 참여 대답(FT-1023-f, 2026-10-23 사람 지시): 자유대화와 같은 분류 규칙 · 수락한 대답 행 ----
+
+    @Test
+    void aPracticeUnclearReplyStartsAtOnceWithoutAReprompt() {
+        withPrompts();
+        h.activityType = ActivityType.PRACTICE;
+        toWaitingChild();
+
+        h.childSays("i-1", "음");
+
+        assertThat(h.executor.status()).isEqualTo(SessionStatus.ACTIVE);
+        assertThat(plays()).extracting(PlayApprovedContent::contentCode).containsExactly(SessionExecutor.INTRO_PRACTICE);
+        assertThat(events(JoinFlow.EVENT_JOIN_RE_PROMPTED)).isEmpty();
+    }
+
+    @Test
+    void aPracticeTopicRefusalIsNotAnEndAndStartsAtOnce() {
+        withPrompts();
+        h.activityType = ActivityType.PRACTICE;
+        toWaitingChild();
+
+        h.childSays("i-1", "이거 말고 다른 거");
+
+        assertThat(h.executor.status()).isEqualTo(SessionStatus.ACTIVE);
+        assertThat(plays()).extracting(PlayApprovedContent::contentCode).containsExactly(SessionExecutor.INTRO_PRACTICE);
+    }
+
+    @Test
+    void aPracticeRefusalDeclinesAtOnceWithoutAnAlternativeAndStoresNoChildRow() {
+        withPrompts();
+        h.activityType = ActivityType.PRACTICE;
+        toWaitingChild();
+
+        h.childSays("i-1", "싫어");
+
+        assertThat(h.transitions.status(h.sessionId)).isEqualTo(SessionStatus.DECLINED);
+        assertThat(plays()).extracting(PlayApprovedContent::contentCode).doesNotContain(SessionExecutor.DECLINE_ALTERNATIVE);
+        assertThat(events(JoinFlow.EVENT_JOIN_ALTERNATIVE_OFFERED)).isEmpty();
+        h.recorder.tick();
+        assertThat(h.store.transcripts).noneMatch(row -> row.speaker() == TranscriptEntry.Speaker.CHILD);
+    }
+
+    @Test
+    void aPracticeAcceptedReplyIsStoredBetweenTheIntroAndTheFirstPracticeRowAndNeverReachesTheExtension() {
+        withPrompts();
+        h.activityType = ActivityType.PRACTICE;
+        var utterances = new java.util.ArrayList<String>();
+        h.practice = ignored -> new PracticeSessionExtension() {
+            @Override public boolean controlsOutput() { return true; }
+            @Override public Signal onActive(PracticeContext context, PracticeOutput output) {
+                output.speak(kr.mujoong.realtime.voice.PracticeSpeech.scenario(UUID.randomUUID(), UUID.randomUUID(), 1, "친구",
+                        "같이 연습해 보자."));
+                return Signal.NONE;
+            }
+            @Override public Signal onChildUtterance(Utterance utterance, PracticeOutput output) {
+                utterances.add(utterance.text());
+                return Signal.NONE;
+            }
+            @Override public Signal onExtensionEvent(ExtensionEvent event, PracticeOutput output) { return Signal.NONE; }
+            @Override public void onSettle(EndContext end) { }
+            @Override public Object practiceRecord() { return null; }
+        };
+        toWaitingChild();
+
+        h.childSays("i-1", "응 좋아");
+        assertThat(h.executor.status()).isEqualTo(SessionStatus.ACTIVE);
+        h.settleSend();
+        h.speak("같이 연습해 보자.", 4800);
+        h.recorder.tick();
+
+        // 연습 시작 안내 행은 재생이 시작되면 글이 채워진다(번호는 보낼 때 정해진다) — 번호 순서만 본다
+        var intro = h.store.transcripts.stream().filter(row -> row.speaker() == TranscriptEntry.Speaker.AI)
+                .min(java.util.Comparator.comparingInt(TranscriptEntry::sequenceNo)).orElseThrow();
+        var reply = h.store.transcripts.stream().filter(row -> row.speaker() == TranscriptEntry.Speaker.CHILD).toList();
+        assertThat(reply).singleElement().satisfies(row -> assertThat(row.text()).isEqualTo("응 좋아"));
+        var firstPractice = h.store.transcripts.stream().filter(row -> row.speaker() == TranscriptEntry.Speaker.AI
+                && row.sequenceNo() != intro.sequenceNo()).mapToInt(TranscriptEntry::sequenceNo).min().orElseThrow();
+        assertThat(reply.getFirst().sequenceNo()).isGreaterThan(intro.sequenceNo()).isLessThan(firstPractice);
+        assertThat(utterances).as("수락한 대답은 기록만 하고 연습 확장점의 아이 발화가 아니다").isEmpty();
+    }
+
     @Test
     void aLostProviderWhileWaitingAbortsTheSession() {
         toWaitingChild();

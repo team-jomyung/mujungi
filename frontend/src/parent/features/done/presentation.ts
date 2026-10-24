@@ -34,11 +34,13 @@ function reasonFor(view: LiveView, childName: string | null): Reason {
   if (view.status === "ENDED_UNCONFIRMED" || view.status === "FAILED") {
     return { title: COPY.done.unconfirmedTitle, body: COPY.done.unconfirmedBody };
   }
+  // 연습 출력 실패(end_detail PRACTICE_OUTPUT_FAILED)는 end_reason이 DISCONNECT여도 연결 끊김이 아니다(FT-1023-e). 이 종료는 CLOSING을 거쳐
+  // ENDED(또는 마무리 시한 초과면 ENDED_UNCONFIRMED)로 오고, 진짜 연결 끊김(ABORTED)에는 이 상세 사유가 붙지 않는다
   if (view.status === "ABORTED") {
     return { title: COPY.done.abortedTitle, body: abortedBody(endedHhmm) };
   }
   if (view.activityType === "PRACTICE" && view.endDetail === "PRACTICE_OUTPUT_FAILED") {
-    return { title: "연습 음성을 재생하지 못했어요", body: "연습이 완료된 것은 아니에요. 기기 연결을 확인하고 다시 시작해 주세요." };
+    return { title: ACTIVITY_TEMP_COPY.practiceOutputFailedTitle, body: ACTIVITY_TEMP_COPY.practiceOutputFailedBody };
   }
   if (view.activityType === "PRACTICE" && view.endDetail === "PRACTICE_COMPLETED") {
     return { title: "이번 연습을 마쳤어요", body: null };

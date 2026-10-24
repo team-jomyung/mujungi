@@ -126,4 +126,29 @@ class TimedOutputBufferTest {
         assertThat(rest.get(1)).hasSize(360);
         assertThat(buffer.drainAudio(1_200)).isEmpty();
     }
+
+    @Test
+    void aTrailingPunctuationOnlyTranscriptIsHeldByPollTextButReleasedAsItsOwnUnitOnceTheResponseIsQuiet() {
+        buffer.transcript("볼까", 0, 100, at, 1);
+        buffer.transcript("?", 100, 120, at, 2);
+        buffer.audio(new byte[120 * 48], 0);
+        var first = buffer.pollText(1, 2, at, 3);
+        assertThat(first.sealed().transcript()).isEqualTo("볼까");
+        assertThat(buffer.pollText(1, 2, at, 4)).as("합칠 다음 조각을 기다린다").isNull();
+        assertThat(buffer.hasPendingText()).isTrue();
+        var trailing = buffer.pollTrailingText(1, 2, at, 5);
+        assertThat(trailing.sealed().transcript()).isEqualTo("?");
+        assertThat(trailing.endByte()).isEqualTo(120 * 48);
+        assertThat(buffer.hasPendingText()).isFalse();
+    }
+
+    @Test
+    void aTrailingTranscriptThatIsNotPunctuationOnlyIsNeverFlushed() {
+        buffer.transcript("볼까", 0, 100, at, 1);
+        buffer.transcript("\u200B", 100, 120, at, 2);
+        buffer.audio(new byte[120 * 48], 0);
+        buffer.pollText(1, 2, at, 3);
+        assertThat(buffer.pollTrailingText(1, 2, at, 4)).isNull();
+        assertThat(buffer.hasPendingText()).isTrue();
+    }
 }

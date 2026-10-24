@@ -161,6 +161,28 @@ public final class TimedOutputBuffer {
     }
 
     /**
+     * 응답이 조용해진 뒤 남은 마지막 전사가 구두점뿐(말끝 "?" 등)이면 그것을 단위로 낸다(FT-1023-e). {@link #pollText}는 구두점뿐인 조각을 다음
+     * 조각과 합치려고 붙잡아 두는데, 응답 끝의 조각은 합칠 다음 조각이 없어 남는다 — 그대로 두면 말끝 음성이 나가지 않고 남은 전사 시한이 지나 출력 세대를
+     * 올린다. 남은 전사가 구두점뿐이 아니면(빈 전사 포함) 아무것도 꺼내지 않는다.
+     */
+    public TextUnit pollTrailingText(long providerGeneration, long deviceGeneration, Instant at, long nanos) {
+        if (failed || !audioStarted) return null;
+        while (!texts.isEmpty() && texts.getFirst().endByte() <= firstByte) {
+            skippedText += texts.removeFirst().value();
+        }
+        if (texts.size() != 1) return null;
+        Text text = texts.peekFirst();
+        String transcript = skippedText + text.value();
+        if (!OutputGate.punctuationOnly(transcript)) return null;
+        texts.removeFirst();
+        skippedText = "";
+        textCharacters -= transcript.length();
+        SegmentBuffer.Sealed sealed = new SegmentBuffer.Sealed(providerGeneration, transcript, List.of(), 0, deviceGeneration,
+                text.at(), text.nanos(), at, nanos, false, true);
+        return new TextUnit(sealed, text.endByte());
+    }
+
+    /**
      * 도착한 음성 중 {@code limitByte}까지를 순서대로 꺼낸다(통과한 단위의 끝 위치까지만 내보낸다). 아직 오지 않은 음성은 다음에 꺼낸다.
      *
      * @return 꺼낸 음성 조각들(없으면 빈 목록)
