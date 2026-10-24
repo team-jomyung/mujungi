@@ -12,8 +12,10 @@ import kr.mujoong.realtime.practiceflow.PracticeScript.Scene;
  *
  * <ul>
  *   <li>고정 문장은 시작 패키지 {@code approvedSpeech}(code → text)에서 읽고, 패키지에 그 코드가 없으면 같은 문장의 상수({@link #FIXED})로 대신한다.
- *   <li>대본 칸이 없으면(옛 대본 v1) 7.4의 대체 문장을 쓴다. 대본 조각을 이어 만든 대체 문장은 문장부호 규칙(마침표 · 쉼표 · 물음표만, 4.3)을
- *       지키게 따옴표 · 괄호 · 느낌표 · 물결 · 말줄임표를 덜어 낸다 — 원문 대조가 문장부호까지 엄격해서 읽은 전사가 그 기호를 빼면 버려지기 때문이다.
+ *   <li>대본 칸이 없으면(옛 대본 v1, 또는 core가 서버 검사에 걸려 그 칸만 뺀 v2 대본) 칸마다 7.4의 대체 문장을 쓴다. 상대 말 전하기의 앞머리 · 묻기 ·
+ *       반응은 장면 relation의 상대 호칭({@link Partner}: 선생님(높임말) · 선배 · 동생 · 호칭 없음(가족) · 친구)으로 고른다. 대본 조각을 이어 만든
+ *       대체 문장은 문장부호 규칙(마침표 · 쉼표 · 물음표만, 4.3)을 지키게 따옴표 · 괄호 · 느낌표 · 물결 · 말줄임표를 덜어 낸다 — 원문 대조가
+ *       문장부호까지 엄격해서 읽은 전사가 그 기호를 빼면 버려지기 때문이다.
  *   <li>두 문장을 한 슬롯으로 이어 읽을 때(친구 말 전하기 + 묻기, 다시 설명 + 묻기, 기다리기 + 묻기)는 앞 문장 끝에 마침표를 채우고 공백 하나로 잇는다.
  * </ul>
  *
@@ -61,6 +63,90 @@ final class DirectAskLines {
     static final String HELP_TAIL = "네 말로 해 볼래?";
 
     /**
+     * 대체 문장의 상대 호칭(계약 ai-io.md 10.17 '상대 호칭별 대체' 표). 장면 relation으로 고르고({@link #of}), 대본 칸이 없을 때(옛 대본 v1이거나 core가
+     * 서버 검사에 걸려 뺀 칸) 상대 말 전하기의 앞머리 · 묻기 · 반응에만 쓴다. 친구(그 밖의 모든 값)는 지금 문장 그대로이고 묻기는 시드 고정 문장
+     * {@code ASK_DEFAULT}다. 다른 호칭의 묻기는 시드 문장이 아니라 이 상수다 — 장면 안 승인 낭독은 대본 ID로만 기록하고 고정 문장 코드 · 판으로 기록하지
+     * 않아서(승인 원문 대조도 문장 자체로 한다) 상수로 두어도 기록이 틀어지지 않는다.
+     */
+    enum Partner {
+        FRIEND(RELAY_LEAD, null, FRIEND_REACTION_FALLBACK),
+        TEACHER("선생님이 이렇게 말씀하셨어.", "너라면 선생님께 뭐라고 말씀드릴래?", "그렇게 말씀드리면 선생님도 네 마음을 아실 거야."),
+        SENIOR("선배가 이렇게 말했어.", "너라면 선배한테 뭐라고 말할래?", "그렇게 말해 주면 선배도 네 마음을 알 거야."),
+        JUNIOR("동생이 이렇게 말했어.", "너라면 동생한테 뭐라고 말할래?", "그렇게 말해 주면 동생도 네 마음을 알 거야."),
+        /** 호칭 없는 중립 문장: 가족, 그리고 동아리 밖의 형 · 누나 · 언니 · 오빠(가족인지 손윗사람인지 갈리지 않는다). */
+        NEUTRAL("그때 이렇게 말했어.", "너라면 뭐라고 말할래?", "그렇게 말해 주면 네 마음이 잘 전해질 거야.");
+
+        /** 손윗사람을 부르는 친족 호칭. 동아리 이름과 함께면 선배이고, 아니면 가족일 수도 있어 호칭 없는 문장이다. */
+        private static final List<String> ELDER_WORDS = List.of("형", "누나", "언니", "오빠");
+        /** 가족 낱말. */
+        private static final List<String> FAMILY_WORDS = List.of("가족", "엄마", "아빠", "부모", "할머니", "할아버지");
+
+        private final String relayLead;
+        private final String ask;
+        private final String reaction;
+
+        Partner(String relayLead, String ask, String reaction) {
+            this.relayLead = relayLead;
+            this.ask = ask;
+            this.reaction = reaction;
+        }
+
+        /** 상대 말 전하기의 앞머리(뒤에 opportunitySentence를 잇는다). */
+        String relayLead() {
+            return relayLead;
+        }
+
+        /** 묻는 말. 친구는 null(시드 고정 문장 ASK_DEFAULT를 쓴다). */
+        String ask() {
+            return ask;
+        }
+
+        /** 상대 반응. */
+        String reaction() {
+            return reaction;
+        }
+
+        /**
+         * relation 코드 {@code TEACHER} · {@code CLUB_SENIOR} · {@code CLUB_JUNIOR} · {@code FAMILY}는 표의 호칭이다. 코드가 아닌 관계 이름(core가
+         * 그래프 코드로 바꾸지 않은 목표의 관계 이름, 예: '동아리 형')은 낱말로 고른다({@link #byName}). 그 밖의 값(친구 · 또래 코드 · 모르는 값)은 친구다.
+         */
+        static Partner of(String relation) {
+            String value = relation == null ? "" : relation.replaceAll("\\s", "");
+            return switch (value) {
+                case "TEACHER" -> TEACHER;
+                case "CLUB_SENIOR" -> SENIOR;
+                case "CLUB_JUNIOR" -> JUNIOR;
+                case "FAMILY" -> NEUTRAL;
+                default -> byName(value);
+            };
+        }
+
+        /**
+         * 관계 이름의 낱말로 고른다(공백은 뺀 값): '선생님' · '교사'는 선생님, '선배'나 '동아리' + 손윗사람 호칭은 선배, '후배' · '동생'은 동생,
+         * 가족 낱말이나 동아리 밖의 손윗사람 호칭은 호칭 없는 문장이고, 그 밖은 친구다.
+         */
+        private static Partner byName(String name) {
+            if (name.contains("선생님") || name.contains("교사")) {
+                return TEACHER;
+            }
+            if (name.contains("선배")) {
+                return SENIOR;
+            }
+            if (name.contains("후배") || name.contains("동생")) {
+                return JUNIOR;
+            }
+            boolean elder = ELDER_WORDS.stream().anyMatch(name::contains);
+            if (elder && name.contains("동아리")) {
+                return SENIOR;
+            }
+            if (elder || FAMILY_WORDS.stream().anyMatch(name::contains)) {
+                return NEUTRAL;
+            }
+            return FRIEND;
+        }
+    }
+
+    /**
      * 도움 말 하나.
      *
      * @param exampleGiven 표현 예시를 담았는가(기록의 EXPRESSION_EXAMPLE 사실 · 도움 행 exampleGiven)
@@ -99,14 +185,21 @@ final class DirectAskLines {
         return join(relay(scene), ask(scene));
     }
 
-    /** 상대 말을 무중이 전하는 문장. 옛 대본은 "친구가 이렇게 말했어." + 기회 문장이다. */
+    /** 상대 말을 무중이 전하는 문장. 칸이 없으면 상대 호칭별 앞머리(친구는 "친구가 이렇게 말했어.") + 기회 문장이다. */
     String relay(Scene scene) {
-        return present(scene.opportunityRelay()) ? scene.opportunityRelay() : join(RELAY_LEAD, plain(scene.opportunitySentence()));
+        if (present(scene.opportunityRelay())) {
+            return scene.opportunityRelay();
+        }
+        return join(Partner.of(scene.relation()).relayLead(), plain(scene.opportunitySentence()));
     }
 
-    /** 묻는 말. 옛 대본은 고정 ASK_DEFAULT다. */
+    /** 묻는 말. 칸이 없으면 친구는 고정 ASK_DEFAULT, 다른 호칭은 호칭별 묻기 상수다. */
     String ask(Scene scene) {
-        return present(scene.askPrompt()) ? scene.askPrompt() : fixed(ASK_DEFAULT);
+        if (present(scene.askPrompt())) {
+            return scene.askPrompt();
+        }
+        Partner partner = Partner.of(scene.relation());
+        return partner == Partner.FRIEND ? fixed(ASK_DEFAULT) : partner.ask();
     }
 
     /** OPPORTUNITY 무응답 1회: 기다리기 + 묻기. */
@@ -149,9 +242,12 @@ final class DirectAskLines {
         return new Help(join(parts.toArray(String[]::new)), example != null);
     }
 
-    /** 장면 성공 마무리: 친구 반응. */
+    /** 장면 성공 마무리: 상대 반응. 칸이 없으면 상대 호칭별 반응 문장(친구는 "그렇게 말해 주면 친구도 네 마음을 알 거야.")이다. */
     String friendReaction(Scene scene) {
-        return present(scene.friendReaction()) ? scene.friendReaction() : FRIEND_REACTION_FALLBACK;
+        if (present(scene.friendReaction())) {
+            return scene.friendReaction();
+        }
+        return Partner.of(scene.relation()).reaction();
     }
 
     /** 문장들을 한 슬롯으로 잇는다: 앞 문장이 문장 끝 부호 · 쉼표로 끝나지 않으면 마침표를 채우고 공백 하나로 잇는다. */

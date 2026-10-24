@@ -95,7 +95,7 @@ final class PracticeScriptFixtures {
     private static String v2Script(UUID scenarioId, String scenes) {
         return "{\"scenarioId\":\"" + scenarioId + "\",\"kind\":\"ORIGINAL\",\"scriptVersion\":\"scenario-script.v2\","
                 + "\"relationType\":\"친구\",\"scenes\":[" + scenes + "],"
-                + "\"selfReview\":{\"verdict\":\"APPROVE\",\"model\":\"fake-model\",\"promptVersion\":\"scenario-review.v2\"},"
+                + "\"selfReview\":{\"verdict\":\"APPROVE\",\"model\":\"fake-model\",\"promptVersion\":\"scenario-review.v1\"},"
                 + "\"generation\":{\"model\":\"fake-model\",\"promptVersion\":\"scenario-generation.v3\",\"graphContextUsed\":true,"
                 + "\"calls\":3,\"kgVersion\":\"kg-1\"},"
                 + "\"validation\":{\"goalIncluded\":true,\"triggerIncluded\":true,\"forbiddenFound\":false}}";
