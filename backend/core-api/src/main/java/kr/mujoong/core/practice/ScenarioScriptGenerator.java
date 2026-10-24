@@ -51,7 +51,7 @@ public final class ScenarioScriptGenerator {
         Input active=input;List<String> correctionReasons=List.of();ScenarioScript scriptToRepair=null;
         for(int correction=0;correction<=2;correction++){
             if(correction==2 && (correctionReasons.isEmpty() || !correctionReasons.stream().allMatch(
-                    reason->java.util.Set.of("INCOMPLETE_SCENE","ANSWER_INCLUDED","EARLY_CUE").contains(reason))))break;
+                    reason->java.util.Set.of("INCOMPLETE_SCENE","ANSWER_INCLUDED","EARLY_CUE","GOAL_MISMATCH").contains(reason))))break;
             final Input current=active;
             try {
                 Map<String,Object> payload=new LinkedHashMap<>(current.payload());
@@ -62,7 +62,10 @@ public final class ScenarioScriptGenerator {
                 var generated=invoke(()->provider.generate(call(payload,current,deadline)),budget,deadline);
                 var generationCost=generationStartedWith.minus(deadline.remaining());
                 if(generated==null||generated.script()==null||!metadata(generated.model()))throw content();
-                model=generated.model();var script=includeBasePartnerLine(generated.script());scriptToRepair=script;
+                model=generated.model();var script=includeBasePartnerLine(generated.script());
+                var cleaned=validation.withoutInvalidSceneStart(script,current.rules());
+                if(cleaned!=script){diagnose("ScenarioSceneStartDropped");script=cleaned;}
+                scriptToRepair=script;
                 Input reviewedInput=current;
                 boolean planMismatch=false;
                 if(current.graphContextUsed()&&current.rules().variants() instanceof ScenarioGraphContext.Session graph&&!script.scenes().isEmpty()){
@@ -142,7 +145,7 @@ public final class ScenarioScriptGenerator {
     private Input withoutGraph(Input input){
         var payload=new LinkedHashMap<>(input.payload());payload.remove("structureContext");payload.remove("variantPlan");payload.put("baseOnly",true);
         var r=input.rules();
-        return new Input(payload,input.aliases(),new ScenarioScriptValidation.Rules(r.relation(),r.opportunity(),r.targetExpression(),r.originalNames(),r.sourceText(),r.seen(),(a,b)->false,r.reflectionAllowed()),false,input.goalContextJson());
+        return new Input(payload,input.aliases(),new ScenarioScriptValidation.Rules(r.relation(),r.opportunity(),r.targetExpression(),r.originalNames(),r.sourceText(),r.seen(),(a,b)->false),false,input.goalContextJson());
     }
     /** Internal description only. The repaired script must still receive independent approval and every server check. */
     static ScenarioScript includeBasePartnerLine(ScenarioScript script){

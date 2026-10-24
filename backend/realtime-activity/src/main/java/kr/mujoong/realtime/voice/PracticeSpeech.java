@@ -81,6 +81,23 @@ public record PracticeSpeech(UUID correlationId, UUID scenarioId, long generatio
         return !prefix.isEmpty() && lead.endsWith(prefix);
     }
 
+    /**
+     * 승인 낭독을 조각 단위로 내보낼 때 쓴다(B1): 지금까지 받은 전사가 승인 원문의 앞부분인가. 공백만 무시하고, 앞에는 {@link #matches}처럼 서버 고정
+     * 안내의 끝부분만 올 수 있다. 원문 전체와 같은지는 응답이 끝난 뒤 {@link #matches}로 따로 본다. 생성형 슬롯은 언제나 거짓.
+     */
+    public boolean matchesPrefix(String actual) {
+        if (generated || actual == null) return false;
+        String received = actual.replaceAll("\\s+", "");
+        if (received.isEmpty()) return true;
+        String body = text.replaceAll("\\s+", "");
+        String lead = readingCue.text().replaceAll("\\s+", "");
+        for (int cut = lead.length(); cut >= 0; cut--) {
+            String expected = lead.substring(cut) + body;
+            if (expected.startsWith(received)) return true;
+        }
+        return false;
+    }
+
     private static String sentence(String text) {
         if (text == null || text.isBlank()) return text;
         return text.matches("(?s).*[.!?。！？…][\"”’']?$") ? text : text + ".";

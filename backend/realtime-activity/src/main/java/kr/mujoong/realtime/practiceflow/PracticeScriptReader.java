@@ -31,7 +31,7 @@ public final class PracticeScriptReader {
     /** 장면 JSON 모양. */
     record RawScene(String sceneKey, String sceneKind, String sceneDescription, String opportunitySentence,
             String reexplanation, String partnerRole, List<String> focusPoints, List<String> expressionExamples,
-            String relation, String place, String topic, String spokenIntroduction, String reflectionPrompt) {
+            String relation, String place, String topic, String spokenIntroduction, String openingLine) {
     }
 
     /** 대본 검토 JSON 모양. */
@@ -122,10 +122,11 @@ public final class PracticeScriptReader {
                 || raw.spokenIntroduction().chars().anyMatch(Character::isISOControl))) {
             throw new PracticeScriptException(Reason.VALIDATION_FAILED);
         }
-        SceneKind kind;
-        if (raw.reflectionPrompt() != null && (blank(raw.reflectionPrompt()) || raw.reflectionPrompt().length() > 300
-                || raw.reflectionPrompt().chars().anyMatch(Character::isISOControl)))
+        // 옛 대본의 돌아보기 질문(reflectionPrompt) · 원래 대화 요약(reflectionSummary)은 모르는 필드로 무시한다(FT-1023-g)
+        if (badOptional(raw.openingLine(), 200)) {
             throw new PracticeScriptException(Reason.VALIDATION_FAILED);
+        }
+        SceneKind kind;
         try {
             kind = SceneKind.valueOf(raw.sceneKind());
         } catch (IllegalArgumentException e) {
@@ -133,7 +134,7 @@ public final class PracticeScriptReader {
         }
         return new PracticeScript.Scene(raw.sceneKey(), kind, raw.sceneDescription(), raw.opportunitySentence(),
                 raw.reexplanation(), raw.partnerRole(), raw.focusPoints(), raw.expressionExamples(), raw.relation(),
-                raw.place(), raw.topic(), raw.spokenIntroduction(), raw.reflectionPrompt());
+                raw.place(), raw.topic(), raw.spokenIntroduction(), raw.openingLine());
     }
 
     private static PracticeScript.SelfReview selfReview(RawSelfReview raw) {
@@ -157,6 +158,10 @@ public final class PracticeScriptReader {
         } catch (IllegalArgumentException e) {
             return null;
         }
+    }
+
+    private static boolean badOptional(String value, int max) {
+        return value != null && (blank(value) || value.length() > max || value.chars().anyMatch(Character::isISOControl));
     }
 
     private static boolean blank(String value) {

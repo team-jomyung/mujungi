@@ -437,7 +437,7 @@ Luna 호출부(core-api · realtime-activity 각자)는 공급자 시도마다 `
 
 ### 10.11 U10 상황 생성 경로
 
-실제 Luna 구성의 상황 생성은 `CONTRACT_SINGLE_CALL`로 생성 `scenario-generation.v2`와 별도 검토 `scenario-review.v1`을 각각 스키마 검증한다. 안쪽 재시도 없이 바깥 요청이 최초 15초·내용 수정1·기술 재시도1·BASE-only 검토1(최대6호출)을 공유한다. 기존 직접 호출 어댑터 메서드의 json_object 계약과 다른 목적의 호출 예산은 그대로다.
+실제 Luna 구성의 상황 생성은 `CONTRACT_SINGLE_CALL`로 생성 `scenario-generation.v2`와 별도 검토 `scenario-review.v1`을 각각 스키마 검증한다. 안쪽 재시도 없이 바깥 요청이 `mujoong.timing.practice.scenario-request-timeout`(현재 30초)과 최대6호출을 공유한다. 내용 수정1회·기술 재시도1회·BASE-only 검토도 그 안에서 수행한다. 직전 거절 사유가 장면 보완 가능 사유(`INCOMPLETE_SCENE`·`ANSWER_INCLUDED`·`EARLY_CUE`·`GOAL_MISMATCH`)로만 구성되면 남은 예산 안에서 마지막 생성·별도 검토를 한 번 더 허용한다. 승인이나 서버 검사를 건너뛰지 않으며 반복·금지 내용 등의 거절을 이 보완 사유로 바꾸지 않는다. 기존 직접 호출 어댑터 메서드의 json_object 계약과 다른 목적의 호출 예산은 그대로다. 여는 말(`openingLine`) 필드와 옛 돌아보기 필드(`reflectionPrompt` · `reflectionSummary`) 처리는 10.17을 따른다 [FT-1023-g].
 
 사용자 결정 Q1-A로 최상위 interests의 이름을 정리한 최대10개·각80자 관심사만 SCENARIO_GENERATION/SCENARIO_REVIEW에 허용한다. 중첩 interests·일반 정리 API·다른 목적은 기존 금지를 유지한다. 이름은 소유 프로필에서 얻은 비공개 별칭으로 ‘아이’로 치환하고 연락처·과도한 자유문은 제외한다. 생성·검토 모두 같은 나이·최근 실제 노출3건·지정 원본·고정 목표의 정리 값을 쓴다. 원래 이름·식별자·판정 전용 기준·검토 원문을 공급자 데이터나 로그에 넣지 않는다. 모르는 타인의 이름 탐지 품질은 자동 시험으로 보장하지 않는다.
 
@@ -547,6 +547,29 @@ J1/J6의 고정 질문·선택지는 `judgment-service-v1`, 공통 지시문은 
 - **버린 출력 진단(2026-10-22).** 출력 세대를 올릴 때 그 세대에서 보류로 버린 조각이 있었으면 `OutputDiscardedHeld`, 지시 전 낡은 말로 버린 조각이 있었으면 `OutputDiscardedStale`(INFO)을 한 번씩 남긴다. `OutputNewSpeechNotObserved` 직전에는 마지막 지시 뒤 출력 조각이 하나도 없었으면 `OutputNotObservedProviderSilent`, 있었으면 `OutputNotObservedOnlyStaleChunks`(WARN)를 남긴다. 원문은 남기지 않는다(R-F14).
 - **공급자 오류 코드.** 입력 쪽 오류(`input_`으로 시작하는 코드)는 지금 나오는 AI 응답을 버리지 않는다. 공급자 `error` 사건마다 오류 코드를 사유 코드 `ProviderErrorCode_<코드>`(WARN)로 남긴다. 코드가 소문자 · 숫자 · 밑줄로 된 2 ~ 61자 식별자일 때만 싣고, 그 밖은 `ProviderErrorCode_unknown`이다(자유 문자열 · 메시지 · 매개변수는 남기지 않는다, R-F14).
 - **안내 직후 첫 응답의 인사 차단 완화.** 아이의 마지막 말에 인사(안녕 · 반가워 · 하이 · 헬로)가 있었으면 그 인사에 답하는 인사말은 시작 인사 반복으로 보지 않는다. 자기소개(`나는 AI` · `나는 무중`)와 안내 · 참여 질문 문장 반복은 계속 막는다.
+
+
+### 10.17 연습 장면 시작 · 오류에도 대화 유지 [FT-1023-g]
+
+**대본 필드(상황 생성 출력 `ai-scenario-output.schema.json`).** 생성 · 검토 지시문 판(`scenario-generation.v2` · `scenario-review.v1`)은 그대로 두고 내용만 고쳤다.
+
+| 필드 | 쓰는 때 | 규칙 |
+|---|---|---|
+| `openingLine` | 모든 장면(선택) | 장면 안내 뒤 상대가 먼저 거는 여는 말, 1 ~ 2문장(200자 이하). 화자는 상대. 기회 문장과 같으면 `OPENING_REPEATS_OPPORTUNITY`, 정답 · 아이 행동 · 목표 표현은 검토(`ANSWER_INCLUDED` · `EARLY_CUE`)와 서버 검사가 막는다 |
+| `spokenIntroduction` | 기존 | 아이의 처지 · 필요(무엇을 하는 중이고 무엇이 필요하거나 불편한지)와 구체적인 상대를 담는다. 빠지면 검토가 `INCOMPLETE_SCENE`으로 거절 |
+
+생성 직후 여는 말이 위 서버 검사를 못 맞추면 대본 전체를 버리지 않고 그 필드만 빼고(진단 사유 `ScenarioSceneStartDropped`) 검토로 보낸다. 내용을 빼기만 하고 더하지 않으므로 추가 호출은 없다.
+
+이전 대화 돌아보기는 하지 않는다(2026-10-24 결정: 초기 안내가 느려 원래 대화 요약도 없앴다). 상황 생성 입력에 아이 발화 인용(`reflectionContext`)을 넣지 않고, 생성 출력에는 돌아보기 질문(`reflectionPrompt`)과 원래 대화 요약(`reflectionSummary`) 필드가 없다. 저장된 옛 대본에 이 필드가 있으면 core · realtime 모두 모르는 필드로 무시한다. `openingLine`이 없으면 장면 안내 뒤 바로 기회 문장이다.
+
+**연습 흐름(realtime `PracticeConversation`).** 목표 안내 → 장면 도입 → 여는 말(`openingLine` 승인 낭독, 상대 역할 · 낭독 신호 `PEER`) → 아이 대답 한 차례 또는 `mujoong.timing.conversation.no-response-wait` 만기 → 기회 문장 → 판정(기존 그대로). 여는 말에 대한 아이 말은 판정하지 않고 무응답 재안내 횟수 · 장면 결과에 넣지 않는다(전사는 그대로 남는다). 장면 행의 시작은 장면 도입 시작 그대로다.
+
+**오류에도 대화 유지.** 발화 · 판정 · 전사 오류로 장면이나 연습을 닫지 않는다.
+
+- 끝내 못 들려준 발화(생성형 재요청 1회 뒤 실패, 승인 낭독 재요청 · 복구 뒤 실패, 제브 막힘, 슬롯 시한 초과)는 건너뛰고 다음 단계로 간다. 재생 실패면 장면 사실 `PLAYBACK_FAILED`를 남기고, 막힘은 사실 없이 건너뛴다. 막힌 말은 다시 내지 않는다(안전 규칙 그대로).
+- 단계별 다음: 목표 안내 → 장면 도입, 장면 도입 → (장면 행을 만들고) 여는 말 또는 기회 문장, 여는 말 → 기회 문장, 입력 단계의 질문 → 그 단계의 아이 말 대기, 역할 전환 알림 → 코치 도움, 코치 도움 → 다시 해 보기, 복귀 알림 → 친구 역할 대화, 친구 마무리 답 → 변형 평가(장면은 정상 원인 유지), 목표 마무리 → 다음 목표 또는 마무리.
+- 판독 불가 · 판정 보류 · 장애 · 불명확: 첫 번째는 지금처럼 교정 없이 같은 안내 1회, 두 번째는 닫지 않고 다음 도움 단계로 간다(기회 · 되묻기 → 도움 제안, 도움 제안 → 동의 없는 코치 도움(예시 없음), 다시 해 보기 → 남은 횟수 안에서 코치 도움 · 없으면 집중 한도 정리). 판독 불가 사실 `TRANSCRIPT_FAILED`는 그대로 남긴다.
+- 연습을 끝내는 길은 종료 표현 · 쉬기 요청, 보호자 종료, 공백 경고 · 종료, 목표 시간 상한(`goal-active-limit`) · 집중 상한(`focus-max`) · 다시 해 보기 횟수, 모든 목표 완료, 실제 끊김뿐이다. 확장점 신호 `OUTPUT_FAILED`와 실행부 전이 `PRACTICE_OUTPUT_FAILED`는 없앴다. 옛 세션의 `end_detail PRACTICE_OUTPUT_FAILED`는 기록 · 화면이 그대로 읽고 보여 준다.
 
 ## 자유대화 전 보호자 입력 참고
 

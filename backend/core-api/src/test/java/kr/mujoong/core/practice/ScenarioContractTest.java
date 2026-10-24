@@ -57,6 +57,22 @@ class ScenarioContractTest {
         assertThat(WebFixtures.schemaErrors("ai-scenario-output.schema.json",body)).isNotEmpty();
         assertThat(WebFixtures.schemaErrors("ai-scenario-output.schema.json",json.write(new ScenarioScript(List.of(scene()))))).isEmpty();
     }
+    @Test void openingLineFollowsTheOutputSchemaAndReflectionFieldsAreGone() {
+        var s=scene();
+        var withStart=new ScenarioScript.Scene(s.sceneKey(),s.sceneKind(),s.sceneDescription(),s.opportunitySentence(),s.reexplanation(),
+                s.focusPoints(),s.expressionExamples(),s.relation(),s.place(),s.topic(),null,null,null,
+                "우와, 너도 블록 놀이 하러 왔어?");
+        assertThat(WebFixtures.schemaErrors("ai-scenario-output.schema.json",json.write(new ScenarioScript(List.of(withStart))))).isEmpty();
+        var oversized=new ScenarioScript.Scene(s.sceneKey(),s.sceneKind(),s.sceneDescription(),s.opportunitySentence(),s.reexplanation(),
+                s.focusPoints(),s.expressionExamples(),s.relation(),s.place(),s.topic(),null,null,null,"가".repeat(201));
+        assertThat(WebFixtures.schemaErrors("ai-scenario-output.schema.json",json.write(new ScenarioScript(List.of(oversized))))).isNotEmpty();
+        String old="{\"scenes\":[{\"sceneKey\":\"base-1\",\"sceneKind\":\"BASE\",\"sceneDescription\":\"상황\",\"opportunitySentence\":\"말\","
+                +"\"reexplanation\":\"다시\",\"relation\":\"PEER\",\"place\":\"교실\",\"topic\":\"놀이\",\"reflectionPrompt\":\"떠올려 볼까?\"}]}";
+        assertThat(WebFixtures.schemaErrors("ai-scenario-output.schema.json",old)).as("옛 질문 필드는 생성 출력이 아니다").isNotEmpty();
+        String summary=old.replace("\"reflectionPrompt\":\"떠올려 볼까?\"","\"reflectionSummary\":\"지난번에 너는 놀이 이야기를 해 줬어.\"");
+        assertThat(WebFixtures.schemaErrors("ai-scenario-output.schema.json",summary)).as("원래 대화 요약도 생성 출력이 아니다").isNotEmpty();
+        assertThat(json.read(summary,ScenarioScript.class).scenes().getFirst().openingLine()).as("저장된 옛 대본은 그대로 읽힌다").isNull();
+    }
     @Test void listSnapshotsCannotBeModifiedAndRoleIsServerOverwritten() {
         var scene=scene().withPartnerRole(ScenarioContentPolicy.PARTNER_ROLE);
         assertThat(scene.partnerRole()).isEqualTo(ScenarioContentPolicy.PARTNER_ROLE);

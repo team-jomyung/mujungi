@@ -129,6 +129,85 @@ class PracticeGeneratedSpeechTest {
     }
 
     private static final String INSTRUCTION = "친구로서 방금 말을 한 번 더 물어보세요";
+
+    @Test
+    void approvedUnitsPlayBeforeTheResponseEndsAndCompleteOnlyAfterAllPlayback() {
+        var speech = startApprovedStream();
+        approvedUnit("나는 블록 ", 0);
+        assertThat(h.link.outputs()).hasSize(1);
+        assertThat(guard.count()).isZero();
+        mark(h.link.outputs().getFirst().playbackId(), PlaybackMark.Status.COMPLETED);
+        assertThat(extension.endFacts(speech.correlationId())).isEmpty();
+
+        approvedUnit("놀이를 하고 싶어.", 1);
+        assertThat(h.link.outputs()).hasSize(2);
+        h.advance(Duration.ofMillis(801));
+        assertThat(extension.endFacts(speech.correlationId())).isEmpty();
+        mark(h.link.outputs().getLast().playbackId(), PlaybackMark.Status.COMPLETED);
+        mark(h.link.outputs().getLast().playbackId(), PlaybackMark.Status.COMPLETED);
+        assertThat(extension.endFacts(speech.correlationId())).containsExactly(PracticePorts.Playback.COMPLETED);
+        assertThat(extension.mismatches).isEmpty();
+        assertThat(guard.count()).isZero();
+    }
+
+    @Test
+    void anApprovedMismatchBeforePlaybackUsesReadingRecoveryAndSendsNothing() {
+        var speech = startApprovedStream();
+        approvedUnit("나는 카드 ", 0);
+        assertThat(h.link.outputs()).isEmpty();
+        assertThat(guard.count()).isZero();
+        assertThat(extension.mismatches).singleElement()
+                .satisfies(event -> assertThat(event.correlationId()).isEqualTo(speech.correlationId()));
+        assertThat(extension.endFacts(speech.correlationId())).isEmpty();
+    }
+
+    @Test
+    void anApprovedMismatchAfterPlaybackDiscardsTheTailWithoutReplayingThePrefix() {
+        var speech = startApprovedStream();
+        approvedUnit("나는 블록 ", 0);
+        approvedUnit("놀이가 싫어.", 1);
+        approvedUnit("더 해봐.", 2);
+        assertThat(h.link.outputs()).hasSize(1);
+        assertThat(extension.endFacts(speech.correlationId())).isEmpty();
+        mark(h.link.outputs().getFirst().playbackId(), PlaybackMark.Status.COMPLETED);
+        h.advance(Duration.ofMillis(801));
+        assertThat(extension.endFacts(speech.correlationId())).containsExactly(PracticePorts.Playback.COMPLETED);
+        assertThat(extension.mismatches).isEmpty();
+        assertThat(guard.count()).isZero();
+    }
+
+    @Test
+    void aTruncatedApprovedResponseClosesOnceAfterItsSentAudioCompletes() {
+        var speech = startApprovedStream();
+        approvedUnit("나는 블록 ", 0);
+        h.advance(Duration.ofMillis(801));
+        assertThat(extension.endFacts(speech.correlationId())).isEmpty();
+        mark(h.link.outputs().getFirst().playbackId(), PlaybackMark.Status.COMPLETED);
+        assertThat(extension.endFacts(speech.correlationId())).containsExactly(PracticePorts.Playback.COMPLETED);
+        assertThat(extension.mismatches).isEmpty();
+    }
+
+    private PracticeSpeech startApprovedStream() {
+        start(true);
+        extension.recovery = true;
+        var speech = PracticeSpeech.scenario(UUID.randomUUID(), UUID.randomUUID(), 1,
+                "PEER", "나는 블록 놀이를 하고 싶어.", PracticeSpeech.ReadingCue.PEER);
+        assertThat(extension.out.speak(speech)).isTrue();
+        h.settleSend();
+        h.provider.last().newSpeechMargin(null);
+        var request = h.provider.last().requests(ProviderRequestFactory.InstructionsAppend.class).getLast();
+        h.provider.last().emit(new ProviderEvent.InstructionsAppended(request.eventId(), 0, 0));
+        return speech;
+    }
+
+    private void approvedUnit(String text, int index) {
+        long margin = h.settings.newSpeechMargin().toMillis();
+        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta(text,
+                index == 0 ? 0 : margin + index * 100L, margin + (index + 1) * 100L));
+        if (index == 0) h.provider.last().emit(new ProviderEvent.OutputAudioDelta(new byte[(int) margin * 48]));
+        h.provider.last().emit(new ProviderEvent.OutputAudioDelta(new byte[4800]));
+        h.drain();
+    }
     private static final String SPOKEN = "그거 줘 하면 어느 색을 말하는 건지 잘 모르겠어";
 
     private final SessionHarness h = new SessionHarness();

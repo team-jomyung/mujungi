@@ -99,7 +99,7 @@ class FlowTransitionsTest {
     }
 
     @Test
-    void j2UnreadableReguidesOnceThenClosesTheSceneUnperformedAsTranscriptFailed() {
+    void j2UnreadableReguidesOnceThenOffersHelpKeepingTheTranscriptFailedFact() {
         FlowState state = at(Phase.OPPORTUNITY, Sub.NONE);
 
         Step first = table.onJudgment(state, JudgmentPoint.J2, "UNREADABLE");
@@ -108,10 +108,10 @@ class FlowTransitionsTest {
 
         state.unreadableGuided(true);
         Step second = table.onJudgment(state, JudgmentPoint.J2, "UNREADABLE");
-        assertEnters(second, Phase.SCENE_WRAP, Sub.VARIANT_EVAL);
-        assertThat(second.cause()).isEqualTo(EndCause.TRANSCRIPT_FAILED);
+        // FT-1023-g: 두 번째도 장면을 닫지 않는다. 같은 안내를 되풀이하지 않고 도움 제안으로 간다
+        assertEnters(second, Phase.HELP_OFFER, Sub.NONE);
+        assertThat(second.cause()).isNull();
         assertThat(second.fact()).isEqualTo(FactKind.TRANSCRIPT_FAILED);
-        assertThat(second.timing()).isEqualTo(LiveTiming.NONE);
     }
 
     // ---- J3 REASK (4코드) ----
@@ -133,14 +133,16 @@ class FlowTransitionsTest {
     }
 
     @Test
-    void j3UnreadableReguidesOnceThenClosesTheScene() {
+    void j3UnreadableReguidesOnceThenOffersHelp() {
         FlowState state = at(Phase.REASK, Sub.NONE);
         assertThat(table.onJudgment(state, JudgmentPoint.J3, "UNREADABLE").action()).isEqualTo(Action.REGUIDE);
 
         state.unreadableGuided(true);
         Step second = table.onJudgment(state, JudgmentPoint.J3, "UNREADABLE");
 
-        assertThat(second.cause()).isEqualTo(EndCause.TRANSCRIPT_FAILED);
+        assertEnters(second, Phase.HELP_OFFER, Sub.NONE);
+        assertThat(second.cause()).isNull();
+        assertThat(second.fact()).isEqualTo(FactKind.TRANSCRIPT_FAILED);
     }
 
     // ---- J4 HELP_OFFER · VARIANT_OFFER (3코드) ----
@@ -167,7 +169,7 @@ class FlowTransitionsTest {
     }
 
     @Test
-    void j4UnclearInHelpOfferOffersAgainOnceThenClosesTheScene() {
+    void j4UnclearInHelpOfferOffersAgainOnceThenGivesCoachHelpWithoutConsent() {
         FlowState state = at(Phase.HELP_OFFER, Sub.NONE);
         Step first = table.onJudgment(state, JudgmentPoint.J4, "UNCLEAR");
         assertThat(first.action()).isEqualTo(Action.REGUIDE);
@@ -175,9 +177,10 @@ class FlowTransitionsTest {
         state.unreadableGuided(true);
         Step second = table.onJudgment(state, JudgmentPoint.J4, "UNCLEAR");
 
-        assertEnters(second, Phase.SCENE_WRAP, Sub.VARIANT_EVAL);
-        assertThat(second.cause()).isEqualTo(EndCause.HELP_UNCLEAR);
+        assertEnters(second, Phase.FOCUS, Sub.ROLE_NOTICE);
+        assertThat(second.cause()).isNull();
         assertThat(second.consent()).isEqualTo(ConsentAnswer.UNCLEAR);
+        assertThat(second.consentsToHelp()).as("동의가 없으니 표현 예시는 주지 않는다").isFalse();
     }
 
     @Test
@@ -257,13 +260,19 @@ class FlowTransitionsTest {
     }
 
     @Test
-    void j5UnreadableReguidesOnceThenClosesTheScene() {
+    void j5UnreadableReguidesOnceThenCoachesAgainUntilTheRetryLimit() {
         FlowState state = at(Phase.RETRY, Sub.NONE);
         assertThat(table.onJudgment(state, JudgmentPoint.J5, "UNREADABLE").action()).isEqualTo(Action.REGUIDE);
 
         state.unreadableGuided(true);
+        Step second = table.onJudgment(state, JudgmentPoint.J5, "UNREADABLE");
+        assertEnters(second, Phase.FOCUS, Sub.COACH_UTTERANCE);
+        assertThat(second.fact()).isEqualTo(FactKind.TRANSCRIPT_FAILED);
 
-        assertThat(table.onJudgment(state, JudgmentPoint.J5, "UNREADABLE").cause()).isEqualTo(EndCause.TRANSCRIPT_FAILED);
+        state.incrementRetry();
+        state.incrementRetry();
+        Step exhausted = table.onJudgment(state, JudgmentPoint.J5, "UNREADABLE");
+        assertThat(exhausted.cause()).as("남은 횟수가 없으면 기존 집중 한도로 정리한다").isEqualTo(EndCause.FOCUS_LIMIT);
     }
 
     @Test
@@ -291,7 +300,7 @@ class FlowTransitionsTest {
 
     @ParameterizedTest
     @EnumSource(value = Phase.class, names = {"OPPORTUNITY", "REASK", "HELP_OFFER", "RETRY"})
-    void anAbstainedJudgmentReguidesOnceThenClosesTheSceneAsAbstainedWithNoFact(Phase phase) {
+    void anAbstainedJudgmentReguidesOnceThenMovesToTheNextHelpStepWithNoFact(Phase phase) {
         FlowState state = at(phase, Sub.NONE);
         JudgmentPoint point = FlowTransitions.expectedPoint(phase);
 
@@ -300,9 +309,13 @@ class FlowTransitionsTest {
 
         state.unreadableGuided(true);
         Step second = table.onJudgmentUnavailable(state, point);
-        assertEnters(second, Phase.SCENE_WRAP, Sub.VARIANT_EVAL);
-        assertThat(second.cause()).isEqualTo(EndCause.ABSTAINED);
-        assertThat(second.timing()).isEqualTo(LiveTiming.ABSTAINED);
+        Phase next = switch (phase) {
+            case OPPORTUNITY, REASK -> Phase.HELP_OFFER;
+            default -> Phase.FOCUS;
+        };
+        assertThat(second.action()).isEqualTo(Action.ENTER);
+        assertThat(second.phase()).isEqualTo(next);
+        assertThat(second.cause()).as("보류 두 번째도 장면을 닫지 않는다(FT-1023-g)").isNull();
         assertThat(second.facts()).isEmpty();
     }
 
@@ -423,27 +436,38 @@ class FlowTransitionsTest {
     // ---- 슬롯 종료 (§3.5) ----
 
     @Test
-    void theIntroPlayedOrInterruptedMovesToTheOpportunityAndAFailedIntroSkipsTheScene() {
+    void anyIntroEndMovesToTheOpportunityAndOnlyAFailedIntroLeavesAPlaybackFailure() {
         FlowState state = at(Phase.SCENE_INTRO, Sub.NONE, false);
 
-        assertEnters(table.onSlotEnded(state, SlotEnd.PLAYED), Phase.OPPORTUNITY, Sub.NONE);
-        assertEnters(table.onSlotEnded(state, SlotEnd.INTERRUPTED), Phase.OPPORTUNITY, Sub.NONE);
-        assertEnters(table.onSlotEnded(state, SlotEnd.FAILED), Phase.NEXT_GOAL, Sub.NONE);
-        assertEnters(table.onSlotEnded(at(Phase.SCENE_INTRO, Sub.NONE), SlotEnd.BLOCKED), Phase.CLOSING, Sub.NONE);
+        for (SlotEnd end : SlotEnd.values()) {
+            Step step = table.onSlotEnded(state, end);
+            assertEnters(step, Phase.OPPORTUNITY, Sub.NONE);
+            assertThat(step.cause()).as("도입 실패도 장면을 닫지 않는다 " + end).isNull();
+            assertThat(step.fact()).isEqualTo(end == SlotEnd.FAILED ? FactKind.PLAYBACK_FAILED : null);
+        }
+    }
+
+    @Test
+    void anIntroWithAnOpeningLineGoesToTheOpeningBeforeTheOpportunity() {
+        assertEnters(table.onIntroductionEnded(SlotEnd.PLAYED, true), Phase.OPPORTUNITY, Sub.OPENING);
+        assertEnters(table.onIntroductionEnded(SlotEnd.BLOCKED, true), Phase.OPPORTUNITY, Sub.OPENING);
+        assertEnters(table.onIntroductionEnded(SlotEnd.PLAYED, false), Phase.OPPORTUNITY, Sub.NONE);
     }
 
     @ParameterizedTest
     @EnumSource(value = Phase.class, names = {"OPPORTUNITY", "REASK", "HELP_OFFER", "RETRY"})
-    void aFinishedQuestionWaitsForInputAndAFailedOneClosesTheScene(Phase phase) {
+    void aFinishedOrSkippedQuestionWaitsForInputAndNeverClosesTheScene(Phase phase) {
         FlowState state = at(phase, Sub.NONE);
 
         assertThat(table.onSlotEnded(state, SlotEnd.PLAYED).action()).isEqualTo(Action.AWAIT);
         assertThat(table.onSlotEnded(state, SlotEnd.INTERRUPTED).action()).isEqualTo(Action.AWAIT);
         Step failed = table.onSlotEnded(state, SlotEnd.FAILED);
-        assertThat(failed.cause()).isEqualTo(EndCause.PLAYBACK_FAILED);
+        assertThat(failed.action()).isEqualTo(Action.AWAIT);
+        assertThat(failed.cause()).isNull();
         assertThat(failed.fact()).isEqualTo(FactKind.PLAYBACK_FAILED);
         Step blocked = table.onSlotEnded(state, SlotEnd.BLOCKED);
-        assertThat(blocked.cause()).isEqualTo(EndCause.SLOT_BLOCKED);
+        assertThat(blocked.action()).isEqualTo(Action.AWAIT);
+        assertThat(blocked.cause()).isNull();
         assertThat(blocked.facts()).isEmpty();
     }
 
@@ -451,7 +475,9 @@ class FlowTransitionsTest {
     void aFinishedReexplanationReturnsToTheOpportunityOrTheCoach() {
         assertEnters(table.onSlotEnded(at(Phase.OPPORTUNITY, Sub.REEXPLAIN), SlotEnd.PLAYED), Phase.OPPORTUNITY, Sub.NONE);
         assertEnters(table.onSlotEnded(at(Phase.RETRY, Sub.REEXPLAIN), SlotEnd.PLAYED), Phase.RETRY, Sub.NONE);
-        assertThat(table.onSlotEnded(at(Phase.RETRY, Sub.REEXPLAIN), SlotEnd.FAILED).cause()).isEqualTo(EndCause.PLAYBACK_FAILED);
+        Step failed = table.onSlotEnded(at(Phase.RETRY, Sub.REEXPLAIN), SlotEnd.FAILED);
+        assertEnters(failed, Phase.RETRY, Sub.NONE);
+        assertThat(failed.fact()).isEqualTo(FactKind.PLAYBACK_FAILED);
     }
 
     @Test
@@ -465,7 +491,7 @@ class FlowTransitionsTest {
     }
 
     @Test
-    void focusEntryOneSwitchesTheRoleOnlyWhenTheNoticePlayedAndOtherwiseWrapsWithTheRoleKept() {
+    void focusEntryOneSwitchesToTheCoachEvenWhenTheNoticeWasNotHeard() {
         FlowState state = at(Phase.FOCUS, Sub.ROLE_NOTICE);
 
         Step played = table.onSlotEnded(state, SlotEnd.PLAYED);
@@ -473,17 +499,19 @@ class FlowTransitionsTest {
         assertThat(played.role()).isEqualTo(FlowRole.COACH);
         assertThat(played.fact()).isEqualTo(FactKind.COACH_SWITCH);
 
+        // FT-1023-g: 알림을 못 들려줘도 도움 단계는 닫지 않는다(BR5.1 · BR5.5의 '도움 없이 정리'를 대체)
         for (SlotEnd end : List.of(SlotEnd.INTERRUPTED, SlotEnd.FAILED, SlotEnd.BLOCKED)) {
             Step step = table.onSlotEnded(state, end);
-            assertEnters(step, Phase.SCENE_WRAP, Sub.VARIANT_EVAL);
-            assertThat(step.role()).as("역할은 바꾸지 않는다 " + end).isNull();
+            assertEnters(step, Phase.FOCUS, Sub.COACH_UTTERANCE);
+            assertThat(step.role()).as(end.name()).isEqualTo(FlowRole.COACH);
+            assertThat(step.cause()).isNull();
         }
-        assertThat(table.onSlotEnded(state, SlotEnd.FAILED).fact()).isEqualTo(FactKind.PLAYBACK_FAILED);
-        assertThat(table.onSlotEnded(state, SlotEnd.INTERRUPTED).facts()).isEmpty();
+        assertThat(table.onSlotEnded(state, SlotEnd.FAILED).facts()).containsExactly(FactKind.COACH_SWITCH, FactKind.PLAYBACK_FAILED);
+        assertThat(table.onSlotEnded(state, SlotEnd.INTERRUPTED).facts()).containsExactly(FactKind.COACH_SWITCH);
     }
 
     @Test
-    void focusEntryTwoMovesToRetryCountingOneRetryWhenThePlayedOrInterruptedAndWrapsWithAReturnNoticeOtherwise() {
+    void focusEntryTwoAlwaysMovesToRetryCountingOneRetry() {
         FlowState state = at(Phase.FOCUS, Sub.COACH_UTTERANCE);
         state.role(FlowRole.COACH);
 
@@ -493,9 +521,12 @@ class FlowTransitionsTest {
             assertThat(step.incrementsRetry()).isTrue();
         }
         Step failed = table.onSlotEnded(state, SlotEnd.FAILED);
-        assertEnters(failed, Phase.SCENE_WRAP, Sub.RETURN_NOTICE);
+        assertEnters(failed, Phase.RETRY, Sub.NONE);
+        assertThat(failed.incrementsRetry()).as("다시 해 보기 횟수 한도가 반복을 끝낸다").isTrue();
         assertThat(failed.fact()).isEqualTo(FactKind.PLAYBACK_FAILED);
-        assertEnters(table.onSlotEnded(state, SlotEnd.BLOCKED), Phase.SCENE_WRAP, Sub.RETURN_NOTICE);
+        Step blocked = table.onSlotEnded(state, SlotEnd.BLOCKED);
+        assertEnters(blocked, Phase.RETRY, Sub.NONE);
+        assertThat(blocked.facts()).isEmpty();
     }
 
     @Test

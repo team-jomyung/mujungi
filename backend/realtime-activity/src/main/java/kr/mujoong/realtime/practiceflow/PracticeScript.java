@@ -42,10 +42,11 @@ public record PracticeScript(UUID scenarioId, String scriptVersion, List<Scene> 
      * @param opportunitySentence 기회 문장
      * @param reexplanation 상황 다시 설명 문장
      * @param partnerRole 상대 역할 문구(core가 발급 때 덮어쓴 값)
+     * @param openingLine 장면 안내 뒤 상대가 먼저 거는 여는 말(승인 문장, 선택). 없으면 바로 기회 문장
      */
     public record Scene(String sceneKey, SceneKind sceneKind, String sceneDescription, String opportunitySentence,
             String reexplanation, String partnerRole, List<String> focusPoints, List<String> expressionExamples,
-            String relation, String place, String topic, String spokenIntroduction, String reflectionPrompt) {
+            String relation, String place, String topic, String spokenIntroduction, String openingLine) {
         public Scene(String sceneKey, SceneKind sceneKind, String sceneDescription, String opportunitySentence,
                 String reexplanation, String partnerRole, List<String> focusPoints, List<String> expressionExamples,
                 String relation, String place, String topic, String spokenIntroduction) {

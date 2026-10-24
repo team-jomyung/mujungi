@@ -30,7 +30,7 @@ server {
     ssl_session_tickets off;
     ssl_stapling off;
 
-    # 프록시 시간: 연결 3초, REST · 화면 읽기 · 쓰기 15초(불변식 I-4 · LC §2.4). /ws/device는 75초로 덮는다(불변식 I-1)
+    # 프록시 시간: 연결 3초, 일반 REST · 화면 읽기 · 쓰기 15초. 연습 시작 읽기는 35초, /ws/device는 75초로 덮는다.
     # 연결 3초는 멈춘 컨테이너의 옛 주소로 든 요청이 502를 받기까지의 최대 대기이기도 하다(504 나누기 J354, 값은 그대로 J356)
     proxy_connect_timeout 3s;
     proxy_read_timeout 15s;
@@ -87,6 +87,17 @@ server {
         include /etc/nginx/mujoong/snippets/proxy-common.conf;
         proxy_set_header Connection "";
         proxy_hide_header Content-Security-Policy;
+        proxy_pass http://mujoong_core_api;
+    }
+
+    # 연습 시작은 Core의 상황 준비 예산 30초와 전송 여유를 기다린다(보호자 요청 시한도 35초).
+    location = /api/activities/practice {
+        set $mujoong_csp "default-src 'none'; frame-ancestors 'none'";
+        include /etc/nginx/mujoong/snippets/security-headers.conf;
+        include /etc/nginx/mujoong/snippets/proxy-common.conf;
+        proxy_set_header Connection "";
+        proxy_hide_header Content-Security-Policy;
+        proxy_read_timeout 35s;
         proxy_pass http://mujoong_core_api;
     }
 

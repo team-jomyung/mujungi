@@ -30,17 +30,22 @@ class ScenarioValidationTest {
     ScenarioScriptValidation.Result inspect(ScenarioScript.Scene...scenes){return validator.inspect(new ScenarioScript(List.of(scenes)),ScenarioGenerationTest.rules());}
     ScenarioScript.Scene scene(String text,String kind,String relation){var s=ScenarioGenerationTest.base();return new ScenarioScript.Scene(s.sceneKey(),kind,text,s.opportunitySentence(),s.reexplanation(),s.focusPoints(),s.expressionExamples(),relation,s.place(),s.topic(),null,null);}
     @Test void correctBaseAndSeparateCoachExamplePass(){assertThat(inspect(ScenarioGenerationTest.base())).isEqualTo(ScenarioScriptValidation.Result.VALID);}
-    @Test void reflectionNeedsVerifiedEvidenceAndKeepsAllSpokenSafetyChecks() {
-        var s=ScenarioGenerationTest.base();var r=ScenarioGenerationTest.rules();
-        var allowed=new ScenarioScriptValidation.Rules(r.relation(),r.opportunity(),r.targetExpression(),r.originalNames(),r.sourceText(),r.seen(),r.variants(),true);
-        for(String question:List.of("지난번 블록 이야기를 떠올려 볼까?","빨리 말해","잠깐 쉬자")) {
-            var scene=new ScenarioScript.Scene(s.sceneKey(),s.sceneKind(),s.sceneDescription(),s.opportunitySentence(),s.reexplanation(),
-                    s.focusPoints(),s.expressionExamples(),s.relation(),s.place(),s.topic(),s.preservation(),s.partnerRole(),null,question);
-            assertThat(inspect(scene)).isEqualTo(ScenarioScriptValidation.Result.INVALID_BASE);
-            assertThat(validator.inspect(new ScenarioScript(List.of(scene)),allowed)).isEqualTo(
-                    question.startsWith("지난번")?ScenarioScriptValidation.Result.VALID:ScenarioScriptValidation.Result.INVALID_BASE);
-            assertThat(scene.withPartnerRole("상대 역할").reflectionPrompt()).isEqualTo(question);
-        }
+    ScenarioScript.Scene withOpening(String opening) {
+        var s=ScenarioGenerationTest.base();
+        return new ScenarioScript.Scene(s.sceneKey(),s.sceneKind(),s.sceneDescription(),s.opportunitySentence(),s.reexplanation(),
+                s.focusPoints(),s.expressionExamples(),s.relation(),s.place(),s.topic(),s.preservation(),s.partnerRole(),null,opening);
+    }
+    @Test void openingLineIsAPartnerLineThatNeitherRepeatsTheOpportunityNorLeaksTheAnswer() {
+        var base=ScenarioGenerationTest.base();
+        var opening=withOpening("우와, 너도 블록 놀이 하러 왔어?");
+        assertThat(inspect(opening)).isEqualTo(ScenarioScriptValidation.Result.VALID);
+        assertThat(opening.withPartnerRole("상대 역할").openingLine()).isEqualTo(opening.openingLine());
+        assertThat(validator.inspectDetailed(new ScenarioScript(List.of(withOpening(base.opportunitySentence()+"!"))),ScenarioGenerationTest.rules()).reason())
+                .isEqualTo(ScenarioScriptValidation.Reason.OPENING_REPEATS_OPPORTUNITY);
+        assertThat(validator.inspectDetailed(new ScenarioScript(List.of(withOpening("너도 잠깐 쉬자라고 해 봐"))),ScenarioGenerationTest.rules()).reason())
+                .isEqualTo(ScenarioScriptValidation.Reason.TARGET_EXPRESSION_DISCLOSED);
+        for(String bad:List.of("빨리 말해","가".repeat(201),"안녕"+(char)7,"010-1234-5678"))
+            assertThat(inspect(withOpening(bad))).as(bad).isEqualTo(ScenarioScriptValidation.Result.INVALID_BASE);
     }
     ScenarioScript.Scene introduction(String text) {
         var s=ScenarioGenerationTest.base();
