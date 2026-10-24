@@ -437,7 +437,7 @@ Luna 호출부(core-api · realtime-activity 각자)는 공급자 시도마다 `
 
 ### 10.11 U10 상황 생성 경로
 
-실제 Luna 구성의 상황 생성은 `CONTRACT_SINGLE_CALL`로 생성 `scenario-generation.v2`와 별도 검토 `scenario-review.v1`을 각각 스키마 검증한다. 안쪽 재시도 없이 바깥 요청이 최초 15초·내용 수정1·기술 재시도1·BASE-only 검토1(최대6호출)을 공유한다. 기존 직접 호출 어댑터 메서드의 json_object 계약과 다른 목적의 호출 예산은 그대로다.
+실제 Luna 구성의 상황 생성은 `CONTRACT_SINGLE_CALL`로 생성 `scenario-generation.v2`와 별도 검토 `scenario-review.v1`을 각각 스키마 검증한다. 안쪽 재시도 없이 바깥 요청이 `mujoong.timing.practice.scenario-request-timeout`(현재 30초)과 최대6호출을 공유한다. 내용 수정1회·기술 재시도1회·BASE-only 검토도 그 안에서 수행한다. 직전 거절 사유가 장면 보완 가능 사유(`INCOMPLETE_SCENE`·`ANSWER_INCLUDED`·`EARLY_CUE`·`GOAL_MISMATCH`)로만 구성되면 남은 예산 안에서 마지막 생성·별도 검토를 한 번 더 허용한다. 승인이나 서버 검사를 건너뛰지 않으며 반복·금지 내용 등의 거절을 이 보완 사유로 바꾸지 않는다. 기존 직접 호출 어댑터 메서드의 json_object 계약과 다른 목적의 호출 예산은 그대로다. 여는 말(`openingLine`) 필드와 옛 돌아보기 필드(`reflectionPrompt` · `reflectionSummary`) 처리는 10.17을 따른다 [FT-1023-g].
 
 사용자 결정 Q1-A로 최상위 interests의 이름을 정리한 최대10개·각80자 관심사만 SCENARIO_GENERATION/SCENARIO_REVIEW에 허용한다. 중첩 interests·일반 정리 API·다른 목적은 기존 금지를 유지한다. 이름은 소유 프로필에서 얻은 비공개 별칭으로 ‘아이’로 치환하고 연락처·과도한 자유문은 제외한다. 생성·검토 모두 같은 나이·최근 실제 노출3건·지정 원본·고정 목표의 정리 값을 쓴다. 원래 이름·식별자·판정 전용 기준·검토 원문을 공급자 데이터나 로그에 넣지 않는다. 모르는 타인의 이름 탐지 품질은 자동 시험으로 보장하지 않는다.
 
@@ -548,6 +548,29 @@ J1/J6의 고정 질문·선택지는 `judgment-service-v1`, 공통 지시문은 
 - **공급자 오류 코드.** 입력 쪽 오류(`input_`으로 시작하는 코드)는 지금 나오는 AI 응답을 버리지 않는다. 공급자 `error` 사건마다 오류 코드를 사유 코드 `ProviderErrorCode_<코드>`(WARN)로 남긴다. 코드가 소문자 · 숫자 · 밑줄로 된 2 ~ 61자 식별자일 때만 싣고, 그 밖은 `ProviderErrorCode_unknown`이다(자유 문자열 · 메시지 · 매개변수는 남기지 않는다, R-F14).
 - **안내 직후 첫 응답의 인사 차단 완화.** 아이의 마지막 말에 인사(안녕 · 반가워 · 하이 · 헬로)가 있었으면 그 인사에 답하는 인사말은 시작 인사 반복으로 보지 않는다. 자기소개(`나는 AI` · `나는 무중`)와 안내 · 참여 질문 문장 반복은 계속 막는다.
 
+
+### 10.17 연습 장면 시작 · 오류에도 대화 유지 [FT-1023-g]
+
+**대본 필드(상황 생성 출력 `ai-scenario-output.schema.json`).** 생성 · 검토 지시문 판(`scenario-generation.v2` · `scenario-review.v1`)은 그대로 두고 내용만 고쳤다.
+
+| 필드 | 쓰는 때 | 규칙 |
+|---|---|---|
+| `openingLine` | 모든 장면(선택) | 장면 안내 뒤 상대가 먼저 거는 여는 말, 1 ~ 2문장(200자 이하). 화자는 상대. 기회 문장과 같으면 `OPENING_REPEATS_OPPORTUNITY`, 정답 · 아이 행동 · 목표 표현은 검토(`ANSWER_INCLUDED` · `EARLY_CUE`)와 서버 검사가 막는다 |
+| `spokenIntroduction` | 기존 | 아이의 처지 · 필요(무엇을 하는 중이고 무엇이 필요하거나 불편한지)와 구체적인 상대를 담는다. 빠지면 검토가 `INCOMPLETE_SCENE`으로 거절 |
+
+생성 직후 여는 말이 위 서버 검사를 못 맞추면 대본 전체를 버리지 않고 그 필드만 빼고(진단 사유 `ScenarioSceneStartDropped`) 검토로 보낸다. 내용을 빼기만 하고 더하지 않으므로 추가 호출은 없다.
+
+이전 대화 돌아보기는 하지 않는다(2026-10-24 결정: 초기 안내가 느려 원래 대화 요약도 없앴다). 상황 생성 입력에 아이 발화 인용(`reflectionContext`)을 넣지 않고, 생성 출력에는 돌아보기 질문(`reflectionPrompt`)과 원래 대화 요약(`reflectionSummary`) 필드가 없다. 저장된 옛 대본에 이 필드가 있으면 core · realtime 모두 모르는 필드로 무시한다. `openingLine`이 없으면 장면 안내 뒤 바로 기회 문장이다.
+
+**연습 흐름(realtime `PracticeConversation`).** 목표 안내 → 장면 도입 → 여는 말(`openingLine` 승인 낭독, 상대 역할 · 낭독 신호 `PEER`) → 아이 대답 한 차례 또는 `mujoong.timing.conversation.no-response-wait` 만기 → 기회 문장 → 판정(기존 그대로). 여는 말에 대한 아이 말은 판정하지 않고 무응답 재안내 횟수 · 장면 결과에 넣지 않는다(전사는 그대로 남는다). 장면 행의 시작은 장면 도입 시작 그대로다.
+
+**오류에도 대화 유지.** 발화 · 판정 · 전사 오류로 장면이나 연습을 닫지 않는다.
+
+- 끝내 못 들려준 발화(생성형 재요청 1회 뒤 실패, 승인 낭독 재요청 · 복구 뒤 실패, 제브 막힘, 슬롯 시한 초과)는 건너뛰고 다음 단계로 간다. 재생 실패면 장면 사실 `PLAYBACK_FAILED`를 남기고, 막힘은 사실 없이 건너뛴다. 막힌 말은 다시 내지 않는다(안전 규칙 그대로).
+- 단계별 다음: 목표 안내 → 장면 도입, 장면 도입 → (장면 행을 만들고) 여는 말 또는 기회 문장, 여는 말 → 기회 문장, 입력 단계의 질문 → 그 단계의 아이 말 대기, 역할 전환 알림 → 코치 도움, 코치 도움 → 다시 해 보기, 복귀 알림 → 친구 역할 대화, 친구 마무리 답 → 변형 평가(장면은 정상 원인 유지), 목표 마무리 → 다음 목표 또는 마무리.
+- 판독 불가 · 판정 보류 · 장애 · 불명확: 첫 번째는 지금처럼 교정 없이 같은 안내 1회, 두 번째는 닫지 않고 다음 도움 단계로 간다(기회 · 되묻기 → 도움 제안, 도움 제안 → 동의 없는 코치 도움(예시 없음), 다시 해 보기 → 남은 횟수 안에서 코치 도움 · 없으면 집중 한도 정리). 판독 불가 사실 `TRANSCRIPT_FAILED`는 그대로 남긴다.
+- 연습을 끝내는 길은 종료 표현 · 쉬기 요청, 보호자 종료, 공백 경고 · 종료, 목표 시간 상한(`goal-active-limit`) · 집중 상한(`focus-max`) · 다시 해 보기 횟수, 모든 목표 완료, 실제 끊김뿐이다. 확장점 신호 `OUTPUT_FAILED`와 실행부 전이 `PRACTICE_OUTPUT_FAILED`는 없앴다. 옛 세션의 `end_detail PRACTICE_OUTPUT_FAILED`는 기록 · 화면이 그대로 읽고 보여 준다.
+
 ## 자유대화 전 보호자 입력 참고
 
 보호자의 입력 원문을 Live 지시문에 넣지 않는다. Core가 고정 키워드와 상황 구분에서 추출한 `conversationGuide.topics`(열거형 1~3개)와 `sourceType`(SEEN, HEARD_FROM_CHILD, UNSPECIFIED)만 자유대화 시작 내부 요청에 선택적으로 포함한다. 이름·연락처·사건 주장·임의 지시문을 담을 문자열 필드는 없다. 아이 기본 정보의 기존 childContext(이름·나이·관심사)는 유지한다.
@@ -562,3 +585,34 @@ Realtime은 고정된 중립 질문으로 바꾸며 보호자의 주장을 아�
 - `discardReason`은 기존 게이트 사유(무효화는 `VOIDED`), `discardDetail`은 `DiscardDetail`의 고정 코드다. `GATE_EMPTY`를 구간 불완전·빈 전사·음성 없음·홀수 PCM 길이·검사 예외로 구분한다(단위별 경로의 구두점뿐인 단위는 폐기하지 않는다 — 10.15 [편차 FT-1023-e]). 대본 불일치, 금지 표현, 공급자 오류/음성 없음, 아이 입력에 의한 미재생 취소, Jev 차단/시간 초과/오류/무효화 및 전송 실패도 구분한다.
 - 판정 우선순위와 폐기·재시도·종료·Jev 정책은 변경하지 않는다. 음성·전사·승인 대본·보호자 메모·예외 메시지·원본 세션 UUID는 로그에 쓰지 않는다. 길이와 시간은 진단용이며 표시 승인이나 안전 검사 근거를 대신하지 않는다.
 - 연습 단계는 폐기를 관측한 시점이다. 제브 대기 중 보관된 구간은 보관 행의 `seq`를 사용해 뒤에 열린 AI 행과 혼동하지 않는다. 기존 기록에 소급해 사유를 추정하지 않는다.
+
+## JIRA-271 Realtime 사용량 수집
+
+이번 범위는 **GPT-Live 연결과 Realtime Luna 실시간 판정 호출의 사용량 저장**이다. 관리자 인증·조회 API·화면·단가 계산은 후속 범위다. Core의 연습 준비·리포트·구조화 호출과 Jev는 포함하지 않는다. 자유대화에서 Luna 판정이 실제 호출되지 않았다면 Luna 행도 생기지 않는다. 기존 회원·활동·판정 표와 공급자 요청 본문은 변경하지 않는다.
+
+| 경계 | 수집 값 | 저장 단위·해석 |
+|---|---|---|
+| `voice.ProviderConnector`의 수신기 장식자 | `session.usage.updated.usage.seconds`, `session.closed.usage.seconds`, 공급자 세션 ID·요청 모델 | 연결 한 개의 누적 초를 같은 키로 교체한다. 주기별 값을 더하지 않는다. 실제 공급자 연결이 여러 개면 각각 별도 행이다 |
+| `luna.RealtimeLunaClient.decide`의 HTTP 완료 콜백 | `model`, `usage.input_tokens`, `output_tokens`, `input_tokens_details.cached_tokens`, `output_tokens_details.reasoning_tokens` | Decisions 실제 전송 시도 한 번당 한 행. 업무 응답이 거절·스키마 오류여도 받은 사용량은 별도로 기록한다. 보내기 전 거절은 행을 만들지 않는다. 판정 턴 ID는 공급자로 보내지 않고 서버 내부에서만 연결한다 |
+
+공급자 정의는 [GPT-Live 대화 가이드](https://developers.openai.com/api/docs/guides/live-conversations)와 [Decisions 생성 API](https://developers.openai.com/api/reference/resources/decisions/methods/create)를 따른다. 음성은 토큰을 추정하지 않고 공급자가 준 **초**를 저장한다. 캐시 입력은 입력 토큰의 일부이고 추론 토큰은 출력 토큰의 일부이므로 전체 토큰에 다시 더하지 않는다. Decisions 응답은 `id`를 보장하지 않으므로 `response_id`는 없으면 `NULL`로 유지하고 서버가 생성한 호출 ID를 행 키로 쓴다. 키·오디오·전사·프롬프트·응답 원문은 사용량 표와 관측 지표에 저장하지 않는다.
+
+비용 화면은 [Decisions 요금 규칙](https://developers.openai.com/api/docs/guides/decisions)을 별도로 적용한다. Decisions 출력 토큰은 과금하지 않으므로 Responses 출력 단가를 그대로 곱하지 않는다. 현재 표는 `input_tokens_details.cache_write_tokens`를 별도로 보관하지 않아 캐시 쓰기 요금을 정확하게 재현할 수 없다. 비용 단계에서 필요한 저장 구조 보완 또는 근사 계산 범위를 정한다. `COMPLETE`는 입력·출력 수치 수신 여부이며 청구액 재현을 보장하는 상태가 아니다.
+
+`AiUsageCollector.offer`는 별도의 유한 메모리 큐에 값을 전달한다. 대화·전사 큐를 공유하지 않으며 수신 경로에서 DB·빈자리·재시도를 기다리지 않는다. 큐 잠금 경쟁이나 가득 참은 즉시 거절하고 지표로 남긴다. 정상이어도 값 생성·파싱·큐 전달 비용은 있으므로 성능 영향이 없다고 단정하지 않는다.
+
+단일 `AiUsageRecorder` 저장 작업이 기존 Realtime DB 풀을 사용한다. `V9__ai_usage.sql`의 새 `realtime.realtime_ai_usage` 표에 기록하며 Core 스키마를 읽지 않는다. Luna는 기존 판정 턴 ID로 `realtime_judgment_live`가 생긴 뒤 세션·보호자를 연결한다. 판정 기록이 아직 없으면 대기 순서를 뒤로 보내 재시도한다. 기본 5분 동안 연결·저장되지 않으면 폐기하고 `expired`를 센다. 연결되지 않은 고아 행을 DB에 만들지 않는다.
+
+| 행의 `capture_status` | 의미 |
+|---|---|
+| `COMPLETE` | 음성은 종료 이벤트의 유효한 최종 초를 받음. Luna는 해당 응답의 입력·출력 토큰을 모두 받음 |
+| `PARTIAL` | 음성은 중간 누적 초만 있음. Luna는 입력·출력 중 일부만 있음 |
+| `UNKNOWN` | 연결/전송 시도는 관측했지만 유효한 사용량을 확인하지 못함. 미확인 수치는 SQL `NULL`이며 실제 0과 구분 |
+
+위 상태는 **개별 행**의 상태이며 전체 활동의 모든 호출이 수집되었다는 보장은 아니다. 큐 거절·기한 만료·강제 종료로 행 자체가 없을 수 있다. 후속 비용 화면은 집계 대상 범위와 "수집된 사용량 기준 예상 비용으로 실제 청구액과 다를 수 있습니다"를 표시한다. 폐기 지표는 코드에만 두고 관리자 화면에는 추가하지 않는다. 미확인 수치(`NULL`)를 0으로 더하거나 과거 미수집 활동을 0원·수집 완료로 바꾸지 않는다. 응답 ID가 있는 Luna 중복 응답은 고유 인덱스로 중복 저장을 막고 음성은 스냅샷 revision으로 오래된 갱신을 무시한다.
+
+기본은 `MUJOONG_AI_USAGE_ENABLED=false`다. 종료 시 최종 사용량을 별도로 기다리지 않는다. 마지막 중간 누적값만 있으면 `PARTIAL`, 연결이 닫히기 전에 유효한 `session.closed` 최종값을 수신하면 `COMPLETE`, 사용량을 받지 못하면 `UNKNOWN`으로 저장한다. 기존 송신·WebSocket 닫기의 타임아웃은 유지하며 사용량 전용 대기와 추가 AI 호출은 하지 않는다. 시간·큐 한도는 [timing.md 15절](timing.md#15-jira-271-사용량-수집)과 Realtime `application.yml`에 정의한다. 메모리 큐는 `@SingleInstanceAssumption(SI-10)` 대상이며 강제 프로세스 종료 시 미저장 값은 유실될 수 있다.
+
+계정 삭제에서는 실행 중 세션을 먼저 멈추는 기존 흐름 뒤에 `AiUsageDeletionParticipant`(170)가 새 쓰기를 차단하고 진행 중 저장을 제한된 시간 기다린 뒤 보호자의 사용량을 지운다. 판정 기록(180)·세션(200)보다 먼저 실행된다. 진행 중 저장을 정리하지 못하면 삭제 요청을 실패로 돌려 기존 Inbox 재시도를 따른다. DB의 세션 외래 키도 삭제된 세션의 지연 사용량 복원을 막는다.
+
+관측: `mujoong.ai.usage.pending`, `mujoong.ai.usage.records{outcome=accepted|full|contention|stopped|stored|retry|unlinked|expired|discarded}`. `accepted`는 중간 스냅샷·중복 전달을 포함하는 전달 횟수, `retry`·`unlinked`는 저장 시도 횟수다. 어느 것도 대화 수나 고유 호출 수로 해석하지 않는다. 검증·실호출 절차는 [RUNBOOK 18절](../infra/RUNBOOK.md#18-jira-271-사용량-수집-수동-검증)에 둔다.

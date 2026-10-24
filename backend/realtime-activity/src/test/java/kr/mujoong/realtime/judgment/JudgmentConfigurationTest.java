@@ -16,6 +16,7 @@ import kr.mujoong.realtime.luna.LunaProperties;
 import kr.mujoong.realtime.observability.EventLogger;
 import kr.mujoong.realtime.observability.RealtimeMetrics;
 import kr.mujoong.realtime.testing.TestEventLoggers;
+import kr.mujoong.realtime.usage.AiUsageCollector;
 import kr.mujoong.testsupport.log.LogCapture;
 import kr.mujoong.testsupport.time.MutableClock;
 import org.junit.jupiter.api.Tag;
@@ -43,6 +44,7 @@ class JudgmentConfigurationTest {
                 .withBean(JsonCodec.class, JsonCodec::shared)
                 .withBean(MujoongClock.class, () -> clock)
                 .withBean(EventLogger.class, () -> events)
+                .withBean(AiUsageCollector.class, () -> AiUsageCollector.NOOP)
                 .withBean(RealtimeProperties.class, () -> realtime)
                 .withBean(LiveContentRegistry.class, () -> new LiveContentRegistry(LiveContentResources.loadDefault()))
                 .withPropertyValues("mujoong.luna.model=gpt-6-luna", "mujoong.luna.base-url=https://api.openai.com/v1",

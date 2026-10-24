@@ -182,7 +182,7 @@ class PracticeFlowIT {
     }
 
     @Test
-    void aBlockedReaskSendsZeroBytesAndTheSceneIsWrappedWithoutStoppingThePractice() {
+    void aBlockedReaskSendsZeroBytesIsSkippedAndThePracticeKeepsListening() {
         h.activate();
         playApproved(INTRO);
         playApproved(OPPORTUNITY);
@@ -202,12 +202,11 @@ class PracticeFlowIT {
         h.drain();
 
         assertThat(h.link.outputs()).as("막힌 되묻기는 0바이트").hasSize(2);
-        assertThat(h.executor.status()).as("두 번째 막힘은 장면을 정리하고 연습은 이어서 끝난다").isEqualTo(SessionStatus.CLOSING);
-        SceneRunRecord wrapped = repository.findSceneRuns(h.sessionId).getFirst();
-        assertThat(wrapped.facts()).extracting(PracticeFlowTypes.Fact::kind).as("막힘은 재생 실패 사실이 아니다")
+        assertThat(h.executor.status()).as("두 번째 막힘도 연습을 닫지 않는다(FT-1023-g)").isEqualTo(SessionStatus.ACTIVE);
+        SceneRunRecord open = repository.findSceneRuns(h.sessionId).getFirst();
+        assertThat(open.facts()).extracting(PracticeFlowTypes.Fact::kind).as("막힘은 재생 실패 사실이 아니다")
                 .doesNotContain(FactKind.PLAYBACK_FAILED);
-        assertThat(wrapped.liveTiming()).isEqualTo(LiveTiming.NONE);
-        assertThat(wrapped.endedAt()).isNotNull();
+        assertThat(open.endedAt()).as("장면은 아이 말을 계속 기다린다").isNull();
         assertThat(failures).isEmpty();
     }
 

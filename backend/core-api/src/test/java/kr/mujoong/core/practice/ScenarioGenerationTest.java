@@ -66,6 +66,19 @@ class ScenarioGenerationTest {
         verify(provider,times(3)).generate(any());verify(provider,times(3)).review(any());
         assertThat(result.details().review().verdict()).isEqualTo("APPROVE");
     }
+    @Test void aGoalMismatchCanUseTheLastRepairSlotButStillRequiresApproval(){
+        when(provider.review(any())).thenReturn(reject("INCOMPLETE_SCENE"),reject("GOAL_MISMATCH"),approve());
+        assertThat(run().details().generation().calls()).isEqualTo(6);
+        var calls=ArgumentCaptor.forClass(ScenarioScriptProvider.Call.class);
+        verify(provider,times(3)).generate(calls.capture());
+        assertThat(calls.getAllValues().getLast().input()).containsEntry("correctionReasons",List.of("GOAL_MISMATCH"));
+        verify(provider,times(3)).review(any());
+    }
+    @Test void anUnrepairedGoalMismatchNeverIssuesAScene(){
+        when(provider.review(any())).thenReturn(reject("GOAL_MISMATCH"));
+        assertThatThrownBy(this::run).isInstanceOf(ScenarioScriptGenerator.ContentExhausted.class);
+        verify(provider,times(3)).generate(any());verify(provider,times(3)).review(any());
+    }
     @Test void includedPartnerLineNeverBypassesRejectionOrAnswerSafety(){
         var scene=base();var indirect=scene.withDescription("블록 놀이 중이야. "+OPPORTUNITY);
         when(provider.generate(any())).thenReturn(generated(indirect));when(provider.review(any())).thenReturn(reject("INCOMPLETE_SCENE"));
@@ -77,6 +90,26 @@ class ScenarioGenerationTest {
     @Test void oneTechnicalRetryIsSharedBetweenGenerationAndReview(){when(provider.generate(any())).thenThrow(failure(ScenarioScriptProvider.Failure.Kind.TRANSIENT)).thenReturn(generated(base()));assertThat(run().details().generation().calls()).isEqualTo(3);assertThat(clock.elapsedSince(0)).isGreaterThanOrEqualTo(Duration.ZERO);}
     @Test void secondTechnicalFailureDoesNotRetryAgain(){when(provider.generate(any())).thenThrow(failure(ScenarioScriptProvider.Failure.Kind.TRANSIENT)).thenReturn(generated(base()));when(provider.review(any())).thenThrow(failure(ScenarioScriptProvider.Failure.Kind.TRANSIENT));assertThatThrownBy(this::run).isInstanceOf(kr.mujoong.core.common.error.CoreApiException.class);verify(provider,times(2)).generate(any());verify(provider).review(any());}
     @Test void permanentFailureDoesNotRegenerate(){when(provider.generate(any())).thenThrow(failure(ScenarioScriptProvider.Failure.Kind.PERMANENT));assertThatThrownBy(this::run).isInstanceOf(kr.mujoong.core.common.error.CoreApiException.class);verify(provider).generate(any());verify(provider,never()).review(any());}
+    @Test void invalidSceneStartFieldsAreDroppedBeforeReviewInsteadOfFailingThePracticeStart(){
+        // FT-1023-g: 기회 문장을 되풀이한 여는 말은 그 필드만 빼고 진행한다(추가 호출 없음)
+        var s=base();
+        var withBadStart=new ScenarioScript.Scene(s.sceneKey(),s.sceneKind(),s.sceneDescription(),s.opportunitySentence(),s.reexplanation(),
+                s.focusPoints(),s.expressionExamples(),s.relation(),s.place(),s.topic(),null,null,null,s.opportunitySentence());
+        when(provider.generate(any())).thenReturn(generated(withBadStart));
+        var issued=run().details().scenes().getFirst();
+        assertThat(issued.openingLine()).isNull();
+        assertThat(issued.sceneDescription()).isEqualTo(s.sceneDescription());
+        var reviewed=org.mockito.ArgumentCaptor.forClass(ScenarioScriptProvider.Call.class);
+        verify(provider,times(1)).generate(any());verify(provider,times(1)).review(reviewed.capture());
+        assertThat(((ScenarioScript)reviewed.getValue().input().get("script")).scenes().getFirst().openingLine()).as("검토는 정리된 대본을 본다").isNull();
+    }
+    @Test void validSceneStartFieldsAreKept(){
+        var s=base();
+        var withStart=new ScenarioScript.Scene(s.sceneKey(),s.sceneKind(),s.sceneDescription(),s.opportunitySentence(),s.reexplanation(),
+                s.focusPoints(),s.expressionExamples(),s.relation(),s.place(),s.topic(),null,null,null,"우와, 너도 블록 놀이 하러 왔어?");
+        when(provider.generate(any())).thenReturn(generated(withStart));
+        assertThat(run().details().scenes().getFirst().openingLine()).isEqualTo("우와, 너도 블록 놀이 하러 왔어?");
+    }
     @Test void approvedButInvalidBaseStillFailsIndependentServerChecks(){var bad=new ScenarioScript.Scene("base","BASE","정답은 잠깐 쉬자", "말", "설명",null,null,"PEER","교실","놀이",null,null);when(provider.generate(any())).thenReturn(generated(bad));assertThatThrownBy(this::run).isInstanceOf(kr.mujoong.core.common.error.CoreApiException.class);verify(provider,times(2)).generate(any());verify(provider,times(2)).review(any());}
     @Test void invalidVariantIsCorrectedOnceThenBaseOnlyReviewed(){var base=base();var variant=new ScenarioScript.Scene("variant","VARIANT",base.sceneDescription(),base.opportunitySentence(),base.reexplanation(),null,null,"PEER","운동장","놀이",null,null);when(provider.generate(any())).thenReturn(generated(base,variant));var result=run();assertThat(result.details().scenes()).hasSize(1);assertThat(result.details().generation().calls()).isEqualTo(5);var calls=ArgumentCaptor.forClass(ScenarioScriptProvider.Call.class);verify(provider,times(3)).review(calls.capture());assertThat(((ScenarioScript)calls.getAllValues().getLast().input().get("script")).scenes()).hasSize(1);verify(provider,times(2)).generate(any());}
     @Test void baseOnlyMustReceiveItsOwnApproval(){var base=base();var variant=new ScenarioScript.Scene("variant","VARIANT",base.sceneDescription(),base.opportunitySentence(),base.reexplanation(),null,null,"PEER","운동장","놀이",null,null);when(provider.generate(any())).thenReturn(generated(base,variant));when(provider.review(any())).thenReturn(approve(),approve(),reject("AGE_MISMATCH"));assertThatThrownBy(this::run).isInstanceOf(kr.mujoong.core.common.error.CoreApiException.class);verify(provider,times(3)).review(any());}

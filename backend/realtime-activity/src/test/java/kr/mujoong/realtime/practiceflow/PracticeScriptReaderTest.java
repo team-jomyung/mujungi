@@ -7,6 +7,7 @@ import static kr.mujoong.realtime.practiceflow.PracticeScriptFixtures.packageJso
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.util.List;
 import java.util.UUID;
 import kr.mujoong.realtime.practiceflow.PracticeFlowTypes.SceneKind;
 import kr.mujoong.realtime.practiceflow.PracticeScriptException.Reason;
@@ -69,6 +70,20 @@ class PracticeScriptReaderTest {
         assertReason(nulled, Reason.MISSING_SCENE_FIELD);
         assertReason(minimalScript(SCENARIO).replaceAll("\"" + field + "\":\"[^\"]*\"", "\"" + field + "\":\"  \""),
                 Reason.MISSING_SCENE_FIELD);
+    }
+
+    @Test
+    void theOpeningLineIsReadAndOldReflectionFieldsAreIgnored() {
+        String withStart = minimalScript(SCENARIO).replace("\"sceneKey\":", "\"openingLine\":\"우와, 너도 왔어?\",\"sceneKey\":");
+        assertThat(PracticeScriptReader.read(withStart).baseScene().openingLine()).isEqualTo("우와, 너도 왔어?");
+
+        PracticeScript.Scene old = PracticeScriptReader.read(minimalScript(SCENARIO).replace("\"sceneKey\":",
+                "\"reflectionPrompt\":\"떠올려 볼까?\",\"reflectionSummary\":\"" + "가".repeat(400) + "\",\"sceneKey\":")).baseScene();
+        assertThat(old.openingLine()).as("옛 돌아보기 필드는 읽지도 거절하지도 않는다(FT-1023-g)").isNull();
+
+        for (String bad : List.of("\"openingLine\":\"" + "가".repeat(201) + "\",", "\"openingLine\":\" \",",
+                "\"openingLine\":\"안녕\\u0007\","))
+            assertReason(minimalScript(SCENARIO).replace("\"sceneKey\":", bad + "\"sceneKey\":"), Reason.VALIDATION_FAILED);
     }
 
     @Test

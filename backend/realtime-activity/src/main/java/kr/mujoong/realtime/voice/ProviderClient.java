@@ -138,6 +138,12 @@ public class ProviderClient implements ProviderPort, DisposableBean {
                 text.setLength(0);
                 ProviderEvent event = parse(json, message, unknownTypes::incrementAndGet);
                 if (event instanceof ProviderEvent.Closed) {
+                    if (listener instanceof ProviderUsageListener usage) {
+                        try {
+                            Inbound inbound = json.read(message, Inbound.class);
+                            usage.finalUsage(inbound.usage() == null ? null : inbound.usage().seconds());
+                        } catch (RuntimeException ignored) { /* 깨진 사용량이 연결 종료를 방해하지 않는다. */ }
+                    }
                     signalClosed();
                 } else if (event != null) {
                     listener.onEvent(event);
@@ -233,7 +239,8 @@ public class ProviderClient implements ProviderPort, DisposableBean {
                                 millis(inbound.endMs()));
                 case "session.output_audio.delta" -> outputAudio(Base64.getDecoder().decode(nullToEmpty(inbound.delta())));
                 case "session.usage.updated" -> inbound.usage() == null || inbound.usage().seconds() == null
-                        || inbound.usage().seconds() < 0 ? null : new ProviderEvent.UsageUpdated(inbound.usage().seconds());
+                        || !Double.isFinite(inbound.usage().seconds()) || inbound.usage().seconds() < 0
+                        ? null : new ProviderEvent.UsageUpdated(inbound.usage().seconds());
                 case "error" -> new ProviderEvent.Error(
                         inbound.error() == null ? "" : nullToEmpty(inbound.error().code()));
                 case "session.closed" -> new ProviderEvent.Closed();

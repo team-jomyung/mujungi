@@ -12,7 +12,7 @@ import kr.mujoong.core.textai.ScenarioScript.Scene;
 public final class ScenarioScriptValidation {
     public enum Result { VALID, INVALID_BASE, INVALID_VARIANT }
     public enum Reason {
-        NONE, EMPTY_SCRIPT, BASE_LAYOUT, SCENE_KEY, FIELD_FORMAT, SPOKEN_FORMAT, REFLECTION_NOT_ALLOWED,
+        NONE, EMPTY_SCRIPT, BASE_LAYOUT, SCENE_KEY, FIELD_FORMAT, SPOKEN_FORMAT, OPENING_REPEATS_OPPORTUNITY,
         PRIVATE_OR_FORBIDDEN_CONTENT, TARGET_EXPRESSION_DISCLOSED, PRESSURE_OR_ANSWER,
         GRAPH_BASE_MISMATCH, RELATION_MISMATCH, CONDITION_MISSING, PARTNER_LINE_MISSING,
         ALREADY_SEEN, UNCHANGED_SOURCE, VARIANT_STRUCTURE
@@ -23,11 +23,7 @@ public final class ScenarioScriptValidation {
         default boolean validBase(Scene base){return true;}
     }
     public record Rules(String relation,String opportunity,String targetExpression,Set<String> originalNames,
-            String sourceText,Predicate<String> seen,VariantCheck variants,boolean reflectionAllowed) {
-        public Rules(String relation,String opportunity,String targetExpression,Set<String> originalNames,
-                String sourceText,Predicate<String> seen,VariantCheck variants) {
-            this(relation,opportunity,targetExpression,originalNames,sourceText,seen,variants,false);
-        }
+            String sourceText,Predicate<String> seen,VariantCheck variants) {
         public Rules {originalNames=Set.copyOf(originalNames);}
         @Override public String toString(){return "ScenarioRules[redacted]";}
     }
@@ -58,6 +54,35 @@ public final class ScenarioScriptValidation {
         return new Inspection(Result.VALID,Reason.NONE);
     }
     private static Inspection invalid(Reason reason){return new Inspection(Result.INVALID_BASE,reason);}
+    /**
+     * FT-1023-g: 선택 필드인 여는 말이 서버 검사를 못 맞추면 대본 전체를 버리지 않고 그 필드만 뺀다(빼면 지금 흐름 그대로다).
+     * 내용을 더하지 않고 빼기만 하므로 뺀 대본도 독립 검토와 나머지 서버 검사를 그대로 받는다. 바뀐 것이 없으면 같은 객체를 돌려준다.
+     */
+    public ScenarioScript withoutInvalidSceneStart(ScenarioScript script,Rules rules){
+        if(script==null)return null;
+        boolean changed=false;var scenes=new java.util.ArrayList<Scene>(script.scenes().size());
+        for(var s:script.scenes()){
+            if(s==null||s.openingLine()==null||openingAllowed(s,rules)){scenes.add(s);continue;}
+            changed=true;
+            scenes.add(new Scene(s.sceneKey(),s.sceneKind(),s.sceneDescription(),s.opportunitySentence(),s.reexplanation(),s.focusPoints(),
+                    s.expressionExamples(),s.relation(),s.place(),s.topic(),s.preservation(),s.partnerRole(),s.spokenIntroduction(),null));
+        }
+        return changed?new ScenarioScript(scenes):script;
+    }
+    private boolean openingAllowed(Scene s,Rules rules){
+        String v=s.openingLine();
+        return spokenSafe(v,200,rules)&&(s.opportunitySentence()==null
+                ||!ScenarioContentPolicy.normalize(v).equals(ScenarioContentPolicy.normalize(s.opportunitySentence())));
+    }
+    /** 들려줄 선택 필드 하나의 형식 · 금지 · 이름 · 연락처 · 정답 · 압박 검사(unsafeReason과 같은 기준). */
+    private boolean spokenSafe(String v,int max,Rules rules){
+        if(!text(v,max)||v.chars().anyMatch(Character::isISOControl))return false;
+        if(!forbidden.isAllowed(v)||rules.originalNames().stream().anyMatch(v::contains)
+                ||v.matches("(?s).*(?:[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}|01[016789][- ]?[0-9]{3,4}[- ]?[0-9]{4}).*"))return false;
+        String target=rules.targetExpression();
+        if(target!=null&&!ScenarioContentPolicy.normalize(target).isBlank()&&contains(v,target))return false;
+        return !v.matches("(?s).*(?:정답은|따라 말해|빨리 말해|꼭 말해야|틀리면).*");
+    }
     private Reason unsafeReason(Scene s,Rules rules){
         if(!text(s.sceneDescription(),8000)||!text(s.opportunitySentence(),2000)||!text(s.reexplanation(),2000)
                 ||!text(s.relation(),200)||!text(s.place(),200)||!text(s.topic(),200)
@@ -69,10 +94,12 @@ public final class ScenarioScriptValidation {
             spoken.add(s.spokenIntroduction());
         }
         var all=new java.util.ArrayList<>(spoken);all.addAll(s.focusPoints());all.addAll(s.expressionExamples());
-        if(s.reflectionPrompt()!=null) {
-            if(!rules.reflectionAllowed() || !"BASE".equals(s.sceneKind()))return Reason.REFLECTION_NOT_ALLOWED;
-            if(!text(s.reflectionPrompt(),300)||s.reflectionPrompt().chars().anyMatch(Character::isISOControl))return Reason.SPOKEN_FORMAT;
-            spoken.add(s.reflectionPrompt());all.add(s.reflectionPrompt());
+        if(s.openingLine()!=null) {
+            // FT-1023-g: 상대가 먼저 거는 말. 기회 문장을 미리 말하면 기회가 사라진다.
+            if(!text(s.openingLine(),200)||s.openingLine().chars().anyMatch(Character::isISOControl))return Reason.SPOKEN_FORMAT;
+            if(ScenarioContentPolicy.normalize(s.openingLine()).equals(ScenarioContentPolicy.normalize(s.opportunitySentence())))
+                return Reason.OPENING_REPEATS_OPPORTUNITY;
+            spoken.add(s.openingLine());all.add(s.openingLine());
         }
         all.addAll(List.of(s.relation(),s.place(),s.topic()));
         if(s.preservation()!=null) {

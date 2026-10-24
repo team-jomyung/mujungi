@@ -18,6 +18,29 @@ class PracticeSpeechMatchTest {
     private static final String TEXT = "다시 친구 역할로 돌아갈게";
 
     @Test
+    void streamingPrefixesAllowOnlyTheApprovedBodyAndItsOwnReadingCue() {
+        for (var cue : PracticeSpeech.ReadingCue.values()) {
+            var speech = PracticeSpeech.scenario(UUID.randomUUID(), UUID.randomUUID(), 0,
+                    "PEER", "나는 블록 놀이를 하고 싶어.", cue);
+            for (int cut = 0; cut <= cue.text().length(); cut++) {
+                String reading = cue.text().substring(cut) + speech.text();
+                for (int end = 1; end <= reading.length(); end++) {
+                    assertThat(speech.matchesPrefix(reading.substring(0, end)))
+                            .as("cue=%s cut=%s end=%s", cue, cut, end).isTrue();
+                }
+                assertThat(speech.matchesPrefix(reading + " 더 해봐.")).isFalse();
+            }
+            assertThat(speech.matchesPrefix("나는 카드")).isFalse();
+            assertThat(speech.matchesPrefix("블록 놀이")).isFalse();
+            assertThat(speech.matchesPrefix("나는\t블록\n놀이를")).isTrue();
+            assertThat(speech.matchesPrefix("나는\u00a0블록")).isFalse();
+            assertThat(speech.matchesPrefix(null)).isFalse();
+        }
+        assertThat(PracticeSpeech.generatedSlot(UUID.randomUUID(), UUID.randomUUID(), 0,
+                "PEER", "나는 블록").matchesPrefix("나는")).isFalse();
+    }
+
+    @Test
     void contextualCuesAllowOnlyTheirOwnFixedPrefixAndNeverMissingOrAddedBodyText() {
         for (var cue : PracticeSpeech.ReadingCue.values()) {
             var speech=PracticeSpeech.scenario(UUID.randomUUID(),UUID.randomUUID(),0,"PEER","나는 다른 놀이를 하고 싶어.",cue);

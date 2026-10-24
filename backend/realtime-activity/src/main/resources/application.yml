@@ -88,7 +88,14 @@ management:
         "[mujoong.guardrail.perceived.wait]": 500ms,1s,1500ms,2s,2500ms,3s,4s,6s,10s
 
 mujoong:
+  ai-usage:
+    enabled: ${MUJOONG_AI_USAGE_ENABLED:false}
   timing:
+    ai-usage:
+      flush-interval: 1s
+      pending-ttl: 5m
+      shutdown-wait: 2s
+      write-timeout: 1s
     session:
       device-ack-timeout: 20s
       closing-confirm: 30s
@@ -174,6 +181,9 @@ mujoong:
     db-check-interval: 5s
     db-failure-threshold: 3
   limits:
+    ai-usage:
+      queue-capacity: 1000
+      batch-size: 20
     ws-text-frame-max: 8KB
     internal-event-body-max: 2MB
     session-input-queue-frames: 50
