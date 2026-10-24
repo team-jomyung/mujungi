@@ -49,6 +49,16 @@ class AiUsageRepositoryIT {
         return db.jdbc().queryForMap("select * from realtime.realtime_ai_usage where id=:id", Map.of("id", id));
     }
 
+    @Test void lunaResponseIndexOnlyDeduplicatesKnownLunaResponses() {
+        String index = db.jdbc().queryForObject("""
+                select indexdef from pg_indexes
+                where schemaname='realtime' and tablename='realtime_ai_usage'
+                  and indexname='realtime_ai_usage_response_idx'
+                """, Map.of(), String.class);
+        assertThat(index).startsWith("CREATE UNIQUE INDEX")
+                .contains("(response_id)", "WHERE", "source", "'LUNA'", "response_id IS NOT NULL");
+    }
+
     @Test void writesRequireATransactionAndUnknownIsStoredAsNullInsteadOfZero() {
         var r = voice(UUID.randomUUID(), 1, null, AiUsageRecord.Status.UNKNOWN);
         assertThatThrownBy(() -> repository.write(r, id -> true)).isInstanceOf(IllegalTransactionStateException.class);
