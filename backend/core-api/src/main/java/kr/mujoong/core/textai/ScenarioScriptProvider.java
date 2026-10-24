@@ -12,8 +12,11 @@ public interface ScenarioScriptProvider {
      * 판이 같도록 한곳에 둔다.
      */
     String GENERATION_PROMPT_VERSION = "scenario-generation.v3";
-    /** 검토 프롬프트 판(새 칸을 기존 사유 코드로 검토한다). */
-    String REVIEW_PROMPT_VERSION = "scenario-review.v2";
+    /**
+     * 검토 프롬프트 판. C안에서도 main 검토 지시(v1)를 그대로 쓰고, 생성 흐름이 C안 칸 다섯 개를 뺀 장면만 검토에 보낸다. C안 칸은 서버가 칸마다
+     * 검사하고 걸린 칸만 뺀다(docs/practice-direct-ask.md 4.4).
+     */
+    String REVIEW_PROMPT_VERSION = "scenario-review.v1";
     /** 위 두 판으로 만든 대본의 판(계약 practice-scenario.schema.json scriptVersion). */
     String SCRIPT_VERSION = "scenario-script.v2";
 
