@@ -547,3 +547,32 @@ Realtime은 고정된 중립 질문으로 바꾸며 보호자의 주장을 아�
 - `discardReason`은 기존 게이트 사유(무효화는 `VOIDED`), `discardDetail`은 `DiscardDetail`의 고정 코드다. `GATE_EMPTY`를 구간 불완전·빈 전사·음성 없음·홀수 PCM 길이·검사 예외로 구분한다. 대본 불일치, 금지 표현, 공급자 오류/음성 없음, 아이 입력에 의한 미재생 취소, Jev 차단/시간 초과/오류/무효화 및 전송 실패도 구분한다.
 - 판정 우선순위와 폐기·재시도·종료·Jev 정책은 변경하지 않는다. 음성·전사·승인 대본·보호자 메모·예외 메시지·원본 세션 UUID는 로그에 쓰지 않는다. 길이와 시간은 진단용이며 표시 승인이나 안전 검사 근거를 대신하지 않는다.
 - 연습 단계는 폐기를 관측한 시점이다. 제브 대기 중 보관된 구간은 보관 행의 `seq`를 사용해 뒤에 열린 AI 행과 혼동하지 않는다. 기존 기록에 소급해 사유를 추정하지 않는다.
+
+## JIRA-271 Realtime 사용량 수집
+
+이번 범위는 **GPT-Live 연결과 Realtime Luna 실시간 판정 호출의 사용량 저장**이다. 관리자 인증·조회 API·화면·단가 계산은 후속 범위다. Core의 연습 준비·리포트·구조화 호출과 Jev는 포함하지 않는다. 자유대화에서 Luna 판정이 실제 호출되지 않았다면 Luna 행도 생기지 않는다. 기존 회원·활동·판정 표와 공급자 요청 본문은 변경하지 않는다.
+
+| 경계 | 수집 값 | 저장 단위·해석 |
+|---|---|---|
+| `voice.ProviderConnector`의 수신기 장식자 | `session.usage.updated.usage.seconds`, `session.closed.usage.seconds`, 공급자 세션 ID·요청 모델 | 연결 한 개의 누적 초를 같은 키로 교체한다. 주기별 값을 더하지 않는다. 실제 공급자 연결이 여러 개면 각각 별도 행이다 |
+| `luna.RealtimeLunaClient`의 HTTP 완료 콜백 | 응답 `id`, `model`, `usage.input_tokens`, `output_tokens`, `input_tokens_details.cached_tokens`, `output_tokens_details.reasoning_tokens` | 실제 전송 시도 한 번당 한 행. 업무 응답이 거절·미완료·스키마 오류여도 받은 사용량은 별도로 기록한다. 보내기 전 거절은 행을 만들지 않는다 |
+
+공급자 정의는 [GPT-Live 대화 가이드](https://developers.openai.com/api/docs/guides/live-conversations)와 [Responses 생성 API](https://developers.openai.com/api/reference/resources/responses/methods/create)를 따른다. 음성은 토큰을 추정하지 않고 공급자가 준 **초**를 저장한다. 캐시 입력은 입력 토큰의 일부이고 추론 토큰은 출력 토큰의 일부이므로 전체 토큰에 다시 더하지 않는다. 키·오디오·전사·프롬프트·응답 원문은 사용량 표와 관측 지표에 저장하지 않는다.
+
+`AiUsageCollector.offer`는 별도의 유한 메모리 큐에 값을 전달한다. 대화·전사 큐를 공유하지 않으며 수신 경로에서 DB·빈자리·재시도를 기다리지 않는다. 큐 잠금 경쟁이나 가득 참은 즉시 거절하고 지표로 남긴다. 정상이어도 값 생성·파싱·큐 전달 비용은 있으므로 성능 영향이 없다고 단정하지 않는다.
+
+단일 `AiUsageRecorder` 저장 작업이 기존 Realtime DB 풀을 사용한다. `V9__ai_usage.sql`의 새 `realtime.realtime_ai_usage` 표에 기록하며 Core 스키마를 읽지 않는다. Luna는 기존 판정 턴 ID로 `realtime_judgment_live`가 생긴 뒤 세션·보호자를 연결한다. 판정 기록이 아직 없으면 대기 순서를 뒤로 보내 재시도한다. 기본 5분 동안 연결·저장되지 않으면 폐기하고 `expired`를 센다. 연결되지 않은 고아 행을 DB에 만들지 않는다.
+
+| 행의 `capture_status` | 의미 |
+|---|---|
+| `COMPLETE` | 음성은 종료 이벤트의 유효한 최종 초를 받음. Luna는 해당 응답의 입력·출력 토큰을 모두 받음 |
+| `PARTIAL` | 음성은 중간 누적 초만 있음. Luna는 입력·출력 중 일부만 있음 |
+| `UNKNOWN` | 연결/전송 시도는 관측했지만 유효한 사용량을 확인하지 못함. 미확인 수치는 SQL `NULL`이며 실제 0과 구분 |
+
+위 상태는 **개별 행**의 상태이며 전체 활동의 모든 호출이 수집되었다는 보장은 아니다. 큐 거절·기한 만료·강제 종료로 행 자체가 없을 수 있다. 후속 비용 화면은 집계 대상 범위와 "수집된 사용량 기준 예상 비용으로 실제 청구액과 다를 수 있습니다"를 표시한다. 폐기 지표는 코드에만 두고 관리자 화면에는 추가하지 않는다. 미확인 수치(`NULL`)를 0으로 더하거나 과거 미수집 활동을 0원·수집 완료로 바꾸지 않는다. 응답 ID가 있는 Luna 중복 응답은 고유 인덱스로 중복 저장을 막고 음성은 스냅샷 revision으로 오래된 갱신을 무시한다.
+
+기본은 `MUJOONG_AI_USAGE_ENABLED=false`다. 종료 시 최종 사용량을 별도로 기다리지 않는다. 마지막 중간 누적값만 있으면 `PARTIAL`, 연결이 닫히기 전에 유효한 `session.closed` 최종값을 수신하면 `COMPLETE`, 사용량을 받지 못하면 `UNKNOWN`으로 저장한다. 기존 송신·WebSocket 닫기의 타임아웃은 유지하며 사용량 전용 대기와 추가 AI 호출은 하지 않는다. 시간·큐 한도는 [timing.md 15절](timing.md#15-jira-271-사용량-수집)과 Realtime `application.yml`에 정의한다. 메모리 큐는 `@SingleInstanceAssumption(SI-10)` 대상이며 강제 프로세스 종료 시 미저장 값은 유실될 수 있다.
+
+계정 삭제에서는 실행 중 세션을 먼저 멈추는 기존 흐름 뒤에 `AiUsageDeletionParticipant`(170)가 새 쓰기를 차단하고 진행 중 저장을 제한된 시간 기다린 뒤 보호자의 사용량을 지운다. 판정 기록(180)·세션(200)보다 먼저 실행된다. 진행 중 저장을 정리하지 못하면 삭제 요청을 실패로 돌려 기존 Inbox 재시도를 따른다. DB의 세션 외래 키도 삭제된 세션의 지연 사용량 복원을 막는다.
+
+관측: `mujoong.ai.usage.pending`, `mujoong.ai.usage.records{outcome=accepted|full|contention|stopped|stored|retry|unlinked|expired|discarded}`. `accepted`는 중간 스냅샷·중복 전달을 포함하는 전달 횟수, `retry`·`unlinked`는 저장 시도 횟수다. 어느 것도 대화 수나 고유 호출 수로 해석하지 않는다. 검증·실호출 절차는 [RUNBOOK 16절](../infra/RUNBOOK.md#16-jira-271-사용량-수집-수동-검증)에 둔다.

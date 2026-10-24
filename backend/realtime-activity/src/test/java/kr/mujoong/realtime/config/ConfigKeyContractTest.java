@@ -82,6 +82,7 @@ class ConfigKeyContractTest {
 
     /** 환경 변수로만 받는 값(비밀이 아닌 시험 값). */
     private static final Map<String, Object> ENV = Map.of(
+            "MUJOONG_AI_USAGE_ENABLED", "false",
             "MUJOONG_SECURITY_ALLOWED_ORIGIN", "https://mujoong.invalid",
             "MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET", "",
             // U9 BR1.5: 판정 모델 이름은 env로만 받는다(비밀 아님). 시험 값은 기본 이름과 같다
@@ -165,6 +166,7 @@ class ConfigKeyContractTest {
         leaves.putAll(recordLeaves(LunaProperties.class, "mujoong.luna"));
         // U13 BR1.3: 제브 설정도 따로 묶는 레코드다
         leaves.putAll(recordLeaves(GuardrailProperties.class, "mujoong.guardrail.jev"));
+        usageLeaves(leaves);
 
         assertThat(keyMismatches(yml.keySet(), leaves.keySet(), RECORD_KEYS_WITHOUT_DEFAULT))
                 .as("yml 키 ↔ 설정 레코드 키").isEmpty();
@@ -173,6 +175,7 @@ class ConfigKeyContractTest {
         Map<String, Object> boundValues = new TreeMap<>(recordValues(bound, "mujoong"));
         boundValues.putAll(recordValues(bindLuna(base), "mujoong.luna"));
         boundValues.putAll(recordValues(bindGuardrail(base), "mujoong.guardrail.jev"));
+        usageValues(boundValues, base);
         assertThat(valueMismatches(yml, leaves, boundValues, placeholderResolver(base)))
                 .as("yml 값과 레코드에 묶인 값").isEmpty();
         assertThat(bound.provider().url()).as("application.yml만으로는 공급자 주소가 비어 기동 점검(S1b)이 거부한다").isNull();
@@ -188,6 +191,7 @@ class ConfigKeyContractTest {
         // U9 BR1.4: test 프로필은 Luna 주소를 루프백으로 덮어쓴다(SD12 레코드)
         leaves.putAll(recordLeaves(LunaProperties.class, "mujoong.luna"));
         leaves.putAll(recordLeaves(GuardrailProperties.class, "mujoong.guardrail.jev"));
+        usageLeaves(leaves);
 
         assertThat(overrides).as("시험 축소값(빈 대조 아님)").isNotEmpty();
         assertThat(overrides.keySet()).as("설정 레코드가 읽지 않는 시험 키(오타는 조용히 버려진다)")
@@ -197,6 +201,7 @@ class ConfigKeyContractTest {
         Map<String, Object> boundValues = new TreeMap<>(recordValues(bound, "mujoong"));
         LunaProperties luna = bindLuna(base, testYml);
         boundValues.putAll(recordValues(luna, "mujoong.luna"));
+        usageValues(boundValues, base, testYml);
         assertThat(valueMismatches(overrides, leaves, boundValues, placeholderResolver(base, testYml)))
                 .as("시험 값이 레코드에 그대로 묶임").isEmpty();
         assertThat(LunaHosts.check(luna.baseUrl(), LunaHosts.Mode.TEST)).as("test 프로필 Luna 주소는 루프백(BR1.4)").isEmpty();
@@ -483,6 +488,21 @@ class ConfigKeyContractTest {
                 new PropertySourcesPlaceholdersResolver(sources), ApplicationConversionService.getSharedInstance());
         return binder.bind("mujoong.luna", Bindable.of(LunaProperties.class))
                 .orElseThrow(() -> new IllegalStateException("mujoong.luna 설정을 묶지 못했다"));
+    }
+
+    private static void usageLeaves(Map<String, RecordComponent> leaves) {
+        leaves.putAll(recordLeaves(kr.mujoong.realtime.usage.AiUsageProperties.class, "mujoong.ai-usage"));
+        leaves.putAll(recordLeaves(kr.mujoong.realtime.usage.AiUsageTimingProperties.class, "mujoong.timing.ai-usage"));
+        leaves.putAll(recordLeaves(kr.mujoong.realtime.usage.AiUsageLimitsProperties.class, "mujoong.limits.ai-usage"));
+    }
+
+    private static void usageValues(Map<String, Object> values, Path... files) {
+        MutablePropertySources sources = sources(files);
+        Binder binder = new Binder(ConfigurationPropertySources.from(sources),
+                new PropertySourcesPlaceholdersResolver(sources), ApplicationConversionService.getSharedInstance());
+        values.putAll(recordValues(binder.bind("mujoong.ai-usage", Bindable.of(kr.mujoong.realtime.usage.AiUsageProperties.class)).get(), "mujoong.ai-usage"));
+        values.putAll(recordValues(binder.bind("mujoong.timing.ai-usage", Bindable.of(kr.mujoong.realtime.usage.AiUsageTimingProperties.class)).get(), "mujoong.timing.ai-usage"));
+        values.putAll(recordValues(binder.bind("mujoong.limits.ai-usage", Bindable.of(kr.mujoong.realtime.usage.AiUsageLimitsProperties.class)).get(), "mujoong.limits.ai-usage"));
     }
 
     /** {@code mujoong.guardrail.jev.*}를 제브 설정 레코드로 묶는다(U13 BR1.3). */

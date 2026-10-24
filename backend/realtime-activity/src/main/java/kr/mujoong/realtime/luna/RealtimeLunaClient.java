@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.CompletionStage;
@@ -15,6 +16,8 @@ import kr.mujoong.contract.log.EventCode;
 import kr.mujoong.contract.log.EventLog;
 import kr.mujoong.contract.time.MujoongClock;
 import kr.mujoong.realtime.observability.EventLogger;
+import kr.mujoong.realtime.usage.AiUsageCollector;
+import kr.mujoong.realtime.usage.LunaUsage;
 
 /**
  * Realtime Luna 공통 호출 (U9 FR1.1 · FR1.2 · FR1.4 · BR2 ~ BR6 · SD1 ~ SD6). 판정 턴(U11 {@code JudgeClient} 구현)이 그 위에 얹힌다.
@@ -39,6 +42,7 @@ public class RealtimeLunaClient {
     private final EventLogger events;
     private final MujoongClock clock;
     private final JsonCodec json;
+    private AiUsageCollector usage = AiUsageCollector.NOOP;
 
     /**
      * @param liveBudget 목적 시한 키 {@code mujoong.timing.judgment.live-budget}의 값
@@ -55,14 +59,25 @@ public class RealtimeLunaClient {
         this.json = Objects.requireNonNull(json, "json");
     }
 
+    public RealtimeLunaClient(LunaProperties properties, Duration liveBudget, LunaSchemas schemas, LunaInputSanitizer sanitizer,
+            LunaTransport transport, EventLogger events, MujoongClock clock, JsonCodec json, AiUsageCollector usage) {
+        this(properties, liveBudget, schemas, sanitizer, transport, events, clock, json);
+        this.usage = Objects.requireNonNull(usage);
+    }
+
     /**
      * 공급자를 한 번 부른다. 실패는 {@link LunaException}(사유 코드만)을 원인으로 하는 예외 완료다. 이 메서드는 호출 스레드로 던지지 않는다(검토
      * R-05): 보내기 전 준비(정리 · 스키마 검증 · 본문 조립) 중 예기치 못한 런타임 오류도 {@code APP_ERROR}(예외 종류 이름만) 한 줄을 남기고
      * {@code FORBIDDEN_INPUT}(시도 0) 예외 완료로 바꾼다. 준비하지 못한 요청은 보내지 않는다는 fail-closed 판단이다.
      */
     public CompletionStage<LunaResult> call(LunaRequest request) {
+        return call(request, null);
+    }
+
+    /** turnId는 서버 안의 연결 정보이며 공급자 요청 본문에 넣지 않는다. */
+    public CompletionStage<LunaResult> call(LunaRequest request, UUID turnId) {
         try {
-            return start(request);
+            return start(request, turnId);
         } catch (RuntimeException unexpected) {
             return unexpectedFailure(unexpected);
         }
@@ -78,7 +93,7 @@ public class RealtimeLunaClient {
         return CompletableFuture.failedFuture(new LunaException(LunaFailureReason.FORBIDDEN_INPUT, 0));
     }
 
-    private CompletionStage<LunaResult> start(LunaRequest request) {
+    private CompletionStage<LunaResult> start(LunaRequest request, UUID turnId) {
         Objects.requireNonNull(request, "request");
         SanitizedInput input;
         try {
@@ -109,6 +124,17 @@ public class RealtimeLunaClient {
                 request.purpose(), properties.options(request.purpose())).body());
         long started = clock.monotonicNanos();
         CompletableFuture<LunaTransport.RawResponse> sent = transport.send(body, limit);
+        if (turnId != null && usage.enabled()) {
+            UUID callId = UUID.randomUUID();
+            sent.whenComplete((response, failure) -> {
+                try {
+                    usage.offer(LunaUsage.read(json, response == null ? null : response.body(), callId, turnId,
+                            properties.model(), clock.now()));
+                } catch (RuntimeException unavailable) {
+                    // 사용량 실패를 판정 실패로 전파하지 않는다.
+                }
+            });
+        }
         CompletableFuture<LunaResult> result = sent.handle((response, failure) -> {
             Duration latency = clock.elapsedSince(started);
             Outcome outcome = failure == null

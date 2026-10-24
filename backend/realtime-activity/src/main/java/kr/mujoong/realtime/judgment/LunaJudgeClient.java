@@ -6,6 +6,7 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.CompletionStage;
+import java.util.function.BiFunction;
 import java.util.function.Function;
 import kr.mujoong.contract.time.MujoongClock;
 import kr.mujoong.realtime.luna.LunaException;
@@ -22,7 +23,7 @@ import kr.mujoong.realtime.luna.LunaResult;
  */
 public final class LunaJudgeClient implements JudgeClient {
 
-    private final Function<LunaRequest, CompletionStage<LunaResult>> luna;
+    private final BiFunction<LunaRequest, UUID, CompletionStage<LunaResult>> luna;
     private final JudgmentPrompt prompt;
     private final JudgeOutcomeValidator validator;
     private final MujoongClock clock;
@@ -32,10 +33,26 @@ public final class LunaJudgeClient implements JudgeClient {
      */
     public LunaJudgeClient(Function<LunaRequest, CompletionStage<LunaResult>> luna, JudgmentPrompt prompt,
             JudgeOutcomeValidator validator, MujoongClock clock) {
+        this(withoutUsage(luna), prompt, validator, clock);
+    }
+
+    private LunaJudgeClient(BiFunction<LunaRequest, UUID, CompletionStage<LunaResult>> luna, JudgmentPrompt prompt,
+            JudgeOutcomeValidator validator, MujoongClock clock) {
         this.luna = Objects.requireNonNull(luna, "luna");
         this.prompt = Objects.requireNonNull(prompt, "prompt");
         this.validator = Objects.requireNonNull(validator, "validator");
         this.clock = Objects.requireNonNull(clock, "clock");
+    }
+
+    public static LunaJudgeClient withUsage(BiFunction<LunaRequest, UUID, CompletionStage<LunaResult>> luna,
+            JudgmentPrompt prompt, JudgeOutcomeValidator validator, MujoongClock clock) {
+        return new LunaJudgeClient(luna, prompt, validator, clock);
+    }
+
+    private static BiFunction<LunaRequest, UUID, CompletionStage<LunaResult>> withoutUsage(
+            Function<LunaRequest, CompletionStage<LunaResult>> luna) {
+        Objects.requireNonNull(luna, "luna");
+        return (request, turnId) -> luna.apply(request);
     }
 
     @Override
@@ -54,7 +71,7 @@ public final class LunaJudgeClient implements JudgeClient {
         CompletionStage<LunaResult> call;
         try {
             call = luna.apply(new LunaRequest(LunaPurpose.JUDGMENT_LIVE, prompt.version(), prompt.instructions(),
-                    request.toLunaInput(), request.aliases(), request.deadline()));
+                    request.toLunaInput(), request.aliases(), request.deadline()), turnId);
         } catch (RuntimeException unexpected) {
             return CompletableFuture.completedFuture(failure(unexpected, clock.elapsedSince(started)));
         }

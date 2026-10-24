@@ -33,6 +33,6 @@ public class JudgmentConfiguration {
         if (client == null) {
             return new UnavailableJudgeClient(prompt.version());
         }
-        return new LunaJudgeClient(client::call, prompt, validator, clock);
+        return LunaJudgeClient.withUsage((request, turnId) -> client.call(request, turnId), prompt, validator, clock);
     }
 }
