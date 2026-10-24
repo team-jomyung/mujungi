@@ -844,3 +844,63 @@ KEEP=1 bash scripts/verify.sh         # 끝에 스택만 남긴다(생성 비밀
 - 이 스택의 로그 · `report.txt`를 이슈에 옮길 때도 0절 규칙을 따른다(사건 코드 · traceId · 건수만).
 
 수동 demo 스택이 같은 PC에서 실행 중이라 네트워크 대역이 겹치면 수동 스택을 내리지 말고, 비어 있는 /24 대역 두 개를 검증에 지정한다. 예: `MUJOONG_VERIFY_EDGE_PREFIX=172.30.210 MUJOONG_VERIFY_BACKEND_PREFIX=172.30.220 bash scripts/verify.sh --mode compose`. 기존 Docker 망과 겹치지 않는지 먼저 확인한다. 검증용 고정 IP와 PostgreSQL 허용 대역은 함께 바뀌며 backend의 internal 격리와 localhost 게시 포트는 유지한다. 변수를 생략하면 기존 기본 대역을 쓴다.
+
+## 18. JIRA-271 사용량 수집 수동 검증
+
+기존 회원·활동 표 변경 없이 Realtime Flyway V9가 `realtime_ai_usage`를 만든다. 수집은 기본 꺼짐(`MUJOONG_AI_USAGE_ENABLED=false`)이며 활성화하려는 Realtime 프로세스에만 `true`를 넣는다. 호스트 `render-env`는 같은 이름의 선택 SSM 파라미터를 읽고, 없으면 `false`로 `realtime.env`에 쓴다. Core·웹에는 넣지 않는다. 이 문서 추가 자체가 설정 활성화나 배포를 뜻하지 않는다.
+
+ECS demo는 `infra/terraform/ecs_services.tf`의 realtime `environment`에 같은 키를 기본 `false`로 둔다. 켤 때는 이 값을 `true`로 변경하고 Terraform plan을 검토한 뒤 apply한다. 서비스의 `task_definition`은 Terraform에서 변경을 무시하고 CD가 관리하므로, apply만으로 실행 중인 태스크에 반영되지는 않는다. 다음 CD 배포(`.github/workflows/deploy.yml`)가 family의 최신 ACTIVE 태스크 정의에서 이미지만 바꿔 배포할 때 설정이 반영된다. apply와 CD를 동시에 실행하지 않고 순서대로 진행한다. 끌 때도 `false` 변경 → Terraform apply → CD 배포 순서다.
+
+배포 뒤에는 최신 family 리비전이 아니라 **실행 중인 각 realtime 태스크가 참조하는 리비전**을 확인한다. 다음 조회는 API 키나 다른 환경변수를 출력하지 않고 수집 스위치만 보여 준다(대상 AWS 계정·프로필을 먼저 확인).
+
+```powershell
+$usageCluster = 'mujungi-cluster'
+$usageRegion = 'ap-northeast-2'
+$usageTasks = (aws ecs list-tasks --region $usageRegion --cluster $usageCluster --service-name mujoong-realtime --desired-status RUNNING --query taskArns --output text) -split '\s+' | Where-Object { $_ -and $_ -ne 'None' }
+if ($LASTEXITCODE -ne 0 -or -not $usageTasks) { throw '실행 중 realtime 태스크 조회 실패' }
+foreach ($usageTask in $usageTasks) {
+    $usageDefinition = aws ecs describe-tasks --region $usageRegion --cluster $usageCluster --tasks $usageTask --query 'tasks[0].taskDefinitionArn' --output text
+    if ($LASTEXITCODE -ne 0 -or -not $usageDefinition -or $usageDefinition -eq 'None') { throw '실행 중 태스크 정의 조회 실패' }
+    Write-Output $usageDefinition
+    aws ecs describe-task-definition --region $usageRegion --task-definition $usageDefinition --query "taskDefinition.containerDefinitions[?name=='realtime'].environment[] | [?name=='MUJOONG_AI_USAGE_ENABLED']" --output json
+    if ($LASTEXITCODE -ne 0) { throw '수집 스위치 조회 실패' }
+}
+```
+
+종료 시 최종 사용량을 별도로 기다리지 않는다. 중간 누적값은 `PARTIAL`, 닫히기 전에 최종값을 수신하면 `COMPLETE`, 사용량을 받지 못하면 `UNKNOWN`으로 저장한다. 로컬 종료에서도 최종 응답 도착 시점에 따라 `COMPLETE`가 가능하며 상태별 비율은 사전에 단정하지 않는다. 기존 송신·WebSocket 닫기의 타임아웃 대기는 유지한다.
+
+다음은 개발자가 직접 실행하는 절차다. Java 21·Docker가 필요하다. 기본 시험은 실호출 태그를 제외하고, 실호출은 아래 특정 클래스만 명시적으로 실행한다. 실제 OpenAI 사용료가 발생한다. 개발용 `ai-test.env`는 커밋하지 않으며 앱/Gradle이 자동으로 읽지 않는다. 저장소 루트에서 **값을 출력하거나 명령으로 평가하지 않고** 필요한 세 변수만 현재 PowerShell에 가져온다.
+
+```powershell
+Get-Content -LiteralPath .\ai-test.env | ForEach-Object {
+    if ($_ -match '^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$') {
+        $usageName = $Matches[1]
+        $usageValue = $Matches[2].Trim().Trim('"').Trim("'")
+        if ($usageName -in @('OPENAI_API_KEY', 'OPENAI_JUDGE_MODEL', 'MUJOONG_PROVIDER_URL')) {
+            [Environment]::SetEnvironmentVariable($usageName, $usageValue, 'Process')
+        }
+    }
+}
+Set-Location .\backend
+```
+
+실호출 없이 큐·중복·미확인·DB 연결·삭제·경계를 확인하려면:
+
+```powershell
+.\gradlew.bat :realtime-activity:test --tests '*AiUsageRecorderTest' --tests '*LunaUsageTest' --tests '*RealtimeLunaUsageTest' --tests '*ProviderUsageListenerTest' --tests '*AiUsageRepositoryIT' --tests '*ConfigKeyContractTest' --tests '*SingleInstanceMarkerTest' --tests '*LunaArchTest' --tests '*RealtimeArchTest' '-Pmujoong.test.db=docker' --console=plain
+```
+
+실제 공급자 응답과 DB 저장을 확인하려면:
+
+```powershell
+.\gradlew.bat :realtime-activity:gptLiveTest --tests '*AiUsageVoiceLiveTest' '-Pmujoong.test.db=docker' --console=plain
+.\gradlew.bat :realtime-activity:lunaLiveTest --tests '*AiUsageLunaLiveTest' '-Pmujoong.test.db=docker' --console=plain
+```
+
+두 시험은 각각 수집 끔/켬을 한 번씩 실행하며 별도 시험 DB에 성인 개발용 합성 세션을 만든다. 음성 주소는 `MUJOONG_PROVIDER_URL`이 있으면 읽고 없으면 `application-demo.yml`을 따른다. 허용된 OpenAI WSS 주소만 접속한다. 음성 시험은 첫 음성 뒤 유효한 중간 사용량 갱신을 최대 30초 기다린 다음 닫으며, 이 대기는 시험에만 있다. 수집 켬에서 숫자 사용 시간과 `PARTIAL` 또는 `COMPLETE`를 확인하고, 중간 갱신 시간 초과나 `UNKNOWN`은 통과로 처리하지 않는다. Luna 설정·운영 판정 시한은 기존 설정을 따른다. 키가 없으면 `SKIPPED_NO_KEY`이며 통과 근거가 아니다. 숫자·상태 요약은 `backend/realtime-activity/build/ai-usage-live/voice.txt`, `luna.txt`에 현재 실행마다 새로 쓴다. DB 컨테이너는 시험 종료 시 정리되므로 운영 DB에 시험 행을 남기지 않는다. 미확인 값을 임의로 채우지 말고 보고서와 실패 내용을 확인한다.
+
+`AiUsageLunaLiveTest`는 합성 판정 기록을 먼저 만들고 `RealtimeLunaClient`를 직접 호출하므로 연습 출력 오류와 무관하게 실제 응답 → 토큰 추출 → 전용 큐 → DB 저장을 검증할 수 있다. 이는 연습 흐름 안에서 판정이 발생하고 올바른 대화에 연결되는지의 검증을 대신하지 않는다. 그 연동 검증은 연습 출력 오류 해결 후 별도로 수행한다. 실제 공급자 결과는 `REAL_API_SYNTHETIC`(실호출·합성 입력)으로 표시하며 가짜 공급자 시험 결과와 구분해 남긴다(R-M11). 기본 단위·DB 시험 통과만으로 실제 Luna 토큰 저장 확인 완료라고 보고하지 않는다.
+
+이 시험의 단일 연결/호출 지연 차이는 네트워크·모델 변동도 포함하므로 **전체 대화 성능 합격 판정을 대신하지 않는다**. 최종 비교는 대화 큐 변경이 반영된 동일 커밋·장비·설정에서 같은 합성 음성/연습을 재생해 수집 끔/켬을 번갈아 반복한다. 자유대화·연습을 따로 보고 첫 음성 지연, 오디오 중계 지연, 기존 전사 큐 폐기·녹음기 저하, DB 풀 대기, 사용량 큐 거절/만료를 비교한다. 비교 전에 허용 지연 차이·표본 수를 정하고 중앙값·p95·실패 수를 함께 기록한다. 준비·리포트·Jev 비용은 이번 수집 범위에 없으므로 전체 API 비용으로 표시하지 않는다.
+
+DB 지연·불가, 사용량 큐 가득 참, 비정상 연결 종료, 애플리케이션 종료, 계정 삭제 중 지연 콜백도 개발/시험 환경에서 확인한다. 사용량 저장 장애가 기존 대화의 AI 출력 폐기 사유가 되어서는 안 된다. 끄기는 `MUJOONG_AI_USAGE_ENABLED=false`로 Realtime을 재기동한다. 미저장 메모리 큐의 강제 종료 유실은 허용된 한계이며 이미 저장된 행은 자동 삭제하지 않는다.

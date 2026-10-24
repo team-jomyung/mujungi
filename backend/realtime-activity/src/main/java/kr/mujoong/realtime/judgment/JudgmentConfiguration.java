@@ -33,6 +33,6 @@ public class JudgmentConfiguration {
         if (client == null) {
             return new UnavailableJudgeClient(prompt.version());
         }
-        return new DecisionsJudgeClient(client::decide, prompt, validator, clock);
+        return DecisionsJudgeClient.withUsage(client::decide, prompt, validator, clock);
     }
 }

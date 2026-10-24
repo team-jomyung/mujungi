@@ -36,6 +36,7 @@ class LunaActivationTest {
         when(realtime.timing().judgment().liveBudget()).thenReturn(Duration.ofSeconds(4));
         ApplicationContextRunner runner = new ApplicationContextRunner()
                 .withUserConfiguration(LunaConfiguration.class)
+                .withBean(kr.mujoong.realtime.usage.AiUsageCollector.class, () -> kr.mujoong.realtime.usage.AiUsageCollector.NOOP)
                 .withBean(JsonCodec.class, JsonCodec::shared)
                 .withBean(MujoongClock.class, () -> clock)
                 .withBean(EventLogger.class, () -> events)

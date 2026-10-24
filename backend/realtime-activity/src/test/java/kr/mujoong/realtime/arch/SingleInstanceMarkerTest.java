@@ -123,7 +123,8 @@ class SingleInstanceMarkerTest {
             "SI-7", Set.of(DisconnectChecker.class, StatusReporter.class, MessagingCleanupJob.class,
                     OrphanSessionChecker.class),
             "SI-9", Set.of(ProviderClient.class, SessionExecutor.class, SessionContext.class),
-            "SI-10", Set.of(AsyncRecorder.class, JudgmentLiveRecorder.class, GuardrailEventRecorder.class),
+            "SI-10", Set.of(AsyncRecorder.class, JudgmentLiveRecorder.class, GuardrailEventRecorder.class,
+                    kr.mujoong.realtime.usage.AiUsageRecorder.class),
             "SI-12", Set.of(LatencyRecorder.class));
 
     /**
