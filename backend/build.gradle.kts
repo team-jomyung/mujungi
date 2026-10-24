@@ -198,6 +198,76 @@ gradle.taskGraph.whenReady {
     }
 }
 
+// ---- 연습 대화 실음성 하니스 분리 확인 (C안 5회차 실측) ----
+// gptLiveTest와 같은 네 가지를 단언한다: check · test 작업 그래프에 gptLivePracticeTest 없음, realtime-activity에 gptLivePracticeTest가 있고
+// 포함 목록 = gpt-live-practice, 모든 모듈의 기본 test 제외 목록에 gpt-live-practice 있음, 기본 test가 OPENAI_API_KEY · JEV_API_KEY를 시험 JVM에
+// 넘기지 않음.
+val gptLivePracticeTag = "gpt-live-practice"
+val gptLivePracticeProblems = mutableListOf<String>()
+val gptLivePracticeModules = mutableListOf<String>()
+
+val verifyGptLivePracticeIsolation = tasks.register("verifyGptLivePracticeIsolation") {
+    group = "verification"
+    description = "gptLivePracticeTest가 check · 기본 test와 분리돼 있는지 확인한다(C안 5회차 실측 하니스)."
+    doLast {
+        if (gptLivePracticeProblems.isNotEmpty()) {
+            throw GradleException("연습 대화 실음성 하니스 분리 위반: ${gptLivePracticeProblems.joinToString("; ")}")
+        }
+        logger.lifecycle(
+            "verifyGptLivePracticeIsolation: 모듈 ${gptLivePracticeModules.sorted()} — check · test 그래프에 gptLivePracticeTest 없음, " +
+                "모든 test는 ${gptLivePracticeTag} 제외 · OPENAI_API_KEY · JEV_API_KEY 없음, gptLivePracticeTest는 ${gptLivePracticeTag}만",
+        )
+    }
+}
+
+tasks.named("check") {
+    dependsOn(verifyGptLivePracticeIsolation)
+}
+
+gradle.taskGraph.whenReady {
+    if (!hasTask(verifyGptLivePracticeIsolation.get())) {
+        return@whenReady
+    }
+    val modules = subprojects.filter { it.tasks.findByName("gptLivePracticeTest") != null }
+    gptLivePracticeModules += modules.map { it.name }
+    if ("realtime-activity" !in gptLivePracticeModules) {
+        gptLivePracticeProblems += "realtime-activity에 gptLivePracticeTest 작업이 없다"
+    }
+    val reachable = mutableSetOf<Task>()
+    val roots = listOf(tasks.getByName("check")) +
+        subprojects.mapNotNull { it.tasks.findByName("check") } +
+        subprojects.mapNotNull { it.tasks.findByName("test") }
+    val pending = ArrayDeque(roots)
+    while (pending.isNotEmpty()) {
+        val task = pending.removeFirst()
+        if (reachable.add(task)) {
+            pending.addAll(task.taskDependencies.getDependencies(task))
+        }
+    }
+    reachable.filter { it.name == "gptLivePracticeTest" }.forEach {
+        gptLivePracticeProblems += "check · test 그래프에 ${it.path}가 있다"
+    }
+    for (module in subprojects) {
+        val test = module.tasks.findByName("test") as? Test ?: continue
+        val testOptions = test.options as JUnitPlatformOptions
+        if (gptLivePracticeTag !in testOptions.excludeTags) {
+            gptLivePracticeProblems += "${test.path} 제외 목록에 ${gptLivePracticeTag} 없음(${testOptions.excludeTags})"
+        }
+        for (key in listOf("OPENAI_API_KEY", "JEV_API_KEY")) {
+            if (test.environment.containsKey(key)) {
+                gptLivePracticeProblems += "${test.path}가 ${key}를 시험 JVM에 넘긴다"
+            }
+        }
+    }
+    for (module in modules) {
+        val live = module.tasks.getByName("gptLivePracticeTest") as Test
+        val liveOptions = live.options as JUnitPlatformOptions
+        if (liveOptions.includeTags != setOf(gptLivePracticeTag)) {
+            gptLivePracticeProblems += "${live.path} 포함 목록이 ${gptLivePracticeTag} 하나가 아님(${liveOptions.includeTags})"
+        }
+    }
+}
+
 // ---- 제브 실호출 시험 분리 확인 (U13 Step 15b) ----
 // lunaReachTest와 같은 네 가지를 단언한다: check · test 작업 그래프에 jevLiveTest 없음, realtime-activity에 jevLiveTest가 있고
 // 포함 목록 = jev-live, 모든 모듈의 기본 test 제외 목록에 jev-live 있음, 기본 test가 JEV_API_KEY를 시험 JVM에 넘기지 않음.

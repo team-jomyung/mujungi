@@ -85,6 +85,35 @@ tasks.register<Test>("gptLiveTest") {
     shouldRunAfter(tasks.named("test"))
 }
 
+// ---- 연습 대화 실음성 하니스 (C안 5회차 실측, docs/practice-direct-ask.md 11장, gptLiveTest와 같은 방식) ----
+// @Tag("gpt-live-practice") 시험만 돈다. 사람이 env OPENAI_API_KEY(+ 있으면 JEV_API_KEY · JEV_BASE_URL · JEV_MODEL)와 출력 폴더
+// MUJOONG_LIVE_EVAL_OUT을 넣고 ./gradlew :realtime-activity:gptLivePracticeTest로 직접 돌린다. 기본 test는 build-logic 규약이
+// gpt-live-practice를 고정 제외하고 키를 지운다. 이 작업은 check · build에 물리지 않고 루트 verifyGptLivePracticeIsolation이 확인한다.
+val gptLivePracticeTag = "gpt-live-practice"
+tasks.register<Test>("gptLivePracticeTest") {
+    group = "verification"
+    description = "연습 대화 실음성 하니스(@Tag(\"gpt-live-practice\"), 사람이 env OPENAI_API_KEY를 넣고 돌림). 키가 없으면 SKIPPED_NO_KEY로 끝난다."
+    testClassesDirs = liveTestSourceSet.output.classesDirs
+    classpath = liveTestSourceSet.runtimeClasspath
+    options {
+        (this as JUnitPlatformOptions).setIncludeTags(setOf(gptLivePracticeTag))
+    }
+    inputs.property("fixedIncludeTags", gptLivePracticeTag)
+    // 실호출은 매번 새로 돈다(캐시된 '통과'를 다시 보고하지 않음)
+    outputs.upToDateWhen { false }
+    // 공통 블록의 커버리지 보고(jacocoTestReport → test 의존)를 끈다: 실호출 작업이 기본 시험을 끌고 오지 않게
+    setFinalizedBy(emptyList<Any>())
+    extensions.configure<JacocoTaskExtension> {
+        isEnabled = false
+    }
+    // 진행 상황(개수 · 파일 위치 한 줄)을 보이게 한다. 대화 원문은 출력 파일에만 있다
+    testLogging {
+        events("passed", "failed", "skipped")
+        showStandardStreams = true
+    }
+    shouldRunAfter(tasks.named("test"))
+}
+
 // ---- Luna 응답 여부 · 지연 확인 (U11 Step 2 · 3 조사, lunaLiveTest · gptLiveTest와 같은 방식) ----
 // @Tag("luna-reach") 시험만 돈다. 사람이 env OPENAI_API_KEY를 넣고 ./gradlew :realtime-activity:lunaReachTest로 직접 돌린다.
 // 운영 Luna 호출부를 그대로 쓰되 시도 시한만 넉넉히(env LUNA_REACH_TIMEOUT_SECONDS) 준다. 기본 test는 build-logic 규약이

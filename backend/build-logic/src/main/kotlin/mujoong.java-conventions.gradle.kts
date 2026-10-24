@@ -199,6 +199,21 @@ tasks.named<Test>("test") {
     systemProperty("mujoong.test.liveIsolated", "true")
 }
 
+// ---- 연습 대화 실음성 하니스 분리 (C안 5회차 실측, gptLiveTest와 같은 방식) ----
+// 실제 GPT-Live · Luna · TTS(· 제브)를 부르는 연습 대화 하니스(@Tag("gpt-live-practice"))는 모든 모듈의 기본 test 작업에서 언제나 빠진다.
+// OPENAI_API_KEY · JEV_API_KEY는 위 · 아래 블록이 이미 지운다. gptLivePracticeTest 작업은 realtime-activity 빌드 파일에만 있고
+// check · build에 물리지 않는다. 확인은 루트 verifyGptLivePracticeIsolation이 한다.
+
+/** 연습 대화 실음성 하니스 태그. */
+val gptLivePracticeTag = "gpt-live-practice"
+
+tasks.named<Test>("test") {
+    options {
+        (this as JUnitPlatformOptions).excludeTags(gptLivePracticeTag)
+    }
+    inputs.property("fixedExcludeTagsGptLivePractice", gptLivePracticeTag)
+}
+
 // ---- Luna 응답 여부 확인 시험 분리 (U11 Step 2 · 3 조사, lunaLiveTest · gptLiveTest와 같은 방식) ----
 // 실제 Luna를 넉넉한 시한으로 부르는 시험(@Tag("luna-reach"))은 모든 모듈의 기본 test 작업에서 언제나 빠진다. OPENAI_API_KEY는 위
 // luna-live 블록이 이미 지운다. lunaReachTest 작업은 realtime-activity 빌드 파일에만 있고 확인은 루트 verifyLunaReachIsolation이 한다.
