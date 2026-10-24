@@ -6,7 +6,7 @@ export const RESULT_TEMP_COPY = {
   backArrow: "←", previousArrow: "‹", nextArrow: "›", dot: " ·", declinedSuffix: " · 시작하지 못함",
   cleaning: "기록을 정리하고 있어요", done: "기록 정리가 끝났어요", failed: "기록을 정리하지 못했어요. 대화 기록은 남아 있어요.", insufficient: "정리할 자료가 부족해요. 대화 기록을 확인해 주세요.",
   emptyRecords: "아직 기록이 없어요. 활동을 마치면 여기에 기록이 남아요.", emptyDay: "활동이 없어요", noTips: "아직 보여 드릴 생활 팁이 없어요. 기록이 더 쌓이면 다시 살펴볼게요.", noCandidates: "아직 담을 연습 목표가 없어요.",
-  unconfirmed: "끝나는 시각을 확인하지 못했어요. 확보한 기록까지만 보여 드려요.", notFound: "기록을 찾을 수 없어요", retry: "다시 시도", back: "뒤로", report: "상담용 리포트", reportDownload: "상담용 리포트 다운",
+  unconfirmed: "끝나는 시각을 확인하지 못했어요. 확보한 기록까지만 보여 드려요.", notFound: "기록을 찾을 수 없어요", retry: "다시 시도", back: "뒤로", report: "상담용 리포트", reportCreate: "상담용 리포트 만들기",
   generating: "리포트를 만들고 있어요", generatingDetail: "고른 기록으로 10개 항목을 만들고 있어요.", reportFailed: "리포트를 만들지 못했어요", reportFailedDetail: "잠시 뒤 다시 시도해 주세요. 고른 범위는 그대로예요.", emptyRange: "이 기간엔 활동이 없어요", emptyRangeDetail: "다른 기간을 골라 주세요.",
   saveQuestion: "PDF로 저장할까요?", saveFailed: "저장하지 못했어요. 다시 시도해 주세요.", saved: "저장했어요", share: "공유하기 (문자 · 메일 · 메신저)", delivery: "전달은 보호자가 직접 해요. 앱이 자동으로 보내지 않아요.",
 } as const;
