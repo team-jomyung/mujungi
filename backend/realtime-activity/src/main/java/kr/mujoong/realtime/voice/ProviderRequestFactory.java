@@ -153,6 +153,23 @@ public class ProviderRequestFactory {
                         + DialogInstructions.conversationGuide(guide), new AudioSpec(new AudioFormat(AUDIO_TYPE, rate))));
     }
 
+    /**
+     * 연습 세션 시작. 아이 정보 역할 문장 뒤에 연습 기본 지침({@link kr.mujoong.realtime.dialog.PracticeSystemPrompt}) 원문을 한 번 싣는다. 자유대화의
+     * 참여 뒤 첫 질문 문장({@code JOIN_FIRST_QUESTION})은 넣지 않는다(연습은 서버가 목표 안내 · 장면으로 시작한다).
+     */
+    public SessionStart practiceSessionStart(ChildContext context, kr.mujoong.contract.context.ConversationGuide guide) {
+        Objects.requireNonNull(context, "context");
+        ChildContextData data = new ChildContextData(
+                instructionName(context.displayName()),
+                context.age() == null ? null : Math.max(MIN_AGE, context.age()),
+                limitInterests(context.interests()));
+        String instructions = DialogInstructions.role(data.displayName(), data.age(), data.interests())
+                + DialogInstructions.conversationGuide(guide)
+                + "\n\n" + kr.mujoong.realtime.dialog.PracticeSystemPrompt.instructions();
+        return new SessionStart(TYPE_SESSION_START,
+                new SessionBody(MODEL, instructions, new AudioSpec(new AudioFormat(AUDIO_TYPE, AUDIO_RATE))));
+    }
+
     /** 현재 자유대화 세션에 고정한 정책을 한 번만 포함한다. 내부 판/해시는 wire 필드가 아니다. */
     public SessionStart sessionStart(ChildContext context, PolicyBundle policy) {
         return sessionStart(context, policy, null);

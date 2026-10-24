@@ -91,10 +91,10 @@ class ScenarioGenerationTest {
     @Test void secondTechnicalFailureDoesNotRetryAgain(){when(provider.generate(any())).thenThrow(failure(ScenarioScriptProvider.Failure.Kind.TRANSIENT)).thenReturn(generated(base()));when(provider.review(any())).thenThrow(failure(ScenarioScriptProvider.Failure.Kind.TRANSIENT));assertThatThrownBy(this::run).isInstanceOf(kr.mujoong.core.common.error.CoreApiException.class);verify(provider,times(2)).generate(any());verify(provider).review(any());}
     @Test void permanentFailureDoesNotRegenerate(){when(provider.generate(any())).thenThrow(failure(ScenarioScriptProvider.Failure.Kind.PERMANENT));assertThatThrownBy(this::run).isInstanceOf(kr.mujoong.core.common.error.CoreApiException.class);verify(provider).generate(any());verify(provider,never()).review(any());}
     @Test void invalidSceneStartFieldsAreDroppedBeforeReviewInsteadOfFailingThePracticeStart(){
-        // FT-1023-g: 기회 문장을 되풀이한 여는 말은 그 필드만 빼고 진행한다(추가 호출 없음)
+        // FT-1023-g: 압박 · 정답이 든 여는 말은 그 필드만 빼고 진행한다(추가 호출 없음)
         var s=base();
         var withBadStart=new ScenarioScript.Scene(s.sceneKey(),s.sceneKind(),s.sceneDescription(),s.opportunitySentence(),s.reexplanation(),
-                s.focusPoints(),s.expressionExamples(),s.relation(),s.place(),s.topic(),null,null,null,s.opportunitySentence());
+                s.focusPoints(),s.expressionExamples(),s.relation(),s.place(),s.topic(),null,null,null,"빨리 말해 봐");
         when(provider.generate(any())).thenReturn(generated(withBadStart));
         var issued=run().details().scenes().getFirst();
         assertThat(issued.openingLine()).isNull();
@@ -102,6 +102,14 @@ class ScenarioGenerationTest {
         var reviewed=org.mockito.ArgumentCaptor.forClass(ScenarioScriptProvider.Call.class);
         verify(provider,times(1)).generate(any());verify(provider,times(1)).review(reviewed.capture());
         assertThat(((ScenarioScript)reviewed.getValue().input().get("script")).scenes().getFirst().openingLine()).as("검토는 정리된 대본을 본다").isNull();
+    }
+    @Test void anOpeningLineThatIsTheOpportunitySentenceIsKept(){
+        // scenario-generation.v3: 첫 말이 기회를 바로 열면 기회 문장과 같아도 된다
+        var s=base();
+        var same=new ScenarioScript.Scene(s.sceneKey(),s.sceneKind(),s.sceneDescription(),s.opportunitySentence(),s.reexplanation(),
+                s.focusPoints(),s.expressionExamples(),s.relation(),s.place(),s.topic(),null,null,null,s.opportunitySentence());
+        when(provider.generate(any())).thenReturn(generated(same));
+        assertThat(run().details().scenes().getFirst().openingLine()).isEqualTo(s.opportunitySentence());
     }
     @Test void validSceneStartFieldsAreKept(){
         var s=base();

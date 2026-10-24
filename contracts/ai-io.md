@@ -551,18 +551,18 @@ J1/J6의 고정 질문·선택지는 `judgment-service-v1`, 공통 지시문은 
 
 ### 10.17 연습 장면 시작 · 오류에도 대화 유지 [FT-1023-g]
 
-**대본 필드(상황 생성 출력 `ai-scenario-output.schema.json`).** 생성 · 검토 지시문 판(`scenario-generation.v2` · `scenario-review.v1`)은 그대로 두고 내용만 고쳤다.
+**대본 필드(상황 생성 출력 `ai-scenario-output.schema.json`).** 생성 · 검토 지시문 판(`scenario-generation.v2` · `scenario-review.v1`)은 그대로 두고 내용만 고쳤다. 2026-10-24부터는 10.18의 `scenario-generation.v3` · `scenario-review.v2`다.
 
 | 필드 | 쓰는 때 | 규칙 |
 |---|---|---|
-| `openingLine` | 모든 장면(선택) | 장면 안내 뒤 상대가 먼저 거는 여는 말, 1 ~ 2문장(200자 이하). 화자는 상대. 기회 문장과 같으면 `OPENING_REPEATS_OPPORTUNITY`, 정답 · 아이 행동 · 목표 표현은 검토(`ANSWER_INCLUDED` · `EARLY_CUE`)와 서버 검사가 막는다 |
+| `openingLine` | 모든 장면(선택) | 장면 안내 뒤 상대가 먼저 거는 여는 말, 1 ~ 2문장(200자 이하). 화자는 상대. 기회 문장과 같아도 된다(10.18, 이전의 `OPENING_REPEATS_OPPORTUNITY` 거절은 없앴다), 정답 · 아이 행동 · 목표 표현은 검토(`ANSWER_INCLUDED` · `EARLY_CUE`)와 서버 검사가 막는다 |
 | `spokenIntroduction` | 기존 | 아이의 처지 · 필요(무엇을 하는 중이고 무엇이 필요하거나 불편한지)와 구체적인 상대를 담는다. 빠지면 검토가 `INCOMPLETE_SCENE`으로 거절 |
 
 생성 직후 여는 말이 위 서버 검사를 못 맞추면 대본 전체를 버리지 않고 그 필드만 빼고(진단 사유 `ScenarioSceneStartDropped`) 검토로 보낸다. 내용을 빼기만 하고 더하지 않으므로 추가 호출은 없다.
 
 이전 대화 돌아보기는 하지 않는다(2026-10-24 결정: 초기 안내가 느려 원래 대화 요약도 없앴다). 상황 생성 입력에 아이 발화 인용(`reflectionContext`)을 넣지 않고, 생성 출력에는 돌아보기 질문(`reflectionPrompt`)과 원래 대화 요약(`reflectionSummary`) 필드가 없다. 저장된 옛 대본에 이 필드가 있으면 core · realtime 모두 모르는 필드로 무시한다. `openingLine`이 없으면 장면 안내 뒤 바로 기회 문장이다.
 
-**연습 흐름(realtime `PracticeConversation`).** 목표 안내 → 장면 도입 → 여는 말(`openingLine` 승인 낭독, 상대 역할 · 낭독 신호 `PEER`) → 아이 대답 한 차례 또는 `mujoong.timing.conversation.no-response-wait` 만기 → 기회 문장 → 판정(기존 그대로). 여는 말에 대한 아이 말은 판정하지 않고 무응답 재안내 횟수 · 장면 결과에 넣지 않는다(전사는 그대로 남는다). 장면 행의 시작은 장면 도입 시작 그대로다.
+**연습 흐름(realtime `PracticeConversation`).** 목표 안내 → 장면 도입 → 여는 말(`openingLine` 승인 낭독, 상대 역할 · 낭독 신호 `PEER`) → 아이 대답 한 차례 또는 `mujoong.timing.conversation.no-response-wait` 만기 → 기회 문장 → 판정(기존 그대로). 여는 말에 대한 아이 말은 판정하지 않고 무응답 재안내 횟수 · 장면 결과에 넣지 않는다(전사는 그대로 남는다). 장면 행의 시작은 장면 도입 시작 그대로다. (2026-10-24: 여는 말 뒤 기회 문장을 강제로 읽는 단계는 10.18로 없앴다.)
 
 **오류에도 대화 유지.** 발화 · 판정 · 전사 오류로 장면이나 연습을 닫지 않는다.
 
@@ -570,6 +570,23 @@ J1/J6의 고정 질문·선택지는 `judgment-service-v1`, 공통 지시문은 
 - 단계별 다음: 목표 안내 → 장면 도입, 장면 도입 → (장면 행을 만들고) 여는 말 또는 기회 문장, 여는 말 → 기회 문장, 입력 단계의 질문 → 그 단계의 아이 말 대기, 역할 전환 알림 → 코치 도움, 코치 도움 → 다시 해 보기, 복귀 알림 → 친구 역할 대화, 친구 마무리 답 → 변형 평가(장면은 정상 원인 유지), 목표 마무리 → 다음 목표 또는 마무리.
 - 판독 불가 · 판정 보류 · 장애 · 불명확: 첫 번째는 지금처럼 교정 없이 같은 안내 1회, 두 번째는 닫지 않고 다음 도움 단계로 간다(기회 · 되묻기 → 도움 제안, 도움 제안 → 동의 없는 코치 도움(예시 없음), 다시 해 보기 → 남은 횟수 안에서 코치 도움 · 없으면 집중 한도 정리). 판독 불가 사실 `TRANSCRIPT_FAILED`는 그대로 남긴다.
 - 연습을 끝내는 길은 종료 표현 · 쉬기 요청, 보호자 종료, 공백 경고 · 종료, 목표 시간 상한(`goal-active-limit`) · 집중 상한(`focus-max`) · 다시 해 보기 횟수, 모든 목표 완료, 실제 끊김뿐이다. 확장점 신호 `OUTPUT_FAILED`와 실행부 전이 `PRACTICE_OUTPUT_FAILED`는 없앴다. 옛 세션의 `end_detail PRACTICE_OUTPUT_FAILED`는 기록 · 화면이 그대로 읽고 보여 준다.
+
+
+### 10.18 연습 프롬프트 묶음 v1 적용 [FT-1024-f]
+
+조원이 작성한 연습 프롬프트 묶음 v1(2026-10-24)을 다음처럼 연결했다. 묶음 원문은 리소스로 그대로 두고, 판 이름은 파일 이름과 첫 줄로 구분한다.
+
+| 묶음 파일 | 쓰는 곳 | 연결 방식 |
+|---|---|---|
+| `practice-system.v1.txt` | realtime `practice/practice-system.v1.txt` | 연습 세션의 `session.start` 지시문에 아이 정보 역할 문장 뒤로 원문 그대로 한 번 싣는다(`PracticeSystemPrompt`). 턴마다 보내는 500자 지시에는 넣지 않는다. 연습 세션은 자유대화의 참여 뒤 첫 질문 문장(`JOIN_FIRST_QUESTION`)을 싣지 않는다 |
+| `turn-instructions.v1.txt` | realtime `PracticeInstructions` | 기존 턴 지시를 ROLE_REPLY · ROLE_CLARIFY · INPUT_CONFIRM · OFFER_COACH · COACH_HINT · COACH_EXAMPLE · RESUME_ROLE · OFFER_VARIANT · CLOSE 문구로 바꿨다. 목표명을 읽지 않고, 역할 전환에 목소리 변화를 약속하지 않으며, 발화마다 '음,'을 붙이지 않는다. 500자 상한은 그대로다 |
+| `generation.v3.txt` · `review.v2.txt` | core `prompts/scenario/` | 상황 생성 · 검토 판을 `scenario-generation.v3` · `scenario-review.v2`로 올렸다. 생성 · 검토 스키마 키와 사유 코드는 그대로다. 시작 패키지 `practice-scenario.schema.json`의 판 값은 저장된 옛 대본 때문에 옛 판과 새 판을 모두 받는다 |
+
+**바뀐 진행 규칙.**
+- 여는 말(`openingLine`)이 장면의 첫 상대 말이다. 여는 말이 있으면 그것만 들려주고 아이의 대답을 기회 문장 대답(J2)으로 바로 판정한다. 기회 문장(`opportunitySentence`)을 이어 강제로 읽지 않는다. 여는 말과 기회 문장은 같은 문장이어도 된다(서버 검사 거절 없음). 여는 말이 없는 옛 대본은 지금처럼 기회 문장으로 시작한다.
+- 대화형 연습(`flexibleDialogue`)에서 판정 보류 · 장애는 아이 말을 못 들은 것으로 다루지 않는다. '잘 못 들었어' 확인 없이 상대 역할로 대화를 잇는다(ROLE_REPLY). 확인 질문(INPUT_CONFIRM)은 전사 자체가 불명확할 때만 한 번 쓰고, 두 번째에는 도움 제안으로 넘기지 않고 대화를 잇는다(사실 `TRANSCRIPT_FAILED`는 남긴다).
+
+**아직 연결하지 않은 것.** 묶음의 판정 계약 `practice-assessment.v1.txt`(대화 관련성 · 목표 근거 · 지원 · 참여를 따로 돌려주는 JSON)는 지금 진행 중 판정이 쓰는 Decisions API의 선택지 하나 고르기 형식과 맞지 않아, 판정 방식 결정 뒤 따로 적용한다. 출력 검토 `practice-output-review.v1.txt`는 묶음 스스로 제브 대체 배포본이 아니라고 적었다. 낭독 중 아이 질문이 들어올 때의 출력 중지 · 발화 보존, 도움 뒤 `expectsReply` 메타데이터, 기록 단계 구분도 아직 서버 동작이 없다. `dialogue-examples.txt` · `regression-cases.jsonl`은 수동 회귀 검수 자료로 둔다.
 
 ## 자유대화 전 보호자 입력 참고
 

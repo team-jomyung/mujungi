@@ -71,6 +71,21 @@ class ProviderRequestFactoryWireTest {
         assertThat(keys(request, "")).isEqualTo(keys(wire(factory.sessionStart(new ChildContext("하늘",8,List.of()))), ""));
     }
 
+    @Test void aPracticeSessionStartCarriesTheWholePracticeSystemPromptOnceAndFreeTalkDoesNot() throws Exception {
+        String original;
+        try (var in = getClass().getClassLoader().getResourceAsStream(kr.mujoong.realtime.dialog.PracticeSystemPrompt.RESOURCE)) {
+            original = new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8).strip();
+        }
+        var practice = wire(factory.practiceSessionStart(new ChildContext("하늘", 8, List.of("블록")), null));
+        String instructions = practice.path("session").path("instructions").asString();
+        assertThat(instructions).as("원문 그대로 한 번").contains(original).startsWith(DialogInstructions.role("하늘", 8, List.of("블록")));
+        assertThat(instructions.indexOf(original)).isEqualTo(instructions.lastIndexOf(original));
+        assertThat(instructions).as("연습은 자유대화의 첫 질문 문장을 쓰지 않는다").doesNotContain(DialogInstructions.JOIN_FIRST_QUESTION);
+        assertThat(keys(practice, "")).as("wire 필드는 그대로").isEqualTo(keys(wire(factory.sessionStart(new ChildContext("하늘", 8, List.of()))), ""));
+        assertThat(wire(factory.sessionStart(new ChildContext("하늘", 8, List.of()))).path("session").path("instructions").asString())
+                .doesNotContain("무중 연습대화 기본 지침");
+    }
+
     @Test void continuingTeenKeepsActualAgeButContentStaysAtTwelve() {
         String instructions = wire(factory.sessionStart(new ChildContext("하늘", 13, List.of("공룡")))).get("session").get("instructions").asString();
         assertThat(instructions).contains("나이: \"13\"", "생성 기준 나이: \"12\"", "진단", "치료");

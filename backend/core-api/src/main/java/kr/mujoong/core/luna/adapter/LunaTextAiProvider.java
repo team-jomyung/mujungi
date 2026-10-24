@@ -52,20 +52,20 @@ public final class LunaTextAiProvider implements TextAiProvider,kr.mujoong.core.
         this.json = Objects.requireNonNull(json, "json");
         try {
             this.instructions = new ClassPathResource(INSTRUCTIONS).getContentAsString(StandardCharsets.UTF_8);
-            this.scriptInstructions = new ClassPathResource("prompts/scenario/generation.v2.txt").getContentAsString(StandardCharsets.UTF_8);
-            this.reviewInstructions = new ClassPathResource("prompts/scenario/review.v1.txt").getContentAsString(StandardCharsets.UTF_8);
+            this.scriptInstructions = new ClassPathResource("prompts/scenario/generation.v3.txt").getContentAsString(StandardCharsets.UTF_8);
+            this.reviewInstructions = new ClassPathResource("prompts/scenario/review.v2.txt").getContentAsString(StandardCharsets.UTF_8);
         } catch (IOException e) {
             throw new IllegalStateException("상황 생성 지시 자원이 없다: " + INSTRUCTIONS, e);
         }
     }
 
     @Override public Generated generate(Call request) {
-        var result=structured(request,LunaPurpose.SCENARIO_GENERATION,"scenario-generation.v2",scriptInstructions);
+        var result=structured(request,LunaPurpose.SCENARIO_GENERATION,"scenario-generation.v3",scriptInstructions);
         try { return new Generated(json.read(result.outputJson(),kr.mujoong.core.textai.ScenarioScript.class),result.responseModel()); }
         catch(RuntimeException invalid){throw new Failure(Failure.Kind.CONTENT,java.util.Optional.empty());}
     }
     @Override public Reviewed review(Call request) {
-        var result=structured(request,LunaPurpose.SCENARIO_REVIEW,"scenario-review.v1",reviewInstructions);
+        var result=structured(request,LunaPurpose.SCENARIO_REVIEW,"scenario-review.v2",reviewInstructions);
         try { return new Reviewed(json.read(result.outputJson(),kr.mujoong.core.textai.ScenarioReview.class),result.responseModel()); }
         catch(RuntimeException invalid){throw new Failure(Failure.Kind.CONTENT,java.util.Optional.empty());}
     }

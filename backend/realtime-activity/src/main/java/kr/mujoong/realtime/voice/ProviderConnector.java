@@ -104,13 +104,19 @@ public class ProviderConnector {
     /** 자유대화 서비스 정책(선택)과 대화 전 보호자 참고(선택)를 함께 세션 시작 지시문에 싣는다. */
     public Attempt connect(UUID sessionId, ChildContext childContext, Listener listener, Callback callback,
             PolicyBundle policy, ConversationGuide guide) {
+        return connect(sessionId, childContext, listener, callback, policy, guide, false);
+    }
+
+    /** {@code practice}면 연습 기본 지침을 실은 세션 시작으로 연결한다(서비스 정책은 자유대화 전용이라 함께 쓰지 않는다). */
+    public Attempt connect(UUID sessionId, ChildContext childContext, Listener listener, Callback callback,
+            PolicyBundle policy, ConversationGuide guide, boolean practice) {
         Objects.requireNonNull(sessionId, "sessionId");
         Objects.requireNonNull(childContext, "childContext");
         Objects.requireNonNull(listener, "listener");
         Objects.requireNonNull(callback, "callback");
         Attempt attempt = new Attempt();
         attempt.thread = launcher.launch("provider-connect-" + sessionId,
-                () -> run(attempt, childContext, listener, callback, policy, guide));
+                () -> run(attempt, childContext, listener, callback, policy, guide, practice));
         if (attempt.isCancelled() && attempt.thread != null) {
             attempt.thread.interrupt();
         }
@@ -118,12 +124,13 @@ public class ProviderConnector {
     }
 
     private void run(Attempt attempt, ChildContext childContext, Listener listener, Callback callback, PolicyBundle policy,
-            ConversationGuide guide) {
+            ConversationGuide guide, boolean practice) {
         if (!ProviderHosts.isConnectable(port.endpoint(), activeProfiles)) {
             callback.failed(ProviderUnavailableException.Reason.HOST_NOT_ALLOWED);
             return;
         }
-        ProviderRequestFactory.SessionStart request = policy != null ? factory.sessionStart(childContext, policy, guide)
+        ProviderRequestFactory.SessionStart request = practice && policy == null ? factory.practiceSessionStart(childContext, guide)
+                : policy != null ? factory.sessionStart(childContext, policy, guide)
                 : guide != null ? factory.sessionStart(childContext, ProviderRequestFactory.AUDIO_RATE, guide)
                 : factory.sessionStart(childContext);
         ProviderSession session = null;
