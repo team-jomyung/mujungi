@@ -34,6 +34,18 @@ class ScenarioReadinessLiveTest {
 
     @Test
     void explainingADifficultyCanProduceAnIndependentlyApprovedPracticeStart() throws Exception {
+        probe("difficulty", SITUATION, "도움을 줄 수 있는 대화 상대", "현재 하는 일과 어려운 지점을 알려주기",
+                "“지금 ○○을 하다가 △△ 부분에서 막혔어.”처럼 하던 일과 막힌 부분을 함께 말하기", TARGET);
+    }
+
+    @Test
+    void anAmbiguousPartnerStateCanProduceAnIndependentlyApprovedPracticeStart() throws Exception {
+        probe("ambiguous-state", "상대가 잠시 말이 없거나 응답 상태가 불분명한 상황", "응답을 기다리는 대화 상대",
+                "상대가 생각 중인지 응답을 마쳤는지 확인하기", "“지금 생각 중이야, 아니면 답변을 마친 거야?”처럼 상태를 묻기",
+                "상대의 말이나 응답 상태가 불분명한 가상 상황에서, 현재 상태를 확인하는 질문을 해보기. 예: “지금 생각 중이야, 아니면 답변을 마친 거야?”");
+    }
+
+    private void probe(String name, String situation, String partner, String intent, String expression, String target) throws Exception {
         assumeTrue(System.getenv(LunaTransport.API_KEY_ENV) != null, "SKIPPED_NO_KEY");
         var clock = new SystemMujoongClock();
         var events = new TestEvents(clock);
@@ -49,7 +61,7 @@ class ScenarioReadinessLiveTest {
                         () -> System.getenv(LunaTransport.API_KEY_ENV), properties.maxResponseBytes()),
                 events.logger(), clock, JSON, CoreLunaClient.SYSTEM_SLEEPER);
         var real = new LunaTextAiProvider(client, clock, JSON);
-        Path evidence = Path.of("build/scenario-readiness-synthetic.jsonl");
+        Path evidence = Path.of("build/scenario-readiness-" + name + "-synthetic.jsonl");
         Files.deleteIfExists(evidence);
         var provider = new ScenarioScriptProvider() {
             private void record(String kind, Object value) {
@@ -62,17 +74,17 @@ class ScenarioReadinessLiveTest {
                 var result = real.generate(call); record("synthetic-script", result.script()); return result;
             }
             @Override public Reviewed review(Call call) {
+                record("reviewed-synthetic-script", call.input().get("script"));
                 var result = real.review(call); record("review", result.review()); return result;
             }
         };
         var payload = Map.<String, Object>of("ageYears", 8, "interests", List.of("책", "블록"),
-                "goal", Map.of("kind", "CANDIDATE", "skillRef", "NONE", "targetExpression", TARGET,
-                        "fourElements", Map.of("situation", SITUATION, "partner", "도움을 줄 수 있는 대화 상대",
-                                "intent", "현재 하는 일과 어려운 지점을 알려주기",
-                                "expression", "“지금 ○○을 하다가 △△ 부분에서 막혔어.”처럼 하던 일과 막힌 부분을 함께 말하기")),
-                "opportunityCondition", SITUATION, "relation", "도움을 줄 수 있는 대화 상대",
+                "goal", Map.of("kind", "CANDIDATE", "skillRef", "NONE", "targetExpression", target,
+                        "fourElements", Map.of("situation", situation, "partner", partner,
+                                "intent", intent, "expression", expression)),
+                "opportunityCondition", situation, "relation", partner,
                 "history", List.of(), "practiceContinuity", List.of(), "baseOnly", true);
-        var rules = new ScenarioScriptValidation.Rules("도움을 줄 수 있는 대화 상대", SITUATION, TARGET,
+        var rules = new ScenarioScriptValidation.Rules(partner, situation, target,
                 Set.of(), null, ignored -> false, (a, b) -> false);
         try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
             var generator = new ScenarioScriptGenerator(provider, new ScenarioScriptValidation(new ForbiddenExpressionPolicy()),
@@ -83,7 +95,7 @@ class ScenarioReadinessLiveTest {
                         new ScenarioDeadline(clock, clock.now().plusSeconds(30)));
                 assertThat(result.details().review().verdict()).isEqualTo("APPROVE");
                 assertThat(result.details().scenes()).isNotEmpty();
-                System.out.println("scenario-readiness round=" + round + " outcome=APPROVED evidence=REAL_API_SYNTHETIC");
+                System.out.println("scenario-readiness case=" + name + " round=" + round + " outcome=APPROVED evidence=REAL_API_SYNTHETIC");
             }
         }
     }
