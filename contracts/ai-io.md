@@ -600,7 +600,7 @@ J1/J6의 고정 질문·선택지는 `judgment-service-v1`, 공통 지시문은 
 
 | 칸 | 뜻 | 서버 검사(`ScenarioScriptValidation` 사유 코드) |
 |---|---|---|
-| `opportunityRelay` | 상대가 한 말을 무중이 자기 말로 전한다. 아이가 알아챌 단서가 들어 있고 "~대 · ~래"로 끝난다 | 2문장 · 200자 이하. `opportunitySentence`와 글자가 같으면(정리 뒤 비교) `RELAY_COPIES_PARTNER_LINE`. 목표 표현 누설 `TARGET_EXPRESSION_DISCLOSED` |
+| `opportunityRelay` | 상대가 한 말을 무중이 간접 인용으로 전한다. 상대의 낱말과 말투를 거의 그대로 살리고 끝만 "~대 · ~래 · ~라고 했어 · ~냐고 물어봤어"로 바꾼다. 단서는 상대가 한 말 자체에 남기고, 속뜻 · 이유 · 감정 · 의도를 풀어 말하지 않는다(풀면 답을 미리 알려 주고, 다른 뜻으로 바꾸면 단서가 사라진다 — 5회차 대본 생성 실측) | 2문장 · 200자 이하. `opportunitySentence`와 글자가 같으면(정리 뒤 비교) `RELAY_COPIES_PARTNER_LINE`. 목표 표현 누설 `TARGET_EXPRESSION_DISCLOSED` |
 | `askPrompt` | "너라면"으로 시작하고 물음표로 끝나는 묻는 말 한 문장. 상대 호칭은 `relation`에 맞춘다 | 1문장 · 100자 이하. 모양이 다르면 `ASK_PROMPT_FORM`. 목표 표현 누설 |
 | `reaskPrompt` | 일부만 전했을 때 되묻는 질문 하나. 단서를 다시 짚되 답은 주지 않는다 | 2문장 · 200자 이하. 목표 표현 누설 |
 | `helpSpeech` | 요점 한 문장 + 표현 예시 하나(`expressionExamples` 중 하나의 뜻, "예를 들면 … 처럼 말할 수 있어") + 고정 꼬리 "네 말로 해 볼래?" | 3문장 · 300자 이하. 꼬리로 끝나지 않거나 꼬리 앞 문장이 없으면 `HELP_TAIL_MISSING`(공백은 대조하지 않는다). 표현 예시를 담는 칸이라 목표 표현 누설은 보지 않는다 |

@@ -13,10 +13,10 @@ opportunitySentence는 상대가 아이에게 하는 말이어야 한다. 아이
 
 C안 검토(장면마다 들리는 칸이 있으면 모두 본다):
 - 공통: 무중이 다른 사람 역할을 맡는다는 말(역할, 코치, 무중이가 친구야, 무중이가 친구 할게 등)이 있거나, 마침표·쉼표·물음표 밖의 부호(따옴표·느낌표·물결·말줄임표·괄호 등)가 있거나, 한 칸이 2문장(helpSpeech는 3문장)을 넘으면 INCOMPLETE_SCENE이다. 6~12세가 알아듣기 어려운 말이나 지나치게 긴 말은 AGE_MISMATCH다.
-- opportunityRelay: 상대가 한 말을 무중이 자기 말로 전하는 말이어야 한다. 아이가 알아챌 단서가 없거나 opportunitySentence를 글자 그대로 옮겼으면 INCOMPLETE_SCENE이다. 정답 표현이나 아이가 할 말·행동이 들어 있으면 ANSWER_INCLUDED, 답을 미리 알려 주는 힌트면 EARLY_CUE다.
+- opportunityRelay: 상대가 한 말을 무중이 간접 인용으로 전하는 말이어야 한다. 상대의 낱말과 말투를 거의 그대로 살리고 끝만 '~대', '~래', '~라고 했어', '~냐고 물어봤어'로 바꾼 전하기는 글자 그대로 옮긴 것이 아니며, 상대 대사의 단서를 그대로 지니므로 불변 문장을 뒷받침하는지는 opportunitySentence를 들은 것과 같다고 보고 판단한다. 따옴표 없이 상대가 직접 말하는 것처럼 opportunitySentence를 글자 그대로 옮겼거나 아이가 알아챌 단서가 없으면 INCOMPLETE_SCENE이다. 무중이 상대의 속뜻·이유·감정·의도·모르는 것을 풀어 말하면(예: 주말 이야기를 하고 싶은 것 같아서, 처음 들어서 궁금해한대) 답을 미리 알려 주는 것이므로 EARLY_CUE이고, 상대의 말을 다른 뜻의 말로 바꿔 단서가 사라졌으면 INVARIANT_MISMATCH다. 정답 표현이나 아이가 할 말·행동이 들어 있으면 ANSWER_INCLUDED다.
 - askPrompt: '너라면'으로 시작하고 물음표로 끝나는 한 문장이어야 하고 상대 호칭이 relation에 맞아야 한다(선생님·어른이면 높임말). 아니면 INCOMPLETE_SCENE, 정답 표현이 있으면 ANSWER_INCLUDED다.
 - reaskPrompt: 단서를 다시 짚는 질문 하나여야 한다. 질문이 아니면 INCOMPLETE_SCENE, 답을 주면 ANSWER_INCLUDED 또는 EARLY_CUE다.
-- spokenIntroduction · reexplanation: 정답 표현은 ANSWER_INCLUDED, 선제 힌트는 EARLY_CUE다. spokenIntroduction은 상황과 아이가 방금 한 일만 말하고, 뒤의 opportunityRelay가 상대의 말을 전하므로 상대 대사를 인용하지 않아도 된다. reexplanation은 다시 설명 뒤에 askPrompt를 다시 읽으므로 질문으로 끝나면 INCOMPLETE_SCENE이다.
+- spokenIntroduction · reexplanation: 정답 표현은 ANSWER_INCLUDED, 선제 힌트는 EARLY_CUE다. spokenIntroduction은 상황과 아이가 방금 한 일만 말하고, 뒤의 opportunityRelay가 상대의 말을 전하므로 상대 대사를 인용하지 않아도 된다. reexplanation은 다시 설명 뒤에 askPrompt를 다시 읽으므로 질문으로 끝나면 INCOMPLETE_SCENE이다. reexplanation이 아이가 추론해야 할 상대의 속뜻·의도·모르는 것을 해설하면 EARLY_CUE다.
 - helpSpeech: 요점 한 문장 + expressionExamples 중 하나의 뜻을 담은 표현 예시 + 마지막 문장 '네 말로 해 볼래?'여야 한다. 구조가 빠지면 INCOMPLETE_SCENE, 예시가 expressionExamples의 뜻과 다르거나 목표 기능을 담지 않으면 GOAL_MISMATCH, 다그치거나 꼭 그대로 말하라고 하면 PRESSURE다.
 - friendReaction: 상대의 반응을 무중이 전하는 말이어야 한다. 칭찬·평가어(잘했어·멋지다·정답·훌륭해·최고야 등)가 있으면 PRESSURE, 물음으로 끝나면 INCOMPLETE_SCENE, 아이 대답의 구체 내용을 가정해 목표를 이룬 다른 대답에 맞지 않으면 ANSWER_INCLUDED다.
 - 들리는 칸이 없는 옛 모양의 장면은 위 C안 검토를 건너뛰고 나머지 검토만 한다.
