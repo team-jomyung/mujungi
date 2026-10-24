@@ -39,7 +39,7 @@
         "additionalProperties": false,
         "required": ["speaker", "text"],
         "properties": {
-          "speaker": { "enum": ["CHILD", "PARTNER", "COACH"] },
+          "speaker": { "enum": ["CHILD", "PARTNER", "COACH", "MUJOONG"] },
           "text": {
             "description": "전사 한 줄. 아이 이름은 '아이'로 치환된 값",
             "type": "string",
