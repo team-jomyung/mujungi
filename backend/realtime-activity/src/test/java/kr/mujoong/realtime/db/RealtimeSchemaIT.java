@@ -237,7 +237,7 @@ class RealtimeSchemaIT {
     }
 
     @Test
-    void connectionLedgerHasFillfactor90AndSessionsHaveTwoPartialUniqueIndexes() throws SQLException {
+    void connectionLedgerHasFillfactor90AndPartialIndexesMatchMigrations() throws SQLException {
         try (Connection realtime = postgres.connect(Role.REALTIME_APP)) {
             assertThat(single(realtime,
                     "select array_to_string(reloptions, ',') from pg_class c join pg_namespace n on n.oid = c.relnamespace"
@@ -248,12 +248,16 @@ class RealtimeSchemaIT {
                             + " order by indexname");
             assertThat(partial.stream().map(row -> (String) row.get(0)).toList()).containsExactly(
                     "realtime_activity_session_in_progress_device_uk",
-                    "realtime_activity_session_in_progress_guardian_uk", "realtime_session_guardrail_revision_idx");
+                    "realtime_activity_session_in_progress_guardian_uk",
+                    "realtime_ai_usage_response_idx", "realtime_session_guardrail_revision_idx");
             assertThat(partial.subList(0, 2)).allSatisfy(row -> assertThat((String) row.get(1))
                     .startsWith("CREATE UNIQUE INDEX").contains("'PREPARING'").contains("'CLOSING'")
                     .doesNotContain("'ENDED'"));
+            // V9 Luna 응답 중복 방지: 응답 ID가 있는 Luna 기록에만 유일성을 적용한다.
+            assertThat((String) partial.get(2).get(1)).startsWith("CREATE UNIQUE INDEX")
+                    .contains("realtime_ai_usage", "(response_id)", "source", "'LUNA'", "response_id IS NOT NULL");
             // V8 서비스 가드레일 사실 조회 색인: 부분 색인이지만 유일 색인은 아니다
-            assertThat((String) partial.get(2).get(1)).startsWith("CREATE INDEX")
+            assertThat((String) partial.get(3).get(1)).startsWith("CREATE INDEX")
                     .contains("realtime_session_event", "session_id", "revision", "DESC", "SESSION_GUARDRAIL_FACTS")
                     .doesNotContain("UNIQUE");
             // 전사 (session_id, sequence_no) 유일과 폴러 · 삭제 참가자 색인
