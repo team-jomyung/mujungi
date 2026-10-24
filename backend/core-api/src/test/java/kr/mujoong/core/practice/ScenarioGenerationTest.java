@@ -81,4 +81,68 @@ class ScenarioGenerationTest {
     @Test void invalidVariantIsCorrectedOnceThenBaseOnlyReviewed(){var base=base();var variant=new ScenarioScript.Scene("variant","VARIANT",base.sceneDescription(),base.opportunitySentence(),base.reexplanation(),null,null,"PEER","운동장","놀이",null,null);when(provider.generate(any())).thenReturn(generated(base,variant));var result=run();assertThat(result.details().scenes()).hasSize(1);assertThat(result.details().generation().calls()).isEqualTo(5);var calls=ArgumentCaptor.forClass(ScenarioScriptProvider.Call.class);verify(provider,times(3)).review(calls.capture());assertThat(((ScenarioScript)calls.getAllValues().getLast().input().get("script")).scenes()).hasSize(1);verify(provider,times(2)).generate(any());}
     @Test void baseOnlyMustReceiveItsOwnApproval(){var base=base();var variant=new ScenarioScript.Scene("variant","VARIANT",base.sceneDescription(),base.opportunitySentence(),base.reexplanation(),null,null,"PEER","운동장","놀이",null,null);when(provider.generate(any())).thenReturn(generated(base,variant));when(provider.review(any())).thenReturn(approve(),approve(),reject("AGE_MISMATCH"));assertThatThrownBy(this::run).isInstanceOf(kr.mujoong.core.common.error.CoreApiException.class);verify(provider,times(3)).review(any());}
     @Test void ageAndSameHistoryReachEveryReviewAndCorrection(){when(provider.review(any())).thenReturn(reject("AGE_MISMATCH"),approve());run();var calls=ArgumentCaptor.forClass(ScenarioScriptProvider.Call.class);verify(provider,times(2)).review(calls.capture());assertThat(calls.getAllValues()).allSatisfy(c->assertThat(c.input()).containsEntry("age",8).containsEntry("history",List.of()));}
+
+    // ---- 연습 대화 C안(docs/practice-direct-ask.md 4.1 · 4.4): 판 기록과 새 칸 다섯 개가 생성 → 검토 → 검사 → 저장 모양까지 흐른다 ----
+
+    @Test
+    void anApprovedScriptIsRecordedAsScriptV2WithGenerationV3AndReviewV2() {
+        var result = run();
+
+        assertThat(result.details().scriptVersion()).isEqualTo("scenario-script.v2");
+        assertThat(result.details().generation().promptVersion()).isEqualTo("scenario-generation.v3");
+        assertThat(result.details().review().promptVersion()).isEqualTo("scenario-review.v2");
+        assertThat(result.legacy().promptVersion()).as("core_scenario.prompt_version").isEqualTo("scenario-generation.v3");
+        assertThat(List.of(ScenarioScriptProvider.SCRIPT_VERSION, ScenarioScriptProvider.GENERATION_PROMPT_VERSION,
+                ScenarioScriptProvider.REVIEW_PROMPT_VERSION))
+                .containsExactly("scenario-script.v2", "scenario-generation.v3", "scenario-review.v2");
+    }
+
+    @Test
+    void theFiveDirectAskFieldsReachTheReviewAndTheStoredSceneWithTheServerRole() {
+        var direct = ScenarioDirectAskValidationTest.direct();
+        when(provider.generate(any())).thenReturn(generated(direct));
+
+        var stored = run().details().scenes().getFirst();
+
+        var reviewed = ArgumentCaptor.forClass(ScenarioScriptProvider.Call.class);
+        verify(provider).review(reviewed.capture());
+        var script = (ScenarioScript) reviewed.getValue().input().get("script");
+        assertThat(script.scenes().getFirst().friendReaction()).as("검토도 새 칸을 본다").isEqualTo(direct.friendReaction());
+        assertThat(stored.opportunityRelay()).isEqualTo(direct.opportunityRelay());
+        assertThat(stored.askPrompt()).isEqualTo(direct.askPrompt());
+        assertThat(stored.reaskPrompt()).isEqualTo(direct.reaskPrompt());
+        assertThat(stored.helpSpeech()).isEqualTo(direct.helpSpeech());
+        assertThat(stored.friendReaction()).isEqualTo(direct.friendReaction());
+        assertThat(stored.partnerRole()).isEqualTo(ScenarioContentPolicy.PARTNER_ROLE);
+    }
+
+    @Test
+    void theIncludedPartnerLineRepairKeepsTheDirectAskFields() {
+        var direct = ScenarioDirectAskValidationTest.direct();
+        var indirect = direct.withDescription("블록 놀이 중이야. " + OPPORTUNITY);
+        when(provider.generate(any())).thenReturn(generated(indirect));
+
+        var stored = run().details().scenes().getFirst();
+
+        assertThat(stored.sceneDescription()).contains(direct.opportunitySentence());
+        assertThat(stored.opportunityRelay()).isEqualTo(direct.opportunityRelay());
+        assertThat(stored.helpSpeech()).isEqualTo(direct.helpSpeech());
+    }
+
+    @Test
+    void aDirectAskRuleFailureIsDiagnosedAndCorrectedLikeOtherServerChecks() {
+        var codes = new java.util.ArrayList<String>();
+        generator.diagnostics(codes::add);
+        var bad = ScenarioDirectAskValidationTest.with("reaction", "잘했어! 친구도 고마워할 거야.");
+        var good = ScenarioDirectAskValidationTest.direct();
+        when(provider.generate(any())).thenReturn(generated(bad), generated(good));
+
+        var result = run();
+
+        assertThat(codes).containsExactly("ScenarioRule_SPOKEN_PUNCTUATION", "ScenarioValidation_INVALID_BASE");
+        var calls = ArgumentCaptor.forClass(ScenarioScriptProvider.Call.class);
+        verify(provider, times(2)).generate(calls.capture());
+        assertThat(calls.getAllValues().getLast().input()).containsEntry("correctionReasons", List.of("INVALID_BASE"));
+        assertThat(result.details().scenes().getFirst().friendReaction()).isEqualTo(good.friendReaction());
+    }
 }

@@ -116,6 +116,31 @@ class CoreLunaClientTest {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
+    void theScenarioRequestSchemaCarriesTheDirectAskFieldsAndTheContractChecksTheirOutput() {
+        String example = LunaTestFixtures.example("ai-scenario-output.schema.json");
+        Map<String, Object> wrongType = LunaTestFixtures.JSON.read(example, Map.class);
+        ((Map<String, Object>) ((List<?>) wrongType.get("scenes")).getFirst()).put("friendReaction", List.of("배열"));
+        stub.respond(Reply.ok(MODEL, example), Reply.ok(MODEL, LunaTestFixtures.JSON.write(wrongType)));
+        LunaRequest scenario = new LunaRequest(LunaPurpose.SCENARIO_GENERATION, "scenario-generation.v3", "지정한 JSON만 출력한다.",
+                Map.of("ageYears", 8), Map.of(), clock.now().plusSeconds(10), LunaRequest.OutputMode.CONTRACT_SINGLE_CALL);
+
+        LunaResult result = client.call(scenario);
+
+        assertThat(result.outputJson()).isEqualTo(example);
+        LunaResponsesStub.RecordedRequest sent = stub.requests().getFirst();
+        assertThat(sent.violations()).as("대역 요청 검사(strict 사본 · 지원 키워드)").isEmpty();
+        Map<String, Object> format = (Map<String, Object>) ((Map<String, Object>) sent.json().get("text")).get("format");
+        assertThat(format).containsEntry("type", "json_schema").containsEntry("name", "scenario_generation").containsEntry("strict", true);
+        Map<String, Object> item = (Map<String, Object>) ((Map<String, Object>) ((Map<String, Object>) ((Map<String, Object>) format
+                .get("schema")).get("properties")).get("scenes")).get("items");
+        assertThat((List<String>) item.get("required"))
+                .contains("opportunityRelay", "askPrompt", "reaskPrompt", "helpSpeech", "friendReaction");
+        assertThat(failure(scenario).reason()).as("새 칸이 계약 모양이 아니면 성공으로 돌려주지 않는다")
+                .isEqualTo(LunaFailureReason.SCHEMA_INVALID);
+    }
+
+    @Test
     void eachResponseFailureIsClassifiedAndNeverReturnedAsSuccess() {
         Map<Reply, LunaFailureReason> cases = new LinkedHashMap<>();
         cases.put(Reply.incomplete(MODEL), LunaFailureReason.LENGTH_EXCEEDED);

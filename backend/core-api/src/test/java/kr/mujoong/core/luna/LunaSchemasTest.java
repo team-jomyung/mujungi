@@ -42,6 +42,40 @@ class LunaSchemasTest {
         assertThat(schemas.isValidOutput(LunaPurpose.SCENARIO_GENERATION, "{\"scenes\":[]}")).isFalse();
     }
 
+    /** 연습 대화 C안 새 칸(docs/practice-direct-ask.md 4.2 · 4.4). 계약 스키마 사본이라 요청에 따라오고, strict 요청에서는 모두 required다. */
+    private static final List<String> DIRECT_ASK_FIELDS =
+            List.of("opportunityRelay", "askPrompt", "reaskPrompt", "helpSpeech", "friendReaction");
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void theFiveDirectAskFieldsFollowTheContractIntoTheStrictRequestWhileOldOutputsStayValid() {
+        var schemas = LunaSchemas.loadDefault(JSON);
+        var pair = schemas.pair(LunaPurpose.SCENARIO_GENERATION, Map.of()).orElseThrow();
+        var root = (Map<String, Object>) pair.requestSchema().get("properties");
+        var item = (Map<String, Object>) ((Map<String, Object>) root.get("scenes")).get("items");
+        var fields = (Map<String, Object>) item.get("properties");
+        for (String field : DIRECT_ASK_FIELDS) {
+            assertThat(fields).as(field).containsKey(field);
+            assertThat((Map<String, Object>) fields.get(field)).as(field + " 사본은 문자열 · 설명만").containsEntry("type", "string")
+                    .containsKey("description").doesNotContainKeys("minLength", "maxLength");
+        }
+        assertThat((List<String>) item.get("required")).containsAll(DIRECT_ASK_FIELDS);
+        assertThat(pair.strict()).isTrue();
+
+        String example = LunaTestFixtures.example("ai-scenario-output.schema.json");
+        assertThat(schemas.isValidOutput(LunaPurpose.SCENARIO_GENERATION, example)).isTrue();
+        var output = JSON.read(example, Map.class);
+        var scene = (Map<String, Object>) ((List<?>) output.get("scenes")).getFirst();
+        DIRECT_ASK_FIELDS.forEach(scene::remove);
+        assertThat(schemas.isValidOutput(LunaPurpose.SCENARIO_GENERATION, JSON.write(output))).as("옛 대본 출력(새 칸 없음)").isTrue();
+        scene.put("askPrompt", "가".repeat(101));
+        assertThat(schemas.isValidOutput(LunaPurpose.SCENARIO_GENERATION, JSON.write(output))).as("계약 maxLength는 응답 검증에서 본다").isFalse();
+        scene.put("askPrompt", 1);
+        assertThat(schemas.isValidOutput(LunaPurpose.SCENARIO_GENERATION, JSON.write(output))).isFalse();
+        scene.put("askPrompt", "");
+        assertThat(schemas.isValidOutput(LunaPurpose.SCENARIO_GENERATION, JSON.write(output))).as("minLength 1").isFalse();
+    }
+
     private static String contractFile(String name) {
         try {
             Path file = LunaTestFixtures.REPO_ROOT.resolve("contracts/schemas/" + name);

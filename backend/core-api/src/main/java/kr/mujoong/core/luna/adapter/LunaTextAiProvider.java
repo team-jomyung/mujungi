@@ -38,6 +38,16 @@ public final class LunaTextAiProvider implements TextAiProvider,kr.mujoong.core.
     public static final String INSTRUCTIONS = "prompts/scenario/generation.v1.txt";
     /** 보낸 프롬프트 판(GeneratedScenario.promptVersion · LUNA_CALL promptVersion). */
     public static final String PROMPT_VERSION = "scenario-generation.v1";
+    /**
+     * U10 구조화 대본 생성 지시 실행 자원(판 {@value kr.mujoong.core.textai.ScenarioScriptProvider#GENERATION_PROMPT_VERSION}). 옛 판 파일
+     * (v2)은 이력으로 남는다(docs/practice-direct-ask.md 4.1).
+     */
+    public static final String SCRIPT_INSTRUCTIONS = "prompts/scenario/generation.v3.txt";
+    /**
+     * U10 별도 검토 지시 실행 자원(판 {@value kr.mujoong.core.textai.ScenarioScriptProvider#REVIEW_PROMPT_VERSION}). 옛 판 파일(v1)은 이력으로
+     * 남는다.
+     */
+    public static final String REVIEW_INSTRUCTIONS = "prompts/scenario/review.v2.txt";
 
     private final CoreLunaClient client;
     private final MujoongClock clock;
@@ -52,20 +62,20 @@ public final class LunaTextAiProvider implements TextAiProvider,kr.mujoong.core.
         this.json = Objects.requireNonNull(json, "json");
         try {
             this.instructions = new ClassPathResource(INSTRUCTIONS).getContentAsString(StandardCharsets.UTF_8);
-            this.scriptInstructions = new ClassPathResource("prompts/scenario/generation.v2.txt").getContentAsString(StandardCharsets.UTF_8);
-            this.reviewInstructions = new ClassPathResource("prompts/scenario/review.v1.txt").getContentAsString(StandardCharsets.UTF_8);
+            this.scriptInstructions = new ClassPathResource(SCRIPT_INSTRUCTIONS).getContentAsString(StandardCharsets.UTF_8);
+            this.reviewInstructions = new ClassPathResource(REVIEW_INSTRUCTIONS).getContentAsString(StandardCharsets.UTF_8);
         } catch (IOException e) {
             throw new IllegalStateException("상황 생성 지시 자원이 없다: " + INSTRUCTIONS, e);
         }
     }
 
     @Override public Generated generate(Call request) {
-        var result=structured(request,LunaPurpose.SCENARIO_GENERATION,"scenario-generation.v2",scriptInstructions);
+        var result = structured(request, LunaPurpose.SCENARIO_GENERATION, GENERATION_PROMPT_VERSION, scriptInstructions);
         try { return new Generated(json.read(result.outputJson(),kr.mujoong.core.textai.ScenarioScript.class),result.responseModel()); }
         catch(RuntimeException invalid){throw new Failure(Failure.Kind.CONTENT,java.util.Optional.empty());}
     }
     @Override public Reviewed review(Call request) {
-        var result=structured(request,LunaPurpose.SCENARIO_REVIEW,"scenario-review.v1",reviewInstructions);
+        var result = structured(request, LunaPurpose.SCENARIO_REVIEW, REVIEW_PROMPT_VERSION, reviewInstructions);
         try { return new Reviewed(json.read(result.outputJson(),kr.mujoong.core.textai.ScenarioReview.class),result.responseModel()); }
         catch(RuntimeException invalid){throw new Failure(Failure.Kind.CONTENT,java.util.Optional.empty());}
     }
