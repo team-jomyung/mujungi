@@ -167,6 +167,12 @@ public final class PracticeConversation implements PracticeSessionExtension {
         return true;
     }
 
+    /** C안은 장면 속 역할이 없어 무중의 말이 모두 무중의 말이다(판정 입력 화자 MUJOONG, docs/practice-direct-ask.md 6장). */
+    @Override
+    public boolean speaksAsMujoong() {
+        return settings.directAsk();
+    }
+
     @Override
     public boolean collectingIntroduction() {
         return state.phase() == Phase.SCENE_INTRO && openSlot != null && !stopping;

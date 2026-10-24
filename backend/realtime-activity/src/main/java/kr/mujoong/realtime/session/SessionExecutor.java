@@ -2627,6 +2627,18 @@ public final class SessionExecutor {
         }
     }
 
+    /**
+     * 판정 입력 최근 대화에 남길 무중 줄의 화자. 역할이 없는 연습(C안)은 무중의 말을 모두 {@code MUJOONG}으로, 역할 대화는 코치 발화를
+     * {@code COACH}, 그 밖을 {@code PARTNER}로 둔다.
+     */
+    private kr.mujoong.realtime.judgment.JudgeRequest.Speaker dialogueSpeaker(kr.mujoong.realtime.voice.PracticeSpeech speech) {
+        if (practice != null && practice.speaksAsMujoong()) {
+            return kr.mujoong.realtime.judgment.JudgeRequest.Speaker.MUJOONG;
+        }
+        return speech != null && "COACH".equals(speech.partnerRole()) ? kr.mujoong.realtime.judgment.JudgeRequest.Speaker.COACH
+                : kr.mujoong.realtime.judgment.JudgeRequest.Speaker.PARTNER;
+    }
+
     /** 조각을 현재 묶음에 더하고(없으면 묶음을 연다) 조용 시계를 다시 건다. 묶음 id를 돌려준다. */
     private String groupInputDelta(ProviderEvent.InputTranscriptDelta delta) {
         lastChildInputAt = ctx.services().clock().now();
@@ -3793,7 +3805,7 @@ public final class SessionExecutor {
         } else {
             if (speech != null && speech.equals(streamedPractice)) streamedPracticeSent = true;
             // Only approved output accepted by the device link may ground a subsequent agreement judgment.
-            judgment.rememberPartner(sealed.transcript(), passAt, speech != null && "COACH".equals(speech.partnerRole()));
+            judgment.rememberPartner(sealed.transcript(), passAt, dialogueSpeaker(speech));
         }
     }
 

@@ -155,6 +155,31 @@ class DecisionsJudgeClientTest {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
+    void aMujoongLineOfTheDirectAskPracticePassesTheRequestContractAndKeepsItsSpeaker() throws Exception {
+        LiveContentResources.JudgmentOptionSet direct = LiveContentResources.loadFor(false).judgment();
+        DecisionsJudgeClient c = new DecisionsJudgeClient(luna(Duration.ofSeconds(4))::decide, JudgmentPrompt.load(direct),
+                new JudgeOutcomeValidator(0.6, 0.15), clock);
+        stub.respond(Reply.choice(MODEL, NAME, "FULL", probabilities(0.8, 0.1)));
+        JudgeRequest request = new JudgeRequest(JudgmentPoint.J2, direct.version(), OPTIONS, "다음에 같이 그리자고 할래.",
+                List.of(new JudgeRequest.RecentTurn(JudgeRequest.Speaker.MUJOONG, "그런데 친구가 손이 아프대. 너라면 친구한테 뭐라고 말할래?")),
+                new JudgeRequest.Criteria("친구의 사정을 듣고 마음을 살피며 다른 방법을 말한다", "사정을 살피는 말과 다른 방법이 드러나면 충분히 전달"),
+                Map.of(), false, clock.now().plusSeconds(4));
+
+        JudgeOutcome outcome = c.judge(request, UUID.randomUUID()).toCompletableFuture().get(WAIT.toSeconds(), TimeUnit.SECONDS);
+
+        assertThat(outcome.isConfirmed()).as("C안 화자 MUJOONG이 판정 요청 계약(ai-judgment-request)을 지난다").isTrue();
+        assertThat(outcome.promptVersion()).isEqualTo("prompt-service-v4");
+        Map<String, Object> body = stub.requests().getFirst().json();
+        Map<String, Object> part = ((List<Map<String, Object>>) ((List<Map<String, Object>>) body.get("input")).getFirst()
+                .get("content")).getFirst();
+        Map<String, Object> data = (Map<String, Object>) part.get("data");
+        assertThat((List<Map<String, Object>>) data.get("recentTurns")).singleElement()
+                .satisfies(turn -> assertThat(turn).containsEntry("speaker", "MUJOONG"));
+        assertThat(data).containsEntry("optionSetVersion", "judgment-service-v2");
+    }
+
+    @Test
     void identifiersAndTheChildNameNeverLeaveTheProcess() throws Exception {
         stub.respond(Reply.choice(MODEL, NAME, "FULL", probabilities(0.8, 0.1)));
         JudgeRequest withAlias = new JudgeRequest(JudgmentPoint.J2, "judgment-v1", OPTIONS, "하준이는 그거 줘", List.of(), null,

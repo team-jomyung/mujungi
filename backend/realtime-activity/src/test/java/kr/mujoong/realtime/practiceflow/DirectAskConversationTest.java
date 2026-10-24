@@ -237,4 +237,13 @@ class DirectAskConversationTest {
         assertThat(h.recorder.factKinds(h.recorder.only())).contains(FactKind.PLAYBACK_FAILED);
         assertThat(h.out.generatedSlots()).as("회고 없이 끝난다").hasSize(1);
     }
+
+    // ---- 화자 ----
+
+    @Test
+    void onlyTheDirectAskPathSpeaksAsMujoongForTheJudgmentInput() {
+        assertThat(with(directAskScript(SCENARIO), FIXED_SPEECH).ext.speaksAsMujoong()).isTrue();
+        assertThat(new Harness(packageJson(GOAL, minimalScript(SCENARIO)), Map.of(), PracticeFlowTestKit.flexible()).ext
+                .speaksAsMujoong()).isFalse();
+    }
 }

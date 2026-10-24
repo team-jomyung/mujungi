@@ -137,6 +137,7 @@ class PracticeFlowRouterTest {
         ExtensionEvent event = new ExtensionEvent(ExtensionEvent.Kind.TIMER_FIRED, "no-response", null, null);
         assertThat(router.onChildUtterance(utterance, output)).isEqualTo(Signal.NONE);
         assertThat(router.onExtensionEvent(event, output)).isEqualTo(Signal.NONE);
+        assertThat(router.speaksAsMujoong()).as("고르기 전에는 역할 대화 화자").isFalse();
         assertThat(router.progress()).isNull();
         assertThat(router.practiceRecord()).isNull();
         assertThat(router.settlementDelay(Instant.EPOCH)).isEqualTo(Duration.ZERO);
@@ -147,6 +148,7 @@ class PracticeFlowRouterTest {
         PracticeContext context = context(packageJson(GOAL, minimalScript(SCENARIO)));
         when(flow.onActive(context, output)).thenReturn(Signal.NONE);
         when(flow.onChildUtterance(utterance, output)).thenReturn(Signal.LAST_GOAL);
+        when(flow.speaksAsMujoong()).thenReturn(true);
         when(flow.onExtensionEvent(event, output)).thenReturn(Signal.NEXT_GOAL);
         PracticeSessionExtension.Progress progress = new PracticeSessionExtension.Progress(1, 1, "목표", "FIRST_RESPONSE");
         when(flow.progress()).thenReturn(progress);
@@ -155,6 +157,7 @@ class PracticeFlowRouterTest {
         router.onActive(context, output);
 
         assertThat(router.onChildUtterance(utterance, output)).isEqualTo(Signal.LAST_GOAL);
+        assertThat(router.speaksAsMujoong()).isTrue();
         assertThat(router.onExtensionEvent(event, output)).isEqualTo(Signal.NEXT_GOAL);
         assertThat(router.progress()).isEqualTo(progress);
         assertThat(router.practiceRecord()).isEqualTo(Map.of("flowVersion", "practice-conversation-v1"));
@@ -188,6 +191,7 @@ class PracticeFlowRouterTest {
 
         assertThat(routed.controlsOutput()).isTrue();
         assertThat(routed.onActive(h.context, h.out)).isEqualTo(Signal.NONE);
+        assertThat(routed.speaksAsMujoong()).as("C안은 장면 안 말을 모두 무중이 한다").isTrue();
         routed.onExtensionEvent(playedEvent(h), h.out); // 목표 안내
         routed.onExtensionEvent(playedEvent(h), h.out); // 상황 안내
         routed.onExtensionEvent(playedEvent(h), h.out); // 친구 말 전하기 + 묻기

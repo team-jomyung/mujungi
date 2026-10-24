@@ -64,6 +64,11 @@ public final class PracticeFlowRouter implements PracticeSessionExtension {
     }
 
     @Override
+    public boolean speaksAsMujoong() {
+        return delegate != null && delegate.speaksAsMujoong();
+    }
+
+    @Override
     public Signal onExtensionEvent(ExtensionEvent event, PracticeOutput output) {
         return delegate == null ? Signal.NONE : delegate.onExtensionEvent(event, output);
     }

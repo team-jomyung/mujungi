@@ -23,6 +23,7 @@ import kr.mujoong.contract.ws.message.PlaybackMark;
 import kr.mujoong.contract.ws.message.VoiceSessionClosed;
 import kr.mujoong.realtime.guardrail.GuardrailRequest;
 import kr.mujoong.realtime.internalhttp.InternalHttpClient;
+import kr.mujoong.realtime.judgment.JudgeRequest.Speaker;
 import kr.mujoong.realtime.judgment.JudgmentPoint;
 import kr.mujoong.realtime.practiceflow.PracticeFlowTypes.FactKind;
 import kr.mujoong.realtime.practiceflow.PracticeFlowTypes.LiveTiming;
@@ -129,6 +130,12 @@ class PracticeFlowIT {
         // 아이 대답이 일부만 전했다 → J2 PARTIAL → 무중이 대본의 되묻기를 그대로 읽는다(생성형 · 제브 없음)
         h.childSays("child-1", "손 아파? " + MARKER);
         assertThat(judge.last().request().point()).isEqualTo(JudgmentPoint.J2);
+        assertThat(judge.last().request().recentTurns()).as("판정 입력의 무중 줄은 화자 MUJOONG(역할 없음)")
+                .allSatisfy(turn -> assertThat(turn.speaker()).isIn(Speaker.MUJOONG, Speaker.CHILD))
+                .anySatisfy(turn -> {
+                    assertThat(turn.speaker()).isEqualTo(Speaker.MUJOONG);
+                    assertThat(turn.text()).isEqualTo(V2_OPPORTUNITY);
+                });
         judge.confirm("PARTIAL", 0.8, "FULL", 0.1);
         h.drain();
         playApproved(V2_REASK);
@@ -137,6 +144,10 @@ class PracticeFlowIT {
         // 되물은 뒤 충분히 전했다 → J3 DELIVERED → 대본의 친구 반응을 승인 낭독하고 재생이 끝나야 장면이 끝난다
         h.childSays("child-2", "손 괜찮아? 그럼 다음에 같이 그리자");
         assertThat(judge.last().request().point()).isEqualTo(JudgmentPoint.J3);
+        assertThat(judge.last().request().recentTurns()).anySatisfy(turn -> {
+            assertThat(turn.speaker()).isEqualTo(Speaker.MUJOONG);
+            assertThat(turn.text()).isEqualTo(V2_REASK);
+        }).noneSatisfy(turn -> assertThat(turn.speaker()).isIn(Speaker.PARTNER, Speaker.COACH));
         judge.confirm("DELIVERED", 0.9, "STILL_SHORT", 0.05);
         h.drain();
         assertThat(h.executor.status()).isEqualTo(SessionStatus.ACTIVE);
