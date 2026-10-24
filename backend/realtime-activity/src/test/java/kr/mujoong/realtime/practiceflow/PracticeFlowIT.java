@@ -1,5 +1,11 @@
 package kr.mujoong.realtime.practiceflow;
 
+import static kr.mujoong.realtime.practiceflow.PracticeScriptFixtures.FIXED_SPEECH;
+import static kr.mujoong.realtime.practiceflow.PracticeScriptFixtures.V2_INTRO;
+import static kr.mujoong.realtime.practiceflow.PracticeScriptFixtures.V2_OPPORTUNITY;
+import static kr.mujoong.realtime.practiceflow.PracticeScriptFixtures.V2_REACTION;
+import static kr.mujoong.realtime.practiceflow.PracticeScriptFixtures.V2_REASK;
+import static kr.mujoong.realtime.practiceflow.PracticeScriptFixtures.directAskScript;
 import static kr.mujoong.realtime.practiceflow.PracticeScriptFixtures.minimalScript;
 import static kr.mujoong.realtime.practiceflow.PracticeScriptFixtures.packageJson;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -17,6 +23,7 @@ import kr.mujoong.contract.ws.message.PlaybackMark;
 import kr.mujoong.contract.ws.message.VoiceSessionClosed;
 import kr.mujoong.realtime.guardrail.GuardrailRequest;
 import kr.mujoong.realtime.internalhttp.InternalHttpClient;
+import kr.mujoong.realtime.judgment.JudgeRequest.Speaker;
 import kr.mujoong.realtime.judgment.JudgmentPoint;
 import kr.mujoong.realtime.practiceflow.PracticeFlowTypes.FactKind;
 import kr.mujoong.realtime.practiceflow.PracticeFlowTypes.LiveTiming;
@@ -41,10 +48,11 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 /**
- * 새 연습 흐름 끝-끝 최소 범위 (U12 FR8.1, 계획 열린 질문 6): AC1.2.3 "그거 줘 → 어느 색? → 파란색" 한 장면을 실행부({@code SessionExecutor}) ·
- * 라우터 · 상태 기계 · 운영 기록기(실제 DB V7 표)로 시작부터 {@code record.practice}까지 본다. 공급자 · 제브 · 판정은 모두 시험이 손으로 푸는
- * 가짜이다(R-F1). 이 시험의 성공은 테스트 대역 · 합성 대화의 성공이며 실제 API · 실제 기기 성공이 아니다(R-M11). 기기 시뮬레이터 · {@code verify.sh}
- * 단계 확장은 하지 않고 후속 과제다.
+ * 새 연습 흐름 끝-끝 최소 범위 (U12 FR8.1, 계획 열린 질문 6): 운영 기본 경로인 C안 '무중이 직접 묻기'(docs/practice-direct-ask.md 2장 공룡 그림
+ * 장면 "손 아파? → 되묻기 → 손 괜찮아? 그럼 다음에 같이 그리자")와 설정으로 되돌린 유연 대화 장면을 실행부({@code SessionExecutor}) · 라우터 · 상태
+ * 기계 · 운영 기록기(실제 DB V7 표)로 시작부터 {@code record.practice}까지 본다. 공급자 · 제브 · 판정은 모두 시험이 손으로 푸는 가짜이다(R-F1). 이
+ * 시험의 성공은 테스트 대역 · 합성 대화의 성공이며 실제 API · 실제 기기 성공이 아니다(R-M11). 기기 시뮬레이터 · {@code verify.sh} 단계 확장은 하지
+ * 않고 후속 과제다.
  */
 @Tag("practice-flow")
 @Tag("db")
@@ -53,9 +61,7 @@ class PracticeFlowIT {
 
     private static final UUID GOAL = UUID.fromString("00000000-0000-4000-8000-000000000001");
     private static final UUID SCENARIO = UUID.fromString("00000000-0000-4000-8000-0000000000a1");
-    private static final String INTRO = "친구가 상자 두 개를 들고 있어.";
     private static final String OPPORTUNITY = "친구가 말했어. 그거 줘.";
-    private static final String REASK = "어느 색을 말하는 건지 잘 모르겠어";
     private static final String MARKER = "표식QX93";
 
     private static RealtimeDb db;
@@ -109,48 +115,53 @@ class PracticeFlowIT {
 
     @Test
     @SuppressWarnings("unchecked")
-    void aReaskThatResolvesTheSceneRunsFromStartToTheSettledPracticeRecord() {
+    void aDirectAskReaskThatResolvesTheSceneRunsFromStartToTheSettledPracticeRecord() {
+        directAsk();
         h.activate();
-        // 도입과 기회 문장: 대본의 승인 문장이 원문 그대로 재생되고(제브 호출 없음) 재생이 끝나면 다음으로 간다
-        playApproved(INTRO);
-        assertThat(repository.findSceneRuns(h.sessionId)).as("도입 재생 성공 뒤에야 장면 행이 생긴다").hasSize(1);
-        playApproved(OPPORTUNITY);
-        assertThat(guard.count()).isZero();
+        // 장면 밖 목표 안내는 생성형이라 제브(PRACTICE_PEER)를 거친다
+        playGenerated("오늘 연습할 목표는 부탁하기야. 짧게 이야기 연습을 해 볼 거야.");
+        assertThat(guard.count()).isEqualTo(1);
+        // 장면 안 말은 모두 대본 칸의 승인 낭독이다: 원문 그대로 재생되면 제브를 부르지 않고, 재생이 끝나면 다음으로 간다
+        playApproved(V2_INTRO);
+        assertThat(repository.findSceneRuns(h.sessionId)).as("상황 안내 재생 성공 뒤에야 장면 행이 생긴다").hasSize(1);
+        playApproved(V2_OPPORTUNITY);
+        assertThat(guard.count()).as("친구 말 전하기 + 묻기도 승인 낭독").isEqualTo(1);
 
-        // 아이가 "그거 줘" → J2 일부 전달 → 친구가 한 번 되묻는다(제브 PRACTICE_PEER 검사 뒤 재생)
-        h.childSays("child-1", "그거 줘 " + MARKER);
+        // 아이 대답이 일부만 전했다 → J2 PARTIAL → 무중이 대본의 되묻기를 그대로 읽는다(생성형 · 제브 없음)
+        h.childSays("child-1", "손 아파? " + MARKER);
         assertThat(judge.last().request().point()).isEqualTo(JudgmentPoint.J2);
+        assertThat(judge.last().request().recentTurns()).as("판정 입력의 무중 줄은 화자 MUJOONG(역할 없음)")
+                .allSatisfy(turn -> assertThat(turn.speaker()).isIn(Speaker.MUJOONG, Speaker.CHILD))
+                .anySatisfy(turn -> {
+                    assertThat(turn.speaker()).isEqualTo(Speaker.MUJOONG);
+                    assertThat(turn.text()).isEqualTo(V2_OPPORTUNITY);
+                });
         judge.confirm("PARTIAL", 0.8, "FULL", 0.1);
         h.drain();
-        h.settleSend();
-        h.speak(REASK, 4800);
-        h.advance(Duration.ofMillis(801));
-        assertThat(guard.last().request().mode()).isEqualTo(GuardrailRequest.Mode.PRACTICE_PEER);
-        assertThat(h.link.outputs()).hasSize(2);
-        guard.allow();
-        h.drain();
-        assertThat(h.link.outputs()).hasSize(3);
-        complete(h.link.outputs().getLast().playbackId());
+        playApproved(V2_REASK);
+        assertThat(guard.count()).isEqualTo(1);
 
-        // 충분히 전달한 뒤에도 친구 답변은 Jev 승인과 기기 재생 완료를 기다린다.
-        h.childSays("child-2", "파란색");
+        // 되물은 뒤 충분히 전했다 → J3 DELIVERED → 대본의 친구 반응을 승인 낭독하고 재생이 끝나야 장면이 끝난다
+        h.childSays("child-2", "손 괜찮아? 그럼 다음에 같이 그리자");
         assertThat(judge.last().request().point()).isEqualTo(JudgmentPoint.J3);
+        assertThat(judge.last().request().recentTurns()).anySatisfy(turn -> {
+            assertThat(turn.speaker()).isEqualTo(Speaker.MUJOONG);
+            assertThat(turn.text()).isEqualTo(V2_REASK);
+        }).noneSatisfy(turn -> assertThat(turn.speaker()).isIn(Speaker.PARTNER, Speaker.COACH));
         judge.confirm("DELIVERED", 0.9, "STILL_SHORT", 0.05);
         h.drain();
         assertThat(h.executor.status()).isEqualTo(SessionStatus.ACTIVE);
         assertThat(repository.findSceneRuns(h.sessionId).getFirst().endedAt()).isNull();
-        h.settleSend();
-        h.speak("응, 여기 파란 상자가 있어.", 4800);
-        h.advance(Duration.ofMillis(801));
-        assertThat(guard.last().request().mode()).isEqualTo(GuardrailRequest.Mode.PRACTICE_PEER);
-        assertThat(h.link.outputs()).hasSize(3);
-        guard.allow();
-        h.drain();
-        assertThat(h.link.outputs()).hasSize(4);
+        playApproved(V2_REACTION);
+        assertThat(guard.count()).as("친구 반응도 승인 낭독").isEqualTo(1);
         assertThat(h.executor.status()).isEqualTo(SessionStatus.ACTIVE);
-        complete(h.link.outputs().getLast().playbackId());
+
+        // 장면 밖 목표 회고(생성형 · 제브)가 끝나면 연습이 끝난다
+        playGenerated("오늘은 부탁하기를 무중이 다시 물었을 때 네 말로 해 봤어. 오늘 연습은 여기까지야.");
         assertThat(h.executor.status()).isEqualTo(SessionStatus.CLOSING);
         assertThat(h.transitions.find(h.sessionId).orElseThrow().endDetail()).isEqualTo("PRACTICE_COMPLETED");
+        assertThat(h.provider.last().requests(kr.mujoong.realtime.voice.ProviderRequestFactory.InstructionsAppend.class))
+                .as("역할 전환 안내 없이 장면 안 다섯 문장을 승인 낭독으로 보냈다").isNotEmpty();
 
         // 종료 뒤 정산: 같은 값이 표에도, 정산 입구에도 있다
         h.mailbox.offerGeneral(new SessionMailbox.VoiceClosed(h.link.connectionId(),
@@ -168,7 +179,9 @@ class PracticeFlowIT {
         assertThat(stored.goalRef()).isEqualTo(GOAL);
         assertThat(stored.scenarioRef()).isEqualTo(SCENARIO);
         assertThat(stored.liveTiming()).isEqualTo(LiveTiming.AFTER_REASK);
-        assertThat(stored.facts()).extracting(PracticeFlowTypes.Fact::kind).contains(FactKind.REASK_RESOLVED);
+        assertThat(stored.facts()).extracting(PracticeFlowTypes.Fact::kind).contains(FactKind.REASK_RESOLVED)
+                .as("C안은 역할 사실을 내지 않는다").doesNotContain(FactKind.COACH_SWITCH, FactKind.COACH_RETURN,
+                        FactKind.ORIGINAL_SCENE_RETURN);
         assertThat(repository.findHelps(h.sessionId)).as("집중 도움 0건").isEmpty();
         assertThat(PracticeFlowRecordAssembler.assemble(repository.findSceneRuns(h.sessionId))).isEqualTo(practice);
         assertThat(failures).isEmpty();
@@ -182,33 +195,52 @@ class PracticeFlowIT {
     }
 
     @Test
-    void aBlockedReaskSendsZeroBytesAndTheSceneIsWrappedWithoutStoppingThePractice() {
+    void aBlockedRecoveryNarrationSendsZeroBytesAndWrapsTheSceneWithoutAClosingLine() {
+        directAsk();
         h.activate();
-        playApproved(INTRO);
-        playApproved(OPPORTUNITY);
-        h.childSays("child-1", "그거 줘");
+        playGenerated("오늘 연습할 목표는 부탁하기야.");
+        playApproved(V2_INTRO);
+        playApproved(V2_OPPORTUNITY);
+        h.childSays("child-1", "손 아파?");
         judge.confirm("PARTIAL", 0.8, "FULL", 0.1);
         h.drain();
-        h.settleSend();
-        h.speak(REASK, 4800);
-        h.advance(Duration.ofMillis(801));
+        int sent = h.link.outputs().size();
 
+        // 승인 되묻기가 두 번 다른 말로 읽히면 버리고, 생성형 '뜻 전하기' 복구를 한 번 낸다
+        speakWithoutPlaying("친구한테 다른 걸 물어볼게.");
+        speakWithoutPlaying("손이 아프면 어떻게 할까?");
+        assertThat(h.link.outputs()).as("다르게 읽힌 승인 낭독은 0바이트").hasSize(sent);
+        // 복구 발화는 제브(PRACTICE_PEER)가 두 번 막는다
+        speakWithoutPlaying("친구 손이 아프대. 어떤 말을 해 주면 좋을까?");
+        assertThat(guard.last().request().mode()).isEqualTo(GuardrailRequest.Mode.PRACTICE_PEER);
         guard.block();
         h.drain();
-        h.settleSend();
-        h.speak("다시 한 번 물어볼게", 4800);
-        h.advance(Duration.ofMillis(801));
+        speakWithoutPlaying("다시 한 번 물어볼게");
         guard.block();
         h.drain();
 
-        assertThat(h.link.outputs()).as("막힌 되묻기는 0바이트").hasSize(2);
-        assertThat(h.executor.status()).as("두 번째 막힘은 장면을 정리하고 연습은 이어서 끝난다").isEqualTo(SessionStatus.CLOSING);
+        assertThat(h.link.outputs()).as("막힌 복구 발화도 0바이트, 마무리 문장도 내지 않는다").hasSize(sent);
+        assertThat(h.executor.status()).as("두 번째 막힘은 장면을 정리하고 연습을 기술 실패로 끝낸다").isEqualTo(SessionStatus.CLOSING);
+        assertThat(h.transitions.find(h.sessionId).orElseThrow().endDetail()).isEqualTo("PRACTICE_OUTPUT_FAILED");
         SceneRunRecord wrapped = repository.findSceneRuns(h.sessionId).getFirst();
         assertThat(wrapped.facts()).extracting(PracticeFlowTypes.Fact::kind).as("막힘은 재생 실패 사실이 아니다")
                 .doesNotContain(FactKind.PLAYBACK_FAILED);
         assertThat(wrapped.liveTiming()).isEqualTo(LiveTiming.NONE);
         assertThat(wrapped.endedAt()).isNotNull();
         assertThat(failures).isEmpty();
+    }
+
+    /** C안 대본 v2와 고정 승인 문장(시작 패키지 approvedSpeech)으로 연다. 운영 기본 경로다. */
+    private void directAsk() {
+        h.practiceJson = packageJson(GOAL, directAskScript(SCENARIO));
+        h.approvedSpeech.putAll(FIXED_SPEECH);
+    }
+
+    /** 공급자가 말하지만 기기로는 나가지 않는 발화(원문이 다르거나 제브를 기다림). */
+    private void speakWithoutPlaying(String text) {
+        h.settleSend();
+        h.speak(text, 4800);
+        h.advance(Duration.ofMillis(801));
     }
 
     private void playApproved(String text) {

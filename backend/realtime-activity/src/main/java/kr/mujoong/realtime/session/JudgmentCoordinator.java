@@ -159,9 +159,15 @@ final class JudgmentCoordinator implements JudgmentTurn.Host {
         }
     }
 
-    void rememberPartner(String text, Instant at, boolean coach) {
+    /**
+     * 기기로 나간 무중 쪽 말 한 줄을 최근 대화에 남긴다.
+     *
+     * @param speaker 그 줄의 화자(역할 대화의 PARTNER · COACH, 역할이 없는 연습의 MUJOONG)
+     */
+    void rememberPartner(String text, Instant at, JudgeRequest.Speaker speaker) {
+        Objects.requireNonNull(speaker, "speaker");
         if (text != null && !text.isBlank()) rememberDialogue(new DialogueLine(0, at,
-                new JudgeRequest.RecentTurn(coach ? JudgeRequest.Speaker.COACH : JudgeRequest.Speaker.PARTNER, clip(text))));
+                new JudgeRequest.RecentTurn(speaker, clip(text))));
     }
 
     private void rememberDialogue(DialogueLine line) {

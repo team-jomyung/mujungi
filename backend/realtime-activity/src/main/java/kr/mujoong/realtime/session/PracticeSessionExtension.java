@@ -11,11 +11,12 @@ import kr.mujoong.contract.status.SessionStatus;
 /**
  * 연습 경로 확장점 (U4b). U5b는 타입 있는 출력과 재생 증거로 ACTIVE 안의 연습 단계를 진행한다.
  *
- * <p>PRACTICE 세션에서만, 실행기 스레드에서 부른다(세션당 직렬). 세션마다 {@link Factory}가 한 개를 만든다. 들어오는 시점은 다섯 개다.
+ * <p>PRACTICE 세션에서만, 실행기 스레드에서 부른다(세션당 직렬). 세션마다 {@link Factory}가 한 개를 만든다. 들어오는 시점은 여섯 개다.
  *
  * <ul>
  *   <li>{@link #onActive}: 참여 확인 뒤 ACTIVE 진입. 출력권을 가진 확장은 자유 응답 요청을 생략한다.
  *   <li>{@link #onChildUtterance}: ACTIVE 중 아이 확정 전사. 출력권을 가진 확장에는 종료 의도가 맡은 발화를 전달하지 않는다.
+ *   <li>{@link #onChildSpeechStarted}: ACTIVE 중 아이 말이 시작됐다(입력 전사 묶음의 첫 조각). 출력권을 가진 확장에만, 묶음마다 한 번.
  *   <li>{@link #onExtensionEvent}: 확장점 사건(재생 완료 · 확장점 시계 만료 · 비동기 결과). 실행기 편지함을 거쳐 실행기 스레드에서 들어온다.
  *   <li>{@link #onSettle}: 종료 전이 뒤 정산 창이 끝난 다음 한 번(남은 목표 NOT_REACHED 정리 등).
  *   <li>{@link #practiceRecord}: 스냅숏 직전 practice 값(객체 또는 null, FD-Q4).
@@ -253,6 +254,12 @@ public interface PracticeSessionExtension {
     /** 실제 연습은 출력권을 소유하고, 무동작·기존 확장은 기존 경로를 유지한다. */
     default boolean controlsOutput() { return false; }
 
+    /**
+     * 이 연습에서 아이에게 들리는 말을 모두 무중이 자기 말로 하는가(장면 속 친구 · 코치 역할이 없다, C안 '무중이 직접 묻기'). 참이면 실행부는 판정
+     * 입력의 최근 대화에서 무중의 줄을 화자 {@code MUJOONG}으로 보낸다. 기본은 거짓(역할 대화: {@code PARTNER} · {@code COACH})이다.
+     */
+    default boolean speaksAsMujoong() { return false; }
+
     /** 안내 수집 중 일반 입력은 대화 턴을 열지 않는다. 입력 기록과 종료·휴식 처리는 실행기가 계속한다. */
     default boolean collectingIntroduction() { return false; }
     /** Whether an unplayed generated conversational response may yield to new child input without completing a task. */
@@ -281,6 +288,16 @@ public interface PracticeSessionExtension {
     Signal onActive(PracticeContext context, PracticeOutput output);
 
     Signal onChildUtterance(Utterance utterance, PracticeOutput output);
+
+    /**
+     * 아이 말이 시작됐다 — 새 입력 전사 묶음의 첫 조각이 왔다(끼어들기 봉인과 같은 신호, 4회차 R1). 확정 전사는 말이 끝나고 조용 시간이 지난 뒤에야
+     * {@link #onChildUtterance}로 오므로, 그 사이 무응답 대기를 멈추려면 이 알림을 쓴다. ACTIVE 중 출력권을 가진 확장에만 묶음마다 한 번 부르고,
+     * 참여 확인 · 기술 일시정지 중에는 부르지 않는다. 그 말이 확정 전사로 끝난다는 보장은 없다(빈 묶음 · 종료 의도가 맡은 말 · 안내 중의 말). 기본은
+     * 처리 안 함이다.
+     *
+     * @param at 첫 조각을 받은 시각
+     */
+    default Signal onChildSpeechStarted(Instant at, PracticeOutput output) { return Signal.NONE; }
 
     Signal onExtensionEvent(ExtensionEvent event, PracticeOutput output);
 

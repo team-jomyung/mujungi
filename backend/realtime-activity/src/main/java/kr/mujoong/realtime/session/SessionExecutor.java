@@ -2598,6 +2598,7 @@ public final class SessionExecutor {
             ctx.timers().arm(Kind.INPUT_TRANSCRIPT_QUIET, ctx.services().settings().inputTranscriptQuiet());
             return;
         }
+        boolean opened = inputGroupId == null;
         groupInputDelta(delta);
         if (ctx.consentWithdrawnAt() != null ||ctx.status() == SessionStatus.WAITING_CHILD) {
             // 동의 철회 뒤 도착한 아이 전사는 저장하지 않는다(확정 때 센다). 참여 전 아이 전사도 저장하지 않는다
@@ -2624,7 +2625,34 @@ public final class SessionExecutor {
             // 아이 입력이 시작되면 모아 둔 AI 전사를 먼저 한 행으로 낸다(보호자 화면의 순서가 말한 순서와 같게)
             ctx.transcripts().endStream(at);
             ctx.transcripts().childDelta(inputGroupId, delta.delta(), at);
+            if (opened) {
+                childSpeechStarted(at);
+            }
         }
+    }
+
+    /**
+     * 4회차 R1: 새 입력 전사 묶음이 열렸다(아이 말이 시작됐다). 확정 전사는 조용 시간 뒤에야 오므로 출력권을 가진 연습에 먼저 알려 무응답 대기를
+     * 멈추게 한다. ACTIVE에서만, 연습 진행이 멈춘 동안(기술 일시정지)에는 알리지 않는다 — 그때의 말은 실행부가 맡는다.
+     */
+    private void childSpeechStarted(Instant at) {
+        PracticeSessionExtension current = practice;
+        if (current == null || !current.controlsOutput() || ctx.status() != SessionStatus.ACTIVE || practiceProgressPaused()) {
+            return;
+        }
+        practiceSignal(() -> current.onChildSpeechStarted(at, practiceOutput), true);
+    }
+
+    /**
+     * 판정 입력 최근 대화에 남길 무중 줄의 화자. 역할이 없는 연습(C안)은 무중의 말을 모두 {@code MUJOONG}으로, 역할 대화는 코치 발화를
+     * {@code COACH}, 그 밖을 {@code PARTNER}로 둔다.
+     */
+    private kr.mujoong.realtime.judgment.JudgeRequest.Speaker dialogueSpeaker(kr.mujoong.realtime.voice.PracticeSpeech speech) {
+        if (practice != null && practice.speaksAsMujoong()) {
+            return kr.mujoong.realtime.judgment.JudgeRequest.Speaker.MUJOONG;
+        }
+        return speech != null && "COACH".equals(speech.partnerRole()) ? kr.mujoong.realtime.judgment.JudgeRequest.Speaker.COACH
+                : kr.mujoong.realtime.judgment.JudgeRequest.Speaker.PARTNER;
     }
 
     /** 조각을 현재 묶음에 더하고(없으면 묶음을 연다) 조용 시계를 다시 건다. 묶음 id를 돌려준다. */
@@ -3793,7 +3821,7 @@ public final class SessionExecutor {
         } else {
             if (speech != null && speech.equals(streamedPractice)) streamedPracticeSent = true;
             // Only approved output accepted by the device link may ground a subsequent agreement judgment.
-            judgment.rememberPartner(sealed.transcript(), passAt, speech != null && "COACH".equals(speech.partnerRole()));
+            judgment.rememberPartner(sealed.transcript(), passAt, dialogueSpeaker(speech));
         }
     }
 

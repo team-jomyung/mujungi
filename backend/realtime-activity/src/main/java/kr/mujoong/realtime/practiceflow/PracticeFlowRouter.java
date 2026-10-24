@@ -12,8 +12,9 @@ import kr.mujoong.realtime.session.PracticeSessionExtension;
  * 고른 뒤의 모든 시점은 그 쪽에 그대로 위임한다.
  *
  * <p>{@link #controlsOutput()}은 분기 전에도 언제나 참이다 — 실행부가 {@code onActive} 전, 첫 응답 요청 전에 묻기 때문이다(레거시도 참이라 바뀌는
- * 동작이 없다). 새 흐름은 {@code scenario-script.v1}일 때만 고른다. {@code scriptVersion}이 없거나 첫 대본이 없는 패키지, 읽을 수 없는 패키지는
- * 레거시가 이전 그대로 받는다. 단 {@code practice} 원문이 아예 비면 레거시로 보내지 않고 '대본 없음'으로 실패시킨다(BR1.2).
+ * 동작이 없다). 새 흐름은 새 흐름이 읽는 대본 판({@code scenario-script.v1} · {@code v2})일 때만 고른다. {@code scriptVersion}이 없거나 첫 대본이
+ * 없는 패키지, 읽을 수 없는 패키지는 레거시가 이전 그대로 받는다. 단 {@code practice} 원문이 아예 비면 레거시로 보내지 않고 '대본 없음'으로
+ * 실패시킨다(BR1.2).
  *
  * <p>이 클래스는 레거시 {@code practice} 패키지를 참조하지 않는다 — 레거시 확장은 확장점 인터페이스로만 받는다(BR10.2).
  */
@@ -60,6 +61,16 @@ public final class PracticeFlowRouter implements PracticeSessionExtension {
     @Override
     public Signal onChildUtterance(Utterance utterance, PracticeOutput output) {
         return delegate == null ? Signal.NONE : delegate.onChildUtterance(utterance, output);
+    }
+
+    @Override
+    public Signal onChildSpeechStarted(Instant at, PracticeOutput output) {
+        return delegate == null ? Signal.NONE : delegate.onChildSpeechStarted(at, output);
+    }
+
+    @Override
+    public boolean speaksAsMujoong() {
+        return delegate != null && delegate.speaksAsMujoong();
     }
 
     @Override

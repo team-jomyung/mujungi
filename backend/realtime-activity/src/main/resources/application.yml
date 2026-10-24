@@ -213,10 +213,12 @@ mujoong:
   judgment:
     min-confidence: 0.6
     min-margin: 0.15
-  # U12 새 연습 흐름 횟수 한도(contracts/ai-io.md 10.14). 시간 값이 아니다: 시간 한도는 timing.conversation.*(no-response-wait · focus-max · goal-active-limit)
+  # U12 새 연습 흐름 설정(contracts/ai-io.md 10.14). 시간 값이 아니다: 시간 한도는 timing.conversation.*(no-response-wait · focus-max · goal-active-limit)
+  # flexible-dialogue: false면 C안 '무중이 직접 묻기'(docs/practice-direct-ask.md, 운영 기본), true면 유연 대화(되돌리기용으로 남긴 경로)
   practice-flow:
-    retry-max: 2
+    retry-max: 1
     reexplain-max: 1
+    flexible-dialogue: false
   # U13 제브 게이트(contracts/ai-io.md 10.12). 시간 값이 아니다: 검사 시한은 timing.guardrail.jev-budget(R-F7). 값은 모두 환경 변수로만 받고 저장소에는 이름만 둔다(R-F3).
   # mode가 비면 프로필 기본값(demo · prod = REAL, 그 밖 = STUB). demo · prod는 REAL + 키 JEV_API_KEY + 허용 호스트 + 고정 모델이 아니면 기동을 거부한다
   guardrail:

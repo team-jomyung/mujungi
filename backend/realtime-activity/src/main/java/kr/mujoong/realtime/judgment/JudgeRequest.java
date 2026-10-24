@@ -34,11 +34,12 @@ public record JudgeRequest(
     /** 최근 대화 상한(BR1.7). */
     public static final int MAX_RECENT_TURNS = 3;
 
-    /** 화자 표시(스키마 enum). */
+    /** 화자 표시(스키마 enum). MUJOONG은 장면 속 역할 없이 무중이 자기 말로 한 줄이다(C안, docs/practice-direct-ask.md 6장). */
     public enum Speaker {
         CHILD,
         PARTNER,
-        COACH
+        COACH,
+        MUJOONG
     }
 
     /** 최근 대화 한 줄. */

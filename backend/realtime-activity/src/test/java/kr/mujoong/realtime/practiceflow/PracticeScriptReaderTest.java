@@ -80,6 +80,64 @@ class PracticeScriptReaderTest {
     }
 
     @Test
+    void aDirectAskVersionTwoScriptKeepsTheFiveSpokenFieldsAndTheV1ScriptHasNone() {
+        PracticeScript script = PracticeScriptReader.read(PracticeScriptFixtures.directAskScriptWithVariant(SCENARIO));
+
+        assertThat(script.scriptVersion()).isEqualTo(PracticeScript.SCRIPT_VERSION_V2).isEqualTo("scenario-script.v2");
+        PracticeScript.Scene base = script.baseScene();
+        assertThat(base.spokenIntroduction()).isEqualTo(PracticeScriptFixtures.V2_INTRO);
+        assertThat(base.opportunityRelay()).isEqualTo(PracticeScriptFixtures.V2_RELAY);
+        assertThat(base.askPrompt()).isEqualTo(PracticeScriptFixtures.V2_ASK);
+        assertThat(base.reaskPrompt()).isEqualTo(PracticeScriptFixtures.V2_REASK);
+        assertThat(base.helpSpeech()).isEqualTo(PracticeScriptFixtures.V2_HELP);
+        assertThat(base.friendReaction()).isEqualTo(PracticeScriptFixtures.V2_REACTION);
+        assertThat(base.opportunitySentence()).as("상대의 직접 대사는 들려주지 않는 칸으로 그대로 읽는다")
+                .isEqualTo(PracticeScriptFixtures.V2_DIRECT_LINE);
+        assertThat(script.variantScene()).get().extracting(PracticeScript.Scene::askPrompt)
+                .isEqualTo(PracticeScriptFixtures.V2_VARIANT_ASK);
+        assertThat(script.generation().promptVersion()).isEqualTo("scenario-generation.v3");
+        assertThat(script.selfReview().promptVersion()).isEqualTo("scenario-review.v2");
+
+        PracticeScript.Scene old = PracticeScriptReader.read(fullScript(SCENARIO)).baseScene();
+        assertThat(java.util.Arrays.asList(old.opportunityRelay(), old.askPrompt(), old.reaskPrompt(), old.helpSpeech(),
+                old.friendReaction())).as("옛 대본 v1에는 새 칸이 없다(대체 문장을 쓴다)").containsOnlyNulls();
+        assertThat(PracticeScript.readable("scenario-script.v1")).isTrue();
+        assertThat(PracticeScript.readable("scenario-script.v2")).isTrue();
+        assertThat(PracticeScript.readable("scenario-script.v3")).isFalse();
+        assertThat(PracticeScript.readable(null)).isFalse();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"opportunityRelay", "askPrompt", "reaskPrompt", "helpSpeech", "friendReaction", "spokenIntroduction"})
+    void aSpokenFieldThatIsBlankTooLongOrHasAControlCharacterRejectsTheScript(String field) {
+        String script = PracticeScriptFixtures.directAskScript(SCENARIO);
+        String value = "\"" + field + "\":\"[^\"]*\"";
+
+        assertReason(script.replaceFirst(value, "\"" + field + "\":\"  \""), Reason.VALIDATION_FAILED);
+        assertReason(script.replaceFirst(value, "\"" + field + "\":\"" + "가".repeat(501) + "\""), Reason.VALIDATION_FAILED);
+        assertReason(script.replaceFirst(value, "\"" + field + "\":\"줄\\\\u0007바꿈\""), Reason.VALIDATION_FAILED);
+        assertThat(PracticeScriptReader.read(script.replaceFirst(value + ",", "")).baseScene())
+                .as("칸이 없는 것은 거절이 아니라 대체 문장 대상이다").isNotNull();
+    }
+
+    @Test
+    void theSpokenFieldLimitsAreTheContractMaxLengths() {
+        String script = PracticeScriptFixtures.directAskScript(SCENARIO);
+        assertThat(PracticeScriptReader.read(script.replaceFirst("\"askPrompt\":\"[^\"]*\"",
+                "\"askPrompt\":\"" + "가".repeat(99) + "?\"")).baseScene().askPrompt()).hasSize(100);
+        assertReason(script.replaceFirst("\"askPrompt\":\"[^\"]*\"", "\"askPrompt\":\"" + "가".repeat(100) + "?\""),
+                Reason.VALIDATION_FAILED);
+        assertThat(PracticeScriptReader.read(script.replaceFirst("\"helpSpeech\":\"[^\"]*\"",
+                "\"helpSpeech\":\"" + "가".repeat(289) + " 네 말로 해 볼래?\"")).baseScene().helpSpeech()).hasSize(300);
+        assertReason(script.replaceFirst("\"helpSpeech\":\"[^\"]*\"", "\"helpSpeech\":\"" + "가".repeat(290) + " 네 말로 해 볼래?\""),
+                Reason.VALIDATION_FAILED);
+        for (String field : new String[] {"opportunityRelay", "reaskPrompt", "friendReaction"}) {
+            assertReason(script.replaceFirst("\"" + field + "\":\"[^\"]*\"", "\"" + field + "\":\"" + "가".repeat(201) + "\""),
+                    Reason.VALIDATION_FAILED);
+        }
+    }
+
+    @Test
     void scenarioIdScenesKindAndValidationAreChecked() {
         assertReason(minimalScript(SCENARIO).replace(SCENARIO.toString(), "not-a-uuid"), Reason.BAD_SCENARIO_ID);
         assertReason(minimalScript(SCENARIO).replace("\"scenarioId\":\"" + SCENARIO + "\",", ""), Reason.BAD_SCENARIO_ID);

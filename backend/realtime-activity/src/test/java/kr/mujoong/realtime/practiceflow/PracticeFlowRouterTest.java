@@ -1,5 +1,7 @@
 package kr.mujoong.realtime.practiceflow;
 
+import static kr.mujoong.realtime.practiceflow.PracticeScriptFixtures.FIXED_SPEECH;
+import static kr.mujoong.realtime.practiceflow.PracticeScriptFixtures.directAskScript;
 import static kr.mujoong.realtime.practiceflow.PracticeScriptFixtures.minimalScript;
 import static kr.mujoong.realtime.practiceflow.PracticeScriptFixtures.packageJson;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -30,9 +32,9 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 /**
- * 분기 확장 시험 (U12 D1 · BR1.4 · AC1.1.5). scriptVersion이 있으면 새 흐름, 없으면 레거시로 가고 {@code controlsOutput}은 분기 전에도 참이며
- * 분기 뒤 모든 시점이 고른 쪽으로 위임된다. 레거시 확장이 무엇을 부르든 실패하도록 만든 대역(레거시 평가 · 단서 포트가 실패를 돌려주는 상황)
- * 위에서도 새 흐름이 끝까지 가는지 본다.
+ * 분기 확장 시험 (U12 D1 · BR1.4 · AC1.1.5). 새 흐름이 읽는 scriptVersion(v1 · C안 v2)이면 새 흐름, 없으면 레거시로 가고
+ * {@code controlsOutput}은 분기 전에도 참이며 분기 뒤 모든 시점(아이 말 시작 알림 · 무중 화자 여부 포함)이 고른 쪽으로 위임된다. 레거시 확장이
+ * 무엇을 부르든 실패하도록 만든 대역(레거시 평가 · 단서 포트가 실패를 돌려주는 상황) 위에서도 새 흐름이 끝까지 가는지 본다.
  */
 @Tag("practice-flow")
 class PracticeFlowRouterTest {
@@ -64,6 +66,32 @@ class PracticeFlowRouterTest {
         assertThat(flowCreated).hasValue(1);
         verifyNoInteractions(legacy);
         assertThat(router.toString()).contains("flow");
+    }
+
+    @Test
+    void aPackageWhoseFirstScriptIsTheDirectAskVersionTwoAlsoGoesToTheNewFlow() {
+        PracticeContext context = context(packageJson(GOAL, directAskScript(SCENARIO)));
+        when(flow.onActive(context, output)).thenReturn(Signal.NONE);
+
+        router.onActive(context, output);
+
+        assertThat(flowCreated).hasValue(1);
+        verifyNoInteractions(legacy);
+        assertThat(router.toString()).contains("flow");
+    }
+
+    @Test
+    void anUnknownScriptVersionIsNotTakenByTheNewFlow() {
+        String future = packageJson(GOAL, minimalScript(SCENARIO).replace("scenario-script.v1", "scenario-script.v9"));
+        PracticeSessionExtension oldOne = mock(PracticeSessionExtension.class);
+        PracticeContext context = context(future);
+        PracticeFlowRouter old = new PracticeFlowRouter(oldOne, () -> {
+            throw new AssertionError("새 흐름을 만들면 안 된다");
+        });
+
+        old.onActive(context, output);
+
+        verify(oldOne).onActive(context, output);
     }
 
     @Test
@@ -108,7 +136,9 @@ class PracticeFlowRouterTest {
         Utterance utterance = new Utterance(1, Instant.EPOCH, "말", false, false);
         ExtensionEvent event = new ExtensionEvent(ExtensionEvent.Kind.TIMER_FIRED, "no-response", null, null);
         assertThat(router.onChildUtterance(utterance, output)).isEqualTo(Signal.NONE);
+        assertThat(router.onChildSpeechStarted(Instant.EPOCH, output)).isEqualTo(Signal.NONE);
         assertThat(router.onExtensionEvent(event, output)).isEqualTo(Signal.NONE);
+        assertThat(router.speaksAsMujoong()).as("고르기 전에는 역할 대화 화자").isFalse();
         assertThat(router.progress()).isNull();
         assertThat(router.practiceRecord()).isNull();
         assertThat(router.settlementDelay(Instant.EPOCH)).isEqualTo(Duration.ZERO);
@@ -119,6 +149,8 @@ class PracticeFlowRouterTest {
         PracticeContext context = context(packageJson(GOAL, minimalScript(SCENARIO)));
         when(flow.onActive(context, output)).thenReturn(Signal.NONE);
         when(flow.onChildUtterance(utterance, output)).thenReturn(Signal.LAST_GOAL);
+        when(flow.onChildSpeechStarted(Instant.EPOCH, output)).thenReturn(Signal.OUTPUT_FAILED);
+        when(flow.speaksAsMujoong()).thenReturn(true);
         when(flow.onExtensionEvent(event, output)).thenReturn(Signal.NEXT_GOAL);
         PracticeSessionExtension.Progress progress = new PracticeSessionExtension.Progress(1, 1, "목표", "FIRST_RESPONSE");
         when(flow.progress()).thenReturn(progress);
@@ -127,6 +159,8 @@ class PracticeFlowRouterTest {
         router.onActive(context, output);
 
         assertThat(router.onChildUtterance(utterance, output)).isEqualTo(Signal.LAST_GOAL);
+        assertThat(router.onChildSpeechStarted(Instant.EPOCH, output)).isEqualTo(Signal.OUTPUT_FAILED);
+        assertThat(router.speaksAsMujoong()).isTrue();
         assertThat(router.onExtensionEvent(event, output)).isEqualTo(Signal.NEXT_GOAL);
         assertThat(router.progress()).isEqualTo(progress);
         assertThat(router.practiceRecord()).isEqualTo(Map.of("flowVersion", "practice-conversation-v1"));
@@ -155,17 +189,21 @@ class PracticeFlowRouterTest {
         PracticeSessionExtension failingLegacy = mock(PracticeSessionExtension.class, withSettings().defaultAnswer(invocation -> {
             throw new AssertionError("레거시 확장을 부르면 안 된다: " + invocation.getMethod().getName());
         }));
-        Harness h = new Harness(packageJson(GOAL, minimalScript(SCENARIO)), Map.of());
+        Harness h = new Harness(packageJson(GOAL, directAskScript(SCENARIO)), FIXED_SPEECH);
         PracticeFlowRouter routed = new PracticeFlowRouter(failingLegacy, () -> h.ext);
 
         assertThat(routed.controlsOutput()).isTrue();
         assertThat(routed.onActive(h.context, h.out)).isEqualTo(Signal.NONE);
-        routed.onExtensionEvent(playedEvent(h), h.out);
-        routed.onExtensionEvent(playedEvent(h), h.out);
-        routed.onChildUtterance(new Utterance(1, Instant.EPOCH, "그거 줘", false, false), h.out);
+        assertThat(routed.speaksAsMujoong()).as("C안은 장면 안 말을 모두 무중이 한다").isTrue();
+        routed.onExtensionEvent(playedEvent(h), h.out); // 목표 안내
+        routed.onExtensionEvent(playedEvent(h), h.out); // 상황 안내
+        routed.onExtensionEvent(playedEvent(h), h.out); // 친구 말 전하기 + 묻기
+        routed.onChildSpeechStarted(Instant.EPOCH, h.out);
+        routed.onChildUtterance(new Utterance(1, Instant.EPOCH, "손 괜찮아?", false, false), h.out);
         routed.onExtensionEvent(new ExtensionEvent(ExtensionEvent.Kind.JUDGMENT_RESULT, "judgment", h.out.lastJudgment().correlationId(),
                 Map.of("point", "J2", "firstOption", "FULL", "secondOption", "NONE")), h.out);
-        assertThat(h.recorder.only().endedAt()).isNull();
+        assertThat(h.recorder.only().endedAt()).as("친구 반응을 재생하기 전").isNull();
+        assertThat(routed.onExtensionEvent(playedEvent(h), h.out)).as("친구 반응 뒤 목표 회고").isEqualTo(Signal.NONE);
         assertThat(routed.onExtensionEvent(playedEvent(h), h.out)).isEqualTo(Signal.LAST_GOAL);
 
         assertThat(routed.progress()).isNotNull();
