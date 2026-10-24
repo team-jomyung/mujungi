@@ -38,14 +38,14 @@
 텍스트 프레임 JSON 한 개 = 메시지 한 개, 공통 필드 `type`. 음성은 base64로 인코딩한 PCM16LE 24kHz 모노 바이트다. 모르는 type은 무시하고 개수만 센다(type 이름 · 본문은 남기지 않는다).
 출처 표시: **실호출** = U11 실호출 3회(합성 음성 · 실제 API, `[실호출-합성]`)에서 관측 · 공급자 오류 문장에서 확인, **문서** = 공급자 공개 문서(live-conversations · voice-websockets)에만 있고 우리 실행에서는 관측되지 않은 것, **미확인** = 관측도 문서도 없는 것(Build and Test 실호출에서 확인). 관측하지 않은 필드는 적지 않는다.
 
-공급자가 지원하는 클라이언트 메시지 type은 열다섯 개다(실호출 오류 문장): `session.start` · `session.update` · `session.close` · `session.input_audio.append` · `session.input_audio.mute` · `session.input_audio.unmute` · `session.instructions.append` · `session.thinking.append` · `session.commentary.append` · `session.output_audio.fixture.play` · `response.create` · `response.item.create` · `decision.create` · `decision.item.create` · `decision.item.delete`. 이 밖의 type은 `error{type: invalid_request_error, code: invalid_value, param: type}`로 거절된다. 응답 취소(`session.response.cancel`)와 지시 교정(`session.instructions.correct`), `session.response.create`는 목록에 없다. **서버는 아래 다섯 type만 보낸다**(2026-10-22 승인된 연습 낭독에 `session.commentary.append` 추가; 같은 직렬 송신 큐와 출력 게이트를 사용한다). `response.create`는 Responses 위임 세션 전용이라 우리 세션(client 위임)에는 `error`("requires a session with Responses delegation")로 거절되고(실호출), `session.update`도 Responses 위임 설정에만 쓸 수 있어 보내지 않는다(문서). 자동 응답 · 말 끝(turn detection) 설정은 없다(문서).
+공급자가 지원하는 클라이언트 메시지 type은 열다섯 개다(실호출 오류 문장): `session.start` · `session.update` · `session.close` · `session.input_audio.append` · `session.input_audio.mute` · `session.input_audio.unmute` · `session.instructions.append` · `session.thinking.append` · `session.commentary.append` · `session.output_audio.fixture.play` · `response.create` · `response.item.create` · `decision.create` · `decision.item.create` · `decision.item.delete`. 이 밖의 type은 `error{type: invalid_request_error, code: invalid_value, param: type}`로 거절된다. 응답 취소(`session.response.cancel`)와 지시 교정(`session.instructions.correct`), `session.response.create`는 목록에 없다. **서버는 아래 다섯 type만 보낸다**(2026-10-22 연습 확장점의 생성 발화에 `session.commentary.append` 추가; 같은 직렬 송신 큐와 출력 게이트를 사용한다. 승인 원문 읽기는 `session.instructions.append`다 — 2026-10-24 코드 사실로 바로잡음 [편차 FT-1024-a]). `response.create`는 Responses 위임 세션 전용이라 우리 세션(client 위임)에는 `error`("requires a session with Responses delegation")로 거절되고(실호출), `session.update`도 Responses 위임 설정에만 쓸 수 있어 보내지 않는다(문서). 자동 응답 · 말 끝(turn detection) 설정은 없다(문서).
 
 | 방향 | type | 필드 | 출처 · 쓰임 |
 |---|---|---|---|
 | 서버 → 공급자 | `session.start` | `session{model, instructions, audio{format{type: "audio/pcm", rate: 24000}}}` — `model`은 코드 상수, `instructions`는 서버 템플릿 지시문(아이 정보는 따옴표로 묶은 데이터로만) | 실호출(중첩 모양 · 24kHz 수락). 연결 직후 한 번. 응답 `session.started`가 ACTIVE 전이 조건의 하나다(BR6.8) |
 | 서버 → 공급자 | `session.input_audio.append` | `audio`(base64, 기기 0x01 프레임 본문 960바이트 그대로) | 실호출. ACTIVE 뒤 ~ CLOSE_TRANSPORT 전 기기 프레임을 순번 순으로(BR7.1 · R3-8). 그 밖의 프레임은 버린다. 참여 확인(WAITING_CHILD)부터 중계하고 원음 기록은 ACTIVE부터다(U4b-J2) |
-| 서버 → 공급자 | `session.instructions.append` | `event_id`(서버 발급, 확인 사건의 `client_event_id`로 돌아온다) · `delegation_id`(**항상 있어야 한다, 값은 `null`**) · `content`(지시문, 500토큰 이하) | 실호출. `delegation_id` 키가 없으면 공급자가 `error{missing_required_parameter, param delegation_id}`로 거절한다 — 이 프로젝트 JSON 코덱이 null 필드를 쓰지 않으므로 이 속성만 항상 쓰게 한다. 옛 본문 필드 `text`는 없다. **일반 지시·교정·생성 역할 지시는 이 경로를 유지한다. 승인된 연습 낭독의 발화 요청은 아래 commentary 경로로 구분한다. 지시 수락은 발화 시작·재생을 보장하지 않는다**(참여 뒤 첫 응답 · 확인 뒤 이어 가기 · 연습 발화 · 연습 `requestResponse` · 게이트 교정 · 판정 뒤 지시, 아래 '서버 발화'). 전사 · 걸린 패턴 · 미승인 원문은 넣지 않는다 |
-| 서버 → 공급자 | `session.commentary.append` | `event_id` · `delegation_id: null` · `content` | 2026-10-22 실호출. 승인된 연습 낭독의 음성 출력 요청. 동일한 고정 낭독 지시와 범위 종료 문장을 사용한다. 음성이 생성돼도 승인 원문과 다르면 기존 게이트가 차단한다. |
+| 서버 → 공급자 | `session.instructions.append` | `event_id`(서버 발급, 확인 사건의 `client_event_id`로 돌아온다) · `delegation_id`(**항상 있어야 한다, 값은 `null`**) · `content`(지시문, 500토큰 이하) | 실호출. `delegation_id` 키가 없으면 공급자가 `error{missing_required_parameter, param delegation_id}`로 거절한다 — 이 프로젝트 JSON 코덱이 null 필드를 쓰지 않으므로 이 속성만 항상 쓰게 한다. 옛 본문 필드 `text`는 없다. **일반 지시 · 교정과 승인된 연습 낭독(승인 원문을 글자 그대로 읽는 발화, `PracticeInstruction.forSpeech`)은 이 경로다. 연습 확장점의 생성 발화(`PracticeInstruction.forGeneratedSpeech`)만 아래 commentary 경로로 구분한다(`ProviderRequestFactory.practiceInstruction`). 지시 수락은 발화 시작·재생을 보장하지 않는다**(참여 뒤 첫 응답 · 확인 뒤 이어 가기 · 연습 발화 · 연습 `requestResponse` · 게이트 교정 · 판정 뒤 지시, 아래 '서버 발화'). 전사 · 걸린 패턴 · 미승인 원문은 넣지 않는다 |
+| 서버 → 공급자 | `session.commentary.append` | `event_id` · `delegation_id: null` · `content` | 2026-10-22 실호출. 연습 확장점의 **생성 발화**(승인 원문 읽기가 아닌 연습 말 — 연습 대화 C안에서는 장면 밖 말인 목표 안내 · 목표 회고 · 돌아보기 제안 · 받아 주기 · 낭독 실패 뒤 뜻 전하기)의 음성 출력 요청. 다른 지시와 같은 범위 종료 문장을 붙이고 같은 직렬 송신 큐 · 출력 게이트(제브 포함)를 지난다. 말을 바꿔 할 수 있어 승인 원문 읽기에는 쓰지 않는다. 이 행의 옛 서술('승인된 연습 낭독의 음성 출력 요청')은 코드와 반대라 2026-10-24에 바로잡았다 [편차 FT-1024-a] |
 | 서버 → 공급자 | `session.close` | — | 종료 · FAILED 전이 뒤 공급자 세션 정리(BR6.10 ④). 응답 `session.closed`(실호출) |
 | 공급자 → 서버 | `session.started` | `session{id, ...}` | 실호출. `session.id`를 공급자 세션 id로 읽는다 |
 | 공급자 → 서버 | `session.output_audio.delta` | `delta`(base64). **응답 id · 시간 정보가 없다** | 실호출. AI 말 음성 조각. 게이트 구간 버퍼에만 쌓는다(BR7.3 · BR11.6). 구간이 확정 · 통과될 때까지 기기로 보내지 않는다(BR7.4). 한 응답이 조각 300 ~ 350개(30 ~ 35초)일 수 있다 |
@@ -342,6 +342,7 @@ U15 씨앗 v2는 GENERATED/DUPLICATE/NONE의 배타적 출력 분기를 사용�
 ### 10.4 판 리소스와 세션 고정
 
 - 판정 질문 · 선택지(J1 ~ J6, A §7.3 · B §5.2)는 realtime `judgment/option-sets-v1.json`, 현재 제브 검사 질문 · 라벨 설명(`PROFANITY` + `PASS`) · 모드는 `guardrail/policy-v3.json`에 둔다. 이전 `policy-v1.json` · `policy-v2.json`은 이력으로 남긴다 [U13 편차 (U13-c)]. J7은 core 상황 생성 자체 검토 프롬프트(U10)라 realtime 판에 넣지 않는다.
+- **연습 대화 C안(10.17)부터 판정 기본 판**은 선택지 판 `judgment-service-v2`와 판정 질문 지시문 `prompt-service-v4`다. `judgment-service-v2`는 `judgment-service-v1`의 J2 · J3 · J5 질문에서 '장면 속 친구' · '코치'를 '무중의 질문' · '무중의 도움'으로 바꾼 판이고 코드 · 지점 · 선택지 순서는 그대로다. 이전 판(`judgment-service-v1` · `prompt-service-v3`)은 이력으로 자원에 남는다(같은 판 이름을 다른 내용으로 바꾸지 않는다). 판 자원과 세션 고정은 realtime 몫이다 [편차 FT-1024-b].
 - realtime은 기동 때 두 파일을 읽어 검증하고, 파일이 없거나 형식이 틀리면 기동을 거부한다(BR2.1 · 4절 시드 사전과 같은 방식).
 - 세션을 받을 때 두 판의 번호와 패키지의 승인 문구 판(`approvedContent` · `approvedSpeech`)을 세션 계획에 고정하고, 세션 정산이 끝나면 놓는다. 판정 · 검사 기록 행은 고정된 판 번호를 함께 남긴다(BR2.2, 기록은 U11 · U13).
 
@@ -353,7 +354,7 @@ U15 씨앗 v2는 GENERATED/DUPLICATE/NONE의 배타적 출력 분기를 사용�
 
 ### 10.6 승인 발화(`APPROVED_SPEECH`)
 
-- 음성 파일 없이 GPT-Live 지시 + 원문 일치로 재생하는 승인 문구는 `content_type` `APPROVED_SPEECH`로 시드한다(`infra/seed/004-u8-reference.sql`). 기존 `APPROVED_AUDIO`(음성 파일 필수)는 그대로다 [U8 편차 (U8-e)].
+- 음성 파일 없이 GPT-Live 지시 + 원문 일치로 재생하는 승인 문구는 `content_type` `APPROVED_SPEECH`로 시드한다(`infra/seed/004-u8-reference.sql`, 연습 대화 C안 고정 문장은 `infra/seed/006-practice-direct-ask-reference.sql`). 기존 `APPROVED_AUDIO`(음성 파일 필수)는 그대로다 [U8 편차 (U8-e)].
 - core는 활동 유형별 허용 목록에 있고 `APPROVED_SPEECH`이며 APPROVED 판이 있는 code만 시작 패키지의 선택 속성 `approvedSpeech`(`{contentVersionId, text}`)에 싣는다. 한 code는 `approvedContent` · `approvedSpeech` 중 하나에만 들어간다. realtime이 두 맵에서 같은 code를 받으면 `approvedSpeech` 쪽을 버리고 `APP_ERROR`(`errorKind` `APPROVED_SPEECH_DUPLICATE_CODE`)만 남긴다 — 문구 텍스트는 로그에 남기지 않는다 [U8 편차 (U8-b)].
 
 | content_code | 넣는 활동 | 정본 |
@@ -361,10 +362,17 @@ U15 씨앗 v2는 GENERATED/DUPLICATE/NONE의 배타적 출력 분기를 사용�
 | `HELP_OFFER` | PRACTICE | B §3.1 `D_OFFER_HELP` 예시(v2 APPROVED, v1 DRAFT '같이 살펴볼까?'는 RETIRED) |
 | `D_REST_ACK_START` | FREE_TALK · PRACTICE | B §3.1 `D_REST_ACK_START` |
 | `D_REST_ACK` | FREE_TALK · PRACTICE | B §3.1 `D_REST_ACK` |
-| `COACH_SWITCH` | PRACTICE | B §8.5 코치 역할 전환 표현 |
-| `PEER_RETURN` | PRACTICE | B §8.5 친구 역할 복귀 표현 |
+| `COACH_SWITCH` | — (2026-10-24부터 연습 허용 목록에서 뺐다. 004 시드 행은 그대로다) | B §8.5 코치 역할 전환 표현 |
+| `PEER_RETURN` | — (같음) | B §8.5 친구 역할 복귀 표현 |
+| `VARIANT_OFFER` | PRACTICE | C안 설계 5장(006 v1): 비슷한 이야기로 한 번 더 해 볼까? |
+| `RETRY_PROMPT` | PRACTICE | C안 설계 5장(006 v1): 네 말로 한 번 말해 볼래? |
+| `INPUT_CONFIRM` | PRACTICE | C안 설계 5장(006 v1): 잘 못 들었어. 한 번 더 말해 줄래? |
+| `SCENE_CLOSE` | PRACTICE | C안 설계 5장(006 v1): 알겠어. 이 이야기는 여기까지 할게. |
+| `WAIT_LEAD` | PRACTICE | C안 설계 5장(006 v1): 천천히 생각해도 돼. |
+| `ASK_DEFAULT` | PRACTICE | C안 설계 5장(006 v1): 너라면 친구한테 뭐라고 말할래? |
 
 - `D_REPROMPT`는 B §3.1에서 '직전에 아이에게 한 무중의 말(출력 전사 그대로)'을 다시 말하는 지시라 고정 원문이 없다. 그래서 시드하지 않는다.
+- C안 고정 문장 6종(006)의 쓰임은 10.17이 정한다. 문구는 설계 문서 표가 초안이고, 팀 승인 기록은 AI 동작 명세 관례로 따로 남긴다. 원문 대조가 문장부호까지 엄격하므로 마침표 · 쉼표 · 물음표만 쓴다. `COACH_SWITCH` · `PEER_RETURN`이 시작 패키지에 없으면 realtime은 역할 알림을 지금처럼 생성형으로 낸다(유연 대화 경로를 다시 켤 때만 해당) [편차 FT-1024-a].
 
 ### 10.7 비밀 이름
 
@@ -407,7 +415,9 @@ Luna 호출부(core-api · realtime-activity 각자)는 공급자 시도마다 `
 
 - **호출 방식:** 두 앱이 각자(코드 공유 없음) JDK `HttpClient` + `JsonCodec`으로 직접 부른다 [U9 편차 (U9-a)]. core-api는 Responses API `POST {base-url}/responses`, realtime(진행 중 판정)은 Decisions API `POST {base-url}/decisions`(아래)다 [편차 FT-1023-d]. 리다이렉트를 따르지 않고(3xx는 `REQUEST_REJECTED`) 프록시를 쓰지 않으며, 응답 본문은 `max-response-bytes`까지만 읽는다. core-api 요청은 `model` · `instructions`(버전 파일의 지시) · `input`(정리된 데이터의 JSON 문자열, 지시와 다른 자리) · `text.format` · `max_output_tokens` · `reasoning.effort` · `store: false`이고 `temperature`는 보내지 않는다(기존 `ResultTextProvider.Request.temperature`는 받기만 하고 무시).
 - **Decisions 경로(realtime 진행 중 판정의 유일한 경로) [편차 FT-1023-d]:** `POST {base-url}/decisions`. core Responses 호출과 같은 규칙(주소 재확인 · 리다이렉트 · 프록시 · 응답 상한 · 시한 · 보내기 전 정리 · 요청 스키마 검증 · 감사 한 줄(10.8))을 지나고 본문 모양과 2xx 응답 검증만 다르다.
-  - 요청: `model`(`mujoong.luna.model`) · `input`(사용자 메시지 하나, 파트 `{"type":"input_json","data":<정리된 판정 입력>}`) · `questions`(`choice` 질문 한 개: `name` `judgment`, `instructions` = 판정 질문 지시문 `judgment/prompt-service-v3.txt`(응답 방식과 "아이의 가장 마지막 말(childUtterance) 하나만 판정한다" 포함) + 그 지점 질문, `choices` = 요청 선택지(판 순서) + 판의 선택지 뜻을 `description`으로). 데이터는 질문 지시문에 넣지 않는다(지시와 데이터 분리). `store` · `temperature` · `reasoning` · `max_output_tokens`는 Decisions에 없는 매개변수라 보내지 않는다(보존을 요청으로 끌 수 없어 10.2 R-F15 확인 기록 대상이다). 판정 기록 `promptVersion`은 `prompt-service-v3`이다. 이전 판 `prompt-service-v2`(Responses 출력 형식)는 이력으로 자원에 남는다.
+  - 요청: `model`(`mujoong.luna.model`) · `input`(사용자 메시지 하나, 파트 `{"type":"input_json","data":<정리된 판정 입력>}`) · `questions`(`choice` 질문 한 개: `name` `judgment`, `instructions` = 판정 질문 지시문(연습 대화 C안부터 기본 `judgment/prompt-service-v4.txt`, 이전 `prompt-service-v3.txt`. 응답 방식과 "아이의 가장 마지막 말(childUtterance) 하나만 판정한다" 포함) + 그 지점 질문, `choices` = 요청 선택지(판 순서) + 판의 선택지 뜻을 `description`으로). 데이터는 질문 지시문에 넣지 않는다(지시와 데이터 분리). `store` · `temperature` · `reasoning` · `max_output_tokens`는 Decisions에 없는 매개변수라 보내지 않는다(보존을 요청으로 끌 수 없어 10.2 R-F15 확인 기록 대상이다). 판정 기록 `promptVersion`은 보낸 판이다 — 연습 대화 C안부터 기본 `prompt-service-v4`, 그 전 `prompt-service-v3`. 이전 판 `prompt-service-v2`(Responses 출력 형식) · `prompt-service-v3`은 이력으로 자원에 남는다.
+  - **입력의 최근 대화 화자(`ai-judgment-request.recentTurns[].speaker`):** `CHILD` · `PARTNER` · `COACH` · `MUJOONG`. 연습 대화 C안에서는 장면 속 상대 역할이 없으므로 무중의 줄을 `PARTNER` · `COACH` 대신 `MUJOONG`으로 보낸다. `PARTNER` · `COACH`는 유연 대화 경로(10.14 `flexible-dialogue`)와 이전 기록 호환으로 남는다. 제브 요청 맥락은 이미 `MUJOONG`을 받는다(10.13) [편차 FT-1024-b].
+  - **C안 인정 규칙(`prompt-service-v4`):** 무중이 상대의 말을 전하고 "너라면 뭐라고 말할래?"라고 묻는 틀이다. 아이 대답이 직접 하는 말 · 할 말을 전하는 말("다음에 같이 그리자고 할래") · 할 행동 설명 중 무엇이든 내용이 목표 핵심 기능을 채우면 J2 `FULL` · J3 `DELIVERED` · J5 `FULL`이다. 할 말을 정하지 못하고 방법만 묻는 말("뭐라고 말해야 돼?")은 `HELP`다. 역할 대화 전제 문단과 J3 `ROLE_DIALOGUE_CLOSURE` 특수 단락은 v4에 없다(J3은 되묻기 뒤에만 쓴다). 절차 질문 규칙("…라고 말하면 돼?" → `HELP`)은 그대로다 [편차 FT-1024-b].
   - 응답 검증(새 사유 코드 없음): 비 2xx는 아래 표와 같다. 2xx에서 JSON이 아니면 `SERVER_ERROR`, 질문 이름이 맞는 답이 없으면 `EMPTY_OUTPUT`(이름 없는 거절만 있으면 `REFUSED`), 같은 이름 답이 여럿이면 `SCHEMA_INVALID`, `type: refusal`이면 `REFUSED`, `model`이 없으면 `MODEL_MISSING`, 그 밖에 `type`이 `choice`가 아님 · `choice`가 보낸 선택지 밖 · `probabilities`가 보낸 선택지를 모두 덮지 않음(밖 · 중복 · 숫자 아님 · 0 ~ 1 밖 포함) · 고른 값의 확률이 가장 높지 않음(같으면 허용)이면 `SCHEMA_INVALID`다.
   - 판정: 확률 내림차순 1 · 2순위(같으면 공급자가 고른 값, 그다음 판 순서)를 검증기(하한 `min-confidence` → `LOW_CONFIDENCE`, 최소 차이 `min-margin` → `LOW_MARGIN`, 같으면 확정)에 넘긴다. 응답의 `confidence`는 쓰지 않는다(판정 규칙은 선택지 확률 기준이고 confidence는 정의가 다른 값). 판독 불가 입력은 공급자 없이 `UNREADABLE_INPUT`, 실패는 `TIMEOUT` · `SCHEMA_INVALID` · `PROVIDER_ERROR` 보류다. Decisions 장애 · 지연 때 대신 부를 다른 끝점은 없고 그 판정은 보류로 끝난다.
 - **보내기 전 정리:** 모든 깊이에서 10.2 금지 키(+ core 결과 게이트웨이의 `audioRefs` · `audioRefsJson` · `interests` 등)를 지우고, 호출자가 준 별칭 표로 아이 이름을 바꾸며, 이메일 · 휴대전화 모양 값을 '연락처'로 가린다. 남으면 · 요청 스키마(`ai-judgment-request`)에 맞지 않으면 부르지 않고 `FORBIDDEN_INPUT`이다. UUID → '참조N'과 복원은 지금 `ResultTextGateway`가 맡는다.
@@ -437,7 +447,9 @@ Luna 호출부(core-api · realtime-activity 각자)는 공급자 시도마다 `
 
 ### 10.11 U10 상황 생성 경로
 
-실제 Luna 구성의 상황 생성은 `CONTRACT_SINGLE_CALL`로 생성 `scenario-generation.v2`와 별도 검토 `scenario-review.v1`을 각각 스키마 검증한다. 안쪽 재시도 없이 바깥 요청이 최초 15초·내용 수정1·기술 재시도1·BASE-only 검토1(최대6호출)을 공유한다. 기존 직접 호출 어댑터 메서드의 json_object 계약과 다른 목적의 호출 예산은 그대로다.
+실제 Luna 구성의 상황 생성은 `CONTRACT_SINGLE_CALL`로 생성 `scenario-generation.v3`(`prompts/scenario/generation.v3.txt`)과 별도 검토 `scenario-review.v2`(`prompts/scenario/review.v2.txt`)를 각각 스키마 검증하고, 두 판으로 낸 대본은 `scriptVersion` `scenario-script.v2`로 저장한다(연습 대화 C안, 10.17). 이전 판 파일(`generation.v2` · `review.v1`)은 이력으로 남고 보내지 않는다(같은 판 이름을 다른 내용으로 바꾸지 않는다) [편차 FT-1024-e]. 안쪽 재시도 없이 바깥 요청이 최초 15초·내용 수정1·기술 재시도1·BASE-only 검토1(최대6호출)을 공유한다. 기존 직접 호출 어댑터 메서드의 json_object 계약과 다른 목적의 호출 예산은 그대로다.
+
+요청 스키마는 계약 스키마(`ai-scenario-output.schema.json`) 사본이라 C안 새 칸 다섯 개(`opportunityRelay` · `askPrompt` · `reaskPrompt` · `helpSpeech` · `friendReaction`)가 따라오고, strict 요청에서는 모두 required라 모델이 반드시 채운다. 응답 검증은 원본 계약으로 하고 원본에서 새 칸은 선택이라 옛 출력도 통과한다. 서버 검사(`ScenarioScriptValidation`)는 새 칸이 있을 때 10.17의 들리는 칸 규칙을 보고, 기존 칸 규칙(BASE 설명의 조건 원문 · 기회 문장, 도입 · 돌아보기 검사, 거절 사유 코드)은 그대로다. 새 칸은 저장(`core_scenario.scenes_json`) · C10 응답 · 시작 패키지 `practice.goals[].firstScenario.scenes[]`에 같은 이름으로 그대로 실린다(null인 칸은 쓰지 않는다).
 
 사용자 결정 Q1-A로 최상위 interests의 이름을 정리한 최대10개·각80자 관심사만 SCENARIO_GENERATION/SCENARIO_REVIEW에 허용한다. 중첩 interests·일반 정리 API·다른 목적은 기존 금지를 유지한다. 이름은 소유 프로필에서 얻은 비공개 별칭으로 ‘아이’로 치환하고 연락처·과도한 자유문은 제외한다. 생성·검토 모두 같은 나이·최근 실제 노출3건·지정 원본·고정 목표의 정리 값을 쓴다. 원래 이름·식별자·판정 전용 기준·검토 원문을 공급자 데이터나 로그에 넣지 않는다. 모르는 타인의 이름 탐지 품질은 자동 시험으로 보장하지 않는다.
 
@@ -492,24 +504,25 @@ realtime 출력 게이트의 제브 단계(U13)가 읽는 설정이다. 시간 �
 
 **열린 항목(실호출로만 확정):** 요청 `model`에 고정 버전 이름이 받아들여지는지(공식 예시 요청은 `-latest` 이동 별칭을 쓰고 우리 규칙은 그것을 거부한다), 오류 본문 모양, `confidence`의 뜻, 한국어 문안의 분류 품질, 지연, 확률 합 허용 오차, 문턱 0.5. 키를 넣기 전 R-F15 확인 기록(RUNBOOK 단계 4)이 먼저다.
 
-### 10.14 U12 새 연습 흐름 횟수 한도
+### 10.14 U12 새 연습 흐름 횟수 한도 · 경로 스위치
 
-realtime 새 연습 흐름(U12)이 읽는 설정이다. 시간 값이 아니며 `timing.md`에 두지 않는다. 시간 한도(무응답 재안내 10초 · 집중 90초 · 목표 ACTIVE 10분)는 기존 키 `mujoong.timing.conversation.no-response-wait` · `focus-max` · `goal-active-limit`(timing.md 13절)이 맡고, 이 표는 횟수만 정한다. 비밀이 아니고 환경 변수가 없다.
+realtime 새 연습 흐름(U12)이 읽는 설정이다. 시간 값이 아니며 `timing.md`에 두지 않는다. 시간 한도(무응답 재안내 10초 · 집중 90초 · 목표 ACTIVE 10분)는 기존 키 `mujoong.timing.conversation.no-response-wait` · `focus-max` · `goal-active-limit`(timing.md 13절)이 맡고, 이 표는 횟수와 경로 스위치만 정한다. 비밀이 아니고 환경 변수가 없다. 연습 대화 C안(10.17)으로 `retry-max` 기본값을 2에서 1로 낮추고 `flexible-dialogue`를 더했다 [편차 FT-1024-a] [편차 FT-1024-d].
 
 | 설정 키 | 기본값 | 앱 | 뜻 |
 |---|---|---|---|
-| `mujoong.practice-flow.retry-max` | `2` | realtime | 장면 하나에서 코치와 함께 '다시 해 보기'를 할 수 있는 최대 횟수(AC1.5.4). 0 이상 정수, 0은 하지 않음 |
+| `mujoong.practice-flow.retry-max` | `1` | realtime | 장면 하나에서 도움 뒤 '다시 해 보기'를 할 수 있는 최대 횟수(AC1.5.4, C안 1 — FT-1024-d). 0 이상 정수, 0은 하지 않음. 넘으면 장면을 닫는다(`SCENE_CLOSE`) |
 | `mujoong.practice-flow.reexplain-max` | `1` | realtime | 장면 하나에서 상황을 다시 설명하는 최대 횟수(AC1.3.x, OPPORTUNITY와 RETRY가 공유). 0 이상 정수, 0은 하지 않음 |
+| `mujoong.practice-flow.flexible-dialogue` | `false` | realtime | 연습 대화 경로 스위치(참거짓). `false`(운영 기본) = 대본형 C안(무중이 직접 묻기, 10.17), `true` = 유연 대화(장면 속 친구 역할 · 생성형, C안 전 운영 동작). 유연 대화 코드와 시험은 지우지 않아 이 값 하나로 되돌릴 수 있다. realtime `application.yml` · 설정 레코드 · `ConfigKeyContractTest` 대조 목록이 이 줄과 같아야 한다 |
 
 ### 10.15 자유대화 서비스 정책 적용
 
-자유대화는 앱에 포함한 `service-0.1-app.3` 정책을 세션에 고정한다. 원본/적용본 해시와 문장 편차는 `service-guardrail-policy-deviations.md`에 기록한다. 이름·나이·관심사만 기존 상한·이스케이프로 데이터 구역에 둔다. 초기 안내/현재 참여 수락은 서버가 확인하며, FIRST/CONTINUE·교정·재시도 지시는 강제 관심사 질문·고정 맞장구·휴식 뒤 자동 재개를 추가하지 않는다. 연습의 기존 역할과 검증된 발화 입구는 유지한다.
+자유대화는 앱에 포함한 `service-0.1-app.3` 정책을 세션에 고정한다. 원본/적용본 해시와 문장 편차는 `service-guardrail-policy-deviations.md`에 기록한다. 이름·나이·관심사만 기존 상한·이스케이프로 데이터 구역에 둔다. 초기 안내/현재 참여 수락은 서버가 확인하며, FIRST/CONTINUE·교정·재시도 지시는 강제 관심사 질문·고정 맞장구·휴식 뒤 자동 재개를 추가하지 않는다. 연습의 검증된 발화 입구는 유지한다(연습 대화 C안부터 장면 속 역할이 없고 장면 안 말은 승인 낭독이다, 10.17).
 
 녹음 안내는 GPT-Live 자신이 발화한 이력으로 추정하지 않는다. 현재 연결의 검증 안내 `COMPLETED`와 참여 수락 뒤 기존 FIRST 지시 하나로 실제 안내 전달 사실을 알리고, 시작 인사·자기소개·대본·참여 질문을 반복하지 않고 아이의 마지막 말에 이어 답하게 한다(RG1). 명확한 재시작 인사/자기소개와 등록 시작 대본 반복은 첫 현재 응답이 실제 기기 프레임으로 송신되고 현재 세대의 재생 완료를 확인하기 전까지 음성·전사 후보 전체를 폐기한다. 제브 ALLOW나 승인 원문 생략도 이 검사를 우회하지 않는다. 별도 AI 판정·자동 재생성·교정 호출은 추가하지 않는다. 아이의 명시적 이름/정체 질문에 대한 답, 인사 인용, 이후 대화와 연습은 구분한다. 이 유한한 표현/상태 검사는 임의의 모든 의미적 바꿔 말하기 탐지나 실모델의 항상 준수를 보장하지 않는다.
 
 참여 전 입력 전사 quiet는 과거 발화를 새 현재 발화로 바꾸는 근거가 아니다. 실제 null `itemId` 입력은 현재 안내 완료 때의 세션 오디오 시간선과 관측 입력 끝 watermark 이후에 시작한 유효 `start_ms/end_ms`만 현재 참여 후보로 삼는다. 시간/식별 근거가 둘 다 없는 전사는 참여 수락으로 추정하지 않는다. 내부 합성 완료 사건과 legacy item ID 대역은 실제 공급자 wire 증거와 구분한다.
 
-J1/J6의 고정 질문·선택지는 `judgment-service-v1`, 공통 지시문은 `prompt-service-v3`(Decisions 질문 지시문, 10.10 · 편차 FT-1023-d)을 사용한다. 판정 요청 스키마·4초 마감·호출 횟수는 그대로다. JEV의 `policyVersion`은 기존 JEV 판이며 서비스 정책판으로 바꾸지 않는다. 내부 검사표만 session/mode/generation/목적·후보 본문 해시·서비스/JEV판을 연결한다. ALLOW 뒤에도 actor의 현재 출력 권한을 다시 확인한다. 확률/동률·800ms·실패/REVIEW 차단은 유지한다. 현재 Jev 범주와 출력 단위는 10.15절의 v3 정책을 따른다.
+J1/J6의 고정 질문·선택지는 `judgment-service-v1`, 공통 지시문은 `prompt-service-v3`(Decisions 질문 지시문, 10.10 · 편차 FT-1023-d)을 사용했고, 연습 대화 C안부터 기본 판은 `judgment-service-v2` · `prompt-service-v4`다(J1 · J6 질문 · 선택지는 v1과 같다, 10.4 · 10.10 [편차 FT-1024-b]). 판정 요청 스키마·4초 마감·호출 횟수는 그대로다. JEV의 `policyVersion`은 기존 JEV 판이며 서비스 정책판으로 바꾸지 않는다. 내부 검사표만 session/mode/generation/목적·후보 본문 해시·서비스/JEV판을 연결한다. ALLOW 뒤에도 actor의 현재 출력 권한을 다시 확인한다. 확률/동률·800ms·실패/REVIEW 차단은 유지한다. 현재 Jev 범주와 출력 단위는 10.15절의 v3 정책을 따른다.
 
 안내·참여 질문·종료 확인·인사는 현재 승인 본문/음성 판과 해시·PCM16LE 24kHz 모노 형식·길이·SPOKEN_VERIFIED 검수판이 일치해야 전달 후보가 된다. 실제 서비스 말소리는 후속 제작/청취/등록 전까지 미준비다. 운영 notice-assets manifest는 비어 있으며 톤·무음이나 합성 시험 자원은 실제 안내로 승격하지 않는다. 새 공급자 API 필드·SDK·자동 AI 호출은 추가하지 않는다.
 
@@ -520,7 +533,7 @@ J1/J6의 고정 질문·선택지는 `judgment-service-v1`, 공통 지시문은 
 
 검사는 출력 순서대로 진행하며, 앞 단위의 판정 동안 최대 128개 단위를 보관한다(추가 대기 음성 상한은 기존 구간 상한 960,000바이트). Jev에는 현재 조각과 직전에 통과한 출력의 마지막 64자만 전달하여 조각 경계에 걸친 욕설을 판단한다. 아동의 대화 맥락은 이 경로에 보내지 않는다. BLOCK·REVIEW·검사 실패·정렬 실패·대기열 초과는 남은 응답을 무효화한다. 기존의 한 차례 재지시와 끼어들기·종료·연결 변경에 대한 권한 검사는 유지한다.
 
-전사가 음성보다 앞서 도착하면 `mujoong.timing.judgment.response-ready` 한도 안에서 대응 음성을 기다린다. 시간 정보가 없거나 음성부터 시작해 전사 대응을 확인할 수 없는 제공자는 기존 무음 구간 검사 경로를 사용한다. 생성형 연습 발화에도 단위별 검사를 적용하되 연습 슬롯의 완료 사실은 모든 단위의 검사·재생과 발화 종료가 확인된 뒤 한 번만 보낸다. 등록 원문 재생 경로는 유지한다.
+전사가 음성보다 앞서 도착하면 `mujoong.timing.judgment.response-ready` 한도 안에서 대응 음성을 기다린다. 시간 정보가 없거나 음성부터 시작해 전사 대응을 확인할 수 없는 제공자는 기존 무음 구간 검사 경로를 사용한다. 생성형 연습 발화에도 단위별 검사를 적용하되 연습 슬롯의 완료 사실은 모든 단위의 검사·재생과 발화 종료가 확인된 뒤 한 번만 보낸다. 등록 원문 재생 경로는 유지한다. 연습 대화 C안(10.17)에서 장면 안 연습 말은 모두 등록 원문 읽기(승인 낭독, `session.instructions.append`)라 원문 대조(10.5)가 `MATCHED`면 제브를 건너뛰고, 단위별 검사를 거치는 생성형 연습 발화(`session.commentary.append`)는 장면 밖 말(목표 안내 · 목표 회고 · 돌아보기 제안 · 받아 주기 · 낭독 실패 뒤 뜻 전하기)에만 남는다. 장면 밖 말은 생성형이라 제브가 꺼져 있으면(`OFF`) 연습은 목표 안내에서 실패한다(main 동작 그대로). 로컬 기본값인 대역(`STUB`)은 제브 단계를 지나 대역 표시가 붙은 `ALLOW`를 돌려주므로 연습이 진행된다(대역 통과는 실제 검사 성공이 아니다, R-M11) [편차 FT-1024-a].
 
 단위 테스트의 PASS/BLOCK은 합성 입력과 테스트 대역의 결과이며 실제 Jev 분류 정확도·운영 지연 측정 결과가 아니다.
 
@@ -547,6 +560,77 @@ J1/J6의 고정 질문·선택지는 `judgment-service-v1`, 공통 지시문은 
 - **버린 출력 진단(2026-10-22).** 출력 세대를 올릴 때 그 세대에서 보류로 버린 조각이 있었으면 `OutputDiscardedHeld`, 지시 전 낡은 말로 버린 조각이 있었으면 `OutputDiscardedStale`(INFO)을 한 번씩 남긴다. `OutputNewSpeechNotObserved` 직전에는 마지막 지시 뒤 출력 조각이 하나도 없었으면 `OutputNotObservedProviderSilent`, 있었으면 `OutputNotObservedOnlyStaleChunks`(WARN)를 남긴다. 원문은 남기지 않는다(R-F14).
 - **공급자 오류 코드.** 입력 쪽 오류(`input_`으로 시작하는 코드)는 지금 나오는 AI 응답을 버리지 않는다. 공급자 `error` 사건마다 오류 코드를 사유 코드 `ProviderErrorCode_<코드>`(WARN)로 남긴다. 코드가 소문자 · 숫자 · 밑줄로 된 2 ~ 61자 식별자일 때만 싣고, 그 밖은 `ProviderErrorCode_unknown`이다(자유 문자열 · 메시지 · 매개변수는 남기지 않는다, R-F14).
 - **안내 직후 첫 응답의 인사 차단 완화.** 아이의 마지막 말에 인사(안녕 · 반가워 · 하이 · 헬로)가 있었으면 그 인사에 답하는 인사말은 시작 인사 반복으로 보지 않는다. 자기소개(`나는 AI` · `나는 무중`)와 안내 · 참여 질문 문장 반복은 계속 막는다.
+
+### 10.17 연습 대화 C안 — 무중이 직접 묻기 (2026-10-24, [편차 FT-1024-a] ~ [편차 FT-1024-e])
+
+장면 속 친구 역할을 없앤다. 무중이 상황과 상대의 말을 자기 말로 전하고 "너라면 뭐라고 말할래?"라고 묻는다. 장면 안에서 무중이 하는 말은 모두 대본을 만들 때 미리 써 둔 대본 칸이거나 시드 고정 승인 문장(004 · 006)이고, realtime은 이것을 승인 낭독(`session.instructions.append`, 원문 대조 10.5)으로 낸다. 그 자리에서 GPT-Live가 장면 안 말을 지어내지 않는다. 설계 정본은 `docs/practice-direct-ask.md`다.
+
+- **경로:** realtime `mujoong.practice-flow.flexible-dialogue`가 `false`(기본, 10.14)일 때 대본형 경로가 C안이다. `true`면 유연 대화(장면 속 친구 역할 · 생성형, C안 전 운영 동작)이고 그 코드 · 시험은 남는다 [편차 FT-1024-a].
+- **장면 밖 말은 바꾸지 않는다:** 목표 안내 · 목표 회고 · 돌아보기 제안 · 받아 주기 · 승인 낭독 실패 뒤 '뜻 전하기' 복구는 지금처럼 생성형(`session.commentary.append`)이고 제브를 거친다(10.15 Jev 출력 단위별 검사). 이 문구 안의 '역할놀이' · '상대 역할'만 C안에 맞게 고친다(realtime 몫).
+- **배포 순서:** realtime을 먼저 배포한다. v1만 읽는 realtime은 v2 대본을 `UNSUPPORTED_VERSION`으로 거절하므로, realtime이 `scenario-script.v1` · `scenario-script.v2`를 모두 읽게 된 뒤에 core가 v2 대본을 낸다 [편차 FT-1024-e].
+
+**상태별 말.** 바탕은 대본형 전이표(`FlowTransitions` OPPORTUNITY · REASK · HELP_OFFER · RETRY · VARIANT_OFFER)이고 갈래와 결과값은 그대로다. 역할 전환 단계(`ROLE_NOTICE` · `RETURN_NOTICE`)와 역할 전환 안내는 없다. 갈래 전체는 설계 3.1이다.
+
+| 상태 | 나가는 말 | 출처 |
+|---|---|---|
+| SCENE_INTRO | 상황 안내 | 대본 `spokenIntroduction` |
+| OPPORTUNITY 진입 | 상대의 말 전하기 + 묻기(한 슬롯으로 이어 읽는다) | 대본 `opportunityRelay` + `askPrompt` |
+| OPPORTUNITY 무응답 1회 | 다시 묻기 | 고정 `WAIT_LEAD` + 대본 `askPrompt` |
+| 다시 설명(J2 `NOT_UNDERSTOOD` · `IRRELEVANT`) | 다시 설명 + 묻기(묻기를 다시 읽는다) | 대본 `reexplanation` + `askPrompt` |
+| REASK(J2 `PARTIAL`) | 되묻기 | 대본 `reaskPrompt` |
+| HELP_OFFER(J3 `STILL_SHORT` · 다시 설명 한도 넘음) | 도움 제안 | 고정 `HELP_OFFER`(004) |
+| FOCUS(J2 · J3 `HELP` · 절차 질문 · J4 `ACCEPT`) | 도움 | 대본 `helpSpeech` |
+| RETRY 무응답 1회 | 다시 해 보기 권유 | 고정 `RETRY_PROMPT` |
+| 판독 불가 · 판정 보류 | 확인 | 고정 `INPUT_CONFIRM` |
+| 장면 성공(J2 `FULL` · J3 `DELIVERED` · J5 `FULL` · `COPIED`) | 상대의 반응 전하기 | 대본 `friendReaction` |
+| 장면 실패 · 거절 · 한도 | 장면 닫기 | 고정 `SCENE_CLOSE` |
+| VARIANT_OFFER | 변형 제안 | 고정 `VARIANT_OFFER` |
+
+- 한도(B §8.3 G-16과 같고 다시 해 보기만 바뀐다): 되묻기 기회마다 1회 · 다시 설명 기회마다 1회(`reexplain-max` 1, 넘으면 HELP_OFFER) · 무응답 다시 묻기 기회마다 1회(넘으면 장면 닫기) · 판독 불가 · 보류 확인 기회마다 2회까지(넘으면 장면 닫기) · 도움 장면마다 1회(첫 도움에 표현 예시를 넣는다) · 다시 해 보기 장면마다 1회(`retry-max` 1, 넘으면 도움을 다시 하지 않고 장면 닫기) [편차 FT-1024-d].
+- 장면 성공 뒤에는 칭찬 대신 대본에 미리 쓴 상대의 반응(`friendReaction`)을 전한다 [편차 FT-1024-c]. 변형 장면도 같은 흐름이고 변형 장면의 칸을 쓴다.
+
+**대본 칸(`scenario-script.v2`).** 들리는 새 칸 다섯 개다. 모두 반말이고(선생님 · 어른에게 하는 말을 묻는 `askPrompt`는 높임말), 저장(`core_scenario.scenes_json`) · C10 응답 · 시작 패키지 `practice.goals[].firstScenario.scenes[]`에 같은 이름의 문자열로 실린다. 값이 없으면 키를 쓰지 않는다. 계약 스키마(`ai-scenario-output`)에서는 선택 칸이고 strict 생성 요청에서는 required다(10.11). 길이 상한은 스키마 `maxLength`다.
+
+| 칸 | 뜻 | 서버 검사(`ScenarioScriptValidation` 사유 코드) |
+|---|---|---|
+| `opportunityRelay` | 상대가 한 말을 무중이 자기 말로 전한다. 아이가 알아챌 단서가 들어 있고 "~대 · ~래"로 끝난다 | 2문장 · 200자 이하. `opportunitySentence`와 글자가 같으면(정리 뒤 비교) `RELAY_COPIES_PARTNER_LINE`. 목표 표현 누설 `TARGET_EXPRESSION_DISCLOSED` |
+| `askPrompt` | "너라면"으로 시작하고 물음표로 끝나는 묻는 말 한 문장. 상대 호칭은 `relation`에 맞춘다 | 1문장 · 100자 이하. 모양이 다르면 `ASK_PROMPT_FORM`. 목표 표현 누설 |
+| `reaskPrompt` | 일부만 전했을 때 되묻는 질문 하나. 단서를 다시 짚되 답은 주지 않는다 | 2문장 · 200자 이하. 목표 표현 누설 |
+| `helpSpeech` | 요점 한 문장 + 표현 예시 하나(`expressionExamples` 중 하나의 뜻, "예를 들면 … 처럼 말할 수 있어") + 고정 꼬리 "네 말로 해 볼래?" | 3문장 · 300자 이하. 꼬리로 끝나지 않거나 꼬리 앞 문장이 없으면 `HELP_TAIL_MISSING`(공백은 대조하지 않는다). 표현 예시를 담는 칸이라 목표 표현 누설은 보지 않는다 |
+| `friendReaction` | 목표를 이룬 어떤 대답 뒤에도 맞는 상대의 반응을 무중이 전한다. 아이 대답의 구체 내용을 가정하지 않는다 | 2문장 · 200자 이하. 칭찬 · 평가어(잘했 · 멋지 · 정답 · 훌륭 등)가 있으면 `REACTION_PRAISE`, 물음표로 끝나면 `REACTION_QUESTION` |
+
+- 다섯 칸 공통: 마침표 · 쉼표 · 물음표 밖의 문장부호 · 기호(따옴표 · 느낌표 · 물결 · 말줄임표 · 괄호 등)는 `SPOKEN_PUNCTUATION`, 빈 값 · 길이 · 문장 수 초과 · 제어 문자는 `SPOKEN_FORMAT`, 역할 말("역할" · "코치" · "무중이가 친구야" · "무중이가 ○○ 할게" 같은 말, 공백을 뺀 글에서 찾는다)은 `ROLE_TALK`이다. 기존 금지 표현 · 원래 이름 · 연락처 검사(`PRIVATE_OR_FORBIDDEN_CONTENT`)와 압박 · 답 강요 검사(`PRESSURE_OR_ANSWER`)도 다섯 칸에 건다. 문장부호를 줄이는 까닭은 원문 대조(10.5)가 공백만 빼고 문장부호까지 같아야 `MATCHED`이기 때문이다.
+- 검사는 칸이 있을 때만 하고(옛 대본 v1에는 없다), 기존 칸의 규칙과 사유 코드는 그대로다. 걸리면 기존 보완 흐름(`INVALID_BASE` · `INVALID_VARIANT`, 진단 `ScenarioRule_<사유>`)을 탄다. 생성 · 검토 지시(`generation.v3` · `review.v2`)도 같은 규칙을 지시 · 검토하고, 검토 사유는 기존 코드(`INCOMPLETE_SCENE` · `ANSWER_INCLUDED` · `EARLY_CUE` · `PRESSURE` · `GOAL_MISMATCH` · `AGE_MISMATCH`)를 쓴다 [편차 FT-1024-e].
+- 안 들리는 칸은 뜻이 그대로다: `sceneDescription`(내부 사실) · `opportunitySentence`(상대의 직접 대사, trigger script · 노출 근거, C안에서는 들려주지 않는다) · `focusPoints` · `expressionExamples`(기록 사실과 `helpSpeech` 근거) · `relation` · `place` · `topic` · `preservation` · `partnerRole` · `reflectionPrompt`.
+
+**고정 승인 문장.** 시작 패키지 `approvedSpeech`(10.6)에 `{contentVersionId, text}`로 실린다. 연습 허용 목록은 `HELP_OFFER` · `D_REST_ACK_START` · `D_REST_ACK`와 아래 006 여섯 개이고, `COACH_SWITCH` · `PEER_RETURN`은 뺐다(004 시드 행은 그대로다) [편차 FT-1024-a].
+
+| content_code | 문장 | 쓰는 곳 |
+|---|---|---|
+| `HELP_OFFER`(004) | 무중이가 조금 도와줄까? | HELP_OFFER |
+| `VARIANT_OFFER` | 비슷한 이야기로 한 번 더 해 볼까? | 변형 제안 |
+| `RETRY_PROMPT` | 네 말로 한 번 말해 볼래? | 다시 해 보기 무응답 |
+| `INPUT_CONFIRM` | 잘 못 들었어. 한 번 더 말해 줄래? | 판독 불가 · 판정 보류 |
+| `SCENE_CLOSE` | 알겠어. 이 이야기는 여기까지 할게. | 장면 실패 · 거절 · 한도 |
+| `WAIT_LEAD` | 천천히 생각해도 돼. | 무응답 다시 묻기 앞머리 |
+| `ASK_DEFAULT` | 너라면 친구한테 뭐라고 말할래? | `askPrompt`가 없을 때 |
+
+**칸이 없을 때(옛 대본 v1) 대체.** 칸마다 따로 대체한다. 고정 대체 문장은 realtime 상수이고 위 문장부호 규칙을 지킨다. 이어 붙이는 옛 칸(`opportunitySentence` · `focusPoints` · `expressionExamples`)은 C안 검사를 받지 않은 값이라 원문 대조가 실패할 수 있다(실패 뒤 처리는 승인 낭독의 재시도 · '뜻 전하기' 복구 그대로) [편차 FT-1024-e].
+
+| 없는 칸 | 대체 |
+|---|---|
+| `spokenIntroduction` | 상상 속 이야기를 떠올려 봐. 무중이가 이야기를 들려줄게. |
+| `opportunityRelay` | 친구가 이렇게 말했어. + `opportunitySentence` |
+| `askPrompt` | 고정 `ASK_DEFAULT` |
+| `reaskPrompt` | 조금 더 자세히 말해 줄래? |
+| `helpSpeech` | `focusPoints[0]` + "예를 들면 " + `expressionExamples[0]` + "처럼 말할 수 있어. 네 말로 해 볼래?" |
+| `friendReaction` | 그렇게 말해 주면 친구도 네 마음을 알 거야. |
+
+**판정.** 진행 중 판정의 기본 판은 `prompt-service-v4` · `judgment-service-v2`이고 판정 입력의 무중 줄 화자는 `MUJOONG`이다(10.4 · 10.10). 아이 대답이 직접 하는 말 · 할 말을 전하는 말("다음에 같이 그리자고 할래") · 할 행동 설명 중 무엇이든 내용이 목표 핵심 기능을 채우면 수행이다(J2 `FULL` · J3 `DELIVERED` · J5 `FULL`). 할 말을 정하지 못하고 방법만 묻는 말("뭐라고 말해야 돼?")은 `HELP`다. 절차 질문 규칙과 판정 경로 · 시한 · 확률 하한은 그대로다. core 기록용 재판정(`RejudgmentGateway`, 출력 스키마 `ai-rejudgment-output`)도 같은 인정 규칙을 넣은 `rejudgment.v2` 지시로 부르고, 판정 기록 `promptVersion`은 `rejudgment.v2`다(리포트 2항목 줄 이름이 이 결과를 쓴다) [편차 FT-1024-b].
+
+**기록.** 연습 기록의 모양과 `flowVersion`(`practice-conversation-v1`) · 시점 5값의 뜻은 그대로다. 역할 사실(`COACH_SWITCH` · `COACH_RETURN` · `ORIGINAL_SCENE_RETURN`)은 C안에서 나오지 않는다(열거값은 유연 대화 · 이전 기록 호환으로 남는다). 마이그레이션은 없다.
+
+**증거.** 자동 시험 · CI · `verify.sh`는 가짜 공급자만 쓴다(R-F1). C안 대본 생성 품질 · 승인 낭독 성공률 · 전하는 식 대답의 판정은 실호출(실제 API + 합성 아이 음성) 관측으로 따로 보고하고, 대역 성공을 실제 공급자 · 실제 기기 성공으로 표시하지 않는다(R-M11).
 
 ## 자유대화 전 보호자 입력 참고
 
