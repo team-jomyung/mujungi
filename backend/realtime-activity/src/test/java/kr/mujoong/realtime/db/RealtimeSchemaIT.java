@@ -259,7 +259,8 @@ class RealtimeSchemaIT {
                             + " and tablename = 'realtime_session_event'"
                             + " and indexname = 'realtime_session_guardrail_revision_idx'"))
                     .startsWith("CREATE INDEX")
-                    .contains("realtime_session_event", "session_id", "revision", "DESC", "SESSION_GUARDRAIL_FACTS")
+                    .contains("realtime_session_event", "session_id", "revision", "DESC",
+                            "WHERE", "event_type", "'SESSION_GUARDRAIL_FACTS'")
                     .doesNotContain("UNIQUE");
             // 전사 (session_id, sequence_no) 유일과 폴러 · 삭제 참가자 색인
             assertThat(single(realtime,
