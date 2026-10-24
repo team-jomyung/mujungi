@@ -1,9 +1,12 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
-import type { ApiClient } from "./apiClient";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
+import { ApiError, type ApiClient } from "./apiClient";
+import { useTiming } from "@/shared/timing/TimingProvider";
 import { queryKeys, useApiClient } from "./queries";
 import { parseHome, type HomeView } from "./types";
+import { subscribeHomeEvents } from "./homeEvents";
 
 // 04 홈 조회 요청 (U1 3.5 Step 39 · PD-12 · 계약 3절). 서버 호출만 한다.
 
@@ -12,8 +15,37 @@ export function fetchHome(api: ApiClient, signal?: AbortSignal): Promise<HomeVie
   return api.request({ method: "GET", path: "/api/home", parse: parseHome, csrf: false, signal });
 }
 
-/** 04 · 05 · 12의 홈 조회(진입 때 1회). */
-export function useHomeQuery() {
+/** 홈·기기 상태 화면에서만 SSE로 최신 상태를 확인한다. 다른 화면은 진입 조회를 유지한다. */
+export function useHomeQuery(poll = false) {
   const api = useApiClient();
-  return useQuery({ queryKey: queryKeys.home, queryFn: ({ signal }) => fetchHome(api, signal) });
+  const client = useQueryClient();
+  const timing = useTiming();
+  const [connected, setConnected] = useState(false);
+  const query = useQuery({
+    queryKey: queryKeys.home,
+    queryFn: ({ signal }) => fetchHome(api, signal),
+    refetchInterval: (query) => poll && !isAccessError(query.state.error)
+      ? connected ? timing.homeReconcileIntervalMs : timing.parentPollIntervalMs : false,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: (query) => poll && !isAccessError(query.state.error),
+    refetchOnReconnect: (query) => poll && !isAccessError(query.state.error),
+  });
+  const { refetch } = query;
+  const allowed = poll && !isAccessError(query.error);
+  useEffect(() => {
+    if (!allowed) return;
+    let active = true;
+    const refresh = async () => {
+      // An in-flight GET may have read before this signal committed. Wait for it, then read once more.
+      if (client.isFetching({ queryKey: queryKeys.home, exact: true })) await refetch({ cancelRefetch: false });
+      if (active && !isAccessError(client.getQueryState(queryKeys.home)?.error)) await refetch({ cancelRefetch: false });
+    };
+    const unsubscribe = subscribeHomeEvents(() => { void refresh(); }, setConnected);
+    return () => { active = false; unsubscribe(); };
+  }, [allowed, refetch, client]);
+  return query;
+}
+
+function isAccessError(error: unknown): boolean {
+  return error instanceof ApiError && (error.status === 401 || error.status === 403 || error.status === 404);
 }

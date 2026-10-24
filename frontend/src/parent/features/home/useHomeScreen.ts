@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { activeTabTarget, liveActivityCard } from "./presentation";
 import { useMeQuery } from "../../common/api/account";
 import { useHomeQuery } from "../../common/api/home";
@@ -13,12 +13,12 @@ import { useToast } from "@/shared/toast/ToastProvider";
 import { useNotificationEntry } from "../../common/push/useNotificationEntry";
 
 // 04 홈 화면의 요청 · 앱 시작 점검 · 오류 분기 · 화면 이동을 맡는 흐름 훅.
-// 동작 규칙(GET /api/home 1회 · GET /api/me 점검 401 → 01 · 잠긴 탭 이유 토스트)은 HomeScreen에 있던 그대로다.
+// 홈 체류 중 기기 상태와 시작 잠금을 함께 갱신한다. GET /api/me의 시작 점검은 그대로 둔다.
 
 export function useHomeScreen() {
   const router = useRouter();
   const toast = useToast();
-  const home = useHomeQuery();
+  const home = useHomeQuery(true);
   const me = useMeQuery();
   const checkingAccount = me.isPending || me.isFetching;
   const notification = useNotificationEntry(
@@ -27,15 +27,20 @@ export function useHomeScreen() {
     checkingAccount,
   );
   const { error, errorUpdatedAt, dataUpdatedAt, refetch } = home;
+  const errorShown = useRef(false);
 
   useEffect(() => {
     if (error === null) {
+      errorShown.current = false;
       return;
     }
     if (isUnauthenticated(error)) {
       goToLogin(router, toast);
       return;
     }
+    // 자동 조회가 계속 실패해도 같은 오류로 토스트를 반복해서 띄우지 않는다.
+    if (errorShown.current) return;
+    errorShown.current = true;
     toast.show({
       message: TEMP_COPY.networkError,
       kind: "error",
@@ -68,7 +73,7 @@ export function useHomeScreen() {
   const activeTarget = notification.active ? null : activeTabTarget(currentSession);
   // 홈을 아직 못 읽었으면 판정을 모르므로 잠근다(닫힌 쪽). 진행 중이면 잠그지 않고 활동 화면으로 보낸다.
   const lockMessage =
-    data === undefined || notification.pending || notification.unknown
+    data === undefined || error !== null || notification.pending || notification.unknown
       ? TEMP_COPY.lockToastStatusUnknown
       : activeTarget !== null
         ? null

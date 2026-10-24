@@ -328,7 +328,10 @@ public class DeviceJdbcRepository {
         integer(params, "recentDisconnects", report.recentDisconnects());
         instant(params, "since", report.since());
         instant(params, "lastSeenAt", report.lastSeenAt());
-        return jdbc.update("""
+        // NOTIFY는 이 UPDATE와 같은 트랜잭션이 커밋된 뒤 모든 Core의 LISTEN 연결에 전달된다.
+        // 중복·역순 보고나 롤백에는 알림이 없다. 상태 원문 대신 보호자별 재조회 신호만 전한다.
+        return jdbc.queryForObject("""
+                with changed as (
                 update core.core_device
                    set reported_connection_state = :state,
                        rtt_ms = coalesce(:rttMs, rtt_ms),
@@ -339,7 +342,13 @@ public class DeviceJdbcRepository {
                        updated_at = :now, row_version = row_version + 1
                  where id = :id and registration_status = 'REGISTERED'
                    and (reported_at is null or reported_at < :reportedAt)
-                """, params);
+                returning guardian_id
+                )
+                select count(*)::integer,
+                       count(pg_catalog.pg_notify('mujoong_home_changed', guardian_id::text))
+                           filter (where guardian_id is not null)
+                  from changed
+                """, params, (rs, rowNum) -> rs.getInt(1));
     }
 
     /** 기기 행의 보호자(A4 · RD-11: payload에 guardianId가 없는 옛 DeviceStatusChanged의 대체 출처). */

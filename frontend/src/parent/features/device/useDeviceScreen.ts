@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useStopExpressionsQuery } from "../../common/api/child";
 import { ApiError } from "../../common/api/apiClient";
 import { useHomeQuery } from "../../common/api/home";
@@ -11,28 +11,32 @@ import { PROPOSED_COPY, TEMP_COPY } from "@/shared/copy/ko";
 import { useToast } from "@/shared/toast/ToastProvider";
 
 // 05 우리 집 기기 화면의 요청(GET /api/home · 종료 표현) · 오류 분기 · 화면 이동을 맡는 흐름 훅.
-// 동작 규칙은 DeviceScreen에 있던 그대로다.
+// 홈과 같은 SSE 알림·재조회·장애 복구를 사용한다.
 
 export function useDeviceScreen() {
   const router = useRouter();
   const toast = useToast();
-  const home = useHomeQuery();
+  const home = useHomeQuery(true);
   const stops = useStopExpressionsQuery();
   const { error, errorUpdatedAt, refetch } = home;
+  const errorShown = useRef(false);
 
   useEffect(() => {
     if (error === null) {
+      errorShown.current = false;
       return;
     }
     if (isUnauthenticated(error)) {
       goToLogin(router, toast);
       return;
     }
+    if (errorShown.current) return;
+    errorShown.current = true;
     toast.show({ message: TEMP_COPY.networkError, kind: "error", action: { label: PROPOSED_COPY.retry, onPress: () => void refetch() } });
   }, [error, errorUpdatedAt, refetch, router, toast]);
 
   const data = home.data;
-  const lockMessage = data === undefined ? TEMP_COPY.lockToastStatusUnknown : data.lock.locked ? lockToastMessage(data.lock.reasonCode) : null;
+  const lockMessage = data === undefined || error !== null ? TEMP_COPY.lockToastStatusUnknown : data.lock.locked ? lockToastMessage(data.lock.reasonCode) : null;
   const childName = data?.child?.displayName ?? null;
   const stopItems = stops.data?.items ?? [];
   const noChild = stops.error instanceof ApiError && stops.error.code === "CHILD_NOT_REGISTERED";
