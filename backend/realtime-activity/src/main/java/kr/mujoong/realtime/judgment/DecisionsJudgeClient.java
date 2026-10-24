@@ -36,7 +36,12 @@ public final class DecisionsJudgeClient implements JudgeClient {
     /** 질문 이름(응답 답과 맞추는 이름, 공급자로 가지만 데이터가 아니다). */
     static final String QUESTION_NAME = "judgment";
 
-    private final BiFunction<LunaRequest, LunaDecisionQuestion, CompletionStage<LunaDecision>> decisions;
+    @FunctionalInterface
+    public interface DecisionCall {
+        CompletionStage<LunaDecision> apply(LunaRequest request, LunaDecisionQuestion question, UUID turnId);
+    }
+
+    private final DecisionCall decisions;
     private final JudgmentPrompt prompt;
     private final JudgeOutcomeValidator validator;
     private final MujoongClock clock;
@@ -47,6 +52,20 @@ public final class DecisionsJudgeClient implements JudgeClient {
      */
     public DecisionsJudgeClient(BiFunction<LunaRequest, LunaDecisionQuestion, CompletionStage<LunaDecision>> decisions,
             JudgmentPrompt prompt, JudgeOutcomeValidator validator, MujoongClock clock) {
+        this(adapt(decisions), prompt, validator, clock);
+    }
+
+    public static DecisionsJudgeClient withUsage(DecisionCall decisions, JudgmentPrompt prompt,
+            JudgeOutcomeValidator validator, MujoongClock clock) {
+        return new DecisionsJudgeClient(decisions, prompt, validator, clock);
+    }
+
+    private static DecisionCall adapt(BiFunction<LunaRequest, LunaDecisionQuestion, CompletionStage<LunaDecision>> decisions) {
+        Objects.requireNonNull(decisions, "decisions");
+        return (request, question, turnId) -> decisions.apply(request, question);
+    }
+
+    private DecisionsJudgeClient(DecisionCall decisions, JudgmentPrompt prompt, JudgeOutcomeValidator validator, MujoongClock clock) {
         this.decisions = Objects.requireNonNull(decisions, "decisions");
         this.prompt = Objects.requireNonNull(prompt, "prompt");
         this.validator = Objects.requireNonNull(validator, "validator");
@@ -74,7 +93,7 @@ public final class DecisionsJudgeClient implements JudgeClient {
         CompletionStage<LunaDecision> call;
         try {
             call = decisions.apply(new LunaRequest(LunaPurpose.JUDGMENT_LIVE, version, instructions.get(request.point()),
-                    request.toLunaInput(), request.aliases(), request.deadline()), question(request));
+                    request.toLunaInput(), request.aliases(), request.deadline()), question(request), turnId);
         } catch (RuntimeException unexpected) {
             return CompletableFuture.completedFuture(
                     JudgeOutcome.abstained(abstainReason(unexpected), clock.elapsedSince(started), null, version));

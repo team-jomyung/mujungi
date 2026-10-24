@@ -13,6 +13,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import kr.mujoong.contract.json.JsonCodec;
 import kr.mujoong.contract.log.EventCode;
 import kr.mujoong.realtime.content.LiveContentResources;
@@ -102,6 +103,25 @@ class DecisionsJudgeClientTest {
             map.put(OPTIONS.get(i), i < values.length ? values[i] : 0.0);
         }
         return map;
+    }
+
+    @Test
+    void usageConnectionReceivesTheExistingJudgmentTurnId() throws Exception {
+        UUID turn = UUID.randomUUID();
+        var received = new AtomicReference<UUID>();
+        var client = DecisionsJudgeClient.withUsage((request, question, turnId) -> {
+            received.set(turnId);
+            var ranked = probabilities(0.8, 0.1, 0.05, 0.03, 0.01, 0.01).entrySet().stream()
+                    .map(entry -> new LunaDecision.Probability(entry.getKey(), entry.getValue())).toList();
+            return CompletableFuture.completedFuture(new LunaDecision("FULL", ranked, MODEL, PROMPT.version(), Duration.ZERO, 1));
+        }, PROMPT, new JudgeOutcomeValidator(0.6, 0.15), clock);
+
+        var outcome = client.judge(request("그거 줘. 높이 쌓고 싶어서.", Duration.ofSeconds(4)), turn)
+                .toCompletableFuture().get(WAIT.toSeconds(), TimeUnit.SECONDS);
+
+        assertThat(received.get()).isEqualTo(turn);
+        assertThat(outcome.isConfirmed()).isTrue();
+        assertThat(outcome.firstOption()).isEqualTo("FULL");
     }
 
     @Test

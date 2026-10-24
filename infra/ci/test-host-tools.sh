@@ -134,7 +134,7 @@ declare -A WANT=(
   [migrate.env]="DB_OWNER_PASSWORD"
   [neo4j.env]="NEO4J_AUTH"
   [core-api.env]="GOOGLE_OAUTH_CLIENT_ID GOOGLE_OAUTH_CLIENT_SECRET GOOGLE_OAUTH_REDIRECT_URI INTERNAL_SERVICE_TOKEN MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET MUJOONG_SECURITY_ALLOWED_ORIGIN NEO4J_AUTH OPENAI_API_KEY SPRING_DATASOURCE_PASSWORD"
-  [realtime.env]="INTERNAL_SERVICE_TOKEN JEV_API_KEY JEV_BASE_URL JEV_MODEL MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET MUJOONG_SECURITY_ALLOWED_ORIGIN OPENAI_API_KEY SPRING_DATASOURCE_PASSWORD"
+  [realtime.env]="INTERNAL_SERVICE_TOKEN JEV_API_KEY JEV_BASE_URL JEV_MODEL MUJOONG_AI_USAGE_ENABLED MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET MUJOONG_SECURITY_ALLOWED_ORIGIN OPENAI_API_KEY SPRING_DATASOURCE_PASSWORD"
   [web.env]="GOOGLE_OAUTH_CLIENT_ID GOOGLE_OAUTH_REDIRECT_URI MUJOONG_SECURITY_ALLOWED_ORIGIN"
   [nginx.env]="MUJOONG_SECURITY_ALLOWED_ORIGIN SERVICE_HOST"
   [certbot.env]="ACME_CONTACT_EMAIL SERVICE_HOST"
@@ -164,6 +164,7 @@ check_rendered() {
   [ "$(value_of "$dir/realtime.env" JEV_API_KEY)" = "${P[JEV_API_KEY]}" ] || problems+=("realtime JEV_API_KEY 매핑")
   [ "$(value_of "$dir/realtime.env" JEV_BASE_URL)" = "${P[JEV_BASE_URL]}" ] || problems+=("realtime JEV_BASE_URL 매핑")
   [ "$(value_of "$dir/realtime.env" JEV_MODEL)" = "${P[JEV_MODEL]}" ] || problems+=("realtime JEV_MODEL 매핑")
+  [ "$(value_of "$dir/realtime.env" MUJOONG_AI_USAGE_ENABLED)" = false ] || problems+=("사용량 수집 기본값이 false가 아니다")
   grep -qE '^JEV_' "$dir/core-api.env" && problems+=("core-api.env에 JEV 변수가 있다")
   # U2 리뷰 3: Core와 web이 같은 이름을 받고 redirect는 허용 origin의 01 콜백 경로다(구글 콘솔에 같은 주소를 등록한다)
   for f in core-api.env web.env; do
@@ -232,6 +233,20 @@ else
 fi
 if [ "${#ai_problems[@]}" -gt 0 ]; then not_ok "render-env-u8-ai-keys" "${ai_problems[*]}"; else ok "render-env-u8-ai-keys"; fi
 
+# JIRA-271: 활성화 값은 realtime.env에만 전달한다. 기본값과 잘못된 값은 별도 사례로 확인한다.
+write_params "$work/p-usage-on" MUJOONG_AI_USAGE_ENABLED=true
+render "$work/p-usage-on" "$work/env-usage-on"
+usage_problems=()
+if [ "$rc" -ne 0 ]; then
+  usage_problems+=("종료 코드 $rc")
+else
+  [ "$(value_of "$work/env-usage-on/realtime.env" MUJOONG_AI_USAGE_ENABLED)" = true ] || usage_problems+=("realtime 수집 켬 매핑")
+  for f in core-api.env web.env nginx.env certbot.env backup.env postgres.env migrate.env; do
+    grep -q '^MUJOONG_AI_USAGE_ENABLED=' "$work/env-usage-on/$f" && usage_problems+=("$f에 수집 설정이 있다")
+  done
+fi
+if [ "${#usage_problems[@]}" -gt 0 ]; then not_ok "render-env-ai-usage-on" "${usage_problems[*]}"; else ok "render-env-ai-usage-on"; fi
+
 # ---- render-env: 실패하면 아무 파일도 바꾸지 않는다(D3 실패 · 구 버전 유지) --------------------------------
 expect_reject() {
   local name="$1" want_rc="$2" params="$3"
@@ -254,6 +269,8 @@ write_params "$work/p-missing" -MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET
 expect_reject "render-env-missing-required" 1 "$work/p-missing"
 write_params "$work/p-graph-missing" -NEO4J_AUTH
 expect_reject "render-env-neo4j-auth-missing" 1 "$work/p-graph-missing"
+write_params "$work/p-usage-invalid" MUJOONG_AI_USAGE_ENABLED=maybe
+expect_reject "render-env-invalid-ai-usage-flag" 1 "$work/p-usage-invalid"
 write_params "$work/p-localhost" SERVICE_HOST=localhost MUJOONG_SECURITY_ALLOWED_ORIGIN=https://localhost
 expect_reject "render-env-rejects-localhost" 1 "$work/p-localhost"
 write_params "$work/p-invalid" SERVICE_HOST=svc.mujoong.invalid MUJOONG_SECURITY_ALLOWED_ORIGIN=https://svc.mujoong.invalid

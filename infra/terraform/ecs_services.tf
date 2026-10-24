@@ -272,6 +272,7 @@ resource "aws_ecs_task_definition" "realtime" {
       { name = "SPRING_PROFILES_ACTIVE", value = "demo" },
       { name = "SPRING_DATASOURCE_URL", value = local.jdbc_url_demo },
       { name = "SPRING_DATASOURCE_USERNAME", value = "realtime_app" },
+      { name = "MUJOONG_AI_USAGE_ENABLED", value = "false" },
       { name = "MUJOONG_INTERNALHTTP_COREBASEURL", value = "http://172.17.0.1:8080" },
       { name = "MUJOONG_SECURITY_ALLOWED_ORIGIN", value = local.cloudfront_origin },
       { name = "SERVER_TOMCAT_REMOTEIP_INTERNALPROXIES", value = "^172\\.17\\.0\\.1$" },

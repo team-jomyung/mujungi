@@ -39,7 +39,7 @@ import org.springframework.core.io.ClassPathResource;
  * {@link RealtimeLunaClient#decide}를 거치지 않고, 그 안의 운영 부품을 같은 순서로 직접 부른다: 입력 정리 {@link LunaInputSanitizer} → 요청
  * 스키마 {@link LunaSchemas#isValidRequest} → 보내기 전 거절 {@link LunaTransport#rejectBeforeSend} → 본문 조립
  * {@link RealtimeLunaClient.DecisionsRequest} → 전송 {@link LunaTransport#send} → 응답 분류 {@link RealtimeLunaClient#classifyDecision}(운영과
- * 같은 메서드). 운영 클라이언트는 응답의 {@code usage}를 버리고 돌려주지 않기 때문이다(운영 코드는 바꾸지 않음).
+ * 같은 메서드). 운영 클라이언트는 사용량 수집기와 별개로 업무 결과에 {@code usage}를 담아 돌려주지 않기 때문이다.
  *
  * <p>주소 · 응답 상한은 {@code application.yml}의 {@code mujoong.luna.*} 값이고 {@link LunaHosts} STRICT 규칙을 통과해야만 부른다(전송 직전
  * 재확인도 운영 전송부가 한다). 요청은 합성 J6(종료 의도) 판정이다: 판 리소스 {@value #OPTION_SETS_RESOURCE}의 J6 선택지 순서를 {@code choice}

@@ -4,6 +4,7 @@ import kr.mujoong.contract.json.JsonCodec;
 import kr.mujoong.contract.time.MujoongClock;
 import kr.mujoong.realtime.config.RealtimeProperties;
 import kr.mujoong.realtime.observability.EventLogger;
+import kr.mujoong.realtime.usage.AiUsageCollector;
 import kr.mujoong.realtime.startup.RealtimeStartupChecks;
 import kr.mujoong.realtime.startup.StartupFailureLine;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -51,8 +52,8 @@ public class LunaConfiguration {
     @Bean
     @Conditional(LunaKeyPresentCondition.class)
     RealtimeLunaClient realtimeLunaClient(LunaProperties properties, RealtimeProperties realtime, LunaSchemas schemas,
-            LunaTransport transport, EventLogger events, MujoongClock clock, JsonCodec json) {
+            LunaTransport transport, EventLogger events, MujoongClock clock, JsonCodec json, AiUsageCollector usage) {
         return new RealtimeLunaClient(properties, realtime.timing().judgment().liveBudget(), schemas,
-                new LunaInputSanitizer(json), transport, events, clock, json);
+                new LunaInputSanitizer(json), transport, events, clock, json, usage);
     }
 }

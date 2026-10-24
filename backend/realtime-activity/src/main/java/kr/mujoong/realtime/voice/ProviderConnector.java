@@ -5,6 +5,8 @@ import java.time.Duration;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
+import kr.mujoong.contract.time.MujoongClock;
+import kr.mujoong.realtime.usage.AiUsageCollector;
 import kr.mujoong.realtime.config.RealtimeProperties;
 import kr.mujoong.realtime.runtime.TaskLauncher;
 import kr.mujoong.realtime.session.ChildContext;
@@ -70,11 +72,15 @@ public class ProviderConnector {
     private final Duration connectTimeout;
     private final TaskLauncher launcher;
     private final String[] activeProfiles;
+    private AiUsageCollector usage = AiUsageCollector.NOOP;
+    private MujoongClock usageClock;
 
     @Autowired
     public ProviderConnector(ProviderPort port, ProviderRequestFactory factory, RealtimeProperties properties,
-            Environment environment, TaskLauncher launcher) {
+            Environment environment, TaskLauncher launcher, AiUsageCollector usage, MujoongClock clock) {
         this(port, factory, properties.provider().connectTimeout(), launcher, environment.getActiveProfiles());
+        this.usage = usage;
+        this.usageClock = clock;
     }
 
     public ProviderConnector(ProviderPort port, ProviderRequestFactory factory, Duration connectTimeout,
@@ -116,14 +122,14 @@ public class ProviderConnector {
         Objects.requireNonNull(callback, "callback");
         Attempt attempt = new Attempt();
         attempt.thread = launcher.launch("provider-connect-" + sessionId,
-                () -> run(attempt, childContext, listener, callback, policy, guide, practice));
+                () -> run(attempt, sessionId, childContext, listener, callback, policy, guide, practice));
         if (attempt.isCancelled() && attempt.thread != null) {
             attempt.thread.interrupt();
         }
         return attempt;
     }
 
-    private void run(Attempt attempt, ChildContext childContext, Listener listener, Callback callback, PolicyBundle policy,
+    private void run(Attempt attempt, UUID sessionId, ChildContext childContext, Listener listener, Callback callback, PolicyBundle policy,
             ConversationGuide guide, boolean practice) {
         if (!ProviderHosts.isConnectable(port.endpoint(), activeProfiles)) {
             callback.failed(ProviderUnavailableException.Reason.HOST_NOT_ALLOWED);
@@ -135,7 +141,9 @@ public class ProviderConnector {
                 : factory.sessionStart(childContext);
         ProviderSession session = null;
         try {
-            session = port.open(listener, connectTimeout);
+            Listener observed = usage.enabled() ? new ProviderUsageListener(sessionId, request.session().model(),
+                    listener, usage, usageClock) : listener;
+            session = port.open(observed, connectTimeout);
             if (attempt.isCancelled()) {
                 session.close();
                 return;
