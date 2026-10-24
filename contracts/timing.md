@@ -232,7 +232,7 @@ U8(계약 · 버전 리소스)이 더한 키다. 새 연습 흐름 키는 12절 
 | `mujoong.timing.judgment.live-budget` | `4s` | realtime | 진행 중 판정(J1 ~ J6) Luna 호출 한 번의 상한. 판정 턴을 연 시각부터 정확히 4.000초에 닿으면 재시도 없이 판정 보류(U11, 2s → 4s: 사람 결정 2026-10-16, 편차 (U11-b)) | FR3.4 · U11-b |
 | `mujoong.timing.judgment.response-ready` | `10s` | realtime | 아이 말이 끝난 뒤 이 시간 안에 응답이 준비되지 않으면 보류 되묻기(`D_HOLD`, U11) | FR5.3 |
 | `mujoong.timing.guardrail.jev-budget` | `800ms` | realtime | 제브 가드레일 검사 한 번의 상한. 넘기면 막힘(자동 ALLOW 없음, U13) | FR6.2 |
-| `mujoong.timing.conversation.no-response-wait` | `10s` | realtime | 새 연습 흐름의 무응답 재안내 대기(U12) | AC1.9.1 |
+| `mujoong.timing.conversation.no-response-wait` | `10s` | realtime | 새 연습 흐름의 무응답 재안내 대기(U12). 아이 말의 첫 입력 전사 조각이 오면 멈추고, 같은 길이의 `child-speech` 안전 대기로 확정 전사를 기다린다. 확정 없이 끝나면 처음부터 다시 잰다(ai-io.md 10.17 무응답 시계, 4회차 R1) | AC1.9.1 |
 | `mujoong.timing.conversation.focus-max` | `90s` | realtime | 집중 연습 한 번의 상한(U12) | AC1.5.4 |
 | `mujoong.timing.conversation.goal-active-limit` | `10m` | realtime | 목표 하나의 진행 상한(U12) | FR4.5 |
 | `mujoong.timing.knowledge.graph-budget` | `2s` | core-api | 지식 그래프 조회 한 번의 상한. 넘기면 빈 응답(U15) | FR9.5 |

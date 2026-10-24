@@ -588,6 +588,13 @@ J1/J6의 고정 질문·선택지는 `judgment-service-v1`, 공통 지시문은 
 
 - 한도(B §8.3 G-16과 같고 다시 해 보기만 바뀐다): 되묻기 기회마다 1회 · 다시 설명 기회마다 1회(`reexplain-max` 1, 넘으면 HELP_OFFER) · 무응답 다시 묻기 기회마다 1회(넘으면 장면 닫기) · 판독 불가 · 보류 확인 기회마다 2회까지(넘으면 장면 닫기) · 도움 장면마다 1회(첫 도움에 표현 예시를 넣는다) · 다시 해 보기 장면마다 1회(`retry-max` 1, 넘으면 도움을 다시 하지 않고 장면 닫기) [편차 FT-1024-d].
 - 장면 성공 뒤에는 칭찬 대신 대본에 미리 쓴 상대의 반응(`friendReaction`)을 전한다 [편차 FT-1024-c]. 변형 장면도 같은 흐름이고 변형 장면의 칸을 쓴다.
+- 구현에서 정한 세부(realtime `DirectAskLines` · `FlowTransitions` C안 표):
+  - REASK 무응답 1회는 `WAIT_LEAD` + `reaskPrompt`를 읽는다. HELP_OFFER · VARIANT_OFFER의 무응답 · 불명확 재안내는 같은 제안 문장을 다시 읽는다.
+  - 도움을 받고 해낸 장면(`AFTER_HELP`)에도 변형을 권한다. `retry-max` 1에서 다시 해 보기 횟수를 변형 금지 한도로 쓰지 않고, 집중 시계(`focus-max`) 만료만 변형 생략 사유로 본다.
+  - `SCENE_CLOSE`는 상황 안내를 들려준 장면에서만 낸다. 재생 실패 · 막힘 · 종료 요청으로 끝나는 장면에는 마무리 말이 없다.
+  - 마무리 문장(`friendReaction` · `SCENE_CLOSE`)이 아이 말로 끊기면 전달된 것으로 보고 다음으로 간다. 재생에 실패한 마무리 문장은 `OUTPUT_FAILED`다. 마무리 문장 도중의 종료 · 실패는 이미 이룬 시점을 지우지 않는다.
+  - 목표 안내 · 목표 회고 · 돌아보기는 C안에서도 낸다(운영 동작 그대로). 판정 입력에서는 이 장면 밖 생성형 줄도 화자 `MUJOONG`이다.
+- **무응답 시계(4회차 R1, 두 경로 공통):** 아이 말의 첫 입력 전사 조각이 오면 realtime은 연습 흐름에 '말 시작'을 알린다. 흐름은 무응답 시계(`no-response-wait`)를 멈추고, 같은 길이의 `child-speech` 안전 대기를 건다. 확정 전사가 오면 판정으로 가고, 확정 전사 없이 안전 대기가 끝나면 무응답 대기를 처음부터 다시 잰다. 그래서 아이가 길게 말하는 중에는 무응답 재안내가 나오지 않는다(main은 확정 전사 판정 때만 시계를 멈췄다).
 
 **대본 칸(`scenario-script.v2`).** 들리는 새 칸 다섯 개다. 모두 반말이고(선생님 · 어른에게 하는 말을 묻는 `askPrompt`는 높임말), 저장(`core_scenario.scenes_json`) · C10 응답 · 시작 패키지 `practice.goals[].firstScenario.scenes[]`에 같은 이름의 문자열로 실린다. 값이 없으면 키를 쓰지 않는다. 계약 스키마(`ai-scenario-output`)에서는 선택 칸이고 strict 생성 요청에서는 required다(10.11). 길이 상한은 스키마 `maxLength`다.
 
@@ -626,9 +633,14 @@ J1/J6의 고정 질문·선택지는 `judgment-service-v1`, 공통 지시문은 
 | `helpSpeech` | `focusPoints[0]` + "예를 들면 " + `expressionExamples[0]` + "처럼 말할 수 있어. 네 말로 해 볼래?" |
 | `friendReaction` | 그렇게 말해 주면 친구도 네 마음을 알 거야. |
 
+- `helpSpeech` 대체에서 `focusPoints`가 없으면 요점 자리에 `reexplanation`을 쓰고, `expressionExamples`가 없으면 "예를 들면 …" 문장 없이 요점 + 고정 꼬리만 쓴다.
+- 이어 붙이는 옛 칸은 마침표 · 쉼표 · 물음표 밖의 문장부호를 정리한 뒤 붙인다(원문 대조 실패를 줄이려는 것이다). 고정 대체 문장은 이 표와 글자가 같고, realtime 대조 시험이 지킨다.
+
 **판정.** 진행 중 판정의 기본 판은 `prompt-service-v4` · `judgment-service-v2`이고 판정 입력의 무중 줄 화자는 `MUJOONG`이다(10.4 · 10.10). 아이 대답이 직접 하는 말 · 할 말을 전하는 말("다음에 같이 그리자고 할래") · 할 행동 설명 중 무엇이든 내용이 목표 핵심 기능을 채우면 수행이다(J2 `FULL` · J3 `DELIVERED` · J5 `FULL`). 할 말을 정하지 못하고 방법만 묻는 말("뭐라고 말해야 돼?")은 `HELP`다. 절차 질문 규칙과 판정 경로 · 시한 · 확률 하한은 그대로다. core 기록용 재판정(`RejudgmentGateway`, 출력 스키마 `ai-rejudgment-output`)도 같은 인정 규칙을 넣은 `rejudgment.v2` 지시로 부르고, 판정 기록 `promptVersion`은 `rejudgment.v2`다(리포트 2항목 줄 이름이 이 결과를 쓴다) [편차 FT-1024-b].
 
 **기록.** 연습 기록의 모양과 `flowVersion`(`practice-conversation-v1`) · 시점 5값의 뜻은 그대로다. 역할 사실(`COACH_SWITCH` · `COACH_RETURN` · `ORIGINAL_SCENE_RETURN`)은 C안에서 나오지 않는다(열거값은 유연 대화 · 이전 기록 호환으로 남는다). 마이그레이션은 없다.
+- C안에서 아이가 먼저 도움을 청하면(J2 · J3 `HELP` · 절차 질문) 도움 동의는 `ACCEPT`, 사실은 `HELP_ACCEPTED`로 남는다. 리포트 8항목이 이 경우를 '답 없음'으로 세지 않게 하려는 것이다. 유연 대화는 지금처럼 `REQUESTED`다.
+- 도움 말 기록 행의 역할 값은 지금처럼 `COACH`다(V7 CHECK 제약 PEER/COACH 안). 보호자 화면은 AI 줄을 '무중'으로만 보여 준다.
 
 **증거.** 자동 시험 · CI · `verify.sh`는 가짜 공급자만 쓴다(R-F1). C안 대본 생성 품질 · 승인 낭독 성공률 · 전하는 식 대답의 판정은 실호출(실제 API + 합성 아이 음성) 관측으로 따로 보고하고, 대역 성공을 실제 공급자 · 실제 기기 성공으로 표시하지 않는다(R-M11).
 
