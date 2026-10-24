@@ -51,6 +51,25 @@ class DirectAskLinesTest {
     }
 
     @Test
+    void theConstantsAreWordForWordTheContractTablesOfSection1017() throws java.io.IOException {
+        java.nio.file.Path repo = java.nio.file.Path.of(System.getProperty("mujoong.repo.root", "..")).toAbsolutePath().normalize();
+        String doc = java.nio.file.Files.readString(repo.resolve("contracts/ai-io.md"), java.nio.charset.StandardCharsets.UTF_8);
+        String section = doc.substring(doc.indexOf("### 10.17 "));
+
+        for (Map.Entry<String, String> fixed : DirectAskLines.FIXED.entrySet()) {
+            assertThat(section).as(fixed.getKey())
+                    .containsPattern("\\| `" + fixed.getKey() + "`(\\(\\d+\\))? \\| " + java.util.regex.Pattern.quote(fixed.getValue()) + " \\|");
+        }
+        assertThat(section).contains("| `spokenIntroduction` | " + DirectAskLines.INTRODUCTION_FALLBACK + " |");
+        assertThat(section).contains("| `opportunityRelay` | " + DirectAskLines.RELAY_LEAD + " + `opportunitySentence` |");
+        assertThat(section).contains("| `askPrompt` | 고정 `ASK_DEFAULT` |");
+        assertThat(section).contains("| `reaskPrompt` | " + DirectAskLines.REASK_FALLBACK + " |");
+        assertThat(section).contains("| `helpSpeech` | `focusPoints[0]` + \"" + DirectAskLines.EXAMPLE_LEAD + "\" + `expressionExamples[0]` + \""
+                + DirectAskLines.EXAMPLE_TAIL + " " + DirectAskLines.HELP_TAIL + "\" |");
+        assertThat(section).contains("| `friendReaction` | " + DirectAskLines.FRIEND_REACTION_FALLBACK + " |");
+    }
+
+    @Test
     void aFixedSentenceComesFromThePackageAndAMissingOrBlankCodeFallsBackToTheConstant() {
         Map<String, String> approved = new HashMap<>();
         approved.put("HELP_OFFER", "무중이가 도와줄까?");

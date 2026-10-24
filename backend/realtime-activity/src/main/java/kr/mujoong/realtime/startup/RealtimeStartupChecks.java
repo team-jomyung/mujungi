@@ -87,7 +87,8 @@ public class RealtimeStartupChecks {
                                 environment.getProperty(GuardrailProperties.BASE_URL_KEY),
                                 environment.getProperty(GuardrailProperties.MODEL_KEY),
                                 environment.getProperty(GuardrailProperties.PASS_THRESHOLD_KEY))),
-                SeedDictionary::loadDefault, LiveContentResources::loadDefault);
+                // 판정 선택지 판은 연습 경로 설정이 고른다(C안이면 judgment-service-v2, 유연 대화면 v1). 판정 지시문 판은 이 판과 짝이다
+                SeedDictionary::loadDefault, () -> LiveContentResources.loadFor(properties.practiceFlow().flexibleDialogue()));
     }
 
     private static boolean hasText(String value) {

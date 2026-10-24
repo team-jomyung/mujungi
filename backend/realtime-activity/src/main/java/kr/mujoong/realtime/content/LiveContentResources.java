@@ -17,15 +17,22 @@ import kr.mujoong.contract.json.JsonCodec;
 /**
  * 판정 선택지 판 · 가드레일 정책 판 자원 (U8 functional-spec 8.3 · BR2.1 · NFR2.3 · SD5, contracts/ai-io.md 10.4절).
  *
- * <p>{@value #JUDGMENT_RESOURCE}(J1 ~ J6 질문 · 선택지)와 {@value #GUARDRAIL_RESOURCE}(제브 검사 질문 · 라벨 설명 · 범주 · 모드)를 기동 때
- * 한 번 읽어 검증하고 이후 읽기 전용 값으로 쓴다(핫 리로드 없음, {@code gate.SeedDictionary}와 같은 방식). 하나라도 틀리면
+ * <p>{@value #JUDGMENT_RESOURCE}(J1 ~ J6 질문 · 선택지, 연습이 C안이면 {@value #DIRECT_ASK_JUDGMENT_RESOURCE})와 {@value #GUARDRAIL_RESOURCE}(제브
+ * 검사 질문 · 라벨 설명 · 범주 · 모드)를 기동 때 한 번 읽어 검증하고 이후 읽기 전용 값으로 쓴다(핫 리로드 없음, {@code gate.SeedDictionary}와 같은 방식). 하나라도 틀리면
  * {@link LoadException}을 던져 Realtime 기동 점검이 기동을 거부한다. 예외 메시지는 사유 열거값과 판정 지점 · 키 이름뿐이다(문구 원문 없음).
  * J7(연습 대본 사전 점검)은 core 상황 생성 자체 검토(U10) 프롬프트라 이 판에 없다.
  */
 public final class LiveContentResources {
 
-    /** 판정 선택지 판(classpath). */
+    /** 판정 선택지 판(classpath). 연습이 유연 대화 경로일 때 쓴다. */
     public static final String JUDGMENT_RESOURCE = "judgment/option-sets-service-v1.json";
+    /**
+     * C안 '무중이 직접 묻기'의 판정 선택지 판(classpath). J2 · J3 · J5 질문의 '장면 속 친구' · '코치'를 '무중의 질문' · '무중의 도움'으로 바꾼 판이고
+     * 지점 · 코드는 v1과 같다(docs/practice-direct-ask.md 6장). 연습 경로가 C안(운영 기본)이면 앱이 이 판을 쓴다.
+     */
+    public static final String DIRECT_ASK_JUDGMENT_RESOURCE = "judgment/option-sets-service-v2.json";
+    /** C안 판정 선택지 판의 판 번호. 판정 지시문은 이 판과 짝인 {@code prompt-service-v4}를 쓴다. */
+    public static final String DIRECT_ASK_JUDGMENT_VERSION = "judgment-service-v2";
     /**
      * 가드레일 정책 판(classpath). 출력 단위별 욕설 검사에는 {@code policy-v3.json}을 읽는다.
      * {@code policy-v1.json} · {@code policy-v2.json}은 이력으로 보관한다.
@@ -149,14 +156,25 @@ public final class LiveContentResources {
         this.guardrail = guardrail;
     }
 
-    /** classpath의 두 판을 읽는다. */
+    /** classpath의 두 판을 읽는다(판정 선택지는 유연 대화 판 {@value #JUDGMENT_RESOURCE}). */
     public static LiveContentResources loadDefault() {
         return parse(resource(JUDGMENT_RESOURCE), resource(GUARDRAIL_RESOURCE));
     }
 
+    /**
+     * 연습 경로에 맞는 판정 선택지 판으로 두 판을 읽는다. 앱 전체가 한 판을 쓴다(참여 확인 · 종료 의도 지점 J1 · J6의 질문 · 선택지는 두 판이 같다).
+     *
+     * @param flexibleDialogue {@code mujoong.practice-flow.flexible-dialogue}. 거짓(운영 기본)이면 C안 판 {@value #DIRECT_ASK_JUDGMENT_RESOURCE}
+     */
+    public static LiveContentResources loadFor(boolean flexibleDialogue) {
+        return flexibleDialogue ? loadDefault()
+                : new LiveContentResources(judgment(resource(DIRECT_ASK_JUDGMENT_RESOURCE), DIRECT_ASK_JUDGMENT_RESOURCE),
+                        guardrail(resource(GUARDRAIL_RESOURCE)));
+    }
+
     /** 두 판의 JSON 본문을 읽고 검증한다. */
     public static LiveContentResources parse(String judgmentJson, String guardrailJson) {
-        return new LiveContentResources(judgment(judgmentJson), guardrail(guardrailJson));
+        return new LiveContentResources(judgment(judgmentJson, JUDGMENT_RESOURCE), guardrail(guardrailJson));
     }
 
     public JudgmentOptionSet judgment() {
@@ -180,18 +198,19 @@ public final class LiveContentResources {
         }
     }
 
-    private static JudgmentOptionSet judgment(String json) {
+    /** @param name 거부 사유에 남길 자원 이름 */
+    private static JudgmentOptionSet judgment(String json, String name) {
         JudgmentFile file;
         try {
             file = JsonCodec.shared().read(Objects.requireNonNull(json, "judgmentJson"), JudgmentFile.class);
         } catch (RuntimeException e) {
-            throw new LoadException(Problem.PARSE_FAILED, JUDGMENT_RESOURCE);
+            throw new LoadException(Problem.PARSE_FAILED, name);
         }
         if (file == null || blank(file.version()) || blank(file.source())) {
-            throw new LoadException(Problem.BAD_VERSION, JUDGMENT_RESOURCE);
+            throw new LoadException(Problem.BAD_VERSION, name);
         }
         if (file.points() == null) {
-            throw new LoadException(Problem.BAD_JUDGMENT_POINTS, JUDGMENT_RESOURCE);
+            throw new LoadException(Problem.BAD_JUDGMENT_POINTS, name);
         }
         Map<JudgmentPoint, PointOptions> points = new LinkedHashMap<>();
         for (RawPoint raw : file.points()) {

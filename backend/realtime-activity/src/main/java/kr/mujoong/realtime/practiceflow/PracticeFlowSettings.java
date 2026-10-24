@@ -43,14 +43,14 @@ public record PracticeFlowSettings(Duration noResponseWait, Duration focusMax, D
         }
     }
 
-    /** 운영 설정 트리에서 읽는다(경로 설정 키는 아직 없어 유연 대화다). */
+    /** 운영 설정 트리에서 읽는다. 경로는 {@code mujoong.practice-flow.flexible-dialogue}(기본 거짓 = C안)가 고른다. */
     public static PracticeFlowSettings from(RealtimeProperties properties) {
         Objects.requireNonNull(properties, "properties");
         RealtimeTimingProperties.ConversationTiming conversation = properties.timing().conversation();
         return new PracticeFlowSettings(conversation.noResponseWait(), conversation.focusMax(),
                 conversation.goalActiveLimit(), properties.timing().device().outputQueueMax(),
                 properties.practiceFlow().retryMax(),
-                properties.practiceFlow().reexplainMax(), true);
+                properties.practiceFlow().reexplainMax(), properties.practiceFlow().flexibleDialogue());
     }
 
     /** C안 '무중이 직접 묻기' 경로인가(유연 대화가 아니면 C안이다). */

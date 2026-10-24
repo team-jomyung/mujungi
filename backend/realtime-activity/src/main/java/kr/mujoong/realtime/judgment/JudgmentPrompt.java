@@ -20,10 +20,17 @@ import kr.mujoong.realtime.content.LiveContentResources;
  */
 public record JudgmentPrompt(String version, String body, LiveContentResources.JudgmentOptionSet optionSet) {
 
-    /** 지시 본문 자원. 판 번호는 파일 이름과 같다. 이전 판(Responses 출력 형식) 자원은 이력으로 남긴다. */
+    /** 지시 본문 자원(연습이 유연 대화 경로일 때). 판 번호는 파일 이름과 같다. 이전 판(Responses 출력 형식) 자원은 이력으로 남긴다. */
     public static final String RESOURCE = "judgment/prompt-service-v3.txt";
-    /** 지금 판 번호(판정 기록 varchar(50) · LABEL 형식 안). */
+    /** 유연 대화 경로의 판 번호(판정 기록 varchar(50) · LABEL 형식 안). 선택지 판 {@code judgment-service-v1}과 짝이다. */
     public static final String DEFAULT_VERSION = "prompt-service-v3";
+    /**
+     * C안 '무중이 직접 묻기'의 지시 본문 자원. v3을 바탕으로 역할 대화 전제 문단과 J3 {@code ROLE_DIALOGUE_CLOSURE} 단락을 빼고, 무중이 상대 말을 전하고
+     * 묻는 틀 · 전하는 식 대답 인정 · 방법만 묻는 말은 HELP를 넣었다(docs/practice-direct-ask.md 6장).
+     */
+    public static final String DIRECT_ASK_RESOURCE = "judgment/prompt-service-v4.txt";
+    /** C안 판 번호. 선택지 판 {@code judgment-service-v2}와 짝이다. */
+    public static final String DIRECT_ASK_VERSION = "prompt-service-v4";
 
     private static final Pattern VERSION = Pattern.compile("^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$");
 
@@ -43,9 +50,16 @@ public record JudgmentPrompt(String version, String body, LiveContentResources.J
         this(version, body, null);
     }
 
-    /** 자원 본문과 선택지 판으로 만든 기본 판. */
+    /**
+     * 자원 본문과 선택지 판으로 만든 판. 지시문 판은 선택지 판과 한 쌍이라 선택지 판을 보고 고른다: C안 선택지 판
+     * ({@value LiveContentResources#DIRECT_ASK_JUDGMENT_VERSION})이면 {@value #DIRECT_ASK_VERSION}, 그 밖은 {@value #DEFAULT_VERSION}이다. 어느
+     * 쌍을 쓸지는 기동 때 연습 경로 설정이 선택지 판으로 정한다({@link LiveContentResources#loadFor}).
+     */
     public static JudgmentPrompt load(LiveContentResources.JudgmentOptionSet optionSet) {
         Objects.requireNonNull(optionSet, "optionSet");
+        if (LiveContentResources.DIRECT_ASK_JUDGMENT_VERSION.equals(optionSet.version())) {
+            return new JudgmentPrompt(DIRECT_ASK_VERSION, readResource(DIRECT_ASK_RESOURCE), optionSet);
+        }
         return new JudgmentPrompt(DEFAULT_VERSION, readResource(RESOURCE), optionSet);
     }
 

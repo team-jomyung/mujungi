@@ -106,7 +106,13 @@ class LiveContentRealtimeStartupChecksTest {
         RealtimeStartupChecks checks = new RealtimeStartupChecks(environment, properties);
 
         assertThat(checks.liveContent().guardrail().modes()).hasSize(3);
+        assertThat(checks.liveContent().judgment().version()).as("연습 경로 기본(C안)은 C안 판정 선택지 판")
+                .isEqualTo(LiveContentResources.DIRECT_ASK_JUDGMENT_VERSION);
         assertThat(err.toString(StandardCharsets.UTF_8)).isEmpty();
+
+        org.mockito.Mockito.when(properties.practiceFlow().flexibleDialogue()).thenReturn(true);
+        assertThat(new RealtimeStartupChecks(environment, properties).liveContent().judgment().version())
+                .as("유연 대화로 되돌리면 판정 선택지 판도 함께 되돌아간다").isEqualTo("judgment-service-v1");
     }
 
     @Test
