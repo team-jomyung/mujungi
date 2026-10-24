@@ -57,7 +57,7 @@ class AiUsageLunaLiveTest {
                             LunaReachProbe.INSTRUCTIONS, LunaReachProbe.j6Input(probe.j6Options()), Map.of(),
                             clock.now().plus(LunaReachProbe.LIVE_BUDGET));
                     long began = clock.monotonicNanos();
-                    try { client.call(request, turn).toCompletableFuture().get(10, TimeUnit.SECONDS); }
+                    try { client.decide(request, LunaReachProbe.question(request), turn).toCompletableFuture().get(10, TimeUnit.SECONDS); }
                     catch (java.util.concurrent.ExecutionException failure) {
                         AiUsageLiveSupport.report("luna", "REAL_API_SYNTHETIC enabled=" + enabled + " businessOutcome="
                                 + (failure.getCause() instanceof LunaException e ? e.reason().name() : "UNKNOWN"));

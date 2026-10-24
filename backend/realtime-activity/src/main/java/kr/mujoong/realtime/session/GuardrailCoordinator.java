@@ -15,6 +15,7 @@ import java.util.function.Function;
 import kr.mujoong.contract.log.EventCode;
 import kr.mujoong.contract.status.SessionStatus;
 import kr.mujoong.realtime.gate.GateDecision;
+import kr.mujoong.realtime.gate.OutputGate;
 import kr.mujoong.realtime.gate.SegmentBuffer;
 import kr.mujoong.realtime.guardrail.GuardrailEventRecord;
 import kr.mujoong.realtime.guardrail.GuardrailRequest;
@@ -70,6 +71,13 @@ final class GuardrailCoordinator {
     static final String REASON_CHECK_TIMER = "GuardrailCheckTimer";
     /** 연습이 쥔 승인 발화와 원문이 같아 제브를 건너뛴 재생의 사유 코드(BR7.5). 레지스트리 출처는 {@code APPROVED_SPEECH} · {@code SESSION_SCRIPT}다. */
     static final String SOURCE_PRACTICE_SPEECH = "PRACTICE_SPEECH";
+    /**
+     * 구두점뿐인 단위(말끝 "?" 등 — 검사할 글이 없다)를 제브 없이 낸 재생의 사유 코드(FT-1023-e). 검사 기록은 원문 일치 생략과 같은 모양(APPROVED_VERBATIM_SKIPPED
+     * · ALLOW · 지연 0)이고, 같은 이름으로 앱 로그(INFO)를 남긴다. 원문은 남기지 않는다.
+     */
+    static final String SOURCE_PUNCTUATION_ONLY = "PUNCTUATION_ONLY";
+    /** {@link #SOURCE_PUNCTUATION_ONLY} 생략의 앱 로그 사유 코드. */
+    static final String REASON_PUNCTUATION_ONLY_SKIPPED = "GuardrailSkippedPunctuationOnly";
 
     /**
      * 다시 보낼 수 있는 서버 지시(마지막 서버 지시, BR6.2 · W2b). 이름과 지시를 만드는 방법만 쥐고 전사 원문은 담지 않는다.
@@ -214,7 +222,7 @@ final class GuardrailCoordinator {
     private final GuardrailSupport support;
     private final SessionExecutor.Plan plan;
     private final Env env;
-    private final GuardrailRequestFactory factory = new GuardrailRequestFactory();
+    private final GuardrailRequestFactory factory;
     /** 익명화 전의 최근 대화 꼬리(아이 확정 전사 · 기기로 나간 무중 발화, 실행기 스레드 전용). */
     private final Deque<GuardrailRequestFactory.Turn> context = new ArrayDeque<>();
 
@@ -238,6 +246,8 @@ final class GuardrailCoordinator {
         this.support = Objects.requireNonNull(support, "support");
         this.plan = Objects.requireNonNull(plan, "plan");
         this.env = Objects.requireNonNull(env, "env");
+        // JIRA-266: 아이 이름 원문 전달 스위치(기본 꺼짐 — 이름을 '아이'로 바꾼다)
+        this.factory = new GuardrailRequestFactory(support.sendChildName());
     }
 
     // ---- 읽기 ----
@@ -404,6 +414,24 @@ final class GuardrailCoordinator {
         }
     }
 
+    /**
+     * 구두점뿐인 단위(FT-1023-e)를 제브 없이 낸다: 검사할 글이 없어 부르지 않는다. 상태 · 재지시 수는 바꾸지 않고(이 단위는 새 말이 아니다), 호출 수 지표는
+     * '원문 재생 생략'으로 세며 검사 기록 한 행(APPROVED_VERBATIM_SKIPPED, ALLOW, 사유 {@link #SOURCE_PUNCTUATION_ONLY}, 지연 0)과 앱 로그(INFO)를
+     * 남긴다. 앞 단위가 검사 중이면 호출자는 이것을 부르지 않고 {@link #begin}으로 대기열에 넣는다 — 차례가 오면 {@link #settleQueue}가 여기로 온다.
+     */
+    void onPunctuationOnlySkipped() {
+        if (!support.enabled()) {
+            return;
+        }
+        RealtimeMetrics metrics = env.metrics();
+        if (metrics != null) {
+            metrics.guardrailCall(support.mode().name(), "approved_verbatim_skipped");
+        }
+        record(UUID.randomUUID(), GuardrailEventRecord.SourceKind.APPROVED_VERBATIM_SKIPPED,
+                GuardrailEventRecord.Decision.ALLOW, SOURCE_PUNCTUATION_ONLY, 0L);
+        env.appError(REASON_PUNCTUATION_ONLY_SKIPPED, EventCode.Level.INFO);
+    }
+
     /** 재지시를 보내지 못했거나 새 말이 시한 안에 시작하지 않았다(큐 스레드의 메시지, BR6.6). */
     void onRetryNotHeard(SessionMailbox.GuardrailRetryNotHeard message) {
         if (state != State.RETRYING || !message.retryId().equals(retryId)) {
@@ -533,6 +561,16 @@ final class GuardrailCoordinator {
             record(UUID.randomUUID(), GuardrailEventRecord.Decision.VOIDED, REASON_QUEUE_DISCARDED, 0L);
             env.discardSilent(waiting.sealed(), waiting.held(), null);
             discardQueue();
+            return;
+        }
+        if (waiting.streaming() && OutputGate.punctuationOnly(waiting.sealed().transcript())) {
+            // 구두점뿐인 단위(FT-1023-e)가 차례가 됐다: 검사할 글이 없어 제브를 부르지 않고 순서만 지켜 낸다. 다음 대기 단위는 이어서 정리한다
+            onPunctuationOnlySkipped();
+            boolean sent = env.recheckAndSend(waiting.sealed(), waiting.held(), false);
+            if (sent) {
+                sentUnit(true, waiting.sealed());
+            }
+            settleQueue(sent);
             return;
         }
         // 검사가 도는 동안 쌓인 뒤따르는 스트리밍 단위는 한 번에 묶어 검사한다(제브 호출 수 · 대기 줄이기). 후보 문장 글자 수 상한 안에서 순서대로 가져온다

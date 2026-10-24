@@ -8,6 +8,7 @@
     { "id": "SEED-CAUSE-1", "pattern": "핵심원인", "category": "CAUSE", "appliesTo": ["OUTPUT_GATE"] },
     { "id": "SEED-GENERALIZATION-1", "pattern": "학교에서도그럴", "category": "GENERALIZATION", "appliesTo": ["OUTPUT_GATE"] },
     { "id": "SEED-EMOTION_CLAIM-1", "pattern": "화가났군요", "category": "EMOTION_CLAIM", "appliesTo": ["OUTPUT_GATE"] },
-    { "id": "SEED-PRESSURE-1", "pattern": "꼭해야해요", "category": "PRESSURE", "appliesTo": ["OUTPUT_GATE"] }
+    { "id": "SEED-PRESSURE-1", "pattern": "꼭해야해요", "category": "PRESSURE", "appliesTo": ["OUTPUT_GATE"] },
+    { "id": "SEED-PROFANITY-1", "pattern": "씨발새끼", "category": "PROFANITY", "appliesTo": ["OUTPUT_GATE"] }
   ]
 }

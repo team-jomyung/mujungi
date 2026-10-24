@@ -32,8 +32,8 @@ public class GuardrailConfiguration {
     static final String REASON_MODE_OFF = "GuardrailModeOff";
 
     @Bean
-    GuardrailRequestFactory guardrailRequestFactory() {
-        return new GuardrailRequestFactory();
+    GuardrailRequestFactory guardrailRequestFactory(GuardrailProperties properties) {
+        return new GuardrailRequestFactory(properties.sendChildName());
     }
 
     /**
@@ -64,13 +64,14 @@ public class GuardrailConfiguration {
 
     @Bean
     GuardrailSupport guardrailSupport(RealtimeStartupChecks startupChecks, GuardrailClient client, RealtimeProperties properties,
-            ObjectProvider<GuardrailEventRecorder> recorder, EventLogger events) {
+            GuardrailProperties jev, ObjectProvider<GuardrailEventRecorder> recorder, EventLogger events) {
         GuardrailMode mode = startupChecks.guardrailMode();
         startupNotice(mode, events);
         if (mode == GuardrailMode.OFF) {
             return GuardrailSupport.DISABLED;
         }
-        return new GuardrailSupport(mode, client, recorder.getIfAvailable(), properties.timing().guardrail().jevBudget());
+        return new GuardrailSupport(mode, client, recorder.getIfAvailable(), properties.timing().guardrail().jevBudget())
+                .withSendChildName(jev.sendChildName());
     }
 
     /** 비실검사 모드 기동 로그 한 줄(BR9.2). REAL이면 남기지 않는다. 남긴 사유 코드(없으면 null). */

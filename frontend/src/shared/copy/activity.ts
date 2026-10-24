@@ -71,6 +71,9 @@ export const ACTIVITY_TEMP_COPY = {
   childFallback: "아이", // 아이 이름을 모를 때(12에서 홈을 거치지 않고 들어옴)
   separator: " · ", // 줄 조각 구분
   rangeSeparator: " ~ ", // 'hh:mm ~ hh:mm'
+  // FT-1023-e: 연습 음성 출력 실패 종료(end_detail PRACTICE_OUTPUT_FAILED). 기기 연결 문제가 아니므로 연결 확인을 안내하지 않는다(임시)
+  practiceOutputFailedTitle: "연습 음성을 재생하지 못했어요",
+  practiceOutputFailedBody: "연습이 완료된 것은 아니에요. 잠시 뒤 다시 시작해 주세요.",
 } as const;
 
 // ───────────── 자리를 채우는 문구 ─────────────

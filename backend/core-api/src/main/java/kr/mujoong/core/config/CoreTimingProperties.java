@@ -26,10 +26,12 @@ public record CoreTimingProperties(
         ResultTiming result,
         ReportTiming report,
         PushTiming push,
-        KnowledgeTiming knowledge) {
+        KnowledgeTiming knowledge,
+        HomeEventsTiming homeEvents) {
 
     public CoreTimingProperties {
         required(knowledge, "mujoong.timing.knowledge");
+        required(homeEvents, "mujoong.timing.home-events");
         required(session, "mujoong.timing.session");
         required(core, "mujoong.timing.core");
         required(bootstrap, "mujoong.timing.bootstrap");
@@ -42,6 +44,23 @@ public record CoreTimingProperties(
         required(result, "mujoong.timing.result");
         required(report, "mujoong.timing.report");
         required(push, "mujoong.timing.push");
+    }
+
+    /** 보호자 상태 변경 알림의 연결 수명 · heartbeat · DB 수신 대기 · 재접속 간격. */
+    public record HomeEventsTiming(Duration streamTimeout, Duration heartbeatInterval,
+            Duration notificationWait, Duration reconnectDelay) {
+        public HomeEventsTiming {
+            positive(streamTimeout, "mujoong.timing.home-events.stream-timeout");
+            positive(heartbeatInterval, "mujoong.timing.home-events.heartbeat-interval");
+            positive(notificationWait, "mujoong.timing.home-events.notification-wait");
+            positive(reconnectDelay, "mujoong.timing.home-events.reconnect-delay");
+            if (notificationWait.toMillis() < 1 || notificationWait.toMillis() > Integer.MAX_VALUE
+                    || notificationWait.compareTo(heartbeatInterval) > 0
+                    || heartbeatInterval.compareTo(streamTimeout) >= 0) {
+                throw invalid("mujoong.timing.home-events: notification-wait는 1ms 이상 int 범위이며 "
+                        + "heartbeat-interval 이하여야 하고 heartbeat-interval은 stream-timeout보다 짧아야 한다");
+            }
+        }
     }
 
     /** 작업 재시도 · 실행 · 누락 판정의 시간 계약. */
@@ -62,11 +81,22 @@ public record CoreTimingProperties(
         }
     }
 
-    /** 리포트 절대 마감과 미저장 보존. */
-    public record ReportTiming(Duration readyTarget, Duration unsavedRetention) {
+    /**
+     * 리포트 절대 마감과 미저장 보존, 결과 정리 대기. 정리 대기 상한은 마감보다 짧아야 대기가 끝난 뒤 리포트를 만들 시간이 남는다.
+     *
+     * @param resultSettleWait 접수부터 고른 활동의 결과 정리를 기다리는 상한(FT-1023-c)
+     * @param resultSettlePoll 정리를 기다리는 동안 다시 보는 간격
+     */
+    public record ReportTiming(Duration readyTarget, Duration unsavedRetention, Duration resultSettleWait,
+            Duration resultSettlePoll) {
         public ReportTiming {
             positive(readyTarget, "mujoong.timing.report.ready-target");
             positive(unsavedRetention, "mujoong.timing.report.unsaved-retention");
+            positive(resultSettleWait, "mujoong.timing.report.result-settle-wait");
+            positive(resultSettlePoll, "mujoong.timing.report.result-settle-poll");
+            if (resultSettleWait.compareTo(readyTarget) >= 0) {
+                throw invalid("mujoong.timing.report.result-settle-wait는 ready-target보다 짧아야 한다");
+            }
         }
     }
 

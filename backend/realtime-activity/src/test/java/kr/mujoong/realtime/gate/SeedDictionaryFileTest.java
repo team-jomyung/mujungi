@@ -35,9 +35,9 @@ import org.junit.jupiter.api.Test;
 @Tag("skeleton")
 class SeedDictionaryFileTest {
 
-    /** 계약 9절 금지 표현 범주 7개. */
+    /** 계약 9절 금지 표현 범주 7개 + 욕설(JIRA-266). */
     private static final Set<String> CATEGORIES =
-            Set.of("DIAGNOSIS", "TREATMENT", "SCORE", "CAUSE", "GENERALIZATION", "EMOTION_CLAIM", "PRESSURE");
+            Set.of("DIAGNOSIS", "TREATMENT", "SCORE", "CAUSE", "GENERALIZATION", "EMOTION_CLAIM", "PRESSURE", "PROFANITY");
     /** 정규화 뒤 형태가 아닌 글자(공백 · 구두점(% 제외) · 라틴 대문자 · 정규식 메타 문자) — SD-18 2.14 로딩 거부 조건. */
     private static final Pattern NOT_NORMALIZED = Pattern.compile("[\\s\\p{Punct}&&[^%#]]|[A-Z]|[\\u200B-\\u200D\\uFEFF]");
 
@@ -71,10 +71,21 @@ class SeedDictionaryFileTest {
         Dictionary dictionary = load();
         assertThat(dictionary.version()).isEqualTo("seed-1");
         assertThat(dictionary.level()).isEqualTo("SEED");
-        // A5: 7범주 각 1항목 이상(비면 Realtime 기동 거부)
+        // A5: 8범주 각 1항목 이상(비면 Realtime 기동 거부)
         assertThat(dictionary.entries().stream().map(Entry::category).collect(Collectors.toSet()))
                 .containsExactlyInAnyOrderElementsOf(CATEGORIES);
         assertThat(dictionary.entries()).allSatisfy(entry -> assertThat(entry.appliesTo()).contains("OUTPUT_GATE"));
+    }
+
+    @Test
+    void theFileCategoriesAreExactlyTheLoaderCategoriesAndTheContractRow() throws IOException {
+        assertThat(Arrays.stream(SeedDictionary.Category.values()).map(Enum::name).collect(Collectors.toSet()))
+                .isEqualTo(CATEGORIES);
+        String row = Files.readAllLines(REPO_ROOT.resolve("contracts/ai-io.md"), StandardCharsets.UTF_8).stream()
+                .filter(line -> line.startsWith("| 금지 표현 사전 항목 |")).findFirst().orElseThrow();
+        Matcher matcher = Pattern.compile("category: ([A-Z_\\\\|]+)").matcher(row);
+        assertThat(matcher.find()).as("계약 행의 category 목록").isTrue();
+        assertThat(Arrays.stream(matcher.group(1).split("\\\\\\|")).collect(Collectors.toSet())).isEqualTo(CATEGORIES);
     }
 
     @Test
@@ -101,7 +112,10 @@ class SeedDictionaryFileTest {
                 .containsEntry("CAUSE", "핵심원인")
                 .containsEntry("GENERALIZATION", "학교에서도그럴")
                 .containsEntry("EMOTION_CLAIM", "화가났군요")
-                .containsEntry("PRESSURE", "꼭해야해요");
+                .containsEntry("PRESSURE", "꼭해야해요")
+                // JIRA-266: 욕설 범주는 범주 표지인 대표 항목 하나만 두고 어휘 · 변형은 공통 욕설 사전(contract-model)이 맡는다.
+                // 이 파일은 공백을 지우고 찾으므로 '아저씨 발'처럼 낱말 경계를 넘는 짧은 항목('씨발')을 두지 않는다
+                .containsEntry("PROFANITY", "씨발새끼");
         // J101 알려진 틈: '점수' · '정상이에요' · '정상입니다'는 정식 사전 v1에서 더한다(시드에 없음)
         assertThat(byCategory.values().stream().flatMap(value -> Arrays.stream(value.split("\\|"))))
                 .doesNotContain("점수", "정상이에요", "정상입니다");

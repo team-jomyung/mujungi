@@ -7,6 +7,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import kr.mujoong.contract.error.ErrorCode;
+import kr.mujoong.contract.text.ProfanityLexicon;
 import kr.mujoong.core.common.error.CoreApiException;
 
 /**
@@ -14,6 +15,10 @@ import kr.mujoong.core.common.error.CoreApiException;
  *
  * <p>글자는 NFC로 맞추고 앞뒤 공백을 뺀 뒤 센다(코드 포인트 수). 이름 1 ~ 10자, 나이 6 ~ 12 정수, 관심사 0 ~ 5개 · 각 1 ~ 10자 · 중복 없음.
  * 어긋나면 400 VALIDATION_FAILED이고 예외에 입력값을 담지 않는다(BR8.7).
+ *
+ * <p>이름은 형식 검사를 통과한 뒤 공통 욕설 사전({@link ProfanityLexicon#containsInName})에 걸리면 400 CHILD_NAME_NOT_ALLOWED다. 이름은
+ * AI 대화 지시문에 그대로 들어가 아이를 부를 때 쓰이므로 입력에서 막는다(JIRA-266 · contracts/deviations.md FT-1023-b). 이미 저장된 이름은
+ * realtime이 세션 시작 때 한 번 더 걸러 중립 호칭으로 바꾼다.
  */
 public final class ChildInput {
 
@@ -53,6 +58,9 @@ public final class ChildInput {
         String name = clean(value);
         if (name.isEmpty() || length(name) > NAME_MAX) {
             throw invalid();
+        }
+        if (ProfanityLexicon.shared().containsInName(name)) {
+            throw CoreApiException.of(ErrorCode.CHILD_NAME_NOT_ALLOWED);
         }
         return name;
     }

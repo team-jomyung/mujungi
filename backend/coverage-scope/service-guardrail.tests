@@ -81,6 +81,7 @@ backend/realtime-activity/src/test/java/kr/mujoong/realtime/guardrail/GuardrailP
 # 세션 전달/참여/종료·시계·검수/연습/삭제 통합 회귀 (BR2/4/5/6/7, NFR2/6)
 backend/realtime-activity/src/test/java/kr/mujoong/realtime/guardrail/JevGuardrailClientTest.java
 # J1/J6 요청·판정 현재성/마감 (BR4.2–4.4, NFR3.3/6.2)
+backend/realtime-activity/src/test/java/kr/mujoong/realtime/judgment/DecisionsJudgeClientTest.java
 backend/realtime-activity/src/test/java/kr/mujoong/realtime/judgment/JudgmentConfigurationTest.java
 # J1/J6 요청·판정 현재성/마감 (BR4.2–4.4, NFR3.3/6.2)
 backend/realtime-activity/src/test/java/kr/mujoong/realtime/judgment/JudgmentInstructionsTest.java
@@ -89,7 +90,6 @@ backend/realtime-activity/src/test/java/kr/mujoong/realtime/judgment/JudgmentReq
 # J1/J6 요청·판정 현재성/마감 (BR4.2–4.4, NFR3.3/6.2)
 backend/realtime-activity/src/test/java/kr/mujoong/realtime/judgment/JudgmentTurnTest.java
 # J1/J6 요청·판정 현재성/마감 (BR4.2–4.4, NFR3.3/6.2)
-backend/realtime-activity/src/test/java/kr/mujoong/realtime/judgment/LunaJudgeClientTest.java
 # 전사 공개·삭제·기존 수명 (BR5.3, NFR1.4)
 backend/realtime-activity/src/test/java/kr/mujoong/realtime/log/AsyncRecorderTest.java
 # 전사 공개·삭제·기존 수명 (BR5.3, NFR1.4)

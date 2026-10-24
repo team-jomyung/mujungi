@@ -217,8 +217,8 @@ public final class CoreWebApp implements AutoCloseable {
             args.put("spring.datasource.url", postgres.jdbcUrl());
             args.put("spring.datasource.username", postgres.username(Role.CORE_APP));
             args.put("spring.datasource.password", postgres.password(Role.CORE_APP));
-            // Inbox 처리기 둘이 커밋 후 REQUIRES_NEW 결과 접수를 마칠 여유 연결이 필요하다.
-            args.put("spring.datasource.hikari.maximum-pool-size", "3");
+            // Inbox 처리기 둘과 REQUIRES_NEW 결과 접수에 필요한 세 연결 + SSE LISTEN 전용 한 연결.
+            args.put("spring.datasource.hikari.maximum-pool-size", "4");
             args.put(RequiredSecretsCheck.INTERNAL_TOKEN, token);
             args.put("mujoong.internal-http.realtime-base-url", realtimeBaseUrl.toString());
             args.put("mujoong.dev-login.enabled", Boolean.toString(devLogin));

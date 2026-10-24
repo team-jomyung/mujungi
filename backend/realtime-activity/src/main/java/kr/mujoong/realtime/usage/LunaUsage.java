@@ -5,7 +5,7 @@ import java.util.Map;
 import java.util.UUID;
 import kr.mujoong.contract.json.JsonCodec;
 
-/** Responses 사용량만 해석한다. 거절·스키마 오류 응답이어도 반환된 사용량은 독립적으로 기록한다. */
+/** Decisions 응답의 사용량을 해석한다. 거절·스키마 오류 응답이어도 반환된 사용량은 독립적으로 기록한다. */
 public final class LunaUsage {
     private LunaUsage() { }
 

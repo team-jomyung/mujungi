@@ -63,6 +63,8 @@ class ErrorCodeTest {
         table.put("GOOGLE_AUTH_FAILED", List.of(401));
         table.put("CHILD_NOT_REGISTERED", List.of(404));
         table.put("CHILD_EXISTS", List.of(409));
+        // JIRA-266(편차 FT-1023-b): 아이 이름 욕설 거절
+        table.put("CHILD_NAME_NOT_ALLOWED", List.of(400));
         return table;
     }
 

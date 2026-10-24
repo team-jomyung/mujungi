@@ -1055,7 +1055,14 @@ public final class PracticeConversation implements PracticeSessionExtension {
     }
 
     private void onIncompleteAudio(PracticeSpeech speech) {
-        if (!speech.correlationId().equals(openSlot) || openSlotPlaying || stopping) return;
+        if (!speech.correlationId().equals(openSlot) || stopping) return;
+        if (openSlotPlaying) {
+            // FT-1023-e: 이미 재생이 시작된 생성형 발화의 꼬리가 비었다 — 같은 지시를 다시 요청하지 않고(아이가 같은 말을 두 번 듣는다) 나간 부분까지
+            // 재생됨으로 닫는다. 실행부가 이 경우를 먼저 닫으므로 보통 오지 않지만, 무시하면 실행부가 시한을 쥔 슬롯이 닫히지 않고 남는다. 승인 원문 읽기는 지금처럼
+            // 무시한다(실행부가 송신과 함께 슬롯을 놓아 재생 뒤 이 사건이 오지 않는다)
+            if (speech.generated()) handleSlotEnd(speech.correlationId(), SlotEnd.PLAYED);
+            return;
+        }
         if (!speech.generated()) { onApprovedTextMismatch(speech); return; }
         if (generatedAudioRetried) { handleSlotEnd(speech.correlationId(), SlotEnd.FAILED); return; }
         cancelOpenSlot();

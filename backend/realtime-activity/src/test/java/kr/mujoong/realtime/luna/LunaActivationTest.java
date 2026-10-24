@@ -36,13 +36,13 @@ class LunaActivationTest {
         when(realtime.timing().judgment().liveBudget()).thenReturn(Duration.ofSeconds(4));
         ApplicationContextRunner runner = new ApplicationContextRunner()
                 .withUserConfiguration(LunaConfiguration.class)
+                .withBean(kr.mujoong.realtime.usage.AiUsageCollector.class, () -> kr.mujoong.realtime.usage.AiUsageCollector.NOOP)
                 .withBean(JsonCodec.class, JsonCodec::shared)
                 .withBean(MujoongClock.class, () -> clock)
                 .withBean(EventLogger.class, () -> events)
                 .withBean(RealtimeProperties.class, () -> realtime)
                 .withPropertyValues("mujoong.luna.model=gpt-6-luna", "mujoong.luna.base-url=https://api.openai.com/v1",
-                        "mujoong.luna.max-response-bytes=1000000", "mujoong.luna.purpose.judgment-live.max-output-tokens=4000",
-                        "mujoong.luna.purpose.judgment-live.reasoning-effort=medium");
+                        "mujoong.luna.max-response-bytes=1000000");
         if (key) {
             runner = runner.withPropertyValues("OPENAI_API_KEY=" + RealtimeLunaTestFixtures.FAKE_KEY);
         }

@@ -14,9 +14,12 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * @param model 고정 모델 버전(env {@code JEV_MODEL}). 이동 별칭({@code -latest})은 거부한다
  * @param passThreshold 통과 문턱(env {@code JEV_PASS_THRESHOLD}, 허용 {@code 0 < x <= 1}). {@code PASS} 확률이 이 값 이상이고 1순위일 때만 자동
  *     통과한다. <b>임시 시험값이다 — AI 성능 시험으로 확정한다</b>(선 형식 정정 D6, 값은 {@code application.yml}에만 있다)
+ * @param sendChildName 제브 요청 후보 문장 · 맥락의 아이 이름을 '아이'로 바꾸지 않고 원문으로 보내는가(env {@code JEV_SEND_CHILD_NAME}, 기본
+ *     {@code false}). 욕설 이름을 제브가 보게 하려는 스위치다(JIRA-266). <b>R-F15 확인 기록(제브의 아동 이름 전달 허용 범위) 전에는 켜지 않는다</b>
+ *     (contracts/ai-io.md 10.2 · infra/RUNBOOK.md). 다른 외부 AI 경로(Luna 등)는 이 값과 관계없이 이름을 바꾼다
  */
 @ConfigurationProperties(prefix = "mujoong.guardrail.jev")
-public record GuardrailProperties(String mode, String baseUrl, String model, double passThreshold) {
+public record GuardrailProperties(String mode, String baseUrl, String model, double passThreshold, boolean sendChildName) {
 
     /** 주소 설정 키. */
     public static final String BASE_URL_KEY = "mujoong.guardrail.jev.base-url";
@@ -24,6 +27,8 @@ public record GuardrailProperties(String mode, String baseUrl, String model, dou
     public static final String MODEL_KEY = "mujoong.guardrail.jev.model";
     /** 통과 문턱 설정 키. */
     public static final String PASS_THRESHOLD_KEY = "mujoong.guardrail.jev.pass-threshold";
+    /** 아이 이름 원문 전달 스위치 키(JIRA-266). */
+    public static final String SEND_CHILD_NAME_KEY = "mujoong.guardrail.jev.send-child-name";
 
     public GuardrailProperties {
         mode = mode == null ? "" : mode;

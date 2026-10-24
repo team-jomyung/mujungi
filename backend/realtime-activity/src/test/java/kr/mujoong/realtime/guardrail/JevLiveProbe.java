@@ -208,7 +208,7 @@ final class JevLiveProbe {
         }
         Duration budget = operationalBudget();
         double threshold = operationalThreshold(env);
-        GuardrailProperties properties = new GuardrailProperties("REAL", baseUrl.strip(), model.strip(), threshold);
+        GuardrailProperties properties = new GuardrailProperties("REAL", baseUrl.strip(), model.strip(), threshold, false);
         String policyVersion = LiveContentResources.loadDefault().guardrail().version();
         Inspector inspector = factory.create(properties, () -> env.apply(GuardrailStartupRules.API_KEY_ENV), budget, clock);
         List<Observation> observations = new ArrayList<>();

@@ -32,11 +32,13 @@ import org.springframework.jdbc.datasource.DataSourceTransactionManager;
         consent=mock(kr.mujoong.core.consent.ConsentPolicyService.class);when(consent.check(any())).thenReturn(granted(true));
         // 연습 목표의 고정 정의가 없으면 7항목에서 뺀다(BR12.2). 시험 목표는 정의가 없다.
         var definitions=mock(BehaviorDefinitionLookup.class);when(definitions.get(anyString(),anyInt())).thenThrow(new IllegalArgumentException("정의 없음"));
-        var handler=new ReportHandler(reports,reader,states,results,scenes,structures,definitions,new ReportAssembler(),new ReportRuleSections(new ForbiddenDictionary()),tm,consent);
-        runner=new JobRunner(jobs,new ReportJobStateAdapter(reports),new GuardianWriteLock(db.jdbc()),clock,JobRunnerTest.properties(),tm,List.of(handler),mock(EventLogger.class));
+        var handler=new ReportHandler(reports,reader,states,results,scenes,structures,definitions,new ReportAssembler(),new ReportRuleSections(new ForbiddenDictionary()),tm,consent,properties());
+        runner=new JobRunner(jobs,new ReportJobStateAdapter(reports),new GuardianWriteLock(db.jdbc()),clock,properties(),tm,List.of(handler),mock(EventLogger.class));
         guardian=db.insertGuardian("ACTIVE");child=db.insertChild(guardian);reportId=UUID.randomUUID();
     }
     @AfterEach void close(){db.close();}
+    /** 리포트 마감 6분 · 정리 대기 5분 · 다시 보기 10초(application.yml 기본값). */
+    static kr.mujoong.core.config.CoreProperties properties(){var p=JobRunnerTest.properties();when(p.timing().report()).thenReturn(new kr.mujoong.core.config.CoreTimingProperties.ReportTiming(Duration.ofMinutes(6),Duration.ofHours(24),Duration.ofMinutes(5),Duration.ofSeconds(10)));return p;}
     static kr.mujoong.core.consent.ConsentPolicyService.GateResult granted(boolean voiceAndText){return new kr.mujoong.core.consent.ConsentPolicyService.GateResult(voiceAndText,null,new kr.mujoong.core.consent.ConsentPolicyService.Snapshot("v1",voiceAndText,true,true,true));}
     /** 짝수 번째는 자유대화(구조화 · 결과 문장 있음), 홀수 번째는 U5b 형식 연습(장면 1 판정 + FIRST 반응 발화 2). */
     ResultJob prepare(int count,Duration deadline){
@@ -66,7 +68,7 @@ import org.springframework.jdbc.datasource.DataSourceTransactionManager;
         for(var constructor:ReportRuleSections.class.getConstructors())assertThat(constructor.getParameterTypes()).doesNotContainAnyElementsOf(forbidden);
     }
     @Test void twentyActivitiesRecoverAfterFirstFailureWithinSixtySeconds()throws Exception{
-        var job=prepare(20,Duration.ofSeconds(60));UUID session=firstSession();var input=reader.find(session,guardian).orElseThrow();AtomicInteger reads=new AtomicInteger();
+        var job=prepare(20,Duration.ofMinutes(6));UUID session=firstSession();var input=reader.find(session,guardian).orElseThrow();AtomicInteger reads=new AtomicInteger();
         when(reader.find(session,guardian)).thenAnswer(call->{if(reads.incrementAndGet()==1)throw new IllegalStateException("일시 읽기 실패");return Optional.of(input);});
         long start=System.nanoTime();runner.execute(job);clock.advance(Duration.ofSeconds(5));runner.execute(runner.claim("REPORT").getFirst());long elapsed=TimeUnit.NANOSECONDS.toMillis(System.nanoTime()-start);
         assertThat(reports.find(reportId).orElseThrow().status()).isEqualTo("READY");assertThat(elapsed).isLessThan(60000);assertThat(reports.sections(reportId)).hasSize(10);
@@ -75,7 +77,7 @@ import org.springframework.jdbc.datasource.DataSourceTransactionManager;
     @Test void absoluteDeadlineStopsDespiteRemainingAttempts(){var job=prepare(1,Duration.ofSeconds(3));when(reader.find(firstSession(),guardian)).thenAnswer(call->{clock.advance(Duration.ofSeconds(3));throw new IllegalStateException("느린 읽기");});runner.execute(job);assertThat(jobs.find(job.id()).orElseThrow().lastErrorCode()).isEqualTo("DEADLINE_EXCEEDED");assertThat(reports.find(reportId).orElseThrow().status()).isEqualTo("FAILED");}
     @Test void nextRetryBeyondDeadlineFailsImmediately(){var job=prepare(1,Duration.ofSeconds(4));when(reader.find(firstSession(),guardian)).thenThrow(new IllegalStateException("읽기 실패"));runner.execute(job);assertThat(jobs.find(job.id()).orElseThrow().status()).isEqualTo("FAILED");assertThat(jobs.find(job.id()).orElseThrow().lastErrorCode()).isEqualTo("DEADLINE_EXCEEDED");}
     @Test void ruleSectionsAreWrittenFromStoredRecordsAndResults(){
-        var job=prepare(2,Duration.ofSeconds(60));runner.execute(job);
+        var job=prepare(2,Duration.ofMinutes(6));runner.execute(job);
         var report=reports.find(reportId).orElseThrow();assertThat(report.status()).isEqualTo("READY");assertThat(reports.sections(reportId)).hasSize(10);
         // 2항목: 연습 장면 1의 FIRST 반응 발화(2)만 인용한다. 연습 인용이 있으면 자유대화 발화는 쓰지 않는다.
         var practiceSession=reports.activities(reportId).stream().filter(a->a.activityType().equals("PRACTICE")).findFirst().orElseThrow().sessionId();
@@ -91,12 +93,12 @@ import org.springframework.jdbc.datasource.DataSourceTransactionManager;
         assertThat(section(10).text()).startsWith(ReportAssembler.LIMITATION).contains("끝난 이유 · 아이가 끝냈어요 2회");
         assertThat(report.citationCount()).isEqualTo(2);
     }
-    @Test void lateCompletionAfterDiscardCannotRestoreChildren(){var job=prepare(1,Duration.ofSeconds(60));var session=firstSession();var input=reader.find(session,guardian).orElseThrow();when(reader.find(session,guardian)).thenAnswer(call->{new org.springframework.transaction.support.TransactionTemplate(new DataSourceTransactionManager(db.dataSource())).executeWithoutResult(t->reports.discard(reportId,clock.now()));return Optional.of(input);});runner.execute(job);assertThat(reports.find(reportId).orElseThrow().status()).isEqualTo("DISCARDED");assertThat(reports.sections(reportId)).isEmpty();assertThat(reports.activities(reportId)).isEmpty();assertThat(jobs.find(job.id()).orElseThrow().lastErrorCode()).isEqualTo("REPORT_DISCARDED");}
-    @Test void emptyTranscriptLeavesQuoteSectionsMissingAndAlwaysKeepsLimitNotice(){var job=prepare(1,Duration.ofSeconds(60));var session=firstSession();var input=reader.find(session,guardian).orElseThrow();var r=input.record();when(reader.find(session,guardian)).thenReturn(Optional.of(new ResultRecordReader.Input(new ActivityRecordRepository.StoredRecord(r.sessionId(),guardian,child,r.activityType(),r.finalStatus(),r.endReason(),true,r.startedAt(),r.endedAt(),r.listedAt(),r.recordFrom(),r.recordTo(),"[]","[]",null,"hash",clock.now()),"ENDED",null,false)));db.jdbc().update("delete from core.core_structured_experience where session_id=:id",Map.of("id",session));runner.execute(job);assertThat(section(2).missing()).isTrue();assertThat(section(5).missing()).isTrue();assertThat(section(10).missing()).isFalse();
+    @Test void lateCompletionAfterDiscardCannotRestoreChildren(){var job=prepare(1,Duration.ofMinutes(6));var session=firstSession();var input=reader.find(session,guardian).orElseThrow();when(reader.find(session,guardian)).thenAnswer(call->{new org.springframework.transaction.support.TransactionTemplate(new DataSourceTransactionManager(db.dataSource())).executeWithoutResult(t->reports.discard(reportId,clock.now()));return Optional.of(input);});runner.execute(job);assertThat(reports.find(reportId).orElseThrow().status()).isEqualTo("DISCARDED");assertThat(reports.sections(reportId)).isEmpty();assertThat(reports.activities(reportId)).isEmpty();assertThat(jobs.find(job.id()).orElseThrow().lastErrorCode()).isEqualTo("REPORT_DISCARDED");}
+    @Test void emptyTranscriptLeavesQuoteSectionsMissingAndAlwaysKeepsLimitNotice(){var job=prepare(1,Duration.ofMinutes(6));var session=firstSession();var input=reader.find(session,guardian).orElseThrow();var r=input.record();when(reader.find(session,guardian)).thenReturn(Optional.of(new ResultRecordReader.Input(new ActivityRecordRepository.StoredRecord(r.sessionId(),guardian,child,r.activityType(),r.finalStatus(),r.endReason(),true,r.startedAt(),r.endedAt(),r.listedAt(),r.recordFrom(),r.recordTo(),"[]","[]",null,"hash",clock.now()),"ENDED",null,false)));db.jdbc().update("delete from core.core_structured_experience where session_id=:id",Map.of("id",session));runner.execute(job);assertThat(section(2).missing()).isTrue();assertThat(section(5).missing()).isTrue();assertThat(section(10).missing()).isFalse();
         // 자유대화만 고른 리포트라 연습 고정 문장은 붙이지 않는다.
         assertThat(section(10).text()).doesNotContain(ReportAssembler.LIMITATION).contains("끝난 이유");}
     @Test void reportWorkerCompletesWhileThreeSlowSessionsAreQueued()throws Exception{
-        var job=prepare(20,Duration.ofSeconds(60));db.jdbc().update("delete from core.core_result_job_attempt where job_id=:id",Map.of("id",job.id()));db.jdbc().update("update core.core_result_job set status='REQUESTED',attempt_count=0,lease_until=null where id=:id",Map.of("id",job.id()));
+        var job=prepare(20,Duration.ofMinutes(6));db.jdbc().update("delete from core.core_result_job_attempt where job_id=:id",Map.of("id",job.id()));db.jdbc().update("update core.core_result_job set status='REQUESTED',attempt_count=0,lease_until=null where id=:id",Map.of("id",job.id()));
         CountDownLatch sessionStarted=new CountDownLatch(1),sessionFinished=new CountDownLatch(1);
         runner.register(new JobHandler(){public String jobType(){return "SESSION_RESULT";}public Outcome handle(JobContext context){sessionStarted.countDown();try{Thread.sleep(10000);sessionFinished.countDown();}catch(InterruptedException e){Thread.currentThread().interrupt();return Outcome.failed("TIMEOUT",true);}context.commit(()->{},()->{});return Outcome.done();}});
         for(int i=0;i<3;i++)jobs.submit("SESSION_RESULT",UUID.randomUUID(),guardian,"slow-"+i+reportId,"RECONCILE",null,clock.now());
@@ -110,11 +112,11 @@ import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 
     /** 실제 사례(JIRA-267 12:59): 세션 끝 15초 뒤 리포트를 만들면 그 활동이 아직 정리 중(RUNNING)이다. 정리가 끝날 때까지 미뤘다가 만든다. */
     @Test void settlingActivityDefersReportUntilResultIsDone(){
-        var job=prepare(2,Duration.ofSeconds(60));var practice=practiceSession();resultStatus(practice,"RUNNING");
+        var job=prepare(2,Duration.ofMinutes(6));var practice=practiceSession();resultStatus(practice,"RUNNING");
         runner.execute(job);
         var waiting=jobs.find(job.id()).orElseThrow();
         assertThat(waiting.status()).isEqualTo("REQUESTED");assertThat(waiting.lastErrorCode()).isNull();
-        assertThat(waiting.nextAttemptAt()).isEqualTo(clock.now().plusSeconds(5));
+        assertThat(waiting.nextAttemptAt()).isEqualTo(clock.now().plusSeconds(10));assertThat(waiting.attemptCount()).isZero();
         assertThat(reports.find(reportId).orElseThrow().status()).isEqualTo("GENERATING");assertThat(reports.sections(reportId)).isEmpty();
         resultStatus(practice,"DONE");
         runner.execute(nextAttempt(job));
@@ -123,11 +125,15 @@ import org.springframework.jdbc.datasource.DataSourceTransactionManager;
         assertThat(section(10).text()).doesNotContain("정리 중인 활동");
         assertThat(reports.activities(reportId)).allSatisfy(a->assertThat(a.resultStatus()).isEqualTo("DONE"));
     }
-    /** 마지막 시도까지 정리가 끝나지 않으면 그때 있는 자료로 만들고 10항목에 정리 중 활동 수를 남긴다. */
-    @Test void stillSettlingAtLastAttemptBuildsWithAvailableRecords(){
-        var job=prepare(2,Duration.ofSeconds(60));var practice=practiceSession();resultStatus(practice,"RUNNING");
-        runner.execute(job);var second=nextAttempt(job);runner.execute(second);var third=nextAttempt(job);
-        assertThat(third.attemptCount()).isEqualTo(3);runner.execute(third);
+    /** 정리 대기 상한(접수부터 5분)까지 정리가 끝나지 않으면 그때 있는 자료로 만들고 10항목에 정리 중 활동 수를 남긴다. 미룬 시도는 시도 횟수를 쓰지 않는다. */
+    @Test void stillSettlingAfterSettleWaitBuildsWithAvailableRecords(){
+        var submitted=clock.now();var job=prepare(2,Duration.ofMinutes(6));var practice=practiceSession();resultStatus(practice,"RUNNING");
+        int deferred=0;
+        while(reports.find(reportId).orElseThrow().status().equals("GENERATING")){
+            assertThat(job.attemptCount()).isEqualTo(1);runner.execute(job);
+            if(reports.find(reportId).orElseThrow().status().equals("GENERATING")){deferred++;job=nextAttempt(job);}
+        }
+        assertThat(deferred).isEqualTo(30);assertThat(clock.now()).isEqualTo(submitted.plus(Duration.ofMinutes(5)));
         assertThat(reports.find(reportId).orElseThrow().status()).isEqualTo("READY");
         assertThat(section(2).missing()).isTrue();assertThat(section(2).text()).isEqualTo("자료 부족");
         assertThat(section(10).text()).contains("정리 중인 활동 1개");
@@ -135,7 +141,7 @@ import org.springframework.jdbc.datasource.DataSourceTransactionManager;
     }
     /** 결과 접수 전(결과 머리 없음)도 기다리지만, 정리하지 못한(FAILED) 활동 · 결과 대상이 아닌(NONE) 활동은 기다리지 않는다. */
     @Test void failedOrIneligibleActivitiesAreNotAwaitedButUnacceptedOnesAre(){
-        var job=prepare(2,Duration.ofSeconds(60));var practice=practiceSession();
+        var job=prepare(2,Duration.ofMinutes(6));var practice=practiceSession();
         db.jdbc().update("delete from core.core_session_result_state where session_id=:id",Map.of("id",practice));
         runner.execute(job);
         assertThat(jobs.find(job.id()).orElseThrow().status()).isEqualTo("REQUESTED");
@@ -144,7 +150,7 @@ import org.springframework.jdbc.datasource.DataSourceTransactionManager;
         assertThat(reports.find(reportId).orElseThrow().status()).isEqualTo("READY");
     }
     @Test void failedActivityIsNotAwaited(){
-        var job=prepare(2,Duration.ofSeconds(60));resultStatus(practiceSession(),"FAILED");
+        var job=prepare(2,Duration.ofMinutes(6));resultStatus(practiceSession(),"FAILED");
         runner.execute(job);
         assertThat(reports.find(reportId).orElseThrow().status()).isEqualTo("READY");
         assertThat(section(10).text()).contains("정리하지 못한 활동 1개");
@@ -158,12 +164,12 @@ import org.springframework.jdbc.datasource.DataSourceTransactionManager;
         return requests;
     }
     @Test void realCreatedReportIsNotBuiltAfterDeletionRequestBeforeParticipants(){
-        prepare(1,Duration.ofSeconds(60));
+        prepare(1,Duration.ofMinutes(6));
         UUID session=firstSession();var record=reader.find(session,guardian).orElseThrow().record();
         when(reader.reportRecords(guardian,child)).thenReturn(List.of(record));
         var children=mock(kr.mujoong.core.child.ChildProfileService.class);
         when(children.childContext(guardian)).thenReturn(Optional.of(new kr.mujoong.core.child.ChildProfileService.ChildContext(child,"민수",7,List.of(),List.of())));
-        var properties=JobRunnerTest.properties();when(properties.timing().report()).thenReturn(new kr.mujoong.core.config.CoreTimingProperties.ReportTiming(Duration.ofSeconds(60),Duration.ofHours(24)));
+        var properties=properties();
         var service=new ReportService(reports,reader,children,states,jobs,new GuardianWriteLock(db.jdbc()),clock,properties,JsonCodec.shared(),tm);
         LocalDate today=clock.now().atZone(ReportService.ZONE).toLocalDate();
         var created=service.create(guardian,today,today,List.of(session),UUID.randomUUID().toString());
@@ -180,7 +186,7 @@ import org.springframework.jdbc.datasource.DataSourceTransactionManager;
     @org.junit.jupiter.params.ParameterizedTest
     @org.junit.jupiter.params.provider.ValueSource(booleans={false,true})
     void withdrawnActivityNeverSuppliesQuotesOrResultsEvenWhenDone(boolean done){
-        var job=prepare(2,Duration.ofSeconds(60));var session=firstSession();
+        var job=prepare(2,Duration.ofMinutes(6));var session=firstSession();
         var r=reader.find(session,guardian).orElseThrow().record();
         var withdrawn=new ActivityRecordRepository.StoredRecord(r.sessionId(),guardian,child,r.activityType(),r.finalStatus(),"CONSENT_WITHDRAWN",
             r.confirmed(),r.startedAt(),r.endedAt(),r.listedAt(),r.recordFrom(),r.recordTo(),
@@ -196,7 +202,7 @@ import org.springframework.jdbc.datasource.DataSourceTransactionManager;
         assertThat(reports.activities(reportId).stream().filter(a->a.sessionId().equals(session)).findFirst().orElseThrow().resultStatus()).isEqualTo(done?"DONE":"NONE");
     }
     @Test void missingCurrentConsentStopsBeforeReportInputIsRead(){
-        var job=prepare(1,Duration.ofSeconds(60));clearInvocations(reader);
+        var job=prepare(1,Duration.ofMinutes(6));clearInvocations(reader);
         when(consent.check(guardian)).thenReturn(granted(false));
         runner.execute(job);verifyNoInteractions(reader);
         assertThat(jobs.find(job.id()).orElseThrow().lastErrorCode()).isEqualTo("INTERNAL");
@@ -205,7 +211,7 @@ import org.springframework.jdbc.datasource.DataSourceTransactionManager;
     @org.junit.jupiter.params.ParameterizedTest
     @org.junit.jupiter.params.provider.ValueSource(booleans={false,true})
     void deletionOrWithdrawalAfterReadingPreventsPublishingReport(boolean deletion){
-        var job=prepare(1,Duration.ofSeconds(60));var session=firstSession();var input=reader.find(session,guardian).orElseThrow();
+        var job=prepare(1,Duration.ofMinutes(6));var session=firstSession();var input=reader.find(session,guardian).orElseThrow();
         when(reader.find(session,guardian)).thenAnswer(call->{
             if(deletion)db.jdbc().update("update core.core_guardian set status='DELETION_REQUESTED' where id=:id",Map.of("id",guardian));
             else when(consent.check(guardian)).thenReturn(granted(false));

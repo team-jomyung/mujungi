@@ -26,7 +26,8 @@ import java.util.function.Supplier;
 
 /**
  * Luna 공급자로 나가는 유일한 길 — realtime (U9 SD3 · NFR3.4 · NFR3.6 · NFR3.9 · NFR3.10). core에 같은 모양이 따로 있다(R-F5).
- * GPT-Live 웹소켓({@code voice.ProviderClient})과는 다른 HTTP 경로다(NFR3.8).
+ * GPT-Live 웹소켓({@code voice.ProviderClient})과는 다른 HTTP 경로다(NFR3.8). 끝점은 Decisions API {@code {baseUrl}/decisions} 하나다
+ * (진행 중 판정, FT-1023-d).
  *
  * <ul>
  *   <li>앱마다 하나인 {@link HttpClient}: 리다이렉트를 따르지 않고 프록시를 쓰지 않는다.
@@ -41,6 +42,9 @@ public final class LunaTransport implements AutoCloseable {
     /** 공급자 키 env 이름(contracts/ai-io.md 10.7). */
     public static final String API_KEY_ENV = "OPENAI_API_KEY";
 
+    /** 기준 주소 뒤에 붙는 Decisions API 경로(FT-1023-d). */
+    static final String DECISIONS_PATH = "decisions";
+
     private final HttpClient client;
     private final URI endpoint;
     private final LunaHosts.Mode mode;
@@ -48,7 +52,7 @@ public final class LunaTransport implements AutoCloseable {
     private final int maxResponseBytes;
 
     /**
-     * @param baseUrl Responses API 기준 주소({@code {baseUrl}/responses}로 보낸다)
+     * @param baseUrl OpenAI API 기준 주소({@code {baseUrl}/decisions}로 보낸다)
      * @param mode 주소 규칙(기동 때와 같은 모드)
      * @param apiKey 보낼 때마다 env에서 읽는 키 공급자(값을 보관하지 않음)
      * @param maxResponseBytes 응답 본문 바이트 상한
@@ -56,7 +60,8 @@ public final class LunaTransport implements AutoCloseable {
     public LunaTransport(URI baseUrl, LunaHosts.Mode mode, Supplier<String> apiKey, int maxResponseBytes) {
         Objects.requireNonNull(baseUrl, "baseUrl");
         String base = baseUrl.toString();
-        this.endpoint = URI.create((base.endsWith("/") ? base.substring(0, base.length() - 1) : base) + "/responses");
+        String trimmed = base.endsWith("/") ? base.substring(0, base.length() - 1) : base;
+        this.endpoint = URI.create(trimmed + "/" + DECISIONS_PATH);
         this.mode = Objects.requireNonNull(mode, "mode");
         this.apiKey = Objects.requireNonNull(apiKey, "apiKey");
         if (maxResponseBytes <= 0) {
@@ -69,13 +74,13 @@ public final class LunaTransport implements AutoCloseable {
                 .build();
     }
 
-    /** 보내는 주소({@code {baseUrl}/responses}). */
+    /** 보내는 주소({@code {baseUrl}/decisions}). */
     public URI endpoint() {
         return endpoint;
     }
 
     /**
-     * 요청 본문 하나를 보낸다. 반환 Future는 시한 {@code limit} 안에 끝나며, 실패는 {@link LunaException}을 원인으로 갖는다.
+     * Decisions API로 요청 본문 하나를 보낸다. 반환 Future는 시한 {@code limit} 안에 끝나며, 실패는 {@link LunaException}을 원인으로 갖는다.
      */
     public CompletableFuture<RawResponse> send(String body, Duration limit) {
         Objects.requireNonNull(body, "body");

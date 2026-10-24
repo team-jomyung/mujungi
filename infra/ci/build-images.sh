@@ -235,6 +235,7 @@ build_one() {
       args=(-f infra/migrate/Dockerfile
         --build-context core_sql=backend/core-api/src/main/resources/db/migration/core
         --build-context realtime_sql=backend/realtime-activity/src/main/resources/db/migration/realtime
+        --build-context reference_seed=infra/seed
         infra/migrate) ;;
     backup) args=(-f infra/backup/Dockerfile infra/backup) ;;
     infra) args=(-f infra/bundle/Dockerfile --build-context "release=$work/release" infra) ;;

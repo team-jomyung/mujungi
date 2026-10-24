@@ -47,29 +47,34 @@ class RealtimeLunaUsageTest {
                 RealtimeLunaTestFixtures.judgmentInput("합성 발화"), Map.of(), clock.now().plusSeconds(10));
     }
 
-    @Test void anIncompleteBusinessReplyStillRecordsItsActualUsageWithoutAnExtraCall() throws Exception {
+    @Test void anInvalidDecisionStillRecordsItsActualUsageWithoutAnExtraCall() throws Exception {
         var captured = new CompletableFuture<AiUsageRecord>();
         UUID turn = UUID.randomUUID();
-        var result = client(r -> { captured.complete(r); return true; }).call(request(), turn).toCompletableFuture();
+        var result = client(r -> { captured.complete(r); return true; })
+                .decide(request(), LunaReachProbe.question(request()), turn).toCompletableFuture();
         response.complete(new LunaTransport.RawResponse(200, """
-                {"id":"synthetic-response","model":"synthetic-model","status":"incomplete",
-                 "usage":{"input_tokens":123,"output_tokens":45,
-                   "input_tokens_details":{"cached_tokens":20},"output_tokens_details":{"reasoning_tokens":10}}}
+                {"model":"synthetic-model","answers":[],
+                 "usage":{"input_tokens":123,"output_tokens":0,
+                   "input_tokens_details":{"cached_tokens":20,"cache_write_tokens":10},
+                   "output_tokens_details":{"reasoning_tokens":0}}}
                 """, Optional.empty()));
         assertThatThrownBy(() -> result.get(2, TimeUnit.SECONDS)).isInstanceOf(ExecutionException.class)
                 .hasCauseInstanceOf(LunaException.class);
         AiUsageRecord record = captured.get(2, TimeUnit.SECONDS);
         assertThat(record.turnId()).isEqualTo(turn);
         assertThat(record.inputTokens()).isEqualTo(123L);
-        assertThat(record.outputTokens()).isEqualTo(45L);
-        assertThat(record.reasoningTokens()).isEqualTo(10L);
+        assertThat(record.outputTokens()).isZero();
+        assertThat(record.reasoningTokens()).isZero();
+        assertThat(record.cachedInputTokens()).isEqualTo(20L);
+        assertThat(record.responseId()).isNull();
         assertThat(record.status()).isEqualTo(AiUsageRecord.Status.COMPLETE);
         verify(transport, times(1)).send(any(), any());
     }
 
     @Test void cancellationRecordsUnknownRatherThanInventingZeroTokens() throws Exception {
         var captured = new CompletableFuture<AiUsageRecord>();
-        var result = client(r -> { captured.complete(r); return true; }).call(request(), UUID.randomUUID()).toCompletableFuture();
+        var result = client(r -> { captured.complete(r); return true; })
+                .decide(request(), LunaReachProbe.question(request()), UUID.randomUUID()).toCompletableFuture();
         assertThat(result.cancel(true)).isTrue();
         assertThat(response.isCancelled()).isTrue();
         AiUsageRecord record = captured.get(2, TimeUnit.SECONDS);
@@ -81,9 +86,9 @@ class RealtimeLunaUsageTest {
 
     @Test void collectorFailureDoesNotReplaceTheOriginalBusinessFailure() {
         var result = client(r -> { throw new IllegalStateException("synthetic collector failure"); })
-                .call(request(), UUID.randomUUID()).toCompletableFuture();
-        response.complete(new LunaTransport.RawResponse(200, "{\"status\":\"incomplete\",\"model\":\"synthetic\"}", Optional.empty()));
+                .decide(request(), LunaReachProbe.question(request()), UUID.randomUUID()).toCompletableFuture();
+        response.complete(new LunaTransport.RawResponse(200, "{\"answers\":[],\"model\":\"synthetic\"}", Optional.empty()));
         assertThatThrownBy(() -> result.get(2, TimeUnit.SECONDS)).isInstanceOf(ExecutionException.class)
-                .satisfies(failure -> assertThat(((LunaException) failure.getCause()).reason()).isEqualTo(LunaFailureReason.LENGTH_EXCEEDED));
+                .satisfies(failure -> assertThat(((LunaException) failure.getCause()).reason()).isEqualTo(LunaFailureReason.EMPTY_OUTPUT));
     }
 }

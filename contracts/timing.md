@@ -41,7 +41,8 @@
 | `mujoong.timing.gate.local-voice-min` | `200ms` | web | 끼어들기 판정에 넣는 최소 음성 길이(이보다 짧은 소리는 무시) | U3-J20 |
 | `mujoong.timing.device.cookie-max-age` | `400d` | core-api | `GET /api/device/me` 성공마다 MUJOONG_DEVICE 쿠키 수명을 다시 이 값으로(서버 토큰은 만료 없음) | BR3.5 · B4 · J29 |
 | `mujoong.timing.core.device-status-stale` | `30s` | core-api | Core가 마지막 보고를 받은 시각 → '기기 상태 확인 불가'(BR4.3 ③), 12 stale(BR6.15) | B6 · RD-6 |
-| `mujoong.timing.parent.poll-interval` | `2s` | web | 12 진행 화면 폴링 주기(다른 화면은 진입 때 1회) | A2 · BR6.15 |
+| `mujoong.timing.parent.poll-interval` | `2s` | web | 12 진행 화면 및 홈 SSE 장애 시 보완 조회 주기 | A2 · BR6.15 · JIRA-274 |
+| `mujoong.timing.parent.home-reconcile-interval` | `30s` | web | 홈 SSE 정상 연결 중 알림 유실·상태 노후화 보완 조회 | JIRA-274 |
 | `mujoong.timing.bootstrap.code-ttl` | `24h` | core-api | 코드 발급 → 만료면 EXPIRED, bootstrap 쿠키 Max-Age도 이 값 | BR1.4 · J22 |
 | `mujoong.timing.bootstrap.status-poll` | `2s` | web | D0 등록 상태 확인 주기 | BR1.7 · J22 |
 | `mujoong.timing.bootstrap.rate-limit.max` | `20` | core-api | `POST /api/device/bootstrap` IP당 창 안 최대 발급 수(같은 쿠키 반복은 세지 않음) | BR1.6 · J29 · [편차 (k)] |
@@ -180,7 +181,9 @@ web의 loading-notice-delay는 MUJOONG_TIMING_PARENT_LOADINGNOTICEDELAY 환경 �
 | `mujoong.timing.result.attempt-timeout` | `90s` | core-api | 세션 결과 시도 시한 | FD-Q2 |
 | `mujoong.timing.result.reconcile-interval` | `5m` | core-api | 누락 · 후보 등록 · 리포트 정리 점검 | FD-Q2 |
 | `mujoong.timing.result.undecided-limit` | `1h` | core-api | 기록 저장 뒤 UNDECIDED 판정 유예 상한 | R-12 |
-| `mujoong.timing.report.ready-target` | `60s` | core-api · web | 리포트 접수부터 절대 마감 | BR9.4 · U6-e |
+| `mujoong.timing.report.ready-target` | `6m` | core-api · web | 리포트 접수부터 절대 마감(web은 이만큼 기다린 뒤 실패로 본다) | BR9.4 · U6-e · FT-1023-c |
+| `mujoong.timing.report.result-settle-wait` | `5m` | core-api | 접수부터 고른 활동의 결과 정리를 기다리는 상한(`ready-target`보다 짧아야 한다) | FT-1023-c |
+| `mujoong.timing.report.result-settle-poll` | `10s` | core-api | 정리를 기다리는 동안 다시 보는 간격 | FT-1023-c |
 | `mujoong.timing.report.unsaved-retention` | `24h` | core-api | 저장 안 된 READY · FAILED 보존 | FD-Q2 |
 | `mujoong.text-ai.result.request-timeout` | `20s` | core-api | AI 한 번의 최대 시한(시도 잔여 시간 이하) | FD-Q2 |
 | `mujoong.text-ai.result.temperature-judgment` | `0` | core-api | 재판정 온도 | ai-io 6.1 |
@@ -189,7 +192,7 @@ web의 loading-notice-delay는 MUJOONG_TIMING_PARENT_LOADINGNOTICEDELAY 환경 �
 
 생성 온도 `mujoong.text-ai.result.temperature-generation=0.2`, 재판정 온도 `temperature-judgment=0`, 프롬프트 버전 `prompt-version=v1`, `mujoong.limits.result-workers=2`는 시간이 아닌 설정이다. 실행 스레드 하나는 REPORT 전용이다. 17 · 27 · 28도 정리/생성 중에만 기존 `parent.poll-interval`을 사용한다(U6-h).
 
-리포트(REPORT 작업)는 AI를 부르지 않아 `mujoong.text-ai.result.*`를 쓰지 않는다. `report.ready-target`(접수부터 60초 절대 마감)과 작업 시도 · 재시도 키의 뜻 · 값은 그대로이며, 시도 실패는 저장 자료 읽기 · 쓰기 오류 같은 AI 밖 원인으로만 생긴다. 고른 활동의 결과 정리가 아직 끝나지 않았으면 리포트 시도를 오류 코드 없이 미뤄 `result.job-retry-backoff` 간격으로 다시 보고(시도 횟수를 쓴다), 마감 안에 다음 시도가 없으면 그 시도에서 만든다 [편차 FT-1023-c].
+리포트(REPORT 작업)는 AI를 부르지 않아 `mujoong.text-ai.result.*`를 쓰지 않는다. 작업 시도 · 재시도 키의 뜻 · 값은 그대로이며, 시도 실패는 저장 자료 읽기 · 쓰기 오류 같은 AI 밖 원인으로만 생긴다. 고른 활동의 결과 정리가 아직 끝나지 않았으면 리포트 시도를 오류 코드 없이 미뤄 `report.result-settle-poll`(10초) 간격으로 다시 보고(미룬 시도는 시도 횟수를 쓰지 않는다), 접수부터 `report.result-settle-wait`(5분)가 지나면 그때 있는 자료로 만든다. 그래서 `report.ready-target`은 60초에서 6분(정리 대기 5분 + 생성 여유 1분)으로 늘었다 [편차 FT-1023-c].
 ## 11. U7 웹 푸시 시간
 
 | 키 | 기본값 | 소유 앱 | 뜻 | 근거 |
@@ -198,6 +201,17 @@ web의 loading-notice-delay는 MUJOONG_TIMING_PARENT_LOADINGNOTICEDELAY 환경 �
 | `mujoong.timing.push.retry-backoff` | `[5s, 30s, 2m]` | core-api | 최초 발송 뒤 재시도 간격 | AC1.7.5 · U7-J6 |
 | `mujoong.timing.push.send-timeout` | `5s` | core-api | 수신처 한 곳의 HTTP 발송 상한 | FR7.10 · U7-J11 |
 | `mujoong.timing.push.device-status-check` | `10s` | core-api | 등록 기기의 보고 신선도 점검 주기 | AC1.7.2 · U7-J7 |
+
+### 보호자 상태 변경 SSE (JIRA-274)
+
+| 키 | 기본값 | 소유 앱 | 뜻 | 근거 |
+|---|---|---|---|---|
+| `mujoong.timing.home-events.stream-timeout` | `2m` | core-api | 연결 수명, 재연결 시 세션 재검증 | home-events.md |
+| `mujoong.timing.home-events.heartbeat-interval` | `10s` | core-api | 프록시 유휴 만료 방지 이벤트 간격 | home-events.md |
+| `mujoong.timing.home-events.notification-wait` | `1s` | core-api | PostgreSQL 알림 수신 대기 상한 | home-events.md |
+| `mujoong.timing.home-events.reconnect-delay` | `1s` | core-api | LISTEN 연결 실패 후 재접속 간격 | home-events.md |
+
+수신 대기는 1ms 이상 int 밀리초 범위이며 heartbeat 간격 이하여야 한다. heartbeat 간격은 연결 수명보다 짧아야 한다.
 
 ## 12. U5b 연습 런타임
 
@@ -247,6 +261,7 @@ U11(선 형식 정비)이 더한 키다. 공급자 실호출에는 응답 id도 
 | `mujoong.timing.provider.input-transcript-quiet` | `1000ms` | realtime | 입력 전사 조각(`session.input_transcript.delta`)이 이만큼 오지 않으면 그 묶음을 확정 전사로 본다. 전사가 음성보다 0.2 ~ 2초 앞서 도착하고 모델이 말 끝 전에 반응하므로 아이의 쉼보다 길게 잡는다. 아이가 길게 쉬면 한 발화가 둘로 나뉠 수 있다. 아이 발화 완료 대기를 줄이려고 1500ms에서 1000ms로 줄였다(2026-10-22) | A7 · U11-a |
 | `mujoong.timing.provider.new-speech-margin` | `700ms` | realtime | 자유대화·판정의 기존 전사/오디오 시간선 경계에 적용한다. 제어된 연습 발화는 앞 음성의 조용함을 확인한 후 새 발화를 처음부터 수집하므로 이 여유로 첫 부분을 자르지 않는다 | A4 · U11-a · 연습 구간 분리 |
 | `mujoong.timing.provider.join-self-start-wait` | `1s` | realtime | 참여 수락 때 보관한 모델 응답이 비어 있으면, 첫 응답 지시를 보내기 전에 모델이 스스로 답을 시작하기를 이만큼 기다린다. 그사이 출력 조각이 오면 그것을 첫 응답으로 받고 지시를 보내지 않는다. 판정 직후 시작한 자동 응답이 지시 확인 전 낡은 말로 버려져 첫 응답이 들리지 않던 문제(2026-10-22) 대응. `0`이면 기다리지 않는다(통합 시험). 실호출로 조정하는 임시값 | 2026-10-22 실호출 관측 |
+| `mujoong.timing.provider.response-stall-wait` | `6s` | realtime | 자유대화 응답 정체 안전망(JIRA-270). ACTIVE에서 아이의 빈 아닌 확정 전사(아이가 "잠깐 생각할게"처럼 기다려 달라고 한 말은 빼고) 또는 "생각해 볼게" 같은 미루는 말로 끝난 AI 응답 뒤, 이 시간 동안 받는 출력 조각도 아이 입력 전사도 없으면 이어 말하기 지시(`STALL_RESUME`)를 한 번 보낸다. 아이 턴마다 한 번만 보낸다. 기기 재생 · 제브 검사가 남았으면 같은 시간만큼 다시 기다리고, 아이가 말하는 중 · 출력 보류 · 판정 · 다른 지시 응답 대기 · ACTIVE 밖에서는 보내지 않는다. `0`이면 끈다(통합 시험). 실호출로 조정하는 임시값 | 2026-10-23 실호출 관측 |
 
 
 ### 2026-10-21 실제 분석 호출 보완

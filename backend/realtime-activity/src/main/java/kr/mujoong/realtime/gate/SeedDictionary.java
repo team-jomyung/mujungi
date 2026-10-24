@@ -15,16 +15,23 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import kr.mujoong.contract.json.JsonCodec;
+import kr.mujoong.contract.text.ProfanityLexicon;
 
 /**
  * 출력 게이트 시드 금지 표현 사전 (U1 3.5 Step 25 · SD-18 2.14 · A5 · NFR1.2 · J101 · contracts/ai-io.md 4절).
  *
  * <p>앱 리소스 {@value #RESOURCE} 하나를 기동 때 읽고 이후 읽기 전용 상수로 쓴다(핫 리로드 없음). 로딩 거부: 파일 없음 · 파싱 실패 · 중복
- * id · category 7개 중 항목이 없는 것 · 정규화 뒤 형태가 아닌 패턴(공백 · 구두점 · 라틴 대문자 · 정규식 메타 문자 · 제로폭 문자) — S1b가
+ * id · category 8개 중 항목이 없는 것 · 정규화 뒤 형태가 아닌 패턴(공백 · 구두점 · 라틴 대문자 · 정규식 메타 문자 · 제로폭 문자) — S1b가
  * 기동을 끝낸다. 패턴 문법은 리터럴과 숫자 자리표시 {@code #}(숫자 한 자 이상)뿐이라 정규식이 없고 판정은 선형에 가깝다(ReDoS 없음).
  *
  * <p>판정은 전사를 {@link #normalize}(NFKC → 공백 · 제로폭 · 구두점(% 제외) 제거 → 라틴 소문자)한 문자열에서 패턴을 부분 문자열로
  * 찾는다. 띄어쓰기 변형은 정규화가, 조사 결합은 어간 형태의 패턴이 흡수한다.
+ *
+ * <p>{@link Category#PROFANITY}(JIRA-266 · FT-1023-b)는 이 파일의 항목에 더해 두 앱 공통 욕설 사전({@link ProfanityLexicon}, contract-model)을
+ * 함께 본다. 욕설 어휘(변형 · 예외 낱말 포함)는 core의 이름 입력 검사와 같은 한 곳에서 관리하고, 이 파일에는 범주 표지인 대표 항목 하나만 둔다
+ * (다른 범주와 같이 '범주마다 항목 하나 이상' 로딩 규칙을 지킨다). 이 파일의 판정은 공백을 지우고 찾으므로 낱말 경계를 넘어 걸릴 짧은 욕설
+ * ('아저씨 발' → '씨발')은 파일에 두지 않고, 낱말 경계를 지키는 공통 사전에 맡긴다. 공통 사전 로딩이 실패하면 시드 사전 로딩도 실패한다(기동 거부). 파일 항목을
+ * 먼저 보고, 걸리지 않으면 공통 사전의 문장 판정({@link ProfanityLexicon#containsInText})을 본다.
  */
 public final class SeedDictionary {
 
@@ -35,7 +42,7 @@ public final class SeedDictionary {
     /** 게이트 적용 범위 값. */
     public static final String APPLIES_TO_OUTPUT_GATE = "OUTPUT_GATE";
 
-    /** 계약 9절 범주 7개. */
+    /** 계약 9절 범주 7개 + 욕설(JIRA-266, 제브 v3 라벨과 같은 이름). */
     public enum Category {
         DIAGNOSIS,
         TREATMENT,
@@ -43,8 +50,12 @@ public final class SeedDictionary {
         CAUSE,
         GENERALIZATION,
         EMOTION_CLAIM,
-        PRESSURE
+        PRESSURE,
+        PROFANITY
     }
+
+    /** 공통 욕설 사전으로 걸렸을 때의 항목 id(로그 · 지표에는 쓰지 않는다). */
+    public static final String LEXICON_PROFANITY_ID = "LEXICON-PROFANITY";
 
     /** 사전 항목. */
     public record Entry(String id, String pattern, Category category, List<String> appliesTo) {
@@ -96,11 +107,13 @@ public final class SeedDictionary {
     private final String level;
     private final List<Entry> entries;
     private final List<CompiledPattern> compiled;
+    private final ProfanityLexicon profanity;
 
-    private SeedDictionary(String version, String level, List<Entry> entries) {
+    private SeedDictionary(String version, String level, List<Entry> entries, ProfanityLexicon profanity) {
         this.version = version;
         this.level = level;
         this.entries = List.copyOf(entries);
+        this.profanity = Objects.requireNonNull(profanity, "profanity");
         List<CompiledPattern> patterns = new ArrayList<>();
         for (Entry entry : this.entries) {
             if (entry.appliesTo().contains(APPLIES_TO_OUTPUT_GATE)) {
@@ -124,8 +137,20 @@ public final class SeedDictionary {
         }
     }
 
-    /** JSON 본문을 읽고 검증한다. */
+    /** JSON 본문을 읽고 검증한다. 욕설 범주는 공통 욕설 사전({@link ProfanityLexicon#shared})을 함께 쓴다. */
     public static SeedDictionary parse(String json) {
+        ProfanityLexicon profanity;
+        try {
+            profanity = ProfanityLexicon.shared();
+        } catch (RuntimeException | ExceptionInInitializerError e) {
+            throw new LoadException(Problem.MISSING, ProfanityLexicon.RESOURCE);
+        }
+        return parse(json, profanity);
+    }
+
+    /** JSON 본문을 읽고 검증한다(공통 욕설 사전을 지정, 시험용). */
+    static SeedDictionary parse(String json, ProfanityLexicon profanity) {
+        Objects.requireNonNull(profanity, "profanity");
         FileShape file;
         try {
             file = JsonCodec.shared().read(json, FileShape.class);
@@ -167,7 +192,7 @@ public final class SeedDictionary {
         if (!empty.isEmpty()) {
             throw new LoadException(Problem.EMPTY_CATEGORY, empty.toString());
         }
-        return new SeedDictionary(file.version(), file.level(), entries);
+        return new SeedDictionary(file.version(), file.level(), entries, profanity);
     }
 
     public String version() {
@@ -197,6 +222,9 @@ public final class SeedDictionary {
             if (pattern.occursIn(normalized)) {
                 return Optional.of(new Match(pattern.id, pattern.category));
             }
+        }
+        if (profanity.containsInText(transcript)) {
+            return Optional.of(new Match(LEXICON_PROFANITY_ID, Category.PROFANITY));
         }
         return Optional.empty();
     }

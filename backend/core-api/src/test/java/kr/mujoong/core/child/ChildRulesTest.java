@@ -49,6 +49,37 @@ class ChildRulesTest {
         expectInvalid(() -> create("하늘", null, List.of()));
     }
 
+    /** JIRA-266: 공통 욕설 사전에 걸린 이름은 생성 · 수정 모두 CHILD_NAME_NOT_ALLOWED이고, 예외에 입력값이 없다. */
+    @ParameterizedTest
+    @ValueSource(strings = {"씨발", "  시발  ", "씨.발", "병신이", "개 새끼", "ㅅㅂ"})
+    void profaneNamesAreRejectedOnCreateAndUpdate(String name) {
+        Valid current = create("하늘", 8, List.of());
+
+        assertThatThrownBy(() -> create(name, 8, List.of()))
+                .isInstanceOfSatisfying(CoreApiException.class, e -> {
+                    assertThat(e.code()).isEqualTo(ErrorCode.CHILD_NAME_NOT_ALLOWED);
+                    assertThat(e.getMessage()).doesNotContain(name.strip());
+                });
+        assertThatThrownBy(() -> ChildInput.forUpdate(current, name, null, null, REF))
+                .isInstanceOfSatisfying(CoreApiException.class,
+                        e -> assertThat(e.code()).isEqualTo(ErrorCode.CHILD_NAME_NOT_ALLOWED));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"하늘", "시우", "아가씨", "수박씨", "병준"})
+    void ordinaryNamesStillPass(String name) {
+        assertThat(create(name, 8, List.of()).displayName()).isEqualTo(name);
+        assertThat(ChildInput.forUpdate(create("하늘", 8, List.of()), name, null, null, REF).displayName()).isEqualTo(name);
+    }
+
+    @Test
+    void formatErrorsComeBeforeTheProfanityCheck() {
+        // 11자 욕설 이름은 길이 오류(VALIDATION_FAILED)가 먼저다
+        assertThatThrownBy(() -> create("씨발" + "가".repeat(9), 8, List.of()))
+                .isInstanceOfSatisfying(CoreApiException.class,
+                        e -> assertThat(e.code()).isEqualTo(ErrorCode.VALIDATION_FAILED));
+    }
+
     @Test
     void interestsAreAtMostFiveDistinctAndTenCharactersEach() {
         expectInvalid(() -> create("하늘", 8, List.of("a", "b", "c", "d", "e", "f")));

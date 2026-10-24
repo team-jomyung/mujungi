@@ -34,13 +34,20 @@ public record RealtimeTimingProperties(
      *
      * @param inputTranscriptQuiet 입력 전사 조각이 이만큼 오지 않으면 그 묶음을 확정 전사로 본다(말 끝 · 전사 완료 사건이 없다, A7)
      * @param newSpeechMargin 지시 뒤 새 말의 전사 시작 시각에 더하는 여유. 오디오 시계가 (새 말 시작 + 이 값)에 닿는 첫 음성 조각부터 받는다(A4)
+     * @param joinSelfStartWait 참여 수락 때 보관한 응답이 비어 있으면 첫 응답 지시 전에 모델이 스스로 답을 시작하기를 기다리는 시간(0이면 바로 지시)
+     * @param responseStallWait 자유대화에서 아이 말 확정 뒤 응답이 오지 않거나 응답이 미루는 말로 끝난 뒤 이만큼 새 출력 · 아이 말이 없으면 이어
+     *     말하기 지시를 한 번 보낸다(JIRA-270, 0이면 끈다)
      */
-    public record ProviderTiming(Duration inputTranscriptQuiet, Duration newSpeechMargin, Duration joinSelfStartWait) {
+    public record ProviderTiming(Duration inputTranscriptQuiet, Duration newSpeechMargin, Duration joinSelfStartWait,
+            Duration responseStallWait) {
         public ProviderTiming {
             positive(inputTranscriptQuiet, "mujoong.timing.provider.input-transcript-quiet");
             positive(newSpeechMargin, "mujoong.timing.provider.new-speech-margin");
             if (joinSelfStartWait == null || joinSelfStartWait.isNegative()) {
                 throw new IllegalArgumentException("mujoong.timing.provider.join-self-start-wait는 0 이상이어야 한다");
+            }
+            if (responseStallWait == null || responseStallWait.isNegative()) {
+                throw new IllegalArgumentException("mujoong.timing.provider.response-stall-wait는 0 이상이어야 한다");
             }
         }
     }

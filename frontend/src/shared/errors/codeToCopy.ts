@@ -43,6 +43,8 @@ export const ERROR_CODES = [
   "GOOGLE_AUTH_FAILED",
   "CHILD_NOT_REGISTERED",
   "CHILD_EXISTS",
+  // JIRA-266: 아이 이름이 공통 욕설 사전에 걸림(편차 FT-1023-b)
+  "CHILD_NAME_NOT_ALLOWED",
 ] as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[number];

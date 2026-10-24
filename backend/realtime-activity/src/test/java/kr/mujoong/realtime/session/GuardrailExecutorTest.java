@@ -293,6 +293,42 @@ class GuardrailExecutorTest {
         assertThat(coordinator().state()).isEqualTo(GuardrailCoordinator.State.IDLE);
     }
 
+    @Test
+    void aUnitAllowedAfterTheChildStartedSpeakingAgainIsLoggedAsAfterChildInput() {
+        h.activate(); childSpeaks();
+        timedText("앞 응답의 말", 0, 100);
+        h.provider.last().emit(new ProviderEvent.OutputAudioDelta(AUDIO));
+        h.drain();
+        // 앞 응답의 음성이 다 온 뒤, 마지막 단위를 검사하는 동안 아이가 계속 말한다
+        h.advance(Duration.ofMillis(300));
+        h.provider.last().emit(new ProviderEvent.InputTranscriptDelta("item-1", " 있잖아"));
+        h.drain();
+
+        guard.allow(); h.drain();
+
+        assertThat(h.link.outputs()).isNotEmpty();
+        assertThat(errorKinds()).contains("OutputBundleAfterChildInput");
+    }
+
+    @Test
+    void aUnitSentBeforeTheChildSpeaksAgainIsNotLoggedAsAfterChildInput() {
+        h.activate();
+        childFinal("공룡 좋아");
+        timedText("앞 응답의 말", 0, 100);
+        h.provider.last().emit(new ProviderEvent.OutputAudioDelta(AUDIO));
+        h.drain();
+
+        guard.allow(); h.drain();
+
+        assertThat(h.link.outputs()).isNotEmpty();
+        assertThat(errorKinds()).doesNotContain("OutputBundleAfterChildInput");
+    }
+
+    private List<String> errorKinds() {
+        return h.logs.events(kr.mujoong.contract.log.EventCode.APP_ERROR).stream()
+                .map(event -> String.valueOf(kr.mujoong.testsupport.log.LogCapture.attrs(event).get("errorKind"))).toList();
+    }
+
     private void timedText(String text, long start, long end) {
         long margin = h.settings.newSpeechMargin().toMillis();
         if (start == 0) {

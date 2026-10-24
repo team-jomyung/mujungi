@@ -37,6 +37,34 @@ class OutputDiscardDiagnosticsTest {
         assertThat(gate.inspect(segment)).isEqualTo(GateDecision.discard(GateDecision.DiscardReason.GATE_EMPTY));
     }
 
+    /**
+     * FT-1023-e(2026-10-23 16:29 로컬 실키 연습 사례 · 사람 결정 '재생'): 단위별 경로의 구두점뿐인 단위(말끝 "?")는 버리지 않고 통과하며 '구두점뿐'으로
+     * 표시된다. 원문이 빈 단위(공백 · 제로폭)와 음성 · PCM 오류는 여전히 버리고, 전체 구간 경로는 구두점뿐이어도 지금처럼 EMPTY_TRANSCRIPT다.
+     */
+    @Test void aPunctuationOnlyAlignedUnitPassesButEmptyUnitsAndWholeSegmentsStayFailClosed() {
+        for (String punctuation : List.of("?", " ?", "…", "?!", "，", "\u200B?")) {
+            OutputGate.Inspection unit = gate.inspectDetailed(segment(punctuation, 9600, true), true);
+            assertThat(unit.decision().passed()).as(punctuation).isTrue();
+            assertThat(unit.punctuationOnly()).isTrue();
+            OutputGate.Inspection text = gate.inspectTextDetailed(segment(punctuation, 0, true));
+            assertThat(text.decision().passed()).isTrue();
+            assertThat(text.punctuationOnly()).isTrue();
+            // 전체 구간(무음으로 봉인한 구간)은 지금 동작 그대로
+            assertThat(gate.inspectDetailed(segment(punctuation, 9600, true)).detail()).isEqualTo(DiscardDetail.EMPTY_TRANSCRIPT);
+        }
+        for (String empty : java.util.Arrays.asList(null, "", " ", "\u200B", "\u3000 \uFEFF")) {
+            assertThat(gate.inspectDetailed(segment(empty, 9600, true), true).detail()).isEqualTo(DiscardDetail.EMPTY_TRANSCRIPT);
+            assertThat(gate.inspectTextDetailed(segment(empty, 0, true)).detail()).isEqualTo(DiscardDetail.EMPTY_TRANSCRIPT);
+        }
+        assertThat(gate.inspectDetailed(segment("?", 0, true), true).detail()).isEqualTo(DiscardDetail.MISSING_AUDIO);
+        assertThat(gate.inspectDetailed(segment("?", 3, true), true).detail()).isEqualTo(DiscardDetail.INVALID_PCM_LENGTH);
+        assertThat(gate.inspectDetailed(segment("?", 4, false), true).detail()).isEqualTo(DiscardDetail.INCOMPLETE_SEGMENT);
+        // 글이 있는 단위는 구두점뿐이 아니고 사전 검사를 그대로 받는다
+        assertThat(gate.inspectDetailed(segment("같이 놀자?", 4, true), true).punctuationOnly()).isFalse();
+        assertThat(gate.inspectDetailed(segment("검사해 보니 비정상이에요?", 4, true), true).detail())
+                .isEqualTo(DiscardDetail.FORBIDDEN_PATTERN);
+    }
+
     @Test void safeAndForbiddenContentKeepTheirExistingOutcomes() {
         assertThat(gate.inspectDetailed(segment("같이 놀자", 4, true)).decision().passed()).isTrue();
         assertThat(gate.inspectDetailed(segment("검사해 보니 비정상이에요", 4, true)).detail())

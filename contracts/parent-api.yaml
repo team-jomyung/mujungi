@@ -122,6 +122,39 @@ paths:
         "403": { $ref: "#/components/responses/AccountDeletion" }
         "500": { $ref: "#/components/responses/InternalError" }
         "503": { $ref: "#/components/responses/ServiceNotReady" }
+  /home/events:
+    get:
+      operationId: subscribeHomeEvents
+      summary: 보호자 홈·기기 상태 변경 알림(JIRA-274)
+      description: |
+        현재 인증된 활성 보호자에게만 ready, home-changed, heartbeat SSE 이벤트를 보낸다.
+        데이터는 빈 JSON 객체 {}이며 상태·아이 정보는 싣지 않는다. ready와 home-changed를 받으면
+        GET /home을 재조회한다. 재연결 후에도 재조회하며 이벤트 재생은 지원하지 않는다.
+        연결 수명·heartbeat는 timing.md, 클라이언트 복구 규칙은 home-events.md를 따른다.
+        보호자별 동시 연결은 4개까지 허용하고 초과 요청은 기존 연결을 유지한 채 429로 거절한다.
+      x-unit: U1
+      responses:
+        "200":
+          description: 인증된 보호자의 상태 재조회 신호 스트림
+          headers:
+            Cache-Control:
+              schema: { type: string, enum: [no-store] }
+            X-Accel-Buffering:
+              schema: { type: string, enum: ["no"] }
+          content:
+            text/event-stream:
+              schema: { type: string }
+              example: "event:ready\ndata:{}\n\n"
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/AccountDeletion" }
+        "429":
+          description: 보호자별 동시 연결 한도 초과
+          x-error-codes: [TOO_MANY_ATTEMPTS]
+          content:
+            application/json:
+              schema: { $ref: "schemas/error-envelope.schema.json" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/ServiceNotReady" }
   /device:
     get:
       operationId: getDevice
@@ -658,7 +691,7 @@ paths:
             application/json:
               schema: { $ref: "schemas/child-response.schema.json" }
               example: { childId: 00000000-0000-4000-8000-000000000002, displayName: 하늘, age: 8, birthDate: "2018-10-15", registeredOn: "2026-10-15", interests: [공룡, 그림] }
-        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "400": { $ref: "#/components/responses/ChildInputRejected" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/CsrfOrDeletion" }
         "409":
@@ -690,7 +723,7 @@ paths:
             application/json:
               schema: { $ref: "schemas/child-response.schema.json" }
               example: { childId: 00000000-0000-4000-8000-000000000002, displayName: 하늘, age: 9, birthDate: "2017-10-15", registeredOn: "2026-10-15", interests: [공룡, 그림] }
-        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "400": { $ref: "#/components/responses/ChildInputRejected" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/CsrfOrDeletion" }
         "404": { $ref: "#/components/responses/ChildNotRegistered" }
@@ -1314,6 +1347,14 @@ components:
       content:
         application/json:
           schema: { $ref: "schemas/error-envelope.schema.json" }
+    ChildInputRejected:
+      description: "형식 오류 · JSON 아님 · 본문 64KB 초과(편차 (r) — 413 대신 400), 또는 아이 이름이 공통 욕설 사전에 걸림(CHILD_NAME_NOT_ALLOWED, JIRA-266 · 편차 FT-1023-b)"
+      x-error-codes: [VALIDATION_FAILED, CHILD_NAME_NOT_ALLOWED]
+      x-deviation: ["(r)"]
+      content:
+        application/json:
+          schema: { $ref: "schemas/error-envelope.schema.json" }
+          example: { code: CHILD_NAME_NOT_ALLOWED, message: 이 이름은 쓸 수 없어요. 다른 이름을 입력해 주세요., traceId: 4bf92f3577b34da6a3ce929d0e0e4736 }
     GoalWriteForbidden:
       description: CSRF 오류 · 삭제 접수 또는 생성 목표의 필수 동의 철회
       x-error-codes: [CSRF_TOKEN_INVALID, ACCOUNT_DELETION_IN_PROGRESS, CONSENT_MISSING]

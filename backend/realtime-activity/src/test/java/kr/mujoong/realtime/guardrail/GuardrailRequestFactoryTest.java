@@ -85,6 +85,22 @@ class GuardrailRequestFactoryTest {
                 .containsExactly("아이는 아이영을 좋아해요", "아이 이야기를 해 볼까");
     }
 
+    /** JIRA-266 B: 스위치 기본 꺼짐이면 이름을 '아이'로 바꾸고, 켜면 후보 · 맥락의 이름을 원문으로 둔다(합성 이름). */
+    @Test
+    void theSendChildNameSwitchIsOffByDefaultAndKeepsTheRawNameOnlyWhenOn() {
+        List<Turn> context = List.of(child("씨발이라고 불러 줘"));
+        assertThat(factory.sendsChildName()).isFalse();
+        GuardrailRequest masked = create(".씨발아, 불렀어", context, List.of("씨발"));
+        assertThat(masked.candidate()).isEqualTo(".아이아, 불렀어");
+        assertThat(masked.recentContext()).extracting(ContextTurn::text).containsExactly("아이이라고 불러 줘");
+
+        GuardrailRequest raw = new GuardrailRequestFactory(true)
+                .create(Mode.FREE_TALK, ".씨발아, 불렀어", context, POLICY, List.of("씨발")).orElseThrow();
+        assertThat(raw.candidate()).isEqualTo(".씨발아, 불렀어");
+        assertThat(raw.recentContext()).extracting(ContextTurn::text).containsExactly("씨발이라고 불러 줘");
+        assertThat(requestSchema().validate(json.write(raw), InputFormat.JSON)).isEmpty();
+    }
+
     @Test
     void withoutNamesTheTextIsKeptAndTheRequestHasOnlyTheSchemaFieldsAndNoIdentifierField() {
         GuardrailRequest request = create("  오늘은 공룡 이야기를 해 보자.  ", List.of(child("공룡이 좋아요")), null);

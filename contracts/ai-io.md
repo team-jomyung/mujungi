@@ -19,7 +19,7 @@
 | 결과 문장 출력 | 6.3절 | ResultPipeline → core_result(U6) |
 | 리포트 항목 출력 | 6.5절 — 리포트 생성 때 AI를 부르지 않아 AI 출력이 없다. 10항목 모두 서버가 만든다 [편차 FT-1023-c] | Report → core_report_section(U6) |
 | 금지 표현 2차 분류 출력 | 6.6절 | TextAiGateway(U6) |
-| 금지 표현 사전 항목 | `{ id, pattern, category: DIAGNOSIS\|TREATMENT\|SCORE\|CAUSE\|GENERALIZATION\|EMOTION_CLAIM\|PRESSURE, appliesTo: [OUTPUT_GATE, RESULT_TEXT, PDF, APPROVED_CONTENT] }` | OutputGate(U1 시드 · U3 정식) · TextAiGateway · Report |
+| 금지 표현 사전 항목 | `{ id, pattern, category: DIAGNOSIS\|TREATMENT\|SCORE\|CAUSE\|GENERALIZATION\|EMOTION_CLAIM\|PRESSURE\|PROFANITY, appliesTo: [OUTPUT_GATE, RESULT_TEXT, PDF, APPROVED_CONTENT] }` — `PROFANITY`(욕설)는 2026-10-23 JIRA-266으로 더한 값이다(편차 FT-1023-b, 4절) | OutputGate(U1 시드 · U3 정식) · TextAiGateway · Report |
 
 ## 2. 공급자 연결 (Realtime VoiceRelay, BR7.2 · J109 · J110 · J141 · SD-20 · SD-25)
 
@@ -103,8 +103,9 @@ U11 이전 가정은 아래 편차들로 계약에 들어 있었고 실호출 �
 |---|---|
 | 패턴 문법 | 리터럴과 숫자 자리표시 `#`(숫자 한 자 이상)만. 정규식을 쓰지 않는다(선형 시간, ReDoS 없음) |
 | 정규화 | 전사를 NFKC → 공백 · 제로폭 문자 · 구두점(`%`는 남김) 제거 → 라틴 소문자로 바꾼 뒤 부분 문자열로 찾는다 |
-| 로딩 거부 | 파일 없음 · 파싱 실패 · 중복 id · category 7개 중 빈 것 · 정규화 뒤 형태가 아닌 패턴(공백 · 구두점 · 대문자 라틴 · 정규식 메타 문자 포함) → Realtime 기동 거부(S1b, 종료 코드 1). 로딩 완료가 readiness 조건이다(S6) |
+| 로딩 거부 | 파일 없음 · 파싱 실패 · 중복 id · category 8개 중 빈 것 · 공통 욕설 사전 로딩 실패 · 정규화 뒤 형태가 아닌 패턴(공백 · 구두점 · 대문자 라틴 · 정규식 메타 문자 포함) → Realtime 기동 거부(S1b, 종료 코드 1). 로딩 완료가 readiness 조건이다(S6) |
 | U1 시드 항목(J101 · 사람 결정 12) | DIAGNOSIS `진단` · TREATMENT `치료` · SCORE `비정상` · CAUSE `핵심원인` · GENERALIZATION `학교에서도그럴` · EMOTION_CLAIM `화가났군요` · PRESSURE `꼭해야해요`. `점수` · `정상이에요` · `정상입니다`는 정식 사전 v1(D 담당)에서 더한다(알려진 틈) |
+| 욕설 범주 `PROFANITY`(JIRA-266 · 편차 FT-1023-b) | 이 파일에는 범주 표지인 대표 항목 `SEED-PROFANITY-1`(`씨발새끼`) 하나만 둔다. 어휘 · 변형 · 예외 낱말은 두 앱 공통 욕설 사전(`backend/contract-model/src/main/resources/kr/mujoong/contract/text/profanity-lexicon.txt`, 판정기 `kr.mujoong.contract.text.ProfanityLexicon`)이 맡고, 게이트는 파일 항목을 먼저 본 뒤 공통 사전의 문장 판정을 본다. 공통 사전은 NFKC · 라틴 소문자 뒤 문장부호 · 숫자 · 기호를 지우고, 공백은 낱말 경계로 남겨 낱말마다(한 글자 낱말이 이어진 곳은 이어서) 찾으며, 예외 낱말(`시발점` · `수박씨` · `아저씨` 등)을 먼저 지운다. 이 파일은 공백을 지우고 찾으므로 낱말 경계를 넘어 걸릴 짧은 욕설(`아저씨 발` → `씨발`)은 파일에 두지 않는다. 걸리면 `GATE_PATTERN` 폐기 뒤 교정 지시 `PROFANITY`를 보낸다. 같은 공통 사전을 core 아이 이름 입력(오류 `CHILD_NAME_NOT_ALLOWED`)과 realtime 세션 시작 지시문의 이름 대체(중립 호칭 `친구`, 사유 코드 `ChildNameProfanityReplaced` INFO)에 쓴다 |
 
 ## 5. 승인 문구 · 승인 음성 (J60 · J102 · J114 · J117)
 
@@ -201,7 +202,7 @@ FR7.11 표대로 FULL · PARTIAL · INSUFFICIENT를 정한다. 내용 있는 아
 
 리포트 생성 때 텍스트 AI(항목 글 생성)와 금지 표현 2차 분류를 부르지 않는다. 입력은 모두 저장된 기록 · 결과 · 구조화 · 장면 판정이다. 2 · 5 · 6 · 10항목의 서버 문구는 임시 문구(J118)이고, 고정 문구는 1차 사전 시험(`ForbiddenDictionaryTest`)으로 금지 표현이 없음을 고정한다. 동의 철회로 끝난 활동의 전사 · 결과는 어느 항목의 글 · 인용에도 넣지 않는다(10항목 끝난 이유 집계에만 센다). 자료가 부족한 항목은 다른 설명 · 대체 내용 없이 "자료 부족"만 낸다.
 
-정리 중 활동: 고른 활동 중 결과 정리가 끝나지 않은 활동(결과 머리 없음 · REQUESTED · RUNNING)이 있으면 REPORT 시도를 오류 코드 없이 미루고 작업 재시도 간격(`mujoong.timing.result.job-retry-backoff`)으로 다시 본다. 시도 횟수(`result.job-attempts`) · 리포트 절대 마감(`report.ready-target`) 안에 다음 시도가 없으면 그 시도에서 그때 있는 자료로 만든다(정리 중 활동은 10항목에 센다). 정리하지 못한(FAILED) 활동 · 결과 대상이 아닌(결과 머리가 NONE) 활동 · 동의 철회 활동은 기다리지 않는다.
+정리 중 활동: 고른 활동 중 결과 정리가 끝나지 않은 활동(결과 머리 없음 · REQUESTED · RUNNING)이 있으면 REPORT 시도를 오류 코드 없이 미루고 `mujoong.timing.report.result-settle-poll`(10초) 간격으로 다시 본다(미룬 시도는 시도 횟수를 쓰지 않는다). 접수부터 `report.result-settle-wait`(5분)가 지나면 그때 있는 자료로 만든다(정리 중 활동은 10항목에 센다). 리포트 절대 마감 `report.ready-target`은 6분이다. 정리하지 못한(FAILED) 활동 · 결과 대상이 아닌(결과 머리가 NONE) 활동 · 동의 철회 활동은 기다리지 않는다.
 
 인용 글: 저장 전사 발화에서 앞머리 문장부호 잡음("..", "?", "]" 등) · 뒤끝 괄호 · 구분 기호 · 대괄호 비언어 표지(`[cry`, `[hum]` 등)를 걷어 낸 글이다. 저장 전사 원문은 바꾸지 않는다. 표지가 앞뒤에만 있으면 인용 글은 원문의 부분 문자열이고, 가운데 표지를 걷은 경우에만 부분 문자열이 아니다(표지 자리를 공백 하나로 둔다). 걷어 낸 뒤 글자가 없거나 추임새("음" · "흠" · "어" 등)뿐인 발화는 인용 후보가 아니다. 한 항목 안에서 같은 (세션, 발화) 인용은 한 번만 단다.
 
@@ -301,7 +302,6 @@ U15 씨앗 v2는 GENERATED/DUPLICATE/NONE의 배타적 출력 분기를 사용�
 | 파일(`contracts/schemas/`) | 목적 | 호출 경로(단위) |
 |---|---|---|
 | `ai-judgment-request.schema.json` | 진행 중 판정 요청(J1 ~ J6, 공급자로 보내는 최소 필드) | realtime 판정 턴(U11) · `JudgeClient`(U9) |
-| `ai-judgment-output.schema.json` | 진행 중 판정 출력(1 · 2순위와 확률) | 같음 |
 | `ai-scenario-output.schema.json` | 연습 장면 대본 생성 출력(상대 역할 지시는 받지 않음, 7절 U5a-J22) | core 상황 생성(U10) |
 | `ai-scenario-review-output.schema.json` | 생성과 분리한 자체 검토 출력(J7) | 같음 |
 | `ai-goal-candidate-output.schema.json` | 목표 후보(6.8 U6 초안을 대체) | core 결과 작업(U14) |
@@ -311,20 +311,22 @@ U15 씨앗 v2는 GENERATED/DUPLICATE/NONE의 배타적 출력 분기를 사용�
 | `guardrail-result.schema.json` | 제브 검사 결과(내부 형식) | 같음 |
 | `practice-record-v2.schema.json` | 기록 캡처 이벤트 `record.practice` 새 흐름 형식(`flowVersion` 필수) | U12가 채우고 U11이 발행, U14가 읽음 [U8 편차 (U8-d)] |
 
+- 진행 중 판정에는 출력 스키마가 없다. 판정은 Decisions API `choice` 질문 한 개이고 응답은 보낸 선택지 · 확률 규칙으로 검증한다(10.10). 이전 Responses 구조화 출력용 `ai-judgment-output.schema.json`은 지웠다 [편차 FT-1023-d].
 - 요청 스키마는 루트와 하위 객체 모두 `additionalProperties: false`로 닫는다. 아이 관련 문자열 필드의 `description`에는 "아이 이름은 '아이'로 치환된 값"을 적는다.
 - 길이 초과 · 빈 응답 · 스키마 최종 실패는 어떤 목적에서도 성공으로 저장하지 않는다. 실패 사유 코드 · 모델 · 프롬프트 판 · 지연만 기록하고 요청 · 응답 원문은 남기지 않는다(BR5.3 · R-F14).
 
 ### 10.2 금지 필드와 외부 전달
 
-- 외부 AI(Luna · 제브)로 보내는 필드는 스키마가 허용한 최소 필드뿐이다. 다음은 어느 요청 스키마의 속성도 될 수 없다: 아동 · 보호자 · 세션 · 기기 식별자(`childId` · `guardianId` · `sessionId` · `deviceId` 등), 키(`apiKey` 등), 원음(`audio`), 보호자 입력 원문, 이메일, 동의 상태. 아이 이름은 '아이'로 바꾼다(BR5.4 · NFR3.1).
-- **R-F15** 공급자 약관 · 보호자 동의 확인 전에는 실제 아동 데이터를 외부 모델로 보내지 않는다. 실호출은 합성 자료로만 한다. U9는 코드로 판정하지 않고 RUNBOOK 확인 기록으로 지킨다(편차 U9-b). 키(`OPENAI_API_KEY`)를 넣는 순간 실제 어댑터가 켜지므로, `infra/RUNBOOK.md` 단계 4의 R-F15 확인 기록 표에 한 줄을 남기기 전에는 운영 환경에 키를 넣지 않는다 [U9 편차 (U9-b)].
+- 외부 AI(Luna · 제브)로 보내는 필드는 스키마가 허용한 최소 필드뿐이다. 다음은 어느 요청 스키마의 속성도 될 수 없다: 아동 · 보호자 · 세션 · 기기 식별자(`childId` · `guardianId` · `sessionId` · `deviceId` 등), 키(`apiKey` 등), 원음(`audio`), 보호자 입력 원문, 이메일, 동의 상태. 아이 이름은 '아이'로 바꾼다(BR5.4 · NFR3.1). **예외(JIRA-266 · 편차 FT-1023-b):** 제브 출력 검사 요청은 설정 `mujoong.guardrail.jev.send-child-name`(10.12)이 켜진 경우에만 후보 문장 · 맥락의 아이 이름을 바꾸지 않고 원문으로 보낸다(욕설로 저장된 이름을 제브가 보게 하려는 것). 기본은 꺼짐이고, `infra/RUNBOOK.md` R-F15 확인 기록에 제브의 아동 이름 전달 허용 범위 확인이 남기 전에는 켜지 않는다. Luna 등 다른 외부 AI 경로는 이 스위치와 관계없이 언제나 이름을 바꾼다.
+- 진행 중 판정은 Decisions 끝점(10.9 · 10.10)으로만 간다. 외부 전달 필드는 **최소 필드**다: 입력 정리(금지 키 제거 · 별칭 치환 · 연락처 가림)를 지난 `ai-judgment-request` 모양 데이터(지점 · 판 번호 · 선택지 · 확정 전사 · 최근 3턴 · 기준)와, 판 리소스의 고정 글(판정 질문 지시문 · 지점 질문 · 선택지 뜻)뿐이다. 식별자 · 아이 이름 원문 · 원음은 가지 않는다 [편차 FT-1023-d].
+- **R-F15** 공급자 약관 · 보호자 동의 확인 전에는 실제 아동 데이터를 외부 모델로 보내지 않는다. 실호출은 합성 자료로만 한다. U9는 코드로 판정하지 않고 RUNBOOK 확인 기록으로 지킨다(편차 U9-b). 키(`OPENAI_API_KEY`)를 넣는 순간 실제 어댑터가 켜지므로, `infra/RUNBOOK.md` 단계 4의 R-F15 확인 기록 표에 한 줄을 남기기 전에는 운영 환경에 키를 넣지 않는다 [U9 편차 (U9-b)]. realtime 진행 중 판정은 Decisions 끝점(`POST {base-url}/decisions`)으로만 가고, 이 끝점은 Responses와 보존 · 데이터 사용 조건이 따로일 수 있으며 요청에 `store` 매개변수가 없다(보존을 요청으로 끌 수 없다). 그래서 realtime Luna(`mujoong.luna.enabled`)를 켜기 전에 같은 확인 기록 표에 Decisions 끝점 확인(보존 · 데이터 사용 조건, `store` 매개변수 없음)을 남긴다 [편차 FT-1023-d].
 - 시험 · CI · 검증은 가짜 공급자만 쓴다(R-F1). 테스트 대역의 성공을 실공급자 성공으로 표시하지 않는다(R-M11).
 
 ### 10.3 목적 → 호출 경로 → 재시도 분류
 
 | 목적 | 호출 경로(단위) | 분류 | 호출 안 재시도 · 실패 뒤 |
 |---|---|---|---|
-| 진행 중 판정 J1 ~ J6 | realtime 판정 턴(U11) | `NONE` | 재시도 없음. `mujoong.timing.judgment.live-budget`(4초) 초과 · 형식 오류 · 선택지 밖 코드는 판정 보류 |
+| 진행 중 판정 J1 ~ J6 | realtime 판정 턴(U11). Decisions API `POST {base-url}/decisions` 한 길이다(다른 끝점 · 대체 경로 없음) [편차 FT-1023-d] | `NONE` | 재시도 없음. `mujoong.timing.judgment.live-budget`(4초) 초과 · 응답 검증 위반 · 공급자 오류는 판정 보류. 하한(`mujoong.judgment.min-confidence` · `min-margin`)에 못 미치면 보류 |
 | 제브 검사(새 발화) | realtime 출력 게이트(U13) | `NONE` | 재시도 없음. `mujoong.timing.guardrail.jev-budget`(800ms) 초과(시간 초과는 막힘) · 전송 오류(비 2xx 포함) · 잘못된 응답(10.13)도 막힘이고 자동 `ALLOW`는 없다. 막힘 뒤 같은 다음 행동 지시를 다시 하는 것은 게이트 단계의 일이다(호출 안 재시도가 아님) [U13 편차 (U13-b)] |
 | 상황 생성 | core 상황 생성 요청(U10) | `REQUEST_BOUNDED` | 일시 실패 기술 재시도 1회 + 내용 재생성 1회(스키마 불일치 포함), 7절 15초 예산 안. 실패는 `SCENARIO_GEN_FAILED` |
 | 자체 검토(J7) | core 상황 생성 요청(U10) | `REQUEST_BOUNDED` | 같은 15초 예산 |
@@ -395,20 +397,24 @@ Luna 호출부(core-api · realtime-activity 각자)는 공급자 시도마다 `
 |---|---|---|---|
 | `mujoong.luna.model` | `${OPENAI_ANALYSIS_MODEL:gpt-6-luna}` | core-api | 요청 모델 이름. env가 비면 `gpt-6-luna` |
 | `mujoong.luna.model` | `${OPENAI_JUDGE_MODEL:gpt-6-luna}` | realtime | 같음 |
-| `mujoong.luna.enabled` | `false` | realtime | realtime Luna 스위치(시간 값 아님). 키가 있어도 false면 `RealtimeLunaClient`를 등록하지 않는다. demo에서 true로 바꾸기 전에 `infra/RUNBOOK.md` 단계 4의 R-F15 확인 기록을 남긴다 |
-| `mujoong.luna.base-url` | `https://api.openai.com/v1` | core-api · realtime | Responses API 기준 주소(`{base-url}/responses`). test 프로필은 루프백으로 덮어쓴다 |
+| `mujoong.luna.enabled` | `false` | realtime | realtime Luna 스위치(시간 값 아님). 키가 있어도 false면 `RealtimeLunaClient`를 등록하지 않는다(판정은 보류 구현). 켜면 진행 중 판정은 언제나 Decisions API로 간다. demo에서 true로 바꾸기 전에 `infra/RUNBOOK.md` 단계 4의 R-F15 확인 기록(Decisions 끝점 확인 포함)을 남긴다 [편차 FT-1023-d] |
+| `mujoong.luna.base-url` | `https://api.openai.com/v1` | core-api · realtime | OpenAI API 기준 주소(core-api `{base-url}/responses`, realtime `{base-url}/decisions`). 두 앱이 같은 주소 규칙을 쓴다. test 프로필은 루프백으로 덮어쓴다 |
 | `mujoong.luna.max-response-bytes` | `1000000` | core-api · realtime | 응답 본문 바이트 상한. 넘으면 `LENGTH_EXCEEDED` |
-| `mujoong.luna.purpose.<목적>.max-output-tokens` | `4000` | core-api · realtime | 요청 `max_output_tokens`. core 목적: `scenario-generation` · `scenario-review` · `seed-generation` · `result-text` · `goal-candidates` · `rejudgment`, realtime 목적: `judgment-live` |
-| `mujoong.luna.purpose.<목적>.reasoning-effort` | `medium` | core-api · realtime | 요청 `reasoning.effort`(`none` · `minimal` · `low` · `medium` · `high`) |
+| `mujoong.luna.purpose.<목적>.max-output-tokens` | `4000` | core-api | 요청 `max_output_tokens`. core 목적: `scenario-generation` · `scenario-review` · `seed-generation` · `result-text` · `goal-candidates` · `rejudgment` |
+| `mujoong.luna.purpose.<목적>.reasoning-effort` | `medium` | core-api | 요청 `reasoning.effort`(`none` · `minimal` · `low` · `medium` · `high`). realtime Decisions 요청에는 출력 한도 · 추론 강도 매개변수가 없어 realtime에는 이 키가 없다 |
 
 ### 10.10 U9 호출 방식 · 실패 사유 · 기존 어댑터
 
-- **호출 방식:** 두 앱이 각자(코드 공유 없음) JDK `HttpClient` + `JsonCodec`으로 Responses API `POST {base-url}/responses`를 직접 부른다 [U9 편차 (U9-a)]. 리다이렉트를 따르지 않고(3xx는 `REQUEST_REJECTED`) 프록시를 쓰지 않으며, 응답 본문은 `max-response-bytes`까지만 읽는다. 요청은 `model` · `instructions`(버전 파일의 지시) · `input`(정리된 데이터의 JSON 문자열, 지시와 다른 자리) · `text.format` · `max_output_tokens` · `reasoning.effort` · `store: false`이고 `temperature`는 보내지 않는다(기존 `ResultTextProvider.Request.temperature`는 받기만 하고 무시).
+- **호출 방식:** 두 앱이 각자(코드 공유 없음) JDK `HttpClient` + `JsonCodec`으로 직접 부른다 [U9 편차 (U9-a)]. core-api는 Responses API `POST {base-url}/responses`, realtime(진행 중 판정)은 Decisions API `POST {base-url}/decisions`(아래)다 [편차 FT-1023-d]. 리다이렉트를 따르지 않고(3xx는 `REQUEST_REJECTED`) 프록시를 쓰지 않으며, 응답 본문은 `max-response-bytes`까지만 읽는다. core-api 요청은 `model` · `instructions`(버전 파일의 지시) · `input`(정리된 데이터의 JSON 문자열, 지시와 다른 자리) · `text.format` · `max_output_tokens` · `reasoning.effort` · `store: false`이고 `temperature`는 보내지 않는다(기존 `ResultTextProvider.Request.temperature`는 받기만 하고 무시).
+- **Decisions 경로(realtime 진행 중 판정의 유일한 경로) [편차 FT-1023-d]:** `POST {base-url}/decisions`. core Responses 호출과 같은 규칙(주소 재확인 · 리다이렉트 · 프록시 · 응답 상한 · 시한 · 보내기 전 정리 · 요청 스키마 검증 · 감사 한 줄(10.8))을 지나고 본문 모양과 2xx 응답 검증만 다르다.
+  - 요청: `model`(`mujoong.luna.model`) · `input`(사용자 메시지 하나, 파트 `{"type":"input_json","data":<정리된 판정 입력>}`) · `questions`(`choice` 질문 한 개: `name` `judgment`, `instructions` = 판정 질문 지시문 `judgment/prompt-service-v3.txt`(응답 방식과 "아이의 가장 마지막 말(childUtterance) 하나만 판정한다" 포함) + 그 지점 질문, `choices` = 요청 선택지(판 순서) + 판의 선택지 뜻을 `description`으로). 데이터는 질문 지시문에 넣지 않는다(지시와 데이터 분리). `store` · `temperature` · `reasoning` · `max_output_tokens`는 Decisions에 없는 매개변수라 보내지 않는다(보존을 요청으로 끌 수 없어 10.2 R-F15 확인 기록 대상이다). 판정 기록 `promptVersion`은 `prompt-service-v3`이다. 이전 판 `prompt-service-v2`(Responses 출력 형식)는 이력으로 자원에 남는다.
+  - 응답 검증(새 사유 코드 없음): 비 2xx는 아래 표와 같다. 2xx에서 JSON이 아니면 `SERVER_ERROR`, 질문 이름이 맞는 답이 없으면 `EMPTY_OUTPUT`(이름 없는 거절만 있으면 `REFUSED`), 같은 이름 답이 여럿이면 `SCHEMA_INVALID`, `type: refusal`이면 `REFUSED`, `model`이 없으면 `MODEL_MISSING`, 그 밖에 `type`이 `choice`가 아님 · `choice`가 보낸 선택지 밖 · `probabilities`가 보낸 선택지를 모두 덮지 않음(밖 · 중복 · 숫자 아님 · 0 ~ 1 밖 포함) · 고른 값의 확률이 가장 높지 않음(같으면 허용)이면 `SCHEMA_INVALID`다.
+  - 판정: 확률 내림차순 1 · 2순위(같으면 공급자가 고른 값, 그다음 판 순서)를 검증기(하한 `min-confidence` → `LOW_CONFIDENCE`, 최소 차이 `min-margin` → `LOW_MARGIN`, 같으면 확정)에 넘긴다. 응답의 `confidence`는 쓰지 않는다(판정 규칙은 선택지 확률 기준이고 confidence는 정의가 다른 값). 판독 불가 입력은 공급자 없이 `UNREADABLE_INPUT`, 실패는 `TIMEOUT` · `SCHEMA_INVALID` · `PROVIDER_ERROR` 보류다. Decisions 장애 · 지연 때 대신 부를 다른 끝점은 없고 그 판정은 보류로 끝난다.
 - **보내기 전 정리:** 모든 깊이에서 10.2 금지 키(+ core 결과 게이트웨이의 `audioRefs` · `audioRefsJson` · `interests` 등)를 지우고, 호출자가 준 별칭 표로 아이 이름을 바꾸며, 이메일 · 휴대전화 모양 값을 '연락처'로 가린다. 남으면 · 요청 스키마(`ai-judgment-request`)에 맞지 않으면 부르지 않고 `FORBIDDEN_INPUT`이다. UUID → '참조N'과 복원은 지금 `ResultTextGateway`가 맡는다.
   - 금지 키는 대소문자와 `_` · `-`를 가리지 않고 비교한다(`child_name` · `Child-Id` · `api_key` · `guardian-id`도 지운다). 정리 뒤 안전망은 이 비교를 다시 쓰지 않는 독립 검사로, 글자 · 숫자 밖 문자를 모두 뺀 꼴(예: `child.name`)까지 보고 남으면 `FORBIDDEN_INPUT`이다.
   - 별칭은 긴 이름부터(길이가 같으면 사전순) 한 번만 훑으며 바꾼다. 이름끼리 포함 관계(예: '민수'와 '수')여도 결과가 별칭 표 순서에 기대지 않고, 바꿔 넣은 별칭을 짧은 이름이 다시 바꾸지 않는다. 빈 이름은 무시한다.
   - realtime 호출부는 보내기 전 준비(정리 · 요청 스키마 검증 · 본문 조립) 중 예기치 못한 런타임 오류도 호출 스레드로 던지지 않고 `APP_ERROR`(예외 종류 이름만) 한 줄과 `FORBIDDEN_INPUT`(시도 0) 실패 완료로 바꾼다.
-- **스키마:** 빌드가 `contracts/schemas/ai-*.schema.json`(+ 그 파일이 가리키는 `common.schema.json`)을 실행 자원 `luna/schemas/`로 복사한다. 요청 `text.format`에는 공급자가 받는 키워드(`type` · `properties` · `required` · `additionalProperties` · `items` · `enum` · `const` · `anyOf` · `$defs` · `$ref` · `description`)만 남긴 사본을 싣고(다른 파일 `$ref`는 정의를 끼워 넣음), 모든 객체가 닫히고 모든 속성이 required일 때만 `strict: true`다. 응답 검증은 언제나 원본 계약 스키마 전체로 한다. 스키마를 읽지 못하거나 정상 예시가 검증을 통과하지 못하면 기동을 거부한다.
+- **스키마:** 빌드가 `contracts/schemas/ai-*.schema.json`(+ 그 파일이 가리키는 `common.schema.json`)을 실행 자원 `luna/schemas/`로 복사한다. core-api는 요청 `text.format`에 공급자가 받는 키워드(`type` · `properties` · `required` · `additionalProperties` · `items` · `enum` · `const` · `anyOf` · `$defs` · `$ref` · `description`)만 남긴 사본을 싣고(다른 파일 `$ref`는 정의를 끼워 넣음), 모든 객체가 닫히고 모든 속성이 required일 때만 `strict: true`다. core 응답 검증은 언제나 원본 계약 스키마 전체로 한다. realtime은 요청 스키마(`ai-judgment-request`)만 읽는다(출력 스키마 없음, 응답은 위 Decisions 응답 검증). 스키마를 읽지 못하거나 정상 예시가 검증을 통과하지 못하면 기동을 거부한다.
 - **시도 · 재시도:** 시도 시한 = min(호출자 마감까지 남은 시간, 목적 시한 키). 0 이하면 부르지 않고 `TIMEOUT`. 재시도는 10.3 분류대로 `REQUEST_BOUNDED`만 일시 실패 기술 재시도 1회 + 스키마 불일치 재요청 1회(합계 ≤ 3)이고, 대기 = max(`mujoong.text-ai.retry.backoff`, 429 `Retry-After`)가 남은 시간보다 짧고, 대기 뒤 남는 시간이 최소 시도 창(새 키 없이 `mujoong.text-ai.retry.backoff` 값을 그대로 씀) 이상일 때만 한다. 401 · 403은 재시도하지 않는다.
 
 | 실패 사유 | 언제 | 일시 | `TextAiProvider` 어댑터(BR8.1) | `ResultTextProvider` 어댑터(BR8.2) |
@@ -419,10 +425,10 @@ Luna 호출부(core-api · realtime-activity 각자)는 공급자 시도마다 `
 | `REQUEST_REJECTED` | 그 밖 4xx(스키마 거절 포함) · 3xx · 허용 밖 주소 | 아니오 | `UNAVAILABLE` · retryable=false | `PROVIDER_ERROR` |
 | `TRANSPORT_ERROR` | 연결 · 읽기 오류 | 예 | `UNAVAILABLE` · retryable=true | `PROVIDER_ERROR` |
 | `TIMEOUT` | 시도 시한 초과 · 남은 시간 없음 | 아니오 | `TIMEOUT` · retryable=true | `TIMEOUT` |
-| `EMPTY_OUTPUT` | 출력 텍스트가 빔 | 예 | `UNAVAILABLE` · retryable=true | `SCHEMA_INVALID` |
+| `EMPTY_OUTPUT` | 출력 텍스트가 빔(Decisions: 질문 이름이 맞는 답 없음) | 예 | `UNAVAILABLE` · retryable=true | `SCHEMA_INVALID` |
 | `LENGTH_EXCEEDED` | `status: incomplete` · 본문 바이트 상한 초과 | 아니오 | `INVALID_OUTPUT` | `SCHEMA_INVALID` |
-| `REFUSED` | 거절(refusal) 출력 | 아니오 | `INVALID_OUTPUT` | `SCHEMA_INVALID` |
-| `SCHEMA_INVALID` | 원본 계약 스키마 위반 · JSON 객체가 아님 | 아니오 | `INVALID_OUTPUT` | `SCHEMA_INVALID` |
+| `REFUSED` | 거절(refusal) 출력(Decisions: `type: refusal` 답) | 아니오 | `INVALID_OUTPUT` | `SCHEMA_INVALID` |
+| `SCHEMA_INVALID` | 원본 계약 스키마 위반 · JSON 객체가 아님(Decisions: 위 응답 검증 위반) | 아니오 | `INVALID_OUTPUT` | `SCHEMA_INVALID` |
 | `FORBIDDEN_INPUT` | 정리 뒤 금지 키 잔존 · 요청 스키마 위반 · (realtime) 보내기 전 준비 중 예기치 못한 오류 | 아니오 | `UNAVAILABLE` · retryable=false | `INTERNAL` |
 | `MODEL_MISSING` | 응답 `model` 없음 | 아니오 | `INVALID_OUTPUT` | `PROVIDER_ERROR` |
 
@@ -448,6 +454,7 @@ realtime 출력 게이트의 제브 단계(U13)가 읽는 설정이다. 시간 �
 | `mujoong.guardrail.jev.mode` | `${JEV_MODE:}` | realtime | 제브 단계 모드 `REAL` · `STUB` · `OFF`. 비면 프로필 기본값(demo · prod = `REAL`, 그 밖 = `STUB`). 세션 안에서 바뀌지 않는다 [U13 편차 (U13-a)] |
 | `mujoong.guardrail.jev.base-url` | `${JEV_BASE_URL:}` | realtime | 제브 주소. 호스트는 위 허용 호스트 안이어야 한다 |
 | `mujoong.guardrail.jev.model` | `${JEV_MODEL:}` | realtime | 고정 모델 버전. 요청의 모델 이름은 이 값과 같아야 한다 |
+| `mujoong.guardrail.jev.send-child-name` | `${JEV_SEND_CHILD_NAME:false}` | realtime | `true`면 제브 요청 후보 문장 · 맥락의 아이 이름을 '아이'로 바꾸지 않고 원문으로 보낸다(10.2 예외, JIRA-266). 비밀이 아니고 시간 값이 아니다. **R-F15 확인 기록(제브의 아동 이름 전달 허용 범위) 전에는 켜지 않는다.** 다른 외부 AI 경로에는 영향이 없다 [편차 FT-1023-b] |
 | `mujoong.guardrail.jev.pass-threshold` | `${JEV_PASS_THRESHOLD:0.5}` | realtime | 통과 문턱, 허용 `0 < x <= 1`. `PASS`가 1순위이고 `PASS` 확률이 이 값 **이상**일 때만 자동 통과한다(10.13). 비밀이 아니다. **임시 시험값이다 — AI 성능 시험으로 확정한다.** `REAL`에서 범위 밖이거나 숫자가 아니면 기동을 거부한다 [U13 편차 (U13-c)] |
 
 기동 점검(모드 × 프로필 × 키): 공개 프로필(demo · prod)은 `REAL` + `JEV_API_KEY` + 허용 호스트 + 고정 모델이 아니면 기동을 거부하고(`STUB` · `OFF`도 거부), 그 밖(dev · test · 프로필 없음)은 `REAL` · `STUB` · `OFF`를 모두 허용하되 `REAL`이면 키가 있어야 한다. `STUB`은 제브 단계를 모두 지나며 1차 사전 통과를 대역 표시가 붙은 `ALLOW`(`reasonCode` `STUB_ALLOW`)로 돌려주고 `OFF`는 제브 단계를 건너뛴다. 둘로 시작하면 기동 로그에 한 줄이 남는다. 대역의 통과는 실제 검사 성공이 아니다(R-M11).
@@ -496,13 +503,13 @@ realtime 새 연습 흐름(U12)이 읽는 설정이다. 시간 값이 아니며 
 
 ### 10.15 자유대화 서비스 정책 적용
 
-자유대화는 앱에 포함한 `service-0.1-app.2` 정책을 세션에 고정한다. 원본/적용본 해시와 문장 편차는 `service-guardrail-policy-deviations.md`에 기록한다. 이름·나이·관심사만 기존 상한·이스케이프로 데이터 구역에 둔다. 초기 안내/현재 참여 수락은 서버가 확인하며, FIRST/CONTINUE·교정·재시도 지시는 강제 관심사 질문·고정 맞장구·휴식 뒤 자동 재개를 추가하지 않는다. 연습의 기존 역할과 검증된 발화 입구는 유지한다.
+자유대화는 앱에 포함한 `service-0.1-app.3` 정책을 세션에 고정한다. 원본/적용본 해시와 문장 편차는 `service-guardrail-policy-deviations.md`에 기록한다. 이름·나이·관심사만 기존 상한·이스케이프로 데이터 구역에 둔다. 초기 안내/현재 참여 수락은 서버가 확인하며, FIRST/CONTINUE·교정·재시도 지시는 강제 관심사 질문·고정 맞장구·휴식 뒤 자동 재개를 추가하지 않는다. 연습의 기존 역할과 검증된 발화 입구는 유지한다.
 
 녹음 안내는 GPT-Live 자신이 발화한 이력으로 추정하지 않는다. 현재 연결의 검증 안내 `COMPLETED`와 참여 수락 뒤 기존 FIRST 지시 하나로 실제 안내 전달 사실을 알리고, 시작 인사·자기소개·대본·참여 질문을 반복하지 않고 아이의 마지막 말에 이어 답하게 한다(RG1). 명확한 재시작 인사/자기소개와 등록 시작 대본 반복은 첫 현재 응답이 실제 기기 프레임으로 송신되고 현재 세대의 재생 완료를 확인하기 전까지 음성·전사 후보 전체를 폐기한다. 제브 ALLOW나 승인 원문 생략도 이 검사를 우회하지 않는다. 별도 AI 판정·자동 재생성·교정 호출은 추가하지 않는다. 아이의 명시적 이름/정체 질문에 대한 답, 인사 인용, 이후 대화와 연습은 구분한다. 이 유한한 표현/상태 검사는 임의의 모든 의미적 바꿔 말하기 탐지나 실모델의 항상 준수를 보장하지 않는다.
 
 참여 전 입력 전사 quiet는 과거 발화를 새 현재 발화로 바꾸는 근거가 아니다. 실제 null `itemId` 입력은 현재 안내 완료 때의 세션 오디오 시간선과 관측 입력 끝 watermark 이후에 시작한 유효 `start_ms/end_ms`만 현재 참여 후보로 삼는다. 시간/식별 근거가 둘 다 없는 전사는 참여 수락으로 추정하지 않는다. 내부 합성 완료 사건과 legacy item ID 대역은 실제 공급자 wire 증거와 구분한다.
 
-J1/J6의 고정 질문·선택지는 `judgment-service-v1`, 공통 지시문은 `prompt-service-v1`을 사용한다. 기존 판정 입출력 스키마·4초 마감·호출 횟수는 그대로다. JEV의 `policyVersion`은 기존 JEV 판이며 서비스 정책판으로 바꾸지 않는다. 내부 검사표만 session/mode/generation/목적·후보 본문 해시·서비스/JEV판을 연결한다. ALLOW 뒤에도 actor의 현재 출력 권한을 다시 확인한다. 확률/동률·800ms·실패/REVIEW 차단은 유지한다. 현재 Jev 범주와 출력 단위는 10.15절의 v3 정책을 따른다.
+J1/J6의 고정 질문·선택지는 `judgment-service-v1`, 공통 지시문은 `prompt-service-v3`(Decisions 질문 지시문, 10.10 · 편차 FT-1023-d)을 사용한다. 판정 요청 스키마·4초 마감·호출 횟수는 그대로다. JEV의 `policyVersion`은 기존 JEV 판이며 서비스 정책판으로 바꾸지 않는다. 내부 검사표만 session/mode/generation/목적·후보 본문 해시·서비스/JEV판을 연결한다. ALLOW 뒤에도 actor의 현재 출력 권한을 다시 확인한다. 확률/동률·800ms·실패/REVIEW 차단은 유지한다. 현재 Jev 범주와 출력 단위는 10.15절의 v3 정책을 따른다.
 
 안내·참여 질문·종료 확인·인사는 현재 승인 본문/음성 판과 해시·PCM16LE 24kHz 모노 형식·길이·SPOKEN_VERIFIED 검수판이 일치해야 전달 후보가 된다. 실제 서비스 말소리는 후속 제작/청취/등록 전까지 미준비다. 운영 notice-assets manifest는 비어 있으며 톤·무음이나 합성 시험 자원은 실제 안내로 승격하지 않는다. 새 공급자 API 필드·SDK·자동 AI 호출은 추가하지 않는다.
 
@@ -517,7 +524,11 @@ J1/J6의 고정 질문·선택지는 `judgment-service-v1`, 공통 지시문은 
 
 단위 테스트의 PASS/BLOCK은 합성 입력과 테스트 대역의 결과이며 실제 Jev 분류 정확도·운영 지연 측정 결과가 아니다.
 
-문장부호 · 공백만 든 전사 조각(예: `,`)은 따로 검사하지 않고 다음 조각과 합친다. 검사가 도는 동안 쌓인 뒤따르는 단위는 후보 문장 3,000자 상한 안에서 한꺼번에 묶어 Jev에 한 번 보낸다. 검사 중이 아니면 첫 단위는 기다리지 않고 바로 보낸다. 자유대화 응답은 **전사가 음성보다 먼저 오는 성질을 이용해**, 전사 조각이 도착해 새 말의 음성이 시작되면 그 조각이 가리키는 음성이 다 오길 기다리지 않고 바로 검사한다. 사전 검사만 통과한 전사로 요청하고(음성은 아직 오는 중이다), 유효한 `ALLOW`(또는 원문 일치)가 나면 그 단위의 전사가 끝나는 PCM 위치까지 **도착한 음성을 도착하는 대로** 기기에 보낸다. `ALLOW` 전에는 어떤 음성도 나가지 않고, 통과한 단위의 끝 위치를 넘는 음성은 나가지 않는다. 응답이 `ALLOW`보다 먼저 끝나도 검사 중인 단위의 음성은 마지막 단위가 정리될 때까지 보관한다. 연습 흐름이 출력을 쥔 응답은 기존처럼 음성이 다 온 단위만 검사한다. 묶인 단위는 한 번의 `ALLOW`로 순서대로 재생하고, `BLOCK` · 무효 · 오류는 묶음 전체를 재생 없이 닫는다.
+문장부호 · 공백만 든 전사 조각(예: `,`)은 따로 검사하지 않고 다음 조각과 합친다(합칠 다음 조각이 없는 말끝 조각은 아래 FT-1023-e). 검사가 도는 동안 쌓인 뒤따르는 단위는 후보 문장 3,000자 상한 안에서 한꺼번에 묶어 Jev에 한 번 보낸다. 검사 중이 아니면 첫 단위는 기다리지 않고 바로 보낸다. 자유대화 응답은 **전사가 음성보다 먼저 오는 성질을 이용해**, 전사 조각이 도착해 새 말의 음성이 시작되면 그 조각이 가리키는 음성이 다 오길 기다리지 않고 바로 검사한다. 사전 검사만 통과한 전사로 요청하고(음성은 아직 오는 중이다), 유효한 `ALLOW`(또는 원문 일치)가 나면 그 단위의 전사가 끝나는 PCM 위치까지 **도착한 음성을 도착하는 대로** 기기에 보낸다. `ALLOW` 전에는 어떤 음성도 나가지 않고, 통과한 단위의 끝 위치를 넘는 음성은 나가지 않는다. 응답이 `ALLOW`보다 먼저 끝나도 검사 중인 단위의 음성은 마지막 단위가 정리될 때까지 보관한다. 연습 흐름이 출력을 쥔 응답은 기존처럼 음성이 다 온 단위만 검사한다. 묶인 단위는 한 번의 `ALLOW`로 순서대로 재생하고, `BLOCK` · 무효 · 오류는 묶음 전체를 재생 없이 닫는다.
+
+**구두점뿐인 단위와 재생이 시작된 연습 발화의 꼬리 (2026-10-23, [편차 FT-1023-e]).** 단위별 경로(시간 정보로 음성과 맞춘 단위 — 전사 먼저 방출 · 연습의 음성이 다 온 단위)에서 전사가 사전 정규화(NFKC · 공백 · 제로폭 · 구두점 제거) 뒤 비지만 원문에 문장부호가 있는 단위(GPT-Live 말끝의 `?` 등, "구두점뿐인 단위")는 빈 전사(`GATE_EMPTY` / `EMPTY_TRANSCRIPT`)로 버리지 않고 그 음성을 재생한다(말끝 억양 보존). 사전 · 제브가 볼 글이 없어 제브를 부르지 않고, 원문 일치 생략과 같은 모양의 검사 기록(`guardrail_event` `APPROVED_VERBATIM_SKIPPED` · `ALLOW` · 사유 `PUNCTUATION_ONLY` · 지연 0)과 앱 로그 사유 코드 `GuardrailSkippedPunctuationOnly`(INFO, 원문 없음)를 남긴다. 앞 단위가 제브 검사 중이거나 대기 중이면 음성 순서를 지키려고 대기열 뒤에 두고, 차례가 오면 제브 없이 낸다(앞 대기 단위와 한 검사로 묶이면 그 검사 글에 붙는다). 음성 없음 · 홀수 PCM 길이 · 불완전 단위 검사는 그대로 거친다. 원문이 null · 빈 문자열 · 공백 · 제로폭 · 서식 문자뿐인 단위와 무음으로 봉인한 전체 구간(단위별 경로 밖)의 빈 전사는 지금처럼 `EMPTY_TRANSCRIPT`로 버린다(fail-closed). 전사 먼저 방출 경로는 다음 조각과 합치려고 붙잡아 둔 말끝 구두점 조각을 응답이 조용해지면(`segment-quiet`) 그대로 단위로 낸다 — 남은 전사 시한이 지나 출력 세대를 올리며 말끝 음성을 버리던 길이 없어진다. 등록 원문 읽기(연습 승인 발화)는 단위별 경로를 타지 않으므로 원문 일치 검사(`PracticeSpeech.matches`)에는 영향이 없다.
+
+생성형 연습 발화가 단위별로 나가다 **이미 단위 하나라도 기기 송신에 넘긴 뒤** 같은 발화의 단위가 `GATE_EMPTY`로 버려지면, 같은 지시를 다시 요청하지 않고(아이가 같은 말을 두 번 듣지 않게) 그 응답의 나머지를 받지 않은 채 나간 부분까지 '재생됨'으로 닫는다 — 보낸 음성이 모두 끝나면 확장에 `COMPLETED` 한 번(사유 코드 `PracticeTailUnitDroppedAfterPlayback`, INFO). 이미 보낸 음성은 끊지 않는다(출력 세대 · 출력 권한을 바꾸지 않는다). 남은 전사가 음성과 맞춰지지 못한 채 시한이 지나도 같은 길로 닫는다(`PracticeTailTextUnalignedAfterPlayback`, INFO). 금지 표현 · 제브 막힘 · 송신 재확인 폐기는 지금처럼 실패이고, 단위가 하나도 나가지 않은 발화의 실패는 지금처럼 확장이 재요청 1회 뒤 실패를 정한다. 단위별로 나가는 생성형 발화의 기기 `STARTED`도 확장에 넘긴다(전에는 삼켜 확장이 '재생 중'을 몰랐다).
 
 보호자 화면의 AI 말풍선은 응답 하나가 행 하나다. 단위별로 통과한 전사는 모아 두었다가 응답이 끝났을 때(남은 검사 · 대기 단위가 없을 때), 아이 입력 전사가 시작될 때, 출력 세대가 올라 응답을 버릴 때 한 번에 `FINAL`로 낸다. 응답 도중에는 확정 전 칸(`PARTIAL`, 텍스트 비움)만 보인다.
 
@@ -528,7 +539,11 @@ J1/J6의 고정 질문·선택지는 `judgment-service-v1`, 공통 지시문은 
 - 참여 대답이 인식되지 않을 때 원인을 가릴 수 있도록 참여 전 전사 조각을 버릴 때 창마다 사유 한 번을 로그 사유 코드 `ParticipationInputDroppedNOT_OPEN` · `ParticipationInputDroppedBEFORE_WINDOW` · `ParticipationInputDroppedBEFORE_WATERMARK` · `ParticipationInputDroppedLEGACY_ITEM`(INFO)로만 남긴다. 전사 원문은 남기지 않는다.
 - **시작 의사 판정(J1)은 제브로 한다(2026-10-22부터 자유대화에서는 J1을 열지 않는다 — 아래 항목).** 제브가 실제 모드(`REAL`)이면 J1은 제브 `systemone`의 `choice` 질문으로 판정한다(질문 ID `judgment`, 질문 · 라벨 설명은 판정 선택지 판의 J1 질문과 선택지 뜻, 확률 1 · 2순위는 기존 판정 검증기의 하한 · 최소 차이 규칙을 그대로 받는다). 제브를 쓸 수 없으면 Luna로 간다. 자유대화의 시작 의사는 **거절인가만** 본다: 사전 분류가 명확한 거절이거나 판정이 `DECLINE`으로 확정되면 대화를 끝내고(거절 흐름), 그 밖(참여 · 불명확 · 휴식 · 판독 불가 · 보류 · 공급자 장애 · 판정을 열 수 없음)은 모두 대화를 시작한다. 무응답(창 만기)은 기존처럼 다시 안내한다. J2 ~ J6은 아직 Luna이며, 같은 구현으로 지점만 더하면 제브로 옮길 수 있다(`JudgmentConfiguration.JEV_POINTS`).
 - **참여 확인 중 공급자가 스스로 시작한 응답은 버리지 않고 보관한다.** GPT-Live는 아이 말이 끝나면 서버 지시 없이 응답을 시작한다. 안내가 끝난 뒤 이 응답의 전사 · 음성 · 무음 조각을 상한(음성 20초 분량 · 전사 8,192자) 안에서 보관했다가, 참여가 수락되면 새 세대의 첫 응답으로 다시 흘려 넣는다(이때 첫 응답 지시는 따로 보내지 않는다). 보관한 응답이 없거나 상한을 넘었으면 기존처럼 첫 응답 지시를 보낸다. 거절 · 불명확이면 보관한 응답은 쓰지 않는다. 다시 흘려 넣은 응답도 제브 검사 · 출력 사전 · 송신 직전 재확인을 똑같이 거친다. 로그 사유 코드는 `JoinHeldOutputReplayed` · `JoinHeldOutputNone` · `JoinHeldOutputOverflow`(INFO)다.
-- **판정 AI J1(참여 대답) · J6(종료 의도)는 자유대화에서 열지 않는다(2026-10-22 결정).** 참여 대답은 거절이 아니면 불명확해도 바로 참여를 수락하고, 종료 의도는 규칙 판정기의 STOP(등록 종료 표현 — 기본 "무중아 그만할래" + 보호자 추가 표현, 물음꼴 포함)만으로 끝낸다(2026-10-23부터 판정기 자체의 명확한 종료 표현 · 즉시 멈춤으로는 끝내지 않는다, `deviations.md` FT-1023-a). 불명확한 종료 신호로 확인 질문이나 판정을 여는 단계는 없다. 그래서 판정 중 출력 보류로 응답이 사라지던 경로도 없다. 연습 확장점이 요청하는 판정(J2 ~ J5)은 그대로다.
+- **보관한 응답이 없으면 스스로 시작을 기다린다(2026-10-22) · 대기 직후 시작한 답도 받는다(2026-10-23, JIRA-261).** 보관한 응답이 비어 있으면 지시 없이 세대를 올려 끊김이 확인된 것으로 두고 `mujoong.timing.provider.join-self-start-wait`만큼 기다린다(`JoinSelfStartWait`). 그사이 조각이 오면 그것이 첫 응답이다(`JoinSelfStartSeen`, 지시 없음). 조각이 하나도 없으면 첫 응답 지시를 보낸다(`JoinSelfStartMissed`). 이 지시 세대는 **첫 조각을 확인 사건 · 전사 시간선과 관계없이 새 응답의 시작으로 받는다**(`JoinSelfStartLateAccepted`, INFO). 모델이 대기 직후 스스로 시작한 답은 전사 시간선이 지시 확인(`end_ms`)보다 앞이라 A4 규칙으로는 낡은 말로 모두 버려져 약 18초 동안 아무 말도 들리지 않았기 때문이다(2026-10-23 12:46 세션). 끊김 확인 뒤 지시를 보낼 때까지 조각이 없었으므로 그 뒤 처음 오는 조각은 앞 응답의 꼬리가 아니다. 이 예외는 끊김이 확인된 단계(조각 없음)에서 보낸 그 지시 세대의 첫 조각에만 쓰고, 첫 조각이 출력 보류 중에 오거나 다음 세대로 넘어가면 사라진다. 그 밖의 모든 지시는 A4 규칙(확인 사건 · 전사 시간선 · 여유)으로 낡은 꼬리를 버린다. 모델이 스스로 시작한 답 뒤에 지시에 대한 답을 또 하면 두 답이 이어서 들릴 수 있다(실호출에서는 관측되지 않음).
+- **응답 정체 안전망(2026-10-23, JIRA-270).** 자유대화 ACTIVE에서 아이의 빈 아닌 확정 전사 뒤, 또는 전사 끝이 "생각해 볼게" · "정리해서 말해 볼게" · "잠깐만" 같은 미루는 말(사전 규칙, 한글 음절만 비교)로 끝난 AI 응답이 조용함으로 봉인된 뒤 `mujoong.timing.provider.response-stall-wait` 동안 받는 출력 조각도 아이 입력 전사 조각도 없으면, 이어 말하기 지시(`ResponseStart.STALL_RESUME`: 미루지 말고 아이의 마지막 말에 바로 짧게 답하고, 모르면 모른다고 말하고, 새 질문을 붙이지 않는다)를 **아이 턴마다 한 번만** 보낸다(`ResponseStallNudge`, 보낼 수 없었으면 `ResponseStallNudgeNotSent`, 미루는 말로 끝난 응답을 보면 `ResponseStallDeferralEnd`, 모두 INFO · 원문 없음). 아이가 "잠깐 생각할게"처럼 기다려 달라고 한 말 뒤에는 걸지 않는다(서비스 정책). 기기 재생 · 승인 문구 재생 · 제브 검사가 남았으면 같은 시간만큼 다시 기다리고, 아이가 말하는 중 · 출력 보류(참여 확인 · 휴식 · 연습 보류) · 판정 턴 · 다른 지시의 새 말 대기 · 참여 직후 스스로 시작 대기 · 열린 응답 · 연습이 출력을 쥔 때 · ACTIVE 밖에서는 보내지 않는다. 보낸 지시는 다른 서버 발화와 같이 세대를 올리고 `response-ready` 시한을 건다. 공백 시계(`silence-warning` · `silence-end`, 아이 침묵 누적)와 연습 무응답 재안내(`conversation.no-response-wait`)는 아이가 말하지 않는 것을 재고, 이 안전망은 모델이 답하지 않는 것을 잰다. 공백 시계는 이 지시로 리셋되지 않는다.
+- **전사 표지 정리(2026-10-23, JIRA-262).** 전사 행을 저장하기 전에(`TranscriptWriter`) AI 행은 영문 대괄호 비언어 표지(`[hum` · `[hum]` 등, 닫는 괄호 없어도)를, 아이 행은 같은 표지 · 짝 없는 `]` · 앞머리 문장부호 잡음(`.` · `..` 등)을 지운다. 대괄호가 없는 AI 글은 바꾸지 않고, 한글이 든 대괄호 쌍은 사람 말일 수 있어 둔다. 아이의 울음 같은 표지도 지운다(표지 글자가 아이 말로 인용 · 판정되지 않게 한다). 표지만 있던 아이 말은 빈 전사(검토 표시)로 남는다. 아이 확정 전사는 저장 전에 같은 규칙으로 정리한 글로 판정 기억 · 제브 대화 문맥 · 종료 판정 · 연습 확장점에 넘긴다(참여 확인 대답은 지금 동작을 지키려고 정리하지 않는다). 제브 출력 후보(AI 전사 단위)에는 표지가 그대로 들어간다.
+- **무음 묶음 진단(2026-10-23).** 기기가 "말하는 중"인데 소리가 나지 않는 경우를 가리려고, 기기로 보내는 AI 음성 묶음마다 디지털 무음(표본 값 0) 비율을 센다. 전부 무음이면 `OutputBundleAllSilent`, 90% 이상이면 `OutputBundleMostlySilent`이고, 응답의 첫 묶음이면 이름에 `First`가 붙는다(`OutputBundleFirstAllSilent` · `OutputBundleFirstMostlySilent`). 묶음의 공급자 음성이 아이의 마지막 입력 전사 조각보다 먼저 끝났으면(아이가 말하는 중에 앞 응답이 늦게 나감) `OutputBundleAfterChildInput`을 남긴다. 모두 INFO 사유 코드이고 원문 · 음성은 남기지 않는다(R-F14). 동작은 바꾸지 않는다.
+- **판정 AI J1(참여 대답) · J6(종료 의도)는 자유대화에서 열지 않는다(2026-10-22 결정).** 참여 대답은 거절이 아니면 불명확해도 바로 참여를 수락하고, 종료 의도는 규칙 판정기의 STOP(등록 종료 표현 — 기본 "무중아 그만할래" + 보호자 추가 표현, 물음꼴 포함)만으로 끝낸다(2026-10-23부터 판정기 자체의 명확한 종료 표현 · 즉시 멈춤으로는 끝내지 않는다, `deviations.md` FT-1023-a). 불명확한 종료 신호로 확인 질문이나 판정을 여는 단계는 없다. 그래서 판정 중 출력 보류로 응답이 사라지던 경로도 없다. 연습 확장점이 요청하는 판정(J2 ~ J5)은 그대로다. **연습의 참여 대답도 같은 분류 규칙이다(2026-10-23, [편차 FT-1023-f]):** 주제 거절 표현은 불명확으로 보고, 거절이면 대안 제시(`DECLINE_ALTERNATIVE`) 없이 바로 DECLINED, 거절이 아니면(불명확 포함) 재안내 없이 바로 ACTIVE다. 수락한 참여 대답은 연습도 보호자 화면에 아이 행 하나로 남는다(AI 참여 안내 → 수락한 아이 말 → 첫 연습 발화, 기록만 하고 연습 확장점의 아이 발화로 넘기지 않는다, 동의 철회 · 빈 대답이면 남기지 않는다). 무응답(창 만기)의 재안내 · 종료 결정표는 두 활동 모두 그대로다.
 - **버린 출력 진단(2026-10-22).** 출력 세대를 올릴 때 그 세대에서 보류로 버린 조각이 있었으면 `OutputDiscardedHeld`, 지시 전 낡은 말로 버린 조각이 있었으면 `OutputDiscardedStale`(INFO)을 한 번씩 남긴다. `OutputNewSpeechNotObserved` 직전에는 마지막 지시 뒤 출력 조각이 하나도 없었으면 `OutputNotObservedProviderSilent`, 있었으면 `OutputNotObservedOnlyStaleChunks`(WARN)를 남긴다. 원문은 남기지 않는다(R-F14).
 - **공급자 오류 코드.** 입력 쪽 오류(`input_`으로 시작하는 코드)는 지금 나오는 AI 응답을 버리지 않는다. 공급자 `error` 사건마다 오류 코드를 사유 코드 `ProviderErrorCode_<코드>`(WARN)로 남긴다. 코드가 소문자 · 숫자 · 밑줄로 된 2 ~ 61자 식별자일 때만 싣고, 그 밖은 `ProviderErrorCode_unknown`이다(자유 문자열 · 메시지 · 매개변수는 남기지 않는다, R-F14).
 - **안내 직후 첫 응답의 인사 차단 완화.** 아이의 마지막 말에 인사(안녕 · 반가워 · 하이 · 헬로)가 있었으면 그 인사에 답하는 인사말은 시작 인사 반복으로 보지 않는다. 자기소개(`나는 AI` · `나는 무중`)와 안내 · 참여 질문 문장 반복은 계속 막는다.
@@ -544,7 +559,7 @@ Realtime은 고정된 중립 질문으로 바꾸며 보호자의 주장을 아�
 
 - `realtime/OutputGate`, INFO, 반복 병합 없음. 기존 `ownerHash`(세션 해시)·세션 `traceId`와 `seq`로 해당 AI 전사 행을 찾는다. `seq=0`은 아직 전사 행이 없는 취소다.
 - 허용 속성: `seq`, `discardReason`, `discardDetail`, `outputGeneration`, `deviceGeneration`, `currentDeviceGeneration`, `segmentComplete`, `audioBytes`, `transcriptChars`, `expectedChars`, `generatedSpeech`, `practicePhase`, `practiceSub`, `tProviderFirstOut`, `tTranscriptFinal`. 없는 자료는 생략한다.
-- `discardReason`은 기존 게이트 사유(무효화는 `VOIDED`), `discardDetail`은 `DiscardDetail`의 고정 코드다. `GATE_EMPTY`를 구간 불완전·빈 전사·음성 없음·홀수 PCM 길이·검사 예외로 구분한다. 대본 불일치, 금지 표현, 공급자 오류/음성 없음, 아이 입력에 의한 미재생 취소, Jev 차단/시간 초과/오류/무효화 및 전송 실패도 구분한다.
+- `discardReason`은 기존 게이트 사유(무효화는 `VOIDED`), `discardDetail`은 `DiscardDetail`의 고정 코드다. `GATE_EMPTY`를 구간 불완전·빈 전사·음성 없음·홀수 PCM 길이·검사 예외로 구분한다(단위별 경로의 구두점뿐인 단위는 폐기하지 않는다 — 10.15 [편차 FT-1023-e]). 대본 불일치, 금지 표현, 공급자 오류/음성 없음, 아이 입력에 의한 미재생 취소, Jev 차단/시간 초과/오류/무효화 및 전송 실패도 구분한다.
 - 판정 우선순위와 폐기·재시도·종료·Jev 정책은 변경하지 않는다. 음성·전사·승인 대본·보호자 메모·예외 메시지·원본 세션 UUID는 로그에 쓰지 않는다. 길이와 시간은 진단용이며 표시 승인이나 안전 검사 근거를 대신하지 않는다.
 - 연습 단계는 폐기를 관측한 시점이다. 제브 대기 중 보관된 구간은 보관 행의 `seq`를 사용해 뒤에 열린 AI 행과 혼동하지 않는다. 기존 기록에 소급해 사유를 추정하지 않는다.
 
@@ -555,9 +570,11 @@ Realtime은 고정된 중립 질문으로 바꾸며 보호자의 주장을 아�
 | 경계 | 수집 값 | 저장 단위·해석 |
 |---|---|---|
 | `voice.ProviderConnector`의 수신기 장식자 | `session.usage.updated.usage.seconds`, `session.closed.usage.seconds`, 공급자 세션 ID·요청 모델 | 연결 한 개의 누적 초를 같은 키로 교체한다. 주기별 값을 더하지 않는다. 실제 공급자 연결이 여러 개면 각각 별도 행이다 |
-| `luna.RealtimeLunaClient`의 HTTP 완료 콜백 | 응답 `id`, `model`, `usage.input_tokens`, `output_tokens`, `input_tokens_details.cached_tokens`, `output_tokens_details.reasoning_tokens` | 실제 전송 시도 한 번당 한 행. 업무 응답이 거절·미완료·스키마 오류여도 받은 사용량은 별도로 기록한다. 보내기 전 거절은 행을 만들지 않는다 |
+| `luna.RealtimeLunaClient.decide`의 HTTP 완료 콜백 | `model`, `usage.input_tokens`, `output_tokens`, `input_tokens_details.cached_tokens`, `output_tokens_details.reasoning_tokens` | Decisions 실제 전송 시도 한 번당 한 행. 업무 응답이 거절·스키마 오류여도 받은 사용량은 별도로 기록한다. 보내기 전 거절은 행을 만들지 않는다. 판정 턴 ID는 공급자로 보내지 않고 서버 내부에서만 연결한다 |
 
-공급자 정의는 [GPT-Live 대화 가이드](https://developers.openai.com/api/docs/guides/live-conversations)와 [Responses 생성 API](https://developers.openai.com/api/reference/resources/responses/methods/create)를 따른다. 음성은 토큰을 추정하지 않고 공급자가 준 **초**를 저장한다. 캐시 입력은 입력 토큰의 일부이고 추론 토큰은 출력 토큰의 일부이므로 전체 토큰에 다시 더하지 않는다. 키·오디오·전사·프롬프트·응답 원문은 사용량 표와 관측 지표에 저장하지 않는다.
+공급자 정의는 [GPT-Live 대화 가이드](https://developers.openai.com/api/docs/guides/live-conversations)와 [Decisions 생성 API](https://developers.openai.com/api/reference/resources/decisions/methods/create)를 따른다. 음성은 토큰을 추정하지 않고 공급자가 준 **초**를 저장한다. 캐시 입력은 입력 토큰의 일부이고 추론 토큰은 출력 토큰의 일부이므로 전체 토큰에 다시 더하지 않는다. Decisions 응답은 `id`를 보장하지 않으므로 `response_id`는 없으면 `NULL`로 유지하고 서버가 생성한 호출 ID를 행 키로 쓴다. 키·오디오·전사·프롬프트·응답 원문은 사용량 표와 관측 지표에 저장하지 않는다.
+
+비용 화면은 [Decisions 요금 규칙](https://developers.openai.com/api/docs/guides/decisions)을 별도로 적용한다. Decisions 출력 토큰은 과금하지 않으므로 Responses 출력 단가를 그대로 곱하지 않는다. 현재 표는 `input_tokens_details.cache_write_tokens`를 별도로 보관하지 않아 캐시 쓰기 요금을 정확하게 재현할 수 없다. 비용 단계에서 필요한 저장 구조 보완 또는 근사 계산 범위를 정한다. `COMPLETE`는 입력·출력 수치 수신 여부이며 청구액 재현을 보장하는 상태가 아니다.
 
 `AiUsageCollector.offer`는 별도의 유한 메모리 큐에 값을 전달한다. 대화·전사 큐를 공유하지 않으며 수신 경로에서 DB·빈자리·재시도를 기다리지 않는다. 큐 잠금 경쟁이나 가득 참은 즉시 거절하고 지표로 남긴다. 정상이어도 값 생성·파싱·큐 전달 비용은 있으므로 성능 영향이 없다고 단정하지 않는다.
 
@@ -575,4 +592,4 @@ Realtime은 고정된 중립 질문으로 바꾸며 보호자의 주장을 아�
 
 계정 삭제에서는 실행 중 세션을 먼저 멈추는 기존 흐름 뒤에 `AiUsageDeletionParticipant`(170)가 새 쓰기를 차단하고 진행 중 저장을 제한된 시간 기다린 뒤 보호자의 사용량을 지운다. 판정 기록(180)·세션(200)보다 먼저 실행된다. 진행 중 저장을 정리하지 못하면 삭제 요청을 실패로 돌려 기존 Inbox 재시도를 따른다. DB의 세션 외래 키도 삭제된 세션의 지연 사용량 복원을 막는다.
 
-관측: `mujoong.ai.usage.pending`, `mujoong.ai.usage.records{outcome=accepted|full|contention|stopped|stored|retry|unlinked|expired|discarded}`. `accepted`는 중간 스냅샷·중복 전달을 포함하는 전달 횟수, `retry`·`unlinked`는 저장 시도 횟수다. 어느 것도 대화 수나 고유 호출 수로 해석하지 않는다. 검증·실호출 절차는 [RUNBOOK 16절](../infra/RUNBOOK.md#16-jira-271-사용량-수집-수동-검증)에 둔다.
+관측: `mujoong.ai.usage.pending`, `mujoong.ai.usage.records{outcome=accepted|full|contention|stopped|stored|retry|unlinked|expired|discarded}`. `accepted`는 중간 스냅샷·중복 전달을 포함하는 전달 횟수, `retry`·`unlinked`는 저장 시도 횟수다. 어느 것도 대화 수나 고유 호출 수로 해석하지 않는다. 검증·실호출 절차는 [RUNBOOK 18절](../infra/RUNBOOK.md#18-jira-271-사용량-수집-수동-검증)에 둔다.
