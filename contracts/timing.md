@@ -72,7 +72,7 @@ U4b가 옮긴 것: `session.join-wait` · `session.join-wait-after-reprompt` · 
 | 키 | 기본값 | 소유 앱 | 뜻 | 근거 |
 |---|---|---|---|---|
 | `mujoong.timing.parent.request-timeout` | `10s` | web | 보호자 웹의 REST 요청 제한 시간 | J80 · PD |
-| `mujoong.timing.parent.practice-start-request-timeout` | `35s` | web | 연습 시작 요청은 서버의 30초 상황 준비 결과와 전송 여유를 기다린다. 다른 REST 요청의 시한은 유지한다. | 연습 시작 신뢰성 보완 |
+| `mujoong.timing.parent.practice-start-request-timeout` | `35s` | web | 연습 시작 요청은 서버의 30초 상황 준비 결과와 전송 여유를 기다린다. Nginx의 정확 일치 `/api/activities/practice` 경로도 읽기 35초로 맞춘다(Compose·ECS). 다른 REST 요청의 시한은 유지한다. | 연습 시작 신뢰성 보완 |
 | `mujoong.timing.recorder.flush-interval` | `200ms` | realtime | 전사 기록기 플러시 주기 | J73 · PD-5 |
 | `mujoong.timing.cache.approved-content-ttl` | `10m` | core-api | 승인 문구 캐시 수명(U1은 DB 직접 읽기로 대신, PD-7은 3.6) | J73 · PD |
 | `mujoong.timing.cache.policy-version-ttl` | `1m` | core-api | 현재 정책 버전 캐시 수명 | J73 · PD · J114 |

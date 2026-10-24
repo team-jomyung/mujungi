@@ -35,9 +35,8 @@ public interface PracticeSessionExtension {
         /** 목표 하나가 끝났다 — 다음 목표로 계속. */
         NEXT_GOAL,
         /** 마지막 목표가 끝났다 — CLOSING(CHILD_STOP, PRACTICE_COMPLETED). */
-        LAST_GOAL,
-        /** 장면 도입 음성을 재생하지 못했다. 완료나 아이의 종료 의사가 아니다. */
-        OUTPUT_FAILED
+        LAST_GOAL
+        // FT-1023-g: 출력 실패로 연습을 끝내는 신호(OUTPUT_FAILED)는 없앴다. 확장은 못 들려준 발화를 건너뛰고 잇는다.
     }
 
     /**
