@@ -40,10 +40,12 @@ class ContractSchemasTest {
     private static final String DRAFT_2020_12 = "https://json-schema.org/draft/2020-12/schema";
     private static final String NAME_SUBSTITUTION = "아이 이름은 '아이'로 치환된 값";
 
-    /** U8이 더한 스키마 파일(BR5.1 · BR6.1). */
+    /**
+     * U8이 더한 스키마 파일(BR5.1 · BR6.1). 진행 중 판정 출력 스키마({@code ai-judgment-output})는 판정이 Decisions API 한 길이 되며
+     * 지웠다(FT-1023-d, 응답은 보낸 선택지로 검증한다).
+     */
     private static final List<String> U8_SCHEMAS = List.of(
             "ai-judgment-request.schema.json",
-            "ai-judgment-output.schema.json",
             "ai-scenario-output.schema.json",
             "ai-scenario-review-output.schema.json",
             "ai-goal-candidate-output.schema.json",
@@ -217,11 +219,6 @@ class ContractSchemasTest {
 
     @Test
     void outputSchemasRejectBrokenModelAnswers() {
-        assertThat(schema("ai-judgment-output.schema.json").validate(JSON.readTree(
-                "{\"first\":{\"option\":\"FULL\",\"probability\":1.2},\"second\":{\"option\":\"PARTIAL\",\"probability\":0.1}}")))
-                .as("확률은 0 ~ 1").isNotEmpty();
-        assertThat(schema("ai-judgment-output.schema.json").validate(JSON.readTree(
-                "{\"first\":{\"option\":\"FULL\",\"probability\":0.9}}"))).as("2순위 필수").isNotEmpty();
         assertThat(schema("ai-scenario-review-output.schema.json").validate(JSON.readTree(
                 "{\"verdict\":\"MAYBE\",\"reasons\":[]}"))).isNotEmpty();
         assertThat(schema("guardrail-result.schema.json").validate(JSON.readTree(

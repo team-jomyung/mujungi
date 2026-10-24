@@ -35,6 +35,7 @@ backend/realtime-activity/src/main/java/kr/mujoong/realtime/judgment/JudgeClient
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/judgment/JudgeOutcome.java
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/judgment/JudgeOutcomeValidator.java
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/judgment/JudgeRequest.java
+backend/realtime-activity/src/main/java/kr/mujoong/realtime/judgment/DecisionsJudgeClient.java
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/judgment/JudgmentConfiguration.java
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/judgment/JudgmentLiveDeletionParticipant.java
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/judgment/JudgmentLiveRecord.java
@@ -46,7 +47,6 @@ backend/realtime-activity/src/main/java/kr/mujoong/realtime/judgment/JudgmentPoi
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/judgment/JudgmentPrompt.java
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/judgment/JudgmentTrigger.java
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/judgment/JudgmentTurn.java
-backend/realtime-activity/src/main/java/kr/mujoong/realtime/judgment/LunaJudgeClient.java
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/judgment/NextAction.java
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/judgment/TurnStatus.java
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/judgment/UnavailableJudgeClient.java

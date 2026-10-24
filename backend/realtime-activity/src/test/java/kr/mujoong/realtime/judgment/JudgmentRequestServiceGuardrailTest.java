@@ -7,7 +7,6 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicReference;
-import kr.mujoong.contract.json.JsonCodec;
 import kr.mujoong.realtime.content.LiveContentResources;
 import kr.mujoong.realtime.luna.LunaRequest;
 import kr.mujoong.testsupport.time.MutableClock;
@@ -21,10 +20,10 @@ class JudgmentRequestServiceGuardrailTest {
         var prompt = JudgmentPrompt.load(options);
         var clock = new MutableClock();
         var sent = new AtomicReference<LunaRequest>();
-        var judge = new LunaJudgeClient(request -> {
+        var judge = new DecisionsJudgeClient((request, question) -> {
             sent.set(request);
             return new CompletableFuture<>();
-        }, prompt, new JudgeOutcomeValidator(0.6, 0.15, JsonCodec.shared()), clock);
+        }, prompt, new JudgeOutcomeValidator(0.6, 0.15), clock);
         var codes = options.points().get(LiveContentResources.JudgmentPoint.valueOf(point.name())).optionCodes();
         judge.judge(new JudgeRequest(point, options.version(), codes, input, List.of(), null, Map.of(), false,
                 clock.now().plus(Duration.ofSeconds(4))), UUID.randomUUID());
@@ -40,7 +39,7 @@ class JudgmentRequestServiceGuardrailTest {
         assertThat(capture(JudgmentPoint.J1, "응").instructions()).contains("질문을 듣기 전", "지난 세션");
     }
     @Test void stopUsesTheServicePromptVersion() {
-        assertThat(capture(JudgmentPoint.J6, "이제 마칠게").promptVersion()).isEqualTo("prompt-service-v2");
+        assertThat(capture(JudgmentPoint.J6, "이제 마칠게").promptVersion()).isEqualTo("prompt-service-v3");
     }
     @Test void stopInstructionsSeparateQuotationNegationTopicAndRest() {
         assertThat(capture(JudgmentPoint.J6, "대사야").instructions()).contains("인용/역할", "종료 부정", "화제 거절", "휴식");
@@ -64,6 +63,6 @@ class JudgmentRequestServiceGuardrailTest {
         var sent = capture(JudgmentPoint.J6, utterance);
         assertThat(sent.input()).containsEntry("judgmentPoint", "J6").containsEntry("childUtterance", utterance);
         assertThat(sent.instructions()).contains("인용/역할", "종료 부정", "화제 거절", "모호함", "휴식");
-        assertThat(sent.promptVersion()).isEqualTo("prompt-service-v2");
+        assertThat(sent.promptVersion()).isEqualTo("prompt-service-v3");
     }
 }

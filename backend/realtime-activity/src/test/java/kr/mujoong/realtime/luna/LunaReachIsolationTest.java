@@ -23,8 +23,8 @@ import kr.mujoong.realtime.observability.RealtimeMetrics;
 import kr.mujoong.realtime.testing.TestEventLoggers;
 import kr.mujoong.testsupport.log.LogCapture;
 import kr.mujoong.testsupport.time.MutableClock;
-import kr.mujoong.testsupport.luna.LunaResponsesStub;
-import kr.mujoong.testsupport.luna.LunaResponsesStub.Reply;
+import kr.mujoong.testsupport.luna.LunaDecisionsStub;
+import kr.mujoong.testsupport.luna.LunaDecisionsStub.Reply;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -33,7 +33,8 @@ import org.junit.jupiter.api.io.TempDir;
  * Luna 응답 여부 확인 도구 규칙 시험 (U11 Step 2 · 3 조사). 기본 test에서 돌고 공급자를 부르지 않는다(R-F1). 호출부는 가짜만 쓴다.
  *
  * <p>작업 그래프 자체(check · test → lunaReachTest 의존 없음)는 루트 {@code verifyLunaReachIsolation}이 check마다 확인한다. 이 시험은 빌드
- * 규칙 · 키 제거 · 키 없음 SKIPPED · env 파싱 · 요청 모양(스키마 통과 · 아이 이름 없음) · 요약 계산 · 보고서 형식을 본다.
+ * 규칙 · 키 제거 · 키 없음 SKIPPED · env 파싱 · 요청 모양(스키마 통과 · 아이 이름 없음) · Decisions 응답 분류 · 요약 계산 · 보고서 형식을
+ * 본다(FT-1023-d).
  */
 @Tag("judgment-turn")
 class LunaReachIsolationTest {
@@ -131,7 +132,7 @@ class LunaReachIsolationTest {
 
         assertThat(LunaHosts.check(properties.baseUrl(), LunaHosts.modeFor())).isEmpty();
         assertThat(properties.model()).isEqualTo(LunaProperties.DEFAULT_MODEL);
-        assertThat(properties.options(LunaPurpose.JUDGMENT_LIVE).reasoningEffort()).isNotBlank();
+        assertThat(properties.maxResponseBytes()).isPositive();
     }
 
     @Test
@@ -153,7 +154,8 @@ class LunaReachIsolationTest {
     void aRunWithAFakeCallerUsesTheGivenTimeoutAndReportsEachAttempt(@TempDir Path dir) throws IOException {
         AtomicReference<Duration> timeoutSeen = new AtomicReference<>();
         List<LunaRequest> requests = new ArrayList<>();
-        String output = "{\"first\":{\"option\":\"END_CLEAR\",\"probability\":0.8123},\"second\":{\"option\":\"WAT\",\"probability\":0.1}}";
+        List<LunaDecision.Probability> probabilities = List.of(new LunaDecision.Probability("WAT", 0.1),
+                new LunaDecision.Probability("END_CLEAR", 0.8123));
         Map<String, Long> usage = new LinkedHashMap<>();
         usage.put("input_tokens", 300L);
         usage.put("output_tokens", 40L);
@@ -162,8 +164,8 @@ class LunaReachIsolationTest {
             return (request, limit) -> {
                 requests.add(request);
                 return requests.size() == 2
-                        ? new LunaReachProbe.CallResult("TIMEOUT", null, null, 30_000, null)
-                        : new LunaReachProbe.CallResult("OK", "gpt-6-luna-x", output, 1500L * requests.size(), usage);
+                        ? new LunaReachProbe.CallResult("TIMEOUT", null, null, null, 30_000, null)
+                        : new LunaReachProbe.CallResult("OK", "gpt-6-luna-x", "END_CLEAR", probabilities, 1500L * requests.size(), usage);
             };
         };
         Map<String, String> env = Map.of(LunaTransport.API_KEY_ENV, "fake-not-a-key", LunaReachProbe.TIMEOUT_ENV, "30",
@@ -183,7 +185,7 @@ class LunaReachIsolationTest {
         assertThat(result.summary().usageUnknown()).isEqualTo(1);
         String written = Files.readString(report, StandardCharsets.UTF_8);
         assertThat(written).startsWith("outcome=REACHED evidence=REAL_API_SYNTHETIC")
-                .contains("| 회차 | 결과 사유 | 응답 모델 | 스키마 통과 | 1순위 | 2순위 | 지연 ms | 사용량(토큰) |",
+                .contains("| 회차 | 결과 사유 | 응답 모델 | 응답 검증 | 1순위 | 2순위 | 지연 ms | 사용량(토큰) |",
                         "| 2 | TIMEOUT | - | - | - | - | 30000 | 모름 |", "input_tokens=300 output_tokens=40 |",
                         "사용량 합계(받은 회차): input_tokens=600 output_tokens=80 · 모름 1회", LunaReachProbe.PRICE_NOTE)
                 .doesNotContain("fake-not-a-key", LunaReachProbe.CHILD_UTTERANCE, "\"probability\"", "https://", "$", "USD");
@@ -205,17 +207,21 @@ class LunaReachIsolationTest {
     }
 
     @Test
-    void theProbeClassifiesEveryReplyLikeTheOperationalClientAndOnlyOncePerCall() throws Exception {
+    void theProbeClassifiesEveryDecisionsReplyLikeTheOperationalClientAndOnlyOncePerCall() throws Exception {
         LunaReachProbe.OptionSet set = new LunaReachProbe(Map.<String, String>of()::get, Path.of("unused"), NEVER, new FixedClock())
                 .j6Options();
-        String valid = "{\"first\":{\"option\":\"END_CLEAR\",\"probability\":0.7},\"second\":{\"option\":\"REST\",\"probability\":0.2}}";
-        List<Reply> replies = List.of(Reply.ok("gpt-6-luna", valid), Reply.status(500), Reply.rateLimited(1), Reply.status(401),
-                Reply.status(400), Reply.incomplete("gpt-6-luna"), Reply.emptyOutput("gpt-6-luna"), Reply.refusal("gpt-6-luna"),
-                Reply.noModel(valid), Reply.ok("gpt-6-luna", "{\"first\":{\"option\":\"END_CLEAR\",\"probability\":2}}"),
-                Reply.json(200, "<html>"), Reply.json(200, "{\"status\":\"cancelled\",\"model\":\"m\"}"),
-                Reply.redirect("https://x.invalid/"));
+        Map<String, Double> valid = new LinkedHashMap<>();
+        valid.put("END_CLEAR", 0.7);
+        valid.put("UNCLEAR", 0.1);
+        valid.put("NOT_END", 0.0);
+        valid.put("REST", 0.2);
+        String name = LunaReachProbe.QUESTION_NAME;
+        List<Reply> replies = List.of(Reply.choice("gpt-6-luna", name, "END_CLEAR", valid), Reply.status(500), Reply.rateLimited(1),
+                Reply.status(401), Reply.status(400), Reply.answers("gpt-6-luna", List.of()), Reply.refusal("gpt-6-luna", name),
+                Reply.choice(null, name, "END_CLEAR", valid), Reply.choice("gpt-6-luna", name, "MAYBE", valid),
+                Reply.json(200, "<html>"), Reply.status(302).withHeader("Location", "https://x.invalid/"));
         MutableClock clock = new MutableClock();
-        try (LunaResponsesStub stub = LunaResponsesStub.start()) {
+        try (LunaDecisionsStub stub = LunaDecisionsStub.start()) {
             RealtimeLunaClient operational = RealtimeLunaTestFixtures.client(stub.baseUrl(), Duration.ofSeconds(5),
                     TestEventLoggers.strict(clock, LogCapture.detached(), RealtimeMetrics.inMemory()), clock);
             LunaReachProbe.OperationalCaller probe = new LunaReachProbe.OperationalCaller(
@@ -227,7 +233,7 @@ class LunaReachIsolationTest {
                 stub.respond(reply);
                 String expected;
                 try {
-                    operational.call(request).toCompletableFuture().get(10, TimeUnit.SECONDS);
+                    operational.decide(request, LunaReachProbe.question(request)).toCompletableFuture().get(10, TimeUnit.SECONDS);
                     expected = "OK";
                 } catch (ExecutionException failure) {
                     expected = ((LunaException) failure.getCause()).reason().name();
@@ -240,7 +246,18 @@ class LunaReachIsolationTest {
                 assertThat(actual.reason()).as("대본 %s", reply.status()).isEqualTo(expected);
                 assertThat(stub.requestCount() - before).as("호출 1회").isEqualTo(1);
             }
+            assertThat(stub.requests()).allSatisfy(sent -> assertThat(sent.violations()).isEmpty());
             assertThat(stub.requests().getLast().body()).isEqualTo(stub.requests().get(stub.requestCount() - 2).body());
+            LunaReachProbe.CallResult ok = LunaReachProbe.classify(JSON, new LunaTransport.RawResponse(200,
+                    "{\"model\":\"m\",\"answers\":[{\"type\":\"choice\",\"name\":\"judgment\",\"choice\":\"END_CLEAR\","
+                            + "\"probabilities\":[{\"value\":\"END_CLEAR\",\"probability\":0.7},{\"value\":\"UNCLEAR\",\"probability\":0.1},"
+                            + "{\"value\":\"NOT_END\",\"probability\":0},{\"value\":\"REST\",\"probability\":0.2}]}],"
+                            + "\"usage\":{\"input_tokens\":12}}", java.util.Optional.empty()),
+                    LunaReachProbe.question(new LunaRequest(LunaPurpose.JUDGMENT_LIVE, "v1", "i", LunaReachProbe.j6Input(set), Map.of(),
+                            clock.now())), 7);
+            assertThat(ok.reason()).isEqualTo("OK");
+            assertThat(ok.usage()).containsEntry("input_tokens", 12L);
+            assertThat(LunaReachProbe.ranks(ok.choice(), ok.probabilities(), set.options())).containsExactly("END_CLEAR 0.70", "REST 0.20");
             probe.close();
         }
     }

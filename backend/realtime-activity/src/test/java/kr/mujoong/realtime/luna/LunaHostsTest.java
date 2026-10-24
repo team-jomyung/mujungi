@@ -82,17 +82,13 @@ class LunaHostsTest {
 
     @Test
     void propertiesNormalizeABlankModelAndRejectInvalidValues() {
-        LunaProperties.PurposeOptions options = new LunaProperties.PurposeOptions(4000, "low");
-        LunaProperties.Purposes purposes = new LunaProperties.Purposes(options);
         URI base = URI.create("https://api.openai.com/v1");
 
-        assertThat(new LunaProperties("", base, 10, purposes, false).model()).isEqualTo(LunaProperties.DEFAULT_MODEL);
-        assertThat(new LunaProperties("gpt-6-luna", base, 10, purposes, false).options(LunaPurpose.JUDGMENT_LIVE)).isSameAs(options);
-        assertThatThrownBy(() -> new LunaProperties("모델", base, 10, purposes, false)).isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> new LunaProperties("m", base, -1, purposes, false)).isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> new LunaProperties("m", base, 1, null, false)).isInstanceOf(NullPointerException.class);
-        assertThatThrownBy(() -> new LunaProperties.Purposes(null)).isInstanceOf(NullPointerException.class);
-        assertThatThrownBy(() -> new LunaProperties.PurposeOptions(4000, null)).isInstanceOf(IllegalArgumentException.class);
+        assertThat(new LunaProperties("", base, 10, false).model()).isEqualTo(LunaProperties.DEFAULT_MODEL);
+        assertThat(new LunaProperties(" gpt-6-luna ", base, 10, true).model()).isEqualTo("gpt-6-luna");
+        assertThatThrownBy(() -> new LunaProperties("모델", base, 10, false)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new LunaProperties("m", base, -1, false)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new LunaProperties("m", null, 1, false)).isInstanceOf(NullPointerException.class);
         assertThat(LunaPurpose.JUDGMENT_LIVE.requestSchema()).isEqualTo("ai-judgment-request.schema.json");
     }
 
@@ -103,7 +99,10 @@ class LunaHostsTest {
             originals = files.filter(file -> file.getFileName().toString().matches("ai-.*\\.schema\\.json|common\\.schema\\.json"))
                     .sorted().toList();
         }
-        assertThat(originals).as("contracts/schemas/ai-*.schema.json + common(빈 대조 아님)").hasSizeGreaterThanOrEqualTo(8);
+        // 빈 대조로 통과하지 않게, realtime이 실제로 읽는 요청 스키마와 그 $ref 대상이 원본 목록에 있는지 본다
+        assertThat(originals).as("contracts/schemas/ai-*.schema.json + common(빈 대조 아님)")
+                .extracting(file -> file.getFileName().toString())
+                .contains(LunaPurpose.JUDGMENT_LIVE.requestSchema(), "common.schema.json");
         for (Path original : originals) {
             String name = original.getFileName().toString();
             try (InputStream resource = getClass().getClassLoader().getResourceAsStream("luna/schemas/" + name)) {

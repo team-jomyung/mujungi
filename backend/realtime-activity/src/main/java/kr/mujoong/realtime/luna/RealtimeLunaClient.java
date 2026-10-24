@@ -1,6 +1,8 @@
 package kr.mujoong.realtime.luna;
 
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -17,16 +19,17 @@ import kr.mujoong.contract.time.MujoongClock;
 import kr.mujoong.realtime.observability.EventLogger;
 
 /**
- * Realtime Luna 공통 호출 (U9 FR1.1 · FR1.2 · FR1.4 · BR2 ~ BR6 · SD1 ~ SD6). 판정 턴(U11 {@code JudgeClient} 구현)이 그 위에 얹힌다.
- * 비동기 {@link #call(LunaRequest)}은 {@code CompletionStage}를 돌려준다(C-DS4). {@code JUDGMENT_LIVE}는 재시도 분류 NONE이라 한 번만
- * 부른다(BR3.1). core에 같은 규칙의 동기 호출부가 따로 있다(코드 공유 없음, R-F5 · BR7.3).
+ * Realtime Luna 판정 호출 (U9 FR1.1 · FR1.2 · FR1.4 · BR2 ~ BR6 · SD1 ~ SD6, FT-1023-d). 진행 중 판정(U11 {@code DecisionsJudgeClient})은
+ * Decisions API({@code POST {base-url}/decisions}) 한 길뿐이다. 비동기 {@link #decide}는 {@code CompletionStage}를 돌려준다(C-DS4).
+ * {@code JUDGMENT_LIVE}는 재시도 분류 NONE이라 한 번만 부른다(BR3.1). core에 Responses 호출부가 따로 있다(코드 공유 없음, R-F5 · BR7.3).
  *
  * <ol>
  *   <li>입력 정리(BR2.1 ~ BR2.3) → 요청 스키마({@code ai-judgment-request}) 검증(BR2.4). 실패면 공급자를 부르지 않고 FORBIDDEN_INPUT.
- *   <li>요청 조립(BR1.6 · BR1.8 · BR2.5 · BR4.5): {@code store=false}, {@code temperature} 없음, 지시와 데이터 자리 분리, 요청용 스키마 사본.
  *   <li>시한 = min(마감까지 남은 시간, {@code mujoong.timing.judgment.live-budget})(BR5.1). 0 이하면 부르지 않고 TIMEOUT. 주소 재확인 ·
  *       빈 키로 거절되면 부르지 않고 그 사유(시도 0, 검토 R-04). 넘으면 요청을 취소한다. 돌려받은 Future를 호출자가 취소해도 요청을 취소한다.
- *   <li>응답 분류(BR4.4 → BR4.1 → BR4.3 → BR4.2)와 {@code LUNA_CALL} 한 줄(BR6.1).
+ *   <li>요청 조립: 지시는 질문 지시문 자리, 정리된 데이터는 {@code input_json} 파트(지시와 데이터 분리, BR2.5). {@code store} ·
+ *       {@code temperature}는 Decisions에 없는 매개변수라 보내지 않는다.
+ *   <li>응답 분류({@link #classifyDecision})와 {@code LUNA_CALL} 한 줄(BR6.1).
  * </ol>
  */
 public class RealtimeLunaClient {
@@ -56,19 +59,20 @@ public class RealtimeLunaClient {
     }
 
     /**
-     * 공급자를 한 번 부른다. 실패는 {@link LunaException}(사유 코드만)을 원인으로 하는 예외 완료다. 이 메서드는 호출 스레드로 던지지 않는다(검토
-     * R-05): 보내기 전 준비(정리 · 스키마 검증 · 본문 조립) 중 예기치 못한 런타임 오류도 {@code APP_ERROR}(예외 종류 이름만) 한 줄을 남기고
-     * {@code FORBIDDEN_INPUT}(시도 0) 예외 완료로 바꾼다. 준비하지 못한 요청은 보내지 않는다는 fail-closed 판단이다.
+     * Decisions API로 {@code choice} 질문 한 개를 한 번 묻는다. 실패는 {@link LunaException}(사유 코드만)을 원인으로 하는 예외 완료다. 이 메서드는
+     * 호출 스레드로 던지지 않는다(검토 R-05): 보내기 전 준비(정리 · 스키마 검증 · 본문 조립) 중 예기치 못한 런타임 오류도 {@code APP_ERROR}(예외
+     * 종류 이름만) 한 줄을 남기고 {@code FORBIDDEN_INPUT}(시도 0) 예외 완료로 바꾼다. 준비하지 못한 요청은 보내지 않는다는 fail-closed 판단이다.
      */
-    public CompletionStage<LunaResult> call(LunaRequest request) {
+    public CompletionStage<LunaDecision> decide(LunaRequest request, LunaDecisionQuestion question) {
         try {
-            return start(request);
+            Objects.requireNonNull(question, "question");
+            return start(request, question);
         } catch (RuntimeException unexpected) {
             return unexpectedFailure(unexpected);
         }
     }
 
-    private CompletableFuture<LunaResult> unexpectedFailure(RuntimeException unexpected) {
+    private <T> CompletableFuture<T> unexpectedFailure(RuntimeException unexpected) {
         try {
             // 원인 메시지 · 스택은 입력을 담을 수 있어 남기지 않는다(BR6.2). 예외 종류 이름만 APP_ERROR로 남긴다
             events.appError(EventLog.Component.REALTIME_LUNA_CLIENT, unexpected);
@@ -78,7 +82,8 @@ public class RealtimeLunaClient {
         return CompletableFuture.failedFuture(new LunaException(LunaFailureReason.FORBIDDEN_INPUT, 0));
     }
 
-    private CompletionStage<LunaResult> start(LunaRequest request) {
+    /** 한 번의 시도: 정리 → 요청 스키마 → 시한 → 보내기 전 거절 → 전송 → 분류 → 감사 한 줄. */
+    private CompletionStage<LunaDecision> start(LunaRequest request, LunaDecisionQuestion question) {
         Objects.requireNonNull(request, "request");
         SanitizedInput input;
         try {
@@ -87,8 +92,7 @@ public class RealtimeLunaClient {
             audit(request, List.of(), LunaFailureReason.FORBIDDEN_INPUT.name(), null, Duration.ZERO, 0);
             return CompletableFuture.failedFuture(rejected);
         }
-        String inputJson = json.write(input.payload());
-        if (!schemas.isValidRequest(request.purpose(), inputJson)) {
+        if (!schemas.isValidRequest(request.purpose(), json.write(input.payload()))) {
             audit(request, input.sentFieldNames(), LunaFailureReason.FORBIDDEN_INPUT.name(), null, Duration.ZERO, 0);
             return CompletableFuture.failedFuture(new LunaException(LunaFailureReason.FORBIDDEN_INPUT, 0));
         }
@@ -104,22 +108,22 @@ public class RealtimeLunaClient {
             audit(request, input.sentFieldNames(), notSent.get().name(), null, Duration.ZERO, 0);
             return CompletableFuture.failedFuture(new LunaException(notSent.get(), 0));
         }
-        LunaSchemas.OutputSchemaPair schema = schemas.pair(request.purpose());
-        String body = json.write(new ResponsesRequest(properties.model(), request.instructions(), inputJson, schema,
-                request.purpose(), properties.options(request.purpose())).body());
+        String requestBody = json.write(
+                new DecisionsRequest(properties.model(), request.instructions(), input.payload(), question).body());
         long started = clock.monotonicNanos();
-        CompletableFuture<LunaTransport.RawResponse> sent = transport.send(body, limit);
-        CompletableFuture<LunaResult> result = sent.handle((response, failure) -> {
+        CompletableFuture<LunaTransport.RawResponse> sent = transport.send(requestBody, limit);
+        CompletableFuture<LunaDecision> result = sent.handle((response, failure) -> {
             Duration latency = clock.elapsedSince(started);
             Outcome outcome = failure == null
-                    ? classify(response, request.purpose())
-                    : new Outcome(LunaTransport.translate(failure).reason(), null, null);
-            audit(request, input.sentFieldNames(), outcome.failure == null ? "OK" : outcome.failure.name(),
-                    outcome.responseModel, latency, 1);
-            if (outcome.failure != null) {
-                throw new CompletionException(new LunaException(outcome.failure, 1));
+                    ? classifyDecision(json, response, question)
+                    : Outcome.failed(LunaTransport.translate(failure).reason(), null);
+            audit(request, input.sentFieldNames(), outcome.failure() == null ? "OK" : outcome.failure().name(),
+                    outcome.responseModel(), latency, 1);
+            if (outcome.failure() != null) {
+                throw new CompletionException(new LunaException(outcome.failure(), 1));
             }
-            return new LunaResult(outcome.outputJson, outcome.responseModel, request.promptVersion(), latency, 1);
+            return new LunaDecision(outcome.answer().choice(), outcome.answer().probabilities(), outcome.responseModel(),
+                    request.promptVersion(), latency, 1);
         });
         // 호출자가 결과 Future를 취소하면(판정 예산 초과 등) 진행 중인 요청도 취소한다
         result.whenComplete((value, failure) -> {
@@ -130,44 +134,56 @@ public class RealtimeLunaClient {
         return result;
     }
 
-    /** 응답 분류(BR4.4 → BR4.1 → BR4.3 → BR4.2). */
-    private Outcome classify(LunaTransport.RawResponse response, LunaPurpose purpose) {
-        int status = response.status();
+    /** 비 2xx 상태의 실패 사유(BR4.4 → BR4.1). 2xx면 null. */
+    private static LunaFailureReason statusFailure(int status) {
         if (status == 401 || status == 403) {
-            return Outcome.failed(LunaFailureReason.AUTH_FAILED, null);
+            return LunaFailureReason.AUTH_FAILED;
         }
         if (status == 429) {
-            return Outcome.failed(LunaFailureReason.RATE_LIMITED, null);
+            return LunaFailureReason.RATE_LIMITED;
         }
         if (status >= 500) {
-            return Outcome.failed(LunaFailureReason.SERVER_ERROR, null);
+            return LunaFailureReason.SERVER_ERROR;
         }
         if (status < 200 || status >= 300) {
-            return Outcome.failed(LunaFailureReason.REQUEST_REJECTED, null);
+            return LunaFailureReason.REQUEST_REJECTED;
         }
-        ResponsesReply reply = ResponsesReply.parse(json, response.body());
+        return null;
+    }
+
+    /**
+     * Decisions 응답 분류(FT-1023-d). 비 2xx는 401 · 403 → AUTH_FAILED, 429 → RATE_LIMITED, 5xx → SERVER_ERROR, 그 밖(3xx 포함) →
+     * REQUEST_REJECTED다. 2xx는 JSON이 아니면 SERVER_ERROR, 질문 이름이 맞는 답이 없으면 EMPTY_OUTPUT(이름 없는 거절만 있으면 REFUSED), 같은
+     * 이름의 답이 여럿이면 SCHEMA_INVALID, 거절(refusal)이면 REFUSED, {@code model}이 없으면 MODEL_MISSING, 그 밖에 선택지 · 확률 규칙
+     * ({@link DecisionsReply#answer})을 어기면 SCHEMA_INVALID다. 실호출 확인 도구도 이 분류를 그대로 쓴다.
+     */
+    static Outcome classifyDecision(JsonCodec json, LunaTransport.RawResponse response, LunaDecisionQuestion question) {
+        LunaFailureReason rejected = statusFailure(response.status());
+        if (rejected != null) {
+            return Outcome.failed(rejected, null);
+        }
+        DecisionsReply reply = DecisionsReply.parse(json, response.body(), question.name());
         if (reply == null) {
             return Outcome.failed(LunaFailureReason.SERVER_ERROR, null);
         }
-        if ("incomplete".equals(reply.status())) {
-            return Outcome.failed(LunaFailureReason.LENGTH_EXCEEDED, reply.model());
+        if (reply.matching().isEmpty()) {
+            return Outcome.failed(reply.anyRefusal() ? LunaFailureReason.REFUSED : LunaFailureReason.EMPTY_OUTPUT, reply.model());
         }
-        if (reply.refused()) {
+        if (reply.matching().size() > 1) {
+            return Outcome.failed(LunaFailureReason.SCHEMA_INVALID, reply.model());
+        }
+        Map<?, ?> answer = reply.matching().getFirst();
+        if ("refusal".equals(answer.get("type"))) {
             return Outcome.failed(LunaFailureReason.REFUSED, reply.model());
-        }
-        if (!"completed".equals(reply.status())) {
-            return Outcome.failed(LunaFailureReason.SERVER_ERROR, reply.model());
-        }
-        if (reply.outputText().isBlank()) {
-            return Outcome.failed(LunaFailureReason.EMPTY_OUTPUT, reply.model());
         }
         if (reply.model() == null || reply.model().isBlank()) {
             return Outcome.failed(LunaFailureReason.MODEL_MISSING, null);
         }
-        if (!schemas.isValidOutput(purpose, reply.outputText())) {
+        DecisionAnswer valid = DecisionsReply.answer(answer, question);
+        if (valid == null) {
             return Outcome.failed(LunaFailureReason.SCHEMA_INVALID, reply.model());
         }
-        return new Outcome(null, reply.model(), reply.outputText());
+        return new Outcome(null, reply.model(), valid);
     }
 
     private void audit(LunaRequest request, List<String> sentFields, String outcome, String responseModel, Duration latency,
@@ -186,50 +202,71 @@ public class RealtimeLunaClient {
         });
     }
 
-    /** 시도 하나의 결과(실패면 failure가 있다). */
-    private record Outcome(LunaFailureReason failure, String responseModel, String outputJson) {
+    /** 시도 하나의 분류 결과(실패면 failure가 있고 answer는 null). */
+    record Outcome(LunaFailureReason failure, String responseModel, DecisionAnswer answer) {
 
         static Outcome failed(LunaFailureReason reason, String responseModel) {
             return new Outcome(reason, responseModel, null);
         }
     }
 
+    /** 검증을 통과한 Decisions 답(고른 선택지와 보낸 선택지 순서의 확률). */
+    record DecisionAnswer(String choice, List<LunaDecision.Probability> probabilities) {
+    }
+
     /**
-     * Responses API 요청 본문(SD2). 이 레코드에는 {@code temperature} 칸이 없고 {@code store}는 언제나 false다(BR1.6 · BR1.8).
+     * Decisions API 요청 본문(FT-1023-d). 최소 필드(정리된 판정 입력)만 보낸다. {@code store} · {@code temperature} ·
+     * {@code reasoning} · {@code max_output_tokens}는 Decisions에 없는 매개변수라 보내지 않는다. 지시는 질문 지시문 자리, 데이터는 사용자 메시지의
+     * {@code input_json} 파트로 간다(BR2.5).
      *
-     * @param input 정리된 데이터의 JSON 문자열(지시와 다른 자리, BR2.5)
+     * @param payload 정리된 데이터(요청 스키마 검증을 통과한 값)
      */
-    record ResponsesRequest(String model, String instructions, String input, LunaSchemas.OutputSchemaPair schema,
-            LunaPurpose purpose, LunaProperties.PurposeOptions options) {
+    record DecisionsRequest(String model, String instructions, Map<String, Object> payload, LunaDecisionQuestion question) {
 
         Map<String, Object> body() {
-            Map<String, Object> format = new LinkedHashMap<>();
-            format.put("type", "json_schema");
-            format.put("name", purpose.name().toLowerCase(java.util.Locale.ROOT));
-            format.put("schema", schema.requestSchema());
-            format.put("strict", schema.strict());
+            Map<String, Object> data = new LinkedHashMap<>();
+            data.put("type", "input_json");
+            data.put("data", payload);
+            Map<String, Object> message = new LinkedHashMap<>();
+            message.put("role", "user");
+            message.put("content", List.of(data));
+            List<Map<String, Object>> choices = new ArrayList<>();
+            for (LunaDecisionQuestion.Choice choice : question.choices()) {
+                Map<String, Object> item = new LinkedHashMap<>();
+                item.put("value", choice.value());
+                if (choice.description() != null) {
+                    item.put("description", choice.description());
+                }
+                choices.add(item);
+            }
+            Map<String, Object> asked = new LinkedHashMap<>();
+            asked.put("type", "choice");
+            asked.put("name", question.name());
+            asked.put("instructions", instructions);
+            asked.put("choices", choices);
             Map<String, Object> body = new LinkedHashMap<>();
             body.put("model", model);
-            body.put("instructions", instructions);
-            body.put("input", input);
-            body.put("text", Map.of("format", format));
-            body.put("max_output_tokens", options.maxOutputTokens());
-            body.put("reasoning", Map.of("effort", options.reasoningEffort()));
-            body.put("store", false);
+            body.put("input", List.of(message));
+            body.put("questions", List.of(asked));
             return body;
         }
 
         @Override
         public String toString() {
-            return "ResponsesRequest[redacted]";
+            return "DecisionsRequest[redacted]";
         }
     }
 
-    /** Responses API 응답에서 분류에 쓰는 값만 읽는다(모르는 필드 무시). */
-    record ResponsesReply(String status, String model, String outputText, boolean refused) {
+    /**
+     * Decisions API 응답에서 분류에 쓰는 값만 읽는다(모르는 필드 · {@code usage} 무시).
+     *
+     * @param matching 질문 이름이 맞는 답들
+     * @param anyRefusal 이름과 관계없이 거절 답이 있는가
+     */
+    record DecisionsReply(String model, List<Map<?, ?>> matching, boolean anyRefusal) {
 
         @SuppressWarnings("unchecked")
-        static ResponsesReply parse(JsonCodec json, String body) {
+        static DecisionsReply parse(JsonCodec json, String body, String questionName) {
             Map<String, Object> root;
             try {
                 root = json.read(body, Map.class);
@@ -240,30 +277,56 @@ public class RealtimeLunaClient {
             if (root == null) {
                 return null;
             }
-            StringBuilder text = new StringBuilder();
-            boolean refused = false;
-            if (root.get("output") instanceof List<?> items) {
-                for (Object item : items) {
-                    if (!(item instanceof Map<?, ?> message) || !"message".equals(message.get("type"))
-                            || !(message.get("content") instanceof List<?> contents)) {
+            List<Map<?, ?>> matching = new ArrayList<>();
+            boolean anyRefusal = false;
+            if (root.get("answers") instanceof List<?> answers) {
+                for (Object item : answers) {
+                    if (!(item instanceof Map<?, ?> answer)) {
                         continue;
                     }
-                    for (Object content : contents) {
-                        if (!(content instanceof Map<?, ?> part)) {
-                            continue;
-                        }
-                        if ("refusal".equals(part.get("type"))) {
-                            refused = true;
-                        } else if ("output_text".equals(part.get("type")) && part.get("text") instanceof String piece) {
-                            text.append(piece);
-                        }
+                    anyRefusal |= "refusal".equals(answer.get("type"));
+                    if (questionName.equals(answer.get("name"))) {
+                        matching.add(answer);
                     }
                 }
             }
-            Object status = root.get("status");
             Object model = root.get("model");
-            return new ResponsesReply(status instanceof String s ? s : null, model instanceof String m ? m : null,
-                    text.toString(), refused);
+            return new DecisionsReply(model instanceof String m ? m : null, List.copyOf(matching), anyRefusal);
+        }
+
+        /**
+         * {@code choice} 답 하나를 검증한다. 맞지 않으면 null(SCHEMA_INVALID): 형식이 {@code choice}가 아님, 고른 값이 보낸 선택지 밖,
+         * 확률 항목이 보낸 선택지 밖 · 중복 · 숫자 아님 · 0 ~ 1 밖, 보낸 선택지 중 확률이 빠진 것이 있음, 고른 값의 확률이 가장 높지 않음(같으면 허용).
+         * 공급자 {@code confidence}는 읽지 않는다(판정 규칙은 선택지 확률 기준).
+         */
+        static DecisionAnswer answer(Map<?, ?> answer, LunaDecisionQuestion question) {
+            if (!"choice".equals(answer.get("type")) || !(answer.get("choice") instanceof String choice)
+                    || !question.values().contains(choice) || !(answer.get("probabilities") instanceof List<?> items)) {
+                return null;
+            }
+            Map<String, Double> byValue = new HashMap<>();
+            for (Object item : items) {
+                if (!(item instanceof Map<?, ?> entry) || !(entry.get("value") instanceof String value)
+                        || !question.values().contains(value) || byValue.containsKey(value)
+                        || !(entry.get("probability") instanceof Number number)) {
+                    return null;
+                }
+                double probability = number.doubleValue();
+                if (Double.isNaN(probability) || probability < 0 || probability > 1) {
+                    return null;
+                }
+                byValue.put(value, probability);
+            }
+            if (byValue.size() != question.values().size()) {
+                return null;
+            }
+            double chosen = byValue.get(choice);
+            if (byValue.values().stream().anyMatch(probability -> probability > chosen)) {
+                return null;
+            }
+            List<LunaDecision.Probability> ordered = question.values().stream()
+                    .map(value -> new LunaDecision.Probability(value, byValue.get(value))).toList();
+            return new DecisionAnswer(choice, ordered);
         }
     }
 }

@@ -7,6 +7,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -34,16 +35,17 @@ import org.springframework.core.io.ClassPathResource;
  * <p>U9 {@code lunaLiveTest}는 운영 시한 {@code mujoong.timing.judgment.live-budget}(4초)에 묶여 TIMEOUT이면 Luna가 응답 자체를 하는지 알 수
  * 없다. 이 도구는 시도 시한만 넉넉히 준다(env {@value #TIMEOUT_ENV}, 기본 {@value #DEFAULT_TIMEOUT_SECONDS}초). 운영 설정은 바꾸지 않는다.
  *
- * <p>공급자 사용량(usage 토큰)을 남기려고 {@link RealtimeLunaClient#call}을 거치지 않고, 그 안의 운영 부품을 같은 순서로 직접 부른다: 입력 정리
- * {@link LunaInputSanitizer} → 요청 스키마 {@link LunaSchemas#isValidRequest} → 보내기 전 거절 {@link LunaTransport#rejectBeforeSend} → 본문
- * 조립 {@link RealtimeLunaClient.ResponsesRequest} → 전송 {@link LunaTransport#send} → 응답 해석 {@link RealtimeLunaClient.ResponsesReply}.
- * 운영 클라이언트는 응답의 {@code usage}를 버리고 돌려주지 않기 때문이다(운영 코드는 바꾸지 않음). 사유 분류는 운영
- * {@code RealtimeLunaClient.classify}와 같은 순서이고, 둘이 같은 사유를 내는지는 루프백 대역 대조 시험이 지킨다.
+ * <p>진행 중 판정과 같은 Decisions API({@code POST {base-url}/decisions}, FT-1023-d)로 묻는다. 공급자 사용량(usage 토큰)을 남기려고
+ * {@link RealtimeLunaClient#decide}를 거치지 않고, 그 안의 운영 부품을 같은 순서로 직접 부른다: 입력 정리 {@link LunaInputSanitizer} → 요청
+ * 스키마 {@link LunaSchemas#isValidRequest} → 보내기 전 거절 {@link LunaTransport#rejectBeforeSend} → 본문 조립
+ * {@link RealtimeLunaClient.DecisionsRequest} → 전송 {@link LunaTransport#send} → 응답 분류 {@link RealtimeLunaClient#classifyDecision}(운영과
+ * 같은 메서드). 운영 클라이언트는 응답의 {@code usage}를 버리고 돌려주지 않기 때문이다(운영 코드는 바꾸지 않음).
  *
- * <p>주소 · 출력 한도 · 추론 강도는 {@code application.yml}의 {@code mujoong.luna.*} 값이고 {@link LunaHosts} STRICT 규칙을 통과해야만 부른다
- * (전송 직전 재확인도 운영 전송부가 한다). 요청은 합성 J6(종료 의도) 판정이다: 판 리소스 {@value #OPTION_SETS_RESOURCE}의 J6 선택지 순서,
- * 합성 아이 발화 한 줄(이름 없음), 기준 없음. env {@value #COUNT_ENV}(기본 {@value #DEFAULT_COUNT})번 차례로 보낸다. 보고서에는 회차 · 사유 ·
- * 응답 모델 · 스키마 통과 · 1 · 2순위 코드와 확률 · 지연 · 사용량 토큰만 쓴다. 요청 · 응답 원문 · 키 · 주소 · 금액은 쓰지 않는다(R-F3 · R-F14).
+ * <p>주소 · 응답 상한은 {@code application.yml}의 {@code mujoong.luna.*} 값이고 {@link LunaHosts} STRICT 규칙을 통과해야만 부른다(전송 직전
+ * 재확인도 운영 전송부가 한다). 요청은 합성 J6(종료 의도) 판정이다: 판 리소스 {@value #OPTION_SETS_RESOURCE}의 J6 선택지 순서를 {@code choice}
+ * 질문 선택지로, 합성 아이 발화 한 줄(이름 없음), 기준 없음. env {@value #COUNT_ENV}(기본 {@value #DEFAULT_COUNT})번 차례로 보낸다. 보고서에는
+ * 회차 · 사유 · 응답 모델 · 응답 검증 · 1 · 2순위 코드와 확률 · 지연 · 사용량 토큰만 쓴다. 요청 · 응답 원문 · 키 · 주소 · 금액은 쓰지 않는다
+ * (R-F3 · R-F14).
  */
 final class LunaReachProbe {
 
@@ -72,14 +74,15 @@ final class LunaReachProbe {
     static final String PRICE_NOTE = "단가는 OpenAI 결제 화면에서 확인한다(이 보고서는 사용량만 남긴다).";
     /** 사용량을 받지 못한 회차 표시(과금 여부를 단정하지 않는다). */
     static final String USAGE_UNKNOWN = "모름";
-    /** 합성 지시(아이 정보 없음). */
-    static final String INSTRUCTIONS = "합성 시험 자료다. 아이 발화가 지금 활동 전체를 끝내고 싶다는 뜻인지 options 중 1 · 2순위와 확률을 고른다. "
-            + "장면 속 역할 대사나 특정 주제만 싫다는 말은 종료가 아니다.";
+    /** 합성 질문 지시(아이 정보 없음). */
+    static final String INSTRUCTIONS = "합성 시험 자료다. 아이 발화가 지금 활동 전체를 끝내고 싶다는 뜻인지 choices 중 하나를 고르고 "
+            + "선택지마다 확률을 매긴다. 장면 속 역할 대사나 특정 주제만 싫다는 말은 종료가 아니다.";
+    /** 질문 이름(운영 판정과 같은 이름). */
+    static final String QUESTION_NAME = "judgment";
     /** 합성 아이 발화(이름 없음). */
     static final String CHILD_UTTERANCE = "이제 그만할래. 나 그만하고 싶어";
 
     private static final Pattern SAFE_TOKEN = Pattern.compile("[A-Za-z0-9._\\-]{1,64}");
-    private static final Pattern OPTION_CODE = Pattern.compile("^[A-Z][A-Z0-9_]*$");
 
     /** 전체 결과. REACHED는 1회 이상 OK. */
     enum Outcome {
@@ -88,16 +91,20 @@ final class LunaReachProbe {
         SKIPPED_NO_KEY
     }
 
-    /** 호출 한 번의 결과. {@code usage}가 null이면 사용량을 받지 못했다(모름). */
-    record CallResult(String reason, String responseModel, String outputJson, long latencyMillis, Map<String, Long> usage) {
+    /**
+     * 호출 한 번의 결과. OK면 {@code choice} · {@code probabilities}(응답 검증을 통과한 값)가 있다. {@code usage}가 null이면 사용량을 받지
+     * 못했다(모름).
+     */
+    record CallResult(String reason, String responseModel, String choice, List<LunaDecision.Probability> probabilities,
+            long latencyMillis, Map<String, Long> usage) {
     }
 
     /** 회차 하나(원문 없음). {@code usage}가 null이면 모름. */
-    record Attempt(int index, String reason, String responseModel, String schema, String first, String second, long latencyMillis,
+    record Attempt(int index, String reason, String responseModel, String validation, String first, String second, long latencyMillis,
             Map<String, Long> usage) {
 
-        Attempt(int index, String reason, String responseModel, String schema, String first, String second, long latencyMillis) {
-            this(index, reason, responseModel, schema, first, second, latencyMillis, null);
+        Attempt(int index, String reason, String responseModel, String validation, String first, String second, long latencyMillis) {
+            this(index, reason, responseModel, validation, first, second, latencyMillis, null);
         }
     }
 
@@ -182,32 +189,32 @@ final class LunaReachProbe {
             } catch (LunaException rejected) {
                 return notSent(rejected.reason());
             }
-            String inputJson = json.write(input.payload());
-            if (!schemas.isValidRequest(request.purpose(), inputJson)) {
+            if (!schemas.isValidRequest(request.purpose(), json.write(input.payload()))) {
                 return notSent(LunaFailureReason.FORBIDDEN_INPUT);
             }
             Optional<LunaFailureReason> rejected = transport.rejectBeforeSend(limit);
             if (rejected.isPresent()) {
                 return notSent(rejected.get());
             }
-            String body = json.write(new RealtimeLunaClient.ResponsesRequest(properties.model(), request.instructions(), inputJson,
-                    schemas.pair(request.purpose()), request.purpose(), properties.options(request.purpose())).body());
+            LunaDecisionQuestion question = question(request);
+            String body = json.write(new RealtimeLunaClient.DecisionsRequest(properties.model(), request.instructions(), input.payload(),
+                    question).body());
             long started = clock.monotonicNanos();
             LunaTransport.RawResponse response;
             try {
                 response = transport.send(body, limit).get(limit.plus(OUTER_MARGIN).toMillis(), TimeUnit.MILLISECONDS);
             } catch (ExecutionException | TimeoutException failure) {
-                return new CallResult(LunaTransport.translate(failure).reason().name(), null, null,
+                return new CallResult(LunaTransport.translate(failure).reason().name(), null, null, null,
                         clock.elapsedSince(started).toMillis(), null);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 throw new IllegalStateException("Luna 응답 확인이 중단됐다", e);
             }
-            return classify(schemas, json, response, request.purpose(), clock.elapsedSince(started).toMillis());
+            return classify(json, response, question, clock.elapsedSince(started).toMillis());
         }
 
         private static CallResult notSent(LunaFailureReason reason) {
-            return new CallResult(reason.name(), null, null, 0, null);
+            return new CallResult(reason.name(), null, null, null, 0, null);
         }
 
         @Override
@@ -216,49 +223,23 @@ final class LunaReachProbe {
         }
     }
 
-    /**
-     * 응답 분류 — 운영 {@code RealtimeLunaClient.classify}와 같은 순서(BR4.4 → BR4.1 → BR4.3 → BR4.2)다. 사용량은 본문의 {@code usage}
-     * 숫자 필드이고, 본문이 JSON이 아니거나 {@code usage}가 없으면 모름(null)이다.
-     */
-    static CallResult classify(LunaSchemas schemas, JsonCodec json, LunaTransport.RawResponse response, LunaPurpose purpose,
-            long latencyMillis) {
+    /** 요청 입력의 선택지(판 순서)로 만든 {@code choice} 질문(선택지 뜻 없음, 합성 지시만). */
+    @SuppressWarnings("unchecked")
+    static LunaDecisionQuestion question(LunaRequest request) {
+        List<String> options = (List<String>) request.input().get("options");
+        return new LunaDecisionQuestion(QUESTION_NAME,
+                options.stream().map(option -> new LunaDecisionQuestion.Choice(option, null)).toList());
+    }
+
+    /** 응답 분류 — 운영 {@link RealtimeLunaClient#classifyDecision} 그대로. 사용량은 본문의 {@code usage} 숫자 필드다(없으면 모름). */
+    static CallResult classify(JsonCodec json, LunaTransport.RawResponse response, LunaDecisionQuestion question, long latencyMillis) {
         Map<String, Long> usage = usageOf(json, response.body());
-        int status = response.status();
-        LunaFailureReason failure = null;
-        String model = null;
-        String output = null;
-        if (status == 401 || status == 403) {
-            failure = LunaFailureReason.AUTH_FAILED;
-        } else if (status == 429) {
-            failure = LunaFailureReason.RATE_LIMITED;
-        } else if (status >= 500) {
-            failure = LunaFailureReason.SERVER_ERROR;
-        } else if (status < 200 || status >= 300) {
-            failure = LunaFailureReason.REQUEST_REJECTED;
-        } else {
-            RealtimeLunaClient.ResponsesReply reply = RealtimeLunaClient.ResponsesReply.parse(json, response.body());
-            if (reply == null) {
-                failure = LunaFailureReason.SERVER_ERROR;
-            } else {
-                model = reply.model();
-                if ("incomplete".equals(reply.status())) {
-                    failure = LunaFailureReason.LENGTH_EXCEEDED;
-                } else if (reply.refused()) {
-                    failure = LunaFailureReason.REFUSED;
-                } else if (!"completed".equals(reply.status())) {
-                    failure = LunaFailureReason.SERVER_ERROR;
-                } else if (reply.outputText().isBlank()) {
-                    failure = LunaFailureReason.EMPTY_OUTPUT;
-                } else if (reply.model() == null || reply.model().isBlank()) {
-                    failure = LunaFailureReason.MODEL_MISSING;
-                } else if (!schemas.isValidOutput(purpose, reply.outputText())) {
-                    failure = LunaFailureReason.SCHEMA_INVALID;
-                } else {
-                    output = reply.outputText();
-                }
-            }
+        RealtimeLunaClient.Outcome outcome = RealtimeLunaClient.classifyDecision(json, response, question);
+        if (outcome.failure() != null) {
+            return new CallResult(outcome.failure().name(), outcome.responseModel(), null, null, latencyMillis, usage);
         }
-        return new CallResult(failure == null ? "OK" : failure.name(), model, output, latencyMillis, usage);
+        return new CallResult("OK", outcome.responseModel(), outcome.answer().choice(), outcome.answer().probabilities(), latencyMillis,
+                usage);
     }
 
     /** 본문 {@code usage}의 숫자 필드(한 단계 안의 세부 항목은 {@code 바깥.안} 이름). 없으면 null(모름). */
@@ -324,11 +305,7 @@ final class LunaReachProbe {
         List<PropertySource<?>> sources = new YamlPropertySourceLoader().load(CONFIG_RESOURCE, new ClassPathResource(CONFIG_RESOURCE));
         String baseUrl = property(sources, "mujoong.luna.base-url");
         String maxBytes = property(sources, "mujoong.luna.max-response-bytes");
-        String tokens = property(sources, "mujoong.luna.purpose.judgment-live.max-output-tokens");
-        String effort = property(sources, "mujoong.luna.purpose.judgment-live.reasoning-effort");
-        return new LunaProperties(env.apply(MODEL_ENV), URI.create(baseUrl), Integer.parseInt(maxBytes),
-                new LunaProperties.Purposes(new LunaProperties.PurposeOptions(Integer.parseInt(tokens), effort)),
-                false);
+        return new LunaProperties(env.apply(MODEL_ENV), URI.create(baseUrl), Integer.parseInt(maxBytes), false);
     }
 
     private static String property(List<PropertySource<?>> sources, String key) throws IOException {
@@ -414,32 +391,30 @@ final class LunaReachProbe {
     Attempt attempt(int index, CallResult call, List<String> options) {
         String model = call.responseModel() == null ? "-" : safe(call.responseModel());
         if ("OK".equals(call.reason())) {
-            String[] ranks = ranks(call.outputJson(), options);
+            String[] ranks = ranks(call.choice(), call.probabilities(), options);
             return new Attempt(index, "OK", model, "통과", ranks[0], ranks[1], call.latencyMillis(), call.usage());
         }
-        String schema = "SCHEMA_INVALID".equals(call.reason()) ? "불통과" : "-";
-        return new Attempt(index, safe(call.reason()), model, schema, "-", "-", call.latencyMillis(), call.usage());
+        String validation = "SCHEMA_INVALID".equals(call.reason()) ? "불통과" : "-";
+        return new Attempt(index, safe(call.reason()), model, validation, "-", "-", call.latencyMillis(), call.usage());
     }
 
-    /** 출력 JSON의 1 · 2순위 코드와 확률(소수 둘째 자리). 선택지 밖 코드는 표시만 하고 원문은 쓰지 않는다. */
-    @SuppressWarnings("unchecked")
-    String[] ranks(String outputJson, List<String> options) {
-        Map<String, Object> output = json.read(outputJson, Map.class);
-        return new String[] {rank(output.get("first"), options), rank(output.get("second"), options)};
+    /**
+     * 확률 내림차순 1 · 2순위 코드와 확률(소수 둘째 자리). 순서는 운영 판정과 같다(같으면 공급자가 고른 값, 그다음 판 순서). 선택지 밖 코드는
+     * 표시만 하고 원문은 쓰지 않는다.
+     */
+    static String[] ranks(String choice, List<LunaDecision.Probability> probabilities, List<String> options) {
+        List<LunaDecision.Probability> ranked = new ArrayList<>(probabilities);
+        ranked.sort(Comparator.comparingDouble(LunaDecision.Probability::probability).reversed()
+                .thenComparing(item -> !item.value().equals(choice)));
+        return new String[] {ranked.isEmpty() ? "-" : rank(ranked.get(0), options), ranked.size() < 2 ? "-" : rank(ranked.get(1), options)};
     }
 
-    private static String rank(Object value, List<String> options) {
-        if (!(value instanceof Map<?, ?> ranked)) {
-            return "-";
-        }
-        Object option = ranked.get("option");
-        Object probability = ranked.get("probability");
-        String code = option instanceof String text && OPTION_CODE.matcher(text).matches() && text.length() <= 40 ? text : "(형식 밖)";
-        if (!options.contains(code)) {
+    private static String rank(LunaDecision.Probability item, List<String> options) {
+        String code = safe(item.value());
+        if (!options.contains(item.value())) {
             code = code + "(선택지 밖)";
         }
-        String p = probability instanceof Number number ? String.format(Locale.ROOT, "%.2f", number.doubleValue()) : "-";
-        return code + " " + p;
+        return code + " " + String.format(Locale.ROOT, "%.2f", item.probability());
     }
 
     static String safe(String token) {
@@ -499,7 +474,7 @@ final class LunaReachProbe {
         boolean skipped = result.outcome() == Outcome.SKIPPED_NO_KEY;
         StringBuilder out = new StringBuilder();
         out.append("outcome=").append(result.outcome()).append(" evidence=").append(skipped ? "NONE" : "REAL_API_SYNTHETIC").append("\n\n");
-        out.append("# Luna 응답 여부 · 지연 · 사용량 확인 보고서 (U11 Step 2 · 3 조사, realtime JUDGMENT_LIVE)\n\n");
+        out.append("# Luna 응답 여부 · 지연 · 사용량 확인 보고서 (realtime JUDGMENT_LIVE, Decisions API)\n\n");
         out.append("- ").append(PRICE_NOTE).append('\n');
         out.append("- 실행 시각(UTC): ").append(nowUtc).append('\n');
         if (skipped) {
@@ -511,10 +486,10 @@ final class LunaReachProbe {
                 .append(", 운영 live-budget ").append(LIVE_BUDGET.toSeconds()).append("초와 다름 — 운영 설정은 바꾸지 않았다)\n");
         out.append("- REACHED는 1회 이상 OK다. 사용량을 받지 못한 회차는 '").append(USAGE_UNKNOWN)
                 .append("'이고 과금 여부를 단정하지 않는다. 요청 · 응답 원문 · 키 · 주소는 담지 않는다(R-F3 · R-F14).\n\n");
-        out.append("| 회차 | 결과 사유 | 응답 모델 | 스키마 통과 | 1순위 | 2순위 | 지연 ms | 사용량(토큰) |\n|---|---|---|---|---|---|---|---|\n");
+        out.append("| 회차 | 결과 사유 | 응답 모델 | 응답 검증 | 1순위 | 2순위 | 지연 ms | 사용량(토큰) |\n|---|---|---|---|---|---|---|---|\n");
         for (Attempt attempt : result.attempts()) {
             out.append("| ").append(attempt.index()).append(" | ").append(attempt.reason()).append(" | ").append(attempt.responseModel())
-                    .append(" | ").append(attempt.schema()).append(" | ").append(attempt.first()).append(" | ").append(attempt.second())
+                    .append(" | ").append(attempt.validation()).append(" | ").append(attempt.first()).append(" | ").append(attempt.second())
                     .append(" | ").append(attempt.latencyMillis()).append(" | ").append(usageText(attempt.usage())).append(" |\n");
         }
         Summary summary = result.summary();
