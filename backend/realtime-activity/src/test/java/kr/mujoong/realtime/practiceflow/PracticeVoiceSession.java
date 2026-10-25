@@ -410,7 +410,7 @@ final class PracticeVoiceSession {
         }
         answersPerPhase.merge(phaseKey, 1, Integer::sum);
         speak(executor, device, act.key(), act.text(), act.rule());
-        if (!"HELP_ACCEPT".equals(act.key()) && !act.key().startsWith("VARIANT_") && !"REFLECTION_DECLINE".equals(act.key())) {
+        if (!"HELP_ACCEPT".equals(act.key()) && !act.key().startsWith("VARIANT_") && !"OPENING_REPLY".equals(act.key())) {
             lastAnswer = act.text();
         }
     }

@@ -583,6 +583,8 @@ public final class SessionExecutor {
     private boolean streamedPracticeEnded;
     /** 단위별 경로의 생성형 연습 발화({@link #streamedPractice})에서 단위 하나라도 기기 송신에 넘겼는가(FT-1023-e: 재생이 시작된 발화). */
     private boolean streamedPracticeSent;
+    /** 조각 단위로 내보내는 승인 낭독(B1)에서 지금까지 원문 앞부분으로 확인하고 보낸 전사. 응답이 끝나면 원문 전체와 대조한다. */
+    private final StringBuilder streamedApprovedText = new StringBuilder();
     private final java.util.ArrayDeque<PracticeSessionExtension.ExtensionEvent> pausedPracticeEvents = new java.util.ArrayDeque<>();
     private Instant practicePauseStartedAt;
     private record PracticePause(Instant from, Instant to) { }
@@ -1127,10 +1129,6 @@ public final class SessionExecutor {
             stopOutputForIntent(ctx.services().clock().now());
             ending.beginClosing(Trigger.PRACTICE_COMPLETED, null);
         }
-        if (signal == PracticeSessionExtension.Signal.OUTPUT_FAILED) {
-            stopOutputForIntent(ctx.services().clock().now());
-            ending.beginClosing(Trigger.PRACTICE_OUTPUT_FAILED, null);
-        }
         // NEXT_GOAL은 계속한다(다음 목표 진행은 확장점이 출력 능력으로 한다)
     }
 
@@ -1273,6 +1271,26 @@ public final class SessionExecutor {
         timedOutput.reset();
         finishStreamedPractice();
         return true;
+    }
+
+    /** B1: 조각 단위 승인 낭독에서 원문과 다른 단위가 와서 버리고 나간 부분까지 재생됨으로 닫았다(INFO, 원문 없음). */
+    static final String REASON_APPROVED_UNIT_MISMATCH = "PracticeApprovedUnitMismatchAfterPlayback";
+    /** B1: 조각 단위 승인 낭독이 원문 끝까지 오지 않은 채 응답이 끝나 나간 부분까지 재생됨으로 닫았다(INFO, 원문 없음). */
+    static final String REASON_APPROVED_TAIL_MISSING = "PracticeApprovedTailMissingAfterPlayback";
+
+    /** 들려주지 않은 승인 낭독이 원문과 달랐다: 출력을 버리고 확장에 원문 불일치를 알린다(확장이 같은 원문 재요청 · 복구 낭독을 정한다). */
+    private void rejectApprovedReading(kr.mujoong.realtime.voice.PracticeSpeech rejectedSpeech) {
+        pendingPracticeSpeech = null;
+        if (rejectedSpeech.equals(streamedPractice)) streamedPractice = null;
+        practiceHold = true;
+        bumpOutput(OutputGeneration.BumpReason.PRACTICE_DISCARD);
+        if (practice.handlesAudioRecovery()) {
+            ctx.mailbox().putSafety(new SessionMailbox.PracticeEvent(new PracticeSessionExtension.ExtensionEvent(
+                    PracticeSessionExtension.ExtensionEvent.Kind.ASYNC_RESULT, "approved-text-mismatch",
+                    rejectedSpeech.correlationId(), rejectedSpeech)));
+        } else {
+            practicePlayback(rejectedSpeech, kr.mujoong.realtime.practicelegacy.PracticePorts.Playback.FAILED);
+        }
     }
 
     private void stopPracticeProgress() {
@@ -1993,7 +2011,9 @@ public final class SessionExecutor {
      */
     private void closeGeneratedSlot(UUID correlationId, kr.mujoong.realtime.practicelegacy.PracticePorts.Playback fact) {
         var slot = pendingPracticeSpeech;
-        if (slot == null || !slot.generated() || (correlationId != null && !slot.correlationId().equals(correlationId))) {
+        // B1: 단위별 경로로 나가던 승인 낭독도 같은 길로 닫는다(경로가 깨지면 재생 실패)
+        if (slot == null || (!slot.generated() && !slot.equals(streamedPractice))
+                || (correlationId != null && !slot.correlationId().equals(correlationId))) {
             return;
         }
         pendingPracticeSpeech = null;
@@ -2847,9 +2867,9 @@ public final class SessionExecutor {
         // 걸려 아이 말이 버려진다. 아이 소리는 늘 실시간으로 보낸다(InputRelay.setHolding은 쓰지 않는다)
         long gen = ctx.outputGen().generation();
         // Timestamped provider deltas form independent verification units. Untimed providers retain the quiet fallback.
+        // B1: 승인 낭독도 다 모으지 않고 단위별 경로로 받는다. 생성형은 단위마다 제브, 승인 낭독은 단위마다 원문 앞부분 대조로 확인해 바로 낸다
         boolean streaming = guardrail.enabled() && ctx.status() == SessionStatus.ACTIVE
-                && (practice == null || !practice.controlsOutput()
-                    || (pendingPracticeSpeech != null && pendingPracticeSpeech.generated()));
+                && (practice == null || !practice.controlsOutput() || pendingPracticeSpeech != null);
         if (!timedOutput.isOpen() && !ctx.segment().isOpen()) {
             // 응답이 시작될 때 어느 출력 경로를 타는지와 그 이유를 사유 코드로 남긴다(전사 원문 없음). 응답이 느릴 때 단위별 방출이 안 켜졌는지 가린다
             String path = !guardrail.enabled() ? "GuardrailOff" : ctx.status() != SessionStatus.ACTIVE ? "NotActive"
@@ -2869,10 +2889,11 @@ public final class SessionExecutor {
                 progressiveResponse = practice == null || !practice.controlsOutput();
                 instructionNotHeard = null;
                 if (!guardrail.isChecking()) ctx.services().latency().providerFirstOut(ctx.plan().sessionId(), at);
-                if (pendingPracticeSpeech != null && pendingPracticeSpeech.generated()) {
+                if (pendingPracticeSpeech != null) {
                     streamedPractice = pendingPracticeSpeech;
                     streamedPracticeEnded = false;
                     streamedPracticeSent = false;
+                    streamedApprovedText.setLength(0);
                 }
             }
             if (transcript != null) timedOutput.transcript(transcript, startMs, endMs, at, nanos);
@@ -2981,6 +3002,17 @@ public final class SessionExecutor {
                     } else {
                         timedOutput.reset();
                         resetProgressive();
+                    }
+                    var approved = streamedPractice;
+                    if (approved != null && !approved.generated() && approved.equals(pendingPracticeSpeech)
+                            && !approved.matches(streamedApprovedText.toString())) {
+                        // B1: 응답이 원문 끝까지 오지 않았다. 나간 부분이 있으면 거기까지 재생됨으로, 없으면 원문 불일치로 재요청 길로 보낸다
+                        if (streamedPracticeSent) {
+                            ctx.services().events().appError(EventLog.Component.OUTPUT_GATE, REASON_APPROVED_TAIL_MISSING,
+                                    EventCode.Level.INFO);
+                        } else {
+                            rejectApprovedReading(approved);
+                        }
                     }
                     streamedPracticeEnded = true;
                     finishStreamedPractice();
@@ -3642,6 +3674,23 @@ public final class SessionExecutor {
                 }
                 return;
             }
+            if (practiceControlled && pendingPracticeSpeech != null && !pendingPracticeSpeech.generated()
+                    && pendingPracticeSpeech.equals(streamedPractice)) {
+                // B1: 승인 낭독 단위. 지금까지 보낸 전사 + 이 단위가 원문의 앞부분이면 제브 없이(원문 일치) 바로 낸다
+                String unit = java.util.Objects.toString(sealed.transcript(), "");
+                if (pendingPracticeSpeech.matchesPrefix(streamedApprovedText + unit)) {
+                    streamedApprovedText.append(unit);
+                    if (guardrail.enabled()) guardrail.onVerbatimSkipped(GuardrailCoordinator.SOURCE_PRACTICE_SPEECH, unit);
+                    recheckAndSend(sealed, null, true);
+                    return;
+                }
+                var rejectedSpeech = pendingPracticeSpeech;
+                guardrail.onDiscardedBeforeCheck();
+                recordDiscard(sealed, null, GateDecision.DiscardReason.GATE_PATTERN, true, DiscardDetail.APPROVED_TEXT_MISMATCH);
+                // 이미 앞부분이 나갔으면 원문과 다른 뒤는 버리고 나간 부분까지 재생됨으로 닫는다. 아무것도 안 나갔으면 지금처럼 재요청 길로 간다
+                if (!closeSentStreamedPractice(REASON_APPROVED_UNIT_MISMATCH)) rejectApprovedReading(rejectedSpeech);
+                return;
+            }
             if (practiceControlled
                     && (pendingPracticeSpeech == null || !pendingPracticeSpeech.matches(sealed.transcript()))) {
                 if (pendingPracticeSpeech != null && !pendingPracticeSpeech.generated()) {
@@ -3649,16 +3698,7 @@ public final class SessionExecutor {
                     guardrail.onDiscardedBeforeCheck();
                     recordDiscard(sealed, null, GateDecision.DiscardReason.GATE_PATTERN, true,
                             DiscardDetail.APPROVED_TEXT_MISMATCH);
-                    pendingPracticeSpeech = null;
-                    practiceHold = true;
-                    bumpOutput(OutputGeneration.BumpReason.PRACTICE_DISCARD);
-                    if (practice.handlesAudioRecovery()) {
-                        ctx.mailbox().putSafety(new SessionMailbox.PracticeEvent(new PracticeSessionExtension.ExtensionEvent(
-                                PracticeSessionExtension.ExtensionEvent.Kind.ASYNC_RESULT, "approved-text-mismatch",
-                                rejectedSpeech.correlationId(), rejectedSpeech)));
-                    } else {
-                        practicePlayback(rejectedSpeech, kr.mujoong.realtime.practicelegacy.PracticePorts.Playback.FAILED);
-                    }
+                    rejectApprovedReading(rejectedSpeech);
                     return;
                 }
                 discard(sealed, GateDecision.DiscardReason.GATE_PATTERN, false, null, true,

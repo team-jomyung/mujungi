@@ -261,9 +261,6 @@ final class PracticeVoiceReport {
             label(labels, lines.waitAndReask(scene), prefix + DirectAskLines.WAIT_LEAD + "+" + (present(scene.reaskPrompt()) ? "reaskPrompt" : "대체:되묻기"));
             label(labels, lines.help(scene).text(), prefix + (present(scene.helpSpeech()) ? "helpSpeech" : "대체:도움"));
             label(labels, lines.friendReaction(scene), prefix + (present(scene.friendReaction()) ? "friendReaction" : "대체:친구 반응"));
-            if (present(scene.reflectionPrompt())) {
-                label(labels, scene.reflectionPrompt(), prefix + "reflectionPrompt");
-            }
         }
         for (String code : List.of(DirectAskLines.HELP_OFFER, DirectAskLines.VARIANT_OFFER, DirectAskLines.RETRY_PROMPT,
                 DirectAskLines.INPUT_CONFIRM, DirectAskLines.SCENE_CLOSE)) {
@@ -292,9 +289,6 @@ final class PracticeVoiceReport {
             heard.put("reexplanation+askPrompt", lines.reexplanation(scene));
             heard.put("helpSpeech", lines.help(scene).text());
             heard.put("friendReaction", lines.friendReaction(scene));
-            if (present(scene.reflectionPrompt())) {
-                heard.put("reflectionPrompt", scene.reflectionPrompt());
-            }
             List<String> missing = new ArrayList<>();
             if (!present(scene.spokenIntroduction())) {
                 missing.add("spokenIntroduction");

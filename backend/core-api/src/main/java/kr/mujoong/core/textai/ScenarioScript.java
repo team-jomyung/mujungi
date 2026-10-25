@@ -9,20 +9,21 @@ public record ScenarioScript(List<Scene> scenes) {
     /**
      * 장면 한 개. 뒤의 다섯 칸({@code opportunityRelay} · {@code askPrompt} · {@code reaskPrompt} · {@code helpSpeech} ·
      * {@code friendReaction})은 연습 대화 C안(무중이 직접 묻기, 대본 판 {@code scenario-script.v2})의 들리는 칸이다. 옛 대본(v1)에는 없어 null이고,
-     * null인 칸은 JSON에 쓰지 않는다(docs/practice-direct-ask.md 4.2).
+     * null인 칸은 JSON에 쓰지 않는다(docs/practice-direct-ask.md 4.2). {@code openingLine}은 장면 안내 뒤 상대가 먼저 거는 여는 말(FT-1023-g)이고,
+     * 옛 대본의 돌아보기 질문 · 요약 칸은 읽지 않는다.
      */
     public record Scene(String sceneKey, String sceneKind, String sceneDescription,
             String opportunitySentence, String reexplanation, List<String> focusPoints,
             List<String> expressionExamples, String relation, String place, String topic,
-            Preservation preservation, String partnerRole, String spokenIntroduction, String reflectionPrompt,
+            Preservation preservation, String partnerRole, String spokenIntroduction, String openingLine,
             String opportunityRelay, String askPrompt, String reaskPrompt, String helpSpeech, String friendReaction) {
         /** C안 칸이 없는 장면(옛 대본 v1 모양). */
         public Scene(String sceneKey, String sceneKind, String sceneDescription, String opportunitySentence,
                 String reexplanation, List<String> focusPoints, List<String> expressionExamples, String relation,
                 String place, String topic, Preservation preservation, String partnerRole, String spokenIntroduction,
-                String reflectionPrompt) {
+                String openingLine) {
             this(sceneKey, sceneKind, sceneDescription, opportunitySentence, reexplanation, focusPoints, expressionExamples,
-                    relation, place, topic, preservation, partnerRole, spokenIntroduction, reflectionPrompt,
+                    relation, place, topic, preservation, partnerRole, spokenIntroduction, openingLine,
                     null, null, null, null, null);
         }
         public Scene(String sceneKey, String sceneKind, String sceneDescription, String opportunitySentence,
@@ -43,24 +44,30 @@ public record ScenarioScript(List<Scene> scenes) {
         }
         public Scene withPartnerRole(String role) {
             return new Scene(sceneKey, sceneKind, sceneDescription, opportunitySentence, reexplanation, focusPoints,
-                    expressionExamples, relation, place, topic, preservation, role, spokenIntroduction, reflectionPrompt,
+                    expressionExamples, relation, place, topic, preservation, role, spokenIntroduction, openingLine,
                     opportunityRelay, askPrompt, reaskPrompt, helpSpeech, friendReaction);
         }
         public Scene withDescription(String description) {
             return new Scene(sceneKey, sceneKind, description, opportunitySentence, reexplanation, focusPoints,
-                    expressionExamples, relation, place, topic, preservation, partnerRole, spokenIntroduction, reflectionPrompt,
+                    expressionExamples, relation, place, topic, preservation, partnerRole, spokenIntroduction, openingLine,
                     opportunityRelay, askPrompt, reaskPrompt, helpSpeech, friendReaction);
         }
         /** C안 들리는 칸 다섯 개만 바꾼 사본. 나머지 칸은 그대로다. */
         public Scene withDirectAsk(String relay, String ask, String reask, String help, String reaction) {
             return new Scene(sceneKey, sceneKind, sceneDescription, opportunitySentence, reexplanation, focusPoints,
-                    expressionExamples, relation, place, topic, preservation, partnerRole, spokenIntroduction, reflectionPrompt,
+                    expressionExamples, relation, place, topic, preservation, partnerRole, spokenIntroduction, openingLine,
                     relay, ask, reask, help, reaction);
         }
         /** 상황 안내만 바꾼 사본. 나머지 칸은 그대로다. */
         public Scene withSpokenIntroduction(String introduction) {
             return new Scene(sceneKey, sceneKind, sceneDescription, opportunitySentence, reexplanation, focusPoints,
-                    expressionExamples, relation, place, topic, preservation, partnerRole, introduction, reflectionPrompt,
+                    expressionExamples, relation, place, topic, preservation, partnerRole, introduction, openingLine,
+                    opportunityRelay, askPrompt, reaskPrompt, helpSpeech, friendReaction);
+        }
+        /** 여는 말만 바꾼 사본(빼기는 null). C안 칸을 포함한 나머지 칸은 그대로다(FT-1023-g). */
+        public Scene withOpeningLine(String opening) {
+            return new Scene(sceneKey, sceneKind, sceneDescription, opportunitySentence, reexplanation, focusPoints,
+                    expressionExamples, relation, place, topic, preservation, partnerRole, spokenIntroduction, opening,
                     opportunityRelay, askPrompt, reaskPrompt, helpSpeech, friendReaction);
         }
         @Override public String toString() { return "Scene[redacted]"; }

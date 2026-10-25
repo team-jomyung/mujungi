@@ -40,8 +40,8 @@ import kr.mujoong.realtime.voice.PracticeSpeech;
  * <p>경로는 둘이다({@link PracticeFlowSettings#flexibleDialogue()}). 운영 기본은 C안 '무중이 직접 묻기'(docs/practice-direct-ask.md)다: 장면 속
  * 친구 · 코치 역할이 없고, 무중이 상황과 상대의 말을 자기 말로 전한 뒤 "너라면 뭐라고 말할래?"라고 묻는다. 장면 안 무중의 말(상황 안내 · 전하기 +
  * 묻기 · 되묻기 · 다시 설명 · 도움 · 확인 · 다시 묻기 · 친구 반응 · 마무리 · 도움 제안 · 변형 제안)은 모두 대본 칸이나 고정 문장의 승인 낭독이다
- * ({@link DirectAskLines}). 장면 밖 말(목표 안내 · 돌아보기 · 받아 주기 · 목표 회고 · 낭독 실패 복구)은 두 경로가 같이 생성형으로 내고 제브를
- * 거친다. 유연 대화 경로는 설정 하나로 되돌릴 수 있게 그대로 둔다.
+ * ({@link DirectAskLines}). 장면 밖 말(목표 안내 · 목표 회고 · 낭독 실패 복구)은 두 경로가 같이 생성형으로 내고 제브를 거친다. 유연 대화 경로는
+ * 설정 하나로 되돌릴 수 있게 그대로 둔다.
  *
  * <p>규칙 요약.
  *
@@ -50,9 +50,14 @@ import kr.mujoong.realtime.voice.PracticeSpeech;
  *       {@code goal-limit} · {@code slot-guard-<correlationId>}(§3.2). 시간 값은 {@link PracticeFlowSettings}가 설정 키에서 읽은 것뿐이고 한도는
  *       만료 표지로 본다(D3). 아이 말이 시작되면(실행부 알림) 무응답 시계를 멈추고 확정 전사를 기다린다(4회차 R1).
  *   <li>판정은 {@code requestJudgment}로 요청한다(J2 · J3 · J5에만 판정 기준을 싣고 J4에는 싣지 않는다, D2). 거절(거짓) · 보류 · 장애는 판독
- *       불가와 같이 교정 없이 같은 질문을 한 번 다시 안내하고 두 번째면 정해진 방식으로 닫는다(BR3.7). 연습이 멈추지 않는다.
+ *       불가와 같이 교정 없이 같은 질문을 한 번 다시 안내하고, 두 번째면 닫지 않고 도움 단계로 넘긴다(BR3.7 · FT-1023-g). 연습이 멈추지 않는다.
  *   <li>GPT-Live가 만드는 모든 역할 발화는 {@code speakGenerated} 한 길로만 낸다(D6). 낼 수 없으면(거짓) 그 슬롯을 실패로 닫고 이어 간다.
  *       역할 전환 · 복귀 알림은 승인 문장이 있으면 {@code announceRoleSwitch}로, 없거나 못 내면 생성형으로 낸다(BR5.4).
+ *   <li>발화 오류로 연습을 끝내지 않는다(FT-1023-g): 끝내 못 들려준 발화(재요청 뒤 실패 · 막힘 · 시한 초과)는 건너뛰고 다음 단계로 간다. 연습을 끝내는
+ *       것은 종료 의사 · 시간 상한 · 모든 목표 완료와 실행부의 끊김 · 공백 처리뿐이다.
+ *   <li>장면 시작(FT-1023-g): 목표 안내 → 장면 도입 → 상대의 여는 말(승인 문장, 있으면)과 대답 한 차례 → 기회 문장. 여는 말에 대한 아이
+ *       말은 판정하지 않는다. 이전 대화 돌아보기 · 요약은 하지 않는다. 여는 말은 상대 역할의 말이라 유연 대화 경로만 쓰고, C안은 상황 안내 뒤 곧바로
+ *       전하기 + 묻기로 간다(docs/practice-direct-ask.md 13.6).
  *   <li>슬롯 종료 사건은 correlationId마다 첫 사건만 처리하고(중복 무시), 확장이 스스로 닫은 슬롯은 곧바로 처리 완료로 둔다(§3.5).
  *   <li>레거시 평가 · 단서 포트에 기대지 않는다: 이 클래스는 {@code practice} 패키지를 참조하지 않는다(BR2.5 · BR10.2).
  *   <li>아이 전사 · 대본 문장 · 판정 입력은 로그 · 기록 · 예외 메시지에 쓰지 않는다. 오류는 고정 사유 코드로만 알린다(R-F14).
@@ -138,8 +143,8 @@ public final class PracticeConversation implements PracticeSessionExtension {
     private LiveTiming sceneAchievement;
     private int clarificationAttempts;
     private int uncertainAttempts;
-    private boolean reflectionAwaiting;
-    private boolean reflecting;
+    private boolean openingAwaiting;
+    private boolean openingAnswered;
     private boolean goalBriefPlayed;
     private boolean goalRecapped;
     private boolean reviewPerformed;
@@ -187,7 +192,7 @@ public final class PracticeConversation implements PracticeSessionExtension {
     }
     @Override public boolean canYieldUnplayedSpeech() {
         // No goal achievement, consent, coaching or closing transition may be inferred from an unheard output.
-        return !stopping && !reflecting && state.phase() == Phase.OPPORTUNITY
+        return !stopping && state.phase() == Phase.OPPORTUNITY
                 && (state.sub() == Sub.NONE || state.sub() == Sub.DIALOGUE_REPLY
                 || state.sub() == Sub.CLARIFICATION_REPLY || state.sub() == Sub.INPUT_CONFIRMATION);
     }
@@ -224,8 +229,8 @@ public final class PracticeConversation implements PracticeSessionExtension {
         // 시작된 말의 확정 전사가 왔다: 아래에서 판정 · 보관 · 무시 어느 쪽으로 가든 '말하는 중'은 끝났다(4회차 R1)
         endChildSpeech();
         Phase phase = state.phase();
-        if (reflecting) {
-            reflectionUtterance(utterance);
+        if (state.sub() == Sub.OPENING) {
+            openingReply();
             return finish();
         }
         if (phase.awaitsInput() && state.sub() == Sub.NONE) {
@@ -246,17 +251,24 @@ public final class PracticeConversation implements PracticeSessionExtension {
         return finish();
     }
 
-    private void reflectionUtterance(Utterance utterance) {
-        if (state.judgmentOpen()) return;
-        if (!reflectionAwaiting || openSlot != null) earlyUtterance = utterance;
-        else if (utterance.uncertain()) finishReflection();
-        else if (state.sub() == Sub.REFLECTION_OFFER) judge(utterance);
-        else {
-            reflectionAwaiting = false;
-            output.cancel(TIMER_NO_RESPONSE);
-            state.phase(Phase.SCENE_INTRO, Sub.REFLECTION_ACK);
-            speakGenerated(FlowRole.PEER, PracticeInstructions.reflectionAcknowledgment());
+    /**
+     * 여는 말에 대한 아이의 대답(내용과 상관없이 한 차례). 판정 · 무응답 재안내 횟수 · 장면 결과에 넣지 않는다(전사는 실행부가 남긴다). 여는 말이 아직
+     * 재생 중이면 끝나는 대로 기회 문장으로 간다.
+     */
+    private void openingReply() {
+        if (openingAwaiting) {
+            openingDone();
+        } else {
+            openingAnswered = true;
         }
+    }
+
+    /** 여는 대화를 마치고 기회 문장으로 간다(판정 없음). */
+    private void openingDone() {
+        openingAwaiting = false;
+        openingAnswered = false;
+        output.cancel(TIMER_NO_RESPONSE);
+        applyStep(Step.enter(Phase.OPPORTUNITY, Sub.NONE));
     }
 
     /**
@@ -285,12 +297,13 @@ public final class PracticeConversation implements PracticeSessionExtension {
 
     /**
      * 4회차 R1: 말이 시작됐는데 확정 전사가 끝내 오지 않았다(빈 묶음 · 종료 의도로 실행부가 맡은 말 · 안내 중의 말). 아직 아이 말을 기다리는 중이면
-     * 무응답 대기를 처음부터 다시 건다 — 그 말을 대답으로 치지 않고, 무응답 재안내도 그만큼 늦춘다.
+     * 무응답 대기를 처음부터 다시 건다 — 그 말을 대답으로 치지 않고, 무응답 재안내도 그만큼 늦춘다. 여는 말 대답을 기다리는 중(유연 대화)이면 여는 말의
+     * 무응답 대기를 다시 건다(만기면 판정 없이 기회 문장으로 간다).
      */
     private void onChildSpeechGuard() {
         childSpeaking = false;
-        if (reflecting) {
-            if (reflectionAwaiting && openSlot == null && !state.judgmentOpen()) {
+        if (state.sub() == Sub.OPENING) {
+            if (openingAwaiting) {
                 output.schedule(TIMER_NO_RESPONSE, settings.noResponseWait());
             }
             return;
@@ -449,33 +462,16 @@ public final class PracticeConversation implements PracticeSessionExtension {
         sceneAchievement = null;
         clarificationAttempts = 0;
         uncertainAttempts = 0;
-        // 목표 안내 · 돌아보기 · 목표 회고는 장면 밖 말이라 두 경로가 같이 낸다(생성형, 제브 필수). C안은 문구만 바꾼다(docs/practice-direct-ask.md 7.3)
+        openingAwaiting = false;
+        openingAnswered = false;
+        // 목표 안내 · 목표 회고는 장면 밖 말이라 두 경로가 같이 낸다(생성형, 제브 필수). C안은 문구만 바꾼다(docs/practice-direct-ask.md 7.3).
+        // 이전 대화 돌아보기 · 요약은 두 경로 모두 하지 않고 목표 안내 뒤 바로 장면 도입으로 간다(FT-1023-g)
         if (kind == SceneKind.BASE && !goalBriefPlayed) {
             state.phase(Phase.SCENE_INTRO, Sub.GOAL_BRIEF);
             speakGenerated(FlowRole.PEER, PracticeInstructions.goalBrief(pack.goals().get(state.goalIndex()).goalName(),
                     state.goalIndex() + 1, pack.goals().size(), settings.directAsk()));
             return;
         }
-        beginReflectionOrIntroduction();
-    }
-
-    private void beginReflectionOrIntroduction() {
-        Scene scene = currentScene;
-        if (state.sceneKind() == SceneKind.BASE && scene.reflectionPrompt() != null) {
-            reflecting = true;
-            reflectionAwaiting = false;
-            state.phase(Phase.SCENE_INTRO, Sub.REFLECTION_OFFER);
-            speakGenerated(FlowRole.PEER, PracticeInstructions.reflectionOffer());
-            return;
-        }
-        beginIntroduction();
-    }
-
-    private void finishReflection() {
-        reflecting = false;
-        reflectionAwaiting = false;
-        earlyUtterance = null;
-        output.cancel(TIMER_NO_RESPONSE);
         beginIntroduction();
     }
 
@@ -503,8 +499,6 @@ public final class PracticeConversation implements PracticeSessionExtension {
         startGoal(state.goalIndex() + 1);
     }
 
-    private boolean outputFailed;
-
     private void closing(boolean byRequest) {
         if (!byRequest && beginGoalRecap(false)) return;
         output.cancel(TIMER_GOAL_LIMIT);
@@ -517,12 +511,12 @@ public final class PracticeConversation implements PracticeSessionExtension {
             // 종료 · 휴식 판정은 실행부(J6) 소유다. 확장은 말을 멈추고 출력을 막은 채 실행부의 결정을 기다린다(신호를 내지 않는다)
             output.holdOutput(true);
         } else {
-            pendingSignal = outputFailed ? Signal.OUTPUT_FAILED : Signal.LAST_GOAL;
+            pendingSignal = Signal.LAST_GOAL;
         }
     }
 
     private boolean beginGoalRecap(boolean advances) {
-        if (goalRecapped || !sceneRowCreated || outputFailed || stopping) return false;
+        if (goalRecapped || !sceneRowCreated || stopping) return false;
         goalRecapped = true;
         recapAdvances = advances;
         output.cancel(TIMER_GOAL_LIMIT);
@@ -579,7 +573,7 @@ public final class PracticeConversation implements PracticeSessionExtension {
     // ---- 아이 말 · 판정 ----
 
     private void judge(Utterance utterance) {
-        if (settings.flexibleDialogue() && !reflecting && state.phase() == Phase.OPPORTUNITY && utterance.uncertain()) {
+        if (settings.flexibleDialogue() && state.phase() == Phase.OPPORTUNITY && utterance.uncertain()) {
             confirmUncertainInput(false);
             return;
         }
@@ -601,7 +595,6 @@ public final class PracticeConversation implements PracticeSessionExtension {
 
     /** J2 · J3 · J5에만 판정 기준을 싣는다(D2). coreFunction은 목표의 판정 기준 문자열에서 만든다(상한 안으로 줄인다). */
     private Map<String, Object> criteriaFor(JudgmentPoint point) {
-        if (reflecting) return null;
         if (settings.flexibleDialogue() && goalAchieved && state.phase() == Phase.OPPORTUNITY) {
             return Map.of("coreFunction", "ROLE_DIALOGUE_CLOSURE", "judgmentCriteria",
                     "친구 역할 대화에서 제안에 동의하거나 대안을 합의하는 등 현재 상황이 정리됐는지 본다. "
@@ -630,14 +623,6 @@ public final class PracticeConversation implements PracticeSessionExtension {
         JudgmentPoint point = pointOf(value.get("point"));
         Object first = value.get("firstOption");
         String option = first == null ? null : first.toString();
-        if (reflecting) {
-            if ("ACCEPT".equals(option)) {
-                reflectionAwaiting = false;
-                state.phase(Phase.SCENE_INTRO, Sub.REFLECTION_PROMPT);
-                speakApproved(currentScene.reflectionPrompt());
-            } else finishReflection();
-            return;
-        }
         if (settings.flexibleDialogue() && flexibleJudgment(point, option, asksProcedure)) return;
         // Preserve the model's recorded result; the flow must not finish on a recognized question about how to practise.
         if (asksProcedure && (point == JudgmentPoint.J2 || point == JudgmentPoint.J3 || point == JudgmentPoint.J5)
@@ -655,13 +640,11 @@ public final class PracticeConversation implements PracticeSessionExtension {
     }
 
     private JudgmentPoint expectedJudgmentPoint() {
-        if (reflecting) return JudgmentPoint.J4;
         return settings.flexibleDialogue() && goalAchieved && state.phase() == Phase.OPPORTUNITY
                 ? JudgmentPoint.J3 : FlowTransitions.expectedPoint(state.phase());
     }
 
     private void unavailableJudgment(JudgmentPoint point) {
-        if (reflecting) { finishReflection(); return; }
         if (settings.flexibleDialogue() && state.phase() == Phase.OPPORTUNITY) {
             confirmUncertainInput(true);
         } else {
@@ -712,13 +695,12 @@ public final class PracticeConversation implements PracticeSessionExtension {
         applyStep(Step.enter(Phase.OPPORTUNITY, Sub.DIALOGUE_REPLY));
     }
 
+    /** 확인 질문은 한 번, 두 번째면 장면을 닫지 않고 도움 제안으로 넘긴다(FT-1023-g). 판독 불가 사실은 그대로 남긴다. */
     private void confirmUncertainInput(boolean abstained) {
         output.cancel(TIMER_NO_RESPONSE);
         if (++uncertainAttempts > 1) {
-            applyStep(Step.enter(Phase.SCENE_WRAP, Sub.VARIANT_EVAL)
-                    .cause(abstained ? FlowTransitions.EndCause.ABSTAINED : FlowTransitions.EndCause.TRANSCRIPT_FAILED)
-                    .timing(abstained ? LiveTiming.ABSTAINED : LiveTiming.NONE)
-                    .fact(abstained ? null : FactKind.TRANSCRIPT_FAILED));
+            uncertainAttempts = 0;
+            applyStep(Step.enter(Phase.HELP_OFFER, Sub.NONE).fact(abstained ? null : FactKind.TRANSCRIPT_FAILED));
         } else applyStep(Step.enter(Phase.OPPORTUNITY, Sub.INPUT_CONFIRMATION));
     }
 
@@ -781,10 +763,6 @@ public final class PracticeConversation implements PracticeSessionExtension {
             return;
         }
         state.markHandled(correlation);
-        if (end == SlotEnd.FAILED || end == SlotEnd.BLOCKED
-                || (end == SlotEnd.INTERRUPTED && state.sub() == Sub.PEER_REPLY)) {
-            outputFailed = true;
-        }
         if (mine) {
             output.cancel(slotGuardName());
             openSlot = null;
@@ -793,68 +771,50 @@ public final class PracticeConversation implements PracticeSessionExtension {
             output.cancel(TIMER_NOTICE_GUARD);
             awaitingNotice = false;
         }
+        // FT-1023-g: 끝내 못 들려준 발화(heard=false)는 건너뛰고 잇는다. 실패 원인은 실행부 진단이 이미 남긴다
+        boolean heard = end == SlotEnd.PLAYED || end == SlotEnd.INTERRUPTED;
         if (mine && state.sub() == Sub.GOAL_RECAP) {
-            // No retry or approved-speech fallback: safety refusal and missing playback stay failures.
-            if (end != SlotEnd.PLAYED) outputFailed = true;
-            if (recapAdvances && !outputFailed) advanceGoal();
+            // No retry or approved-speech fallback: a refused or unheard recap is skipped, never replayed.
+            if (recapAdvances) advanceGoal();
             else closing(false);
             return;
         }
-        if (mine && state.sub() == Sub.GOAL_BRIEF && end == SlotEnd.PLAYED) {
+        if (mine && state.sub() == Sub.GOAL_BRIEF) {
+            // A played, interrupted or unheard brief all continue to the reviewed scene start; never repeat it.
             goalBriefPlayed = true;
-            beginReflectionOrIntroduction();
+            beginIntroduction();
             return;
         }
-        if (mine && state.sub() == Sub.GOAL_BRIEF && end == SlotEnd.INTERRUPTED) {
-            // A played, guarded brief interrupted by speech is not a transport failure.
-            // Continue to the reviewed scene introduction; never repeat the brief indefinitely.
-            goalBriefPlayed = true;
-            beginReflectionOrIntroduction();
+        boolean introEnded = mine && state.phase() == Phase.SCENE_INTRO && state.sub() == Sub.NONE && !sceneRowCreated;
+        if (introEnded) {
+            // 들려주지 못한 도입도 장면 행을 만들고(PLAYBACK_FAILED 사실이 붙는다) 여는 말 · 기회 문장으로 간다. 막힌 도입은 다시 내지 않는다.
+            // 여는 말은 상대 역할의 말이라 유연 대화만 읽는다. C안은 곧바로 전하기 + 묻기다(docs/practice-direct-ask.md 13.6)
+            createSceneRow();
+            applyStep(transitions.onIntroductionEnded(end, settings.flexibleDialogue() && currentScene.openingLine() != null));
             return;
         }
-        if (reflecting && mine && (end == SlotEnd.PLAYED || end == SlotEnd.INTERRUPTED)) {
-            if (state.sub() == Sub.REFLECTION_ACK) finishReflection();
-            else {
-                reflectionAwaiting = true;
-                // 아이가 이미 말하는 중이면 그 말의 확정 전사(또는 안전 시계)를 기다린다(4회차 R1)
+        if (mine && state.sub() == Sub.OPENING) {
+            if (!heard) {
+                recordFact(end == SlotEnd.FAILED ? FactKind.PLAYBACK_FAILED : null);
+                openingDone();
+            } else if (openingAnswered) {
+                openingDone();
+            } else {
+                // 대답 한 차례 또는 무응답 대기 만기까지 기다린다. 무응답 재안내 횟수에는 넣지 않는다. 아이가 이미 말하는 중이면 그 말의 확정 전사(또는
+                // 안전 시계)를 기다린다(4회차 R1)
+                openingAwaiting = true;
                 if (!childSpeaking) output.schedule(TIMER_NO_RESPONSE, settings.noResponseWait());
-                if (earlyUtterance != null) {
-                    Utterance early = earlyUtterance;
-                    earlyUtterance = null;
-                    reflectionUtterance(early);
-                }
             }
             return;
-        }
-        if (mine && state.phase() == Phase.SCENE_INTRO && !sceneRowCreated
-                && (end == SlotEnd.FAILED || end == SlotEnd.BLOCKED)) {
-            // 들려주지 못한 도입을 '장면 완료'로 건너뛰지 않는다. 안전 검사 실패도 그대로 막는다.
-            output.cancel(TIMER_GOAL_LIMIT);
-            state.phase(Phase.CLOSING, Sub.NONE);
-            pendingSignal = Signal.OUTPUT_FAILED;
-            return;
-        }
-        boolean introEnded = state.phase() == Phase.SCENE_INTRO && state.sub() == Sub.NONE && !sceneRowCreated
-                && (end == SlotEnd.PLAYED || end == SlotEnd.INTERRUPTED);
-        if (introEnded) {
-            createSceneRow();
         }
         if (settings.flexibleDialogue() && state.phase() == Phase.OPPORTUNITY) {
             if ((state.sub() == Sub.DIALOGUE_REPLY || state.sub() == Sub.CLARIFICATION_REPLY || state.sub() == Sub.INPUT_CONFIRMATION)
-                    && (end == SlotEnd.PLAYED || end == SlotEnd.INTERRUPTED)) {
+                    && heard) {
                 applyStep(Step.enter(Phase.OPPORTUNITY, Sub.NONE));
                 return;
             }
-            if (state.sub() == Sub.RETURN_NOTICE && end == SlotEnd.PLAYED) {
-                applyStep(Step.enter(Phase.OPPORTUNITY, Sub.DIALOGUE_REPLY)
-                        .role(FlowRole.PEER).fact(FactKind.COACH_RETURN).fact(FactKind.ORIGINAL_SCENE_RETURN));
-                return;
-            }
             if (state.sub() == Sub.RETURN_NOTICE) {
-                outputFailed = true;
-                applyStep(Step.enter(Phase.SCENE_WRAP, Sub.VARIANT_EVAL).role(FlowRole.PEER)
-                        .cause(FlowTransitions.EndCause.PLAYBACK_FAILED).timing(goalAchievementTiming)
-                        .fact(FactKind.PLAYBACK_FAILED));
+                returnToDialogue(end);
                 return;
             }
         }
@@ -866,8 +826,18 @@ public final class PracticeConversation implements PracticeSessionExtension {
         applyStep(step);
     }
 
+    /** 코치 도움 뒤 친구 역할 대화로 돌아간다. 복귀 알림을 못 들려줬어도 돌아간다(FT-1023-g). */
+    private void returnToDialogue(SlotEnd end) {
+        applyStep(Step.enter(Phase.OPPORTUNITY, Sub.DIALOGUE_REPLY).role(FlowRole.PEER).fact(FactKind.COACH_RETURN)
+                .fact(FactKind.ORIGINAL_SCENE_RETURN).fact(end == SlotEnd.FAILED ? FactKind.PLAYBACK_FAILED : null));
+    }
+
     private void onTimer(String name) {
-        if (reflecting && TIMER_NO_RESPONSE.equals(name)) { finishReflection(); return; }
+        if (TIMER_NO_RESPONSE.equals(name) && state.sub() == Sub.OPENING) {
+            // 여는 말 뒤 무응답: 재안내 없이 기회 문장으로 간다(재안내 횟수 불변). 재생 중에 남은 늦은 만기는 무시한다
+            if (openingAwaiting) openingDone();
+            return;
+        }
         switch (name) {
             case TIMER_NO_RESPONSE -> applyStep(transitions.onNoResponse(state));
             case TIMER_CHILD_SPEECH -> onChildSpeechGuard();
@@ -876,7 +846,11 @@ public final class PracticeConversation implements PracticeSessionExtension {
             case TIMER_NOTICE_GUARD -> {
                 if (awaitingNotice) {
                     awaitingNotice = false;
-                    applyStep(transitions.onSlotEnded(state, SlotEnd.FAILED));
+                    if (settings.flexibleDialogue() && state.phase() == Phase.OPPORTUNITY && state.sub() == Sub.RETURN_NOTICE) {
+                        returnToDialogue(SlotEnd.FAILED);
+                    } else {
+                        applyStep(transitions.onSlotEnded(state, SlotEnd.FAILED));
+                    }
                 }
             }
             default -> {
@@ -937,7 +911,10 @@ public final class PracticeConversation implements PracticeSessionExtension {
             case IGNORE -> {
                 // 표에 없는 입력: 상태를 바꾸지 않는다
             }
-            case AWAIT -> awaitInput();
+            case AWAIT -> {
+                step.facts().forEach(this::recordFact);
+                awaitInput();
+            }
             case REGUIDE -> reguide(step);
             case REEXPLAIN -> reexplain(step);
             case ENTER -> enter(step);
@@ -1081,6 +1058,7 @@ public final class PracticeConversation implements PracticeSessionExtension {
                 else if (step.sub() == Sub.CLARIFICATION_REPLY) speakGenerated(FlowRole.PEER, PracticeInstructions.peerClarification(currentScene));
                 else if (step.sub() == Sub.INPUT_CONFIRMATION) speakGenerated(FlowRole.PEER, PracticeInstructions.inputConfirmation());
                 else if (step.sub() == Sub.RETURN_NOTICE) announce(FlowRole.PEER);
+                else if (step.sub() == Sub.OPENING) speakApproved(currentScene.openingLine());
                 else if (previousSub == Sub.REEXPLAIN || previousSub == Sub.DIALOGUE_REPLY
                         || previousSub == Sub.CLARIFICATION_REPLY || previousSub == Sub.INPUT_CONFIRMATION) awaitInput();
                 // C안: 무중이 상대 말을 자기 말로 전하고 곧바로 묻는다(한 슬롯). 유연 대화는 상대의 직접 대사를 읽는다
@@ -1236,8 +1214,7 @@ public final class PracticeConversation implements PracticeSessionExtension {
         try {
             speech = PracticeSpeech.scenario(correlation, currentScript.scenarioId(), speechGeneration++,
                     settings.directAsk() ? RolePolicy.MUJOONG_LABEL : RolePolicy.partnerLabel(state.role(), currentScene.partnerRole()), text,
-                    state.sub() == Sub.REFLECTION_PROMPT ? PracticeSpeech.ReadingCue.ROLE_NOTICE
-                            : state.phase() == Phase.SCENE_INTRO ? PracticeSpeech.ReadingCue.SCENE
+                    state.phase() == Phase.SCENE_INTRO ? PracticeSpeech.ReadingCue.SCENE
                             : state.sub() == Sub.REEXPLAIN ? PracticeSpeech.ReadingCue.REEXPLANATION : PracticeSpeech.ReadingCue.PEER);
         } catch (IllegalArgumentException invalid) {
             // 승인 문장이 재생 형식(길이 · 제어 문자)을 못 맞춘다: 문장 내용은 남기지 않고 재생 실패로 닫는다
@@ -1297,6 +1274,7 @@ public final class PracticeConversation implements PracticeSessionExtension {
     }
 
     private void recordFact(FactKind kind) {
+        if (kind == null) return;
         if (kind == FactKind.FOCUS_HELP || kind == FactKind.EXPRESSION_EXAMPLE) reviewHelpProvided = true;
         if (kind == FactKind.TIMEOUT || kind == FactKind.TRANSCRIPT_FAILED || kind == FactKind.END_REQUEST) reviewInterrupted = true;
         if (sceneRowCreated) {

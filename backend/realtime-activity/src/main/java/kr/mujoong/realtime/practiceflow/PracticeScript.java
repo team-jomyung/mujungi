@@ -43,14 +43,16 @@ public record PracticeScript(UUID scenarioId, String scriptVersion, List<Scene> 
 
     /**
      * 장면 하나. 필수 6필드는 비어 있지 않다. 선택 필드(focusPoints · expressionExamples · relation · place · topic)가 없으면 빈 값이다.
-     * 들리는 선택 칸(spokenIntroduction · reflectionPrompt와 C안 칸 다섯 개)은 없으면 null이다 — 쓰는 쪽이 대체 문장을 고른다
-     * ({@link DirectAskLines}).
+     * 들리는 선택 칸(spokenIntroduction · openingLine과 C안 칸 다섯 개)은 없으면 null이다 — 쓰는 쪽이 대체 문장을 고른다
+     * ({@link DirectAskLines}). 옛 대본의 돌아보기 질문 · 요약(reflectionPrompt · reflectionSummary)은 읽지 않는다(FT-1023-g).
      *
      * @param sceneKey 대본 안 장면 식별(장면 식별은 이 값뿐이다, 장면별 UUID 없음)
      * @param sceneDescription 상황 문장(내부 사실. C안에서는 들려주지 않는다)
      * @param opportunitySentence 기회 문장(상대의 직접 대사. C안에서는 들려주지 않는다)
      * @param reexplanation 상황 다시 설명 문장
      * @param partnerRole 상대 역할 문구(core가 발급 때 덮어쓴 값)
+     * @param openingLine 장면 안내 뒤 상대가 먼저 거는 여는 말(승인 문장, 선택). 없으면 바로 기회 문장. 상대 역할의 말이라 유연 대화 경로만 읽는다
+     *     (C안은 읽지 않는다)
      * @param opportunityRelay C안: 상대가 한 말을 무중이 자기 말로 전하는 문장
      * @param askPrompt C안: "너라면 …?" 묻는 말 한 문장
      * @param reaskPrompt C안: 일부만 전했을 때 되묻는 질문
@@ -59,13 +61,14 @@ public record PracticeScript(UUID scenarioId, String scriptVersion, List<Scene> 
      */
     public record Scene(String sceneKey, SceneKind sceneKind, String sceneDescription, String opportunitySentence,
             String reexplanation, String partnerRole, List<String> focusPoints, List<String> expressionExamples,
-            String relation, String place, String topic, String spokenIntroduction, String reflectionPrompt,
+            String relation, String place, String topic, String spokenIntroduction, String openingLine,
             String opportunityRelay, String askPrompt, String reaskPrompt, String helpSpeech, String friendReaction) {
+        /** C안 칸이 없는 장면(옛 대본 v1 모양). */
         public Scene(String sceneKey, SceneKind sceneKind, String sceneDescription, String opportunitySentence,
                 String reexplanation, String partnerRole, List<String> focusPoints, List<String> expressionExamples,
-                String relation, String place, String topic, String spokenIntroduction, String reflectionPrompt) {
+                String relation, String place, String topic, String spokenIntroduction, String openingLine) {
             this(sceneKey, sceneKind, sceneDescription, opportunitySentence, reexplanation, partnerRole, focusPoints,
-                    expressionExamples, relation, place, topic, spokenIntroduction, reflectionPrompt, null, null, null, null, null);
+                    expressionExamples, relation, place, topic, spokenIntroduction, openingLine, null, null, null, null, null);
         }
 
         public Scene(String sceneKey, SceneKind sceneKind, String sceneDescription, String opportunitySentence,

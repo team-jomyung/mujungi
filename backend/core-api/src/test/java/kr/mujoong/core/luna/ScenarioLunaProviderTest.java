@@ -40,11 +40,13 @@ class ScenarioLunaProviderTest {
         assertThat(new org.springframework.core.io.ClassPathResource("prompts/scenario/review.v2.txt").exists()).as("출시하지 않은 검토 v2는 지웠다").isFalse();
         assertThat(scene.askPrompt()).as("계약 예시의 새 칸을 읽는다").isEqualTo("너라면 친구한테 뭐라고 말할래?");
         assertThat(scene.friendReaction()).isNotBlank();
-        // 옛 판은 지우거나 고치지 않는다(같은 판 이름을 다른 내용으로 바꾸지 않음, 설계 4.1)
+        // 옛 판은 지우지 않는다(설계 4.1). v2는 main이 같은 판 이름으로 보완한 내용을 그대로 받는다(main 합치기 2026-10-25) — 역할 대화 지시라
+        // 상대 역할 알림이 남는다
         for(String old:java.util.List.of("prompts/scenario/generation.v2.txt","prompts/scenario/review.v1.txt"))
             assertThat(new org.springframework.core.io.ClassPathResource(old).exists()).as(old).isTrue();
         assertThat(new org.springframework.core.io.ClassPathResource("prompts/scenario/generation.v2.txt").getContentAsString(java.nio.charset.StandardCharsets.UTF_8))
-                .startsWith("scenario-generation.v2").contains("무중이가 친구 역할을 해 볼게");
+                .startsWith("scenario-generation.v2").contains("친구 역할을 해 볼게", "상대 역할을 알린다");
+        assertThat(generation).as("C안 v3는 역할 알림을 쓰지 않는다").doesNotContain("상대 역할을 알린다", "친구 역할을 해 볼게");
     }
     @Test void theContractExampleSceneKeepsEveryHeardFieldUnderTheServerChecks(){
         when(client.call(any())).thenReturn(output(LunaTestFixtures.example("ai-scenario-output.schema.json")));

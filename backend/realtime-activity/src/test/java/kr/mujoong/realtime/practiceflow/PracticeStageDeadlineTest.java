@@ -88,9 +88,10 @@ class PracticeStageDeadlineTest {
         UUID playback=h.link.outputs().getFirst().playbackId();mark(playback,PlaybackMark.Status.STARTED);
         h.advanceAlive(Duration.ofSeconds(19));mark(playback,PlaybackMark.Status.STARTED);
         h.advanceAlive(Duration.ofSeconds(2));
-        assertThat(h.executor.status()).isEqualTo(SessionStatus.CLOSING);
-        assertThat(LogCapture.attrs(h.logs.last(EventCode.PRACTICE_AUDIO_STAGE).orElseThrow()))
-                .containsEntry("audioStage","PLAYBACK_TIMEOUT");
+        assertThat(h.logs.events(EventCode.PRACTICE_AUDIO_STAGE)).extracting(event -> LogCapture.attrs(event).get("audioStage"))
+                .contains("PLAYBACK_TIMEOUT");
+        // FT-1023-g: 재생 시한을 넘긴 발화는 건너뛰고 연습은 잇는다(출력 실패로 세션을 닫지 않는다)
+        assertThat(h.executor.status()).isEqualTo(SessionStatus.ACTIVE);
     }
 
     void mark(UUID id,PlaybackMark.Status status) {

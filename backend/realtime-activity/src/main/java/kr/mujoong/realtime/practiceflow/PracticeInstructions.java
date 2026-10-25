@@ -117,14 +117,6 @@ final class PracticeInstructions {
                 + "아이의 표현이나 이해가 부족하다고 판단하거나 교정하지 마. 못 들은 말을 추측하거나 정답·예시를 주지 마. 말하기를 강요하지 마.";
     }
 
-    static String reflectionOffer() {
-        return "지금 '음,'이라고 짧게 말한 뒤 지난번 이야기부터 잠깐 떠올려 볼지 물어봐. 기억나지 않거나 원하지 않으면 건너뛰고 바로 새 연습을 해도 된다고 알려줘. 이전 사건·감정·정답을 지어내지 마. 한두 문장으로 말해.";
-    }
-
-    static String reflectionAcknowledgment() {
-        return "지금 '음,'이라고 짧게 말한 뒤 이야기하거나 건너뛰어도 괜찮다고 짧게 받아들이고 이제 새 가상 상황을 연습해 보자고 알려줘. 아이의 기억을 평가·교정하거나 사건을 사실로 확정하지 마. 추가 질문·정답·예시를 말하지 마.";
-    }
-
     private static String partner(Scene scene) {
         return cut(field(scene.relation().isBlank() ? scene.partnerRole() : scene.relation()), 40);
     }

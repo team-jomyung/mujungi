@@ -44,6 +44,8 @@ import kr.mujoong.realtime.session.PracticeSessionExtension.Signal;
 import kr.mujoong.realtime.testing.InternalApi;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 /**
  * 새 연습 상태 기계 시험 — 운영 기본 경로인 C안 '무중이 직접 묻기'(docs/practice-direct-ask.md, U12 FR2 · FR3 · FR5 · BR1 ~ BR6). 기록하는 가짜
@@ -123,11 +125,14 @@ class PracticeConversationTest {
     }
 
     @Test
-    void failedReexplanationCannotJudgeTheBufferedAnswerOrFinishSuccessfully() {
+    void failedReexplanationIsSkippedAndTheBufferedAnswerIsJudgedWithoutEndingThePractice() {
+        // FT-1023-g: 못 들려준 다시 설명(+ 묻기)은 건너뛰고, 아이가 실제로 한 말은 그대로 판정한다
         Harness h=direct();h.toOpportunity();h.child("모르겠어");h.result("J2","NOT_UNDERSTOOD");
         h.child("손 괜찮아?");
-        assertThat(h.end(Playback.FAILED)).isEqualTo(Signal.OUTPUT_FAILED);
-        assertThat(h.out.judgments).hasSize(1);
+        assertThat(h.end(Playback.FAILED)).isEqualTo(Signal.NONE);
+        assertThat(h.out.judgments).hasSize(2);
+        assertThat(h.ext.state().phase()).isEqualTo(FlowState.Phase.OPPORTUNITY);
+        assertThat(h.recorder.factKinds(h.recorder.only())).contains(FactKind.PLAYBACK_FAILED);
     }
 
     @Test
@@ -195,43 +200,54 @@ class PracticeConversationTest {
     }
 
     @Test
-    void unheardSceneIntroductionDoesNotCompleteThePracticeOrWaitForChildInput() {
+    void unheardSceneIntroductionIsSkippedToTheOpportunityWithAPlaybackFailureFact() {
+        // FT-1023-g: 도입을 못 들려줘도 연습을 닫지 않는다. 장면 행을 만들고 사실을 남긴 뒤 전하기 + 묻기로 간다
         Harness h = direct();
         h.toIntroduction();
         assertThat(h.out.lastSlot().text()).isEqualTo(V2_INTRO);
-        assertThat(h.end(Playback.FAILED)).isEqualTo(Signal.OUTPUT_FAILED);
-        assertThat(h.recorder.rows).isEmpty();
+        assertThat(h.end(Playback.FAILED)).isEqualTo(Signal.NONE);
+        assertThat(h.recorder.rows).hasSize(1);
+        assertThat(h.recorder.factKinds(h.recorder.only())).containsExactly(FactKind.PLAYBACK_FAILED);
+        assertThat(h.out.slots).as("목표 안내 + 도입 + 전하기 · 묻기").hasSize(3);
+        assertThat(h.out.lastSlot().text()).isEqualTo(V2_OPPORTUNITY);
         assertThat(h.out.timers).doesNotContainKey("no-response");
-        assertThat(h.out.slots).as("목표 안내 + 도입").hasSize(2);
     }
 
     @Test
-    void aBlockedGoalBriefOrIntroductionRemainsBlockedAndIsNotACompletedPractice() {
+    void aBlockedGoalBriefOrIntroductionIsNeverReplayedButThePracticeContinues() {
+        // FT-1023-g: 막힌 목표 안내는 다시 내지 않고 도입으로, 막힌 도입은 다시 내지 않고 전하기 + 묻기로 간다
         Harness brief = direct();
         brief.activate();
         Slot notice = brief.out.lastSlot();
         assertThat(notice.generated()).as("목표 안내는 생성형이라 제브를 거친다").isTrue();
         assertThat(brief.event(ExtensionEvent.Kind.GUARDRAIL_BLOCKED, "guardrail-blocked", notice.correlationId(),
-                new GuardrailBlockedEvent(notice.correlationId(), kr.mujoong.realtime.guardrail.GuardrailRequest.Mode.PRACTICE_PEER, "BLOCK", true))).isEqualTo(Signal.OUTPUT_FAILED);
-        assertThat(brief.recorder.rows).isEmpty();
+                new GuardrailBlockedEvent(notice.correlationId(), kr.mujoong.realtime.guardrail.GuardrailRequest.Mode.PRACTICE_PEER, "BLOCK", true))).isEqualTo(Signal.NONE);
+        assertThat(brief.out.slots).as("목표 안내 + 도입").hasSize(2);
+        assertThat(brief.out.generatedSlots()).as("막힌 목표 안내는 다시 내지 않는다").hasSize(1);
+        assertThat(brief.out.lastSlot().text()).isEqualTo(V2_INTRO);
+        assertThat(brief.recorder.rows).as("장면 행은 도입이 끝날 때 만든다").isEmpty();
         Harness h = direct();
         h.toIntroduction();
         Slot intro = h.out.lastSlot();
         assertThat(h.event(ExtensionEvent.Kind.GUARDRAIL_BLOCKED, "guardrail-blocked", intro.correlationId(),
-                new GuardrailBlockedEvent(intro.correlationId(), kr.mujoong.realtime.guardrail.GuardrailRequest.Mode.PRACTICE_PEER, "BLOCK", true))).isEqualTo(Signal.OUTPUT_FAILED);
-        assertThat(h.recorder.rows).isEmpty();
+                new GuardrailBlockedEvent(intro.correlationId(), kr.mujoong.realtime.guardrail.GuardrailRequest.Mode.PRACTICE_PEER, "BLOCK", true))).isEqualTo(Signal.NONE);
+        assertThat(h.out.slots).as("목표 안내 + 도입 + 전하기 · 묻기").hasSize(3);
+        assertThat(h.out.slots).filteredOn(slot -> V2_INTRO.equals(slot.text())).as("막힌 도입은 다시 내지 않는다").hasSize(1);
+        assertThat(h.out.lastSlot().text()).isEqualTo(V2_OPPORTUNITY);
+        assertThat(h.recorder.factKinds(h.recorder.only())).as("막힘은 재생 실패 사실이 아니다").isEmpty();
     }
 
     @Test
-    void failedReexplanationIsSavedAsPlaybackFailureAndCannotCompleteThePractice() {
+    void failedReexplanationIsSavedAsPlaybackFailureAndTheSceneKeepsListening() {
         Harness h = direct();
         h.toOpportunity();
         h.child("무슨 말인지 모르겠어");
         h.result("J2", "NOT_UNDERSTOOD");
         assertThat(h.ext.state().sub()).isEqualTo(FlowState.Sub.REEXPLAIN);
-        assertThat(h.end(Playback.FAILED)).isEqualTo(Signal.OUTPUT_FAILED);
+        assertThat(h.end(Playback.FAILED)).isEqualTo(Signal.NONE);
         assertThat(h.recorder.factKinds(h.recorder.only())).contains(FactKind.PLAYBACK_FAILED);
-        assertThat(h.recorder.only().endedAt()).isNotNull();
+        assertThat(h.recorder.only().endedAt()).as("장면은 닫히지 않는다").isNull();
+        assertThat(h.out.timers).containsKey("no-response");
     }
 
     @Test
@@ -257,7 +273,7 @@ class PracticeConversationTest {
         h.slotEvent(first.correlationId(), Playback.STARTED, speech, first.text());
         int count=h.out.slots.size();
         Signal signal=h.event(ExtensionEvent.Kind.ASYNC_RESULT,"practice-audio-incomplete",first.correlationId(),speech);
-        assertThat(signal).isNotEqualTo(Signal.OUTPUT_FAILED);
+        assertThat(signal).isEqualTo(Signal.NONE);
         assertThat(h.out.slots).as("같은 지시를 다시 요청하지 않고 재생됨으로 닫아 도입으로 간다").hasSize(count + 1);
         assertThat(h.out.lastSlot().text()).isEqualTo(V2_INTRO);
         assertThat(h.event(ExtensionEvent.Kind.ASYNC_RESULT,"practice-audio-incomplete",first.correlationId(),speech))
@@ -278,8 +294,13 @@ class PracticeConversationTest {
         h.event(ExtensionEvent.Kind.ASYNC_RESULT,"practice-audio-incomplete",first.correlationId(),speech);
         assertThat(h.out.slots).hasSize(count);
         var retrySpeech=kr.mujoong.realtime.voice.PracticeSpeech.generatedSlot(retry.correlationId(), SCENARIO, 2, retry.role(), retry.text());
-        assertThat(h.event(ExtensionEvent.Kind.ASYNC_RESULT,"practice-audio-incomplete",retry.correlationId(),retrySpeech)).isEqualTo(Signal.OUTPUT_FAILED);
-        assertThat(h.out.slots).hasSize(count);
+        // 재요청 뒤에도 실패: 같은 지시를 세 번째로 내지 않고 이 단계의 다음(C안 생성형인 목표 안내 → 장면 도입)으로 간다(FT-1023-g)
+        assertThat(h.event(ExtensionEvent.Kind.ASYNC_RESULT,"practice-audio-incomplete",retry.correlationId(),retrySpeech)).isEqualTo(Signal.NONE);
+        assertThat(h.out.slots).as("목표 안내는 다시 내지 않고 도입 승인 낭독 하나만 연다").hasSize(count + 1);
+        assertThat(h.out.generatedSlots()).hasSize(2);
+        assertThat(h.out.lastSlot().text()).isEqualTo(V2_INTRO);
+        assertThat(h.ext.state().phase()).isEqualTo(FlowState.Phase.SCENE_INTRO);
+        assertThat(h.recorder.rows).as("장면 행은 도입이 끝날 때 만든다").isEmpty();
     }
 
     @Test
@@ -310,9 +331,10 @@ class PracticeConversationTest {
         h.event(ExtensionEvent.Kind.ASYNC_RESULT,"approved-text-mismatch",retry.correlationId(),retry.speech());
         assertThat(h.out.lastSlot().generated()).isTrue();
         int count=h.out.slots.size();
-        assertThat(h.end(Playback.FAILED)).isEqualTo(Signal.OUTPUT_FAILED);
-        assertThat(h.out.slots).hasSize(count);
-        assertThat(h.recorder.rows).isEmpty();
+        assertThat(h.end(Playback.FAILED)).isEqualTo(Signal.NONE);
+        assertThat(h.out.slots).as("복구 낭독은 되풀이하지 않고 전하기 + 묻기로 간다").hasSize(count + 1);
+        assertThat(h.out.lastSlot().text()).isEqualTo(V2_OPPORTUNITY);
+        assertThat(h.recorder.factKinds(h.recorder.only())).containsExactly(FactKind.PLAYBACK_FAILED);
     }
 
     @Test
@@ -330,8 +352,11 @@ class PracticeConversationTest {
         Harness h=direct();h.toIntroduction();Slot first=h.out.lastSlot();
         h.event(ExtensionEvent.Kind.ASYNC_RESULT,"approved-text-mismatch",first.correlationId(),first.speech());
         int slots=h.out.slots.size();
-        assertThat(h.advance(Duration.ofSeconds(20))).isEqualTo(Signal.OUTPUT_FAILED);
-        assertThat(h.out.slots).hasSize(slots);
+        assertThat(h.advance(Duration.ofSeconds(20))).isEqualTo(Signal.NONE);
+        assertThat(h.out.slots).as("시한이 지나도 도입을 다시 내지 않고 전하기 + 묻기 하나만 연다").hasSize(slots + 1);
+        assertThat(h.out.slots).filteredOn(slot -> V2_INTRO.equals(slot.text())).as("도입 재요청은 한 번뿐이다(처음 + 재요청)").hasSize(2);
+        assertThat(h.out.lastSlot().text()).isEqualTo(V2_OPPORTUNITY);
+        assertThat(h.recorder.factKinds(h.recorder.only())).containsExactly(FactKind.PLAYBACK_FAILED);
     }
 
     @Test
@@ -485,9 +510,11 @@ class PracticeConversationTest {
         assertThat(h.advance(Duration.ofSeconds(19))).isEqualTo(Signal.NONE);
         Signal end = h.advance(Duration.ofSeconds(1));
 
-        assertThat(end).as("도입을 듣지 못한 연습은 완료가 아니다").isEqualTo(Signal.OUTPUT_FAILED);
-        assertThat(h.recorder.list()).as("도입 재생이 성공하지 못했으니 행이 없다").isEmpty();
+        // FT-1023-g: 도입을 끝내 못 들려줘도 연습을 닫지 않고 사실을 남긴 뒤 전하기 + 묻기로 간다
+        assertThat(end).as("도입을 듣지 못한 연습은 완료도 종료도 아니다").isEqualTo(Signal.NONE);
+        assertThat(h.recorder.factKinds(h.recorder.only())).as("못 들려준 도입은 사실로 남는다").containsExactly(FactKind.PLAYBACK_FAILED);
         assertThat(h.out.cancelledSpeech).containsExactly(intro.correlationId());
+        assertThat(h.out.lastSlot().text()).isEqualTo(V2_OPPORTUNITY);
     }
 
     @Test
@@ -514,8 +541,8 @@ class PracticeConversationTest {
         h.end(Playback.STARTED);
         h.advance(Duration.ofSeconds(10));
         h.end(Playback.STARTED);
-        assertThat(h.advance(Duration.ofSeconds(10))).isEqualTo(Signal.OUTPUT_FAILED);
-        assertThat(h.recorder.list()).isEmpty();
+        assertThat(h.advance(Duration.ofSeconds(10))).isEqualTo(Signal.NONE);
+        assertThat(h.recorder.factKinds(h.recorder.only())).containsExactly(FactKind.PLAYBACK_FAILED);
         assertThat(h.out.cancelledSpeech).hasSize(1);
     }
 
@@ -525,8 +552,8 @@ class PracticeConversationTest {
         h.toIntroduction();
         h.advance(Duration.ofSeconds(12));
         h.slotEvent(UUID.randomUUID(), Playback.STARTED, null, "unrelated");
-        assertThat(h.advance(Duration.ofSeconds(8))).isEqualTo(Signal.OUTPUT_FAILED);
-        assertThat(h.recorder.list()).isEmpty();
+        assertThat(h.advance(Duration.ofSeconds(8))).isEqualTo(Signal.NONE);
+        assertThat(h.recorder.factKinds(h.recorder.only())).as("도입 안전 시계가 늘지 않고 만료됐다").containsExactly(FactKind.PLAYBACK_FAILED);
     }
 
     // ---- 다시 해 보기 한도 · 도움 예시 (FT-1024-d) ----
@@ -576,7 +603,7 @@ class PracticeConversationTest {
     // ---- 판정 거절 · 보류 · 이어 가기 ----
 
     @Test
-    void whenRequestJudgmentReturnsFalseThePracticeDoesNotStopItConfirmsOnceAndThenClosesAbstained() {
+    void whenRequestJudgmentReturnsFalseThePracticeDoesNotStopItConfirmsOnceAndThenOffersHelp() {
         Harness h = direct();
         h.out.judgmentResult = false;
         h.toOpportunity();
@@ -588,20 +615,19 @@ class PracticeConversationTest {
         assertThat(h.out.lastSlot().text()).isEqualTo(INPUT_CONFIRM);
         h.played();
 
+        // FT-1023-g: 두 번째에도 장면을 닫지 않고 같은 안내를 되풀이하지도 않는다. 도움 제안(C안은 고정 문장)으로 간다
         assertThat(h.child("음")).isEqualTo(Signal.NONE);
-        assertThat(h.out.lastSlot().text()).isEqualTo(SCENE_CLOSE);
-        Signal end = h.playedThroughRecap();
-
-        assertThat(end).isEqualTo(Signal.LAST_GOAL);
         assertThat(h.out.judgments).hasSize(2);
+        assertThat(h.ext.state().phase()).isEqualTo(FlowState.Phase.HELP_OFFER);
+        assertThat(h.out.lastSlot().text()).isEqualTo(HELP_OFFER);
+        assertThat(h.out.lastSlot().generated()).as("장면 안 말은 승인 낭독").isFalse();
         SceneRunRecord row = h.recorder.only();
-        assertThat(row.liveTiming()).isEqualTo(LiveTiming.ABSTAINED);
-        assertThat(h.recorder.factKinds(row)).containsExactly(FactKind.VARIANT_SKIPPED);
-        assertThat(row.variantSkipReason()).isEqualTo(VariantSkipReason.NO_VARIANT);
+        assertThat(row.endedAt()).isNull();
+        assertThat(h.recorder.factKinds(row)).isEmpty();
     }
 
     @Test
-    void anAbstainedJudgmentEventTakesTheSameConfirmPathAndTheSecondOneClosesTheScene() {
+    void anAbstainedJudgmentEventTakesTheSameConfirmPathAndTheSecondOneOffersHelp() {
         Harness h = direct();
         h.toOpportunity();
         h.child("음");
@@ -613,10 +639,10 @@ class PracticeConversationTest {
         h.played();
         h.child("음");
         assertThat(h.abstained("J2")).isEqualTo(Signal.NONE);
-        assertThat(h.out.lastSlot().text()).isEqualTo(SCENE_CLOSE);
 
-        assertThat(h.playedThroughRecap()).isEqualTo(Signal.LAST_GOAL);
-        assertThat(h.recorder.only().liveTiming()).isEqualTo(LiveTiming.ABSTAINED);
+        assertThat(h.ext.state().phase()).as("두 번째 보류는 장면을 닫지 않고 도움 제안으로 간다(FT-1023-g)").isEqualTo(FlowState.Phase.HELP_OFFER);
+        assertThat(h.out.lastSlot().text()).isEqualTo(HELP_OFFER);
+        assertThat(h.recorder.only().endedAt()).isNull();
         assertThat(h.failures).isEmpty();
     }
 
@@ -727,7 +753,8 @@ class PracticeConversationTest {
     }
 
     @Test
-    void aBlockedRecoveryNarrationWrapsTheSceneWithoutAClosingLineAndTheFollowingFailedEventIsIgnored() {
+    void aBlockedRecoveryNarrationIsSkippedKeepsTheSceneAndIgnoresTheFollowingFailedEvent() {
+        // FT-1023-g: 막힌 말(C안 장면 안에서 제브를 거치는 것은 낭독 실패 복구뿐)은 다시 내지 않고 마무리 문장도 없이 이 단계의 입력을 기다린다
         Harness h = direct();
         h.toIntroduction();
         h.played();
@@ -744,26 +771,35 @@ class PracticeConversationTest {
                         "BLOCK", true));
         Signal late = h.slotEvent(recovery.correlationId(), Playback.FAILED, null, recovery.text());
 
-        assertThat(end).isEqualTo(Signal.OUTPUT_FAILED);
+        assertThat(end).isEqualTo(Signal.NONE);
         assertThat(late).isEqualTo(Signal.NONE);
-        assertThat(h.out.slots).as("막힌 출력 뒤에는 마무리 문장도 내지 않는다").hasSize(slots);
+        assertThat(h.out.slots).as("막힌 말은 다시 내지 않고 마무리 문장도 내지 않는다").hasSize(slots);
+        assertThat(h.ext.state().phase()).isEqualTo(FlowState.Phase.OPPORTUNITY);
+        assertThat(h.out.timers).containsKey("no-response");
         SceneRunRecord row = h.recorder.only();
-        assertThat(h.recorder.factKinds(row)).containsExactly(FactKind.VARIANT_SKIPPED);
-        assertThat(row.variantSkipReason()).isEqualTo(VariantSkipReason.NO_VARIANT);
+        assertThat(h.recorder.factKinds(row)).as("막힘은 재생 실패 사실이 아니다").isEmpty();
+        assertThat(row.endedAt()).isNull();
         assertThat(h.failures).isEmpty();
     }
 
     @Test
-    void aGoalBriefTheOutputCannotMakeEndsBeforeAnyScene() {
+    void aGoalBriefTheOutputCannotMakeIsSkippedAndTheSceneStillStarts() {
+        // FT-1023-g: 못 낸 목표 안내(C안의 장면 밖 생성형 말)는 다시 내지 않고 장면 도입으로 간다. 연습을 닫지 않는다
         Harness h = direct();
         h.out.generatedResult = false;
 
-        assertThat(h.activate()).isEqualTo(Signal.OUTPUT_FAILED);
-        assertThat(h.recorder.list()).isEmpty();
+        assertThat(h.activate()).isEqualTo(Signal.NONE);
+        assertThat(h.out.generatedSlots()).as("목표 안내는 한 번만 요청한다").hasSize(1);
+        assertThat(h.out.lastSlot().text()).isEqualTo(V2_INTRO);
+        assertThat(h.recorder.list()).as("장면 행은 도입이 끝날 때 만든다").isEmpty();
+        assertThat(h.played()).isEqualTo(Signal.NONE);
+        assertThat(h.ext.state().phase()).isEqualTo(FlowState.Phase.OPPORTUNITY);
+        assertThat(h.recorder.factKinds(h.recorder.only())).as("장면 밖 말의 실패는 장면 사실로 남지 않는다").isEmpty();
+        assertThat(h.failures).isEmpty();
     }
 
     @Test
-    void anApprovedReadingTheOutputRefusesMidSceneIsNotReportedAsPracticeCompleted() {
+    void anApprovedReadingTheOutputRefusesMidSceneIsSkippedAndNeverReportedAsCompleted() {
         Harness h = direct();
         h.toOpportunity();
         h.child("그럼 그만해");
@@ -771,28 +807,34 @@ class PracticeConversationTest {
 
         Signal end = h.result("J2", "PARTIAL");
 
-        assertThat(end).isEqualTo(Signal.OUTPUT_FAILED);
+        assertThat(end).isEqualTo(Signal.NONE);
+        assertThat(h.ext.state().phase()).isEqualTo(FlowState.Phase.REASK);
         SceneRunRecord row = h.recorder.only();
-        assertThat(h.recorder.factKinds(row)).containsExactly(FactKind.PLAYBACK_FAILED, FactKind.VARIANT_SKIPPED);
+        assertThat(h.recorder.factKinds(row)).containsExactly(FactKind.PLAYBACK_FAILED);
+        assertThat(row.liveTiming()).isNull();
         assertThat(h.failures).isEmpty();
     }
 
     @Test
-    void anApprovedSpeechTheOutputRefusesEndsAsTechnicalFailure() {
+    void approvedSpeechTheOutputRefusesIsSkippedAndTheSceneWaitsForTheChild() {
+        // FT-1023-g: 도입 · 전하기 + 묻기를 끝내 못 내도 연습을 닫지 않고 아이 말을 받는다
         Harness h = direct();
         h.out.speakResult = false;
 
         assertThat(h.activate()).as("목표 안내는 생성형이라 나간다").isEqualTo(Signal.NONE);
         Signal end = h.played();
 
-        assertThat(end).isEqualTo(Signal.OUTPUT_FAILED);
-        assertThat(h.recorder.list()).isEmpty();
+        assertThat(end).isEqualTo(Signal.NONE);
+        assertThat(h.ext.state().phase()).isEqualTo(FlowState.Phase.OPPORTUNITY);
+        assertThat(h.recorder.factKinds(h.recorder.only())).containsExactly(FactKind.PLAYBACK_FAILED, FactKind.PLAYBACK_FAILED);
+        assertThat(h.out.timers).as("아이 말은 계속 받는다").containsKey("no-response");
     }
 
     // ---- 도움 말 (역할 전환 없음) ----
 
     @Test
-    void aHelpSpeechThatFailsWrapsAsPlaybackFailureWithoutAClosingLine() {
+    void aHelpSpeechThatFailsIsSkippedAndTheRetryStillListens() {
+        // FT-1023-g: 못 들려준 도움은 다시 내지 않고 마무리 문장도 없이 다시 해 보기의 아이 말을 기다린다(유연 대화의 코치 도움 실패와 같다)
         Harness h = direct();
         h.toOpportunity();
         h.child("도와줘");
@@ -801,10 +843,13 @@ class PracticeConversationTest {
 
         Signal end = h.end(Playback.FAILED);
 
-        assertThat(end).isEqualTo(Signal.OUTPUT_FAILED);
-        assertThat(h.out.slots).hasSize(slots);
-        assertThat(h.ext.state().retryCount()).isZero();
+        assertThat(end).isEqualTo(Signal.NONE);
+        assertThat(h.out.slots).as("도움을 다시 내지 않고 마무리 문장도 내지 않는다").hasSize(slots);
+        assertThat(h.ext.state().phase()).isEqualTo(FlowState.Phase.RETRY);
+        assertThat(h.ext.state().retryCount()).isEqualTo(1);
+        assertThat(h.out.timers).containsKey("no-response");
         assertThat(h.recorder.factKinds(h.recorder.only())).contains(FactKind.PLAYBACK_FAILED);
+        assertThat(h.recorder.only().endedAt()).isNull();
     }
 
     @Test
@@ -1220,9 +1265,9 @@ class PracticeConversationTest {
         h.child("다");
         assertThat(h.event(ExtensionEvent.Kind.JUDGMENT_ABSTAINED, "judgment", h.out.lastJudgment().correlationId(), "모양이 틀림"))
                 .isEqualTo(Signal.NONE);
-        assertThat(h.out.lastSlot().text()).isEqualTo(SCENE_CLOSE);
-
-        assertThat(h.playedThroughRecap()).isEqualTo(Signal.LAST_GOAL);
+        assertThat(h.ext.state().phase()).as("두 번째 보류는 도움 제안으로 간다(FT-1023-g)").isEqualTo(FlowState.Phase.HELP_OFFER);
+        assertThat(h.out.lastSlot().text()).isEqualTo(HELP_OFFER);
+        assertThat(h.recorder.only().endedAt()).as("장면을 닫지 않는다").isNull();
     }
 
     @Test
@@ -1309,21 +1354,43 @@ class PracticeConversationTest {
         assertThat(h.recorder.only().liveTiming()).isEqualTo(LiveTiming.IMMEDIATE);
     }
 
-    @Test
-    void aFailedFriendReactionIsAPlaybackFailureAndNotANormalCompletion() {
+    @ParameterizedTest
+    @EnumSource(value = Playback.class, names = {"FAILED", "INTERRUPTED"})
+    void aFailedOrCutOffFriendReactionIsNotRetriedAndThePracticeMovesOn(Playback playback) {
+        // FT-1023-g: 아이가 이미 해낸 장면은 그대로 두고, 못 들려준(끊긴) 친구 반응은 다시 내지 않은 채 회고 · 다음으로 간다
         Harness h = direct(); h.toOpportunity(); h.child("다음에 같이 그리자고 할래"); h.result("J2", "FULL");
-        assertThat(h.end(Playback.FAILED)).isEqualTo(Signal.OUTPUT_FAILED);
-        assertThat(h.recorder.factKinds(h.recorder.only())).contains(FactKind.PLAYBACK_FAILED);
+        assertThat(h.end(playback)).as("친구 반응 뒤 목표 회고").isEqualTo(Signal.NONE);
+        assertThat(h.out.lastSlot().generated()).isTrue();
+        assertThat(h.played()).isEqualTo(Signal.LAST_GOAL);
+        assertThat(h.out.slots.stream().filter(slot -> slot.text().equals(V2_REACTION))).as("친구 반응은 다시 내지 않는다").hasSize(1);
+        assertThat(h.recorder.factKinds(h.recorder.only()).contains(FactKind.PLAYBACK_FAILED)).isEqualTo(playback == Playback.FAILED);
         assertThat(h.recorder.only().liveTiming()).as("이룬 수행은 지우지 않는다").isEqualTo(LiveTiming.IMMEDIATE);
-        assertThat(h.out.generatedSlots()).as("회고 없이 끝난다").hasSize(1);
+        assertThat(h.recorder.only().variantSkipReason()).isEqualTo(VariantSkipReason.NO_VARIANT);
+    }
+
+    @Test
+    void aFailedFriendReactionKeepsTheAchievedSceneSoTheVariantIsStillOffered() {
+        // FT-1023-g: 못 들려준 친구 반응은 장면의 원인(정상 수행)을 바꾸지 않아 변형 제안이 그대로 나간다
+        Harness h = withVariant(); h.toOpportunity(); h.child("다음에 같이 그리자고 할래"); h.result("J2", "FULL");
+        Slot reaction = h.out.lastSlot();
+        assertThat(h.end(Playback.FAILED)).isEqualTo(Signal.NONE);
+        assertThat(h.ext.state().phase()).isEqualTo(FlowState.Phase.VARIANT_OFFER);
+        assertThat(h.out.lastSlot().text()).isEqualTo(VARIANT_OFFER);
+        assertThat(h.out.slots).filteredOn(slot -> reaction.text().equals(slot.text())).as("친구 반응은 다시 내지 않는다").hasSize(1);
+        assertThat(h.recorder.factKinds(h.recorder.only())).containsExactly(FactKind.PLAYBACK_FAILED);
     }
 
     @Test
     void silentFriendReactionTimesOutInsteadOfHangingOrLooping() {
+        // FT-1023-g: 시한이 지난 친구 반응은 다시 내지 않고 재생 실패 사실만 남긴 채 회고 · 다음으로 간다
         Harness h = direct(); h.toOpportunity(); h.child("다음에 같이 그리자고 할래"); h.result("J2", "FULL");
         int slots = h.out.slots.size();
-        assertThat(h.advance(Duration.ofSeconds(20))).isEqualTo(Signal.OUTPUT_FAILED);
-        assertThat(h.out.slots).hasSize(slots);
+        assertThat(h.advance(Duration.ofSeconds(20))).isEqualTo(Signal.NONE);
+        assertThat(h.out.slots).as("친구 반응을 다시 내지 않고 목표 회고만 연다").hasSize(slots + 1);
+        assertThat(h.out.lastSlot().generated()).isTrue();
+        assertThat(h.played()).isEqualTo(Signal.LAST_GOAL);
+        assertThat(h.recorder.factKinds(h.recorder.only())).contains(FactKind.PLAYBACK_FAILED);
+        assertThat(h.recorder.only().liveTiming()).isEqualTo(LiveTiming.IMMEDIATE);
     }
 
     @Test

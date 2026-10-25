@@ -4,6 +4,7 @@
 >
 > - 결정: 2026-10-24 팀장(준하). 이 문서의 1장에 결정과 기본값을 적었다.
 > - 바탕: `main` `916ec12b`(10/24). 브랜치 `claude/practice-direct-ask`. main 병합은 팀 합의 뒤에 한다.
+> - 2026-10-25: 최신 main(`2d2730f2`, JIRA-275 승인 낭독 조기 재생 · FT-1023-g 연습 시작 · 오류 처리 등)을 브랜치 `claude/practice-direct-ask-main`에 합쳤다. 합친 방식과 바뀐 동작 · 시험은 13.6에 적었다. 아래 설계 장에서 합치기로 바뀐 곳은 "(main 합치기 뒤 …)"로 표시했다.
 > - 상태: **구현 · 자동 시험 완료(가짜 공급자), 5회차 실측 준비 중.** 구현 결과는 13장에 적었다. 5회차 실측 결과는 그 뒤에 이어 적는다.
 > - 앞선 기록: `claude/practice-dialogue-standard` 브랜치의 `docs/practice-dialogue-standard.md`(4회차까지 실측). main과의 비교는 같은 날 조사로 확인했다(35개 파일 충돌, 같은 문제를 다르게 푼 곳 다수).
 
@@ -37,7 +38,7 @@
 
 팀장 확인이 더 필요하면 바꾼다.
 
-1. **C안이 바꾸는 범위는 장면 안의 말이다.** 장면 밖 말(목표 안내 · 돌아보기 · 목표 회고 · 낭독 실패 복구)은 main 동작을 그대로 둔다. 이 말들은 생성형이고 제브가 필요하다.
+1. **C안이 바꾸는 범위는 장면 안의 말이다.** 장면 밖 말(목표 안내 · 목표 회고 · 낭독 실패 복구)은 main 동작을 그대로 둔다. 이 말들은 생성형이고 제브가 필요하다. (main 합치기 뒤: 돌아보기는 main이 없앴다, 13.6)
    - main 코드가 목표 안내 · 회고를 "생성 발화, 제브 필수, 승인 낭독으로 건너뛰지 않음"으로 정해 두었다(`PracticeInstructions.factualNotice` 주석). 그 결정을 따른다.
    - 문구 안의 '역할놀이' · '상대 역할'만 C안에 맞게 고친다(7.3).
 2. **도움은 장면마다 한 번이다.** 첫 도움에 표현 예시를 넣고("예를 들면 … 처럼 말할 수 있어"), 다시 해 보기도 한 번이다(`retry-max` 2 → 1).
@@ -78,8 +79,8 @@
 ### 3.1 목표 하나
 
 ```
-목표 시작 ── 목표 안내(생성) ── [돌아보기(main 그대로)] ──┐
-                                                          ▼
+목표 시작 ── 목표 안내(생성) ──┐
+                                ▼
 SCENE_INTRO: 상황 안내[spokenIntroduction] ─▶ OPPORTUNITY: 친구 말 전하기 + 묻기[opportunityRelay + askPrompt] ─▶ 아이 대답 → J2
   FULL ──────────────▶ 친구 반응[friendReaction] (IMMEDIATE) ──────────────┐
   PARTIAL ───────────▶ REASK: 되묻기[reaskPrompt] → J3                      │
@@ -90,9 +91,9 @@ SCENE_INTRO: 상황 안내[spokenIntroduction] ─▶ OPPORTUNITY: 친구 말 �
                           FULL · COPIED ▶ 친구 반응 (AFTER_HELP) ─────────┤
                           그 밖 ─────▶ 장면 닫기[SCENE_CLOSE] (NONE)        │
   NOT_UNDERSTOOD · IRRELEVANT ▶ 다시 설명[reexplanation] + 묻기[askPrompt] → J2 (1회, 넘으면 HELP_OFFER)
-  UNREADABLE · 판정 보류 ▶ 확인[INPUT_CONFIRM] → J2 (2번째면 장면 닫기)    │
+  UNREADABLE · 판정 보류 ▶ 확인[INPUT_CONFIRM] → J2 (2번째면 HELP_OFFER)   │
   무응답 ────────────▶ 다시 묻기[WAIT_LEAD + askPrompt] (2번째면 장면 닫기) │
-HELP_OFFER: [HELP_OFFER] → J4  ACCEPT ▶ FOCUS / REFUSE ▶ 장면 닫기 (HELP_DECLINED) / UNCLEAR 2회 ▶ 장면 닫기
+HELP_OFFER: [HELP_OFFER] → J4  ACCEPT ▶ FOCUS / REFUSE ▶ 장면 닫기 (HELP_DECLINED) / UNCLEAR 2회 ▶ FOCUS(동의 없는 도움)
                                                                            ▼
 VARIANT_OFFER: [VARIANT_OFFER] → J4  ACCEPT ▶ 변형 장면 SCENE_INTRO / 그 밖 ▶ (변형 생략)
 목표 회고(생성) ─▶ 다음 목표 또는 마무리(목표 3개 상한, main 그대로)
@@ -104,6 +105,7 @@ VARIANT_OFFER: [VARIANT_OFFER] → J4  ACCEPT ▶ 변형 장면 SCENE_INTRO / �
   3. 다시 설명 뒤 묻기를 다시 읽는다. main은 다시 설명 뒤 듣기만 한다.
   4. 다시 해 보기 뒤 부족하면 도움을 다시 하지 않고 장면을 닫는다(`retry-max` 1).
 - 변형 장면도 같은 흐름이다. 변형 대본의 `spokenIntroduction` · `opportunityRelay` · `askPrompt` …를 쓴다.
+- (main 합치기 뒤, 13.6) main FT-1023-g를 함께 따른다. 발화 · 판정 · 전사 오류로 장면이나 연습을 닫지 않는다. 끝내 못 들려준 말(재요청 뒤 실패 · 막힘 · 시한 초과)은 다시 내지 않고 건너뛰고(재생 실패면 사실 PLAYBACK_FAILED), 판독 불가 · 보류 두 번째는 위 그림처럼 도움 단계로 넘긴다. 유연 대화의 여는 말(`openingLine`)은 C안에서 읽지 않는다.
 
 ### 3.2 상태별 말
 
@@ -131,7 +133,7 @@ AI동작명세 §8.3(G-16)과 같다. 바뀌는 값은 다시 해 보기 하나�
 | 되묻기 | 기회마다 1회 | (J3 결과로 진행) |
 | 다시 설명 | 기회마다 1회(`reexplain-max` 1, 그대로) | HELP_OFFER |
 | 무응답 다시 묻기 | 기회마다 1회 | 장면 닫기 |
-| 판독 불가 · 보류 확인 | 기회마다 2회까지 | 장면 닫기 |
+| 판독 불가 · 보류 확인 | 기회마다 2회까지 | 장면 닫기 → (main 합치기 뒤) HELP_OFFER, 도움 제안 단계면 동의 없는 도움(13.6) |
 | 도움 | 장면마다 1회 | — |
 | 다시 해 보기 | 장면마다 1회(`retry-max` 2 → **1**) | 장면 닫기 |
 
@@ -162,7 +164,8 @@ AI동작명세 §8.3(G-16)과 같다. 바뀌는 값은 다시 해 보기 하나�
 - `sceneDescription`: 내부 사실(조건 원문 + 상대 대사 인용). main 규칙 그대로.
 - `opportunitySentence`: 상대의 직접 대사. trigger script · 노출 근거라 뜻을 바꾸지 않는다. C안에서는 들려주지 않는다.
 - `focusPoints` · `expressionExamples`: 기록(FOCUS_HELP · EXPRESSION_EXAMPLE 사실)과 `helpSpeech` 검사 근거.
-- `relation` · `place` · `topic` · `preservation` · `partnerRole` · `reflectionPrompt`.
+- `relation` · `place` · `topic` · `preservation` · `partnerRole`.
+- `openingLine`(main 합치기 뒤): 유연 대화만 읽는 상대의 여는 말이다. C안에서는 들려주지 않지만 strict 요청이라 모델이 채운다(13.6). main의 `reflectionPrompt`는 없어졌다.
 
 ### 4.3 들리는 칸의 공통 규칙
 
@@ -187,8 +190,8 @@ AI동작명세 §8.3(G-16)과 같다. 바뀌는 값은 다시 해 보기 하나�
 ### 4.4 서버 검사 · 생성 흐름
 
 - `ScenarioScriptValidation`: 장면 판정과 칸별 판정으로 나눈다.
-  - 장면 판정(`INVALID_BASE` · `INVALID_VARIANT`, 진단 `ScenarioRule_<사유>`, 보완 흐름)은 main 규칙 그대로 필수 칸만 본다(BASE 설명의 조건 원문 · 기회 문장, 돌아보기 검사, 거절 사유 코드). main과 달리 상황 안내는 여기서 보지 않는다.
-  - 칸별 판정(`optionalSpokenIssues`)은 들리는 선택 칸(상황 안내 + C안 칸 다섯 개)을 칸마다 보고 처음 걸린 사유 하나를 낸다. 모양(빈 값 · 길이 · 제어 문자 · 문장부호 · 문장 수 · 역할 말) → 내용(금지 표현 · 원래 이름 · 연락처 → 목표 표현 누설 → 압박) → 칸의 뜻 순서다. 칸의 뜻은 전하기의 상대 대사 복사 · 짐작 말투 · 충실도(상대 말 두 글자 조각의 0.5 이상), 되묻기의 짐작 말투, 묻기의 모양 · 선생님 관계, 도움 꼬리, 반응의 칭찬 · 물음 끝이다. 상황 안내는 main 규칙 그대로다. 목록 · 문턱은 계약 10.17이 정본이다.
+  - 장면 판정(`INVALID_BASE` · `INVALID_VARIANT`, 진단 `ScenarioRule_<사유>`, 보완 흐름)은 main 규칙 그대로 필수 칸만 본다(BASE 설명의 조건 원문 · 기회 문장, 거절 사유 코드). main과 달리 상황 안내는 여기서 보지 않는다. (main 합치기 뒤: 돌아보기 검사는 main이 없앴고, 여는 말은 main 그대로 걸리면 그 칸만 빼고 발급한다, 13.6)
+  - 칸별 판정(`optionalSpokenIssues`)은 들리는 선택 칸(상황 안내 + C안 칸 다섯 개)을 칸마다 보고 처음 걸린 사유 하나를 낸다. 모양(빈 값 · 길이 · 제어 문자 · 문장부호 · 문장 수 · 역할 말) → 내용(금지 표현 · 원래 이름 · 연락처 → 목표 표현 누설 → 압박) → 칸의 뜻 순서다. 칸의 뜻은 전하기의 상대 대사 복사 · 짐작 말투 · 충실도(상대 말 두 글자 조각의 0.5 이상), 되묻기의 짐작 말투, 묻기의 모양 · 선생님 관계, 도움 꼬리, 반응의 칭찬 · 물음 끝이다. 상황 안내는 main 규칙 그대로다. 목록 · 문턱은 계약 10.18이 정본이다.
 - `ScenarioScriptGenerator`: main 로직(보완 3회 · 실패 사유 전달 · 마감 계산 · 진단 · 이전 연습 기록)을 그대로 쓴다.
   - 검토에는 장면마다 C안 칸 다섯 개를 뺀 사본을 보낸다(키를 보내지 않는다).
   - 발급 직전(`approved`, BASE · VARIANT)에만 칸별 판정에 걸린 칸을 빼고(null) 장면은 발급한다. 뺀 칸마다 진단 `ScenarioField_<칸>_<사유>`(고정 코드뿐, R-F14)를 남긴다. 칸 문제는 수정 요청을 만들지 않는다.
@@ -249,13 +252,13 @@ AI동작명세 §8.3(G-16)과 같다. 바뀌는 값은 다시 해 보기 하나�
 | `PracticeInstructions` | 목표 안내의 "짧게 역할놀이를" → "짧게 이야기 연습을"로 바꾼다. 목표 회고의 "상대가 다시 물었을 때" → "무중이 다시 물었을 때"로 바꾼다. 대체 도입 문장(7.4)도 바꾼다 |
 | `JudgmentPrompt` · 판정 자원 | `prompt-service-v4` · `judgment-service-v2`를 기본 판으로 하고 화자 `MUJOONG`을 쓴다 |
 | 무응답 시계(옮김: 우리 브랜치 R1) | 아이 말의 첫 입력 전사 조각에서 `TIMER_NO_RESPONSE`를 멈추고 `child-speech` 보호(= `no-response-wait`)를 건다. main은 확정 전사 판정 때만 멈춰서, 아이가 길게 말하는 중에 무응답이 터질 수 있다(우리 3회차 6/9 → 4회차 0) |
-| 끊긴 마무리 문장 | 아이가 `friendReaction` · `SCENE_CLOSE` 위에 말해 끊기면 전달된 것으로 보고 다음으로 간다. main은 이때 연습 전체가 `OUTPUT_FAILED`로 끝난다 |
+| 끊긴 마무리 문장 | 아이가 `friendReaction` · `SCENE_CLOSE` 위에 말해 끊기면 전달된 것으로 보고 다음으로 간다. 합치기 전 main은 이때 연습 전체가 `OUTPUT_FAILED`로 끝났다(main FT-1023-g 뒤로는 main도 끝내지 않는다, 13.6) |
 | 도움 동의 기록 | 아이가 먼저 도움을 청하면(J2 · J3 HELP) 동의(ACCEPT)로 기록한다. 리포트 8항목이 이것을 '답 없음'으로 세던 문제를 함께 푼다 |
 
 ### 7.3 장면 밖 말 (main 그대로)
 
-- 목표 안내 · 목표 회고 · 돌아보기 제안 · 받아 주기 · 승인 낭독 실패 뒤 '뜻 전하기' 복구는 생성형이고 제브를 거친다.
-- 그래서 **제브가 꺼져 있으면(OFF) 연습이 목표 안내에서 실패한다**(main 동작).
+- 목표 안내 · 목표 회고 · 승인 낭독 실패 뒤 '뜻 전하기' 복구는 생성형이고 제브를 거친다. (돌아보기 제안 · 받아 주기는 main 합치기 뒤 없어졌다, 13.6)
+- 그래서 **제브가 꺼져 있으면(OFF) 이 생성형 말은 버려진다**(main 동작). 합치기 전에는 연습이 목표 안내에서 실패했고, main FT-1023-g 뒤로는 그 말을 건너뛰고 장면으로 간다(13.6).
   - 로컬 기본값은 대역(STUB)이다. 대역은 제브 단계를 지나며 ALLOW를 돌려주므로 연습이 진행된다(`GuardrailMode.STUB`, `GuardrailSupport.enabled()`는 OFF만 거짓).
 
 ### 7.4 칸이 없을 때 대체 (옛 대본 v1 · core가 뺀 칸)
@@ -271,10 +274,10 @@ AI동작명세 §8.3(G-16)과 같다. 바뀌는 값은 다시 해 보기 하나�
 | `helpSpeech` | `focusPoints[0]` + "예를 들면 " + `expressionExamples[0]` + "처럼 말할 수 있어. 네 말로 해 볼래?" |
 | `friendReaction` | 그렇게 말해 주면 친구도 네 마음을 알 거야. |
 
-대체 문장도 4.3 문장부호 규칙을 지킨다. 고정 대체 문장은 realtime 상수로 두고 계약(10.17)에 적는다.
+대체 문장도 4.3 문장부호 규칙을 지킨다. 고정 대체 문장은 realtime 상수로 두고 계약(10.18)에 적는다.
 
 - 위 표의 전하기 · 묻기 · 반응은 친구 장면 문장이다. 이 셋은 장면 `relation`의 상대 호칭으로 고른다: `TEACHER`는 높임말("선생님이 이렇게 말씀하셨어." · "너라면 선생님께 뭐라고 말씀드릴래?" · "그렇게 말씀드리면 선생님도 네 마음을 아실 거야."), `CLUB_SENIOR`는 선배, `CLUB_JUNIOR`는 동생, `FAMILY`는 호칭 없는 문장("그때 이렇게 말했어." · "너라면 뭐라고 말할래?" · "그렇게 말해 주면 네 마음이 잘 전해질 거야."), 그 밖과 모르는 값은 위 친구 문장이다.
-- 코드가 아닌 관계 이름(예: '동아리 형')은 낱말로 고른다. 낱말 목록과 전체 표는 계약 10.17이 정본이다(13.4 #16).
+- 코드가 아닌 관계 이름(예: '동아리 형')은 낱말로 고른다. 낱말 목록과 전체 표는 계약 10.18이 정본이다(13.4 #16).
 
 ### 7.5 그대로 쓰는 main 장치
 
@@ -384,13 +387,13 @@ core와 realtime을 두 갈래로 나눠 동시에 구현하고 합쳤다. 합�
 | core | `9d740f5a` | 대본 칸 · 들리는 칸 서버 검사(사유 코드 7개) · `generation.v3` · `review.v2`(뒤에 `c5c01f36`이 지우고 main `review.v1`로 되돌렸다) |
 | core | `23865f10` | 시드 006(고정 승인 문장 6종) · 연습 허용 목록(`COACH_SWITCH` · `PEER_RETURN` 제외) |
 | core | `02314f58` | 기록용 재판정 `rejudgment.v2`(전하는 식 대답 인정) |
-| core | `bb48e719` | 계약 문장: `ai-io.md` 10.17(C안 절) · 편차 FT-1024-a ~ e |
+| core | `bb48e719` | 계약 문장: `ai-io.md` 10.17(C안 절, main 합치기 뒤 10.18) · 편차 FT-1024-a ~ e |
 | realtime | `411cd7a0` | 대본 판 v2의 새 칸 읽기 · 옛 대본 대체 문장 |
 | realtime | `16ccd72c` | 대본형 경로를 C안으로(`DirectAskLines` · `FlowTransitions` C안 표 · 문구) |
 | realtime | `238eeaa6` | `flexible-dialogue`(기본 false) · `retry-max` 1 · `judgment-service-v2` · `prompt-service-v4` |
 | realtime | `ce756064` | 판정 입력의 무중 줄 화자 `MUJOONG` |
 | realtime | `cc7792f9` | R1 무응답 시계(말 시작에서 멈추고 확정 전사를 기다림) |
-| 계약 보충 | `4b01e9c9` | 10.17 구현 세부 · 무응답 시계 · 대체 규칙 · 기록, `timing.md` 무응답 줄 설명 |
+| 계약 보충 | `4b01e9c9` | 10.17(지금 10.18) 구현 세부 · 무응답 시계 · 대체 규칙 · 기록, `timing.md` 무응답 줄 설명 |
 
 그 뒤 5회차 core 실호출 대본 생성 하니스(`753b564a`, 합친 커밋 `3595e77d`)와 전하기 · 다시 설명 지시 고침(`0deb39a8`)을 더했다. 이 실측에서 C안 대본 발급이 main보다 줄어서(4.1) 아래 커밋으로 검토와 서버 검사를 바꿨다(발급 회복).
 
@@ -398,7 +401,7 @@ core와 realtime을 두 갈래로 나눠 동시에 구현하고 합쳤다. 합�
 |---|---|---|
 | 발급 회복 core | `c5c01f36` | 검토를 main `review.v1`로 되돌리고 검토 입력에서 C안 칸 다섯 개를 뺌(`review.v2` 지움, 스키마 `selfReview` 판 v1), 들리는 선택 칸의 칸별 판정 · 발급 때 걸린 칸만 빼기 · 진단 `ScenarioField_<칸>_<사유>`, 새 칸별 사유 3개(`RELAY_LOW_FIDELITY` · `PARTNER_INTERPRETED` · `ASK_PROMPT_RELATION`), 스키마 예시 장면의 전하기, 로컬 진단 도구 허용 목록 |
 | 발급 회복 core | `e92b2d6b` | core 실호출 하니스: 목표마다 뺀 칸 진단 코드와 합계(`strippedFields`), 검토 판 v1 표기 |
-| 발급 회복 계약 | `b782d170` | `ai-io.md` 10.11 · 10.17(칸별 판정 · 짐작 말투 표 · 검토 · 상대 호칭별 대체), 편차 FT-1024-c · e |
+| 발급 회복 계약 | `b782d170` | `ai-io.md` 10.11 · 10.17(지금 10.18, 칸별 판정 · 짐작 말투 표 · 검토 · 상대 호칭별 대체), 편차 FT-1024-c · e |
 | 발급 회복 realtime | `5072156e` | 뺀 칸 · 옛 대본 칸의 대체 문장을 상대 호칭별로(`DirectAskLines.Partner`), 칸 일부가 빠진 v2 대본 시험 |
 | 발급 회복 문서 | 이 문서를 고친 커밋 | 4장(검토 · 서버 검사) · 5장 `ASK_DEFAULT` 행 · 7.4 · 9.2 · 13장 |
 
@@ -460,9 +463,9 @@ core와 realtime을 두 갈래로 나눠 동시에 구현하고 합쳤다. 합�
 | 3 | 칭찬 거절 서버 사유는 `REACTION_PRAISE`, 검토 사유는 `PRESSURE`. 도움 꼬리 대조는 공백을 무시한다(발급 회복 뒤 검토는 반응 칸을 보지 않는다, #10) | 원문 대조와 같은 규칙 |
 | 4 | 도움을 받고 해낸 장면(`AFTER_HELP`)에도 변형을 권한다. 집중 시계 만료만 변형 생략 사유다 | `retry-max` 1이면 기존 표가 변형을 막아서 |
 | 5 | REASK 무응답 1회는 `WAIT_LEAD` + `reaskPrompt`. 도움 · 변형 제안의 무응답 · 불명확은 같은 제안 문장을 다시 읽는다 | 설계 3.2에 없던 갈래 |
-| 6 | `SCENE_CLOSE`는 상황 안내를 들려준 장면에서만 낸다. 끊긴 마무리 문장은 전달된 것으로, 재생 실패한 마무리 문장은 `OUTPUT_FAILED`로 본다. 마무리 도중의 종료 · 실패는 이룬 시점을 지우지 않는다 | 기록 정확성 |
+| 6 | `SCENE_CLOSE`는 상황 안내를 들려준 장면에서만 낸다. 끊긴 마무리 문장은 전달된 것으로, 재생 실패한 마무리 문장은 `OUTPUT_FAILED`로 본다(main 합치기 뒤: 다시 내지 않고 사실 PLAYBACK_FAILED만 남긴 채 변형 평가로 간다, 13.6). 마무리 도중의 종료 · 실패는 이룬 시점을 지우지 않는다 | 기록 정확성 |
 | 7 | 옛 대본 대체: `focusPoints`가 없으면 `reexplanation`, 예시가 없으면 예시 없이 쓴다. 이어 붙이는 옛 칸은 문장부호를 정리한다 | 원문 대조 실패를 줄이려고 |
-| 8 | 목표 안내 · 회고 · 돌아보기를 C안에서도 낸다 | 설계 7.3 '장면 밖 말은 main 그대로'를 운영 동작으로 읽음 |
+| 8 | 목표 안내 · 회고 · 돌아보기를 C안에서도 낸다(main 합치기 뒤 돌아보기는 없어졌다, 13.6) | 설계 7.3 '장면 밖 말은 main 그대로'를 운영 동작으로 읽음 |
 | 9 | 도움 말 기록 행의 역할 값은 `COACH` 그대로다 | V7 CHECK 제약 안, 화면은 '무중'으로만 보임 |
 
 발급 회복(13.1 아래 표)에서 정한 것:
@@ -478,10 +481,86 @@ core와 realtime을 두 갈래로 나눠 동시에 구현하고 합쳤다. 합�
 | 16 | 대체 문장의 호칭은 `TEACHER` 높임말 · `CLUB_SENIOR` 선배 · `CLUB_JUNIOR` 동생 · `FAMILY` 호칭 없음 · 그 밖과 모르는 값은 친구다. 코드가 아닌 관계 이름은 낱말로 고른다: '선생님' · '교사' → 선생님, '선배'나 '동아리' + 형 · 누나 · 언니 · 오빠 → 선배, '후배' · '동생' → 동생, 가족 낱말이나 동아리 밖의 형 · 누나 · 언니 · 오빠 → 호칭 없음 | 칸 빼기로 대체 문장이 자주 들린다. core `graphRelation`은 정해진 이름만 그래프 코드로 바꾸므로 relation에 '동아리 형' 같은 이름이 그대로 온다(5회차 S10). 동아리 밖의 손윗사람 호칭은 가족일 수도 있어 호칭을 붙이지 않는 문장이 안전하다 |
 | 17 | 친구가 아닌 호칭의 묻기 대체는 시드 승인 문장이 아니라 realtime 상수다(시드 `ASK_DEFAULT_TEACHER` 같은 행을 더하지 않았다) | 장면 안 승인 낭독은 대본 ID로만 기록하고 고정 문장 코드 · `contentVersionId`로 기록하지 않는다. 승인 원문 대조도 문장 자체로 한다 |
 
-모두 `contracts/ai-io.md` 10.17에 적었다.
+모두 `contracts/ai-io.md` 10.18(main 합치기 전 10.17)에 적었다.
 
 ### 13.5 다음
 
 - 발급 회복 뒤 core 실호출 대본 생성을 다시 재서 목표별 발급 수와 뺀 칸 진단(`strippedFields`)을 main과 견준다. 뺀 칸이 잦은 칸 · 사유는 생성 지시로 줄인다(대체 문장은 대본 칸보다 덜 자연스럽다).
 - 실측 장치 이식: core 실호출 대본 생성(실제 Luna로 C안 대본 → 시작 패키지)과 realtime 실음성 연습 대화(실제 GPT-Live · Luna 판정 + 합성 아이 음성 + 제브 대역). 옛 브랜치 장치를 main 구조에 맞춰 옮긴다.
 - 그다음 5회차 실측(11장 계획)을 돌리고 결과를 14장에 적는다.
+
+### 13.6 main 합치기 (2026-10-25)
+
+최신 main(`2d2730f2`)을 C안 브랜치(`39ab173c`)에 `git merge origin/main`으로 합쳤다(rebase 아님, 공통 조상 `916ec12b`). 작업 브랜치는 `claude/practice-direct-ask-main`이다.
+- 가져온 main 변경: JIRA-275 연습 시작 · 음성 지연 · 실패 복구(승인 낭독 조기 재생 B1 `PracticeSpeech.matchesPrefix` · `SessionExecutor`, FT-1023-g 시작 흐름 · 오류 처리), 응답 대기 선행 맥락 대본 보완(`generation.v2` · `review.v1`), JIRA-271 AI 사용량 수집(realtime V9), JIRA-274 보호자 홈 SSE, JIRA-276 리포트 만들기 동작.
+- 해결 원칙: 양쪽 동작을 다 살린다. 같은 것을 다르게 정한 곳은 **장면 안은 C안, 장면 밖 · 시작 · 음성 출력 경로는 main**을 따른다(1.3-1).
+
+**충돌 파일과 해결.**
+
+| 파일 | 해결 |
+|---|---|
+| realtime `FlowTransitions` | main FT-1023-g 표(못 들려준 말은 건너뛰고 사실만 남김 `skippedFact`, 재안내 뒤 또 막히면 다음 도움 단계 `afterRepeatedTrouble`, `onIntroductionEnded(end, hasOpening)`) 위에 C안이 다른 네 곳(역할 전환 없는 도움 `focusEntry`, 친구 반응 · 고정 마무리 문장, 청한 도움 = 동의, 끊긴 마무리 = 전달)을 얹었다. 마무리 문장 재생 실패는 다시 내지 않고 사실 PLAYBACK_FAILED만 남긴 채 변형 평가로 간다 |
+| realtime `PracticeConversation` | main의 여는 대화(`Sub.OPENING`) · 돌아보기 제거 · 못 낸 발화 건너뛰기와 C안 승인 낭독 출력(`DirectAskLines` · 화자 `MUJOONG` · 다시 설명 + 묻기 한 슬롯) · R1 아이 말 시계를 함께 두었다. 여는 말은 유연 대화만 읽는다. 목표 안내 · 회고는 두 경로가 같이 낸다 |
+| realtime `PracticeScript` · `PracticeScriptReader` | main `openingLine`(선택, 200자)을 읽고 `reflectionPrompt` · `reflectionSummary`는 읽지 않는다. C안 칸 다섯 개와 판 v1 · v2 읽기는 그대로다 |
+| core `ScenarioScript` | 장면에 main `openingLine`과 C안 칸 다섯 개를 함께 두고 돌아보기 칸을 뺐다. `withOpeningLine`을 더했다 |
+| core `ScenarioScriptValidation` | main 장면 판정 변경(돌아보기 검사 제거, 여는 말 검사 · `withoutInvalidSceneStart`)과 C안 칸별 판정(`optionalSpokenIssues`)을 둘 다 살렸다. main `withoutInvalidSceneStart`가 장면을 다시 만들며 C안 칸을 버리던 의미 충돌을 `withOpeningLine(null)`로 고쳤다 |
+| `contracts/schemas/ai-scenario-output.schema.json` | main `openingLine`(설명에 'C안은 읽지 않는다'를 더함)과 C안 칸 다섯 개를 함께 두고 `reflectionPrompt`를 뺐다 |
+| `contracts/ai-io.md` | main 10.x 변경(10.11, 10.15 B1, 10.17 FT-1023-g)을 받았다. C안 절은 main이 10.17을 먼저 써서 10.18로 옮겼고, 두 쪽이 함께 고친 10.11 · 10.15는 문장을 합쳤다 |
+| `contracts/deviations.md` | main FT-1023-g 행과 C안 FT-1024-a ~ e를 둘 다 두고, FT-1024-a · d에 합친 뒤 동작을 적었다 |
+| realtime `PracticeConversationTest` · `PracticeFlowIT` | C안 시험 틀(v2 대본 · 고정 문장)에 main FT-1023-g 단언을 옮겼다(아래 R-F2 표) |
+
+자동 병합됐지만 함께 고친 곳: `generation.v3.txt`(M7), `FlowState` 주석, 절 번호 참조 10.17 → 10.18(`DirectAskLines` · 시험 · `contracts/timing.md` · `infra/RUNBOOK.md` · 이 문서), 실음성 하니스(`PracticeVoiceChild` · `PracticeVoiceSession` · `PracticeVoiceReport`의 돌아보기 거절 → 유연 대화 여는 말 대답), 아래 R-F2 표의 시험.
+
+**원칙 1로 정한 판단.**
+
+| # | 판단 | 까닭 |
+|---|---|---|
+| M1 | C안은 여는 말(`openingLine`)을 읽지 않고 상황 안내 뒤 곧바로 전하기 + 묻기로 간다. 유연 대화는 main대로 읽는다. core는 strict 요청이라 v3에서도 여는 말을 쓰고, main 검토 · 서버 검사를 그대로 받는다(서버 검사에 걸리면 그 칸만 뺀다) | 여는 말은 상대 역할이 거는 말이라 '무중이 끝까지 무중으로 말한다'는 C안 장면 안 흐름과 맞지 않는다 |
+| M2 | main FT-1023-g의 발화 오류 처리를 C안에도 쓴다. 끝내 못 들려준 상황 안내 · 전하기 + 묻기 · 되묻기 · 다시 설명 · 도움 · 친구 반응 · 마무리 문장 · 목표 안내 · 회고는 다시 내지 않고 건너뛴다(재생 실패면 사실 PLAYBACK_FAILED, 막힘은 사실 없음). 연습 출력 실패 종료(`OUTPUT_FAILED` · `PRACTICE_OUTPUT_FAILED`)는 없다 | 음성 출력 경로는 main을 따른다 |
+| M3 | 판독 불가 · 보류 두 번째는 C안에서도 장면을 닫지 않고 도움 제안(고정 `HELP_OFFER`)으로 간다. 도움 제안에 두 번 불명확이면 동의 없이(기록 `UNCLEAR`) C안 도움(대본 `helpSpeech`)으로 간다. 다시 해 보기에서 두 번째면 남은 횟수가 없어(`retry-max` 1) 집중 한도로 장면을 닫는다 | main '재안내 상한 → 도움 제안'을 받는다. C안 도움은 장면마다 한 번이고 표현 예시가 들어 있어 예시 없는 판이 없다(main은 같은 자리에서 예시 없는 코치 도움). 장면 안 도움의 모양은 C안이다 |
+| M4 | C안 마무리 문장(친구 반응 · `SCENE_CLOSE`)을 못 들려주면 장면의 원인 · 시점을 바꾸지 않고 사실 PLAYBACK_FAILED만 남긴 채 변형 평가 · 회고로 간다 | M2와 같다. 이룬 수행을 지우지 않고 변형 제안도 막지 않는다 |
+| M5 | 돌아보기 · 요약은 두 경로 모두 없다. 목표 안내 · 회고는 두 경로가 같이 낸다(13.4 #8 유지) | main이 돌아보기를 없앴다. 안내 · 회고는 main 운영 경로(유연 대화)의 장면 밖 말이다 |
+| M6 | R1 아이 말 시계를 유연 대화의 여는 대화에도 쓴다. 아이가 말하는 중이면 대답 대기를 끝내지 않고, 확정 전사 없이 끝난 말 뒤에는 대답 대기를 다시 건다 | 두 쪽 장치가 만나는 곳이다. 말하는 도중에 기회 문장으로 넘어가지 않게 한다 |
+| M7 | `generation.v3`에 main v2 보완을 C안 칸에 맞춰 옮겼다: 응답 상태 확인 목표의 선행 질문 · 멈춘 경위(멈춘 말은 `opportunityRelay`가 전하고 말줄임표는 쓰지 않음), 막힌 곳 설명하기 목표의 장면 설정 · 아이 답 대사 구분 · GOAL_MISMATCH 보완, 상황 안내의 지금 하는 일 · 필요한 것 · 구체적 상대 호칭. 역할 알림 문장은 옮기지 않았고, 여는 말 칸 규칙을 더하고, 돌아보기 문단을 지웠다 | main `generation.v2` · `review.v1`은 그대로 받는다. 검토는 main `review.v1` 하나라 main의 새 검토 규칙(응답 상태 · 설명하기 · 여는 말)이 C안 대본에도 그대로 걸린다 |
+| M8 | C안 계약 절 번호를 10.17 → 10.18로 옮겼다. 시드 `infra/seed/006-practice-direct-ask-reference.sql` 첫 주석의 '10.17'은 고치지 않았다 | main이 10.17을 먼저 썼다. 시드는 별도 Flyway 이력으로 적용되어 내용이 바뀌면 검사합이 달라진다(R-M2와 같은 원칙) |
+
+**바뀐 시험 (R-F2).** 지운 시험은 없다. main FT-1023-g로 C안 쪽 동작이 바뀐 단언은 같은 갈래의 새 동작을 단언하도록 고쳤다(이름도 바뀐 동작에 맞췄다). 계약 대조 · ArchUnit 시험은 손대지 않았다.
+
+| 시험 | 바꾼 것(옛 단언 → 새 단언) | 대신 지키는 것 |
+|---|---|---|
+| realtime `PracticeConversationTest` — 도입 · 목표 안내 · 낭독 복구 실패 9건(`unheardSceneIntroduction…` · `aBlockedGoalBriefOrIntroduction…` · `generatedTechnicalRecovery…` · `recoveryNarrationDoesNotLoop…` · `aRetryWithoutOutput…` · `aSlotThatNeverReportsAnEnd…` · `duplicatePlaybackStarts…` · `anUnknownPlaybackStart…` · `aGoalBriefTheOutputCannotMake…`) | `OUTPUT_FAILED` · 장면 행 없음 → `NONE`, 다음 말(도입 · 전하기 + 묻기)로 감. 도입 실패는 장면 행 + PLAYBACK_FAILED(막힘은 사실 없음), 목표 안내 실패는 장면 행 전이라 사실 없음 | 같은 말을 다시 내지 않음(도입 · 재요청 · 복구 낭독 횟수), 취소된 슬롯, 늦은 사건 무시 |
+| 〃 다시 설명 실패 2건(`failedReexplanationIsSkipped…` · `…TheSceneKeepsListening`) | `OUTPUT_FAILED` · 판정 1번 · 장면 닫힘 → `NONE`, 보관한 대답 판정(2번), 장면 열림 · 무응답 시계 | PLAYBACK_FAILED 사실 |
+| 〃 판정 거절 · 보류 3건(`whenRequestJudgmentReturnsFalse…ThenOffersHelp` · `anAbstainedJudgmentEvent…OffersHelp` · `aMalformedJudgmentEvent…`) | 두 번째에 `SCENE_CLOSE` · `ABSTAINED` → 도움 제안(고정 `HELP_OFFER`), 장면 열림 | 첫 번째의 교정 없는 확인(`INPUT_CONFIRM`) 한 번, 판정 요청 수, 앱 오류 없음 |
+| 〃 승인 낭독 거절 2건(`anApprovedReadingTheOutputRefusesMidScene…` · `approvedSpeechTheOutputRefuses…`) | `OUTPUT_FAILED` · `VARIANT_SKIPPED` → `NONE`, 그 단계 입력 대기, PLAYBACK_FAILED만 | 시점이 비어 있음(수행으로 기록하지 않음) |
+| 〃 막힌 복구 낭독 1건(`aBlockedRecoveryNarrationIsSkipped…`) | `OUTPUT_FAILED` · 장면 정리 → `NONE`, 장면 열림 · 무응답 시계 | 막힌 말 · 마무리 문장을 다시 내지 않음, 늦은 실패 사건 무시 |
+| 〃 도움 실패 1건(`aHelpSpeechThatFailsIsSkipped…`) | `OUTPUT_FAILED` · 다시 해 보기 0 → `NONE`, 다시 해 보기 1 · 무응답 시계 | 도움을 다시 내지 않음, PLAYBACK_FAILED |
+| 〃 친구 반응 실패 · 시한 2건(`aFailedOrCutOffFriendReaction…`(실패 · 끊김) · `silentFriendReaction…`) | `OUTPUT_FAILED` · 회고 없음 → 회고 뒤 `LAST_GOAL`, PLAYBACK_FAILED(끊김은 없음) | 이룬 시점 `IMMEDIATE`, 친구 반응을 다시 내지 않음. 새 시험 `aFailedFriendReactionKeepsTheAchievedSceneSoTheVariantIsStillOffered`(main의 막힌 친구 답변 시험 자리) |
+| 〃 `anIncompleteTailAfterPlaybackStarted…` | `isNotEqualTo(OUTPUT_FAILED)` → `isEqualTo(NONE)` | — (단언을 좁혔다) |
+| realtime `DirectAskTransitionsTest` 5건 | 두 번째 판독 불가 · 보류 → 도움 제안(다시 해 보기면 집중 한도), 도움 제안 두 번 불명확 → 동의 없는 도움, 못 들려준 도움 → 다시 해 보기, 못 들려준 질문 → 입력 대기, 못 들려준 마무리 → 원인 없이 변형 평가(PLAYBACK_FAILED) | 역할 전환 없음, 끊긴 마무리 = 전달, 변형 제안 유지, 표 전체 52행 대조 |
+| realtime `DirectAskConversationTest` 3건 | 두 번째 판독 불가 · 도움 제안 두 번 불명확 · 마무리 재생 실패의 장면 닫기 · `OUTPUT_FAILED` → 도움 제안 · 동의 없는 도움(`UNCLEAR`) · 회고 뒤 끝 | TRANSCRIPT_FAILED · HELP_DECLINED 사실, 마무리 문장을 다시 내지 않음 |
+| realtime `FlexibleRoleNoticeTest` 3건 | (유연 대화) 못 들려준 · 막힌 · 끝나지 않은 역할 전환 알림 → 장면 정리 · `OUTPUT_FAILED` → 코치 도움으로 감(main 같은 시험의 새 단언) | 막힌 알림을 다시 내지 않음, PLAYBACK_FAILED는 실패 때만 |
+| realtime `PracticeChildSpeechTest` 1건 | 돌아보기(없어짐) 대기 시험 → 유연 대화 여는 말 대기 시험(`theOpeningLineWaitsForTheChildsSpeech…`) | 말하는 중에는 넘어가지 않고, 전사 없이 끝난 말 뒤 다시 기다린 만큼 지나 기회 문장, 여는 말 대답은 판정하지 않음 |
+| realtime `PracticeFlowRouterTest` · `ChildSpeechStartExecutorTest` | 없어진 신호 `OUTPUT_FAILED` → `NEXT_GOAL` · `LAST_GOAL`(끝 상세 `PRACTICE_COMPLETED`) | 위임 · 신호 적용 경로 그대로 |
+| realtime `PracticeFlowIT` 1건 | 두 번째 막힘에 `CLOSING` · `PRACTICE_OUTPUT_FAILED` → `ACTIVE`, 장면 열림 | 막힌 말 0바이트, PLAYBACK_FAILED 없음, 앱 오류 없음 |
+| core `ScenarioLunaProviderTest` 1건 | v2 내용 단언 '무중이가 친구 역할을 해 볼게'(main이 v2 문구를 '같은 반 친구 역할'로 고침) → '친구 역할을 해 볼게' · '상대 역할을 알린다' | v3에는 역할 알림이 없음을 더함 |
+
+- main 쪽 시험 가운데 C안 장면 안에 없는 갈래(생성형 되묻기 · 친구 답변의 막힘 · 생성 실패)는 C안 시험 틀로 옮기지 않았다. 같은 장치는 유연 대화 시험(`FlexiblePracticeConversationTest`, main 그대로)과 위 C안 대응 시험이 지킨다.
+
+**자동 시험.** 합친 뒤 `./gradlew clean check -Pmujoong.test.db=docker`를 돌렸다. BUILD SUCCESSFUL이다(실호출 격리 검사 `verify*Isolation` 포함). 첫 실행에서는 `DirectAskTransitionsTest` 5개(매개변수 포함 6건)가 옛 동작을 단언해 실패했고, 위 표대로 고친 뒤 다시 돌려 모두 통과했다.
+
+| 모듈 | 시험(발급 회복 뒤, 13.2) | 시험(main 합치기 뒤) | 실패 · 오류 · 건너뜀 |
+|---|---|---|---|
+| contract-model | 394 | 394 | 0 |
+| core-api | 1,905 | 1,913 | 0 |
+| realtime-activity | 2,317 | 2,352 | 0 |
+| test-support | 31 | 31 | 0 |
+| 합계 | 4,647 | 4,690 | 0 |
+
+- 증거 종류는 가짜 공급자 · 합성 대화다. 실제 API · 실제 기기 · 실제 아이 성공이 아니다(R-M11).
+- 실음성 하니스(`PracticeVoice*`, 작업 `:realtime-activity:gptLivePracticeTest`)와 core 하니스(`PracticeQualityLiveTest`, 작업 `:core-api:lunaLiveTest`)는 같은 시험 소스라 컴파일만 확인했다. 실호출은 하지 않았다.
+
+**남은 위험.**
+- C안 대본도 여는 말을 쓰고 main 검토가 그것을 본다. 들리지 않는 칸 때문에 검토가 대본 전체를 거절하면 C안 발급이 줄 수 있다(M1). 다음 core 실호출 대본 생성에서 거절 사유를 본다.
+- 동의 없는 도움에도 표현 예시가 나간다(M3). 예시는 동의 · 요청 때만이라는 BR5.2와 다르므로 팀 확인이 필요하다.
+- 못 들려준 장면 안 질문을 건너뛰면 아이가 질문을 못 들은 채 기다릴 수 있다. 무응답 재안내(기다리기 + 묻기)가 같은 질문을 다시 들려주지만, 실측으로 확인해야 한다.
+- B1 조기 재생과 C안 긴 승인 슬롯(전하기 + 묻기 · 다시 설명 + 묻기 · 도움 3문장)의 조합은 가짜 공급자 시험만 거쳤다. 5회차 실측은 합친 코드로 다시 한다.

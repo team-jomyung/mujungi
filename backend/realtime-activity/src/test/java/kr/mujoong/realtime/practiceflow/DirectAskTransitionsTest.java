@@ -26,7 +26,8 @@ import org.junit.jupiter.params.provider.EnumSource;
 /**
  * C안 '무중이 직접 묻기' 전이표 시험 (docs/practice-direct-ask.md 2장 3A ~ 3E′ · 3.3 · 7.2). 순수 함수라 DB · AI · 시계가 없다. 역할 대화 표
  * ({@link FlowTransitionsTest})와 같은 입력에서 C안이 다른 네 곳 — 역할 전환 없이 곧바로 도움, 친구 반응 · 고정 마무리 문장, 아이가 청한 도움을
- * 동의로 남김, 끊긴 마무리 문장은 전달로 봄 — 과 다시 해 보기 한도 1을 행마다 단언한다.
+ * 동의로 남김, 끊긴 마무리 문장은 전달로 봄 — 과 다시 해 보기 한도 1을 행마다 단언한다. 발화 · 판정 · 전사 오류는 두 표가 같이 main FT-1023-g를
+ * 따른다(못 들려준 말은 건너뛰고, 판독 불가 · 보류 두 번째는 도움 단계로, 13.6 main 합치기).
  */
 @Tag("practice-flow")
 class DirectAskTransitionsTest {
@@ -132,32 +133,40 @@ class DirectAskTransitionsTest {
     }
 
     @Test
-    void anUnclearHelpAnswerIsReguidedOnceThenClosesWithTheFixedClosingLine() {
+    void anUnclearHelpAnswerIsReguidedOnceThenGoesToMujoongsHelpWithoutConsent() {
         assertThat(table.onJudgment(at(Phase.HELP_OFFER, Sub.NONE), JudgmentPoint.J4, "UNCLEAR").guard()).isEqualTo(Guard.UNREADABLE);
 
         FlowState guided = at(Phase.HELP_OFFER, Sub.NONE);
         guided.unreadableGuided(true);
         Step step = table.onJudgment(guided, JudgmentPoint.J4, "UNCLEAR");
-        assertEnters(step, Phase.SCENE_WRAP, Sub.SCENE_CLOSE);
-        assertThat(step.cause()).isEqualTo(EndCause.HELP_UNCLEAR);
+        // FT-1023-g: 두 번째 불명확은 장면을 닫지 않고 동의 없는 도움으로 간다. C안은 역할 전환 알림 없이 곧바로 무중의 도움이다
+        assertEnters(step, Phase.FOCUS, Sub.COACH_UTTERANCE);
+        assertThat(step.cause()).isNull();
         assertThat(step.consent()).isEqualTo(ConsentAnswer.UNCLEAR);
+        assertThat(step.consentsToHelp()).as("동의한 것은 아니다").isFalse();
+        assertThat(step.facts()).isEmpty();
+        assertThat(step.role()).isNull();
     }
 
     @Test
-    void theHelpSpeechEndingStartsTheOnlyRetryAndAFailedHelpSpeechWrapsSilently() {
+    void theHelpSpeechEndingStartsTheOnlyRetryEvenWhenTheHelpSpeechFailedOrWasBlocked() {
         for (SlotEnd end : List.of(SlotEnd.PLAYED, SlotEnd.INTERRUPTED)) {
             Step step = table.onSlotEnded(at(Phase.FOCUS, Sub.COACH_UTTERANCE), end);
             assertEnters(step, Phase.RETRY, Sub.NONE);
             assertThat(step.incrementsRetry()).as(end.name()).isTrue();
             assertThat(step.role()).isNull();
+            assertThat(step.facts()).isEmpty();
         }
+        // FT-1023-g: 못 들려준 도움(실패 · 막힘)도 장면을 닫지 않고 다시 해 보기로 간다(실패면 사실 PLAYBACK_FAILED)
         Step failed = table.onSlotEnded(at(Phase.FOCUS, Sub.COACH_UTTERANCE), SlotEnd.FAILED);
-        assertEnters(failed, Phase.SCENE_WRAP, Sub.VARIANT_EVAL);
-        assertThat(failed.cause()).isEqualTo(EndCause.PLAYBACK_FAILED);
+        assertEnters(failed, Phase.RETRY, Sub.NONE);
+        assertThat(failed.incrementsRetry()).isTrue();
+        assertThat(failed.cause()).isNull();
         assertThat(failed.facts()).containsExactly(FactKind.PLAYBACK_FAILED);
         Step blocked = table.onSlotEnded(at(Phase.FOCUS, Sub.COACH_UTTERANCE), SlotEnd.BLOCKED);
-        assertEnters(blocked, Phase.SCENE_WRAP, Sub.VARIANT_EVAL);
-        assertThat(blocked.cause()).isEqualTo(EndCause.SLOT_BLOCKED);
+        assertEnters(blocked, Phase.RETRY, Sub.NONE);
+        assertThat(blocked.cause()).isNull();
+        assertThat(blocked.facts()).as("막힘은 재생 실패 사실이 아니다").isEmpty();
     }
 
     // ---- 3D 다시 해 보기(한 번) ----
@@ -202,17 +211,28 @@ class DirectAskTransitionsTest {
     }
 
     @Test
-    void theSecondUnreadableOrAbstainedAnswerClosesTheSceneWithTheFixedClosingLine() {
-        FlowState guided = at(Phase.OPPORTUNITY, Sub.NONE);
-        guided.unreadableGuided(true);
-        Step unreadable = table.onJudgment(guided, JudgmentPoint.J2, "UNREADABLE");
-        assertEnters(unreadable, Phase.SCENE_WRAP, Sub.SCENE_CLOSE);
-        assertThat(unreadable.facts()).containsExactly(FactKind.TRANSCRIPT_FAILED);
+    void theSecondUnreadableOrAbstainedAnswerGoesToTheHelpOfferInsteadOfClosingTheScene() {
+        // FT-1023-g: 두 번째 판독 불가 · 보류는 장면을 닫지 않고 도움 제안으로 간다(판독 불가 사실은 남긴다)
+        for (Phase phase : List.of(Phase.OPPORTUNITY, Phase.REASK)) {
+            FlowState guided = at(phase, Sub.NONE);
+            guided.unreadableGuided(true);
+            Step unreadable = table.onJudgment(guided, FlowTransitions.expectedPoint(phase), "UNREADABLE");
+            assertEnters(unreadable, Phase.HELP_OFFER, Sub.NONE);
+            assertThat(unreadable.cause()).as(phase.name()).isNull();
+            assertThat(unreadable.facts()).containsExactly(FactKind.TRANSCRIPT_FAILED);
 
-        Step abstained = table.onJudgmentUnavailable(guided, JudgmentPoint.J2);
-        assertEnters(abstained, Phase.SCENE_WRAP, Sub.SCENE_CLOSE);
-        assertThat(abstained.cause()).isEqualTo(EndCause.ABSTAINED);
-        assertThat(abstained.timing()).isEqualTo(LiveTiming.ABSTAINED);
+            Step abstained = table.onJudgmentUnavailable(guided, FlowTransitions.expectedPoint(phase));
+            assertEnters(abstained, Phase.HELP_OFFER, Sub.NONE);
+            assertThat(abstained.cause()).as(phase.name()).isNull();
+            assertThat(abstained.facts()).isEmpty();
+        }
+        // 다시 해 보기에서 두 번째면 남은 횟수가 없어(retry-max 1) 도움을 다시 하지 않고 집중 한도로 고정 마무리 문장을 낸다
+        FlowState retry = retrying();
+        retry.unreadableGuided(true);
+        Step limit = table.onJudgment(retry, JudgmentPoint.J5, "UNREADABLE");
+        assertEnters(limit, Phase.SCENE_WRAP, Sub.SCENE_CLOSE);
+        assertThat(limit.cause()).isEqualTo(EndCause.FOCUS_LIMIT);
+        assertThat(limit.facts()).containsExactly(FactKind.TRANSCRIPT_FAILED);
     }
 
     @Test
@@ -227,13 +247,18 @@ class DirectAskTransitionsTest {
     }
 
     @Test
-    void outputFailuresAndEndRequestsSayNoClosingLine() {
+    void outputFailuresAreSkippedWithoutAClosingLineAndEndRequestsClose() {
+        // FT-1023-g: 못 들려준 질문은 다시 내지 않고 그 단계의 입력을 기다린다(장면을 닫지 않고 마무리 문장도 없다)
         Step failed = table.onSlotEnded(at(Phase.OPPORTUNITY, Sub.NONE), SlotEnd.FAILED);
-        assertEnters(failed, Phase.SCENE_WRAP, Sub.VARIANT_EVAL);
-        assertThat(failed.cause()).isEqualTo(EndCause.PLAYBACK_FAILED);
+        assertThat(failed.action()).isEqualTo(Action.AWAIT);
+        assertThat(failed.cause()).isNull();
+        assertThat(failed.facts()).containsExactly(FactKind.PLAYBACK_FAILED);
         Step blocked = table.onSlotEnded(at(Phase.REASK, Sub.NONE), SlotEnd.BLOCKED);
-        assertEnters(blocked, Phase.SCENE_WRAP, Sub.VARIANT_EVAL);
-        assertThat(blocked.cause()).isEqualTo(EndCause.SLOT_BLOCKED);
+        assertThat(blocked.action()).isEqualTo(Action.AWAIT);
+        assertThat(blocked.facts()).as("막힘은 재생 실패 사실이 아니다").isEmpty();
+        Step reexplained = table.onSlotEnded(at(Phase.OPPORTUNITY, Sub.REEXPLAIN), SlotEnd.FAILED);
+        assertEnters(reexplained, Phase.OPPORTUNITY, Sub.NONE);
+        assertThat(reexplained.facts()).as("못 들려준 다시 설명은 소단계만 닫는다").containsExactly(FactKind.PLAYBACK_FAILED);
         Step end = table.onEndRequested(at(Phase.OPPORTUNITY, Sub.NONE));
         assertEnters(end, Phase.CLOSING, Sub.NONE);
         assertThat(end.endsByRequest()).isTrue();
@@ -254,19 +279,21 @@ class DirectAskTransitionsTest {
 
     @ParameterizedTest
     @EnumSource(value = Sub.class, names = {"FRIEND_REACTION", "SCENE_CLOSE"})
-    void aClosingLineTheOutputCouldNotPlayIsAPlaybackFailureThatKeepsTheSceneTiming(Sub sub) {
+    void aClosingLineTheOutputCouldNotPlayIsSkippedWithAPlaybackFailureAndKeepsTheSceneCause(Sub sub) {
         FlowState state = at(Phase.SCENE_WRAP, sub);
         state.sceneEnd(EndCause.NORMAL, LiveTiming.AFTER_REASK);
 
+        // FT-1023-g: 못 들려준 마무리 문장은 다시 내지 않고 변형 평가로 간다. 장면의 원인 · 시점은 바꾸지 않는다(전이에 원인이 없다)
         Step failed = table.onSlotEnded(state, SlotEnd.FAILED);
         assertEnters(failed, Phase.SCENE_WRAP, Sub.VARIANT_EVAL);
-        assertThat(failed.cause()).isEqualTo(EndCause.PLAYBACK_FAILED);
+        assertThat(failed.cause()).isNull();
         assertThat(failed.facts()).containsExactly(FactKind.PLAYBACK_FAILED);
-        assertThat(failed.timing()).isEqualTo(LiveTiming.AFTER_REASK);
 
         Step blocked = table.onSlotEnded(state, SlotEnd.BLOCKED);
-        assertThat(blocked.cause()).isEqualTo(EndCause.SLOT_BLOCKED);
+        assertEnters(blocked, Phase.SCENE_WRAP, Sub.VARIANT_EVAL);
+        assertThat(blocked.cause()).isNull();
         assertThat(blocked.facts()).isEmpty();
+        assertThat(table.decideVariant(state, true).offer()).as("정상 수행 장면은 마무리를 못 들려줘도 변형을 권한다").isTrue();
     }
 
     // ---- 변형 ----

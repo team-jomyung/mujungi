@@ -95,6 +95,7 @@
 
 .mj-header > h1 { margin: 0; font-size: 1.25rem; font-weight: 800; }
 .mj-header > p { flex-basis: 100%; margin: 0; color: var(--color-text-secondary); }
+.mj-header--records > button { margin-inline-start: auto; max-width: 100%; }
 .mj-parent button:not([class]) {
   min-height: var(--touch-target-min);
   padding: 8px 12px;

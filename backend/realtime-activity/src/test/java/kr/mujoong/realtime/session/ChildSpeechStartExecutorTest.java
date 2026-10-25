@@ -120,12 +120,13 @@ class ChildSpeechStartExecutorTest {
     @Test
     void theSignalTheNotificationReturnsIsAppliedLikeAnyOtherPracticeMoment() {
         practice(true);
-        extension.onSpeechStarted = (at, out) -> Signal.OUTPUT_FAILED;
+        // FT-1023-g로 출력 실패 신호(OUTPUT_FAILED)가 없어져, 남은 끝 신호(LAST_GOAL)로 같은 적용 경로를 본다
+        extension.onSpeechStarted = (at, out) -> Signal.LAST_GOAL;
         h.activate();
 
         delta("item-1", "어");
 
         assertThat(h.executor.status()).isEqualTo(SessionStatus.CLOSING);
-        assertThat(h.transitions.find(h.sessionId).orElseThrow().endDetail()).isEqualTo("PRACTICE_OUTPUT_FAILED");
+        assertThat(h.transitions.find(h.sessionId).orElseThrow().endDetail()).isEqualTo("PRACTICE_COMPLETED");
     }
 }

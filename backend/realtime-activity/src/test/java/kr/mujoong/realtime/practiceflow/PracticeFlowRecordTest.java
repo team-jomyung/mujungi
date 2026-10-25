@@ -14,6 +14,7 @@ import kr.mujoong.contract.json.JsonCodec;
 import kr.mujoong.realtime.practicelegacy.PracticePorts.Playback;
 import kr.mujoong.realtime.practiceflow.PracticeFlowTestKit.Harness;
 import kr.mujoong.realtime.practiceflow.PracticeFlowTypes.Fact;
+import kr.mujoong.realtime.practiceflow.PracticeFlowTypes.FactKind;
 import kr.mujoong.realtime.practiceflow.PracticeFlowTypes.HelpRecord;
 import kr.mujoong.realtime.practiceflow.PracticeFlowTypes.SceneRunRecord;
 import kr.mujoong.realtime.testing.InternalApi;
@@ -84,12 +85,12 @@ class PracticeFlowRecordTest {
     }
 
     @Test
-    void anIntroThatNeverPlayedLeavesNoRowAndTheSettlementValueStillFollowsTheContract() {
+    void anIntroThatNeverPlayedLeavesARowWithAPlaybackFailureAndTheSettlementValueStillFollowsTheContract() {
         Harness h = full();
         h.toIntroduction();
         h.end(Playback.FAILED);
 
-        assertThat(h.recorder.list()).isEmpty();
+        assertThat(h.recorder.factKinds(h.recorder.only())).containsExactly(FactKind.PLAYBACK_FAILED);
         assertThat(InternalApi.schemaErrors("practice-record-v2.schema.json", JsonCodec.shared().write(h.ext.practiceRecord())))
                 .isEmpty();
     }

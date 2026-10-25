@@ -2,7 +2,6 @@ package kr.mujoong.realtime.practiceflow;
 
 import static kr.mujoong.realtime.practiceflow.PracticeScriptFixtures.FIXED_SPEECH;
 import static kr.mujoong.realtime.practiceflow.PracticeScriptFixtures.V2_ASK;
-import static kr.mujoong.realtime.practiceflow.PracticeScriptFixtures.V2_INTRO;
 import static kr.mujoong.realtime.practiceflow.PracticeScriptFixtures.directAskScript;
 import static kr.mujoong.realtime.practiceflow.PracticeScriptFixtures.minimalScript;
 import static kr.mujoong.realtime.practiceflow.PracticeScriptFixtures.packageJson;
@@ -21,8 +20,8 @@ import org.junit.jupiter.api.Test;
 /**
  * 아이가 말하는 중의 무응답 시계 시험 (4회차 R1, docs/practice-direct-ask.md 7.2). 확정 전사는 말이 끝나고 조용 시간이 지나야 오므로, 실행부가 알리는
  * '아이 말 시작'에서 무응답 시계를 멈추고 같은 길이의 안전 시계({@code child-speech})만 건다. 확정 전사가 오면 지금처럼 판정하고, 전사 없이 끝난 말은
- * 안전 시계가 끝날 때 무응답 대기를 처음부터 다시 건다. C안 · 유연 대화 두 경로와 돌아보기가 같다. 가짜 출력 · 수동 시계 위의 합성 대화이다(테스트
- * 대역 증거).
+ * 안전 시계가 끝날 때 무응답 대기를 처음부터 다시 건다. C안 · 유연 대화 두 경로와 유연 대화의 여는 대화(FT-1023-g)가 같다. 가짜 출력 · 수동 시계
+ * 위의 합성 대화이다(테스트 대역 증거).
  */
 @Tag("practice-flow")
 class PracticeChildSpeechTest {
@@ -123,23 +122,28 @@ class PracticeChildSpeechTest {
     }
 
     @Test
-    void theOptionalReflectionWaitsForTheChildsSpeechInsteadOfSkippingItMidSentence() {
-        String script = directAskScript(SCENARIO).replace("\"sceneKey\":\"base-1\"",
-                "\"reflectionPrompt\":\"지난번 이야기를 잠깐 떠올려 볼까?\",\"sceneKey\":\"base-1\"");
-        Harness h = new Harness(packageJson(GOAL, script), FIXED_SPEECH);
-        h.activate();
+    void theOpeningLineWaitsForTheChildsSpeechInsteadOfSkippingItMidSentence() {
+        // 돌아보기(main FT-1023-g에서 없앰) 대신 유연 대화의 여는 대화가 같은 규칙을 따른다: 말하는 중에는 대답 대기를 끝내지 않는다
+        String opening = "안녕, 나 상자 정리하고 있었어.";
+        String script = minimalScript(SCENARIO).replace("\"sceneKey\":\"base-1\"",
+                "\"openingLine\":\"" + opening + "\",\"sceneKey\":\"base-1\"");
+        Harness h = new Harness(packageJson(GOAL, script), Map.of(), PracticeFlowTestKit.flexible());
+        h.toIntroduction();
         h.played();
-        assertThat(h.ext.state().sub()).isEqualTo(FlowState.Sub.REFLECTION_OFFER);
+        assertThat(h.ext.state().sub()).isEqualTo(FlowState.Sub.OPENING);
+        assertThat(h.out.lastSlot().text()).isEqualTo(opening);
         h.played();
         assertThat(h.out.timers).containsKey(NO_RESPONSE);
 
         h.speechStarted();
         h.advance(WAIT);
-        assertThat(h.ext.state().sub()).as("말하는 중에는 돌아보기를 건너뛰지 않는다").isEqualTo(FlowState.Sub.REFLECTION_OFFER);
+        assertThat(h.ext.state().sub()).as("말하는 중에는 여는 대화를 건너뛰지 않는다").isEqualTo(FlowState.Sub.OPENING);
         assertThat(h.out.timers).containsKey(NO_RESPONSE);
 
         h.advance(WAIT);
-        assertThat(h.out.lastSlot().text()).as("전사 없이 끝난 말 뒤 다시 기다린 만큼 지나서야 장면으로 간다").isEqualTo(V2_INTRO);
+        assertThat(h.ext.state().sub()).isEqualTo(FlowState.Sub.NONE);
+        assertThat(h.out.lastSlot().text()).as("전사 없이 끝난 말 뒤 다시 기다린 만큼 지나서야 기회 문장으로 간다").isEqualTo("친구가 말했어. 그거 줘.");
+        assertThat(h.out.judgments).as("여는 말에 대한 말은 판정하지 않는다").isEmpty();
     }
 
     @Test

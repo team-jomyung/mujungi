@@ -45,8 +45,7 @@ public final class StructuredScenarioFlow {
         }
         payload.put("goal",semanticGoal);
         payload.put("practiceContinuity",continuity.supportHistory());
-        if(previous==null&&!continuity.childEvidence().isEmpty())payload.put("reflectionContext",
-                Map.of("source","CHILD_UTTERANCE","verifiedQuotes",continuity.childEvidence()));
+        // FT-1023-g(2026-10-24): 원래 대화 요약을 없애 아이 발화 인용(reflectionContext)은 생성 입력에 넣지 않는다
         String opportunity=original.candidate()?original.fourElements().situation():definition.opportunityCondition();
         String relation=previous==null?goal.relationType():previous.scenario().relationType();
         if(!original.candidate()){
@@ -73,8 +72,7 @@ public final class StructuredScenarioFlow {
         if(previous!=null)sourceText=(String)((Map<?,?>)clean.get("sourceScenario")).get("scenarioText");
         var duplicate=new java.util.concurrent.atomic.AtomicBoolean();
         var rules=new ScenarioScriptValidation.Rules(cleanRelation,cleanOpportunity,cleanGoal.targetExpression(),aliases.originalNames(),
-                sourceText,fingerprint->{boolean seen=repository.seen(session.childId(),fingerprint);if(seen)duplicate.set(true);return seen;},knowledge,
-                clean.containsKey("reflectionContext"));
+                sourceText,fingerprint->{boolean seen=repository.seen(session.childId(),fingerprint);if(seen)duplicate.set(true);return seen;},knowledge);
         try{return generator.generate(new ScenarioScriptGenerator.Input(clean,aliases.aliases(),rules,knowledge.context().isPresent(),json.write(cleanGoal)),deadline);}
         catch(ScenarioScriptGenerator.ContentExhausted exhausted){exhausted.retryableDuplicate=duplicate.get();throw exhausted;}
     }

@@ -18,14 +18,18 @@ import kr.mujoong.realtime.practiceflow.PracticeFlowTypes.VariantSkipReason;
  * 시계 · 기록)은 하지 않고 {@link FlowState}를 바꾸지도 않는다 — 적용은 {@link PracticeConversation}이 한다.
  *
  * <p>한도는 {@code Instant} 차이가 아니라 시계 만료 표지({@link FlowState#focusLimitReached()} · {@link FlowState#goalLimitReached()})와 횟수로
- * 판단한다(D3). 표에 없는 입력은 오류가 아니라 {@link Action#IGNORE}다(BR3.1). 계약의 기록 사실 15종 · 변형 생략 사유 5종 · 진행 중 판정 시점
+ * 판단한다(D3). 표에 없는 입력은 오류가 아니라 {@link Action#IGNORE}다(BR3.1).
+ *
+ * <p>FT-1023-g: 발화 · 판정 · 전사 오류는 장면이나 연습을 닫지 않는다. 실패한 발화는 건너뛰고 다음 단계로 가며(사실 PLAYBACK_FAILED는 남긴다),
+ * 판독 불가 · 보류 두 번째는 도움 제안 · 코치 도움으로 넘긴다. 장면을 닫는 것은 정상 진행 · 무응답 · 시간 상한 · 종료 의사뿐이다. 계약의 기록 사실 15종 · 변형 생략 사유 5종 · 진행 중 판정 시점
  * 5종만 쓴다. 아이 전사 · 대본 문장 · 판정 입력은 받지도 돌려주지도 않는다(R-F14).
  *
- * <p>C안 '무중이 직접 묻기'({@code directAsk}, docs/practice-direct-ask.md 3장)는 같은 표에서 네 곳만 다르다. ① 도움 요청 · 도움 동의는 역할 전환
- * 알림({@code ROLE_NOTICE}) 없이 곧바로 무중의 도움으로 간다. ② 장면 정리는 복귀 알림({@code RETURN_NOTICE}) · 친구 역할 답변({@code PEER_REPLY})
- * 대신, 수행이면 친구 반응({@code FRIEND_REACTION}), 실패 · 거절 · 한도면 고정 마무리 문장({@code SCENE_CLOSE})을 낸다. 재생 실패 · 막힘은
- * 지금처럼 말 없이 정리한다. ③ 아이가 먼저 도움을 청해도(J2 · J3 HELP) 도움 동의(ACCEPT · HELP_ACCEPTED)로 남긴다. ④ 마무리 문장이 아이 말로
- * 끊기면 전달된 것으로 보고 다음으로 간다. 다시 해 보기 한도는 설정({@code retry-max}, C안 기본 1)이 정한다.
+ * <p>C안 '무중이 직접 묻기'({@code directAsk}, docs/practice-direct-ask.md 3장)는 같은 표에서 네 곳만 다르다. ① 도움 요청 · 도움 동의(판독 불가
+ * · 보류 뒤 동의 없는 도움 포함)는 역할 전환 알림({@code ROLE_NOTICE}) 없이 곧바로 무중의 도움으로 간다. ② 장면 정리는 복귀 알림
+ * ({@code RETURN_NOTICE}) · 친구 역할 답변({@code PEER_REPLY}) 대신, 수행이면 친구 반응({@code FRIEND_REACTION}), 미수행 · 거절 · 한도면 고정
+ * 마무리 문장({@code SCENE_CLOSE})을 낸다. ③ 아이가 먼저 도움을 청해도(J2 · J3 HELP) 도움 동의(ACCEPT · HELP_ACCEPTED)로 남긴다. ④ 마무리 문장이
+ * 아이 말로 끊기면 전달된 것으로 보고 다음으로 간다. 발화 · 판정 · 전사 오류는 두 표가 같이 위 FT-1023-g 규칙을 따른다(못 들려준 말은 건너뛰고,
+ * 판독 불가 · 보류 두 번째는 도움 단계로). 다시 해 보기 한도는 설정({@code retry-max}, C안 기본 1)이 정한다.
  */
 public final class FlowTransitions {
 
@@ -57,15 +61,15 @@ public final class FlowTransitions {
         HELP_DECLINED,
         /** 무응답 둘째 만료(미실시). */
         TIMEOUT,
-        /** 판독 불가 두 번째(미실시). */
+        /** 판독 불가 두 번째(미실시). FT-1023-g 뒤 새 전이는 내지 않는다(옛 기록 · 변형 평가 표 호환). */
         TRANSCRIPT_FAILED,
-        /** 판정 보류 · 장애 두 번째. */
+        /** 판정 보류 · 장애 두 번째. FT-1023-g 뒤 새 전이는 내지 않는다. */
         ABSTAINED,
-        /** 도움 제안에 불명확 두 번째. */
+        /** 도움 제안에 불명확 두 번째. FT-1023-g 뒤 새 전이는 내지 않는다. */
         HELP_UNCLEAR,
-        /** 슬롯 두 번째 막힘. */
+        /** 슬롯 두 번째 막힘. FT-1023-g 뒤 새 전이는 내지 않는다. */
         SLOT_BLOCKED,
-        /** 재생 실패 · 알림 끊김. */
+        /** 재생 실패 · 알림 끊김. FT-1023-g 뒤 새 전이는 내지 않는다. */
         PLAYBACK_FAILED,
         /** 목표 10분 만료. */
         TIME_LIMIT,
@@ -324,7 +328,7 @@ public final class FlowTransitions {
         };
     }
 
-    /** 판정 보류 · 장애 사건. 판독 불가와 같은 재안내를 하되 두 번째에는 보류로 닫는다(§3.3a). */
+    /** 판정 보류 · 장애 사건. 판독 불가와 같은 재안내를 하고, 두 번째에는 닫지 않고 도움으로 넘긴다(FT-1023-g). */
     public Step onJudgmentUnavailable(FlowState s, JudgmentPoint point) {
         if (!acceptsJudgment(s, point)) {
             return Step.ignore();
@@ -364,9 +368,7 @@ public final class FlowTransitions {
             case "ACCEPT" -> Step.enter(Phase.FOCUS, focusEntry()).fact(FactKind.HELP_ACCEPTED).consent(ConsentAnswer.ACCEPT)
                     .helpConsented();
             case "REFUSE" -> wrap(s, EndCause.HELP_DECLINED, FactKind.HELP_DECLINED, LiveTiming.NONE).consent(ConsentAnswer.DECLINE);
-            case "UNCLEAR" -> s.unreadableGuided()
-                    ? wrap(s, EndCause.HELP_UNCLEAR, null, LiveTiming.NONE).consent(ConsentAnswer.UNCLEAR)
-                    : Step.reguide(Guard.UNREADABLE);
+            case "UNCLEAR" -> s.unreadableGuided() ? afterRepeatedTrouble(s) : Step.reguide(Guard.UNREADABLE);
             default -> unavailable(s);
         };
     }
@@ -416,15 +418,18 @@ public final class FlowTransitions {
         return directAsk ? Sub.COACH_UTTERANCE : Sub.ROLE_NOTICE;
     }
 
-    /** UNREADABLE: 같은 질문을 교정 없이 한 번 다시, 두 번째면 판독 불가로 미실시(TRANSCRIPT_FAILED, NONE). */
+    /** UNREADABLE: 같은 질문을 교정 없이 한 번 다시, 두 번째면 사실 TRANSCRIPT_FAILED를 남기고 도움으로 넘긴다(FT-1023-g). */
     private Step unreadable(FlowState s) {
         if (!s.unreadableGuided()) {
             return Step.reguide(Guard.UNREADABLE);
         }
-        return wrap(s, EndCause.TRANSCRIPT_FAILED, FactKind.TRANSCRIPT_FAILED, LiveTiming.NONE);
+        if (s.phase() == Phase.VARIANT_OFFER) {
+            return declineVariant(s, VariantSkipReason.DECLINED);
+        }
+        return afterRepeatedTrouble(s).fact(FactKind.TRANSCRIPT_FAILED);
     }
 
-    /** 보류 · 장애: 재안내 한 번, 두 번째면 보류로 닫는다(사실 없음, ABSTAINED). */
+    /** 보류 · 장애: 재안내 한 번, 두 번째면 도움으로 넘긴다(사실 없음, FT-1023-g). */
     private Step unavailable(FlowState s) {
         if (!s.unreadableGuided()) {
             return Step.reguide(Guard.UNREADABLE);
@@ -432,7 +437,23 @@ public final class FlowTransitions {
         if (s.phase() == Phase.VARIANT_OFFER) {
             return declineVariant(s, VariantSkipReason.DECLINED);
         }
-        return wrap(s, EndCause.ABSTAINED, null, LiveTiming.ABSTAINED);
+        return afterRepeatedTrouble(s);
+    }
+
+    /**
+     * 같은 단계에서 재안내를 한 번 했는데도 또 알아듣지 못했다: 같은 안내를 되풀이하지 않고 다음 도움 단계로 간다(FT-1023-g). 기회 · 되묻기는 도움 제안,
+     * 도움 제안은 동의 없는 코치 도움(예시 없음), 다시 해 보기는 남은 횟수 안에서 코치 도움이다. 횟수 · 집중 한도가 끝나면 그 한도로 정리한다. C안도
+     * 같은 표를 쓰고, 도움 진입만 역할 전환 알림 없이 곧바로 무중의 도움이다(C안의 도움은 장면마다 한 번이라 다시 해 보기에서는 한도로 정리된다).
+     */
+    private Step afterRepeatedTrouble(FlowState s) {
+        return switch (s.phase()) {
+            case OPPORTUNITY, REASK -> Step.enter(Phase.HELP_OFFER, Sub.NONE);
+            case HELP_OFFER -> Step.enter(Phase.FOCUS, focusEntry()).consent(ConsentAnswer.UNCLEAR);
+            case RETRY -> retriesLeft(s)
+                    ? Step.enter(Phase.FOCUS, Sub.COACH_UTTERANCE)
+                    : wrap(s, EndCause.FOCUS_LIMIT, null, LiveTiming.NONE);
+            default -> Step.ignore();
+        };
     }
 
     // ---- 시계 ----
@@ -490,7 +511,7 @@ public final class FlowTransitions {
     public Step onSlotEnded(FlowState s, SlotEnd end) {
         boolean ended = end == SlotEnd.PLAYED || end == SlotEnd.INTERRUPTED;
         return switch (s.phase()) {
-            case SCENE_INTRO -> ended ? Step.enter(Phase.OPPORTUNITY, Sub.NONE) : Step.enter(afterScene(s), Sub.NONE);
+            case SCENE_INTRO -> onIntroductionEnded(end, false);
             case OPPORTUNITY, REASK, HELP_OFFER, RETRY -> inputPhaseSlot(s, end);
             case VARIANT_OFFER -> ended ? Step.await() : declineVariant(s, VariantSkipReason.NO_VARIANT);
             case FOCUS -> focusSlot(s, end);
@@ -504,6 +525,15 @@ public final class FlowTransitions {
         };
     }
 
+    /**
+     * 장면 도입이 끝났다. 들려주지 못했어도(실패 · 막힘) 장면을 닫지 않고 여는 말 또는 기회 문장으로 간다(FT-1023-g). 막힌 도입은 다시 내지 않는다.
+     *
+     * @param hasOpening 대본에 여는 말(openingLine)이 있는가
+     */
+    public Step onIntroductionEnded(SlotEnd end, boolean hasOpening) {
+        return Step.enter(Phase.OPPORTUNITY, hasOpening ? Sub.OPENING : Sub.NONE).fact(skippedFact(end));
+    }
+
     private Step inputPhaseSlot(FlowState s, SlotEnd end) {
         if (end == SlotEnd.PLAYED || end == SlotEnd.INTERRUPTED) {
             if (s.sub() == Sub.REEXPLAIN) {
@@ -511,7 +541,8 @@ public final class FlowTransitions {
             }
             return Step.await();
         }
-        return failedWrap(s, end);
+        // FT-1023-g: 못 들려준 발화는 건너뛰고 이 단계의 입력을 기다린다(소단계 발화면 소단계를 닫는다)
+        return (s.sub() == Sub.NONE ? Step.await() : Step.enter(s.phase(), Sub.NONE)).fact(skippedFact(end));
     }
 
     private Step focusSlot(FlowState s, SlotEnd end) {
@@ -520,19 +551,19 @@ public final class FlowTransitions {
             if (end == SlotEnd.PLAYED) {
                 return Step.enter(Phase.FOCUS, Sub.COACH_UTTERANCE).role(FlowRole.COACH).fact(FactKind.COACH_SWITCH);
             }
-            // 알림이 끊기거나 실패 · 막힘이면 역할을 바꾸지 않고 도움 없이 정리한다(BR5.1 · BR5.5)
-            return end == SlotEnd.INTERRUPTED ? wrap(s, EndCause.PLAYBACK_FAILED, null, LiveTiming.NONE) : failedWrap(s, end);
+            // FT-1023-g: 알림이 끊기거나 실패 · 막혀도 장면을 닫지 않고 코치 도움으로 간다(BR5.1 · BR5.5를 대체)
+            return Step.enter(Phase.FOCUS, Sub.COACH_UTTERANCE).role(FlowRole.COACH).fact(FactKind.COACH_SWITCH)
+                    .fact(skippedFact(end));
         }
         if (s.sub() == Sub.COACH_UTTERANCE) {
-            return ended ? Step.enter(Phase.RETRY, Sub.NONE).incrementRetry() : failedWrap(s, end);
+            return Step.enter(Phase.RETRY, Sub.NONE).incrementRetry().fact(ended ? null : skippedFact(end));
         }
         return Step.ignore();
     }
 
-    private Step failedWrap(FlowState s, SlotEnd end) {
-        return end == SlotEnd.BLOCKED
-                ? wrap(s, EndCause.SLOT_BLOCKED, null, LiveTiming.NONE)
-                : wrap(s, EndCause.PLAYBACK_FAILED, FactKind.PLAYBACK_FAILED, LiveTiming.NONE);
+    /** 건너뛴 발화의 사실: 재생 실패는 PLAYBACK_FAILED, 안전 막힘 · 정상 종료는 없음. */
+    private static FactKind skippedFact(SlotEnd end) {
+        return end == SlotEnd.FAILED ? FactKind.PLAYBACK_FAILED : null;
     }
 
     private Step returnNoticeEnded(FlowState s, SlotEnd end) {
@@ -553,25 +584,21 @@ public final class FlowTransitions {
         if (end == SlotEnd.PLAYED) {
             return Step.enter(Phase.SCENE_WRAP, Sub.VARIANT_EVAL);
         }
-        return failedClosing(s, end);
+        // Blocked, failed or cut-off replies never start another generated reply. FT-1023-g: the achieved scene keeps its
+        // normal cause, so the variant evaluation still runs.
+        return Step.enter(Phase.SCENE_WRAP, Sub.VARIANT_EVAL).fact(skippedFact(end));
     }
 
     /**
      * C안 마무리 문장(친구 반응 · 고정 마무리)이 닫혔다. 끝까지 재생됐거나 아이 말로 끊겼으면 전달된 것으로 보고 변형 평가로 간다 — 아이가 마무리 위에
-     * 말한 것을 실패로 치지 않는다(docs/practice-direct-ask.md 7.2). 실패 · 막힘은 친구 역할 답변과 같게 재생 실패로 정리한다.
+     * 말한 것을 실패로 치지 않는다(docs/practice-direct-ask.md 7.2). 못 들려준 마무리(실패 · 막힘)도 친구 역할 답변과 같게 다시 내지 않고 건너뛴다:
+     * 장면의 원인 · 시점은 그대로 두고 재생 실패만 사실로 남긴 채 변형 평가로 간다(FT-1023-g).
      */
     private Step closingLineEnded(FlowState s, SlotEnd end) {
         if (end == SlotEnd.PLAYED || end == SlotEnd.INTERRUPTED) {
             return Step.enter(Phase.SCENE_WRAP, Sub.VARIANT_EVAL);
         }
-        return failedClosing(s, end);
-    }
-
-    /** Blocked, failed or cut-off replies never start another reply or a variant. */
-    private static Step failedClosing(FlowState s, SlotEnd end) {
-        return Step.enter(Phase.SCENE_WRAP, Sub.VARIANT_EVAL)
-                .cause(end == SlotEnd.BLOCKED ? EndCause.SLOT_BLOCKED : EndCause.PLAYBACK_FAILED)
-                .timing(s.sceneTiming()).fact(end == SlotEnd.BLOCKED ? null : FactKind.PLAYBACK_FAILED);
+        return Step.enter(Phase.SCENE_WRAP, Sub.VARIANT_EVAL).fact(skippedFact(end));
     }
 
     // ---- 장면 정리 · 변형 ----
@@ -630,8 +657,9 @@ public final class FlowTransitions {
     }
 
     /**
-     * C안 장면 정리에서 낼 말: 수행이면 친구 반응, 실패 · 거절 · 한도(무응답 · 판독 불가 · 보류 · 도움 거절 · 불명확 · 다시 해 보기 · 집중 · 목표 시간
-     * 한도)면 고정 마무리 문장이다. 재생 실패 · 막힘은 말이 나가지 못하는 때라 말 없이 정리하고(지금처럼), 종료 · 휴식 의사는 실행부가 맡는다.
+     * C안 장면 정리에서 낼 말: 수행이면 친구 반응, 미수행 · 거절 · 한도(무응답 · 다시 해 보기 · 집중 · 목표 시간 한도 · 도움 거절)면 고정 마무리
+     * 문장이다. 판독 불가 · 보류 · 불명확 · 재생 실패 · 막힘 원인은 FT-1023-g 뒤 새 전이가 내지 않지만 옛 표 호환으로 둔다(앞의 셋은 마무리 문장, 뒤의
+     * 둘은 말 없이 정리). 종료 · 휴식 의사는 실행부가 맡는다.
      */
     private static Sub closingLine(EndCause cause) {
         return switch (cause) {

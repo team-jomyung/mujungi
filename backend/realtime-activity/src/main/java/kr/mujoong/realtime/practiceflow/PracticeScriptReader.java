@@ -17,9 +17,10 @@ import kr.mujoong.realtime.practiceflow.PracticeScriptException.Reason;
  *       {@code validation}(통과). 하나라도 어기면 {@link PracticeScriptException}(사유 코드만).
  *   <li>선택: {@code selfReview} · {@code generation} · 변형 장면 · 장면의 {@code focusPoints · expressionExamples · relation · place · topic}.
  *       없으면 빈 값으로 정규화한다(거절하지 않는다). 모르는 필드는 무시한다(계약 10절).
- *   <li>들리는 선택 칸({@code spokenIntroduction · reflectionPrompt}과 C안 칸 {@code opportunityRelay · askPrompt · reaskPrompt · helpSpeech ·
+ *   <li>들리는 선택 칸({@code spokenIntroduction · openingLine}과 C안 칸 {@code opportunityRelay · askPrompt · reaskPrompt · helpSpeech ·
  *       friendReaction})은 없으면 null로 두고(옛 대본은 대체 문장을 쓴다), 있으면 비지 않고 계약 길이 안이며 제어 문자가 없어야 한다
- *       (어기면 {@link Reason#VALIDATION_FAILED}).
+ *       (어기면 {@link Reason#VALIDATION_FAILED}). 옛 대본의 돌아보기 질문 · 원래 대화 요약({@code reflectionPrompt · reflectionSummary})은
+ *       모르는 필드로 무시한다(FT-1023-g).
  *   <li>{@code scriptVersion}이 없으면 새 흐름 대상이 아니다({@link Reason#NO_SCRIPT_VERSION}, 분기는 BR1.4가 정한다).
  * </ul>
  *
@@ -35,13 +36,13 @@ public final class PracticeScriptReader {
     /** 장면 JSON 모양. */
     record RawScene(String sceneKey, String sceneKind, String sceneDescription, String opportunitySentence,
             String reexplanation, String partnerRole, List<String> focusPoints, List<String> expressionExamples,
-            String relation, String place, String topic, String spokenIntroduction, String reflectionPrompt,
+            String relation, String place, String topic, String spokenIntroduction, String openingLine,
             String opportunityRelay, String askPrompt, String reaskPrompt, String helpSpeech, String friendReaction) {
     }
 
     /** 들리는 선택 칸의 길이 상한(계약 {@code ai-scenario-output.schema.json} maxLength와 같다). */
     private static final int SPOKEN_INTRODUCTION_MAX = 500;
-    private static final int REFLECTION_PROMPT_MAX = 300;
+    private static final int OPENING_LINE_MAX = 200;
     private static final int OPPORTUNITY_RELAY_MAX = 200;
     private static final int ASK_PROMPT_MAX = 100;
     private static final int REASK_PROMPT_MAX = 200;
@@ -133,7 +134,8 @@ public final class PracticeScriptReader {
             throw new PracticeScriptException(Reason.MISSING_SCENE_FIELD);
         }
         spoken(raw.spokenIntroduction(), SPOKEN_INTRODUCTION_MAX);
-        spoken(raw.reflectionPrompt(), REFLECTION_PROMPT_MAX);
+        // 옛 대본의 돌아보기 질문(reflectionPrompt) · 원래 대화 요약(reflectionSummary)은 모르는 필드로 무시한다(FT-1023-g)
+        spoken(raw.openingLine(), OPENING_LINE_MAX);
         spoken(raw.opportunityRelay(), OPPORTUNITY_RELAY_MAX);
         spoken(raw.askPrompt(), ASK_PROMPT_MAX);
         spoken(raw.reaskPrompt(), REASK_PROMPT_MAX);
@@ -147,7 +149,7 @@ public final class PracticeScriptReader {
         }
         return new PracticeScript.Scene(raw.sceneKey(), kind, raw.sceneDescription(), raw.opportunitySentence(),
                 raw.reexplanation(), raw.partnerRole(), raw.focusPoints(), raw.expressionExamples(), raw.relation(),
-                raw.place(), raw.topic(), raw.spokenIntroduction(), raw.reflectionPrompt(), raw.opportunityRelay(),
+                raw.place(), raw.topic(), raw.spokenIntroduction(), raw.openingLine(), raw.opportunityRelay(),
                 raw.askPrompt(), raw.reaskPrompt(), raw.helpSpeech(), raw.friendReaction());
     }
 

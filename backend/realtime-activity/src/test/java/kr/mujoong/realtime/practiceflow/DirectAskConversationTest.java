@@ -28,8 +28,9 @@ import org.junit.jupiter.api.Test;
 
 /**
  * C안 '무중이 직접 묻기' 대화 시험 (docs/practice-direct-ask.md 2장 · 5장 · 7.2 · 7.4). 옛 대본(v1)은 대체 문장으로, 고정 문장은 시작 패키지
- * approvedSpeech(없으면 같은 문장의 상수)로 읽히고, 판독 불가 · 불명확은 고정 확인 문장 한 번 뒤 고정 마무리 문장으로 닫히며, 아이 말로 끊긴 마무리
- * 문장은 전달된 것으로 보고 다음으로 가는지 본다. 가짜 출력 · 가짜 판정 · 수동 시계 위의 합성 대화이다(테스트 대역 증거).
+ * approvedSpeech(없으면 같은 문장의 상수)로 읽히고, 판독 불가 · 불명확은 고정 확인(또는 같은 제안) 한 번 뒤 장면을 닫지 않고 도움 제안 · 도움으로
+ * 넘어가며(FT-1023-g), 아이 말로 끊긴 마무리 문장은 전달된 것으로 보고 다음으로 가는지 본다. 가짜 출력 · 가짜 판정 · 수동 시계 위의 합성
+ * 대화이다(테스트 대역 증거).
  */
 @Tag("practice-flow")
 class DirectAskConversationTest {
@@ -177,7 +178,7 @@ class DirectAskConversationTest {
     // ---- 판독 불가 · 불명확 ----
 
     @Test
-    void aSecondUnreadableAnswerClosesTheSceneWithTheClosingLineAfterOneInputConfirm() {
+    void aSecondUnreadableAnswerOffersHelpAfterOneInputConfirmAndKeepsTheTranscriptFailedFact() {
         Harness h = with(directAskScriptWithVariant(SCENARIO), FIXED_SPEECH);
         h.toOpportunity();
         h.child("웅얼웅얼");
@@ -188,16 +189,17 @@ class DirectAskConversationTest {
 
         h.result("J2", "UNREADABLE");
 
-        assertThat(h.out.lastSlot().text()).isEqualTo(SCENE_CLOSE);
-        assertThat(h.playedThroughRecap()).isEqualTo(Signal.LAST_GOAL);
+        // FT-1023-g: 두 번째 판독 불가는 장면을 닫지 않고 도움 제안으로 간다(판독 불가 사실은 남긴다)
+        assertThat(h.ext.state().phase()).isEqualTo(FlowState.Phase.HELP_OFFER);
+        assertThat(h.out.lastSlot().text()).isEqualTo(HELP_OFFER);
         SceneRunRecord row = h.recorder.only();
-        assertThat(row.liveTiming()).isEqualTo(LiveTiming.NONE);
-        assertThat(row.variantSkipReason()).as("판독 불가 두 번은 변형을 권하지 않는다").isEqualTo(VariantSkipReason.END_OR_REST);
-        assertThat(h.recorder.factKinds(row)).contains(FactKind.TRANSCRIPT_FAILED);
+        assertThat(row.endedAt()).isNull();
+        assertThat(row.liveTiming()).isNull();
+        assertThat(h.recorder.factKinds(row)).containsExactly(FactKind.TRANSCRIPT_FAILED);
     }
 
     @Test
-    void anUnclearAnswerToTheHelpOfferRereadsTheOfferOnceThenTheSceneCloses() {
+    void anUnclearAnswerToTheHelpOfferRereadsTheOfferOnceThenHelpsWithoutConsent() {
         Harness h = with(directAskScript(SCENARIO), FIXED_SPEECH);
         toHelpOffer(h);
         h.played();
@@ -209,10 +211,15 @@ class DirectAskConversationTest {
 
         h.result("J4", "UNCLEAR");
 
-        assertThat(h.out.lastSlot().text()).isEqualTo(SCENE_CLOSE);
-        assertThat(h.playedThroughRecap()).isEqualTo(Signal.LAST_GOAL);
-        assertThat(h.recorder.only().variantSkipReason()).isEqualTo(VariantSkipReason.NO_VARIANT);
-        assertThat(h.recorder.factKinds(h.recorder.only())).doesNotContain(FactKind.HELP_ACCEPTED, FactKind.FOCUS_HELP);
+        // FT-1023-g: 두 번째 불명확은 장면을 닫지 않고 동의 없이 도움으로 간다. C안 도움은 장면마다 한 번이고 대본 helpSpeech라 표현 예시가
+        // 함께 나간다(docs/practice-direct-ask.md 13.6 main 합치기)
+        assertThat(h.ext.state().phase()).isEqualTo(FlowState.Phase.FOCUS);
+        assertThat(h.out.lastSlot().text()).isEqualTo(PracticeScriptFixtures.V2_HELP);
+        assertThat(h.out.announces).isEmpty();
+        assertThat(h.recorder.helps).filteredOn(help -> help.kind() == HelpKind.FOCUS_HELP).singleElement()
+                .satisfies(help -> assertThat(help.consentAnswer()).isEqualTo(ConsentAnswer.UNCLEAR));
+        assertThat(h.recorder.factKinds(h.recorder.only())).contains(FactKind.FOCUS_HELP).doesNotContain(FactKind.HELP_ACCEPTED);
+        assertThat(h.recorder.only().endedAt()).isNull();
     }
 
     @Test
@@ -257,7 +264,7 @@ class DirectAskConversationTest {
         assertThat(h.out.lastSlot().text()).isEqualTo(V2_REACTION);
         h.child("응 고마워");
 
-        assertThat(h.end(Playback.INTERRUPTED)).as("main은 여기서 연습 전체가 OUTPUT_FAILED였다").isEqualTo(Signal.NONE);
+        assertThat(h.end(Playback.INTERRUPTED)).as("아이 말로 끊긴 친구 반응은 전달된 것으로 본다").isEqualTo(Signal.NONE);
 
         assertThat(h.out.lastSlot().text()).isEqualTo(VARIANT_OFFER);
         assertThat(h.recorder.only().liveTiming()).isEqualTo(LiveTiming.IMMEDIATE);
@@ -266,17 +273,21 @@ class DirectAskConversationTest {
     }
 
     @Test
-    void aClosingLineTheOutputCouldNotPlayEndsAsATechnicalFailure() {
+    void aClosingLineTheOutputCouldNotPlayIsSkippedAndThePracticeMovesOn() {
         Harness h = with(directAskScript(SCENARIO), FIXED_SPEECH);
         toHelpOffer(h);
         h.played();
         h.child("싫어");
         h.result("J4", "REFUSE");
 
-        assertThat(h.end(Playback.FAILED)).isEqualTo(Signal.OUTPUT_FAILED);
+        // FT-1023-g: 못 들려준 마무리 문장은 다시 내지 않고 재생 실패 사실만 남긴 채 회고 · 다음으로 간다
+        assertThat(h.end(Playback.FAILED)).as("마무리 문장 뒤 목표 회고").isEqualTo(Signal.NONE);
+        assertThat(h.out.lastSlot().generated()).isTrue();
+        assertThat(h.played()).isEqualTo(Signal.LAST_GOAL);
 
-        assertThat(h.recorder.factKinds(h.recorder.only())).contains(FactKind.PLAYBACK_FAILED);
-        assertThat(h.out.generatedSlots()).as("회고 없이 끝난다").hasSize(1);
+        assertThat(h.out.slots.stream().filter(slot -> slot.text().equals(SCENE_CLOSE))).as("마무리 문장은 다시 내지 않는다").hasSize(1);
+        assertThat(h.recorder.factKinds(h.recorder.only())).contains(FactKind.HELP_DECLINED, FactKind.PLAYBACK_FAILED);
+        assertThat(h.recorder.only().variantSkipReason()).isEqualTo(VariantSkipReason.NO_VARIANT);
     }
 
     // ---- 화자 ----

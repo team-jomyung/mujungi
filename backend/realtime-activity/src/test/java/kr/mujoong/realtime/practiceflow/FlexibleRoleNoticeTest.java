@@ -73,21 +73,20 @@ class FlexibleRoleNoticeTest {
 
     @ParameterizedTest
     @EnumSource(value = Playback.class, names = {"FAILED", "INTERRUPTED"})
-    void aRoleSwitchNoticeThatDoesNotPlayLeavesTheRoleWithThePeerAndNeverStartsTheCoach(Playback status) {
+    void aRoleSwitchNoticeThatDoesNotPlayIsSkippedAndTheCoachStillHelps(Playback status) {
+        // FT-1023-g: 알림을 못 들려줘도 도움 단계를 닫지 않는다(BR5.1 · BR5.5의 '도움 없이 정리'를 대체)
         Harness h = minimal();
         askForHelp(h);
         assertThat(h.out.announces).containsExactly("COACH");
 
         Signal end = h.announcedNotice(status);
 
-        assertThat(end).as("실패는 기술 실패, 끊김은 회고 뒤 끝").isEqualTo(status == Playback.FAILED ? Signal.OUTPUT_FAILED : Signal.NONE);
-        if (status == Playback.INTERRUPTED) {
-            assertThat(h.played()).isEqualTo(Signal.LAST_GOAL);
-        }
-        assertThat(coachSlots(h)).as("코치 발화 없음").isEmpty();
-        assertThat(h.recorder.helps).extracting(HelpRecord::kind).as("역할 전환 기록 없음").doesNotContain(HelpKind.ROLE_SWITCH);
-        assertThat(h.ext.state().role()).isEqualTo(FlowRole.PEER);
-        assertThat(h.recorder.factKinds(h.recorder.only())).doesNotContain(FactKind.COACH_SWITCH, FactKind.FOCUS_HELP);
+        assertThat(end).isEqualTo(Signal.NONE);
+        assertThat(coachSlots(h)).as("코치 발화").hasSize(1);
+        assertThat(h.recorder.helps).extracting(HelpRecord::kind).contains(HelpKind.ROLE_SWITCH, HelpKind.FOCUS_HELP);
+        assertThat(h.ext.state().role()).isEqualTo(FlowRole.COACH);
+        assertThat(h.recorder.factKinds(h.recorder.only())).containsSubsequence(FactKind.COACH_SWITCH, FactKind.FOCUS_HELP);
+        assertThat(h.recorder.factKinds(h.recorder.only()).contains(FactKind.PLAYBACK_FAILED)).isEqualTo(status == Playback.FAILED);
     }
 
     @Test
@@ -109,7 +108,7 @@ class FlexibleRoleNoticeTest {
 
     @Test
     void withoutApprovedNoticeSentencesInTheStartPackageTheNoticeIsGeneratedWithoutCallingTheAnnouncer() {
-        // core는 C안부터 COACH_SWITCH · PEER_RETURN을 보내지 않는다(ai-io.md 10.17). 유연 대화는 그때 생성형 알림으로 간다(BR5.4)
+        // core는 C안부터 COACH_SWITCH · PEER_RETURN을 보내지 않는다(ai-io.md 10.18). 유연 대화는 그때 생성형 알림으로 간다(BR5.4)
         Harness h = new Harness(packageJson(GOAL, minimalScript(SCENARIO)), Map.of(), PracticeFlowTestKit.flexible());
         askForHelp(h);
 
@@ -122,7 +121,8 @@ class FlexibleRoleNoticeTest {
     }
 
     @Test
-    void aGeneratedNoticeThatIsBlockedTwiceWrapsWithoutSwitchingTheRole() {
+    void aGeneratedNoticeThatIsBlockedTwiceIsNeverReplayedAndTheCoachFollows() {
+        // FT-1023-g: 막힌 알림은 다시 내지 않고 코치 도움으로 간다
         Harness h = minimal();
         h.out.announceResult = false;
         askForHelp(h);
@@ -132,23 +132,26 @@ class FlexibleRoleNoticeTest {
                 new GuardrailBlockedEvent(notice.correlationId(), kr.mujoong.realtime.guardrail.GuardrailRequest.Mode.PRACTICE_COACH,
                         "BLOCK", true));
 
-        assertThat(end).isEqualTo(Signal.OUTPUT_FAILED);
-        assertThat(h.ext.state().role()).isEqualTo(FlowRole.PEER);
-        assertThat(coachSlots(h)).as("막힌 알림 하나뿐, 코치 도움 없음").containsExactly(notice);
+        assertThat(end).isEqualTo(Signal.NONE);
+        assertThat(h.ext.state().role()).isEqualTo(FlowRole.COACH);
+        assertThat(coachSlots(h)).as("막힌 알림 + 코치 도움").hasSize(2);
+        assertThat(coachSlots(h).get(1).text()).isNotEqualTo(notice.text());
+        assertThat(h.recorder.factKinds(h.recorder.only())).as("막힘은 재생 실패 사실이 아니다").doesNotContain(FactKind.PLAYBACK_FAILED);
     }
 
     @Test
-    void anAnnouncedNoticeThatNeverEndsFailsWhenItsSafetyClockExpiresAndTheRoleStaysPeer() {
+    void anAnnouncedNoticeThatNeverEndsIsSkippedWhenItsSafetyClockExpiresAndTheCoachFollows() {
+        // FT-1023-g: 끝나지 않은 알림은 시한에 건너뛰고(재생 실패 사실) 코치 도움으로 간다
         Harness h = minimal();
         askForHelp(h);
         assertThat(h.out.scheduleLog).contains("slot-guard-notice:PT20S");
 
-        assertThat(h.advance(Duration.ofSeconds(20))).as("알림 실패로 정리한 뒤 목표 회고").isEqualTo(Signal.NONE);
-        assertThat(h.played()).isEqualTo(Signal.LAST_GOAL);
+        assertThat(h.advance(Duration.ofSeconds(20))).isEqualTo(Signal.NONE);
 
-        assertThat(h.recorder.factKinds(h.recorder.only())).containsExactly(FactKind.PLAYBACK_FAILED, FactKind.VARIANT_SKIPPED);
-        assertThat(coachSlots(h)).isEmpty();
-        assertThat(h.ext.state().role()).isEqualTo(FlowRole.PEER);
+        assertThat(h.recorder.factKinds(h.recorder.only())).containsExactly(FactKind.COACH_SWITCH, FactKind.PLAYBACK_FAILED,
+                FactKind.FOCUS_HELP);
+        assertThat(h.ext.state().role()).isEqualTo(FlowRole.COACH);
+        assertThat(coachSlots(h)).hasSize(1);
     }
 
     // ---- 코치 도움 · 다시 해 보기 ----

@@ -13,7 +13,7 @@ import org.junit.jupiter.api.Test;
 
 /**
  * C안 장면 안 말 시험 (docs/practice-direct-ask.md 3.2 · 5장 · 7.4). 고정 문장은 시작 패키지 approvedSpeech에서 오고 없으면 같은 문장의 상수로
- * 대신하며, 칸이 없으면(옛 대본 v1 · core가 뺀 칸) 7.4 대체 문장을 상대 호칭별(계약 10.17 표)로 쓰고, 이어 읽는 문장은 문장부호 규칙(마침표 ·
+ * 대신하며, 칸이 없으면(옛 대본 v1 · core가 뺀 칸) 7.4 대체 문장을 상대 호칭별(계약 10.18 표)로 쓰고, 이어 읽는 문장은 문장부호 규칙(마침표 ·
  * 쉼표 · 물음표)을 지키는지 본다. 문장은 시험용 가짜 값이다.
  */
 @Tag("practice-flow")
@@ -52,10 +52,10 @@ class DirectAskLinesTest {
     }
 
     @Test
-    void theConstantsAreWordForWordTheContractTablesOfSection1017() throws java.io.IOException {
+    void theConstantsAreWordForWordTheContractTablesOfSection1018() throws java.io.IOException {
         java.nio.file.Path repo = java.nio.file.Path.of(System.getProperty("mujoong.repo.root", "..")).toAbsolutePath().normalize();
         String doc = java.nio.file.Files.readString(repo.resolve("contracts/ai-io.md"), java.nio.charset.StandardCharsets.UTF_8);
-        String section = doc.substring(doc.indexOf("### 10.17 "));
+        String section = doc.substring(doc.indexOf("### 10.18 "));
 
         for (Map.Entry<String, String> fixed : DirectAskLines.FIXED.entrySet()) {
             assertThat(section).as(fixed.getKey())

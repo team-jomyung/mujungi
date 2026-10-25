@@ -18,10 +18,11 @@ import kr.mujoong.core.textai.ScenarioScript.Scene;
 /**
  * BR2: 별도 검토의 APPROVE와 독립적인 결정적 검사. 의미 품질을 보증한다고 주장하지 않는다.
  *
- * <p>검사는 두 갈래다(docs/practice-direct-ask.md 4.4 · 계약 ai-io.md 10.17).
+ * <p>검사는 두 갈래다(docs/practice-direct-ask.md 4.4 · 계약 ai-io.md 10.18).
  * <ul>
  *   <li><b>장면 판정</b>({@link #inspectDetailed}): 장면 구성과 필수 칸(설명 · 기회 문장 · 다시 설명 · 요점 · 표현 예시 · 관계 · 장소 · 주제 · 보존 ·
- *       돌아보기 질문)을 main과 같은 규칙으로 본다. 걸리면 그 장면이 INVALID_BASE · INVALID_VARIANT가 되어 보완 흐름을 탄다. 들리는 선택 칸은 보지 않는다.
+ *       여는 말)을 main과 같은 규칙으로 본다. 걸리면 그 장면이 INVALID_BASE · INVALID_VARIANT가 되어 보완 흐름을 탄다. 여는 말은 main 규칙대로 생성 직후
+ *       걸린 것만 빼고({@link #withoutInvalidSceneStart}) 남은 것을 본다. 아래 칸별 판정 칸은 보지 않는다.
  *   <li><b>칸별 판정</b>({@link #optionalSpokenIssues}): 아이에게 들리는 선택 칸(상황 안내 {@code spokenIntroduction}과 C안 칸 다섯 개
  *       {@code opportunityRelay} · {@code askPrompt} · {@code reaskPrompt} · {@code helpSpeech} · {@code friendReaction})을 칸마다 본다. 생성기는
  *       걸린 칸만 발급 때 빼고({@link #withoutFields}) 장면은 발급한다. realtime이 뺀 칸 자리에 대체 문장을 읽는다. 없는 칸(옛 대본 v1)은 보지 않는다.
@@ -32,7 +33,7 @@ import kr.mujoong.core.textai.ScenarioScript.Scene;
 public final class ScenarioScriptValidation {
     public enum Result { VALID, INVALID_BASE, INVALID_VARIANT }
     public enum Reason {
-        NONE, EMPTY_SCRIPT, BASE_LAYOUT, SCENE_KEY, FIELD_FORMAT, SPOKEN_FORMAT, REFLECTION_NOT_ALLOWED,
+        NONE, EMPTY_SCRIPT, BASE_LAYOUT, SCENE_KEY, FIELD_FORMAT, SPOKEN_FORMAT, OPENING_REPEATS_OPPORTUNITY,
         PRIVATE_OR_FORBIDDEN_CONTENT, TARGET_EXPRESSION_DISCLOSED, PRESSURE_OR_ANSWER,
         GRAPH_BASE_MISMATCH, RELATION_MISMATCH, CONDITION_MISSING, PARTNER_LINE_MISSING,
         ALREADY_SEEN, UNCHANGED_SOURCE, VARIANT_STRUCTURE,
@@ -63,11 +64,7 @@ public final class ScenarioScriptValidation {
         default boolean validBase(Scene base){return true;}
     }
     public record Rules(String relation,String opportunity,String targetExpression,Set<String> originalNames,
-            String sourceText,Predicate<String> seen,VariantCheck variants,boolean reflectionAllowed) {
-        public Rules(String relation,String opportunity,String targetExpression,Set<String> originalNames,
-                String sourceText,Predicate<String> seen,VariantCheck variants) {
-            this(relation,opportunity,targetExpression,originalNames,sourceText,seen,variants,false);
-        }
+            String sourceText,Predicate<String> seen,VariantCheck variants) {
         public Rules {originalNames=Set.copyOf(originalNames);}
         @Override public String toString(){return "ScenarioRules[redacted]";}
     }
@@ -110,7 +107,7 @@ public final class ScenarioScriptValidation {
         }
     }
     /**
-     * 짐작 말투 목록(설계 13장 · 계약 10.17). '[하-햏]'은 '하'의 줄어든 꼴(한 · 할 · 해 · 했 …)까지 받는다('궁금해한대' · '싶어 한대'). 이 밖에 짐작 꼴
+     * 짐작 말투 목록(설계 13장 · 계약 10.18). '[하-햏]'은 '하'의 줄어든 꼴(한 · 할 · 해 · 했 …)까지 받는다('궁금해한대' · '싶어 한대'). 이 밖에 짐작 꼴
      * '-나 봐' · '-ㄴ가 봐'('모르나 봐' · '그런가 봐')는 {@link #conjectures}가 따로 찾는다.
      */
     static final List<Interpretive> INTERPRETIVE = List.of(
@@ -183,7 +180,42 @@ public final class ScenarioScriptValidation {
     }
     private static Inspection invalid(Reason reason){return new Inspection(Result.INVALID_BASE,reason);}
 
-    /** 장면 판정의 칸 검사(main 규칙 그대로). 들리는 선택 칸은 {@link #optionalSpokenIssues}가 칸마다 본다. */
+    /**
+     * FT-1023-g: 선택 필드인 여는 말이 서버 검사를 못 맞추면 대본 전체를 버리지 않고 그 필드만 뺀다(빼면 지금 흐름 그대로다).
+     * 내용을 더하지 않고 빼기만 하므로 뺀 대본도 독립 검토와 나머지 서버 검사를 그대로 받는다. 바뀐 것이 없으면 같은 객체를 돌려준다.
+     * 여는 말만 빼고 C안 칸을 포함한 다른 칸은 그대로 둔다.
+     */
+    public ScenarioScript withoutInvalidSceneStart(ScenarioScript script, Rules rules) {
+        if (script == null) return null;
+        boolean changed = false;
+        var scenes = new ArrayList<Scene>(script.scenes().size());
+        for (var s : script.scenes()) {
+            if (s == null || s.openingLine() == null || openingAllowed(s, rules)) {
+                scenes.add(s);
+                continue;
+            }
+            changed = true;
+            scenes.add(s.withOpeningLine(null));
+        }
+        return changed ? new ScenarioScript(scenes) : script;
+    }
+
+    private boolean openingAllowed(Scene s, Rules rules) {
+        String v = s.openingLine();
+        return spokenSafe(v, 200, rules) && (s.opportunitySentence() == null
+                || !ScenarioContentPolicy.normalize(v).equals(ScenarioContentPolicy.normalize(s.opportunitySentence())));
+    }
+
+    /** 들려줄 선택 필드 하나의 형식 · 금지 · 이름 · 연락처 · 정답 · 압박 검사(unsafeReason과 같은 기준). */
+    private boolean spokenSafe(String v, int max, Rules rules) {
+        if (!text(v, max) || controlled(v)) return false;
+        return content(v, rules, true) == Reason.NONE;
+    }
+
+    /**
+     * 장면 판정의 칸 검사(main 규칙 그대로). 들리는 선택 칸 가운데 상황 안내와 C안 칸 다섯 개는 {@link #optionalSpokenIssues}가 칸마다 본다. 여는 말
+     * ({@code openingLine})은 main 규칙대로 생성 직후 {@link #withoutInvalidSceneStart}가 걸린 것을 빼고, 남은 것은 여기서도 본다(FT-1023-g).
+     */
     private Reason unsafeReason(Scene s, Rules rules) {
         if (!text(s.sceneDescription(), 8000) || !text(s.opportunitySentence(), 2000) || !text(s.reexplanation(), 2000)
                 || !text(s.relation(), 200) || !text(s.place(), 200) || !text(s.topic(), 200)
@@ -194,11 +226,13 @@ public final class ScenarioScriptValidation {
         var all = new ArrayList<>(spoken);
         all.addAll(s.focusPoints());
         all.addAll(s.expressionExamples());
-        if (s.reflectionPrompt() != null) {
-            if (!rules.reflectionAllowed() || !"BASE".equals(s.sceneKind())) return Reason.REFLECTION_NOT_ALLOWED;
-            if (!text(s.reflectionPrompt(), 300) || controlled(s.reflectionPrompt())) return Reason.SPOKEN_FORMAT;
-            spoken.add(s.reflectionPrompt());
-            all.add(s.reflectionPrompt());
+        if (s.openingLine() != null) {
+            // FT-1023-g: 상대가 먼저 거는 말. 기회 문장을 미리 말하면 기회가 사라진다.
+            if (!text(s.openingLine(), 200) || controlled(s.openingLine())) return Reason.SPOKEN_FORMAT;
+            if (ScenarioContentPolicy.normalize(s.openingLine()).equals(ScenarioContentPolicy.normalize(s.opportunitySentence())))
+                return Reason.OPENING_REPEATS_OPPORTUNITY;
+            spoken.add(s.openingLine());
+            all.add(s.openingLine());
         }
         all.addAll(List.of(s.relation(), s.place(), s.topic()));
         if (s.preservation() != null) {

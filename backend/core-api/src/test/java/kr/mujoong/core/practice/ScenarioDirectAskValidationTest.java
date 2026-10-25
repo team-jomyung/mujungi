@@ -13,7 +13,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 /**
- * 연습 대화 C안 들리는 선택 칸의 칸별 서버 검사(docs/practice-direct-ask.md 4.3 · 4.4, 계약 ai-io.md 10.17). 칸마다 모양(문장부호 · 길이 · 문장 수 ·
+ * 연습 대화 C안 들리는 선택 칸의 칸별 서버 검사(docs/practice-direct-ask.md 4.3 · 4.4, 계약 ai-io.md 10.18). 칸마다 모양(문장부호 · 길이 · 문장 수 ·
  * 역할 말) · 내용(금지 · 이름 · 연락처 · 목표 표현 누설 · 압박) · 칸의 뜻(상대 대사 복사 · 묻기 모양 · 도움 꼬리 · 칭찬과 물음 끝)을 보고 걸린 칸만
  * 사유와 함께 낸다. 장면 판정(INVALID_BASE · INVALID_VARIANT)은 이 칸들을 보지 않는다. 옛 대본(새 칸 없음)은 그대로 통과한다. 합성 문장만 쓴다.
  */

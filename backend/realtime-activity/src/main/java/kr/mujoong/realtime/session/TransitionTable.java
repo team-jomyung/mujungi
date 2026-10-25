@@ -66,9 +66,7 @@ public final class TransitionTable {
         /** U4b: 연습 마지막 목표 끝(BR10.3 · FD-Q6) — 사유 CHILD_STOP, end_detail PRACTICE_COMPLETED. */
         PRACTICE_COMPLETED(EnumSet.of(SessionStatus.ACTIVE), SessionStatus.CLOSING, EndReason.CHILD_STOP, null,
                 END_DETAIL_PRACTICE_COMPLETED),
-        /** 연습 도입 출력 실패. 아이의 중단 요청이나 정상 완료로 표시하지 않는다. */
-        PRACTICE_OUTPUT_FAILED(EnumSet.of(SessionStatus.ACTIVE), SessionStatus.CLOSING, EndReason.DISCONNECT, null,
-                "PRACTICE_OUTPUT_FAILED"),
+        // FT-1023-g: 연습 출력 실패 종료(PRACTICE_OUTPUT_FAILED)는 없앴다. 옛 세션의 end_detail 값은 기록 · 화면이 그대로 읽는다.
         /** U4b: 공백 6분(BR5.4). */
         SILENCE_TIMEOUT(EnumSet.of(SessionStatus.ACTIVE), SessionStatus.CLOSING, EndReason.SILENCE, null, null),
         /** VOICE_SESSION_CLOSED 확인(BR6.10 ④). 사유는 CLOSING의 것을 그대로 둔다(BR1.4). */

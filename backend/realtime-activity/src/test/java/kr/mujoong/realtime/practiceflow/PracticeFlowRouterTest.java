@@ -149,7 +149,7 @@ class PracticeFlowRouterTest {
         PracticeContext context = context(packageJson(GOAL, minimalScript(SCENARIO)));
         when(flow.onActive(context, output)).thenReturn(Signal.NONE);
         when(flow.onChildUtterance(utterance, output)).thenReturn(Signal.LAST_GOAL);
-        when(flow.onChildSpeechStarted(Instant.EPOCH, output)).thenReturn(Signal.OUTPUT_FAILED);
+        when(flow.onChildSpeechStarted(Instant.EPOCH, output)).thenReturn(Signal.NEXT_GOAL);
         when(flow.speaksAsMujoong()).thenReturn(true);
         when(flow.onExtensionEvent(event, output)).thenReturn(Signal.NEXT_GOAL);
         PracticeSessionExtension.Progress progress = new PracticeSessionExtension.Progress(1, 1, "목표", "FIRST_RESPONSE");
@@ -159,7 +159,7 @@ class PracticeFlowRouterTest {
         router.onActive(context, output);
 
         assertThat(router.onChildUtterance(utterance, output)).isEqualTo(Signal.LAST_GOAL);
-        assertThat(router.onChildSpeechStarted(Instant.EPOCH, output)).isEqualTo(Signal.OUTPUT_FAILED);
+        assertThat(router.onChildSpeechStarted(Instant.EPOCH, output)).isEqualTo(Signal.NEXT_GOAL);
         assertThat(router.speaksAsMujoong()).isTrue();
         assertThat(router.onExtensionEvent(event, output)).isEqualTo(Signal.NEXT_GOAL);
         assertThat(router.progress()).isEqualTo(progress);

@@ -43,14 +43,17 @@ public final class FlowState {
         PEER_REPLY,
         /** SCENE_WRAP(C안): 목표를 이룬 뒤 무중이 대본의 친구 반응을 승인 낭독으로 전하는 중. */
         FRIEND_REACTION,
-        /** SCENE_WRAP(C안): 실패 · 거절 · 한도로 닫으며 고정 마무리 문장을 승인 낭독하는 중. */
+        /** SCENE_WRAP(C안): 미수행 · 거절 · 한도로 닫으며 고정 마무리 문장을 승인 낭독하는 중. */
         SCENE_CLOSE,
         /** OPPORTUNITY: 상대 역할의 답변. 재생 뒤 같은 역할 대화의 입력을 기다린다. */
         DIALOGUE_REPLY,
         /** 상황 안의 확인 질문 또는 인식이 불확실할 때의 확인. */
         CLARIFICATION_REPLY, INPUT_CONFIRMATION,
-        /** 선택적 이전 대화 돌아보기. */
-        REFLECTION_OFFER, REFLECTION_PROMPT, REFLECTION_ACK,
+        /**
+         * OPPORTUNITY: 기회 문장 앞에서 상대가 먼저 거는 여는 말과 그 대답 한 차례. 판정하지 않는다(FT-1023-g). 상대 역할의 말이라 유연 대화 경로만
+         * 쓴다(C안은 상황 안내 뒤 곧바로 전하기 + 묻기, docs/practice-direct-ask.md 13.6).
+         */
+        OPENING,
         /** SCENE_WRAP: 변형 평가(알림이 없거나 끝났다). */
         VARIANT_EVAL,
         /** OPPORTUNITY · RETRY: 상황 다시 설명(승인 발화) 재생 중. */

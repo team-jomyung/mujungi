@@ -35,7 +35,7 @@ import kr.mujoong.realtime.practiceflow.PracticeScript.Scene;
  * <ul>
  *   <li>아이 말은 목표마다 Luna가 한 번에 만든다: 장면 안에서 아이가 들을 승인 문장(대본 칸)과 장면 설명 · 계획별 칸 뜻을 받아 칸마다 짧은 말을
  *       쓴다(합성). 실패하면 대본의 표현 예시 · 고정 문장으로 대신하고 그 사실을 적는다.
- *   <li>참여 · 도움 수락 · 변형 수락 / 거절 · 돌아보기 거절 · 그만하기는 고정 문장이다.
+ *   <li>참여 · 도움 수락 · 변형 수락 / 거절 · 여는 말 대답(유연 대화) · 그만하기는 고정 문장이다.
  *   <li>대화가 시작되기 전에 계획이 쓸 말을 모두 TTS로 미리 만든다(4회차 H4). 아이가 말할 때 TTS를 기다리지 않는다.
  * </ul>
  */
@@ -103,7 +103,8 @@ final class PracticeVoiceChild {
     static final String HELP_ACCEPT = "응, 도와줘.";
     static final String VARIANT_ACCEPT = "응, 해 볼래.";
     static final String VARIANT_DECLINE = "아니, 안 할래.";
-    static final String REFLECTION_DECLINE = "아니, 괜찮아.";
+    /** 유연 대화의 여는 말(상대가 먼저 거는 말, 판정 없음)에 하는 짧은 대답(FT-1023-g). C안은 여는 말을 읽지 않는다. */
+    static final String OPENING_REPLY = "응, 좋아.";
     static final String STOP_LINE = "무중아 그만할래";
     static final String STOP_CONFIRM_YES = "응, 그만할래.";
     static final String KEEP_GOING = "아니, 더 할래.";
@@ -194,11 +195,8 @@ final class PracticeVoiceChild {
     static Act decide(Plan plan, Cue cue, GoalLines lines) {
         SceneLines scene = lines.scene(cue.sceneKind());
         boolean variant = cue.sceneKind() == SceneKind.VARIANT;
-        if (cue.phase() == Phase.SCENE_INTRO && cue.sub() == Sub.REFLECTION_OFFER) {
-            return Act.speak("REFLECTION_DECLINE", REFLECTION_DECLINE, "돌아보기 제안 → 고정 거절");
-        }
-        if (cue.phase() == Phase.SCENE_INTRO && cue.sub() == Sub.REFLECTION_PROMPT) {
-            return Act.speak("DIRECT", scene.get(Line.DIRECT), "돌아보기 질문 → 직접 말");
+        if (cue.phase() == Phase.OPPORTUNITY && cue.sub() == Sub.OPENING) {
+            return Act.speak("OPENING_REPLY", OPENING_REPLY, "여는 말(유연 대화) → 고정 짧은 대답");
         }
         if (cue.lastLine() != null && cue.lastLine().endsWith(DirectAskLines.INPUT_CONFIRM) && cue.lastAnswer() != null
                 && cue.phase().awaitsInput()) {
@@ -272,11 +270,11 @@ final class PracticeVoiceChild {
             case STOP -> texts.add(STOP_LINE);
         }
         if (plan != Plan.STOP) {
-            // 판정이 계획과 다르게 갈라져도 쓰는 말(되묻기 뒤 직접 말 · 도움 수락 · 자기 말 · 돌아보기 거절 · 변형 답)
+            // 판정이 계획과 다르게 갈라져도 쓰는 말(되묻기 뒤 직접 말 · 도움 수락 · 자기 말 · 여는 말 대답 · 변형 답)
             texts.add(base.get(Line.DIRECT));
             texts.add(HELP_ACCEPT);
             texts.add(base.get(Line.OWN_WORDS));
-            texts.add(REFLECTION_DECLINE);
+            texts.add(OPENING_REPLY);
             texts.add(plan.acceptsVariant() ? VARIANT_ACCEPT : VARIANT_DECLINE);
             if (hasVariant && plan.acceptsVariant() && lines.variant() != null) {
                 texts.add(lines.variant().get(plan == Plan.RELAY ? Line.RELAY : Line.DIRECT));

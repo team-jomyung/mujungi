@@ -10,7 +10,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 /**
- * C안 전하기(opportunityRelay)의 충실도 · 해석 말투, 되묻기(reaskPrompt)의 해석 말투, 묻기(askPrompt)의 관계 검사(계약 ai-io.md 10.17). 전하기는 상대가 한
+ * C안 전하기(opportunityRelay)의 충실도 · 해석 말투, 되묻기(reaskPrompt)의 해석 말투, 묻기(askPrompt)의 관계 검사(계약 ai-io.md 10.18). 전하기는 상대가 한
  * 말을 간접 인용으로 전하고(낱말을 거의 그대로 살리고 끝만 '~대' · '~냐고 물어봤어' 등으로 바꾼다) 상대의 속뜻 · 이유 · 감정 · 의도를 풀어 말하지 않는다.
  * 걸린 칸은 발급 때 빠지고 realtime이 대체 문장을 읽는다. 합성 문장만 쓴다.
  */
