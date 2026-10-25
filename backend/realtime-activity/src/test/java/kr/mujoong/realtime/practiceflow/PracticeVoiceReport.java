@@ -897,7 +897,8 @@ final class PracticeVoiceReport {
                 TurnLink link = call.childTurn == null ? null : links.get(call.childTurn);
                 rows.add(ordered("dialogue", plan.index(), "index", call.index, "atMs", call.atMs, "at", formatMs(call.atMs), "point", call.point,
                         "kind", call.kind, "first", call.first, "firstProbability", call.firstProbability, "second", call.second,
-                        "secondProbability", call.secondProbability, "abstainReason", call.abstainReason, "latencyMs", call.latencyMs,
+                        "secondProbability", call.secondProbability, "abstainReason", call.abstainReason, "sameStepSum", call.sameStepSum,
+                        "latencyMs", call.latencyMs,
                         "cancelledAtDeadline", call.cancelledAtDeadline, "harnessCapped", call.capped, "model", call.model, "uncertainInput",
                         call.uncertain, "childTurn", call.childTurn, "childKey", link == null ? null : link.turn().key, "childText",
                         link == null ? null : link.turn().text, "utterance", call.utterance));
@@ -1219,6 +1220,10 @@ final class PracticeVoiceReport {
         }
         if (call.cancelledAtDeadline) {
             return "시한 취소(CANCELLED_AT_DEADLINE)";
+        }
+        if ("CONFIRMED".equals(call.kind) && call.sameStepSum && call.firstProbability != null && call.secondProbability != null) {
+            return call.first + " " + probability(call.firstProbability) + "(같은 걸음 " + call.second + "와 합 "
+                    + probability(call.firstProbability + call.secondProbability) + ")";
         }
         if ("CONFIRMED".equals(call.kind)) {
             return call.first + " " + probability(call.firstProbability);

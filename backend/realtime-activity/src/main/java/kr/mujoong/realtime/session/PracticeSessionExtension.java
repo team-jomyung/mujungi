@@ -195,8 +195,15 @@ public interface PracticeSessionExtension {
         default boolean cancelSpeech(UUID correlationId) { return false; }
 
         /**
-         * 아이 확정 전사 하나에 대한 진행 중 판정을 요청한다. 거절(ACTIVE 아님 · 열린 턴 있음 · 지점 밖 · 최근 전사 4개 밖 ·
-         * 공급자 없음)이면 거짓이다. 결과는 JUDGMENT_RESULT · JUDGMENT_ABSTAINED 사건으로 온다.
+         * {@link #requestJudgment} 기준 맵의 선택 키: 확장이 지금 단계에서 같은 다음 걸음으로 처리하는 판정 선택지 묶음(선택지 코드 목록의 목록,
+         * 묶음마다 둘 이상 · 묶음끼리 겹치지 않음). 판정 기준(coreFunction · judgmentCriteria)이 아니다 — 실행부는 판정 검증기가 하한을 볼 때만
+         * 쓰고(1 · 2순위가 같은 묶음이면 두 확률의 합, ai-io.md 10.10) 공급자로 보내지 않는다. 기준이 없는 지점(J4)에는 이 키만 든 맵을 보낸다.
+         */
+        String SAME_STEP_GROUPS = "sameStepGroups";
+
+        /**
+         * 아이 확정 전사 하나에 대한 진행 중 판정을 요청한다. 거절(ACTIVE 아님 · 열린 턴 있음 · 지점 밖 · 최근 전사 4개 밖 · 기준이나 같은
+         * 걸음 묶음({@link #SAME_STEP_GROUPS}) 모양 틀림 · 공급자 없음)이면 거짓이다. 결과는 JUDGMENT_RESULT · JUDGMENT_ABSTAINED 사건으로 온다.
          */
         default boolean requestJudgment(kr.mujoong.realtime.judgment.JudgmentPoint point, long transcriptSeq, UUID correlationId,
                 java.util.Map<String, Object> criteria) { return false; }

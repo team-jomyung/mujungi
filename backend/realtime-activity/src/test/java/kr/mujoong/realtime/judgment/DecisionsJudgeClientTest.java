@@ -232,6 +232,56 @@ class DecisionsJudgeClientTest {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
+    void theRequestsSameStepGroupsReachTheValidatorButNeverTheProvider() throws Exception {
+        // J2 판 순서: FULL · PARTIAL · HELP · NOT_UNDERSTOOD · IRRELEVANT · UNREADABLE. C안 기회 단계에서 다시 설명으로 가는 두 코드가 한 묶음이다
+        List<List<String>> groups = List.of(List.of("NOT_UNDERSTOOD", "IRRELEVANT"));
+        stub.respond(Reply.choice(MODEL, NAME, "NOT_UNDERSTOOD", probabilities(0.05, 0.1, 0.1, 0.4, 0.3, 0.05)),
+                Reply.choice(MODEL, NAME, "HELP", probabilities(0.02, 0.05, 0.54, 0.3, 0.05, 0.04)));
+        JudgeRequest base = request("음 무슨 말이야", Duration.ofSeconds(4));
+        JudgeRequest withGroups = new JudgeRequest(base.point(), base.optionSetVersion(), base.options(), base.childUtterance(),
+                base.recentTurns(), base.criteria(), base.aliases(), base.uncertain(), base.deadline(), groups);
+
+        JudgeOutcome sameStep = run(withGroups);
+        JudgeOutcome differentSteps = run(withGroups);
+
+        assertThat(sameStep.isConfirmed()).isTrue();
+        assertThat(sameStep.sameStepSum()).isTrue();
+        assertThat(sameStep.firstOption()).isEqualTo("NOT_UNDERSTOOD");
+        assertThat(sameStep.secondOption()).isEqualTo("IRRELEVANT");
+        assertThat(differentSteps.abstainReason()).as("5회차 J2: HELP 0.54 · NOT_UNDERSTOOD 0.30은 다른 걸음이라 그대로 보류")
+                .isEqualTo(AbstainReason.LOW_CONFIDENCE);
+        for (LunaResponsesStub.RecordedRequest sent : stub.requests()) {
+            Map<String, Object> part = ((List<Map<String, Object>>) ((List<Map<String, Object>>) sent.json().get("input")).getFirst()
+                    .get("content")).getFirst();
+            assertThat(((Map<String, Object>) part.get("data")).keySet()).as("묶음은 공급자 입력이 아니다")
+                    .containsExactlyInAnyOrder("judgmentPoint", "optionSetVersion", "options", "childUtterance", "recentTurns", "criteria");
+            assertThat(sent.violations()).isEmpty();
+        }
+        assertThat(stub.anyBodyContains("sameStep")).isFalse();
+        assertThat(withGroups.toString()).doesNotContain("NOT_UNDERSTOOD");
+    }
+
+    @Test
+    void sameStepGroupsMustBeTwoOrMoreRequestedOptionsEachInOneGroup() {
+        JudgeRequest base = request("그거", Duration.ofSeconds(4));
+        java.util.function.Function<List<List<String>>, JudgeRequest> with = groups -> new JudgeRequest(base.point(),
+                base.optionSetVersion(), base.options(), base.childUtterance(), base.recentTurns(), base.criteria(), base.aliases(),
+                base.uncertain(), base.deadline(), groups);
+
+        assertThat(with.apply(null).sameStepGroups()).isEmpty();
+        assertThat(base.sameStepGroups()).as("묶음 없는 생성자").isEmpty();
+        assertThat(with.apply(List.of(List.of("NOT_UNDERSTOOD", "IRRELEVANT"))).sameStepGroups())
+                .containsExactly(List.of("NOT_UNDERSTOOD", "IRRELEVANT"));
+        assertThatThrownBy(() -> with.apply(List.of(List.of("FULL")))).as("하나뿐인 묶음").isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> with.apply(List.of(List.of("FULL", "COPIED")))).as("J2 선택지 밖 코드")
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> with.apply(List.of(List.of("FULL", "FULL")))).as("묶음 안 중복").isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> with.apply(List.of(List.of("FULL", "PARTIAL"), List.of("PARTIAL", "HELP")))).as("묶음끼리 겹침")
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
     void aTieKeepsTheProvidersChoiceFirst() throws Exception {
         stub.respond(Reply.choice(MODEL, NAME, "PARTIAL", probabilities(0.4, 0.4, 0.2)));
 

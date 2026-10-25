@@ -1,10 +1,13 @@
 package kr.mujoong.realtime.practiceflow;
 
 import static kr.mujoong.realtime.practiceflow.PracticeScriptFixtures.FIXED_SPEECH;
+import static kr.mujoong.realtime.practiceflow.PracticeScriptFixtures.V2_ASK;
+import static kr.mujoong.realtime.practiceflow.PracticeScriptFixtures.V2_HELP;
 import static kr.mujoong.realtime.practiceflow.PracticeScriptFixtures.V2_INTRO;
 import static kr.mujoong.realtime.practiceflow.PracticeScriptFixtures.V2_OPPORTUNITY;
 import static kr.mujoong.realtime.practiceflow.PracticeScriptFixtures.V2_REACTION;
 import static kr.mujoong.realtime.practiceflow.PracticeScriptFixtures.V2_REASK;
+import static kr.mujoong.realtime.practiceflow.PracticeScriptFixtures.V2_REEXPLAIN;
 import static kr.mujoong.realtime.practiceflow.PracticeScriptFixtures.directAskScript;
 import static kr.mujoong.realtime.practiceflow.PracticeScriptFixtures.minimalScript;
 import static kr.mujoong.realtime.practiceflow.PracticeScriptFixtures.packageJson;
@@ -13,24 +16,39 @@ import static org.mockito.Mockito.mock;
 
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 import kr.mujoong.contract.json.JsonCodec;
 import kr.mujoong.contract.status.ActivityType;
 import kr.mujoong.contract.status.SessionStatus;
 import kr.mujoong.contract.ws.message.PlaybackMark;
 import kr.mujoong.contract.ws.message.VoiceSessionClosed;
+import kr.mujoong.realtime.content.LiveContentResources;
 import kr.mujoong.realtime.guardrail.GuardrailRequest;
 import kr.mujoong.realtime.internalhttp.InternalHttpClient;
+import kr.mujoong.realtime.judgment.AbstainReason;
+import kr.mujoong.realtime.judgment.DecisionsJudgeClient;
+import kr.mujoong.realtime.judgment.JudgeClient;
+import kr.mujoong.realtime.judgment.JudgeOutcome;
+import kr.mujoong.realtime.judgment.JudgeOutcomeValidator;
+import kr.mujoong.realtime.judgment.JudgeRequest;
 import kr.mujoong.realtime.judgment.JudgeRequest.Speaker;
+import kr.mujoong.realtime.judgment.JudgmentLiveRecord;
+import kr.mujoong.realtime.judgment.JudgmentOutcomeKind;
 import kr.mujoong.realtime.judgment.JudgmentPoint;
+import kr.mujoong.realtime.judgment.JudgmentPrompt;
+import kr.mujoong.realtime.luna.LunaDecision;
 import kr.mujoong.realtime.practiceflow.PracticeFlowTypes.FactKind;
 import kr.mujoong.realtime.practiceflow.PracticeFlowTypes.LiveTiming;
 import kr.mujoong.realtime.practiceflow.PracticeFlowTypes.SceneRunRecord;
 import kr.mujoong.realtime.session.ActivitySessionRepository;
 import kr.mujoong.realtime.session.ChildContext;
 import kr.mujoong.realtime.session.ConsentSnapshot;
+import kr.mujoong.realtime.session.JudgmentSupport;
 import kr.mujoong.realtime.session.NewActivitySession;
 import kr.mujoong.realtime.session.NoOpPracticeSessionExtension;
 import kr.mujoong.realtime.session.SessionEvent;
@@ -225,6 +243,137 @@ class PracticeFlowIT {
         assertThat(open.facts()).extracting(PracticeFlowTypes.Fact::kind).as("막힘은 재생 실패 사실이 아니다")
                 .doesNotContain(FactKind.PLAYBACK_FAILED);
         assertThat(open.endedAt()).as("장면은 아이 말을 계속 기다린다").isNull();
+        assertThat(failures).isEmpty();
+    }
+
+    // ---- 같은 걸음 묶음: 운영 Decisions 구현 + 실제 검증기 (ai-io.md 10.10, 편차 FT-1024-f) ----
+
+    /** 판정 요청(실행부가 만든 JudgeRequest)과 그 공급자 응답 약속. 응답(선택지 확률)은 시험이 손으로 준다. */
+    private final List<JudgeRequest> judged = new ArrayList<>();
+    private final List<CompletableFuture<LunaDecision>> decisions = new ArrayList<>();
+
+    /**
+     * 진행 중 판정을 운영 구현({@link DecisionsJudgeClient})과 실제 검증기(하한 0.6 · 최소 차이 0.15, application.yml 기본값)로 돌린다. 공급자 호출만
+     * 시험이 확률을 손으로 주는 대역이다(R-F1).
+     */
+    private void judgeWithTheRealValidator() {
+        LiveContentResources.JudgmentOptionSet optionSet = LiveContentResources.loadFor(false).judgment();
+        JudgmentPrompt prompt = JudgmentPrompt.load(optionSet);
+        DecisionsJudgeClient client = new DecisionsJudgeClient((request, question) -> {
+            CompletableFuture<LunaDecision> pending = new CompletableFuture<>();
+            decisions.add(pending);
+            return pending;
+        }, prompt, new JudgeOutcomeValidator(0.6, 0.15), h.clock);
+        JudgeClient recording = new JudgeClient() {
+            @Override
+            public boolean available() {
+                return true;
+            }
+
+            @Override
+            public CompletionStage<JudgeOutcome> judge(JudgeRequest request, UUID turnId) {
+                judged.add(request);
+                return client.judge(request, turnId);
+            }
+        };
+        h.judgment = new JudgmentSupport(recording, h.judgmentRecorder, Duration.ofSeconds(4), prompt.version(), optionSet);
+    }
+
+    /** 마지막 판정에 공급자 응답을 준다(코드 · 확률 짝, 확률이 가장 높은 코드를 공급자가 고른다). */
+    private void decide(Object... codeAndProbability) {
+        Map<String, Double> probabilities = new LinkedHashMap<>();
+        for (int i = 0; i < codeAndProbability.length; i += 2) {
+            probabilities.put((String) codeAndProbability[i], (Double) codeAndProbability[i + 1]);
+        }
+        String choice = probabilities.entrySet().stream().max(Map.Entry.comparingByValue()).orElseThrow().getKey();
+        decisions.getLast().complete(new LunaDecision(choice, probabilities.entrySet().stream()
+                .map(entry -> new LunaDecision.Probability(entry.getKey(), entry.getValue())).toList(), "luna-test", "prompt-service-v4",
+                Duration.ofMillis(900), 1));
+        h.drain();
+    }
+
+    private List<JudgmentLiveRecord> judgmentRecords() {
+        h.judgmentRecorder.tick();
+        return List.copyOf(h.store.judgments);
+    }
+
+    /** 공급자에 보낸 승인 낭독 지시(낭독 태그가 든 것)들. */
+    private List<String> readings() {
+        return h.provider.last().requests(kr.mujoong.realtime.voice.ProviderRequestFactory.InstructionsAppend.class).stream()
+                .map(kr.mujoong.realtime.voice.ProviderRequestFactory.InstructionsAppend::content)
+                .filter(content -> content.contains("<approved_speech>")).toList();
+    }
+
+    @Test
+    void aDirectAskRetryWhoseTopTwoAreBothSuccessesIsConfirmedByTheirSumAndEndsAfterHelp() {
+        directAsk();
+        judgeWithTheRealValidator();
+        h.activate();
+        playGenerated("오늘 연습할 목표는 부탁하기야. 짧게 이야기 연습을 해 볼 거야.");
+        playApproved(V2_INTRO);
+        playApproved(V2_OPPORTUNITY);
+        h.childSays("child-1", "몰라. 뭐라고 해야 돼?");
+        decide("FULL", 0.02, "PARTIAL", 0.02, "HELP", 0.9, "NOT_UNDERSTOOD", 0.02, "IRRELEVANT", 0.02, "UNREADABLE", 0.02);
+        playApproved(V2_HELP);
+
+        // 5회차 S6(실제 API + 합성 아이 음성): 도움 뒤 맞게 말했는데 FULL 0.38 · COPIED 0.29라 LOW_CONFIDENCE 보류였다
+        h.childSays("child-2", "내가 필요한 건 파란색이야");
+        assertThat(judged.getLast().point()).isEqualTo(JudgmentPoint.J5);
+        assertThat(judged.getLast().sameStepGroups()).as("흐름이 정한 묶음이 판정 요청까지 온다")
+                .containsExactly(List.of("FULL", "COPIED"), List.of("PARTIAL", "HELP", "NOT_UNDERSTOOD", "IRRELEVANT"));
+        decide("FULL", 0.38, "PARTIAL", 0.2, "HELP", 0.05, "NOT_UNDERSTOOD", 0.03, "IRRELEVANT", 0.02, "UNREADABLE", 0.03,
+                "COPIED", 0.29);
+
+        // 두 확률의 합 0.67로 확정 → 확인 질문 없이 대본의 친구 반응으로 장면이 끝난다
+        playApproved(V2_REACTION);
+        playGenerated("오늘은 부탁하기를 무중이 도와준 뒤에 네 말로 해 봤어. 오늘 연습은 여기까지야.");
+        assertThat(h.executor.status()).isEqualTo(SessionStatus.CLOSING);
+        SceneRunRecord stored = repository.findSceneRuns(h.sessionId).getFirst();
+        assertThat(stored.liveTiming()).isEqualTo(LiveTiming.AFTER_HELP);
+        assertThat(readings()).as("확인(INPUT_CONFIRM)을 읽지 않았다").noneMatch(content -> content.contains(FIXED_SPEECH.get("INPUT_CONFIRM")));
+        JudgmentLiveRecord retry = judgmentRecords().getLast();
+        assertThat(retry.point()).isEqualTo(JudgmentPoint.J5);
+        assertThat(retry.outcome()).isEqualTo(JudgmentOutcomeKind.CONFIRMED);
+        assertThat(retry.firstOption()).as("기록은 모델이 낸 1순위 그대로").isEqualTo("FULL");
+        assertThat(retry.firstProbability()).isEqualTo(0.38);
+        assertThat(retry.secondOption()).isEqualTo("COPIED");
+        assertThat(retry.secondProbability()).isEqualTo(0.29);
+        assertThat(h.logs.anyLineContains("JudgmentConfirmedBySameStepSum_J5")).isTrue();
+        assertThat(h.logs.anyLineContains("JudgmentConfirmedBySameStepSum_J2")).as("1순위 혼자 확정한 J2는 표지가 없다").isFalse();
+        assertThat(failures).isEmpty();
+    }
+
+    @Test
+    void aFirstAnswerBetweenTheTwoReexplainCodesIsReexplainedWhileHelpAgainstNotUnderstoodStillAsksAgain() {
+        directAsk();
+        judgeWithTheRealValidator();
+        h.activate();
+        playGenerated("오늘 연습할 목표는 부탁하기야.");
+        playApproved(V2_INTRO);
+        playApproved(V2_OPPORTUNITY);
+
+        // 5회차 J2: HELP 0.54 — 2순위 NOT_UNDERSTOOD(다시 설명)는 다른 걸음이라 지금처럼 보류하고 교정 없이 한 번 다시 묻는다
+        h.childSays("child-1", "무중아, 친구한테 어떻게 부탁하면 좋을까?");
+        assertThat(judged.getLast().sameStepGroups()).containsExactly(List.of("NOT_UNDERSTOOD", "IRRELEVANT"));
+        decide("FULL", 0.03, "PARTIAL", 0.05, "HELP", 0.54, "NOT_UNDERSTOOD", 0.3, "IRRELEVANT", 0.05, "UNREADABLE", 0.03);
+        playApproved(FIXED_SPEECH.get("INPUT_CONFIRM"));
+
+        // 다시 설명으로 가는 두 코드 사이의 망설임은 합 0.7로 확정해 다시 설명 + 묻기를 읽는다
+        h.childSays("child-2", "공룡 그림이 뭐야?");
+        decide("FULL", 0.05, "PARTIAL", 0.1, "HELP", 0.1, "NOT_UNDERSTOOD", 0.4, "IRRELEVANT", 0.3, "UNREADABLE", 0.05);
+        playApproved(V2_REEXPLAIN + " " + V2_ASK);
+
+        List<JudgmentLiveRecord> records = judgmentRecords();
+        assertThat(records).extracting(JudgmentLiveRecord::outcome)
+                .containsExactly(JudgmentOutcomeKind.ABSTAINED, JudgmentOutcomeKind.CONFIRMED);
+        assertThat(records.getFirst().abstainReason()).isEqualTo(AbstainReason.LOW_CONFIDENCE);
+        assertThat(records.getLast().firstOption()).isEqualTo("NOT_UNDERSTOOD");
+        assertThat(records.getLast().secondOption()).isEqualTo("IRRELEVANT");
+        assertThat(h.logs.anyLineContains("JudgmentConfirmedBySameStepSum_J2")).isTrue();
+        SceneRunRecord open = repository.findSceneRuns(h.sessionId).getFirst();
+        assertThat(open.facts()).extracting(PracticeFlowTypes.Fact::kind).containsExactly(FactKind.SITUATION_EXPLAINED);
+        assertThat(open.endedAt()).as("다시 설명 뒤 아이 말을 기다린다").isNull();
+        assertThat(h.executor.status()).isEqualTo(SessionStatus.ACTIVE);
         assertThat(failures).isEmpty();
     }
 

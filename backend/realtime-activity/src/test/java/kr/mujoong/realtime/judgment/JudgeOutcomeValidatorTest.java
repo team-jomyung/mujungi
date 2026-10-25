@@ -98,6 +98,107 @@ class JudgeOutcomeValidatorTest {
                 .abstainReason()).isEqualTo(AbstainReason.PROBABILITY_OUT_OF_RANGE);
     }
 
+    // ---- 같은 걸음 묶음 (ai-io.md 10.10, 편차 FT-1024-f) ----
+
+    /** C안 다시 해 보기(J5) 선택지와 그 단계의 묶음: 성공 둘, 장면 닫기 넷(다시 해 보기 한도 1). */
+    private static final List<String> J5 = List.of("FULL", "PARTIAL", "HELP", "NOT_UNDERSTOOD", "IRRELEVANT", "UNREADABLE", "COPIED");
+    private static final List<List<String>> J5_GROUPS = List.of(List.of("FULL", "COPIED"),
+            List.of("PARTIAL", "HELP", "NOT_UNDERSTOOD", "IRRELEVANT"));
+
+    private JudgeOutcome grouped(String first, double firstP, String second, double secondP, List<List<String>> groups) {
+        return validator.validateRanked(first, firstP, second, secondP, J5, groups, LATENCY, "luna-test", "prompt-service-v4");
+    }
+
+    @Test
+    void theFifthRunCaseIsConfirmedBecauseFullAndCopiedAreTheSameStepAndTheModelsFirstOptionStays() {
+        // 5회차 S6(실제 API + 합성 아이 음성): FULL 0.38 · COPIED 0.29 — 둘 다 도움 뒤 성공이라 합 0.67이 하한 0.6을 넘는다
+        JudgeOutcome outcome = grouped("FULL", 0.38, "COPIED", 0.29, J5_GROUPS);
+
+        assertThat(outcome.isConfirmed()).isTrue();
+        assertThat(outcome.sameStepSum()).as("1순위 혼자가 아니라 묶음 합으로 확정").isTrue();
+        assertThat(outcome.firstOption()).as("1순위는 모델이 낸 그대로(기록이 FULL · COPIED를 구분)").isEqualTo("FULL");
+        assertThat(outcome.firstProbability()).isEqualTo(0.38);
+        assertThat(outcome.secondOption()).isEqualTo("COPIED");
+        assertThat(outcome.secondProbability()).isEqualTo(0.29);
+        assertThat(outcome.abstainReason()).isNull();
+        assertThat(grouped("COPIED", 0.38, "FULL", 0.29, J5_GROUPS).firstOption()).as("묶음 안 순서도 모델 그대로").isEqualTo("COPIED");
+        assertThat(outcome.toString()).doesNotContain("FULL").doesNotContain("0.38").contains("sameStepSum");
+    }
+
+    @Test
+    void twoOptionsOfDifferentStepsAreStillAbstainedExactlyAsBefore() {
+        // 5회차 S10 첫 대답: PARTIAL 0.44 · FULL 0.44 — 장면 닫기와 성공은 다른 걸음이다
+        JudgeOutcome tie = grouped("PARTIAL", 0.44, "FULL", 0.44, J5_GROUPS);
+        JudgeOutcome split = grouped("FULL", 0.38, "PARTIAL", 0.29, J5_GROUPS);
+
+        assertThat(tie.abstainReason()).isEqualTo(AbstainReason.LOW_CONFIDENCE);
+        assertThat(split.abstainReason()).isEqualTo(AbstainReason.LOW_CONFIDENCE);
+        assertThat(split.sameStepSum()).isFalse();
+        assertThat(split.firstProbability()).as("보류 기록용 확률은 그대로").isEqualTo(0.38);
+        assertThat(grouped("FULL", 0.62, "PARTIAL", 0.5, J5_GROUPS).abstainReason()).as("다른 걸음이면 최소 차이도 그대로")
+                .isEqualTo(AbstainReason.LOW_MARGIN);
+    }
+
+    @Test
+    void withoutGroupsTheSamePairIsAbstainedLikeTodayAndTheOldOverloadIsUnchanged() {
+        assertThat(grouped("FULL", 0.38, "COPIED", 0.29, List.of()).abstainReason()).isEqualTo(AbstainReason.LOW_CONFIDENCE);
+        assertThat(grouped("FULL", 0.38, "COPIED", 0.29, null).abstainReason()).isEqualTo(AbstainReason.LOW_CONFIDENCE);
+        assertThat(validator.validateRanked("FULL", 0.38, "COPIED", 0.29, J5, LATENCY, "luna-test", "p").abstainReason())
+                .isEqualTo(AbstainReason.LOW_CONFIDENCE);
+    }
+
+    @ParameterizedTest(name = "{0} + {1} -> {2}")
+    @CsvSource({
+        "0.30, 0.25, ABSTAINED",
+        "0.35, 0.25, CONFIRMED",
+        "0.34, 0.25, ABSTAINED",
+        "0.50, 0.45, CONFIRMED"
+    })
+    void inOneGroupTheFloorUsesTheSumWithTheSameEqualIsConfirmedBoundary(double firstP, double secondP, JudgmentOutcomeKind kind) {
+        JudgeOutcome outcome = grouped("PARTIAL", firstP, "HELP", secondP, J5_GROUPS);
+
+        assertThat(outcome.kind()).isEqualTo(kind);
+        if (kind == JudgmentOutcomeKind.ABSTAINED) {
+            assertThat(outcome.abstainReason()).as("합해도 하한 미만").isEqualTo(AbstainReason.LOW_CONFIDENCE);
+            assertThat(outcome.sameStepSum()).isFalse();
+        } else {
+            assertThat(outcome.sameStepSum()).isTrue();
+            assertThat(outcome.firstOption()).isEqualTo("PARTIAL");
+        }
+    }
+
+    @Test
+    void inOneGroupTheMarginBetweenTheTwoIsNotCheckedButAClearFirstOptionIsAnOrdinaryConfirmation() {
+        // 확률 합이 1을 넘는 응답(공급자 반올림 등)에서도 두 선택지 사이의 차이는 보지 않는다
+        JudgeOutcome closeInGroup = grouped("FULL", 0.62, "COPIED", 0.5, J5_GROUPS);
+        assertThat(closeInGroup.isConfirmed()).isTrue();
+        assertThat(closeInGroup.sameStepSum()).isTrue();
+        assertThat(grouped("FULL", 0.62, "COPIED", 0.5, List.of()).abstainReason()).isEqualTo(AbstainReason.LOW_MARGIN);
+
+        JudgeOutcome clear = grouped("FULL", 0.7, "COPIED", 0.2, J5_GROUPS);
+        assertThat(clear.isConfirmed()).isTrue();
+        assertThat(clear.sameStepSum()).as("묶음 없이도 확정이면 묶음 합 표지를 달지 않는다").isFalse();
+    }
+
+    @Test
+    void theRangeSetAndDuplicateChecksStillComeBeforeTheGroupRule() {
+        List<List<String>> wide = List.of(List.of("FULL", "COPIED", "NOT_A_CODE"));
+        assertThat(grouped("FULL", 0.38, "NOT_A_CODE", 0.29, wide).abstainReason()).isEqualTo(AbstainReason.OPTION_OUT_OF_SET);
+        assertThat(grouped("FULL", 0.38, "FULL", 0.29, J5_GROUPS).abstainReason()).isEqualTo(AbstainReason.DUPLICATE_OPTION);
+        assertThat(grouped("FULL", 1.2, "COPIED", 0.29, J5_GROUPS).abstainReason()).isEqualTo(AbstainReason.PROBABILITY_OUT_OF_RANGE);
+        assertThat(grouped(null, 0.38, "COPIED", 0.29, J5_GROUPS).abstainReason()).isEqualTo(AbstainReason.SCHEMA_INVALID);
+    }
+
+    @Test
+    void theSameStepMarkIsOnlyForConfirmations() {
+        assertThatThrownBy(() -> new JudgeOutcome(JudgmentOutcomeKind.ABSTAINED, "FULL", 0.38, "COPIED", 0.29,
+                AbstainReason.LOW_CONFIDENCE, LATENCY, null, "p", true)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new JudgeOutcome(JudgmentOutcomeKind.SUPERSEDED, null, null, null, null, null, LATENCY, null, "p",
+                true)).isInstanceOf(IllegalArgumentException.class);
+        assertThat(JudgeOutcome.confirmed("FULL", 0.9, "COPIED", 0.05, LATENCY, null, "p").sameStepSum()).isFalse();
+        assertThat(JudgeOutcome.abstained(AbstainReason.TIMEOUT, LATENCY, null, "p").sameStepSum()).isFalse();
+    }
+
     @Test
     void theOutcomeValueEnforcesItsInvariants() {
         assertThatThrownBy(() -> new JudgeOutcome(JudgmentOutcomeKind.CONFIRMED, "FULL", 0.9, null, null, null, LATENCY, null, "p"))

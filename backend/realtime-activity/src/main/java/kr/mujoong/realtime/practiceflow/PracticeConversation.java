@@ -5,6 +5,7 @@ import java.util.ArrayDeque;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -51,6 +52,8 @@ import kr.mujoong.realtime.voice.PracticeSpeech;
  *       만료 표지로 본다(D3). 아이 말이 시작되면(실행부 알림) 무응답 시계를 멈추고 확정 전사를 기다린다(4회차 R1).
  *   <li>판정은 {@code requestJudgment}로 요청한다(J2 · J3 · J5에만 판정 기준을 싣고 J4에는 싣지 않는다, D2). 거절(거짓) · 보류 · 장애는 판독
  *       불가와 같이 교정 없이 같은 질문을 한 번 다시 안내하고, 두 번째면 닫지 않고 도움 단계로 넘긴다(BR3.7 · FT-1023-g). 연습이 멈추지 않는다.
+ *       C안은 지금 단계에서 같은 다음 걸음으로 처리하는 선택지 묶음({@link PracticeOutput#SAME_STEP_GROUPS})도 실어, 1 · 2순위가 같은 묶음이면
+ *       실행부 검증기가 하한을 두 확률의 합으로 보게 한다(판정 기준이 아니라 공급자로 가지 않는다, 편차 FT-1024-f).
  *   <li>GPT-Live가 만드는 모든 역할 발화는 {@code speakGenerated} 한 길로만 낸다(D6). 낼 수 없으면(거짓) 그 슬롯을 실패로 닫고 이어 간다.
  *       역할 전환 · 복귀 알림은 승인 문장이 있으면 {@code announceRoleSwitch}로, 없거나 못 내면 생성형으로 낸다(BR5.4).
  *   <li>발화 오류로 연습을 끝내지 않는다(FT-1023-g): 끝내 못 들려준 발화(재요청 뒤 실패 · 막힘 · 시한 초과)는 건너뛰고 다음 단계로 간다. 연습을 끝내는
@@ -583,7 +586,7 @@ public final class PracticeConversation implements PracticeSessionExtension {
         judgmentCorrelation = correlation;
         judgmentAsksProcedure = PracticeProcedureQuestion.matches(utterance.text());
         state.judgmentOpen(true);
-        boolean accepted = output.requestJudgment(point, utterance.seq(), correlation, criteriaFor(point));
+        boolean accepted = output.requestJudgment(point, utterance.seq(), correlation, criteriaFor(point, judgmentAsksProcedure));
         if (!accepted) {
             // 거절(열린 턴 · 공급자 없음 · 전사 범위 밖 등)은 보류와 같게 이어 간다. 연습은 멈추지 않는다(BR3.7)
             judgmentCorrelation = null;
@@ -593,21 +596,50 @@ public final class PracticeConversation implements PracticeSessionExtension {
         }
     }
 
-    /** J2 · J3 · J5에만 판정 기준을 싣는다(D2). coreFunction은 목표의 판정 기준 문자열에서 만든다(상한 안으로 줄인다). */
-    private Map<String, Object> criteriaFor(JudgmentPoint point) {
+    /**
+     * J2 · J3 · J5에만 판정 기준을 싣는다(D2). coreFunction은 목표의 판정 기준 문자열에서 만든다(상한 안으로 줄인다). C안은 같은 걸음 묶음이 있으면
+     * 함께 싣고, 기준이 없는 J4에는 묶음만 든 맵을 보낸다(묶음이 없으면 지금처럼 null).
+     */
+    private Map<String, Object> criteriaFor(JudgmentPoint point, boolean asksProcedure) {
         if (settings.flexibleDialogue() && goalAchieved && state.phase() == Phase.OPPORTUNITY) {
             return Map.of("coreFunction", "ROLE_DIALOGUE_CLOSURE", "judgmentCriteria",
                     "친구 역할 대화에서 제안에 동의하거나 대안을 합의하는 등 현재 상황이 정리됐는지 본다. "
                     + "새 질문·이유 묻기·조건 제시·반대·진행 방법 질문은 대화가 더 필요하다. 짧은 응도 직전 제안을 받아들이는 맥락이면 정리될 수 있다.");
         }
+        List<List<String>> groups = sameStepGroups(point, asksProcedure);
         if (point != JudgmentPoint.J2 && point != JudgmentPoint.J3 && point != JudgmentPoint.J5) {
-            return null;
+            return groups.isEmpty() ? null : Map.of(PracticeOutput.SAME_STEP_GROUPS, groups);
         }
         String criteria = pack.goals().get(state.goalIndex()).judgmentCriteria();
         Map<String, Object> map = new LinkedHashMap<>();
         map.put("coreFunction", criteria.length() <= CORE_FUNCTION_MAX ? criteria : criteria.substring(0, CORE_FUNCTION_MAX));
         map.put("judgmentCriteria", criteria);
+        if (!groups.isEmpty()) {
+            map.put(PracticeOutput.SAME_STEP_GROUPS, groups);
+        }
         return map;
+    }
+
+    /**
+     * C안: 지금 단계에서 이 흐름이 같은 다음 걸음으로 처리하는 선택지 묶음. 결과를 받을 때와 같은 바꾸기({@link #handledOption})를 거쳐 전이표에
+     * 넣어 본 전이로 정한다(손으로 정한 목록이 아니다). 판정 중에는 단계가 바뀌지 않는다 — 시계 만료 · 종료로 단계가 바뀌면 열린 판정을 거두므로 늦은
+     * 결과는 이 묶음과 다른 상태에 적용되지 않는다. 유연 대화는 기회 단계의 결과를 따로 처리해 묶음을 보내지 않는다(지금 동작 그대로).
+     */
+    private List<List<String>> sameStepGroups(JudgmentPoint point, boolean asksProcedure) {
+        if (!settings.directAsk() || point == null) {
+            return List.of();
+        }
+        return transitions.sameStepGroups(state, point, code -> handledOption(point, code, asksProcedure));
+    }
+
+    /**
+     * 판정 결과 코드를 전이표에 넣기 전에 흐름이 바꾸는 규칙: 아이가 할 말을 정하지 못하고 방법을 물었으면(절차 질문) 수행 코드도 도움 요청(HELP)으로
+     * 본다. 모델이 낸 결과(판정 기록)는 그대로다.
+     */
+    private static String handledOption(JudgmentPoint point, String option, boolean asksProcedure) {
+        boolean answerPoint = point == JudgmentPoint.J2 || point == JudgmentPoint.J3 || point == JudgmentPoint.J5;
+        boolean performed = "FULL".equals(option) || "DELIVERED".equals(option) || "COPIED".equals(option);
+        return asksProcedure && answerPoint && performed ? "HELP" : option;
     }
 
     private void onJudgmentResult(ExtensionEvent event) {
@@ -625,8 +657,7 @@ public final class PracticeConversation implements PracticeSessionExtension {
         String option = first == null ? null : first.toString();
         if (settings.flexibleDialogue() && flexibleJudgment(point, option, asksProcedure)) return;
         // Preserve the model's recorded result; the flow must not finish on a recognized question about how to practise.
-        if (asksProcedure && (point == JudgmentPoint.J2 || point == JudgmentPoint.J3 || point == JudgmentPoint.J5)
-                && ("FULL".equals(option) || "DELIVERED".equals(option) || "COPIED".equals(option))) option = "HELP";
+        option = handledOption(point, option, asksProcedure);
         afterJudgment(point == null ? Step.ignore() : transitions.onJudgment(state, point, option));
     }
 

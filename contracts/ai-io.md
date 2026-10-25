@@ -326,7 +326,7 @@ U15 씨앗 v2는 GENERATED/DUPLICATE/NONE의 배타적 출력 분기를 사용�
 
 | 목적 | 호출 경로(단위) | 분류 | 호출 안 재시도 · 실패 뒤 |
 |---|---|---|---|
-| 진행 중 판정 J1 ~ J6 | realtime 판정 턴(U11). Decisions API `POST {base-url}/decisions` 한 길이다(다른 끝점 · 대체 경로 없음) [편차 FT-1023-d] | `NONE` | 재시도 없음. `mujoong.timing.judgment.live-budget`(4초) 초과 · 응답 검증 위반 · 공급자 오류는 판정 보류. 하한(`mujoong.judgment.min-confidence` · `min-margin`)에 못 미치면 보류 |
+| 진행 중 판정 J1 ~ J6 | realtime 판정 턴(U11). Decisions API `POST {base-url}/decisions` 한 길이다(다른 끝점 · 대체 경로 없음) [편차 FT-1023-d] | `NONE` | 재시도 없음. `mujoong.timing.judgment.live-budget`(4초) 초과 · 응답 검증 위반 · 공급자 오류는 판정 보류. 하한(`mujoong.judgment.min-confidence` · `min-margin`)에 못 미치면 보류(연습 흐름이 같은 다음 걸음으로 처리하는 1 · 2순위는 두 확률의 합, 10.10) |
 | 제브 검사(새 발화) | realtime 출력 게이트(U13) | `NONE` | 재시도 없음. `mujoong.timing.guardrail.jev-budget`(800ms) 초과(시간 초과는 막힘) · 전송 오류(비 2xx 포함) · 잘못된 응답(10.13)도 막힘이고 자동 `ALLOW`는 없다. 막힘 뒤 같은 다음 행동 지시를 다시 하는 것은 게이트 단계의 일이다(호출 안 재시도가 아님) [U13 편차 (U13-b)] |
 | 상황 생성 | core 상황 생성 요청(U10) | `REQUEST_BOUNDED` | 일시 실패 기술 재시도 1회 + 내용 재생성 1회(스키마 불일치 포함), 7절 15초 예산 안. 실패는 `SCENARIO_GEN_FAILED` |
 | 자체 검토(J7) | core 상황 생성 요청(U10) | `REQUEST_BOUNDED` | 같은 15초 예산 |
@@ -420,6 +420,17 @@ Luna 호출부(core-api · realtime-activity 각자)는 공급자 시도마다 `
   - **C안 인정 규칙(`prompt-service-v4`):** 무중이 상대의 말을 전하고 "너라면 뭐라고 말할래?"라고 묻는 틀이다. 아이 대답이 직접 하는 말 · 할 말을 전하는 말("다음에 같이 그리자고 할래") · 할 행동 설명 중 무엇이든 내용이 목표 핵심 기능을 채우면 J2 `FULL` · J3 `DELIVERED` · J5 `FULL`이다. 할 말을 정하지 못하고 방법만 묻는 말("뭐라고 말해야 돼?")은 `HELP`다. 역할 대화 전제 문단과 J3 `ROLE_DIALOGUE_CLOSURE` 특수 단락은 v4에 없다(J3은 되묻기 뒤에만 쓴다). 절차 질문 규칙("…라고 말하면 돼?" → `HELP`)은 그대로다 [편차 FT-1024-b].
   - 응답 검증(새 사유 코드 없음): 비 2xx는 아래 표와 같다. 2xx에서 JSON이 아니면 `SERVER_ERROR`, 질문 이름이 맞는 답이 없으면 `EMPTY_OUTPUT`(이름 없는 거절만 있으면 `REFUSED`), 같은 이름 답이 여럿이면 `SCHEMA_INVALID`, `type: refusal`이면 `REFUSED`, `model`이 없으면 `MODEL_MISSING`, 그 밖에 `type`이 `choice`가 아님 · `choice`가 보낸 선택지 밖 · `probabilities`가 보낸 선택지를 모두 덮지 않음(밖 · 중복 · 숫자 아님 · 0 ~ 1 밖 포함) · 고른 값의 확률이 가장 높지 않음(같으면 허용)이면 `SCHEMA_INVALID`다.
   - 판정: 확률 내림차순 1 · 2순위(같으면 공급자가 고른 값, 그다음 판 순서)를 검증기(하한 `min-confidence` → `LOW_CONFIDENCE`, 최소 차이 `min-margin` → `LOW_MARGIN`, 같으면 확정)에 넘긴다. 응답의 `confidence`는 쓰지 않는다(판정 규칙은 선택지 확률 기준이고 confidence는 정의가 다른 값). 판독 불가 입력은 공급자 없이 `UNREADABLE_INPUT`, 실패는 `TIMEOUT` · `SCHEMA_INVALID` · `PROVIDER_ERROR` 보류다. Decisions 장애 · 지연 때 대신 부를 다른 끝점은 없고 그 판정은 보류로 끝난다.
+  - **같은 걸음 묶음(연습 대화 C안, 2026-10-25) [편차 FT-1024-f]:** 판정을 요청한 연습 흐름은 지금 단계에서 같은 다음 걸음으로 처리하는 선택지들을 묶어(선택지 코드 목록의 목록, 묶음마다 둘 이상 · 묶음끼리 겹치지 않음) 확장 판정 요청의 기준 맵 키 `sameStepGroups`로 함께 보낸다. 묶음은 손으로 정한 목록이 아니라, 흐름이 그 단계의 상태에서 코드마다 결과 처리(절차 질문이면 수행 코드를 `HELP`로 보는 규칙 포함)와 전이표를 거쳐 본 전이 — 다음 단계 · 소단계 · 기록 사실 · 시점 · 장면 원인 · 도움 동의 · 횟수 · 재안내 표지 · 변형 · 종료 표지 — 가 모두 같은 코드끼리다(realtime `FlowTransitions.sameStepGroups`). 1 · 2순위가 같은 묶음이면 하한은 두 확률의 합으로 보고(합이 `min-confidence` 이상이면 확정, 같으면 확정) 두 선택지 사이의 최소 차이는 보지 않는다. 확정 결과의 1 · 2순위 코드와 확률은 모델이 낸 그대로라 판정 기록 · 리포트가 묶음 안의 코드(예: `FULL` · `COPIED`)를 구분한다. 1순위 혼자로는 확정이 아니었던 이 확정은 진단 사유 코드 `JudgmentConfirmedBySameStepSum_<지점>`(예: `_J5`, INFO, 고정 코드뿐 · 코드 · 확률 · 전사 없음, R-F14) 한 줄을 남긴다. 1 · 2순위가 다른 묶음이거나 묶음이 없는 요청은 위 규칙 그대로이고 `min-confidence` 0.6 · `min-margin` 0.15는 바꾸지 않는다. 묶음은 검증기만 읽고 공급자로 보내지 않으며(`ai-judgment-request` 입력에 없다) 판정 기준(`coreFunction` · `judgmentCriteria`)이 아니라서, 기준이 없는 J4에는 이 키만 실린다. 실행부는 묶음 모양이 틀리면(목록의 목록이 아님 · 빈 코드 · 둘 미만 · 한 코드가 두 번) 판정 요청을 거절하고, 그 지점 선택지 판에 없는 코드는 걷는다(둘 미만이 되면 그 묶음을 버린다). 유연 대화 경로(10.14 `flexible-dialogue` `true`)는 묶음을 보내지 않는다. C안 운영 기본(`retry-max` 1 · `reexplain-max` 1)의 묶음은 아래와 같다.
+
+| 지점 · 단계 | 묶음 | 같은 다음 걸음 |
+|---|---|---|
+| J2 · 기회(OPPORTUNITY) | `NOT_UNDERSTOOD` · `IRRELEVANT` | 다시 설명 + 묻기(다시 설명 한도를 넘었으면 도움 제안) |
+| J5 · 다시 해 보기(RETRY) | `FULL` · `COPIED` | 상대의 반응 전하기, 시점 `AFTER_HELP` |
+| J5 · 다시 해 보기(RETRY) | `PARTIAL` · `HELP` · `NOT_UNDERSTOOD` · `IRRELEVANT` | 다시 해 보기 한도로 장면 닫기(`SCENE_CLOSE`, 원인 집중 한도). `retry-max`가 2 이상이면 `PARTIAL` · `HELP`(다시 도움)와 `NOT_UNDERSTOOD` · `IRRELEVANT`(다시 설명)로 나뉜다 |
+| J4 · 변형 제안(VARIANT_OFFER), 불명확 재안내 뒤 | `REFUSE` · `UNCLEAR` | 변형 건너뛰기(사유 `DECLINED`) |
+| 아이가 방법을 물은 말(절차 질문) | J2 `FULL` · `HELP`, J3 `DELIVERED` · `HELP`, J5 `FULL` · `COPIED` · `PARTIAL` · `HELP` · `NOT_UNDERSTOOD` · `IRRELEVANT` | 수행 코드도 도움 요청으로 처리한다(10.18 절차 질문 규칙). J2의 `NOT_UNDERSTOOD` · `IRRELEVANT` 묶음은 그대로다 |
+| 묶음 없음 | J3 되묻기(REASK), J4 도움 제안(HELP_OFFER), J4 변형 제안 첫 대답. `UNREADABLE`은 어느 묶음에도 들지 않는다(두 번째에는 판독 불가 사실이 더 남는다) | — |
+
 - **보내기 전 정리:** 모든 깊이에서 10.2 금지 키(+ core 결과 게이트웨이의 `audioRefs` · `audioRefsJson` · `interests` 등)를 지우고, 호출자가 준 별칭 표로 아이 이름을 바꾸며, 이메일 · 휴대전화 모양 값을 '연락처'로 가린다. 남으면 · 요청 스키마(`ai-judgment-request`)에 맞지 않으면 부르지 않고 `FORBIDDEN_INPUT`이다. UUID → '참조N'과 복원은 지금 `ResultTextGateway`가 맡는다.
   - 금지 키는 대소문자와 `_` · `-`를 가리지 않고 비교한다(`child_name` · `Child-Id` · `api_key` · `guardian-id`도 지운다). 정리 뒤 안전망은 이 비교를 다시 쓰지 않는 독립 검사로, 글자 · 숫자 밖 문자를 모두 뺀 꼴(예: `child.name`)까지 보고 남으면 `FORBIDDEN_INPUT`이다.
   - 별칭은 긴 이름부터(길이가 같으면 사전순) 한 번만 훑으며 바꾼다. 이름끼리 포함 관계(예: '민수'와 '수')여도 결과가 별칭 표 순서에 기대지 않고, 바꿔 넣은 별칭을 짧은 이름이 다시 바꾸지 않는다. 빈 이름은 무시한다.
@@ -698,7 +709,7 @@ J1/J6의 고정 질문·선택지는 `judgment-service-v1`, 공통 지시문은 
 | `FAMILY`(이름에 가족 낱말, 또는 동아리 밖의 손윗사람 호칭), 호칭 없는 중립 문장 | 그때 이렇게 말했어. + `opportunitySentence` | 너라면 뭐라고 말할래? | 그렇게 말해 주면 네 마음이 잘 전해질 거야. |
 | 그 밖(`FRIEND*` · `PEER*` · `CLASSMATE` · `CLUB_PEER` · `TEAMMATE` · 모르는 값) | 친구가 이렇게 말했어. + `opportunitySentence` | 고정 `ASK_DEFAULT` | 그렇게 말해 주면 친구도 네 마음을 알 거야. |
 
-**판정.** 진행 중 판정의 기본 판은 `prompt-service-v4` · `judgment-service-v2`이고 판정 입력의 무중 줄 화자는 `MUJOONG`이다(10.4 · 10.10). 아이 대답이 직접 하는 말 · 할 말을 전하는 말("다음에 같이 그리자고 할래") · 할 행동 설명 중 무엇이든 내용이 목표 핵심 기능을 채우면 수행이다(J2 `FULL` · J3 `DELIVERED` · J5 `FULL`). 할 말을 정하지 못하고 방법만 묻는 말("뭐라고 말해야 돼?")은 `HELP`다. 절차 질문 규칙과 판정 경로 · 시한 · 확률 하한은 그대로다. core 기록용 재판정(`RejudgmentGateway`, 출력 스키마 `ai-rejudgment-output`)도 같은 인정 규칙을 넣은 `rejudgment.v2` 지시로 부르고, 판정 기록 `promptVersion`은 `rejudgment.v2`다(리포트 2항목 줄 이름이 이 결과를 쓴다) [편차 FT-1024-b].
+**판정.** 진행 중 판정의 기본 판은 `prompt-service-v4` · `judgment-service-v2`이고 판정 입력의 무중 줄 화자는 `MUJOONG`이다(10.4 · 10.10). 아이 대답이 직접 하는 말 · 할 말을 전하는 말("다음에 같이 그리자고 할래") · 할 행동 설명 중 무엇이든 내용이 목표 핵심 기능을 채우면 수행이다(J2 `FULL` · J3 `DELIVERED` · J5 `FULL`). 할 말을 정하지 못하고 방법만 묻는 말("뭐라고 말해야 돼?")은 `HELP`다. 절차 질문 규칙과 판정 경로 · 시한은 그대로다. 확률 하한도 그대로이되, 1 · 2순위가 흐름의 같은 다음 걸음 묶음(예: 다시 해 보기의 `FULL` · `COPIED`)이면 두 확률의 합으로 본다(10.10 같은 걸음 묶음, 2026-10-25 [편차 FT-1024-f]). core 기록용 재판정(`RejudgmentGateway`, 출력 스키마 `ai-rejudgment-output`)도 같은 인정 규칙을 넣은 `rejudgment.v2` 지시로 부르고, 판정 기록 `promptVersion`은 `rejudgment.v2`다(리포트 2항목 줄 이름이 이 결과를 쓴다) [편차 FT-1024-b].
 
 **기록.** 연습 기록의 모양과 `flowVersion`(`practice-conversation-v1`) · 시점 5값의 뜻은 그대로다. 역할 사실(`COACH_SWITCH` · `COACH_RETURN` · `ORIGINAL_SCENE_RETURN`)은 C안에서 나오지 않는다(열거값은 유연 대화 · 이전 기록 호환으로 남는다). 마이그레이션은 없다.
 - C안에서 아이가 먼저 도움을 청하면(J2 · J3 `HELP` · 절차 질문) 도움 동의는 `ACCEPT`, 사실은 `HELP_ACCEPTED`로 남는다. 리포트 8항목이 이 경우를 '답 없음'으로 세지 않게 하려는 것이다. 유연 대화는 지금처럼 `REQUESTED`다.

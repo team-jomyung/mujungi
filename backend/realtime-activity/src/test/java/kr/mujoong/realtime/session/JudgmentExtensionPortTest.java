@@ -4,11 +4,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.Duration;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import kr.mujoong.contract.ws.message.SessionState;
 import kr.mujoong.contract.ws.message.View;
 import kr.mujoong.realtime.judgment.AbstainReason;
+import kr.mujoong.realtime.judgment.JudgeRequest;
 import kr.mujoong.realtime.judgment.JudgmentLiveRecord;
 import kr.mujoong.realtime.judgment.JudgmentOutcomeKind;
 import kr.mujoong.realtime.judgment.JudgmentPoint;
@@ -177,6 +179,88 @@ class JudgmentExtensionPortTest {
         t.h.speak("응답", 4_800);
         t.advance(Duration.ofSeconds(1));
         assertThat(extension.output.setThinking(false)).isTrue();
+    }
+
+    // ---- 같은 걸음 묶음 (ai-io.md 10.10, 편차 FT-1024-f) ----
+
+    @Test
+    void sameStepGroupsInTheCriteriaMapReachTheJudgeRequestWithinTheOptionSetAndAreNotProviderInput() {
+        practice();
+        long seq = say("i-1", "무슨 말이야");
+        Map<String, Object> criteria = criteria();
+        criteria.put(PracticeSessionExtension.PracticeOutput.SAME_STEP_GROUPS,
+                List.of(List.of("NOT_UNDERSTOOD", "IRRELEVANT"), List.of("FULL", "COPIED")));
+
+        assertThat(extension.output.requestJudgment(JudgmentPoint.J2, seq, correlation, criteria)).isTrue();
+        t.h.drain();
+
+        JudgeRequest request = t.judge.last().request();
+        assertThat(request.sameStepGroups()).as("J2 선택지 밖 코드(COPIED)는 걷고 하나만 남은 묶음은 버린다")
+                .containsExactly(List.of("NOT_UNDERSTOOD", "IRRELEVANT"));
+        assertThat(request.criteria()).isNotNull();
+        assertThat(request.toLunaInput()).as("묶음은 공급자 입력이 아니다")
+                .doesNotContainKey(PracticeSessionExtension.PracticeOutput.SAME_STEP_GROUPS);
+    }
+
+    @Test
+    void aJ4RequestMayCarryOnlyTheGroupsAndStillHasNoCriteria() {
+        practice();
+        long seq = say("i-1", "몰라");
+
+        assertThat(extension.output.requestJudgment(JudgmentPoint.J4, seq, correlation,
+                Map.of(PracticeSessionExtension.PracticeOutput.SAME_STEP_GROUPS, List.of(List.of("REFUSE", "UNCLEAR"))))).isTrue();
+        t.h.drain();
+
+        assertThat(t.judge.last().request().criteria()).as("J4에는 판정 기준이 없다(D2)").isNull();
+        assertThat(t.judge.last().request().sameStepGroups()).containsExactly(List.of("REFUSE", "UNCLEAR"));
+    }
+
+    @Test
+    void malformedSameStepGroupsAreRefusedLikeMalformedCriteria() {
+        practice();
+        long seq = say("i-1", "그거 줘");
+        List<Object> malformed = List.of("FULL", List.of("FULL", "PARTIAL"), List.of(List.of("FULL")), List.of(List.of("FULL", 3)),
+                List.of(List.of("FULL", " ")), List.of(List.of("FULL", "PARTIAL"), List.of("PARTIAL", "HELP")),
+                List.of(List.of("FULL", "FULL")));
+
+        for (Object bad : malformed) {
+            Map<String, Object> criteria = criteria();
+            criteria.put(PracticeSessionExtension.PracticeOutput.SAME_STEP_GROUPS, bad);
+            assertThat(extension.output.requestJudgment(JudgmentPoint.J2, seq, correlation, criteria)).as(String.valueOf(bad)).isFalse();
+        }
+        assertThat(t.judge.calls()).as("모양이 틀린 묶음으로는 턴을 열지 않는다").isEmpty();
+        assertThat(extension.output.requestJudgment(JudgmentPoint.J2, seq, correlation, criteria())).as("묶음 없는 요청은 그대로").isTrue();
+    }
+
+    @Test
+    void aSameStepSumConfirmationIsDeliveredAsAnOrdinaryResultAndLeavesOneFixedDiagnosticCode() {
+        practice();
+        long first = say("i-1", "그거 줘");
+        extension.output.requestJudgment(JudgmentPoint.J2, first, correlation, criteria());
+        t.h.drain();
+        t.judge.confirm("FULL", 0.9, "PARTIAL", 0.05);
+        t.h.drain();
+        assertThat(t.h.logs.anyLineContains(JudgmentCoordinator.SAME_STEP_SUM_CONFIRMED)).as("1순위 혼자 확정은 진단 코드가 없다").isFalse();
+
+        long retry = say("i-2", "내가 필요한 건 파란색이야");
+        UUID retryCorrelation = UUID.randomUUID();
+        extension.output.requestJudgment(JudgmentPoint.J5, retry, retryCorrelation, criteria());
+        t.h.drain();
+        t.judge.confirmBySameStep("FULL", 0.38, "COPIED", 0.29);
+        t.h.drain();
+
+        ExtensionEvent event = extension.events.getLast();
+        assertThat(event.kind()).isEqualTo(ExtensionEvent.Kind.JUDGMENT_RESULT);
+        assertThat(event.correlationId()).isEqualTo(retryCorrelation);
+        assertThat(event.value().toString()).contains("FULL", "COPIED", "J5").doesNotContain("0.38", "0.29");
+        assertThat(t.h.logs.anyLineContains("JudgmentConfirmedBySameStepSum_J5")).isTrue();
+        assertThat(t.h.logs.anyLineContains("파란색")).isFalse();
+        JudgmentLiveRecord record = t.records().getLast();
+        assertThat(record.outcome()).isEqualTo(JudgmentOutcomeKind.CONFIRMED);
+        assertThat(record.firstOption()).as("기록에는 모델이 낸 1순위 그대로").isEqualTo("FULL");
+        assertThat(record.firstProbability()).isEqualTo(0.38);
+        assertThat(record.secondOption()).isEqualTo("COPIED");
+        assertThat(record.secondProbability()).isEqualTo(0.29);
     }
 
     @Test

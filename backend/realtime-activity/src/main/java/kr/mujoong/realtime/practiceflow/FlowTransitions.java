@@ -1,7 +1,11 @@
 package kr.mujoong.realtime.practiceflow;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.function.UnaryOperator;
 import kr.mujoong.realtime.judgment.JudgmentPoint;
 import kr.mujoong.realtime.practiceflow.FlowState.Phase;
 import kr.mujoong.realtime.practiceflow.FlowState.Sub;
@@ -258,10 +262,34 @@ public final class FlowTransitions {
             return endRequest;
         }
 
+        /**
+         * 이 전이가 흐름에 시키는 일 전부(행동 · 단계 · 소단계 · 사실 · 시점 · 원인 · 동의 · 생략 사유 · 재안내 표지 · 역할 · 횟수 · 변형 · 도움 동의
+         * · 종료 표지)를 값으로 비교할 수 있게 담은 것. 같으면 {@link PracticeConversation}이 이 전이를 똑같이 적용한다.
+         */
+        List<Object> effect() {
+            return Arrays.asList(action, phase, sub, List.copyOf(facts), timing, cause, consent, skip, guard, role, incrementRetry,
+                    incrementReexplain, startVariant, helpConsented, endRequest);
+        }
+
         @Override
         public String toString() {
             return "Step[" + action + ", " + phase + "/" + sub + ", facts=" + facts + "]";
         }
+    }
+
+    /**
+     * 판정 지점마다 이 표({@link #onJudgment})가 읽는 선택지 코드(판정 판 순서). 판정 선택지 판(judgment-service-v1 · v2)의 J2 ~ J5 선택지와 같아야
+     * 한다(시험이 대조한다). 묶음은 이 목록이 아니라 각 코드를 표에 넣어 본 전이로 정한다({@link #sameStepGroups}).
+     */
+    private static final Map<JudgmentPoint, List<String>> JUDGMENT_CODES = Map.of(
+            JudgmentPoint.J2, List.of("FULL", "PARTIAL", "HELP", "NOT_UNDERSTOOD", "IRRELEVANT", "UNREADABLE"),
+            JudgmentPoint.J3, List.of("DELIVERED", "STILL_SHORT", "HELP", "UNREADABLE"),
+            JudgmentPoint.J4, List.of("ACCEPT", "REFUSE", "UNCLEAR"),
+            JudgmentPoint.J5, List.of("FULL", "PARTIAL", "HELP", "NOT_UNDERSTOOD", "IRRELEVANT", "UNREADABLE", "COPIED"));
+
+    /** 이 표가 그 지점에서 읽는 선택지 코드(판 순서, 연습 흐름이 판정하지 않는 지점은 빈 목록). */
+    public static List<String> judgmentCodes(JudgmentPoint point) {
+        return JUDGMENT_CODES.getOrDefault(point, List.of());
     }
 
     /** 변형 평가 결과(§3.3a). */
@@ -326,6 +354,25 @@ public final class FlowTransitions {
             case VARIANT_OFFER -> variantOffer(s, code);
             default -> Step.ignore();
         };
+    }
+
+    /**
+     * 지금 단계에서 같은 다음 걸음으로 처리되는 판정 선택지 묶음(ai-io.md 10.10, 편차 FT-1024-f). 그 지점의 코드마다 흐름이 결과를 받을 때와 같은
+     * 바꾸기({@code handled}, 예: 방법을 묻는 말이면 수행 코드를 HELP로)를 거쳐 이 표에 넣어 보고, 전이가 하는 일({@link Step#effect()})이 같은
+     * 코드끼리 묶는다. 둘 이상인 묶음만 판 순서로 돌려준다. 표 밖 입력(IGNORE)은 묶지 않는다. 입출력 없는 순수 함수다.
+     *
+     * @param handled 결과 코드를 표에 넣기 전에 흐름이 바꾸는 규칙(바꾸지 않으면 그대로 돌려준다)
+     */
+    public List<List<String>> sameStepGroups(FlowState s, JudgmentPoint point, UnaryOperator<String> handled) {
+        Map<List<Object>, List<String>> byEffect = new LinkedHashMap<>();
+        for (String code : judgmentCodes(point)) {
+            Step step = onJudgment(s, point, handled.apply(code));
+            if (step.action() == Action.IGNORE) {
+                continue;
+            }
+            byEffect.computeIfAbsent(step.effect(), effect -> new ArrayList<>()).add(code);
+        }
+        return byEffect.values().stream().filter(group -> group.size() > 1).map(List::copyOf).toList();
     }
 
     /** 판정 보류 · 장애 사건. 판독 불가와 같은 재안내를 하고, 두 번째에는 닫지 않고 도움으로 넘긴다(FT-1023-g). */

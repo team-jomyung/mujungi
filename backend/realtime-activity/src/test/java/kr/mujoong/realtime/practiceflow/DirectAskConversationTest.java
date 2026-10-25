@@ -22,6 +22,7 @@ import kr.mujoong.realtime.practiceflow.PracticeFlowTypes.HelpKind;
 import kr.mujoong.realtime.practiceflow.PracticeFlowTypes.LiveTiming;
 import kr.mujoong.realtime.practiceflow.PracticeFlowTypes.SceneRunRecord;
 import kr.mujoong.realtime.practiceflow.PracticeFlowTypes.VariantSkipReason;
+import kr.mujoong.realtime.session.PracticeSessionExtension;
 import kr.mujoong.realtime.session.PracticeSessionExtension.Signal;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -288,6 +289,79 @@ class DirectAskConversationTest {
         assertThat(h.out.slots.stream().filter(slot -> slot.text().equals(SCENE_CLOSE))).as("마무리 문장은 다시 내지 않는다").hasSize(1);
         assertThat(h.recorder.factKinds(h.recorder.only())).contains(FactKind.HELP_DECLINED, FactKind.PLAYBACK_FAILED);
         assertThat(h.recorder.only().variantSkipReason()).isEqualTo(VariantSkipReason.NO_VARIANT);
+    }
+
+    // ---- 같은 걸음 묶음 (ai-io.md 10.10, 편차 FT-1024-f) ----
+
+    private static final String GROUPS = PracticeSessionExtension.PracticeOutput.SAME_STEP_GROUPS;
+
+    @Test
+    void theRetryJudgmentCarriesTheSuccessAndCloseGroupsBesideTheCriteriaAndASuccessEndsAfterHelp() {
+        Harness h = with(directAskScript(SCENARIO), FIXED_SPEECH);
+        h.toOpportunity();
+        h.child("몰라, 뭐라고 해야 돼?");
+        Map<String, Object> first = h.out.lastJudgment().criteria();
+        assertThat(first).containsKeys("coreFunction", "judgmentCriteria")
+                .containsEntry(GROUPS, List.of(List.of("NOT_UNDERSTOOD", "IRRELEVANT")));
+        h.result("J2", "HELP");
+        assertThat(h.out.lastSlot().text()).isEqualTo(PracticeScriptFixtures.V2_HELP);
+        h.played();
+
+        h.child("내가 필요한 건 파란색이야");
+
+        assertThat(h.out.lastJudgment().point()).isEqualTo(kr.mujoong.realtime.judgment.JudgmentPoint.J5);
+        assertThat(h.out.lastJudgment().criteria()).containsKeys("coreFunction", "judgmentCriteria").containsEntry(GROUPS,
+                List.of(List.of("FULL", "COPIED"), List.of("PARTIAL", "HELP", "NOT_UNDERSTOOD", "IRRELEVANT")));
+        // 실행부가 묶음 합으로 확정해 1순위(모델 그대로)만 보낸다: COPIED여도 FULL과 같은 성공이다
+        h.result("J5", "COPIED");
+        assertThat(h.out.lastSlot().text()).isEqualTo(V2_REACTION);
+        h.playedThroughRecap();
+        assertThat(h.recorder.only().liveTiming()).isEqualTo(LiveTiming.AFTER_HELP);
+    }
+
+    @Test
+    void aProcedureQuestionIsGroupedWithHelpBecauseTheFlowTreatsItAsAHelpRequest() {
+        Harness h = with(directAskScript(SCENARIO), FIXED_SPEECH);
+        h.toOpportunity();
+
+        h.child("뭐라고 말해야 돼?");
+
+        assertThat(h.out.lastJudgment().criteria()).containsEntry(GROUPS,
+                List.of(List.of("FULL", "HELP"), List.of("NOT_UNDERSTOOD", "IRRELEVANT")));
+        h.result("J2", "FULL");
+        assertThat(h.out.lastSlot().text()).as("방법을 물은 말의 FULL은 도움 요청으로 처리한다(지금 동작)")
+                .isEqualTo(PracticeScriptFixtures.V2_HELP);
+    }
+
+    @Test
+    void theVariantOfferSendsNoCriteriaFirstAndOnlyTheGroupsAfterOneUnclearAnswer() {
+        Harness h = with(directAskScriptWithVariant(SCENARIO), FIXED_SPEECH);
+        h.toOpportunity();
+        h.child("손 괜찮아?");
+        h.result("J2", "FULL");
+        h.played();
+        assertThat(h.out.lastSlot().text()).isEqualTo(VARIANT_OFFER);
+        h.played();
+        h.child("음");
+        assertThat(h.out.lastJudgment().criteria()).as("묶음이 없으면 J4는 지금처럼 기준 없음").isNull();
+        h.result("J4", "UNCLEAR");
+        assertThat(h.out.lastSlot().text()).isEqualTo(VARIANT_OFFER);
+        h.played();
+
+        h.child("음");
+
+        assertThat(h.out.lastJudgment().criteria()).as("판정 기준 없이 묶음만").containsOnlyKeys(GROUPS)
+                .containsEntry(GROUPS, List.of(List.of("REFUSE", "UNCLEAR")));
+    }
+
+    @Test
+    void theFlexibleDialogueSendsNoGroups() {
+        Harness h = new Harness(packageJson(GOAL, minimalScript(SCENARIO)), Map.of(), PracticeFlowTestKit.flexible());
+        h.toOpportunity();
+
+        h.child("무슨 말이야?");
+
+        assertThat(h.out.lastJudgment().criteria()).containsKeys("coreFunction", "judgmentCriteria").doesNotContainKey(GROUPS);
     }
 
     // ---- 화자 ----
