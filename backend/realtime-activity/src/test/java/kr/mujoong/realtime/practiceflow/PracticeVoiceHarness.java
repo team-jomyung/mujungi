@@ -975,8 +975,12 @@ final class PracticeVoiceHarness {
                         + "버린 구간은 '안 들림'과 사유 코드(원문 불일치 APPROVED_TEXT_MISMATCH · 빈 구간 GATE_EMPTY · 새 말 없음 FIRST_OUTPUT_TIMEOUT 등)로 적는다.",
                 "출처: 무중의 장면 안 말은 대본 칸 이름(spokenIntroduction · opportunityRelay+askPrompt · reaskPrompt · helpSpeech · friendReaction 등) "
                         + "또는 고정 code(HELP_OFFER · VARIANT_OFFER · RETRY_PROMPT · INPUT_CONFIRM · SCENE_CLOSE · WAIT_LEAD)이고, 장면 밖 말은 '생성형:<단계>'다.",
-                "승인 원문 읽기 결과: 첫 시도 일치(FIRST_MATCH) · 같은 글 재시도 일치(RETRY_MATCH) · '뜻 전하기' 생성형 복구(RECOVERED) · 실패(FAILED) · "
-                        + "미완(INCOMPLETE, 끝남 · 취소로 결과 없음).",
+                "승인 원문 읽기 결과: 첫 시도 일치(FIRST_MATCH) · 나머지 다시 읽기로 다 들림(REREAD_MATCH) · 같은 글 재시도 일치(RETRY_MATCH) · "
+                        + "'뜻 전하기' 생성형 복구(RECOVERED) · 앞부분만 들림(PARTIAL) · 실패(FAILED) · 미완(INCOMPLETE, 끝남 · 취소로 결과 없음).",
+                "부분 재생: B1 조각 단위 승인 낭독이 중간에 끊겨 나간 부분까지만 재생 끝으로 닫힌 시도는 끝을 '앞부분만 들림(원문 n/m자)'로 적는다(n은 실행부가 "
+                        + "흐름에 알린 들린 곳 위치). C안은 그 뒤 끊긴 문장부터 끝까지를 한 번 다시 읽고(시도 '나머지 다시 읽기'), 흐름 진단 code("
+                        + "PracticeApprovedRemainderReread · PracticeApprovedRemainderCutAgain · PracticeApprovedRemainderWithoutWords)를 "
+                        + "대화마다 센다.",
                 "판정은 운영 Decisions 경로의 실제 Luna 결과다(지점 · 1 · 2순위 · 확률 · 지연). 판정 턴이 시한에 취소한 판정은 CANCELLED_AT_DEADLINE이다.",
                 "무응답 시계 사건(걸림 · 거둠 · 울림)과 아이 말 시작(4회차 R1) · 안전 대기를 차례마다 적는다. '무응답 오작동'은 시계가 걸린 뒤 아이가 실제로 "
                         + "소리를 냈는데 무응답으로 울린 경우다.",

@@ -716,6 +716,13 @@ final class PracticeVoiceSession {
         public boolean setThinking(boolean on) {
             return delegate.setThinking(on);
         }
+
+        /** 흐름 진단 코드(부분 재생 뒤 나머지 다시 읽기 등)를 사실로 남기고 실행부에 그대로 넘긴다(앱 로그 INFO). */
+        @Override
+        public void diagnostic(String reasonCode) {
+            facts().diagnostic(reasonCode);
+            delegate.diagnostic(reasonCode);
+        }
     }
 
     /** 기록기 저장 입구를 감싸 전사 행 · 세션 사건을 사실로 남긴다(저장은 메모리, 동작은 운영 기록기 그대로). */

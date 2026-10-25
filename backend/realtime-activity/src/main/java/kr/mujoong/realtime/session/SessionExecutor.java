@@ -1203,7 +1203,8 @@ public final class SessionExecutor {
             if (from.isBefore(interval.to())) paused = paused.plus(Duration.between(from, interval.to()));
         }
         return new PracticeSessionExtension.ExtensionEvent(event.kind(), event.name(), event.correlationId(),
-                new PracticeSessionExtension.PlaybackFact(fact.speech(), fact.status(), fact.text(), fact.receivedAt(), paused));
+                new PracticeSessionExtension.PlaybackFact(fact.speech(), fact.status(), fact.text(), fact.receivedAt(), paused,
+                        fact.heardEnd()));
     }
 
     private void practicePlayback(kr.mujoong.realtime.voice.PracticeSpeech speech,
@@ -1213,6 +1214,12 @@ public final class SessionExecutor {
 
     private void practicePlayback(kr.mujoong.realtime.voice.PracticeSpeech speech,
             kr.mujoong.realtime.practicelegacy.PracticePorts.Playback fact, Instant receivedAt) {
+        practicePlayback(speech, fact, receivedAt, PracticeSessionExtension.PlaybackFact.WHOLE);
+    }
+
+    /** @param heardEnd B1 부분 재생이면 원문에서 들린 곳이 끝나는 색인, 아니면 {@link PracticeSessionExtension.PlaybackFact#WHOLE} */
+    private void practicePlayback(kr.mujoong.realtime.voice.PracticeSpeech speech,
+            kr.mujoong.realtime.practicelegacy.PracticePorts.Playback fact, Instant receivedAt, int heardEnd) {
         if (speech.equals(streamedPractice) && fact != kr.mujoong.realtime.practicelegacy.PracticePorts.Playback.STARTED) {
             // 단위별로 나가는 생성형 발화의 STARTED는 확장에 그대로 넘긴다(FT-1023-e: 확장이 '재생 중'을 알아야 한다 — 확장은 중복 STARTED를
             // 무시한다). 단위 하나의 COMPLETED는 발화의 끝이 아니다: 응답이 끝나고 보낸 음성이 모두 끝났을 때 한 번 COMPLETED로 닫는다
@@ -1233,7 +1240,7 @@ public final class SessionExecutor {
         }
         ctx.mailbox().putSafety(new SessionMailbox.PracticeEvent(new PracticeSessionExtension.ExtensionEvent(
                 PracticeSessionExtension.ExtensionEvent.Kind.PLAYBACK_FACT, "u5b-playback", speech.correlationId(),
-                new PracticeSessionExtension.PlaybackFact(speech, fact, speech.text(), receivedAt))));
+                new PracticeSessionExtension.PlaybackFact(speech, fact, speech.text(), receivedAt, Duration.ZERO, heardEnd))));
     }
 
     private void finishStreamedPractice() {
@@ -1245,7 +1252,15 @@ public final class SessionExecutor {
         practiceCollecting = false;
         ctx.timers().cancel(Kind.PRACTICE_COLLECT_MAX);
         practiceHold = true;
-        practicePlayback(speech, kr.mujoong.realtime.practicelegacy.PracticePorts.Playback.COMPLETED);
+        // B1: 승인 낭독이 원문 끝까지 나가지 못한 채 '나간 부분까지만' 닫혔으면(단위 불일치 · 꼬리 없음 · 꼬리 정렬 실패 · 빈 꼬리 단위) 재생 끝과 함께
+        // 원문에서 들린 곳(위치만)을 알린다. 그 사실로 무엇을 할지(나머지 다시 읽기 등)는 확장이 정한다
+        int heardEnd = PracticeSessionExtension.PlaybackFact.WHOLE;
+        if (!speech.generated() && !speech.matches(streamedApprovedText.toString())) {
+            heardEnd = speech.heardEnd(streamedApprovedText.toString());
+            ctx.services().events().appError(EventLog.Component.OUTPUT_GATE, REASON_APPROVED_PARTIAL_PLAYBACK, EventCode.Level.INFO);
+        }
+        practicePlayback(speech, kr.mujoong.realtime.practicelegacy.PracticePorts.Playback.COMPLETED, ctx.services().clock().now(),
+                heardEnd);
     }
 
     /** FT-1023-e: 재생이 시작된 생성형 연습 발화의 뒤 단위를 버리고 나간 부분까지 재생됨으로 닫았다(앱 로그 INFO 사유 코드). */
@@ -1277,6 +1292,11 @@ public final class SessionExecutor {
     static final String REASON_APPROVED_UNIT_MISMATCH = "PracticeApprovedUnitMismatchAfterPlayback";
     /** B1: 조각 단위 승인 낭독이 원문 끝까지 오지 않은 채 응답이 끝나 나간 부분까지 재생됨으로 닫았다(INFO, 원문 없음). */
     static final String REASON_APPROVED_TAIL_MISSING = "PracticeApprovedTailMissingAfterPlayback";
+    /**
+     * B1: 나간 부분까지만 닫힌 승인 낭독의 재생 끝을 '부분 재생'(원문에서 들린 위치)으로 확장에 알렸다(INFO, 원문 없음). 닫힌 까닭(위 두 코드 ·
+     * FT-1023-e 꼬리 코드)과 상관없이 부분 재생 한 번에 한 줄이다.
+     */
+    static final String REASON_APPROVED_PARTIAL_PLAYBACK = "PracticeApprovedPartialPlayback";
 
     /** 들려주지 않은 승인 낭독이 원문과 달랐다: 출력을 버리고 확장에 원문 불일치를 알린다(확장이 같은 원문 재요청 · 복구 낭독을 정한다). */
     private void rejectApprovedReading(kr.mujoong.realtime.voice.PracticeSpeech rejectedSpeech) {
@@ -2069,6 +2089,11 @@ public final class SessionExecutor {
             return sendInstruction(OutputGeneration.BumpReason.SERVER_SEND, "provider-practice-speech-",
                     id -> ctx.services().requests().practiceInstruction(id, instruction),
                     () -> practiceOutput.post("u5b-voice-failed", speech));
+        }
+
+        /** 흐름의 진단 사유 코드(고정 식별자, 원문 없음)를 앱 로그 INFO 한 줄로 남긴다. 형식이 틀린 값은 기록기가 Unknown으로 바꾼다. */
+        @Override public void diagnostic(String reasonCode) {
+            ctx.services().events().appError(EventLog.Component.OUTPUT_GATE, reasonCode, EventCode.Level.INFO);
         }
 
         @Override public boolean cancelSpeech(UUID correlationId) {

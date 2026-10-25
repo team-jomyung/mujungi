@@ -43,8 +43,12 @@ final class PracticeVoiceFacts {
 
     // 판정 결과 · 읽기 결과 코드(출력 값)
     static final String FIRST_MATCH = "FIRST_MATCH";
+    /** 부분 재생(B1, 앞부분만 들림) 뒤 C안이 다시 읽은 나머지로 끝까지 들렸다. */
+    static final String REREAD_MATCH = "REREAD_MATCH";
     static final String RETRY_MATCH = "RETRY_MATCH";
     static final String RECOVERED = "RECOVERED";
+    /** 끝까지 들린 시도 없이 앞부분만 들렸다(유연 대화의 부분 재생 · C안 복구 길까지 끊김). */
+    static final String PARTIAL = "PARTIAL";
     static final String FAILED = "FAILED";
     static final String INCOMPLETE = "INCOMPLETE";
 
@@ -80,6 +84,10 @@ final class PracticeVoiceFacts {
         Reading reading;
         int indexInReading;
         boolean recovery;
+        /** C안이 부분 재생 뒤 들리지 않은 나머지를 다시 읽으려고 낸 시도(흐름 진단 PracticeApprovedRemainderReread 바로 뒤의 낭독). */
+        boolean resumed;
+        /** 부분 재생으로 끝났으면 원문에서 들린 곳이 끝나는 위치(실행부 사실 값, 그 밖은 null). */
+        Integer heardEnd;
         Long requestSentAtMs;
         Long instructionAtMs;
         String instructionType;
@@ -107,6 +115,11 @@ final class PracticeVoiceFacts {
 
         boolean heard() {
             return startedAtMs != null;
+        }
+
+        /** 재생 끝이지만 원문 앞부분만 들렸다(B1 부분 재생). */
+        boolean partial() {
+            return "PARTIAL".equals(end);
         }
 
         boolean open() {
@@ -137,16 +150,23 @@ final class PracticeVoiceFacts {
             return attempts.getLast();
         }
 
-        /** 읽기 결과: 첫 시도 일치 · 재시도 일치 · 뜻 전하기 복구 · 실패 · 미완(취소 · 끝남). */
+        /**
+         * 읽기 결과: 끝까지 들린 첫 시도로 정한다 — 첫 시도 일치 · 나머지 다시 읽기 일치 · 같은 글 재시도 일치 · 뜻 전하기 복구. 끝까지 들린 시도가 없으면
+         * 앞부분만 들림 · 실패 · 미완(취소 · 끝남)이다. 부분 재생된 시도는 '들림'이어도 일치로 치지 않는다.
+         */
         String outcome() {
-            if (attempts.getFirst().heard()) {
-                return FIRST_MATCH;
-            }
-            for (int i = 1; i < attempts.size(); i++) {
+            for (int i = 0; i < attempts.size(); i++) {
                 Attempt attempt = attempts.get(i);
-                if (attempt.heard()) {
-                    return attempt.recovery ? RECOVERED : RETRY_MATCH;
+                if (!attempt.heard() || attempt.partial()) {
+                    continue;
                 }
+                if (attempt.recovery) {
+                    return RECOVERED;
+                }
+                return i == 0 ? FIRST_MATCH : attempt.resumed ? REREAD_MATCH : RETRY_MATCH;
+            }
+            if (attempts.stream().anyMatch(Attempt::partial)) {
+                return PARTIAL;
             }
             boolean anyOpen = attempts.stream().anyMatch(Attempt::open);
             boolean slotFailure = attempts.stream().anyMatch(a -> "FAILED".equals(a.end) || "BLOCKED".equals(a.end)
@@ -155,6 +175,16 @@ final class PracticeVoiceFacts {
                 return FAILED;
             }
             return INCOMPLETE;
+        }
+
+        /** 이 읽기에서 C안이 부분 재생 뒤 나머지를 다시 읽었는가(결과와 따로 센다). */
+        boolean reread() {
+            return attempts.stream().anyMatch(attempt -> attempt.resumed);
+        }
+
+        /** 이 읽기에서 부분 재생으로 끝난 시도 수. */
+        long partialPlays() {
+            return attempts.stream().filter(Attempt::partial).count();
         }
     }
 
@@ -366,6 +396,12 @@ final class PracticeVoiceFacts {
     private final Map<UUID, Attempt> attemptsByCorrelation = new HashMap<>();
     private final List<Reading> readings = new ArrayList<>();
     private Reading currentReading;
+    /** 흐름이 나머지 다시 읽기 진단을 남겼고 그 낭독이 아직 오지 않았다. */
+    private boolean resumePending;
+    /** 흐름이 '다시 읽은 나머지도 끊김' 진단을 남겼고 그 뒤 낭독(같은 글 재시도)이 아직 오지 않았다. */
+    private boolean cutAgainPending;
+    /** 흐름 진단 사유 코드별 횟수. */
+    private final Map<String, Integer> flowDiagnostics = new LinkedHashMap<>();
     private final List<Play> plays = new ArrayList<>();
     private final Map<UUID, Play> playsById = new HashMap<>();
     private final Map<Instant, Play> startedAt = new HashMap<>();
@@ -486,7 +522,9 @@ final class PracticeVoiceFacts {
                                 lastLineSource = attempt.source;
                             }
                         } else if (attempt.end == null) {
-                            attempt.end = fact.played() ? "PLAYED" : fact.interrupted() ? "INTERRUPTED" : "FAILED";
+                            // 부분 재생(B1): 재생 끝이지만 원문 앞부분만 들렸다(들린 위치는 실행부 사실 값)
+                            attempt.end = fact.partial() ? "PARTIAL" : fact.played() ? "PLAYED" : fact.interrupted() ? "INTERRUPTED" : "FAILED";
+                            attempt.heardEnd = fact.partial() ? fact.heardEnd() : null;
                             attempt.endedAtMs = ms();
                         }
                     }
@@ -572,12 +610,20 @@ final class PracticeVoiceFacts {
      * 먼저 열어 둬야 그 지시 · 첫 출력이 이 시도에 붙는다. 넘긴 결과는 {@link #sendResult}로 적는다.
      */
     synchronized Attempt speakRequested(PracticeSpeech speech, Flow at, String source) {
-        Attempt attempt = new Attempt(attempts.size() + 1, speech.correlationId(), "APPROVED", source, speech.text(), speech.partnerRole(),
-                at, ms(), true);
         Reading reading = currentReading;
-        boolean retry = reading != null && reading.text.equals(speech.text()) && !reading.last().open()
-                && ("MISMATCH".equals(reading.last().end) || "INCOMPLETE".equals(reading.last().end));
-        if (!retry) {
+        // C안 나머지 다시 읽기: 흐름이 진단을 남긴 바로 뒤 낭독은 앞부분만 들린 읽기의 나머지다(같은 읽기 묶음의 시도)
+        boolean resumed = resumePending && reading != null && reading.last().partial();
+        // 같은 글 재시도: 앞 시도가 원문 불일치 · 음성 미완으로 끝났거나, 다시 읽은 나머지가 또 끊겨(흐름 진단) 같은 글을 다시 읽는다
+        boolean cutAgain = cutAgainPending && reading != null && reading.last().partial();
+        resumePending = false;
+        cutAgainPending = false;
+        boolean retry = !resumed && reading != null && reading.last().text.equals(speech.text()) && !reading.last().open()
+                && ("MISMATCH".equals(reading.last().end) || "INCOMPLETE".equals(reading.last().end) || cutAgain);
+        String label = resumed ? reading.source + " · 나머지" : source;
+        Attempt attempt = new Attempt(attempts.size() + 1, speech.correlationId(), "APPROVED", label, speech.text(), speech.partnerRole(),
+                at, ms(), true);
+        attempt.resumed = resumed;
+        if (!resumed && !retry) {
             reading = new Reading(readings.size() + 1, speech.text(), source, attempt.atMs);
             readings.add(reading);
             currentReading = reading;
@@ -587,6 +633,19 @@ final class PracticeVoiceFacts {
         reading.attempts.add(attempt);
         register(attempt);
         return attempt;
+    }
+
+    /**
+     * 흐름이 남긴 진단 사유 코드(고정 코드). C안 나머지 다시 읽기 코드면 바로 뒤 낭독을 지금 읽기의 '나머지 다시 읽기' 시도로 잇는다. 코드 자체는 실행부가
+     * 남기는 앱 로그 줄(APP_ERROR INFO)로도 모인다.
+     */
+    synchronized void diagnostic(String code) {
+        flowDiagnostics.merge(String.valueOf(code), 1, Integer::sum);
+        if (PracticeConversation.DIAG_REMAINDER_REREAD.equals(code)) {
+            resumePending = true;
+        } else if (PracticeConversation.DIAG_REMAINDER_CUT_AGAIN.equals(code)) {
+            cutAgainPending = true;
+        }
     }
 
     /** 실행부가 말 요청을 받았는지(받지 않았으면 그 자리에서 '보내지 못함'으로 닫는다). */
@@ -602,7 +661,10 @@ final class PracticeVoiceFacts {
     synchronized Attempt generatedRequested(UUID correlationId, String role, String instruction, Flow at, String source) {
         Attempt attempt = new Attempt(attempts.size() + 1, correlationId, "GENERATED", source, instruction, role, at, ms(), true);
         Reading reading = currentReading;
-        if (reading != null && !reading.last().open() && !reading.last().heard()) {
+        resumePending = false;
+        cutAgainPending = false;
+        // 들리지 않은 시도, 또는 C안에서 다시 읽은 나머지 · 재시도가 또 끊긴(부분 재생) 시도 뒤의 '뜻 전하기'
+        if (reading != null && !reading.last().open() && (!reading.last().heard() || reading.last().partial())) {
             String expected = PracticeInstructions.recoverApprovedNarration(reading.last().text);
             if (expected != null && expected.equals(instruction)) {
                 attempt.recovery = true;
@@ -1091,7 +1153,8 @@ final class PracticeVoiceFacts {
                 List.copyOf(otherInstructions), List.copyOf(deviceViews), new LinkedHashMap<>(outputCalls), List.copyOf(providerErrors),
                 new LinkedHashMap<>(instructionTypes), activeAtMs, providerOpenedAtMs, providerStartedAtMs, providerClosedAtMs,
                 usageSeconds, outputAudioBytes, outputTranscriptDeltas, inputTranscriptDeltas, framesOffered, voicedFramesOffered,
-                practiceRecord, settled, noResponseMalfunctions, List.copyOf(malfunctionDetails), startInstant);
+                practiceRecord, settled, noResponseMalfunctions, List.copyOf(malfunctionDetails), startInstant,
+                new LinkedHashMap<>(flowDiagnostics));
     }
 
     /** 세션이 끝난 뒤 보고서가 읽는 사본(목록은 사본, 원소는 끝난 뒤라 더 바뀌지 않는다). */
@@ -1105,7 +1168,7 @@ final class PracticeVoiceFacts {
             Long activeAtMs, Long providerOpenedAtMs, Long providerStartedAtMs, Long providerClosedAtMs, double usageSeconds,
             long outputAudioBytes, long outputTranscriptDeltas, long inputTranscriptDeltas, long framesOffered, long voicedFramesOffered,
             Object practiceRecord, Map<String, Object> settled, int noResponseMalfunctions, List<Map<String, Object>> malfunctionDetails,
-            Instant startInstant) {
+            Instant startInstant, Map<String, Integer> flowDiagnostics) {
 
         /** 기록기 칸 시각을 대화 시작부터의 ms로(없으면 null). */
         Long msOf(Instant at) {

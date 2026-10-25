@@ -232,13 +232,39 @@ public interface PracticeSessionExtension {
         default boolean managesSpeechTimeouts() { return false; }
 
         default boolean setThinking(boolean on) { return false; }
+
+        /**
+         * 연습 흐름의 진단 사유 코드 한 줄을 남긴다(앱 로그 INFO). 코드는 영문 식별자 모양의 고정 값만 받고(그 밖은 실행부가 {@code Unknown}으로
+         * 바꾼다) 아이 전사 · 대본 문장 · 판정 입력은 담지 않는다(R-F14). 흐름 진행 · 상태에는 영향을 주지 않고, ACTIVE 밖에서도 받는다. 기본은 남기지
+         * 않는다.
+         */
+        default void diagnostic(String reasonCode) { }
     }
 
+    /**
+     * 연습 발화 하나의 재생 사실(시작 · 끝).
+     *
+     * @param heardEnd 조각 단위 승인 낭독(B1)이 원문 중간에서 끊겨 이미 나간 부분까지만 재생됨으로 닫혔을 때, 원문({@code speech.text()}) 앞에서부터
+     *     들린 곳이 끝나는 색인(0 ~ 원문 길이, 들린 마지막 글자 바로 뒤). 끝까지 들렸거나 그 밖의 사실이면 {@link #WHOLE}이다. 위치만 담고 글은 담지
+     *     않는다(R-F14). 상태는 재생 끝(COMPLETED)이라 이 값을 보지 않는 확장(유연 대화 · 레거시)에는 지금처럼 '재생 끝'이다
+     */
     record PlaybackFact(kr.mujoong.realtime.voice.PracticeSpeech speech,
-            kr.mujoong.realtime.practicelegacy.PracticePorts.Playback status, String text, Instant receivedAt, Duration pausedFor) {
+            kr.mujoong.realtime.practicelegacy.PracticePorts.Playback status, String text, Instant receivedAt, Duration pausedFor,
+            int heardEnd) {
+        /** 끝까지 들렸다(부분 재생이 아니다). */
+        public static final int WHOLE = -1;
+
         public PlaybackFact {
             Objects.requireNonNull(pausedFor, "pausedFor");
             if (pausedFor.isNegative()) throw new IllegalArgumentException("negative playback pause");
+            if (heardEnd != WHOLE && (heardEnd < 0 || status != kr.mujoong.realtime.practicelegacy.PracticePorts.Playback.COMPLETED
+                    || (speech != null && heardEnd > speech.text().length()))) {
+                throw new IllegalArgumentException("partial playback position");
+            }
+        }
+        public PlaybackFact(kr.mujoong.realtime.voice.PracticeSpeech speech,
+                kr.mujoong.realtime.practicelegacy.PracticePorts.Playback status, String text, Instant receivedAt, Duration pausedFor) {
+            this(speech, status, text, receivedAt, pausedFor, WHOLE);
         }
         public PlaybackFact(kr.mujoong.realtime.voice.PracticeSpeech speech,
                 kr.mujoong.realtime.practicelegacy.PracticePorts.Playback status, String text, Instant receivedAt) {
@@ -252,7 +278,11 @@ public interface PracticeSessionExtension {
         public boolean played() { return status == kr.mujoong.realtime.practicelegacy.PracticePorts.Playback.COMPLETED; }
         /** U12: 아이가 끼어들어 끊겼다(INTERRUPTED). */
         public boolean interrupted() { return status == kr.mujoong.realtime.practicelegacy.PracticePorts.Playback.INTERRUPTED; }
-        @Override public String toString() { return "PlaybackFact[status=" + status + "]"; }
+        /** B1: 재생 끝이지만 승인 원문 앞부분({@link #heardEnd}까지)만 들렸다. */
+        public boolean partial() { return heardEnd != WHOLE; }
+        @Override public String toString() {
+            return "PlaybackFact[status=" + status + (partial() ? ", heardEnd=" + heardEnd : "") + "]";
+        }
     }
 
     record Progress(int goalIndex, int goalCount, String goalName, String stage) { }

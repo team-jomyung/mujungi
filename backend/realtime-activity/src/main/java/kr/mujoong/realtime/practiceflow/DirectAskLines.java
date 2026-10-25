@@ -250,6 +250,47 @@ final class DirectAskLines {
         return Partner.of(scene.relation()).reaction();
     }
 
+    /** 문장 끝 부호(마침표 · 물음표 · 느낌표 · 말줄임표, 전각 포함 — {@code PracticeSpeech}가 문장 끝으로 보는 부호와 같다). */
+    private static final String SENTENCE_ENDS = ".?!。？！…";
+    /** 문장 끝 부호 뒤에 붙어 그 문장에 드는 닫는 따옴표(옛 대본 조각). */
+    private static final String CLOSING_QUOTES = "\"”’'";
+
+    /**
+     * 조각 단위 승인 낭독(B1)이 원문 중간에서 끊겨 앞부분만 들렸을 때 다시 읽을 나머지(docs/practice-direct-ask.md 7.7). 원문을 문장 끝 부호로 나눠,
+     * 들린 곳이 끝나는 위치가 든 문장부터 원문 끝까지다 — 문장 중간에서 끊겼으면 그 문장 처음부터, 문장 끝 부호까지 들렸으면 다음 문장부터다. 나머지는 승인
+     * 원문의 일부라 그대로 새 승인 원문으로 읽는다(원문 대조 · B1도 이 나머지가 기준이다). 들리지 않은 글에 말(글자 · 숫자)이 없으면(문장부호 · 공백뿐,
+     * 예: 전사가 말끝 물음표만 빠뜨림) 다 들린 것으로 보고 null이다.
+     *
+     * @param text 승인 원문(재생한 그대로)
+     * @param heardEnd 원문에서 들린 곳이 끝나는 색인(0 ~ 원문 길이)
+     * @return 다시 읽을 나머지, 다시 읽을 말이 없으면 null
+     */
+    static String unheardRest(String text, int heardEnd) {
+        if (text == null) {
+            return null;
+        }
+        int cut = Math.clamp(heardEnd, 0, text.length());
+        if (text.substring(cut).codePoints().noneMatch(Character::isLetterOrDigit)) {
+            return null;
+        }
+        int start = 0;
+        for (int i = 0; i < text.length(); i++) {
+            if (SENTENCE_ENDS.indexOf(text.charAt(i)) < 0) {
+                continue;
+            }
+            int next = i + 1;
+            while (next < text.length() && (SENTENCE_ENDS.indexOf(text.charAt(next)) >= 0 || CLOSING_QUOTES.indexOf(text.charAt(next)) >= 0)) {
+                next++;
+            }
+            if (next > cut) {
+                break;
+            }
+            start = next;
+            i = next - 1;
+        }
+        return text.substring(start).strip();
+    }
+
     /** 문장들을 한 슬롯으로 잇는다: 앞 문장이 문장 끝 부호 · 쉼표로 끝나지 않으면 마침표를 채우고 공백 하나로 잇는다. */
     static String join(String... parts) {
         StringBuilder text = new StringBuilder();

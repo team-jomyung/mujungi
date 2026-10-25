@@ -240,6 +240,79 @@ class PracticeGeneratedSpeechTest {
                 "따옴표 안 상대 대사도 생략하거나 바꾸지 않는다", "<approved_speech>" + speech.text() + "</approved_speech>");
     }
 
+    @Test
+    void aReadingCutByADifferentUnitTellsTheExtensionWhereTheHeardPrefixEndsInTheOriginal() {
+        var speech = startApprovedStream();
+        approvedUnit("나는 블록 ", 0);
+        approvedUnit("놀이가 싫어.", 1);
+        mark(h.link.outputs().getFirst().playbackId(), PlaybackMark.Status.COMPLETED);
+
+        assertThat(endFactsOf(speech)).singleElement().satisfies(fact -> {
+            assertThat(fact.played()).as("상태는 지금처럼 재생 끝이다(이 값을 보지 않는 확장은 그대로)").isTrue();
+            assertThat(fact.partial()).isTrue();
+            assertThat(fact.heardEnd()).as("원문 '나는 블록 놀이를 하고 싶어.'에서 들린 곳").isEqualTo("나는 블록".length());
+            assertThat(fact.toString()).doesNotContain("블록");
+        });
+        assertThat(appErrorKinds()).contains(SessionExecutor.REASON_APPROVED_UNIT_MISMATCH,
+                SessionExecutor.REASON_APPROVED_PARTIAL_PLAYBACK);
+    }
+
+    @Test
+    void aReadingWhoseResponseEndsBeforeTheOriginalEndsAlsoTellsTheHeardPrefix() {
+        var speech = startApprovedStream();
+        approvedUnit("나는 블록 ", 0);
+        h.advance(Duration.ofMillis(801));
+        mark(h.link.outputs().getFirst().playbackId(), PlaybackMark.Status.COMPLETED);
+
+        assertThat(endFactsOf(speech)).singleElement().satisfies(fact -> {
+            assertThat(fact.played()).isTrue();
+            assertThat(fact.heardEnd()).isEqualTo("나는 블록".length());
+        });
+        assertThat(appErrorKinds()).contains(SessionExecutor.REASON_APPROVED_TAIL_MISSING,
+                SessionExecutor.REASON_APPROVED_PARTIAL_PLAYBACK);
+    }
+
+    @Test
+    void aReadingHeardToTheEndIsNotPartial() {
+        var speech = startApprovedStream();
+        approvedUnit("나는 블록 ", 0);
+        approvedUnit("놀이를 하고 싶어.", 1);
+        h.advance(Duration.ofMillis(801));
+        mark(h.link.outputs().getFirst().playbackId(), PlaybackMark.Status.COMPLETED);
+        mark(h.link.outputs().getLast().playbackId(), PlaybackMark.Status.COMPLETED);
+
+        assertThat(endFactsOf(speech)).singleElement().satisfies(fact -> {
+            assertThat(fact.played()).isTrue();
+            assertThat(fact.partial()).isFalse();
+            assertThat(fact.heardEnd()).isEqualTo(PracticeSessionExtension.PlaybackFact.WHOLE);
+        });
+        assertThat(appErrorKinds()).doesNotContain(SessionExecutor.REASON_APPROVED_PARTIAL_PLAYBACK);
+    }
+
+    @Test
+    void theExtensionDiagnosticBecomesAContentFreeInfoLine() {
+        start(true);
+        h.logs.clear();
+        extension.out.diagnostic("PracticeApprovedRemainderReread");
+        extension.out.diagnostic("아이 말 원문");
+
+        var lines = h.logs.events(kr.mujoong.contract.log.EventCode.APP_ERROR);
+        assertThat(lines).extracting(event -> kr.mujoong.testsupport.log.LogCapture.attrs(event).get("errorKind"))
+                .containsExactly("PracticeApprovedRemainderReread", "Unknown");
+        assertThat(lines).allSatisfy(event -> assertThat(String.valueOf(event.get("level"))).isEqualTo("INFO"));
+        assertThat(h.logs.anyLineContains("원문")).isFalse();
+    }
+
+    private List<PracticeSessionExtension.PlaybackFact> endFactsOf(PracticeSpeech speech) {
+        return extension.facts.stream().filter(fact -> !fact.started())
+                .filter(fact -> fact.speech().correlationId().equals(speech.correlationId())).toList();
+    }
+
+    private List<String> appErrorKinds() {
+        return h.logs.events(kr.mujoong.contract.log.EventCode.APP_ERROR).stream()
+                .map(event -> String.valueOf(kr.mujoong.testsupport.log.LogCapture.attrs(event).get("errorKind"))).toList();
+    }
+
     private PracticeSpeech startApprovedStream() {
         start(true);
         extension.recovery = true;
