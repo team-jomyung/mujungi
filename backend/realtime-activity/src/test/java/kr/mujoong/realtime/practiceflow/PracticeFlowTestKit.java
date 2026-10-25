@@ -70,6 +70,8 @@ final class PracticeFlowTestKit {
         final List<String> cancelLog = new ArrayList<>();
         final List<UUID> cancelledSpeech = new ArrayList<>();
         final List<Boolean> holds = new ArrayList<>();
+        /** 흐름이 남긴 진단 사유 코드(고정 코드). */
+        final List<String> diagnostics = new ArrayList<>();
         final List<Map.Entry<String, Object>> posted = new ArrayList<>();
         final Map<String, Instant> timers = new LinkedHashMap<>();
         int calls;
@@ -186,6 +188,11 @@ final class PracticeFlowTestKit {
             slots.add(new Slot(correlationId, true, role, instructionText, null));
             return generatedResult;
         }
+
+        @Override
+        public void diagnostic(String reasonCode) {
+            diagnostics.add(reasonCode);
+        }
     }
 
     /** 메모리 기록기: 상태 기계가 남기는 장면 · 사실 · 도움을 그대로 쌓는다(원문 칸이 없다). */
@@ -292,6 +299,23 @@ final class PracticeFlowTestKit {
         Signal slotEvent(UUID correlationId, Playback status, PracticeSpeech speech, String text) {
             return ext.onExtensionEvent(new ExtensionEvent(ExtensionEvent.Kind.PLAYBACK_FACT, "u5b-playback", correlationId,
                     new PlaybackFact(speech, status, text)), out);
+        }
+
+        /**
+         * B1 부분 재생: 맨 마지막으로 연 승인 낭독 슬롯이 원문 앞 {@code heardEnd}글자(원문 색인)까지만 들린 채 재생 끝으로 닫혔다(실행부가 나간 부분까지만
+         * 닫은 사실).
+         */
+        Signal partial(int heardEnd) {
+            Slot slot = out.lastSlot();
+            return ext.onExtensionEvent(new ExtensionEvent(ExtensionEvent.Kind.PLAYBACK_FACT, "u5b-playback", slot.correlationId(),
+                    new PlaybackFact(slot.speech(), Playback.COMPLETED, slot.text(), null, Duration.ZERO, heardEnd)), out);
+        }
+
+        /** 맨 마지막으로 연 승인 낭독 슬롯을 실행부가 원문 불일치(아무것도 들려주지 않음)로 버렸다. */
+        Signal mismatched() {
+            Slot slot = out.lastSlot();
+            return ext.onExtensionEvent(new ExtensionEvent(ExtensionEvent.Kind.ASYNC_RESULT, "approved-text-mismatch", slot.correlationId(),
+                    slot.speech()), out);
         }
 
         /** 실행부가 연 승인 알림 슬롯(확장이 correlationId를 모른다)의 종료 사실. */

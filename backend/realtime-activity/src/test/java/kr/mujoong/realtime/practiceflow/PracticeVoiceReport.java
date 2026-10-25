@@ -51,12 +51,14 @@ final class PracticeVoiceReport {
     /** 아이 말 시작보다 이만큼 앞서 확정된 전사 행도 그 차례로 본다(가상 기기 시각과 실행부 시각의 차). */
     private static final long ROW_LEAD_MS = 300L;
 
-    static final List<String> READING_OUTCOMES = List.of(PracticeVoiceFacts.FIRST_MATCH, PracticeVoiceFacts.RETRY_MATCH,
-            PracticeVoiceFacts.RECOVERED, PracticeVoiceFacts.FAILED, PracticeVoiceFacts.INCOMPLETE);
-    static final Map<String, String> READING_LABELS = Map.of(PracticeVoiceFacts.FIRST_MATCH, "첫 시도 일치", PracticeVoiceFacts.RETRY_MATCH,
-            "같은 글 재시도 일치", PracticeVoiceFacts.RECOVERED, "'뜻 전하기' 복구", PracticeVoiceFacts.FAILED, "실패",
-            PracticeVoiceFacts.INCOMPLETE, "미완(끝남 · 취소)");
+    static final List<String> READING_OUTCOMES = List.of(PracticeVoiceFacts.FIRST_MATCH, PracticeVoiceFacts.REREAD_MATCH,
+            PracticeVoiceFacts.RETRY_MATCH, PracticeVoiceFacts.RECOVERED, PracticeVoiceFacts.PARTIAL, PracticeVoiceFacts.FAILED,
+            PracticeVoiceFacts.INCOMPLETE);
+    static final Map<String, String> READING_LABELS = Map.of(PracticeVoiceFacts.FIRST_MATCH, "첫 시도 일치", PracticeVoiceFacts.REREAD_MATCH,
+            "나머지 다시 읽기로 다 들림", PracticeVoiceFacts.RETRY_MATCH, "같은 글 재시도 일치", PracticeVoiceFacts.RECOVERED, "'뜻 전하기' 복구",
+            PracticeVoiceFacts.PARTIAL, "앞부분만 들림", PracticeVoiceFacts.FAILED, "실패", PracticeVoiceFacts.INCOMPLETE, "미완(끝남 · 취소)");
     private static final Map<String, String> END_LABELS = Map.ofEntries(Map.entry("PLAYED", "재생 끝"),
+            Map.entry("PARTIAL", "앞부분만 들림(나간 부분까지 재생 끝)"),
             Map.entry("INTERRUPTED", "재생 중 끊김"), Map.entry("FAILED", "재생 실패"), Map.entry("MISMATCH", "원문 불일치로 버림"),
             Map.entry("INCOMPLETE", "음성 미완"), Map.entry("BLOCKED", "제브가 막음"), Map.entry("TIMEOUT", "슬롯 안전 시계로 닫힘"),
             Map.entry("NOT_SENT", "요청을 보내지 못함"), Map.entry("CANCELLED", "흐름이 취소"),
@@ -159,7 +161,7 @@ final class PracticeVoiceReport {
         return flow == null ? null : flow.label();
     }
 
-    /** 승인 원문 읽기 시도의 자리(첫 시도 · 같은 글 재시도 · '뜻 전하기' 복구). */
+    /** 승인 원문 읽기 시도의 자리(첫 시도 · 나머지 다시 읽기 · 같은 글 재시도 · '뜻 전하기' 복구). */
     static String attemptLabel(Attempt attempt) {
         if (attempt.reading == null) {
             return attempt.approved() ? "승인 원문 읽기" : "생성형";
@@ -168,11 +170,21 @@ final class PracticeVoiceReport {
         if (attempt.recovery) {
             return "'뜻 전하기' 복구(" + nth + "번째 시도)";
         }
+        if (attempt.resumed) {
+            return "나머지 다시 읽기(" + nth + "번째 시도)";
+        }
         return nth == 1 ? "승인 원문 읽기 첫 시도" : "같은 글 재시도(" + nth + "번째 시도)";
     }
 
     static String endLabel(String end) {
         return end == null ? "끝 기록 없음(열린 채 세션 끝)" : END_LABELS.getOrDefault(end, end);
+    }
+
+    /** 시도의 끝 이름. 부분 재생이면 원문의 몇 글자까지 들렸는지 붙인다(위치만, 실행부 사실 값). */
+    static String endLabel(Attempt attempt) {
+        String label = endLabel(attempt.end);
+        return attempt.partial() && attempt.heardEnd != null && attempt.text != null
+                ? label + "(원문 " + attempt.heardEnd + "/" + attempt.text.length() + "자)" : label;
     }
 
     /** 버린 사유 코드 → 이름(원문 불일치 · 새 말 없음 · 빈 구간 등). */
@@ -335,14 +347,17 @@ final class PracticeVoiceReport {
     record DialogueRun(Map<String, Object> row, Metrics metrics) {
     }
 
-    /** 요약 표가 읽는 대화 하나의 수치(대화 기록 Markdown 절 포함). */
+    /**
+     * 요약 표가 읽는 대화 하나의 수치(대화 기록 Markdown 절 포함). {@code partialPlays}는 앞부분만 들리고 끝난 승인 원문 시도 수,
+     * {@code rereadReadings}는 C안이 부분 재생 뒤 나머지를 다시 읽은 읽기 수다(읽기 결과와 따로 센다).
+     */
     record Metrics(int index, String goal, String goalName, String plan, String planLabel, String status, String scenes,
             List<Map<String, Object>> sceneRows, Map<String, Integer> readings, Map<String, Integer> readingDiscards, int readingAttempts,
-            List<Map<String, Object>> waits, List<Map<String, Object>> silentWaits, List<Map<String, Object>> relayJudgments,
-            List<Map<String, Object>> judgments, Map<String, Integer> clock, int noResponseMalfunctions,
-            List<Map<String, Object>> malfunctions, List<Map<String, Object>> autoResponses, Map<String, Integer> guardDecisions,
-            List<Long> guardLatencies, double usageSeconds, double connectedSeconds, double seconds, boolean gptLiveStarted,
-            int childTurnsSpoken, int transcriptMismatches, String markdown) {
+            int partialPlays, int rereadReadings, List<Map<String, Object>> waits, List<Map<String, Object>> silentWaits,
+            List<Map<String, Object>> relayJudgments, List<Map<String, Object>> judgments, Map<String, Integer> clock,
+            int noResponseMalfunctions, List<Map<String, Object>> malfunctions, List<Map<String, Object>> autoResponses,
+            Map<String, Integer> guardDecisions, List<Long> guardLatencies, double usageSeconds, double connectedSeconds, double seconds,
+            boolean gptLiveStarted, int childTurnsSpoken, int transcriptMismatches, String markdown) {
 
         List<Long> waitValues() {
             return waits.stream().map(row -> asLong(row.get("waitMs"))).filter(Objects::nonNull).toList();
@@ -350,8 +365,9 @@ final class PracticeVoiceReport {
 
         Metrics withMarkdown(String text) {
             return new Metrics(index, goal, goalName, plan, planLabel, status, scenes, sceneRows, readings, readingDiscards, readingAttempts,
-                    waits, silentWaits, relayJudgments, judgments, clock, noResponseMalfunctions, malfunctions, autoResponses, guardDecisions,
-                    guardLatencies, usageSeconds, connectedSeconds, seconds, gptLiveStarted, childTurnsSpoken, transcriptMismatches, text);
+                    partialPlays, rereadReadings, waits, silentWaits, relayJudgments, judgments, clock, noResponseMalfunctions, malfunctions,
+                    autoResponses, guardDecisions, guardLatencies, usageSeconds, connectedSeconds, seconds, gptLiveStarted, childTurnsSpoken,
+                    transcriptMismatches, text);
         }
     }
 
@@ -365,8 +381,8 @@ final class PracticeVoiceReport {
             Map<String, Object> row = ordered("index", plan.index(), "goal", plan.goal().key(), "plan", plan.plan().name(), "status", status,
                     "session", session, "reportError", failure.getClass().getSimpleName());
             Metrics metrics = new Metrics(plan.index(), plan.goal().key(), plan.goal().goalName(), plan.plan().name(), plan.plan().label,
-                    status, "보고 실패", List.of(), Map.of(), Map.of(), 0, List.of(), List.of(), List.of(), List.of(), Map.of(), 0, List.of(),
-                    List.of(), Map.of(), List.of(), snapshot.usageSeconds(), 0, seconds, snapshot.providerStartedAtMs() != null, 0, 0,
+                    status, "보고 실패", List.of(), Map.of(), Map.of(), 0, 0, 0, List.of(), List.of(), List.of(), List.of(), Map.of(), 0,
+                    List.of(), List.of(), Map.of(), List.of(), snapshot.usageSeconds(), 0, seconds, snapshot.providerStartedAtMs() != null, 0, 0,
                     "- 대화 보고를 만들지 못했다(" + failure.getClass().getSimpleName() + "). JSON의 사실을 본다." + NL);
             return new DialogueRun(row, metrics);
         }
@@ -444,8 +460,12 @@ final class PracticeVoiceReport {
             READING_OUTCOMES.forEach(outcome -> readingCounts.put(outcome, 0));
             Map<String, Integer> readingDiscards = new LinkedHashMap<>();
             int readingAttempts = 0;
+            int partialPlays = 0;
+            int rereadReadings = 0;
             for (Reading reading : s.readings()) {
                 readingCounts.merge(reading.outcome(), 1, Integer::sum);
+                partialPlays += (int) reading.partialPlays();
+                rereadReadings += reading.reread() ? 1 : 0;
                 for (Attempt attempt : reading.attempts) {
                     readingAttempts++;
                     for (String code : attempt.discards) {
@@ -496,9 +516,9 @@ final class PracticeVoiceReport {
             Map<String, Object> row = row(readings, readingCounts, readingDiscards, waits, silentWaits, judgments, relay, sceneRows, clock,
                     autoResponses, guardDecisions, guardLatencies, mismatches);
             Metrics metrics = new Metrics(plan.index(), plan.goal().key(), plan.goal().goalName(), plan.plan().name(), plan.plan().label,
-                    status, scenesLine, sceneRows, readingCounts, readingDiscards, readingAttempts, waits, silentWaits, relay, judgments, clock,
-                    s.noResponseMalfunctions(), malfunctions, autoResponses, guardDecisions, guardLatencies, s.usageSeconds(), connectedSeconds(),
-                    seconds, s.providerStartedAtMs() != null, spoken.size(), mismatches, null);
+                    status, scenesLine, sceneRows, readingCounts, readingDiscards, readingAttempts, partialPlays, rereadReadings, waits,
+                    silentWaits, relay, judgments, clock, s.noResponseMalfunctions(), malfunctions, autoResponses, guardDecisions, guardLatencies,
+                    s.usageSeconds(), connectedSeconds(), seconds, s.providerStartedAtMs() != null, spoken.size(), mismatches, null);
             return new DialogueRun(row, metrics.withMarkdown(markdown(metrics, readings)));
         }
 
@@ -699,14 +719,14 @@ final class PracticeVoiceReport {
                 Map<String, Object> json = ordered("who", "무중", "kind", attempt.kind, "attemptId", attempt.id, "source", attempt.source,
                         "readingId", attempt.reading == null ? null : attempt.reading.id, "attempt", attemptLabel(attempt), "flow",
                         flowLabel(attempt.flow), "heard", heardAt != null, "text", heardText, "approvedText", attempt.approved() ? attempt.text : null,
-                        "end", attempt.end, "discards", attempt.discards, "requestToSoundMs", heardAt == null ? null : heardAt - attempt.atMs,
-                        "guard", guards);
+                        "end", attempt.end, "heardEnd", attempt.heardEnd, "resumed", attempt.resumed, "discards", attempt.discards,
+                        "requestToSoundMs", heardAt == null ? null : heardAt - attempt.atMs, "guard", guards);
                 String guardNote = guards.isEmpty() ? "" : " · " + String.join(" · ", guards);
                 if (heardAt != null) {
                     String shown = present(heardText) ? heardText
                             : attempt.approved() ? attempt.text + " [전사 행 없음 — 승인 원문을 적음]" : "(전사 없음)";
                     String result = attempt.reading == null ? "" : " → " + READING_LABELS.getOrDefault(attempt.reading.outcome(), "?");
-                    String end = attempt.end == null || "PLAYED".equals(attempt.end) ? "" : " · " + endLabel(attempt.end);
+                    String end = attempt.end == null || "PLAYED".equals(attempt.end) ? "" : " · " + endLabel(attempt);
                     add(heardAt, json, "무중: " + shown + " (" + attempt.source + " · " + attemptLabel(attempt) + result + " · 요청 → 첫 소리 "
                             + secs(heardAt - attempt.atMs) + end + guardNote + ")");
                 } else {
@@ -862,11 +882,13 @@ final class PracticeVoiceReport {
                     attempts.add(ordered("attemptId", attempt.id, "kind", attempt.kind, "position", attemptLabel(attempt), "accepted",
                             attempt.accepted, "requestedAtMs", attempt.atMs, "requestSentAtMs", attempt.requestSentAtMs, "instructionAtMs",
                             attempt.instructionAtMs, "instructionType", attempt.instructionType, "firstOutputAtMs", attempt.firstOutputAtMs,
-                            "heardAtMs", heardAt, "endedAtMs", attempt.endedAtMs, "end", attempt.end, "discards", attempt.discards, "stages",
-                            attempt.stages, "heardText", heardText(attempt)));
+                            "heardAtMs", heardAt, "endedAtMs", attempt.endedAtMs, "end", attempt.end, "heardEnd", attempt.heardEnd, "resumed",
+                            attempt.resumed, "text", attempt.text, "discards", attempt.discards, "stages", attempt.stages, "heardText",
+                            heardText(attempt)));
                 }
                 rows.add(ordered("readingId", reading.id, "atMs", reading.atMs, "at", formatMs(reading.atMs), "source", reading.source, "text",
-                        reading.text, "outcome", reading.outcome(), "outcomeLabel", READING_LABELS.get(reading.outcome()), "attempts", attempts));
+                        reading.text, "outcome", reading.outcome(), "outcomeLabel", READING_LABELS.get(reading.outcome()), "partialPlays",
+                        reading.partialPlays(), "reread", reading.reread(), "attempts", attempts));
             }
             return rows;
         }
@@ -1032,6 +1054,7 @@ final class PracticeVoiceReport {
             row.put("helps", s.helps());
             row.put("readingCounts", readingCounts);
             row.put("readingDiscards", readingDiscards);
+            row.put("flowDiagnostics", s.flowDiagnostics());
             row.put("readings", readings);
             row.put("generatedOutsideScene", generated());
             row.put("judgments", judgments);
@@ -1095,7 +1118,11 @@ final class PracticeVoiceReport {
                     .append(m.connectedSeconds()).append("초)").append(NL);
             md.append("- 장면 결과: ").append(m.scenes()).append(s.helps().isEmpty() ? "" : " · 도움 기록 " + s.helps().size() + "건").append(NL);
             md.append("- 승인 원문 읽기: ").append(readingLine(m.readings())).append(m.readingDiscards().isEmpty() ? ""
-                    : " · 버린 사유 " + m.readingDiscards()).append(NL);
+                    : " · 버린 사유 " + m.readingDiscards()).append(" · 부분 재생 ").append(m.partialPlays()).append("번 · 나머지 다시 읽은 읽기 ")
+                    .append(m.rereadReadings()).append("개").append(NL);
+            if (!s.flowDiagnostics().isEmpty()) {
+                md.append("- 흐름 진단(고정 code): ").append(s.flowDiagnostics()).append(NL);
+            }
             md.append("- 무중 차례 대기(아이 말 끝 → 다음 무중 말 시작): ").append(statsLine(waitStats(m.waitValues()))).append(NL);
             md.append("- 무응답 시계: 걸림 ").append(m.clock().get("NO_RESPONSE_ARMED")).append(" · 거둠 ").append(m.clock().get("NO_RESPONSE_CANCELLED"))
                     .append(" · 울림 ").append(m.clock().get("NO_RESPONSE_FIRED")).append(" · 아이 말 시작 알림(R1) ")
@@ -1129,8 +1156,9 @@ final class PracticeVoiceReport {
                 for (Reading reading : s.readings()) {
                     List<String> attempts = new ArrayList<>();
                     for (Attempt attempt : reading.attempts) {
-                        attempts.add("#" + attempt.id + " " + attemptLabel(attempt) + " " + (attempt.heard() || heardAt(attempt) != null ? "들림"
-                                : endLabel(attempt.end)) + (attempt.discards.isEmpty() ? "" : "(" + attempt.discards.stream()
+                        String heard = attempt.partial() ? endLabel(attempt)
+                                : attempt.heard() || heardAt(attempt) != null ? "들림" : endLabel(attempt.end);
+                        attempts.add("#" + attempt.id + " " + attemptLabel(attempt) + " " + heard + (attempt.discards.isEmpty() ? "" : "(" + attempt.discards.stream()
                                 .map(PracticeVoiceReport::discardLabel).distinct().toList() + ")"));
                     }
                     md.append("| ").append(reading.id).append(" ").append(formatMs(reading.atMs)).append(" | ").append(cell(reading.source))
@@ -1276,16 +1304,21 @@ final class PracticeVoiceReport {
         int spokenTurns = 0;
         int mismatches = 0;
         int readingAttempts = 0;
+        int partialPlays = 0;
+        int rereadReadings = 0;
         for (Metrics m : all) {
             Map<String, Object> row = ordered("index", m.index(), "goal", m.goal(), "plan", m.plan(), "planLabel", m.planLabel(), "status",
-                    m.status(), "scenes", m.scenes(), "readings", m.readings(), "mujoongWait", waitStats(m.waitValues()), "noResponseMalfunctions",
-                    m.noResponseMalfunctions(), "autoResponsesHeard", m.autoResponses().size(), "usageSeconds", round1(m.usageSeconds()));
+                    m.status(), "scenes", m.scenes(), "readings", m.readings(), "partialPlays", m.partialPlays(), "rereadReadings",
+                    m.rereadReadings(), "mujoongWait", waitStats(m.waitValues()), "noResponseMalfunctions", m.noResponseMalfunctions(),
+                    "autoResponsesHeard", m.autoResponses().size(), "usageSeconds", round1(m.usageSeconds()));
             dialogues.add(row);
             byPlan.computeIfAbsent(m.plan(), plan -> new ArrayList<>()).add(ordered("index", m.index(), "goal", m.goal(), "status", m.status(),
                     "scenes", m.scenes()));
             m.readings().forEach((key, value) -> readings.merge(key, value, Integer::sum));
             m.readingDiscards().forEach((key, value) -> discards.merge(key, value, Integer::sum));
             readingAttempts += m.readingAttempts();
+            partialPlays += m.partialPlays();
+            rereadReadings += m.rereadReadings();
             for (Map<String, Object> wait : m.waits()) {
                 Long value = asLong(wait.get("waitMs"));
                 if (value == null) {
@@ -1342,7 +1375,7 @@ final class PracticeVoiceReport {
         summary.put("scenesByPlan", byPlan);
         summary.put("approvedReadings", ordered("readings", readingTotal, "attempts", readingAttempts, "outcomes", readings, "outcomeLabels",
                 READING_LABELS, "firstMatchRate", readingTotal == 0 ? null : round1(100.0 * readings.get(PracticeVoiceFacts.FIRST_MATCH)
-                        / readingTotal), "discardReasons", discards));
+                        / readingTotal), "partialPlays", partialPlays, "rereadReadings", rereadReadings, "discardReasons", discards));
         Map<String, Object> bySource = new LinkedHashMap<>();
         waitsBySource.forEach((key, values) -> bySource.put(key, waitStats(values)));
         Map<String, Object> stages = new LinkedHashMap<>();
@@ -1417,12 +1450,14 @@ final class PracticeVoiceReport {
 
         md.append("## 요약").append(NL).append(NL);
         md.append("### 대화별 장면 결과").append(NL).append(NL);
-        md.append("| 대화 | 목표 | 계획 | 상태 | 장면 결과 | 승인 읽기(첫 · 재 · 복구 · 실패 · 미완) | 무중 대기 중앙 · 최대 | 무응답 오작동 | 자동 응답 |").append(NL);
-        md.append("| --- | --- | --- | --- | --- | --- | --- | --- | --- |").append(NL);
+        md.append("| 대화 | 목표 | 계획 | 상태 | 장면 결과 | 승인 읽기(첫 · 나머지 · 재 · 복구 · 부분 · 실패 · 미완) | 부분 재생 · 나머지 다시 읽기 "
+                + "| 무중 대기 중앙 · 최대 | 무응답 오작동 | 자동 응답 |").append(NL);
+        md.append("| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |").append(NL);
         for (Metrics m : all) {
             Map<String, Object> wait = waitStats(m.waitValues());
             md.append("| ").append(m.index()).append(" | ").append(cell(m.goal())).append(" | ").append(cell(m.planLabel())).append(" | ")
                     .append(cell(m.status())).append(" | ").append(cell(m.scenes())).append(" | ").append(readingCells(m.readings())).append(" | ")
+                    .append(m.partialPlays()).append(" · ").append(m.rereadReadings()).append(" | ")
                     .append(num(wait.get("count")) == 0 ? "-" : secs(asLong(wait.get("medianMs"))) + " · " + secs(asLong(wait.get("maxMs"))))
                     .append(" | ").append(m.noResponseMalfunctions()).append(" | ").append(m.autoResponses().size()).append(" |").append(NL);
         }
@@ -1439,6 +1474,8 @@ final class PracticeVoiceReport {
         }
         md.append(String.join(" · ", parts)).append(readings.get("firstMatchRate") == null ? "" : " · 첫 시도 성공률 " + readings.get("firstMatchRate") + "%")
                 .append(NL);
+        md.append("- 부분 재생(앞부분만 들리고 끝난 시도): ").append(str(readings.get("partialPlays"))).append("번 · C안이 나머지를 다시 읽은 읽기: ")
+                .append(str(readings.get("rereadReadings"))).append("개").append(NL);
         md.append("- 버린 사유(읽기 시도): ").append(map(readings.get("discardReasons")).isEmpty() ? "없음" : str(readings.get("discardReasons")))
                 .append(NL).append(NL);
 

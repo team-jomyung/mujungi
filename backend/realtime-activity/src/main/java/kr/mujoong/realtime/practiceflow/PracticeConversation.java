@@ -55,6 +55,9 @@ import kr.mujoong.realtime.voice.PracticeSpeech;
  *       역할 전환 · 복귀 알림은 승인 문장이 있으면 {@code announceRoleSwitch}로, 없거나 못 내면 생성형으로 낸다(BR5.4).
  *   <li>발화 오류로 연습을 끝내지 않는다(FT-1023-g): 끝내 못 들려준 발화(재요청 뒤 실패 · 막힘 · 시한 초과)는 건너뛰고 다음 단계로 간다. 연습을 끝내는
  *       것은 종료 의사 · 시간 상한 · 모든 목표 완료와 실행부의 끊김 · 공백 처리뿐이다.
+ *   <li>조각 단위 승인 낭독(B1)이 원문 중간에서 끊겨 앞부분만 들렸다는 실행부 사실(부분 재생)이 오면, C안은 들리지 않은 나머지(끊긴 곳이 든 문장부터)를
+ *       낭독 하나에 한 번 다시 읽고 그 재생이 끝난 뒤에 다음으로 간다. 그것도 끊기면 지금 있는 복구 길을 그대로 탄다. 유연 대화는 지금처럼 재생 끝으로
+ *       본다(docs/practice-direct-ask.md 7.6).
  *   <li>장면 시작(FT-1023-g): 목표 안내 → 장면 도입 → 상대의 여는 말(승인 문장, 있으면)과 대답 한 차례 → 기회 문장. 여는 말에 대한 아이
  *       말은 판정하지 않는다. 이전 대화 돌아보기 · 요약은 하지 않는다. 여는 말은 상대 역할의 말이라 유연 대화 경로만 쓰고, C안은 상황 안내 뒤 곧바로
  *       전하기 + 묻기로 간다(docs/practice-direct-ask.md 13.6).
@@ -78,6 +81,12 @@ public final class PracticeConversation implements PracticeSessionExtension {
     static final String TIMER_NOTICE_GUARD = "slot-guard-notice";
     /** 다음 목표 대본 비동기 결과의 post 이름. */
     static final String ASYNC_SCRIPT = "practice-script";
+    /** 진단(INFO, 원문 없음): C안에서 부분 재생된 승인 낭독의 들리지 않은 나머지를 다시 읽었다(docs/practice-direct-ask.md 7.6). */
+    static final String DIAG_REMAINDER_REREAD = "PracticeApprovedRemainderReread";
+    /** 진단(INFO): 다시 읽은 나머지도 끊겨 지금 있는 복구 길(같은 글 재시도 → '뜻 전하기' 복구 → 건너뛰기)로 갔다. */
+    static final String DIAG_REMAINDER_CUT_AGAIN = "PracticeApprovedRemainderCutAgain";
+    /** 진단(INFO): 부분 재생이지만 들리지 않은 글이 문장부호 · 공백뿐이라 다 들린 것으로 봤다. */
+    static final String DIAG_REMAINDER_WITHOUT_WORDS = "PracticeApprovedRemainderWithoutWords";
 
     private static final String COACH_SWITCH_CODE = "COACH_SWITCH";
     private static final String PEER_RETURN_CODE = "PEER_RETURN";
@@ -123,6 +132,8 @@ public final class PracticeConversation implements PracticeSessionExtension {
     private UUID openSlot;
     private boolean openSlotPlaying;
     private boolean approvedReadingRetried;
+    /** C안: 이 낭독(speakApproved 한 번)에서 부분 재생 뒤 나머지 다시 읽기를 이미 했다(낭독마다 한 번). */
+    private boolean remainderReread;
     private boolean generatedAudioRetried;
     private boolean awaitingNotice;
     private boolean inputReady;
@@ -748,8 +759,44 @@ public final class PracticeConversation implements PracticeSessionExtension {
             }
             return;
         }
+        // 부분 재생(B1)은 C안만 나머지를 다시 읽는다. 유연 대화는 지금처럼 재생 끝으로 본다(docs/practice-direct-ask.md 7.6)
+        if (fact.partial() && settings.directAsk() && resumePartialReading(fact, correlation)) {
+            return;
+        }
         SlotEnd end = fact.played() ? SlotEnd.PLAYED : fact.interrupted() ? SlotEnd.INTERRUPTED : SlotEnd.FAILED;
         handleSlotEnd(correlation, end);
+    }
+
+    /**
+     * C안: 조각 단위 승인 낭독(B1)이 원문 중간에서 끊겨 앞부분만 들렸다(실행부의 부분 재생 사실). 아이가 듣지 못한 나머지(끊긴 곳이 든 문장부터 끝까지,
+     * {@link DirectAskLines#unheardRest})를 새 승인 원문으로 낭독 하나에 한 번 다시 읽는다. 지금 슬롯은 처리 완료로 두고 단계를 바꾸지 않으므로 다음
+     * 걸음(판정 열기 · 무응답 시계 · 다음 말)은 나머지까지 재생이 끝난 뒤에 간다. 다시 읽은 나머지도 끊기면 지금 있는 복구 길({@link #retryOrRecoverReading})을
+     * 그대로 탄다 — 재시도 · 복구 횟수는 늘리지 않는다. 진단은 고정 사유 코드뿐이다(R-F14).
+     *
+     * @return 여기서 처리했으면 참(거짓이면 재생 끝으로 처리한다)
+     */
+    private boolean resumePartialReading(PlaybackFact fact, UUID correlation) {
+        PracticeSpeech speech = fact.speech();
+        if (speech == null || speech.generated() || correlation == null || !correlation.equals(openSlot)
+                || state.isHandled(correlation)) {
+            return false;
+        }
+        String rest = DirectAskLines.unheardRest(speech.text(), fact.heardEnd());
+        if (rest == null) {
+            // 들리지 않은 글에 말이 없다(전사가 말끝 부호만 빠뜨림 등): 다 들린 것으로 보고 다시 읽지 않는다
+            output.diagnostic(DIAG_REMAINDER_WITHOUT_WORDS);
+            return false;
+        }
+        if (remainderReread) {
+            output.diagnostic(DIAG_REMAINDER_CUT_AGAIN);
+            retryOrRecoverReading(speech);
+            return true;
+        }
+        remainderReread = true;
+        output.diagnostic(DIAG_REMAINDER_REREAD);
+        cancelOpenSlot();
+        submitApproved(rest);
+        return true;
     }
 
     /** 슬롯 종료 사건 하나. correlationId마다 첫 사건만 처리하고 확장이 닫은 슬롯 · 모르는 슬롯의 늦은 사건은 무시한다(§3.5). */
@@ -1167,6 +1214,7 @@ public final class PracticeConversation implements PracticeSessionExtension {
 
     private void speakApproved(String text) {
         approvedReadingRetried = false;
+        remainderReread = false;
         submitApproved(text);
     }
 
@@ -1189,6 +1237,14 @@ public final class PracticeConversation implements PracticeSessionExtension {
 
     private void onApprovedTextMismatch(PracticeSpeech speech) {
         if (speech.generated() || !speech.correlationId().equals(openSlot) || openSlotPlaying) return;
+        retryOrRecoverReading(speech);
+    }
+
+    /**
+     * 들려주지 못한 승인 낭독의 복구 길(원문 불일치, C안에서는 다시 읽은 나머지가 또 끊긴 때도 같다): 같은 글을 한 번 다시 읽고, 이미 다시 읽었으면 생성형
+     * '뜻 전하기'를 한 번 내며, 그것도 만들 수 없으면 못 들려준 말로 건너뛴다(FT-1023-g). 낭독마다 같은 글 재시도 한 번 · 복구 한 번이다.
+     */
+    private void retryOrRecoverReading(PracticeSpeech speech) {
         if (approvedReadingRetried) {
             String recovery = PracticeInstructions.recoverApprovedNarration(speech.text());
             if (recovery == null) {
@@ -1201,7 +1257,7 @@ public final class PracticeConversation implements PracticeSessionExtension {
             speakGenerated(state.role(), recovery);
             return;
         }
-        // No mismatched audio was delivered. One fresh slot gets one bounded attempt at the SAME approved text.
+        // 원문과 다른 말은 들려주지 않았다(불일치), 또는 C안에서 다시 읽은 나머지가 또 끊겼다. 새 슬롯 하나에 같은 승인 글을 한 번만 더 읽힌다
         cancelOpenSlot();
         approvedReadingRetried = true;
         submitApproved(speech.text());

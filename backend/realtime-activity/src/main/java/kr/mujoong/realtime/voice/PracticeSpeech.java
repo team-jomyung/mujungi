@@ -98,6 +98,39 @@ public record PracticeSpeech(UUID correlationId, UUID scenarioId, long generatio
         return false;
     }
 
+    /**
+     * 조각 단위로 내보낸 승인 낭독(B1)이 원문 중간에서 끊겼을 때, 이미 내보낸 전사가 원문 어디까지 닿았는가. 값은 원문({@link #text})의 색인(0 ~ 길이)이고
+     * 들린 마지막 글자 바로 뒤를 가리킨다. {@link #matchesPrefix}처럼 공백만 무시하고, 앞에 온 서버 고정 안내의 끝부분은 원문에 넣지 않는다. 고정 안내를
+     * 어디까지로 볼지 여러 풀이가 맞으면 원문에 덜 닿은 풀이를 고른다 — 들린 곳을 넓게 잡아 아이가 못 들은 말을 들은 것으로 치지 않게 한다. 원문 앞부분으로
+     * 맞지 않거나 생성형 슬롯이면 0이다. 글은 돌려주지 않고 위치만 돌려준다.
+     */
+    public int heardEnd(String sent) {
+        if (generated || sent == null) return 0;
+        String received = sent.replaceAll("\\s+", "");
+        String body = text.replaceAll("\\s+", "");
+        String lead = readingCue.text().replaceAll("\\s+", "");
+        for (int cut = 0; cut <= lead.length(); cut++) {
+            String leadPart = lead.substring(cut);
+            if ((leadPart + body).startsWith(received)) return indexAfter(Math.max(0, received.length() - leadPart.length()));
+        }
+        return 0;
+    }
+
+    /** 공백(ASCII, {@code \s})을 뺀 원문의 앞 {@code count}글자가 끝나는 원문 색인. */
+    private int indexAfter(int count) {
+        if (count <= 0) return 0;
+        int seen = 0;
+        for (int i = 0; i < text.length(); i++) {
+            if (!isAsciiSpace(text.charAt(i)) && ++seen == count) return i + 1;
+        }
+        return text.length();
+    }
+
+    /** 정규식 {@code \s}와 같은 공백(space · \t · \n · \x0B · \f · \r)인가. */
+    private static boolean isAsciiSpace(char c) {
+        return c == ' ' || c == '\t' || c == '\n' || c == '\u000B' || c == '\f' || c == '\r';
+    }
+
     private static String sentence(String text) {
         if (text == null || text.isBlank()) return text;
         return text.matches("(?s).*[.!?。！？…][\"”’']?$") ? text : text + ".";

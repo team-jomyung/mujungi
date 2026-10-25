@@ -41,6 +41,35 @@ class PracticeSpeechMatchTest {
     }
 
     @Test
+    void heardEndPointsJustAfterTheLastSentCharacterOfTheApprovedBody() {
+        var speech = PracticeSpeech.scenario(UUID.randomUUID(), UUID.randomUUID(), 0,
+                "PEER", "나는 블록 놀이를 하고 싶어.", PracticeSpeech.ReadingCue.PEER);
+        String text = speech.text();
+
+        assertThat(speech.heardEnd("나는 블록 ")).as("공백은 세지 않고 원문 색인으로").isEqualTo("나는 블록".length());
+        assertThat(speech.heardEnd("나는")).isEqualTo(2);
+        assertThat(speech.heardEnd("나는\t블록\n놀")).isEqualTo("나는 블록 놀".length());
+        assertThat(speech.heardEnd(PracticeSpeech.ReadingCue.PEER.text() + " 나는 블록")).as("앞의 고정 안내는 원문에 넣지 않는다")
+                .isEqualTo("나는 블록".length());
+        assertThat(speech.heardEnd("건넸어. 나는")).isEqualTo(2);
+        assertThat(speech.heardEnd(text)).isEqualTo(text.length());
+        assertThat(speech.heardEnd("")).isZero();
+        assertThat(speech.heardEnd(null)).isZero();
+        assertThat(speech.heardEnd("나는 카드")).as("앞부분이 아니면 들린 것이 없다").isZero();
+        assertThat(PracticeSpeech.generatedSlot(UUID.randomUUID(), UUID.randomUUID(), 0, "PEER", "나는 블록").heardEnd("나는"))
+                .isZero();
+    }
+
+    @Test
+    void whenTheFixedLeadAndTheBodyBothExplainTheSentTextTheHeardEndTakesTheShorterBody() {
+        // "어."는 안내 "이런 말을 건넸어."의 끝일 수도, 본문 첫 문장일 수도 있다: 들린 곳을 넓게 잡지 않는다(본문 0글자)
+        var speech = PracticeSpeech.scenario(UUID.randomUUID(), UUID.randomUUID(), 0, "PEER", "어. 그래.", PracticeSpeech.ReadingCue.PEER);
+
+        assertThat(speech.heardEnd("어.")).isZero();
+        assertThat(speech.heardEnd("어. 그")).as("본문으로만 풀리면 그만큼").isEqualTo("어. 그".length());
+    }
+
+    @Test
     void contextualCuesAllowOnlyTheirOwnFixedPrefixAndNeverMissingOrAddedBodyText() {
         for (var cue : PracticeSpeech.ReadingCue.values()) {
             var speech=PracticeSpeech.scenario(UUID.randomUUID(),UUID.randomUUID(),0,"PEER","나는 다른 놀이를 하고 싶어.",cue);

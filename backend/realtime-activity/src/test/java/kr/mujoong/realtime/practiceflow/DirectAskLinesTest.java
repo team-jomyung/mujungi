@@ -232,6 +232,39 @@ class DirectAskLinesTest {
     }
 
     @Test
+    void theUnheardRestStartsAtTheSentenceThatHoldsTheCut() {
+        String intro = "너는 친구랑 공룡 그림을 같이 그리는 중이야. 친구한테 같이 그리자고 했어.";
+        String second = "친구한테 같이 그리자고 했어.";
+        int secondStart = intro.indexOf(second);
+
+        assertThat(DirectAskLines.unheardRest(intro, "너는".length())).as("첫 단위 '너는'에서 끊기면 첫 문장부터 전체").isEqualTo(intro);
+        assertThat(DirectAskLines.unheardRest(intro, 0)).isEqualTo(intro);
+        assertThat(DirectAskLines.unheardRest(intro, secondStart + "친구한테".length())).as("둘째 문장 중간이면 둘째 문장부터")
+                .isEqualTo(second);
+        assertThat(DirectAskLines.unheardRest(intro, intro.indexOf(". ") + 1)).as("문장 끝 부호까지 들렸으면 다음 문장부터")
+                .isEqualTo(second);
+        assertThat(DirectAskLines.unheardRest(intro, intro.indexOf(". ") + 2)).as("문장 사이 공백에서 끊겨도 다음 문장부터")
+                .isEqualTo(second);
+        assertThat(DirectAskLines.unheardRest(intro, intro.indexOf(". "))).as("마침표 바로 앞이면 그 문장부터")
+                .isEqualTo(intro);
+    }
+
+    @Test
+    void anUnheardRestWithoutWordsIsNoRestAndSentenceEndsIncludeRunsAndClosingQuotes() {
+        String ask = "그런데 친구가 손이 아프대. 너라면 친구한테 뭐라고 말할래?";
+        assertThat(DirectAskLines.unheardRest(ask, ask.length())).as("다 들렸다").isNull();
+        assertThat(DirectAskLines.unheardRest(ask, ask.length() - 1)).as("말끝 물음표만 남았다: 다시 읽을 말이 없다").isNull();
+        assertThat(DirectAskLines.unheardRest(ask, ask.length() + 5)).as("원문보다 긴 위치는 끝으로 본다").isNull();
+        assertThat(DirectAskLines.unheardRest(ask, -1)).as("음수는 처음으로 본다").isEqualTo(ask);
+        assertThat(DirectAskLines.unheardRest(null, 0)).isNull();
+
+        String legacy = "친구가 이렇게 말했어. “그만해!?” 너라면 뭐라고 말할래?";
+        assertThat(DirectAskLines.unheardRest(legacy, legacy.indexOf("너라면") + 1)).as("부호 묶음 · 닫는 따옴표까지 앞 문장이다")
+                .isEqualTo("너라면 뭐라고 말할래?");
+        assertThat(DirectAskLines.unheardRest(legacy, legacy.indexOf("그만해") + 1)).isEqualTo("“그만해!?” 너라면 뭐라고 말할래?");
+    }
+
+    @Test
     void theStringFormsNeverCarryTheSentences() {
         assertThat(PACKAGE.toString()).isEqualTo("DirectAskLines[approvedCodes=7]");
         assertThat(PACKAGE.help(v2()).toString()).doesNotContain("친구").contains("exampleGiven=true");
