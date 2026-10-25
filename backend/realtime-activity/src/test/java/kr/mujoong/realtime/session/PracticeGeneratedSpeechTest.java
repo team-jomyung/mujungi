@@ -187,6 +187,59 @@ class PracticeGeneratedSpeechTest {
         assertThat(extension.mismatches).isEmpty();
     }
 
+    // ---- 장면 속 역할이 없는 연습(C안)의 승인 낭독 지시 (docs/practice-direct-ask.md 7.6) ----
+
+    @Test
+    void aPracticeWithoutRolesSendsTheReadingWithoutRoleOrQuotationWordingAndStillPlaysTheExactText() {
+        extension.mujoong = true;
+        start(true);
+        var speech = PracticeSpeech.scenario(UUID.randomUUID(), UUID.randomUUID(), 1, "무중",
+                "그런데 친구가 손이 좀 아프대. 너라면 친구한테 뭐라고 말할래?", PracticeSpeech.ReadingCue.PEER);
+
+        assertThat(extension.out.speak(speech)).isTrue();
+        h.settleSend();
+
+        assertThat(appended().getLast()).contains("<approved_speech>" + speech.text() + "</approved_speech>",
+                "태그 안의 글자만 처음부터 끝까지 그대로 읽는다", "덧붙이지 않는다", "낭독문 마지막 글자에서 즉시 끝낸다", "다음 서버 지시를 기다린다")
+                .doesNotContain("따옴표", "partnerRole", "배경 역할", "역할극");
+        say(speech.text());
+        assertThat(h.link.outputs()).as("원문과 같은 낭독은 그대로 제브 없이 재생된다").hasSize(1);
+        assertThat(guard.count()).isZero();
+        assertThat(extension.mismatches).isEmpty();
+    }
+
+    @Test
+    void theRolelessReadingStillPlaysApprovedUnitsBeforeTheResponseEnds() {
+        extension.mujoong = true;
+        var speech = startApprovedStream();
+        assertThat(appended().getLast()).doesNotContain("따옴표", "partnerRole");
+
+        approvedUnit("나는 블록 ", 0);
+        assertThat(h.link.outputs()).as("B1 조기 재생 그대로: 응답이 끝나기 전에 첫 단위가 나간다").hasSize(1);
+        mark(h.link.outputs().getFirst().playbackId(), PlaybackMark.Status.COMPLETED);
+        assertThat(extension.endFacts(speech.correlationId())).isEmpty();
+        approvedUnit("놀이를 하고 싶어.", 1);
+        assertThat(h.link.outputs()).hasSize(2);
+        h.advance(Duration.ofMillis(801));
+        mark(h.link.outputs().getLast().playbackId(), PlaybackMark.Status.COMPLETED);
+        assertThat(extension.endFacts(speech.correlationId())).containsExactly(PracticePorts.Playback.COMPLETED);
+        assertThat(extension.mismatches).isEmpty();
+        assertThat(guard.count()).isZero();
+    }
+
+    @Test
+    void aRoleDialoguePracticeKeepsTheRoleAndQuotationWordingOfTheReadingInstruction() {
+        start(true);
+        var speech = PracticeSpeech.scenario(UUID.randomUUID(), UUID.randomUUID(), 1, "친구", "친구가 \"같이 놀자.\"라고 말한다.",
+                PracticeSpeech.ReadingCue.PEER);
+
+        assertThat(extension.out.speak(speech)).isTrue();
+        h.settleSend();
+
+        assertThat(appended().getLast()).contains("이전 대화와 역할극 응답 지시를 이어가지 않고", "partnerRole", "친구",
+                "따옴표 안 상대 대사도 생략하거나 바꾸지 않는다", "<approved_speech>" + speech.text() + "</approved_speech>");
+    }
+
     private PracticeSpeech startApprovedStream() {
         start(true);
         extension.recovery = true;
@@ -565,6 +618,8 @@ class PracticeGeneratedSpeechTest {
         PracticeOutput out;
         boolean introduction;
         boolean recovery;
+        /** 참이면 장면 속 역할이 없는 연습(C안)처럼 군다. */
+        boolean mujoong;
         UUID replySlot;
         final List<PlaybackFact> facts = new ArrayList<>();
         final List<GuardrailBlockedEvent> blocked = new ArrayList<>();
@@ -583,6 +638,7 @@ class PracticeGeneratedSpeechTest {
 
         @Override public boolean collectingIntroduction() { return introduction; }
         @Override public boolean handlesAudioRecovery() { return recovery; }
+        @Override public boolean speaksAsMujoong() { return mujoong; }
         @Override public boolean canYieldUnplayedSpeech() { return !introduction; }
 
         @Override

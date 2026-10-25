@@ -5,9 +5,11 @@ import java.time.Instant;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
 import kr.mujoong.contract.status.SessionStatus;
@@ -38,6 +40,13 @@ final class JudgmentCoordinator implements JudgmentTurn.Host {
     static final int RECENT_LIMIT = 4;
     /** 아이 이름 대신 공급자에 보내는 말. */
     static final String CHILD_ALIAS = "아이";
+    /**
+     * 같은 걸음 묶음의 합으로 확정한 판정이 닫혔다는 진단 사유 코드의 앞부분(INFO, 뒤에 지점 이름, 예: {@code JudgmentConfirmedBySameStepSum_J5}).
+     * 선택지 코드 · 확률 · 전사는 담지 않는다(R-F14). 선택지와 확률은 판정 기록 행에 그대로 남는다.
+     */
+    static final String SAME_STEP_SUM_CONFIRMED = "JudgmentConfirmedBySameStepSum_";
+    /** 같은 걸음 묶음 코드 하나의 길이 상한(판정 선택지 코드 모양). */
+    private static final int GROUP_CODE_MAX = 64;
 
     /** 실행기가 구현하는 바깥 세계. 모두 실행기 스레드에서 불린다({@code postFromProvider}만 어느 스레드에서나). */
     interface Env {
@@ -65,6 +74,9 @@ final class JudgmentCoordinator implements JudgmentTurn.Host {
 
         /** 낡은 결과 · 전사를 버렸다(사유 코드 {@code JUDGMENT_LATE_DROPPED}, 개수만). */
         void lateDropped(String reasonCode);
+
+        /** 판정 진단 사유 코드 한 줄(INFO, 고정 코드뿐 · 내용 없음). */
+        void diagnostic(String reasonCode);
     }
 
     /** 턴을 열 수 있는 상태인가. */
@@ -84,10 +96,19 @@ final class JudgmentCoordinator implements JudgmentTurn.Host {
         static final Handled NOTHING = new Handled(NextAction.NONE, false);
     }
 
-    /** 턴을 여는 요청: 지점 · 계기와 지점별 분기. */
+    /**
+     * 턴을 여는 요청: 지점 · 계기와 지점별 분기.
+     *
+     * @param sameStepGroups 요청한 쪽이 같은 다음 걸음으로 처리하는 선택지 묶음({@link #sameStepGroups(Object)}로 모양을 확인한 값, 없으면 빈
+     *     목록). 열 때 그 지점의 선택지 밖 코드를 걷어 판정 요청에 싣는다
+     */
     record Open(JudgmentPoint point, JudgmentTrigger trigger, JudgmentOwner owner, int transcriptSeq, String text, Instant at,
-            JudgeRequest.Criteria criteria, List<JudgeRequest.RecentTurn> recent, JudgmentTurn.ResultHandler decide,
-            Function<JudgmentTurn.Closure, Handled> after) {
+            JudgeRequest.Criteria criteria, List<List<String>> sameStepGroups, List<JudgeRequest.RecentTurn> recent,
+            JudgmentTurn.ResultHandler decide, Function<JudgmentTurn.Closure, Handled> after) {
+
+        Open {
+            sameStepGroups = sameStepGroups == null ? List.of() : List.copyOf(sameStepGroups);
+        }
 
         @Override
         public String toString() {
@@ -249,7 +270,8 @@ final class JudgmentCoordinator implements JudgmentTurn.Host {
         LiveContentResources.PointOptions options = support.optionSet().points()
                 .get(LiveContentResources.JudgmentPoint.valueOf(request.point().name()));
         JudgeRequest judgeRequest = new JudgeRequest(request.point(), support.optionSet().version(), options.optionCodes(),
-                clip(request.text()), request.recent(), request.criteria(), aliases(), false, now.plus(liveBudget));
+                clip(request.text()), request.recent(), request.criteria(), aliases(), false, now.plus(liveBudget),
+                groupsWithin(options.optionCodes(), request.sameStepGroups()));
         TurnStatus openedIn = env.status() == SessionStatus.ACTIVE ? TurnStatus.ACTIVE : TurnStatus.WAITING_CHILD;
         JudgmentTurn.Spec spec = new JudgmentTurn.Spec(UUID.randomUUID(), request.point(), request.trigger(), request.owner(),
                 openedIn, request.transcriptSeq(), request.at(), liveBudget, responseReady, support.promptVersion());
@@ -260,6 +282,48 @@ final class JudgmentCoordinator implements JudgmentTurn.Host {
     private Map<String, String> aliases() {
         String name = plan.childContext().displayName();
         return name == null || name.isBlank() ? Map.of() : Map.of(name, CHILD_ALIAS);
+    }
+
+    /**
+     * 확장이 판정 기준 맵에 실은 같은 걸음 묶음({@link PracticeSessionExtension.PracticeOutput#SAME_STEP_GROUPS})의 모양을 확인한다. 없으면 빈
+     * 목록이다. 목록의 목록이 아니거나, 코드가 빈 · 너무 긴 문자열이거나, 묶음이 둘 미만이거나, 한 코드가 두 번 나오면(묶음 안 · 묶음끼리) 예외다 —
+     * 호출한 쪽은 판정 요청을 거절한다(기준 모양 틀림과 같다).
+     */
+    static List<List<String>> sameStepGroups(Object raw) {
+        if (raw == null) {
+            return List.of();
+        }
+        if (!(raw instanceof List<?> groups)) {
+            throw new IllegalArgumentException("같은 걸음 묶음은 목록이다");
+        }
+        Set<String> seen = new HashSet<>();
+        List<List<String>> parsed = new ArrayList<>(groups.size());
+        for (Object item : groups) {
+            if (!(item instanceof List<?> group) || group.size() < 2) {
+                throw new IllegalArgumentException("같은 걸음 묶음은 코드 둘 이상의 목록이다");
+            }
+            List<String> codes = new ArrayList<>(group.size());
+            for (Object code : group) {
+                if (!(code instanceof String text) || text.isBlank() || text.length() > GROUP_CODE_MAX || !seen.add(text)) {
+                    throw new IllegalArgumentException("같은 걸음 묶음의 코드는 비지 않은 문자열이고 한 번만 나온다");
+                }
+                codes.add(text);
+            }
+            parsed.add(List.copyOf(codes));
+        }
+        return List.copyOf(parsed);
+    }
+
+    /** 묶음에서 그 지점 선택지 밖의 코드를 걷고, 둘 미만이 된 묶음은 버린다(판 순서가 바뀌거나 코드가 빠져도 판정을 막지 않는다). */
+    private static List<List<String>> groupsWithin(List<String> options, List<List<String>> groups) {
+        List<List<String>> kept = new ArrayList<>(groups.size());
+        for (List<String> group : groups) {
+            List<String> inSet = group.stream().filter(options::contains).toList();
+            if (inSet.size() >= 2) {
+                kept.add(inSet);
+            }
+        }
+        return List.copyOf(kept);
     }
 
     private static String clip(String text) {
@@ -377,6 +441,10 @@ final class JudgmentCoordinator implements JudgmentTurn.Host {
         Open open = currentOpen;
         current = null;
         currentOpen = null;
+        if (closure.outcome().sameStepSum()) {
+            // 1순위 혼자가 아니라 같은 걸음 묶음의 합으로 확정했다는 사실만 고정 코드로 남긴다(선택지 · 확률은 판정 기록 행에 있다)
+            env.diagnostic(SAME_STEP_SUM_CONFIRMED + closure.point().name());
+        }
         Handled handled = Handled.NOTHING;
         boolean threw = true;
         try {

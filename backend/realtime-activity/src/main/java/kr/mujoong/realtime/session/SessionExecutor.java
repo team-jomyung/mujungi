@@ -1413,8 +1413,9 @@ public final class SessionExecutor {
     }
 
     /**
-     * W4: 확장이 요청한 판정. 거절 조건은 열린 턴 · 지점 밖 · 최근 확정 전사 4개 밖 · 기준 모양 틀림 · 공급자 없음이다(ACTIVE가 아니면
-     * 호출 앞에서 PRACTICE_EXTENSION_FAILED로 거절한다). 다음 행동은 확장이 정하므로 실행부는 지시를 내지 않는다.
+     * W4: 확장이 요청한 판정. 거절 조건은 열린 턴 · 지점 밖 · 최근 확정 전사 4개 밖 · 기준 모양 틀림(같은 걸음 묶음 모양 포함) · 공급자 없음이다
+     * (ACTIVE가 아니면 호출 앞에서 PRACTICE_EXTENSION_FAILED로 거절한다). 다음 행동은 확장이 정하므로 실행부는 지시를 내지 않는다. 기준 맵의 같은
+     * 걸음 묶음({@link PracticeSessionExtension.PracticeOutput#SAME_STEP_GROUPS})은 어느 지점이든 판정 요청에 실어 검증기의 하한 검사에만 쓴다.
      */
     private boolean requestExtensionJudgment(JudgmentPoint point, long transcriptSeq, UUID correlationId,
             Map<String, Object> criteria) {
@@ -1439,13 +1440,20 @@ public final class SessionExecutor {
                 return false;
             }
         }
+        List<List<String>> sameStepGroups;
+        try {
+            sameStepGroups = JudgmentCoordinator.sameStepGroups(
+                    criteria == null ? null : criteria.get(PracticeSessionExtension.PracticeOutput.SAME_STEP_GROUPS));
+        } catch (RuntimeException invalid) {
+            return false;
+        }
         JudgmentCoordinator.Readiness ready = judgment.preflight(target.text());
         if (ready != JudgmentCoordinator.Readiness.READY) {
             judgment.recordSkipped(ready, point, JudgmentTrigger.EXTENSION_REQUEST, target.seq(), NextAction.DELEGATED_TO_EXTENSION);
             return false;
         }
         judgment.open(new JudgmentCoordinator.Open(point, JudgmentTrigger.EXTENSION_REQUEST, JudgmentOwner.EXTENSION, target.seq(),
-                target.text(), target.at(), shaped,
+                target.text(), target.at(), shaped, sameStepGroups,
                 practice != null && practice.controlsOutput()
                         ? judgment.dialogueBefore(target.seq(), target.at()) : judgment.recentBefore(target.seq()),
                 (turn, outcome) -> JudgmentTurn.Decision.close(), closure -> afterExtensionJudgment(closure, correlationId)));
@@ -1545,6 +1553,11 @@ public final class SessionExecutor {
 
         @Override
         public void lateDropped(String reasonCode) {
+            ctx.services().events().appError(EventLog.Component.SESSION_LIFECYCLE, reasonCode, EventCode.Level.INFO);
+        }
+
+        @Override
+        public void diagnostic(String reasonCode) {
             ctx.services().events().appError(EventLog.Component.SESSION_LIFECYCLE, reasonCode, EventCode.Level.INFO);
         }
 
@@ -2048,9 +2061,11 @@ public final class SessionExecutor {
             pendingPracticeSpeech = speech;
             practiceHold = false;
             // 설계 개정 A2: 승인된 발화 읽기 지시를 세대를 올리며 직렬 큐로 보낸다(응답 요청 type이 없어 지시가 발화를 시작한다). 새 말이 시한
-            // 안에 시작하지 않거나 송신이 실패하면 지금처럼 확장에 실패를 알린다
-            kr.mujoong.realtime.voice.PracticeInstruction instruction =
-                    kr.mujoong.realtime.voice.PracticeInstruction.forSpeech(speech);
+            // 안에 시작하지 않거나 송신이 실패하면 지금처럼 확장에 실패를 알린다. 장면 속 역할이 없는 연습(C안)은 배경 역할 · 역할극 · 따옴표 안
+            // 상대 대사 문구가 없는 낭독 지시를 쓴다(5회차에 그 문구 조각이 낭독 앞에 붙어 원문 대조가 거듭 실패했다, docs/practice-direct-ask.md 7.6)
+            kr.mujoong.realtime.voice.PracticeInstruction instruction = practice != null && practice.speaksAsMujoong()
+                    ? kr.mujoong.realtime.voice.PracticeInstruction.forSpeechWithoutRole(speech)
+                    : kr.mujoong.realtime.voice.PracticeInstruction.forSpeech(speech);
             return sendInstruction(OutputGeneration.BumpReason.SERVER_SEND, "provider-practice-speech-",
                     id -> ctx.services().requests().practiceInstruction(id, instruction),
                     () -> practiceOutput.post("u5b-voice-failed", speech));

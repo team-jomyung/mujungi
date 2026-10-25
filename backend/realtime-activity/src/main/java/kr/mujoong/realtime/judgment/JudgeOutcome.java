@@ -9,6 +9,8 @@ import java.util.Objects;
  * LOW_MARGIN뿐이다(기록용이며 확정 행동에 쓰지 않는다, NFR2). 문자열 표현은 라벨 · 확률을 숨긴다.
  *
  * @param model 공급자가 돌려준 모델 이름. 공급자를 부르지 않았으면 null
+ * @param sameStepSum 1순위 혼자로는 하한 · 최소 차이를 넘지 못했지만 1 · 2순위가 요청의 같은 걸음 묶음이라 두 확률의 합으로 확정했다(확정에만 참일 수
+ *     있다). 1순위 코드 · 두 확률은 모델이 낸 그대로다
  */
 public record JudgeOutcome(
         JudgmentOutcomeKind kind,
@@ -19,7 +21,8 @@ public record JudgeOutcome(
         AbstainReason abstainReason,
         Duration latency,
         String model,
-        String promptVersion) {
+        String promptVersion,
+        boolean sameStepSum) {
 
     public JudgeOutcome {
         Objects.requireNonNull(kind, "kind");
@@ -53,12 +56,31 @@ public record JudgeOutcome(
                 }
             }
         }
+        if (sameStepSum && kind != JudgmentOutcomeKind.CONFIRMED) {
+            throw new IllegalArgumentException("묶음 합 확정 표지는 확정에만 쓴다");
+        }
+    }
+
+    /** 묶음 합 확정 표지가 없는 결과(기존 모양). */
+    public JudgeOutcome(JudgmentOutcomeKind kind, String firstOption, Double firstProbability, String secondOption,
+            Double secondProbability, AbstainReason abstainReason, Duration latency, String model, String promptVersion) {
+        this(kind, firstOption, firstProbability, secondOption, secondProbability, abstainReason, latency, model, promptVersion, false);
     }
 
     /** 확정 결과. */
     public static JudgeOutcome confirmed(String first, double firstP, String second, double secondP, Duration latency, String model,
             String promptVersion) {
         return new JudgeOutcome(JudgmentOutcomeKind.CONFIRMED, first, firstP, second, secondP, null, latency, model, promptVersion);
+    }
+
+    /**
+     * 같은 걸음 묶음의 합으로 확정한 결과: 1 · 2순위가 흐름의 같은 다음 걸음이고 두 확률의 합이 하한 이상이다. 1순위는 모델이 낸 1순위 그대로라
+     * 기록 · 리포트가 묶음 안의 선택지(예: FULL · COPIED)를 구분한다.
+     */
+    public static JudgeOutcome confirmedBySameStep(String first, double firstP, String second, double secondP, Duration latency,
+            String model, String promptVersion) {
+        return new JudgeOutcome(JudgmentOutcomeKind.CONFIRMED, first, firstP, second, secondP, null, latency, model, promptVersion,
+                true);
     }
 
     /** 확률 없는 보류. */
@@ -83,6 +105,7 @@ public record JudgeOutcome(
 
     @Override
     public String toString() {
-        return "JudgeOutcome[kind=" + kind + (abstainReason == null ? "" : ", reason=" + abstainReason) + "]";
+        return "JudgeOutcome[kind=" + kind + (abstainReason == null ? "" : ", reason=" + abstainReason)
+                + (sameStepSum ? ", sameStepSum" : "") + "]";
     }
 }

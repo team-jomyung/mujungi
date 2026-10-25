@@ -248,6 +248,8 @@ final class PracticeVoiceFacts {
         String second;
         Double secondProbability;
         String abstainReason;
+        /** 1 · 2순위가 같은 걸음 묶음이라 두 확률의 합으로 확정했다(ai-io.md 10.10). */
+        boolean sameStepSum;
         String model;
         long latencyMs = -1;
         Long doneAtMs;
@@ -902,6 +904,7 @@ final class PracticeVoiceFacts {
         call.second = outcome.secondOption();
         call.secondProbability = outcome.secondProbability();
         call.abstainReason = outcome.abstainReason() == null ? null : outcome.abstainReason().name();
+        call.sameStepSum = outcome.sameStepSum();
         call.model = PracticeVoiceReport.safeToken(outcome.model());
         call.latencyMs = outcome.latency().toMillis();
     }

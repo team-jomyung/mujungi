@@ -331,6 +331,127 @@ class DirectAskTransitionsTest {
         assertThat(table.evaluateVariant(variant, true).facts()).containsExactly(FactKind.VARIANT_PLAYED);
     }
 
+    // ---- 같은 걸음 묶음 (ai-io.md 10.10, 편차 FT-1024-f) ----
+
+    /** 흐름이 결과를 받을 때처럼 코드를 바꾸지 않는다(절차 질문이 아닌 대답). */
+    private static final java.util.function.UnaryOperator<String> AS_IS = code -> code;
+    /** 절차 질문(방법을 묻는 말)이면 수행 코드를 HELP로 본다 — PracticeConversation의 결과 처리와 같은 규칙. */
+    private static final java.util.function.UnaryOperator<String> PROCEDURE = code ->
+            List.of("FULL", "DELIVERED", "COPIED").contains(code) ? "HELP" : code;
+
+    @Test
+    void theOnlyRetryGroupsTheTwoSuccessesAndTheFourAnswersThatCloseTheScene() {
+        List<List<String>> groups = table.sameStepGroups(retrying(), JudgmentPoint.J5, AS_IS);
+
+        // 5회차 S6(FULL 0.38 · COPIED 0.29)이 한 묶음: 둘 다 도움 뒤 성공(AFTER_HELP). 다시 해 보기가 한 번뿐이라 나머지 넷은 모두 장면 닫기
+        assertThat(groups).containsExactly(List.of("FULL", "COPIED"), List.of("PARTIAL", "HELP", "NOT_UNDERSTOOD", "IRRELEVANT"));
+        assertThat(groups).noneMatch(group -> group.contains("UNREADABLE"));
+    }
+
+    @Test
+    void withRetriesLeftTheRetryGroupsFollowTheTableIntoHelpAgainAndReexplain() {
+        List<List<String>> groups = new FlowTransitions(2, 1, true).sameStepGroups(retrying(), JudgmentPoint.J5, AS_IS);
+
+        assertThat(groups).containsExactly(List.of("FULL", "COPIED"), List.of("PARTIAL", "HELP"), List.of("NOT_UNDERSTOOD", "IRRELEVANT"));
+    }
+
+    @Test
+    void theFirstAnswerGroupsOnlyTheTwoAnswersThatAreReexplainedAndKeepsHelpApart() {
+        FlowState first = at(Phase.OPPORTUNITY, Sub.NONE);
+        assertThat(table.sameStepGroups(first, JudgmentPoint.J2, AS_IS)).containsExactly(List.of("NOT_UNDERSTOOD", "IRRELEVANT"));
+
+        FlowState reexplained = at(Phase.OPPORTUNITY, Sub.NONE);
+        reexplained.incrementReexplain();
+        assertThat(table.sameStepGroups(reexplained, JudgmentPoint.J2, AS_IS)).as("다시 설명 한도 뒤에는 둘 다 도움 제안")
+                .containsExactly(List.of("NOT_UNDERSTOOD", "IRRELEVANT"));
+        FlowState guided = at(Phase.OPPORTUNITY, Sub.NONE);
+        guided.unreadableGuided(true);
+        assertThat(table.sameStepGroups(guided, JudgmentPoint.J2, AS_IS)).as("판독 불가는 사실이 달라 묶지 않는다")
+                .containsExactly(List.of("NOT_UNDERSTOOD", "IRRELEVANT"));
+    }
+
+    @Test
+    void theReaskAndTheHelpOfferHaveNoGroupsAndTheVariantOfferGroupsOnlyAfterOneReguide() {
+        assertThat(table.sameStepGroups(at(Phase.REASK, Sub.NONE), JudgmentPoint.J3, AS_IS)).isEmpty();
+        FlowState offer = at(Phase.HELP_OFFER, Sub.NONE);
+        assertThat(table.sameStepGroups(offer, JudgmentPoint.J4, AS_IS)).isEmpty();
+        offer.unreadableGuided(true);
+        assertThat(table.sameStepGroups(offer, JudgmentPoint.J4, AS_IS)).as("두 번째 불명확은 동의 없는 도움, 거절은 장면 닫기").isEmpty();
+
+        FlowState variant = at(Phase.VARIANT_OFFER, Sub.NONE);
+        assertThat(table.sameStepGroups(variant, JudgmentPoint.J4, AS_IS)).as("첫 불명확은 다시 묻기").isEmpty();
+        variant.unreadableGuided(true);
+        assertThat(table.sameStepGroups(variant, JudgmentPoint.J4, AS_IS)).as("다시 물은 뒤의 불명확은 거절처럼 변형을 건너뛴다")
+                .containsExactly(List.of("REFUSE", "UNCLEAR"));
+    }
+
+    @Test
+    void aProcedureQuestionPutsTheAnswerCodesInTheSameStepAsHelp() {
+        assertThat(table.sameStepGroups(at(Phase.OPPORTUNITY, Sub.NONE), JudgmentPoint.J2, PROCEDURE))
+                .containsExactly(List.of("FULL", "HELP"), List.of("NOT_UNDERSTOOD", "IRRELEVANT"));
+        assertThat(table.sameStepGroups(at(Phase.REASK, Sub.NONE), JudgmentPoint.J3, PROCEDURE))
+                .containsExactly(List.of("DELIVERED", "HELP"));
+        assertThat(table.sameStepGroups(retrying(), JudgmentPoint.J5, PROCEDURE))
+                .containsExactly(List.of("FULL", "PARTIAL", "HELP", "NOT_UNDERSTOOD", "IRRELEVANT", "COPIED"));
+    }
+
+    @Test
+    void everyGroupedCodeReallyTakesTheSameStepAndCodesOutsideAGroupDoNot() {
+        int pairs = 0;
+        for (FlowTransitions any : List.of(table, new FlowTransitions(2, 1, true))) {
+            for (Map.Entry<Phase, List<String>> entry : CODES.entrySet()) {
+                for (boolean guided : List.of(false, true)) {
+                    FlowState state = entry.getKey() == Phase.RETRY ? retrying() : at(entry.getKey(), Sub.NONE);
+                    state.unreadableGuided(guided);
+                    JudgmentPoint point = FlowTransitions.expectedPoint(entry.getKey());
+                    List<List<String>> groups = any.sameStepGroups(state, point, AS_IS);
+                    for (String a : entry.getValue()) {
+                        for (String b : entry.getValue()) {
+                            if (a.equals(b)) {
+                                continue;
+                            }
+                            boolean grouped = groups.stream().anyMatch(group -> group.contains(a) && group.contains(b));
+                            Step sa = any.onJudgment(state, point, a);
+                            Step sb = any.onJudgment(state, point, b);
+                            String row = entry.getKey() + " " + a + "/" + b + " guided=" + guided;
+                            assertThat(sa.effect().equals(sb.effect())).as(row).isEqualTo(grouped);
+                            if (grouped) {
+                                assertThat(sa.phase()).as(row).isEqualTo(sb.phase());
+                                assertThat(sa.sub()).as(row).isEqualTo(sb.sub());
+                                assertThat(sa.facts()).as(row).isEqualTo(sb.facts());
+                                assertThat(sa.timing()).as(row).isEqualTo(sb.timing());
+                                assertThat(sa.cause()).as(row).isEqualTo(sb.cause());
+                            }
+                            pairs++;
+                        }
+                    }
+                }
+            }
+        }
+        assertThat(pairs).as("빈 대조로 통과하지 않음").isGreaterThan(100);
+    }
+
+    @Test
+    void aStateThatIsNotWaitingForThatPointGroupsNothing() {
+        assertThat(table.sameStepGroups(at(Phase.SCENE_WRAP, Sub.FRIEND_REACTION), JudgmentPoint.J5, AS_IS)).isEmpty();
+        assertThat(table.sameStepGroups(at(Phase.OPPORTUNITY, Sub.REEXPLAIN), JudgmentPoint.J2, AS_IS)).as("다시 설명 재생 중").isEmpty();
+        assertThat(table.sameStepGroups(at(Phase.OPPORTUNITY, Sub.NONE), JudgmentPoint.J5, AS_IS)).as("지점이 단계와 다르다").isEmpty();
+        assertThat(FlowTransitions.judgmentCodes(JudgmentPoint.J1)).isEmpty();
+        assertThat(FlowTransitions.judgmentCodes(JudgmentPoint.J6)).isEmpty();
+    }
+
+    @Test
+    void theTableReadsExactlyTheOptionCodesOfBothJudgmentOptionSets() {
+        for (boolean flexible : List.of(false, true)) {
+            var optionSet = kr.mujoong.realtime.content.LiveContentResources.loadFor(flexible).judgment();
+            for (JudgmentPoint point : List.of(JudgmentPoint.J2, JudgmentPoint.J3, JudgmentPoint.J4, JudgmentPoint.J5)) {
+                assertThat(FlowTransitions.judgmentCodes(point)).as(optionSet.version() + " " + point)
+                        .containsExactlyElementsOf(optionSet.points()
+                                .get(kr.mujoong.realtime.content.LiveContentResources.JudgmentPoint.valueOf(point.name())).optionCodes());
+            }
+        }
+    }
+
     // ---- 표 전체 ----
 
     @Test

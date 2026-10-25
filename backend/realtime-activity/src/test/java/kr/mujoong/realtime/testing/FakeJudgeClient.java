@@ -51,6 +51,12 @@ public final class FakeJudgeClient implements JudgeClient {
         last().future().complete(JudgeOutcome.confirmed(first, firstP, second, secondP, Duration.ofMillis(900), "luna-test", "prompt-v1"));
     }
 
+    /** 마지막 요청에 같은 걸음 묶음의 합으로 확정한 결과를 준다(실행부가 하한을 계산하지 않으므로 검증기 결과 모양만 흉내 낸다). */
+    public void confirmBySameStep(String first, double firstP, String second, double secondP) {
+        last().future().complete(JudgeOutcome.confirmedBySameStep(first, firstP, second, secondP, Duration.ofMillis(900), "luna-test",
+                "prompt-v1"));
+    }
+
     /** 마지막 요청에 확률 없는 보류를 준다. */
     public void abstain(kr.mujoong.realtime.judgment.AbstainReason reason) {
         last().future().complete(JudgeOutcome.abstained(reason, Duration.ofMillis(900), "luna-test", "prompt-v1"));
