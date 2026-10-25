@@ -14,8 +14,11 @@ class ScenarioValidationTest {
                 .isEqualTo(ScenarioScriptValidation.Reason.RELATION_MISMATCH);
         assertThat(validator.inspectDetailed(new ScenarioScript(List.of(scene("이제 그만할래.","BASE","PEER"))),rules).reason())
                 .isEqualTo(ScenarioScriptValidation.Reason.CONDITION_MISSING);
+        // 상황 안내는 칸별 판정이다: 장면은 통과하고 그 칸만 사유가 붙는다(발급 때 그 칸을 뺀다)
         assertThat(validator.inspectDetailed(new ScenarioScript(List.of(introduction("잠깐 쉬자"))),rules).reason())
-                .isEqualTo(ScenarioScriptValidation.Reason.TARGET_EXPRESSION_DISCLOSED);
+                .isEqualTo(ScenarioScriptValidation.Reason.NONE);
+        assertThat(validator.optionalSpokenIssues(introduction("잠깐 쉬자"),rules)).containsExactly(java.util.Map.entry(
+                ScenarioScriptValidation.SPOKEN_INTRODUCTION,ScenarioScriptValidation.Reason.TARGET_EXPRESSION_DISCLOSED));
     }
     @Test void detailedDuplicateCheckRunsOnceAndKeepsTheExistingRejection(){
         var r=ScenarioGenerationTest.rules();var calls=new java.util.concurrent.atomic.AtomicInteger();
@@ -53,8 +56,20 @@ class ScenarioValidationTest {
         assertThat(s.withPartnerRole("상대 역할").spokenIntroduction()).isEqualTo(s.spokenIntroduction());
     }
     @Test void spokenIntroductionCannotLeakTheAnswerPressureIdentityOrInternalConditionTail() {
-        for(String text:List.of("잠깐 쉬자","빨리 말해","합성아이와 함께야","친구와 놀이가 다를 때.","가".repeat(501),"친구랑"+(char)0+" 놀려고 해."))
-            assertThat(inspect(introduction(text))).isEqualTo(ScenarioScriptValidation.Result.INVALID_BASE);
+        // 걸린 상황 안내는 그 칸만 빠지고 장면은 발급된다(realtime이 대체 안내를 읽는다). 칸 규칙은 main 그대로다
+        var expected=new java.util.LinkedHashMap<String,ScenarioScriptValidation.Reason>();
+        expected.put("잠깐 쉬자",ScenarioScriptValidation.Reason.TARGET_EXPRESSION_DISCLOSED);
+        expected.put("빨리 말해",ScenarioScriptValidation.Reason.PRESSURE_OR_ANSWER);
+        expected.put("합성아이와 함께야",ScenarioScriptValidation.Reason.PRIVATE_OR_FORBIDDEN_CONTENT);
+        expected.put("친구와 놀이가 다를 때.",ScenarioScriptValidation.Reason.SPOKEN_FORMAT);
+        expected.put("가".repeat(501),ScenarioScriptValidation.Reason.SPOKEN_FORMAT);
+        expected.put("친구랑"+(char)0+" 놀려고 해.",ScenarioScriptValidation.Reason.SPOKEN_FORMAT);
+        expected.put(" ",ScenarioScriptValidation.Reason.SPOKEN_FORMAT);
+        expected.forEach((text,reason)->{
+            assertThat(inspect(introduction(text))).isEqualTo(ScenarioScriptValidation.Result.VALID);
+            assertThat(validator.optionalSpokenIssues(introduction(text),ScenarioGenerationTest.rules()))
+                    .containsExactly(java.util.Map.entry(ScenarioScriptValidation.SPOKEN_INTRODUCTION,reason));
+        });
     }
     @Test void missingBaseAndMultipleBaseFail(){assertThat(inspect()).isEqualTo(ScenarioScriptValidation.Result.INVALID_BASE);assertThat(inspect(ScenarioGenerationTest.base(),ScenarioGenerationTest.base())).isEqualTo(ScenarioScriptValidation.Result.INVALID_BASE);}
     @Test void firstVariantCannotReplaceBase(){assertThat(inspect(scene("상황","VARIANT","PEER"))).isEqualTo(ScenarioScriptValidation.Result.INVALID_BASE);}

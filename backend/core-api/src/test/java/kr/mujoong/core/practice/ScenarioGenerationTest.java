@@ -82,38 +82,180 @@ class ScenarioGenerationTest {
     @Test void baseOnlyMustReceiveItsOwnApproval(){var base=base();var variant=new ScenarioScript.Scene("variant","VARIANT",base.sceneDescription(),base.opportunitySentence(),base.reexplanation(),null,null,"PEER","운동장","놀이",null,null);when(provider.generate(any())).thenReturn(generated(base,variant));when(provider.review(any())).thenReturn(approve(),approve(),reject("AGE_MISMATCH"));assertThatThrownBy(this::run).isInstanceOf(kr.mujoong.core.common.error.CoreApiException.class);verify(provider,times(3)).review(any());}
     @Test void ageAndSameHistoryReachEveryReviewAndCorrection(){when(provider.review(any())).thenReturn(reject("AGE_MISMATCH"),approve());run();var calls=ArgumentCaptor.forClass(ScenarioScriptProvider.Call.class);verify(provider,times(2)).review(calls.capture());assertThat(calls.getAllValues()).allSatisfy(c->assertThat(c.input()).containsEntry("age",8).containsEntry("history",List.of()));}
 
-    // ---- 연습 대화 C안(docs/practice-direct-ask.md 4.1 · 4.4): 판 기록과 새 칸 다섯 개가 생성 → 검토 → 검사 → 저장 모양까지 흐른다 ----
+    // ---- 연습 대화 C안(docs/practice-direct-ask.md 4.1 · 4.4): 판 기록, 검토 입력, 칸별 빼기 ----
+
+    /** C안 장면 다섯 칸 이름(계약 이름). */
+    static final List<String> DIRECT_ASK_KEYS = List.of("opportunityRelay", "askPrompt", "reaskPrompt", "helpSpeech", "friendReaction");
 
     @Test
-    void anApprovedScriptIsRecordedAsScriptV2WithGenerationV3AndReviewV2() {
+    void anApprovedScriptIsRecordedAsScriptV2WithGenerationV3AndTheMainReviewV1() {
         var result = run();
 
         assertThat(result.details().scriptVersion()).isEqualTo("scenario-script.v2");
         assertThat(result.details().generation().promptVersion()).isEqualTo("scenario-generation.v3");
-        assertThat(result.details().review().promptVersion()).isEqualTo("scenario-review.v2");
+        assertThat(result.details().review().promptVersion()).isEqualTo("scenario-review.v1");
         assertThat(result.legacy().promptVersion()).as("core_scenario.prompt_version").isEqualTo("scenario-generation.v3");
         assertThat(List.of(ScenarioScriptProvider.SCRIPT_VERSION, ScenarioScriptProvider.GENERATION_PROMPT_VERSION,
                 ScenarioScriptProvider.REVIEW_PROMPT_VERSION))
-                .containsExactly("scenario-script.v2", "scenario-generation.v3", "scenario-review.v2");
+                .containsExactly("scenario-script.v2", "scenario-generation.v3", "scenario-review.v1");
     }
 
     @Test
-    void theFiveDirectAskFieldsReachTheReviewAndTheStoredSceneWithTheServerRole() {
-        var direct = ScenarioDirectAskValidationTest.direct();
+    void theReviewSeesTheSceneWithoutTheFiveDirectAskFieldsWhileTheStoredSceneKeepsThem() {
+        var direct = ScenarioDirectAskValidationTest.direct().withSpokenIntroduction("친구랑 블록 놀이를 하는 이야기야.");
         when(provider.generate(any())).thenReturn(generated(direct));
 
         var stored = run().details().scenes().getFirst();
 
         var reviewed = ArgumentCaptor.forClass(ScenarioScriptProvider.Call.class);
         verify(provider).review(reviewed.capture());
-        var script = (ScenarioScript) reviewed.getValue().input().get("script");
-        assertThat(script.scenes().getFirst().friendReaction()).as("검토도 새 칸을 본다").isEqualTo(direct.friendReaction());
+        var seen = ((ScenarioScript) reviewed.getValue().input().get("script")).scenes().getFirst();
+        assertThat(java.util.Arrays.asList(seen.opportunityRelay(), seen.askPrompt(), seen.reaskPrompt(), seen.helpSpeech(),
+                seen.friendReaction())).as("검토(main review.v1)는 C안 칸을 보지 않는다").containsOnlyNulls();
+        assertThat(seen.spokenIntroduction()).as("상황 안내는 main도 검토한다").isEqualTo(direct.spokenIntroduction());
+        assertThat(List.of(seen.sceneDescription(), seen.opportunitySentence(), seen.reexplanation()))
+                .containsExactly(direct.sceneDescription(), direct.opportunitySentence(), direct.reexplanation());
         assertThat(stored.opportunityRelay()).isEqualTo(direct.opportunityRelay());
         assertThat(stored.askPrompt()).isEqualTo(direct.askPrompt());
         assertThat(stored.reaskPrompt()).isEqualTo(direct.reaskPrompt());
         assertThat(stored.helpSpeech()).isEqualTo(direct.helpSpeech());
         assertThat(stored.friendReaction()).isEqualTo(direct.friendReaction());
         assertThat(stored.partnerRole()).isEqualTo(ScenarioContentPolicy.PARTNER_ROLE);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void theReviewInputLeavesTheFiveKeysOutOfTheJsonInsteadOfSendingNulls() {
+        when(provider.generate(any())).thenReturn(generated(ScenarioDirectAskValidationTest.direct()
+                .withSpokenIntroduction("친구랑 블록 놀이를 하는 이야기야.")));
+        run();
+        var reviewed = ArgumentCaptor.forClass(ScenarioScriptProvider.Call.class);
+        verify(provider).review(reviewed.capture());
+        var call = reviewed.getValue();
+
+        String json = kr.mujoong.contract.json.JsonCodec.shared().write(call.input());
+        assertThat(json).contains("\"spokenIntroduction\"", "\"sceneDescription\"");
+        for (String key : DIRECT_ASK_KEYS) assertThat(json).as(key).doesNotContain("\"" + key + "\"");
+        // 공급자로 가는 모양(호출부의 입력 정리 결과)도 같다
+        var sent = new kr.mujoong.core.luna.LunaInputSanitizer(kr.mujoong.contract.json.JsonCodec.shared())
+                .sanitize(call.input(), call.aliases(), kr.mujoong.core.luna.LunaPurpose.SCENARIO_REVIEW).payload();
+        var scene = ((List<Map<String, Object>>) ((Map<String, Object>) sent.get("script")).get("scenes")).getFirst();
+        assertThat(scene).containsKey("spokenIntroduction").doesNotContainKeys(DIRECT_ASK_KEYS.toArray(String[]::new));
+    }
+
+    @Test
+    void aDirectAskFieldProblemIsIssuedOnTheFirstAttemptWithOnlyThatFieldRemoved() {
+        var codes = new java.util.ArrayList<String>();
+        generator.diagnostics(codes::add);
+        var bad = ScenarioDirectAskValidationTest.with("reaction", "잘했어! 친구도 고마워할 거야.");
+        when(provider.generate(any())).thenReturn(generated(bad));
+
+        var result = run();
+
+        assertThat(result.details().generation().calls()).as("생성 1 + 검토 1").isEqualTo(2);
+        verify(provider).generate(any());
+        verify(provider).review(any());
+        assertThat(codes).containsExactly("ScenarioField_friendReaction_SPOKEN_PUNCTUATION");
+        var stored = result.details().scenes().getFirst();
+        assertThat(stored.friendReaction()).as("걸린 칸만 뺀다(realtime이 대체 문장을 읽는다)").isNull();
+        assertThat(List.of(stored.opportunityRelay(), stored.askPrompt(), stored.reaskPrompt(), stored.helpSpeech()))
+                .containsExactly(bad.opportunityRelay(), bad.askPrompt(), bad.reaskPrompt(), bad.helpSpeech());
+        assertThat(kr.mujoong.contract.json.JsonCodec.shared().write(stored)).as("뺀 칸은 저장 JSON에 키가 없다")
+                .doesNotContain("friendReaction").contains("opportunityRelay");
+    }
+
+    @Test
+    void everyKindOfFieldProblemRemovesOnlyThatFieldWithAFixedDiagnostic() {
+        var codes = new java.util.ArrayList<String>();
+        generator.diagnostics(codes::add);
+        var bad = ScenarioDirectAskValidationTest.direct()
+                .withDirectAsk("친구가 처음 들어서 궁금해한대.", "너라면 선생님께 뭐라고 말씀드릴래?",
+                        "친구가 그만하고 싶어 하는 것 같지? 어떤 말을 해 줄까?", "잠깐 쉬자고 말해 봐.", ScenarioDirectAskValidationTest.REACTION)
+                .withSpokenIntroduction("친구랑 블록 놀이를 하고 있다.");
+        when(provider.generate(any())).thenReturn(generated(bad));
+
+        var stored = run().details().scenes().getFirst();
+
+        assertThat(codes).containsExactly("ScenarioField_spokenIntroduction_SPOKEN_FORMAT",
+                "ScenarioField_opportunityRelay_PARTNER_INTERPRETED", "ScenarioField_askPrompt_ASK_PROMPT_RELATION",
+                "ScenarioField_reaskPrompt_PARTNER_INTERPRETED", "ScenarioField_helpSpeech_HELP_TAIL_MISSING");
+        assertThat(java.util.Arrays.asList(stored.spokenIntroduction(), stored.opportunityRelay(), stored.askPrompt(),
+                stored.reaskPrompt(), stored.helpSpeech())).containsOnlyNulls();
+        assertThat(stored.friendReaction()).isEqualTo(ScenarioDirectAskValidationTest.REACTION);
+        assertThat(codes).as("진단은 고정 코드뿐이다(대본 글이 없다)").allMatch(code -> code.matches("[A-Za-z_]+"));
+        verify(provider).generate(any());
+    }
+
+    @Test
+    void aLowFidelityRelayOrALeakedTargetIsRemovedWithoutAskingForACorrection() {
+        var codes = new java.util.ArrayList<String>();
+        generator.diagnostics(codes::add);
+        var bad = ScenarioDirectAskValidationTest.with("relay", "그런데 친구가 다른 놀이가 하고 싶대.")
+                .withDirectAsk("그런데 친구가 다른 놀이가 하고 싶대.", "너라면 잠깐 쉬자고 말할래?", ScenarioDirectAskValidationTest.REASK,
+                        ScenarioDirectAskValidationTest.HELP, ScenarioDirectAskValidationTest.REACTION);
+        when(provider.generate(any())).thenReturn(generated(bad));
+
+        var stored = run().details().scenes().getFirst();
+
+        assertThat(codes).containsExactly("ScenarioField_opportunityRelay_RELAY_LOW_FIDELITY",
+                "ScenarioField_askPrompt_TARGET_EXPRESSION_DISCLOSED");
+        assertThat(stored.opportunityRelay()).isNull();
+        assertThat(stored.askPrompt()).isNull();
+        var calls = ArgumentCaptor.forClass(ScenarioScriptProvider.Call.class);
+        verify(provider).generate(calls.capture());
+        assertThat(calls.getValue().input()).doesNotContainKey("correctionReasons");
+    }
+
+    @Test
+    void aRequiredFieldProblemStillFailsTheSceneAndIsCorrectedAsBefore() {
+        var codes = new java.util.ArrayList<String>();
+        generator.diagnostics(codes::add);
+        var direct = ScenarioDirectAskValidationTest.direct();
+        var bad = direct.withDescription(direct.sceneDescription() + " 잠깐 쉬자.").withDirectAsk(direct.opportunityRelay(),
+                direct.askPrompt(), direct.reaskPrompt(), direct.helpSpeech(), "잘했어.");
+        when(provider.generate(any())).thenReturn(generated(bad), generated(direct));
+
+        var result = run();
+
+        assertThat(codes).as("실패한 시도의 C안 칸은 진단하지 않는다(발급할 때만)")
+                .containsExactly("ScenarioRule_TARGET_EXPRESSION_DISCLOSED", "ScenarioValidation_INVALID_BASE");
+        var calls = ArgumentCaptor.forClass(ScenarioScriptProvider.Call.class);
+        verify(provider, times(2)).generate(calls.capture());
+        assertThat(calls.getAllValues().getLast().input()).containsEntry("correctionReasons", List.of("INVALID_BASE"));
+        assertThat(((ScenarioScript) calls.getAllValues().getLast().input().get("scriptToRepair")).scenes().getFirst()
+                .friendReaction()).as("수정 요청에는 C안 칸이 그대로 실린다").isEqualTo("잘했어.");
+        assertThat(result.details().scenes().getFirst().friendReaction()).isEqualTo(direct.friendReaction());
+        assertThat(result.details().generation().calls()).isEqualTo(4);
+    }
+
+    @Test
+    void aVariantSceneLosesOnlyItsOwnBadFieldsAndTheBaseKeepsAll() {
+        var codes = new java.util.ArrayList<String>();
+        generator.diagnostics(codes::add);
+        var base = ScenarioDirectAskValidationTest.direct();
+        var variant = new ScenarioScript.Scene("variant", "VARIANT", base.sceneDescription(), base.opportunitySentence(),
+                base.reexplanation(), base.focusPoints(), base.expressionExamples(), "PEER", "운동장", "놀이", null, null)
+                .withDirectAsk("친구가 처음 들어서 궁금해한대.", ScenarioDirectAskValidationTest.ASK, ScenarioDirectAskValidationTest.REASK,
+                        ScenarioDirectAskValidationTest.HELP, "잘했어.");
+        when(provider.generate(any())).thenReturn(generated(base, variant));
+        var r = rules();
+        var accepting = new ScenarioScriptValidation.Rules(r.relation(), r.opportunity(), r.targetExpression(), r.originalNames(), null,
+                x -> false, (a, b) -> true);
+
+        var result = generator.generate(new ScenarioScriptGenerator.Input(Map.of("age", 8, "history", List.of()), Map.of("합성아이", "아이"),
+                accepting, false, "{}"), new ScenarioDeadline(clock, clock.now().plusSeconds(15)));
+
+        assertThat(result.details().scenes()).hasSize(2);
+        var storedBase = result.details().scenes().getFirst();
+        var storedVariant = result.details().scenes().getLast();
+        assertThat(List.of(storedBase.opportunityRelay(), storedBase.friendReaction())).containsExactly(base.opportunityRelay(),
+                base.friendReaction());
+        assertThat(storedVariant.opportunityRelay()).isNull();
+        assertThat(storedVariant.friendReaction()).isNull();
+        assertThat(storedVariant.askPrompt()).isEqualTo(ScenarioDirectAskValidationTest.ASK);
+        assertThat(codes).containsExactly("ScenarioField_opportunityRelay_PARTNER_INTERPRETED",
+                "ScenarioField_friendReaction_REACTION_PRAISE");
+        assertThat(result.details().generation().calls()).isEqualTo(2);
     }
 
     @Test
@@ -129,20 +271,4 @@ class ScenarioGenerationTest {
         assertThat(stored.helpSpeech()).isEqualTo(direct.helpSpeech());
     }
 
-    @Test
-    void aDirectAskRuleFailureIsDiagnosedAndCorrectedLikeOtherServerChecks() {
-        var codes = new java.util.ArrayList<String>();
-        generator.diagnostics(codes::add);
-        var bad = ScenarioDirectAskValidationTest.with("reaction", "잘했어! 친구도 고마워할 거야.");
-        var good = ScenarioDirectAskValidationTest.direct();
-        when(provider.generate(any())).thenReturn(generated(bad), generated(good));
-
-        var result = run();
-
-        assertThat(codes).containsExactly("ScenarioRule_SPOKEN_PUNCTUATION", "ScenarioValidation_INVALID_BASE");
-        var calls = ArgumentCaptor.forClass(ScenarioScriptProvider.Call.class);
-        verify(provider, times(2)).generate(calls.capture());
-        assertThat(calls.getAllValues().getLast().input()).containsEntry("correctionReasons", List.of("INVALID_BASE"));
-        assertThat(result.details().scenes().getFirst().friendReaction()).isEqualTo(good.friendReaction());
-    }
 }

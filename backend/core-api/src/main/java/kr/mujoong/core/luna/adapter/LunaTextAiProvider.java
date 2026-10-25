@@ -44,10 +44,10 @@ public final class LunaTextAiProvider implements TextAiProvider,kr.mujoong.core.
      */
     public static final String SCRIPT_INSTRUCTIONS = "prompts/scenario/generation.v3.txt";
     /**
-     * U10 별도 검토 지시 실행 자원(판 {@value kr.mujoong.core.textai.ScenarioScriptProvider#REVIEW_PROMPT_VERSION}). 옛 판 파일(v1)은 이력으로
-     * 남는다.
+     * U10 별도 검토 지시 실행 자원(판 {@value kr.mujoong.core.textai.ScenarioScriptProvider#REVIEW_PROMPT_VERSION}). C안도 main 검토 지시를 그대로
+     * 쓰고, 생성 흐름이 C안 칸을 뺀 장면만 보낸다(docs/practice-direct-ask.md 4.4).
      */
-    public static final String REVIEW_INSTRUCTIONS = "prompts/scenario/review.v2.txt";
+    public static final String REVIEW_INSTRUCTIONS = "prompts/scenario/review.v1.txt";
 
     private final CoreLunaClient client;
     private final MujoongClock clock;

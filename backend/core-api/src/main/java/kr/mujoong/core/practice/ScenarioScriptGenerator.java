@@ -170,10 +170,17 @@ public final class ScenarioScriptGenerator {
         return new ScenarioScriptProvider.Call(payload,input.aliases(),deadline.callDeadline(timing.requestTimeout()));
     }
     private ScenarioScriptProvider.Reviewed review(ScenarioScript script,Input input,Budget budget,ScenarioDeadline deadline){
-        var payload=new LinkedHashMap<>(input.payload());payload.put("script",script);
+        var payload=new LinkedHashMap<>(input.payload());payload.put("script",forReview(script));
         var reviewed=invoke(()->provider.review(call(payload,input,deadline)),budget,deadline);
         if(reviewed==null||reviewed.review()==null||!metadata(reviewed.model()))throw content();
         return reviewed;
+    }
+    /**
+     * 별도 검토(main 검토 지시 review.v1)에 보내는 대본: 장면마다 C안 칸 다섯 개를 뺀 사본이다. 상황 안내(spokenIntroduction)는 main도 검토하므로
+     * 남긴다. 뺀 칸은 null이라 JSON에 쓰지 않는다(JsonCodec은 null 칸을 쓰지 않는다). C안 칸은 서버가 칸마다 검사한다(docs/practice-direct-ask.md 4.4).
+     */
+    static ScenarioScript forReview(ScenarioScript script){
+        return new ScenarioScript(script.scenes().stream().map(scene->scene.withDirectAsk(null,null,null,null,null)).toList());
     }
     private <T>T invoke(Supplier<T> operation,Budget budget,ScenarioDeadline deadline){
         for(;;){
@@ -194,12 +201,15 @@ public final class ScenarioScriptGenerator {
             throw new ScenarioScriptProvider.Failure(ScenarioScriptProvider.Failure.Kind.TRANSIENT,Optional.empty());
         }
     }
-    /** 승인된 대본을 저장 모양으로 바꾼다. 판은 공급자가 보낸 판과 같은 상수다(C안 대본 v2 · 생성 v3 · 검토 v2, docs/practice-direct-ask.md 4.1). */
+    /**
+     * 승인된 대본을 저장 모양으로 바꾼다. 판은 공급자가 보낸 판과 같은 상수다(C안 대본 v2 · 생성 v3 · 검토 v1, docs/practice-direct-ask.md 4.1).
+     * 들리는 선택 칸은 여기서 칸마다 판정해 걸린 칸만 뺀다({@link #issuable}). 루프 안의 비교(baseToPreserve)는 원래 대본으로 하므로 칸 빼기는 발급 직전에만 한다.
+     */
     private Result approved(ScenarioScript script,String model,String reviewModel,Input input,Budget budget,ScenarioDeadline deadline){
         deadline.check();var base=script.scenes().getFirst();
         var legacy = new GeneratedScenario(base.sceneDescription(), base.opportunitySentence(), input.rules().relation(),
                 input.rules().opportunity(), model, ScenarioScriptProvider.GENERATION_PROMPT_VERSION);
-        var scenes=script.scenes().stream().map(s->s.withPartnerRole(ScenarioContentPolicy.PARTNER_ROLE)).toList();
+        var scenes=script.scenes().stream().map(s->issuable(s,input.rules())).map(s->s.withPartnerRole(ScenarioContentPolicy.PARTNER_ROLE)).toList();
         String version=input.graphContextUsed()&&input.rules().variants() instanceof ScenarioGraphContext.Session graph?graph.graphVersion():null;
         var review = new Scenario.Review("APPROVE", reviewModel, ScenarioScriptProvider.REVIEW_PROMPT_VERSION);
         var generation = new Scenario.Generation(model, ScenarioScriptProvider.GENERATION_PROMPT_VERSION, input.graphContextUsed(),
@@ -207,6 +217,17 @@ public final class ScenarioScriptGenerator {
         return new Result(legacy, new ScenarioRepository.Details(ScenarioScriptProvider.SCRIPT_VERSION, scenes, review, generation,
                 input.goalContextJson()));
     }
+    /**
+     * 발급할 장면: 들리는 선택 칸(상황 안내 · C안 칸 다섯 개) 가운데 서버 검사에 걸린 칸만 null로 뺀다. 장면은 버리지 않고, 뺀 칸 자리는 realtime이 대체
+     * 문장으로 읽는다. 뺀 칸마다 진단 코드 {@code ScenarioField_<칸>_<사유>}만 남긴다(대본 내용은 남기지 않는다, R-F14). 수정 요청은 만들지 않는다.
+     */
+    private ScenarioScript.Scene issuable(ScenarioScript.Scene scene,ScenarioScriptValidation.Rules rules){
+        var issues=validation.optionalSpokenIssues(scene,rules);
+        issues.forEach((field,reason)->diagnose(FIELD_DIAGNOSTIC+field+"_"+reason.name()));
+        return ScenarioScriptValidation.withoutFields(scene,issues.keySet());
+    }
+    /** 뺀 칸의 진단 코드 머리. */
+    static final String FIELD_DIAGNOSTIC="ScenarioField_";
     private static boolean variantReason(String code){return java.util.Set.of("INVARIANT_MISMATCH","SKILL_MISMATCH","TRANSFER_MISMATCH","UNCHANGED_VARIANT").contains(code);}
     private static boolean metadata(String value){return value!=null&&value.matches("[A-Za-z0-9][A-Za-z0-9._:-]{0,79}");}
     private static ScenarioScriptProvider.Failure content(){return new ScenarioScriptProvider.Failure(ScenarioScriptProvider.Failure.Kind.CONTENT,Optional.empty());}

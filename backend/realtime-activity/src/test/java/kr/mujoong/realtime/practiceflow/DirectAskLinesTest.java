@@ -13,7 +13,8 @@ import org.junit.jupiter.api.Test;
 
 /**
  * C안 장면 안 말 시험 (docs/practice-direct-ask.md 3.2 · 5장 · 7.4). 고정 문장은 시작 패키지 approvedSpeech에서 오고 없으면 같은 문장의 상수로
- * 대신하며, 옛 대본(v1)은 7.4 대체 문장을 쓰고, 이어 읽는 문장은 문장부호 규칙(마침표 · 쉼표 · 물음표)을 지키는지 본다. 문장은 시험용 가짜 값이다.
+ * 대신하며, 칸이 없으면(옛 대본 v1 · core가 뺀 칸) 7.4 대체 문장을 상대 호칭별(계약 10.17 표)로 쓰고, 이어 읽는 문장은 문장부호 규칙(마침표 ·
+ * 쉼표 · 물음표)을 지키는지 본다. 문장은 시험용 가짜 값이다.
  */
 @Tag("practice-flow")
 class DirectAskLinesTest {
@@ -67,6 +68,91 @@ class DirectAskLinesTest {
         assertThat(section).contains("| `helpSpeech` | `focusPoints[0]` + \"" + DirectAskLines.EXAMPLE_LEAD + "\" + `expressionExamples[0]` + \""
                 + DirectAskLines.EXAMPLE_TAIL + " " + DirectAskLines.HELP_TAIL + "\" |");
         assertThat(section).contains("| `friendReaction` | " + DirectAskLines.FRIEND_REACTION_FALLBACK + " |");
+        // 상대 호칭별 대체 표: 전하기 앞머리 | 묻기 | 반응(친구 행의 묻기는 고정 ASK_DEFAULT)
+        for (DirectAskLines.Partner partner : DirectAskLines.Partner.values()) {
+            String ask = partner == DirectAskLines.Partner.FRIEND ? "고정 `ASK_DEFAULT`" : partner.ask();
+            assertThat(section).as(partner.name()).contains("| " + partner.relayLead() + " + `opportunitySentence` | " + ask + " | "
+                    + partner.reaction() + " |");
+        }
+    }
+
+    /** relation만 다른 옛 대본 장면(새 칸 없음). */
+    private static Scene v1(String relation) {
+        return new Scene("base-1", SceneKind.BASE, "상자가 두 개 있어.", "그거 줘.", "상자가 두 개 있어.", "역할", List.of(), List.of(),
+                relation, "교실", "물건 부탁");
+    }
+
+    @Test
+    void theFallbackTitleFollowsTheRelationTable() {
+        record Row(String relation, String relay, String ask, String reaction) {
+        }
+        String friendAsk = "너라면 친구한테 뭐라고 말할래?";
+        for (Row row : List.of(
+                new Row("TEACHER", "선생님이 이렇게 말씀하셨어. 그거 줘.", "너라면 선생님께 뭐라고 말씀드릴래?", "그렇게 말씀드리면 선생님도 네 마음을 아실 거야."),
+                new Row("CLUB_SENIOR", "선배가 이렇게 말했어. 그거 줘.", "너라면 선배한테 뭐라고 말할래?", "그렇게 말해 주면 선배도 네 마음을 알 거야."),
+                new Row("CLUB_JUNIOR", "동생이 이렇게 말했어. 그거 줘.", "너라면 동생한테 뭐라고 말할래?", "그렇게 말해 주면 동생도 네 마음을 알 거야."),
+                new Row("FAMILY", "그때 이렇게 말했어. 그거 줘.", "너라면 뭐라고 말할래?", "그렇게 말해 주면 네 마음이 잘 전해질 거야."))) {
+            Scene scene = v1(row.relation());
+            assertThat(EMPTY.relay(scene)).as(row.relation()).isEqualTo(row.relay());
+            assertThat(PACKAGE.ask(scene)).as(row.relation() + " 묻기는 시드 ASK_DEFAULT가 아니라 호칭별 상수").isEqualTo(row.ask());
+            assertThat(EMPTY.friendReaction(scene)).as(row.relation()).isEqualTo(row.reaction());
+            assertThat(EMPTY.opportunity(scene)).isEqualTo(row.relay() + " " + row.ask());
+        }
+        for (String friend : List.of("FRIEND", "FRIEND_CLOSE", "FRIEND_CASUAL", "FRIEND_PRIVATE", "CLASSMATE", "PEER", "PEER_RETURN",
+                "CLUB_PEER", "TEAMMATE", "친구", "모둠 친구", "동아리 친구", "UNKNOWN_CODE", "")) {
+            Scene scene = v1(friend);
+            assertThat(EMPTY.relay(scene)).as(friend + "는 지금 친구 문장 그대로").isEqualTo("친구가 이렇게 말했어. 그거 줘.");
+            assertThat(EMPTY.ask(scene)).as(friend).isEqualTo(friendAsk);
+            assertThat(EMPTY.friendReaction(scene)).as(friend).isEqualTo(DirectAskLines.FRIEND_REACTION_FALLBACK);
+        }
+        assertThat(new DirectAskLines(Map.of("ASK_DEFAULT", "너라면 친구한테 어떻게 말할래?")).ask(v1("PEER")))
+                .as("친구 장면의 묻기만 시드 승인 문장을 따른다").isEqualTo("너라면 친구한테 어떻게 말할래?");
+    }
+
+    @Test
+    void aRelationNameWithTheSameTitleWordUsesThatTitle() {
+        assertThat(DirectAskLines.Partner.of("담임 선생님")).isEqualTo(DirectAskLines.Partner.TEACHER);
+        assertThat(DirectAskLines.Partner.of("보조 교사")).isEqualTo(DirectAskLines.Partner.TEACHER);
+        assertThat(DirectAskLines.Partner.of("동아리 선배")).isEqualTo(DirectAskLines.Partner.SENIOR);
+        assertThat(DirectAskLines.Partner.of("동아리 후배")).isEqualTo(DirectAskLines.Partner.JUNIOR);
+        assertThat(DirectAskLines.Partner.of("옆집 동생")).isEqualTo(DirectAskLines.Partner.JUNIOR);
+        assertThat(DirectAskLines.Partner.of("가족")).isEqualTo(DirectAskLines.Partner.NEUTRAL);
+        assertThat(DirectAskLines.Partner.of(" TEACHER ")).as("앞뒤 공백").isEqualTo(DirectAskLines.Partner.TEACHER);
+        assertThat(DirectAskLines.Partner.of(null)).isEqualTo(DirectAskLines.Partner.FRIEND);
+    }
+
+    /** core가 그래프 코드로 바꾸지 않은 목표의 관계 이름(5회차 S10 '동아리 형' 같은 값)도 표의 호칭을 고른다. */
+    @Test
+    void aClubElderNameIsASeniorAndOtherElderOrFamilyNamesGetNoTitle() {
+        for (String senior : List.of("동아리 형", "동아리 누나", "동아리 언니", "동아리오빠")) {
+            assertThat(DirectAskLines.Partner.of(senior)).as(senior).isEqualTo(DirectAskLines.Partner.SENIOR);
+        }
+        assertThat(DirectAskLines.Partner.of("동아리 동생")).isEqualTo(DirectAskLines.Partner.JUNIOR);
+        for (String neutral : List.of("형", "옆집 누나", "같은 반 언니", "사촌 오빠", "엄마", "아빠", "부모님", "할머니", "할아버지")) {
+            assertThat(DirectAskLines.Partner.of(neutral)).as(neutral + "는 가족일 수도 있어 호칭을 붙이지 않는다")
+                    .isEqualTo(DirectAskLines.Partner.NEUTRAL);
+        }
+        for (String friend : List.of("동아리 친구", "모둠 친구", "같은 반 친구", "친한 친구")) {
+            assertThat(DirectAskLines.Partner.of(friend)).as(friend).isEqualTo(DirectAskLines.Partner.FRIEND);
+        }
+
+        Scene clubElder = v1("동아리 형");
+        assertThat(EMPTY.opportunity(clubElder)).isEqualTo("선배가 이렇게 말했어. 그거 줘. 너라면 선배한테 뭐라고 말할래?");
+        assertThat(EMPTY.friendReaction(clubElder)).isEqualTo("그렇게 말해 주면 선배도 네 마음을 알 거야.");
+        Scene mother = v1("엄마");
+        assertThat(EMPTY.opportunity(mother)).isEqualTo("그때 이렇게 말했어. 그거 줘. 너라면 뭐라고 말할래?");
+        assertThat(EMPTY.friendReaction(mother)).isEqualTo("그렇게 말해 주면 네 마음이 잘 전해질 거야.");
+    }
+
+    @Test
+    void scriptFieldsWinOverTheTitleFallback() {
+        Scene teacher = new Scene("base-1", SceneKind.BASE, "선생님과 그림을 그린다.", "오늘은 여기까지 하자.", "선생님이 그림을 그만하재.",
+                "역할", List.of(), List.of(), "TEACHER", "교실", "그림", null, null, "그런데 선생님이 오늘은 여기까지 하자고 하셨어.",
+                "너라면 선생님께 뭐라고 말씀드릴래?", null, null, "그렇게 말씀드리면 선생님도 기뻐하실 거야.");
+
+        assertThat(PACKAGE.relay(teacher)).isEqualTo("그런데 선생님이 오늘은 여기까지 하자고 하셨어.");
+        assertThat(PACKAGE.friendReaction(teacher)).isEqualTo("그렇게 말씀드리면 선생님도 기뻐하실 거야.");
+        assertThat(PACKAGE.reask(teacher)).as("되묻기 대체는 호칭이 없다").isEqualTo(DirectAskLines.REASK_FALLBACK);
     }
 
     @Test

@@ -101,6 +101,47 @@ class DirectAskConversationTest {
                 .satisfies(help -> assertThat(help.exampleGiven()).isFalse());
     }
 
+    // ---- core가 서버 검사에 걸린 칸만 뺀 v2 대본 ----
+
+    /** v2 대본에서 칸 하나를 지운다(core가 발급 때 뺀 칸은 키가 없다). */
+    private static String without(String script, String field) {
+        return script.replaceFirst("\"" + field + "\":\"[^\"]*\",", "");
+    }
+
+    @Test
+    void aV2ScriptMissingOnlyTheRelayAndTheReactionUsesTheFallbacksForThoseFieldsAndTheScriptForTheRest() {
+        String script = without(without(directAskScript(SCENARIO), "opportunityRelay"), "friendReaction");
+        Harness h = with(script, FIXED_SPEECH);
+        h.toIntroduction();
+        assertThat(h.out.lastSlot().text()).isEqualTo(PracticeScriptFixtures.V2_INTRO);
+        h.played();
+        assertThat(h.out.lastSlot().text()).as("전하기만 대체 문장, 묻기는 대본 칸")
+                .isEqualTo("친구가 이렇게 말했어. " + PracticeScriptFixtures.V2_DIRECT_LINE + " " + PracticeScriptFixtures.V2_ASK);
+        h.played();
+        h.child("손 괜찮아?");
+
+        h.result("J2", "FULL");
+
+        assertThat(h.out.lastSlot().text()).isEqualTo(DirectAskLines.FRIEND_REACTION_FALLBACK);
+        assertThat(h.failures).isEmpty();
+    }
+
+    @Test
+    void aTeacherSceneMissingTheRelayAskAndReactionSpeaksTheHonorificFallbacks() {
+        String script = without(without(without(directAskScript(SCENARIO), "opportunityRelay"), "askPrompt"), "friendReaction")
+                .replace("\"relation\":\"친구\"", "\"relation\":\"TEACHER\"");
+        Harness h = with(script, FIXED_SPEECH);
+        h.toOpportunity();
+        assertThat(h.out.lastSlot().text()).isEqualTo(
+                "선생님이 이렇게 말씀하셨어. " + PracticeScriptFixtures.V2_DIRECT_LINE + " 너라면 선생님께 뭐라고 말씀드릴래?");
+        h.child("선생님 손 괜찮으세요?");
+
+        h.result("J2", "FULL");
+
+        assertThat(h.out.lastSlot().text()).isEqualTo("그렇게 말씀드리면 선생님도 네 마음을 아실 거야.");
+        assertThat(h.failures).isEmpty();
+    }
+
     // ---- 고정 문장 ----
 
     @Test

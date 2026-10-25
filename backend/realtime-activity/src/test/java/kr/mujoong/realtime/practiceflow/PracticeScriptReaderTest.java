@@ -96,7 +96,7 @@ class PracticeScriptReaderTest {
         assertThat(script.variantScene()).get().extracting(PracticeScript.Scene::askPrompt)
                 .isEqualTo(PracticeScriptFixtures.V2_VARIANT_ASK);
         assertThat(script.generation().promptVersion()).isEqualTo("scenario-generation.v3");
-        assertThat(script.selfReview().promptVersion()).isEqualTo("scenario-review.v2");
+        assertThat(script.selfReview().promptVersion()).as("C안 대본도 main 검토 판이다").isEqualTo("scenario-review.v1");
 
         PracticeScript.Scene old = PracticeScriptReader.read(fullScript(SCENARIO)).baseScene();
         assertThat(java.util.Arrays.asList(old.opportunityRelay(), old.askPrompt(), old.reaskPrompt(), old.helpSpeech(),
@@ -105,6 +105,29 @@ class PracticeScriptReaderTest {
         assertThat(PracticeScript.readable("scenario-script.v2")).isTrue();
         assertThat(PracticeScript.readable("scenario-script.v3")).isFalse();
         assertThat(PracticeScript.readable(null)).isFalse();
+    }
+
+    @Test
+    void aV2ScriptWhoseCoreRemovedSomeFieldsIsReadWithOnlyThoseFieldsMissing() {
+        String script = PracticeScriptFixtures.directAskScriptWithVariant(SCENARIO)
+                .replaceFirst("\"opportunityRelay\":\"[^\"]*\",", "")
+                .replaceFirst("\"spokenIntroduction\":\"[^\"]*\",", "");
+
+        PracticeScript read = PracticeScriptReader.read(script);
+
+        PracticeScript.Scene base = read.baseScene();
+        assertThat(base.opportunityRelay()).as("core가 뺀 칸").isNull();
+        assertThat(base.spokenIntroduction()).isNull();
+        assertThat(base.askPrompt()).isEqualTo(PracticeScriptFixtures.V2_ASK);
+        assertThat(base.reaskPrompt()).isEqualTo(PracticeScriptFixtures.V2_REASK);
+        assertThat(base.helpSpeech()).isEqualTo(PracticeScriptFixtures.V2_HELP);
+        assertThat(base.friendReaction()).isEqualTo(PracticeScriptFixtures.V2_REACTION);
+        assertThat(read.variantScene()).get().as("앞 장면에서만 지웠다(변형 장면 칸은 그대로)")
+                .extracting(PracticeScript.Scene::opportunityRelay).isEqualTo(PracticeScriptFixtures.V2_VARIANT_RELAY);
+        DirectAskLines lines = new DirectAskLines(PracticeScriptFixtures.FIXED_SPEECH);
+        assertThat(lines.relay(base)).as("뺀 칸만 대체 문장").isEqualTo("친구가 이렇게 말했어. " + PracticeScriptFixtures.V2_DIRECT_LINE);
+        assertThat(lines.introduction(base)).isEqualTo(DirectAskLines.INTRODUCTION_FALLBACK);
+        assertThat(lines.ask(base)).isEqualTo(PracticeScriptFixtures.V2_ASK);
     }
 
     @ParameterizedTest

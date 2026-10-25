@@ -14,9 +14,16 @@ RULES = {
     "EMPTY_SCRIPT", "BASE_LAYOUT", "SCENE_KEY", "FIELD_FORMAT", "SPOKEN_FORMAT", "REFLECTION_NOT_ALLOWED",
     "PRIVATE_OR_FORBIDDEN_CONTENT", "TARGET_EXPRESSION_DISCLOSED", "PRESSURE_OR_ANSWER", "GRAPH_BASE_MISMATCH",
     "RELATION_MISMATCH", "CONDITION_MISSING", "PARTNER_LINE_MISSING", "ALREADY_SEEN", "UNCHANGED_SOURCE", "VARIANT_STRUCTURE",
-    # 연습 대화 C안 들리는 칸(docs/practice-direct-ask.md 4.3)
+    # 연습 대화 C안 들리는 칸: 이전 빌드가 장면 사유로 냈다. 지금은 아래 칸별 코드(ScenarioField_*)로 낸다
     "SPOKEN_PUNCTUATION", "ROLE_TALK", "RELAY_COPIES_PARTNER_LINE", "ASK_PROMPT_FORM", "HELP_TAIL_MISSING",
     "REACTION_PRAISE", "REACTION_QUESTION",
+}
+# 들리는 선택 칸의 칸별 판정: 걸린 칸만 빼고 장면은 발급한다(ScenarioField_<칸>_<사유>, docs/practice-direct-ask.md 4.4)
+FIELDS = {"spokenIntroduction", "opportunityRelay", "askPrompt", "reaskPrompt", "helpSpeech", "friendReaction"}
+FIELD_REASONS = {
+    "SPOKEN_FORMAT", "SPOKEN_PUNCTUATION", "ROLE_TALK", "PRIVATE_OR_FORBIDDEN_CONTENT", "TARGET_EXPRESSION_DISCLOSED",
+    "PRESSURE_OR_ANSWER", "RELAY_COPIES_PARTNER_LINE", "RELAY_LOW_FIDELITY", "PARTNER_INTERPRETED", "ASK_PROMPT_FORM",
+    "ASK_PROMPT_RELATION", "HELP_TAIL_MISSING", "REACTION_PRAISE", "REACTION_QUESTION",
 }
 REVIEWS = {
     "REJECT", "UNCERTAIN", "ANSWER_INCLUDED", "EARLY_CUE", "PRESSURE", "AGE_MISMATCH", "GOAL_MISMATCH", "REPETITION",
@@ -25,6 +32,7 @@ REVIEWS = {
 ALLOWED = PROVIDER | {"ScenarioRule_" + x for x in RULES} | {"ScenarioReview_" + x for x in REVIEWS}
 ALLOWED |= {"ScenarioValidation_INVALID_BASE", "ScenarioValidation_INVALID_VARIANT"}
 ALLOWED |= {"ScenarioProvider_" + x for x in ("CONTENT", "TRANSIENT", "PERMANENT")}
+ALLOWED |= {"ScenarioField_" + field + "_" + reason for field in FIELDS for reason in FIELD_REASONS}
 
 
 def main():

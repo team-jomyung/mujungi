@@ -57,6 +57,12 @@ public record ScenarioScript(List<Scene> scenes) {
                     expressionExamples, relation, place, topic, preservation, partnerRole, spokenIntroduction, reflectionPrompt,
                     relay, ask, reask, help, reaction);
         }
+        /** 상황 안내만 바꾼 사본. 나머지 칸은 그대로다. */
+        public Scene withSpokenIntroduction(String introduction) {
+            return new Scene(sceneKey, sceneKind, sceneDescription, opportunitySentence, reexplanation, focusPoints,
+                    expressionExamples, relation, place, topic, preservation, partnerRole, introduction, reflectionPrompt,
+                    opportunityRelay, askPrompt, reaskPrompt, helpSpeech, friendReaction);
+        }
         @Override public String toString() { return "Scene[redacted]"; }
     }
     public record Preservation(String skillRef, String invariantSentence, String preservationRule,

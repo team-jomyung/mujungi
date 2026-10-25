@@ -447,9 +447,9 @@ Luna 호출부(core-api · realtime-activity 각자)는 공급자 시도마다 `
 
 ### 10.11 U10 상황 생성 경로
 
-실제 Luna 구성의 상황 생성은 `CONTRACT_SINGLE_CALL`로 생성 `scenario-generation.v3`(`prompts/scenario/generation.v3.txt`)과 별도 검토 `scenario-review.v2`(`prompts/scenario/review.v2.txt`)를 각각 스키마 검증하고, 두 판으로 낸 대본은 `scriptVersion` `scenario-script.v2`로 저장한다(연습 대화 C안, 10.17). 이전 판 파일(`generation.v2` · `review.v1`)은 이력으로 남고 보내지 않는다(같은 판 이름을 다른 내용으로 바꾸지 않는다) [편차 FT-1024-e]. 안쪽 재시도 없이 바깥 요청이 최초 15초·내용 수정1·기술 재시도1·BASE-only 검토1(최대6호출)을 공유한다. 기존 직접 호출 어댑터 메서드의 json_object 계약과 다른 목적의 호출 예산은 그대로다.
+실제 Luna 구성의 상황 생성은 `CONTRACT_SINGLE_CALL`로 생성 `scenario-generation.v3`(`prompts/scenario/generation.v3.txt`)과 별도 검토 `scenario-review.v1`(`prompts/scenario/review.v1.txt`, main 검토 지시 그대로)를 각각 스키마 검증하고, 대본은 `scriptVersion` `scenario-script.v2`로 저장한다(연습 대화 C안, 10.17). 검토 입력 대본에서는 장면마다 C안 칸 다섯 개를 뺀다(키를 보내지 않는다, 상황 안내 `spokenIntroduction`은 남긴다). 이전 생성 판 파일(`generation.v2`)은 이력으로 남고 보내지 않는다(같은 판 이름을 다른 내용으로 바꾸지 않는다). 출시하지 않은 검토 판 `scenario-review.v2`는 지웠고 계약 `practice-scenario`의 `selfReview.promptVersion`은 `scenario-review.v1`이다 [편차 FT-1024-e]. 안쪽 재시도 없이 바깥 요청이 최초 15초·내용 수정1·기술 재시도1·BASE-only 검토1(최대6호출)을 공유한다. 기존 직접 호출 어댑터 메서드의 json_object 계약과 다른 목적의 호출 예산은 그대로다.
 
-요청 스키마는 계약 스키마(`ai-scenario-output.schema.json`) 사본이라 C안 새 칸 다섯 개(`opportunityRelay` · `askPrompt` · `reaskPrompt` · `helpSpeech` · `friendReaction`)가 따라오고, strict 요청에서는 모두 required라 모델이 반드시 채운다. 응답 검증은 원본 계약으로 하고 원본에서 새 칸은 선택이라 옛 출력도 통과한다. 서버 검사(`ScenarioScriptValidation`)는 새 칸이 있을 때 10.17의 들리는 칸 규칙을 보고, 기존 칸 규칙(BASE 설명의 조건 원문 · 기회 문장, 도입 · 돌아보기 검사, 거절 사유 코드)은 그대로다. 새 칸은 저장(`core_scenario.scenes_json`) · C10 응답 · 시작 패키지 `practice.goals[].firstScenario.scenes[]`에 같은 이름으로 그대로 실린다(null인 칸은 쓰지 않는다).
+요청 스키마는 계약 스키마(`ai-scenario-output.schema.json`) 사본이라 C안 새 칸 다섯 개(`opportunityRelay` · `askPrompt` · `reaskPrompt` · `helpSpeech` · `friendReaction`)가 따라오고, strict 요청에서는 모두 required라 모델이 반드시 채운다. 응답 검증은 원본 계약으로 하고 원본에서 새 칸은 선택이라 옛 출력도 통과한다. 서버 검사(`ScenarioScriptValidation`)는 장면 판정과 칸별 판정으로 나뉜다. 장면 판정은 필수 칸 규칙(BASE 설명의 조건 원문 · 기회 문장, 돌아보기 검사, 거절 사유 코드)을 main 그대로 보고, 들리는 선택 칸(상황 안내와 C안 칸 다섯 개)은 10.17의 칸별 판정이 보며 걸린 칸만 발급 때 뺀다. 새 칸은 저장(`core_scenario.scenes_json`) · C10 응답 · 시작 패키지 `practice.goals[].firstScenario.scenes[]`에 같은 이름으로 그대로 실린다(null인 칸 · 뺀 칸은 쓰지 않는다).
 
 사용자 결정 Q1-A로 최상위 interests의 이름을 정리한 최대10개·각80자 관심사만 SCENARIO_GENERATION/SCENARIO_REVIEW에 허용한다. 중첩 interests·일반 정리 API·다른 목적은 기존 금지를 유지한다. 이름은 소유 프로필에서 얻은 비공개 별칭으로 ‘아이’로 치환하고 연락처·과도한 자유문은 제외한다. 생성·검토 모두 같은 나이·최근 실제 노출3건·지정 원본·고정 목표의 정리 값을 쓴다. 원래 이름·식별자·판정 전용 기준·검토 원문을 공급자 데이터나 로그에 넣지 않는다. 모르는 타인의 이름 탐지 품질은 자동 시험으로 보장하지 않는다.
 
@@ -598,17 +598,44 @@ J1/J6의 고정 질문·선택지는 `judgment-service-v1`, 공통 지시문은 
 
 **대본 칸(`scenario-script.v2`).** 들리는 새 칸 다섯 개다. 모두 반말이고(선생님 · 어른에게 하는 말을 묻는 `askPrompt`는 높임말), 저장(`core_scenario.scenes_json`) · C10 응답 · 시작 패키지 `practice.goals[].firstScenario.scenes[]`에 같은 이름의 문자열로 실린다. 값이 없으면 키를 쓰지 않는다. 계약 스키마(`ai-scenario-output`)에서는 선택 칸이고 strict 생성 요청에서는 required다(10.11). 길이 상한은 스키마 `maxLength`다.
 
-| 칸 | 뜻 | 서버 검사(`ScenarioScriptValidation` 사유 코드) |
+| 칸 | 뜻 | 칸별 서버 검사(걸리면 그 칸만 뺀다, `ScenarioScriptValidation` 사유 코드) |
 |---|---|---|
-| `opportunityRelay` | 상대가 한 말을 무중이 간접 인용으로 전한다. 상대의 낱말과 말투를 거의 그대로 살리고 끝만 "~대 · ~래 · ~라고 했어 · ~냐고 물어봤어"로 바꾼다. 단서는 상대가 한 말 자체에 남기고, 속뜻 · 이유 · 감정 · 의도를 풀어 말하지 않는다(풀면 답을 미리 알려 주고, 다른 뜻으로 바꾸면 단서가 사라진다 — 5회차 대본 생성 실측) | 2문장 · 200자 이하. `opportunitySentence`와 글자가 같으면(정리 뒤 비교) `RELAY_COPIES_PARTNER_LINE`. 목표 표현 누설 `TARGET_EXPRESSION_DISCLOSED` |
-| `askPrompt` | "너라면"으로 시작하고 물음표로 끝나는 묻는 말 한 문장. 상대 호칭은 `relation`에 맞춘다 | 1문장 · 100자 이하. 모양이 다르면 `ASK_PROMPT_FORM`. 목표 표현 누설 |
-| `reaskPrompt` | 일부만 전했을 때 되묻는 질문 하나. 단서를 다시 짚되 답은 주지 않는다 | 2문장 · 200자 이하. 목표 표현 누설 |
+| `opportunityRelay` | 상대가 한 말을 무중이 간접 인용으로 전한다. 상대의 낱말과 말투를 거의 그대로 살리고 끝만 "~대 · ~래 · ~라고 했어 · ~냐고 물어봤어"로 바꾼다. 단서는 상대가 한 말 자체에 남기고, 속뜻 · 이유 · 감정 · 의도를 풀어 말하지 않는다(풀면 답을 미리 알려 주고, 다른 뜻으로 바꾸면 단서가 사라진다 — 5회차 대본 생성 실측) | 2문장 · 200자 이하. 목표 표현 누설 `TARGET_EXPRESSION_DISCLOSED`. `opportunitySentence`와 글자가 같으면(정리 뒤 비교) `RELAY_COPIES_PARTNER_LINE`. 상대 말에 없는 짐작 말투가 있으면 `PARTNER_INTERPRETED`. 충실도가 문턱 미만이면 `RELAY_LOW_FIDELITY`(아래) |
+| `askPrompt` | "너라면"으로 시작하고 물음표로 끝나는 묻는 말 한 문장. 상대 호칭은 `relation`에 맞춘다 | 1문장 · 100자 이하. 목표 표현 누설. 모양이 다르면 `ASK_PROMPT_FORM`. 선생님 장면인데 '선생님'이 없거나, 선생님 장면이 아닌데 '선생님'이 있으면 `ASK_PROMPT_RELATION`(아래) |
+| `reaskPrompt` | 일부만 전했을 때 되묻는 질문 하나. 단서를 다시 짚되 답은 주지 않는다 | 2문장 · 200자 이하. 목표 표현 누설. 상대 말에 없는 짐작 말투가 있으면 `PARTNER_INTERPRETED`(충실도는 보지 않는다) |
 | `helpSpeech` | 요점 한 문장 + 표현 예시 하나(`expressionExamples` 중 하나의 뜻, "예를 들면 … 처럼 말할 수 있어") + 고정 꼬리 "네 말로 해 볼래?" | 3문장 · 300자 이하. 꼬리로 끝나지 않거나 꼬리 앞 문장이 없으면 `HELP_TAIL_MISSING`(공백은 대조하지 않는다). 표현 예시를 담는 칸이라 목표 표현 누설은 보지 않는다 |
-| `friendReaction` | 목표를 이룬 어떤 대답 뒤에도 맞는 상대의 반응을 무중이 전한다. 아이 대답의 구체 내용을 가정하지 않는다 | 2문장 · 200자 이하. 칭찬 · 평가어(잘했 · 멋지 · 정답 · 훌륭 등)가 있으면 `REACTION_PRAISE`, 물음표로 끝나면 `REACTION_QUESTION` |
+| `friendReaction` | 목표를 이룬 어떤 대답 뒤에도 맞는 상대의 반응을 무중이 전한다. 아이 대답의 구체 내용을 가정하지 않는다 | 2문장 · 200자 이하. 칭찬 · 평가어(잘했 · 멋지 · 정답 · 훌륭 등)가 있으면 `REACTION_PRAISE`, 물음표로 끝나면 `REACTION_QUESTION`. 목표를 이룬 뒤에 들리는 칸이라 목표 표현 누설은 보지 않는다 |
 
 - 다섯 칸 공통: 마침표 · 쉼표 · 물음표 밖의 문장부호 · 기호(따옴표 · 느낌표 · 물결 · 말줄임표 · 괄호 등)는 `SPOKEN_PUNCTUATION`, 빈 값 · 길이 · 문장 수 초과 · 제어 문자는 `SPOKEN_FORMAT`, 역할 말("역할" · "코치" · "무중이가 친구야" · "무중이가 ○○ 할게" 같은 말, 공백을 뺀 글에서 찾는다)은 `ROLE_TALK`이다. 기존 금지 표현 · 원래 이름 · 연락처 검사(`PRIVATE_OR_FORBIDDEN_CONTENT`)와 압박 · 답 강요 검사(`PRESSURE_OR_ANSWER`)도 다섯 칸에 건다. 문장부호를 줄이는 까닭은 원문 대조(10.5)가 공백만 빼고 문장부호까지 같아야 `MATCHED`이기 때문이다.
-- 검사는 칸이 있을 때만 하고(옛 대본 v1에는 없다), 기존 칸의 규칙과 사유 코드는 그대로다. 걸리면 기존 보완 흐름(`INVALID_BASE` · `INVALID_VARIANT`, 진단 `ScenarioRule_<사유>`)을 탄다. 생성 · 검토 지시(`generation.v3` · `review.v2`)도 같은 규칙을 지시 · 검토하고, 검토 사유는 기존 코드(`INCOMPLETE_SCENE` · `ANSWER_INCLUDED` · `EARLY_CUE` · `PRESSURE` · `GOAL_MISMATCH` · `AGE_MISMATCH`)를 쓴다 [편차 FT-1024-e].
 - 안 들리는 칸은 뜻이 그대로다: `sceneDescription`(내부 사실) · `opportunitySentence`(상대의 직접 대사, trigger script · 노출 근거, C안에서는 들려주지 않는다) · `focusPoints` · `expressionExamples`(기록 사실과 `helpSpeech` 근거) · `relation` · `place` · `topic` · `preservation` · `partnerRole` · `reflectionPrompt`.
+
+**칸별 판정(들리는 선택 칸).** 상황 안내 `spokenIntroduction`과 위 다섯 칸은 장면 판정과 따로 칸마다 판정한다. 걸린 칸은 발급 직전에 그 칸만 빼고(null, 저장 · C10 응답 · 시작 패키지에 키가 없다) 장면은 그대로 발급하며, realtime이 그 자리에 대체 문장(아래)을 읽는다. 뺀 칸마다 진단 코드 `ScenarioField_<칸>_<사유>`(고정 코드뿐, 대본 글 없음, R-F14)를 남기고 수정 요청(보완)은 만들지 않는다. 생성 루프 안의 BASE 보존 비교 · 수정 요청 대본(`scriptToRepair`)은 칸을 빼기 전의 원래 대본이다. 없는 칸(옛 대본 v1)은 보지 않는다. 필수 칸(설명 · 기회 문장 · 다시 설명 · 요점 · 표현 예시 · 관계 · 장소 · 주제 · 보존 · 돌아보기 질문)의 검사와 결과(`INVALID_BASE` · `INVALID_VARIANT`, 진단 `ScenarioRule_<사유>`, 보완 흐름)는 main 그대로다 [편차 FT-1024-e].
+
+- 사유는 칸마다 처음 걸린 하나다. 순서는 모양(빈 값 · 길이 · 제어 문자 · 문장부호 · 문장 수 · 역할 말) → 내용(금지 표현 · 원래 이름 · 연락처 → 목표 표현 누설 → 압박) → 칸의 뜻(상대 대사 복사 → 짐작 말투 → 충실도, 묻기 모양 → 관계, 도움 꼬리, 칭찬 → 물음 끝)이다.
+- 상황 안내 `spokenIntroduction`: main 규칙 그대로다(빈 값 · 500자 · 제어 문자 · 문어체 '~하고 있다' · '~라고 말한다' · 조건 꼬리 '~다를 때'는 `SPOKEN_FORMAT`, 금지 표현 · 원래 이름 · 연락처 `PRIVATE_OR_FORBIDDEN_CONTENT`, 목표 표현 누설 `TARGET_EXPRESSION_DISCLOSED`, 압박 `PRESSURE_OR_ANSWER`). main에서는 이 칸이 걸리면 장면이 실패했다.
+- 전하기 충실도(`RELAY_LOW_FIDELITY`): 공백 · 문장부호를 뺀 `opportunitySentence`의 서로 다른 두 글자 조각(바이그램) 가운데 공백 · 문장부호를 뺀 `opportunityRelay`에도 있는 조각의 비율이 **0.5**(`RELAY_BIGRAM_RATIO_MIN`) 미만이면 뺀다(0.5는 통과). 분모가 상대 말 쪽이라 전하기 앞에 장면 맥락 문장이 붙어도 비율이 떨어지지 않는다. 조각이 2개 미만인 아주 짧은 말은 정리한 상대 말이 전하기에 통째로 들어 있어야 통과한다.
+- 짐작 말투(`PARTNER_INTERPRETED`, 전하기 · 되묻기): 상대의 속뜻 · 의도 · 이유 · 감정을 짐작하는 말투가 있고 상대 말에는 그 낱말(줄기)이 없으면 뺀다. 상대가 직접 한 말이면 통과한다(상대가 "어려울 것 같아"라고 했으면 "어려울 것 같대"는 통과). 공백을 뺀 글에서 찾는다.
+
+| 짐작 말투 | 상대 말에 이것이 있으면 걸지 않는다 |
+|---|---|
+| '것 같' · '거 같'('것 같이' · '거 같이'는 뺀다) | '것 같' · '거 같' |
+| '것처럼' · '거처럼' | '것처럼' · '거처럼' |
+| '고 싶은 것' · '고 싶어서' · '싶어 하'(줄어든 꼴 '싶어 한대' · '싶어 했대' 포함) | '싶' |
+| '려는' · '려고' | '려는' · '려고' · '려면' · '려다' · '려던' |
+| '궁금해서' · '궁금해하'(줄어든 꼴 포함) | '궁금' |
+| '싫어서' · '싫어하'(줄어든 꼴 포함) | '싫' |
+| '사실은' | '사실' |
+| '속마음' | '마음' |
+| '기분이' | '기분' |
+| '속상해서' | '속상' |
+| '서운해서' | '서운' |
+| '몰라서' | '몰라' · '모르' |
+| '까 봐' | '까 봐' |
+| 짐작 꼴 '-나 봐'('했나 봐' · '좋아하나 봐' · '모르나 봐')와 '-ㄴ가 봐'('아픈가 봐' · '그런가 봐'). 어간에 띄어 쓰지 않고 붙은 것만 보고, '나(자신) 봐' · '한번 가 봐' · '만나 봐' · '일어나 봐'처럼 '-나다' 동사에 '-아 보다'가 붙은 꼴은 뺀다 | 상대 말에도 짐작 꼴이 있다 |
+
+- 묻기 관계(`ASK_PROMPT_RELATION`): 장면 `relation`이 선생님(`TEACHER`, 또는 관계 이름에 '선생님' · '교사'가 든 값)이면 `askPrompt`에 '선생님'이 있어야 하고, 아니면 '선생님'이 없어야 한다. 다른 호칭은 검사하지 않는다.
+
+**검토.** 별도 검토는 main 검토 지시 `scenario-review.v1`(`prompts/scenario/review.v1.txt`)이 장면마다 C안 칸 다섯 개를 뺀 대본을 본다(상황 안내는 남긴다, 뺀 칸은 키를 보내지 않는다). 검토 사유와 그 처리(거절 · 보완 · BASE만 검토)는 main 그대로다. C안 칸의 뜻 규칙은 생성 지시(`generation.v3`)가 지시하고 위 칸별 판정이 지킨다. 5회차 실측(실제 API + 합성 입력, 실제 기기 · 실제 아이 아님)에서 C안 칸까지 검토하던 검토 판(출시하지 않음, 지움)이 거절을 늘려 발급이 main보다 줄었고, 그동안 C안 칸 서버 검사는 한 번도 걸리지 않았다 [편차 FT-1024-e].
 
 **고정 승인 문장.** 시작 패키지 `approvedSpeech`(10.6)에 `{contentVersionId, text}`로 실린다. 연습 허용 목록은 `HELP_OFFER` · `D_REST_ACK_START` · `D_REST_ACK`와 아래 006 여섯 개이고, `COACH_SWITCH` · `PEER_RETURN`은 뺐다(004 시드 행은 그대로다) [편차 FT-1024-a].
 
@@ -620,9 +647,9 @@ J1/J6의 고정 질문·선택지는 `judgment-service-v1`, 공통 지시문은 
 | `INPUT_CONFIRM` | 잘 못 들었어. 한 번 더 말해 줄래? | 판독 불가 · 판정 보류 |
 | `SCENE_CLOSE` | 알겠어. 이 이야기는 여기까지 할게. | 장면 실패 · 거절 · 한도 |
 | `WAIT_LEAD` | 천천히 생각해도 돼. | 무응답 다시 묻기 앞머리 |
-| `ASK_DEFAULT` | 너라면 친구한테 뭐라고 말할래? | `askPrompt`가 없을 때 |
+| `ASK_DEFAULT` | 너라면 친구한테 뭐라고 말할래? | `askPrompt`가 없는 친구 장면(아래 상대 호칭별 대체 표) |
 
-**칸이 없을 때(옛 대본 v1) 대체.** 칸마다 따로 대체한다. 고정 대체 문장은 realtime 상수이고 위 문장부호 규칙을 지킨다. 이어 붙이는 옛 칸(`opportunitySentence` · `focusPoints` · `expressionExamples`)은 C안 검사를 받지 않은 값이라 원문 대조가 실패할 수 있다(실패 뒤 처리는 승인 낭독의 재시도 · '뜻 전하기' 복구 그대로) [편차 FT-1024-e].
+**칸이 없을 때(옛 대본 v1 · 칸별 판정으로 뺀 칸) 대체.** 칸마다 따로 대체한다. v2 대본에서 일부 칸만 없어도 그 칸만 대체하고 나머지 칸은 대본 칸을 읽는다. 고정 대체 문장은 realtime 상수이고 위 문장부호 규칙을 지킨다. 이어 붙이는 옛 칸(`opportunitySentence` · `focusPoints` · `expressionExamples`)은 C안 검사를 받지 않은 값이라 원문 대조가 실패할 수 있다(실패 뒤 처리는 승인 낭독의 재시도 · '뜻 전하기' 복구 그대로) [편차 FT-1024-e].
 
 | 없는 칸 | 대체 |
 |---|---|
@@ -635,6 +662,15 @@ J1/J6의 고정 질문·선택지는 `judgment-service-v1`, 공통 지시문은 
 
 - `helpSpeech` 대체에서 `focusPoints`가 없으면 요점 자리에 `reexplanation`을 쓰고, `expressionExamples`가 없으면 "예를 들면 …" 문장 없이 요점 + 고정 꼬리만 쓴다.
 - 이어 붙이는 옛 칸은 마침표 · 쉼표 · 물음표 밖의 문장부호를 정리한 뒤 붙인다(원문 대조 실패를 줄이려는 것이다). 고정 대체 문장은 이 표와 글자가 같고, realtime 대조 시험이 지킨다.
+- 위 표의 전하기 · 묻기 · 반응은 친구 장면 문장이다. 이 세 칸의 대체는 장면 `relation`의 상대 호칭으로 아래 표에서 고른다. 관계 코드가 아닌 관계 이름(core `graphRelation`이 그래프 관계 코드로 바꾸지 않은 목표의 관계 이름, 예: '동아리 형')은 공백을 뺀 이름의 낱말로 고른다: '선생님' · '교사'는 선생님, '선배'나 '동아리' + 손윗사람 호칭('형' · '누나' · '언니' · '오빠')은 선배, '후배' · '동생'은 동생, 가족 낱말('가족' · '엄마' · '아빠' · '부모' · '할머니' · '할아버지')이나 동아리 밖의 손윗사람 호칭은 호칭 없는 문장이다(손윗사람 호칭만으로는 가족인지 아닌지 갈리지 않아서다). 그 밖의 값과 모르는 값은 친구 행이다(예: '모둠 친구' · '동아리 친구'). 상황 안내 · 되묻기 · 도움의 대체에는 호칭이 없다. 친구가 아닌 행의 묻기는 시드 승인 문장이 아니라 realtime 상수다(장면 안 승인 낭독은 대본 ID로만 기록하고 고정 문장 코드 · 판으로 기록하지 않는다).
+
+| 장면 `relation` | 상대 말 전하기(`opportunityRelay` 대체) | 묻기(`askPrompt` 대체) | 상대 반응(`friendReaction` 대체) |
+|---|---|---|---|
+| `TEACHER`(이름에 '선생님' · '교사') | 선생님이 이렇게 말씀하셨어. + `opportunitySentence` | 너라면 선생님께 뭐라고 말씀드릴래? | 그렇게 말씀드리면 선생님도 네 마음을 아실 거야. |
+| `CLUB_SENIOR`(이름에 '선배', 또는 '동아리' + 손윗사람 호칭) | 선배가 이렇게 말했어. + `opportunitySentence` | 너라면 선배한테 뭐라고 말할래? | 그렇게 말해 주면 선배도 네 마음을 알 거야. |
+| `CLUB_JUNIOR`(이름에 '후배' · '동생') | 동생이 이렇게 말했어. + `opportunitySentence` | 너라면 동생한테 뭐라고 말할래? | 그렇게 말해 주면 동생도 네 마음을 알 거야. |
+| `FAMILY`(이름에 가족 낱말, 또는 동아리 밖의 손윗사람 호칭), 호칭 없는 중립 문장 | 그때 이렇게 말했어. + `opportunitySentence` | 너라면 뭐라고 말할래? | 그렇게 말해 주면 네 마음이 잘 전해질 거야. |
+| 그 밖(`FRIEND*` · `PEER*` · `CLASSMATE` · `CLUB_PEER` · `TEAMMATE` · 모르는 값) | 친구가 이렇게 말했어. + `opportunitySentence` | 고정 `ASK_DEFAULT` | 그렇게 말해 주면 친구도 네 마음을 알 거야. |
 
 **판정.** 진행 중 판정의 기본 판은 `prompt-service-v4` · `judgment-service-v2`이고 판정 입력의 무중 줄 화자는 `MUJOONG`이다(10.4 · 10.10). 아이 대답이 직접 하는 말 · 할 말을 전하는 말("다음에 같이 그리자고 할래") · 할 행동 설명 중 무엇이든 내용이 목표 핵심 기능을 채우면 수행이다(J2 `FULL` · J3 `DELIVERED` · J5 `FULL`). 할 말을 정하지 못하고 방법만 묻는 말("뭐라고 말해야 돼?")은 `HELP`다. 절차 질문 규칙과 판정 경로 · 시한 · 확률 하한은 그대로다. core 기록용 재판정(`RejudgmentGateway`, 출력 스키마 `ai-rejudgment-output`)도 같은 인정 규칙을 넣은 `rejudgment.v2` 지시로 부르고, 판정 기록 `promptVersion`은 `rejudgment.v2`다(리포트 2항목 줄 이름이 이 결과를 쓴다) [편차 FT-1024-b].
 
