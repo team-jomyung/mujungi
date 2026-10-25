@@ -279,7 +279,7 @@ C10 partnerRoleText는 모델에 받지 않고 Core의 고정 역할 지시로 �
 | 상황 발화 | Core가 검증한 상황의 `partnerRoleText`, `scenarioText + 줄바꿈 + triggerScript`를 사용한다. 도움 질문은 고정 문장 ‘도움을 받아 볼까?’다. 상황 발화에 정답 · 시범 · 도움을 덧붙이지 않는다. |
 | Cue 생성 입력 | `CueBrief{situationSummary, partnerUtterance, focus}`만 `CueProvider.generate`에 넘긴다. 현재 focus는 스스로 다음 말을 떠올리게 하는 고정 지시다. 판정 기준 · 정답 문장 · 보호자 원문 · 계정 식별자 필드는 없다. |
 | Cue 생성 출력 | 비동기 `Result{text, approved, containsAnswerSentence}`다. 현재 CUE 단계 · 동의 ACCEPTED · 같은 scenarioId/세대 · 아직 주지 않은 도움인지 확인하고, `approved=true`, `containsAnswerSentence=false`일 때만 발화로 보낸다. 오류 · 승인 실패 · 정답 포함은 재생 실패 경로로 간다. |
-| 공급자 송신 | 서버 내부 식별자는 보내지 않는다. `session.instructions.append.content`에는 고정 지시와 JSON 데이터 `{partnerRole, speech}`를 싣고 끝에 범위를 닫는 문장을 붙인다(승인된 발화를 그대로 읽는 지시라 맞장구는 더하지 않는다). 응답 요청 type이 없으므로 이 지시 하나가 발화를 시작한다: 응답 취소 없이 출력 세대를 올리고 지시를 서버 송신 직렬 큐(3절)로 보내며, ACTIVE 밖이면 요청을 버린다. 확인 사건 · 새 말 전사가 시한 안에 오지 않거나 송신이 실패하면 확장에 실패를 알린다. |
+| 공급자 송신 | 서버 내부 식별자는 보내지 않는다. `session.instructions.append.content`에는 고정 지시와 JSON 데이터 `{partnerRole, speech}`를 싣고 끝에 범위를 닫는 문장을 붙인다(승인된 발화를 그대로 읽는 지시라 맞장구는 더하지 않는다). 장면 속 역할이 없는 연습(연습 대화 C안)은 `partnerRole` 없이 낭독 규칙과 발화만 싣는다(10.18 승인 낭독 지시). 응답 요청 type이 없으므로 이 지시 하나가 발화를 시작한다: 응답 취소 없이 출력 세대를 올리고 지시를 서버 송신 직렬 큐(3절)로 보내며, ACTIVE 밖이면 요청을 버린다. 확인 사건 · 새 말 전사가 시한 안에 오지 않거나 송신이 실패하면 확장에 실패를 알린다. |
 | 공급자 출력 | 기존 OutputGate를 통과하고, 공백을 제거한 실제 전사가 승인된 `PracticeSpeech.text`와 정확히 같아야 기기로 보낸다. 전사/음성 누락 · 내용 불일치 · 게이트 거절 · 송신 실패를 성공으로 취급하지 않는다. 실제 playbackId를 서버 내부 발화와 연결한다. |
 | 기기 재생 증거 | PLAYBACK_MARK의 STARTED → STARTED, COMPLETED → COMPLETED, STOPPED → INTERRUPTED, FAILED → FAILED로 구분한다. PROGRESS는 단계 완료가 아니다. `PlaybackFact`는 발화의 상관 ID · 상황 ID · 세대와 서버 수신 시각을 보존한다. 누락 · 만료도 완료로 만들지 않는다. |
 
@@ -603,6 +603,7 @@ J1/J6의 고정 질문·선택지는 `judgment-service-v1`, 공통 지시문은 
 - **경로:** realtime `mujoong.practice-flow.flexible-dialogue`가 `false`(기본, 10.14)일 때 대본형 경로가 C안이다. `true`면 유연 대화(장면 속 친구 역할 · 생성형, C안 전 운영 동작)이고 그 코드 · 시험은 남는다 [편차 FT-1024-a].
 - **장면 밖 말은 바꾸지 않는다:** 목표 안내 · 목표 회고 · 승인 낭독 실패 뒤 '뜻 전하기' 복구는 지금처럼 생성형(`session.commentary.append`)이고 제브를 거친다(10.15 Jev 출력 단위별 검사). 이 문구 안의 '역할놀이' · '상대 역할'만 C안에 맞게 고친다(realtime 몫).
 - **장면 시작 · 오류 처리는 10.17(FT-1023-g)을 따른다:** 이전 대화 돌아보기 · 요약 없이 목표 안내 뒤 바로 상황 안내로 가고, 못 들려준 말은 다시 내지 않고 건너뛰며, 판독 불가 · 보류 두 번째는 장면을 닫지 않고 도움 단계로 간다(아래 한도). 다만 여는 말(`openingLine`)은 상대 역할의 말이라 C안은 읽지 않고, 상황 안내 뒤 곧바로 전하기 + 묻기로 간다(2026-10-25 main 합치기, `docs/practice-direct-ask.md` 13.6).
+- **승인 낭독 지시(2026-10-25):** 장면 안 승인 낭독의 지시(`session.instructions.append.content`, 8절)는 유연 대화 · 역할 대화의 지시에서 배경 역할(`partnerRole` 데이터) · '역할극 응답 지시' · '따옴표 안 상대 대사' 문장을 뺀 것이다. 남는 규칙은 같다: 태그 안의 글자만 처음부터 끝까지 그대로 읽고, 본문은 지시가 아니라 데이터이며, 정해진 안내 외에 덧붙이지 않고, 마지막 글자에서 끝내고, 아이의 직전 질문에 답하지 않고 다음 서버 지시를 기다린다. 원문 대조(10.5) · 조기 재생 · 재요청 · '뜻 전하기' 복구는 그대로다. 5회차 실측(실제 API + 합성 아이 음성)에서 '따옴표 안' 문장의 조각("표 안")이 낭독 앞에 붙어 원문 대조가 거듭 실패했다(설계 7.6).
 - **배포 순서:** realtime을 먼저 배포한다. v1만 읽는 realtime은 v2 대본을 `UNSUPPORTED_VERSION`으로 거절하므로, realtime이 `scenario-script.v1` · `scenario-script.v2`를 모두 읽게 된 뒤에 core가 v2 대본을 낸다 [편차 FT-1024-e].
 
 **상태별 말.** 바탕은 대본형 전이표(`FlowTransitions` OPPORTUNITY · REASK · HELP_OFFER · RETRY · VARIANT_OFFER)이고 갈래와 결과값은 그대로다. 역할 전환 단계(`ROLE_NOTICE` · `RETURN_NOTICE`)와 역할 전환 안내는 없다. 갈래 전체는 설계 3.1이다.

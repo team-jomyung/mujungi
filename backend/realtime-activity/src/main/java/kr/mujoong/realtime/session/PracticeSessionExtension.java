@@ -262,7 +262,8 @@ public interface PracticeSessionExtension {
 
     /**
      * 이 연습에서 아이에게 들리는 말을 모두 무중이 자기 말로 하는가(장면 속 친구 · 코치 역할이 없다, C안 '무중이 직접 묻기'). 참이면 실행부는 판정
-     * 입력의 최근 대화에서 무중의 줄을 화자 {@code MUJOONG}으로 보낸다. 기본은 거짓(역할 대화: {@code PARTNER} · {@code COACH})이다.
+     * 입력의 최근 대화에서 무중의 줄을 화자 {@code MUJOONG}으로 보내고, 승인 낭독 지시에서 배경 역할 · 역할극 · 따옴표 안 상대 대사 문구를 뺀다
+     * ({@link kr.mujoong.realtime.voice.PracticeInstruction#forSpeechWithoutRole}). 기본은 거짓(역할 대화: {@code PARTNER} · {@code COACH})이다.
      */
     default boolean speaksAsMujoong() { return false; }
 

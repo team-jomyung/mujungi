@@ -2061,9 +2061,11 @@ public final class SessionExecutor {
             pendingPracticeSpeech = speech;
             practiceHold = false;
             // 설계 개정 A2: 승인된 발화 읽기 지시를 세대를 올리며 직렬 큐로 보낸다(응답 요청 type이 없어 지시가 발화를 시작한다). 새 말이 시한
-            // 안에 시작하지 않거나 송신이 실패하면 지금처럼 확장에 실패를 알린다
-            kr.mujoong.realtime.voice.PracticeInstruction instruction =
-                    kr.mujoong.realtime.voice.PracticeInstruction.forSpeech(speech);
+            // 안에 시작하지 않거나 송신이 실패하면 지금처럼 확장에 실패를 알린다. 장면 속 역할이 없는 연습(C안)은 배경 역할 · 역할극 · 따옴표 안
+            // 상대 대사 문구가 없는 낭독 지시를 쓴다(5회차에 그 문구 조각이 낭독 앞에 붙어 원문 대조가 거듭 실패했다, docs/practice-direct-ask.md 7.6)
+            kr.mujoong.realtime.voice.PracticeInstruction instruction = practice != null && practice.speaksAsMujoong()
+                    ? kr.mujoong.realtime.voice.PracticeInstruction.forSpeechWithoutRole(speech)
+                    : kr.mujoong.realtime.voice.PracticeInstruction.forSpeech(speech);
             return sendInstruction(OutputGeneration.BumpReason.SERVER_SEND, "provider-practice-speech-",
                     id -> ctx.services().requests().practiceInstruction(id, instruction),
                     () -> practiceOutput.post("u5b-voice-failed", speech));

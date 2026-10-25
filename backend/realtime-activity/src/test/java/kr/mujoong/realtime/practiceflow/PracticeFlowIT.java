@@ -340,6 +340,9 @@ class PracticeFlowIT {
         assertThat(retry.secondProbability()).isEqualTo(0.29);
         assertThat(h.logs.anyLineContains("JudgmentConfirmedBySameStepSum_J5")).isTrue();
         assertThat(h.logs.anyLineContains("JudgmentConfirmedBySameStepSum_J2")).as("1순위 혼자 확정한 J2는 표지가 없다").isFalse();
+        // 장면 안 승인 낭독 지시에는 배경 역할 · 역할극 · 따옴표 문구가 없다(설계 7.6)
+        assertThat(readings()).hasSizeGreaterThanOrEqualTo(4).allSatisfy(content -> assertThat(content)
+                .doesNotContain("따옴표", "partnerRole", "역할극", "배경 역할"));
         assertThat(failures).isEmpty();
     }
 
