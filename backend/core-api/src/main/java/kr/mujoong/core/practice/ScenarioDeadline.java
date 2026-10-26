@@ -8,6 +8,7 @@ import java.util.concurrent.TimeUnit;
 import kr.mujoong.contract.error.ErrorCode;
 import kr.mujoong.contract.time.MujoongClock;
 import kr.mujoong.core.common.error.CoreApiException;
+import kr.mujoong.core.usage.AiUsageScope;
 
 /** 최초 벽시계·단조시계 예산을 공유한다. 정각과 취소는 만료다. */
 public final class ScenarioDeadline {
@@ -27,7 +28,8 @@ public final class ScenarioDeadline {
     public Instant callDeadline(Duration maximum){return clock.now().plus(limit(maximum));}
     public void check(){if(Thread.currentThread().isInterrupted()||remaining().compareTo(Duration.ZERO)<=0)throw failed();}
     public <T>T call(ExecutorService executor,Duration maximum,Callable<T> operation){
-        var limit=limit(maximum);var future=executor.submit(operation);
+        // 사용량 연결은 실행기 스레드로 옮겨야 Luna 호출부가 읽는다(JIRA-277)
+        var limit=limit(maximum);var future=executor.submit(AiUsageScope.propagate(operation));
         try {var result=future.get(limit.toNanos(),TimeUnit.NANOSECONDS);check();return result;}
         catch(java.util.concurrent.TimeoutException timeout){future.cancel(true);throw failed();}
         catch(InterruptedException interrupted){future.cancel(true);Thread.currentThread().interrupt();throw failed();}

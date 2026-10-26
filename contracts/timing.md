@@ -278,7 +278,11 @@ U11(선 형식 정비)이 더한 키다. 공급자 실호출에는 응답 id도 
 
 | 키 | 기본값 | 소유 앱 | 뜻 | 근거 |
 |---|---|---|---|---|
-| `mujoong.timing.ai-usage.flush-interval` | `1s` | realtime | 사용량 저장·재시도 주기 | JIRA-271 |
-| `mujoong.timing.ai-usage.pending-ttl` | `5m` | realtime | 연결되지 않거나 저장에 실패한 대기 기록의 최대 보관 시간 | JIRA-271 |
-| `mujoong.timing.ai-usage.shutdown-wait` | `2s` | realtime | 공급자 종료 뒤 사용량 정리·계정 삭제 시 진행 중 쓰기 대기 상한 | JIRA-271 |
-| `mujoong.timing.ai-usage.write-timeout` | `1s` | realtime | 한 기록의 DB 트랜잭션 제한 시간. 풀 연결 대기는 별도 기존 한도를 따른다 | JIRA-271 |
+| `mujoong.timing.ai-usage.flush-interval` | `1s` | realtime · core-api | 사용량 저장·재시도 주기 | JIRA-271 · JIRA-277 |
+| `mujoong.timing.ai-usage.pending-ttl` | `5m` | realtime · core-api | 연결되지 않거나 저장에 실패한 대기 기록의 최대 보관 시간 | JIRA-271 · JIRA-277 |
+| `mujoong.timing.ai-usage.shutdown-wait` | `2s` | realtime · core-api | 공급자 종료 뒤 사용량 정리·계정 삭제 시 진행 중 쓰기 대기 상한 | JIRA-271 · JIRA-277 |
+| `mujoong.timing.ai-usage.write-timeout` | `1s` | realtime · core-api | 한 기록의 DB 트랜잭션 제한 시간. 풀 연결 대기는 별도 기존 한도를 따른다 | JIRA-271 · JIRA-277 |
+
+## 16. JIRA-277 Core 사용량 수집
+
+Core Luna 호출 사용량도 업무 처리와 분리한 저장 작업 하나(`AiUsageRecorder`)가 저장하며, 15절 키를 같은 기본값으로 읽는다(설정 레코드 `kr.mujoong.core.usage.AiUsageProperties.Timing`). Core에서 `pending-ttl`은 저장하지 못한 대기 기록의 최대 보관 시간(넘기면 버리고 `expired`로 센다), `shutdown-wait`은 앱 종료 때 남은 기록 저장과 계정 삭제 때 진행 중 저장을 기다리는 상한이다. 한 키를 두 앱이 함께 쓰므로 값을 바꿀 때는 Core · Realtime `application.yml`과 이 표를 같은 커밋에서 함께 고친다(R-M5). 웹 시간 설정에는 넣지 않는다.
