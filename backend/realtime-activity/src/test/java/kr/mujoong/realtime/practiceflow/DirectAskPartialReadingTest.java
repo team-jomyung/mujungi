@@ -154,7 +154,7 @@ class DirectAskPartialReadingTest {
         assertThat(h.out.lastSlot().text()).isEqualTo(V2_OPPORTUNITY);
         assertThat(h.out.slots.stream().filter(slot -> !slot.generated()).filter(slot -> slot.text().equals(V2_INTRO)
                 || slot.text().equals(V2_SECOND))).as("승인 낭독 3번(원문 · 나머지 · 같은 글 재시도)").hasSize(3);
-        assertThat(h.out.generatedSlots()).as("목표 안내 + 복구 한 번").hasSize(2);
+        assertThat(h.out.generatedSlots()).as("복구 한 번(목표 안내는 승인 낭독, FT-1024-g)").hasSize(1);
     }
 
     @Test
@@ -188,7 +188,55 @@ class DirectAskPartialReadingTest {
         h.partial("너는".length());
 
         assertThat(h.out.lastSlot().generated()).as("같은 글 재시도는 이미 썼다: 곧바로 복구").isTrue();
-        assertThat(h.out.slots.stream().filter(slot -> !slot.generated())).hasSize(3);
+        assertThat(h.out.slots.stream().filter(slot -> !slot.generated()).filter(slot -> slot.text().equals(V2_INTRO)
+                || slot.text().equals(V2_SECOND))).as("상황 안내 승인 낭독 3번(원문 · 같은 글 재시도 · 나머지)").hasSize(3);
+    }
+
+    // ---- 목표 안내도 같은 승인 낭독 길 (편차 FT-1024-g) ----
+
+    @Test
+    void aGoalBriefCutInsideItsSecondSentenceIsReadAgainFromThatSentenceBeforeTheIntroduction() {
+        Harness h = directAsk();
+        h.activate();
+        Slot brief = h.out.lastSlot();
+        assertThat(brief.text()).isEqualTo(PracticeScriptFixtures.V2_GOAL_BRIEF);
+        String second = DirectAskLines.GOAL_BRIEF_ONLY;
+
+        // 첫 문장과 둘째 문장 앞 세 글자만 들렸다: 둘째 문장부터 끝까지를 다시 읽고, 도입은 그 재생이 끝난 뒤다
+        assertThat(h.partial(brief.text().indexOf(second) + 3)).isEqualTo(Signal.NONE);
+
+        Slot reread = h.out.lastSlot();
+        assertThat(reread.generated()).isFalse();
+        assertThat(reread.text()).isEqualTo(second + " " + DirectAskLines.GOAL_BRIEF_TAIL);
+        assertThat(h.ext.state().sub()).isEqualTo(Sub.GOAL_BRIEF);
+        assertThat(h.out.diagnostics).containsExactly(REREAD);
+        h.played();
+        assertThat(h.out.lastSlot().text()).isEqualTo(V2_INTRO);
+        assertThat(h.out.slots).filteredOn(slot -> slot.text().startsWith(DirectAskLines.GOAL_BRIEF_LEAD)).as("목표 안내는 한 번").hasSize(1);
+        assertThat(h.recorder.list()).as("목표 안내는 장면 밖 말이라 장면 행 · 사실이 없다").isEmpty();
+    }
+
+    @Test
+    void aGoalBriefReadDifferentlyIsRetriedOnceThenRecoveredLikeAnyApprovedReading() {
+        Harness h = directAsk();
+        h.activate();
+
+        h.mismatched();
+        Slot retry = h.out.lastSlot();
+        assertThat(retry.generated()).isFalse();
+        assertThat(retry.text()).as("원문 대조가 어긋나면 같은 글을 한 번 더").isEqualTo(PracticeScriptFixtures.V2_GOAL_BRIEF);
+        h.mismatched();
+        Slot recovery = h.out.lastSlot();
+        assertThat(recovery.generated()).as("또 어긋나면 생성형 '뜻 전하기' 복구 한 번(제브를 거친다)").isTrue();
+        assertThat(recovery.text()).isEqualTo(PracticeInstructions.recoverApprovedNarration(PracticeScriptFixtures.V2_GOAL_BRIEF));
+
+        h.end(Playback.FAILED);
+
+        // 복구도 못 들려줬다: 목표 안내는 다시 내지 않고 장면 도입으로 간다(FT-1023-g)
+        assertThat(h.out.lastSlot().text()).isEqualTo(V2_INTRO);
+        assertThat(h.ext.state().phase()).isEqualTo(Phase.SCENE_INTRO);
+        assertThat(h.recorder.list()).isEmpty();
+        assertThat(h.failures).isEmpty();
     }
 
     @Test

@@ -8,7 +8,8 @@ import kr.mujoong.realtime.practiceflow.PracticeScript.Scene;
 
 /**
  * C안 '무중이 직접 묻기'의 장면 안 말 (docs/practice-direct-ask.md 3.2 · 5장 · 7.4). 장면 안에서 무중이 하는 말은 모두 여기서 고른 승인 문장이고
- * 승인 원문 읽기로 낸다 — 그 자리에서 지어내는 말이 없다.
+ * 승인 원문 읽기로 낸다 — 그 자리에서 지어내는 말이 없다. 장면 밖 말 가운데 목표 안내도 서버가 정한 승인 문장({@link #goalBrief})으로 읽는다(편차
+ * FT-1024-g, 같은 문서 7.3). 목표 회고 · 낭독 실패 뒤 '뜻 전하기'는 생성형 그대로다.
  *
  * <ul>
  *   <li>고정 문장은 시작 패키지 {@code approvedSpeech}(code → text)에서 읽고, 패키지에 그 코드가 없으면 같은 문장의 상수({@link #FIXED})로 대신한다.
@@ -61,6 +62,23 @@ final class DirectAskLines {
     static final String EXAMPLE_TAIL = "처럼 말할 수 있어.";
     /** 도움 끝의 고정 꼬리(대본 helpSpeech도 이 말로 끝난다). */
     static final String HELP_TAIL = "네 말로 해 볼래?";
+
+    /** 목표 안내 승인 문장의 앞머리(뒤에 목표 이름 + 받침에 맞춘 '이야.' · '야.'를 잇는다, 편차 FT-1024-g). */
+    static final String GOAL_BRIEF_LEAD = "오늘 연습할 목표는 ";
+    /** 목표 안내: 오늘 목표가 하나일 때의 둘째 문장. */
+    static final String GOAL_BRIEF_ONLY = "이 목표로 짧게 이야기 연습을 하고 오늘 연습을 마무리할 거야.";
+    /** 목표 안내: 목표가 여럿일 때 몇 번째인지 말한 뒤의 문장. */
+    static final String GOAL_BRIEF_ONE_OF = "이 목표로 짧게 이야기 연습을 해 볼 거야.";
+    /** 목표 안내의 마지막 문장. */
+    static final String GOAL_BRIEF_TAIL = "필요하면 도움을 받아도 되고, 언제든 쉬거나 끝내도 돼.";
+    /**
+     * 목표 안내 승인 문장에 넣을 수 있는 목표 이름의 최대 글자 수(공백 포함, 다듬은 뒤). AI 목표 후보 표시 이름 상한(12자,
+     * {@code ai-goal-candidate-output})보다 넉넉하게 둔다. 넘으면 생성형 목표 안내로 대신한다.
+     */
+    static final int GOAL_NAME_MAX = 20;
+    /** 오늘 고른 목표 수(1 ~ 3, 연습 시작 요청의 목표 상한 3)와 지금 몇 번째인지를 읽는 말. 숫자는 낭독 · 받아쓰기에서 꼴이 바뀌어 원문 대조가 어긋난다. */
+    private static final List<String> COUNT_WORDS = List.of("한", "두", "세");
+    private static final List<String> ORDINAL_WORDS = List.of("첫", "두", "세");
 
     /**
      * 대체 문장의 상대 호칭(계약 ai-io.md 10.18 '상대 호칭별 대체' 표). 장면 relation으로 고르고({@link #of}), 대본 칸이 없을 때(옛 대본 v1이거나 core가
@@ -248,6 +266,63 @@ final class DirectAskLines {
             return scene.friendReaction();
         }
         return Partner.of(scene.relation()).reaction();
+    }
+
+    /**
+     * 장면 밖 목표 안내의 승인 문장(편차 FT-1024-g, 계약 ai-io.md 10.18 '목표 안내 승인 낭독'). 생성형 목표 안내({@link PracticeInstructions#goalBrief})와
+     * 같은 뜻을 서버가 정한 문장으로 쓰되 문장부호 규칙(마침표 · 쉼표 · 물음표만, 4.3)을 지킨다: 목표 이름을 감싸던 작은따옴표를 쓰지 않고, 이름 뒤는 끝
+     * 글자의 받침으로 '이야.'(받침 있음) · '야.'(받침 없음)를 고르며, 목표 수 · 몇 번째는 숫자 대신 말("두 개" · "첫 번째")로 읽는다.
+     *
+     * <p>목표 이름({@link #goalName})을 다듬을 수 없거나(빈 이름 · 너무 김 · 한글 음절과 띄어쓰기 밖의 글자) 목표 수 · 순서가 1 ~ 3 밖이면 승인 문장을 만들지
+     * 않는다 — 호출자는 지금의 생성형 목표 안내로 대신한다.
+     *
+     * @param goalName 목표 표시 이름(시작 패키지)
+     * @param index 지금 목표의 순서(1부터)
+     * @param count 오늘 고른 목표 수
+     * @return 승인 문장, 만들 수 없으면 null
+     */
+    static String goalBrief(String goalName, int index, int count) {
+        String name = goalName(goalName);
+        if (name == null || count < 1 || count > COUNT_WORDS.size() || index < 1 || index > count) {
+            return null;
+        }
+        String opening = GOAL_BRIEF_LEAD + name + (hasFinalConsonant(name) ? "이야." : "야.");
+        String scope = count == 1 ? GOAL_BRIEF_ONLY
+                : "오늘 고른 목표는 " + COUNT_WORDS.get(count - 1) + " 개이고, 지금은 " + ORDINAL_WORDS.get(index - 1) + " 번째야. "
+                        + GOAL_BRIEF_ONE_OF;
+        return opening + " " + scope + " " + GOAL_BRIEF_TAIL;
+    }
+
+    /**
+     * 목표 이름을 목표 안내 승인 문장에 넣을 꼴로 다듬는다: 한글을 조합형(NFC)으로 맞추고, 제어 문자 · 겹친 공백을 공백 하나로 바꾸고, 따옴표는 걷는다.
+     * 남은 글자가 한글 음절과 띄어쓰기뿐이고 1 ~ {@link #GOAL_NAME_MAX}자일 때만 쓴다. 그 밖의 글자(숫자 · 로마자 · 그 밖의 문장부호 · 기호 · 낱자)는
+     * 문장부호 규칙을 어기거나 낭독 · 받아쓰기에서 꼴이 바뀌어 원문 대조가 어긋나므로 고쳐 쓰지 않고 null을 돌려준다.
+     *
+     * @return 다듬은 이름, 쓸 수 없으면 null
+     */
+    static String goalName(String raw) {
+        if (raw == null) {
+            return null;
+        }
+        String name = java.text.Normalizer.normalize(raw, java.text.Normalizer.Form.NFC)
+                .replaceAll("[\"'“”‘’「」『』]", "")
+                .replaceAll("[\\p{Cntrl}\\s\\p{Z}]+", " ")
+                .strip();
+        if (name.isEmpty() || name.codePointCount(0, name.length()) > GOAL_NAME_MAX) {
+            return null;
+        }
+        for (int i = 0; i < name.length(); i++) {
+            char c = name.charAt(i);
+            if (c != ' ' && (c < '가' || c > '힣')) {
+                return null;
+            }
+        }
+        return name;
+    }
+
+    /** 끝 글자(한글 음절)에 받침이 있는가. */
+    private static boolean hasFinalConsonant(String name) {
+        return (name.charAt(name.length() - 1) - '가') % 28 != 0;
     }
 
     /** 문장 끝 부호(마침표 · 물음표 · 느낌표 · 말줄임표, 전각 포함 — {@code PracticeSpeech}가 문장 끝으로 보는 부호와 같다). */

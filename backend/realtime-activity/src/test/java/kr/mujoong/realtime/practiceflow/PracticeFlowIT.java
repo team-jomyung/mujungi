@@ -2,6 +2,7 @@ package kr.mujoong.realtime.practiceflow;
 
 import static kr.mujoong.realtime.practiceflow.PracticeScriptFixtures.FIXED_SPEECH;
 import static kr.mujoong.realtime.practiceflow.PracticeScriptFixtures.V2_ASK;
+import static kr.mujoong.realtime.practiceflow.PracticeScriptFixtures.V2_GOAL_BRIEF;
 import static kr.mujoong.realtime.practiceflow.PracticeScriptFixtures.V2_HELP;
 import static kr.mujoong.realtime.practiceflow.PracticeScriptFixtures.V2_INTRO;
 import static kr.mujoong.realtime.practiceflow.PracticeScriptFixtures.V2_OPPORTUNITY;
@@ -136,14 +137,14 @@ class PracticeFlowIT {
     void aDirectAskReaskThatResolvesTheSceneRunsFromStartToTheSettledPracticeRecord() {
         directAsk();
         h.activate();
-        // 장면 밖 목표 안내는 생성형이라 제브(PRACTICE_PEER)를 거친다
-        playGenerated("오늘 연습할 목표는 부탁하기야. 짧게 이야기 연습을 해 볼 거야.");
-        assertThat(guard.count()).isEqualTo(1);
+        // 장면 밖 목표 안내도 C안은 서버가 정한 문장의 승인 낭독이다(FT-1024-g): 원문 그대로 재생되면 제브(PRACTICE_PEER)를 부르지 않는다
+        playApproved(V2_GOAL_BRIEF);
+        assertThat(guard.count()).isZero();
         // 장면 안 말은 모두 대본 칸의 승인 낭독이다: 원문 그대로 재생되면 제브를 부르지 않고, 재생이 끝나면 다음으로 간다
         playApproved(V2_INTRO);
         assertThat(repository.findSceneRuns(h.sessionId)).as("상황 안내 재생 성공 뒤에야 장면 행이 생긴다").hasSize(1);
         playApproved(V2_OPPORTUNITY);
-        assertThat(guard.count()).as("친구 말 전하기 + 묻기도 승인 낭독").isEqualTo(1);
+        assertThat(guard.count()).as("친구 말 전하기 + 묻기도 승인 낭독").isZero();
 
         // 아이 대답이 일부만 전했다 → J2 PARTIAL → 무중이 대본의 되묻기를 그대로 읽는다(생성형 · 제브 없음)
         h.childSays("child-1", "손 아파? " + MARKER);
@@ -157,7 +158,7 @@ class PracticeFlowIT {
         judge.confirm("PARTIAL", 0.8, "FULL", 0.1);
         h.drain();
         playApproved(V2_REASK);
-        assertThat(guard.count()).isEqualTo(1);
+        assertThat(guard.count()).isZero();
 
         // 되물은 뒤 충분히 전했다 → J3 DELIVERED → 대본의 친구 반응을 승인 낭독하고 재생이 끝나야 장면이 끝난다
         h.childSays("child-2", "손 괜찮아? 그럼 다음에 같이 그리자");
@@ -171,11 +172,12 @@ class PracticeFlowIT {
         assertThat(h.executor.status()).isEqualTo(SessionStatus.ACTIVE);
         assertThat(repository.findSceneRuns(h.sessionId).getFirst().endedAt()).isNull();
         playApproved(V2_REACTION);
-        assertThat(guard.count()).as("친구 반응도 승인 낭독").isEqualTo(1);
+        assertThat(guard.count()).as("친구 반응도 승인 낭독").isZero();
         assertThat(h.executor.status()).isEqualTo(SessionStatus.ACTIVE);
 
         // 장면 밖 목표 회고(생성형 · 제브)가 끝나면 연습이 끝난다
         playGenerated("오늘은 부탁하기를 무중이 다시 물었을 때 네 말로 해 봤어. 오늘 연습은 여기까지야.");
+        assertThat(guard.count()).as("제브는 생성형 목표 회고 한 번뿐").isEqualTo(1);
         assertThat(h.executor.status()).isEqualTo(SessionStatus.CLOSING);
         assertThat(h.transitions.find(h.sessionId).orElseThrow().endDetail()).isEqualTo("PRACTICE_COMPLETED");
         assertThat(h.provider.last().requests(kr.mujoong.realtime.voice.ProviderRequestFactory.InstructionsAppend.class))
@@ -216,7 +218,7 @@ class PracticeFlowIT {
     void aBlockedRecoveryNarrationSendsZeroBytesIsSkippedAndThePracticeKeepsListening() {
         directAsk();
         h.activate();
-        playGenerated("오늘 연습할 목표는 부탁하기야.");
+        playApproved(V2_GOAL_BRIEF);
         playApproved(V2_INTRO);
         playApproved(V2_OPPORTUNITY);
         h.childSays("child-1", "손 아파?");
@@ -309,7 +311,7 @@ class PracticeFlowIT {
         directAsk();
         judgeWithTheRealValidator();
         h.activate();
-        playGenerated("오늘 연습할 목표는 부탁하기야. 짧게 이야기 연습을 해 볼 거야.");
+        playApproved(V2_GOAL_BRIEF);
         playApproved(V2_INTRO);
         playApproved(V2_OPPORTUNITY);
         h.childSays("child-1", "몰라. 뭐라고 해야 돼?");
@@ -351,7 +353,7 @@ class PracticeFlowIT {
         directAsk();
         judgeWithTheRealValidator();
         h.activate();
-        playGenerated("오늘 연습할 목표는 부탁하기야.");
+        playApproved(V2_GOAL_BRIEF);
         playApproved(V2_INTRO);
         playApproved(V2_OPPORTUNITY);
 
@@ -391,7 +393,7 @@ class PracticeFlowIT {
         directAsk();
         judgeWithTheRealValidator();
         h.activate();
-        playGenerated("오늘 연습할 목표는 부탁하기야.");
+        playApproved(V2_GOAL_BRIEF);
         playApproved(V2_INTRO);
         playApproved(V2_OPPORTUNITY);
 
@@ -429,7 +431,7 @@ class PracticeFlowIT {
         directAsk();
         judgeWithTheRealValidator();
         h.activate();
-        playGenerated("오늘 연습할 목표는 부탁하기야.");
+        playApproved(V2_GOAL_BRIEF);
         playApproved(V2_INTRO);
         playApproved(V2_OPPORTUNITY);
 

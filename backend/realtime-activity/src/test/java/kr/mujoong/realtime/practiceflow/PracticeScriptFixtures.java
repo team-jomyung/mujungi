@@ -101,9 +101,24 @@ final class PracticeScriptFixtures {
                 + "\"validation\":{\"goalIncluded\":true,\"triggerIncluded\":true,\"forbiddenFound\":false}}";
     }
 
+    /**
+     * C안 목표 안내 승인 문장(편차 FT-1024-g): {@link #packageJson}의 목표 '부탁하기'(끝 글자 받침 없음 → '야'), 오늘 목표 하나. 계약 ai-io.md 10.18
+     * '목표 안내 승인 낭독'의 문장틀 그대로다.
+     */
+    static final String V2_GOAL_BRIEF = "오늘 연습할 목표는 부탁하기야. 이 목표로 짧게 이야기 연습을 하고 오늘 연습을 마무리할 거야. "
+            + "필요하면 도움을 받아도 되고, 언제든 쉬거나 끝내도 돼.";
+
+    /** 승인 문장으로 다듬을 수 없는 목표 이름(숫자가 있다): C안도 지금처럼 생성형 목표 안내로 대신한다(편차 FT-1024-g). */
+    static final String UNREADABLE_GOAL_NAME = "3단계 부탁하기";
+
     /** 목표 하나 짜리 시작 패키지 practice 조각(첫 목표에 firstScenario). */
     static String packageJson(UUID goal, String firstScenarioJson) {
-        return "{\"goals\":[{\"goalSelectionId\":\"" + goal + "\",\"order\":1,\"displayName\":\"부탁하기\","
+        return packageJson(goal, firstScenarioJson, "부탁하기");
+    }
+
+    /** {@link #packageJson(UUID, String)}과 같되 목표 표시 이름을 고른다(JSON 문자열 안에 그대로 넣는다 — 따옴표 · 역슬래시 없는 이름만). */
+    static String packageJson(UUID goal, String firstScenarioJson, String goalName) {
+        return "{\"goals\":[{\"goalSelectionId\":\"" + goal + "\",\"order\":1,\"displayName\":\"" + goalName + "\","
                 + "\"behaviorKey\":\"REQUEST\",\"behaviorVersion\":1,\"judgmentCriteria\":\"원하는 것을 말로 요청한다\""
                 + (firstScenarioJson == null ? "" : ",\"firstScenario\":" + firstScenarioJson) + "}]}";
     }

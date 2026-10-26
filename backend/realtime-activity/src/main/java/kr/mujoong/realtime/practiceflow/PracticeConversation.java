@@ -41,8 +41,9 @@ import kr.mujoong.realtime.voice.PracticeSpeech;
  * <p>경로는 둘이다({@link PracticeFlowSettings#flexibleDialogue()}). 운영 기본은 C안 '무중이 직접 묻기'(docs/practice-direct-ask.md)다: 장면 속
  * 친구 · 코치 역할이 없고, 무중이 상황과 상대의 말을 자기 말로 전한 뒤 "너라면 뭐라고 말할래?"라고 묻는다. 장면 안 무중의 말(상황 안내 · 전하기 +
  * 묻기 · 되묻기 · 다시 설명 · 도움 · 확인 · 다시 묻기 · 친구 반응 · 마무리 · 도움 제안 · 변형 제안)은 모두 대본 칸이나 고정 문장의 승인 낭독이다
- * ({@link DirectAskLines}). 장면 밖 말(목표 안내 · 목표 회고 · 낭독 실패 복구)은 두 경로가 같이 생성형으로 내고 제브를 거친다. 유연 대화 경로는
- * 설정 하나로 되돌릴 수 있게 그대로 둔다.
+ * ({@link DirectAskLines}). 장면 밖 말 가운데 목표 안내도 C안은 서버가 정한 승인 문장으로 읽는다(목표 이름을 승인 문장으로 다듬을 수 없을 때만
+ * 생성형, 편차 FT-1024-g). 목표 회고 · 낭독 실패 복구는 두 경로가 같이 생성형으로 내고 제브를 거친다. 유연 대화 경로는 설정 하나로 되돌릴 수 있게
+ * 그대로 둔다(목표 안내도 생성형).
  *
  * <p>규칙 요약.
  *
@@ -98,6 +99,11 @@ public final class PracticeConversation implements PracticeSessionExtension {
      * 왔다는 사실을 남기는 고정 코드다(전사 · 선택지 · 확률 없음, R-F14). 판정 기록 행에는 그 판정이 보류(사유 포함)로 남는다.
      */
     static final String DIAG_UNSURE_ASKED_AGAIN = "PracticeUnsureJudgmentAskedAgain_";
+    /**
+     * 진단(INFO): C안 목표 안내를 승인 문장으로 만들 수 없어(목표 이름이 비었거나 너무 길거나 한글 음절 · 띄어쓰기 밖의 글자가 있음, 목표 수가 상한 밖)
+     * 생성형으로 냈다(편차 FT-1024-g). 고정 코드뿐이다(이름 원문 없음, R-F14).
+     */
+    static final String DIAG_GOAL_BRIEF_GENERATED = "PracticeGoalBriefGeneratedFallback";
     /** 실행부 판정 보류 사유 가운데 받아쓰기는 됐는데 1순위 확률이 하한 · 최소 차이에 못 미친 것(판독 불가 · 장애와 구분한다). */
     private static final Set<String> LOW_SCORE_ABSTAINS = Set.of("LOW_CONFIDENCE", "LOW_MARGIN");
 
@@ -488,15 +494,32 @@ public final class PracticeConversation implements PracticeSessionExtension {
         uncertainAttempts = 0;
         openingAwaiting = false;
         openingAnswered = false;
-        // 목표 안내 · 목표 회고는 장면 밖 말이라 두 경로가 같이 낸다(생성형, 제브 필수). C안은 문구만 바꾼다(docs/practice-direct-ask.md 7.3).
-        // 이전 대화 돌아보기 · 요약은 두 경로 모두 하지 않고 목표 안내 뒤 바로 장면 도입으로 간다(FT-1023-g)
+        // 목표 안내 · 목표 회고는 장면 밖 말이라 두 경로가 같이 낸다. 이전 대화 돌아보기 · 요약은 두 경로 모두 하지 않고 목표 안내 뒤 바로 장면 도입으로
+        // 간다(FT-1023-g)
         if (kind == SceneKind.BASE && !goalBriefPlayed) {
             state.phase(Phase.SCENE_INTRO, Sub.GOAL_BRIEF);
-            speakGenerated(FlowRole.PEER, PracticeInstructions.goalBrief(pack.goals().get(state.goalIndex()).goalName(),
-                    state.goalIndex() + 1, pack.goals().size(), settings.directAsk()));
+            speakGoalBrief(pack.goals().get(state.goalIndex()).goalName(), state.goalIndex() + 1, pack.goals().size());
             return;
         }
         beginIntroduction();
+    }
+
+    /**
+     * 목표 안내. C안은 서버가 정한 문장({@link DirectAskLines#goalBrief})을 장면 안 말과 같은 승인 낭독으로 읽는다(편차 FT-1024-g): 원문 대조 · 조각
+     * 단위 재생(B1) · 부분 재생 뒤 나머지 다시 읽기 · 같은 글 재시도 → '뜻 전하기' 복구가 같고, 원문과 같으면 제브를 건너뛰되 출력 게이트의 1차 검사는
+     * 그대로 지난다. 목표 이름을 승인 문장으로 다듬을 수 없으면(빈 이름 · 너무 김 · 한글 음절과 띄어쓰기 밖의 글자) 지금처럼 생성형(제브 필수)으로 내고
+     * 고정 사유 코드를 남긴다. 유연 대화는 지금 그대로 생성형이다. 어느 쪽이든 못 들려준 목표 안내는 다시 내지 않고 장면 도입으로 간다.
+     */
+    private void speakGoalBrief(String goalName, int index, int count) {
+        String approved = settings.directAsk() ? DirectAskLines.goalBrief(goalName, index, count) : null;
+        if (approved != null) {
+            speakApproved(approved);
+            return;
+        }
+        if (settings.directAsk()) {
+            output.diagnostic(DIAG_GOAL_BRIEF_GENERATED);
+        }
+        speakGenerated(FlowRole.PEER, PracticeInstructions.goalBrief(goalName, index, count, settings.directAsk()));
     }
 
     private void beginIntroduction() {

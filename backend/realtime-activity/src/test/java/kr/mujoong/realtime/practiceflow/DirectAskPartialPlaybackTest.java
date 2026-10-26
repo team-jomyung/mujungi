@@ -85,7 +85,7 @@ class DirectAskPartialPlaybackTest {
 
         assertThat(recorder.list()).as("나머지까지 들린 뒤 장면 행").hasSize(1);
         assertThat(nextApprovedReading()).contains("<approved_speech>" + V2_OPPORTUNITY + "</approved_speech>");
-        assertThat(guard.count()).as("장면 안 승인 낭독은 제브를 부르지 않는다(목표 안내 한 번뿐)").isEqualTo(1);
+        assertThat(guard.count()).as("장면 안 승인 낭독도 목표 안내 승인 낭독도 제브를 부르지 않는다(FT-1024-g)").isZero();
         assertThat(h.executor.status()).isEqualTo(SessionStatus.ACTIVE);
         assertThat(failures).isEmpty();
         assertThat(h.logs.anyLineContains("그리자고")).as("진단에는 원문이 없다(R-F14)").isFalse();
@@ -150,13 +150,20 @@ class DirectAskPartialPlaybackTest {
                 Duration.ofSeconds(1));
         h.practice = session -> new PracticeConversation(session, h.guardianId, h.clock, settings, requester, recorder, failures::add);
         h.activate();
-        // 장면 밖 목표 안내는 생성형이라 제브를 거친다(시간 정보 없는 응답)
         h.settleSend();
-        h.speak("오늘 연습할 목표는 부탁하기야.", 4800);
-        h.advance(Duration.ofMillis(801));
-        assertThat(guard.last().request().mode()).isEqualTo(GuardrailRequest.Mode.PRACTICE_PEER);
-        guard.allow();
-        h.drain();
+        if (settings.directAsk()) {
+            // C안 목표 안내는 서버가 정한 문장의 승인 낭독이다(FT-1024-g): 원문 그대로 읽히면 제브 없이 나간다(시간 정보 없는 응답)
+            h.speak(PracticeScriptFixtures.V2_GOAL_BRIEF, 4800);
+            h.advance(Duration.ofMillis(801));
+        } else {
+            // 유연 대화의 목표 안내는 생성형이라 제브를 거친다(시간 정보 없는 응답)
+            h.speak("오늘 연습할 목표는 부탁하기야.", 4800);
+            h.advance(Duration.ofMillis(801));
+            assertThat(guard.last().request().mode()).isEqualTo(GuardrailRequest.Mode.PRACTICE_PEER);
+            guard.allow();
+            h.drain();
+        }
+        assertThat(h.link.outputs()).as("목표 안내가 기기로 나갔다").hasSize(1);
         playAll();
         sentBefore = h.link.outputs().size();
     }

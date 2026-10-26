@@ -269,4 +269,79 @@ class DirectAskLinesTest {
         assertThat(PACKAGE.toString()).isEqualTo("DirectAskLines[approvedCodes=7]");
         assertThat(PACKAGE.help(v2()).toString()).doesNotContain("친구").contains("exampleGiven=true");
     }
+
+    // ---- 목표 안내 승인 문장 (편차 FT-1024-g) ----
+
+    @Test
+    void theGoalBriefPicksTheCopulaByTheLastSyllablesFinalConsonantAndDropsTheQuotes() {
+        // 받침 없음 → '야'
+        assertThat(DirectAskLines.goalBrief("부탁하기", 1, 1)).isEqualTo(PracticeScriptFixtures.V2_GOAL_BRIEF);
+        assertThat(DirectAskLines.goalBrief("돌려 말한 거절 알기", 1, 1)).startsWith("오늘 연습할 목표는 돌려 말한 거절 알기야. ");
+        // 받침 있음(ㅇ · ㄹ · ㄴ) → '이야'
+        assertThat(DirectAskLines.goalBrief("모르는 친구에게 설명", 1, 1)).isEqualTo("오늘 연습할 목표는 모르는 친구에게 설명이야. "
+                + "이 목표로 짧게 이야기 연습을 하고 오늘 연습을 마무리할 거야. 필요하면 도움을 받아도 되고, 언제든 쉬거나 끝내도 돼.");
+        assertThat(DirectAskLines.goalBrief("차례 지키며 말", 1, 1)).startsWith("오늘 연습할 목표는 차례 지키며 말이야. ");
+        assertThat(DirectAskLines.goalBrief("고마운 마음 전하는 인사", 1, 1)).startsWith("오늘 연습할 목표는 고마운 마음 전하는 인사야. ");
+        assertThat(DirectAskLines.goalBrief("친구 마음 헤아려 말하기", 1, 1)).doesNotContain("‘", "’", "'");
+        // 생성형 목표 안내와 같은 문장이고 목표 이름을 감싸던 작은따옴표만 없다(목표 하나)
+        assertThat(PracticeInstructions.goalBrief("부탁하기", 1, 1, true))
+                .contains(PracticeScriptFixtures.V2_GOAL_BRIEF.replace("부탁하기야.", "‘부탁하기’야."));
+    }
+
+    @Test
+    void severalGoalsAreCountedInWordsAndTheSentencesKeepTheDirectAskPunctuationRule() {
+        assertThat(DirectAskLines.goalBrief("부탁하기", 1, 2)).isEqualTo("오늘 연습할 목표는 부탁하기야. 오늘 고른 목표는 두 개이고, 지금은 첫 번째야. "
+                + "이 목표로 짧게 이야기 연습을 해 볼 거야. 필요하면 도움을 받아도 되고, 언제든 쉬거나 끝내도 돼.");
+        assertThat(DirectAskLines.goalBrief("거절하기", 2, 2)).contains("두 개이고, 지금은 두 번째야.");
+        assertThat(DirectAskLines.goalBrief("사과하기", 3, 3)).contains("세 개이고, 지금은 세 번째야.");
+        for (int count = 1; count <= 3; count++) {
+            for (int index = 1; index <= count; index++) {
+                String brief = DirectAskLines.goalBrief("모르는 친구에게 설명", index, count);
+                assertThat(brief).as(index + "/" + count).isNotNull().doesNotContainPattern("[0-9]")
+                        .matches("[가-힣 .,?]+").endsWith(DirectAskLines.GOAL_BRIEF_TAIL);
+                assertThat(brief.split("(?<=[.?]) ")).as("문장 수(목표 하나 3, 여럿 4)").hasSize(count == 1 ? 3 : 4);
+            }
+        }
+    }
+
+    @Test
+    void goalNamesAreTidiedButNeverRewritten() {
+        assertThat(DirectAskLines.goalName("‘부탁하기’")).isEqualTo("부탁하기");
+        assertThat(DirectAskLines.goalName("\"거절하기\"")).isEqualTo("거절하기");
+        assertThat(DirectAskLines.goalName("  부탁\t하기  ")).as("공백 · 제어 문자는 공백 하나로").isEqualTo("부탁 하기");
+        assertThat(DirectAskLines.goalName(java.text.Normalizer.normalize("부탁하기", java.text.Normalizer.Form.NFD)))
+                .as("풀어 쓴 한글은 조합형으로").isEqualTo("부탁하기");
+        assertThat(DirectAskLines.goalName("가".repeat(DirectAskLines.GOAL_NAME_MAX))).hasSize(DirectAskLines.GOAL_NAME_MAX);
+    }
+
+    @Test
+    void aGoalNameTheApprovedSentenceCannotHoldGivesNoSentenceSoTheFlowFallsBackToTheGeneratedBrief() {
+        java.util.List<String> unusable = new java.util.ArrayList<>(java.util.Arrays.asList(null, "", "   ", "‘’", "3단계 부탁하기",
+                "OK 말하기", "부탁하기!", "부탁하기?", "부탁하기.", "부탁, 거절", "부탁·거절", "부탁(친구)", "부탁~", "ㅂㅌ하기", "부탁😊",
+                "가".repeat(DirectAskLines.GOAL_NAME_MAX + 1)));
+        for (String name : unusable) {
+            assertThat(DirectAskLines.goalName(name)).as(String.valueOf(name)).isNull();
+            assertThat(DirectAskLines.goalBrief(name, 1, 1)).as(String.valueOf(name)).isNull();
+        }
+        // 목표 수 · 순서가 1 ~ 3 밖(연습 시작 요청의 목표 상한 3)
+        assertThat(DirectAskLines.goalBrief("부탁하기", 1, 4)).isNull();
+        assertThat(DirectAskLines.goalBrief("부탁하기", 0, 1)).isNull();
+        assertThat(DirectAskLines.goalBrief("부탁하기", 3, 2)).isNull();
+        assertThat(DirectAskLines.goalBrief("부탁하기", 1, 0)).isNull();
+    }
+
+    @Test
+    void theGoalBriefFrameIsWordForWordTheContractTableOfSection1018() throws java.io.IOException {
+        java.nio.file.Path repo = java.nio.file.Path.of(System.getProperty("mujoong.repo.root", "..")).toAbsolutePath().normalize();
+        String doc = java.nio.file.Files.readString(repo.resolve("contracts/ai-io.md"), java.nio.charset.StandardCharsets.UTF_8);
+        String section = doc.substring(doc.indexOf("### 10.18 "));
+
+        assertThat(section).contains("`" + DirectAskLines.GOAL_BRIEF_LEAD + "{목표 이름}이야.`")
+                .contains("`" + DirectAskLines.GOAL_BRIEF_LEAD + "{목표 이름}야.`")
+                .contains("| 둘째 문장(목표 하나) | " + DirectAskLines.GOAL_BRIEF_ONLY + " |")
+                .contains("| 둘째 문장(목표 둘 · 셋) | 오늘 고른 목표는 {두 · 세} 개이고, 지금은 {첫 · 두 · 세} 번째야. "
+                        + DirectAskLines.GOAL_BRIEF_ONE_OF + " |")
+                .contains("| 끝 문장 | " + DirectAskLines.GOAL_BRIEF_TAIL + " |")
+                .contains("한글 음절과 띄어쓰기만 " + DirectAskLines.GOAL_NAME_MAX + "자 이하");
+    }
 }
