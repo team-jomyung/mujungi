@@ -101,9 +101,11 @@ final class JudgmentCoordinator implements JudgmentTurn.Host {
      *
      * @param sameStepGroups 요청한 쪽이 같은 다음 걸음으로 처리하는 선택지 묶음({@link #sameStepGroups(Object)}로 모양을 확인한 값, 없으면 빈
      *     목록). 열 때 그 지점의 선택지 밖 코드를 걷어 판정 요청에 싣는다
+     * @param minConfidence 요청한 쪽이 이 판정에만 쓰자고 실은 낮춘 하한({@link #minConfidence(Object)}로 모양을 확인한 값, 없으면 null). 판정 요청에
+     *     그대로 싣고 검증기가 전역 하한보다 낮을 때만 쓴다
      */
     record Open(JudgmentPoint point, JudgmentTrigger trigger, JudgmentOwner owner, int transcriptSeq, String text, Instant at,
-            JudgeRequest.Criteria criteria, List<List<String>> sameStepGroups, List<JudgeRequest.RecentTurn> recent,
+            JudgeRequest.Criteria criteria, List<List<String>> sameStepGroups, Double minConfidence, List<JudgeRequest.RecentTurn> recent,
             JudgmentTurn.ResultHandler decide, Function<JudgmentTurn.Closure, Handled> after) {
 
         Open {
@@ -271,7 +273,7 @@ final class JudgmentCoordinator implements JudgmentTurn.Host {
                 .get(LiveContentResources.JudgmentPoint.valueOf(request.point().name()));
         JudgeRequest judgeRequest = new JudgeRequest(request.point(), support.optionSet().version(), options.optionCodes(),
                 clip(request.text()), request.recent(), request.criteria(), aliases(), false, now.plus(liveBudget),
-                groupsWithin(options.optionCodes(), request.sameStepGroups()));
+                groupsWithin(options.optionCodes(), request.sameStepGroups()), request.minConfidence());
         TurnStatus openedIn = env.status() == SessionStatus.ACTIVE ? TurnStatus.ACTIVE : TurnStatus.WAITING_CHILD;
         JudgmentTurn.Spec spec = new JudgmentTurn.Spec(UUID.randomUUID(), request.point(), request.trigger(), request.owner(),
                 openedIn, request.transcriptSeq(), request.at(), liveBudget, responseReady, support.promptVersion());
@@ -312,6 +314,26 @@ final class JudgmentCoordinator implements JudgmentTurn.Host {
             parsed.add(List.copyOf(codes));
         }
         return List.copyOf(parsed);
+    }
+
+    /**
+     * 확장이 판정 기준 맵에 실은 낮춘 하한({@link PracticeSessionExtension.PracticeOutput#MIN_CONFIDENCE})의 모양을 확인한다. 없으면 null이다. 수가
+     * 아니거나, 유한하지 않거나, 허용 범위({@link PracticeSessionExtension.PracticeOutput#MIN_CONFIDENCE_LOWEST} 이상 1 이하) 밖이면 예외다 — 호출한
+     * 쪽은 판정 요청을 거절한다(같은 걸음 묶음 모양이 틀린 때와 같다). 전역 하한보다 큰 값은 모양이 틀린 것이 아니다(검증기가 무시한다, 낮추기만 한다).
+     */
+    static Double minConfidence(Object raw) {
+        if (raw == null) {
+            return null;
+        }
+        if (!(raw instanceof Number number)) {
+            throw new IllegalArgumentException("낮춘 하한은 수다");
+        }
+        double value = number.doubleValue();
+        if (Double.isNaN(value) || Double.isInfinite(value) || value < PracticeSessionExtension.PracticeOutput.MIN_CONFIDENCE_LOWEST
+                || value > 1.0) {
+            throw new IllegalArgumentException("낮춘 하한이 허용 범위 밖이다");
+        }
+        return value;
     }
 
     /** 묶음에서 그 지점 선택지 밖의 코드를 걷고, 둘 미만이 된 묶음은 버린다(판 순서가 바뀌거나 코드가 빠져도 판정을 막지 않는다). */

@@ -26,12 +26,14 @@ import kr.mujoong.realtime.session.PracticeSessionExtension;
 import kr.mujoong.realtime.session.PracticeSessionExtension.Signal;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 /**
  * C안 '무중이 직접 묻기' 대화 시험 (docs/practice-direct-ask.md 2장 · 5장 · 7.2 · 7.4). 옛 대본(v1)은 대체 문장으로, 고정 문장은 시작 패키지
  * approvedSpeech(없으면 같은 문장의 상수)로 읽히고, 판독 불가 · 불명확은 고정 확인(또는 같은 제안) 한 번 뒤 장면을 닫지 않고 도움 제안 · 도움으로
- * 넘어가며(FT-1023-g), 아이 말로 끊긴 마무리 문장은 전달된 것으로 보고 다음으로 가는지 본다. 가짜 출력 · 가짜 판정 · 수동 시계 위의 합성
- * 대화이다(테스트 대역 증거).
+ * 넘어가며(FT-1023-g), 판정 보류(받아쓰기는 됐는데 확률 하한 · 최소 차이 미달)는 확인 대신 그 단계의 묻는 말로 다시 묻고(FT-1024-h), 아이 말로
+ * 끊긴 마무리 문장은 전달된 것으로 보고 다음으로 가는지 본다. 가짜 출력 · 가짜 판정 · 수동 시계 위의 합성 대화이다(테스트 대역 증거).
  */
 @Tag("practice-flow")
 class DirectAskConversationTest {
@@ -237,6 +239,216 @@ class DirectAskConversationTest {
         assertThat(h.recorder.helps).filteredOn(help -> help.kind() == HelpKind.FOCUS_HELP).singleElement()
                 .satisfies(help -> assertThat(help.consentAnswer()).isEqualTo(ConsentAnswer.ACCEPT));
         assertThat(h.recorder.factKinds(h.recorder.only())).contains(FactKind.HELP_ACCEPTED);
+    }
+
+    // ---- 판정 보류는 그 단계의 묻는 말로 (ai-io.md 10.18, 편차 FT-1024-h) ----
+
+    private static final String MIN_CONFIDENCE = PracticeSessionExtension.PracticeOutput.MIN_CONFIDENCE;
+    private static final String RETRY_PROMPT = FIXED_SPEECH.get("RETRY_PROMPT");
+
+    private static String unsureAskedAgain(String point) {
+        return PracticeConversation.DIAG_UNSURE_ASKED_AGAIN + point;
+    }
+
+    @Test
+    void anUnsureFirstAnswerIsAskedAgainWithTheScriptReaskAndADeliveredReaskEndsAfterReask() {
+        Harness h = with(directAskScript(SCENARIO), FIXED_SPEECH);
+        h.toOpportunity();
+        h.child("손 아파?");
+
+        h.abstained("J2", "LOW_CONFIDENCE");
+
+        assertThat(h.ext.state().phase()).isEqualTo(FlowState.Phase.REASK);
+        assertThat(h.out.lastSlot().text()).as("확인 질문이 아니라 대본의 되묻기").isEqualTo(PracticeScriptFixtures.V2_REASK);
+        assertThat(h.out.lastSlot().generated()).isFalse();
+        assertThat(h.out.slots).noneMatch(slot -> slot.text().equals(INPUT_CONFIRM));
+        assertThat(h.out.diagnostics).as("되묻기가 PARTIAL이 아니라 보류에서 왔다는 고정 코드").containsExactly(unsureAskedAgain("J2"));
+        h.played();
+        h.child("손 괜찮아? 그럼 다음에 같이 그리자");
+        assertThat(h.out.lastJudgment().point()).isEqualTo(kr.mujoong.realtime.judgment.JudgmentPoint.J3);
+
+        h.result("J3", "DELIVERED");
+
+        assertThat(h.out.lastSlot().text()).isEqualTo(V2_REACTION);
+        h.playedThroughRecap();
+        SceneRunRecord row = h.recorder.only();
+        assertThat(row.liveTiming()).as("J2 PARTIAL 뒤 되묻기와 같은 시점").isEqualTo(LiveTiming.AFTER_REASK);
+        assertThat(h.recorder.factKinds(row)).contains(FactKind.REASK_RESOLVED).doesNotContain(FactKind.TRANSCRIPT_FAILED,
+                FactKind.SITUATION_EXPLAINED);
+        assertThat(h.failures).isEmpty();
+    }
+
+    @Test
+    void anUnsureAnswerByTheMarginIsAskedAgainTheSameWay() {
+        Harness h = with(directAskScript(SCENARIO), FIXED_SPEECH);
+        h.toOpportunity();
+        h.child("손 아파?");
+
+        h.abstained("J2", "LOW_MARGIN");
+
+        assertThat(h.ext.state().phase()).isEqualTo(FlowState.Phase.REASK);
+        assertThat(h.out.lastSlot().text()).isEqualTo(PracticeScriptFixtures.V2_REASK);
+        assertThat(h.out.diagnostics).containsExactly(unsureAskedAgain("J2"));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"UNREADABLE_INPUT", "TIMEOUT", "PROVIDER_ERROR", "SCHEMA_INVALID", "OPTION_OUT_OF_SET", "NO_PROVIDER",
+            "RESPONSE_NOT_READY", "FAULT"})
+    void anUnreadableInputOrAJudgmentFaultStillAsksTheInputConfirm(String reason) {
+        Harness h = with(directAskScript(SCENARIO), FIXED_SPEECH);
+        h.toOpportunity();
+        h.child("웅얼웅얼");
+
+        h.abstained("J2", reason);
+
+        assertThat(h.ext.state().phase()).isEqualTo(FlowState.Phase.OPPORTUNITY);
+        assertThat(h.out.lastSlot().text()).isEqualTo(INPUT_CONFIRM);
+        assertThat(h.out.diagnostics).isEmpty();
+    }
+
+    @Test
+    void anUnsureFirstAnswerUsesTheConfirmSoAnUnreadableReaskAnswerOffersHelpAtOnce() {
+        Harness h = with(directAskScript(SCENARIO), FIXED_SPEECH);
+        h.toOpportunity();
+        h.child("손 아파?");
+        h.abstained("J2", "LOW_CONFIDENCE");
+        h.played();
+        h.child("웅얼");
+
+        h.result("J3", "UNREADABLE");
+
+        // 횟수 · 상한은 늘지 않는다: 보류 한 번 + 판독 불가 한 번 = 두 번째 불명확이라 지금처럼 도움 제안이다
+        assertThat(h.ext.state().phase()).isEqualTo(FlowState.Phase.HELP_OFFER);
+        assertThat(h.out.lastSlot().text()).isEqualTo(HELP_OFFER);
+        assertThat(h.out.slots).noneMatch(slot -> slot.text().equals(INPUT_CONFIRM));
+        assertThat(h.recorder.factKinds(h.recorder.only())).containsExactly(FactKind.TRANSCRIPT_FAILED);
+    }
+
+    @Test
+    void anUnsureReaskAnswerRereadsTheReaskOnceAndTheSecondOneOffersHelp() {
+        Harness h = with(directAskScript(SCENARIO), FIXED_SPEECH);
+        h.toOpportunity();
+        h.child("그거");
+        h.result("J2", "PARTIAL");
+        h.played();
+        h.child("음 그러니까");
+
+        h.abstained("J3", "LOW_CONFIDENCE");
+
+        assertThat(h.ext.state().phase()).isEqualTo(FlowState.Phase.REASK);
+        assertThat(h.out.slots.stream().filter(slot -> slot.text().equals(PracticeScriptFixtures.V2_REASK))).hasSize(2);
+        assertThat(h.out.lastSlot().text()).isEqualTo(PracticeScriptFixtures.V2_REASK);
+        assertThat(h.out.diagnostics).containsExactly(unsureAskedAgain("J3"));
+        h.played();
+        h.child("음");
+
+        h.abstained("J3", "LOW_CONFIDENCE");
+
+        assertThat(h.ext.state().phase()).isEqualTo(FlowState.Phase.HELP_OFFER);
+        assertThat(h.out.lastSlot().text()).isEqualTo(HELP_OFFER);
+        assertThat(h.out.diagnostics).as("두 번째 불명확은 다시 묻지 않는다").containsExactly(unsureAskedAgain("J3"));
+    }
+
+    @Test
+    void theReaskReachedFromAnUnsureAnswerKeepsItsOwnNoResponseReguide() {
+        Harness h = with(directAskScript(SCENARIO), FIXED_SPEECH);
+        h.toOpportunity();
+        h.child("손 아파?");
+        h.abstained("J2", "LOW_CONFIDENCE");
+        h.played();
+
+        h.advance(java.time.Duration.ofSeconds(10));
+
+        assertThat(h.ext.state().phase()).isEqualTo(FlowState.Phase.REASK);
+        assertThat(h.out.lastSlot().text()).isEqualTo(FIXED_SPEECH.get("WAIT_LEAD") + " " + PracticeScriptFixtures.V2_REASK);
+    }
+
+    @Test
+    void anUnsureRetryAnswerHearsTheRetryPromptAndASecondOneClosesTheSceneAsBefore() {
+        Harness h = with(directAskScript(SCENARIO), FIXED_SPEECH);
+        h.toOpportunity();
+        h.child("몰라, 뭐라고 해야 돼?");
+        h.result("J2", "HELP");
+        h.played();
+        h.child("파란색 줘");
+
+        h.abstained("J5", "LOW_CONFIDENCE");
+
+        assertThat(h.ext.state().phase()).isEqualTo(FlowState.Phase.RETRY);
+        assertThat(h.out.lastSlot().text()).as("확인 질문 대신 다시 해 보기의 묻는 말").isEqualTo(RETRY_PROMPT);
+        assertThat(h.out.diagnostics).containsExactly(unsureAskedAgain("J5"));
+        h.played();
+        h.child("파란색");
+
+        h.abstained("J5", "LOW_MARGIN");
+
+        // 두 번째 불명확: 다시 해 보기가 한 번뿐이라(retry-max 1) 도움을 다시 하지 않고 장면을 닫는다(지금과 같다)
+        assertThat(h.out.lastSlot().text()).isEqualTo(SCENE_CLOSE);
+        assertThat(h.out.diagnostics).hasSize(1);
+    }
+
+    @Test
+    void anUnsureAnswerToTheHelpOfferRereadsTheSameOffer() {
+        Harness h = with(directAskScript(SCENARIO), FIXED_SPEECH);
+        toHelpOffer(h);
+        h.played();
+        h.child("음 몰라");
+
+        h.abstained("J4", "LOW_CONFIDENCE");
+
+        assertThat(h.ext.state().phase()).isEqualTo(FlowState.Phase.HELP_OFFER);
+        assertThat(h.out.lastSlot().text()).isEqualTo(HELP_OFFER);
+        assertThat(h.out.diagnostics).containsExactly(unsureAskedAgain("J4"));
+    }
+
+    @Test
+    void onlyTheDirectAskOpportunityJudgmentCarriesTheLoweredFloor() {
+        Harness h = with(directAskScript(SCENARIO), FIXED_SPEECH);
+        h.toOpportunity();
+        h.child("그거");
+        assertThat(h.out.lastJudgment().point()).isEqualTo(kr.mujoong.realtime.judgment.JudgmentPoint.J2);
+        assertThat(h.out.lastJudgment().criteria()).containsKeys("coreFunction", "judgmentCriteria")
+                .containsEntry(MIN_CONFIDENCE, PracticeFlowTestKit.J2_MIN_CONFIDENCE);
+        h.result("J2", "PARTIAL");
+        h.played();
+        h.child("음");
+        assertThat(h.out.lastJudgment().criteria()).as("J3").containsKey("coreFunction").doesNotContainKey(MIN_CONFIDENCE);
+        h.result("J3", "STILL_SHORT");
+        h.played();
+        h.child("응");
+        assertThat(h.out.lastJudgment().criteria()).as("J4 도움 제안은 지금처럼 기준 없음").isNull();
+        h.result("J4", "ACCEPT");
+        h.played();
+        h.child("파란 상자 줘");
+        assertThat(h.out.lastJudgment().point()).isEqualTo(kr.mujoong.realtime.judgment.JudgmentPoint.J5);
+        assertThat(h.out.lastJudgment().criteria()).as("J5").containsKey("coreFunction").doesNotContainKey(MIN_CONFIDENCE);
+
+        Harness flexible = new Harness(packageJson(GOAL, minimalScript(SCENARIO)), Map.of(), PracticeFlowTestKit.flexible());
+        flexible.toOpportunity();
+        flexible.child("그거");
+        assertThat(flexible.out.lastJudgment().criteria()).as("유연 대화").containsKey("coreFunction").doesNotContainKey(MIN_CONFIDENCE);
+
+        PracticeFlowSettings noFloor = new PracticeFlowSettings(java.time.Duration.ofSeconds(10), java.time.Duration.ofSeconds(90),
+                java.time.Duration.ofMinutes(10), java.time.Duration.ofSeconds(20), 1, 1, false);
+        Harness withoutFloor = new Harness(packageJson(GOAL, directAskScript(SCENARIO)), FIXED_SPEECH, noFloor);
+        withoutFloor.toOpportunity();
+        withoutFloor.child("그거");
+        assertThat(withoutFloor.out.lastJudgment().criteria()).as("하한 설정이 없는 설정 객체").doesNotContainKey(MIN_CONFIDENCE);
+    }
+
+    @Test
+    void theFlexibleDialogueStillConfirmsAnUnsureAnswerWithItsGeneratedQuestion() {
+        Harness h = new Harness(packageJson(GOAL, minimalScript(SCENARIO)), Map.of(), PracticeFlowTestKit.flexible());
+        h.toOpportunity();
+        h.child("그거");
+
+        h.abstained("J2", "LOW_CONFIDENCE");
+
+        assertThat(h.ext.state().phase()).isEqualTo(FlowState.Phase.OPPORTUNITY);
+        assertThat(h.ext.state().sub()).isEqualTo(FlowState.Sub.INPUT_CONFIRMATION);
+        assertThat(h.out.lastSlot().generated()).isTrue();
+        assertThat(h.out.lastSlot().text()).isEqualTo(PracticeInstructions.inputConfirmation());
+        assertThat(h.out.diagnostics).isEmpty();
     }
 
     // ---- 끊긴 마무리 문장 ----

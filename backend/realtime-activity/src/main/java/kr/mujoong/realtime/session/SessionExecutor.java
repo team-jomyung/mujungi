@@ -1433,9 +1433,10 @@ public final class SessionExecutor {
     }
 
     /**
-     * W4: 확장이 요청한 판정. 거절 조건은 열린 턴 · 지점 밖 · 최근 확정 전사 4개 밖 · 기준 모양 틀림(같은 걸음 묶음 모양 포함) · 공급자 없음이다
-     * (ACTIVE가 아니면 호출 앞에서 PRACTICE_EXTENSION_FAILED로 거절한다). 다음 행동은 확장이 정하므로 실행부는 지시를 내지 않는다. 기준 맵의 같은
-     * 걸음 묶음({@link PracticeSessionExtension.PracticeOutput#SAME_STEP_GROUPS})은 어느 지점이든 판정 요청에 실어 검증기의 하한 검사에만 쓴다.
+     * W4: 확장이 요청한 판정. 거절 조건은 열린 턴 · 지점 밖 · 최근 확정 전사 4개 밖 · 기준 모양 틀림(같은 걸음 묶음 · 낮춘 하한 모양 포함) · 공급자
+     * 없음이다(ACTIVE가 아니면 호출 앞에서 PRACTICE_EXTENSION_FAILED로 거절한다). 다음 행동은 확장이 정하므로 실행부는 지시를 내지 않는다. 기준 맵의
+     * 같은 걸음 묶음({@link PracticeSessionExtension.PracticeOutput#SAME_STEP_GROUPS})과 낮춘 하한({@link PracticeSessionExtension.PracticeOutput#MIN_CONFIDENCE})은
+     * 어느 지점이든 판정 요청에 실어 검증기의 하한 검사에만 쓴다(공급자로 보내지 않는다).
      */
     private boolean requestExtensionJudgment(JudgmentPoint point, long transcriptSeq, UUID correlationId,
             Map<String, Object> criteria) {
@@ -1461,9 +1462,12 @@ public final class SessionExecutor {
             }
         }
         List<List<String>> sameStepGroups;
+        Double minConfidence;
         try {
             sameStepGroups = JudgmentCoordinator.sameStepGroups(
                     criteria == null ? null : criteria.get(PracticeSessionExtension.PracticeOutput.SAME_STEP_GROUPS));
+            minConfidence = JudgmentCoordinator.minConfidence(
+                    criteria == null ? null : criteria.get(PracticeSessionExtension.PracticeOutput.MIN_CONFIDENCE));
         } catch (RuntimeException invalid) {
             return false;
         }
@@ -1473,7 +1477,7 @@ public final class SessionExecutor {
             return false;
         }
         judgment.open(new JudgmentCoordinator.Open(point, JudgmentTrigger.EXTENSION_REQUEST, JudgmentOwner.EXTENSION, target.seq(),
-                target.text(), target.at(), shaped, sameStepGroups,
+                target.text(), target.at(), shaped, sameStepGroups, minConfidence,
                 practice != null && practice.controlsOutput()
                         ? judgment.dialogueBefore(target.seq(), target.at()) : judgment.recentBefore(target.seq()),
                 (turn, outcome) -> JudgmentTurn.Decision.close(), closure -> afterExtensionJudgment(closure, correlationId)));

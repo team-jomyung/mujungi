@@ -263,6 +263,58 @@ class JudgmentExtensionPortTest {
         assertThat(record.secondProbability()).isEqualTo(0.29);
     }
 
+    // ---- 요청 하한 (ai-io.md 10.10, 편차 FT-1024-h) ----
+
+    private static final String MIN_CONFIDENCE = PracticeSessionExtension.PracticeOutput.MIN_CONFIDENCE;
+
+    @Test
+    void aLoweredFloorInTheCriteriaMapReachesTheJudgeRequestAndIsNotProviderInput() {
+        practice();
+        long seq = say("i-1", "그거");
+        Map<String, Object> criteria = criteria();
+        criteria.put(MIN_CONFIDENCE, 0.45);
+
+        assertThat(extension.output.requestJudgment(JudgmentPoint.J2, seq, correlation, criteria)).isTrue();
+        t.h.drain();
+
+        JudgeRequest request = t.judge.last().request();
+        assertThat(request.minConfidence()).isEqualTo(0.45);
+        assertThat(request.criteria()).as("판정 기준은 그대로").isNotNull();
+        assertThat(request.toLunaInput()).as("낮춘 하한은 공급자 입력이 아니다").doesNotContainKey(MIN_CONFIDENCE);
+        assertThat(request.toLunaInput().toString()).doesNotContain("0.45");
+    }
+
+    @Test
+    void withoutAFloorTheJudgeRequestKeepsTheGlobalOne() {
+        practice();
+        long seq = say("i-1", "그거");
+
+        assertThat(extension.output.requestJudgment(JudgmentPoint.J2, seq, correlation, criteria())).isTrue();
+        t.h.drain();
+
+        assertThat(t.judge.last().request().minConfidence()).isNull();
+    }
+
+    @Test
+    void aFloorOutsideTheAcceptedShapeIsRefusedLikeMalformedCriteria() {
+        practice();
+        long seq = say("i-1", "그거 줘");
+        List<Object> malformed = List.of("0.45", Double.NaN, Double.POSITIVE_INFINITY, 0.29, 1.01, -0.5, List.of(0.45), true);
+
+        for (Object bad : malformed) {
+            Map<String, Object> criteria = criteria();
+            criteria.put(MIN_CONFIDENCE, bad);
+            assertThat(extension.output.requestJudgment(JudgmentPoint.J2, seq, correlation, criteria)).as(String.valueOf(bad)).isFalse();
+        }
+        assertThat(t.judge.calls()).as("모양이 틀린 하한으로는 턴을 열지 않는다").isEmpty();
+
+        Map<String, Object> lowest = criteria();
+        lowest.put(MIN_CONFIDENCE, PracticeSessionExtension.PracticeOutput.MIN_CONFIDENCE_LOWEST);
+        assertThat(extension.output.requestJudgment(JudgmentPoint.J2, seq, correlation, lowest)).as("받는 범위의 아래 끝").isTrue();
+        t.h.drain();
+        assertThat(t.judge.last().request().minConfidence()).isEqualTo(0.3);
+    }
+
     @Test
     void existingExtensionsCompileWithoutTheNewCapabilitiesAndTheyDefaultToFalse() {
         PracticeSessionExtension.PracticeOutput bare = new PracticeSessionExtension.PracticeOutput() {

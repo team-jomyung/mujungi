@@ -11,6 +11,10 @@ import java.util.List;
  * <p>같은 걸음 묶음(ai-io.md 10.10, 편차 FT-1024-f): 판정을 요청한 연습 흐름이 지금 단계에서 같은 다음 걸음으로 처리하는 선택지 묶음을 요청에 실으면,
  * 1 · 2순위가 같은 묶음일 때 하한은 두 확률의 합으로 보고 두 선택지 사이의 최소 차이는 보지 않는다. 어느 쪽이 1순위여도 흐름이 하는 일이 같아서 둘
  * 사이의 망설임은 보류할 까닭이 아니다. 확정 결과의 1순위는 모델이 낸 1순위 그대로다. 1 · 2순위가 다른 묶음이거나 묶음이 없으면 지금 규칙 그대로다.
+ *
+ * <p>요청 하한(ai-io.md 10.10, 편차 FT-1024-h): 요청이 이 판정에만 쓸 낮춘 하한을 실으면(C안 기회 J2) 하한 자리에 그 값을 쓴다 — 1순위 하나를 볼
+ * 때도, 같은 걸음 묶음의 합을 볼 때도 같은 하한이다. 낮추기만 한다: 전역 하한보다 크거나 같으면(또는 수가 아니거나 0 ~ 1 밖이면) 무시하고 전역 하한을
+ * 쓴다. 최소 차이는 언제나 전역 값이다.
  */
 public final class JudgeOutcomeValidator {
 
@@ -38,17 +42,38 @@ public final class JudgeOutcomeValidator {
      */
     public JudgeOutcome validateRanked(String firstOption, double firstProbability, String secondOption, double secondProbability,
             List<String> allowedOptions, List<List<String>> sameStepGroups, Duration latency, String model, String promptVersion) {
+        return validateRanked(firstOption, firstProbability, secondOption, secondProbability, allowedOptions, sameStepGroups, null,
+                latency, model, promptVersion);
+    }
+
+    /**
+     * {@link #validateRanked(String, double, String, double, List, List, Duration, String, String)}에 요청 하한을 더한 것.
+     *
+     * @param requestedMinConfidence 요청이 이 판정에만 쓰자고 실은 낮춘 하한(없으면 null). 전역 하한보다 낮을 때만 하한 자리에 쓴다
+     */
+    public JudgeOutcome validateRanked(String firstOption, double firstProbability, String secondOption, double secondProbability,
+            List<String> allowedOptions, List<List<String>> sameStepGroups, Double requestedMinConfidence, Duration latency, String model,
+            String promptVersion) {
         Ranked first = Ranked.of(firstOption, firstProbability);
         Ranked second = Ranked.of(secondOption, secondProbability);
         if (first == null || second == null) {
             return JudgeOutcome.abstained(AbstainReason.SCHEMA_INVALID, latency, model, promptVersion);
         }
-        return check(first, second, allowedOptions, sameStepGroups == null ? List.of() : sameStepGroups, latency, model,
-                promptVersion);
+        return check(first, second, allowedOptions, sameStepGroups == null ? List.of() : sameStepGroups, floor(requestedMinConfidence),
+                latency, model, promptVersion);
+    }
+
+    /** 이 판정의 하한: 요청 하한이 0 ~ 1 안의 수이고 전역 하한보다 낮으면 그 값, 아니면 전역 하한(낮추기만 한다). */
+    private BigDecimal floor(Double requested) {
+        if (requested == null || requested.isNaN() || requested.isInfinite() || requested < 0.0 || requested > 1.0) {
+            return minConfidence;
+        }
+        BigDecimal value = BigDecimal.valueOf(requested);
+        return value.compareTo(minConfidence) < 0 ? value : minConfidence;
     }
 
     private JudgeOutcome check(Ranked first, Ranked second, List<String> allowedOptions, List<List<String>> sameStepGroups,
-            Duration latency, String model, String promptVersion) {
+            BigDecimal floor, Duration latency, String model, String promptVersion) {
         if (!first.inUnitInterval() || !second.inUnitInterval()) {
             return JudgeOutcome.abstained(AbstainReason.PROBABILITY_OUT_OF_RANGE, latency, model, promptVersion);
         }
@@ -58,13 +83,13 @@ public final class JudgeOutcomeValidator {
         if (first.option.equals(second.option)) {
             return JudgeOutcome.abstained(AbstainReason.DUPLICATE_OPTION, latency, model, promptVersion);
         }
-        boolean confident = first.probability.compareTo(minConfidence) >= 0;
+        boolean confident = first.probability.compareTo(floor) >= 0;
         boolean separated = first.probability.subtract(second.probability).compareTo(minMargin) >= 0;
         if (confident && separated) {
             return JudgeOutcome.confirmed(first.option, first.p(), second.option, second.p(), latency, model, promptVersion);
         }
         if (sameStep(sameStepGroups, first.option, second.option)
-                && first.probability.add(second.probability).compareTo(minConfidence) >= 0) {
+                && first.probability.add(second.probability).compareTo(floor) >= 0) {
             return JudgeOutcome.confirmedBySameStep(first.option, first.p(), second.option, second.p(), latency, model, promptVersion);
         }
         return JudgeOutcome.abstainedWithScores(confident ? AbstainReason.LOW_MARGIN : AbstainReason.LOW_CONFIDENCE, first.option,

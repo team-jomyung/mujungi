@@ -36,13 +36,16 @@ final class PracticeFlowTestKit {
     private PracticeFlowTestKit() {
     }
 
+    /** C안 기회(J2) 판정에 싣는 낮춘 하한(application.yml {@code mujoong.practice-flow.direct-ask.j2-min-confidence}와 같은 값). */
+    static final double J2_MIN_CONFIDENCE = 0.45;
+
     /**
      * 기본 설정 = C안 '무중이 직접 묻기'(운영 기본 경로, 시험용 값: 무응답 10초 · 집중 90초 · 목표 10분 · 슬롯 안전 20초 · 다시 해 보기 1 ·
-     * 다시 설명 1 — application.yml과 같은 횟수).
+     * 다시 설명 1 · J2 하한 0.45 — application.yml과 같은 횟수 · 하한).
      */
     static PracticeFlowSettings defaults() {
         return new PracticeFlowSettings(Duration.ofSeconds(10), Duration.ofSeconds(90), Duration.ofMinutes(10),
-                Duration.ofSeconds(20), 1, 1, false);
+                Duration.ofSeconds(20), 1, 1, false, J2_MIN_CONFIDENCE);
     }
 
     /** 유연 대화 경로(설정으로 되돌린 경로, 지금 시험 값: 다시 해 보기 2 · 다시 설명 1). */
@@ -343,8 +346,16 @@ final class PracticeFlowTestKit {
         }
 
         Signal abstained(String point) {
+            return abstained(point, "FAULT");
+        }
+
+        /**
+         * 판정 보류 사건(실행부가 보내는 모양 그대로 {@code {point, abstainReason}}). 사유 LOW_CONFIDENCE · LOW_MARGIN은 받아쓰기는 됐는데 확률이
+         * 하한 · 최소 차이에 못 미친 보류, UNREADABLE_INPUT은 판독 불가 입력, FAULT · TIMEOUT · PROVIDER_ERROR 등은 장애다.
+         */
+        Signal abstained(String point, String reason) {
             return ext.onExtensionEvent(new ExtensionEvent(ExtensionEvent.Kind.JUDGMENT_ABSTAINED, "judgment",
-                    out.lastJudgment().correlationId(), Map.of("point", point, "abstainReason", "FAULT")), out);
+                    out.lastJudgment().correlationId(), Map.of("point", point, "abstainReason", reason)), out);
         }
 
         Signal event(ExtensionEvent.Kind kind, String name, UUID correlationId, Object value) {

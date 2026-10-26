@@ -280,6 +280,8 @@ final class PracticeVoiceFacts {
         String abstainReason;
         /** 1 · 2순위가 같은 걸음 묶음이라 두 확률의 합으로 확정했다(ai-io.md 10.10). */
         boolean sameStepSum;
+        /** 판정 요청에 실린 낮춘 하한(C안 기회 J2, 없으면 null = 전역 하한, ai-io.md 10.10 · 편차 FT-1024-h). */
+        Double requestedMinConfidence;
         String model;
         long latencyMs = -1;
         Long doneAtMs;
@@ -938,6 +940,7 @@ final class PracticeVoiceFacts {
     synchronized JudgeCall judgeStarted(JudgeRequest request, boolean capped) {
         JudgeCall call = new JudgeCall(judgeCalls.size() + 1, request.point().name(), request.childUtterance(), request.uncertain(), ms(),
                 capped);
+        call.requestedMinConfidence = request.minConfidence();
         ChildTurn turn = lastSpokenTurn();
         call.childTurn = turn == null ? null : turn.index;
         judgeCalls.add(call);

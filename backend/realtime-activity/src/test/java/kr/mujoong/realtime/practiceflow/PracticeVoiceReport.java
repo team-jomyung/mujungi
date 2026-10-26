@@ -259,8 +259,20 @@ final class PracticeVoiceReport {
      * approvedSpeech와 같은 고정 문장).
      */
     static Map<String, String> lineLabels(PracticeScript script, Map<String, String> approvedSpeech) {
+        return lineLabels(script, approvedSpeech, null);
+    }
+
+    /**
+     * {@link #lineLabels(PracticeScript, Map)}에 장면 밖 목표 안내 승인 문장(편차 FT-1024-g)을 '목표 안내'로 더한다. 하니스 시작 패키지는 목표 하나라
+     * 순서 1 · 목표 수 1로 만든다. 목표 이름을 승인 문장으로 다듬을 수 없으면(흐름이 생성형으로 낸다) 더하지 않는다.
+     */
+    static Map<String, String> lineLabels(PracticeScript script, Map<String, String> approvedSpeech, String goalName) {
         DirectAskLines lines = new DirectAskLines(approvedSpeech);
         Map<String, String> labels = new LinkedHashMap<>();
+        String goalBrief = DirectAskLines.goalBrief(goalName, 1, 1);
+        if (goalBrief != null) {
+            label(labels, goalBrief, "목표 안내");
+        }
         for (Scene scene : script.scenes()) {
             String prefix = scene.sceneKind() == SceneKind.VARIANT ? "변형:" : "";
             String ask = present(scene.askPrompt()) ? "askPrompt" : DirectAskLines.ASK_DEFAULT;
@@ -920,7 +932,7 @@ final class PracticeVoiceReport {
                 rows.add(ordered("dialogue", plan.index(), "index", call.index, "atMs", call.atMs, "at", formatMs(call.atMs), "point", call.point,
                         "kind", call.kind, "first", call.first, "firstProbability", call.firstProbability, "second", call.second,
                         "secondProbability", call.secondProbability, "abstainReason", call.abstainReason, "sameStepSum", call.sameStepSum,
-                        "latencyMs", call.latencyMs,
+                        "requestedMinConfidence", call.requestedMinConfidence, "latencyMs", call.latencyMs,
                         "cancelledAtDeadline", call.cancelledAtDeadline, "harnessCapped", call.capped, "model", call.model, "uncertainInput",
                         call.uncertain, "childTurn", call.childTurn, "childKey", link == null ? null : link.turn().key, "childText",
                         link == null ? null : link.turn().text, "utterance", call.utterance));
@@ -1195,7 +1207,7 @@ final class PracticeVoiceReport {
                     String intended = link == null ? "-" : link.turn().key + " «" + link.turn().text + "»";
                     md.append("| ").append(call.index).append(" ").append(formatMs(call.atMs)).append(" | ").append(call.point).append(" | ")
                             .append(cell(intended + " → «" + nz(call.utterance, "") + "»" + (call.uncertain ? "(불확실)" : ""))).append(" | ")
-                            .append(cell(resultLabel(call))).append(" | ").append(call.second == null ? "-" : call.second + " " + probability(
+                            .append(cell(resultLabel(call) + floorNote(call))).append(" | ").append(call.second == null ? "-" : call.second + " " + probability(
                                     call.secondProbability)).append(" | ").append(call.latencyMs < 0 ? "-" : secs(call.latencyMs)).append(" |")
                             .append(NL);
                 }
@@ -1262,11 +1274,16 @@ final class PracticeVoiceReport {
         return nz(call.kind, "결과 없음");
     }
 
-    /** 판정 한 줄(대화 기록용): J2 FULL 0.91(2순위 PARTIAL 0.05) · 1.2초. */
+    /** 판정 한 줄(대화 기록용): J2 FULL 0.91(2순위 PARTIAL 0.05) · 1.2초. 요청 하한이 실렸으면 '(요청 하한 0.45)'를 붙인다(편차 FT-1024-h). */
     static String judgmentLabel(JudgeCall call) {
         String second = call.second == null ? "" : "(2순위 " + call.second + " " + probability(call.secondProbability) + ")";
-        return call.point + " " + resultLabel(call) + ("CONFIRMED".equals(call.kind) ? second : "")
+        return call.point + " " + resultLabel(call) + ("CONFIRMED".equals(call.kind) ? second : "") + floorNote(call)
                 + (call.latencyMs < 0 ? "" : " · " + secs(call.latencyMs));
+    }
+
+    /** 판정 요청에 실린 낮춘 하한 표시(C안 기회 J2, 편차 FT-1024-h). 없으면 빈 글. */
+    private static String floorNote(JudgeCall call) {
+        return call.requestedMinConfidence == null ? "" : "(요청 하한 " + probability(call.requestedMinConfidence) + ")";
     }
 
     // ------------------------------------------------------------------ 요약

@@ -209,7 +209,9 @@ final class PracticeVoiceSession {
             // 시작 패키지는 목표 하나만 담아 다음 목표 대본 요청(core 내부 호출)은 일어나지 않는다. 요청자는 운영 모양 그대로 둔다
             PracticeScriptRequester requester = new PracticeScriptRequester(mock(InternalHttpClient.class), Runnable::run,
                     flowSettings.slotGuard());
-            Map<String, String> labels = PracticeVoiceReport.lineLabels(plan.goal().script(), harness.catalog.speechTexts());
+            // 목표 안내도 C안은 승인 낭독이다(편차 FT-1024-g): 승인 원문 읽기로 세고 출처를 '목표 안내'로 적는다
+            Map<String, String> labels = PracticeVoiceReport.lineLabels(plan.goal().script(), harness.catalog.speechTexts(),
+                    plan.goal().goalName());
             PracticeSessionExtension.Factory factory = id -> new ObservedExtension(new PracticeFlowRouter(
                     NoOpPracticeSessionExtension.FACTORY.create(id), () -> {
                         PracticeConversation created = new PracticeConversation(id, guardianId, clock, flowSettings, requester,

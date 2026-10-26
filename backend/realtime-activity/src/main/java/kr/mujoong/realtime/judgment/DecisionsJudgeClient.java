@@ -29,8 +29,8 @@ import kr.mujoong.realtime.luna.LunaRequest;
  * <p>질문은 판정 지시문 · 선택지 판({@link JudgmentPrompt})에서 만든다: 지시 본문 + 그 지점 질문이 질문 지시문이고, 선택지는 요청 선택지(판
  * 순서)에 판의 뜻을 {@code description}으로 붙인다. 데이터({@link JudgeRequest#toLunaInput()})는 질문이 아니라 입력 자리로 간다(지시와 데이터
  * 분리, U9 BR2.5). 1 · 2순위는 선택지 확률 내림차순이고(같으면 공급자가 고른 값, 그다음 판 순서), 하한 · 최소 차이(요청의 같은 걸음 묶음이면
- * 두 확률의 합)는 {@link JudgeOutcomeValidator#validateRanked}로 확인한다. 묶음은 공급자로 보내지 않는다. 입력 · 출력 본문은 로그에 쓰지
- * 않는다(R-F14).
+ * 두 확률의 합, 요청의 낮춘 하한이 있으면 그 하한)는 {@link JudgeOutcomeValidator#validateRanked}로 확인한다. 묶음 · 낮춘 하한은 공급자로 보내지
+ * 않는다. 입력 · 출력 본문은 로그에 쓰지 않는다(R-F14).
  */
 public final class DecisionsJudgeClient implements JudgeClient {
 
@@ -144,7 +144,7 @@ public final class DecisionsJudgeClient implements JudgeClient {
         LunaDecision.Probability first = ranked.get(0);
         LunaDecision.Probability second = ranked.get(1);
         return validator.validateRanked(first.value(), first.probability(), second.value(), second.probability(), request.options(),
-                request.sameStepGroups(), latency, decision.responseModel(), version);
+                request.sameStepGroups(), request.minConfidence(), latency, decision.responseModel(), version);
     }
 
     /** 호출 실패 → 보류 사유(TIMEOUT · SCHEMA_INVALID, 그 밖은 PROVIDER_ERROR). */

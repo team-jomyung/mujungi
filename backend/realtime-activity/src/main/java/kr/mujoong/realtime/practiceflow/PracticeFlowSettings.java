@@ -4,6 +4,7 @@ import java.time.Duration;
 import java.util.Objects;
 import kr.mujoong.realtime.config.RealtimeProperties;
 import kr.mujoong.realtime.config.RealtimeTimingProperties;
+import kr.mujoong.realtime.session.PracticeSessionExtension.PracticeOutput;
 
 /**
  * 새 연습 흐름이 읽는 설정 값 객체.
@@ -21,14 +22,23 @@ import kr.mujoong.realtime.config.RealtimeTimingProperties;
  * @param retryMax 장면당 다시 해 보기 최대 횟수
  * @param reexplainMax 장면당 상황 다시 설명 최대 횟수
  * @param flexibleDialogue 참이면 유연 대화 경로, 거짓이면 C안 '무중이 직접 묻기'(docs/practice-direct-ask.md, 운영 기본)
+ * @param directAskJ2MinConfidence C안 기회(J2) 판정 요청에 실어 보낼 낮춘 확률 하한({@code mujoong.practice-flow.direct-ask.j2-min-confidence}, 편차
+ *     FT-1024-h). 실행부 검증기가 전역 하한보다 낮을 때만 쓴다. null이면 싣지 않는다(전역 하한 그대로 — 경로 · 하한을 고르지 않는 시험용 생성자).
+ *     값이 있으면 {@link PracticeOutput#MIN_CONFIDENCE_LOWEST} 이상 1 이하여야 한다(실행부가 받는 범위와 같다)
  */
 public record PracticeFlowSettings(Duration noResponseWait, Duration focusMax, Duration goalActiveLimit, Duration slotGuard,
-        int retryMax, int reexplainMax, boolean flexibleDialogue) {
+        int retryMax, int reexplainMax, boolean flexibleDialogue, Double directAskJ2MinConfidence) {
 
     /** 경로를 고르지 않는 기존 호출처(시험)는 지금처럼 유연 대화를 받는다. 운영은 {@link #from}이 설정 키로 고른다. */
     public PracticeFlowSettings(Duration noResponseWait, Duration focusMax, Duration goalActiveLimit, Duration slotGuard,
             int retryMax, int reexplainMax) {
         this(noResponseWait, focusMax, goalActiveLimit, slotGuard, retryMax, reexplainMax, true);
+    }
+
+    /** J2 낮춘 하한을 싣지 않는 호출처(시험): 판정은 전역 하한 그대로다. */
+    public PracticeFlowSettings(Duration noResponseWait, Duration focusMax, Duration goalActiveLimit, Duration slotGuard,
+            int retryMax, int reexplainMax, boolean flexibleDialogue) {
+        this(noResponseWait, focusMax, goalActiveLimit, slotGuard, retryMax, reexplainMax, flexibleDialogue, null);
     }
 
     public PracticeFlowSettings {
@@ -42,6 +52,11 @@ public record PracticeFlowSettings(Duration noResponseWait, Duration focusMax, D
         if (reexplainMax < 0) {
             throw new IllegalArgumentException("설정 키는 0 이상이어야 한다: mujoong.practice-flow.reexplain-max");
         }
+        if (directAskJ2MinConfidence != null && (directAskJ2MinConfidence.isNaN()
+                || directAskJ2MinConfidence < PracticeOutput.MIN_CONFIDENCE_LOWEST || directAskJ2MinConfidence > 1.0)) {
+            throw new IllegalArgumentException("설정 키는 " + PracticeOutput.MIN_CONFIDENCE_LOWEST
+                    + " 이상 1 이하여야 한다: mujoong.practice-flow.direct-ask.j2-min-confidence");
+        }
     }
 
     /** 운영 설정 트리에서 읽는다. 경로는 {@code mujoong.practice-flow.flexible-dialogue}(기본 거짓 = C안)가 고른다. */
@@ -51,7 +66,8 @@ public record PracticeFlowSettings(Duration noResponseWait, Duration focusMax, D
         return new PracticeFlowSettings(conversation.noResponseWait(), conversation.focusMax(),
                 conversation.goalActiveLimit(), properties.timing().device().outputQueueMax(),
                 properties.practiceFlow().retryMax(),
-                properties.practiceFlow().reexplainMax(), properties.practiceFlow().flexibleDialogue());
+                properties.practiceFlow().reexplainMax(), properties.practiceFlow().flexibleDialogue(),
+                properties.practiceFlow().directAsk().j2MinConfidence());
     }
 
     /** C안 '무중이 직접 묻기' 경로인가(유연 대화가 아니면 C안이다). */

@@ -2,6 +2,7 @@ package kr.mujoong.realtime.practiceflow;
 
 import static kr.mujoong.realtime.practiceflow.PracticeScriptFixtures.FIXED_SPEECH;
 import static kr.mujoong.realtime.practiceflow.PracticeScriptFixtures.V2_ASK;
+import static kr.mujoong.realtime.practiceflow.PracticeScriptFixtures.V2_GOAL_BRIEF;
 import static kr.mujoong.realtime.practiceflow.PracticeScriptFixtures.V2_HELP;
 import static kr.mujoong.realtime.practiceflow.PracticeScriptFixtures.V2_INTRO;
 import static kr.mujoong.realtime.practiceflow.PracticeScriptFixtures.V2_OPPORTUNITY;
@@ -136,14 +137,14 @@ class PracticeFlowIT {
     void aDirectAskReaskThatResolvesTheSceneRunsFromStartToTheSettledPracticeRecord() {
         directAsk();
         h.activate();
-        // 장면 밖 목표 안내는 생성형이라 제브(PRACTICE_PEER)를 거친다
-        playGenerated("오늘 연습할 목표는 부탁하기야. 짧게 이야기 연습을 해 볼 거야.");
-        assertThat(guard.count()).isEqualTo(1);
+        // 장면 밖 목표 안내도 C안은 서버가 정한 문장의 승인 낭독이다(FT-1024-g): 원문 그대로 재생되면 제브(PRACTICE_PEER)를 부르지 않는다
+        playApproved(V2_GOAL_BRIEF);
+        assertThat(guard.count()).isZero();
         // 장면 안 말은 모두 대본 칸의 승인 낭독이다: 원문 그대로 재생되면 제브를 부르지 않고, 재생이 끝나면 다음으로 간다
         playApproved(V2_INTRO);
         assertThat(repository.findSceneRuns(h.sessionId)).as("상황 안내 재생 성공 뒤에야 장면 행이 생긴다").hasSize(1);
         playApproved(V2_OPPORTUNITY);
-        assertThat(guard.count()).as("친구 말 전하기 + 묻기도 승인 낭독").isEqualTo(1);
+        assertThat(guard.count()).as("친구 말 전하기 + 묻기도 승인 낭독").isZero();
 
         // 아이 대답이 일부만 전했다 → J2 PARTIAL → 무중이 대본의 되묻기를 그대로 읽는다(생성형 · 제브 없음)
         h.childSays("child-1", "손 아파? " + MARKER);
@@ -157,7 +158,7 @@ class PracticeFlowIT {
         judge.confirm("PARTIAL", 0.8, "FULL", 0.1);
         h.drain();
         playApproved(V2_REASK);
-        assertThat(guard.count()).isEqualTo(1);
+        assertThat(guard.count()).isZero();
 
         // 되물은 뒤 충분히 전했다 → J3 DELIVERED → 대본의 친구 반응을 승인 낭독하고 재생이 끝나야 장면이 끝난다
         h.childSays("child-2", "손 괜찮아? 그럼 다음에 같이 그리자");
@@ -171,11 +172,12 @@ class PracticeFlowIT {
         assertThat(h.executor.status()).isEqualTo(SessionStatus.ACTIVE);
         assertThat(repository.findSceneRuns(h.sessionId).getFirst().endedAt()).isNull();
         playApproved(V2_REACTION);
-        assertThat(guard.count()).as("친구 반응도 승인 낭독").isEqualTo(1);
+        assertThat(guard.count()).as("친구 반응도 승인 낭독").isZero();
         assertThat(h.executor.status()).isEqualTo(SessionStatus.ACTIVE);
 
         // 장면 밖 목표 회고(생성형 · 제브)가 끝나면 연습이 끝난다
         playGenerated("오늘은 부탁하기를 무중이 다시 물었을 때 네 말로 해 봤어. 오늘 연습은 여기까지야.");
+        assertThat(guard.count()).as("제브는 생성형 목표 회고 한 번뿐").isEqualTo(1);
         assertThat(h.executor.status()).isEqualTo(SessionStatus.CLOSING);
         assertThat(h.transitions.find(h.sessionId).orElseThrow().endDetail()).isEqualTo("PRACTICE_COMPLETED");
         assertThat(h.provider.last().requests(kr.mujoong.realtime.voice.ProviderRequestFactory.InstructionsAppend.class))
@@ -216,7 +218,7 @@ class PracticeFlowIT {
     void aBlockedRecoveryNarrationSendsZeroBytesIsSkippedAndThePracticeKeepsListening() {
         directAsk();
         h.activate();
-        playGenerated("오늘 연습할 목표는 부탁하기야.");
+        playApproved(V2_GOAL_BRIEF);
         playApproved(V2_INTRO);
         playApproved(V2_OPPORTUNITY);
         h.childSays("child-1", "손 아파?");
@@ -254,10 +256,10 @@ class PracticeFlowIT {
 
     /**
      * 진행 중 판정을 운영 구현({@link DecisionsJudgeClient})과 실제 검증기(하한 0.6 · 최소 차이 0.15, application.yml 기본값)로 돌린다. 공급자 호출만
-     * 시험이 확률을 손으로 주는 대역이다(R-F1).
+     * 시험이 확률을 손으로 주는 대역이다(R-F1). 판정 판은 경로에 맞춘다(C안 judgment-service-v2, 유연 대화 v1).
      */
     private void judgeWithTheRealValidator() {
-        LiveContentResources.JudgmentOptionSet optionSet = LiveContentResources.loadFor(false).judgment();
+        LiveContentResources.JudgmentOptionSet optionSet = LiveContentResources.loadFor(flexible).judgment();
         JudgmentPrompt prompt = JudgmentPrompt.load(optionSet);
         DecisionsJudgeClient client = new DecisionsJudgeClient((request, question) -> {
             CompletableFuture<LunaDecision> pending = new CompletableFuture<>();
@@ -309,7 +311,7 @@ class PracticeFlowIT {
         directAsk();
         judgeWithTheRealValidator();
         h.activate();
-        playGenerated("오늘 연습할 목표는 부탁하기야. 짧게 이야기 연습을 해 볼 거야.");
+        playApproved(V2_GOAL_BRIEF);
         playApproved(V2_INTRO);
         playApproved(V2_OPPORTUNITY);
         h.childSays("child-1", "몰라. 뭐라고 해야 돼?");
@@ -347,35 +349,144 @@ class PracticeFlowIT {
     }
 
     @Test
-    void aFirstAnswerBetweenTheTwoReexplainCodesIsReexplainedWhileHelpAgainstNotUnderstoodStillAsksAgain() {
+    void aFirstAnswerBetweenTheTwoReexplainCodesIsReexplainedAndHelpOverNotUnderstoodNowPassesTheLoweredJ2Floor() {
         directAsk();
         judgeWithTheRealValidator();
         h.activate();
-        playGenerated("오늘 연습할 목표는 부탁하기야.");
+        playApproved(V2_GOAL_BRIEF);
         playApproved(V2_INTRO);
         playApproved(V2_OPPORTUNITY);
 
-        // 5회차 J2: HELP 0.54 — 2순위 NOT_UNDERSTOOD(다시 설명)는 다른 걸음이라 지금처럼 보류하고 교정 없이 한 번 다시 묻는다
-        h.childSays("child-1", "무중아, 친구한테 어떻게 부탁하면 좋을까?");
+        // 다시 설명으로 가는 두 코드 사이의 망설임은 합 0.7로 확정해 다시 설명 + 묻기를 읽는다(1순위 0.4는 낮춘 하한 0.45에도 못 미친다)
+        h.childSays("child-1", "공룡 그림이 뭐야?");
         assertThat(judged.getLast().sameStepGroups()).containsExactly(List.of("NOT_UNDERSTOOD", "IRRELEVANT"));
-        decide("FULL", 0.03, "PARTIAL", 0.05, "HELP", 0.54, "NOT_UNDERSTOOD", 0.3, "IRRELEVANT", 0.05, "UNREADABLE", 0.03);
-        playApproved(FIXED_SPEECH.get("INPUT_CONFIRM"));
-
-        // 다시 설명으로 가는 두 코드 사이의 망설임은 합 0.7로 확정해 다시 설명 + 묻기를 읽는다
-        h.childSays("child-2", "공룡 그림이 뭐야?");
+        assertThat(judged.getLast().minConfidence()).as("C안 기회 판정에는 낮춘 하한(설정 0.45)이 실린다").isEqualTo(0.45);
         decide("FULL", 0.05, "PARTIAL", 0.1, "HELP", 0.1, "NOT_UNDERSTOOD", 0.4, "IRRELEVANT", 0.3, "UNREADABLE", 0.05);
         playApproved(V2_REEXPLAIN + " " + V2_ASK);
 
+        // 5회차 J2: HELP 0.54 · NOT_UNDERSTOOD 0.30 — 전역 하한 0.6에서는 보류 · 확인이었지만, 낮춘 하한 0.45와 최소 차이 0.15를 넘어 곧바로 도움이다
+        h.childSays("child-2", "무중아, 친구한테 어떻게 부탁하면 좋을까?");
+        decide("FULL", 0.03, "PARTIAL", 0.05, "HELP", 0.54, "NOT_UNDERSTOOD", 0.3, "IRRELEVANT", 0.05, "UNREADABLE", 0.03);
+        playApproved(V2_HELP);
+
         List<JudgmentLiveRecord> records = judgmentRecords();
         assertThat(records).extracting(JudgmentLiveRecord::outcome)
-                .containsExactly(JudgmentOutcomeKind.ABSTAINED, JudgmentOutcomeKind.CONFIRMED);
-        assertThat(records.getFirst().abstainReason()).isEqualTo(AbstainReason.LOW_CONFIDENCE);
-        assertThat(records.getLast().firstOption()).isEqualTo("NOT_UNDERSTOOD");
-        assertThat(records.getLast().secondOption()).isEqualTo("IRRELEVANT");
+                .containsExactly(JudgmentOutcomeKind.CONFIRMED, JudgmentOutcomeKind.CONFIRMED);
+        assertThat(records.getFirst().firstOption()).isEqualTo("NOT_UNDERSTOOD");
+        assertThat(records.getFirst().secondOption()).isEqualTo("IRRELEVANT");
+        assertThat(records.getLast().firstOption()).isEqualTo("HELP");
+        assertThat(records.getLast().firstProbability()).as("기록 표에서는 1순위 확률이 0.6 미만인 J2 확정으로 알아본다").isEqualTo(0.54);
         assertThat(h.logs.anyLineContains("JudgmentConfirmedBySameStepSum_J2")).isTrue();
+        assertThat(readings()).as("확인(INPUT_CONFIRM)을 읽지 않았다").noneMatch(content -> content.contains(FIXED_SPEECH.get("INPUT_CONFIRM")));
         SceneRunRecord open = repository.findSceneRuns(h.sessionId).getFirst();
-        assertThat(open.facts()).extracting(PracticeFlowTypes.Fact::kind).containsExactly(FactKind.SITUATION_EXPLAINED);
-        assertThat(open.endedAt()).as("다시 설명 뒤 아이 말을 기다린다").isNull();
+        assertThat(open.facts()).extracting(PracticeFlowTypes.Fact::kind).containsSubsequence(FactKind.SITUATION_EXPLAINED,
+                FactKind.HELP_ACCEPTED);
+        assertThat(open.endedAt()).as("도움 뒤 다시 해 보기를 기다린다").isNull();
+        assertThat(h.executor.status()).isEqualTo(SessionStatus.ACTIVE);
+        assertThat(failures).isEmpty();
+    }
+
+    // ---- 판정 보류 · J2 하한: 운영 Decisions 구현 + 실제 검증기 (ai-io.md 10.10 · 10.18, 편차 FT-1024-h) ----
+
+    @Test
+    void aJ2AnswerBelowTheLoweredFloorIsAskedAgainWithTheScriptReaskAndResolvesAfterReask() {
+        directAsk();
+        judgeWithTheRealValidator();
+        h.activate();
+        playApproved(V2_GOAL_BRIEF);
+        playApproved(V2_INTRO);
+        playApproved(V2_OPPORTUNITY);
+
+        // J2 PARTIAL 0.44: 낮춘 하한 0.45에도 못 미쳐 보류 → 확인 질문 대신 되묻기 단계로 가서 대본의 되묻기를 읽는다
+        h.childSays("child-1", "손 아파? " + MARKER);
+        decide("FULL", 0.2, "PARTIAL", 0.44, "HELP", 0.16, "NOT_UNDERSTOOD", 0.1, "IRRELEVANT", 0.06, "UNREADABLE", 0.04);
+        playApproved(V2_REASK);
+        assertThat(h.logs.anyLineContains("PracticeUnsureJudgmentAskedAgain_J2")).isTrue();
+
+        // 되물은 뒤 충분히 전했다 → J3 DELIVERED → 친구 반응, 시점은 J2 PARTIAL 뒤 되묻기와 같은 AFTER_REASK
+        h.childSays("child-2", "손 괜찮아? 그럼 다음에 같이 그리자");
+        assertThat(judged.getLast().point()).isEqualTo(JudgmentPoint.J3);
+        assertThat(judged.getLast().minConfidence()).as("되묻기 판정은 전역 하한 그대로").isNull();
+        decide("DELIVERED", 0.9, "STILL_SHORT", 0.05, "HELP", 0.03, "UNREADABLE", 0.02);
+        playApproved(V2_REACTION);
+        playGenerated("오늘은 부탁하기를 무중이 다시 물었을 때 네 말로 해 봤어. 오늘 연습은 여기까지야.");
+
+        assertThat(h.executor.status()).isEqualTo(SessionStatus.CLOSING);
+        SceneRunRecord stored = repository.findSceneRuns(h.sessionId).getFirst();
+        assertThat(stored.liveTiming()).isEqualTo(LiveTiming.AFTER_REASK);
+        assertThat(stored.facts()).extracting(PracticeFlowTypes.Fact::kind).contains(FactKind.REASK_RESOLVED)
+                .doesNotContain(FactKind.TRANSCRIPT_FAILED);
+        List<JudgmentLiveRecord> records = judgmentRecords();
+        assertThat(records).extracting(JudgmentLiveRecord::point).containsExactly(JudgmentPoint.J2, JudgmentPoint.J3);
+        assertThat(records).extracting(JudgmentLiveRecord::outcome)
+                .containsExactly(JudgmentOutcomeKind.ABSTAINED, JudgmentOutcomeKind.CONFIRMED);
+        assertThat(records.getFirst().abstainReason()).as("판정 기록에는 보류와 그 사유로 남는다").isEqualTo(AbstainReason.LOW_CONFIDENCE);
+        assertThat(readings()).noneMatch(content -> content.contains(FIXED_SPEECH.get("INPUT_CONFIRM")));
+        assertThat(h.logs.anyLineContains(MARKER)).as("진단 코드에 전사가 없다").isFalse();
+        assertThat(failures).isEmpty();
+    }
+
+    @Test
+    void aJ2HelpBetweenTheTwoFloorsGoesStraightToHelpWhileAnUnsureRetryHearsTheRetryPrompt() {
+        directAsk();
+        judgeWithTheRealValidator();
+        h.activate();
+        playApproved(V2_GOAL_BRIEF);
+        playApproved(V2_INTRO);
+        playApproved(V2_OPPORTUNITY);
+
+        // J2 HELP 0.48 · 2순위와 차이 0.20: 낮춘 하한 0.45로 확정 → 확인 질문 없이 곧바로 도움
+        h.childSays("child-1", "어떻게 말해야 할지 모르겠어");
+        assertThat(judged.getLast().minConfidence()).isEqualTo(0.45);
+        decide("FULL", 0.05, "PARTIAL", 0.1, "HELP", 0.48, "NOT_UNDERSTOOD", 0.28, "IRRELEVANT", 0.05, "UNREADABLE", 0.04);
+        playApproved(V2_HELP);
+
+        // 다시 해 보기(J5)는 전역 하한 0.6 그대로: FULL 0.48 · PARTIAL 0.30(다른 걸음)은 보류 → 확인 질문 대신 다시 해 보기의 묻는 말
+        h.childSays("child-2", "파란 상자 줄래?");
+        assertThat(judged.getLast().point()).isEqualTo(JudgmentPoint.J5);
+        assertThat(judged.getLast().minConfidence()).as("다른 지점에는 낮춘 하한을 싣지 않는다").isNull();
+        decide("FULL", 0.48, "PARTIAL", 0.3, "HELP", 0.05, "NOT_UNDERSTOOD", 0.05, "IRRELEVANT", 0.04, "UNREADABLE", 0.04, "COPIED",
+                0.04);
+        playApproved(FIXED_SPEECH.get("RETRY_PROMPT"));
+        assertThat(h.logs.anyLineContains("PracticeUnsureJudgmentAskedAgain_J5")).isTrue();
+
+        // 다시 말한 대답이 분명하면 도움 뒤 성공이다
+        h.childSays("child-3", "파란 상자 줄래? 높이 쌓고 싶어");
+        decide("FULL", 0.9, "PARTIAL", 0.04, "HELP", 0.01, "NOT_UNDERSTOOD", 0.01, "IRRELEVANT", 0.01, "UNREADABLE", 0.01, "COPIED",
+                0.02);
+        playApproved(V2_REACTION);
+        playGenerated("오늘은 부탁하기를 무중이 도와준 뒤에 네 말로 해 봤어. 오늘 연습은 여기까지야.");
+
+        assertThat(h.executor.status()).isEqualTo(SessionStatus.CLOSING);
+        assertThat(repository.findSceneRuns(h.sessionId).getFirst().liveTiming()).isEqualTo(LiveTiming.AFTER_HELP);
+        List<JudgmentLiveRecord> records = judgmentRecords();
+        assertThat(records).extracting(JudgmentLiveRecord::point).containsExactly(JudgmentPoint.J2, JudgmentPoint.J5, JudgmentPoint.J5);
+        assertThat(records).extracting(JudgmentLiveRecord::outcome).containsExactly(JudgmentOutcomeKind.CONFIRMED,
+                JudgmentOutcomeKind.ABSTAINED, JudgmentOutcomeKind.CONFIRMED);
+        assertThat(records.getFirst().firstProbability()).isEqualTo(0.48);
+        assertThat(records.get(1).abstainReason()).isEqualTo(AbstainReason.LOW_CONFIDENCE);
+        assertThat(readings()).noneMatch(content -> content.contains(FIXED_SPEECH.get("INPUT_CONFIRM")));
+        assertThat(failures).isEmpty();
+    }
+
+    @Test
+    void theFlexibleDialogueKeepsTheGlobalJ2FloorAndConfirmsAnUnsureAnswerWithItsGeneratedQuestion() {
+        flexible = true;
+        judgeWithTheRealValidator();
+        h.activate();
+        playGenerated("오늘은 부탁하기를 짧은 역할놀이로 연습해 볼 거야.");
+        playApproved("상상 속 상황을 떠올려 봐. 무중이가 상황 속 상대 역할을 해 볼게.");
+        playApproved(OPPORTUNITY);
+
+        h.childSays("flex-unsure-1", "그거 줘");
+        assertThat(judged.getLast().point()).isEqualTo(JudgmentPoint.J2);
+        assertThat(judged.getLast().minConfidence()).as("유연 대화는 낮춘 하한을 싣지 않는다").isNull();
+        decide("FULL", 0.2, "PARTIAL", 0.48, "HELP", 0.12, "NOT_UNDERSTOOD", 0.1, "IRRELEVANT", 0.06, "UNREADABLE", 0.04);
+
+        // 전역 하한 0.6 그대로 보류 → 지금처럼 생성형 확인 질문(제브를 거친다)
+        playGenerated("잘 못 들었어. 다시 한 번 말해 줄래?");
+        assertThat(judgmentRecords().getLast().abstainReason()).isEqualTo(AbstainReason.LOW_CONFIDENCE);
+        assertThat(h.logs.anyLineContains("PracticeUnsureJudgmentAskedAgain")).isFalse();
         assertThat(h.executor.status()).isEqualTo(SessionStatus.ACTIVE);
         assertThat(failures).isEmpty();
     }

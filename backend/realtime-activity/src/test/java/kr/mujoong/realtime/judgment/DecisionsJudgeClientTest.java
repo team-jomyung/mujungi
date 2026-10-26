@@ -281,6 +281,60 @@ class DecisionsJudgeClientTest {
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
+    // ---- 요청 하한 (ai-io.md 10.10, 편차 FT-1024-h) ----
+
+    private static JudgeRequest withFloor(JudgeRequest base, Double floor) {
+        return new JudgeRequest(base.point(), base.optionSetVersion(), base.options(), base.childUtterance(), base.recentTurns(),
+                base.criteria(), base.aliases(), base.uncertain(), base.deadline(), List.of(), floor);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void theRequestsLoweredFloorReachesTheValidatorButNeverTheProvider() throws Exception {
+        // 5회차 J2(실제 API + 합성 아이 음성): 일부만 대답 PARTIAL 0.48(2순위와 차이 0.20), 도움 요청 HELP 0.44. J2 판 순서: FULL · PARTIAL · HELP …
+        stub.respond(Reply.choice(MODEL, NAME, "PARTIAL", probabilities(0.28, 0.48, 0.1, 0.06, 0.05, 0.03)),
+                Reply.choice(MODEL, NAME, "HELP", probabilities(0.05, 0.1, 0.44, 0.3, 0.08, 0.03)),
+                Reply.choice(MODEL, NAME, "PARTIAL", probabilities(0.28, 0.48, 0.1, 0.06, 0.05, 0.03)));
+        JudgeRequest base = request("그거 줘", Duration.ofSeconds(4));
+        JudgeRequest floored = withFloor(base, 0.45);
+
+        JudgeOutcome partial = run(floored);
+        JudgeOutcome help = run(floored);
+        JudgeOutcome global = run(base);
+
+        assertThat(partial.isConfirmed()).as("낮춘 하한 0.45 이상 · 최소 차이 0.15 이상").isTrue();
+        assertThat(partial.firstOption()).isEqualTo("PARTIAL");
+        assertThat(partial.firstProbability()).isEqualTo(0.48);
+        assertThat(partial.sameStepSum()).isFalse();
+        assertThat(help.abstainReason()).as("낮춘 하한에도 못 미친다").isEqualTo(AbstainReason.LOW_CONFIDENCE);
+        assertThat(global.abstainReason()).as("하한을 싣지 않은 요청은 전역 하한 0.6 그대로").isEqualTo(AbstainReason.LOW_CONFIDENCE);
+        assertThat(global.firstProbability()).isEqualTo(0.48);
+        for (LunaResponsesStub.RecordedRequest sent : stub.requests()) {
+            Map<String, Object> part = ((List<Map<String, Object>>) ((List<Map<String, Object>>) sent.json().get("input")).getFirst()
+                    .get("content")).getFirst();
+            assertThat(((Map<String, Object>) part.get("data")).keySet()).as("낮춘 하한은 공급자 입력이 아니다")
+                    .containsExactlyInAnyOrder("judgmentPoint", "optionSetVersion", "options", "childUtterance", "recentTurns", "criteria");
+            assertThat(sent.violations()).isEmpty();
+        }
+        assertThat(stub.anyBodyContains("minConfidence")).isFalse();
+        assertThat(stub.requestCount()).isEqualTo(3);
+    }
+
+    @Test
+    void theLoweredFloorOfTheRequestIsAProbabilityOrNothing() {
+        JudgeRequest base = request("그거", Duration.ofSeconds(4));
+
+        assertThat(base.minConfidence()).as("하한 없는 생성자").isNull();
+        assertThat(withFloor(base, null).minConfidence()).isNull();
+        assertThat(withFloor(base, 0.45).minConfidence()).isEqualTo(0.45);
+        assertThat(new JudgeRequest(base.point(), base.optionSetVersion(), base.options(), base.childUtterance(), base.recentTurns(),
+                base.criteria(), base.aliases(), base.uncertain(), base.deadline(), List.of(List.of("NOT_UNDERSTOOD", "IRRELEVANT")))
+                .minConfidence()).as("묶음만 싣는 생성자").isNull();
+        for (double bad : new double[] {Double.NaN, -0.01, 1.01, Double.POSITIVE_INFINITY}) {
+            assertThatThrownBy(() -> withFloor(base, bad)).as(String.valueOf(bad)).isInstanceOf(IllegalArgumentException.class);
+        }
+    }
+
     @Test
     void aTieKeepsTheProvidersChoiceFirst() throws Exception {
         stub.respond(Reply.choice(MODEL, NAME, "PARTIAL", probabilities(0.4, 0.4, 0.2)));

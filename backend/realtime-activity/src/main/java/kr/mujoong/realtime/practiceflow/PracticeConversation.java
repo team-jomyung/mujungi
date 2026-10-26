@@ -41,8 +41,9 @@ import kr.mujoong.realtime.voice.PracticeSpeech;
  * <p>경로는 둘이다({@link PracticeFlowSettings#flexibleDialogue()}). 운영 기본은 C안 '무중이 직접 묻기'(docs/practice-direct-ask.md)다: 장면 속
  * 친구 · 코치 역할이 없고, 무중이 상황과 상대의 말을 자기 말로 전한 뒤 "너라면 뭐라고 말할래?"라고 묻는다. 장면 안 무중의 말(상황 안내 · 전하기 +
  * 묻기 · 되묻기 · 다시 설명 · 도움 · 확인 · 다시 묻기 · 친구 반응 · 마무리 · 도움 제안 · 변형 제안)은 모두 대본 칸이나 고정 문장의 승인 낭독이다
- * ({@link DirectAskLines}). 장면 밖 말(목표 안내 · 목표 회고 · 낭독 실패 복구)은 두 경로가 같이 생성형으로 내고 제브를 거친다. 유연 대화 경로는
- * 설정 하나로 되돌릴 수 있게 그대로 둔다.
+ * ({@link DirectAskLines}). 장면 밖 말 가운데 목표 안내도 C안은 서버가 정한 승인 문장으로 읽는다(목표 이름을 승인 문장으로 다듬을 수 없을 때만
+ * 생성형, 편차 FT-1024-g). 목표 회고 · 낭독 실패 복구는 두 경로가 같이 생성형으로 내고 제브를 거친다. 유연 대화 경로는 설정 하나로 되돌릴 수 있게
+ * 그대로 둔다(목표 안내도 생성형).
  *
  * <p>규칙 요약.
  *
@@ -53,7 +54,9 @@ import kr.mujoong.realtime.voice.PracticeSpeech;
  *   <li>판정은 {@code requestJudgment}로 요청한다(J2 · J3 · J5에만 판정 기준을 싣고 J4에는 싣지 않는다, D2). 거절(거짓) · 보류 · 장애는 판독
  *       불가와 같이 교정 없이 같은 질문을 한 번 다시 안내하고, 두 번째면 닫지 않고 도움 단계로 넘긴다(BR3.7 · FT-1023-g). 연습이 멈추지 않는다.
  *       C안은 지금 단계에서 같은 다음 걸음으로 처리하는 선택지 묶음({@link PracticeOutput#SAME_STEP_GROUPS})도 실어, 1 · 2순위가 같은 묶음이면
- *       실행부 검증기가 하한을 두 확률의 합으로 보게 한다(판정 기준이 아니라 공급자로 가지 않는다, 편차 FT-1024-f).
+ *       실행부 검증기가 하한을 두 확률의 합으로 보게 한다(판정 기준이 아니라 공급자로 가지 않는다, 편차 FT-1024-f). C안 기회(J2) 판정에는 설정의 낮춘
+ *       하한({@link PracticeOutput#MIN_CONFIDENCE})도 싣는다. C안의 판정 보류(받아쓰기는 됐는데 확률 하한 · 최소 차이에 못 미침)는 확인 질문 대신 그
+ *       단계의 묻는 말로 다시 묻는다(기회는 되묻기 단계로, 편차 FT-1024-h).
  *   <li>GPT-Live가 만드는 모든 역할 발화는 {@code speakGenerated} 한 길로만 낸다(D6). 낼 수 없으면(거짓) 그 슬롯을 실패로 닫고 이어 간다.
  *       역할 전환 · 복귀 알림은 승인 문장이 있으면 {@code announceRoleSwitch}로, 없거나 못 내면 생성형으로 낸다(BR5.4).
  *   <li>발화 오류로 연습을 끝내지 않는다(FT-1023-g): 끝내 못 들려준 발화(재요청 뒤 실패 · 막힘 · 시한 초과)는 건너뛰고 다음 단계로 간다. 연습을 끝내는
@@ -90,6 +93,19 @@ public final class PracticeConversation implements PracticeSessionExtension {
     static final String DIAG_REMAINDER_CUT_AGAIN = "PracticeApprovedRemainderCutAgain";
     /** 진단(INFO): 부분 재생이지만 들리지 않은 글이 문장부호 · 공백뿐이라 다 들린 것으로 봤다. */
     static final String DIAG_REMAINDER_WITHOUT_WORDS = "PracticeApprovedRemainderWithoutWords";
+    /**
+     * 진단(INFO, 뒤에 지점 이름, 예: {@code PracticeUnsureJudgmentAskedAgain_J2}): C안에서 판정 보류(받아쓰기는 됐는데 확률 하한 · 최소 차이에 못
+     * 미침)를 확인 질문 대신 그 단계의 묻는 말로 다시 물었다(J2는 되묻기 단계로, 편차 FT-1024-h). 되묻기가 판정 결과(PARTIAL)가 아니라 보류에서
+     * 왔다는 사실을 남기는 고정 코드다(전사 · 선택지 · 확률 없음, R-F14). 판정 기록 행에는 그 판정이 보류(사유 포함)로 남는다.
+     */
+    static final String DIAG_UNSURE_ASKED_AGAIN = "PracticeUnsureJudgmentAskedAgain_";
+    /**
+     * 진단(INFO): C안 목표 안내를 승인 문장으로 만들 수 없어(목표 이름이 비었거나 너무 길거나 한글 음절 · 띄어쓰기 밖의 글자가 있음, 목표 수가 상한 밖)
+     * 생성형으로 냈다(편차 FT-1024-g). 고정 코드뿐이다(이름 원문 없음, R-F14).
+     */
+    static final String DIAG_GOAL_BRIEF_GENERATED = "PracticeGoalBriefGeneratedFallback";
+    /** 실행부 판정 보류 사유 가운데 받아쓰기는 됐는데 1순위 확률이 하한 · 최소 차이에 못 미친 것(판독 불가 · 장애와 구분한다). */
+    private static final Set<String> LOW_SCORE_ABSTAINS = Set.of("LOW_CONFIDENCE", "LOW_MARGIN");
 
     private static final String COACH_SWITCH_CODE = "COACH_SWITCH";
     private static final String PEER_RETURN_CODE = "PEER_RETURN";
@@ -478,15 +494,32 @@ public final class PracticeConversation implements PracticeSessionExtension {
         uncertainAttempts = 0;
         openingAwaiting = false;
         openingAnswered = false;
-        // 목표 안내 · 목표 회고는 장면 밖 말이라 두 경로가 같이 낸다(생성형, 제브 필수). C안은 문구만 바꾼다(docs/practice-direct-ask.md 7.3).
-        // 이전 대화 돌아보기 · 요약은 두 경로 모두 하지 않고 목표 안내 뒤 바로 장면 도입으로 간다(FT-1023-g)
+        // 목표 안내 · 목표 회고는 장면 밖 말이라 두 경로가 같이 낸다. 이전 대화 돌아보기 · 요약은 두 경로 모두 하지 않고 목표 안내 뒤 바로 장면 도입으로
+        // 간다(FT-1023-g)
         if (kind == SceneKind.BASE && !goalBriefPlayed) {
             state.phase(Phase.SCENE_INTRO, Sub.GOAL_BRIEF);
-            speakGenerated(FlowRole.PEER, PracticeInstructions.goalBrief(pack.goals().get(state.goalIndex()).goalName(),
-                    state.goalIndex() + 1, pack.goals().size(), settings.directAsk()));
+            speakGoalBrief(pack.goals().get(state.goalIndex()).goalName(), state.goalIndex() + 1, pack.goals().size());
             return;
         }
         beginIntroduction();
+    }
+
+    /**
+     * 목표 안내. C안은 서버가 정한 문장({@link DirectAskLines#goalBrief})을 장면 안 말과 같은 승인 낭독으로 읽는다(편차 FT-1024-g): 원문 대조 · 조각
+     * 단위 재생(B1) · 부분 재생 뒤 나머지 다시 읽기 · 같은 글 재시도 → '뜻 전하기' 복구가 같고, 원문과 같으면 제브를 건너뛰되 출력 게이트의 1차 검사는
+     * 그대로 지난다. 목표 이름을 승인 문장으로 다듬을 수 없으면(빈 이름 · 너무 김 · 한글 음절과 띄어쓰기 밖의 글자) 지금처럼 생성형(제브 필수)으로 내고
+     * 고정 사유 코드를 남긴다. 유연 대화는 지금 그대로 생성형이다. 어느 쪽이든 못 들려준 목표 안내는 다시 내지 않고 장면 도입으로 간다.
+     */
+    private void speakGoalBrief(String goalName, int index, int count) {
+        String approved = settings.directAsk() ? DirectAskLines.goalBrief(goalName, index, count) : null;
+        if (approved != null) {
+            speakApproved(approved);
+            return;
+        }
+        if (settings.directAsk()) {
+            output.diagnostic(DIAG_GOAL_BRIEF_GENERATED);
+        }
+        speakGenerated(FlowRole.PEER, PracticeInstructions.goalBrief(goalName, index, count, settings.directAsk()));
     }
 
     private void beginIntroduction() {
@@ -609,7 +642,8 @@ public final class PracticeConversation implements PracticeSessionExtension {
 
     /**
      * J2 · J3 · J5에만 판정 기준을 싣는다(D2). coreFunction은 목표의 판정 기준 문자열에서 만든다(상한 안으로 줄인다). C안은 같은 걸음 묶음이 있으면
-     * 함께 싣고, 기준이 없는 J4에는 묶음만 든 맵을 보낸다(묶음이 없으면 지금처럼 null).
+     * 함께 싣고, 기준이 없는 J4에는 묶음만 든 맵을 보낸다(묶음이 없으면 지금처럼 null). C안 기회(J2)에는 설정의 낮춘 하한도 싣는다(판정 기준이 아니라
+     * 검증기만 읽는다, 편차 FT-1024-h).
      */
     private Map<String, Object> criteriaFor(JudgmentPoint point, boolean asksProcedure) {
         if (settings.flexibleDialogue() && goalAchieved && state.phase() == Phase.OPPORTUNITY) {
@@ -627,6 +661,9 @@ public final class PracticeConversation implements PracticeSessionExtension {
         map.put("judgmentCriteria", criteria);
         if (!groups.isEmpty()) {
             map.put(PracticeOutput.SAME_STEP_GROUPS, groups);
+        }
+        if (point == JudgmentPoint.J2 && settings.directAsk() && settings.directAskJ2MinConfidence() != null) {
+            map.put(PracticeOutput.MIN_CONFIDENCE, settings.directAskJ2MinConfidence());
         }
         return map;
     }
@@ -676,9 +713,27 @@ public final class PracticeConversation implements PracticeSessionExtension {
         if (!closeJudgment(event.correlationId())) {
             return;
         }
-        JudgmentPoint point = event.value() instanceof Map<?, ?> value ? pointOf(value.get("point"))
-                : expectedJudgmentPoint();
+        Map<?, ?> value = event.value() instanceof Map<?, ?> map ? map : null;
+        JudgmentPoint point = value != null ? pointOf(value.get("point")) : expectedJudgmentPoint();
+        if (settings.directAsk() && value != null && LOW_SCORE_ABSTAINS.contains(String.valueOf(value.get("abstainReason")))) {
+            unsureJudgment(point);
+            return;
+        }
+        // 판독 불가 입력 · 판정 장애(시한 · 공급자 오류 · 응답 검증 위반 등)와 유연 대화는 지금처럼 확인 질문 · 같은 질문 재안내다
         unavailableJudgment(point);
+    }
+
+    /**
+     * C안 판정 보류(받아쓰기는 됐는데 1순위 확률이 하한 · 최소 차이에 못 미쳤다): 첫 번째는 확인 질문 대신 그 단계의 묻는 말로 다시 묻고(기회는 되묻기
+     * 단계로), 두 번째는 장애와 같이 도움 단계로 간다({@link FlowTransitions#onJudgmentUnsure}, 편차 FT-1024-h). 첫 번째에는 그 되묻기 · 다시 묻기가
+     * 판정 결과가 아니라 보류에서 왔다는 고정 사유 코드를 남긴다.
+     */
+    private void unsureJudgment(JudgmentPoint point) {
+        Step step = point == null ? Step.ignore() : transitions.onJudgmentUnsure(state, point);
+        if (step.guard() == FlowTransitions.Guard.UNSURE) {
+            output.diagnostic(DIAG_UNSURE_ASKED_AGAIN + point.name());
+        }
+        afterJudgment(step);
     }
 
     private JudgmentPoint expectedJudgmentPoint() {
@@ -1025,13 +1080,13 @@ public final class PracticeConversation implements PracticeSessionExtension {
         earlyUtterance = null;
         switch (step.guard()) {
             case NO_RESPONSE -> state.noResponseGuided(true);
-            case UNREADABLE -> state.unreadableGuided(true);
+            case UNREADABLE, UNSURE -> state.unreadableGuided(true);
             case NONE -> {
                 // 재안내 표지 없음
             }
         }
         if (settings.directAsk()) {
-            reguideDirectAsk(step.guard() == FlowTransitions.Guard.NO_RESPONSE);
+            reguideDirectAsk(step.guard());
             return;
         }
         switch (state.phase()) {
@@ -1050,14 +1105,24 @@ public final class PracticeConversation implements PracticeSessionExtension {
     }
 
     /**
-     * C안 재안내(docs/practice-direct-ask.md 3.2): 같은 단계의 질문을 교정 없이 승인 문장으로 한 번 더 낸다. 무응답이면 기다리기 + 그 단계의 질문(다시
-     * 해 보기는 고정 RETRY_PROMPT), 판독 불가 · 판정 보류면 고정 INPUT_CONFIRM이다. 도움 · 변형 제안은 같은 제안 문장을 다시 읽는다(불명확 대답 포함).
+     * C안 재안내(docs/practice-direct-ask.md 3.2): 같은 단계의 질문을 교정 없이 승인 문장으로 한 번 더 낸다.
+     *
+     * <ul>
+     *   <li>무응답({@code NO_RESPONSE}): 기다리기 + 그 단계의 질문(다시 해 보기는 고정 RETRY_PROMPT).
+     *   <li>판독 불가 · 판정 장애 · 불명확({@code UNREADABLE}): 고정 INPUT_CONFIRM.
+     *   <li>판정 보류(확률 하한 · 최소 차이, {@code UNSURE}, 편차 FT-1024-h): 그 단계의 묻는 말 — 되묻기 단계는 대본 되묻기(없으면 대체 문장), 다시 해
+     *       보기는 고정 RETRY_PROMPT다. 기회(J2)의 보류는 표가 되묻기 단계로 보내므로 기회에서 이 재안내를 하지 않는다(한다면 그 단계의 묻는 말이다).
+     *   <li>도움 · 변형 제안은 어느 경우든 같은 제안 문장을 다시 읽는다(불명확 대답 포함).
+     * </ul>
      */
-    private void reguideDirectAsk(boolean noResponse) {
+    private void reguideDirectAsk(FlowTransitions.Guard guard) {
+        boolean noResponse = guard == FlowTransitions.Guard.NO_RESPONSE;
+        boolean unsure = guard == FlowTransitions.Guard.UNSURE;
+        String confirm = lines.fixed(DirectAskLines.INPUT_CONFIRM);
         switch (state.phase()) {
-            case OPPORTUNITY -> speakApproved(noResponse ? lines.waitAndAsk(currentScene) : lines.fixed(DirectAskLines.INPUT_CONFIRM));
-            case REASK -> speakApproved(noResponse ? lines.waitAndReask(currentScene) : lines.fixed(DirectAskLines.INPUT_CONFIRM));
-            case RETRY -> speakApproved(lines.fixed(noResponse ? DirectAskLines.RETRY_PROMPT : DirectAskLines.INPUT_CONFIRM));
+            case OPPORTUNITY -> speakApproved(noResponse ? lines.waitAndAsk(currentScene) : unsure ? lines.ask(currentScene) : confirm);
+            case REASK -> speakApproved(noResponse ? lines.waitAndReask(currentScene) : unsure ? lines.reask(currentScene) : confirm);
+            case RETRY -> speakApproved(noResponse || unsure ? lines.fixed(DirectAskLines.RETRY_PROMPT) : confirm);
             case HELP_OFFER -> speakApproved(lines.fixed(DirectAskLines.HELP_OFFER));
             case VARIANT_OFFER -> speakApproved(lines.fixed(DirectAskLines.VARIANT_OFFER));
             default -> {
@@ -1107,6 +1172,11 @@ public final class PracticeConversation implements PracticeSessionExtension {
         state.phase(step.phase(), step.sub());
         state.noResponseGuided(false);
         state.unreadableGuided(false);
+        if (step.guard() == FlowTransitions.Guard.UNSURE || step.guard() == FlowTransitions.Guard.UNREADABLE) {
+            // 앞 단계에서 쓴 확인 · 보류 재안내를 새 단계로 잇는다(J2 판정 보류 → 되묻기 단계, 편차 FT-1024-h): 그 단계의 판독 불가 · 보류는 두 번째
+            // 불명확이라 지금처럼 도움 단계로 간다(횟수 · 상한을 늘리지 않는다)
+            state.unreadableGuided(true);
+        }
         step.facts().forEach(this::recordFact);
         if (step.cause() != null && step.phase() == Phase.SCENE_WRAP) {
             wrapScene();

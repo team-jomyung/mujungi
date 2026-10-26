@@ -1,7 +1,9 @@
 package kr.mujoong.realtime.practiceflow;
 
 import static kr.mujoong.realtime.practiceflow.PracticeScriptFixtures.FIXED_SPEECH;
+import static kr.mujoong.realtime.practiceflow.PracticeScriptFixtures.UNREADABLE_GOAL_NAME;
 import static kr.mujoong.realtime.practiceflow.PracticeScriptFixtures.V2_ASK;
+import static kr.mujoong.realtime.practiceflow.PracticeScriptFixtures.V2_GOAL_BRIEF;
 import static kr.mujoong.realtime.practiceflow.PracticeScriptFixtures.V2_HELP;
 import static kr.mujoong.realtime.practiceflow.PracticeScriptFixtures.V2_INTRO;
 import static kr.mujoong.realtime.practiceflow.PracticeScriptFixtures.V2_OPPORTUNITY;
@@ -52,7 +54,8 @@ import org.junit.jupiter.params.provider.EnumSource;
  * 출력 · 가짜 판정 결과 사건 · 수동 시계 · 메모리 기록기 위에서 확장점 시점(onActive · onChildUtterance · onExtensionEvent)만으로 장면을 끝까지
  * 움직인다(테스트 대역 · 합성 대화 증거이고 실제 AI · 실제 기기가 아니다). 대본은 C안 판 v2이고 고정 문장은 시작 패키지 approvedSpeech로 온다.
  * 표 행 자체는 {@code FlowTransitionsTest} · {@code DirectAskTransitionsTest}가 보고 여기서는 시계 경계 · 출력 능력 호출 · 중복 사건 · 실패 이어
- * 가기 · 지시문 위생을 본다. 장면 밖 말(목표 안내 · 회고)은 생성형이고, 장면 안 말은 모두 승인 낭독이다.
+ * 가기 · 지시문 위생을 본다. 장면 안 말은 모두 승인 낭독이다. 장면 밖 말 가운데 목표 안내도 서버가 정한 승인 문장의 낭독이고(목표 이름을 승인 문장으로
+ * 다듬을 수 없을 때만 생성형, 편차 FT-1024-g), 목표 회고는 생성형이다.
  */
 @Tag("practice-flow")
 class PracticeConversationTest {
@@ -76,6 +79,11 @@ class PracticeConversationTest {
 
     private static Harness withVariant() {
         return new Harness(packageJson(GOAL, directAskScriptWithVariant(SCENARIO)), APPROVED);
+    }
+
+    /** 목표 이름을 승인 문장으로 다듬을 수 없어(숫자) C안도 생성형 목표 안내를 내는 패키지(편차 FT-1024-g). 생성형 슬롯의 처리를 보는 시험이 쓴다. */
+    private static Harness generatedBrief() {
+        return new Harness(packageJson(GOAL, directAskScript(SCENARIO), UNREADABLE_GOAL_NAME), APPROVED);
     }
 
     private static String twoGoalPackage() {
@@ -216,16 +224,30 @@ class PracticeConversationTest {
     @Test
     void aBlockedGoalBriefOrIntroductionIsNeverReplayedButThePracticeContinues() {
         // FT-1023-g: 막힌 목표 안내는 다시 내지 않고 도입으로, 막힌 도입은 다시 내지 않고 전하기 + 묻기로 간다
+        // C안 목표 안내는 승인 낭독이다(FT-1024-g): 출력 게이트 1차 검사에 걸리면 실행부가 그 슬롯을 재생 실패로 닫는다
         Harness brief = direct();
         brief.activate();
         Slot notice = brief.out.lastSlot();
-        assertThat(notice.generated()).as("목표 안내는 생성형이라 제브를 거친다").isTrue();
-        assertThat(brief.event(ExtensionEvent.Kind.GUARDRAIL_BLOCKED, "guardrail-blocked", notice.correlationId(),
-                new GuardrailBlockedEvent(notice.correlationId(), kr.mujoong.realtime.guardrail.GuardrailRequest.Mode.PRACTICE_PEER, "BLOCK", true))).isEqualTo(Signal.NONE);
+        assertThat(notice.generated()).as("C안 목표 안내는 승인 낭독").isFalse();
+        assertThat(notice.text()).isEqualTo(V2_GOAL_BRIEF);
+        assertThat(brief.end(Playback.FAILED)).isEqualTo(Signal.NONE);
         assertThat(brief.out.slots).as("목표 안내 + 도입").hasSize(2);
-        assertThat(brief.out.generatedSlots()).as("막힌 목표 안내는 다시 내지 않는다").hasSize(1);
+        assertThat(brief.out.slots).filteredOn(slot -> V2_GOAL_BRIEF.equals(slot.text())).as("막힌 목표 안내는 다시 내지 않는다")
+                .hasSize(1);
         assertThat(brief.out.lastSlot().text()).isEqualTo(V2_INTRO);
         assertThat(brief.recorder.rows).as("장면 행은 도입이 끝날 때 만든다").isEmpty();
+        // 승인 문장으로 다듬을 수 없는 목표 이름이면 생성형 목표 안내(제브를 거친다)다. 제브가 막아도 다시 내지 않는다
+        Harness generated = generatedBrief();
+        generated.activate();
+        Slot generatedNotice = generated.out.lastSlot();
+        assertThat(generatedNotice.generated()).as("생성형 목표 안내는 제브를 거친다").isTrue();
+        assertThat(generated.event(ExtensionEvent.Kind.GUARDRAIL_BLOCKED, "guardrail-blocked", generatedNotice.correlationId(),
+                new GuardrailBlockedEvent(generatedNotice.correlationId(), kr.mujoong.realtime.guardrail.GuardrailRequest.Mode.PRACTICE_PEER,
+                        "BLOCK", true))).isEqualTo(Signal.NONE);
+        assertThat(generated.out.slots).as("목표 안내 + 도입").hasSize(2);
+        assertThat(generated.out.generatedSlots()).as("막힌 목표 안내는 다시 내지 않는다").hasSize(1);
+        assertThat(generated.out.lastSlot().text()).isEqualTo(V2_INTRO);
+        assertThat(generated.recorder.rows).as("장면 행은 도입이 끝날 때 만든다").isEmpty();
         Harness h = direct();
         h.toIntroduction();
         Slot intro = h.out.lastSlot();
@@ -263,10 +285,13 @@ class PracticeConversationTest {
         assertThat(h.recorder.factKinds(h.recorder.only())).doesNotContain(FactKind.PLAYBACK_FAILED);
     }
 
-    /** FT-1023-e: 재생이 시작된(STARTED) 생성형 발화(목표 안내)의 꼬리가 비었다는 알림은 재요청도 실패도 아니라 재생됨으로 닫는다. */
+    /**
+     * FT-1023-e: 재생이 시작된(STARTED) 생성형 발화(승인 문장으로 다듬을 수 없는 목표 이름의 생성형 목표 안내, FT-1024-g)의 꼬리가 비었다는 알림은
+     * 재요청도 실패도 아니라 재생됨으로 닫는다.
+     */
     @Test
     void anIncompleteTailAfterPlaybackStartedClosesTheGeneratedSlotAsPlayedWithoutARetry() {
-        Harness h=direct();h.activate();
+        Harness h=generatedBrief();h.activate();
         Slot first=h.out.lastSlot();
         assertThat(first.generated()).isTrue();
         var speech=kr.mujoong.realtime.voice.PracticeSpeech.generatedSlot(first.correlationId(), SCENARIO, 1, first.role(), first.text());
@@ -284,7 +309,8 @@ class PracticeConversationTest {
 
     @Test
     void generatedTechnicalRecoveryRetriesTrustedInstructionsOnceAndIgnoresStaleFailures() {
-        Harness h=direct();h.activate();
+        // 생성형 슬롯은 승인 문장으로 다듬을 수 없는 목표 이름의 생성형 목표 안내다(FT-1024-g)
+        Harness h=generatedBrief();h.activate();
         Slot first=h.out.lastSlot();
         var speech=kr.mujoong.realtime.voice.PracticeSpeech.generatedSlot(first.correlationId(), SCENARIO, 1, first.role(), first.text());
         assertThat(h.event(ExtensionEvent.Kind.ASYNC_RESULT,"practice-audio-incomplete",first.correlationId(),speech)).isEqualTo(Signal.NONE);
@@ -294,7 +320,7 @@ class PracticeConversationTest {
         h.event(ExtensionEvent.Kind.ASYNC_RESULT,"practice-audio-incomplete",first.correlationId(),speech);
         assertThat(h.out.slots).hasSize(count);
         var retrySpeech=kr.mujoong.realtime.voice.PracticeSpeech.generatedSlot(retry.correlationId(), SCENARIO, 2, retry.role(), retry.text());
-        // 재요청 뒤에도 실패: 같은 지시를 세 번째로 내지 않고 이 단계의 다음(C안 생성형인 목표 안내 → 장면 도입)으로 간다(FT-1023-g)
+        // 재요청 뒤에도 실패: 같은 지시를 세 번째로 내지 않고 이 단계의 다음(생성형으로 대신한 목표 안내 → 장면 도입)으로 간다(FT-1023-g)
         assertThat(h.event(ExtensionEvent.Kind.ASYNC_RESULT,"practice-audio-incomplete",retry.correlationId(),retrySpeech)).isEqualTo(Signal.NONE);
         assertThat(h.out.slots).as("목표 안내는 다시 내지 않고 도입 승인 낭독 하나만 연다").hasSize(count + 1);
         assertThat(h.out.generatedSlots()).hasSize(2);
@@ -361,7 +387,8 @@ class PracticeConversationTest {
 
     @Test
     void generatedSpeechCannotUseTheApprovedReadingRetryPath() {
-        Harness h=direct();h.activate();
+        // 생성형 슬롯은 승인 문장으로 다듬을 수 없는 목표 이름의 생성형 목표 안내다(FT-1024-g)
+        Harness h=generatedBrief();h.activate();
         Slot generated=h.out.lastSlot();int count=h.out.slots.size();
         assertThat(generated.generated()).isTrue();
         assertThat(h.event(ExtensionEvent.Kind.ASYNC_RESULT,"approved-text-mismatch",generated.correlationId(),generated.speech())).isEqualTo(Signal.NONE);
@@ -376,8 +403,9 @@ class PracticeConversationTest {
 
         assertThat(h.activate()).isEqualTo(Signal.NONE);
         Slot brief = h.out.lastSlot();
-        assertThat(brief.generated()).as("목표 안내는 장면 밖 생성형 말").isTrue();
-        assertThat(brief.text()).contains("오늘 연습할 목표는 ‘부탁하기’", "짧게 이야기 연습을").doesNotContain("역할놀이");
+        assertThat(brief.generated()).as("C안 목표 안내는 서버가 정한 문장의 승인 낭독(FT-1024-g)").isFalse();
+        assertThat(brief.text()).isEqualTo(V2_GOAL_BRIEF).contains("짧게 이야기 연습을").doesNotContain("역할놀이", "‘", "’");
+        assertThat(brief.speech().partnerRole()).isEqualTo(RolePolicy.MUJOONG_LABEL);
         h.played();
         assertThat(h.out.lastSlot().text()).as("도입은 대본 상황 안내 승인 낭독").isEqualTo(V2_INTRO);
         assertThat(h.out.lastSlot().generated()).isFalse();
@@ -416,7 +444,7 @@ class PracticeConversationTest {
         assertThat(row.variantSkipReason()).isEqualTo(VariantSkipReason.NO_VARIANT);
         assertThat(row.endedAt()).isNotNull();
         assertThat(h.recorder.helps).as("도움 0건").isEmpty();
-        assertThat(h.out.generatedSlots()).as("생성형은 장면 밖 목표 안내 · 회고뿐").containsExactly(brief, recap);
+        assertThat(h.out.generatedSlots()).as("생성형은 장면 밖 목표 회고뿐(목표 안내는 승인 낭독)").containsExactly(recap);
         assertThat(h.failures).isEmpty();
         assertRecordMatchesTheContract(h.ext.practiceRecord());
     }
@@ -695,18 +723,18 @@ class PracticeConversationTest {
 
         assertThat(h.out.announces).as("C안은 역할 전환 알림 능력을 부르지 않는다").isEmpty();
         List<Slot> generated = h.out.generatedSlots();
-        assertThat(generated).as("생성형은 장면 밖 목표 안내 · 회고뿐").hasSize(2);
-        assertThat(generated.getFirst()).isEqualTo(h.out.slots.getFirst());
+        assertThat(generated).as("생성형은 장면 밖 목표 회고뿐(목표 안내는 승인 낭독, FT-1024-g)").hasSize(1);
         assertThat(generated.getLast()).isEqualTo(h.out.lastSlot());
-        assertThat(h.out.slots.subList(1, h.out.slots.size() - 1)).extracting(Slot::text).containsExactly(V2_INTRO, V2_OPPORTUNITY,
-                V2_REASK, HELP_OFFER, V2_HELP, RETRY_PROMPT, V2_REACTION, VARIANT_OFFER, VARIANT_OFFER);
-        assertThat(h.out.slots.subList(1, h.out.slots.size() - 1)).allSatisfy(slot -> {
+        assertThat(h.out.slots.subList(0, h.out.slots.size() - 1)).extracting(Slot::text).containsExactly(V2_GOAL_BRIEF, V2_INTRO,
+                V2_OPPORTUNITY, V2_REASK, HELP_OFFER, V2_HELP, RETRY_PROMPT, V2_REACTION, VARIANT_OFFER, VARIANT_OFFER);
+        assertThat(h.out.slots.subList(0, h.out.slots.size() - 1)).allSatisfy(slot -> {
             assertThat(slot.generated()).isFalse();
             assertThat(slot.speech().partnerRole()).as("장면 속 역할 없이 무중이 말한다").isEqualTo(RolePolicy.MUJOONG_LABEL);
         });
         List<String> forbidden = List.of("FULL", "PARTIAL", "HELP", "NOT_UNDERSTOOD", "IRRELEVANT", "UNREADABLE", "DELIVERED",
                 "STILL_SHORT", "ACCEPT", "REFUSE", "UNCLEAR", "COPIED", "%", "확률", CRITERIA, marker, "판정", "J2", "J3", "J4", "J5");
-        for (Slot slot : generated) {
+        // 장면 밖 말 둘(승인 낭독 목표 안내 · 생성형 목표 회고)에 판정 라벨 · 기준 · 아이 말이 없다
+        for (Slot slot : List.of(h.out.slots.getFirst(), generated.getLast())) {
             assertThat(slot.text()).as(slot.role()).isNotBlank().doesNotContain(forbidden.toArray(new String[0]));
             assertThat(slot.text().codePointCount(0, slot.text().length())).isLessThanOrEqualTo(500);
             assertThat(slot.text().chars().noneMatch(Character::isISOControl)).isTrue();
@@ -784,8 +812,23 @@ class PracticeConversationTest {
 
     @Test
     void aGoalBriefTheOutputCannotMakeIsSkippedAndTheSceneStillStarts() {
-        // FT-1023-g: 못 낸 목표 안내(C안의 장면 밖 생성형 말)는 다시 내지 않고 장면 도입으로 간다. 연습을 닫지 않는다
-        Harness h = direct();
+        // FT-1023-g: 못 낸 목표 안내는 다시 내지 않고 장면 도입으로 간다. 연습을 닫지 않는다
+        // C안 승인 낭독 목표 안내(FT-1024-g): 재생에 실패해도 다시 읽지 않는다
+        Harness approved = direct();
+        assertThat(approved.activate()).isEqualTo(Signal.NONE);
+        assertThat(approved.out.lastSlot().text()).isEqualTo(V2_GOAL_BRIEF);
+        assertThat(approved.end(Playback.FAILED)).isEqualTo(Signal.NONE);
+        assertThat(approved.out.slots).filteredOn(slot -> V2_GOAL_BRIEF.equals(slot.text())).as("목표 안내는 한 번만 요청한다")
+                .hasSize(1);
+        assertThat(approved.out.lastSlot().text()).isEqualTo(V2_INTRO);
+        assertThat(approved.recorder.list()).as("장면 행은 도입이 끝날 때 만든다").isEmpty();
+        assertThat(approved.played()).isEqualTo(Signal.NONE);
+        assertThat(approved.ext.state().phase()).isEqualTo(FlowState.Phase.OPPORTUNITY);
+        assertThat(approved.recorder.factKinds(approved.recorder.only())).as("장면 밖 말의 실패는 장면 사실로 남지 않는다").isEmpty();
+        assertThat(approved.failures).isEmpty();
+
+        // 생성형으로 대신한 목표 안내(승인 문장으로 다듬을 수 없는 목표 이름): 출력이 만들지 못해도 같다
+        Harness h = generatedBrief();
         h.out.generatedResult = false;
 
         assertThat(h.activate()).isEqualTo(Signal.NONE);
@@ -821,7 +864,7 @@ class PracticeConversationTest {
         Harness h = direct();
         h.out.speakResult = false;
 
-        assertThat(h.activate()).as("목표 안내는 생성형이라 나간다").isEqualTo(Signal.NONE);
+        assertThat(h.activate()).as("C안 목표 안내도 승인 낭독이라 같이 못 내고 건너뛴다(FT-1024-g)").isEqualTo(Signal.NONE);
         Signal end = h.played();
 
         assertThat(end).isEqualTo(Signal.NONE);
@@ -927,7 +970,8 @@ class PracticeConversationTest {
         assertThat(rows.get(0).variantSkipReason()).isNull();
         assertThat(rows.get(0).liveTiming()).isEqualTo(LiveTiming.IMMEDIATE);
         assertThat(h.recorder.factKinds(rows.get(1))).containsExactly(FactKind.VARIANT_PLAYED);
-        assertThat(h.out.generatedSlots()).as("목표 안내와 회고뿐").hasSize(2);
+        assertThat(h.out.generatedSlots()).as("생성형은 회고뿐(목표 안내는 승인 낭독, FT-1024-g)").hasSize(1);
+        assertThat(h.out.slots.getFirst().text()).isEqualTo(V2_GOAL_BRIEF);
         assertRecordMatchesTheContract(h.ext.practiceRecord());
     }
 
@@ -966,7 +1010,12 @@ class PracticeConversationTest {
         assertThat(h.out.slots).as("안내 · 도입 · 묻기 · 친구 반응 · 회고").hasSize(5);
         h.deliverPosted();
         assertThat(h.out.slots).as("대본이 닿으면 다음 목표의 안내").hasSize(6);
-        assertThat(h.out.lastSlot().text()).contains("거절하기", "2번째");
+        // C안 목표 안내 승인 문장: 받침 없는 이름 + '야', 목표 수 · 순서는 숫자 대신 말(FT-1024-g)
+        assertThat(h.out.slots.getFirst().text()).isEqualTo("오늘 연습할 목표는 부탁하기야. 오늘 고른 목표는 두 개이고, 지금은 첫 번째야. "
+                + "이 목표로 짧게 이야기 연습을 해 볼 거야. 필요하면 도움을 받아도 되고, 언제든 쉬거나 끝내도 돼.");
+        assertThat(h.out.lastSlot().generated()).isFalse();
+        assertThat(h.out.lastSlot().text()).isEqualTo("오늘 연습할 목표는 거절하기야. 오늘 고른 목표는 두 개이고, 지금은 두 번째야. "
+                + "이 목표로 짧게 이야기 연습을 해 볼 거야. 필요하면 도움을 받아도 되고, 언제든 쉬거나 끝내도 돼.");
         assertThat(h.ext.progress().goalIndex()).isEqualTo(2);
         assertThat(h.ext.progress().goalCount()).isEqualTo(2);
         assertThat(h.ext.progress().goalName()).isEqualTo("거절하기");
@@ -1405,7 +1454,7 @@ class PracticeConversationTest {
         assertThat(h.recorder.only().liveTiming()).as("마무리 중의 종료가 이룬 수행을 미수행으로 덮지 않는다").isEqualTo(LiveTiming.IMMEDIATE);
         assertThat(h.slotEvent(reaction.correlationId(), Playback.COMPLETED, reaction.speech(), "응"))
                 .isEqualTo(Signal.NONE);
-        assertThat(h.out.generatedSlots()).as("종료 요청이면 회고도 없다").hasSize(1);
+        assertThat(h.out.generatedSlots()).as("종료 요청이면 회고도 없다(목표 안내는 승인 낭독, FT-1024-g)").isEmpty();
     }
 
     @Test
