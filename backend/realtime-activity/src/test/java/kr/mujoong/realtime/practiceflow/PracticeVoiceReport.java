@@ -920,7 +920,7 @@ final class PracticeVoiceReport {
                 rows.add(ordered("dialogue", plan.index(), "index", call.index, "atMs", call.atMs, "at", formatMs(call.atMs), "point", call.point,
                         "kind", call.kind, "first", call.first, "firstProbability", call.firstProbability, "second", call.second,
                         "secondProbability", call.secondProbability, "abstainReason", call.abstainReason, "sameStepSum", call.sameStepSum,
-                        "latencyMs", call.latencyMs,
+                        "requestedMinConfidence", call.requestedMinConfidence, "latencyMs", call.latencyMs,
                         "cancelledAtDeadline", call.cancelledAtDeadline, "harnessCapped", call.capped, "model", call.model, "uncertainInput",
                         call.uncertain, "childTurn", call.childTurn, "childKey", link == null ? null : link.turn().key, "childText",
                         link == null ? null : link.turn().text, "utterance", call.utterance));
@@ -1262,10 +1262,11 @@ final class PracticeVoiceReport {
         return nz(call.kind, "결과 없음");
     }
 
-    /** 판정 한 줄(대화 기록용): J2 FULL 0.91(2순위 PARTIAL 0.05) · 1.2초. */
+    /** 판정 한 줄(대화 기록용): J2 FULL 0.91(2순위 PARTIAL 0.05) · 1.2초. 요청 하한이 실렸으면 '(요청 하한 0.45)'를 붙인다(편차 FT-1024-h). */
     static String judgmentLabel(JudgeCall call) {
         String second = call.second == null ? "" : "(2순위 " + call.second + " " + probability(call.secondProbability) + ")";
-        return call.point + " " + resultLabel(call) + ("CONFIRMED".equals(call.kind) ? second : "")
+        String floor = call.requestedMinConfidence == null ? "" : "(요청 하한 " + probability(call.requestedMinConfidence) + ")";
+        return call.point + " " + resultLabel(call) + ("CONFIRMED".equals(call.kind) ? second : "") + floor
                 + (call.latencyMs < 0 ? "" : " · " + secs(call.latencyMs));
     }
 

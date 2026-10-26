@@ -229,6 +229,10 @@ mujoong:
     retry-max: 1
     reexplain-max: 1
     flexible-dialogue: false
+    # C안 기회(J2) 판정에만 쓰는 낮춘 확률 하한(편차 FT-1024-h). 판정 요청에 데이터로 실려 검증기가 judgment.min-confidence보다 낮을 때만 쓴다.
+    # 다른 지점 · 유연 대화 · min-margin은 그대로다. 0.3 이상 1 이하
+    direct-ask:
+      j2-min-confidence: 0.45
   # U13 제브 게이트(contracts/ai-io.md 10.12). 시간 값이 아니다: 검사 시한은 timing.guardrail.jev-budget(R-F7). 값은 모두 환경 변수로만 받고 저장소에는 이름만 둔다(R-F3).
   # mode가 비면 프로필 기본값(demo · prod = REAL, 그 밖 = STUB). demo · prod는 REAL + 키 JEV_API_KEY + 허용 호스트 + 고정 모델이 아니면 기동을 거부한다
   guardrail:

@@ -326,7 +326,7 @@ U15 씨앗 v2는 GENERATED/DUPLICATE/NONE의 배타적 출력 분기를 사용�
 
 | 목적 | 호출 경로(단위) | 분류 | 호출 안 재시도 · 실패 뒤 |
 |---|---|---|---|
-| 진행 중 판정 J1 ~ J6 | realtime 판정 턴(U11). Decisions API `POST {base-url}/decisions` 한 길이다(다른 끝점 · 대체 경로 없음) [편차 FT-1023-d] | `NONE` | 재시도 없음. `mujoong.timing.judgment.live-budget`(4초) 초과 · 응답 검증 위반 · 공급자 오류는 판정 보류. 하한(`mujoong.judgment.min-confidence` · `min-margin`)에 못 미치면 보류(연습 흐름이 같은 다음 걸음으로 처리하는 1 · 2순위는 두 확률의 합, 10.10) |
+| 진행 중 판정 J1 ~ J6 | realtime 판정 턴(U11). Decisions API `POST {base-url}/decisions` 한 길이다(다른 끝점 · 대체 경로 없음) [편차 FT-1023-d] | `NONE` | 재시도 없음. `mujoong.timing.judgment.live-budget`(4초) 초과 · 응답 검증 위반 · 공급자 오류는 판정 보류. 하한(`mujoong.judgment.min-confidence` · `min-margin`)에 못 미치면 보류(연습 흐름이 같은 다음 걸음으로 처리하는 1 · 2순위는 두 확률의 합, C안 기회 J2는 요청 하한 0.45, 10.10) |
 | 제브 검사(새 발화) | realtime 출력 게이트(U13) | `NONE` | 재시도 없음. `mujoong.timing.guardrail.jev-budget`(800ms) 초과(시간 초과는 막힘) · 전송 오류(비 2xx 포함) · 잘못된 응답(10.13)도 막힘이고 자동 `ALLOW`는 없다. 막힘 뒤 같은 다음 행동 지시를 다시 하는 것은 게이트 단계의 일이다(호출 안 재시도가 아님) [U13 편차 (U13-b)] |
 | 상황 생성 | core 상황 생성 요청(U10) | `REQUEST_BOUNDED` | 일시 실패 기술 재시도 1회 + 내용 재생성 1회(스키마 불일치 포함), 7절 15초 예산 안. 실패는 `SCENARIO_GEN_FAILED` |
 | 자체 검토(J7) | core 상황 생성 요청(U10) | `REQUEST_BOUNDED` | 같은 15초 예산 |
@@ -431,6 +431,8 @@ Luna 호출부(core-api · realtime-activity 각자)는 공급자 시도마다 `
 | 아이가 방법을 물은 말(절차 질문) | J2 `FULL` · `HELP`, J3 `DELIVERED` · `HELP`, J5 `FULL` · `COPIED` · `PARTIAL` · `HELP` · `NOT_UNDERSTOOD` · `IRRELEVANT` | 수행 코드도 도움 요청으로 처리한다(10.18 절차 질문 규칙). J2의 `NOT_UNDERSTOOD` · `IRRELEVANT` 묶음은 그대로다 |
 | 묶음 없음 | J3 되묻기(REASK), J4 도움 제안(HELP_OFFER), J4 변형 제안 첫 대답. `UNREADABLE`은 어느 묶음에도 들지 않는다(두 번째에는 판독 불가 사실이 더 남는다) | — |
 
+- **요청 하한(C안 기회 J2, 2026-10-26) [편차 FT-1024-h]:** C안 연습 흐름은 기회(J2) 판정 요청의 기준 맵에 이 판정에만 쓸 낮춘 하한을 키 `minConfidence`(수)로 함께 보낸다. 값은 realtime 설정 `mujoong.practice-flow.direct-ask.j2-min-confidence`(기본 0.45, 10.14)다. 판정 모듈은 연습 흐름을 참조하지 않으므로(ArchUnit) 값은 같은 걸음 묶음처럼 데이터로만 온다. 실행부는 모양을 확인해(수 · 유한 · 0.3 이상 1 이하, 아니면 판정 요청을 거절한다) 판정 요청에 싣고, 검증기는 그 값이 전역 하한(`min-confidence` 0.6)보다 낮을 때만 하한 자리에 쓴다(낮추기만 한다 — 같거나 크면 무시한다). 1순위 하나를 볼 때도 같은 걸음 묶음의 합을 볼 때도 같은 하한이다. 최소 차이(`min-margin` 0.15) · 다른 지점(J3 · J4 · J5) · 유연 대화(요청 하한을 보내지 않는다)는 그대로다. 하한은 공급자로 보내지 않고(`ai-judgment-request` 입력에 없다) 판정 기록 표 · 마이그레이션도 바뀌지 않는다. 이 하한으로 확정한 판정은 판정 기록 표에서 1순위 확률이 0.6 미만인 J2 확정으로 알아볼 수 있다(같은 걸음 합 확정은 위 진단 사유 코드로 따로 남는다). 까닭: 5회차 실음성 실측(실제 API + 합성 아이 음성, 실제 기기 · 실제 아이 아님)에서 J2 보류 13/20의 1순위는 대개 맞는 항목이었고 확률만 하한에 못 미쳤다(일부만 대답 `PARTIAL` 0.56 · 0.52 · 0.56 · 0.48, 2순위와 차이 0.20 이상, 도움 요청 `HELP` 0.46 · 0.44).
+
 - **보내기 전 정리:** 모든 깊이에서 10.2 금지 키(+ core 결과 게이트웨이의 `audioRefs` · `audioRefsJson` · `interests` 등)를 지우고, 호출자가 준 별칭 표로 아이 이름을 바꾸며, 이메일 · 휴대전화 모양 값을 '연락처'로 가린다. 남으면 · 요청 스키마(`ai-judgment-request`)에 맞지 않으면 부르지 않고 `FORBIDDEN_INPUT`이다. UUID → '참조N'과 복원은 지금 `ResultTextGateway`가 맡는다.
   - 금지 키는 대소문자와 `_` · `-`를 가리지 않고 비교한다(`child_name` · `Child-Id` · `api_key` · `guardian-id`도 지운다). 정리 뒤 안전망은 이 비교를 다시 쓰지 않는 독립 검사로, 글자 · 숫자 밖 문자를 모두 뺀 꼴(예: `child.name`)까지 보고 남으면 `FORBIDDEN_INPUT`이다.
   - 별칭은 긴 이름부터(길이가 같으면 사전순) 한 번만 훑으며 바꾼다. 이름끼리 포함 관계(예: '민수'와 '수')여도 결과가 별칭 표 순서에 기대지 않고, 바꿔 넣은 별칭을 짧은 이름이 다시 바꾸지 않는다. 빈 이름은 무시한다.
@@ -517,13 +519,14 @@ realtime 출력 게이트의 제브 단계(U13)가 읽는 설정이다. 시간 �
 
 ### 10.14 U12 새 연습 흐름 횟수 한도 · 경로 스위치
 
-realtime 새 연습 흐름(U12)이 읽는 설정이다. 시간 값이 아니며 `timing.md`에 두지 않는다. 시간 한도(무응답 재안내 10초 · 집중 90초 · 목표 ACTIVE 10분)는 기존 키 `mujoong.timing.conversation.no-response-wait` · `focus-max` · `goal-active-limit`(timing.md 13절)이 맡고, 이 표는 횟수와 경로 스위치만 정한다. 비밀이 아니고 환경 변수가 없다. 연습 대화 C안(10.18)으로 `retry-max` 기본값을 2에서 1로 낮추고 `flexible-dialogue`를 더했다 [편차 FT-1024-a] [편차 FT-1024-d].
+realtime 새 연습 흐름(U12)이 읽는 설정이다. 시간 값이 아니며 `timing.md`에 두지 않는다. 시간 한도(무응답 재안내 10초 · 집중 90초 · 목표 ACTIVE 10분)는 기존 키 `mujoong.timing.conversation.no-response-wait` · `focus-max` · `goal-active-limit`(timing.md 13절)이 맡고, 이 표는 횟수 · 경로 스위치와 C안 판정 하한만 정한다. 비밀이 아니고 환경 변수가 없다. 연습 대화 C안(10.18)으로 `retry-max` 기본값을 2에서 1로 낮추고 `flexible-dialogue`를 더했다 [편차 FT-1024-a] [편차 FT-1024-d]. 2026-10-26에 C안 기회(J2) 판정 하한 `direct-ask.j2-min-confidence`를 더했다 [편차 FT-1024-h].
 
 | 설정 키 | 기본값 | 앱 | 뜻 |
 |---|---|---|---|
 | `mujoong.practice-flow.retry-max` | `1` | realtime | 장면 하나에서 도움 뒤 '다시 해 보기'를 할 수 있는 최대 횟수(AC1.5.4, C안 1 — FT-1024-d). 0 이상 정수, 0은 하지 않음. 넘으면 장면을 닫는다(`SCENE_CLOSE`) |
 | `mujoong.practice-flow.reexplain-max` | `1` | realtime | 장면 하나에서 상황을 다시 설명하는 최대 횟수(AC1.3.x, OPPORTUNITY와 RETRY가 공유). 0 이상 정수, 0은 하지 않음 |
 | `mujoong.practice-flow.flexible-dialogue` | `false` | realtime | 연습 대화 경로 스위치(참거짓). `false`(운영 기본) = 대본형 C안(무중이 직접 묻기, 10.18), `true` = 유연 대화(장면 속 친구 역할 · 생성형, C안 전 운영 동작). 유연 대화 코드와 시험은 지우지 않아 이 값 하나로 되돌릴 수 있다. realtime `application.yml` · 설정 레코드 · `ConfigKeyContractTest` 대조 목록이 이 줄과 같아야 한다 |
+| `mujoong.practice-flow.direct-ask.j2-min-confidence` | `0.45` | realtime | C안 기회(J2) 판정에만 쓰는 낮춘 확률 하한(0 ~ 1 사이 수). 연습 흐름이 J2 판정 요청에 데이터로 싣고(10.10 요청 하한) 실행부 검증기가 전역 하한 `mujoong.judgment.min-confidence`(0.6)보다 낮을 때만 쓴다(낮추기만 한다). 다른 지점 · 유연 대화 · `mujoong.judgment.min-margin`(0.15) · 같은 걸음 묶음 규칙은 그대로다. 실행부가 받는 범위는 0.3 이상 1 이하이고 연습 흐름 설정 객체가 기동 때 같은 범위를 본다(밖이면 기동 거부). 키가 없으면 기동하지 않는다(코드 기본값 없음) [편차 FT-1024-h] |
 
 ### 10.15 자유대화 서비스 정책 적용
 
@@ -614,16 +617,21 @@ J1/J6의 고정 질문·선택지는 `judgment-service-v1`, 공통 지시문은 
 | OPPORTUNITY 진입 | 상대의 말 전하기 + 묻기(한 슬롯으로 이어 읽는다) | 대본 `opportunityRelay` + `askPrompt` |
 | OPPORTUNITY 무응답 1회 | 다시 묻기 | 고정 `WAIT_LEAD` + 대본 `askPrompt` |
 | 다시 설명(J2 `NOT_UNDERSTOOD` · `IRRELEVANT`) | 다시 설명 + 묻기(묻기를 다시 읽는다) | 대본 `reexplanation` + `askPrompt` |
-| REASK(J2 `PARTIAL`) | 되묻기 | 대본 `reaskPrompt` |
+| REASK(J2 `PARTIAL` · J2 판정 보류) | 되묻기 | 대본 `reaskPrompt` |
 | HELP_OFFER(J3 `STILL_SHORT` · 다시 설명 한도 넘음) | 도움 제안 | 고정 `HELP_OFFER`(004) |
 | FOCUS(J2 · J3 `HELP` · 절차 질문 · J4 `ACCEPT`) | 도움 | 대본 `helpSpeech` |
 | RETRY 무응답 1회 | 다시 해 보기 권유 | 고정 `RETRY_PROMPT` |
-| 판독 불가 · 판정 보류 | 확인 | 고정 `INPUT_CONFIRM` |
+| 판독 불가(`UNREADABLE` · 판독 불가 입력 · 빈 전사) · 판정 장애(시한 · 공급자 오류 · 응답 검증 위반 · 요청 거절) | 확인 | 고정 `INPUT_CONFIRM` |
+| 판정 보류(받아쓰기는 됐는데 1순위 확률이 하한 · 최소 차이 미만, 보류 사유 `LOW_CONFIDENCE` · `LOW_MARGIN`) 첫 번째 [편차 FT-1024-h] | 그 단계의 묻는 말. 기회(J2)는 되묻기 단계(REASK)로 넘어가 되묻기를 읽는다 | 대본 `reaskPrompt`(기회 · 되묻기, 없으면 대체 문장) · 고정 `RETRY_PROMPT`(다시 해 보기) · 같은 제안 문장(도움 제안 `HELP_OFFER` · 변형 제안 `VARIANT_OFFER`) |
 | 장면 성공(J2 `FULL` · J3 `DELIVERED` · J5 `FULL` · `COPIED`) | 상대의 반응 전하기 | 대본 `friendReaction` |
 | 장면 실패 · 거절 · 한도 | 장면 닫기 | 고정 `SCENE_CLOSE` |
 | VARIANT_OFFER | 변형 제안 | 고정 `VARIANT_OFFER` |
 
-- 한도(B §8.3 G-16과 같고 다시 해 보기만 바뀐다): 되묻기 기회마다 1회 · 다시 설명 기회마다 1회(`reexplain-max` 1, 넘으면 HELP_OFFER) · 무응답 다시 묻기 기회마다 1회(넘으면 장면 닫기) · 판독 불가 · 보류 확인 기회마다 1회(두 번째면 장면을 닫지 않고 10.17의 다음 도움 단계: 기회 · 되묻기 → 도움 제안, 도움 제안 → 동의 없는 도움, 다시 해 보기 → 남은 횟수가 없어(`retry-max` 1) 집중 한도로 장면 닫기) · 도움 장면마다 1회(첫 도움에 표현 예시를 넣는다) · 다시 해 보기 장면마다 1회(`retry-max` 1, 넘으면 도움을 다시 하지 않고 장면 닫기) [편차 FT-1024-d · FT-1023-g].
+- 한도(B §8.3 G-16과 같고 다시 해 보기만 바뀐다): 되묻기 기회마다 1회 · 다시 설명 기회마다 1회(`reexplain-max` 1, 넘으면 HELP_OFFER) · 무응답 다시 묻기 기회마다 1회(넘으면 장면 닫기) · 판독 불가 확인 · 판정 보류 다시 묻기(아래 FT-1024-h) 합쳐 기회마다 1회(두 번째면 장면을 닫지 않고 10.17의 다음 도움 단계: 기회 · 되묻기 → 도움 제안, 도움 제안 → 동의 없는 도움, 다시 해 보기 → 남은 횟수가 없어(`retry-max` 1) 집중 한도로 장면 닫기) · 도움 장면마다 1회(첫 도움에 표현 예시를 넣는다) · 다시 해 보기 장면마다 1회(`retry-max` 1, 넘으면 도움을 다시 하지 않고 장면 닫기) [편차 FT-1024-d · FT-1023-g].
+- **판정 보류는 묻는 말로 다시 묻는다(2026-10-26) [편차 FT-1024-h]:** 판정 보류(받아쓰기는 됐는데 1순위 확률이 하한 · 최소 차이에 못 미침, 실행부 사건의 보류 사유 `LOW_CONFIDENCE` · `LOW_MARGIN`)의 첫 재안내는 확인 질문(`INPUT_CONFIRM` "잘 못 들었어…") 대신 그 단계의 묻는 말이다(위 표). 판독 불가(`UNREADABLE` 판정 · 판독 불가 입력 `UNREADABLE_INPUT` · 빈 전사) · 판정 장애(그 밖의 보류 사유 · 장애 · 판정 요청 거절)는 지금처럼 `INPUT_CONFIRM`이다. 5회차 실음성 실측(실제 API + 합성 아이 음성)에서 받아쓰기는 맞았는데 아이가 "잘 못 들었어"를 들었고, 일부만 대답이 되묻기 대신 확인 질문 → 도움 제안으로 가 되묻기 흐름이 거의 쓰이지 않았다.
+  - 기회(J2)의 보류는 되묻기 단계로 넘어가 대본 되묻기를 읽는다. 다음 판정은 J3이고 결과 처리 · 시점은 J2 `PARTIAL` 뒤 되묻기와 같다(`DELIVERED` → 상대 반응 · 시점 `AFTER_REASK` · 사실 `REASK_RESOLVED`, `STILL_SHORT` → 도움 제안, `HELP` → 도움). 확인 · 보류 횟수는 되묻기 단계로 이어 가서 되묻기 단계의 판독 불가 · 보류 · 장애는 두 번째 불명확으로 곧바로 도움 제안이다(무응답 다시 묻기는 되묻기 단계의 한 번이 따로 있다). 되묻기 · 다시 해 보기 · 도움 제안 · 변형 제안의 보류는 같은 단계에서 그 단계의 묻는 말을 다시 읽는다.
+  - 두 번째 불명확은 지금처럼 도움 단계다. 횟수 · 상한은 늘리지 않는다. 유연 대화(`flexible-dialogue` `true`)는 지금 동작 그대로다.
+  - 기록: 되묻기 · 다시 묻기가 판정 결과(예: `PARTIAL`)가 아니라 보류에서 왔다는 사실은 흐름 진단 사유 코드 `PracticeUnsureJudgmentAskedAgain_<지점>`(예: `_J2`, 앱 로그 INFO, 고정 코드뿐 · 전사 · 선택지 · 확률 없음, R-F14)으로 남고, 판정 기록 행에는 그 판정이 보류(`ABSTAINED`)와 보류 사유(`LOW_CONFIDENCE` · `LOW_MARGIN`)로 남는다(1 · 2순위 확률은 지금처럼 확정 행에만 있다). 장면 사실 · 연습 기록의 모양은 바뀌지 않는다(마이그레이션 없음).
 - 장면 성공 뒤에는 칭찬 대신 대본에 미리 쓴 상대의 반응(`friendReaction`)을 전한다 [편차 FT-1024-c]. 변형 장면도 같은 흐름이고 변형 장면의 칸을 쓴다.
 - 구현에서 정한 세부(realtime `DirectAskLines` · `FlowTransitions` C안 표):
   - REASK 무응답 1회는 `WAIT_LEAD` + `reaskPrompt`를 읽는다. HELP_OFFER · VARIANT_OFFER의 무응답 · 불명확 재안내는 같은 제안 문장을 다시 읽는다.
@@ -687,8 +695,8 @@ J1/J6의 고정 질문·선택지는 `judgment-service-v1`, 공통 지시문은 
 |---|---|---|
 | `HELP_OFFER`(004) | 무중이가 조금 도와줄까? | HELP_OFFER |
 | `VARIANT_OFFER` | 비슷한 이야기로 한 번 더 해 볼까? | 변형 제안 |
-| `RETRY_PROMPT` | 네 말로 한 번 말해 볼래? | 다시 해 보기 무응답 |
-| `INPUT_CONFIRM` | 잘 못 들었어. 한 번 더 말해 줄래? | 판독 불가 · 판정 보류 |
+| `RETRY_PROMPT` | 네 말로 한 번 말해 볼래? | 다시 해 보기 무응답 · 다시 해 보기 판정 보류(FT-1024-h) |
+| `INPUT_CONFIRM` | 잘 못 들었어. 한 번 더 말해 줄래? | 판독 불가 · 판정 장애(판정 보류는 그 단계의 묻는 말, FT-1024-h) |
 | `SCENE_CLOSE` | 알겠어. 이 이야기는 여기까지 할게. | 장면 실패 · 거절 · 한도 |
 | `WAIT_LEAD` | 천천히 생각해도 돼. | 무응답 다시 묻기 앞머리 |
 | `ASK_DEFAULT` | 너라면 친구한테 뭐라고 말할래? | `askPrompt`가 없는 친구 장면(아래 상대 호칭별 대체 표) |
@@ -716,7 +724,7 @@ J1/J6의 고정 질문·선택지는 `judgment-service-v1`, 공통 지시문은 
 | `FAMILY`(이름에 가족 낱말, 또는 동아리 밖의 손윗사람 호칭), 호칭 없는 중립 문장 | 그때 이렇게 말했어. + `opportunitySentence` | 너라면 뭐라고 말할래? | 그렇게 말해 주면 네 마음이 잘 전해질 거야. |
 | 그 밖(`FRIEND*` · `PEER*` · `CLASSMATE` · `CLUB_PEER` · `TEAMMATE` · 모르는 값) | 친구가 이렇게 말했어. + `opportunitySentence` | 고정 `ASK_DEFAULT` | 그렇게 말해 주면 친구도 네 마음을 알 거야. |
 
-**판정.** 진행 중 판정의 기본 판은 `prompt-service-v4` · `judgment-service-v2`이고 판정 입력의 무중 줄 화자는 `MUJOONG`이다(10.4 · 10.10). 아이 대답이 직접 하는 말 · 할 말을 전하는 말("다음에 같이 그리자고 할래") · 할 행동 설명 중 무엇이든 내용이 목표 핵심 기능을 채우면 수행이다(J2 `FULL` · J3 `DELIVERED` · J5 `FULL`). 할 말을 정하지 못하고 방법만 묻는 말("뭐라고 말해야 돼?")은 `HELP`다. 절차 질문 규칙과 판정 경로 · 시한은 그대로다. 확률 하한도 그대로이되, 1 · 2순위가 흐름의 같은 다음 걸음 묶음(예: 다시 해 보기의 `FULL` · `COPIED`)이면 두 확률의 합으로 본다(10.10 같은 걸음 묶음, 2026-10-25 [편차 FT-1024-f]). core 기록용 재판정(`RejudgmentGateway`, 출력 스키마 `ai-rejudgment-output`)도 같은 인정 규칙을 넣은 `rejudgment.v2` 지시로 부르고, 판정 기록 `promptVersion`은 `rejudgment.v2`다(리포트 2항목 줄 이름이 이 결과를 쓴다) [편차 FT-1024-b].
+**판정.** 진행 중 판정의 기본 판은 `prompt-service-v4` · `judgment-service-v2`이고 판정 입력의 무중 줄 화자는 `MUJOONG`이다(10.4 · 10.10). 아이 대답이 직접 하는 말 · 할 말을 전하는 말("다음에 같이 그리자고 할래") · 할 행동 설명 중 무엇이든 내용이 목표 핵심 기능을 채우면 수행이다(J2 `FULL` · J3 `DELIVERED` · J5 `FULL`). 할 말을 정하지 못하고 방법만 묻는 말("뭐라고 말해야 돼?")은 `HELP`다. 절차 질문 규칙과 판정 경로 · 시한은 그대로다. 확률 하한도 그대로이되, 1 · 2순위가 흐름의 같은 다음 걸음 묶음(예: 다시 해 보기의 `FULL` · `COPIED`)이면 두 확률의 합으로 본다(10.10 같은 걸음 묶음, 2026-10-25 [편차 FT-1024-f]). 기회(J2)의 하한만 0.45로 낮춘다 — 흐름이 J2 판정 요청에 요청 하한을 싣고 검증기가 전역 하한보다 낮을 때만 쓴다. 다른 지점 · 최소 차이 0.15 · 같은 걸음 묶음 규칙은 그대로다(10.10 요청 하한 · 10.14, 2026-10-26 [편차 FT-1024-h]). core 기록용 재판정(`RejudgmentGateway`, 출력 스키마 `ai-rejudgment-output`)도 같은 인정 규칙을 넣은 `rejudgment.v2` 지시로 부르고, 판정 기록 `promptVersion`은 `rejudgment.v2`다(리포트 2항목 줄 이름이 이 결과를 쓴다) [편차 FT-1024-b].
 
 **기록.** 연습 기록의 모양과 `flowVersion`(`practice-conversation-v1`) · 시점 5값의 뜻은 그대로다. 역할 사실(`COACH_SWITCH` · `COACH_RETURN` · `ORIGINAL_SCENE_RETURN`)은 C안에서 나오지 않는다(열거값은 유연 대화 · 이전 기록 호환으로 남는다). 마이그레이션은 없다.
 - C안에서 아이가 먼저 도움을 청하면(J2 · J3 `HELP` · 절차 질문) 도움 동의는 `ACCEPT`, 사실은 `HELP_ACCEPTED`로 남는다. 리포트 8항목이 이 경우를 '답 없음'으로 세지 않게 하려는 것이다. 유연 대화는 지금처럼 `REQUESTED`다.

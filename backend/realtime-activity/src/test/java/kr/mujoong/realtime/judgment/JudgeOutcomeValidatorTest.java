@@ -189,6 +189,87 @@ class JudgeOutcomeValidatorTest {
         assertThat(grouped(null, 0.38, "COPIED", 0.29, J5_GROUPS).abstainReason()).isEqualTo(AbstainReason.SCHEMA_INVALID);
     }
 
+    // ---- 요청 하한 (ai-io.md 10.10, 편차 FT-1024-h) ----
+
+    /** C안 기회(J2) 선택지와 그 단계의 묶음(다시 설명으로 가는 둘). */
+    private static final List<String> J2 = List.of("FULL", "PARTIAL", "HELP", "NOT_UNDERSTOOD", "IRRELEVANT", "UNREADABLE");
+    private static final List<List<String>> J2_GROUPS = List.of(List.of("NOT_UNDERSTOOD", "IRRELEVANT"));
+
+    private JudgeOutcome floored(String first, double firstP, String second, double secondP, Double floor) {
+        return validator.validateRanked(first, firstP, second, secondP, J2, J2_GROUPS, floor, LATENCY, "luna-test", "prompt-service-v4");
+    }
+
+    @ParameterizedTest(name = "PARTIAL {0} / FULL {1} under 0.45 -> {2} {3}")
+    @CsvSource({
+        "0.48, 0.28, CONFIRMED, ",
+        "0.56, 0.20, CONFIRMED, ",
+        "0.45, 0.30, CONFIRMED, ",
+        "0.44, 0.20, ABSTAINED, LOW_CONFIDENCE",
+        "0.46, 0.31, CONFIRMED, ",
+        "0.50, 0.36, ABSTAINED, LOW_MARGIN",
+        "0.59, 0.10, CONFIRMED, "
+    })
+    void theLoweredFloorConfirmsAFirstOptionBetweenItAndTheGlobalFloorButKeepsTheMargin(double firstP, double secondP,
+            JudgmentOutcomeKind kind, AbstainReason reason) {
+        // 5회차 J2(실제 API + 합성 아이 음성): 일부만 대답 PARTIAL 0.56 · 0.52 · 0.56 · 0.48, 2순위와 차이 0.20 이상. 경계는 같으면 확정이다
+        JudgeOutcome outcome = floored("PARTIAL", firstP, "FULL", secondP, 0.45);
+
+        assertThat(outcome.kind()).isEqualTo(kind);
+        assertThat(outcome.abstainReason()).isEqualTo(reason);
+        assertThat(outcome.firstOption()).isEqualTo("PARTIAL");
+        assertThat(outcome.firstProbability()).as("확정 · 보류 모두 기록용 확률은 그대로").isEqualTo(firstP);
+        assertThat(outcome.sameStepSum()).isFalse();
+        assertThat(floored("PARTIAL", firstP, "FULL", secondP, null).abstainReason()).as("하한을 싣지 않으면 전역 0.6")
+                .isIn(AbstainReason.LOW_CONFIDENCE, AbstainReason.LOW_MARGIN);
+    }
+
+    @Test
+    void theFifthRunHelpAnswersAreConfirmedOnlyWhenTheyReachTheLoweredFloor() {
+        // 5회차 J2 도움 요청 HELP 0.46 · 0.44(실제 API + 합성 아이 음성)
+        assertThat(floored("HELP", 0.46, "NOT_UNDERSTOOD", 0.30, 0.45).isConfirmed()).isTrue();
+        assertThat(floored("HELP", 0.44, "NOT_UNDERSTOOD", 0.28, 0.45).abstainReason()).isEqualTo(AbstainReason.LOW_CONFIDENCE);
+        // 13.7의 J2 HELP 0.54 · NOT_UNDERSTOOD 0.30: 전역 하한에서는 다른 걸음이라 보류였고, 낮춘 하한에서는 1순위 혼자 확정이다
+        assertThat(floored("HELP", 0.54, "NOT_UNDERSTOOD", 0.30, null).abstainReason()).isEqualTo(AbstainReason.LOW_CONFIDENCE);
+        JudgeOutcome help = floored("HELP", 0.54, "NOT_UNDERSTOOD", 0.30, 0.45);
+        assertThat(help.isConfirmed()).isTrue();
+        assertThat(help.firstOption()).isEqualTo("HELP");
+        assertThat(help.sameStepSum()).as("1순위 혼자 넘은 확정은 묶음 합 표지가 없다").isFalse();
+    }
+
+    @Test
+    void aRequestedFloorOnlyLowersTheGlobalFloorAndValuesItCannotUseAreIgnored() {
+        for (Double ignored : new Double[] {null, 0.6, 0.7, 1.0, Double.NaN, Double.POSITIVE_INFINITY, -0.1, 1.5}) {
+            assertThat(floored("PARTIAL", 0.55, "FULL", 0.2, ignored).abstainReason()).as("하한 " + ignored)
+                    .isEqualTo(AbstainReason.LOW_CONFIDENCE);
+            assertThat(floored("PARTIAL", 0.6, "FULL", 0.2, ignored).isConfirmed()).as("하한 " + ignored).isTrue();
+        }
+        assertThat(floored("PARTIAL", 0.55, "FULL", 0.2, 0.55).isConfirmed()).isTrue();
+        assertThat(floored("PARTIAL", 0.54, "FULL", 0.2, 0.55).abstainReason()).isEqualTo(AbstainReason.LOW_CONFIDENCE);
+        assertThat(floored("PARTIAL", 0.55, "FULL", 0.45, 0.45).abstainReason()).as("최소 차이는 언제나 전역 0.15")
+                .isEqualTo(AbstainReason.LOW_MARGIN);
+    }
+
+    @Test
+    void theSameStepSumIsComparedWithTheSameLoweredFloor() {
+        JudgeOutcome sum = floored("NOT_UNDERSTOOD", 0.25, "IRRELEVANT", 0.20, 0.45);
+        assertThat(sum.isConfirmed()).as("합 0.45는 낮춘 하한과 같아 확정").isTrue();
+        assertThat(sum.sameStepSum()).isTrue();
+        assertThat(sum.firstOption()).isEqualTo("NOT_UNDERSTOOD");
+        assertThat(floored("NOT_UNDERSTOOD", 0.25, "IRRELEVANT", 0.19, 0.45).abstainReason()).isEqualTo(AbstainReason.LOW_CONFIDENCE);
+        assertThat(floored("NOT_UNDERSTOOD", 0.25, "IRRELEVANT", 0.20, null).abstainReason()).as("전역 하한이면 합 0.45는 보류")
+                .isEqualTo(AbstainReason.LOW_CONFIDENCE);
+    }
+
+    @Test
+    void theOverloadsWithoutARequestedFloorKeepTheGlobalFloor() {
+        assertThat(validator.validateRanked("PARTIAL", 0.5, "FULL", 0.2, J2, LATENCY, "luna-test", "p").abstainReason())
+                .isEqualTo(AbstainReason.LOW_CONFIDENCE);
+        assertThat(validator.validateRanked("PARTIAL", 0.5, "FULL", 0.2, J2, J2_GROUPS, LATENCY, "luna-test", "p").abstainReason())
+                .isEqualTo(AbstainReason.LOW_CONFIDENCE);
+        assertThat(floored("PARTIAL", 0.5, "NOT_A_CODE", 0.2, 0.45).abstainReason()).as("범위 · 선택지 · 중복 검사가 먼저")
+                .isEqualTo(AbstainReason.OPTION_OUT_OF_SET);
+    }
+
     @Test
     void theSameStepMarkIsOnlyForConfirmations() {
         assertThatThrownBy(() -> new JudgeOutcome(JudgmentOutcomeKind.ABSTAINED, "FULL", 0.38, "COPIED", 0.29,

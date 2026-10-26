@@ -25,9 +25,10 @@ import org.junit.jupiter.params.provider.EnumSource;
 
 /**
  * C안 '무중이 직접 묻기' 전이표 시험 (docs/practice-direct-ask.md 2장 3A ~ 3E′ · 3.3 · 7.2). 순수 함수라 DB · AI · 시계가 없다. 역할 대화 표
- * ({@link FlowTransitionsTest})와 같은 입력에서 C안이 다른 네 곳 — 역할 전환 없이 곧바로 도움, 친구 반응 · 고정 마무리 문장, 아이가 청한 도움을
- * 동의로 남김, 끊긴 마무리 문장은 전달로 봄 — 과 다시 해 보기 한도 1을 행마다 단언한다. 발화 · 판정 · 전사 오류는 두 표가 같이 main FT-1023-g를
- * 따른다(못 들려준 말은 건너뛰고, 판독 불가 · 보류 두 번째는 도움 단계로, 13.6 main 합치기).
+ * ({@link FlowTransitionsTest})와 같은 입력에서 C안이 다른 다섯 곳 — 역할 전환 없이 곧바로 도움, 친구 반응 · 고정 마무리 문장, 아이가 청한 도움을
+ * 동의로 남김, 끊긴 마무리 문장은 전달로 봄, 판정 보류의 첫 재안내는 그 단계의 묻는 말(기회는 되묻기 단계로, 편차 FT-1024-h) — 과 다시 해 보기 한도
+ * 1을 행마다 단언한다. 발화 · 판정 · 전사 오류는 두 표가 같이 main FT-1023-g를 따른다(못 들려준 말은 건너뛰고, 판독 불가 · 보류 두 번째는 도움
+ * 단계로, 13.6 main 합치기).
  */
 @Tag("practice-flow")
 class DirectAskTransitionsTest {
@@ -233,6 +234,83 @@ class DirectAskTransitionsTest {
         assertEnters(limit, Phase.SCENE_WRAP, Sub.SCENE_CLOSE);
         assertThat(limit.cause()).isEqualTo(EndCause.FOCUS_LIMIT);
         assertThat(limit.facts()).containsExactly(FactKind.TRANSCRIPT_FAILED);
+    }
+
+    // ---- 판정 보류는 그 단계의 묻는 말로 (ai-io.md 10.18, 편차 FT-1024-h) ----
+
+    @Test
+    void aFirstUnsureJudgmentAtTheOpportunityEntersTheReaskAndCarriesTheConfirmCount() {
+        Step step = table.onJudgmentUnsure(at(Phase.OPPORTUNITY, Sub.NONE), JudgmentPoint.J2);
+
+        assertEnters(step, Phase.REASK, Sub.NONE);
+        assertThat(step.guard()).as("확인 · 보류 표지를 되묻기 단계로 잇는다").isEqualTo(Guard.UNSURE);
+        assertThat(step.facts()).as("되묻기 사실(REASK_RESOLVED)은 되묻기가 풀릴 때 남는다").isEmpty();
+        assertThat(step.timing()).isNull();
+        assertThat(step.cause()).isNull();
+        assertThat(step.consent()).isNull();
+        // 결과 처리는 J2 PARTIAL 뒤 되묻기와 같다: 다음 판정은 J3이고, 풀리면 AFTER_REASK · REASK_RESOLVED다
+        assertThat(FlowTransitions.expectedPoint(step.phase())).isEqualTo(JudgmentPoint.J3);
+        Step partial = table.onJudgment(at(Phase.OPPORTUNITY, Sub.NONE), JudgmentPoint.J2, "PARTIAL");
+        assertThat(List.of(step.phase(), step.sub())).isEqualTo(List.of(partial.phase(), partial.sub()));
+        FlowState reask = at(Phase.REASK, Sub.NONE);
+        reask.unreadableGuided(true);
+        Step resolved = table.onJudgment(reask, JudgmentPoint.J3, "DELIVERED");
+        assertEnters(resolved, Phase.SCENE_WRAP, Sub.FRIEND_REACTION);
+        assertThat(resolved.timing()).isEqualTo(LiveTiming.AFTER_REASK);
+        assertThat(resolved.facts()).containsExactly(FactKind.REASK_RESOLVED);
+    }
+
+    @Test
+    void aFirstUnsureJudgmentInTheOtherPhasesAsksAgainInTheSamePhase() {
+        for (Phase phase : List.of(Phase.REASK, Phase.HELP_OFFER, Phase.VARIANT_OFFER, Phase.RETRY)) {
+            FlowState state = phase == Phase.RETRY ? retrying() : at(phase, Sub.NONE);
+
+            Step step = table.onJudgmentUnsure(state, FlowTransitions.expectedPoint(phase));
+
+            assertThat(step.action()).as(phase.name()).isEqualTo(Action.REGUIDE);
+            assertThat(step.guard()).as(phase.name()).isEqualTo(Guard.UNSURE);
+            assertThat(step.facts()).as(phase.name()).isEmpty();
+            assertThat(step.cause()).as(phase.name()).isNull();
+        }
+    }
+
+    @Test
+    void aSecondUnsureJudgmentTakesTheSameHelpStepAsAnUnavailableOneSoNoCountGrows() {
+        for (Phase phase : List.of(Phase.OPPORTUNITY, Phase.REASK, Phase.HELP_OFFER, Phase.VARIANT_OFFER, Phase.RETRY)) {
+            FlowState guided = phase == Phase.RETRY ? retrying() : at(phase, Sub.NONE);
+            guided.unreadableGuided(true);
+            JudgmentPoint point = FlowTransitions.expectedPoint(phase);
+
+            assertThat(table.onJudgmentUnsure(guided, point).effect()).as(phase.name())
+                    .isEqualTo(table.onJudgmentUnavailable(guided, point).effect());
+        }
+        // 되묻기 단계로 이어 간 표지: 되묻기의 보류 · 판독 불가는 두 번째 불명확이라 곧바로 도움 제안이다
+        FlowState carried = at(Phase.REASK, Sub.NONE);
+        carried.unreadableGuided(true);
+        assertEnters(table.onJudgmentUnsure(carried, JudgmentPoint.J3), Phase.HELP_OFFER, Sub.NONE);
+        Step unreadable = table.onJudgment(carried, JudgmentPoint.J3, "UNREADABLE");
+        assertEnters(unreadable, Phase.HELP_OFFER, Sub.NONE);
+        assertThat(unreadable.facts()).containsExactly(FactKind.TRANSCRIPT_FAILED);
+    }
+
+    @Test
+    void theRoleDialogueTableKeepsTreatingAnUnsureJudgmentLikeAnUnavailableOneAndOtherPointsAreIgnored() {
+        FlowTransitions roleDialogue = new FlowTransitions(2, 1);
+        for (Phase phase : List.of(Phase.OPPORTUNITY, Phase.REASK, Phase.HELP_OFFER, Phase.RETRY)) {
+            for (boolean guided : List.of(false, true)) {
+                FlowState state = phase == Phase.RETRY ? retrying() : at(phase, Sub.NONE);
+                state.unreadableGuided(guided);
+                JudgmentPoint point = FlowTransitions.expectedPoint(phase);
+                assertThat(roleDialogue.onJudgmentUnsure(state, point).effect()).as(phase + " guided=" + guided)
+                        .isEqualTo(roleDialogue.onJudgmentUnavailable(state, point).effect());
+            }
+        }
+        assertThat(table.onJudgmentUnsure(at(Phase.OPPORTUNITY, Sub.NONE), JudgmentPoint.J3).action()).as("단계와 다른 지점")
+                .isEqualTo(Action.IGNORE);
+        assertThat(table.onJudgmentUnsure(at(Phase.OPPORTUNITY, Sub.REEXPLAIN), JudgmentPoint.J2).action()).as("다시 설명 재생 중")
+                .isEqualTo(Action.IGNORE);
+        assertThat(table.onJudgmentUnsure(at(Phase.SCENE_WRAP, Sub.FRIEND_REACTION), JudgmentPoint.J5).action())
+                .isEqualTo(Action.IGNORE);
     }
 
     @Test

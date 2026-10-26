@@ -15,13 +15,15 @@ import java.util.Set;
  * 판정 요청 한 건 (U11 entities JudgeRequest · BR1.2 · BR1.7). {@code contracts/schemas/ai-judgment-request.schema.json} 모양에 맞는 필드만
  * 담는다: 지점, 판 번호, 판 순서 그대로의 선택지, 확정 전사, 최근 대화 최대 3턴, J2 · J3 · J5만 기준이다. 아동 · 보호자 · 세션 · 기기 식별자와
  * 원음, 보호자 입력 원문 필드는 아예 없다(R-F14 · R-F15). 별칭 표(아이 이름 → 아이)는 Luna 입력 정리가 치환에만 쓰고 공급자로 가지 않는다.
- * 같은 걸음 묶음도 검증기만 읽고 공급자로 가지 않는다({@link #toLunaInput()}에 없다). 문자열 표현은 본문을 숨긴다.
+ * 같은 걸음 묶음 · 낮춘 하한도 검증기만 읽고 공급자로 가지 않는다({@link #toLunaInput()}에 없다). 문자열 표현은 본문을 숨긴다.
  *
  * @param childUtterance 판정 대상 확정 전사. 비었을 수 있다(그러면 공급자 없이 UNREADABLE_INPUT, BR4.3). 2000자 이하는 호출자가 지킨다
  * @param uncertain 전사 신뢰도가 낮다고 표시됐는가. 입력 신뢰도를 알 수 없으면 거짓이다(BR4.3, 설계 개정 A7)
  * @param deadline 호출자 마감({@code MujoongClock} 기준). 보통 판정 턴 열린 시각 + live-budget이다(BR1.4)
  * @param sameStepGroups 판정을 요청한 연습 흐름이 지금 단계에서 같은 다음 걸음으로 처리하는 선택지 묶음(없으면 빈 목록). 묶음마다 서로 다른 요청
  *     선택지 둘 이상이고, 한 선택지는 한 묶음에만 든다. 1 · 2순위가 같은 묶음이면 검증기가 하한을 두 확률의 합으로 본다(ai-io.md 10.10)
+ * @param minConfidence 판정을 요청한 쪽이 이 판정에만 쓰자고 실은 낮춘 확률 하한(없으면 null = 전역 하한, C안 기회 J2 — 편차 FT-1024-h). 0 이상 1
+ *     이하다(실행부가 받기 전에 허용 범위를 따로 본다). 검증기는 전역 하한보다 낮을 때만 쓴다(낮추기만 한다)
  */
 public record JudgeRequest(
         JudgmentPoint point,
@@ -33,7 +35,8 @@ public record JudgeRequest(
         Map<String, String> aliases,
         boolean uncertain,
         Instant deadline,
-        List<List<String>> sameStepGroups) {
+        List<List<String>> sameStepGroups,
+        Double minConfidence) {
 
     /** 요청 전사 · 대화 한 줄의 상한(스키마 maxLength). */
     public static final int MAX_TEXT_CHARS = 2000;
@@ -104,12 +107,22 @@ public record JudgeRequest(
         aliases = aliases == null ? Map.of() : Collections.unmodifiableMap(new LinkedHashMap<>(aliases));
         Objects.requireNonNull(deadline, "deadline");
         sameStepGroups = sameStepGroups == null ? List.of() : copyGroups(sameStepGroups, options);
+        if (minConfidence != null && (minConfidence.isNaN() || minConfidence < 0.0 || minConfidence > 1.0)) {
+            throw new IllegalArgumentException("낮춘 하한은 0 이상 1 이하다");
+        }
     }
 
     /** 같은 걸음 묶음이 없는 요청(묶음을 싣지 않는 호출처 · 시험이 그대로 쓴다). */
     public JudgeRequest(JudgmentPoint point, String optionSetVersion, List<String> options, String childUtterance,
             List<RecentTurn> recentTurns, Criteria criteria, Map<String, String> aliases, boolean uncertain, Instant deadline) {
         this(point, optionSetVersion, options, childUtterance, recentTurns, criteria, aliases, uncertain, deadline, List.of());
+    }
+
+    /** 낮춘 하한이 없는 요청(전역 하한 그대로, 하한을 싣지 않는 호출처 · 시험이 그대로 쓴다). */
+    public JudgeRequest(JudgmentPoint point, String optionSetVersion, List<String> options, String childUtterance,
+            List<RecentTurn> recentTurns, Criteria criteria, Map<String, String> aliases, boolean uncertain, Instant deadline,
+            List<List<String>> sameStepGroups) {
+        this(point, optionSetVersion, options, childUtterance, recentTurns, criteria, aliases, uncertain, deadline, sameStepGroups, null);
     }
 
     /** 묶음의 바뀌지 않는 사본. 둘 미만 · 요청 선택지 밖 · 묶음 안 중복 · 묶음끼리 겹침은 예외다. */

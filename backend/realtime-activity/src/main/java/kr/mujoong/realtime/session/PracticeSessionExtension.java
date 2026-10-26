@@ -202,8 +202,23 @@ public interface PracticeSessionExtension {
         String SAME_STEP_GROUPS = "sameStepGroups";
 
         /**
+         * {@link #requestJudgment} 기준 맵의 선택 키: 이 판정에만 쓸 낮춘 확률 하한(수, C안 기회 J2 — 편차 FT-1024-h, ai-io.md 10.10). 판정 기준이
+         * 아니다 — 실행부는 판정 검증기가 1순위 확률(같은 걸음 묶음이면 두 확률의 합)을 하한과 견줄 때만 쓰고 공급자로 보내지 않는다. 낮추기만 한다:
+         * 전역 하한({@code mujoong.judgment.min-confidence})보다 크면 무시한다. 최소 차이({@code mujoong.judgment.min-margin})는 바꾸지 않는다. 값이
+         * 수가 아니거나 {@link #MIN_CONFIDENCE_LOWEST} ~ 1 밖이면 실행부는 판정 요청을 거절한다(같은 걸음 묶음 모양이 틀린 때와 같다).
+         */
+        String MIN_CONFIDENCE = "minConfidence";
+
+        /**
+         * {@link #MIN_CONFIDENCE}가 받는 가장 낮은 값(허용 범위는 이 값 이상 1 이하). 이보다 낮은 하한은 고르게 나뉜 확률(J2 6지선다면 약 0.17)에 가까워
+         * 1순위를 가려 보는 문턱이 사실상 없어지므로 받지 않는다 — 설정 실수 · 잘못된 요청을 막는 범위다.
+         */
+        double MIN_CONFIDENCE_LOWEST = 0.3;
+
+        /**
          * 아이 확정 전사 하나에 대한 진행 중 판정을 요청한다. 거절(ACTIVE 아님 · 열린 턴 있음 · 지점 밖 · 최근 전사 4개 밖 · 기준이나 같은
-         * 걸음 묶음({@link #SAME_STEP_GROUPS}) 모양 틀림 · 공급자 없음)이면 거짓이다. 결과는 JUDGMENT_RESULT · JUDGMENT_ABSTAINED 사건으로 온다.
+         * 걸음 묶음({@link #SAME_STEP_GROUPS}) · 낮춘 하한({@link #MIN_CONFIDENCE}) 모양 틀림 · 공급자 없음)이면 거짓이다. 결과는 JUDGMENT_RESULT ·
+         * JUDGMENT_ABSTAINED 사건으로 온다.
          */
         default boolean requestJudgment(kr.mujoong.realtime.judgment.JudgmentPoint point, long transcriptSeq, UUID correlationId,
                 java.util.Map<String, Object> criteria) { return false; }

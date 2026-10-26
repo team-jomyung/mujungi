@@ -28,12 +28,14 @@ import kr.mujoong.realtime.practiceflow.PracticeFlowTypes.VariantSkipReason;
  * 판독 불가 · 보류 두 번째는 도움 제안 · 코치 도움으로 넘긴다. 장면을 닫는 것은 정상 진행 · 무응답 · 시간 상한 · 종료 의사뿐이다. 계약의 기록 사실 15종 · 변형 생략 사유 5종 · 진행 중 판정 시점
  * 5종만 쓴다. 아이 전사 · 대본 문장 · 판정 입력은 받지도 돌려주지도 않는다(R-F14).
  *
- * <p>C안 '무중이 직접 묻기'({@code directAsk}, docs/practice-direct-ask.md 3장)는 같은 표에서 네 곳만 다르다. ① 도움 요청 · 도움 동의(판독 불가
+ * <p>C안 '무중이 직접 묻기'({@code directAsk}, docs/practice-direct-ask.md 3장)는 같은 표에서 다섯 곳만 다르다. ① 도움 요청 · 도움 동의(판독 불가
  * · 보류 뒤 동의 없는 도움 포함)는 역할 전환 알림({@code ROLE_NOTICE}) 없이 곧바로 무중의 도움으로 간다. ② 장면 정리는 복귀 알림
  * ({@code RETURN_NOTICE}) · 친구 역할 답변({@code PEER_REPLY}) 대신, 수행이면 친구 반응({@code FRIEND_REACTION}), 미수행 · 거절 · 한도면 고정
  * 마무리 문장({@code SCENE_CLOSE})을 낸다. ③ 아이가 먼저 도움을 청해도(J2 · J3 HELP) 도움 동의(ACCEPT · HELP_ACCEPTED)로 남긴다. ④ 마무리 문장이
- * 아이 말로 끊기면 전달된 것으로 보고 다음으로 간다. 발화 · 판정 · 전사 오류는 두 표가 같이 위 FT-1023-g 규칙을 따른다(못 들려준 말은 건너뛰고,
- * 판독 불가 · 보류 두 번째는 도움 단계로). 다시 해 보기 한도는 설정({@code retry-max}, C안 기본 1)이 정한다.
+ * 아이 말로 끊기면 전달된 것으로 보고 다음으로 간다. ⑤ 판정 보류(받아쓰기는 됐는데 확률 하한 · 최소 차이에 못 미침)의 첫 재안내는 확인 질문 대신
+ * 그 단계의 묻는 말이고, 기회에서는 되묻기 단계로 간다({@link #onJudgmentUnsure}, 편차 FT-1024-h). 발화 · 판정 · 전사 오류는 두 표가 같이 위
+ * FT-1023-g 규칙을 따른다(못 들려준 말은 건너뛰고, 판독 불가 · 보류 두 번째는 도움 단계로). 다시 해 보기 한도는 설정({@code retry-max}, C안 기본
+ * 1)이 정한다.
  */
 public final class FlowTransitions {
 
@@ -54,8 +56,17 @@ public final class FlowTransitions {
     /** 확장 슬롯이 닫힌 원인(§3.5). */
     public enum SlotEnd { PLAYED, INTERRUPTED, FAILED, BLOCKED }
 
-    /** 어느 재안내 표지를 세우는가. */
-    public enum Guard { NONE, NO_RESPONSE, UNREADABLE }
+    /**
+     * 어느 재안내 표지를 세우는가. REGUIDE는 같은 단계에, ENTER는 들어간 새 단계에 세운다(ENTER는 보통 NONE — 새 단계는 표지 없이 시작한다).
+     *
+     * <ul>
+     *   <li>{@code NO_RESPONSE}: 무응답 첫 만료.
+     *   <li>{@code UNREADABLE}: 판독 불가 · 판정 장애 · 불명확 대답(교정 없이 같은 질문 · 확인).
+     *   <li>{@code UNSURE}: C안의 판정 보류(받아쓰기는 됐는데 1순위 확률이 하한 · 최소 차이에 못 미침). {@code UNREADABLE}과 같은 표지(확인 · 보류
+     *       횟수)를 세우되, 재안내 말은 확인 질문이 아니라 그 단계의 묻는 말이다(편차 FT-1024-h).
+     * </ul>
+     */
+    public enum Guard { NONE, NO_RESPONSE, UNREADABLE, UNSURE }
 
     /** 장면이 정리로 들어간 원인(§3.3a의 행). 변형 제안 · 생략 사유를 정한다. */
     public enum EndCause {
@@ -132,6 +143,12 @@ public final class FlowTransitions {
 
         static Step reexplain(Phase phase) {
             return new Step(Action.REEXPLAIN, phase, Sub.REEXPLAIN).incrementReexplain().fact(FactKind.SITUATION_EXPLAINED);
+        }
+
+        /** 들어간 새 단계에 처음부터 세워 둘 재안내 표지(ENTER에만, 앞 단계에서 이미 쓴 확인 · 보류를 잇는다). */
+        Step guarded(Guard value) {
+            this.guard = value;
+            return this;
         }
 
         Step fact(FactKind kind) {
@@ -381,6 +398,29 @@ public final class FlowTransitions {
             return Step.ignore();
         }
         return unavailable(s);
+    }
+
+    /**
+     * 판정 보류 가운데 받아쓰기는 됐는데 1순위 확률이 하한 · 최소 차이에 못 미친 것(실행부 보류 사유 LOW_CONFIDENCE · LOW_MARGIN, 편차 FT-1024-h).
+     * 5회차 실측에서 이런 보류의 1순위는 대개 맞는 항목이었는데, 아이는 "잘 못 들었어"(확인 질문)를 들었다. 그래서 C안은 첫 보류에 확인 질문 대신 그
+     * 단계의 묻는 말로 다시 묻는다.
+     *
+     * <ul>
+     *   <li>기회(J2): 되묻기 단계(REASK)로 넘어가 대본 되묻기를 읽는다. 다음 판정은 J3이고 성공은 되묻기 흐름과 같이 AFTER_REASK(사실 REASK_RESOLVED)다.
+     *       확인 · 보류 표지는 새 단계로 이어 가므로({@link Guard#UNSURE}) 되묻기 단계의 판독 불가 · 보류는 곧바로 두 번째 불명확이다.
+     *   <li>그 밖(J3 되묻기 · J4 도움 제안 · 변형 제안 · J5 다시 해 보기): 같은 단계에서 그 단계의 묻는 말을 다시 읽는다({@link Guard#UNSURE} 재안내).
+     * </ul>
+     *
+     * 두 번째 불명확(이미 확인 · 보류 재안내를 한 단계)과 역할 대화 표는 {@link #onJudgmentUnavailable}과 같다 — 횟수 · 상한은 늘지 않는다.
+     */
+    public Step onJudgmentUnsure(FlowState s, JudgmentPoint point) {
+        if (!acceptsJudgment(s, point)) {
+            return Step.ignore();
+        }
+        if (!directAsk || s.unreadableGuided()) {
+            return unavailable(s);
+        }
+        return s.phase() == Phase.OPPORTUNITY ? Step.enter(Phase.REASK, Sub.NONE).guarded(Guard.UNSURE) : Step.reguide(Guard.UNSURE);
     }
 
     private static boolean acceptsJudgment(FlowState s, JudgmentPoint point) {
