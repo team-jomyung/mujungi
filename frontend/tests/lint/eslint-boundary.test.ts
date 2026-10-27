@@ -54,6 +54,89 @@ describe("영역 경계(PD-15 · NFR11.1)", () => {
   }, TIMEOUT_MS);
 });
 
+describe("관리자 영역 경계(JIRA-279)", () => {
+  it.each([
+    ["src/admin/__sample__.ts", 'import { PARENT_ROUTES } from "@/parent/common/navigation";\nexport const sample = PARENT_ROUTES;\n'],
+    ["src/admin/features/activity/__sample__.ts", 'import { createApiClient } from "../../../parent/common/api/apiClient";\nexport const sample = createApiClient;\n'],
+    ["src/admin/__device_sample__.ts", 'import { deviceReducer } from "@/device/machine/deviceMachine";\nexport const sample = deviceReducer;\n'],
+    ["src/app/admin/__sample__.tsx", 'import DevicePage from "../device/page";\nexport const sample = DevicePage;\n'],
+    ["src/app/admin/__parent_sample__.tsx", 'import ParentLayout from "@/app/parent/layout";\nexport const sample = ParentLayout;\n'],
+  ])("관리자(%s)는 보호자 · 기기 기능 및 라우트를 import하지 않는다", async (filePath, code) => {
+    const rules = await rulesFor(filePath, code);
+    expect(rules).toContain("no-restricted-imports");
+    expect(rules).toContain("import/no-restricted-paths");
+  }, TIMEOUT_MS);
+
+  it.each([
+    ["src/parent/__sample__.ts", "@/admin/data/types"],
+    ["src/parent/common/__sample__.ts", "../../admin/data/types"],
+    ["src/parent/features/home/__sample__.ts", "@/admin/data/types"],
+    ["src/app/parent/__sample__.ts", "@/admin/data/types"],
+    ["src/device/__sample__.ts", "../admin/data/types"],
+    ["src/app/device/__sample__.ts", "@/admin/data/types"],
+    ["src/shared/__sample__.ts", "@/admin/data/types"],
+    ["src/shared/__relative_sample__.ts", "../admin/data/types"],
+  ])("보호자 · 기기 · 공용(%s)은 관리자 타입도 import하지 않는다", async (filePath, importPath) => {
+    const rules = await rulesFor(filePath, `import type { AdminFilter } from "${importPath}";\nexport type Sample = AdminFilter;\n`);
+    expect(rules).toContain("no-restricted-imports");
+    expect(rules).toContain("import/no-restricted-paths");
+  }, TIMEOUT_MS);
+
+  it.each([
+    ["src/admin/__sample__.ts", 'import { COPY } from "@/shared/copy/ko";\nexport const sample = COPY;\n'],
+    ["src/admin/features/activity/__sample__.ts", 'import type { AdminFilter } from "../../data/types";\nexport type Sample = AdminFilter;\n'],
+    ["src/app/admin/__sample__.ts", 'import type { AdminFilter } from "@/admin/data/types";\nexport type Sample = AdminFilter;\n'],
+  ])("관리자(%s)는 공용 계층과 관리자 영역을 import할 수 있다", async (filePath, code) => {
+    expect(await rulesFor(filePath, code)).toEqual([]);
+  }, TIMEOUT_MS);
+});
+
+describe("관리자 공통 · 기능 의존 방향", () => {
+  it.each([
+    ["src/admin/common/__sample__.ts", "@/admin/features/activity/ActivityScreen"],
+    ["src/admin/common/__relative_sample__.ts", "../features/activity/ActivityScreen"],
+    ["src/admin/data/__sample__.ts", "@/admin/features/activity/ActivityScreen"],
+    ["src/admin/data/__relative_sample__.ts", "../features/activity/ActivityScreen"],
+  ])("공통 · 데이터 계층(%s)은 기능을 import하지 않는다", async (filePath, importPath) => {
+    const rules = await rulesFor(
+      filePath,
+      `import { ActivityScreen } from "${importPath}";\nexport const sample = ActivityScreen;\n`,
+    );
+    expect(rules).toContain("no-restricted-imports");
+    expect(rules).toContain("import/no-restricted-paths");
+  }, TIMEOUT_MS);
+
+  const features = [
+    ["overview", "OverviewScreen"],
+    ["activity", "ActivityScreen"],
+    ["quality", "QualityScreen"],
+    ["cost", "CostScreen"],
+  ] as const;
+  const crossFeatureImports = features.flatMap(([name]) =>
+    features.filter(([other]) => name !== other).flatMap(([other, screen]) => [
+      [name, `@/admin/features/${other}/${screen}`, screen],
+      [name, `../${other}/${screen}`, screen],
+    ]),
+  );
+
+  it.each(crossFeatureImports)("기능 %s에서 다른 기능 %s를 import하면 실패한다", async (name, importPath, component) => {
+    const rules = await rulesFor(
+      `src/admin/features/${name}/__sample__.ts`,
+      `import { ${component} } from "${importPath}";\nexport const sample = ${component};\n`,
+    );
+    expect(rules).toContain("no-restricted-imports");
+    expect(rules).toContain("import/no-restricted-paths");
+  }, TIMEOUT_MS);
+
+  it.each(features)("기능 %s는 공통 코드를 별칭과 상대 경로로 import할 수 있다", async (name) => {
+    const filePath = `src/admin/features/${name}/__sample__.ts`;
+    for (const importPath of ["@/admin/common/Badge", "../../common/Badge"]) {
+      const rules = await rulesFor(filePath, `import { Badge } from "${importPath}";\nexport const sample = Badge;\n`);
+      expect(rules).toEqual([]);
+    }
+  }, TIMEOUT_MS);
+});
+
 describe("보안 · 기기 규칙(SD-11 · NFR10.4 · PD-16)", () => {
   it("dangerouslySetInnerHTML은 오류다(react/no-danger)", async () => {
     const rules = await rulesFor(
