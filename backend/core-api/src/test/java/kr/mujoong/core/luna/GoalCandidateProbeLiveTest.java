@@ -46,7 +46,7 @@ class GoalCandidateProbeLiveTest {
                         // 운영 goal-candidates 값(low · 4000). env GOAL_PROBE_EFFORT · GOAL_PROBE_MAX_TOKENS로 바꿔 비교 측정한다
                         new LunaProperties.PurposeOptions(Integer.parseInt(System.getenv().getOrDefault("GOAL_PROBE_MAX_TOKENS", "4000")),
                                 System.getenv().getOrDefault("GOAL_PROBE_EFFORT", "low")), ordinary));
-        // 호출 한 번의 시한(운영 mujoong.text-ai.result.request-timeout=20s보다 넉넉한 30s 기본). env GOAL_PROBE_TIMEOUT_SECONDS로 바꾼다
+        // 호출 한 번의 시한(기본 30s, 운영 mujoong.text-ai.result.request-timeout은 40s). env GOAL_PROBE_TIMEOUT_SECONDS로 바꾼다
         Duration callTimeout = Duration.ofSeconds(Long.parseLong(System.getenv().getOrDefault("GOAL_PROBE_TIMEOUT_SECONDS", "30")));
         var timing = new TextAiProperties(callTimeout, new TextAiProperties.Retry(1, Duration.ofMillis(250)),
                 new TextAiProperties.Result(callTimeout, 0, 0.2, "v1"));

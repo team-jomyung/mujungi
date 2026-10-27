@@ -585,7 +585,7 @@ class ConfigKeyContractTest {
         }
         TextAiProperties ai = bindRecord(TextAiProperties.class, "mujoong.text-ai", base);
         assertThat(ai.requestTimeout()).isEqualTo(Duration.ofSeconds(10));
-        assertThat(ai.result().requestTimeout()).isEqualTo(Duration.ofSeconds(20));
+        assertThat(ai.result().requestTimeout()).isEqualTo(Duration.ofSeconds(40));
         assertThat(ai.retry().maxRetries()).isEqualTo(1);
         assertThat(ai.retry().backoff()).isEqualTo(Duration.ofMillis(250));
         assertThat(bindRecord(KnowledgeProperties.class, "mujoong.knowledge.neo4j", base).enabled()).isTrue();

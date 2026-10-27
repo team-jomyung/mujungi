@@ -249,7 +249,8 @@ mujoong:
   text-ai:
     request-timeout: 10s
     result:
-      request-timeout: 20s
+      # 목표 후보(low)가 긴 대화에서 14~15초까지 걸려 20s에서 40s로 늘렸다. 시도 전체는 timing.result.attempt-timeout(90s)이 막는다(FT-1027-i)
+      request-timeout: 40s
       temperature-judgment: 0
       temperature-generation: 0.2
       prompt-version: v1
@@ -277,7 +278,7 @@ mujoong:
         reasoning-effort: none
       goal-candidates:
         max-output-tokens: 4000
-        # none이면 긴 대화에서 질문 한 번 무시를 놓친다. low는 8~12초로 result.request-timeout(20s) 안이다(FT-1027-i)
+        # none이면 긴 대화에서 질문 한 번 무시를 놓친다. low는 8~15초로 result.request-timeout(40s) 안이다(FT-1027-i)
         reasoning-effort: low
       rejudgment:
         max-output-tokens: 4000
