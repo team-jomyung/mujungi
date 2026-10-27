@@ -17,7 +17,8 @@ import org.springframework.stereotype.Repository;
 /**
  * Core AI 사용량 {@code core.core_ai_usage}(JIRA-277) 집계 읽기 (JIRA-280). 쓰기 · 삭제는 usage 패키지 몫이다.
  *
- * <p>표시용 토큰은 필드마다 아는 값을 더하고, 금액 계산용 합은 입력 · 출력 토큰이 둘 다 있는 행만 더한다(그 행의 캐시 토큰이 없으면 0으로 본다). 계정 삭제가 접수된 보호자의
+ * <p>표시용 토큰은 필드마다 아는 값을 더하고, 금액 계산용 합은 입력 · 출력 토큰이 둘 다 있는 행만 더한다(그 행의 캐시 토큰이 없으면 0으로 보고, 캐시 읽기를
+ * 모르는 호출 수를 따로 센다). 계정 삭제가 접수된 보호자의
  * 행은 빠진다. 보호자가 없는 행은 활동을 연결하지 못한 호출이라 호출(call_id)마다 따로 모은다.
  */
 @Repository
@@ -29,6 +30,7 @@ public class AdminUsageRepository {
             count(*) filter (where %1$s) as measured,
             count(*) filter (where u.input_tokens is not null or u.output_tokens is not null) as known,
             count(*) filter (where u.capture_status = 'COMPLETE') as complete,
+            count(*) filter (where %1$s and u.cached_input_tokens is null) as cache_unknown,
             sum(u.input_tokens) as input_tokens,
             sum(u.output_tokens) as output_tokens,
             sum(u.cached_input_tokens) as cached_tokens,
@@ -56,9 +58,10 @@ public class AdminUsageRepository {
      * @param key 활동 · 준비 id(연결된 호출) 또는 call_id(연결 미확인)
      * @param measuredCalls 입력 · 출력이 모두 있어 금액을 계산할 수 있는 호출 수
      * @param knownCalls 입력 · 출력 가운데 하나라도 아는 호출 수
+     * @param cacheUnknownCalls 금액을 계산한 호출 가운데 캐시 읽기 토큰을 모르는 호출 수(캐시 0으로 계산돼 금액이 정확하지 않다)
      */
     public record Aggregate(UUID key, String purpose, String model, int calls, int measuredCalls, int knownCalls,
-            int completeCalls, Long inputTokens, Long outputTokens, Long cachedInputTokens, Long cacheWriteTokens,
+            int completeCalls, int cacheUnknownCalls, Long inputTokens, Long outputTokens, Long cachedInputTokens, Long cacheWriteTokens,
             Long reasoningTokens, Long measuredInputTokens, Long measuredOutputTokens, Long measuredCachedInputTokens,
             Long measuredCacheWriteTokens, Instant lastObservedAt) {
     }
@@ -99,6 +102,16 @@ public class AdminUsageRepository {
                 """, ClockParams.uuid(new MapSqlParameterSource(), "call", callId), AdminUsageRepository::aggregate);
     }
 
+    /** 세션 id들 가운데 연결된 Core 사용량이 하나라도 있는 것(관측 시각 제한 없음). */
+    public Set<UUID> sessionsWithUsage(Collection<UUID> sessionIds) {
+        if (sessionIds.isEmpty()) {
+            return Set.of();
+        }
+        return new HashSet<>(jdbc.query("select distinct session_id from core.core_ai_usage where session_id = any(:sessions)",
+                ClockParams.uuidArray(new MapSqlParameterSource(), "sessions", sessionIds),
+                (rs, n) -> ClockParams.uuid(rs, "session_id")));
+    }
+
     /** 세션 id들 가운데 활동 행이 있는 것(상태 · 보호자 무관). 없는 id는 시작 전에 준비가 실패한 연습이다. */
     public Set<UUID> activitySessions(Collection<UUID> sessionIds) {
         if (sessionIds.isEmpty()) {
@@ -118,7 +131,8 @@ public class AdminUsageRepository {
 
     private static Aggregate aggregate(ResultSet rs, int n) throws SQLException {
         return new Aggregate(ClockParams.uuid(rs, "group_key"), rs.getString("purpose"), rs.getString("model"), rs.getInt("calls"),
-                rs.getInt("measured"), rs.getInt("known"), rs.getInt("complete"), nullableLong(rs, "input_tokens"),
+                rs.getInt("measured"), rs.getInt("known"), rs.getInt("complete"), rs.getInt("cache_unknown"),
+                nullableLong(rs, "input_tokens"),
                 nullableLong(rs, "output_tokens"), nullableLong(rs, "cached_tokens"), nullableLong(rs, "cache_write_tokens"),
                 nullableLong(rs, "reasoning_tokens"), nullableLong(rs, "measured_input"), nullableLong(rs, "measured_output"),
                 nullableLong(rs, "measured_cached"), nullableLong(rs, "measured_cache_write"),

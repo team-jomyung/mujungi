@@ -21,6 +21,7 @@
           "measuredCalls",
           "knownCalls",
           "completeCalls",
+          "cacheUnknownCalls",
           "lastObservedAt"
         ],
         "properties": {
@@ -53,6 +54,11 @@
             "minimum": 0
           },
           "completeCalls": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "cacheUnknownCalls": {
+            "description": "측정된 LUNA 행 가운데 캐시 읽기 토큰이 없는 행 수(금액은 캐시 0으로 계산되므로 Core가 수집 상태를 PARTIAL로 표시, JIRA-287). VOICE는 0",
             "type": "integer",
             "minimum": 0
           },

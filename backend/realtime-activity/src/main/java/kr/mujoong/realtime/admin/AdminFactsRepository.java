@@ -30,6 +30,7 @@ public class AdminFactsRepository {
                 count(*) filter (where %1$s) as measured,
                 count(*) filter (where %3$s) as known,
                 count(*) filter (where capture_status = 'COMPLETE') as complete,
+                count(*) filter (where (%2$s) and cached_input_tokens is null) as cache_unknown,
                 sum(voice_seconds) as voice_seconds,
                 sum(input_tokens) as input_tokens,
                 sum(output_tokens) as output_tokens,
@@ -63,10 +64,11 @@ public class AdminFactsRepository {
 
     /**
      * 세션 · 출처 · 모델 하나의 사용량 합. 표시용 합(voiceSeconds · inputTokens · …)은 필드마다 아는 값만 더하고, 금액 계산용 합
-     * ({@code measured*})은 측정된 행(음성: 초 있음, 판정: 입력 · 출력 토큰 모두 있음)만 더한다.
+     * ({@code measured*})은 측정된 행(음성: 초 있음, 판정: 입력 · 출력 토큰 모두 있음)만 더한다. {@code cacheUnknownCalls}는 측정된 판정 행
+     * 가운데 캐시 읽기 토큰이 없는 행 수다(금액 계산에서 캐시 0으로 본다).
      */
     public record UsageSum(UUID sessionId, String source, String model, int calls, int measuredCalls, int knownCalls,
-            int completeCalls, Double voiceSeconds, Long inputTokens, Long outputTokens, Long cachedInputTokens,
+            int completeCalls, int cacheUnknownCalls, Double voiceSeconds, Long inputTokens, Long outputTokens, Long cachedInputTokens,
             Long reasoningTokens, Long measuredInputTokens, Long measuredOutputTokens, Long measuredCachedInputTokens,
             Instant lastObservedAt) {
     }
@@ -135,7 +137,8 @@ public class AdminFactsRepository {
 
     private static UsageSum usage(ResultSet rs, int n) throws SQLException {
         return new UsageSum(ClockParams.uuid(rs, "session_id"), rs.getString("source"), rs.getString("model"), rs.getInt("calls"),
-                rs.getInt("measured"), rs.getInt("known"), rs.getInt("complete"), nullableDouble(rs, "voice_seconds"),
+                rs.getInt("measured"), rs.getInt("known"), rs.getInt("complete"), rs.getInt("cache_unknown"),
+                nullableDouble(rs, "voice_seconds"),
                 nullableLong(rs, "input_tokens"), nullableLong(rs, "output_tokens"), nullableLong(rs, "cached_tokens"),
                 nullableLong(rs, "reasoning_tokens"), nullableLong(rs, "measured_input"), nullableLong(rs, "measured_output"),
                 nullableLong(rs, "measured_cached"), ClockParams.instant(rs, "last_observed_at"));

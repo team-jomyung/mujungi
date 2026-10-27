@@ -39,7 +39,7 @@
       ]
     },
     "CollectionStatus": {
-      "description": "COMPLETE: 모든 호출의 입력 · 출력(음성은 초)을 알고 완결, PARTIAL: 일부만 앎, UNKNOWN: 아는 값이 하나도 없음, NOT_COLLECTED: 저장된 사용량 없음",
+      "description": "COMPLETE: 모든 호출의 입력 · 출력(음성은 초)과 캐시 읽기 토큰을 알고 완결, PARTIAL: 일부만 앎(캐시 읽기 토큰을 모르는 호출 포함, 금액은 캐시 0으로 계산), UNKNOWN: 아는 값이 하나도 없음, NOT_COLLECTED: 저장된 사용량 없음(비용 목록에는 기간 안 활동 시각 기준으로 나온다)",
       "enum": [
         "COMPLETE",
         "PARTIAL",
