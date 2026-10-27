@@ -6,14 +6,16 @@ import { fetchRecordDays, fetchRecords } from "../../common/api/results";
 import { useApiClient } from "../../common/api/queries";
 import { BottomTabBar } from "../../common/components/BottomTabBar";
 import { MonthCalendar, dateLabel, seoulDate, validDate } from "../../common/components/MonthCalendar";
-import { PARENT_ROUTES, routeForTab } from "../../common/navigation";
+import { PARENT_ROUTES } from "../../common/navigation";
 import { formatHhmm, minutesBetween } from "@/shared/copy/timeText";
 import { RESULT_TEMP_COPY as C, durationLabel } from "@/shared/copy/result";
 import { SavedReports } from "../../common/components/SavedReports";
 import { ActivityTypeFilter, type ActivityTypeFilterValue } from "../../common/components/ActivityTypeFilter";
 import { ACTIVITY_SELECTION_COPY, UNSTARTED_RECORD_COPY } from "@/shared/copy/result";
+import { useActivityEntry } from "../../common/activity/useActivityEntry";
 export function RecordsScreen() {
   const router = useRouter(), params = useSearchParams(), api = useApiClient(), today = seoulDate();
+  const entry = useActivityEntry();
   const initial = params.get("date"); const [selected, setSelected] = useState(validDate(initial) && initial <= today ? initial : today); const [month, setMonth] = useState(selected.slice(0, 7));
   const days = useQuery({ queryKey: ["record-days", month], queryFn: ({ signal }) => fetchRecordDays(api, month, signal) });
   const items = useQuery({ queryKey: ["records", selected], queryFn: ({ signal }) => fetchRecords(api, selected, signal) });
@@ -47,5 +49,5 @@ export function RecordsScreen() {
       return <button type="button" className="mj-card mj-button--block" key={item.sessionId} data-testid={`records-item-${item.sessionId}`} onClick={() => router.push(PARENT_ROUTES.recordDetail(item.sessionId))}>{time}　{kind}{item.activityType === "PRACTICE" ? ` · 목표 ${item.goalCount}개` : ""}{durationLabel(minutesBetween(item.startedAt, item.endedAt) ?? 0)}{item.interrupted || item.finalStatus === "FAILED" ? " · 중간에 끊김" : ""}</button>;
     })}
     <SavedReports />
-  </main><BottomTabBar active="records" lockMessage={null} onLockedPress={() => {}} onNavigate={tab => router.push(routeForTab(tab))} /></div>;
+  </main><BottomTabBar active="records" lockMessage={entry.lockMessage} onLockedPress={entry.onLockedPress} onNavigate={entry.navigate} /></div>;
 }

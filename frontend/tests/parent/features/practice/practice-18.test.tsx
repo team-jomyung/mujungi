@@ -6,7 +6,8 @@ import { PracticeScreen } from "@/parent/features/practice/PracticeScreen";
 import { useToast } from "@/shared/toast/ToastProvider";
 import { deferred, errorResponse, jsonResponse } from "../../../support/fixtures";
 import { resetRouter, router } from "../../../support/nextNavigation";
-import { renderParent, type RequestHandler } from "../../../support/parentHarness";
+import type { RequestHandler } from "../../../support/parentHarness";
+import { renderParent } from "../../../support/readyActivityHarness";
 import { G1, G2, G3, GOALS, PATH, RESTORE_UNTIL, goal } from "../../../support/practiceFixtures";
 
 vi.mock("next/navigation", async () => (await import("../../../support/nextNavigation")).nextNavigationMock);

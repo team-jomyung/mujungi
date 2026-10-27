@@ -8,10 +8,11 @@ import { useApiClient } from "../../common/api/queries";
 import { startFreeTalk } from "./api";
 import type { FreeTalkContext } from "../../common/api/types";
 import type { TabKey } from "../../common/components/BottomTabBar";
-import { PARENT_ROUTES, goToLogin, routeForTab } from "../../common/navigation";
+import { PARENT_ROUTES, goToLogin } from "../../common/navigation";
 import { PROPOSED_COPY, TEMP_COPY } from "@/shared/copy/ko";
 import { messageForErrorCode } from "@/shared/errors/codeToCopy";
 import { useToast } from "@/shared/toast/ToastProvider";
+import { useActivityEntry } from "../../common/activity/useActivityEntry";
 
 // 08 자유대화 준비 화면의 시작 요청 · 거절 사유 · 오류 분기 · 화면 이동을 맡는 흐름 훅.
 // 입력 칸 값과 본문(context) 조립은 화면에 두고, 훅은 만든 본문을 받아 보낸다. 동작 규칙은 FreeTalkScreen에 있던 그대로다.
@@ -41,6 +42,7 @@ export function useFreeTalkScreen(returnedFailed: boolean, failureCode: string |
   const router = useRouter();
   const toast = useToast();
   const api = useApiClient();
+  const entry = useActivityEntry();
   const [submitting, setSubmitting] = useState(false);
   const [reason, setReason] = useState<string | null>(returnedFailed ? startFailureReason(failureCode) : null);
   const pendingRef = useRef<PendingStart | null>(null);
@@ -54,7 +56,7 @@ export function useFreeTalkScreen(returnedFailed: boolean, failureCode: string |
   };
 
   const submit = async (context: FreeTalkContext | undefined) => {
-    if (inFlightRef.current) {
+    if (inFlightRef.current || !entry.canStart) {
       return;
     }
     inFlightRef.current = true;
@@ -101,17 +103,18 @@ export function useFreeTalkScreen(returnedFailed: boolean, failureCode: string |
   };
 
   const handleNavigate = (tab: TabKey) => {
-    if (tab !== "free") {
-      router.push(routeForTab(tab));
+    if (tab !== "free" || !entry.canStart) {
+      entry.navigate(tab);
     }
   };
 
   return {
     submitting,
+    entry,
     reason,
     formRef,
     submit: (context: FreeTalkContext | undefined) => void submit(context),
     handleNavigate,
-    onLockedPress: (message: string) => toast.show({ message }),
+    onLockedPress: entry.onLockedPress,
   };
 }

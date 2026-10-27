@@ -37,7 +37,7 @@ export interface FreeTalkScreenProps {
 }
 
 export function FreeTalkScreen({ returnedFailed, failureCode = null }: FreeTalkScreenProps) {
-  const { submitting, reason, formRef, submit, handleNavigate, onLockedPress } = useFreeTalkScreen(returnedFailed, failureCode);
+  const { submitting, entry, reason, formRef, submit, handleNavigate, onLockedPress } = useFreeTalkScreen(returnedFailed, failureCode);
   const [knownContent, setKnownContent] = useState("");
   const [situation, setSituation] = useState<SituationType | null>(null);
   const [source, setSource] = useState<SourceType | null>(null);
@@ -118,12 +118,13 @@ export function FreeTalkScreen({ returnedFailed, failureCode = null }: FreeTalkS
               </p>
             ) : null}
           </div>
-          <button type="submit" className="mj-button mj-button--primary mj-button--block" data-testid="free-start" disabled={submitting}>
+          {entry.startMessage !== null ? <p className="mj-reason-card" role="status" data-testid="free-readiness">{entry.startMessage}</p> : null}
+          <button type="submit" className="mj-button mj-button--primary mj-button--block" data-testid="free-start" disabled={submitting || !entry.canStart}>
             {COPY.free.start}
           </button>
         </form>
       </main>
-      <BottomTabBar active="free" lockMessage={null} onNavigate={handleNavigate} onLockedPress={onLockedPress} />
+      <BottomTabBar active="free" lockMessage={entry.lockMessage} onNavigate={handleNavigate} onLockedPress={onLockedPress} />
     </div>
   );
 }
