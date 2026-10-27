@@ -250,6 +250,13 @@ FR7.11 표대로 FULL · PARTIAL · INSUFFICIENT를 정한다. 내용 있는 아
 
 전사, 검증된 구조화(자유대화) 또는 장면 칩(연습), ACTIVE 정의 목록(behaviorKey · behaviorVersion · displayName · coreFunction)을 입력한다. 출력 `{ "candidates": [{"behaviorKey":"…", "behaviorVersion":1, "reasonText":"…", "evidence":[{"utteranceSeq":1,"quote":"…","kind":"CHILD_RECALL"}]}] }`에서 근거 인용 · ACTIVE 정의 · 금지 표현을 서버가 확인한 최대 3개만 등록한다. 근거 없는 후보와 보호자 입력만 근거인 후보는 버린다. 지시: 관찰된 아이 회상 발화만 근거로 쓰고 의도 · 감정을 단정하지 않는다.
 
+**현재 지시문(2026-10-27, `prompts/goal/goal-candidates.v2.txt`, 판 `goal-candidates.v2`) [편차 FT-1027-g].** 위 U6-J 초안 뒤 입출력은 `ai-goal-candidate-output.schema.json`(displayName · displayEvidence · targetExpression · fourElements · skillRef · evidence · reasonText · structureSignature)으로 바뀌었고, 후보 선정 기준은 다음과 같다.
+- 후보는 **관찰된 지원 필요**에서 만든다: 아이가 이해하기 어렵거나 어떻게 말해야 할지 모르겠다고 밝힌 경우, 대화 맥락상 필요한 의사소통이 해결되지 않았고 그 원인을 감정 · 의도 · 성격 · 기술 장애로 추측하지 않고 설명할 수 있는 경우, 명시적인 도움을 받은 뒤에야 해당 기능을 쓴 경우(도움 전 어려움 · 도움 요청 근거가 함께 있어야 함). 한 장면의 근거로도 그 장면에 한정해 제안할 수 있지만 지속적인 결함으로 일반화하지 않는다.
+- 이미 적절하게 쓴 표현만 있으면 **빈 배열**이다(v1의 '이미 잘한 표현을 다른 상황에서 다시 써 보기' 후보는 만들지 않는다). 잘한 기록은 강점 · 도움 후 변화의 맥락으로만 참고한다.
+- 어려움으로 보지 않는 것: 짧은 답 · 생략 · 비격식 표현, 상대 확인으로 자연스럽게 해결된 대화, 의견 차이 · 적절한 거절 · 중단 · 도움 요청 · 역할극 속 질문, AI의 부자연스러운 질문 · 부족한 안내 · 음성 인식 · 재생 · 연결 문제 · 판정 지연으로 생긴 혼란(원인이 구분되지 않으면 제외), 행동을 쓸 기회가 없었다는 사실.
+- 근거 인용 규칙(CHILD 발화 전체를 seq와 함께 글자 그대로) · 진단 · 원인 단정 · 감정 단정 금지 · 출력 계약 · 구조 서명 규칙은 v1과 같다. 서버 검사(인용 일치 · 금지 표현 2차 분류)도 그대로다.
+- 이전 판 `goal-candidates.v1.txt`는 이력으로 남긴다. 결과 · 사용량 기록의 `promptVersion`으로 두 판의 결과를 구분한다.
+
 ### 6.9 U6 호출 예산과 생활 팁
 
 결과 호출은 `mujoong.text-ai.result.request-timeout`과 작업 시도 잔여 시간 중 작은 값으로 제한한다. 게이트웨이 재시도 없이 작업당 최초 1회와 추가 최대 3회, 총 4회 시도하며 지연은 5·15·30초다(U14·FR7.6). INSUFFICIENT 사전 판정이면 AI 없이 DONE이다. 생활 팁은 레거시 목표 · 검증 후보 behaviorKey와 승인 항목의 교집합을 서버에서 찾고, 생성 후보를 임의 behaviorKey로 바꾸지 않는다. title · condition · content · limitation에 1차 금지 사전을 적용한다.

@@ -36,9 +36,9 @@ public class GoalCandidateGateway {
         Map<String,String> references=new HashMap<>();
         request.replaceAll((key,value)->referenceIds(value,references));
         var quotes=childQuotes(objects(request.get("transcript")));
-        String prompt;try{prompt=new ClassPathResource("prompts/goal/goal-candidates.v1.txt").getContentAsString(StandardCharsets.UTF_8);}catch(java.io.IOException missing){throw new ResultAiException("INTERNAL");}
+        String prompt;try{prompt=new ClassPathResource("prompts/goal/goal-candidates.v2.txt").getContentAsString(StandardCharsets.UTF_8);}catch(java.io.IOException missing){throw new ResultAiException("INTERNAL");}
         access.run();LunaResult generated;
-        try{generated=luna.orElseThrow(()->new ResultAiException("PROVIDER_UNAVAILABLE")).call(LunaRequest.of(LunaPurpose.GOAL_CANDIDATES,"goal-candidates.v1",prompt,request,Map.of(),deadline));}
+        try{generated=luna.orElseThrow(()->new ResultAiException("PROVIDER_UNAVAILABLE")).call(LunaRequest.of(LunaPurpose.GOAL_CANDIDATES,"goal-candidates.v2",prompt,request,Map.of(),deadline));}
         catch(LunaException failed){throw new ResultAiException(failed.reason()==LunaFailureReason.TIMEOUT?"TIMEOUT":"PROVIDER_ERROR");}
         Map<String,Object> output=object(json.read(generated.outputJson(),Map.class));
         if(!(output.get("candidates") instanceof List<?>))throw new ResultAiException("SCHEMA_INVALID");
