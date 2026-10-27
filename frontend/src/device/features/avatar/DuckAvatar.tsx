@@ -8,7 +8,9 @@ import { DUCK_CLIPS, type DuckMotion } from "./duckClips";
 
 // 3D 무중이(Explorer_A_Web 패키지 DuckAvatar를 기기 화면에 맞게 줄임).
 // 불러오기 · WebGL이 실패하면 onStatus("error")만 알리고, 화면은 기본 도형 캐릭터를 그대로 둔다.
-// 화면 밖 · 숨은 탭에서는 그리지 않고, 모션 줄이기 설정이면 중립 자세로 멈춘다. 해제 때 네트워크 · GPU 자원을 모두 돌려준다.
+// 화면 밖 · 숨은 탭에서는 그리지 않는다. 해제 때 네트워크 · GPU 자원을 모두 돌려준다.
+// 아이 기기의 OS 「동작 줄이기」가 켜져 있어도 기본으로는 무중이가 움직인다(팀 결정, docs/ui/device-subtitle.md).
+// honorReducedMotion을 켜면 그 설정일 때 중립 자세로 멈춘다.
 
 export const DUCK_MODEL_SRC = "/models/Explorer_A_Web.meshopt.glb";
 const MAX_DPR = 1.5;
@@ -19,6 +21,8 @@ export interface DuckAvatarProps {
   readonly motion: DuckMotion;
   readonly src?: string;
   readonly onStatus?: (status: "ready" | "error") => void;
+  /** OS 「동작 줄이기」를 따를지. 기본 false(항상 움직임). */
+  readonly honorReducedMotion?: boolean;
 }
 
 function releaseModel(root: THREE.Object3D): void {
@@ -88,7 +92,7 @@ function addLights(scene: THREE.Scene): void {
   scene.add(fill);
 }
 
-export function DuckAvatar({ motion, src = DUCK_MODEL_SRC, onStatus }: DuckAvatarProps) {
+export function DuckAvatar({ motion, src = DUCK_MODEL_SRC, onStatus, honorReducedMotion = false }: DuckAvatarProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const playRef = useRef<(motion: DuckMotion) => void>(() => undefined);
   const motionRef = useRef(motion);
@@ -162,7 +166,7 @@ export function DuckAvatar({ motion, src = DUCK_MODEL_SRC, onStatus }: DuckAvata
 
     const play = (wanted: DuckMotion) => {
       if (mixer === undefined) return;
-      const reduce = motionMedia.matches;
+      const reduce = honorReducedMotion && motionMedia.matches;
       const next = actions.get(reduce ? "neutral" : wanted) ?? actions.get("idle");
       if (next === undefined) return;
       if (reduce) mixer.stopAllAction();
@@ -180,7 +184,7 @@ export function DuckAvatar({ motion, src = DUCK_MODEL_SRC, onStatus }: DuckAvata
       const delta = previousTime === 0 ? 0 : Math.min((now - previousTime) / 1000, MAX_FRAME_SEC);
       previousTime = now;
       if (inViewport && !document.hidden && modelSize !== undefined) {
-        if (!motionMedia.matches) mixer?.update(delta);
+        if (!(honorReducedMotion && motionMedia.matches)) mixer?.update(delta);
         renderer.render(scene, camera);
       }
       frame = requestAnimationFrame(animate);
@@ -261,7 +265,7 @@ export function DuckAvatar({ motion, src = DUCK_MODEL_SRC, onStatus }: DuckAvata
       renderer.domElement.remove();
       scene.clear();
     };
-  }, [src]);
+  }, [src, honorReducedMotion]);
 
   return <div ref={hostRef} className="mj-duck" aria-hidden="true" />;
 }
