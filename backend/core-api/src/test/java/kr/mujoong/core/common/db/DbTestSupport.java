@@ -242,6 +242,8 @@ public final class DbTestSupport implements AutoCloseable {
         }
         if (!guardians.isEmpty()) {
             MapSqlParameterSource params = new MapSqlParameterSource("ids", guardians.toArray(UUID[]::new));
+            // JIRA-277 사용량(→ 보호자)
+            jdbc.update("delete from core.core_ai_usage where guardian_id = any(:ids)", params);
             jdbc.update("delete from core.core_push_dispatch where guardian_id = any(:ids)", params);
             jdbc.update("delete from core.core_push_subscription where guardian_id = any(:ids)", params);
             jdbc.update("delete from core.core_outbox_event where guardian_id = any(:ids)", params);
