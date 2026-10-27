@@ -247,7 +247,7 @@ public final class ScenarioScriptGenerator {
         var legacy=new GeneratedScenario(base.sceneDescription(),base.opportunitySentence(),input.rules().relation(),input.rules().opportunity(),model,"scenario-generation.v4");
         var scenes=script.scenes().stream().map(s->s.withPartnerRole(ScenarioContentPolicy.PARTNER_ROLE)).toList();
         String version=input.graphContextUsed()&&input.rules().variants() instanceof ScenarioGraphContext.Session graph?graph.graphVersion():null;
-        return new Result(legacy,new ScenarioRepository.Details("scenario-script.v1",scenes,new Scenario.Review("APPROVE",reviewModel,"scenario-review.v2"),new Scenario.Generation(model,"scenario-generation.v4",input.graphContextUsed(),budget.calls,version),input.goalContextJson()));
+        return new Result(legacy,new ScenarioRepository.Details("scenario-script.v1",scenes,new Scenario.Review("APPROVE",reviewModel,"scenario-review.v3"),new Scenario.Generation(model,"scenario-generation.v4",input.graphContextUsed(),budget.calls,version),input.goalContextJson()));
     }
     private static boolean variantReason(String code){return java.util.Set.of("INVARIANT_MISMATCH","SKILL_MISMATCH","TRANSFER_MISMATCH","UNCHANGED_VARIANT").contains(code);}
     private static boolean metadata(String value){return value!=null&&value.matches("[A-Za-z0-9][A-Za-z0-9._:-]{0,79}");}

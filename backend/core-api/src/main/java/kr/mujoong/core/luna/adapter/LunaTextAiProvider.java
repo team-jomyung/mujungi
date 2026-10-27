@@ -53,7 +53,7 @@ public final class LunaTextAiProvider implements TextAiProvider,kr.mujoong.core.
         try {
             this.instructions = new ClassPathResource(INSTRUCTIONS).getContentAsString(StandardCharsets.UTF_8);
             this.scriptInstructions = new ClassPathResource("prompts/scenario/generation.v4.txt").getContentAsString(StandardCharsets.UTF_8);
-            this.reviewInstructions = new ClassPathResource("prompts/scenario/review.v2.txt").getContentAsString(StandardCharsets.UTF_8);
+            this.reviewInstructions = new ClassPathResource("prompts/scenario/review.v3.txt").getContentAsString(StandardCharsets.UTF_8);
         } catch (IOException e) {
             throw new IllegalStateException("상황 생성 지시 자원이 없다: " + INSTRUCTIONS, e);
         }
@@ -65,7 +65,7 @@ public final class LunaTextAiProvider implements TextAiProvider,kr.mujoong.core.
         catch(RuntimeException invalid){throw new Failure(Failure.Kind.CONTENT,java.util.Optional.empty());}
     }
     @Override public Reviewed review(Call request) {
-        var result=structured(request,LunaPurpose.SCENARIO_REVIEW,"scenario-review.v2",reviewInstructions);
+        var result=structured(request,LunaPurpose.SCENARIO_REVIEW,"scenario-review.v3",reviewInstructions);
         try { return new Reviewed(json.read(result.outputJson(),kr.mujoong.core.textai.ScenarioReview.class),result.responseModel()); }
         catch(RuntimeException invalid){throw new Failure(Failure.Kind.CONTENT,java.util.Optional.empty());}
     }
