@@ -17,7 +17,7 @@
   | 마이크 거부 | `Mild_Sad` |
   | 모션 줄이기 설정 | `V6_Neutral`(고정 자세) |
 
-- **모델 파일은 저장소에 없다**(16MB, 삼각형 약 53만). 배포 전에 저장 위치(저장소 · Git LFS · 정적 저장소)와 저사양 기기 성능을 정해야 한다. 파일이 없으면 도형 캐릭터로 동작한다.
+- 모델 파일은 `frontend/public/models/Explorer_A_Web.meshopt.glb`(16MB, 삼각형 약 53만)이고 `frontend/Dockerfile`이 웹 이미지에 넣는다. 저사양 기기 성능은 실기에서 확인해야 한다. 파일을 못 받으면 도형 캐릭터로 동작한다.
 
 ## 게임식 대화창 (`frontend/src/device/features/status/SubtitleDialog.tsx`)
 
