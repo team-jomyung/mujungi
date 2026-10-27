@@ -634,3 +634,20 @@ Realtime은 고정된 중립 질문으로 바꾸며 보호자의 주장을 아�
 계정 삭제에서는 실행 중 세션을 먼저 멈추는 기존 흐름 뒤에 `AiUsageDeletionParticipant`(170)가 새 쓰기를 차단하고 진행 중 저장을 제한된 시간 기다린 뒤 보호자의 사용량을 지운다. 판정 기록(180)·세션(200)보다 먼저 실행된다. 진행 중 저장을 정리하지 못하면 삭제 요청을 실패로 돌려 기존 Inbox 재시도를 따른다. DB의 세션 외래 키도 삭제된 세션의 지연 사용량 복원을 막는다.
 
 관측: `mujoong.ai.usage.pending`, `mujoong.ai.usage.records{outcome=accepted|full|contention|stopped|stored|retry|unlinked|expired|discarded}`. `accepted`는 중간 스냅샷·중복 전달을 포함하는 전달 횟수, `retry`·`unlinked`는 저장 시도 횟수다. 어느 것도 대화 수나 고유 호출 수로 해석하지 않는다. 검증·실호출 절차는 [RUNBOOK 18절](../infra/RUNBOOK.md#18-jira-271-사용량-수집-수동-검증)에 둔다.
+
+## JIRA-277 Core 사용량 수집
+
+이번 범위는 **Core가 대화 시작 전 · 종료 후에 부르는 Luna(Responses API) 호출의 사용량 저장**이다. 관리자 인증 · 조회 API · 화면 · 단가 계산과 Jev 비용은 후속 범위다. Realtime의 GPT-Live · 실시간 판정 사용량은 JIRA-271이 따로 저장한다. 기존 회원 · 활동 · 결과 표와 공급자 요청 본문은 바꾸지 않는다.
+
+| 목적(`purpose`) | 언제 | 붙이는 대상(`session_id`) |
+|---|---|---|
+| `SCENARIO_GENERATION` · `SCENARIO_REVIEW` | 연습 장면 생성 · 검수(시작 준비, 진행 중 새 장면) | 연습 준비 ID. 준비가 성공하면 같은 ID로 활동이 시작되고, 실패하면 활동 행이 없는 시작 실패 비용이다 |
+| `RESULT_TEXT` · `GOAL_CANDIDATES` · `REJUDGMENT` | 종료 후 결과 작업(구조화 · 판정 · 결과 문장 · 후보 · 2차 분류 · 목표 추천 · 재판정) | 결과 작업의 활동 세션 ID |
+| `SEED_GENERATION` | 결과에서 나온 목표 후보의 지식 시드 생성 | 그 후보가 나온 활동 세션 ID. 화면은 목적으로 따로 묶을 수 있다 |
+
+- **경계**: `luna.CoreLunaClient.call`이 실제로 보낸 시도마다 응답 본문에서 `model` · `id` · `usage.input_tokens` · `usage.output_tokens` · `usage.input_tokens_details.cached_tokens`(캐시 읽기) · `usage.input_tokens_details.cache_write_tokens`(캐시 쓰기) · `usage.output_tokens_details.reasoning_tokens`만 읽어 한 행을 만든다. 업무 응답이 거절 · 스키마 오류 · 내용 검사 불통과여도 받은 사용량은 기록하고, 응답을 받지 못한 시도(시간 초과 · 전송 오류)는 `UNKNOWN` 행이다. 보내기 전 거절(입력 정리 실패 · 시한 0 · 주소 재확인 · 빈 키)은 행을 만들지 않는다. 기술 재시도 · 스키마 재요청도 시도마다 따로 기록하고 같은 호출은 `call_id`로 묶는다. 캐시 읽기 · 캐시 쓰기는 서로 겹치지 않는 입력 토큰의 일부이고, 추론 토큰은 출력 토큰의 일부라 더하지 않는다. 캐시 쓰기는 일반 입력 · 캐시 읽기와 단가가 달라([프롬프트 캐싱](https://developers.openai.com/api/docs/guides/prompt-caching)) `cache_write_tokens`로 따로 보관한다. 일반 입력 = `input_tokens - cached_input_tokens - cache_write_tokens`이다. Core는 `prompt_cache_options`를 보내지 않아 기본 보관 시간만 쓰므로 보관 시간별 세부(`cache_write_tokens_details`)는 저장하지 않는다.
+- **활동 연결**: 연결 대상은 서버 내부 값이며 공급자 요청에 넣지 않는다. 기존 요청 · 게이트웨이 시그니처를 바꾸지 않으려고 작업 진입점(`SessionResultHandler` · `ScenarioService` · `SeedGenerationService`)이 `usage.AiUsageScope`로 대상을 열고, 다른 실행기로 일을 넘기는 곳(`ResultTextGateway` · `TextAiGateway` · `ScenarioDeadline`)이 대상을 함께 넘긴다. 이 경로 밖에서 생긴 호출은 `guardian_id` · `session_id`가 비어 있는 **연결 미확인** 행이다.
+- **저장**: `AiUsageCollector.offer`는 전용 유한 메모리 큐에 넣기만 하고 DB를 기다리지 않는다. 저장 작업 하나(`AiUsageRecorder`)가 `V12__ai_usage.sql`의 `core.core_ai_usage`에 기록마다 짧은 트랜잭션으로 넣는다. 같은 행 키 · 같은 응답 `id`는 한 행만 남긴다. 큐가 가득 차면 새 기록을 버리고, 저장 실패는 다음 주기에 다시 시도하며, 보관 시간을 넘기면 버린다. 사용량 수집 실패는 결과 작업 · 장면 생성 · 시드 생성의 결과를 바꾸지 않는다. 미저장 기록은 프로세스 메모리에 있어 강제 종료 때 잃을 수 있다.
+- **미확인 · 누락**: 미확인 토큰은 SQL `NULL`이고 실제 0과 다르다. `capture_status`는 행 하나의 상태(`COMPLETE` 입력 · 출력 모두, `PARTIAL` 일부, `UNKNOWN` 없음)이며 모든 호출이 수집되었다는 보장은 아니다. 후속 비용 화면은 "수집된 사용량 기준 예상 비용"으로 표시하고 `NULL`을 0원으로 더하지 않는다. 기간 합계는 `observed_at`(시도가 끝난 시각) 기준이다.
+- **계정 삭제**: `AiUsageDeletionParticipant`(순서 50)가 그 보호자의 대기 기록을 버리고 진행 중 저장이 끝나기를 제한 시간 기다린 뒤 행을 지운다. 끝나지 않으면 예외로 지휘의 재시도를 따른다. 그 뒤 늦게 저장된 행은 지휘의 두 번째 참가자 호출이 지우고, 보호자 행이 지워진 뒤에는 외래 키가 저장을 막는다.
+- **스위치 · 관측**: 기본은 꺼짐(`MUJOONG_CORE_AI_USAGE_ENABLED=false`, Realtime 스위치와 따로)이다. 시간 · 한도는 [timing.md 16절](timing.md#16-jira-277-core-사용량-수집)과 Core `application.yml`(`mujoong.limits.ai-usage.*`)에 둔다. 지표는 `mujoong.ai.usage.pending`, `mujoong.ai.usage.records{outcome=accepted|full|stopped|stored|retry|expired|discarded}`이며 대화 수 · 고유 호출 수로 해석하지 않는다. 키 · 프롬프트 · 입력 · 출력 원문은 사용량 표와 지표에 남기지 않는다.

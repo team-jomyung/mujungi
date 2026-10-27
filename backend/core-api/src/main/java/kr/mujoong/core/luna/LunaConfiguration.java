@@ -5,6 +5,8 @@ import kr.mujoong.contract.time.MujoongClock;
 import kr.mujoong.core.observability.EventLogger;
 import kr.mujoong.core.startup.StartupFailureLine;
 import kr.mujoong.core.textai.TextAiProperties;
+import kr.mujoong.core.usage.AiUsageCollector;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Conditional;
@@ -53,8 +55,9 @@ public class LunaConfiguration {
     @Bean
     @Conditional(LunaKeyPresentCondition.class)
     CoreLunaClient coreLunaClient(LunaProperties properties, TextAiProperties timing, LunaSchemas schemas,
-            LunaTransport transport, EventLogger events, MujoongClock clock, JsonCodec json) {
+            LunaTransport transport, EventLogger events, MujoongClock clock, JsonCodec json, ObjectProvider<AiUsageCollector> usage) {
+        // 사용량 수집기가 없는 문맥(Luna 설정만 띄우는 시험 등)에서는 수집하지 않는다(JIRA-277)
         return new CoreLunaClient(properties, timing, schemas, new LunaInputSanitizer(json), transport, events, clock, json,
-                CoreLunaClient.SYSTEM_SLEEPER);
+                CoreLunaClient.SYSTEM_SLEEPER, usage.getIfAvailable(() -> AiUsageCollector.NOOP));
     }
 }

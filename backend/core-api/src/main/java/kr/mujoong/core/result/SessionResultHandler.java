@@ -13,6 +13,8 @@ import kr.mujoong.core.practice.*;
 import kr.mujoong.core.record.ActivityRecordRepository.StoredRecord;
 import kr.mujoong.core.record.ResultRecordReader;
 import kr.mujoong.core.result.check.*;
+import kr.mujoong.core.usage.AiUsageLink;
+import kr.mujoong.core.usage.AiUsageScope;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -45,6 +47,10 @@ public class SessionResultHandler implements JobHandler {
     private record Input(StoredRecord record,List<Map<String,Object>> transcript,Map<String,Object> practice,Map<String,Object> background,
             Map<String,String> aliases,boolean consent){}
     public Outcome handle(JobContext job){
+        // 이 작업의 Luna 사용량을 활동에 붙인다(JIRA-277). 결과 작업의 subjectId는 활동 세션 ID다
+        return AiUsageScope.call(new AiUsageLink(job.guardianId(),job.subjectId()),()->handleInScope(job));
+    }
+    private Outcome handleInScope(JobContext job){
         Input input=tx.execute(t->load(job));if(input==null)return Outcome.failed("INTERNAL",false);
         var r=input.record();var transcript=input.transcript();var practice=input.practice();var quotes=childQuotes(transcript);
         String level=ResultLevelCalculator.before(r,transcript,practice,input.consent());boolean insufficient=level.equals("INSUFFICIENT");

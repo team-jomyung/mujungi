@@ -191,6 +191,7 @@ resource "aws_ecs_task_definition" "core_api" {
       { name = "SPRING_PROFILES_ACTIVE", value = "demo" },
       { name = "SPRING_DATASOURCE_URL", value = local.jdbc_url },
       { name = "SPRING_DATASOURCE_USERNAME", value = "core_app" },
+      { name = "MUJOONG_CORE_AI_USAGE_ENABLED", value = "false" },
       { name = "MUJOONG_KNOWLEDGE_NEO4J_ENABLED", value = "true" },
       { name = "MUJOONG_KNOWLEDGE_NEO4J_ENDPOINT", value = "http://172.17.0.1:7474" },
       { name = "MUJOONG_SECURITY_ALLOWED_ORIGIN", value = local.cloudfront_origin },
