@@ -118,6 +118,7 @@ U4b가 옮긴 것: `session.join-wait` · `session.join-wait-after-reprompt` · 
 | `mujoong.internal-http.session-start-retries` | `1` | core-api | 시작 호출 시간 초과에 한한 재시도 수(같은 sessionId) | BR6.7 |
 | `mujoong.internal-http.session-end-timeout` | `2s` | core-api | `POST /internal/sessions/{id}/end` 제한(차단기 없음) | BR6.9 · R3-2 |
 | `mujoong.internal-http.session-view-timeout` | `1s` | core-api | `GET /internal/sessions/{id}/view` 제한 | BR6.15 |
+| `mujoong.internal-http.admin-facts-timeout` | `3s` | core-api | 관리자 조회의 `POST /internal/sessions/admin-facts` · `admin-usage` 제한(재시도 · 차단기 없음, 넘으면 그 관리자 요청이 503 `REALTIME_UNAVAILABLE`) | JIRA-280 |
 | `mujoong.internal-http.event-publish-timeout` | `3s` | core-api · realtime | `POST /internal/events` 제한 | BR5.2 |
 | `mujoong.internal-http.verify-token-timeout` | `1s` | realtime | `POST /internal/devices/verify-token` 제한(넘으면 1013) | BR3.4 · BR3.6 |
 | `mujoong.internal-http.device-status-timeout` | `1s` | realtime | `PUT /internal/devices/{id}/connection` 제한 | BR4.8 |

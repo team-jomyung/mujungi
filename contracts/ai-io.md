@@ -651,3 +651,20 @@ Realtime은 고정된 중립 질문으로 바꾸며 보호자의 주장을 아�
 - **미확인 · 누락**: 미확인 토큰은 SQL `NULL`이고 실제 0과 다르다. `capture_status`는 행 하나의 상태(`COMPLETE` 입력 · 출력 모두, `PARTIAL` 일부, `UNKNOWN` 없음)이며 모든 호출이 수집되었다는 보장은 아니다. 후속 비용 화면은 "수집된 사용량 기준 예상 비용"으로 표시하고 `NULL`을 0원으로 더하지 않는다. 기간 합계는 `observed_at`(시도가 끝난 시각) 기준이다.
 - **계정 삭제**: `AiUsageDeletionParticipant`(순서 50)가 그 보호자의 대기 기록을 버리고 진행 중 저장이 끝나기를 제한 시간 기다린 뒤 행을 지운다. 끝나지 않으면 예외로 지휘의 재시도를 따른다. 그 뒤 늦게 저장된 행은 지휘의 두 번째 참가자 호출이 지우고, 보호자 행이 지워진 뒤에는 외래 키가 저장을 막는다.
 - **스위치 · 관측**: 기본은 꺼짐(`MUJOONG_CORE_AI_USAGE_ENABLED=false`, Realtime 스위치와 따로)이다. 시간 · 한도는 [timing.md 16절](timing.md#16-jira-277-core-사용량-수집)과 Core `application.yml`(`mujoong.limits.ai-usage.*`)에 둔다. 지표는 `mujoong.ai.usage.pending`, `mujoong.ai.usage.records{outcome=accepted|full|stopped|stored|retry|expired|discarded}`이며 대화 수 · 고유 호출 수로 해석하지 않는다. 키 · 프롬프트 · 입력 · 출력 원문은 사용량 표와 지표에 남기지 않는다.
+
+## JIRA-280 관리자 비용 화면 단가
+
+관리자 API · 비용 화면(`/api/admin/costs`)은 저장된 사용량(Core `core_ai_usage`, Realtime `realtime_ai_usage`)에 **조회할 때** 아래 설정 단가를 곱한
+**예상 비용(USD)**을 보여 준다. 실제 청구액이 아니다. 금액은 저장하지 않으므로 단가를 바꾸면 지난 활동의 예상 비용도 새 단가로 다시 계산된다.
+
+| 설정 키(`mujoong.admin.pricing.*`) | 기본값(USD) | 적용 |
+|---|---|---|
+| `voice-usd-per-minute` | `0.05` | Realtime VOICE 행의 `voice_seconds` ÷ 60(초 단위 과금) |
+| `responses.input-usd-per-million` · `cached-input-usd-per-million` · `cache-write-usd-per-million` · `output-usd-per-million` | `0.10` · `0.01` · `0.125` · `0.50` | Core Luna 호출(Responses API) |
+| `decisions.input-usd-per-million` · `cached-input-usd-per-million` · `cache-write-usd-per-million` · `output-usd-per-million` | `0.10` · `0.01` · `0.125` · `0` | Realtime 진행 중 판정(Decisions API). 출력 토큰은 과금하지 않는다(위 JIRA-271 절) |
+
+- 토큰 비용 = (일반 입력 × 입력 단가 + 캐시 읽기 × 캐시 읽기 단가 + 캐시 쓰기 × 캐시 쓰기 단가 + 출력 × 출력 단가) ÷ 1,000,000. 일반 입력 = 입력 − 캐시 읽기 − 캐시 쓰기(캐시는 입력의 일부). 추론 토큰은 출력에 들어 있어 다시 더하지 않는다.
+- 측정된 호출(VOICE는 초, 토큰 호출은 입력 · 출력 토큰이 모두 있는 행)만 계산한다. 측정되지 않은 호출은 0원으로 더하지 않고 `unknownCount` · 수집 상태(`PARTIAL` · `UNKNOWN`)로 드러낸다. 수집 중 빠져 저장되지 않은 호출은 알 수 없다.
+- Realtime 판정 행에는 캐시 쓰기 토큰 열이 없어 캐시 쓰기 요금은 반영하지 않는다. 요청당 입력 272K 토큰 초과 할증 · 지역 처리 할증 · Batch · Flex 할인도 반영하지 않는다.
+- 금액은 토큰 · 초 합계에서 한 번 계산해 소수 8자리로 반올림한 문자열(`^\d+(\.\d+)?$`, 지수 표기 · 부호 · 쉼표 없음, 0은 `"0"`)이다. 반올림한 값을 다시 더하지 않아 목록 행의 합과 합계가 마지막 자리에서 다를 수 있다.
+- 단계: 장면 생성 · 검수 → `PREPARATION`, 결과 문장 · 목표 추천 · 재판정 · 시드 생성 → `POST_PROCESSING`, 음성 → `VOICE`, 진행 중 판정 → `JUDGMENT`.
