@@ -133,7 +133,7 @@ declare -A WANT=(
   [postgres.env]="DB_BACKUP_PASSWORD DB_CORE_PASSWORD DB_OWNER_PASSWORD DB_REALTIME_PASSWORD POSTGRES_PASSWORD"
   [migrate.env]="DB_OWNER_PASSWORD"
   [neo4j.env]="NEO4J_AUTH"
-  [core-api.env]="GOOGLE_OAUTH_CLIENT_ID GOOGLE_OAUTH_CLIENT_SECRET GOOGLE_OAUTH_REDIRECT_URI INTERNAL_SERVICE_TOKEN MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET MUJOONG_SECURITY_ALLOWED_ORIGIN NEO4J_AUTH OPENAI_API_KEY SPRING_DATASOURCE_PASSWORD"
+  [core-api.env]="GOOGLE_OAUTH_CLIENT_ID GOOGLE_OAUTH_CLIENT_SECRET GOOGLE_OAUTH_REDIRECT_URI INTERNAL_SERVICE_TOKEN MUJOONG_CORE_AI_USAGE_ENABLED MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET MUJOONG_SECURITY_ALLOWED_ORIGIN NEO4J_AUTH OPENAI_API_KEY SPRING_DATASOURCE_PASSWORD"
   [realtime.env]="INTERNAL_SERVICE_TOKEN JEV_API_KEY JEV_BASE_URL JEV_MODEL MUJOONG_AI_USAGE_ENABLED MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET MUJOONG_SECURITY_ALLOWED_ORIGIN OPENAI_API_KEY SPRING_DATASOURCE_PASSWORD"
   [web.env]="GOOGLE_OAUTH_CLIENT_ID GOOGLE_OAUTH_REDIRECT_URI MUJOONG_SECURITY_ALLOWED_ORIGIN"
   [nginx.env]="MUJOONG_SECURITY_ALLOWED_ORIGIN SERVICE_HOST"
@@ -166,6 +166,7 @@ check_rendered() {
   [ "$(value_of "$dir/realtime.env" JEV_MODEL)" = "${P[JEV_MODEL]}" ] || problems+=("realtime JEV_MODEL 매핑")
   [ "$(value_of "$dir/realtime.env" MUJOONG_AI_USAGE_ENABLED)" = false ] || problems+=("사용량 수집 기본값이 false가 아니다")
   grep -qE '^JEV_' "$dir/core-api.env" && problems+=("core-api.env에 JEV 변수가 있다")
+  [ "$(value_of "$dir/core-api.env" MUJOONG_CORE_AI_USAGE_ENABLED)" = false ] || problems+=("Core 사용량 수집 기본값이 false가 아니다")
   # U2 리뷰 3: Core와 web이 같은 이름을 받고 redirect는 허용 origin의 01 콜백 경로다(구글 콘솔에 같은 주소를 등록한다)
   for f in core-api.env web.env; do
     [ "$(value_of "$dir/$f" GOOGLE_OAUTH_CLIENT_ID)" = "" ] || problems+=("$f GOOGLE_OAUTH_CLIENT_ID가 빈 변수가 아니다")
@@ -246,6 +247,19 @@ else
   done
 fi
 if [ "${#usage_problems[@]}" -gt 0 ]; then not_ok "render-env-ai-usage-on" "${usage_problems[*]}"; else ok "render-env-ai-usage-on"; fi
+# JIRA-277: Core 사용량 수집 스위치는 core-api.env에만 전달한다. 잘못된 값은 아래 거절 사례에서 본다.
+write_params "$work/p-core-usage-on" MUJOONG_CORE_AI_USAGE_ENABLED=true
+render "$work/p-core-usage-on" "$work/env-core-usage-on"
+core_usage_problems=()
+if [ "$rc" -ne 0 ]; then
+  core_usage_problems+=("종료 코드 $rc")
+else
+  [ "$(value_of "$work/env-core-usage-on/core-api.env" MUJOONG_CORE_AI_USAGE_ENABLED)" = true ] || core_usage_problems+=("core 수집 켬 매핑")
+  for f in realtime.env web.env nginx.env certbot.env backup.env postgres.env migrate.env; do
+    grep -q '^MUJOONG_CORE_AI_USAGE_ENABLED=' "$work/env-core-usage-on/$f" && core_usage_problems+=("$f에 Core 수집 설정이 있다")
+  done
+fi
+if [ "${#core_usage_problems[@]}" -gt 0 ]; then not_ok "render-env-core-ai-usage-on" "${core_usage_problems[*]}"; else ok "render-env-core-ai-usage-on"; fi
 
 # ---- render-env: 실패하면 아무 파일도 바꾸지 않는다(D3 실패 · 구 버전 유지) --------------------------------
 expect_reject() {
@@ -271,6 +285,8 @@ write_params "$work/p-graph-missing" -NEO4J_AUTH
 expect_reject "render-env-neo4j-auth-missing" 1 "$work/p-graph-missing"
 write_params "$work/p-usage-invalid" MUJOONG_AI_USAGE_ENABLED=maybe
 expect_reject "render-env-invalid-ai-usage-flag" 1 "$work/p-usage-invalid"
+write_params "$work/p-core-usage-invalid" MUJOONG_CORE_AI_USAGE_ENABLED=maybe
+expect_reject "render-env-invalid-core-ai-usage-flag" 1 "$work/p-core-usage-invalid"
 write_params "$work/p-localhost" SERVICE_HOST=localhost MUJOONG_SECURITY_ALLOWED_ORIGIN=https://localhost
 expect_reject "render-env-rejects-localhost" 1 "$work/p-localhost"
 write_params "$work/p-invalid" SERVICE_HOST=svc.mujoong.invalid MUJOONG_SECURITY_ALLOWED_ORIGIN=https://svc.mujoong.invalid

@@ -15,6 +15,8 @@ import kr.mujoong.core.practice.ScenarioConfiguration.ScenarioLimits;
 import kr.mujoong.core.textai.ScenarioPrompt;
 import kr.mujoong.core.textai.TextAiException;
 import kr.mujoong.core.textai.TextAiGateway;
+import kr.mujoong.core.usage.AiUsageLink;
+import kr.mujoong.core.usage.AiUsageScope;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -125,6 +127,12 @@ public class ScenarioService {
         Instant started=clock.now();
         var budget=new ScenarioDeadline(clock,deadline);
         SessionContext context=source.get();
+        // 장면 생성 · 검수 사용량을 이 세션(연습 준비 ID 또는 진행 중 활동)에 붙인다(JIRA-277)
+        return AiUsageScope.call(new AiUsageLink(context.guardianId(),context.sessionId()),
+                ()->generate(request,source,deadline,started,budget,context));
+    }
+    private Scenario generate(Request request, java.util.function.Supplier<SessionContext> source,Instant deadline,
+            Instant started,ScenarioDeadline budget,SessionContext context) {
         GoalSnapshot goal=goal(context,request);
         ScenarioRepository.Stored previous=request.previousScenarioId()==null ? null : repository.require(request.previousScenarioId());
         if (previous!=null && (!previous.sessionId().equals(context.sessionId()) || !previous.childId().equals(context.childId())

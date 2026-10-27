@@ -37,6 +37,7 @@ import kr.mujoong.core.knowledge.SeedGenerationProperties;
 import kr.mujoong.core.luna.LunaHosts;
 import kr.mujoong.core.luna.LunaProperties;
 import kr.mujoong.core.textai.TextAiProperties;
+import kr.mujoong.core.usage.AiUsageProperties;
 import org.springframework.core.convert.ConversionService;
 import org.springframework.core.env.EnumerablePropertySource;
 import org.springframework.core.env.MapPropertySource;
@@ -81,6 +82,7 @@ class ConfigKeyContractTest {
 
     /** 환경 변수로만 받는 값(비밀이 아닌 시험 값). */
     private static final Map<String, Object> ENV = Map.of(
+            "MUJOONG_CORE_AI_USAGE_ENABLED", "false",
             "MUJOONG_SECURITY_ALLOWED_ORIGIN", "https://mujoong.invalid",
             "MUJOONG_OBSERVABILITY_OWNER_HASH_SECRET", "");
 
@@ -149,6 +151,10 @@ class ConfigKeyContractTest {
         leaves.putAll(recordLeaves(SeedGenerationProperties.class, "mujoong.knowledge.seed-generation"));
         // U9 SD12: Luna 호출 설정도 같은 방식의 레코드가 묶는다
         leaves.putAll(recordLeaves(LunaProperties.class, "mujoong.luna"));
+        // JIRA-277: 사용량 수집 스위치 · 시간 · 한도도 같은 방식의 레코드가 묶는다
+        leaves.putAll(recordLeaves(AiUsageProperties.class, "mujoong.ai-usage"));
+        leaves.putAll(recordLeaves(AiUsageProperties.Timing.class, "mujoong.timing.ai-usage"));
+        leaves.putAll(recordLeaves(AiUsageProperties.Limits.class, "mujoong.limits.ai-usage"));
 
         assertThat(keyMismatches(yml.keySet(), leaves.keySet(), RECORD_KEYS_WITHOUT_DEFAULT))
                 .as("yml 키 ↔ 설정 레코드 키").isEmpty();
@@ -161,6 +167,11 @@ class ConfigKeyContractTest {
         boundValues.putAll(recordValues(bindRecord(SeedGenerationProperties.class, "mujoong.knowledge.seed-generation", base),
                 "mujoong.knowledge.seed-generation"));
         boundValues.putAll(recordValues(bindRecord(LunaProperties.class, "mujoong.luna", base), "mujoong.luna"));
+        boundValues.putAll(recordValues(bindRecord(AiUsageProperties.class, "mujoong.ai-usage", base), "mujoong.ai-usage"));
+        boundValues.putAll(recordValues(bindRecord(AiUsageProperties.Timing.class, "mujoong.timing.ai-usage", base),
+                "mujoong.timing.ai-usage"));
+        boundValues.putAll(recordValues(bindRecord(AiUsageProperties.Limits.class, "mujoong.limits.ai-usage", base),
+                "mujoong.limits.ai-usage"));
         assertThat(valueMismatches(yml, leaves, boundValues, placeholderResolver(base)))
                 .as("yml 값과 레코드에 묶인 값").isEmpty();
         assertThat(bound.timing().bootstrap().rateLimit().max()).isEqualTo(20);
