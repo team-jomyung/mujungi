@@ -43,14 +43,28 @@ class GoalCandidateProbeLiveTest {
         var ordinary = new LunaProperties.PurposeOptions(4000, "medium");
         var properties = new LunaProperties(null, URI.create("https://api.openai.com/v1"), 1_000_000,
                 new LunaProperties.Purposes(ordinary, ordinary, ordinary, ordinary,
-                        // 운영 goal-candidates 값(low). env GOAL_PROBE_EFFORT로 추론 수준을 바꿔 비교 측정한다
-                        new LunaProperties.PurposeOptions(4000, System.getenv().getOrDefault("GOAL_PROBE_EFFORT", "low")), ordinary));
-        var timing = new TextAiProperties(Duration.ofSeconds(30), new TextAiProperties.Retry(1, Duration.ofMillis(250)),
-                new TextAiProperties.Result(Duration.ofSeconds(30), 0, 0.2, "v1"));
+                        // 운영 goal-candidates 값(low · 4000). env GOAL_PROBE_EFFORT · GOAL_PROBE_MAX_TOKENS로 바꿔 비교 측정한다
+                        new LunaProperties.PurposeOptions(Integer.parseInt(System.getenv().getOrDefault("GOAL_PROBE_MAX_TOKENS", "4000")),
+                                System.getenv().getOrDefault("GOAL_PROBE_EFFORT", "low")), ordinary));
+        // 호출 한 번의 시한(운영 mujoong.text-ai.result.request-timeout=20s보다 넉넉한 30s 기본). env GOAL_PROBE_TIMEOUT_SECONDS로 바꾼다
+        Duration callTimeout = Duration.ofSeconds(Long.parseLong(System.getenv().getOrDefault("GOAL_PROBE_TIMEOUT_SECONDS", "30")));
+        var timing = new TextAiProperties(callTimeout, new TextAiProperties.Retry(1, Duration.ofMillis(250)),
+                new TextAiProperties.Result(callTimeout, 0, 0.2, "v1"));
+        // 시도마다 결과 코드 · 토큰 수만 모은다(본문 없음)
+        List<Map<String, Object>> attempts = new ArrayList<>();
+        kr.mujoong.core.usage.AiUsageCollector usage = record -> {
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("outcome", record.outcome());
+            row.put("inputTokens", record.inputTokens());
+            row.put("outputTokens", record.outputTokens());
+            row.put("reasoningTokens", record.reasoningTokens());
+            attempts.add(row);
+            return true;
+        };
         var client = new CoreLunaClient(properties, timing, LunaSchemas.loadDefault(JSON), new LunaInputSanitizer(JSON),
                 new LunaTransport(properties.baseUrl(), LunaHosts.modeFor(), () -> System.getenv(LunaTransport.API_KEY_ENV),
                         properties.maxResponseBytes()),
-                new kr.mujoong.core.support.TestEvents(clock).logger(), clock, JSON, CoreLunaClient.SYSTEM_SLEEPER);
+                new kr.mujoong.core.support.TestEvents(clock).logger(), clock, JSON, CoreLunaClient.SYSTEM_SLEEPER, usage);
 
         Map<String, Object> input = new LinkedHashMap<>(JSON.read(Files.readString(Path.of(inputPath)), Map.class));
         input.putIfAbsent("seedSummaries", List.of());
@@ -66,8 +80,19 @@ class GoalCandidateProbeLiveTest {
         String prompt = override != null ? Files.readString(Path.of(override))
                 : new ClassPathResource("prompts/goal/goal-candidates.v3.txt").getContentAsString(StandardCharsets.UTF_8);
 
-        LunaResult result = client.call(LunaRequest.of(LunaPurpose.GOAL_CANDIDATES, "goal-candidates.v3", prompt, input, Map.of(),
-                clock.now().plusSeconds(60)));
+        Files.createDirectories(report.toAbsolutePath().getParent());
+        long started = System.nanoTime();
+        LunaResult result;
+        try {
+            // 마감은 재시도 1회까지 들어가게 시한의 두 배로 둔다
+            result = client.call(LunaRequest.of(LunaPurpose.GOAL_CANDIDATES, "goal-candidates.v3", prompt, input, Map.of(),
+                    clock.now().plus(callTimeout.multipliedBy(2))));
+        } catch (LunaException failed) {
+            Files.writeString(report, JSON.write(Map.of("failure", failed.reason().name(), "elapsedMs", (System.nanoTime() - started) / 1_000_000,
+                    "attempts", attempts)));
+            System.out.println("goal-probe failure=" + failed.reason() + " report=" + report.toAbsolutePath());
+            return;
+        }
         Map<String, Object> output = JSON.read(result.outputJson(), Map.class);
         List<Map<String, Object>> proposed = (List<Map<String, Object>>) output.getOrDefault("candidates", List.of());
         // 운영과 같은 검사(GoalCandidateValidator)의 탈락 사유 코드를 그대로 쓴다. 2차 분류(OutputChecker)는 부르지 않는다
@@ -81,9 +106,8 @@ class GoalCandidateProbeLiveTest {
                     : checked.dropped().stream().filter(d -> d.index() == index).map(d -> d.reason() + "(" + d.field() + ")").toList();
             verdicts.add(Map.of("candidate", proposed.get(i), "serverValidation", verdict));
         }
-        Files.createDirectories(report.toAbsolutePath().getParent());
         Files.writeString(report, JSON.write(Map.of("model", result.responseModel(), "latencyMs", result.latency().toMillis(),
-                "candidateCount", verdicts.size(), "candidates", verdicts)));
+                "attemptsUsed", result.attemptsUsed(), "attempts", attempts, "candidateCount", verdicts.size(), "candidates", verdicts)));
         System.out.println("goal-probe candidates=" + verdicts.size() + " report=" + report.toAbsolutePath());
     }
 }
