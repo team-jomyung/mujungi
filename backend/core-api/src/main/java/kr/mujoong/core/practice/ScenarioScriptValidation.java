@@ -12,7 +12,7 @@ import kr.mujoong.core.textai.ScenarioScript.Scene;
 public final class ScenarioScriptValidation {
     public enum Result { VALID, INVALID_BASE, INVALID_VARIANT }
     public enum Reason {
-        NONE, EMPTY_SCRIPT, BASE_LAYOUT, SCENE_KEY, FIELD_FORMAT, SPOKEN_FORMAT, OPENING_REPEATS_OPPORTUNITY,
+        NONE, EMPTY_SCRIPT, BASE_LAYOUT, SCENE_KEY, FIELD_FORMAT, SPOKEN_FORMAT,
         PRIVATE_OR_FORBIDDEN_CONTENT, TARGET_EXPRESSION_DISCLOSED, PRESSURE_OR_ANSWER,
         GRAPH_BASE_MISMATCH, RELATION_MISMATCH, CONDITION_MISSING, PARTNER_LINE_MISSING,
         ALREADY_SEEN, UNCHANGED_SOURCE, VARIANT_STRUCTURE
@@ -55,7 +55,7 @@ public final class ScenarioScriptValidation {
     }
     private static Inspection invalid(Reason reason){return new Inspection(Result.INVALID_BASE,reason);}
     /**
-     * FT-1023-g: 선택 필드인 여는 말이 서버 검사를 못 맞추면 대본 전체를 버리지 않고 그 필드만 뺀다(빼면 지금 흐름 그대로다).
+     * FT-1023-g: 선택 필드인 여는 말이 서버 검사(형식 · 금지 · 정답 · 압박)를 못 맞추면 대본 전체를 버리지 않고 그 필드만 뺀다(빼면 지금 흐름 그대로다).
      * 내용을 더하지 않고 빼기만 하므로 뺀 대본도 독립 검토와 나머지 서버 검사를 그대로 받는다. 바뀐 것이 없으면 같은 객체를 돌려준다.
      */
     public ScenarioScript withoutInvalidSceneStart(ScenarioScript script,Rules rules){
@@ -71,8 +71,7 @@ public final class ScenarioScriptValidation {
     }
     private boolean openingAllowed(Scene s,Rules rules){
         String v=s.openingLine();
-        return spokenSafe(v,200,rules)&&(s.opportunitySentence()==null
-                ||!ScenarioContentPolicy.normalize(v).equals(ScenarioContentPolicy.normalize(s.opportunitySentence())));
+        return spokenSafe(v,200,rules);
     }
     /** 들려줄 선택 필드 하나의 형식 · 금지 · 이름 · 연락처 · 정답 · 압박 검사(unsafeReason과 같은 기준). */
     private boolean spokenSafe(String v,int max,Rules rules){
@@ -95,10 +94,8 @@ public final class ScenarioScriptValidation {
         }
         var all=new java.util.ArrayList<>(spoken);all.addAll(s.focusPoints());all.addAll(s.expressionExamples());
         if(s.openingLine()!=null) {
-            // FT-1023-g: 상대가 먼저 거는 말. 기회 문장을 미리 말하면 기회가 사라진다.
+            // 상대가 먼저 거는 첫 말. scenario-generation.v3부터 기회 문장과 같아도 된다(첫 말이 목표 기회를 바로 열 수 있다)
             if(!text(s.openingLine(),200)||s.openingLine().chars().anyMatch(Character::isISOControl))return Reason.SPOKEN_FORMAT;
-            if(ScenarioContentPolicy.normalize(s.openingLine()).equals(ScenarioContentPolicy.normalize(s.opportunitySentence())))
-                return Reason.OPENING_REPEATS_OPPORTUNITY;
             spoken.add(s.openingLine());all.add(s.openingLine());
         }
         all.addAll(List.of(s.relation(),s.place(),s.topic()));

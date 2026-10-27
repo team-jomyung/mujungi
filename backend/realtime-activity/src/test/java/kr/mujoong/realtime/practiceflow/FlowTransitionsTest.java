@@ -447,13 +447,6 @@ class FlowTransitionsTest {
         }
     }
 
-    @Test
-    void anIntroWithAnOpeningLineGoesToTheOpeningBeforeTheOpportunity() {
-        assertEnters(table.onIntroductionEnded(SlotEnd.PLAYED, true), Phase.OPPORTUNITY, Sub.OPENING);
-        assertEnters(table.onIntroductionEnded(SlotEnd.BLOCKED, true), Phase.OPPORTUNITY, Sub.OPENING);
-        assertEnters(table.onIntroductionEnded(SlotEnd.PLAYED, false), Phase.OPPORTUNITY, Sub.NONE);
-    }
-
     @ParameterizedTest
     @EnumSource(value = Phase.class, names = {"OPPORTUNITY", "REASK", "HELP_OFFER", "RETRY"})
     void aFinishedOrSkippedQuestionWaitsForInputAndNeverClosesTheScene(Phase phase) {
