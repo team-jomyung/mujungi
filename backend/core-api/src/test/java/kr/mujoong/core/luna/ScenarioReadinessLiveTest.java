@@ -45,6 +45,15 @@ class ScenarioReadinessLiveTest {
                 "상대의 말이나 응답 상태가 불분명한 가상 상황에서, 현재 상태를 확인하는 질문을 해보기. 예: “지금 생각 중이야, 아니면 답변을 마친 거야?”");
     }
 
+    private Path evidence;
+
+    private void record(String kind, Object value) {
+        try {
+            Files.writeString(evidence, JSON.write(Map.of("kind", kind, "value", value)) + "\n",
+                    StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+        } catch (java.io.IOException failure) { throw new java.io.UncheckedIOException(failure); }
+    }
+
     private void probe(String name, String situation, String partner, String intent, String expression, String target) throws Exception {
         assumeTrue(System.getenv(LunaTransport.API_KEY_ENV) != null, "SKIPPED_NO_KEY");
         var clock = new SystemMujoongClock();
@@ -63,13 +72,8 @@ class ScenarioReadinessLiveTest {
         var real = new LunaTextAiProvider(client, clock, JSON);
         Path evidence = Path.of("build/scenario-readiness-" + name + "-synthetic.jsonl");
         Files.deleteIfExists(evidence);
+        this.evidence = evidence;
         var provider = new ScenarioScriptProvider() {
-            private void record(String kind, Object value) {
-                try {
-                    Files.writeString(evidence, JSON.write(Map.of("kind", kind, "value", value)) + "\n",
-                            StandardOpenOption.CREATE, StandardOpenOption.APPEND);
-                } catch (java.io.IOException failure) { throw new java.io.UncheckedIOException(failure); }
-            }
             @Override public Generated generate(Call call) {
                 var result = real.generate(call); record("synthetic-script", result.script()); return result;
             }
@@ -90,12 +94,20 @@ class ScenarioReadinessLiveTest {
             var generator = new ScenarioScriptGenerator(provider, new ScenarioScriptValidation(new ForbiddenExpressionPolicy()),
                     timing, executor, CoreLunaClient.SYSTEM_SLEEPER::sleep);
             int rounds = Integer.parseInt(System.getenv().getOrDefault("SCENARIO_READINESS_ROUNDS", "1"));
+            // 비교 측정용(SCENARIO_READINESS_CONTINUE=true): 한 회차가 실패해도 결과를 남기고 다음 회차로 간다. 기본은 첫 실패에서 멈춘다
+            boolean keepGoing = Boolean.parseBoolean(System.getenv().getOrDefault("SCENARIO_READINESS_CONTINUE", "false"));
             for (int round = 0; round < rounds; round++) {
-                var result = generator.generate(new ScenarioScriptGenerator.Input(payload, Map.of(), rules, false, "{}"),
-                        new ScenarioDeadline(clock, clock.now().plusSeconds(30)));
-                assertThat(result.details().review().verdict()).isEqualTo("APPROVE");
-                assertThat(result.details().scenes()).isNotEmpty();
-                System.out.println("scenario-readiness case=" + name + " round=" + round + " outcome=APPROVED evidence=REAL_API_SYNTHETIC");
+                record("round", Map.of("round", round));
+                try {
+                    var result = generator.generate(new ScenarioScriptGenerator.Input(payload, Map.of(), rules, false, "{}"),
+                            new ScenarioDeadline(clock, clock.now().plusSeconds(30)));
+                    assertThat(result.details().review().verdict()).isEqualTo("APPROVE");
+                    assertThat(result.details().scenes()).isNotEmpty();
+                    record("outcome", Map.of("round", round, "result", "APPROVED", "calls", result.details().generation().calls()));
+                } catch (RuntimeException failure) {
+                    record("outcome", Map.of("round", round, "result", "FAILED"));
+                    if (!keepGoing) throw failure;
+                }
             }
         }
     }

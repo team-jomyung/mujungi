@@ -582,6 +582,7 @@ J1/J6의 고정 질문·선택지는 `judgment-service-v1`, 공통 지시문은 
 | `practice-system.v1.txt` | realtime `practice/practice-system.v1.txt` | 연습 세션의 `session.start` 지시문에 아이 정보 역할 문장 뒤로 원문 그대로 한 번 싣는다(`PracticeSystemPrompt`). 턴마다 보내는 500자 지시에는 넣지 않는다. 연습 세션은 자유대화의 참여 뒤 첫 질문 문장(`JOIN_FIRST_QUESTION`)을 싣지 않는다 |
 | `turn-instructions.v1.txt` | realtime `PracticeInstructions` | 기존 턴 지시를 ROLE_REPLY · ROLE_CLARIFY · INPUT_CONFIRM · OFFER_COACH · COACH_HINT · COACH_EXAMPLE · RESUME_ROLE · OFFER_VARIANT · CLOSE 문구로 바꿨다. 목표명을 읽지 않고, 역할 전환에 목소리 변화를 약속하지 않으며, 발화마다 '음,'을 붙이지 않는다. 500자 상한은 그대로다 |
 | `generation.v3.txt` · `review.v2.txt` | core `prompts/scenario/` | 상황 생성 · 검토 판을 `scenario-generation.v3` · `scenario-review.v2`로 올렸다. 생성 · 검토 스키마 키와 사유 코드는 그대로다. 시작 패키지 `practice-scenario.schema.json`의 판 값은 저장된 옛 대본 때문에 옛 판과 새 판을 모두 받는다 |
+| `generation.v4.txt` | core `prompts/scenario/` | 상황 생성 판을 `scenario-generation.v4`로 올렸다(2026-10-27, 편차 FT-1027-d). v3에 여는 말(`openingLine`) 규칙 한 문장만 더했다: 첫 말에 시작 안내에서 이미 말한 활동 · 대상 하나(책 제목, 만드는 것, 물건의 색 · 모양 등)를 상대가 그 자리에서 할 법한 말로 다시 가리키고, 안내에 없는 새 대상 · 사건을 붙이거나 경위를 해설하지 않는다. 나머지 규칙은 v3 그대로다(합성 실호출 목표 2개 × 6회에서 승인률이 v3와 같았다: 6/6 · 3/6). 스키마 키 · 사유 코드 · 길이 상한(여는 말 200자)은 그대로이고, 검토 판은 `scenario-review.v2` 그대로다. 시작 패키지 판 값은 v2 · v3 · v4를 모두 받는다 |
 
 **바뀐 진행 규칙.**
 - 여는 말(`openingLine`)이 장면의 첫 상대 말이다. 여는 말이 있으면 그것만 들려주고 아이의 대답을 기회 문장 대답(J2)으로 바로 판정한다. 기회 문장(`opportunitySentence`)을 이어 강제로 읽지 않는다. 여는 말과 기회 문장은 같은 문장이어도 된다(서버 검사 거절 없음). 여는 말이 없는 옛 대본은 지금처럼 기회 문장으로 시작한다.
