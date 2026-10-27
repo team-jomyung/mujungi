@@ -91,7 +91,8 @@ class FlexiblePracticeConversationTest {
     void helpedPerformanceIsNotDescribedAsIndependentSuccess() {
         Harness h=dialogue();h.child("도와줘");h.result("J2","HELP");
         h.announcedNotice(Playback.COMPLETED);h.played();h.child("파란 상자를 줘");h.result("J5","FULL");
-        h.announcedNotice(Playback.COMPLETED);h.played();h.child("고마워");h.result("J3","DELIVERED");h.played();
+        // 도움 뒤 정답이면 친구로 돌아가 마무리 답 하나로 닫는다(대화를 다시 열지 않는다, 2026-10-27 실키)
+        h.announcedNotice(Playback.COMPLETED);h.played();
         assertThat(h.out.lastSlot().text()).contains("도움을 받은 뒤 네 말로 해 봤어");
         assertThat(h.recorder.only().liveTiming()).isEqualTo(LiveTiming.AFTER_HELP);
     }
@@ -220,6 +221,18 @@ class FlexiblePracticeConversationTest {
         assertThat(h.played()).isEqualTo(Signal.LAST_GOAL);
         assertThat(h.recorder.only().liveTiming()).isEqualTo(LiveTiming.IMMEDIATE);
         assertThat(h.recorder.factKinds(h.recorder.only())).doesNotContain(FactKind.REASK_RESOLVED);
+    }
+
+    /** 2026-10-27 실키: 목표 달성 뒤 판독 불가 · 도움 같은 정리 판정 결과도 확인 질문 · 도움으로 새지 않고 정리 답 상한에 센다. */
+    @Test
+    void afterTheGoalIsAchievedEveryClosureResultCountsTowardTheSettleCap() {
+        Harness h = dialogue(); h.child("다른 놀이 할까?"); h.result("J2", "FULL"); h.played();
+        h.child("뭐라고"); h.result("J3", "UNREADABLE");
+        assertThat(h.ext.state().sub()).as("확인 질문이 아니라 정리 답").isEqualTo(FlowState.Sub.DIALOGUE_REPLY);
+        h.played();
+        h.child("도와줘"); assertThat(h.result("J3", "HELP")).isEqualTo(Signal.NONE);
+        assertThat(h.ext.state().sub()).as("상한에 닿으면 마무리 답").isEqualTo(FlowState.Sub.PEER_REPLY);
+        assertThat(h.out.announces).as("도움으로 새지 않는다").isEmpty();
     }
 
     /** 2026-10-24 실키 사례: 목표 달성 뒤 정리 판정이 끝내 안 나와 잡담이 목표 시간 상한까지 이어졌다. 정리 답은 두 번까지만 한다. */
@@ -461,8 +474,12 @@ class FlexiblePracticeConversationTest {
         assertThat(h.out.announces).containsExactly("COACH", "PEER");
         h.announcedNotice(Playback.COMPLETED);
         assertThat(h.out.lastSlot().generated()).isTrue();
-        assertThat(h.ext.state().phase()).isEqualTo(FlowState.Phase.OPPORTUNITY);
-        h.played(); h.child("좋아"); h.result("J3", "DELIVERED"); h.played();
+        // 도움 뒤 정답: 친구의 마무리 답으로 아이의 마지막 말에 답하며 닫는다. 처음 기회를 다시 열지 않는다(2026-10-27 실키)
+        assertThat(h.ext.state().phase()).isEqualTo(FlowState.Phase.SCENE_WRAP);
+        assertThat(h.ext.state().sub()).isEqualTo(FlowState.Sub.PEER_REPLY);
+        assertThat(h.out.lastSlot().text()).contains("직접 답하며 이 상호작용을 마무리해", "얼버무리지 말고");
+        h.played();
+        assertThat(h.ext.state().sub()).isEqualTo(FlowState.Sub.GOAL_RECAP);
         assertThat(h.recorder.only().liveTiming()).isEqualTo(LiveTiming.AFTER_HELP);
     }
 

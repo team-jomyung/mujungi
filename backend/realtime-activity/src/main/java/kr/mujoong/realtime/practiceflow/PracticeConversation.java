@@ -561,6 +561,14 @@ public final class PracticeConversation implements PracticeSessionExtension {
 
     private boolean flexibleJudgment(JudgmentPoint point, String option, boolean asksProcedure) {
         if (state.phase() == Phase.OPPORTUNITY && point == expectedJudgmentPoint()) {
+            if (goalAchieved && !asksProcedure) {
+                // 목표 달성 뒤 남은 것은 대화 정리뿐이다: 정리됨(DELIVERED)이면 닫고, 그 밖의 결과(여전히 부족 · 판독 불가 · 도움 등)도
+                // 정리 답 상한까지만 잇는다. 확신 부족 보류를 없앤 뒤(FT-1027-c) 정리 판정이 늘 확정돼 상한이 빠져나가던 길을 막는다
+                uncertainAttempts = 0;
+                if ("DELIVERED".equals(option) || settleReplies >= SETTLE_REPLY_MAX) closeAchievedScene();
+                else continueDialogue();
+                return true;
+            }
             if ("UNREADABLE".equals(option)) {
                 confirmUncertainInput();
             } else if (asksProcedure || "HELP".equals(option)) {
@@ -574,9 +582,6 @@ public final class PracticeConversation implements PracticeSessionExtension {
                 uncertainAttempts = 0;
                 if (++clarificationAttempts > 1) applyStep(Step.enter(Phase.HELP_OFFER, Sub.NONE));
                 else applyStep(Step.enter(Phase.OPPORTUNITY, Sub.CLARIFICATION_REPLY));
-            } else if (goalAchieved && "DELIVERED".equals(option)) {
-                applyStep(Step.enter(Phase.SCENE_WRAP, Sub.PEER_REPLY)
-                        .cause(FlowTransitions.EndCause.NORMAL).timing(goalAchievementTiming));
             } else {
                 if (!goalAchieved && "FULL".equals(option)) {
                     goalAchieved = true;
@@ -740,8 +745,17 @@ public final class PracticeConversation implements PracticeSessionExtension {
         applyStep(step);
     }
 
-    /** 코치 도움 뒤 친구 역할 대화로 돌아간다. 복귀 알림을 못 들려줬어도 돌아간다(FT-1023-g). */
+    /**
+     * 코치 도움 뒤 친구 역할 대화로 돌아간다. 복귀 알림을 못 들려줬어도 돌아간다(FT-1023-g). 도움 뒤 목표를 이미 해냈으면(J5 FULL) 대화를 다시
+     * 열지 않고 상대의 마무리 답으로 아이의 마지막 말에 답하며 장면을 닫는다(2026-10-27 실키: 복귀 첫 말이 처음 기회 문장을 다시 꺼내 대화가 2분 더 이어졌다).
+     */
     private void returnToDialogue(SlotEnd end) {
+        if (goalAchieved) {
+            applyStep(Step.enter(Phase.SCENE_WRAP, Sub.PEER_REPLY).cause(FlowTransitions.EndCause.NORMAL).timing(goalAchievementTiming)
+                    .role(FlowRole.PEER).fact(FactKind.COACH_RETURN).fact(FactKind.ORIGINAL_SCENE_RETURN)
+                    .fact(end == SlotEnd.FAILED ? FactKind.PLAYBACK_FAILED : null));
+            return;
+        }
         applyStep(Step.enter(Phase.OPPORTUNITY, Sub.DIALOGUE_REPLY).role(FlowRole.PEER).fact(FactKind.COACH_RETURN)
                 .fact(FactKind.ORIGINAL_SCENE_RETURN).fact(end == SlotEnd.FAILED ? FactKind.PLAYBACK_FAILED : null));
     }
