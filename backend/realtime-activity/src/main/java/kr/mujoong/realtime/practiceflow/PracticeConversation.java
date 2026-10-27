@@ -748,7 +748,11 @@ public final class PracticeConversation implements PracticeSessionExtension {
 
     private void onTimer(String name) {
         switch (name) {
-            case TIMER_NO_RESPONSE -> applyStep(transitions.onNoResponse(state));
+            case TIMER_NO_RESPONSE -> {
+                // 아이가 말하는 중에 만료되면 재촉하지 않고 다시 기다린다: 그 말이 확정되면 판정이 시계를 끈다
+                if (output.childSpeaking()) armNoResponse();
+                else applyStep(transitions.onNoResponse(state));
+            }
             case TIMER_FOCUS_MAX -> onFocusMax();
             case TIMER_GOAL_LIMIT -> onGoalLimit();
             case TIMER_NOTICE_GUARD -> {

@@ -199,6 +199,8 @@ class FlexiblePracticeConversationTest {
         assertThat(h.out.lastSlot().generated()).isTrue();
         // 목표 달성 뒤 상대 답은 지금 상호작용을 정리한다: 새 주제 · 새 질문으로 다시 열지 않는다
         assertThat(h.out.lastSlot().text()).contains("받아들이고 그 결과로 짧게 이어가", "새 주제나 새 질문을 꺼내지 말고");
+        // 아이의 질문에는 얼버무리지 않고 구체적으로 답한다(2026-10-27 실키: "어떤 이야기?"에 답을 피해 아이가 되물었다)
+        assertThat(h.out.lastSlot().text()).contains("얼버무리지 말고", "구체적인 답을 바로 해");
         assertThat(h.recorder.only().endedAt()).isNull();
     }
 
@@ -366,6 +368,20 @@ class FlexiblePracticeConversationTest {
         assertThat(h.out.lastSlot().text()).contains("생각할 시간");
         assertThat(h.out.slots).noneMatch(slot -> OPPORTUNITY_LINE.equals(slot.text()));
         assertThat(h.recorder.only().endedAt()).isNull();
+    }
+
+    /** 2026-10-27 실키: 무응답 시계가 아이가 말하는 도중에 만료돼 재촉 발화가 나가고 그 말은 18초 뒤 보류됐다. */
+    @Test
+    void noResponseExpiringWhileTheChildIsSpeakingWaitsInsteadOfPrompting() {
+        Harness h=toOpening(opening());h.played();int slots=h.out.slots.size();
+        h.out.speaking=true;
+        assertThat(h.advance(Duration.ofSeconds(10))).isEqualTo(Signal.NONE);
+        assertThat(h.out.slots).as("말하는 중에는 재촉하지 않는다").hasSize(slots);
+        assertThat(h.out.timers).as("다시 기다린다").containsKey("no-response");
+        h.out.speaking=false;
+        h.child("응, 나도 상자 보러 왔어");
+        assertThat(h.out.judgments).hasSize(1);
+        assertThat(h.out.slots).hasSize(slots);
     }
 
     @Test

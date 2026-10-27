@@ -2137,6 +2137,11 @@ public final class SessionExecutor {
         }
 
         @Override
+        public boolean childSpeaking() {
+            return inputGroupId != null;
+        }
+
+        @Override
         public boolean cancelResponse() {
             if (!practiceActive()) {
                 return refusePractice("cancelResponse", "NOT_ACTIVE");
