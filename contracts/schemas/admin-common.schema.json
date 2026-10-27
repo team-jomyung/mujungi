@@ -1,0 +1,461 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mujoong.invalid/contracts/schemas/admin-common.schema.json",
+  "title": "관리자 API 공통 형식(JIRA-280)",
+  "description": "관리자 조회 응답이 함께 쓰는 모양. 미확인 값은 null이고 0은 확인된 0이다. 금액은 USD 소수 문자열이다(실제 청구액 아님).",
+  "$defs": {
+    "Usd": {
+      "description": "USD 금액 문자열. 지수 표기 · 부호 · 쉼표 없음, 소수 최대 8자리(서버 반올림). 실제 0은 \"0\"",
+      "type": "string",
+      "pattern": "^[0-9]+(\\.[0-9]{1,8})?$",
+      "maxLength": 40
+    },
+    "NullableUsd": {
+      "description": "USD 금액 문자열 또는 null(저장된 사용량이 없거나 금액을 계산할 수 있는 호출이 없어 확인 불가, 0이 아니다)",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Usd"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "ActivityStatus": {
+      "enum": [
+        "COMPLETED",
+        "INTERRUPTED",
+        "FAILED_TO_START"
+      ]
+    },
+    "EndCategory": {
+      "description": "끝 분류. ENDED_UNCONFIRMED는 화면 상태가 COMPLETED지만 정상 종료(ENDED)와 따로 표시한다",
+      "enum": [
+        "ENDED",
+        "ENDED_UNCONFIRMED",
+        "INTERRUPTED",
+        "DECLINED",
+        "NOT_STARTED"
+      ]
+    },
+    "CollectionStatus": {
+      "description": "COMPLETE: 모든 호출의 입력 · 출력(음성은 초)을 알고 완결, PARTIAL: 일부만 앎, UNKNOWN: 아는 값이 하나도 없음, NOT_COLLECTED: 저장된 사용량 없음",
+      "enum": [
+        "COMPLETE",
+        "PARTIAL",
+        "UNKNOWN",
+        "NOT_COLLECTED"
+      ]
+    },
+    "ActivitySummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "guardianId",
+        "guardianName",
+        "deviceId",
+        "childId",
+        "childName",
+        "type",
+        "status",
+        "endCategory",
+        "startedAt",
+        "endedAt",
+        "durationSeconds",
+        "childTurns",
+        "aiTurns",
+        "endReason"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "common.schema.json#/$defs/Uuid"
+        },
+        "guardianId": {
+          "$ref": "common.schema.json#/$defs/Uuid"
+        },
+        "guardianName": {
+          "description": "보호자 이름은 저장하지 않아 id 앞 6자로 만든 표시 이름",
+          "type": "string",
+          "maxLength": 40
+        },
+        "deviceId": {
+          "$ref": "common.schema.json#/$defs/Uuid"
+        },
+        "childId": {
+          "$ref": "common.schema.json#/$defs/Uuid"
+        },
+        "childName": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "type": {
+          "enum": [
+            "FREE_TALK",
+            "PRACTICE"
+          ]
+        },
+        "status": {
+          "$ref": "#/$defs/ActivityStatus"
+        },
+        "endCategory": {
+          "$ref": "#/$defs/EndCategory"
+        },
+        "startedAt": {
+          "description": "시작 시각(시작 전이면 요청 시각)",
+          "$ref": "common.schema.json#/$defs/DateTime"
+        },
+        "endedAt": {
+          "$ref": "common.schema.json#/$defs/NullableDateTime"
+        },
+        "durationSeconds": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "childTurns": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "aiTurns": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "endReason": {
+          "description": "끝난 이유 표시 문구",
+          "type": "string",
+          "maxLength": 60
+        }
+      }
+    },
+    "HelpRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "kind",
+        "consentAnswer",
+        "exampleGiven"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "common.schema.json#/$defs/Uuid"
+        },
+        "kind": {
+          "enum": [
+            "FOCUS_HELP",
+            "SITUATION_EXPLAIN",
+            "EXPRESSION_EXAMPLE"
+          ]
+        },
+        "consentAnswer": {
+          "enum": [
+            "ACCEPT",
+            "DECLINE",
+            "UNCLEAR",
+            "REQUESTED",
+            null
+          ]
+        },
+        "exampleGiven": {
+          "type": "boolean"
+        }
+      }
+    },
+    "SceneResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "title",
+        "kind",
+        "judgment",
+        "reason",
+        "responseTiming",
+        "abstainReason",
+        "helpResponse",
+        "helpOffer",
+        "variantSkipReason",
+        "retryCount",
+        "reExplanationCount",
+        "helpRecords"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "common.schema.json#/$defs/Uuid"
+        },
+        "title": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "kind": {
+          "enum": [
+            "BASE",
+            "VARIANT"
+          ]
+        },
+        "judgment": {
+          "enum": [
+            "SUCCESS",
+            "FAILURE",
+            "ABSTAINED",
+            "NOT_EVALUATED"
+          ]
+        },
+        "reason": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "responseTiming": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "abstainReason": {
+          "description": "장면 단위 판정 보류 사유는 저장되지 않아 늘 null",
+          "type": "null"
+        },
+        "helpResponse": {
+          "description": "장면당 한 번 판정한 도움 반응(도움 행을 세지 않음). 기록으로 가를 수 없으면 null",
+          "enum": [
+            "ACCEPT",
+            "DECLINE",
+            "UNCLEAR",
+            "REQUESTED",
+            null
+          ]
+        },
+        "helpOffer": {
+          "description": "OFFERED: 제안했고 반응 기록 있음, REQUESTED: 아이가 먼저 청함, NOT_OFFERED: 제안 전에 장면이 끝남(IMMEDIATE · AFTER_REASK), UNKNOWN: 기록으로 가를 수 없음",
+          "enum": [
+            "OFFERED",
+            "REQUESTED",
+            "NOT_OFFERED",
+            "UNKNOWN"
+          ]
+        },
+        "variantSkipReason": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "retryCount": {
+          "description": "Realtime 장면 실행 기록이 없으면 null(0이 아니다)",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "reExplanationCount": {
+          "description": "Realtime 장면 실행 기록이 없으면 null",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "helpRecords": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/HelpRecord"
+          }
+        }
+      }
+    },
+    "CostSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "activityId",
+        "childName",
+        "type",
+        "category",
+        "purpose",
+        "observedAt",
+        "status",
+        "voiceSeconds",
+        "inputTokens",
+        "outputTokens",
+        "estimatedUsd"
+      ],
+      "properties": {
+        "id": {
+          "description": "활동 · 준비 id 또는 연결 미확인 호출 id",
+          "$ref": "common.schema.json#/$defs/Uuid"
+        },
+        "activityId": {
+          "$ref": "common.schema.json#/$defs/NullableUuid"
+        },
+        "childName": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 100
+        },
+        "type": {
+          "enum": [
+            "FREE_TALK",
+            "PRACTICE",
+            null
+          ]
+        },
+        "category": {
+          "description": "ACTIVITY, FAILED_TO_START(활동 행 없는 연습 준비), NON_ACTIVITY(지금 수집 구조에는 없음), UNLINKED(보호자 연결 없는 Core 호출)",
+          "enum": [
+            "ACTIVITY",
+            "FAILED_TO_START",
+            "NON_ACTIVITY",
+            "UNLINKED"
+          ]
+        },
+        "purpose": {
+          "type": "string",
+          "maxLength": 60
+        },
+        "observedAt": {
+          "description": "마지막 호출 완료 시각(사용량이 없으면 활동 시각)",
+          "$ref": "common.schema.json#/$defs/DateTime"
+        },
+        "status": {
+          "$ref": "#/$defs/CollectionStatus"
+        },
+        "voiceSeconds": {
+          "description": "아는 값의 합(표시용)",
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "inputTokens": {
+          "description": "아는 값의 합(표시용). 금액은 입력 · 출력을 모두 아는 호출만 계산한다",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "outputTokens": {
+          "description": "아는 값의 합(표시용)",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "estimatedUsd": {
+          "$ref": "#/$defs/NullableUsd"
+        }
+      }
+    },
+    "CostPhase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "phase",
+        "model",
+        "calls",
+        "voiceSeconds",
+        "inputTokens",
+        "outputTokens",
+        "cachedInputTokens",
+        "cacheWriteTokens",
+        "reasoningTokens",
+        "estimatedUsd",
+        "status",
+        "calculation"
+      ],
+      "properties": {
+        "phase": {
+          "enum": [
+            "PREPARATION",
+            "VOICE",
+            "JUDGMENT",
+            "POST_PROCESSING",
+            "OTHER"
+          ]
+        },
+        "model": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "calls": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "voiceSeconds": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "inputTokens": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "outputTokens": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "cachedInputTokens": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "cacheWriteTokens": {
+          "description": "Realtime 판정(JUDGMENT)은 수집하지 않아 null",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "reasoningTokens": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "estimatedUsd": {
+          "$ref": "#/$defs/NullableUsd"
+        },
+        "status": {
+          "$ref": "#/$defs/CollectionStatus"
+        },
+        "calculation": {
+          "description": "서버가 쓴 계산 근거(USD). 계산하지 못했으면 null",
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 400
+        }
+      }
+    }
+  }
+}

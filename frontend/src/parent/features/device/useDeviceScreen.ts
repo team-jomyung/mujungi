@@ -50,6 +50,8 @@ export function useDeviceScreen() {
     lockMessage,
     childName,
     stopItems,
+    stopLoading: stops.isPending,
+    stopReadFailed: stops.isError,
     noChild,
     handleNavigate,
     onLockedPress: (message: string) => toast.show({ message }),

@@ -321,6 +321,16 @@
 .mj-stop-section__summary {
   margin: 0 0 calc(var(--space-unit) * 2);
 }
+.mj-stop-section__label {
+  margin: 0 0 var(--space-unit);
+  font-weight: 700;
+}
+.mj-stop-section__expressions {
+  margin: 0 0 calc(var(--space-unit) * 2);
+  padding-inline-start: calc(var(--space-unit) * 5);
+  overflow-wrap: anywhere;
+}
+.mj-stop-section__expressions > li + li { margin-top: var(--space-unit); }
 
 /* SET-01 종료 표현 */
 .mj-stop-list {

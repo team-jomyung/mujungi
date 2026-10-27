@@ -551,18 +551,18 @@ J1/J6의 고정 질문·선택지는 `judgment-service-v1`, 공통 지시문은 
 
 ### 10.17 연습 장면 시작 · 오류에도 대화 유지 [FT-1023-g]
 
-**대본 필드(상황 생성 출력 `ai-scenario-output.schema.json`).** 생성 · 검토 지시문 판(`scenario-generation.v2` · `scenario-review.v1`)은 그대로 두고 내용만 고쳤다.
+**대본 필드(상황 생성 출력 `ai-scenario-output.schema.json`).** 생성 · 검토 지시문 판(`scenario-generation.v2` · `scenario-review.v1`)은 그대로 두고 내용만 고쳤다. 2026-10-24부터는 10.18의 `scenario-generation.v3` · `scenario-review.v2`다.
 
 | 필드 | 쓰는 때 | 규칙 |
 |---|---|---|
-| `openingLine` | 모든 장면(선택) | 장면 안내 뒤 상대가 먼저 거는 여는 말, 1 ~ 2문장(200자 이하). 화자는 상대. 기회 문장과 같으면 `OPENING_REPEATS_OPPORTUNITY`, 정답 · 아이 행동 · 목표 표현은 검토(`ANSWER_INCLUDED` · `EARLY_CUE`)와 서버 검사가 막는다 |
+| `openingLine` | 모든 장면(선택) | 장면 안내 뒤 상대가 먼저 거는 여는 말, 1 ~ 2문장(200자 이하). 화자는 상대. 기회 문장과 같아도 된다(10.18, 이전의 `OPENING_REPEATS_OPPORTUNITY` 거절은 없앴다), 정답 · 아이 행동 · 목표 표현은 검토(`ANSWER_INCLUDED` · `EARLY_CUE`)와 서버 검사가 막는다 |
 | `spokenIntroduction` | 기존 | 아이의 처지 · 필요(무엇을 하는 중이고 무엇이 필요하거나 불편한지)와 구체적인 상대를 담는다. 빠지면 검토가 `INCOMPLETE_SCENE`으로 거절 |
 
 생성 직후 여는 말이 위 서버 검사를 못 맞추면 대본 전체를 버리지 않고 그 필드만 빼고(진단 사유 `ScenarioSceneStartDropped`) 검토로 보낸다. 내용을 빼기만 하고 더하지 않으므로 추가 호출은 없다.
 
 이전 대화 돌아보기는 하지 않는다(2026-10-24 결정: 초기 안내가 느려 원래 대화 요약도 없앴다). 상황 생성 입력에 아이 발화 인용(`reflectionContext`)을 넣지 않고, 생성 출력에는 돌아보기 질문(`reflectionPrompt`)과 원래 대화 요약(`reflectionSummary`) 필드가 없다. 저장된 옛 대본에 이 필드가 있으면 core · realtime 모두 모르는 필드로 무시한다. `openingLine`이 없으면 장면 안내 뒤 바로 기회 문장이다.
 
-**연습 흐름(realtime `PracticeConversation`).** 목표 안내 → 장면 도입 → 여는 말(`openingLine` 승인 낭독, 상대 역할 · 낭독 신호 `PEER`) → 아이 대답 한 차례 또는 `mujoong.timing.conversation.no-response-wait` 만기 → 기회 문장 → 판정(기존 그대로). 여는 말에 대한 아이 말은 판정하지 않고 무응답 재안내 횟수 · 장면 결과에 넣지 않는다(전사는 그대로 남는다). 장면 행의 시작은 장면 도입 시작 그대로다.
+**연습 흐름(realtime `PracticeConversation`).** 목표 안내 → 장면 도입 → 여는 말(`openingLine` 승인 낭독, 상대 역할 · 낭독 신호 `PEER`) → 아이 대답 한 차례 또는 `mujoong.timing.conversation.no-response-wait` 만기 → 기회 문장 → 판정(기존 그대로). 여는 말에 대한 아이 말은 판정하지 않고 무응답 재안내 횟수 · 장면 결과에 넣지 않는다(전사는 그대로 남는다). 장면 행의 시작은 장면 도입 시작 그대로다. (2026-10-24: 여는 말 뒤 기회 문장을 강제로 읽는 단계는 10.18로 없앴다.)
 
 **오류에도 대화 유지.** 발화 · 판정 · 전사 오류로 장면이나 연습을 닫지 않는다.
 
@@ -570,6 +570,24 @@ J1/J6의 고정 질문·선택지는 `judgment-service-v1`, 공통 지시문은 
 - 단계별 다음: 목표 안내 → 장면 도입, 장면 도입 → (장면 행을 만들고) 여는 말 또는 기회 문장, 여는 말 → 기회 문장, 입력 단계의 질문 → 그 단계의 아이 말 대기, 역할 전환 알림 → 코치 도움, 코치 도움 → 다시 해 보기, 복귀 알림 → 친구 역할 대화, 친구 마무리 답 → 변형 평가(장면은 정상 원인 유지), 목표 마무리 → 다음 목표 또는 마무리.
 - 판독 불가 · 판정 보류 · 장애 · 불명확: 첫 번째는 지금처럼 교정 없이 같은 안내 1회, 두 번째는 닫지 않고 다음 도움 단계로 간다(기회 · 되묻기 → 도움 제안, 도움 제안 → 동의 없는 코치 도움(예시 없음), 다시 해 보기 → 남은 횟수 안에서 코치 도움 · 없으면 집중 한도 정리). 판독 불가 사실 `TRANSCRIPT_FAILED`는 그대로 남긴다.
 - 연습을 끝내는 길은 종료 표현 · 쉬기 요청, 보호자 종료, 공백 경고 · 종료, 목표 시간 상한(`goal-active-limit`) · 집중 상한(`focus-max`) · 다시 해 보기 횟수, 모든 목표 완료, 실제 끊김뿐이다. 확장점 신호 `OUTPUT_FAILED`와 실행부 전이 `PRACTICE_OUTPUT_FAILED`는 없앴다. 옛 세션의 `end_detail PRACTICE_OUTPUT_FAILED`는 기록 · 화면이 그대로 읽고 보여 준다.
+
+
+### 10.18 연습 프롬프트 묶음 v1 적용 [FT-1024-f]
+
+조원이 작성한 연습 프롬프트 묶음 v1(2026-10-24)을 다음처럼 연결했다. 묶음 원문은 리소스로 그대로 두고, 판 이름은 파일 이름과 첫 줄로 구분한다.
+
+| 묶음 파일 | 쓰는 곳 | 연결 방식 |
+|---|---|---|
+| `practice-system.v1.txt` | realtime `practice/practice-system.v1.txt` | 연습 세션의 `session.start` 지시문에 아이 정보 역할 문장 뒤로 원문 그대로 한 번 싣는다(`PracticeSystemPrompt`). 턴마다 보내는 500자 지시에는 넣지 않는다. 연습 세션은 자유대화의 참여 뒤 첫 질문 문장(`JOIN_FIRST_QUESTION`)을 싣지 않는다 |
+| `turn-instructions.v1.txt` | realtime `PracticeInstructions` | 기존 턴 지시를 ROLE_REPLY · ROLE_CLARIFY · INPUT_CONFIRM · OFFER_COACH · COACH_HINT · COACH_EXAMPLE · RESUME_ROLE · OFFER_VARIANT · CLOSE 문구로 바꿨다. 목표명을 읽지 않고, 역할 전환에 목소리 변화를 약속하지 않으며, 발화마다 '음,'을 붙이지 않는다. 500자 상한은 그대로다 |
+| `generation.v3.txt` · `review.v2.txt` | core `prompts/scenario/` | 상황 생성 · 검토 판을 `scenario-generation.v3` · `scenario-review.v2`로 올렸다. 생성 · 검토 스키마 키와 사유 코드는 그대로다. 시작 패키지 `practice-scenario.schema.json`의 판 값은 저장된 옛 대본 때문에 옛 판과 새 판을 모두 받는다 |
+
+**바뀐 진행 규칙.**
+- 여는 말(`openingLine`)이 장면의 첫 상대 말이다. 여는 말이 있으면 그것만 들려주고 아이의 대답을 기회 문장 대답(J2)으로 바로 판정한다. 기회 문장(`opportunitySentence`)을 이어 강제로 읽지 않는다. 여는 말과 기회 문장은 같은 문장이어도 된다(서버 검사 거절 없음). 여는 말이 없는 옛 대본은 지금처럼 기회 문장으로 시작한다.
+- 대화형 연습(`flexibleDialogue`)에서 판정 보류 · 장애는 아이 말을 못 들은 것으로 다루지 않는다. '잘 못 들었어' 확인 없이 상대 역할로 대화를 잇는다(ROLE_REPLY). 확인 질문(INPUT_CONFIRM)은 전사 자체가 불명확할 때만 한 번 쓰고, 두 번째에는 도움 제안으로 넘기지 않고 대화를 잇는다(사실 `TRANSCRIPT_FAILED`는 남긴다).
+- 목표 달성(J2 `FULL`) 뒤의 상대 답은 지금 상호작용을 정리하는 답(`peerSettle`)이다: 아이의 제안 · 요청을 받아들여 그 결과로 짧게 잇고 새 주제 · 새 질문을 꺼내지 않는다. 정리 답은 장면당 2번(`SETTLE_REPLY_MAX`)까지이고, 그 뒤 아이 말에는 대화 정리 판정(J3)과 관계없이 마무리 답(`peerCompletion`)으로 장면을 닫는다. 목표 달성 뒤 J3 보류 · 장애는 '정리됨'으로 보고 바로 마무리 답으로 닫는다(2026-10-24 실키 사례: 목표 달성 뒤 J3가 9번 중 6번 보류돼 잡담이 보호자 종료까지 이어졌다). 장면 결과(목표 달성 시점)는 그대로다.
+
+**아직 연결하지 않은 것.** 묶음의 판정 계약 `practice-assessment.v1.txt`(대화 관련성 · 목표 근거 · 지원 · 참여를 따로 돌려주는 JSON)는 지금 진행 중 판정이 쓰는 Decisions API의 선택지 하나 고르기 형식과 맞지 않아, 판정 방식 결정 뒤 따로 적용한다. 출력 검토 `practice-output-review.v1.txt`는 묶음 스스로 제브 대체 배포본이 아니라고 적었다. 낭독 중 아이 질문이 들어올 때의 출력 중지 · 발화 보존, 도움 뒤 `expectsReply` 메타데이터, 기록 단계 구분도 아직 서버 동작이 없다. `dialogue-examples.txt` · `regression-cases.jsonl`은 수동 회귀 검수 자료로 둔다.
 
 ## 자유대화 전 보호자 입력 참고
 
@@ -616,3 +634,37 @@ Realtime은 고정된 중립 질문으로 바꾸며 보호자의 주장을 아�
 계정 삭제에서는 실행 중 세션을 먼저 멈추는 기존 흐름 뒤에 `AiUsageDeletionParticipant`(170)가 새 쓰기를 차단하고 진행 중 저장을 제한된 시간 기다린 뒤 보호자의 사용량을 지운다. 판정 기록(180)·세션(200)보다 먼저 실행된다. 진행 중 저장을 정리하지 못하면 삭제 요청을 실패로 돌려 기존 Inbox 재시도를 따른다. DB의 세션 외래 키도 삭제된 세션의 지연 사용량 복원을 막는다.
 
 관측: `mujoong.ai.usage.pending`, `mujoong.ai.usage.records{outcome=accepted|full|contention|stopped|stored|retry|unlinked|expired|discarded}`. `accepted`는 중간 스냅샷·중복 전달을 포함하는 전달 횟수, `retry`·`unlinked`는 저장 시도 횟수다. 어느 것도 대화 수나 고유 호출 수로 해석하지 않는다. 검증·실호출 절차는 [RUNBOOK 18절](../infra/RUNBOOK.md#18-jira-271-사용량-수집-수동-검증)에 둔다.
+
+## JIRA-277 Core 사용량 수집
+
+이번 범위는 **Core가 대화 시작 전 · 종료 후에 부르는 Luna(Responses API) 호출의 사용량 저장**이다. 관리자 인증 · 조회 API · 화면 · 단가 계산과 Jev 비용은 후속 범위다. Realtime의 GPT-Live · 실시간 판정 사용량은 JIRA-271이 따로 저장한다. 기존 회원 · 활동 · 결과 표와 공급자 요청 본문은 바꾸지 않는다.
+
+| 목적(`purpose`) | 언제 | 붙이는 대상(`session_id`) |
+|---|---|---|
+| `SCENARIO_GENERATION` · `SCENARIO_REVIEW` | 연습 장면 생성 · 검수(시작 준비, 진행 중 새 장면) | 연습 준비 ID. 준비가 성공하면 같은 ID로 활동이 시작되고, 실패하면 활동 행이 없는 시작 실패 비용이다 |
+| `RESULT_TEXT` · `GOAL_CANDIDATES` · `REJUDGMENT` | 종료 후 결과 작업(구조화 · 판정 · 결과 문장 · 후보 · 2차 분류 · 목표 추천 · 재판정) | 결과 작업의 활동 세션 ID |
+| `SEED_GENERATION` | 결과에서 나온 목표 후보의 지식 시드 생성 | 그 후보가 나온 활동 세션 ID. 화면은 목적으로 따로 묶을 수 있다 |
+
+- **경계**: `luna.CoreLunaClient.call`이 실제로 보낸 시도마다 응답 본문에서 `model` · `id` · `usage.input_tokens` · `usage.output_tokens` · `usage.input_tokens_details.cached_tokens`(캐시 읽기) · `usage.input_tokens_details.cache_write_tokens`(캐시 쓰기) · `usage.output_tokens_details.reasoning_tokens`만 읽어 한 행을 만든다. 업무 응답이 거절 · 스키마 오류 · 내용 검사 불통과여도 받은 사용량은 기록하고, 응답을 받지 못한 시도(시간 초과 · 전송 오류)는 `UNKNOWN` 행이다. 보내기 전 거절(입력 정리 실패 · 시한 0 · 주소 재확인 · 빈 키)은 행을 만들지 않는다. 기술 재시도 · 스키마 재요청도 시도마다 따로 기록하고 같은 호출은 `call_id`로 묶는다. 캐시 읽기 · 캐시 쓰기는 서로 겹치지 않는 입력 토큰의 일부이고, 추론 토큰은 출력 토큰의 일부라 더하지 않는다. 캐시 쓰기는 일반 입력 · 캐시 읽기와 단가가 달라([프롬프트 캐싱](https://developers.openai.com/api/docs/guides/prompt-caching)) `cache_write_tokens`로 따로 보관한다. 일반 입력 = `input_tokens - cached_input_tokens - cache_write_tokens`이다. Core는 `prompt_cache_options`를 보내지 않아 기본 보관 시간만 쓰므로 보관 시간별 세부(`cache_write_tokens_details`)는 저장하지 않는다.
+- **활동 연결**: 연결 대상은 서버 내부 값이며 공급자 요청에 넣지 않는다. 기존 요청 · 게이트웨이 시그니처를 바꾸지 않으려고 작업 진입점(`SessionResultHandler` · `ScenarioService` · `SeedGenerationService`)이 `usage.AiUsageScope`로 대상을 열고, 다른 실행기로 일을 넘기는 곳(`ResultTextGateway` · `TextAiGateway` · `ScenarioDeadline`)이 대상을 함께 넘긴다. 이 경로 밖에서 생긴 호출은 `guardian_id` · `session_id`가 비어 있는 **연결 미확인** 행이다.
+- **저장**: `AiUsageCollector.offer`는 전용 유한 메모리 큐에 넣기만 하고 DB를 기다리지 않는다. 저장 작업 하나(`AiUsageRecorder`)가 `V12__ai_usage.sql`의 `core.core_ai_usage`에 기록마다 짧은 트랜잭션으로 넣는다. 같은 행 키 · 같은 응답 `id`는 한 행만 남긴다. 큐가 가득 차면 새 기록을 버리고, 저장 실패는 다음 주기에 다시 시도하며, 보관 시간을 넘기면 버린다. 사용량 수집 실패는 결과 작업 · 장면 생성 · 시드 생성의 결과를 바꾸지 않는다. 미저장 기록은 프로세스 메모리에 있어 강제 종료 때 잃을 수 있다.
+- **미확인 · 누락**: 미확인 토큰은 SQL `NULL`이고 실제 0과 다르다. `capture_status`는 행 하나의 상태(`COMPLETE` 입력 · 출력 모두, `PARTIAL` 일부, `UNKNOWN` 없음)이며 모든 호출이 수집되었다는 보장은 아니다. 후속 비용 화면은 "수집된 사용량 기준 예상 비용"으로 표시하고 `NULL`을 0원으로 더하지 않는다. 기간 합계는 `observed_at`(시도가 끝난 시각) 기준이다.
+- **계정 삭제**: `AiUsageDeletionParticipant`(순서 50)가 그 보호자의 대기 기록을 버리고 진행 중 저장이 끝나기를 제한 시간 기다린 뒤 행을 지운다. 끝나지 않으면 예외로 지휘의 재시도를 따른다. 그 뒤 늦게 저장된 행은 지휘의 두 번째 참가자 호출이 지우고, 보호자 행이 지워진 뒤에는 외래 키가 저장을 막는다.
+- **스위치 · 관측**: 기본은 꺼짐(`MUJOONG_CORE_AI_USAGE_ENABLED=false`, Realtime 스위치와 따로)이다. 시간 · 한도는 [timing.md 16절](timing.md#16-jira-277-core-사용량-수집)과 Core `application.yml`(`mujoong.limits.ai-usage.*`)에 둔다. 지표는 `mujoong.ai.usage.pending`, `mujoong.ai.usage.records{outcome=accepted|full|stopped|stored|retry|expired|discarded}`이며 대화 수 · 고유 호출 수로 해석하지 않는다. 키 · 프롬프트 · 입력 · 출력 원문은 사용량 표와 지표에 남기지 않는다.
+
+## JIRA-280 관리자 비용 화면 단가
+
+관리자 API · 비용 화면(`/api/admin/costs`)은 저장된 사용량(Core `core_ai_usage`, Realtime `realtime_ai_usage`)에 **조회할 때** 아래 설정 단가를 곱한
+**예상 비용(USD)**을 보여 준다. 실제 청구액이 아니다. 금액은 저장하지 않으므로 단가를 바꾸면 지난 활동의 예상 비용도 새 단가로 다시 계산된다.
+
+| 설정 키(`mujoong.admin.pricing.*`) | 기본값(USD) | 적용 |
+|---|---|---|
+| `voice-usd-per-minute` | `0.05` | Realtime VOICE 행의 `voice_seconds` ÷ 60(초 단위 과금) |
+| `responses.input-usd-per-million` · `cached-input-usd-per-million` · `cache-write-usd-per-million` · `output-usd-per-million` | `0.10` · `0.01` · `0.125` · `0.50` | Core Luna 호출(Responses API) |
+| `decisions.input-usd-per-million` · `cached-input-usd-per-million` · `cache-write-usd-per-million` · `output-usd-per-million` | `0.10` · `0.01` · `0.125` · `0` | Realtime 진행 중 판정(Decisions API). 출력 토큰은 과금하지 않는다(위 JIRA-271 절) |
+
+- 토큰 비용 = (일반 입력 × 입력 단가 + 캐시 읽기 × 캐시 읽기 단가 + 캐시 쓰기 × 캐시 쓰기 단가 + 출력 × 출력 단가) ÷ 1,000,000. 일반 입력 = 입력 − 캐시 읽기 − 캐시 쓰기(캐시는 입력의 일부). 추론 토큰은 출력에 들어 있어 다시 더하지 않는다.
+- 측정된 호출(VOICE는 초, 토큰 호출은 입력 · 출력 토큰이 모두 있는 행)만 계산한다. 측정되지 않은 호출은 0원으로 더하지 않고 `unknownCount` · 수집 상태(`PARTIAL` · `UNKNOWN`)로 드러낸다. 수집 중 빠져 저장되지 않은 호출은 알 수 없다.
+- Realtime 판정 행에는 캐시 쓰기 토큰 열이 없어 캐시 쓰기 요금은 반영하지 않는다. 요청당 입력 272K 토큰 초과 할증 · 지역 처리 할증 · Batch · Flex 할인도 반영하지 않는다.
+- 금액은 토큰 · 초 합계에서 한 번 계산해 소수 8자리로 반올림한 문자열(`^\d+(\.\d+)?$`, 지수 표기 · 부호 · 쉼표 없음, 0은 `"0"`)이다. 반올림한 값을 다시 더하지 않아 목록 행의 합과 합계가 마지막 자리에서 다를 수 있다.
+- 단계: 장면 생성 · 검수 → `PREPARATION`, 결과 문장 · 목표 추천 · 재판정 · 시드 생성 → `POST_PROCESSING`, 음성 → `VOICE`, 진행 중 판정 → `JUDGMENT`.

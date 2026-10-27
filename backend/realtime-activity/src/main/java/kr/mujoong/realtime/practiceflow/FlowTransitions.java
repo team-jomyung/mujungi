@@ -474,7 +474,7 @@ public final class FlowTransitions {
     public Step onSlotEnded(FlowState s, SlotEnd end) {
         boolean ended = end == SlotEnd.PLAYED || end == SlotEnd.INTERRUPTED;
         return switch (s.phase()) {
-            case SCENE_INTRO -> onIntroductionEnded(end, false);
+            case SCENE_INTRO -> onIntroductionEnded(end);
             case OPPORTUNITY, REASK, HELP_OFFER, RETRY -> inputPhaseSlot(s, end);
             case VARIANT_OFFER -> ended ? Step.await() : declineVariant(s, VariantSkipReason.NO_VARIANT);
             case FOCUS -> focusSlot(s, end);
@@ -488,12 +488,10 @@ public final class FlowTransitions {
     }
 
     /**
-     * 장면 도입이 끝났다. 들려주지 못했어도(실패 · 막힘) 장면을 닫지 않고 여는 말 또는 기회 문장으로 간다(FT-1023-g). 막힌 도입은 다시 내지 않는다.
-     *
-     * @param hasOpening 대본에 여는 말(openingLine)이 있는가
+     * 장면 도입이 끝났다. 들려주지 못했어도(실패 · 막힘) 장면을 닫지 않고 첫 상대 말(여는 말 또는 기회 문장)로 간다(FT-1023-g). 막힌 도입은 다시 내지 않는다.
      */
-    public Step onIntroductionEnded(SlotEnd end, boolean hasOpening) {
-        return Step.enter(Phase.OPPORTUNITY, hasOpening ? Sub.OPENING : Sub.NONE).fact(skippedFact(end));
+    public Step onIntroductionEnded(SlotEnd end) {
+        return Step.enter(Phase.OPPORTUNITY, Sub.NONE).fact(skippedFact(end));
     }
 
     private Step inputPhaseSlot(FlowState s, SlotEnd end) {

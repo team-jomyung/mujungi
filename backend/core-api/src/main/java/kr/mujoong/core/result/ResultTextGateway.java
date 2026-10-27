@@ -6,6 +6,7 @@ import java.util.concurrent.*;
 import kr.mujoong.contract.json.JsonCodec;
 import kr.mujoong.contract.time.MujoongClock;
 import kr.mujoong.core.textai.TextAiProperties;
+import kr.mujoong.core.usage.AiUsageScope;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Service;
@@ -33,7 +34,8 @@ public class ResultTextGateway {
         var request=new ResultTextProvider.Request(task,instructions,input,task.equals("judgment")||task.equals("classify")?properties.temperatureJudgment():properties.temperatureGeneration(),properties.promptVersion());
         Future<String> future;
         accessCheck.run(); // 입력 조립 중 철회·삭제가 접수됐으면 공급자에게 넘기지 않는다.
-        try{future=executor.submit(()->provider.generate(request,limit));}catch(RejectedExecutionException e){throw new ResultAiException("PROVIDER_UNAVAILABLE");}
+        // 사용량 연결은 실행기 스레드로 옮겨야 Luna 호출부가 읽는다(JIRA-277)
+        try{future=executor.submit(AiUsageScope.propagate(()->provider.generate(request,limit)));}catch(RejectedExecutionException e){throw new ResultAiException("PROVIDER_UNAVAILABLE");}
         String output;
         try{output=future.get(limit.toNanos(),TimeUnit.NANOSECONDS);}
         catch(InterruptedException e){future.cancel(true);Thread.currentThread().interrupt();throw new ResultAiException("TIMEOUT");}

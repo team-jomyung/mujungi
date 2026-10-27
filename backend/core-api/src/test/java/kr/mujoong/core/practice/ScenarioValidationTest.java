@@ -35,13 +35,13 @@ class ScenarioValidationTest {
         return new ScenarioScript.Scene(s.sceneKey(),s.sceneKind(),s.sceneDescription(),s.opportunitySentence(),s.reexplanation(),
                 s.focusPoints(),s.expressionExamples(),s.relation(),s.place(),s.topic(),s.preservation(),s.partnerRole(),null,opening);
     }
-    @Test void openingLineIsAPartnerLineThatNeitherRepeatsTheOpportunityNorLeaksTheAnswer() {
+    @Test void openingLineMayOpenTheOpportunityItselfButNeverLeaksTheAnswer() {
         var base=ScenarioGenerationTest.base();
         var opening=withOpening("우와, 너도 블록 놀이 하러 왔어?");
         assertThat(inspect(opening)).isEqualTo(ScenarioScriptValidation.Result.VALID);
         assertThat(opening.withPartnerRole("상대 역할").openingLine()).isEqualTo(opening.openingLine());
-        assertThat(validator.inspectDetailed(new ScenarioScript(List.of(withOpening(base.opportunitySentence()+"!"))),ScenarioGenerationTest.rules()).reason())
-                .isEqualTo(ScenarioScriptValidation.Reason.OPENING_REPEATS_OPPORTUNITY);
+        // scenario-generation.v3: 첫 말이 목표 기회를 바로 열면 기회 문장과 같은 문장이어도 된다
+        assertThat(inspect(withOpening(base.opportunitySentence()))).isEqualTo(ScenarioScriptValidation.Result.VALID);
         assertThat(validator.inspectDetailed(new ScenarioScript(List.of(withOpening("너도 잠깐 쉬자라고 해 봐"))),ScenarioGenerationTest.rules()).reason())
                 .isEqualTo(ScenarioScriptValidation.Reason.TARGET_EXPRESSION_DISCLOSED);
         for(String bad:List.of("빨리 말해","가".repeat(201),"안녕"+(char)7,"010-1234-5678"))

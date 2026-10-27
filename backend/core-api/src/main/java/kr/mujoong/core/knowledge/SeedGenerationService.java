@@ -12,6 +12,8 @@ import kr.mujoong.core.luna.LunaCallBudget;
 import kr.mujoong.core.luna.LunaPurpose;
 import kr.mujoong.core.luna.LunaRequest;
 import kr.mujoong.core.luna.LunaResult;
+import kr.mujoong.core.usage.AiUsageLink;
+import kr.mujoong.core.usage.AiUsageScope;
 
 /** BR4: 모델 호출 동안 DB 잠금을 풀고 T2 핸들을 확정한 뒤 T3에서만 투영한다. */
 public class SeedGenerationService {
@@ -47,6 +49,11 @@ public class SeedGenerationService {
     }
 
     public Result generateSeed(Request request) {
+        // 시드는 이 활동의 결과에서 나온 후보로 만든다. 사용량은 이 활동에 붙이고, 목적(SEED_GENERATION)으로 따로 집계한다(JIRA-277)
+        return AiUsageScope.call(new AiUsageLink(request.guardianId(), request.activityId()), () -> generateSeedInScope(request));
+    }
+
+    private Result generateSeedInScope(Request request) {
         if (!enabled || !knowledge.enabled() || luna.isEmpty() || !"NONE".equals(request.skillRef())) return Result.none("DISABLED_OR_INELIGIBLE");
         List<KnowledgeSeed> catalog = knowledge.seedSummaries(request.guardianId(), request.childId());
         if (catalog.isEmpty()) return Result.none("CATALOG_UNAVAILABLE");

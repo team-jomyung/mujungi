@@ -15,6 +15,7 @@ public record CoreInternalHttpProperties(
         Integer sessionStartRetries,
         Duration sessionEndTimeout,
         Duration sessionViewTimeout,
+        Duration adminFactsTimeout,
         Duration eventPublishTimeout,
         Integer breakerFailureThreshold,
         Duration breakerOpenDuration) {
@@ -26,6 +27,7 @@ public record CoreInternalHttpProperties(
         nonNegative(sessionStartRetries, "mujoong.internal-http.session-start-retries");
         positive(sessionEndTimeout, "mujoong.internal-http.session-end-timeout");
         positive(sessionViewTimeout, "mujoong.internal-http.session-view-timeout");
+        positive(adminFactsTimeout, "mujoong.internal-http.admin-facts-timeout");
         positive(eventPublishTimeout, "mujoong.internal-http.event-publish-timeout");
         positive(breakerFailureThreshold, "mujoong.internal-http.breaker-failure-threshold");
         positive(breakerOpenDuration, "mujoong.internal-http.breaker-open-duration");

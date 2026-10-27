@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -17,6 +18,10 @@ import kr.mujoong.contract.log.EventLog;
 import kr.mujoong.contract.time.MujoongClock;
 import kr.mujoong.core.observability.EventLogger;
 import kr.mujoong.core.textai.TextAiProperties;
+import kr.mujoong.core.usage.AiUsageCollector;
+import kr.mujoong.core.usage.AiUsageLink;
+import kr.mujoong.core.usage.AiUsageScope;
+import kr.mujoong.core.usage.ResponsesUsage;
 
 /**
  * Core Luna 공통 호출 (U9 FR1.1 · FR1.2 · FR1.4 · BR2 ~ BR6 · SD1 ~ SD6). 동기 {@link #call(LunaRequest)} 하나다 — 기존 게이트웨이가 이미 가상
@@ -32,6 +37,8 @@ import kr.mujoong.core.textai.TextAiProperties;
  *       남은 시간이 대기보다 길고 대기 뒤 backoff 이상 남을 때만 한다(BR3.6 · NFR1.3 · 검토 R-03). NONE · JOB_ATTEMPT · 기존 어댑터 요청은 1회.
  *   <li>시도마다 {@code LUNA_CALL} 한 줄(BR6.1). 본문 · 이름 · 키는 남기지 않는다(BR6.2). 보내기 전에 끝나면(정리 실패 · 시한 0 · 주소 재확인 ·
  *       빈 키) {@code attempt=0} 한 줄이고 시도 수에 세지 않는다(검토 R-04).
+ *   <li>실제로 보낸 시도마다 응답의 사용량을 수집기에 넘긴다(JIRA-277). 활동 연결은 {@link AiUsageScope}에서 읽고 요청 본문에는 넣지 않는다. 수집
+ *       실패는 호출 결과를 바꾸지 않는다.
  * </ol>
  *
  * <p>시각은 {@link MujoongClock}으로만 읽고 시간 값은 {@code mujoong.text-ai.*} 설정에서만 온다(BR5.2 · R-F6 · R-F7).
@@ -47,6 +54,7 @@ public class CoreLunaClient {
     private final MujoongClock clock;
     private final JsonCodec json;
     private final Sleeper sleeper;
+    private final AiUsageCollector usage;
 
     /** 재시도 대기(시험은 시계를 앞당기는 대역을 넣는다). */
     @FunctionalInterface
@@ -59,6 +67,11 @@ public class CoreLunaClient {
 
     public CoreLunaClient(LunaProperties properties, TextAiProperties timing, LunaSchemas schemas, LunaInputSanitizer sanitizer,
             LunaTransport transport, EventLogger events, MujoongClock clock, JsonCodec json, Sleeper sleeper) {
+        this(properties, timing, schemas, sanitizer, transport, events, clock, json, sleeper, AiUsageCollector.NOOP);
+    }
+
+    public CoreLunaClient(LunaProperties properties, TextAiProperties timing, LunaSchemas schemas, LunaInputSanitizer sanitizer,
+            LunaTransport transport, EventLogger events, MujoongClock clock, JsonCodec json, Sleeper sleeper, AiUsageCollector usage) {
         this.properties = Objects.requireNonNull(properties, "properties");
         this.timing = Objects.requireNonNull(timing, "timing");
         Objects.requireNonNull(timing.result(), "mujoong.text-ai.result");
@@ -69,6 +82,7 @@ public class CoreLunaClient {
         this.clock = Objects.requireNonNull(clock, "clock");
         this.json = Objects.requireNonNull(json, "json");
         this.sleeper = Objects.requireNonNull(sleeper, "sleeper");
+        this.usage = Objects.requireNonNull(usage, "usage");
     }
 
     /**
@@ -96,6 +110,8 @@ public class CoreLunaClient {
                 schema.orElse(null), request.purpose(), properties.options(request.purpose())).body());
         boolean retries = request.outputMode() == LunaRequest.OutputMode.CONTRACT
                 && request.purpose().retryClass() == LunaPurpose.RetryClass.REQUEST_BOUNDED;
+        AiUsageLink link = AiUsageScope.current().orElse(null);
+        UUID callId = UUID.randomUUID();
         int attempts = 0;
         boolean technicalRetryUsed = false;
         boolean schemaRetryUsed = false;
@@ -120,6 +136,7 @@ public class CoreLunaClient {
             Duration latency = clock.elapsedSince(started);
             audit(request, input.sentFieldNames(), attempt.failure == null ? "OK" : attempt.failure.name(),
                     attempt.responseModel, latency, attempts);
+            recordUsage(request, link, callId, attempts, attempt);
             if (attempt.failure == null) {
                 return new LunaResult(attempt.outputJson, attempt.responseModel, request.promptVersion(), latency, attempts,
                         schemaRetryUsed);
@@ -162,7 +179,7 @@ public class CoreLunaClient {
         } catch (ExecutionException failed) {
             return Attempt.failed(LunaTransport.translate(failed).reason(), null, Optional.empty());
         }
-        return classify(response, request.purpose(), schema.isPresent());
+        return classify(response, request.purpose(), schema.isPresent()).withBody(response.body());
     }
 
     /** 응답 분류(BR4.4 → BR4.1 → BR4.3 → BR4.2). */
@@ -207,6 +224,20 @@ public class CoreLunaClient {
         return new Attempt(null, model, reply.outputText(), Optional.empty());
     }
 
+    /** 보낸 시도 한 번의 사용량을 넘긴다. 응답이 없으면(시간 초과 · 전송 오류) 미확인 행이다. */
+    private void recordUsage(LunaRequest request, AiUsageLink link, UUID callId, int attemptNo, Attempt attempt) {
+        if (!usage.enabled()) {
+            return;
+        }
+        try {
+            usage.offer(ResponsesUsage.read(json, new ResponsesUsage.Attempt(callId, attemptNo, request.purpose().name(), link,
+                    request.promptVersion(), properties.model(), attempt.failure == null ? "OK" : attempt.failure.name(),
+                    attempt.body, clock.now())));
+        } catch (RuntimeException unavailable) {
+            // 사용량 기록 실패를 Luna 호출 실패로 바꾸지 않는다(본문 · 예외 메시지는 남기지 않는다)
+        }
+    }
+
     private void audit(LunaRequest request, List<String> sentFields, String outcome, String responseModel, Duration latency,
             int attempt) {
         events.log(EventCode.LUNA_CALL, EventLog.Component.CORE_LUNA_CLIENT, null, entry -> {
@@ -244,11 +275,25 @@ public class CoreLunaClient {
         return a.compareTo(b) <= 0 ? a : b;
     }
 
-    /** 시도 하나의 결과(실패면 failure가 있다). */
-    private record Attempt(LunaFailureReason failure, String responseModel, String outputJson, Optional<Duration> retryAfter) {
+    /** 시도 하나의 결과(실패면 failure가 있다). body는 사용량을 읽을 응답 원문이며 응답이 없으면 null이다. */
+    private record Attempt(LunaFailureReason failure, String responseModel, String outputJson, Optional<Duration> retryAfter,
+            String body) {
+
+        Attempt(LunaFailureReason failure, String responseModel, String outputJson, Optional<Duration> retryAfter) {
+            this(failure, responseModel, outputJson, retryAfter, null);
+        }
 
         static Attempt failed(LunaFailureReason reason, String responseModel, Optional<Duration> retryAfter) {
             return new Attempt(reason, responseModel, null, retryAfter);
+        }
+
+        Attempt withBody(String value) {
+            return new Attempt(failure, responseModel, outputJson, retryAfter, value);
+        }
+
+        @Override
+        public String toString() {
+            return "Attempt[redacted]";
         }
     }
 

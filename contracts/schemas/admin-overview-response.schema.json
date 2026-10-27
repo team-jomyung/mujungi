@@ -1,0 +1,144 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mujoong.invalid/contracts/schemas/admin-overview-response.schema.json",
+  "title": "관리자 대시보드 응답(JIRA-280)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "activityCount",
+    "freeTalkCount",
+    "practiceCount",
+    "activeChildren",
+    "childTurns",
+    "aiTurns",
+    "averageSeconds",
+    "daily",
+    "endReasons",
+    "recentActivities"
+  ],
+  "properties": {
+    "activityCount": {
+      "description": "시작한 활동 수(시작 실패 · 참여 거절 제외)",
+      "type": "integer",
+      "minimum": 0
+    },
+    "freeTalkCount": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "practiceCount": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "activeChildren": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "childTurns": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "aiTurns": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "averageSeconds": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "all",
+        "freeTalk",
+        "practice"
+      ],
+      "properties": {
+        "all": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "freeTalk": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "practice": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        }
+      }
+    },
+    "daily": {
+      "type": "array",
+      "maxItems": 366,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "date",
+          "freeTalk",
+          "practice"
+        ],
+        "properties": {
+          "date": {
+            "type": "string",
+            "format": "date"
+          },
+          "freeTalk": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "practice": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      }
+    },
+    "endReasons": {
+      "description": "끝 분류별 수(시작하지 못한 활동 포함). ENDED_UNCONFIRMED는 정상 종료와 따로 센다",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "code",
+          "label",
+          "count"
+        ],
+        "properties": {
+          "code": {
+            "$ref": "admin-common.schema.json#/$defs/EndCategory"
+          },
+          "label": {
+            "type": "string",
+            "maxLength": 40
+          },
+          "count": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      }
+    },
+    "recentActivities": {
+      "type": "array",
+      "maxItems": 5,
+      "items": {
+        "$ref": "admin-common.schema.json#/$defs/ActivitySummary"
+      }
+    }
+  }
+}

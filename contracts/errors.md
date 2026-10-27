@@ -57,6 +57,7 @@
 | `CHILD_NOT_REGISTERED` | 404 | 아이 정보가 아직 없어요. | 보호자 | 아이를 등록하지 않은 보호자의 `/api/child` 조회 · 수정 · 종료 표현 | 계약 3절 /child · U2 |
 | `CHILD_EXISTS` | 409 | 이미 등록된 아이가 있어요. | 보호자 | 계정당 아이 하나 — 두 번째 `POST /api/child` | 계약 3절 /child · AC1.3.9 · U2 |
 | `CHILD_NAME_NOT_ALLOWED` | 400 | 이 이름은 쓸 수 없어요. 다른 이름을 입력해 주세요. | 보호자 | `POST · PATCH /api/child`의 이름(`displayName`)이 공통 욕설 사전(`contract-model` `ProfanityLexicon`)에 걸림. 길이 · 형식 오류는 그대로 `VALIDATION_FAILED`이고, 이 검사는 형식 검사 뒤에 한다. message에 입력값을 싣지 않는다 | JIRA-266 · 편차 FT-1023-b |
+| `ADMIN_FORBIDDEN` | 403 | 관리자만 볼 수 있어요. | 보호자 | 로그인한 보호자가 활성 관리자(`core.core_admin_account` `ACTIVE`)가 아닐 때 `/api/admin/**` 전부. 로그인 안 함 · 만료는 이 code가 아니라 `UNAUTHENTICATED`(401)다 | JIRA-280 |
 
 ## 응답 헤더 규칙
 
