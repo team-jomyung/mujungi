@@ -46,8 +46,29 @@ describe("SubtitleDialog", () => {
     expect(screen.getByTestId("t19-dialog").textContent).toContain(PROPOSED_COPY.device.dialogTurnBody);
     rerender(<SubtitleDialog display="thinking" subtitle={null} />);
     expect(screen.getByTestId("t19-dialog").dataset.kind).toBe("think");
-    rerender(<SubtitleDialog display="standby" subtitle="남은 글" />);
+    rerender(<SubtitleDialog display="standby" subtitle={null} />);
     expect(screen.getByTestId("t19-dialog").dataset.kind).toBe("none");
+  });
+
+  it("자막이 남아 있으면 묶음 사이에 생각 중 · 듣는 중으로 잠깐 바뀌어도 말 창을 바꾸지 않는다(깜빡임 방지)", () => {
+    const { rerender } = render(<SubtitleDialog display="speaking" subtitle="같이 놀자" />);
+    rerender(<SubtitleDialog display="thinking" subtitle="같이 놀자" />);
+    expect(screen.getByTestId("t19-dialog").dataset.kind).toBe("say");
+    rerender(<SubtitleDialog display="reconnecting" subtitle="같이 놀자" />);
+    expect(screen.getByTestId("t19-dialog").dataset.kind).toBe("none");
+  });
+
+  it("앞 글에 이어 붙은 글은 처음부터가 아니라 이어서 쓴다", () => {
+    const { rerender } = render(<SubtitleDialog display="speaking" subtitle="안녕" />);
+    act(() => {
+      vi.advanceTimersByTime(1000);
+    });
+    rerender(<SubtitleDialog display="speaking" subtitle="안녕 하늘" />);
+    expect(screen.getByTestId("t19-dialog").querySelector(".mj-dialog__text")?.textContent).toBe("안녕");
+    act(() => {
+      vi.advanceTimersByTime(1000);
+    });
+    expect(screen.getByTestId("t19-dialog").querySelector(".mj-dialog__text")?.textContent).toBe("안녕 하늘");
   });
 
   it("새 자막이 오면 처음부터 다시 쓴다", () => {

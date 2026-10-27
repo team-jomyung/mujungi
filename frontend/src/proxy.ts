@@ -3,6 +3,7 @@ import {
   ALLOWED_ORIGIN_ENV,
   CSP_HEADER,
   NONCE_HEADER,
+  allowsWasm,
   buildContentSecurityPolicy,
   createNonce,
   usesStrictDynamic,
@@ -19,6 +20,7 @@ export function proxy(request: NextRequest): NextResponse {
     allowedOrigin: process.env[ALLOWED_ORIGIN_ENV],
     isDevelopment: process.env.NODE_ENV === "development",
     strictDynamic: usesStrictDynamic(request.nextUrl.pathname),
+    allowWasm: allowsWasm(request.nextUrl.pathname),
   });
 
   const requestHeaders = new Headers(request.headers);

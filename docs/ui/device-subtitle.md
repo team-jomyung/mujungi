@@ -4,6 +4,8 @@
 
 - `DuckAvatar.tsx`가 `/models/Explorer_A_Web.meshopt.glb`(three.js 0.182, Meshopt 압축)를 불러와 T19 캐릭터 자리에 그린다. 준비 전 · 실패(WebGL 없음, 파일 없음) 때는 기존 도형 캐릭터가 그대로 보인다.
 - GLB 안 그림은 blob: 주소 없이 바로 `createImageBitmap`으로 푼다. 기본 GLTFLoader 경로는 blob: URL을 fetch해 CSP `connect-src 'self'`에 막히기 때문이다. CSP는 넓히지 않았다.
+- Meshopt 디코더는 WebAssembly를 컴파일하므로 `/device` 경로에만 CSP `script-src`에 `'wasm-unsafe-eval'`을 더한다(`shared/security/csp.ts` `WASM_ALLOWED_PATH_PREFIXES`). JS `eval`은 계속 막고, 보호자 웹에는 더하지 않는다. 개발 서버는 `'unsafe-eval'` 때문에 이 문제가 드러나지 않으니 운영 빌드(`next build && next start`)로 확인한다.
+- OS의 동작 줄이기 설정이 켜져 있으면 의도대로 고정 자세다(Windows 「애니메이션 효과」 끔 포함).
 - 상태 → 동작(`duckClips.ts`)
 
   | 기기 상태 | 클립 |
@@ -30,7 +32,7 @@
 
 - 글은 서버가 보내는 `OUTPUT_BEGIN.text`(선택, 500자 이하)다. 게이트를 통과한 그 말의 확정 글이며 부모 말풍선과 같은 출처(`sealed.transcript()`)다.
 - 기기는 글을 재생 번호별로 두었다가 그 재생이 실제로 소리 나는 `STARTED` 때 띄우고, `STOPPED`(끼어들기 · 멈춤) · 말하기 끝 · 연결 끊김 · 끄기 때 지운다.
-- 응답을 나눠 보내면(progressive) 묶음마다 그 사이 새로 통과한 글만 싣는다.
+- 응답을 나눠 보내면(progressive) 묶음마다 그 사이 새로 통과한 글만 싣는다. 기기는 말하기가 끝나도 자막을 1.2초(`SUBTITLE_HOLD_MS`) 두고, 그 사이 온 글은 이어 붙여 이어서 쓴다(묶음 사이 깜빡임 방지, `useDeviceSubtitle.ts`). 자막이 있는 동안에는 묶음 사이 틈에 생각 중 · 듣는 중으로 바뀌어도 말 창을 유지한다.
 - 글은 화면에만 두고 기록 · 로그에 남기지 않는다(R-F14). `OutputBegin` · `OutputBundle`의 `toString`에는 글자 수만 쓴다.
 - 모션 줄이기 설정이면 한 글자씩 쓰지 않고 한 번에 보인다. 화면 읽기는 다 쓴 문장을 한 번 읽는다.
 

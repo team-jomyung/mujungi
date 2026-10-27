@@ -2,7 +2,7 @@ import dynamic from "next/dynamic";
 import { useState } from "react";
 import { COPY } from "@/shared/copy/ko";
 import { motionFor } from "../avatar/duckClips";
-import { SubtitleDialog } from "./SubtitleDialog";
+import { SubtitleDialog, kindOf } from "./SubtitleDialog";
 
 // T19 상태 화면 최소 (U1 3.5 Step 38 · 39 · 57)
 // 클릭 요소는 「켜기」 · 「끄기」뿐이고 화면에서 가장 큰 터치 영역(72px 이상)이며 「끄기」는 캐릭터와 떨어진 구석에 둔다.
@@ -56,7 +56,7 @@ function Character({ expression }: { readonly expression: StatusDisplay }) {
 export function StatusView({ display, label, subLabel = null, subtitle = null, onTurnOn, onTurnOff }: StatusViewProps) {
   const isOff = display === "off" || display === "mic-request" || display === "mic-denied";
   // 대화창이 같은 뜻을 크게 보이는 상태에서는 라벨을 화면에서만 숨긴다(화면 읽기용으로는 남김)
-  const dialogShown = display === "listening" || display === "thinking" || (display === "speaking" && subtitle !== null);
+  const dialogShown = kindOf(display, subtitle) !== "none";
   return (
     <section className="mj-t19" data-testid="t19-view" data-state={display}>
       <div className="mj-t19__stage">

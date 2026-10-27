@@ -18,8 +18,12 @@ export interface SubtitleDialogProps {
 
 type DialogKind = "say" | "turn" | "think" | "none";
 
-function kindOf(display: StatusDisplay, subtitle: string | null): DialogKind {
-  if (display === "speaking") return subtitle === null ? "none" : "say";
+/** 자막을 보일 수 있는 상태(세션 화면). 묶음 사이 틈에 잠깐 생각 중 · 듣는 중으로 바뀌어도 자막이 있으면 창을 바꾸지 않는다. */
+const SESSION_DISPLAYS: readonly StatusDisplay[] = ["speaking", "listening", "thinking", "standby", "closing"];
+
+export function kindOf(display: StatusDisplay, subtitle: string | null): DialogKind {
+  if (subtitle !== null && SESSION_DISPLAYS.includes(display)) return "say";
+  if (display === "speaking") return "none";
   if (display === "listening") return "turn";
   if (display === "thinking") return "think";
   return "none";
@@ -29,19 +33,24 @@ function prefersReducedMotion(): boolean {
   return typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
-/** 한 글자씩 늘어나는 글(코드 포인트 단위, 이모지가 깨지지 않게). 글이 바뀌면 처음부터 다시 쓴다. */
+/** 앞 글을 이어 붙인 글이면 이미 쓴 만큼을 이어 가고, 다른 글이면 처음부터 쓴다. */
+function keptCount(previous: { readonly text: string | null; readonly count: number }, text: string): number {
+  return previous.text !== null && text.startsWith(previous.text) ? previous.count : 0;
+}
+
+/** 한 글자씩 늘어나는 글(코드 포인트 단위, 이모지가 깨지지 않게). 나눠 온 글은 이어서 쓴다. */
 function useTypewriter(text: string | null): { readonly shown: string; readonly done: boolean } {
   const [reduced] = useState(prefersReducedMotion);
   const [progress, setProgress] = useState<{ readonly text: string | null; readonly count: number }>({ text: null, count: 0 });
   const chars = text === null ? [] : [...text];
-  const count = reduced ? chars.length : progress.text === text ? progress.count : 0;
+  const count = reduced ? chars.length : text === null ? 0 : keptCount(progress, text);
 
   useEffect(() => {
     if (text === null || reduced) return undefined;
     const total = [...text].length;
     const timer = window.setInterval(() => {
       setProgress((current) => {
-        const next = (current.text === text ? current.count : 0) + 1;
+        const next = keptCount(current, text) + 1;
         if (next >= total) window.clearInterval(timer);
         return { text, count: Math.min(next, total) };
       });
