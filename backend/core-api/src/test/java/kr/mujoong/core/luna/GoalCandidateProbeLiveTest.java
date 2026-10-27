@@ -17,6 +17,7 @@ import kr.mujoong.contract.json.JsonCodec;
 import kr.mujoong.contract.time.SystemMujoongClock;
 import kr.mujoong.core.result.check.ForbiddenDictionary;
 import kr.mujoong.core.practicegoal.GoalCandidateValidator;
+import kr.mujoong.core.practicegoal.RepeatedAiSpan;
 import kr.mujoong.core.textai.TextAiProperties;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -24,7 +25,7 @@ import org.springframework.core.io.ClassPathResource;
 
 /**
  * 목표 후보 진단 측정(수동, lunaLiveTest 전용). 결과 작업과 같은 모양의 입력 파일(env {@code GOAL_PROBE_INPUT}: transcript · structured · endReason ·
- * scenes)을 현재 지시문(goal-candidates.v2)으로 Luna에 보내, 모델이 낸 후보와 운영 서버 검사(GoalCandidateValidator)의 통과 여부 · 탈락 사유 코드를
+ * scenes)을 현재 지시문(goal-candidates.v3)과 운영과 같은 전처리(불확실 행 · AI 되풀이 구간 제외)로 Luna에 보내, 모델이 낸 후보와 운영 서버 검사(GoalCandidateValidator)의 통과 여부 · 탈락 사유 코드를
  * 보고서(env {@code GOAL_PROBE_REPORT})에 쓴다. 입력 파일과 보고서는 저장소 밖에 둔다. 입력에 seedSummaries가 없으면 비워 보낸다.
  */
 @Tag("luna-live")
@@ -54,15 +55,16 @@ class GoalCandidateProbeLiveTest {
         java.util.Set<Object> catalog = new java.util.HashSet<>();
         for (var seed : (List<Map<String, Object>>) input.get("seedSummaries")) catalog.add(seed.get("seedId"));
         List<Map<String, Object>> transcript = (List<Map<String, Object>>) input.get("transcript");
-        input.put("transcript", transcript.stream().filter(row -> !Boolean.TRUE.equals(row.get("uncertain"))).toList());
+        transcript = RepeatedAiSpan.without(transcript.stream().filter(row -> !Boolean.TRUE.equals(row.get("uncertain"))).toList());
+        input.put("transcript", transcript);
         Map<Long, String> quotes = new LinkedHashMap<>();
         for (var row : transcript) if ("CHILD".equals(row.get("speaker"))) quotes.put(((Number) row.get("seq")).longValue(), (String) row.get("text"));
         // env GOAL_PROBE_PROMPT가 있으면 그 파일의 지시문으로 비교 측정한다(저장소의 지시문은 바꾸지 않는다)
         String override = System.getenv("GOAL_PROBE_PROMPT");
         String prompt = override != null ? Files.readString(Path.of(override))
-                : new ClassPathResource("prompts/goal/goal-candidates.v2.txt").getContentAsString(StandardCharsets.UTF_8);
+                : new ClassPathResource("prompts/goal/goal-candidates.v3.txt").getContentAsString(StandardCharsets.UTF_8);
 
-        LunaResult result = client.call(LunaRequest.of(LunaPurpose.GOAL_CANDIDATES, "goal-candidates.v2", prompt, input, Map.of(),
+        LunaResult result = client.call(LunaRequest.of(LunaPurpose.GOAL_CANDIDATES, "goal-candidates.v3", prompt, input, Map.of(),
                 clock.now().plusSeconds(60)));
         Map<String, Object> output = JSON.read(result.outputJson(), Map.class);
         List<Map<String, Object>> proposed = (List<Map<String, Object>>) output.getOrDefault("candidates", List.of());

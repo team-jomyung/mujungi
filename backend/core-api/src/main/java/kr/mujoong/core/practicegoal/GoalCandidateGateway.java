@@ -23,7 +23,7 @@ public class GoalCandidateGateway {
     private final Optional<CoreLunaClient> luna;
     private final ChildKnowledgeService knowledge;
     private final GoalCandidateValidator validator;
-    private static final String PROMPT_VERSION="goal-candidates.v2";
+    private static final String PROMPT_VERSION="goal-candidates.v3";
     private static final Map<String,String> CHECK_FIELDS=Map.of("goal-reason","REASON_TEXT","goal-display","DISPLAY_EVIDENCE","goal-name","DISPLAY_NAME","goal-target","TARGET_EXPRESSION");
     private final OutputChecker checker;
     private final EventLogger events;
@@ -38,12 +38,14 @@ public class GoalCandidateGateway {
         request.keySet().retainAll(Set.of("transcript","structured","scenes","seedSummaries","endReason"));
         // Only the modern candidate boundary excludes uncertain material; legacy result readers are unchanged.
         request.put("transcript",objects(request.get("transcript")).stream().filter(row->!Boolean.TRUE.equals(row.get("uncertain"))).toList());
+        // AI가 같은 말을 되풀이한 구간은 근거에서 빼고 보낸다(FT-1027-i). 인용 검사도 남은 전사로 하므로 그 구간의 아이 발화는 근거가 될 수 없다
+        request.put("transcript",RepeatedAiSpan.without(objects(request.get("transcript"))));
         request=new LinkedHashMap<>(new LunaInputSanitizer(json).sanitize(request,aliases).payload());
         // Local UUIDs become per-call aliases; the separate seed:* skillRef catalog identifiers stay unchanged.
         Map<String,String> references=new HashMap<>();
         request.replaceAll((key,value)->referenceIds(value,references));
         var quotes=childQuotes(objects(request.get("transcript")));
-        String prompt;try{prompt=new ClassPathResource("prompts/goal/goal-candidates.v2.txt").getContentAsString(StandardCharsets.UTF_8);}catch(java.io.IOException missing){throw new ResultAiException("INTERNAL");}
+        String prompt;try{prompt=new ClassPathResource("prompts/goal/goal-candidates.v3.txt").getContentAsString(StandardCharsets.UTF_8);}catch(java.io.IOException missing){throw new ResultAiException("INTERNAL");}
         access.run();LunaResult generated;
         try{generated=luna.orElseThrow(()->new ResultAiException("PROVIDER_UNAVAILABLE")).call(LunaRequest.of(LunaPurpose.GOAL_CANDIDATES,PROMPT_VERSION,prompt,request,Map.of(),deadline));}
         catch(LunaException failed){throw new ResultAiException(failed.reason()==LunaFailureReason.TIMEOUT?"TIMEOUT":"PROVIDER_ERROR");}

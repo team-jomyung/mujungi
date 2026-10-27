@@ -250,19 +250,22 @@ FR7.11 표대로 FULL · PARTIAL · INSUFFICIENT를 정한다. 내용 있는 아
 
 전사, 검증된 구조화(자유대화) 또는 장면 칩(연습), ACTIVE 정의 목록(behaviorKey · behaviorVersion · displayName · coreFunction)을 입력한다. 출력 `{ "candidates": [{"behaviorKey":"…", "behaviorVersion":1, "reasonText":"…", "evidence":[{"utteranceSeq":1,"quote":"…","kind":"CHILD_RECALL"}]}] }`에서 근거 인용 · ACTIVE 정의 · 금지 표현을 서버가 확인한 최대 3개만 등록한다. 근거 없는 후보와 보호자 입력만 근거인 후보는 버린다. 지시: 관찰된 아이 회상 발화만 근거로 쓰고 의도 · 감정을 단정하지 않는다.
 
-**현재 지시문(2026-10-27, `prompts/goal/goal-candidates.v2.txt`, 판 `goal-candidates.v2`) [편차 FT-1027-g].** 위 U6-J 초안 뒤 입출력은 `ai-goal-candidate-output.schema.json`(displayName · displayEvidence · targetExpression · fourElements · skillRef · evidence · reasonText · structureSignature)으로 바뀌었고, 후보 선정 기준은 다음과 같다.
+**현재 지시문(2026-10-27, `prompts/goal/goal-candidates.v3.txt`, 판 `goal-candidates.v3`) [편차 FT-1027-g · FT-1027-i].** 위 U6-J 초안 뒤 입출력은 `ai-goal-candidate-output.schema.json`(displayName · displayEvidence · targetExpression · fourElements · skillRef · evidence · reasonText · structureSignature)으로 바뀌었고, 후보 선정 기준은 다음과 같다.
 - 후보는 **관찰된 지원 필요**에서 만든다: 아이가 이해하기 어렵거나 어떻게 말해야 할지 모르겠다고 밝힌 경우, 대화 맥락상 필요한 의사소통이 해결되지 않았고 그 원인을 감정 · 의도 · 성격 · 기술 장애로 추측하지 않고 설명할 수 있는 경우, 명시적인 도움을 받은 뒤에야 해당 기능을 쓴 경우(도움 전 어려움 · 도움 요청 근거가 함께 있어야 함). 한 장면의 근거로도 그 장면에 한정해 제안할 수 있지만 지속적인 결함으로 일반화하지 않는다.
 - 이미 적절하게 쓴 표현만 있으면 **빈 배열**이다(v1의 '이미 잘한 표현을 다른 상황에서 다시 써 보기' 후보는 만들지 않는다). 잘한 기록은 강점 · 도움 후 변화의 맥락으로만 참고한다.
 - 어려움으로 보지 않는 것: 짧은 답 · 생략 · 비격식 표현, 상대 확인으로 자연스럽게 해결된 대화, 의견 차이 · 적절한 거절 · 중단 · 도움 요청 · 역할극 속 질문, AI의 부자연스러운 질문 · 부족한 안내 · 음성 인식 · 재생 · 연결 문제 · 판정 지연으로 생긴 혼란(원인이 구분되지 않으면 제외), 행동을 쓸 기회가 없었다는 사실.
 - 근거 인용 규칙(CHILD 발화 전체를 seq와 함께 글자 그대로) · 진단 · 원인 단정 · 감정 단정 금지 · 출력 계약 · 구조 서명 규칙은 v1과 같다. 서버 검사(인용 일치 · 금지 표현 2차 분류)도 그대로다.
 - 근거 발화는 evidence의 utteranceSeq로만 잇고, reasonText · displayEvidence에는 seq 번호나 다른 숫자를 쓰지 않는다(시점은 말로). 서버 숫자 검사(`NumberGuard`)가 숫자 섞인 후보를 버리기 때문이다(2026-10-27 진돗개 자유대화 측정에서 유일한 후보가 사유 칸의 seq 번호로 버려짐).
-- 이전 판 `goal-candidates.v1.txt`는 이력으로 남긴다. 결과 · 사용량 기록의 `promptVersion`으로 두 판의 결과를 구분한다.
+- v3(FT-1027-i)는 POC 평가 기준표(`PERFORM_RUBRIC.csv`) P1 · P3에서 온 **대화 반응 기준**을 더한다. 응답: 상대가 질문 · 요청 · 제안을 했는데 아이가 답하지 않고 관련 없는 말을 했다(되묻기 · 전제 반박 · 짧은 답 · '몰라' · 거절은 반응). 화제: 상대가 이어 가던 화제가 끝나지 않았는데 아이가 연결 · 알림 없이 자기 화제로 바꿨다. 한 대목으로도 후보가 될 수 있다. AI 쪽 문제(되풀이 · 끊김 · 부자연스러운 질문) 바로 뒤의 무응답 · 전환과, 상대를 탓하거나 무시하는 말 자체는 근거가 아니다.
+- v3는 고른 대목을 seed의 `invariantSentence` · `signature.requiredInference`에 비추어 다시 확인하고 맞을 때만 그 seedId를 skillRef로 쓴다. seed에 맞추려고 관찰된 어려움을 바꾸지 않는다.
+- 서버는 보내기 전에 **AI가 같은 말을 되풀이한 구간을 전사에서 뺀다**(`RepeatedAiSpan`): AI 발화가 바로 앞 AI 발화와 같은 문장이면(앞머리 '음 · 응 · 어'와 공백 · 문장부호 무시) 그 문장의 첫 발화부터 다음 다른 AI 발화 전까지의 AI · 아이 발화를 뺀다. 인용 검사도 남은 전사로 하므로 빠진 아이 발화를 인용한 후보는 `QUOTE_MISMATCH`로 버려진다.
+- 이전 판 `goal-candidates.v1.txt` · `goal-candidates.v2.txt`는 이력으로 남긴다. 결과 · 사용량 기록의 `promptVersion`으로 판의 결과를 구분한다.
 
 **후보 탈락 진단 로그(`GOAL_CANDIDATE_DROPPED`, 2026-10-27).** 모델이 낸 후보가 서버 검사에서 빠지면 core-api `Maintenance` 컴포넌트가 후보마다 INFO 한 줄을 남긴다(병합 없음, `ownerHash`는 보호자). 모델이 0개를 냈으면 줄이 없으므로, 후보가 없는 결과가 모델 판단인지 서버 탈락인지를 가를 수 있다. 후보 이름 · 인용 · 사유 글 · 전사는 담지 않는다(R-F14). 정본은 `EventCode` · `AttrKey`이고 `infra/bin/log-hygiene-check` 허용 표와 대조한다.
 
 | 속성 | 형식 | 값 |
 |---|---|---|
-| `promptVersion` | LABEL | 보낸 지시문 판(`goal-candidates.v2`) |
+| `promptVersion` | LABEL | 보낸 지시문 판(`goal-candidates.v3`) |
 | `candidateIndex` · `candidatesProposed` | NUMBER | 모델 출력에서 몇 번째(0부터) 후보인지, 모델이 낸 후보 수 |
 | `dropReason` | ENUM | `GoalCandidateValidator`: `LENGTH` · `SKILL_REF_UNKNOWN` · `NO_EVIDENCE` · `QUOTE_MISMATCH` · `FORBIDDEN_DICTIONARY` · `NUMBER_GUARD` · `DUPLICATE` · `OVER_LIMIT`(남길 수 있는 3개를 넘음). `OutputChecker`: 1차 `CHECK_EMPTY` · `CHECK_QUOTE` · `CHECK_NUMBER` · `CHECK_DICTIONARY`, 2차 분류 위반 `CHECK_CLASSIFIER` |
 | `dropField` | ENUM | 처음 걸린 칸: `DISPLAY_NAME` · `DISPLAY_EVIDENCE` · `TARGET_EXPRESSION` · `REASON_TEXT` · `SKILL_REF` · `SITUATION` · `PARTNER` · `INTENT` · `EXPRESSION` · `EVIDENCE` · `NONE` |
