@@ -24,7 +24,9 @@ class GoalCandidateGatewayTest {
     /** FT-1027-g: 목표 후보는 관찰된 지원 필요에서 만든다(goal-candidates.v2). 강점 강화로 후보를 채우던 v1은 이력으로만 남는다. */
     @Test void sendsTheSupportNeedPromptVersionTwo(){run(Map.of());var request=ArgumentCaptor.forClass(LunaRequest.class);verify(luna).call(request.capture());
         assertThat(request.getValue().promptVersion()).isEqualTo("goal-candidates.v2");
-        assertThat(request.getValue().instructions()).contains("실제로 어려움을 겪었거나 목표 관련 도움이 필요했던 의사소통 과제","이미 적절하게 사용한 표현만 있는 경우에도 빈 배열이다");}
+        assertThat(request.getValue().instructions()).contains("실제로 어려움을 겪었거나 목표 관련 도움이 필요했던 의사소통 과제","이미 적절하게 사용한 표현만 있는 경우에도 빈 배열이다");
+        // 서버 NumberGuard가 숫자 섞인 사유를 버리므로 지시문이 seq 번호를 evidence에만 쓰게 한다
+        assertThat(request.getValue().instructions()).contains("reasonText·displayEvidence에는 seq 번호나 다른 숫자를 쓰지 않는다").doesNotContain("입력에 seq가 있으면 해당 seq로 근거를 연결한다");}
     @Test void usesGoalPurposeAndJobAttemptOneCall(){run(Map.of());var request=ArgumentCaptor.forClass(LunaRequest.class);verify(luna,times(1)).call(request.capture());assertThat(request.getValue().purpose()).isEqualTo(LunaPurpose.GOAL_CANDIDATES);assertThat(request.getValue().outputMode()).isEqualTo(LunaRequest.OutputMode.CONTRACT);}
     @Test void removesIdentifiersAgeAndGuardianRawInput(){run(Map.of("guardianId",guardian,"childId",child,"age",8,"guardianInput","원문","audio","원음","transcript",List.of(Map.of("speaker","CHILD","seq",1,"text","합성이름 같이 할래"))));var request=ArgumentCaptor.forClass(LunaRequest.class);verify(luna).call(request.capture());String serialized=JsonCodec.shared().write(request.getValue().input());assertThat(serialized).doesNotContain("guardianId","childId","age","guardianInput","원문","원음","합성이름").contains("아이 같이 할래");}
     @Test void rejectsInvalidRoot(){when(luna.call(any(LunaRequest.class))).thenReturn(new LunaResult("{}","fake","goal-candidates.v1",Duration.ZERO,1,false));assertThatThrownBy(()->run(Map.of())).isInstanceOf(kr.mujoong.core.result.ResultAiException.class);}
