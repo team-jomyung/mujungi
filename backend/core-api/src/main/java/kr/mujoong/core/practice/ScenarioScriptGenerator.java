@@ -40,6 +40,8 @@ public final class ScenarioScriptGenerator {
         this.provider=provider;this.validation=validation;this.timing=timing;this.executor=executor;this.sleeper=sleeper;
     }
     private static final class Budget{int calls;boolean technical;}
+    /** 변형 라운드 전에 통째로 독립 승인 · 서버 검사를 통과한 대본. 변형 라운드가 실패하면 고치지 않고 이것을 그대로 발급한다(JIRA-283). */
+    private record Approved(ScenarioScript script,String model,String reviewModel,Input input){}
     public static final class ContentExhausted extends kr.mujoong.core.common.error.CoreApiException {
         private static final long serialVersionUID=1L;
         boolean retryableDuplicate;
@@ -48,7 +50,7 @@ public final class ScenarioScriptGenerator {
     }
     public Result generate(Input input,ScenarioDeadline deadline){
         var budget=new Budget();ScenarioScript.Scene preserved=null;String model=null;
-        Input active=input;List<String> correctionReasons=List.of();ScenarioScript scriptToRepair=null;
+        Input active=input;List<String> correctionReasons=List.of();ScenarioScript scriptToRepair=null;Approved approvedBeforeVariant=null;
         for(int correction=0;correction<=2;correction++){
             if(correction==2 && (correctionReasons.isEmpty() || !correctionReasons.stream().allMatch(
                     reason->java.util.Set.of("INCOMPLETE_SCENE","ANSWER_INCLUDED","EARLY_CUE","GOAL_MISMATCH").contains(reason))))break;
@@ -95,9 +97,11 @@ public final class ScenarioScriptGenerator {
                     // 실제 첫 호출 비용으로 남은 예산을 비교하고, 부족하면 검증 완료 BASE만 발급한다.
                     // 거절/불확실/서버 검사 실패인 BASE는 이 경로로 발급하지 않는다.
                     var estimatedVariantCost=generationCost.multipliedBy(2).plus(reviewCost);
-                    if(result==ScenarioScriptValidation.Result.VALID && reviewed.review().approved()
-                            && deadline.remaining().compareTo(estimatedVariantCost)<=0)
-                        return approved(script,model,reviewed.model(),current,budget,deadline);
+                    if(result==ScenarioScriptValidation.Result.VALID && reviewed.review().approved()){
+                        if(deadline.remaining().compareTo(estimatedVariantCost)<=0)
+                            return approved(script,model,reviewed.model(),current,budget,deadline);
+                        approvedBeforeVariant=new Approved(script,model,reviewed.model(),current);
+                    }
                     active=reviewedInput;
                     preserved=reviewed.review().approved()?script.scenes().getFirst():null;
                     continue;
@@ -111,6 +115,7 @@ public final class ScenarioScriptGenerator {
                     diagnose("ScenarioReview_"+reviewed.review().verdict());
                     reviewed.review().reasons().forEach(reason->diagnose("ScenarioReview_"+reason));
                 }
+                if(approvedBeforeVariant!=null)return issueApprovedBeforeVariant(approvedBeforeVariant,budget,deadline);
                 if(result!=ScenarioScriptValidation.Result.VALID)correctionReasons.add(result.name());
                 if(!script.scenes().isEmpty()&&script.scenes().getFirst().sceneDescription()!=null){
                     var base=script.scenes().getFirst();
@@ -127,8 +132,13 @@ public final class ScenarioScriptGenerator {
                         ?script.scenes().getFirst():null;
             }catch(ScenarioScriptProvider.Failure failure){
                 diagnose("ScenarioProvider_"+failure.kind().name());
+                if(approvedBeforeVariant!=null)return issueApprovedBeforeVariant(approvedBeforeVariant,budget,deadline);
                 if(failure.kind()!=ScenarioScriptProvider.Failure.Kind.CONTENT)throw ScenarioDeadline.failed();
                 correctionReasons=List.of("INVALID_OUTPUT_FORMAT");
+            }catch(kr.mujoong.core.common.error.CoreApiException exhausted){
+                // 변형 라운드의 마감 · 호출 수 소진 · 그래프 대체 실패도 승인된 대본이 있으면 그것을 발급한다(마감이 지났으면 발급도 실패한다)
+                if(approvedBeforeVariant==null)throw exhausted;
+                return issueApprovedBeforeVariant(approvedBeforeVariant,budget,deadline);
             }
         }
         if(preserved!=null&&model!=null){
@@ -141,6 +151,10 @@ public final class ScenarioScriptGenerator {
             }
         }
         throw new ContentExhausted();
+    }
+    private Result issueApprovedBeforeVariant(Approved approved,Budget budget,ScenarioDeadline deadline){
+        diagnose("ScenarioVariantFailedApprovedIssued");
+        return approved(approved.script(),approved.model(),approved.reviewModel(),approved.input(),budget,deadline);
     }
     private Input withoutGraph(Input input){
         var payload=new LinkedHashMap<>(input.payload());payload.remove("structureContext");payload.remove("variantPlan");payload.put("baseOnly",true);

@@ -28,5 +28,29 @@ import org.mockito.ArgumentCaptor;
     @Test void fallbackStillRequiresItsOwnReview(){when(provider.review(any())).thenReturn(ScenarioGenerationTest.approve(),ScenarioGenerationTest.reject("AGE_MISMATCH"));assertThatThrownBy(this::run).isInstanceOf(kr.mujoong.core.common.error.CoreApiException.class);}
     @Test void noContentSlotAfterBaseFailureDoesNotAddThirdGeneration(){var bad=new ScenarioScript.Scene("base","BASE","잘못된 장면","말","설명",List.of(),List.of(),"FRIEND_CLOSE","교실","놀이",null,null);when(provider.generate(any())).thenReturn(ScenarioGenerationTest.generated(bad),new ScenarioScriptProvider.Generated(new ScenarioScript(List.of(base,variant)),"fake"));assertThatThrownBy(this::run).isInstanceOf(kr.mujoong.core.common.error.CoreApiException.class);verify(provider,times(2)).generate(any());}
     @Test void fifteenSecondExpiryDuringPlanCannotRegenerate(){when(f.service.variantPlan(any(),any(),any(),any(),any())).thenAnswer(c->{f.clock.advance(Duration.ofSeconds(15));return Optional.empty();});assertThatThrownBy(this::run).isInstanceOf(kr.mujoong.core.common.error.CoreApiException.class);verify(provider).generate(any());}
+    /** JIRA-283: 변형 라운드 전에 통째로 승인 · 서버 검사를 통과한 대본은 변형 라운드가 실패해도 버리지 않고 그대로 발급한다. */
+    void planReadyWithApprovedBaseFirst(){when(f.service.variantPlan(any(),any(),any(),any(),any())).thenReturn(Optional.of(plan));
+        when(provider.generate(any())).thenReturn(new ScenarioScriptProvider.Generated(new ScenarioScript(List.of(base)),"fake"),
+                new ScenarioScriptProvider.Generated(new ScenarioScript(List.of(base,variant)),"fake"));}
+    @Test void aRejectedVariantRoundIssuesTheScriptApprovedBeforeItWithoutRepair(){planReadyWithApprovedBaseFirst();
+        when(provider.review(any())).thenReturn(ScenarioGenerationTest.approve(),ScenarioGenerationTest.reject("GOAL_MISMATCH"));
+        var result=run();
+        assertThat(result.details().scenes()).extracting(ScenarioScript.Scene::sceneKind).containsExactly("BASE");
+        assertThat(result.details().generation().graphContextUsed()).isTrue();
+        assertThat(result.details().generation().calls()).as("고쳐 생성 · 재검토 호출 없음").isEqualTo(4);
+        verify(provider,times(2)).generate(any());verify(provider,times(2)).review(any());}
+    @Test void aFailingVariantProviderStillIssuesTheApprovedScript(){planReadyWithApprovedBaseFirst();
+        when(provider.generate(any())).thenReturn(new ScenarioScriptProvider.Generated(new ScenarioScript(List.of(base)),"fake"))
+                .thenThrow(new ScenarioScriptProvider.Failure(ScenarioScriptProvider.Failure.Kind.PERMANENT,Optional.empty()));
+        var result=run();
+        assertThat(result.details().scenes()).hasSize(1);
+        verify(provider,times(1)).review(any());}
+    @Test void anApprovedVariantRoundStillWins(){planReadyWithApprovedBaseFirst();
+        var result=run();
+        assertThat(result.details().scenes()).extracting(ScenarioScript.Scene::sceneKind).containsExactly("BASE","VARIANT");}
+    @Test void theApprovedScriptIsNotIssuedAfterTheDeadline(){planReadyWithApprovedBaseFirst();
+        when(provider.generate(any())).thenReturn(new ScenarioScriptProvider.Generated(new ScenarioScript(List.of(base)),"fake"))
+                .thenAnswer(c->{f.clock.advance(Duration.ofSeconds(15));return new ScenarioScriptProvider.Generated(new ScenarioScript(List.of(base,variant)),"fake");});
+        assertThatThrownBy(this::run).isInstanceOf(kr.mujoong.core.common.error.CoreApiException.class);}
     @Test void contentMismatchWithHealthyGraphKeepsSeparatelyApprovedBaseAndTrue(){when(f.service.variantPlan(any(),any(),any(),any(),any())).thenReturn(Optional.of(plan));var unchanged=scene(ScenarioGraphContext.coordinates(base),"variant","VARIANT");when(provider.generate(any())).thenReturn(new ScenarioScriptProvider.Generated(new ScenarioScript(List.of(base,unchanged)),"fake"));var result=run();assertThat(result.details().generation().graphContextUsed()).isTrue();assertThat(result.details().scenes()).hasSize(1);assertThat(result.details().generation().calls()).isEqualTo(5);}
 }
