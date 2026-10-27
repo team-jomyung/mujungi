@@ -122,22 +122,28 @@ describe("05 두 줄 + 판정 카드(AC2.1.1 ~ AC2.1.6 · AC2.1.13 · AC2.1.14)"
 });
 
 describe("05 종료 표현 구역 · 이동(AC2.1.7 · AC2.1.8 · AC2.1.12)", () => {
-  it("'{아이}의 종료 표현' · 기본 표현 · 추가 요약 · 「설정」 → SET-01", async () => {
+  it("기본·추가 종료 표현을 구분하고 추가 표현은 각각 표시하며 설정으로 이동한다", async () => {
     renderParent(<DeviceScreen />, { handler: handler("STABLE") });
     const section = await screen.findByTestId("device-stop-section");
     expect(section).toHaveTextContent("하늘의 종료 표현");
     expect(section).toHaveTextContent("“무중아 그만할래”");
-    expect(await screen.findByTestId("device-stop-summary")).toHaveTextContent("추가 표현 2개 · “이제 그만” · “끝낼래”");
+    expect(section).toHaveTextContent("기본 종료 표현");
+    const additional = await screen.findByRole("list", { name: "추가 종료 표현" });
+    expect(additional.querySelectorAll("li")).toHaveLength(2);
+    expect(additional).toHaveTextContent("“이제 그만”");
+    expect(additional).toHaveTextContent("“끝낼래”");
+    expect(additional).not.toHaveTextContent("무중아 그만할래");
     fireEvent.click(screen.getByTestId("device-stop-settings"));
     expect(router.push).toHaveBeenCalledWith("/parent/child/stop-expressions");
   });
 
-  it("추가 표현이 없으면 요약 줄이 없고 아이가 없으면 구역이 없다", async () => {
+  it("추가 표현이 없으면 비어 있음을 안내하고 아이가 없으면 구역이 없다", async () => {
     const first = renderParent(<DeviceScreen />, {
       handler: handler("STABLE", homeBody("STABLE"), { "GET /api/child/stop-expressions": () => jsonResponse(200, stopBody([])) }),
     });
     await screen.findByTestId("device-stop-section");
     expect(screen.queryByTestId("device-stop-summary")).toBeNull();
+    expect(await screen.findByText("추가한 종료 표현이 없어요.")).toBeInTheDocument();
     first.view.unmount();
 
     renderParent(<DeviceScreen />, {
