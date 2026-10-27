@@ -576,6 +576,12 @@ public final class SessionExecutor {
     private record DeferredPracticeInstruction(OutputGeneration.BumpReason reason, ProviderSendQueue.Job job,
             UUID speechId, Instant deadline) {}
     private DeferredPracticeInstruction deferredPracticeInstruction;
+    /** 진단(JIRA-282 후속): 출력 대기를 무엇이 얼마나 막았는지(사유별 누적 ms). 대기를 시작할 때 비운다. */
+    private enum DrainBlocker { OUTPUT_FLOWING, OUTPUT_PENDING, CHILD_INPUT_OPEN }
+    private final java.util.EnumMap<DrainBlocker, Long> drainBlockedMs = new java.util.EnumMap<>(DrainBlocker.class);
+    private Instant drainStartedAt;
+    private Instant drainCheckedAt;
+    private DrainBlocker drainLastBlocker;
     private boolean practiceCollecting;
     private final Set<UUID> practicePlaybackStarted = new HashSet<>();
     private final Map<UUID, kr.mujoong.realtime.voice.PracticeSpeech> practiceAudio = new HashMap<>();
@@ -3025,6 +3031,27 @@ public final class SessionExecutor {
         } else practicePlayback(speech, kr.mujoong.realtime.practicelegacy.PracticePorts.Playback.FAILED);
     }
 
+    /** 지난 확인부터 지금까지를 그때 막고 있던 사유에 더한다(진단). */
+    private void accountDrain(Instant now) {
+        if (drainCheckedAt != null && drainLastBlocker != null) {
+            drainBlockedMs.merge(drainLastBlocker, Math.max(0L, Duration.between(drainCheckedAt, now).toMillis()), Long::sum);
+        }
+        drainCheckedAt = now;
+    }
+
+    /** 출력 대기가 끝난 단계(REQUEST_QUEUED · DRAIN_TIMEOUT)를 대기 시간과 가장 오래 막은 사유와 함께 남긴다(진단, 원문 없음). */
+    private void practiceDrainStage(String stage, Instant now) {
+        long waited = drainStartedAt == null ? 0L : Math.max(0L, Duration.between(drainStartedAt, now).toMillis());
+        String blocker = drainBlockedMs.entrySet().stream().filter(entry -> entry.getValue() > 0)
+                .max(java.util.Map.Entry.comparingByValue()).map(entry -> entry.getKey().name()).orElse("NONE");
+        ctx.services().events().log(EventCode.PRACTICE_AUDIO_STAGE, EventLog.Component.OUTPUT_GATE,
+                ctx.plan().sessionId(), ctx.plan().traceId(), entry -> entry
+                .attr(AttrKey.AUDIO_STAGE, stage).attr(AttrKey.OUTPUT_GENERATION, ctx.outputGen().generation())
+                .attr(AttrKey.PRACTICE_PHASE, practice == null ? "NONE" : practice.diagnosticPhase())
+                .attr(AttrKey.PRACTICE_SUB, practice == null ? "NONE" : practice.diagnosticSub())
+                .attr(AttrKey.DURATION_MS, waited).attr(AttrKey.DRAIN_BLOCKER, blocker));
+    }
+
     private void practiceAudioStage(String stage) {
         ctx.services().events().log(EventCode.PRACTICE_AUDIO_STAGE, EventLog.Component.OUTPUT_GATE,
                 ctx.plan().sessionId(), ctx.plan().traceId(), entry -> entry
@@ -3062,9 +3089,10 @@ public final class SessionExecutor {
             return;
         }
         Instant now = ctx.services().clock().now();
+        accountDrain(now);
         if (!now.isBefore(deferred.deadline())) {
             deferredPracticeInstruction = null;
-            practiceAudioStage("DRAIN_TIMEOUT");
+            practiceDrainStage("DRAIN_TIMEOUT", now);
             ctx.services().events().appError(EventLog.Component.OUTPUT_GATE, "PracticeOutputDrainTimeout", EventCode.Level.WARN);
             if (deferred.job().onFailure != null) deferred.job().onFailure.run();
             return;
@@ -3072,7 +3100,10 @@ public final class SessionExecutor {
         Instant last = ctx.outputGen().lastDeltaAt();
         Instant ready = last == null ? now : last.plus(ctx.services().settings().segmentQuiet());
         // Let a pending child utterance reach stop/rest classification before starting more audio.
-        if (pendingOutputChunks.get() > 0 || inputGroupId != null || now.isBefore(ready)) {
+        drainLastBlocker = pendingOutputChunks.get() > 0 ? DrainBlocker.OUTPUT_PENDING
+                : inputGroupId != null ? DrainBlocker.CHILD_INPUT_OPEN
+                : now.isBefore(ready) ? DrainBlocker.OUTPUT_FLOWING : null;
+        if (drainLastBlocker != null) {
             ctx.timers().arm(Kind.PRACTICE_OUTPUT_DRAIN, now.isBefore(ready)
                     ? Duration.between(now, ready) : ctx.services().settings().segmentQuiet());
             return;
@@ -3088,7 +3119,7 @@ public final class SessionExecutor {
         ctx.timers().cancel(Kind.SEGMENT_QUIET);
         ctx.timers().arm(Kind.PRACTICE_SEND_WAIT, ctx.services().settings().instructionWait());
         instructionNotHeard = deferred.job().onFailure;
-        practiceAudioStage("REQUEST_QUEUED");
+        practiceDrainStage("REQUEST_QUEUED", now);
         ctx.sendQueue().submit(deferred.job());
     }
 
@@ -3168,6 +3199,10 @@ public final class SessionExecutor {
             streamedPracticeEnded = false;
             guardrail.onServerInstruction(replayable ? new GuardrailCoordinator.ReplayableInstruction(name, build) : null);
             practiceAudioStage("DRAINING");
+            drainBlockedMs.clear();
+            drainStartedAt = now;
+            drainCheckedAt = now;
+            drainLastBlocker = null;
             cancelResponseStall();
             onPracticeOutputDrain();
             return true;

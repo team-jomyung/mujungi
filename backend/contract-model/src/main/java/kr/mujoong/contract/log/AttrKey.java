@@ -75,6 +75,8 @@ public enum AttrKey {
     AUDIO_BYTES("audioBytes", ValueType.NUMBER, null),
     AUDIO_STAGE("audioStage", ValueType.ENUM, Set.of("DRAINING", "DRAIN_TIMEOUT", "REQUEST_QUEUED", "REQUEST_SENT",
             "SEND_TIMEOUT", "FIRST_OUTPUT_TIMEOUT", "COLLECTING", "COLLECTION_TIMEOUT", "PLAYBACK_QUEUED", "PLAYING", "PLAYBACK_ENDED", "PLAYBACK_TIMEOUT")),
+    /** 연습 출력 대기를 가장 오래 막은 사유(진단, JIRA-282 후속). NONE은 기다리지 않았다는 뜻이다. */
+    DRAIN_BLOCKER("drainBlocker", ValueType.ENUM, Set.of("OUTPUT_FLOWING", "OUTPUT_PENDING", "CHILD_INPUT_OPEN", "NONE")),
     TRANSCRIPT_CHARS("transcriptChars", ValueType.NUMBER, null),
     EXPECTED_CHARS("expectedChars", ValueType.NUMBER, null),
     GENERATED_SPEECH("generatedSpeech", ValueType.BOOLEAN, null),
