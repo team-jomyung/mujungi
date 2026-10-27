@@ -49,7 +49,11 @@ public class InternalHttpClient implements DisposableBean {
         SESSION_START(Group.SESSION_CONTROL, true),
         SESSION_END(Group.SESSION_CONTROL, true),
         SESSION_VIEW(Group.SESSION_VIEW, false),
-        EVENT_PUBLISH(Group.EVENTS, false);
+        EVENT_PUBLISH(Group.EVENTS, false),
+        /** JIRA-280 관리자 조회: 연습 장면 실행 · 도움 기록. 성공은 지표만 남긴다. */
+        ADMIN_FACTS(Group.ADMIN, false),
+        /** JIRA-280 관리자 조회: Realtime AI 사용량 집계. 성공은 지표만 남긴다. */
+        ADMIN_USAGE(Group.ADMIN, false);
 
         private final Group group;
         private final boolean logSuccess;
@@ -74,7 +78,9 @@ public class InternalHttpClient implements DisposableBean {
     public enum Group {
         SESSION_CONTROL,
         SESSION_VIEW,
-        EVENTS
+        EVENTS,
+        /** 관리자 조회(JIRA-280). 느린 집계가 세션 제어 · 진행 조회를 굶기지 않게 따로 둔다. */
+        ADMIN
     }
 
     /** 호출 결과 분류(OD-2 outcome 열거). */
@@ -199,9 +205,11 @@ public class InternalHttpClient implements DisposableBean {
         if (outcome == Outcome.OK && !target.logsSuccess()) {
             return;
         }
-        EventLog.Component component = target == Target.EVENT_PUBLISH
-                ? EventLog.Component.CORE_MESSAGING
-                : EventLog.Component.ACTIVITY_COORDINATOR;
+        EventLog.Component component = switch (target.group()) {
+            case EVENTS -> EventLog.Component.CORE_MESSAGING;
+            case ADMIN -> EventLog.Component.ADMIN_QUERY;
+            case SESSION_CONTROL, SESSION_VIEW -> EventLog.Component.ACTIVITY_COORDINATOR;
+        };
         events.log(EventCode.INTERNAL_HTTP, component, call.owner(), entry -> {
             entry.attr(AttrKey.TARGET, target).attr(AttrKey.OUTCOME, outcome)
                     .attr(AttrKey.DURATION_MS, duration.toMillis())

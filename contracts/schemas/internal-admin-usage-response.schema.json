@@ -1,0 +1,99 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mujoong.invalid/contracts/schemas/internal-admin-usage-response.schema.json",
+  "title": "관리자 조회 — 세션 · 출처 · 모델별 Realtime AI 사용량 합(JIRA-280)",
+  "description": "표시용 합(voiceSeconds · inputTokens · outputTokens · cachedInputTokens · reasoningTokens)은 필드마다 아는 값을 더한다(입력만 아는 호출의 입력도 들어간다). 금액 계산용 합(measured*)은 측정된 행(VOICE: voice_seconds 있음, LUNA: 입력 · 출력 토큰 모두 있음)만 더한다. 아는 값이 없는 합은 필드가 없다(0으로 채우지 않는다). 캐시 쓰기 토큰은 Realtime 표에 없다.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "usage"
+  ],
+  "properties": {
+    "usage": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "sessionId",
+          "source",
+          "calls",
+          "measuredCalls",
+          "knownCalls",
+          "completeCalls",
+          "lastObservedAt"
+        ],
+        "properties": {
+          "sessionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "source": {
+            "enum": [
+              "VOICE",
+              "LUNA"
+            ]
+          },
+          "model": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "calls": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "measuredCalls": {
+            "description": "금액을 계산할 수 있는 호출 수",
+            "type": "integer",
+            "minimum": 0
+          },
+          "knownCalls": {
+            "description": "값을 하나라도 아는 호출 수",
+            "type": "integer",
+            "minimum": 0
+          },
+          "completeCalls": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "voiceSeconds": {
+            "type": "number",
+            "minimum": 0
+          },
+          "inputTokens": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "outputTokens": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "cachedInputTokens": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "reasoningTokens": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "measuredInputTokens": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "measuredOutputTokens": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "measuredCachedInputTokens": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "lastObservedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      }
+    }
+  }
+}

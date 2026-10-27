@@ -84,7 +84,8 @@ public enum AttrKey {
     CLOSE_CODE("closeCode", ValueType.NUMBER, null),
     // INTERNAL_HTTP
     TARGET("target", ValueType.ENUM, Set.of(
-            "SESSION_START", "SESSION_END", "SESSION_VIEW", "VERIFY_TOKEN", "DEVICE_STATUS", "EVENT_PUBLISH", "PRACTICE_SCENARIO")),
+            "SESSION_START", "SESSION_END", "SESSION_VIEW", "VERIFY_TOKEN", "DEVICE_STATUS", "EVENT_PUBLISH", "PRACTICE_SCENARIO",
+            "ADMIN_FACTS", "ADMIN_USAGE")),
     OUTCOME("outcome", ValueType.ENUM, Set.of("OK", "TIMEOUT", "CONN_ERROR", "HTTP_4XX", "HTTP_5XX", "BREAKER_OPEN")),
     STATUS_CODE("statusCode", ValueType.NUMBER, null),
     DURATION_MS("durationMs", ValueType.NUMBER, null),
@@ -149,7 +150,9 @@ public enum AttrKey {
     PROMPT_VERSION("promptVersion", ValueType.LABEL, null),
     SENT_FIELDS("sentFields", ValueType.NAME_LIST, null),
     LATENCY_MS("latencyMs", ValueType.NUMBER, null),
-    LUNA_STATE("lunaState", ValueType.ENUM, Set.of("ENABLED", "DISABLED_NO_KEY", "DISABLED_SWITCH_OFF"));
+    LUNA_STATE("lunaState", ValueType.ENUM, Set.of("ENABLED", "DISABLED_NO_KEY", "DISABLED_SWITCH_OFF")),
+    // ADMIN_RECORD_VIEWED(JIRA-280): 열람한 관리자의 ownerHash(OwnerHasher 12자 16진). 관리자 id 원문은 싣지 않는다
+    VIEWER_HASH("viewerHash", ValueType.LABEL, null);
 
     /** 값 형식(OD-1 표). */
     public enum ValueType {

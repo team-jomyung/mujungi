@@ -285,7 +285,8 @@ class ContractConformanceIT {
                     .replace("{deviceId}", UUID.randomUUID().toString())
                     .replace("{goalSelectionId}", UUID.randomUUID().toString())
                     .replace("{reportId}", UUID.randomUUID().toString())
-                    .replace("{sessionId}", UUID.randomUUID().toString());
+                    .replace("{sessionId}", UUID.randomUUID().toString())
+                    .replace("{costId}", UUID.randomUUID().toString());
             Call call = app.call(method, path);
             if (!method.equals("GET")) {
                 call = call.json("{\"idempotencyKey\":\"" + UUID.randomUUID() + "\",\"requestId\":\"" + UUID.randomUUID()

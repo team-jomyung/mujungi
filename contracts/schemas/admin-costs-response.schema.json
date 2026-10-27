@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mujoong.invalid/contracts/schemas/admin-costs-response.schema.json",
+  "title": "관리자 API · 비용 응답(JIRA-280). USD 예상 비용이며 실제 청구액이 아니다",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "totals",
+    "activities",
+    "otherCosts",
+    "scope"
+  ],
+  "properties": {
+    "totals": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "collectedUsd",
+        "activityUsd",
+        "failedStartUsd",
+        "nonActivityUsd",
+        "unlinkedUsd",
+        "unknownCount"
+      ],
+      "properties": {
+        "collectedUsd": {
+          "$ref": "admin-common.schema.json#/$defs/NullableUsd"
+        },
+        "activityUsd": {
+          "$ref": "admin-common.schema.json#/$defs/NullableUsd"
+        },
+        "failedStartUsd": {
+          "$ref": "admin-common.schema.json#/$defs/NullableUsd"
+        },
+        "nonActivityUsd": {
+          "description": "활동과 무관한 호출은 현재 수집 범위에 들지 않아 늘 null",
+          "type": "null"
+        },
+        "unlinkedUsd": {
+          "$ref": "admin-common.schema.json#/$defs/NullableUsd"
+        },
+        "unknownCount": {
+          "description": "저장된 호출 가운데 측정되지 않아 금액을 계산하지 못한 호출 수. 수집 중 빠져 저장되지 않은 호출은 알 수 없다",
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "activities": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "items",
+        "page",
+        "pageSize",
+        "total"
+      ],
+      "properties": {
+        "items": {
+          "type": "array",
+          "maxItems": 50,
+          "items": {
+            "$ref": "admin-common.schema.json#/$defs/CostSummary"
+          }
+        },
+        "page": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "pageSize": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 50
+        },
+        "total": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "otherCosts": {
+      "type": "array",
+      "items": {
+        "$ref": "admin-common.schema.json#/$defs/CostSummary"
+      }
+    },
+    "scope": {
+      "type": "string",
+      "maxLength": 400
+    }
+  }
+}
