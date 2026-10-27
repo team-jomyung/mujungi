@@ -66,9 +66,15 @@ import org.junit.jupiter.api.*;
         assertThatThrownBy(()->f.legacy.service.generate(f.legacy.original())).isInstanceOf(kr.mujoong.core.common.error.CoreApiException.class);
         assertThat(f.legacy.db.jdbc().queryForObject("select count(*) from core.core_scenario where guardian_id=:g",Map.of("g",f.legacy.guardian),Integer.class)).isZero();
     }
-    @Test void missingPlanGetsFreshStructureFreeBaseAndNullVersion(){
+    /**
+     * JIRA-283(2026-10-27 사람 결정): 그래프는 정상이고 변형 계획만 비었으면, 승인 · 서버 검사를 통과한 첫 대본을 다시 만들지 않고 그래프 판과 함께
+     * 발급한다. 이전 규칙(그래프 없이 새로 만들기 · 판 null)은 호출 2번이 더 들어 실키에서 30초 마감을 자주 넘겼다. 그래프 읽기 실패는 아래
+     * failedPlanCannotMakeInputIndependentVariantIssuable이 계속 지킨다(그래프 없이 새로 만든다).
+     */
+    @Test void missingPlanIssuesTheApprovedGraphBaseWithItsVersion(){
         doReturn(Optional.empty()).when(f.graph).variantPlan(any(),any(),any(),any(),any());
-        var result=f.legacy.service.generate(f.legacy.original());assertThat(result.scenes()).hasSize(1);assertThat(result.generation().graphContextUsed()).isFalse();assertThat(result.generation().kgVersion()).isNull();
+        var result=f.legacy.service.generate(f.legacy.original());assertThat(result.scenes()).hasSize(1);assertThat(result.generation().graphContextUsed()).isTrue();assertThat(result.generation().kgVersion()).isEqualTo("graph-v7");
+        verify(f.provider,times(1)).generate(any());
     }
     @Test void failedPlanCannotMakeInputIndependentVariantIssuable(){
         doThrow(new IllegalStateException("synthetic graph unavailable")).when(f.graph).variantPlan(any(),any(),any(),any(),any());

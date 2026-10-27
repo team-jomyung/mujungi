@@ -89,6 +89,13 @@ public final class ScenarioScriptGenerator {
                 if(planMismatch&&script.scenes().size()>1&&result!=ScenarioScriptValidation.Result.INVALID_BASE)
                     result=ScenarioScriptValidation.Result.INVALID_VARIANT;
                 if(current.graphContextUsed()&&current.rules().variants() instanceof ScenarioGraphContext.Session graph&&graph.fallbackRequired()){
+                    diagnose(graph.planMissingOnly()?"ScenarioGraphFallback_PLAN_EMPTY":"ScenarioGraphFallback_READ_FAILED");
+                    // 그래프는 정상이고 변형 계획만 없을 때, 첫 라운드 대본이 통째로 승인 · 서버 검사를 통과했으면 다시 만들지 않고 그대로 발급한다(JIRA-283).
+                    // 다시 만들면 호출 2번(약 12초)이 더 들어 30초 마감을 넘기기 쉽다. 그래프 읽기 실패면 지금처럼 그래프 없이 새로 만든다
+                    if(correction==0&&graph.planMissingOnly()&&result==ScenarioScriptValidation.Result.VALID&&reviewed.review().approved()){
+                        diagnose("ScenarioGraphFallbackApprovedIssued");
+                        return approved(script,model,reviewed.model(),current,budget,deadline);
+                    }
                     if(correction==1)throw ScenarioDeadline.failed();
                     active=withoutGraph(current);preserved=null;continue;
                 }

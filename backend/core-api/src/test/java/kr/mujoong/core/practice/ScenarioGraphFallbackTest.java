@@ -22,6 +22,26 @@ import org.mockito.ArgumentCaptor;
     ScenarioScript.Scene scene(VariantPlanner.Context c,String key,String kind){return new ScenarioScript.Scene(key,kind,"놀이 중. "+ScenarioGenerationTest.OPPORTUNITY+" 이제 그만할래.","이제 그만할래.","쉬려 해.",List.of(),List.of(),c.relationship(),c.place(),c.topic(),new ScenarioScript.Preservation("seed:S1",f.seed.invariantSentence(),f.seed.preservationRule(),plan.grade(),plan.changedField(),c.participants(),c.situation()),null);}
     ScenarioScriptGenerator.Result run(){graph=f.open();var rules=new ScenarioScriptValidation.Rules("FRIEND_CLOSE",ScenarioGenerationTest.OPPORTUNITY,"잠깐 쉬자",Set.of(),null,x->false,graph);var fallback=ScenarioGenerationTest.base();fallback=new ScenarioScript.Scene(fallback.sceneKey(),fallback.sceneKind(),"새 기본 장면. "+fallback.sceneDescription(),fallback.opportunitySentence(),fallback.reexplanation(),fallback.focusPoints(),fallback.expressionExamples(),"FRIEND_CLOSE",fallback.place(),fallback.topic(),null,null);doReturn(ScenarioGenerationTest.generated(fallback)).when(provider).generate(argThat(c->c!=null&&Boolean.TRUE.equals(c.input().get("baseOnly"))));return generator.generate(new ScenarioScriptGenerator.Input(Map.of("structureContext",Map.of("skillRef","seed:S1")),Map.of(),rules,true,"{}"),new ScenarioDeadline(f.clock,f.clock.now().plusSeconds(15)));}
     void assertFreshFallback(){var result=run();assertThat(result.details().generation().graphContextUsed()).isFalse();assertThat(result.legacy().scenarioText()).startsWith("새 기본 장면.");assertThat(result.details().generation().calls()).isEqualTo(4);var calls=ArgumentCaptor.forClass(ScenarioScriptProvider.Call.class);verify(provider,times(2)).generate(calls.capture());verify(provider,times(2)).review(calls.capture());assertThat(calls.getAllValues().get(1).input()).doesNotContainKeys("structureContext","variantPlan","baseToPreserve");assertThat(calls.getAllValues().getLast().input()).doesNotContainKeys("structureContext","variantPlan");}
+    /** JIRA-283: 변형 계획이 비어도 첫 라운드 대본이 통째로 승인 · 서버 검사를 통과했으면 다시 만들지 않고 그대로 발급한다. */
+    @Test void anApprovedFirstScriptIsIssuedWhenThePlanIsEmpty(){
+        when(provider.generate(any())).thenReturn(new ScenarioScriptProvider.Generated(new ScenarioScript(List.of(base)),"fake"));
+        var result=run();
+        assertThat(result.details().scenes()).extracting(ScenarioScript.Scene::sceneKind).containsExactly("BASE");
+        assertThat(result.details().generation().graphContextUsed()).isTrue();
+        assertThat(result.details().generation().calls()).isEqualTo(2);
+        verify(provider,times(1)).generate(any());verify(provider,times(1)).review(any());}
+    @Test void aFailedGraphReadStillRegeneratesWithoutGraphEvenIfTheFirstScriptWasApproved(){
+        when(f.service.variantPlan(any(),any(),any(),any(),any())).thenThrow(new IllegalStateException("synthetic unavailable"));
+        when(provider.generate(any())).thenReturn(new ScenarioScriptProvider.Generated(new ScenarioScript(List.of(base)),"fake"));
+        var result=run();
+        assertThat(result.details().generation().graphContextUsed()).isFalse();
+        assertThat(result.legacy().scenarioText()).startsWith("새 기본 장면.");}
+    @Test void aRejectedFirstScriptStillRegeneratesWithoutGraphWhenThePlanIsEmpty(){
+        when(provider.generate(any())).thenReturn(new ScenarioScriptProvider.Generated(new ScenarioScript(List.of(base)),"fake"));
+        when(provider.review(any())).thenReturn(ScenarioGenerationTest.reject("GOAL_MISMATCH"),ScenarioGenerationTest.approve());
+        var result=run();
+        assertThat(result.details().generation().graphContextUsed()).isFalse();
+        assertThat(result.legacy().scenarioText()).startsWith("새 기본 장면.");}
     @Test void successfulSkillThenEmptyPlanRegeneratesWithoutGraph(){assertFreshFallback();}
     @Test void successfulSkillThenPlanFailureRegeneratesWithoutGraph(){when(f.service.variantPlan(any(),any(),any(),any(),any())).thenThrow(new IllegalStateException("synthetic unavailable"));assertFreshFallback();}
     @Test void successfulSkillThenLatePlanRegeneratesWithoutGraph(){when(f.service.variantPlan(any(),any(),any(),any(),any())).thenAnswer(c->{f.clock.advance(Duration.ofSeconds(2));return Optional.of(plan);});assertFreshFallback();}
