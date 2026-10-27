@@ -91,6 +91,7 @@ describe("ko — 자리를 채우는 문구", () => {
       dialogTurnTag: "내 차례",
       dialogTurnBody: "말해 볼까?",
       dialogThinking: "음… 생각하고 있어",
+      reduceMotion: "동작 줄이기",
     });
   });
 });

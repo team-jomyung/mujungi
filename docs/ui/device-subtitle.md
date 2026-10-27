@@ -5,7 +5,8 @@
 - `DuckAvatar.tsx`가 `/models/Explorer_A_Web.meshopt.glb`(three.js 0.182, Meshopt 압축)를 불러와 T19 캐릭터 자리에 그린다. 준비 전 · 실패(WebGL 없음, 파일 없음) 때는 기존 도형 캐릭터가 그대로 보인다.
 - GLB 안 그림은 blob: 주소 없이 바로 `createImageBitmap`으로 푼다. 기본 GLTFLoader 경로는 blob: URL을 fetch해 CSP `connect-src 'self'`에 막히기 때문이다. CSP는 넓히지 않았다.
 - Meshopt 디코더는 WebAssembly를 컴파일하므로 `/device` 경로에만 CSP `script-src`에 `'wasm-unsafe-eval'`을 더한다(`shared/security/csp.ts` `WASM_ALLOWED_PATH_PREFIXES`). JS `eval`은 계속 막고, 보호자 웹에는 더하지 않는다. 개발 서버는 `'unsafe-eval'` 때문에 이 문제가 드러나지 않으니 운영 빌드(`next build && next start`)로 확인한다.
-- OS의 「동작 줄이기」 설정(Windows 「애니메이션 효과」 끔 포함)이 켜져 있어도 무중이는 기본으로 움직인다. 아이 기기에서 캐릭터 동작이 상태를 알려 주는 1차 수단이라서다. 따르게 하려면 `DuckAvatar`의 `honorReducedMotion`을 켠다(그때는 `V6_Neutral` 고정 자세). 대화창 글 · 전환 애니메이션은 지금처럼 그 설정을 따른다.
+- 기기 화면 왼쪽 위 구석에 「동작 줄이기」 스위치를 둔다(기본 꺼짐). 켜면 무중이가 `V6_Neutral` 고정 자세로 멈춘다. OS 동작 줄이기 설정은 따르지 않는다. 기기 영역은 브라우저 저장소를 쓰지 않으므로(BR9.1) 값은 그 화면에서만 기억하고 다시 열면 꺼짐이다.
+  - **편차(AC6.2.1)**: 기기 화면 조작 요소는 「켜기」 · 「끄기」 하나뿐이었는데 이 스위치를 더했다. `status-view.test.tsx`는 스위치(role=switch)를 빼고 켜기 · 끄기가 하나인지 계속 본다.
 - 상태 → 동작(`duckClips.ts`)
 
   | 기기 상태 | 클립 |
@@ -17,7 +18,7 @@
   | 연결 중 · 재연결 | `V6_SmallSteps_Prototype` |
   | 마무리 | `Happy_Laugh` |
   | 마이크 거부 | `Mild_Sad` |
-  | 모션 줄이기 설정(`honorReducedMotion` 켰을 때만) | `V6_Neutral`(고정 자세) |
+  | 「동작 줄이기」 스위치 켬 | `V6_Neutral`(고정 자세) |
 
 - 모델 파일은 `frontend/public/models/Explorer_A_Web.meshopt.glb`(16MB, 삼각형 약 53만)이고 `frontend/Dockerfile`이 웹 이미지에 넣는다. 저사양 기기 성능은 실기에서 확인해야 한다. 파일을 못 받으면 도형 캐릭터로 동작한다.
 

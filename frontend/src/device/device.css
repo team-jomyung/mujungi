@@ -401,3 +401,54 @@
     animation: none;
   }
 }
+
+/* ───── 「동작 줄이기」 스위치(왼쪽 위 구석, 기본 꺼짐) ───── */
+.mj-t19__motion {
+  position: absolute;
+  top: calc(var(--space-unit) * 4);
+  left: calc(var(--space-unit) * 4);
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: var(--touch-target-min);
+  padding: 6px 14px 6px 8px;
+  border: 2px solid #f0e2d8;
+  border-radius: 999px;
+  background: #fff;
+  color: #3d2a22;
+  font: inherit;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.mj-t19__motion:focus-visible {
+  outline: 3px solid var(--color-brand-primary);
+  outline-offset: 2px;
+}
+
+.mj-t19__motion-track {
+  position: relative;
+  width: 40px;
+  height: 24px;
+  border-radius: 999px;
+  background: #d1d6db;
+  transition: background-color 150ms ease-out;
+}
+
+.mj-t19__motion-track::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 20%);
+  transition: transform 150ms ease-out;
+}
+
+.mj-t19__motion[aria-checked="true"] .mj-t19__motion-track { background: #03a865; }
+.mj-t19__motion[aria-checked="true"] .mj-t19__motion-track::after { transform: translateX(16px); }

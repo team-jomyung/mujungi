@@ -10,7 +10,9 @@ vi.mock("@/device/mic/micPermission", async () => (await import("../../../suppor
 // T19 상태 화면 시험 (U1 3.5 Step 41 · BR9.5 · BR9.6 · AC6.2.1 ~ AC6.2.3 · AC6.2.5 · AC6.2.9 · C.D-19.31 · 39 · 57)
 // 6상태(꺼짐 · 대기 · 듣는 중 · 말하는 중 · 마무리 · 마이크 허용 안 됨) 라벨, '말하는 중'은 실제 재생 중일 때만, ?debug=1 상태 로그.
 
-const INTERACTIVE = "button, a[href], input, select, textarea, [role='button'], [tabindex]:not([tabindex='-1'])";
+// 구석의 「동작 줄이기」 스위치(role=switch, docs/ui/device-subtitle.md 편차)를 뺀 조작 요소. 켜기 · 끄기는 여전히 하나뿐이다.
+const INTERACTIVE =
+  "button:not([role='switch']), a[href], input, select, textarea, [role='button'], [tabindex]:not([tabindex='-1']):not([role='switch'])";
 
 function renderView(display: StatusDisplay, label: string | null = null) {
   const onTurnOn = vi.fn();
@@ -58,6 +60,21 @@ describe("StatusView", () => {
     expect(container.querySelectorAll(INTERACTIVE)).toHaveLength(1);
     fireEvent.click(screen.getByTestId("t19-off"));
     expect(onTurnOff).toHaveBeenCalledTimes(1);
+  });
+
+  it("「동작 줄이기」 스위치는 꺼짐 · 켜짐 화면 모두 하나 있고 기본은 꺼져 있으며 누르면 켜진다", () => {
+    for (const display of ["off", "standby"] as const) {
+      const { container, unmount } = renderView(display, "대기");
+      const toggle = screen.getByTestId("t19-reduce-motion");
+      expect(container.querySelectorAll("[role='switch']")).toHaveLength(1);
+      expect(toggle).toHaveTextContent("동작 줄이기");
+      expect(toggle).toHaveAttribute("aria-checked", "false");
+      fireEvent.click(toggle);
+      expect(toggle).toHaveAttribute("aria-checked", "true");
+      fireEvent.click(toggle);
+      expect(toggle).toHaveAttribute("aria-checked", "false");
+      unmount();
+    }
   });
 
   it("연결 중에는 라벨이 비어 있고 기술 문구가 없다(BR9.4)", () => {

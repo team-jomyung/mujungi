@@ -9,8 +9,7 @@ import { DUCK_CLIPS, type DuckMotion } from "./duckClips";
 // 3D 무중이(Explorer_A_Web 패키지 DuckAvatar를 기기 화면에 맞게 줄임).
 // 불러오기 · WebGL이 실패하면 onStatus("error")만 알리고, 화면은 기본 도형 캐릭터를 그대로 둔다.
 // 화면 밖 · 숨은 탭에서는 그리지 않는다. 해제 때 네트워크 · GPU 자원을 모두 돌려준다.
-// 아이 기기의 OS 「동작 줄이기」가 켜져 있어도 기본으로는 무중이가 움직인다(팀 결정, docs/ui/device-subtitle.md).
-// honorReducedMotion을 켜면 그 설정일 때 중립 자세로 멈춘다.
+// 기기 화면의 「동작 줄이기」 스위치(기본 꺼짐)를 켜면 중립 자세로 멈춘다(docs/ui/device-subtitle.md). OS 설정은 따르지 않는다.
 
 export const DUCK_MODEL_SRC = "/models/Explorer_A_Web.meshopt.glb";
 const MAX_DPR = 1.5;
@@ -21,8 +20,8 @@ export interface DuckAvatarProps {
   readonly motion: DuckMotion;
   readonly src?: string;
   readonly onStatus?: (status: "ready" | "error") => void;
-  /** OS 「동작 줄이기」를 따를지. 기본 false(항상 움직임). */
-  readonly honorReducedMotion?: boolean;
+  /** 기기 화면 「동작 줄이기」 스위치. true면 중립 자세로 멈춘다. */
+  readonly still?: boolean;
 }
 
 function releaseModel(root: THREE.Object3D): void {
@@ -92,25 +91,27 @@ function addLights(scene: THREE.Scene): void {
   scene.add(fill);
 }
 
-export function DuckAvatar({ motion, src = DUCK_MODEL_SRC, onStatus, honorReducedMotion = false }: DuckAvatarProps) {
+export function DuckAvatar({ motion, src = DUCK_MODEL_SRC, onStatus, still = false }: DuckAvatarProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const playRef = useRef<(motion: DuckMotion) => void>(() => undefined);
   const motionRef = useRef(motion);
+  const stillRef = useRef(still);
   const statusRef = useRef(onStatus);
 
   useEffect(() => {
     motionRef.current = motion;
+    stillRef.current = still;
     statusRef.current = onStatus;
   });
 
   useEffect(() => {
     playRef.current(motion);
-  }, [motion]);
+  }, [motion, still]);
 
   useEffect(() => {
     const host = hostRef.current;
     if (host === null) return;
-    if (typeof window.matchMedia !== "function" || typeof ResizeObserver === "undefined" || typeof IntersectionObserver === "undefined") {
+    if (typeof ResizeObserver === "undefined" || typeof IntersectionObserver === "undefined") {
       statusRef.current?.("error");
       return;
     }
@@ -123,7 +124,6 @@ export function DuckAvatar({ motion, src = DUCK_MODEL_SRC, onStatus, honorReduce
     let active: THREE.AnimationAction | undefined;
     let modelSize: THREE.Vector3 | undefined;
     const abort = new AbortController();
-    const motionMedia = window.matchMedia("(prefers-reduced-motion: reduce)");
     const actions = new Map<DuckMotion, THREE.AnimationAction>();
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(35, 1, 0.01, 100);
@@ -166,7 +166,7 @@ export function DuckAvatar({ motion, src = DUCK_MODEL_SRC, onStatus, honorReduce
 
     const play = (wanted: DuckMotion) => {
       if (mixer === undefined) return;
-      const reduce = honorReducedMotion && motionMedia.matches;
+      const reduce = stillRef.current;
       const next = actions.get(reduce ? "neutral" : wanted) ?? actions.get("idle");
       if (next === undefined) return;
       if (reduce) mixer.stopAllAction();
@@ -184,13 +184,12 @@ export function DuckAvatar({ motion, src = DUCK_MODEL_SRC, onStatus, honorReduce
       const delta = previousTime === 0 ? 0 : Math.min((now - previousTime) / 1000, MAX_FRAME_SEC);
       previousTime = now;
       if (inViewport && !document.hidden && modelSize !== undefined) {
-        if (!(honorReducedMotion && motionMedia.matches)) mixer?.update(delta);
+        if (!stillRef.current) mixer?.update(delta);
         renderer.render(scene, camera);
       }
       frame = requestAnimationFrame(animate);
     };
 
-    const onReducedMotion = () => play(motionRef.current);
     const onContextLost = (event: Event) => {
       event.preventDefault();
       fail();
@@ -201,7 +200,6 @@ export function DuckAvatar({ motion, src = DUCK_MODEL_SRC, onStatus, honorReduce
     });
     resizeObserver.observe(host);
     intersectionObserver.observe(host);
-    motionMedia.addEventListener("change", onReducedMotion);
     renderer.domElement.addEventListener("webglcontextlost", onContextLost);
     resize();
     frame = requestAnimationFrame(animate);
@@ -252,7 +250,6 @@ export function DuckAvatar({ motion, src = DUCK_MODEL_SRC, onStatus, honorReduce
       playRef.current = () => undefined;
       resizeObserver.disconnect();
       intersectionObserver.disconnect();
-      motionMedia.removeEventListener("change", onReducedMotion);
       renderer.domElement.removeEventListener("webglcontextlost", onContextLost);
       mixer?.stopAllAction();
       if (model !== undefined) {
@@ -265,7 +262,7 @@ export function DuckAvatar({ motion, src = DUCK_MODEL_SRC, onStatus, honorReduce
       renderer.domElement.remove();
       scene.clear();
     };
-  }, [src, honorReducedMotion]);
+  }, [src]);
 
   return <div ref={hostRef} className="mj-duck" aria-hidden="true" />;
 }
