@@ -859,6 +859,10 @@ public final class SessionExecutor {
                 ctx.remember(ctx.startOpId(), startSession);
             }
         }
+        if (sent) {
+            // 첫 판정 전에 공급자 연결을 미리 맺는다. 기다리지 않고 실패해도 흐름은 그대로다(첫 판정 시한 초과 방지)
+            ctx.services().judgment().judge().warmUp();
+        }
         if (!sent) {
             // ⑤: 같은 처리 안에서 PREPARING → FAILED(DEVICE_NO_ACK) + UNRESPONSIVE
             Optional<ActivitySessionRow> failed = ending.transition(SessionStatus.PREPARING, Trigger.START_SEND_FAILED, null);

@@ -21,6 +21,17 @@ public final class FakeJudgeClient implements JudgeClient {
 
     private final List<Call> calls = new ArrayList<>();
     private boolean available = true;
+    private int warmUps;
+
+    @Override
+    public synchronized void warmUp() {
+        warmUps++;
+    }
+
+    /** 예열을 부른 횟수. */
+    public synchronized int warmUps() {
+        return warmUps;
+    }
 
     @Override
     public synchronized boolean available() {

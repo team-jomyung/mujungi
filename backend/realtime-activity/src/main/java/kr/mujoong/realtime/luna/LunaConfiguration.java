@@ -7,7 +7,10 @@ import kr.mujoong.realtime.observability.EventLogger;
 import kr.mujoong.realtime.usage.AiUsageCollector;
 import kr.mujoong.realtime.startup.RealtimeStartupChecks;
 import kr.mujoong.realtime.startup.StartupFailureLine;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.context.ApplicationListener;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Conditional;
 import org.springframework.context.annotation.Configuration;
@@ -47,6 +50,12 @@ public class LunaConfiguration {
     LunaTransport lunaTransport(LunaProperties properties, LunaStartup startup, Environment environment) {
         return new LunaTransport(properties.baseUrl(), startup.mode(),
                 () -> environment.getProperty(LunaTransport.API_KEY_ENV), properties.maxResponseBytes());
+    }
+
+    /** 앱이 요청을 받기 시작할 때 판정 호출 경로를 한 번 데운다. 기다리지 않고, 실패해도 기동에 영향이 없다. */
+    @Bean
+    ApplicationListener<ApplicationReadyEvent> lunaWarmUpOnReady(ObjectProvider<RealtimeLunaClient> client) {
+        return event -> client.ifAvailable(RealtimeLunaClient::warmUp);
     }
 
     @Bean
