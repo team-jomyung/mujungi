@@ -62,6 +62,7 @@ class WsEnvelopeCodecTest {
                         DeviceReady.Prefetch.PARTIAL)),
                 Arguments.of(new SessionState(View.THINKING)),
                 Arguments.of(new OutputBegin(PLAYBACK_ID, OutputBegin.Source.GPT_LIVE)),
+                Arguments.of(new OutputBegin(PLAYBACK_ID, OutputBegin.Source.GPT_LIVE, "같이 놀자고 말해 볼까?")),
                 Arguments.of(new OutputEnd(PLAYBACK_ID, 1800L)),
                 Arguments.of(new PlayApprovedContent(PLAYBACK_ID, PlayApprovedContent.WAITING_FILLER, CONTENT_VERSION_ID)),
                 Arguments.of(new PlaybackMark(PLAYBACK_ID, PlaybackMark.Status.STOPPED,

@@ -184,14 +184,14 @@ components:
           payload: {"type": "SESSION_STATE", "seq": 4, "sentAt": "2026-10-15T09:02:02Z", "sessionId": "00000000-0000-4000-8000-000000000020", "payload": {"view": "LISTENING"}}
     OUTPUT_BEGIN:
       name: OUTPUT_BEGIN
-      summary: "서버 → 기기. 게이트를 통과한 AI 말 묶음 시작. 뒤따르는 0x02가 이 묶음이다"
+      summary: "서버 → 기기. 게이트를 통과한 AI 말 묶음 시작. 뒤따르는 0x02가 이 묶음이다. 선택 text는 그 말의 확정 글(기기 자막, 500자 이하)이고 응답을 나눠 보내면 첫 묶음에만 싣는다"
       contentType: application/json
       x-payload-schema: "schemas/ws-messages.schema.json#/$defs/OUTPUT_BEGIN"
       payload:
         $ref: "schemas/ws-envelope.schema.json"
       examples:
         - name: output_begin
-          payload: {"type": "OUTPUT_BEGIN", "seq": 5, "sentAt": "2026-10-15T09:02:10Z", "sessionId": "00000000-0000-4000-8000-000000000020", "payload": {"playbackId": "00000000-0000-4000-8000-000000000080", "source": "GPT_LIVE"}}
+          payload: {"type": "OUTPUT_BEGIN", "seq": 5, "sentAt": "2026-10-15T09:02:10Z", "sessionId": "00000000-0000-4000-8000-000000000020", "payload": {"playbackId": "00000000-0000-4000-8000-000000000080", "source": "GPT_LIVE", "text": "오늘은 친구한테 같이 놀자고 말하는 연습을 해 볼까?"}}
     OUTPUT_END:
       name: OUTPUT_END
       summary: "서버 → 기기. 그 묶음 마지막 프레임 뒤"

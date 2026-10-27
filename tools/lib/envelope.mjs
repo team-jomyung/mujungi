@@ -191,6 +191,8 @@ function optionalField(problems, label, object, key, test, description) {
 const isInt = (min) => (value) => Number.isInteger(value) && value >= min;
 const isEnum = (values) => (value) => values.includes(value);
 const isNullable = (test) => (value) => value === null || test(value);
+// OUTPUT_BEGIN.text(기기 자막): 1 ~ 500자(코드 포인트), ws-messages.schema.json과 같다
+const isSubtitle = (value) => typeof value === "string" && value.length > 0 && [...value].length <= 500;
 
 /** 서버 → 기기 payload 확인(ws-messages.schema.json). 문제 목록(빈 배열이면 통과). */
 export function checkServerPayload(type, payload) {
@@ -258,8 +260,9 @@ export function checkServerPayload(type, payload) {
       requireField(problems, label, p, "view", isEnum(VIEWS), "View");
       break;
     case "OUTPUT_BEGIN":
-      checkKeys(problems, label, p, ["playbackId", "source"]);
+      checkKeys(problems, label, p, ["playbackId", "source", "text"]);
       requireField(problems, label, p, "playbackId", isUuid, "UUID");
+      optionalField(problems, label, p, "text", isSubtitle, "1 ~ 500자 글");
       requireField(
         problems,
         label,

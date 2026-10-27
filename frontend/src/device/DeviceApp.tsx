@@ -132,6 +132,8 @@ export function DeviceApp({ debug, api: injectedApi }: DeviceAppProps) {
   const timing = useTiming();
   const [state, dispatch] = useReducer(deviceReducer, undefined, initialDeviceState);
   const [api] = useState<DeviceApi>(() => injectedApi ?? createDeviceApi());
+  // 무중이 말 자막(OUTPUT_BEGIN.text). 화면에만 두고 상태 기계 · 기록에는 넣지 않는다
+  const [subtitle, setSubtitle] = useState<string | null>(null);
   const runtimeRef = useRef<DeviceRuntime | null>(null);
   const connectStepRef = useRef(0);
   const turnOnBusyRef = useRef(false);
@@ -220,9 +222,16 @@ export function DeviceApp({ debug, api: injectedApi }: DeviceAppProps) {
           nowMs: () => Date.now(),
           events: {
             onReady: () => dispatch({ type: "WS_READY", stepId: connectStepRef.current }),
-            onClosed: (code, closedByDevice) => dispatch({ type: "WS_CLOSED", code, closedByDevice }),
+            onClosed: (code, closedByDevice) => {
+              setSubtitle(null);
+              dispatch({ type: "WS_CLOSED", code, closedByDevice });
+            },
             onView: (view) => dispatch({ type: "SESSION_VIEW", view }),
-            onSpeaking: (speaking) => dispatch({ type: "SPEAKING", speaking }),
+            onSpeaking: (speaking) => {
+              if (!speaking) setSubtitle(null);
+              dispatch({ type: "SPEAKING", speaking });
+            },
+            onSubtitle: setSubtitle,
           },
         });
         releaseRuntime(runtimeRef, false);
@@ -238,6 +247,7 @@ export function DeviceApp({ debug, api: injectedApi }: DeviceAppProps) {
   }, [timing]);
 
   const handleTurnOff = useCallback(() => {
+    setSubtitle(null);
     releaseRuntime(runtimeRef, true);
     dispatch({ type: "TURN_OFF" });
   }, []);
@@ -251,6 +261,7 @@ export function DeviceApp({ debug, api: injectedApi }: DeviceAppProps) {
           display={display as StatusDisplay}
           label={t19Label(state)}
           subLabel={display === "reconnecting" ? PROPOSED_COPY.device.t19Reconnecting : null}
+          subtitle={subtitle}
           onTurnOn={handleTurnOn}
           onTurnOff={handleTurnOff}
         />

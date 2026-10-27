@@ -102,6 +102,10 @@ export const PROPOSED_COPY = {
   device: {
     d0Checking: "연결을 확인하는 중", // BR9.4 · interaction-spec 4절 D0 · 개발명세 D-00 오류
     t19Reconnecting: "다시 연결하고 있어요", // mockups 9-31 · AC6.2.6(U3 재접속 주기의 보조 줄)
+    dialogSpeaker: "무중이", // 기기 자막 대화창 이름표(docs/ui/device-subtitle.md)
+    dialogTurnTag: "내 차례", // 듣는 중 대화창 이름표
+    dialogTurnBody: "말해 볼까?", // 듣는 중 대화창 글
+    dialogThinking: "음… 생각하고 있어", // 생각 중 대화창 글
   },
   home: {
     disconnected: "끊김", // mockups S-04 대화 기기 · AC1.4.3
