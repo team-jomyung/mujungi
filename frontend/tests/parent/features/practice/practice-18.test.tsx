@@ -201,83 +201,131 @@ describe("18 — read and favorite failures", () => {
   });
 });
 
-describe("18 — delayed deletion coordinator (AC4.1.6/11 · J3)", () => {
-  it("hides immediately, keeps selection/favorite/order for undo, and sends no DELETE", async () => {
-    const harness = setup(); await advance();
-    fireEvent.click(check("도움 요청하기"));
-    fireEvent.click(remove("도움 요청하기"));
+describe("18 — acknowledged deletion and server undo", () => {
+  it("sends DELETE immediately, waits for acknowledgement, and stays deleted after a reload", async () => {
+    const response = deferred<Response>();
+    let deleted = false;
+    const handler: RequestHandler = (_path, init) => {
+      if (init.method === "DELETE") return response.promise.then(r => { deleted = true; return r; });
+      return jsonResponse(200, { items: deleted ? [] : [goal()] });
+    };
+    const harness = setup(handler); await advance(); fireEvent.click(remove()); await advance();
+    expect(harness.requests(`${PATH}/${G1}`).map(r => r.method)).toEqual(["DELETE"]);
+    expect(row()).toBeVisible(); expect(remove()).toBeDisabled(); expect(check()).toBeDisabled();
+    expect(screen.getByText("삭제 중이에요.")).toBeVisible();
+    expect(screen.queryByText("친구에게 부탁하기 목표를 삭제했어요.")).toBeNull();
+    response.resolve(jsonResponse(200, { restoreUntil: RESTORE_UNTIL })); await advance();
+    expect(screen.queryByTestId(`goal-${G1}`)).toBeNull();
+    expect(screen.getByTestId("toast")).toHaveTextContent("목표를 삭제했어요.");
+    // Reload before the undo toast expires: server truth must already be deleted.
+    harness.view.unmount(); setup(handler); await advance();
+    expect(screen.queryByTestId(`goal-${G1}`)).toBeNull();
+    expect(screen.getByText("아직 담은 목표가 없어요")).toBeVisible();
+  });
+
+  it("undo restores on the server and keeps selection, favorite and order across reload", async () => {
+    let deleted = false;
+    const handler: RequestHandler = (path, init) => {
+      if (init.method === "DELETE") { deleted = true; return jsonResponse(200, { restoreUntil: RESTORE_UNTIL }); }
+      if (path.endsWith("/restore")) { deleted = false; return jsonResponse(200, GOALS.find(g => g.goalSelectionId === G3)); }
+      return jsonResponse(200, { items: GOALS.filter(g => !deleted || g.goalSelectionId !== G3) });
+    };
+    const harness = setup(handler); await advance(); fireEvent.click(check("도움 요청하기"));
+    fireEvent.click(remove("도움 요청하기")); await advance();
     expect(screen.queryByTestId(`goal-${G3}`)).toBeNull();
-    expect(screen.getByTestId("toast-region-polite")).toHaveTextContent("되돌리기");
-    await advance(UNDO_MS - 1);
-    expect(harness.requests(`${PATH}/${G3}`)).toHaveLength(0);
-    fireEvent.click(screen.getByTestId("toast-action"));
-    expect(row(G3)).toBeVisible();
+    fireEvent.focus(screen.getByTestId("toast-action")); await advance(UNDO_MS * 2);
+    fireEvent.click(screen.getByTestId("toast-action")); await advance();
+    expect(harness.requests(`${PATH}/${G3}/restore`).map(r => r.method)).toEqual(["POST"]);
     expect(check("도움 요청하기")).toBeChecked();
     expect(favorite("도움 요청하기", true)).toHaveAttribute("aria-pressed", "true");
     expect(screen.getAllByRole("listitem")[0]).toBe(row(G3));
-    await advance(UNDO_MS * 2);
-    expect(harness.requests(`${PATH}/${G3}`)).toHaveLength(0);
+    expect(screen.getByTestId("toast")).toHaveTextContent("목표를 되돌렸어요.");
+    harness.view.unmount(); setup(handler); await advance(); expect(row(G3)).toBeVisible();
   });
 
-  it("does not send DELETE while undo has focus, and commits once when expired focus leaves", async () => {
+  it("two rapid deletions both reach the server without cancelling the earlier request", async () => {
+    const response = deferred<Response>();
+    const harness = setup((_path, init) => init.method === "DELETE" ? response.promise.then(r => r.clone()) : jsonResponse(200, { items: GOALS }));
+    await advance(); fireEvent.click(remove()); fireEvent.click(remove("차례 기다리기")); await advance();
+    expect(harness.requests(`${PATH}/${G1}`).map(r => r.method)).toEqual(["DELETE"]);
+    expect(harness.requests(`${PATH}/${G2}`).map(r => r.method)).toEqual(["DELETE"]);
+    response.resolve(jsonResponse(200, { restoreUntil: RESTORE_UNTIL })); await advance();
+    expect(screen.queryByTestId(`goal-${G1}`)).toBeNull(); expect(screen.queryByTestId(`goal-${G2}`)).toBeNull();
+  });
+
+  it("replacement notifications cannot cancel a confirmed deletion", async () => {
     const harness = setup((_path, init) => init.method === "DELETE" ? jsonResponse(200, { restoreUntil: RESTORE_UNTIL }) : jsonResponse(200, { items: GOALS }));
-    await advance(); fireEvent.click(remove());
-    fireEvent.focus(screen.getByTestId("toast-action")); await advance(UNDO_MS * 10);
-    expect(harness.requests(`${PATH}/${G1}`)).toHaveLength(0);
-    expect(screen.getByTestId("toast-action")).toBeVisible();
-    fireEvent.blur(screen.getByTestId("toast-action")); await advance();
-    expect(harness.requests(`${PATH}/${G1}`).map((r) => r.method)).toEqual(["DELETE"]);
+    await advance(); fireEvent.click(remove()); await advance();
+    fireEvent.click(screen.getByRole("button", { name: "새 알림" })); await advance(UNDO_MS * 2);
     expect(screen.queryByTestId(`goal-${G1}`)).toBeNull();
-    await advance(UNDO_MS);
-    expect(harness.requests(`${PATH}/${G1}`)).toHaveLength(1);
+    expect(harness.requests(`${PATH}/${G1}`).map(r => r.method)).toEqual(["DELETE"]);
   });
 
-  it("undo remains valid after the nominal deadline while focused", async () => {
-    const harness = setup(); await advance(); fireEvent.click(remove());
-    fireEvent.focus(screen.getByTestId("toast-action")); await advance(UNDO_MS * 2);
+  it.each(["tab", "unmount"])("%s cannot cancel a deletion awaiting its response", async (mode) => {
+    const response = deferred<Response>(); let deleted = false;
+    const handler: RequestHandler = (_path, init) => init.method === "DELETE"
+      ? response.promise.then(r => { deleted = true; return r; }) : jsonResponse(200, { items: deleted ? [] : [goal()] });
+    const harness = setup(handler); await advance(); fireEvent.click(remove()); await advance();
+    if (mode === "tab") fireEvent.click(screen.getByTestId("tab-home"));
+    harness.view.unmount(); response.resolve(jsonResponse(200, { restoreUntil: RESTORE_UNTIL })); await advance();
+    expect(harness.requests(`${PATH}/${G1}`).map(r => r.method)).toEqual(["DELETE"]);
+    setup(handler); await advance(); expect(screen.queryByTestId(`goal-${G1}`)).toBeNull();
+  });
+
+  it("expired undo never invents a restored row", async () => {
+    setup((path, init) => path.endsWith("/restore") ? errorResponse(410, "RESTORE_EXPIRED") : init.method === "DELETE"
+      ? jsonResponse(200, { restoreUntil: RESTORE_UNTIL }) : jsonResponse(200, { items: [goal()] }));
+    await advance(); fireEvent.click(remove()); await advance();
     fireEvent.click(screen.getByTestId("toast-action")); await advance();
-    expect(row()).toBeVisible();
-    expect(harness.requests(`${PATH}/${G1}`)).toHaveLength(0);
+    expect(screen.queryByTestId(`goal-${G1}`)).toBeNull();
+    expect(screen.getByTestId("toast")).toHaveTextContent("목표를 되돌릴 수 없어요.");
   });
 
-  it("a second delete cancels the first pending delete and gives the new row its full window", async () => {
-    const harness = setup(); await advance(); fireEvent.click(remove()); await advance(UNDO_MS / 2);
-    fireEvent.click(remove("차례 기다리기"));
-    expect(row()).toBeVisible();
-    expect(screen.queryByTestId(`goal-${G2}`)).toBeNull();
-    await advance(UNDO_MS / 2);
-    expect(harness.requests(`${PATH}/${G1}`)).toHaveLength(0);
-    expect(harness.requests(`${PATH}/${G2}`)).toHaveLength(0);
-    fireEvent.click(screen.getByTestId("toast-action")); await advance(UNDO_MS);
-    expect(row(G2)).toBeVisible();
+  it("a lost undo response is reconciled to the restored server state", async () => {
+    let deleted = false;
+    setup((path, init) => {
+      if (init.method === "DELETE") { deleted = true; return jsonResponse(200, { restoreUntil: RESTORE_UNTIL }); }
+      if (path.endsWith("/restore")) { deleted = false; throw new TypeError("lost restore response"); }
+      return jsonResponse(200, { items: deleted ? [] : [goal()] });
+    });
+    await advance(); fireEvent.click(remove()); await advance();
+    fireEvent.click(screen.getByTestId("toast-action")); await advance();
+    expect(row()).toBeVisible(); expect(remove()).toBeEnabled();
+    expect(screen.getByTestId("toast")).toHaveTextContent("목표를 되돌렸어요.");
   });
 
-  it("replacement toast cancels unsent deletion without closing the replacement", async () => {
-    const harness = setup(); await advance(); fireEvent.click(remove());
-    fireEvent.click(screen.getByRole("button", { name: "새 알림" }));
-    expect(row()).toBeVisible();
-    expect(screen.getByTestId("toast")).toHaveTextContent("새 알림");
-    await advance(UNDO_MS * 2);
-    expect(harness.requests(`${PATH}/${G1}`)).toHaveLength(0);
+  it("a refused undo keeps the row deleted and reports failure", async () => {
+    setup((path, init) => path.endsWith("/restore") ? errorResponse(403, "ACCOUNT_DELETION_IN_PROGRESS")
+      : init.method === "DELETE" ? jsonResponse(200, { restoreUntil: RESTORE_UNTIL }) : jsonResponse(200, { items: [goal()] }));
+    await advance(); fireEvent.click(remove()); await advance();
+    fireEvent.click(screen.getByTestId("toast-action")); await advance();
+    expect(screen.queryByTestId(`goal-${G1}`)).toBeNull();
+    expect(screen.getByTestId("toast")).toHaveTextContent("목표를 되돌리지 못했어요.");
   });
 
-  it.each(["tab", "unmount"])("%s cancels a pending deletion", async (mode) => {
-    const harness = setup(); await advance(); fireEvent.click(remove());
-    if (mode === "tab") fireEvent.click(screen.getByTestId("tab-home")); else harness.view.unmount();
-    await advance(UNDO_MS * 2);
-    expect(harness.requests(`${PATH}/${G1}`)).toHaveLength(0);
+  it("reconciling a different failed delete cannot resurrect an acknowledged deletion", async () => {
+    const response = deferred<Response>();
+    let reads = 0;
+    setup((path, init) => {
+      if (init.method === "DELETE") return path.endsWith(G1) ? response.promise : Promise.reject(new TypeError("offline"));
+      return ++reads === 1 ? jsonResponse(200, { items: GOALS }) : response.promise.then(() => jsonResponse(200, { items: GOALS }));
+    });
+    await advance(); fireEvent.click(remove()); fireEvent.click(remove("차례 기다리기")); await advance();
+    response.resolve(jsonResponse(200, { restoreUntil: RESTORE_UNTIL })); await advance();
+    expect(screen.queryByTestId(`goal-${G1}`)).toBeNull();
+    expect(row(G2)).toBeVisible(); expect(remove("차례 기다리기")).toBeEnabled();
   });
 
   it("an explicit delete refusal restores the row and alerts without losing selected/favorite data", async () => {
     setup((_path, init) => init.method === "DELETE" ? errorResponse(403, "ACCOUNT_DELETION_IN_PROGRESS") : jsonResponse(200, { items: GOALS }));
-    await advance(); fireEvent.click(check()); fireEvent.click(remove()); await advance(UNDO_MS + 1);
+    await advance(); fireEvent.click(check()); fireEvent.click(remove()); await advance();
     expect(row()).toBeVisible(); expect(check()).toBeChecked();
     expect(screen.getByTestId("toast-region-assertive")).toHaveTextContent("삭제하지 못해 목표를 되돌렸어요.");
   });
 
   it("delete 401 restores local state and sends the user to the login route", async () => {
     setup((_path, init) => init.method === "DELETE" ? errorResponse(401, "UNAUTHENTICATED") : jsonResponse(200, { items: GOALS }));
-    await advance(); fireEvent.click(remove()); await advance(UNDO_MS + 1);
+    await advance(); fireEvent.click(remove()); await advance();
     expect(router.replace).toHaveBeenCalledWith("/parent/login");
   });
 });
@@ -288,7 +336,7 @@ describe("18 — unknown DELETE result and bounded compensation", () => {
       if (init.method === "DELETE") throw new TypeError("offline");
       return jsonResponse(200, { items: [goal()] });
     });
-    await advance(); fireEvent.click(remove()); await advance(UNDO_MS + 1);
+    await advance(); fireEvent.click(remove()); await advance();
     expect(row()).toBeVisible();
     expect(harness.requests(PATH)).toHaveLength(2);
     expect(harness.requests(`${PATH}/${G1}/restore`)).toHaveLength(0);
@@ -301,7 +349,7 @@ describe("18 — unknown DELETE result and bounded compensation", () => {
       if (path.endsWith("/restore")) { deleted = false; return jsonResponse(200, goal()); }
       return jsonResponse(200, { items: deleted ? [] : [goal()] });
     });
-    await advance(); fireEvent.click(remove()); await advance(UNDO_MS + 1);
+    await advance(); fireEvent.click(remove()); await advance();
     expect(row()).toBeVisible();
     expect(harness.requests(`${PATH}/${G1}/restore`)).toHaveLength(1);
     expect(remove()).toBeEnabled();
@@ -315,7 +363,7 @@ describe("18 — unknown DELETE result and bounded compensation", () => {
       if (path.endsWith("/restore")) return errorResponse(410, "RESTORE_EXPIRED");
       return jsonResponse(200, { items: deleted ? [] : [goal()] });
     });
-    await advance(); fireEvent.click(remove()); await advance(UNDO_MS + 1);
+    await advance(); fireEvent.click(remove()); await advance();
     expect(screen.queryByTestId(`goal-${G1}`)).toBeNull();
     expect(screen.getByText("아직 담은 목표가 없어요")).toBeVisible();
     expect(screen.getByTestId("toast")).toHaveTextContent("되돌릴 수 있는 시간이 지났어요");
@@ -329,7 +377,7 @@ describe("18 — unknown DELETE result and bounded compensation", () => {
       if (++reads === 2) throw new TypeError("still offline");
       return jsonResponse(200, { items: [goal()] });
     });
-    await advance(); fireEvent.click(remove()); await advance(UNDO_MS + 1);
+    await advance(); fireEvent.click(remove()); await advance();
     expect(row()).toBeVisible(); expect(remove()).toBeDisabled();
     expect(screen.getByTestId("toast")).toHaveTextContent("목표 상태를 확인하지 못했어요");
     await advance(UNDO_MS + 1);

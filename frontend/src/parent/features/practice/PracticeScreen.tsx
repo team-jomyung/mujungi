@@ -41,7 +41,7 @@ export function PracticeScreen({ returnedFailed = false, failureCode = null }: {
 
   const navigate = (tab: TabKey) => {
     if (tab === "practice") return;
-    goals.cancelPending();
+    goals.dismissUndo();
     router.push(routeForTab(tab));
   };
 
@@ -56,10 +56,11 @@ export function PracticeScreen({ returnedFailed = false, failureCode = null }: {
           return (
             <li key={id} className="mj-practice__goal" data-testid={`goal-${id}`} data-selected={checked} aria-busy={busy}>
               <label className="mj-practice__select">
-                <input type="checkbox" checked={checked} disabled={startLocked || (!checked && selectedCount >= MAX_PRACTICE_GOALS)} onChange={() => toggleSelected(id)} aria-label={PRACTICE_TEMP_COPY.select(goal.displayName)} />
+                <input type="checkbox" checked={checked} disabled={busy || (!checked && selectedCount >= MAX_PRACTICE_GOALS)} onChange={() => toggleSelected(id)} aria-label={PRACTICE_TEMP_COPY.select(goal.displayName)} />
                 <span className="mj-practice__text">
                   <span className="mj-practice__name">{goal.displayName}</span>
                   <span className="mj-practice__meta">{goalMeta(goal)}</span>
+                  {goals.deletingIds.has(id) ? <span role="status" className="mj-practice__meta">{PRACTICE_TEMP_COPY.deleting}</span> : null}
                 </span>
               </label>
               <button type="button" className="mj-practice__icon" aria-label={PRACTICE_TEMP_COPY.favorite(goal.displayName, goal.isFavorite)} aria-pressed={goal.isFavorite} disabled={busy} onClick={() => { void goals.toggleFavorite(goal); }}>
@@ -97,13 +98,13 @@ export function PracticeScreen({ returnedFailed = false, failureCode = null }: {
             <h2>{PRACTICE_COPY.empty}</h2>
             <h3>{PRACTICE_COPY.howTo}</h3>
             <ol className="mj-practice__steps">{PRACTICE_COPY.steps.map((step) => <li key={step}>{step}</li>)}</ol>
-            <Link className="mj-button mj-button--primary mj-button--block" href={PARENT_ROUTES.free} onClick={goals.cancelPending}>{PRACTICE_COPY.goFree}</Link>
+            <Link className="mj-button mj-button--primary mj-button--block" href={PARENT_ROUTES.free} onClick={goals.dismissUndo}>{PRACTICE_COPY.goFree}</Link>
           </section>
         ) : <><p id="practice-selection-limit">{PRACTICE_COPY.selectionLimit}</p>{group(visible.filter((goal) => goal.isFavorite), true)}{group(visible.filter((goal) => !goal.isFavorite), false)}</>}
         {goals.items !== undefined && (visible.length > 0 || startLocked) ? (
           <PracticeStartAction selected={[...selected]} owned={visible.map((goal) => goal.goalSelectionId)} port={port}
             newKey={() => crypto.randomUUID()} blocked={goals.needsRecovery || goals.busyIds.size > 0 || goals.isFetching}
-            onLockedChange={setStartLocked} onSubmitting={() => { setShowReturnedFailure(false); goals.cancelPending(); }}
+            onLockedChange={setStartLocked} onSubmitting={() => { setShowReturnedFailure(false); goals.dismissUndo(); }}
             onRejected={(code) => { if (code === "UNAUTHENTICATED") goToLogin(router, toast); }}
             onAccepted={(sessionId) => router.push(PARENT_ROUTES.session(sessionId))} />
         ) : null}

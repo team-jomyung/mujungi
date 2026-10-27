@@ -8,7 +8,7 @@ import { LiveScreen } from "@/parent/features/live/LiveScreen";
 import { SESSION_ID, OTHER_SESSION_ID, deferred, errorResponse, homeBody, jsonResponse, liveViewBody } from "../../../support/fixtures";
 import { resetRouter, router } from "../../../support/nextNavigation";
 import { renderParent, type RequestHandler } from "../../../support/parentHarness";
-import { G1, G2, GOALS, PATH } from "../../../support/practiceFixtures";
+import { G1, G2, GOALS, PATH, RESTORE_UNTIL } from "../../../support/practiceFixtures";
 
 vi.mock("next/navigation", async () => (await import("../../../support/nextNavigation")).nextNavigationMock);
 const START = "/api/activities/practice";
@@ -17,7 +17,7 @@ const check = () => screen.getByRole("checkbox", { name: "선택 — 친구에�
 const start = () => screen.getByTestId("practice-start");
 async function advance(ms = 1) { await act(async () => { await vi.advanceTimersByTimeAsync(ms); }); }
 function setupStart(handler: RequestHandler) {
-  return renderParent(<PracticeScreen />, { handler: (path, init) => path === PATH ? jsonResponse(200, { items: GOALS }) : handler(path, init) });
+  return renderParent(<PracticeScreen />, { handler: (path, init) => path === PATH ? jsonResponse(200, { items: GOALS }) : init.method === "DELETE" ? jsonResponse(200, { restoreUntil: RESTORE_UNTIL }) : handler(path, init) });
 }
 function setupLive(handler: RequestHandler) {
   return renderParent(<LiveScreen sessionId={SESSION_ID} />, {
@@ -76,12 +76,13 @@ it("18 확정 상황 실패는 선택을 유지하고 명시 재시도에 새 �
   expect(bodies[1].idempotencyKey).not.toBe(bodies[0].idempotencyKey); expect(bodies[1].goalSelectionIds).toEqual([G1]);
 });
 
-it("18은 삭제 대기 중 숨긴 목표를 시작 본문에 넣지 않는다", async () => {
+it("18은 삭제 확인 중에는 시작을 막고 삭제 완료한 목표를 시작 본문에 넣지 않는다", async () => {
   const h = setupStart(() => jsonResponse(202, { sessionId: SESSION_ID })); await advance();
   fireEvent.click(check()); fireEvent.click(screen.getByRole("checkbox", { name: "선택 — 차례 기다리기" }));
-  fireEvent.click(screen.getByRole("button", { name: "삭제 — 친구에게 부탁하기" })); fireEvent.click(start()); await advance();
+  fireEvent.click(screen.getByRole("button", { name: "삭제 — 친구에게 부탁하기" }));
+  expect(start()).toBeDisabled(); await advance(); fireEvent.click(start()); await advance();
   expect(h.requests(START)[0].body).toEqual({ idempotencyKey: expect.any(String), goalSelectionIds: [G2] });
-  expect(h.requests(`${PATH}/${G1}`)).toHaveLength(0);
+  expect(h.requests(`${PATH}/${G1}`).map(r => r.method)).toEqual(["DELETE"]);
 });
 
 it("18 시작 중 401은 공통 로그인 안내로 이동한다", async () => {
