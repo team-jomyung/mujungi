@@ -65,6 +65,8 @@ public final class ScenarioScriptGenerator {
                 var generationCost=generationStartedWith.minus(deadline.remaining());
                 if(generated==null||generated.script()==null||!metadata(generated.model()))throw content();
                 model=generated.model();var script=includeBasePartnerLine(generated.script());
+                var withCondition=includeOpportunityCondition(script,current.rules().opportunity());
+                if(withCondition!=script){diagnose("ScenarioConditionAppended");script=withCondition;}
                 var cleaned=validation.withoutInvalidSceneStart(script,current.rules());
                 if(cleaned!=script){diagnose("ScenarioSceneStartDropped");script=cleaned;}
                 scriptToRepair=script;
@@ -177,6 +179,23 @@ public final class ScenarioScriptGenerator {
                 || ScenarioContentPolicy.normalize(base.sceneDescription()).contains(ScenarioContentPolicy.normalize(base.opportunitySentence())))return script;
         // These are already generated scene facts, never an inferred child answer or new event.
         String description=base.sceneDescription()+" 상대가 “"+base.opportunitySentence()+"”라고 말한다.";
+        if(description.length()>8000)return script;
+        var scenes=new java.util.ArrayList<>(script.scenes());scenes.set(0,base.withDescription(description));
+        return new ScenarioScript(scenes);
+    }
+    /**
+     * 기본 장면 설명에 기회 조건 원문이 없으면 끝에 덧붙인다(내부 설명만, 아이에게 읽지 않는다). 모델은 조건을 뜻은 같게 표현만 바꿔 쓰는 일이 잦아
+     * 글자 그대로 비교하는 서버 검사(CONDITION_MISSING)에 걸려 고쳐 생성하느라 호출 2번을 더 썼다(2026-10-27 실키, JIRA-283). 덧붙인 대본도
+     * 독립 검토와 모든 서버 검사를 그대로 거친다.
+     */
+    static ScenarioScript includeOpportunityCondition(ScenarioScript script,String condition){
+        if(script.scenes().isEmpty()||condition==null||ScenarioContentPolicy.normalize(condition).isBlank())return script;
+        var base=script.scenes().getFirst();
+        if(!"BASE".equals(base.sceneKind())||base.sceneDescription()==null||base.sceneDescription().isBlank()
+                ||ScenarioContentPolicy.normalize(base.sceneDescription()).contains(ScenarioContentPolicy.normalize(condition)))return script;
+        String sentence=condition.strip();
+        if(!sentence.matches(".*[.!?。]$"))sentence+=".";
+        String description=base.sceneDescription().strip()+" "+sentence;
         if(description.length()>8000)return script;
         var scenes=new java.util.ArrayList<>(script.scenes());scenes.set(0,base.withDescription(description));
         return new ScenarioScript(scenes);
