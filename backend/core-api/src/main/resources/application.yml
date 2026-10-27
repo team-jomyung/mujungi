@@ -277,7 +277,8 @@ mujoong:
         reasoning-effort: none
       goal-candidates:
         max-output-tokens: 4000
-        reasoning-effort: none
+        # none이면 긴 대화에서 질문 한 번 무시를 놓친다. low는 8~12초로 result.request-timeout(20s) 안이다(FT-1027-i)
+        reasoning-effort: low
       rejudgment:
         max-output-tokens: 4000
         reasoning-effort: medium

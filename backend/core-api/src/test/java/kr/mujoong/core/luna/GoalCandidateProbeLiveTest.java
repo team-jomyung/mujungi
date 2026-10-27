@@ -42,7 +42,9 @@ class GoalCandidateProbeLiveTest {
         var clock = new SystemMujoongClock();
         var ordinary = new LunaProperties.PurposeOptions(4000, "medium");
         var properties = new LunaProperties(null, URI.create("https://api.openai.com/v1"), 1_000_000,
-                new LunaProperties.Purposes(ordinary, ordinary, ordinary, ordinary, new LunaProperties.PurposeOptions(4000, "none"), ordinary));
+                new LunaProperties.Purposes(ordinary, ordinary, ordinary, ordinary,
+                        // 운영 goal-candidates 값(low). env GOAL_PROBE_EFFORT로 추론 수준을 바꿔 비교 측정한다
+                        new LunaProperties.PurposeOptions(4000, System.getenv().getOrDefault("GOAL_PROBE_EFFORT", "low")), ordinary));
         var timing = new TextAiProperties(Duration.ofSeconds(30), new TextAiProperties.Retry(1, Duration.ofMillis(250)),
                 new TextAiProperties.Result(Duration.ofSeconds(30), 0, 0.2, "v1"));
         var client = new CoreLunaClient(properties, timing, LunaSchemas.loadDefault(JSON), new LunaInputSanitizer(JSON),
