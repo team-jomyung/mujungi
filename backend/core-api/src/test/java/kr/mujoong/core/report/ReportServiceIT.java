@@ -7,6 +7,16 @@ import kr.mujoong.core.common.error.CoreApiException;
 import org.junit.jupiter.api.*;
 @Tag("result-report") @Tag("db") class ReportServiceIT extends WebTestSupport {
     ReportService service(){return app.bean(ReportService.class);}LocalDate today(){return app.clock().now().atZone(ReportService.ZONE).toLocalDate();}
+    @Test void atMostTenActivitiesAreAcceptedAndRejectedRequestsLeaveExistingReportUntouched(){
+        var f=family();var sessions=new ArrayList<UUID>();
+        for(int i=0;i<11;i++){var session=copy(f,"ENDED",null);record(f,session,"ENDED",3);sessions.add(session);}
+        var accepted=service().create(f.guardianId(),today(),today(),sessions.subList(0,10),UUID.randomUUID().toString());
+        assertThat(app.bean(ReportRepository.class).activities(accepted.reportId())).hasSize(10);
+        assertThatThrownBy(()->service().create(f.guardianId(),today(),today(),sessions,UUID.randomUUID().toString()))
+            .isInstanceOf(CoreApiException.class);
+        assertThat(service().owned(f.guardianId(),accepted.reportId()).status()).isEqualTo("GENERATING");
+        assertThat(app.bean(ReportRepository.class).unsaved(f.guardianId())).hasSize(1);
+    }
     @Test void previewUsesListedDateAndIncludesRestartFailure(){var f=family();var session=copy(f,"FAILED","SERVER_RESTART");record(f,session,"FAILED",1);var declined=copy(f,"DECLINED",null);record(f,declined,"DECLINED",0);var preview=service().preview(f.guardianId(),today(),today());assertThat(preview.firstRecordDate()).isEqualTo(today());assertThat(preview.activities()).hasSize(1);assertThat(preview.activities().getFirst().sessionId()).isEqualTo(session);assertThat(preview.activities().getFirst().startedAt()).isNull();}
     @Test void sameKeyReturnsFirstReportAndDifferentBodyConflicts(){var f=family();var session=copy(f,"ENDED",null);record(f,session,"ENDED",3);String key=UUID.randomUUID().toString();var first=service().create(f.guardianId(),today(),today(),List.of(session),key);assertThat(service().create(f.guardianId(),today(),today(),List.of(session),key)).isEqualTo(first);assertThatThrownBy(()->service().create(f.guardianId(),today().minusDays(1),today(),List.of(session),key)).isInstanceOf(CoreApiException.class);}
     @Test void foreignSessionRejectsWholeRequest(){var f=family();var other=family();var session=copy(other,"ENDED",null);record(other,session,"ENDED",3);assertThatThrownBy(()->service().create(f.guardianId(),today(),today(),List.of(session),UUID.randomUUID().toString())).isInstanceOf(CoreApiException.class);assertThat(app.bean(ReportRepository.class).unsaved(f.guardianId())).isEmpty();}

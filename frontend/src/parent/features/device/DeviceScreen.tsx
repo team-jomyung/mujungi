@@ -14,7 +14,6 @@ import {
   rttText,
   sinceText,
   stopSectionTitle,
-  stopSummary,
 } from "@/shared/copy/account";
 import { COPY, TEMP_COPY, lastCheckedLine, unresponsiveLastLine } from "@/shared/copy/ko";
 import { formatHhmm } from "@/shared/copy/timeText";
@@ -120,7 +119,7 @@ const TONE_ICON: Readonly<Record<Tone, string>> = {
 };
 
 export function DeviceScreen() {
-  const { data, lockMessage, childName, stopItems, noChild, handleNavigate, onLockedPress, goToHome, goToRegister, goToStopExpressions } =
+  const { data, lockMessage, childName, stopItems, stopLoading, stopReadFailed, noChild, handleNavigate, onLockedPress, goToHome, goToRegister, goToStopExpressions } =
     useDeviceScreen();
   const view = data === undefined ? null : presentDeviceScreen(data.device);
   const lastChecked = data === undefined ? null : hhmm(data.device.network.lastReportedAt ?? data.device.network.lastSeenAt);
@@ -186,12 +185,16 @@ export function DeviceScreen() {
             <h2 className="mj-card__heading" id="device-stop-heading">
               {stopSectionTitle(childName)}
             </h2>
+            <p className="mj-stop-section__label">{ACCOUNT_COPY.device.stopDefaultLabel}</p>
             <p className="mj-stop-section__default">{quoted(ACCOUNT_COPY.stopExpressions.defaultText)}</p>
-            {stopItems.length > 0 ? (
-              <p className="mj-stop-section__summary" data-testid="device-stop-summary">
-                {stopSummary(stopItems.map((item) => item.text))}
-              </p>
-            ) : null}
+            <p className="mj-stop-section__label" id="device-stop-additional-heading">{ACCOUNT_COPY.device.stopAdditionalLabel}</p>
+            {stopLoading ? <p role="status">{ACCOUNT_COPY.device.stopLoading}</p>
+              : stopReadFailed ? <p role="alert">{ACCOUNT_COPY.device.stopReadFailed}</p>
+              : stopItems.length > 0 ? (
+                <ul className="mj-stop-section__expressions" data-testid="device-stop-summary" aria-labelledby="device-stop-additional-heading">
+                  {stopItems.map(item => <li key={item.id}>{quoted(item.text)}</li>)}
+                </ul>
+              ) : <p className="mj-stop-section__summary">{ACCOUNT_COPY.device.stopAdditionalEmpty}</p>}
             <button
               type="button"
               className="mj-link-button"
