@@ -45,6 +45,13 @@ class ScenarioReadinessLiveTest {
                 "상대의 말이나 응답 상태가 불분명한 가상 상황에서, 현재 상태를 확인하는 질문을 해보기. 예: “지금 생각 중이야, 아니면 답변을 마친 거야?”");
     }
 
+    @Test
+    void askingToRepeatAMissedLineCanProduceAnIndependentlyApprovedPracticeStart() throws Exception {
+        probe("ask-repeat", "대화 중 상대의 말을 듣지 못했을 때", "방금 말한 상대", "놓친 내용을 다시 들을 수 있도록 요청하기",
+                "“방금 한 말을 못 들었어. 다시 말해 줄래?”",
+                "상대의 말을 듣지 못했을 때, 어떤 말을 놓쳤는지 알려 주고 다시 말해 달라고 한다. 예: “방금 한 말을 못 들었어. 다시 말해 줄래?”");
+    }
+
     private Path evidence;
 
     private void record(String kind, Object value) {
